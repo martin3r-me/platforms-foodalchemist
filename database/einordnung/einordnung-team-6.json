@@ -3,6 +3,20 @@
     "team_id": 6,
     "zeilen": [
         {
+            "slug": "aal-rote-bete-orange-sesam-peter-goossens-hof-van-cleve",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "abinao-cassis-veilchen-roland-trettl-team-ikarus-1",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "allergene-diatetik-backzutaten-gluten-im-fokus",
             "art": null,
             "geltung": [],
@@ -293,6 +307,13 @@
             ]
         },
         {
+            "slug": "bisonfilet-yin-yang-didier-corlou-ikarus-1",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "blatterteig-anwendung-en-croute-technik-kennwerte",
             "art": null,
             "geltung": [],
@@ -388,6 +409,27 @@
             ]
         },
         {
+            "slug": "bluefin-thunfisch-burger-enrico-roberto-cerea-da-vittorio",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "bretonische-seezunge-moderne-finkenwerder-art-sven-elverfeld-aqua",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "bretonischer-hummer-mit-karamellisierten-zwiebeln-und-hummer-pistazien-bisque-mauro-colagreco-mirazur",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "buffet_display_praesentation_kennwerte",
             "art": null,
             "geltung": [],
@@ -419,6 +461,41 @@
                 "sauerrahm_butter",
                 "suessrahm_butter"
             ]
+        },
+        {
+            "slug": "calamari-zucchini-ananas-gebacken-mit-zitronenengel-enrico-roberto-cerea-da-vittorio",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "carpaccio-von-jakobsmuscheln-apfelgazpacho-und-grunem-rettich-mauro-colagreco-mirazur",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "causas-mit-taschenkrebs-thunfisch-und-wolfsbarsch-gaston-acurio-astrid-y-gaston-lima",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "confierter-kurbis-schafsfrischkase-honigeis-und-weisse-truffel-mauro-colagreco-mirazur",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "confiertes-zicklein-mit-kartoffel-oliven-puree-und-gratiniertem-lauch-enrico-roberto-cerea-da-vittorio",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
         },
         {
             "slug": "confiserie-texturen-praline-fruchtgummi",
@@ -474,6 +551,13 @@
                 "quinoa_rot",
                 "quinoa_weiss"
             ]
+        },
+        {
+            "slug": "creme-brulee-mit-banane-und-funf-gewurzen-didier-corlou-ikarus-1",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
         },
         {
             "slug": "dehydrieren-temperaturen-grundlagen",
@@ -1278,6 +1362,13 @@
             ]
         },
         {
+            "slug": "flusskrebse-mit-hecht-und-campari-kohlrabi-emmanuel-renaut-flocons-de-sel",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "food_cost_optimierung_strategien",
             "art": null,
             "geltung": [],
@@ -1386,7 +1477,7 @@
         },
         {
             "slug": "frosch-pulpo-krustentiermayonnaise-basilikumsorbet-marcus-g-lindner-mesa-zurich",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -1568,6 +1659,13 @@
             ]
         },
         {
+            "slug": "garnelenfruhlingsrollen-mit-jungem-lauch-didier-corlou-ikarus-1",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "garum-schwarzfermentation-kennwerte",
             "art": null,
             "geltung": [],
@@ -1591,6 +1689,27 @@
                 "saftverlust",
                 "sous_vide_steak"
             ]
+        },
+        {
+            "slug": "gebratene-taubenbrust-mit-polenta-petersilienravioli-und-herbsttrompeten-joel-antunes-joel-atlanta",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "gebratener-steinbutt-mit-garnelen-quinoa-und-krustentierreduktion-gaston-acurio-astrid-y-gaston-lima",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "gebratener-thunfisch-mit-pak-choi-und-passionsfrucht-didier-corlou-ikarus-1",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
         },
         {
             "slug": "geflugel-allergene-diatik",
@@ -1664,6 +1783,13 @@
             "aliase": [
                 "coq"
             ]
+        },
+        {
+            "slug": "gefullte-calamari-mit-hummer-muscheln-und-tamarinde-didier-corlou-ikarus-1",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
         },
         {
             "slug": "gelatinefreie-pulpo-rollen-terrine-n-marcus-g-lindner",
@@ -1951,6 +2077,13 @@
             ]
         },
         {
+            "slug": "glasierte-kalbshaxe-mit-kartoffelpuree-steinpilzen-und-pfifferlingen-gerard-depardieu-roland-trettl-la-fontaine-gaillon-paris",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "go_to_market_framework",
             "art": null,
             "geltung": [],
@@ -1970,7 +2103,7 @@
         },
         {
             "slug": "heidelbeere-alpenmilch-marcus-g-lindner-mesa-zurich",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -2068,6 +2201,13 @@
             ]
         },
         {
+            "slug": "iberisches-spanferkel-mit-geschmortem-sellerie-und-perigordtruffel-roland-trettl-team-ikarus-1",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "innereien-arten-klassifikation",
             "art": null,
             "geltung": [],
@@ -2160,6 +2300,13 @@
                 "mixed_grill",
                 "substitution_innereien"
             ]
+        },
+        {
+            "slug": "joels-schwarzwalder-mit-kirschsorbet-joel-antunes-joel-atlanta",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
         },
         {
             "slug": "kaffee-sorten-rostung-mahlung",
@@ -2275,7 +2422,7 @@
         },
         {
             "slug": "kalbstatar-petersilie-langostino-speck-marcus-g-lindner-mesa-zurich",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -2302,6 +2449,13 @@
                 "selbstkosten",
                 "wareneinsatz"
             ]
+        },
+        {
+            "slug": "kalte-suppe-von-soba-nudeln-mit-pochiertem-ei-fruhlingslauch-und-yuzu-kenichiro-ooe-park-hyatt-tokio",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
         },
         {
             "slug": "kaninchen",
@@ -2342,6 +2496,13 @@
                 "maillard_vs_karamellisierung",
                 "zucker_pyrolyse"
             ]
+        },
+        {
+            "slug": "kartoffel-pot-au-feu-blattspinat-eigelb-perigordtrueffel-sven-elverfeld-aqua",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
         },
         {
             "slug": "kase-allergene-diatetik",
@@ -2515,6 +2676,13 @@
             ]
         },
         {
+            "slug": "knusprig-gebratenes-spanferkel-mit-weissem-pfirsich-und-blutwurst-gaston-acurio-astrid-y-gaston-lima",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "koji-amazake-kennwerte",
             "art": null,
             "geltung": [],
@@ -2656,6 +2824,13 @@
                 "pokelsalz_parfait_petermann",
                 "terrinen_trio_verkostungsflight"
             ]
+        },
+        {
+            "slug": "marinierter-bluefin-thunfisch-schwarzer-knoblauch-kokos-mechouiasauce-sven-elverfeld-aqua",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
         },
         {
             "slug": "meeresfruchte-innereien-dampf-beutel-garen",
@@ -4407,6 +4582,13 @@
             ]
         },
         {
+            "slug": "millefeuille-von-kartoffeln-pilzen-und-krautern-emmanuel-renaut-flocons-de-sel",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "miso-peaso-shoyu-kennwerte",
             "art": null,
             "geltung": [],
@@ -4427,6 +4609,13 @@
                 "rotavapor",
                 "zentrifugation"
             ]
+        },
+        {
+            "slug": "mozzarella-mit-kandierten-tomaten-enrico-roberto-cerea-da-vittorio",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
         },
         {
             "slug": "myoglobin-und-fleischfarbe",
@@ -4589,6 +4778,20 @@
                 "frittieroel_verbrauch",
                 "salatsauce"
             ]
+        },
+        {
+            "slug": "orangengelee-mit-honigeis-didier-corlou-ikarus-1",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "osterreichischer-alpenlachs-mit-sesam-rettich-und-miso-dressing-stefan-morth-park-hyatt-tokio",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
         },
         {
             "slug": "panaden-breading",
@@ -4824,6 +5027,27 @@
             ]
         },
         {
+            "slug": "poelierter-lachs-mit-austern-sauerrahm-perlen-und-kressesud-roland-trettl-team-ikarus-1",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "polenta-mit-steinpilzen-und-schwarzer-truffel-emmanuel-renaut-flocons-de-sel",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "polentasouffle-mit-artischockensud-und-truffel-enrico-roberto-cerea-da-vittorio",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "portfolio_struktur_prinzipien",
             "art": null,
             "geltung": [],
@@ -4854,7 +5078,7 @@
         },
         {
             "slug": "referenz_artischocken_erbsen_gruene_tomaten_parmesan",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -4864,7 +5088,7 @@
         },
         {
             "slug": "referenz_bananenkuchen_kokoseis_karamellmilch",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -4875,7 +5099,7 @@
         },
         {
             "slug": "referenz_hummersalat_curryeis_longan",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -4886,7 +5110,7 @@
         },
         {
             "slug": "referenz_langostino_mandel_zitrus_granite",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -4896,7 +5120,7 @@
         },
         {
             "slug": "referenz_miesmuscheln_alge_linsen_aji_amarillo",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -4906,7 +5130,7 @@
         },
         {
             "slug": "referenz_nebrodi_schwein_kartoffel_kaki",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -4917,7 +5141,7 @@
         },
         {
             "slug": "referenz_oktopus_palmherz_lardo_olivenpesto",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -4927,7 +5151,7 @@
         },
         {
             "slug": "referenz_orangen_cachaca_granite",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -4937,7 +5161,7 @@
         },
         {
             "slug": "referenz_ricotta_cannolo_kaktusfeige_mandelsorbet",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -4948,7 +5172,7 @@
         },
         {
             "slug": "referenz_short_ribs_austernsauce_erbse",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -4959,7 +5183,7 @@
         },
         {
             "slug": "referenz_thunfisch_toro_zwiebel_sumach",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -4969,7 +5193,7 @@
         },
         {
             "slug": "referenz_tom_yum_garnelen_taco",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -4980,7 +5204,7 @@
         },
         {
             "slug": "referenz_wagyu_wassermelone_sauerkraut_tapioka",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -4990,7 +5214,7 @@
         },
         {
             "slug": "referenz_wolfsbarsch_gurkensalat_zuckerwatte",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -4999,8 +5223,15 @@
             ]
         },
         {
+            "slug": "referenz-rezept-abalone-kartoffel-zitronengras-alvin-leung-bo-innovation",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "referenz-rezept-ajoblanco-mit-karamellisiertem-paprikasaft-litschipopcorn-dani-garcia",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -5009,8 +5240,22 @@
             ]
         },
         {
+            "slug": "referenz-rezept-atlantikhummer-in-der-blase-mit-navetten-und-zitronenconfit-thierry-marx-ikarus-1",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-bacalaokutteln-mit-salsiccia-und-blutwurst-xavier-pellicer-can-fabes",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "referenz-rezept-bachforelle-lardo-blumenkohl-marco-muller-rutz",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -5018,8 +5263,15 @@
             ]
         },
         {
+            "slug": "referenz-rezept-balfego-thunfisch-rettich-dashi-dieter-koschina-vila-joya",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "referenz-rezept-bbq-schwein-ikarus-team-martin-klein",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -5030,7 +5282,7 @@
         },
         {
             "slug": "referenz-rezept-beef-tatar-bete-imperial-kaviar-eckart-witzigmann-ikarus",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -5038,8 +5290,43 @@
             ]
         },
         {
+            "slug": "referenz-rezept-beeren-holunderbluten-pistazie-peter-goossens-hof-van-cleve",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-birkenmeringue-und-met-honig-eis-rene-redzepi-noma-ikarus-1",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-black-cod-safranmiso-alvin-leung-bo-innovation",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-borschtsch-heiss-kalt-mit-entenstopfleber-anatoly-komm-restaurant-varvary",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-bouchot-muscheln-mit-banane-rucola-und-speck-heiko-nieder-the-restaurant-dolder-grand",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "referenz-rezept-brick-in-the-wall-rote-bete-schokolade-juan-amador",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -5049,8 +5336,15 @@
             ]
         },
         {
+            "slug": "referenz-rezept-carpaccio-von-jakobsmuscheln-mit-perigordtruffel-und-ganselebermousse-joachim-koerper-eleven",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "referenz-rezept-ceviche-von-jakobsmuscheln-mit-wodka-red-bull-limettenespuma-kaviar-normand-laprise-ikarus-1",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -5058,8 +5352,64 @@
             ]
         },
         {
+            "slug": "referenz-rezept-confierter-kabeljau-mit-chorizoknodel-und-spinatsud-joachim-koerper-eleven",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-creme-brulee-von-der-passionsfrucht-mit-bergpfeffereis-joachim-koerper-eleven",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-crepinette-vom-zicklein-mit-artischocken-und-bries-antonino-cannavacciuolo-villa-crespi",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-dessert-von-fenchel-orange-und-milch-heiko-nieder-the-restaurant-dolder-grand",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-dreierlei-vom-iberischen-schwein-mit-zwiebelpuree-und-schmortomaten-andreas-caminada",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-erbsensuppe-mit-buttermilchschnee-und-schinken-daniel-humm-eleven-madison-park",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-erdbeere-rucola-paprikagemuse-apfel-anatoly-komm-restaurant-varvary",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-falsche-gnocchi-mit-tomatensauce-und-lardo-stefano-baiocco-villa-feltrinelli",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "referenz-rezept-flusskrebs-paradeiser-alain-weissgerber",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -5069,8 +5419,36 @@
             ]
         },
         {
+            "slug": "referenz-rezept-forellenrogen-kokosnuss-lakritze-ananas-grant-achatz-alinea",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-gambas-ravioli-und-carpaccio-mit-steinpilzen-xavier-pellicer-can-fabes",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-ganseleberterrine-mit-schokolade-und-passionsfrucht-thierry-marx-ikarus-1",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-gansestopfleber-mit-champignons-und-schwarzer-truffel-marcelo-tejedor-casa-marcelo",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "referenz-rezept-garnelensandwich-sandwich-von-roten-garnelen-normand-laprise-ikarus-1",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -5078,8 +5456,15 @@
             ]
         },
         {
+            "slug": "referenz-rezept-garnelentatar-mit-krautersorbet-ikarus-team-restaurant-ikarus",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "referenz-rezept-garum-ochsenherztomate-gruner-wacholder-marco-muller-rutz",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -5088,7 +5473,7 @@
         },
         {
             "slug": "referenz-rezept-gebratene-entenstopfleber-mit-pfirsich-physalis-arganol-normand-laprise-ikarus-1",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -5096,8 +5481,29 @@
             ]
         },
         {
+            "slug": "referenz-rezept-gebratene-ganseleber-auf-chicoree-mit-himbeeren-christian-jurgens-kastell",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-gebratene-langostinos-mit-austernemulsion-und-roten-algen-rene-redzepi-noma-ikarus-1",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-gebratene-taubenbrust-mit-parmesan-und-zwiebel-stefano-baiocco-villa-feltrinelli",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "referenz-rezept-gebratene-taubenbrust-mit-pistaziencreme-und-kamille-kenneth-oringer-ikarus-1",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -5108,8 +5514,29 @@
             ]
         },
         {
+            "slug": "referenz-rezept-gebratener-oktopus-mit-sot-ly-laisse-topinambur-und-feigen-roland-trettl-ikarus-1b",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-gedaempfte-papada-mit-kaviar-xavier-pellicer-can-fabes",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-gedampfter-seehecht-aus-celeiro-mit-grunem-paprikasud-marcelo-tejedor-casa-marcelo",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "referenz-rezept-gedampfter-wolfsbarsch-und-lauch-mit-krustentiersauce-und-imperialkaviar-jean-marie-gautier-villa-eugenie-ikarus-1",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -5117,8 +5544,15 @@
             ]
         },
         {
+            "slug": "referenz-rezept-gefullte-calamaretti-mit-artischocken-stefano-baiocco-villa-feltrinelli",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "referenz-rezept-gefullte-tomate-mit-bretonischem-hummer-avocado-tomaten-creme-dani-garcia",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -5126,8 +5560,22 @@
             ]
         },
         {
+            "slug": "referenz-rezept-gefullte-zitrone-paul-pairet-mr-mrs-bund",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-gegrillte-aubergine-tahini-joghurt-tendoncracker-paul-pairet-mr-mrs-bund",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "referenz-rezept-gegrillte-fine-de-claire-austern-mit-tapioka-und-silber-kenneth-oringer-ikarus-1",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -5138,8 +5586,22 @@
             ]
         },
         {
+            "slug": "referenz-rezept-gegrillte-garnelen-mit-weissem-spargel-knoblauch-und-schwarzem-pfeffer-ian-pongtawat-chalermkittichai-ikarus-1",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-gerostetes-brot-mit-schwarzer-truffel-paul-pairet-mr-mrs-bund",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "referenz-rezept-geschmorte-karotte-mit-ingwer-orange-ente-couet-svensson-ikarus-1",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -5147,8 +5609,22 @@
             ]
         },
         {
+            "slug": "referenz-rezept-geschmorte-milchlammhaxe-mit-thai-auberginen-und-grunem-curry-ian-pongtawat-chalermkittichai-ikarus-1",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-gurken-erdnuss-lollipop-paul-pairet-mr-mrs-bund",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "referenz-rezept-hartkasecreme-mit-roter-bete-couet-svensson-ikarus-1",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -5156,8 +5632,15 @@
             ]
         },
         {
+            "slug": "referenz-rezept-haselnuss-dacquoise-jean-marie-gautier-villa-eugenie-ikarus-1",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "referenz-rezept-hirschkalbsrucken-mit-hagebuttenpuree-geschmorten-zwiebeln-chiliol-normand-laprise-ikarus-1",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -5165,8 +5648,36 @@
             ]
         },
         {
+            "slug": "referenz-rezept-hummer-erbsen-sternanis-alvin-leung-bo-innovation",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-hummer-popcorn-mango-curry-grant-achatz-alinea",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-jakobsmuschel-mit-haselnusskruste-und-perigord-truffel-jean-marie-gautier-villa-eugenie-ikarus-1",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-jakobsmuschel-oktopus-und-kalbsmilken-andreas-caminada",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "referenz-rezept-jakobsmuscheln-spitzmorcheln-chablissud-harald-wohlfahrt-schwarzwaldstube",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -5174,8 +5685,22 @@
             ]
         },
         {
+            "slug": "referenz-rezept-kalbsmilken-grenadins-in-der-mandelkruste-artischockenboden-mit-getruffelten-kartoffeln-horst-petermann-kunststuben",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-kanadischer-hummer-in-gelber-currysauce-norbert-kostner-the-oriental",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "referenz-rezept-kartoffel-in-der-silberfolie-mit-thunfischtoro-kartoffelcreme-dani-garcia",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -5183,8 +5708,43 @@
             ]
         },
         {
+            "slug": "referenz-rezept-kartoffel-krauter-riegel-mit-garnelen-ikarus-team-restaurant-ikarus",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-knusprige-wachtelbrust-mit-wassermelone-und-cashewnussen-ian-pongtawat-chalermkittichai-ikarus-1",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-knuspriger-schweinebauch-mit-roter-currypaste-und-grunen-bohnen-norbert-kostner-the-oriental",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-kokosrisotto-mit-langostinos-im-filoteig-joachim-koerper-eleven",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-krosses-rotbarbenfilet-mit-guacamole-und-krustentierreduktion-stefano-baiocco-villa-feltrinelli",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "referenz-rezept-lachs-in-brotkruste-auf-zitronenhollandaise-topinambur-fenchel-couet-svensson-ikarus-1",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -5192,8 +5752,22 @@
             ]
         },
         {
+            "slug": "referenz-rezept-lammkarree-mit-zitronenkruste-weissem-spargel-artischocken-und-saubohnen-joachim-koerper-eleven",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-lammrucken-und-geschmortes-von-der-albler-wacholderheide-mit-saubohnen-und-tomaten-claus-peter-lumpp-bareiss",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "referenz-rezept-langostino-kalbszunge-cochayuyo-zitrus-konstantin-filippou",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -5203,8 +5777,15 @@
             ]
         },
         {
+            "slug": "referenz-rezept-langostinos-mit-tatar-vom-kalbsfilet-und-chilifond-andreas-caminada",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "referenz-rezept-larchenholz-himbeere-gurke-marco-muller-rutz",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -5212,8 +5793,29 @@
             ]
         },
         {
+            "slug": "referenz-rezept-lauch-kartoffel-mit-eigelb-und-kaviar-marcelo-tejedor-casa-marcelo",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-limettensouffle-mit-vanilleeis-und-karamellsauce-xavier-pellicer-can-fabes",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-linguine-aus-gragnano-calamaretti-und-fobellobrotsauce-antonino-cannavacciuolo-villa-crespi",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "referenz-rezept-magnum-von-der-gansestopfleber-massimo-bottura-osteria-francescana",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -5221,8 +5823,36 @@
             ]
         },
         {
+            "slug": "referenz-rezept-marinierte-garnelen-aus-sizilien-mit-kaviar-und-eigelb-antonino-cannavacciuolo-villa-crespi",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-marinierter-kingfish-auf-schwarzem-reis-und-koriandersauce-claus-peter-lumpp-bareiss",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-marinierter-taschenkrebs-mit-daikonrettich-und-krustentiermayonnaise-daniel-humm-eleven-madison-park",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-mariniertes-gemuse-mit-rindermark-rene-redzepi-noma-ikarus-1",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "referenz-rezept-mascarponecreme-mit-yuzu-kirschen-normand-laprise-ikarus-1",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -5230,8 +5860,15 @@
             ]
         },
         {
+            "slug": "referenz-rezept-miesmuscheln-mit-kokosnussmilch-galangal-und-limettenblattern-norbert-kostner-the-oriental",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "referenz-rezept-milch-schokolade-daniel-humm-eleven-madison-park",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -5239,8 +5876,15 @@
             ]
         },
         {
+            "slug": "referenz-rezept-minestrone-von-obst-und-gemuse-stefano-baiocco-villa-feltrinelli",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "referenz-rezept-moonrock-kenneth-oringer-ikarus-1",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -5250,8 +5894,15 @@
             ]
         },
         {
+            "slug": "referenz-rezept-mozzarella-tomate-ikarus-team-restaurant-ikarus",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "referenz-rezept-multivitamin-christian-bau-victors-fine-dining",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -5260,7 +5911,7 @@
         },
         {
             "slug": "referenz-rezept-nussbutterparfaitrollchen-mit-birnengranite-honig-couet-svensson-ikarus-1",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -5268,8 +5919,15 @@
             ]
         },
         {
+            "slug": "referenz-rezept-oktopus-mit-blumenkohl-und-luftgetrockneter-papada-xavier-pellicer-can-fabes",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "referenz-rezept-ora-king-lachs-koji-sake-nick-bril-the-jane",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -5277,8 +5935,15 @@
             ]
         },
         {
+            "slug": "referenz-rezept-parmigiano-reggiano-in-funf-reifegraden-temperaturen-und-texturen-massimo-bottura",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "referenz-rezept-perigordtrueffel-in-der-salzkruste-mit-birne-und-frischkaese-kenneth-oringer-ikarus-1",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -5290,7 +5955,7 @@
         },
         {
             "slug": "referenz-rezept-pfifferlinge-huhnerhaut-kirsche-marco-muller-rutz",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -5298,8 +5963,22 @@
             ]
         },
         {
+            "slug": "referenz-rezept-pina-colada-marcelo-tejedor-casa-marcelo",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-pistazienmousse-tortchen-mit-pfirsichwurfel-ikarus-team-restaurant-ikarus",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "referenz-rezept-poulet-de-bresse-gemusegarten-steinklee-ikarus-team-martin-klein",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -5309,8 +5988,15 @@
             ]
         },
         {
+            "slug": "referenz-rezept-ravioli-de-cecco-christian-jurgens-kastell",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "referenz-rezept-ravioli-vom-ochsenschwanz-mit-blumenkohl-schwarzem-truffel-dani-garcia",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -5319,7 +6005,7 @@
         },
         {
             "slug": "referenz-rezept-reinanke-holunderblute-alge-ikarus-team-martin-klein",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -5329,8 +6015,64 @@
             ]
         },
         {
+            "slug": "referenz-rezept-rhabarbervariationen-mit-schokolade-und-erdbeeren-andreas-caminada",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-riesengarnele-mit-zitrusfruchten-und-vanille-paul-pairet-mr-mrs-bund",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-rillettes-von-wachtelkeulen-geraucherter-schinken-steinpilz-ikarus-team-restaurant-ikarus",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-rindertatar-mit-sauerklee-und-estragonemulsion-rene-redzepi-noma-ikarus-1",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-rohe-jakobsmuschel-mit-codium-alge-marcelo-tejedor-casa-marcelo",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-rotbarbe-mit-roter-bete-und-knoblauch-vanille-puree-antonino-cannavacciuolo-villa-crespi",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-rotbarbe-safran-aioli-sobrasada-fernando-p-arellano-zaranda--hinweis",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-rotbarbe-safran-aioli-sobrasada-fernando-p-arellano-zaranda--komponenten-kennwerte",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "referenz-rezept-saibling-langsam-konfiert-mandeln-fichtensprossen-vinaigrette-stradner-villa-rene-lalique",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -5340,8 +6082,22 @@
             ]
         },
         {
+            "slug": "referenz-rezept-saibling-mit-erbsenpuree-und-roter-bete-andreas-caminada",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-salat-von-algen-wassermelone-und-herzmuscheln-anatoly-komm-restaurant-varvary",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "referenz-rezept-salzwiesenlamm-dashi-junglauch-marco-muller-rutz",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -5349,8 +6105,29 @@
             ]
         },
         {
+            "slug": "referenz-rezept-schokolade-heidelbeere-tabak-ahorn-grant-achatz-alinea",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-schokolade-wurzelgemuse-hulsenfruchte-und-perigord-truffel-roland-trettl-ikarus-1b",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-schokoladencroquette-mit-ananas-und-kokoseis-antonino-cannavacciuolo-villa-crespi",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "referenz-rezept-schwedische-jakobsmuscheln-mit-winterapfel-walnussen-couet-svensson-ikarus-1",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -5358,8 +6135,113 @@
             ]
         },
         {
+            "slug": "referenz-rezept-schweinebauch-mit-barlauchsud-und-knusper-rene-redzepi-noma-ikarus-1",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-seeigel-mit-sellerie-und-chorizo-heiko-nieder-the-restaurant-dolder-grand",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-sepia-piquillo-cannelloni-mit-schweinekruste-thierry-marx-ikarus-1",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-sepiagnocchi-mit-ajo-blanco-und-frischen-mandeln-ikarus-team-restaurant-ikarus",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-sepiashimi-mit-avocado-und-schwarzem-knoblauch-ikarus-team-restaurant-ikarus",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-sex-on-the-beach-alvin-leung-bo-innovation",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-soufflierte-zucchinibluten-mit-langustinen-auf-einer-orangenvinaigrette-horst-petermann-kunststuben",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-spanferkel-mit-rhabarber-daniel-humm-eleven-madison-park",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-spargel-und-morcheln-mit-pochiertem-ei-und-truffelsauce-anatoly-komm-restaurant-varvary",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-speck-karamell-apfel-thymian-grant-achatz-alinea",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-springbock-mit-biltong-buchu-gnocchi-mais-pilz-ragout-und-pastinakenschaum-margot-janse",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-st-pierre-mit-flusskrebsen-und-knoblauch-daniel-humm-eleven-madison-park",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-steinbutt-im-chinakohlblatt-in-sojasud-sam-leong-ikarus-1b",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-steinbutt-mit-waadtlander-saucisson-wirsing-und-truffel-heiko-nieder-the-restaurant-dolder-grand",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-sticky-rice-mit-mango-ian-pongtawat-chalermkittichai-ikarus-1",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "referenz-rezept-tapiokaknodel-geraucherte-forelle-erdnusse-senfblatter-bee-satongun-paste",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -5368,7 +6250,7 @@
         },
         {
             "slug": "referenz-rezept-taube-haselnuss-gnocchi-kerbel-sergio-herman-oud-sluis",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -5376,8 +6258,15 @@
             ]
         },
         {
+            "slug": "referenz-rezept-taube-kurbis-pfifferlinge-salbei-peter-goossens-hof-van-cleve",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "referenz-rezept-taube-mango-kokos-purple-curry-juan-amador",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -5387,8 +6276,15 @@
             ]
         },
         {
+            "slug": "referenz-rezept-thailandischer-rindfleischsalat-vom-wagyu-beef-mit-tomaten-paprika-vinaigrette-ian-pongtawat-chalermkittichai-ikarus-1",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "referenz-rezept-thunfischtatar-mit-kaviar-wachtelei-und-norisauce-kenneth-oringer-ikarus-1",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -5400,8 +6296,29 @@
             ]
         },
         {
+            "slug": "referenz-rezept-tomate-chinesische-oliven-pat-chun-alvin-leung-bo-innovation",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-tomatensabayon-mit-parmesaneis-und-getrocknetem-pata-negra-schinken-margot-janse",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-tortchen-von-passionsfrucht-mit-nougat-und-butterstreusel-claus-peter-lumpp-bareiss",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "referenz-rezept-truffelconsomme-unter-der-blatterteighaube-christophe-muller-bocuse",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -5409,8 +6326,22 @@
             ]
         },
         {
+            "slug": "referenz-rezept-vareniki-mit-konigskrabbe-anatoly-komm-restaurant-varvary",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-variation-von-garnelen-mit-wasabi-mayonnaise-und-honig-senf-sauce-sam-leong-ikarus-1b",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "referenz-rezept-vollmond-aus-weisser-schokolade-mandarine-yuzu-dani-garcia",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -5418,8 +6349,36 @@
             ]
         },
         {
+            "slug": "referenz-rezept-wachtelkegel-mit-saubohnen-erbsen-gelee-und-selleriecouscous-thierry-marx-ikarus-1",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-wagyu-beef-a-1-gemahlen-kartoffel-chips-grant-achatz-alinea",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-wan-tans-mit-schweinefleisch-und-krebsfleisch-im-spinatsud-sam-leong-ikarus-1b",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-wassermelone-mit-fetakase-olivencreme-und-balsamico-gelee-margot-janse",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "referenz-rezept-wolfsbarsch-wasserspinat-nussbutter-schwarzer-truffel-tim-raue",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -5427,9 +6386,41 @@
             ]
         },
         {
-            "slug": "referenzgericht.niveau1_saibling_haute",
-            "art": null,
+            "slug": "referenz-rezept-zigarre-von-der-gansestopfleber-mit-schwarzer-truffel-horst-petermann-kunststuben",
+            "art": "referenz",
             "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-zitronentarte-neu-konstruiert-thierry-marx-ikarus-1",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-zuppa-inglese-massimo-bottura",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenz-rezept-zweierlei-vom-charolais-rind-chicoree-gruyere-und-feigen-heiko-nieder-the-restaurant-dolder-grand",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "referenzgericht.niveau1_saibling_haute",
+            "art": "referenz",
+            "geltung": {
+                "niveau": [
+                    "haute_cuisine"
+                ]
+            },
             "datenwerte": [],
             "aliase": [
                 "beurre_blanc",
@@ -5442,8 +6433,12 @@
         },
         {
             "slug": "referenzgericht.niveau2_plant_forward_sellerie",
-            "art": null,
-            "geltung": [],
+            "art": "referenz",
+            "geltung": {
+                "niveau": [
+                    "gehoben"
+                ]
+            },
             "datenwerte": [],
             "aliase": [
                 "centerpiece",
@@ -5454,8 +6449,12 @@
         },
         {
             "slug": "referenzgericht.niveau3_geschmorte_rinderbacke",
-            "art": null,
-            "geltung": [],
+            "art": "referenz",
+            "geltung": {
+                "niveau": [
+                    "klassisch"
+                ]
+            },
             "datenwerte": [],
             "aliase": [
                 "goldgericht",
@@ -5920,6 +6919,13 @@
             ]
         },
         {
+            "slug": "rehrucken-mit-esskastanien-rotkohlpuree-und-heidelbeeren-mauro-colagreco-mirazur",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "reis-sorten",
             "art": null,
             "geltung": [],
@@ -5973,12 +6979,19 @@
         },
         {
             "slug": "saibling-wurzelgemuse-apfel-quinoa-marcus-g-lindner-mesa-zurich",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
                 "lebenssinn"
             ]
+        },
+        {
+            "slug": "sashimi-von-thunfisch-und-steinbutt-mit-sushi-von-gebratener-makrele-kenichiro-ooe-park-hyatt-tokio",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
         },
         {
             "slug": "saureph-chemie-in-der-kuche",
@@ -5992,6 +7005,27 @@
                 "ph_wert",
                 "saure_kuche"
             ]
+        },
+        {
+            "slug": "saute-von-calamari-tomaten-und-knoblauch-gerard-depardieu-roland-trettl-la-fontaine-gaillon-paris",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "sautierte-rotbarbe-mit-safranrisotto-und-bouillabaissesud-joel-antunes-joel-atlanta",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "sautiertes-kalbsbries-mit-holunderblute-emmanuel-renaut-flocons-de-sel",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
         },
         {
             "slug": "schalenfruchte-nuss-arten",
@@ -6165,6 +7199,13 @@
             ]
         },
         {
+            "slug": "schokoladentarte-didier-corlou-ikarus-1",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "seafood-krustentiere-muscheln-kopffusser",
             "art": null,
             "geltung": [],
@@ -6195,6 +7236,13 @@
                 "venusmuschel",
                 "vongole"
             ]
+        },
+        {
+            "slug": "seeteufel-bomba-reis-bouillabaisse-peter-goossens-hof-van-cleve",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
         },
         {
             "slug": "segment.betriebsgastronomie",
@@ -6278,6 +7326,13 @@
                 "schulverpflegung",
                 "vdskc"
             ]
+        },
+        {
+            "slug": "sepia-rote-paprika-suss-saures-peter-goossens-hof-van-cleve",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
         },
         {
             "slug": "service_grundlagen",
@@ -6462,6 +7517,20 @@
                 "restaurant_tim_raue",
                 "tim_raue"
             ]
+        },
+        {
+            "slug": "simmentaler-rinderfilet-stroganoff-sauerrahm-rote-bete-gewuerzgurke-kartoffel-sven-elverfeld-aqua",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "simply-gansestopfleber-mit-red-bull-simply-cola-roland-trettl-team-ikarus-1",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
         },
         {
             "slug": "skill-wissens-dossier-anlegen-splitten-uber-mcp",
@@ -6902,6 +7971,13 @@
             ]
         },
         {
+            "slug": "taschenkrebs-mit-guacamole-und-gazpachosauce-gerard-depardieu-roland-trettl-la-fontaine-gaillon-paris",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "tee-sorten-oxidationsgrade",
             "art": null,
             "geltung": [],
@@ -6942,6 +8018,13 @@
             ]
         },
         {
+            "slug": "terrine-von-gemuse-a-la-barigoule-und-atlantikhummer-roland-trettl-team-ikarus-1",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "terrinen-formen-kuhlen-prasentieren-magnum-und-zigarre-technik",
             "art": null,
             "geltung": [],
@@ -6964,6 +8047,13 @@
                 "terrinen_bindung_verhaltnisse",
                 "terrinen_grundtypen"
             ]
+        },
+        {
+            "slug": "tiramisu-interpretation-08-sven-elverfeld-aqua",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
         },
         {
             "slug": "triebmittel-hefe-sauerteig-backpulver-natron",
@@ -7027,6 +8117,20 @@
                 "tuile_rezept",
                 "zweistufen_kartoffelchip"
             ]
+        },
+        {
+            "slug": "variation-von-der-gansestopfleber-mit-rhabarber-und-portwein-claus-peter-lumpp-bareiss-baiersbronn",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "variation-von-langostinos-und-imperial-kaviar-claus-peter-lumpp-bareiss-baiersbronn",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
         },
         {
             "slug": "verwechslungs-risiken-abgrenzung-bei-wurzel-und-zwiebelgemuse",
@@ -7128,7 +8232,7 @@
         },
         {
             "slug": "wagyu-beef-avocado-tomate-rucola-marcus-g-lindner-mesa-zurich",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -8063,6 +9167,13 @@
             ]
         },
         {
+            "slug": "wintergarten-parmesanbouillon-schwarze-truffel-mauro-colagreco-mirazur",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "wissensmodul-architektur-funktionsweise-food-alchemist",
             "art": "ablauf",
             "geltung": [],
@@ -8327,6 +9438,13 @@
                 "soffritto",
                 "wurzelgemuese"
             ]
+        },
+        {
+            "slug": "zitrone-geblasene-zuckerzitrone-emmanuel-renaut-flocons-de-sel",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
         },
         {
             "slug": "zucker-bindemittel-aromen-backzutaten",

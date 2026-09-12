@@ -1,5 +1,5 @@
 {
-    "erzeugt_am": "2026-09-10",
+    "erzeugt_am": "2026-09-12",
     "team_id": 6,
     "zeilen": [
         {
@@ -39,6 +39,156 @@
             "ord": 10,
             "mode": "pflicht",
             "slug": "regelwerk-foodbook-grundgerust",
+            "active": true,
+            "global": false
+        },
+        {
+            "scope": "prompt_key",
+            "scope_key": "gp.allergene",
+            "role": "root",
+            "ord": 10,
+            "mode": "pflicht",
+            "slug": "regelwerk-gp-16-allergen-vererbung",
+            "active": true,
+            "global": false
+        },
+        {
+            "scope": "prompt_key",
+            "scope_key": "gp.condition",
+            "role": "root",
+            "ord": 10,
+            "mode": "pflicht",
+            "slug": "regelwerk-gp-49-attribute-klassen-pflicht-vokabular",
+            "active": true,
+            "global": false
+        },
+        {
+            "scope": "prompt_key",
+            "scope_key": "gp.conformance_revise",
+            "role": "root",
+            "ord": 10,
+            "mode": "pflicht",
+            "slug": "regelwerk-gp-6-benennungsschema-doppelnamen-fremdwoerter",
+            "active": true,
+            "global": false
+        },
+        {
+            "scope": "prompt_key",
+            "scope_key": "gp.conformance_revise",
+            "role": "root",
+            "ord": 20,
+            "mode": "pflicht",
+            "slug": "regelwerk-gp-61-singular-pflicht-produktnamen",
+            "active": true,
+            "global": false
+        },
+        {
+            "scope": "prompt_key",
+            "scope_key": "gp.conformance_revise",
+            "role": "root",
+            "ord": 30,
+            "mode": "pflicht",
+            "slug": "regelwerk-gp-49-attribute-klassen-pflicht-vokabular",
+            "active": true,
+            "global": false
+        },
+        {
+            "scope": "prompt_key",
+            "scope_key": "gp.conformance_revise",
+            "role": "root",
+            "ord": 40,
+            "mode": "wenn_platz",
+            "slug": "regelwerk-gp-3-strukturbaum-15-warengruppen--3-strukturbaum-15-warengruppen",
+            "active": true,
+            "global": false
+        },
+        {
+            "scope": "prompt_key",
+            "scope_key": "gp.conformance_revise",
+            "role": "root",
+            "ord": 50,
+            "mode": "wenn_platz",
+            "slug": "regelwerk-gp-3-strukturbaum-15-warengruppen--3-strukturbaum-15-warengruppen-2",
+            "active": true,
+            "global": false
+        },
+        {
+            "scope": "prompt_key",
+            "scope_key": "gp.piece_default_g",
+            "role": "root",
+            "ord": 10,
+            "mode": "pflicht",
+            "slug": "regelwerk-gp-78-grammatur-regeln-produktspezifische-pflichtangaben",
+            "active": true,
+            "global": false
+        },
+        {
+            "scope": "prompt_key",
+            "scope_key": "gp.suggest",
+            "role": "root",
+            "ord": 10,
+            "mode": "pflicht",
+            "slug": "regelwerk-gp-6-benennungsschema-doppelnamen-fremdwoerter",
+            "active": true,
+            "global": false
+        },
+        {
+            "scope": "prompt_key",
+            "scope_key": "gp.suggest",
+            "role": "root",
+            "ord": 20,
+            "mode": "pflicht",
+            "slug": "regelwerk-gp-61-singular-pflicht-produktnamen",
+            "active": true,
+            "global": false
+        },
+        {
+            "scope": "prompt_key",
+            "scope_key": "gp.suggest",
+            "role": "root",
+            "ord": 30,
+            "mode": "wenn_platz",
+            "slug": "regelwerk-gp-510-markenregel-4-punkt-tiebreaker",
+            "active": true,
+            "global": false
+        },
+        {
+            "scope": "prompt_key",
+            "scope_key": "gp.suggest",
+            "role": "root",
+            "ord": 40,
+            "mode": "wenn_platz",
+            "slug": "regelwerk-gp-78-grammatur-regeln-produktspezifische-pflichtangaben",
+            "active": true,
+            "global": false
+        },
+        {
+            "scope": "prompt_key",
+            "scope_key": "gp.zaehl_einheiten",
+            "role": "root",
+            "ord": 10,
+            "mode": "pflicht",
+            "slug": "regelwerk-gp-78-grammatur-regeln-produktspezifische-pflichtangaben",
+            "active": true,
+            "global": false
+        },
+        {
+            "scope": "prompt_key",
+            "scope_key": "recipe.description",
+            "role": "root",
+            "ord": 10,
+            "mode": "pflicht",
+            "slug": "regelwerk-basisrezepte-8-ki-beschreibung-tag-vergabe",
+            "active": true,
+            "global": false
+        },
+        {
+            "scope": "prompt_key",
+            "scope_key": "recipe.garverlust",
+            "role": "root",
+            "ord": 10,
+            "mode": "pflicht",
+            "slug": "regelwerk-basisrezepte-6-mengen-einheiten-yield",
             "active": true,
             "global": false
         },
@@ -174,6 +324,56 @@
         },
         {
             "scope": "prompt_key",
+            "scope_key": "recipe.name_putzen",
+            "role": "root",
+            "ord": 10,
+            "mode": "pflicht",
+            "slug": "regelwerk-basisrezepte-10-12-naming-grundprinzip-typ-vokabular--1-naming-syntax-formalisiert",
+            "active": true,
+            "global": false
+        },
+        {
+            "scope": "prompt_key",
+            "scope_key": "recipe.name_putzen",
+            "role": "root",
+            "ord": 20,
+            "mode": "pflicht",
+            "slug": "regelwerk-basisrezepte-10-12-naming-grundprinzip-typ-vokabular--1-2-typ-vokabular-kontrolliert",
+            "active": true,
+            "global": false
+        },
+        {
+            "scope": "prompt_key",
+            "scope_key": "recipe.steps",
+            "role": "root",
+            "ord": 10,
+            "mode": "pflicht",
+            "slug": "regelwerk-basisrezepte-12-zutaten-komponenten-reihenfolge",
+            "active": true,
+            "global": false
+        },
+        {
+            "scope": "prompt_key",
+            "scope_key": "recipe.titel_vorschlag",
+            "role": "root",
+            "ord": 10,
+            "mode": "pflicht",
+            "slug": "regelwerk-basisrezepte-10-12-naming-grundprinzip-typ-vokabular--1-naming-syntax-formalisiert",
+            "active": true,
+            "global": false
+        },
+        {
+            "scope": "prompt_key",
+            "scope_key": "recipe.titel_vorschlag",
+            "role": "root",
+            "ord": 20,
+            "mode": "pflicht",
+            "slug": "regelwerk-basisrezepte-10-12-naming-grundprinzip-typ-vokabular--1-2-typ-vokabular-kontrolliert",
+            "active": true,
+            "global": false
+        },
+        {
+            "scope": "prompt_key",
             "scope_key": "vk.generator",
             "role": "root",
             "ord": 10,
@@ -289,6 +489,56 @@
             "ord": 120,
             "mode": "pflicht",
             "slug": "mengen_defaults--format-multiplikatoren-von-a-la-carte-ausgehend",
+            "active": true,
+            "global": false
+        },
+        {
+            "scope": "prompt_key",
+            "scope_key": "vk.speisen_klasse",
+            "role": "root",
+            "ord": 10,
+            "mode": "pflicht",
+            "slug": "regelwerk.regelwerk_verkaufsgerichte--2-klassifikation-modell-a-hg-ist-die-kategorie-a",
+            "active": true,
+            "global": false
+        },
+        {
+            "scope": "prompt_key",
+            "scope_key": "vk.titel_vorschlag",
+            "role": "root",
+            "ord": 10,
+            "mode": "pflicht",
+            "slug": "regelwerk.regelwerk_verkaufsgerichte--1-naming-hg-praefix-pipe-skelett-verbindlich-use",
+            "active": true,
+            "global": false
+        },
+        {
+            "scope": "prompt_key",
+            "scope_key": "vk.titel_vorschlag",
+            "role": "root",
+            "ord": 20,
+            "mode": "pflicht",
+            "slug": "regelwerk.regelwerk_verkaufsgerichte--1-2a-form-portions-qualifier-definierend-bleibt",
+            "active": true,
+            "global": false
+        },
+        {
+            "scope": "prompt_key",
+            "scope_key": "vk.wording",
+            "role": "root",
+            "ord": 10,
+            "mode": "pflicht",
+            "slug": "regelwerk.regelwerk_verkaufsgerichte--1-naming-hg-praefix-pipe-skelett-verbindlich-use",
+            "active": true,
+            "global": false
+        },
+        {
+            "scope": "prompt_key",
+            "scope_key": "vk.wording",
+            "role": "root",
+            "ord": 20,
+            "mode": "wenn_platz",
+            "slug": "regelwerk.regelwerk_verkaufsgerichte--1-2a-form-portions-qualifier-definierend-bleibt",
             "active": true,
             "global": false
         }
