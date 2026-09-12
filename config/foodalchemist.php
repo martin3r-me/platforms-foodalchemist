@@ -1840,7 +1840,10 @@ return [
                 . '(Dressing, Salat, Dessert, Rohkost): kalt = true und geraet_id = null. Sonst kalt = false, '
                 . 'geraet_id gesetzt, temp_c (Geraetetemperatur), duration_min, core_temp_c (Kerntemperatur, '
                 . 'nur wenn kuechenueblich gemessen, sonst null), note (kurz, z. B. abgedeckt, Fluessigkeit '
-                . 'angiessen). Unsicher bei einem Zahlenfeld ⇒ null, nie raten: '
+                . 'angiessen). Unsicher bei einem Zahlenfeld ⇒ null, nie raten. '
+                . 'NENNT beschreibung oder zubereitung ein Geraet bzw. Verfahren ausdruecklich '
+                . '(z. B. »Regeneration im Kombidaempfer«), dann gilt DAS — eine fachlich abweichende '
+                . 'Meinung gehoert in note, nicht in geraet_id: '
                 . 'werte = {kalt, geraet_id, temp_c, duration_min, core_temp_c, note}.',
         ],
         'vk.regeneration' => [
