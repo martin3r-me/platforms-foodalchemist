@@ -756,14 +756,22 @@
             "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
-            "aliase": []
+            "aliase": [
+                "bruehe",
+                "bruehen",
+                "fond",
+                "fonds"
+            ]
         },
         {
             "slug": "bruehen_fonds--klaerfleisch-klaeren-fuer-consomme",
             "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
-            "aliase": []
+            "aliase": [
+                "consomme",
+                "klaerfleisch"
+            ]
         },
         {
             "slug": "bruehen_fonds--modernist-bruehen-innovationen",
@@ -3073,7 +3081,10 @@
             "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
-            "aliase": []
+            "aliase": [
+                "gefahrenanalyse",
+                "hygiene"
+            ]
         },
         {
             "slug": "hygiene_haccp--mikrobiologie-lebensmittel-relevant",
@@ -3087,7 +3098,9 @@
             "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
-            "aliase": []
+            "aliase": [
+                "kerntemperatur_sicherheit"
+            ]
         },
         {
             "slug": "hygiene_haccp--tiefkuehl-vorgaben-fuer-rohen-fisch-sashimi-sich",
@@ -5666,7 +5679,11 @@
             "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
-            "aliase": []
+            "aliase": [
+                "gaenge",
+                "menue_aufbau",
+                "menuefolge"
+            ]
         },
         {
             "slug": "menue_architektur--logistik-aspekte-im-service",
@@ -5680,7 +5697,9 @@
             "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
-            "aliase": []
+            "aliase": [
+                "spannungsbogen"
+            ]
         },
         {
             "slug": "milch-sahne-fettstufen",
@@ -6452,7 +6471,11 @@
             "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
-            "aliase": []
+            "aliase": [
+                "anrichten",
+                "plating",
+                "teller_aufbau"
+            ]
         },
         {
             "slug": "plating_patterns--11-bhg-anwendbarkeit-was-passt-wo",
@@ -6466,7 +6489,9 @@
             "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
-            "aliase": []
+            "aliase": [
+                "textur_kontrast"
+            ]
         },
         {
             "slug": "plating_patterns--9-typische-komponenten-patterns-modernist-inspir",
@@ -8783,21 +8808,34 @@
             "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
-            "aliase": []
+            "aliase": [
+                "demi_glace",
+                "espagnole",
+                "hollandaise"
+            ]
         },
         {
             "slug": "sauce_mutterstrukturen--die-5-mutter-saucen",
             "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
-            "aliase": []
+            "aliase": [
+                "bechamel",
+                "grundsauce",
+                "muttersauce",
+                "veloute"
+            ]
         },
         {
             "slug": "sauce_mutterstrukturen--emulsion-schaeume-spezialwissen",
             "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
-            "aliase": []
+            "aliase": [
+                "emulsion",
+                "espuma",
+                "schaum"
+            ]
         },
         {
             "slug": "sauce_mutterstrukturen--fruehstuecks-brunch-mutter-mayonnaise-bonus",
@@ -10734,7 +10772,10 @@
             "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
-            "aliase": []
+            "aliase": [
+                "cremesuppe",
+                "gebundene_suppe"
+            ]
         },
         {
             "slug": "suppen_systematik--service-logik",
@@ -10748,7 +10789,10 @@
             "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
-            "aliase": []
+            "aliase": [
+                "suppe",
+                "suppen"
+            ]
         },
         {
             "slug": "synonyme--asiatische-wuerzen",
