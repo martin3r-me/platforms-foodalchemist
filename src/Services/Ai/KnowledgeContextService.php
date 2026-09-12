@@ -1914,6 +1914,6 @@ class KnowledgeContextService
     {
         return DB::table('foodalchemist_knowledge_documents')->tap($this->nurSichtbar($team))
             ->where('slug', $slug)->where('active', 1)->whereNull('deleted_at')
-            ->first(['slug', 'title', 'category', 'art', 'geltung', 'datenwerte', 'version', 'char_count', 'content_md']);
+            ->first(['id', 'slug', 'title', 'category', 'art', 'geltung', 'datenwerte', 'version', 'char_count', 'content_md']);
     }
 }
