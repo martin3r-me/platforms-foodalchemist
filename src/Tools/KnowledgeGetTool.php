@@ -2,6 +2,7 @@
 
 namespace Platform\FoodAlchemist\Tools;
 
+use Illuminate\Support\Facades\DB;
 use Platform\Core\Contracts\ToolContract;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolMetadataContract;
@@ -56,6 +57,15 @@ class KnowledgeGetTool extends FoodAlchemistTool implements ToolContract, ToolMe
             'datenwerte' => json_decode($doc->datenwerte ?? '[]', true),
             'version' => (int) $doc->version,
             'char_count' => (int) $doc->char_count,
+            // Aliase MIT id: `knowledge.ALIAS action=remove` verlangt eine `alias_id`, und die gab
+            // bis hierher kein Werkzeug aus — ein einmal gesetzter Alias war über MCP nicht mehr
+            // zu finden und nicht mehr zu entfernen. Bei einer Kuration über den ganzen Korpus
+            // waeren das hunderte Einbahn-Entscheidungen. Aliase wiegen schwer: ein Treffer gibt
+            // +1,0 auf den lexikalischen Score, ein Jaccard-Treffer 0,05–0,3.
+            'aliases' => DB::table('foodalchemist_knowledge_aliases')
+                ->where('knowledge_document_id', $doc->id)->orderBy('alias_slug')
+                ->get(['id', 'alias_slug'])
+                ->map(fn ($a) => ['id' => (int) $a->id, 'alias' => $a->alias_slug])->all(),
             'truncated' => mb_strlen($doc->content_md) > $maxChars,
             'content_md' => $svc->truncate($doc->content_md, $maxChars),
         ]);
