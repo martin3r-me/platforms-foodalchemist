@@ -456,9 +456,25 @@ class RecipeOneShotService
             $slugs = array_values(array_filter((array) ($vorschlag->werte['equipment_slugs'] ?? []), 'is_string'));
             $ids = $slugs === [] ? collect() : FoodAlchemistVocabKochequipment::visibleToTeam($team)
                 ->whereIn('slug', $slugs)->pluck('id');
-            $recipe->equipment()->sync($ids->all());
 
-            return ['status' => $ids->isEmpty() ? 'leer' : 'aktualisiert', 'n_equipment' => $ids->count()];
+            // ★ MANUAL GEWINNT — dieselbe Invariante wie bei Ankern und Regeneration.
+            // Vorher stand hier ein blankes sync(): es ERSETZT die ganze Liste, also verschwand
+            // ein von Hand gesetztes Geraet beim naechsten Voll-Lauf spurlos und ohne Meldung.
+            // Bei den Anker-Mappings ist genau das seit Spec 50 verboten ("manuelle Mappings
+            // werden nie ersetzt"); beim Equipment fehlte die Grundlage, weil die Tabelle
+            // manuell und KI gar nicht unterscheiden konnte.
+            // allRelatedIds() statt pluck('<tabelle>.id'): der Tabellenname der Relation ist
+            // foodalchemist_vocab_kitchen_equipment, NICHT der Modellname — ein hartkodierter
+            // Qualifier ging hier prompt daneben.
+            $manuell = $recipe->equipment()->wherePivot('source', 'manual')->allRelatedIds();
+            $behalten = $manuell->flip()->map(fn () => ['source' => 'manual'])->all();
+            $neu = $ids->diff($manuell)->flip()
+                ->map(fn () => ['source' => 'ki', 'ai_confidence' => $vorschlag->confidence])->all();
+            $recipe->equipment()->sync($behalten + $neu);
+
+            return ['status' => $ids->isEmpty() ? 'leer' : 'aktualisiert',
+                'n_equipment' => count($behalten) + count($neu),
+                'manuell_geschuetzt' => $manuell->count()];
         } catch (\Throwable $e) {
             return ['status' => 'fehler', 'fehler' => mb_strimwidth($e->getMessage(), 0, 300)];
         }

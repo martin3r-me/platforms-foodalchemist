@@ -247,7 +247,7 @@ class FoodAlchemistRecipe extends Model
     public function equipment(): BelongsToMany
     {
         return $this->belongsToMany(FoodAlchemistVocabKochequipment::class, 'foodalchemist_recipe_equipment', 'recipe_id', 'equipment_id')
-            ->withPivot('note');
+            ->withPivot('note', 'source', 'ai_confidence', 'ai_reasoning');
     }
 
     /** Eltern-Rezepte = Rezepte, die DIESES als Sub-Rezept referenzieren (↑-Navigation). */

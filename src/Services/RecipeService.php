@@ -270,7 +270,11 @@ class RecipeService
         ]);
         // Equipment (§4.2.6): M:N-Sync wie update(), nur wenn übergeben
         if (array_key_exists('equipment_ids', $in) && is_array($in['equipment_ids'])) {
-            $recipe->equipment()->sync(array_map('intval', $in['equipment_ids']));
+            // Aus Editor und MCP kommt eine MENSCHLICHE Entscheidung — sie wird als solche
+            // gestempelt, damit die Anreicherung sie spaeter nicht ueberschreibt.
+            $recipe->equipment()->sync(collect($in['equipment_ids'])->mapWithKeys(
+                fn ($id) => [(int) $id => ['source' => 'manual']]
+            )->all());
         }
         $this->schritteAusMarkdown($recipe, $in);
         app(RecipeRecomputeService::class)->recomputePipeline($recipe->id);
@@ -331,7 +335,11 @@ class RecipeService
         ]);
         // Equipment (§4.2.6): M:N-Sync, nur wenn übergeben
         if (array_key_exists('equipment_ids', $in) && is_array($in['equipment_ids'])) {
-            $recipe->equipment()->sync(array_map('intval', $in['equipment_ids']));
+            // Aus Editor und MCP kommt eine MENSCHLICHE Entscheidung — sie wird als solche
+            // gestempelt, damit die Anreicherung sie spaeter nicht ueberschreibt.
+            $recipe->equipment()->sync(collect($in['equipment_ids'])->mapWithKeys(
+                fn ($id) => [(int) $id => ['source' => 'manual']]
+            )->all());
         }
         $this->schritteAusMarkdown($recipe, $in);
         if (array_key_exists('yield_kg_manual', $in) && $in['yield_kg_manual'] !== $altManual) {
