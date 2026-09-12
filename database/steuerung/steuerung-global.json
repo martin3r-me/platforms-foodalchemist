@@ -1,5 +1,5 @@
 {
-    "erzeugt_am": "2026-09-12",
+    "erzeugt_am": "2026-09-13",
     "routings": [
         {
             "feature": "ai_extract_recipe",
@@ -698,6 +698,22 @@
             "max_chars_per_doc": null
         },
         {
+            "feature": "planning.dish_proposal_revise",
+            "art": "fachwissen",
+            "category": null,
+            "mode": "discovery",
+            "max_docs": 3,
+            "max_chars_per_doc": null
+        },
+        {
+            "feature": "planung.leitplanken",
+            "art": "fachwissen",
+            "category": null,
+            "mode": "none",
+            "max_docs": null,
+            "max_chars_per_doc": null
+        },
+        {
             "feature": "praesentation.design_css",
             "art": "fachwissen",
             "category": null,
@@ -911,6 +927,14 @@
             "category": null,
             "mode": "discovery",
             "max_docs": 3,
+            "max_chars_per_doc": null
+        },
+        {
+            "feature": "signal.margin_levers",
+            "art": "fachwissen",
+            "category": null,
+            "mode": "none",
+            "max_docs": null,
             "max_chars_per_doc": null
         },
         {
