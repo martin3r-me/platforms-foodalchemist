@@ -74,3 +74,53 @@ it('der Schalter steht im Schema, damit ein Agent ihn ueberhaupt finden kann', f
     expect($schema['properties'])->toHaveKey('mit_wissen')
         ->and($schema['properties']['mit_wissen']['description'])->toContain('VOLLTEXTE');
 });
+
+/**
+ * ★ Der Fix hatte selbst einen Fehler, und nur das Testen ueber den ECHTEN MCP-Weg hat ihn
+ * gezeigt: alle 13 Dossiers am Stueck sind 35.075 Zeichen Text und ergaben eine
+ * 50.832-Zeichen-Antwort — jenseits des Token-Limits. Der Aufruf starb, bevor der Agent ein
+ * Wort davon sah. Eine Antwort, die nie ankommt, ist schlechter als eine Titelliste: sie sieht
+ * nach Fortschritt aus.
+ */
+it('★ blaettert, statt eine Antwort zu bauen, die am Token-Limit stirbt', function () {
+    // Zwei fette Dossiers, zusammen sicher ueber dem Budget von 20.000 Zeichen.
+    foreach ([1, 2] as $n) {
+        $text = str_repeat("Regeltext zum Fuellen des Budgets. ", 400);   // ~13.600 Z.
+        $docId = \Illuminate\Support\Facades\DB::table('foodalchemist_knowledge_documents')->insertGetId([
+            'uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(), 'team_id' => null,
+            'slug' => 'regelwerk-fett-'.$n, 'title' => 'Fettes Regelwerk '.$n,
+            'category' => 'regelwerk', 'content_md' => $text, 'version' => 1,
+            'content_hash' => hash('sha256', 'fett'.$n), 'char_count' => mb_strlen($text),
+            'active' => 1, 'created_via' => 'ui', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        \Illuminate\Support\Facades\DB::table('foodalchemist_knowledge_canon')->insert([
+            'uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(), 'team_id' => null,
+            'scope' => 'prompt_key', 'scope_key' => 'recipe.generator', 'role' => 'root', 'ord' => 20 + $n,
+            'knowledge_document_id' => $docId, 'mode' => 'pflicht', 'active' => 1,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+    }
+
+    $erste = ($this->ruf)(['vorgang' => 'basisrezept_anlegen', 'mit_wissen' => true])->data;
+
+    expect($erste['wissen_teil']['zeichen'])->toBeLessThanOrEqual(34000)
+        ->and($erste['wissen_teil']['naechstes_ab'])->not->toBeNull()
+        ->and($erste['hinweis'])->toContain('Weiter mit');
+
+    // Und der genannte Weg trägt wirklich weiter — sonst wäre der Hinweis eine Sackgasse.
+    $zweite = ($this->ruf)([
+        'vorgang' => 'basisrezept_anlegen', 'mit_wissen' => true,
+        'ab' => $erste['wissen_teil']['naechstes_ab'],
+    ])->data;
+
+    expect($zweite['wissen_teil']['geliefert'])->toBeGreaterThan(0)
+        ->and($zweite['regelwerke']['dokumente'][0]['slug'])
+        ->not->toBe($erste['regelwerke']['dokumente'][0]['slug']);
+});
+
+it('meldet am Ende den vollstaendigen Kanon, nicht wieder ein „weiter"', function () {
+    $res = ($this->ruf)(['vorgang' => 'basisrezept_anlegen', 'mit_wissen' => true])->data;
+
+    expect($res['wissen_teil']['naechstes_ab'])->toBeNull()
+        ->and($res['hinweis'])->toContain('vollstaendige');
+});
