@@ -1,0 +1,943 @@
+{
+  "erzeugt_am": "2026-09-12",
+  "routings": [
+    {
+      "feature": "ai_extract_recipe",
+      "art": null,
+      "category": "cross_cutting",
+      "mode": "none",
+      "max_docs": null,
+      "max_chars_per_doc": null
+    },
+    {
+      "feature": "ai_generate_recipe",
+      "art": null,
+      "category": "cross_cutting",
+      "mode": "discovery",
+      "max_docs": 6,
+      "max_chars_per_doc": 8000
+    },
+    {
+      "feature": "ai_generate_recipe",
+      "art": null,
+      "category": "domain",
+      "mode": "discovery",
+      "max_docs": null,
+      "max_chars_per_doc": null
+    },
+    {
+      "feature": "ai_generate_recipe",
+      "art": null,
+      "category": "ernaehrung",
+      "mode": "discovery",
+      "max_docs": 1,
+      "max_chars_per_doc": 1500
+    },
+    {
+      "feature": "ai_generate_recipe",
+      "art": null,
+      "category": "kreativ_input",
+      "mode": "discovery",
+      "max_docs": 1,
+      "max_chars_per_doc": 2000
+    },
+    {
+      "feature": "ai_generate_recipe",
+      "art": null,
+      "category": "kueche",
+      "mode": "discovery",
+      "max_docs": 2,
+      "max_chars_per_doc": 2500
+    },
+    {
+      "feature": "ai_generate_recipe",
+      "art": null,
+      "category": "niveau",
+      "mode": "discovery",
+      "max_docs": 1,
+      "max_chars_per_doc": 1800
+    },
+    {
+      "feature": "ai_generate_recipe",
+      "art": null,
+      "category": "pairing",
+      "mode": "none",
+      "max_docs": null,
+      "max_chars_per_doc": null
+    },
+    {
+      "feature": "ai_generate_recipe",
+      "art": null,
+      "category": "prasentation_service",
+      "mode": "discovery",
+      "max_docs": 1,
+      "max_chars_per_doc": 1500
+    },
+    {
+      "feature": "ai_generate_recipe",
+      "art": null,
+      "category": "referenzgericht",
+      "mode": "none",
+      "max_docs": null,
+      "max_chars_per_doc": null
+    },
+    {
+      "feature": "ai_generate_recipe",
+      "art": null,
+      "category": "regelwerk",
+      "mode": "none",
+      "max_docs": null,
+      "max_chars_per_doc": null
+    },
+    {
+      "feature": "ai_generate_recipe",
+      "art": null,
+      "category": "signatur_kuechen",
+      "mode": "discovery",
+      "max_docs": 1,
+      "max_chars_per_doc": 2000
+    },
+    {
+      "feature": "ai_generate_recipe",
+      "art": null,
+      "category": "weltkueche",
+      "mode": "discovery",
+      "max_docs": 1,
+      "max_chars_per_doc": 2000
+    },
+    {
+      "feature": "ai_generate_recipe",
+      "art": "fachwissen",
+      "category": null,
+      "mode": "discovery",
+      "max_docs": 17,
+      "max_chars_per_doc": null
+    },
+    {
+      "feature": "ai_generate_recipe",
+      "art": "referenz",
+      "category": null,
+      "mode": "discovery",
+      "max_docs": 3,
+      "max_chars_per_doc": null
+    },
+    {
+      "feature": "ai_infer_ankers",
+      "art": null,
+      "category": "pairing",
+      "mode": "grounding",
+      "max_docs": 3,
+      "max_chars_per_doc": 1400
+    },
+    {
+      "feature": "ai_plan_dishes",
+      "art": null,
+      "category": "betrieb_warenwirtschaft",
+      "mode": "discovery",
+      "max_docs": 2,
+      "max_chars_per_doc": 6000
+    },
+    {
+      "feature": "ai_plan_dishes",
+      "art": null,
+      "category": "cross_cutting",
+      "mode": "discovery",
+      "max_docs": 5,
+      "max_chars_per_doc": 8000
+    },
+    {
+      "feature": "ai_plan_dishes",
+      "art": null,
+      "category": "domain",
+      "mode": "discovery",
+      "max_docs": null,
+      "max_chars_per_doc": null
+    },
+    {
+      "feature": "ai_plan_dishes",
+      "art": null,
+      "category": "ernaehrung",
+      "mode": "discovery",
+      "max_docs": 3,
+      "max_chars_per_doc": 5000
+    },
+    {
+      "feature": "ai_plan_dishes",
+      "art": null,
+      "category": "event_playbook",
+      "mode": "discovery",
+      "max_docs": 2,
+      "max_chars_per_doc": 6000
+    },
+    {
+      "feature": "ai_plan_dishes",
+      "art": null,
+      "category": "prasentation_service",
+      "mode": "discovery",
+      "max_docs": 3,
+      "max_chars_per_doc": 5000
+    },
+    {
+      "feature": "ai_plan_dishes",
+      "art": null,
+      "category": "segment",
+      "mode": "discovery",
+      "max_docs": 2,
+      "max_chars_per_doc": 6000
+    },
+    {
+      "feature": "ai_plan_dishes",
+      "art": null,
+      "category": "weltkueche",
+      "mode": "discovery",
+      "max_docs": 3,
+      "max_chars_per_doc": 8000
+    },
+    {
+      "feature": "ai_plan_dishes",
+      "art": "fachwissen",
+      "category": null,
+      "mode": "discovery",
+      "max_docs": 23,
+      "max_chars_per_doc": null
+    },
+    {
+      "feature": "ai_plan_dishes",
+      "art": "referenz",
+      "category": null,
+      "mode": "discovery",
+      "max_docs": 3,
+      "max_chars_per_doc": null
+    },
+    {
+      "feature": "ai_suggest_pairings",
+      "art": null,
+      "category": "pairing",
+      "mode": "grounding",
+      "max_docs": 5,
+      "max_chars_per_doc": 1200
+    },
+    {
+      "feature": "concept.brief_geruest",
+      "art": null,
+      "category": "geschaeftsmodell",
+      "mode": "discovery",
+      "max_docs": 2,
+      "max_chars_per_doc": 8000
+    },
+    {
+      "feature": "concept.brief_geruest",
+      "art": null,
+      "category": "regelwerk",
+      "mode": "discovery",
+      "max_docs": 3,
+      "max_chars_per_doc": 8000
+    },
+    {
+      "feature": "concept.brief_geruest",
+      "art": "fachwissen",
+      "category": null,
+      "mode": "discovery",
+      "max_docs": 6,
+      "max_chars_per_doc": null
+    },
+    {
+      "feature": "concept.plan",
+      "art": null,
+      "category": "betrieb_warenwirtschaft",
+      "mode": "discovery",
+      "max_docs": 2,
+      "max_chars_per_doc": 6000
+    },
+    {
+      "feature": "concept.plan",
+      "art": null,
+      "category": "concept",
+      "mode": "always",
+      "max_docs": 4,
+      "max_chars_per_doc": 4000
+    },
+    {
+      "feature": "concept.plan",
+      "art": null,
+      "category": "cross_cutting",
+      "mode": "discovery",
+      "max_docs": 5,
+      "max_chars_per_doc": 8000
+    },
+    {
+      "feature": "concept.plan",
+      "art": null,
+      "category": "domain",
+      "mode": "discovery",
+      "max_docs": null,
+      "max_chars_per_doc": null
+    },
+    {
+      "feature": "concept.plan",
+      "art": null,
+      "category": "ernaehrung",
+      "mode": "discovery",
+      "max_docs": 3,
+      "max_chars_per_doc": 5000
+    },
+    {
+      "feature": "concept.plan",
+      "art": null,
+      "category": "event_playbook",
+      "mode": "discovery",
+      "max_docs": 2,
+      "max_chars_per_doc": 6000
+    },
+    {
+      "feature": "concept.plan",
+      "art": null,
+      "category": "format",
+      "mode": "discovery",
+      "max_docs": 2,
+      "max_chars_per_doc": 8000
+    },
+    {
+      "feature": "concept.plan",
+      "art": null,
+      "category": "geschaeftsmodell",
+      "mode": "discovery",
+      "max_docs": 3,
+      "max_chars_per_doc": 8000
+    },
+    {
+      "feature": "concept.plan",
+      "art": null,
+      "category": "prasentation_service",
+      "mode": "discovery",
+      "max_docs": 3,
+      "max_chars_per_doc": 5000
+    },
+    {
+      "feature": "concept.plan",
+      "art": null,
+      "category": "segment",
+      "mode": "discovery",
+      "max_docs": 2,
+      "max_chars_per_doc": 6000
+    },
+    {
+      "feature": "concept.plan",
+      "art": null,
+      "category": "signatur_kuechen",
+      "mode": "discovery",
+      "max_docs": 3,
+      "max_chars_per_doc": 8000
+    },
+    {
+      "feature": "concept.plan",
+      "art": null,
+      "category": "weltkueche",
+      "mode": "discovery",
+      "max_docs": 3,
+      "max_chars_per_doc": 8000
+    },
+    {
+      "feature": "concept.plan",
+      "art": "fachwissen",
+      "category": null,
+      "mode": "discovery",
+      "max_docs": 35,
+      "max_chars_per_doc": null
+    },
+    {
+      "feature": "concept.plan",
+      "art": "referenz",
+      "category": null,
+      "mode": "discovery",
+      "max_docs": 3,
+      "max_chars_per_doc": null
+    },
+    {
+      "feature": "concept.wording",
+      "art": null,
+      "category": "cross_cutting",
+      "mode": "always",
+      "max_docs": null,
+      "max_chars_per_doc": null
+    },
+    {
+      "feature": "concept.wording",
+      "art": "fachwissen",
+      "category": null,
+      "mode": "discovery",
+      "max_docs": 4,
+      "max_chars_per_doc": null
+    },
+    {
+      "feature": "foodbook.grundgeruest",
+      "art": null,
+      "category": "regelwerk",
+      "mode": "none",
+      "max_docs": null,
+      "max_chars_per_doc": null
+    },
+    {
+      "feature": "foodbook.kapitel_ideen",
+      "art": "fachwissen",
+      "category": null,
+      "mode": "discovery",
+      "max_docs": 3,
+      "max_chars_per_doc": null
+    },
+    {
+      "feature": "foodbook.kundentext",
+      "art": null,
+      "category": "cross_cutting",
+      "mode": "always",
+      "max_docs": null,
+      "max_chars_per_doc": null
+    },
+    {
+      "feature": "foodbook.kundentext",
+      "art": "fachwissen",
+      "category": null,
+      "mode": "discovery",
+      "max_docs": 4,
+      "max_chars_per_doc": null
+    },
+    {
+      "feature": "foodbook.plan",
+      "art": null,
+      "category": "betrieb_warenwirtschaft",
+      "mode": "discovery",
+      "max_docs": 2,
+      "max_chars_per_doc": 6000
+    },
+    {
+      "feature": "foodbook.plan",
+      "art": null,
+      "category": "concept",
+      "mode": "always",
+      "max_docs": 4,
+      "max_chars_per_doc": 4000
+    },
+    {
+      "feature": "foodbook.plan",
+      "art": null,
+      "category": "cross_cutting",
+      "mode": "discovery",
+      "max_docs": 5,
+      "max_chars_per_doc": 8000
+    },
+    {
+      "feature": "foodbook.plan",
+      "art": null,
+      "category": "domain",
+      "mode": "discovery",
+      "max_docs": null,
+      "max_chars_per_doc": null
+    },
+    {
+      "feature": "foodbook.plan",
+      "art": null,
+      "category": "ernaehrung",
+      "mode": "discovery",
+      "max_docs": 3,
+      "max_chars_per_doc": 5000
+    },
+    {
+      "feature": "foodbook.plan",
+      "art": null,
+      "category": "event_playbook",
+      "mode": "discovery",
+      "max_docs": 2,
+      "max_chars_per_doc": 6000
+    },
+    {
+      "feature": "foodbook.plan",
+      "art": null,
+      "category": "format",
+      "mode": "discovery",
+      "max_docs": 2,
+      "max_chars_per_doc": 8000
+    },
+    {
+      "feature": "foodbook.plan",
+      "art": null,
+      "category": "geschaeftsmodell",
+      "mode": "discovery",
+      "max_docs": 2,
+      "max_chars_per_doc": 8000
+    },
+    {
+      "feature": "foodbook.plan",
+      "art": null,
+      "category": "prasentation_service",
+      "mode": "discovery",
+      "max_docs": 3,
+      "max_chars_per_doc": 5000
+    },
+    {
+      "feature": "foodbook.plan",
+      "art": null,
+      "category": "segment",
+      "mode": "discovery",
+      "max_docs": 2,
+      "max_chars_per_doc": 6000
+    },
+    {
+      "feature": "foodbook.plan",
+      "art": null,
+      "category": "signatur_kuechen",
+      "mode": "discovery",
+      "max_docs": 3,
+      "max_chars_per_doc": 8000
+    },
+    {
+      "feature": "foodbook.plan",
+      "art": null,
+      "category": "weltkueche",
+      "mode": "discovery",
+      "max_docs": 3,
+      "max_chars_per_doc": 8000
+    },
+    {
+      "feature": "foodbook.plan",
+      "art": "fachwissen",
+      "category": null,
+      "mode": "discovery",
+      "max_docs": 34,
+      "max_chars_per_doc": null
+    },
+    {
+      "feature": "foodbook.plan",
+      "art": "referenz",
+      "category": null,
+      "mode": "discovery",
+      "max_docs": 3,
+      "max_chars_per_doc": null
+    },
+    {
+      "feature": "format.grundgeruest",
+      "art": null,
+      "category": "betrieb_warenwirtschaft",
+      "mode": "discovery",
+      "max_docs": 2,
+      "max_chars_per_doc": 6000
+    },
+    {
+      "feature": "format.grundgeruest",
+      "art": null,
+      "category": "concept",
+      "mode": "always",
+      "max_docs": 3,
+      "max_chars_per_doc": 4000
+    },
+    {
+      "feature": "format.grundgeruest",
+      "art": null,
+      "category": "cross_cutting",
+      "mode": "discovery",
+      "max_docs": 3,
+      "max_chars_per_doc": 6000
+    },
+    {
+      "feature": "format.grundgeruest",
+      "art": null,
+      "category": "ernaehrung",
+      "mode": "discovery",
+      "max_docs": 2,
+      "max_chars_per_doc": 5000
+    },
+    {
+      "feature": "format.grundgeruest",
+      "art": null,
+      "category": "event_playbook",
+      "mode": "discovery",
+      "max_docs": 2,
+      "max_chars_per_doc": 6000
+    },
+    {
+      "feature": "format.grundgeruest",
+      "art": null,
+      "category": "format",
+      "mode": "discovery",
+      "max_docs": 2,
+      "max_chars_per_doc": 8000
+    },
+    {
+      "feature": "format.grundgeruest",
+      "art": null,
+      "category": "geschaeftsmodell",
+      "mode": "discovery",
+      "max_docs": 2,
+      "max_chars_per_doc": 8000
+    },
+    {
+      "feature": "format.grundgeruest",
+      "art": null,
+      "category": "prasentation_service",
+      "mode": "discovery",
+      "max_docs": 2,
+      "max_chars_per_doc": 5000
+    },
+    {
+      "feature": "format.grundgeruest",
+      "art": null,
+      "category": "segment",
+      "mode": "discovery",
+      "max_docs": 2,
+      "max_chars_per_doc": 6000
+    },
+    {
+      "feature": "format.grundgeruest",
+      "art": null,
+      "category": "signatur_kuechen",
+      "mode": "discovery",
+      "max_docs": 2,
+      "max_chars_per_doc": 8000
+    },
+    {
+      "feature": "format.grundgeruest",
+      "art": null,
+      "category": "weltkueche",
+      "mode": "discovery",
+      "max_docs": 2,
+      "max_chars_per_doc": 8000
+    },
+    {
+      "feature": "format.grundgeruest",
+      "art": "fachwissen",
+      "category": null,
+      "mode": "discovery",
+      "max_docs": 24,
+      "max_chars_per_doc": null
+    },
+    {
+      "feature": "format.grundgeruest",
+      "art": "referenz",
+      "category": null,
+      "mode": "discovery",
+      "max_docs": 2,
+      "max_chars_per_doc": null
+    },
+    {
+      "feature": "gp.anker",
+      "art": "fachwissen",
+      "category": null,
+      "mode": "discovery",
+      "max_docs": 3,
+      "max_chars_per_doc": null
+    },
+    {
+      "feature": "gp.domain",
+      "art": "fachwissen",
+      "category": null,
+      "mode": "discovery",
+      "max_docs": 3,
+      "max_chars_per_doc": null
+    },
+    {
+      "feature": "gp.naehrwerte",
+      "art": "fachwissen",
+      "category": null,
+      "mode": "discovery",
+      "max_docs": 3,
+      "max_chars_per_doc": null
+    },
+    {
+      "feature": "gp.role",
+      "art": "fachwissen",
+      "category": null,
+      "mode": "discovery",
+      "max_docs": 3,
+      "max_chars_per_doc": null
+    },
+    {
+      "feature": "gp.tags",
+      "art": "fachwissen",
+      "category": null,
+      "mode": "discovery",
+      "max_docs": 3,
+      "max_chars_per_doc": null
+    },
+    {
+      "feature": "recipe.anker",
+      "art": "fachwissen",
+      "category": null,
+      "mode": "discovery",
+      "max_docs": 3,
+      "max_chars_per_doc": null
+    },
+    {
+      "feature": "recipe.bauart",
+      "art": "fachwissen",
+      "category": null,
+      "mode": "discovery",
+      "max_docs": 3,
+      "max_chars_per_doc": null
+    },
+    {
+      "feature": "recipe.category",
+      "art": "fachwissen",
+      "category": null,
+      "mode": "discovery",
+      "max_docs": 3,
+      "max_chars_per_doc": null
+    },
+    {
+      "feature": "recipe.eigenschaften",
+      "art": null,
+      "category": "produktion_kapazitat",
+      "mode": "discovery",
+      "max_docs": 3,
+      "max_chars_per_doc": 6000
+    },
+    {
+      "feature": "recipe.eigenschaften",
+      "art": null,
+      "category": "regelwerk",
+      "mode": "discovery",
+      "max_docs": 3,
+      "max_chars_per_doc": 4000
+    },
+    {
+      "feature": "recipe.eigenschaften",
+      "art": "fachwissen",
+      "category": null,
+      "mode": "discovery",
+      "max_docs": 6,
+      "max_chars_per_doc": null
+    },
+    {
+      "feature": "recipe.equipment",
+      "art": "fachwissen",
+      "category": null,
+      "mode": "discovery",
+      "max_docs": 3,
+      "max_chars_per_doc": null
+    },
+    {
+      "feature": "recipe.generator",
+      "art": "datenwerk",
+      "category": null,
+      "mode": "resolve",
+      "max_docs": null,
+      "max_chars_per_doc": null
+    },
+    {
+      "feature": "recipe.generator",
+      "art": "fachwissen",
+      "category": null,
+      "mode": "discovery",
+      "max_docs": 17,
+      "max_chars_per_doc": null
+    },
+    {
+      "feature": "recipe.generator",
+      "art": "referenz",
+      "category": null,
+      "mode": "discovery",
+      "max_docs": 3,
+      "max_chars_per_doc": null
+    },
+    {
+      "feature": "recipe.pairing",
+      "art": "fachwissen",
+      "category": null,
+      "mode": "discovery",
+      "max_docs": 3,
+      "max_chars_per_doc": null
+    },
+    {
+      "feature": "recipe.production_depth",
+      "art": "fachwissen",
+      "category": null,
+      "mode": "discovery",
+      "max_docs": 3,
+      "max_chars_per_doc": null
+    },
+    {
+      "feature": "recipe.regeneration",
+      "art": "fachwissen",
+      "category": null,
+      "mode": "discovery",
+      "max_docs": 3,
+      "max_chars_per_doc": null
+    },
+    {
+      "feature": "recipe.review",
+      "art": null,
+      "category": "regelwerk",
+      "mode": "discovery",
+      "max_docs": 3,
+      "max_chars_per_doc": 4000
+    },
+    {
+      "feature": "recipe.sensorik",
+      "art": "fachwissen",
+      "category": null,
+      "mode": "discovery",
+      "max_docs": 3,
+      "max_chars_per_doc": null
+    },
+    {
+      "feature": "recipe.steps",
+      "art": null,
+      "category": "cross_cutting",
+      "mode": "discovery",
+      "max_docs": 4,
+      "max_chars_per_doc": 8000
+    },
+    {
+      "feature": "recipe.steps",
+      "art": null,
+      "category": "domain",
+      "mode": "discovery",
+      "max_docs": null,
+      "max_chars_per_doc": null
+    },
+    {
+      "feature": "recipe.steps",
+      "art": null,
+      "category": "kueche",
+      "mode": "discovery",
+      "max_docs": 3,
+      "max_chars_per_doc": 3000
+    },
+    {
+      "feature": "recipe.steps",
+      "art": null,
+      "category": "niveau",
+      "mode": "discovery",
+      "max_docs": 1,
+      "max_chars_per_doc": 8000
+    },
+    {
+      "feature": "recipe.steps",
+      "art": "fachwissen",
+      "category": null,
+      "mode": "discovery",
+      "max_docs": 11,
+      "max_chars_per_doc": null
+    },
+    {
+      "feature": "recipe.ueberarbeiten",
+      "art": null,
+      "category": "regelwerk",
+      "mode": "discovery",
+      "max_docs": 3,
+      "max_chars_per_doc": 4000
+    },
+    {
+      "feature": "recipe.verpackungsmasse",
+      "art": "fachwissen",
+      "category": null,
+      "mode": "discovery",
+      "max_docs": 3,
+      "max_chars_per_doc": null
+    },
+    {
+      "feature": "vk.generator",
+      "art": "datenwerk",
+      "category": null,
+      "mode": "resolve",
+      "max_docs": null,
+      "max_chars_per_doc": null
+    },
+    {
+      "feature": "vk.generator",
+      "art": "fachwissen",
+      "category": null,
+      "mode": "discovery",
+      "max_docs": 17,
+      "max_chars_per_doc": null
+    },
+    {
+      "feature": "vk.generator",
+      "art": "referenz",
+      "category": null,
+      "mode": "discovery",
+      "max_docs": 3,
+      "max_chars_per_doc": null
+    },
+    {
+      "feature": "vk.kohaerenz",
+      "art": "fachwissen",
+      "category": null,
+      "mode": "discovery",
+      "max_docs": 3,
+      "max_chars_per_doc": null
+    },
+    {
+      "feature": "vk.marketing",
+      "art": "fachwissen",
+      "category": null,
+      "mode": "discovery",
+      "max_docs": 3,
+      "max_chars_per_doc": null
+    },
+    {
+      "feature": "vk.plating",
+      "art": "fachwissen",
+      "category": null,
+      "mode": "discovery",
+      "max_docs": 3,
+      "max_chars_per_doc": null
+    },
+    {
+      "feature": "vk.regeneration",
+      "art": "fachwissen",
+      "category": null,
+      "mode": "discovery",
+      "max_docs": 3,
+      "max_chars_per_doc": null
+    },
+    {
+      "feature": "vk.review",
+      "art": null,
+      "category": "regelwerk",
+      "mode": "discovery",
+      "max_docs": 3,
+      "max_chars_per_doc": 4000
+    },
+    {
+      "feature": "vk.rollen",
+      "art": "fachwissen",
+      "category": null,
+      "mode": "discovery",
+      "max_docs": 3,
+      "max_chars_per_doc": null
+    },
+    {
+      "feature": "vk.servier_vehikel",
+      "art": "fachwissen",
+      "category": null,
+      "mode": "discovery",
+      "max_docs": 3,
+      "max_chars_per_doc": null
+    },
+    {
+      "feature": "vk.teller_heber",
+      "art": "fachwissen",
+      "category": null,
+      "mode": "discovery",
+      "max_docs": 3,
+      "max_chars_per_doc": null
+    },
+    {
+      "feature": "vk.ueberarbeiten",
+      "art": null,
+      "category": "regelwerk",
+      "mode": "discovery",
+      "max_docs": 3,
+      "max_chars_per_doc": 4000
+    }
+  ],
+  "budgets": [
+    {
+      "prompt_key": "recipe.generator",
+      "max_chars": 56000
+    },
+    {
+      "prompt_key": "vk.generator",
+      "max_chars": 57000
+    }
+  ]
+}
