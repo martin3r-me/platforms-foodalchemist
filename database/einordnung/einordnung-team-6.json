@@ -2016,6 +2016,33 @@
             ]
         },
         {
+            "slug": "foodcontent-index-uebersicht-foto-prompt-system--architektur-2-ebenen",
+            "art": null,
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": [
+                "bildprompt_uebersicht",
+                "foodcontent_index",
+                "foto_prompt_anleitung",
+                "foto_prompt_architektur",
+                "foto_prompt_system",
+                "welche_bausteine_gibt_es"
+            ]
+        },
+        {
+            "slug": "foodcontent-index-uebersicht-foto-prompt-system--rezept-faustregeln-verwendung-setup-bausteine",
+            "art": null,
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": [
+                "bildgenerierung_pruefen",
+                "foto_prompt_faustregeln",
+                "foto_qualitaets_check",
+                "rezept_faustregeln_foto",
+                "welches_setup_fuer_welches_rezept"
+            ]
+        },
+        {
             "slug": "foodpairing-prinzip-wie-aromen-zusammenpassen",
             "art": "fachwissen",
             "geltung": [],
@@ -2616,6 +2643,35 @@
             "geltung": [],
             "datenwerte": [],
             "aliase": []
+        },
+        {
+            "slug": "geschirr-baukasten-typen-einsetzbare-bloecke--12-emaille-geschirr-vintage",
+            "art": null,
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": [
+                "emaille_geschirr",
+                "geschirr_faustregeln",
+                "glas_coupe_schaelchen",
+                "holzbrett_servierbrett",
+                "porzellan_goldrand",
+                "vintage_geschirr"
+            ]
+        },
+        {
+            "slug": "geschirr-baukasten-typen-einsetzbare-bloecke--katalog-bloecke",
+            "art": null,
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": [
+                "geschirr_baukasten",
+                "gusseisen_pfanne_foto",
+                "mattschwarzer_coupe",
+                "pastateller_breiter_rand",
+                "schwarze_steingutschale",
+                "teller_katalog",
+                "welcher_teller_foto"
+            ]
         },
         {
             "slug": "geschmacksbalance--5-geschmaecker-grundlage",
@@ -6573,6 +6629,33 @@
             "aliase": []
         },
         {
+            "slug": "prompt-template-high-end-restaurant-food-photography-foto-restyling-nach-referenz--bausteine-uebersicht",
+            "art": null,
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": [
+                "foto_prompt_tipps",
+                "master_prompt_platzhalter",
+                "platzhalter_uebersicht",
+                "prompt_template_bausteine",
+                "welcher_baustein_ersetzt_was"
+            ]
+        },
+        {
+            "slug": "prompt-template-high-end-restaurant-food-photography-foto-restyling-nach-referenz--zwei-wege",
+            "art": null,
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": [
+                "foto_prompt_grundgeruest",
+                "foto_prompt_vorlage",
+                "foto_restyling_nach_referenz",
+                "high_end_food_photography_prompt",
+                "master_prompt_foto",
+                "prompt_template_high_end"
+            ]
+        },
+        {
             "slug": "protein-denaturierung-reversible-vs-irreversible-veranderungen",
             "art": "fachwissen",
             "geltung": [],
@@ -9312,6 +9395,31 @@
             ]
         },
         {
+            "slug": "setup-chefscorner-dark-moody-burnt-wood--overrides",
+            "art": null,
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": [
+                "chefscorner_overrides",
+                "chefscorner_referenz",
+                "setup_overrides"
+            ]
+        },
+        {
+            "slug": "setup-chefscorner-dark-moody-burnt-wood--signatur-des-chefs-corner-shootings-das-macht-de",
+            "art": null,
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": [
+                "buehnenlicht_schwarzraum",
+                "chefs_corner",
+                "chefscorner",
+                "chefscorner_signatur",
+                "leuchtende_insel",
+                "setup_chefscorner"
+            ]
+        },
+        {
             "slug": "signatur_benoit_sinthon",
             "art": "referenz",
             "geltung": [],
@@ -10556,9 +10664,6 @@
             "geltung": [],
             "datenwerte": [],
             "aliase": [
-                "burnt_wood",
-                "chefs_corner",
-                "chefscorner",
                 "cinematic_food",
                 "dark_and_moody",
                 "dark_food_photography",
@@ -10566,8 +10671,7 @@
                 "dark_moody",
                 "dunkel_stimmungsvoll",
                 "fine_dining_moody_stil",
-                "moody_food",
-                "verbranntes_holz"
+                "moody_food"
             ]
         },
         {
@@ -10919,6 +11023,49 @@
             "geltung": [],
             "datenwerte": [],
             "aliase": []
+        },
+        {
+            "slug": "tisch-oberflaechen-baukasten-typen-einsetzbare-bloecke--8-sandstein-kalkstein",
+            "art": null,
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": [
+                "betonoptik_untergrund",
+                "dunkler_fond_seamless",
+                "edelstahl_gebuerstet",
+                "kraftpapier_backpapier",
+                "leinen_textil_untergrund",
+                "mosaikfliese_gemustert",
+                "sandstein_kalkstein",
+                "studio_hintergrund_neutral"
+            ]
+        },
+        {
+            "slug": "tisch-oberflaechen-baukasten-typen-einsetzbare-bloecke--katalog-detaillierte-bloecke",
+            "art": null,
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": [
+                "burnt_wood",
+                "eichenholz_untergrund",
+                "marmor_untergrund",
+                "oberflaechen_baukasten",
+                "schiefer_untergrund",
+                "tisch_baukasten",
+                "untergrund_katalog",
+                "verbranntes_holz"
+            ]
+        },
+        {
+            "slug": "tisch-oberflaechen-baukasten-typen-einsetzbare-bloecke--so-setzt-du-es-ein",
+            "art": null,
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": [
+                "oberflaeche_faustregeln",
+                "untergrund_waehlen",
+                "welcher_tisch_foto"
+            ]
         },
         {
             "slug": "triebmittel-hefe-sauerteig-backpulver-natron",
