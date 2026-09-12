@@ -694,7 +694,7 @@ class RecipeModal extends Component
 
             return;
         }
-        if (in_array($geschmack->werte['taste_direction'] ?? null, ['suess', 'herzhaft', 'neutral'], true)) {
+        if (in_array($geschmack->werte['taste_direction'] ?? null, \Platform\FoodAlchemist\Services\RecipeService::TASTE_DIRECTIONS, true)) {
             $this->form['taste_direction'] = $geschmack->werte['taste_direction'];
             $gefuellt++;
         }

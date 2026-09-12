@@ -580,7 +580,7 @@ class VkModal extends Component
             }
         }
         $g = $ki->propose('recipe.geschmack', $kontext + ['taste_direction' => $this->form['taste_direction'] ?? null]);
-        if (in_array($g->werte['taste_direction'] ?? null, ['suess', 'herzhaft', 'neutral'], true)) {
+        if (in_array($g->werte['taste_direction'] ?? null, \Platform\FoodAlchemist\Services\RecipeService::TASTE_DIRECTIONS, true)) {
             $this->form['taste_direction'] = $g->werte['taste_direction'];
         }
     }

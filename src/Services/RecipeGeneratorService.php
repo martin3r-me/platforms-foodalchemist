@@ -188,7 +188,7 @@ class RecipeGeneratorService
                 // Enum-Guard: taste_direction ist die grobe Menüplanungs-Richtung (suess|herzhaft|neutral,
                 // varchar(16)) — nicht das Aroma-Profil. Ein Generator-Freitext ("cremig-süßlich, …") lebt
                 // in description; hier nur den Enum-Wert durchlassen, sonst null (crasht sonst den Insert).
-                'taste_direction' => in_array($kiRezept['taste_direction'] ?? null, ['suess', 'herzhaft', 'neutral'], true)
+                'taste_direction' => in_array($kiRezept['taste_direction'] ?? null, \Platform\FoodAlchemist\Services\RecipeService::TASTE_DIRECTIONS, true)
                     ? $kiRezept['taste_direction']
                     : null,
                 'production_depth' => match ($parameter['convenience'] ?? null) {
