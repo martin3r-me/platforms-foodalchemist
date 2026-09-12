@@ -66,6 +66,14 @@ class WissenEinordnungSicherungCommand extends Command
         $this->info(sprintf('✓ %d eingeordnete Dossiers gesichert → %s', count($inhalt['zeilen']), $datei));
         $this->line('Die Datei gehört in den Commit — sie ist der einzige Rückweg für diese Arbeit.');
 
+        // Auf einem Server liegt das Modul unter vendor/, und das überschreibt der nächste
+        // `composer update`. Eine Sicherung an der flüchtigsten Stelle des Systems ist keine.
+        if (str_contains($datei, '/vendor/')) {
+            $this->warn('⚠ Dieser Pfad liegt unter vendor/ — der nächste Deploy überschreibt ihn.');
+            $this->warn('  Datei ins Repo holen und committen, sonst ist die Sicherung beim nächsten');
+            $this->warn('  composer update weg:  scp <server>:'.$datei.' database/einordnung/');
+        }
+
         return self::SUCCESS;
     }
 

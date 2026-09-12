@@ -153,3 +153,19 @@ it('das Kommando schreibt die Datei und meldet die Zahl', function () {
     $inhalt = json_decode((string) file_get_contents($this->datei), true);
     expect(array_column($inhalt['zeilen'], 'slug'))->toContain('fuers-kommando');
 });
+
+it('★ warnt, wenn der Export unter vendor/ landet — dort ueberschreibt ihn der naechste Deploy', function () {
+    // Selbst hineingelaufen: der erste Nullstand auf demo landete unter
+    // vendor/martin3r/platform-foodalchemist/database/einordnung/ — also an der fluechtigsten
+    // Stelle des Systems. Eine Sicherung, die ein composer update loescht, ist keine.
+    ($this->mkDoc)('fuer-vendor-warnung');
+    app(KnowledgeService::class)->update($this->rootTeam, 'fuer-vendor-warnung', ['art' => 'regel']);
+    $vendorPfad = sys_get_temp_dir().'/vendor/martin3r/platform-foodalchemist/einordnung-'.uniqid().'.json';
+    @mkdir(dirname($vendorPfad), 0775, true);
+
+    $this->artisan('foodalchemist:wissen-einordnung-sicherung', [
+        'richtung' => 'export', '--team' => $this->rootTeam->id, '--datei' => $vendorPfad,
+    ])->expectsOutputToContain('vendor/')->assertSuccessful();
+
+    @unlink($vendorPfad);
+});
