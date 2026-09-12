@@ -17,8 +17,64 @@
             "aliase": []
         },
         {
+            "slug": "agentic_decision_matrix--1-wann-triggert-der-resolver-ueberhaupt",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "agentic_decision_matrix--2-die-entscheidungs-matrix",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "agentic_decision_matrix--4-begruendung-format-fuer-frontend-parsing-stand",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "allergen_patterns--die-14-eu-allergene-pflicht-kennzeichnung",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "allergen_patterns--eu-allergen-quick-check-fuer-5-bhg-typische-geri",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "allergen_patterns--pflicht-kennzeichnungs-wege-fuer-speisekarten-de",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "allergen_patterns--ramen",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "allergen_patterns--versteckte-quellen-pro-allergen",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "allergene-diatetik-backzutaten-gluten-im-fokus",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -34,7 +90,7 @@
         },
         {
             "slug": "allergene-diatetik-milchprodukte",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -45,7 +101,7 @@
         },
         {
             "slug": "allergene-diatetik-schokolade-sussbausteine",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -57,7 +113,7 @@
         },
         {
             "slug": "allergene-diatetik-wurstwaren-charcuterie",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -72,7 +128,7 @@
         },
         {
             "slug": "allergene-und-diatik-bei-veganen-ersatzprodukten",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -86,7 +142,7 @@
         },
         {
             "slug": "allergene-verwechslung-asiatischer-wuerzen",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -97,8 +153,71 @@
             ]
         },
         {
+            "slug": "anlass_serviceformen--1-drei-orthogonale-vk-achsen-und-eine-wichtige-a",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "anlass_serviceformen--2-achse-anlass-event-typ",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "anlass_serviceformen--3-achse-serviceform",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "anlass_serviceformen--4-achse-sektor-verpflegungskontext",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "anlass_serviceformen--5-sektor-eignung-als-persistierter-tag-hook-tag",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "anlass_serviceformen--8-anwendung-im-cooking-jarvis",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "anti_marker--backzutaten-schokolade",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "anti_marker--fisch",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "anti_marker--klassische-top-10-fallen-gold",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "aromenextraktion_infusion_kennwerte",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -121,7 +240,7 @@
         },
         {
             "slug": "asia-pasten-miso-curry-gochujang-chili",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -145,7 +264,7 @@
         },
         {
             "slug": "asiatische-aromaten-reis-dashi-algen-umami-stoffe",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -187,7 +306,7 @@
         },
         {
             "slug": "ausbackteige-tempura-bierteig-beignet",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -197,8 +316,22 @@
             ]
         },
         {
+            "slug": "behalter-fullmengen-fullgrad-je-gerat-und-dichte-je-produktklasse--dichte-je-produktklasse-kg-l",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "behalter-fullmengen-fullgrad-je-gerat-und-dichte-je-produktklasse--fuellgrad-behaelter-geraet",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "betrieb_arbeitssicherheit",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -210,7 +343,7 @@
         },
         {
             "slug": "betrieb_einkauf_lieferanten",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -221,8 +354,22 @@
             ]
         },
         {
+            "slug": "betrieb_geraete_instandhaltung--grundprinzipien",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "betrieb_geraete_instandhaltung--schnittstellen",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "betrieb_kennzahlen_steuerung",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -235,7 +382,7 @@
         },
         {
             "slug": "betrieb_kuechenorganisation",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -247,7 +394,7 @@
         },
         {
             "slug": "betrieb_mise_en_place",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -259,7 +406,7 @@
         },
         {
             "slug": "betrieb_nachhaltigkeit_foodwaste",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -270,8 +417,22 @@
             ]
         },
         {
+            "slug": "betrieb_operations_index--ki-regeln-cluster",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "betrieb_operations_index--landkarte-status",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "betrieb_personal_dienstplan",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -283,7 +444,7 @@
         },
         {
             "slug": "betrieb_produktionsplanung",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -294,8 +455,22 @@
             ]
         },
         {
+            "slug": "betrieb_reinigung_betriebshygiene--grundprinzipien",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "betrieb_reinigung_betriebshygiene--schnittstellen",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "betrieb_sop_checklisten",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -307,6 +482,104 @@
             ]
         },
         {
+            "slug": "beverage_pairings--alkoholfrei-premium",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "beverage_pairings--bhg-standardliste-fuer-caterer",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "beverage_pairings--grundprinzipien",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "beverage_pairings--klassische-pairings-erfahrungs-datenbank",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "beverage_pairings--pairing-anti-pattern",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "beverage_pairings--tee-pairing",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "bhg_anwendbarkeits_filter--bhg-format-spezifische-empfehlungen",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "bhg_anwendbarkeits_filter--bhg-formate-realitaets-anker",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "bhg_anwendbarkeits_filter--modernist-cost-hebel-fuer-bhg-top-empfehlungen",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "bhg_anwendbarkeits_filter--techniken-filter",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "bier_cidre--substitutionen",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "bier_cidre--was-ist-drin",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "bindemittel--a-klassische-kuechenbinder",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "bindemittel--d-erweiterter-textur-werkzeugkasten",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "bisonfilet-yin-yang-didier-corlou-ikarus-1",
             "art": "referenz",
             "geltung": [],
@@ -315,7 +588,7 @@
         },
         {
             "slug": "blatterteig-anwendung-en-croute-technik-kennwerte",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -327,7 +600,7 @@
         },
         {
             "slug": "blattgemuse-krauter-substitutionen",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -339,7 +612,7 @@
         },
         {
             "slug": "blattgemuse-krauter-verwechslungsrisiken",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -352,7 +625,7 @@
         },
         {
             "slug": "blattgemuse-krauter-verwendung-zubereitung-mengen",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -367,7 +640,7 @@
         },
         {
             "slug": "blattsalate-blattgemuse-sorten",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -416,6 +689,20 @@
             "aliase": []
         },
         {
+            "slug": "branche_markt_digitalisierung--1-markt-struktur",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "branche_markt_digitalisierung--5-digitalisierung-ki-robotik",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "bretonische-seezunge-moderne-finkenwerder-art-sven-elverfeld-aqua",
             "art": "referenz",
             "geltung": [],
@@ -430,8 +717,64 @@
             "aliase": []
         },
         {
+            "slug": "brot_patisserie--mehl-grundlagen",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "brot_patisserie--patisserie-disziplin",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "brot_patisserie--patisserie-teige",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "brot_patisserie--sourdough-cycle-sauerteig-fuehrung",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "brot_patisserie--vor-teige-pre-fermentation",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "bruehen_fonds--grundbegriffe",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "bruehen_fonds--klaerfleisch-klaeren-fuer-consomme",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "bruehen_fonds--modernist-bruehen-innovationen",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "buffet_display_praesentation_kennwerte",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -449,7 +792,7 @@
         },
         {
             "slug": "butter-butterfette",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -484,6 +827,27 @@
             "aliase": []
         },
         {
+            "slug": "charcuterie_poekeln_kennwerte--1-equilibrium-prinzip-s-101",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "charcuterie_poekeln_kennwerte--ki-regeln",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "charcuterie_poekeln_kennwerte--zeit-s-120122",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "confierter-kurbis-schafsfrischkase-honigeis-und-weisse-truffel-mauro-colagreco-mirazur",
             "art": "referenz",
             "geltung": [],
@@ -499,7 +863,7 @@
         },
         {
             "slug": "confiserie-texturen-praline-fruchtgummi",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -513,8 +877,57 @@
             ]
         },
         {
+            "slug": "convenience_und_recipe_engineering--1-convenience-stufen-0-5-die-taxonomie",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "convenience_und_recipe_engineering--2-halb-convenience-vs-voll-convenience-entscheid",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "convenience_und_recipe_engineering--3-speed-scratch-cooking-die-hybrid-methodik",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "convenience_und_recipe_engineering--4-make-or-buy-die-vollkosten-logik",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "convenience_und_recipe_engineering--5-produktionssysteme-cook-serve-cook-chill-cook",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "convenience_und_recipe_engineering--6-regeneration-physik-der-finale-garprozess",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "convenience_und_recipe_engineering--8-anwendung-im-cooking-jarvis",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "cookchill_regenerieren_transport_kennwerte",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -538,7 +951,7 @@
         },
         {
             "slug": "couscous-bulgur-getreidebeilagen",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -560,8 +973,22 @@
             "aliase": []
         },
         {
+            "slug": "dehydrieren-spezial-aroma-ol-tierhaut-chips--1-aromatisiertes-gruen-algen-oel-trocknen-mixen",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "dehydrieren-spezial-aroma-ol-tierhaut-chips--ki-regeln",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "dehydrieren-temperaturen-grundlagen",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -571,7 +998,7 @@
         },
         {
             "slug": "druckgaren-vertieft-cryogene-gefriertrocknung",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -582,7 +1009,7 @@
         },
         {
             "slug": "ei-custards-anteil-kerntemperatur",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -593,8 +1020,78 @@
             ]
         },
         {
+            "slug": "eier_patisserie_wissenschaft--1-pasteurisation-in-der-schale",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "eier_patisserie_wissenschaft--12-allergen-diaet",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "eier_patisserie_wissenschaft--3-eier-textur-tabelle-ganzes-ei-modernist-gold",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "eier_patisserie_wissenschaft--7-eier-klassifikation-thermoreversibel-irreversi",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "eier_patisserie_wissenschaft--9-eischnee-eiweiss-schaum",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "eier--aromatik-verwendung",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "eier--notizen-lernen",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "eier--substitutionen",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "eier--verwechslungs-risiken",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "eier--was-ist-drin",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "eierersatz-und-pflanzliche-proteine-vegan",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -612,7 +1109,7 @@
         },
         {
             "slug": "eis_glace_zuckerbalance_struktur",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -625,7 +1122,7 @@
         },
         {
             "slug": "eis_sorbet_stabilisatoren_emulgatoren",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -638,7 +1135,7 @@
         },
         {
             "slug": "eis_sorbet_temperaturen_prozess",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -651,7 +1148,7 @@
         },
         {
             "slug": "eis_spezialtechniken_herzhaft_aromatisiert",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -665,7 +1162,7 @@
         },
         {
             "slug": "enzymatische-braunung-bei-obst-und-gemuse",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -678,7 +1175,7 @@
         },
         {
             "slug": "ernaehrung.klinik_senioren_konsistenzstufen",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -699,8 +1196,22 @@
             ]
         },
         {
+            "slug": "ernaehrung.kostformen_diaetformen--c-sensorisch-konsistenz",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "ernaehrung.kostformen_diaetformen--grundprinzip",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "ernaehrung.lmiv_kennzeichnung",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -720,7 +1231,7 @@
         },
         {
             "slug": "ernaehrung.naehrwertberechnung",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -741,7 +1252,7 @@
         },
         {
             "slug": "ernaehrung.protein_functional_gut_health",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -761,7 +1272,7 @@
         },
         {
             "slug": "essige-sorten-sauregrad",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -786,7 +1297,7 @@
         },
         {
             "slug": "event_playbook_brunch",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -797,7 +1308,7 @@
         },
         {
             "slug": "event_playbook_business_lunch",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -809,7 +1320,7 @@
         },
         {
             "slug": "event_playbook_empfang",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -821,7 +1332,7 @@
         },
         {
             "slug": "event_playbook_firmenfeier",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -834,7 +1345,7 @@
         },
         {
             "slug": "event_playbook_gala",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -846,8 +1357,22 @@
             ]
         },
         {
+            "slug": "event_playbook_hochzeit--1-steckbrief-einordnung",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "event_playbook_hochzeit--6-getraenke-konzept-pro-gast-getraenkeservice",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "event_playbook_index",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -859,7 +1384,7 @@
         },
         {
             "slug": "event_playbook_kaffeepause_sweettable",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -873,7 +1398,7 @@
         },
         {
             "slug": "event_playbook_latenight",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -885,7 +1410,7 @@
         },
         {
             "slug": "event_playbook_messe",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -897,7 +1422,7 @@
         },
         {
             "slug": "event_playbook_tagung",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -911,7 +1436,7 @@
         },
         {
             "slug": "event_playbook_trauerkaffee",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -924,7 +1449,7 @@
         },
         {
             "slug": "event_playbook_weihnachtsfeier",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -936,7 +1461,7 @@
         },
         {
             "slug": "fehlerbehebung-stabilisierung-spharifikation-und-gele",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -949,8 +1474,22 @@
             ]
         },
         {
+            "slug": "fermentation_foodservice_strategie--1-grundhaltung-infrastruktur-statt-schaufenster",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "fermentation_foodservice_strategie--4-wirtschaftlicher-hebel",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "fermentierte-asia-saucen-soja-fisch-austern-hoisin",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -975,7 +1514,7 @@
         },
         {
             "slug": "fermentierte-milchprodukte-joghurt-kefir-saure-sahne-quark",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -996,7 +1535,7 @@
         },
         {
             "slug": "fingerfood_canapes_kennwerte",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -1018,8 +1557,36 @@
             ]
         },
         {
+            "slug": "fisch_zuschnitt_teilstuecke--1-anatomie-grundzerlegung",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "fisch_zuschnitt_teilstuecke--5-krusten-schalentiere-kopffuesser",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "fisch-beizen-marinaden-rohsashimi-nah-kennwerte--1-grundprinzip",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "fisch-beizen-marinaden-rohsashimi-nah-kennwerte--7-escabeche-kurzmarinade-n-gaston-acurio-astrid",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "fisch-krustentiere-und-meeresfruchte",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -1032,7 +1599,7 @@
         },
         {
             "slug": "fisch-seafood-abgrenzung-verwechslungsrisiken",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -1045,7 +1612,7 @@
         },
         {
             "slug": "fisch-seafood-allergene-diatik",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -1058,7 +1625,7 @@
         },
         {
             "slug": "fischarten-salzwasser-susswasser",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -1093,8 +1660,43 @@
             ]
         },
         {
+            "slug": "fischqualitaet_frische_reifung--1-frische-beurteilen",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "fischqualitaet_frische_reifung--6-nachhaltigkeit-herkunft",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "fleisch_lamm--garmethode",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "fleisch_lamm--substitutionen",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "fleisch_lamm--was-ist-drin",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "fleisch_rind_allergene_verwechslung",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -1108,7 +1710,7 @@
         },
         {
             "slug": "fleisch_rind_dlg_bezeichnungen",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -1142,7 +1744,7 @@
         },
         {
             "slug": "fleisch_rind_substitutionen",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -1155,7 +1757,7 @@
         },
         {
             "slug": "fleisch_rind_teilstuecke_cuts",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -1176,7 +1778,7 @@
         },
         {
             "slug": "fleisch_rind_verwendung_mengen",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -1194,7 +1796,7 @@
         },
         {
             "slug": "fleisch-anatomie-muskelstruktur-und-fasertypen",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -1209,7 +1811,7 @@
         },
         {
             "slug": "fleisch-schwein-garung-verwendung",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -1223,7 +1825,7 @@
         },
         {
             "slug": "fleisch-schwein-premium-rassen-qualitat",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -1241,7 +1843,7 @@
         },
         {
             "slug": "fleisch-schwein-substitutionen-diatik",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -1252,7 +1854,7 @@
         },
         {
             "slug": "fleisch-schwein-teilstucke-hinterbein-haxe-garmethoden",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -1268,7 +1870,7 @@
         },
         {
             "slug": "fleisch-schwein-teilstucke-vorderteil-rucken",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -1294,7 +1896,7 @@
         },
         {
             "slug": "fleisch-schwein-verwechslungsrisiken",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -1306,7 +1908,7 @@
         },
         {
             "slug": "fleisch-und-fischersatz-vegan",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -1341,7 +1943,7 @@
         },
         {
             "slug": "fleischqualitaet_marmorierung_reifung",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -1369,8 +1971,29 @@
             "aliase": []
         },
         {
+            "slug": "fonds_jus_consomme_kennwerte--5-jus-demi-glace-protein-fond-100",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "fonds_jus_consomme_kennwerte--methode-zeit",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "fonds_jus_consomme_kennwerte--regeln-fuer-die-ki",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "food_cost_optimierung_strategien",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -1386,7 +2009,7 @@
         },
         {
             "slug": "foodpairing-prinzip-wie-aromen-zusammenpassen",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -1397,6 +2020,20 @@
                 "kontrast",
                 "pairing_prinzip"
             ]
+        },
+        {
+            "slug": "format.gastro_formate--4-schlanke-monothematische-formate",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "format.gastro_formate--leitsatz",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
         },
         {
             "slug": "framing-kompositions-baukasten-bildaufteilung-raum",
@@ -1416,7 +2053,7 @@
         },
         {
             "slug": "frische-kuchenkrauter-sorten",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -1443,7 +2080,7 @@
         },
         {
             "slug": "frittier-temperaturen-ol-kennwerte",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -1453,7 +2090,7 @@
         },
         {
             "slug": "frittieren-blah-technik-ei-freier-cannolo-teig",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -1466,7 +2103,7 @@
         },
         {
             "slug": "frittieren-zweistufige-schweinebauch-doppelgarung",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -1486,7 +2123,7 @@
         },
         {
             "slug": "frucht-gelees-praxis-dosierungen-apfel-birne-ananas",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -1499,7 +2136,7 @@
         },
         {
             "slug": "fruchtgele-pate-de-fruit-meringue-verhaltnisse-stabilisierung",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -1511,7 +2148,7 @@
         },
         {
             "slug": "fruchtgemuse-sorten-ubersicht",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -1554,7 +2191,7 @@
         },
         {
             "slug": "fruchtgemuse-substitutionen",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -1572,7 +2209,7 @@
         },
         {
             "slug": "fruchtgemuse-verwechslungsrisiken",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -1591,7 +2228,7 @@
         },
         {
             "slug": "fruchtgemuse-verwendung-zubereitung-mengen",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -1613,7 +2250,7 @@
         },
         {
             "slug": "fruehstueck_kaffeekueche",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -1631,8 +2268,29 @@
             ]
         },
         {
+            "slug": "ganache_kennwerte--1-grundverhaeltnisse-schokolade-sahne-nach-typ-v",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "ganache_kennwerte--4-fruchtganache-was-zu-beachten-ist-kernpunkt",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "ganache_kennwerte--ki-regeln",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "garen-mit-feuchter-warme",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -1646,7 +2304,7 @@
         },
         {
             "slug": "garen-mit-trockener-warme",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -1659,6 +2317,20 @@
             ]
         },
         {
+            "slug": "garmethoden_modern--1-feuer-rauch-live-fire-cold-smoke-tee-smoking",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "garmethoden_modern--3-reifung-dry-aging-ueber-das-rind-hinaus",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "garnelenfruhlingsrollen-mit-jungem-lauch-didier-corlou-ikarus-1",
             "art": "referenz",
             "geltung": [],
@@ -1667,7 +2339,7 @@
         },
         {
             "slug": "garum-schwarzfermentation-kennwerte",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -1679,7 +2351,7 @@
         },
         {
             "slug": "garung-warmewelle-und-saftverlust-im-fleisch",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -1713,7 +2385,7 @@
         },
         {
             "slug": "geflugel-allergene-diatik",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -1727,7 +2399,7 @@
         },
         {
             "slug": "geflugel-arten-teilstucke-qualitatsstufen",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -1752,7 +2424,7 @@
         },
         {
             "slug": "geflugel-garung-verwendung-mengen",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -1777,7 +2449,7 @@
         },
         {
             "slug": "geflugel-substitution-verwechslungsrisiken",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -1793,7 +2465,7 @@
         },
         {
             "slug": "gelatinefreie-pulpo-rollen-terrine-n-marcus-g-lindner",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -1804,7 +2476,7 @@
         },
         {
             "slug": "gelierte-cremes-panna-cotta-bavaroise-chiboust",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -1814,8 +2486,29 @@
             ]
         },
         {
+            "slug": "gemuese_kohl--aromatik-verwendung",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "gemuese_kohl--verwechslungs-risiken",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "gemuese_kohl--was-ist-drin",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "gemuse-spirituosen-gelees-praxis-dosierungen",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -1827,7 +2520,7 @@
         },
         {
             "slug": "gemuseobst-sous-vide-briningpokeln-schnellreferenz",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -1840,8 +2533,113 @@
             ]
         },
         {
+            "slug": "geraete_cookbook--1-sous-vide-equipment",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "geraete_cookbook--3-praezisions-mengen-temperatur",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "geraete_cookbook--6-bunsenbrenner-salamander-raeucher",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "geraete_cookbook--9-hydrokolloide-modernist-zutaten-bezugsquellen",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "gericht_kreation_kreativprozess--5-teller-geschirrwahl-praegt-die-wahrnehmung",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "gericht_kreation_kreativprozess--leitidee",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "geschaeftsmodell.betriebsgastronomie--1-strukturtreiber-hybrid-office",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "geschaeftsmodell.betriebsgastronomie--5-erloesmodelle-smart-fridge-vending-caterer-sic",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "geschaeftsmodell.erloesmodelle--1-ghost-dark-kitchen-automation",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "geschaeftsmodell.erloesmodelle--4-direktvertrieb-d2c-meal-kit-box",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "geschaeftsmodell.erloesmodelle--regeln-fuer-die-ki",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "geschmacksbalance--5-geschmaecker-grundlage",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "geschmacksbalance--erste-hilfe-checkliste-fuer-stimmt-nicht",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "geschmacksbalance--mundgefuehl-textur-sensorische-achsen",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "geschmacksbalance--reparatur-playbook",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "getraenke_alkoholfrei_zeroproof",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -1861,7 +2659,7 @@
         },
         {
             "slug": "getraenkeservice",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -1878,6 +2676,20 @@
                 "wein_servieren",
                 "weinservice"
             ]
+        },
+        {
+            "slug": "getreide_pseudogetreide--allergene-diaetik",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "getreide_pseudogetreide--aromatik-verwendung",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
         },
         {
             "slug": "getreide_pseudogetreide--mengen-defaults",
@@ -2005,8 +2817,36 @@
             "aliase": []
         },
         {
+            "slug": "getreide_pseudogetreide--subkategorien-vertreter",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "getreide_pseudogetreide--was-ist-drin",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "getrockneter-schaum-mousse-metil-baiser--1-getrockneter-schaum-dehydrierte-mousse-n-humm",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "getrockneter-schaum-mousse-metil-baiser--3-metil-gemuese-leder-luftgesprueht-getrocknet-n",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "gewurze-allergene-diatik",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -2019,7 +2859,7 @@
         },
         {
             "slug": "gewurze-sorten-warenkunde",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -2055,7 +2895,7 @@
         },
         {
             "slug": "gewurze-verwechslungsrisiken-abgrenzung",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -2065,7 +2905,7 @@
         },
         {
             "slug": "gewurze-verwendung-dosierung-substitution",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -2085,7 +2925,7 @@
         },
         {
             "slug": "go_to_market_framework",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -2102,6 +2942,20 @@
             ]
         },
         {
+            "slug": "haute_cuisine--1-was-haute-cuisine-von-premium-unterscheidet",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "haute_cuisine--5-geschmacks-orchestrierung",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "heidelbeere-alpenmilch-marcus-g-lindner-mesa-zurich",
             "art": "referenz",
             "geltung": [],
@@ -2112,7 +2966,7 @@
         },
         {
             "slug": "herstellung-pokeln-rauchern-bruhen-fermentation-wurstwaren",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -2125,7 +2979,7 @@
         },
         {
             "slug": "herzhafte-gel-spezialtechnik-farce-in-gelee-wickeltechnik",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -2137,7 +2991,7 @@
         },
         {
             "slug": "hulsenfruchte-allergene-verwechslung",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -2149,7 +3003,7 @@
         },
         {
             "slug": "hulsenfruchte-einweichen-garung-vorbereitung",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -2163,7 +3017,7 @@
         },
         {
             "slug": "hulsenfruchte-sorten-ubersicht",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -2175,7 +3029,7 @@
         },
         {
             "slug": "hulsenfruchte-verwendung-klassiker-mengen",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -2191,14 +3045,56 @@
             ]
         },
         {
+            "slug": "hydrokolloid-gele-grundtypen-dosier-tabelle--8-dip-mold-hohlform-via-konjac-kappa-gel-n-alvin",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "hydrokolloid-gele-grundtypen-dosier-tabelle--fluid-gel-giessbar-scherverduennend",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "hydrokolloide-verdickungsmittel-geliermittel",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
                 "guarkernmehl",
                 "hydrokolloide"
             ]
+        },
+        {
+            "slug": "hygiene_haccp--haccp-hazard-analysis-critical-control-points",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "hygiene_haccp--mikrobiologie-lebensmittel-relevant",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "hygiene_haccp--pasteurisations-tabellen-fda-standard-vertieft-m",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "hygiene_haccp--tiefkuehl-vorgaben-fuer-rohen-fisch-sashimi-sich",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
         },
         {
             "slug": "iberisches-spanferkel-mit-geschmortem-sellerie-und-perigordtruffel-roland-trettl-team-ikarus-1",
@@ -2209,7 +3105,7 @@
         },
         {
             "slug": "innereien-arten-klassifikation",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -2251,7 +3147,7 @@
         },
         {
             "slug": "innereien-hygiene-hochrisiko-frische",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -2266,7 +3162,7 @@
         },
         {
             "slug": "innereien-verwechslungsrisiken",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -2275,7 +3171,7 @@
         },
         {
             "slug": "innereien-vorbereitung-wassern-putzen",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -2290,7 +3186,7 @@
         },
         {
             "slug": "innereien-zubereitung-garung-verwendung",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -2310,7 +3206,7 @@
         },
         {
             "slug": "kaffee-sorten-rostung-mahlung",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -2333,7 +3229,7 @@
         },
         {
             "slug": "kaffee-tee-abgrenzung-allergene-diatik",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -2346,7 +3242,7 @@
         },
         {
             "slug": "kaffee-zubereitung-mengen-verwechslungen",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -2361,7 +3257,7 @@
         },
         {
             "slug": "kalbfleisch-allergene-verwechslungsrisiken",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -2371,7 +3267,7 @@
         },
         {
             "slug": "kalbfleisch-aufzuchtart-qualitat-herkunft",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -2383,8 +3279,15 @@
             ]
         },
         {
+            "slug": "kalbfleisch-substitutionen",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "kalbfleisch-teilstucke-cuts-ubersicht",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -2410,7 +3313,7 @@
         },
         {
             "slug": "kalbfleisch-verwendung-zubereitung-mengen",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -2431,7 +3334,7 @@
         },
         {
             "slug": "kalkulation_event_angebot",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -2451,6 +3354,90 @@
             ]
         },
         {
+            "slug": "kalkulation-im-food-alchemist--1-das-wichtigste-prinzip",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "kalkulation-im-food-alchemist--12-katalogsicht-im-concepter",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "kalkulation-im-food-alchemist--16-auftragsspezifische-kalkulation-mit-pax",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "kalkulation-im-food-alchemist--20-typische-fehlerbilder",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "kalkulation-im-food-alchemist--22-empfohlener-testablauf-mit-einem-gericht",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "kalkulation-im-food-alchemist--3-empfohlene-einrichtungsreihenfolge",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "kalkulation-im-food-alchemist--5-4-marge",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "kalkulation-im-food-alchemist--6-fixkosten-und-bezugsbasen",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "kalkulation-im-food-alchemist--7-dynamischer-unternehmens-basissatz",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "kalkulation-im-food-alchemist--9-gericht-und-darreichung-als-preis-wahrheit",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "kalte-kreativ-emulsionen-krauter-mousseline-farce-multi-ol--1-passierte-kraeuter-xanthan-emulsion-n-rene-red",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "kalte-kreativ-emulsionen-krauter-mousseline-farce-multi-ol--4-fehlerdiagnose-rettung",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "kalte-suppe-von-soba-nudeln-mit-pochiertem-ei-fruhlingslauch-und-yuzu-kenichiro-ooe-park-hyatt-tokio",
             "art": "referenz",
             "geltung": [],
@@ -2459,7 +3446,7 @@
         },
         {
             "slug": "kaninchen",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -2476,7 +3463,7 @@
         },
         {
             "slug": "karamellisierte-milch-milchhaut-imitat",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -2487,7 +3474,7 @@
         },
         {
             "slug": "karamellisierung-abgrenzung-zu-maillard",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -2498,6 +3485,13 @@
             ]
         },
         {
+            "slug": "kartoffel-kochtypen-sortenwahl",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "kartoffel-pot-au-feu-blattspinat-eigelb-perigordtrueffel-sven-elverfeld-aqua",
             "art": "referenz",
             "geltung": [],
@@ -2505,8 +3499,22 @@
             "aliase": []
         },
         {
+            "slug": "kartoffelteig-gnocchi-verhaltnisse-technik-kennwerte--1-kartoffelwahl-garen",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "kartoffelteig-gnocchi-verhaltnisse-technik-kennwerte--ki-regeln",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "kase-allergene-diatetik",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -2516,7 +3524,7 @@
         },
         {
             "slug": "kase-grundlagen-kasegruppen",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -2533,7 +3541,7 @@
         },
         {
             "slug": "kase-substitutionen",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -2544,7 +3552,7 @@
         },
         {
             "slug": "kase-verwechslungsrisiken",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -2556,7 +3564,7 @@
         },
         {
             "slug": "kase-verwendung-aromatik-mengen",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -2570,7 +3578,7 @@
         },
         {
             "slug": "kasealternativen-vegan",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -2588,7 +3596,7 @@
         },
         {
             "slug": "kaviar-rogen-fischkonserven",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -2603,7 +3611,7 @@
         },
         {
             "slug": "kerntemperaturen-fisch-gartechniken",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -2619,7 +3627,7 @@
         },
         {
             "slug": "kerntemperaturen-geflugel-pasteurisierung",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -2634,7 +3642,7 @@
         },
         {
             "slug": "kerntemperaturen-rind-kalb-lamm-wild",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -2649,8 +3657,50 @@
             ]
         },
         {
+            "slug": "kerntemperaturen-schmoren-niedertemperatur-confit--dampfgaren-als-vierte-confit-alternative-neben-w",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "kerntemperaturen-schmoren-niedertemperatur-confit--praxisbeispiele-sternekueche",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "kerntemperaturen-schmoren-niedertemperatur-confit--praxisbeispiele-sternekueche-2",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "kerntemperaturen-schmoren-niedertemperatur-confit--temperatur-zeit-sous-vide-wasserbad",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "klassische-emulsionen-kalt-warm--1-grundprinzip",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "klassische-emulsionen-kalt-warm--regeln-fuer-die-ki",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "klassische-zubereitungsreihen-garzeiten-ubersicht",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -2664,7 +3714,7 @@
         },
         {
             "slug": "klimakterik-vs-nicht-klimakterik-fruchtreifung",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -2684,7 +3734,7 @@
         },
         {
             "slug": "koji-amazake-kennwerte",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -2695,7 +3745,7 @@
         },
         {
             "slug": "kollagen-umwandlung-und-fleischreifung",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -2709,7 +3759,7 @@
         },
         {
             "slug": "kombucha-wasserkefir-essig-kennwerte",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -2720,7 +3770,7 @@
         },
         {
             "slug": "konzept_validierung_framework",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -2736,7 +3786,7 @@
         },
         {
             "slug": "krauter-frisch-getrocknet",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -2751,8 +3801,57 @@
             ]
         },
         {
+            "slug": "kreativ_input.beef_sirloin--beef-sirloin-rinderruecken-fleisch-rind",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "kreativ_input.beef_sirloin--gemessene-partner-foodpairing-inspire",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "kruste-gefrorene-baguettescheiben-als-fischhaut-ersatz",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "kryo_gefriertrocknung_pacojet_kennwerte--1-fluessigstickstoff-ln2",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "kryo_gefriertrocknung_pacojet_kennwerte--1c-ln2-sauerrahmperlen-ohne-gelatine-bindemittel",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "kryo_gefriertrocknung_pacojet_kennwerte--2-pacojet-mikro-puree",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "kryo_gefriertrocknung_pacojet_kennwerte--ki-regeln",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "kuverture-schokoladen-typen-kakaogehalt",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -2780,7 +3879,7 @@
         },
         {
             "slug": "lacto-fermentation-gemuse-frucht-kennwerte",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -2792,7 +3891,7 @@
         },
         {
             "slug": "lauterzucker-isomalt-grundlagen",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -2803,7 +3902,7 @@
         },
         {
             "slug": "leberparfait-garfuhrung-klassisch-sous-vide-bottura",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -2815,7 +3914,7 @@
         },
         {
             "slug": "leberparfait-varianten-pokelsalz-reifung-petermann-terrinen-trio-lumpp",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -2826,6 +3925,20 @@
             ]
         },
         {
+            "slug": "maillard-reaktion-mechanismus-aromastoffe-optimierung--definition",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "maillard-reaktion-mechanismus-aromastoffe-optimierung--hemmer-was-maillard-verhindert",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "marinierter-bluefin-thunfisch-schwarzer-knoblauch-kokos-mechouiasauce-sven-elverfeld-aqua",
             "art": "referenz",
             "geltung": [],
@@ -2833,8 +3946,22 @@
             "aliase": []
         },
         {
+            "slug": "matching_logik--1-stemming-plural-flexions-reduktion",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "matching_logik--3-pool-prioritaet-gp-vs-sub-rezept",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "meeresfruchte-innereien-dampf-beutel-garen",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -2850,7 +3977,7 @@
         },
         {
             "slug": "mehle-getreide-backzutaten",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -4514,7 +5641,7 @@
         },
         {
             "slug": "menu_engineering_methodik",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -4528,8 +5655,36 @@
             ]
         },
         {
+            "slug": "menue_architektur--format-varianten-und-ihre-architektur-regeln",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "menue_architektur--gaenge-logik",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "menue_architektur--logistik-aspekte-im-service",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "menue_architektur--spannungsbogen-regeln",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "milch-sahne-fettstufen",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -4559,7 +5714,7 @@
         },
         {
             "slug": "milchersatz-und-pflanzliche-drinks-vegan",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -4590,7 +5745,7 @@
         },
         {
             "slug": "miso-peaso-shoyu-kennwerte",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -4600,7 +5755,7 @@
         },
         {
             "slug": "modernist-aroma-extraktion",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -4619,7 +5774,7 @@
         },
         {
             "slug": "myoglobin-und-fleischfarbe",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -4633,7 +5788,7 @@
         },
         {
             "slug": "niedrigtemperatur-techniken-fur-gemuse-modernist-tricks",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -4643,8 +5798,106 @@
             ]
         },
         {
+            "slug": "niveau.niveau_1_haute_cuisine--1-kernaussage",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "niveau.niveau_1_haute_cuisine--3-detailprofil",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "niveau.niveau_1_haute_cuisine--5-praxisbeispiele-aus-realer-2-sterne-liste",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "niveau.niveau_2_gehoben--1-kernaussage",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "niveau.niveau_2_gehoben--5-praxisbeispiele",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "niveau.niveau_3_klassisch--1-kernaussage",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "niveau.niveau_3_klassisch--4-mess-indikatoren-je-format-und-je-form",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "niveau.niveau_3_klassisch--9-anbindung-ans-system",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "niveau.niveau_basis_1_haute_cuisine",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "niveau.niveau_basis_2_gehoben",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "niveau.niveau_basis_3_klassisch",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "niveau.niveau_system",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "niveau.niveau_system_claude_code_briefing--warum-diese-entscheidungen-die-wichtigen-begruen",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "niveau.niveau_system_claude_code_briefing--worum-es-geht",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "nusse-saaten-allergene-kritisch",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -4657,7 +5910,7 @@
         },
         {
             "slug": "nusse-saaten-verwechslung-substitution",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -4670,7 +5923,7 @@
         },
         {
             "slug": "nusse-saaten-verwendung-rosten-verarbeitung",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -4681,6 +5934,69 @@
                 "pesto",
                 "tahini_sauce"
             ]
+        },
+        {
+            "slug": "obst_beeren--aromatik-verwendung",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "obst_beeren--verwechslungs-risiken",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "obst_beeren--was-ist-drin",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "obst_kernobst--substitutionen",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "obst_kernobst--was-ist-drin",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "obst_steinobst--aromatik-verwendung",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "obst_steinobst--verwechslungs-risiken",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "obst_steinobst--was-ist-drin",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "obst_zitrus--aromatik-verwendung",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
         },
         {
             "slug": "obst_zitrus--mengen-defaults",
@@ -4756,8 +6072,22 @@
             "aliase": []
         },
         {
+            "slug": "obst_zitrus--verwechslungs-risiken",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "obst_zitrus--was-ist-drin",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "ole-essige-substitution-verwechslungsrisiken",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -4769,7 +6099,7 @@
         },
         {
             "slug": "ole-essige-verwendung-dosierung-vinaigrette",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -4795,7 +6125,7 @@
         },
         {
             "slug": "panaden-breading",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -4806,7 +6136,7 @@
         },
         {
             "slug": "panierte-gebackene-schoko-elemente-ganache-croquette-zwei-texturen-ofentrick",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -4819,7 +6149,7 @@
         },
         {
             "slug": "pasta-arten-und-formen",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -4858,7 +6188,7 @@
         },
         {
             "slug": "pasta-reis-couscous-allergene-gluten",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -4870,7 +6200,7 @@
         },
         {
             "slug": "pasta-reis-couscous-verwendung-mengen",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -4882,7 +6212,7 @@
         },
         {
             "slug": "patisserie-sussbausteine-gianduja-marzipan-nougat-krokant-karamell",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -5003,7 +6333,7 @@
         },
         {
             "slug": "pflanzenmilch-pflanzliche-alternativen",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -5013,8 +6343,22 @@
             ]
         },
         {
+            "slug": "pflanzlich_konfieren_kennwerte--5-sirup-sous-vide-s-146",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "pflanzlich_konfieren_kennwerte--festigkeits-prinzip-paraphrasiert",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "phasenubergange-latente-warme-des-wassers",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -5025,6 +6369,111 @@
                 "tripelpunkt",
                 "verdampfungswarme"
             ]
+        },
+        {
+            "slug": "pickle_ferment--allergen-aspekte",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "pickle_ferment--koji-fermentation",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "pickle_ferment--lacto-fermentation",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "pickle_ferment--vier-konservierungs-familien",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "pickle_ferment--wuerzpasten-fermentierte-wuerzen",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "pilze--aromatik-verwendung",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "pilze--notizen-lernen",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "pilze--verwechslungs-risiken",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "pilze--was-ist-drin",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "plant_forward_strategie--1-grundparadigma-identitaet-statt-imitation",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "plant_forward_strategie--5-aroma-umami-ohne-tier-layering",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "plating_patterns--1-komponenten-anzahl-pro-plate",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "plating_patterns--11-bhg-anwendbarkeit-was-passt-wo",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "plating_patterns--6-textur-kontraste-zentral",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "plating_patterns--9-typische-komponenten-patterns-modernist-inspir",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
         },
         {
             "slug": "poelierter-lachs-mit-austern-sauerrahm-perlen-und-kressesud-roland-trettl-team-ikarus-1",
@@ -5049,7 +6498,7 @@
         },
         {
             "slug": "portfolio_struktur_prinzipien",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -5064,8 +6513,43 @@
             ]
         },
         {
+            "slug": "produktion-arbeitszeit-und-personenminuten--batch-und-produktionsvorgaenge",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "produktion-arbeitszeit-und-personenminuten--suchbegriffe",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "produktion-arbeitszeit-und-personenminuten--zweck-dieser-wissensdomain",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "produktions-zeitkennwerte-rust-vorgangs-variable-zeit-kalibrier-set-v0--a-ruestzeit-je-produktionslauf-setup-time-min",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "produktions-zeitkennwerte-rust-vorgangs-variable-zeit-kalibrier-set-v0--e-plausibilitaetsband-sanity-check",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "protein-denaturierung-reversible-vs-irreversible-veranderungen",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -5075,6 +6559,20 @@
                 "myosin",
                 "proteindenaturierung"
             ]
+        },
+        {
+            "slug": "pulver-frucht-leder-dehydriert--1-pulver-malto-maltodextrin-trockenpulver",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "pulver-frucht-leder-dehydriert--ki-regeln",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
         },
         {
             "slug": "referenz_artischocken_erbsen_gruene_tomaten_parmesan",
@@ -6468,7 +7966,7 @@
         },
         {
             "slug": "referenzwerte-modernist-cuisine-fur-emulsionen-schaume",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -6482,8 +7980,22 @@
             ]
         },
         {
+            "slug": "regelwerk-basisrezepte-10-12-naming-grundprinzip-typ-vokabular--1-2-typ-vokabular-kontrolliert",
+            "art": "regel",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "regelwerk-basisrezepte-10-12-naming-grundprinzip-typ-vokabular--1-naming-syntax-formalisiert",
+            "art": "regel",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "regelwerk-basisrezepte-10-anti-patterns",
-            "art": null,
+            "art": "regel",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -6494,7 +8006,7 @@
         },
         {
             "slug": "regelwerk-basisrezepte-110-111-anti-patterns-verbindliche-beispiele",
-            "art": null,
+            "art": "regel",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -6504,7 +8016,7 @@
         },
         {
             "slug": "regelwerk-basisrezepte-11a-derivat-gps-grundregeln-schema-vokabular",
-            "art": null,
+            "art": "regel",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -6515,7 +8027,7 @@
         },
         {
             "slug": "regelwerk-basisrezepte-11b-derivat-gps-match-logik-spezialregeln-migration",
-            "art": null,
+            "art": "regel",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -6526,7 +8038,7 @@
         },
         {
             "slug": "regelwerk-basisrezepte-12-zutaten-komponenten-reihenfolge",
-            "art": null,
+            "art": "regel",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -6538,8 +8050,22 @@
             ]
         },
         {
+            "slug": "regelwerk-basisrezepte-13-15-bezeichnung-slot-grossschreibung-variantediskriminator--1-3-bezeichnung-slot",
+            "art": "regel",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "regelwerk-basisrezepte-13-15-bezeichnung-slot-grossschreibung-variantediskriminator--1-5-variante-diskriminator-klammer",
+            "art": "regel",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "regelwerk-basisrezepte-15a-convenience-kennzeichnung-ffhf",
-            "art": null,
+            "art": "regel",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -6549,7 +8075,7 @@
         },
         {
             "slug": "regelwerk-basisrezepte-16-19-herkunft-feld-slug-dubletten-diskriminator-splits",
-            "art": null,
+            "art": "regel",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -6560,7 +8086,7 @@
         },
         {
             "slug": "regelwerk-basisrezepte-2-verarbeitungs-reduktion-brunoise-roh-form",
-            "art": null,
+            "art": "regel",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -6570,7 +8096,7 @@
         },
         {
             "slug": "regelwerk-basisrezepte-3-purees-marks-coulis",
-            "art": null,
+            "art": "regel",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -6581,7 +8107,7 @@
         },
         {
             "slug": "regelwerk-basisrezepte-4-sub-rezept-hierarchie-stubs",
-            "art": null,
+            "art": "regel",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -6591,8 +8117,22 @@
             ]
         },
         {
+            "slug": "regelwerk-basisrezepte-5-default-gps-fur-generische-zutaten--5-default-gps-fuer-generische-zutaten",
+            "art": "regel",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "regelwerk-basisrezepte-5-default-gps-fur-generische-zutaten--keine-offenen-fragen-mehr-in-5",
+            "art": "regel",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "regelwerk-basisrezepte-6-mengen-einheiten-yield",
-            "art": null,
+            "art": "regel",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -6602,8 +8142,22 @@
             ]
         },
         {
+            "slug": "regelwerk-basisrezepte-7-allergen-zusatzstoff-vererbung--7-allergen-zusatzstoff-vererbung",
+            "art": "regel",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "regelwerk-basisrezepte-7-allergen-zusatzstoff-vererbung--gesetzt-user-2026-09-04-konfidenz-deckelt-sie-lo",
+            "art": "regel",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "regelwerk-basisrezepte-8-ki-beschreibung-tag-vergabe",
-            "art": null,
+            "art": "regel",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -6614,7 +8168,7 @@
         },
         {
             "slug": "regelwerk-basisrezepte-9-einbahn-sync-sql-md",
-            "art": null,
+            "art": "regel",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -6624,7 +8178,7 @@
         },
         {
             "slug": "regelwerk-foodbook-grundgerust",
-            "art": null,
+            "art": "regel",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -6636,7 +8190,7 @@
         },
         {
             "slug": "regelwerk-gp-111-derivate-konservierungs-derivate",
-            "art": null,
+            "art": "regel",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -6647,8 +8201,22 @@
             ]
         },
         {
+            "slug": "regelwerk-gp-112-derivate-nebenprodukt-derivate--11-derivate",
+            "art": "regel",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "regelwerk-gp-112-derivate-nebenprodukt-derivate--spezialregeln",
+            "art": "regel",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "regelwerk-gp-12-anti-patterns",
-            "art": null,
+            "art": "regel",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -6660,7 +8228,7 @@
         },
         {
             "slug": "regelwerk-gp-12-ziel-grundprinzip-wasartwie",
-            "art": null,
+            "art": "regel",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -6672,7 +8240,7 @@
         },
         {
             "slug": "regelwerk-gp-13-entscheidungsbaum-grundprodukt-ja-oder-nein",
-            "art": null,
+            "art": "regel",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -6683,7 +8251,7 @@
         },
         {
             "slug": "regelwerk-gp-14-synonyme-logik",
-            "art": null,
+            "art": "regel",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -6694,7 +8262,7 @@
         },
         {
             "slug": "regelwerk-gp-15-dateiname-konvention-ordner-mapping",
-            "art": null,
+            "art": "regel",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -6706,7 +8274,7 @@
         },
         {
             "slug": "regelwerk-gp-16-allergen-vererbung",
-            "art": null,
+            "art": "regel",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -6718,8 +8286,22 @@
             ]
         },
         {
+            "slug": "regelwerk-gp-17-necta-export-mapping--17-necta-export-mapping",
+            "art": "regel",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "regelwerk-gp-17-necta-export-mapping--derivat-gp-felder-vault-only-nicht-in-necta",
+            "art": "regel",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "regelwerk-gp-1820-governance-merksaetze",
-            "art": null,
+            "art": "regel",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -6732,7 +8314,7 @@
         },
         {
             "slug": "regelwerk-gp-19-13-beispiele-warengruppen-01-05",
-            "art": null,
+            "art": "regel",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -6743,7 +8325,7 @@
         },
         {
             "slug": "regelwerk-gp-19-23-beispiele-warengruppen-06-11",
-            "art": null,
+            "art": "regel",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -6752,7 +8334,7 @@
         },
         {
             "slug": "regelwerk-gp-19-33-beispiele-warengruppen-12-15",
-            "art": null,
+            "art": "regel",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -6760,8 +8342,22 @@
             ]
         },
         {
+            "slug": "regelwerk-gp-3-strukturbaum-15-warengruppen--3-strukturbaum-15-warengruppen",
+            "art": "regel",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "regelwerk-gp-3-strukturbaum-15-warengruppen--3-strukturbaum-15-warengruppen-2",
+            "art": "regel",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "regelwerk-gp-313-convenience-klasse-detail-wg-13",
-            "art": null,
+            "art": "regel",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -6773,7 +8369,7 @@
         },
         {
             "slug": "regelwerk-gp-49-attribute-klassen-pflicht-vokabular",
-            "art": null,
+            "art": "regel",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -6785,7 +8381,7 @@
         },
         {
             "slug": "regelwerk-gp-510-markenregel-4-punkt-tiebreaker",
-            "art": null,
+            "art": "regel",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -6797,7 +8393,7 @@
         },
         {
             "slug": "regelwerk-gp-6-benennungsschema-doppelnamen-fremdwoerter",
-            "art": null,
+            "art": "regel",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -6809,7 +8405,7 @@
         },
         {
             "slug": "regelwerk-gp-61-singular-pflicht-produktnamen",
-            "art": null,
+            "art": "regel",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -6821,7 +8417,7 @@
         },
         {
             "slug": "regelwerk-gp-78-grammatur-regeln-produktspezifische-pflichtangaben",
-            "art": null,
+            "art": "regel",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -6833,7 +8429,7 @@
         },
         {
             "slug": "regelwerk-la-1-2-ziel-geltungsbereich-datenmodell",
-            "art": null,
+            "art": "regel",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -6844,7 +8440,7 @@
         },
         {
             "slug": "regelwerk-la-10-11-allergen-aggregation-anti-patterns",
-            "art": null,
+            "art": "regel",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -6855,7 +8451,7 @@
         },
         {
             "slug": "regelwerk-la-12-13-status-flags-convenience-las",
-            "art": null,
+            "art": "regel",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -6866,7 +8462,7 @@
         },
         {
             "slug": "regelwerk-la-14-15-re-mapping-regeln-governance",
-            "art": null,
+            "art": "regel",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -6876,7 +8472,7 @@
         },
         {
             "slug": "regelwerk-la-16-18-verifikation-offene-punkte-merksatze",
-            "art": null,
+            "art": "regel",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -6886,8 +8482,22 @@
             ]
         },
         {
+            "slug": "regelwerk-la-3-4-match-schlussel-hierarchie-necta-quellfelder--3-match-schluessel-hierarchie",
+            "art": "regel",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "regelwerk-la-3-4-match-schlussel-hierarchie-necta-quellfelder--4-necta-quellfelder-fuer-matching",
+            "art": "regel",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "regelwerk-la-5-6-auto-match-schwellen-disambiguierung",
-            "art": null,
+            "art": "regel",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -6898,7 +8508,7 @@
         },
         {
             "slug": "regelwerk-la-7-8-la-granularitat-lead-la-heuristik",
-            "art": null,
+            "art": "regel",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -6909,7 +8519,7 @@
         },
         {
             "slug": "regelwerk-la-9-vault-sync-sqlyaml",
-            "art": null,
+            "art": "regel",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -6917,6 +8527,48 @@
                 "sql_zu_yaml_sync",
                 "vault_sync_la"
             ]
+        },
+        {
+            "slug": "regelwerk.regelwerk_concept--1-definition",
+            "art": "regel",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "regelwerk.regelwerk_concept--3-geruest-regel-kern-gegen-c1-rc-4",
+            "art": "regel",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "regelwerk.regelwerk_concept--5-preislogik-einzelpreise-buendelpreis-datenmode",
+            "art": "regel",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "regelwerk.regelwerk_verkaufsgerichte--1-2a-form-portions-qualifier-definierend-bleibt",
+            "art": "regel",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "regelwerk.regelwerk_verkaufsgerichte--1-naming-hg-praefix-pipe-skelett-verbindlich-use",
+            "art": "regel",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "regelwerk.regelwerk_verkaufsgerichte--2-klassifikation-modell-a-hg-ist-die-kategorie-a",
+            "art": "regel",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
         },
         {
             "slug": "rehrucken-mit-esskastanien-rotkohlpuree-und-heidelbeeren-mauro-colagreco-mirazur",
@@ -6927,7 +8579,7 @@
         },
         {
             "slug": "reis-sorten",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -6953,8 +8605,92 @@
             ]
         },
         {
+            "slug": "rezept_archetypen",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "rezept_aufbau_prozessstufen--aufbau-skelette-je-bereich",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "rezept_aufbau_prozessstufen--ki-regeln",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "rezept_aufbau_prozessstufen--niveau-unabhaengig",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "rezeptanalyse-3-durchgerechnete-kalibrier-falle--fall-1-jus-20-kg-yield-gv-kessel",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "rezeptanalyse-3-durchgerechnete-kalibrier-falle--fall-3-anrichten-hauptgang-40-portionen-fine-din",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "rezeptinspiration_aromatik--1-globale-aromatik-umami-saeure-layering",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "rezeptinspiration_aromatik--5-newstalgia-klassiker-technisch-modern-aufwerte",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "rezeptur_berechnungen--1-portionen-umrechnung-skalierung",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "rezeptur_berechnungen--3-kosten-berechnung",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "rezeptur_berechnungen--5-quick-reference-cheat-tabelle",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "rezeptur_berechnungen--standard-verlust-tabelle",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "saaten-kerne-erdnuss",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -6987,6 +8723,55 @@
             ]
         },
         {
+            "slug": "saisonkalender--hauptsaison-nach-monaten-de",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "saisonkalender--verfuegbarkeit-matrix-pro-lebensmittel",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "salz_brining_curing--1-salz-funktionen-in-der-kueche",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "salz_brining_curing--4-brining-salzlake-beize-fuer-fleisch-gefluegel",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "salz_brining_curing--5-curing-poekeln-konservierung-charcuterie",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "salz_brining_curing--7-eis-lake-salz-eis-schock-kuehlung",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "salz_brining_curing--wuerzsalz-default-verbindliche-regel-user-2026-0",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "sashimi-von-thunfisch-und-steinbutt-mit-sushi-von-gebratener-makrele-kenichiro-ooe-park-hyatt-tokio",
             "art": "referenz",
             "geltung": [],
@@ -6994,8 +8779,57 @@
             "aliase": []
         },
         {
+            "slug": "sauce_mutterstrukturen--3-espagnole-demi-glace",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "sauce_mutterstrukturen--die-5-mutter-saucen",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "sauce_mutterstrukturen--emulsion-schaeume-spezialwissen",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "sauce_mutterstrukturen--fruehstuecks-brunch-mutter-mayonnaise-bonus",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "saucen_modern_kennwerte--1-moderne-bindung-von-saucen-statt-neben-roux",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "saucen_modern_kennwerte--3a-herzhafte-lacke-wurst-fischsuppen-glasur-zum",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "saucen_modern_kennwerte--regeln-fuer-die-ki",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "saureph-chemie-in-der-kuche",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -7029,7 +8863,7 @@
         },
         {
             "slug": "schalenfruchte-nuss-arten",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -7057,7 +8891,7 @@
         },
         {
             "slug": "schaume-grundtypen-basistechniken",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -7065,6 +8899,34 @@
                 "albumina_baiser",
                 "espuma_grundprinzip"
             ]
+        },
+        {
+            "slug": "schaume-kreativtechniken-i-luft-frost-gemuse--1-mikrowellen-espuma-biskuit-bizcocho-de-sifon-n",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "schaume-kreativtechniken-i-luft-frost-gemuse--5-xanthan-pastinakenschaum-warm-n-margot-janse-l",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "schaume-kreativtechniken-ii-kase-hitzegel--1-parmesan-kaffeefilter-schaum-kalt-und-warm-n-m",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "schaume-kreativtechniken-ii-kase-hitzegel--6-joghurtespuma-mit-pro-espuma-sosa-n-marcus-g-l",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
         },
         {
             "slug": "schokolade-sussbausteine-verwendung-verarbeitung-mengen-defaults",
@@ -7184,8 +9046,22 @@
             ]
         },
         {
+            "slug": "schokolade-temperieren-3-punkt-kurve-velvet-hohlkorper--3-punkt-kurve-c",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "schokolade-temperieren-3-punkt-kurve-velvet-hohlkorper--zwei-schritt-kurve-ohne-rueck-erwaermung-fuer-du",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "schokolade-texturtricks-karamellisierung-luft-fondant-kern",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -7207,7 +9083,7 @@
         },
         {
             "slug": "seafood-krustentiere-muscheln-kopffusser",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -7246,7 +9122,7 @@
         },
         {
             "slug": "segment.betriebsgastronomie",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -7263,7 +9139,7 @@
         },
         {
             "slug": "segment.event_bankett_catering",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -7280,8 +9156,36 @@
             ]
         },
         {
+            "slug": "segment.kita_schule_ernaehrung_dge--1-referenzrahmen",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "segment.kita_schule_ernaehrung_dge--5-zucker-fett-salz-reduktionsstrategie",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "segment.kita_schule_markt_vergabe_oekonomie--1-der-strukturelle-nachfrage-treiber-ganztag-rec",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "segment.kita_schule_markt_vergabe_oekonomie--4-marktgroesse-demografie-orientierung-stand-202",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "segment.kita_verpflegung",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -7297,7 +9201,7 @@
         },
         {
             "slug": "segment.klinik_senioren_care",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -7312,7 +9216,7 @@
         },
         {
             "slug": "segment.schulverpflegung",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -7328,6 +9232,20 @@
             ]
         },
         {
+            "slug": "sensorik_degustation--verfahren-methoden",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "sensorik_degustation--vier-sinne-pruefung",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "sepia-rote-paprika-suss-saures-peter-goossens-hof-van-cleve",
             "art": "referenz",
             "geltung": [],
@@ -7336,7 +9254,7 @@
         },
         {
             "slug": "service_grundlagen",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -7357,7 +9275,7 @@
         },
         {
             "slug": "signatur_benoit_sinthon",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -7367,8 +9285,78 @@
             ]
         },
         {
+            "slug": "signatur_chayawee_sutcharitchan--ki-regeln",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur_chayawee_sutcharitchan--signatur-gerichte-kombi",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur_chayawee_sutcharitchan--steckbrief",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur_ciccio_sultano--cross-links",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur_ciccio_sultano--signatur-gerichte-kombi",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur_ciccio_sultano--steckbrief",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur_dieter_koschina--einsatz-eignung",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur_dieter_koschina--steckbrief",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur_funky_gourmet--signatur-gerichte-kombi",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur_funky_gourmet--steckbrief",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "signatur_hans_neuner",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -7378,8 +9366,57 @@
             ]
         },
         {
+            "slug": "signatur_ivan_ralston--signatur-gerichte-kombi",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur_ivan_ralston--steckbrief",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur_kuechen_template--aktivierung-sichtbarkeit-wichtig",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur_kuechen_template--anleitung-neuer-chef-neues-buch-fan-out-nach-typ",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur_kuechen_template--index-angelegte-profile",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur_kuechen_template--ki-regeln-kategorie",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur_kuechen_template--wissens-typ-ziel-baustein-verteil-matrix",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "signatur-kuche-alain-weissgerber-taubenkobel-burgenland",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -7389,8 +9426,64 @@
             ]
         },
         {
+            "slug": "signatur-kuche-alvin-leung-bo-innovation-hongkong--signatur-gerichte-kombi",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-alvin-leung-bo-innovation-hongkong--steckbrief",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-anatoly-komm-restaurant-varvary-moskau-russland",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-andreas-caminada-schloss-schauenstein-furstenau-schweiz--1-steckbrief",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-andreas-caminada-schloss-schauenstein-furstenau-schweiz--5-cross-links",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-antonino-cannavacciuolo-villa-crespi-orta-san-giulio-italien--1-steckbrief",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-antonino-cannavacciuolo-villa-crespi-orta-san-giulio-italien--3-signatur-gerichte-gastkochmenue-eine-reise-vom",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-antonino-cannavacciuolo-villa-crespi-orta-san-giulio-italien--6-ki-regeln",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "signatur-kuche-bee-satongun-paste-bangkok",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -7400,8 +9493,36 @@
             ]
         },
         {
+            "slug": "signatur-kuche-christian-bau-victors-fine-dining-perl-nennig--ki-regeln",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-christian-bau-victors-fine-dining-perl-nennig--steckbrief",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-christian-jurgens-kastell-burg-wernberg-wernberg-koblitz--signatur-gerichte-kombi",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-christian-jurgens-kastell-burg-wernberg-wernberg-koblitz--steckbrief",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "signatur-kuche-christophe-muller-paul-bocuse-lauberge-du-pont-de-collonges-lyon",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -7411,8 +9532,141 @@
             ]
         },
         {
+            "slug": "signatur-kuche-claus-peter-lumpp-restaurant-bareiss-baiersbronn-mitteltal--einsatz-ki-regeln",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-claus-peter-lumpp-restaurant-bareiss-baiersbronn-mitteltal--signatur-gerichte-kombi",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-claus-peter-lumpp-restaurant-bareiss-baiersbronn-mitteltal--steckbrief",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-dani-garcia-calima-marbella--1-steckbrief",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-dani-garcia-calima-marbella--4-signatur-gerichte-kombi-kein-mengenrezept",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-dani-garcia-calima-marbella--7-ki-regeln",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-daniel-humm-eleven-madison-park-new-york--ki-regeln",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-daniel-humm-eleven-madison-park-new-york--signatur-gerichte-kombi",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-daniel-humm-eleven-madison-park-new-york--steckbrief",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-danyel-couet-paul-svensson-f12-stockholm-schweden--signatur-gerichte-kombi-kein-mengenrezept",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-danyel-couet-paul-svensson-f12-stockholm-schweden--steckbrief",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-didier-corlou-la-verticale-hanoi-vietnam--kontext-bio",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-didier-corlou-la-verticale-hanoi-vietnam--menue-gelistet-kein-voll-rezept",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-eckart-witzigmann-patron-restaurant-ikarus--ki-regeln",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-eckart-witzigmann-patron-restaurant-ikarus--steckbrief",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-emmanuel-renaut-flocons-de-sel-megeve-frankreich--signatur-gerichte-kombi",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-emmanuel-renaut-flocons-de-sel-megeve-frankreich--steckbrief",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-enrico-roberto-cerea-da-vittorio-brusaporto-italien--1-steckbrief",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-enrico-roberto-cerea-da-vittorio-brusaporto-italien--3-signatur-gerichte-gastkochmenue-enrico-roberto",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "signatur-kuche-fernando-p-arellano-zaranda-es-capdella",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -7422,8 +9676,57 @@
             ]
         },
         {
+            "slug": "signatur-kuche-gaston-acurio-astrid-y-gaston-lima-peru--signatur-gerichte-kombi",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-gaston-acurio-astrid-y-gaston-lima-peru--steckbrief",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-gerard-depardieu-roland-trettl-la-fontaine-gaillon-paris-frankreich--besonderheit-dieses-kapitels",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-gerard-depardieu-roland-trettl-la-fontaine-gaillon-paris-frankreich--signatur-gerichte-gastkochmenue-kapitel-ikarus-1",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-grant-achatz-alinea-chicago-usa--einsatz-ki-regeln",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-grant-achatz-alinea-chicago-usa--signatur-gerichte-kombi",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-grant-achatz-alinea-chicago-usa--steckbrief",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "signatur-kuche-harald-wohlfahrt-schwarzwaldstube-baiersbronn",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -7433,8 +9736,78 @@
             ]
         },
         {
+            "slug": "signatur-kuche-heiko-nieder-the-restaurant-the-dolder-grand-zurich-schweiz--signatur-gerichte-kombi",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-heiko-nieder-the-restaurant-the-dolder-grand-zurich-schweiz--steckbrief",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-horst-petermann-petermanns-kunststuben-kusnacht-schweiz--cross-links",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-horst-petermann-petermanns-kunststuben-kusnacht-schweiz--signatur-gerichte-kombi",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-horst-petermann-petermanns-kunststuben-kusnacht-schweiz--steckbrief",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-ian-pongtawat-chalermkittichai-la-boqueria-bangkok-mumuri-barcelona-kittichai-new-york--1-steckbrief",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-ian-pongtawat-chalermkittichai-la-boqueria-bangkok-mumuri-barcelona-kittichai-new-york--4-signatur-techniken-verweise",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-ikarus-team-martin-klein-restaurant-ikarus--1-steckbrief",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-ikarus-team-martin-klein-restaurant-ikarus--3-signatur-techniken-verweise-auf-themen-baustei",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-ikarus-team-martin-klein-restaurant-ikarus--5b-signatur-gerichte-ikarus-7-edition-menue-heim",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "signatur-kuche-jean-marie-gautier-villa-eugenie-hotel-du-palais-biarritz-frankreich",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -7444,8 +9817,36 @@
             ]
         },
         {
+            "slug": "signatur-kuche-joachim-koerper-eleven-lissabon-portugal--1-steckbrief",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-joachim-koerper-eleven-lissabon-portugal--3-signatur-gerichte-gastkochmenue-joachim-koerpe",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-joel-antunes-joel-atlanta-usa--herkunft-werdegang",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-joel-antunes-joel-atlanta-usa--laender-kontext",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "signatur-kuche-juan-amador-restaurant-amador-wien",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -7456,8 +9857,22 @@
             ]
         },
         {
+            "slug": "signatur-kuche-kenneth-oringer-clio-boston--signatur-gerichte-kombi-kein-mengenrezept",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-kenneth-oringer-clio-boston--steckbrief",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "signatur-kuche-konstantin-filippou-wien",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -7465,8 +9880,106 @@
             ]
         },
         {
+            "slug": "signatur-kuche-marcelo-tejedor-casa-marcelo-santiago-de-compostela-spanien--signatur-gerichte-kombi",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-marcelo-tejedor-casa-marcelo-santiago-de-compostela-spanien--steckbrief",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-marco-muller-rutz-restaurant-berlin--signatur-gerichte-kombi",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-marco-muller-rutz-restaurant-berlin--signatur-gerichte-kombi-2",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-marco-muller-rutz-restaurant-berlin--steckbrief",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-marcus-g-lindner-restaurant-mesa-zurich-schweiz--einsatz-eignung",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-marcus-g-lindner-restaurant-mesa-zurich-schweiz--signatur-gerichte-kombi",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-marcus-g-lindner-restaurant-mesa-zurich-schweiz--steckbrief",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-margot-janse-le-quartier-francais-franschhoek-sudafrika--ki-regeln",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-margot-janse-le-quartier-francais-franschhoek-sudafrika--signatur-gerichte-kombi",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-margot-janse-le-quartier-francais-franschhoek-sudafrika--steckbrief",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-massimo-bottura-osteria-francescana-modena--signatur-gerichte-kombi",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-massimo-bottura-osteria-francescana-modena--steckbrief",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-mauro-colagreco-mirazur-menton-frankreich",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "signatur-kuche-nick-bril-the-jane-antwerpen",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -7475,8 +9988,50 @@
             ]
         },
         {
+            "slug": "signatur-kuche-norbert-kostner-the-oriental-bangkok-thailand--signatur-gerichte-kombi",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-norbert-kostner-the-oriental-bangkok-thailand--steckbrief",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-normand-laprise-toque-montreal-kanada--signatur-gerichte-kombi-kein-mengenrezept",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-normand-laprise-toque-montreal-kanada--steckbrief",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-paul-pairet-mr-mrs-bund-shanghai-china--signatur-gerichte-kombi",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-paul-pairet-mr-mrs-bund-shanghai-china--steckbrief",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "signatur-kuche-paul-stradner-jean-georges-klein-villa-rene-lalique",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -7487,8 +10042,50 @@
             ]
         },
         {
+            "slug": "signatur-kuche-peter-goossens-hof-van-cleve-kruishoutem-belgien--signatur-gerichte-kombi",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-peter-goossens-hof-van-cleve-kruishoutem-belgien--steckbrief",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-rene-redzepi-noma-kopenhagen-danemark--steckbrief",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-rene-redzepi-noma-kopenhagen-danemark--technik-verweise",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-roland-trettl-team-restaurant-ikarus-hangar-7-salzburg--haus-rolle",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-roland-trettl-team-restaurant-ikarus-hangar-7-salzburg--signatur-gerichte-2008-edition-gastkochmenue-rol",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "signatur-kuche-sam-leong-my-humble-house-singapur",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -7497,7 +10094,7 @@
         },
         {
             "slug": "signatur-kuche-sergio-herman-oud-sluis-sluis",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -7508,8 +10105,71 @@
             ]
         },
         {
+            "slug": "signatur-kuche-stefan-morth-kenichiro-ooe-park-hyatt-hotel-tokio-japan--signatur-gerichte-kombi",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-stefan-morth-kenichiro-ooe-park-hyatt-hotel-tokio-japan--steckbrief",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-stefano-baiocco-villa-feltrinelli-gargnano-italien--signatur-gerichte-kombi",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-stefano-baiocco-villa-feltrinelli-gargnano-italien--steckbrief",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-sven-elverfeld-aqua-the-ritz-carlton-wolfsburg-deutschland--signatur-gerichte-kombi",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-sven-elverfeld-aqua-the-ritz-carlton-wolfsburg-deutschland--signatur-gerichte-kombi-2",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-sven-elverfeld-aqua-the-ritz-carlton-wolfsburg-deutschland--steckbrief",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-thierry-marx-chateau-cordeillan-bages-pauillac-frankreich--1-steckbrief",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kuche-thierry-marx-chateau-cordeillan-bages-pauillac-frankreich--4-signatur-techniken-verweise",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "signatur-kuche-tim-raue-restaurant-tim-raue-berlin",
-            "art": null,
+            "art": "referenz",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -7517,6 +10177,20 @@
                 "restaurant_tim_raue",
                 "tim_raue"
             ]
+        },
+        {
+            "slug": "signatur-kueche-xavier-pellicer-can-fabes-sant-celoni-spanien--signatur-gerichte-kombi",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "signatur-kueche-xavier-pellicer-can-fabes-sant-celoni-spanien--steckbrief",
+            "art": "referenz",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
         },
         {
             "slug": "simmentaler-rinderfilet-stroganoff-sauerrahm-rote-bete-gewuerzgurke-kartoffel-sven-elverfeld-aqua",
@@ -7547,7 +10221,7 @@
         },
         {
             "slug": "smoker-bbq-rauch-kennwerte",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -7561,7 +10235,7 @@
         },
         {
             "slug": "sorbet_granite_zucker_wasser_frucht",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -7575,7 +10249,7 @@
         },
         {
             "slug": "sous-vide-fisch-meeresfruchte",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -7587,7 +10261,7 @@
         },
         {
             "slug": "sous-vide-fleisch-rindkalblammwildschwein-ei",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -7601,7 +10275,7 @@
         },
         {
             "slug": "sous-vide-garzeit-tabellen-konduktionsmodelle",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -7615,7 +10289,7 @@
         },
         {
             "slug": "sous-vide-geflugel",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -7627,7 +10301,7 @@
         },
         {
             "slug": "sous-vide-gemuse-obst",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -7637,7 +10311,7 @@
         },
         {
             "slug": "sous-vide-prinzip-gargrade-zeitberechnung",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -7649,8 +10323,22 @@
             ]
         },
         {
+            "slug": "sous-vide-prinzip-kerntemperaturen-workflow--braeunungs-methoden-nach-sous-vide",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "sous-vide-prinzip-kerntemperaturen-workflow--grundprinzip-t-regel",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "sous-vide-sicherheit-pasteurisierung-abkuhlen-technik",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -7662,8 +10350,36 @@
             ]
         },
         {
+            "slug": "speisekarten_engineering--allergen-auszeichnung-pflicht-lmiv",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "speisekarten_engineering--beschreibungssprache",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "speisekarten_engineering--menu-engineering-matrix-bcg-adapted-fuer-gastro",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "speisekarten_engineering--preis-anchoring-preis-psychologie",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "speiseole-sorten-rauchpunkte-verwendung",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -7691,7 +10407,7 @@
         },
         {
             "slug": "spharifikation-direct-reverse",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -7702,8 +10418,22 @@
             ]
         },
         {
+            "slug": "spharifikation-direkte-reverse-methode-kennwerte--3-frozen-hemisphere-reverse-sphaerifikation-gros",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "spharifikation-direkte-reverse-methode-kennwerte--direkte-sphaerifikation-duenne-haut-sofort-servi",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "spirituosen-allergene-diatetik-verwechslungs-risiken",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -7720,7 +10450,7 @@
         },
         {
             "slug": "spirituosen-substitutionen",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -7737,7 +10467,7 @@
         },
         {
             "slug": "spirituosen-ubersicht-klassen",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -7753,7 +10483,7 @@
         },
         {
             "slug": "spirituosen-verwendung-mengen-kuchepatisseriebar",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -7770,7 +10500,7 @@
         },
         {
             "slug": "starke-verkleisterung-und-retrogradation",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -7932,7 +10662,7 @@
         },
         {
             "slug": "strauss",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -7947,8 +10677,43 @@
             ]
         },
         {
+            "slug": "substitution-ersatz-bei-wurzel-und-zwiebelgemuse",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "substitutionen--allergen-substitutionen",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "substitutionen--asia-wuerzen",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "substitutionen--bar-spirituosen-patisserie-likoer",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "substitutionen--diaet-substitutionen-ueber-alle-domains",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "substitutionen-schokolade-patisserie-sussbausteine",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -7958,8 +10723,64 @@
             ]
         },
         {
+            "slug": "suppen_systematik--eintoepfe-volumen-suppen",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "suppen_systematik--gebundene-suppen-verdickungs-mechanismen",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "suppen_systematik--service-logik",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "suppen_systematik--suppen-hierarchie",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "synonyme--asiatische-wuerzen",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "synonyme--cross-sprachliche-synonyme-gleicher-lebensmittel",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "synonyme--gemuese",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "synonyme--pasta-reis",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "tapioka-klebreis-hullen-knodel-dim-sum-teige-kennwerte",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -7979,7 +10800,7 @@
         },
         {
             "slug": "tee-sorten-oxidationsgrade",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -8002,7 +10823,7 @@
         },
         {
             "slug": "tee-zubereitung-mengen-verwechslungen",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -8026,7 +10847,7 @@
         },
         {
             "slug": "terrinen-formen-kuhlen-prasentieren-magnum-und-zigarre-technik",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -8038,7 +10859,7 @@
         },
         {
             "slug": "terrinen-grundtypen-bindungs-verhaltnisse",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -8057,7 +10878,7 @@
         },
         {
             "slug": "triebmittel-hefe-sauerteig-backpulver-natron",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -8075,8 +10896,15 @@
             ]
         },
         {
+            "slug": "tropenfruchte-abgrenzung-verwechslung-enzym-hinweise",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "tropenfruchte-sorten-saison-ubersicht",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -8105,8 +10933,22 @@
             ]
         },
         {
+            "slug": "tropenfruchte-substitution",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "tropenfruchte-verwendung-zubereitung-mengen",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "tuiles-cracker-chips-dehydriert",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -8133,8 +10975,22 @@
             "aliase": []
         },
         {
+            "slug": "verdickungsmittel_kennwerte--1-natuerliche-staerken-slurry-kalt-anruehren-80",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "verdickungsmittel_kennwerte--5-auswahl-synergien",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "verwechslungs-risiken-abgrenzung-bei-wurzel-und-zwiebelgemuse",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -8151,7 +11007,7 @@
         },
         {
             "slug": "verwechslungs-risiken-wurstwaren-charcuterie",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -8165,7 +11021,7 @@
         },
         {
             "slug": "verwechslungsrisiken-bei-veganen-ersatzprodukten",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -8178,7 +11034,7 @@
         },
         {
             "slug": "verwechslungsrisiken-schokolade-domain-vs-convenience-homonyme",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -8189,7 +11045,7 @@
         },
         {
             "slug": "verwendung-dosierung-asiatischer-wuerzen",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -8200,7 +11056,7 @@
         },
         {
             "slug": "verwendung-verhaltnisse-mehl-trieb-klassiker",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -8217,7 +11073,7 @@
         },
         {
             "slug": "vorbereitung-schnitttechniken",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -8241,7 +11097,7 @@
         },
         {
             "slug": "warenwirtschaft_lager",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -8266,7 +11122,7 @@
         },
         {
             "slug": "warmekapazitat-energieeffizienz-beim-garen",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -8280,7 +11136,7 @@
         },
         {
             "slug": "warmeubertragungsmodi-garzeit-skalierung",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -8295,7 +11151,7 @@
         },
         {
             "slug": "wasser-anomalien-wasserstoffbruckenbindungen",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -8307,7 +11163,7 @@
         },
         {
             "slug": "wasseraktivitat-aw-wert-hitze-konservierung",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -8321,7 +11177,7 @@
         },
         {
             "slug": "wein-allergene-verwechslungsrisiken",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -8336,7 +11192,7 @@
         },
         {
             "slug": "wein-substitution",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -8349,7 +11205,7 @@
         },
         {
             "slug": "wein-verwendung-in-der-kuche",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -8364,7 +11220,7 @@
         },
         {
             "slug": "wein-weinarten-rebsorten",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -8428,7 +11284,7 @@
         },
         {
             "slug": "weltkueche_aethiopisch",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -8442,7 +11298,7 @@
         },
         {
             "slug": "weltkueche_algerisch",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -8453,8 +11309,22 @@
             ]
         },
         {
+            "slug": "weltkueche_argentinisch--1-steckbrief-einfluesse",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "weltkueche_argentinisch--10-catering-event-eignung",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "weltkueche_australisch",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -8468,7 +11338,7 @@
         },
         {
             "slug": "weltkueche_balkan",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -8481,7 +11351,7 @@
         },
         {
             "slug": "weltkueche_belgisch",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -8493,8 +11363,22 @@
             ]
         },
         {
+            "slug": "weltkueche_brasilianisch--1-steckbrief-einfluesse",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "weltkueche_brasilianisch--9-substitution-beschaffung",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "weltkueche_britisch",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -8508,7 +11392,7 @@
         },
         {
             "slug": "weltkueche_chinesisch",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -8522,7 +11406,7 @@
         },
         {
             "slug": "weltkueche_daenisch",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -8533,8 +11417,22 @@
             ]
         },
         {
+            "slug": "weltkueche_deutsch--1-steckbrief-einfluesse",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "weltkueche_deutsch--11-cross-links-ki-regeln",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "weltkueche_finnisch",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -8546,8 +11444,43 @@
             ]
         },
         {
+            "slug": "weltkueche_franzoesisch--1-steckbrief-einfluesse",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "weltkueche_franzoesisch--3-speisekammer",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "weltkueche_franzoesisch--7-mahlzeit-menue-struktur",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "weltkueche_griechisch--1-steckbrief-einfluesse",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "weltkueche_griechisch--11-cross-links-ki-regeln",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "weltkueche_index",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -8559,8 +11492,22 @@
             ]
         },
         {
+            "slug": "weltkueche_indisch--1-steckbrief-einfluesse",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "weltkueche_indisch--10-catering-event-eignung",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "weltkueche_indonesisch",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -8573,7 +11520,7 @@
         },
         {
             "slug": "weltkueche_irisch",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -8586,7 +11533,7 @@
         },
         {
             "slug": "weltkueche_islaendisch",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -8599,7 +11546,7 @@
         },
         {
             "slug": "weltkueche_israelisch",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -8612,8 +11559,50 @@
             ]
         },
         {
+            "slug": "weltkueche_italienisch--1-steckbrief-einfluesse",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "weltkueche_italienisch--8-signatur-gerichte-anker-regional-gestreut",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "weltkueche_italienisch--regional-vertiefung-sizilien-insel-handschrift",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "weltkueche_italienisch--signatur-aromapaare-kanonisch",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "weltkueche_japanisch--1-steckbrief-einfluesse",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "weltkueche_japanisch--11-cross-links-ki-regeln",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "weltkueche_karibisch",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -8627,7 +11616,7 @@
         },
         {
             "slug": "weltkueche_koreanisch",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -8640,7 +11629,7 @@
         },
         {
             "slug": "weltkueche_levantinisch",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -8654,7 +11643,7 @@
         },
         {
             "slug": "weltkueche_malaysisch",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -8669,7 +11658,7 @@
         },
         {
             "slug": "weltkueche_marokkanisch",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -8682,7 +11671,7 @@
         },
         {
             "slug": "weltkueche_mexikanisch",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -8695,7 +11684,7 @@
         },
         {
             "slug": "weltkueche_nepalesisch",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -8709,7 +11698,7 @@
         },
         {
             "slug": "weltkueche_neuseelaendisch",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -8722,7 +11711,7 @@
         },
         {
             "slug": "weltkueche_niederlaendisch",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -8736,7 +11725,7 @@
         },
         {
             "slug": "weltkueche_norwegisch",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -8750,7 +11739,7 @@
         },
         {
             "slug": "weltkueche_oesterreichisch",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -8763,7 +11752,7 @@
         },
         {
             "slug": "weltkueche_ostafrikanisch",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -8777,7 +11766,7 @@
         },
         {
             "slug": "weltkueche_pakistanisch",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -8790,7 +11779,7 @@
         },
         {
             "slug": "weltkueche_persisch",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -8804,7 +11793,7 @@
         },
         {
             "slug": "weltkueche_peruanisch",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -8818,7 +11807,7 @@
         },
         {
             "slug": "weltkueche_philippinisch",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -8832,7 +11821,7 @@
         },
         {
             "slug": "weltkueche_polnisch",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -8844,8 +11833,22 @@
             ]
         },
         {
+            "slug": "weltkueche_portugiesisch--1-steckbrief-einfluesse",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "weltkueche_portugiesisch--11-cross-links-ki-regeln",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "weltkueche_russisch",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -8859,7 +11862,7 @@
         },
         {
             "slug": "weltkueche_schwedisch",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -8872,8 +11875,22 @@
             ]
         },
         {
+            "slug": "weltkueche_schweizerisch--1-steckbrief-einfluesse",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "weltkueche_schweizerisch--8-signatur-gerichte-anker",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "weltkueche_singapurisch",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -8885,8 +11902,22 @@
             ]
         },
         {
+            "slug": "weltkueche_spanisch--1-steckbrief-einfluesse",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "weltkueche_spanisch--11-cross-links-ki-regeln",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "weltkueche_srilankisch",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -8899,8 +11930,22 @@
             ]
         },
         {
+            "slug": "weltkueche_suedafrikanisch--1-steckbrief-einfluesse",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "weltkueche_suedafrikanisch--11-cross-links-ki-regeln",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "weltkueche_taiwanesisch",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -8913,8 +11958,29 @@
             ]
         },
         {
+            "slug": "weltkueche_thailaendisch--1-steckbrief-einfluesse",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "weltkueche_thailaendisch--5-kulinarische-dna-handschrift",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "weltkueche_thailaendisch--7-mahlzeit-menue-struktur",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
             "slug": "weltkueche_tschechisch",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -8927,7 +11993,7 @@
         },
         {
             "slug": "weltkueche_tuerkisch",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -8941,7 +12007,7 @@
         },
         {
             "slug": "weltkueche_tunesisch",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -8954,7 +12020,7 @@
         },
         {
             "slug": "weltkueche_ukrainisch",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -8967,7 +12033,7 @@
         },
         {
             "slug": "weltkueche_ungarisch",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -8979,7 +12045,7 @@
         },
         {
             "slug": "weltkueche_uruguayisch",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -8993,7 +12059,7 @@
         },
         {
             "slug": "weltkueche_usamerikanisch",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -9007,7 +12073,7 @@
         },
         {
             "slug": "weltkueche_vietnamesisch",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -9021,7 +12087,7 @@
         },
         {
             "slug": "weltkueche_westafrikanisch",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -9034,7 +12100,7 @@
         },
         {
             "slug": "wild_zerlegen_ausnehmen",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -9050,7 +12116,7 @@
         },
         {
             "slug": "wild-allergene-diatik",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -9061,7 +12127,7 @@
         },
         {
             "slug": "wild-federwild-arten-garregel",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -9087,7 +12153,7 @@
         },
         {
             "slug": "wild-haarwild-arten-teilstucke-verwendung",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -9136,7 +12202,7 @@
         },
         {
             "slug": "wild-saison-schonzeiten",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -9147,7 +12213,7 @@
         },
         {
             "slug": "wild-substitutionen-verwechslungsrisiken",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -9156,7 +12222,7 @@
         },
         {
             "slug": "wild-zubereitung-garpunkte-hangezeit",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -9229,6 +12295,34 @@
         {
             "slug": "workflow.basisrezept_regeln",
             "art": "ablauf",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "workflow.betriebe_nordstern_einkauf_bestellung--0-der-kern-in-einem-satz",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "workflow.betriebe_nordstern_einkauf_bestellung--5-audit-befunde-read-only-2026-08-29",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "workflow.betriebe_preisarchitektur_stand--controlling",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "workflow.betriebe_preisarchitektur_stand--das-modell-in-einem-satz",
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": []
@@ -9350,7 +12444,7 @@
         },
         {
             "slug": "wurstwaren-charcuterie-arten-ubersicht",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -9363,7 +12457,7 @@
         },
         {
             "slug": "wurstwaren-charcuterie-verwendung-verarbeitung-mengen",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -9376,7 +12470,7 @@
         },
         {
             "slug": "wurzel-knollengemuse-sorten-ubersicht",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -9430,7 +12524,7 @@
         },
         {
             "slug": "wurzel-zwiebelgemuse-verwendung-garung-mengen",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -9448,7 +12542,7 @@
         },
         {
             "slug": "zucker-bindemittel-aromen-backzutaten",
-            "art": null,
+            "art": "fachwissen",
             "geltung": [],
             "datenwerte": [],
             "aliase": [
@@ -9498,6 +12592,62 @@
                 "waldhonig",
                 "zitronenoel"
             ]
+        },
+        {
+            "slug": "zucker-spezialtechniken-fruchtkaramell-isomalt-birkenmeringue-blasebalg-kugel--aromatisiertes-fruchtkaramell-staebchen-n-thierr",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "zucker-spezialtechniken-fruchtkaramell-isomalt-birkenmeringue-blasebalg-kugel--geblasene-isomalt-zuckerkugel-blasebalg-technik",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "zucker-spezialtechniken-fruchtkaramell-isomalt-birkenmeringue-blasebalg-kugel--ki-regeln",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "zuckerkochstufen-karamell-kochprobe-karamell-typen-kristallisation--ki-regeln",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "zuckerkochstufen-karamell-kochprobe-karamell-typen-kristallisation--zuckerstufen-kochprobe-saccharose-c",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "zutaten_default_logik--1-die-drei-entscheidungs-achsen-orthogonal",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "zutaten_default_logik--3-profi-defaults-pro-zutaten-klasse-begruendung",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
+        },
+        {
+            "slug": "zutaten_default_logik--5-wie-der-matcher-das-nutzt-status-2026-06-01",
+            "art": "fachwissen",
+            "geltung": [],
+            "datenwerte": [],
+            "aliase": []
         }
     ]
 }
