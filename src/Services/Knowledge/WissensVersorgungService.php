@@ -39,6 +39,22 @@ class WissensVersorgungService
      */
     public const VERDIKTE = ['gesteuert', 'none', 'UNGESTEUERT'];
 
+    /**
+     * Prompt-Keys, die ihren Pflichtkanon von ANDEREN Keys LEIHEN.
+     *
+     * `conformance.check` ist der einzige: der Critic prüft ein Basisrezept gegen den Kanon von
+     * `recipe.generator` und ein VK-Gericht gegen den von `vk.generator` — welcher gilt,
+     * entscheidet der Artefakt-Typ zur Laufzeit ({@see ConformanceKnowledge::kanonKeyFuer()},
+     * Quelle `config('foodalchemist.ai.conformance_kanon')`). Unter seinem EIGENEN Schlüssel hat
+     * er darum null Zeilen.
+     *
+     * ★ Bis 2026-09-12 stand er deshalb dauerhaft als `UNGESTEUERT` im Bericht — obwohl er von
+     * allen Keys mit am besten versorgt ist (25 Kanon-Zeilen über beide Artefakt-Typen). Ein
+     * Bericht, der ausgerechnet dort falsch rot zeigt, wo man ihm glauben soll, erzieht dazu,
+     * ihn zu überlesen. Und dann fällt das echte Rot daneben auch nicht mehr auf.
+     */
+    public const LEIHT_KANON = ['conformance.check'];
+
     public function __construct(
         private readonly KnowledgeCanonService $canon,
         private readonly KnowledgeContextService $wissen,
@@ -97,6 +113,27 @@ class WissensVersorgungService
         // zweite Query kostet — sie trug noch das v1-Schema `knowledge_section_id`.
         $kanon = $this->canon->documentsFor('prompt_key', $promptKey, $team);
 
+        // Geliehener Kanon (siehe self::LEIHT_KANON): über DIESELBE Auflösung wie zur Laufzeit
+        // und in der Vorschau, nicht über eine eigene Liste — sonst entstünde hier die zweite
+        // Wahrheit, die dieser Dienst gerade abschafft. Ein Rollout auf ein weiteres Artefakt
+        // bleibt damit eine Config-Zeile.
+        $geliehenVon = [];
+        if (in_array($promptKey, self::LEIHT_KANON, true)) {
+            foreach (array_keys((array) config('foodalchemist.ai.conformance_kanon', [])) as $artefakt) {
+                $quelle = ConformanceKnowledge::kanonKeyFuer((string) $artefakt);
+                if ($quelle === null) {
+                    continue;
+                }
+                $geliehen = $this->canon->documentsFor('prompt_key', $quelle, $team);
+                if ($geliehen->isEmpty()) {
+                    continue;
+                }
+                $geliehenVon[] = $quelle;
+                $kanon = $kanon->concat($geliehen);
+            }
+            $kanon = $kanon->unique('slug')->values();
+        }
+
         // ★ Über `wirksameRoutings()`, NICHT per eigener Query: der Prompt-Bau führt eigene
         // Zeilen und Alias-Zeilen pro Kategorie zusammen. Eine eigene Query zeigte die
         // Alias-Werte, während zur Laufzeit die eigenen galten — der Bericht log über die
@@ -147,6 +184,8 @@ class WissensVersorgungService
             'kanon_chars' => (int) $kanon->sum('char_count'),
             'kanon_pflicht' => $kanon->where('mode', 'pflicht')->count(),
             'kanon_slugs' => $kanon->pluck('slug')->all(),
+            // Leer bei jedem normalen Key; gefüllt sagt es, WOHER der Pflichtkanon stammt.
+            'kanon_geliehen_von' => $geliehenVon,
             'routing' => $routing,
             'bindungen' => $bindungen->count(),
             'bindungen_tot' => $bindungenTot,

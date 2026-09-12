@@ -70,7 +70,12 @@ class WissenVersorgungCommand extends Command
                 array_map(fn ($z) => [
                     $z['prompt_key'],
                     $z['alt_schluessel'] ? $z['routing_key'].' (alt)' : '=',
-                    $z['kanon_docs'] > 0 ? $z['kanon_docs'].' · '.number_format($z['kanon_chars'], 0, ',', '.').' Z.' : '–',
+                    $z['kanon_docs'] > 0
+                        ? $z['kanon_docs'].' · '.number_format($z['kanon_chars'], 0, ',', '.').' Z.'
+                            // Geliehener Kanon MUSS sichtbar sein: sonst tauscht man ein falsches
+                            // Rot gegen ein unerklärtes Grün, und niemand findet die Zeilen wieder.
+                            .($z['kanon_geliehen_von'] ?? [] ? ' (von '.implode(' + ', $z['kanon_geliehen_von']).')' : '')
+                        : '–',
                     $z['routing'] === [] ? '–' : implode(', ', array_map(
                         fn ($r) => ($r['art'] ?? $r['category']).':'.$r['mode'].($r['max_docs'] ? ' max. '.$r['max_docs'].' Quellen' : ''),
                         $z['routing']

@@ -231,3 +231,55 @@ it('weist eine Bindung an einem Key MIT Kanon als stumm aus, nicht als Versorgun
         ->and($zeile['bindungen'])->toBe(1)
         ->and($zeile['bindungen_stumm'])->toBe(1);
 });
+
+/**
+ * ★ Gemessener Anlass 2026-09-12: `conformance.check` stand dauerhaft als UNGESTEUERT im
+ * Bericht — obwohl er von allen Keys mit am besten versorgt ist. Er leiht sich seinen
+ * Pflichtkanon je nach Artefakt-Typ von `recipe.generator` (Basisrezept) bzw. `vk.generator`
+ * (VK-Gericht); unter seinem eigenen Schlüssel hat er null Zeilen.
+ *
+ * Ein Bericht, der ausgerechnet dort falsch rot zeigt, wo man ihm glauben soll, erzieht dazu,
+ * ihn zu überlesen — und dann fällt das ECHTE Rot daneben auch nicht mehr auf. Deshalb steht
+ * das hier als Vertrag und nicht als Kommentar.
+ */
+it('★ zaehlt GELIEHENEN Kanon als Versorgung — conformance.check ist nicht ungesteuert', function () {
+    config([
+        'foodalchemist.prompts' => ['conformance.check' => ['tier' => 'B', 'task' => 'Pruefe.']],
+        'foodalchemist.ai.conformance_kanon' => ['basisrezept' => 'recipe.generator'],
+    ]);
+    // Die Zeile haengt an recipe.generator, NICHT an conformance.check.
+    ($this->mkKanon)(($this->mkDoc)('regel-doc'), 'recipe.generator');
+
+    $bericht = app(\Platform\FoodAlchemist\Services\Knowledge\WissensVersorgungService::class)
+        ->bericht($this->rootTeam);
+    $zeile = collect($bericht['zeilen'])->firstWhere('prompt_key', 'conformance.check');
+
+    expect($zeile['verdikt'])->toBe('gesteuert')
+        ->and($zeile['kanon_docs'])->toBe(1)
+        // Die Herkunft MUSS mitkommen, sonst tauscht man falsches Rot gegen unerklaertes Gruen.
+        ->and($zeile['kanon_geliehen_von'])->toBe(['recipe.generator']);
+});
+
+it('ein normaler Key leiht nichts — das Feld bleibt leer', function () {
+    config(['foodalchemist.prompts' => ['test.normal' => ['tier' => 'B', 'task' => 'Tu etwas.']]]);
+    ($this->mkKanon)(($this->mkDoc)('eigen-doc'), 'test.normal');
+
+    $bericht = app(\Platform\FoodAlchemist\Services\Knowledge\WissensVersorgungService::class)
+        ->bericht($this->rootTeam);
+    $zeile = collect($bericht['zeilen'])->firstWhere('prompt_key', 'test.normal');
+
+    expect($zeile['kanon_geliehen_von'])->toBe([])->and($zeile['verdikt'])->toBe('gesteuert');
+});
+
+it('leiht NICHT, wenn die Quelle selbst leer ist — dann bleibt der Befund ehrlich', function () {
+    config([
+        'foodalchemist.prompts' => ['conformance.check' => ['tier' => 'B', 'task' => 'Pruefe.']],
+        'foodalchemist.ai.conformance_kanon' => ['basisrezept' => 'recipe.generator'],
+    ]);
+    // Kein Kanon nirgends: der Key darf jetzt NICHT gruen werden, nur weil eine Config-Zeile da ist.
+    $bericht = app(\Platform\FoodAlchemist\Services\Knowledge\WissensVersorgungService::class)
+        ->bericht($this->rootTeam);
+    $zeile = collect($bericht['zeilen'])->firstWhere('prompt_key', 'conformance.check');
+
+    expect($zeile['verdikt'])->toBe('UNGESTEUERT')->and($zeile['kanon_geliehen_von'])->toBe([]);
+});
