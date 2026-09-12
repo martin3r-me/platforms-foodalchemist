@@ -427,6 +427,22 @@ class BulkEnrichService
         $p = $this->ki->propose('recipe.regeneration', [
             'name' => $r->name,
             'kategorie' => $r->category?->label,
+            // ★ Beschreibung UND Zubereitung mitgeben. Ohne sie waehlte der Schritt blind:
+            // gemessen an Rezept 3751 stand in der description woertlich "Regeneration im
+            // Kombidaempfer am Einsatztag" — der Schritt sah das nie und entschied sich fuer
+            // Induktion. Eine ausdrueckliche Vorgabe wurde ueberstimmt, weil sie im selben
+            // Datensatz stand und trotzdem nicht uebergeben wurde.
+            //
+            // Dasselbe fehlende Feld erklaert die leeren Zahlenfelder: der Prompt sagt zu Recht
+            // "Unsicher bei einem Zahlenfeld ⇒ null, nie raten" — ohne Beschreibung und ohne
+            // Prozesstext gibt es aber nichts, worauf sich Temperatur und Dauer stuetzen
+            // liessen. Die Zeile trug danach ein Geraet und keine einzige Zahl, und damit sagt
+            // sie der Kueche nichts.
+            //
+            // `preparation` ist im Voll-Lauf oft noch leer (die Schritte entstehen spaeter) —
+            // darum beides, und nicht nur eins.
+            'beschreibung' => $r->description,
+            'zubereitung' => $r->preparation ? mb_strimwidth((string) $r->preparation, 0, 1200, '…') : null,
             'zutaten' => $r->ingredients()->whereNull('deleted_at')->with('gp:id,name')->limit(15)->get()
                 ->map(fn ($z) => $z->display_name ?: ($z->gp?->name ?? $z->raw_text))->filter()->values()->all(),
             'geraete' => $geraete->pluck('name', 'id')->all(),
