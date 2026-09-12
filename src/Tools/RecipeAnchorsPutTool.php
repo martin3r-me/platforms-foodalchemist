@@ -22,7 +22,9 @@ class RecipeAnchorsPutTool extends FoodAlchemistTool implements ToolContract, To
 
     public function getDescription(): string
     {
-        return 'Verknüpft/löst einen Kern-Aroma-Anker (GP) mit einem sichtbaren Rezept (team-scoped). '
+        return 'Verknüpft/löst einen Kern-Aroma-Anker mit einem sichtbaren Rezept (team-scoped). '
+            . 'anker_id ist die Id aus dem AROMA-ANKER-VOKABULAR (foodalchemist.composer.ANKER_SUCHE), '
+            . 'NICHT die Grundprodukt-Id — ein Anker steht für eine Aroma-Familie, ein GP für einen Artikel. '
             . 'action=set|remove. Die Anzahl Kern-Anker pro Rezept ist im Service gedeckelt.';
     }
 
@@ -32,7 +34,9 @@ class RecipeAnchorsPutTool extends FoodAlchemistTool implements ToolContract, To
             'type' => 'object',
             'properties' => [
                 'recipe_id' => ['type' => 'integer', 'description' => 'Rezept-Id (Basis oder VK, sichtbar).'],
-                'anker_id' => ['type' => 'integer', 'description' => 'Anker-GP-Id.'],
+                'anker_id' => ['type' => 'integer', 'description' => 'Id aus dem Aroma-Anker-Vokabular — '
+                    . 'zu holen über foodalchemist.composer.ANKER_SUCHE. NICHT die gp_id: eine GP-Id wird hier '
+                    . 'als NOT_FOUND abgewiesen.'],
                 'action' => ['type' => 'string', 'enum' => ['set', 'remove'], 'description' => 'Setzen oder entfernen.'],
             ],
             'required' => ['recipe_id', 'anker_id', 'action'],
@@ -57,7 +61,16 @@ class RecipeAnchorsPutTool extends FoodAlchemistTool implements ToolContract, To
 
         $ankerId = (int) ($arguments['anker_id'] ?? 0);
         if (! $this->pairingAnkerSichtbar($team, $ankerId)) {
-            return ToolResult::error('anker_id nicht sichtbar/vorhanden.', 'NOT_FOUND');
+            // ★ Der haeufigste Griff daneben ist die gp_id — sie ist die naheliegende Zahl, und bis
+            // 2026-09-12 stand im Schema sogar "Anker-GP-Id". Wer ihr folgte, bekam ein nacktes
+            // "nicht sichtbar/vorhanden" und keinen Hinweis, welche Id gemeint war. Eine
+            // Fehlermeldung, die den Weg zur richtigen Id nennt, spart genau diese Sackgasse.
+            return ToolResult::error(
+                "Anker {$ankerId} gibt es im Aroma-Anker-Vokabular nicht (oder er ist für dieses Team "
+                . 'nicht sichtbar). Achtung: hier gehört die ANKER-Id hin, nicht die gp_id — passende '
+                . 'Anker findest du mit foodalchemist.composer.ANKER_SUCHE.',
+                'NOT_FOUND'
+            );
         }
         $svc = app(PairingService::class);
         try {
@@ -79,8 +92,9 @@ class RecipeAnchorsPutTool extends FoodAlchemistTool implements ToolContract, To
             'read_only' => false, 'idempotent' => true, 'risk_level' => 'write',
             'requires_auth' => true, 'requires_team' => true, 'cost_class' => 'local_db',
             'side_effects' => ['updates'],
-            'related_tools' => ['foodalchemist.recipe_pairings.PUT', 'foodalchemist.pairings.GET'],
-            'examples' => ['Verknüpfe Anker-GP 88 mit Rezept 12.'],
+            'related_tools' => ['foodalchemist.composer.ANKER_SUCHE', 'foodalchemist.recipe_pairings.PUT',
+                'foodalchemist.pairings.GET'],
+            'examples' => ['Anker per composer.ANKER_SUCHE finden, dann dessen id mit Rezept 12 verknüpfen.'],
         ];
     }
 }

@@ -27,6 +27,46 @@ use Platform\FoodAlchemist\Support\TeamScope;
 class RecipeService
 {
     /**
+     * Die grobe Menü-Richtung. EIN Wort, geschlossenes Vokabular — das Aroma-Profil gehört in
+     * `description` (so steht es auch im Prompt `recipe.geschmack`).
+     *
+     * ★ Diese Liste stand bis 2026-09-12 VIERMAL im Code ausgeschrieben (RecipeModal, VkModal,
+     * BulkEnrichService, RecipeGeneratorService) — und ausgerechnet hier, am Engpass, durch den
+     * UI *und* MCP müssen, gar nicht. Über `recipes.POST/PUT` ging jeder String durch bis in die
+     * `varchar(16)`-Spalte; ein längerer Satz starb dort mit `SQLSTATE[22001]`. Vier Kopien einer
+     * Regel und die eine Stelle ohne, an der sie zählt.
+     */
+    public const TASTE_DIRECTIONS = ['suess', 'herzhaft', 'neutral'];
+
+    /**
+     * Deckel für die beiden KI-Freitextfelder `function` und `temperature` (Spalte: varchar(255)).
+     *
+     * ★ Der Riegel gehört HIERHER und nicht nur in den Anreicherungs-Pfad: über
+     * `recipes.POST/PUT` schreibt MCP direkt durch diesen Service, und dort gab es gar keine
+     * Grenze. Beim Testen faellt das nicht auf — die Suite laeuft auf SQLite, und SQLite
+     * erzwingt keine varchar-Laenge ([[feedback_sqlite_tests_no_varchar_length]]). Erst MySQL
+     * wirft `SQLSTATE[22001]`, und dann reisst das eine Feld alle anderen desselben Schreib-
+     * vorgangs mit.
+     */
+    private static function freitext(mixed $wert, int $max = 255): ?string
+    {
+        $wert = is_string($wert) ? trim($wert) : '';
+
+        return $wert === '' ? null : mb_substr($wert, 0, $max);
+    }
+
+    /**
+     * Unbekannte Richtung ⇒ null, nicht „irgendwas". Ein falsches Etikett wäre schlimmer als ein
+     * fehlendes: die Menüplanung filtert darauf, ein Fantasiewert verschwindet aus jedem Filter.
+     */
+    private static function tasteDirection(mixed $wert): ?string
+    {
+        $wert = is_string($wert) ? trim(mb_strtolower($wert)) : '';
+
+        return in_array($wert, self::TASTE_DIRECTIONS, true) ? $wert : null;
+    }
+
+    /**
      * Filterschlüssel der Taxonomie-Achse (MVP-042/043). Eine Facette rechnet immer OHNE die
      * eigene Achse — sonst zählt sie die Auswahl, die sie gerade ersetzen soll. „Ohne Kategorie"
      * gehört zur selben Achse wie Hauptgruppe/Kategorie: die drei schließen sich gegenseitig aus.
@@ -204,7 +244,7 @@ class RecipeService
                 $in['markup_class_id'] ?? null, $team, 'Aufschlagsklasse'
             ),
             'status' => 'draft',
-            'taste_direction' => ($in['taste_direction'] ?? '') ?: null,
+            'taste_direction' => self::tasteDirection($in['taste_direction'] ?? null),
             'production_depth' => ($in['production_depth'] ?? '') ?: null,
             'work_time_min' => $in['work_time_min'] ?? null,
             // Stufe 3 — Planer-Felder (Create-Parität mit update(), sonst still verworfen bei Anlage).
@@ -221,8 +261,8 @@ class RecipeService
             'description' => ($in['description'] ?? '') ?: null,
             // #509 Create-Parität: dieselben Fachfelder wie update() — sonst verwirft
             // die Anlage still, was der Nutzer im Anlege-Modal getippt hat (D-5 §4.2).
-            'temperature' => ($in['temperature'] ?? '') ?: null,
-            'function' => ($in['function'] ?? '') ?: null,
+            'temperature' => self::freitext($in['temperature'] ?? null),
+            'function' => self::freitext($in['function'] ?? null),
             'preparation' => ($in['preparation'] ?? '') ?: null,
             'notes_manual' => ($in['notes_manual'] ?? '') ?: null,
             'last_modified_by' => 'editor',
@@ -260,7 +300,8 @@ class RecipeService
             'category_id' => array_key_exists('category_id', $in)
                 ? TeamScope::referenz(FoodAlchemistRecipeCategory::class, $in['category_id'], $team, 'Kategorie')
                 : $recipe->category_id,
-            'taste_direction' => array_key_exists('taste_direction', $in) ? (($in['taste_direction'] ?? '') ?: null) : $recipe->taste_direction,
+            'taste_direction' => array_key_exists('taste_direction', $in)
+                ? self::tasteDirection($in['taste_direction']) : $recipe->taste_direction,
             'production_depth' => array_key_exists('production_depth', $in) ? (($in['production_depth'] ?? '') ?: null) : $recipe->production_depth,
             'work_time_min' => array_key_exists('work_time_min', $in) ? $in['work_time_min'] : $recipe->work_time_min,
             // Stufe 3 — Auto-Produktionsplaner: Default-Posten, Vorproduzierbarkeit, Rüstzeit, Topf-Deckel.
@@ -279,8 +320,8 @@ class RecipeService
             'yield_pieces' => array_key_exists('yield_pieces', $in) ? (($in['yield_pieces'] ?? '') !== '' ? $in['yield_pieces'] : null) : $recipe->yield_pieces,
             'description' => array_key_exists('description', $in) ? (($in['description'] ?? '') ?: null) : $recipe->description,
             // UI-Audit (D-5 §4.2): Eigenschaften/Zubereitung/Notizen/Status im Editor pflegbar
-            'temperature' => array_key_exists('temperature', $in) ? (($in['temperature'] ?? '') ?: null) : $recipe->temperature,
-            'function' => array_key_exists('function', $in) ? (($in['function'] ?? '') ?: null) : $recipe->function,
+            'temperature' => array_key_exists('temperature', $in) ? self::freitext($in['temperature']) : $recipe->temperature,
+            'function' => array_key_exists('function', $in) ? self::freitext($in['function']) : $recipe->function,
             'preparation' => array_key_exists('preparation', $in) ? (($in['preparation'] ?? '') ?: null) : $recipe->preparation,
             'notes_manual' => array_key_exists('notes_manual', $in) ? (($in['notes_manual'] ?? '') ?: null) : $recipe->notes_manual,
             'status' => array_key_exists('status', $in) && in_array($in['status'], ['stub', 'draft', 'review', 'approved', 'archived'], true)

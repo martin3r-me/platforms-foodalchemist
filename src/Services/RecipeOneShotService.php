@@ -59,6 +59,15 @@ use Platform\FoodAlchemist\Models\FoodAlchemistVocabKochequipment;
  */
 class RecipeOneShotService
 {
+    /**
+     * Deckel für die KI-Freitextfelder `function` und `temperature` (Spalte: varchar(255)).
+     *
+     * Bewusst unter der Spaltenbreite: ein Wert, der hier anschlägt, ist ohnehin keine
+     * „kulinarische Funktion" mehr, sondern ein Absatz — und abgeschnittener Text ist allemal
+     * besser als ein Schreibfehler, der die ganze Schätzung mitnimmt.
+     */
+    private const FREITEXT_MAX = 240;
+
     public function __construct(
         private BulkEnrichService $bulk,
         private CoherenceService $coherence,
@@ -387,10 +396,18 @@ class RecipeOneShotService
                 unset($update[$recipe->istStueckErtrag() ? 'batch_max_kg' : 'batch_max_pieces']);
             }
 
+            // ★ Kappen, nicht hoffen. `function` und `temperature` sind Freitext ohne
+            // Längenvorgabe im Prompt, und beide landen mit allem anderen in EINEM
+            // `forceFill()->save()` weiter unten. Lief einer über, warf MySQL
+            // `SQLSTATE[22001] Data too long` — und riss work_time_min, setup_time_min,
+            // standzeit_min und batch_max_* mit, obwohl die längst korrekt geschätzt waren.
+            // Gemessen am 12.09.: `function` war zu 98 % der Spaltenbreite ausgereizt (63 von
+            // 64 Zeichen über 2.347 Rezepte). Die Migration weitet auf 255; dieser Riegel sorgt
+            // dafür, dass auch eine ungewöhnlich ausführliche Antwort den Rest nicht mitnimmt.
             foreach (['temperature', 'function'] as $feld) {
                 $wert = $vorschlag->werte[$feld] ?? null;
                 if (is_string($wert) && trim($wert) !== '') {
-                    $update[$feld] = trim($wert);
+                    $update[$feld] = mb_substr(trim($wert), 0, self::FREITEXT_MAX);
                 }
             }
 

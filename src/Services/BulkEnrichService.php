@@ -556,7 +556,7 @@ class BulkEnrichService
                 : ['plating_text' => $text(), 'plating_source' => 'ki', 'plating_ai_confidence' => $prop->confidence],
             'category' => $r->category_source === 'manual' || FoodAlchemistRecipeCategory::find((int) $wert) === null ? null
                 : ['category_id' => (int) $wert, 'category_source' => 'ki', 'category_ai_confidence' => $prop->confidence],
-            'geschmack' => in_array($wert, ['suess', 'herzhaft', 'neutral'], true)
+            'geschmack' => in_array($wert, \Platform\FoodAlchemist\Services\RecipeService::TASTE_DIRECTIONS, true)
                 ? ['taste_direction' => $wert] : null,             // Auto-Apply-Ausnahme-Feld (GL-07 §4.3), kein Lineage-Trio
             // B-1: nur Gericht, nur sichtbare Typ-Vehikel, manual gewinnt (dieselben Riegel wie VkModal::uebernehmeVehikel)
             'servier_vehikel' => $r->serving_vehicle_source === 'manual' || ! $r->is_sales_recipe || ! is_numeric($wert)
