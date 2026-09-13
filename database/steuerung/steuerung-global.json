@@ -806,7 +806,7 @@
             "art": "fachwissen",
             "category": null,
             "mode": "discovery",
-            "max_docs": 17,
+            "max_docs": 8,
             "max_chars_per_doc": null
         },
         {
@@ -1077,7 +1077,7 @@
     "budgets": [
         {
             "prompt_key": "recipe.generator",
-            "max_chars": 56000
+            "max_chars": 64000
         },
         {
             "prompt_key": "vk.generator",
