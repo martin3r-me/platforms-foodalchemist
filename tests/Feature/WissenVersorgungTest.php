@@ -283,3 +283,40 @@ it('leiht NICHT, wenn die Quelle selbst leer ist — dann bleibt der Befund ehrl
 
     expect($zeile['verdikt'])->toBe('UNGESTEUERT')->and($zeile['kanon_geliehen_von'])->toBe([]);
 });
+
+/**
+ * ★ Dominique hat es am 13.09. an der Oberflaeche gesehen: die Einstellungs-Seite
+ * „Wissens-Steuerung" meldete 1 ungesteuert, das Kommando 0. Der Fix aus PR #82 hatte nur den
+ * WissensVersorgungService erreicht — die Seite liest aber ueber WissensProfilService.
+ *
+ * Zwei Dienste, dieselbe Frage, zwei Antworten. Genau das Muster, das diese Spec abbaut: wer
+ * die Antwort an zwei Stellen berechnet, bekommt irgendwann zwei verschiedene.
+ */
+it('★ auch das PROFIL kennt den geliehenen Kanon — sonst widerspricht die Seite dem Kommando', function () {
+    config([
+        'foodalchemist.prompts' => ['conformance.check' => ['tier' => 'B', 'task' => 'Pruefe.']],
+        'foodalchemist.ai.conformance_kanon' => ['basisrezept' => 'recipe.generator'],
+    ]);
+    ($this->mkKanon)(($this->mkDoc)('regel-fuers-profil'), 'recipe.generator');
+
+    $profil = app(\Platform\FoodAlchemist\Services\Knowledge\WissensProfilService::class)
+        ->profil('conformance.check', $this->rootTeam);
+
+    expect($profil['zustand'])->toBe('gesteuert');
+});
+
+it('★ Seite und Kommando kommen zur GLEICHEN Zahl', function () {
+    config([
+        'foodalchemist.prompts' => ['conformance.check' => ['tier' => 'B', 'task' => 'Pruefe.']],
+        'foodalchemist.ai.conformance_kanon' => ['basisrezept' => 'recipe.generator'],
+    ]);
+    ($this->mkKanon)(($this->mkDoc)('regel-fuer-beide'), 'recipe.generator');
+
+    $seite = app(\Platform\FoodAlchemist\Services\Knowledge\WissensProfilService::class)
+        ->integritaet($this->rootTeam, null);
+    $kommando = app(\Platform\FoodAlchemist\Services\Knowledge\WissensVersorgungService::class)
+        ->bericht($this->rootTeam);
+
+    expect($seite['ungesteuert'])->toBe($kommando['ungesteuert'])
+        ->and($seite['gesteuert'])->toBe($kommando['gesteuert']);
+});

@@ -10,126 +10,6 @@
             "max_chars_per_doc": null
         },
         {
-            "feature": "ai_generate_recipe",
-            "art": null,
-            "category": "cross_cutting",
-            "mode": "discovery",
-            "max_docs": 6,
-            "max_chars_per_doc": 8000
-        },
-        {
-            "feature": "ai_generate_recipe",
-            "art": null,
-            "category": "domain",
-            "mode": "discovery",
-            "max_docs": null,
-            "max_chars_per_doc": null
-        },
-        {
-            "feature": "ai_generate_recipe",
-            "art": null,
-            "category": "ernaehrung",
-            "mode": "discovery",
-            "max_docs": 1,
-            "max_chars_per_doc": 1500
-        },
-        {
-            "feature": "ai_generate_recipe",
-            "art": null,
-            "category": "kreativ_input",
-            "mode": "discovery",
-            "max_docs": 1,
-            "max_chars_per_doc": 2000
-        },
-        {
-            "feature": "ai_generate_recipe",
-            "art": null,
-            "category": "kueche",
-            "mode": "discovery",
-            "max_docs": 2,
-            "max_chars_per_doc": 2500
-        },
-        {
-            "feature": "ai_generate_recipe",
-            "art": null,
-            "category": "niveau",
-            "mode": "discovery",
-            "max_docs": 1,
-            "max_chars_per_doc": 1800
-        },
-        {
-            "feature": "ai_generate_recipe",
-            "art": null,
-            "category": "pairing",
-            "mode": "none",
-            "max_docs": null,
-            "max_chars_per_doc": null
-        },
-        {
-            "feature": "ai_generate_recipe",
-            "art": null,
-            "category": "prasentation_service",
-            "mode": "discovery",
-            "max_docs": 1,
-            "max_chars_per_doc": 1500
-        },
-        {
-            "feature": "ai_generate_recipe",
-            "art": null,
-            "category": "referenzgericht",
-            "mode": "none",
-            "max_docs": null,
-            "max_chars_per_doc": null
-        },
-        {
-            "feature": "ai_generate_recipe",
-            "art": null,
-            "category": "regelwerk",
-            "mode": "none",
-            "max_docs": null,
-            "max_chars_per_doc": null
-        },
-        {
-            "feature": "ai_generate_recipe",
-            "art": null,
-            "category": "signatur_kuechen",
-            "mode": "discovery",
-            "max_docs": 1,
-            "max_chars_per_doc": 2000
-        },
-        {
-            "feature": "ai_generate_recipe",
-            "art": null,
-            "category": "weltkueche",
-            "mode": "discovery",
-            "max_docs": 1,
-            "max_chars_per_doc": 2000
-        },
-        {
-            "feature": "ai_generate_recipe",
-            "art": "fachwissen",
-            "category": null,
-            "mode": "discovery",
-            "max_docs": 17,
-            "max_chars_per_doc": null
-        },
-        {
-            "feature": "ai_generate_recipe",
-            "art": "referenz",
-            "category": null,
-            "mode": "discovery",
-            "max_docs": 3,
-            "max_chars_per_doc": null
-        },
-        {
-            "feature": "ai_infer_ankers",
-            "art": null,
-            "category": "pairing",
-            "mode": "grounding",
-            "max_docs": 3,
-            "max_chars_per_doc": 1400
-        },
-        {
             "feature": "ai_plan_dishes",
             "art": null,
             "category": "betrieb_warenwirtschaft",
@@ -208,14 +88,6 @@
             "mode": "discovery",
             "max_docs": 3,
             "max_chars_per_doc": null
-        },
-        {
-            "feature": "ai_suggest_pairings",
-            "art": null,
-            "category": "pairing",
-            "mode": "grounding",
-            "max_docs": 5,
-            "max_chars_per_doc": 1200
         },
         {
             "feature": "chat.message",
@@ -754,6 +626,30 @@
             "max_chars_per_doc": null
         },
         {
+            "feature": "recipe.dichteklasse",
+            "art": null,
+            "category": "produktion_kapazitat",
+            "mode": "discovery",
+            "max_docs": 3,
+            "max_chars_per_doc": 6000
+        },
+        {
+            "feature": "recipe.dichteklasse",
+            "art": null,
+            "category": "regelwerk",
+            "mode": "discovery",
+            "max_docs": 3,
+            "max_chars_per_doc": 4000
+        },
+        {
+            "feature": "recipe.dichteklasse",
+            "art": "fachwissen",
+            "category": null,
+            "mode": "discovery",
+            "max_docs": 6,
+            "max_chars_per_doc": null
+        },
+        {
             "feature": "recipe.eigenschaften",
             "art": null,
             "category": "produktion_kapazitat",
@@ -792,6 +688,94 @@
             "mode": "none",
             "max_docs": null,
             "max_chars_per_doc": null
+        },
+        {
+            "feature": "recipe.generator",
+            "art": null,
+            "category": "cross_cutting",
+            "mode": "discovery",
+            "max_docs": 6,
+            "max_chars_per_doc": 8000
+        },
+        {
+            "feature": "recipe.generator",
+            "art": null,
+            "category": "domain",
+            "mode": "discovery",
+            "max_docs": null,
+            "max_chars_per_doc": null
+        },
+        {
+            "feature": "recipe.generator",
+            "art": null,
+            "category": "ernaehrung",
+            "mode": "discovery",
+            "max_docs": 1,
+            "max_chars_per_doc": 1500
+        },
+        {
+            "feature": "recipe.generator",
+            "art": null,
+            "category": "kreativ_input",
+            "mode": "discovery",
+            "max_docs": 1,
+            "max_chars_per_doc": 2000
+        },
+        {
+            "feature": "recipe.generator",
+            "art": null,
+            "category": "kueche",
+            "mode": "discovery",
+            "max_docs": 2,
+            "max_chars_per_doc": 2500
+        },
+        {
+            "feature": "recipe.generator",
+            "art": null,
+            "category": "niveau",
+            "mode": "discovery",
+            "max_docs": 1,
+            "max_chars_per_doc": 1800
+        },
+        {
+            "feature": "recipe.generator",
+            "art": null,
+            "category": "prasentation_service",
+            "mode": "discovery",
+            "max_docs": 1,
+            "max_chars_per_doc": 1500
+        },
+        {
+            "feature": "recipe.generator",
+            "art": null,
+            "category": "referenzgericht",
+            "mode": "none",
+            "max_docs": null,
+            "max_chars_per_doc": null
+        },
+        {
+            "feature": "recipe.generator",
+            "art": null,
+            "category": "regelwerk",
+            "mode": "none",
+            "max_docs": null,
+            "max_chars_per_doc": null
+        },
+        {
+            "feature": "recipe.generator",
+            "art": null,
+            "category": "signatur_kuechen",
+            "mode": "discovery",
+            "max_docs": 1,
+            "max_chars_per_doc": 2000
+        },
+        {
+            "feature": "recipe.generator",
+            "art": null,
+            "category": "weltkueche",
+            "mode": "discovery",
+            "max_docs": 1,
+            "max_chars_per_doc": 2000
         },
         {
             "feature": "recipe.generator",
@@ -976,6 +960,94 @@
             "mode": "none",
             "max_docs": null,
             "max_chars_per_doc": null
+        },
+        {
+            "feature": "vk.generator",
+            "art": null,
+            "category": "cross_cutting",
+            "mode": "discovery",
+            "max_docs": 6,
+            "max_chars_per_doc": 8000
+        },
+        {
+            "feature": "vk.generator",
+            "art": null,
+            "category": "domain",
+            "mode": "discovery",
+            "max_docs": null,
+            "max_chars_per_doc": null
+        },
+        {
+            "feature": "vk.generator",
+            "art": null,
+            "category": "ernaehrung",
+            "mode": "discovery",
+            "max_docs": 1,
+            "max_chars_per_doc": 1500
+        },
+        {
+            "feature": "vk.generator",
+            "art": null,
+            "category": "kreativ_input",
+            "mode": "discovery",
+            "max_docs": 1,
+            "max_chars_per_doc": 2000
+        },
+        {
+            "feature": "vk.generator",
+            "art": null,
+            "category": "kueche",
+            "mode": "discovery",
+            "max_docs": 2,
+            "max_chars_per_doc": 2500
+        },
+        {
+            "feature": "vk.generator",
+            "art": null,
+            "category": "niveau",
+            "mode": "discovery",
+            "max_docs": 1,
+            "max_chars_per_doc": 1800
+        },
+        {
+            "feature": "vk.generator",
+            "art": null,
+            "category": "prasentation_service",
+            "mode": "discovery",
+            "max_docs": 1,
+            "max_chars_per_doc": 1500
+        },
+        {
+            "feature": "vk.generator",
+            "art": null,
+            "category": "referenzgericht",
+            "mode": "none",
+            "max_docs": null,
+            "max_chars_per_doc": null
+        },
+        {
+            "feature": "vk.generator",
+            "art": null,
+            "category": "regelwerk",
+            "mode": "none",
+            "max_docs": null,
+            "max_chars_per_doc": null
+        },
+        {
+            "feature": "vk.generator",
+            "art": null,
+            "category": "signatur_kuechen",
+            "mode": "discovery",
+            "max_docs": 1,
+            "max_chars_per_doc": 2000
+        },
+        {
+            "feature": "vk.generator",
+            "art": null,
+            "category": "weltkueche",
+            "mode": "discovery",
+            "max_docs": 1,
+            "max_chars_per_doc": 2000
         },
         {
             "feature": "vk.generator",

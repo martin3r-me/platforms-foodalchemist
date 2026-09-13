@@ -54,6 +54,30 @@ class WissensProfilService
     {
         $routingKey = KnowledgeContextService::routingFeatureFuer($promptKey);
         $docs = $this->canon->documentsFor('prompt_key', $promptKey, $team, $role);
+
+        // ★ Geliehener Kanon — siehe WissensVersorgungService::LEIHT_KANON.
+        // `conformance.check` prueft ein Basisrezept gegen den Kanon von `recipe.generator` und
+        // ein VK-Gericht gegen den von `vk.generator`; unter seinem EIGENEN Schluessel hat er
+        // null Zeilen. Ohne diese Aufloesung stand er in der Einstellungs-Seite dauerhaft als
+        // `ungesteuert`, obwohl er von allen Keys mit am besten versorgt ist.
+        //
+        // Am 13.09. hat Dominique genau das an der Oberflaeche gesehen: die Seite meldete
+        // 1 ungesteuert, das Kommando 0. Der Fix von PR #82 hatte nur den
+        // WissensVersorgungService erreicht — zwei Dienste, dieselbe Frage, zwei Antworten.
+        // Aufgeloest wird wieder ueber ConformanceKnowledge, nicht ueber eine dritte Liste.
+        if ($docs->isEmpty() && in_array($promptKey, WissensVersorgungService::LEIHT_KANON, true)) {
+            foreach (array_keys((array) config('foodalchemist.ai.conformance_kanon', [])) as $artefakt) {
+                $quelle = ConformanceKnowledge::kanonKeyFuer((string) $artefakt);
+                if ($quelle === null) {
+                    continue;
+                }
+                $geliehen = $this->canon->documentsFor('prompt_key', $quelle, $team, $role);
+                if ($geliehen->isNotEmpty()) {
+                    $docs = $docs->concat($geliehen);
+                }
+            }
+            $docs = $docs->unique('slug')->values();
+        }
         $kaputt = $this->canon->unaufloesbareZeilen($team, $promptKey);
         $hatKanonZeilen = $this->canon->hasCanon('prompt_key', $promptKey, $team, $role);
 
