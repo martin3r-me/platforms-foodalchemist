@@ -990,7 +990,7 @@
             "art": "fachwissen",
             "category": null,
             "mode": "discovery",
-            "max_docs": 17,
+            "max_docs": 8,
             "max_chars_per_doc": null
         },
         {
@@ -1081,7 +1081,7 @@
         },
         {
             "prompt_key": "vk.generator",
-            "max_chars": 57000
+            "max_chars": 65000
         }
     ]
 }
