@@ -130,12 +130,9 @@
             @endif
 
             <div class="mt-2.5 flex items-center gap-2">
-                <button type="button" wire:click="kiFixAusfuehren({{ $sig->id }})" wire:target="kiFixAusfuehren" wire:loading.attr="disabled"
-                        class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium text-white bg-gradient-to-r from-violet-500 to-indigo-500 shadow-sm shadow-violet-500/25 hover:shadow-md hover:shadow-violet-500/30 disabled:opacity-50 transition-all">
-                    @svg($istFix ? 'heroicon-o-play' : 'heroicon-o-sparkles', 'w-3.5 h-3.5')
-                    <span wire:loading.remove wire:target="kiFixAusfuehren">{{ $istFix ? 'Automatisch beheben' : 'Entwurf erzeugen' }}</span>
-                    <span wire:loading wire:target="kiFixAusfuehren">Läuft …</span>
-                </button>
+                <x-foodalchemist::ki-action action="kiFixAusfuehren({{ $sig->id }})" target="kiFixAusfuehren" variant="primary"
+                        :icon="$istFix ? 'heroicon-o-play' : 'heroicon-o-sparkles'" :label="$istFix ? 'Automatisch beheben' : 'Entwurf erzeugen'"
+                        busy="Läuft …" class="!px-2.5 !py-1 !text-[11px]" />
                 <button type="button" wire:click="toggleKiPanel({{ $sig->id }})" class="px-2.5 py-1 rounded-lg text-[11px] text-gray-500 hover:bg-black/5 transition-colors">Schließen</button>
             </div>
         </div>

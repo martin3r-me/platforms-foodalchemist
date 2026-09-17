@@ -62,13 +62,9 @@
                 </button>
 
                 <div class="inline-flex items-center gap-1.5 pl-2 pr-1 py-1 rounded-lg bg-white/60 border border-black/5">
-                    <button type="button" wire:click="befundeLaufen" wire:target="befundeLaufen" wire:loading.attr="disabled"
-                            data-rq-befunde
-                            class="inline-flex items-center gap-1.5 text-xs font-medium text-violet-700 hover:text-violet-900 transition-all disabled:opacity-60"
-                            title="Rezept-Copilot über die fälligen Rezepte laufen lassen. Ruft das Modell PRO Rezept — das Limit rechts ist die Kostenbremse.">
-                        <span wire:loading.remove wire:target="befundeLaufen" class="inline-flex items-center gap-1.5">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') KI-Befunde sammeln</span>
-                        <span wire:loading wire:target="befundeLaufen" class="inline-flex items-center gap-1.5">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5 animate-spin') Reihe ein …</span>
-                    </button>
+                    <x-foodalchemist::ki-action action="befundeLaufen" variant="ai" icon="heroicon-o-sparkles" label="KI-Befunde sammeln"
+                            title="Rezept-Copilot über die fälligen Rezepte laufen lassen. Ruft das Modell PRO Rezept — das Limit rechts ist die Kostenbremse."
+                            busy="Reihe ein …" flash="Lauf gestartet" data-rq-befunde />
                     <input type="number" wire:model="befundeLimit" min="1" max="{{ \Platform\FoodAlchemist\Services\RecipeFindingsBatchService::MAX_LIMIT }}"
                            data-rq-befunde-limit
                            class="w-14 text-xs text-right bg-transparent border-0 focus:ring-0 text-gray-600 tabular-nums"
