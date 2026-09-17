@@ -205,6 +205,8 @@ Merge-Reihe: #94 → #95 → #97 → #96 → #98 (C und D integrieren `main` per
 | #95 Re-Roll-Zähler (Base auf main retargetet) | `ec9238a9` | 17:58 |
 | #97 B Wissen | `5fb8c955` | 17:59 |
 | #96 C Feedback (main per Merge-Commit `955e2191` integriert, 307/307 gezielt) | `e840e5b6` | 18:12 |
-| #98 D Sprachbefehl | _folgt nach Merge von main in den Branch_ | |
+| #98 D Sprachbefehl (main per Merge-Commit `46c2c75d` integriert, 228/228 gezielt) | `d104db08` | 18:25 |
 
 Deploy-Entscheid (Orchestrierung, von Dominique freigestellt): ein Deploy nach Merge aller fünf PRs — die Branches sind gegen den vollen Stapel getestet, ein Teil-Deploy brächte keinen Vorteil.
+
+**Deploy demo 2026-09-17 ~18:30 UTC:** Lock-Pin `727abe19` → `d104db08` (3 Felder, nur FA), Commit im demo-Repo, Push → Forge. Verifikation folgt (Pin am Host, Migration `phase/phase_at`, Worker-Neustart per `ps`-Beleg).
