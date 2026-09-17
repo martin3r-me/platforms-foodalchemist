@@ -71,10 +71,8 @@
                             <input type="checkbox" wire:model="generatorFavoritesConvenienceOnly" class="rounded border-gray-300 text-violet-600 focus:ring-violet-500" data-generator-favoriten-conv /> nur Convenience-Favoriten
                         </label>
                         <div class="flex gap-2">
-                            <button type="button" wire:click="generatorStart" class="{{ $btnPrimary }} flex-1 justify-center" wire:loading.attr="disabled" data-generator-start>
-                                <span wire:loading.remove wire:target="generatorStart">Konzept generieren</span>
-                                <span wire:loading wire:target="generatorStart">Baue Gerüst + wähle Gerichte …</span>
-                            </button>
+                            <x-foodalchemist::ki-action action="generatorStart" variant="primary" label="Konzept generieren"
+                                    busy="Baue Gerüst + wähle Gerichte …" class="flex-1 justify-center" data-generator-start />
                             <button type="button" wire:click="$set('generatorOffen', false)" class="{{ $btnGhost }}">✕</button>
                         </div>
                         <p class="text-[10px] text-gray-500">Ausschließlich echte VK-Gerichte — Slots ohne Treffer bleiben leer mit Begründung. Ergebnis ist ein Draft.</p>
