@@ -2492,3 +2492,101 @@ it('Ausgabe-Tabs: Editor rendert die 3 Ausgabe-Kickoff-Tabs + Panels (Foodbook/S
         ->assertSeeHtml('data-tab-sk-erzeugen')       // Speisekarte aus Brief — live (speisekarteAusBrief)
         ->assertSeeHtml('data-tab-sp-erzeugen');      // Speiseplan aus Brief — live (speiseplanAusBrief, Stufe 4)
 });
+
+// ── Spec 53 / Paket C — Phase-Anzeige, Poll-Gate, Server-Guards, Komponente, Status-Leiste ──────
+
+it('Phase 1 „eingereiht — wartet auf Worker": queued/running-Step ohne Phase zeigt den Platzhalter-Text', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Phase-Platzhalter', 'brief' => 'x']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'planning_session_id' => $session->id, 'scope' => 'rezept', 'status' => 'running']);
+    FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'rezept', 'status' => 'queued', 'label' => 'Fond', 'sort' => 1]);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->assertSee('eingereiht — wartet auf Worker');
+});
+
+it('Phase gesetzt am Step überschreibt den Platzhalter mit dem echten Fortschrittstext', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Phase-Echt', 'brief' => 'x']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'planning_session_id' => $session->id, 'scope' => 'rezept', 'status' => 'running']);
+    FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'rezept', 'status' => 'running', 'phase' => 'Rezept wird entworfen …', 'phase_at' => now(), 'label' => 'Fond', 'sort' => 1]);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->assertSee('Rezept wird entworfen …')
+        ->assertDontSee('eingereiht — wartet auf Worker');
+});
+
+it('Poll-Gate (Worker-Tab, 1500ms): Ruhezustand ohne Lauf zeigt kein wire:poll.1500ms', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Ruhe', 'brief' => 'x']);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->assertDontSeeHtml('wire:poll.1500ms');
+});
+
+it('Poll-Gate (Worker-Tab, 1500ms): eine Phase OHNE laufenden Run (Konformität nach Freigabe) haelt das Polling an', function () {
+    // Kernfall der Ableitung (statt gemerktes Flag): der Run ist längst `done`, aber ein Step trägt
+    // noch eine Phase (z. B. Konformitätsprüfung nach der Freigabe) — vorher eine der zwei Lücken.
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Phase-Nachlauf', 'brief' => 'x']);
+    $recipe = $this->makeRecipe($this->rootTeam, 'Nachlauf-Rezept', ['status' => 'draft']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'planning_session_id' => $session->id, 'scope' => 'rezept', 'status' => 'done']);
+    FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'rezept', 'status' => 'freigegeben',
+        'ref_type' => 'recipe', 'ref_id' => $recipe->id, 'phase' => PlanningCascadeService::PHASE_KONFORMITAET, 'phase_at' => now(), 'sort' => 1,
+    ]);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->assertSeeHtml('wire:poll.1500ms');
+});
+
+it('Doppel-Enqueue-Guard: zweiter Klick auf neuAnreichern waehrend die erste Anreicherung noch laeuft dispatcht keinen zweiten Job', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Doppel-Anreichern', 'brief' => 'x']);
+    $recipe = $this->makeRecipe($this->rootTeam, 'Doppel-Anreichern-Rezept', ['status' => 'draft']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'planning_session_id' => $session->id, 'scope' => 'gericht', 'status' => 'review']);
+    $step = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'freigegeben', 'ref_type' => 'recipe', 'ref_id' => $recipe->id]);
+
+    $component = Livewire::test(PlanungIndex::class)->call('oeffne', $session->id);
+    $component->call('neuAnreichern', $step->id);
+    $component->call('neuAnreichern', $step->id);   // zweiter Klick, waehrend deferred.enrich=queued steht
+
+    Queue::assertPushed(EnrichRecipeJob::class, 1);
+});
+
+it('Doppel-Enqueue-Guard: zweiter Klick auf konformitaetPruefen waehrend die erste Pruefung noch laeuft dispatcht keinen zweiten Job', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Doppel-Konformitaet', 'brief' => 'x']);
+    $recipe = $this->makeRecipe($this->rootTeam, 'Doppel-Konformitaet-Rezept', ['status' => 'draft']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'planning_session_id' => $session->id, 'scope' => 'rezept', 'status' => 'done']);
+    $step = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'rezept', 'status' => 'freigegeben', 'ref_type' => 'recipe', 'ref_id' => $recipe->id]);
+
+    $component = Livewire::test(PlanungIndex::class)->call('oeffne', $session->id);
+    $component->call('konformitaetPruefen', $recipe->id);
+    $component->call('konformitaetPruefen', $recipe->id);   // zweiter Klick — der erste hat die Phase schon synchron gesetzt
+
+    Queue::assertPushed(\Platform\FoodAlchemist\Jobs\ConformanceCheckJob::class, 1);
+    expect($step->refresh()->phase)->toBe(PlanningCascadeService::PHASE_KONFORMITAET);
+});
+
+it('ki-action-Komponente: data-ki-action + wire:target sind gesetzt und stimmen mit dem Wire-Ausdruck ueberein', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Komponente', 'brief' => 'x']);
+    $recipe = $this->makeRecipe($this->rootTeam, 'Komponenten-Rezept', ['status' => 'draft']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'planning_session_id' => $session->id, 'scope' => 'rezept', 'status' => 'done']);
+    FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'rezept', 'status' => 'freigegeben', 'ref_type' => 'recipe', 'ref_id' => $recipe->id, 'label' => 'X', 'sort' => 1]);
+
+    $html = Livewire::test(PlanungIndex::class)->call('oeffne', $session->id)->html();
+
+    $ausdruck = 'konformitaetPruefen(' . $recipe->id . ')';
+    expect($html)->toContain('data-ki-action="' . $ausdruck . '"')
+        ->toContain('wire:target="' . $ausdruck . '"');
+});
+
+it('Globaler KI-Status: zeigt wartend/laufend fuers Team an, unabhaengig davon ob ein Lauf im Cockpit offen ist', function () {
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'rezept', 'status' => 'running']);
+    FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'rezept', 'status' => 'queued', 'sort' => 1]);
+    FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'rezept', 'status' => 'running', 'phase' => 'Rezept wird entworfen …', 'phase_at' => now(), 'sort' => 2]);
+
+    Livewire::test(PlanungIndex::class)
+        ->assertSeeHtml('data-planung-ki-status-leiste')
+        ->assertSee('1 KI-Aufgabe wartet')
+        ->assertSee('Rezept wird entworfen …');
+});
