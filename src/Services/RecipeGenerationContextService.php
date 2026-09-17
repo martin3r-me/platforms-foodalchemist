@@ -255,9 +255,13 @@ class RecipeGenerationContextService
         // Reine String-/Int-Listen → gefahrlos durch Job-Cache + Livewire-Ergebnis reichbar.
         $kontext = [
             'wissen' => $wissen['used_by_category'] ?? [],
+            // Spec 53 Rebase-Hinweis (2026-09-17): Pauls PR #94 legte hier unabhängig dieselbe
+            // Idee an, als flache Liste (`$wissen['files_dropped']`) statt strukturiert nach Kanal.
+            // Abgesprochen mit der Orchestrierung (cooking-jarvis-03): das strukturierte Feld
+            // {retrieval, kanon} bleibt — der Inspektor rendert genau dieses Format (s.
+            // `kontext-inspektor.blade.php`), die flache Variante wurde nirgends gerendert.
             'wissen_verworfen' => $wissenVerworfen,
             'chars' => (int) ($wissen['total_chars'] ?? 0),
-            'wissen_verworfen' => $wissen['files_dropped'] ?? [],
             'templates' => array_values(array_map(
                 fn ($t) => ['id' => $t['id'], 'name' => $t['name']],
                 array_filter($templateContext, fn ($t) => ($t['score'] ?? 0) > 0),
