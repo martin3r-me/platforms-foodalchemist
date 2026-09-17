@@ -76,15 +76,34 @@ class ConformanceCheckJob implements ShouldQueue
             app(\Platform\FoodAlchemist\Services\PlanningCascadeService::class)
                 ->setzePhase($this->cascadeStepId, 'Konformität wird geprüft …');
         }
+        // Spec 53 / Paket C: Dauer des Critic-Passes für die Cockpit-/MCP-Anzeige.
+        $start = hrtime(true);
         try {
             $conformance->pruefeUndHeile($team, $this->artifactTyp, $this->artifactId);
         } catch (\Throwable $e) {
             // Best-effort — eine gescheiterte Prüfung ist nie ein Grund, das fertige Artefakt zu kippen.
         } finally {
             if ($this->cascadeStepId !== null) {
-                app(\Platform\FoodAlchemist\Services\PlanningCascadeService::class)
-                    ->setzePhase($this->cascadeStepId, null);
+                $svc = app(\Platform\FoodAlchemist\Services\PlanningCascadeService::class);
+                $svc->setzePhase($this->cascadeStepId, null);
+                $this->markKonformitaetsDauer((int) round((hrtime(true) - $start) / 1_000_000));
             }
+        }
+    }
+
+    /** Spec 53 / Paket C: `deferred.conformance.ms` am auslösenden Step — Beiwerk, nie blockierend. */
+    private function markKonformitaetsDauer(int $ms): void
+    {
+        try {
+            $step = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep::find($this->cascadeStepId);
+            if ($step === null) {
+                return;
+            }
+            $deferred = is_array($step->deferred) ? $step->deferred : [];
+            $deferred['conformance'] = ['ms' => $ms, 'at' => now()->toIso8601String()];
+            $step->update(['deferred' => $deferred]);
+        } catch (\Throwable) {
+            // Tracking ist Beiwerk — nie blockierend.
         }
     }
 }

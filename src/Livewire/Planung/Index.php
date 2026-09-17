@@ -2632,7 +2632,11 @@ class Index extends Component
             return;
         }
         $lauf = $cascade->lauf($team, $this->laufId);
-        if ($lauf === null || $lauf->status !== 'running') {
+        // Spec 53 / Paket C: eine Phase (Konformitätsprüfung/Anreicherung/Bilder) kann auch nach dem
+        // Ende des Laufs noch offen sein — dann darf pruefeLauf nicht früh abbrechen, sonst würde das
+        // Poll-Ziel selbst suggerieren, es sei fertig, während render()s $pollAktiv weiter pollt.
+        $phaseOffen = $lauf !== null && $lauf->steps->contains(fn ($s) => $s->phase !== null);
+        if ($lauf === null || ($lauf->status !== 'running' && ! $phaseOffen)) {
             $this->laeuft = false;
             $this->hinweis = null;
             if ($lauf !== null && $lauf->status === 'review') {
@@ -2640,6 +2644,13 @@ class Index extends Component
             } elseif ($lauf !== null && $lauf->status === 'failed') {
                 $this->fehler = 'Generierung fehlgeschlagen — Details im Ergebnis unten.';
             }
+
+            return;
+        }
+        if ($lauf->status !== 'running') {
+            // Der Lauf selbst ist fertig, aber eine Phase läuft noch nach — der Watchdog unten
+            // beobachtet nur laufende Kaskaden-Schritte und griffe hier ins Leere.
+            $this->laeuft = false;
 
             return;
         }
@@ -3173,7 +3184,8 @@ class Index extends Component
         $stepsByRun = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep::whereIn('cascade_run_id', $runIds)
             // `deferred` mitholen: stufenAusSteps liest daraus den Reifegrad der Übernahmen.
             // Ohne die Spalte zählte eine unreife Übernahme auf der Hauptseite still als fertig.
-            ->get(['cascade_run_id', 'kind', 'status', 'label', 'ref_id', 'deferred'])
+            // `phase`/`phase_at` (Spec 53 / Paket C): Poll-Gate + Board-Anzeige der laufenden Phase.
+            ->get(['cascade_run_id', 'kind', 'status', 'label', 'ref_id', 'deferred', 'phase', 'phase_at'])
             ->groupBy('cascade_run_id');
 
         // Spec 42 / Board: Ausgabe-Ziel (Owner) je Lauf — Namen batch-auflösen (ein Query je Owner-Typ,
@@ -3201,9 +3213,14 @@ class Index extends Component
             $steps = $stepsByRun->get((int) $r->id) ?? collect();
             $ot = $r->source_owner_type !== null ? (string) $r->source_owner_type : null;
             $oid = $r->source_owner_id !== null ? (int) $r->source_owner_id : null;
+            // Spec 53 / Paket C: ein Step kann noch eine Phase melden (Anreicherung/Konformität), auch
+            // wenn der Run selbst schon nicht mehr `running` ist — Board-Poll-Gate ($irgendeinLaeuft)
+            // und Anzeige sollen das sehen. Jüngste Phase (nach phase_at) für die Board-Zeile.
+            $phaseStep = $steps->whereNotNull('phase')->sortByDesc('phase_at')->first();
             $out[$sid] = [
                 'status' => $badge[$r->status] ?? (string) $r->status,
-                'running' => $r->status === 'running',
+                'running' => $r->status === 'running' || $phaseStep !== null,
+                'phase' => $phaseStep?->phase,
                 'run_id' => (int) $r->id,
                 'scope' => (string) $r->scope,
                 'stufen' => $this->stufenAusSteps($steps),
@@ -3840,6 +3857,17 @@ class Index extends Component
         // sonst sofort „done", während das Gericht noch ein roher Entwurf wäre.
         $this->anreicherungLaeuft = $this->anreicherungOffen($lauf);
 
+        // Spec 53 / Paket C: Poll-Gate ABLEITEN statt merken. Vorher speiste ein gespeichertes Flag
+        // (17 Aufrufstellen) das wire:poll — mit Lücken (goKaskade, konformitaetPruefen hatten keinen
+        // eigenen Merker). Jetzt: aktiv, solange irgendein Signal noch etwas zu melden hat — inklusive
+        // eines Steps, der eine Phase trägt (Konformitätsprüfung/Anreicherung/Bilder), auch wenn der
+        // Run selbst schon nicht mehr `running` ist.
+        $pollAktiv = $this->laeuft || $this->anreicherungLaeuft || ($lauf !== null && (
+            $lauf->status === 'running'
+            || $this->anreicherungOffen($lauf)
+            || $lauf->steps->contains(fn ($s) => $s->phase !== null)
+        ));
+
         // Etappe 6: EK/VK/Marge je Stufe im Cockpit sichtbar — schon am Draft, nicht erst nach dem
         // Speichern/Öffnen im VK-Editor. Für jeden Rezept-/Gericht-Step mit erzeugtem Artefakt
         // (ref_type=recipe) die ABGELEITETE Kalkulation über den EINEN Bündler ziehen
@@ -4093,6 +4121,7 @@ class Index extends Component
             'workerAlter' => $workerAlter,
             'workerWarnung' => $workerWarnung,
             'irgendeinLaeuft' => $irgendeinLaeuft,
+            'pollAktiv' => $pollAktiv,
             'active' => $active,
             'skizzen' => $skizzen,
             'skizzenLauf' => $skizzenLauf,

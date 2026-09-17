@@ -841,14 +841,19 @@
 
             {{-- WORKER — alle Läufe/Entwürfe zusammen: Status + Fan-out-Baum + Freigabe --}}
             <div wire:key="planung-tab-worker" x-show="tab==='worker'" class="space-y-4">
-                @if($laeuft || $anreicherungLaeuft)
+                {{-- Spec 53 / Paket C: $pollAktiv wird JEDES Render frisch aus DB-Wahrheit abgeleitet
+                     (Lauf-Status + Step-Phasen), kein gespeichertes Flag mehr — deckt auch Fälle ab,
+                     die kein $laeuft/$anreicherungLaeuft setzen (z. B. eine on-demand Konformitätsprüfung). --}}
+                @if($pollAktiv)
                     <div wire:poll.1500ms="pruefeLauf" class="flex items-center gap-2 text-xs text-amber-300">
                         @svg('heroicon-o-arrow-path', 'w-4 h-4 animate-spin')
                         <span>
                             @if($laeuft)
                                 Läuft — der Worker arbeitet die Kaskade ab …
-                            @else
+                            @elseif($anreicherungLaeuft)
                                 Freigegeben — die Anreicherung läuft nach (Beschreibung, Kalkulation, Allergene) …
+                            @else
+                                Ein Hintergrund-Schritt läuft noch …
                             @endif
                         </span>
                     </div>
