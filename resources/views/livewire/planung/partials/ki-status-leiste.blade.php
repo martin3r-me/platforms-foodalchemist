@@ -4,6 +4,9 @@
      $workerState (WorkerHealthService::status, schon in Index::render() berechnet). Optional
      $klickbar=true schaltet auf den Worker-Tab um (nur sinnvoll, wo `tab` im Alpine-Scope existiert). --}}
 @php
+    // Fail-soft: ein späterer Include-Ort ohne $kiStatus im Scope soll still nichts rendern
+    // (@if unten), statt mit "Undefined variable" zu sterben.
+    $kiStatus = $kiStatus ?? null;
     $klickbar = $klickbar ?? false;
     $ampelPunkt = ['gesund' => 'bg-emerald-500', 'still' => 'bg-amber-500', 'unbekannt' => 'bg-gray-400'][$workerState ?? 'unbekannt'] ?? 'bg-gray-400';
 @endphp
