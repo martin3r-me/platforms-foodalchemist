@@ -686,9 +686,18 @@ class RecipeModal extends Component
                     $gefuellt++;
                 }
             }
+            // Review-Fund Lisa (Paket G, Wissens-Nachtrag): dieser Call gab bisher KEIN
+            // $wissenOpts mit, obwohl der Nachbar-Call (recipe.eigenschaften, oben) eins baut —
+            // ein eigener contextFor()-Aufruf, weil das Routing pro Feature-Key (`recipe.geschmack`,
+            // nicht `recipe.eigenschaften`) gebunden ist; den falschen Block mitzugeben wäre
+            // „falsch versorgt" statt „unversorgt" gewesen.
+            $geschmackWissen = $wissen->contextFor(Auth::user()?->currentTeamRelation, 'recipe.geschmack',
+                trim(($this->form['name'] ?? '').' '.implode(' · ', $zutaten)),
+                null, [], $r !== null ? \Platform\FoodAlchemist\Services\Knowledge\RezeptAchsen::fuer($r) : []);
+            $geschmackOpts = \Platform\FoodAlchemist\Services\Ai\KnowledgeContextService::proposeOptionen($geschmackWissen);
             $geschmack = $ki->propose('recipe.geschmack', [
                 'name' => $this->form['name'], 'taste_direction' => $this->form['taste_direction'] ?: null, 'zutaten' => $zutaten,
-            ]);
+            ], $geschmackOpts);
         } catch (\RuntimeException $e) {
             $this->fehler = $e->getMessage();
 
