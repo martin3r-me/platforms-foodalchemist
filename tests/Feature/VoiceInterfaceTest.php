@@ -297,3 +297,17 @@ it('Rezept-Kontext: das oeffnen()-Event landet im Auftrag, ohne dass der User de
 
     expect($erfasst->auftrag)->toContain('Kontext: aktuell geöffnet — recipe ID=' . $rezept->id);
 });
+
+/*
+ * Hotfix 2026-09-17: ein rohes <script> als ERSTES Tag der Komponenten-HTML bekam von Livewire das
+ * wire:id (Drawer\Utils::insertAttributesIntoHtmlRoot hängt Attribute per Regex an das erste Tag).
+ * Das Modal-Markup gehörte damit zur Eltern-Komponente (Sidebar) — $wire.upload lief gegen
+ * foodalchemist.sidebar ohne WithFileUploads (MissingFileUploadsTraitException, demo). Die
+ * Root-ZÄHLUNG strippt <script> vorher, die Attribut-INJEKTION nicht — deshalb hier der Wächter:
+ * das erste Tag der gerenderten Komponente muss das Modal-Div sein, nie ein Script.
+ */
+it('rendert kein <script> als erstes Tag der Komponente (wire:id landet sonst am Script)', function () {
+    $html = Livewire::test(VoiceModal::class)->html();
+    preg_match('/(?:\n\s*|^\s*)<([a-zA-Z0-9\-]+)/', $html, $m);
+    expect($m[1] ?? null)->toBe('div');
+});

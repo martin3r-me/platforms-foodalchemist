@@ -312,8 +312,13 @@ class RecipeGeneratorService
                 // STARKES Sub (§4 »jus ist die sauce« / LLM-Flag true): IMMER Basisrezept — überstimmt
                 // auch einen GP-Treffer und jede Convenience-Stufe. Marker sind praktisch nie Flachware.
                 $strongSub = ! $direktArtikel && ($nameHalbfabrikat || $prefixSub || ($llmSub === true));
-                // Rolle komponente/beilage im VK-Gericht (T4) — jetzt Convenience-gesteuert:
-                $rolleKomponente = $vkModus && ! $direktArtikel && in_array($z['role'] ?? null, ['komponente', 'beilage'], true);
+                // Rolle komponente/beilage/garnitur/aroma_treiber im VK-Gericht (T4) — Convenience-
+                // gesteuert. Dominique-Entscheid (Nebenbefund #102): ein Gericht wird aus
+                // Basisrezepten gebaut — auch Garnitur/Aroma-Treiber ohne Bestandstreffer werden
+                // zum Basisrezept (Rüstzeit etc. gehört dort erfasst), nicht zur LA-Wahl. Ein
+                // GP-Treffer gewinnt weiterhin unabhängig von der Rolle (siehe $rolleWillSub unten).
+                $rolleKomponente = $vkModus && ! $direktArtikel
+                    && in_array($z['role'] ?? null, ['komponente', 'beilage', 'garnitur', 'aroma_treiber'], true);
                 $istConvenienceGp = $istGpTreffer && $this->istConvenienceGp((int) ($treffer['gp_id'] ?? 0));
                 $rolleWillSub = $rolleKomponente && match ($convenience) {
                     'from_scratch'     => true,                 // hart: selbst bauen (auch über GP-Treffer)
@@ -437,11 +442,21 @@ class RecipeGeneratorService
             // NUR auf dem Generierungs-Pfad: im Editor ordnet der Mensch bewusst um, dort
             // darf nichts nachsortieren.
             if ($vkModus) {
-                [$zeilen, $verschoben] = $this->sortiereNachRolle($zeilen);
+                [$zeilen, $verschoben, $altZuNeu] = $this->sortiereNachRolle($zeilen);
                 if ($verschoben > 0) {
                     // Sichtbar machen statt still korrigieren — so wird messbar, wie oft das
                     // Modell die Reihenfolge verfehlt, statt es hinter dem Fix zu verstecken.
                     $statistik['reihenfolge_korrigiert'] = $verschoben;
+                    // Lauf 71 (demo, 20.09.): offene[]['index'] wurde VOR dem Sortieren gebaut
+                    // (Kontrakt afterGenerated: position === index + 1) und zeigte danach auf die
+                    // FALSCHE oder gar keine Zutat — planChildren() fand die Zeile nie, legte
+                    // keinen Sub-Rezept-Step an, die Beilage/Garnitur blieb dauerhaft unmatched.
+                    foreach ($offene as &$open) {
+                        if (isset($open['index'], $altZuNeu[$open['index']])) {
+                            $open['index'] = $altZuNeu[$open['index']];
+                        }
+                    }
+                    unset($open);
                 }
             }
 
@@ -550,7 +565,10 @@ class RecipeGeneratorService
      * steckt kulinarisches Urteil (welche Beilage zuerst), das keine Rang-Tabelle kennt.
      *
      * @param  list<array<string, mixed>>  $zeilen
-     * @return array{0: list<array<string, mixed>>, 1: int}
+     * @return array{0: list<array<string, mixed>>, 1: int, 2: array<int, int>} Zeilen (neue
+     *         Reihenfolge), Anzahl verschobener Zeilen, Alt-Index → Neu-Index (Kontrakt
+     *         afterGenerated: position === index + 1 — offene[]['index'] wird VOR dem Sortieren
+     *         gebaut und muss danach über diese Map nachgezogen werden, siehe Aufrufstelle).
      */
     private function sortiereNachRolle(array $zeilen): array
     {
@@ -565,13 +583,15 @@ class RecipeGeneratorService
         usort($mitRang, fn ($a, $b) => [$a['rang'], $a['i']] <=> [$b['rang'], $b['i']]);
 
         $verschoben = 0;
+        $altZuNeu = [];
         foreach ($mitRang as $neuerIndex => $eintrag) {
+            $altZuNeu[$eintrag['i']] = $neuerIndex;
             if ($eintrag['i'] !== $neuerIndex) {
                 $verschoben++;
             }
         }
 
-        return [array_column($mitRang, 'zeile'), $verschoben];
+        return [array_column($mitRang, 'zeile'), $verschoben, $altZuNeu];
     }
 
     private function kohaerenzGate(Team $team, array $result, callable $melde): array
