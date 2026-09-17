@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\DB;
+use Platform\FoodAlchemist\Exceptions\KiAntwortStrukturellUnbrauchbarException;
 use Platform\FoodAlchemist\Services\Ai\AiGatewayService;
 use Platform\FoodAlchemist\Services\Ai\FakeAiProvider;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
@@ -111,6 +112,21 @@ it('§3.3: 3× kaputt → Exception NACH dem Log (error-Zeile, Versuch 3 dokumen
     $promptParts = json_decode((string) DB::table('foodalchemist_ai_call_log')->orderByDesc('id')->value('prompt_parts'), true);
     expect($promptParts['versuche'])->toBe(3)
         ->and($promptParts['reroll_grund'])->toBe('json_ungueltig');
+});
+
+it('Review-Fund: reroll_grund klassifiziert per Exception-Typ, nicht per Message-Text', function () {
+    // Derselbe Exception-TYP mit einem völlig anderen Wortlaut muss trotzdem 'strukturell'
+    // ergeben — sonst kippt jede Wortlaut-Änderung die Klassifikation stumm zu 'provider_fehler'.
+    ($this->skriptProvider)([
+        new KiAntwortStrukturellUnbrauchbarException('Ein ganz anderer Text, der nicht mehr "strukturell unbrauchbar" enthält.'),
+        '{"werte": {"x": 1}, "confidence": 0.8}',
+    ]);
+
+    $this->gw->propose('recipe.description', ['b' => 1]);
+
+    $promptParts = json_decode((string) DB::table('foodalchemist_ai_call_log')->orderByDesc('id')->value('prompt_parts'), true);
+    expect($promptParts['versuche'])->toBe(2)
+        ->and($promptParts['reroll_grund'])->toBe('strukturell');
 });
 
 it('§3.2: nach erschöpftem Backoff einmaliger Modell-Fallback — model trägt das echte Modell', function () {

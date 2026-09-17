@@ -6,6 +6,8 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Platform\Core\Contracts\LLMProviderContract;
 use Platform\Core\Services\LLMProviderRegistry;
+use Platform\FoodAlchemist\Exceptions\KiAntwortKeinJsonException;
+use Platform\FoodAlchemist\Exceptions\KiAntwortStrukturellUnbrauchbarException;
 use RuntimeException;
 
 /**
@@ -374,23 +376,20 @@ class AiGatewayService
                 $tatsaechlichesModell = $antwort['model'] ?? $tatsaechlichesModell;
                 $parsed = json_decode($this->stripJsonFence((string) ($antwort['content'] ?? '')), true);
                 if (!is_array($parsed)) {
-                    throw new RuntimeException("KI-Antwort für [{$promptKey}] ist kein valides JSON (nach Fence-Stripping, Versuch " . ($versuch + 1) . ').');
+                    throw new KiAntwortKeinJsonException(
+                        "KI-Antwort für [{$promptKey}] ist kein valides JSON (nach Fence-Stripping, Versuch " . ($versuch + 1) . ').',
+                    );
                 }
                 if (is_callable($isUsable) && ! $isUsable($parsed)) {
-                    throw new RuntimeException("KI-Antwort für [{$promptKey}] ist strukturell unbrauchbar (Versuch " . ($versuch + 1) . ').');
+                    throw new KiAntwortStrukturellUnbrauchbarException(
+                        "KI-Antwort für [{$promptKey}] ist strukturell unbrauchbar (Versuch " . ($versuch + 1) . ').',
+                    );
                 }
                 break;                                               // erste valide + brauchbare gewinnt
             } catch (\Throwable $e) {
                 $fehler = $e;
                 $parsed = null;
-                // Grob nach der Fehlerquelle einordnen — chatMitBackoff() fängt Modell-
-                // Fallback/Provider-Backoff bereits intern ab; erreicht deren Exception TROTZDEM
-                // diese Ebene, ist auch der Fallback-Versuch gescheitert (»provider_fehler«).
-                $letzterRerollGrund = match (true) {
-                    str_contains($e->getMessage(), 'strukturell unbrauchbar') => 'strukturell',
-                    str_contains($e->getMessage(), 'kein valides JSON') => 'json_ungueltig',
-                    default => 'provider_fehler',
-                };
+                $letzterRerollGrund = $this->rerollGrund($e);
             }
         }
         $elapsedMs = (int) ((hrtime(true) - $start) / 1_000_000);
@@ -757,6 +756,23 @@ class AiGatewayService
         $summe['input_tokens'] += (int) ($usage['input_tokens'] ?? 0);
         $summe['output_tokens'] += (int) ($usage['output_tokens'] ?? 0);
         $summe['input_tokens_details']['cached_tokens'] += (int) ($usage['input_tokens_details']['cached_tokens'] ?? 0);
+    }
+
+    /**
+     * Re-Roll-Grund für den Call-Log (`prompt_parts.reroll_grund`) — TYPISIERT, nicht per
+     * Message-Substring (Review-Fund: [[feedback_prompt_wortlaut_ist_keine_schnittstelle]],
+     * 5 Treffer an einem Tag; ein geänderter Wortlaut hätte jeden Re-Roll stumm als
+     * 'provider_fehler' einsortiert). `chatMitBackoff()` fängt Modell-Fallback/Provider-
+     * Backoff bereits intern ab; erreicht deren Exception TROTZDEM diese Ebene, ist auch
+     * der Fallback-Versuch gescheitert ('provider_fehler').
+     */
+    private function rerollGrund(\Throwable $e): string
+    {
+        return match (true) {
+            $e instanceof KiAntwortStrukturellUnbrauchbarException => 'strukturell',
+            $e instanceof KiAntwortKeinJsonException => 'json_ungueltig',
+            default => 'provider_fehler',
+        };
     }
 
     /**
