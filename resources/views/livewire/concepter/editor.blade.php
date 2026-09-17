@@ -241,7 +241,9 @@
                             <option value="">— neutral —</option>
                             @foreach($schreibstile as $s)<option value="{{ $s->id }}">{{ $s->name }}</option>@endforeach
                         </select>
-                        <button type="button" wire:click="wordingGenerieren" class="{{ $btnAi }} shrink-0" title="Wording übers ganze Konzept erzeugen: pro Position einen Brand-Voice-Namen + Konzept-Einleitung (echter Text mit LLM-Key)" data-ki-concept-wording>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') Wording</button>
+                        <x-foodalchemist::ki-action action="wordingGenerieren" variant="ai" icon="heroicon-o-sparkles" label="Wording"
+                                title="Wording übers ganze Konzept erzeugen: pro Position einen Brand-Voice-Namen + Konzept-Einleitung (echter Text mit LLM-Key)"
+                                class="shrink-0" data-ki-concept-wording />
                     </div>
                 @endif
             @endif
