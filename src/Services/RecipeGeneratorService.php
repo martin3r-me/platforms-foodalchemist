@@ -339,7 +339,7 @@ class RecipeGeneratorService
                 // aber nur validiert (visibleToTeam + §-Status + kein Platzhalter / Zyklus-Guard) und
                 // OHNE die L2-Zerlegungs-/Frische-Entscheidung zu übersteuern (Reihenfolge NACH
                 // $gpBlockiert/$istBasisrezept). Halluzinierte/fremde id ⇒ null ⇒ Fuzzy-Fallback.
-                $proposedSubId = $this->validiereProposedSub($team, (int) $recipe->id, $z['sub_rezept_id'] ?? null);
+                $proposedSubId = $this->validiereProposedSub($team, (int) $recipe->id, $z['sub_rezept_id'] ?? null, $text);
                 $proposedGpId = $proposedSubId === null ? $this->validiereProposedGp($team, $z['gp_id'] ?? null, $text) : null;
                 $verdrahtet = false;
                 if ($proposedSubId !== null && ($istBasisrezept || ! $gpBlockiert)) {
@@ -949,10 +949,18 @@ class RecipeGeneratorService
      * {@see RecipeService::syncIngredients} später die GANZE Generierung mit einer Exception
      * kippen. Ungültig/zyklisch ⇒ null (Fuzzy-Fallback greift).
      */
-    private function validiereProposedSub(Team $team, int $parentRecipeId, mixed $id): ?int
+    private function validiereProposedSub(Team $team, int $parentRecipeId, mixed $id, string $text = ''): ?int
     {
         $id = is_numeric($id) ? (int) $id : 0;
         if ($id <= 0 || $id === $parentRecipeId) {
+            return null;
+        }
+        // Ein explizit genannter §9-Zustand („Dosentomaten", „TK-Erbsen") beschreibt eine
+        // ROHWARE in einer bestimmten Einkaufsform — ein Sub-Rezept (verarbeitete Komponente)
+        // kann das strukturell nicht ersetzen. Fuzzy-Fallback findet danach den passenden GP
+        // ({@see IngredientMatchService::acceptsProductForm()}). $text default '' hält den
+        // Bestands-Draw-Aufrufer (ziehtAusBestand, keine Zeilen-Beschreibung verfügbar) unverändert.
+        if (app(Matching\TokenEngine::class)->produktForm($text)['zustand'] !== null) {
             return null;
         }
         $exists = FoodAlchemistRecipe::query()->visibleToTeam($team)->basis()
