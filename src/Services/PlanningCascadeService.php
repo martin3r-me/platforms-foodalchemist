@@ -1025,7 +1025,13 @@ class PlanningCascadeService
             $params = array_merge($this->sessionGenerationParams($team, $planningSessionId), ['auto_dependencies' => true, 'cascade_step_id' => $stepId]);
             $workflow = app(RecipeDependencyWorkflowService::class);
             $context = $workflow->prepare($team, $stepId, $brief, $params, true);
-            $gen = app(RecipeGeneratorService::class)->generiere($team, $brief, $params, null, true, 'plan_go', $context);
+            // Spec 53 / Paket C-Nachtrag: derselbe Fortschritts-Callback wie GenerateRecipeJob —
+            // generiere() meldet dieselben Stufen (Kontext & Wissen/KI schreibt/Zutaten/Kohärenz),
+            // hier bisher ungenutzt. Phase am Step statt am Cache (kein eigener Cache-Key hier).
+            $gen = app(RecipeGeneratorService::class)->generiere(
+                $team, $brief, $params, null, true, 'plan_go', $context,
+                fn (string $stufe) => $this->setzePhase($stepId, $stufe),
+            );
             $recipe = $gen['recipe'] ?? null;
             if ($recipe === null) {
                 throw new RuntimeException('Generierung lieferte kein Rezept.');
@@ -1108,7 +1114,13 @@ class PlanningCascadeService
             $params = array_merge($this->sessionGenerationParams($team, $planningSessionId), ['auto_dependencies' => true, 'cascade_step_id' => $stepId]);
             $workflow = app(RecipeDependencyWorkflowService::class);
             $context = $workflow->prepare($team, $stepId, $brief, $params, true);
-            $gen = app(RecipeGeneratorService::class)->generiere($team, $brief, $params, null, true, 'plan_go', $context);
+            // Spec 53 / Paket C-Nachtrag: derselbe Fortschritts-Callback wie GenerateRecipeJob —
+            // generiere() meldet dieselben Stufen (Kontext & Wissen/KI schreibt/Zutaten/Kohärenz),
+            // hier bisher ungenutzt. Phase am Step statt am Cache (kein eigener Cache-Key hier).
+            $gen = app(RecipeGeneratorService::class)->generiere(
+                $team, $brief, $params, null, true, 'plan_go', $context,
+                fn (string $stufe) => $this->setzePhase($stepId, $stufe),
+            );
             $recipe = $gen['recipe'] ?? null;
             if ($recipe === null) {
                 throw new RuntimeException('Generierung lieferte kein Rezept.');
@@ -1324,7 +1336,13 @@ class PlanningCascadeService
             }
             $workflow = app(RecipeDependencyWorkflowService::class);
             $context = $workflow->prepare($team, $stepId, $beschreibung, $params, true);
-            $gen = app(RecipeGeneratorService::class)->generiere($team, $beschreibung, $params, null, true, 'plan_go', $context);
+            // Spec 53 / Paket C-Nachtrag: derselbe Fortschritts-Callback wie materialisiereSpeisekarte-
+            // Position/-SpeiseplanZelle — dies ist der häufigste Gericht-Pfad live (jedes erfundene
+            // Gericht aus Concept-/Foodbook-Fan-out, MaterializeConceptIdeaJob), bisher ohne Phase.
+            $gen = app(RecipeGeneratorService::class)->generiere(
+                $team, $beschreibung, $params, null, true, 'plan_go', $context,
+                fn (string $stufe) => $this->setzePhase($stepId, $stufe),
+            );
             $recipe = $gen['recipe'] ?? null;
             if ($recipe === null) {
                 throw new RuntimeException('Generierung lieferte kein Rezept.');
@@ -1561,7 +1579,10 @@ class PlanningCascadeService
         $deferred = is_array($step->deferred) ? $step->deferred : [];
         unset($deferred['fanout']);                   // Fan-out-Args sind verbraucht/tot
         $deferred['fanout_error'] = Str::limit($error, 500, '');
-        $step->update(['deferred' => $deferred]);
+        // Spec 53 / Paket C-Nachtrag: Status bleibt `freigegeben` (kein markStepFailed-Pfad hier) —
+        // ohne das explizite Löschen bliebe "Skizzen werden erfunden …" nach einem harten Job-Tod
+        // (Timeout/OOM in FanoutConceptJob) für immer am Step stehen.
+        $step->update(['deferred' => $deferred, 'phase' => null, 'phase_at' => null]);
         $this->recomputeRunStatus((int) $step->cascade_run_id);
         $this->scoreConceptCohesionIfComplete($step);
     }
@@ -1945,21 +1966,30 @@ class PlanningCascadeService
     /**
      * Step freigeben: das Draft-Artefakt live setzen (Rezept → approved, Concept → active) über die
      * sanktionierten Services, Step → `freigegeben`, Run neu bewerten. Nur `done`-Steps sind freigebbar.
+     *
+     * Ein `geplant`-Step (egal welcher `kind`) wird durch dieselbe FREIGABE-Aktion stattdessen ERZEUGT
+     * — Gate 1 (Kapitel → Concept, Sub-Rezept/erfundenes Gericht → Materialisierung) statt Gate 2
+     * (Draft → live). Vorher lief das nur für `kind=concept`; ein geplanter Gericht-/Rezept-Step war
+     * über `gibStepFrei`/MCP-FREIGABE ein stiller No-op (Anlass: Lauf 74, Step 513) — die UI bedient
+     * denselben Fall längst über `erzeugeGeplant`.
+     *
+     * @return string Aktions-Tag für den Aufrufer (MCP-Tool zeigt es an, UI ignoriert es):
+     *                 `freigegeben` | `geplant_erzeugt` | `no_op_status_<status>`
      */
-    public function gibStepFrei(Team $team, int $stepId): void
+    public function gibStepFrei(Team $team, int $stepId): string
     {
         $step = $this->ownedStep($team, $stepId);
-        // Kapitel-Gate (gestufte Foodbook-Vollkaskade): ein GEPLANTER Kapitel-Concept-Step wird durch die
-        // „Freigabe" ERZEUGT (dispatch), nicht approved — die Freigabe der Kapitel-Struktur startet die
-        // Concept-Generierung. So bedient dieselbe FREIGABE-Aktion Gate 1 (Kapitel → Concept erzeugen) und
-        // Gate 2 (Concept-Entwurf freigeben + Gänge-Fan-out).
-        if ($step->kind === 'concept' && $step->status === 'geplant') {
-            $this->erzeugeGeplantesConcept($team, $stepId);
+        if ($step->status === 'geplant') {
+            if ($step->kind === 'concept') {
+                $this->erzeugeGeplantesConcept($team, $stepId);
+            } else {
+                $this->erzeugeGeplantenStep($team, $stepId);
+            }
 
-            return;
+            return 'geplant_erzeugt';
         }
         if ($step->status !== 'done') {
-            return;
+            return 'no_op_status_' . $step->status;
         }
         if ($step->ref_id !== null) {
             if ($step->ref_type === 'recipe') {
@@ -1979,6 +2009,8 @@ class PlanningCascadeService
         if (! $asyncFolgestufe) {
             $this->recomputeRunStatus((int) $step->cascade_run_id);
         }
+
+        return 'freigegeben';
     }
 
     /**
@@ -2867,9 +2899,13 @@ class PlanningCascadeService
                 'ebene' => (string) $s->kind,
                 'label' => (string) $s->label,
                 'status' => (string) $s->status,
-                // Spec 53 / Paket C: DB-Wahrheit der laufenden Zwischen-Phase (Cockpit + MCP) — die
-                // Terminal-Phasen (Entwurf bereit/Fehler) ergeben sich aus `status`, nicht aus `phase`.
-                'phase' => $s->phase,
+                // Spec 53 / Paket C(-Nachtrag): DB-Wahrheit der laufenden Zwischen-Phase (Cockpit + MCP)
+                // — die Terminal-Phasen (Entwurf bereit/Fehler) ergeben sich aus `status`, nicht aus
+                // `phase`. queued/running OHNE gesetzte Phase heißt „dispatcht, aber der Worker hat den
+                // Job noch nicht aufgenommen" (Cockpit-Text „eingereiht — wartet auf Worker",
+                // step-zeile.blade.php) — derselbe Text hier, damit ein MCP-Konsument dieselbe
+                // Unterscheidung sieht, statt sie aus Status+fehlender Phase selbst zu rekonstruieren.
+                'phase' => $s->phase ?: (in_array($s->status, ['queued', 'running'], true) ? 'eingereiht — wartet auf Worker' : null),
                 // Spec 53 / Paket A: `context_snapshot['timings']` je Step (generator_ms/context_ms/…),
                 // sobald Paket A sie schreibt — Peter zeigt sie nur an, Fallback null bis dahin.
                 'timings' => (! empty($snapshot['timings']) && is_array($snapshot['timings'])) ? $snapshot['timings'] : null,

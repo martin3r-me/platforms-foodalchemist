@@ -100,3 +100,45 @@ it('FREIGABE-Tenancy: childA gibt einen childB-Schritt NICHT frei (ownedStep) �
         ->and($r->errorCode)->toBe('FREIGABE_FAILED');
     expect($step->refresh()->status)->toBe('done');   // unangetastet
 });
+
+/**
+ * Nachtrag (Paket-E-Trace, Lauf 74/Step 513): ein GEPLANTER Nicht-Concept-Step (Sub-Rezept/erfundenes
+ * Gericht) war über FREIGABE ein stiller No-op — nur `kind=concept` routete auf den Erzeugen-Pfad. Die
+ * UI kennt denselben Fall längst über `erzeugeGeplant`.
+ */
+it('FREIGABE auf einen GEPLANTEN Sub-Rezept-Step (kind=rezept) erzeugt ihn (Gate 1), statt No-op', function () {
+    $run = FoodAlchemistCascadeRun::create([
+        'team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'review', 'staged' => true, 'brief' => 'x',
+    ]);
+    $step = FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'rezept',
+        'status' => 'geplant', 'label' => 'Schweinejus', 'sort' => 1,
+    ]);
+
+    $r = $this->registry->get('foodalchemist.planung_kaskade.FREIGABE')
+        ->execute(['step_id' => (int) $step->id], $this->ctx);
+
+    expect($r->success)->toBeTrue()
+        ->and($r->data['aktion'] ?? null)->toBe('geplant_erzeugt')
+        ->and($r->data['aktion_hinweis'] ?? null)->toBeNull();
+    expect($step->refresh()->status)->toBe('running');
+    Queue::assertPushed(\Platform\FoodAlchemist\Jobs\GenerateRecipeJob::class, fn ($job) => (int) ($job->parameter['cascade_step_id'] ?? 0) === (int) $step->id);
+});
+
+it('FREIGABE auf einen bereits laufenden Step bleibt ein No-op — jetzt SICHTBAR ueber aktion+hinweis', function () {
+    $run = FoodAlchemistCascadeRun::create([
+        'team_id' => $this->rootTeam->id, 'scope' => 'rezept', 'status' => 'running', 'staged' => false, 'brief' => 'x',
+    ]);
+    $step = FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'rezept',
+        'status' => 'running', 'label' => 'Laeuft schon', 'sort' => 1,
+    ]);
+
+    $r = $this->registry->get('foodalchemist.planung_kaskade.FREIGABE')
+        ->execute(['step_id' => (int) $step->id], $this->ctx);
+
+    expect($r->success)->toBeTrue()
+        ->and($r->data['aktion'] ?? null)->toBe('no_op_status_running')
+        ->and($r->data['aktion_hinweis'] ?? null)->toContain('running');
+    expect($step->refresh()->status)->toBe('running');   // unangetastet
+});
