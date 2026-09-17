@@ -92,6 +92,17 @@ class GenerateRecipeJob implements ShouldQueue
             if ($r === [] || ! isset($r['recipe'])) {
                 throw new \RuntimeException('Generierung lieferte kein Ergebnis.');
             }
+            // Aufgabe 5 (#505-Nachtrag, Vertrag mit Peter/Paket C): Timings in context_snapshot
+            // mergen, Key exakt 'timings' mit den fünf RecipeGeneratorService-Phasen-Schlüsseln.
+            // Einziger anderer Schreiber von context_snapshot ist prepare() (oben, VOR diesem
+            // Aufruf) — kein Race innerhalb desselben Jobs. laufStatus()/Anzeige macht Peter.
+            if ($stepId !== null && is_array($r['statistik']['timings'] ?? null)) {
+                $step = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep::whereKey($stepId)->first(['id', 'context_snapshot']);
+                if ($step !== null) {
+                    $snapshot = is_array($step->context_snapshot) ? $step->context_snapshot : [];
+                    $step->update(['context_snapshot' => [...$snapshot, 'timings' => $r['statistik']['timings']]]);
+                }
+            }
             // Der Provider-Call kann nicht mitten im HTTP-Request abgewürgt werden. Wurde währenddessen
             // gestoppt, den eben entstandenen Draft soft-deleten und keinerlei Lineage/Kinder erzeugen.
             if ($this->kaskadeAbgebrochen()) {
