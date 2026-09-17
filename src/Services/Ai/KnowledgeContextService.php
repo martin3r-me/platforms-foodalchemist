@@ -71,17 +71,6 @@ class KnowledgeContextService
         'mengen_defaults', 'techniken', 'bruehen_fonds',
     ];
 
-    /**
-     * W0-4 — Pro-Doc-Deckel für die beiden Kategorien, die ihre Routing-Zeile NICHT lesen.
-     * `cross_cutting:always` und `domain:discovery` werten `max_chars_per_doc`/`max_docs`
-     * nur als Boolean-Gate aus (die Routing-Werte laufen ins Leere), sie sind also
-     * ausschließlich hier steuerbar. 7 Cross-Cutting-Dossiers à 4000 Z. waren allein
-     * 28.000 Z. — bei Features ohne Gesamtbudget (recipe.steps) ungedeckelt.
-     */
-    public const CROSS_CUTTING_TRUNCATE_CHARS = 1800;
-
-    public const DOMAIN_TRUNCATE_CHARS = 2500;
-
     public const DOMAIN_TOP_K = 4;
 
     public const PAIRING_TOP_K = 3;
@@ -117,14 +106,6 @@ class KnowledgeContextService
      */
     private array $ausgeschlossen = [];
 
-    /**
-     * Rezept-Calls laufen in einer Kaskade (Gericht + Basisrezepte). Ohne einen featureweiten
-     * Deckel addiert jede geroutete Discovery-Kategorie ihr eigenes Top-K und aus einem gezielten
-     * Abruf werden 30–40 Volltext-Dossiers pro Call. Der Deckel gilt nur für den eigentlichen
-     * Rezeptgenerator; Planungs-/Concept-Features behalten ihre eigenen Budgets.
-     */
-    public const RECIPE_MAX_CHARS_PER_DOC = 2400;
-
     public const RECIPE_MAX_KNOWLEDGE_CHARS = 48000; // Kompatibilitätskonstante; Laufzeit: KnowledgeBudget
 
     /**
@@ -141,11 +122,6 @@ class KnowledgeContextService
 
     /** Spec 08 P6: Fallback-Budget für `concept:always`, wenn die Routing-Zeile nichts vorgibt. */
     public const CONCEPT_MAX_DOCS = 4;
-
-    public const CONCEPT_TRUNCATE_CHARS = 4000;
-
-    /** Etappe 1: Fallback-Budget für `regelwerk:always` — fasst die §2–§4-Region (~6,5k) mit Reserve. */
-    public const REGELWERK_TRUNCATE_CHARS = 7000;
 
     /**
      * Haupt-Einstieg (Pseudocode §3): baut den Wissens-Block für ein KI-Feature.
@@ -164,6 +140,15 @@ class KnowledgeContextService
         $this->geltungsParameter = $params;
         $this->geltungsIds = null;
         $this->achsenPflichtFiles = [];
+        // Spec 53 (2026-09-17): `foodalchemist_knowledge_routings.max_chars_per_doc` wird ab hier
+        // NICHT MEHR gelesen. Es stand für einen Pro-Dokument-Deckel, der nirgends ausgeführt wurde
+        // (`truncate()` hatte 0 Aufrufer) — reaktivieren hätte den W0-3-Bug wieder aufgerissen
+        // (Pflichtdossiers als Fragment, s. `WissenTokenWelle0Test` „übermittelt Cross-Cutting-
+        // Pflichtdossiers vollständig trotz alter Einzeldeckel"): Ganzdokument-Budgetierung
+        // (`KnowledgeContextBlock::assemble`) ist die gewollte Architektur seit Welle 0 — kleine/
+        // niedrig-priorisierte Docs fallen KOMPLETT raus, statt grosse zu mutilieren. Die Spalte
+        // bleibt in der DB (kein Datenverlust), ist aber wirkungslos; `pflichtZeichen()` rechnet
+        // seither mit den realen Dossierlängen, nicht mit `max_chars_per_doc × max_docs`.
         $routing = $allRouting->filter(fn ($r) => empty($r->art))
             ->when(! empty($params['_required_only']), fn ($rows) => $rows->where('mode', 'always'))
             ->keyBy(fn ($r) => $r->category . ':' . $r->mode);
@@ -215,9 +200,8 @@ class KnowledgeContextService
         // und rahmt damit die Zutaten-Ebene darunter. Leere Kategorie ⇒ kein Block.
         if (($r = $routing->get('concept:always')) !== null) {
             $before = count($filesUsed);
-            $concept = $this->conceptBlock($team, 
+            $concept = $this->conceptBlock($team,
                 (int) ($r->max_docs ?: self::CONCEPT_MAX_DOCS),
-                (int) ($r->max_chars_per_doc ?: self::CONCEPT_TRUNCATE_CHARS),
                 $filesUsed
             );
             if ($concept !== null) {
@@ -231,9 +215,8 @@ class KnowledgeContextService
         // ist (Anlass/Inspiration), bevor die Zutaten-Ebene darunter greift.
         if (($r = $routing->get('trend:discovery')) !== null) {
             $before = count($filesUsed);
-            $trend = $this->trendBlock($team, 
+            $trend = $this->trendBlock($team,
                 (int) ($r->max_docs ?: 5),
-                (int) ($r->max_chars_per_doc ?: 1500),
                 $description,
                 $filesUsed
             );
@@ -274,7 +257,6 @@ class KnowledgeContextService
             $before = count($filesUsed);
             $crossDocs = $this->crossCuttingDocs($team, $feature);
             foreach ($crossDocs as $doc) {
-                $maxChars = $recipeBudget ? self::RECIPE_MAX_CHARS_PER_DOC : self::CROSS_CUTTING_TRUNCATE_CHARS;
                 $blocks[] = ['file' => "{$doc->slug}@v{$doc->version}", 'text' => "## CROSS_CUTTING: {$doc->slug}\n\n" . (string) $doc->content_md];
                 $filesUsed[] = "{$doc->slug}@v{$doc->version}";
             }
@@ -285,7 +267,6 @@ class KnowledgeContextService
             $domainDocs = $this->discoverDomains($team, $this->discoveryQuery($description, $params), $scopeSlugs,
                 (int) ($routing->get('domain:discovery')->max_docs ?: self::DOMAIN_TOP_K));
             foreach ($domainDocs as $doc) {
-                $maxChars = $recipeBudget ? self::RECIPE_MAX_CHARS_PER_DOC : self::DOMAIN_TRUNCATE_CHARS;
                 $blocks[] = ['file' => "{$doc->slug}@v{$doc->version}", 'text' => "## DOMAIN: {$doc->slug}\n\n" . (string) $doc->content_md];
                 $this->herkunft[$doc->slug]['sent'] = mb_strlen((string) $doc->content_md);
                 $filesUsed[] = "{$doc->slug}@v{$doc->version}";
@@ -315,7 +296,7 @@ class KnowledgeContextService
         // ── 3. Pairing-Doku-Grounding (Anker-/Pairing-Inferenz) ──
         if (($r = $routing->get('pairing:grounding')) !== null) {
             $before = count($filesUsed);
-            $parts[] = $this->groundingBlock($team, $hauptzutatSlugs, (int) $r->max_docs, (int) $r->max_chars_per_doc, $filesUsed);
+            $parts[] = $this->groundingBlock($team, $hauptzutatSlugs, (int) $r->max_docs, $filesUsed);
             $snap('pairing_grounding', $before);
         }
 
@@ -325,10 +306,7 @@ class KnowledgeContextService
         // Deterministisch: der Typ (params['rezept_typ']) wählt die Slug-Familie, der Level die Stufe.
         if (($r = $routing->get('niveau:discovery')) !== null) {
             $before = count($filesUsed);
-            $niveau = $this->niveauBlock($team, 
-                $recipeBudget
-                    ? min(self::RECIPE_MAX_CHARS_PER_DOC, (int) ($r->max_chars_per_doc ?: 3000))
-                    : (int) ($r->max_chars_per_doc ?: 3000),
+            $niveau = $this->niveauBlock($team,
                 (string) ($params['niveau'] ?? $params['level'] ?? ''),
                 (string) ($params['rezept_typ'] ?? 'basisrezept'),
                 $filesUsed
@@ -367,11 +345,8 @@ class KnowledgeContextService
             $allowed = $scopeSlugs !== [] && ! in_array($category, ['regelwerk', 'niveau', 'cross_cutting'], true)
                 ? $scopeSlugs
                 : [];
-            $generic = $this->discoverGenericBlock($team, 
+            $generic = $this->discoverGenericBlock($team,
                 $category, $leitplankenQuery, $topK,
-                $recipeBudget
-                    ? min(self::RECIPE_MAX_CHARS_PER_DOC, (int) ($r->max_chars_per_doc ?: 3000))
-                    : (int) ($r->max_chars_per_doc ?: 3000),
                 $filesUsed, $allowed
             );
             if ($generic !== null) {
@@ -392,12 +367,9 @@ class KnowledgeContextService
                 continue;
             }
             $before = count($filesUsed);
-            $immer = $this->alwaysCategoryBlock($team, 
+            $immer = $this->alwaysCategoryBlock($team,
                 (string) $r->category,
                 (int) ($r->max_docs ?: 2),
-                $recipeBudget
-                    ? min(self::RECIPE_MAX_CHARS_PER_DOC, (int) ($r->max_chars_per_doc ?: 4000))
-                    : (int) ($r->max_chars_per_doc ?: 4000),
                 $filesUsed
             );
             if ($immer !== null) {
@@ -412,7 +384,7 @@ class KnowledgeContextService
             $before = count($filesUsed);
             if ($route->mode === 'discovery' && empty($params['_required_only'])) {
                 $part = $this->discoverGenericBlock($team, $route->art, $leitplankenQuery,
-                    (int) ($route->max_docs ?: 3), (int) ($route->max_chars_per_doc ?: 3000), $filesUsed, $scopeSlugs, $route->art);
+                    (int) ($route->max_docs ?: 3), $filesUsed, $scopeSlugs, $route->art);
                 if ($part !== null) $parts[] = $part;
             } elseif ($route->art === 'datenwerk' && $route->mode === 'resolve') {
                 $base = $this->sichtbareDokumente($team);
@@ -712,15 +684,24 @@ class KnowledgeContextService
      * Fehlerklasse, die Welle 0 beseitigen soll. Also: Budget >= Pflichtmenge, maschinell
      * geprüft (`foodalchemist:wissen-steuerdaten-w0 --verify`), nicht per Augenmaß.
      *
-     * Die Rechnung spiegelt die Ist-Deckel der jeweiligen Block-Builder:
-     *   · cross_cutting — 7 feste Slugs, Routing-Werte werden ignoriert
+     * ★ Spec 53 (2026-09-17): rechnet mit den REALEN Dossierlängen, nicht mehr mit
+     * `max_docs × max_chars_per_doc`. Die alte Formel unterstellte einen Pro-Dokument-Deckel,
+     * den kein Block-Builder je angewandt hat (`max_chars_per_doc` war tot, s. Docblock bei
+     * `routingZeilen()`-Aufruf in `contextFor()`) — sie konnte die Pflichtmenge beliebig falsch
+     * schätzen (zu klein UND zu groß), je nachdem ob echte Dossiers länger oder kürzer als der
+     * (wirkungslose) Deckel waren. Ruft dieselben Block-Builder wie `contextFor()` — cross_cutting/
+     * concept/alwaysCategoryBlock — mit `$team = null` (der Wissenskorpus ist geteilt, s.
+     * Klassen-Docblock „MANDANTEN-INVARIANTE") und misst `mb_strlen()` am zusammengesetzten Block,
+     * statt eine zweite Formel zu pflegen. Eine Rechnung, ein Ergebnis (`docs/ARCHITEKTUR.md`).
+     *
+     *   · cross_cutting — 7 feste Slugs (`crossCuttingDocs()`), reale Länge
      *   · regelwerk     — **0**, seit Spec 52 · F4: der dedizierte always-Zweig ist gelöscht,
      *     die Zeile lädt nichts. Sie hier weiter als Pflichtmenge zu zählen, hiesse Budget für
      *     Wissen zu reservieren, das nie kommt — und die W0-5-Invariante würde Phantasiewerte
      *     prüfen. Dass so eine Zeile überhaupt existiert, meldet `wissen-profil` als Befund
      *     `routing_always_tot`; hier ist sie schlicht 0.
-     *   · concept       — max_docs (Default CONCEPT_MAX_DOCS) × Doc-Deckel
-     *   · sonst         — alwaysCategoryBlock: max_docs (Default 2) × Doc-Deckel
+     *   · concept       — reale Länge der ersten `max_docs` Concept-Dossiers (`conceptBlock()`)
+     *   · sonst         — reale Länge der ersten `max_docs` Dossiers der Kategorie (`alwaysCategoryBlock()`)
      */
     public function pflichtZeichen(string $feature): int
     {
@@ -729,15 +710,22 @@ class KnowledgeContextService
         $zeilen = $this->routingZeilen($feature)->where('mode', 'always');
 
         $summe = 0;
+        $wegwerfAudit = [];
         foreach ($zeilen as $r) {
-            $docDeckel = (int) ($r->max_chars_per_doc ?: 0);
             $summe += match ((string) $r->category) {
                 // Dieselbe feature-genaue Auflösung wie crossCuttingDocs() — sonst prüft die
                 // Invariante eine Pflichtmenge, die es für dieses Feature nie gibt.
-                'cross_cutting' => count($this->crossCuttingSlugs($feature)) * self::CROSS_CUTTING_TRUNCATE_CHARS,
+                'cross_cutting' => array_sum(array_map(
+                    static fn ($doc) => mb_strlen((string) $doc->content_md),
+                    $this->crossCuttingDocs(null, $feature),
+                )),
                 'regelwerk' => 0,                                   // F4: lädt nichts mehr, s. Docblock
-                'concept' => ((int) ($r->max_docs ?: self::CONCEPT_MAX_DOCS)) * ($docDeckel ?: self::CONCEPT_TRUNCATE_CHARS),
-                default => ((int) ($r->max_docs ?: 2)) * ($docDeckel ?: 4000),
+                'concept' => mb_strlen($this->conceptBlock(
+                    null, (int) ($r->max_docs ?: self::CONCEPT_MAX_DOCS), $wegwerfAudit
+                )?->text() ?? ''),
+                default => mb_strlen($this->alwaysCategoryBlock(
+                    null, (string) $r->category, (int) ($r->max_docs ?: 2), $wegwerfAudit
+                )?->text() ?? ''),
             };
         }
 
@@ -807,10 +795,12 @@ class KnowledgeContextService
      * Spec 52/Paket 2 — Aufrufe, die die REZEPT-Deckel benutzen.
      *
      * ★ Vorher stand hier ein String-Vergleich: `$feature === 'ai_generate_recipe'`. Der
-     * gatete **acht** Verhaltensweisen, darunter jeden Pro-Dossier-Deckel
-     * (`RECIPE_MAX_CHARS_PER_DOC` 2.400 statt der Kategorie-Defaults 1.800/2.500). Den Alt-Namen
-     * einfach durch den Prompt-Key zu ersetzen hätte deshalb JEDEN Rezept-Prompt anders gekappt
-     * — still, ohne dass ein Test rot wird. Genau die Fehlerklasse, die diese Spec abbaut.
+     * gatete **acht** Verhaltensweisen, darunter (bis Spec 53) jeden Pro-Dossier-Deckel
+     * (`RECIPE_MAX_CHARS_PER_DOC`, seither entfernt — er war nie verdrahtet, s. Docblock am
+     * `routingZeilen()`-Aufruf in `contextFor()`). Den Alt-Namen einfach durch den Prompt-Key zu
+     * ersetzen hätte deshalb JEDEN Rezept-Prompt anders gekappt — still, ohne dass ein Test rot
+     * wird. Genau die Fehlerklasse, die diese Spec abbaut. Heute bestimmt `REZEPT_BUDGET_KEYS` nur
+     * noch die Discovery-Prioritätsreihenfolge (unten) und das Gesamt-Zeichenbudget.
      *
      * Als Satz geschrieben, ist die Umstellung verhaltensneutral: `recipe.generator` und
      * `vk.generator` bekommen dieselben Deckel wie der Alt-Name, und der Alt-Name funktioniert
@@ -1047,7 +1037,14 @@ class KnowledgeContextService
         }
     }
 
-    /** Invariante 3: hartes Per-Dokument-Budget mit wörtlichem Kürzungs-Marker. */
+    /**
+     * ★ Spec 53 (2026-09-17): NICHT mehr Teil der automatischen Kontext-Pipeline (kein
+     * Block-Builder ruft das noch auf — die Ganzdokument-Budgetierung ersetzt den toten
+     * Pro-Doc-Deckel, s. Docblock bei `routingZeilen()` in `contextFor()`). Bleibt als expliziter,
+     * angeforderter Deckel für EINEN einzelnen Dokument-Abruf (`foodalchemist.knowledge.GET`,
+     * `max_chars`-Parameter) — ein Mensch/Agent, der bewusst nur einen Ausschnitt sehen will,
+     * ist ein anderer Fall als eine Pipeline, die Pflichtwissen unbemerkt kappt.
+     */
     public function truncate(string $text, int $maxChars): string
     {
         if (mb_strlen($text) <= $maxChars) {
@@ -1133,12 +1130,13 @@ class KnowledgeContextService
      * Spec 08 P6: Concepting-Wissen für die Planungs-Features (`foodbook.plan`,
      * `concept.plan`). Bewusst `always` statt `discovery`: der Bestand ist klein
      * und beschreibt Handwerk, kein Produkt — eine Beschreibungs-Discovery würde
-     * hier nach Zutaten filtern, wo Dramaturgie gefragt ist. Deckel kommt aus der
-     * Routing-Zeile (max_docs/max_chars_per_doc), Reihenfolge ist Slug-stabil.
+     * hier nach Zutaten filtern, wo Dramaturgie gefragt ist. Deckel ist `max_docs` aus der
+     * Routing-Zeile (`max_chars_per_doc` seit Spec 53 ohne Wirkung, s. `contextFor()`),
+     * Reihenfolge ist Slug-stabil.
      *
      * @param  list<string>  $filesUsed  by-ref-Audit
      */
-    private function conceptBlock(?Team $team, int $maxDocs, int $maxChars, array &$filesUsed): ?KnowledgeContextBlock
+    private function conceptBlock(?Team $team, int $maxDocs, array &$filesUsed): ?KnowledgeContextBlock
     {
         $docs = DB::table('foodalchemist_knowledge_documents')->tap($this->nurFuerPrompt($team))
             ->where('category', 'concept')->where('active', 1)->whereNull('deleted_at')
@@ -1267,7 +1265,7 @@ class KnowledgeContextService
      *
      * @param  list<string>  $filesUsed  by-ref-Audit
      */
-    private function trendBlock(?Team $team, int $maxDocs, int $maxChars, string $description, array &$filesUsed): ?KnowledgeContextBlock
+    private function trendBlock(?Team $team, int $maxDocs, string $description, array &$filesUsed): ?KnowledgeContextBlock
     {
         $maxDocs = max(1, $maxDocs);
         $tokens = $this->tokenize($description);
@@ -1361,11 +1359,11 @@ class KnowledgeContextService
      * 2026-08-27 (Dominique): UNBEDINGTER Kategorie-Load für Referenz-Dossiers (z.B.
      * produktion_kapazitat = Produktions-Zeitkennwerte), die rezept-unabhängig immer gelten.
      * Lädt ALLE aktiven Docs der Kategorie (slug-sortiert = deterministisch), gedeckelt auf
-     * $maxDocs + je Doc $maxChars. Ergänzt {@see discoverGenericBlock} (das per Slug-Jaccard
+     * $maxDocs — ganze Dokumente, kein Pro-Doc-Deckel (seit Spec 53). Ergänzt {@see discoverGenericBlock} (das per Slug-Jaccard
      * rankt und eine General-Referenz mit Score 0 verfehlen würde) — hier zählt die Kategorie-
      * Zugehörigkeit, nicht der Rezept-Bezug.
      */
-    private function alwaysCategoryBlock(?Team $team, string $category, int $maxDocs, int $maxChars, array &$filesUsed): ?KnowledgeContextBlock
+    private function alwaysCategoryBlock(?Team $team, string $category, int $maxDocs, array &$filesUsed): ?KnowledgeContextBlock
     {
         if ($maxDocs <= 0) {
             return null;
@@ -1393,7 +1391,7 @@ class KnowledgeContextService
      * nach Rangfusion die ausgewählten Volltexte. So trägt jedes neu gepflegte Doc automatisch,
      * ohne Service-Änderung; der Prompt bleibt durch top_k/chars beschränkt (O(1), nicht O(n)).
      */
-    private function discoverGenericBlock(?Team $team, string $category, string $query, int $topK, int $maxChars, array &$filesUsed, array $allowedSlugs = [], ?string $art = null): ?KnowledgeContextBlock
+    private function discoverGenericBlock(?Team $team, string $category, string $query, int $topK, array &$filesUsed, array $allowedSlugs = [], ?string $art = null): ?KnowledgeContextBlock
     {
         $base = DB::table('foodalchemist_knowledge_documents')->tap($art === null ? $this->nurFuerPrompt($team) : $this->nurSichtbar($team))
             ->when($art === null, fn ($q) => $q->where('category', $category), fn ($q) => $q->where('art', $art))->where('active', 1)->whereNull('deleted_at')
@@ -1439,7 +1437,7 @@ class KnowledgeContextService
      *
      * @param  list<string>  $filesUsed  by-ref-Audit
      */
-    private function niveauBlock(?Team $team, int $maxChars, string $level, string $rezeptTyp, array &$filesUsed): ?KnowledgeContextBlock
+    private function niveauBlock(?Team $team, string $level, string $rezeptTyp, array &$filesUsed): ?KnowledgeContextBlock
     {
         $levelToken = match ($level) {
             'haute_cuisine' => 'haute',
@@ -1649,7 +1647,7 @@ class KnowledgeContextService
      * @param  list<string>  $hauptzutatSlugs
      * @param  list<string>  $filesUsed  by-ref-Audit
      */
-    private function groundingBlock(?Team $team, array $hauptzutatSlugs, int $maxDocs, int $maxChars, array &$filesUsed): KnowledgeContextBlock
+    private function groundingBlock(?Team $team, array $hauptzutatSlugs, int $maxDocs, array &$filesUsed): KnowledgeContextBlock
     {
         $blocks = [];
         $geladen = [];
