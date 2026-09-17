@@ -239,3 +239,16 @@ Vorher: kein Tomaten-/Suppen-Dossier in der Top-5 (lex-Ränge 22–51), mit Leit
 | 6 Sub-Zerlegung | `Fond: Helle Gemüsebrühe` (#1452) übernommen, korrekt als **unreif** markiert („keine Schritte"); Run-Kopf `uebernommen=1, uebernommen_unreif=1` |
 
 EK 7,74 € / 1,96 kg (3,95 €/kg). Steps 0 (Anreicherung läuft erst nach Freigabe). Vergleich Screenshot vorher: 11 von 13 bepreist, Dosentomaten offen → jetzt 13/13 verknüpft.
+
+### Live-Lauf 2 — Gericht Rinderfilet/Kartoffelpüree/Jus (Session 126, Lauf 70, Step 476 → VK-Rezept 3754, Leitplanken level=gehoben, sektor=catering, saison=herbst; `vk.generator`-Budget 49.000 unverändert)
+
+| Messpunkt | Ergebnis |
+|---|---|
+| 1 Phasen | 20:42:53 „KI schreibt das Rezept …" → 20:43:35 „Zutaten werden zugeordnet …" → 20:43:39 `done` → anschließend „Konformität wird geprüft …" (im MCP-Status sichtbar) |
+| 2 `timings` | context 10.044 · generation 48.953 · matching_and_save 3.153 · checks 178 · generator 62.717 ms |
+| 3 Call-Log | `vk.generator` in 23.418 / cached **0** (erster Aufruf mit diesen Leitplanken) / out 2.866, 48,9 s, `versuche=1` · `conformance.check` 13.200/12.032/1.784, 30 s · `vk.ueberarbeiten` (Selbstheilung Schicht 3) 13.350/12.032/710, 9,8 s |
+| 4 Wissen | Kanon 12, Retrieval 8 (`event_playbook_business_lunch`, `segment.event_bankett_catering`, 3× `niveau.*`, 2 Referenzgerichte Elverfeld, `referenzgericht.niveau2_plant_forward_sellerie`); **verworfen (Retrieval) 3**: `fonds_jus_consomme_kennwerte--5-jus`, 2× `niveau.*-kernaussage` — jetzt sichtbar im Status (`wissen_verworfen`) |
+| 5 Ergebnis | „[HG] Rinderfilet · Malz-Rinderjus · Kartoffelpüree · Herbsttrompeten · Hokkaidokürbis", Beschreibung business-catering-tauglich; VK/Speisen-Klasse leer (Anreicherung erst nach Freigabe) |
+| 6 Sub-Zerlegung | 6 Kinder: übernommen `Sauce: Malz-Rinderjus` (#3728, **unreif**: keine Schritte), `Proteine: Rinderfilet sous-vide` (#3666, reif), `Gemüsebeilage: Gerösteter Hokkaido-Kürbis` (#3511, **unreif**), `Crunch: Haselnuss-Ciabatta` (#3534, reif); geplant `Kartoffelpüree`, `Beilage: Herbsttrompeten gebraten`. Run-Kopf `uebernommen=4, uebernommen_unreif=2` ✓ |
+
+Beobachtung: die Fonds/Jus-Kennwerte wurden bei einem Jus-Gericht budget-verworfen — Kandidat für eine Budget-Anhebung auch bei `vk.generator` (heute 49.000), Entscheidung Dominique (Gerichte laufen in Kaskaden vielfach → Kosten).
