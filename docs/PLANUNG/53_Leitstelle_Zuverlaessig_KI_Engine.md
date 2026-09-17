@@ -204,7 +204,7 @@ Merge-Reihe: #94 → #95 → #97 → #96 → #98 (C und D integrieren `main` per
 | #94 A Basisrezept | `af4fec9b` | 17:56 |
 | #95 Re-Roll-Zähler (Base auf main retargetet) | `ec9238a9` | 17:58 |
 | #97 B Wissen | `5fb8c955` | 17:59 |
-| #96 C Feedback | _folgt nach Merge von main in den Branch_ | |
+| #96 C Feedback (main per Merge-Commit `955e2191` integriert, 307/307 gezielt) | `e840e5b6` | 18:12 |
 | #98 D Sprachbefehl | _folgt nach Merge von main in den Branch_ | |
 
 Deploy-Entscheid (Orchestrierung, von Dominique freigestellt): ein Deploy nach Merge aller fünf PRs — die Branches sind gegen den vollen Stapel getestet, ein Teil-Deploy brächte keinen Vorteil.
