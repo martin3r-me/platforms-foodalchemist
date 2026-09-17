@@ -175,11 +175,19 @@ class GenerateRecipeJob implements ShouldQueue
         return is_numeric($roh) ? (float) $roh : null;
     }
 
-    /** Job-Tod (Timeout/Fatal außerhalb des handle-try) → Status trotzdem setzen, sonst pollt die UI ewig. */
+    /**
+     * Job-Tod (Timeout/Fatal außerhalb des handle-try) → Status trotzdem setzen, sonst pollt
+     * die UI ewig. demo 16.09.: `GenerateRecipeJob has timed out` (timeout=300, tries=1) —
+     * `TimeoutExceededException` (erbt von `MaxAttemptsExceededException`, ein `instanceof`
+     * fängt beide) trägt nur die technische Laravel-Meldung; klarer Text statt Rohtext.
+     */
     public function failed(\Throwable $e): void
     {
-        $this->schreibe(['status' => 'error', 'fehler' => 'Generierung abgebrochen: ' . $e->getMessage()]);
-        $this->meldeKaskade(false, null, 'Generierung abgebrochen: ' . $e->getMessage());
+        $fehler = $e instanceof \Illuminate\Queue\MaxAttemptsExceededException
+            ? 'Zeitüberschreitung nach ' . $this->timeout . ' s'
+            : 'Generierung abgebrochen: ' . $e->getMessage();
+        $this->schreibe(['status' => 'error', 'fehler' => $fehler]);
+        $this->meldeKaskade(false, null, $fehler);
     }
 
     /** cascade_step_id aus dem Parameter-Bündel (Rückkanal-Ziel), null wenn kein Kaskaden-Lauf. */
