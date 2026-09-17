@@ -52,7 +52,7 @@ class IngredientMatchService
         bool $preferRaw = false,
         string $bio = 'neutral',
     ): array {
-        $queryTokens = $this->engine->tokenize($ingredientName);
+        $queryTokens = $this->engine->ingredientTokens($ingredientName);
         $querySlug = $hauptzutatSlug !== null && trim($hauptzutatSlug) !== '' ? $hauptzutatSlug : null;
 
         if ($queryTokens === [] && $querySlug === null) {
@@ -80,7 +80,7 @@ class IngredientMatchService
         // 4.4s — §5-Default-GP-Alias (sichere Degradation)
         if (($aliasName = $this->heuristik->defaultGpAlias($queryTokens, $preferRaw)) !== null) {
             $ziel = $this->resolveGpByName($team, $aliasName);
-            if ($ziel !== null) {
+            if ($ziel !== null && $this->acceptsProductForm($ingredientName, $ziel['name'], $ziel['condition'])) {
                 return [
                     'target' => 'gp', 'status' => MatchBand::fuerScore(MatchHeuristics::DEFAULT_GP_ALIAS_SCORE),
                     'gp_id' => $ziel['id'], 'gp_name' => $ziel['name'],
@@ -256,7 +256,7 @@ class IngredientMatchService
      */
     public function candidatesFor(Team $team, string $ingredientName, ?string $hauptzutatSlug = null, int $k = 5): array
     {
-        $queryTokens = $this->engine->tokenize($ingredientName);
+        $queryTokens = $this->engine->ingredientTokens($ingredientName);
         $querySlug = $hauptzutatSlug !== null && trim($hauptzutatSlug) !== '' ? $hauptzutatSlug : null;
         if ($queryTokens === [] && $querySlug === null) {
             return [];
@@ -300,6 +300,9 @@ class IngredientMatchService
         // bleiben unberührt, es kann nur MEHR gefunden werden.
         $lex = [];
         foreach ($this->poolMitEngenSonden($team, $poolTokens, $queryTokens, $querySlug) as $gp) {
+            if (! $this->acceptsProductForm($ingredientName, $gp->name, $gp->condition)) {
+                continue;
+            }
             $combined = trim($gp->name . ' ' . ($gp->main_ingredient_display ?? ''));
             $score = $this->bestLexScore($queryTokens, $aliasVariants, $querySlug, $combined, $gp->main_ingredient_slug, $gp->name);
             if ($score > 0.0) {
@@ -367,7 +370,10 @@ class IngredientMatchService
         $gpMissing = array_values(array_filter($gpIds, static fn ($id) => ! isset($lex["gp\0$id"])));
         if ($gpMissing !== []) {
             foreach (FoodAlchemistGp::visibleToTeam($team)->whereIn('status', ['approved', 'tentative'])
-                ->where('is_platzhalter', false)->whereIn('id', $gpMissing)->get(['id', 'name']) as $g) {
+                ->where('is_platzhalter', false)->whereIn('id', $gpMissing)->get(['id', 'name', 'condition']) as $g) {
+                if (! $this->acceptsProductForm($ingredientName, $g->name, $g->condition)) {
+                    continue;
+                }
                 $names["gp\0{$g->id}"] = $g->name;
             }
         }
@@ -490,6 +496,20 @@ class IngredientMatchService
         ));
     }
 
+    /** Eine explizite Dose darf weder auf frische noch auf getrocknete Ware fallen. */
+    public function acceptsProductForm(string $query, string $name, ?string $condition): bool
+    {
+        if (! $this->engine->wantsCanned($query)) {
+            return true;
+        }
+        if (trim((string) $condition) !== '') {
+            return mb_strtolower(trim($condition)) === 'konserviert';
+        }
+
+        return in_array('konserviert', $this->engine->tokenize($name), true)
+            || $this->engine->wantsCanned($name);
+    }
+
     // ── Pool-Scans ───────────────────────────────────────────────────────
 
     private function bestGpMatch(Team $team, array $queryTokens, ?string $querySlug, string $pref, bool $preferRaw, string $bio): ?array
@@ -498,7 +518,8 @@ class IngredientMatchService
         $bestZustand = null;
         $bestBio = null;
         foreach ($this->gpPool($team, $queryTokens, $querySlug) as $gp) {
-            if ($this->terminology->isAntiMarker($this->currentIngredientName, $gp->name)) {
+            if (! $this->acceptsProductForm($this->currentIngredientName, $gp->name, $gp->condition)
+                || $this->terminology->isAntiMarker($this->currentIngredientName, $gp->name)) {
                 continue;   // S2: Anti-Marker nie als Entscheidung
             }
             $combined = trim($gp->name . ' ' . ($gp->main_ingredient_display ?? ''));
@@ -773,9 +794,12 @@ class IngredientMatchService
             return null;
         }
         sort($targetTokens);
-        foreach (FoodAlchemistRecipe::visibleToTeam($team)->basis()
-            ->whereIn('status', ['stub', 'draft', 'review', 'approved'])
-            ->orderBy('id')->cursor() as $r) {
+        $query = FoodAlchemistRecipe::visibleToTeam($team)->basis()
+            ->whereIn('status', ['stub', 'draft', 'review', 'approved']);
+        // Alias-Gleichheit bleibt tokenbasiert; nur passende Namen statt des gesamten
+        // Stamms hydrieren. Kein LIMIT, damit hohe IDs weiterhin erreichbar bleiben.
+        $this->likeVorfilter($query, $targetTokens, null, ['name']);
+        foreach ($query->orderBy('id')->cursor(['id', 'name']) as $r) {
             $tokens = $this->engine->tokenize($r->name);
             sort($tokens);
             if ($tokens === $targetTokens) {
@@ -793,13 +817,14 @@ class IngredientMatchService
             return null;
         }
         sort($targetTokens);
-        foreach (FoodAlchemistGp::visibleToTeam($team)
-            ->whereIn('status', ['approved', 'tentative'])->where('is_platzhalter', false)
-            ->orderBy('id')->cursor() as $gp) {
+        $query = FoodAlchemistGp::visibleToTeam($team)
+            ->whereIn('status', ['approved', 'tentative'])->where('is_platzhalter', false);
+        $this->likeVorfilter($query, $targetTokens, null, ['name']);
+        foreach ($query->orderBy('id')->cursor(['id', 'name', 'condition']) as $gp) {
             $tokens = $this->engine->tokenize($gp->name);
             sort($tokens);
             if ($tokens === $targetTokens) {
-                return ['id' => $gp->id, 'name' => $gp->name];
+                return ['id' => $gp->id, 'name' => $gp->name, 'condition' => $gp->condition];
             }
         }
 

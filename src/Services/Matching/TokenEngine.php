@@ -28,7 +28,7 @@ class TokenEngine
 
     private const QUALIFIER_PREFIXE = [
         'frisch', 'roh', 'tiefgek', 'gefror', 'konserv', 'getrock', 'trocken', 'eingelegt', 'haltbar',
-        'mini', 'baby', 'gross', 'klein', 'fein', 'grob', 'ganz', 'bio', 'gemischt', 'geschael',
+        'stueckig', 'mini', 'baby', 'gross', 'klein', 'fein', 'grob', 'ganz', 'bio', 'gemischt', 'geschael',
         'gegart', 'gekocht', 'verzehrfertig',
     ];
 
@@ -49,6 +49,20 @@ class TokenEngine
 
         // strval: numerische Tokens ('30') würden als int-Array-Keys zurückkommen
         return array_map('strval', array_keys($tokens));
+    }
+
+    /** Einkaufsform normalisieren, ohne „konserviert“ als bedeutungslos zu entfernen. */
+    public function ingredientTokens(string $name): array
+    {
+        $name = preg_replace('/\baus\s+(?:der|einer)\s+dose\b|\bin\s+dosen\b/iu', 'konserviert', $name);
+        $name = preg_replace('/\bdosentomaten?\b/iu', 'Tomaten konserviert', $name);
+
+        return $this->tokenize($name);
+    }
+
+    public function wantsCanned(string $name): bool
+    {
+        return preg_match('/\baus\s+(?:der|einer)\s+dose\b|\bin\s+dosen\b|\bdosentomaten?\b/iu', $name) === 1;
     }
 
     /** rs:203–217 — '-'→'_', nur Alphanumerik + '_' behalten, Rest ERSATZLOS weg (auch Spaces). */

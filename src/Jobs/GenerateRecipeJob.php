@@ -77,7 +77,7 @@ class GenerateRecipeJob implements ShouldQueue
         try {
             // Phase 0 — erste Stufe sichtbar machen (Seed fürs gestufte Generieren):
             // der teure LLM-Entwurf startet, die UI zeigt statt „läuft …" eine Stufe.
-            $this->fortschritt($this->vkModus ? 'Gericht wird entworfen …' : 'Rezept wird entworfen …');
+            $this->fortschritt('Kontext & Wissen werden geladen …');
             $stepId = $this->cascadeStepId();
             $prepared = $stepId !== null
                 ? app(\Platform\FoodAlchemist\Services\RecipeDependencyWorkflowService::class)

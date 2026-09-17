@@ -73,6 +73,12 @@ class RecipeGeneratorService
                 $onProgress($stufe);
             }
         };
+        $started = hrtime(true);
+        $timings = ['context_ms' => 0, 'generation_ms' => 0];
+        // Kaskadenpfad: RecipeDependencyWorkflowService::prepare() baut den Kontext VOR diesem
+        // Aufruf (GenerateRecipeJob::handle) — die dafür verbrauchte Zeit liegt vor $started und
+        // fehlt sonst in generator_ms, obwohl sie in context_ms steckt. Nachgetragen am Ende.
+        $contextVorabGebaut = $preparedContext !== null;
         $kiRezept = $kiRezeptOverride;
         // Kontext-Inspektor: das UI-fertige „auf welches Wissen greift der Generator"-Bündel.
         // VOR dem OOM-`unset` unten gesichert (winzige String-Listen) und am Ende ans Ergebnis
@@ -84,7 +90,9 @@ class RecipeGeneratorService
             $preparedContext ??= app(RecipeGenerationContextService::class)->build($team, $description, $parameter, $vkModus);
             $kontextAudit = $preparedContext['kontext'] ?? null;
             $kontext = $preparedContext['prompt'];
-            $wissen = ['block' => $preparedContext['knowledge'], 'files_used' => $preparedContext['knowledge_used']];
+            $wissen = ['block' => $preparedContext['knowledge'], 'files_used' => $preparedContext['knowledge_used'],
+                'dropped_chars' => $preparedContext['knowledge_dropped_chars'] ?? 0];
+            $timings['context_ms'] = (int) ($preparedContext['context_ms'] ?? 0);
 
             // M6-07 / V-04 (Audit-Hebel 3): Reuse-at-Generation — lexikalischer
             // Prefetch des Bestands VOR der Benennung; die KI soll vorhandene
@@ -119,6 +127,7 @@ class RecipeGeneratorService
             $kontext['recipe_hauptgruppen'] = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeMainGroup::visibleToTeam($team)
                 ->orderBy('sort_order')->pluck('label')->values()->all();
             $melde('KI schreibt das Rezept …');
+            $generationStarted = hrtime(true);
             $vorschlag = $this->ki->propose($vkModus ? 'vk.generator' : 'recipe.generator', $kontext, [
                 'knowledge' => $wissen['block'],
                 'knowledge_used' => $wissen['files_used'],            // M7-01: GL-13-§6-Audit-Lücke geschlossen
@@ -131,6 +140,7 @@ class RecipeGeneratorService
                 // name/zutaten ist strukturell unbrauchbar → Gateway re-rollt
                 'structural_retry' => fn (array $parsed) => ! empty($parsed['werte']['name']) && ! empty($parsed['werte']['zutaten']),
             ]);
+            $timings['generation_ms'] = (int) ((hrtime(true) - $generationStarted) / 1_000_000);
             $kiRezept = $vorschlag->werte;
             // W3-5: die ECHTEN Prompt-Größen an den Kontext-Inspektor hängen. Bis hierher zeigte
             // er nur `chars` aus contextFor — also allein den Retrieval-Topf. Gemessen sind das
@@ -176,7 +186,8 @@ class RecipeGeneratorService
 
         $melde('Zutaten werden zugeordnet …');
 
-        $result = DB::transaction(function () use ($team, $kiRezept, $parameter, $mode, $pref, $preferRaw, $bio, $convenience, $vkModus, $createdVia, $melde) {
+        $matchingStarted = hrtime(true);
+        $result = DB::transaction(function () use ($team, $kiRezept, $parameter, $mode, $pref, $preferRaw, $bio, $convenience, $vkModus, $createdVia, $melde, &$timings) {
             $recipe = $this->recipes->create($team, [
                 // L5: getippter Titel (titel_vorgabe) ist der Namens-Anker — er gewinnt vor dem KI-Namen
                 // (der Mensch hat bewusst benannt). Immer defensiv normalisieren (Umbrüche/Whitespace raus,
@@ -329,7 +340,7 @@ class RecipeGeneratorService
                 // OHNE die L2-Zerlegungs-/Frische-Entscheidung zu übersteuern (Reihenfolge NACH
                 // $gpBlockiert/$istBasisrezept). Halluzinierte/fremde id ⇒ null ⇒ Fuzzy-Fallback.
                 $proposedSubId = $this->validiereProposedSub($team, (int) $recipe->id, $z['sub_rezept_id'] ?? null);
-                $proposedGpId = $proposedSubId === null ? $this->validiereProposedGp($team, $z['gp_id'] ?? null) : null;
+                $proposedGpId = $proposedSubId === null ? $this->validiereProposedGp($team, $z['gp_id'] ?? null, $text) : null;
                 $verdrahtet = false;
                 if ($proposedSubId !== null && ($istBasisrezept || ! $gpBlockiert)) {
                     $zeile['referenced_recipe_id'] = $proposedSubId;
@@ -440,14 +451,20 @@ class RecipeGeneratorService
             // persistierte Zeilen) — jetzt auch für BASIS, nicht nur VK. Diagnose-Zahl, kein
             // Blocker; DB-only + fail-open. Die Anzeige konditioniert Phase 3 auf coverage_pct.
             $melde('Kohärenz wird geprüft …');
+            $kohaerenzStarted = hrtime(true);
             try {
                 $statistik['kohaerenz'] = app(PairingService::class)->recipeCohesion($recipe);
             } catch (\Throwable $e) {
                 // Kohärenz ist Diagnose, kein Blocker der Generierung.
             }
+            // Diagnose-Check, kein Matching/Speichern — zählt zu checks_ms (siehe unten).
+            $timings['kohaerenz_ms'] = (int) ((hrtime(true) - $kohaerenzStarted) / 1_000_000);
 
             return ['recipe' => $recipe, 'statistik' => $statistik, 'offene' => $offene];
         });
+
+        $timings['matching_and_save_ms'] = (int) ((hrtime(true) - $matchingStarted) / 1_000_000) - ($timings['kohaerenz_ms'] ?? 0);
+        $checksStarted = hrtime(true);
 
         // Call-Log ↔ Rezept verknüpfen (2026-09-06): bis hier hatte der Generator-Call KEIN Ziel
         // (target_table/target_id leer), weil das Rezept erst nach dem Call entsteht. Ohne die
@@ -483,6 +500,17 @@ class RecipeGeneratorService
         // behalten. Read-only Post-Check (kein Mint-Eingriff), fail-open.
         $result = $this->dedupGate($team, $result, $parameter);
 
+        $timings['checks_ms'] = (int) ((hrtime(true) - $checksStarted) / 1_000_000) + ($timings['kohaerenz_ms'] ?? 0);
+        unset($timings['kohaerenz_ms']);   // war nur die Zwischengröße für die Umbuchung, keine eigene Phase
+        // Kaskadenpfad (siehe $contextVorabGebaut oben): context_ms lag vor $started und fehlt
+        // sonst in der Summe der Phasen.
+        $timings['generator_ms'] = (int) ((hrtime(true) - $started) / 1_000_000)
+            + ($contextVorabGebaut ? $timings['context_ms'] : 0);
+        $result['statistik']['timings'] = $timings;
+        \Illuminate\Support\Facades\Log::info('foodalchemist.recipe.generated', [
+            'recipe_id' => (int) $result['recipe']->id, 'call_log_id' => $callLogId,
+            'timings' => $timings,
+        ]);
         $result['kontext'] = $kontextAudit;   // Kontext-Inspektor fürs UI (null im Override-Pfad)
 
         return $result;
@@ -900,17 +928,19 @@ class RecipeGeneratorService
      * Eligibilitäts-Filter wie der Matcher (visibleToTeam + §-Status approved/tentative +
      * kein Platzhalter). Ungültig/fremd/halluziniert ⇒ null (Fuzzy-Fallback greift).
      */
-    private function validiereProposedGp(Team $team, mixed $id): ?int
+    private function validiereProposedGp(Team $team, mixed $id, string $text = ''): ?int
     {
         $id = is_numeric($id) ? (int) $id : 0;
         if ($id <= 0) {
             return null;
         }
 
-        return FoodAlchemistGp::query()->visibleToTeam($team)
+        $gp = FoodAlchemistGp::query()->visibleToTeam($team)
             ->whereIn('status', ['approved', 'tentative'])
             ->where('is_platzhalter', false)
-            ->whereKey($id)->exists() ? $id : null;
+            ->whereKey($id)->first(['id', 'name', 'condition']);
+
+        return $gp !== null && $this->matcher->acceptsProductForm($text, $gp->name, $gp->condition) ? $id : null;
     }
 
     /**
