@@ -2877,6 +2877,22 @@ class PlanningCascadeService
                 // Verwendetes Wissen je Step (aus context_snapshot, geschrieben von RecipeGenerationContextService::build):
                 // welche Wissens-Dossiers real in den Prompt geflossen sind — damit die Erdung headless prüfbar ist.
                 'wissen' => ! empty($snapshot['knowledge_files']) ? $snapshot['knowledge_files'] : null,
+                // Spec 53 Paket B Aufgabe 6 — was gebaut, aber NICHT gesendet wurde, additiv neben
+                // 'wissen': 'retrieval' aus dem Budget-Schnitt der Fuzzy-Discovery, 'kanon' aus
+                // gedroppten wenn_platz-Dossiers (RecipeDependencyWorkflowService::afterGenerated
+                // korrigiert diesen Zweig nach dem Gateway-Call). Nur der Snapshot-Key wird gelesen —
+                // kein neuer Rechenweg. `null` statt einer leeren Struktur, solange nichts verworfen
+                // wurde (kein Etikett ohne Landebahn).
+                'wissen_verworfen' => (static function () use ($snapshot): ?array {
+                    $d = is_array($snapshot['knowledge_dropped'] ?? null) ? $snapshot['knowledge_dropped'] : [];
+                    $retrieval = is_array($d['retrieval'] ?? null) ? array_values($d['retrieval']) : [];
+                    $kanon = is_array($d['kanon'] ?? null) ? array_values($d['kanon']) : [];
+
+                    return ($retrieval === [] && $kanon === []) ? null : array_filter([
+                        'retrieval' => $retrieval !== [] ? $retrieval : null,
+                        'kanon' => $kanon !== [] ? $kanon : null,
+                    ]);
+                })(),
             ], static fn ($v): bool => $v !== null && $v !== '');
         })->all();
 

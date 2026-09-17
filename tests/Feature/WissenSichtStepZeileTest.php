@@ -59,6 +59,37 @@ it('Snapshot: Kanon-Dossiers stehen in kanon_files — und NICHT in knowledge_fi
     expect($ctx['kontext']['wissen']['kanon'] ?? null)->toBe($ctx['snapshot']['kanon_files']);
 });
 
+/*
+ * Spec 53 Paket B Aufgabe 6 — was gebaut, aber NICHT gesendet wurde, steht jetzt an ZWEI Stellen:
+ * `snapshot.knowledge_dropped` (persistiert, für die Step-Zeile) und `kontext.wissen_verworfen`
+ * (live, für den Inspektor im Generator-Modal) — beide aus derselben Quelle (contextFor()::
+ * files_dropped), damit keine zweite Zähl-Formel entsteht. 'kanon' bleibt an dieser Stelle leer:
+ * das ist erst nach dem Gateway-Call bekannt (RecipeDependencyWorkflowService::afterGenerated).
+ */
+it('Snapshot + Inspektor: ein per Budget gedropptes Domain-Dossier steht in knowledge_dropped.retrieval', function () {
+    DB::table('foodalchemist_knowledge_documents')->insert([
+        'uuid' => (string) UuidV7::generate(), 'team_id' => (int) $this->rootTeam->id,
+        'slug' => 'verworfen-domain-a', 'title' => 'verworfen-domain-a', 'category' => 'domain',
+        'content_md' => str_repeat('Text ', 200), 'version' => 1,
+        'content_hash' => hash('sha256', 'verworfen-domain-a'), 'char_count' => 1000,
+        'active' => 1, 'created_at' => now(), 'updated_at' => now(),
+    ]);
+    DB::table('foodalchemist_knowledge_routings')->insert([
+        'feature' => 'recipe.generator', 'category' => 'domain', 'mode' => 'discovery',
+        'max_docs' => 1, 'max_chars_per_doc' => null, 'created_at' => now(), 'updated_at' => now(),
+    ]);
+
+    // Budget so knapp, dass das gebaute Domain-Dossier (~1000 Z. + Block-Header) nicht mehr passt.
+    $ctx = app(RecipeGenerationContextService::class)->build(
+        $this->rootTeam, 'Rotwein-Schalotten-Reduktion mit Domain', ['_max_chars' => 50], false
+    );
+
+    expect($ctx['snapshot']['knowledge_dropped']['retrieval'] ?? [])->toContain('verworfen-domain-a@v1')
+        ->and($ctx['snapshot']['knowledge_dropped']['kanon'] ?? null)->toBe([])
+        // Dieselbe Quelle im LIVE-Inspektor-Bündel — eine Wahrheit, zwei Sichten.
+        ->and($ctx['kontext']['wissen_verworfen'])->toBe($ctx['snapshot']['knowledge_dropped']);
+});
+
 it('Step-Zeile: zeigt Kanon + Recherche komplett — 20 Recherche-Chips ohne „+N"-Kappung', function () {
     $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'X', 'brief' => 'y']);
     $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'planning_session_id' => $session->id, 'scope' => 'rezept', 'status' => 'review']);

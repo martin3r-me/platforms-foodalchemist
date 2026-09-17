@@ -61,13 +61,16 @@ class KnowledgePolicySeedCommand extends Command
         ['ai_generate_recipe', 'pairing', 'none', null, null],             // Spec 50: Pairing-Dossiers gibt es nicht mehr — der Anker-Graph stützt den Generator, kein Prosa-Wissen
         ['ai_generate_recipe', 'regelwerk', 'none', null, null],
         ['ai_generate_recipe', 'referenzgericht', 'none', null, null],
-        ['ai_generate_recipe', 'kueche', 'discovery', 2, 2500],
-        ['ai_generate_recipe', 'weltkueche', 'discovery', 1, 2000],
-        ['ai_generate_recipe', 'signatur_kuechen', 'discovery', 1, 2000],
-        ['ai_generate_recipe', 'kreativ_input', 'discovery', 1, 2000],
-        ['ai_generate_recipe', 'niveau', 'discovery', 1, 1800],
-        ['ai_generate_recipe', 'ernaehrung', 'discovery', 1, 1500],
-        ['ai_generate_recipe', 'prasentation_service', 'discovery', 1, 1500],
+        // Spec 53 (2026-09-17): `max_chars_per_doc` seedet ab jetzt NICHT mehr — das Feld ist
+        // wirkungslos (KnowledgeContextService wendet es nirgends an, s. Docblock dort), es hier
+        // mit Zahlen zu befüllen behauptet eine Kappung, die nie stattfindet. `max_docs` bleibt.
+        ['ai_generate_recipe', 'kueche', 'discovery', 2, null],
+        ['ai_generate_recipe', 'weltkueche', 'discovery', 1, null],
+        ['ai_generate_recipe', 'signatur_kuechen', 'discovery', 1, null],
+        ['ai_generate_recipe', 'kreativ_input', 'discovery', 1, null],
+        ['ai_generate_recipe', 'niveau', 'discovery', 1, null],
+        ['ai_generate_recipe', 'ernaehrung', 'discovery', 1, null],
+        ['ai_generate_recipe', 'prasentation_service', 'discovery', 1, null],
 
         // ── übrige Features: unverändert übernommen ──
         // Spec 52 · F4: war `always 1×9000` — der dedizierte always-Zweig ist gelöscht, die Zeile
