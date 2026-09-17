@@ -437,11 +437,21 @@ class RecipeGeneratorService
             // NUR auf dem Generierungs-Pfad: im Editor ordnet der Mensch bewusst um, dort
             // darf nichts nachsortieren.
             if ($vkModus) {
-                [$zeilen, $verschoben] = $this->sortiereNachRolle($zeilen);
+                [$zeilen, $verschoben, $altZuNeu] = $this->sortiereNachRolle($zeilen);
                 if ($verschoben > 0) {
                     // Sichtbar machen statt still korrigieren — so wird messbar, wie oft das
                     // Modell die Reihenfolge verfehlt, statt es hinter dem Fix zu verstecken.
                     $statistik['reihenfolge_korrigiert'] = $verschoben;
+                    // Lauf 71 (demo, 20.09.): offene[]['index'] wurde VOR dem Sortieren gebaut
+                    // (Kontrakt afterGenerated: position === index + 1) und zeigte danach auf die
+                    // FALSCHE oder gar keine Zutat — planChildren() fand die Zeile nie, legte
+                    // keinen Sub-Rezept-Step an, die Beilage/Garnitur blieb dauerhaft unmatched.
+                    foreach ($offene as &$open) {
+                        if (isset($open['index'], $altZuNeu[$open['index']])) {
+                            $open['index'] = $altZuNeu[$open['index']];
+                        }
+                    }
+                    unset($open);
                 }
             }
 
@@ -550,7 +560,10 @@ class RecipeGeneratorService
      * steckt kulinarisches Urteil (welche Beilage zuerst), das keine Rang-Tabelle kennt.
      *
      * @param  list<array<string, mixed>>  $zeilen
-     * @return array{0: list<array<string, mixed>>, 1: int}
+     * @return array{0: list<array<string, mixed>>, 1: int, 2: array<int, int>} Zeilen (neue
+     *         Reihenfolge), Anzahl verschobener Zeilen, Alt-Index → Neu-Index (Kontrakt
+     *         afterGenerated: position === index + 1 — offene[]['index'] wird VOR dem Sortieren
+     *         gebaut und muss danach über diese Map nachgezogen werden, siehe Aufrufstelle).
      */
     private function sortiereNachRolle(array $zeilen): array
     {
@@ -565,13 +578,15 @@ class RecipeGeneratorService
         usort($mitRang, fn ($a, $b) => [$a['rang'], $a['i']] <=> [$b['rang'], $b['i']]);
 
         $verschoben = 0;
+        $altZuNeu = [];
         foreach ($mitRang as $neuerIndex => $eintrag) {
+            $altZuNeu[$eintrag['i']] = $neuerIndex;
             if ($eintrag['i'] !== $neuerIndex) {
                 $verschoben++;
             }
         }
 
-        return [array_column($mitRang, 'zeile'), $verschoben];
+        return [array_column($mitRang, 'zeile'), $verschoben, $altZuNeu];
     }
 
     private function kohaerenzGate(Team $team, array $result, callable $melde): array
