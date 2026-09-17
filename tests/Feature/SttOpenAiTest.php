@@ -182,6 +182,21 @@ it('Safari: video/mp4 und video/webm werden erkannt (Audio-only-Aufnahme, vom Br
         ->contains(fn ($f) => $f['name'] === 'file' && str_ends_with((string) ($f['filename'] ?? ''), '.webm')));
 });
 
+it('Endungen: audio/mp4 mit Codec-Parameter und audio/ogg werden korrekt erkannt', function () {
+    config(['services.openai.api_key' => 'sk-test']);
+    Http::fake(['api.openai.com/*' => Http::response(['text' => 'ok'], 200)]);
+
+    // Browser hängen den Codec an den Mime (z. B. Chrome bei audio/mp4) — die Basis-Endung muss
+    // trotzdem stimmen; `explode(';', ...)` schneidet den Codec-Teil vor dem ENDUNGEN-Lookup ab.
+    (new OpenAiSttService())->transcribe('BINARY', 'audio/mp4;codecs=mp4a.40.2');
+    Http::assertSent(fn ($request) => collect($request->data())
+        ->contains(fn ($f) => $f['name'] === 'file' && str_ends_with((string) ($f['filename'] ?? ''), '.mp4')));
+
+    (new OpenAiSttService())->transcribe('BINARY', 'audio/ogg');
+    Http::assertSent(fn ($request) => collect($request->data())
+        ->contains(fn ($f) => $f['name'] === 'file' && str_ends_with((string) ($f['filename'] ?? ''), '.ogg')));
+});
+
 it('Binding-Matrix: Fake ausserhalb testing/local ohne allow_fake bindet Unkonfiguriert', function () {
     app()['env'] = 'production';
     config(['foodalchemist.stt.provider' => 'fake', 'foodalchemist.stt.allow_fake' => false]);

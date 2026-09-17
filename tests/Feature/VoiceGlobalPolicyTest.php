@@ -266,3 +266,26 @@ it('Tool-Ergebnis-Kappung: eine grosse Tool-Antwort wächst den Prompt nicht unb
         ->and($gekappt)->toContain('gekürzt')
         ->and($methode->invoke($ki, 'kurz'))->toBe('kurz');            // unter der Grenze unverändert
 });
+
+it('GL-07: die drei neuen Planungs-Vorschlags-Tools sind für den Sprach-Loop erreichbar', function () {
+    $reg = app(ToolRegistry::class);
+    foreach ([
+        'foodalchemist.planung_vorschlag.POST',
+        'foodalchemist.anreicherung_vorschlag.POST',
+        'foodalchemist.planung_kaskade.LETZTE',
+    ] as $name) {
+        $tool = $reg->get($name);
+        expect($tool)->not->toBeNull("Tool {$name} nicht registriert");
+        expect(VoiceCommandService::darfNutzen($name, $tool))->toBeTrue("{$name} sollte erreichbar sein");
+        expect(in_array($name, VoiceCommandService::TOOLS, true))->toBeTrue("{$name} sollte im Warmstart stehen");
+    }
+});
+
+it('GL-07: die echten Schreiber planung_session.POST und planung_kaskade.START bleiben gesperrt', function () {
+    $reg = app(ToolRegistry::class);
+    foreach (['foodalchemist.planung_session.POST', 'foodalchemist.planung_kaskade.START'] as $name) {
+        $tool = $reg->get($name);
+        expect($tool)->not->toBeNull("Tool {$name} nicht registriert");
+        expect(VoiceCommandService::darfNutzen($name, $tool))->toBeFalse("{$name} sollte GESPERRT sein");
+    }
+});
