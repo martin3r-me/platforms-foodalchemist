@@ -27,8 +27,12 @@ use Platform\FoodAlchemist\Services\Matching\TokenEngine;
  */
 class GenerationContextService
 {
-    /** Max. Tokens aus der Beschreibung, die wir erden (Prompt-Budget). */
-    private const MAX_TOKENS = 6;
+    /**
+     * Obergrenze der SONDIERUNG (wie viele Leit-Tokens gegen candidatesFor() probiert
+     * werden) — NICHT das Prompt-Budget. Ein Token ohne GP-Treffer belegt keinen Slot;
+     * die eigentliche Kappung passiert danach nach Trefferqualität auf GP_CAND_MAX.
+     */
+    private const SONDIERUNG_MAX_TOKENS = 16;
     /** GP-Kandidaten je Token bzw. gesamt. */
     private const CAND_PER_TOKEN = 3;
     private const GP_CAND_MAX = 24;
@@ -155,9 +159,20 @@ class GenerationContextService
             }
         }
 
+        // Score-basiert statt Einfüge-/Token-Reihenfolge kappen (#505-Nachtrag 2026-09):
+        // mit SONDIERUNG_MAX_TOKENS=16 probierten Tokens reicht die reine Einfüge-
+        // Reihenfolge nicht mehr als Kappungs-Kriterium — sonst gewinnen frühe Tokens
+        // trotz schwächerem Treffer gegen spät gefundene, stärker passende Kandidaten.
+        $sortByScore = static function (array $map): array {
+            $liste = array_values($map);
+            usort($liste, static fn ($a, $b) => $b['score'] <=> $a['score']);
+
+            return $liste;
+        };
+
         $out = [];
         if ($gp !== []) {
-            $treffer = $this->mitZustandsfeldern($team, array_slice(array_values($gp), 0, $gpCandMax));
+            $treffer = $this->mitZustandsfeldern($team, array_slice($sortByScore($gp), 0, $gpCandMax));
             $out['gp_kandidaten'] = [
                 // B1 (2026-08-20): im Datenbank-Modus HART erden (jede fachlich passende Zutat exakt
                 // benennen + gp_id angeben), sonst weich (Angebot). Der Fit-Guard im recipe/vk.generator
@@ -181,7 +196,7 @@ class GenerationContextService
                 'hinweis' => $strikt
                     ? 'DATENBANK-Modus: nutze für jede Komponente, die hier fachlich passt, das vorhandene Rezept (sub_rezept_id angeben) statt es nachzubauen.'
                     : 'Vorhandene Rezepte als Komponente wiederverwenden (sub_rezept_id nutzen) statt nachzubauen.',
-                'treffer' => array_slice(array_values($rezepte), 0, self::REZEPT_CAND_MAX),
+                'treffer' => array_slice($sortByScore($rezepte), 0, self::REZEPT_CAND_MAX),
             ];
         }
         if ($pairing !== []) {
@@ -287,18 +302,18 @@ class GenerationContextService
     }
 
     /**
-     * Leit-Tokens der Beschreibung (≥4 Zeichen, dedupe, gekappt) — dieselbe
-     * Token-Basis wie bestandsInventar, damit Erdung und Reuse konsistent sind.
+     * Leit-Tokens der Beschreibung — dieselbe geteilte Denylist wie bestandsInventar
+     * ({@see TokenEngine::leitTokens()}), damit Erdung und Reuse konsistent sondieren.
+     * Score-basiert statt positionsbasiert (#505-Nachtrag 2026-09): früher kappte
+     * array_slice() nach Position im Brief auf MAX_TOKENS=8 — ein weiteres Füllwort
+     * verdrängte spät genannte Zutaten VOR jeder Sondierung. Jetzt sondiert
+     * forGeneration() alle hier gelieferten Tokens (bis SONDIERUNG_MAX_TOKENS) gegen
+     * candidatesFor() und kappt danach nach Trefferqualität.
      *
      * @return list<string>
      */
     private function leitTokens(string $description): array
     {
-        $tokens = array_values(array_unique(array_filter(
-            $this->tokens->tokenize($description),
-            fn ($t) => mb_strlen((string) $t) >= 4,
-        )));
-
-        return array_slice($tokens, 0, self::MAX_TOKENS);
+        return $this->tokens->leitTokens($description, self::SONDIERUNG_MAX_TOKENS);
     }
 }

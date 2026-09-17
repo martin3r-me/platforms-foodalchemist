@@ -77,7 +77,7 @@ class GenerateRecipeJob implements ShouldQueue
         try {
             // Phase 0 — erste Stufe sichtbar machen (Seed fürs gestufte Generieren):
             // der teure LLM-Entwurf startet, die UI zeigt statt „läuft …" eine Stufe.
-            $this->fortschritt($this->vkModus ? 'Gericht wird entworfen …' : 'Rezept wird entworfen …');
+            $this->fortschritt('Kontext & Wissen werden geladen …');
             $stepId = $this->cascadeStepId();
             $prepared = $stepId !== null
                 ? app(\Platform\FoodAlchemist\Services\RecipeDependencyWorkflowService::class)
@@ -91,6 +91,17 @@ class GenerateRecipeJob implements ShouldQueue
             );
             if ($r === [] || ! isset($r['recipe'])) {
                 throw new \RuntimeException('Generierung lieferte kein Ergebnis.');
+            }
+            // Aufgabe 5 (#505-Nachtrag, Vertrag mit Peter/Paket C): Timings in context_snapshot
+            // mergen, Key exakt 'timings' mit den fünf RecipeGeneratorService-Phasen-Schlüsseln.
+            // Einziger anderer Schreiber von context_snapshot ist prepare() (oben, VOR diesem
+            // Aufruf) — kein Race innerhalb desselben Jobs. laufStatus()/Anzeige macht Peter.
+            if ($stepId !== null && is_array($r['statistik']['timings'] ?? null)) {
+                $step = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep::whereKey($stepId)->first(['id', 'context_snapshot']);
+                if ($step !== null) {
+                    $snapshot = is_array($step->context_snapshot) ? $step->context_snapshot : [];
+                    $step->update(['context_snapshot' => [...$snapshot, 'timings' => $r['statistik']['timings']]]);
+                }
             }
             // Der Provider-Call kann nicht mitten im HTTP-Request abgewürgt werden. Wurde währenddessen
             // gestoppt, den eben entstandenen Draft soft-deleten und keinerlei Lineage/Kinder erzeugen.
@@ -164,11 +175,19 @@ class GenerateRecipeJob implements ShouldQueue
         return is_numeric($roh) ? (float) $roh : null;
     }
 
-    /** Job-Tod (Timeout/Fatal außerhalb des handle-try) → Status trotzdem setzen, sonst pollt die UI ewig. */
+    /**
+     * Job-Tod (Timeout/Fatal außerhalb des handle-try) → Status trotzdem setzen, sonst pollt
+     * die UI ewig. demo 16.09.: `GenerateRecipeJob has timed out` (timeout=300, tries=1) —
+     * `TimeoutExceededException` (erbt von `MaxAttemptsExceededException`, ein `instanceof`
+     * fängt beide) trägt nur die technische Laravel-Meldung; klarer Text statt Rohtext.
+     */
     public function failed(\Throwable $e): void
     {
-        $this->schreibe(['status' => 'error', 'fehler' => 'Generierung abgebrochen: ' . $e->getMessage()]);
-        $this->meldeKaskade(false, null, 'Generierung abgebrochen: ' . $e->getMessage());
+        $fehler = $e instanceof \Illuminate\Queue\MaxAttemptsExceededException
+            ? 'Zeitüberschreitung nach ' . $this->timeout . ' s'
+            : 'Generierung abgebrochen: ' . $e->getMessage();
+        $this->schreibe(['status' => 'error', 'fehler' => $fehler]);
+        $this->meldeKaskade(false, null, $fehler);
     }
 
     /** cascade_step_id aus dem Parameter-Bündel (Rückkanal-Ziel), null wenn kein Kaskaden-Lauf. */

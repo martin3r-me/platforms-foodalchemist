@@ -78,6 +78,7 @@ class RecipeGenerationContextService
 
     public function build(Team $team, string $description, array $parameter, bool $vkModus): array
     {
+        $started = hrtime(true);
         // Spec 37 (2026-08-07): Rezept-Typ explizit. Steuert (a) die typ-abhängige Niveau-Auswahl
         // (der Selektor liest params['rezept_typ']) und geht (b) als eigenes Kontext-Feld an die KI
         // — Gürtel & Hosenträger zur Prompt-Einleitung (Basisrezept = Baustein, Gericht = Teller).
@@ -248,6 +249,7 @@ class RecipeGenerationContextService
         $kontext = [
             'wissen' => $wissen['used_by_category'] ?? [],
             'chars' => (int) ($wissen['total_chars'] ?? 0),
+            'wissen_verworfen' => $wissen['files_dropped'] ?? [],
             'templates' => array_values(array_map(
                 fn ($t) => ['id' => $t['id'], 'name' => $t['name']],
                 array_filter($templateContext, fn ($t) => ($t['score'] ?? 0) > 0),
@@ -263,6 +265,8 @@ class RecipeGenerationContextService
             'prompt' => $prompt,
             'knowledge' => $wissen['block'],
             'knowledge_used' => $wissen['files_used'],
+            'knowledge_dropped_chars' => $wissen['dropped_chars'] ?? 0,
+            'context_ms' => (int) ((hrtime(true) - $started) / 1_000_000),
             'kontext' => $kontext,
             'snapshot' => [
                 // `knowledge_files` = NUR der Retrieval-Fund (Dedup-Eingang W0-3b + `_knowledge_scope`

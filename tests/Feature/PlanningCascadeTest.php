@@ -2604,3 +2604,30 @@ it('L5 markStepDone zieht das Step-Label auf den echten Artefakt-Namen (nicht de
 
     expect($step->refresh()->label)->toBe('Rotwein-Reduktion');
 });
+
+it('#505-Nachtrag Task 6: laufStatus() zählt unfertige Übernahmen im Run-Kopf, "abgeschlossen" behauptet keine Vollständigkeit mehr', function () {
+    // Lauf 65 (Anlass): ein `skipped`-Step (Bestands-Übernahme) ohne Schritte wurde als
+    // "abgeschlossen" gemeldet — reifegrad() bleibt die Wahrheit, hier wird nur gezählt,
+    // was RecipeDependencyWorkflowService::afterGenerated in deferred.reuse ablegt.
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'concept', 'status' => 'done']);
+    FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'basisrezept',
+        'status' => 'skipped', 'label' => 'Rotwein-Reduktion (unreif)', 'sort' => 1,
+        'deferred' => ['reuse' => ['reif' => false, 'luecken' => ['keine Schritte']]],
+    ]);
+    FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'basisrezept',
+        'status' => 'skipped', 'label' => 'Schalottenfond (reif)', 'sort' => 2,
+        'deferred' => ['reuse' => ['reif' => true, 'luecken' => []]],
+    ]);
+    FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht',
+        'status' => 'freigegeben', 'label' => 'Herbstteller', 'sort' => 3,
+    ]);
+
+    $status = app(PlanningCascadeService::class)->laufStatus($this->rootTeam, (int) $run->id);
+
+    expect($status['lauf']['uebernommen'])->toBe(2)
+        ->and($status['lauf']['uebernommen_unreif'])->toBe(1)
+        ->and($status['hinweis'])->toContain('2 Rezepte aus dem Bestand übernommen, davon 1 unfertig');
+});
