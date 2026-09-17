@@ -51,6 +51,11 @@ class VoiceCommandService
         'foodalchemist.verkaufsrezepte.SEARCH', 'foodalchemist.artikel.SEARCH',
         'foodalchemist.recipe_klasse.POST',
         'foodalchemist.ui.OPEN',
+        // Spec 53/D: ui.OPEN öffnet einen KONKRETEN Datensatz (id nötig) — für „Öffne die Planung"
+        // (keine id, allgemeine Seite) gibt es NAVIGATE. Ohne den Eintrag hier kannte das Modell
+        // das Werkzeug nicht (es steht zwar über die Policy offen, aber nichts im Katalog/System-
+        // Prompt sagte ihm, dass es existiert) und `verarbeite()` wertete den Ruf auch nicht aus.
+        'foodalchemist.ui.NAVIGATE',
         // Ohne das hier handelt der Sprach-Agent aus dem Bauch. Erlaubt war es ueber die Policy
         // schon immer (jedes lesende foodalchemist.*-Tool ist es) — aber nichts im Katalog und
         // nichts in der System-Nachricht sagte ihm, dass es ein Wissensmodul gibt, und ein
@@ -121,18 +126,37 @@ class VoiceCommandService
     }
 
     /**
-     * @return array{text: ?string, runden: int, elapsed_ms: int, freigeschaltet: list<string>,
+     * Rundenbudget UND Zeitbudget (Befund 2026-09-17, demo-Call-Log 16.09.: 2 von 5 Läufen liefen
+     * bis `maxRuns` durch — 6 Runden, ~60 s, ~91.560 Input-Token — ohne dass der Nutzer in der
+     * Zeit auch nur eine Zwischenmeldung sah). 4 Runden reichen für die gemessenen Fälle (Suche,
+     * Detail öffnen, Proposal) locker; das Zeitbudget ist der zweite, unabhängige Deckel, falls
+     * eine einzelne Runde selbst schon lange braucht.
+     */
+    private const MAX_RUNDEN = 4;
+
+    private const ZEITBUDGET_MS = 28_000;
+
+    /**
+     * @param  array{type: string, id: int}|null  $kontext  Aufgabe 7: Rezept-/Gericht-Kontext der
+     *                                                        öffnenden Seite („reichere DIESES Rezept an").
+     * @return array{text: ?string, unklar: bool, runden: int, elapsed_ms: int, freigeschaltet: list<string>,
      *               aktionen: list<array>, proposals: list<array>, tool_laeufe: list<array>}
      */
-    public function verarbeite(string $transcript): array
+    public function verarbeite(string $transcript, ?array $kontext = null): array
     {
+        $kontextHinweis = ($kontext !== null && isset($kontext['type'], $kontext['id']))
+            ? " [Kontext: aktuell geöffnet — {$kontext['type']} ID={$kontext['id']}. Bei \"dieses/das Rezept\" "
+                . 'OHNE genannten Namen/Nummer diese ID verwenden, NICHT raten. Wird ein anderer Name genannt, '
+                . 'gilt der genannte Name.]'
+            : '';
         $resultat = $this->ki->callWithTools(
-            "Sprachbefehl des Users (Deutsch, Kurz-Audio-Transkript): \"{$transcript}\"",
+            "Sprachbefehl des Users (Deutsch, Kurz-Audio-Transkript): \"{$transcript}\"{$kontextHinweis}",
             self::TOOLS,
-            6,
+            self::MAX_RUNDEN,
             [
                 'policy' => [self::class, 'darfNutzen'],
                 'arg_guard' => [self::class, 'entschaerfeArgumente'],
+                'zeitbudget_ms' => self::ZEITBUDGET_MS,
                 'system_zusatz' => 'Du steuerst den GANZEN FoodAlchemist (Rezepte, Gerichte, Concepter, Foodbook, '
                     . 'Speisekarte, Speiseplan, Bestellwesen, Lieferanten). Der Katalog unten ist nur der Einstieg: '
                     . 'fehlt dir ein Werkzeug, suche es mit tool_registry.SEARCH und rufe es direkt auf. '
@@ -140,12 +164,23 @@ class VoiceCommandService
                     . '"name_glob":"foodalchemist.*"}) — Tools anderer Module sind gesperrt, jede Anfrage dorthin '
                     . 'kostet nur eine Runde. Freigeschaltet sind LESENDE foodalchemist.*-Tools. Schreibende sind '
                     . 'gesperrt; Änderungen laufen über die Proposal-Tools und werden vom Menschen bestätigt. '
-                    . 'Zum Navigieren foodalchemist.ui.OPEN nutzen. '
+                    . 'Zum Öffnen eines KONKRETEN Datensatzes foodalchemist.ui.OPEN nutzen (id nötig), '
+                    . 'zum Wechseln auf eine allgemeine Seite ohne Datensatz (z. B. „Öffne die Planung") '
+                    . 'foodalchemist.ui.NAVIGATE mit route_key aus foodalchemist.ui.ROUTES. '
                     . 'ARBEITSWEISE: geht es um eine Fach-Aufgabe (Rezept, Gericht, Konzept, Foodbook, GP), '
                     . 'hole ZUERST den hinterlegten Ablauf mit foodalchemist.ablauf.GET — dort stehen die '
                     . 'verbindlichen Regeln und die Reihenfolge. Für eine einzelne Fachfrage hole dir '
                     . 'foodalchemist.knowledge.SEARCH über tool_registry.SEARCH. Nicht aus dem Gedächtnis '
-                    . 'arbeiten und keine Werte erfinden: fehlt etwas, ist die Lücke die Antwort.',
+                    . 'arbeiten und keine Werte erfinden: fehlt etwas, ist die Lücke die Antwort. '
+                    . 'DREI PLANUNGS-FÄHIGKEITEN über tool_registry.SEARCH mit name_glob "foodalchemist.*": '
+                    . '(1) foodalchemist.planung_vorschlag.POST für „erstelle/baue ein Rezept/Gericht/Menü …" — '
+                    . 'legt NICHTS an, nur einen Vorschlag zum Bestätigen; '
+                    . '(2) foodalchemist.anreicherung_vorschlag.POST für „reichere dieses Rezept an" — ebenfalls '
+                    . 'nur ein Vorschlag; '
+                    . '(3) foodalchemist.planung_kaskade.LETZTE für „wie weit ist die Generierung?" (liest die '
+                    . 'letzten Läufe, keine run_id nötig). '
+                    . 'foodalchemist.planung_session.POST und foodalchemist.planung_kaskade.START sind für dich '
+                    . 'GESPERRT (echte Schreiber) — NIE versuchen, IMMER stattdessen (1)/(2) vorschlagen.',
             ],
         );
 
@@ -155,11 +190,42 @@ class VoiceCommandService
             if ($lauf['name'] === 'foodalchemist.ui.OPEN' && $lauf['success']) {
                 $aktionen[] = $lauf['data']['open'];
             }
+            // Spec 53/D: NAVIGATE lieferte bisher zwar ein Tool-Ergebnis, aber verarbeite() wertete
+            // es nie aus — der Agent konnte die Seite wechseln, ohne dass am Modal je etwas ankam.
+            if ($lauf['name'] === 'foodalchemist.ui.NAVIGATE' && $lauf['success']) {
+                $aktionen[] = ['type' => 'navigate'] + $lauf['data']['navigate'];
+            }
             if ($lauf['name'] === 'foodalchemist.recipe_klasse.POST' && $lauf['success'] && ! ($lauf['data']['accepted'] ?? false)) {
                 $proposals[] = ['type' => 'speisen_klasse', 'recipe_id' => $lauf['arguments']['recipe_id'] ?? null] + $lauf['data'];
             }
+            // Aufgabe 7 (GL-07): „erstelle ein …" darf nur bis zum Vorschlag kommen — der Knopf im
+            // Modal (VoiceModal::planungStarten()) legt die Session erst beim Bestätigen an.
+            if ($lauf['name'] === 'foodalchemist.planung_vorschlag.POST' && $lauf['success']) {
+                $proposals[] = ['type' => 'planung_start'] + $lauf['data']['vorschlag'];
+            }
+            if ($lauf['name'] === 'foodalchemist.anreicherung_vorschlag.POST' && $lauf['success']) {
+                $proposals[] = ['type' => 'anreicherung'] + $lauf['data']['vorschlag'];
+            }
         }
 
-        return $resultat + ['aktionen' => $aktionen, 'proposals' => $proposals];
+        // Befund 2026-09-17: `text === null` (Runden-/Zeitbudget erschöpft, kein `final`) rendert
+        // vorher NICHTS als Antwort — die graue Meta-Zeile („N Runde(n) · N Tool-Aufruf(e)") stand
+        // allein da, für den Nutzer nach bis zu einer Minute Stille „nichts ist passiert". Ein Satz,
+        // der die versuchten Werkzeuge nennt, ist ehrlicher als eine leere Ergebnisbox.
+        $unklar = $resultat['text'] === null;
+        $resultat['text'] = $unklar ? $this->unklarText($resultat['tool_laeufe']) : $resultat['text'];
+
+        return $resultat + ['unklar' => $unklar, 'aktionen' => $aktionen, 'proposals' => $proposals];
+    }
+
+    private function unklarText(array $toolLaeufe): string
+    {
+        $versucht = array_values(array_unique(array_column($toolLaeufe, 'name')));
+        if ($versucht === []) {
+            return 'Ich habe den Befehl nicht verstanden — bitte anders formulieren.';
+        }
+
+        return 'Kein passendes Werkzeug gefunden (versucht: ' . implode(', ', $versucht)
+            . ') — bitte den Befehl präziser formulieren.';
     }
 }

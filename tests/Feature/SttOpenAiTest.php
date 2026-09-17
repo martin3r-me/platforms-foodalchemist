@@ -1,10 +1,14 @@
 <?php
 
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
 use Platform\FoodAlchemist\Services\Stt\AssemblyAiSttService;
 use Platform\FoodAlchemist\Services\Stt\FakeSttService;
 use Platform\FoodAlchemist\Services\Stt\OpenAiSttService;
 use Platform\FoodAlchemist\Services\Stt\SttServiceContract;
+use Platform\FoodAlchemist\Services\Stt\UnkonfiguriertSttService;
+use Platform\FoodAlchemist\Support\VoiceFehlerText;
+use Platform\FoodAlchemist\Support\VoiceMime;
 use Platform\FoodAlchemist\Tests\TestCase;
 
 uses(TestCase::class);
@@ -146,4 +150,97 @@ it('ein echter Befehl bleibt unangetastet — der Riegel darf nicht überfiltern
 it('auch ein KURZER Befehl mit Fachwort aus dem Hinweis übersteht den Riegel', function () {
     // Ein Befehl darf nie als Echo gelten, nur weil er ein Vokabel-Wort enthält.
     expect(sttMit('Basisrezept anlegen'))->toBe('Basisrezept anlegen');
+});
+
+/*
+ * Spec 53 / Paket D — ab hier: name(), Safari-video/mp4-Endungen, Provider-Transparenz-Binding
+ * (Fake ausserhalb testing/local nur mit allow_fake), VoiceMime, VoiceFehlerText.
+ */
+
+it('name() identifiziert jeden Provider', function () {
+    expect((new OpenAiSttService())->name())->toBe('openai')
+        ->and((new AssemblyAiSttService())->name())->toBe('assemblyai')
+        ->and((new FakeSttService())->name())->toBe('fake')
+        ->and((new UnkonfiguriertSttService())->name())->toBe('none');
+});
+
+it('UnkonfiguriertSttService wirft eine klare Meldung statt zu schweigen', function () {
+    expect(fn () => (new UnkonfiguriertSttService())->transcribe('BLOB'))
+        ->toThrow(RuntimeException::class, 'nicht konfiguriert');
+});
+
+it('Safari: video/mp4 und video/webm werden erkannt (Audio-only-Aufnahme, vom Browser als video/* gemeldet)', function () {
+    config(['services.openai.api_key' => 'sk-test']);
+    Http::fake(['api.openai.com/*' => Http::response(['text' => 'ok'], 200)]);
+
+    (new OpenAiSttService())->transcribe('BINARY', 'video/mp4');
+    Http::assertSent(fn ($request) => collect($request->data())
+        ->contains(fn ($f) => $f['name'] === 'file' && str_ends_with((string) ($f['filename'] ?? ''), '.mp4')));
+
+    (new OpenAiSttService())->transcribe('BINARY', 'video/webm');
+    Http::assertSent(fn ($request) => collect($request->data())
+        ->contains(fn ($f) => $f['name'] === 'file' && str_ends_with((string) ($f['filename'] ?? ''), '.webm')));
+});
+
+it('Binding-Matrix: Fake ausserhalb testing/local ohne allow_fake bindet Unkonfiguriert', function () {
+    app()['env'] = 'production';
+    config(['foodalchemist.stt.provider' => 'fake', 'foodalchemist.stt.allow_fake' => false]);
+
+    expect(app(SttServiceContract::class))->toBeInstanceOf(UnkonfiguriertSttService::class);
+
+    app()['env'] = 'testing';
+});
+
+it('Binding-Matrix: allow_fake=true erlaubt Fake auch ausserhalb testing/local', function () {
+    app()['env'] = 'production';
+    config(['foodalchemist.stt.provider' => 'fake', 'foodalchemist.stt.allow_fake' => true]);
+
+    expect(app(SttServiceContract::class))->toBeInstanceOf(FakeSttService::class);
+
+    app()['env'] = 'testing';
+});
+
+it('Binding-Matrix: auto ohne jeden Zugang ausserhalb testing/local bindet ebenfalls Unkonfiguriert', function () {
+    app()['env'] = 'production';
+    config([
+        'foodalchemist.stt.provider' => 'auto', 'services.openai.api_key' => '',
+        'foodalchemist.stt.key' => '', 'foodalchemist.stt.allow_fake' => false,
+    ]);
+
+    // Vorher landete das hier stumm auf Fake — jeder Sprachbefehl wäre durch den Fixtext ersetzt worden.
+    expect(app(SttServiceContract::class))->toBeInstanceOf(UnkonfiguriertSttService::class);
+
+    app()['env'] = 'testing';
+});
+
+it('VoiceMime bevorzugt getClientMimeType, wenn er audio/* oder video/* meldet', function () {
+    $file = UploadedFile::fake()->create('befehl.mp4', 1, 'audio/mp4');
+
+    expect(VoiceMime::aufgeloest($file))->toBe('audio/mp4');
+});
+
+it('VoiceMime fällt auf getMimeType zurück, wenn der Client-Typ kein audio/video ist', function () {
+    $tmp = tempnam(sys_get_temp_dir(), 'voice');
+    file_put_contents($tmp, 'hallo welt');
+    $file = new \Illuminate\Http\UploadedFile($tmp, 'befehl.txt', 'application/octet-stream', null, true);
+
+    expect(VoiceMime::aufgeloest($file))->not->toBe('application/octet-stream');
+});
+
+it('VoiceFehlerText übersetzt HTTP-Status und Text-Muster in verständliche Sätze', function () {
+    expect(VoiceFehlerText::aus(new RuntimeException('nope', 401))['text'])->toBe('Zugang ungültig — API-Schlüssel prüfen.')
+        ->and(VoiceFehlerText::aus(new RuntimeException('nope', 403))['text'])->toBe('Zugang ungültig — API-Schlüssel prüfen.')
+        ->and(VoiceFehlerText::aus(new RuntimeException('nope', 429))['text'])->toContain('Zu viele Anfragen')
+        ->and(VoiceFehlerText::aus(new RuntimeException('bad format', 400))['text'])->toContain('Audioformat')
+        ->and(VoiceFehlerText::aus(new RuntimeException('Spracherkennung ist nicht konfiguriert'))['text'])
+            ->toBe('Spracherkennung ist nicht konfiguriert')
+        ->and(VoiceFehlerText::aus(new RuntimeException('Aufnahme war leer'))['text'])->toBe('Aufnahme war leer.')
+        ->and(VoiceFehlerText::aus(new RuntimeException('irgendwas'))['text'])->toBe('Unerwarteter Fehler bei der Spracherkennung.')
+        ->and(VoiceFehlerText::aus(new RuntimeException('irgendwas', 500))['detail'])->toBe('irgendwas');
+});
+
+it('VoiceFehlerText: Timeout/ConnectionException bekommt den Kürzer-sprechen-Hinweis', function () {
+    $verbindung = new \Illuminate\Http\Client\ConnectionException('cURL error 28: timed out');
+
+    expect(VoiceFehlerText::aus($verbindung)['text'])->toContain('nicht rechtzeitig geantwortet');
 });

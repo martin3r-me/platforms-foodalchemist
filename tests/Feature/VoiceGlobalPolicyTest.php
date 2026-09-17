@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 use Platform\Core\Tools\ToolRegistry;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
+use Platform\FoodAlchemist\Services\Ai\AiGatewayService;
 use Platform\FoodAlchemist\Services\Ai\FakeAiProvider;
 use Platform\FoodAlchemist\Services\VoiceCommandService;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
@@ -157,7 +158,10 @@ it('Token-Deckel: der Basiskatalog bleibt klein — er wird in JEDER Runde bezah
 
     // Live gemessen: alle 111 lesenden FA-Tools wären 78.348 Zeichen ≈ 26.000 Token je Runde.
     // Der Warmstart darf davon ein Zehntel kosten — mehr wäre die Rückkehr zum Vollsortiment.
-    expect($zeichen)->toBeLessThan(8000, "Basiskatalog auf {$zeichen} Zeichen gewachsen");
+    // Spec 53/D (2026-09-17): +`ui.NAVIGATE` (8.000 → 8.340) — ohne den Katalog-Eintrag kannte
+    // das Modell das Werkzeug nicht (Policy erlaubte es zwar, aber nichts sagte ihm, dass es
+    // existiert), „Öffne die Planung" landete also nie. Deckel moderat angehoben, nicht entfernt.
+    expect($zeichen)->toBeLessThan(8500, "Basiskatalog auf {$zeichen} Zeichen gewachsen");
 });
 
 it('Platzierung: der Sprach-Agent hängt global in der Sidebar — Knopf und genau EIN Mount', function () {
@@ -195,4 +199,67 @@ it('Loop: erfundener Tool-Name führt nicht zum Fatal, sondern zur Ablehnung', f
         ->and($r['freigeschaltet'])->toBe([])
         ->and($r['runden'])->toBe(2)
         ->and($r['text'])->toBe('Das Werkzeug kenne ich nicht.');
+});
+
+/*
+ * Spec 53/D — Befund 2026-09-17 (demo-Call-Log, User 7, 16.09.): 2 von 5 Läufen liefen bis
+ * maxRuns=6 durch (~60 s, ~91.560 Input-Token), endeten mit `final=false` und einer LEEREN
+ * Ergebnisbox — für den Nutzer nach fast einer Minute Stille „nichts ist passiert".
+ */
+
+it('MAX_RUNDEN ist 4 (vorher 6 — die 2 von 5 demo-Läufen liefen bis dahin ins Leere)', function () {
+    expect((new ReflectionClass(VoiceCommandService::class))->getConstant('MAX_RUNDEN'))->toBe(4);
+});
+
+it('Zeitbudget: callWithTools bricht ab, ohne einen Modellaufruf zu starten, wenn die Zeit schon um ist', function () {
+    ($this->skript)(['{"action":"final","text":"sollte nie ankommen"}']);
+
+    $resultat = app(AiGatewayService::class)
+        ->callWithTools('Test', ['foodalchemist.recipes.SEARCH'], 6, ['zeitbudget_ms' => 0]);
+
+    expect($resultat['text'])->toBeNull()
+        ->and($resultat['runden'])->toBe(0);
+});
+
+it('Frühabbruch: gleiches Tool mit gleichen Argumenten zweimal ⇒ Loop endet mit final=false statt zu wiederholen', function () {
+    FoodAlchemistRecipe::create(['team_id' => $this->rootTeam->id, 'recipe_key' => 'x', 'name' => 'X', 'status' => 'approved']);
+    ($this->skript)([
+        '{"action":"tool","name":"foodalchemist.recipes.SEARCH","arguments":{"q":"X"}}',
+        '{"action":"tool","name":"foodalchemist.recipes.SEARCH","arguments":{"q":"X"}}',   // exakt wiederholt
+        '{"action":"final","text":"sollte nie ankommen"}',
+    ]);
+
+    $r = app(VoiceCommandService::class)->verarbeite('Suche X');
+
+    expect($r['tool_laeufe'])->toHaveCount(1)                          // der zweite, identische Aufruf lief NICHT
+        ->and($r['unklar'])->toBeTrue();
+});
+
+it('Ehrliches final=false: nennt die versuchten Werkzeuge statt einer leeren Ergebnisbox', function () {
+    FoodAlchemistRecipe::create(['team_id' => $this->rootTeam->id, 'recipe_key' => 'x', 'name' => 'X', 'status' => 'approved']);
+    ($this->skript)([
+        '{"action":"tool","name":"foodalchemist.recipes.SEARCH","arguments":{"q":"eins"}}',
+        '{"action":"tool","name":"foodalchemist.recipes.SEARCH","arguments":{"q":"zwei"}}',
+        '{"action":"tool","name":"foodalchemist.recipes.SEARCH","arguments":{"q":"drei"}}',
+        '{"action":"tool","name":"foodalchemist.recipes.SEARCH","arguments":{"q":"vier"}}',
+    ]);                                                                 // 4 Antworten = MAX_RUNDEN erschöpft, kein 'final'
+
+    $r = app(VoiceCommandService::class)->verarbeite('Mach irgendwas Unklares');
+
+    expect($r['unklar'])->toBeTrue()
+        ->and($r['text'])->toContain('foodalchemist.recipes.SEARCH')
+        ->and($r['runden'])->toBe(4);
+});
+
+it('Tool-Ergebnis-Kappung: eine grosse Tool-Antwort wächst den Prompt nicht unbegrenzt', function () {
+    $ki = app(AiGatewayService::class);
+    $methode = (new ReflectionClass($ki))->getMethod('kappeToolErgebnis');
+    $methode->setAccessible(true);
+
+    $gross = str_repeat('x', 5000);
+    $gekappt = $methode->invoke($ki, $gross);
+
+    expect(mb_strlen($gekappt))->toBeLessThan(2100)
+        ->and($gekappt)->toContain('gekürzt')
+        ->and($methode->invoke($ki, 'kurz'))->toBe('kurz');            // unter der Grenze unverändert
 });

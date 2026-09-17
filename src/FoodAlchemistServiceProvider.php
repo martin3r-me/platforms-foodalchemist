@@ -826,6 +826,12 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\PlanungLeitplankenExtractTool::class,
                     // Etappe 9 (Planung-Leitstelle): Kaskaden-Status headless lesen — READ-ONLY.
                     \Platform\FoodAlchemist\Tools\PlanungKaskadeStatusGetTool::class,
+                    // Spec 53/D: GL-07 für den Sprachbefehl — Planung/Anreicherung NUR als Vorschlag
+                    // (read_only=true, schreibt nichts), plus die run_id-freie Status-Abfrage für
+                    // „wie weit ist die Generierung?" ohne bekannte run_id.
+                    \Platform\FoodAlchemist\Tools\PlanungVorschlagPostTool::class,
+                    \Platform\FoodAlchemist\Tools\AnreicherungVorschlagPostTool::class,
+                    \Platform\FoodAlchemist\Tools\PlanungKaskadeLetzteGetTool::class,
                     // Etappe 9 · Slice 2: Kaskaden-START (Go) + FREIGABE (Gate 2) via MCP — WRITE. Der
                     // Kaskaden-Trigger via MCP ist bewusst freigegeben (Entscheidung 2026-08-17); Schutz =
                     // Tenancy (Start isOwnedBy Session, Freigabe ownedStep). Nicht mehr human-only.
