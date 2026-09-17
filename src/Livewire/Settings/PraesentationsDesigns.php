@@ -41,6 +41,7 @@ class PraesentationsDesigns extends Component
             $media = app(PresentationDesignService::class)->storeBlockImage($this->team(), $this->blockImageUpload);
             $this->layout[$i]['style']['context_file_id'] = $media['context_file_id'];
             $this->layout[$i]['style']['path'] = $media['path'];
+            $this->markiereGeaendert();
         } catch (\Throwable $e) {
             $this->fehler = $e->getMessage();
         }
@@ -51,6 +52,7 @@ class PraesentationsDesigns extends Component
     {
         if (isset($this->layout[$i]) && ($this->layout[$i]['block_type'] ?? '') === 'image') {
             unset($this->layout[$i]['style']['context_file_id'], $this->layout[$i]['style']['path'], $this->layout[$i]['style']['url']);
+            $this->markiereGeaendert();
         }
     }
 
@@ -78,6 +80,7 @@ class PraesentationsDesigns extends Component
         try {
             $res = app(PresentationDesignService::class)->generateCss($this->team(), $this->cssBrief);
             $this->customCss = $res['css'];
+            $this->markiereGeaendert();
             $this->status = 'CSS von der KI erzeugt — Live-Vorschau aktualisiert. Zum Sichern „Speichern".';
         } catch (\Throwable $e) {
             $this->fehler = $e->getMessage();
@@ -94,6 +97,30 @@ class PraesentationsDesigns extends Component
     public ?string $status = null;
 
     public ?string $fehler = null;
+
+    /**
+     * Bug-Runde 2026-09-17 #2: Die Live-Vorschau rendert den Editor-Zustand, veröffentlicht wird
+     * aber nur der GESPEICHERTE Stand. Ohne Marker sieht man in der Vorschau eine Änderung, die
+     * im Kundenlink nie ankommt. Das Flag macht den Unterschied sichtbar.
+     */
+    public bool $ungespeichert = false;
+
+    /** Jede Änderung an Design-Daten (nicht an Ansichts-Zustand) macht den Editor „schmutzig". */
+    public function updated($property, $value = null): void
+    {
+        $ansicht = ['previewType', 'previewSourceId', 'selectedBlockIndex', 'blockImageUpload', 'cssBrief', 'status', 'fehler', 'ungespeichert'];
+        foreach ($ansicht as $p) {
+            if ($property === $p || str_starts_with((string) $property, $p . '.')) {
+                return;
+            }
+        }
+        $this->ungespeichert = true;
+    }
+
+    private function markiereGeaendert(): void
+    {
+        $this->ungespeichert = true;
+    }
 
     /** Standard-Style je Block-Typ beim Hinzufügen. */
     private const BLOCK_DEFAULTS = [
@@ -142,6 +169,7 @@ class PraesentationsDesigns extends Component
         $this->outputTypes = $b['output_types'] ?? [];
         $this->customCss = null;
         $this->selectedBlockIndex = null;
+        $this->ungespeichert = false;
         $this->resetFeedback();
     }
 
@@ -160,6 +188,7 @@ class PraesentationsDesigns extends Component
         $this->outputTypes = is_array($design->output_types) ? $design->output_types : [];
         $this->customCss = $design->custom_css;
         $this->selectedBlockIndex = null;
+        $this->ungespeichert = false;
         $this->resetFeedback();
     }
 
@@ -185,7 +214,9 @@ class PraesentationsDesigns extends Component
                 ? app(PresentationDesignService::class)->update($team, $this->selectedId, $data)
                 : app(PresentationDesignService::class)->create($team, $data);
             $this->selectedId = (int) $design->id;
-            $this->status = 'Design gespeichert.';
+            $this->ungespeichert = false;
+            $this->status = 'Design gespeichert.'
+                . ' Damit der Kundenlink folgt, die Ausgabe danach noch einmal veröffentlichen.';
         } catch (\Throwable $e) {
             $this->fehler = $e->getMessage();
         }
@@ -214,6 +245,7 @@ class PraesentationsDesigns extends Component
         }
         $this->layout[] = ['block_type' => $type, 'style' => self::BLOCK_DEFAULTS[$type] ?? []];
         $this->selectedBlockIndex = count($this->layout) - 1;
+        $this->markiereGeaendert();
         $this->resetFeedback();
     }
 
@@ -224,6 +256,7 @@ class PraesentationsDesigns extends Component
         }
         array_splice($this->layout, $index, 1);
         $this->selectedBlockIndex = null;
+        $this->markiereGeaendert();
         $this->resetFeedback();
     }
 
@@ -240,6 +273,7 @@ class PraesentationsDesigns extends Component
         }
         [$this->layout[$index], $this->layout[$ziel]] = [$this->layout[$ziel], $this->layout[$index]];
         $this->selectedBlockIndex = $ziel;
+        $this->markiereGeaendert();
     }
 
     /** Reorder aus dem Drag-&-Drop (Alpine liefert die neue Index-Reihenfolge). */
@@ -255,6 +289,7 @@ class PraesentationsDesigns extends Component
         if (count($neu) === count($this->layout)) {
             $this->layout = $neu;
             $this->selectedBlockIndex = null;
+            $this->markiereGeaendert();
         }
     }
 
@@ -271,6 +306,7 @@ class PraesentationsDesigns extends Component
         $to = max(0, min($to, count($this->layout)));
         array_splice($this->layout, $to, 0, $item);
         $this->selectedBlockIndex = $to;
+        $this->markiereGeaendert();
     }
 
     public function stilSetzen(int $index, string $key, mixed $value): void
@@ -282,12 +318,21 @@ class PraesentationsDesigns extends Component
         if ($value === 'true' || $value === 'false') {
             $value = $value === 'true';
         }
+        // Leergeräumtes Zahlenfeld (z. B. „max. Höhe") = Einstellung entfernen, nicht null speichern.
+        if ($value === null || $value === '') {
+            unset($this->layout[$index]['style'][$key]);
+            $this->markiereGeaendert();
+
+            return;
+        }
         $this->layout[$index]['style'][$key] = $value;
+        $this->markiereGeaendert();
     }
 
     public function tokenSetzen(string $gruppe, string $key, mixed $value): void
     {
         $this->tokens[$gruppe][$key] = $value;
+        $this->markiereGeaendert();
     }
 
     // ── intern ─────────────────────────────────────────────────────────────

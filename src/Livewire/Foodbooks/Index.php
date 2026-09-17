@@ -1376,6 +1376,8 @@ class Index extends Component
                 'live' => $fb->isPresentationLive(),
                 'published_at' => $fb->presentation_published_at?->format('d.m.Y H:i'),
                 'expires_at' => $fb->presentation_expires_at?->format('d.m.Y'),
+                // Bug-Runde 2026-09-17 #2: Design nach der Veröffentlichung geändert → Link hinkt hinterher.
+                'design_veraltet' => app(PresentationService::class)->designGeaendertSeitPublish($fb),
             ];
             if ($fb->presentation_enabled && $fb->presentationPublicRef()) {
                 $presentationLink = url('/p/foodbook/' . $fb->presentationPublicRef());
