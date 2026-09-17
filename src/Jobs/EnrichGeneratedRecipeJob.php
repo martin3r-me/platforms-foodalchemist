@@ -32,6 +32,8 @@ class EnrichGeneratedRecipeJob implements ShouldQueue
         public array $recipePayload,
         public ?float $zielVk = null,
         ?string $knowledgeRunId = null,
+        /** Spec 53 / Paket C: Kaskaden-Step, an dem Phase + Konformitätsprüfung sichtbar werden. */
+        public ?int $cascadeStepId = null,
     ) {
         $this->knowledgeRunId = $knowledgeRunId;
         if ($this->knowledgeRunId === null && true) {
@@ -63,6 +65,13 @@ class EnrichGeneratedRecipeJob implements ShouldQueue
         }
 
         Auth::login($user);
+        // Spec 53 / Paket C: Phase am Kaskaden-Step sichtbar machen, solange dieser (Voll-Anreicherungs-)
+        // Pass läuft — derselbe Text wie EnrichRecipeJob::markEnrich, damit die Anzeige nicht unterscheidet,
+        // welcher der beiden Anreicherungs-Jobs gerade läuft.
+        if ($this->cascadeStepId !== null) {
+            app(\Platform\FoodAlchemist\Services\PlanningCascadeService::class)
+                ->setzePhase($this->cascadeStepId, \Platform\FoodAlchemist\Services\PlanningCascadeService::PHASE_ANREICHERUNG);
+        }
         try {
             $this->schreibe([
                 ...$this->recipePayload,
@@ -73,13 +82,19 @@ class EnrichGeneratedRecipeJob implements ShouldQueue
             // anstoßen — best-effort, ein Dispatch-Fehler kippt das fertige Rezept nicht.
             try {
                 ConformanceCheckJob::dispatch(
-                    $this->teamId, $this->userId, $recipe->is_sales_recipe ? 'gericht' : 'basisrezept', (int) $recipe->id, $this->knowledgeRunId,
+                    $this->teamId, $this->userId, $recipe->is_sales_recipe ? 'gericht' : 'basisrezept', (int) $recipe->id,
+                    $this->knowledgeRunId, $this->cascadeStepId,
                 );
             } catch (\Throwable $e) {
                 // schlucken — Konformität ist nachgelagert, nie ein Grund für einen Enrich-Fehler.
             }
         } catch (\Throwable $e) {
             $this->fertigMitFehler($e->getMessage());
+        } finally {
+            if ($this->cascadeStepId !== null) {
+                app(\Platform\FoodAlchemist\Services\PlanningCascadeService::class)
+                    ->setzePhase($this->cascadeStepId, null);
+            }
         }
     }
 
@@ -87,6 +102,12 @@ class EnrichGeneratedRecipeJob implements ShouldQueue
     public function failed(\Throwable $e): void
     {
         $this->fertigMitFehler('Anreicherung abgebrochen: ' . $e->getMessage());
+        // Harter Job-Tod (Timeout/OOM) läuft NICHT durchs finally in handleInRun() — ohne das hier
+        // bliebe die Phase am Step stehen und $pollAktiv würde für immer weiterpollen.
+        if ($this->cascadeStepId !== null) {
+            app(\Platform\FoodAlchemist\Services\PlanningCascadeService::class)
+                ->setzePhase($this->cascadeStepId, null);
+        }
     }
 
     private function fertigMitFehler(string $fehler): void

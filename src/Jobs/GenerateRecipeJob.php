@@ -147,12 +147,12 @@ class GenerateRecipeJob implements ShouldQueue
             try {
                 EnrichGeneratedRecipeJob::dispatch(
                     $this->runId, $this->teamId, $this->userId, (int) $r['recipe']->id,
-                    $payload, $this->zielVk(),
+                    $payload, $this->zielVk(), null, $stepId,
                 );
             } catch (\Throwable $e) {
                 (new EnrichGeneratedRecipeJob(
                     $this->runId, $this->teamId, $this->userId, (int) $r['recipe']->id,
-                    $payload, $this->zielVk(),
+                    $payload, $this->zielVk(), null, $stepId,
                 ))->failed($e);
             }
         } catch (\Throwable $e) {

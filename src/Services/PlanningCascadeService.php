@@ -50,6 +50,16 @@ class PlanningCascadeService
     /** Async-Result via Cache (Job-Vertrag) — Minuten, bis der Worker den Step abschließt. */
     private const RESULT_TTL_MIN = 15;
 
+    /**
+     * Spec 53 / Paket C: Phasen-Texte (`cascade_run_steps.phase`) als Konstanten statt Magic-Strings —
+     * Schreiber (Jobs) UND Leser (Index::konformitaetPruefen vergleicht gegen PHASE_KONFORMITAET, um
+     * eine laufende Prüfung zu erkennen) referenzieren dieselbe Konstante, damit ein Textwechsel den
+     * Vergleich nicht still bricht.
+     */
+    public const PHASE_ANREICHERUNG = 'Anreicherung läuft …';
+    public const PHASE_BILDER = 'KI-Fotos werden erzeugt …';
+    public const PHASE_KONFORMITAET = 'Konformität wird geprüft …';
+
     /** Deckel gegen Runaway-Kosten: max. Zellen (= KI-Gericht-Generierungen) je Speiseplan-Voll-Kaskade. */
     /**
      * Wie viele Zyklus-Wochen ein Speiseplan-Lauf auf einmal baut (Dominique 2026-09-03:
@@ -2108,7 +2118,7 @@ class PlanningCascadeService
         // erste noch läuft — sonst überschneiden sich zwei RecipeImageService-Läufe am selben Rezept.
         $bilderStatus = is_array($step->deferred) ? ($step->deferred['bilder']['status'] ?? null) : null;
         if (in_array($bilderStatus, ['queued', 'running'], true)) {
-            throw new RuntimeException('Bild-Erzeugung läuft bereits.');
+            throw new \Platform\FoodAlchemist\Exceptions\PlanungAktionLaeuftBereitsException('Bild-Erzeugung läuft bereits.');
         }
         $this->markBilderQueued($step);
         EnrichRecipeJob::dispatch($team->id, (int) (Auth::id() ?? 0), (int) $step->ref_id, null, false, (int) $step->id, true);
@@ -2170,7 +2180,7 @@ class PlanningCascadeService
         // während der erste noch läuft (sonst laufen zwei RecipeOneShotService-Pässe gegeneinander).
         $enrichStatus = is_array($step->deferred) ? ($step->deferred['enrich']['status'] ?? null) : null;
         if (in_array($enrichStatus, ['queued', 'running'], true)) {
-            throw new RuntimeException('Anreicherung läuft bereits.');
+            throw new \Platform\FoodAlchemist\Exceptions\PlanungAktionLaeuftBereitsException('Anreicherung läuft bereits.');
         }
         $params = is_array($step->run?->params) ? $step->run->params : [];
         $zielVk = isset($params['ziel_vk_eur']) ? (float) $params['ziel_vk_eur'] : null;
@@ -2257,7 +2267,7 @@ class PlanningCascadeService
         // Server-Guard gegen Doppel-Enqueue (Spec 53 / Paket C): ein zweiter Klick auf „neu generieren"
         // während der erste Versuch noch rechnet, darf keinen zweiten GenerateRecipeJob einreihen.
         if ($step->status === 'running') {
-            throw new RuntimeException('Läuft bereits — bitte warten, bis der aktuelle Versuch fertig ist.');
+            throw new \Platform\FoodAlchemist\Exceptions\PlanungAktionLaeuftBereitsException('Läuft bereits — bitte warten, bis der aktuelle Versuch fertig ist.');
         }
         // L4: Regenerieren eines KIND-Basisrezepts — die Eltern-Zutat zeigt noch auf den gleich
         // gelöschten Draft. VOR dem Löschen die Bindung lösen (referenced_recipe_id NULL, unmatched),
@@ -2709,6 +2719,52 @@ class PlanningCascadeService
             ->where('planning_session_id', $planningSessionId)
             ->orderByDesc('id')
             ->first();
+    }
+
+    /**
+     * Spec 53 / Paket C: Globaler KI-Status fürs Planung-Kopf — EIN Aggregat über alle Steps des
+     * Teams (nicht nur die des aktuell offenen Laufs), damit „N warten · M laufen" auch sichtbar ist,
+     * wenn gerade kein Lauf im Cockpit geöffnet ist. Team-EIGENE Steps (nicht die Team-Ancestry —
+     * der Status soll zeigen, was DIESES Team gerade selbst anstößt).
+     *
+     * @return array{wartend:int, laufend:int, aktuelle_phase:?string, fehler_24h:int, queue:?int}
+     */
+    public function kiStatusFuerTeam(Team $team): array
+    {
+        $steps = FoodAlchemistCascadeRunStep::where('team_id', $team->id);
+
+        $wartend = (clone $steps)->where('status', 'queued')->count();
+        // „laufend" = belegt gerade tatsächlich einen Worker-Slot: primäre Generierung (status=running)
+        // ODER eine sekundäre Phase (Anreicherung/Bilder/Konformität), die auch nach der Freigabe
+        // (status=freigegeben/done) noch läuft und deshalb kein `running` mehr trägt.
+        $laufend = (clone $steps)->where(function ($q) {
+            $q->where('status', 'running')->orWhereNotNull('phase');
+        })->count();
+        $aktuellePhase = (clone $steps)->whereNotNull('phase')
+            ->orderByDesc('phase_at')
+            ->value('phase');
+        $fehler24h = (clone $steps)->where('status', 'failed')
+            ->where('updated_at', '>=', now()->subDay())
+            ->count();
+
+        // Optionale Queue-Tiefe: nur wenn die `jobs`-Tabelle existiert UND die Default-Queue-Connection
+        // `database` ist (sonst liegt die Warteschlange z. B. in Redis — kein Job hierfür zu erfinden).
+        $queue = null;
+        try {
+            if (config('queue.default') === 'database' && \Illuminate\Support\Facades\Schema::hasTable('jobs')) {
+                $queue = (int) \Illuminate\Support\Facades\DB::table('jobs')->count();
+            }
+        } catch (\Throwable) {
+            $queue = null;
+        }
+
+        return [
+            'wartend' => $wartend,
+            'laufend' => $laufend,
+            'aktuelle_phase' => $aktuellePhase,
+            'fehler_24h' => $fehler24h,
+            'queue' => $queue,
+        ];
     }
 
     /**

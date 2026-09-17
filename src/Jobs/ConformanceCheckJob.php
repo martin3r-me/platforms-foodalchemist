@@ -74,7 +74,7 @@ class ConformanceCheckJob implements ShouldQueue
 
         if ($this->cascadeStepId !== null) {
             app(\Platform\FoodAlchemist\Services\PlanningCascadeService::class)
-                ->setzePhase($this->cascadeStepId, 'Konformität wird geprüft …');
+                ->setzePhase($this->cascadeStepId, \Platform\FoodAlchemist\Services\PlanningCascadeService::PHASE_KONFORMITAET);
         }
         // Spec 53 / Paket C: Dauer des Critic-Passes für die Cockpit-/MCP-Anzeige.
         $start = hrtime(true);

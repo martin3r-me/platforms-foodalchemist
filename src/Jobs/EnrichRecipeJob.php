@@ -277,7 +277,7 @@ class EnrichRecipeJob implements ShouldQueue
         // Spec 53 / Paket C: dieselbe Statusänderung als Phase am Step — running zeigt „Anreicherung
         // läuft …", done/failed löschen sie wieder (die Anzeige zeigt dann den enrich-Status selbst).
         app(\Platform\FoodAlchemist\Services\PlanningCascadeService::class)->setzePhase(
-            (int) $this->stepId, $status === 'running' ? 'Anreicherung läuft …' : null,
+            (int) $this->stepId, $status === 'running' ? \Platform\FoodAlchemist\Services\PlanningCascadeService::PHASE_ANREICHERUNG : null,
         );
     }
 
@@ -341,7 +341,7 @@ class EnrichRecipeJob implements ShouldQueue
         // Spec 53 / Paket C: dieselbe Statusänderung als Phase am Step — running zeigt „KI-Fotos werden
         // erzeugt …", done/failed löschen sie wieder (die Anzeige zeigt dann den bilder-Status selbst).
         app(\Platform\FoodAlchemist\Services\PlanningCascadeService::class)->setzePhase(
-            (int) $this->stepId, $status === 'running' ? 'KI-Fotos werden erzeugt …' : null,
+            (int) $this->stepId, $status === 'running' ? \Platform\FoodAlchemist\Services\PlanningCascadeService::PHASE_BILDER : null,
         );
     }
 }

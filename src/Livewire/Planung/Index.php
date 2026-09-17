@@ -3066,6 +3066,9 @@ class Index extends Component
             $this->fehler = null;
             unset($this->speiseKommentar[$stepId]);
             $this->kommentarOffen = array_values(array_diff($this->kommentarOffen, [$stepId]));
+        } catch (\Platform\FoodAlchemist\Exceptions\PlanungAktionLaeuftBereitsException $e) {
+            // Guard, kein Fehlschlag — neutraler Hinweis statt rotem Banner.
+            $this->meldung = $e->getMessage();
         } catch (\Throwable $e) {
             $this->fehler = $e->getMessage();
         }
@@ -3326,6 +3329,8 @@ class Index extends Component
             $cascade->reAnreichern($team, $stepId, $voll ? true : null);
             $this->meldung = 'Anreicherung neu gestartet …';
             $this->fehler = null;
+        } catch (\Platform\FoodAlchemist\Exceptions\PlanungAktionLaeuftBereitsException $e) {
+            $this->meldung = $e->getMessage();
         } catch (\Throwable $e) {
             $this->fehler = $e->getMessage();
         }
@@ -3344,6 +3349,8 @@ class Index extends Component
             $cascade->reBilder($team, $stepId);
             $this->meldung = 'KI-Fotos werden neu erzeugt …';
             $this->fehler = null;
+        } catch (\Platform\FoodAlchemist\Exceptions\PlanungAktionLaeuftBereitsException $e) {
+            $this->meldung = $e->getMessage();
         } catch (\Throwable $e) {
             $this->fehler = $e->getMessage();
         }
@@ -3717,7 +3724,7 @@ class Index extends Component
                 ->first()
             : null;
         // Server-Guard gegen Doppel-Enqueue: läuft die Konformitätsprüfung an diesem Step schon, kein zweiter Job.
-        if ($step !== null && $step->phase === 'Konformität wird geprüft …') {
+        if ($step !== null && $step->phase === PlanningCascadeService::PHASE_KONFORMITAET) {
             $this->meldung = 'Konformitätsprüfung läuft bereits.';
 
             return;
@@ -3726,6 +3733,12 @@ class Index extends Component
         if (! $recipe->is_sales_recipe && (int) $recipe->team_id === (int) $team->id) {
             $run = app(\Platform\FoodAlchemist\Services\Knowledge\KnowledgeRunService::class)->start($team);
             $recipe->forceFill(['knowledge_run_id' => $run->id])->save();
+        }
+        // Synchron VOR dem Dispatch setzen (nicht erst im Job) — sonst öffnet ein zweiter Klick,
+        // solange der Job noch in der Queue wartet (noch nicht angelaufen), dieselbe Lücke, die der
+        // Guard oben eigentlich schließen soll (der Job braucht Zeit, bis er die Phase selbst setzt).
+        if ($step !== null) {
+            app(PlanningCascadeService::class)->setzePhase((int) $step->id, PlanningCascadeService::PHASE_KONFORMITAET);
         }
         \Platform\FoodAlchemist\Jobs\ConformanceCheckJob::dispatch(
             $team->id, (int) Auth::id(), $recipe->is_sales_recipe ? 'gericht' : 'basisrezept', $recipeId, null, $step?->id,
@@ -4081,6 +4094,10 @@ class Index extends Component
         // Board-Poll-Gate: nur pollen, wenn irgendein Lauf tatsächlich läuft (kein Dauer-Poll im Ruhezustand).
         $irgendeinLaeuft = collect($kaskaden)->contains(fn ($k) => (bool) ($k['running'] ?? false));
 
+        // Spec 53 / Paket C: globaler KI-Status (Board-Kopf + über der Editor-Tab-Leiste) — EIN Aggregat
+        // über alle Steps des Teams, unabhängig davon, ob gerade ein Lauf im Cockpit offen ist.
+        $kiStatus = $team !== null ? app(PlanningCascadeService::class)->kiStatusFuerTeam($team) : null;
+
         // E1b (Spec 40): Owner-Kontext der offenen Session — für Banner „Planung für Foodbook ‚Adler'"
         // + Zurück-Link. null bei freier Cockpit-Planung ohne Ausgabe-Owner (dann kein Banner).
         $ownerKontext = ($team !== null && $active !== null)
@@ -4120,6 +4137,7 @@ class Index extends Component
             'workerState' => $workerState,
             'workerAlter' => $workerAlter,
             'workerWarnung' => $workerWarnung,
+            'kiStatus' => $kiStatus,
             'irgendeinLaeuft' => $irgendeinLaeuft,
             'pollAktiv' => $pollAktiv,
             'active' => $active,
