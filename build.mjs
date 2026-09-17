@@ -12,6 +12,12 @@ const bundles = [
     outfile: 'resources/dist/foodalchemist-pairing-netz.iife.js',
     banner: `/* foodalchemist-pairing-netz v${version} | MIT */`,
   },
+  {
+    entryPoints: ['resources/js/voice-recorder/index.js'],
+    globalName: 'PlatformFoodAlchemistVoiceRecorder',
+    outfile: 'resources/dist/foodalchemist-voice-recorder.iife.js',
+    banner: `/* foodalchemist-voice-recorder v${version} | MIT */`,
+  },
 ];
 
 const manifest = {};

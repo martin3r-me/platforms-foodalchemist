@@ -36,6 +36,8 @@ use Platform\FoodAlchemist\Services\TeamSettingsService;
 use Platform\FoodAlchemist\Services\TitelVorschlagService;
 use Platform\FoodAlchemist\Services\WorkerHealthService;
 use Platform\FoodAlchemist\Support\TeamScope;
+use Platform\FoodAlchemist\Support\VoiceFehlerText;
+use Platform\FoodAlchemist\Support\VoiceMime;
 
 /**
  * Planungs-/Kreativ-Cockpit (Doppel-Diamant, Spec 08). Haus-Layout: links Kategorie→Klasse +
@@ -469,7 +471,20 @@ class Index extends Component
             // Komponente stirbt mit dem Redirect — ein dort gesetzter Hinweis wäre nie gerendert.
             // Ohne dieses Laden bliebe die Landung also stumm, obwohl der Deckel am Lauf steht.
             $this->ladeLetztenLauf();
-            $this->dispatch('modal.open', name: 'planung-editor');
+            // Spec 53/D: Sprachbefehl-Handoff (VoiceModal::planungStarten()) — `?tab=` sagt, auf
+            // welchem Scope-Tab der Editor öffnet (Scope-Treue wie beim Composer-Übernehmen-Knopf
+            // weiter unten); ohne bekannten Wert bleibt tabInit vom Modal (Default 'gericht').
+            // Die Session trägt bereits den scope-spezifischen Brief (PlanningSessionService::create
+            // im Voice-Pfad) — hier nur ins Tab-Briefing vorbefüllen, wenn dort noch nichts steht.
+            $tab = in_array(request('tab'), ['basisrezept', 'gericht', 'concept'], true) ? request('tab') : null;
+            if ($tab !== null) {
+                $scope = $tab === 'basisrezept' ? 'rezept' : $tab;
+                $brief = trim((string) $this->aktiveSession()?->brief);
+                if ($brief !== '' && trim((string) ($this->eingabe[$scope]['brief'] ?? '')) === '') {
+                    $this->eingabe[$scope]['brief'] = $brief;
+                }
+            }
+            $this->dispatch('modal.open', name: 'planung-editor', tab: $tab);
         }
         // Spec 42 F2 — Handoff aus dem Foodbook: Leitstelle im Owner-Kontext öffnen, „Foodbook aus
         // Brief"-Panel für DIESES bestehende Foodbook vorgeklappt (kein neues Foodbook anlegen).
@@ -1922,10 +1937,10 @@ class Index extends Component
         try {
             $text = trim(app(SttServiceContract::class)->transcribe(
                 (string) file_get_contents($this->briefAudio->getRealPath()),
-                $this->briefAudio->getMimeType() ?: 'audio/webm',
+                VoiceMime::aufgeloest($this->briefAudio),
             ));
         } catch (\Throwable $e) {
-            $this->fehler = 'Diktat fehlgeschlagen: ' . $e->getMessage();
+            $this->fehler = 'Diktat fehlgeschlagen: ' . VoiceFehlerText::aus($e)['text'];
             $this->briefAudio = null;
 
             return;

@@ -555,8 +555,14 @@ class AiGatewayService
      *                   Dokumentation. Protokolliert werden die ENTSCHÄRFTEN Argumente,
      *                   also die tatsächlich ausgeführten.
      *   system_zusatz — eine statische Zeile für die System-Message (Prefix bleibt stabil).
+     *   zeitbudget_ms — Spec 53/D (Befund 2026-09-17, demo-Call-Log): ohne Zeitbudget lief der
+     *                   Sprachbefehl bis `maxRuns` durch, auch wenn das ~60 s und ~91.000 Input-
+     *                   Token kostete, weil jede Runde die volle bisherige Konversation inkl.
+     *                   aller Tool-Ergebnisse neu sendet. Läuft die Zeit ab, bricht die NÄCHSTE
+     *                   Runde nicht mehr an (kein weiterer Modellaufruf) — wie bei `maxRuns`
+     *                   bleibt `finalText` dann `null`, der Aufrufer behandelt beides gleich.
      *
-     * @param  array{policy?: callable, arg_guard?: callable, system_zusatz?: string}  $optionen
+     * @param  array{policy?: callable, arg_guard?: callable, system_zusatz?: string, zeitbudget_ms?: int}  $optionen
      */
     public function callWithTools(string $auftrag, array $toolNames, int $maxRuns = 6, array $optionen = []): array
     {
@@ -594,8 +600,15 @@ class AiGatewayService
         $usageGesamt = ['input_tokens' => 0, 'output_tokens' => 0, 'input_tokens_details' => ['cached_tokens' => 0]];
         $tatsaechlichesModell = null;
         $kontext = $team !== null && Auth::user() !== null ? new \Platform\Core\Contracts\ToolContext(Auth::user(), $team) : null;
+        $zeitbudgetMs = $optionen['zeitbudget_ms'] ?? null;
+        // Frühabbruch (Befund 2026-09-17): dasselbe Tool mit denselben Argumenten ein zweites
+        // Mal ⇒ der Loop dreht sich im Kreis, weiteres Drehen kostet nur noch Runden/Token.
+        $gesehen = [];
         try {
         while ($runde < $maxRuns) {
+            if ($zeitbudgetMs !== null && ((hrtime(true) - $start) / 1_000_000) >= $zeitbudgetMs) {
+                break;                                                // wie maxRuns: finalText bleibt null
+            }
             $runde++;
             $antwort = $this->chatMitBackoff($messages, [
                 'temperature' => 0.0,
@@ -645,11 +658,17 @@ class AiGatewayService
                 if (is_callable($argGuard)) {
                     $argumente = $argGuard($name, $argumente);
                 }
+                $signatur = $name . '|' . json_encode($argumente, JSON_UNESCAPED_UNICODE);
+                if (in_array($signatur, $gesehen, true)) {
+                    break 1;                                          // Wiederholung: finalText bleibt null, kein weiterer Call
+                }
+                $gesehen[] = $signatur;
                 $resultat = $tool->execute($argumente, $kontext);
                 $toolLaeufe[] = ['name' => $name, 'arguments' => $argumente, 'success' => $resultat->success, 'data' => $resultat->data];
                 $messages[] = ['role' => 'assistant', 'content' => (string) ($antwort['content'] ?? '')];
-                $messages[] = ['role' => 'user', 'content' => 'TOOL-ERGEBNIS ' . $name . ': '
-                    . json_encode(['success' => $resultat->success, 'data' => $resultat->data, 'error' => $resultat->error], JSON_UNESCAPED_UNICODE)];
+                $messages[] = ['role' => 'user', 'content' => 'TOOL-ERGEBNIS ' . $name . ': ' . $this->kappeToolErgebnis(
+                    json_encode(['success' => $resultat->success, 'data' => $resultat->data, 'error' => $resultat->error], JSON_UNESCAPED_UNICODE),
+                )];
 
                 continue;
             }
@@ -675,6 +694,21 @@ class AiGatewayService
 
         return ['text' => $finalText, 'runden' => $runde, 'tool_laeufe' => $toolLaeufe, 'elapsed_ms' => $elapsedMs,
             'freigeschaltet' => $freigeschaltet];
+    }
+
+    /**
+     * Spec 53/D (Befund 2026-09-17): ungekappte Tool-Ergebnisse gehen in JEDER Folgerunde erneut
+     * in den Kontext — gemessen 91.560 Input-Token über 6 Runden mit 6 Tool-Aufrufen (~15k/Runde).
+     * Kappt an einer Zeichengrenze, aber sichtbar markiert (das Modell soll wissen, dass es
+     * abgeschnitten ist, statt eine unvollständige Liste für vollständig zu halten).
+     */
+    private function kappeToolErgebnis(string $json, int $max = 2000): string
+    {
+        if (mb_strlen($json) <= $max) {
+            return $json;
+        }
+
+        return mb_substr($json, 0, $max) . '…[gekürzt, ' . mb_strlen($json) . ' Zeichen gesamt]';
     }
 
     /** 06_KI §5 Pflicht 3: generischer Accept-Stempel (Reject analog). */

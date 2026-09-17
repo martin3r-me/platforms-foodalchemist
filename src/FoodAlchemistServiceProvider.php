@@ -280,11 +280,19 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     default => 'fake',
                 };
             }
+            // Spec 53/D: Fake ist ausserhalb von testing/local nur mit dem expliziten Flag erlaubt.
+            // Vorher landete eine demo-/Produktions-Instanz ohne jeden Zugang HIER auf Fake und
+            // ersetzte jeden Sprachbefehl stumm durch den Fixtext — fehlerfrei und trotzdem falsch.
+            if ($provider === 'fake' && ! $this->app->environment(['testing', 'local'])
+                && ! config('foodalchemist.stt.allow_fake', false)) {
+                $provider = 'none';
+            }
 
             return match ($provider) {
                 'openai' => new \Platform\FoodAlchemist\Services\Stt\OpenAiSttService(),
                 'assemblyai' => new \Platform\FoodAlchemist\Services\Stt\AssemblyAiSttService(),
-                default => new \Platform\FoodAlchemist\Services\Stt\FakeSttService(),
+                'fake' => new \Platform\FoodAlchemist\Services\Stt\FakeSttService(),
+                default => new \Platform\FoodAlchemist\Services\Stt\UnkonfiguriertSttService(),
             };
         });
 
@@ -444,6 +452,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
         if (file_exists($faManifestPath)) {
             $faManifest = json_decode(file_get_contents($faManifestPath), true) ?? [];
             config(['platform.fa_pairing_netz_hash' => $faManifest['foodalchemist-pairing-netz.iife.js'] ?? '0']);
+            // Spec 53 / Paket D: gemeinsamer Voice-Recorder (Sprachbefehl + Diktat), analog zum Pairing-Netz-Bundle.
+            config(['platform.fa_voice_recorder_hash' => $faManifest['foodalchemist-voice-recorder.iife.js'] ?? '0']);
         }
 
         /**
@@ -816,6 +826,12 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\PlanungLeitplankenExtractTool::class,
                     // Etappe 9 (Planung-Leitstelle): Kaskaden-Status headless lesen — READ-ONLY.
                     \Platform\FoodAlchemist\Tools\PlanungKaskadeStatusGetTool::class,
+                    // Spec 53/D: GL-07 für den Sprachbefehl — Planung/Anreicherung NUR als Vorschlag
+                    // (read_only=true, schreibt nichts), plus die run_id-freie Status-Abfrage für
+                    // „wie weit ist die Generierung?" ohne bekannte run_id.
+                    \Platform\FoodAlchemist\Tools\PlanungVorschlagPostTool::class,
+                    \Platform\FoodAlchemist\Tools\AnreicherungVorschlagPostTool::class,
+                    \Platform\FoodAlchemist\Tools\PlanungKaskadeLetzteGetTool::class,
                     // Etappe 9 · Slice 2: Kaskaden-START (Go) + FREIGABE (Gate 2) via MCP — WRITE. Der
                     // Kaskaden-Trigger via MCP ist bewusst freigegeben (Entscheidung 2026-08-17); Schutz =
                     // Tenancy (Start isOwnedBy Session, Freigabe ownedStep). Nicht mehr human-only.
