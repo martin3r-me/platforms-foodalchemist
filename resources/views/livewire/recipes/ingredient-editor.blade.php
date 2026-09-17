@@ -324,11 +324,19 @@
             hoch(i) { if (i > 0) this.rows.splice(i - 1, 0, this.rows.splice(i, 1)[0]); },
             runter(i) { if (i < this.rows.length - 1) this.rows.splice(i + 1, 0, this.rows.splice(i, 1)[0]); },
             async garverluste() {  // M4-11: Vorschläge in die Client-rows mergen (Save schreibt source=ki)
+                // Paket G: der Knopf lebt im Modal-Scope (ausserhalb DIESES x-data), darum die
+                // Rückmeldung als Fenster-Event statt Promise-Rückgabe — der Knopf hört selbst
+                // (@garverluste-fertig.window / @garverluste-fehler.window, s. recipe-modal/vk-modal).
                 const zutaten = {};
                 this.rows.forEach((z, i) => { zutaten[i] = z.raw_text; });
-                const v = await this.$wire.garverlustVorschlag(zutaten);
-                for (const [i, pct] of Object.entries(v.verluste ?? {})) {
-                    if (this.rows[i] !== undefined) { this.rows[i].cooking_loss_pct = pct; this.rows[i]._garverlust_ki = true; }
+                try {
+                    const v = await this.$wire.garverlustVorschlag(zutaten);
+                    for (const [i, pct] of Object.entries(v.verluste ?? {})) {
+                        if (this.rows[i] !== undefined) { this.rows[i].cooking_loss_pct = pct; this.rows[i]._garverlust_ki = true; }
+                    }
+                    window.dispatchEvent(new CustomEvent('garverluste-fertig'));
+                } catch (e) {
+                    window.dispatchEvent(new CustomEvent('garverluste-fehler', { detail: { message: (e && e.message) ? e.message : 'Fehler — bitte erneut versuchen.' } }));
                 }
             },
             hinzufuegen(ziel) {  // Auto-Fill (M4-08) — R18: interner Schritt des Park-Flows
