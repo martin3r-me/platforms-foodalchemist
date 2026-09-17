@@ -260,6 +260,48 @@ it('Platzierung: JEDE FA-Vollseite bindet das agent-mount-Partial GENAU EINMAL i
     expect($fehlend)->toBe([], 'Fehlendes/doppeltes agent-mount-Include: ' . implode(', ', $fehlend));
 });
 
+/**
+ * Review-Fund cooking-jarvis-03: die hardcodierte Liste oben beweist nur, dass SIE SELBST
+ * vollständig ist — nicht, dass sie die tatsächlich gerouteten Vollseiten trifft. Dieser Test
+ * misst stattdessen live aus `routes/web.php`: jede `foodalchemist.*`-Route, deren Ziel eine
+ * Livewire-Komponentenklasse ist (keine Closure/kein Controller — Presentation-Routen sind
+ * öffentliche Kundenbuch-Seiten mit eigenem Layout OHNE Sidebar/Agent und fallen bewusst raus),
+ * wird gerendert und auf GENAU EIN `data-voice-float-mount` geprüft. Ein künftiger Routen-Zugang
+ * ohne Include fällt hier durch, ohne dass jemand die Liste oben nachpflegen muss.
+ */
+it('Platzierung (gemessen): JEDE geroutete FA-Livewire-Vollseite rendert data-voice-float-mount genau 1×', function () {
+    $geprueft = [];
+    $fehlend = [];
+
+    foreach (app('router')->getRoutes() as $route) {
+        $name = $route->getName();
+        if ($name === null || ! str_starts_with($name, 'foodalchemist.')) {
+            continue;
+        }
+        $klasse = $route->getActionName();
+        if (! is_string($klasse) || ! str_starts_with($klasse, 'Platform\\FoodAlchemist\\Livewire\\')) {
+            continue; // Closure oder Controller (Dokument-/Karten-/Präsentations-Routen) — keine App-Vollseite
+        }
+        if (! is_subclass_of($klasse, \Livewire\Component::class)) {
+            continue;
+        }
+        if (in_array($klasse, $geprueft, true)) {
+            continue; // dieselbe Komponente über mehrere Routen (Tagesplan/Wandmonitor) — einmal reicht
+        }
+        $geprueft[] = $klasse;
+
+        $treffer = substr_count(Livewire::test($klasse)->html(), 'data-voice-float-mount');
+        if ($treffer !== 1) {
+            $fehlend[] = "{$klasse} ({$name}): {$treffer}x statt 1x";
+        }
+    }
+
+    // Riegel gegen einen wirkungslosen Test: wenn die Introspektion nichts findet, weil sich
+    // z. B. das Action-Format ändert, würde der Test sonst grün lügen (nichts geprüft = nichts gefunden).
+    expect($geprueft)->toHaveCount(26, 'Routen-Introspektion hat nicht 26 FA-Livewire-Vollseiten gefunden — Action-Format geändert?');
+    expect($fehlend)->toBe([], 'Fehlendes/doppeltes agent-mount-Include (live gerendert): ' . implode(', ', $fehlend));
+});
+
 it('Loop: erfundener Tool-Name führt nicht zum Fatal, sondern zur Ablehnung', function () {
     // Null-Guard: `$registry->get()` liefert null — vorher lief hier ein ToolResult::error,
     // beim Umbau auf die Policy wäre daraus ein Aufruf auf null geworden.
