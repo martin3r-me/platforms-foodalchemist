@@ -955,12 +955,15 @@ class RecipeGeneratorService
         if ($id <= 0 || $id === $parentRecipeId) {
             return null;
         }
-        // Ein explizit genannter §9-Zustand („Dosentomaten", „TK-Erbsen") beschreibt eine
-        // ROHWARE in einer bestimmten Einkaufsform — ein Sub-Rezept (verarbeitete Komponente)
-        // kann das strukturell nicht ersetzen. Fuzzy-Fallback findet danach den passenden GP
-        // ({@see IngredientMatchService::acceptsProductForm()}). $text default '' hält den
-        // Bestands-Draw-Aufrufer (ziehtAusBestand, keine Zeilen-Beschreibung verfügbar) unverändert.
-        if (app(Matching\TokenEngine::class)->produktForm($text)['zustand'] !== null) {
+        // Ein explizit genannter EINKAUFSFORM-Zustand („Dosentomaten", „TK-Erbsen", „getrocknete
+        // Tomaten") beschreibt eine ROHWARE in einer bestimmten Einkaufsform — ein Sub-Rezept
+        // (verarbeitete Komponente) kann das strukturell nicht ersetzen. Fuzzy-Fallback findet
+        // danach den passenden GP ({@see IngredientMatchService::acceptsProductForm()}). NICHT
+        // bei „frisch" (Review-Fund): „Pesto, frisch" oder „Tomatensauce, frisch zubereitet" ist
+        // genau der gewollte Sub-Rezept-Fall (frisch gemacht ≠ Rohware-Einkaufsform). $text
+        // default '' hält den Bestands-Draw-Aufrufer (ziehtAusBestand, keine Zeilen-Beschreibung
+        // verfügbar) unverändert.
+        if (in_array(app(Matching\TokenEngine::class)->produktForm($text)['zustand'], ['TK', 'trocken', 'konserviert'], true)) {
             return null;
         }
         $exists = FoodAlchemistRecipe::query()->visibleToTeam($team)->basis()

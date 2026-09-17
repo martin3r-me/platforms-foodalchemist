@@ -27,6 +27,11 @@ it('produktForm() trennt §9-Zustand von reiner Geometrie/Verarbeitung', functio
     'TK mit Bindestrich' => ['TK-Erbsen', 'TK', null],
     'getrocknet' => ['getrocknete Tomaten', 'trocken', null],
     'frisch' => ['Tomaten frisch', 'frisch', null],
+    // Review-Fund (vor Commit): „frisch" ist hier ein ZUBEREITUNGS-Adverb, kein §9-Zustand
+    // — Pfeffer/Parmesan/Zitronensaft sind trockene bzw. andersartige GPs, kein Frischware-Anspruch.
+    'frisch gemahlen ist Zubereitung' => ['Pfeffer, schwarz, frisch gemahlen', null, null],
+    'frisch gerieben ist Zubereitung' => ['Parmesan, frisch gerieben', null, null],
+    'frisch gepresst ist Zubereitung' => ['Zitronensaft, frisch gepresst', null, null],
 ]);
 
 it('mehrdeutiger §9-Zustand im Namen bleibt unentschieden statt geraten', function () {
@@ -73,3 +78,18 @@ it('ohne §9-Wort im Query filtert acceptsProductForm nichts — Score entscheid
     $match = $matcher->matchIngredient($this->rootTeam, 'passierte Tomaten', 'tomate');
     expect($match['gp_id'])->toBe($canned->id);
 });
+
+it('Review-Fund: „frisch gemahlen/gerieben" lehnt trockene GPs nicht ab (Zubereitung ≠ §9-Zustand)', function (string $query, string $slug) {
+    // Vor dem Fix hätte acceptsProductForm() zustand=frisch verlangt — Pfeffer/Parmesan-GPs
+    // sind trocken bzw. tragen kein condition=frisch, jeder Kandidat wäre abgelehnt worden
+    // (target=none statt eines korrekten Treffers — eine Verschlechterung ggü. dem Ist-Stand).
+    $gp = $this->makeGp($this->rootTeam, str_starts_with($slug, 'pfeffer') ? 'Pfeffer: schwarz, ganz' : 'Parmesan: gerieben, 24 Monate');
+    $gp->update(['status' => 'approved', 'main_ingredient_slug' => $slug]);   // condition bewusst leer
+
+    $match = app(IngredientMatchService::class)->matchIngredient($this->rootTeam, $query, $slug);
+
+    expect($match['gp_id'])->toBe($gp->id);
+})->with([
+    'Pfeffer frisch gemahlen' => ['Pfeffer, schwarz, frisch gemahlen', 'pfeffer'],
+    'Parmesan frisch gerieben' => ['Parmesan, frisch gerieben', 'parmesan'],
+]);

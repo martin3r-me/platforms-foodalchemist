@@ -84,6 +84,16 @@ class TokenEngine
     ];
 
     /**
+     * Review-Fund (Paul/cooking-jarvis-03, vor Commit): „frisch" ist meist ein
+     * ZUBEREITUNGS-Adverb, kein §9-Zustand — „Pfeffer, schwarz, frisch gemahlen" beschreibt
+     * WIE gemahlen wurde, nicht dass der Pfeffer als Frischware eingekauft wird (Pfeffer-GPs
+     * sind trocken). Ungefiltert hätte acceptsProductForm() jeden Pfeffer-Kandidaten
+     * abgelehnt (condition≠frisch) → target=none statt eines korrekten Treffers — eine
+     * Verschlechterung gegenüber dem Ist-Stand vor #505-Nachtrag.
+     */
+    private const FRISCH_ZUBEREITUNG_MUSTER = '/\bfrisch\w*\s+(?:gemahlen|gerieben|gepresst|gehackt|geschnitten|gezupft|geraspelt|gestossen|gestoßen|zubereitet|gekocht)\w*\b/iu';
+
+    /**
      * Rein deskriptive Geometrie/Zuschnitt-Wörter aus dem Brief — KEIN §9-Zustand, aber ein
      * Signal für den Form-Bonus im Ranking (mehrere GPs mit identischem Zustand/Score).
      * Erste passende Form gewinnt; anders als beim Zustand ist Mehrdeutigkeit hier unschädlich
@@ -110,6 +120,9 @@ class TokenEngine
 
         $zustandTreffer = [];
         foreach (self::ZUSTAND_MUSTER as $zustand => $muster) {
+            if ($zustand === 'frisch' && preg_match(self::FRISCH_ZUBEREITUNG_MUSTER, $normalisiert) === 1) {
+                continue;   // „frisch gemahlen/gerieben/…" ist Zubereitung, kein §9-Zustand
+            }
             if (preg_match($muster, $normalisiert) === 1) {
                 $zustandTreffer[] = $zustand;
             }

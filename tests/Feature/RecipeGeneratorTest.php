@@ -722,3 +722,19 @@ it('verwirft gp_id UND sub_rezept_id bei Dosentomaten — Fuzzy-Fallback findet 
     expect($zeile->referenced_recipe_id)->toBeNull()
         ->and($zeile->gp_id)->toBe($canned->id);
 });
+
+it('Review-Fund: „frisch" verwirft ein vorgeschlagenes Sub-Rezept NICHT (kein Einkaufsform-Zustand)', function () {
+    // "Pesto, frisch" / "frisch zubereitet" ist genau der gewollte Sub-Rezept-Fall — anders als
+    // Dosentomaten/TK/getrocknet beschreibt "frisch" hier keine Rohware-Einkaufsform, die ein
+    // Sub-Rezept strukturell nicht ersetzen könnte.
+    $pesto = $this->makeRecipe($this->rootTeam, 'Pesto: Basilikum');
+
+    $out = $this->svc->generiere($this->rootTeam, 'Nudelgericht', [], kiRezeptOverride: [
+        'name' => 'Nudeln mit Pesto',
+        'zutaten' => [[
+            'text' => 'Pesto, frisch', 'quantity' => 200, 'unit' => 'g', 'sub_rezept_id' => $pesto->id,
+        ]],
+    ]);
+
+    expect($out['recipe']->ingredients()->first()->referenced_recipe_id)->toBe($pesto->id);
+});
