@@ -21,8 +21,8 @@
             <div class="flex items-center gap-1.5" data-ki-naming>
                 <input type="text" wire:model="kiRohtext" placeholder="Roh-Bezeichnung, z. B. Lieferanten-Text …"
                        class="{{ $input }} !w-72" />
-                <button type="button" wire:click="kiVorschlagNaming"
-                        class="{{ $btnAi }}" title="gp.suggest: Builder-Felder aus Roh-Bezeichnung (§6)">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') KI-Vorschlag</button>
+                <x-foodalchemist::ki-action action="kiVorschlagNaming" variant="ai" icon="heroicon-o-sparkles" label="KI-Vorschlag"
+                    title="gp.suggest: Builder-Felder aus Roh-Bezeichnung (§6)" busy="Wird vorgeschlagen …" flash="Vorschlag da" />
             </div>
         @elseif($gp !== null)
             <span class="text-gray-300">|</span>
@@ -41,12 +41,9 @@
             @endif
 
             @if(\Platform\FoodAlchemist\Support\Curate::canCurate(auth()->user(), $gp))
-                <button type="button" wire:click="allesAnreichern" wire:loading.attr="disabled" wire:target="allesAnreichern"
-                        class="{{ $btnAi }}"
-                        title="Zustand + Tags + Allergene + Nährwerte in EINEM Lauf vorschlagen (Review-Liste, Übernahme bleibt manuell)" data-gp-alles-anreichern>
-                    <span wire:loading.remove wire:target="allesAnreichern" class="inline-flex items-center gap-1.5">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') Alles anreichern</span>
-                    <span wire:loading wire:target="allesAnreichern">… läuft</span>
-                </button>
+                <x-foodalchemist::ki-action action="allesAnreichern" variant="ai" icon="heroicon-o-sparkles" label="Alles anreichern"
+                    title="Zustand + Tags + Allergene + Nährwerte in EINEM Lauf vorschlagen (Review-Liste, Übernahme bleibt manuell)" data-gp-alles-anreichern
+                    busy="… läuft" flash="Vorschläge da" />
             @endif
         @endif
     </x-slot:actions>
@@ -190,8 +187,9 @@
                 {{-- Wording aus dem Lieferantenartikel ableiten (Override-First: Vorschlag → Übernehmen) --}}
                 @if(! $neu)
                     <div class="mt-2" data-name-aus-la>
-                        <button type="button" wire:click="nameAusLeadLa" class="{{ $btnGhostXs }} text-violet-600"
-                                title="gp.suggest: §6-Namensvorschlag aus der Bezeichnung des Lead-Lieferantenartikels">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') Name aus Lieferantenartikel ableiten</button>
+                        <x-foodalchemist::ki-action action="nameAusLeadLa" variant="ghostXs" icon="heroicon-o-sparkles" label="Name aus Lieferantenartikel ableiten"
+                            title="gp.suggest: §6-Namensvorschlag aus der Bezeichnung des Lead-Lieferantenartikels"
+                            class="!text-violet-600" busy="Wird abgeleitet …" flash="Vorschlag da" />
                         @if($nameVorschlag !== null)
                             <div class="mt-1.5 rounded-lg bg-violet-500/10 border border-violet-500/30 px-2.5 py-1.5 text-[11px]" data-name-vorschlag>
                                 <p class="text-gray-900">Vorschlag: <span class="font-medium">{{ $nameVorschlag }}</span></p>
@@ -401,7 +399,8 @@
                         </div>
                         <button type="button" wire:click="formSetzen" class="{{ $btnGhostXs }}" data-gp-form-add>+ Form</button>
                         <span class="flex-1"></span>
-                        <button type="button" wire:click="formenKiSchaetzen" class="{{ $btnAi }}" data-gp-formen-ki>✨ KI schätzen</button>
+                        <x-foodalchemist::ki-action action="formenKiSchaetzen" variant="ai" icon="heroicon-o-sparkles" label="KI schätzen"
+                            data-gp-formen-ki busy="Wird geschätzt …" flash="Geschätzt" />
                     </div>
                     @error('formNeuGramm')<div class="mt-1 text-[11px] text-red-500">{{ $message }}</div>@enderror
                 </x-foodalchemist::modal-section>

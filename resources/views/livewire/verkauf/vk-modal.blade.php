@@ -22,9 +22,9 @@
                     class="{{ $btnGhostXs }} text-rose-600" data-vk-loeschen>Löschen</button>
             <span class="text-gray-300">|</span>
             {{-- Spec 03 L1b: ✨ Alles anreichern — VK-Schrittfolge + operative OneShot-Coverage --}}
-            <button type="button" wire:click="allesAnreichern" class="{{ $btnAi }}"
-                    title="VK-Text, Eigenschaften, Produktionsrouting, Equipment, Schritte, Aromaanker, Pairings, Eignung, Sensorik, Wirtschaftlichkeit und Kohärenz synchronisieren. KI-Fotos laufen separat; Ersatz bleibt manuell."
-                    data-vk-alles-anreichern>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5')Alles anreichern</button>
+            <x-foodalchemist::ki-action action="allesAnreichern" variant="ai" icon="heroicon-o-sparkles" label="Alles anreichern"
+                title="VK-Text, Eigenschaften, Produktionsrouting, Equipment, Schritte, Aromaanker, Pairings, Eignung, Sensorik, Wirtschaftlichkeit und Kohärenz synchronisieren. KI-Fotos laufen separat; Ersatz bleibt manuell."
+                data-vk-alles-anreichern busy="Wird angereichert …" flash="Angereichert" />
         </x-slot:actions>
     @endif
 
@@ -313,7 +313,9 @@
         <div x-show="tab === 'aufbau'" x-cloak class="pt-4 space-y-4">
         <x-foodalchemist::modal-section title="Zutaten ({{ $rezept->ingredients->count() }})">
             <x-slot:actions>
-                <button type="button" wire:click="ai_rollen" class="{{ $btnAi }}" title="ai_verteile_rollen — Gesamt-Gericht-Sicht (V-21)" data-vk-editor-rollen>@svg('heroicon-o-user-group', 'w-3.5 h-3.5') Rollen verteilen</button>
+                <x-foodalchemist::ki-action action="ai_rollen" variant="ai" icon="heroicon-o-user-group" label="Rollen verteilen"
+                    title="ai_verteile_rollen — Gesamt-Gericht-Sicht (V-21)" data-vk-editor-rollen
+                    busy="Wird verteilt …" flash="Rollen verteilt" />
                 {{-- Spec 03 L1a: ✨ KI-Überarbeiten — freie Anweisung, Vorschau, Übernehmen --}}
                 <button type="button" wire:click="$toggle('ueberarbeitenOffen')" class="{{ $btnAi }}"
                         title="Freie Anweisung — KI überarbeitet Komponenten, Mengen, Beschreibung, Plating & VK-Wording (Vorschau + Übernehmen). Klasse/Diät/Darreichung/Verkaufseinheit bleiben unangetastet."
@@ -332,10 +334,8 @@
                     <div class="flex items-center gap-2">
                         <input type="text" wire:model="anweisung" wire:keydown.enter="kiUeberarbeiten"
                                placeholder="z. B. «mach das Gericht vegan und ersetze die Sauce»" class="{{ $input }} !py-1.5 flex-1" data-vk-anweisung />
-                        <button type="button" wire:click="kiUeberarbeiten" wire:loading.attr="disabled" class="{{ $btnPrimary }}" data-vk-ueberarbeiten-start>
-                            <span wire:loading.remove wire:target="kiUeberarbeiten" class="inline-flex items-center gap-1.5">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') Vorschlagen</span>
-                            <span wire:loading wire:target="kiUeberarbeiten">denkt …</span>
-                        </button>
+                        <x-foodalchemist::ki-action action="kiUeberarbeiten" variant="primary" icon="heroicon-o-sparkles" label="Vorschlagen"
+                            data-vk-ueberarbeiten-start busy="denkt …" flash="Vorschlag da" />
                     </div>
                     @if($ueberarbeitung !== null)
                         <div class="rounded-lg bg-white/60 px-3 py-2 space-y-1.5 max-h-72 overflow-y-auto" data-vk-ueberarbeiten-vorschau>
@@ -761,7 +761,9 @@
 
         <x-foodalchemist::modal-section title="Regeneration (je Komponente, V-19)">
             <x-slot:actions>
-                <button type="button" wire:click="kiRegeneration" class="{{ $btnAi }}" title="vk.regeneration: ein Programm je Komponente (Vorschlag, Übernahme je Zeile)" data-ki-regeneration>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5')Regeneration</button>
+                <x-foodalchemist::ki-action action="kiRegeneration" variant="ai" icon="heroicon-o-sparkles" label="Regeneration"
+                    title="vk.regeneration: ein Programm je Komponente (Vorschlag, Übernahme je Zeile)" data-ki-regeneration
+                    busy="Wird ermittelt …" flash="Regeneration ermittelt" />
             </x-slot:actions>
             @if($regenVorschlaege !== [])
                 <div class="mb-2 rounded-lg bg-violet-500/10 border border-violet-500/30 px-3 py-2 space-y-1" data-regen-vorschlaege>
@@ -961,10 +963,8 @@
             @if($rezept !== null)
                 <div class="flex items-center justify-between gap-2 mb-2">
                     <span class="text-[11px] text-gray-500">Gegartes Profil — KI liest Zutaten + Zubereitung.</span>
-                    <button type="button" wire:click="sensorikBewerten" wire:loading.attr="disabled" wire:target="sensorikBewerten" class="{{ $btnAi }}">
-                        <span wire:loading.remove wire:target="sensorikBewerten" class="inline-flex items-center gap-1.5">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') Sensorik neu bewerten</span>
-                        <span wire:loading wire:target="sensorikBewerten">… bewertet</span>
-                    </button>
+                    <x-foodalchemist::ki-action action="sensorikBewerten" variant="ai" icon="heroicon-o-sparkles" label="Sensorik neu bewerten"
+                        busy="… bewertet" flash="Sensorik bewertet" />
                 </div>
             @endif
             @if(($komposition ?? null) && ! ($komposition['leer'] ?? true))

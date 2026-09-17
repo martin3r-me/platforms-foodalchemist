@@ -15,7 +15,8 @@
       error     Persistenter Server-Fehler (z. B. deferred.enrich.error) → Ruhezustand zeigt
                 Fehler-Optik + $retry-Text statt $label, title = $error.
       retry     Label im Fehlerzustand (Default = label).
-      variant   link (Default, Text-Link-Optik) | ghostXs | ghost | primary | icon (nur Icon, kein Text).
+      variant   link (Default, Text-Link-Optik) | ghostXs | ghost | primary | ai (violett getönt, $btnAi —
+                Editoren außerhalb der Planung) | icon (nur Icon, kein Text).
       icon      Heroicon-Name (optional bei link/ghostXs/primary, Pflicht sinngemäß bei icon).
       title     Tooltip-Override (Default: $error im Fehlerzustand, sonst der Anzeige-Text).
       confirm   window.confirm()-Text VOR dem $wire-Call (wire:confirm greift nicht bei $wire.*-Calls).
@@ -56,6 +57,10 @@
         'primary' => \Platform\FoodAlchemist\Support\Ui::maps()['btnPrimary'],
         'ghostXs' => \Platform\FoodAlchemist\Support\Ui::maps()['btnGhostXs'],
         'ghost' => \Platform\FoodAlchemist\Support\Ui::maps()['btnGhost'],
+        // Paket G: die violett getönte KI-Knopf-Optik (Editoren außerhalb der Planung, $btnAi)
+        // bleibt visuell erhalten statt auf das neutrale ghostXs zu wechseln — die Tönung ist
+        // das Signal „diese Aktion ruft die KI", das büßt eine Umfärbung sonst stillos ein.
+        'ai' => \Platform\FoodAlchemist\Support\Ui::maps()['btnAi'],
         'icon' => 'inline-flex items-center text-gray-400 hover:text-gray-200',
         default => 'text-violet-300 hover:text-violet-200 underline decoration-violet-300/40 underline-offset-2',
     };

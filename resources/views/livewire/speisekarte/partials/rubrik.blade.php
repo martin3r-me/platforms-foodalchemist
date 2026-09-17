@@ -48,27 +48,35 @@
              x-on:drop="if (dragPosId && dragPosId !== {{ $pos->id }}) { $wire.positionAblegen(dragPosId, {{ $pos->id }}); dragPosId = null }"
              x-bind:class="dragPosId === {{ $pos->id }} ? 'opacity-40' : ''">
             <span class="cursor-move select-none text-gray-300 shrink-0" title="Ziehen">⠿</span>
-            {{-- Bug-Runde 2026-09-17 #1: aus der Karte ins Gericht/Konzept springen (Vorbild Foodbook-Board).
-                 Ohne den Sprung war ein fehlender VK nur als Karten-Override (✎ → „Manuell") zu heilen, nie am
-                 Gericht selbst. draggable=false, sonst zieht der Browser den Link statt der Position. --}}
-            @php($sprungUrl = match ($pos->type) {
-                'gericht_ref' => $pos->sales_recipe_id ? route('foodalchemist.verkauf.index', ['rezept' => $pos->sales_recipe_id]) : null,
-                'menue_ref' => $pos->concept_id ? route('foodalchemist.concepter.index', [
-                    'tab' => ($pos->concept?->kind === 'paket' ? 'pakete' : 'concepts'),
-                    'sel' => $pos->concept_id,
-                ]) : null,
+            {{-- Bug-Runde 2026-09-17 #1: aus der Karte ins Gericht/Konzept — der Editor öffnet sich
+                 ÜBER der Karte (Nachbesserung: erst war es ein Link in einen neuen Tab, was den
+                 Arbeitsfluss riss). Ohne den Sprung war ein fehlender VK nur als Karten-Override
+                 (✎ → „Manuell") zu heilen, nie am Gericht selbst. Dieselben Events wie im Rezept-/
+                 Concepter-Browser; die Modale hängen auf Seitenebene in der index.blade. --}}
+            @php($sprungAufruf = match ($pos->type) {
+                'gericht_ref' => $pos->sales_recipe_id
+                    ? sprintf("\$dispatch('%s', { id: %d })", $pos->dish?->is_sales_recipe ? 'vk-modal.oeffnen' : 'recipe-modal.oeffnen', (int) $pos->sales_recipe_id)
+                    : null,
+                'menue_ref' => $pos->concept_id
+                    ? sprintf("\$dispatch('concepter-editor.oeffnen', { type: '%s', id: %d })", $pos->concept?->kind === 'paket' ? 'pakete' : 'concepts', (int) $pos->concept_id)
+                    : null,
                 default => null,
             })
+            @php($sprungTitel = $pos->type === 'gericht_ref' ? 'Gericht im Editor öffnen' : 'Konzept im Editor öffnen')
             <span class="flex-1 text-gray-800">
                 @if($pos->type === 'gericht_ref')
-                    @if($sprungUrl)
-                        <a href="{{ $sprungUrl }}" target="_blank" draggable="false" class="hover:text-violet-700 hover:underline" title="Gericht im VK-Editor öffnen (neuer Tab)">{{ $pos->wording ?: ($pos->dish?->name ?? $pos->label ?? '— Gericht —') }}</a>
+                    @if($sprungAufruf)
+                        <button type="button" draggable="false" class="text-left hover:text-violet-500 hover:underline"
+                                wire:click="{{ $sprungAufruf }}"
+                                title="{{ $sprungTitel }}">{{ $pos->wording ?: ($pos->dish?->name ?? $pos->label ?? '— Gericht —') }}</button>
                     @else
                         {{ $pos->wording ?: ($pos->dish?->name ?? $pos->label ?? '— Gericht —') }}
                     @endif
                 @elseif($pos->type === 'menue_ref')
-                    @if($sprungUrl)
-                        <a href="{{ $sprungUrl }}" target="_blank" draggable="false" class="hover:text-violet-700 hover:underline" title="Im Concepter öffnen (neuer Tab)">{{ $pos->wording ?: ($pos->concept?->name ?? 'Menü') }}</a>
+                    @if($sprungAufruf)
+                        <button type="button" draggable="false" class="text-left hover:text-violet-500 hover:underline"
+                                wire:click="{{ $sprungAufruf }}"
+                                title="{{ $sprungTitel }}">{{ $pos->wording ?: ($pos->concept?->name ?? 'Menü') }}</button>
                     @else
                         {{ $pos->wording ?: ($pos->concept?->name ?? 'Menü') }}
                     @endif
@@ -96,9 +104,11 @@
             {{-- Werkstrang M Phase C: Position in ihrer Rubrik hoch/runter. --}}
             <button type="button" wire:click="positionHochRunter({{ $pos->id }}, 'hoch')" class="{{ $btnGhostXs }}" title="hoch">▲</button>
             <button type="button" wire:click="positionHochRunter({{ $pos->id }}, 'runter')" class="{{ $btnGhostXs }}" title="runter">▼</button>
-            {{-- Bug-Runde 2026-09-17 #1: sichtbarer Absprung neben ✎ — der Name allein wurde nicht gefunden. --}}
-            @if($sprungUrl)
-                <a href="{{ $sprungUrl }}" target="_blank" draggable="false" class="{{ $btnGhostXs }}" title="{{ $pos->type === 'gericht_ref' ? 'Gericht öffnen (neuer Tab)' : 'Im Concepter öffnen (neuer Tab)' }}">↗</a>
+            {{-- Bug-Runde 2026-09-17 #1: sichtbarer Einstieg neben ✎ — der Name allein wurde nicht gefunden. --}}
+            @if($sprungAufruf)
+                <button type="button" class="{{ $btnGhostXs }}" title="{{ $sprungTitel }}"
+                        wire:click="{{ $sprungAufruf }}"
+                        data-sk-pos-oeffnen>@svg('heroicon-o-pencil-square', 'w-3.5 h-3.5 inline-block align-middle')</button>
             @endif
             @if(in_array($pos->type, ['gericht_ref', 'menue_ref', 'header', 'text']))
                 <button type="button" wire:click="positionBearbeiten({{ $pos->id }})" class="{{ $btnGhostXs }}">✎</button>

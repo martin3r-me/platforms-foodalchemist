@@ -561,8 +561,15 @@ class AiGatewayService
      *                   aller Tool-Ergebnisse neu sendet. Läuft die Zeit ab, bricht die NÄCHSTE
      *                   Runde nicht mehr an (kein weiterer Modellaufruf) — wie bei `maxRuns`
      *                   bleibt `finalText` dann `null`, der Aufrufer behandelt beides gleich.
+     *   intercept     — callable(string $name, array $args, object $tool, ToolContext $ctx): ?ToolResult.
+     *                   Spec 53/F (1b): läuft NACH `arg_guard`, VOR `$tool->execute()`. Liefert es
+     *                   ein ToolResult, ERSETZT das die echte Ausführung (der Aufrufer entscheidet
+     *                   selbst, ob/wie er das Tool wirklich ausführt — z. B. Voice baut daraus
+     *                   einen Schreibvorschlag und führt erst nach menschlicher Bestätigung aus).
+     *                   `null` = normal ausführen. Additiv, Default `null` — ohne den Schlüssel
+     *                   verhält sich der Loop byte-identisch zu vorher.
      *
-     * @param  array{policy?: callable, arg_guard?: callable, system_zusatz?: string, zeitbudget_ms?: int}  $optionen
+     * @param  array{policy?: callable, arg_guard?: callable, system_zusatz?: string, zeitbudget_ms?: int, intercept?: callable}  $optionen
      */
     public function callWithTools(string $auftrag, array $toolNames, int $maxRuns = 6, array $optionen = []): array
     {
@@ -579,6 +586,7 @@ class AiGatewayService
 
         $policy = $optionen['policy'] ?? null;
         $argGuard = $optionen['arg_guard'] ?? null;
+        $intercept = $optionen['intercept'] ?? null;
         $erlaubt = array_values(array_unique($toolNames));           // wächst über die Policy
         $freigeschaltet = [];
 
@@ -663,7 +671,11 @@ class AiGatewayService
                     break 1;                                          // Wiederholung: finalText bleibt null, kein weiterer Call
                 }
                 $gesehen[] = $signatur;
-                $resultat = $tool->execute($argumente, $kontext);
+                // Spec 53/F (1b): ein `intercept` darf die Ausführung ERSETZEN (z. B. Voice baut
+                // daraus einen Schreibvorschlag statt wirklich zu schreiben). `null` = normal
+                // ausführen — additiv, ohne Hook verhält sich der Loop wie vorher.
+                $abgefangen = is_callable($intercept) ? $intercept($name, $argumente, $tool, $kontext) : null;
+                $resultat = $abgefangen ?? $tool->execute($argumente, $kontext);
                 $toolLaeufe[] = ['name' => $name, 'arguments' => $argumente, 'success' => $resultat->success, 'data' => $resultat->data];
                 $messages[] = ['role' => 'assistant', 'content' => (string) ($antwort['content'] ?? '')];
                 $messages[] = ['role' => 'user', 'content' => 'TOOL-ERGEBNIS ' . $name . ': ' . $this->kappeToolErgebnis(
