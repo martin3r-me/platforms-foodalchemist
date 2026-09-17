@@ -157,11 +157,14 @@ it('Token-Deckel: der Basiskatalog bleibt klein — er wird in JEDER Runde bezah
         )));
 
     // Live gemessen: alle 111 lesenden FA-Tools wären 78.348 Zeichen ≈ 26.000 Token je Runde.
-    // Der Warmstart darf davon ein Zehntel kosten — mehr wäre die Rückkehr zum Vollsortiment.
-    // Spec 53/D (2026-09-17): +`ui.NAVIGATE` (8.000 → 8.340) — ohne den Katalog-Eintrag kannte
-    // das Modell das Werkzeug nicht (Policy erlaubte es zwar, aber nichts sagte ihm, dass es
-    // existiert), „Öffne die Planung" landete also nie. Deckel moderat angehoben, nicht entfernt.
-    expect($zeichen)->toBeLessThan(8500, "Basiskatalog auf {$zeichen} Zeichen gewachsen");
+    // Spec 53/D (2026-09-17): +`ui.NAVIGATE` (8.000 → 8.340), dann +die drei Planungs-Vorschlags-
+    // Tools DIREKT im Katalog statt hinter tool_registry.SEARCH (8.340 → 10.047) — Review-Befund
+    // cooking-jarvis-03: mit MAX_RUNDEN=4 und der „ablauf.GET zuerst"-Anweisung frässe ein SEARCH-
+    // Umweg für „Erstelle ein Gericht …" eine ganze Runde, der Befehl läge exakt am Limit. Runden-
+    // budget-Sicherheit wiegt hier schwerer als das ursprüngliche „ein Zehntel"-Ziel (~13 % statt
+    // ~10 % des Vollsortiments) — der Deckel bleibt trotzdem eine Wand, keine Formsache: jedes
+    // künftige Tool braucht wieder eine bewusste Entscheidung Katalog vs. Discovery.
+    expect($zeichen)->toBeLessThan(10500, "Basiskatalog auf {$zeichen} Zeichen gewachsen");
 });
 
 it('Platzierung: der Sprach-Agent hängt global in der Sidebar — Knopf und genau EIN Mount', function () {

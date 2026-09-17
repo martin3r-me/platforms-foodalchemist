@@ -68,18 +68,36 @@ class VoiceCommandService
         // Werkzeug steht namentlich in der System-Nachricht und wird ueber tool_registry.SEARCH
         // geholt — ein Name in Prosa kostet 30 Zeichen statt 1.341.
         'foodalchemist.ablauf.GET',
+        // Review-Befund 2026-09-17 (cooking-jarvis-03): mit MAX_RUNDEN=4 und der „hole ZUERST
+        // ablauf.GET"-Anweisung frisst ein tool_registry.SEARCH-Umweg für diese drei eine ganze
+        // Runde — „Erstelle ein Gericht …" läge dann exakt am Limit (Ablauf, Search, Tool, final).
+        // Klein genug fürs Direkt-Aufrufen (kleine Schemas, siehe Token-Deckel-Test).
+        'foodalchemist.planung_vorschlag.POST',
+        'foodalchemist.anreicherung_vorschlag.POST',
+        'foodalchemist.planung_kaskade.LETZTE',
     ];
 
     /**
-     * Schreibende Tools, die trotzdem erlaubt sind, WEIL ihre Wirkung ein Vorschlag ist:
+     * Tools, die auch OHNE (oder trotz künftig geändertem) `read_only`-Flag erreichbar bleiben
+     * SOLLEN, weil ihre Wirkung für den Sprachpfad sicher ist:
      *   - `recipe_klasse.POST` ohne Commit-Flag = Klassen-Vorschlag (Bestätigen in der UI).
      *   - `gp_proposals.POST` = Beschaffungs-Wunsch im Sourcing-Backlog, laut eigenem
      *     Docblock ausdrücklich „KEIN GP-Write".
+     *   - `planung_vorschlag.POST` / `anreicherung_vorschlag.POST` (Aufgabe 7, GL-07): schreiben
+     *     nichts (siehe deren eigene Docblocks), tragen aber „POST" im Namen — die Doppelsicherung
+     *     ist Absicht (Review-Befund 2026-09-17): ändert jemand künftig ihr `read_only`-Flag aus
+     *     Versehen, bleiben sie über DIESE Liste trotzdem als Vorschlag erreichbar statt komplett
+     *     zu verschwinden.
+     *   - `planung_kaskade.LETZTE` ist ohnehin nur Lesen (kein POST/PUT), steht hier aus demselben
+     *     Vorsichtsgrund.
      * Bewusst NICHT hier: `match_proposals.PUT` (das ist das Übernehmen, nicht der Vorschlag).
      */
     public const PROPOSAL_TOOLS = [
         'foodalchemist.recipe_klasse.POST',
         'foodalchemist.gp_proposals.POST',
+        'foodalchemist.planung_vorschlag.POST',
+        'foodalchemist.anreicherung_vorschlag.POST',
+        'foodalchemist.planung_kaskade.LETZTE',
     ];
 
     /**
@@ -167,12 +185,8 @@ class VoiceCommandService
                     . 'Zum Öffnen eines KONKRETEN Datensatzes foodalchemist.ui.OPEN nutzen (id nötig), '
                     . 'zum Wechseln auf eine allgemeine Seite ohne Datensatz (z. B. „Öffne die Planung") '
                     . 'foodalchemist.ui.NAVIGATE mit route_key aus foodalchemist.ui.ROUTES. '
-                    . 'ARBEITSWEISE: geht es um eine Fach-Aufgabe (Rezept, Gericht, Konzept, Foodbook, GP), '
-                    . 'hole ZUERST den hinterlegten Ablauf mit foodalchemist.ablauf.GET — dort stehen die '
-                    . 'verbindlichen Regeln und die Reihenfolge. Für eine einzelne Fachfrage hole dir '
-                    . 'foodalchemist.knowledge.SEARCH über tool_registry.SEARCH. Nicht aus dem Gedächtnis '
-                    . 'arbeiten und keine Werte erfinden: fehlt etwas, ist die Lücke die Antwort. '
-                    . 'DREI PLANUNGS-FÄHIGKEITEN über tool_registry.SEARCH mit name_glob "foodalchemist.*": '
+                    . 'DREI PLANUNGS-FÄHIGKEITEN — direkt aufrufen, KEIN vorheriges tool_registry.SEARCH nötig '
+                    . '(stehen schon im Katalog oben): '
                     . '(1) foodalchemist.planung_vorschlag.POST für „erstelle/baue ein Rezept/Gericht/Menü …" — '
                     . 'legt NICHTS an, nur einen Vorschlag zum Bestätigen; '
                     . '(2) foodalchemist.anreicherung_vorschlag.POST für „reichere dieses Rezept an" — ebenfalls '
@@ -180,7 +194,14 @@ class VoiceCommandService
                     . '(3) foodalchemist.planung_kaskade.LETZTE für „wie weit ist die Generierung?" (liest die '
                     . 'letzten Läufe, keine run_id nötig). '
                     . 'foodalchemist.planung_session.POST und foodalchemist.planung_kaskade.START sind für dich '
-                    . 'GESPERRT (echte Schreiber) — NIE versuchen, IMMER stattdessen (1)/(2) vorschlagen.',
+                    . 'GESPERRT (echte Schreiber) — NIE versuchen, IMMER stattdessen (1)/(2) vorschlagen. '
+                    . 'ARBEITSWEISE für ALLES ANDERE: geht es um eine Fach-Aufgabe (Rezept, Gericht, Konzept, '
+                    . 'Foodbook, GP) AUSSER den drei Planungs-Fähigkeiten oben, hole ZUERST den hinterlegten '
+                    . 'Ablauf mit foodalchemist.ablauf.GET — dort stehen die verbindlichen Regeln und die '
+                    . 'Reihenfolge; für (1)-(3) ist das NICHT nötig, sie sind schon vollständig beschrieben. '
+                    . 'Für eine einzelne Fachfrage hole dir foodalchemist.knowledge.SEARCH über '
+                    . 'tool_registry.SEARCH. Nicht aus dem Gedächtnis arbeiten und keine Werte erfinden: '
+                    . 'fehlt etwas, ist die Lücke die Antwort.',
             ],
         );
 
