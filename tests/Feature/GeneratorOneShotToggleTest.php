@@ -63,16 +63,20 @@ it('Toggle aus lässt den Job den Bestandspfad fahren (kein Anreicherungs-Pass)'
 });
 
 it('Generierung und Anreicherung haben getrennte Job-Zeitfenster', function () {
-    expect((new GenerateRecipeJob('r', 1, 1, 'x', [], false, false))->timeout)->toBe(300)
-        ->and((new GenerateRecipeJob('r', 1, 1, 'x', [], true, true))->timeout)->toBe(300)
+    // Lauf 71 (demo, 20.09.): reale Basisrezept-Läufe von 169 s (Generierung) + Ø 42 s
+    // Kohärenz-Kritiker + Matching/Checks — 300 s waren unter Last real erreichbar, ohne
+    // dass etwas kaputt war. 540 s bleibt unter dem Worker-Timeout (600 s).
+    expect((new GenerateRecipeJob('r', 1, 1, 'x', [], false, false))->timeout)->toBe(540)
+        ->and((new GenerateRecipeJob('r', 1, 1, 'x', [], true, true))->timeout)->toBe(540)
         ->and((new \Platform\FoodAlchemist\Jobs\EnrichGeneratedRecipeJob('r', 1, 1, 2, []))->timeout)->toBe(300)
         ->and((new GenerateRecipeJob('r', 1, 1, 'x', [], true, true))->tries)->toBe(1);
 });
 
-it('#505-Nachtrag Task 7: Job-Timeout meldet "Zeitüberschreitung nach 300 s" statt der rohen Laravel-Meldung', function () {
+it('#505-Nachtrag Task 7: Job-Timeout meldet den Timeout-Wert des Jobs statt der rohen Laravel-Meldung', function () {
     // demo 16.09.: "GenerateRecipeJob has timed out" (timeout=300, tries=1) lief unverändert
     // durch die generische failed()-Meldung. TimeoutExceededException erbt von
-    // MaxAttemptsExceededException — ein instanceof fängt beide Fälle.
+    // MaxAttemptsExceededException — ein instanceof fängt beide Fälle. Der Text nimmt
+    // $this->timeout dynamisch (Lauf 71, 20.09.: 300 → 540 s) statt einer festen Zahl.
     $runId = 'run-timeout-test-' . uniqid();
     $job = new GenerateRecipeJob($runId, $this->rootTeam->id, 1, 'Testrezept');
     $laravelJob = new class
@@ -87,7 +91,7 @@ it('#505-Nachtrag Task 7: Job-Timeout meldet "Zeitüberschreitung nach 300 s" st
 
     $status = Cache::get(GenerateRecipeJob::cacheKey($runId));
     expect($status['status'])->toBe('error')
-        ->and($status['fehler'])->toBe('Zeitüberschreitung nach 300 s');
+        ->and($status['fehler'])->toBe('Zeitüberschreitung nach 540 s');
 });
 
 it('#505-Nachtrag Task 7: ein normaler Job-Fehler bleibt bei der Rohtext-Meldung', function () {
