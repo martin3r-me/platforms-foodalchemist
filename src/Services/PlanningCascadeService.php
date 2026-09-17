@@ -805,7 +805,7 @@ class PlanningCascadeService
      *
      * @param  list<int>  $seen  Rekursions-Pfad; ab Tiefe 1 ist dieser Durchgang eine Paket-Station
      */
-    private function vermerkeConceptLuecke(int $runId, int $conceptId, int $slotsLeer, int $angefragt, int $erzeugt, int $grenze, array $seen): void
+    private function vermerkeConceptLuecke(int $runId, int $conceptId, int $slotsLeer, int $angefragt, int $erzeugt, int $grenze, array $seen, ?string $ideenFehler = null): void
     {
         $offen = $slotsLeer - $erzeugt;
         if ($offen < 1) {
@@ -818,8 +818,11 @@ class PlanningCascadeService
         }
 
         if ($erzeugt < min($angefragt, $grenze)) {
+            // Ein gescheiterter Ideen-Aufruf (Budget/Provider/…) ist ein ANDERER Befund als „die KI
+            // hat 0 geliefert" — der Mensch braucht den echten Grund, nicht eine Vermutung über die
+            // KI-Antwort, wenn sie nie gefragt wurde.
             $grund = $erzeugt === 0
-                ? 'die KI hat keine geliefert'
+                ? ($ideenFehler ?? 'die KI hat keine geliefert')
                 : sprintf('die KI hat nur %d geliefert', $erzeugt);
         } elseif ($angefragt > $grenze) {
             $grund = sprintf('die KI liefert höchstens %d auf einmal', $grenze);
@@ -1186,12 +1189,29 @@ class PlanningCascadeService
 
             $ideen = [];
             $div = null;   // muss VOR dem try stehen — im Fehlerfall wäre es sonst undefiniert
+            // Anlass (Lauf 72, 2026-09-17): ein gescheiterter kiDivergenzConcept-Call verschwand
+            // hier bisher spurlos (nackter catch, kein Log) — der Run meldete "die KI hat keine
+            // geliefert", obwohl sie nie gefragt wurde (z. B. KnowledgeBudgetExceeded). $ideenFehler
+            // trägt den ECHTEN Grund an vermerkeConceptLuecke weiter, geloggt wird IMMER.
+            $ideenFehler = null;
             try {
                 // Wissen+Trend fließen in die Divergenz (voller Stack + generischer Trend + Ursprungs-Trend der Planung).
                 $div = app(IdeenService::class)->kiDivergenzConcept($team, $conceptId, $leere->count(), null, $trendDocId);
                 $ideen = is_array($div['angelegt'] ?? null) ? $div['angelegt'] : [];
-            } catch (\Throwable) {
-                $ideen = [];   // KI nicht verfügbar → keine Erfindung für die direkten Slots (graceful); Pakete werden dennoch versucht
+            } catch (\Platform\FoodAlchemist\Services\Ai\KnowledgeBudgetExceeded $e) {
+                $ideen = [];
+                $ideenFehler = 'Wissensbudget überschritten (' . $e->getMessage() . ')';
+                \Illuminate\Support\Facades\Log::warning('[fanoutConceptInvention] kiDivergenzConcept: Wissensbudget überschritten', [
+                    'concept_id' => $conceptId, 'error' => $e->getMessage(),
+                ]);
+            } catch (\Throwable $e) {
+                // KI nicht verfügbar/Fehler → keine Erfindung für die direkten Slots (graceful); Pakete
+                // werden dennoch versucht. Graceful heißt aber nicht stumm — geloggt wird trotzdem.
+                $ideen = [];
+                $ideenFehler = 'Ideen-Aufruf fehlgeschlagen (' . get_class($e) . ': ' . $e->getMessage() . ')';
+                \Illuminate\Support\Facades\Log::warning('[fanoutConceptInvention] kiDivergenzConcept fehlgeschlagen', [
+                    'concept_id' => $conceptId, 'exception' => get_class($e), 'error' => $e->getMessage(),
+                ]);
             }
 
             // EIN Befund für diesen Konzept-Durchgang, statt getrennter Vermerke für den
@@ -1207,6 +1227,7 @@ class PlanningCascadeService
                 count($ideen),
                 (int) ($div['grenze'] ?? IdeenService::IDEEN_MAX),
                 $seen,
+                $ideenFehler,
             );
 
             foreach (array_values($ideen) as $idx => $idee) {
