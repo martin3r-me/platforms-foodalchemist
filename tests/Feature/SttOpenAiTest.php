@@ -259,3 +259,15 @@ it('VoiceFehlerText: Timeout/ConnectionException bekommt den Kürzer-sprechen-Hi
 
     expect(VoiceFehlerText::aus($verbindung)['text'])->toContain('nicht rechtzeitig geantwortet');
 });
+
+it('STT-Timeout End-to-End: OpenAiSttService gibt eine ConnectionException durch (Abnahme-Matrix-Fall timeout_s=1)', function () {
+    config(['services.openai.api_key' => 'sk-test', 'foodalchemist.stt.timeout_s' => 1]);
+    Http::fake(function () {
+        throw new \Illuminate\Http\Client\ConnectionException('cURL error 28: Operation timed out after 1000 milliseconds');
+    });
+
+    expect(fn () => (new OpenAiSttService())->transcribe('BINARY'))
+        ->toThrow(\Illuminate\Http\Client\ConnectionException::class);
+    // Die Übersetzung des Ergebnisses ist oben (VoiceFehlerText) separat gepinnt — zusammen
+    // deckt das die ganze Kette: HTTP-Timeout → Exception → verständlicher Satz im Modal.
+});
