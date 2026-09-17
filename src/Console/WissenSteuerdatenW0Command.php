@@ -76,13 +76,15 @@ class WissenSteuerdatenW0Command extends Command
         // Haupt-Fehltreffer-Quelle des Slug-Rankings (Referenzgerichte matchen auf
         // Gerichtnamen, nicht auf Bau-Wissen).
         'referenzgericht' => ['mode' => 'none', 'max_docs' => null, 'max_chars' => null],
-        'kueche' => ['mode' => 'discovery', 'max_docs' => 2, 'max_chars' => 2500],
-        'weltkueche' => ['mode' => 'discovery', 'max_docs' => 1, 'max_chars' => 2000],
-        'signatur_kuechen' => ['mode' => 'discovery', 'max_docs' => 1, 'max_chars' => 2000],
-        'kreativ_input' => ['mode' => 'discovery', 'max_docs' => 1, 'max_chars' => 2000],
-        'niveau' => ['mode' => 'discovery', 'max_docs' => 1, 'max_chars' => 1800],
-        'ernaehrung' => ['mode' => 'discovery', 'max_docs' => 1, 'max_chars' => 1500],
-        'prasentation_service' => ['mode' => 'discovery', 'max_docs' => 1, 'max_chars' => 1500],
+        // Spec 53 (2026-09-17): `max_chars` seedet ab jetzt NICHT mehr — wirkungsloses Feld,
+        // s. KnowledgePolicySeedCommand::ROUTINGS und den Docblock in KnowledgeContextService.
+        'kueche' => ['mode' => 'discovery', 'max_docs' => 2, 'max_chars' => null],
+        'weltkueche' => ['mode' => 'discovery', 'max_docs' => 1, 'max_chars' => null],
+        'signatur_kuechen' => ['mode' => 'discovery', 'max_docs' => 1, 'max_chars' => null],
+        'kreativ_input' => ['mode' => 'discovery', 'max_docs' => 1, 'max_chars' => null],
+        'niveau' => ['mode' => 'discovery', 'max_docs' => 1, 'max_chars' => null],
+        'ernaehrung' => ['mode' => 'discovery', 'max_docs' => 1, 'max_chars' => null],
+        'prasentation_service' => ['mode' => 'discovery', 'max_docs' => 1, 'max_chars' => null],
     ];
 
     /**

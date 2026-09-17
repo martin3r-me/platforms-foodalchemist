@@ -279,11 +279,21 @@ it('Budget traegt die Pflicht-Inhalte jedes Features mit always-Routing', functi
     expect($verletzt)->toBe([]);
 });
 
-it('rechnet die Pflichtmenge nach den Ist-Deckeln der Block-Builder', function () {
-    // cross_cutting ignoriert die Routing-Werte und lädt 7 feste Slugs.
+/*
+ * ★ Spec 53 (2026-09-17): `pflichtZeichen()` rechnet jetzt mit den REALEN Dossierlängen
+ * (dieselben Block-Builder wie `contextFor()`), nicht mehr mit `max_docs × max_chars_per_doc` —
+ * dieser Deckel war nie verdrahtet (`truncate()` hatte 0 Aufrufer). Die alte Formel konnte die
+ * Pflichtmenge beliebig falsch schätzen: zu GROSS wie hier (`max_chars_per_doc=1500` bei einem
+ * 9.000-Zeichen-Dossier hätte 1.500 gemeldet, real sind es 9.000) — ein Budget knapp über der
+ * Formel-Zahl hätte den Aufbau zur Laufzeit trotzdem sprengen können.
+ */
+it('rechnet die Pflichtmenge nach den REALEN Dossierlaengen, nicht nach max_chars_per_doc', function () {
+    // cross_cutting ignoriert die Routing-Werte ohnehin und lädt 7 feste Slugs — real vermessen.
+    foreach (KnowledgeContextService::ALWAYS_LOAD_CROSS_CUTTING as $slug) {
+        w0Doc($slug, 'cross_cutting', 1000, 'Substitutionswissen');
+    }
     w0Routing('w0pflicht.cc', 'cross_cutting', 'always', 99, 99000);
-    expect(app(KnowledgeContextService::class)->pflichtZeichen('w0pflicht.cc'))
-        ->toBe(7 * KnowledgeContextService::CROSS_CUTTING_TRUNCATE_CHARS);
+    expect(app(KnowledgeContextService::class)->pflichtZeichen('w0pflicht.cc'))->toBe(7 * 1000);
 
     // ★ regelwerk zählt seit Spec 52 · F4 NULL: der dedizierte always-Zweig ist gelöscht, die
     // Zeile lädt nichts. Sie weiter als Pflichtmenge zu führen hiesse, Budget für Wissen zu
@@ -291,9 +301,21 @@ it('rechnet die Pflichtmenge nach den Ist-Deckeln der Block-Builder', function (
     w0Routing('w0pflicht.rw', 'regelwerk', 'always', 5, 6000);
     expect(app(KnowledgeContextService::class)->pflichtZeichen('w0pflicht.rw'))->toBe(0);
 
-    // concept: max_docs × Doc-Deckel.
+    // concept: reale Länge der ersten `max_docs` Concept-Dossiers, nicht max_docs × Doc-Deckel
+    // (die alte Formel hätte 4×4000=16000 gesagt — obwohl nur 2 Dossiers existieren).
+    w0Doc('w0pflicht-concept-a', 'concept', 1800, 'Konzept A');
+    w0Doc('w0pflicht-concept-b', 'concept', 2200, 'Konzept B');
     w0Routing('w0pflicht.co', 'concept', 'always', 4, 4000);
-    expect(app(KnowledgeContextService::class)->pflichtZeichen('w0pflicht.co'))->toBe(16000);
+    $conceptPflicht = app(KnowledgeContextService::class)->pflichtZeichen('w0pflicht.co');
+    expect($conceptPflicht)
+        ->toBeGreaterThanOrEqual(1800 + 2200)   // die reale Nutzlast steckt mindestens drin (+ Block-Kopfzeilen)
+        ->toBeLessThan(16000);                  // die alte Formel-Zahl (4 × CONCEPT_TRUNCATE_CHARS) ist Geschichte
+
+    // Der von cooking-jarvis-03 verlangte Beleg: EIN 9.000-Zeichen-Dossier, Routing sagt
+    // max_chars_per_doc=1500 → Pflichtmenge ist ~9.000 (real), NICHT 1.500 (Formel-Fiktion).
+    w0Doc('w0pflicht-sonst-a', 'w0pflichtsonst', 9000, 'Sonstige Kategorie');
+    w0Routing('w0pflicht.sonst', 'w0pflichtsonst', 'always', 1, 1500);
+    expect(app(KnowledgeContextService::class)->pflichtZeichen('w0pflicht.sonst'))->toBeGreaterThanOrEqual(9000);
 });
 
 /*
@@ -553,7 +575,9 @@ it('klemmt einen zu kleinen Override auf die Pflichtmenge statt Pflichtwissen zu
     $svc = app(KnowledgeContextService::class);
 
     $pflicht = $svc->pflichtZeichen('kompo.feature');
-    expect($pflicht)->toBe(6000);
+    // Spec 53: reale Länge inkl. Block-Kopfzeilen (alwaysCategoryBlock), nicht die nackte
+    // Doc-Summe — mindestens die 2×3000 Zeichen Nutzlast müssen drinstecken.
+    expect($pflicht)->toBeGreaterThanOrEqual(6000);
 
     // Absurd kleiner Override — darf die Pflicht nicht unterschreiten.
     $ctx = $svc->contextFor(null, 'kompo.feature', 'irgendwas', null, [], ['_max_chars' => 500]);
@@ -656,10 +680,19 @@ it('rechnet die Pflichtmenge feature-genau — sonst prueft die Invariante Phant
     w0Routing('w0cc.voll', 'cross_cutting', 'always');
     $svc = app(KnowledgeContextService::class);
 
-    expect($svc->pflichtZeichen('w0cc.schmal'))
-        ->toBe(2 * KnowledgeContextService::CROSS_CUTTING_TRUNCATE_CHARS)
-        ->and($svc->pflichtZeichen('w0cc.voll'))
-        ->toBe(count(KnowledgeContextService::ALWAYS_LOAD_CROSS_CUTTING) * KnowledgeContextService::CROSS_CUTTING_TRUNCATE_CHARS);
+    // Spec 53: reale Dossierlängen statt 7/2 × CROSS_CUTTING_TRUNCATE_CHARS — jeder der 7
+    // Standard-Slugs bekommt eine EIGENE, unterscheidbare Länge, damit ein falsch summierter
+    // Slug (zu viele/zu wenige) auffiele.
+    $groessen = ['substitutionen' => 900, 'saisonkalender' => 500, 'synonyme' => 700,
+        'sauce_mutterstrukturen' => 600, 'mengen_defaults' => 800, 'techniken' => 400, 'bruehen_fonds' => 300];
+    foreach ($groessen as $slug => $chars) {
+        w0Doc($slug, 'cross_cutting', $chars, "Wissen {$slug}");
+    }
+
+    // w0cc.schmal zieht NUR die zwei überschriebenen Slugs (feature-genau).
+    expect($svc->pflichtZeichen('w0cc.schmal'))->toBe($groessen['saisonkalender'] + $groessen['synonyme'])
+        // w0cc.voll (kein Override) zieht den vollen 7er-Satz — Summe aller realen Längen.
+        ->and($svc->pflichtZeichen('w0cc.voll'))->toBe(array_sum($groessen));
 
     // Und die echten Kundentext-Features müssen ihre (kleinere) Pflicht tragen können.
     foreach (['foodbook.kundentext', 'concept.wording'] as $f) {

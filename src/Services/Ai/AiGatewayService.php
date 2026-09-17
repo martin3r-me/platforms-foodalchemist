@@ -6,6 +6,8 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Platform\Core\Contracts\LLMProviderContract;
 use Platform\Core\Services\LLMProviderRegistry;
+use Platform\FoodAlchemist\Exceptions\KiAntwortKeinJsonException;
+use Platform\FoodAlchemist\Exceptions\KiAntwortStrukturellUnbrauchbarException;
 use RuntimeException;
 
 /**
@@ -359,7 +361,14 @@ class AiGatewayService
         $usageGesamt = ['input_tokens' => 0, 'output_tokens' => 0, 'input_tokens_details' => ['cached_tokens' => 0]];
         $tatsaechlichesModell = null;
         $tempTreppe = [(float) ($prompt['temperature'] ?? 0.1), 0.5, 0.7];   // §3.3
+        // Dominique §9: „Wie oft greift der strukturelle Retry?" war bisher nicht messbar —
+        // schreibeCallLog() schreibt genau EINE Zeile, tokens_in/out summieren über alle
+        // (auch verworfenen) Versuche, ein erfolgreicher Re-Roll hinterlässt sonst keine Spur.
+        // Keine neue Spalte/Migration: Zählung + letzter Grund gehen in prompt_parts (JSON-Feld).
+        $versucheGemacht = 0;
+        $letzterRerollGrund = null;
         foreach ($tempTreppe as $versuch => $temperature) {
+            $versucheGemacht = $versuch + 1;
             $fehler = null;
             try {
                 $antwort = $this->chatMitBackoff($messages, $options + ['temperature' => $temperature]);
@@ -367,15 +376,20 @@ class AiGatewayService
                 $tatsaechlichesModell = $antwort['model'] ?? $tatsaechlichesModell;
                 $parsed = json_decode($this->stripJsonFence((string) ($antwort['content'] ?? '')), true);
                 if (!is_array($parsed)) {
-                    throw new RuntimeException("KI-Antwort für [{$promptKey}] ist kein valides JSON (nach Fence-Stripping, Versuch " . ($versuch + 1) . ').');
+                    throw new KiAntwortKeinJsonException(
+                        "KI-Antwort für [{$promptKey}] ist kein valides JSON (nach Fence-Stripping, Versuch " . ($versuch + 1) . ').',
+                    );
                 }
                 if (is_callable($isUsable) && ! $isUsable($parsed)) {
-                    throw new RuntimeException("KI-Antwort für [{$promptKey}] ist strukturell unbrauchbar (Versuch " . ($versuch + 1) . ').');
+                    throw new KiAntwortStrukturellUnbrauchbarException(
+                        "KI-Antwort für [{$promptKey}] ist strukturell unbrauchbar (Versuch " . ($versuch + 1) . ').',
+                    );
                 }
                 break;                                               // erste valide + brauchbare gewinnt
             } catch (\Throwable $e) {
                 $fehler = $e;
                 $parsed = null;
+                $letzterRerollGrund = $this->rerollGrund($e);
             }
         }
         $elapsedMs = (int) ((hrtime(true) - $start) / 1_000_000);
@@ -383,6 +397,11 @@ class AiGatewayService
             // Auch verworfene, aber vom Provider erfolgreich beantwortete Re-Rolls werden berechnet.
             $antwort['usage'] = $usageGesamt;
             $antwort['model'] = $tatsaechlichesModell ?? ($antwort['model'] ?? null);
+        }
+
+        $promptParts['versuche'] = $versucheGemacht;
+        if ($versucheGemacht > 1) {
+            $promptParts['reroll_grund'] = $letzterRerollGrund;
         }
 
         $audit['layers_used'] = $layersUsed;
@@ -771,6 +790,23 @@ class AiGatewayService
         $summe['input_tokens'] += (int) ($usage['input_tokens'] ?? 0);
         $summe['output_tokens'] += (int) ($usage['output_tokens'] ?? 0);
         $summe['input_tokens_details']['cached_tokens'] += (int) ($usage['input_tokens_details']['cached_tokens'] ?? 0);
+    }
+
+    /**
+     * Re-Roll-Grund für den Call-Log (`prompt_parts.reroll_grund`) — TYPISIERT, nicht per
+     * Message-Substring (Review-Fund: [[feedback_prompt_wortlaut_ist_keine_schnittstelle]],
+     * 5 Treffer an einem Tag; ein geänderter Wortlaut hätte jeden Re-Roll stumm als
+     * 'provider_fehler' einsortiert). `chatMitBackoff()` fängt Modell-Fallback/Provider-
+     * Backoff bereits intern ab; erreicht deren Exception TROTZDEM diese Ebene, ist auch
+     * der Fallback-Versuch gescheitert ('provider_fehler').
+     */
+    private function rerollGrund(\Throwable $e): string
+    {
+        return match (true) {
+            $e instanceof KiAntwortStrukturellUnbrauchbarException => 'strukturell',
+            $e instanceof KiAntwortKeinJsonException => 'json_ungueltig',
+            default => 'provider_fehler',
+        };
     }
 
     /**
