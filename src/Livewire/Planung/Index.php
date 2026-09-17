@@ -36,6 +36,8 @@ use Platform\FoodAlchemist\Services\TeamSettingsService;
 use Platform\FoodAlchemist\Services\TitelVorschlagService;
 use Platform\FoodAlchemist\Services\WorkerHealthService;
 use Platform\FoodAlchemist\Support\TeamScope;
+use Platform\FoodAlchemist\Support\VoiceFehlerText;
+use Platform\FoodAlchemist\Support\VoiceMime;
 
 /**
  * Planungs-/Kreativ-Cockpit (Doppel-Diamant, Spec 08). Haus-Layout: links Kategorie→Klasse +
@@ -1922,10 +1924,10 @@ class Index extends Component
         try {
             $text = trim(app(SttServiceContract::class)->transcribe(
                 (string) file_get_contents($this->briefAudio->getRealPath()),
-                $this->briefAudio->getMimeType() ?: 'audio/webm',
+                VoiceMime::aufgeloest($this->briefAudio),
             ));
         } catch (\Throwable $e) {
-            $this->fehler = 'Diktat fehlgeschlagen: ' . $e->getMessage();
+            $this->fehler = 'Diktat fehlgeschlagen: ' . VoiceFehlerText::aus($e)['text'];
             $this->briefAudio = null;
 
             return;

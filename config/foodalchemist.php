@@ -411,6 +411,13 @@ return [
         'timeout_s' => 30,
         'fake_text' => 'Suche BBQ Sauce',
         /*
+         * Spec 53/D: Fake ist ausserhalb von testing/local nur mit diesem Flag erlaubt — sonst
+         * bindet der ServiceProvider auf `UnkonfiguriertSttService` (klarer Fehler statt stummem
+         * Fixtext). Default false: eine frische demo-/Produktions-Instanz ohne Schlüssel soll
+         * NICHT unbemerkt jeden Sprachbefehl durch »Suche BBQ Sauce« ersetzen.
+         */
+        'allow_fake' => env('FOODALCHEMIST_STT_ALLOW_FAKE', false),
+        /*
          * Kontext-Hinweis an die Transkription (die API nimmt einen `prompt`). Genau
          * die Begriffe, an denen ein allgemeines Modell scheitert — ohne den Hinweis
          * wird aus „Grundprodukt" ein „Grund Produkt" und der Tool-Loop sucht ins Leere.

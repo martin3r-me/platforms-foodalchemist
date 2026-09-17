@@ -158,7 +158,11 @@
           }
         };
         this.rec.onstop = function () {
-          self._verarbeiteAufnahme(mime);
+          // `self.rec.mimeType` ist die vom Browser NACH der Aushandlung tatsächlich genutzte
+          // Kapselung — auf Safari kann sie vom angeforderten Kandidaten abweichen (Audio-only-
+          // Aufnahmen werden dort teils als `video/mp4` statt `audio/mp4` gemeldet). Der
+          // angeforderte Kandidat ist nur der Fallback, falls der Browser die Property leer lässt.
+          self._verarbeiteAufnahme(self.rec.mimeType || mime);
         };
 
         this.rec.start();

@@ -280,11 +280,19 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     default => 'fake',
                 };
             }
+            // Spec 53/D: Fake ist ausserhalb von testing/local nur mit dem expliziten Flag erlaubt.
+            // Vorher landete eine demo-/Produktions-Instanz ohne jeden Zugang HIER auf Fake und
+            // ersetzte jeden Sprachbefehl stumm durch den Fixtext — fehlerfrei und trotzdem falsch.
+            if ($provider === 'fake' && ! $this->app->environment(['testing', 'local'])
+                && ! config('foodalchemist.stt.allow_fake', false)) {
+                $provider = 'none';
+            }
 
             return match ($provider) {
                 'openai' => new \Platform\FoodAlchemist\Services\Stt\OpenAiSttService(),
                 'assemblyai' => new \Platform\FoodAlchemist\Services\Stt\AssemblyAiSttService(),
-                default => new \Platform\FoodAlchemist\Services\Stt\FakeSttService(),
+                'fake' => new \Platform\FoodAlchemist\Services\Stt\FakeSttService(),
+                default => new \Platform\FoodAlchemist\Services\Stt\UnkonfiguriertSttService(),
             };
         });
 

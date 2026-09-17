@@ -9,4 +9,9 @@ class FakeSttService implements SttServiceContract
     {
         return (string) config('foodalchemist.stt.fake_text', 'Suche BBQ Sauce');
     }
+
+    public function name(): string
+    {
+        return 'fake';
+    }
 }

@@ -16,4 +16,11 @@ interface SttServiceContract
      * @return string Transkript (de)
      */
     public function transcribe(string $audioBinary, string $mimeType = 'audio/webm'): string;
+
+    /**
+     * Spec 53 / Paket D — Provider-Transparenz: welcher Dienst antwortet tatsächlich?
+     * `openai`|`assemblyai`|`fake`|`none`. Vorher war das unsichtbar: Fake lieferte
+     * stumm den immer gleichen Fixtext, ohne dass die Oberfläche das kenntlich machte.
+     */
+    public function name(): string;
 }
