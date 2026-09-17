@@ -799,3 +799,82 @@ it('Review-Fund Lauf 71: eine unmatched Beilage ohne LLM-Flag bekommt einen gepl
     expect($kind)->not->toBeNull()
         ->and($kind->status)->toBe('geplant');
 });
+
+it('#102-Nebenbefund (Dominique-Entscheid): offene Garnitur-Zeile ohne Bestandstreffer wird zum Basisrezept', function () {
+    // "Ein Gericht wird aus Basisrezepten gebaut" — auch Garnitur ohne Treffer wird zum
+    // Basisrezept (Rüstzeit etc. gehört dort erfasst), nicht zur LA-Wahl (die alte Idee war
+    // laut Dominique ein falscher Gedanke).
+    $run = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRun::create([
+        'team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'running',
+    ]);
+    $step = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht',
+        'status' => 'running', 'depth' => 0,
+    ]);
+
+    $out = $this->svc->generiere($this->rootTeam, 'Teller', [], kiRezeptOverride: [
+        'name' => 'Teller: Garnitur-Test',
+        'zutaten' => [[
+            'text' => 'Petersilienöl', 'role' => 'garnitur', 'quantity' => 5, 'unit' => 'g',
+        ]],
+    ], vkModus: true);
+
+    $zeile = $out['recipe']->ingredients()->first();
+    expect($zeile->match_method->value)->toBe('unmatched');
+    $offen = collect($out['offene'])->first();
+    expect($offen['primaer'])->toBe('basisrezept_anlegen');
+
+    app(\Platform\FoodAlchemist\Services\RecipeDependencyWorkflowService::class)->afterGenerated(
+        $this->rootTeam, (int) $step->id, 1, $out['recipe'], $out['offene'], ['_defer_children' => true],
+    );
+    $kind = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep::where('parent_step_id', $step->id)
+        ->where('kind', 'rezept')->where('label', 'Petersilienöl')->first();
+    expect($kind)->not->toBeNull()
+        ->and($kind->status)->toBe('geplant');
+});
+
+it('#102-Nebenbefund: offene Aroma-Treiber-Zeile ohne Bestandstreffer wird zum Basisrezept', function () {
+    $run = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRun::create([
+        'team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'running',
+    ]);
+    $step = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht',
+        'status' => 'running', 'depth' => 0,
+    ]);
+
+    $out = $this->svc->generiere($this->rootTeam, 'Teller', [], kiRezeptOverride: [
+        'name' => 'Teller: Aroma-Test',
+        'zutaten' => [[
+            'text' => 'Steinpilzreduktion', 'role' => 'aroma_treiber', 'quantity' => 20, 'unit' => 'g',
+        ]],
+    ], vkModus: true);
+
+    $zeile = $out['recipe']->ingredients()->first();
+    expect($zeile->match_method->value)->toBe('unmatched');
+    $offen = collect($out['offene'])->first();
+    expect($offen['primaer'])->toBe('basisrezept_anlegen');
+
+    app(\Platform\FoodAlchemist\Services\RecipeDependencyWorkflowService::class)->afterGenerated(
+        $this->rootTeam, (int) $step->id, 1, $out['recipe'], $out['offene'], ['_defer_children' => true],
+    );
+    $kind = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep::where('parent_step_id', $step->id)
+        ->where('kind', 'rezept')->where('label', 'Steinpilzreduktion')->first();
+    expect($kind)->not->toBeNull()
+        ->and($kind->status)->toBe('geplant');
+});
+
+it('#102-Nebenbefund: eine Zeile MIT GP-Treffer bleibt GP, egal welche Rolle (garnitur)', function () {
+    $gp = ($this->mkGpMitPreis)('Petersilienöl: kaltgepresst', 'petersilienoel', 4.0);
+
+    $out = $this->svc->generiere($this->rootTeam, 'Teller', [], kiRezeptOverride: [
+        'name' => 'Teller: Garnitur-GP-Test',
+        'zutaten' => [[
+            'text' => 'Petersilienöl', 'slug' => 'petersilienoel', 'role' => 'garnitur', 'quantity' => 5, 'unit' => 'g',
+        ]],
+    ], vkModus: true);
+
+    $zeile = $out['recipe']->ingredients()->first();
+    expect($zeile->gp_id)->toBe($gp->id)
+        ->and($zeile->referenced_recipe_id)->toBeNull()
+        ->and($out['offene'])->toBeEmpty();
+});

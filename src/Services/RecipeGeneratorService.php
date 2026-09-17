@@ -312,8 +312,13 @@ class RecipeGeneratorService
                 // STARKES Sub (§4 »jus ist die sauce« / LLM-Flag true): IMMER Basisrezept — überstimmt
                 // auch einen GP-Treffer und jede Convenience-Stufe. Marker sind praktisch nie Flachware.
                 $strongSub = ! $direktArtikel && ($nameHalbfabrikat || $prefixSub || ($llmSub === true));
-                // Rolle komponente/beilage im VK-Gericht (T4) — jetzt Convenience-gesteuert:
-                $rolleKomponente = $vkModus && ! $direktArtikel && in_array($z['role'] ?? null, ['komponente', 'beilage'], true);
+                // Rolle komponente/beilage/garnitur/aroma_treiber im VK-Gericht (T4) — Convenience-
+                // gesteuert. Dominique-Entscheid (Nebenbefund #102): ein Gericht wird aus
+                // Basisrezepten gebaut — auch Garnitur/Aroma-Treiber ohne Bestandstreffer werden
+                // zum Basisrezept (Rüstzeit etc. gehört dort erfasst), nicht zur LA-Wahl. Ein
+                // GP-Treffer gewinnt weiterhin unabhängig von der Rolle (siehe $rolleWillSub unten).
+                $rolleKomponente = $vkModus && ! $direktArtikel
+                    && in_array($z['role'] ?? null, ['komponente', 'beilage', 'garnitur', 'aroma_treiber'], true);
                 $istConvenienceGp = $istGpTreffer && $this->istConvenienceGp((int) ($treffer['gp_id'] ?? 0));
                 $rolleWillSub = $rolleKomponente && match ($convenience) {
                     'from_scratch'     => true,                 // hart: selbst bauen (auch über GP-Treffer)
