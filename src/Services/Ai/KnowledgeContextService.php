@@ -264,7 +264,7 @@ class KnowledgeContextService
         }
         if ($routing->has('domain:discovery')) {
             $before = count($filesUsed);
-            $domainDocs = $this->discoverDomains($team, $this->discoveryQuery($description, $params), $scopeSlugs,
+            $domainDocs = $this->discoverDomains($team, $this->discoveryQuery($description, $hauptzutatSlugs), $scopeSlugs,
                 (int) ($routing->get('domain:discovery')->max_docs ?: self::DOMAIN_TOP_K));
             foreach ($domainDocs as $doc) {
                 $blocks[] = ['file' => "{$doc->slug}@v{$doc->version}", 'text' => "## DOMAIN: {$doc->slug}\n\n" . (string) $doc->content_md];
@@ -284,7 +284,7 @@ class KnowledgeContextService
         if ($routing->has('pairing:discovery')) {
             $before = count($filesUsed);
             $pairing = $this->pairingBlock(
-                    $this->discoveryQuery($description, $params), $stil, $filesUsed,
+                    $this->discoveryQuery($description, $hauptzutatSlugs), $stil, $filesUsed,
                     self::PAIRING_TOP_K,
                 );
             if ($pairing !== null) {
@@ -319,12 +319,18 @@ class KnowledgeContextService
 
         // ── 4. GENERISCHE discovery-Kategorien (S1 Skalierbarkeit) ──
         // Jede als `discovery` geroutete Kategorie OHNE Spezial-Handler (domain/pairing/
-        // trend/concept haben eigene, oben) wird hier generisch per Beschreibung + Leitplanken-
-        // Werten (Niveau/Sektor) entdeckt und gedeckelt geladen. Damit skaliert die Wissensbasis:
+        // trend/concept haben eigene, oben) wird hier generisch per Beschreibung + Hauptzutat-Slugs
+        // (s. `discoveryQuery()`, seit Spec 53 OHNE Leitplanken-Werte) entdeckt und gedeckelt
+        // geladen. Damit skaliert die Wissensbasis:
         // eine neue Kategorie braucht nur eine Routing-Zeile, KEINEN Service-Code. Bestehende
         // Kategorien werden übersprungen → Verhalten für sie byte-identisch (golden-safe).
         $spezial = ['domain', 'pairing', 'trend', 'concept', 'niveau'];   // niveau (3b) hat eigenen dedizierten Selektor. cross_cutting + regelwerk ab 2026-08-27 über generische Discovery (Dossier-Split): die dedizierten Blöcke oben feuern nur bei mode=always und werden bei routing=discovery automatisch übersprungen, crossCuttingDocs()/regelwerkBlock() sind dann ungenutzt.
-        $leitplankenQuery = $this->discoveryQuery($description, $params);
+        // Spec 53 Aufgabe 2 (Query-Hygiene): NICHT mehr die 18 Leitplanken-WERTE anhängen — sie
+        // gewannen generische Dossiers (niveau/event-playbook) per Ein-Token-Treffer und verdrängten
+        // die Zutaten-Domäne komplett (gemessen: PREVIEW recipe.generator ohne/mit Leitplanken für
+        // den Tomatensuppen-Brief). Leitplanken wirken ab jetzt NUR über ihre eigenen Selektoren
+        // (niveauBlock/achsenBlock oben); die Discovery-Query ist Brief + Hauptzutat-Slugs.
+        $discoveryQuery = $this->discoveryQuery($description, $hauptzutatSlugs);
         $discoveryRoutings = $routing->filter(
             fn ($r) => $r->mode === 'discovery' && ! in_array($r->category, $spezial, true)
         );
@@ -346,7 +352,7 @@ class KnowledgeContextService
                 ? $scopeSlugs
                 : [];
             $generic = $this->discoverGenericBlock($team,
-                $category, $leitplankenQuery, $topK,
+                $category, $discoveryQuery, $topK,
                 $filesUsed, $allowed
             );
             if ($generic !== null) {
@@ -383,7 +389,7 @@ class KnowledgeContextService
         foreach ($artRouting as $route) {
             $before = count($filesUsed);
             if ($route->mode === 'discovery' && empty($params['_required_only'])) {
-                $part = $this->discoverGenericBlock($team, $route->art, $leitplankenQuery,
+                $part = $this->discoverGenericBlock($team, $route->art, $discoveryQuery,
                     (int) ($route->max_docs ?: 3), $filesUsed, $scopeSlugs, $route->art);
                 if ($part !== null) $parts[] = $part;
             } elseif ($route->art === 'datenwerk' && $route->mode === 'resolve') {
@@ -945,31 +951,22 @@ class KnowledgeContextService
     }
 
     /**
-     * Die Regler/der Quadrant müssen die Retrieval-Query tatsächlich prägen. Steuer- und Cache-
-     * Felder bleiben draußen; nur kulinarisch bedeutende Werte werden flach angehängt.
+     * Spec 53 Aufgabe 2 (Query-Hygiene) — die Retrieval-Query ist Brief + Hauptzutat-Slugs, SONST
+     * NICHTS. Bis 2026-09-17 hängte diese Methode die WERTE von 18 Leitplanken (niveau, sektor,
+     * occasion, saison, …) roh an den Brief. Gemessen per `knowledge.PREVIEW` am Tomatensuppen-Brief:
+     * mit Leitplanken gewannen `niveau.*`/`event_playbook_business_lunch` die Discovery per
+     * Ein-Token-Treffer (Jaccard) komplett — die Zutaten-/Technik-Domäne (Fonds, Wurzelgemüse) fiel
+     * ganz raus. Leitplanken sind kein Rausch-Text für die Ähnlichkeitssuche; sie wirken über ihre
+     * EIGENEN, deterministischen Selektoren (`niveauBlock()`, `achsenBlock()`), nicht hier.
      */
-    private function discoveryQuery(string $description, array $params): string
+    private function discoveryQuery(string $description, array $hauptzutatSlugs = []): string
     {
-        $keys = [
-            'niveau', 'level', 'sektor', 'convenience', 'frische', 'bio', 'bio_pref',
-            'bestand', 'diaet_hart', 'allergen_nogo', 'aroma', 'aroma_kueche', 'occasion',
-            'serviceform', 'kompositions_stil', 'saison', 'ziel_we_pct', 'rezept_typ',
-        ];
-        $werte = [];
-        foreach ($keys as $key) {
-            $value = $params[$key] ?? null;
-            if (is_array($value)) {
-                $value = implode(' ', array_filter(array_map(
-                    fn ($v) => is_scalar($v) ? (string) $v : '',
-                    $value
-                )));
-            }
-            if (is_scalar($value) && trim((string) $value) !== '') {
-                $werte[] = str_replace(['_', '-'], ' ', (string) $value);
-            }
-        }
+        $zutaten = array_values(array_filter(array_map(
+            static fn ($slug) => is_scalar($slug) ? str_replace(['_', '-'], ' ', trim((string) $slug)) : '',
+            $hauptzutatSlugs
+        )));
 
-        return trim($description . ' ' . implode(' ', $werte));
+        return trim($description . ' ' . implode(' ', $zutaten));
     }
 
     /** @return list<string> */
@@ -1386,8 +1383,8 @@ class KnowledgeContextService
 
     /**
      * S1 (Skalierbarkeit): generische discovery für JEDE als `discovery` geroutete Kategorie
-     * OHNE eigenen Spezial-Handler. Rankt die aktiven Docs der Kategorie gegen die (Leitplanken-
-     * augmentierte) Query über den gemeinsamen KnowledgeSearchService und lädt erst
+     * OHNE eigenen Spezial-Handler. Rankt die aktiven Docs der Kategorie gegen die Query
+     * (Brief + Hauptzutat-Slugs, s. `discoveryQuery()`) über den gemeinsamen KnowledgeSearchService und lädt erst
      * nach Rangfusion die ausgewählten Volltexte. So trägt jedes neu gepflegte Doc automatisch,
      * ohne Service-Änderung; der Prompt bleibt durch top_k/chars beschränkt (O(1), nicht O(n)).
      */
