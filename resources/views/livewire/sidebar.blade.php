@@ -15,19 +15,13 @@
         Food Alchemist
     </div>
 
-    {{-- Phase C2: der Sprach-Agent — EINMAL global gemountet. Die Sidebar liegt via
-         platform::layouts.app auf jeder FA-Seite, also gibt es genau eine Modal-Identität
-         (`voice-modal`); jede Seite öffnet sie mit `voice-modal.oeffnen`.
-
-         Bewusst hier und NICHT im `x-show="!collapsed"`-Block darunter: `x-show` setzt
-         display:none und würde das geöffnete Modal mit ausblenden. Kein Teleport nötig —
-         `x-ui-sidebar` trägt nur `relative` (kein transform/filter), das `fixed`-Modal
-         bezieht sich also auf den Viewport; `overflow-y-auto` am <nav> klippt es nicht.
-         Grenze, die bleibt: `x-ui-sidebar` rendert den Modul-Slot in einem `x-if` und
-         nimmt ihn beim Einklappen aus dem DOM. Knopf und Modal teilen damit dieselbe
-         Sichtbarkeit — kein Loch, aber der Grund, warum es keine eingeklappte Variante
-         gibt (die wäre nie gerendert, wie FAs Icon-Leiste weiter unten). --}}
-    @livewire('foodalchemist.voice-modal')
+    {{-- Spec 53/F Stufe 2: der Sprach-Agent mountet NICHT MEHR hier — `x-ui-sidebar` rendert
+         den Modul-Slot in einem `x-if` und nimmt ihn beim Einklappen komplett aus dem DOM
+         (traf früher auch das hier gemountete Modal, siehe `saved-toast`-Nebenbefund). Das
+         Modal mountet jetzt auf SEITENEBENE über `foodalchemist::partials.agent-mount`
+         (im Root jeder FA-Vollseite, überlebt das Einklappen). Die Sidebar behält NUR noch
+         den Öffnen-Knopf — eine Modal-Identität (`voice-modal`), jede Seite öffnet sie mit
+         demselben `voice-modal.oeffnen`-Event. --}}
 
     {{-- Ebene 2 (D2): aktiver Betrieb — die Preis-Dimension der ganzen FA (nur ausgeklappt). --}}
     <div x-show="!collapsed" class="px-2">

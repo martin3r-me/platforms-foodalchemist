@@ -25,11 +25,64 @@ class Ki extends Component
     /** Nutzungs-Zeitraum: '7' | '30' | '90' | 'all' (Tage; all = gesamte Historie). */
     public string $zeitraum = '30';
 
+    /** Spec 53/F: Agenten-Modus des Sprachbefehls — fragen (Default)|auto_sicher|nur_lesen. */
+    public string $sprachAgentModus = TeamSettingsService::VOICE_AGENT_MODE_DEFAULT;
+
+    /** Spec 53/F Stufe 2: Sprachbefehl auf jeder Vollseite als schwebendes Element (Default AUS). */
+    public bool $sprachAgentDauerhaftAktiv = false;
+
     public function mount(): void
     {
         $team = Auth::user()?->currentTeamRelation;
         $this->kiAktiv = $team === null || app(TeamSettingsService::class)->kiAktiv($team);
+        if ($team !== null) {
+            $svc = app(TeamSettingsService::class);
+            $this->sprachAgentModus = $svc->voiceAgentModus($team);
+            $this->sprachAgentDauerhaftAktiv = $svc->voiceAgentDauerhaftAktiv($team);
+        }
     }
+
+    /** Sofort speichern + localStorage-Spiegel via Browser-Event (agent-mount.blade.php liest ihn). */
+    public function sprachAgentDauerhaftUmschalten(): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null) {
+            return;
+        }
+        $this->sprachAgentDauerhaftAktiv = ! $this->sprachAgentDauerhaftAktiv;
+        app(TeamSettingsService::class)->update($team, ['voice_agent_dauerhaft_aktiv' => $this->sprachAgentDauerhaftAktiv]);
+        // Kein `->to()` nötig: Livewire dispatcht als normales `window`-CustomEvent — der
+        // schwebende Knopf (Alpine, agent-mount.blade.php) hört global zu und spiegelt den
+        // Wert sofort in localStorage, ohne dass die aktuelle Seite neu geladen werden muss.
+        $this->dispatch('voice-agent-dauerhaft-aktiv-geaendert', aktiv: $this->sprachAgentDauerhaftAktiv);
+        $this->meldung = $this->sprachAgentDauerhaftAktiv
+            ? 'Sprachbefehl ist jetzt auf jeder Seite als schwebendes Element sichtbar.'
+            : 'Sprachbefehl bleibt wieder auf den Sidebar-Knopf beschränkt.';
+    }
+
+    /** Livewire-Hook: `wire:model.live="sprachAgentModus"` speichert sofort bei Auswahl. */
+    public function updatedSprachAgentModus(string $wert): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null || ! in_array($wert, TeamSettingsService::VOICE_AGENT_MODES, true)) {
+            return;
+        }
+        app(TeamSettingsService::class)->update($team, ['voice_agent_mode' => $wert]);
+        $this->meldung = 'Sprachbefehl-Modus gespeichert: ' . self::MODUS_LABEL[$wert];
+    }
+
+    /** Label + Beschreibung je Modus — geteilt zwischen Blade (Radio-Gruppe) und Pill im Voice-Modal. */
+    public const MODUS_LABEL = ['fragen' => 'Fragen', 'auto_sicher' => 'Automatisch (sicher)', 'nur_lesen' => 'Nur lesen'];
+
+    public const MODUS_BESCHREIBUNG = [
+        'fragen' => 'Der Agent liest frei, jede Schreibaktion (Planung anlegen, Rezept anreichern, Klasse '
+            . 'übernehmen) bleibt ein Vorschlag mit Bestätigen-Klick.',
+        'auto_sicher' => 'Reversible Vorschläge (Planung anlegen + Editor öffnen, Anreicherung starten, '
+            . 'Speisen-Klasse übernehmen) laufen sofort und werden als „ausgeführt" gemeldet. Unumkehrbares '
+            . '(löschen, veröffentlichen, bestellen) bleibt Vorschlag mit Klick.',
+        'nur_lesen' => 'Der Agent antwortet nur — keine Vorschläge, keine Schreibaktionen. Aufnahme und '
+            . 'Tippen bleiben verfügbar.',
+    ];
 
     public function umschalten(): void
     {

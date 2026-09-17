@@ -1,0 +1,73 @@
+{{--
+    Spec 53 / Paket F, Stufe 2: Sprachbefehl-Mount auf SEITENEBENE statt im Sidebar-`x-if`-Slot.
+
+    WARUM: `x-ui-sidebar` (Core) rendert den FA-Modul-Slot in einem `x-if` — beim Einklappen
+    der Sidebar fliegt der GANZE Slot aus dem DOM, inklusive eines dort gemounteten Modals
+    (Nebenbefund, betraf auch `saved-toast`). Dieses Partial wird stattdessen von JEDER FA-
+    Vollseite im Root-Element eingebunden (eine Zeile: `@include('foodalchemist::partials.agent-mount')`),
+    überlebt also das Einklappen. Die Sidebar behält NUR noch den Öffnen-Knopf, der das
+    bestehende `voice-modal.oeffnen`-Event schickt — das Modal selbst mountet hier.
+
+    LEHRE AUS DEM ROOT-HOTFIX (2026-09-17): dieses Include gehört INS Root-Element der
+    aufrufenden Seite, NIE davor/danach als eigener Geschwister-Knoten — sonst besteht dasselbe
+    Risiko wie beim rohen `<script>`-Tag (`Utils::insertAttributesIntoHtmlRoot` hängt `wire:id`
+    an das ERSTE Tag der Komponente). Root-ZÄHLUNG beweist dabei nichts über Attribut-INJEKTION.
+
+    „Dauerhaft aktiv" (Team-Setting, Radio+Schalter in den Einstellungen) zeigt zusätzlich ein
+    schwebendes, ziehbares Mikrofon-Element — Positions-Spiegel in localStorage (rein clientseitig,
+    kein Server-State). Ohne den Schalter (Default) bleibt es wie heute: nur der Sidebar-Knopf.
+--}}
+@php($__voiceAgentTeam = auth()->user()?->currentTeamRelation)
+@php($__voiceAgentDauerhaftAktiv = $__voiceAgentTeam !== null
+    ? app(\Platform\FoodAlchemist\Services\TeamSettingsService::class)->voiceAgentDauerhaftAktiv($__voiceAgentTeam)
+    : false)
+@livewire('foodalchemist.voice-modal')
+<div
+    x-data="{
+        aktiv: @js($__voiceAgentDauerhaftAktiv),
+        x: null, y: null,
+        dragOffsetX: 0, dragOffsetY: 0, dragging: false, moved: false,
+        init() {
+            try {
+                const gespeichert = JSON.parse(localStorage.getItem('fa-voice-mount-pos') || 'null');
+                if (gespeichert && typeof gespeichert.x === 'number') { this.x = gespeichert.x; this.y = gespeichert.y; }
+            } catch (e) { /* localStorage kann in Private-Mode werfen — Default-Ecke bleibt */ }
+            window.addEventListener('voice-agent-dauerhaft-aktiv-geaendert', (e) => {
+                this.aktiv = !!(e.detail && e.detail.aktiv);
+            });
+        },
+        startDrag(e) {
+            this.dragging = true; this.moved = false;
+            const rect = this.$refs.knopf.getBoundingClientRect();
+            this.dragOffsetX = e.clientX - rect.left;
+            this.dragOffsetY = e.clientY - rect.top;
+        },
+        onDrag(e) {
+            if (! this.dragging) return;
+            this.moved = true;
+            this.x = e.clientX - this.dragOffsetX;
+            this.y = e.clientY - this.dragOffsetY;
+        },
+        stopDrag() {
+            if (! this.dragging) return;
+            this.dragging = false;
+            if (this.moved) {
+                try { localStorage.setItem('fa-voice-mount-pos', JSON.stringify({ x: this.x, y: this.y })); } catch (e) {}
+            }
+        },
+        oeffnen() { if (! this.moved) { $dispatch('voice-modal.oeffnen'); } },
+    }"
+    x-show="aktiv" x-cloak
+    x-init="init()"
+    @mousemove.window="onDrag($event)"
+    @mouseup.window="stopDrag()"
+    class="fixed z-[90]"
+    :style="x !== null ? ('left:' + x + 'px; top:' + y + 'px;') : 'right:1.5rem; bottom:1.5rem;'"
+    data-voice-float-mount
+>
+    <button type="button" x-ref="knopf" @mousedown="startDrag($event)" @click="oeffnen()"
+            class="w-12 h-12 rounded-full bg-gradient-to-r from-violet-500 to-indigo-500 text-white shadow-lg shadow-violet-500/30 flex items-center justify-center cursor-move select-none"
+            title="Sprachbefehl (ziehbar)" data-voice-float-button>
+        @svg('heroicon-o-microphone', 'w-5 h-5')
+    </button>
+</div>

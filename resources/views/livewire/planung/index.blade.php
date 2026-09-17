@@ -1079,4 +1079,6 @@
     {{-- Vollen Conceptor-Editor inline: ein erzeugtes Concept öffnet mit allen Tabs/KPIs/Score/Kalkulation/
          Geschirr direkt hier (öffnet via concepter-editor.oeffnen aus der step-zeile). Gleiches Muster wie Angebote. --}}
     <livewire:foodalchemist.concepter.editor />
+    {{-- Spec 53/F Stufe 2: Sprachbefehl-Mount auf Seitenebene (Modal + optionales schwebendes Element). --}}
+    @include('foodalchemist::partials.agent-mount')
 </x-ui-page>
