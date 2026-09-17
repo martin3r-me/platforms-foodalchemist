@@ -226,3 +226,16 @@ Vorher: kein Tomaten-/Suppen-Dossier in der Top-5 (lex-Ränge 22–51), mit Leit
 **Konsequenz (Dominique 17.09.: „Menge für Discovery erhöhen"):** `knowledge_budget.PUT recipe.generator 64.000 → 80.000` — Discovery bekommt ~33.000 statt ~17.000 Zeichen; Erwartung: `kasealternativen-vegan` und `rezept_aufbau_prozessstufen` kommen in Lauf 3/1 hinein. Nachmessung folgt.
 
 **Nachmessung @ 80.000 (Lisa):** Lauf 1: verworfen 0, gesendet 77.256 (vorher 63.539) — zusätzlich `rezept_aufbau_prozessstufen` (3.714), `fruchtgemuse-sorten-ubersicht` (3.643), `fonds_jus_consomme_kennwerte--5-jus` (2.944), `pflanzlich_konfieren_kennwerte` (3.108); 11 Retrieval-Dossiers, alle drin. Lauf 3: verworfen 0, gesendet 75.775 — zusätzlich `kasealternativen-vegan` (2.955, lex 3 — der Gewinn) und `allergen_patterns--ramen` (2.294, lex 27/sem 20 — **Ausreißer**: Ramen-Allergenmuster hat mit Tomatensuppe nichts zu tun, wirkt wie generisches Diät-/Allergen-Rauschen). Einschätzung: Auswahl bei 80k überwiegend fokussiert; Beobachtungspunkt: bei `diaet_hart`-Kombinationen prüfen, ob `allergen_patterns--*` systematisch mitkommt. Budget bleibt 80.000.
+
+### Live-Lauf 1 — Basisrezept Tomatensuppe (Session 125, Lauf 69, Step 474 → Rezept 3753 „Suppe: Tomate-Basilikum", Budget 80.000, `complete_coverage=false`, `ki_bilder=false`)
+
+| Messpunkt | Ergebnis |
+|---|---|
+| 1 Phasen (DB `phase`, 2-s-Poll) | 20:36:21 „KI schreibt das Rezept …" → 20:39:18 „Kohärenz-Gate: Fremdkörper werden geprüft …" → 20:39:26 `done` + „Konformität wird geprüft …" → 20:40:46 Phase gelöscht. Phase im MCP-Status sichtbar (`schritte[].phase`). „Kontext & Wissen"/„Zutaten zugeordnet" zu kurz für 2-s-Poll (7,4 s / 2,3 s) |
+| 2 `timings` | context 7.416 · generation 169.265 · matching_and_save 2.256 · checks 13.091 · generator 192.386 ms — **Generierung = 88 %** |
+| 3 Call-Log | `recipe.generator` in 29.648 / **cached 29.440 (99 %)** / out 2.767, 169 s, 91.390 Prompt-Zeichen, `versuche=1` (kein Re-Roll) · `recipe.review` (Kohärenz-Kritiker, wegen verdrahtetem Sub) 5.272/1.792/650, 12,6 s · `conformance.check` 14.818/14.080/1.090, 80,5 s (`deferred.conformance.ms=80563`) |
+| 4 Wissen | Kanon 13, Retrieval 11 (Suppen-Systematik ×4, Rezeptaufbau, Fruchtgemüse, Fonds, pflanzlich konfieren, 3 Tomaten-Referenzrezepte), verworfen {kanon: [], retrieval: []} — Anzeige ehrlich |
+| 5 Zutaten (13, **0 offen**) | „Stückige Tomaten aus der Dose" → `Tomaten: konserviert, gewuerfelt / Polpa` ✓ · Staudensellerie/Sahne/Olivenöl/Basilikum alle geerdet ✓ (späte Zutaten) · Pfeffer → `trocken, gemahlen` ✓ · Tomatenmark konserviert ✓ · Salz/Zucker trocken ✓. GP-Wahl-Schönheitsfehler: `Karotten: frisch, mini, gemischt` und `Zwiebeln: frisch, geachtelt` (Form passt nicht zum Suppenansatz — Ranking-Bonus für Form greift hier nicht sichtbar) |
+| 6 Sub-Zerlegung | `Fond: Helle Gemüsebrühe` (#1452) übernommen, korrekt als **unreif** markiert („keine Schritte"); Run-Kopf `uebernommen=1, uebernommen_unreif=1` |
+
+EK 7,74 € / 1,96 kg (3,95 €/kg). Steps 0 (Anreicherung läuft erst nach Freigabe). Vergleich Screenshot vorher: 11 von 13 bepreist, Dosentomaten offen → jetzt 13/13 verknüpft.
