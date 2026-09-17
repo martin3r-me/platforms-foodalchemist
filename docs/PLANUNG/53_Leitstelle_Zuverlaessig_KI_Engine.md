@@ -365,6 +365,25 @@ Anlass: Dominique drückt im Rezept-Editor (Stammdaten) „Name putzen/Kategorie
 
 **Bündel 2 angewendet (2026-09-18 00:20):** Code-Check Lisa widerlegt die Graph-Hypothese für `vk.kohaerenz`/`vk.teller_heber` — `CoherenceService.php:56/:83` ruft `propose()` mit 2 Positionsargumenten, kein `knowledge`; Judge-Score wird laut Docblock NIE mit `PairingService::cohesion` verrechnet → echte Lücke, Kanon wenn_platz (Foodpairing-Prinzip + Geschmacksbalance bzw. `plating_patterns--1/--11`). `vk.plating` → Kanon wenn_platz `plating_patterns--1/--6` + `gericht_kreation_kreativprozess--5-teller-geschirrwahl`. `vk.servier_vehikel` → kein Dossier (Vehikel = DB-Vokabular), nur Zeile löschen. `recipe.sektor`: Kategorie `segment` hat 8+ aktive Dossiers → Code-Anschluss lohnt. `vk.rollen` Kanon pflicht gesetzt (3.566 Z.). Deletes (cooking-jarvis-03, je `{deleted:1}`, alle `art=fachwissen`): gp.naehrwerte, vk.kohaerenz, vk.teller_heber, vk.plating, vk.servier_vehikel, vk.regeneration. Kanon-PUTs (7, Server-bestätigt) + PREVIEW nachher (Lisa, 00:35): `vk.kohaerenz` 7.201 Z. nur Kanon, `vk.teller_heber` 5.666 Z. nur Kanon, `vk.plating` 8.441 Z. alle 3 unter kanon (Etikett-Fall verschwunden, kein Overlap mehr), `gp.naehrwerte`/`vk.servier_vehikel`/`vk.regeneration` 0/0/0 wie entschieden. Die zwei leerlaufenden `regelwerk`-Zeilen (eigenschaften, dichteklasse) einzeln nachgelöscht (je `{deleted:1}`). **Audit-Bilanz Lisa: 26 Keys, 13 Kanon-Bindungen, 11 Routing-Deletes, 3 Code-Anschlüsse offen (Paul PR 2: recipe.sektor, component.replacement_suggest; optional recipe.geschmack-Discovery), 4 Korpus-Lücken.**
 
+### G.4 Korpus-Lücken geschlossen — Import-Lücke statt Schreibauftrag (cooking-jarvis-03, 2026-09-18 01:00)
+
+Prüfung gegen `knowledge.LIST category=regelwerk` (77 Dossiers): Regelwerk Basisrezepte **§14 Regeneration & Behälter** (Vault v1.10) und Regelwerk Verkaufsgerichte **§3 Anleitungs-Ebenen (inkl. §3.2a, §3.4–3.8) + §4 Darreichung** (Vault v1.8) fehlen im Modul komplett — der Vault-Import hat die Spec-51-Nachzüge vom 2026-09-04 nie übernommen. Lücken 2 (Produktionszeit) und 3 (Regeneration/Behälter) sind damit **keine Schreibaufträge**, sondern Import-Lücken; Lücke 1 (Basisrezept-Kategorisierung) deckt das vorhandene Dossier `regelwerk-basisrezepte-10-12-…--1-2-typ-vokabular-kontrolliert` (Hauptgruppe → Typen-Tabelle) → **als Kanon wenn_platz an `recipe.category` gebunden** (ord 20). Lücke 4 (Nährwert-Referenz) bleibt offen (Datenwerk, braucht Quellen).
+
+**8 Dossiers per `knowledge.POST` angelegt — alle `active=false`, `art=regel`, Vault-konsistente Slugs (Reconciliation beim nächsten Import), ≤ 4.000 Z.:**
+
+| Slug | Zeichen |
+|---|---|
+| `regelwerk-basisrezepte-14-regeneration-behaelter-am-basisrezept` | 2.701 |
+| `regelwerk.regelwerk_verkaufsgerichte--3-anleitungs-ebenen-produktion-regeneration-anrichten` | 3.132 |
+| `regelwerk.regelwerk_verkaufsgerichte--3-2a-regeneration-gehoert-der-komponente-fuenf-raenge` | 2.422 |
+| `regelwerk.regelwerk_verkaufsgerichte--3-4-behaelter-je-zweck-nicht-servier-vehikel` (+ §3.4d) | 2.179 |
+| `regelwerk.regelwerk_verkaufsgerichte--3-4a-c-produktions-groessen-pass-nebenkosten` | 2.265 |
+| `regelwerk.regelwerk_verkaufsgerichte--3-4e-behaelter-bemessung-menge-waehlt-groesse-und-anzahl` | 3.495 |
+| `regelwerk.regelwerk_verkaufsgerichte--3-5-3-8-temperatur-ausgabe-briefing-schritte-ohne-mengen` | 3.301 |
+| `regelwerk.regelwerk_verkaufsgerichte--4-darreichung-unbestimmt-ist-ein-zustand` | 871 |
+
+**Nächster Schritt (Dominique):** Freischalten im Wissens-Browser. Danach Kanon-Bindungen: `vk.regeneration` ← §3.2a + §14 (pflicht); `recipe.eigenschaften` ← §14 (wenn_platz); `vk.plating` ← §3 (wenn_platz, Anrichten-Ebene); `recipe.steps`/`vk.steps` ← §3.8 Schritte ohne Mengen (pflicht, sofern Key existiert); Darreichungs-Keys ← §4. Offen: `regelwerk-basisrezepte-4-…` (4.002 Z.) splitten.
+
 ### G.2 Umbau-Stand (Paul, 2026-09-17 23:40, `feat/ki-feedback-editoren` HEAD f740b9ae, 6 Commits)
 
 27 Knöpfe umgestellt, neue Komponenten-Variante `ai` (violette `$btnAi`-Optik bleibt Signal „ruft KI"): recipe-modal 9, vk-modal 5, gps/detail-panel 4, gp-modal 4, verkauf/detail-panel 5; Generator-Modal war bereits korrekt (Beleg-Test Poll Ruhe/aktiv ergänzt). Code-Fix `recipe.geschmack` ohne `$wissenOpts` (d8525b28); VkModal::ki()-Dispatcher und alle GpModal-Calls übergeben UNIFORM kein Wissen → offene fachliche Frage (Lisa prüft, ob Kanon im Gateway auch ohne Caller-Options zieht). Restliste 17 Dateien (~30–40 Knöpfe) + Garverluste ×2 (Alpine-Custom-Merge) → PR 2 `feat/ki-feedback-editoren-2`. Belege: `data-ki-action="namePutzen"` + `wire:target="namePutzen"` (KiFeedbackRecipeModalTest), Poll-Regel (KiFeedbackGeneratorPollTest).
