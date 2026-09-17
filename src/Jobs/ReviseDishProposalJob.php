@@ -45,6 +45,8 @@ class ReviseDishProposalJob implements ShouldQueue
             Auth::login($user);
         }
 
+        // Spec 53 / Paket C-Nachtrag: Phase sichtbar machen, solange der Revise-Call läuft.
+        $cascade->setzePhase($this->stepId, 'Gerichtsvorschlag wird überarbeitet …');
         try {
             $proposal = $ai->propose('planning.dish_proposal_revise', [
                 'bestehend' => [
@@ -73,6 +75,10 @@ class ReviseDishProposalJob implements ShouldQueue
                 'description' => $this->text($w['beschreibung'] ?? $idee->description),
                 'source_meta' => $meta,
             ]);
+            // Vor dem Status-Sprung zurück auf `geplant` löschen (setzePhase()-Guard lässt nur
+            // queued/running/done/freigegeben zu) und als EIGENER Call statt im $step->update() unten
+            // mitzugeben — dieselbe Dirty-Checking-Falle wie in GenerateDishProposalJob.
+            $cascade->setzePhase($this->stepId, null);
             if (! $cascade->istAbgebrochen((int) $step->cascade_run_id)) {
                 $step->update([
                     'label' => Str::limit($titel, 120, ''),
@@ -87,9 +93,24 @@ class ReviseDishProposalJob implements ShouldQueue
                 $cascade->recomputeRunStatus((int) $step->cascade_run_id);
             }
         } catch (\Throwable $e) {
+            $cascade->setzePhase($this->stepId, null);
             $step->update(['status' => 'geplant', 'error' => Str::limit('Überarbeitung fehlgeschlagen: '.$e->getMessage(), 500, '')]);
             $cascade->recomputeRunStatus((int) $step->cascade_run_id);
         }
+    }
+
+    /** Job-Tod (Timeout/Fatal außerhalb des handle-try) → Step zurück auf `geplant` (wie im catch-Pfad
+     *  oben) statt failed, sonst blieben Status UND Phase für immer auf „läuft"/„wird überarbeitet". */
+    public function failed(\Throwable $e): void
+    {
+        $cascade = app(PlanningCascadeService::class);
+        $cascade->setzePhase($this->stepId, null);
+        $step = FoodAlchemistCascadeRunStep::find($this->stepId);
+        if ($step === null) {
+            return;
+        }
+        $step->update(['status' => 'geplant', 'error' => Str::limit('Überarbeitung abgebrochen: '.$e->getMessage(), 500, '')]);
+        $cascade->recomputeRunStatus((int) $step->cascade_run_id);
     }
 
     private function text(mixed $value): ?string

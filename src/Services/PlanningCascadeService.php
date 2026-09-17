@@ -1336,7 +1336,13 @@ class PlanningCascadeService
             }
             $workflow = app(RecipeDependencyWorkflowService::class);
             $context = $workflow->prepare($team, $stepId, $beschreibung, $params, true);
-            $gen = app(RecipeGeneratorService::class)->generiere($team, $beschreibung, $params, null, true, 'plan_go', $context);
+            // Spec 53 / Paket C-Nachtrag: derselbe Fortschritts-Callback wie materialisiereSpeisekarte-
+            // Position/-SpeiseplanZelle — dies ist der häufigste Gericht-Pfad live (jedes erfundene
+            // Gericht aus Concept-/Foodbook-Fan-out, MaterializeConceptIdeaJob), bisher ohne Phase.
+            $gen = app(RecipeGeneratorService::class)->generiere(
+                $team, $beschreibung, $params, null, true, 'plan_go', $context,
+                fn (string $stufe) => $this->setzePhase($stepId, $stufe),
+            );
             $recipe = $gen['recipe'] ?? null;
             if ($recipe === null) {
                 throw new RuntimeException('Generierung lieferte kein Rezept.');

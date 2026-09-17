@@ -6,10 +6,13 @@ use Platform\FoodAlchemist\Jobs\GenerateConceptJob;
 use Platform\FoodAlchemist\Jobs\GenerateDishProposalJob;
 use Platform\FoodAlchemist\Jobs\MaterializeSpeisekartePositionJob;
 use Platform\FoodAlchemist\Jobs\MaterializeSpeiseplanCellJob;
+use Platform\FoodAlchemist\Jobs\ReviseDishProposalJob;
 use Platform\FoodAlchemist\Models\FoodAlchemistCascadeRun;
 use Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep;
 use Platform\FoodAlchemist\Models\FoodAlchemistDishIdea;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
+use Platform\FoodAlchemist\Services\Ai\AiGatewayService;
+use Platform\FoodAlchemist\Services\Ai\AiProposal;
 use Platform\FoodAlchemist\Services\ConceptGeneratorService;
 use Platform\FoodAlchemist\Services\IdeenService;
 use Platform\FoodAlchemist\Services\PlanningCascadeService;
@@ -223,6 +226,76 @@ it('GenerateDishProposalJob::failed loescht eine haengengebliebene Phase (harter
 
     expect($step->refresh()->phase)->toBeNull()
         ->and($step->refresh()->status)->toBe('failed');
+});
+
+it('materialisiereConceptGericht setzt die generiere()-Stufen als Phase (haeufigster Gericht-Pfad: erfundenes Concept-/Foodbook-Gericht)', function () {
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'concept', 'status' => 'running']);
+    $step = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'running', 'sort' => 1]);
+    $idee = FoodAlchemistDishIdea::create([
+        'team_id' => $this->rootTeam->id, 'title' => 'Erfundenes Gericht', 'status' => 'entwurf', 'target_form' => 'einzel',
+        'generation_status' => 'queued', 'position' => 1, 'created_via' => 'test',
+        'source_meta' => ['target_concept_slot_id' => 0],
+    ]);
+    $recipe = $this->makeRecipe($this->rootTeam, 'Erfundenes-Gericht-Rezept', ['is_sales_recipe' => true, 'status' => 'draft']);
+
+    $this->mock(RecipeDependencyWorkflowService::class, function ($m) {
+        $m->shouldReceive('prepare')->andReturn(['snapshot' => []]);
+        $m->shouldReceive('afterGenerated')->andReturn(null);
+    });
+    $phaseMid = null;
+    $this->mock(RecipeGeneratorService::class, function ($m) use (&$phaseMid, $step, $recipe) {
+        $m->shouldReceive('generiere')->once()->andReturnUsing(function (...$args) use (&$phaseMid, $step, $recipe) {
+            $cb = $args[7] ?? null;
+            if (is_callable($cb)) {
+                $cb('KI schreibt das Rezept …');
+                $phaseMid = $step->refresh()->phase;
+            }
+
+            return ['recipe' => $recipe, 'offene' => []];
+        });
+    });
+
+    app(PlanningCascadeService::class)->materialisiereConceptGericht($this->rootTeam, (int) $idee->id, (int) $step->id);
+
+    expect($phaseMid)->toBe('KI schreibt das Rezept …')
+        ->and($step->refresh()->phase)->toBeNull()
+        ->and($step->refresh()->status)->toBe('done');
+});
+
+it('ReviseDishProposalJob setzt "Gerichtsvorschlag wird überarbeitet …" waehrend propose(), geloescht danach', function () {
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'running']);
+    $step = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'running', 'sort' => 1]);
+    $idee = FoodAlchemistDishIdea::create(['team_id' => $this->rootTeam->id, 'title' => 'Alt', 'status' => 'entwurf', 'target_form' => 'einzel', 'generation_status' => 'entwurf', 'position' => 1, 'created_via' => 'test']);
+
+    $phaseMid = null;
+    $this->mock(AiGatewayService::class, function ($m) use (&$phaseMid, $step) {
+        $m->shouldReceive('propose')->once()->andReturnUsing(function () use (&$phaseMid, $step) {
+            $phaseMid = $step->refresh()->phase;
+
+            return new AiProposal(['titel' => 'Neu', 'beschreibung' => 'Ueberarbeitet', 'komponenten' => []], 0.9);
+        });
+    });
+
+    (new ReviseDishProposalJob($this->rootTeam->id, (int) $this->user->id, (int) $step->id, (int) $idee->id, 'Feedback'))
+        ->handle(app(AiGatewayService::class), app(PlanningCascadeService::class));
+
+    expect($phaseMid)->toBe('Gerichtsvorschlag wird überarbeitet …')
+        ->and($step->refresh()->phase)->toBeNull()
+        ->and($step->refresh()->status)->toBe('geplant')
+        ->and($idee->refresh()->title)->toBe('Neu');
+});
+
+it('ReviseDishProposalJob::failed setzt den Step zurueck auf geplant und loescht die Phase (harter Job-Tod)', function () {
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'running']);
+    $step = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'running', 'phase' => 'Gerichtsvorschlag wird überarbeitet …', 'phase_at' => now(), 'sort' => 1]);
+    $idee = FoodAlchemistDishIdea::create(['team_id' => $this->rootTeam->id, 'title' => 'Alt', 'status' => 'entwurf', 'target_form' => 'einzel', 'generation_status' => 'entwurf', 'position' => 1, 'created_via' => 'test']);
+
+    (new ReviseDishProposalJob($this->rootTeam->id, (int) $this->user->id, (int) $step->id, (int) $idee->id, 'Feedback'))
+        ->failed(new \RuntimeException('Timeout'));
+
+    expect($step->refresh()->phase)->toBeNull()
+        ->and($step->refresh()->status)->toBe('geplant')
+        ->and($step->refresh()->error)->toContain('Timeout');
 });
 
 it('laufStatus() zeigt fuer queued/running-Steps ohne gesetzte Phase denselben "wartet auf Worker"-Text wie das Cockpit', function () {
