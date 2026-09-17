@@ -8,6 +8,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistAngebot;
 use Platform\FoodAlchemist\Models\FoodAlchemistFoodbook;
 use Platform\FoodAlchemist\Models\FoodAlchemistOutlet;
 use Platform\FoodAlchemist\Models\FoodAlchemistPresentation;
+use Platform\FoodAlchemist\Models\FoodAlchemistPresentationDesign;
 use Platform\FoodAlchemist\Models\FoodAlchemistSpeisekarte;
 use Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplan;
 
@@ -95,6 +96,27 @@ class PresentationService
             'expires_at' => $expiresAt->toIso8601String(),
             'design' => $design,
         ];
+    }
+
+    /**
+     * Bug-Runde 2026-09-17 #2: Wurde das gebundene Design NACH der letzten Veröffentlichung
+     * geändert? Der Public-Link rendert nur den eingefrorenen Snapshot — ohne diesen Hinweis
+     * sieht man die Design-Änderung in der Vorschau, im Kundenlink aber nie. Builtins ändern
+     * sich nicht, für sie ist die Antwort immer false.
+     */
+    public function designGeaendertSeitPublish(Model $entity): bool
+    {
+        $published = $entity->presentation_published_at ?? null;
+        if (! ($entity->presentation_enabled ?? false) || $published === null) {
+            return false;
+        }
+        $source = (string) ($entity->presentation_design ?? '');
+        if (! str_starts_with($source, 'design:')) {
+            return false;
+        }
+        $design = FoodAlchemistPresentationDesign::query()->find((int) substr($source, 7));
+
+        return $design?->updated_at !== null && $design->updated_at->greaterThan($published);
     }
 
     /** Nimmt den Public-Link vom Netz (Snapshot + Token bleiben — Wieder-Freigabe möglich). */

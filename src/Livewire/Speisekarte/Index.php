@@ -864,6 +864,8 @@ class Index extends Component
                 'live' => $karte->isPresentationLive(),
                 'published_at' => $karte->presentation_published_at?->format('d.m.Y H:i'),
                 'expires_at' => $karte->presentation_expires_at?->format('d.m.Y'),
+                // Bug-Runde 2026-09-17 #2: Design nach der Veröffentlichung geändert → Link hinkt hinterher.
+                'design_veraltet' => app(PresentationService::class)->designGeaendertSeitPublish($karte),
             ];
             if ($karte->presentation_enabled && $karte->presentation_token) {
                 $presentationLink = url('/p/speisekarte/' . $karte->presentation_token);

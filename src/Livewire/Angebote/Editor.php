@@ -1532,6 +1532,8 @@ class Editor extends Component
                 'live' => $angebot->isPresentationLive(),
                 'published_at' => $angebot->presentation_published_at?->format('d.m.Y H:i'),
                 'expires_at' => $angebot->presentation_expires_at?->format('d.m.Y'),
+                // Bug-Runde 2026-09-17 #2: Design nach der Veröffentlichung geändert → Link hinkt hinterher.
+                'design_veraltet' => app(PresentationService::class)->designGeaendertSeitPublish($angebot),
             ];
             if ($angebot->presentation_enabled && $angebot->presentationPublicRef()) {
                 $presentationLink = url('/p/angebot/' . $angebot->presentationPublicRef());

@@ -335,6 +335,16 @@
                     </label>
                 </div>
 
+                @if($presentationInfo['design_veraltet'] ?? false)
+                    {{-- Bug-Runde 2026-09-17 #2: Der Link rendert nur den eingefrorenen Snapshot.
+                         Ohne diesen Hinweis sieht man die Design-Änderung in der Vorschau, im
+                         Kundenlink aber nie — und hält das für einen Render-Fehler. --}}
+                    <div class="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[12px] text-amber-900" data-fa-design-veraltet>
+                        <strong>Design wurde nach der Veröffentlichung geändert.</strong>
+                        Der Kundenlink zeigt weiter den Stand von {{ $presentationInfo['published_at'] ?? '—' }}.
+                        Zum Übernehmen unten <em>Neu veröffentlichen</em>.
+                    </div>
+                @endif
                 <div class="flex flex-wrap items-center gap-2 pt-1">
                     <a href="{{ route('foodalchemist.speisekarte.praesentation', ['id' => $karte->id, 'design' => $presentationDesign]) }}" target="_blank" class="{{ $btnGhost }}">Vorschau öffnen</a>
                     <button type="button" wire:click="veroeffentlichen" wire:confirm="Diesen Stand als Karte veröffentlichen? Der Snapshot wird eingefroren." class="{{ $btnPrimary }}" data-sk-praes-publish @disabled(! $presentationGueltigBis)>

@@ -52,7 +52,7 @@ class PresentationDesignService
         return 'Geordnete Blockliste: [{block_type, style{}}]. block_type ∈ '
             . 'cover|chapter_loop|dish_list|price_summary|legend|grid|text|heading|image|spacer|cta. '
             . 'style je Typ: '
-            . 'cover{align, show_cover_image:bool, show_logo:bool, cover_fit:cover|contain, cover_height:klein|mittel|gross, compact:bool}; '
+            . 'cover{align, show_cover_image:bool, show_logo:bool, cover_fit:cover|contain, cover_height:10-100 (% der Fensterhöhe; Altwerte klein|mittel|gross werden weiter verstanden), cover_height_max_px:int|null, compact:bool}; '
             . 'chapter_loop/dish_list{show_price:bool, show_codes:bool, show_dish_photos:bool, show_chapter_image:bool, dish_columns:1|2, show_kicker:bool}; '
             . 'image{context_file_id, path, img_fit:cover|contain|auto, img_height:klein|mittel|gross, img_width:voll|schmal|bleed}; '
             . 'text/heading{text}; spacer{height}; cta{text, link}; price_summary{mode:pro_person}; legend/grid{}. '

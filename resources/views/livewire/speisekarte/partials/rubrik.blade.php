@@ -48,11 +48,30 @@
              x-on:drop="if (dragPosId && dragPosId !== {{ $pos->id }}) { $wire.positionAblegen(dragPosId, {{ $pos->id }}); dragPosId = null }"
              x-bind:class="dragPosId === {{ $pos->id }} ? 'opacity-40' : ''">
             <span class="cursor-move select-none text-gray-300 shrink-0" title="Ziehen">⠿</span>
+            {{-- Bug-Runde 2026-09-17 #1: aus der Karte ins Gericht/Konzept springen (Vorbild Foodbook-Board).
+                 Ohne den Sprung war ein fehlender VK nur als Karten-Override (✎ → „Manuell") zu heilen, nie am
+                 Gericht selbst. draggable=false, sonst zieht der Browser den Link statt der Position. --}}
+            @php($sprungUrl = match ($pos->type) {
+                'gericht_ref' => $pos->sales_recipe_id ? route('foodalchemist.verkauf.index', ['rezept' => $pos->sales_recipe_id]) : null,
+                'menue_ref' => $pos->concept_id ? route('foodalchemist.concepter.index', [
+                    'tab' => ($pos->concept?->kind === 'paket' ? 'pakete' : 'concepts'),
+                    'sel' => $pos->concept_id,
+                ]) : null,
+                default => null,
+            })
             <span class="flex-1 text-gray-800">
                 @if($pos->type === 'gericht_ref')
-                    {{ $pos->wording ?: ($pos->dish?->name ?? $pos->label ?? '— Gericht —') }}
+                    @if($sprungUrl)
+                        <a href="{{ $sprungUrl }}" target="_blank" draggable="false" class="hover:text-violet-700 hover:underline" title="Gericht im VK-Editor öffnen (neuer Tab)">{{ $pos->wording ?: ($pos->dish?->name ?? $pos->label ?? '— Gericht —') }}</a>
+                    @else
+                        {{ $pos->wording ?: ($pos->dish?->name ?? $pos->label ?? '— Gericht —') }}
+                    @endif
                 @elseif($pos->type === 'menue_ref')
-                    {{ $pos->wording ?: ($pos->concept?->name ?? 'Menü') }}
+                    @if($sprungUrl)
+                        <a href="{{ $sprungUrl }}" target="_blank" draggable="false" class="hover:text-violet-700 hover:underline" title="Im Concepter öffnen (neuer Tab)">{{ $pos->wording ?: ($pos->concept?->name ?? 'Menü') }}</a>
+                    @else
+                        {{ $pos->wording ?: ($pos->concept?->name ?? 'Menü') }}
+                    @endif
                 @elseif($pos->type === 'header')
                     <span class="font-medium uppercase text-[11px] tracking-wide text-gray-500">{{ $pos->label }}</span>
                 @else
@@ -77,6 +96,10 @@
             {{-- Werkstrang M Phase C: Position in ihrer Rubrik hoch/runter. --}}
             <button type="button" wire:click="positionHochRunter({{ $pos->id }}, 'hoch')" class="{{ $btnGhostXs }}" title="hoch">▲</button>
             <button type="button" wire:click="positionHochRunter({{ $pos->id }}, 'runter')" class="{{ $btnGhostXs }}" title="runter">▼</button>
+            {{-- Bug-Runde 2026-09-17 #1: sichtbarer Absprung neben ✎ — der Name allein wurde nicht gefunden. --}}
+            @if($sprungUrl)
+                <a href="{{ $sprungUrl }}" target="_blank" draggable="false" class="{{ $btnGhostXs }}" title="{{ $pos->type === 'gericht_ref' ? 'Gericht öffnen (neuer Tab)' : 'Im Concepter öffnen (neuer Tab)' }}">↗</a>
+            @endif
             @if(in_array($pos->type, ['gericht_ref', 'menue_ref', 'header', 'text']))
                 <button type="button" wire:click="positionBearbeiten({{ $pos->id }})" class="{{ $btnGhostXs }}">✎</button>
             @endif
