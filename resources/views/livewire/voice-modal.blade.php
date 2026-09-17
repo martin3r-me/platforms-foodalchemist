@@ -14,11 +14,15 @@
     <div class="space-y-3" data-voice>
 
         {{-- Provider-Transparenz (Aufgabe 4): vorher unsichtbar, ob echt transkribiert wird
-             oder der Fake-Fixtext antwortet. --}}
-        <div class="flex items-center gap-2">
+             oder der Fake-Fixtext antwortet. Aufgabe F: Modus-Pill daneben — ein Klick öffnet
+             die Einstellungen (dort steht die Radio-Gruppe, settings/ki.blade.php). --}}
+        <div class="flex items-center gap-2 flex-wrap">
             <span class="{{ $pill }} {{ $aufnahmeMoeglich ? $variantPill['success'] : $variantPill['warning'] }}" data-voice-provider>
                 STT: {{ ['openai' => 'OpenAI', 'assemblyai' => 'AssemblyAI', 'fake' => 'Test-Fixtext', 'none' => 'nicht konfiguriert'][$provider] ?? $provider }}
             </span>
+            <a href="{{ route('foodalchemist.einstellungen') }}" wire:navigate class="{{ $pill }} {{ $variantPill['secondary'] }}" data-voice-modus title="Klicken zum Ändern in den Einstellungen">
+                Modus: {{ \Platform\FoodAlchemist\Livewire\Settings\Ki::MODUS_LABEL[$agentModus] ?? $agentModus }}
+            </a>
             @unless($aufnahmeMoeglich)
                 <span class="text-[11px] text-amber-600" data-voice-provider-hinweis>Spracherkennung ist nicht konfiguriert — Befehl tippen.</span>
             @endunless
@@ -101,13 +105,16 @@
                     @endif
                 @endforeach
 
+                {{-- Aufgabe F: im Modus auto_sicher wurden accepted-Vorschläge OHNE Klick ausgeführt —
+                     eigener Badge-Text macht das sichtbar statt „übernommen"/„gestartet" zu behaupten. --}}
+                @php($autoBadge = '✓ automatisch ausgeführt')
                 @foreach($ergebnis['proposals'] as $i => $p)
                     @if(($p['type'] ?? 'speisen_klasse') === 'speisen_klasse')
                         <div class="rounded bg-violet-500/10 border border-violet-500/30 px-2 py-1.5 text-xs" wire:key="vp-{{ $i }}" data-voice-proposal>
                             Speisen-Klasse: <span class="font-medium">{{ $p['klasse_name'] ?? 'kein Treffer' }}</span>
                             <span class="text-[11px] text-gray-500">· {{ round(($p['confidence'] ?? 0) * 100) }} %</span>
                             @if($p['accepted'] ?? false)
-                                <span class="{{ $pill }} {{ $variantPill['success'] }} ml-1">übernommen</span>
+                                <span class="{{ $pill }} {{ $variantPill['success'] }} ml-1" data-voice-proposal-auto="{{ $agentModus === 'auto_sicher' ? '1' : '0' }}">{{ $agentModus === 'auto_sicher' ? $autoBadge : 'übernommen' }}</span>
                             @elseif(($p['klasse_id'] ?? null) !== null)
                                 <button type="button" wire:click="proposalUebernehmen({{ $i }})" class="{{ $btnGhostXs }} text-emerald-600 ml-1" data-voice-proposal-accept>Bestätigen</button>
                             @endif
@@ -129,16 +136,20 @@
                             @if(!empty($p['unklar']))
                                 <p class="text-[11px] text-amber-600">unklar: {{ implode(', ', $p['unklar']) }}</p>
                             @endif
-                            <button type="button" wire:click="planungStarten({{ $i }})" wire:loading.attr="disabled" wire:target="planungStarten({{ $i }})"
-                                    class="{{ $btnGhostXs }} text-emerald-600 disabled:opacity-40" data-voice-proposal-planung-start>
-                                Planung starten
-                            </button>
+                            @if($p['accepted'] ?? false)
+                                <span class="{{ $pill }} {{ $variantPill['success'] }}" data-voice-proposal-auto="1">{{ $autoBadge }}: Planung angelegt, Editor geöffnet</span>
+                            @else
+                                <button type="button" wire:click="planungStarten({{ $i }})" wire:loading.attr="disabled" wire:target="planungStarten({{ $i }})"
+                                        class="{{ $btnGhostXs }} text-emerald-600 disabled:opacity-40" data-voice-proposal-planung-start>
+                                    Planung starten
+                                </button>
+                            @endif
                         </div>
                     @elseif($p['type'] === 'anreicherung')
                         <div class="rounded bg-violet-500/10 border border-violet-500/30 px-2 py-1.5 text-xs" wire:key="vp-{{ $i }}" data-voice-proposal-anreicherung>
                             Vollständig anreichern: <span class="font-medium">{{ $p['name'] ?? ('Rezept #' . $p['recipe_id']) }}</span>
                             @if($p['accepted'] ?? false)
-                                <span class="{{ $pill }} {{ $variantPill['success'] }} ml-1">gestartet</span>
+                                <span class="{{ $pill }} {{ $variantPill['success'] }} ml-1" data-voice-proposal-auto="{{ $agentModus === 'auto_sicher' ? '1' : '0' }}">{{ $agentModus === 'auto_sicher' ? $autoBadge : 'gestartet' }}</span>
                             @else
                                 <button type="button" wire:click="anreicherungStarten({{ $i }})" wire:loading.attr="disabled" wire:target="anreicherungStarten({{ $i }})"
                                         class="{{ $btnGhostXs }} text-emerald-600 ml-1 disabled:opacity-40" data-voice-proposal-anreicherung-start>

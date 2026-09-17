@@ -11,6 +11,7 @@ use Platform\FoodAlchemist\Jobs\EnrichRecipeJob;
 use Platform\FoodAlchemist\Services\PlanningSessionService;
 use Platform\FoodAlchemist\Services\RecipeService;
 use Platform\FoodAlchemist\Services\Stt\SttServiceContract;
+use Platform\FoodAlchemist\Services\TeamSettingsService;
 use Platform\FoodAlchemist\Services\VoiceCommandService;
 use Platform\FoodAlchemist\Support\VoiceFehlerText;
 use Platform\FoodAlchemist\Support\VoiceMime;
@@ -51,6 +52,14 @@ class VoiceModal extends Component
 
     /** Nur mit einem echten STT-Zugang darf aufgenommen werden — sonst bleibt nur Tippen. */
     public bool $aufnahmeMoeglich = false;
+
+    /**
+     * Spec 53 / Paket F: Agenten-Modus (fragen|auto_sicher|nur_lesen) — Team-Setting, gelesen
+     * in {@see mount()}. Steuert NUR, was mit einem Proposal passiert (Klick vs. Direktausführung
+     * für {@see VoiceCommandService::AUTO_ERLAUBT}); die Tool-Policy selbst liegt in
+     * {@see VoiceCommandService::verarbeite()}.
+     */
+    public string $agentModus = TeamSettingsService::VOICE_AGENT_MODE_DEFAULT;
 
     /**
      * Rezept-Kontext, falls das Modal von einer Rezept-Seite aus geöffnet wurde (Spec 53/D,
@@ -98,6 +107,10 @@ class VoiceModal extends Component
         // Tippen beschränkt statt eine Aufnahme zu erlauben, die serverseitig ins Leere läuft.
         $this->aufnahmeMoeglich = in_array($this->provider, ['openai', 'assemblyai'], true);
         $this->herkunftRoute = request()->route()?->getName();
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team !== null) {
+            $this->agentModus = app(TeamSettingsService::class)->voiceAgentModus($team);
+        }
     }
 
     /**
@@ -165,7 +178,9 @@ class VoiceModal extends Component
     private function verarbeite(): void
     {
         try {
-            $this->ergebnis = app(VoiceCommandService::class)->verarbeite((string) $this->transcript, $this->kontextFuerAuftrag());
+            $this->ergebnis = app(VoiceCommandService::class)->verarbeite(
+                (string) $this->transcript, $this->kontextFuerAuftrag(), $this->agentModus,
+            );
         } catch (\Throwable $e) {
             $this->fehler = VoiceFehlerText::aus($e)['text'];
 
@@ -193,6 +208,25 @@ class VoiceModal extends Component
             }
             $this->ergebnis['aktionen'][$i]['link'] = $ziel['url'];
             $this->ergebnis['aktionen'][$i]['link_label'] = $ziel['label'];
+        }
+        // Spec 53/F: im Modus `auto_sicher` laufen die REVERSIBLEN Vorschläge sofort — dieselben
+        // Methoden wie der Bestätigen-Klick, nur ohne Klick. AUTO_ERLAUBT ist die einzige
+        // Entscheidungsquelle (keine Namensmuster); alles andere bleibt Vorschlag mit Knopf.
+        // NACH den aktionen: ein planungStarten()-Redirect hier gewinnt gegen eine ui.OPEN/
+        // NAVIGATE-Navigation weiter oben (derselbe Befehl erzeugt praktisch nie beides).
+        if ($this->agentModus === 'auto_sicher') {
+            foreach ($this->ergebnis['proposals'] as $i => $p) {
+                $typ = $p['type'] ?? null;
+                if (($p['accepted'] ?? false) || ! in_array($typ, VoiceCommandService::AUTO_ERLAUBT, true)) {
+                    continue;
+                }
+                match ($typ) {
+                    'speisen_klasse' => $this->proposalUebernehmen($i),
+                    'planung_start' => $this->planungStarten($i),
+                    'anreicherung' => $this->anreicherungStarten($i),
+                    default => null,
+                };
+            }
         }
     }
 
@@ -295,6 +329,7 @@ class VoiceModal extends Component
 
             return;
         }
+        $this->ergebnis['proposals'][$index]['accepted'] = true;   // Spec 53/F: auch hier setzen (auto_sicher, Audit)
         $this->redirect(route('foodalchemist.planung.index', ['session' => $session->id, 'open' => 1, 'tab' => $tab]), navigate: true);
     }
 

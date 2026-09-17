@@ -3,6 +3,8 @@
 use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 use Platform\Core\Tools\ToolRegistry;
+use Platform\FoodAlchemist\Models\FoodAlchemistDishClass;
+use Platform\FoodAlchemist\Models\FoodAlchemistDishMainGroup;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Services\Ai\AiGatewayService;
 use Platform\FoodAlchemist\Services\Ai\FakeAiProvider;
@@ -288,4 +290,33 @@ it('GL-07: die echten Schreiber planung_session.POST und planung_kaskade.START b
         expect($tool)->not->toBeNull("Tool {$name} nicht registriert");
         expect(VoiceCommandService::darfNutzen($name, $tool))->toBeFalse("{$name} sollte GESPERRT sein");
     }
+});
+
+/*
+ * Spec 53 / Paket F — Agenten-Modus. AUTO_ERLAUBT ist eine explizite Liste (kein Namensmuster,
+ * Memory feedback_agent_tool_freigabe_nach_eigenschaft) — dieser Test pinnt ihren Inhalt, damit
+ * eine künftige Erweiterung eine BEWUSSTE Code-Änderung braucht, kein stilles Reinrutschen.
+ */
+it('AUTO_ERLAUBT (auto_sicher) enthält genau die drei geprüft-reversiblen Proposal-Typen', function () {
+    expect(VoiceCommandService::AUTO_ERLAUBT)->toBe(['planung_start', 'anreicherung', 'speisen_klasse']);
+});
+
+it('Modus nur_lesen sperrt Proposal-Tools STRUKTURELL (die Policy lehnt ab, der Loop läuft weiter statt final)', function () {
+    $hg = FoodAlchemistDishMainGroup::create(['code' => 'HGF', 'label' => 'Hauptgang F']);
+    $klasse = FoodAlchemistDishClass::create(['dish_main_group_id' => $hg->id, 'code' => 'HGF_X', 'label' => 'X', 'diet_form' => 'fleisch']);
+    $vk = FoodAlchemistRecipe::create([
+        'team_id' => $this->rootTeam->id, 'recipe_key' => 'nl1', 'name' => 'HG: Filet', 'status' => 'draft',
+        'is_sales_recipe' => true, 'dish_class_id' => $klasse->id,
+    ]);
+    ($this->skript)([
+        '{"action":"tool","name":"foodalchemist.recipe_klasse.POST","arguments":{"recipe_id":' . $vk->id . '}}',
+        '{"action":"final","text":"Das darf ich in diesem Modus nicht vorschlagen."}',
+    ]);
+
+    $r = app(VoiceCommandService::class)->verarbeite('Klassifiziere das Filet', null, 'nur_lesen');
+
+    expect($r['tool_laeufe'])->toBe([])                                  // Tool wurde NIE ausgeführt
+        ->and($r['freigeschaltet'])->toBe([])
+        ->and($r['proposals'])->toBe([])
+        ->and($r['text'])->toBe('Das darf ich in diesem Modus nicht vorschlagen.');
 });

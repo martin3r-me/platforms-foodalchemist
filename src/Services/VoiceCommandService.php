@@ -107,6 +107,25 @@ class VoiceCommandService
      */
     public const COMMIT_FLAGS = ['confirm', 'accept', 'apply', 'force'];
 
+    /**
+     * Spec 53 / Paket F: `proposals[]['type']`-Werte, die im Modus `auto_sicher` OHNE Klick
+     * ausgeführt werden dürfen — weil ihre Wirkung REVERSIBEL ist (Session löschen/Klasse
+     * ändern/erneut anreichern sind alle möglich). Eine explizite Liste, KEIN Namensmuster
+     * (Memory: „Tool-Freigabe nach Eigenschaft, nie nach Name") — jeder Typ hier ist einzeln
+     * gegen die drei erzeugenden Tools geprüft:
+     *   - `planung_start` (`planung_vorschlag.POST`, read_only, schreibt selbst nichts —
+     *     VoiceModal::planungStarten() legt NUR eine Planungs-Session an, keine Kaskade).
+     *   - `anreicherung` (`anreicherung_vorschlag.POST`, read_only) — dispatcht einen Job,
+     *     der ein bestehendes Rezept anreichert (idempotent wiederholbar).
+     *   - `speisen_klasse` (`recipe_klasse.POST`) — setzt eine Klassifikation, jederzeit
+     *     überschreibbar.
+     * Bewusst NICHT hier: alles mit `confirm`/`accept`/`apply`/`force`-Flag im echten Schema
+     * (löschen, veröffentlichen, bestellen, Status „approved" setzen) — dafür gibt es heute
+     * keine Voice-Proposal-Typen, käme aber ein neuer hinzu, bräuchte er eine BEWUSSTE
+     * Aufnahme hier, nicht automatisch.
+     */
+    public const AUTO_ERLAUBT = ['planung_start', 'anreicherung', 'speisen_klasse'];
+
     public function __construct(private AiGatewayService $ki)
     {
     }
@@ -157,25 +176,52 @@ class VoiceCommandService
     /**
      * @param  array{type: string, id: int}|null  $kontext  Aufgabe 7: Rezept-/Gericht-Kontext der
      *                                                        öffnenden Seite („reichere DIESES Rezept an").
+     * @param  string  $modus  Spec 53/F: fragen (Default)|auto_sicher|nur_lesen — siehe
+     *                          {@see \Platform\FoodAlchemist\Services\TeamSettingsService::VOICE_AGENT_MODES}.
      * @return array{text: ?string, unklar: bool, runden: int, elapsed_ms: int, freigeschaltet: list<string>,
      *               aktionen: list<array>, proposals: list<array>, tool_laeufe: list<array>}
      */
-    public function verarbeite(string $transcript, ?array $kontext = null): array
+    public function verarbeite(string $transcript, ?array $kontext = null, string $modus = 'fragen'): array
     {
         $kontextHinweis = ($kontext !== null && isset($kontext['type'], $kontext['id']))
             ? " [Kontext: aktuell geöffnet — {$kontext['type']} ID={$kontext['id']}. Bei \"dieses/das Rezept\" "
                 . 'OHNE genannten Namen/Nummer diese ID verwenden, NICHT raten. Wird ein anderer Name genannt, '
                 . 'gilt der genannte Name.]'
             : '';
+        // Aufgabe F: `nur_lesen` sperrt die Proposal-Tools STRUKTURELL (nicht erst am Ergebnis
+        // gefiltert) — sonst würde das Modell Runden/Token für einen Vorschlag verbrauchen,
+        // der ohnehin nirgends landet. `fragen`/`auto_sicher` ändern an der Tool-Policy nichts;
+        // der Unterschied zwischen ihnen ist NUR, was VoiceModal mit dem Proposal danach macht.
+        // Der Basiskatalog macht ein Tool sofort erlaubt, BEVOR die Policy je gefragt wird
+        // (AiGatewayService::callWithTools: `$erlaubt` startet mit den übergebenen $toolNames) —
+        // die Policy allein hätte `recipe_klasse.POST`/`planung_vorschlag.POST` NICHT gesperrt,
+        // weil beide schon im Warmstart-Katalog stehen. Für `nur_lesen` müssen sie also aus dem
+        // KATALOG raus, nicht nur aus der Policy (die bleibt als zweite Sicherung stehen, falls
+        // das Modell eines trotzdem über tool_registry.SEARCH findet).
+        $toolsFuerModus = $modus === 'nur_lesen' ? array_values(array_diff(self::TOOLS, self::PROPOSAL_TOOLS)) : self::TOOLS;
+        $policy = $modus === 'nur_lesen'
+            ? static fn (string $name, object $tool): bool => ! in_array($name, self::PROPOSAL_TOOLS, true) && self::darfNutzen($name, $tool)
+            : [self::class, 'darfNutzen'];
+        $modusHinweis = match ($modus) {
+            'nur_lesen' => 'MODUS „nur lesen": Schreibvorschläge sind für dich komplett gesperrt (auch als '
+                . 'Vorschlag). Beantworte Fragen konversationell, navigiere/öffne bei Bedarf, aber schlage NICHTS '
+                . 'zum Anlegen/Anreichern/Klassifizieren vor — sag stattdessen, dass der Modus das nicht erlaubt.',
+            'auto_sicher' => 'MODUS „automatisch (sicher)": deine reversiblen Vorschläge (planung_vorschlag.POST, '
+                . 'anreicherung_vorschlag.POST, recipe_klasse.POST) werden dem Nutzer NICHT zur Bestätigung '
+                . 'vorgelegt, sondern SOFORT ausgeführt — sag das im finalen Text auch so (z. B. „Ich habe die '
+                . 'Planung angelegt und den Editor geöffnet."), nicht „bitte bestätigen".',
+            default => 'MODUS „fragen" (Standard): jeder Vorschlag braucht einen Bestätigen-Klick vom Nutzer — '
+                . 'sag das auch so (z. B. „Vorschlag: … — bitte bestätigen").',
+        };
         $resultat = $this->ki->callWithTools(
             "Sprachbefehl des Users (Deutsch, Kurz-Audio-Transkript): \"{$transcript}\"{$kontextHinweis}",
-            self::TOOLS,
+            $toolsFuerModus,
             self::MAX_RUNDEN,
             [
-                'policy' => [self::class, 'darfNutzen'],
+                'policy' => $policy,
                 'arg_guard' => [self::class, 'entschaerfeArgumente'],
                 'zeitbudget_ms' => self::ZEITBUDGET_MS,
-                'system_zusatz' => 'Du steuerst den GANZEN FoodAlchemist (Rezepte, Gerichte, Concepter, Foodbook, '
+                'system_zusatz' => $modusHinweis . ' Du steuerst den GANZEN FoodAlchemist (Rezepte, Gerichte, Concepter, Foodbook, '
                     . 'Speisekarte, Speiseplan, Bestellwesen, Lieferanten). Der Katalog unten ist nur der Einstieg: '
                     . 'fehlt dir ein Werkzeug, suche es mit tool_registry.SEARCH und rufe es direkt auf. '
                     . 'Suche IMMER mit name_glob "foodalchemist.*" (z. B. {"query":"foodbook kapitel",'

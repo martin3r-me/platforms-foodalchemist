@@ -25,11 +25,41 @@ class Ki extends Component
     /** Nutzungs-Zeitraum: '7' | '30' | '90' | 'all' (Tage; all = gesamte Historie). */
     public string $zeitraum = '30';
 
+    /** Spec 53/F: Agenten-Modus des Sprachbefehls — fragen (Default)|auto_sicher|nur_lesen. */
+    public string $sprachAgentModus = TeamSettingsService::VOICE_AGENT_MODE_DEFAULT;
+
     public function mount(): void
     {
         $team = Auth::user()?->currentTeamRelation;
         $this->kiAktiv = $team === null || app(TeamSettingsService::class)->kiAktiv($team);
+        if ($team !== null) {
+            $this->sprachAgentModus = app(TeamSettingsService::class)->voiceAgentModus($team);
+        }
     }
+
+    /** Livewire-Hook: `wire:model.live="sprachAgentModus"` speichert sofort bei Auswahl. */
+    public function updatedSprachAgentModus(string $wert): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null || ! in_array($wert, TeamSettingsService::VOICE_AGENT_MODES, true)) {
+            return;
+        }
+        app(TeamSettingsService::class)->update($team, ['voice_agent_mode' => $wert]);
+        $this->meldung = 'Sprachbefehl-Modus gespeichert: ' . self::MODUS_LABEL[$wert];
+    }
+
+    /** Label + Beschreibung je Modus — geteilt zwischen Blade (Radio-Gruppe) und Pill im Voice-Modal. */
+    public const MODUS_LABEL = ['fragen' => 'Fragen', 'auto_sicher' => 'Automatisch (sicher)', 'nur_lesen' => 'Nur lesen'];
+
+    public const MODUS_BESCHREIBUNG = [
+        'fragen' => 'Der Agent liest frei, jede Schreibaktion (Planung anlegen, Rezept anreichern, Klasse '
+            . 'übernehmen) bleibt ein Vorschlag mit Bestätigen-Klick.',
+        'auto_sicher' => 'Reversible Vorschläge (Planung anlegen + Editor öffnen, Anreicherung starten, '
+            . 'Speisen-Klasse übernehmen) laufen sofort und werden als „ausgeführt" gemeldet. Unumkehrbares '
+            . '(löschen, veröffentlichen, bestellen) bleibt Vorschlag mit Klick.',
+        'nur_lesen' => 'Der Agent antwortet nur — keine Vorschläge, keine Schreibaktionen. Aufnahme und '
+            . 'Tippen bleiben verfügbar.',
+    ];
 
     public function umschalten(): void
     {

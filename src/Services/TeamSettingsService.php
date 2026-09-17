@@ -19,6 +19,17 @@ use Platform\FoodAlchemist\Models\FoodAlchemistTeamSetting;
  */
 class TeamSettingsService
 {
+    /**
+     * Spec 53 / Paket F: Agenten-Modus des Sprachbefehls (Claude-Code-Mode-Switcher-Vorbild).
+     * `fragen` (Default, heutiges Verhalten) = jede Schreibaktion nur als Vorschlag mit
+     * Bestätigen-Klick (GL-07 unverändert). `auto_sicher` = die REVERSIBLEN Vorschläge aus
+     * {@see \Platform\FoodAlchemist\Services\VoiceCommandService::AUTO_ERLAUBT} laufen direkt,
+     * Unumkehrbares bleibt Vorschlag. `nur_lesen` = keine Vorschläge, der Agent antwortet nur.
+     */
+    public const VOICE_AGENT_MODES = ['fragen', 'auto_sicher', 'nur_lesen'];
+
+    public const VOICE_AGENT_MODE_DEFAULT = 'fragen';
+
     public const MWST_DEFAULTS = ['regulaer' => 19.0, 'ermaessigt' => 7.0, 'default_satz' => 'ermaessigt'];
 
     public const RUNDUNG_DEFAULTS = ['nachkommastellen' => 2, 'mode' => 'kaufmaennisch'];
@@ -199,6 +210,14 @@ class TeamSettingsService
     public function kiAktiv(Team $team): bool
     {
         return (bool) ($this->for($team)->ai_active ?? true);
+    }
+
+    /** Spec 53/F: Agenten-Modus des Sprachbefehls — ungültiger/fehlender Wert fällt auf `fragen` zurück. */
+    public function voiceAgentModus(Team $team): string
+    {
+        $wert = (string) ($this->for($team)->voice_agent_mode ?? '');
+
+        return in_array($wert, self::VOICE_AGENT_MODES, true) ? $wert : self::VOICE_AGENT_MODE_DEFAULT;
     }
 
     /** Trendradar: 08:00-Konzept-Automatisierung für dieses Team (Default AUS — opt-in). */

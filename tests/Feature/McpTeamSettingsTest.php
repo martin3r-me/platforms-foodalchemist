@@ -99,3 +99,32 @@ it('akzeptiert eigene Preisklasse als default_markup_class_id', function () {
     expect($res->success)->toBeTrue();
     expect(app(TeamSettingsService::class)->defaultMarkupClassId($this->rootTeam))->toBe($eigen->id);
 });
+
+/*
+ * Spec 53/F: Agenten-Modus des Sprachbefehls — Setting-Roundtrip + MCP-Validierung.
+ */
+
+it('voice_agent_mode: ungesetzt fällt auf fragen zurück', function () {
+    expect(app(TeamSettingsService::class)->voiceAgentModus($this->rootTeam))->toBe('fragen');
+});
+
+it('voice_agent_mode: Roundtrip über team_settings.PUT (auto_sicher, nur_lesen)', function () {
+    $res = $this->registry->get('foodalchemist.team_settings.PUT')->execute([
+        'settings' => ['voice_agent_mode' => 'auto_sicher'],
+    ], $this->kontext);
+    expect($res->success)->toBeTrue();
+    expect(app(TeamSettingsService::class)->voiceAgentModus($this->rootTeam))->toBe('auto_sicher');
+
+    $this->registry->get('foodalchemist.team_settings.PUT')->execute([
+        'settings' => ['voice_agent_mode' => 'nur_lesen'],
+    ], $this->kontext);
+    expect(app(TeamSettingsService::class)->voiceAgentModus($this->rootTeam))->toBe('nur_lesen');
+});
+
+it('voice_agent_mode: unbekannter Wert → VALIDATION_ERROR, nichts geschrieben', function () {
+    $res = $this->registry->get('foodalchemist.team_settings.PUT')->execute([
+        'settings' => ['voice_agent_mode' => 'irgendwas'],
+    ], $this->kontext);
+    expect($res->success)->toBeFalse()->and($res->errorCode)->toBe('VALIDATION_ERROR');
+    expect(app(TeamSettingsService::class)->voiceAgentModus($this->rootTeam))->toBe('fragen');
+});

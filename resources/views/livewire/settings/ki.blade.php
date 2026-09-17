@@ -21,6 +21,23 @@
         </x-foodalchemist::alert>
     @endif
 
+    {{-- Spec 53/F: Agenten-Modus des Sprachbefehls — Claude-Code-Mode-Switcher-Vorbild.
+         Radio-Gruppen-Muster übernommen aus settings/einkauf.blade.php (Lead-LA-Strategie). --}}
+    <div data-settings-sprachagent>
+        <p class="{{ $dt }} mb-1">Sprachbefehl — Agenten-Modus</p>
+        <div class="space-y-2">
+            @foreach(\Platform\FoodAlchemist\Services\TeamSettingsService::VOICE_AGENT_MODES as $m)
+                <label class="flex items-start gap-3 p-3 rounded-lg cursor-pointer transition-all duration-150 {{ $sprachAgentModus === $m ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10' : 'hover:bg-black/[0.03]' }}">
+                    <input type="radio" wire:model.live="sprachAgentModus" value="{{ $m }}" class="mt-0.5" data-sprachagent-modus="{{ $m }}" />
+                    <span>
+                        <span class="block text-xs font-medium text-gray-900">{{ \Platform\FoodAlchemist\Livewire\Settings\Ki::MODUS_LABEL[$m] }}</span>
+                        <span class="block text-[11px] text-gray-500 mt-0.5">{{ \Platform\FoodAlchemist\Livewire\Settings\Ki::MODUS_BESCHREIBUNG[$m] }}</span>
+                    </span>
+                </label>
+            @endforeach
+        </div>
+    </div>
+
     <div>
         <p class="{{ $dt }} mb-1">Tier-Zuordnung (V-01 — je Prompt, Registry)</p>
         <div class="flex flex-wrap gap-1" data-ki-tiers>

@@ -14,6 +14,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistPlanningSession;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Services\Ai\FakeAiProvider;
 use Platform\FoodAlchemist\Services\Stt\SttServiceContract;
+use Platform\FoodAlchemist\Services\TeamSettingsService;
 use Platform\FoodAlchemist\Services\VoiceCommandService;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
 use Platform\FoodAlchemist\Tests\TestCase;
@@ -310,4 +311,67 @@ it('rendert kein <script> als erstes Tag der Komponente (wire:id landet sonst am
     $html = Livewire::test(VoiceModal::class)->html();
     preg_match('/(?:\n\s*|^\s*)<([a-zA-Z0-9\-]+)/', $html, $m);
     expect($m[1] ?? null)->toBe('div');
+});
+
+/*
+ * Spec 53 / Paket F — Agenten-Modus (fragen|auto_sicher|nur_lesen). Kein Team-Setting gesetzt
+ * ⇒ Default `fragen` (bestehende GL-07-Tests oben bleiben also unverändert gültig).
+ */
+
+it('Modus fragen (Default): kein Setting gesetzt ⇒ Modal liest fragen (Klick-Pflicht bleibt wie in den GL-07-Tests oben belegt)', function () {
+    expect(Livewire::test(VoiceModal::class)->get('agentModus'))->toBe('fragen');
+});
+
+it('Modus auto_sicher: planung_start legt die Session OHNE Klick an, Ergebnis zeigt „automatisch ausgeführt"', function () {
+    app(TeamSettingsService::class)->update($this->rootTeam, ['voice_agent_mode' => 'auto_sicher']);
+    ($this->skript)([
+        '{"action":"tool","name":"foodalchemist.planung_vorschlag.POST","arguments":{"scope":"rezept","brief":"Tomatensuppe","leitplanken":false}}',
+        '{"action":"final","text":"Vorschlag: Tomatensuppe."}',
+    ]);
+
+    $modal = Livewire::test(VoiceModal::class);
+    expect($modal->get('agentModus'))->toBe('auto_sicher')
+        ->and(FoodAlchemistPlanningSession::count())->toBe(0);
+
+    $modal->call('verarbeiteText', 'Erstelle ein Basisrezept für Tomatensuppe')
+        ->assertRedirect(route('foodalchemist.planung.index', [
+            'session' => FoodAlchemistPlanningSession::first()?->id, 'open' => 1, 'tab' => 'basisrezept',
+        ]));
+
+    expect(FoodAlchemistPlanningSession::count())->toBe(1);              // KEIN Klick nötig — direkt ausgeführt
+    $proposal = collect($modal->get('ergebnis')['proposals'])->firstWhere('type', 'planung_start');
+    expect($proposal['accepted'] ?? false)->toBeTrue();
+});
+
+it('Modus auto_sicher: anreicherung_vorschlag dispatcht EnrichRecipeJob OHNE Klick', function () {
+    app(TeamSettingsService::class)->update($this->rootTeam, ['voice_agent_mode' => 'auto_sicher']);
+    Queue::fake();
+    $rezept = FoodAlchemistRecipe::create(['team_id' => $this->rootTeam->id, 'recipe_key' => 'auto1', 'name' => 'Sauce', 'status' => 'draft']);
+    ($this->skript)([
+        '{"action":"tool","name":"foodalchemist.anreicherung_vorschlag.POST","arguments":{"recipe_id":' . $rezept->id . '}}',
+        '{"action":"final","text":"Vorschlag: Sauce."}',
+    ]);
+
+    $modal = Livewire::test(VoiceModal::class)->call('verarbeiteText', 'Reichere dieses Rezept vollständig an');
+
+    Queue::assertPushed(EnrichRecipeJob::class, fn ($job) => $job->recipeId === $rezept->id);   // KEIN Klick nötig
+    $proposal = collect($modal->get('ergebnis')['proposals'])->firstWhere('type', 'anreicherung');
+    expect($proposal['accepted'] ?? false)->toBeTrue();
+});
+
+it('Modus nur_lesen: Proposal-Tools sind strukturell gesperrt — keine Vorschläge, kein Write', function () {
+    app(TeamSettingsService::class)->update($this->rootTeam, ['voice_agent_mode' => 'nur_lesen']);
+    ($this->skript)([
+        '{"action":"tool","name":"foodalchemist.planung_vorschlag.POST","arguments":{"scope":"rezept","brief":"Tomatensuppe"}}',
+        '{"action":"final","text":"Das darf ich in diesem Modus nicht vorschlagen."}',
+    ]);
+
+    $modal = Livewire::test(VoiceModal::class);
+    expect($modal->get('agentModus'))->toBe('nur_lesen');
+
+    $modal->call('verarbeiteText', 'Erstelle ein Basisrezept für Tomatensuppe');
+
+    expect(FoodAlchemistPlanningSession::count())->toBe(0)
+        ->and($modal->get('ergebnis')['proposals'])->toBe([])
+        ->and($modal->get('ergebnis')['tool_laeufe'])->toBe([]);          // Tool wurde von der Policy abgelehnt, nie ausgeführt
 });

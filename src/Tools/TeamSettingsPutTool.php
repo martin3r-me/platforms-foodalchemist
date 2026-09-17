@@ -41,6 +41,7 @@ class TeamSettingsPutTool extends FoodAlchemistTool implements ToolContract, Too
     private const ENUM_KEYS = [
         'labor_cost_source' => ['team_flat', 'station_roles'],
         'purchase_journal_trigger' => ['sent', 'delivered'],
+        'voice_agent_mode' => TeamSettingsService::VOICE_AGENT_MODES,
     ];
 
     /** WG-Code → %-Verlust-Maps (assoziatives Array, Werte numerisch). */
@@ -55,7 +56,8 @@ class TeamSettingsPutTool extends FoodAlchemistTool implements ToolContract, Too
     {
         return 'Schreibt Team-Einstellungen (nur eigene Team-Zeile): Ki-Kill-Switch, Küchen-Typ, '
             . 'Ziel-Wareneinsatz-%, Stundensatz/Marge/Zuschläge, Topf-Deckel-Defaults, Trendradar-Automatik, '
-            . 'Einkaufsjournal-Trigger, Garverlust-/Putzverlust-Defaults, Standard-Preisklasse (team-scoped geprüft). '
+            . 'Einkaufsjournal-Trigger, Garverlust-/Putzverlust-Defaults, Standard-Preisklasse (team-scoped geprüft), '
+            . 'Sprachbefehl-Agenten-Modus. '
             . 'Nur die im Schema gelisteten Keys sind erlaubt; unbekannte Keys werden abgewiesen. '
             . 'Idempotent (PUT). Vokabular/Taxonomie und komplexe JSON-Konfigs laufen über eigene Tools bzw. die UI.';
     }
@@ -90,6 +92,7 @@ class TeamSettingsPutTool extends FoodAlchemistTool implements ToolContract, Too
                         'trend_auto_limit' => ['type' => 'integer', 'description' => 'Anzahl Top-Trends je Automatik-Lauf.'],
                         'trend_signal_enabled' => ['type' => 'boolean', 'description' => 'Trend-Vorschlag als Signal in die Inbox.'],
                         'purchase_journal_trigger' => ['type' => 'string', 'description' => 'Einkaufsjournal-Buchung ab Status: sent|delivered.'],
+                        'voice_agent_mode' => ['type' => 'string', 'description' => 'Agenten-Modus des Sprachbefehls: fragen (Default, jede Schreibaktion nur Vorschlag) | auto_sicher (reversible Vorschläge laufen direkt) | nur_lesen (keine Vorschläge).'],
                         'cooking_loss_defaults' => ['type' => 'object', 'description' => 'Garverlust-Default % je WG-Code ("*" = global). Werte numerisch.'],
                         'trimming_loss_defaults' => ['type' => 'object', 'description' => 'Putzverlust-Default % je WG-Code ("*" = global). Werte numerisch.'],
                     ],
