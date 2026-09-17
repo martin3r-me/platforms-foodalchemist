@@ -37,15 +37,24 @@ it('fortschritt() setzt die Phase am Kaskaden-Step UND schreibt weiterhin den Ca
     $teamId = $this->rootTeam->id;
     $userId = $this->user->id;
 
+    // Phase + Cache-progress MID-FLIGHT abgreifen (im Callback) — beide werden danach wieder
+    // überschrieben: markStepDone() (via meldeKaskade) nullt die Phase, sobald der Step `done` ist
+    // (Terminal-Status ersetzt die Zwischen-Phase), schreibe() überschreibt den Cache-Key mit dem
+    // fertigen Ergebnis (kein progress-Key mehr). Der Vertrag gilt nur WÄHREND der Generierung.
+    // An $this gehängt statt per use(&$var) — zuverlässiger über die verschachtelten Mockery-Closures.
+    $this->progressMid = null;
+    $this->phaseMid = null;
     $this->mock(RecipeDependencyWorkflowService::class, function ($m) {
         $m->shouldReceive('prepare')->andReturn(['snapshot' => []]);
         $m->shouldReceive('afterGenerated')->andReturn(null);
     });
-    $this->mock(RecipeGeneratorService::class, function ($m) use ($teamId, $runId) {
-        $m->shouldReceive('generiere')->once()->andReturnUsing(function (...$args) use ($teamId, $runId) {
+    $this->mock(RecipeGeneratorService::class, function ($m) use ($teamId, $runId, $step) {
+        $m->shouldReceive('generiere')->once()->andReturnUsing(function (...$args) use ($teamId, $runId, $step) {
             $cb = $args[7] ?? null;
             if (is_callable($cb)) {
                 $cb('Rezept wird entworfen …');
+                $this->progressMid = Cache::get(GenerateRecipeJob::cacheKey($runId));
+                $this->phaseMid = $step->refresh()->phase;
             }
 
             return [
@@ -59,20 +68,24 @@ it('fortschritt() setzt die Phase am Kaskaden-Step UND schreibt weiterhin den Ca
     (new GenerateRecipeJob($runId, $teamId, $userId, 'desc', ['cascade_step_id' => $step->id], false, false))
         ->handle(app(RecipeGeneratorService::class));
 
-    expect($step->refresh()->phase)->toBe('Rezept wird entworfen …')
-        ->and(Cache::get(GenerateRecipeJob::cacheKey($runId))['progress'] ?? null)->toBe('Rezept wird entworfen …');
+    expect($this->phaseMid)->toBe('Rezept wird entworfen …')
+        ->and($this->progressMid['progress'] ?? null)->toBe('Rezept wird entworfen …')
+        // markStepDone (meldeKaskade) nullt die Phase, sobald der Step done ist — kein Zombie-Text.
+        ->and($step->refresh()->phase)->toBeNull();
 });
 
 it('fortschritt() ohne cascade_step_id bleibt byte-identisch zum Bestandspfad (kein Step-Schreiber)', function () {
     $runId = 'p53-c-ohne-' . uniqid();
     $teamId = $this->rootTeam->id;
     $userId = $this->user->id;
+    $progressMid = null;
 
-    $this->mock(RecipeGeneratorService::class, function ($m) use ($teamId, $runId) {
-        $m->shouldReceive('generiere')->once()->andReturnUsing(function (...$args) use ($teamId, $runId) {
+    $this->mock(RecipeGeneratorService::class, function ($m) use ($teamId, $runId, &$progressMid) {
+        $m->shouldReceive('generiere')->once()->andReturnUsing(function (...$args) use ($teamId, $runId, &$progressMid) {
             $cb = $args[7] ?? null;
             if (is_callable($cb)) {
                 $cb('Rezept wird entworfen …');
+                $progressMid = Cache::get(GenerateRecipeJob::cacheKey($runId));
             }
 
             return [
@@ -86,5 +99,5 @@ it('fortschritt() ohne cascade_step_id bleibt byte-identisch zum Bestandspfad (k
     (new GenerateRecipeJob($runId, $teamId, $userId, 'desc', [], false, false))
         ->handle(app(RecipeGeneratorService::class));
 
-    expect(Cache::get(GenerateRecipeJob::cacheKey($runId))['progress'] ?? null)->toBe('Rezept wird entworfen …');
+    expect($progressMid['progress'] ?? null)->toBe('Rezept wird entworfen …');
 });

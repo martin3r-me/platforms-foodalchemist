@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Queue;
 use Livewire\Livewire;
 use Platform\Core\Contracts\LLMProviderContract;
+use Platform\FoodAlchemist\Jobs\EnrichRecipeJob;
 use Platform\FoodAlchemist\Jobs\GenerateConceptJob;
 use Platform\FoodAlchemist\Jobs\GenerateRecipeJob;
 use Platform\FoodAlchemist\Jobs\GenerateDishProposalJob;
@@ -1746,7 +1747,9 @@ it('Cockpit Bild-Status: failed-Badge bietet „neu erzeugen" und re-triggert nu
     Livewire::test(PlanungIndex::class)
         ->call('oeffne', $session->id)
         ->assertSeeHtml('neu erzeugen')
-        ->assertSeeHtml('wire:click="bilderNeu(' . $step->id . ')"')
+        // Spec 53 / Paket C: der Knopf ist jetzt <x-foodalchemist::ki-action> ($wire.bilderNeu(...)
+        // statt wire:click) — data-ki-action trägt denselben Wire-Ausdruck als Beleg.
+        ->assertSeeHtml('data-ki-action="bilderNeu(' . $step->id . ')"')
         ->call('bilderNeu', $step->id);
 
     expect($step->refresh()->deferred['bilder']['status'] ?? null)->toBe('queued');
@@ -2587,6 +2590,8 @@ it('Globaler KI-Status: zeigt wartend/laufend fuers Team an, unabhaengig davon o
 
     Livewire::test(PlanungIndex::class)
         ->assertSeeHtml('data-planung-ki-status-leiste')
-        ->assertSee('1 KI-Aufgabe wartet')
-        ->assertSee('Rezept wird entworfen …');
+        // assertSeeText (nicht assertSee): die Zahl steckt in einem eigenen <strong>-Tag,
+        // assertSee prüft die RAW-HTML-Zeichenkette und würde an der Tag-Grenze scheitern.
+        ->assertSeeText('1 KI-Aufgabe wartet')
+        ->assertSeeText('Rezept wird entworfen …');
 });
