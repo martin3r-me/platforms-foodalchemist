@@ -14,6 +14,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistPlanningSession;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Services\Ai\FakeAiProvider;
 use Platform\FoodAlchemist\Services\Stt\SttServiceContract;
+use Platform\FoodAlchemist\Services\TeamSettingsService;
 use Platform\FoodAlchemist\Services\VoiceCommandService;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
 use Platform\FoodAlchemist\Tests\TestCase;
@@ -310,4 +311,160 @@ it('rendert kein <script> als erstes Tag der Komponente (wire:id landet sonst am
     $html = Livewire::test(VoiceModal::class)->html();
     preg_match('/(?:\n\s*|^\s*)<([a-zA-Z0-9\-]+)/', $html, $m);
     expect($m[1] ?? null)->toBe('div');
+});
+
+/*
+ * Spec 53 / Paket F — Agenten-Modus (fragen|auto_sicher|nur_lesen). Kein Team-Setting gesetzt
+ * ⇒ Default `fragen` (bestehende GL-07-Tests oben bleiben also unverändert gültig).
+ */
+
+it('Modus fragen (Default): kein Setting gesetzt ⇒ Modal liest fragen (Klick-Pflicht bleibt wie in den GL-07-Tests oben belegt)', function () {
+    expect(Livewire::test(VoiceModal::class)->get('agentModus'))->toBe('fragen');
+});
+
+it('Modus auto_sicher: planung_start legt die Session OHNE Klick an, Ergebnis zeigt „automatisch ausgeführt"', function () {
+    app(TeamSettingsService::class)->update($this->rootTeam, ['voice_agent_mode' => 'auto_sicher']);
+    ($this->skript)([
+        '{"action":"tool","name":"foodalchemist.planung_vorschlag.POST","arguments":{"scope":"rezept","brief":"Tomatensuppe","leitplanken":false}}',
+        '{"action":"final","text":"Vorschlag: Tomatensuppe."}',
+    ]);
+
+    $modal = Livewire::test(VoiceModal::class);
+    expect($modal->get('agentModus'))->toBe('auto_sicher')
+        ->and(FoodAlchemistPlanningSession::count())->toBe(0);
+
+    $modal->call('verarbeiteText', 'Erstelle ein Basisrezept für Tomatensuppe')
+        ->assertRedirect(route('foodalchemist.planung.index', [
+            'session' => FoodAlchemistPlanningSession::first()?->id, 'open' => 1, 'tab' => 'basisrezept',
+        ]));
+
+    expect(FoodAlchemistPlanningSession::count())->toBe(1);              // KEIN Klick nötig — direkt ausgeführt
+    $proposal = collect($modal->get('ergebnis')['proposals'])->firstWhere('type', 'planung_start');
+    expect($proposal['accepted'] ?? false)->toBeTrue();
+});
+
+it('Modus auto_sicher: anreicherung_vorschlag dispatcht EnrichRecipeJob OHNE Klick', function () {
+    app(TeamSettingsService::class)->update($this->rootTeam, ['voice_agent_mode' => 'auto_sicher']);
+    Queue::fake();
+    $rezept = FoodAlchemistRecipe::create(['team_id' => $this->rootTeam->id, 'recipe_key' => 'auto1', 'name' => 'Sauce', 'status' => 'draft']);
+    ($this->skript)([
+        '{"action":"tool","name":"foodalchemist.anreicherung_vorschlag.POST","arguments":{"recipe_id":' . $rezept->id . '}}',
+        '{"action":"final","text":"Vorschlag: Sauce."}',
+    ]);
+
+    $modal = Livewire::test(VoiceModal::class)->call('verarbeiteText', 'Reichere dieses Rezept vollständig an');
+
+    Queue::assertPushed(EnrichRecipeJob::class, fn ($job) => $job->recipeId === $rezept->id);   // KEIN Klick nötig
+    $proposal = collect($modal->get('ergebnis')['proposals'])->firstWhere('type', 'anreicherung');
+    expect($proposal['accepted'] ?? false)->toBeTrue();
+});
+
+it('Modus nur_lesen: Proposal-Tools sind strukturell gesperrt — keine Vorschläge, kein Write', function () {
+    app(TeamSettingsService::class)->update($this->rootTeam, ['voice_agent_mode' => 'nur_lesen']);
+    ($this->skript)([
+        '{"action":"tool","name":"foodalchemist.planung_vorschlag.POST","arguments":{"scope":"rezept","brief":"Tomatensuppe"}}',
+        '{"action":"final","text":"Das darf ich in diesem Modus nicht vorschlagen."}',
+    ]);
+
+    $modal = Livewire::test(VoiceModal::class);
+    expect($modal->get('agentModus'))->toBe('nur_lesen');
+
+    $modal->call('verarbeiteText', 'Erstelle ein Basisrezept für Tomatensuppe');
+
+    expect(FoodAlchemistPlanningSession::count())->toBe(0)
+        ->and($modal->get('ergebnis')['proposals'])->toBe([])
+        ->and($modal->get('ergebnis')['tool_laeufe'])->toBe([]);          // Tool wurde von der Policy abgelehnt, nie ausgeführt
+});
+
+it('Review-Fix: #[Locked] verhindert Selbst-Hochstufung — $wire.set(agentModus, auto_sicher) wird abgelehnt', function () {
+    app(TeamSettingsService::class)->update($this->rootTeam, ['voice_agent_mode' => 'nur_lesen']);
+
+    $modal = Livewire::test(VoiceModal::class);
+    expect($modal->get('agentModus'))->toBe('nur_lesen');
+
+    expect(fn () => $modal->set('agentModus', 'auto_sicher'))
+        ->toThrow(\Livewire\Features\SupportLockedProperties\CannotUpdateLockedPropertyException::class);
+
+    // Selbst wenn die Property (z. B. per direktem PHP-Zugriff) doch abwiche, entscheidet
+    // NICHT sie — agentModusAktuell() liest immer frisch aus dem Team-Setting.
+    ($modal->instance())->agentModus = 'auto_sicher';   // simuliert einen umgangenen Property-Zustand
+    FoodAlchemistRecipe::create(['team_id' => $this->rootTeam->id, 'recipe_key' => 'lock1', 'name' => 'X', 'status' => 'draft']);
+    ($this->skript)([
+        '{"action":"tool","name":"foodalchemist.planung_vorschlag.POST","arguments":{"scope":"rezept","brief":"Test"}}',
+        '{"action":"final","text":"nicht erlaubt"}',
+    ]);
+
+    $modal->call('verarbeiteText', 'Erstelle ein Basisrezept');
+
+    expect(FoodAlchemistPlanningSession::count())->toBe(0);               // Team-Setting (nur_lesen) hat gewonnen, nicht die Property
+});
+
+/*
+ * Spec 53 / Paket F (1b) — generischer Schreibvorschlag für FA-Write-Tools ohne eigenes
+ * Proposal-Tool. Alias-Fall (recipes.PUT: Feld-Diff) + Alias-Fall Löschen (kein Diff, Name
+ * Pflicht) — beide bis zum Bestätigen-Klick ohne DB-Änderung, GL-07 unverändert.
+ */
+
+it('Schreibvorschlag (Alias recipes.PUT): Vorschau zeigt NUR das im Befehl genannte Feld (Partial-Update-Beweis)', function () {
+    $rezept = FoodAlchemistRecipe::create([
+        'team_id' => $this->rootTeam->id, 'recipe_key' => 'sv1', 'name' => 'Alter Name',
+        'description' => 'Alte Beschreibung', 'status' => 'draft',
+    ]);
+    ($this->skript)([
+        '{"action":"tool","name":"foodalchemist.recipes.PUT","arguments":{"recipe_id":' . $rezept->id . ',"name":"Neuer Name"}}',
+        '{"action":"final","text":"Vorschlag angelegt — bitte bestätigen."}',
+    ]);
+
+    $modal = Livewire::test(VoiceModal::class)->call('verarbeiteText', 'Nenne das Rezept in Neuer Name um');
+
+    $proposal = collect($modal->get('ergebnis')['proposals'])->firstWhere('type', 'schreibaktion');
+    expect($proposal)->not->toBeNull()
+        ->and($proposal['objekt']['type'])->toBe('Basisrezept')
+        ->and($proposal['objekt']['name'])->toBe('Alter Name')              // GET-Vorher liefert den ALTEN Namen
+        ->and($proposal['vorschau'])->toHaveCount(1)                        // NUR das genannte Feld, nicht description
+        ->and($proposal['vorschau'][0])->toBe(['feld' => 'name', 'alt' => 'Alter Name', 'neu' => 'Neuer Name']);
+    expect($rezept->fresh()->name)->toBe('Alter Name');                    // NICHTS geschrieben vor dem Klick
+
+    $index = collect($modal->get('ergebnis')['proposals'])->search(fn ($p) => $p['type'] === 'schreibaktion');
+    $modal->call('schreibaktionAusfuehren', $index);
+
+    expect($rezept->fresh()->name)->toBe('Neuer Name');                    // JETZT geschrieben
+    expect(DB::table('foodalchemist_ai_call_log')->where('feature', 'voice.schreibaktion')->exists())->toBeTrue();
+});
+
+it('Schreibvorschlag (Alias recipes.DELETE): Karte zeigt den Objekt-NAMEN, kein Feld-Diff, DELETE erst nach Klick', function () {
+    $rezept = FoodAlchemistRecipe::create([
+        'team_id' => $this->rootTeam->id, 'recipe_key' => 'sv2', 'name' => 'Tomatensuppe klassisch', 'status' => 'draft',
+    ]);
+    ($this->skript)([
+        '{"action":"tool","name":"foodalchemist.recipes.DELETE","arguments":{"id":' . $rezept->id . ',"confirm":true}}',
+        '{"action":"final","text":"Vorschlag angelegt — bitte bestätigen."}',
+    ]);
+
+    $modal = Livewire::test(VoiceModal::class)->call('verarbeiteText', 'Lösche das Rezept Tomatensuppe klassisch');
+
+    $proposal = collect($modal->get('ergebnis')['proposals'])->firstWhere('type', 'schreibaktion');
+    expect($proposal['objekt']['name'])->toBe('Tomatensuppe klassisch')
+        ->and($proposal['vorschau'])->toBe([]);                            // Löschen hat keinen Feld-Diff
+    expect(FoodAlchemistRecipe::find($rezept->id))->not->toBeNull();       // NICHT gelöscht vor dem Klick
+
+    $index = collect($modal->get('ergebnis')['proposals'])->search(fn ($p) => $p['type'] === 'schreibaktion');
+    $modal->call('schreibaktionAusfuehren', $index);
+
+    expect(FoodAlchemistRecipe::find($rezept->id))->toBeNull();            // JETZT gelöscht (confirm wurde am Klick wiederhergestellt)
+});
+
+it('Schreibvorschlag ohne Alias: rohe Argumente ohne Alt-Wert + Tool-Beschreibung, kein falscher Diff', function () {
+    ($this->skript)([
+        '{"action":"tool","name":"foodalchemist.gps.POST","arguments":{"hauptzutat":"Zander"}}',
+        '{"action":"final","text":"Vorschlag angelegt — bitte bestätigen."}',
+    ]);
+
+    $modal = Livewire::test(VoiceModal::class)->call('verarbeiteText', 'Lege ein Grundprodukt Zander an');
+
+    $proposal = collect($modal->get('ergebnis')['proposals'])->firstWhere('type', 'schreibaktion');
+    expect($proposal['tool'])->toBe('foodalchemist.gps.POST')
+        ->and($proposal['beschreibung'])->not->toBeNull()
+        ->and($proposal['vorschau'][0])->toBe(['feld' => 'hauptzutat', 'neu' => 'Zander'])
+        ->and($proposal['vorschau'][0])->not->toHaveKey('alt');            // kein geratener Alt-Wert
 });
