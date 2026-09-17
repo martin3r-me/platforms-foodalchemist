@@ -359,7 +359,14 @@ class AiGatewayService
         $usageGesamt = ['input_tokens' => 0, 'output_tokens' => 0, 'input_tokens_details' => ['cached_tokens' => 0]];
         $tatsaechlichesModell = null;
         $tempTreppe = [(float) ($prompt['temperature'] ?? 0.1), 0.5, 0.7];   // §3.3
+        // Dominique §9: „Wie oft greift der strukturelle Retry?" war bisher nicht messbar —
+        // schreibeCallLog() schreibt genau EINE Zeile, tokens_in/out summieren über alle
+        // (auch verworfenen) Versuche, ein erfolgreicher Re-Roll hinterlässt sonst keine Spur.
+        // Keine neue Spalte/Migration: Zählung + letzter Grund gehen in prompt_parts (JSON-Feld).
+        $versucheGemacht = 0;
+        $letzterRerollGrund = null;
         foreach ($tempTreppe as $versuch => $temperature) {
+            $versucheGemacht = $versuch + 1;
             $fehler = null;
             try {
                 $antwort = $this->chatMitBackoff($messages, $options + ['temperature' => $temperature]);
@@ -376,6 +383,14 @@ class AiGatewayService
             } catch (\Throwable $e) {
                 $fehler = $e;
                 $parsed = null;
+                // Grob nach der Fehlerquelle einordnen — chatMitBackoff() fängt Modell-
+                // Fallback/Provider-Backoff bereits intern ab; erreicht deren Exception TROTZDEM
+                // diese Ebene, ist auch der Fallback-Versuch gescheitert (»provider_fehler«).
+                $letzterRerollGrund = match (true) {
+                    str_contains($e->getMessage(), 'strukturell unbrauchbar') => 'strukturell',
+                    str_contains($e->getMessage(), 'kein valides JSON') => 'json_ungueltig',
+                    default => 'provider_fehler',
+                };
             }
         }
         $elapsedMs = (int) ((hrtime(true) - $start) / 1_000_000);
@@ -383,6 +398,11 @@ class AiGatewayService
             // Auch verworfene, aber vom Provider erfolgreich beantwortete Re-Rolls werden berechnet.
             $antwort['usage'] = $usageGesamt;
             $antwort['model'] = $tatsaechlichesModell ?? ($antwort['model'] ?? null);
+        }
+
+        $promptParts['versuche'] = $versucheGemacht;
+        if ($versucheGemacht > 1) {
+            $promptParts['reroll_grund'] = $letzterRerollGrund;
         }
 
         $audit['layers_used'] = $layersUsed;
