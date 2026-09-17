@@ -1939,21 +1939,30 @@ class PlanningCascadeService
     /**
      * Step freigeben: das Draft-Artefakt live setzen (Rezept → approved, Concept → active) über die
      * sanktionierten Services, Step → `freigegeben`, Run neu bewerten. Nur `done`-Steps sind freigebbar.
+     *
+     * Ein `geplant`-Step (egal welcher `kind`) wird durch dieselbe FREIGABE-Aktion stattdessen ERZEUGT
+     * — Gate 1 (Kapitel → Concept, Sub-Rezept/erfundenes Gericht → Materialisierung) statt Gate 2
+     * (Draft → live). Vorher lief das nur für `kind=concept`; ein geplanter Gericht-/Rezept-Step war
+     * über `gibStepFrei`/MCP-FREIGABE ein stiller No-op (Anlass: Lauf 74, Step 513) — die UI bedient
+     * denselben Fall längst über `erzeugeGeplant`.
+     *
+     * @return string Aktions-Tag für den Aufrufer (MCP-Tool zeigt es an, UI ignoriert es):
+     *                 `freigegeben` | `geplant_erzeugt` | `no_op_status_<status>`
      */
-    public function gibStepFrei(Team $team, int $stepId): void
+    public function gibStepFrei(Team $team, int $stepId): string
     {
         $step = $this->ownedStep($team, $stepId);
-        // Kapitel-Gate (gestufte Foodbook-Vollkaskade): ein GEPLANTER Kapitel-Concept-Step wird durch die
-        // „Freigabe" ERZEUGT (dispatch), nicht approved — die Freigabe der Kapitel-Struktur startet die
-        // Concept-Generierung. So bedient dieselbe FREIGABE-Aktion Gate 1 (Kapitel → Concept erzeugen) und
-        // Gate 2 (Concept-Entwurf freigeben + Gänge-Fan-out).
-        if ($step->kind === 'concept' && $step->status === 'geplant') {
-            $this->erzeugeGeplantesConcept($team, $stepId);
+        if ($step->status === 'geplant') {
+            if ($step->kind === 'concept') {
+                $this->erzeugeGeplantesConcept($team, $stepId);
+            } else {
+                $this->erzeugeGeplantenStep($team, $stepId);
+            }
 
-            return;
+            return 'geplant_erzeugt';
         }
         if ($step->status !== 'done') {
-            return;
+            return 'no_op_status_' . $step->status;
         }
         if ($step->ref_id !== null) {
             if ($step->ref_type === 'recipe') {
@@ -1973,6 +1982,8 @@ class PlanningCascadeService
         if (! $asyncFolgestufe) {
             $this->recomputeRunStatus((int) $step->cascade_run_id);
         }
+
+        return 'freigegeben';
     }
 
     /**
