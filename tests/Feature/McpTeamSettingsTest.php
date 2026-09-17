@@ -143,3 +143,33 @@ it('voice_agent_dauerhaft_aktiv: Default AUS, Roundtrip über team_settings.PUT'
     ], $this->kontext);
     expect(app(TeamSettingsService::class)->voiceAgentDauerhaftAktiv($this->rootTeam))->toBeFalse();
 });
+
+/*
+ * Spec 53/F (3): Konversations-Modus — Vorlesen-Schalter + Stimmen-Wahl.
+ */
+
+it('voice_tts_vorlesen: Default AUS, Roundtrip über team_settings.PUT', function () {
+    expect(app(TeamSettingsService::class)->voiceTtsVorlesen($this->rootTeam))->toBeFalse();
+
+    $res = $this->registry->get('foodalchemist.team_settings.PUT')->execute([
+        'settings' => ['voice_tts_vorlesen' => true],
+    ], $this->kontext);
+    expect($res->success)->toBeTrue();
+    expect(app(TeamSettingsService::class)->voiceTtsVorlesen($this->rootTeam))->toBeTrue();
+});
+
+it('voice_tts_stimme: ungesetzt fällt auf alloy zurück, Roundtrip + unbekannter Wert → VALIDATION_ERROR', function () {
+    expect(app(TeamSettingsService::class)->voiceTtsStimme($this->rootTeam))->toBe('alloy');
+
+    $res = $this->registry->get('foodalchemist.team_settings.PUT')->execute([
+        'settings' => ['voice_tts_stimme' => 'nova'],
+    ], $this->kontext);
+    expect($res->success)->toBeTrue();
+    expect(app(TeamSettingsService::class)->voiceTtsStimme($this->rootTeam))->toBe('nova');
+
+    $bad = $this->registry->get('foodalchemist.team_settings.PUT')->execute([
+        'settings' => ['voice_tts_stimme' => 'irgendwas'],
+    ], $this->kontext);
+    expect($bad->success)->toBeFalse()->and($bad->errorCode)->toBe('VALIDATION_ERROR');
+    expect(app(TeamSettingsService::class)->voiceTtsStimme($this->rootTeam))->toBe('nova');   // unverändert
+});

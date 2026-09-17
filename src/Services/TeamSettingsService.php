@@ -30,6 +30,15 @@ class TeamSettingsService
 
     public const VOICE_AGENT_MODE_DEFAULT = 'fragen';
 
+    /**
+     * Spec 53 / Paket F (3): OpenAI-TTS-Stimmen — die klassischen sechs, stabil über
+     * `tts-1`/`gpt-4o-mini-tts` hinweg (neuere Stimmen wie `sage`/`verse` bewusst
+     * aussen vor, bis sie in `gpt-4o-mini-tts` genauso verlässlich verfügbar sind).
+     */
+    public const VOICE_TTS_STIMMEN = ['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer'];
+
+    public const VOICE_TTS_STIMME_DEFAULT = 'alloy';
+
     public const MWST_DEFAULTS = ['regulaer' => 19.0, 'ermaessigt' => 7.0, 'default_satz' => 'ermaessigt'];
 
     public const RUNDUNG_DEFAULTS = ['nachkommastellen' => 2, 'mode' => 'kaufmaennisch'];
@@ -228,6 +237,20 @@ class TeamSettingsService
     public function voiceAgentDauerhaftAktiv(Team $team): bool
     {
         return (bool) ($this->for($team)->voice_agent_dauerhaft_aktiv ?? false);
+    }
+
+    /** Spec 53 / Paket F (3): Antworten des Sprach-Agenten laut vorlesen (Default AUS). */
+    public function voiceTtsVorlesen(Team $team): bool
+    {
+        return (bool) ($this->for($team)->voice_tts_vorlesen ?? false);
+    }
+
+    /** Ungültiger/fehlender Wert fällt auf die Default-Stimme zurück. */
+    public function voiceTtsStimme(Team $team): string
+    {
+        $wert = (string) ($this->for($team)->voice_tts_stimme ?? '');
+
+        return in_array($wert, self::VOICE_TTS_STIMMEN, true) ? $wert : self::VOICE_TTS_STIMME_DEFAULT;
     }
 
     /** Trendradar: 08:00-Konzept-Automatisierung für dieses Team (Default AUS — opt-in). */

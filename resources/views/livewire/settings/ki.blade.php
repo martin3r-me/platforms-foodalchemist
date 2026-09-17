@@ -51,6 +51,27 @@
         </button>
     </div>
 
+    {{-- Spec 53/F (3): Konversations-Modus — Antworten vorlesen + Stimmen-Wahl. --}}
+    <div class="flex items-start justify-between gap-4" data-settings-sprachagent-tts>
+        <div>
+            <p class="{{ $dt }} mb-1">Antworten des Sprachbefehls vorlesen</p>
+            <p class="text-[11px] text-gray-500">Konversations-Modus: die Antwort kommt zusätzlich zum Text als Sprachausgabe (OpenAI-TTS).</p>
+        </div>
+        <button type="button" wire:click="sprachTtsVorlesenUmschalten"
+                class="{{ $sprachTtsVorlesen ? $btnPrimary : $btnGhost }} shrink-0" data-sprachagent-tts-switch>
+            @svg('heroicon-o-speaker-wave', 'w-4 h-4')
+            {{ $sprachTtsVorlesen ? 'Aktiv — ausschalten' : 'Aktivieren' }}
+        </button>
+    </div>
+    <div data-settings-sprachagent-tts-stimme>
+        <p class="{{ $dt }} mb-1">Stimme</p>
+        <select wire:model.live="sprachTtsStimme" class="{{ $input }} !w-40">
+            @foreach(\Platform\FoodAlchemist\Services\TeamSettingsService::VOICE_TTS_STIMMEN as $stimme)
+                <option value="{{ $stimme }}">{{ ucfirst($stimme) }}</option>
+            @endforeach
+        </select>
+    </div>
+
     <div>
         <p class="{{ $dt }} mb-1">Tier-Zuordnung (V-01 — je Prompt, Registry)</p>
         <div class="flex flex-wrap gap-1" data-ki-tiers>

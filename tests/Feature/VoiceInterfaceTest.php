@@ -468,3 +468,96 @@ it('Schreibvorschlag ohne Alias: rohe Argumente ohne Alt-Wert + Tool-Beschreibun
         ->and($proposal['vorschau'][0])->toBe(['feld' => 'hauptzutat', 'neu' => 'Zander'])
         ->and($proposal['vorschau'][0])->not->toHaveKey('alt');            // kein geratener Alt-Wert
 });
+
+/*
+ * Spec 53 / Paket F (3): Konversations-Modus — Sprachausgabe. Server-Teil (Contract, Route,
+ * Livewire-Methoden, Call-Log); VAD/Autoplay/speechSynthesis-Fallback ist Browser-Teil (Stufe 3B).
+ */
+
+it('TTS-Vorlesen AN: nach der Antwort wird voice-tts-bereit dispatcht (Fake-TTS, kein echtes HTTP)', function () {
+    config(['foodalchemist.tts.provider' => 'fake']);
+    app(TeamSettingsService::class)->update($this->rootTeam, ['voice_tts_vorlesen' => true]);
+    ($this->skript)(['{"action":"final","text":"Alles klar."}']);
+
+    Livewire::test(VoiceModal::class)
+        ->call('verarbeiteText', 'Hallo')
+        ->assertDispatched('voice-tts-bereit');
+
+    expect(DB::table('foodalchemist_ai_call_log')->where('feature', 'voice.tts')->exists())->toBeTrue();
+});
+
+it('TTS-Vorlesen AUS (Default): keine Sprachausgabe ausgelöst', function () {
+    ($this->skript)(['{"action":"final","text":"Alles klar."}']);
+
+    Livewire::test(VoiceModal::class)
+        ->call('verarbeiteText', 'Hallo')
+        ->assertNotDispatched('voice-tts-bereit');
+});
+
+it('TTS-Vorlesen AN, aber die Antwort navigiert: kein Vorlesen (der Ton würde die verlassene Seite treffen)', function () {
+    config(['foodalchemist.tts.provider' => 'fake']);
+    app(TeamSettingsService::class)->update($this->rootTeam, ['voice_tts_vorlesen' => true]);
+    ($this->skript)([
+        '{"action":"tool","name":"foodalchemist.ui.NAVIGATE","arguments":{"route_key":"planung"}}',
+        '{"action":"final","text":"Planung geöffnet."}',
+    ]);
+
+    Livewire::test(VoiceModal::class)
+        ->call('verarbeiteText', 'Öffne die Planung')
+        ->assertNotDispatched('voice-tts-bereit');
+});
+
+it('sprechen(): setzt sprichtGerade + dispatcht die signierte Audio-URL; sprechenBeendet() setzt zurück', function () {
+    config(['foodalchemist.tts.provider' => 'fake']);
+
+    Livewire::test(VoiceModal::class)
+        ->call('sprechen', 'Testsatz')
+        ->assertSet('sprichtGerade', true)
+        ->assertDispatched('voice-tts-bereit')
+        ->call('sprechenBeendet')
+        ->assertSet('sprichtGerade', false);
+});
+
+it('sprechen(): TTS-Fehler dispatcht voice-tts-fehlgeschlagen statt die UI zu blockieren', function () {
+    config(['foodalchemist.tts.provider' => 'none']);   // bindet UnkonfiguriertTtsService, wirft immer
+
+    Livewire::test(VoiceModal::class)
+        ->call('sprechen', 'Testsatz')
+        ->assertSet('sprichtGerade', false)
+        ->assertDispatched('voice-tts-fehlgeschlagen');
+});
+
+it('die von sprechen() TATSÄCHLICH dispatchte Audio-URL ist abrufbar und liefert die echten Bytes (Single-Use)', function () {
+    config(['foodalchemist.tts.provider' => 'fake']);
+
+    $url = null;
+    Livewire::test(VoiceModal::class)
+        ->call('sprechen', 'Testsatz')
+        ->assertDispatched('voice-tts-bereit', function ($name, $params) use (&$url) {
+            $url = $params['url'];
+
+            return is_string($url) && $url !== '';
+        });
+
+    $response = $this->get($url);
+    $response->assertOk();
+    expect($response->getContent())->toBe((new \Platform\FoodAlchemist\Services\Tts\FakeTtsService())->synthesize('Testsatz'))
+        ->and($response->headers->get('Content-Type'))->toStartWith('audio/mpeg');
+
+    // Single-Use: derselbe Link liefert beim zweiten Abruf nichts mehr.
+    $this->get($url)->assertNotFound();
+});
+
+it('Audio-Route ohne gültige Signatur wird abgelehnt (403) — kein Erraten der Route über die reine ID', function () {
+    $ungesichert = route('foodalchemist.voice.audio', ['token' => 'irgendwas']);
+
+    $this->get($ungesichert)->assertForbidden();
+});
+
+it('Audio-Route mit gültiger Signatur, aber unbekanntem/abgelaufenem Token: 404 statt Fatal', function () {
+    $signierteUrl = \Illuminate\Support\Facades\URL::temporarySignedRoute(
+        'foodalchemist.voice.audio', now()->addMinutes(5), ['token' => 'nie-gecacht'],
+    );
+
+    $this->get($signierteUrl)->assertNotFound();
+});

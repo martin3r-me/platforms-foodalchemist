@@ -25,7 +25,7 @@ use Platform\FoodAlchemist\Services\TeamSettingsService;
 class TeamSettingsPutTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
 {
     /** Boolean-Schalter. */
-    private const BOOL_KEYS = ['ai_active', 'show_fallback_chain', 'trend_auto_enabled', 'trend_signal_enabled', 'voice_agent_dauerhaft_aktiv'];
+    private const BOOL_KEYS = ['ai_active', 'show_fallback_chain', 'trend_auto_enabled', 'trend_signal_enabled', 'voice_agent_dauerhaft_aktiv', 'voice_tts_vorlesen'];
 
     /** Numerische Skalare (float, ≥ 0). */
     private const NUM_KEYS = [
@@ -42,6 +42,7 @@ class TeamSettingsPutTool extends FoodAlchemistTool implements ToolContract, Too
         'labor_cost_source' => ['team_flat', 'station_roles'],
         'purchase_journal_trigger' => ['sent', 'delivered'],
         'voice_agent_mode' => TeamSettingsService::VOICE_AGENT_MODES,
+        'voice_tts_stimme' => TeamSettingsService::VOICE_TTS_STIMMEN,
     ];
 
     /** WG-Code → %-Verlust-Maps (assoziatives Array, Werte numerisch). */
@@ -57,7 +58,7 @@ class TeamSettingsPutTool extends FoodAlchemistTool implements ToolContract, Too
         return 'Schreibt Team-Einstellungen (nur eigene Team-Zeile): Ki-Kill-Switch, Küchen-Typ, '
             . 'Ziel-Wareneinsatz-%, Stundensatz/Marge/Zuschläge, Topf-Deckel-Defaults, Trendradar-Automatik, '
             . 'Einkaufsjournal-Trigger, Garverlust-/Putzverlust-Defaults, Standard-Preisklasse (team-scoped geprüft), '
-            . 'Sprachbefehl-Agenten-Modus + dauerhaft-aktiv-Schalter. '
+            . 'Sprachbefehl-Agenten-Modus + dauerhaft-aktiv-Schalter + Vorlesen/Stimme. '
             . 'Nur die im Schema gelisteten Keys sind erlaubt; unbekannte Keys werden abgewiesen. '
             . 'Idempotent (PUT). Vokabular/Taxonomie und komplexe JSON-Konfigs laufen über eigene Tools bzw. die UI.';
     }
@@ -94,6 +95,8 @@ class TeamSettingsPutTool extends FoodAlchemistTool implements ToolContract, Too
                         'voice_agent_dauerhaft_aktiv' => ['type' => 'boolean', 'description' => 'Sprachbefehl auf jeder Seite als schwebendes Element sichtbar (nicht nur Sidebar-Knopf).'],
                         'purchase_journal_trigger' => ['type' => 'string', 'description' => 'Einkaufsjournal-Buchung ab Status: sent|delivered.'],
                         'voice_agent_mode' => ['type' => 'string', 'description' => 'Agenten-Modus des Sprachbefehls: fragen (Default, jede Schreibaktion nur Vorschlag) | auto_sicher (reversible Vorschläge laufen direkt) | nur_lesen (keine Vorschläge).'],
+                        'voice_tts_vorlesen' => ['type' => 'boolean', 'description' => 'Antworten des Sprach-Agenten laut vorlesen (Konversations-Modus, Default AUS).'],
+                        'voice_tts_stimme' => ['type' => 'string', 'description' => 'OpenAI-TTS-Stimme: alloy (Default) | echo | fable | onyx | nova | shimmer.'],
                         'cooking_loss_defaults' => ['type' => 'object', 'description' => 'Garverlust-Default % je WG-Code ("*" = global). Werte numerisch.'],
                         'trimming_loss_defaults' => ['type' => 'object', 'description' => 'Putzverlust-Default % je WG-Code ("*" = global). Werte numerisch.'],
                     ],
