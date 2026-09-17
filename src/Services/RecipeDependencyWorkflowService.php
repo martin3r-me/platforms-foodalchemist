@@ -66,6 +66,12 @@ class RecipeDependencyWorkflowService
      * Fail-soft: fehlt der Call-Log-Eintrag oder das Feld (älterer Migrationsstand,
      * `schreibeCallLog()` schreibt `knowledge_channels` nur hinter `Schema::hasColumn`), bleibt
      * `context_snapshot` unverändert — der alte (potenziell zu grosse) Wert ist kein Blocker.
+     *
+     * Aufgabe 6 (verworfen getrennt ausweisen): befüllt hier zusätzlich den `kanon`-Zweig von
+     * `context_snapshot.knowledge_dropped` — die gedroppten `wenn_platz`-Dossiers, als Differenz
+     * zwischen der vollen Kanon-Liste (vor dieser Korrektur) und der wirklich gesendeten. Der
+     * `retrieval`-Zweig kommt bereits korrekt aus `RecipeGenerationContextService::build()`
+     * (`contextFor()::files_dropped`) und wird hier nur durchgereicht, nicht neu berechnet.
      */
     private function korrigiereKanonFiles(FoodAlchemistCascadeRunStep $step, FoodAlchemistRecipe $recipe): void
     {
@@ -84,13 +90,19 @@ class RecipeDependencyWorkflowService
         if (! is_array($channels) || ! array_key_exists('kanon', $channels)) {
             return;                                                     // kein Kanon gesendet ⇒ nichts zu korrigieren
         }
+        $kanonVorher = $snapshot['kanon_files'];
         $kanonGesendet = is_array($channels['kanon']) ? array_values($channels['kanon']) : [];
-        if ($kanonGesendet === $snapshot['kanon_files']) {
+        $kanonVerworfen = array_values(array_diff($kanonVorher, $kanonGesendet));
+
+        $dropped = is_array($snapshot['knowledge_dropped'] ?? null) ? $snapshot['knowledge_dropped'] : [];
+        $dropped['kanon'] = $kanonVerworfen;
+        $updates = ['kanon_files' => $kanonGesendet, 'knowledge_dropped' => $dropped];
+        if ($kanonGesendet === $kanonVorher && $kanonVerworfen === []) {
             return;                                                     // schon deckungsgleich, kein Schreib-Nutzen
         }
-        FoodAlchemistCascadeRunStep::whereKey($step->id)
-            ->update(['context_snapshot' => array_merge($snapshot, ['kanon_files' => $kanonGesendet])]);
-        $step->context_snapshot = array_merge($snapshot, ['kanon_files' => $kanonGesendet]);
+        $neuerSnapshot = array_merge($snapshot, $updates);
+        FoodAlchemistCascadeRunStep::whereKey($step->id)->update(['context_snapshot' => $neuerSnapshot]);
+        $step->context_snapshot = $neuerSnapshot;
     }
 
     public function afterGenerated(Team $team, int $stepId, int $userId, FoodAlchemistRecipe $recipe, array $offene, array $parameter): void

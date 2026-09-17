@@ -5,6 +5,13 @@
 
 @php
     $wissen = is_array($kontext) ? (array) ($kontext['wissen'] ?? []) : [];
+    // Spec 53 Paket B Aufgabe 6 — was gebaut, aber NICHT gesendet wurde, getrennt nach Kanal
+    // ('retrieval' aus dem Budget-Schnitt der Fuzzy-Discovery, 'kanon' aus gedroppten
+    // wenn_platz-Dossiers). Optional: ein Aufrufer ohne dieses Feld zeigt einfach keine Chips
+    // (fail-safe wie der Rest der Komponente).
+    $verworfenRoh = is_array($kontext) ? (array) ($kontext['wissen_verworfen'] ?? []) : [];
+    $verworfenRetrieval = array_values((array) ($verworfenRoh['retrieval'] ?? []));
+    $verworfenKanon = array_values((array) ($verworfenRoh['kanon'] ?? []));
     $templates = is_array($kontext) ? (array) ($kontext['templates'] ?? []) : [];
     $chars = is_array($kontext) ? (int) ($kontext['chars'] ?? 0) : 0;
     // W3-5: die ECHTEN Prompt-Größen (Messsonde). `$chars` oben ist NUR der Retrieval-Topf —
@@ -34,7 +41,7 @@
     $kanaele = array_merge($bekannt, $unbekannt);
 
     $docCount = array_sum(array_map(fn ($v) => is_array($v) ? count($v) : 0, $wissen));
-    $hatInhalt = $docCount > 0 || $templates !== [];
+    $hatInhalt = $docCount > 0 || $templates !== [] || $verworfenRetrieval !== [] || $verworfenKanon !== [];
 
     // Quellen behalten ihre Version; nur das technische graph:-Präfix entfällt.
     $pretty = fn (string $e): string => (string) preg_replace('/^graph:/', '', $e);
@@ -96,6 +103,27 @@
                     </div>
                 @endif
             @endforeach
+
+            {{-- Aufgabe 6: verworfen getrennt ausweisen — eigene Chip-Gruppe je Kanal (Recherche
+                 = Fuzzy-Discovery, Kanon = gedroppte wenn_platz-Dossiers), nicht nur die
+                 Zeichenzahl aus den Prompt-Größen oben. --}}
+            @if($verworfenRetrieval !== [] || $verworfenKanon !== [])
+                <div>
+                    <p class="text-[10px] uppercase tracking-wide text-gray-400 mb-1">Verworfen (nicht gesendet)</p>
+                    <div class="flex flex-wrap gap-1">
+                        @foreach($verworfenRetrieval as $e)
+                            <span class="inline-block rounded bg-amber-50 border border-amber-200 px-1.5 py-0.5 text-[10px] text-amber-800" title="Gebaut, aber vom Budget-Schnitt der Recherche verworfen">
+                                Recherche: {{ $pretty((string) $e) }}
+                            </span>
+                        @endforeach
+                        @foreach($verworfenKanon as $e)
+                            <span class="inline-block rounded bg-amber-50 border border-amber-200 px-1.5 py-0.5 text-[10px] text-amber-800" title="Als wenn_platz vorgesehen, aber vom Kanon-Budget gedroppt">
+                                Kanon: {{ $pretty((string) $e) }}
+                            </span>
+                        @endforeach
+                    </div>
+                </div>
+            @endif
 
             @if($templates !== [])
                 <div>

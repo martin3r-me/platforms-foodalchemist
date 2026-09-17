@@ -31,13 +31,16 @@ beforeEach(function () {
         ]);
     };
 
-    $this->mkStep = function (FoodAlchemistCascadeRun $run, array $kanonFiles): FoodAlchemistCascadeRunStep {
+    $this->mkStep = function (FoodAlchemistCascadeRun $run, array $kanonFiles, array $retrievalDropped = []): FoodAlchemistCascadeRunStep {
         return FoodAlchemistCascadeRunStep::create([
             'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id,
             'kind' => 'rezept', 'status' => 'running', 'sort' => 1,
             'context_snapshot' => [
                 'knowledge_files' => ['domain-doc@v1'],
                 'kanon_files' => $kanonFiles,
+                // Wie RecipeGenerationContextService::build() es VOR dem Gateway-Call schreibt:
+                // 'retrieval' schon bekannt (contextFor()::files_dropped), 'kanon' noch leer.
+                'knowledge_dropped' => ['retrieval' => $retrievalDropped, 'kanon' => []],
                 'template_ids' => [], 'pairing_keys' => [], 'built_at' => now()->toIso8601String(),
             ],
         ]);
@@ -80,6 +83,27 @@ it('korrigiert kanon_files auf die wirklich gesendete Liste (wenn_platz gedroppt
     expect($step->refresh()->context_snapshot['kanon_files'])->toBe($wirklichGesendet)
         // Die Retrieval-Seite (knowledge_files) bleibt unberührt — sie war schon vorher korrekt.
         ->and($step->context_snapshot['knowledge_files'])->toBe(['domain-doc@v1']);
+});
+
+it('ein Retrieval-Drop (aus build()) und ein Kanon-Drop (aus dem Call-Log) landen getrennt im Snapshot', function () {
+    $run = ($this->mkRun)();
+    // 'retrieval' kommt schon bei prepare() rein (contextFor()::files_dropped) — hier simuliert,
+    // als hätte build() bereits ein Fuzzy-Discovery-Dossier gedroppt.
+    $step = ($this->mkStep)(
+        $run,
+        ['regelwerk-a@v1', 'regelwerk-b@v1', 'regelwerk-c-wenn-platz@v1'],
+        ['fruchtgemuese-substitutionen@v3'],
+    );
+    $rezept = $this->makeRecipe($this->rootTeam, 'Tomatensuppe mit zwei Verwurf-Kanälen');
+    ($this->mkCallLog)($rezept->id, 'recipe.generator', ['regelwerk-a@v1', 'regelwerk-b@v1']);
+
+    app(RecipeDependencyWorkflowService::class)->afterGenerated(
+        $this->rootTeam, $step->id, auth()->id(), $rezept, [], []
+    );
+
+    $dropped = $step->refresh()->context_snapshot['knowledge_dropped'];
+    expect($dropped['retrieval'])->toBe(['fruchtgemuese-substitutionen@v3'])   // unangetastet
+        ->and($dropped['kanon'])->toBe(['regelwerk-c-wenn-platz@v1']);        // neu nachgetragen
 });
 
 it('lässt kanon_files unverändert, wenn keine passende Call-Log-Zeile existiert (fail-soft)', function () {

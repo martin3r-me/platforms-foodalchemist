@@ -242,12 +242,20 @@ class RecipeGenerationContextService
             $prompt['rezept_templates'] = $templateContext;
         }
 
+        // Spec 53 Paket B Aufgabe 6 — geteilt zwischen dem LIVE-Bündel ($kontext, unten) und dem
+        // persistierten `snapshot` (s. return-Array): 'retrieval' ist ab hier bekannt
+        // (`contextFor()::files_dropped`), 'kanon' erst nach dem Gateway-Call — dort bleibt es
+        // leer, bis `RecipeDependencyWorkflowService::afterGenerated()` es im Snapshot nachträgt
+        // (dieselbe Grenze wie bei `kanon_files`/`used_by_category['kanon']`, s. Docblock dort).
+        $wissenVerworfen = ['retrieval' => $wissen['files_dropped'] ?? [], 'kanon' => []];
+
         // Kontext-Inspektor (2026-08-07): kompaktes, UI-fertiges Bündel „auf welches Wissen
         // greift der Generator" — gruppierte Wissens-Docs je Kanal + gematchte Templates
         // (nur score>0 = echt zur Beschreibung passend) + Zeichen-Budget des Wissens-Blocks.
         // Reine String-/Int-Listen → gefahrlos durch Job-Cache + Livewire-Ergebnis reichbar.
         $kontext = [
             'wissen' => $wissen['used_by_category'] ?? [],
+            'wissen_verworfen' => $wissenVerworfen,
             'chars' => (int) ($wissen['total_chars'] ?? 0),
             'wissen_verworfen' => $wissen['files_dropped'] ?? [],
             'templates' => array_values(array_map(
@@ -275,6 +283,13 @@ class RecipeGenerationContextService
                 // Dedup-Kanal zu verschmutzen (Anlass 2026-09-06: „man sieht nie komplett, was benutzt wurde").
                 'knowledge_files' => $wissen['files_used'],
                 'kanon_files' => $kanonFiles,
+                // Spec 53 Paket B Aufgabe 6 — was gebaut, aber NICHT gesendet wurde, getrennt nach
+                // Kanal: 'retrieval' kommt direkt aus contextFor() (Budget-Schnitt der Fuzzy-Discovery,
+                // Ganzdokument-Drop); 'kanon' ist hier immer leer und wird erst NACH dem Gateway-Call
+                // durch RecipeDependencyWorkflowService::afterGenerated() befüllt (derselbe Rückweg wie
+                // bei kanon_files, s. dort) — vor dem Call ist noch nicht bekannt, welche wenn_platz-
+                // Dossiers `selectKanon()` droppt.
+                'knowledge_dropped' => $wissenVerworfen,
                 'template_ids' => array_column($templateContext, 'id'),
                 'pairing_keys' => array_values(array_filter(array_keys($prompt), fn ($key) => str_contains((string) $key, 'pair'))),
                 'built_at' => now()->toIso8601String(),
