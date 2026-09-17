@@ -196,3 +196,15 @@ Re-Roll-Zähler gebaut: PR #95 `fix/call-log-reroll-zaehler` (Basis #94, Commit 
 | D Sprachbefehl (Oskar) | #98 | 4.503 / 0 rot | A + C |
 
 Merge-Reihe: #94 → #95 → #97 → #96 → #98 (C und D integrieren `main` per Merge-Commit, kein Rebase — hält Hashes für den jeweils darauf gestapelten Branch stabil). `gh pr merge` aus der Orchestrierungs-Session ist im Auto-Modus blockiert („Merge Without Review"); Merge durch Dominique oder nach Permission-Freigabe. Danach ein Deploy demo (Checkliste `00_INBOX/_Spec53_Leitstelle/E_Abnahme_Protokoll.md`), dann Paket E.
+
+## Merges 2026-09-17 (Freigabe Dominique 19:55 „du kannst mergen")
+
+| PR | Merge-Commit | Zeit (UTC) |
+|---|---|---|
+| #94 A Basisrezept | `af4fec9b` | 17:56 |
+| #95 Re-Roll-Zähler (Base auf main retargetet) | `ec9238a9` | 17:58 |
+| #97 B Wissen | `5fb8c955` | 17:59 |
+| #96 C Feedback | _folgt nach Merge von main in den Branch_ | |
+| #98 D Sprachbefehl | _folgt nach Merge von main in den Branch_ | |
+
+Deploy-Entscheid (Orchestrierung, von Dominique freigestellt): ein Deploy nach Merge aller fünf PRs — die Branches sind gegen den vollen Stapel getestet, ein Teil-Deploy brächte keinen Vorteil.
