@@ -21,7 +21,9 @@
                     <div class="flex items-center gap-2">
                         <button type="button" wire:click="oeffne({{ $k['id'] }})" class="flex-1 min-w-0 text-left text-xs font-medium text-gray-800 truncate hover:text-violet-700" data-kapitel-toggle="{{ $k['id'] }}">{{ $k['title'] ?: 'Kapitel' }}</button>
                         @if($laeuft)<span class="shrink-0 w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" title="läuft"></span>@endif
-                        <button type="button" wire:click="kapitelErzeugen({{ $k['id'] }})" wire:loading.attr="disabled" wire:target="kapitelErzeugen" class="{{ $btnGhostXs }} shrink-0" title="Dieses Kapitel über die Kaskade erzeugen" data-kapitel-erzeugen="{{ $k['id'] }}">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5')</button>
+                        <x-foodalchemist::ki-action action="kapitelErzeugen({{ $k['id'] }})" target="kapitelErzeugen" variant="icon"
+                                icon="heroicon-o-sparkles" label="Dieses Kapitel über die Kaskade erzeugen"
+                                class="shrink-0" data-kapitel-erzeugen="{{ $k['id'] }}" />
                     </div>
 
                     @if($offen)
