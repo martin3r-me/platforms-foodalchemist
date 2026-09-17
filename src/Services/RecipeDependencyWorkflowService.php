@@ -45,6 +45,54 @@ class RecipeDependencyWorkflowService
         return $context;
     }
 
+    /**
+     * Spec 53 Paket B Aufgabe 5 — „Verwendet" = wirklich gesendet.
+     *
+     * `prepare()` (oben) schreibt `context_snapshot.kanon_files` VOR dem KI-Call aus der vollen
+     * Kanon-Liste (`pflicht` + `wenn_platz`) — `RecipeGenerationContextService::build()` kennt die
+     * Gateway-Auswahl noch nicht, die erst `AiGatewayService::selectKanon()` trifft (droppt
+     * `wenn_platz`, wenn das Budget nicht reicht). Die Step-Zeile „Kanon (n) · Recherche (m)"
+     * (`step-zeile.blade.php`, liest `context_snapshot.kanon_files`) zeigte damit eine Zahl, die
+     * grösser sein kann als das, was tatsächlich im Prompt stand.
+     *
+     * Fix OHNE AiGatewayService/GenerateRecipeJob anzufassen: der Gateway schreibt die WIRKLICH
+     * gesendete Kanon-Liste bereits verlässlich in `foodalchemist_ai_call_log.knowledge_channels`
+     * (`AiGatewayService::schreibeCallLog()`), und `RecipeGeneratorService::generiereImLauf()`
+     * verknüpft diese Call-Log-Zeile NACH dem Commit über `target_table`/`target_id` mit dem
+     * fertigen Rezept. Zum Zeitpunkt von `afterGenerated()` (nach `bindCompletedChild` aufgerufen)
+     * steht diese Verknüpfung bereits — ein einfacher Rückschreib-Haken statt einer zweiten
+     * Zähl-Formel („eine Rechnung, ein Ergebnis").
+     *
+     * Fail-soft: fehlt der Call-Log-Eintrag oder das Feld (älterer Migrationsstand,
+     * `schreibeCallLog()` schreibt `knowledge_channels` nur hinter `Schema::hasColumn`), bleibt
+     * `context_snapshot` unverändert — der alte (potenziell zu grosse) Wert ist kein Blocker.
+     */
+    private function korrigiereKanonFiles(FoodAlchemistCascadeRunStep $step, FoodAlchemistRecipe $recipe): void
+    {
+        $snapshot = $step->context_snapshot;
+        if (! is_array($snapshot) || ! array_key_exists('kanon_files', $snapshot)) {
+            return;
+        }
+        $row = DB::table('foodalchemist_ai_call_log')
+            ->where('target_table', 'foodalchemist_recipes')->where('target_id', $recipe->id)
+            ->whereIn('feature', ['recipe.generator', 'vk.generator'])
+            ->orderByDesc('id')->first(['knowledge_channels']);
+        if ($row === null || $row->knowledge_channels === null) {
+            return;
+        }
+        $channels = json_decode((string) $row->knowledge_channels, true);
+        if (! is_array($channels) || ! array_key_exists('kanon', $channels)) {
+            return;                                                     // kein Kanon gesendet ⇒ nichts zu korrigieren
+        }
+        $kanonGesendet = is_array($channels['kanon']) ? array_values($channels['kanon']) : [];
+        if ($kanonGesendet === $snapshot['kanon_files']) {
+            return;                                                     // schon deckungsgleich, kein Schreib-Nutzen
+        }
+        FoodAlchemistCascadeRunStep::whereKey($step->id)
+            ->update(['context_snapshot' => array_merge($snapshot, ['kanon_files' => $kanonGesendet])]);
+        $step->context_snapshot = array_merge($snapshot, ['kanon_files' => $kanonGesendet]);
+    }
+
     public function afterGenerated(Team $team, int $stepId, int $userId, FoodAlchemistRecipe $recipe, array $offene, array $parameter): void
     {
         $step = FoodAlchemistCascadeRunStep::find($stepId);
@@ -52,6 +100,7 @@ class RecipeDependencyWorkflowService
             return;
         }
 
+        $this->korrigiereKanonFiles($step, $recipe);
         $this->bindCompletedChild($team, $step, $recipe);
 
         // Sichtbarkeit (Beobachtung Dominique 2026-08-14): die vom Generator direkt verdrahteten
