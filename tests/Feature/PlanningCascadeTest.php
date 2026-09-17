@@ -904,6 +904,45 @@ it('EnrichRecipeJob: ohne ki_bilder-Toggle wird KEIN deferred.bilder geschrieben
         ->and($step->deferred['enrich']['status'] ?? null)->toBe('done');
 });
 
+it('Spec 53 / Paket C: EnrichRecipeJob setzt die Phase waehrend anreichern() und loescht sie danach (dauer_ms gesetzt)', function () {
+    $recipe = $this->makeRecipe($this->rootTeam, 'Phase-Enrich', ['status' => 'draft']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'review']);
+    $step = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'freigegeben', 'ref_type' => 'recipe', 'ref_id' => $recipe->id]);
+
+    $phaseWaehrendLauf = null;
+    $this->mock(RecipeOneShotService::class, function ($m) use (&$phaseWaehrendLauf, $step) {
+        $m->shouldReceive('anreichern')->once()->andReturnUsing(function () use (&$phaseWaehrendLauf, $step) {
+            $phaseWaehrendLauf = $step->refresh()->phase;
+
+            return [];
+        });
+    });
+
+    (new EnrichRecipeJob($this->rootTeam->id, (int) auth()->id(), (int) $recipe->id, null, false, (int) $step->id))
+        ->handle(app(RecipeOneShotService::class));
+
+    $fresh = $step->refresh();
+    expect($phaseWaehrendLauf)->toBe(\Platform\FoodAlchemist\Services\PlanningCascadeService::PHASE_ANREICHERUNG)
+        ->and($fresh->phase)->toBeNull()
+        ->and($fresh->deferred['enrich']['status'] ?? null)->toBe('done')
+        ->and($fresh->deferred['enrich']['dauer_ms'] ?? null)->toBeInt();
+});
+
+it('Spec 53 / Paket C: EnrichRecipeJob loescht die Phase auch nach failed', function () {
+    $recipe = $this->makeRecipe($this->rootTeam, 'Phase-Enrich-Fail', ['status' => 'draft']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'review']);
+    $step = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'freigegeben', 'ref_type' => 'recipe', 'ref_id' => $recipe->id]);
+
+    $this->mock(RecipeOneShotService::class, fn ($m) => $m->shouldReceive('anreichern')->once()->andThrow(new \RuntimeException('Boom')));
+
+    (new EnrichRecipeJob($this->rootTeam->id, (int) auth()->id(), (int) $recipe->id, null, false, (int) $step->id))
+        ->handle(app(RecipeOneShotService::class));
+
+    $fresh = $step->refresh();
+    expect($fresh->phase)->toBeNull()
+        ->and($fresh->deferred['enrich']['status'] ?? null)->toBe('failed');
+});
+
 // ── Phase 0.3 — Anreicherungs-Tiefe (Step-by-Step ja/nein) per MCP steuerbar ──
 // completeCoverage steuert die schwere Text-Coverage (Step-by-Step/Sensorik/Equipment/…). Der GP-Mint
 // (EK) bleibt davon unabhängig: bei „leichter" Anreicherung läuft er trotzdem, sonst wäre die
@@ -2630,4 +2669,112 @@ it('#505-Nachtrag Task 6: laufStatus() zählt unfertige Übernahmen im Run-Kopf,
     expect($status['lauf']['uebernommen'])->toBe(2)
         ->and($status['lauf']['uebernommen_unreif'])->toBe(1)
         ->and($status['hinweis'])->toContain('2 Rezepte aus dem Bestand übernommen, davon 1 unfertig');
+});
+
+// ── Spec 53 / Paket C — Phase (persistente Zwischen-Phase) + Poll-Gate + Server-Guards ──────
+
+it('setzePhase: schreibt phase + phase_at an einen aktiven Step, loescht bei null', function () {
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'rezept', 'status' => 'running']);
+    $step = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'rezept', 'status' => 'running', 'sort' => 1]);
+
+    app(PlanningCascadeService::class)->setzePhase((int) $step->id, 'Rezept wird entworfen …');
+
+    $fresh = $step->refresh();
+    expect($fresh->phase)->toBe('Rezept wird entworfen …')
+        ->and($fresh->phase_at)->not->toBeNull();
+
+    app(PlanningCascadeService::class)->setzePhase((int) $step->id, null);
+
+    $fresh = $step->refresh();
+    expect($fresh->phase)->toBeNull()->and($fresh->phase_at)->toBeNull();
+});
+
+it('setzePhase: no-op an einem terminalen Step (verworfen) — kein stiller Zombie-Text an totem Step', function () {
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'rezept', 'status' => 'failed']);
+    $step = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'rezept', 'status' => 'verworfen', 'sort' => 1]);
+
+    app(PlanningCascadeService::class)->setzePhase((int) $step->id, 'Sollte nie ankommen');
+
+    expect($step->refresh()->phase)->toBeNull();
+});
+
+it('markStepDone/markStepFailed loeschen eine gesetzte Phase', function () {
+    $rezept = $this->makeRecipe($this->rootTeam, 'Phase-Done');
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'rezept', 'status' => 'running']);
+    $stepDone = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'rezept', 'status' => 'running', 'phase' => 'Rezept wird entworfen …', 'phase_at' => now(), 'sort' => 1]);
+    $stepFailed = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'rezept', 'status' => 'running', 'phase' => 'Rezept wird entworfen …', 'phase_at' => now(), 'sort' => 2]);
+
+    app(PlanningCascadeService::class)->markStepDone((int) $stepDone->id, 'recipe', (int) $rezept->id);
+    app(PlanningCascadeService::class)->markStepFailed((int) $stepFailed->id, 'Boom');
+
+    expect($stepDone->refresh()->phase)->toBeNull()
+        ->and($stepFailed->refresh()->phase)->toBeNull();
+});
+
+it('laufStatus() exportiert phase je Step + timings aus context_snapshot', function () {
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'rezept', 'status' => 'running']);
+    $step = FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'rezept', 'status' => 'running',
+        'phase' => 'Rezept wird entworfen …', 'phase_at' => now(), 'sort' => 1,
+        'context_snapshot' => ['timings' => ['generator_ms' => 4200, 'context_ms' => 300]],
+    ]);
+
+    $status = app(PlanningCascadeService::class)->laufStatus($this->rootTeam, (int) $run->id);
+    $exportiert = collect($status['schritte'])->firstWhere('id', (int) $step->id);
+
+    expect($exportiert['phase'] ?? null)->toBe('Rezept wird entworfen …')
+        ->and($exportiert['timings']['generator_ms'] ?? null)->toBe(4200);
+});
+
+it('regeneriereStep: no-op (Exception statt zweitem Job) wenn der Step schon running ist', function () {
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'rezept', 'status' => 'running']);
+    $step = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'rezept', 'status' => 'running', 'sort' => 1]);
+
+    expect(fn () => app(PlanningCascadeService::class)->regeneriereStep($this->rootTeam, (int) $step->id))
+        ->toThrow(\Platform\FoodAlchemist\Exceptions\PlanungAktionLaeuftBereitsException::class);
+
+    Queue::assertNotPushed(GenerateRecipeJob::class);
+    expect($step->refresh()->status)->toBe('running');
+});
+
+it('reAnreichern: no-op wenn deferred.enrich bereits queued|running ist (kein zweiter EnrichRecipeJob)', function () {
+    $rezept = $this->makeRecipe($this->rootTeam, 'Doppel-Anreicherung');
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'review']);
+    $step = FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'freigegeben',
+        'ref_type' => 'recipe', 'ref_id' => $rezept->id, 'deferred' => ['enrich' => ['status' => 'running']],
+    ]);
+
+    expect(fn () => app(PlanningCascadeService::class)->reAnreichern($this->rootTeam, (int) $step->id))
+        ->toThrow(\Platform\FoodAlchemist\Exceptions\PlanungAktionLaeuftBereitsException::class);
+
+    Queue::assertNotPushed(EnrichRecipeJob::class);
+});
+
+it('reBilder: no-op wenn deferred.bilder bereits queued|running ist (kein zweiter Foto-Job)', function () {
+    $rezept = $this->makeRecipe($this->rootTeam, 'Doppel-Fotos');
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'review']);
+    $step = FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'freigegeben',
+        'ref_type' => 'recipe', 'ref_id' => $rezept->id, 'deferred' => ['bilder' => ['status' => 'queued']],
+    ]);
+
+    expect(fn () => app(PlanningCascadeService::class)->reBilder($this->rootTeam, (int) $step->id))
+        ->toThrow(\Platform\FoodAlchemist\Exceptions\PlanungAktionLaeuftBereitsException::class);
+
+    Queue::assertNotPushed(EnrichRecipeJob::class);
+});
+
+it('kiStatusFuerTeam: zaehlt wartend/laufend team-eigen und liest die juengste Phase', function () {
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'rezept', 'status' => 'running']);
+    FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'rezept', 'status' => 'queued', 'sort' => 1]);
+    FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'rezept', 'status' => 'running', 'phase' => 'Rezept wird entworfen …', 'phase_at' => now(), 'sort' => 2]);
+    FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'rezept', 'status' => 'failed', 'sort' => 3, 'updated_at' => now()]);
+
+    $status = app(PlanningCascadeService::class)->kiStatusFuerTeam($this->rootTeam);
+
+    expect($status['wartend'])->toBe(1)
+        ->and($status['laufend'])->toBe(1)
+        ->and($status['aktuelle_phase'])->toBe('Rezept wird entworfen …')
+        ->and($status['fehler_24h'])->toBe(1);
 });

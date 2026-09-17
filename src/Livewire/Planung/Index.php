@@ -2632,7 +2632,11 @@ class Index extends Component
             return;
         }
         $lauf = $cascade->lauf($team, $this->laufId);
-        if ($lauf === null || $lauf->status !== 'running') {
+        // Spec 53 / Paket C: eine Phase (Konformitätsprüfung/Anreicherung/Bilder) kann auch nach dem
+        // Ende des Laufs noch offen sein — dann darf pruefeLauf nicht früh abbrechen, sonst würde das
+        // Poll-Ziel selbst suggerieren, es sei fertig, während render()s $pollAktiv weiter pollt.
+        $phaseOffen = $lauf !== null && $lauf->steps->contains(fn ($s) => $s->phase !== null);
+        if ($lauf === null || ($lauf->status !== 'running' && ! $phaseOffen)) {
             $this->laeuft = false;
             $this->hinweis = null;
             if ($lauf !== null && $lauf->status === 'review') {
@@ -2640,6 +2644,13 @@ class Index extends Component
             } elseif ($lauf !== null && $lauf->status === 'failed') {
                 $this->fehler = 'Generierung fehlgeschlagen — Details im Ergebnis unten.';
             }
+
+            return;
+        }
+        if ($lauf->status !== 'running') {
+            // Der Lauf selbst ist fertig, aber eine Phase läuft noch nach — der Watchdog unten
+            // beobachtet nur laufende Kaskaden-Schritte und griffe hier ins Leere.
+            $this->laeuft = false;
 
             return;
         }
@@ -3055,6 +3066,9 @@ class Index extends Component
             $this->fehler = null;
             unset($this->speiseKommentar[$stepId]);
             $this->kommentarOffen = array_values(array_diff($this->kommentarOffen, [$stepId]));
+        } catch (\Platform\FoodAlchemist\Exceptions\PlanungAktionLaeuftBereitsException $e) {
+            // Guard, kein Fehlschlag — neutraler Hinweis statt rotem Banner.
+            $this->meldung = $e->getMessage();
         } catch (\Throwable $e) {
             $this->fehler = $e->getMessage();
         }
@@ -3173,7 +3187,8 @@ class Index extends Component
         $stepsByRun = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep::whereIn('cascade_run_id', $runIds)
             // `deferred` mitholen: stufenAusSteps liest daraus den Reifegrad der Übernahmen.
             // Ohne die Spalte zählte eine unreife Übernahme auf der Hauptseite still als fertig.
-            ->get(['cascade_run_id', 'kind', 'status', 'label', 'ref_id', 'deferred'])
+            // `phase`/`phase_at` (Spec 53 / Paket C): Poll-Gate + Board-Anzeige der laufenden Phase.
+            ->get(['cascade_run_id', 'kind', 'status', 'label', 'ref_id', 'deferred', 'phase', 'phase_at'])
             ->groupBy('cascade_run_id');
 
         // Spec 42 / Board: Ausgabe-Ziel (Owner) je Lauf — Namen batch-auflösen (ein Query je Owner-Typ,
@@ -3201,9 +3216,14 @@ class Index extends Component
             $steps = $stepsByRun->get((int) $r->id) ?? collect();
             $ot = $r->source_owner_type !== null ? (string) $r->source_owner_type : null;
             $oid = $r->source_owner_id !== null ? (int) $r->source_owner_id : null;
+            // Spec 53 / Paket C: ein Step kann noch eine Phase melden (Anreicherung/Konformität), auch
+            // wenn der Run selbst schon nicht mehr `running` ist — Board-Poll-Gate ($irgendeinLaeuft)
+            // und Anzeige sollen das sehen. Jüngste Phase (nach phase_at) für die Board-Zeile.
+            $phaseStep = $steps->whereNotNull('phase')->sortByDesc('phase_at')->first();
             $out[$sid] = [
                 'status' => $badge[$r->status] ?? (string) $r->status,
-                'running' => $r->status === 'running',
+                'running' => $r->status === 'running' || $phaseStep !== null,
+                'phase' => $phaseStep?->phase,
                 'run_id' => (int) $r->id,
                 'scope' => (string) $r->scope,
                 'stufen' => $this->stufenAusSteps($steps),
@@ -3309,6 +3329,8 @@ class Index extends Component
             $cascade->reAnreichern($team, $stepId, $voll ? true : null);
             $this->meldung = 'Anreicherung neu gestartet …';
             $this->fehler = null;
+        } catch (\Platform\FoodAlchemist\Exceptions\PlanungAktionLaeuftBereitsException $e) {
+            $this->meldung = $e->getMessage();
         } catch (\Throwable $e) {
             $this->fehler = $e->getMessage();
         }
@@ -3327,6 +3349,8 @@ class Index extends Component
             $cascade->reBilder($team, $stepId);
             $this->meldung = 'KI-Fotos werden neu erzeugt …';
             $this->fehler = null;
+        } catch (\Platform\FoodAlchemist\Exceptions\PlanungAktionLaeuftBereitsException $e) {
+            $this->meldung = $e->getMessage();
         } catch (\Throwable $e) {
             $this->fehler = $e->getMessage();
         }
@@ -3689,13 +3713,35 @@ class Index extends Component
         if ($recipe === null) {
             return;
         }
+        // Spec 53 / Paket C: den Step im AKTUELLEN Lauf auflösen (ref_type=recipe/ref_id=$recipeId) —
+        // so wird die Phase „Konformität wird geprüft …" am Cockpit sichtbar und $pollAktiv sieht sie.
+        // Kein offener Lauf (Check außerhalb des Cockpits, z. B. Rezept-Modal) → Phase bleibt leer,
+        // der Job läuft trotzdem.
+        $step = $this->laufId !== null
+            ? \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep::visibleToTeam($team)
+                ->where('cascade_run_id', $this->laufId)
+                ->where('ref_type', 'recipe')->where('ref_id', $recipeId)
+                ->first()
+            : null;
+        // Server-Guard gegen Doppel-Enqueue: läuft die Konformitätsprüfung an diesem Step schon, kein zweiter Job.
+        if ($step !== null && $step->phase === PlanningCascadeService::PHASE_KONFORMITAET) {
+            $this->meldung = 'Konformitätsprüfung läuft bereits.';
+
+            return;
+        }
         // Eine ausdrücklich neu gestartete Prüfung verwendet den heutigen Kanon.
         if (! $recipe->is_sales_recipe && (int) $recipe->team_id === (int) $team->id) {
             $run = app(\Platform\FoodAlchemist\Services\Knowledge\KnowledgeRunService::class)->start($team);
             $recipe->forceFill(['knowledge_run_id' => $run->id])->save();
         }
+        // Synchron VOR dem Dispatch setzen (nicht erst im Job) — sonst öffnet ein zweiter Klick,
+        // solange der Job noch in der Queue wartet (noch nicht angelaufen), dieselbe Lücke, die der
+        // Guard oben eigentlich schließen soll (der Job braucht Zeit, bis er die Phase selbst setzt).
+        if ($step !== null) {
+            app(PlanningCascadeService::class)->setzePhase((int) $step->id, PlanningCascadeService::PHASE_KONFORMITAET);
+        }
         \Platform\FoodAlchemist\Jobs\ConformanceCheckJob::dispatch(
-            $team->id, (int) Auth::id(), $recipe->is_sales_recipe ? 'gericht' : 'basisrezept', $recipeId,
+            $team->id, (int) Auth::id(), $recipe->is_sales_recipe ? 'gericht' : 'basisrezept', $recipeId, null, $step?->id,
         );
     }
 
@@ -3823,6 +3869,17 @@ class Index extends Component
         // wirklich angereichert (oder der Fehler sichtbar) ist. Bei einem flachen Gericht ist der Run
         // sonst sofort „done", während das Gericht noch ein roher Entwurf wäre.
         $this->anreicherungLaeuft = $this->anreicherungOffen($lauf);
+
+        // Spec 53 / Paket C: Poll-Gate ABLEITEN statt merken. Vorher speiste ein gespeichertes Flag
+        // (17 Aufrufstellen) das wire:poll — mit Lücken (goKaskade, konformitaetPruefen hatten keinen
+        // eigenen Merker). Jetzt: aktiv, solange irgendein Signal noch etwas zu melden hat — inklusive
+        // eines Steps, der eine Phase trägt (Konformitätsprüfung/Anreicherung/Bilder), auch wenn der
+        // Run selbst schon nicht mehr `running` ist.
+        $pollAktiv = $this->laeuft || $this->anreicherungLaeuft || ($lauf !== null && (
+            $lauf->status === 'running'
+            || $this->anreicherungOffen($lauf)
+            || $lauf->steps->contains(fn ($s) => $s->phase !== null)
+        ));
 
         // Etappe 6: EK/VK/Marge je Stufe im Cockpit sichtbar — schon am Draft, nicht erst nach dem
         // Speichern/Öffnen im VK-Editor. Für jeden Rezept-/Gericht-Step mit erzeugtem Artefakt
@@ -4037,6 +4094,10 @@ class Index extends Component
         // Board-Poll-Gate: nur pollen, wenn irgendein Lauf tatsächlich läuft (kein Dauer-Poll im Ruhezustand).
         $irgendeinLaeuft = collect($kaskaden)->contains(fn ($k) => (bool) ($k['running'] ?? false));
 
+        // Spec 53 / Paket C: globaler KI-Status (Board-Kopf + über der Editor-Tab-Leiste) — EIN Aggregat
+        // über alle Steps des Teams, unabhängig davon, ob gerade ein Lauf im Cockpit offen ist.
+        $kiStatus = $team !== null ? app(PlanningCascadeService::class)->kiStatusFuerTeam($team) : null;
+
         // E1b (Spec 40): Owner-Kontext der offenen Session — für Banner „Planung für Foodbook ‚Adler'"
         // + Zurück-Link. null bei freier Cockpit-Planung ohne Ausgabe-Owner (dann kein Banner).
         $ownerKontext = ($team !== null && $active !== null)
@@ -4076,7 +4137,9 @@ class Index extends Component
             'workerState' => $workerState,
             'workerAlter' => $workerAlter,
             'workerWarnung' => $workerWarnung,
+            'kiStatus' => $kiStatus,
             'irgendeinLaeuft' => $irgendeinLaeuft,
+            'pollAktiv' => $pollAktiv,
             'active' => $active,
             'skizzen' => $skizzen,
             'skizzenLauf' => $skizzenLauf,

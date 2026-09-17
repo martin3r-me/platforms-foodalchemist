@@ -80,6 +80,9 @@ class EnrichRecipeJob implements ShouldQueue
         // Rezept + deferred.enrich unangetastet und erzeugt ausschliesslich die Fotos neu.
         if (! $this->nurBilder) {
             $this->markEnrich('running');
+            // Spec 53 / Paket C: Dauer der Anreicherung messen (nicht der ganze Job — nur der teure
+            // OneShot-Pass) für die Cockpit-/MCP-Anzeige „angereichert in Xs".
+            $start = hrtime(true);
             try {
                 $ergebnis = $oneShot->anreichern(
                     $team,
@@ -104,15 +107,18 @@ class EnrichRecipeJob implements ShouldQueue
                 // Reife-Report kann den ZUSTAND live messen, aber nicht rekonstruieren, WARUM
                 // ein Glied übersprungen wurde (z. B. `uebersprungen_ohne_grounding`). Genau das
                 // gehört ins Lauf-Protokoll, wo `planung_kaskade.GET` es je Step ausweist.
-                $this->markEnrich('done', null, $this->coverageKurz($ergebnis));
+                $this->markEnrich('done', null, $this->coverageKurz($ergebnis), $this->dauerMs($start));
             } catch (\Throwable $e) {
                 // Rezept bleibt live (fail-soft) — aber der Fehler wird sichtbar (Status + Log), nicht geschluckt.
                 Log::warning('[EnrichRecipeJob] Anreicherung fehlgeschlagen', ['recipe' => $this->recipeId, 'error' => $e->getMessage()]);
-                $this->markEnrich('failed', $e->getMessage());
+                $this->markEnrich('failed', $e->getMessage(), null, $this->dauerMs($start));
             }
         }
 
         if (! $this->kaskadeAbgebrochen() && ($this->kiBilder || $this->nurBilder)) {
+            // Spec 53 / Paket C: Phase sichtbar machen, solange die Bild-Erzeugung tatsächlich läuft
+            // (markBilderQueued setzt beim Re-Trigger schon „queued" — hier folgt „running").
+            $this->markBilder('running');
             try {
                 $imageService = app(RecipeImageService::class);
                 if ($this->nurBilder) {
@@ -134,6 +140,12 @@ class EnrichRecipeJob implements ShouldQueue
                 $this->markBilder('failed', $e->getMessage(), 0);
             }
         }
+    }
+
+    /** Spec 53 / Paket C: `hrtime`-Delta seit `$start` in ganzen Millisekunden. */
+    private function dauerMs(int $start): int
+    {
+        return (int) round((hrtime(true) - $start) / 1_000_000);
     }
 
     private function kaskadeAbgebrochen(): bool
@@ -222,7 +234,7 @@ class EnrichRecipeJob implements ShouldQueue
         return $kurz === [] ? null : $kurz;
     }
 
-    private function markEnrich(string $status, ?string $error = null, ?array $coverage = null): void
+    private function markEnrich(string $status, ?string $error = null, ?array $coverage = null, ?int $dauerMs = null): void
     {
         if ($this->stepId === null) {
             return;
@@ -237,6 +249,9 @@ class EnrichRecipeJob implements ShouldQueue
                 'status' => $status,
                 'error' => $error !== null ? Str::limit($error, 200) : null,
                 'coverage' => $coverage,                            // D-2: je Glied der Status
+                // Spec 53 / Paket C: Dauer NUR des OneShot-Anreicherungs-Passes (nicht des ganzen Jobs
+                // inkl. Bild-Erzeugung) — für „angereichert in Xs" am Cockpit.
+                'dauer_ms' => $dauerMs,
                 // TIEFE des Passes (2026-09-07). Das Badge zeigte „angereichert ✓" auch fuer
                 // einen Lauf mit completeCoverage=false, der Step-by-Step, Sensorik, Zeiten,
                 // Equipment und Pairings uebersprungen hat — genau der Fall in Lauf 65, wo am
@@ -259,6 +274,11 @@ class EnrichRecipeJob implements ShouldQueue
         } catch (\Throwable) {
             // Tracking ist Beiwerk — nie blockierend.
         }
+        // Spec 53 / Paket C: dieselbe Statusänderung als Phase am Step — running zeigt „Anreicherung
+        // läuft …", done/failed löschen sie wieder (die Anzeige zeigt dann den enrich-Status selbst).
+        app(\Platform\FoodAlchemist\Services\PlanningCascadeService::class)->setzePhase(
+            (int) $this->stepId, $status === 'running' ? \Platform\FoodAlchemist\Services\PlanningCascadeService::PHASE_ANREICHERUNG : null,
+        );
     }
 
     /**
@@ -318,5 +338,10 @@ class EnrichRecipeJob implements ShouldQueue
         } catch (\Throwable) {
             // Tracking ist Beiwerk — nie blockierend.
         }
+        // Spec 53 / Paket C: dieselbe Statusänderung als Phase am Step — running zeigt „KI-Fotos werden
+        // erzeugt …", done/failed löschen sie wieder (die Anzeige zeigt dann den bilder-Status selbst).
+        app(\Platform\FoodAlchemist\Services\PlanningCascadeService::class)->setzePhase(
+            (int) $this->stepId, $status === 'running' ? \Platform\FoodAlchemist\Services\PlanningCascadeService::PHASE_BILDER : null,
+        );
     }
 }

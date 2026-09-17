@@ -421,6 +421,9 @@
             @if($deckelHinweis !== null)
                 <span class="text-xs text-amber-300" data-deckel-hinweis>⚠ {{ $deckelHinweis }}</span>
             @endif
+            {{-- Spec 53 / Paket C: globaler KI-Status, sichtbar auf JEDEM Tab (x-slot:actions
+                 überlebt den Tab-Wechsel — die Tab-Leiste beginnt erst danach). --}}
+            @include('foodalchemist::livewire.planung.partials.ki-status-leiste', ['klickbar' => true])
         </x-slot:actions>
 
         <x-slot:tabs>
@@ -825,30 +828,35 @@
                             <span>Geprüfter Plan vorbereitet — der Go verwendet ihn (statt neu zu generieren).</span>
                             <button type="button" wire:click="planVerwerfen" @disabled($laeuft) class="underline hover:text-emerald-200 disabled:opacity-40">Plan verwerfen (frisch generieren)</button>
                         </div>
-                        <button wire:click="goKaskade('concept')" @click="tab='worker'" @disabled($laeuft) class="{{ $btnPrimary }} disabled:opacity-40">
-                            @svg('heroicon-o-squares-2x2', 'w-4 h-4') Go aus geprüftem Plan
-                        </button>
+                        <x-foodalchemist::ki-action action="goKaskade('concept')" variant="primary" icon="heroicon-o-squares-2x2"
+                            label="Go aus geprüftem Plan" busy="Kaskade wird gestartet …" flash="Kaskade gestartet"
+                            :disabled="$laeuft" before="tab='worker'" />
                     @else
                         {{-- DF-2: Schnellweg (sekundär) — ohne Vorab-Plan direkt erzeugen. Empfohlen ist der
                              KI-Kopf oben (ausgearbeiteter, prüfbarer Plan). --}}
                         <p class="{{ $label ?? 'text-[11px] text-gray-500' }} mb-2">Schnellweg (ohne Vorab-Plan): Die LLM baut aus dem Briefing direkt die Zusammenstellung (Pakete/Buffet) nach den Leitplanken; die Gerichte kommen nach der Freigabe. Für ein ausgearbeitetes Konzept den <b>KI-Kopf</b> oben nutzen. Fortschritt im <b>Worker</b>-Tab.</p>
-                        <button wire:click="goKaskade('concept')" @click="tab='worker'" @disabled($laeuft) class="{{ $btnGhost }} disabled:opacity-40">
-                            @svg('heroicon-o-squares-2x2', 'w-4 h-4') Direkt erzeugen (Schnellweg)
-                        </button>
+                        <x-foodalchemist::ki-action action="goKaskade('concept')" variant="ghost" icon="heroicon-o-squares-2x2"
+                            label="Direkt erzeugen (Schnellweg)" busy="Kaskade wird gestartet …" flash="Kaskade gestartet"
+                            :disabled="$laeuft" before="tab='worker'" />
                     @endif
                 </x-foodalchemist::modal-section>
             </div>
 
             {{-- WORKER — alle Läufe/Entwürfe zusammen: Status + Fan-out-Baum + Freigabe --}}
             <div wire:key="planung-tab-worker" x-show="tab==='worker'" class="space-y-4">
-                @if($laeuft || $anreicherungLaeuft)
+                {{-- Spec 53 / Paket C: $pollAktiv wird JEDES Render frisch aus DB-Wahrheit abgeleitet
+                     (Lauf-Status + Step-Phasen), kein gespeichertes Flag mehr — deckt auch Fälle ab,
+                     die kein $laeuft/$anreicherungLaeuft setzen (z. B. eine on-demand Konformitätsprüfung). --}}
+                @if($pollAktiv)
                     <div wire:poll.1500ms="pruefeLauf" class="flex items-center gap-2 text-xs text-amber-300">
                         @svg('heroicon-o-arrow-path', 'w-4 h-4 animate-spin')
                         <span>
                             @if($laeuft)
                                 Läuft — der Worker arbeitet die Kaskade ab …
-                            @else
+                            @elseif($anreicherungLaeuft)
                                 Freigegeben — die Anreicherung läuft nach (Beschreibung, Kalkulation, Allergene) …
+                            @else
+                                Ein Hintergrund-Schritt läuft noch …
                             @endif
                         </span>
                     </div>

@@ -50,6 +50,16 @@ class PlanningCascadeService
     /** Async-Result via Cache (Job-Vertrag) — Minuten, bis der Worker den Step abschließt. */
     private const RESULT_TTL_MIN = 15;
 
+    /**
+     * Spec 53 / Paket C: Phasen-Texte (`cascade_run_steps.phase`) als Konstanten statt Magic-Strings —
+     * Schreiber (Jobs) UND Leser (Index::konformitaetPruefen vergleicht gegen PHASE_KONFORMITAET, um
+     * eine laufende Prüfung zu erkennen) referenzieren dieselbe Konstante, damit ein Textwechsel den
+     * Vergleich nicht still bricht.
+     */
+    public const PHASE_ANREICHERUNG = 'Anreicherung läuft …';
+    public const PHASE_BILDER = 'KI-Fotos werden erzeugt …';
+    public const PHASE_KONFORMITAET = 'Konformität wird geprüft …';
+
     /** Deckel gegen Runaway-Kosten: max. Zellen (= KI-Gericht-Generierungen) je Speiseplan-Voll-Kaskade. */
     /**
      * Wie viele Zyklus-Wochen ein Speiseplan-Lauf auf einmal baut (Dominique 2026-09-03:
@@ -1400,7 +1410,7 @@ class PlanningCascadeService
         // 120 Zeichen geschnittene Brief — das Cockpit zeigte also den Briefing-Text statt des Rezept-/
         // Concept-Namens. Der Brief bleibt separat im Run-Kopf sichtbar. Fail-soft (Name-Auflösung optional).
         $artefaktName = $this->artefaktName($step->team_id ? (int) $step->team_id : null, $refType, $refId);
-        $updates = ['status' => 'done', 'ref_type' => $refType, 'ref_id' => $refId, 'error' => null];
+        $updates = ['status' => 'done', 'ref_type' => $refType, 'ref_id' => $refId, 'error' => null, 'phase' => null, 'phase_at' => null];
         if ($artefaktName !== null && $artefaktName !== '') {
             $updates['label'] = Str::limit($artefaktName, 120, '');
         }
@@ -1433,9 +1443,26 @@ class PlanningCascadeService
         if ($step === null) {
             return;
         }
-        $step->update(['status' => 'failed', 'error' => Str::limit($error, 500, '')]);
+        $step->update(['status' => 'failed', 'error' => Str::limit($error, 500, ''), 'phase' => null, 'phase_at' => null]);
         $this->recomputeRunStatus((int) $step->cascade_run_id);
         $this->scoreConceptCohesionIfComplete($step);
+    }
+
+    /**
+     * Persistente Zwischen-Phase eines laufenden Steps (Spec 53 / Paket C) — Cockpit-Wahrheit statt
+     * Cache-only (der Cache `fa:recipe-gen:{runId}` bleibt zusätzlich für die Rezept-Modals). Ein-
+     * Spalten-Update; Guard gegen tote/terminale Steps (verworfen/skipped haben nichts mehr zu melden).
+     * Beiwerk — ein Tracking-Fehler darf den aufrufenden Job/Lauf nie kippen.
+     */
+    public function setzePhase(int $stepId, ?string $label): void
+    {
+        try {
+            FoodAlchemistCascadeRunStep::whereKey($stepId)
+                ->whereIn('status', ['queued', 'running', 'done', 'freigegeben'])
+                ->update(['phase' => $label, 'phase_at' => $label !== null ? now() : null]);
+        } catch (\Throwable) {
+            // Tracking ist Beiwerk — nie blockierend.
+        }
     }
 
     /**
@@ -2087,6 +2114,12 @@ class PlanningCascadeService
         if ($step->ref_type !== 'recipe' || $step->ref_id === null || ! in_array($step->kind, ['rezept', 'gericht'], true)) {
             return;
         }
+        // Server-Guard gegen Doppel-Enqueue (Spec 53 / Paket C): kein zweiter Foto-Job, während der
+        // erste noch läuft — sonst überschneiden sich zwei RecipeImageService-Läufe am selben Rezept.
+        $bilderStatus = is_array($step->deferred) ? ($step->deferred['bilder']['status'] ?? null) : null;
+        if (in_array($bilderStatus, ['queued', 'running'], true)) {
+            throw new \Platform\FoodAlchemist\Exceptions\PlanungAktionLaeuftBereitsException('Bild-Erzeugung läuft bereits.');
+        }
         $this->markBilderQueued($step);
         EnrichRecipeJob::dispatch($team->id, (int) (Auth::id() ?? 0), (int) $step->ref_id, null, false, (int) $step->id, true);
     }
@@ -2142,6 +2175,12 @@ class PlanningCascadeService
         $step = $this->ownedStep($team, $stepId);
         if ($step->ref_type !== 'recipe' || $step->ref_id === null || ! in_array($step->kind, ['rezept', 'gericht'], true)) {
             return;
+        }
+        // Server-Guard gegen Doppel-Enqueue (Spec 53 / Paket C): kein zweiter Anreicherungs-Job,
+        // während der erste noch läuft (sonst laufen zwei RecipeOneShotService-Pässe gegeneinander).
+        $enrichStatus = is_array($step->deferred) ? ($step->deferred['enrich']['status'] ?? null) : null;
+        if (in_array($enrichStatus, ['queued', 'running'], true)) {
+            throw new \Platform\FoodAlchemist\Exceptions\PlanungAktionLaeuftBereitsException('Anreicherung läuft bereits.');
         }
         $params = is_array($step->run?->params) ? $step->run->params : [];
         $zielVk = isset($params['ziel_vk_eur']) ? (float) $params['ziel_vk_eur'] : null;
@@ -2225,6 +2264,11 @@ class PlanningCascadeService
         if (! in_array($step->kind, ['rezept', 'gericht', 'concept'], true)) {
             return;
         }
+        // Server-Guard gegen Doppel-Enqueue (Spec 53 / Paket C): ein zweiter Klick auf „neu generieren"
+        // während der erste Versuch noch rechnet, darf keinen zweiten GenerateRecipeJob einreihen.
+        if ($step->status === 'running') {
+            throw new \Platform\FoodAlchemist\Exceptions\PlanungAktionLaeuftBereitsException('Läuft bereits — bitte warten, bis der aktuelle Versuch fertig ist.');
+        }
         // L4: Regenerieren eines KIND-Basisrezepts — die Eltern-Zutat zeigt noch auf den gleich
         // gelöschten Draft. VOR dem Löschen die Bindung lösen (referenced_recipe_id NULL, unmatched),
         // die Dependency aber BEHALTEN, damit der neue Lauf via bindCompletedChild sauber neu bindet.
@@ -2255,7 +2299,7 @@ class PlanningCascadeService
         // Die geplanten/übernommenen Sub-Rezepte beschreiben die Zerlegung des ALTEN Entwurfs — der
         // neue Lauf plant seine eigenen (sonst bleiben Zeilen stehen, die zu nichts mehr gehören).
         $this->raeumeGeplanteKinder($step);
-        $step->update(['status' => 'running', 'ref_type' => null, 'ref_id' => null, 'error' => null, 'deferred' => null]);
+        $step->update(['status' => 'running', 'ref_type' => null, 'ref_id' => null, 'error' => null, 'deferred' => null, 'phase' => null, 'phase_at' => null]);
         $run = $step->run;
         // L5: Wurzel-Step (Gericht/Concept) neu erzeugen aus dem VOLLEN Run-Brief — nicht aus dem Label,
         // das markStepDone inzwischen auf den (kurzen) Artefakt-Namen gezogen hat (sonst schrumpfte das
@@ -2678,6 +2722,52 @@ class PlanningCascadeService
     }
 
     /**
+     * Spec 53 / Paket C: Globaler KI-Status fürs Planung-Kopf — EIN Aggregat über alle Steps des
+     * Teams (nicht nur die des aktuell offenen Laufs), damit „N warten · M laufen" auch sichtbar ist,
+     * wenn gerade kein Lauf im Cockpit geöffnet ist. Team-EIGENE Steps (nicht die Team-Ancestry —
+     * der Status soll zeigen, was DIESES Team gerade selbst anstößt).
+     *
+     * @return array{wartend:int, laufend:int, aktuelle_phase:?string, fehler_24h:int, queue:?int}
+     */
+    public function kiStatusFuerTeam(Team $team): array
+    {
+        $steps = FoodAlchemistCascadeRunStep::where('team_id', $team->id);
+
+        $wartend = (clone $steps)->where('status', 'queued')->count();
+        // „laufend" = belegt gerade tatsächlich einen Worker-Slot: primäre Generierung (status=running)
+        // ODER eine sekundäre Phase (Anreicherung/Bilder/Konformität), die auch nach der Freigabe
+        // (status=freigegeben/done) noch läuft und deshalb kein `running` mehr trägt.
+        $laufend = (clone $steps)->where(function ($q) {
+            $q->where('status', 'running')->orWhereNotNull('phase');
+        })->count();
+        $aktuellePhase = (clone $steps)->whereNotNull('phase')
+            ->orderByDesc('phase_at')
+            ->value('phase');
+        $fehler24h = (clone $steps)->where('status', 'failed')
+            ->where('updated_at', '>=', now()->subDay())
+            ->count();
+
+        // Optionale Queue-Tiefe: nur wenn die `jobs`-Tabelle existiert UND die Default-Queue-Connection
+        // `database` ist (sonst liegt die Warteschlange z. B. in Redis — kein Job hierfür zu erfinden).
+        $queue = null;
+        try {
+            if (config('queue.default') === 'database' && \Illuminate\Support\Facades\Schema::hasTable('jobs')) {
+                $queue = (int) \Illuminate\Support\Facades\DB::table('jobs')->count();
+            }
+        } catch (\Throwable) {
+            $queue = null;
+        }
+
+        return [
+            'wartend' => $wartend,
+            'laufend' => $laufend,
+            'aktuelle_phase' => $aktuellePhase,
+            'fehler_24h' => $fehler24h,
+            'queue' => $queue,
+        ];
+    }
+
+    /**
      * E1b (Spec 40): Owner-Kontext der Session für die Leitstelle — macht den Einbahn-Sprung zum
      * sichtbaren Round-Trip: WOFÜR wird hier geplant (Ausgabe-Modul + Name) + der Rückweg dorthin.
      * Liest den jüngsten Lauf der Session MIT Ausgabe-Owner (`source_owner_type`/`_id` — die sitzen
@@ -2756,6 +2846,12 @@ class PlanningCascadeService
                 'ebene' => (string) $s->kind,
                 'label' => (string) $s->label,
                 'status' => (string) $s->status,
+                // Spec 53 / Paket C: DB-Wahrheit der laufenden Zwischen-Phase (Cockpit + MCP) — die
+                // Terminal-Phasen (Entwurf bereit/Fehler) ergeben sich aus `status`, nicht aus `phase`.
+                'phase' => $s->phase,
+                // Spec 53 / Paket A: `context_snapshot['timings']` je Step (generator_ms/context_ms/…),
+                // sobald Paket A sie schreibt — Peter zeigt sie nur an, Fallback null bis dahin.
+                'timings' => (! empty($snapshot['timings']) && is_array($snapshot['timings'])) ? $snapshot['timings'] : null,
                 'tiefe' => (int) $s->depth,
                 'ref_type' => $s->ref_type,
                 'ref_id' => $s->ref_id !== null ? (int) $s->ref_id : null,

@@ -137,7 +137,7 @@ class GenerateRecipeJob implements ShouldQueue
             $this->meldeKaskade(true, (int) $r['recipe']->id, null);
             if (! $this->vollAnreichern) {
                 $this->schreibe(['status' => 'done', ...$payload]);
-                $this->pruefeKonformitaet((int) $r['recipe']->id);   // Schicht 3: Critic auto nach Generierung (Rezept final)
+                $this->pruefeKonformitaet((int) $r['recipe']->id, $stepId);   // Schicht 3: Critic auto nach Generierung (Rezept final)
 
                 return;
             }
@@ -147,12 +147,12 @@ class GenerateRecipeJob implements ShouldQueue
             try {
                 EnrichGeneratedRecipeJob::dispatch(
                     $this->runId, $this->teamId, $this->userId, (int) $r['recipe']->id,
-                    $payload, $this->zielVk(),
+                    $payload, $this->zielVk(), null, $stepId,
                 );
             } catch (\Throwable $e) {
                 (new EnrichGeneratedRecipeJob(
                     $this->runId, $this->teamId, $this->userId, (int) $r['recipe']->id,
-                    $payload, $this->zielVk(),
+                    $payload, $this->zielVk(), null, $stepId,
                 ))->failed($e);
             }
         } catch (\Throwable $e) {
@@ -251,6 +251,12 @@ class GenerateRecipeJob implements ShouldQueue
         } catch (\Throwable) {
             // Fortschritts-Write bewusst schlucken.
         }
+        // Spec 53 / Paket C: dieselbe Phase zusätzlich als DB-Wahrheit am Kaskaden-Step (Cache bleibt
+        // für die Rezept-Modals) — das Planungs-Cockpit liest sie über laufStatus()/step-zeile.
+        $stepId = $this->cascadeStepId();
+        if ($stepId !== null) {
+            app(\Platform\FoodAlchemist\Services\PlanningCascadeService::class)->setzePhase($stepId, $label);
+        }
     }
 
     private function schreibe(array $data): void
@@ -259,11 +265,11 @@ class GenerateRecipeJob implements ShouldQueue
     }
 
     /** Schicht 3: den Konformitäts-Critic async anstoßen — best-effort, nie die fertige Generierung kippen. */
-    private function pruefeKonformitaet(int $recipeId): void
+    private function pruefeKonformitaet(int $recipeId, ?int $stepId = null): void
     {
         try {
             ConformanceCheckJob::dispatch(
-                $this->teamId, $this->userId, $this->vkModus ? 'gericht' : 'basisrezept', $recipeId,
+                $this->teamId, $this->userId, $this->vkModus ? 'gericht' : 'basisrezept', $recipeId, null, $stepId,
             );
         } catch (\Throwable $e) {
             // Dispatch-Fehler (Queue down o. ä.) darf das fertige Rezept nicht zum Fehler machen.

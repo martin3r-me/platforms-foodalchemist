@@ -32,6 +32,8 @@
             <span><strong class="text-emerald-600">{{ $zaehler['fertig'] ?? 0 }}</strong> fertig</span>
             @if(($zaehler['fehlgeschlagen'] ?? 0) > 0)<span><strong class="text-rose-600">{{ $zaehler['fehlgeschlagen'] }}</strong> fehlgeschlagen</span>@endif
         </div>
+        {{-- Spec 53 / Paket C: globaler KI-Status (Team-Aggregat, unabhängig vom Session-Filter oben). --}}
+        @include('foodalchemist::livewire.planung.partials.ki-status-leiste')
     </div>
 
     {{-- Fortschritt je laufendem Lauf --}}
@@ -63,6 +65,10 @@
                     </div>
                     @php $fort = $kaskadeFortschritt($s->id); @endphp
                     @if($fort !== '')<p class="mt-1 text-[10px] text-gray-400 truncate">{{ $fort }}</p>@endif
+                    {{-- Spec 53 / Paket C: aktuelle Phase des Laufs (jüngster Step mit gesetzter Phase)
+                         unter dem Fortschrittsbalken — z. B. „KI schreibt das Rezept …". --}}
+                    @php $phaseAktuell = $kaskaden[(int) $s->id]['phase'] ?? null; @endphp
+                    @if($phaseAktuell)<p class="mt-0.5 text-[10px] text-amber-600/80 truncate" data-planung-worker-phase="{{ $s->id }}">{{ $phaseAktuell }}</p>@endif
                 </div>
             @endforeach
         </div>
