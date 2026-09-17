@@ -537,5 +537,13 @@
                 </x-foodalchemist::editor-tabs>
             </x-foodalchemist::modal>
         @endif
+
+    {{-- Bug-Runde 2026-09-17 #1 (Nachbesserung): aus der Karte heraus wird das Gericht bzw. das
+         Konzept IM Editor geöffnet, nicht in einem neuen Tab. Dieselben Editor-Modale wie im
+         Rezept-/Concepter-Browser; sie stehen auf Seitenebene NACH dem Speisekarten-Modal, damit
+         sie darüber liegen (beide tragen z-[100], der spätere im DOM gewinnt). --}}
+    <livewire:foodalchemist.verkauf.vk-modal />
+    <livewire:foodalchemist.recipes.recipe-modal />
+    <livewire:foodalchemist.concepter.editor />
     </x-ui-page-container>
 </x-ui-page>
