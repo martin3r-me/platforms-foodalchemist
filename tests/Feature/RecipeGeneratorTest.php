@@ -638,3 +638,87 @@ it('Ausbeute: implausibler oder fehlender Garverlust bleibt null (Kaskade wie bi
         ->and($zeilen[1]->cooking_loss_pct)->toBeNull()
         ->and((float) $resultat['recipe']->refresh()->yield_kg)->toBe(1.0);
 });
+
+it('ignoriert eine frische GP-ID bei expliziten Dosentomaten und misst die Laufphasen', function () {
+    $fresh = ($this->mkGpMitPreis)('Tomaten: frisch, ganz', 'tomaten', 3.0);
+    $fresh->update(['condition' => 'frisch']);
+    $canned = ($this->mkGpMitPreis)('Tomaten: konserviert, stückig', 'tomaten', 2.0);
+    $canned->update(['condition' => 'konserviert']);
+    $out = $this->svc->generiere($this->rootTeam, 'Tomatensuppe', [], kiRezeptOverride: [
+        'name' => 'Suppe: Tomate',
+        'zutaten' => [[
+            'text' => 'Stückige Tomaten, aus der Dose', 'slug' => 'tomaten',
+            'quantity' => 6000, 'unit' => 'g', 'gp_id' => $fresh->id,
+        ]],
+    ]);
+    expect($out['recipe']->ingredients()->first()->gp_id)->toBe($canned->id);
+    $timings = $out['statistik']['timings'];
+    expect($timings)->toHaveKeys([
+        'context_ms', 'generation_ms', 'matching_and_save_ms', 'checks_ms', 'generator_ms',
+    ]);
+    // Phasen müssen die Wahrheit über generator_ms sein — sonst zeigt die UI eine
+    // Gesamtzeit, die kein Teil-Balken erklärt.
+    $summe = $timings['context_ms'] + $timings['generation_ms'] + $timings['matching_and_save_ms'] + $timings['checks_ms'];
+    expect(abs($summe - $timings['generator_ms']))->toBeLessThan(5);
+});
+
+it('Kaskade: generator_ms schließt die vor generiere() gebaute Kontextzeit ein (prepare() läuft vorher)', function () {
+    ($this->mkGpMitPreis)('Schalotten: frisch, ganz', 'schalotten', 4.00);
+
+    $run = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRun::create([
+        'team_id' => $this->rootTeam->id, 'scope' => 'concept', 'status' => 'running',
+    ]);
+    $step = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'basisrezept', 'status' => 'running',
+    ]);
+
+    // Wie GenerateRecipeJob::handle: prepare() baut den Kontext VOR generiere() — dessen
+    // context_ms-Fenster liegt also außerhalb der internen $started-Uhr von generiere().
+    $prepared = app(\Platform\FoodAlchemist\Services\RecipeDependencyWorkflowService::class)
+        ->prepare($this->rootTeam, (int) $step->id, 'Schalotten-Fond', [], false);
+    expect($prepared['context_ms'])->toBeGreaterThanOrEqual(0);
+
+    $this->mock(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class, function ($m) {
+        $m->shouldReceive('propose')->once()->andReturnUsing(function () {
+            usleep(20_000);   // messbare, deterministisch von context_ms unterscheidbare generation_ms
+
+            return new \Platform\FoodAlchemist\Services\Ai\AiProposal(
+                werte: ['name' => 'Fond: Schalotte', 'zutaten' => [
+                    ['text' => 'Schalotten', 'slug' => 'schalotten', 'quantity' => 200, 'unit' => 'g'],
+                ]],
+                confidence: 0.9,
+            );
+        });
+    });
+
+    $svc = app(\Platform\FoodAlchemist\Services\RecipeGeneratorService::class);
+    $out = $svc->generiere($this->rootTeam, 'Schalotten-Fond', [], null, false, null, $prepared);
+
+    $timings = $out['statistik']['timings'];
+    $summe = $timings['context_ms'] + $timings['generation_ms'] + $timings['matching_and_save_ms'] + $timings['checks_ms'];
+    expect(abs($summe - $timings['generator_ms']))->toBeLessThan(5)
+        ->and($timings['generator_ms'])->toBeGreaterThanOrEqual($timings['context_ms'] + $timings['generation_ms']);
+});
+
+it('verwirft gp_id UND sub_rezept_id bei Dosentomaten — Fuzzy-Fallback findet die konservierte GP', function () {
+    $fresh = ($this->mkGpMitPreis)('Tomaten: frisch, ganz', 'tomaten', 3.0);
+    $fresh->update(['condition' => 'frisch']);
+    $canned = ($this->mkGpMitPreis)('Tomaten: konserviert, stückig', 'tomaten', 2.0);
+    $canned->update(['condition' => 'konserviert']);
+    // Ein fremdes, existierendes Basisrezept — strukturell unpassend für eine ROHWARE mit
+    // explizitem §9-Zustand, aber ohne den Zustands-Guard würde validiereProposedSub es
+    // trotzdem verdrahten (visibleToTeam + Status + kein Zyklus reichen ihm sonst).
+    $fremdesSub = $this->makeRecipe($this->rootTeam, 'Tomatenconcassée');
+
+    $out = $this->svc->generiere($this->rootTeam, 'Tomatensuppe', [], kiRezeptOverride: [
+        'name' => 'Suppe: Tomate',
+        'zutaten' => [[
+            'text' => 'Dosentomaten', 'slug' => 'tomaten',
+            'quantity' => 6000, 'unit' => 'g', 'gp_id' => $fresh->id, 'sub_rezept_id' => $fremdesSub->id,
+        ]],
+    ]);
+
+    $zeile = $out['recipe']->ingredients()->first();
+    expect($zeile->referenced_recipe_id)->toBeNull()
+        ->and($zeile->gp_id)->toBe($canned->id);
+});

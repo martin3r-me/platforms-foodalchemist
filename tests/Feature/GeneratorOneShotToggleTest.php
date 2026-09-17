@@ -69,6 +69,37 @@ it('Generierung und Anreicherung haben getrennte Job-Zeitfenster', function () {
         ->and((new GenerateRecipeJob('r', 1, 1, 'x', [], true, true))->tries)->toBe(1);
 });
 
+it('#505-Nachtrag Task 7: Job-Timeout meldet "Zeitüberschreitung nach 300 s" statt der rohen Laravel-Meldung', function () {
+    // demo 16.09.: "GenerateRecipeJob has timed out" (timeout=300, tries=1) lief unverändert
+    // durch die generische failed()-Meldung. TimeoutExceededException erbt von
+    // MaxAttemptsExceededException — ein instanceof fängt beide Fälle.
+    $runId = 'run-timeout-test-' . uniqid();
+    $job = new GenerateRecipeJob($runId, $this->rootTeam->id, 1, 'Testrezept');
+    $laravelJob = new class
+    {
+        public function resolveName(): string
+        {
+            return GenerateRecipeJob::class;
+        }
+    };
+
+    $job->failed(\Illuminate\Queue\TimeoutExceededException::forJob($laravelJob));
+
+    $status = Cache::get(GenerateRecipeJob::cacheKey($runId));
+    expect($status['status'])->toBe('error')
+        ->and($status['fehler'])->toBe('Zeitüberschreitung nach 300 s');
+});
+
+it('#505-Nachtrag Task 7: ein normaler Job-Fehler bleibt bei der Rohtext-Meldung', function () {
+    $runId = 'run-fatal-test-' . uniqid();
+    $job = new GenerateRecipeJob($runId, $this->rootTeam->id, 1, 'Testrezept');
+
+    $job->failed(new \RuntimeException('DB weg'));
+
+    $status = Cache::get(GenerateRecipeJob::cacheKey($runId));
+    expect($status['fehler'])->toBe('Generierung abgebrochen: DB weg');
+});
+
 it('Poll zeigt das gespeicherte Rezept schon während der separaten Anreicherung', function () {
     $comp = Livewire::test(GeneratorModal::class)
         ->set('description', 'Kalbsfond')
