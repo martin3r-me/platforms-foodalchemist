@@ -220,6 +220,16 @@ class TeamSettingsService
         return in_array($wert, self::VOICE_AGENT_MODES, true) ? $wert : self::VOICE_AGENT_MODE_DEFAULT;
     }
 
+    /**
+     * Spec 53/F Stufe 2: „Sprachbefehl dauerhaft aktivieren" — AN zeigt auf JEDER FA-Vollseite
+     * das schwebende Startelement (statt nur den Sidebar-Knopf, der mit eingeklappter Sidebar
+     * verschwindet). Default AUS = heutiges Verhalten.
+     */
+    public function voiceAgentDauerhaftAktiv(Team $team): bool
+    {
+        return (bool) ($this->for($team)->voice_agent_dauerhaft_aktiv ?? false);
+    }
+
     /** Trendradar: 08:00-Konzept-Automatisierung für dieses Team (Default AUS — opt-in). */
     public function trendAutoAktiv(Team $team): bool
     {

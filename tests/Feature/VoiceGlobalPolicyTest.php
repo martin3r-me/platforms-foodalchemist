@@ -187,25 +187,77 @@ it('Token-Deckel: der Basiskatalog bleibt klein — er wird in JEDER Runde bezah
     expect($zeichen)->toBeLessThan(10500, "Basiskatalog auf {$zeichen} Zeichen gewachsen");
 });
 
-it('Platzierung: der Sprach-Agent hängt global in der Sidebar — Knopf und genau EIN Mount', function () {
+/*
+ * Spec 53/F Stufe 2: der Sprach-Agent mountet NICHT MEHR in der Sidebar (deren `x-ui-sidebar`-
+ * Modul-Slot liegt in einem `x-if` und verschwindet beim Einklappen komplett — traf früher auch
+ * das dort gemountete Modal). Neu: JEDE FA-Vollseite bindet `foodalchemist::partials.agent-mount`
+ * im eigenen Root-Element ein; die Sidebar behält nur noch den Öffnen-Knopf.
+ */
+
+it('Platzierung: die Sidebar hat NUR noch den Öffnen-Knopf, KEIN Modal-Mount mehr', function () {
     $html = Livewire::test(\Platform\FoodAlchemist\Livewire\Sidebar::class)->html();
 
-    expect($html)->toContain('data-voice-global')                    // der Knopf auf Betriebs-Wähler-Ebene
-        ->and($html)->toContain('data-voice');                       // das gemountete Modal
+    expect($html)->toContain('data-voice-global')                    // der Knopf bleibt
+        ->and($html)->not->toContain('data-voice-float-mount')       // kein Modal-Mount mehr im Sidebar-HTML
+        ->and($html)->not->toContain('data-voice-float-button');
 
-    // Der Mount liegt AUSSERHALB des x-show="!collapsed"-Blocks: x-show setzt display:none
-    // und würde ein geöffnetes Modal mitverstecken.
-    $mount = mb_strpos($html, 'data-voice');
-    $xshow = mb_strpos($html, 'x-show="!collapsed" class="px-2"');
-    expect($mount)->toBeLessThan($xshow, 'Modal-Mount liegt im x-show-Block');
+    $blade = file_get_contents(__DIR__ . '/../../resources/views/livewire/sidebar.blade.php');
+    expect($blade)->not->toContain("@livewire('foodalchemist.voice-modal')");
 });
 
-it('Platzierung: die Rezept-Seite mountet KEINEN zweiten Sprach-Agenten', function () {
-    $blade = file_get_contents(__DIR__ . '/../../resources/views/livewire/recipes/browser.blade.php');
+it('Platzierung: agent-mount.blade.php mountet das Modal (Modal-Identität bleibt einmalig pro Seite)', function () {
+    $partial = file_get_contents(__DIR__ . '/../../resources/views/partials/agent-mount.blade.php');
 
-    // Eine Modal-Identität (`voice-modal`) darf nur einmal im DOM liegen — sonst öffnen
-    // zwei Instanzen gleichzeitig und der Upload landet in der falschen.
-    expect($blade)->not->toContain('voice-modal');
+    expect($partial)->toContain("@livewire('foodalchemist.voice-modal')")
+        ->and($partial)->toContain('data-voice-float-mount')
+        ->and($partial)->toContain('data-voice-float-button');
+});
+
+it('agent-mount.blade.php: „dauerhaft aktiv" AUS (Default) → Alpine-State aktiv:false', function () {
+    $html = view('foodalchemist::partials.agent-mount')->render();
+    expect($html)->toContain('aktiv: false');
+});
+
+it('agent-mount.blade.php: „dauerhaft aktiv" AN (Team-Setting) → Alpine-State aktiv:true', function () {
+    app(\Platform\FoodAlchemist\Services\TeamSettingsService::class)->update($this->rootTeam, [
+        'voice_agent_dauerhaft_aktiv' => true,
+    ]);
+
+    $html = view('foodalchemist::partials.agent-mount')->render();
+    expect($html)->toContain('aktiv: true');
+});
+
+/**
+ * Alle 26 FA-Vollseiten (Routen-Ziele, `grep -oE "Livewire\\\\[A-Za-z0-9_\\\\]+::class" routes/web.php`
+ * gegengeprüft, 2026-09-17) — hart hinterlegt statt aus routes/web.php geparst: ein Regex über
+ * Bare-Imports (`use ...Dashboard;`) vs. FQCN-Referenzen wäre selbst fehleranfällig, und genau
+ * DAS soll dieser Test verlässlich prüfen, nicht neu erfinden.
+ */
+const FA_VOLLSEITEN_VIEWS = [
+    'angebote/index', 'concepter/browser', 'concepts/index', 'controlling/cockpit', 'dashboard',
+    'demnaechst', 'favorites/index', 'food-dna/index', 'foodbooks/index', 'formate/browser',
+    'geschirr/index', 'gps/browser', 'knowledge/browser', 'orders/index', 'pakete/index',
+    'planung/index', 'produktion/browser', 'produktion/tagesplan', 'recipes/browser',
+    'review-queue', 'settings/index', 'speisekarte/index', 'speiseplan/index', 'suppliers/index',
+    'trendradar/index', 'verkauf/browser',
+];
+
+it('Platzierung: JEDE FA-Vollseite bindet das agent-mount-Partial GENAU EINMAL im Root-Element ein', function () {
+    $fehlend = [];
+    foreach (FA_VOLLSEITEN_VIEWS as $view) {
+        $pfad = __DIR__ . "/../../resources/views/livewire/{$view}.blade.php";
+        if (! file_exists($pfad)) {
+            $fehlend[] = "{$view} (View-Datei fehlt — Liste veraltet?)";
+
+            continue;
+        }
+        $treffer = substr_count(file_get_contents($pfad), "@include('foodalchemist::partials.agent-mount')");
+        if ($treffer !== 1) {
+            $fehlend[] = "{$view} ({$treffer}x statt 1x im Root)";
+        }
+    }
+
+    expect($fehlend)->toBe([], 'Fehlendes/doppeltes agent-mount-Include: ' . implode(', ', $fehlend));
 });
 
 it('Loop: erfundener Tool-Name führt nicht zum Fatal, sondern zur Ablehnung', function () {

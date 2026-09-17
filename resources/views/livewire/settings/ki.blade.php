@@ -38,6 +38,19 @@
         </div>
     </div>
 
+    {{-- Spec 53/F Stufe 2: „dauerhaft aktiv" — Team-Schalter, Muster wie der Kill-Switch-Knopf oben. --}}
+    <div class="flex items-start justify-between gap-4" data-settings-sprachagent-dauerhaft>
+        <div>
+            <p class="{{ $dt }} mb-1">Sprachbefehl dauerhaft aktivieren</p>
+            <p class="text-[11px] text-gray-500">Zeigt ein schwebendes Mikrofon-Element auf JEDER Seite — auch bei eingeklappter Sidebar. Aus (Default): nur der Knopf in der Sidebar.</p>
+        </div>
+        <button type="button" wire:click="sprachAgentDauerhaftUmschalten"
+                class="{{ $sprachAgentDauerhaftAktiv ? $btnPrimary : $btnGhost }} shrink-0" data-sprachagent-dauerhaft-switch>
+            @svg('heroicon-o-microphone', 'w-4 h-4')
+            {{ $sprachAgentDauerhaftAktiv ? 'Aktiv — ausschalten' : 'Aktivieren' }}
+        </button>
+    </div>
+
     <div>
         <p class="{{ $dt }} mb-1">Tier-Zuordnung (V-01 — je Prompt, Registry)</p>
         <div class="flex flex-wrap gap-1" data-ki-tiers>

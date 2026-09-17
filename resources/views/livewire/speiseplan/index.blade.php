@@ -77,4 +77,6 @@
             @include('foodalchemist::livewire.speiseplan.partials.vorschau', ['vorschau' => $vorschau])
         @endif
     </x-ui-page-container>
+    {{-- Spec 53/F Stufe 2: Sprachbefehl-Mount auf Seitenebene (Modal + optionales schwebendes Element). --}}
+    @include('foodalchemist::partials.agent-mount')
 </x-ui-page>

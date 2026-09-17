@@ -128,3 +128,18 @@ it('voice_agent_mode: unbekannter Wert → VALIDATION_ERROR, nichts geschrieben'
     expect($res->success)->toBeFalse()->and($res->errorCode)->toBe('VALIDATION_ERROR');
     expect(app(TeamSettingsService::class)->voiceAgentModus($this->rootTeam))->toBe('fragen');
 });
+
+it('voice_agent_dauerhaft_aktiv: Default AUS, Roundtrip über team_settings.PUT', function () {
+    expect(app(TeamSettingsService::class)->voiceAgentDauerhaftAktiv($this->rootTeam))->toBeFalse();
+
+    $res = $this->registry->get('foodalchemist.team_settings.PUT')->execute([
+        'settings' => ['voice_agent_dauerhaft_aktiv' => true],
+    ], $this->kontext);
+    expect($res->success)->toBeTrue();
+    expect(app(TeamSettingsService::class)->voiceAgentDauerhaftAktiv($this->rootTeam))->toBeTrue();
+
+    $this->registry->get('foodalchemist.team_settings.PUT')->execute([
+        'settings' => ['voice_agent_dauerhaft_aktiv' => false],
+    ], $this->kontext);
+    expect(app(TeamSettingsService::class)->voiceAgentDauerhaftAktiv($this->rootTeam))->toBeFalse();
+});

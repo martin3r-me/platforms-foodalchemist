@@ -25,7 +25,7 @@ use Platform\FoodAlchemist\Services\TeamSettingsService;
 class TeamSettingsPutTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
 {
     /** Boolean-Schalter. */
-    private const BOOL_KEYS = ['ai_active', 'show_fallback_chain', 'trend_auto_enabled', 'trend_signal_enabled'];
+    private const BOOL_KEYS = ['ai_active', 'show_fallback_chain', 'trend_auto_enabled', 'trend_signal_enabled', 'voice_agent_dauerhaft_aktiv'];
 
     /** Numerische Skalare (float, ≥ 0). */
     private const NUM_KEYS = [
@@ -57,7 +57,7 @@ class TeamSettingsPutTool extends FoodAlchemistTool implements ToolContract, Too
         return 'Schreibt Team-Einstellungen (nur eigene Team-Zeile): Ki-Kill-Switch, Küchen-Typ, '
             . 'Ziel-Wareneinsatz-%, Stundensatz/Marge/Zuschläge, Topf-Deckel-Defaults, Trendradar-Automatik, '
             . 'Einkaufsjournal-Trigger, Garverlust-/Putzverlust-Defaults, Standard-Preisklasse (team-scoped geprüft), '
-            . 'Sprachbefehl-Agenten-Modus. '
+            . 'Sprachbefehl-Agenten-Modus + dauerhaft-aktiv-Schalter. '
             . 'Nur die im Schema gelisteten Keys sind erlaubt; unbekannte Keys werden abgewiesen. '
             . 'Idempotent (PUT). Vokabular/Taxonomie und komplexe JSON-Konfigs laufen über eigene Tools bzw. die UI.';
     }
@@ -91,6 +91,7 @@ class TeamSettingsPutTool extends FoodAlchemistTool implements ToolContract, Too
                         'trend_auto_enabled' => ['type' => 'boolean', 'description' => 'Trendradar-Konzept-Automatik an/aus.'],
                         'trend_auto_limit' => ['type' => 'integer', 'description' => 'Anzahl Top-Trends je Automatik-Lauf.'],
                         'trend_signal_enabled' => ['type' => 'boolean', 'description' => 'Trend-Vorschlag als Signal in die Inbox.'],
+                        'voice_agent_dauerhaft_aktiv' => ['type' => 'boolean', 'description' => 'Sprachbefehl auf jeder Seite als schwebendes Element sichtbar (nicht nur Sidebar-Knopf).'],
                         'purchase_journal_trigger' => ['type' => 'string', 'description' => 'Einkaufsjournal-Buchung ab Status: sent|delivered.'],
                         'voice_agent_mode' => ['type' => 'string', 'description' => 'Agenten-Modus des Sprachbefehls: fragen (Default, jede Schreibaktion nur Vorschlag) | auto_sicher (reversible Vorschläge laufen direkt) | nur_lesen (keine Vorschläge).'],
                         'cooking_loss_defaults' => ['type' => 'object', 'description' => 'Garverlust-Default % je WG-Code ("*" = global). Werte numerisch.'],

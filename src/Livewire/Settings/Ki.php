@@ -28,13 +28,36 @@ class Ki extends Component
     /** Spec 53/F: Agenten-Modus des Sprachbefehls — fragen (Default)|auto_sicher|nur_lesen. */
     public string $sprachAgentModus = TeamSettingsService::VOICE_AGENT_MODE_DEFAULT;
 
+    /** Spec 53/F Stufe 2: Sprachbefehl auf jeder Vollseite als schwebendes Element (Default AUS). */
+    public bool $sprachAgentDauerhaftAktiv = false;
+
     public function mount(): void
     {
         $team = Auth::user()?->currentTeamRelation;
         $this->kiAktiv = $team === null || app(TeamSettingsService::class)->kiAktiv($team);
         if ($team !== null) {
-            $this->sprachAgentModus = app(TeamSettingsService::class)->voiceAgentModus($team);
+            $svc = app(TeamSettingsService::class);
+            $this->sprachAgentModus = $svc->voiceAgentModus($team);
+            $this->sprachAgentDauerhaftAktiv = $svc->voiceAgentDauerhaftAktiv($team);
         }
+    }
+
+    /** Sofort speichern + localStorage-Spiegel via Browser-Event (agent-mount.blade.php liest ihn). */
+    public function sprachAgentDauerhaftUmschalten(): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null) {
+            return;
+        }
+        $this->sprachAgentDauerhaftAktiv = ! $this->sprachAgentDauerhaftAktiv;
+        app(TeamSettingsService::class)->update($team, ['voice_agent_dauerhaft_aktiv' => $this->sprachAgentDauerhaftAktiv]);
+        // Kein `->to()` nötig: Livewire dispatcht als normales `window`-CustomEvent — der
+        // schwebende Knopf (Alpine, agent-mount.blade.php) hört global zu und spiegelt den
+        // Wert sofort in localStorage, ohne dass die aktuelle Seite neu geladen werden muss.
+        $this->dispatch('voice-agent-dauerhaft-aktiv-geaendert', aktiv: $this->sprachAgentDauerhaftAktiv);
+        $this->meldung = $this->sprachAgentDauerhaftAktiv
+            ? 'Sprachbefehl ist jetzt auf jeder Seite als schwebendes Element sichtbar.'
+            : 'Sprachbefehl bleibt wieder auf den Sidebar-Knopf beschränkt.';
     }
 
     /** Livewire-Hook: `wire:model.live="sprachAgentModus"` speichert sofort bei Auswahl. */
