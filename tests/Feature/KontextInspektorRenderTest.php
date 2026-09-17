@@ -101,3 +101,37 @@ it('bleibt bei der alten Anzeige, wenn die Messsonde nichts liefert', function (
     expect($html)->toContain('~11.000 Zeichen')
         ->not->toContain('data-prompt-groessen');
 });
+
+/*
+ * Spec 53 Paket B Aufgabe 6 — verworfen getrennt ausweisen: eine eigene Chip-Gruppe je Kanal
+ * (Recherche = Fuzzy-Discovery-Budget-Schnitt, Kanon = gedroppte wenn_platz-Dossiers), nicht nur
+ * die Zeichenzahl aus den Prompt-Größen.
+ */
+it('zeigt verworfene Dossiers getrennt nach Recherche und Kanon', function () {
+    $k = [
+        'wissen' => ['domain' => ['fisch_seafood@v1']],
+        'wissen_verworfen' => [
+            'retrieval' => ['fruchtgemuese-substitutionen@v3'],
+            'kanon' => ['regelwerk-basisrezepte-6-mengen-einheiten-yield@v4'],
+        ],
+        'chars' => 11000, 'templates' => [],
+    ];
+
+    $html = Blade::render('<x-foodalchemist::kontext-inspektor :kontext="$kontext" />', ['kontext' => $k]);
+
+    expect($html)->toContain('Verworfen (nicht gesendet)')
+        ->toContain('Recherche: fruchtgemuese-substitutionen@v3')
+        ->toContain('Kanon: regelwerk-basisrezepte-6-mengen-einheiten-yield@v4');
+});
+
+it('zeigt KEINE Verworfen-Gruppe, wenn nichts verworfen wurde (kein Etikett ohne Landebahn)', function () {
+    $k = [
+        'wissen' => ['domain' => ['fisch_seafood@v1']],
+        'wissen_verworfen' => ['retrieval' => [], 'kanon' => []],
+        'chars' => 11000, 'templates' => [],
+    ];
+
+    $html = Blade::render('<x-foodalchemist::kontext-inspektor :kontext="$kontext" />', ['kontext' => $k]);
+
+    expect($html)->not->toContain('Verworfen (nicht gesendet)');
+});
