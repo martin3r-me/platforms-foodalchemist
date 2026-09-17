@@ -97,7 +97,7 @@ it('#11: Eigenschaften-Assistent schätzt die Chargengröße mit (batch_max_kg i
                 ['work_time_min' => 10, 'batch_max_kg' => 60], 0.9, null, [], 'mock'
             ));
         $mock->shouldReceive('propose')
-            ->with('recipe.geschmack', \Mockery::any())
+            ->with('recipe.geschmack', \Mockery::any(), \Mockery::any())
             ->andReturn(new \Platform\FoodAlchemist\Services\Ai\AiProposal(['taste_direction' => 'herzhaft'], 0.9, null, [], 'mock'));
     });
 
@@ -162,7 +162,7 @@ it('Eigenschaften-Assistent schickt die vorhandene Zubereitung + Portionen als K
             ->once()
             ->andReturn(new \Platform\FoodAlchemist\Services\Ai\AiProposal(['work_time_min' => 15], 0.9, null, [], 'mock'));
         $mock->shouldReceive('propose')
-            ->with('recipe.geschmack', \Mockery::any())
+            ->with('recipe.geschmack', \Mockery::any(), \Mockery::any())
             ->andReturn(new \Platform\FoodAlchemist\Services\Ai\AiProposal(['taste_direction' => 'herzhaft'], 0.9, null, [], 'mock'));
     });
 
@@ -181,6 +181,34 @@ it('Eigenschaften-Assistent meldet ehrlich, wenn keine Basis (Zutaten/Zubereitun
         ->call('oeffnen', $this->rezept->id)
         ->call('kiEigenschaften')
         ->assertSet('fehler', fn ($f) => is_string($f) && str_contains($f, 'nur auf Basis'));
+});
+
+it('Review-Fund Lisa (Paket G): recipe.geschmack bekommt jetzt sein EIGENES $wissenOpts (nicht mehr None)', function () {
+    // Bisher rief kiEigenschaften() recipe.geschmack OHNE dritten Options-Parameter auf, obwohl der
+    // Nachbar-Call recipe.eigenschaften zwei Zeilen darüber eins baut — Lisas Knowledge-Routing-Audit
+    // (Wissens-Nachtrag) fand „geschmack ist komplett unversorgt (Routing steht auf none)".
+    $this->rezept->update(['preparation' => 'Reduzieren, abschmecken, montieren.']);
+
+    $this->mock(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class, function ($mock) {
+        $mock->shouldReceive('propose')
+            ->with('recipe.eigenschaften', \Mockery::any(), \Mockery::any())
+            ->andReturn(new \Platform\FoodAlchemist\Services\Ai\AiProposal(['work_time_min' => 5], 0.9, null, [], 'mock'));
+        // Der eigentliche Beleg: ein DRITTES Argument, das genau aus proposeOptionen() stammt
+        // (Schlüssel knowledge/knowledge_used/knowledge_dropped_chars) — fehlte es, würde die
+        // strikte Mockery-Argumentzahl gar nicht matchen ("no matching handler").
+        $mock->shouldReceive('propose')
+            ->with('recipe.geschmack', \Mockery::any(), \Mockery::on(function ($opts) {
+                return is_array($opts) && array_key_exists('knowledge', $opts)
+                    && array_key_exists('knowledge_used', $opts) && array_key_exists('knowledge_dropped_chars', $opts);
+            }))
+            ->once()
+            ->andReturn(new \Platform\FoodAlchemist\Services\Ai\AiProposal(['taste_direction' => 'herzhaft'], 0.9, null, [], 'mock'));
+    });
+
+    Livewire::test(RecipeModal::class)
+        ->call('oeffnen', $this->rezept->id)
+        ->call('kiEigenschaften')
+        ->assertSet('fehler', null);
 });
 
 it('M4-12: Template-Toggle, Status-Workflow und Bulk-Status (D1: nur eigene)', function () {
