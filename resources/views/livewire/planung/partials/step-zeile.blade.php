@@ -25,14 +25,28 @@
     $reuse = (is_array($st->deferred) && is_array($st->deferred['reuse'] ?? null)) ? $st->deferred['reuse'] : null;
     $reuseUnreif = $st->status === 'skipped' && $reuse !== null && ! ($reuse['reif'] ?? false);
 @endphp
-<div wire:key="step-{{ $st->id }}" class="{{ $indent ? 'ml-1 pl-3 border-l border-white/10' : '' }}">
+<div wire:key="step-{{ $st->id }}" x-data="{ busy: null }" class="{{ $indent ? 'ml-1 pl-3 border-l border-white/10' : '' }}">
     <div class="flex items-center justify-between gap-3 text-xs">
         <span class="truncate text-gray-200">{{ $indent ? '↳ ' : '' }}{{ $st->label ?: ucfirst($st->kind) }}</span>
         <span class="shrink-0 flex items-center gap-2">
             @if($hardstop)
                 <span class="text-amber-300" title="Die Datenbank hat dafür kein passendes Grundprodukt/Basisrezept. Zutat am Gericht per Picker binden oder den Kreativ-Modus wechseln.">⚠ kein Bestand — wählen</span>
+            @elseif(in_array($st->status, ['queued', 'running'], true))
+                {{-- Spec 53 / Paket C: DB-Wahrheit statt nur „läuft" — die Phase (falls schon gesetzt)
+                     ODER Phase 1 „eingereiht — wartet auf Worker" (Job noch nicht angelaufen). --}}
+                <span class="text-amber-300 inline-flex items-center gap-1">
+                    @svg('heroicon-o-arrow-path', 'w-3 h-3 animate-spin')
+                    {{ $st->phase ?: 'eingereiht — wartet auf Worker' }}
+                </span>
             @else
                 <span class="{{ $reuseUnreif ? 'text-amber-300' : ($stepColor[$st->status] ?? 'text-gray-400') }}">{{ $stepLabel[$st->status] ?? $st->status }}</span>
+                @if($st->status === 'done')
+                    @php $genMs = is_array($st->context_snapshot) ? ($st->context_snapshot['timings']['generator_ms'] ?? null) : null; @endphp
+                    @if(is_numeric($genMs))
+                        {{-- Paket A liefert generator_ms in context_snapshot.timings — nur anzeigen, wenn da. --}}
+                        <span class="text-[10px] text-gray-500">in {{ (int) round($genMs / 1000) }} s</span>
+                    @endif
+                @endif
                 @if($reuseUnreif)
                     {{-- Was genau fehlt, steht in der Zeile — nicht nur „unfertig". --}}
                     <span class="text-[10px] text-amber-300/90" title="Bestands-Rezept ist nicht produktionsreif: {{ implode(' · ', (array) ($reuse['luecken'] ?? [])) }}">Bestand unfertig{{ ($reuse['luecken'] ?? []) === [] ? '' : ' — ' . implode(', ', (array) $reuse['luecken']) }}</span>
@@ -67,21 +81,28 @@
                          Pairings leer. Vorher stand hier in beiden Faellen dasselbe ✓. --}}
                     @if(($enr['tief'] ?? true) === false)
                         <span class="text-[10px] text-gray-400" title="Kernfelder gefüllt ({{ $enr['at'] ?? '' }}) — ohne Schritte, Sensorik, Zeiten, Equipment und Pairings (Leitplanke „Voll anreichern" war aus).">leicht angereichert</span>
-                        <button wire:click="neuAnreichern({{ $st->id }}, true)" class="text-[10px] text-violet-300 hover:text-violet-200 underline" title="Jetzt in voller Tiefe anreichern: Schritte, Sensorik, Arbeits- und Rüstzeit, Equipment, Posten, geerdete Pairings.">voll anreichern</button>
+                        <x-foodalchemist::ki-action action="neuAnreichern({{ $st->id }}, true)" label="voll anreichern"
+                            busy="Wird angereichert …" flash="Anreicherung eingereiht"
+                            title="Jetzt in voller Tiefe anreichern: Schritte, Sensorik, Arbeits- und Rüstzeit, Equipment, Posten, geerdete Pairings."
+                            class="text-[10px]" />
                     @else
                         <span class="text-[10px] text-emerald-400/80" title="voll angereichert {{ $enr['at'] ?? '' }}">angereichert ✓</span>
                     @endif
                 @elseif(in_array($enrStatus, ['queued', 'running'], true))
                     <span class="text-[10px] text-amber-300/80 inline-flex items-center gap-1">@svg('heroicon-o-arrow-path', 'w-3 h-3 animate-spin') reichert an …</span>
                 @elseif($enrStatus === 'failed')
-                    <button wire:click="neuAnreichern({{ $st->id }})" class="text-[10px] text-rose-300 hover:text-rose-200 underline" title="{{ $enr['error'] ?? '' }}">Anreicherung fehlgeschlagen — neu anreichern</button>
+                    <x-foodalchemist::ki-action action="neuAnreichern({{ $st->id }})" :error="$enr['error'] ?? null"
+                        retry="Anreicherung fehlgeschlagen — neu anreichern" busy="Wird erneut angereichert …"
+                        flash="Anreicherung eingereiht" class="text-[10px]" />
                 @elseif($reuseUnreif)
                     {{-- Kein Auto-Lauf: das übernommene Rezept ist entweder FREMD (Referenz eines
                          übergeordneten Teams) oder schon freigegeben — daran hängen möglicherweise
                          Gerichte, Foodbooks und Speisepläne. Die Kaskade schreibt da nicht von
                          selbst hinein; die Entscheidung gehört dem Menschen. --}}
-                    <button wire:click="neuAnreichern({{ $st->id }})" class="text-[10px] text-amber-300 hover:text-amber-200 underline"
-                            title="Bestands-Rezept{{ ($reuse['eigen'] ?? false) ? '' : ' eines anderen Teams' }}{{ ($reuse['status'] ?? '') === 'approved' ? ', bereits freigegeben' : '' }} — Anreicherung bewusst anstoßen. Vorhandene Inhalte können dabei neu erzeugt werden.">Bestand anreichern</button>
+                    <x-foodalchemist::ki-action action="neuAnreichern({{ $st->id }})" label="Bestand anreichern"
+                        busy="Wird angereichert …" flash="Anreicherung eingereiht"
+                        title="Bestands-Rezept{{ ($reuse['eigen'] ?? false) ? '' : ' eines anderen Teams' }}{{ ($reuse['status'] ?? '') === 'approved' ? ', bereits freigegeben' : '' }} — Anreicherung bewusst anstoßen. Vorhandene Inhalte können dabei neu erzeugt werden."
+                        class="text-[10px] !text-amber-300 hover:!text-amber-200" />
                 @endif
                 {{-- Etappe 7 — Bild-Status: erzeugt / fehlgeschlagen / angefordert-aber-leer, analog
                      zum Anreicherungs-Badge. Nur wenn KI-Fotos angefordert waren ($bilderAngefordert,
@@ -103,7 +124,11 @@
                     @elseif($bldStatus === 'failed')
                         {{-- Etappe 7 Teil 2b: „neu erzeugen" — NUR die KI-Fotos re-triggern (ohne Voll-Anreicherung),
                              analog zum „neu anreichern" am enrich=failed-Badge. --}}
-                        <button wire:click="bilderNeu({{ $st->id }})" class="text-[10px] text-rose-300 hover:text-rose-200 underline inline-flex items-center gap-1" data-bild-status="{{ $st->id }}" title="{{ $bld['error'] ?? 'Bild-Erzeugung fehlgeschlagen' }}">@svg('heroicon-o-photo', 'w-3 h-3') Fotos fehlgeschlagen{{ $fotoN > 0 ? ' (' . $fotoN . ' ok)' : '' }} — neu erzeugen</button>
+                        <x-foodalchemist::ki-action action="bilderNeu({{ $st->id }})"
+                            :error="$bld['error'] ?? 'Bild-Erzeugung fehlgeschlagen'"
+                            retry="Fotos fehlgeschlagen{{ $fotoN > 0 ? ' (' . $fotoN . ' ok)' : '' }} — neu erzeugen"
+                            icon="heroicon-o-photo" busy="Fotos werden neu erzeugt …" flash="Neu erzeugen eingereiht"
+                            data-bild-status="{{ $st->id }}" class="text-[10px]" />
                     @elseif($fotoN > 0)
                         <span class="text-[10px] text-emerald-400/80 inline-flex items-center gap-1" data-bild-status="{{ $st->id }}" title="{{ $fotoN }} KI-Foto(s) erzeugt">@svg('heroicon-o-photo', 'w-3 h-3') {{ $fotoN }} Foto{{ $fotoN === 1 ? '' : 's' }} ✓</span>
                     @else
@@ -114,22 +139,33 @@
             @if(in_array($st->status, ['done', 'failed'], true) && in_array($st->kind, ['rezept', 'gericht', 'concept'], true))
                 {{-- A2: Feedback zu genau dieser Position → dann gezielt neu generieren (nur diese Position). --}}
                 <button wire:click="toggleKommentar({{ $st->id }})" class="{{ in_array($st->id, $kommentarOffen ?? [], true) ? 'text-emerald-300' : 'text-gray-400 hover:text-gray-200' }}" title="Feedback geben & gezielt neu generieren">@svg('heroicon-o-pencil-square', 'w-4 h-4')</button>
-                <button wire:click="neuGenerieren({{ $st->id }})" class="text-amber-300 hover:text-amber-200" title="Neu generieren (verwirft den aktuellen Entwurf)">@svg('heroicon-o-arrow-path', 'w-4 h-4')</button>
+                <x-foodalchemist::ki-action action="neuGenerieren({{ $st->id }})" variant="icon" icon="heroicon-o-arrow-path"
+                    label="Neu generieren (verwirft den aktuellen Entwurf)" busy="Wird neu generiert …" flash="Neu generieren eingereiht"
+                    class="text-amber-300 hover:text-amber-200" />
             @endif
             @if($st->status === 'done')
-                <button wire:click="gibFrei({{ $st->id }})" class="text-emerald-300 hover:text-emerald-200" title="Freigeben">@svg('heroicon-o-check', 'w-4 h-4')</button>
-                <button wire:click="verwirf({{ $st->id }})" class="text-rose-300 hover:text-rose-200" title="Verwerfen">@svg('heroicon-o-trash', 'w-4 h-4')</button>
+                <x-foodalchemist::ki-action action="gibFrei({{ $st->id }})" variant="icon" icon="heroicon-o-check"
+                    label="Freigeben" busy="Wird freigegeben …" flash="Freigegeben" class="text-emerald-300 hover:text-emerald-200" />
+                <x-foodalchemist::ki-action action="verwirf({{ $st->id }})" variant="icon" icon="heroicon-o-trash"
+                    label="Verwerfen" busy="Wird verworfen …" flash="Verworfen" confirm="Diesen Entwurf wirklich verwerfen?"
+                    class="text-rose-300 hover:text-rose-200" />
             @endif
             {{-- Etappe 1, Teil 2: geplante Sub-Rezepte einzeln bedienen — jetzt erzeugen (vorziehen)
                  oder verwerfen — VOR der Freigabe der Stufe darüber. --}}
             @if($st->status === 'geplant')
                 @if($st->kind === 'gericht' && !empty($snap['dish_idea_id']))
                     <button wire:click="toggleKommentar({{ $st->id }})" class="{{ in_array($st->id, $kommentarOffen ?? [], true) ? 'text-emerald-300' : 'text-gray-400 hover:text-gray-200' }}" title="Vorschlag mit Feedback überarbeiten">@svg('heroicon-o-pencil-square', 'w-4 h-4')</button>
-                    <button wire:click="erzeugeGeplant({{ $st->id }})" class="text-emerald-300 hover:text-emerald-200" title="Vorschlag annehmen und Gericht als Entwurf erzeugen">@svg('heroicon-o-bolt', 'w-4 h-4')</button>
+                    <x-foodalchemist::ki-action action="erzeugeGeplant({{ $st->id }})" variant="icon" icon="heroicon-o-bolt"
+                        label="Vorschlag annehmen und Gericht als Entwurf erzeugen" busy="Wird erzeugt …" flash="Erzeugung eingereiht"
+                        class="text-emerald-300 hover:text-emerald-200" />
                 @else
-                    <button wire:click="erzeugeGeplant({{ $st->id }})" class="text-emerald-300 hover:text-emerald-200" title="Jetzt erzeugen (vorziehen)">@svg('heroicon-o-bolt', 'w-4 h-4')</button>
+                    <x-foodalchemist::ki-action action="erzeugeGeplant({{ $st->id }})" variant="icon" icon="heroicon-o-bolt"
+                        label="Jetzt erzeugen (vorziehen)" busy="Wird erzeugt …" flash="Erzeugung eingereiht"
+                        class="text-emerald-300 hover:text-emerald-200" />
                 @endif
-                <button wire:click="verwirfGeplant({{ $st->id }})" class="text-rose-300 hover:text-rose-200" title="Brauche ich nicht (verwerfen)">@svg('heroicon-o-trash', 'w-4 h-4')</button>
+                <x-foodalchemist::ki-action action="verwirfGeplant({{ $st->id }})" variant="icon" icon="heroicon-o-trash"
+                    label="Brauche ich nicht (verwerfen)" busy="Wird verworfen …" flash="Verworfen"
+                    class="text-rose-300 hover:text-rose-200" />
             @endif
         </span>
     </div>
@@ -141,10 +177,11 @@
                       placeholder="Was an dieser Position ändern? (z. B. „vegetarisch statt Rind", „leichter, weniger Sahne", „mehr Säure") …"
                       class="w-full text-[11px] bg-white/5 border border-white/10 rounded px-2 py-1 text-gray-200 placeholder-gray-500"></textarea>
             <div class="mt-1 flex items-center gap-3">
-                <button wire:click="{{ $st->status === 'geplant' ? 'vorschlagUeberarbeiten' : 'neuGenerieren' }}({{ $st->id }})"
-                        class="text-[11px] text-emerald-300 hover:text-emerald-200 inline-flex items-center gap-1">
-                    @svg('heroicon-o-arrow-path', 'w-3.5 h-3.5') {{ $st->status === 'geplant' ? 'Vorschlag überarbeiten' : 'mit Feedback neu generieren' }}
-                </button>
+                <x-foodalchemist::ki-action
+                    action="{{ $st->status === 'geplant' ? 'vorschlagUeberarbeiten' : 'neuGenerieren' }}({{ $st->id }})"
+                    icon="heroicon-o-arrow-path"
+                    label="{{ $st->status === 'geplant' ? 'Vorschlag überarbeiten' : 'mit Feedback neu generieren' }}"
+                    busy="Wird eingereiht …" flash="Eingereiht" class="text-[11px] !text-emerald-300 hover:!text-emerald-200" />
                 <button wire:click="toggleKommentar({{ $st->id }})" class="text-[11px] text-gray-500 hover:text-gray-300">abbrechen</button>
             </div>
         </div>
@@ -401,7 +438,9 @@
             @else
                 <span class="flex-1"></span>
             @endif
-            <button type="button" wire:click="konformitaetPruefen({{ (int) $st->ref_id }})" wire:loading.attr="disabled" class="shrink-0 text-[10px] text-gray-500 hover:text-gray-300" title="Konformität gegen die Regelwerke prüfen">🔍 prüfen</button>
+            <x-foodalchemist::ki-action action="konformitaetPruefen({{ (int) $st->ref_id }})" label="🔍 prüfen"
+                busy="Wird geprüft …" flash="Prüfung eingereiht" title="Konformität gegen die Regelwerke prüfen"
+                class="shrink-0 text-[10px] !text-gray-500 hover:!text-gray-300 no-underline" />
         </div>
     @endif
     {{-- Slice 4c: GP-Konformität dieses Steps — die Zutaten-GPs (v.a. die im Lauf frisch geminteten

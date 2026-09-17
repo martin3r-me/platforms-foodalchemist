@@ -1,7 +1,9 @@
 {{-- Worker-Cockpit: Stufen-Abschnitte (Concept · Gerichte · Basisrezepte) mit Fortschritts-Headern +
      Stufen-Freigabe. Nur erreichte Stufen erscheinen (progressive Enthüllung). Erwartet $lauf gesetzt. --}}
 @php
-    $stepLabel = ['geplant' => 'geplant', 'queued' => 'wartet', 'running' => 'läuft', 'done' => 'Vorschau', 'freigegeben' => 'freigegeben', 'verworfen' => 'verworfen', 'failed' => 'Fehler', 'skipped' => 'übernommen'];
+    // Spec 53 / Paket C, Phase 7: „Entwurf bereit" statt „Vorschau" — Wortlaut spiegelt das
+    // zweistufige Statusmodell (done = Draft fertig, wartet auf Freigabe/Ansicht).
+    $stepLabel = ['geplant' => 'geplant', 'queued' => 'wartet', 'running' => 'läuft', 'done' => 'Entwurf bereit', 'freigegeben' => 'freigegeben', 'verworfen' => 'verworfen', 'failed' => 'Fehler', 'skipped' => 'übernommen'];
     $stepColor = ['geplant' => 'text-violet-300', 'queued' => 'text-amber-300', 'running' => 'text-amber-300', 'done' => 'text-emerald-300', 'freigegeben' => 'text-emerald-400', 'verworfen' => 'text-gray-500', 'failed' => 'text-rose-300', 'skipped' => 'text-gray-400'];
     $refRoute = ['gericht' => 'foodalchemist.verkauf.index', 'rezept' => 'foodalchemist.recipes.index', 'concept' => 'foodalchemist.concepts.index'];
     $laufRunning = $lauf->steps->whereIn('status', ['queued', 'running'])->count();
@@ -28,6 +30,9 @@
     }
     // Terminal-Endzustand: nichts läuft mehr, keine offenen Entwürfe, aber freigegebene Artefakte da.
     $terminal = $laufRunning === 0 && $offeneEntwuerfe === 0 && $freigegebenGesamt > 0;
+    // Spec 53 / Paket C: aktuelle Phase des JÜNGSTEN Steps mit gesetzter Phase (nach phase_at) — für
+    // den Worker-Header „Worker arbeitet — … <Phase>" statt nur „N Schritt(e) laufen".
+    $aktuellePhase = $lauf->steps->whereNotNull('phase')->sortByDesc('phase_at')->first()?->phase;
 @endphp
 <x-foodalchemist::modal-section title="Kaskade — Stufen &amp; Freigabe">
     @if($lauf->brief)
@@ -39,7 +44,7 @@
         @if($laufRunning > 0 && ($hinweis ?? null) !== null)
             <span class="inline-flex items-center gap-1.5 text-amber-400">@svg('heroicon-o-exclamation-triangle', 'w-4 h-4') Worker hängt? — {{ $laufRunning }} Schritt(e) warten (vermutlich kein Queue-Worker)</span>
         @elseif($laufRunning > 0)
-            <span class="inline-flex items-center gap-1.5 text-amber-300">@svg('heroicon-o-arrow-path', 'w-4 h-4 animate-spin') Worker arbeitet — {{ $laufRunning }} Schritt(e) laufen{{ $laufDone > 0 ? ', ' . $laufDone . ' fertig' : '' }}</span>
+            <span class="inline-flex items-center gap-1.5 text-amber-300">@svg('heroicon-o-arrow-path', 'w-4 h-4 animate-spin') Worker arbeitet — {{ $laufRunning }} Schritt(e) laufen{{ $laufDone > 0 ? ', ' . $laufDone . ' fertig' : '' }}{{ $aktuellePhase ? ' — ' . $aktuellePhase : '' }}</span>
         @elseif($offeneEntwuerfe > 0)
             <span class="inline-flex items-center gap-1.5 text-emerald-300">@svg('heroicon-o-check-circle', 'w-4 h-4') Vorschau fertig — {{ $offeneEntwuerfe }} Entwurf/Entwürfe (ansehen / stufenweise freigeben)</span>
         @elseif($terminal)
@@ -58,12 +63,9 @@
     @if($laufFailedGenerierbar > 0)
         <div class="flex items-center gap-2 flex-wrap mb-3" data-planung-resume>
             <span class="text-[11px] text-rose-300">{{ $laufFailedGenerierbar }} Schritt(e) gescheitert.</span>
-            <button type="button" wire:click="laufWiederAufnehmen" wire:loading.attr="disabled"
-                    data-planung-resume-btn
-                    class="inline-flex items-center gap-1 text-[11px] text-emerald-300 underline underline-offset-2 hover:text-emerald-200">
-                @svg('heroicon-o-arrow-path', 'w-3.5 h-3.5')
-                Gescheiterte Schritte fortsetzen
-            </button>
+            <x-foodalchemist::ki-action action="laufWiederAufnehmen()" target="laufWiederAufnehmen" icon="heroicon-o-arrow-path"
+                label="Gescheiterte Schritte fortsetzen" busy="Wird fortgesetzt …" flash="Fortsetzung eingereiht"
+                data-planung-resume-btn class="text-[11px] !text-emerald-300 hover:!text-emerald-200" />
         </div>
     @endif
 
@@ -75,7 +77,7 @@
     <div class="space-y-3">
         @forelse($stufen as $stufe)
             @php $stufeSteps = $lauf->steps->where('kind', $stufe['kind'])->sortBy([['depth', 'asc'], ['sort', 'asc']]); @endphp
-            <div wire:key="stufe-{{ $stufe['kind'] }}" class="rounded-lg border border-white/10 p-2.5">
+            <div wire:key="stufe-{{ $stufe['kind'] }}" x-data="{ busy: null }" class="rounded-lg border border-white/10 p-2.5">
                 <div class="flex items-center justify-between gap-2 mb-2">
                     <span class="text-xs font-semibold text-gray-200">{{ $stufe['label'] }}</span>
                     <span class="flex items-center gap-2">
@@ -100,17 +102,15 @@
                         <input type="text" wire:model="neuerSubName" wire:keydown.enter="ergaenzeSubRezept"
                                placeholder="Basisrezept ergänzen (z. B. Schweinejus) …"
                                class="flex-1 text-xs bg-white/5 border border-white/10 rounded px-2 py-1 text-gray-200 placeholder-gray-500" />
-                        <button type="button" wire:click="ergaenzeSubRezept"
-                                class="text-[11px] text-violet-300 hover:text-violet-200 inline-flex items-center gap-1 shrink-0">
-                            @svg('heroicon-o-plus', 'w-3.5 h-3.5') ergänzen
-                        </button>
+                        <x-foodalchemist::ki-action action="ergaenzeSubRezept()" target="ergaenzeSubRezept" icon="heroicon-o-plus" label="ergänzen"
+                            busy="Wird ergänzt …" flash="Ergänzt" class="text-[11px] shrink-0" />
                     </div>
                 @endif
                 @if($stufe['zustand'] === 'prüfen')
                     <div class="mt-2 pt-2 border-t border-white/10 flex justify-end">
-                        <button wire:click="gibStufeFrei('{{ $stufe['kind'] }}')" class="text-[11px] text-emerald-300 hover:text-emerald-200 inline-flex items-center gap-1">
-                            @svg('heroicon-o-check-badge', 'w-3.5 h-3.5') Ganze Stufe freigeben → nächste erzeugen
-                        </button>
+                        <x-foodalchemist::ki-action action="gibStufeFrei('{{ $stufe['kind'] }}')" icon="heroicon-o-check-badge"
+                            label="Ganze Stufe freigeben → nächste erzeugen" busy="Wird freigegeben …" flash="Stufe freigegeben"
+                            class="text-[11px] !text-emerald-300 hover:!text-emerald-200" />
                     </div>
                 @endif
             </div>
@@ -121,11 +121,14 @@
 
     {{-- Globale Bulk-Freigabe als Fallback über alle Stufen. --}}
     @if($offeneEntwuerfe > 0)
-        <div class="flex items-center justify-between gap-2 mt-3 pt-2 border-t border-white/10">
+        <div x-data="{ busy: null }" class="flex items-center justify-between gap-2 mt-3 pt-2 border-t border-white/10">
             <span class="text-[11px] text-gray-400">{{ $offeneEntwuerfe }} Entwurf/Entwürfe offen</span>
             <span class="flex gap-2">
-                <button wire:click="alleFrei" class="text-[11px] text-emerald-300 hover:text-emerald-200">Alle freigeben</button>
-                <button wire:click="alleVerwerfen" class="text-[11px] text-rose-300 hover:text-rose-200">Alle verwerfen</button>
+                <x-foodalchemist::ki-action action="alleFrei()" target="alleFrei" label="Alle freigeben"
+                    busy="Wird freigegeben …" flash="Alle freigegeben" class="text-[11px] !text-emerald-300 hover:!text-emerald-200" />
+                <x-foodalchemist::ki-action action="alleVerwerfen()" target="alleVerwerfen" label="Alle verwerfen"
+                    busy="Wird verworfen …" flash="Alle verworfen" confirm="Alle offenen Entwürfe dieses Laufs wirklich verwerfen?"
+                    class="text-[11px] !text-rose-300 hover:!text-rose-200" />
             </span>
         </div>
     @endif
