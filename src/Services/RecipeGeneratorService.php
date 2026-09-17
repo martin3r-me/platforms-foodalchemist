@@ -1148,7 +1148,15 @@ class RecipeGeneratorService
         if ($raw !== '') {
             return in_array($raw, $erlaubtRaw, true);
         }
-        // condition unset → Namens-Bucket (lenient): erlaubte Roh-Werte auf Buckets abbilden.
+        // condition unset → Namens-Token-Fallback über produktForm() (4-wertiges §9-Vokabular,
+        // trocken ≠ konserviert — anders als der RANKING-Bucket zustandClassResolved(), der
+        // beide für die Score-Tiebreak-Präferenz bewusst in EINE Klasse "preserved" fasst;
+        // hier geht es um eine harte Ja/Nein-Zulässigkeit, nicht um eine Rangfolge).
+        $namensZustand = app(Matching\TokenEngine::class)->produktForm((string) $gp->name)['zustand'];
+        if ($namensZustand !== null) {
+            return in_array($namensZustand, $erlaubtRaw, true);
+        }
+        // Kein eindeutiges §9-Wort im Namen → lenient Bucket-Fallback wie zuvor.
         $erlaubtBuckets = array_map(static fn ($z) => match ($z) {
             'frisch' => 'fresh', 'TK' => 'frozen', 'trocken', 'konserviert' => 'preserved', default => 'unknown',
         }, $erlaubtRaw);

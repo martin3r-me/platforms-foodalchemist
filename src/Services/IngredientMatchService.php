@@ -496,18 +496,27 @@ class IngredientMatchService
         ));
     }
 
-    /** Eine explizite Dose darf weder auf frische noch auf getrocknete Ware fallen. */
+    /**
+     * Ein explizit genannter §9-Zustand (frisch/TK/trocken/konserviert) darf nicht auf eine
+     * andere Zustandsklasse fallen — „TK-Erbsen" nicht auf trocken, „Dosentomaten" nicht auf
+     * frisch, „getrocknete Tomaten" nicht auf konserviert (vorher fielen trocken UND
+     * konserviert in dieselbe Prüfung, siehe {@see TokenEngine::produktForm()}).
+     */
     public function acceptsProductForm(string $query, string $name, ?string $condition): bool
     {
-        if (! $this->engine->wantsCanned($query)) {
-            return true;
+        $zustand = $this->engine->produktForm($query)['zustand'];
+        if ($zustand === null) {
+            return true;   // kein expliziter §9-Zustand im Query ⇒ nichts zu gaten, Score entscheidet
         }
         if (trim((string) $condition) !== '') {
-            return mb_strtolower(trim($condition)) === 'konserviert';
+            return mb_strtolower(trim($condition)) === mb_strtolower($zustand);
         }
+        // condition-Feld leer ⇒ Namens-Token-Fallback: der GP-NAME muss den verlangten
+        // Zustand tragen — ein Name ohne eindeutiges §9-Wort lehnt ab (konservativ, wie
+        // GpZustandBackfillCommand: Lücke lassen ist besser als raten).
+        $gpZustand = $this->engine->produktForm($name)['zustand'];
 
-        return in_array('konserviert', $this->engine->tokenize($name), true)
-            || $this->engine->wantsCanned($name);
+        return $gpZustand !== null && mb_strtolower($gpZustand) === mb_strtolower($zustand);
     }
 
     // ── Pool-Scans ───────────────────────────────────────────────────────

@@ -51,18 +51,87 @@ class TokenEngine
         return array_map('strval', array_keys($tokens));
     }
 
+    /** Phrasen der Dosen-Einkaufsform auf das §9-Zustandswort normalisieren. */
+    private function normalisiereEinkaufsform(string $name): string
+    {
+        $name = preg_replace('/\baus\s+(?:der|einer)\s+dose\b|\bin\s+dosen\b/iu', 'konserviert', $name);
+
+        return preg_replace('/\bdosentomaten?\b/iu', 'Tomaten konserviert', $name);
+    }
+
     /** Einkaufsform normalisieren, ohne „konserviert“ als bedeutungslos zu entfernen. */
     public function ingredientTokens(string $name): array
     {
-        $name = preg_replace('/\baus\s+(?:der|einer)\s+dose\b|\bin\s+dosen\b/iu', 'konserviert', $name);
-        $name = preg_replace('/\bdosentomaten?\b/iu', 'Tomaten konserviert', $name);
-
-        return $this->tokenize($name);
+        return $this->tokenize($this->normalisiereEinkaufsform($name));
     }
 
     public function wantsCanned(string $name): bool
     {
         return preg_match('/\baus\s+(?:der|einer)\s+dose\b|\bin\s+dosen\b|\bdosentomaten?\b/iu', $name) === 1;
+    }
+
+    /**
+     * §9-Zustandswörter aus freiem Text — Wort-Boundary wie GpZustandBackfillCommand::MUSTER
+     * (dieselbe Quelle: Regelwerk_Grundprodukte.md §9 „frisch, tiefgekuehlt (TK), trocken,
+     * konserviert"). Mehrdeutigkeit (mehr als ein Zustand im selben Text) bleibt KONSERVATIV
+     * unentschieden statt geraten — dieselbe Politik wie der Backfill.
+     */
+    private const ZUSTAND_MUSTER = [
+        'frisch' => '/\bfrisch\w*\b/iu',
+        'TK' => '/\btk\b|\btiefgek(?:ue|ü)hlt\w*\b|\bgefroren\w*\b/iu',
+        'trocken' => '/\btrocken\w*\b|\bgetrocknet\w*\b/iu',
+        'konserviert' => '/\bkonserviert\w*\b/iu',
+    ];
+
+    /**
+     * Rein deskriptive Geometrie/Zuschnitt-Wörter aus dem Brief — KEIN §9-Zustand, aber ein
+     * Signal für den Form-Bonus im Ranking (mehrere GPs mit identischem Zustand/Score).
+     * Erste passende Form gewinnt; anders als beim Zustand ist Mehrdeutigkeit hier unschädlich
+     * (der Bonus ist ein Tiebreaker, kein Filter).
+     */
+    private const FORM_MUSTER = [
+        'stueckig' => '/\bst(?:ue|ü)ckig\w*\b/iu',
+        'passiert' => '/\bpassiert\w*\b/iu',
+        'gewuerfelt' => '/\bgew(?:ue|ü)rfelt\w*\b/iu',
+        'ganz' => '/\bganz\w*\b/iu',
+    ];
+
+    /**
+     * Identität / Zustand / Form aus einer Zutatenbeschreibung trennen (#505-Nachtrag
+     * 2026-09, Anlass „Creme-Suppe: Tomate-Speck" — GP 13757 „TK, getrocknet" wurde
+     * gegen „konserviert" verrechnet, weil beide Zustände bis dahin in EINE Klasse fielen).
+     * `identitaet` = Tokens ohne Zustands-/Form-/sonstige Qualifier-Wörter (isQualifierToken).
+     *
+     * @return array{identitaet: list<string>, zustand: ?string, form: ?string}
+     */
+    public function produktForm(string $name): array
+    {
+        $normalisiert = $this->normalisiereEinkaufsform($name);
+
+        $zustandTreffer = [];
+        foreach (self::ZUSTAND_MUSTER as $zustand => $muster) {
+            if (preg_match($muster, $normalisiert) === 1) {
+                $zustandTreffer[] = $zustand;
+            }
+        }
+        // Mehrdeutig (z. B. „TK, getrocknet") ⇒ kein Zustand gesetzt — Raten wäre hier
+        // schlimmer als ungeprüft lassen (identische Politik zu GpZustandBackfillCommand).
+        $zustand = count($zustandTreffer) === 1 ? $zustandTreffer[0] : null;
+
+        $form = null;
+        foreach (self::FORM_MUSTER as $kandidat => $muster) {
+            if (preg_match($muster, $normalisiert) === 1) {
+                $form = $kandidat;
+                break;
+            }
+        }
+
+        $identitaet = array_values(array_filter(
+            $this->tokenize($normalisiert),
+            fn ($t) => ! $this->isQualifierToken($t) && ! in_array($t, ['dose', 'dosen'], true),
+        ));
+
+        return ['identitaet' => $identitaet, 'zustand' => $zustand, 'form' => $form];
     }
 
     /**
