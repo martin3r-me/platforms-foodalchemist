@@ -210,3 +210,17 @@ Merge-Reihe: #94 → #95 → #97 → #96 → #98 (C und D integrieren `main` per
 Deploy-Entscheid (Orchestrierung, von Dominique freigestellt): ein Deploy nach Merge aller fünf PRs — die Branches sind gegen den vollen Stapel getestet, ein Teil-Deploy brächte keinen Vorteil.
 
 **Deploy demo 2026-09-17 ~18:30 UTC:** Lock-Pin `727abe19` → `d104db08` (3 Felder, nur FA), Commit im demo-Repo, Push → Forge. **Verifiziert 18:40 UTC:** Pin `d104db08` am Host (demo-main `192c210`), Vendor-Code neu (`setzePhase`, `produktForm`, Voice-Recorder-Bundle), Spalten `phase`/`phase_at` vorhanden (Forge migrierte selbst; FA-scoped `migrate` danach: Nothing to migrate), `view:clear` + `config:cache`, `queue:restart` + supervisorctl-Neustart aller 6 FA-Worker; `ps`-Beleg: 2× default + fa-anreichern/fa-gerichte/fa-kaskade/fa-rezepte je 1 + attachments.
+
+## Paket E — Messungen nach Deploy (2026-09-17)
+
+### B: Wissensauswahl „nachher" (Lisa, `knowledge.PREVIEW`, demo Team 6, Code `d104db08`, Budget 64.000, exakt der Vorher-Brief)
+
+| Lauf | Top-Retrieval (via hybrid, lex/sem-Rang) | Zahlen |
+|---|---|---|
+| 1 ohne Leitplanken | `suppen_systematik--eintoepfe-volumen-suppen` (14/1) · `suppen_systematik--suppen-hierarchie` (20/5) · `suppen_systematik--gebundene-suppen-verdickungs-mechanismen` (16/10) · `suppen_systematik--service-logik` (19/21) · 3× `referenz-rezept-*-tomate-*` (lex 1/3/4) | Pflicht 46.605 · verworfen 13.717 · gesendet 63.539 |
+| 2 mit Leitplanken (gehoben, business_catering, catering, herbst, klassisch) | **byte-identisch zu Lauf 1** | identisch |
+| 3 + `aroma_kueche=thai`, `diaet_hart=vegan` | wie 1, plus `pflanzlich_konfieren_kennwerte--festigkeits-prinzip` (9/21, vegan-relevant); `kasealternativen-vegan` gefunden (lex 3), aber **budget-gedroppt** | Pflicht 46.605 · verworfen 13.424 · gesendet 62.351 |
+
+Vorher: kein Tomaten-/Suppen-Dossier in der Top-5 (lex-Ränge 22–51), mit Leitplanken komplett von `niveau.*`/`event_playbook` verdrängt. **Nachher:** Decompounding wirkt lexikalisch (Tomate lex 1/3/4, Suppe 14–23, alle hybrid), Query-Hygiene wirkt (Leitplanken ohne Einfluss), Diät-Ausnahme wirkt (vegan-Signal gefunden). `cross_cutting`/`regelwerk` weiterhin 0 im Retrieval — jetzt ein sauberer Befund: für zutatenfokussierte Briefs strukturell selten die beste Quelle; Stichprobe mit verfahrenslastigem Brief („Sauce binden ohne Ei") vor einer Routing-Änderung. Kanon 13 Dossiers / 46.605 Zeichen in allen Läufen unverändert.
+
+**Konsequenz (Dominique 17.09.: „Menge für Discovery erhöhen"):** `knowledge_budget.PUT recipe.generator 64.000 → 80.000` — Discovery bekommt ~33.000 statt ~17.000 Zeichen; Erwartung: `kasealternativen-vegan` und `rezept_aufbau_prozessstufen` kommen in Lauf 3/1 hinein. Nachmessung folgt.
