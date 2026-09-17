@@ -43,20 +43,37 @@ class FanoutConceptJob implements ShouldQueue
         if ($cascade->istAbgebrochen((int) $step->cascade_run_id)) {
             return;
         }
+        // Konsistenz-Härtung (Nachtrag): die drei Geschwister-Jobs (GenerateRecipeJob,
+        // GenerateConceptJob, ConformanceCheckJob) brechen bei fehlendem User hart ab, bevor
+        // irgendein AiGatewayService-Call ohne Team-Kontext laufen kann — dieser Job lief bisher
+        // still ohne Auth weiter, wenn der User fehlte. Kein bekannter Vorfall daraus (das Symptom
+        // von Lauf 72–74 war die Wissensbudget-Überschreitung, siehe fix/kapitel-ideen-budget), aber
+        // dieselbe Lücke wie bei den Geschwistern schließen, statt sie stehen zu lassen.
         $user = User::find($this->userId);
-        if ($user !== null) {
-            Auth::login($user);   // Team-Kontext für AiGatewayService (Divergenz-Call)
+        if ($user === null) {
+            $cascade->markFanoutFailed($this->cascadeStepId, 'User nicht gefunden — Fan-out ohne Team-Kontext nicht sicher möglich.');
+
+            return;
         }
+        Auth::login($user);   // Team-Kontext für AiGatewayService (Divergenz-Call)
 
         $d = is_array($step->deferred['fanout'] ?? null) ? $step->deferred['fanout'] : [];
         $mode = (string) ($d['mode'] ?? 'voll_kreativ');
         $trendDocId = isset($d['trend_doc_id']) ? (int) $d['trend_doc_id'] : null;
         $planningSessionId = isset($d['planning_session_id']) ? (int) $d['planning_session_id'] : null;
 
+        // Spec 53 / Paket C-Nachtrag: Phase sichtbar machen, solange der Fan-out läuft — der Step
+        // selbst bleibt `freigegeben` (das Concept ist längst approved), ohne Phase sähe das Cockpit
+        // hier keinerlei Aktivität zwischen Freigabe und den ersten sichtbaren Kind-Steps.
+        $cascade->setzePhase((int) $step->id, 'Skizzen werden erfunden …');
         try {
             $cascade->fanoutConceptInvention($team, (int) $step->id, (int) $step->ref_id, $mode, $trendDocId, $planningSessionId);
         } finally {
             $step->update(['deferred' => null]);
+            // Phase IMMER loeschen, bevor recomputeRunStatus() den Run ggf. auf done setzt — sonst
+            // bliebe "Skizzen werden erfunden ..." nach einem 0-Ideen-Durchgang fuer immer stehen
+            // (Status bleibt `freigegeben`, der setzePhase-Guard wuerde also nicht selbst greifen).
+            $cascade->setzePhase((int) $step->id, null);
             // 0 Gerichte (keine leeren Slots / kein LLM) → Run bleibt sonst auf „running" hängen.
             $cascade->recomputeRunStatus((int) $step->cascade_run_id);
         }
