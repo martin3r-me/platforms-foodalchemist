@@ -33,8 +33,19 @@ final class KnowledgeContextBlock
     }
 
     /**
-     * Pflichtquellen reservieren, dann optionale Quellen in Prioritätsreihenfolge
-     * ergänzen. Die Größenrechnung benutzt denselben Renderer wie das Ergebnis.
+     * Pflichtquellen reservieren, dann optionale Quellen nach RELEVANZ ergänzen. Die
+     * Größenrechnung benutzt denselben Renderer wie das Ergebnis.
+     *
+     * ★ Spec 53 Aufgabe 4 (Budget nach Rang): bis 2026-09-17 füllte die zweite Schleife in
+     * EINFÜGEREIHENFOLGE (Block-Reihenfolge, dann Dokument-Index) — eine spät gebaute Kategorie
+     * mit einem hochrelevanten Rang-1-Treffer verlor gegen ein früh gebautes, gering relevantes
+     * Rang-4-Dokument einer anderen Kategorie, sobald das Budget knapp wurde. Jetzt: alle
+     * optionalen Dokumente aller Blöcke werden EINMAL gesammelt und global nach ihrem `score`
+     * absteigend sortiert befüllt (`usort` ist seit PHP 8.0 stabil — gleicher Score behält die
+     * Einfügereihenfolge, also weiterhin deterministisch). `score` kommt aus dem Dokument-Eintrag
+     * selbst (von `KnowledgeContextService` je Kategorie gesetzt: reales Ranking bei Discovery,
+     * ein hoher Fixwert bei deterministisch/präzise aufgelöstem Wissen wie Niveau/Achsen/Konzept
+     * — s. dort); ein Dokument ohne `score` gilt als 0 und tritt zuletzt an.
      *
      * @param list<self> $blocks
      * @param list<string> $requiredFiles
@@ -57,17 +68,23 @@ final class KnowledgeContextBlock
         if ($requiredChars > $budget) {
             throw new KnowledgeBudgetExceeded($feature, $requiredChars, $budget);
         }
+        $kandidaten = [];
         foreach ($blocks as $key => $block) {
             foreach ($block->documents as $index => $document) {
                 if (in_array($index, $indices[$key], true)) {
                     continue;
                 }
-                $candidate = $selected;
-                $candidate[$key] = $block->select([...$indices[$key], $index]);
-                if (mb_strlen(self::join($candidate)) <= $budget) {
-                    $indices[$key][] = $index;
-                    $selected = $candidate;
-                }
+                $kandidaten[] = ['key' => $key, 'index' => $index, 'score' => (float) ($document['score'] ?? 0.0)];
+            }
+        }
+        usort($kandidaten, static fn ($a, $b) => $b['score'] <=> $a['score']);
+        foreach ($kandidaten as $kandidat) {
+            $key = $kandidat['key'];
+            $candidate = $selected;
+            $candidate[$key] = $blocks[$key]->select([...$indices[$key], $kandidat['index']]);
+            if (mb_strlen(self::join($candidate)) <= $budget) {
+                $indices[$key][] = $kandidat['index'];
+                $selected = $candidate;
             }
         }
         $files = [];

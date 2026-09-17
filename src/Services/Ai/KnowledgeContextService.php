@@ -78,15 +78,21 @@ class KnowledgeContextService
     public const MAX_PARTNERS = 28;
 
     /**
-     * Pro-Doc-Deckel für achsen-aufgelöstes Wissen (Anlass-Playbook, Segment-Profil).
-     * Bewusst knapp: das sind PRÄZISE Treffer, die den unpräzisen Discovery-Treffern
-     * Budget wegnehmen — das ist der Sinn der Sache, aber es darf sie nicht verdrängen.
+     * Spec 53 Aufgabe 4 (Budget nach Rang) — Score für deterministisch/präzise aufgelöstes
+     * Wissen (Niveau, Achsen, Concept, Trend-Rahmen, Pairing, Grounding, Cross-Cutting), das
+     * `KnowledgeContextBlock::assemble()` beim Budget-Schnitt VOR der unpräzisen Fuzzy-Discovery
+     * (`discoverGenericBlock`/Domain, reale RRF-Scores, gemessen ~0,02–0,03) einsortieren soll —
+     * dieselbe Priorität, die vorher implizit aus der Aufrufreihenfolge in `contextFor()` kam.
+     * Weit über jedem realistischen RRF-Score (`KnowledgeSearchService::RRF_K` = 60 ⇒ Maximum
+     * ≈ 1/60 + 1/60 ≈ 0,033 bei Rang 1 auf beiden Seiten).
      */
-    private const ACHSEN_TRUNCATE_CHARS = 2400;
+    private const DETERMINISTISCHER_SCORE = 1.0;
 
     /**
      * W0-6 — Herkunft je ausgewähltem Doc-Slug: `via` (lexical|alias|semantic|hybrid), `score`,
-     * `chars` (Doc-Größe) und `sent` (was nach dem Pro-Doc-Deckel wirklich rausging).
+     * `chars` (Doc-Größe) und `sent` (0 wenn die Ganzdokument-Budgetierung das Dossier komplett
+     * verworfen hat, sonst == `chars` — es gibt seit Spec 53 keinen Pro-Doc-Deckel mehr, der
+     * `sent` zwischen 0 und `chars` landen liesse).
      * Wird je contextFor()-Lauf zurückgesetzt und mit dem Block zurückgegeben.
      *
      * @var array<string, array{score: float|null, via: string, chars?: int, sent?: int}>
@@ -257,7 +263,10 @@ class KnowledgeContextService
             $before = count($filesUsed);
             $crossDocs = $this->crossCuttingDocs($team, $feature);
             foreach ($crossDocs as $doc) {
-                $blocks[] = ['file' => "{$doc->slug}@v{$doc->version}", 'text' => "## CROSS_CUTTING: {$doc->slug}\n\n" . (string) $doc->content_md];
+                // Score irrelevant für Pflicht-Dossiers (mode=always landet über usedByCategory in
+                // $requiredFiles, s. unten) — gesetzt für den seltenen Fall, dass eine cross_cutting-
+                // Zeile NICHT always ist und die Docs so doch im Rang-Wettbewerb landen.
+                $blocks[] = ['file' => "{$doc->slug}@v{$doc->version}", 'text' => "## CROSS_CUTTING: {$doc->slug}\n\n" . (string) $doc->content_md, 'score' => self::DETERMINISTISCHER_SCORE];
                 $filesUsed[] = "{$doc->slug}@v{$doc->version}";
             }
             $snap('cross_cutting', $before);
@@ -267,7 +276,9 @@ class KnowledgeContextService
             $domainDocs = $this->discoverDomains($team, $this->discoveryQuery($description, $hauptzutatSlugs), $scopeSlugs,
                 (int) ($routing->get('domain:discovery')->max_docs ?: self::DOMAIN_TOP_K));
             foreach ($domainDocs as $doc) {
-                $blocks[] = ['file' => "{$doc->slug}@v{$doc->version}", 'text' => "## DOMAIN: {$doc->slug}\n\n" . (string) $doc->content_md];
+                // Reale RRF-Herkunft (discoverDomains hat sie schon in $this->herkunft geschrieben) —
+                // Domain konkurriert im Budget-Schnitt fair gegen die anderen Fuzzy-Discovery-Kategorien.
+                $blocks[] = ['file' => "{$doc->slug}@v{$doc->version}", 'text' => "## DOMAIN: {$doc->slug}\n\n" . (string) $doc->content_md, 'score' => (float) ($this->herkunft[$doc->slug]['score'] ?? 0.0)];
                 $this->herkunft[$doc->slug]['sent'] = mb_strlen((string) $doc->content_md);
                 $filesUsed[] = "{$doc->slug}@v{$doc->version}";
             }
@@ -658,7 +669,7 @@ class KnowledgeContextService
                 $doc = $docs[$slug];
                 if ($doc->art === Wissensart::REGEL) $this->achsenPflichtFiles[] = "{$doc->slug}@v{$doc->version}";
                 $bloecke[] = ['file' => "{$doc->slug}@v{$doc->version}", 'text' => '## ' . mb_strtoupper((string) $achse) . ": {$doc->title}\n\n"
-                    . (string) $doc->content_md];
+                    . (string) $doc->content_md, 'score' => self::DETERMINISTISCHER_SCORE];
                 $filesUsed[] = "{$doc->slug}@v{$doc->version}";
                 $this->herkunft[$slug] = [
                     'score' => null,
@@ -1145,7 +1156,7 @@ class KnowledgeContextService
 
         $blocks = [];
         foreach ($docs as $doc) {
-            $blocks[] = ['file' => "{$doc->slug}@v{$doc->version}", 'text' => "## CONCEPT: {$doc->slug}\n\n" . (string) $doc->content_md];
+            $blocks[] = ['file' => "{$doc->slug}@v{$doc->version}", 'text' => "## CONCEPT: {$doc->slug}\n\n" . (string) $doc->content_md, 'score' => self::DETERMINISTISCHER_SCORE];
             $filesUsed[] = "{$doc->slug}@v{$doc->version}";
         }
 
@@ -1295,7 +1306,7 @@ class KnowledgeContextService
             if ($doc === null) {
                 continue;
             }
-            $blocks[] = ['file' => "{$doc->slug}@v{$doc->version}", 'text' => "## TREND: {$doc->slug}\n\n" . (string) $doc->content_md];
+            $blocks[] = ['file' => "{$doc->slug}@v{$doc->version}", 'text' => "## TREND: {$doc->slug}\n\n" . (string) $doc->content_md, 'score' => self::DETERMINISTISCHER_SCORE];
             $filesUsed[] = "{$doc->slug}@v{$doc->version}";
         }
         if ($blocks === []) {
@@ -1374,7 +1385,7 @@ class KnowledgeContextService
         }
         $blocks = [];
         foreach ($docs as $doc) {
-            $blocks[] = ['file' => "{$doc->slug}@v{$doc->version}", 'text' => '## ' . mb_strtoupper($category) . ": {$doc->slug}\n\n" . (string) $doc->content_md];
+            $blocks[] = ['file' => "{$doc->slug}@v{$doc->version}", 'text' => '## ' . mb_strtoupper($category) . ": {$doc->slug}\n\n" . (string) $doc->content_md, 'score' => self::DETERMINISTISCHER_SCORE];
             $filesUsed[] = "{$doc->slug}@v{$doc->version}";
         }
 
@@ -1411,7 +1422,7 @@ class KnowledgeContextService
         foreach ($hits as $hit) {
             $content = (string) ($contents[$hit['id']] ?? '');
             $file = "{$hit['slug']}@v{$hit['version']}";
-            $blocks[] = ['file' => $file, 'text' => "## {$label}: {$hit['slug']}\n\n".$content];
+            $blocks[] = ['file' => $file, 'text' => "## {$label}: {$hit['slug']}\n\n".$content, 'score' => (float) $hit['score']];
             $filesUsed[] = $file;
             $this->herkunft[$hit['slug']] = [
                 'score' => $hit['score'], 'via' => $hit['via'],
@@ -1463,6 +1474,7 @@ class KnowledgeContextService
         return new KnowledgeContextBlock("# NIVEAU-WISSEN\n\n", [[
             'file' => "{$doc->slug}@v{$doc->version}",
             'text' => "## NIVEAU: {$doc->slug}\n\n" . (string) $doc->content_md,
+            'score' => self::DETERMINISTISCHER_SCORE,
         ]]);
     }
 
@@ -1601,7 +1613,7 @@ class KnowledgeContextService
                     fn ($name, $sym) => $name . $sym,
                     array_keys($namen), array_values($namen),
                 ));
-                $zeilen[] = ['file' => "graph:{$res['anker']['slug']}", 'text' => "- {$stem}: {$partnerText}"];
+                $zeilen[] = ['file' => "graph:{$res['anker']['slug']}", 'text' => "- {$stem}: {$partnerText}", 'score' => self::DETERMINISTISCHER_SCORE];
                 $filesUsed[] = "graph:{$res['anker']['slug']}";
             }
         }
@@ -1667,7 +1679,7 @@ class KnowledgeContextService
                     $doc = $this->pairingDoc($team, $stem);
                     if ($doc !== null) {
                         $geladen[$stem] = true;
-                        $blocks[] = ['file' => "{$doc->slug}@v{$doc->version}", 'text' => "### Pairing-Doku: {$stem}\n" . (string) $doc->content_md];
+                        $blocks[] = ['file' => "{$doc->slug}@v{$doc->version}", 'text' => "### Pairing-Doku: {$stem}\n" . (string) $doc->content_md, 'score' => self::DETERMINISTISCHER_SCORE];
                         $filesUsed[] = "{$doc->slug}@v{$doc->version}";
                     }
                 }
