@@ -273,7 +273,7 @@ class KnowledgeContextService
         }
         if ($routing->has('domain:discovery')) {
             $before = count($filesUsed);
-            $domainDocs = $this->discoverDomains($team, $this->discoveryQuery($description, $hauptzutatSlugs), $scopeSlugs,
+            $domainDocs = $this->discoverDomains($team, $this->discoveryQuery($description, $hauptzutatSlugs, $params), $scopeSlugs,
                 (int) ($routing->get('domain:discovery')->max_docs ?: self::DOMAIN_TOP_K));
             foreach ($domainDocs as $doc) {
                 // Reale RRF-Herkunft (discoverDomains hat sie schon in $this->herkunft geschrieben) —
@@ -295,7 +295,7 @@ class KnowledgeContextService
         if ($routing->has('pairing:discovery')) {
             $before = count($filesUsed);
             $pairing = $this->pairingBlock(
-                    $this->discoveryQuery($description, $hauptzutatSlugs), $stil, $filesUsed,
+                    $this->discoveryQuery($description, $hauptzutatSlugs, $params), $stil, $filesUsed,
                     self::PAIRING_TOP_K,
                 );
             if ($pairing !== null) {
@@ -341,7 +341,7 @@ class KnowledgeContextService
         // die Zutaten-Domäne komplett (gemessen: PREVIEW recipe.generator ohne/mit Leitplanken für
         // den Tomatensuppen-Brief). Leitplanken wirken ab jetzt NUR über ihre eigenen Selektoren
         // (niveauBlock/achsenBlock oben); die Discovery-Query ist Brief + Hauptzutat-Slugs.
-        $discoveryQuery = $this->discoveryQuery($description, $hauptzutatSlugs);
+        $discoveryQuery = $this->discoveryQuery($description, $hauptzutatSlugs, $params);
         $discoveryRoutings = $routing->filter(
             fn ($r) => $r->mode === 'discovery' && ! in_array($r->category, $spezial, true)
         );
@@ -969,13 +969,26 @@ class KnowledgeContextService
      * Ein-Token-Treffer (Jaccard) komplett — die Zutaten-/Technik-Domäne (Fonds, Wurzelgemüse) fiel
      * ganz raus. Leitplanken sind kein Rausch-Text für die Ähnlichkeitssuche; sie wirken über ihre
      * EIGENEN, deterministischen Selektoren (`niveauBlock()`, `achsenBlock()`), nicht hier.
+     *
+     * ★ Ausnahme, mit Beleg (`QueryHygieneKuecheDiaetTest`): `aroma_kueche` (z. B. "thai") und
+     * `diaet_hart` (z. B. "vegan") tragen Fachinformation, die oft NICHT im Brief-Text steht, und
+     * haben — anders als niveau/saison/occasion/… — KEINEN eigenen deterministischen Selektor, der
+     * ihre Kategorie (weltkueche/ernaehrung) sonst erden würde. Ohne sie verschwindet das passende
+     * Dossier komplett aus der Discovery, gemessen an Fixture-Dossiers. Diese zwei bleiben deshalb
+     * in der Query — als einzige Ausnahme, nicht als Rückfall auf die alte Liste.
      */
-    private function discoveryQuery(string $description, array $hauptzutatSlugs = []): string
+    private function discoveryQuery(string $description, array $hauptzutatSlugs = [], array $params = []): string
     {
         $zutaten = array_values(array_filter(array_map(
             static fn ($slug) => is_scalar($slug) ? str_replace(['_', '-'], ' ', trim((string) $slug)) : '',
             $hauptzutatSlugs
         )));
+        foreach (['aroma_kueche', 'diaet_hart'] as $key) {
+            $value = $params[$key] ?? null;
+            if (is_scalar($value) && trim((string) $value) !== '') {
+                $zutaten[] = str_replace(['_', '-'], ' ', (string) $value);
+            }
+        }
 
         return trim($description . ' ' . implode(' ', $zutaten));
     }
