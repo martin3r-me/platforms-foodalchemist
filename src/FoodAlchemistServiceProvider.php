@@ -444,6 +444,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
         if (file_exists($faManifestPath)) {
             $faManifest = json_decode(file_get_contents($faManifestPath), true) ?? [];
             config(['platform.fa_pairing_netz_hash' => $faManifest['foodalchemist-pairing-netz.iife.js'] ?? '0']);
+            // Spec 53 / Paket D: gemeinsamer Voice-Recorder (Sprachbefehl + Diktat), analog zum Pairing-Netz-Bundle.
+            config(['platform.fa_voice_recorder_hash' => $faManifest['foodalchemist-voice-recorder.iife.js'] ?? '0']);
         }
 
         /**

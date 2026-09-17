@@ -1,4 +1,8 @@
 {{-- M7-10: Voice — MediaRecorder (Opus mono) → STT → Tool-Loop; Proposals mit Bestätigen (GL-07) --}}
+{{-- Spec 53/D: gemeinsamer Recorder-Baustein (Safari/Chrome-Mime-Divergenz, Fehler, Pegel).
+     KEIN `defer` — `data-navigate-once` übernimmt das Dedup über `wire:navigate`-Seitenwechsel
+     hinweg (das Modal ist global in der Sidebar gemountet, liegt also auf JEDER Seite im DOM). --}}
+<script src="/_platform/fa-assets/foodalchemist-voice-recorder.iife.js?v={{ config('platform.fa_voice_recorder_hash', '0') }}" data-navigate-once></script>
 @php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
 
 <x-foodalchemist::modal name="voice-modal" title="Sprachbefehl" size="max-w-xl">
