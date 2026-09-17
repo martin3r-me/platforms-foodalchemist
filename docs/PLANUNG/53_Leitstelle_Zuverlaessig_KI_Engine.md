@@ -329,3 +329,23 @@ Vorbild: Mode-Switcher in Claude Code (Manual / Auto / Plan). Team-Setting `voic
 ## Paket G — Sofort-Feedback für KI-Knöpfe in allen Editoren (Paul, 2026-09-17 22:50)
 
 Anlass: Dominique drückt im Rezept-Editor (Stammdaten) „Name putzen/Kategorie/Fertigung/Eigenschaften" — keine Reaktion sichtbar. Paket C löste das nur in der Planung. **Gemessen main 7f886d4c:** ~85 `sparkles`-KI-Knöpfe in 25 Blade-Dateien, 0 nutzen `<x-foodalchemist::ki-action>` außerhalb der Planung; Spitzenreiter `recipes/recipe-modal` 14, `verkauf/vk-modal` 13, `gps/detail-panel` 9, `gps/gp-modal` 6, `verkauf/detail-panel` 6 (0 wire:loading). Auftrag: Inventar je Knopf (sync vs. Job), synchrone Knöpfe auf die Komponente, Job-Knöpfe „eingereiht" + Poll nur solange etwas läuft, Reihenfolge recipe-modal → vk-modal → gps → verkauf → Rest, Root-Elemente der Vollseiten nicht anfassen (Oskar mountet dort). **Nachtrag (Dominique 22:55):** je Knopf Prompt-Key + Wissensversorgung prüfen — Paul ermittelt Keys code-seitig, Lisa prüft live per `knowledge.PREVIEW` (Befund versorgt/unversorgt/falsch versorgt), Steuerdaten-Änderungen nur gebündelt nach Freigabe. Brief: `00_INBOX/_Spec53_Leitstelle/Paul_Paket_G_KI_Knoepfe_Editoren.md`. Merge-Reihenfolge: Peter (`feat/job-phasen-anzeige`) → Paul (`feat/ki-feedback-editoren`) → Oskar (`feat/voice-agent-modus`).
+
+### G.1 Wissens-Audit Rezept-Editor (Lisa, 2026-09-17 23:20, live demo Team 6, nur lesen)
+
+12 Prompt-Keys der Rezept-Editor-Knöpfe per `knowledge_routings.GET` + Kanon + `knowledge.PREVIEW` (Tomatensuppe UND Kontrollbrief Rinderfilet/Püree/Jus) vermessen:
+
+| Key | Befund | Maßnahme (Bündel, Freigabe cooking-jarvis-03) |
+|---|---|---|
+| `recipe.description` | versorgt (Kanon exakt §8) | — |
+| `recipe.ueberarbeiten` | versorgt (13 Kanon-Dossiers) | Dossier `regelwerk-basisrezepte-4-…` über Deckel → Split (276-Builder) |
+| `recipe.garverlust` | versorgt (Kanon §6 Mengen/Yield, 4.013 Z., 0 dropped) | — |
+| `recipe.name_putzen` | halb: Kanon nur §1, GP-Regelwerk §6 fehlt, 0 Routing | Kanon pflicht + GP §6 |
+| `recipe.geschmack` | **unversorgt**: Routing `none`, kein Kanon, im Code KEIN Ersatzkanal (RecipeModal:689 übergibt keine `$wissenOpts`; Pairing-Panel nur Blade) | Code-Fix `$wissenOpts` (Paul) + Kanon wenn_platz Geschmacksbalance/Aromen |
+| `recipe.sensorik` | kein Befund: `SensorikService::groundingKontext()` erdet Salzig/Süß/Fettig aus LA-Nährwerten („gemessen schlägt KI") | Routing → `none` (Kosten-Hygiene) |
+| `recipe.category` | falsch: Domain-Rauschen zur Hauptzutat; Ziel-Dossier `regelwerk_verkaufsgerichte--2-klassifikation-modell-a` existiert aktiv, ungebunden | Routing `none` + Kanon pflicht |
+| `recipe.equipment` | falsch: Domain-Rauschen; 4 `geraete_cookbook--*` aktiv, tauchen nie auf | Routing `none` + Kanon wenn_platz |
+| `recipe.production_depth` | falsch: 1/3 relevant (Behälter), Rest Zufall | Routing → `produktion_kapazitat` + Kanon |
+| `recipe.eigenschaften` | falsch: `regelwerk`-Routing-Zeile liefert strukturell 0 (Sonderkategorie läuft leer) | Zeile streichen, Kanon wenn_platz Spec-51-Dossier + Behälter-Datenwerk |
+| `recipe.dichteklasse` | falsch: bester Treffer (Dichte-Datenwerk, semantic_rank 1–3, lexical null) knapp über Budget 16.200 verworfen — RRF-Deckel 1/61 für Einzel-Verfahren-Treffer (bekannt, Spec 52 Etappe E) | Kanon pflicht Dichte-Datenwerk (entzieht es der Rang-Konkurrenz) |
+
+**Strukturbefund:** 5 von 12 Keys nutzen dieselbe ungefilterte `category=""`-Discovery-Zeile und ziehen austauschbar Domain-Wissen zur Hauptzutat (Suppe → Suppen-Systematik, Rind → Jus/Kerntemperatur/Portionen), egal was der Knopf fachlich fragt. Kein neuer Content nötig — alle Ziel-Dossiers existieren aktiv, es fehlen Kanon-Bindungen. Regel daraus: **Struktur-/Referenz-Keys bekommen Kanon, nicht Discovery; Discovery nur für inhaltsabhängiges Wissen.**
