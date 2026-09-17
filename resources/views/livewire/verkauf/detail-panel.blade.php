@@ -31,8 +31,10 @@
                 <a href="{{ route('foodalchemist.rezepte.dokument', ['id' => $rezept->id, 'profil' => 'produktion', 'pdf' => 1]) }}"
                    class="{{ $btnGhostXs }}" title="PDF herunterladen" data-vk-panel-pdf>PDF</a>
                 <button type="button" wire:click="$dispatch('zutaten-editor.oeffnen', { id: {{ $rezept->id }} })" class="{{ $btnGhostXs }}" data-vk-komponenten>@svg('heroicon-o-squares-2x2', 'w-3.5 h-3.5') Komponenten</button>
-                <button type="button" wire:click="ai_klassifizieren" class="{{ $btnAi }}" title="ai_classify_speisen_klasse (GL-07)" data-vk-klassifizieren>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') Klassifizieren</button>
-                <button type="button" wire:click="ai_rollen" class="{{ $btnAi }}" title="ai_verteile_rollen (V-21)" data-vk-rollen>@svg('heroicon-o-user-group', 'w-3.5 h-3.5') Rollen</button>
+                <x-foodalchemist::ki-action action="ai_klassifizieren" variant="ai" icon="heroicon-o-sparkles" label="Klassifizieren"
+                    title="ai_classify_speisen_klasse (GL-07)" data-vk-klassifizieren busy="Wird klassifiziert …" flash="Klassifiziert" />
+                <x-foodalchemist::ki-action action="ai_rollen" variant="ai" icon="heroicon-o-user-group" label="Rollen"
+                    title="ai_verteile_rollen (V-21)" data-vk-rollen busy="Wird verteilt …" flash="Rollen verteilt" />
             </div>
             <div class="flex flex-wrap items-center gap-1.5 mt-2">
                 <span class="{{ $pill }} font-medium {{ $statusPill[$rezept->status->value] ?? $variantPill['secondary'] }}">{{ $rezept->status->label() }}</span>
@@ -196,7 +198,9 @@
                     @else
                         <span class="text-gray-400">noch kein Urteil</span>
                     @endif
-                    <button type="button" wire:click="pruefeKohaerenz" class="{{ $btnAi }} ml-auto" data-vk-kohaerenz-pruefen>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') {{ $urteil?->score !== null ? 'Erneut prüfen' : 'Prüfen' }}</button>
+                    <x-foodalchemist::ki-action action="pruefeKohaerenz" variant="ai" icon="heroicon-o-sparkles"
+                        :label="$urteil?->score !== null ? 'Erneut prüfen' : 'Prüfen'" class="ml-auto"
+                        data-vk-kohaerenz-pruefen busy="Wird geprüft …" flash="Geprüft" />
                 </div>
                 @if($urteil?->reasoning !== null)<p class="text-xs text-gray-500 leading-relaxed">{{ $urteil->reasoning }}</p>@endif
                 @if($urteil?->score !== null)<p class="text-[11px] text-gray-400">{{ $urteil->judged_at?->format('Y-m-d') }} · {{ $urteil->judge_model }}</p>@endif
@@ -207,7 +211,9 @@
                     @else
                         <span class="text-gray-400">noch keine</span>
                     @endif
-                    <button type="button" wire:click="schlageHeberVor" class="{{ $btnAi }} ml-auto" data-vk-heber-vorschlagen>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') {{ ($heberJson['vorschlaege'] ?? []) !== [] ? 'Erneut' : 'Vorschlagen' }}</button>
+                    <x-foodalchemist::ki-action action="schlageHeberVor" variant="ai" icon="heroicon-o-sparkles"
+                        :label="($heberJson['vorschlaege'] ?? []) !== [] ? 'Erneut' : 'Vorschlagen'" class="ml-auto"
+                        data-vk-heber-vorschlagen busy="Wird vorgeschlagen …" flash="Vorschlag da" />
                 </div>
                 @if(($heberJson['einschaetzung'] ?? null) !== null)<p class="text-xs text-gray-500 leading-relaxed">{{ $heberJson['einschaetzung'] }}</p>@endif
                 <p class="text-gray-500 border-t border-black/5 pt-2" data-vk-nachbarn>Aroma-Nachbarn <span class="text-gray-400">— aromaverwandte Zutaten sind im Pairing-Netz oben sichtbar.</span></p>
@@ -218,7 +224,9 @@
         <x-foodalchemist::section title="Eignung" icon="heroicon-o-user-group"
             :meta="$sektorEignungen->count() + $niveauEignungen->count()" data-vk-eignung>
             <x-slot:actions>
-                <button type="button" wire:click="kiEignung" class="{{ $btnAi }}" title="recipe.sektor + recipe.level — nur «geeignet»-Urteile" data-ki-eignung>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') Eignung</button>
+                <x-foodalchemist::ki-action action="kiEignung" variant="ai" icon="heroicon-o-sparkles" label="Eignung"
+                    title="recipe.sektor + recipe.level — nur «geeignet»-Urteile" data-ki-eignung
+                    busy="Wird ermittelt …" flash="Eignung ermittelt" />
             </x-slot:actions>
             @if($eignungVorschlag !== null)
                 <div class="rounded-lg bg-violet-500/10 border border-violet-500/30 px-3 py-2 text-xs mb-1.5" data-eignung-vorschlag>

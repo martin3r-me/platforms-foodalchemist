@@ -638,3 +638,243 @@ it('Ausbeute: implausibler oder fehlender Garverlust bleibt null (Kaskade wie bi
         ->and($zeilen[1]->cooking_loss_pct)->toBeNull()
         ->and((float) $resultat['recipe']->refresh()->yield_kg)->toBe(1.0);
 });
+
+it('ignoriert eine frische GP-ID bei expliziten Dosentomaten und misst die Laufphasen', function () {
+    $fresh = ($this->mkGpMitPreis)('Tomaten: frisch, ganz', 'tomaten', 3.0);
+    $fresh->update(['condition' => 'frisch']);
+    $canned = ($this->mkGpMitPreis)('Tomaten: konserviert, stückig', 'tomaten', 2.0);
+    $canned->update(['condition' => 'konserviert']);
+    $out = $this->svc->generiere($this->rootTeam, 'Tomatensuppe', [], kiRezeptOverride: [
+        'name' => 'Suppe: Tomate',
+        'zutaten' => [[
+            'text' => 'Stückige Tomaten, aus der Dose', 'slug' => 'tomaten',
+            'quantity' => 6000, 'unit' => 'g', 'gp_id' => $fresh->id,
+        ]],
+    ]);
+    expect($out['recipe']->ingredients()->first()->gp_id)->toBe($canned->id);
+    $timings = $out['statistik']['timings'];
+    expect($timings)->toHaveKeys([
+        'context_ms', 'generation_ms', 'matching_and_save_ms', 'checks_ms', 'generator_ms',
+    ]);
+    // Phasen müssen die Wahrheit über generator_ms sein — sonst zeigt die UI eine
+    // Gesamtzeit, die kein Teil-Balken erklärt.
+    $summe = $timings['context_ms'] + $timings['generation_ms'] + $timings['matching_and_save_ms'] + $timings['checks_ms'];
+    expect(abs($summe - $timings['generator_ms']))->toBeLessThan(5);
+});
+
+it('Kaskade: generator_ms schließt die vor generiere() gebaute Kontextzeit ein (prepare() läuft vorher)', function () {
+    ($this->mkGpMitPreis)('Schalotten: frisch, ganz', 'schalotten', 4.00);
+
+    $run = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRun::create([
+        'team_id' => $this->rootTeam->id, 'scope' => 'concept', 'status' => 'running',
+    ]);
+    $step = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'basisrezept', 'status' => 'running',
+    ]);
+
+    // Wie GenerateRecipeJob::handle: prepare() baut den Kontext VOR generiere() — dessen
+    // context_ms-Fenster liegt also außerhalb der internen $started-Uhr von generiere().
+    $prepared = app(\Platform\FoodAlchemist\Services\RecipeDependencyWorkflowService::class)
+        ->prepare($this->rootTeam, (int) $step->id, 'Schalotten-Fond', [], false);
+    expect($prepared['context_ms'])->toBeGreaterThanOrEqual(0);
+
+    $this->mock(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class, function ($m) {
+        $m->shouldReceive('propose')->once()->andReturnUsing(function () {
+            usleep(20_000);   // messbare, deterministisch von context_ms unterscheidbare generation_ms
+
+            return new \Platform\FoodAlchemist\Services\Ai\AiProposal(
+                werte: ['name' => 'Fond: Schalotte', 'zutaten' => [
+                    ['text' => 'Schalotten', 'slug' => 'schalotten', 'quantity' => 200, 'unit' => 'g'],
+                ]],
+                confidence: 0.9,
+            );
+        });
+    });
+
+    $svc = app(\Platform\FoodAlchemist\Services\RecipeGeneratorService::class);
+    $out = $svc->generiere($this->rootTeam, 'Schalotten-Fond', [], null, false, null, $prepared);
+
+    $timings = $out['statistik']['timings'];
+    $summe = $timings['context_ms'] + $timings['generation_ms'] + $timings['matching_and_save_ms'] + $timings['checks_ms'];
+    expect(abs($summe - $timings['generator_ms']))->toBeLessThan(5)
+        ->and($timings['generator_ms'])->toBeGreaterThanOrEqual($timings['context_ms'] + $timings['generation_ms']);
+});
+
+it('verwirft gp_id UND sub_rezept_id bei Dosentomaten — Fuzzy-Fallback findet die konservierte GP', function () {
+    $fresh = ($this->mkGpMitPreis)('Tomaten: frisch, ganz', 'tomaten', 3.0);
+    $fresh->update(['condition' => 'frisch']);
+    $canned = ($this->mkGpMitPreis)('Tomaten: konserviert, stückig', 'tomaten', 2.0);
+    $canned->update(['condition' => 'konserviert']);
+    // Ein fremdes, existierendes Basisrezept — strukturell unpassend für eine ROHWARE mit
+    // explizitem §9-Zustand, aber ohne den Zustands-Guard würde validiereProposedSub es
+    // trotzdem verdrahten (visibleToTeam + Status + kein Zyklus reichen ihm sonst).
+    $fremdesSub = $this->makeRecipe($this->rootTeam, 'Tomatenconcassée');
+
+    $out = $this->svc->generiere($this->rootTeam, 'Tomatensuppe', [], kiRezeptOverride: [
+        'name' => 'Suppe: Tomate',
+        'zutaten' => [[
+            'text' => 'Dosentomaten', 'slug' => 'tomaten',
+            'quantity' => 6000, 'unit' => 'g', 'gp_id' => $fresh->id, 'sub_rezept_id' => $fremdesSub->id,
+        ]],
+    ]);
+
+    $zeile = $out['recipe']->ingredients()->first();
+    expect($zeile->referenced_recipe_id)->toBeNull()
+        ->and($zeile->gp_id)->toBe($canned->id);
+});
+
+it('Review-Fund: „frisch" verwirft ein vorgeschlagenes Sub-Rezept NICHT (kein Einkaufsform-Zustand)', function () {
+    // "Pesto, frisch" / "frisch zubereitet" ist genau der gewollte Sub-Rezept-Fall — anders als
+    // Dosentomaten/TK/getrocknet beschreibt "frisch" hier keine Rohware-Einkaufsform, die ein
+    // Sub-Rezept strukturell nicht ersetzen könnte.
+    $pesto = $this->makeRecipe($this->rootTeam, 'Pesto: Basilikum');
+
+    $out = $this->svc->generiere($this->rootTeam, 'Nudelgericht', [], kiRezeptOverride: [
+        'name' => 'Nudeln mit Pesto',
+        'zutaten' => [[
+            'text' => 'Pesto, frisch', 'quantity' => 200, 'unit' => 'g', 'sub_rezept_id' => $pesto->id,
+        ]],
+    ]);
+
+    expect($out['recipe']->ingredients()->first()->referenced_recipe_id)->toBe($pesto->id);
+});
+
+it('Review-Fund Lauf 71: offene[][index] bleibt nach VK-Rollen-Sortierung korrekt (Kontrakt position=index+1)', function () {
+    // Lauf 71 (demo, 20.09., Speisekarte-aus-Brief): 5 unmatched Beilagen-/Garnitur-/Aroma-
+    // Zeilen bekamen NIE einen Sub-Rezept-Step, weil planChildren() (RecipeDependencyWorkflow-
+    // Service) die Zutat über offene[]['index'] + 1 == position sucht — dieser Index wurde
+    // aber VOR sortiereNachRolle() gebaut. Die KI liefert „garnitur" vor „beilage" (Modell-
+    // Reihenfolge, nicht Rollen-Reihenfolge) — genau der Fall, der §12.2 umsortiert.
+    $out = $this->svc->generiere($this->rootTeam, 'Teller', [], kiRezeptOverride: [
+        'name' => 'Teller: Test',
+        'zutaten' => [
+            ['text' => 'Erbsenschaum', 'role' => 'garnitur', 'quantity' => 10, 'unit' => 'g'],
+            ['text' => 'Voellig unbekannte Beilage XYZ', 'role' => 'beilage', 'quantity' => 100, 'unit' => 'g'],
+        ],
+    ], vkModus: true);
+
+    expect($out['statistik']['reihenfolge_korrigiert'] ?? 0)->toBeGreaterThan(0);   // Sortierung griff wirklich
+
+    $zeile = $out['recipe']->ingredients()->where('raw_text', 'Voellig unbekannte Beilage XYZ')->first();
+    expect($zeile)->not->toBeNull()
+        ->and($zeile->match_method->value)->toBe('unmatched');
+
+    $offenerEintrag = collect($out['offene'])->firstWhere('text', 'Voellig unbekannte Beilage XYZ');
+    expect($offenerEintrag)->not->toBeNull()
+        ->and($offenerEintrag['primaer'])->toBe('basisrezept_anlegen')
+        ->and((int) $offenerEintrag['index'] + 1)->toBe((int) $zeile->position);
+});
+
+it('Review-Fund Lauf 71: eine unmatched Beilage ohne LLM-Flag bekommt einen geplanten Sub-Rezept-Step', function () {
+    // End-to-End über RecipeDependencyWorkflowService::afterGenerated() — der eigentliche
+    // Konsument von offene[]['index']. Ohne den Index-Fix (siehe Test oben) findet
+    // planChildren() die Zeile nie: kein Step, keine Sichtbarkeit im Cascade-Run.
+    $run = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRun::create([
+        'team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'running',
+    ]);
+    $step = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht',
+        'status' => 'running', 'depth' => 0,
+    ]);
+
+    $out = $this->svc->generiere($this->rootTeam, 'Teller', [], kiRezeptOverride: [
+        'name' => 'Teller: Test 2',
+        'zutaten' => [
+            ['text' => 'Erbsenschaum', 'role' => 'garnitur', 'quantity' => 10, 'unit' => 'g'],
+            ['text' => 'Ganz andere unbekannte Beilage ABC', 'role' => 'beilage', 'quantity' => 100, 'unit' => 'g'],
+        ],
+    ], vkModus: true);
+
+    // _defer_children: nur planen (kein Job-Dispatch) — landet stabil auf 'geplant', bis die
+    // Stufe darüber freigegeben wird ({@see resumeDeferredChildren}). auto_dependencies würde
+    // den Step sofort auf 'running' weiterschalten (echter Speisekarte-Lauf) — hier soll nur
+    // planChildren() selbst geprüft werden, nicht der Job-Dispatch danach.
+    app(\Platform\FoodAlchemist\Services\RecipeDependencyWorkflowService::class)->afterGenerated(
+        $this->rootTeam, (int) $step->id, 1, $out['recipe'], $out['offene'], ['_defer_children' => true],
+    );
+
+    $kind = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep::where('parent_step_id', $step->id)
+        ->where('kind', 'rezept')->where('label', 'Ganz andere unbekannte Beilage ABC')->first();
+
+    expect($kind)->not->toBeNull()
+        ->and($kind->status)->toBe('geplant');
+});
+
+it('#102-Nebenbefund (Dominique-Entscheid): offene Garnitur-Zeile ohne Bestandstreffer wird zum Basisrezept', function () {
+    // "Ein Gericht wird aus Basisrezepten gebaut" — auch Garnitur ohne Treffer wird zum
+    // Basisrezept (Rüstzeit etc. gehört dort erfasst), nicht zur LA-Wahl (die alte Idee war
+    // laut Dominique ein falscher Gedanke).
+    $run = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRun::create([
+        'team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'running',
+    ]);
+    $step = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht',
+        'status' => 'running', 'depth' => 0,
+    ]);
+
+    $out = $this->svc->generiere($this->rootTeam, 'Teller', [], kiRezeptOverride: [
+        'name' => 'Teller: Garnitur-Test',
+        'zutaten' => [[
+            'text' => 'Petersilienöl', 'role' => 'garnitur', 'quantity' => 5, 'unit' => 'g',
+        ]],
+    ], vkModus: true);
+
+    $zeile = $out['recipe']->ingredients()->first();
+    expect($zeile->match_method->value)->toBe('unmatched');
+    $offen = collect($out['offene'])->first();
+    expect($offen['primaer'])->toBe('basisrezept_anlegen');
+
+    app(\Platform\FoodAlchemist\Services\RecipeDependencyWorkflowService::class)->afterGenerated(
+        $this->rootTeam, (int) $step->id, 1, $out['recipe'], $out['offene'], ['_defer_children' => true],
+    );
+    $kind = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep::where('parent_step_id', $step->id)
+        ->where('kind', 'rezept')->where('label', 'Petersilienöl')->first();
+    expect($kind)->not->toBeNull()
+        ->and($kind->status)->toBe('geplant');
+});
+
+it('#102-Nebenbefund: offene Aroma-Treiber-Zeile ohne Bestandstreffer wird zum Basisrezept', function () {
+    $run = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRun::create([
+        'team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'running',
+    ]);
+    $step = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht',
+        'status' => 'running', 'depth' => 0,
+    ]);
+
+    $out = $this->svc->generiere($this->rootTeam, 'Teller', [], kiRezeptOverride: [
+        'name' => 'Teller: Aroma-Test',
+        'zutaten' => [[
+            'text' => 'Steinpilzreduktion', 'role' => 'aroma_treiber', 'quantity' => 20, 'unit' => 'g',
+        ]],
+    ], vkModus: true);
+
+    $zeile = $out['recipe']->ingredients()->first();
+    expect($zeile->match_method->value)->toBe('unmatched');
+    $offen = collect($out['offene'])->first();
+    expect($offen['primaer'])->toBe('basisrezept_anlegen');
+
+    app(\Platform\FoodAlchemist\Services\RecipeDependencyWorkflowService::class)->afterGenerated(
+        $this->rootTeam, (int) $step->id, 1, $out['recipe'], $out['offene'], ['_defer_children' => true],
+    );
+    $kind = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep::where('parent_step_id', $step->id)
+        ->where('kind', 'rezept')->where('label', 'Steinpilzreduktion')->first();
+    expect($kind)->not->toBeNull()
+        ->and($kind->status)->toBe('geplant');
+});
+
+it('#102-Nebenbefund: eine Zeile MIT GP-Treffer bleibt GP, egal welche Rolle (garnitur)', function () {
+    $gp = ($this->mkGpMitPreis)('Petersilienöl: kaltgepresst', 'petersilienoel', 4.0);
+
+    $out = $this->svc->generiere($this->rootTeam, 'Teller', [], kiRezeptOverride: [
+        'name' => 'Teller: Garnitur-GP-Test',
+        'zutaten' => [[
+            'text' => 'Petersilienöl', 'slug' => 'petersilienoel', 'role' => 'garnitur', 'quantity' => 5, 'unit' => 'g',
+        ]],
+    ], vkModus: true);
+
+    $zeile = $out['recipe']->ingredients()->first();
+    expect($zeile->gp_id)->toBe($gp->id)
+        ->and($zeile->referenced_recipe_id)->toBeNull()
+        ->and($out['offene'])->toBeEmpty();
+});

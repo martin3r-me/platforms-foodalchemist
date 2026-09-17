@@ -28,7 +28,7 @@ class TokenEngine
 
     private const QUALIFIER_PREFIXE = [
         'frisch', 'roh', 'tiefgek', 'gefror', 'konserv', 'getrock', 'trocken', 'eingelegt', 'haltbar',
-        'mini', 'baby', 'gross', 'klein', 'fein', 'grob', 'ganz', 'bio', 'gemischt', 'geschael',
+        'stueckig', 'mini', 'baby', 'gross', 'klein', 'fein', 'grob', 'ganz', 'bio', 'gemischt', 'geschael',
         'gegart', 'gekocht', 'verzehrfertig',
     ];
 
@@ -49,6 +49,137 @@ class TokenEngine
 
         // strval: numerische Tokens ('30') würden als int-Array-Keys zurückkommen
         return array_map('strval', array_keys($tokens));
+    }
+
+    /** Phrasen der Dosen-Einkaufsform auf das §9-Zustandswort normalisieren. */
+    private function normalisiereEinkaufsform(string $name): string
+    {
+        $name = preg_replace('/\baus\s+(?:der|einer)\s+dose\b|\bin\s+dosen\b/iu', 'konserviert', $name);
+
+        return preg_replace('/\bdosentomaten?\b/iu', 'Tomaten konserviert', $name);
+    }
+
+    /** Einkaufsform normalisieren, ohne „konserviert“ als bedeutungslos zu entfernen. */
+    public function ingredientTokens(string $name): array
+    {
+        return $this->tokenize($this->normalisiereEinkaufsform($name));
+    }
+
+    public function wantsCanned(string $name): bool
+    {
+        return preg_match('/\baus\s+(?:der|einer)\s+dose\b|\bin\s+dosen\b|\bdosentomaten?\b/iu', $name) === 1;
+    }
+
+    /**
+     * §9-Zustandswörter aus freiem Text — Wort-Boundary wie GpZustandBackfillCommand::MUSTER
+     * (dieselbe Quelle: Regelwerk_Grundprodukte.md §9 „frisch, tiefgekuehlt (TK), trocken,
+     * konserviert"). Mehrdeutigkeit (mehr als ein Zustand im selben Text) bleibt KONSERVATIV
+     * unentschieden statt geraten — dieselbe Politik wie der Backfill.
+     */
+    private const ZUSTAND_MUSTER = [
+        'frisch' => '/\bfrisch\w*\b/iu',
+        'TK' => '/\btk\b|\btiefgek(?:ue|ü)hlt\w*\b|\bgefroren\w*\b/iu',
+        'trocken' => '/\btrocken\w*\b|\bgetrocknet\w*\b/iu',
+        'konserviert' => '/\bkonserviert\w*\b/iu',
+    ];
+
+    /**
+     * Review-Fund (Paul/cooking-jarvis-03, vor Commit): „frisch" ist meist ein
+     * ZUBEREITUNGS-Adverb, kein §9-Zustand — „Pfeffer, schwarz, frisch gemahlen" beschreibt
+     * WIE gemahlen wurde, nicht dass der Pfeffer als Frischware eingekauft wird (Pfeffer-GPs
+     * sind trocken). Ungefiltert hätte acceptsProductForm() jeden Pfeffer-Kandidaten
+     * abgelehnt (condition≠frisch) → target=none statt eines korrekten Treffers — eine
+     * Verschlechterung gegenüber dem Ist-Stand vor #505-Nachtrag.
+     */
+    private const FRISCH_ZUBEREITUNG_MUSTER = '/\bfrisch\w*\s+(?:gemahlen|gerieben|gepresst|gehackt|geschnitten|gezupft|geraspelt|gestossen|gestoßen|zubereitet|gekocht)\w*\b/iu';
+
+    /**
+     * Rein deskriptive Geometrie/Zuschnitt-Wörter aus dem Brief — KEIN §9-Zustand, aber ein
+     * Signal für den Form-Bonus im Ranking (mehrere GPs mit identischem Zustand/Score).
+     * Erste passende Form gewinnt; anders als beim Zustand ist Mehrdeutigkeit hier unschädlich
+     * (der Bonus ist ein Tiebreaker, kein Filter).
+     */
+    private const FORM_MUSTER = [
+        'stueckig' => '/\bst(?:ue|ü)ckig\w*\b/iu',
+        'passiert' => '/\bpassiert\w*\b/iu',
+        'gewuerfelt' => '/\bgew(?:ue|ü)rfelt\w*\b/iu',
+        'ganz' => '/\bganz\w*\b/iu',
+    ];
+
+    /**
+     * Identität / Zustand / Form aus einer Zutatenbeschreibung trennen (#505-Nachtrag
+     * 2026-09, Anlass „Creme-Suppe: Tomate-Speck" — GP 13757 „TK, getrocknet" wurde
+     * gegen „konserviert" verrechnet, weil beide Zustände bis dahin in EINE Klasse fielen).
+     * `identitaet` = Tokens ohne Zustands-/Form-/sonstige Qualifier-Wörter (isQualifierToken).
+     *
+     * @return array{identitaet: list<string>, zustand: ?string, form: ?string}
+     */
+    public function produktForm(string $name): array
+    {
+        $normalisiert = $this->normalisiereEinkaufsform($name);
+
+        $zustandTreffer = [];
+        foreach (self::ZUSTAND_MUSTER as $zustand => $muster) {
+            if ($zustand === 'frisch' && preg_match(self::FRISCH_ZUBEREITUNG_MUSTER, $normalisiert) === 1) {
+                continue;   // „frisch gemahlen/gerieben/…" ist Zubereitung, kein §9-Zustand
+            }
+            if (preg_match($muster, $normalisiert) === 1) {
+                $zustandTreffer[] = $zustand;
+            }
+        }
+        // Mehrdeutig (z. B. „TK, getrocknet") ⇒ kein Zustand gesetzt — Raten wäre hier
+        // schlimmer als ungeprüft lassen (identische Politik zu GpZustandBackfillCommand).
+        $zustand = count($zustandTreffer) === 1 ? $zustandTreffer[0] : null;
+
+        $form = null;
+        foreach (self::FORM_MUSTER as $kandidat => $muster) {
+            if (preg_match($muster, $normalisiert) === 1) {
+                $form = $kandidat;
+                break;
+            }
+        }
+
+        $identitaet = array_values(array_filter(
+            $this->tokenize($normalisiert),
+            fn ($t) => ! $this->isQualifierToken($t) && ! in_array($t, ['dose', 'dosen'], true),
+        ));
+
+        return ['identitaet' => $identitaet, 'zustand' => $zustand, 'form' => $form];
+    }
+
+    /**
+     * Briefing-Sprache ist kein Produkt — Füllwörter/Artikel/Konnektoren aus freiem
+     * Beschreibungstext vor dem Grounding-Retrieval raus, sonst verdrängen sie spät
+     * genannte Zutaten. NICHT Teil des GL-04-Ports (rein Briefing-Vorfilter). Geteilt
+     * zwischen GenerationContextService::leitTokens() und
+     * RecipeGeneratorService::bestandsInventar() — beide sondieren denselben Wortschatz.
+     */
+    private const BRIEF_STOPWORDS = [
+        'bitte', 'kannst', 'koenntest', 'erstelle', 'erstellen', 'mache', 'machen',
+        'haette', 'moechte', 'brauche', 'rezept', 'basisrezept', 'gericht', 'suppe',
+        'einen', 'eine', 'einer', 'einem', 'eines', 'soll', 'sollen', 'sein', 'werden',
+        'wird', 'sind', 'dabei', 'dazu', 'darin', 'drin', 'auch', 'noch', 'etwas',
+        'bisschen', 'klassisch', 'klassischen', 'klassische', 'ansatz', 'fuer',
+        'ohne', 'oder', 'aber', 'dann', 'diese', 'dieser', 'dieses', 'eher',
+        'gemischt', 'gemixt', 'eingemixt', 'pueriert', 'fertig',
+        'mit', 'und', 'der', 'die', 'das', 'den', 'dem', 'aus', 'zum', 'zur', 'ich', 'ein', 'mal',
+    ];
+
+    /**
+     * Leit-Tokens eines freien Beschreibungstexts: tokenisiert, Briefing-Füllwörter,
+     * Kurzwörter (< 3 Zeichen) und Zahlen raus, auf `$max` gekappt (Sondierungs-Budget,
+     * NICHT das Prompt-Budget — der Aufrufer kappt Kandidaten danach nach Trefferqualität).
+     *
+     * @return list<string>
+     */
+    public function leitTokens(string $description, int $max = 16): array
+    {
+        $tokens = array_values(array_filter(
+            $this->tokenize($description),
+            fn ($t) => mb_strlen($t) >= 3 && ! in_array($t, self::BRIEF_STOPWORDS, true) && ! ctype_digit($t),
+        ));
+
+        return array_slice($tokens, 0, $max);
     }
 
     /** rs:203–217 — '-'→'_', nur Alphanumerik + '_' behalten, Rest ERSATZLOS weg (auch Spaces). */

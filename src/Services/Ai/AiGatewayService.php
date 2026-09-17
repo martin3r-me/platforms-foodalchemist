@@ -6,6 +6,8 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Platform\Core\Contracts\LLMProviderContract;
 use Platform\Core\Services\LLMProviderRegistry;
+use Platform\FoodAlchemist\Exceptions\KiAntwortKeinJsonException;
+use Platform\FoodAlchemist\Exceptions\KiAntwortStrukturellUnbrauchbarException;
 use RuntimeException;
 
 /**
@@ -359,7 +361,14 @@ class AiGatewayService
         $usageGesamt = ['input_tokens' => 0, 'output_tokens' => 0, 'input_tokens_details' => ['cached_tokens' => 0]];
         $tatsaechlichesModell = null;
         $tempTreppe = [(float) ($prompt['temperature'] ?? 0.1), 0.5, 0.7];   // §3.3
+        // Dominique §9: „Wie oft greift der strukturelle Retry?" war bisher nicht messbar —
+        // schreibeCallLog() schreibt genau EINE Zeile, tokens_in/out summieren über alle
+        // (auch verworfenen) Versuche, ein erfolgreicher Re-Roll hinterlässt sonst keine Spur.
+        // Keine neue Spalte/Migration: Zählung + letzter Grund gehen in prompt_parts (JSON-Feld).
+        $versucheGemacht = 0;
+        $letzterRerollGrund = null;
         foreach ($tempTreppe as $versuch => $temperature) {
+            $versucheGemacht = $versuch + 1;
             $fehler = null;
             try {
                 $antwort = $this->chatMitBackoff($messages, $options + ['temperature' => $temperature]);
@@ -367,15 +376,20 @@ class AiGatewayService
                 $tatsaechlichesModell = $antwort['model'] ?? $tatsaechlichesModell;
                 $parsed = json_decode($this->stripJsonFence((string) ($antwort['content'] ?? '')), true);
                 if (!is_array($parsed)) {
-                    throw new RuntimeException("KI-Antwort für [{$promptKey}] ist kein valides JSON (nach Fence-Stripping, Versuch " . ($versuch + 1) . ').');
+                    throw new KiAntwortKeinJsonException(
+                        "KI-Antwort für [{$promptKey}] ist kein valides JSON (nach Fence-Stripping, Versuch " . ($versuch + 1) . ').',
+                    );
                 }
                 if (is_callable($isUsable) && ! $isUsable($parsed)) {
-                    throw new RuntimeException("KI-Antwort für [{$promptKey}] ist strukturell unbrauchbar (Versuch " . ($versuch + 1) . ').');
+                    throw new KiAntwortStrukturellUnbrauchbarException(
+                        "KI-Antwort für [{$promptKey}] ist strukturell unbrauchbar (Versuch " . ($versuch + 1) . ').',
+                    );
                 }
                 break;                                               // erste valide + brauchbare gewinnt
             } catch (\Throwable $e) {
                 $fehler = $e;
                 $parsed = null;
+                $letzterRerollGrund = $this->rerollGrund($e);
             }
         }
         $elapsedMs = (int) ((hrtime(true) - $start) / 1_000_000);
@@ -383,6 +397,11 @@ class AiGatewayService
             // Auch verworfene, aber vom Provider erfolgreich beantwortete Re-Rolls werden berechnet.
             $antwort['usage'] = $usageGesamt;
             $antwort['model'] = $tatsaechlichesModell ?? ($antwort['model'] ?? null);
+        }
+
+        $promptParts['versuche'] = $versucheGemacht;
+        if ($versucheGemacht > 1) {
+            $promptParts['reroll_grund'] = $letzterRerollGrund;
         }
 
         $audit['layers_used'] = $layersUsed;
@@ -536,8 +555,21 @@ class AiGatewayService
      *                   Dokumentation. Protokolliert werden die ENTSCHÄRFTEN Argumente,
      *                   also die tatsächlich ausgeführten.
      *   system_zusatz — eine statische Zeile für die System-Message (Prefix bleibt stabil).
+     *   zeitbudget_ms — Spec 53/D (Befund 2026-09-17, demo-Call-Log): ohne Zeitbudget lief der
+     *                   Sprachbefehl bis `maxRuns` durch, auch wenn das ~60 s und ~91.000 Input-
+     *                   Token kostete, weil jede Runde die volle bisherige Konversation inkl.
+     *                   aller Tool-Ergebnisse neu sendet. Läuft die Zeit ab, bricht die NÄCHSTE
+     *                   Runde nicht mehr an (kein weiterer Modellaufruf) — wie bei `maxRuns`
+     *                   bleibt `finalText` dann `null`, der Aufrufer behandelt beides gleich.
+     *   intercept     — callable(string $name, array $args, object $tool, ToolContext $ctx): ?ToolResult.
+     *                   Spec 53/F (1b): läuft NACH `arg_guard`, VOR `$tool->execute()`. Liefert es
+     *                   ein ToolResult, ERSETZT das die echte Ausführung (der Aufrufer entscheidet
+     *                   selbst, ob/wie er das Tool wirklich ausführt — z. B. Voice baut daraus
+     *                   einen Schreibvorschlag und führt erst nach menschlicher Bestätigung aus).
+     *                   `null` = normal ausführen. Additiv, Default `null` — ohne den Schlüssel
+     *                   verhält sich der Loop byte-identisch zu vorher.
      *
-     * @param  array{policy?: callable, arg_guard?: callable, system_zusatz?: string}  $optionen
+     * @param  array{policy?: callable, arg_guard?: callable, system_zusatz?: string, zeitbudget_ms?: int, intercept?: callable}  $optionen
      */
     public function callWithTools(string $auftrag, array $toolNames, int $maxRuns = 6, array $optionen = []): array
     {
@@ -554,6 +586,7 @@ class AiGatewayService
 
         $policy = $optionen['policy'] ?? null;
         $argGuard = $optionen['arg_guard'] ?? null;
+        $intercept = $optionen['intercept'] ?? null;
         $erlaubt = array_values(array_unique($toolNames));           // wächst über die Policy
         $freigeschaltet = [];
 
@@ -575,8 +608,15 @@ class AiGatewayService
         $usageGesamt = ['input_tokens' => 0, 'output_tokens' => 0, 'input_tokens_details' => ['cached_tokens' => 0]];
         $tatsaechlichesModell = null;
         $kontext = $team !== null && Auth::user() !== null ? new \Platform\Core\Contracts\ToolContext(Auth::user(), $team) : null;
+        $zeitbudgetMs = $optionen['zeitbudget_ms'] ?? null;
+        // Frühabbruch (Befund 2026-09-17): dasselbe Tool mit denselben Argumenten ein zweites
+        // Mal ⇒ der Loop dreht sich im Kreis, weiteres Drehen kostet nur noch Runden/Token.
+        $gesehen = [];
         try {
         while ($runde < $maxRuns) {
+            if ($zeitbudgetMs !== null && ((hrtime(true) - $start) / 1_000_000) >= $zeitbudgetMs) {
+                break;                                                // wie maxRuns: finalText bleibt null
+            }
             $runde++;
             $antwort = $this->chatMitBackoff($messages, [
                 'temperature' => 0.0,
@@ -626,11 +666,21 @@ class AiGatewayService
                 if (is_callable($argGuard)) {
                     $argumente = $argGuard($name, $argumente);
                 }
-                $resultat = $tool->execute($argumente, $kontext);
+                $signatur = $name . '|' . json_encode($argumente, JSON_UNESCAPED_UNICODE);
+                if (in_array($signatur, $gesehen, true)) {
+                    break 1;                                          // Wiederholung: finalText bleibt null, kein weiterer Call
+                }
+                $gesehen[] = $signatur;
+                // Spec 53/F (1b): ein `intercept` darf die Ausführung ERSETZEN (z. B. Voice baut
+                // daraus einen Schreibvorschlag statt wirklich zu schreiben). `null` = normal
+                // ausführen — additiv, ohne Hook verhält sich der Loop wie vorher.
+                $abgefangen = is_callable($intercept) ? $intercept($name, $argumente, $tool, $kontext) : null;
+                $resultat = $abgefangen ?? $tool->execute($argumente, $kontext);
                 $toolLaeufe[] = ['name' => $name, 'arguments' => $argumente, 'success' => $resultat->success, 'data' => $resultat->data];
                 $messages[] = ['role' => 'assistant', 'content' => (string) ($antwort['content'] ?? '')];
-                $messages[] = ['role' => 'user', 'content' => 'TOOL-ERGEBNIS ' . $name . ': '
-                    . json_encode(['success' => $resultat->success, 'data' => $resultat->data, 'error' => $resultat->error], JSON_UNESCAPED_UNICODE)];
+                $messages[] = ['role' => 'user', 'content' => 'TOOL-ERGEBNIS ' . $name . ': ' . $this->kappeToolErgebnis(
+                    json_encode(['success' => $resultat->success, 'data' => $resultat->data, 'error' => $resultat->error], JSON_UNESCAPED_UNICODE),
+                )];
 
                 continue;
             }
@@ -656,6 +706,21 @@ class AiGatewayService
 
         return ['text' => $finalText, 'runden' => $runde, 'tool_laeufe' => $toolLaeufe, 'elapsed_ms' => $elapsedMs,
             'freigeschaltet' => $freigeschaltet];
+    }
+
+    /**
+     * Spec 53/D (Befund 2026-09-17): ungekappte Tool-Ergebnisse gehen in JEDER Folgerunde erneut
+     * in den Kontext — gemessen 91.560 Input-Token über 6 Runden mit 6 Tool-Aufrufen (~15k/Runde).
+     * Kappt an einer Zeichengrenze, aber sichtbar markiert (das Modell soll wissen, dass es
+     * abgeschnitten ist, statt eine unvollständige Liste für vollständig zu halten).
+     */
+    private function kappeToolErgebnis(string $json, int $max = 2000): string
+    {
+        if (mb_strlen($json) <= $max) {
+            return $json;
+        }
+
+        return mb_substr($json, 0, $max) . '…[gekürzt, ' . mb_strlen($json) . ' Zeichen gesamt]';
     }
 
     /** 06_KI §5 Pflicht 3: generischer Accept-Stempel (Reject analog). */
@@ -737,6 +802,23 @@ class AiGatewayService
         $summe['input_tokens'] += (int) ($usage['input_tokens'] ?? 0);
         $summe['output_tokens'] += (int) ($usage['output_tokens'] ?? 0);
         $summe['input_tokens_details']['cached_tokens'] += (int) ($usage['input_tokens_details']['cached_tokens'] ?? 0);
+    }
+
+    /**
+     * Re-Roll-Grund für den Call-Log (`prompt_parts.reroll_grund`) — TYPISIERT, nicht per
+     * Message-Substring (Review-Fund: [[feedback_prompt_wortlaut_ist_keine_schnittstelle]],
+     * 5 Treffer an einem Tag; ein geänderter Wortlaut hätte jeden Re-Roll stumm als
+     * 'provider_fehler' einsortiert). `chatMitBackoff()` fängt Modell-Fallback/Provider-
+     * Backoff bereits intern ab; erreicht deren Exception TROTZDEM diese Ebene, ist auch
+     * der Fallback-Versuch gescheitert ('provider_fehler').
+     */
+    private function rerollGrund(\Throwable $e): string
+    {
+        return match (true) {
+            $e instanceof KiAntwortStrukturellUnbrauchbarException => 'strukturell',
+            $e instanceof KiAntwortKeinJsonException => 'json_ungueltig',
+            default => 'provider_fehler',
+        };
     }
 
     /**

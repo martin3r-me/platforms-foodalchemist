@@ -35,8 +35,15 @@ class GenerateRecipeJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    /** Nur Phase 1; die Anreicherung hat einen eigenen Queue-Job. */
-    public int $timeout = 300;
+    /**
+     * Nur Phase 1; die Anreicherung hat einen eigenen Queue-Job. War 300 s — Lauf 71 (demo,
+     * 20.09.) zeigt reale Basisrezept-Läufe von 169 s (Generierung, gpt-5.5, 29,6k Tokens) +
+     * Ø 42 s Kohärenz-Kritiker + Matching/Checks: 300 s sind unter Last real erreichbar, ohne
+     * dass etwas kaputt ist — ein TimeoutExceededException killt den Job und lässt die
+     * Eltern-Zutat (Sub-Rezept-Kaskade) dauerhaft unmatched, statt nur einen echten Hänger
+     * zu fangen. 540 s bleibt unter dem Worker-Timeout (600 s, siehe docs/PLANUNG/39).
+     */
+    public int $timeout = 540;
 
     /** KI-Kosten: kein stiller Auto-Retry der ganzen Generierung. */
     public int $tries = 1;
@@ -77,7 +84,7 @@ class GenerateRecipeJob implements ShouldQueue
         try {
             // Phase 0 — erste Stufe sichtbar machen (Seed fürs gestufte Generieren):
             // der teure LLM-Entwurf startet, die UI zeigt statt „läuft …" eine Stufe.
-            $this->fortschritt($this->vkModus ? 'Gericht wird entworfen …' : 'Rezept wird entworfen …');
+            $this->fortschritt('Kontext & Wissen werden geladen …');
             $stepId = $this->cascadeStepId();
             $prepared = $stepId !== null
                 ? app(\Platform\FoodAlchemist\Services\RecipeDependencyWorkflowService::class)
@@ -91,6 +98,17 @@ class GenerateRecipeJob implements ShouldQueue
             );
             if ($r === [] || ! isset($r['recipe'])) {
                 throw new \RuntimeException('Generierung lieferte kein Ergebnis.');
+            }
+            // Aufgabe 5 (#505-Nachtrag, Vertrag mit Peter/Paket C): Timings in context_snapshot
+            // mergen, Key exakt 'timings' mit den fünf RecipeGeneratorService-Phasen-Schlüsseln.
+            // Einziger anderer Schreiber von context_snapshot ist prepare() (oben, VOR diesem
+            // Aufruf) — kein Race innerhalb desselben Jobs. laufStatus()/Anzeige macht Peter.
+            if ($stepId !== null && is_array($r['statistik']['timings'] ?? null)) {
+                $step = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep::whereKey($stepId)->first(['id', 'context_snapshot']);
+                if ($step !== null) {
+                    $snapshot = is_array($step->context_snapshot) ? $step->context_snapshot : [];
+                    $step->update(['context_snapshot' => [...$snapshot, 'timings' => $r['statistik']['timings']]]);
+                }
             }
             // Der Provider-Call kann nicht mitten im HTTP-Request abgewürgt werden. Wurde währenddessen
             // gestoppt, den eben entstandenen Draft soft-deleten und keinerlei Lineage/Kinder erzeugen.
@@ -126,7 +144,7 @@ class GenerateRecipeJob implements ShouldQueue
             $this->meldeKaskade(true, (int) $r['recipe']->id, null);
             if (! $this->vollAnreichern) {
                 $this->schreibe(['status' => 'done', ...$payload]);
-                $this->pruefeKonformitaet((int) $r['recipe']->id);   // Schicht 3: Critic auto nach Generierung (Rezept final)
+                $this->pruefeKonformitaet((int) $r['recipe']->id, $stepId);   // Schicht 3: Critic auto nach Generierung (Rezept final)
 
                 return;
             }
@@ -136,12 +154,12 @@ class GenerateRecipeJob implements ShouldQueue
             try {
                 EnrichGeneratedRecipeJob::dispatch(
                     $this->runId, $this->teamId, $this->userId, (int) $r['recipe']->id,
-                    $payload, $this->zielVk(),
+                    $payload, $this->zielVk(), null, $stepId,
                 );
             } catch (\Throwable $e) {
                 (new EnrichGeneratedRecipeJob(
                     $this->runId, $this->teamId, $this->userId, (int) $r['recipe']->id,
-                    $payload, $this->zielVk(),
+                    $payload, $this->zielVk(), null, $stepId,
                 ))->failed($e);
             }
         } catch (\Throwable $e) {
@@ -164,11 +182,19 @@ class GenerateRecipeJob implements ShouldQueue
         return is_numeric($roh) ? (float) $roh : null;
     }
 
-    /** Job-Tod (Timeout/Fatal außerhalb des handle-try) → Status trotzdem setzen, sonst pollt die UI ewig. */
+    /**
+     * Job-Tod (Timeout/Fatal außerhalb des handle-try) → Status trotzdem setzen, sonst pollt
+     * die UI ewig. demo 16.09.: `GenerateRecipeJob has timed out` (timeout=300, tries=1) —
+     * `TimeoutExceededException` (erbt von `MaxAttemptsExceededException`, ein `instanceof`
+     * fängt beide) trägt nur die technische Laravel-Meldung; klarer Text statt Rohtext.
+     */
     public function failed(\Throwable $e): void
     {
-        $this->schreibe(['status' => 'error', 'fehler' => 'Generierung abgebrochen: ' . $e->getMessage()]);
-        $this->meldeKaskade(false, null, 'Generierung abgebrochen: ' . $e->getMessage());
+        $fehler = $e instanceof \Illuminate\Queue\MaxAttemptsExceededException
+            ? 'Zeitüberschreitung nach ' . $this->timeout . ' s'
+            : 'Generierung abgebrochen: ' . $e->getMessage();
+        $this->schreibe(['status' => 'error', 'fehler' => $fehler]);
+        $this->meldeKaskade(false, null, $fehler);
     }
 
     /** cascade_step_id aus dem Parameter-Bündel (Rückkanal-Ziel), null wenn kein Kaskaden-Lauf. */
@@ -232,6 +258,12 @@ class GenerateRecipeJob implements ShouldQueue
         } catch (\Throwable) {
             // Fortschritts-Write bewusst schlucken.
         }
+        // Spec 53 / Paket C: dieselbe Phase zusätzlich als DB-Wahrheit am Kaskaden-Step (Cache bleibt
+        // für die Rezept-Modals) — das Planungs-Cockpit liest sie über laufStatus()/step-zeile.
+        $stepId = $this->cascadeStepId();
+        if ($stepId !== null) {
+            app(\Platform\FoodAlchemist\Services\PlanningCascadeService::class)->setzePhase($stepId, $label);
+        }
     }
 
     private function schreibe(array $data): void
@@ -240,11 +272,11 @@ class GenerateRecipeJob implements ShouldQueue
     }
 
     /** Schicht 3: den Konformitäts-Critic async anstoßen — best-effort, nie die fertige Generierung kippen. */
-    private function pruefeKonformitaet(int $recipeId): void
+    private function pruefeKonformitaet(int $recipeId, ?int $stepId = null): void
     {
         try {
             ConformanceCheckJob::dispatch(
-                $this->teamId, $this->userId, $this->vkModus ? 'gericht' : 'basisrezept', $recipeId,
+                $this->teamId, $this->userId, $this->vkModus ? 'gericht' : 'basisrezept', $recipeId, null, $stepId,
             );
         } catch (\Throwable $e) {
             // Dispatch-Fehler (Queue down o. ä.) darf das fertige Rezept nicht zum Fehler machen.

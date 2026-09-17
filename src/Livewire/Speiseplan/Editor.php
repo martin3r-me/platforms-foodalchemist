@@ -656,6 +656,8 @@ class Editor extends Component
                 'live' => $sp->isPresentationLive(),
                 'published_at' => $sp->presentation_published_at?->format('d.m.Y H:i'),
                 'expires_at' => $sp->presentation_expires_at?->format('d.m.Y'),
+                // Bug-Runde 2026-09-17 #2: Design nach der Veröffentlichung geändert → Link hinkt hinterher.
+                'design_veraltet' => app(PresentationService::class)->designGeaendertSeitPublish($sp),
             ];
             if ($sp->presentation_enabled && $sp->presentation_token) {
                 $presentationLink = url('/p/speiseplan/' . $sp->presentation_token);

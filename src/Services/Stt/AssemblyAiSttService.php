@@ -49,4 +49,9 @@ class AssemblyAiSttService implements SttServiceContract
 
         throw new \RuntimeException('STT-Timeout (Kurz-Audio-Profil) — Audio zu lang?');
     }
+
+    public function name(): string
+    {
+        return 'assemblyai';
+    }
 }

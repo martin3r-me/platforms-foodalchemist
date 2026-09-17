@@ -41,6 +41,10 @@ class GenerateDishProposalJob implements ShouldQueue
         if (($user = User::find($this->userId)) !== null) {
             Auth::login($user);
         }
+        // Spec 53 / Paket C-Nachtrag: Phase sichtbar machen, solange der Bauplan-Call läuft — dieser
+        // Step-Typ hat keinen eigenen fortschritt()-Callback (kiDivergenzSession meldet keine Stufen),
+        // daher EINE Phase statt vier.
+        $cascade->setzePhase($this->stepId, 'Gerichtsvorschlag wird erfunden …');
         try {
             $result = $ideen->kiDivergenzSession($team, $this->sessionId, $this->brief, 1, $this->creativeMode);
             $idee = $result['angelegt'][0] ?? null;
@@ -49,11 +53,18 @@ class GenerateDishProposalJob implements ShouldQueue
             }
             if ($cascade->istAbgebrochen((int) $step->cascade_run_id)) {
                 $idee->update(['status' => 'verworfen']);
+                $cascade->setzePhase($this->stepId, null);
                 return;
             }
             $meta = $idee->source_meta ?? [];
             $meta['target_concept_slot_id'] = 0;
             $idee->update(['source_meta' => $meta]);
+            // VOR dem Status-Wechsel löschen: setzePhase() lässt nur queued/running/done/freigegeben
+            // zu (Guard gegen tote Steps) — nach dem Sprung auf `geplant` würde der Aufruf No-op sein,
+            // und die stale Model-Instanz $step (geladen vor jedem setzePhase-Query-Update) darf `phase`
+            // auch nicht im untenstehenden $step->update() „miterledigen" (Dirty-Checking sähe es
+            // fälschlich als bereits null und ließe die Spalte in der UPDATE-Query ganz weg).
+            $cascade->setzePhase($this->stepId, null);
             $step->update([
                 'label' => $idee->title,
                 'status' => 'geplant',
@@ -67,5 +78,12 @@ class GenerateDishProposalJob implements ShouldQueue
         } catch (\Throwable $e) {
             $cascade->markStepFailed($this->stepId, $e->getMessage());
         }
+    }
+
+    /** Job-Tod (Timeout/Fatal außerhalb des handle-try) → Step terminal setzen (löscht auch die
+     *  Phase), sonst bleibt „Gerichtsvorschlag wird erfunden …" für immer stehen. */
+    public function failed(\Throwable $e): void
+    {
+        app(PlanningCascadeService::class)->markStepFailed($this->stepId, 'Gerichtsvorschlag abgebrochen: ' . $e->getMessage());
     }
 }

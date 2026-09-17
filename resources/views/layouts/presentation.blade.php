@@ -135,9 +135,6 @@
 
         /* Cover / Hero */
         .pt-hero { position: relative; min-height: min(88vh, 820px); display: grid; place-items: center; text-align: center; overflow: hidden; }
-        .pt-hero--h-klein { min-height: min(46vh, 420px); }
-        .pt-hero--h-mittel { min-height: min(64vh, 600px); }
-        .pt-hero--h-gross { min-height: min(88vh, 820px); }
         .pt-hero-media { position: absolute; inset: 0; }
         .pt-hero-media img { width: 100%; height: 100%; object-fit: cover; }
         /* Einpassen: ganzes Bild zeigen (kein Beschnitt), Rest bekommt eine dunkle Bühne. */
@@ -154,6 +151,12 @@
         .pt-hero-sub { font-size: clamp(1rem, 2.4vw, 1.28rem); color: var(--pt-muted); margin: 20px auto 0; max-width: 640px; }
         .pt-hero-meta { margin-top: 22px; font-size: .82rem; letter-spacing: .04em; color: var(--pt-muted); }
         .pt-hero.no-media { border-bottom: 1px solid var(--pt-line); min-height: min(70vh, 640px); }
+        /* Cover-Höhe (Design-Einstellung) — steht bewusst NACH .pt-hero.no-media und trägt
+           dieselbe Spezifität (0,2,0): sonst überschreibt die no-media-Zeile die Einstellung
+           und klein/mittel/groß bleibt ohne Coverbild wirkungslos (Bug-Runde 2026-09-17 #2). */
+        .pt-hero.pt-hero--h-klein { min-height: min(46vh, 420px); }
+        .pt-hero.pt-hero--h-mittel { min-height: min(64vh, 600px); }
+        .pt-hero.pt-hero--h-gross { min-height: min(88vh, 820px); }
         .pt-hero.no-media .pt-hero-sub { color: var(--pt-muted); }
 
         /* Sections — breites Raster statt einer zentrierten Spalte */
@@ -298,7 +301,7 @@
             .pt-rondell-track { overflow: visible; flex-wrap: wrap; }
             .pt-rondell-img { flex-basis: 46%; max-width: 46%; }
             .pt-nav-sidebar .pt-wrap { padding-left: 0; }
-            .pt-hero { min-height: auto; }
+            .pt-hero { min-height: auto !important; }
             body { background: #fff; }
             .pt-reveal { opacity: 1 !important; transform: none !important; }
             .pt-blocks.pt-cols-2 { grid-template-columns: 1fr 1fr; }

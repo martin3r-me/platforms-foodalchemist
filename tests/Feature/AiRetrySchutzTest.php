@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\DB;
+use Platform\FoodAlchemist\Exceptions\KiAntwortStrukturellUnbrauchbarException;
 use Platform\FoodAlchemist\Services\Ai\AiGatewayService;
 use Platform\FoodAlchemist\Services\Ai\FakeAiProvider;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
@@ -74,6 +75,10 @@ it('DoD §3.3: kaputte Antwort (Degeneration) → Re-Roll mit Temp-Treppe → Er
         ->and((int) DB::table('foodalchemist_ai_call_log')->orderByDesc('id')->value('tokens_in'))->toBe(2)
         ->and((int) DB::table('foodalchemist_ai_call_log')->orderByDesc('id')->value('tokens_out'))->toBe(2)
         ->and((int) DB::table('foodalchemist_ai_call_log')->orderByDesc('id')->value('tokens_cached'))->toBe(2);
+
+    $promptParts = json_decode((string) DB::table('foodalchemist_ai_call_log')->orderByDesc('id')->value('prompt_parts'), true);
+    expect($promptParts['versuche'])->toBe(2)
+        ->and($promptParts['reroll_grund'])->toBe('json_ungueltig');
 });
 
 it('§3.3 Generator-Variante: strukturell unbrauchbar (leere zutaten) → Retry → brauchbar', function () {
@@ -87,6 +92,12 @@ it('§3.3 Generator-Variante: strukturell unbrauchbar (leere zutaten) → Retry 
     ]);
 
     expect($p->werte['zutaten'])->toHaveCount(1);
+
+    // Dominique §9 („Wie oft greift der strukturelle Retry?"): Zählung + Grund landen im
+    // JSON-Feld prompt_parts der EINEN Call-Log-Zeile — keine neue Spalte/Migration.
+    $promptParts = json_decode((string) DB::table('foodalchemist_ai_call_log')->orderByDesc('id')->value('prompt_parts'), true);
+    expect($promptParts['versuche'])->toBe(2)
+        ->and($promptParts['reroll_grund'])->toBe('strukturell');
 });
 
 it('§3.3: 3× kaputt → Exception NACH dem Log (error-Zeile, Versuch 3 dokumentiert)', function () {
@@ -96,6 +107,26 @@ it('§3.3: 3× kaputt → Exception NACH dem Log (error-Zeile, Versuch 3 dokumen
         ->toThrow(RuntimeException::class, 'Versuch 3');
 
     expect(DB::table('foodalchemist_ai_call_log')->orderByDesc('id')->value('error'))->toContain('Versuch 3');
+
+    // Auch der Fehlerpfad zählt mit — schreibeCallLog() läuft VOR dem re-throw.
+    $promptParts = json_decode((string) DB::table('foodalchemist_ai_call_log')->orderByDesc('id')->value('prompt_parts'), true);
+    expect($promptParts['versuche'])->toBe(3)
+        ->and($promptParts['reroll_grund'])->toBe('json_ungueltig');
+});
+
+it('Review-Fund: reroll_grund klassifiziert per Exception-Typ, nicht per Message-Text', function () {
+    // Derselbe Exception-TYP mit einem völlig anderen Wortlaut muss trotzdem 'strukturell'
+    // ergeben — sonst kippt jede Wortlaut-Änderung die Klassifikation stumm zu 'provider_fehler'.
+    ($this->skriptProvider)([
+        new KiAntwortStrukturellUnbrauchbarException('Ein ganz anderer Text, der nicht mehr "strukturell unbrauchbar" enthält.'),
+        '{"werte": {"x": 1}, "confidence": 0.8}',
+    ]);
+
+    $this->gw->propose('recipe.description', ['b' => 1]);
+
+    $promptParts = json_decode((string) DB::table('foodalchemist_ai_call_log')->orderByDesc('id')->value('prompt_parts'), true);
+    expect($promptParts['versuche'])->toBe(2)
+        ->and($promptParts['reroll_grund'])->toBe('strukturell');
 });
 
 it('§3.2: nach erschöpftem Backoff einmaliger Modell-Fallback — model trägt das echte Modell', function () {
@@ -117,4 +148,10 @@ it('§3.2: nach erschöpftem Backoff einmaliger Modell-Fallback — model trägt
     expect($p->werte)->toBe(['ok' => true])
         ->and($p->model)->toBe('billig-fallback')
         ->and(DB::table('foodalchemist_ai_call_log')->orderByDesc('id')->value('model'))->toBe('billig-fallback');
+
+    // Modell-Fallback läuft INNERHALB von chatMitBackoff() ab — die äußere Temp-Treppe
+    // sieht nur einen einzigen erfolgreichen Versuch, keinen Reroll.
+    $promptParts = json_decode((string) DB::table('foodalchemist_ai_call_log')->orderByDesc('id')->value('prompt_parts'), true);
+    expect($promptParts['versuche'])->toBe(1)
+        ->and($promptParts)->not->toHaveKey('reroll_grund');
 });

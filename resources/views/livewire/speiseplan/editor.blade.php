@@ -370,6 +370,16 @@
                                 </label>
                             </div>
 
+                            @if($presentationInfo['design_veraltet'] ?? false)
+                                {{-- Bug-Runde 2026-09-17 #2: Aushang rendert nur den eingefrorenen Snapshot
+                                     (Editor ist dunkel gescopet — eigene Tonwerte statt der hellen Variante). --}}
+                                <div class="rounded-lg border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-[12px] text-amber-200 mt-3" data-fa-design-veraltet>
+                                    <strong>Design wurde nach der Veröffentlichung geändert.</strong>
+                                    Der Aushang zeigt weiter den Stand von {{ $presentationInfo['published_at'] ?? '—' }}.
+                                    Zum Übernehmen unten <em>Neu veröffentlichen</em>.
+                                </div>
+                            @endif
+
                             <div class="flex flex-wrap items-center gap-2 mt-3">
                                 <a href="{{ route('foodalchemist.speiseplan.praesentation', ['id' => $sp->id, 'design' => $presentationDesign]) }}" target="_blank" class="{{ $btnGhost }}">Vorschau öffnen</a>
                                 <button type="button" wire:click="veroeffentlichen" wire:confirm="Diesen Aushang veröffentlichen? Der Snapshot wird eingefroren." class="{{ $btnPrimary }}" data-sp-praes-publish @disabled(! $presentationGueltigBis)>

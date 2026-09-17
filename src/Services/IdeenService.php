@@ -13,6 +13,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel;
 use Platform\FoodAlchemist\Models\FoodAlchemistPlanningSession;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Services\Ai\AiGatewayService;
+use Platform\FoodAlchemist\Services\Ai\KnowledgeBudget;
 use Platform\FoodAlchemist\Services\Ai\KnowledgeContextService;
 
 /**
@@ -412,8 +413,20 @@ class IdeenService
             '_exclude_slugs' => $plan['files_used'] ?? [],
         ]);
         $ursprung = $trendDocId !== null ? $this->ursprungsTrendBlock($team, $trendDocId) : null;
+        $block = implode("\n\n", array_filter([$plan['block'] ?? '', $trend['block'] ?? '', $ursprung], fn ($b) => is_string($b) && $b !== ''));
+        // B1 (2026-09-02) hat die beiden contextFor-Deckel (14.000 + 5.000) gegen die damals gemessenen
+        // 39.056 Zeichen reduziert — aber nie gegen DIESE Ceiling abgeglichen: propose() prüft den
+        // GANZEN Block (inkl. Ursprungs-Trend) gegen KnowledgeBudget::forKey('foodbook.kapitel_ideen')
+        // (Default 16.200) und wirft KnowledgeBudgetExceeded VOR jedem Call-Log-Eintrag, wenn er drüber
+        // liegt — bis zu 19.000+ Zeichen aus den beiden Deckeln allein reichen dafür. Lauf 72
+        // (2026-09-17): genau das, silent geschluckt vom Aufrufer (fanoutConceptInvention), 0 Skizzen
+        // ohne jede Spur. Hart auf das Prompt-Key-Budget kappen statt unabhängige Deckel zu vertrauen.
+        $budget = KnowledgeBudget::forKey('foodbook.kapitel_ideen');
+        if (mb_strlen($block) > $budget) {
+            $block = mb_substr($block, 0, $budget);
+        }
         $wissen = [
-            'block' => implode("\n\n", array_filter([$plan['block'] ?? '', $trend['block'] ?? '', $ursprung], fn ($b) => is_string($b) && $b !== '')),
+            'block' => $block,
             'files_used' => array_values(array_unique(array_merge($plan['files_used'] ?? [], $trend['files_used'] ?? []))),
         ];
 

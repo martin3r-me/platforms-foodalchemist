@@ -60,10 +60,20 @@
                     <label class="block text-[11px] text-gray-500">Design-Name</label>
                     <input type="text" wire:model="name" class="w-full text-sm border border-gray-300 rounded px-2 py-1" placeholder="Design-Name" data-fa-design-name>
                 </div>
-                <button type="button" wire:click="speichern" class="text-sm px-4 py-1.5 rounded-lg bg-violet-600 text-white font-medium hover:bg-violet-700" data-fa-design-save>
+                <button type="button" wire:click="speichern" class="text-sm px-4 py-1.5 rounded-lg font-medium text-white {{ $ungespeichert ? 'bg-amber-600 hover:bg-amber-700' : 'bg-violet-600 hover:bg-violet-700' }}" data-fa-design-save>
                     {{ $selectedId ? 'Speichern' : 'Anlegen' }}
                 </button>
             </div>
+
+            {{-- Bug-Runde 2026-09-17 #2: Die Vorschau zeigt den Editor-Zustand, der Kundenlink den
+                 gespeicherten + veröffentlichten. Ungespeichert sah man die Änderung also nur hier. --}}
+            @if($ungespeichert)
+                <div class="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[12px] text-amber-900" data-fa-design-dirty>
+                    <strong>Ungespeicherte Änderungen.</strong> Die Vorschau unten zeigt sie bereits —
+                    im Kundenlink erscheinen sie erst nach <em>Speichern</em> und einem erneuten
+                    <em>Veröffentlichen</em> der Ausgabe.
+                </div>
+            @endif
 
             {{-- Form-Scoping: für welche Ausgabeformen dieses Design im Picker auftaucht (leer = alle). --}}
             <div class="flex flex-wrap items-center gap-3" data-fa-output-types>
@@ -94,6 +104,9 @@
 
             <div class="rounded-xl border border-gray-200 overflow-hidden bg-gray-50">
                 @if($vorschauHtml !== null)
+                    <div class="px-3 py-1.5 text-[11px] border-b border-gray-200 {{ $ungespeichert ? 'bg-amber-50 text-amber-800' : 'bg-gray-50 text-gray-500' }}">
+                        {{ $ungespeichert ? 'Vorschau des ungespeicherten Standes — noch nicht im Kundenlink.' : 'Vorschau des gespeicherten Standes.' }}
+                    </div>
                     <iframe class="w-full" style="height: 640px; border: 0; background: #fff;" srcdoc="{{ $vorschauHtml }}" title="Live-Vorschau" data-fa-preview-frame></iframe>
                 @else
                     <div class="h-[640px] flex items-center justify-center text-sm text-gray-400 text-center px-6">
@@ -164,13 +177,33 @@
                                 <option value="contain">Ganz zeigen (kein Beschnitt)</option>
                             </select>
                         </label>
-                        <label class="block text-sm">Coverbild-Höhe
-                            <select wire:model.live="layout.{{ $i }}.style.cover_height" class="block w-full text-sm border border-gray-300 rounded px-2 py-1">
-                                <option value="klein">klein</option>
-                                <option value="mittel">mittel</option>
-                                <option value="gross">groß</option>
-                            </select>
-                        </label>
+                        {{-- Bug-Runde 2026-09-17: frei einstellbar statt drei fester Stufen.
+                             Der Wert ist % der Fensterhöhe — Alt-Designs mit klein/mittel/groß
+                             werden beim Anzeigen auf ihren Zahlenwert gespiegelt. --}}
+                        @php($chVal = $sb['style']['cover_height'] ?? 'gross')
+                        @php($chVh = is_numeric($chVal) ? (int) $chVal : (['klein' => 46, 'mittel' => 64, 'gross' => 88][$chVal] ?? 88))
+                        <div class="text-sm">
+                            <div class="flex items-center justify-between gap-2">
+                                <span>Coverbild-Höhe</span>
+                                <span class="text-[11px] text-gray-500 tabular-nums">{{ $chVh }} % der Bildschirmhöhe</span>
+                            </div>
+                            <div class="flex items-center gap-2 mt-1">
+                                <input type="range" min="10" max="100" step="1" value="{{ $chVh }}"
+                                       @change="$wire.stilSetzen({{ $i }}, 'cover_height', parseInt($event.target.value))"
+                                       class="flex-1" data-fa-cover-height-range>
+                                <input type="number" min="10" max="100" step="1" value="{{ $chVh }}"
+                                       @change="$wire.stilSetzen({{ $i }}, 'cover_height', parseInt($event.target.value))"
+                                       class="w-16 text-sm border border-gray-300 rounded px-2 py-1 tabular-nums" data-fa-cover-height-num>
+                            </div>
+                            <div class="flex items-center gap-2 mt-1">
+                                <span class="text-[11px] text-gray-500">max. Höhe</span>
+                                <input type="number" min="120" max="2000" step="10" placeholder="ohne Begrenzung"
+                                       value="{{ $sb['style']['cover_height_max_px'] ?? '' }}"
+                                       @change="$wire.stilSetzen({{ $i }}, 'cover_height_max_px', $event.target.value === '' ? null : parseInt($event.target.value))"
+                                       class="w-32 text-sm border border-gray-300 rounded px-2 py-1 tabular-nums" data-fa-cover-height-max>
+                                <span class="text-[11px] text-gray-400">px — deckelt die Höhe auf großen Bildschirmen</span>
+                            </div>
+                        </div>
                     @elseif(in_array($bt, ['text', 'heading'], true))
                         <label class="block text-[11px] text-gray-500">Text</label>
                         <textarea wire:model.blur="layout.{{ $i }}.style.text" rows="3" class="w-full text-sm border border-gray-300 rounded px-2 py-1"></textarea>

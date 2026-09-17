@@ -84,3 +84,36 @@ it('der Job reicht einen Callback an generiere, der die Stufe live in den Cache 
         ->and($progressMid['progress'] ?? null)->toBe('Zwischenstufe X')
         ->and($progressMid['status'] ?? null)->toBe('pending');
 });
+
+it('#505-Nachtrag Task 5: mergt die Timings aus generiere() in context_snapshot des Kaskaden-Steps', function () {
+    // Vertrag mit Peter/Paket C (laufStatus() liest 'timings' je Step): der Job ist der
+    // einzige zweite Schreiber von context_snapshot neben prepare() im selben Aufruf —
+    // kein Race. Schlüsselname exakt 'timings', 5 Phasen wie RecipeGeneratorService.
+    $run = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRun::create([
+        'team_id' => $this->rootTeam->id, 'scope' => 'concept', 'status' => 'running',
+    ]);
+    $step = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'basisrezept', 'status' => 'running',
+    ]);
+    $runId = 'p5-' . uniqid();
+    $teamId = $this->rootTeam->id;
+    $userId = $this->user->id;
+    $timings = ['context_ms' => 12, 'generation_ms' => 340, 'matching_and_save_ms' => 8, 'checks_ms' => 3, 'generator_ms' => 363];
+
+    $this->mock(RecipeGeneratorService::class, function ($m) use ($timings, $teamId, $runId) {
+        $m->shouldReceive('generiere')->once()->andReturnUsing(function () use ($timings, $teamId, $runId) {
+            return [
+                'recipe' => FoodAlchemistRecipe::create(['team_id' => $teamId, 'recipe_key' => $runId, 'name' => 'X', 'status' => 'draft']),
+                'statistik' => ['bestand_gp' => 0, 'bestand_sub' => 0, 'stub_neu' => 0, 'stubs' => [], 'offen' => 0, 'timings' => $timings],
+                'offene' => [],
+            ];
+        });
+    });
+
+    (new GenerateRecipeJob($runId, $teamId, $userId, 'Testfond', ['cascade_step_id' => $step->id], false, false))
+        ->handle(app(RecipeGeneratorService::class));
+
+    expect($step->refresh()->context_snapshot['timings'] ?? null)->toBe($timings)
+        // prepare() hat vorher geschrieben — der Job-Merge darf den Rest des Snapshots nicht wegwerfen.
+        ->and($step->context_snapshot)->toHaveKey('built_at');
+});

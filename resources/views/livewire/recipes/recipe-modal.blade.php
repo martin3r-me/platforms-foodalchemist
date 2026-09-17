@@ -25,8 +25,9 @@
             <button type="button" wire:click="loeschen" wire:confirm="Rezept wirklich löschen? (Als Sub-Rezept referenzierte Rezepte sind geschützt)"
                     class="{{ $btnGhostXs }} text-rose-600" data-rezept-loeschen>Löschen</button>
             <span class="text-gray-300">|</span>
-            <button type="button" wire:click="allesAnreichern" class="{{ $btnAi }}"
-                    title="Text, Eigenschaften, Produktionsrouting, Equipment, Schritte, Aromaanker, Pairings, Eignung und Sensorik synchronisieren. KI-Fotos laufen separat; Ersatz bleibt eine bewusste manuelle Verknüpfung." data-alles-anreichern>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') Alles anreichern</button>
+            <x-foodalchemist::ki-action action="allesAnreichern" variant="ai" icon="heroicon-o-sparkles" label="Alles anreichern"
+                title="Text, Eigenschaften, Produktionsrouting, Equipment, Schritte, Aromaanker, Pairings, Eignung und Sensorik synchronisieren. KI-Fotos laufen separat; Ersatz bleibt eine bewusste manuelle Verknüpfung."
+                data-alles-anreichern busy="Wird angereichert …" flash="Angereichert" />
             {{-- R6: Template-Markierung (Basis für «Aus Template» im Browser) --}}
             <button type="button" wire:click="templateToggle" class="{{ $btnGhostXs }} {{ $istTemplate ? '!text-orange-600 !bg-orange-500/10 !border-orange-500/20' : '' }}"
                     title="Template = Vorlage für neue Rezepte (Browser: «Aus Template»)" data-template-toggle>
@@ -133,10 +134,8 @@
                     <div class="flex items-center gap-2">
                         <input type="text" wire:model="anweisung" wire:keydown.enter="kiUeberarbeiten"
                                placeholder="z. B. «mach das Rezept vegan und halbiere den Zucker»" class="{{ $input }} !py-1.5 flex-1" data-anweisung />
-                        <button type="button" wire:click="kiUeberarbeiten" wire:loading.attr="disabled" class="{{ $btnPrimary }}" data-ueberarbeiten-start>
-                            <span wire:loading.remove wire:target="kiUeberarbeiten" class="inline-flex items-center gap-1.5">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') Vorschlagen</span>
-                            <span wire:loading wire:target="kiUeberarbeiten">denkt …</span>
-                        </button>
+                        <x-foodalchemist::ki-action action="kiUeberarbeiten" variant="primary" icon="heroicon-o-sparkles" label="Vorschlagen"
+                            data-ueberarbeiten-start busy="denkt …" flash="Vorschlag da" />
                     </div>
                     @if($ueberarbeitung !== null)
                         <div class="rounded-lg bg-white/60 px-3 py-2 space-y-1.5 max-h-72 overflow-y-auto" data-ueberarbeiten-vorschau>
@@ -220,7 +219,11 @@
     {{-- EQUIPMENT (§4.2.6) — gruppiert nach Vokabular-Gruppe (Ist-App-Layout) --}}
     <x-foodalchemist::modal-section title="Equipment">
         <x-slot:actions>
-            @if(!$neu)<button type="button" wire:click="kiEquipment" class="{{ $btnAi }}" title="Set-Vorschlag aus den Zutaten (in die Auswahl, nichts persistiert)">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5')Equipment</button>@endif
+            @if(!$neu)
+                <x-foodalchemist::ki-action action="kiEquipment" variant="ai" icon="heroicon-o-sparkles" label="Equipment"
+                    title="Set-Vorschlag aus den Zutaten (in die Auswahl, nichts persistiert)"
+                    busy="Wird ermittelt …" flash="Equipment ermittelt" />
+            @endif
         </x-slot:actions>
         {{-- Gewählte Geräte deutlich hervorheben (gefüllt violett + ✓) + Zusammenfassung oben,
              damit die Auswahl im ~40-Chip-Raster nicht untergeht. Farben als rohes CSS (hell + dunkel). --}}
@@ -301,11 +304,14 @@
     {{-- STAMMDATEN (§4.2.2) — Name/Herkunft/Status/Taxonomie --}}
     <x-foodalchemist::modal-section title="Stammdaten" class="!p-3">
         <x-slot:actions>
-            <button type="button" wire:click="namePutzen" class="{{ $btnAi }}" title="§1-Syntax normalisieren">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') Name putzen</button>
+            <x-foodalchemist::ki-action action="namePutzen" variant="ai" icon="heroicon-o-sparkles" label="Name putzen"
+                title="§1-Syntax normalisieren" busy="Wird geputzt …" flash="Name geputzt" />
             @if(!$neu)
-                <button type="button" wire:click="ai_kategorie" class="{{ $btnAi }}" title="D-1-Klassifikation (GL-07-Vorschlag unten)">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') Kategorie</button>
+                <x-foodalchemist::ki-action action="ai_kategorie" variant="ai" icon="heroicon-o-sparkles" label="Kategorie"
+                    title="D-1-Klassifikation (GL-07-Vorschlag unten)" busy="Wird ermittelt …" flash="Kategorie ermittelt" />
             @endif
-            <button type="button" wire:click="kiFertigung" class="{{ $btnAi }}" title="Fertigungstiefe aus den Zutaten">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') Fertigung</button>
+            <x-foodalchemist::ki-action action="kiFertigung" variant="ai" icon="heroicon-o-sparkles" label="Fertigung"
+                title="Fertigungstiefe aus den Zutaten" busy="Wird ermittelt …" flash="Fertigung ermittelt" />
         </x-slot:actions>
 
         {{-- Kompakt: ein enges Raster, Name volle Breite --}}
@@ -373,7 +379,9 @@
     {{-- EIGENSCHAFTEN (§4.2.4) --}}
     <x-foodalchemist::modal-section title="Eigenschaften">
         <x-slot:actions>
-            <button type="button" wire:click="kiEigenschaften" class="{{ $btnAi }}" title="Arbeitszeit/Temperatur/Funktion + Geschmack (in die Felder, nichts persistiert)">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5')Eigenschaften</button>
+            <x-foodalchemist::ki-action action="kiEigenschaften" variant="ai" icon="heroicon-o-sparkles" label="Eigenschaften"
+                title="Arbeitszeit/Temperatur/Funktion + Geschmack (in die Felder, nichts persistiert)"
+                busy="Wird geschätzt …" flash="Eigenschaften geschätzt" />
         </x-slot:actions>
         <div class="grid grid-cols-2 gap-3">
             <div>
@@ -470,7 +478,8 @@
     <x-foodalchemist::modal-section title="Beschreibung (§8.3 — 3-5 Sätze nüchtern)">
         <x-slot:actions>
             @if(!$neu)
-                <button type="button" wire:click="ai_beschreibung" class="{{ $btnAi }}" data-ai-description>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5')Beschreibung</button>
+                <x-foodalchemist::ki-action action="ai_beschreibung" variant="ai" icon="heroicon-o-sparkles" label="Beschreibung"
+                    data-ai-description busy="Wird geschrieben …" flash="Beschreibung erstellt" />
                 <button type="button" wire:click="manual_beschreibung" class="{{ $btnGhostXs }}" title="aktuellen Text als manuell markieren (Override-First-Schutz)">als manuell</button>
                 <button type="button" wire:click="clear_beschreibung" class="{{ $btnGhostXs }}" title="Feld + Lineage leeren">Reset</button>
             @endif
@@ -567,9 +576,9 @@
 
         <x-foodalchemist::modal-section title="Behälter je Zweck">
             <x-slot:actions>
-                <button type="button" wire:click="kiDichteklasse" class="{{ $btnAi }}"
-                        title="recipe.dichteklasse: Produkteigenschaft schaetzen — nie die Behaelterzahl"
-                        data-ki-dichteklasse>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5')Schätzen</button>
+                <x-foodalchemist::ki-action action="kiDichteklasse" variant="ai" icon="heroicon-o-sparkles" label="Schätzen"
+                    title="recipe.dichteklasse: Produkteigenschaft schaetzen — nie die Behaelterzahl"
+                    data-ki-dichteklasse busy="Wird geschätzt …" flash="Geschätzt" />
             </x-slot:actions>
 
             <p class="text-[11px] text-gray-500 mb-2">
@@ -628,10 +637,8 @@
         @unless($neu)
             <div class="flex items-center justify-between gap-2 mb-2">
                 <span class="text-[11px] text-gray-500">Gegartes Profil — KI liest Zutaten + Zubereitung.</span>
-                <button type="button" wire:click="sensorikBewerten" wire:loading.attr="disabled" wire:target="sensorikBewerten" class="{{ $btnAi }}">
-                    <span wire:loading.remove wire:target="sensorikBewerten" class="inline-flex items-center gap-1.5">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') Sensorik neu bewerten</span>
-                    <span wire:loading wire:target="sensorikBewerten">… bewertet</span>
-                </button>
+                <x-foodalchemist::ki-action action="sensorikBewerten" variant="ai" icon="heroicon-o-sparkles" label="Sensorik neu bewerten"
+                    busy="… bewertet" flash="Sensorik bewertet" />
             </div>
         @endunless
         @include('foodalchemist::livewire.concepter.partials.sensorik')

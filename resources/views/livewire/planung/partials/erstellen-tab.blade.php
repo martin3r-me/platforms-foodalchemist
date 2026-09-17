@@ -92,9 +92,9 @@
             </div>
         @endif
         <div class="flex flex-wrap gap-2 items-center">
-            <button wire:click="goKaskade('{{ $scope }}')" @click="tab='worker'" @disabled($laeuft) class="{{ $btnPrimary }} disabled:opacity-40">
-                @svg($goIcon, 'w-4 h-4') {{ $scope === 'gericht' ? 'Bauplan vorschlagen' : $goLabel . ' erzeugen' }}
-            </button>
+            <x-foodalchemist::ki-action action="goKaskade('{{ $scope }}')" variant="primary" :icon="$goIcon"
+                :label="$scope === 'gericht' ? 'Bauplan vorschlagen' : $goLabel . ' erzeugen'"
+                busy="Kaskade wird gestartet …" flash="Kaskade gestartet" :disabled="$laeuft" before="tab='worker'" />
             <button type="button" wire:click="wissenVorschau('{{ $scope }}')" @disabled($laeuft)
                     wire:loading.attr="disabled" wire:target="wissenVorschau"
                     class="{{ $btnGhost }} disabled:opacity-40 inline-flex items-center gap-1" data-planung-wissen-vorab>

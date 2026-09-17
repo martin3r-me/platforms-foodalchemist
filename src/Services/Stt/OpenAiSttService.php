@@ -28,11 +28,17 @@ class OpenAiSttService implements SttServiceContract
 {
     private const ENDPOINT = 'https://api.openai.com/v1/audio/transcriptions';
 
-    /** OpenAI leitet das Format aus dem Dateinamen ab — Mime → Endung. */
+    /**
+     * OpenAI leitet das Format aus dem Dateinamen ab — Mime → Endung. `video/mp4`/`video/webm`
+     * stehen zusätzlich zu den `audio/*`-Pendants drin: Safari meldet bei reinen Audio-Aufnahmen
+     * mit MP4-Container `MediaRecorder.mimeType` teils als `video/mp4` — ohne diesen Eintrag
+     * landete die Endung beim generischen `.webm`-Fallback und OpenAI lehnte die Datei ab.
+     */
     private const ENDUNGEN = [
         'audio/webm' => 'webm', 'audio/ogg' => 'ogg', 'audio/mpeg' => 'mp3',
         'audio/mp4' => 'mp4', 'audio/m4a' => 'm4a', 'audio/x-m4a' => 'm4a',
         'audio/wav' => 'wav', 'audio/x-wav' => 'wav', 'audio/flac' => 'flac',
+        'video/mp4' => 'mp4', 'video/webm' => 'webm', 'audio/aac' => 'aac',
     ];
 
     /** Hartes Limit der API (25 MB) — vorher abfangen, damit die Meldung verständlich bleibt. */
@@ -74,16 +80,23 @@ class OpenAiSttService implements SttServiceContract
             ->post(self::ENDPOINT, $felder);
 
         if (! $antwort->successful()) {
-            // Die API-Meldung mitgeben, aber gekappt — sie landet im UI-Fehlerfeld.
+            // Die API-Meldung mitgeben, aber gekappt — sie landet im UI-Fehlerfeld. Der HTTP-Status
+            // geht als Exception-Code mit, damit VoiceFehlerText::aus() ihn auswerten kann, ohne
+            // die Meldung nach „HTTP \d+" zu durchsuchen.
             $grund = (string) ($antwort->json('error.message') ?? $antwort->body());
 
             throw new \RuntimeException('Transkription fehlgeschlagen (HTTP ' . $antwort->status() . '): '
-                . mb_strimwidth($grund, 0, 200, '…'));
+                . mb_strimwidth($grund, 0, 200, '…'), $antwort->status());
         }
 
         $text = trim((string) ($antwort->json('text') ?? ''));
 
         return $vokabular === '' ? $text : self::ohneVokabularEcho($text, $vokabular);
+    }
+
+    public function name(): string
+    {
+        return 'openai';
     }
 
     /**

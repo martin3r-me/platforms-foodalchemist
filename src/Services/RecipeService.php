@@ -631,6 +631,9 @@ class RecipeService
         if (! $recipe->steps()->whereNull('deleted_at')->exists()) {
             $luecken[] = 'keine Schritte';
         }
+        if (! $recipe->ingredients()->whereNull('deleted_at')->exists()) {
+            $luecken[] = 'keine Zutaten';
+        }
         $offeneZutaten = $recipe->ingredients()->whereNull('deleted_at')
             ->whereNull('gp_id')->whereNull('referenced_recipe_id')->count();
         if ($offeneZutaten > 0) {

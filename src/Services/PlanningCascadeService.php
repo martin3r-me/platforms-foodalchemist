@@ -50,6 +50,16 @@ class PlanningCascadeService
     /** Async-Result via Cache (Job-Vertrag) — Minuten, bis der Worker den Step abschließt. */
     private const RESULT_TTL_MIN = 15;
 
+    /**
+     * Spec 53 / Paket C: Phasen-Texte (`cascade_run_steps.phase`) als Konstanten statt Magic-Strings —
+     * Schreiber (Jobs) UND Leser (Index::konformitaetPruefen vergleicht gegen PHASE_KONFORMITAET, um
+     * eine laufende Prüfung zu erkennen) referenzieren dieselbe Konstante, damit ein Textwechsel den
+     * Vergleich nicht still bricht.
+     */
+    public const PHASE_ANREICHERUNG = 'Anreicherung läuft …';
+    public const PHASE_BILDER = 'KI-Fotos werden erzeugt …';
+    public const PHASE_KONFORMITAET = 'Konformität wird geprüft …';
+
     /** Deckel gegen Runaway-Kosten: max. Zellen (= KI-Gericht-Generierungen) je Speiseplan-Voll-Kaskade. */
     /**
      * Wie viele Zyklus-Wochen ein Speiseplan-Lauf auf einmal baut (Dominique 2026-09-03:
@@ -795,7 +805,7 @@ class PlanningCascadeService
      *
      * @param  list<int>  $seen  Rekursions-Pfad; ab Tiefe 1 ist dieser Durchgang eine Paket-Station
      */
-    private function vermerkeConceptLuecke(int $runId, int $conceptId, int $slotsLeer, int $angefragt, int $erzeugt, int $grenze, array $seen): void
+    private function vermerkeConceptLuecke(int $runId, int $conceptId, int $slotsLeer, int $angefragt, int $erzeugt, int $grenze, array $seen, ?string $ideenFehler = null): void
     {
         $offen = $slotsLeer - $erzeugt;
         if ($offen < 1) {
@@ -808,8 +818,11 @@ class PlanningCascadeService
         }
 
         if ($erzeugt < min($angefragt, $grenze)) {
+            // Ein gescheiterter Ideen-Aufruf (Budget/Provider/…) ist ein ANDERER Befund als „die KI
+            // hat 0 geliefert" — der Mensch braucht den echten Grund, nicht eine Vermutung über die
+            // KI-Antwort, wenn sie nie gefragt wurde.
             $grund = $erzeugt === 0
-                ? 'die KI hat keine geliefert'
+                ? ($ideenFehler ?? 'die KI hat keine geliefert')
                 : sprintf('die KI hat nur %d geliefert', $erzeugt);
         } elseif ($angefragt > $grenze) {
             $grund = sprintf('die KI liefert höchstens %d auf einmal', $grenze);
@@ -1012,7 +1025,13 @@ class PlanningCascadeService
             $params = array_merge($this->sessionGenerationParams($team, $planningSessionId), ['auto_dependencies' => true, 'cascade_step_id' => $stepId]);
             $workflow = app(RecipeDependencyWorkflowService::class);
             $context = $workflow->prepare($team, $stepId, $brief, $params, true);
-            $gen = app(RecipeGeneratorService::class)->generiere($team, $brief, $params, null, true, 'plan_go', $context);
+            // Spec 53 / Paket C-Nachtrag: derselbe Fortschritts-Callback wie GenerateRecipeJob —
+            // generiere() meldet dieselben Stufen (Kontext & Wissen/KI schreibt/Zutaten/Kohärenz),
+            // hier bisher ungenutzt. Phase am Step statt am Cache (kein eigener Cache-Key hier).
+            $gen = app(RecipeGeneratorService::class)->generiere(
+                $team, $brief, $params, null, true, 'plan_go', $context,
+                fn (string $stufe) => $this->setzePhase($stepId, $stufe),
+            );
             $recipe = $gen['recipe'] ?? null;
             if ($recipe === null) {
                 throw new RuntimeException('Generierung lieferte kein Rezept.');
@@ -1095,7 +1114,13 @@ class PlanningCascadeService
             $params = array_merge($this->sessionGenerationParams($team, $planningSessionId), ['auto_dependencies' => true, 'cascade_step_id' => $stepId]);
             $workflow = app(RecipeDependencyWorkflowService::class);
             $context = $workflow->prepare($team, $stepId, $brief, $params, true);
-            $gen = app(RecipeGeneratorService::class)->generiere($team, $brief, $params, null, true, 'plan_go', $context);
+            // Spec 53 / Paket C-Nachtrag: derselbe Fortschritts-Callback wie GenerateRecipeJob —
+            // generiere() meldet dieselben Stufen (Kontext & Wissen/KI schreibt/Zutaten/Kohärenz),
+            // hier bisher ungenutzt. Phase am Step statt am Cache (kein eigener Cache-Key hier).
+            $gen = app(RecipeGeneratorService::class)->generiere(
+                $team, $brief, $params, null, true, 'plan_go', $context,
+                fn (string $stufe) => $this->setzePhase($stepId, $stufe),
+            );
             $recipe = $gen['recipe'] ?? null;
             if ($recipe === null) {
                 throw new RuntimeException('Generierung lieferte kein Rezept.');
@@ -1176,12 +1201,29 @@ class PlanningCascadeService
 
             $ideen = [];
             $div = null;   // muss VOR dem try stehen — im Fehlerfall wäre es sonst undefiniert
+            // Anlass (Lauf 72, 2026-09-17): ein gescheiterter kiDivergenzConcept-Call verschwand
+            // hier bisher spurlos (nackter catch, kein Log) — der Run meldete "die KI hat keine
+            // geliefert", obwohl sie nie gefragt wurde (z. B. KnowledgeBudgetExceeded). $ideenFehler
+            // trägt den ECHTEN Grund an vermerkeConceptLuecke weiter, geloggt wird IMMER.
+            $ideenFehler = null;
             try {
                 // Wissen+Trend fließen in die Divergenz (voller Stack + generischer Trend + Ursprungs-Trend der Planung).
                 $div = app(IdeenService::class)->kiDivergenzConcept($team, $conceptId, $leere->count(), null, $trendDocId);
                 $ideen = is_array($div['angelegt'] ?? null) ? $div['angelegt'] : [];
-            } catch (\Throwable) {
-                $ideen = [];   // KI nicht verfügbar → keine Erfindung für die direkten Slots (graceful); Pakete werden dennoch versucht
+            } catch (\Platform\FoodAlchemist\Services\Ai\KnowledgeBudgetExceeded $e) {
+                $ideen = [];
+                $ideenFehler = 'Wissensbudget überschritten (' . $e->getMessage() . ')';
+                \Illuminate\Support\Facades\Log::warning('[fanoutConceptInvention] kiDivergenzConcept: Wissensbudget überschritten', [
+                    'concept_id' => $conceptId, 'error' => $e->getMessage(),
+                ]);
+            } catch (\Throwable $e) {
+                // KI nicht verfügbar/Fehler → keine Erfindung für die direkten Slots (graceful); Pakete
+                // werden dennoch versucht. Graceful heißt aber nicht stumm — geloggt wird trotzdem.
+                $ideen = [];
+                $ideenFehler = 'Ideen-Aufruf fehlgeschlagen (' . get_class($e) . ': ' . $e->getMessage() . ')';
+                \Illuminate\Support\Facades\Log::warning('[fanoutConceptInvention] kiDivergenzConcept fehlgeschlagen', [
+                    'concept_id' => $conceptId, 'exception' => get_class($e), 'error' => $e->getMessage(),
+                ]);
             }
 
             // EIN Befund für diesen Konzept-Durchgang, statt getrennter Vermerke für den
@@ -1197,6 +1239,7 @@ class PlanningCascadeService
                 count($ideen),
                 (int) ($div['grenze'] ?? IdeenService::IDEEN_MAX),
                 $seen,
+                $ideenFehler,
             );
 
             foreach (array_values($ideen) as $idx => $idee) {
@@ -1293,7 +1336,13 @@ class PlanningCascadeService
             }
             $workflow = app(RecipeDependencyWorkflowService::class);
             $context = $workflow->prepare($team, $stepId, $beschreibung, $params, true);
-            $gen = app(RecipeGeneratorService::class)->generiere($team, $beschreibung, $params, null, true, 'plan_go', $context);
+            // Spec 53 / Paket C-Nachtrag: derselbe Fortschritts-Callback wie materialisiereSpeisekarte-
+            // Position/-SpeiseplanZelle — dies ist der häufigste Gericht-Pfad live (jedes erfundene
+            // Gericht aus Concept-/Foodbook-Fan-out, MaterializeConceptIdeaJob), bisher ohne Phase.
+            $gen = app(RecipeGeneratorService::class)->generiere(
+                $team, $beschreibung, $params, null, true, 'plan_go', $context,
+                fn (string $stufe) => $this->setzePhase($stepId, $stufe),
+            );
             $recipe = $gen['recipe'] ?? null;
             if ($recipe === null) {
                 throw new RuntimeException('Generierung lieferte kein Rezept.');
@@ -1400,7 +1449,7 @@ class PlanningCascadeService
         // 120 Zeichen geschnittene Brief — das Cockpit zeigte also den Briefing-Text statt des Rezept-/
         // Concept-Namens. Der Brief bleibt separat im Run-Kopf sichtbar. Fail-soft (Name-Auflösung optional).
         $artefaktName = $this->artefaktName($step->team_id ? (int) $step->team_id : null, $refType, $refId);
-        $updates = ['status' => 'done', 'ref_type' => $refType, 'ref_id' => $refId, 'error' => null];
+        $updates = ['status' => 'done', 'ref_type' => $refType, 'ref_id' => $refId, 'error' => null, 'phase' => null, 'phase_at' => null];
         if ($artefaktName !== null && $artefaktName !== '') {
             $updates['label'] = Str::limit($artefaktName, 120, '');
         }
@@ -1433,9 +1482,26 @@ class PlanningCascadeService
         if ($step === null) {
             return;
         }
-        $step->update(['status' => 'failed', 'error' => Str::limit($error, 500, '')]);
+        $step->update(['status' => 'failed', 'error' => Str::limit($error, 500, ''), 'phase' => null, 'phase_at' => null]);
         $this->recomputeRunStatus((int) $step->cascade_run_id);
         $this->scoreConceptCohesionIfComplete($step);
+    }
+
+    /**
+     * Persistente Zwischen-Phase eines laufenden Steps (Spec 53 / Paket C) — Cockpit-Wahrheit statt
+     * Cache-only (der Cache `fa:recipe-gen:{runId}` bleibt zusätzlich für die Rezept-Modals). Ein-
+     * Spalten-Update; Guard gegen tote/terminale Steps (verworfen/skipped haben nichts mehr zu melden).
+     * Beiwerk — ein Tracking-Fehler darf den aufrufenden Job/Lauf nie kippen.
+     */
+    public function setzePhase(int $stepId, ?string $label): void
+    {
+        try {
+            FoodAlchemistCascadeRunStep::whereKey($stepId)
+                ->whereIn('status', ['queued', 'running', 'done', 'freigegeben'])
+                ->update(['phase' => $label, 'phase_at' => $label !== null ? now() : null]);
+        } catch (\Throwable) {
+            // Tracking ist Beiwerk — nie blockierend.
+        }
     }
 
     /**
@@ -1513,7 +1579,10 @@ class PlanningCascadeService
         $deferred = is_array($step->deferred) ? $step->deferred : [];
         unset($deferred['fanout']);                   // Fan-out-Args sind verbraucht/tot
         $deferred['fanout_error'] = Str::limit($error, 500, '');
-        $step->update(['deferred' => $deferred]);
+        // Spec 53 / Paket C-Nachtrag: Status bleibt `freigegeben` (kein markStepFailed-Pfad hier) —
+        // ohne das explizite Löschen bliebe "Skizzen werden erfunden …" nach einem harten Job-Tod
+        // (Timeout/OOM in FanoutConceptJob) für immer am Step stehen.
+        $step->update(['deferred' => $deferred, 'phase' => null, 'phase_at' => null]);
         $this->recomputeRunStatus((int) $step->cascade_run_id);
         $this->scoreConceptCohesionIfComplete($step);
     }
@@ -1897,21 +1966,30 @@ class PlanningCascadeService
     /**
      * Step freigeben: das Draft-Artefakt live setzen (Rezept → approved, Concept → active) über die
      * sanktionierten Services, Step → `freigegeben`, Run neu bewerten. Nur `done`-Steps sind freigebbar.
+     *
+     * Ein `geplant`-Step (egal welcher `kind`) wird durch dieselbe FREIGABE-Aktion stattdessen ERZEUGT
+     * — Gate 1 (Kapitel → Concept, Sub-Rezept/erfundenes Gericht → Materialisierung) statt Gate 2
+     * (Draft → live). Vorher lief das nur für `kind=concept`; ein geplanter Gericht-/Rezept-Step war
+     * über `gibStepFrei`/MCP-FREIGABE ein stiller No-op (Anlass: Lauf 74, Step 513) — die UI bedient
+     * denselben Fall längst über `erzeugeGeplant`.
+     *
+     * @return string Aktions-Tag für den Aufrufer (MCP-Tool zeigt es an, UI ignoriert es):
+     *                 `freigegeben` | `geplant_erzeugt` | `no_op_status_<status>`
      */
-    public function gibStepFrei(Team $team, int $stepId): void
+    public function gibStepFrei(Team $team, int $stepId): string
     {
         $step = $this->ownedStep($team, $stepId);
-        // Kapitel-Gate (gestufte Foodbook-Vollkaskade): ein GEPLANTER Kapitel-Concept-Step wird durch die
-        // „Freigabe" ERZEUGT (dispatch), nicht approved — die Freigabe der Kapitel-Struktur startet die
-        // Concept-Generierung. So bedient dieselbe FREIGABE-Aktion Gate 1 (Kapitel → Concept erzeugen) und
-        // Gate 2 (Concept-Entwurf freigeben + Gänge-Fan-out).
-        if ($step->kind === 'concept' && $step->status === 'geplant') {
-            $this->erzeugeGeplantesConcept($team, $stepId);
+        if ($step->status === 'geplant') {
+            if ($step->kind === 'concept') {
+                $this->erzeugeGeplantesConcept($team, $stepId);
+            } else {
+                $this->erzeugeGeplantenStep($team, $stepId);
+            }
 
-            return;
+            return 'geplant_erzeugt';
         }
         if ($step->status !== 'done') {
-            return;
+            return 'no_op_status_' . $step->status;
         }
         if ($step->ref_id !== null) {
             if ($step->ref_type === 'recipe') {
@@ -1931,6 +2009,8 @@ class PlanningCascadeService
         if (! $asyncFolgestufe) {
             $this->recomputeRunStatus((int) $step->cascade_run_id);
         }
+
+        return 'freigegeben';
     }
 
     /**
@@ -2087,6 +2167,12 @@ class PlanningCascadeService
         if ($step->ref_type !== 'recipe' || $step->ref_id === null || ! in_array($step->kind, ['rezept', 'gericht'], true)) {
             return;
         }
+        // Server-Guard gegen Doppel-Enqueue (Spec 53 / Paket C): kein zweiter Foto-Job, während der
+        // erste noch läuft — sonst überschneiden sich zwei RecipeImageService-Läufe am selben Rezept.
+        $bilderStatus = is_array($step->deferred) ? ($step->deferred['bilder']['status'] ?? null) : null;
+        if (in_array($bilderStatus, ['queued', 'running'], true)) {
+            throw new \Platform\FoodAlchemist\Exceptions\PlanungAktionLaeuftBereitsException('Bild-Erzeugung läuft bereits.');
+        }
         $this->markBilderQueued($step);
         EnrichRecipeJob::dispatch($team->id, (int) (Auth::id() ?? 0), (int) $step->ref_id, null, false, (int) $step->id, true);
     }
@@ -2142,6 +2228,12 @@ class PlanningCascadeService
         $step = $this->ownedStep($team, $stepId);
         if ($step->ref_type !== 'recipe' || $step->ref_id === null || ! in_array($step->kind, ['rezept', 'gericht'], true)) {
             return;
+        }
+        // Server-Guard gegen Doppel-Enqueue (Spec 53 / Paket C): kein zweiter Anreicherungs-Job,
+        // während der erste noch läuft (sonst laufen zwei RecipeOneShotService-Pässe gegeneinander).
+        $enrichStatus = is_array($step->deferred) ? ($step->deferred['enrich']['status'] ?? null) : null;
+        if (in_array($enrichStatus, ['queued', 'running'], true)) {
+            throw new \Platform\FoodAlchemist\Exceptions\PlanungAktionLaeuftBereitsException('Anreicherung läuft bereits.');
         }
         $params = is_array($step->run?->params) ? $step->run->params : [];
         $zielVk = isset($params['ziel_vk_eur']) ? (float) $params['ziel_vk_eur'] : null;
@@ -2225,6 +2317,11 @@ class PlanningCascadeService
         if (! in_array($step->kind, ['rezept', 'gericht', 'concept'], true)) {
             return;
         }
+        // Server-Guard gegen Doppel-Enqueue (Spec 53 / Paket C): ein zweiter Klick auf „neu generieren"
+        // während der erste Versuch noch rechnet, darf keinen zweiten GenerateRecipeJob einreihen.
+        if ($step->status === 'running') {
+            throw new \Platform\FoodAlchemist\Exceptions\PlanungAktionLaeuftBereitsException('Läuft bereits — bitte warten, bis der aktuelle Versuch fertig ist.');
+        }
         // L4: Regenerieren eines KIND-Basisrezepts — die Eltern-Zutat zeigt noch auf den gleich
         // gelöschten Draft. VOR dem Löschen die Bindung lösen (referenced_recipe_id NULL, unmatched),
         // die Dependency aber BEHALTEN, damit der neue Lauf via bindCompletedChild sauber neu bindet.
@@ -2255,7 +2352,7 @@ class PlanningCascadeService
         // Die geplanten/übernommenen Sub-Rezepte beschreiben die Zerlegung des ALTEN Entwurfs — der
         // neue Lauf plant seine eigenen (sonst bleiben Zeilen stehen, die zu nichts mehr gehören).
         $this->raeumeGeplanteKinder($step);
-        $step->update(['status' => 'running', 'ref_type' => null, 'ref_id' => null, 'error' => null, 'deferred' => null]);
+        $step->update(['status' => 'running', 'ref_type' => null, 'ref_id' => null, 'error' => null, 'deferred' => null, 'phase' => null, 'phase_at' => null]);
         $run = $step->run;
         // L5: Wurzel-Step (Gericht/Concept) neu erzeugen aus dem VOLLEN Run-Brief — nicht aus dem Label,
         // das markStepDone inzwischen auf den (kurzen) Artefakt-Namen gezogen hat (sonst schrumpfte das
@@ -2678,6 +2775,52 @@ class PlanningCascadeService
     }
 
     /**
+     * Spec 53 / Paket C: Globaler KI-Status fürs Planung-Kopf — EIN Aggregat über alle Steps des
+     * Teams (nicht nur die des aktuell offenen Laufs), damit „N warten · M laufen" auch sichtbar ist,
+     * wenn gerade kein Lauf im Cockpit geöffnet ist. Team-EIGENE Steps (nicht die Team-Ancestry —
+     * der Status soll zeigen, was DIESES Team gerade selbst anstößt).
+     *
+     * @return array{wartend:int, laufend:int, aktuelle_phase:?string, fehler_24h:int, queue:?int}
+     */
+    public function kiStatusFuerTeam(Team $team): array
+    {
+        $steps = FoodAlchemistCascadeRunStep::where('team_id', $team->id);
+
+        $wartend = (clone $steps)->where('status', 'queued')->count();
+        // „laufend" = belegt gerade tatsächlich einen Worker-Slot: primäre Generierung (status=running)
+        // ODER eine sekundäre Phase (Anreicherung/Bilder/Konformität), die auch nach der Freigabe
+        // (status=freigegeben/done) noch läuft und deshalb kein `running` mehr trägt.
+        $laufend = (clone $steps)->where(function ($q) {
+            $q->where('status', 'running')->orWhereNotNull('phase');
+        })->count();
+        $aktuellePhase = (clone $steps)->whereNotNull('phase')
+            ->orderByDesc('phase_at')
+            ->value('phase');
+        $fehler24h = (clone $steps)->where('status', 'failed')
+            ->where('updated_at', '>=', now()->subDay())
+            ->count();
+
+        // Optionale Queue-Tiefe: nur wenn die `jobs`-Tabelle existiert UND die Default-Queue-Connection
+        // `database` ist (sonst liegt die Warteschlange z. B. in Redis — kein Job hierfür zu erfinden).
+        $queue = null;
+        try {
+            if (config('queue.default') === 'database' && \Illuminate\Support\Facades\Schema::hasTable('jobs')) {
+                $queue = (int) \Illuminate\Support\Facades\DB::table('jobs')->count();
+            }
+        } catch (\Throwable) {
+            $queue = null;
+        }
+
+        return [
+            'wartend' => $wartend,
+            'laufend' => $laufend,
+            'aktuelle_phase' => $aktuellePhase,
+            'fehler_24h' => $fehler24h,
+            'queue' => $queue,
+        ];
+    }
+
+    /**
      * E1b (Spec 40): Owner-Kontext der Session für die Leitstelle — macht den Einbahn-Sprung zum
      * sichtbaren Round-Trip: WOFÜR wird hier geplant (Ausgabe-Modul + Name) + der Rückweg dorthin.
      * Liest den jüngsten Lauf der Session MIT Ausgabe-Owner (`source_owner_type`/`_id` — die sitzen
@@ -2756,6 +2899,16 @@ class PlanningCascadeService
                 'ebene' => (string) $s->kind,
                 'label' => (string) $s->label,
                 'status' => (string) $s->status,
+                // Spec 53 / Paket C(-Nachtrag): DB-Wahrheit der laufenden Zwischen-Phase (Cockpit + MCP)
+                // — die Terminal-Phasen (Entwurf bereit/Fehler) ergeben sich aus `status`, nicht aus
+                // `phase`. queued/running OHNE gesetzte Phase heißt „dispatcht, aber der Worker hat den
+                // Job noch nicht aufgenommen" (Cockpit-Text „eingereiht — wartet auf Worker",
+                // step-zeile.blade.php) — derselbe Text hier, damit ein MCP-Konsument dieselbe
+                // Unterscheidung sieht, statt sie aus Status+fehlender Phase selbst zu rekonstruieren.
+                'phase' => $s->phase ?: (in_array($s->status, ['queued', 'running'], true) ? 'eingereiht — wartet auf Worker' : null),
+                // Spec 53 / Paket A: `context_snapshot['timings']` je Step (generator_ms/context_ms/…),
+                // sobald Paket A sie schreibt — Peter zeigt sie nur an, Fallback null bis dahin.
+                'timings' => (! empty($snapshot['timings']) && is_array($snapshot['timings'])) ? $snapshot['timings'] : null,
                 'tiefe' => (int) $s->depth,
                 'ref_type' => $s->ref_type,
                 'ref_id' => $s->ref_id !== null ? (int) $s->ref_id : null,
@@ -2781,8 +2934,31 @@ class PlanningCascadeService
                 // Verwendetes Wissen je Step (aus context_snapshot, geschrieben von RecipeGenerationContextService::build):
                 // welche Wissens-Dossiers real in den Prompt geflossen sind — damit die Erdung headless prüfbar ist.
                 'wissen' => ! empty($snapshot['knowledge_files']) ? $snapshot['knowledge_files'] : null,
+                // Spec 53 Paket B Aufgabe 6 — was gebaut, aber NICHT gesendet wurde, additiv neben
+                // 'wissen': 'retrieval' aus dem Budget-Schnitt der Fuzzy-Discovery, 'kanon' aus
+                // gedroppten wenn_platz-Dossiers (RecipeDependencyWorkflowService::afterGenerated
+                // korrigiert diesen Zweig nach dem Gateway-Call). Nur der Snapshot-Key wird gelesen —
+                // kein neuer Rechenweg. `null` statt einer leeren Struktur, solange nichts verworfen
+                // wurde (kein Etikett ohne Landebahn).
+                'wissen_verworfen' => (static function () use ($snapshot): ?array {
+                    $d = is_array($snapshot['knowledge_dropped'] ?? null) ? $snapshot['knowledge_dropped'] : [];
+                    $retrieval = is_array($d['retrieval'] ?? null) ? array_values($d['retrieval']) : [];
+                    $kanon = is_array($d['kanon'] ?? null) ? array_values($d['kanon']) : [];
+
+                    return ($retrieval === [] && $kanon === []) ? null : array_filter([
+                        'retrieval' => $retrieval !== [] ? $retrieval : null,
+                        'kanon' => $kanon !== [] ? $kanon : null,
+                    ]);
+                })(),
             ], static fn ($v): bool => $v !== null && $v !== '');
         })->all();
+
+        // Task 6 (#505-Nachtrag 2026-09, Lauf 65 „abgeschlossen" trotz 0-Schritte-Draft):
+        // RecipeService::reifegrad() bleibt die einzige Wahrheit — hier nur aggregiert, was
+        // RecipeDependencyWorkflowService::afterGenerated je Step bereits in deferred.reuse
+        // ablegt, damit der Run-Kopf (nicht nur die einzelne Step-Zeile) zeigt, ob "übernommen"
+        // wirklich fertig heißt.
+        $uebernahme = $this->zaehleUebernommenUnreif($steps);
 
         $stufen = $steps->groupBy('kind')->map(static function ($group, $kind): array {
             return [
@@ -2823,6 +2999,8 @@ class PlanningCascadeService
                 'creative_mode' => (string) $run->creative_mode,
                 'planning_session_id' => $run->planning_session_id !== null ? (int) $run->planning_session_id : null,
                 'origin_dish_idea_id' => $run->origin_dish_idea_id !== null ? (int) $run->origin_dish_idea_id : null,
+                'uebernommen' => $uebernahme['gesamt'] > 0 ? $uebernahme['gesamt'] : null,
+                'uebernommen_unreif' => $uebernahme['gesamt'] > 0 ? $uebernahme['unreif'] : null,
             ], static fn ($v): bool => $v !== null && $v !== ''),
             'leitplanken' => $leitplanken === [] ? null : $leitplanken,
             'stufen' => $stufen,
@@ -2840,32 +3018,65 @@ class PlanningCascadeService
         ];
     }
 
+    /**
+     * `skipped`-Steps (Bestands-Übernahme) + wie viele davon laut `deferred.reuse.reif`
+     * UNREIF sind. `RecipeService::reifegrad()` bleibt die einzige Quelle für „reif" — hier
+     * wird nur das von `RecipeDependencyWorkflowService::afterGenerated` bereits geschriebene
+     * deferred-Feld gezählt (fehlt `reuse` ganz, zählt der Step nicht mit — kein Reuse-Fall).
+     *
+     * @return array{gesamt: int, unreif: int, unreif_labels: list<string>}
+     */
+    private function zaehleUebernommenUnreif(mixed $steps): array
+    {
+        $uebernommen = collect($steps)->where('status', 'skipped');
+        $unreif = $uebernommen->filter(static function ($s): bool {
+            $reuse = is_array($s->deferred['reuse'] ?? null) ? $s->deferred['reuse'] : null;
+
+            return $reuse !== null && ! ($reuse['reif'] ?? false);
+        });
+
+        return [
+            'gesamt' => $uebernommen->count(),
+            'unreif' => $unreif->count(),
+            'unreif_labels' => $unreif->pluck('label')->filter()->values()->all(),
+        ];
+    }
+
     /** Übersetzt den Run-Status in einen Handlungs-Satz (Freigabe/Fortsetzen bleiben human-only). */
     private function laufStatusHinweis(string $status, mixed $steps = null): string
     {
+        $uebernahme = $steps !== null
+            ? $this->zaehleUebernommenUnreif($steps)
+            : ['gesamt' => 0, 'unreif' => 0, 'unreif_labels' => []];
+
         // Ein Lauf, der nur noch wegen einer UNREIFEN ÜBERNAHME in `review` haengt, braucht einen
         // anderen Satz als „Entwuerfe warten auf Freigabe" — sonst sucht man die Freigabe-Aktion,
         // die es dort nicht gibt (eine `skipped`-Zeile ist nicht freigebbar).
         if ($status === 'review' && $steps !== null) {
-            $unreif = collect($steps)->where('status', 'skipped')->filter(static function ($st) {
-                $reuse = is_array($st->deferred['reuse'] ?? null) ? $st->deferred['reuse'] : null;
-
-                return $reuse !== null && ! ($reuse['reif'] ?? false);
-            });
             $offeneEntwuerfe = collect($steps)->whereIn('status', ['done', 'geplant'])->count();
-            if ($unreif->isNotEmpty() && $offeneEntwuerfe === 0) {
+            if ($uebernahme['unreif'] > 0 && $offeneEntwuerfe === 0) {
                 return 'Übernommene Bestands-Rezepte sind nicht produktionsreif ('
-                    .$unreif->pluck('label')->filter()->implode(', ')
+                    .implode(', ', $uebernahme['unreif_labels'])
                     .'). Eigene Entwürfe werden bei der Freigabe automatisch angereichert; fremde oder '
                     .'freigegebene Rezepte brauchen eine bewusste Entscheidung im Cockpit '
                     .'(„Bestand anreichern"). Details je Schritt: uebernahme_reif / uebernahme_luecken.';
             }
         }
 
+        // Task 6: „Lauf abgeschlossen" hieß bisher auch dann so, wenn ein übernommener Bestand
+        // NICHT produktionsreif ist (Lauf 65) — der Satz nennt die Zahl jetzt explizit, statt
+        // Vollständigkeit zu behaupten, die reifegrad() nicht bestätigt.
+        $uebernahmeZusatz = $uebernahme['gesamt'] > 0
+            ? sprintf(
+                ' %d Rezept%s aus dem Bestand übernommen, davon %d unfertig (nicht produktionsreif).',
+                $uebernahme['gesamt'], $uebernahme['gesamt'] === 1 ? '' : 'e', $uebernahme['unreif'],
+            )
+            : '';
+
         return match ($status) {
             'running' => 'Der Worker rechnet noch (Steps queued/running). Auf Abschluss warten, dann prüfen/freigeben.',
             'review' => 'Fertige Entwürfe warten auf die menschliche Freigabe (Gate 2); geplante Sub-Rezepte auf die Freigabe der Stufe darüber. Freigeben/Verwerfen ist human-only, kein MCP-Trigger.',
-            'done' => 'Lauf abgeschlossen — alle Artefakte freigegeben oder als Bestand übernommen.',
+            'done' => 'Lauf abgeschlossen — alle Artefakte freigegeben oder als Bestand übernommen.' . $uebernahmeZusatz,
             'failed' => 'Lauf fehlgeschlagen — gescheiterte Schritte lassen sich gebündelt fortsetzen (human-only im Cockpit).',
             default => $status,
         };
