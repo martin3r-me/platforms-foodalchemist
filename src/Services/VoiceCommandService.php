@@ -101,6 +101,21 @@ class VoiceCommandService
     ];
 
     /**
+     * Review-Fix 2026-09-17 (cooking-jarvis-03): die vier Tools aus PROPOSAL_TOOLS, die
+     * tatsächlich einen Vorschlag ERZEUGEN — `planung_kaskade.LETZTE` ist reines Lesen
+     * (`read_only => true`) und stand in PROPOSAL_TOOLS nur als Flag-Sicherung, nicht weil
+     * es einen Vorschlag baut. Für den Modus `nur_lesen` darf NUR diese engere Liste aus
+     * Katalog/Policy fliegen — sonst verliert „wie weit ist die Generierung?" grundlos
+     * seine Antwort, obwohl es nichts vorschlägt und nichts schreibt.
+     */
+    public const SCHREIB_VORSCHLAG_TOOLS = [
+        'foodalchemist.recipe_klasse.POST',
+        'foodalchemist.gp_proposals.POST',
+        'foodalchemist.planung_vorschlag.POST',
+        'foodalchemist.anreicherung_vorschlag.POST',
+    ];
+
+    /**
      * Commit-Flags, die ein Proposal-Tool zum Direktschreiber machen. Nicht geraten,
      * sondern aus den echten Schemas erhoben: `confirm` (24 Tools), `accept` (4),
      * `apply` (3), `force` (2). Im Sprachpfad immer aus.
@@ -197,15 +212,19 @@ class VoiceCommandService
         // die Policy allein hätte `recipe_klasse.POST`/`planung_vorschlag.POST` NICHT gesperrt,
         // weil beide schon im Warmstart-Katalog stehen. Für `nur_lesen` müssen sie also aus dem
         // KATALOG raus, nicht nur aus der Policy (die bleibt als zweite Sicherung stehen, falls
-        // das Modell eines trotzdem über tool_registry.SEARCH findet).
-        $toolsFuerModus = $modus === 'nur_lesen' ? array_values(array_diff(self::TOOLS, self::PROPOSAL_TOOLS)) : self::TOOLS;
+        // das Modell eines trotzdem über tool_registry.SEARCH findet). NUR SCHREIB_VORSCHLAG_TOOLS
+        // (nicht die ganze PROPOSAL_TOOLS-Liste) — `planung_kaskade.LETZTE` ist reines Lesen und
+        // soll in nur_lesen erreichbar bleiben („wie weit ist die Generierung?" schlägt nichts vor).
+        $toolsFuerModus = $modus === 'nur_lesen' ? array_values(array_diff(self::TOOLS, self::SCHREIB_VORSCHLAG_TOOLS)) : self::TOOLS;
         $policy = $modus === 'nur_lesen'
-            ? static fn (string $name, object $tool): bool => ! in_array($name, self::PROPOSAL_TOOLS, true) && self::darfNutzen($name, $tool)
+            ? static fn (string $name, object $tool): bool => ! in_array($name, self::SCHREIB_VORSCHLAG_TOOLS, true) && self::darfNutzen($name, $tool)
             : [self::class, 'darfNutzen'];
         $modusHinweis = match ($modus) {
             'nur_lesen' => 'MODUS „nur lesen": Schreibvorschläge sind für dich komplett gesperrt (auch als '
                 . 'Vorschlag). Beantworte Fragen konversationell, navigiere/öffne bei Bedarf, aber schlage NICHTS '
-                . 'zum Anlegen/Anreichern/Klassifizieren vor — sag stattdessen, dass der Modus das nicht erlaubt.',
+                . 'zum Anlegen/Anreichern/Klassifizieren vor — sag stattdessen, dass der Modus das nicht erlaubt. '
+                . 'Status/letzte Läufe abfragen (foodalchemist.planung_kaskade.LETZTE) ist weiterhin erlaubt — '
+                . 'das ist reines Lesen, kein Vorschlag.',
             'auto_sicher' => 'MODUS „automatisch (sicher)": deine reversiblen Vorschläge (planung_vorschlag.POST, '
                 . 'anreicherung_vorschlag.POST, recipe_klasse.POST) werden dem Nutzer NICHT zur Bestätigung '
                 . 'vorgelegt, sondern SOFORT ausgeführt — sag das im finalen Text auch so (z. B. „Ich habe die '

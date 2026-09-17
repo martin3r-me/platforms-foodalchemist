@@ -4,6 +4,7 @@ namespace Platform\FoodAlchemist\Livewire;
 
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
+use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
 use Livewire\Component;
 use Livewire\WithFileUploads;
@@ -55,10 +56,13 @@ class VoiceModal extends Component
 
     /**
      * Spec 53 / Paket F: Agenten-Modus (fragen|auto_sicher|nur_lesen) — Team-Setting, gelesen
-     * in {@see mount()}. Steuert NUR, was mit einem Proposal passiert (Klick vs. Direktausführung
-     * für {@see VoiceCommandService::AUTO_ERLAUBT}); die Tool-Policy selbst liegt in
-     * {@see VoiceCommandService::verarbeite()}.
+     * in {@see mount()}, NUR für die Pill-Anzeige. `#[Locked]` (Review-Fix cooking-jarvis-03):
+     * jede public Livewire-Property ist sonst per `$wire.set()` vom Client setzbar — ohne den
+     * Schutz könnte ein Team-Mitglied im Modus `nur_lesen` sich selbst auf `auto_sicher`
+     * hochstufen. Die tatsächliche Entscheidung (Tool-Loop-Policy, Direktausführung) liest
+     * IMMER frisch {@see agentModusAktuell()}, nie diese Property.
      */
+    #[Locked]
     public string $agentModus = TeamSettingsService::VOICE_AGENT_MODE_DEFAULT;
 
     /**
@@ -107,10 +111,7 @@ class VoiceModal extends Component
         // Tippen beschränkt statt eine Aufnahme zu erlauben, die serverseitig ins Leere läuft.
         $this->aufnahmeMoeglich = in_array($this->provider, ['openai', 'assemblyai'], true);
         $this->herkunftRoute = request()->route()?->getName();
-        $team = Auth::user()?->currentTeamRelation;
-        if ($team !== null) {
-            $this->agentModus = app(TeamSettingsService::class)->voiceAgentModus($team);
-        }
+        $this->agentModus = $this->agentModusAktuell();   // NUR für die Pill — Entscheidungen lesen immer frisch
     }
 
     /**
@@ -177,9 +178,10 @@ class VoiceModal extends Component
 
     private function verarbeite(): void
     {
+        $modus = $this->agentModusAktuell();
         try {
             $this->ergebnis = app(VoiceCommandService::class)->verarbeite(
-                (string) $this->transcript, $this->kontextFuerAuftrag(), $this->agentModus,
+                (string) $this->transcript, $this->kontextFuerAuftrag(), $modus,
             );
         } catch (\Throwable $e) {
             $this->fehler = VoiceFehlerText::aus($e)['text'];
@@ -214,7 +216,7 @@ class VoiceModal extends Component
         // Entscheidungsquelle (keine Namensmuster); alles andere bleibt Vorschlag mit Knopf.
         // NACH den aktionen: ein planungStarten()-Redirect hier gewinnt gegen eine ui.OPEN/
         // NAVIGATE-Navigation weiter oben (derselbe Befehl erzeugt praktisch nie beides).
-        if ($this->agentModus === 'auto_sicher') {
+        if ($modus === 'auto_sicher') {
             foreach ($this->ergebnis['proposals'] as $i => $p) {
                 $typ = $p['type'] ?? null;
                 if (($p['accepted'] ?? false) || ! in_array($typ, VoiceCommandService::AUTO_ERLAUBT, true)) {
@@ -375,6 +377,19 @@ class VoiceModal extends Component
         }
 
         return null;
+    }
+
+    /**
+     * Review-Fix (cooking-jarvis-03): den Modus für die SCHREIB-Entscheidung immer frisch aus
+     * dem Team-Setting lesen statt aus `$this->agentModus` — die Property ist zwar `#[Locked]`,
+     * aber die Wahrheit steht im Team-Setting, nicht in einem Zwischenstand der Komponente
+     * (kein Vertrauen auf einen möglicherweise veralteten/umgangenen Client-Zustand).
+     */
+    private function agentModusAktuell(): string
+    {
+        $team = Auth::user()?->currentTeamRelation;
+
+        return $team !== null ? app(TeamSettingsService::class)->voiceAgentModus($team) : TeamSettingsService::VOICE_AGENT_MODE_DEFAULT;
     }
 
     public function render()

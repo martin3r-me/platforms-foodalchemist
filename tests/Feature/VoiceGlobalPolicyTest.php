@@ -320,3 +320,17 @@ it('Modus nur_lesen sperrt Proposal-Tools STRUKTURELL (die Policy lehnt ab, der 
         ->and($r['proposals'])->toBe([])
         ->and($r['text'])->toBe('Das darf ich in diesem Modus nicht vorschlagen.');
 });
+
+it('Review-Fix: nur_lesen sperrt die 4 Vorschlags-Tools, LÄSST aber planung_kaskade.LETZTE (reines Lesen) durch', function () {
+    ($this->skript)([
+        '{"action":"tool","name":"foodalchemist.planung_kaskade.LETZTE","arguments":{}}',
+        '{"action":"final","text":"Keine laufende Generierung gefunden."}',
+    ]);
+
+    $r = app(VoiceCommandService::class)->verarbeite('Wie weit ist die Generierung?', null, 'nur_lesen');
+
+    expect($r['tool_laeufe'])->toHaveCount(1)
+        ->and($r['tool_laeufe'][0]['name'])->toBe('foodalchemist.planung_kaskade.LETZTE')
+        ->and($r['tool_laeufe'][0]['success'])->toBeTrue()
+        ->and($r['text'])->toBe('Keine laufende Generierung gefunden.');
+});

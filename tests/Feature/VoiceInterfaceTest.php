@@ -375,3 +375,26 @@ it('Modus nur_lesen: Proposal-Tools sind strukturell gesperrt — keine Vorschl�
         ->and($modal->get('ergebnis')['proposals'])->toBe([])
         ->and($modal->get('ergebnis')['tool_laeufe'])->toBe([]);          // Tool wurde von der Policy abgelehnt, nie ausgeführt
 });
+
+it('Review-Fix: #[Locked] verhindert Selbst-Hochstufung — $wire.set(agentModus, auto_sicher) wird abgelehnt', function () {
+    app(TeamSettingsService::class)->update($this->rootTeam, ['voice_agent_mode' => 'nur_lesen']);
+
+    $modal = Livewire::test(VoiceModal::class);
+    expect($modal->get('agentModus'))->toBe('nur_lesen');
+
+    expect(fn () => $modal->set('agentModus', 'auto_sicher'))
+        ->toThrow(\Livewire\Features\SupportLockedProperties\CannotUpdateLockedPropertyException::class);
+
+    // Selbst wenn die Property (z. B. per direktem PHP-Zugriff) doch abwiche, entscheidet
+    // NICHT sie — agentModusAktuell() liest immer frisch aus dem Team-Setting.
+    ($modal->instance())->agentModus = 'auto_sicher';   // simuliert einen umgangenen Property-Zustand
+    FoodAlchemistRecipe::create(['team_id' => $this->rootTeam->id, 'recipe_key' => 'lock1', 'name' => 'X', 'status' => 'draft']);
+    ($this->skript)([
+        '{"action":"tool","name":"foodalchemist.planung_vorschlag.POST","arguments":{"scope":"rezept","brief":"Test"}}',
+        '{"action":"final","text":"nicht erlaubt"}',
+    ]);
+
+    $modal->call('verarbeiteText', 'Erstelle ein Basisrezept');
+
+    expect(FoodAlchemistPlanningSession::count())->toBe(0);               // Team-Setting (nur_lesen) hat gewonnen, nicht die Property
+});
