@@ -64,6 +64,30 @@ it('Panel: ✨ Eignung übernimmt nur «geeignet»-Urteile aus dem Vokabular', f
         ->and(DB::table('foodalchemist_recipe_level_suitability')->where('recipe_id', $this->vk->id)->whereNull('deleted_at')->value('level_slug'))->toBe('klassisch');
 });
 
+it('Review-Fund Lisa (Paket G): recipe.sektor bekommt jetzt sein EIGENES $wissenOpts (nicht mehr None)', function () {
+    // Bisher rief kiEignung() BEIDE Prompt-Keys (recipe.sektor + recipe.level) ohne dritten
+    // Options-Parameter auf — Lisas Knowledge-Routing-Audit fand für recipe.sektor eine
+    // Routing-Zeile, deren Discovery-Treffer nie ankamen. Beleg: ein DRITTES Argument, das
+    // genau aus proposeOptionen() stammt (Schlüssel knowledge/knowledge_used/knowledge_dropped_chars).
+    $this->mock(AiGatewayService::class, function ($mock) {
+        $mock->shouldReceive('propose')
+            ->with('recipe.sektor', \Mockery::any(), \Mockery::on(function ($opts) {
+                return is_array($opts) && array_key_exists('knowledge', $opts)
+                    && array_key_exists('knowledge_used', $opts) && array_key_exists('knowledge_dropped_chars', $opts);
+            }))
+            ->once()
+            ->andReturn(new AiProposal(['sektoren' => ['care' => ['eignung' => 'geeignet']]], 0.85));
+        $mock->shouldReceive('propose')
+            ->with('recipe.level', \Mockery::any(), \Mockery::any())
+            ->once()
+            ->andReturn(new AiProposal(['niveaus' => []], 0.85));
+    });
+
+    Livewire::test(DetailPanel::class, ['recipeId' => $this->vk->id])
+        ->call('kiEignung')
+        ->assertSet('kiFehler', null);
+});
+
 it('Panel: ✨ Marketing schreibt mit Lineage ki; manual blockt (Override-First)', function () {
     // R0.5 2026-07-12: übersprungen — die KI-Marketing-Aktion im Panel (kiMarketing/
     // marketingUebernehmen) ist NICHT implementiert. marketing_text wurde beim UX-Umbau
