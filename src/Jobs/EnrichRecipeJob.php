@@ -113,6 +113,9 @@ class EnrichRecipeJob implements ShouldQueue
         }
 
         if (! $this->kaskadeAbgebrochen() && ($this->kiBilder || $this->nurBilder)) {
+            // Spec 53 / Paket C: Phase sichtbar machen, solange die Bild-Erzeugung tatsächlich läuft
+            // (markBilderQueued setzt beim Re-Trigger schon „queued" — hier folgt „running").
+            $this->markBilder('running');
             try {
                 $imageService = app(RecipeImageService::class);
                 if ($this->nurBilder) {
@@ -259,6 +262,11 @@ class EnrichRecipeJob implements ShouldQueue
         } catch (\Throwable) {
             // Tracking ist Beiwerk — nie blockierend.
         }
+        // Spec 53 / Paket C: dieselbe Statusänderung als Phase am Step — running zeigt „Anreicherung
+        // läuft …", done/failed löschen sie wieder (die Anzeige zeigt dann den enrich-Status selbst).
+        app(\Platform\FoodAlchemist\Services\PlanningCascadeService::class)->setzePhase(
+            (int) $this->stepId, $status === 'running' ? 'Anreicherung läuft …' : null,
+        );
     }
 
     /**
@@ -318,5 +326,10 @@ class EnrichRecipeJob implements ShouldQueue
         } catch (\Throwable) {
             // Tracking ist Beiwerk — nie blockierend.
         }
+        // Spec 53 / Paket C: dieselbe Statusänderung als Phase am Step — running zeigt „KI-Fotos werden
+        // erzeugt …", done/failed löschen sie wieder (die Anzeige zeigt dann den bilder-Status selbst).
+        app(\Platform\FoodAlchemist\Services\PlanningCascadeService::class)->setzePhase(
+            (int) $this->stepId, $status === 'running' ? 'KI-Fotos werden erzeugt …' : null,
+        );
     }
 }

@@ -3689,13 +3689,29 @@ class Index extends Component
         if ($recipe === null) {
             return;
         }
+        // Spec 53 / Paket C: den Step im AKTUELLEN Lauf auflösen (ref_type=recipe/ref_id=$recipeId) —
+        // so wird die Phase „Konformität wird geprüft …" am Cockpit sichtbar und $pollAktiv sieht sie.
+        // Kein offener Lauf (Check außerhalb des Cockpits, z. B. Rezept-Modal) → Phase bleibt leer,
+        // der Job läuft trotzdem.
+        $step = $this->laufId !== null
+            ? \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep::visibleToTeam($team)
+                ->where('cascade_run_id', $this->laufId)
+                ->where('ref_type', 'recipe')->where('ref_id', $recipeId)
+                ->first()
+            : null;
+        // Server-Guard gegen Doppel-Enqueue: läuft die Konformitätsprüfung an diesem Step schon, kein zweiter Job.
+        if ($step !== null && $step->phase === 'Konformität wird geprüft …') {
+            $this->meldung = 'Konformitätsprüfung läuft bereits.';
+
+            return;
+        }
         // Eine ausdrücklich neu gestartete Prüfung verwendet den heutigen Kanon.
         if (! $recipe->is_sales_recipe && (int) $recipe->team_id === (int) $team->id) {
             $run = app(\Platform\FoodAlchemist\Services\Knowledge\KnowledgeRunService::class)->start($team);
             $recipe->forceFill(['knowledge_run_id' => $run->id])->save();
         }
         \Platform\FoodAlchemist\Jobs\ConformanceCheckJob::dispatch(
-            $team->id, (int) Auth::id(), $recipe->is_sales_recipe ? 'gericht' : 'basisrezept', $recipeId,
+            $team->id, (int) Auth::id(), $recipe->is_sales_recipe ? 'gericht' : 'basisrezept', $recipeId, null, $step?->id,
         );
     }
 

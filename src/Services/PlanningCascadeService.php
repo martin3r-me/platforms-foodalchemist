@@ -1400,7 +1400,7 @@ class PlanningCascadeService
         // 120 Zeichen geschnittene Brief — das Cockpit zeigte also den Briefing-Text statt des Rezept-/
         // Concept-Namens. Der Brief bleibt separat im Run-Kopf sichtbar. Fail-soft (Name-Auflösung optional).
         $artefaktName = $this->artefaktName($step->team_id ? (int) $step->team_id : null, $refType, $refId);
-        $updates = ['status' => 'done', 'ref_type' => $refType, 'ref_id' => $refId, 'error' => null];
+        $updates = ['status' => 'done', 'ref_type' => $refType, 'ref_id' => $refId, 'error' => null, 'phase' => null, 'phase_at' => null];
         if ($artefaktName !== null && $artefaktName !== '') {
             $updates['label'] = Str::limit($artefaktName, 120, '');
         }
@@ -1433,9 +1433,26 @@ class PlanningCascadeService
         if ($step === null) {
             return;
         }
-        $step->update(['status' => 'failed', 'error' => Str::limit($error, 500, '')]);
+        $step->update(['status' => 'failed', 'error' => Str::limit($error, 500, ''), 'phase' => null, 'phase_at' => null]);
         $this->recomputeRunStatus((int) $step->cascade_run_id);
         $this->scoreConceptCohesionIfComplete($step);
+    }
+
+    /**
+     * Persistente Zwischen-Phase eines laufenden Steps (Spec 53 / Paket C) — Cockpit-Wahrheit statt
+     * Cache-only (der Cache `fa:recipe-gen:{runId}` bleibt zusätzlich für die Rezept-Modals). Ein-
+     * Spalten-Update; Guard gegen tote/terminale Steps (verworfen/skipped haben nichts mehr zu melden).
+     * Beiwerk — ein Tracking-Fehler darf den aufrufenden Job/Lauf nie kippen.
+     */
+    public function setzePhase(int $stepId, ?string $label): void
+    {
+        try {
+            FoodAlchemistCascadeRunStep::whereKey($stepId)
+                ->whereIn('status', ['queued', 'running', 'done', 'freigegeben'])
+                ->update(['phase' => $label, 'phase_at' => $label !== null ? now() : null]);
+        } catch (\Throwable) {
+            // Tracking ist Beiwerk — nie blockierend.
+        }
     }
 
     /**
@@ -2087,6 +2104,12 @@ class PlanningCascadeService
         if ($step->ref_type !== 'recipe' || $step->ref_id === null || ! in_array($step->kind, ['rezept', 'gericht'], true)) {
             return;
         }
+        // Server-Guard gegen Doppel-Enqueue (Spec 53 / Paket C): kein zweiter Foto-Job, während der
+        // erste noch läuft — sonst überschneiden sich zwei RecipeImageService-Läufe am selben Rezept.
+        $bilderStatus = is_array($step->deferred) ? ($step->deferred['bilder']['status'] ?? null) : null;
+        if (in_array($bilderStatus, ['queued', 'running'], true)) {
+            throw new RuntimeException('Bild-Erzeugung läuft bereits.');
+        }
         $this->markBilderQueued($step);
         EnrichRecipeJob::dispatch($team->id, (int) (Auth::id() ?? 0), (int) $step->ref_id, null, false, (int) $step->id, true);
     }
@@ -2142,6 +2165,12 @@ class PlanningCascadeService
         $step = $this->ownedStep($team, $stepId);
         if ($step->ref_type !== 'recipe' || $step->ref_id === null || ! in_array($step->kind, ['rezept', 'gericht'], true)) {
             return;
+        }
+        // Server-Guard gegen Doppel-Enqueue (Spec 53 / Paket C): kein zweiter Anreicherungs-Job,
+        // während der erste noch läuft (sonst laufen zwei RecipeOneShotService-Pässe gegeneinander).
+        $enrichStatus = is_array($step->deferred) ? ($step->deferred['enrich']['status'] ?? null) : null;
+        if (in_array($enrichStatus, ['queued', 'running'], true)) {
+            throw new RuntimeException('Anreicherung läuft bereits.');
         }
         $params = is_array($step->run?->params) ? $step->run->params : [];
         $zielVk = isset($params['ziel_vk_eur']) ? (float) $params['ziel_vk_eur'] : null;
@@ -2225,6 +2254,11 @@ class PlanningCascadeService
         if (! in_array($step->kind, ['rezept', 'gericht', 'concept'], true)) {
             return;
         }
+        // Server-Guard gegen Doppel-Enqueue (Spec 53 / Paket C): ein zweiter Klick auf „neu generieren"
+        // während der erste Versuch noch rechnet, darf keinen zweiten GenerateRecipeJob einreihen.
+        if ($step->status === 'running') {
+            throw new RuntimeException('Läuft bereits — bitte warten, bis der aktuelle Versuch fertig ist.');
+        }
         // L4: Regenerieren eines KIND-Basisrezepts — die Eltern-Zutat zeigt noch auf den gleich
         // gelöschten Draft. VOR dem Löschen die Bindung lösen (referenced_recipe_id NULL, unmatched),
         // die Dependency aber BEHALTEN, damit der neue Lauf via bindCompletedChild sauber neu bindet.
@@ -2255,7 +2289,7 @@ class PlanningCascadeService
         // Die geplanten/übernommenen Sub-Rezepte beschreiben die Zerlegung des ALTEN Entwurfs — der
         // neue Lauf plant seine eigenen (sonst bleiben Zeilen stehen, die zu nichts mehr gehören).
         $this->raeumeGeplanteKinder($step);
-        $step->update(['status' => 'running', 'ref_type' => null, 'ref_id' => null, 'error' => null, 'deferred' => null]);
+        $step->update(['status' => 'running', 'ref_type' => null, 'ref_id' => null, 'error' => null, 'deferred' => null, 'phase' => null, 'phase_at' => null]);
         $run = $step->run;
         // L5: Wurzel-Step (Gericht/Concept) neu erzeugen aus dem VOLLEN Run-Brief — nicht aus dem Label,
         // das markStepDone inzwischen auf den (kurzen) Artefakt-Namen gezogen hat (sonst schrumpfte das
@@ -2756,6 +2790,12 @@ class PlanningCascadeService
                 'ebene' => (string) $s->kind,
                 'label' => (string) $s->label,
                 'status' => (string) $s->status,
+                // Spec 53 / Paket C: DB-Wahrheit der laufenden Zwischen-Phase (Cockpit + MCP) — die
+                // Terminal-Phasen (Entwurf bereit/Fehler) ergeben sich aus `status`, nicht aus `phase`.
+                'phase' => $s->phase,
+                // Spec 53 / Paket A: `context_snapshot['timings']` je Step (generator_ms/context_ms/…),
+                // sobald Paket A sie schreibt — Peter zeigt sie nur an, Fallback null bis dahin.
+                'timings' => (! empty($snapshot['timings']) && is_array($snapshot['timings'])) ? $snapshot['timings'] : null,
                 'tiefe' => (int) $s->depth,
                 'ref_type' => $s->ref_type,
                 'ref_id' => $s->ref_id !== null ? (int) $s->ref_id : null,

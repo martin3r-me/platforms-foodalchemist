@@ -41,6 +41,8 @@ class ConformanceCheckJob implements ShouldQueue
         public string $artifactTyp,
         public int $artifactId,
         ?string $knowledgeRunId = null,
+        /** Spec 53 / Paket C: Kaskaden-Step, an dem die Phase „Konformität wird geprüft …" sichtbar wird. */
+        public ?int $cascadeStepId = null,
     ) {
         $this->knowledgeRunId = $knowledgeRunId;
         if ($this->knowledgeRunId === null && in_array($this->artifactTyp, ['recipe', 'basisrezept'], true)) {
@@ -70,10 +72,19 @@ class ConformanceCheckJob implements ShouldQueue
 
         Auth::login($user);   // Team-Kontext für AiGatewayService (Kill-Switch / Food-DNA / Call-Log)
 
+        if ($this->cascadeStepId !== null) {
+            app(\Platform\FoodAlchemist\Services\PlanningCascadeService::class)
+                ->setzePhase($this->cascadeStepId, 'Konformität wird geprüft …');
+        }
         try {
             $conformance->pruefeUndHeile($team, $this->artifactTyp, $this->artifactId);
         } catch (\Throwable $e) {
             // Best-effort — eine gescheiterte Prüfung ist nie ein Grund, das fertige Artefakt zu kippen.
+        } finally {
+            if ($this->cascadeStepId !== null) {
+                app(\Platform\FoodAlchemist\Services\PlanningCascadeService::class)
+                    ->setzePhase($this->cascadeStepId, null);
+            }
         }
     }
 }
