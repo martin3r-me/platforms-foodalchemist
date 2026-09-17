@@ -35,8 +35,15 @@ class GenerateRecipeJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    /** Nur Phase 1; die Anreicherung hat einen eigenen Queue-Job. */
-    public int $timeout = 300;
+    /**
+     * Nur Phase 1; die Anreicherung hat einen eigenen Queue-Job. War 300 s — Lauf 71 (demo,
+     * 20.09.) zeigt reale Basisrezept-Läufe von 169 s (Generierung, gpt-5.5, 29,6k Tokens) +
+     * Ø 42 s Kohärenz-Kritiker + Matching/Checks: 300 s sind unter Last real erreichbar, ohne
+     * dass etwas kaputt ist — ein TimeoutExceededException killt den Job und lässt die
+     * Eltern-Zutat (Sub-Rezept-Kaskade) dauerhaft unmatched, statt nur einen echten Hänger
+     * zu fangen. 540 s bleibt unter dem Worker-Timeout (600 s, siehe docs/PLANUNG/39).
+     */
+    public int $timeout = 540;
 
     /** KI-Kosten: kein stiller Auto-Retry der ganzen Generierung. */
     public int $tries = 1;
