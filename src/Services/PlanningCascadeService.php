@@ -2784,6 +2784,13 @@ class PlanningCascadeService
             ], static fn ($v): bool => $v !== null && $v !== '');
         })->all();
 
+        // Task 6 (#505-Nachtrag 2026-09, Lauf 65 „abgeschlossen" trotz 0-Schritte-Draft):
+        // RecipeService::reifegrad() bleibt die einzige Wahrheit — hier nur aggregiert, was
+        // RecipeDependencyWorkflowService::afterGenerated je Step bereits in deferred.reuse
+        // ablegt, damit der Run-Kopf (nicht nur die einzelne Step-Zeile) zeigt, ob "übernommen"
+        // wirklich fertig heißt.
+        $uebernahme = $this->zaehleUebernommenUnreif($steps);
+
         $stufen = $steps->groupBy('kind')->map(static function ($group, $kind): array {
             return [
                 'ebene' => (string) $kind,
@@ -2823,6 +2830,8 @@ class PlanningCascadeService
                 'creative_mode' => (string) $run->creative_mode,
                 'planning_session_id' => $run->planning_session_id !== null ? (int) $run->planning_session_id : null,
                 'origin_dish_idea_id' => $run->origin_dish_idea_id !== null ? (int) $run->origin_dish_idea_id : null,
+                'uebernommen' => $uebernahme['gesamt'] > 0 ? $uebernahme['gesamt'] : null,
+                'uebernommen_unreif' => $uebernahme['gesamt'] > 0 ? $uebernahme['unreif'] : null,
             ], static fn ($v): bool => $v !== null && $v !== ''),
             'leitplanken' => $leitplanken === [] ? null : $leitplanken,
             'stufen' => $stufen,
@@ -2840,32 +2849,65 @@ class PlanningCascadeService
         ];
     }
 
+    /**
+     * `skipped`-Steps (Bestands-Übernahme) + wie viele davon laut `deferred.reuse.reif`
+     * UNREIF sind. `RecipeService::reifegrad()` bleibt die einzige Quelle für „reif" — hier
+     * wird nur das von `RecipeDependencyWorkflowService::afterGenerated` bereits geschriebene
+     * deferred-Feld gezählt (fehlt `reuse` ganz, zählt der Step nicht mit — kein Reuse-Fall).
+     *
+     * @return array{gesamt: int, unreif: int, unreif_labels: list<string>}
+     */
+    private function zaehleUebernommenUnreif(mixed $steps): array
+    {
+        $uebernommen = collect($steps)->where('status', 'skipped');
+        $unreif = $uebernommen->filter(static function ($s): bool {
+            $reuse = is_array($s->deferred['reuse'] ?? null) ? $s->deferred['reuse'] : null;
+
+            return $reuse !== null && ! ($reuse['reif'] ?? false);
+        });
+
+        return [
+            'gesamt' => $uebernommen->count(),
+            'unreif' => $unreif->count(),
+            'unreif_labels' => $unreif->pluck('label')->filter()->values()->all(),
+        ];
+    }
+
     /** Übersetzt den Run-Status in einen Handlungs-Satz (Freigabe/Fortsetzen bleiben human-only). */
     private function laufStatusHinweis(string $status, mixed $steps = null): string
     {
+        $uebernahme = $steps !== null
+            ? $this->zaehleUebernommenUnreif($steps)
+            : ['gesamt' => 0, 'unreif' => 0, 'unreif_labels' => []];
+
         // Ein Lauf, der nur noch wegen einer UNREIFEN ÜBERNAHME in `review` haengt, braucht einen
         // anderen Satz als „Entwuerfe warten auf Freigabe" — sonst sucht man die Freigabe-Aktion,
         // die es dort nicht gibt (eine `skipped`-Zeile ist nicht freigebbar).
         if ($status === 'review' && $steps !== null) {
-            $unreif = collect($steps)->where('status', 'skipped')->filter(static function ($st) {
-                $reuse = is_array($st->deferred['reuse'] ?? null) ? $st->deferred['reuse'] : null;
-
-                return $reuse !== null && ! ($reuse['reif'] ?? false);
-            });
             $offeneEntwuerfe = collect($steps)->whereIn('status', ['done', 'geplant'])->count();
-            if ($unreif->isNotEmpty() && $offeneEntwuerfe === 0) {
+            if ($uebernahme['unreif'] > 0 && $offeneEntwuerfe === 0) {
                 return 'Übernommene Bestands-Rezepte sind nicht produktionsreif ('
-                    .$unreif->pluck('label')->filter()->implode(', ')
+                    .implode(', ', $uebernahme['unreif_labels'])
                     .'). Eigene Entwürfe werden bei der Freigabe automatisch angereichert; fremde oder '
                     .'freigegebene Rezepte brauchen eine bewusste Entscheidung im Cockpit '
                     .'(„Bestand anreichern"). Details je Schritt: uebernahme_reif / uebernahme_luecken.';
             }
         }
 
+        // Task 6: „Lauf abgeschlossen" hieß bisher auch dann so, wenn ein übernommener Bestand
+        // NICHT produktionsreif ist (Lauf 65) — der Satz nennt die Zahl jetzt explizit, statt
+        // Vollständigkeit zu behaupten, die reifegrad() nicht bestätigt.
+        $uebernahmeZusatz = $uebernahme['gesamt'] > 0
+            ? sprintf(
+                ' %d Rezept%s aus dem Bestand übernommen, davon %d unfertig (nicht produktionsreif).',
+                $uebernahme['gesamt'], $uebernahme['gesamt'] === 1 ? '' : 'e', $uebernahme['unreif'],
+            )
+            : '';
+
         return match ($status) {
             'running' => 'Der Worker rechnet noch (Steps queued/running). Auf Abschluss warten, dann prüfen/freigeben.',
             'review' => 'Fertige Entwürfe warten auf die menschliche Freigabe (Gate 2); geplante Sub-Rezepte auf die Freigabe der Stufe darüber. Freigeben/Verwerfen ist human-only, kein MCP-Trigger.',
-            'done' => 'Lauf abgeschlossen — alle Artefakte freigegeben oder als Bestand übernommen.',
+            'done' => 'Lauf abgeschlossen — alle Artefakte freigegeben oder als Bestand übernommen.' . $uebernahmeZusatz,
             'failed' => 'Lauf fehlgeschlagen — gescheiterte Schritte lassen sich gebündelt fortsetzen (human-only im Cockpit).',
             default => $status,
         };
