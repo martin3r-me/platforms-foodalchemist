@@ -209,4 +209,4 @@ Merge-Reihe: #94 → #95 → #97 → #96 → #98 (C und D integrieren `main` per
 
 Deploy-Entscheid (Orchestrierung, von Dominique freigestellt): ein Deploy nach Merge aller fünf PRs — die Branches sind gegen den vollen Stapel getestet, ein Teil-Deploy brächte keinen Vorteil.
 
-**Deploy demo 2026-09-17 ~18:30 UTC:** Lock-Pin `727abe19` → `d104db08` (3 Felder, nur FA), Commit im demo-Repo, Push → Forge. Verifikation folgt (Pin am Host, Migration `phase/phase_at`, Worker-Neustart per `ps`-Beleg).
+**Deploy demo 2026-09-17 ~18:30 UTC:** Lock-Pin `727abe19` → `d104db08` (3 Felder, nur FA), Commit im demo-Repo, Push → Forge. **Verifiziert 18:40 UTC:** Pin `d104db08` am Host (demo-main `192c210`), Vendor-Code neu (`setzePhase`, `produktForm`, Voice-Recorder-Bundle), Spalten `phase`/`phase_at` vorhanden (Forge migrierte selbst; FA-scoped `migrate` danach: Nothing to migrate), `view:clear` + `config:cache`, `queue:restart` + supervisorctl-Neustart aller 6 FA-Worker; `ps`-Beleg: 2× default + fa-anreichern/fa-gerichte/fa-kaskade/fa-rezepte je 1 + attachments.
