@@ -3,11 +3,14 @@
 namespace Platform\FoodAlchemist\Livewire;
 
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
 use Livewire\Component;
 use Livewire\WithFileUploads;
+use Platform\Core\Contracts\ToolContext;
+use Platform\Core\Tools\ToolRegistry;
 use Platform\FoodAlchemist\Jobs\EnrichRecipeJob;
 use Platform\FoodAlchemist\Services\PlanningSessionService;
 use Platform\FoodAlchemist\Services\RecipeService;
@@ -356,6 +359,69 @@ class VoiceModal extends Component
         EnrichRecipeJob::dispatch($team->id, (int) (Auth::id() ?? 0), (int) $recipe->id, null, false, null, false, true);
         $this->ergebnis['proposals'][$index]['accepted'] = true;
         $this->fehler = null;
+    }
+
+    /**
+     * Paket F (1b) / GL-07: der generische Schreibvorschlag — Bestätigen führt DASSELBE Tool
+     * mit DENSELBEN Argumenten aus, die der Agent vorgeschlagen hatte, JETZT über den echten
+     * Team-Kontext des angemeldeten Nutzers (nicht den Sekunden alten Proposal-Snapshot). Ein
+     * im Vorschlag neutralisiertes Commit-Flag (`entschaerfeArgumente()` erzwingt `confirm`
+     * u. a. auf `false`, siehe VoiceCommandService) wird HIER — und nur hier, am menschlichen
+     * Bestätigen-Klick — wieder auf `true` gesetzt.
+     */
+    public function schreibaktionAusfuehren(int $index): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        $p = $this->ergebnis['proposals'][$index] ?? null;
+        if ($team === null || $p === null || ($p['type'] ?? null) !== 'schreibaktion' || ($p['accepted'] ?? false)) {
+            return;
+        }
+        $tool = app(ToolRegistry::class)->get((string) ($p['tool'] ?? ''));
+        if ($tool === null) {
+            $this->fehler = 'Werkzeug nicht mehr verfügbar.';
+
+            return;
+        }
+        $argumente = (array) ($p['arguments'] ?? []);
+        foreach (VoiceCommandService::COMMIT_FLAGS as $flag) {
+            if (array_key_exists($flag, $argumente)) {
+                $argumente[$flag] = true;                             // JETZT bestätigt der Mensch wirklich
+            }
+        }
+        $start = hrtime(true);
+        $resultat = $tool->execute($argumente, new ToolContext(Auth::user(), $team));
+        $this->protokolliereSchreibaktion((string) $p['tool'], (int) ((hrtime(true) - $start) / 1_000_000), $resultat->success);
+        if (! $resultat->success) {
+            $this->fehler = $resultat->error ?? 'Aktion fehlgeschlagen.';
+
+            return;
+        }
+        $this->ergebnis['proposals'][$index]['accepted'] = true;
+        $this->fehler = null;
+    }
+
+    /**
+     * Eigener, schlanker Audit-Trail für tatsächlich ausgeführte Schreibvorschläge — getrennt
+     * vom `voice.command`-Log des Tool-Loops (der läuft schon, bevor der Mensch bestätigt hat).
+     * Graceful: ein Logging-Fehler darf die eigentliche Aktion nie reissen.
+     */
+    private function protokolliereSchreibaktion(string $tool, int $elapsedMs, bool $erfolg): void
+    {
+        try {
+            DB::table('foodalchemist_ai_call_log')->insert([
+                'uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(),
+                'team_id' => Auth::user()?->currentTeamRelation?->id,
+                'user_id' => Auth::id(),
+                'feature' => 'voice.schreibaktion',
+                'tier' => 'D',
+                'prompt_hash' => hash('sha256', $tool),
+                'response_summary' => mb_strimwidth($tool . ($erfolg ? ' — ausgeführt' : ' — fehlgeschlagen'), 0, 200, '…'),
+                'elapsed_ms' => $elapsedMs,
+                'created_at' => now(), 'updated_at' => now(),
+            ]);
+        } catch (\Throwable) {
+            // Audit darf die eigentliche Aktion nie reissen.
+        }
     }
 
     /**

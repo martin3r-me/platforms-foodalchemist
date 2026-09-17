@@ -398,3 +398,73 @@ it('Review-Fix: #[Locked] verhindert Selbst-Hochstufung — $wire.set(agentModus
 
     expect(FoodAlchemistPlanningSession::count())->toBe(0);               // Team-Setting (nur_lesen) hat gewonnen, nicht die Property
 });
+
+/*
+ * Spec 53 / Paket F (1b) — generischer Schreibvorschlag für FA-Write-Tools ohne eigenes
+ * Proposal-Tool. Alias-Fall (recipes.PUT: Feld-Diff) + Alias-Fall Löschen (kein Diff, Name
+ * Pflicht) — beide bis zum Bestätigen-Klick ohne DB-Änderung, GL-07 unverändert.
+ */
+
+it('Schreibvorschlag (Alias recipes.PUT): Vorschau zeigt NUR das im Befehl genannte Feld (Partial-Update-Beweis)', function () {
+    $rezept = FoodAlchemistRecipe::create([
+        'team_id' => $this->rootTeam->id, 'recipe_key' => 'sv1', 'name' => 'Alter Name',
+        'description' => 'Alte Beschreibung', 'status' => 'draft',
+    ]);
+    ($this->skript)([
+        '{"action":"tool","name":"foodalchemist.recipes.PUT","arguments":{"recipe_id":' . $rezept->id . ',"name":"Neuer Name"}}',
+        '{"action":"final","text":"Vorschlag angelegt — bitte bestätigen."}',
+    ]);
+
+    $modal = Livewire::test(VoiceModal::class)->call('verarbeiteText', 'Nenne das Rezept in Neuer Name um');
+
+    $proposal = collect($modal->get('ergebnis')['proposals'])->firstWhere('type', 'schreibaktion');
+    expect($proposal)->not->toBeNull()
+        ->and($proposal['objekt']['type'])->toBe('Basisrezept')
+        ->and($proposal['objekt']['name'])->toBe('Alter Name')              // GET-Vorher liefert den ALTEN Namen
+        ->and($proposal['vorschau'])->toHaveCount(1)                        // NUR das genannte Feld, nicht description
+        ->and($proposal['vorschau'][0])->toBe(['feld' => 'name', 'alt' => 'Alter Name', 'neu' => 'Neuer Name']);
+    expect($rezept->fresh()->name)->toBe('Alter Name');                    // NICHTS geschrieben vor dem Klick
+
+    $index = collect($modal->get('ergebnis')['proposals'])->search(fn ($p) => $p['type'] === 'schreibaktion');
+    $modal->call('schreibaktionAusfuehren', $index);
+
+    expect($rezept->fresh()->name)->toBe('Neuer Name');                    // JETZT geschrieben
+    expect(DB::table('foodalchemist_ai_call_log')->where('feature', 'voice.schreibaktion')->exists())->toBeTrue();
+});
+
+it('Schreibvorschlag (Alias recipes.DELETE): Karte zeigt den Objekt-NAMEN, kein Feld-Diff, DELETE erst nach Klick', function () {
+    $rezept = FoodAlchemistRecipe::create([
+        'team_id' => $this->rootTeam->id, 'recipe_key' => 'sv2', 'name' => 'Tomatensuppe klassisch', 'status' => 'draft',
+    ]);
+    ($this->skript)([
+        '{"action":"tool","name":"foodalchemist.recipes.DELETE","arguments":{"id":' . $rezept->id . ',"confirm":true}}',
+        '{"action":"final","text":"Vorschlag angelegt — bitte bestätigen."}',
+    ]);
+
+    $modal = Livewire::test(VoiceModal::class)->call('verarbeiteText', 'Lösche das Rezept Tomatensuppe klassisch');
+
+    $proposal = collect($modal->get('ergebnis')['proposals'])->firstWhere('type', 'schreibaktion');
+    expect($proposal['objekt']['name'])->toBe('Tomatensuppe klassisch')
+        ->and($proposal['vorschau'])->toBe([]);                            // Löschen hat keinen Feld-Diff
+    expect(FoodAlchemistRecipe::find($rezept->id))->not->toBeNull();       // NICHT gelöscht vor dem Klick
+
+    $index = collect($modal->get('ergebnis')['proposals'])->search(fn ($p) => $p['type'] === 'schreibaktion');
+    $modal->call('schreibaktionAusfuehren', $index);
+
+    expect(FoodAlchemistRecipe::find($rezept->id))->toBeNull();            // JETZT gelöscht (confirm wurde am Klick wiederhergestellt)
+});
+
+it('Schreibvorschlag ohne Alias: rohe Argumente ohne Alt-Wert + Tool-Beschreibung, kein falscher Diff', function () {
+    ($this->skript)([
+        '{"action":"tool","name":"foodalchemist.gps.POST","arguments":{"hauptzutat":"Zander"}}',
+        '{"action":"final","text":"Vorschlag angelegt — bitte bestätigen."}',
+    ]);
+
+    $modal = Livewire::test(VoiceModal::class)->call('verarbeiteText', 'Lege ein Grundprodukt Zander an');
+
+    $proposal = collect($modal->get('ergebnis')['proposals'])->firstWhere('type', 'schreibaktion');
+    expect($proposal['tool'])->toBe('foodalchemist.gps.POST')
+        ->and($proposal['beschreibung'])->not->toBeNull()
+        ->and($proposal['vorschau'][0])->toBe(['feld' => 'hauptzutat', 'neu' => 'Zander'])
+        ->and($proposal['vorschau'][0])->not->toHaveKey('alt');            // kein geratener Alt-Wert
+});

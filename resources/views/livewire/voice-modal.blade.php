@@ -157,6 +157,41 @@
                                 </button>
                             @endif
                         </div>
+                    {{-- Paket F (1b): generischer Schreibvorschlag für JEDES andere FA-Write-Tool.
+                         Mit Alias (VoiceCommandService::SCHREIBAKTION_ALIAS) zeigt die Vorschau
+                         alt→neu je Feld; ohne Alias nur die rohen Argumente + Tool-Beschreibung. --}}
+                    @elseif($p['type'] === 'schreibaktion')
+                        <div class="rounded bg-violet-500/10 border border-violet-500/30 px-2 py-1.5 text-xs space-y-1" wire:key="vp-{{ $i }}" data-voice-proposal-schreibaktion data-voice-proposal-tool="{{ $p['tool'] }}">
+                            <p>
+                                {{ ($p['objekt']['type'] ?? null) === null ? 'Aktion' : ucfirst($p['objekt']['type']) }}:
+                                <span class="font-medium">{{ $p['objekt']['name'] ?? (isset($p['objekt']['id']) ? '#' . $p['objekt']['id'] : $p['tool']) }}</span>
+                                @if(!empty($p['objekt']['id']) && !empty($p['objekt']['name'])) (ID {{ $p['objekt']['id'] }}) @endif
+                            </p>
+                            @if($p['beschreibung'] ?? null)
+                                <p class="text-[11px] text-gray-500">{{ $p['beschreibung'] }}</p>
+                            @endif
+                            @if(!empty($p['vorschau']))
+                                <ul class="text-[11px] text-gray-600 space-y-0.5">
+                                    @foreach($p['vorschau'] as $v)
+                                        <li data-voice-vorschau-feld="{{ $v['feld'] }}">
+                                            <span class="font-medium">{{ $v['feld'] }}</span>:
+                                            @if(array_key_exists('alt', $v))
+                                                <span class="line-through text-gray-400">{{ is_scalar($v['alt']) ? $v['alt'] : json_encode($v['alt']) }}</span> →
+                                            @endif
+                                            <span>{{ is_scalar($v['neu']) ? $v['neu'] : json_encode($v['neu']) }}</span>
+                                        </li>
+                                    @endforeach
+                                </ul>
+                            @endif
+                            @if($p['accepted'] ?? false)
+                                <span class="{{ $pill }} {{ $variantPill['success'] }}">✓ ausgeführt</span>
+                            @else
+                                <button type="button" wire:click="schreibaktionAusfuehren({{ $i }})" wire:loading.attr="disabled" wire:target="schreibaktionAusfuehren({{ $i }})"
+                                        class="{{ $btnGhostXs }} text-emerald-600 disabled:opacity-40" data-voice-proposal-schreibaktion-start>
+                                    Bestätigen
+                                </button>
+                            @endif
+                        </div>
                     @endif
                 @endforeach
             </div>

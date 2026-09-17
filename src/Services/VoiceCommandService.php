@@ -141,6 +141,64 @@ class VoiceCommandService
      */
     public const AUTO_ERLAUBT = ['planung_start', 'anreicherung', 'speisen_klasse'];
 
+    /**
+     * Spec 53 / Paket F (1b): ECHTE Tool-Namen, die im Modus `auto_sicher` DIREKT ausgeführt
+     * werden — zusätzlich zu AUTO_ERLAUBT (das sind Proposal-`type`-Werte, keine Tool-Namen).
+     * Explizite Liste, keine Namensmuster: alle drei sind reversibel (Duplikat löschen,
+     * Recompute ist reine Neuberechnung ohne Fachänderung, Anreicherung ist wiederholbar) und
+     * tragen KEIN Commit-Flag im Schema (geprüft — `entschaerfeArgumente()` hätte sie sonst
+     * wirkungslos gemacht). `recipe_klasse.POST` steht NICHT hier: es läuft schon über
+     * AUTO_ERLAUBT/PROPOSAL_TOOLS (eigener, älterer Mechanismus, Aufgabe 7).
+     */
+    public const AUTO_SICHER_DIREKT_TOOLS = [
+        'foodalchemist.recipes.DUPLICATE',
+        'foodalchemist.recipes.RECOMPUTE',
+        'foodalchemist.recipes.ENRICH',
+    ];
+
+    /**
+     * Spec 53 / Paket F (1b): Alias-Map für die HOCHWERTIGE Schreibvorschlag-Vorschau (GET
+     * vorher + Feld-Diff alt/neu). Es gibt KEINE einheitliche Tool-Form — gemessen an drei
+     * PUT-Tools: RecipesPutTool nimmt `recipe_id` + flache Felder, GpsPutTool `id` + flache
+     * Felder, AngebotePutTool/VerkaufsrezeptePutTool `id` + ein verschachteltes `felder`-
+     * Objekt. Ein naiver Top-Level-Diff wäre für die zweite Gruppe falsch (er zeigt nur
+     * `{feld:'felder', neu:{...gesamtes Objekt...}}`). Darum: nur die HIER gelisteten Tools
+     * bekommen einen echten Feld-Diff, alles andere (baueSchreibvorschlag() ohne Alias-Eintrag)
+     * zeigt ehrlich die rohen Argumente OHNE Alt-Wert — kein falscher Diff ist besser als ein
+     * vollständiger, der stimmt zufällig nur für die Hälfte der ~330 Schreib-Tools. Erweitern,
+     * sobald ein echter Sprachbefehl ein fehlendes Tool trifft; jeder Eintrag mit Kommentar,
+     * woran id-Param/Wrapper-Key gemessen wurden — nicht geraten.
+     */
+    public const SCHREIBAKTION_ALIAS = [
+        // id-Param `recipe_id`, flache Felder — gemessen an RecipesPutTool::getSchema()
+        // (`'recipe_id' => [...]`, kein Wrapper-Key, Felder wie `name`/`status`/... top-level).
+        'foodalchemist.recipes.PUT' => [
+            'id_param' => 'recipe_id', 'get_tool' => 'foodalchemist.recipes.GET',
+            'felder_key' => null, 'typ' => 'Basisrezept', 'delete' => false,
+        ],
+        // id-Param `id`, flache Felder — gemessen an GpsPutTool::getSchema() (`'id' => [...]`).
+        'foodalchemist.gps.PUT' => [
+            'id_param' => 'id', 'get_tool' => 'foodalchemist.gps.GET',
+            'felder_key' => null, 'typ' => 'Grundprodukt', 'delete' => false,
+        ],
+        // id-Param `id` + verschachteltes `felder`-Objekt — gemessen an
+        // VerkaufsrezeptePutTool::getSchema() (`'required' => ['id', 'felder']`).
+        'foodalchemist.verkaufsrezepte.PUT' => [
+            'id_param' => 'id', 'get_tool' => 'foodalchemist.verkaufsrezepte.GET',
+            'felder_key' => 'felder', 'typ' => 'Gericht', 'delete' => false,
+        ],
+        // Löschen: kein Feld-Diff nötig, aber der Objekt-NAME auf der Karte ist Pflicht
+        // (Review-Befund cooking-jarvis-03 — sonst bestätigt niemand sinnvoll „löschen").
+        'foodalchemist.recipes.DELETE' => [
+            'id_param' => 'id', 'get_tool' => 'foodalchemist.recipes.GET',
+            'felder_key' => null, 'typ' => 'Basisrezept', 'delete' => true,
+        ],
+        'foodalchemist.gps.DELETE' => [
+            'id_param' => 'id', 'get_tool' => 'foodalchemist.gps.GET',
+            'felder_key' => null, 'typ' => 'Grundprodukt', 'delete' => true,
+        ],
+    ];
+
     public function __construct(private AiGatewayService $ki)
     {
     }
@@ -216,9 +274,16 @@ class VoiceCommandService
         // (nicht die ganze PROPOSAL_TOOLS-Liste) — `planung_kaskade.LETZTE` ist reines Lesen und
         // soll in nur_lesen erreichbar bleiben („wie weit ist die Generierung?" schlägt nichts vor).
         $toolsFuerModus = $modus === 'nur_lesen' ? array_values(array_diff(self::TOOLS, self::SCHREIB_VORSCHLAG_TOOLS)) : self::TOOLS;
+        // Paket F (1b, Dominique: „alles was MCP-fähig ist"): in fragen/auto_sicher ist JEDES
+        // foodalchemist.*-Tool AUFRUFBAR — die Grenze liegt nicht mehr an der Policy, sondern am
+        // intercept()-Hook weiter unten, der JEDEN Nicht-read_only-Aufruf abfängt, bevor er
+        // wirklich ausgeführt wird (Ausnahme: AUTO_SICHER_DIREKT_TOOLS in auto_sicher). Das ist
+        // der einzige Punkt, an dem `read_only` geprüft wird — die Policy allein wäre hier KEINE
+        // Sicherung, sie lässt den Aufruf ja bewusst durch.
         $policy = $modus === 'nur_lesen'
             ? static fn (string $name, object $tool): bool => ! in_array($name, self::SCHREIB_VORSCHLAG_TOOLS, true) && self::darfNutzen($name, $tool)
-            : [self::class, 'darfNutzen'];
+            : static fn (string $name, object $tool): bool => str_starts_with($name, 'foodalchemist.');
+        $intercept = $modus === 'nur_lesen' ? null : $this->interceptor($modus);
         $modusHinweis = match ($modus) {
             'nur_lesen' => 'MODUS „nur lesen": Schreibvorschläge sind für dich komplett gesperrt (auch als '
                 . 'Vorschlag). Beantworte Fragen konversationell, navigiere/öffne bei Bedarf, aber schlage NICHTS '
@@ -226,12 +291,28 @@ class VoiceCommandService
                 . 'Status/letzte Läufe abfragen (foodalchemist.planung_kaskade.LETZTE) ist weiterhin erlaubt — '
                 . 'das ist reines Lesen, kein Vorschlag.',
             'auto_sicher' => 'MODUS „automatisch (sicher)": deine reversiblen Vorschläge (planung_vorschlag.POST, '
-                . 'anreicherung_vorschlag.POST, recipe_klasse.POST) werden dem Nutzer NICHT zur Bestätigung '
-                . 'vorgelegt, sondern SOFORT ausgeführt — sag das im finalen Text auch so (z. B. „Ich habe die '
-                . 'Planung angelegt und den Editor geöffnet."), nicht „bitte bestätigen".',
+                . 'anreicherung_vorschlag.POST, recipe_klasse.POST, recipes.DUPLICATE, recipes.RECOMPUTE, '
+                . 'recipes.ENRICH) werden dem Nutzer NICHT zur Bestätigung vorgelegt, sondern SOFORT ausgeführt '
+                . '— sag das im finalen Text auch so (z. B. „Ich habe die Planung angelegt und den Editor '
+                . 'geöffnet."), nicht „bitte bestätigen". Alle ANDEREN Schreibaktionen (Rezept/GP bearbeiten '
+                . 'oder löschen, usw.) bleiben trotzdem eine Karte zum Bestätigen.',
             default => 'MODUS „fragen" (Standard): jeder Vorschlag braucht einen Bestätigen-Klick vom Nutzer — '
                 . 'sag das auch so (z. B. „Vorschlag: … — bitte bestätigen").',
         };
+        // Paket F (1b): der generische Weg für ALLE anderen schreibenden FA-Tools (Rezept/GP
+        // bearbeiten/löschen, ...) — ruf sie normal auf, das System fängt sie ab und baut eine
+        // Karte; das Tool-Ergebnis bestätigt das (kein Fehler, also nicht in Runde+1 anders
+        // probieren). Partial-Update-Pflicht + Mengen-Rücklese sind Prompt-Regeln (kein Code-
+        // Zwang möglich, da PUT-Tools je nach Alias flach ODER verschachtelt sind).
+        $schreibHinweis = 'SCHREIBAKTIONEN AUSSER DEN DREI PLANUNGS-FÄHIGKEITEN (z. B. ein Rezept bearbeiten, '
+            . 'ein GP anlegen, etwas löschen): du darfst JEDES foodalchemist.*-Tool aufrufen, auch schreibende — '
+            . 'so wie sie sind, nicht extra suchen ob es einen „Vorschlag"-Namen trägt. Sie werden NIE direkt '
+            . 'ausgeführt (Ausnahme: die auto_sicher-Liste oben) — das System fängt sie ab und legt eine Karte '
+            . 'zum Bestätigen an; das Tool-Ergebnis sagt dir „Vorschlag angelegt" — das ist ein ERFOLG, nicht '
+            . 'versuche es danach nicht nochmal anders. PFLICHT bei Bearbeiten (PUT): sende NUR die im Befehl '
+            . 'GENANNTEN Felder, NIE ein ganzes Objekt zurückschreiben — alles Ungenannte bleibt unangetastet. '
+            . 'Nennt der Befehl eine Menge/Zahl mit Einheit (z. B. „200 Gramm Butter"), wiederhole sie im '
+            . 'finalen Antworttext wörtlich, damit der Nutzer sie gegenlesen kann. ';
         $resultat = $this->ki->callWithTools(
             "Sprachbefehl des Users (Deutsch, Kurz-Audio-Transkript): \"{$transcript}\"{$kontextHinweis}",
             $toolsFuerModus,
@@ -239,8 +320,9 @@ class VoiceCommandService
             [
                 'policy' => $policy,
                 'arg_guard' => [self::class, 'entschaerfeArgumente'],
+                'intercept' => $intercept,
                 'zeitbudget_ms' => self::ZEITBUDGET_MS,
-                'system_zusatz' => $modusHinweis . ' Du steuerst den GANZEN FoodAlchemist (Rezepte, Gerichte, Concepter, Foodbook, '
+                'system_zusatz' => $modusHinweis . ' ' . $schreibHinweis . 'Du steuerst den GANZEN FoodAlchemist (Rezepte, Gerichte, Concepter, Foodbook, '
                     . 'Speisekarte, Speiseplan, Bestellwesen, Lieferanten). Der Katalog unten ist nur der Einstieg: '
                     . 'fehlt dir ein Werkzeug, suche es mit tool_registry.SEARCH und rufe es direkt auf. '
                     . 'Suche IMMER mit name_glob "foodalchemist.*" (z. B. {"query":"foodbook kapitel",'
@@ -292,6 +374,13 @@ class VoiceCommandService
             if ($lauf['name'] === 'foodalchemist.anreicherung_vorschlag.POST' && $lauf['success']) {
                 $proposals[] = ['type' => 'anreicherung'] + $lauf['data']['vorschlag'];
             }
+            // Paket F (1b): jeder vom intercept()-Hook abgefangene Schreibversuch trägt
+            // `data.schreibaktion` — generischer Proposal-Typ für die ~330 FA-Write-Tools ohne
+            // eigenes Proposal-Tool. `success` ist hier immer true (baueSchreibvorschlag() liefert
+            // ToolResult::success), das Unterscheidungsmerkmal ist der `schreibaktion`-Schlüssel.
+            if (isset($lauf['data']['schreibaktion'])) {
+                $proposals[] = ['type' => 'schreibaktion'] + $lauf['data']['schreibaktion'];
+            }
         }
 
         // Befund 2026-09-17: `text === null` (Runden-/Zeitbudget erschöpft, kein `final`) rendert
@@ -313,5 +402,95 @@ class VoiceCommandService
 
         return 'Kein passendes Werkzeug gefunden (versucht: ' . implode(', ', $versucht)
             . ') — bitte den Befehl präziser formulieren.';
+    }
+
+    /**
+     * Paket F (1b): der `intercept`-Hook für {@see \Platform\FoodAlchemist\Services\Ai\AiGatewayService::callWithTools()}.
+     * `null` = normal ausführen (Lesen, eigene Proposal-Tools, explizit freigegebene
+     * auto_sicher-Direkt-Tools); sonst wird die Ausführung durch einen Schreibvorschlag ERSETZT.
+     */
+    private function interceptor(string $modus): callable
+    {
+        return function (string $name, array $arguments, object $tool, \Platform\Core\Contracts\ToolContext $context) use ($modus) {
+            $meta = method_exists($tool, 'getMetadata') ? (array) $tool->getMetadata() : [];
+            if (($meta['read_only'] ?? null) === true) {
+                return null;                                            // liest nur — normal ausführen
+            }
+            if (in_array($name, self::PROPOSAL_TOOLS, true)) {
+                return null;                                            // eigene Proposal-Tools schreiben strukturell nichts
+            }
+            if ($modus === 'auto_sicher' && in_array($name, self::AUTO_SICHER_DIREKT_TOOLS, true)) {
+                return null;                                            // explizit freigegeben — direkt ausführen
+            }
+
+            return $this->baueSchreibvorschlag($name, $arguments, $context);
+        };
+    }
+
+    /**
+     * Generischer Schreibvorschlag: GET-Vorher (nur mit Alias-Eintrag, siehe SCHREIBAKTION_ALIAS)
+     * + Feld-Diff, sonst ehrliche Roh-Argumente ohne Alt-Wert + Tool-Beschreibung als Kontext.
+     * Liefert IMMER `ToolResult::success()` — ein Fehler würde das Modell zu einem anderen
+     * Versuch in der nächsten Runde verleiten, obwohl der Vorschlag schon steht.
+     */
+    private function baueSchreibvorschlag(string $name, array $arguments, \Platform\Core\Contracts\ToolContext $context): \Platform\Core\Contracts\ToolResult
+    {
+        $registry = app(\Platform\Core\Tools\ToolRegistry::class);
+        $alias = self::SCHREIBAKTION_ALIAS[$name] ?? null;
+        $objekt = ['type' => null, 'id' => null, 'name' => null];
+        $vorschau = [];
+        $beschreibung = null;
+
+        if ($alias !== null) {
+            $id = $arguments[$alias['id_param']] ?? null;
+            $objekt['type'] = $alias['typ'];
+            $objekt['id'] = $id;
+            $vorher = null;
+            $getTool = $id !== null ? $registry->get($alias['get_tool']) : null;
+            if ($getTool !== null) {
+                $r = $getTool->execute(['id' => (int) $id], $context);
+                $vorher = $r->success ? $r->data : null;
+            }
+            $objekt['name'] = $vorher['name'] ?? null;
+            if (! ($alias['delete'] ?? false)) {
+                $felder = $alias['felder_key'] !== null ? (array) ($arguments[$alias['felder_key']] ?? []) : $arguments;
+                foreach ($felder as $feld => $neu) {
+                    if ($feld === $alias['id_param']) {
+                        continue;
+                    }
+                    $alt = is_array($vorher) ? ($vorher[$feld] ?? null) : null;
+                    if ($alt !== $neu) {
+                        $vorschau[] = ['feld' => $feld, 'alt' => $alt, 'neu' => $neu];
+                    }
+                }
+            }
+        } else {
+            // Kein Alias: ehrlich ohne Alt-Wert (kein falscher Diff) + die Tool-Beschreibung
+            // (existiert schon, kostet nichts) fürs Verständnis, WAS das Tool tut.
+            $tool = $registry->get($name);
+            $beschreibung = $tool !== null
+                ? mb_strimwidth(explode('.', $tool->getDescription())[0] ?? '', 0, 200, '…')
+                : null;
+            foreach ($arguments as $feld => $neu) {
+                $vorschau[] = ['feld' => $feld, 'neu' => $neu];
+            }
+            foreach (['id', 'recipe_id', 'gp_id'] as $key) {              // best-effort NUR für die Anzeige
+                if (isset($arguments[$key])) {
+                    $objekt['id'] = $arguments[$key];
+
+                    break;
+                }
+            }
+            $teile = explode('.', $name);
+            $objekt['type'] = $teile[1] ?? null;
+        }
+
+        return \Platform\Core\Contracts\ToolResult::success([
+            'schreibaktion' => [
+                'tool' => $name, 'arguments' => $arguments, 'objekt' => $objekt,
+                'vorschau' => $vorschau, 'beschreibung' => $beschreibung,
+            ],
+            '_hinweis' => 'Vorschlag angelegt, wartet auf Bestätigung des Nutzers — nicht erneut versuchen.',
+        ]);
     }
 }

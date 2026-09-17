@@ -134,16 +134,34 @@ it('Loop: entdecktes lesendes Tool wird ausgeführt und als freigeschaltet proto
     expect($summary)->toContain('ui.ROUTES');
 });
 
-it('Loop: schreibendes Tool wird abgelehnt, der Loop läuft weiter statt abzubrechen', function () {
+it('Paket F (1b): in fragen/auto_sicher wird ein schreibendes Tool NICHT abgelehnt, sondern zum Schreibvorschlag (kein DB-Write)', function () {
     ($this->skript)([
         '{"action":"tool","name":"foodalchemist.gps.POST","arguments":{"hauptzutat":"Zander"}}',
-        '{"action":"final","text":"Das darf ich nicht — ich kann es vorschlagen."}',
+        '{"action":"final","text":"Vorschlag angelegt — bitte bestätigen."}',
     ]);
 
     $r = app(VoiceCommandService::class)->verarbeite('Lege ein Grundprodukt Zander an');
 
-    expect($r['tool_laeufe'])->toBe([])                              // NICHTS ausgeführt
-        ->and($r['freigeschaltet'])->toBe([])
+    expect($r['tool_laeufe'])->toHaveCount(1)                        // abgefangen, nicht abgelehnt
+        ->and($r['tool_laeufe'][0]['success'])->toBeTrue()           // kein Fehler ans Modell (SET_ACTIVE-Muster)
+        // `freigeschaltet` protokolliert weiterhin JEDEN Aufruf ausserhalb des Warmstart-Katalogs
+        // (unabhängig von 1b) — gps.POST steht nicht in TOOLS, taucht also trotzdem hier auf.
+        ->and($r['freigeschaltet'])->toBe(['foodalchemist.gps.POST'])
+        ->and($r['proposals'][0]['type'])->toBe('schreibaktion')
+        ->and($r['proposals'][0]['tool'])->toBe('foodalchemist.gps.POST')
+        ->and($r['text'])->toBe('Vorschlag angelegt — bitte bestätigen.');
+});
+
+it('Paket F (1b): nur_lesen sperrt schreibende Tools weiter strukturell (kein Vorschlag, kein Write)', function () {
+    ($this->skript)([
+        '{"action":"tool","name":"foodalchemist.gps.POST","arguments":{"hauptzutat":"Zander"}}',
+        '{"action":"final","text":"Das darf ich in diesem Modus nicht."}',
+    ]);
+
+    $r = app(VoiceCommandService::class)->verarbeite('Lege ein Grundprodukt Zander an', null, 'nur_lesen');
+
+    expect($r['tool_laeufe'])->toBe([])                              // NICHTS ausgeführt, kein Vorschlag
+        ->and($r['proposals'])->toBe([])
         ->and($r['runden'])->toBe(2)                                 // Ablehnung beendet den Loop nicht
         ->and($r['text'])->toContain('nicht');
 });
@@ -333,4 +351,27 @@ it('Review-Fix: nur_lesen sperrt die 4 Vorschlags-Tools, LÄSST aber planung_kas
         ->and($r['tool_laeufe'][0]['name'])->toBe('foodalchemist.planung_kaskade.LETZTE')
         ->and($r['tool_laeufe'][0]['success'])->toBeTrue()
         ->and($r['text'])->toBe('Keine laufende Generierung gefunden.');
+});
+
+it('AUTO_SICHER_DIREKT_TOOLS enthält genau die drei explizit freigegebenen Tool-Namen', function () {
+    expect(VoiceCommandService::AUTO_SICHER_DIREKT_TOOLS)->toBe([
+        'foodalchemist.recipes.DUPLICATE', 'foodalchemist.recipes.RECOMPUTE', 'foodalchemist.recipes.ENRICH',
+    ]);
+});
+
+it('Paket F (1b) auto_sicher: ein AUTO_SICHER_DIREKT_TOOLS-Tool läuft wirklich, OHNE Vorschlag', function () {
+    $rezept = FoodAlchemistRecipe::create([
+        'team_id' => $this->rootTeam->id, 'recipe_key' => 'rc1', 'name' => 'Basis: Fond', 'status' => 'approved',
+    ]);
+    ($this->skript)([
+        '{"action":"tool","name":"foodalchemist.recipes.RECOMPUTE","arguments":{"id":' . $rezept->id . '}}',
+        '{"action":"final","text":"Neu berechnet."}',
+    ]);
+
+    $r = app(VoiceCommandService::class)->verarbeite('Berechne das Rezept neu', null, 'auto_sicher');
+
+    expect($r['tool_laeufe'])->toHaveCount(1)
+        ->and($r['tool_laeufe'][0]['success'])->toBeTrue()
+        ->and($r['tool_laeufe'][0]['data']['recomputed'] ?? null)->toBeTrue()   // ECHT ausgeführt, kein Schreibvorschlag
+        ->and($r['proposals'])->toBe([]);
 });
