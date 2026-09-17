@@ -252,3 +252,11 @@ EK 7,74 € / 1,96 kg (3,95 €/kg). Steps 0 (Anreicherung läuft erst nach Frei
 | 6 Sub-Zerlegung | 6 Kinder: übernommen `Sauce: Malz-Rinderjus` (#3728, **unreif**: keine Schritte), `Proteine: Rinderfilet sous-vide` (#3666, reif), `Gemüsebeilage: Gerösteter Hokkaido-Kürbis` (#3511, **unreif**), `Crunch: Haselnuss-Ciabatta` (#3534, reif); geplant `Kartoffelpüree`, `Beilage: Herbsttrompeten gebraten`. Run-Kopf `uebernommen=4, uebernommen_unreif=2` ✓ |
 
 Beobachtung: die Fonds/Jus-Kennwerte wurden bei einem Jus-Gericht budget-verworfen — Kandidat für eine Budget-Anhebung auch bei `vk.generator` (heute 49.000), Entscheidung Dominique (Gerichte laufen in Kaskaden vielfach → Kosten).
+
+### Live-Lauf 3 — Speisekarte-aus-Brief (Session 127, Lauf 71, Speisekarte 5, 2 Rubriken × 2 Gerichte) und Live-Lauf 4 — Foodbook-aus-Brief (Session 128, Lauf 72, Foodbook 24, gestuft)
+
+Phasen-Trace (2-s-Poll über alle Steps):
+- **Gericht-Steps der Speisekarte (Tiefe 0, `MaterializeSpeisekartePositionJob`) zeigen KEINE Phase** („running | -" bis `done`) — 483→3755 (28 s), 484→3756, 485→3758, 486→3760; alle 4 Gerichte in 3 Min. **Lücke Paket C:** `MaterializeSpeisekartePositionJob`/`MaterializeSpeiseplanCellJob`/`GenerateDishProposalJob` rufen `fortschritt()`/`setzePhase()` nicht.
+- **Concept-Step des Foodbooks (Tiefe 0, `GenerateConceptJob`) ebenfalls ohne Phase** — 505 → Concept #146 in 28 s. Gleiche Lücke.
+- **Sub-Rezept-Steps (Tiefe 1/2, `GenerateRecipeJob`) zeigen die volle Kette:** z. B. #489: 20:46:38 Kontext & Wissen → 20:46:40 KI schreibt → 20:47:40 Zutaten → 20:47:42 Kohärenz-Gate → 20:48:22 done + Konformität → 20:49:59 Phase frei. Reuse-Kinder (`skipped`) und `geplant` erscheinen sofort beim Andocken.
+- **Durchsatz:** Sub-Rezepte laufen auf `fa-rezepte` mit EINEM Worker seriell (~1,5–2 Min je Basisrezept inkl. Konformität) — eine Speisekarte mit 4 Gerichten zieht ~12 Sub-Rezepte ⇒ 20–25 Min bis alles durch ist. Für Speiseplan (30 Zellen) skaliert das nicht; Kandidat: 2–3 Prozesse auf `fa-rezepte` (Forge) oder Konformität von der Kette entkoppeln.
