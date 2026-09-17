@@ -1,14 +1,13 @@
 {{-- M7-10: Voice — MediaRecorder (gemeinsamer Baustein) → STT → Tool-Loop; Proposals mit
      Bestätigen (GL-07). Spec 53/D: Roundtrip in zwei sichtbare Server-Schritte gesplittet
      (Transkription → `verstehen()`), Provider-Pill, verständliche Fehlertexte. --}}
-{{-- KEIN `defer` — Alpine wertet `x-data="FaVoiceRecorder(...)"` weiter unten SYNCHRON beim
-     ersten Scan des initialen DOM aus; ein `defer` (oder `@assets`, dessen Injektion über
-     Livewires eigene Effekt-Pipeline läuft) könnte später kommen als dieser Scan und würde
-     `FaVoiceRecorder` dann als ReferenceError sehen. Ein blockierendes Script VOR dieser Stelle
-     im DOM garantiert, dass die Funktion beim Parsen des Modal-Markups schon existiert.
-     `data-navigate-once` übernimmt stattdessen das Dedup über `wire:navigate`-Seitenwechsel
-     hinweg (das Modal ist global in der Sidebar gemountet, liegt also auf JEDER Seite im DOM). --}}
-<script src="/_platform/fa-assets/foodalchemist-voice-recorder.iife.js?v={{ config('platform.fa_voice_recorder_hash', '0') }}" data-navigate-once></script>
+{{-- Spec 53/D Hotfix: Recorder-Bundle über @assets (server-seitig in den <head> gehoben, vor Alpine).
+     Ein rohes <script> als ERSTES Tag der Komponente bekam von Livewire das wire:id
+     (Utils::insertAttributesIntoHtmlRoot hängt es an das erste Tag) — das Modal gehörte damit zur
+     Eltern-Komponente (Sidebar), $wire.upload lief gegen foodalchemist.sidebar ohne WithFileUploads. --}}
+@assets
+<script src="/_platform/fa-assets/foodalchemist-voice-recorder.iife.js?v={{ config('platform.fa_voice_recorder_hash', '0') }}"></script>
+@endassets
 @php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
 
 <x-foodalchemist::modal name="voice-modal" title="Sprachbefehl" size="max-w-xl">
