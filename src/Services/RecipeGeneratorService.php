@@ -1038,10 +1038,10 @@ class RecipeGeneratorService
 
         // (2) Lexikalischer Token-LIKE-Pass (additiv/Fallback) — wörtliche Treffer, die der
         //     semantische Floor evtl. auslässt, plus das gesamte Provider-aus-Verhalten.
-        $tokens = array_values(array_filter(
-            app(Matching\TokenEngine::class)->tokenize($description),
-            fn ($t) => mb_strlen($t) >= 4,
-        ));
+        // Geteilte Denylist mit GenerationContextService::leitTokens() (#505-Nachtrag
+        // 2026-09): vorher ≥4 Zeichen ohne Stoppwortfilter — „Basisrezept"/„bitte" usw.
+        // landeten hier als LIKE-Sonde, obwohl das Grounding sie längst ausschloss.
+        $tokens = app(Matching\TokenEngine::class)->leitTokens($description);
         if ($tokens !== []) {
             $lexNamen = FoodAlchemistRecipe::visibleToTeam($team)->basis()
                 ->whereIn('status', ['draft', 'review', 'approved'])

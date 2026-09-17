@@ -65,6 +65,41 @@ class TokenEngine
         return preg_match('/\baus\s+(?:der|einer)\s+dose\b|\bin\s+dosen\b|\bdosentomaten?\b/iu', $name) === 1;
     }
 
+    /**
+     * Briefing-Sprache ist kein Produkt — Füllwörter/Artikel/Konnektoren aus freiem
+     * Beschreibungstext vor dem Grounding-Retrieval raus, sonst verdrängen sie spät
+     * genannte Zutaten. NICHT Teil des GL-04-Ports (rein Briefing-Vorfilter). Geteilt
+     * zwischen GenerationContextService::leitTokens() und
+     * RecipeGeneratorService::bestandsInventar() — beide sondieren denselben Wortschatz.
+     */
+    private const BRIEF_STOPWORDS = [
+        'bitte', 'kannst', 'koenntest', 'erstelle', 'erstellen', 'mache', 'machen',
+        'haette', 'moechte', 'brauche', 'rezept', 'basisrezept', 'gericht', 'suppe',
+        'einen', 'eine', 'einer', 'einem', 'eines', 'soll', 'sollen', 'sein', 'werden',
+        'wird', 'sind', 'dabei', 'dazu', 'darin', 'drin', 'auch', 'noch', 'etwas',
+        'bisschen', 'klassisch', 'klassischen', 'klassische', 'ansatz', 'fuer',
+        'ohne', 'oder', 'aber', 'dann', 'diese', 'dieser', 'dieses', 'eher',
+        'gemischt', 'gemixt', 'eingemixt', 'pueriert', 'fertig',
+        'mit', 'und', 'der', 'die', 'das', 'den', 'dem', 'aus', 'zum', 'zur', 'ich', 'ein', 'mal',
+    ];
+
+    /**
+     * Leit-Tokens eines freien Beschreibungstexts: tokenisiert, Briefing-Füllwörter,
+     * Kurzwörter (< 3 Zeichen) und Zahlen raus, auf `$max` gekappt (Sondierungs-Budget,
+     * NICHT das Prompt-Budget — der Aufrufer kappt Kandidaten danach nach Trefferqualität).
+     *
+     * @return list<string>
+     */
+    public function leitTokens(string $description, int $max = 16): array
+    {
+        $tokens = array_values(array_filter(
+            $this->tokenize($description),
+            fn ($t) => mb_strlen($t) >= 3 && ! in_array($t, self::BRIEF_STOPWORDS, true) && ! ctype_digit($t),
+        ));
+
+        return array_slice($tokens, 0, $max);
+    }
+
     /** rs:203–217 — '-'→'_', nur Alphanumerik + '_' behalten, Rest ERSATZLOS weg (auch Spaces). */
     public function normalizeSlug(string $s): string
     {
