@@ -3,9 +3,11 @@
 @assets
 <script src="/_platform/fa-assets/foodalchemist-pairing-netz.iife.js?v={{ config('platform.fa_pairing_netz_hash', '0') }}" defer></script>
 @endassets
-{{-- Spec 53/D: gemeinsamer Voice-Recorder fürs Briefing-Diktat (partials/diktat.blade.php).
-     KEIN `defer`/`@assets` — `data-navigate-once` dedupt über `wire:navigate` hinweg. --}}
-<script src="/_platform/fa-assets/foodalchemist-voice-recorder.iife.js?v={{ config('platform.fa_voice_recorder_hash', '0') }}" data-navigate-once></script>
+@assets
+{{-- Spec 53/D: gemeinsamer Voice-Recorder fürs Briefing-Diktat (partials/diktat.blade.php). Hotfix: in
+     @assets statt als rohes erstes Tag — sonst bekommt das <script> Livewires wire:id und die Komponente zerfällt. --}}
+<script src="/_platform/fa-assets/foodalchemist-voice-recorder.iife.js?v={{ config('platform.fa_voice_recorder_hash', '0') }}"></script>
+@endassets
 @php
     extract(\Platform\FoodAlchemist\Support\Ui::maps());
     $statusLabel = ['divergenz' => 'Divergenz', 'konvergenz' => 'Konvergenz', 'erledigt' => 'Erledigt'];
