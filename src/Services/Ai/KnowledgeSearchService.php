@@ -6,6 +6,7 @@ use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Services\TerminologyService;
 
 /**
  * Spec 52/E: ein Ranking, unabhängig von Einstieg und Kontextbudget.
@@ -17,7 +18,10 @@ class KnowledgeSearchService
     public const CANDIDATE_LIMIT = 100;
     public const RRF_K = 60;
 
-    public function __construct(private readonly KnowledgeTokenizer $tokenizer) {}
+    public function __construct(
+        private readonly KnowledgeTokenizer $tokenizer,
+        private readonly TerminologyService $terminology,
+    ) {}
 
     /**
      * @return list<array<string, mixed>> Metadaten und nachvollziehbare Ranganteile, kein Volltext
@@ -27,6 +31,21 @@ class KnowledgeSearchService
         $tokens = $this->tokenizer->tokenize($query);
         if (trim($query) === '' || $limit <= 0) {
             return [];
+        }
+        // Spec 53 Aufgabe 3 (Kompositum-Grenze): "tomatensuppe" ist EIN Token und matcht
+        // "tomate"/"suppe"-Dossiers weder per Jaccard noch per (bis dahin einseitiger)
+        // Substring-Regel. Decompoundierung mit demselben Baustein wie das Zutaten-Matching
+        // (TerminologyService::decompoundPhrasesFor, s. IngredientMatchService) — ERWEITERT die
+        // Query-Tokens, verdrängt keinen; ein Kompositum ohne bekannten Kopf (COMPOUND_HEADS)
+        // bleibt unverändert.
+        $decompoundTokens = [];
+        foreach ($tokens as $token) {
+            foreach ($this->terminology->decompoundPhrasesFor($token) as $phrase) {
+                array_push($decompoundTokens, ...$this->tokenizer->tokenize($phrase));
+            }
+        }
+        if ($decompoundTokens !== []) {
+            $tokens = array_values(array_unique([...$tokens, ...$decompoundTokens]));
         }
         $columns = ['id', 'slug', 'title', 'category', 'active', 'version', 'char_count'];
         if (Schema::hasColumn('foodalchemist_knowledge_documents', 'art')) {
@@ -44,8 +63,14 @@ class KnowledgeSearchService
             $words = $this->tokenizer->tokenize($doc->slug.' '.$doc->title);
             $overlap = count(array_intersect($tokens, $words));
             $union = count(array_unique([...$tokens, ...$words]));
+            // Beidseitig ab 5 Zeichen (Spec 53 Aufgabe 3): vorher nur $word CONTAINS $token — ein
+            // kurzes Doc-Wort wie "tomate" (6) kann kein längeres Query-Kompositum wie
+            // "tomatensuppe" (12) enthalten, obwohl die Decompoundierung genau das nicht immer
+            // auflöst (unbekannte Köpfe). Symmetrisch behoben, mit derselben Mindestlänge auf
+            // beiden Seiten, damit kein kurzes Funktionswort per Substring durchrutscht.
             $substringHits = count(array_filter($tokens, static fn ($token) => mb_strlen($token) >= 5
-                && count(array_filter($words, static fn ($word) => str_contains($word, $token))) > 0));
+                && count(array_filter($words, static fn ($word) => mb_strlen($word) >= 5
+                    && (str_contains($word, $token) || str_contains($token, $word)))) > 0));
             $alias = false;
             foreach ($aliases->get($id, collect()) as $row) {
                 if (array_intersect($tokens, $this->tokenizer->tokenize($row->alias_slug)) !== []) {
