@@ -410,6 +410,21 @@ Prüfung gegen `knowledge.LIST category=regelwerk` (77 Dossiers): Regelwerk Basi
 
 **Paket F Bilanz (Stufen 1–4, PRs #105/#109/#112):** Agenten-Modus fragen|auto_sicher|nur_lesen · generischer Schreibvorschlag für 332 Schreib-Tools · Seiten-Mount 26 Vollseiten + „dauerhaft aktiv" · OpenAI-TTS + VAD-Konversationsmodus · Gesprächsgedächtnis 30 Min. Offen: Browser-Abnahme Dominique (Chrome + Safari), Core-Bitten an Martin (Mount außerhalb Sidebar-Slot, TranscriptionContract/SpeechContract) → Spec 45 §Bitten.
 
+## G.5 Regelwerk-Dossiers aktiviert und gebunden (2026-09-18 11:30)
+
+Dominique hat die 8 Dossiers (Basisrezepte §14, VK §3/§3.2a/§3.4/§3.4a–c/§3.4e/§3.5–3.8/§4) im Wissens-Browser freigeschaltet (Version 2). Kanon-Bindungen (cooking-jarvis-03, Server je „Gesetzt — wirkt sofort"):
+
+| Key | Dossier | Modus |
+|---|---|---|
+| `vk.regeneration` | §3.2a Regeneration gehört der Komponente · §14 Regeneration & Behälter am Basisrezept | pflicht · pflicht |
+| `recipe.regeneration` | §14 · §3.2a | pflicht · wenn_platz |
+| `recipe.eigenschaften` | §14 | wenn_platz (ord 30, nach Behälter ×2) |
+| `vk.plating` | §3 Anleitungs-Ebenen · §3.5–3.8 Schritte ohne absolute Mengen | wenn_platz · pflicht |
+| `recipe.steps` | §3.5–3.8 · §3 Anleitungs-Ebenen | pflicht · wenn_platz |
+| `signal.serving_form_suggest` | §4 Darreichung `unbestimmt` | wenn_platz |
+
+Deploy 7 (Pin 39a13c46): #114 Kacheltext „KI" in den Einstellungen nennt den Sprachbefehl (Live-Befund Dominique: Einstellungen nicht gefunden). Live-Check Team 6: alle drei Voice-Schalter standen noch auf aus → Modal sah unverändert aus (Default = Ein-Klick-Modus); Befehl „Planung öffnen" lief 16,8 s, 2 Runden, 1 Tool, ohne Fehler.
+
 **Stand F(2) 2026-09-17 23:35 — Commit `57550549` (Oskar):** Partial `partials/agent-mount.blade.php` (Modal + schwebendes, ziehbares Mikrofon bei Team-Setting „dauerhaft aktiv", Position in localStorage) im Root von 26 Vollseiten, Sidebar nur Öffnen-Knopf; Migration `voice_agent_dauerhaft_aktiv`. Review: kein Script als erstes Tag, keine Verschachtelung der 26 (keine Doppel-Modals). **Loch:** auf FA-Seiten ohne Include tut der Sidebar-Knopf nichts mehr (Editor-Vollseiten fehlen vermutlich) → Routen-Abdeckung messen (routes/web.php → Komponente → Include ja/nein), fehlende nachziehen, Test „genau 1× `data-voice-float-mount` je geroutete Vollseite". Dann volle Suite → **PR 1 = F(1)+(1b)+(2)**; (3) TTS/VAD + (4) Gedächtnis auf `feat/voice-gespraechsmodus` off PR-1-HEAD.
 
 **PR #105 GEMERGT (2026-09-18 01:15, main `2a3c5355`):** F(1)+(1b)+(2), HEAD 28a828ae, volle Suite sandbox-voice 4.553/4.559 grün, 6 skipped, 0 rot (23.132 Assertions). Mein vermutetes Loch (Editor-Vollseiten ohne Mount) **gemessen widerlegt**: `Route::getRoutes()` → FA-Livewire-Ziele = exakt 26 Klassen; alle Editoren/Panels/Modals sind `<livewire:>`-genestet in diese 26 (Presentation-Routen sind Controller mit eigenem Layout, bewusst ohne Agent); `KundeDnaPanel`/`LeitstelleRail` toter Code ohne Mount. Neuer Test rendert alle 26 live und zählt `data-voice-float-mount` (Riegel `toHaveCount(26)`). PR-Zahlen: 461 FA-Tools, 129 read_only (nur_lesen), 332 Schreib-Tools (Karte), 5 Alias-Map, 3 AUTO_SICHER_DIREKT_TOOLS, 3 AUTO_ERLAUBT. Merge vor Peter/Paul, weil keine Datei-Überlappung; beide rebasen vor PR. (3) läuft auf `feat/voice-gespraechsmodus` off main.
