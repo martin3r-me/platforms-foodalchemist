@@ -317,7 +317,21 @@ class KnowledgeContextService
         // Technik-/Referenz-Dossiers um dieselben Top-K-Plätze. Deterministisch: kein Rang-Risiko.
         if (($r = $routing->get('zutat:grounding')) !== null) {
             $before = count($filesUsed);
-            $parts[] = $this->zutatGroundingBlock($team, $hauptzutatSlugs, $feature, (int) ($r->max_docs ?: 8), $filesUsed);
+            // Fund (Orchestrierung, 2026-09-18, Live-PREVIEW nach Deploy 15): NUR
+            // RecipeGenerationContextService::build() übergibt Hauptzutat-Slugs (B4). Jeder andere
+            // contextFor()-Aufrufer (KnowledgePreviewService, RecipeOneShotService::steps, StepEditor,
+            // DetailPanel, Review/Conformance, …) liefert `[]` — die Routing-Zeile stand, ohne dass
+            // der Grounding-Zweig je zündete ("Etikett ohne Landebahn"). Fehlen Slugs, dieselbe
+            // leichte Vorsondierung wie in build() (B4) HIER zentral nachholen, statt an jedem
+            // Aufrufer einzeln — betrifft damit auch KnowledgePreviewService (PREVIEW soll die
+            // reale Pipeline spiegeln, nicht einen Sonderfall).
+            $hauptzutatenQuelle = 'caller';
+            $zutatSlugs = $hauptzutatSlugs;
+            if ($zutatSlugs === []) {
+                $zutatSlugs = app(\Platform\FoodAlchemist\Services\Matching\TokenEngine::class)->leitTokens($description);
+                $hauptzutatenQuelle = 'abgeleitet';
+            }
+            $parts[] = $this->zutatGroundingBlock($team, $zutatSlugs, $feature, (int) ($r->max_docs ?: 8), $filesUsed, $hauptzutatenQuelle);
             $snap('zutat', $before);
         }
 
@@ -1796,7 +1810,7 @@ class KnowledgeContextService
      * @param  list<string>  $hauptzutatSlugs  rohe Zutaten-Namen/-Token, NICHT normalisierte Anker-Slugs
      * @param  list<string>  $filesUsed  by-ref-Audit
      */
-    private function zutatGroundingBlock(?Team $team, array $hauptzutatSlugs, string $feature, int $maxDocs, array &$filesUsed): KnowledgeContextBlock
+    private function zutatGroundingBlock(?Team $team, array $hauptzutatSlugs, string $feature, int $maxDocs, array &$filesUsed, string $hauptzutatenQuelle = 'caller'): KnowledgeContextBlock
     {
         $aspekt = $this->zutatAspektFuer($feature);
         $pairing = app(\Platform\FoodAlchemist\Services\PairingService::class);
@@ -1814,7 +1828,7 @@ class KnowledgeContextService
             if ($anker === null) {
                 // Ehrlich sichtbar statt stillschweigend übersprungen (Dominique: "nimmt er dann
                 // random irgendeins?" — Antwort hier: nein, gar keins, und das steht auch so da).
-                $this->herkunft["zutat:{$hz}"] = ['via' => 'zutat_grounding', 'score' => null, 'status' => 'ohne_anker'];
+                $this->herkunft["zutat:{$hz}"] = ['via' => 'zutat_grounding', 'score' => null, 'status' => 'ohne_anker', 'hauptzutaten_quelle' => $hauptzutatenQuelle];
                 continue;
             }
             if (isset($geladen[$anker])) {
@@ -1826,7 +1840,7 @@ class KnowledgeContextService
             // hier ALLE Teil-Dossiers des gewählten Aspekts, nicht nur eins.
             $docs = $this->zutatDocs($team, $anker, $aspekt);
             if ($docs->isEmpty()) {
-                $this->herkunft["zutat.{$anker}"] = ['via' => 'zutat_grounding', 'score' => null, 'status' => 'ohne_dossier', 'aspekt' => $aspekt];
+                $this->herkunft["zutat.{$anker}"] = ['via' => 'zutat_grounding', 'score' => null, 'status' => 'ohne_dossier', 'aspekt' => $aspekt, 'hauptzutaten_quelle' => $hauptzutatenQuelle];
                 continue;
             }
             foreach ($docs as $doc) {
@@ -1838,7 +1852,7 @@ class KnowledgeContextService
                 $this->herkunft["{$doc->slug}@v{$doc->version}"] = [
                     'via' => 'zutat_grounding', 'score' => self::DETERMINISTISCHER_SCORE,
                     'chars' => mb_strlen((string) $doc->content_md), 'sent' => mb_strlen((string) $doc->content_md),
-                    'aspekt' => $aspekt, 'hauptzutat' => $hz,
+                    'aspekt' => $aspekt, 'hauptzutat' => $hz, 'hauptzutaten_quelle' => $hauptzutatenQuelle,
                 ];
             }
         }
