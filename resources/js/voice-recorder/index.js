@@ -74,12 +74,66 @@
   }
 
   /**
+   * Spec 53 / Paket F (3): Autoplay-Politik (Safari besonders) erlaubt script-getriggertes
+   * `play()` nur, nachdem das Element schon EINMAL innerhalb einer echten Nutzer-Geste
+   * gespielt hat. Ein leeres `<audio>` ohne `src` zu spielen, entsperrt NICHTS (das Element
+   * hat keine Quelle) — darum ein winziger, deterministisch erzeugter 60-Byte-WAV-Clip
+   * (8 kHz mono, 8 Samples Stille, ~1 ms) als Data-URI statt eines geratenen/kopierten Blobs.
+   * Wird von den ÖFFNEN-Klicks (Sidebar-Knopf, schwebender Knopf) aufgerufen, bevor das
+   * Modal-Event dispatcht wird — noch im selben Klick-Handler, also noch "user activation".
+   */
+  var STILLER_CLIP = 'data:audio/wav;base64,UklGRjQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YRAAAAAAAAAAAAAAAAAAAAAAAAAA';
+
+  global.FaVoiceAudioEntsperren = function (elementId) {
+    var audio = global.document && global.document.getElementById(elementId);
+    if (!audio || audio.dataset.faEntsperrt === '1') {
+      return;
+    }
+    try {
+      if (!audio.src) {
+        audio.src = STILLER_CLIP;
+      }
+      var vorLautstaerke = audio.volume;
+      audio.muted = true;
+      var p = audio.play();
+      var fertig = function () {
+        audio.pause();
+        try { audio.currentTime = 0; } catch (e) { /* manche Browser vor dem ersten Play nicht seekbar */ }
+        audio.muted = false;
+        audio.volume = vorLautstaerke;
+        audio.dataset.faEntsperrt = '1';
+      };
+      if (p && typeof p.then === 'function') {
+        p.then(fertig).catch(function () {
+          audio.muted = false;                                       // Entsperrung nicht sicher — Fallback greift später
+        });
+      } else {
+        fertig();
+      }
+    } catch (e) {
+      // Entsperrung ist best-effort — schlägt sie fehl, greift beim echten Abspielen der
+      // speechSynthesis-Fallback (siehe voice-modal.blade.php).
+    }
+  };
+
+  /**
    * @param {object} opts
    * @param {string} opts.property      Livewire-Upload-Property (z. B. 'audio', 'briefAudio')
    * @param {number} [opts.maxMs]       Auto-Stopp nach dieser Aufnahmedauer (Default 20000)
    * @param {number} [opts.minMs]       Mindestdauer, sonst „Aufnahme zu kurz" (Default 700)
    * @param {(string|Function)} [opts.before]  Optionaler Hook (Alpine-Methodenname oder Funktion),
    *                                     VOR dem Mikrofonzugriff awaited (z. B. `$wire.set('diktatZiel', …)`).
+   * @param {boolean} [opts.vad]        Spec 53/F (3): Stille-Erkennung — stoppt die Aufnahme
+   *                                     automatisch, statt auf einen manuellen Klick zu warten
+   *                                     (Konversations-Modus, hands-free). AUS per Default —
+   *                                     der Ein-Klick-Sprachbefehl (voice-modal) stoppt weiter
+   *                                     manuell, das ist kein Verhaltensbruch.
+   * @param {number} [opts.sprechSchwelle]  Pegel (0..1), ab dem "spricht" erkannt wird (Default 0.08).
+   * @param {number} [opts.stilleSchwelle]  Pegel (0..1), unter dem NACH erkannter Sprache "still"
+   *                                     zählt (Default 0.04 — niedriger als sprechSchwelle: Hysterese
+   *                                     gegen Flackern um eine einzelne Schwelle herum).
+   * @param {number} [opts.stilleMs]    Stille-Dauer nach Sprache, bis automatisch gestoppt wird
+   *                                     (Default 700 — wie die Mindestdauer, aus derselben Quelle).
    */
   global.FaVoiceRecorder = function (opts) {
     opts = opts || {};
@@ -87,6 +141,10 @@
     var maxMs = opts.maxMs || 20000;
     var minMs = opts.minMs || 700;
     var before = opts.before || null;
+    var vad = !!opts.vad;
+    var sprechSchwelle = opts.sprechSchwelle || 0.08;
+    var stilleSchwelle = opts.stilleSchwelle || 0.04;
+    var stilleMs = opts.stilleMs || 700;
 
     return {
       rec: null,
@@ -105,12 +163,16 @@
       _analyser: null,
       _pegelRaf: null,
       _startedAt: 0,
+      _vadState: 'warten',                                            // 'warten' | 'spricht' | 'still'
+      _vadStilleSeit: null,
 
       async start() {
         this.fehler = null;
         if (this.laeuft) {
           return;
         }
+        this._vadState = 'warten';
+        this._vadStilleSeit = null;
         if (!this.unterstuetzt) {
           this.fehler = 'Sprachaufnahme wird von diesem Browser nicht unterstützt.';
 
@@ -248,6 +310,26 @@
               summe += v * v;
             }
             self.pegel = Math.min(1, Math.sqrt(summe / puffer.length) * 4);
+
+            if (vad) {
+              if (self.pegel >= sprechSchwelle) {
+                self._vadState = 'spricht';
+                self._vadStilleSeit = null;
+              } else if (self.pegel < stilleSchwelle && self._vadState === 'spricht') {
+                self._vadState = 'still';
+                self._vadStilleSeit = Date.now();
+              }
+              // Erst NACH erkannter Sprache zählt Stille als Ende — reine Anfangs-/Hintergrund-
+              // stille (state bleibt 'warten') darf die Aufnahme nie sofort beenden.
+              if (self._vadState === 'still' && self._vadStilleSeit !== null
+                  && (Date.now() - self._vadStilleSeit) >= stilleMs
+                  && (Date.now() - self._startedAt) >= minMs) {
+                self.stop();
+
+                return;
+              }
+            }
+
             self._pegelRaf = global.requestAnimationFrame(schleife);
           };
           schleife();

@@ -55,7 +55,14 @@
                 try { localStorage.setItem('fa-voice-mount-pos', JSON.stringify({ x: this.x, y: this.y })); } catch (e) {}
             }
         },
-        oeffnen() { if (! this.moved) { $dispatch('voice-modal.oeffnen'); } },
+        oeffnen() {
+            if (! this.moved) {
+                // Spec 53/F (3): dieselbe Entsperrung wie der Sidebar-Knopf — noch im
+                // selben Klick, bevor `$dispatch` das Modal-Event schickt.
+                window.FaVoiceAudioEntsperren && window.FaVoiceAudioEntsperren('fa-voice-tts-audio');
+                $dispatch('voice-modal.oeffnen');
+            }
+        },
     }"
     x-show="aktiv" x-cloak
     x-init="init()"

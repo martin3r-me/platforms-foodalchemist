@@ -81,6 +81,23 @@ class VoiceModal extends Component
     public bool $sprichtGerade = false;
 
     /**
+     * Spec 53 / Paket F (3): steuert im Blade, ob der Recorder im VAD-Hands-free-Modus läuft
+     * (Stille-Erkennung + Auto-Weiterhören nach der Antwort) statt im Ein-Klick-Modus. Gespiegelt
+     * vom „dauerhaft aktiv"-Team-Setting (Stufe 2) — reine UX-Weiche, keine Rechte-Entscheidung,
+     * darum kein `#[Locked]` nötig (anders als `$agentModus`).
+     */
+    public bool $konversationAktiv = false;
+
+    /**
+     * Spec 53 / Paket F (3): Event-Namen als Konstanten — die Blade-Seite hört über
+     * `$wire.on(...)` auf GENAU diese Strings, nicht auf eine zweite, unabhängig gepflegte
+     * Kopie. Review-Auflage cooking-jarvis-03: „kein Magic-String an zwei Stellen".
+     */
+    public const EVENT_TTS_BEREIT = 'voice-tts-bereit';
+
+    public const EVENT_TTS_FEHLGESCHLAGEN = 'voice-tts-fehlgeschlagen';
+
+    /**
      * Rezept-Kontext, falls das Modal von einer Rezept-Seite aus geöffnet wurde (Spec 53/D,
      * Aufgabe 7: „Reichere DIESES Rezept an" ohne dass der Nutzer den Namen nennen muss).
      *
@@ -127,6 +144,8 @@ class VoiceModal extends Component
         $this->aufnahmeMoeglich = in_array($this->provider, ['openai', 'assemblyai'], true);
         $this->herkunftRoute = request()->route()?->getName();
         $this->agentModus = $this->agentModusAktuell();   // NUR für die Pill — Entscheidungen lesen immer frisch
+        $team = Auth::user()?->currentTeamRelation;
+        $this->konversationAktiv = $team !== null && app(TeamSettingsService::class)->voiceAgentDauerhaftAktiv($team);
     }
 
     /**
@@ -283,11 +302,13 @@ class VoiceModal extends Component
             Cache::put(VoiceAudioController::cacheKey($token), ['bytes' => $audio, 'mime' => $tts->mimeType()], now()->addMinutes($ttlMinuten));
             $url = URL::temporarySignedRoute('foodalchemist.voice.audio', now()->addMinutes($ttlMinuten), ['token' => $token]);
             $this->protokolliereTts($tts->name(), (int) ((hrtime(true) - $start) / 1_000_000), true);
-            $this->dispatch('voice-tts-bereit', url: $url);
+            // `text` reist mit — der speechSynthesis-Fallback (Autoplay blockiert ODER Synthese
+            // fehlgeschlagen) braucht ihn, das Modal selbst hat ihn sonst nirgends griffbereit.
+            $this->dispatch(self::EVENT_TTS_BEREIT, url: $url, text: $text);
         } catch (\Throwable) {
             $this->sprichtGerade = false;
             $this->protokolliereTts('fehler', (int) ((hrtime(true) - $start) / 1_000_000), false);
-            $this->dispatch('voice-tts-fehlgeschlagen');
+            $this->dispatch(self::EVENT_TTS_FEHLGESCHLAGEN, text: $text);
         }
     }
 

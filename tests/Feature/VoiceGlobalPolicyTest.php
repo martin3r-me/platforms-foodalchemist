@@ -269,9 +269,16 @@ it('Platzierung: JEDE FA-Vollseite bindet das agent-mount-Partial GENAU EINMAL i
  * wird gerendert und auf GENAU EIN `data-voice-float-mount` geprüft. Ein künftiger Routen-Zugang
  * ohne Include fällt hier durch, ohne dass jemand die Liste oben nachpflegen muss.
  */
-it('Platzierung (gemessen): JEDE geroutete FA-Livewire-Vollseite rendert data-voice-float-mount genau 1×', function () {
+it('Platzierung (gemessen): JEDE geroutete FA-Livewire-Vollseite rendert data-voice-float-mount UND data-voice-tts genau 1×', function () {
+    // Spec 53/F (3): `data-voice-tts` (das <audio>-Wiedergabe-Element) liegt hinter
+    // `@if($aufnahmeMoeglich)` — ohne STT-Zugang bliebe der ganze Recorder-Block weg und
+    // der Test würde fälschlich 0x statt 1x melden, nicht weil das Audio-Element fehlt,
+    // sondern weil die Vorbedingung fehlt.
+    config(['foodalchemist.stt.provider' => 'openai', 'services.openai.api_key' => 'sk-test']);
+
     $geprueft = [];
-    $fehlend = [];
+    $fehlendMount = [];
+    $fehlendAudio = [];
 
     foreach (app('router')->getRoutes() as $route) {
         $name = $route->getName();
@@ -290,16 +297,20 @@ it('Platzierung (gemessen): JEDE geroutete FA-Livewire-Vollseite rendert data-vo
         }
         $geprueft[] = $klasse;
 
-        $treffer = substr_count(Livewire::test($klasse)->html(), 'data-voice-float-mount');
-        if ($treffer !== 1) {
-            $fehlend[] = "{$klasse} ({$name}): {$treffer}x statt 1x";
+        $html = Livewire::test($klasse)->html();
+        if (substr_count($html, 'data-voice-float-mount') !== 1) {
+            $fehlendMount[] = "{$klasse} ({$name}): " . substr_count($html, 'data-voice-float-mount') . 'x statt 1x';
+        }
+        if (substr_count($html, 'data-voice-tts') !== 1) {
+            $fehlendAudio[] = "{$klasse} ({$name}): " . substr_count($html, 'data-voice-tts') . 'x statt 1x';
         }
     }
 
     // Riegel gegen einen wirkungslosen Test: wenn die Introspektion nichts findet, weil sich
     // z. B. das Action-Format ändert, würde der Test sonst grün lügen (nichts geprüft = nichts gefunden).
     expect($geprueft)->toHaveCount(26, 'Routen-Introspektion hat nicht 26 FA-Livewire-Vollseiten gefunden — Action-Format geändert?');
-    expect($fehlend)->toBe([], 'Fehlendes/doppeltes agent-mount-Include (live gerendert): ' . implode(', ', $fehlend));
+    expect($fehlendMount)->toBe([], 'Fehlendes/doppeltes agent-mount-Include (live gerendert): ' . implode(', ', $fehlendMount));
+    expect($fehlendAudio)->toBe([], 'Fehlendes/doppeltes TTS-Audio-Element (live gerendert): ' . implode(', ', $fehlendAudio));
 });
 
 it('Loop: erfundener Tool-Name führt nicht zum Fatal, sondern zur Ablehnung', function () {
