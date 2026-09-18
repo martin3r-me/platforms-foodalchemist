@@ -24,9 +24,16 @@ class KnowledgeSearchService
     ) {}
 
     /**
+     * @param  ?string  $preferredAspect  Spec 53/H Aufgabe A: bei Aspekt-Familien (Slug-Schema
+     *                                    `<entitaet>--<aspekt>`, z. B. `zutat.passion_fruit--verwendung`)
+     *                                    gewinnt je Entität DIESER Aspekt statt des Score-Siegers, sofern
+     *                                    vorhanden — null (Browser-/MCP-Suche ohne Prompt-Key-Bezug) lässt
+     *                                    den Score entscheiden. Bewusst hier statt im Aufrufer geprüft:
+     *                                    der Aufrufer liefert nur den fertig aufgelösten String, `search()`
+     *                                    bleibt frei von Prompt-Key-Wissen (s. Klassen-Docblock).
      * @return list<array<string, mixed>> Metadaten und nachvollziehbare Ranganteile, kein Volltext
      */
-    public function search(Builder $base, string $query, int $limit, bool $semantic = true, ?Team $team = null): array
+    public function search(Builder $base, string $query, int $limit, bool $semantic = true, ?Team $team = null, ?string $preferredAspect = null): array
     {
         $tokens = $this->tokenizer->tokenize($query);
         if (trim($query) === '' || $limit <= 0) {
@@ -113,6 +120,52 @@ class KnowledgeSearchService
         }
         usort($hits, static fn ($a, $b) => ($b['score'] <=> $a['score']) ?: strcmp($a['slug'], $b['slug']));
 
-        return array_slice($hits, 0, $limit);
+        // Spec 53/H Aufgabe A (Gruppen-Dedup): eine Aspekt-Familie (`zutat.passion_fruit--steckbrief`,
+        // `--verwendung`, `--verhalten`, `--cave`, …) darf nicht mehrere Plätze derselben Entität
+        // belegen und damit eine zweite Entität oder ein Technik-Dossier verdrängen — gemessen am
+        // "Passionsfrucht-Gelee mit Acerola"-Brief: `acerola` belegte alle 4 Aspekte, `passion_fruit`
+        // nur 2, das Gelée-Technik-Dossier fiel ganz raus. Entität = Slug-Präfix vor `--`; Docs ohne
+        // `--` sind ihre eigene Entität (Singleton-Gruppe, unverändert im Ranking — alte
+        // Domain-Dossiers ohne Aspekt-Schema betrifft das nicht). Innerhalb einer Gruppe gewinnt der
+        // zu `$preferredAspect` passende Aspekt, sonst der Score-Sieger der Gruppe (mit
+        // `aspekt_fallback: true`, damit die Herkunfts-Anzeige den Rückfall nicht verschweigt).
+        // Ergänzt, ersetzt NICHT, den dedizierten Grounding-Block für `zutat` (Aufgabe B) — der lädt
+        // pro Hauptzutat deterministisch genau ein Dossier; dieser Dedup hier ist der generische
+        // Schutz im Discovery-Pfad für JEDE aktuelle oder künftige `--`-Aspekt-Familie und für den
+        // Übergang, solange `zutat` noch discovery-geroutet sein sollte. Zwei Mechanismen, eine Rolle
+        // jeweils — nicht als Doppelung ausbauen.
+        $gruppen = [];
+        foreach ($hits as $hit) {
+            $entitaet = str_contains($hit['slug'], '--') ? strstr($hit['slug'], '--', true) : $hit['slug'];
+            $gruppen[$entitaet][] = $hit;
+        }
+        $dedupliziert = [];
+        foreach ($gruppen as $gruppe) {
+            if (count($gruppe) === 1) {
+                $dedupliziert[] = $gruppe[0];
+                continue;
+            }
+            $vertreter = null;
+            if ($preferredAspect !== null) {
+                foreach ($gruppe as $hit) {
+                    if (str_ends_with($hit['slug'], "--{$preferredAspect}")) {
+                        $vertreter = $hit;
+                        break;
+                    }
+                }
+            }
+            if ($vertreter === null) {
+                // $gruppe[0] ist der Score-Sieger: die Gruppen entstehen aus dem bereits
+                // score-sortierten $hits, die Gruppierung erhält diese Reihenfolge je Gruppe.
+                $vertreter = $gruppe[0];
+                if ($preferredAspect !== null) {
+                    $vertreter['aspekt_fallback'] = true;
+                }
+            }
+            $dedupliziert[] = $vertreter;
+        }
+        usort($dedupliziert, static fn ($a, $b) => ($b['score'] <=> $a['score']) ?: strcmp($a['slug'], $b['slug']));
+
+        return array_slice($dedupliziert, 0, $limit);
     }
 }
