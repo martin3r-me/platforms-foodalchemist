@@ -601,6 +601,10 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     // D1c: LA↔GP-Mapping (link/unlink owner, lock/pin team-overlay), Ersatz-Äquivalenzen,
                     // Platzhalter-GPs, GP-Replace (destruktiv/confirm, team-übergreifender Recompute).
                     \Platform\FoodAlchemist\Tools\GpLaPutTool::class,
+                    // Spec 53 Paket J: Aroma-Anker am GP (mehrere je GP, role kern|neben) — Slug-basiert.
+                    \Platform\FoodAlchemist\Tools\GpAnchorsPutTool::class,
+                    \Platform\FoodAlchemist\Tools\GpAnchorsImportTool::class,
+                    \Platform\FoodAlchemist\Tools\GpAnchorsGetTool::class,
                     \Platform\FoodAlchemist\Tools\ComponentEquivalentsPostTool::class,
                     \Platform\FoodAlchemist\Tools\ComponentEquivalentsDeleteTool::class,
                     \Platform\FoodAlchemist\Tools\PlatzhalterPostTool::class,

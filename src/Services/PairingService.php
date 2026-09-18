@@ -1103,9 +1103,18 @@ class PairingService
             ->where('recipe_id', $recipeId)->where('anchor_id', $ankerId)->update(['deleted_at' => now()]);
     }
 
-    /** GP-Kern-Anker setzen (Gegenstück zu setRecipeAnker; Tabelle gp_anchor_mappings, CAP_GP). */
-    public function setGpAnker(Team $team, int $gpId, int $ankerId): void
-    {
+    /**
+     * GP-Aroma-Anker setzen/aktualisieren (Gegenstück zu setRecipeAnker; Tabelle gp_anchor_mappings,
+     * CAP_GP — mehrere Anker je GP erlaubt, s. Altdaten: 433 GPs mit >1 Anker, z. B. Ratatouille →
+     * eggplant/tomato/zucchini). `role` unterscheidet Haupt- von Nebenträger (kern|neben, Default
+     * kern); `source`/`ai_confidence`/`ai_reasoning` sind offen für den MCP-Import (Spec 53 Paket J:
+     * `bridge_alt_neu`, `exact_name`, … — nicht nur `manual`).
+     */
+    public function setGpAnker(
+        Team $team, int $gpId, int $ankerId, string $role = 'kern', string $source = 'manual',
+        ?float $aiConfidence = null, ?string $aiReasoning = null,
+    ): void {
+        $role = in_array($role, ['kern', 'neben'], true) ? $role : 'kern';
         $gp = \Platform\FoodAlchemist\Models\FoodAlchemistGp::visibleToTeam($team)->findOrFail($gpId);
         $vorhanden = DB::table('foodalchemist_gp_anchor_mappings')
             ->where('gp_id', $gp->id)->where('anchor_id', $ankerId)->whereNull('deleted_at')->first();
@@ -1115,10 +1124,29 @@ class PairingService
         }
         DB::table('foodalchemist_gp_anchor_mappings')->updateOrInsert(
             ['gp_id' => $gp->id, 'anchor_id' => $ankerId],
-            ['uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(), 'team_id' => $team->id, 'role' => 'kern',
-                'source' => 'manual', 'ai_confidence' => null, 'ai_reasoning' => null,   // manual gewinnt (Inv. 3), wie setRecipeAnker
+            ['uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(), 'team_id' => $team->id, 'role' => $role,
+                'source' => $source, 'ai_confidence' => $aiConfidence, 'ai_reasoning' => $aiReasoning,
                 'deleted_at' => null, 'updated_at' => now(), 'created_at' => now()],
         );
+    }
+
+    /** Gegenstück zu removeRecipeAnker — löst einen einzelnen GP-Anker (soft-delete). */
+    public function removeGpAnker(Team $team, int $gpId, int $ankerId): void
+    {
+        \Platform\FoodAlchemist\Models\FoodAlchemistGp::visibleToTeam($team)->findOrFail($gpId);
+        DB::table('foodalchemist_gp_anchor_mappings')
+            ->where('gp_id', $gpId)->where('anchor_id', $ankerId)->update(['deleted_at' => now()]);
+    }
+
+    /**
+     * Alle Anker eines GP löschen (soft-delete) — für den MCP-Import mit `ersetze_alle=true`
+     * (Spec 53 Paket J): die gelieferte Anker-Liste ersetzt den bisherigen Bestand vollständig.
+     */
+    public function clearGpAnker(Team $team, int $gpId): void
+    {
+        \Platform\FoodAlchemist\Models\FoodAlchemistGp::visibleToTeam($team)->findOrFail($gpId);
+        DB::table('foodalchemist_gp_anchor_mappings')
+            ->where('gp_id', $gpId)->whereNull('deleted_at')->update(['deleted_at' => now()]);
     }
 
     /**
@@ -1211,7 +1239,7 @@ class PairingService
             ->update(['deleted_at' => now()]);
     }
 
-    /** Kern-Aroma-Anker eines GP inkl. Slug/Quelle (GP-Pairing-Panel). */
+    /** Kern-Aroma-Anker eines GP inkl. Slug/Quelle (GP-Pairing-Panel, Aroma-Ähnlichkeit/Ersatz-Logik). */
     public function gpAnkers(int $gpId): Collection
     {
         return DB::table('foodalchemist_gp_anchor_mappings AS m')
@@ -1219,6 +1247,20 @@ class PairingService
             ->where('m.gp_id', $gpId)->where('m.role', 'kern')->whereNull('m.deleted_at')
             ->orderByRaw('COALESCE(m.ai_confidence, 1.0) DESC')->orderBy('m.id')
             ->get(['a.id', 'a.slug', 'a.display_de', 'm.source', 'm.ai_confidence']);
+    }
+
+    /**
+     * ALLE Anker eines GP (kern UND neben), inkl. `role` — für den Editor-Block und das Detail-Panel
+     * (Spec 53 Paket J). Anders als {@see gpAnkers}, das bewusst nur `kern` liefert (Aroma-Ähnlichkeit/
+     * Ersatz-Logik nutzt nur den Haupt-Aromaträger) — hier soll der Kurator BEIDE Rollen sehen/pflegen.
+     */
+    public function gpAnkerAlle(int $gpId): Collection
+    {
+        return DB::table('foodalchemist_gp_anchor_mappings AS m')
+            ->join('foodalchemist_vocab_pairing_anchors AS a', 'a.id', '=', 'm.anchor_id')
+            ->where('m.gp_id', $gpId)->whereNull('m.deleted_at')
+            ->orderByRaw("CASE m.role WHEN 'kern' THEN 1 ELSE 2 END")->orderBy('a.display_de')
+            ->get(['a.id', 'a.slug', 'a.display_de', 'm.role', 'm.source', 'm.ai_confidence']);
     }
 
     /**

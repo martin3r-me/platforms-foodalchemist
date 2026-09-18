@@ -430,6 +430,39 @@
             <div x-show="tab === 'sensorik'" x-cloak class="pt-2">
                 <x-foodalchemist::modal-section title="Sensorik & Pairing">
                     @include('foodalchemist::livewire.concepter.partials.sensorik')
+
+                    {{-- Spec 53 Paket J: Aroma-Anker editierbar (mehrere je GP, kern|neben) — die
+                         Netz-Daten (Passt dazu/Kontrast) DARUNTER kommen aus dem read-only Pairing-
+                         Partial und aktualisieren sich automatisch, sobald hier ein Anker steht. --}}
+                    @if($gpId !== null)
+                        <h3 class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 mt-5 mb-2">Aroma-Anker</h3>
+                        <div class="flex flex-wrap gap-1" data-gp-anker-liste>
+                            @forelse($gpAnker as $a)
+                                <span wire:key="ga-{{ $a->id }}" class="{{ $pill }} {{ $a->role === 'kern' ? $variantPill['primary'] : $variantPill['secondary'] }} group" title="{{ $a->role }} · {{ $a->source }}{{ $a->ai_confidence !== null ? ' ' . round($a->ai_confidence * 100) . '%' : '' }}">
+                                    {{ $a->role === 'kern' ? '★' : '·' }} {{ $a->display_de }}
+                                    <button type="button" wire:click="gpAnkerLoesen({{ $a->id }})" class="hidden group-hover:inline text-rose-400 ml-0.5" title="lösen" data-gp-anker-loesen>✕</button>
+                                </span>
+                            @empty
+                                <span class="text-[11px] text-gray-400">Noch kein Aroma-Anker gesetzt.</span>
+                            @endforelse
+                        </div>
+                        @if($gpAnkerFehler !== null)<p class="text-[11px] text-rose-500 mt-1" data-gp-anker-fehler>{{ $gpAnkerFehler }}</p>@endif
+                        <div class="relative mt-1.5 flex items-center gap-1.5">
+                            <select wire:model="gpAnkerRolle" class="{{ $input }} !py-1 !w-24 text-[11px]" title="Rolle des nächsten verknüpften Ankers" data-gp-anker-rolle>
+                                <option value="kern">kern</option>
+                                <option value="neben">neben</option>
+                            </select>
+                            <div class="relative flex-1">
+                                <input type="search" wire:model.live.debounce.300ms="gpAnkerSuche" placeholder="Anker verknüpfen — Slug oder Name …" class="{{ $input }} !py-1" data-gp-anker-suche />
+                                @foreach($gpAnkerKandidaten as $kandidat)
+                                    <button type="button" wire:key="gak-{{ $kandidat->id }}" wire:click="gpAnkerVerknuepfen({{ $kandidat->id }})" class="block w-full text-left px-2 py-1 rounded text-xs text-gray-700 hover:bg-violet-500/10" data-gp-anker-kandidat>
+                                        {{ $kandidat->display_de }} <span class="text-gray-500">{{ $kandidat->slug }}{{ $kandidat->category ? ' · ' . $kandidat->category : '' }}</span>
+                                    </button>
+                                @endforeach
+                            </div>
+                        </div>
+                    @endif
+
                     <h3 class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 mt-5 mb-2">Pairing</h3>
                     @include('foodalchemist::livewire.concepter.partials.pairing')
                 </x-foodalchemist::modal-section>
