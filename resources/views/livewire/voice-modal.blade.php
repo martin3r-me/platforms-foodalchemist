@@ -1,6 +1,13 @@
 {{-- M7-10: Voice — MediaRecorder (gemeinsamer Baustein) → STT → Tool-Loop; Proposals mit
      Bestätigen (GL-07). Spec 53/D: Roundtrip in zwei sichtbare Server-Schritte gesplittet
      (Transkription → `verstehen()`), Provider-Pill, verständliche Fehlertexte. --}}
+{{-- REGEL (Live-Bruch 2026-09-18): NIE ein geradeaus-Anführungszeichen in JS/Kommentaren
+     INNERHALB der x-data- bzw. x-init-Attribute unten — das Attribut endet beim ERSTEN
+     Anführungszeichen, egal ob roher Text oder Kommentar; Alpine bekommt dann nur ein
+     Bruchstück und fällt für die GANZE Komponente aus. Backticks (`) oder Guillemets (»«)
+     statt Anführungszeichen. `{{ }}`/`@js()`-Ausgaben sind sicher (escapen automatisch) —
+     reiner Kommentartext/hartkodiertes JS ist es NICHT. Wächter-Test:
+     tests/Feature/BladeXDataAttributeGuardTest.php (scannt ALLE Blade-Dateien des Moduls). --}}
 {{-- Spec 53/D Hotfix: Recorder-Bundle über @assets (server-seitig in den <head> gehoben, vor Alpine).
      Ein rohes <script> als ERSTES Tag der Komponente bekam von Livewire das wire:id
      (Utils::insertAttributesIntoHtmlRoot hängt es an das erste Tag) — das Modal gehörte damit zur
@@ -54,6 +61,8 @@
                     ...FaVoiceRecorder({ property: 'audio', maxMs: 20000, minMs: 700, vad: @js($konversationAktiv) }),
                     konversationAktiv: @js($konversationAktiv),
                     fallbackAktiv: false,
+                    autoZyklen: 0,
+                    konversationPausiert: false,
                     initKonversation() {
                         const audio = this.$refs.ttsAudio;
                         $wire.on('{{ \Platform\FoodAlchemist\Livewire\VoiceModal::EVENT_TTS_BEREIT }}', (payload) => this._wiedergeben(audio, payload.url, payload.text));
@@ -74,6 +83,15 @@
                             this.konversationAktiv = !!aktiv;
                             this.vad = !!aktiv;
                         });
+                        // Live-Bruch 2026-09-18 (b): der schwebende Knopf muss WÄHREND hört zu/
+                        // sendet/spricht als STOPP wirken (agent-mount.blade.php kann diesen
+                        // Alpine-Scope nicht direkt erreichen — eigene Komponente). Ein globaler,
+                        // reaktiv nachgezogener Flag statt eines Custom-Events: `stopAlles()`
+                        // bleibt hier definiert (kein zweiter Ort mit eigener Kopie der Logik).
+                        this.$watch(() => this.laeuft || this.hochladenLaeuft || this.fallbackAktiv || $wire.sprichtGerade, (v) => {
+                            window.FaVoiceKonversationAktiv = !!v;
+                        });
+                        window.FaVoiceStopAlles = () => this.stopAlles();
                         // Live-Befund Dominique (2026-09-18): »zwei Klicks statt einem« — im
                         // Konversations-Modus sollte der ÖFFNEN-Klick (schwebender Knopf ODER
                         // Sidebar) SOFORT das Zuhören starten, nicht erst einen zweiten Klick
@@ -84,12 +102,37 @@
                         // AudioContext also synchron genug (Safari-Regel bleibt gewahrt). Absichtlich
                         // `this.konversationAktiv` (der von `oeffnen()` frisch gesetzte Server-Wert,
                         // s. o.) statt eines vom Klick mitgeschickten Flags — der Ein-Klick-Modus
-                        // bleibt dadurch unverändert, auch wenn `autostart` mitkommt.
+                        // bleibt dadurch unverändert, auch wenn `autostart` mitkommt. Ein ÖFFNEN-
+                        // Klick ist immer eine ECHTE Nutzer-Geste — Sicherheitsdeckel (c) und
+                        // Stille-Pause (a) werden hier zurückgesetzt, sonst bliebe die Konversation
+                        // nach einer Pause für immer stehen.
                         window.addEventListener('voice-modal.oeffnen', (e) => {
                             if (e?.detail?.autostart && this.konversationAktiv && this.unterstuetzt && ! this.laeuft) {
+                                this.autoZyklen = 0;
+                                this.konversationPausiert = false;
+                                this.keineSpracheErkannt = false;
                                 this.start();
                             }
                         });
+                    },
+                    // Live-Bruch 2026-09-18 (b): STOPP überall — schwebender Knopf während eines
+                    // laufenden Zyklus, der Stopp-Knopf im Modal, ESC. Räumt ALLES ab (Recorder,
+                    // Server-TTS-Audio, Browser-Fallback-Stimme) und pausiert die Konversation,
+                    // bis ein echter Klick sie wieder aufnimmt (siehe `autostart`-Listener oben).
+                    stopAlles() {
+                        if (this.laeuft) {
+                            this.stop();
+                        }
+                        const audio = this.$refs.ttsAudio;
+                        if (audio) {
+                            audio.pause();
+                        }
+                        if ('speechSynthesis' in window) {
+                            window.speechSynthesis.cancel();
+                        }
+                        this.fallbackAktiv = false;
+                        this.konversationPausiert = true;
+                        $wire.call('sprechenBeendet');
                     },
                     _wiedergeben(audio, url, text) {
                         if (! audio || audio.dataset.faEntsperrt !== '1') {
@@ -118,20 +161,39 @@
                     _nachDemSprechen() {
                         this.fallbackAktiv = false;
                         $wire.call('sprechenBeendet');
-                        if (this.konversationAktiv && ! this.laeuft) {
-                            this.start();
+                        if (! this.konversationAktiv || this.laeuft) {
+                            return;
                         }
+                        // Live-Bruch 2026-09-18 (c): Sicherheitsdeckel — nach 3 automatischen
+                        // Zyklen OHNE echten Nutzer-Klick pausiert die Konversation, statt endlos
+                        // weiterzuhören (das war der eigentliche »nicht stoppbar«-Bruch: eine
+                        // ECHTE Antwort auf ECHTE Sprache kann sich genauso wiederholen wie eine
+                        // Stille-Schleife, darum zählt dieser Deckel JEDEN automatischen Zyklus,
+                        // nicht nur stille). Ein Klick (autostart-Listener oben) setzt zurück.
+                        this.autoZyklen++;
+                        if (this.autoZyklen >= 3) {
+                            this.konversationPausiert = true;
+
+                            return;
+                        }
+                        this.start();
                     },
                  }"
                  x-init="initKonversation()"
+                 @keydown.window.escape="stopAlles()"
                  class="space-y-1.5">
                 <div class="flex items-center gap-2">
-                    <button type="button" @click="laeuft ? stop() : start()" :disabled="! unterstuetzt"
+                    {{-- Live-Bruch 2026-09-18 (b): STOPP überall — dieser Knopf muss WÄHREND
+                         hört zu/sendet/spricht (nicht nur während der Aufnahme selbst) stoppen,
+                         darum die kombinierte Bedingung statt nur `laeuft`. --}}
+                    <button type="button"
+                            @click="(laeuft || hochladenLaeuft || fallbackAktiv || $wire.sprichtGerade) ? stopAlles() : (autoZyklen = 0, konversationPausiert = false, start())"
+                            :disabled="! unterstuetzt"
                             :class="laeuft ? 'animate-pulse' : ''" class="{{ $btnPrimary }} disabled:opacity-40" data-voice-rec>
                         <span class="inline-flex items-center gap-1.5">
-                            <span x-show="laeuft" x-cloak>@svg('heroicon-o-stop', 'w-3.5 h-3.5')</span>
-                            <span x-show="! laeuft">@svg('heroicon-o-microphone', 'w-3.5 h-3.5')</span>
-                            <span x-text="laeuft ? 'Stopp & senden' : 'Aufnahme starten'"></span>
+                            <span x-show="laeuft || hochladenLaeuft || fallbackAktiv || $wire.sprichtGerade" x-cloak>@svg('heroicon-o-stop', 'w-3.5 h-3.5')</span>
+                            <span x-show="! (laeuft || hochladenLaeuft || fallbackAktiv || $wire.sprichtGerade)">@svg('heroicon-o-microphone', 'w-3.5 h-3.5')</span>
+                            <span x-text="(laeuft || hochladenLaeuft || fallbackAktiv || $wire.sprichtGerade) ? 'Stopp' : 'Aufnahme starten'"></span>
                         </span>
                     </button>
                     <span class="text-[11px] text-gray-500">Kurz-Befehl sprechen (wenige Sekunden) — z. B. »Suche BBQ-Sauce«, »Öffne Rezept …«, »Öffne die Planung«</span>
@@ -152,6 +214,18 @@
                 </p>
                 <p class="text-[11px] text-violet-600" x-show="fallbackAktiv" x-cloak data-voice-status="spricht_fallback">
                     Antwort wird vorgelesen (Browser-Stimme — Server-Sprachausgabe war nicht erreichbar) …
+                </p>
+                {{-- Live-Bruch 2026-09-18 (a): VAD hat in der ganzen Aufnahme NIE Sprache erkannt
+                     (Sprechschwelle nie überschritten) — KEIN Upload, KEIN automatischer
+                     Wiedereinstieg. Nur ein echter Klick hört wieder zu. --}}
+                <p class="text-[11px] text-amber-600" x-show="keineSpracheErkannt" x-cloak data-voice-status="keine_sprache">
+                    Keine Sprache erkannt — zum Weiterhören klicken.
+                </p>
+                {{-- Live-Bruch 2026-09-18 (c): Sicherheitsdeckel nach 3 automatischen Zyklen ohne
+                     echten Nutzer-Klick — verhindert eine Endlos-Schleife, die sich nicht mehr von
+                     selbst stoppt. --}}
+                <p class="text-[11px] text-amber-600" x-show="konversationPausiert" x-cloak data-voice-status="pausiert">
+                    Konversation pausiert (3× automatisch weitergehört) — zum Weiterhören klicken.
                 </p>
                 <p class="text-xs text-rose-500" x-show="fehler" x-cloak x-text="fehler" data-voice-rec-fehler></p>
                 {{-- Einziges Wiedergabe-Element für die TTS-Antwort — versteckt, steuert sich rein

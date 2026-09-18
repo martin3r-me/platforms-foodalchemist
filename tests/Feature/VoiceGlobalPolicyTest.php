@@ -8,6 +8,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistDishMainGroup;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Services\Ai\AiGatewayService;
 use Platform\FoodAlchemist\Services\Ai\FakeAiProvider;
+use Platform\FoodAlchemist\Services\TeamSettingsService;
 use Platform\FoodAlchemist\Services\VoiceCommandService;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
 use Platform\FoodAlchemist\Tests\TestCase;
@@ -479,4 +480,86 @@ it('Paket F (1b) auto_sicher: ein AUTO_SICHER_DIREKT_TOOLS-Tool läuft wirklich,
         ->and($r['tool_laeufe'][0]['success'])->toBeTrue()
         ->and($r['tool_laeufe'][0]['data']['recomputed'] ?? null)->toBeTrue()   // ECHT ausgeführt, kein Schreibvorschlag
         ->and($r['proposals'])->toBe([]);
+});
+
+/**
+ * Live-Bruch Dominique (2026-09-18): der Interceptor hatte KEINE Modul-Grenze — er fing JEDEN
+ * Aufruf ab, auch `tool_registry.SEARCH`/`.GET` (Core, kein FA-Tool, also nie `read_only=true`
+ * in FA-Metadaten). Der Agent verlor dadurch die Fähigkeit, überhaupt ein Werkzeug zu FINDEN:
+ * jede Registry-Suche wurde zu einer sinnlosen Schreib-Karte „SEARCH: tool_registry.SEARCH —
+ * bitte bestätigen", das Ergebnis blieb bei „0 Runde(n) · 0 Tool-Aufruf(e)" stehen.
+ */
+it('Review-Fix: der Interceptor fasst NUR foodalchemist.*-Tools an — tool_registry.SEARCH läuft im Modus fragen normal durch', function () {
+    ($this->skript)([
+        '{"action":"tool","name":"tool_registry.SEARCH","arguments":{"query":"foodbook kapitel","name_glob":"foodalchemist.*"}}',
+        '{"action":"final","text":"Gefunden."}',
+    ]);
+
+    $r = app(VoiceCommandService::class)->verarbeite('Suche ein Werkzeug für Foodbook-Kapitel', null, 'fragen');
+
+    expect($r['tool_laeufe'])->toHaveCount(1)
+        ->and($r['tool_laeufe'][0]['name'])->toBe('tool_registry.SEARCH')
+        ->and($r['tool_laeufe'][0]['success'])->toBeTrue()               // ECHT ausgeführt, kein Abfangen
+        ->and($r['proposals'])->toBe([]);                                // KEINE Schreib-Karte für eine Suche
+});
+
+it('Review-Fix: foodalchemist.gps.POST bleibt weiterhin eine Karte — die Modul-Grenze schwächt den Schreibschutz nicht ab', function () {
+    ($this->skript)([
+        '{"action":"tool","name":"foodalchemist.gps.POST","arguments":{"hauptzutat":"Zander"}}',
+        '{"action":"final","text":"Vorschlag — bitte bestätigen."}',
+    ]);
+
+    $r = app(VoiceCommandService::class)->verarbeite('Lege ein Grundprodukt an', null, 'fragen');
+
+    expect($r['proposals'])->toHaveCount(1)
+        ->and($r['proposals'][0]['type'])->toBe('schreibaktion')
+        ->and($r['proposals'][0]['tool'])->toBe('foodalchemist.gps.POST');
+});
+
+it('ui.NAVIGATE/ui.OPEN sind foodalchemist.*-Tools MIT read_only=true — die Modul-Grenze ändert an ihrem Verhalten nichts (gemessen, nicht vermutet)', function () {
+    expect((new \Platform\FoodAlchemist\Tools\UiNavigateTool())->getMetadata()['read_only'] ?? null)->toBeTrue()
+        ->and((new \Platform\FoodAlchemist\Tools\UiOpenTool())->getMetadata()['read_only'] ?? null)->toBeTrue();
+});
+
+/**
+ * Live-Bruch Dominique (2026-09-18, Punkt d): eine Endlos-Schleife entstand, weil das Modell auf
+ * Rauschen/unklares Gemurmel trotzdem eine muntere Füllantwort gab ("Alles klar, ich warte …"),
+ * die vorgelesen wurde und den nächsten automatischen Zyklus auslöste. Die clientseitige VAD-
+ * Schwelle (Stille) ist die primäre Sicherung — dieser Systemprompt-Hinweis die zweite, für den
+ * Fall, dass ETWAS akustisch als Sprache durchkam.
+ */
+it('Systemprompt enthält die Rauschen/"wartet"-Regel — spy auf die tatsächlich gesendete System-Message', function () {
+    // Das Spy-OBJEKT wird VORHER erzeugt und das Singleton liefert nur diese eine, feste
+    // Instanz zurück — kein Referenz-Einfang nötig (eine Arrow Function erfasst äussere
+    // Variablen ohnehin bei WERT, das hätte eine `&$x`-Property-Promotion nur auf die eigene
+    // Kopie der Arrow Function bezogen, nicht auf die äussere Testvariable).
+    $spy = new class extends FakeAiProvider
+    {
+        public ?array $gesendet = null;
+
+        public function chat(array $messages, array $options = []): array
+        {
+            $this->gesendet = $messages;
+
+            return ['content' => '{"action":"final","text":"ok"}', 'model' => 'fake-voice', 'usage' => []];
+        }
+    };
+    app()->singleton(FakeAiProvider::class, fn () => $spy);
+
+    app(VoiceCommandService::class)->verarbeite('Suche BBQ Sauce');
+
+    $systemMessage = collect($spy->gesendet)->firstWhere('role', 'system')['content'] ?? '';
+    expect($systemMessage)->toContain('RAUSCHEN')
+        ->and($systemMessage)->toContain('wartet')
+        ->and($systemMessage)->not->toContain('"nicht stoppbar"');   // kein " zurück in den Prompt-Text
+});
+
+it('VoiceModal spricht ein reines "wartet"-Signal NICHT vor — sonst hätte sich der Agent selbst wieder angehört', function () {
+    config(['foodalchemist.tts.provider' => 'fake']);
+    app(TeamSettingsService::class)->update($this->rootTeam, ['voice_tts_vorlesen' => true]);
+    ($this->skript)(['{"action":"final","text":"wartet"}']);
+
+    Livewire::test(\Platform\FoodAlchemist\Livewire\VoiceModal::class)
+        ->call('verarbeiteText', 'ghsjdf mmpf')
+        ->assertNotDispatched('voice-tts-bereit');
 });
