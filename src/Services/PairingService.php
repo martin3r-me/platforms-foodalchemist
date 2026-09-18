@@ -2520,6 +2520,18 @@ class PairingService
     }
 
     /**
+     * Spec 53/H Aufgabe B1: nur der Anker-Slug einer Namens-/Token-Auflösung, ohne die
+     * Nachbarschafts-Berechnung von {@see neighborsForName()} zu bezahlen (limit=1 — die
+     * Partner-Liste wird hier nie gelesen). Dünner Wrapper, damit die drei Aufrufstellen
+     * (Pairing-Stems, Seed-Anker, jetzt Zutaten-Grounding) dieselbe Auflösung teilen statt
+     * sie zu duplizieren.
+     */
+    public function ankerSlugFuer(string $name): ?string
+    {
+        return $this->neighborsForName($name, null, 1)['anker']['slug'] ?? null;
+    }
+
+    /**
      * MCP-Discovery (Phase K): Pairing-Partner für einen Zutat-NAMEN oder
      * Anker-Slug. Auflösung ist HYBRID (analog gps.SEARCH): exakter/
      * normalisierter Slug → lexikalischer Anker-Index (resolveByName) →
