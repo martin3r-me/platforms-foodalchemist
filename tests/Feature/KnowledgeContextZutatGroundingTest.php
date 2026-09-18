@@ -145,3 +145,51 @@ it('markiert eine Zutat ohne Anker-Treffer ehrlich statt sie zu ignorieren oder 
 
     expect(array_filter($ctx['files_used'], fn ($f) => str_starts_with($f, 'zutat.')))->toBeEmpty();
 });
+
+/**
+ * Fund (Orchestrierung, 2026-09-18, Live-PREVIEW nach Deploy 15): NUR
+ * RecipeGenerationContextService::build() übergibt Hauptzutat-Slugs an contextFor() — jeder andere
+ * Aufrufer (KnowledgePreviewService, RecipeOneShotService::steps, StepEditor, DetailPanel,
+ * Review/Conformance) liefert `[]`. Das Grounding zündete dadurch nirgends außer im
+ * Generator-Pfad; die Routing-Zeile stand ohne Landebahn, und PREVIEW spiegelte die reale Pipeline
+ * nicht. Fix: contextFor() leitet bei leeren $hauptzutatSlugs selbst Tokens aus der Beschreibung ab
+ * (dieselbe Funktion wie build()s Vorsondierung, B4) und markiert das ehrlich in der Herkunft.
+ */
+it('leitet Hauptzutaten aus der Beschreibung ab, wenn der Aufrufer keine liefert (PREVIEW/steps-Pfad)', function () {
+    ($this->mkAnker)('passionsfrucht', 'Passionsfrucht');
+    ($this->mkAnker)('acerola', 'Acerola');
+    ($this->mkZutatDoc)('zutat.passionsfrucht--verwendung', 'Passionsfrucht Verwendung');
+    ($this->mkZutatDoc)('zutat.acerola_14--verwendung', 'Acerola Verwendung');
+    ($this->mkGroundingRouting)('recipe.generator');
+
+    // Genau der PREVIEW-/RecipeOneShotService::steps-Fall: contextFor() OHNE Hauptzutat-Slugs.
+    $ctx = app(KnowledgeContextService::class)->contextFor($this->rootTeam, 'recipe.generator', 'Passionsfrucht-Gelee mit Acerola, 40 Portionen');
+
+    expect($ctx['files_used'])
+        ->toContain('zutat.passionsfrucht--verwendung@v1')
+        ->toContain('zutat.acerola_14--verwendung@v1')
+        ->and($ctx['herkunft']['zutat.passionsfrucht--verwendung@v1']['via'])->toBe('zutat_grounding')
+        ->and($ctx['herkunft']['zutat.passionsfrucht--verwendung@v1']['hauptzutaten_quelle'])->toBe('abgeleitet')
+        ->and($ctx['herkunft']['zutat.acerola_14--verwendung@v1']['hauptzutaten_quelle'])->toBe('abgeleitet');
+});
+
+it('greift auch für recipe.steps ohne Caller-Slugs (RecipeOneShotService-Pfad)', function () {
+    ($this->mkAnker)('acerola', 'Acerola');
+    ($this->mkZutatDoc)('zutat.acerola--verhalten', 'Acerola Verhalten');
+    ($this->mkGroundingRouting)('recipe.steps');
+
+    $ctx = app(KnowledgeContextService::class)->contextFor($this->rootTeam, 'recipe.steps', 'Acerola-Sirup');
+
+    expect($ctx['files_used'])->toContain('zutat.acerola--verhalten@v1')
+        ->and($ctx['herkunft']['zutat.acerola--verhalten@v1']['hauptzutaten_quelle'])->toBe('abgeleitet');
+});
+
+it('markiert Caller-gelieferte Hauptzutaten weiterhin als "caller", keine Vermischung mit der Ableitung', function () {
+    ($this->mkAnker)('acerola', 'Acerola');
+    ($this->mkZutatDoc)('zutat.acerola--verwendung', 'Acerola Verwendung');
+    ($this->mkGroundingRouting)('recipe.generator');
+
+    $ctx = app(KnowledgeContextService::class)->contextFor($this->rootTeam, 'recipe.generator', 'Ein Dessert', null, ['acerola']);
+
+    expect($ctx['herkunft']['zutat.acerola--verwendung@v1']['hauptzutaten_quelle'])->toBe('caller');
+});
