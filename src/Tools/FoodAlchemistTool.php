@@ -252,6 +252,23 @@ abstract class FoodAlchemistTool
     }
 
     /**
+     * Slug → Anker-Id, sichtbar fürs Team (global ∪ Ancestry, aktiv). Spec 53 Paket J:
+     * `gp_anchors.*`-Tools adressieren Anker über den Slug (stabiler als die numerische Id für
+     * Import-Brücken alt→neu), null wenn unbekannt/unsichtbar.
+     */
+    protected function pairingAnkerIdFuerSlug(Team $team, string $slug): ?int
+    {
+        $slug = trim($slug);
+        if ($slug === '') {
+            return null;
+        }
+
+        return DB::table('foodalchemist_vocab_pairing_anchors')->where('slug', $slug)->whereNull('deleted_at')
+            ->where(fn ($q) => $q->whereNull('team_id')->orWhereIn('team_id', TeamScope::ancestryIds($team)))
+            ->value('id');
+    }
+
+    /**
      * Guard für Konzept-Slot-/Block-by-id-Tools: existiert der Slot und gehört sein Konzept dem Team?
      * Gibt bei Fehler NOT_FOUND/ACCESS_DENIED, sonst null.
      */

@@ -39,6 +39,14 @@ class DetailPanel extends Component
     /** Erfolgs-Feedback (z.B. nach Rezept-Ersetzung) — grünes Pendant zu $fehler. */
     public ?string $hinweis = null;
 
+    /** Spec 53 Paket J: welcher Anker-Chip die „weitere GPs mit diesem Anker"-Liste aufklappt. */
+    public ?int $ankerNetzOffenId = null;
+
+    public function ankerNetzUmschalten(int $ankerId): void
+    {
+        $this->ankerNetzOffenId = $this->ankerNetzOffenId === $ankerId ? null : $ankerId;
+    }
+
     /** Eingebettet im GP-Modal (recipe-modal-Muster): ohne Panel-Chrome, section = eine Kartei. */
     public bool $embedded = false;
 
@@ -515,6 +523,16 @@ class DetailPanel extends Component
                     ->whereIn('r.team_id', FoodAlchemistGp::teamAncestryIds($team))
                     ->orderBy('r.name')->distinct()
                     ->limit(30)->get(['r.id', 'r.name', 'r.is_sales_recipe'])
+                : collect(),
+            // Spec 53 Paket J: Aroma-Anker als Chip + „weitere GPs mit diesem Anker" (Reverse-Lookup,
+            // kein Graph — s. PR-Body für die spätere Anker-zentrierte Netz-Idee).
+            'gpAnker' => ($gp !== null && $vollmodus)
+                ? app(\Platform\FoodAlchemist\Services\PairingService::class)->gpAnkerAlle($gp->id)
+                : collect(),
+            'ankerNetz' => ($gp !== null && $team !== null && $this->ankerNetzOffenId !== null)
+                ? app(\Platform\FoodAlchemist\Services\PairingService::class)
+                    ->gpsForAnkerIds($team, [$this->ankerNetzOffenId])
+                    ->where('id', '!=', $gp->id)
                 : collect(),
         ]);
     }

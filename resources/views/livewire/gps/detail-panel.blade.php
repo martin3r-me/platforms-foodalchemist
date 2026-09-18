@@ -84,6 +84,37 @@
         </x-foodalchemist::section>
         @endif
 
+        {{-- Spec 53 Paket J: Aroma-Anker als Chip, Klick zeigt „weitere GPs mit diesem Anker"
+             (Reverse-Lookup, kein Graph). Pflege des Ankers selbst → GP-Modal, Tab Sensorik & Pairing. --}}
+        @if($section === null && $gpAnker->isNotEmpty())
+        <x-foodalchemist::section title="Aroma-Anker" icon="heroicon-o-sparkles" data-gp-panel-anker>
+            <div class="flex flex-wrap gap-1">
+                @foreach($gpAnker as $a)
+                    <button type="button" wire:key="pa-{{ $a->id }}" wire:click="ankerNetzUmschalten({{ $a->id }})"
+                            class="{{ $pill }} {{ $a->role === 'kern' ? $variantPill['primary'] : $variantPill['secondary'] }} {{ $ankerNetzOffenId === $a->id ? 'ring-1 ring-violet-500/40' : '' }}"
+                            title="{{ $a->role }} · weitere GPs mit diesem Anker anzeigen" data-gp-anker-chip>
+                        {{ $a->role === 'kern' ? '★' : '·' }} {{ $a->display_de }}
+                    </button>
+                @endforeach
+            </div>
+            @if($ankerNetzOffenId !== null)
+                <div class="mt-2 rounded-lg bg-black/[0.03] px-2.5 py-2" data-gp-anker-netz>
+                    @if($ankerNetz->isEmpty())
+                        <p class="text-[11px] text-gray-500">Keine weiteren GPs mit diesem Anker (als Kern-Träger).</p>
+                    @else
+                        <p class="{{ $dt }} mb-1">Weitere GPs mit diesem Anker</p>
+                        <div class="flex flex-wrap gap-1">
+                            @foreach($ankerNetz as $verwandt)
+                                <a href="{{ route('foodalchemist.gps.index', ['gp' => $verwandt->id]) }}" wire:navigate
+                                   class="{{ $pill }} {{ $variantPill['secondary'] }} hover:bg-violet-500/10">{{ $verwandt->name }}</a>
+                            @endforeach
+                        </div>
+                    @endif
+                </div>
+            @endif
+        </x-foodalchemist::section>
+        @endif
+
         {{-- Natürliche Einheit & Gewicht (auch im Nährwerte-Tab) --}}
         @if($section === null || $section === 'naehrwerte')
         <div class="rounded-lg bg-black/[0.03] px-3 py-2" data-unit-gewicht>

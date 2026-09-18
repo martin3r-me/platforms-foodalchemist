@@ -41,6 +41,14 @@ class GpModal extends Component
 
     public ?int $gpId = null;
 
+    // ── Spec 53 Paket J: Aroma-Anker (Sensorik & Pairing) ─────────────────
+
+    public string $gpAnkerSuche = '';
+
+    public string $gpAnkerRolle = 'kern';
+
+    public ?string $gpAnkerFehler = null;
+
     public array $builder = self::BUILDER_LEER;
 
     /** Manueller Namens-Override — leer = AUTO-SYNC aus dem Builder (I4). */
@@ -395,6 +403,34 @@ class GpModal extends Component
         }
         $this->hinweis = $n > 0 ? "{$n} Form(en) per KI geschätzt." : 'Keine zusätzlichen Formen ableitbar (oder alles manuell gepflegt).';
         $this->dispatch('gp-gespeichert');
+    }
+
+    // ── Spec 53 Paket J: Aroma-Anker (Sensorik & Pairing) — mehrere je GP,
+    //    role kern|neben, sofort gespeichert (kein Speichern-Knopf, wie am Rezept). ──
+
+    public function gpAnkerVerknuepfen(int $ankerId): void
+    {
+        $this->gpAnkerFehler = null;
+        $team = $this->team();
+        if ($team === null || $this->gpId === null) {
+            return;
+        }
+        try {
+            app(\Platform\FoodAlchemist\Services\PairingService::class)
+                ->setGpAnker($team, $this->gpId, $ankerId, $this->gpAnkerRolle);
+            $this->gpAnkerSuche = '';
+        } catch (\RuntimeException $e) {
+            $this->gpAnkerFehler = $e->getMessage();
+        }
+    }
+
+    public function gpAnkerLoesen(int $ankerId): void
+    {
+        $this->gpAnkerFehler = null;
+        $team = $this->team();
+        if ($team !== null && $this->gpId !== null) {
+            app(\Platform\FoodAlchemist\Services\PairingService::class)->removeGpAnker($team, $this->gpId, $ankerId);
+        }
     }
 
     // ── 06·H4b: Favorit direkt am GP pinnen (zweiter Andockpunkt neben dem
@@ -850,6 +886,24 @@ class GpModal extends Component
             'formSlugs' => \Platform\FoodAlchemist\Services\GpFormService::formSlugs(Auth::user()?->currentTeamRelation),
             'sensorik' => $this->gpId !== null ? app(\Platform\FoodAlchemist\Services\SensorikService::class)->fuerGp($this->gpId) : null,
             'pairing' => $this->gpId !== null ? app(\Platform\FoodAlchemist\Services\PairingService::class)->panelGp($this->gpId) : null,
+            // Spec 53 Paket J: Aroma-Anker editierbar (kern + neben) — panelGp()/pairing.blade.php
+            // bleiben read-only (liefern nur 'kern', ohne id/role); dieser Block ist die Schreib-Fläche.
+            'gpAnker' => $this->gpId !== null
+                ? app(\Platform\FoodAlchemist\Services\PairingService::class)->gpAnkerAlle($this->gpId)
+                : collect(),
+            'gpAnkerKandidaten' => $this->gpAnkerSuche !== '' && $team !== null
+                ? \Platform\FoodAlchemist\Support\TeamScope::applyVisible(
+                    \Illuminate\Support\Facades\DB::table('foodalchemist_vocab_pairing_anchors')->whereNull('deleted_at'),
+                    'team_id', $team,
+                )
+                    ->where(function ($w) {
+                        $like = '%'.mb_strtolower($this->gpAnkerSuche).'%';
+                        $w->whereRaw('LOWER(slug) LIKE ?', [$like])
+                            ->orWhereRaw('LOWER(display_de) LIKE ?', [$like])
+                            ->orWhereRaw('LOWER(display_en) LIKE ?', [$like]);
+                    })
+                    ->orderBy('display_de')->limit(8)->get(['id', 'slug', 'display_de', 'display_en', 'category'])
+                : collect(),
         ]);
     }
 
