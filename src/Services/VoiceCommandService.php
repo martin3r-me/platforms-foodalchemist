@@ -254,12 +254,19 @@ class VoiceCommandService
      * @return array{text: ?string, unklar: bool, runden: int, elapsed_ms: int, freigeschaltet: list<string>,
      *               aktionen: list<array>, proposals: list<array>, tool_laeufe: list<array>}
      */
-    public function verarbeite(string $transcript, ?array $kontext = null, string $modus = 'fragen'): array
+    public function verarbeite(string $transcript, ?array $kontext = null, string $modus = 'fragen', ?string $verlauf = null): array
     {
         $kontextHinweis = ($kontext !== null && isset($kontext['type'], $kontext['id']))
             ? " [Kontext: aktuell geöffnet — {$kontext['type']} ID={$kontext['id']}. Bei \"dieses/das Rezept\" "
                 . 'OHNE genannten Namen/Nummer diese ID verwenden, NICHT raten. Wird ein anderer Name genannt, '
                 . 'gilt der genannte Name.]'
+            : '';
+        // Spec 53 / Paket F (4): GEKÜRZTER Gesprächsverlauf (letzte Züge + zuletzt geöffnetes
+        // Objekt) — löst Pronomen/Ellipsen über den letzten Turn hinweg auf ("und jetzt lösche
+        // das"). Referenz-Bestätigungen ("ja", "das zweite") laufen NICHT hier durch: die fängt
+        // VoiceModal VOR diesem Aufruf ab (dieselben Methoden wie der Bestätigen-Klick).
+        $verlaufHinweis = $verlauf !== null && trim($verlauf) !== ''
+            ? "\n\n[Bisheriger Gesprächsverlauf dieser Sitzung, GEKÜRZT — nur zur Einordnung, keine neuen Fakten erfinden:\n{$verlauf}]"
             : '';
         // Aufgabe F: `nur_lesen` sperrt die Proposal-Tools STRUKTURELL (nicht erst am Ergebnis
         // gefiltert) — sonst würde das Modell Runden/Token für einen Vorschlag verbrauchen,
@@ -314,7 +321,7 @@ class VoiceCommandService
             . 'Nennt der Befehl eine Menge/Zahl mit Einheit (z. B. „200 Gramm Butter"), wiederhole sie im '
             . 'finalen Antworttext wörtlich, damit der Nutzer sie gegenlesen kann. ';
         $resultat = $this->ki->callWithTools(
-            "Sprachbefehl des Users (Deutsch, Kurz-Audio-Transkript): \"{$transcript}\"{$kontextHinweis}",
+            "Sprachbefehl des Users (Deutsch, Kurz-Audio-Transkript): \"{$transcript}\"{$kontextHinweis}{$verlaufHinweis}",
             $toolsFuerModus,
             self::MAX_RUNDEN,
             [
