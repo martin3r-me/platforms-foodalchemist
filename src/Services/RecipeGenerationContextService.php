@@ -97,7 +97,16 @@ class RecipeGenerationContextService
         // (`routingZeilen()` fällt auf den Alias zurück), und die Rezept-Deckel hängen an
         // `REZEPT_BUDGET_KEYS` statt an einem String-Vergleich — sonst hätte diese eine Zeile
         // jeden Rezept-Prompt anders gekappt.
-        $wissen = $this->knowledge->contextFor($team, $genKey, $description, $parameter['kompositions_stil'] ?? null, [], $parameter + ['rezept_typ' => $rezeptTyp, '_kanon_prompt_key' => $genKey]);
+        // Spec 53/H Aufgabe B4: leichte Vor-Sondierung NUR für die Zutaten-Grounding-Anker-Auflösung
+        // (KnowledgeContextService::zutatGroundingBlock) — bewusst NICHT die volle GP-Matching-
+        // Pipeline (`$this->generation->forGeneration()`, unten Zeile ~176) vorziehen: die liefert
+        // `gp_kandidaten` erst NACH diesem contextFor()-Aufruf, ein Reihenfolge-Tausch hätte
+        // `$erdungsText`/`$prompt`-Abhängigkeiten dort riskiert, ohne fachlichen Gewinn (rohe Token
+        // reichen — die Anker-Auflösung passiert ohnehin erst im Grounding-Block selbst, s. dort).
+        // Dieselbe Denylist-Funktion wie `GenerationContextService::leitTokens()` (Paul: "eine
+        // Funktion, zwei Aufrufer"), hier direkt am TokenEngine statt am privaten Wrapper.
+        $hauptzutatSlugs = $this->tokens->leitTokens($description);
+        $wissen = $this->knowledge->contextFor($team, $genKey, $description, $parameter['kompositions_stil'] ?? null, $hauptzutatSlugs, $parameter + ['rezept_typ' => $rezeptTyp, '_kanon_prompt_key' => $genKey]);
         /*
          * Transparenz: die an recipe.generator/vk.generator GEBUNDENEN Dossiers stehen nicht in
          * contextFor()->files_used, sollen aber im „Verwendetes Wissen"-Chip auftauchen.

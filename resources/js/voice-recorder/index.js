@@ -287,6 +287,11 @@
           function () {                                                // finish
             self.hochladenLaeuft = false;
             self.hochladenProgress = 100;
+            // Spec 54 (4): der Upload ist fertig, `updatedAudio()` löst jetzt automatisch
+            // `verstehen()` aus (Server-Roundtrip, bis zu 45s) — ohne dieses Flag wirkte die
+            // Sprechblase in genau dieser Lücke ruhig/untätig (voice-modal.blade.php:
+            // `_schwebeStatus()`). Zurückgesetzt sobald eine echte Antwort ankommt.
+            self.verarbeitetGerade = true;
           },
           function (err) {                                             // error — vorher: leerer Callback, Fehler unsichtbar
             self.hochladenLaeuft = false;

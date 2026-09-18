@@ -2520,6 +2520,34 @@ class PairingService
     }
 
     /**
+     * Spec 53/H Aufgabe B1 → verschärft (Orchestrierung, 2026-09-18, Live-PREVIEW nach Deploy 17):
+     * für das Zutaten-Grounding EXAKTE Gleichheit von `display_de` oder `slug` (beide normalisiert),
+     * NIE Nearest-Neighbor. `neighborsForName()`/`resolveByName()` sind für die INTERAKTIVE
+     * Pairing-Suche gebaut (Composer, Seed-Anker) und akzeptieren bewusst Wort-Fragmente ≥4 Zeichen
+     * aus `display_de` als Treffer (`anchorIndex()` prio 2) plus einen semantischen Fallback — genau
+     * das ist hier die Gefahr: `leitTokens()` liefert aus "Passionsfrucht-Gelee" auch das Token
+     * "gelee", und `resolveByName('gelee')` traf einen Anker, dessen `display_de` NUR zufällig das
+     * Wort "Gelee" enthält (z. B. "Apfel Gelee") — nicht die gemeinte Zutat. Grounding lädt
+     * deterministisch GENAU EIN Dossier und darf sich diese Verwechslung nicht erlauben: lieber
+     * `ohne_anker` (ehrlich sichtbar in der Herkunft) als ein falsches Dossier.
+     */
+    public function ankerSlugExakt(string $token): ?string
+    {
+        $token = trim($token);
+        if ($token === '') {
+            return null;
+        }
+        $slugNorm = $this->normalizeAnkerSlug($token);
+        $displayNorm = trim($this->fold($token));
+        $anker = DB::table('foodalchemist_vocab_pairing_anchors')->whereNull('deleted_at')
+            ->where('slug', '!=', 'neutral')->get(['slug', 'display_de'])
+            ->first(fn ($a) => $this->normalizeAnkerSlug($a->slug) === $slugNorm
+                || trim($this->fold($a->display_de)) === $displayNorm);
+
+        return $anker->slug ?? null;
+    }
+
+    /**
      * MCP-Discovery (Phase K): Pairing-Partner für einen Zutat-NAMEN oder
      * Anker-Slug. Auflösung ist HYBRID (analog gps.SEARCH): exakter/
      * normalisierter Slug → lexikalischer Anker-Index (resolveByName) →

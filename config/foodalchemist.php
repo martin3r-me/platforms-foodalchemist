@@ -646,6 +646,14 @@ return [
             'D' => env('FOODALCHEMIST_AI_TIER_D'),
         ],
 
+        // Spec 54 (1): Tier D hängt an mehreren Prompt-Keys (demo.echo, gp.condition,
+        // recipe.category MIT §1.2-Kanon, recipe.name_putzen, AiGatewayService:623) — ein
+        // schnelleres Modell für den Voice-Loop dort einzutragen würde diese Keys mit
+        // umstellen. Eigene, unabhängige Einstellung: `null` = bisheriges Tier-D-Verhalten
+        // (kein anderer Aufrufer betroffen), gesetzt = NUR VoiceCommandService übersteuert
+        // sein `model` explizit.
+        'voice_model' => env('FOODALCHEMIST_AI_VOICE_MODEL'),
+
         /*
          * OpenAI-Listenpreise in USD je 1 Mio Tokens (Standard-Verarbeitung,
          * kurzer Kontext; Stand 2026-08-31). Die Abrechnung folgt dem im Log

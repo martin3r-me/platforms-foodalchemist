@@ -348,6 +348,91 @@ it('MAX_RUNDEN ist 4 (vorher 6 — die 2 von 5 demo-Läufen liefen bis dahin ins
     expect((new ReflectionClass(VoiceCommandService::class))->getConstant('MAX_RUNDEN'))->toBe(4);
 });
 
+/**
+ * Spec 54 (3): `FakeAiProvider::chat()` ignoriert `$options` komplett — ein Spy auf die
+ * ÜBERGEBENEN Optionen ist die einzige Stelle, an der ein reales Provider-Verhalten
+ * (`OpenAiService::buildMessagesWithContext()`, gated über `with_context`) NICHT selbst
+ * mitgetestet werden kann, aber die STRUKTURELLE Weichenstellung dahin schon: ohne
+ * `with_context: false` würde Core vor JEDE Runde eine eigene Persona + `'Zeit: '.now()`
+ * (Cache-Killer) + eine plattformweite Tools-Übersicht hängen — pro Runde erneut, MAX_RUNDEN=4.
+ */
+it('Spec 54 (3): callWithTools schaltet Cores Kontext-Einspritzung aus — wie propose() es schon tut', function () {
+    $spy = new class extends FakeAiProvider
+    {
+        public array $gesehen = [];
+
+        public function chat(array $messages, array $options = []): array
+        {
+            $this->gesehen[] = $options;
+
+            return ['content' => '{"action":"final","text":"ok"}', 'model' => 'fake-voice', 'usage' => []];
+        }
+    };
+    app()->singleton(FakeAiProvider::class, fn () => $spy);
+
+    app(AiGatewayService::class)->callWithTools('Test', ['foodalchemist.recipes.SEARCH'], 4, []);
+
+    expect($spy->gesehen)->not->toBeEmpty();
+    foreach ($spy->gesehen as $options) {
+        expect($options['with_context'] ?? null)->toBeFalse()
+            ->and($options['tools'] ?? null)->toBeFalse();
+    }
+});
+
+/**
+ * Spec 54 (1): Tier D hängt an mehreren anderen Prompt-Keys (demo.echo, gp.condition,
+ * recipe.category, recipe.name_putzen) — eine eigene, unabhängige Einstellung für den
+ * Voice-Loop statt eines Umbaus an Tier D selbst. `callWithTools()`s `$optionen['model']`
+ * hat Vorrang; ohne gesetzten Aufrufer-`model` bleibt Tier D unverändert der Fallback.
+ */
+it('Spec 54 (1): callWithTools gibt ein explizit übergebenes model an den Provider weiter — Tier D bleibt der Fallback', function () {
+    $spy = new class extends FakeAiProvider
+    {
+        public array $gesehen = [];
+
+        public function chat(array $messages, array $options = []): array
+        {
+            $this->gesehen[] = $options;
+
+            return ['content' => '{"action":"final","text":"ok"}', 'model' => 'fake-voice', 'usage' => []];
+        }
+    };
+    app()->singleton(FakeAiProvider::class, fn () => $spy);
+    config(['foodalchemist.ai.tiers.D' => 'tier-d-fallback']);
+
+    app(AiGatewayService::class)->callWithTools('Test', ['foodalchemist.recipes.SEARCH'], 1, ['model' => 'gpt-4o-mini-2024-07-18']);
+    expect($spy->gesehen[0]['model'] ?? null)->toBe('gpt-4o-mini-2024-07-18');
+
+    $spy->gesehen = [];
+    app(AiGatewayService::class)->callWithTools('Test', ['foodalchemist.recipes.SEARCH'], 1, []);
+    expect($spy->gesehen[0]['model'] ?? null)->toBe('tier-d-fallback');
+});
+
+it('Spec 54 (1): VoiceCommandService reicht foodalchemist.ai.voice_model als model weiter — Default null ändert nichts', function () {
+    $spy = new class extends FakeAiProvider
+    {
+        public array $gesehen = [];
+
+        public function chat(array $messages, array $options = []): array
+        {
+            $this->gesehen[] = $options;
+
+            return ['content' => '{"action":"final","text":"ok"}', 'model' => 'fake-voice', 'usage' => []];
+        }
+    };
+    app()->singleton(FakeAiProvider::class, fn () => $spy);
+    config(['foodalchemist.ai.tiers.D' => 'tier-d-fallback']);
+
+    expect(config('foodalchemist.ai.voice_model'))->toBeNull();          // Default, bevor gesetzt
+    app(VoiceCommandService::class)->verarbeite('Suche BBQ Sauce');
+    expect($spy->gesehen[0]['model'] ?? null)->toBe('tier-d-fallback'); // unverändert ohne Konfiguration
+
+    $spy->gesehen = [];
+    config(['foodalchemist.ai.voice_model' => 'gpt-4o-mini-2024-07-18']);
+    app(VoiceCommandService::class)->verarbeite('Suche BBQ Sauce');
+    expect($spy->gesehen[0]['model'] ?? null)->toBe('gpt-4o-mini-2024-07-18');
+});
+
 it('Zeitbudget: callWithTools bricht ab, ohne einen Modellaufruf zu starten, wenn die Zeit schon um ist', function () {
     ($this->skript)(['{"action":"final","text":"sollte nie ankommen"}']);
 
@@ -527,6 +612,33 @@ it('Review-Fix: foodalchemist.gps.POST bleibt weiterhin eine Karte — die Modul
 it('ui.NAVIGATE/ui.OPEN sind foodalchemist.*-Tools MIT read_only=true — die Modul-Grenze ändert an ihrem Verhalten nichts (gemessen, nicht vermutet)', function () {
     expect((new \Platform\FoodAlchemist\Tools\UiNavigateTool())->getMetadata()['read_only'] ?? null)->toBeTrue()
         ->and((new \Platform\FoodAlchemist\Tools\UiOpenTool())->getMetadata()['read_only'] ?? null)->toBeTrue();
+});
+
+/**
+ * Spec 54 (2): eine zweite LLM-Runde NUR für den Schlusssatz kostet ~8-10 s Latenz für nichts —
+ * bei einem erfolgreichen `ui.NAVIGATE` steht mit `label` (aus dem Katalog) bereits alles im
+ * Tool-Ergebnis, was ein kurzer, korrekter Satz braucht. Nur EINE gescriptete Antwort: würde der
+ * Loop trotzdem eine zweite Runde einlegen, träfe er auf dasselbe Tool mit denselben Argumenten
+ * (Frühabbruch-Dedup, `runden` bliebe zwar 2, aber `text` bliebe `null` → „Kein passendes
+ * Werkzeug…“) — die Assertion auf `runden === 1` UND den echten Antworttext unterscheidet beide Fälle.
+ */
+it('Spec 54 (2): erfolgreiches ui.NAVIGATE beantwortet sich SELBST — keine zweite LLM-Runde für den Schlusssatz', function () {
+    ($this->skript)(['{"action":"tool","name":"foodalchemist.ui.NAVIGATE","arguments":{"route_key":"recipes"}}']);
+
+    $resultat = app(VoiceCommandService::class)->verarbeite('Öffne die Basisrezepte');
+
+    expect($resultat['runden'])->toBe(1)
+        ->and($resultat['tool_laeufe'])->toHaveCount(1)
+        ->and($resultat['unklar'])->toBeFalse()
+        ->and($resultat['text'])->toBe('Öffne Basisrezepte.');
+});
+
+it('Spec 54 (2): ui.OPEN bleibt bewusst AUSSEN vor — sein Tool-Ergebnis trägt kein Label für einen freundlichen Satz', function () {
+    expect(VoiceCommandService::fruehesFinale(
+        'foodalchemist.ui.OPEN',
+        ['type' => 'recipe', 'id' => 42],
+        \Platform\Core\Contracts\ToolResult::success(['open' => ['type' => 'recipe', 'id' => 42]]),
+    ))->toBeNull();
 });
 
 /**
