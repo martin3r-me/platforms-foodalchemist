@@ -637,3 +637,93 @@ it('VAD-Optionen: konversationAktiv steuert vad:true/false am Recorder', functio
     $an = Livewire::test(VoiceModal::class)->html();
     expect($an)->toContain('vad: true');
 });
+
+/*
+ * Spec 53 / Paket F (4): Gesprächsgedächtnis — Referenz-Bestätigung auf einen offenen
+ * Vorschlag, Fortbestand über eine simulierte Seiten-Navigation hinweg, „Gespräch vergessen".
+ */
+
+it('Zwei-Zug-Dialog: Zug 1 erzeugt zwei Vorschläge, Zug 2 „das zweite" bestätigt NUR den zweiten', function () {
+    ($this->skript)([
+        '{"action":"tool","name":"foodalchemist.gps.POST","arguments":{"hauptzutat":"Zander"}}',
+        '{"action":"tool","name":"foodalchemist.gps.POST","arguments":{"hauptzutat":"Lachs"}}',
+        '{"action":"final","text":"Zwei Vorschläge — bitte bestätigen."}',
+    ]);
+
+    $modal = Livewire::test(VoiceModal::class)->call('verarbeiteText', 'Lege zwei Grundprodukte an');
+    $vorschlaege = $modal->get('ergebnis')['proposals'];
+    expect($vorschlaege)->toHaveCount(2)
+        ->and($vorschlaege[0]['accepted'] ?? false)->toBeFalse()
+        ->and($vorschlaege[1]['accepted'] ?? false)->toBeFalse();
+
+    // Zug 2: KEIN zweiter Tool-Loop-Skript-Eintrag nötig — die Referenz läuft VOR dem Tool-Loop.
+    $modal->call('verarbeiteText', 'das zweite');
+
+    $nachher = $modal->get('ergebnis')['proposals'];
+    expect($nachher[0]['accepted'] ?? false)->toBeFalse('der ERSTE Vorschlag darf NICHT mit-bestätigt werden')
+        ->and($nachher[1]['accepted'] ?? false)->toBeTrue('der ZWEITE Vorschlag muss bestätigt sein');
+
+    // Echte Ausführung, nicht nur ein Flag — dasselbe Tool wie im Vorschlag, mit den Lachs-Argumenten
+    // (nicht Zander — das wäre der ERSTE, nicht bestätigte Vorschlag).
+    expect(\Platform\FoodAlchemist\Models\FoodAlchemistGp::where('name', 'like', '%lachs%')->exists())->toBeTrue()
+        ->and(\Platform\FoodAlchemist\Models\FoodAlchemistGp::where('name', 'like', '%zander%')->exists())->toBeFalse();
+});
+
+it('reine Zustimmung "ja" bestätigt den einen offenen Vorschlag — bei mehreren bleibt sie mehrdeutig (kein Rateversuch)', function () {
+    ($this->skript)([
+        '{"action":"tool","name":"foodalchemist.gps.POST","arguments":{"hauptzutat":"Zander"}}',
+        '{"action":"final","text":"Vorschlag — bitte bestätigen."}',
+    ]);
+    $modal = Livewire::test(VoiceModal::class)->call('verarbeiteText', 'Lege ein Grundprodukt an');
+
+    $modal->call('verarbeiteText', 'ja');
+
+    expect($modal->get('ergebnis')['proposals'][0]['accepted'] ?? false)->toBeTrue();
+});
+
+it('Sitzung überlebt eine simulierte Seiten-Navigation: neue Komponenten-Instanz stellt die offenen Vorschläge wieder her', function () {
+    ($this->skript)([
+        '{"action":"tool","name":"foodalchemist.gps.POST","arguments":{"hauptzutat":"Zander"}}',
+        '{"action":"final","text":"Vorschlag — bitte bestätigen."}',
+    ]);
+    Livewire::test(VoiceModal::class)->call('verarbeiteText', 'Lege ein Grundprodukt an');
+
+    // NEUE Komponenten-Instanz = wie ein frischer Seiten-Mount (agent-mount.blade.php auf
+    // JEDER FA-Vollseite) + Öffnen-Klick — genau der Fall, den Stufe 2 sonst kaputt macht.
+    $neuesModal = Livewire::test(VoiceModal::class)->call('oeffnen');
+
+    $wiederhergestellt = $neuesModal->get('ergebnis')['proposals'] ?? [];
+    expect($wiederhergestellt)->toHaveCount(1)
+        ->and($wiederhergestellt[0]['tool'])->toBe('foodalchemist.gps.POST')
+        ->and($wiederhergestellt[0]['accepted'] ?? false)->toBeFalse();
+
+    // Und die Referenz funktioniert auf der NEUEN Instanz genauso wie auf der alten.
+    $neuesModal->call('verarbeiteText', 'ja');
+    expect($neuesModal->get('ergebnis')['proposals'][0]['accepted'] ?? false)->toBeTrue();
+});
+
+it('„Gespräch vergessen": eine neue Komponenten-Instanz stellt danach NICHTS mehr wieder her', function () {
+    ($this->skript)([
+        '{"action":"tool","name":"foodalchemist.gps.POST","arguments":{"hauptzutat":"Zander"}}',
+        '{"action":"final","text":"Vorschlag — bitte bestätigen."}',
+    ]);
+    $modal = Livewire::test(VoiceModal::class)->call('verarbeiteText', 'Lege ein Grundprodukt an');
+    $modal->call('vergessen');
+
+    $neuesModal = Livewire::test(VoiceModal::class)->call('oeffnen');
+    expect($neuesModal->get('ergebnis'))->toBeNull();
+});
+
+it('„Gespräch vergessen" ist nur sichtbar, wenn es Vorschläge gibt', function () {
+    ($this->skript)(['{"action":"final","text":"Hallo, wie kann ich helfen?"}']);
+    $ohneVorschlag = Livewire::test(VoiceModal::class)->call('verarbeiteText', 'Hallo');
+    expect($ohneVorschlag->html())->not->toContain('data-voice-vergessen');
+
+    ($this->skript)([
+        '{"action":"tool","name":"foodalchemist.gps.POST","arguments":{"hauptzutat":"Zander"}}',
+        '{"action":"final","text":"Vorschlag — bitte bestätigen."}',
+    ]);
+    $mitVorschlag = Livewire::test(VoiceModal::class)->call('verarbeiteText', 'Lege ein Grundprodukt an');
+
+    expect($mitVorschlag->html())->toContain('data-voice-vergessen');
+});

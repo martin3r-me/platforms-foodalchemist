@@ -22,8 +22,10 @@ use Platform\FoodAlchemist\Services\Stt\SttServiceContract;
 use Platform\FoodAlchemist\Services\TeamSettingsService;
 use Platform\FoodAlchemist\Services\Tts\TtsServiceContract;
 use Platform\FoodAlchemist\Services\VoiceCommandService;
+use Platform\FoodAlchemist\Services\VoiceSessionService;
 use Platform\FoodAlchemist\Support\VoiceFehlerText;
 use Platform\FoodAlchemist\Support\VoiceMime;
+use Platform\FoodAlchemist\Support\VoiceReferenzResolver;
 
 /**
  * M7-10 / Phase C2: 🎙 Voice-Interface — zweiter Bedienweg (UI bleibt parallel).
@@ -154,9 +156,35 @@ class VoiceModal extends Component
     #[On('voice-modal.oeffnen')]
     public function oeffnen(?array $kontext = null): void
     {
-        $this->reset('audio', 'transcript', 'ergebnis', 'fehler', 'phase');
+        $this->reset('audio', 'transcript', 'fehler', 'phase');
         $this->kontext = $kontext;
+        // Spec 53 / Paket F (4): OHNE das hier wäre jedes Öffnen (auch ohne Seitenwechsel —
+        // das Modal mountet zwar nur einmal pro Seite, aber `reset('ergebnis', ...)` lief
+        // bisher IMMER beim Öffnen) ein sauberer Neustart, der offene Vorschläge wegwirft.
+        // Restauriert wird NUR die Vorschlags-Liste (minimal-valide $ergebnis-Form — die
+        // Bestätigen-Methoden lesen ausschliesslich `proposals[$index]`), kein alter Text/
+        // keine alten Aktionen, die ohnehin nicht mehr zur aktuellen Seite passen.
+        $offene = $this->sitzungOffeneVorschlaege();
+        $this->ergebnis = $offene !== [] ? [
+            'text' => null, 'runden' => 0, 'tool_laeufe' => [], 'aktionen' => [],
+            'proposals' => $offene, 'unklar' => false, 'elapsed_ms' => 0,
+        ] : null;
         $this->dispatch('modal.open', name: 'voice-modal');
+    }
+
+    /**
+     * Spec 53 / Paket F (4): „Gespräch vergessen" — kompletter Reset des Server-Gedächtnisses
+     * UND des sichtbaren Zustands. Eigene Methode statt Wiederverwendung von {@see oeffnen()},
+     * weil sie explizit VOR dem Wiederherstellen aufgerufen wird (der Knopf soll wirklich
+     * NICHTS übrig lassen, nicht nur den Client-State).
+     */
+    public function vergessen(): void
+    {
+        $ids = $this->sitzungIds();
+        if ($ids !== null) {
+            app(VoiceSessionService::class)->vergessen(...$ids);
+        }
+        $this->reset('audio', 'transcript', 'ergebnis', 'fehler', 'phase');
     }
 
     /**
@@ -213,9 +241,22 @@ class VoiceModal extends Component
     private function verarbeite(): void
     {
         $modus = $this->agentModusAktuell();
+
+        // Spec 53 / Paket F (4): "ja"/"das zweite" bestätigt einen bereits gezeigten, noch
+        // offenen Vorschlag — über DIESELBEN Methoden wie der Bestätigen-Klick, KEIN Tool-Loop
+        // für ein einzelnes Wort (GL-07 unverändert: nichts läuft hier direkter als der Knopf).
+        $offeneIndizes = $this->offeneVorschlagIndizes();
+        $referenzPosition = VoiceReferenzResolver::erkenne((string) $this->transcript, count($offeneIndizes));
+        if ($referenzPosition !== null) {
+            $this->fuehreReferenzAus($offeneIndizes[$referenzPosition]);
+
+            return;
+        }
+
         try {
+            $verlauf = app(VoiceSessionService::class)->promptKontext($this->sitzungGeladen());
             $this->ergebnis = app(VoiceCommandService::class)->verarbeite(
-                (string) $this->transcript, $this->kontextFuerAuftrag(), $modus,
+                (string) $this->transcript, $this->kontextFuerAuftrag(), $modus, $verlauf,
             );
         } catch (\Throwable $e) {
             $this->fehler = VoiceFehlerText::aus($e)['text'];
@@ -264,12 +305,116 @@ class VoiceModal extends Component
                 };
             }
         }
+        $this->sitzungAktualisieren();
         // Spec 53 / Paket F (3): Konversations-Modus liest die Antwort vor, wenn das Team-Setting
         // an ist. NICHT bei einer Navigation — der Ton würde auf der Seite ankommen, die der Nutzer
         // gerade verlässt (`redirect()` plant den Wechsel, hält die Methode aber nicht an).
         if (! $navigiert) {
             $this->sprichWennAktiviert((string) $this->ergebnis['text']);
         }
+    }
+
+    /**
+     * Spec 53 / Paket F (4): führt einen per {@see \Platform\FoodAlchemist\Support\VoiceReferenzResolver}
+     * erkannten Vorschlag aus — GENAU die Methode, die auch der Bestätigen-Klick in der Blade
+     * aufruft, mit demselben Original-Index in `$ergebnis['proposals']`.
+     */
+    private function fuehreReferenzAus(int $originalIndex): void
+    {
+        $typ = $this->ergebnis['proposals'][$originalIndex]['type'] ?? null;
+        match ($typ) {
+            'speisen_klasse' => $this->proposalUebernehmen($originalIndex),
+            'planung_start' => $this->planungStarten($originalIndex),
+            'anreicherung' => $this->anreicherungStarten($originalIndex),
+            'schreibaktion' => $this->schreibaktionAusfuehren($originalIndex),
+            default => null,
+        };
+        $erfolg = ($this->ergebnis['proposals'][$originalIndex]['accepted'] ?? false) === true;
+        $antwortText = $erfolg ? 'Erledigt.' : ((string) ($this->fehler ?? 'Konnte nicht ausgeführt werden.'));
+        $this->sitzungAktualisieren($antwortText);
+        $this->sprichWennAktiviert($antwortText);
+    }
+
+    /** @return list<int> Original-Indizes (in `$ergebnis['proposals']`) der noch NICHT bestätigten Vorschläge, in Reihenfolge. */
+    private function offeneVorschlagIndizes(): array
+    {
+        $indizes = [];
+        foreach (($this->ergebnis['proposals'] ?? []) as $i => $p) {
+            if (! ($p['accepted'] ?? false)) {
+                $indizes[] = $i;
+            }
+        }
+
+        return $indizes;
+    }
+
+    /** @return array{0: int, 1: int, 2: string}|null [teamId, userId, sessionId] — null ohne Team/User. */
+    private function sitzungIds(): ?array
+    {
+        $user = Auth::user();
+        $team = $user?->currentTeamRelation;
+        if ($user === null || $team === null) {
+            return null;
+        }
+
+        return [(int) $team->id, (int) $user->id, (string) session()->getId()];
+    }
+
+    /** @return array<string, mixed> leere Sitzungs-Struktur ohne Team/User. */
+    private function sitzungGeladen(): array
+    {
+        $ids = $this->sitzungIds();
+        if ($ids === null) {
+            return app(VoiceSessionService::class)->leer();
+        }
+        [$teamId, $userId, $sessionId] = $ids;
+
+        return app(VoiceSessionService::class)->lade($teamId, $userId, $sessionId);
+    }
+
+    /** @return array<int, array<string, mixed>> alle bisher NICHT bestätigten Vorschläge, Original-Indizes. */
+    private function sitzungOffeneVorschlaege(): array
+    {
+        return $this->sitzungGeladen()['offene_vorschlaege'];
+    }
+
+    /**
+     * Sichert den aktuellen Turn (User-Transkript + Agent-Antwort), die offenen Vorschläge
+     * und best-effort das zuletzt geöffnete Objekt. `$agentTextOverride` deckt den Referenz-
+     * Ausführungs-Pfad ab, dort bleibt `$ergebnis['text']` null (kein zweiter Tool-Loop-Text).
+     */
+    private function sitzungAktualisieren(?string $agentTextOverride = null): void
+    {
+        $ids = $this->sitzungIds();
+        if ($ids === null) {
+            return;
+        }
+        [$teamId, $userId, $sessionId] = $ids;
+        $svc = app(VoiceSessionService::class);
+        $sitzung = $svc->lade($teamId, $userId, $sessionId);
+        $sitzung = $svc->zugHinzufuegen($sitzung, 'user', (string) $this->transcript);
+        $sitzung = $svc->zugHinzufuegen($sitzung, 'agent', $agentTextOverride ?? (string) ($this->ergebnis['text'] ?? ''));
+        $sitzung['offene_vorschlaege'] = $this->ergebnis['proposals'] ?? [];
+        $objekt = $this->neuGeoeffnetesObjekt();
+        if ($objekt !== null) {
+            $sitzung['geoeffnetes_objekt'] = $objekt;
+        }
+        $svc->speichere($teamId, $userId, $sessionId, $sitzung);
+    }
+
+    /** Best-effort aus dem Seiten-Kontext ODER der ersten ui.OPEN/NAVIGATE-Aktion dieser Antwort. */
+    private function neuGeoeffnetesObjekt(): ?array
+    {
+        if ($this->kontext !== null && isset($this->kontext['type'], $this->kontext['id'])) {
+            return ['type' => (string) $this->kontext['type'], 'id' => (int) $this->kontext['id'], 'name' => null];
+        }
+        foreach (($this->ergebnis['aktionen'] ?? []) as $aktion) {
+            if (($aktion['type'] ?? null) !== null && isset($aktion['id'])) {
+                return ['type' => (string) $aktion['type'], 'id' => (int) $aktion['id'], 'name' => $aktion['label'] ?? null];
+            }
+        }
+
+        return null;
     }
 
     /** Nur der Gate-Check (Team-Setting) — {@see sprechen()} bleibt unbedingt aufrufbar. */

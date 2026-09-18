@@ -26,6 +26,14 @@
             @unless($aufnahmeMoeglich)
                 <span class="text-[11px] text-amber-600" data-voice-provider-hinweis>Spracherkennung ist nicht konfiguriert — Befehl tippen.</span>
             @endunless
+            {{-- Spec 53 / Paket F (4): nur sichtbar, wenn es wirklich etwas zu vergessen gibt —
+                 ein Knopf, der immer dasteht, suggeriert fälschlich ein laufendes Gespräch. --}}
+            @if(!empty($ergebnis['proposals']))
+                <button type="button" wire:click="vergessen" wire:loading.attr="disabled" wire:target="vergessen"
+                        class="{{ $btnGhostXs }} text-gray-500 ml-auto disabled:opacity-40" data-voice-vergessen>
+                    Gespräch vergessen
+                </button>
+            @endif
         </div>
 
         {{-- Aufnahme: gemeinsamer Recorder-Baustein (window.FaVoiceRecorder), Root mit eigenem
