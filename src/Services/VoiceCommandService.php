@@ -242,6 +242,26 @@ class VoiceCommandService
     }
 
     /**
+     * Spec 54 (2): eine zweite LLM-Runde NUR für den Schlusssatz kostet ~8-10 s Latenz für
+     * nichts. Nur `ui.NAVIGATE` — bewusst NICHT `ui.OPEN`: dessen Tool-Ergebnis trägt kein
+     * Label (nur `type`+`id`, siehe {@see \Platform\FoodAlchemist\Tools\UiOpenTool::execute()}),
+     * ein freundlicher Satz bräuchte den echten Datensatz-Namen, den es hier nicht gibt — lieber
+     * eine echte Modell-Runde als eine unfreundliche "Geöffnet: recipe #42"-Antwort. `ui.NAVIGATE`
+     * hat mit `label` (aus dem Katalog, {@see \Platform\FoodAlchemist\Tools\FoodAlchemistTool::uiRouteCatalog()})
+     * bereits alles, was ein kurzer, korrekter Satz braucht, und ist als reine Seiten-Navigation
+     * (kein Datensatz, keine Ambiguität) IMMER eine abgeschlossene Aktion ohne offene Frage.
+     */
+    public static function fruehesFinale(string $name, array $arguments, \Platform\Core\Contracts\ToolResult $resultat): ?string
+    {
+        if ($name !== 'foodalchemist.ui.NAVIGATE' || ! $resultat->success) {
+            return null;
+        }
+        $label = $resultat->data['navigate']['label'] ?? null;
+
+        return is_string($label) && trim($label) !== '' ? "Öffne {$label}." : null;
+    }
+
+    /**
      * Rundenbudget UND Zeitbudget (Befund 2026-09-17, demo-Call-Log 16.09.: 2 von 5 Läufen liefen
      * bis `maxRuns` durch — 6 Runden, ~60 s, ~91.560 Input-Token — ohne dass der Nutzer in der
      * Zeit auch nur eine Zwischenmeldung sah). 4 Runden reichen für die gemessenen Fälle (Suche,
@@ -250,7 +270,11 @@ class VoiceCommandService
      */
     private const MAX_RUNDEN = 4;
 
-    private const ZEITBUDGET_MS = 28_000;
+    // Spec 54 (4): 28 s schnitt auf Tier D (~8-10 s/Runde) den 3.-Runden-Fall (36 s) fast
+    // immer ab, BEVOR ein `final` erreicht war — reine Symptom-Verschiebung wäre ein
+    // längeres Budget allein gewesen (macht die Runde nicht schneller, nur den Abbruch
+    // seltener sichtbar); erst mit (1)-(3) zusammen wirkt die Anhebung sinnvoll.
+    private const ZEITBUDGET_MS = 45_000;
 
     /**
      * @param  array{type: string, id: int}|null  $kontext  Aufgabe 7: Rezept-/Gericht-Kontext der
@@ -347,6 +371,13 @@ class VoiceCommandService
                 'arg_guard' => [self::class, 'entschaerfeArgumente'],
                 'intercept' => $intercept,
                 'zeitbudget_ms' => self::ZEITBUDGET_MS,
+                'fruehes_finale' => [self::class, 'fruehesFinale'],
+                // Spec 54 (1): eigene, von Tier D UNABHÄNGIGE Einstellung — `null` (Default)
+                // lässt `callWithTools()`s `$optionen['model'] ?? Tier D`-Fallback greifen,
+                // NICHTS ändert sich. Gesetzt übersteuert NUR den Voice-Loop, ohne die anderen
+                // an Tier D hängenden Prompt-Keys (demo.echo, gp.condition, recipe.category,
+                // recipe.name_putzen) mit umzustellen.
+                'model' => config('foodalchemist.ai.voice_model'),
                 'system_zusatz' => $modusHinweis . ' ' . $schreibHinweis . $rauschHinweis . 'Du steuerst den GANZEN FoodAlchemist (Rezepte, Gerichte, Concepter, Foodbook, '
                     . 'Speisekarte, Speiseplan, Bestellwesen, Lieferanten). Der Katalog unten ist nur der Einstieg: '
                     . 'fehlt dir ein Werkzeug, suche es mit tool_registry.SEARCH und rufe es direkt auf. '

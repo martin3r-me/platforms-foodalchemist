@@ -328,9 +328,12 @@ class AiGatewayService
         // `with_context`). Ein sekundengenau wechselnder Prefix macht Prompt-Caching
         // strukturell unmöglich — bei `cached_in` = 10 % des Normalpreises ist das der
         // teuerste Nebeneffekt im System (gemessene Cache-Quote: 0,35 %). FA-Prompts sind
-        // reine JSON-Generierung und nutzen keine Tools; der agentische Tier-D-Loop baut
-        // seinen Katalog in callWithTools() selbst und ist hiervon nicht betroffen.
+        // reine JSON-Generierung und nutzen keine Tools.
         // `+=` statt Überschreiben: ein Aufrufer, der es explizit setzt, behält die Hoheit.
+        // Spec 54 (3): die Annahme, der agentische Tier-D-Loop (callWithTools()) baue seinen
+        // Katalog selbst und sei „hiervon nicht betroffen", war NUR für FA's eigenen Katalog
+        // richtig — `with_context` ist ein separater, additiver Core-Default und lief dort bis
+        // 2026-09-18 ungebremst mit; siehe die gleiche Options-Ergänzung dort weiter unten.
         $options += ['with_context' => false, 'tools' => false];
 
         if ($tierModell !== null && ! isset($options['model'])) {
@@ -618,9 +621,26 @@ class AiGatewayService
                 break;                                                // wie maxRuns: finalText bleibt null
             }
             $runde++;
+            // Spec 54 (3, Befund): der Kommentar bei `propose()`s `with_context: false` (s. o.)
+            // behauptete, der agentische Loop baue seinen Katalog selbst und sei „hiervon nicht
+            // betroffen" — das stimmte nur für FA's EIGENEN Katalog, nicht für den Zusatz-Weg.
+            // `chatMitBackoff()` reichte hier bisher GAR KEIN `with_context`/`tools` durch, also
+            // griff `OpenAiService::buildMessagesWithContext()`s Default (`true`): Core hängte
+            // vor JEDE Runde eine EIGENE, mit FA's System-Message konkurrierende Persona plus
+            // `'Zeit: ' . now()` (Cache-Killer, s. o.) plus eine plattformweite Tools-Übersicht
+            // (redundant zum Katalog, den dieser Loop selbst mitschickt). Bei bis zu MAX_RUNDEN=4
+            // Runden zahlt das JEDE Runde erneut, ohne Cache-Treffer. Gleiche additive Options
+            // wie bei `propose()` — kein anderer Aufrufer betroffen (nur diese eine Stelle).
+            // Spec 54 (1): `optionen['model']` (VoiceCommandService: `foodalchemist.ai.voice_model`)
+            // hat Vorrang vor Tier D — Tier D hängt an mehreren anderen Prompt-Keys
+            // (demo.echo, gp.condition, recipe.category, recipe.name_putzen), ein Umbau DORT
+            // hätte die mit umgestellt. Ohne gesetzten Aufrufer-`model` bleibt das Verhalten
+            // exakt wie vorher (Tier D).
             $antwort = $this->chatMitBackoff($messages, [
                 'temperature' => 0.0,
-                'model' => config('foodalchemist.ai.tiers', [])['D'] ?? null,
+                'model' => $optionen['model'] ?? (config('foodalchemist.ai.tiers', [])['D'] ?? null),
+                'with_context' => false,
+                'tools' => false,
             ]);
             $this->addUsage($usageGesamt, (array) ($antwort['usage'] ?? []));
             $tatsaechlichesModell = $antwort['model'] ?? $tatsaechlichesModell;
@@ -677,6 +697,20 @@ class AiGatewayService
                 $abgefangen = is_callable($intercept) ? $intercept($name, $argumente, $tool, $kontext) : null;
                 $resultat = $abgefangen ?? $tool->execute($argumente, $kontext);
                 $toolLaeufe[] = ['name' => $name, 'arguments' => $argumente, 'success' => $resultat->success, 'data' => $resultat->data];
+                // Spec 54 (2): eine zweite LLM-Runde NUR für den Schlusssatz kostet ~8-10 s Latenz
+                // für nichts — bei bestimmten Tools (Voice: erfolgreiches ui.NAVIGATE/ui.OPEN ohne
+                // offene Frage) kann der Aufrufer die Antwort selbst zusammensetzen. Additiv (Default
+                // null) — OHNE diese Option verhält sich der Loop exakt wie vorher, kein anderer
+                // Aufrufer ist betroffen. Liefert der Callback eine Zeichenkette, endet der Loop
+                // HIER, ohne die TOOL-ERGEBNIS-Nachricht anzuhängen oder erneut zu fragen.
+                $fruehFinal = is_callable($optionen['fruehes_finale'] ?? null)
+                    ? $optionen['fruehes_finale']($name, $argumente, $resultat)
+                    : null;
+                if (is_string($fruehFinal)) {
+                    $finalText = $fruehFinal;
+
+                    break;
+                }
                 $messages[] = ['role' => 'assistant', 'content' => (string) ($antwort['content'] ?? '')];
                 $messages[] = ['role' => 'user', 'content' => 'TOOL-ERGEBNIS ' . $name . ': ' . $this->kappeToolErgebnis(
                     json_encode(['success' => $resultat->success, 'data' => $resultat->data, 'error' => $resultat->error], JSON_UNESCAPED_UNICODE),
