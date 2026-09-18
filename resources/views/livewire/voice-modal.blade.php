@@ -10,7 +10,7 @@
 @endassets
 @php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
 
-<x-foodalchemist::modal name="voice-modal" title="Sprachbefehl" size="max-w-xl">
+<x-foodalchemist::modal name="voice-modal" title="Sprachbefehl" size="max-w-xl" :z-fest="true">
     <div class="space-y-3" data-voice>
 
         {{-- Provider-Transparenz (Aufgabe 4): vorher unsichtbar, ob echt transkribiert wird
@@ -61,6 +61,35 @@
                         if (audio) {
                             audio.addEventListener('ended', () => this._nachDemSprechen());
                         }
+                        // Live-Befund Dominique (2026-09-18): `oeffnen()` liest das Team-Setting
+                        // jetzt frisch (server-seitig), aber dieses x-data-Objekt wurde beim
+                        // ERSTEN Rendern EINMAL mit dem damaligen Wert initialisiert — die Blade-
+                        // Direktive fuer den Server-Wert laeuft nur EINMAL beim ersten Rendern,
+                        // ein spaeterer Livewire-Roundtrip re-initialisiert dieses Objekt NICHT.
+                        // "wire.konversationAktiv" selbst IST live (Alpines Livewire-Plugin liest
+                        // es bei jedem Zugriff frisch) — dieser Watcher zieht den lokalen Zustand
+                        // UND den Recorder-internen VAD-Schalter nach, statt an jeder Stelle
+                        // "wire.konversationAktiv" einzeln aufzuloesen.
+                        this.$watch(() => $wire.konversationAktiv, (aktiv) => {
+                            this.konversationAktiv = !!aktiv;
+                            this.vad = !!aktiv;
+                        });
+                        // Live-Befund Dominique (2026-09-18): "zwei Klicks statt einem" — im
+                        // Konversations-Modus sollte der ÖFFNEN-Klick (schwebender Knopf ODER
+                        // Sidebar) SOFORT das Zuhören starten, nicht erst einen zweiten Klick
+                        // auf "Aufnahme starten" verlangen. `voice-modal.oeffnen` ist ein
+                        // natives, blubberndes CustomEvent (Alpine-$dispatch/Livewire-Client-
+                        // $dispatch laufen OHNE Server-Roundtrip) — der Listener hier feuert
+                        // NOCH in derselben Nutzer-Geste wie der Klick, `start()` erzeugt seinen
+                        // AudioContext also synchron genug (Safari-Regel bleibt gewahrt). Absichtlich
+                        // `this.konversationAktiv` (der von `oeffnen()` frisch gesetzte Server-Wert,
+                        // s. o.) statt eines vom Klick mitgeschickten Flags — der Ein-Klick-Modus
+                        // bleibt dadurch unverändert, auch wenn `autostart` mitkommt.
+                        window.addEventListener('voice-modal.oeffnen', (e) => {
+                            if (e?.detail?.autostart && this.konversationAktiv && this.unterstuetzt && ! this.laeuft) {
+                                this.start();
+                            }
+                        });
                     },
                     _wiedergeben(audio, url, text) {
                         if (! audio || audio.dataset.faEntsperrt !== '1') {

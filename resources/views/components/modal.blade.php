@@ -31,6 +31,13 @@
     'darkCanvas' => false,                                            {{-- 2026-07-31: dunkler Editor-Grund im Body (nur grosse Editoren); Karten schweben darauf --}}
     'titleName' => null,                                              {{-- 2026-07-31: hebt einen Namen (z.B. Rezept) im Titel als gerahmten Akzent-Chip hervor — präsenter, nicht grösser --}}
     'tabInit' => null,                                                {{-- 2026-07-31: aktiviert eine fixe Tab-Leiste im Kopf (via <x-slot:tabs>); Wert = Default-Start-Tab. Alpine-`tab` lebt am Panel, umspannt Kopf-Tabs + Body-Panels. Ein `modal.open`-Dispatch darf per `tab:`-Detail einen anderen Start-Tab erzwingen (Scope-Treue: „Freies Basisrezept" öffnet auf dem Basisrezept-Tab) — ohne Detail bleibt tabInit. --}}
+    'zFest' => false,                                                 {{-- Live-Befund Dominique (2026-09-18): der schwebende Sprachbefehl-Mikro-Knopf verschwand
+                                                                            hinter geöffneten Editoren (RecipeModal/VkModal/... — alle über DIESE Komponente, alle
+                                                                            z-[100] + `bringToFront`s global wachsendem Zähler = "zuletzt geöffnet gewinnt"). Für ein
+                                                                            Modal, das IMMER über jedem Editor bleiben soll (aktuell nur Sprachbefehl), pinnt `zFest`
+                                                                            eine feste z-[190] und nimmt NICHT am Zähler-Wettlauf teil — sonst würde ein später
+                                                                            geöffneter Editor es trotzdem wieder überdecken. Bewusst additiv (Default false): JEDES
+                                                                            andere Modal verhält sich exakt wie vorher. --}}
 ])
 
 @php
@@ -41,8 +48,13 @@
         open: false,
         @if($tabInit) tab: '{{ $tabInit }}', @endif
         bringToFront(el) {
+            @if($zFest)
+            // zFest: fest auf z-[190] gepinnt (Klasse unten) — KEINE Teilnahme am globalen
+            // Zähler, sonst würde ein danach geöffneter Editor es wieder überdecken.
+            @else
             window.__foodAlchemistModalZ = Math.max(window.__foodAlchemistModalZ || 100, 100) + 1;
             el.style.zIndex = String(window.__foodAlchemistModalZ);
+            @endif
         },
         close() { this.open = false; this.$dispatch('modal.closed', { name: '{{ $name }}' }); },
         closeWithState() { @if($closeVia) this.$wire.{{ $closeVia }}(); @endif this.close(); },
@@ -55,7 +67,7 @@
      "
      x-show="open" x-cloak
      @keydown.window.escape="if (open) closeWithState()"
-     class="fixed inset-0 z-[100] flex items-center justify-center p-4"
+     class="fixed inset-0 {{ $zFest ? 'z-[190]' : 'z-[100]' }} flex items-center justify-center p-4"
      data-modal="{{ $name }}"
      role="dialog" aria-modal="true" @if($title) aria-label="{{ trim($title . ($titleName !== null ? ': ' . $titleName : '')) }}" @endif>
 

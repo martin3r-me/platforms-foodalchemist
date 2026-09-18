@@ -322,6 +322,28 @@ it('Modus fragen (Default): kein Setting gesetzt ⇒ Modal liest fragen (Klick-P
     expect(Livewire::test(VoiceModal::class)->get('agentModus'))->toBe('fragen');
 });
 
+/**
+ * Live-Befund Dominique (2026-09-18): Team-Setting geändert NACH `mount()` (z. B. auf der
+ * Einstellungen-Seite selbst) — die Pille zeigte weiter den ALTEN Modus, der Recorder blieb im
+ * Ein-Klick-Modus, bis zum vollen Reload. `mount()` läuft nur einmal pro Seite; `oeffnen()` ist
+ * der richtige Moment, beides frisch zu lesen.
+ */
+it('oeffnen() liest Modus + „dauerhaft aktiv" FRISCH — eine Setting-Änderung nach mount() zeigt sich sofort beim nächsten Öffnen', function () {
+    $modal = Livewire::test(VoiceModal::class);
+    expect($modal->get('agentModus'))->toBe('fragen')
+        ->and($modal->get('konversationAktiv'))->toBeFalse();
+
+    // Setting ändert sich NACH mount() — z. B. auf einer anderen/derselben Seite.
+    app(TeamSettingsService::class)->update($this->rootTeam, [
+        'voice_agent_mode' => 'auto_sicher', 'voice_agent_dauerhaft_aktiv' => true,
+    ]);
+
+    $modal->call('oeffnen');
+
+    expect($modal->get('agentModus'))->toBe('auto_sicher')
+        ->and($modal->get('konversationAktiv'))->toBeTrue();
+});
+
 it('Modus auto_sicher: planung_start legt die Session OHNE Klick an, Ergebnis zeigt „automatisch ausgeführt"', function () {
     app(TeamSettingsService::class)->update($this->rootTeam, ['voice_agent_mode' => 'auto_sicher']);
     ($this->skript)([
@@ -726,4 +748,52 @@ it('„Gespräch vergessen" ist nur sichtbar, wenn es Vorschläge gibt', functio
     $mitVorschlag = Livewire::test(VoiceModal::class)->call('verarbeiteText', 'Lege ein Grundprodukt an');
 
     expect($mitVorschlag->html())->toContain('data-voice-vergessen');
+});
+
+/*
+ * Live-Befund Dominique (2026-09-18): drei Hotfixes off main 8b90e0b7 in EINEM PR.
+ */
+
+it('oeffnen(): sowohl Sidebar- als auch schwebender Knopf schicken autostart:true mit', function () {
+    $sidebar = file_get_contents(__DIR__ . '/../../resources/views/livewire/sidebar.blade.php');
+    $agentMount = file_get_contents(__DIR__ . '/../../resources/views/partials/agent-mount.blade.php');
+
+    expect($sidebar)->toContain("\$dispatch('voice-modal.oeffnen', { autostart: true })")
+        ->and($agentMount)->toContain("\$dispatch('voice-modal.oeffnen', { autostart: true })");
+});
+
+it('der Recorder startet NUR, wenn autostart UND konversationAktiv beide wahr sind (Ein-Klick-Modus bleibt unverändert)', function () {
+    $blade = file_get_contents(__DIR__ . '/../../resources/views/livewire/voice-modal.blade.php');
+
+    $zeile = collect(explode("\n", $blade))
+        ->first(fn ($z) => str_contains($z, "addEventListener('voice-modal.oeffnen'"));
+    expect($zeile)->not->toBeNull();
+
+    $bedingung = collect(explode("\n", $blade))
+        ->first(fn ($z) => str_contains($z, 'e?.detail?.autostart'));
+    expect($bedingung)->toContain('this.konversationAktiv')
+        ->and($bedingung)->toContain('this.unterstuetzt')
+        ->and($bedingung)->toContain('this.laeuft');
+});
+
+it('z-index: Sprachbefehl-Modal ist fest über allen Editoren gepinnt (zFest), der schwebende Knopf über BEIDEM', function () {
+    config(['foodalchemist.stt.provider' => 'openai', 'services.openai.api_key' => 'sk-test']);
+
+    $modalHtml = Livewire::test(VoiceModal::class)->html();
+    expect($modalHtml)->toContain('z-[190]')->not->toContain('z-[100]');
+
+    $agentMount = file_get_contents(__DIR__ . '/../../resources/views/partials/agent-mount.blade.php');
+    expect($agentMount)->toContain('z-[210]');
+
+    // 210 > 190 (Modal) > 100 (jeder Standard-Editor über dieselbe Komponente) — der Knopf
+    // gewinnt in JEDER Kombination, unabhängig von der bringToFront-Reihung der Editoren.
+    expect(210)->toBeGreaterThan(190)->and(190)->toBeGreaterThan(100);
+});
+
+it('andere Modale (z. B. ein GP-Editor) bleiben bei z-[100] — zFest ist additiv, kein globaler Verhaltenswechsel', function () {
+    $html = \Illuminate\Support\Facades\Blade::render(
+        '<x-foodalchemist::modal name="gp-edit" title="GP bearbeiten">X</x-foodalchemist::modal>'
+    );
+
+    expect($html)->toContain('z-[100]')->not->toContain('z-[190]');
 });

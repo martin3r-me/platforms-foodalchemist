@@ -141,12 +141,17 @@
     var maxMs = opts.maxMs || 20000;
     var minMs = opts.minMs || 700;
     var before = opts.before || null;
-    var vad = !!opts.vad;
     var sprechSchwelle = opts.sprechSchwelle || 0.08;
     var stilleSchwelle = opts.stilleSchwelle || 0.04;
     var stilleMs = opts.stilleMs || 700;
 
     return {
+      // Live-Befund Dominique (2026-09-18): EIGENE Property statt geschlossener Variable —
+      // `mount()`/mehrfaches Öffnen kann das Team-Setting NACH der Erstellung dieses Objekts
+      // ändern (VoiceModal::oeffnen() liest jetzt frisch). Eine geschlossene `var vad` hätte
+      // den Stand vom allerersten Aufruf für die ganze Lebensdauer des Recorders eingefroren —
+      // `this.vad` lässt sich von aussen (Blade-Watcher auf `$wire.konversationAktiv`) aktualisieren.
+      vad: !!opts.vad,
       rec: null,
       stream: null,
       chunks: [],
@@ -311,7 +316,7 @@
             }
             self.pegel = Math.min(1, Math.sqrt(summe / puffer.length) * 4);
 
-            if (vad) {
+            if (self.vad) {
               if (self.pegel >= sprechSchwelle) {
                 self._vadState = 'spricht';
                 self._vadStilleSeit = null;
