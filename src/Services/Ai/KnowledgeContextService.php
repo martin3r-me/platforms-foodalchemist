@@ -1484,6 +1484,13 @@ class KnowledgeContextService
     {
         $base = DB::table('foodalchemist_knowledge_documents')->tap($art === null ? $this->nurFuerPrompt($team) : $this->nurSichtbar($team))
             ->when($art === null, fn ($q) => $q->where('category', $category), fn ($q) => $q->where('art', $art))->where('active', 1)->whereNull('deleted_at')
+            // Zutaten-Bulk-Import (Orchestrierung, 2026-09-18): ~12.000 zutat-Dossiers tragen
+            // art=fachwissen und würden sonst JEDE art-Discovery fluten (RRF-Score-Abstand Rang 1
+            // zu Rang 18 nur 12% — bei 12.000 statt 18 Kandidaten ist der Budget-Schnitt beliebig).
+            // Zutaten-Wissen kommt ab jetzt AUSSCHLIESSLICH über den Grounding-Zweig (Anker), nie
+            // über den generischen art-Auffangtopf. Nur beim art-Pfad relevant ($art !== null) —
+            // eine echte `category=zutat`-Discovery-Zeile (Übergangs-/Sicherheitsnetz) bleibt möglich.
+            ->when($art !== null, fn ($q) => $q->where('category', '!=', 'zutat'))
             ->when($allowedSlugs !== [], fn ($q) => $q->whereIn('slug', $allowedSlugs))
             ->when($this->ausgeschlossen !== [], fn ($q) => $q->whereNotIn('slug', $this->ausgeschlossen))
             // Familien-Ausschluss (s. Property-Docblock): eine Zutat, die zutatGroundingBlock() schon
@@ -1967,7 +1974,11 @@ class KnowledgeContextService
         $base = DB::table('foodalchemist_knowledge_documents')->tap($this->nurSichtbar($team))
             ->whereIn('id', $this->geltendeDokumentIds($team))
             ->where('category', 'zutat')->where('active', 1)->whereNull('deleted_at');
-        $muster = '/^zutat\.'.preg_quote($anker, '/').'(_\d+)?--'.preg_quote($aspekt, '/').'(-[a-z0-9_]+)?$/u';
+        // Suffix-Zeichenklasse enthält '-' (Orchestrierung, 2026-09-18, Zutaten-Bulk-Import Punkt 6):
+        // 194 von 11.966 realen Slugs tragen einen Zähler INNERHALB des Teilstück-Suffix
+        // (`--verhalten-aroma-2`, `--steckbrief-sorten-2`) — ohne '-' in der Klasse bricht das Muster
+        // am zweiten Bindestrich ab und verwirft den Rest als Nicht-Treffer.
+        $muster = '/^zutat\.'.preg_quote($anker, '/').'(_\d+)?--'.preg_quote($aspekt, '/').'(-[a-z0-9_-]+)?$/u';
 
         return $base->where('slug', 'like', "zutat.{$anker}%--{$aspekt}%")
             ->orderBy('slug')->get(['slug', 'content_md', 'version'])
