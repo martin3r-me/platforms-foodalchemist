@@ -1058,20 +1058,70 @@ it('ein NEUER Vorschlag WÄHREND des Turns öffnet das Modal nachträglich, auch
         ->assertDispatched('modal.open');        // jetzt gibt es etwas zu bestätigen
 });
 
-it('schwebender Knopf zeigt GENAU vier Zustände (pulsierend=hört zu, Wellen=spricht, ruhig=wartet, Fehler rot) — nicht mehr, wie verabredet', function () {
+it('schwebender Knopf zeigt GENAU fünf Zustände (pulsierend=hört zu, Wellen=spricht, ruhig=wartet, amber=pausiert, rot=fehler)', function () {
     $blade = file_get_contents(__DIR__ . '/../../resources/views/livewire/voice-modal.blade.php');
 
     $zeile = collect(explode("\n", $blade))->first(fn ($z) => str_contains($z, '_schwebeStatus()'));
     expect($zeile)->not->toBeNull();
-    foreach (["return 'fehler'", "return 'spricht'", "return 'hoert_zu'", "return 'wartet'"] as $wert) {
+    foreach (["return 'fehler'", "return 'pausiert'", "return 'spricht'", "return 'hoert_zu'", "return 'wartet'"] as $wert) {
         expect($blade)->toContain($wert);
     }
 
     $agentMount = file_get_contents(__DIR__ . '/../../resources/views/partials/agent-mount.blade.php');
     expect($agentMount)->toContain("schwebeStatus === 'hoert_zu'")
         ->and($agentMount)->toContain("schwebeStatus === 'spricht'")
+        ->and($agentMount)->toContain("schwebeStatus === 'pausiert'")
         ->and($agentMount)->toContain("schwebeStatus === 'fehler'")
         ->and($agentMount)->toContain('data-voice-float-status');
+});
+
+/**
+ * Live-Bruch Dominique (2026-09-18, Folgefund): der Knopf zeigte ROT (Fehler), obwohl
+ * serverseitig alles grün lief (letzte Antworten final=true, TTS synthetisiert) — Ursache: „keine
+ * Sprache erkannt"/der 3-Zyklen-Deckel liefen über denselben `fehler`-Zustand wie ein echter
+ * technischer Fehler. `pausiert` ist jetzt eigenständig; `fehler` NUR bei `this.fehler`.
+ */
+it('"keine Sprache erkannt" und der 3-Zyklen-Deckel sind "pausiert" (amber), NICHT "fehler" (rot)', function () {
+    $blade = file_get_contents(__DIR__ . '/../../resources/views/livewire/voice-modal.blade.php');
+
+    // Der Methoden-Körper zwischen `_schwebeStatus() {` und der NÄCHSTEN Methode
+    // (`_schwebeTitel() {`) — ein zuverlässiger Ausschnitt statt fragiler Zeilen-Arithmetik.
+    $start = strpos($blade, '_schwebeStatus() {');
+    $ende = strpos($blade, '_schwebeTitel() {', $start);
+    expect($start)->not->toBeFalse()->and($ende)->not->toBeFalse();
+    $koerper = substr($blade, $start, $ende - $start);
+
+    // `this.fehler` allein entscheidet über 'fehler' — keineSpracheErkannt/konversationPausiert
+    // dürfen NICHT mehr in derselben if-Bedingung stehen (das war GENAU der Bruch).
+    preg_match("/if \(([^)]*)\)\s*\{\s*\n\s*return 'fehler';/", $koerper, $fehlerTreffer);
+    expect($fehlerTreffer[1] ?? null)->not->toBeNull()
+        ->and($fehlerTreffer[1])->toContain('this.fehler')
+        ->and($fehlerTreffer[1])->not->toContain('keineSpracheErkannt')
+        ->and($fehlerTreffer[1])->not->toContain('konversationPausiert');
+
+    preg_match("/if \(([^)]*)\)\s*\{\s*\n\s*return 'pausiert';/", $koerper, $pausiertTreffer);
+    expect($pausiertTreffer[1] ?? null)->not->toBeNull()
+        ->and($pausiertTreffer[1])->toContain('keineSpracheErkannt')
+        ->and($pausiertTreffer[1])->toContain('konversationPausiert');
+});
+
+it('der schwebende Knopf trägt einen dynamischen Titel/aria-label statt eines festen "Sprachbefehl (ziehbar)"', function () {
+    $blade = file_get_contents(__DIR__ . '/../../resources/views/livewire/voice-modal.blade.php');
+    expect($blade)->toContain('_schwebeTitel()')
+        ->and($blade)->toContain('Pausiert — zum Weiterhören klicken');
+
+    $agentMount = file_get_contents(__DIR__ . '/../../resources/views/partials/agent-mount.blade.php');
+    expect($agentMount)->toContain(':title="schwebeTitel"')
+        ->and($agentMount)->toContain(':aria-label="schwebeTitel"')
+        ->and($agentMount)->toContain('schwebeTitel');
+});
+
+it('schwebeTitel hat einen sinnvollen Default, bevor der Poll (300ms) das erste Mal lief', function () {
+    $html = view('foodalchemist::partials.agent-mount')->render();
+    // `:title="schwebeTitel"` ist eine Alpine-Bindung (kein statisches HTML-Attribut mehr) —
+    // der Default-Wert steht als Teil des x-data-Objekts trotzdem im Server-Render, damit der
+    // Knopf NIE ein leeres title/aria-label zeigt, bevor der erste Poll-Tick gelaufen ist.
+    expect($html)->toContain("schwebeTitel: 'Sprachbefehl (ziehbar)'");
 });
 
 it('die Sprechblase (drittes Element in agent-mount) zeigt Transkript + Antwort und öffnet beim Klick das Modal normal (nicht schwebend)', function () {

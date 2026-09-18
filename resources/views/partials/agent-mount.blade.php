@@ -35,8 +35,12 @@
         x: null, y: null,
         dragOffsetX: 0, dragOffsetY: 0, dragging: false, moved: false,
         // Live-Bruch 2026-09-18 (Punkt 3, erster Schritt Spec 54 »schwebender Begleiter«):
-        // Zustand am Knopf statt Modal-Aufreissen — GENAU vier Zustände (nichts Feineres).
+        // Zustand am Knopf statt Modal-Aufreissen. Live-Bruch 2026-09-18 (Folgefund): FÜNF
+        // Zustände statt vier — `pausiert` (nichts SCHIEFGELAUFEN, wartet nur auf einen Klick:
+        // keine Sprache erkannt ODER 3-Zyklen-Deckel) ist eigenständig von `fehler` (echter
+        // technischer Fehler), sonst zeigte der Knopf rot, obwohl serverseitig alles grün lief.
         schwebeStatus: 'wartet',
+        schwebeTitel: 'Sprachbefehl (ziehbar)',
         schwebeTranskript: null,
         schwebeAntwort: null,
         blaseSichtbar: false,
@@ -59,6 +63,7 @@
                     return;
                 }
                 this.schwebeStatus = z.status;
+                this.schwebeTitel = z.titel || 'Sprachbefehl (ziehbar)';
                 if (z.antwort && z.antwort !== this.schwebeAntwort) {
                     this.schwebeTranskript = z.transkript;
                     this.schwebeAntwort = z.antwort;
@@ -149,15 +154,19 @@
         <p class="text-[10px] text-gray-400 truncate" x-show="schwebeTranskript" x-text="schwebeTranskript"></p>
         <p class="text-xs text-gray-800 line-clamp-2" x-text="schwebeAntwort"></p>
     </div>
+    {{-- Live-Bruch 2026-09-18 (Folgefund): `pausiert` (amber/grau, KEIN Pulsieren — nichts ist
+         schiefgelaufen, es wartet nur auf einen Klick) ist eigenständig von `fehler` (rot). --}}
     <button type="button" x-ref="knopf" @mousedown="startDrag($event)" @click="oeffnen()"
             :class="{
                 'animate-pulse': schwebeStatus === 'hoert_zu',
                 'animate-bounce': schwebeStatus === 'spricht',
-                'bg-gradient-to-r from-violet-500 to-indigo-500': schwebeStatus !== 'fehler',
+                'bg-gradient-to-r from-violet-500 to-indigo-500': schwebeStatus === 'wartet' || schwebeStatus === 'hoert_zu' || schwebeStatus === 'spricht',
+                'bg-amber-500': schwebeStatus === 'pausiert',
                 'bg-rose-500': schwebeStatus === 'fehler',
             }"
             class="w-12 h-12 rounded-full text-white shadow-lg shadow-violet-500/30 flex items-center justify-center cursor-move select-none"
-            title="Sprachbefehl (ziehbar)" data-voice-float-button :data-voice-float-status="schwebeStatus">
+            :title="schwebeTitel" :aria-label="schwebeTitel"
+            data-voice-float-button :data-voice-float-status="schwebeStatus">
         @svg('heroicon-o-microphone', 'w-5 h-5')
     </button>
 </div>
