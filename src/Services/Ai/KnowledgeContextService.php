@@ -332,6 +332,16 @@ class KnowledgeContextService
                 $hauptzutatenQuelle = 'abgeleitet';
             }
             $parts[] = $this->zutatGroundingBlock($team, $zutatSlugs, $feature, (int) ($r->max_docs ?: 8), $filesUsed, $hauptzutatenQuelle);
+            // Fund (Orchestrierung, 2026-09-18, Live-PREVIEW nach Deploy 16): zutatDocs() nutzt jetzt
+            // nurSichtbar() statt nurFuerPrompt() (s. dort) — dieselben Zutaten-Dossiers (art=fachwissen)
+            // sind damit auch für die generische art-Discovery-Schleife weiter unten sichtbar. Ohne
+            // Ausschluss würde ein Dossier, das das Grounding gerade geladen hat, dort ein ZWEITES Mal
+            // gefunden und landete doppelt im Prompt. `$this->ausgeschlossen` ist genau der Kanal, den
+            // discoverGenericBlock() für sowas schon abfragt (bisher nur Kanon-Pflicht + `_exclude_slugs`).
+            $this->ausgeschlossen = array_values(array_unique([
+                ...$this->ausgeschlossen,
+                ...array_map(static fn ($f) => preg_replace('/@v\d+$/', '', $f), array_slice($filesUsed, $before)),
+            ]));
             $snap('zutat', $before);
         }
 
@@ -1886,9 +1896,24 @@ class KnowledgeContextService
      * `_`-Wildcard-Risiko in der Bedeutung), dann in PHP mit einem Regex verifizieren, der NUR einen
      * `_<Zahl>`-Anker-Suffix UND/ODER einen `-<Teil>`-Aspekt-Suffix erlaubt.
      */
+    /**
+     * ⚠ Bewusst `nurSichtbar()` + `geltendeDokumentIds()`, NICHT `nurFuerPrompt()` (Orchestrierung,
+     * 2026-09-18, Live-PREVIEW nach Deploy 16): `nurFuerPrompt()` blendet bei aktivem Arten-Routing
+     * (`$this->artenRoutingAktiv` — auf demo wahr, sobald fachwissen/referenz/datenwerk-Zeilen für
+     * das Feature existieren) ALLE Dokumente mit gesetztem `art` komplett aus, weil in dem Fall die
+     * `artRouting`-Schleife in `contextFor()` sie separat holt (dort mit `nurSichtbar()`, s.
+     * `discoverGenericBlock($team, $route->art, …, $art: $route->art)`). Zutaten-Dossiers tragen
+     * `art = fachwissen` (Regelwerk Zutaten-Dossier §8.2) — mit `nurFuerPrompt()` wurden sie für
+     * DIESEN deterministischen Slug-Lookup unsichtbar, obwohl dieselben Docs über die art-Discovery
+     * im selben Lauf gefunden wurden (`ohne_dossier` in der Herkunft trotz existierendem Dossier).
+     * Der Arten-Ausschluss ist ein Kategorie-Discovery-Konzept ("wer holt diese Docs generisch"),
+     * für einen gezielten Slug-Lookup falsch — `nurFuerPrompt()` selbst bleibt für alle anderen
+     * Aufrufer unangetastet.
+     */
     private function zutatDocs(?Team $team, string $anker, string $aspekt): \Illuminate\Support\Collection
     {
-        $base = DB::table('foodalchemist_knowledge_documents')->tap($this->nurFuerPrompt($team))
+        $base = DB::table('foodalchemist_knowledge_documents')->tap($this->nurSichtbar($team))
+            ->whereIn('id', $this->geltendeDokumentIds($team))
             ->where('category', 'zutat')->where('active', 1)->whereNull('deleted_at');
         $muster = '/^zutat\.'.preg_quote($anker, '/').'(_\d+)?--'.preg_quote($aspekt, '/').'(-[a-z0-9_]+)?$/u';
 

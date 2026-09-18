@@ -184,6 +184,62 @@ it('greift auch für recipe.steps ohne Caller-Slugs (RecipeOneShotService-Pfad)'
         ->and($ctx['herkunft']['zutat.acerola--verhalten@v1']['hauptzutaten_quelle'])->toBe('abgeleitet');
 });
 
+/**
+ * Fund (Orchestrierung, 2026-09-18, Live-PREVIEW nach Deploy 16): `zutatDocs()` nutzte
+ * `nurFuerPrompt()`, das bei aktivem Arten-Routing (fachwissen/referenz/datenwerk-Zeilen existieren
+ * für das Feature — auf demo für `recipe.steps` der Fall) ALLE Dokumente mit gesetztem `art`
+ * komplett ausblendet, weil die separate art-Discovery-Schleife sie holen soll. Zutaten-Dossiers
+ * tragen `art = fachwissen` (Regelwerk Zutaten-Dossier §8.2) — für den Grounding-Slug-Lookup wurden
+ * sie dadurch unsichtbar (`ohne_dossier`), obwohl dieselben Docs im selben Lauf über die
+ * art-Discovery gefunden wurden. Test-Fixture spiegelt exakt den demo-Stand: `art = fachwissen`
+ * AUF DEM DOSSIER UND eine aktive Arten-Routing-Zeile fürs Feature — ohne beides bleibt der Test
+ * grün, während demo rot ist (das ist der Fehler, der gerade passiert ist).
+ */
+it('findet Zutat-Dossiers auch bei aktivem Arten-Routing (art=fachwissen war unter nurFuerPrompt() unsichtbar)', function () {
+    ($this->mkAnker)('acerola', 'Acerola');
+    DB::table('foodalchemist_knowledge_documents')->insert([
+        'uuid' => (string) UuidV7::generate(), 'slug' => 'zutat.acerola--verhalten', 'title' => 'zutat.acerola--verhalten',
+        'category' => 'zutat', 'art' => 'fachwissen', 'content_md' => 'Acerola Verhalten unter Hitze und Saeure',
+        'version' => 1, 'content_hash' => hash('sha256', 'zutat.acerola--verhalten'), 'char_count' => 40,
+        'active' => 1, 'created_at' => now(), 'updated_at' => now(),
+    ]);
+    ($this->mkGroundingRouting)('recipe.steps');
+    // Arten-Routing aktiv wie auf demo: eine fachwissen-Zeile fuers selbe Feature.
+    DB::table('foodalchemist_knowledge_routings')->insert([
+        'feature' => 'recipe.steps', 'category' => '', 'art' => 'fachwissen', 'mode' => 'discovery',
+        'max_docs' => 3, 'max_chars_per_doc' => null, 'created_at' => now(), 'updated_at' => now(),
+    ]);
+
+    $ctx = app(KnowledgeContextService::class)->contextFor($this->rootTeam, 'recipe.steps', 'Acerola-Sirup', null, ['acerola']);
+
+    expect($ctx['files_used'])->toContain('zutat.acerola--verhalten@v1')
+        ->and($ctx['herkunft']['zutat.acerola--verhalten@v1']['status'] ?? null)->not->toBe('ohne_dossier');
+});
+
+it('laedt dasselbe Zutat-Dossier nicht doppelt, wenn Grounding UND die art-Discovery-Schleife es faenden', function () {
+    ($this->mkAnker)('acerola', 'Acerola');
+    DB::table('foodalchemist_knowledge_documents')->insert([
+        'uuid' => (string) UuidV7::generate(), 'slug' => 'zutat.acerola--verhalten', 'title' => 'zutat.acerola--verhalten',
+        'category' => 'zutat', 'art' => 'fachwissen', 'content_md' => 'Acerola Verhalten unter Hitze und Saeure — '.str_repeat('x', 400),
+        'version' => 1, 'content_hash' => hash('sha256', 'zutat.acerola--verhalten'), 'char_count' => 440,
+        'active' => 1, 'created_at' => now(), 'updated_at' => now(),
+    ]);
+    ($this->mkGroundingRouting)('recipe.steps');
+    DB::table('foodalchemist_knowledge_routings')->insert([
+        'feature' => 'recipe.steps', 'category' => '', 'art' => 'fachwissen', 'mode' => 'discovery',
+        'max_docs' => 3, 'max_chars_per_doc' => null, 'created_at' => now(), 'updated_at' => now(),
+    ]);
+
+    // Query enthaelt "acerola verhalten hitze saeure" -> dasselbe Dossier waere auch fuer die
+    // generische art-Discovery ein Treffer, wenn es nicht ausgeschlossen wuerde.
+    $ctx = app(KnowledgeContextService::class)->contextFor(
+        $this->rootTeam, 'recipe.steps', 'Acerola-Sirup mit Verhalten unter Hitze und Saeure', null, ['acerola'],
+    );
+
+    $treffer = array_count_values($ctx['files_used']);
+    expect($treffer['zutat.acerola--verhalten@v1'] ?? 0)->toBe(1);
+});
+
 it('markiert Caller-gelieferte Hauptzutaten weiterhin als "caller", keine Vermischung mit der Ableitung', function () {
     ($this->mkAnker)('acerola', 'Acerola');
     ($this->mkZutatDoc)('zutat.acerola--verwendung', 'Acerola Verwendung');
