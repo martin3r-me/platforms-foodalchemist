@@ -320,6 +320,18 @@ class VoiceCommandService
             . 'GENANNTEN Felder, NIE ein ganzes Objekt zurückschreiben — alles Ungenannte bleibt unangetastet. '
             . 'Nennt der Befehl eine Menge/Zahl mit Einheit (z. B. „200 Gramm Butter"), wiederhole sie im '
             . 'finalen Antworttext wörtlich, damit der Nutzer sie gegenlesen kann. ';
+        // Live-Bruch Dominique (2026-09-18, Punkt d): im Konversations-Modus lief eine Endlos-
+        // Schleife, weil das Modell auf ein Transkript aus Hintergrundrauschen/unklarem Gemurmel
+        // trotzdem eine muntere Füllantwort gab ("Alles klar, ich warte auf deinen nächsten
+        // Befehl"), die vorgelesen wurde und den nächsten automatischen Zyklus auslöste. Die
+        // clientseitige VAD-Schwelle (Stufe 3B) fängt STILLE zuverlässig ab — dieser Hinweis ist
+        // die zweite Sicherung für den Fall, dass ETWAS akustisch als Sprache durchkam, aber die
+        // Transkription selbst kein sinnvoller Befehl ist.
+        $rauschHinweis = 'WIRKT DAS TRANSKRIPT WIE RAUSCHEN/UNKLARES GEMURMEL/EIN EINZELNES UNVERSTÄNDLICHES '
+            . 'WORT OHNE ERKENNBAREN BEFEHL: KEINE muntere Füllantwort ("Alles klar, ich warte …", "Wie kann '
+            . 'ich helfen?" o. ä.) — antworte stattdessen NUR mit dem einen Wort „wartet" als finalen Text, '
+            . 'ohne jedes Tool aufzurufen. Ein kurzer, aber ERKENNBARER Befehl (auch unvollständig) ist davon '
+            . 'NICHT betroffen — im Zweifel gilt ein Transkript als Befehl, nicht als Rauschen. ';
         $resultat = $this->ki->callWithTools(
             "Sprachbefehl des Users (Deutsch, Kurz-Audio-Transkript): \"{$transcript}\"{$kontextHinweis}{$verlaufHinweis}",
             $toolsFuerModus,
@@ -329,7 +341,7 @@ class VoiceCommandService
                 'arg_guard' => [self::class, 'entschaerfeArgumente'],
                 'intercept' => $intercept,
                 'zeitbudget_ms' => self::ZEITBUDGET_MS,
-                'system_zusatz' => $modusHinweis . ' ' . $schreibHinweis . 'Du steuerst den GANZEN FoodAlchemist (Rezepte, Gerichte, Concepter, Foodbook, '
+                'system_zusatz' => $modusHinweis . ' ' . $schreibHinweis . $rauschHinweis . 'Du steuerst den GANZEN FoodAlchemist (Rezepte, Gerichte, Concepter, Foodbook, '
                     . 'Speisekarte, Speiseplan, Bestellwesen, Lieferanten). Der Katalog unten ist nur der Einstieg: '
                     . 'fehlt dir ein Werkzeug, suche es mit tool_registry.SEARCH und rufe es direkt auf. '
                     . 'Suche IMMER mit name_glob "foodalchemist.*" (z. B. {"query":"foodbook kapitel",'
@@ -419,6 +431,16 @@ class VoiceCommandService
     private function interceptor(string $modus): callable
     {
         return function (string $name, array $arguments, object $tool, \Platform\Core\Contracts\ToolContext $context) use ($modus) {
+            // Live-Bruch Dominique (2026-09-18): OHNE diese Modul-Grenze fängt der Interceptor
+            // JEDEN Aufruf ab, auch `tool_registry.SEARCH/GET` (Core, kein FA-Tool) — die haben
+            // kein FA-Metadatum, also ist `read_only` dort NIE `true`, und der Agent verlor die
+            // Fähigkeit, überhaupt ein Werkzeug zu FINDEN (jede Suche wurde zur sinnlosen
+            // Schreib-Karte „SEARCH: tool_registry.SEARCH — bitte bestätigen"). Die Policy
+            // (`str_starts_with($name,'foodalchemist.')`) erlaubt Registry/Core-Tools schon
+            // regulär — der Interceptor darf sie NICHT zusätzlich abfangen.
+            if (! str_starts_with($name, 'foodalchemist.')) {
+                return null;
+            }
             $meta = method_exists($tool, 'getMetadata') ? (array) $tool->getMetadata() : [];
             if (($meta['read_only'] ?? null) === true) {
                 return null;                                            // liest nur — normal ausführen

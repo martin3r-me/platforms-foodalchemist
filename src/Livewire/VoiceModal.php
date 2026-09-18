@@ -318,7 +318,13 @@ class VoiceModal extends Component
         // Spec 53 / Paket F (3): Konversations-Modus liest die Antwort vor, wenn das Team-Setting
         // an ist. NICHT bei einer Navigation — der Ton würde auf der Seite ankommen, die der Nutzer
         // gerade verlässt (`redirect()` plant den Wechsel, hält die Methode aber nicht an).
-        if (! $navigiert) {
+        // Live-Bruch Dominique (2026-09-18, Punkt d): NICHT bei "wartet" — das ist das verabredete
+        // Signal des Systemprompts für Rauschen/unklares Gemurmel (VoiceCommandService), STUMM
+        // bleiben heisst hier auch: keine Sprachausgabe, sonst hätte der Agent sich selbst wieder
+        // "wartet" vorgelesen und (über den auf die Wiedergabe folgenden Auto-Zyklus) trotzdem
+        // weitergehört, ohne dass echte Sprache da war.
+        $istWartetSignal = $this->ergebnis['text'] !== null && mb_strtolower(trim((string) $this->ergebnis['text'])) === 'wartet';
+        if (! $navigiert && ! $istWartetSignal) {
             $this->sprichWennAktiviert((string) $this->ergebnis['text']);
         }
     }

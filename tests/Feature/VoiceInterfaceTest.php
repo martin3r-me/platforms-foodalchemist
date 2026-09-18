@@ -797,3 +797,141 @@ it('andere Modale (z. B. ein GP-Editor) bleiben bei z-[100] — zFest ist additi
 
     expect($html)->toContain('z-[100]')->not->toContain('z-[190]');
 });
+
+/**
+ * Live-Bruch nach PR #116 (Deploy 8): vier JS-Kommentarzeilen INNERHALB von `x-data="…"` in
+ * voice-modal.blade.php enthielten geradeaus-Anführungszeichen (") — ein HTML-Attribut endet
+ * beim ERSTEN `"`, egal ob es aus Blade/PHP oder rohem Text stammt. Das Attribut riss dort ab,
+ * Alpine bekam nur noch ein Bruchstück-Objekt und fiel für das GANZE Modal aus (Code als
+ * Klartext sichtbar, schwebender Knopf komplett weg). 148 grüne Tests vorher hatten das NICHT
+ * gesehen: `Livewire::test()->html()` prüft Textinhalt/Marker, kein Attribut-Parsing wie ein
+ * echter Browser. Dieser Wächter tut GENAU das — ein HTML-Attribut-Parser in Miniatur.
+ */
+it('WÄCHTER: jedes x-data="…" im gerenderten Voice-Modal ist eine VOLLSTÄNDIGE JS-Klammer — kein " reisst es ab', function () {
+    config(['foodalchemist.stt.provider' => 'openai', 'services.openai.api_key' => 'sk-test']);
+    $html = Livewire::test(VoiceModal::class)->html();
+
+    // Exakt wie ein HTML-Parser: das Attribut endet beim ERSTEN ", ganz gleich was davor stand.
+    preg_match_all('/x-data="([^"]*)"/s', $html, $treffer);
+    expect($treffer[1])->not->toBeEmpty();
+
+    foreach ($treffer[1] as $i => $inhalt) {
+        // Ein abgerissenes Attribut endet mitten in einem Kommentar/Bezeichner, nicht auf der
+        // schliessenden Klammer des Objekt-Literals.
+        expect(rtrim($inhalt))->toEndWith('}');
+    }
+
+    // Das GRÖSSTE, am meisten kommentierte Objekt (der Recorder) muss den LETZTEN definierten
+    // Bezeichner wirklich enthalten — ein Abriss mitten in den Kommentaren fehlte GENAU hier,
+    // weil das Attribut lange vorher endete (das war der reale Bruch).
+    $recorderData = collect($treffer[1])->first(fn ($t) => str_contains($t, 'initKonversation'));
+    expect($recorderData)->not->toBeNull()
+        ->and($recorderData)->toContain('_nachDemSprechen')
+        ->and($recorderData)->toContain('_sprachausgabeFallback');
+});
+
+it('WÄCHTER: dasselbe für agent-mount.blade.php — jedes x-data="…" ist eine VOLLSTÄNDIGE JS-Klammer', function () {
+    $html = view('foodalchemist::partials.agent-mount')->render();
+
+    preg_match_all('/x-data="([^"]*)"/s', $html, $treffer);
+    expect($treffer[1])->not->toBeEmpty();
+
+    foreach ($treffer[1] as $inhalt) {
+        expect(rtrim($inhalt))->toEndWith('}');
+    }
+
+    $floatData = collect($treffer[1])->first(fn ($t) => str_contains($t, 'startDrag'));
+    expect($floatData)->not->toBeNull()
+        ->and($floatData)->toContain('oeffnen')
+        ->and($floatData)->toContain('stopDrag');
+});
+
+/*
+ * Live-Bruch Dominique (2026-09-18, Punkt 2): Endlos-Schleife im Konversations-Modus, nicht
+ * stoppbar. VAD/Audio-Timing selbst lässt sich ohne echten Browser nicht ausführen — diese Tests
+ * pinnen, was Pest MESSEN kann: dass die Sicherungen im Markup/Quelltext wirklich verdrahtet
+ * sind (Stopp überall, Sicherheitsdeckel, kein Upload/Wiedereinstieg ohne erkannte Sprache).
+ */
+
+it('stopAlles(): räumt Recorder, TTS-Audio UND speechSynthesis ab und pausiert die Konversation', function () {
+    $blade = file_get_contents(__DIR__ . '/../../resources/views/livewire/voice-modal.blade.php');
+
+    $zeile = collect(explode("\n", $blade))->first(fn ($z) => str_contains($z, 'stopAlles()'));
+    expect($zeile)->not->toBeNull();
+
+    expect($blade)->toContain('window.speechSynthesis.cancel()')
+        ->and($blade)->toContain('audio.pause()')
+        ->and($blade)->toContain('this.konversationPausiert = true')
+        ->and($blade)->toContain('@keydown.window.escape="stopAlles()"');   // ESC stoppt überall
+});
+
+it('der Stopp-/Aufnahme-Knopf reagiert auf hört-zu/sendet/spricht gemeinsam, nicht nur auf "laeuft"', function () {
+    $blade = file_get_contents(__DIR__ . '/../../resources/views/livewire/voice-modal.blade.php');
+
+    $zeile = collect(explode("\n", $blade))
+        ->first(fn ($z) => str_contains($z, '? stopAlles() : (autoZyklen'));
+    expect($zeile)->not->toBeNull()
+        ->and($zeile)->toContain('hochladenLaeuft')
+        ->and($zeile)->toContain('fallbackAktiv')
+        ->and($zeile)->toContain('$wire.sprichtGerade');
+});
+
+it('Sicherheitsdeckel: nach 3 automatischen Zyklen pausiert die Konversation statt endlos weiterzuhören', function () {
+    $blade = file_get_contents(__DIR__ . '/../../resources/views/livewire/voice-modal.blade.php');
+
+    $zeile = collect(explode("\n", $blade))->first(fn ($z) => str_contains($z, 'this.autoZyklen >= 3'));
+    expect($zeile)->not->toBeNull();
+
+    // Der Zähler zählt JEDEN automatischen Zyklus (nicht nur stille) und wird NUR bei einem
+    // echten Nutzer-Klick zurückgesetzt (autostart-Listener) — sonst könnte eine Kette echter
+    // Antworten den Deckel umgehen.
+    expect($blade)->toContain('this.autoZyklen++')
+        ->and($blade)->toContain('this.autoZyklen = 0');
+});
+
+it('VAD "keine Sprache erkannt": kein Upload, kein automatischer Wiedereinstieg', function () {
+    $js = file_get_contents(__DIR__ . '/../../resources/js/voice-recorder/index.js');
+
+    $zeile = collect(explode("\n", $js))
+        ->first(fn ($z) => str_contains($z, "this.vad && this._vadState === 'warten'"));
+    expect($zeile)->not->toBeNull();
+
+    // Der Guard muss VOR dem Upload-Aufruf stehen und dort mit `return` aussteigen — sonst würde
+    // der Code darunter (Mindestdauer-Check, `$wire.upload(...)`) trotzdem noch laufen.
+    $zeilen = explode("\n", $js);
+    $guardIndex = null;
+    $uploadIndex = null;
+    foreach ($zeilen as $i => $z) {
+        if ($guardIndex === null && str_contains($z, "this.vad && this._vadState === 'warten'")) {
+            $guardIndex = $i;
+        }
+        if ($uploadIndex === null && str_contains($z, '$wire.upload(')) {
+            $uploadIndex = $i;
+        }
+    }
+    expect($guardIndex)->not->toBeNull()->and($uploadIndex)->not->toBeNull()
+        ->and($guardIndex)->toBeLessThan($uploadIndex);
+});
+
+it('schwebender Knopf: ein Klick WÄHREND eines laufenden Zyklus stoppt, statt erneut zu öffnen', function () {
+    $agentMount = file_get_contents(__DIR__ . '/../../resources/views/partials/agent-mount.blade.php');
+
+    $zeile = collect(explode("\n", $agentMount))
+        ->first(fn ($z) => str_contains($z, 'window.FaVoiceKonversationAktiv && window.FaVoiceStopAlles'));
+    expect($zeile)->not->toBeNull();
+
+    // Der Stopp-Zweig muss VOR dem Öffnen-Dispatch geprüft werden, sonst würde immer erst
+    // erneut geöffnet, bevor überhaupt gestoppt werden könnte.
+    $stoppIndex = null;
+    $oeffnenIndex = null;
+    foreach (explode("\n", $agentMount) as $i => $z) {
+        if ($stoppIndex === null && str_contains($z, 'FaVoiceStopAlles();')) {
+            $stoppIndex = $i;
+        }
+        if ($oeffnenIndex === null && str_contains($z, "\$dispatch('voice-modal.oeffnen', { autostart: true })")) {
+            $oeffnenIndex = $i;
+        }
+    }
+    expect($stoppIndex)->not->toBeNull()->and($oeffnenIndex)->not->toBeNull()
+        ->and($stoppIndex)->toBeLessThan($oeffnenIndex);
+});

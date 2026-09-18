@@ -170,9 +170,11 @@
       _startedAt: 0,
       _vadState: 'warten',                                            // 'warten' | 'spricht' | 'still'
       _vadStilleSeit: null,
+      keineSpracheErkannt: false,                                     // Live-Bruch 2026-09-18: für die "wartet"-Statuszeile
 
       async start() {
         this.fehler = null;
+        this.keineSpracheErkannt = false;
         if (this.laeuft) {
           return;
         }
@@ -252,6 +254,21 @@
       _verarbeiteAufnahme(mime) {
         var dauerMs = Date.now() - this._startedAt;
         var blob = new Blob(this.chunks, { type: mime || 'audio/webm' });
+        // Live-Bruch Dominique (2026-09-18): im Konversations-Modus lief eine 20-s-Stille bisher
+        // bis zum harten `maxMs`-Timeout, wurde DANN trotzdem hochgeladen (Rauschen/Stille als
+        // "Befehl"), das Modell antwortete mit einer Füllantwort ("Alles klar, ich warte..."),
+        // die Antwort wurde vorgelesen, danach hörte der Recorder automatisch WIEDER zu — alle
+        // ~30 s, ohne dass ein Klick etwas daran änderte. Diese Prüfung greift VOR dem Upload:
+        // wurde die Sprech-Schwelle in der ganzen Aufnahme NIE überschritten (`_vadState` blieb
+        // 'warten'), ist es keine Sprache — kein Upload, kein Server-Roundtrip, KEIN automatischer
+        // Wiedereinstieg (der hängt am `verstehen()`/`sprechen()`-Zyklus, der hier gar nicht erst
+        // beginnt). Nur im VAD-Modus relevant — der Ein-Klick-Modus lädt weiter wie bisher hoch.
+        if (this.vad && this._vadState === 'warten') {
+          this._raeumeAuf();
+          this.keineSpracheErkannt = true;
+
+          return;
+        }
         this._raeumeAuf();
 
         if (dauerMs < minMs || blob.size === 0) {
