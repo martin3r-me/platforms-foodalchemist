@@ -95,3 +95,16 @@ it('die Einstellungs-Views tragen keine Emoji-Marker mehr in Bedienelementen', f
 
     expect($treffer)->toBe([]);
 });
+
+/**
+ * Live-Befund Dominique (2026-09-18): die KI-Kachel nannte den Sprachbefehl mit keinem Wort
+ * (nur „Provider · Tiering (V-01) · Nutzung · Kill-Switch (M7-08)") — Agenten-Modus/dauerhaft
+ * aktiv/Vorlesen liegen zwar seit Spec 53/F Stufe 1–4 alle unter dieser Sektion, waren über die
+ * Übersicht aber nicht auffindbar.
+ */
+it('die KI-Kachel nennt den Sprachbefehl (Agenten-Modus/dauerhaft aktiv/Vorlesen) im Hint', function () {
+    expect(Einstellungen::SEKTIONEN['ki']['hint'])->toContain('Sprachbefehl');
+
+    $html = Livewire::test(Einstellungen::class)->html();
+    expect($html)->toContain('Sprachbefehl (Agenten-Modus, dauerhaft aktiv, Vorlesen)');
+});
