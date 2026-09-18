@@ -542,6 +542,34 @@ class KnowledgeContextService
         return DB::table('foodalchemist_knowledge_documents')->tap($this->nurSichtbar($team));
     }
 
+    /**
+     * Kanon-Text für einen Prompt-Key, ohne Discovery/Budget-Riegel — für Aufrufer, die NICHT über
+     * `propose()`/`contextFor()` laufen (Spec 53 Bildstil-Dossier: der Bild-Dienst geht direkt an
+     * Core `ImageGenerationService`, nie durch den Gateway). Nimmt denselben Weg wie
+     * `AiGatewayService::selectKanon()` (`KnowledgeCanonService::documentsFor()` + `KnowledgeCanonText`),
+     * aber NUR Pflicht-Dokumente (kein optionales „wenn Platz" — ohne Budget-Riegel gäbe es keine
+     * Grenze, ab der „wenn_platz" aufhört) und ohne das GL-13-Retrieval/Discovery drumherum.
+     *
+     * @return array{text: ?string, files_used: list<string>}
+     */
+    public function kanonTextFuer(?Team $team, string $promptKey): array
+    {
+        if ($team === null || ! Schema::hasTable('foodalchemist_knowledge_canon')) {
+            return ['text' => null, 'files_used' => []];
+        }
+
+        $rows = app(KnowledgeCanonService::class)->documentsFor('prompt_key', $promptKey, $team)
+            ->filter(fn ($doc) => (string) $doc->mode === 'pflicht');
+        if ($rows->isEmpty()) {
+            return ['text' => null, 'files_used' => []];
+        }
+
+        $text = KnowledgeCanonText::block($rows->map(fn ($doc) => KnowledgeCanonText::document($doc))->values()->all());
+        $slugs = $rows->map(fn ($doc) => "{$doc->slug}@v{$doc->version}")->values()->all();
+
+        return ['text' => $text !== '' ? $text : null, 'files_used' => $slugs];
+    }
+
     private function nurSichtbar(?Team $team, string $spalte = 'team_id'): \Closure
     {
         if (! (bool) config('foodalchemist.knowledge_team_scope', false)) {

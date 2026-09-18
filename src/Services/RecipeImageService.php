@@ -5,6 +5,7 @@ namespace Platform\FoodAlchemist\Services;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Platform\Core\Models\ContextFile;
@@ -16,6 +17,7 @@ use Platform\FoodAlchemist\Livewire\Recipes\StepEditor;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeStep;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeStepPhoto;
+use Platform\FoodAlchemist\Services\Ai\KnowledgeContextService;
 
 /**
  * KI-Fotos für ein Rezept (Preisfrage-Feature): ein Produktfoto (Endergebnis) + je Zubereitungsschritt
@@ -49,6 +51,15 @@ class RecipeImageService
     public const FEATURE_SCHRITTFOTOS = 'recipe.step_photos';
 
     public const BILD_FEATURES = [self::FEATURE_PRODUKTFOTO, self::FEATURE_SCHRITTFOTOS];
+
+    /**
+     * Kappung für gebundene Bildstil-Dossiers (Spec 53, Stand 2026-09-24). Kein dokumentiertes
+     * Prompt-Limit im Core-Bilddienst gefunden (weder `ImageGenerationService` noch der
+     * OpenAI-Provider prüfen/begrenzen `$prompt` — nur `strlen()` wird geloggt) — konservativer
+     * Deckel statt eines geratenen Providerwerts. Wird an einer Absatzgrenze gekappt, nicht
+     * mitten im Satz.
+     */
+    private const STIL_MAX_CHARS = 4000;
 
     /**
      * Produktfoto + je Schritt ein Foto. Jedes Bild einzeln abgesichert (ein Fehler kippt den Rest
@@ -300,18 +311,57 @@ class RecipeImageService
             .'image of this recipe — they are one series, not separate photos.';
     }
 
+    /**
+     * Stil-Block für einen Bild-Prompt — {@see stilAnker} plus (sofern übergeben) einen
+     * feature-eigenen Fallback-Style-Satz, ERSETZT vollständig durch ein am Prompt-Key
+     * gebundenes Wissens-Dossier (Kanon, Pflicht-Dokumente — {@see KnowledgeContextService::kanonTextFuer}).
+     * Ohne Bindung bleibt der Prompt inhaltlich wie zuvor (Fallback = stilAnker + Fallback-Style-Satz).
+     * `$fallbackStyleSuffix` bleibt LEER bei produktFoto (kein eigener „Style rules"-Satz dort) —
+     * die je Aufrufer unterschiedlichen INHALTS-Regeln (welcher Fertigungszustand gezeigt werden
+     * darf) bleiben immer im Code, sie sind Logik, kein Stil.
+     */
+    /** @param list<string> $filesUsed OUT: gebundene Kanon-Dossiers (slug@version) — leer ohne Bindung. */
+    public function stilBlock(Team $team, FoodAlchemistRecipe $recipe, string $feature, string $fallbackStyleSuffix = '', array &$filesUsed = []): string
+    {
+        $kanon = app(KnowledgeContextService::class)->kanonTextFuer($team, $feature);
+        if ($kanon['text'] !== null) {
+            $filesUsed = $kanon['files_used'];
+
+            return $this->kappeAnAbsatzgrenze($kanon['text'], self::STIL_MAX_CHARS);
+        }
+
+        $filesUsed = [];
+        $anker = $this->stilAnker($recipe);
+
+        return $fallbackStyleSuffix !== '' ? $anker."\n".$fallbackStyleSuffix : $anker;
+    }
+
+    /** Kappt an der letzten vollständigen Absatzgrenze (Doppel-Zeilenumbruch) im Limit — nie mitten im Satz. */
+    private function kappeAnAbsatzgrenze(string $text, int $maxChars): string
+    {
+        if (mb_strlen($text) <= $maxChars) {
+            return $text;
+        }
+        $geschnitten = mb_substr($text, 0, $maxChars);
+        $letzterAbsatz = mb_strrpos($geschnitten, "\n\n");
+
+        return $letzterAbsatz !== false && $letzterAbsatz > 0 ? mb_substr($geschnitten, 0, $letzterAbsatz) : $geschnitten;
+    }
+
     /** Ein Foto des fertig angerichteten Gerichts (Hero/Endergebnis, ohne Schritt-Kopplung → is_result). */
     public function produktFoto(Team $team, FoodAlchemistRecipe $recipe): FoodAlchemistRecipeStepPhoto
     {
         // Englisch und mit demselben Anker wie die Schritte: der Hero ist Bild 0 derselben Serie,
         // nicht ein Bild aus einer anderen Welt. Vorher war dies der einzige deutsche Prompt ohne
         // jede Stilregel — entsprechend passte er zu keinem Schrittbild.
+        $stilFiles = [];
+        $stilBlock = $this->stilBlock($team, $recipe, self::FEATURE_PRODUKTFOTO, filesUsed: $stilFiles);
         $prompt = trim('Photorealistic professional food photo of the finished, plated dish «'.$recipe->name.'». '
             .mb_strimwidth((string) ($recipe->description ?? ''), 0, 280)
-            ."\n\n".$this->stilAnker($recipe)
+            ."\n\n".$stilBlock
             ."\n\nNo people, no hands, no text, no labels, no logos, no packaging.");
 
-        return $this->generiereFoto($team, $recipe, $prompt, 'KI-Produktfoto', 0, true, self::FEATURE_PRODUKTFOTO, null);
+        return $this->generiereFoto($team, $recipe, $prompt, 'KI-Produktfoto', 0, true, self::FEATURE_PRODUKTFOTO, null, $stilFiles);
     }
 
     /** Ein Foto zu einem Zubereitungsschritt (an den Schritt gehängt). Rückgabe: true = Foto erzeugt,
@@ -322,18 +372,22 @@ class RecipeImageService
         if ($text === '') {
             return false;
         }
-        $prompt = $this->schrittPrompt($recipe, $step);
+        $stilFiles = [];
+        $prompt = $this->schrittPrompt($team, $recipe, $step, filesUsed: $stilFiles);
 
-        $foto = $this->generiereFoto($team, $recipe, $prompt, 'KI-Foto: Schritt '.$step->position, (int) $step->position * 10, false, self::FEATURE_SCHRITTFOTOS, (int) $step->id);
+        $foto = $this->generiereFoto($team, $recipe, $prompt, 'KI-Foto: Schritt '.$step->position, (int) $step->position * 10, false, self::FEATURE_SCHRITTFOTOS, (int) $step->id, $stilFiles);
         $step->photos()->syncWithoutDetaching([$foto->id => ['position' => 1]]);
 
         return true;
     }
 
-    /** Eine zentrale Prompt-Wahrheit für Planung, Rezept-/Gerichte-Editor und MCP. */
-    public function schrittPrompt(FoodAlchemistRecipe $recipe, FoodAlchemistRecipeStep $step): string
+    /**
+     * Eine zentrale Prompt-Wahrheit für Planung, Rezept-/Gerichte-Editor und MCP.
+     *
+     * @param  list<string>  $filesUsed  OUT: gebundene Kanon-Dossiers (slug@version) — leer ohne Bindung.
+     */
+    public function schrittPrompt(Team $team, FoodAlchemistRecipe $recipe, FoodAlchemistRecipeStep $step, array &$filesUsed = []): string
     {
-        $anker = $this->stilAnker($recipe);
         $zutaten = $recipe->ingredients->pluck('raw_text')->take(20)->filter()->implode(', ');
         $alleSchritte = FoodAlchemistRecipeStep::where('recipe_id', $recipe->id)
             ->orderBy('position')->orderBy('id')
@@ -342,6 +396,10 @@ class RecipeImageService
             ->implode("\n");
 
         if ($recipe->is_sales_recipe) {
+            $stilBlock = $this->stilBlock($team, $recipe, self::FEATURE_SCHRITTFOTOS,
+                'Style rules: realistic food photography, clean professional gastro containers and plating tools, no people, no hands, no faces, no text, no labels, no logos, no packaging, no surreal props.',
+                $filesUsed);
+
             return trim(<<<PROMPT
 Photorealistic professional restaurant kitchen service and plating process photo.
 Dish: {$recipe->name}
@@ -355,10 +413,14 @@ Full service sequence for continuity only:
 
 Dish rules: all recipe components are already professionally prepared. Never show their production from raw ingredients. Show only the current action: mise en place for service, regeneration, final seasoning, portioning, assembly, saucing, garnishing or plating as stated. Show one coherent serving of this exact dish and the food state immediately after the current action. If the step contains alternatives such as "or", show only the first stated method; never show multiple alternatives in parallel. Do not invent extra components, garnishes, tableware or processing stages.
 
-{$anker}
-Style rules: realistic food photography, clean professional gastro containers and plating tools, no people, no hands, no faces, no text, no labels, no logos, no packaging, no surreal props. Do not show a finished plated dish before the plating or finishing step.
+{$stilBlock}
+Do not show a finished plated dish before the plating or finishing step.
 PROMPT);
         }
+
+        $stilBlock = $this->stilBlock($team, $recipe, self::FEATURE_SCHRITTFOTOS,
+            'Style rules: realistic food photography, clean gastro containers and pans, no people, no hands, no faces, no text, no labels, no logos, no packaging, no surreal props.',
+            $filesUsed);
 
         return trim(<<<PROMPT
 Photorealistic professional catering kitchen process photo.
@@ -373,12 +435,13 @@ Full step sequence for continuity only:
 
 Content rules: show only the current step, as one unambiguous action, and the food state immediately after that action. Use only ingredients, tools and containers relevant to this step. Do not depict actions from earlier or later steps. If the step contains alternatives such as "or", show only the first stated method; never show multiple alternative methods in parallel. Do not invent additional ingredients, garnishes, vessels or processing stages.
 
-{$anker}
-Style rules: realistic food photography, clean gastro containers and pans, no people, no hands, no faces, no text, no labels, no logos, no packaging, no surreal props. Show the food state of this step, not the final plated dish unless the step is plating or finishing.
+{$stilBlock}
+Show the food state of this step, not the final plated dish unless the step is plating or finishing.
 PROMPT);
     }
 
-    private function generiereFoto(Team $team, FoodAlchemistRecipe $recipe, string $prompt, string $caption, int $sort, bool $isResult, string $feature, ?int $stepId): FoodAlchemistRecipeStepPhoto
+    /** @param list<string> $stilFilesUsed gebundene Kanon-Dossiers (slug@version) — leer ohne Bindung. */
+    private function generiereFoto(Team $team, FoodAlchemistRecipe $recipe, string $prompt, string $caption, int $sort, bool $isResult, string $feature, ?int $stepId, array $stilFilesUsed = []): FoodAlchemistRecipeStepPhoto
     {
         $started = microtime(true);
         $result = app(ImageGenerationService::class)->generateAndStore(
@@ -404,16 +467,24 @@ PROMPT);
             'is_result' => $isResult,
         ]);
 
-        $this->logCall($team, $recipe, $prompt, $feature, $started, $stepId, (int) $foto->id);
+        $this->logCall($team, $recipe, $prompt, $feature, $started, $stepId, (int) $foto->id, $stilFilesUsed);
 
         return $foto;
     }
 
-    /** Kosten-/Nutzungs-Log (fail-soft — Logging-Fehler darf die Bild-Erzeugung nie kippen). */
-    private function logCall(Team $team, FoodAlchemistRecipe $recipe, string $prompt, string $feature, float $started, ?int $stepId, int $photoId): void
+    /**
+     * Kosten-/Nutzungs-Log (fail-soft — Logging-Fehler darf die Bild-Erzeugung nie kippen).
+     * `knowledge_used` spiegelt dasselbe Feld der Text-Calls (GL-13 §6, slug@version-Liste) —
+     * damit zeigt der Kontext-Inspektor auch am Bild-Call, welches Stil-Dossier gewirkt hat.
+     * `knowledge_channels` bleibt bewusst leer: Kanon-Bindungen fliessen auch beim Gateway NICHT
+     * in diese Spalte (nur die Discovery-Kanäle cross_cutting/domain/… tun das, s. AiGatewayService).
+     *
+     * @param  list<string>  $stilFilesUsed
+     */
+    private function logCall(Team $team, FoodAlchemistRecipe $recipe, string $prompt, string $feature, float $started, ?int $stepId, int $photoId, array $stilFilesUsed = []): void
     {
         try {
-            DB::table('foodalchemist_ai_call_log')->insert([
+            $values = [
                 'uuid' => (string) Str::orderedUuid(),
                 'team_id' => $team->id,
                 'user_id' => Auth::id(),
@@ -430,7 +501,11 @@ PROMPT);
                 'elapsed_ms' => (int) round((microtime(true) - $started) * 1000),
                 'created_at' => now(),
                 'updated_at' => now(),
-            ]);
+            ];
+            if ($stilFilesUsed !== [] && Schema::hasColumn('foodalchemist_ai_call_log', 'knowledge_used')) {
+                $values['knowledge_used'] = json_encode($stilFilesUsed);
+            }
+            DB::table('foodalchemist_ai_call_log')->insert($values);
         } catch (\Throwable) {
             // Log ist Beiwerk — nie blockierend.
         }

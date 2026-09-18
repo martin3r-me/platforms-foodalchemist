@@ -214,8 +214,8 @@ it('nutzt zentral getrennte Bild-Prompts fuer Basisrezept-Produktion und Gericht
     $gerichtStep = FoodAlchemistRecipeStep::where('recipe_id', $gericht->id)->firstOrFail();
 
     $bilder = app(RecipeImageService::class);
-    $basisPrompt = $bilder->schrittPrompt($this->rezept, $basisStep);
-    $gerichtPrompt = $bilder->schrittPrompt($gericht, $gerichtStep);
+    $basisPrompt = $bilder->schrittPrompt($this->rootTeam, $this->rezept, $basisStep);
+    $gerichtPrompt = $bilder->schrittPrompt($this->rootTeam, $gericht, $gerichtStep);
 
     expect($basisPrompt)
         ->toContain('professional catering kitchen process photo')

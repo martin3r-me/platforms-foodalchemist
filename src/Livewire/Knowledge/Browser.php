@@ -651,7 +651,15 @@ class Browser extends Component
                 : collect(app(\Platform\FoodAlchemist\Services\Knowledge\KnowledgeCanonService::class)
                     ->list($kanonTeam, 'prompt_key', null, null, includeInactive: true))
                     ->where('slug', $selected->slug)->sortBy('scope_key')->values()->all(),
-            'promptKeys' => array_keys((array) config('foodalchemist.prompts', [])),
+            // Bild-Feature-Keys (recipe.product_photo/recipe.step_photos) stehen NICHT in der
+            // Prompt-Registry (sie brauchen kein 'task' — PromptRegistryTest würde das voraussetzen,
+            // s. Settings/Ki.php „auditOhnePrompt") und tauchen darum hier separat auf. Diese Liste
+            // ist ohnehin nur UI-Bequemlichkeit: `kanonAdd()`/`KnowledgeCanonPutTool` validieren
+            // scope_key NICHT gegen die Registry, jeder String ≤64 Zeichen wäre serverseitig bindbar.
+            'promptKeys' => array_merge(
+                array_keys((array) config('foodalchemist.prompts', [])),
+                \Platform\FoodAlchemist\Services\RecipeImageService::BILD_FEATURES,
+            ),
             // Kanon setzen ist KURATION, nicht Inhalts-Edit: es geht auch an geerbtem
             // Master-/Vault-Wissen (der Doc-Inhalt wird nicht angefasst) — anders als
             // `$editable`, das Besitz verlangt. Die harten Regeln (Tenancy, global nur
