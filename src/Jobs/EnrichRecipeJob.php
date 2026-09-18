@@ -8,6 +8,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Platform\Core\Models\Team;
@@ -37,6 +38,16 @@ use Platform\FoodAlchemist\Services\RecipeOneShotService;
  * (ohne Voll-Anreicherung), z. B. nach `deferred.bilder=failed` über den Cockpit-Knopf „neu erzeugen"
  * ({@see \Platform\FoodAlchemist\Services\PlanningCascadeService::reBilder}). Ersetzt die alten
  * KI-Fotos statt sie anzuhäufen (manuelle Uploads bleiben) und lässt `deferred.enrich` unangetastet.
+ *
+ * Spec 53 Bildstil-Dossier/Produktfoto-Knopf — »nur Produktfoto«-Modus (`$nurProduktfoto`): erzeugt
+ * AUSSCHLIESSLICH das Hero-Foto ({@see RecipeImageService::produktFoto}), keine Schrittfotos, keine
+ * Anreicherung. Ausgelöst vom Rezept-/VK-Modal — DORT gibt es keinen `$stepId` (die Modals editieren
+ * auch Rezepte ausserhalb jeder aktiven Kaskade), darum greift `markBilder()`/der Step-Doppel-Enqueue-
+ * Guard aus `PlanningCascadeService::reBilder` hier NICHT (beide sind an `$stepId` gebunden, No-Op
+ * ohne ihn). Status + Doppel-Enqueue-Guard laufen stattdessen über einen Cache-Schlüssel je Team+
+ * Rezept ({@see self::produktfotoCacheKey}) — dasselbe Muster wie
+ * {@see \Platform\FoodAlchemist\Jobs\GenerateRecipeJob::cacheKey()} (`HatGeneratorLauf`-Trait,
+ * VK-/Basisrezept-Generator).
  */
 class EnrichRecipeJob implements ShouldQueue
 {
@@ -55,7 +66,14 @@ class EnrichRecipeJob implements ShouldQueue
         public bool $nurBilder = false,
         public bool $refresh = false,   // #4: Kaskaden-Anreicherung aus dem Editor → auch gefüllte, nicht-manuelle Felder auffrischen
         public bool $completeCoverage = true,   // Phase 0.3: Anreicherungs-Tiefe (Step-by-Step/Sensorik/…); Default an = Bestandsverhalten
+        public bool $nurProduktfoto = false,
     ) {}
+
+    /** Cache-Schlüssel für den stepId-freien Produktfoto-Lauf (Modal-Knopf) — Status + Doppel-Enqueue-Guard. */
+    public static function produktfotoCacheKey(int $teamId, int $recipeId): string
+    {
+        return "fa:enrich-produktfoto:{$teamId}:{$recipeId}";
+    }
 
     public function handle(RecipeOneShotService $oneShot): void
     {
@@ -66,19 +84,24 @@ class EnrichRecipeJob implements ShouldQueue
         $user = User::find($this->userId);
         $recipe = $team === null ? null : FoodAlchemistRecipe::visibleToTeam($team)->find($this->recipeId);
         if ($team === null || $user === null || $recipe === null) {
-            // Im »nur Bilder«-Modus lebt der Status in deferred.bilder — die Anreicherung war schon durch.
-            $this->nurBilder
-                ? $this->markBilder('failed', 'Team/User/Rezept nicht gefunden', 0)
-                : $this->markEnrich('failed', 'Team/User/Rezept nicht gefunden');
+            // Im »nur Bilder«-/»nur Produktfoto«-Modus lebt der Status in deferred.bilder bzw. im
+            // Produktfoto-Cache — die Anreicherung war schon durch.
+            if ($this->nurProduktfoto) {
+                $this->markProduktfotoCache('failed', 'Team/User/Rezept nicht gefunden');
+            } elseif ($this->nurBilder) {
+                $this->markBilder('failed', 'Team/User/Rezept nicht gefunden', 0);
+            } else {
+                $this->markEnrich('failed', 'Team/User/Rezept nicht gefunden');
+            }
 
             return;
         }
 
         Auth::login($user);   // Team-Kontext (Call-Log/Kill-Switch/DNA)
 
-        // Voll-Anreicherung nur im Normalpfad — »nur Bilder« (Teil 2b) lässt das angereicherte
-        // Rezept + deferred.enrich unangetastet und erzeugt ausschliesslich die Fotos neu.
-        if (! $this->nurBilder) {
+        // Voll-Anreicherung nur im Normalpfad — »nur Bilder«/»nur Produktfoto« lassen das
+        // angereicherte Rezept + deferred.enrich unangetastet und erzeugen ausschliesslich Fotos neu.
+        if (! $this->nurBilder && ! $this->nurProduktfoto) {
             $this->markEnrich('running');
             // Spec 53 / Paket C: Dauer der Anreicherung messen (nicht der ganze Job — nur der teure
             // OneShot-Pass) für die Cockpit-/MCP-Anzeige „angereichert in Xs".
@@ -113,6 +136,25 @@ class EnrichRecipeJob implements ShouldQueue
                 Log::warning('[EnrichRecipeJob] Anreicherung fehlgeschlagen', ['recipe' => $this->recipeId, 'error' => $e->getMessage()]);
                 $this->markEnrich('failed', $e->getMessage(), null, $this->dauerMs($start));
             }
+        }
+
+        if (! $this->kaskadeAbgebrochen() && $this->nurProduktfoto) {
+            // Modal-Knopf „KI-Produktfoto": kein stepId, Status läuft über den Cache
+            // (produktfotoCacheKey), nicht über deferred.bilder (das wäre hier ein No-Op).
+            $this->markProduktfotoCache('running');
+            try {
+                $imageService = app(RecipeImageService::class);
+                // Vorhandenes KI-Produktfoto ERSETZEN (nicht anhäufen) — manuelle Uploads bleiben
+                // unangetastet (Discriminator = Call-Log, s. loescheKiFotos), Schrittfotos bleiben stehen.
+                $imageService->loescheKiFotos($team, $recipe->refresh(), [RecipeImageService::FEATURE_PRODUKTFOTO]);
+                $imageService->produktFoto($team, $recipe->refresh());
+                $this->markProduktfotoCache('done');
+            } catch (\Throwable $e) {
+                Log::warning('[EnrichRecipeJob] KI-Produktfoto fehlgeschlagen', ['recipe' => $this->recipeId, 'error' => $e->getMessage()]);
+                $this->markProduktfotoCache('failed', $e->getMessage());
+            }
+
+            return;
         }
 
         if (! $this->kaskadeAbgebrochen() && ($this->kiBilder || $this->nurBilder)) {
@@ -163,6 +205,13 @@ class EnrichRecipeJob implements ShouldQueue
      *  fehlgeschlagen markieren — und den Fehler der RICHTIGEN Phase zuordnen (Fehler-Transparenz). */
     public function failed(\Throwable $e): void
     {
+        // Im »nur Produktfoto«-Modus (Modal-Knopf, kein stepId) gehört der Fehler in den Cache.
+        if ($this->nurProduktfoto) {
+            $this->markProduktfotoCache('failed', $e->getMessage());
+
+            return;
+        }
+
         // Im »nur Bilder«-Modus gehört der Fehler an deferred.bilder (die Anreicherung war längst durch).
         if ($this->nurBilder) {
             $this->markBilder('failed', $e->getMessage(), 0);
@@ -343,5 +392,23 @@ class EnrichRecipeJob implements ShouldQueue
         app(\Platform\FoodAlchemist\Services\PlanningCascadeService::class)->setzePhase(
             (int) $this->stepId, $status === 'running' ? \Platform\FoodAlchemist\Services\PlanningCascadeService::PHASE_BILDER : null,
         );
+    }
+
+    /**
+     * Status des stepId-freien Produktfoto-Laufs (Modal-Knopf) — Cache statt DB, dasselbe TTL-
+     * Prinzip wie `GenerateRecipeJob` (15 Min, ein abgestürzter Job darf den Knopf nicht dauerhaft
+     * sperren). Beiwerk — ein Tracking-Fehler darf die Bild-Erzeugung selbst nie kippen.
+     */
+    private function markProduktfotoCache(string $status, ?string $error = null): void
+    {
+        try {
+            Cache::put(self::produktfotoCacheKey($this->teamId, $this->recipeId), array_filter([
+                'status' => $status,
+                'error' => $error !== null ? Str::limit($error, 200) : null,
+                'at' => now()->toIso8601String(),
+            ], fn ($v) => $v !== null), now()->addMinutes(15));
+        } catch (\Throwable) {
+            // Tracking ist Beiwerk — nie blockierend.
+        }
     }
 }

@@ -288,8 +288,23 @@
             @if(!$neu)
                 <button type="button" wire:click="manual_zubereitung" class="{{ $btnGhostXs }}" title="gegen KI-Überschreiben sperren">als manuell</button>
                 <button type="button" wire:click="clear_zubereitung" class="{{ $btnGhostXs }}" title="Lineage-Markierung aufheben — der Text bleibt">Lineage-Reset</button>
+                {{-- Spec 53: Produktfoto (Hero) erzeugen/ersetzen — läuft async (EnrichRecipeJob,
+                     nurProduktfoto), gepollt über pruefeProduktfotoErgebnis. --}}
+                @php($bildkosten = config('foodalchemist.ai.bildkosten_usd.models')['gpt-image-1.5'] ?? null)
+                <x-foodalchemist::ki-action action="kiProduktfoto" variant="ai" icon="heroicon-o-photo" label="KI-Produktfoto"
+                        busy="malt …" flash="Foto erzeugt"
+                        title="{{ 'Erzeugt/ersetzt das Hero-Foto des fertigen Gerichts' . ($bildkosten !== null ? ' — ca. ' . number_format($bildkosten, 3, ',', '.') . ' $ je Bild' : '') . '.' }}"
+                        data-ki-produktfoto />
             @endif
         </x-slot:actions>
+        @if($produktfotoLaeuft)
+            <div wire:poll.2s="pruefeProduktfotoErgebnis" class="mb-2 flex items-center gap-2 text-[11px] text-violet-700" data-produktfoto-laeuft>
+                @svg('heroicon-o-arrow-path', 'w-3.5 h-3.5 animate-spin') KI-Produktfoto wird erzeugt …
+            </div>
+        @endif
+        @if($produktfotoFehler)
+            <p class="mb-2 text-[11px] text-rose-600" data-produktfoto-fehler>{{ $produktfotoFehler }}</p>
+        @endif
         @if($neu)
             {{-- Anlage-Modus: es gibt noch keine Schritt-IDs (und damit keine Foto-Verknüpfung).
                  Freitext ist hier weiter erlaubt und wird beim Speichern in Schritte geparst. --}}
@@ -299,7 +314,7 @@
                 <code>##</code> = Abschnitt · <code>1.</code> / <code>-</code> = Schritt. Nach dem Speichern gibt es den Schritt-Editor mit Fotos.
             </p>
         @else
-            <livewire:foodalchemist.recipes.step-editor :recipe-id="$recipeId" wire:key="schritt-editor-{{ $recipeId }}" />
+            <livewire:foodalchemist.recipes.step-editor :recipe-id="$recipeId" wire:key="schritt-editor-{{ $recipeId }}-v{{ $fotoVersion }}" />
             <p class="text-[10px] text-gray-500 mt-1">
                 Lineage: {{ $zustaende['preparation'] }} — der Markdown-Text in <code>preparation</code> wird aus den Schritten erzeugt
                 (Produktionsdruck, Suche und Prozessanker lesen ihn).

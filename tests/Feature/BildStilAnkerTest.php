@@ -35,7 +35,7 @@ it('★ derselbe Anker steht in JEDEM Schritt desselben Rezepts', function () {
     $recipe->refresh()->load('ingredients');
 
     $prompts = FoodAlchemistRecipeStep::where('recipe_id', $recipe->id)->orderBy('position')->get()
-        ->map(fn ($s) => $this->dienst->schrittPrompt($recipe, $s));
+        ->map(fn ($s) => $this->dienst->schrittPrompt($this->rootTeam, $recipe, $s));
 
     expect($anker)->not->toBe('');
     foreach ($prompts as $p) {
@@ -69,6 +69,6 @@ it('die vage Formel „same … kitchen" ist aus den Prompts verschwunden', func
     ]);
     $recipe->refresh()->load('ingredients');
 
-    expect($this->dienst->schrittPrompt($recipe, $step))
+    expect($this->dienst->schrittPrompt($this->rootTeam, $recipe, $step))
         ->not->toContain('same neutral stainless-steel');
 });

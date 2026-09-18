@@ -3,6 +3,7 @@
 namespace Platform\FoodAlchemist\Livewire\Recipes;
 
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\On;
 use Livewire\Component;
@@ -473,6 +474,9 @@ class RecipeModal extends Component
     /** Re-Mount-Zähler für den eingebetteten Zutaten-Editor (rows leben im Client). */
     public int $zutatenVersion = 0;
 
+    /** Re-Mount-Zähler für den eingebetteten Step-Editor (trägt die Fotos) — s. kiProduktfoto. */
+    public int $fotoVersion = 0;
+
     public function kiUeberarbeiten(): void
     {
         $team = Auth::user()?->currentTeamRelation;
@@ -790,6 +794,73 @@ class RecipeModal extends Component
         } catch (\Throwable $e) {
             $this->fehler = $e->getMessage();                          // Provider-/Coverage-Fehler → graceful im Editor
         }
+    }
+
+    // ── Spec 53 Bildstil-Dossier/Produktfoto-Knopf ────────────────────────
+
+    public bool $produktfotoLaeuft = false;
+
+    public ?string $produktfotoFehler = null;
+
+    /**
+     * „KI-Produktfoto erzeugen" — dispatcht {@see EnrichRecipeJob} im `nurProduktfoto`-Modus
+     * (ersetzt NUR das Hero-Foto, keine Schrittfotos, keine Anreicherung). Der Web-Request kehrt
+     * sofort zurück (kein 502), die UI pollt über {@see self::pruefeProduktfotoErgebnis}.
+     *
+     * Doppel-Enqueue-Guard: kein `$stepId` in diesem Modal (auch Rezepte ausserhalb jeder
+     * Kaskade editierbar) — darum ein eigener Cache-Schlüssel je Team+Rezept statt des
+     * step-gebundenen `deferred.bilder`-Mechanismus (s. {@see EnrichRecipeJob}-Klassendoc).
+     */
+    public function kiProduktfoto(): void
+    {
+        $this->produktfotoFehler = null;
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null || $this->recipeId === null) {
+            return;
+        }
+        $key = EnrichRecipeJob::produktfotoCacheKey((int) $team->id, (int) $this->recipeId);
+        $stand = Cache::get($key);
+        if (is_array($stand) && in_array($stand['status'] ?? null, ['queued', 'running'], true)) {
+            $this->produktfotoLaeuft = true;   // Lauf ist schon unterwegs — nicht doppelt dispatchen
+            return;
+        }
+        Cache::put($key, ['status' => 'queued', 'at' => now()->toIso8601String()], now()->addMinutes(15));
+        EnrichRecipeJob::dispatch(
+            teamId: (int) $team->id,
+            userId: (int) (Auth::id() ?? 0),
+            recipeId: (int) $this->recipeId,
+            nurProduktfoto: true,
+        );
+        $this->produktfotoLaeuft = true;
+        $this->savedToast('✨ KI-Produktfoto wird erzeugt …');
+    }
+
+    /** Poll-Ziel (wire:poll während $produktfotoLaeuft): liest den Job-Ausgang aus dem Cache. */
+    public function pruefeProduktfotoErgebnis(): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null || $this->recipeId === null) {
+            $this->produktfotoLaeuft = false;
+
+            return;
+        }
+        $stand = Cache::get(EnrichRecipeJob::produktfotoCacheKey((int) $team->id, (int) $this->recipeId));
+        if (! is_array($stand) || in_array($stand['status'] ?? null, ['queued', 'running'], true)) {
+            return;   // noch am Rechnen → weiter pollen
+        }
+        $this->produktfotoLaeuft = false;
+        if (($stand['status'] ?? null) === 'failed') {
+            $this->produktfotoFehler = $stand['error'] ?? 'KI-Produktfoto fehlgeschlagen.';
+            $this->errorToast('KI-Produktfoto fehlgeschlagen.');
+
+            return;
+        }
+        // done → NUR den eingebetteten Step-Editor (trägt die Fotos) neu mounten lassen, wie beim
+        // Zutaten-Editor ($zutatenVersion) — NICHT oeffnen()/editorStateEntladen(): das würde das
+        // ganze Formular verwerfen und damit unsichtbar gewordene, noch ungespeicherte Eingaben
+        // in anderen Feldern löschen, nur weil im Hintergrund ein Foto fertig wurde.
+        $this->fotoVersion++;
+        $this->savedToast('✅ KI-Produktfoto erzeugt.');
     }
 
     public function bulkAlleUebernehmen(): void
