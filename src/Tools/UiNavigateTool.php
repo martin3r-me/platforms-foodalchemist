@@ -36,7 +36,21 @@ class UiNavigateTool extends FoodAlchemistTool implements ToolContract, ToolMeta
         return [
             'type' => 'object',
             'properties' => [
-                'route_key' => ['type' => 'string', 'description' => 'Schlüssel aus foodalchemist.ui.ROUTES.'],
+                // Live-Bruch Dominique (2026-09-18): "Öffne die Seite der Basisrezepte" brauchte
+                // 3 Runden (tool_registry.SEARCH → ui.ROUTES → NAVIGATE), weil route_key nur als
+                // "aus ui.ROUTES" beschrieben war — der Katalog (27 Keys) stand nirgends im
+                // Warmstart-Prompt. Die kurzen Labels HIER direkt in der Schema-Beschreibung
+                // machen Navigation zu EINER Runde; foodalchemist.ui.ROUTES bleibt als Rückfall
+                // in VoiceCommandService::TOOLS erreichbar, falls ein Key hier fehlt/sich ändert.
+                'route_key' => ['type' => 'string', 'description' => 'Schlüssel: dashboard=Dashboard, '
+                    . 'recipes=Basisrezepte, verkauf=Gerichte/Verkaufsrezepte, gps=Grundprodukte, '
+                    . 'gp_detail=GP-Detail(id nötig), concepter=Concepter, concepts=Konzepte, pakete=Pakete, '
+                    . 'formate=Formate, foodbooks=Foodbooks, speisekarte=Speisekarten, speiseplan=Speisepläne, '
+                    . 'angebote=Angebote, suppliers=Lieferanten, geschirr=Geschirr, orders=Bestellwesen, '
+                    . 'einkauf=Einkauf, produktion=Produktion, planung=Planung, controlling=Controlling, '
+                    . 'kalkulation=Kalkulation, knowledge=Wissensmodul, trendradar=Trendradar, '
+                    . 'food_dna=Food-DNA, favorites=Favoriten, review=Review-Queue, einstellungen=Einstellungen. '
+                    . 'Fehlt ein Ziel hier, foodalchemist.ui.ROUTES abfragen statt zu raten.'],
                 'id' => ['type' => 'integer', 'description' => 'Datensatz-id (nur bei Detail-Seiten mit expects_record).'],
                 'params' => ['type' => 'object', 'description' => 'Optionale Query-/Routen-Parameter (z.B. tab, sektion).'],
             ],

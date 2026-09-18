@@ -34,6 +34,13 @@
         aktiv: @js($__voiceAgentDauerhaftAktiv),
         x: null, y: null,
         dragOffsetX: 0, dragOffsetY: 0, dragging: false, moved: false,
+        // Live-Bruch 2026-09-18 (Punkt 3, erster Schritt Spec 54 »schwebender Begleiter«):
+        // Zustand am Knopf statt Modal-Aufreissen — GENAU vier Zustände (nichts Feineres).
+        schwebeStatus: 'wartet',
+        schwebeTranskript: null,
+        schwebeAntwort: null,
+        blaseSichtbar: false,
+        _letzterSchwebeStatus: 'wartet',
         init() {
             try {
                 const gespeichert = JSON.parse(localStorage.getItem('fa-voice-mount-pos') || 'null');
@@ -42,6 +49,32 @@
             window.addEventListener('voice-agent-dauerhaft-aktiv-geaendert', (e) => {
                 this.aktiv = !!(e.detail && e.detail.aktiv);
             });
+            // Der Recorder im Modal (eigene Komponente) schreibt seinen Zustand nach
+            // window.FaVoiceZustand — ein Intervall-Poll statt eines Custom-Events, weil Alpine
+            // reine window-Property-Änderungen nicht automatisch beobachtet (kein reaktiver
+            // Proxy dahinter). 300 ms ist unauffällig, aber oft genug für den schwebenden Knopf.
+            setInterval(() => {
+                const z = window.FaVoiceZustand;
+                if (! z) {
+                    return;
+                }
+                this.schwebeStatus = z.status;
+                if (z.antwort && z.antwort !== this.schwebeAntwort) {
+                    this.schwebeTranskript = z.transkript;
+                    this.schwebeAntwort = z.antwort;
+                    this.blaseSichtbar = true;
+                }
+                // Blase verschwindet, sobald das Vorlesen endet ODER ein neuer Zuhör-Zyklus
+                // beginnt (deckt auch den Fall »Vorlesen ist aus« ab — die Blase bleibt bis
+                // zum nächsten gesprochenen Befehl stehen statt für immer).
+                if (this._letzterSchwebeStatus === 'spricht' && z.status !== 'spricht') {
+                    this.blaseSichtbar = false;
+                }
+                if (this._letzterSchwebeStatus !== 'hoert_zu' && z.status === 'hoert_zu') {
+                    this.blaseSichtbar = false;
+                }
+                this._letzterSchwebeStatus = z.status;
+            }, 300);
         },
         startDrag(e) {
             this.dragging = true; this.moved = false;
@@ -86,7 +119,11 @@
             // (der Recorder im Modal entscheidet selbst anhand des FRISCH aus dem Team-
             // Setting gelesenen `konversationAktiv`, ob er wirklich sofort startet — der
             // Ein-Klick-Modus bleibt dadurch unverändert).
-            $dispatch('voice-modal.oeffnen', { autostart: true });
+            // Live-Bruch 2026-09-18 (Punkt 3): `schwebend:true` sagt `VoiceModal::oeffnen()`,
+            // dass dieser Klick vom Float-Knopf kommt — im Konversations-Modus bleibt das Modal
+            // dann zu (der Knopf selbst zeigt den Zustand, siehe Sprechblase unten), solange es
+            // nichts zu bestätigen gibt.
+            $dispatch('voice-modal.oeffnen', { autostart: true, schwebend: true });
         },
     }"
     x-show="aktiv" x-cloak
@@ -102,9 +139,25 @@
     :style="x !== null ? ('left:' + x + 'px; top:' + y + 'px;') : 'right:1.5rem; bottom:1.5rem;'"
     data-voice-float-mount
 >
+    {{-- Sprechblase (drittes Element, Punkt 3): Transkript + Antwort statt des grossen Modals.
+         Max. 2 Zeilen für die Antwort (line-clamp), verschwindet nach dem Vorlesen (s. Poll oben).
+         Ein Klick öffnet das Modal ganz normal (`schwebend:false` — wie der Sidebar-Knopf). --}}
+    <div x-show="blaseSichtbar" x-cloak x-transition
+         @click="blaseSichtbar = false; window.FaVoiceAudioEntsperren && window.FaVoiceAudioEntsperren('fa-voice-tts-audio'); $dispatch('voice-modal.oeffnen', { autostart: false, schwebend: false })"
+         class="absolute bottom-full right-0 mb-2 max-w-[240px] rounded-lg bg-white shadow-lg border border-black/10 px-3 py-2 cursor-pointer"
+         data-voice-blase>
+        <p class="text-[10px] text-gray-400 truncate" x-show="schwebeTranskript" x-text="schwebeTranskript"></p>
+        <p class="text-xs text-gray-800 line-clamp-2" x-text="schwebeAntwort"></p>
+    </div>
     <button type="button" x-ref="knopf" @mousedown="startDrag($event)" @click="oeffnen()"
-            class="w-12 h-12 rounded-full bg-gradient-to-r from-violet-500 to-indigo-500 text-white shadow-lg shadow-violet-500/30 flex items-center justify-center cursor-move select-none"
-            title="Sprachbefehl (ziehbar)" data-voice-float-button>
+            :class="{
+                'animate-pulse': schwebeStatus === 'hoert_zu',
+                'animate-bounce': schwebeStatus === 'spricht',
+                'bg-gradient-to-r from-violet-500 to-indigo-500': schwebeStatus !== 'fehler',
+                'bg-rose-500': schwebeStatus === 'fehler',
+            }"
+            class="w-12 h-12 rounded-full text-white shadow-lg shadow-violet-500/30 flex items-center justify-center cursor-move select-none"
+            title="Sprachbefehl (ziehbar)" data-voice-float-button :data-voice-float-status="schwebeStatus">
         @svg('heroicon-o-microphone', 'w-5 h-5')
     </button>
 </div>

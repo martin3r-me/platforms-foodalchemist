@@ -25,7 +25,11 @@ class VoiceAudioController extends Controller
         $eintrag = Cache::pull(self::cacheKey($token));
         abort_if(! is_array($eintrag) || ! isset($eintrag['bytes'], $eintrag['mime']), 404);
 
-        return response((string) $eintrag['bytes'], 200, [
+        // Live-Bruch Dominique (2026-09-18): auf demo läuft `cache.default=database` — rohe
+        // MP3-Bytes in einer utf8mb4-Textspalte lässt MySQL (strict mode) NICHT zu
+        // (SQLSTATE 1366 "Incorrect string value"), Base64 ist reines ASCII. Das Gegenstück
+        // steht in VoiceModal::sprechen(), das VOR `Cache::put()` base64-kodiert.
+        return response(base64_decode((string) $eintrag['bytes'], true) ?: '', 200, [
             'Content-Type' => (string) $eintrag['mime'],
             'Cache-Control' => 'no-store',
         ]);

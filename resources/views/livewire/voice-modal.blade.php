@@ -92,6 +92,22 @@
                             window.FaVoiceKonversationAktiv = !!v;
                         });
                         window.FaVoiceStopAlles = () => this.stopAlles();
+                        // Live-Bruch 2026-09-18 (Punkt 3, erster Schritt Spec 54 »schwebender
+                        // Begleiter«): der schwebende Knopf soll den Zustand SELBST zeigen
+                        // (pulsierend/Wellen/ruhig/rot), statt das grosse Modal aufzureissen —
+                        // dieselbe Fenster-Brücke wie oben, jetzt mit dem sichtbaren Zustand +
+                        // Transkript/Antwort für die Sprechblase in agent-mount.blade.php.
+                        this.$watch(
+                            () => [this.laeuft, this.fallbackAktiv, $wire.sprichtGerade, this.keineSpracheErkannt,
+                                this.konversationPausiert, !!this.fehler, $wire.transcript, $wire.ergebnis?.text].join('|'),
+                            () => {
+                                window.FaVoiceZustand = {
+                                    status: this._schwebeStatus(),
+                                    transkript: $wire.transcript,
+                                    antwort: $wire.ergebnis?.text ?? null,
+                                };
+                            },
+                        );
                         // Live-Befund Dominique (2026-09-18): »zwei Klicks statt einem« — im
                         // Konversations-Modus sollte der ÖFFNEN-Klick (schwebender Knopf ODER
                         // Sidebar) SOFORT das Zuhören starten, nicht erst einen zweiten Klick
@@ -133,6 +149,23 @@
                         this.fallbackAktiv = false;
                         this.konversationPausiert = true;
                         $wire.call('sprechenBeendet');
+                    },
+                    // Live-Bruch 2026-09-18 (Punkt 3): GENAU die vier Zustände, die der
+                    // schwebende Knopf zeigen soll — nichts Feineres (bewusst klein gehalten).
+                    // Reihenfolge ist Absicht: ein Fehler/eine Pause überschreibt »spricht«/
+                    // »hört zu«, die zufällig noch nicht zurückgesetzt sind.
+                    _schwebeStatus() {
+                        if (this.keineSpracheErkannt || this.konversationPausiert || this.fehler) {
+                            return 'fehler';
+                        }
+                        if (this.fallbackAktiv || $wire.sprichtGerade) {
+                            return 'spricht';
+                        }
+                        if (this.laeuft) {
+                            return 'hoert_zu';
+                        }
+
+                        return 'wartet';
                     },
                     _wiedergeben(audio, url, text) {
                         if (! audio || audio.dataset.faEntsperrt !== '1') {

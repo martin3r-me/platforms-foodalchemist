@@ -154,7 +154,7 @@ class VoiceModal extends Component
      * @param  array{type: string, id: int}|null  $kontext  Rezept-/Gericht-Kontext der öffnenden Seite (Aufgabe 7).
      */
     #[On('voice-modal.oeffnen')]
-    public function oeffnen(?array $kontext = null): void
+    public function oeffnen(?array $kontext = null, bool $schwebend = false): void
     {
         $this->reset('audio', 'transcript', 'fehler', 'phase');
         $this->kontext = $kontext;
@@ -178,6 +178,18 @@ class VoiceModal extends Component
             'text' => null, 'runden' => 0, 'tool_laeufe' => [], 'aktionen' => [],
             'proposals' => $offene, 'unklar' => false, 'elapsed_ms' => 0,
         ] : null;
+        // Live-Bruch Dominique (2026-09-18, Punkt 3 — erster Schritt Spec 54 „schwebender
+        // Begleiter"): der schwebende Knopf soll im Konversations-Modus NICHT mehr das grosse
+        // Modal aufreissen — der Knopf selbst zeigt den Zustand (Alpine-Store-Brücke oben in
+        // voice-modal.blade.php), eine Sprechblase in agent-mount.blade.php zeigt Transkript +
+        // Antwort. Das Modal öffnet nur, wenn es WIRKLICH etwas zu bestätigen gibt (offene
+        // Vorschläge aus einer wiederhergestellten Sitzung) — neue Vorschläge WÄHREND dieses
+        // Turns öffnen es am Ende von `verarbeite()` nachträglich (dort ist zum Zeitpunkt
+        // dieses Aufrufs noch nichts bekannt). Sidebar (`$schwebend=false`, Ein-Klick-Modus)
+        // UND ein Klick auf die Blase selbst (ebenfalls `$schwebend=false`) öffnen wie bisher.
+        if ($schwebend && $this->konversationAktiv && $offene === []) {
+            return;
+        }
         $this->dispatch('modal.open', name: 'voice-modal');
     }
 
@@ -315,6 +327,14 @@ class VoiceModal extends Component
             }
         }
         $this->sitzungAktualisieren();
+        // Live-Bruch Dominique (2026-09-18, Punkt 3): im Konversations-Modus bleibt das Modal
+        // beim Öffnen zu (siehe `oeffnen()`) — entsteht aber WÄHREND dieses Turns ein neuer,
+        // noch nicht bestätigter Vorschlag, muss er trotzdem sichtbar werden. `oeffnen()` weiss
+        // das zum Öffnen-Zeitpunkt noch nicht (der Tool-Loop läuft ja erst danach) — dieser
+        // Aufruf hier ist der einzig richtige Moment.
+        if ($this->offeneVorschlagIndizes() !== []) {
+            $this->dispatch('modal.open', name: 'voice-modal');
+        }
         // Spec 53 / Paket F (3): Konversations-Modus liest die Antwort vor, wenn das Team-Setting
         // an ist. NICHT bei einer Navigation — der Ton würde auf der Seite ankommen, die der Nutzer
         // gerade verlässt (`redirect()` plant den Wechsel, hält die Methode aber nicht an).
@@ -459,15 +479,24 @@ class VoiceModal extends Component
             $audio = $tts->synthesize($text, $stimme);
             $ttlMinuten = (int) config('foodalchemist.tts.audio_ttl_minuten', 5);
             $token = (string) Str::uuid();
-            Cache::put(VoiceAudioController::cacheKey($token), ['bytes' => $audio, 'mime' => $tts->mimeType()], now()->addMinutes($ttlMinuten));
+            // Live-Bruch Dominique (2026-09-18): auf demo läuft `cache.default=database` — rohe
+            // MP3-Bytes in einer utf8mb4-Textspalte lässt MySQL (strict mode) NICHT zu
+            // (SQLSTATE 1366 "Incorrect string value" — reproduziert per Tinker: random_bytes
+            // wirft, base64_encode geht durch). Base64 ist reines ASCII, passt in JEDEN
+            // Cache-Treiber. Gegenstück: VoiceAudioController::stream() dekodiert wieder.
+            Cache::put(VoiceAudioController::cacheKey($token), ['bytes' => base64_encode($audio), 'mime' => $tts->mimeType()], now()->addMinutes($ttlMinuten));
             $url = URL::temporarySignedRoute('foodalchemist.voice.audio', now()->addMinutes($ttlMinuten), ['token' => $token]);
             $this->protokolliereTts($tts->name(), (int) ((hrtime(true) - $start) / 1_000_000), true);
             // `text` reist mit — der speechSynthesis-Fallback (Autoplay blockiert ODER Synthese
             // fehlgeschlagen) braucht ihn, das Modal selbst hat ihn sonst nirgends griffbereit.
             $this->dispatch(self::EVENT_TTS_BEREIT, url: $url, text: $text);
-        } catch (\Throwable) {
+        } catch (\Throwable $e) {
             $this->sprichtGerade = false;
-            $this->protokolliereTts('fehler', (int) ((hrtime(true) - $start) / 1_000_000), false);
+            // Live-Bruch Dominique (2026-09-18): `catch (\Throwable)` ohne Variable verschluckte
+            // die Fehlermeldung komplett — das Call-Log zeigte nur "fehler — fehlgeschlagen" ohne
+            // jeden Hinweis, WARUM (Memory „Etikett lügt": ein Fehler ohne Text ist nicht
+            // diagnostizierbar; 40 Minuten für diesen einen Bruch, weil die Ursache nirgends stand).
+            $this->protokolliereTts('fehler', (int) ((hrtime(true) - $start) / 1_000_000), false, $e->getMessage());
             $this->dispatch(self::EVENT_TTS_FEHLGESCHLAGEN, text: $text);
         }
     }
@@ -478,8 +507,12 @@ class VoiceModal extends Component
         $this->sprichtGerade = false;
     }
 
-    /** Eigener, schlanker Audit-Trail — Spiegel von {@see protokolliereSchreibaktion()}. */
-    private function protokolliereTts(string $provider, int $elapsedMs, bool $erfolg): void
+    /**
+     * Eigener, schlanker Audit-Trail — Spiegel von {@see protokolliereSchreibaktion()}.
+     * `$fehlerText` (Live-Bruch 2026-09-18): OHNE ihn war ein fehlgeschlagener TTS-Aufruf im
+     * Call-Log nicht diagnostizierbar — nur "fehler — fehlgeschlagen", keine Ursache.
+     */
+    private function protokolliereTts(string $provider, int $elapsedMs, bool $erfolg, ?string $fehlerText = null): void
     {
         try {
             DB::table('foodalchemist_ai_call_log')->insert([
@@ -490,6 +523,7 @@ class VoiceModal extends Component
                 'tier' => 'D',
                 'prompt_hash' => hash('sha256', $provider),
                 'response_summary' => mb_strimwidth($provider . ($erfolg ? ' — synthetisiert' : ' — fehlgeschlagen'), 0, 200, '…'),
+                'error' => $fehlerText !== null ? mb_strimwidth($fehlerText, 0, 2000, '…') : null,
                 'elapsed_ms' => $elapsedMs,
                 'created_at' => now(), 'updated_at' => now(),
             ]);
