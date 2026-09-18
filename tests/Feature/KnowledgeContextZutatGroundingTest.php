@@ -168,9 +168,9 @@ it('leitet Hauptzutaten aus der Beschreibung ab, wenn der Aufrufer keine liefert
     expect($ctx['files_used'])
         ->toContain('zutat.passionsfrucht--verwendung@v1')
         ->toContain('zutat.acerola_14--verwendung@v1')
-        ->and($ctx['herkunft']['zutat.passionsfrucht--verwendung@v1']['via'])->toBe('zutat_grounding')
-        ->and($ctx['herkunft']['zutat.passionsfrucht--verwendung@v1']['hauptzutaten_quelle'])->toBe('abgeleitet')
-        ->and($ctx['herkunft']['zutat.acerola_14--verwendung@v1']['hauptzutaten_quelle'])->toBe('abgeleitet');
+        ->and($ctx['herkunft']['zutat.passionsfrucht--verwendung']['via'])->toBe('zutat_grounding')
+        ->and($ctx['herkunft']['zutat.passionsfrucht--verwendung']['hauptzutaten_quelle'])->toBe('abgeleitet')
+        ->and($ctx['herkunft']['zutat.acerola_14--verwendung']['hauptzutaten_quelle'])->toBe('abgeleitet');
 });
 
 it('greift auch für recipe.steps ohne Caller-Slugs (RecipeOneShotService-Pfad)', function () {
@@ -181,7 +181,7 @@ it('greift auch für recipe.steps ohne Caller-Slugs (RecipeOneShotService-Pfad)'
     $ctx = app(KnowledgeContextService::class)->contextFor($this->rootTeam, 'recipe.steps', 'Acerola-Sirup');
 
     expect($ctx['files_used'])->toContain('zutat.acerola--verhalten@v1')
-        ->and($ctx['herkunft']['zutat.acerola--verhalten@v1']['hauptzutaten_quelle'])->toBe('abgeleitet');
+        ->and($ctx['herkunft']['zutat.acerola--verhalten']['hauptzutaten_quelle'])->toBe('abgeleitet');
 });
 
 /**
@@ -213,7 +213,7 @@ it('findet Zutat-Dossiers auch bei aktivem Arten-Routing (art=fachwissen war unt
     $ctx = app(KnowledgeContextService::class)->contextFor($this->rootTeam, 'recipe.steps', 'Acerola-Sirup', null, ['acerola']);
 
     expect($ctx['files_used'])->toContain('zutat.acerola--verhalten@v1')
-        ->and($ctx['herkunft']['zutat.acerola--verhalten@v1']['status'] ?? null)->not->toBe('ohne_dossier');
+        ->and($ctx['herkunft']['zutat.acerola--verhalten']['status'] ?? null)->not->toBe('ohne_dossier');
 });
 
 it('laedt dasselbe Zutat-Dossier nicht doppelt, wenn Grounding UND die art-Discovery-Schleife es faenden', function () {
@@ -247,5 +247,79 @@ it('markiert Caller-gelieferte Hauptzutaten weiterhin als "caller", keine Vermis
 
     $ctx = app(KnowledgeContextService::class)->contextFor($this->rootTeam, 'recipe.generator', 'Ein Dessert', null, ['acerola']);
 
-    expect($ctx['herkunft']['zutat.acerola--verwendung@v1']['hauptzutaten_quelle'])->toBe('caller');
+    expect($ctx['herkunft']['zutat.acerola--verwendung']['hauptzutaten_quelle'])->toBe('caller');
+});
+
+/**
+ * Fund (Orchestrierung, 2026-09-18, Live-PREVIEW nach Deploy 17): weil `--verwendung` durch das
+ * Grounding aus dem Discovery-Kandidatenpool verschwunden ist, wählte der Gruppen-Dedup (Aufgabe A)
+ * den nächsten Vertreter derselben Familie (`--steckbrief`) — jede Zutat landete ZWEIMAL im Prompt.
+ * Genau das "zweite zufällige" Dossier, das Grounding verhindern sollte. Fixture spiegelt den
+ * demo-Stand: eine `zutat`-Kategorie-Discovery-Zeile UND eine Grounding-Zeile fürs selbe Feature.
+ */
+it('sperrt die ganze Zutat-Familie fuer Discovery, wenn Grounding sie schon versorgt hat', function () {
+    // Demo-realistisch: Zutat-Dossiers tragen art=fachwissen (Regelwerk Zutaten-Dossier §8.2) und
+    // werden ohne eigene category=zutat-Zeile ueber das art-Auffangnetz gefunden (§4a).
+    ($this->mkAnker)('acerola', 'Acerola');
+    DB::table('foodalchemist_knowledge_documents')->insert([
+        ['uuid' => (string) UuidV7::generate(), 'slug' => 'zutat.acerola--verwendung', 'title' => 'zutat.acerola--verwendung',
+            'category' => 'zutat', 'art' => 'fachwissen', 'content_md' => 'Acerola Verwendung unter Hitze und Saeure',
+            'version' => 1, 'content_hash' => hash('sha256', 'zutat.acerola--verwendung'), 'char_count' => 40,
+            'active' => 1, 'created_at' => now(), 'updated_at' => now()],
+        ['uuid' => (string) UuidV7::generate(), 'slug' => 'zutat.acerola--steckbrief', 'title' => 'zutat.acerola--steckbrief',
+            'category' => 'zutat', 'art' => 'fachwissen', 'content_md' => 'Acerola Steckbrief Einkauf Handelsformen unter Hitze und Saeure',
+            'version' => 1, 'content_hash' => hash('sha256', 'zutat.acerola--steckbrief'), 'char_count' => 60,
+            'active' => 1, 'created_at' => now(), 'updated_at' => now()],
+    ]);
+    ($this->mkGroundingRouting)('recipe.generator');
+    DB::table('foodalchemist_knowledge_routings')->insert([
+        'feature' => 'recipe.generator', 'category' => '', 'art' => 'fachwissen', 'mode' => 'discovery',
+        'max_docs' => 3, 'max_chars_per_doc' => null, 'created_at' => now(), 'updated_at' => now(),
+    ]);
+
+    $ctx = app(KnowledgeContextService::class)->contextFor($this->rootTeam, 'recipe.generator', 'Acerola-Sirup', null, ['acerola']);
+
+    $zutatFiles = array_values(array_filter($ctx['files_used'], fn ($f) => str_starts_with($f, 'zutat.')));
+    expect($zutatFiles)->toBe(['zutat.acerola--verwendung@v1'])
+        ->and($zutatFiles)->not->toContain('zutat.acerola--steckbrief@v1');
+});
+
+/**
+ * Fund (Orchestrierung, 2026-09-18): `leitTokens()` liefert aus "Passionsfrucht-Gelee" auch das
+ * Token "gelee" — die alte fuzzige Auflösung (`resolveByName()`/Wort-Fragmente ≥4 Zeichen) fand
+ * damit einen Anker, dessen `display_de` NUR zufällig "Gelee" enthält (hier: "Apfel Gelee"), nicht
+ * die gemeinte Zutat. Exakte Auflösung darf das nicht tun.
+ */
+it('loest Anker nur bei EXAKTER Gleichheit auf, kein Wort-Fragment-Treffer ("gelee" darf nicht auf "Apfel Gelee" matchen)', function () {
+    ($this->mkAnker)('acerola', 'Acerola');
+    ($this->mkAnker)('apple_jelly', 'Apfel Gelee');
+    ($this->mkZutatDoc)('zutat.acerola--verwendung', 'Acerola Verwendung');
+    ($this->mkZutatDoc)('zutat.apple_jelly--verwendung', 'Apfelgelee Verwendung');
+    ($this->mkGroundingRouting)('recipe.generator');
+
+    $ctx = app(KnowledgeContextService::class)->contextFor(
+        $this->rootTeam, 'recipe.generator', 'Passionsfrucht-Gelee mit Acerola', null, ['gelee', 'acerola'],
+    );
+
+    expect($ctx['files_used'])
+        ->toContain('zutat.acerola--verwendung@v1')
+        ->not->toContain('zutat.apple_jelly--verwendung@v1')
+        ->and($ctx['herkunft']['zutat:gelee']['status'] ?? null)->toBe('ohne_anker');
+});
+
+/**
+ * Fund (Orchestrierung, 2026-09-18, Live-PREVIEW nach Deploy 17): PREVIEW zeigte `sent: 0` für
+ * Grounding-Treffer, obwohl der Text im Prompt stand (total_chars stimmte). Ursache: die
+ * Herkunft wurde mit `"{$doc->slug}@v{$doc->version}"` als Key geschrieben, contextFor()s
+ * Schluss-Korrektur vergleicht aber gegen nackte Slugs — der Vergleich traf nie, `sent` wurde immer
+ * auf 0 zurückgesetzt.
+ */
+it('meldet "sent" korrekt fuer geladene Grounding-Dossiers, nicht 0 trotz gesendetem Text', function () {
+    ($this->mkAnker)('acerola', 'Acerola');
+    ($this->mkZutatDoc)('zutat.acerola--verwendung', 'Acerola Verwendung unter Hitze und Saeure');
+    ($this->mkGroundingRouting)('recipe.generator');
+
+    $ctx = app(KnowledgeContextService::class)->contextFor($this->rootTeam, 'recipe.generator', 'Acerola-Sirup', null, ['acerola']);
+
+    expect($ctx['herkunft']['zutat.acerola--verwendung']['sent'])->toBeGreaterThan(0);
 });

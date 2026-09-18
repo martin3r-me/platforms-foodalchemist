@@ -112,6 +112,20 @@ class KnowledgeContextService
      */
     private array $ausgeschlossen = [];
 
+    /**
+     * Spec 53/H (Orchestrierung, 2026-09-18, Live-PREVIEW nach Deploy 17): Anker-Slugs, deren
+     * ganze Zutat-Familie (`zutat.<anker>--*`) für die generische Discovery gesperrt ist, weil
+     * {@see zutatGroundingBlock()} für sie bereits ein Aspekt-Dossier geladen hat. `$ausgeschlossen`
+     * (oben) sperrt nur EXAKTE Slugs — nach dem Grounding von `--verwendung` wählte der Gruppen-Dedup
+     * in `KnowledgeSearchService::search()` sonst `--steckbrief` derselben Zutat als nächsten
+     * Vertreter, weil `--verwendung` aus dem Kandidatenpool verschwunden war: die Zutat landete
+     * ZWEIMAL im Prompt (Grounding + Discovery), genau das "zweite zufällige" Dossier, das
+     * verhindert werden sollte.
+     *
+     * @var list<string>
+     */
+    private array $ausgeschlosseneZutatFamilien = [];
+
     public const RECIPE_MAX_KNOWLEDGE_CHARS = 48000; // Kompatibilitätskonstante; Laufzeit: KnowledgeBudget
 
     /**
@@ -165,6 +179,7 @@ class KnowledgeContextService
         $this->herkunft = [];
         // B1: Slugs, die ein vorheriger Block schon geliefert hat (Versions-Suffix @vN weg).
         $this->ausgeschlossen = [];
+        $this->ausgeschlosseneZutatFamilien = [];
         foreach ((array) ($params['_exclude_slugs'] ?? []) as $roh) {
             $slug = preg_replace('/@v\d+$/', '', trim((string) $roh));
             if ($slug !== '') {
@@ -331,7 +346,8 @@ class KnowledgeContextService
                 $zutatSlugs = app(\Platform\FoodAlchemist\Services\Matching\TokenEngine::class)->leitTokens($description);
                 $hauptzutatenQuelle = 'abgeleitet';
             }
-            $parts[] = $this->zutatGroundingBlock($team, $zutatSlugs, $feature, (int) ($r->max_docs ?: 8), $filesUsed, $hauptzutatenQuelle);
+            $geerdeteAnker = [];
+            $parts[] = $this->zutatGroundingBlock($team, $zutatSlugs, $feature, (int) ($r->max_docs ?: 8), $filesUsed, $hauptzutatenQuelle, $geerdeteAnker);
             // Fund (Orchestrierung, 2026-09-18, Live-PREVIEW nach Deploy 16): zutatDocs() nutzt jetzt
             // nurSichtbar() statt nurFuerPrompt() (s. dort) — dieselben Zutaten-Dossiers (art=fachwissen)
             // sind damit auch für die generische art-Discovery-Schleife weiter unten sichtbar. Ohne
@@ -341,6 +357,14 @@ class KnowledgeContextService
             $this->ausgeschlossen = array_values(array_unique([
                 ...$this->ausgeschlossen,
                 ...array_map(static fn ($f) => preg_replace('/@v\d+$/', '', $f), array_slice($filesUsed, $before)),
+            ]));
+            // Fund (Orchestrierung, 2026-09-18, Deploy 17): der exakte Slug-Ausschluss oben reicht
+            // NICHT — nach dem Grounding von `--verwendung` wählte der Gruppen-Dedup den nächsten
+            // Vertreter derselben Familie (`--steckbrief`) über Discovery, die Zutat kam zweimal.
+            // Ganze Familie sperren, nicht nur den geladenen Slug.
+            $this->ausgeschlosseneZutatFamilien = array_values(array_unique([
+                ...$this->ausgeschlosseneZutatFamilien,
+                ...$geerdeteAnker,
             ]));
             $snap('zutat', $before);
         }
@@ -1461,7 +1485,14 @@ class KnowledgeContextService
         $base = DB::table('foodalchemist_knowledge_documents')->tap($art === null ? $this->nurFuerPrompt($team) : $this->nurSichtbar($team))
             ->when($art === null, fn ($q) => $q->where('category', $category), fn ($q) => $q->where('art', $art))->where('active', 1)->whereNull('deleted_at')
             ->when($allowedSlugs !== [], fn ($q) => $q->whereIn('slug', $allowedSlugs))
-            ->when($this->ausgeschlossen !== [], fn ($q) => $q->whereNotIn('slug', $this->ausgeschlossen));
+            ->when($this->ausgeschlossen !== [], fn ($q) => $q->whereNotIn('slug', $this->ausgeschlossen))
+            // Familien-Ausschluss (s. Property-Docblock): eine Zutat, die zutatGroundingBlock() schon
+            // per Grounding versorgt hat, darf hier keinen ZWEITEN Aspekt über Discovery nachziehen.
+            ->when($this->ausgeschlosseneZutatFamilien !== [], fn ($q) => $q->where(function ($w) {
+                foreach ($this->ausgeschlosseneZutatFamilien as $anker) {
+                    $w->where('slug', 'not like', "zutat.{$anker}--%");
+                }
+            }));
         $eligible = (clone $base)->get(['id', 'geltung'])->filter(fn ($doc) => \Platform\FoodAlchemist\Services\Knowledge\WissensGeltung::passt(
             \Platform\FoodAlchemist\Services\Knowledge\WissensGeltung::lesen($doc->geltung), $this->geltungsParameter))->pluck('id')->all();
         $base->whereIn('id', $eligible);
@@ -1805,8 +1836,9 @@ class KnowledgeContextService
      * (Aspekt aus {@see zutatAspektFuer()}), statt sie der Fuzzy-Discovery zu überlassen (dort
      * konkurrieren alle 4 Aspekte jeder Zutat gegeneinander UND gegen Technik-/Referenz-Dossiers —
      * gemessen am Passionsfrucht/Acerola-Brief: eine Nebenzutat belegte alle 4 Aspekt-Plätze, das
-     * Gelée-Technik-Dossier fiel komplett raus). Die Anker-Auflösung teilt sich {@see PairingService::ankerSlugFuer()}
-     * mit den beiden anderen Aufrufstellen (Pairing-Stems, Seed-Anker) — kein Raten am Slug.
+     * Gelée-Technik-Dossier fiel komplett raus). Die Anker-Auflösung nutzt {@see PairingService::ankerSlugExakt()}
+     * — EXAKTE Gleichheit, kein Nearest-Neighbor (Orchestrierung, 2026-09-18: "gelee" aus
+     * "Passionsfrucht-Gelee" darf NICHT auf ein zufälliges Apfelgelee-Dossier matchen).
      *
      * Geschützte Kontingente (Aufgabe C, ursprünglich geplant): NICHT gebaut. Die lokale Nachher-
      * Messung mit A+B (WissenGoldenPassionsfruchtAcerolaTest) zeigt bei `recipe.steps` (kleinstes
@@ -1819,8 +1851,13 @@ class KnowledgeContextService
      *
      * @param  list<string>  $hauptzutatSlugs  rohe Zutaten-Namen/-Token, NICHT normalisierte Anker-Slugs
      * @param  list<string>  $filesUsed  by-ref-Audit
+     * @param  list<string>  $geerdeteAnker  by-ref-Audit: Anker-Slugs, für die HIER mind. ein Dossier
+     *                                       geladen wurde — der Aufrufer sperrt deren ganze Familie
+     *                                       (`zutat.<anker>--*`) für die nachfolgende Discovery (sonst
+     *                                       holt sich der Gruppen-Dedup den nächsten Aspekt derselben
+     *                                       Zutat zusätzlich, Orchestrierung 2026-09-18).
      */
-    private function zutatGroundingBlock(?Team $team, array $hauptzutatSlugs, string $feature, int $maxDocs, array &$filesUsed, string $hauptzutatenQuelle = 'caller'): KnowledgeContextBlock
+    private function zutatGroundingBlock(?Team $team, array $hauptzutatSlugs, string $feature, int $maxDocs, array &$filesUsed, string $hauptzutatenQuelle, array &$geerdeteAnker): KnowledgeContextBlock
     {
         $aspekt = $this->zutatAspektFuer($feature);
         $pairing = app(\Platform\FoodAlchemist\Services\PairingService::class);
@@ -1834,7 +1871,7 @@ class KnowledgeContextService
             if ($hz === '') {
                 continue;
             }
-            $anker = $pairing->ankerSlugFuer($hz);
+            $anker = $pairing->ankerSlugExakt($hz);
             if ($anker === null) {
                 // Ehrlich sichtbar statt stillschweigend übersprungen (Dominique: "nimmt er dann
                 // random irgendeins?" — Antwort hier: nein, gar keins, und das steht auch so da).
@@ -1853,13 +1890,21 @@ class KnowledgeContextService
                 $this->herkunft["zutat.{$anker}"] = ['via' => 'zutat_grounding', 'score' => null, 'status' => 'ohne_dossier', 'aspekt' => $aspekt, 'hauptzutaten_quelle' => $hauptzutatenQuelle];
                 continue;
             }
+            $geerdeteAnker[] = $anker;
             foreach ($docs as $doc) {
                 if (count($blocks) >= $maxDocs) {
                     break;
                 }
                 $blocks[] = ['file' => "{$doc->slug}@v{$doc->version}", 'text' => "### Zutat: {$anker} ({$aspekt})\n" . (string) $doc->content_md, 'score' => self::DETERMINISTISCHER_SCORE];
                 $filesUsed[] = "{$doc->slug}@v{$doc->version}";
-                $this->herkunft["{$doc->slug}@v{$doc->version}"] = [
+                // Herkunft-Key MUSS der nackte Slug sein (Fund Orchestrierung, 2026-09-18, Deploy 17):
+                // contextFor()s Schluss-Korrektur (s. u., `$sentSlugs`) vergleicht gegen slugs OHNE
+                // `@vN` — mit Version im Key traf der Vergleich nie, `sent` wurde für JEDES geladene
+                // Grounding-Dossier auf 0 zurückgesetzt, obwohl der Text im Prompt stand
+                // (total_chars stimmte, nur die Herkunfts-Anzeige log). Alle anderen Blöcke
+                // (discoverGenericBlock, discoverDomains, Datenwerk) keyen konsistent auf den
+                // nackten Slug — hier nachgezogen.
+                $this->herkunft[$doc->slug] = [
                     'via' => 'zutat_grounding', 'score' => self::DETERMINISTISCHER_SCORE,
                     'chars' => mb_strlen((string) $doc->content_md), 'sent' => mb_strlen((string) $doc->content_md),
                     'aspekt' => $aspekt, 'hauptzutat' => $hz, 'hauptzutaten_quelle' => $hauptzutatenQuelle,
@@ -1882,7 +1927,7 @@ class KnowledgeContextService
      * Teil-Dossiers (`--<aspekt>-<suffix>`, Regelwerk Zutaten-Dossier §2, z. B. `--verhalten-hitze`
      * neben `--verhalten-saeure`, wenn eine Frage allein nicht in 3.900 Zeichen passt). `(_\d+)?`
      * deckt zusätzlich eine nummerierte Anker-Vokabular-Variante ab (z. B. Anker `acerola`, Dossier
-     * `zutat.acerola_14--…`) — REIN defensiv: der Anker-Slug aus {@see PairingService::ankerSlugFuer()}
+     * `zutat.acerola_14--…`) — REIN defensiv: der Anker-Slug aus {@see PairingService::ankerSlugExakt()}
      * (Quelle: dieselbe `foodalchemist_vocab_pairing_anchors`-Tabelle wie `composer.ANKER_SUCHE`,
      * verifiziert) trägt sein Zahlsuffix laut Regelwerk §3 bereits selbst (`acerola_14` IST der
      * Anker-Slug, nicht `acerola`) — der Normalfall trifft daher direkt exakt, `(_\d+)?` greift nur
