@@ -7,13 +7,13 @@ use Illuminate\Support\Facades\Cache;
 /**
  * Spec 53 / Paket F (4): Gesprächsgedächtnis für den Sprachbefehl. Der Sprach-Agent selbst
  * ist zustandslos (jeder `VoiceCommandService::verarbeite()`-Aufruf ein frischer Tool-Loop) —
- * OHNE dieses Gedächtnis vergisst er nach jedem Turn alles, UND (seit Spec 53/F Stufe 2) sogar
- * MITTEN in einer Konversation, sobald die Seite wechselt: das Modal mountet auf JEDER
- * FA-Vollseite neu (`agent-mount.blade.php`), `VoiceModal::$ergebnis` ist reine Komponenten-
- * Instanz-State und überlebt eine Navigation NICHT. Diese Sitzung liegt darum serverseitig in
- * Cache (TTL {@see TTL_MINUTEN}), Schlüssel Team+User+Laravel-Session-ID — Letzteres ist
- * bereits "pro Browser/Gerät" (ein neuer Browser/Inkognito-Tab bekommt eine neue Session-ID),
- * ohne dass ein eigener Geräte-Identifikator erfunden werden musste.
+ * OHNE dieses Gedächtnis vergisst er nach jedem Turn alles. Diese Sitzung liegt darum
+ * serverseitig in Cache (TTL {@see TTL_MINUTEN}).
+ *
+ * Spec 55: Schlüssel Team+User+Planungs-Session (`VoiceModal::sitzungIds()`) — NICHT mehr die
+ * Laravel-Browser-Session (der Agent lebt jetzt als Panel in der Planungs-Leitstelle, nicht
+ * mehr seitenübergreifend; ein Gerätewechsel soll das Gespräch nicht abschneiden, solange
+ * dieselbe Planungs-Session offen bleibt). Ohne offene Session: EIN geteilter Team+User-Eimer.
  *
  * Enthält NUR, was der Agent für Anschlussfragen braucht — kein Roh-Log: die letzten
  * {@see MAX_ZUEGE} Züge (gekürzt), die zuletzt NICHT bestätigten Vorschläge (für "ja"/"das

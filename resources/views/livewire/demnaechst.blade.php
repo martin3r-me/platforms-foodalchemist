@@ -35,5 +35,4 @@
         <p class="text-[11px] text-gray-500">Vollständiger Plan: <code class="font-mono">docs/14_ROADMAP_PHASE2.md</code> im Modul-Repo.</p>
     </x-ui-page-container>
     {{-- Spec 53/F Stufe 2: Sprachbefehl-Mount auf Seitenebene (Modal + optionales schwebendes Element). --}}
-    @include('foodalchemist::partials.agent-mount')
 </x-ui-page>

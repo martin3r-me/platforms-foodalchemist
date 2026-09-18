@@ -225,5 +225,4 @@
     <livewire:foodalchemist.recipes.recipe-modal />
     <livewire:foodalchemist.verkauf.vk-modal />
     {{-- Spec 53/F Stufe 2: Sprachbefehl-Mount auf Seitenebene (Modal + optionales schwebendes Element). --}}
-    @include('foodalchemist::partials.agent-mount')
 </x-ui-page>

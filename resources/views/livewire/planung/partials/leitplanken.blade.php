@@ -48,7 +48,11 @@
         </div>
 
         <div data-richtung="sektor">
-            <p class="text-xs font-medium text-gray-900 mb-1">Sektor (Verpflegungskontext)</p>
+            <p class="text-xs font-medium text-gray-900 mb-1">Sektor (Verpflegungskontext)
+                @if($reglerVonAgent[$scope]['sektor'] ?? false)
+                    <span class="{{ $pill }} {{ $variantPill['secondary'] }}" data-regler-von-agent="sektor" title="Vom Sprachbefehl-Agenten vorgeschlagen — verschwindet bei manueller Änderung">Agent</span>
+                @endif
+            </p>
             <select wire:model="regler.{{ $scope }}.sektor" class="{{ $input }} !py-1.5">
                 <option value="">(egal/universell)</option>
                 <option value="betriebsgastronomie">Betriebsgastronomie</option>
@@ -127,7 +131,11 @@
                 </div>
             @else
                 <div>
-                    <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Pax / Gäste</label>
+                    <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Pax / Gäste
+                        @if($reglerVonAgent[$scope]['pax'] ?? false)
+                            <span class="{{ $pill }} {{ $variantPill['secondary'] }}" data-regler-von-agent="pax" title="Vom Sprachbefehl-Agenten vorgeschlagen — verschwindet bei manueller Änderung">Agent</span>
+                        @endif
+                    </label>
                     <input type="number" min="1" max="100000" step="1" wire:model="regler.{{ $scope }}.pax" placeholder="z. B. 50" class="{{ $input }} !py-1.5" data-planung-pax />
                 </div>
                 {{-- Ziel-Portion (g) ist per-Portion — für ein Concept (ganzes Menü) scope-fremd, darum nur
@@ -224,7 +232,11 @@
             <div class="md:col-span-2 border-t border-black/5 pt-3 mt-1" data-richtung="vk-achsen">
                 <div class="grid md:grid-cols-3 gap-x-6 gap-y-3">
                     <div>
-                        <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Anlass</label>
+                        <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Anlass
+                            @if($reglerVonAgent[$scope]['occasion'] ?? false)
+                                <span class="{{ $pill }} {{ $variantPill['secondary'] }}" data-regler-von-agent="occasion" title="Vom Sprachbefehl-Agenten vorgeschlagen — verschwindet bei manueller Änderung">Agent</span>
+                            @endif
+                        </label>
                         <select wire:model="regler.{{ $scope }}.occasion" class="{{ $input }} !py-1.5">
                             <option value="">—</option>
                             @foreach(['fruehstueck' => 'Frühstück', 'lunch' => 'Lunch', 'konferenz' => 'Konferenz', 'empfang' => 'Empfang', 'dinner' => 'Dinner', 'late_night' => 'Late Night'] as $wert => $lbl)
@@ -254,7 +266,11 @@
                          p. P. oben die EINZIGE Preisquelle (Entscheid 2026-08-18) — hier kein zweiter Preis. --}}
                     @if($scope === 'gericht')
                         <div class="md:col-span-3">
-                            <p class="text-xs font-medium text-gray-900 mb-1">Ziel-VK (optional)</p>
+                            <p class="text-xs font-medium text-gray-900 mb-1">Ziel-VK (optional)
+                                @if($reglerVonAgent[$scope]['ziel_vk'] ?? false)
+                                    <span class="{{ $pill }} {{ $variantPill['secondary'] }}" data-regler-von-agent="ziel_vk" title="Vom Sprachbefehl-Agenten vorgeschlagen — verschwindet bei manueller Änderung">Agent</span>
+                                @endif
+                            </p>
                             <input type="text" wire:model="regler.{{ $scope }}.ziel_vk" placeholder="z. B. 8,50" class="{{ $input }} !py-1.5 md:max-w-xs" data-planung-ziel-vk />
                             <p class="text-[11px] text-gray-500 mt-1">Netto je Portion. Geht als Vorgabe in den Vorschlag; der Preis wird nicht auf das Ziel gedrückt.</p>
                         </div>

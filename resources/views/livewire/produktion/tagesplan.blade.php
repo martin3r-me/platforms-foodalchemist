@@ -1488,5 +1488,4 @@
 </x-ui-page>
 @endif
 {{-- Spec 53/F Stufe 2: Sprachbefehl-Mount auf Seitenebene (echter Root ist das aeussere <div>, nicht das bedingte <x-ui-page> — Include gehoert deshalb hier, nicht neben das andere </x-ui-page>). --}}
-@include('foodalchemist::partials.agent-mount')
 </div>

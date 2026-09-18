@@ -25,7 +25,7 @@ use Platform\FoodAlchemist\Services\TeamSettingsService;
 class TeamSettingsPutTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
 {
     /** Boolean-Schalter. */
-    private const BOOL_KEYS = ['ai_active', 'show_fallback_chain', 'trend_auto_enabled', 'trend_signal_enabled', 'voice_agent_dauerhaft_aktiv', 'voice_tts_vorlesen'];
+    private const BOOL_KEYS = ['ai_active', 'show_fallback_chain', 'trend_auto_enabled', 'trend_signal_enabled', 'voice_agent_dauerhaft_aktiv', 'voice_agent_panel_planung', 'voice_tts_vorlesen'];
 
     /** Numerische Skalare (float, ≥ 0). */
     private const NUM_KEYS = [
@@ -92,7 +92,8 @@ class TeamSettingsPutTool extends FoodAlchemistTool implements ToolContract, Too
                         'trend_auto_enabled' => ['type' => 'boolean', 'description' => 'Trendradar-Konzept-Automatik an/aus.'],
                         'trend_auto_limit' => ['type' => 'integer', 'description' => 'Anzahl Top-Trends je Automatik-Lauf.'],
                         'trend_signal_enabled' => ['type' => 'boolean', 'description' => 'Trend-Vorschlag als Signal in die Inbox.'],
-                        'voice_agent_dauerhaft_aktiv' => ['type' => 'boolean', 'description' => 'Sprachbefehl auf jeder Seite als schwebendes Element sichtbar (nicht nur Sidebar-Knopf).'],
+                        'voice_agent_dauerhaft_aktiv' => ['type' => 'boolean', 'description' => 'VERALTET (Spec 55) — das schwebende Element auf jeder Seite gibt es nicht mehr, dieser Schlüssel wird nirgends mehr gelesen. Für die Panel-Sichtbarkeit in der Planung: voice_agent_panel_planung.'],
+                        'voice_agent_panel_planung' => ['type' => 'boolean', 'description' => 'Agenten-Panel in der Planungs-Leitstelle sichtbar (Default AN, wenn nie gesetzt).'],
                         'purchase_journal_trigger' => ['type' => 'string', 'description' => 'Einkaufsjournal-Buchung ab Status: sent|delivered.'],
                         'voice_agent_mode' => ['type' => 'string', 'description' => 'Agenten-Modus des Sprachbefehls: fragen (Default, jede Schreibaktion nur Vorschlag) | auto_sicher (reversible Vorschläge laufen direkt) | nur_lesen (keine Vorschläge).'],
                         'voice_tts_vorlesen' => ['type' => 'boolean', 'description' => 'Antworten des Sprach-Agenten laut vorlesen (Konversations-Modus, Default AUS).'],

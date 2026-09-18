@@ -17,8 +17,23 @@
 @endassets
 @php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
 
-<x-foodalchemist::modal name="voice-modal" title="Sprachbefehl" size="max-w-xl" :z-fest="true">
-    <div class="space-y-3" data-voice>
+{{-- Spec 55: kein globales Modal mehr — der Agent ist ein einklappbares Panel, fest in der
+     Planungs-Leitstelle eingebettet (planung/index.blade.php entscheidet, OB es überhaupt
+     rendert, über foodalchemist.ai.voice_agent_panel_planung). Startet eingeklappt (Team-
+     Entscheid Dominique), `x-init` löst dieselbe Initialisierung aus, die früher der
+     Öffnen-Klick auslöste (Sitzung wiederherstellen, Kontext setzen — siehe VoiceModal::oeffnen()). --}}
+<div class="rounded-lg border border-[var(--ui-border)] bg-[var(--ui-surface)]" data-voice-panel-planung
+     x-data="{ aufgeklappt: false }" x-init="$wire.oeffnen()">
+    <button type="button" @click="aufgeklappt = ! aufgeklappt"
+            class="w-full flex items-center justify-between px-3 py-2 text-xs font-medium text-[var(--ui-secondary)]"
+            data-voice-panel-toggle>
+        <span class="inline-flex items-center gap-1.5">
+            @svg('heroicon-o-microphone', 'w-4 h-4')
+            Sprachbefehl-Agent
+        </span>
+        <span x-text="aufgeklappt ? '−' : '+'"></span>
+    </button>
+    <div class="px-3 pb-3 space-y-3" data-voice x-show="aufgeklappt" x-cloak>
 
         {{-- Provider-Transparenz (Aufgabe 4): vorher unsichtbar, ob echt transkribiert wird
              oder der Fake-Fixtext antwortet. Aufgabe F: Modus-Pill daneben — ein Klick öffnet
@@ -47,14 +62,14 @@
              wire:key — Server-Status liegt AUSSERHALB dieses Blocks, damit ein Re-Render des
              Server-Status (Polling/Redirect) den laufenden Alpine-Aufnahmezustand nicht zerstört.
 
-             Spec 53 / Paket F (3): im Konversations-Modus (`konversationAktiv`, Team-Setting
-             „dauerhaft aktiv") läuft der Recorder mit VAD (Stille-Erkennung statt Klick-zum-
-             Stoppen) und hört nach der vorgelesenen Antwort automatisch weiter zu — Ein-Klick-
-             Modus (Standard) bleibt unverändert manuell. `<audio data-voice-tts>` ist das EINE
-             Wiedergabe-Element für die TTS-Antwort; die Autoplay-Entsperrung passiert BEIM
-             ÖFFNEN-Klick (sidebar.blade.php / agent-mount.blade.php), noch bevor dieses Modal
-             überhaupt rendert — hier wird nur geprüft, ob sie stattgefunden hat
-             (`dataset.faEntsperrt`), sonst greift sofort der `speechSynthesis`-Fallback. --}}
+             Spec 53 / Paket F (3): im Konversations-Modus (`konversationAktiv`, jetzt an
+             `voice_tts_vorlesen` gekoppelt statt am entfernten „dauerhaft aktiv") läuft der
+             Recorder mit VAD (Stille-Erkennung statt Klick-zum-Stoppen) und hört nach der
+             vorgelesenen Antwort automatisch weiter zu — Ein-Klick-Modus (Standard) bleibt
+             unverändert manuell. `<audio data-voice-tts>` ist das EINE Wiedergabe-Element für
+             die TTS-Antwort; die Autoplay-Entsperrung passiert jetzt beim ERSTEN Aufnahme-Klick
+             (s. u., `onclick` am Aufnahme-Knopf) — hier wird nur geprüft, ob sie stattgefunden
+             hat (`dataset.faEntsperrt`), sonst greift sofort der `speechSynthesis`-Fallback. --}}
         @if($aufnahmeMoeglich)
             <div wire:key="voice-recorder"
                  x-data="{
@@ -63,14 +78,6 @@
                     fallbackAktiv: false,
                     autoZyklen: 0,
                     konversationPausiert: false,
-                    // Spec 54 (4, Zwischenstatus): der Server-Roundtrip (verstehen()/
-                    // verarbeiteText(), bis zu 45s) läuft synchron — kein rundenweiser
-                    // Fortschritt zeigbar, aber DASS gerade etwas läuft, soll die Sprechblase
-                    // sofort zeigen statt ruhig zu wirken. Gesetzt an den beiden Stellen, an
-                    // denen WIR den Server-Call auslösen (Text-Absenden unten, Upload-Ende in
-                    // FaVoiceRecorder); zurückgesetzt, sobald eine Antwort ankommt (Watcher
-                    // unten — derselbe, der ohnehin auf Transkript/Ergebnis reagiert).
-                    verarbeitetGerade: false,
                     initKonversation() {
                         const audio = this.$refs.ttsAudio;
                         $wire.on('{{ \Platform\FoodAlchemist\Livewire\VoiceModal::EVENT_TTS_BEREIT }}', (payload) => this._wiedergeben(audio, payload.url, payload.text));
@@ -91,74 +98,10 @@
                             this.konversationAktiv = !!aktiv;
                             this.vad = !!aktiv;
                         });
-                        // Live-Bruch 2026-09-18 (b): der schwebende Knopf muss WÄHREND hört zu/
-                        // sendet/spricht als STOPP wirken (agent-mount.blade.php kann diesen
-                        // Alpine-Scope nicht direkt erreichen — eigene Komponente). Ein globaler,
-                        // reaktiv nachgezogener Flag statt eines Custom-Events: `stopAlles()`
-                        // bleibt hier definiert (kein zweiter Ort mit eigener Kopie der Logik).
-                        this.$watch(() => this.laeuft || this.hochladenLaeuft || this.fallbackAktiv || $wire.sprichtGerade, (v) => {
-                            window.FaVoiceKonversationAktiv = !!v;
-                        });
-                        window.FaVoiceStopAlles = () => this.stopAlles();
-                        // Live-Bruch 2026-09-18 (Punkt 3, erster Schritt Spec 54 »schwebender
-                        // Begleiter«): der schwebende Knopf soll den Zustand SELBST zeigen
-                        // (pulsierend/Wellen/ruhig/rot), statt das grosse Modal aufzureissen —
-                        // dieselbe Fenster-Brücke wie oben, jetzt mit dem sichtbaren Zustand +
-                        // Transkript/Antwort für die Sprechblase in agent-mount.blade.php.
-                        this.$watch(
-                            () => [this.laeuft, this.fallbackAktiv, $wire.sprichtGerade, this.keineSpracheErkannt,
-                                this.konversationPausiert, !!this.fehler, this.verarbeitetGerade, $wire.transcript,
-                                $wire.ergebnis?.text].join('|'),
-                            () => {
-                                window.FaVoiceZustand = {
-                                    status: this._schwebeStatus(),
-                                    titel: this._schwebeTitel(),
-                                    transkript: $wire.transcript,
-                                    antwort: $wire.ergebnis?.text ?? null,
-                                };
-                            },
-                        );
-                        // Spec 54 (4): eigener, schmaler Watcher NUR für das Zurücksetzen von
-                        // `verarbeitetGerade` — mit `(neu, alt)`-Vergleich, NICHT einfach
-                        // »transcript/ergebnis ist gesetzt«: im Konversations-Modus ist
-                        // `$wire.transcript` schon vom VORHERIGEN Zug gesetzt, während der
-                        // nächste Server-Call noch läuft — ein reiner Nicht-Null-Check hätte
-                        // sofort wieder zurückgesetzt, statt auf die ECHTE NEUE Antwort zu warten.
-                        this.$watch(
-                            () => [$wire.transcript, $wire.ergebnis?.text, !!this.fehler].join('|'),
-                            (neu, alt) => {
-                                if (alt !== undefined && neu !== alt) {
-                                    this.verarbeitetGerade = false;
-                                }
-                            },
-                        );
-                        // Live-Befund Dominique (2026-09-18): »zwei Klicks statt einem« — im
-                        // Konversations-Modus sollte der ÖFFNEN-Klick (schwebender Knopf ODER
-                        // Sidebar) SOFORT das Zuhören starten, nicht erst einen zweiten Klick
-                        // auf »Aufnahme starten« verlangen. `voice-modal.oeffnen` ist ein
-                        // natives, blubberndes CustomEvent (Alpine-$dispatch/Livewire-Client-
-                        // $dispatch laufen OHNE Server-Roundtrip) — der Listener hier feuert
-                        // NOCH in derselben Nutzer-Geste wie der Klick, `start()` erzeugt seinen
-                        // AudioContext also synchron genug (Safari-Regel bleibt gewahrt). Absichtlich
-                        // `this.konversationAktiv` (der von `oeffnen()` frisch gesetzte Server-Wert,
-                        // s. o.) statt eines vom Klick mitgeschickten Flags — der Ein-Klick-Modus
-                        // bleibt dadurch unverändert, auch wenn `autostart` mitkommt. Ein ÖFFNEN-
-                        // Klick ist immer eine ECHTE Nutzer-Geste — Sicherheitsdeckel (c) und
-                        // Stille-Pause (a) werden hier zurückgesetzt, sonst bliebe die Konversation
-                        // nach einer Pause für immer stehen.
-                        window.addEventListener('voice-modal.oeffnen', (e) => {
-                            if (e?.detail?.autostart && this.konversationAktiv && this.unterstuetzt && ! this.laeuft) {
-                                this.autoZyklen = 0;
-                                this.konversationPausiert = false;
-                                this.keineSpracheErkannt = false;
-                                this.start();
-                            }
-                        });
                     },
-                    // Live-Bruch 2026-09-18 (b): STOPP überall — schwebender Knopf während eines
-                    // laufenden Zyklus, der Stopp-Knopf im Modal, ESC. Räumt ALLES ab (Recorder,
-                    // Server-TTS-Audio, Browser-Fallback-Stimme) und pausiert die Konversation,
-                    // bis ein echter Klick sie wieder aufnimmt (siehe `autostart`-Listener oben).
+                    // Spec 55: STOPP-Sammelstelle bleibt (Stopp-Knopf im Panel, ESC) — die
+                    // Fenster-Brücke für einen schwebenden Knopf ist weg (kein globales Element
+                    // mehr, das von aussen stoppen können müsste).
                     stopAlles() {
                         if (this.laeuft) {
                             this.stop();
@@ -173,59 +116,6 @@
                         this.fallbackAktiv = false;
                         this.konversationPausiert = true;
                         $wire.call('sprechenBeendet');
-                    },
-                    // Live-Bruch 2026-09-18: »keine Sprache erkannt« und der 3-Zyklen-
-                    // Sicherheitsdeckel sind KEINE Fehler — der Knopf zeigte trotzdem rot, obwohl
-                    // serverseitig alles grün lief (letzte Antworten final=true, TTS synthetisiert).
-                    // Fünf Zustände jetzt statt vier: `pausiert` (amber/grau, wartet auf einen
-                    // Klick, aber nichts ist SCHIEFGELAUFEN) ist eigenständig von `fehler` (rot,
-                    // NUR bei einem echten technischen Fehler: Mikro verweigert/nicht unterstützt,
-                    // Upload fehlgeschlagen). Reihenfolge ist weiter Absicht: ein Fehler/eine
-                    // Pause überschreibt »spricht«/»hört zu«, die zufällig noch nicht
-                    // zurückgesetzt sind.
-                    _schwebeStatus() {
-                        if (this.fehler) {
-                            return 'fehler';
-                        }
-                        if (this.keineSpracheErkannt || this.konversationPausiert) {
-                            return 'pausiert';
-                        }
-                        if (this.fallbackAktiv || $wire.sprichtGerade) {
-                            return 'spricht';
-                        }
-                        if (this.laeuft) {
-                            return 'hoert_zu';
-                        }
-                        // Spec 54 (4): Aufnahme/Upload sind vorbei, der Server-Roundtrip
-                        // (verstehen()/verarbeiteText(), bis zu 45s) läuft noch — vorher fiel das
-                        // hier auf 'wartet' durch und die Sprechblase wirkte ruhig/untätig.
-                        if (this.verarbeitetGerade) {
-                            return 'denkt_nach';
-                        }
-
-                        return 'wartet';
-                    },
-                    // Live-Bruch 2026-09-18: der Nutzer sollte den GRUND sehen statt zu raten,
-                    // warum der Knopf gerade rot/amber ist — `this.fehler` trägt den echten
-                    // Fehlertext (VoiceRecorder setzt ihn bei getUserMedia-/Upload-Fehlern).
-                    _schwebeTitel() {
-                        if (this.fehler) {
-                            return this.fehler;
-                        }
-                        if (this.keineSpracheErkannt || this.konversationPausiert) {
-                            return 'Pausiert — zum Weiterhören klicken';
-                        }
-                        if (this.fallbackAktiv || $wire.sprichtGerade) {
-                            return 'Spricht';
-                        }
-                        if (this.laeuft) {
-                            return 'Hört zu';
-                        }
-                        if (this.verarbeitetGerade) {
-                            return 'Denkt nach …';
-                        }
-
-                        return 'Sprachbefehl (ziehbar)';
                     },
                     _wiedergeben(audio, url, text) {
                         if (! audio || audio.dataset.faEntsperrt !== '1') {
@@ -278,8 +168,14 @@
                 <div class="flex items-center gap-2">
                     {{-- Live-Bruch 2026-09-18 (b): STOPP überall — dieser Knopf muss WÄHREND
                          hört zu/sendet/spricht (nicht nur während der Aufnahme selbst) stoppen,
-                         darum die kombinierte Bedingung statt nur `laeuft`. --}}
+                         darum die kombinierte Bedingung statt nur `laeuft`. Spec 55: die
+                         Autoplay-Entsperrung sass vorher im Öffnen-Klick (Sidebar/schwebender
+                         Knopf, beide entfernt) — der erste Aufnahme-Klick hier ist jetzt die
+                         früheste echte Nutzer-Geste, `onclick` läuft synchron VOR dem
+                         Alpine-`@click` (Safari-Regel bleibt gewahrt), entsperrt bleibt für die
+                         Lebensdauer des Elements gültig. --}}
                     <button type="button"
+                            onclick="window.FaVoiceAudioEntsperren && window.FaVoiceAudioEntsperren('fa-voice-tts-audio')"
                             @click="(laeuft || hochladenLaeuft || fallbackAktiv || $wire.sprichtGerade) ? stopAlles() : (autoZyklen = 0, konversationPausiert = false, start())"
                             :disabled="! unterstuetzt"
                             :class="laeuft ? 'animate-pulse' : ''" class="{{ $btnPrimary }} disabled:opacity-40" data-voice-rec>
@@ -438,6 +334,31 @@
                                 </button>
                             @endif
                         </div>
+                    {{-- Spec 55 (Design-Punkt b): Feld-Vorschläge für die OFFENE Planungs-Session —
+                         Übernehmen schreibt NICHT hier, sondern dispatcht ein Event an Planung\Index
+                         (VoiceModal::komponentenUebernehmen()). --}}
+                    @elseif($p['type'] === 'komponenten_uebernahme')
+                        <div class="rounded bg-violet-500/10 border border-violet-500/30 px-2 py-1.5 text-xs space-y-1" wire:key="vp-{{ $i }}" data-voice-proposal-komponenten>
+                            <p>Vorschlag für die offene Planung: <span class="font-medium">{{ ['rezept' => 'Basisrezept', 'gericht' => 'Gericht', 'concept' => 'Concept'][$p['scope']] ?? $p['scope'] }}</span></p>
+                            @if($p['brief'])
+                                <p class="text-[11px] text-gray-600">Brief: {{ $p['brief'] }}</p>
+                            @endif
+                            @if(!empty($p['felder']))
+                                <p class="text-[11px] text-gray-500">
+                                    @foreach($p['felder'] as $k => $v)
+                                        <span class="{{ $pill }} {{ $variantPill['secondary'] }} mr-1">{{ $k }}: {{ is_array($v) ? implode(',', $v) : $v }}</span>
+                                    @endforeach
+                                </p>
+                            @endif
+                            @if($p['accepted'] ?? false)
+                                <span class="{{ $pill }} {{ $variantPill['success'] }}" data-voice-proposal-auto="1">✓ übernommen</span>
+                            @else
+                                <button type="button" wire:click="komponentenUebernehmen({{ $i }})" wire:loading.attr="disabled" wire:target="komponentenUebernehmen({{ $i }})"
+                                        class="{{ $btnGhostXs }} text-emerald-600 disabled:opacity-40" data-voice-proposal-komponenten-start>
+                                    Übernehmen
+                                </button>
+                            @endif
+                        </div>
                     {{-- Paket F (1b): generischer Schreibvorschlag für JEDES andere FA-Write-Tool.
                          Mit Alias (VoiceCommandService::SCHREIBAKTION_ALIAS) zeigt die Vorschau
                          alt→neu je Feld; ohne Alias nur die rohen Argumente + Tool-Beschreibung. --}}
@@ -478,4 +399,4 @@
             </div>
         @endif
     </div>
-</x-foodalchemist::modal>
+</div>

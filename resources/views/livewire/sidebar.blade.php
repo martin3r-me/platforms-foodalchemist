@@ -15,32 +15,13 @@
         Food Alchemist
     </div>
 
-    {{-- Spec 53/F Stufe 2: der Sprach-Agent mountet NICHT MEHR hier — `x-ui-sidebar` rendert
-         den Modul-Slot in einem `x-if` und nimmt ihn beim Einklappen komplett aus dem DOM
-         (traf früher auch das hier gemountete Modal, siehe `saved-toast`-Nebenbefund). Das
-         Modal mountet jetzt auf SEITENEBENE über `foodalchemist::partials.agent-mount`
-         (im Root jeder FA-Vollseite, überlebt das Einklappen). Die Sidebar behält NUR noch
-         den Öffnen-Knopf — eine Modal-Identität (`voice-modal`), jede Seite öffnet sie mit
-         demselben `voice-modal.oeffnen`-Event. --}}
+    {{-- Spec 55: der globale Sprachbefehl-Knopf ist weg — der Agent lebt nur noch als Panel
+         in der Planungs-Leitstelle (planung/index.blade.php), kein seitenübergreifendes Mount
+         mehr (das alte Modal-Mount-Partial ist entfernt, sein Öffnen-Event ungenutzt). --}}
 
     {{-- Ebene 2 (D2): aktiver Betrieb — die Preis-Dimension der ganzen FA (nur ausgeklappt). --}}
     <div x-show="!collapsed" class="px-2">
         @livewire('foodalchemist.active-outlet-bar')
-
-        {{-- Auf der Ebene des Betriebs-Wählers, weil das Mikrofon dieselbe Reichweite hat:
-             übergeordnete Steuerung für den ganzen FoodAlchemist, nicht für eine Seite. --}}
-        {{-- Spec 53/F (3): Autoplay-Entsperrung MUSS im selben Klick-Handler passieren wie das
-             Öffnen — noch innerhalb der "user activation", bevor irgendein await/Promise
-             dazwischenliegt (siehe `FaVoiceAudioEntsperren` in resources/js/voice-recorder). --}}
-        <button type="button" onclick="window.FaVoiceAudioEntsperren && window.FaVoiceAudioEntsperren('fa-voice-tts-audio')"
-                wire:click="$dispatch('voice-modal.oeffnen', { autostart: true })"
-                class="w-full mb-2 px-3 py-2 rounded-md flex items-center gap-2 text-xs font-medium
-                       text-[var(--ui-secondary)] border border-[var(--ui-border)] hover:bg-[var(--ui-muted-5)]"
-                title="Sprachbefehl — steuert den ganzen FoodAlchemist (lesend frei, Änderungen als Vorschlag)"
-                data-voice-global>
-            @svg('heroicon-o-microphone', 'w-4 h-4')
-            <span>Sprachbefehl</span>
-        </button>
     </div>
 
     @foreach($gruppen as $gruppe)

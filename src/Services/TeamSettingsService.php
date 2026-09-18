@@ -239,6 +239,19 @@ class TeamSettingsService
         return (bool) ($this->for($team)->voice_agent_dauerhaft_aktiv ?? false);
     }
 
+    /**
+     * Spec 55: „Agenten-Panel in der Planungs-Leitstelle anzeigen" — EIGENER Schlüssel,
+     * NICHT {@see voiceAgentDauerhaftAktiv()} (der trägt echte Entscheidungen zum alten,
+     * jetzt entfernten schwebenden Element; ein Backfill hätte sie stillschweigend
+     * umgedeutet). `null` (nie gesetzt) = Default AN.
+     */
+    public function voiceAgentPanelPlanung(Team $team): bool
+    {
+        $wert = $this->for($team)->voice_agent_panel_planung ?? null;
+
+        return $wert === null ? true : (bool) $wert;
+    }
+
     /** Spec 53 / Paket F (3): Antworten des Sprach-Agenten laut vorlesen (Default AUS). */
     public function voiceTtsVorlesen(Team $team): bool
     {

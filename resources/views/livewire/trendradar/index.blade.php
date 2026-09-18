@@ -199,5 +199,4 @@
         </x-foodalchemist::detail-sidebar>
     </x-slot>
     {{-- Spec 53/F Stufe 2: Sprachbefehl-Mount auf Seitenebene (Modal + optionales schwebendes Element). --}}
-    @include('foodalchemist::partials.agent-mount')
 </x-ui-page>
