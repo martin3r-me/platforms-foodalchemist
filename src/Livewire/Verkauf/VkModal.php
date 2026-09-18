@@ -1072,6 +1072,74 @@ class VkModal extends Component
         }
     }
 
+    // ── Spec 53 Bildstil-Dossier/Produktfoto-Knopf ────────────────────────
+
+    public bool $produktfotoLaeuft = false;
+
+    public ?string $produktfotoFehler = null;
+
+    /** Re-Mount-Zähler für den eingebetteten „Anrichten"-Step-Editor (trägt das Produktfoto). */
+    public int $fotoVersion = 0;
+
+    /**
+     * „KI-Produktfoto erzeugen" — dieselbe Mechanik wie im Basisrezept-Editor
+     * ({@see \Platform\FoodAlchemist\Livewire\Recipes\RecipeModal::kiProduktfoto}): dispatcht
+     * {@see \Platform\FoodAlchemist\Jobs\EnrichRecipeJob} im `nurProduktfoto`-Modus. Kein `$stepId`
+     * in diesem Modal — Doppel-Enqueue-Guard über denselben Cache-Schlüssel je Team+Rezept.
+     */
+    public function kiProduktfoto(): void
+    {
+        $this->produktfotoFehler = null;
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null || $this->recipeId === null) {
+            return;
+        }
+        $key = \Platform\FoodAlchemist\Jobs\EnrichRecipeJob::produktfotoCacheKey((int) $team->id, (int) $this->recipeId);
+        $stand = \Illuminate\Support\Facades\Cache::get($key);
+        if (is_array($stand) && in_array($stand['status'] ?? null, ['queued', 'running'], true)) {
+            $this->produktfotoLaeuft = true;   // Lauf ist schon unterwegs — nicht doppelt dispatchen
+            return;
+        }
+        \Illuminate\Support\Facades\Cache::put($key, ['status' => 'queued', 'at' => now()->toIso8601String()], now()->addMinutes(15));
+        \Platform\FoodAlchemist\Jobs\EnrichRecipeJob::dispatch(
+            teamId: (int) $team->id,
+            userId: (int) (Auth::id() ?? 0),
+            recipeId: (int) $this->recipeId,
+            nurProduktfoto: true,
+        );
+        $this->produktfotoLaeuft = true;
+        $this->savedToast('✨ KI-Produktfoto wird erzeugt …');
+    }
+
+    /** Poll-Ziel (wire:poll während $produktfotoLaeuft): liest den Job-Ausgang aus dem Cache. */
+    public function pruefeProduktfotoErgebnis(): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null || $this->recipeId === null) {
+            $this->produktfotoLaeuft = false;
+
+            return;
+        }
+        $stand = \Illuminate\Support\Facades\Cache::get(
+            \Platform\FoodAlchemist\Jobs\EnrichRecipeJob::produktfotoCacheKey((int) $team->id, (int) $this->recipeId)
+        );
+        if (! is_array($stand) || in_array($stand['status'] ?? null, ['queued', 'running'], true)) {
+            return;   // noch am Rechnen → weiter pollen
+        }
+        $this->produktfotoLaeuft = false;
+        if (($stand['status'] ?? null) === 'failed') {
+            $this->produktfotoFehler = $stand['error'] ?? 'KI-Produktfoto fehlgeschlagen.';
+            $this->errorToast('KI-Produktfoto fehlgeschlagen.');
+
+            return;
+        }
+        // done → NUR den eingebetteten Anrichten-Step-Editor (trägt das Produktfoto) neu mounten
+        // lassen (wie $zutatenVersion) — NICHT oeffnen(): das würde ungespeicherte Eingaben in
+        // anderen Feldern löschen, nur weil im Hintergrund ein Foto fertig wurde.
+        $this->fotoVersion++;
+        $this->savedToast('✅ KI-Produktfoto erzeugt.');
+    }
+
     public function bulkAlleUebernehmen(): void
     {
         $team = Auth::user()?->currentTeamRelation;

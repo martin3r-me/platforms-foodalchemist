@@ -957,13 +957,28 @@
         <x-foodalchemist::modal-section title="Anrichten & Ausgabe">
             <x-slot:actions>
                 <button type="button" wire:click="ki('plating')" class="{{ $btnAi }}" title="vk.plating: Plating-Vorschlag — wird in Anrichte-Schritte geparst" data-ki-plating>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5')Plating</button>
+                {{-- Spec 53: Produktfoto (Hero) erzeugen/ersetzen — läuft async (EnrichRecipeJob,
+                     nurProduktfoto), gepollt über pruefeProduktfotoErgebnis. --}}
+                @php($bildkosten = config('foodalchemist.ai.bildkosten_usd.models')['gpt-image-1.5'] ?? null)
+                <x-foodalchemist::ki-action action="kiProduktfoto" variant="ai" icon="heroicon-o-photo" label="KI-Produktfoto"
+                        busy="malt …" flash="Foto erzeugt"
+                        title="{{ 'Erzeugt/ersetzt das Hero-Foto des fertigen Gerichts' . ($bildkosten !== null ? ' — ca. ' . number_format($bildkosten, 3, ',', '.') . ' $ je Bild' : '') . '.' }}"
+                        data-ki-produktfoto />
             </x-slot:actions>
             <p class="text-[11px] text-gray-500 mb-2">
                 Teller-Aufbau am Pass: Reihenfolge, Mengen je Teller, Geometrie, Garnitur — Schritt für Schritt, mit Fotos. Keine Produktion und keine Regenerations-Parameter.
             </p>
+            @if($produktfotoLaeuft)
+                <div wire:poll.2s="pruefeProduktfotoErgebnis" class="mb-2 flex items-center gap-2 text-[11px] text-violet-700" data-produktfoto-laeuft>
+                    @svg('heroicon-o-arrow-path', 'w-3.5 h-3.5 animate-spin') KI-Produktfoto wird erzeugt …
+                </div>
+            @endif
+            @if($produktfotoFehler)
+                <p class="mb-2 text-[11px] text-rose-600" data-produktfoto-fehler>{{ $produktfotoFehler }}</p>
+            @endif
             <div data-vk-plating>
                 <livewire:foodalchemist.recipes.step-editor :recipe-id="$rezept->id" ebene="anrichten"
-                    wire:key="schritt-editor-vk-anrichten-{{ $rezept->id }}" />
+                    wire:key="schritt-editor-vk-anrichten-{{ $rezept->id }}-v{{ $fotoVersion }}" />
             </div>
             <p class="text-[10px] text-gray-500 mt-1">
                 Die Schritte sind der Master — <code>plating_text</code> wird daraus erzeugt (Foodbook, Angebot und Report lesen weiterhin diesen Text).
