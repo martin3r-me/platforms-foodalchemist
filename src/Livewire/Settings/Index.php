@@ -53,7 +53,7 @@ class Index extends Component
         'aufschlagsklassen' => ['label' => 'Preisklassen', 'hint' => 'Relative Faktoren auf den dynamischen Unternehmens-Basissatz'],
 
         // — KI & Kreativ-Steuerung (speist die KI-Generierung) —
-        'ki' => ['label' => 'KI', 'hint' => 'Provider · Tiering (V-01) · Nutzung · Kill-Switch (M7-08)'],
+        'ki' => ['label' => 'KI', 'hint' => 'Provider · Tiering (V-01) · Nutzung · Kill-Switch (M7-08) · Sprachbefehl (Agenten-Modus, dauerhaft aktiv, Vorlesen)'],
         'kueche' => ['label' => 'Küchen-Profil', 'hint' => 'Mandanten-Tendenz für den Generator (M7-07, Hooks gewinnen)'],
         // Ebene 1 der DNA-Kette (Umzug 2026-07-21): Team-Food-DNA wohnt bei den Einstellungen, nicht als Top-Level-Nav
         'food-dna' => ['label' => 'Food DNA (Identität)', 'hint' => 'Leitbild · Signature-Stil · Aromatik · No-Gos · Schreibstil — stehende KI-Referenz (Ebene 1)'],
