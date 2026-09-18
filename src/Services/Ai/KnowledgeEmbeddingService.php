@@ -319,11 +319,14 @@ class KnowledgeEmbeddingService
      * Embedding, wie viele noch nicht, dazu eine Stichprobe der fehlenden Slugs. Rein lesend.
      *
      * Zählt PER DOKUMENT über {@see EmbeddingStoreContract::getSourceHash()} — der Store-Contract
-     * bietet keine Bulk-Enumeration (s. Docblock von {@see purgeStale()}), ein direkter SQL-Zugriff
-     * auf die Core-Embedding-Tabelle wäre zudem falsch, sobald `embeddings.routing` für diesen
-     * Entity-Type auf Qdrant statt MySQL zeigt — der Contract ist der einzige backend-unabhängige
-     * Weg. Für einen kategorie-/präfix-eingeschränkten Kontroll-Aufruf (nicht "alle 12.000 auf
-     * einmal") ist das die richtige Größenordnung.
+     * bietet keine Bulk-Enumeration (s. Docblock von {@see purgeStale()}). Ein direkter SQL-Zugriff
+     * auf die Core-Embedding-Tabelle wäre HIER FALSCH, nicht nur theoretisch: `embeddings.routing`
+     * zeigt für Wissens-Dokumente auf demo tatsächlich auf **Qdrant**, nicht auf die MySQL-Tabelle
+     * (bestätigt, Orchestrierung 2026-09-18) — eine "Optimierung" auf direkten SQL-Zugriff würde
+     * dort still IMMER 0 zählen. Der Contract ist der einzige backend-unabhängige Weg; das bewusst
+     * NICHT gegen einen vermeintlich schnelleren Direktzugriff tauschen. Für einen kategorie-/
+     * präfix-eingeschränkten Kontroll-Aufruf (nicht "alle 12.000 auf einmal") ist die
+     * Einzel-Lookup-Größenordnung angemessen.
      *
      * @return array{aktiv_gesamt:int, mit_embedding:int, ohne_embedding:int, inaktiv:int, stichprobe_ohne_embedding:list<string>, hinweis:?string}
      */
