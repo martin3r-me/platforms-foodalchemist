@@ -495,3 +495,16 @@ Frage Dominique „bekommt vk.regeneration trotz Kanon noch Discovery?" → Nein
 | recipe.steps (50k) | `…--verhalten@v2` ×2 | `…--steckbrief` ×2 | 5.819 (§3 wenn_platz wieder raus) |
 
 - **Nachzügler → Lisa `fix/zutat-grounding-familie`:** (1) Familien-Ausschluss: nach Grounding ist `zutat.<anker>--*` für Discovery gesperrt, sonst wählt der Gruppen-Dedup den nächsten Aspekt als Vertreter (steckbrief) — das „zweite zufällige" kommt zurück. (2) Anker-Auflösung exakt statt Nearest-Neighbor: „gelee" → `apple_jelly` (heute ohne_dossier, später falsches Wissen). (3) PREVIEW-Herkunft zeigt `sent: 0` für Grounding-Einträge, obwohl gesendet (total_chars +9,4k).
+
+## Deploy 18 — 2026-09-18 20:45: Paket H abgeschlossen (Pin `acff65b9` = PR #134)
+
+- Familien-Sperre: nach Grounding ist `zutat.<anker>--*` für Discovery gesperrt (`$ausgeschlosseneZutatFamilien`, `not like`). Exakte Anker-Auflösung `PairingService::ankerSlugExakt()` (Slug oder display_de, normalisiert, kein Nearest-Neighbor). Herkunft-Key ohne `@vN` → `sent` stimmt.
+- **Messung nach Deploy 18 (PREVIEW „Passionsfrucht-Gelee mit Acerola, 40 Portionen"):**
+
+| Key | Zutaten-Dossiers (via zutat_grounding, score 1, sent > 0) | weitere zutat.* | dropped |
+|---|---|---|---|
+| recipe.generator (100k) | `passion_fruit--verwendung@v4` (3.185), `acerola_14--verwendung@v3` (3.113) | keine | 0 |
+| recipe.steps (50k) | `passion_fruit--verhalten@v2` (3.776), `acerola_14--verhalten@v2` (3.819) | keine | 3.657 (Maltodextrin-Pulver, irrelevant); §3 wenn_platz-Kanon wieder drin |
+
+`gelee` und `portionen` → `ohne_anker` (korrekt, vorher `apple_jelly`). Dominiques Frage „nimmt er random irgendeins?" ist damit mit Nein beantwortet: je Zutat genau der Aspekt des Arbeitsschritts, deterministisch, kein zweites Dossier derselben Zutat. Live-Reichweite hängt am Import der 2.630 Vault-Dossiers (andere Session; Splitter auf 4 Aspekte bringen).
+- Kleiner Nachtrag (nicht blockierend): `ankerSlugExakt()` lädt je Token die ganze Anker-Tabelle — Cache je Request sinnvoll, sobald der Import die Anker-Zahl hebt.
