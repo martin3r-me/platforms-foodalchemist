@@ -44,12 +44,21 @@ class VoiceCommandService
      *
      * Live gemessen: 6.366 Zeichen ≈ 2.122 Token je Runde (statt 26.000).
      */
+    /**
+     * Spec 55: der Agent lebt nur noch in der Planungs-Leitstelle — der Katalog ist auf
+     * Planungsbezug geschrumpft (kein `verkaufsrezepte.SEARCH`/`artikel.SEARCH` — Lieferanten-
+     * artikel/Verkaufsrezepte-Browsing gehört nicht zur Planung; kein `recipe_klasse.POST` —
+     * Speisen-Klassifikation ist keine der genannten Planungs-Fähigkeiten). NEU: `formats.SEARCH`
+     * + `zielgruppen.GET` + `knowledge.PREVIEW` für Wissens-fundierte Vorschläge MIT Quelle
+     * (Design-Punkt d). `ui.OPEN` bleibt (öffnet Entwürfe, die eine Kaskade erzeugt hat —
+     * „Schritt öffnen"), `ui.NAVIGATE`/`ui.ROUTES` bleiben technisch unverändert (der volle
+     * FA-Routenkatalog ist geteilter Code, siehe `UiNavigateTool`) — die Beschränkung auf
+     * planungsinterne Ziele ist eine Prompt-Regel (`system_zusatz` unten), kein Katalog-Cut.
+     */
     public const TOOLS = [
         'tool_registry.SEARCH', 'tool_registry.GET',
         'foodalchemist.gps.SEARCH', 'foodalchemist.gps.GET',
         'foodalchemist.recipes.SEARCH', 'foodalchemist.recipes.GET',
-        'foodalchemist.verkaufsrezepte.SEARCH', 'foodalchemist.artikel.SEARCH',
-        'foodalchemist.recipe_klasse.POST',
         'foodalchemist.ui.OPEN',
         // Spec 53/D: ui.OPEN öffnet einen KONKRETEN Datensatz (id nötig) — für „Öffne die Planung"
         // (keine id, allgemeine Seite) gibt es NAVIGATE. Ohne den Eintrag hier kannte das Modell
@@ -81,6 +90,11 @@ class VoiceCommandService
         'foodalchemist.planung_vorschlag.POST',
         'foodalchemist.anreicherung_vorschlag.POST',
         'foodalchemist.planung_kaskade.LETZTE',
+        // Spec 55 (Design-Punkt d): Wissens-Fundierung MIT Quelle — Formate/Zielgruppen als
+        // reale Referenzen statt Bauchgefühl, `knowledge.PREVIEW` für Event-Playbooks/Regelwerke.
+        'foodalchemist.formats.SEARCH',
+        'foodalchemist.zielgruppen.GET',
+        'foodalchemist.knowledge.PREVIEW',
     ];
 
     /**
@@ -262,6 +276,51 @@ class VoiceCommandService
     }
 
     /**
+     * Spec 55 (Design-Punkt c): kompakter Status-Snapshot des LETZTEN Kaskaden-Laufs der aktiven
+     * Planungs-Session — direkt im Systemprompt, damit der Agent proaktiv darauf antworten kann
+     * („Schritt 3 ist rot — neu anstoßen?"), OHNE dass der Mensch erst danach fragt (dafür gibt es
+     * bereits `foodalchemist.planung_kaskade.LETZTE` als Tool). Best effort: kein Team/keine
+     * Session/kein Lauf/ein Fehler beim Lesen liefert einfach `null` — ein fehlender Hinweis ist
+     * kein Grund, den Sprachbefehl abzubrechen.
+     */
+    private function planungsKaskadenHinweis(?int $planungsSessionId): string
+    {
+        if ($planungsSessionId === null) {
+            return '';
+        }
+        $team = \Illuminate\Support\Facades\Auth::user()?->currentTeamRelation;
+        if ($team === null) {
+            return '';
+        }
+        try {
+            $run = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRun::visibleToTeam($team)
+                ->where('planning_session_id', $planungsSessionId)
+                ->orderByDesc('id')
+                ->first();
+            if ($run === null) {
+                return '';
+            }
+            $status = app(PlanningCascadeService::class)->laufStatus($team, (int) $run->id);
+        } catch (\Throwable) {
+            return '';                                               // Kontext ist ein Bonus, kein Pflichtpfad
+        }
+        if ($status === null) {
+            return '';
+        }
+        $zeilen = ['Status: ' . ($status['lauf']['status'] ?? 'unbekannt')];
+        foreach ($status['schritte'] as $schritt) {
+            if (($schritt['status'] ?? null) === 'failed') {
+                $zeilen[] = 'Schritt „' . ($schritt['label'] ?? '?') . '" ist fehlgeschlagen'
+                    . (($schritt['fehler'] ?? null) !== null ? ' (' . $schritt['fehler'] . ')' : '') . '.';
+            }
+        }
+
+        return "\n\n[Aktuelle Kaskade dieser Planungs-Session, NUR zur Einordnung — auf einen fehlgeschlagenen "
+            . "Schritt darfst du proaktiv hinweisen und einen Neustart vorschlagen, ohne dass danach gefragt wird:\n"
+            . implode("\n", $zeilen) . ']';
+    }
+
+    /**
      * Rundenbudget UND Zeitbudget (Befund 2026-09-17, demo-Call-Log 16.09.: 2 von 5 Läufen liefen
      * bis `maxRuns` durch — 6 Runden, ~60 s, ~91.560 Input-Token — ohne dass der Nutzer in der
      * Zeit auch nur eine Zwischenmeldung sah). 4 Runden reichen für die gemessenen Fälle (Suche,
@@ -281,16 +340,26 @@ class VoiceCommandService
      *                                                        öffnenden Seite („reichere DIESES Rezept an").
      * @param  string  $modus  Spec 53/F: fragen (Default)|auto_sicher|nur_lesen — siehe
      *                          {@see \Platform\FoodAlchemist\Services\TeamSettingsService::VOICE_AGENT_MODES}.
+     * @param  ?int  $planungsSessionId  Spec 55 (Design-Punkt c): die aktive Planungs-Session — trägt den
+     *                                    letzten Kaskaden-Lauf (Status, roter Schritt) als Kontext, DAMIT
+     *                                    der Agent proaktiv darauf antworten kann, ohne dass der Mensch
+     *                                    erst fragt (z. B. „Schritt 3 ist rot — neu anstoßen?").
      * @return array{text: ?string, unklar: bool, runden: int, elapsed_ms: int, freigeschaltet: list<string>,
      *               aktionen: list<array>, proposals: list<array>, tool_laeufe: list<array>}
      */
-    public function verarbeite(string $transcript, ?array $kontext = null, string $modus = 'fragen', ?string $verlauf = null): array
-    {
+    public function verarbeite(
+        string $transcript,
+        ?array $kontext = null,
+        string $modus = 'fragen',
+        ?string $verlauf = null,
+        ?int $planungsSessionId = null,
+    ): array {
         $kontextHinweis = ($kontext !== null && isset($kontext['type'], $kontext['id']))
             ? " [Kontext: aktuell geöffnet — {$kontext['type']} ID={$kontext['id']}. Bei \"dieses/das Rezept\" "
                 . 'OHNE genannten Namen/Nummer diese ID verwenden, NICHT raten. Wird ein anderer Name genannt, '
                 . 'gilt der genannte Name.]'
             : '';
+        $planungsHinweis = $this->planungsKaskadenHinweis($planungsSessionId);
         // Spec 53 / Paket F (4): GEKÜRZTER Gesprächsverlauf (letzte Züge + zuletzt geöffnetes
         // Objekt) — löst Pronomen/Ellipsen über den letzten Turn hinweg auf ("und jetzt lösche
         // das"). Referenz-Bestätigungen ("ja", "das zweite") laufen NICHT hier durch: die fängt
@@ -363,7 +432,7 @@ class VoiceCommandService
             . 'ohne jedes Tool aufzurufen. Ein kurzer, aber ERKENNBARER Befehl (auch unvollständig) ist davon '
             . 'NICHT betroffen — im Zweifel gilt ein Transkript als Befehl, nicht als Rauschen. ';
         $resultat = $this->ki->callWithTools(
-            "Sprachbefehl des Users (Deutsch, Kurz-Audio-Transkript): \"{$transcript}\"{$kontextHinweis}{$verlaufHinweis}",
+            "Sprachbefehl des Users (Deutsch, Kurz-Audio-Transkript): \"{$transcript}\"{$kontextHinweis}{$verlaufHinweis}{$planungsHinweis}",
             $toolsFuerModus,
             self::MAX_RUNDEN,
             [
@@ -378,18 +447,23 @@ class VoiceCommandService
                 // an Tier D hängenden Prompt-Keys (demo.echo, gp.condition, recipe.category,
                 // recipe.name_putzen) mit umzustellen.
                 'model' => config('foodalchemist.ai.voice_model'),
-                'system_zusatz' => $modusHinweis . ' ' . $schreibHinweis . $rauschHinweis . 'Du steuerst den GANZEN FoodAlchemist (Rezepte, Gerichte, Concepter, Foodbook, '
-                    . 'Speisekarte, Speiseplan, Bestellwesen, Lieferanten). Der Katalog unten ist nur der Einstieg: '
-                    . 'fehlt dir ein Werkzeug, suche es mit tool_registry.SEARCH und rufe es direkt auf. '
-                    . 'Suche IMMER mit name_glob "foodalchemist.*" (z. B. {"query":"foodbook kapitel",'
-                    . '"name_glob":"foodalchemist.*"}) — Tools anderer Module sind gesperrt, jede Anfrage dorthin '
-                    . 'kostet nur eine Runde. Freigeschaltet sind LESENDE foodalchemist.*-Tools. Schreibende sind '
-                    . 'gesperrt; Änderungen laufen über die Proposal-Tools und werden vom Menschen bestätigt. '
-                    . 'Zum Öffnen eines KONKRETEN Datensatzes foodalchemist.ui.OPEN nutzen (id nötig), '
-                    . 'zum Wechseln auf eine allgemeine Seite ohne Datensatz (z. B. „Öffne die Planung") '
-                    . 'foodalchemist.ui.NAVIGATE — die kurzen route_key-Labels stehen direkt im Schema des '
-                    . 'Tools, DIREKT aufrufen statt vorher zu suchen; nur wenn kein Key passt, '
-                    . 'foodalchemist.ui.ROUTES abfragen. '
+                // Spec 55: der Agent ist NICHT mehr der globale FA-Navigator (das war bis
+                // Spec 53/54 der Fall) — er lebt NUR noch als Panel in der Planungs-Leitstelle.
+                // Die Rolle + der Katalog (self::TOOLS) sind entsprechend geschrumpft.
+                'system_zusatz' => $modusHinweis . ' ' . $schreibHinweis . $rauschHinweis
+                    . 'DEINE ROLLE: Planungs-Assistent der Planungs-Leitstelle — NICHT mehr der '
+                    . 'globale FoodAlchemist-Navigator. Du hilfst beim Aufbau EINER Planung (Basisrezept, '
+                    . 'Gericht oder Concept): Brief formulieren, Leitplanken setzen, einen Vorschlag '
+                    . 'anstossen, den Stand der laufenden Kaskade nennen. Der Katalog unten ist nur der '
+                    . 'Einstieg: fehlt dir ein Werkzeug, suche es mit tool_registry.SEARCH und rufe es '
+                    . 'direkt auf — Suche IMMER mit name_glob "foodalchemist.*" (Tools anderer Module '
+                    . 'sind gesperrt, jede Anfrage dorthin kostet nur eine Runde). Freigeschaltet sind '
+                    . 'LESENDE foodalchemist.*-Tools. Schreibende sind gesperrt; Änderungen laufen über '
+                    . 'die Proposal-Tools und werden vom Menschen bestätigt. '
+                    . 'Zum Öffnen eines KONKRETEN Datensatzes (z. B. ein von der Kaskade erzeugter '
+                    . 'Entwurf) foodalchemist.ui.OPEN nutzen (id nötig); foodalchemist.ui.NAVIGATE NUR '
+                    . 'für Ziele INNERHALB der Planung (Tabs, die eigene Session, ein Kaskaden-Schritt) — '
+                    . 'die kurzen route_key-Labels stehen direkt im Schema des Tools. '
                     . 'DREI PLANUNGS-FÄHIGKEITEN — direkt aufrufen, KEIN vorheriges tool_registry.SEARCH nötig '
                     . '(stehen schon im Katalog oben): '
                     . '(1) foodalchemist.planung_vorschlag.POST für „erstelle/baue ein Rezept/Gericht/Menü …" — '
@@ -400,13 +474,32 @@ class VoiceCommandService
                     . 'letzten Läufe, keine run_id nötig). '
                     . 'foodalchemist.planung_session.POST und foodalchemist.planung_kaskade.START sind für dich '
                     . 'GESPERRT (echte Schreiber) — NIE versuchen, IMMER stattdessen (1)/(2) vorschlagen. '
-                    . 'ARBEITSWEISE für ALLES ANDERE: geht es um eine Fach-Aufgabe (Rezept, Gericht, Konzept, '
-                    . 'Foodbook, GP) AUSSER den drei Planungs-Fähigkeiten oben, hole ZUERST den hinterlegten '
+                    . 'LÜCKENCHECK vor (1): nennt der Befehl NICHT mindestens Sektor, Anlass, Personenzahl, '
+                    . 'Budget/Ziel-VK UND Niveau, frage GEZIELT nach den fehlenden davon, BEVOR du '
+                    . 'planung_vorschlag.POST aufrufst — kein Rateversuch mit Platzhaltern. Nennt der Nutzer '
+                    . 'in der Antwort auf deine Nachfrage weitere Angaben, ergänze sie und rufe DANN auf. '
+                    . ($planungsSessionId !== null
+                        ? 'ES IST BEREITS EINE PLANUNGS-SESSION OFFEN: „erstelle eine neue Planung" bleibt (1) — '
+                            . 'aber „ändere den Brief"/„setze Sektor auf …"/„Personenzahl ist 40" betrifft die '
+                            . 'OFFENE Session, NICHT (1). Dafür KEIN Tool aufrufen — stattdessen im finalen '
+                            . '{"action":"final",…} zusätzlich ein "struktur"-Feld mitgeben: '
+                            . '{"struktur":{"scope":"rezept|gericht|concept","felder":{"<Leitplanken-Schlüssel>":'
+                            . '"<Wert>"},"brief":"<optionaler neuer Brief-Text>"}}. Leitplanken-Schlüssel EXAKT: '
+                            . 'sektor, occasion (Anlass), pax (Personen), ziel_vk (Budget), level (Niveau) — '
+                            . 'NUR die tatsächlich genannten Felder, nichts erfinden. Der Mensch bestätigt die '
+                            . 'Übernahme per Klick (GL-07), du schreibst NICHTS direkt. '
+                        : '')
+                    . 'WISSENS-FUNDIERUNG: für Sektor/Anlass-Empfehlungen ZUERST foodalchemist.formats.SEARCH '
+                    . '(passende Formate), foodalchemist.zielgruppen.GET (hinterlegte Segmente) oder '
+                    . 'foodalchemist.knowledge.PREVIEW (Event-Playbooks/Regelwerke) prüfen — im finalen Text '
+                    . 'die Quelle nennen („laut Format …", „Event-Playbook …"), NICHT raten, wenn nichts '
+                    . 'passt sag das statt zu erfinden. '
+                    . 'ARBEITSWEISE für ALLES ANDERE: geht es um eine Fach-Aufgabe (Rezept, Gericht, Concept) '
+                    . 'AUSSER den drei Planungs-Fähigkeiten oben, hole ZUERST den hinterlegten '
                     . 'Ablauf mit foodalchemist.ablauf.GET — dort stehen die verbindlichen Regeln und die '
                     . 'Reihenfolge; für (1)-(3) ist das NICHT nötig, sie sind schon vollständig beschrieben. '
-                    . 'Für eine einzelne Fachfrage hole dir foodalchemist.knowledge.SEARCH über '
-                    . 'tool_registry.SEARCH. Nicht aus dem Gedächtnis arbeiten und keine Werte erfinden: '
-                    . 'fehlt etwas, ist die Lücke die Antwort.',
+                    . 'Nicht aus dem Gedächtnis arbeiten und keine Werte erfinden: fehlt etwas, ist die '
+                    . 'Lücke die Antwort.',
             ],
         );
 
@@ -438,6 +531,28 @@ class VoiceCommandService
             // ToolResult::success), das Unterscheidungsmerkmal ist der `schreibaktion`-Schlüssel.
             if (isset($lauf['data']['schreibaktion'])) {
                 $proposals[] = ['type' => 'schreibaktion'] + $lauf['data']['schreibaktion'];
+            }
+        }
+        // Spec 55 (Design-Punkt b): das Modell darf im finalen JSON zusätzlich ein "struktur"-Feld
+        // mitgeben (additive Protokoll-Erweiterung, s. AiGatewayService::callWithTools()) — Feld-
+        // Vorschläge für die OFFENE Planungs-Session (Regler/Brief), OHNE eigenes MCP-Tool.
+        // Whitelist gegen REGLER_DEFAULT-Schlüssel: das Modell darf NICHTS erfinden, was
+        // Planung\Index::regler() beim Übernehmen nicht kennt (kein Katalog-Wachstum, keine
+        // ungeprüften Keys in einer fremden Komponente).
+        $struktur = $resultat['struktur'] ?? null;
+        if (is_array($struktur) && in_array($struktur['scope'] ?? null, ['rezept', 'gericht', 'concept'], true)) {
+            $felder = array_intersect_key(
+                is_array($struktur['felder'] ?? null) ? $struktur['felder'] : [],
+                array_flip(['sektor', 'occasion', 'pax', 'ziel_vk', 'level']),
+            );
+            $brief = is_string($struktur['brief'] ?? null) ? trim($struktur['brief']) : null;
+            if ($felder !== [] || ($brief !== null && $brief !== '')) {
+                $proposals[] = [
+                    'type' => 'komponenten_uebernahme',
+                    'scope' => $struktur['scope'],
+                    'felder' => $felder,
+                    'brief' => $brief !== '' ? $brief : null,
+                ];
             }
         }
 

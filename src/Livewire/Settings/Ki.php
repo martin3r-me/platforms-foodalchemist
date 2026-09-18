@@ -28,8 +28,8 @@ class Ki extends Component
     /** Spec 53/F: Agenten-Modus des Sprachbefehls — fragen (Default)|auto_sicher|nur_lesen. */
     public string $sprachAgentModus = TeamSettingsService::VOICE_AGENT_MODE_DEFAULT;
 
-    /** Spec 53/F Stufe 2: Sprachbefehl auf jeder Vollseite als schwebendes Element (Default AUS). */
-    public bool $sprachAgentDauerhaftAktiv = false;
+    /** Spec 55: Agenten-Panel in der Planungs-Leitstelle sichtbar (Default AN). */
+    public bool $sprachAgentPanelPlanung = true;
 
     /** Spec 53/F (3): Antworten des Sprach-Agenten laut vorlesen (Konversations-Modus, Default AUS). */
     public bool $sprachTtsVorlesen = false;
@@ -44,13 +44,13 @@ class Ki extends Component
         if ($team !== null) {
             $svc = app(TeamSettingsService::class);
             $this->sprachAgentModus = $svc->voiceAgentModus($team);
-            $this->sprachAgentDauerhaftAktiv = $svc->voiceAgentDauerhaftAktiv($team);
+            $this->sprachAgentPanelPlanung = $svc->voiceAgentPanelPlanung($team);
             $this->sprachTtsVorlesen = $svc->voiceTtsVorlesen($team);
             $this->sprachTtsStimme = $svc->voiceTtsStimme($team);
         }
     }
 
-    /** Sofort speichern, Muster wie {@see sprachAgentDauerhaftUmschalten()}. */
+    /** Sofort speichern, Muster wie {@see sprachAgentPanelPlanungUmschalten()}. */
     public function sprachTtsVorlesenUmschalten(): void
     {
         $team = Auth::user()?->currentTeamRelation;
@@ -75,22 +75,24 @@ class Ki extends Component
         $this->meldung = 'Stimme gespeichert: ' . $wert;
     }
 
-    /** Sofort speichern + localStorage-Spiegel via Browser-Event (agent-mount.blade.php liest ihn). */
-    public function sprachAgentDauerhaftUmschalten(): void
+    /**
+     * Spec 55: Agenten-Panel in der Planungs-Leitstelle an/aus — eigener Schlüssel
+     * `voice_agent_panel_planung` (NICHT das alte `voice_agent_dauerhaft_aktiv`, das trägt
+     * Entscheidungen zum entfernten schwebenden Element). Reine Server-Einstellung — die
+     * Planungsseite liest sie beim Laden, kein Live-Browser-Event nötig (kein globales
+     * Element mehr, das sofort reagieren müsste).
+     */
+    public function sprachAgentPanelPlanungUmschalten(): void
     {
         $team = Auth::user()?->currentTeamRelation;
         if ($team === null) {
             return;
         }
-        $this->sprachAgentDauerhaftAktiv = ! $this->sprachAgentDauerhaftAktiv;
-        app(TeamSettingsService::class)->update($team, ['voice_agent_dauerhaft_aktiv' => $this->sprachAgentDauerhaftAktiv]);
-        // Kein `->to()` nötig: Livewire dispatcht als normales `window`-CustomEvent — der
-        // schwebende Knopf (Alpine, agent-mount.blade.php) hört global zu und spiegelt den
-        // Wert sofort in localStorage, ohne dass die aktuelle Seite neu geladen werden muss.
-        $this->dispatch('voice-agent-dauerhaft-aktiv-geaendert', aktiv: $this->sprachAgentDauerhaftAktiv);
-        $this->meldung = $this->sprachAgentDauerhaftAktiv
-            ? 'Sprachbefehl ist jetzt auf jeder Seite als schwebendes Element sichtbar.'
-            : 'Sprachbefehl bleibt wieder auf den Sidebar-Knopf beschränkt.';
+        $this->sprachAgentPanelPlanung = ! $this->sprachAgentPanelPlanung;
+        app(TeamSettingsService::class)->update($team, ['voice_agent_panel_planung' => $this->sprachAgentPanelPlanung]);
+        $this->meldung = $this->sprachAgentPanelPlanung
+            ? 'Agenten-Panel ist in der Planungs-Leitstelle sichtbar.'
+            : 'Agenten-Panel ist in der Planungs-Leitstelle ausgeblendet.';
     }
 
     /** Livewire-Hook: `wire:model.live="sprachAgentModus"` speichert sofort bei Auswahl. */

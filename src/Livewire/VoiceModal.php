@@ -9,7 +9,6 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Str;
 use Livewire\Attributes\Locked;
-use Livewire\Attributes\On;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 use Platform\Core\Contracts\ToolContext;
@@ -108,6 +107,15 @@ class VoiceModal extends Component
     public ?array $kontext = null;
 
     /**
+     * Spec 55: die aktive Planungs-Session (`Planung\Index::$sessionId`) — bestimmt den
+     * Gedächtnis-Schlüssel (siehe {@see sitzungIds()}). Wird beim Mounten übergeben
+     * (`@livewire('foodalchemist.voice-modal', ['planungsSessionId' => $sessionId])`), NICHT
+     * live nachgezogen — die Planungsseite bindet das Panel mit `wire:key`, das die Session-ID
+     * enthält, ein Wechsel remountet die Komponente also ohnehin komplett.
+     */
+    public ?int $planungsSessionId = null;
+
+    /**
      * Die Route, auf der das (global gemountete) Modal beim Öffnen der Seite lag — gemerkt in
      * {@see mount()}, damit `verarbeite()` weiss, ob ein geöffneter Datensatz schon auf der
      * aktuellen Seite sichtbar wäre (⇒ Event) oder eine andere Seite braucht (⇒ Redirect).
@@ -136,8 +144,9 @@ class VoiceModal extends Component
         'production_order' => ['route' => 'foodalchemist.produktion.index', 'param' => 'auftrag', 'event' => null, 'label' => 'Produktionsauftrag öffnen'],
     ];
 
-    public function mount(): void
+    public function mount(?int $planungsSessionId = null): void
     {
+        $this->planungsSessionId = $planungsSessionId;
         $stt = app(SttServiceContract::class);
         $this->provider = $stt->name();
         // Fake/None sind nie ein echtes Aufnahmeziel: Fake ignoriert die Aufnahme (fester Fixtext,
@@ -147,14 +156,18 @@ class VoiceModal extends Component
         $this->herkunftRoute = request()->route()?->getName();
         $this->agentModus = $this->agentModusAktuell();   // NUR für die Pill — Entscheidungen lesen immer frisch
         $team = Auth::user()?->currentTeamRelation;
-        $this->konversationAktiv = $team !== null && app(TeamSettingsService::class)->voiceAgentDauerhaftAktiv($team);
+        // Spec 55: der Agent lebt nur noch als Panel in der Planungs-Leitstelle — das ALTE
+        // "dauerhaft aktiv" steuerte, ob ein schwebendes Element auf JEDER Seite erscheint
+        // (Feature entfernt). Kontinuierliches VAD-Zuhören (statt Klick-je-Turn) ist jetzt an
+        // dieselbe Einstellung gekoppelt wie die gesprochene Antwort — ein Team, das Antworten
+        // hören will, will plausibel auch ohne Klick weitersprechen können.
+        $this->konversationAktiv = $team !== null && app(TeamSettingsService::class)->voiceTtsVorlesen($team);
     }
 
     /**
-     * @param  array{type: string, id: int}|null  $kontext  Rezept-/Gericht-Kontext der öffnenden Seite (Aufgabe 7).
+     * @param  array{type: string, id: int}|null  $kontext  Rezept-/Gericht-/Schritt-Kontext der Planung (Aufgabe 7).
      */
-    #[On('voice-modal.oeffnen')]
-    public function oeffnen(?array $kontext = null, bool $schwebend = false): void
+    public function oeffnen(?array $kontext = null): void
     {
         $this->reset('audio', 'transcript', 'fehler', 'phase');
         $this->kontext = $kontext;
@@ -166,9 +179,9 @@ class VoiceModal extends Component
         // EINZIGE Quelle für die tatsächliche Schreib-Entscheidung (unverändert).
         $this->agentModus = $this->agentModusAktuell();
         $team = Auth::user()?->currentTeamRelation;
-        $this->konversationAktiv = $team !== null && app(TeamSettingsService::class)->voiceAgentDauerhaftAktiv($team);
+        $this->konversationAktiv = $team !== null && app(TeamSettingsService::class)->voiceTtsVorlesen($team);
         // Spec 53 / Paket F (4): OHNE das hier wäre jedes Öffnen (auch ohne Seitenwechsel —
-        // das Modal mountet zwar nur einmal pro Seite, aber `reset('ergebnis', ...)` lief
+        // das Panel mountet zwar nur einmal pro Seite, aber `reset('ergebnis', ...)` lief
         // bisher IMMER beim Öffnen) ein sauberer Neustart, der offene Vorschläge wegwirft.
         // Restauriert wird NUR die Vorschlags-Liste (minimal-valide $ergebnis-Form — die
         // Bestätigen-Methoden lesen ausschliesslich `proposals[$index]`), kein alter Text/
@@ -178,19 +191,10 @@ class VoiceModal extends Component
             'text' => null, 'runden' => 0, 'tool_laeufe' => [], 'aktionen' => [],
             'proposals' => $offene, 'unklar' => false, 'elapsed_ms' => 0,
         ] : null;
-        // Live-Bruch Dominique (2026-09-18, Punkt 3 — erster Schritt Spec 54 „schwebender
-        // Begleiter"): der schwebende Knopf soll im Konversations-Modus NICHT mehr das grosse
-        // Modal aufreissen — der Knopf selbst zeigt den Zustand (Alpine-Store-Brücke oben in
-        // voice-modal.blade.php), eine Sprechblase in agent-mount.blade.php zeigt Transkript +
-        // Antwort. Das Modal öffnet nur, wenn es WIRKLICH etwas zu bestätigen gibt (offene
-        // Vorschläge aus einer wiederhergestellten Sitzung) — neue Vorschläge WÄHREND dieses
-        // Turns öffnen es am Ende von `verarbeite()` nachträglich (dort ist zum Zeitpunkt
-        // dieses Aufrufs noch nichts bekannt). Sidebar (`$schwebend=false`, Ein-Klick-Modus)
-        // UND ein Klick auf die Blase selbst (ebenfalls `$schwebend=false`) öffnen wie bisher.
-        if ($schwebend && $this->konversationAktiv && $offene === []) {
-            return;
-        }
-        $this->dispatch('modal.open', name: 'voice-modal');
+        // Spec 55: kein Modal mehr, das geöffnet/geschlossen wird — der Agent ist ein
+        // einklappbares Panel, fest in der Planungs-Leitstelle eingebettet. Diese Methode
+        // bleibt die Initialisierung (Kontext setzen, Sitzung wiederherstellen), ausgelöst
+        // per `x-init="$wire.oeffnen()"` beim Mounten des Panels statt per Klick-Event.
     }
 
     /**
@@ -277,7 +281,7 @@ class VoiceModal extends Component
         try {
             $verlauf = app(VoiceSessionService::class)->promptKontext($this->sitzungGeladen());
             $this->ergebnis = app(VoiceCommandService::class)->verarbeite(
-                (string) $this->transcript, $this->kontextFuerAuftrag(), $modus, $verlauf,
+                (string) $this->transcript, $this->kontextFuerAuftrag(), $modus, $verlauf, $this->planungsSessionId,
             );
         } catch (\Throwable $e) {
             $this->fehler = VoiceFehlerText::aus($e)['text'];
@@ -384,6 +388,13 @@ class VoiceModal extends Component
     }
 
     /** @return array{0: int, 1: int, 2: string}|null [teamId, userId, sessionId] — null ohne Team/User. */
+    /**
+     * Spec 55: Gedächtnis-Schlüssel Team+User+Planungs-Session (NICHT mehr die Browser-
+     * Session — der Agent lebt jetzt in der Planung, nicht seitenübergreifend, ein Wechsel des
+     * Geräts/Tabs soll das Gespräch NICHT abschneiden, solange dieselbe Planungs-Session offen
+     * ist). Fallback `ohne_session`: EIN geteilter Team+User-Eimer für Gespräche, die noch
+     * keine Session haben (Einstieg „ich brauche ein neues Format").
+     */
     private function sitzungIds(): ?array
     {
         $user = Auth::user();
@@ -391,8 +402,11 @@ class VoiceModal extends Component
         if ($user === null || $team === null) {
             return null;
         }
+        $sessionSchluessel = $this->planungsSessionId !== null
+            ? 'planung:' . $this->planungsSessionId
+            : 'ohne_session';
 
-        return [(int) $team->id, (int) $user->id, (string) session()->getId()];
+        return [(int) $team->id, (int) $user->id, $sessionSchluessel];
     }
 
     /** @return array<string, mixed> leere Sitzungs-Struktur ohne Team/User. */
@@ -633,6 +647,28 @@ class VoiceModal extends Component
         }
         $this->ergebnis['proposals'][$index]['accepted'] = true;   // Spec 53/F: auch hier setzen (auto_sicher, Audit)
         $this->redirect(route('foodalchemist.planung.index', ['session' => $session->id, 'open' => 1, 'tab' => $tab]), navigate: true);
+    }
+
+    /**
+     * Spec 55 (Design-Punkt b): „Übernehmen" für einen `komponenten_uebernahme`-Vorschlag —
+     * schreibt NICHT selbst (VoiceModal kennt `Planung\Index::$regler`/`$eingabe` nicht, andere
+     * Komponenten-Instanz), sondern dispatcht ein Browser-Event, das die Planungsseite auffängt
+     * ({@see \Platform\FoodAlchemist\Livewire\Planung\Index::voiceKomponentenUebernehmen()}).
+     * GL-07 bleibt: kein Schreiben ohne diesen Klick.
+     */
+    public function komponentenUebernehmen(int $index): void
+    {
+        $p = $this->ergebnis['proposals'][$index] ?? null;
+        if ($p === null || ($p['type'] ?? null) !== 'komponenten_uebernahme') {
+            return;
+        }
+        $this->dispatch(
+            'voice.komponenten-uebernahme',
+            scope: $p['scope'],
+            felder: $p['felder'] ?? [],
+            brief: $p['brief'] ?? null,
+        );
+        $this->ergebnis['proposals'][$index]['accepted'] = true;
     }
 
     /**

@@ -354,14 +354,16 @@ it('Modus fragen (Default): kein Setting gesetzt ⇒ Modal liest fragen (Klick-P
  * Ein-Klick-Modus, bis zum vollen Reload. `mount()` läuft nur einmal pro Seite; `oeffnen()` ist
  * der richtige Moment, beides frisch zu lesen.
  */
-it('oeffnen() liest Modus + „dauerhaft aktiv" FRISCH — eine Setting-Änderung nach mount() zeigt sich sofort beim nächsten Öffnen', function () {
+it('oeffnen() liest Modus + Konversations-Modus FRISCH — eine Setting-Änderung nach mount() zeigt sich sofort beim nächsten Öffnen', function () {
     $modal = Livewire::test(VoiceModal::class);
     expect($modal->get('agentModus'))->toBe('fragen')
         ->and($modal->get('konversationAktiv'))->toBeFalse();
 
-    // Setting ändert sich NACH mount() — z. B. auf einer anderen/derselben Seite.
+    // Setting ändert sich NACH mount() — z. B. auf einer anderen/derselben Seite. Spec 55:
+    // konversationAktiv hängt jetzt an voice_tts_vorlesen, NICHT mehr am entfernten
+    // voice_agent_dauerhaft_aktiv (das schwebende Element gibt es nicht mehr).
     app(TeamSettingsService::class)->update($this->rootTeam, [
-        'voice_agent_mode' => 'auto_sicher', 'voice_agent_dauerhaft_aktiv' => true,
+        'voice_agent_mode' => 'auto_sicher', 'voice_tts_vorlesen' => true,
     ]);
 
     $modal->call('oeffnen');
@@ -723,7 +725,9 @@ it('VAD-Optionen: konversationAktiv steuert vad:true/false am Recorder', functio
     $aus = Livewire::test(VoiceModal::class)->html();
     expect($aus)->toContain('vad: false');
 
-    app(TeamSettingsService::class)->update($this->rootTeam, ['voice_agent_dauerhaft_aktiv' => true]);
+    // Spec 55: konversationAktiv hängt jetzt an voice_tts_vorlesen (das entfernte schwebende
+    // Element trieb es vorher über voice_agent_dauerhaft_aktiv).
+    app(TeamSettingsService::class)->update($this->rootTeam, ['voice_tts_vorlesen' => true]);
     $an = Livewire::test(VoiceModal::class)->html();
     expect($an)->toContain('vad: true');
 });
@@ -771,6 +775,26 @@ it('reine Zustimmung "ja" bestätigt den einen offenen Vorschlag — bei mehrere
     expect($modal->get('ergebnis')['proposals'][0]['accepted'] ?? false)->toBeTrue();
 });
 
+/**
+ * Spec 55: Gedächtnis-Schlüssel Team+User+Planungs-Session statt Browser-Session — zwei
+ * VERSCHIEDENE Sessions dürfen sich NICHT vermischen (sonst sieht Session B den Vorschlag
+ * von Session A), zwei Komponenten-Instanzen MIT DERSELBEN Session TEILEN sich das Gedächtnis
+ * (Gerätewechsel bei offener Planung darf das Gespräch nicht abschneiden).
+ */
+it('Spec 55: Gedächtnis ist PRO Planungs-Session isoliert, NICHT mehr pro Browser-Session', function () {
+    ($this->skript)([
+        '{"action":"tool","name":"foodalchemist.gps.POST","arguments":{"hauptzutat":"Zander"}}',
+        '{"action":"final","text":"Vorschlag — bitte bestätigen."}',
+    ]);
+    Livewire::test(VoiceModal::class, ['planungsSessionId' => 1])->call('verarbeiteText', 'Lege ein Grundprodukt an');
+
+    $andereSession = Livewire::test(VoiceModal::class, ['planungsSessionId' => 2])->call('oeffnen');
+    expect($andereSession->get('ergebnis')['proposals'] ?? [])->toBe([]);   // fremde Session sieht NICHTS
+
+    $gleicheSession = Livewire::test(VoiceModal::class, ['planungsSessionId' => 1])->call('oeffnen');
+    expect($gleicheSession->get('ergebnis')['proposals'] ?? [])->toHaveCount(1);   // dieselbe Session sieht es
+});
+
 it('Sitzung überlebt eine simulierte Seiten-Navigation: neue Komponenten-Instanz stellt die offenen Vorschläge wieder her', function () {
     ($this->skript)([
         '{"action":"tool","name":"foodalchemist.gps.POST","arguments":{"hauptzutat":"Zander"}}',
@@ -778,8 +802,9 @@ it('Sitzung überlebt eine simulierte Seiten-Navigation: neue Komponenten-Instan
     ]);
     Livewire::test(VoiceModal::class)->call('verarbeiteText', 'Lege ein Grundprodukt an');
 
-    // NEUE Komponenten-Instanz = wie ein frischer Seiten-Mount (agent-mount.blade.php auf
-    // JEDER FA-Vollseite) + Öffnen-Klick — genau der Fall, den Stufe 2 sonst kaputt macht.
+    // NEUE Komponenten-Instanz = wie ein frischer Seiten-Mount (Spec 55: das Panel remountet
+    // per wire:key bei jedem Session-Wechsel in der Planung) — genau der Fall, den die
+    // Sitzungs-Wiederherstellung abfangen muss.
     $neuesModal = Livewire::test(VoiceModal::class)->call('oeffnen');
 
     $wiederhergestellt = $neuesModal->get('ergebnis')['proposals'] ?? [];
@@ -818,329 +843,3 @@ it('„Gespräch vergessen" ist nur sichtbar, wenn es Vorschläge gibt', functio
     expect($mitVorschlag->html())->toContain('data-voice-vergessen');
 });
 
-/*
- * Live-Befund Dominique (2026-09-18): drei Hotfixes off main 8b90e0b7 in EINEM PR.
- */
-
-it('oeffnen(): sowohl Sidebar- als auch schwebender Knopf schicken autostart:true mit', function () {
-    $sidebar = file_get_contents(__DIR__ . '/../../resources/views/livewire/sidebar.blade.php');
-    $agentMount = file_get_contents(__DIR__ . '/../../resources/views/partials/agent-mount.blade.php');
-
-    expect($sidebar)->toContain("\$dispatch('voice-modal.oeffnen', { autostart: true })")
-        // Live-Bruch 2026-09-18 (Punkt 3): der schwebende Knopf schickt seit dem »schwebender
-        // Begleiter«-Schritt ZUSÄTZLICH `schwebend:true` mit (Sidebar NICHT — deren Ein-Klick-
-        // Modus öffnet weiter immer normal), darum eigene, WEITERE Assertion statt derselben.
-        ->and($agentMount)->toContain("\$dispatch('voice-modal.oeffnen', { autostart: true, schwebend: true })");
-});
-
-it('der Recorder startet NUR, wenn autostart UND konversationAktiv beide wahr sind (Ein-Klick-Modus bleibt unverändert)', function () {
-    $blade = file_get_contents(__DIR__ . '/../../resources/views/livewire/voice-modal.blade.php');
-
-    $zeile = collect(explode("\n", $blade))
-        ->first(fn ($z) => str_contains($z, "addEventListener('voice-modal.oeffnen'"));
-    expect($zeile)->not->toBeNull();
-
-    $bedingung = collect(explode("\n", $blade))
-        ->first(fn ($z) => str_contains($z, 'e?.detail?.autostart'));
-    expect($bedingung)->toContain('this.konversationAktiv')
-        ->and($bedingung)->toContain('this.unterstuetzt')
-        ->and($bedingung)->toContain('this.laeuft');
-});
-
-it('z-index: Sprachbefehl-Modal ist fest über allen Editoren gepinnt (zFest), der schwebende Knopf über BEIDEM', function () {
-    config(['foodalchemist.stt.provider' => 'openai', 'services.openai.api_key' => 'sk-test']);
-
-    $modalHtml = Livewire::test(VoiceModal::class)->html();
-    expect($modalHtml)->toContain('z-[190]')->not->toContain('z-[100]');
-
-    $agentMount = file_get_contents(__DIR__ . '/../../resources/views/partials/agent-mount.blade.php');
-    expect($agentMount)->toContain('z-[210]');
-
-    // 210 > 190 (Modal) > 100 (jeder Standard-Editor über dieselbe Komponente) — der Knopf
-    // gewinnt in JEDER Kombination, unabhängig von der bringToFront-Reihung der Editoren.
-    expect(210)->toBeGreaterThan(190)->and(190)->toBeGreaterThan(100);
-});
-
-it('andere Modale (z. B. ein GP-Editor) bleiben bei z-[100] — zFest ist additiv, kein globaler Verhaltenswechsel', function () {
-    $html = \Illuminate\Support\Facades\Blade::render(
-        '<x-foodalchemist::modal name="gp-edit" title="GP bearbeiten">X</x-foodalchemist::modal>'
-    );
-
-    expect($html)->toContain('z-[100]')->not->toContain('z-[190]');
-});
-
-/**
- * Live-Bruch nach PR #116 (Deploy 8): vier JS-Kommentarzeilen INNERHALB von `x-data="…"` in
- * voice-modal.blade.php enthielten geradeaus-Anführungszeichen (") — ein HTML-Attribut endet
- * beim ERSTEN `"`, egal ob es aus Blade/PHP oder rohem Text stammt. Das Attribut riss dort ab,
- * Alpine bekam nur noch ein Bruchstück-Objekt und fiel für das GANZE Modal aus (Code als
- * Klartext sichtbar, schwebender Knopf komplett weg). 148 grüne Tests vorher hatten das NICHT
- * gesehen: `Livewire::test()->html()` prüft Textinhalt/Marker, kein Attribut-Parsing wie ein
- * echter Browser. Dieser Wächter tut GENAU das — ein HTML-Attribut-Parser in Miniatur.
- */
-it('WÄCHTER: jedes x-data="…" im gerenderten Voice-Modal ist eine VOLLSTÄNDIGE JS-Klammer — kein " reisst es ab', function () {
-    config(['foodalchemist.stt.provider' => 'openai', 'services.openai.api_key' => 'sk-test']);
-    $html = Livewire::test(VoiceModal::class)->html();
-
-    // Exakt wie ein HTML-Parser: das Attribut endet beim ERSTEN ", ganz gleich was davor stand.
-    preg_match_all('/x-data="([^"]*)"/s', $html, $treffer);
-    expect($treffer[1])->not->toBeEmpty();
-
-    foreach ($treffer[1] as $i => $inhalt) {
-        // Ein abgerissenes Attribut endet mitten in einem Kommentar/Bezeichner, nicht auf der
-        // schliessenden Klammer des Objekt-Literals.
-        expect(rtrim($inhalt))->toEndWith('}');
-    }
-
-    // Das GRÖSSTE, am meisten kommentierte Objekt (der Recorder) muss den LETZTEN definierten
-    // Bezeichner wirklich enthalten — ein Abriss mitten in den Kommentaren fehlte GENAU hier,
-    // weil das Attribut lange vorher endete (das war der reale Bruch).
-    $recorderData = collect($treffer[1])->first(fn ($t) => str_contains($t, 'initKonversation'));
-    expect($recorderData)->not->toBeNull()
-        ->and($recorderData)->toContain('_nachDemSprechen')
-        ->and($recorderData)->toContain('_sprachausgabeFallback');
-});
-
-it('WÄCHTER: dasselbe für agent-mount.blade.php — jedes x-data="…" ist eine VOLLSTÄNDIGE JS-Klammer', function () {
-    $html = view('foodalchemist::partials.agent-mount')->render();
-
-    preg_match_all('/x-data="([^"]*)"/s', $html, $treffer);
-    expect($treffer[1])->not->toBeEmpty();
-
-    foreach ($treffer[1] as $inhalt) {
-        expect(rtrim($inhalt))->toEndWith('}');
-    }
-
-    $floatData = collect($treffer[1])->first(fn ($t) => str_contains($t, 'startDrag'));
-    expect($floatData)->not->toBeNull()
-        ->and($floatData)->toContain('oeffnen')
-        ->and($floatData)->toContain('stopDrag');
-});
-
-/*
- * Live-Bruch Dominique (2026-09-18, Punkt 2): Endlos-Schleife im Konversations-Modus, nicht
- * stoppbar. VAD/Audio-Timing selbst lässt sich ohne echten Browser nicht ausführen — diese Tests
- * pinnen, was Pest MESSEN kann: dass die Sicherungen im Markup/Quelltext wirklich verdrahtet
- * sind (Stopp überall, Sicherheitsdeckel, kein Upload/Wiedereinstieg ohne erkannte Sprache).
- */
-
-it('stopAlles(): räumt Recorder, TTS-Audio UND speechSynthesis ab und pausiert die Konversation', function () {
-    $blade = file_get_contents(__DIR__ . '/../../resources/views/livewire/voice-modal.blade.php');
-
-    $zeile = collect(explode("\n", $blade))->first(fn ($z) => str_contains($z, 'stopAlles()'));
-    expect($zeile)->not->toBeNull();
-
-    expect($blade)->toContain('window.speechSynthesis.cancel()')
-        ->and($blade)->toContain('audio.pause()')
-        ->and($blade)->toContain('this.konversationPausiert = true')
-        ->and($blade)->toContain('@keydown.window.escape="stopAlles()"');   // ESC stoppt überall
-});
-
-it('der Stopp-/Aufnahme-Knopf reagiert auf hört-zu/sendet/spricht gemeinsam, nicht nur auf "laeuft"', function () {
-    $blade = file_get_contents(__DIR__ . '/../../resources/views/livewire/voice-modal.blade.php');
-
-    $zeile = collect(explode("\n", $blade))
-        ->first(fn ($z) => str_contains($z, '? stopAlles() : (autoZyklen'));
-    expect($zeile)->not->toBeNull()
-        ->and($zeile)->toContain('hochladenLaeuft')
-        ->and($zeile)->toContain('fallbackAktiv')
-        ->and($zeile)->toContain('$wire.sprichtGerade');
-});
-
-it('Sicherheitsdeckel: nach 3 automatischen Zyklen pausiert die Konversation statt endlos weiterzuhören', function () {
-    $blade = file_get_contents(__DIR__ . '/../../resources/views/livewire/voice-modal.blade.php');
-
-    $zeile = collect(explode("\n", $blade))->first(fn ($z) => str_contains($z, 'this.autoZyklen >= 3'));
-    expect($zeile)->not->toBeNull();
-
-    // Der Zähler zählt JEDEN automatischen Zyklus (nicht nur stille) und wird NUR bei einem
-    // echten Nutzer-Klick zurückgesetzt (autostart-Listener) — sonst könnte eine Kette echter
-    // Antworten den Deckel umgehen.
-    expect($blade)->toContain('this.autoZyklen++')
-        ->and($blade)->toContain('this.autoZyklen = 0');
-});
-
-it('VAD "keine Sprache erkannt": kein Upload, kein automatischer Wiedereinstieg', function () {
-    $js = file_get_contents(__DIR__ . '/../../resources/js/voice-recorder/index.js');
-
-    $zeile = collect(explode("\n", $js))
-        ->first(fn ($z) => str_contains($z, "this.vad && this._vadState === 'warten'"));
-    expect($zeile)->not->toBeNull();
-
-    // Der Guard muss VOR dem Upload-Aufruf stehen und dort mit `return` aussteigen — sonst würde
-    // der Code darunter (Mindestdauer-Check, `$wire.upload(...)`) trotzdem noch laufen.
-    $zeilen = explode("\n", $js);
-    $guardIndex = null;
-    $uploadIndex = null;
-    foreach ($zeilen as $i => $z) {
-        if ($guardIndex === null && str_contains($z, "this.vad && this._vadState === 'warten'")) {
-            $guardIndex = $i;
-        }
-        if ($uploadIndex === null && str_contains($z, '$wire.upload(')) {
-            $uploadIndex = $i;
-        }
-    }
-    expect($guardIndex)->not->toBeNull()->and($uploadIndex)->not->toBeNull()
-        ->and($guardIndex)->toBeLessThan($uploadIndex);
-});
-
-it('schwebender Knopf: ein Klick WÄHREND eines laufenden Zyklus stoppt, statt erneut zu öffnen', function () {
-    $agentMount = file_get_contents(__DIR__ . '/../../resources/views/partials/agent-mount.blade.php');
-
-    $zeile = collect(explode("\n", $agentMount))
-        ->first(fn ($z) => str_contains($z, 'window.FaVoiceKonversationAktiv && window.FaVoiceStopAlles'));
-    expect($zeile)->not->toBeNull();
-
-    // Der Stopp-Zweig muss VOR dem Öffnen-Dispatch geprüft werden, sonst würde immer erst
-    // erneut geöffnet, bevor überhaupt gestoppt werden könnte.
-    $stoppIndex = null;
-    $oeffnenIndex = null;
-    foreach (explode("\n", $agentMount) as $i => $z) {
-        if ($stoppIndex === null && str_contains($z, 'FaVoiceStopAlles();')) {
-            $stoppIndex = $i;
-        }
-        if ($oeffnenIndex === null && str_contains($z, "\$dispatch('voice-modal.oeffnen', { autostart: true, schwebend: true })")) {
-            $oeffnenIndex = $i;
-        }
-    }
-    expect($stoppIndex)->not->toBeNull()->and($oeffnenIndex)->not->toBeNull()
-        ->and($stoppIndex)->toBeLessThan($oeffnenIndex);
-});
-
-/*
- * Live-Bruch Dominique (2026-09-18, Punkt 3 — erster Schritt Spec 54 »schwebender Begleiter«):
- * das Modal soll im Konversations-Modus NICHT mehr aufreissen, solange es nichts zu bestätigen
- * gibt — der schwebende Knopf zeigt den Zustand selbst, eine Sprechblase Transkript + Antwort.
- */
-
-it('oeffnen(schwebend:true) im Konversations-Modus OHNE offene Vorschläge öffnet das Modal NICHT', function () {
-    app(TeamSettingsService::class)->update($this->rootTeam, ['voice_agent_dauerhaft_aktiv' => true]);
-
-    Livewire::test(VoiceModal::class)
-        ->call('oeffnen', null, true)
-        ->assertNotDispatched('modal.open');
-});
-
-it('oeffnen(schwebend:true) im Konversations-Modus MIT offenen Vorschlägen öffnet das Modal trotzdem (etwas zu bestätigen)', function () {
-    app(TeamSettingsService::class)->update($this->rootTeam, ['voice_agent_dauerhaft_aktiv' => true]);
-    ($this->skript)([
-        '{"action":"tool","name":"foodalchemist.gps.POST","arguments":{"hauptzutat":"Zander"}}',
-        '{"action":"final","text":"Vorschlag — bitte bestätigen."}',
-    ]);
-    Livewire::test(VoiceModal::class)->call('verarbeiteText', 'Lege ein Grundprodukt an');
-    // Neue Instanz = wie ein frischer Seiten-Mount + Öffnen-Klick — die Sitzung hat den
-    // Vorschlag gespeichert, jetzt öffnet oeffnen(schwebend:true) TROTZDEM.
-    Livewire::test(VoiceModal::class)
-        ->call('oeffnen', null, true)
-        ->assertDispatched('modal.open');
-});
-
-it('oeffnen(schwebend:false) — Sidebar/Ein-Klick-Modus, Klick auf die Blase — öffnet IMMER, unabhängig vom Konversations-Modus', function () {
-    app(TeamSettingsService::class)->update($this->rootTeam, ['voice_agent_dauerhaft_aktiv' => true]);
-
-    Livewire::test(VoiceModal::class)
-        ->call('oeffnen', null, false)
-        ->assertDispatched('modal.open');
-});
-
-it('oeffnen(schwebend:true) OHNE Konversations-Modus öffnet ebenfalls IMMER (die Sperre gilt NUR im Konversations-Modus)', function () {
-    Livewire::test(VoiceModal::class)
-        ->call('oeffnen', null, true)
-        ->assertDispatched('modal.open');
-});
-
-it('ein NEUER Vorschlag WÄHREND des Turns öffnet das Modal nachträglich, auch wenn oeffnen() es zuvor geschlossen liess', function () {
-    app(TeamSettingsService::class)->update($this->rootTeam, ['voice_agent_dauerhaft_aktiv' => true]);
-    $modal = Livewire::test(VoiceModal::class)->call('oeffnen', null, true);
-    $modal->assertNotDispatched('modal.open');   // beim Öffnen noch nichts zu bestätigen
-
-    ($this->skript)([
-        '{"action":"tool","name":"foodalchemist.gps.POST","arguments":{"hauptzutat":"Zander"}}',
-        '{"action":"final","text":"Vorschlag — bitte bestätigen."}',
-    ]);
-    $modal->call('verarbeiteText', 'Lege ein Grundprodukt an')
-        ->assertDispatched('modal.open');        // jetzt gibt es etwas zu bestätigen
-});
-
-it('schwebender Knopf zeigt GENAU fünf Zustände (pulsierend=hört zu, Wellen=spricht, ruhig=wartet, amber=pausiert, rot=fehler)', function () {
-    $blade = file_get_contents(__DIR__ . '/../../resources/views/livewire/voice-modal.blade.php');
-
-    $zeile = collect(explode("\n", $blade))->first(fn ($z) => str_contains($z, '_schwebeStatus()'));
-    expect($zeile)->not->toBeNull();
-    foreach (["return 'fehler'", "return 'pausiert'", "return 'spricht'", "return 'hoert_zu'", "return 'wartet'"] as $wert) {
-        expect($blade)->toContain($wert);
-    }
-
-    $agentMount = file_get_contents(__DIR__ . '/../../resources/views/partials/agent-mount.blade.php');
-    expect($agentMount)->toContain("schwebeStatus === 'hoert_zu'")
-        ->and($agentMount)->toContain("schwebeStatus === 'spricht'")
-        ->and($agentMount)->toContain("schwebeStatus === 'pausiert'")
-        ->and($agentMount)->toContain("schwebeStatus === 'fehler'")
-        ->and($agentMount)->toContain('data-voice-float-status');
-});
-
-/**
- * Live-Bruch Dominique (2026-09-18, Folgefund): der Knopf zeigte ROT (Fehler), obwohl
- * serverseitig alles grün lief (letzte Antworten final=true, TTS synthetisiert) — Ursache: „keine
- * Sprache erkannt"/der 3-Zyklen-Deckel liefen über denselben `fehler`-Zustand wie ein echter
- * technischer Fehler. `pausiert` ist jetzt eigenständig; `fehler` NUR bei `this.fehler`.
- */
-it('"keine Sprache erkannt" und der 3-Zyklen-Deckel sind "pausiert" (amber), NICHT "fehler" (rot)', function () {
-    $blade = file_get_contents(__DIR__ . '/../../resources/views/livewire/voice-modal.blade.php');
-
-    // Der Methoden-Körper zwischen `_schwebeStatus() {` und der NÄCHSTEN Methode
-    // (`_schwebeTitel() {`) — ein zuverlässiger Ausschnitt statt fragiler Zeilen-Arithmetik.
-    $start = strpos($blade, '_schwebeStatus() {');
-    $ende = strpos($blade, '_schwebeTitel() {', $start);
-    expect($start)->not->toBeFalse()->and($ende)->not->toBeFalse();
-    $koerper = substr($blade, $start, $ende - $start);
-
-    // `this.fehler` allein entscheidet über 'fehler' — keineSpracheErkannt/konversationPausiert
-    // dürfen NICHT mehr in derselben if-Bedingung stehen (das war GENAU der Bruch).
-    preg_match("/if \(([^)]*)\)\s*\{\s*\n\s*return 'fehler';/", $koerper, $fehlerTreffer);
-    expect($fehlerTreffer[1] ?? null)->not->toBeNull()
-        ->and($fehlerTreffer[1])->toContain('this.fehler')
-        ->and($fehlerTreffer[1])->not->toContain('keineSpracheErkannt')
-        ->and($fehlerTreffer[1])->not->toContain('konversationPausiert');
-
-    preg_match("/if \(([^)]*)\)\s*\{\s*\n\s*return 'pausiert';/", $koerper, $pausiertTreffer);
-    expect($pausiertTreffer[1] ?? null)->not->toBeNull()
-        ->and($pausiertTreffer[1])->toContain('keineSpracheErkannt')
-        ->and($pausiertTreffer[1])->toContain('konversationPausiert');
-});
-
-it('der schwebende Knopf trägt einen dynamischen Titel/aria-label statt eines festen "Sprachbefehl (ziehbar)"', function () {
-    $blade = file_get_contents(__DIR__ . '/../../resources/views/livewire/voice-modal.blade.php');
-    expect($blade)->toContain('_schwebeTitel()')
-        ->and($blade)->toContain('Pausiert — zum Weiterhören klicken');
-
-    $agentMount = file_get_contents(__DIR__ . '/../../resources/views/partials/agent-mount.blade.php');
-    expect($agentMount)->toContain(':title="schwebeTitel"')
-        ->and($agentMount)->toContain(':aria-label="schwebeTitel"')
-        ->and($agentMount)->toContain('schwebeTitel');
-});
-
-it('schwebeTitel hat einen sinnvollen Default, bevor der Poll (300ms) das erste Mal lief', function () {
-    $html = view('foodalchemist::partials.agent-mount')->render();
-    // `:title="schwebeTitel"` ist eine Alpine-Bindung (kein statisches HTML-Attribut mehr) —
-    // der Default-Wert steht als Teil des x-data-Objekts trotzdem im Server-Render, damit der
-    // Knopf NIE ein leeres title/aria-label zeigt, bevor der erste Poll-Tick gelaufen ist.
-    expect($html)->toContain("schwebeTitel: 'Sprachbefehl (ziehbar)'");
-});
-
-it('die Sprechblase (drittes Element in agent-mount) zeigt Transkript + Antwort und öffnet beim Klick das Modal normal (nicht schwebend)', function () {
-    $agentMount = file_get_contents(__DIR__ . '/../../resources/views/partials/agent-mount.blade.php');
-
-    expect($agentMount)->toContain('data-voice-blase')
-        ->and($agentMount)->toContain('schwebeTranskript')
-        ->and($agentMount)->toContain('schwebeAntwort')
-        // Ein Klick auf die Blase öffnet NORMAL (schwebend:false) — anders als der Knopf selbst.
-        ->and($agentMount)->toContain("\$dispatch('voice-modal.oeffnen', { autostart: false, schwebend: false })");
-});
-
-it('voice-modal.blade.php spiegelt seinen Zustand nach window.FaVoiceZustand — die Brücke zum schwebenden Knopf', function () {
-    $blade = file_get_contents(__DIR__ . '/../../resources/views/livewire/voice-modal.blade.php');
-
-    expect($blade)->toContain('window.FaVoiceZustand')
-        ->and($blade)->toContain('this._schwebeStatus()');
-});

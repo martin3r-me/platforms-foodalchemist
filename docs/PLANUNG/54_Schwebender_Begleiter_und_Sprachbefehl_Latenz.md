@@ -2,6 +2,12 @@
 
 **Stand 2026-09-18 · Latenz-Runde umgesetzt (Branch `feat/voice-latenz`)**
 
+> **Nachtrag (Spec 55, 2026-09-18):** der „schwebende Begleiter" (Stufe 1 hier) ist WIEDER
+> ENTFERNT — Dominique-Entscheid nach Deploy 14: der globale Agent bringt nichts, er lebt jetzt
+> NUR noch als Panel in der Planungs-Leitstelle. Die Latenz-Arbeit unten (alle 4 Hebel) bleibt
+> voll gültig, derselbe Loop läuft nur mit planungsspezifischem Katalog/Systemprompt weiter.
+> Siehe `docs/PLANUNG/55_Agent_in_der_Planung.md`.
+
 Stufe 1 des „schwebenden Begleiters" ist Teil von PR #122 (`fix/voice-tts-cache-navigate-schwebekopf`):
 der schwebende Knopf zeigt seinen Zustand selbst (fünf Werte seit PR #124: hört zu · sendet ·
 spricht · pausiert · fehler), eine Sprechblase zeigt Transkript + Antwort, das grosse Modal

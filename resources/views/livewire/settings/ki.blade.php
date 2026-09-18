@@ -38,16 +38,17 @@
         </div>
     </div>
 
-    {{-- Spec 53/F Stufe 2: „dauerhaft aktiv" — Team-Schalter, Muster wie der Kill-Switch-Knopf oben. --}}
-    <div class="flex items-start justify-between gap-4" data-settings-sprachagent-dauerhaft>
+    {{-- Spec 55: der Agent lebt nur noch als Panel in der Planungs-Leitstelle, kein schwebendes
+         Element mehr auf jeder Seite. --}}
+    <div class="flex items-start justify-between gap-4" data-settings-sprachagent-panel-planung>
         <div>
-            <p class="{{ $dt }} mb-1">Sprachbefehl dauerhaft aktivieren</p>
-            <p class="text-[11px] text-gray-500">Zeigt ein schwebendes Mikrofon-Element auf JEDER Seite — auch bei eingeklappter Sidebar. Aus (Default): nur der Knopf in der Sidebar.</p>
+            <p class="{{ $dt }} mb-1">Agenten-Panel in der Planung</p>
+            <p class="text-[11px] text-gray-500">Zeigt das Sprachbefehl-Panel in der Planungs-Leitstelle (eingeklappt startend). An (Default).</p>
         </div>
-        <button type="button" wire:click="sprachAgentDauerhaftUmschalten"
-                class="{{ $sprachAgentDauerhaftAktiv ? $btnPrimary : $btnGhost }} shrink-0" data-sprachagent-dauerhaft-switch>
+        <button type="button" wire:click="sprachAgentPanelPlanungUmschalten"
+                class="{{ $sprachAgentPanelPlanung ? $btnPrimary : $btnGhost }} shrink-0" data-sprachagent-panel-planung-switch>
             @svg('heroicon-o-microphone', 'w-4 h-4')
-            {{ $sprachAgentDauerhaftAktiv ? 'Aktiv — ausschalten' : 'Aktivieren' }}
+            {{ $sprachAgentPanelPlanung ? 'Aktiv — ausschalten' : 'Aktivieren' }}
         </button>
     </div>
 

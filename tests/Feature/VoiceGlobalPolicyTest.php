@@ -196,131 +196,145 @@ it('Token-Deckel: der Basiskatalog bleibt klein — er wird in JEDER Runde bezah
     expect($zeichen)->toBeLessThan(11200, "Basiskatalog auf {$zeichen} Zeichen gewachsen");
 });
 
-/*
- * Spec 53/F Stufe 2: der Sprach-Agent mountet NICHT MEHR in der Sidebar (deren `x-ui-sidebar`-
- * Modul-Slot liegt in einem `x-if` und verschwindet beim Einklappen komplett — traf früher auch
- * das dort gemountete Modal). Neu: JEDE FA-Vollseite bindet `foodalchemist::partials.agent-mount`
- * im eigenen Root-Element ein; die Sidebar behält nur noch den Öffnen-Knopf.
+/**
+ * Spec 55: Rückbau — der Agent lebt nur noch als Panel in der Planungs-Leitstelle, kein
+ * globales Mount mehr. Beweist NEGATIV (nirgends mehr) UND POSITIV (genau einmal in der
+ * Planung), Gegenstück zu den bis Spec 54 gültigen „JEDE Seite bindet agent-mount ein"-Tests.
  */
+it('Spec 55: agent-mount.blade.php existiert nicht mehr, kein Include irgendwo im Modul', function () {
+    expect(file_exists(__DIR__ . '/../../resources/views/partials/agent-mount.blade.php'))->toBeFalse();
 
-it('Platzierung: die Sidebar hat NUR noch den Öffnen-Knopf, KEIN Modal-Mount mehr', function () {
+    $treffer = [];
+    foreach (\Illuminate\Support\Facades\File::allFiles(__DIR__ . '/../../resources/views') as $file) {
+        if ($file->getExtension() !== 'php') {
+            continue;
+        }
+        if (str_contains(file_get_contents($file->getPathname()), "@include('foodalchemist::partials.agent-mount')")) {
+            $treffer[] = $file->getRelativePathname();
+        }
+    }
+    expect($treffer)->toBe([], 'agent-mount-Include noch vorhanden: ' . implode(', ', $treffer));
+});
+
+it('Spec 55: Sidebar hat KEINEN Sprachbefehl-Knopf mehr', function () {
     $html = Livewire::test(\Platform\FoodAlchemist\Livewire\Sidebar::class)->html();
-
-    expect($html)->toContain('data-voice-global')                    // der Knopf bleibt
-        ->and($html)->not->toContain('data-voice-float-mount')       // kein Modal-Mount mehr im Sidebar-HTML
-        ->and($html)->not->toContain('data-voice-float-button');
+    expect($html)->not->toContain('data-voice-global');
 
     $blade = file_get_contents(__DIR__ . '/../../resources/views/livewire/sidebar.blade.php');
-    expect($blade)->not->toContain("@livewire('foodalchemist.voice-modal')");
+    expect($blade)->not->toContain("voice-modal.oeffnen");
 });
 
-it('Platzierung: agent-mount.blade.php mountet das Modal (Modal-Identität bleibt einmalig pro Seite)', function () {
-    $partial = file_get_contents(__DIR__ . '/../../resources/views/partials/agent-mount.blade.php');
-
-    expect($partial)->toContain("@livewire('foodalchemist.voice-modal')")
-        ->and($partial)->toContain('data-voice-float-mount')
-        ->and($partial)->toContain('data-voice-float-button');
+it('Spec 55: Planung/Index rendert das Agenten-Panel GENAU EINMAL, wenn das Team-Setting es nicht abgeschaltet hat', function () {
+    $html = Livewire::test(\Platform\FoodAlchemist\Livewire\Planung\Index::class)->html();
+    expect(substr_count($html, 'data-voice-panel-planung'))->toBe(1);
 });
 
-it('agent-mount.blade.php: „dauerhaft aktiv" AUS (Default) → Alpine-State aktiv:false', function () {
-    $html = view('foodalchemist::partials.agent-mount')->render();
-    expect($html)->toContain('aktiv: false');
-});
-
-it('agent-mount.blade.php: „dauerhaft aktiv" AN (Team-Setting) → Alpine-State aktiv:true', function () {
+it('Spec 55: das Agenten-Panel rendert NICHT, wenn voice_agent_panel_planung explizit auf false steht', function () {
     app(\Platform\FoodAlchemist\Services\TeamSettingsService::class)->update($this->rootTeam, [
-        'voice_agent_dauerhaft_aktiv' => true,
+        'voice_agent_panel_planung' => false,
+    ]);
+    $html = Livewire::test(\Platform\FoodAlchemist\Livewire\Planung\Index::class)->html();
+    expect($html)->not->toContain('data-voice-panel-planung');
+});
+
+it('Spec 55: voiceAgentPanelPlanung() ist Default AN (nie gesetzt = true), explizit AUS bleibt AUS', function () {
+    $svc = app(\Platform\FoodAlchemist\Services\TeamSettingsService::class);
+    expect($svc->voiceAgentPanelPlanung($this->rootTeam))->toBeTrue();
+
+    $svc->update($this->rootTeam, ['voice_agent_panel_planung' => false]);
+    expect($svc->voiceAgentPanelPlanung($this->rootTeam))->toBeFalse();
+
+    $svc->update($this->rootTeam, ['voice_agent_panel_planung' => true]);
+    expect($svc->voiceAgentPanelPlanung($this->rootTeam))->toBeTrue();
+});
+
+/**
+ * Spec 55: Katalog auf Planungsbezug geschrumpft — verkaufsrezepte/artikel/recipe_klasse raus
+ * (gehören nicht zu den genannten Planungs-Fähigkeiten), formats/zielgruppen/knowledge.PREVIEW
+ * rein (Wissens-Fundierung, Design-Punkt d).
+ */
+it('Spec 55: TOOLS enthält die neuen Wissens-Fundierungs-Tools und NICHT mehr die globalen Browse-Tools', function () {
+    expect(VoiceCommandService::TOOLS)->toContain('foodalchemist.formats.SEARCH')
+        ->toContain('foodalchemist.zielgruppen.GET')
+        ->toContain('foodalchemist.knowledge.PREVIEW')
+        ->not->toContain('foodalchemist.verkaufsrezepte.SEARCH')
+        ->not->toContain('foodalchemist.artikel.SEARCH')
+        ->not->toContain('foodalchemist.recipe_klasse.POST');
+});
+
+/**
+ * Spec 55 (Design-Punkt c): der Kaskaden-Hinweis ist best effort — kein Team/keine Session/
+ * kein Lauf darf den Sprachbefehl NIE zum Absturz bringen (Kontext ist ein Bonus).
+ */
+it('Spec 55: verarbeite() ohne planungsSessionId bricht nicht — kein Kaskaden-Hinweis im Prompt', function () {
+    ($this->skript)(['{"action":"final","text":"ok"}']);
+    $r = app(VoiceCommandService::class)->verarbeite('Suche BBQ Sauce');
+    expect($r['unklar'])->toBeFalse();
+});
+
+it('Spec 55 (Design-Punkt c): ein fehlgeschlagener Kaskaden-Schritt landet als Hinweis im Systemprompt', function () {
+    $session = app(\Platform\FoodAlchemist\Services\PlanningSessionService::class)
+        ->create($this->rootTeam, ['title' => 'Test', 'brief' => 'Test-Brief']);
+    $run = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRun::create([
+        'team_id' => $this->rootTeam->id, 'planning_session_id' => $session->id,
+        'scope' => 'gericht', 'status' => 'review', 'staged' => false,
+    ]);
+    \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht',
+        'label' => 'Testgericht', 'status' => 'failed', 'error' => 'Zeitüberschreitung', 'depth' => 0,
     ]);
 
-    $html = view('foodalchemist::partials.agent-mount')->render();
-    expect($html)->toContain('aktiv: true');
+    $spy = new class extends FakeAiProvider
+    {
+        public ?array $gesendet = null;
+
+        public function chat(array $messages, array $options = []): array
+        {
+            $this->gesendet = $messages;
+
+            return ['content' => '{"action":"final","text":"ok"}', 'model' => 'fake-voice', 'usage' => []];
+        }
+    };
+    app()->singleton(FakeAiProvider::class, fn () => $spy);
+
+    app(VoiceCommandService::class)->verarbeite('Wie steht die Planung?', null, 'fragen', null, (int) $session->id);
+
+    $user = collect($spy->gesendet)->firstWhere('role', 'user')['content'] ?? '';
+    expect($user)->toContain('Testgericht')
+        ->and($user)->toContain('fehlgeschlagen')
+        ->and($user)->toContain('Zeitüberschreitung');
 });
 
 /**
- * Alle 26 FA-Vollseiten (Routen-Ziele, `grep -oE "Livewire\\\\[A-Za-z0-9_\\\\]+::class" routes/web.php`
- * gegengeprüft, 2026-09-17) — hart hinterlegt statt aus routes/web.php geparst: ein Regex über
- * Bare-Imports (`use ...Dashboard;`) vs. FQCN-Referenzen wäre selbst fehleranfällig, und genau
- * DAS soll dieser Test verlässlich prüfen, nicht neu erfinden.
+ * Spec 55 (Design-Punkt b): das additive "struktur"-Feld aus dem finalen Modell-JSON wird zu
+ * einem `komponenten_uebernahme`-Vorschlag — NUR mit whitelisted Leitplanken-Schlüsseln, NUR
+ * bei bekanntem Scope, KEIN neues Tool/Katalog-Wachstum (s. AiGatewayService::callWithTools()).
  */
-const FA_VOLLSEITEN_VIEWS = [
-    'angebote/index', 'concepter/browser', 'concepts/index', 'controlling/cockpit', 'dashboard',
-    'demnaechst', 'favorites/index', 'food-dna/index', 'foodbooks/index', 'formate/browser',
-    'geschirr/index', 'gps/browser', 'knowledge/browser', 'orders/index', 'pakete/index',
-    'planung/index', 'produktion/browser', 'produktion/tagesplan', 'recipes/browser',
-    'review-queue', 'settings/index', 'speisekarte/index', 'speiseplan/index', 'suppliers/index',
-    'trendradar/index', 'verkauf/browser',
-];
+it('Spec 55 (Design-Punkt b): ein "struktur"-Feld im finalen JSON wird zum komponenten_uebernahme-Vorschlag', function () {
+    ($this->skript)([
+        '{"action":"final","text":"Sektor auf Business gesetzt.","struktur":{"scope":"gericht","felder":{"sektor":"business","pax":"40","erfundenes_feld":"x"},"brief":"Business-Frühstück für 40 Personen"}}',
+    ]);
 
-it('Platzierung: JEDE FA-Vollseite bindet das agent-mount-Partial GENAU EINMAL im Root-Element ein', function () {
-    $fehlend = [];
-    foreach (FA_VOLLSEITEN_VIEWS as $view) {
-        $pfad = __DIR__ . "/../../resources/views/livewire/{$view}.blade.php";
-        if (! file_exists($pfad)) {
-            $fehlend[] = "{$view} (View-Datei fehlt — Liste veraltet?)";
+    $r = app(VoiceCommandService::class)->verarbeite('Setze Sektor auf Business, 40 Personen');
 
-            continue;
-        }
-        $treffer = substr_count(file_get_contents($pfad), "@include('foodalchemist::partials.agent-mount')");
-        if ($treffer !== 1) {
-            $fehlend[] = "{$view} ({$treffer}x statt 1x im Root)";
-        }
-    }
-
-    expect($fehlend)->toBe([], 'Fehlendes/doppeltes agent-mount-Include: ' . implode(', ', $fehlend));
+    expect($r['proposals'])->toHaveCount(1);
+    $p = $r['proposals'][0];
+    expect($p['type'])->toBe('komponenten_uebernahme')
+        ->and($p['scope'])->toBe('gericht')
+        ->and($p['felder'])->toBe(['sektor' => 'business', 'pax' => '40'])   // erfundenes_feld gefiltert
+        ->and($p['brief'])->toBe('Business-Frühstück für 40 Personen');
 });
 
-/**
- * Review-Fund cooking-jarvis-03: die hardcodierte Liste oben beweist nur, dass SIE SELBST
- * vollständig ist — nicht, dass sie die tatsächlich gerouteten Vollseiten trifft. Dieser Test
- * misst stattdessen live aus `routes/web.php`: jede `foodalchemist.*`-Route, deren Ziel eine
- * Livewire-Komponentenklasse ist (keine Closure/kein Controller — Presentation-Routen sind
- * öffentliche Kundenbuch-Seiten mit eigenem Layout OHNE Sidebar/Agent und fallen bewusst raus),
- * wird gerendert und auf GENAU EIN `data-voice-float-mount` geprüft. Ein künftiger Routen-Zugang
- * ohne Include fällt hier durch, ohne dass jemand die Liste oben nachpflegen muss.
- */
-it('Platzierung (gemessen): JEDE geroutete FA-Livewire-Vollseite rendert data-voice-float-mount UND data-voice-tts genau 1×', function () {
-    // Spec 53/F (3): `data-voice-tts` (das <audio>-Wiedergabe-Element) liegt hinter
-    // `@if($aufnahmeMoeglich)` — ohne STT-Zugang bliebe der ganze Recorder-Block weg und
-    // der Test würde fälschlich 0x statt 1x melden, nicht weil das Audio-Element fehlt,
-    // sondern weil die Vorbedingung fehlt.
-    config(['foodalchemist.stt.provider' => 'openai', 'services.openai.api_key' => 'sk-test']);
+it('Spec 55 (Design-Punkt b): ein "struktur"-Feld mit unbekanntem Scope wird verworfen', function () {
+    ($this->skript)([
+        '{"action":"final","text":"ok","struktur":{"scope":"quatsch","felder":{"sektor":"business"}}}',
+    ]);
 
-    $geprueft = [];
-    $fehlendMount = [];
-    $fehlendAudio = [];
+    $r = app(VoiceCommandService::class)->verarbeite('Test');
 
-    foreach (app('router')->getRoutes() as $route) {
-        $name = $route->getName();
-        if ($name === null || ! str_starts_with($name, 'foodalchemist.')) {
-            continue;
-        }
-        $klasse = $route->getActionName();
-        if (! is_string($klasse) || ! str_starts_with($klasse, 'Platform\\FoodAlchemist\\Livewire\\')) {
-            continue; // Closure oder Controller (Dokument-/Karten-/Präsentations-Routen) — keine App-Vollseite
-        }
-        if (! is_subclass_of($klasse, \Livewire\Component::class)) {
-            continue;
-        }
-        if (in_array($klasse, $geprueft, true)) {
-            continue; // dieselbe Komponente über mehrere Routen (Tagesplan/Wandmonitor) — einmal reicht
-        }
-        $geprueft[] = $klasse;
-
-        $html = Livewire::test($klasse)->html();
-        if (substr_count($html, 'data-voice-float-mount') !== 1) {
-            $fehlendMount[] = "{$klasse} ({$name}): " . substr_count($html, 'data-voice-float-mount') . 'x statt 1x';
-        }
-        if (substr_count($html, 'data-voice-tts') !== 1) {
-            $fehlendAudio[] = "{$klasse} ({$name}): " . substr_count($html, 'data-voice-tts') . 'x statt 1x';
-        }
-    }
-
-    // Riegel gegen einen wirkungslosen Test: wenn die Introspektion nichts findet, weil sich
-    // z. B. das Action-Format ändert, würde der Test sonst grün lügen (nichts geprüft = nichts gefunden).
-    expect($geprueft)->toHaveCount(26, 'Routen-Introspektion hat nicht 26 FA-Livewire-Vollseiten gefunden — Action-Format geändert?');
-    expect($fehlendMount)->toBe([], 'Fehlendes/doppeltes agent-mount-Include (live gerendert): ' . implode(', ', $fehlendMount));
-    expect($fehlendAudio)->toBe([], 'Fehlendes/doppeltes TTS-Audio-Element (live gerendert): ' . implode(', ', $fehlendAudio));
+    expect($r['proposals'])->toBe([]);
 });
+
 
 it('Loop: erfundener Tool-Name führt nicht zum Fatal, sondern zur Ablehnung', function () {
     // Null-Guard: `$registry->get()` liefert null — vorher lief hier ein ToolResult::error,

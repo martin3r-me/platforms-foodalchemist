@@ -1079,6 +1079,12 @@
     {{-- Vollen Conceptor-Editor inline: ein erzeugtes Concept öffnet mit allen Tabs/KPIs/Score/Kalkulation/
          Geschirr direkt hier (öffnet via concepter-editor.oeffnen aus der step-zeile). Gleiches Muster wie Angebote. --}}
     <livewire:foodalchemist.concepter.editor />
-    {{-- Spec 53/F Stufe 2: Sprachbefehl-Mount auf Seitenebene (Modal + optionales schwebendes Element). --}}
-    @include('foodalchemist::partials.agent-mount')
+    {{-- Spec 55: der Agent lebt NUR noch hier, als einklappbares Panel — sichtbar auf JEDEM Tab
+         (dieser Include liegt ausserhalb der Tab-`@if`-Blöcke, wie recipe-modal/vk-modal/
+         concepter.editor oben). `wire:key` trägt die Session-ID: wechselt sie, remountet das
+         Panel komplett (frisches Gedächtnis für die neue Session, siehe VoiceModal::sitzungIds()) —
+         kein `#[Reactive]`-Prop-Update nötig. --}}
+    @if($agentPanelSichtbar)
+        @livewire('foodalchemist.voice-modal', ['planungsSessionId' => $sessionId], key('voice-panel-' . ($sessionId ?? 'keine')))
+    @endif
 </x-ui-page>

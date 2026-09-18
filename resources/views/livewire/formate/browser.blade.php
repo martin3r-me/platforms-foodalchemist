@@ -150,5 +150,4 @@
     {{-- Voll-Editor-Modal — auf Seitenebene, öffnet via formate-editor.oeffnen --}}
     <livewire:foodalchemist.formate.editor />
     {{-- Spec 53/F Stufe 2: Sprachbefehl-Mount auf Seitenebene (Modal + optionales schwebendes Element). --}}
-    @include('foodalchemist::partials.agent-mount')
 </x-ui-page>

@@ -2595,3 +2595,57 @@ it('Globaler KI-Status: zeigt wartend/laufend fuers Team an, unabhaengig davon o
         ->assertSeeText('1 KI-Aufgabe wartet')
         ->assertSeeText('Rezept wird entworfen …');
 });
+
+/**
+ * Spec 55 (Design-Punkt b): „Übernehmen"-Klick im Sprachbefehl-Panel schreibt DIREKT in
+ * Regler/Brief dieser Komponente — kein MCP-Tool, kein Umweg über die DB (siehe
+ * VoiceModal::komponentenUebernehmen(), VoiceCommandService "struktur"-Feld).
+ */
+it('Spec 55: voiceKomponentenUebernehmen() schreibt Leitplanken + Brief in den Ziel-Scope, whitelisted', function () {
+    $test = Livewire::test(PlanungIndex::class)
+        ->dispatch('voice.komponenten-uebernahme', scope: 'gericht', felder: [
+            'sektor' => 'catering', 'pax' => '40', 'erfundenes_feld' => 'boese',
+        ], brief: 'Business-Frühstück für 40 Personen')
+        ->assertSet('regler.gericht.sektor', 'catering')
+        ->assertSet('regler.gericht.pax', '40')
+        ->assertSet('eingabe.gericht.brief', 'Business-Frühstück für 40 Personen')
+        ->assertSet('reglerVonAgent.gericht.sektor', true);
+
+    // Fremdkeys aus dem Browser-Event NIE übernehmen — der Server prüft nochmal, auch wenn
+    // VoiceCommandService selbst schon filtert (kein vertrauenswürdiger Kanal dazwischen).
+    expect($test->get('regler')['gericht']['erfundenes_feld'] ?? null)->toBeNull();
+});
+
+it('Spec 55: voiceKomponentenUebernehmen() mit unbekanntem Scope schreibt nichts', function () {
+    Livewire::test(PlanungIndex::class)
+        ->dispatch('voice.komponenten-uebernahme', scope: 'quatsch', felder: ['sektor' => 'catering'], brief: null)
+        ->assertSet('regler.quatsch', null);
+});
+
+/**
+ * Spec 55: „vom Agenten"-Badge — die Anzeige-Markierung entsteht bei der Übernahme UND
+ * verschwindet bei der NÄCHSTEN manuellen Änderung desselben Feldes (updated()-Hook, gleiches
+ * Muster wie die Schnellstart-Markierung `aktiveVorlage`).
+ */
+it('Spec 55: „vom Agenten"-Badge zeigt sich nach Übernahme im Rendering und verschwindet bei manueller Änderung', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Event']);
+
+    $test = Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->dispatch('voice.komponenten-uebernahme', scope: 'gericht', felder: [
+            'sektor' => 'catering', 'pax' => '40',
+        ], brief: 'Business-Frühstück für 40 Personen');
+
+    expect(substr_count($test->html(), 'data-regler-von-agent="sektor"'))->toBe(1)
+        ->and(substr_count($test->html(), 'data-regler-von-agent="pax"'))->toBe(1)
+        ->and(substr_count($test->html(), 'data-regler-von-agent="brief"'))->toBe(1);
+
+    // Manuelle Änderung NUR am Sektor-Feld — Pax/Brief bleiben markiert, Sektor nicht mehr.
+    $test->set('regler.gericht.sektor', 'restaurant')
+        ->assertSet('reglerVonAgent.gericht.sektor', null)
+        ->assertSet('reglerVonAgent.gericht.pax', true)
+        ->assertSet('reglerVonAgent.gericht.brief', true);
+
+    expect($test->html())->not->toContain('data-regler-von-agent="sektor"')
+        ->and($test->html())->toContain('data-regler-von-agent="pax"');
+});

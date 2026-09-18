@@ -607,6 +607,12 @@ class AiGatewayService
         $start = hrtime(true);
         $toolLaeufe = [];
         $finalText = null;
+        // Spec 55 (Design-Punkt b): additiver, optionaler Begleiter zum `final`-Text — der
+        // Aufrufer (VoiceCommandService) darf sein eigenes Protokoll definieren (z. B.
+        // strukturierte Feld→Wert-Vorschläge), OHNE ein neues MCP-Tool und ohne den Katalog
+        // zu vergrössern. `null` ändert am bisherigen Verhalten nichts, kein anderer Aufrufer
+        // betroffen (niemand sonst liest dieses Feld).
+        $finalStruktur = null;
         $runde = 0;
         $usageGesamt = ['input_tokens' => 0, 'output_tokens' => 0, 'input_tokens_details' => ['cached_tokens' => 0]];
         $tatsaechlichesModell = null;
@@ -652,6 +658,7 @@ class AiGatewayService
             }
             if (($parsed['action'] ?? null) === 'final' || $kontext === null) {
                 $finalText = $parsed['text'] ?? null;
+                $finalStruktur = is_array($parsed['struktur'] ?? null) ? $parsed['struktur'] : null;
                 break;
             }
             if (($parsed['action'] ?? null) === 'tool' && is_string($parsed['name'] ?? null)) {
@@ -739,7 +746,7 @@ class AiGatewayService
             ['knowledge_used' => null, 'target_table' => null, 'target_id' => null, 'layers_used' => null]);
 
         return ['text' => $finalText, 'runden' => $runde, 'tool_laeufe' => $toolLaeufe, 'elapsed_ms' => $elapsedMs,
-            'freigeschaltet' => $freigeschaltet];
+            'freigeschaltet' => $freigeschaltet, 'struktur' => $finalStruktur];
     }
 
     /**

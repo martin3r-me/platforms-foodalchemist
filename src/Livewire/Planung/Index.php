@@ -148,6 +148,15 @@ class Index extends Component
      */
     public array $regler = [];
 
+    /**
+     * Spec 55: welche `$regler[$scope]`-Felder zuletzt vom Sprachbefehl-Agenten übernommen
+     * wurden (`$scope => [$feld => true]`) — reine Anzeige-Markierung für die Leitplanken-UI
+     * („vom Agenten"), kein eigener Speicherort. Ein manueller Edit des Feldes löscht seine
+     * eigene Markierung nicht automatisch (kein Watcher pro Feld) — vertretbar für eine reine
+     * Kennzeichnung, sie verschwindet spätestens beim nächsten Tab-Wechsel/Neuladen.
+     */
+    public array $reglerVonAgent = [];
+
     /** Die drei Creation-Scopes (Tabs mit eigener Eingabe + Leitplanken). */
     public const SCOPES = ['rezept', 'gericht', 'concept'];
 
@@ -1165,6 +1174,33 @@ class Index extends Component
     }
 
     /**
+     * Spec 55 (Design-Punkt b): „Übernehmen"-Klick eines `komponenten_uebernahme`-Vorschlags im
+     * eingebetteten Sprachbefehl-Panel ({@see \Platform\FoodAlchemist\Livewire\VoiceModal::komponentenUebernehmen()}) —
+     * schreibt DIREKT in die Regler/den Brief DIESER Komponente (kein MCP-Tool, kein Katalog-
+     * Wachstum). Whitelist der Leitplanken-Schlüssel schon in VoiceCommandService gefiltert,
+     * hier NOCHMAL geprüft (Browser-Events sind kein vertrauenswürdiger Server-Kanal).
+     *
+     * @param  array<string, mixed>  $felder
+     */
+    #[\Livewire\Attributes\On('voice.komponenten-uebernahme')]
+    public function voiceKomponentenUebernehmen(string $scope, array $felder, ?string $brief = null): void
+    {
+        if (! in_array($scope, self::SCOPES, true)) {
+            return;
+        }
+        $erlaubt = array_intersect_key($felder, array_flip(['sektor', 'occasion', 'pax', 'ziel_vk', 'level']));
+        foreach ($erlaubt as $feld => $wert) {
+            $this->regler[$scope][$feld] = $wert;
+            $this->reglerVonAgent[$scope][$feld] = true;
+        }
+        if ($brief !== null && trim($brief) !== '') {
+            $this->eingabe[$scope]['brief'] = trim($brief);
+            $this->reglerVonAgent[$scope]['brief'] = true;
+        }
+        $this->meldung = 'Vorschlag des Sprachbefehl-Agenten übernommen.';
+    }
+
+    /**
      * Zuletzt-Karte: Planung verwerfen (Soft-Delete, reversibel; finale Etappe #17). Team-owned (D1)
      * über den Service. War die verworfene Session gerade aktiv, wird der Editor-/Lauf-Kontext gelöst.
      */
@@ -1714,11 +1750,22 @@ class Index extends Component
      * Eine MANUELLE Brief-Änderung hebt die Schnellstart-Markierung des Scopes auf — die Vorlage war
      * nur Startpunkt, ab hier ist es ein eigenes Briefing (ein stehender Chip-Highlight wäre irreführend).
      * Feuert NICHT beim programmatischen Setzen in {@see briefVorlage()} (nur client-originierte Updates).
+     *
+     * Spec 55: dieselbe Logik für `reglerVonAgent` — der „vom Agenten"-Marker ist eine Aussage
+     * über den AKTUELLEN Feldwert („das steht so, weil der Agent es vorgeschlagen hat"); ändert
+     * der Mensch das Feld manuell, stimmt die Aussage nicht mehr. `updated()` feuert NUR bei
+     * client-originierten `wire:model`-Updates (Tippen/Regler-Bedienung), NICHT wenn
+     * {@see voiceKomponentenUebernehmen()} selbst den Marker setzt (das ist ein Server-Write
+     * in derselben Methode, kein Property-Update-Zyklus).
      */
     public function updated(string $name): void
     {
         if (preg_match('#^eingabe\.([^.]+)\.brief$#', $name, $m)) {
             unset($this->aktiveVorlage[$m[1]]);
+            unset($this->reglerVonAgent[$m[1]]['brief']);
+        }
+        if (preg_match('#^regler\.([^.]+)\.([^.]+)$#', $name, $m)) {
+            unset($this->reglerVonAgent[$m[1]][$m[2]]);
         }
     }
 
@@ -4140,6 +4187,9 @@ class Index extends Component
             : collect();
 
         return view('foodalchemist::livewire.planung.index', [
+            // Spec 55: Agenten-Panel — sichtbar, wenn das Team es nicht abgeschaltet hat
+            // (Default AN). Eigener Schlüssel, siehe TeamSettingsService::voiceAgentPanelPlanung().
+            'agentPanelSichtbar' => $team !== null && app(TeamSettingsService::class)->voiceAgentPanelPlanung($team),
             'fbAuswahl' => $fbAuswahl,
             'skAuswahl' => $skAuswahl,
             'spAuswahl' => $spAuswahl,

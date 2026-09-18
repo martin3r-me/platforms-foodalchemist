@@ -17,7 +17,11 @@
                 <span wire:loading wire:target="titelVorschlagen">…</span>
             </button>
         </div>
-        <label class="{{ $label ?? 'text-[11px] text-gray-500' }}">Beschreibung (geht in die Erzeugung)</label>
+        <label class="{{ $label ?? 'text-[11px] text-gray-500' }}">Beschreibung (geht in die Erzeugung)
+            @if($reglerVonAgent[$scope]['brief'] ?? false)
+                <span class="{{ $pill }} {{ $variantPill['secondary'] }}" data-regler-von-agent="brief" title="Vom Sprachbefehl-Agenten vorgeschlagen — verschwindet bei manueller Änderung">Agent</span>
+            @endif
+        </label>
         <textarea wire:model="eingabe.{{ $scope }}.brief" rows="3" class="{{ $input }} mb-2" placeholder="Constraints, Anlass, Richtung …"></textarea>
 
         {{-- Phase C2, zweite Ebene: hier ist Sprache EINGABE, nicht Steuerung. Der Recorder
