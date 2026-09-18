@@ -311,6 +311,16 @@ class KnowledgeContextService
             $snap('pairing_grounding', $before);
         }
 
+        // ── 3a. ZUTATEN-GROUNDING (Spec 53/H): je Hauptzutat GENAU EIN Aspekt-Dossier ──
+        // Ersetzt für `zutat` die generische Fuzzy-Discovery (§4) — dort konkurrierten alle
+        // Aspekte (steckbrief/verwendung/verhalten/cave) JEDER Zutat gegeneinander UND gegen
+        // Technik-/Referenz-Dossiers um dieselben Top-K-Plätze. Deterministisch: kein Rang-Risiko.
+        if (($r = $routing->get('zutat:grounding')) !== null) {
+            $before = count($filesUsed);
+            $parts[] = $this->zutatGroundingBlock($team, $hauptzutatSlugs, $feature, (int) ($r->max_docs ?: 8), $filesUsed);
+            $snap('zutat', $before);
+        }
+
         // ── 3b. NIVEAU-WISSEN (Spec 37, TYP-ABHÄNGIG) ──
         // Bewusst NICHT im generischen discovery-Loop unten: Basisrezept-Doc (…basis…) und Teller-Doc
         // tragen denselben Level-Token (haute/gehoben/klassisch) → fuzzy-Ranking wäre nicht eindeutig.
@@ -362,9 +372,13 @@ class KnowledgeContextService
             $allowed = $scopeSlugs !== [] && ! in_array($category, ['regelwerk', 'niveau', 'cross_cutting'], true)
                 ? $scopeSlugs
                 : [];
+            // Spec 53/H (PR-Review, 2026-09-18): `zutat` ist der EINZIGE Fall, in dem `search()`s
+            // Gruppen-Dedup (Aufgabe A) einen Aspekt statt des Scores gewinnen lassen soll — die
+            // Restriktion in `search()` selbst (`str_starts_with($hit['slug'], 'zutat.')`) sorgt
+            // dafür, dass dieser Parameter für jede andere Kategorie wirkungslos bleibt.
             $generic = $this->discoverGenericBlock($team,
                 $category, $discoveryQuery, $topK,
-                $filesUsed, $allowed
+                $filesUsed, $allowed, preferredAspect: $category === 'zutat' ? $this->zutatAspektFuer($feature) : null,
             );
             if ($generic !== null) {
                 $parts[] = $generic;
@@ -400,8 +414,14 @@ class KnowledgeContextService
         foreach ($artRouting as $route) {
             $before = count($filesUsed);
             if ($route->mode === 'discovery' && empty($params['_required_only'])) {
+                // `zutat`-Dossiers tragen `art=fachwissen` (Regelwerk Zutaten-Dossier §8.2) und laufen
+                // MOMENTAN, solange keine eigene `category=zutat`-Routing-Zeile existiert, über dieses
+                // Auffangnetz in den Prompt (§4a) — dieselbe Aspekt-Präferenz muss also auch hier greifen,
+                // sonst hilft Aufgabe A nur im (noch ungenutzten) Kategorie-Pfad oben.
                 $part = $this->discoverGenericBlock($team, $route->art, $discoveryQuery,
-                    (int) ($route->max_docs ?: 3), $filesUsed, $scopeSlugs, $route->art);
+                    (int) ($route->max_docs ?: 3), $filesUsed, $scopeSlugs, $route->art,
+                    preferredAspect: $route->art === 'fachwissen' ? $this->zutatAspektFuer($feature) : null,
+                );
                 if ($part !== null) $parts[] = $part;
             } elseif ($route->art === 'datenwerk' && $route->mode === 'resolve') {
                 $base = $this->sichtbareDokumente($team);
@@ -1412,7 +1432,7 @@ class KnowledgeContextService
      * nach Rangfusion die ausgewählten Volltexte. So trägt jedes neu gepflegte Doc automatisch,
      * ohne Service-Änderung; der Prompt bleibt durch top_k/chars beschränkt (O(1), nicht O(n)).
      */
-    private function discoverGenericBlock(?Team $team, string $category, string $query, int $topK, array &$filesUsed, array $allowedSlugs = [], ?string $art = null): ?KnowledgeContextBlock
+    private function discoverGenericBlock(?Team $team, string $category, string $query, int $topK, array &$filesUsed, array $allowedSlugs = [], ?string $art = null, ?string $preferredAspect = null): ?KnowledgeContextBlock
     {
         $base = DB::table('foodalchemist_knowledge_documents')->tap($art === null ? $this->nurFuerPrompt($team) : $this->nurSichtbar($team))
             ->when($art === null, fn ($q) => $q->where('category', $category), fn ($q) => $q->where('art', $art))->where('active', 1)->whereNull('deleted_at')
@@ -1422,7 +1442,7 @@ class KnowledgeContextService
             \Platform\FoodAlchemist\Services\Knowledge\WissensGeltung::lesen($doc->geltung), $this->geltungsParameter))->pluck('id')->all();
         $base->whereIn('id', $eligible);
         $hits = app(KnowledgeSearchService::class)->search($base, $query, $topK,
-            (bool) config('foodalchemist.semantic_search.enabled', false), $team);
+            (bool) config('foodalchemist.semantic_search.enabled', false), $team, $preferredAspect);
         if ($hits === []) {
             return null;
         }
@@ -1733,6 +1753,134 @@ class KnowledgeContextService
             ->where('category', 'pairing')->where('active', 1)->whereNull('deleted_at')
             ->whereIn('slug', ["pairing.{$stem}", $stem])
             ->first(['slug', 'content_md', 'version']);
+    }
+
+    /**
+     * Spec 53/H Aufgabe B: welcher Aspekt (`zutat.<anker>--<aspekt>`) trägt die Antwort auf die
+     * Frage, die DIESER Prompt-Key stellt — Naming/Rezeptur fragt "wie wird sie verwendet",
+     * Produktionsschritte fragen "wie verhält sie sich unter Hitze/Säure/Zeit", Review/Konformität
+     * fragt "was ist zu beachten" (Cave), GP-Anlage fragt "was ist sie" (Steckbrief). Eine Zutat
+     * hat immer nur EINEN Platz im Grounding-Block (B2) — anders als bei der Aspekt-Präferenz in
+     * `KnowledgeSearchService::search()` (Aufgabe A) muss hier nicht zwischen mehreren Kandidaten
+     * gewählt werden, das Aspekt-Dossier wird direkt adressiert.
+     */
+    private function zutatAspektFuer(string $feature): string
+    {
+        return match (true) {
+            in_array($feature, ['recipe.generator', 'vk.generator'], true) => 'verwendung',
+            in_array($feature, ['recipe.steps', 'vk.plating'], true) => 'verhalten',
+            in_array($feature, ['recipe.review', 'vk.review'], true) => 'cave',
+            str_starts_with($feature, 'conformance.') => 'cave',
+            str_starts_with($feature, 'gp.') => 'steckbrief',
+            default => 'verwendung',
+        };
+    }
+
+    /**
+     * Spec 53/H Aufgabe B2: Zutaten-Grounding — pro Hauptzutat-Slug GENAU EIN Dossier
+     * (Aspekt aus {@see zutatAspektFuer()}), statt sie der Fuzzy-Discovery zu überlassen (dort
+     * konkurrieren alle 4 Aspekte jeder Zutat gegeneinander UND gegen Technik-/Referenz-Dossiers —
+     * gemessen am Passionsfrucht/Acerola-Brief: eine Nebenzutat belegte alle 4 Aspekt-Plätze, das
+     * Gelée-Technik-Dossier fiel komplett raus). Die Anker-Auflösung teilt sich {@see PairingService::ankerSlugFuer()}
+     * mit den beiden anderen Aufrufstellen (Pairing-Stems, Seed-Anker) — kein Raten am Slug.
+     *
+     * Geschützte Kontingente (Aufgabe C, ursprünglich geplant): NICHT gebaut. Die lokale Nachher-
+     * Messung mit A+B (WissenGoldenPassionsfruchtAcerolaTest) zeigt bei `recipe.steps` (kleinstes
+     * Budget im Rezept-Pfad, 17.200 Zeichen) bereits `dropped_chars: 0` — das Zutat-Grounding hier
+     * verlässt die Fuzzy-Discovery-Konkurrenz vollständig (eigener Block, `DETERMINISTISCHER_SCORE`),
+     * das Technik-Dossier konkurriert dadurch nur noch innerhalb seiner eigenen Kategorie statt
+     * zusätzlich gegen 4-8 Zutaten-Aspekte. Eine Absicherung gegen ein Problem bauen, das durch A+B
+     * bereits gelöst ist, wäre eine verfrühte Abstraktion — C erst bauen, wenn ein realer Fall
+     * auftaucht, den A+B nicht lösen (Orchestrierung, 2026-09-18).
+     *
+     * @param  list<string>  $hauptzutatSlugs  rohe Zutaten-Namen/-Token, NICHT normalisierte Anker-Slugs
+     * @param  list<string>  $filesUsed  by-ref-Audit
+     */
+    private function zutatGroundingBlock(?Team $team, array $hauptzutatSlugs, string $feature, int $maxDocs, array &$filesUsed): KnowledgeContextBlock
+    {
+        $aspekt = $this->zutatAspektFuer($feature);
+        $pairing = app(\Platform\FoodAlchemist\Services\PairingService::class);
+        $blocks = [];
+        $geladen = [];
+        foreach ($hauptzutatSlugs as $hz) {
+            if (count($blocks) >= $maxDocs) {
+                break;
+            }
+            $hz = trim((string) $hz);
+            if ($hz === '') {
+                continue;
+            }
+            $anker = $pairing->ankerSlugFuer($hz);
+            if ($anker === null) {
+                // Ehrlich sichtbar statt stillschweigend übersprungen (Dominique: "nimmt er dann
+                // random irgendeins?" — Antwort hier: nein, gar keins, und das steht auch so da).
+                $this->herkunft["zutat:{$hz}"] = ['via' => 'zutat_grounding', 'score' => null, 'status' => 'ohne_anker'];
+                continue;
+            }
+            if (isset($geladen[$anker])) {
+                continue;   // dieselbe Zutat mehrfach im Brief erwähnt
+            }
+            $geladen[$anker] = true;
+            // Regelwerk Zutaten-Dossier §2: eine Frage wird bei Bedarf INNERHALB der Frage weiter
+            // geteilt (`--verhalten-hitze`, `--verhalten-saeure`), nie quer über zwei Fragen — darum
+            // hier ALLE Teil-Dossiers des gewählten Aspekts, nicht nur eins.
+            $docs = $this->zutatDocs($team, $anker, $aspekt);
+            if ($docs->isEmpty()) {
+                $this->herkunft["zutat.{$anker}"] = ['via' => 'zutat_grounding', 'score' => null, 'status' => 'ohne_dossier', 'aspekt' => $aspekt];
+                continue;
+            }
+            foreach ($docs as $doc) {
+                if (count($blocks) >= $maxDocs) {
+                    break;
+                }
+                $blocks[] = ['file' => "{$doc->slug}@v{$doc->version}", 'text' => "### Zutat: {$anker} ({$aspekt})\n" . (string) $doc->content_md, 'score' => self::DETERMINISTISCHER_SCORE];
+                $filesUsed[] = "{$doc->slug}@v{$doc->version}";
+                $this->herkunft["{$doc->slug}@v{$doc->version}"] = [
+                    'via' => 'zutat_grounding', 'score' => self::DETERMINISTISCHER_SCORE,
+                    'chars' => mb_strlen((string) $doc->content_md), 'sent' => mb_strlen((string) $doc->content_md),
+                    'aspekt' => $aspekt, 'hauptzutat' => $hz,
+                ];
+            }
+        }
+        if ($blocks === []) {
+            // Kein `file`-Eintrag → landet weder in $filesUsed (s. o., wird nur bei echten Treffern
+            // gefüllt) noch in KnowledgeContextBlock::assemble()::files (dort explizit auf
+            // `file !== null` geprüft) — erscheint also nicht als Dossier im Kontext-Inspektor,
+            // ist reiner Prompt-Hinweistext (konsistent mit dem bestehenden Muster in groundingBlock()).
+            return new KnowledgeContextBlock('', [['file' => null, 'text' => '(keine Zutaten-Dossiers gefunden)']]);
+        }
+
+        return new KnowledgeContextBlock('', $blocks, "\n\n");
+    }
+
+    /**
+     * `zutat.<anker>--<aspekt>` — alle Treffer, sortiert nach Slug: der exakte Aspekt UND seine
+     * Teil-Dossiers (`--<aspekt>-<suffix>`, Regelwerk Zutaten-Dossier §2, z. B. `--verhalten-hitze`
+     * neben `--verhalten-saeure`, wenn eine Frage allein nicht in 3.900 Zeichen passt). `(_\d+)?`
+     * deckt zusätzlich eine nummerierte Anker-Vokabular-Variante ab (z. B. Anker `acerola`, Dossier
+     * `zutat.acerola_14--…`) — REIN defensiv: der Anker-Slug aus {@see PairingService::ankerSlugFuer()}
+     * (Quelle: dieselbe `foodalchemist_vocab_pairing_anchors`-Tabelle wie `composer.ANKER_SUCHE`,
+     * verifiziert) trägt sein Zahlsuffix laut Regelwerk §3 bereits selbst (`acerola_14` IST der
+     * Anker-Slug, nicht `acerola`) — der Normalfall trifft daher direkt exakt, `(_\d+)?` greift nur
+     * bei einer Diskrepanz zwischen Anker-Vokabular und Zutaten-Korpus, nie doppelt (das Muster ist
+     * mit `^…$` verankert, ein Treffer schließt die anderen Möglichkeiten aus).
+     *
+     * ⚠ Ein `LIKE 'zutat.<anker>_%--<aspekt>%'` allein ist eine Falle (Orchestrierung, 2026-09-18):
+     * `_` matcht in MySQL UND SQLite ein BELIEBIGES Zeichen, nicht nur den literalen Unterstrich —
+     * `zutat.apfel_%--verwendung%` träfe damit auch `zutat.apfelsine--verwendung` (Apfel→Apfelsine).
+     * Deshalb: Kandidaten breiter per LIKE holen (reiner Präfix-/Substring-Filter, kein
+     * `_`-Wildcard-Risiko in der Bedeutung), dann in PHP mit einem Regex verifizieren, der NUR einen
+     * `_<Zahl>`-Anker-Suffix UND/ODER einen `-<Teil>`-Aspekt-Suffix erlaubt.
+     */
+    private function zutatDocs(?Team $team, string $anker, string $aspekt): \Illuminate\Support\Collection
+    {
+        $base = DB::table('foodalchemist_knowledge_documents')->tap($this->nurFuerPrompt($team))
+            ->where('category', 'zutat')->where('active', 1)->whereNull('deleted_at');
+        $muster = '/^zutat\.'.preg_quote($anker, '/').'(_\d+)?--'.preg_quote($aspekt, '/').'(-[a-z0-9_]+)?$/u';
+
+        return $base->where('slug', 'like', "zutat.{$anker}%--{$aspekt}%")
+            ->orderBy('slug')->get(['slug', 'content_md', 'version'])
+            ->filter(fn ($doc) => preg_match($muster, $doc->slug) === 1)->values();
     }
 
     // ── MCP-Discovery (Phase K): Wissens-Suche für externe LLM-Clients ──────
