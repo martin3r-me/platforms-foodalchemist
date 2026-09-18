@@ -56,6 +56,12 @@ class VoiceCommandService
         // das Werkzeug nicht (es steht zwar über die Policy offen, aber nichts im Katalog/System-
         // Prompt sagte ihm, dass es existiert) und `verarbeite()` wertete den Ruf auch nicht aus.
         'foodalchemist.ui.NAVIGATE',
+        // Live-Bruch Dominique (2026-09-18): route_key trägt jetzt die kurzen Labels direkt in
+        // der Schema-Beschreibung von ui.NAVIGATE (siehe UiNavigateTool) — Navigation braucht
+        // dadurch normalerweise KEINEN ui.ROUTES-Aufruf mehr. Trotzdem als RÜCKFALL im Katalog
+        // (winziges Schema, keine Properties — siehe Token-Deckel-Test): fehlt ein Ziel in der
+        // kurzen Liste oder ändert sie sich, braucht das Modell sonst wieder einen SEARCH-Umweg.
+        'foodalchemist.ui.ROUTES',
         // Ohne das hier handelt der Sprach-Agent aus dem Bauch. Erlaubt war es ueber die Policy
         // schon immer (jedes lesende foodalchemist.*-Tool ist es) — aber nichts im Katalog und
         // nichts in der System-Nachricht sagte ihm, dass es ein Wissensmodul gibt, und ein
@@ -350,7 +356,9 @@ class VoiceCommandService
                     . 'gesperrt; Änderungen laufen über die Proposal-Tools und werden vom Menschen bestätigt. '
                     . 'Zum Öffnen eines KONKRETEN Datensatzes foodalchemist.ui.OPEN nutzen (id nötig), '
                     . 'zum Wechseln auf eine allgemeine Seite ohne Datensatz (z. B. „Öffne die Planung") '
-                    . 'foodalchemist.ui.NAVIGATE mit route_key aus foodalchemist.ui.ROUTES. '
+                    . 'foodalchemist.ui.NAVIGATE — die kurzen route_key-Labels stehen direkt im Schema des '
+                    . 'Tools, DIREKT aufrufen statt vorher zu suchen; nur wenn kein Key passt, '
+                    . 'foodalchemist.ui.ROUTES abfragen. '
                     . 'DREI PLANUNGS-FÄHIGKEITEN — direkt aufrufen, KEIN vorheriges tool_registry.SEARCH nötig '
                     . '(stehen schon im Katalog oben): '
                     . '(1) foodalchemist.planung_vorschlag.POST für „erstelle/baue ein Rezept/Gericht/Menü …" — '

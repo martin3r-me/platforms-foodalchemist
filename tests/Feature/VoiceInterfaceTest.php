@@ -223,6 +223,28 @@ it('Navigation: ui.NAVIGATE zur Planung redirected (Aufgabe 6 Beispiel „Öffne
         ->assertRedirect(route('foodalchemist.planung.index'));
 });
 
+/**
+ * Live-Bruch Dominique (2026-09-18): „Öffne die Seite der Basisrezepte" brauchte 3 Runden
+ * (tool_registry.SEARCH → ui.ROUTES → NAVIGATE, 29,8 s — knapp am 28 s-Zeitbudget). Die kurzen
+ * route_key-Labels stehen jetzt direkt im ui.NAVIGATE-Schema — das Skript hier bietet absichtlich
+ * NUR EINEN Tool-Aufruf an; würde das Modell zuerst SEARCH/ROUTES probieren, bekäme es dafür
+ * einfach dieselbe (falsche) Antwort zurück und der Test schlüge fehl.
+ */
+it('Navigation: "Öffne die Basisrezepte" braucht NUR EINE Runde — kein SEARCH/ui.ROUTES-Umweg', function () {
+    ($this->skript)([
+        '{"action":"tool","name":"foodalchemist.ui.NAVIGATE","arguments":{"route_key":"recipes"}}',
+        '{"action":"final","text":"Öffne die Basisrezepte."}',
+    ]);
+
+    $r = app(VoiceCommandService::class)->verarbeite('Öffne die Seite der Basisrezepte');
+
+    expect($r['runden'])->toBe(2)                                        // 1 Tool + final, keine dritte Runde
+        ->and($r['tool_laeufe'])->toHaveCount(1)
+        ->and($r['tool_laeufe'][0]['name'])->toBe('foodalchemist.ui.NAVIGATE')
+        ->and(collect($r['tool_laeufe'])->pluck('name'))->not->toContain('foodalchemist.ui.ROUTES')
+        ->and(collect($r['tool_laeufe'])->pluck('name'))->not->toContain('tool_registry.SEARCH');
+});
+
 /*
  * Spec 53/D — Aufgabe 7 (GL-07): „erstelle ein …" / „reichere an" dürfen nur bis zum Vorschlag
  * kommen. Kein Schreiben vor dem Bestätigen-Klick — genau wie beim bestehenden speisen_klasse-Fall.
@@ -570,6 +592,48 @@ it('die von sprechen() TATSÄCHLICH dispatchte Audio-URL ist abrufbar und liefer
     $this->get($url)->assertNotFound();
 });
 
+/**
+ * Live-Bruch Dominique (2026-09-18): auf demo läuft `cache.default=database` — rohe MP3-Bytes
+ * in einer utf8mb4-Textspalte lässt MySQL im strict mode NICHT zu (SQLSTATE 1366 "Incorrect
+ * string value"), reproduziert per Tinker (random_bytes wirft, base64_encode geht durch). Der
+ * SQLite-Test-Treiber kennt dieses Problem NICHT (keine Charset-Prüfung) — der Round-Trip-Test
+ * oben wäre also grün geblieben, selbst mit dem Bug. Diese Prüfung greift direkt am gecachten
+ * Rohwert an: er MUSS reines ASCII sein (Base64), sonst wäre auf einem strengen SQL-Cache-
+ * Treiber genau dieser Bruch wieder da.
+ */
+it('die gecachten TTS-Bytes sind reines ASCII (Base64) — nicht die rohen Binär-Bytes, sonst scheitert ein utf8mb4-Cache-Treiber', function () {
+    config(['foodalchemist.tts.provider' => 'fake']);
+
+    $url = null;
+    Livewire::test(VoiceModal::class)
+        ->call('sprechen', 'Testsatz')
+        ->assertDispatched('voice-tts-bereit', function ($name, $params) use (&$url) {
+            $url = $params['url'];
+
+            return true;
+        });
+
+    $token = basename(parse_url($url, PHP_URL_PATH));
+    $eintrag = \Illuminate\Support\Facades\Cache::get(\Platform\FoodAlchemist\Http\Controllers\VoiceAudioController::cacheKey($token));
+
+    expect($eintrag)->not->toBeNull()
+        ->and(mb_check_encoding($eintrag['bytes'], 'ASCII'))->toBeTrue()
+        ->and(base64_decode($eintrag['bytes'], true))->not->toBeFalse();
+});
+
+it('TTS-Fehler landet MIT Fehlertext im Call-Log — "fehler — fehlgeschlagen" ohne Ursache war 40 Minuten Sucherei', function () {
+    config(['foodalchemist.tts.provider' => 'none']);   // bindet UnkonfiguriertTtsService, wirft immer
+
+    Livewire::test(VoiceModal::class)->call('sprechen', 'Testsatz');
+
+    $zeile = \Illuminate\Support\Facades\DB::table('foodalchemist_ai_call_log')
+        ->where('feature', 'voice.tts')->latest('id')->first();
+
+    expect($zeile)->not->toBeNull()
+        ->and($zeile->error)->not->toBeNull()
+        ->and($zeile->error)->toContain('nicht konfiguriert');
+});
+
 it('Audio-Route ohne gültige Signatur wird abgelehnt (403) — kein Erraten der Route über die reine ID', function () {
     $ungesichert = route('foodalchemist.voice.audio', ['token' => 'irgendwas']);
 
@@ -759,7 +823,10 @@ it('oeffnen(): sowohl Sidebar- als auch schwebender Knopf schicken autostart:tru
     $agentMount = file_get_contents(__DIR__ . '/../../resources/views/partials/agent-mount.blade.php');
 
     expect($sidebar)->toContain("\$dispatch('voice-modal.oeffnen', { autostart: true })")
-        ->and($agentMount)->toContain("\$dispatch('voice-modal.oeffnen', { autostart: true })");
+        // Live-Bruch 2026-09-18 (Punkt 3): der schwebende Knopf schickt seit dem »schwebender
+        // Begleiter«-Schritt ZUSÄTZLICH `schwebend:true` mit (Sidebar NICHT — deren Ein-Klick-
+        // Modus öffnet weiter immer normal), darum eigene, WEITERE Assertion statt derselben.
+        ->and($agentMount)->toContain("\$dispatch('voice-modal.oeffnen', { autostart: true, schwebend: true })");
 });
 
 it('der Recorder startet NUR, wenn autostart UND konversationAktiv beide wahr sind (Ein-Klick-Modus bleibt unverändert)', function () {
@@ -928,10 +995,98 @@ it('schwebender Knopf: ein Klick WÄHREND eines laufenden Zyklus stoppt, statt e
         if ($stoppIndex === null && str_contains($z, 'FaVoiceStopAlles();')) {
             $stoppIndex = $i;
         }
-        if ($oeffnenIndex === null && str_contains($z, "\$dispatch('voice-modal.oeffnen', { autostart: true })")) {
+        if ($oeffnenIndex === null && str_contains($z, "\$dispatch('voice-modal.oeffnen', { autostart: true, schwebend: true })")) {
             $oeffnenIndex = $i;
         }
     }
     expect($stoppIndex)->not->toBeNull()->and($oeffnenIndex)->not->toBeNull()
         ->and($stoppIndex)->toBeLessThan($oeffnenIndex);
+});
+
+/*
+ * Live-Bruch Dominique (2026-09-18, Punkt 3 — erster Schritt Spec 54 »schwebender Begleiter«):
+ * das Modal soll im Konversations-Modus NICHT mehr aufreissen, solange es nichts zu bestätigen
+ * gibt — der schwebende Knopf zeigt den Zustand selbst, eine Sprechblase Transkript + Antwort.
+ */
+
+it('oeffnen(schwebend:true) im Konversations-Modus OHNE offene Vorschläge öffnet das Modal NICHT', function () {
+    app(TeamSettingsService::class)->update($this->rootTeam, ['voice_agent_dauerhaft_aktiv' => true]);
+
+    Livewire::test(VoiceModal::class)
+        ->call('oeffnen', null, true)
+        ->assertNotDispatched('modal.open');
+});
+
+it('oeffnen(schwebend:true) im Konversations-Modus MIT offenen Vorschlägen öffnet das Modal trotzdem (etwas zu bestätigen)', function () {
+    app(TeamSettingsService::class)->update($this->rootTeam, ['voice_agent_dauerhaft_aktiv' => true]);
+    ($this->skript)([
+        '{"action":"tool","name":"foodalchemist.gps.POST","arguments":{"hauptzutat":"Zander"}}',
+        '{"action":"final","text":"Vorschlag — bitte bestätigen."}',
+    ]);
+    Livewire::test(VoiceModal::class)->call('verarbeiteText', 'Lege ein Grundprodukt an');
+    // Neue Instanz = wie ein frischer Seiten-Mount + Öffnen-Klick — die Sitzung hat den
+    // Vorschlag gespeichert, jetzt öffnet oeffnen(schwebend:true) TROTZDEM.
+    Livewire::test(VoiceModal::class)
+        ->call('oeffnen', null, true)
+        ->assertDispatched('modal.open');
+});
+
+it('oeffnen(schwebend:false) — Sidebar/Ein-Klick-Modus, Klick auf die Blase — öffnet IMMER, unabhängig vom Konversations-Modus', function () {
+    app(TeamSettingsService::class)->update($this->rootTeam, ['voice_agent_dauerhaft_aktiv' => true]);
+
+    Livewire::test(VoiceModal::class)
+        ->call('oeffnen', null, false)
+        ->assertDispatched('modal.open');
+});
+
+it('oeffnen(schwebend:true) OHNE Konversations-Modus öffnet ebenfalls IMMER (die Sperre gilt NUR im Konversations-Modus)', function () {
+    Livewire::test(VoiceModal::class)
+        ->call('oeffnen', null, true)
+        ->assertDispatched('modal.open');
+});
+
+it('ein NEUER Vorschlag WÄHREND des Turns öffnet das Modal nachträglich, auch wenn oeffnen() es zuvor geschlossen liess', function () {
+    app(TeamSettingsService::class)->update($this->rootTeam, ['voice_agent_dauerhaft_aktiv' => true]);
+    $modal = Livewire::test(VoiceModal::class)->call('oeffnen', null, true);
+    $modal->assertNotDispatched('modal.open');   // beim Öffnen noch nichts zu bestätigen
+
+    ($this->skript)([
+        '{"action":"tool","name":"foodalchemist.gps.POST","arguments":{"hauptzutat":"Zander"}}',
+        '{"action":"final","text":"Vorschlag — bitte bestätigen."}',
+    ]);
+    $modal->call('verarbeiteText', 'Lege ein Grundprodukt an')
+        ->assertDispatched('modal.open');        // jetzt gibt es etwas zu bestätigen
+});
+
+it('schwebender Knopf zeigt GENAU vier Zustände (pulsierend=hört zu, Wellen=spricht, ruhig=wartet, Fehler rot) — nicht mehr, wie verabredet', function () {
+    $blade = file_get_contents(__DIR__ . '/../../resources/views/livewire/voice-modal.blade.php');
+
+    $zeile = collect(explode("\n", $blade))->first(fn ($z) => str_contains($z, '_schwebeStatus()'));
+    expect($zeile)->not->toBeNull();
+    foreach (["return 'fehler'", "return 'spricht'", "return 'hoert_zu'", "return 'wartet'"] as $wert) {
+        expect($blade)->toContain($wert);
+    }
+
+    $agentMount = file_get_contents(__DIR__ . '/../../resources/views/partials/agent-mount.blade.php');
+    expect($agentMount)->toContain("schwebeStatus === 'hoert_zu'")
+        ->and($agentMount)->toContain("schwebeStatus === 'spricht'")
+        ->and($agentMount)->toContain("schwebeStatus === 'fehler'")
+        ->and($agentMount)->toContain('data-voice-float-status');
+});
+
+it('die Sprechblase (drittes Element in agent-mount) zeigt Transkript + Antwort und öffnet beim Klick das Modal normal (nicht schwebend)', function () {
+    $agentMount = file_get_contents(__DIR__ . '/../../resources/views/partials/agent-mount.blade.php');
+
+    expect($agentMount)->toContain('data-voice-blase')
+        ->and($agentMount)->toContain('schwebeTranskript')
+        ->and($agentMount)->toContain('schwebeAntwort')
+        // Ein Klick auf die Blase öffnet NORMAL (schwebend:false) — anders als der Knopf selbst.
+        ->and($agentMount)->toContain("\$dispatch('voice-modal.oeffnen', { autostart: false, schwebend: false })");
+});
+
+it('voice-modal.blade.php spiegelt seinen Zustand nach window.FaVoiceZustand — die Brücke zum schwebenden Knopf', function () {
+    $blade = file_get_contents(__DIR__ . '/../../resources/views/livewire/voice-modal.blade.php');
+
+    expect($blade)->toContain('window.FaVoiceZustand')
+        ->and($blade)->toContain('this._schwebeStatus()');
 });

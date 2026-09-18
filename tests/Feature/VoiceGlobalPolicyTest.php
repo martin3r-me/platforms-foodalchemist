@@ -114,25 +114,28 @@ it('Loop: entdecktes lesendes Tool wird ausgeführt und als freigeschaltet proto
     FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id, 'recipe_key' => 'bbq', 'name' => 'Sauce: BBQ', 'status' => 'approved',
     ]);
-    // ui.ROUTES steht NICHT im Basiskatalog, ist aber lesend → die Policy lässt es zu.
-    expect(in_array('foodalchemist.ui.ROUTES', VoiceCommandService::TOOLS, true))->toBeFalse();
-    expect(app(ToolRegistry::class)->get('foodalchemist.ui.ROUTES')?->getMetadata()['read_only'] ?? null)->toBeTrue();
+    // suppliers.SEARCH steht NICHT im Basiskatalog, ist aber lesend → die Policy lässt es zu.
+    // (Live-Bruch 2026-09-18: `ui.ROUTES` — das ursprüngliche Beispiel hier — steht seitdem SELBST
+    // im Katalog, als Rückfall für die kurzen route_key-Labels im ui.NAVIGATE-Schema, siehe
+    // Token-Deckel-Test. suppliers.SEARCH beweist dieselbe Discovery-Eigenschaft weiterhin.)
+    expect(in_array('foodalchemist.suppliers.SEARCH', VoiceCommandService::TOOLS, true))->toBeFalse();
+    expect(app(ToolRegistry::class)->get('foodalchemist.suppliers.SEARCH')?->getMetadata()['read_only'] ?? null)->toBeTrue();
 
     ($this->skript)([
-        '{"action":"tool","name":"foodalchemist.ui.ROUTES","arguments":{}}',
-        '{"action":"final","text":"Hier sind die Bereiche."}',
+        '{"action":"tool","name":"foodalchemist.suppliers.SEARCH","arguments":{"q":"Chefs"}}',
+        '{"action":"final","text":"Hier sind die Lieferanten."}',
     ]);
 
-    $r = app(VoiceCommandService::class)->verarbeite('Welche Bereiche gibt es?');
+    $r = app(VoiceCommandService::class)->verarbeite('Suche den Lieferanten Chefs');
 
-    expect($r['tool_laeufe'][0]['name'])->toBe('foodalchemist.ui.ROUTES')
+    expect($r['tool_laeufe'][0]['name'])->toBe('foodalchemist.suppliers.SEARCH')
         ->and($r['tool_laeufe'][0]['success'])->toBeTrue()
-        ->and($r['freigeschaltet'])->toBe(['foodalchemist.ui.ROUTES'])
-        ->and($r['text'])->toBe('Hier sind die Bereiche.');
+        ->and($r['freigeschaltet'])->toBe(['foodalchemist.suppliers.SEARCH'])
+        ->and($r['text'])->toBe('Hier sind die Lieferanten.');
 
     // Das Audit muss zeigen, WORÜBER der Werkzeugkasten gewachsen ist.
     $summary = DB::table('foodalchemist_ai_call_log')->where('feature', 'voice.command')->latest('id')->value('response_summary');
-    expect($summary)->toContain('ui.ROUTES');
+    expect($summary)->toContain('suppliers.SEARCH');
 });
 
 it('Paket F (1b): in fragen/auto_sicher wird ein schreibendes Tool NICHT abgelehnt, sondern zum Schreibvorschlag (kein DB-Write)', function () {
@@ -185,7 +188,12 @@ it('Token-Deckel: der Basiskatalog bleibt klein — er wird in JEDER Runde bezah
     // budget-Sicherheit wiegt hier schwerer als das ursprüngliche „ein Zehntel"-Ziel (~13 % statt
     // ~10 % des Vollsortiments) — der Deckel bleibt trotzdem eine Wand, keine Formsache: jedes
     // künftige Tool braucht wieder eine bewusste Entscheidung Katalog vs. Discovery.
-    expect($zeichen)->toBeLessThan(10500, "Basiskatalog auf {$zeichen} Zeichen gewachsen");
+    // Live-Bruch Dominique (2026-09-18): „Öffne die Seite der Basisrezepte" brauchte 3 Runden
+    // (SEARCH → ui.ROUTES → NAVIGATE), weil route_key nur als "aus ui.ROUTES" beschrieben war,
+    // ohne den Katalog je im Warmstart zu nennen. Die 27 route_key-Kurzlabel jetzt direkt im
+    // ui.NAVIGATE-Schema + `ui.ROUTES` selbst als Rückfall im Katalog (10.047 → 10.970) — Navigation
+    // ist damit wieder EINE Runde statt drei, das war der teurere Fehler.
+    expect($zeichen)->toBeLessThan(11200, "Basiskatalog auf {$zeichen} Zeichen gewachsen");
 });
 
 /*
