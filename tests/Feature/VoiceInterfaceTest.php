@@ -229,6 +229,10 @@ it('Navigation: ui.NAVIGATE zur Planung redirected (Aufgabe 6 Beispiel „Öffne
  * route_key-Labels stehen jetzt direkt im ui.NAVIGATE-Schema — das Skript hier bietet absichtlich
  * NUR EINEN Tool-Aufruf an; würde das Modell zuerst SEARCH/ROUTES probieren, bekäme es dafür
  * einfach dieselbe (falsche) Antwort zurück und der Test schlüge fehl.
+ *
+ * Spec 54 (2): eine zweite scriptete Antwort steht absichtlich noch bereit (falls der Frühabbruch
+ * je ausbliebe, bräuchte der Loop sie) — mit `fruehes_finale` (AiGatewayService::callWithTools())
+ * endet der Loop aber schon NACH dem ERSTEN NAVIGATE selbst formuliert, sie wird nie abgerufen.
  */
 it('Navigation: "Öffne die Basisrezepte" braucht NUR EINE Runde — kein SEARCH/ui.ROUTES-Umweg', function () {
     ($this->skript)([
@@ -238,7 +242,7 @@ it('Navigation: "Öffne die Basisrezepte" braucht NUR EINE Runde — kein SEARCH
 
     $r = app(VoiceCommandService::class)->verarbeite('Öffne die Seite der Basisrezepte');
 
-    expect($r['runden'])->toBe(2)                                        // 1 Tool + final, keine dritte Runde
+    expect($r['runden'])->toBe(1)                                        // Spec 54 (2): Tool-Runde selbst ist final
         ->and($r['tool_laeufe'])->toHaveCount(1)
         ->and($r['tool_laeufe'][0]['name'])->toBe('foodalchemist.ui.NAVIGATE')
         ->and(collect($r['tool_laeufe'])->pluck('name'))->not->toContain('foodalchemist.ui.ROUTES')

@@ -63,6 +63,14 @@
                     fallbackAktiv: false,
                     autoZyklen: 0,
                     konversationPausiert: false,
+                    // Spec 54 (4, Zwischenstatus): der Server-Roundtrip (verstehen()/
+                    // verarbeiteText(), bis zu 45s) läuft synchron — kein rundenweiser
+                    // Fortschritt zeigbar, aber DASS gerade etwas läuft, soll die Sprechblase
+                    // sofort zeigen statt ruhig zu wirken. Gesetzt an den beiden Stellen, an
+                    // denen WIR den Server-Call auslösen (Text-Absenden unten, Upload-Ende in
+                    // FaVoiceRecorder); zurückgesetzt, sobald eine Antwort ankommt (Watcher
+                    // unten — derselbe, der ohnehin auf Transkript/Ergebnis reagiert).
+                    verarbeitetGerade: false,
                     initKonversation() {
                         const audio = this.$refs.ttsAudio;
                         $wire.on('{{ \Platform\FoodAlchemist\Livewire\VoiceModal::EVENT_TTS_BEREIT }}', (payload) => this._wiedergeben(audio, payload.url, payload.text));
@@ -99,7 +107,8 @@
                         // Transkript/Antwort für die Sprechblase in agent-mount.blade.php.
                         this.$watch(
                             () => [this.laeuft, this.fallbackAktiv, $wire.sprichtGerade, this.keineSpracheErkannt,
-                                this.konversationPausiert, !!this.fehler, $wire.transcript, $wire.ergebnis?.text].join('|'),
+                                this.konversationPausiert, !!this.fehler, this.verarbeitetGerade, $wire.transcript,
+                                $wire.ergebnis?.text].join('|'),
                             () => {
                                 window.FaVoiceZustand = {
                                     status: this._schwebeStatus(),
@@ -107,6 +116,20 @@
                                     transkript: $wire.transcript,
                                     antwort: $wire.ergebnis?.text ?? null,
                                 };
+                            },
+                        );
+                        // Spec 54 (4): eigener, schmaler Watcher NUR für das Zurücksetzen von
+                        // `verarbeitetGerade` — mit `(neu, alt)`-Vergleich, NICHT einfach
+                        // »transcript/ergebnis ist gesetzt«: im Konversations-Modus ist
+                        // `$wire.transcript` schon vom VORHERIGEN Zug gesetzt, während der
+                        // nächste Server-Call noch läuft — ein reiner Nicht-Null-Check hätte
+                        // sofort wieder zurückgesetzt, statt auf die ECHTE NEUE Antwort zu warten.
+                        this.$watch(
+                            () => [$wire.transcript, $wire.ergebnis?.text, !!this.fehler].join('|'),
+                            (neu, alt) => {
+                                if (alt !== undefined && neu !== alt) {
+                                    this.verarbeitetGerade = false;
+                                }
                             },
                         );
                         // Live-Befund Dominique (2026-09-18): »zwei Klicks statt einem« — im
@@ -173,6 +196,12 @@
                         if (this.laeuft) {
                             return 'hoert_zu';
                         }
+                        // Spec 54 (4): Aufnahme/Upload sind vorbei, der Server-Roundtrip
+                        // (verstehen()/verarbeiteText(), bis zu 45s) läuft noch — vorher fiel das
+                        // hier auf 'wartet' durch und die Sprechblase wirkte ruhig/untätig.
+                        if (this.verarbeitetGerade) {
+                            return 'denkt_nach';
+                        }
 
                         return 'wartet';
                     },
@@ -191,6 +220,9 @@
                         }
                         if (this.laeuft) {
                             return 'Hört zu';
+                        }
+                        if (this.verarbeitetGerade) {
+                            return 'Denkt nach …';
                         }
 
                         return 'Sprachbefehl (ziehbar)';
@@ -310,7 +342,7 @@
              Fortschrittsbalkens (asynchrone Job-Variante wie Paket C ist eine spätere Entscheidung). --}}
         <p class="text-[11px] text-violet-600 inline-flex items-center gap-1.5" wire:loading wire:target="verstehen,verarbeiteText" data-voice-status="versteht">
             <span class="inline-block w-1.5 h-1.5 rounded-full bg-violet-500 animate-pulse"></span>
-            Befehl wird verstanden und ausgeführt … (kann bis zu 30 s dauern)
+            Befehl wird verstanden und ausgeführt … (kann bis zu 45 s dauern)
         </p>
         <p class="text-[11px] text-violet-600 inline-flex items-center gap-1.5" wire:loading wire:target="schreibaktionAusfuehren,planungStarten,anreicherungStarten,proposalUebernehmen" data-voice-status="fuehrt_aus">
             <span class="inline-block w-1.5 h-1.5 rounded-full bg-violet-500 animate-pulse"></span>
