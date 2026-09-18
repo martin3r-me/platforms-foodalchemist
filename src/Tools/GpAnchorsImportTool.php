@@ -129,12 +129,19 @@ class GpAnchorsImportTool extends FoodAlchemistTool implements ToolContract, Too
             }
         }
 
+        $abgelehntN = count(array_filter($ergebnis, fn ($e) => $e['status'] === 'abgelehnt'));
+
         return ToolResult::success([
             'gesamt' => count($ergebnis),
             'angenommen' => count(array_filter($ergebnis, fn ($e) => $e['status'] === 'angenommen')),
             'unveraendert' => count(array_filter($ergebnis, fn ($e) => $e['status'] === 'unveraendert')),
-            'abgelehnt' => count(array_filter($ergebnis, fn ($e) => $e['status'] === 'abgelehnt')),
+            'abgelehnt' => $abgelehntN,
             'eintraege' => $ergebnis,
+            // Muster wie knowledge.IMPORT: ein Hinweis, wenn Ablehnungen dabei waren, statt sie
+            // nur in der Detail-Liste zu verstecken.
+            'hinweis' => $abgelehntN > 0
+                ? 'Abgelehnte Eintraege wurden uebersprungen, der Rest ist verbucht. Gruende stehen je Eintrag.'
+                : null,
         ]);
     }
 
