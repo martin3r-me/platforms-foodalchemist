@@ -16,6 +16,13 @@
     „Dauerhaft aktiv" (Team-Setting, Radio+Schalter in den Einstellungen) zeigt zusätzlich ein
     schwebendes, ziehbares Mikrofon-Element — Positions-Spiegel in localStorage (rein clientseitig,
     kein Server-State). Ohne den Schalter (Default) bleibt es wie heute: nur der Sidebar-Knopf.
+
+    REGEL (Live-Bruch 2026-09-18): NIE ein geradeaus-Anführungszeichen in JS/Kommentaren
+    INNERHALB der x-data- bzw. x-init-Attribute unten — das Attribut endet beim ERSTEN
+    Anführungszeichen, egal ob roher Text oder Kommentar; Alpine bekommt dann nur ein
+    Bruchstück und fällt für die GANZE Komponente aus (hier: der schwebende Knopf war komplett
+    unsichtbar). Backticks (`) oder Guillemets (»«) statt Anführungszeichen. Wächter-Test:
+    tests/Feature/BladeXDataAttributeGuardTest.php (scannt ALLE Blade-Dateien).
 --}}
 @php($__voiceAgentTeam = auth()->user()?->currentTeamRelation)
 @php($__voiceAgentDauerhaftAktiv = $__voiceAgentTeam !== null
@@ -56,18 +63,30 @@
             }
         },
         oeffnen() {
-            if (! this.moved) {
-                // Spec 53/F (3): dieselbe Entsperrung wie der Sidebar-Knopf — noch im
-                // selben Klick, bevor `$dispatch` das Modal-Event schickt.
-                window.FaVoiceAudioEntsperren && window.FaVoiceAudioEntsperren('fa-voice-tts-audio');
-                // Live-Befund Dominique (2026-09-18): der schwebende Knopf öffnete bisher nur
-                // den Ein-Klick-Zustand (»Aufnahme starten«) — im Konversations-Modus musste
-                // NOCH ein zweiter Klick folgen. `autostart` wird HIER unbedingt mitgeschickt
-                // (der Recorder im Modal entscheidet selbst anhand des FRISCH aus dem Team-
-                // Setting gelesenen `konversationAktiv`, ob er wirklich sofort startet — der
-                // Ein-Klick-Modus bleibt dadurch unverändert).
-                $dispatch('voice-modal.oeffnen', { autostart: true });
+            if (this.moved) {
+                return;
             }
+            // Live-Bruch 2026-09-18 (b): ein Klick auf den schwebenden Knopf WÄHREND ein Zyklus
+            // läuft (hört zu/sendet/spricht) muss STOPPEN statt erneut zu öffnen — sonst gibt es
+            // keinen erreichbaren Weg mehr, eine hängende/schleifende Konversation zu beenden.
+            // `window.FaVoiceKonversationAktiv`/`FaVoiceStopAlles` werden vom Recorder im Modal
+            // selbst gepflegt (eigene Komponente, dieser Alpine-Scope kann sie nicht direkt
+            // erreichen) — kein zweiter, unabhängig gepflegter Zustand hier.
+            if (window.FaVoiceKonversationAktiv && window.FaVoiceStopAlles) {
+                window.FaVoiceStopAlles();
+
+                return;
+            }
+            // Spec 53/F (3): dieselbe Entsperrung wie der Sidebar-Knopf — noch im
+            // selben Klick, bevor `$dispatch` das Modal-Event schickt.
+            window.FaVoiceAudioEntsperren && window.FaVoiceAudioEntsperren('fa-voice-tts-audio');
+            // Live-Befund Dominique (2026-09-18): der schwebende Knopf öffnete bisher nur
+            // den Ein-Klick-Zustand (»Aufnahme starten«) — im Konversations-Modus musste
+            // NOCH ein zweiter Klick folgen. `autostart` wird HIER unbedingt mitgeschickt
+            // (der Recorder im Modal entscheidet selbst anhand des FRISCH aus dem Team-
+            // Setting gelesenen `konversationAktiv`, ob er wirklich sofort startet — der
+            // Ein-Klick-Modus bleibt dadurch unverändert).
+            $dispatch('voice-modal.oeffnen', { autostart: true });
         },
     }"
     x-show="aktiv" x-cloak
