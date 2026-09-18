@@ -998,3 +998,11 @@ Route::get('/demnaechst', \Platform\FoodAlchemist\Livewire\Demnaechst::class)
  */
 Route::get('/zu-pruefen', \Platform\FoodAlchemist\Livewire\ReviewQueue::class)
     ->name('foodalchemist.review');
+
+/**
+ * Spec 53 / Paket F (3): signierte Kurzzeit-Route für die TTS-Antwort des Sprach-Agenten
+ * (Konversations-Modus) — siehe {@see \Platform\FoodAlchemist\Http\Controllers\VoiceAudioController}.
+ */
+Route::get('/sprachbefehl/audio/{token}', [\Platform\FoodAlchemist\Http\Controllers\VoiceAudioController::class, 'stream'])
+    ->name('foodalchemist.voice.audio')
+    ->middleware('signed');

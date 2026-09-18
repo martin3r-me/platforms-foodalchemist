@@ -29,7 +29,11 @@
 
         {{-- Auf der Ebene des Betriebs-Wählers, weil das Mikrofon dieselbe Reichweite hat:
              übergeordnete Steuerung für den ganzen FoodAlchemist, nicht für eine Seite. --}}
-        <button type="button" wire:click="$dispatch('voice-modal.oeffnen')"
+        {{-- Spec 53/F (3): Autoplay-Entsperrung MUSS im selben Klick-Handler passieren wie das
+             Öffnen — noch innerhalb der "user activation", bevor irgendein await/Promise
+             dazwischenliegt (siehe `FaVoiceAudioEntsperren` in resources/js/voice-recorder). --}}
+        <button type="button" onclick="window.FaVoiceAudioEntsperren && window.FaVoiceAudioEntsperren('fa-voice-tts-audio')"
+                wire:click="$dispatch('voice-modal.oeffnen')"
                 class="w-full mb-2 px-3 py-2 rounded-md flex items-center gap-2 text-xs font-medium
                        text-[var(--ui-secondary)] border border-[var(--ui-border)] hover:bg-[var(--ui-muted-5)]"
                 title="Sprachbefehl — steuert den ganzen FoodAlchemist (lesend frei, Änderungen als Vorschlag)"

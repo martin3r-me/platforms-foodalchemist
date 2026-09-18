@@ -296,6 +296,27 @@ class FoodAlchemistServiceProvider extends ServiceProvider
             };
         });
 
+        // Spec 53 / Paket F (3): TTS-Fassade — gleiches Auto/Fake-Prinzip wie STT oben.
+        $this->app->bind(\Platform\FoodAlchemist\Services\Tts\TtsServiceContract::class, function () {
+            $provider = (string) config('foodalchemist.tts.provider', 'auto');
+            if ($provider === 'auto') {
+                $provider = match (true) {
+                    (string) config('services.openai.api_key') !== '' => 'openai',
+                    default => 'fake',
+                };
+            }
+            if ($provider === 'fake' && ! $this->app->environment(['testing', 'local'])
+                && ! config('foodalchemist.tts.allow_fake', false)) {
+                $provider = 'none';
+            }
+
+            return match ($provider) {
+                'openai' => new \Platform\FoodAlchemist\Services\Tts\OpenAiTtsService(),
+                'fake' => new \Platform\FoodAlchemist\Services\Tts\FakeTtsService(),
+                default => new \Platform\FoodAlchemist\Services\Tts\UnkonfiguriertTtsService(),
+            };
+        });
+
         // E1 (#507): Embedding-Observer — halten die GP-/Rezept-Recall-Vektoren bei
         // interaktiven Einzeledits synchron (Bulk = foodalchemist:embed). Unbedingt
         // registriert (nicht table-guarded — der Guard liefe zur Boot-Zeit, bevor

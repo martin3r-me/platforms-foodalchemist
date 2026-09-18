@@ -429,6 +429,31 @@ return [
             . 'Planung, Kaskade, Bestellwesen, Produktion.',
     ],
 
+    /*
+     * Spec 53 / Paket F (3): Sprachausgabe für den Konversations-Modus. Gleiches
+     * `auto`-Prinzip wie `stt` — OpenAI, wenn ein Zugang da ist, sonst Fake nur in
+     * testing/local, sonst ein klarer „nicht konfiguriert"-Fehler statt stillem Fallback.
+     */
+    'tts' => [
+        'provider' => env('FOODALCHEMIST_TTS_PROVIDER', 'auto'),
+        'model' => env('FOODALCHEMIST_TTS_MODEL', 'gpt-4o-mini-tts'),
+        'voice' => env('FOODALCHEMIST_TTS_VOICE', 'alloy'),
+        'timeout_s' => 30,
+        /*
+         * Wie `stt.allow_fake` (Spec 53/D): ausserhalb testing/local bindet der
+         * ServiceProvider ohne dieses Flag auf `UnkonfiguriertTtsService`.
+         */
+        'allow_fake' => env('FOODALCHEMIST_TTS_ALLOW_FAKE', false),
+        /*
+         * Signierte Kurzzeit-Route zum Ausliefern der synthetisierten MP3 — der Browser
+         * kann kein Binary aus einem Livewire-Response abspielen, darum liegt das Audio
+         * kurz in Cache und wird über eine `signed`-Route einmal abgeholt. 5 Minuten sind
+         * grosszügig für "sofort abspielen", aber kurz genug, dass ein geteilter/geleakter
+         * Link nicht dauerhaft funktioniert.
+         */
+        'audio_ttl_minuten' => 5,
+    ],
+
     'ai' => [
         'provider' => env('FOODALCHEMIST_AI_PROVIDER', 'core'),
 

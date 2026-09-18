@@ -468,3 +468,172 @@ it('Schreibvorschlag ohne Alias: rohe Argumente ohne Alt-Wert + Tool-Beschreibun
         ->and($proposal['vorschau'][0])->toBe(['feld' => 'hauptzutat', 'neu' => 'Zander'])
         ->and($proposal['vorschau'][0])->not->toHaveKey('alt');            // kein geratener Alt-Wert
 });
+
+/*
+ * Spec 53 / Paket F (3): Konversations-Modus — Sprachausgabe. Server-Teil (Contract, Route,
+ * Livewire-Methoden, Call-Log); VAD/Autoplay/speechSynthesis-Fallback ist Browser-Teil (Stufe 3B).
+ */
+
+it('TTS-Vorlesen AN: nach der Antwort wird voice-tts-bereit dispatcht (Fake-TTS, kein echtes HTTP)', function () {
+    config(['foodalchemist.tts.provider' => 'fake']);
+    app(TeamSettingsService::class)->update($this->rootTeam, ['voice_tts_vorlesen' => true]);
+    ($this->skript)(['{"action":"final","text":"Alles klar."}']);
+
+    Livewire::test(VoiceModal::class)
+        ->call('verarbeiteText', 'Hallo')
+        ->assertDispatched('voice-tts-bereit');
+
+    expect(DB::table('foodalchemist_ai_call_log')->where('feature', 'voice.tts')->exists())->toBeTrue();
+});
+
+it('TTS-Vorlesen AUS (Default): keine Sprachausgabe ausgelöst', function () {
+    ($this->skript)(['{"action":"final","text":"Alles klar."}']);
+
+    Livewire::test(VoiceModal::class)
+        ->call('verarbeiteText', 'Hallo')
+        ->assertNotDispatched('voice-tts-bereit');
+});
+
+it('TTS-Vorlesen AN, aber die Antwort navigiert: kein Vorlesen (der Ton würde die verlassene Seite treffen)', function () {
+    config(['foodalchemist.tts.provider' => 'fake']);
+    app(TeamSettingsService::class)->update($this->rootTeam, ['voice_tts_vorlesen' => true]);
+    ($this->skript)([
+        '{"action":"tool","name":"foodalchemist.ui.NAVIGATE","arguments":{"route_key":"planung"}}',
+        '{"action":"final","text":"Planung geöffnet."}',
+    ]);
+
+    Livewire::test(VoiceModal::class)
+        ->call('verarbeiteText', 'Öffne die Planung')
+        ->assertNotDispatched('voice-tts-bereit');
+});
+
+it('sprechen(): setzt sprichtGerade + dispatcht die signierte Audio-URL; sprechenBeendet() setzt zurück', function () {
+    config(['foodalchemist.tts.provider' => 'fake']);
+
+    Livewire::test(VoiceModal::class)
+        ->call('sprechen', 'Testsatz')
+        ->assertSet('sprichtGerade', true)
+        ->assertDispatched('voice-tts-bereit')
+        ->call('sprechenBeendet')
+        ->assertSet('sprichtGerade', false);
+});
+
+it('sprechen(): TTS-Fehler dispatcht voice-tts-fehlgeschlagen statt die UI zu blockieren', function () {
+    config(['foodalchemist.tts.provider' => 'none']);   // bindet UnkonfiguriertTtsService, wirft immer
+
+    Livewire::test(VoiceModal::class)
+        ->call('sprechen', 'Testsatz')
+        ->assertSet('sprichtGerade', false)
+        ->assertDispatched('voice-tts-fehlgeschlagen');
+});
+
+it('die von sprechen() TATSÄCHLICH dispatchte Audio-URL ist abrufbar und liefert die echten Bytes (Single-Use)', function () {
+    config(['foodalchemist.tts.provider' => 'fake']);
+
+    $url = null;
+    Livewire::test(VoiceModal::class)
+        ->call('sprechen', 'Testsatz')
+        ->assertDispatched('voice-tts-bereit', function ($name, $params) use (&$url) {
+            $url = $params['url'];
+
+            return is_string($url) && $url !== '';
+        });
+
+    $response = $this->get($url);
+    $response->assertOk();
+    expect($response->getContent())->toBe((new \Platform\FoodAlchemist\Services\Tts\FakeTtsService())->synthesize('Testsatz'))
+        ->and($response->headers->get('Content-Type'))->toStartWith('audio/mpeg');
+
+    // Single-Use: derselbe Link liefert beim zweiten Abruf nichts mehr.
+    $this->get($url)->assertNotFound();
+});
+
+it('Audio-Route ohne gültige Signatur wird abgelehnt (403) — kein Erraten der Route über die reine ID', function () {
+    $ungesichert = route('foodalchemist.voice.audio', ['token' => 'irgendwas']);
+
+    $this->get($ungesichert)->assertForbidden();
+});
+
+it('Audio-Route mit gültiger Signatur, aber unbekanntem/abgelaufenem Token: 404 statt Fatal', function () {
+    $signierteUrl = \Illuminate\Support\Facades\URL::temporarySignedRoute(
+        'foodalchemist.voice.audio', now()->addMinutes(5), ['token' => 'nie-gecacht'],
+    );
+
+    $this->get($signierteUrl)->assertNotFound();
+});
+
+/*
+ * Spec 53 / Paket F (3), Browser-Teil: VAD/Autoplay/speechSynthesis-Fallback selbst lässt sich
+ * ohne echten Browser nicht ausführen — diese Tests pinnen, was Pest MESSEN kann: das gerenderte
+ * Markup, die Event-Verdrahtung als Konstanten (kein Magic-String an zwei Stellen) und die
+ * fünf Zustands-Texte. Chrome/Safari-Verhalten prüft Dominique live (siehe PR-Body).
+ */
+
+it('Event-Namen sind Konstanten: das Blade zitiert VoiceModal::EVENT_TTS_BEREIT/-FEHLGESCHLAGEN statt eigener String-Literale', function () {
+    $blade = file_get_contents(__DIR__ . '/../../resources/views/livewire/voice-modal.blade.php');
+
+    expect($blade)->toContain('VoiceModal::EVENT_TTS_BEREIT')
+        ->and($blade)->toContain('VoiceModal::EVENT_TTS_FEHLGESCHLAGEN')
+        // Kein zweites, unabhängig gepflegtes String-Literal für denselben Event-Namen im Blade —
+        // die einzigen Vorkommen von 'voice-tts-bereit'/'voice-tts-fehlgeschlagen' als Text sind
+        // die PHP-Konstanten-Werte selbst (VoiceModal.php), nicht das Blade.
+        ->and($blade)->not->toContain("'voice-tts-bereit'")
+        ->and($blade)->not->toContain("'voice-tts-fehlgeschlagen'");
+
+    expect(VoiceModal::EVENT_TTS_BEREIT)->toBe('voice-tts-bereit')
+        ->and(VoiceModal::EVENT_TTS_FEHLGESCHLAGEN)->toBe('voice-tts-fehlgeschlagen');
+});
+
+it('Fallback-Event ist verdrahtet: $wire.on(EVENT_TTS_FEHLGESCHLAGEN) ruft den speechSynthesis-Fallback', function () {
+    $blade = file_get_contents(__DIR__ . '/../../resources/views/livewire/voice-modal.blade.php');
+
+    // Nicht die ganze Zeile wörtlich (bricht bei jeder Formatierungsänderung) — die
+    // BAUSTEINE einzeln: derselbe $wire.on-Block referenziert den Konstanten-Namen UND
+    // ruft den Fallback auf; speechSynthesis/SpeechSynthesisUtterance stehen im Fallback.
+    $onFehlgeschlagenZeile = collect(explode("\n", $blade))
+        ->first(fn ($z) => str_contains($z, '$wire.on') && str_contains($z, 'EVENT_TTS_FEHLGESCHLAGEN'));
+
+    expect($onFehlgeschlagenZeile)->not->toBeNull('kein $wire.on(...EVENT_TTS_FEHLGESCHLAGEN...) im Blade gefunden')
+        ->and($onFehlgeschlagenZeile)->toContain('_sprachausgabeFallback')
+        ->and($blade)->toContain('speechSynthesis')
+        ->and($blade)->toContain('SpeechSynthesisUtterance')
+        // Autoplay blockiert (kein Entsperrt-Flag in _wiedergeben) landet im SELBEN Fallback-Pfad,
+        // nicht in einem zweiten, separat gepflegten.
+        ->and(substr_count($blade, '_sprachausgabeFallback'))->toBeGreaterThanOrEqual(3);
+});
+
+it('Zustandsanzeige: alle fünf data-voice-status-Werte stehen als Markup fest (hört zu · sendet · versteht · führt aus · spricht)', function () {
+    config(['foodalchemist.stt.provider' => 'openai', 'services.openai.api_key' => 'sk-test']);
+
+    $html = Livewire::test(VoiceModal::class)->html();
+
+    foreach (['hoert_zu', 'sendet', 'versteht', 'fuehrt_aus'] as $status) {
+        expect($html)->toContain("data-voice-status=\"{$status}\"");
+    }
+    // „spricht" ist NICHT immer im Markup (nur solange $sprichtGerade true ist) — das ist
+    // Absicht (echter Server-Zustand, kein CSS-Dauerelement) und wird im nächsten Test geprüft.
+});
+
+it('Zustand „spricht": data-voice-status="spricht" erscheint NUR während sprichtGerade wahr ist', function () {
+    config(['foodalchemist.stt.provider' => 'openai', 'services.openai.api_key' => 'sk-test', 'foodalchemist.tts.provider' => 'fake']);
+
+    $modal = Livewire::test(VoiceModal::class);
+    expect($modal->html())->not->toContain('data-voice-status="spricht"');
+
+    $modal->call('sprechen', 'Testsatz');
+    expect($modal->html())->toContain('data-voice-status="spricht"');
+
+    $modal->call('sprechenBeendet');
+    expect($modal->html())->not->toContain('data-voice-status="spricht"');
+});
+
+it('VAD-Optionen: konversationAktiv steuert vad:true/false am Recorder', function () {
+    config(['foodalchemist.stt.provider' => 'openai', 'services.openai.api_key' => 'sk-test']);
+
+    $aus = Livewire::test(VoiceModal::class)->html();
+    expect($aus)->toContain('vad: false');
+
+    app(TeamSettingsService::class)->update($this->rootTeam, ['voice_agent_dauerhaft_aktiv' => true]);
+    $an = Livewire::test(VoiceModal::class)->html();
+    expect($an)->toContain('vad: true');
+});

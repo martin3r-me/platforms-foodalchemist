@@ -3,19 +3,24 @@
 namespace Platform\FoodAlchemist\Livewire;
 
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\URL;
+use Illuminate\Support\Str;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Tools\ToolRegistry;
+use Platform\FoodAlchemist\Http\Controllers\VoiceAudioController;
 use Platform\FoodAlchemist\Jobs\EnrichRecipeJob;
 use Platform\FoodAlchemist\Services\PlanningSessionService;
 use Platform\FoodAlchemist\Services\RecipeService;
 use Platform\FoodAlchemist\Services\Stt\SttServiceContract;
 use Platform\FoodAlchemist\Services\TeamSettingsService;
+use Platform\FoodAlchemist\Services\Tts\TtsServiceContract;
 use Platform\FoodAlchemist\Services\VoiceCommandService;
 use Platform\FoodAlchemist\Support\VoiceFehlerText;
 use Platform\FoodAlchemist\Support\VoiceMime;
@@ -69,6 +74,30 @@ class VoiceModal extends Component
     public string $agentModus = TeamSettingsService::VOICE_AGENT_MODE_DEFAULT;
 
     /**
+     * Spec 53 / Paket F (3): true während die Antwort abgespielt wird — der Konversations-
+     * Modus (Stufe 3B, Browser-Teil) pausiert das VAD-Zuhören solange, damit der Agent sich
+     * nicht selbst über die Lautsprecher-Wiedergabe zuhört. `sprechenBeendet()` setzt zurück.
+     */
+    public bool $sprichtGerade = false;
+
+    /**
+     * Spec 53 / Paket F (3): steuert im Blade, ob der Recorder im VAD-Hands-free-Modus läuft
+     * (Stille-Erkennung + Auto-Weiterhören nach der Antwort) statt im Ein-Klick-Modus. Gespiegelt
+     * vom „dauerhaft aktiv"-Team-Setting (Stufe 2) — reine UX-Weiche, keine Rechte-Entscheidung,
+     * darum kein `#[Locked]` nötig (anders als `$agentModus`).
+     */
+    public bool $konversationAktiv = false;
+
+    /**
+     * Spec 53 / Paket F (3): Event-Namen als Konstanten — die Blade-Seite hört über
+     * `$wire.on(...)` auf GENAU diese Strings, nicht auf eine zweite, unabhängig gepflegte
+     * Kopie. Review-Auflage cooking-jarvis-03: „kein Magic-String an zwei Stellen".
+     */
+    public const EVENT_TTS_BEREIT = 'voice-tts-bereit';
+
+    public const EVENT_TTS_FEHLGESCHLAGEN = 'voice-tts-fehlgeschlagen';
+
+    /**
      * Rezept-Kontext, falls das Modal von einer Rezept-Seite aus geöffnet wurde (Spec 53/D,
      * Aufgabe 7: „Reichere DIESES Rezept an" ohne dass der Nutzer den Namen nennen muss).
      *
@@ -115,6 +144,8 @@ class VoiceModal extends Component
         $this->aufnahmeMoeglich = in_array($this->provider, ['openai', 'assemblyai'], true);
         $this->herkunftRoute = request()->route()?->getName();
         $this->agentModus = $this->agentModusAktuell();   // NUR für die Pill — Entscheidungen lesen immer frisch
+        $team = Auth::user()?->currentTeamRelation;
+        $this->konversationAktiv = $team !== null && app(TeamSettingsService::class)->voiceAgentDauerhaftAktiv($team);
     }
 
     /**
@@ -232,6 +263,78 @@ class VoiceModal extends Component
                     default => null,
                 };
             }
+        }
+        // Spec 53 / Paket F (3): Konversations-Modus liest die Antwort vor, wenn das Team-Setting
+        // an ist. NICHT bei einer Navigation — der Ton würde auf der Seite ankommen, die der Nutzer
+        // gerade verlässt (`redirect()` plant den Wechsel, hält die Methode aber nicht an).
+        if (! $navigiert) {
+            $this->sprichWennAktiviert((string) $this->ergebnis['text']);
+        }
+    }
+
+    /** Nur der Gate-Check (Team-Setting) — {@see sprechen()} bleibt unbedingt aufrufbar. */
+    private function sprichWennAktiviert(string $text): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null || trim($text) === '' || ! app(TeamSettingsService::class)->voiceTtsVorlesen($team)) {
+            return;
+        }
+        $this->sprechen($text);
+    }
+
+    /**
+     * Synthetisiert Text zu Sprache und dispatcht eine signierte Kurzzeit-Audio-URL an den
+     * Browser (Wiedergabe/Autoplay ist Browser-Teil, Stufe 3B). Schlägt die Synthese fehl,
+     * bleibt die Text-Antwort stehen und der Browser fällt auf `speechSynthesis` zurück —
+     * kein harter Fehler, denn Vorlesen ist ein Komfort-Extra, nie ein Blocker.
+     */
+    public function sprechen(string $text): void
+    {
+        $start = hrtime(true);
+        $this->sprichtGerade = true;
+        try {
+            $team = Auth::user()?->currentTeamRelation;
+            $tts = app(TtsServiceContract::class);
+            $stimme = $team !== null ? app(TeamSettingsService::class)->voiceTtsStimme($team) : null;
+            $audio = $tts->synthesize($text, $stimme);
+            $ttlMinuten = (int) config('foodalchemist.tts.audio_ttl_minuten', 5);
+            $token = (string) Str::uuid();
+            Cache::put(VoiceAudioController::cacheKey($token), ['bytes' => $audio, 'mime' => $tts->mimeType()], now()->addMinutes($ttlMinuten));
+            $url = URL::temporarySignedRoute('foodalchemist.voice.audio', now()->addMinutes($ttlMinuten), ['token' => $token]);
+            $this->protokolliereTts($tts->name(), (int) ((hrtime(true) - $start) / 1_000_000), true);
+            // `text` reist mit — der speechSynthesis-Fallback (Autoplay blockiert ODER Synthese
+            // fehlgeschlagen) braucht ihn, das Modal selbst hat ihn sonst nirgends griffbereit.
+            $this->dispatch(self::EVENT_TTS_BEREIT, url: $url, text: $text);
+        } catch (\Throwable) {
+            $this->sprichtGerade = false;
+            $this->protokolliereTts('fehler', (int) ((hrtime(true) - $start) / 1_000_000), false);
+            $this->dispatch(self::EVENT_TTS_FEHLGESCHLAGEN, text: $text);
+        }
+    }
+
+    /** Vom Browser gerufen, wenn die Audio-Wiedergabe endet (Stufe 3B) — hebt die VAD-Pause auf. */
+    public function sprechenBeendet(): void
+    {
+        $this->sprichtGerade = false;
+    }
+
+    /** Eigener, schlanker Audit-Trail — Spiegel von {@see protokolliereSchreibaktion()}. */
+    private function protokolliereTts(string $provider, int $elapsedMs, bool $erfolg): void
+    {
+        try {
+            DB::table('foodalchemist_ai_call_log')->insert([
+                'uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(),
+                'team_id' => Auth::user()?->currentTeamRelation?->id,
+                'user_id' => Auth::id(),
+                'feature' => 'voice.tts',
+                'tier' => 'D',
+                'prompt_hash' => hash('sha256', $provider),
+                'response_summary' => mb_strimwidth($provider . ($erfolg ? ' — synthetisiert' : ' — fehlgeschlagen'), 0, 200, '…'),
+                'elapsed_ms' => $elapsedMs,
+                'created_at' => now(), 'updated_at' => now(),
+            ]);
+        } catch (\Throwable) {
+            // Audit darf die eigentliche Aktion nie reissen.
         }
     }
 

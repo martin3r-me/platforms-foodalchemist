@@ -30,9 +30,64 @@
 
         {{-- Aufnahme: gemeinsamer Recorder-Baustein (window.FaVoiceRecorder), Root mit eigenem
              wire:key — Server-Status liegt AUSSERHALB dieses Blocks, damit ein Re-Render des
-             Server-Status (Polling/Redirect) den laufenden Alpine-Aufnahmezustand nicht zerstört. --}}
+             Server-Status (Polling/Redirect) den laufenden Alpine-Aufnahmezustand nicht zerstört.
+
+             Spec 53 / Paket F (3): im Konversations-Modus (`konversationAktiv`, Team-Setting
+             „dauerhaft aktiv") läuft der Recorder mit VAD (Stille-Erkennung statt Klick-zum-
+             Stoppen) und hört nach der vorgelesenen Antwort automatisch weiter zu — Ein-Klick-
+             Modus (Standard) bleibt unverändert manuell. `<audio data-voice-tts>` ist das EINE
+             Wiedergabe-Element für die TTS-Antwort; die Autoplay-Entsperrung passiert BEIM
+             ÖFFNEN-Klick (sidebar.blade.php / agent-mount.blade.php), noch bevor dieses Modal
+             überhaupt rendert — hier wird nur geprüft, ob sie stattgefunden hat
+             (`dataset.faEntsperrt`), sonst greift sofort der `speechSynthesis`-Fallback. --}}
         @if($aufnahmeMoeglich)
-            <div wire:key="voice-recorder" x-data="FaVoiceRecorder({ property: 'audio', maxMs: 20000, minMs: 700 })" class="space-y-1.5">
+            <div wire:key="voice-recorder"
+                 x-data="{
+                    ...FaVoiceRecorder({ property: 'audio', maxMs: 20000, minMs: 700, vad: @js($konversationAktiv) }),
+                    konversationAktiv: @js($konversationAktiv),
+                    fallbackAktiv: false,
+                    initKonversation() {
+                        const audio = this.$refs.ttsAudio;
+                        $wire.on('{{ \Platform\FoodAlchemist\Livewire\VoiceModal::EVENT_TTS_BEREIT }}', (payload) => this._wiedergeben(audio, payload.url, payload.text));
+                        $wire.on('{{ \Platform\FoodAlchemist\Livewire\VoiceModal::EVENT_TTS_FEHLGESCHLAGEN }}', (payload) => this._sprachausgabeFallback(payload.text));
+                        if (audio) {
+                            audio.addEventListener('ended', () => this._nachDemSprechen());
+                        }
+                    },
+                    _wiedergeben(audio, url, text) {
+                        if (! audio || audio.dataset.faEntsperrt !== '1') {
+                            this._sprachausgabeFallback(text);
+                            return;
+                        }
+                        audio.src = url;
+                        audio.play().catch(() => this._sprachausgabeFallback(text));
+                    },
+                    _sprachausgabeFallback(text) {
+                        // Autoplay blockiert ODER die Synthese ist serverseitig fehlgeschlagen —
+                        // in BEIDEN Fällen bleibt speechSynthesis der Fallback, sichtbar als
+                        // Status-Hinweis, nicht stumm. `sprechenBeendet()` läuft in jedem Fall,
+                        // damit die VAD-Pause (`sprichtGerade`) nie hängen bleibt.
+                        if ('speechSynthesis' in window && text) {
+                            this.fallbackAktiv = true;
+                            const u = new SpeechSynthesisUtterance(text);
+                            u.lang = 'de-DE';
+                            u.onend = () => this._nachDemSprechen();
+                            u.onerror = () => this._nachDemSprechen();
+                            window.speechSynthesis.speak(u);
+                        } else {
+                            this._nachDemSprechen();
+                        }
+                    },
+                    _nachDemSprechen() {
+                        this.fallbackAktiv = false;
+                        $wire.call('sprechenBeendet');
+                        if (this.konversationAktiv && ! this.laeuft) {
+                            this.start();
+                        }
+                    },
+                 }"
+                 x-init="initKonversation()"
+                 class="space-y-1.5">
                 <div class="flex items-center gap-2">
                     <button type="button" @click="laeuft ? stop() : start()" :disabled="! unterstuetzt"
                             :class="laeuft ? 'animate-pulse' : ''" class="{{ $btnPrimary }} disabled:opacity-40" data-voice-rec>
@@ -47,20 +102,33 @@
                 <p class="text-[11px] text-gray-500" x-show="! unterstuetzt" x-cloak data-voice-nicht-unterstuetzt>
                     Sprachaufnahme wird von diesem Browser nicht unterstützt — Befehl tippen.
                 </p>
-                <p class="text-[11px] text-gray-500" x-show="laeuft" x-cloak data-voice-status-aufnahme>
+                {{-- „hört zu": VAD-Leerlauf VOR erkannter Sprache, nur im Konversations-Modus sichtbar
+                     (im Ein-Klick-Modus sagt der Knopftext selbst schon „Aufnahme starten"). --}}
+                <p class="text-[11px] text-gray-500" x-show="konversationAktiv && laeuft && ! hochladenLaeuft" x-cloak data-voice-status="hoert_zu">
+                    Hört zu …
+                </p>
+                <p class="text-[11px] text-gray-500" x-show="! konversationAktiv && laeuft" x-cloak data-voice-status-aufnahme>
                     Aufnahme läuft … <span x-text="sekunden"></span>s / 20s
                 </p>
                 <p class="text-[11px] text-gray-500" x-show="hochladenLaeuft" x-cloak data-voice-status-upload>
                     Audio wird hochgeladen …
                 </p>
+                <p class="text-[11px] text-violet-600" x-show="fallbackAktiv" x-cloak data-voice-status="spricht_fallback">
+                    Antwort wird vorgelesen (Browser-Stimme — Server-Sprachausgabe war nicht erreichbar) …
+                </p>
                 <p class="text-xs text-rose-500" x-show="fehler" x-cloak x-text="fehler" data-voice-rec-fehler></p>
+                {{-- Einziges Wiedergabe-Element für die TTS-Antwort — versteckt, steuert sich rein
+                     über `src`/`play()`/`ended` aus dem Alpine-Code oben. --}}
+                <audio x-ref="ttsAudio" id="fa-voice-tts-audio" class="hidden" preload="none" playsinline data-voice-tts></audio>
             </div>
         @endif
 
         {{-- Server-Status: OHNE Ladezustand liefen vorher goKaskade & Co. still 5-20 s — hier
-             transkribieren → verstehen → ausführen als eigene, sichtbare Zeile. --}}
-        <p class="text-[11px] text-violet-600" wire:loading wire:target="audio" data-voice-status="erkennen">
-            Sprache wird erkannt …
+             sendet → versteht → führt aus → spricht als eigene, sichtbare Zeilen (Spec 53/F,
+             Zustandsanzeige-Auflage cooking-jarvis-03: alle fünf `data-voice-status`-Werte
+             stehen als Markup fest, unabhängig davon, welcher gerade sichtbar ist). --}}
+        <p class="text-[11px] text-violet-600" wire:loading wire:target="audio" data-voice-status="sendet">
+            Sprache wird gesendet …
         </p>
         @if($transcript !== null && $phase === 'verstehen')
             <p class="text-[11px] text-gray-500" data-voice-transcript>Transkript: »{{ $transcript }}«</p>
@@ -68,10 +136,19 @@
         {{-- Befund 2026-09-17: der Tool-Loop läuft synchron in DIESEM Request — echte Rundenzahl
              ist serverseitig nicht live zeigbar, darum der Zeitbudget-Hinweis statt eines
              Fortschrittsbalkens (asynchrone Job-Variante wie Paket C ist eine spätere Entscheidung). --}}
-        <p class="text-[11px] text-violet-600 inline-flex items-center gap-1.5" wire:loading wire:target="verstehen,verarbeiteText" data-voice-status="verstehen">
+        <p class="text-[11px] text-violet-600 inline-flex items-center gap-1.5" wire:loading wire:target="verstehen,verarbeiteText" data-voice-status="versteht">
             <span class="inline-block w-1.5 h-1.5 rounded-full bg-violet-500 animate-pulse"></span>
             Befehl wird verstanden und ausgeführt … (kann bis zu 30 s dauern)
         </p>
+        <p class="text-[11px] text-violet-600 inline-flex items-center gap-1.5" wire:loading wire:target="schreibaktionAusfuehren,planungStarten,anreicherungStarten,proposalUebernehmen" data-voice-status="fuehrt_aus">
+            <span class="inline-block w-1.5 h-1.5 rounded-full bg-violet-500 animate-pulse"></span>
+            Aktion wird ausgeführt …
+        </p>
+        @if($sprichtGerade)
+            <p class="text-[11px] text-violet-600" data-voice-status="spricht">
+                Antwort wird vorgelesen …
+            </p>
+        @endif
 
         {{-- Fallback/Sandbox: Befehl tippen — IMMER verfügbar, auch ohne STT-Zugang. --}}
         <form wire:submit.prevent="verarbeiteText($refs.cmd.value)" @submit="$refs.cmd.value = ''" class="flex gap-2">

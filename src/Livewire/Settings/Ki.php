@@ -31,6 +31,12 @@ class Ki extends Component
     /** Spec 53/F Stufe 2: Sprachbefehl auf jeder Vollseite als schwebendes Element (Default AUS). */
     public bool $sprachAgentDauerhaftAktiv = false;
 
+    /** Spec 53/F (3): Antworten des Sprach-Agenten laut vorlesen (Konversations-Modus, Default AUS). */
+    public bool $sprachTtsVorlesen = false;
+
+    /** Spec 53/F (3): OpenAI-TTS-Stimme. */
+    public string $sprachTtsStimme = TeamSettingsService::VOICE_TTS_STIMME_DEFAULT;
+
     public function mount(): void
     {
         $team = Auth::user()?->currentTeamRelation;
@@ -39,7 +45,34 @@ class Ki extends Component
             $svc = app(TeamSettingsService::class);
             $this->sprachAgentModus = $svc->voiceAgentModus($team);
             $this->sprachAgentDauerhaftAktiv = $svc->voiceAgentDauerhaftAktiv($team);
+            $this->sprachTtsVorlesen = $svc->voiceTtsVorlesen($team);
+            $this->sprachTtsStimme = $svc->voiceTtsStimme($team);
         }
+    }
+
+    /** Sofort speichern, Muster wie {@see sprachAgentDauerhaftUmschalten()}. */
+    public function sprachTtsVorlesenUmschalten(): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null) {
+            return;
+        }
+        $this->sprachTtsVorlesen = ! $this->sprachTtsVorlesen;
+        app(TeamSettingsService::class)->update($team, ['voice_tts_vorlesen' => $this->sprachTtsVorlesen]);
+        $this->meldung = $this->sprachTtsVorlesen
+            ? 'Antworten des Sprachbefehls werden ab jetzt vorgelesen.'
+            : 'Antworten werden nicht mehr vorgelesen.';
+    }
+
+    /** Livewire-Hook: `wire:model.live="sprachTtsStimme"` speichert sofort bei Auswahl. */
+    public function updatedSprachTtsStimme(string $wert): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null || ! in_array($wert, TeamSettingsService::VOICE_TTS_STIMMEN, true)) {
+            return;
+        }
+        app(TeamSettingsService::class)->update($team, ['voice_tts_stimme' => $wert]);
+        $this->meldung = 'Stimme gespeichert: ' . $wert;
     }
 
     /** Sofort speichern + localStorage-Spiegel via Browser-Event (agent-mount.blade.php liest ihn). */
