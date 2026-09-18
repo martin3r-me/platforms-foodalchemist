@@ -9,7 +9,15 @@ use Platform\Core\Contracts\ToolResult;
 use Platform\FoodAlchemist\Exceptions\WissenGesperrtException;
 use Platform\FoodAlchemist\Services\KnowledgeService;
 
-/** MCP-Steuerbarkeit · D12: Alias eines team-eigenen Wissensdokuments hinzufügen/entfernen (action-enum). */
+/**
+ * MCP-Steuerbarkeit · D12: Alias eines team-eigenen Wissensdokuments hinzufügen/entfernen (action-enum).
+ *
+ * ★ Briefing Zutaten-Bulk-Import, 2026-09-18: `action=check` (rein lesend, keine Team-Bindung
+ * nötig — Aliasse sind systemweit eindeutig) beantwortet je Kandidat, ob er schon belegt ist und
+ * auf welchem Dossier. Anlass: `add` schluckte eine Kollision bisher STILLSCHWEIGEND — das Dossier
+ * wurde angelegt, der Alias blieb einfach weg. Bei 2.628 Zutatennamen sind hunderte Kollisionen zu
+ * erwarten; vorher prüfen statt hinterher raten.
+ */
 class KnowledgeAliasTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
 {
     public function getName(): string
@@ -20,7 +28,11 @@ class KnowledgeAliasTool extends FoodAlchemistTool implements ToolContract, Tool
     public function getDescription(): string
     {
         return 'Pflegt Aliasse eines team-eigenen Wissensdokuments. action=add: slug + alias (Text). '
-            . 'action=remove: alias_id. Aliasse verbessern die deterministische Wissens-Auflösung.';
+            . 'action=remove: alias_id. action=check: aliases[] (bis '.KnowledgeService::ALIAS_CHECK_MAX.') — '
+            . 'rein lesend, meldet je Kandidat belegt (true/false) und auf welchem Dossier (slug + title). '
+            . 'Vor einem Massen-add IMMER erst check fahren: Aliasse sind systemweit eindeutig, add '
+            . 'schluckt eine Kollision sonst stillschweigend (Dossier wird angelegt, Alias bleibt weg). '
+            . 'Aliasse verbessern die deterministische Wissens-Auflösung.';
     }
 
     public function getSchema(): array
@@ -28,10 +40,11 @@ class KnowledgeAliasTool extends FoodAlchemistTool implements ToolContract, Tool
         return [
             'type' => 'object',
             'properties' => [
-                'action' => ['type' => 'string', 'enum' => ['add', 'remove'], 'description' => 'Hinzufügen oder entfernen.'],
+                'action' => ['type' => 'string', 'enum' => ['add', 'remove', 'check'], 'description' => 'Hinzufügen, entfernen oder (rein lesend) Belegung prüfen.'],
                 'slug' => ['type' => 'string', 'description' => 'Doc-Slug (bei action=add).'],
                 'alias' => ['type' => 'string', 'description' => 'Alias-Text (bei action=add; wird zu Slug normalisiert).'],
                 'alias_id' => ['type' => 'integer', 'description' => 'Alias-Id (bei action=remove).'],
+                'aliases' => ['type' => 'array', 'items' => ['type' => 'string'], 'description' => 'Alias-Kandidaten (bei action=check), bis '.KnowledgeService::ALIAS_CHECK_MAX.'.'],
             ],
             'required' => ['action'],
         ];
@@ -45,6 +58,23 @@ class KnowledgeAliasTool extends FoodAlchemistTool implements ToolContract, Tool
         }
         $action = (string) ($arguments['action'] ?? '');
         $svc = app(KnowledgeService::class);
+
+        if ($action === 'check') {
+            $aliases = $arguments['aliases'] ?? null;
+            if (! is_array($aliases) || $aliases === []) {
+                return ToolResult::error('aliases[] ist Pflicht bei action=check.', 'VALIDATION_ERROR');
+            }
+            if (count($aliases) > KnowledgeService::ALIAS_CHECK_MAX) {
+                return ToolResult::error(sprintf('Hoechstens %d Alias-Kandidaten je Aufruf.', KnowledgeService::ALIAS_CHECK_MAX), 'VALIDATION_ERROR');
+            }
+            $ergebnisse = $svc->checkAliases($aliases);
+
+            return ToolResult::success([
+                'geprueft' => count($ergebnisse),
+                'belegt' => count(array_filter($ergebnisse, fn ($r) => $r['belegt'])),
+                'eintraege' => $ergebnisse,
+            ]);
+        }
 
         try {
             if ($action === 'add') {
@@ -71,7 +101,7 @@ class KnowledgeAliasTool extends FoodAlchemistTool implements ToolContract, Tool
             return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR');
         }
 
-        return ToolResult::error('action muss add oder remove sein.', 'VALIDATION_ERROR');
+        return ToolResult::error('action muss add, remove oder check sein.', 'VALIDATION_ERROR');
     }
 
     public function getMetadata(): array
