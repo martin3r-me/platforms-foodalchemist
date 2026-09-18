@@ -103,6 +103,7 @@
                             () => {
                                 window.FaVoiceZustand = {
                                     status: this._schwebeStatus(),
+                                    titel: this._schwebeTitel(),
                                     transkript: $wire.transcript,
                                     antwort: $wire.ergebnis?.text ?? null,
                                 };
@@ -150,13 +151,21 @@
                         this.konversationPausiert = true;
                         $wire.call('sprechenBeendet');
                     },
-                    // Live-Bruch 2026-09-18 (Punkt 3): GENAU die vier Zustände, die der
-                    // schwebende Knopf zeigen soll — nichts Feineres (bewusst klein gehalten).
-                    // Reihenfolge ist Absicht: ein Fehler/eine Pause überschreibt »spricht«/
-                    // »hört zu«, die zufällig noch nicht zurückgesetzt sind.
+                    // Live-Bruch 2026-09-18: »keine Sprache erkannt« und der 3-Zyklen-
+                    // Sicherheitsdeckel sind KEINE Fehler — der Knopf zeigte trotzdem rot, obwohl
+                    // serverseitig alles grün lief (letzte Antworten final=true, TTS synthetisiert).
+                    // Fünf Zustände jetzt statt vier: `pausiert` (amber/grau, wartet auf einen
+                    // Klick, aber nichts ist SCHIEFGELAUFEN) ist eigenständig von `fehler` (rot,
+                    // NUR bei einem echten technischen Fehler: Mikro verweigert/nicht unterstützt,
+                    // Upload fehlgeschlagen). Reihenfolge ist weiter Absicht: ein Fehler/eine
+                    // Pause überschreibt »spricht«/»hört zu«, die zufällig noch nicht
+                    // zurückgesetzt sind.
                     _schwebeStatus() {
-                        if (this.keineSpracheErkannt || this.konversationPausiert || this.fehler) {
+                        if (this.fehler) {
                             return 'fehler';
+                        }
+                        if (this.keineSpracheErkannt || this.konversationPausiert) {
+                            return 'pausiert';
                         }
                         if (this.fallbackAktiv || $wire.sprichtGerade) {
                             return 'spricht';
@@ -166,6 +175,25 @@
                         }
 
                         return 'wartet';
+                    },
+                    // Live-Bruch 2026-09-18: der Nutzer sollte den GRUND sehen statt zu raten,
+                    // warum der Knopf gerade rot/amber ist — `this.fehler` trägt den echten
+                    // Fehlertext (VoiceRecorder setzt ihn bei getUserMedia-/Upload-Fehlern).
+                    _schwebeTitel() {
+                        if (this.fehler) {
+                            return this.fehler;
+                        }
+                        if (this.keineSpracheErkannt || this.konversationPausiert) {
+                            return 'Pausiert — zum Weiterhören klicken';
+                        }
+                        if (this.fallbackAktiv || $wire.sprichtGerade) {
+                            return 'Spricht';
+                        }
+                        if (this.laeuft) {
+                            return 'Hört zu';
+                        }
+
+                        return 'Sprachbefehl (ziehbar)';
                     },
                     _wiedergeben(audio, url, text) {
                         if (! audio || audio.dataset.faEntsperrt !== '1') {
