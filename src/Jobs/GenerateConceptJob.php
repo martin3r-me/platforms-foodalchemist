@@ -77,6 +77,10 @@ class GenerateConceptJob implements ShouldQueue
         Auth::login($user);   // Team-Kontext für AiGatewayService (Kill-Switch/DNA/Call-Log)
 
         try {
+            // Spec 53 / Paket C-Nachtrag: Phase sichtbar machen, solange der Gerüst-Entwurf läuft —
+            // ConceptGeneratorService kennt (anders als RecipeGeneratorService) keinen Fortschritts-
+            // Callback, daher EINE grobe Phase statt vier feine Stufen.
+            $this->fortschritt('Gerüst wird geplant …');
             // #53 „Standard plan-first": in den kreativen Modi (voll_kreativ/hybrid) baut der Concept-Go
             // den vollen Plan (Draft + kreative Canvas + LEERE Fan-out-Slots) — die Gerichte ERFINDET
             // der Fan-out bei der Freigabe. Nur der Reuse-Modus (datenbank) füllt weiter deterministisch
@@ -93,6 +97,7 @@ class GenerateConceptJob implements ShouldQueue
             if ($this->kaskadeAbgebrochen()) {
                 $concept->delete();
                 $this->schreibe(['status' => 'cancelled']);
+                $this->fortschritt(null);
                 return;
             }
             // Planungs-„Go"-Lineage: Trend-Herkunft ans Konzept, Session→konvergenz.
@@ -139,6 +144,9 @@ class GenerateConceptJob implements ShouldQueue
                             'planning_session_id' => $this->planningSessionId,
                         ]]]);
                     } else {
+                        // Ungestuft: der Fan-out läuft SOFORT inline (kein FanoutConceptJob dazwischen) —
+                        // die Phase muss darum hier gesetzt werden, nicht erst im (hier nicht durchlaufenen) Worker.
+                        $this->fortschritt('Skizzen werden erfunden …');
                         app(\Platform\FoodAlchemist\Services\PlanningCascadeService::class)
                             ->fanoutConceptInvention($team, $this->cascadeStepId, (int) $concept->id, $this->creativeMode, $trendDocId, $this->planningSessionId);
                     }
@@ -260,5 +268,16 @@ class GenerateConceptJob implements ShouldQueue
     private function schreibe(array $data): void
     {
         Cache::put(self::cacheKey($this->runId), $data, now()->addMinutes(15));
+    }
+
+    /**
+     * Spec 53 / Paket C-Nachtrag: Phase am Kaskaden-Step (Cockpit + MCP) — kein eigener Cache-Vertrag
+     * hier (anders als GenerateRecipeJob), der Step ist die einzige Wahrheit. No-op ohne cascadeStepId.
+     */
+    private function fortschritt(?string $label): void
+    {
+        if ($this->cascadeStepId !== null) {
+            app(\Platform\FoodAlchemist\Services\PlanningCascadeService::class)->setzePhase($this->cascadeStepId, $label);
+        }
     }
 }

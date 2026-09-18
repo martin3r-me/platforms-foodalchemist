@@ -32,11 +32,13 @@ class PlanungKaskadeFreigabePostTool extends FoodAlchemistTool implements ToolCo
     {
         return 'Gibt EINEN Schritt eines Planungs-Kaskaden-Laufs frei, headless. Zwei Fälle: (1) ein done-'
             . 'Schritt wird live gesetzt (Draft → approved/active) und startet in gestuften Läufen die nächste '
-            . 'Ebene + Anreicherung. (2) Kapitel-Gate der gestuften Foodbook-Vollkaskade: ein GEPLANTER '
-            . 'Kapitel-Concept-Schritt wird durch die Freigabe ERZEUGT (die Concept-Generierung startet) — so '
-            . 'geht man Kapitel für Kapitel durch (Struktur prüfen → Kapitel freigeben → Concept-Entwurf → '
-            . 'freigeben → Gänge). Nur team-eigene Schritte (isOwnedBy); ein queued/running-Schritt ist ein '
-            . 'No-op. Liefert den Lauf-Status wie planung_kaskade.GET zurück.';
+            . 'Ebene + Anreicherung. (2) ein GEPLANTER Schritt (Kapitel-Concept, erfundenes Gericht oder '
+            . 'aufgeschobenes Sub-Rezept) wird durch dieselbe Freigabe stattdessen ERZEUGT (Gate 1) — so geht '
+            . 'man Ebene für Ebene durch (Struktur prüfen → freigeben → Entwurf → freigeben → nächste Ebene). '
+            . 'Nur team-eigene Schritte (isOwnedBy). Ein queued/running/terminaler Schritt bleibt ein No-op — '
+            . 'die Antwort trägt ein `aktion`-Feld (freigegeben|geplant_erzeugt|no_op_status_<status>) und bei '
+            . 'No-op zusätzlich `aktion_hinweis` (Klartext, warum nichts passierte), statt still eine '
+            . 'unveränderte Statuskopie zu liefern. Sonst wie planung_kaskade.GET.';
     }
 
     public function getSchema(): array
@@ -59,9 +61,11 @@ class PlanungKaskadeFreigabePostTool extends FoodAlchemistTool implements ToolCo
         $stepId = (int) $arguments['step_id'];
 
         // gibStepFrei ist über ownedStep (visibleToTeam + isOwnedBy/D1) geschützt → fremder/geerbter
-        // Schritt wirft. Nicht-done-Schritt = stiller No-op (kein Wurf).
+        // Schritt wirft. Ein `geplant`-Step (jeder kind) wird stattdessen ERZEUGT (Gate 1). Ein
+        // queued/running-Step bleibt ein No-op — das Aktions-Tag macht das jetzt SICHTBAR, statt eine
+        // unveränderte Statuskopie zurückzugeben, an der man den No-op nicht erkennt.
         try {
-            app(PlanningCascadeService::class)->gibStepFrei($team, $stepId);
+            $aktion = app(PlanningCascadeService::class)->gibStepFrei($team, $stepId);
         } catch (\Throwable $e) {
             return ToolResult::error('Freigabe nicht möglich: ' . $e->getMessage(), 'FREIGABE_FAILED');
         }
@@ -70,7 +74,19 @@ class PlanungKaskadeFreigabePostTool extends FoodAlchemistTool implements ToolCo
         $runId = (int) (FoodAlchemistCascadeRunStep::whereKey($stepId)->value('cascade_run_id') ?? 0);
         $status = $runId > 0 ? app(PlanningCascadeService::class)->laufStatus($team, $runId) : null;
 
-        return ToolResult::success($status ?? ['step_id' => $stepId, 'freigegeben' => true]);
+        $out = $status ?? ['step_id' => $stepId];
+        $out['aktion'] = $aktion;
+        // Eigener Schlüssel statt `hinweis` — laufStatus() belegt `hinweis` bereits mit einer
+        // RUN-weiten Meldung (z. B. Watchdog „Worker rechnet noch"); ein zweiter Sinn auf demselben
+        // Namen hätte ihn hier je nach Aktion überschrieben oder verwechselbar gemacht.
+        if (str_starts_with($aktion, 'no_op_status_')) {
+            $roherStatus = substr($aktion, strlen('no_op_status_'));
+            $out['aktion_hinweis'] = "Schritt {$stepId} steht auf '{$roherStatus}' — die Freigabe griff nicht. "
+                . "Nur 'done' wird freigegeben, ein 'geplant'-Schritt wird stattdessen erzeugt; "
+                . "'queued'/'running' braucht keine Aktion (läuft bereits), 'freigegeben'/'verworfen'/'failed' sind terminal.";
+        }
+
+        return ToolResult::success($out);
     }
 
     public function getMetadata(): array
