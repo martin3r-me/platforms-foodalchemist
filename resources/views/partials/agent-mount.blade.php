@@ -61,7 +61,7 @@
                 // selben Klick, bevor `$dispatch` das Modal-Event schickt.
                 window.FaVoiceAudioEntsperren && window.FaVoiceAudioEntsperren('fa-voice-tts-audio');
                 // Live-Befund Dominique (2026-09-18): der schwebende Knopf öffnete bisher nur
-                // den Ein-Klick-Zustand ("Aufnahme starten") — im Konversations-Modus musste
+                // den Ein-Klick-Zustand (»Aufnahme starten«) — im Konversations-Modus musste
                 // NOCH ein zweiter Klick folgen. `autostart` wird HIER unbedingt mitgeschickt
                 // (der Recorder im Modal entscheidet selbst anhand des FRISCH aus dem Team-
                 // Setting gelesenen `konversationAktiv`, ob er wirklich sofort startet — der
