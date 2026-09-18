@@ -112,6 +112,32 @@ it('LIKE-Praefix trifft KEIN unverwandtes Dossier mit gemeinsamem Wortstamm (Apf
     expect($ctx['files_used'])->not->toContain('zutat.apfelsine--verwendung@v1');
 });
 
+it('laedt BEIDE Teil-Dossiers eines Aspekts (Regelwerk Zutaten-Dossier §2: Teilung innerhalb der Frage)', function () {
+    ($this->mkAnker)('acerola', 'Acerola');
+    ($this->mkZutatDoc)('zutat.acerola--verhalten-hitze', 'Acerola Verhalten unter Hitze');
+    ($this->mkZutatDoc)('zutat.acerola--verhalten-saeure', 'Acerola Verhalten unter Saeure');
+    ($this->mkZutatDoc)('zutat.acerola--verwendung', 'Acerola Verwendung');   // darf NICHT mitgezogen werden
+    ($this->mkGroundingRouting)('recipe.steps');   // Aspekt "verhalten"
+
+    $ctx = app(KnowledgeContextService::class)->contextFor($this->rootTeam, 'recipe.steps', 'Acerola-Sirup', null, ['acerola']);
+
+    expect($ctx['files_used'])
+        ->toContain('zutat.acerola--verhalten-hitze@v1')
+        ->toContain('zutat.acerola--verhalten-saeure@v1')
+        ->not->toContain('zutat.acerola--verwendung@v1');
+});
+
+it('laedt genau ein Dossier, wenn der Aspekt NICHT geteilt ist', function () {
+    ($this->mkAnker)('acerola', 'Acerola');
+    ($this->mkZutatDoc)('zutat.acerola--verhalten', 'Acerola Verhalten');
+    ($this->mkGroundingRouting)('recipe.steps');
+
+    $ctx = app(KnowledgeContextService::class)->contextFor($this->rootTeam, 'recipe.steps', 'Acerola-Sirup', null, ['acerola']);
+
+    $zutatFiles = array_values(array_filter($ctx['files_used'], fn ($f) => str_starts_with($f, 'zutat.')));
+    expect($zutatFiles)->toBe(['zutat.acerola--verhalten@v1']);
+});
+
 it('markiert eine Zutat ohne Anker-Treffer ehrlich statt sie zu ignorieren oder zu raten', function () {
     ($this->mkGroundingRouting)('recipe.generator');
 

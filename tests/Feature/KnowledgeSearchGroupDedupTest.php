@@ -98,3 +98,18 @@ it('laesst Dossiers ohne "--" unangetastet, auch wenn mehrere hoch scoren', func
         ->toContain('fonds-jus-consomme-kennwerte')
         ->toContain('kerntemperaturen-rind-kalb-lamm-wild');
 });
+
+it('dedupliziert NICHT ausserhalb der zutat-Kategorie, auch bei "--" im Slug (PR-Review 2026-09-18)', function () {
+    // Erste Fassung gruppierte JEDES Doc mit "--" (Regelwerk-Abschnitte, Domain-Splits,
+    // allergen_patterns--ramen, ...) ohne dass preferredAspect je gesetzt wurde -> eine ungemessene,
+    // globale Verhaltensaenderung fuer main. Nur `zutat.`-Slugs duerfen kollabieren.
+    ($this->mkDoc)('regelwerk-basisrezepte--3-verarbeitungs-reduktion', 'Regelwerk Fremdzutat §3 Verarbeitungs-Reduktion', 'regelwerk');
+    ($this->mkDoc)('regelwerk-basisrezepte--4-sub-rezept-hierarchie', 'Regelwerk Fremdzutat §4 Sub-Rezept-Hierarchie', 'regelwerk');
+
+    $base = DB::table('foodalchemist_knowledge_documents')->where('category', 'regelwerk');
+    $hits = app(KnowledgeSearchService::class)->search($base, 'Regelwerk Fremdzutat', 5, semantic: false);
+
+    expect(array_column($hits, 'slug'))
+        ->toContain('regelwerk-basisrezepte--3-verarbeitungs-reduktion')
+        ->toContain('regelwerk-basisrezepte--4-sub-rezept-hierarchie');
+});
