@@ -671,12 +671,9 @@
                     <div>
                         <div class="flex items-center justify-between">
                             <label class="{{ $label }}">Hinführung (Kundentext des Kapitels)</label>
-                            <button type="button" wire:click="kiKapitelText" wire:loading.attr="disabled" wire:target="kiKapitelText"
-                                    title="foodbook.kundentext (Ebene Kapitel): Hinführung aus Kapitel-Inhalt (Wording-Kette), Buch-Einleitung und Marken-Stimme" data-fb-ki-kapiteltext
-                                    class="{{ $btnAi }}">
-                                <span wire:loading.remove wire:target="kiKapitelText">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') KI-Text</span>
-                                <span wire:loading wire:target="kiKapitelText">schreibt …</span>
-                            </button>
+                            <x-foodalchemist::ki-action action="kiKapitelText" variant="ai" icon="heroicon-o-sparkles" label="KI-Text"
+                                    title="foodbook.kundentext (Ebene Kapitel): Hinführung aus Kapitel-Inhalt (Wording-Kette), Buch-Einleitung und Marken-Stimme"
+                                    busy="schreibt …" data-fb-ki-kapiteltext />
                         </div>
                         <textarea wire:model.blur="kapitelForm.description" wire:change="kapitelSpeichern" rows="2"
                                   class="{{ $input }} resize-none min-h-[3.5rem]"
@@ -698,13 +695,10 @@
                                 @foreach($schreibstile as $s)<option value="{{ $s->id }}">{{ $s->name }}</option>@endforeach
                             </select>
                         </div>
-                        <button type="button" wire:click="kapitelWordingGenerieren" wire:loading.attr="disabled" wire:target="kapitelWordingGenerieren"
-                                @disabled(($kapitelForm['writing_style_id'] ?? null) === null || ($kapitelForm['writing_style_id'] ?? '') === '')
+                        <x-foodalchemist::ki-action action="kapitelWordingGenerieren" variant="ai" icon="heroicon-o-sparkles" label="Kapitel-Wording"
+                                :disabled="($kapitelForm['writing_style_id'] ?? null) === null || ($kapitelForm['writing_style_id'] ?? '') === ''"
                                 title="Betextet alle Konzepte dieses Kapitels im gewählten Schreibstil neu (foodbook-lokaler Snapshot; das Concept bleibt unangetastet)"
-                                class="{{ $btnAi }} shrink-0" data-fb-kapitel-wording>
-                            <span wire:loading.remove wire:target="kapitelWordingGenerieren">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') Kapitel-Wording</span>
-                            <span wire:loading wire:target="kapitelWordingGenerieren">betextet …</span>
-                        </button>
+                                busy="betextet …" class="shrink-0" data-fb-kapitel-wording />
                     </div>
                     @error('kapitelWording')<p class="text-[11px] text-rose-500 mt-1" data-fb-kapitel-fehler>{{ $message }}</p>@enderror
                 </div>
@@ -871,7 +865,8 @@
                                             <div class="flex gap-1.5 items-start">
                                                 <textarea wire:model="blockForm.customer_text" rows="2" class="{{ $input }}" placeholder="Beschreibungstext / Untertitel (kundensichtbar, optional)"></textarea>
                                                 @if($block->type === 'concept_ref')
-                                                    <button type="button" wire:click="kiKundentext" class="{{ $btnAi }} shrink-0 mt-0.5" title="vk.marketing: verkäuferischer Beschreibungstext zu diesem Concept" data-fb-ki-kundentext>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5 inline-block align-middle')</button>
+                                                    <x-foodalchemist::ki-action action="kiKundentext" variant="icon" icon="heroicon-o-sparkles" label="KI-Kundentext"
+                                                            title="vk.marketing: verkäuferischer Beschreibungstext zu diesem Concept" class="shrink-0 mt-0.5" data-fb-ki-kundentext />
                                                 @endif
                                             </div>
                                         @endif

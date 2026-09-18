@@ -166,7 +166,9 @@
             @endif
             @if(count(array_filter($auswahl)) > 0)
                 <div class="flex items-center gap-1.5" data-bulk-status>
-                    <button type="button" wire:click="bulkAnreichern" class="{{ $btnAi }}" title="Beschreibung · Kategorie · Geschmack als Review-Vorschläge (GL-07: nie Auto-Persistenz)" data-bulk-anreichern>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') Bulk anreichern</button>
+                    <x-foodalchemist::ki-action action="bulkAnreichern" variant="ai" icon="heroicon-o-sparkles" label="Bulk anreichern"
+                            title="Beschreibung · Kategorie · Geschmack als Review-Vorschläge (GL-07: nie Auto-Persistenz)"
+                            flash="Bulk gestartet" data-bulk-anreichern />
                     <span class="text-xs text-gray-900 font-medium">{{ count(array_filter($auswahl)) }} ausgewählt:</span>
                     @foreach(['draft' => 'Entwurf', 'review' => 'Review', 'approved' => 'Freigeben'] as $wert => $lbl)
                         <button type="button" wire:click="bulkStatus('{{ $wert }}')" class="{{ $btnGhostXs }}" data-bulk-status-btn="{{ $wert }}">→ {{ $lbl }}</button>

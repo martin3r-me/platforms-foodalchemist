@@ -43,10 +43,8 @@
         <div class="mt-3" data-fbkontext-briefing>
             <div class="flex items-center justify-between">
                 <label class="{{ $label }}">Briefing / Einleitung (Kundentext)</label>
-                <button type="button" wire:click="kiEinleitung" wire:loading.attr="disabled" wire:target="kiEinleitung" class="{{ $btnAi }}" data-fbkontext-ki>
-                    <span wire:loading.remove wire:target="kiEinleitung">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') KI-Text</span>
-                    <span wire:loading wire:target="kiEinleitung">schreibt …</span>
-                </button>
+                <x-foodalchemist::ki-action action="kiEinleitung" variant="ai" icon="heroicon-o-sparkles" label="KI-Text"
+                        busy="schreibt …" data-fbkontext-ki />
             </div>
             <textarea wire:model.blur="beschreibung" rows="3"
                       class="{{ $input }} w-full resize-none min-h-[4.5rem]"

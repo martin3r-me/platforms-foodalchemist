@@ -124,9 +124,22 @@
                 {{-- Spec 03 L6b: Copilot — Prüf-Pass statt Neu-Schreiben (Befunde einzeln annehmen) --}}
                 <button type="button" wire:click="$toggle('copilotOffen')" class="{{ $btnAi }}"
                         title="Prüf-Pass: die KI beurteilt Mengen, Einheiten, überflüssige und fehlende Zutaten — je Befund einzeln übernehmbar. Das Rezept bleibt stehen." data-copilot>@svg('heroicon-o-clipboard-document-check', 'w-3.5 h-3.5') Copilot</button>
-                {{-- Garverluste: feuert ins eingebettete zutaten-kern (Alpine garverluste() via Window-Event) --}}
-                <button type="button" x-on:click="$dispatch('garverluste-vorschlagen')" class="{{ $btnAi }}"
-                        title="M4-11: KI-Schätzung der Garverluste je Zutat (GL-07 — geschrieben erst beim Speichern)" data-garverlust-ki>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') Garverluste</button>
+                {{-- Garverluste: feuert ins eingebettete zutaten-kern (Alpine garverluste() via Window-Event) —
+                     lebt in einem ANDEREN x-data-Scope als der $wire-Call selbst, darum kein
+                     <x-foodalchemist::ki-action> (das ruft $wire.<action> direkt); die Rückmeldung
+                     kommt hier stattdessen über garverluste-fertig/-fehler (s. ingredient-editor.blade.php),
+                     visuell identisch zur Komponente (Spinner/Haken/Fehler). --}}
+                <button type="button" x-data="{ pending: false, ok: false, err: null }"
+                        x-on:garverluste-fertig.window="pending = false; ok = true; err = null; setTimeout(() => ok = false, 1600)"
+                        x-on:garverluste-fehler.window="pending = false; ok = false; err = $event.detail?.message || 'Fehler — bitte erneut versuchen.'"
+                        x-on:click="pending = true; ok = false; err = null; $dispatch('garverluste-vorschlagen')"
+                        :class="{ 'opacity-50 cursor-wait': pending }" :disabled="pending"
+                        class="{{ $btnAi }}" :title="err || 'M4-11: KI-Schätzung der Garverluste je Zutat (GL-07 — geschrieben erst beim Speichern)'" data-garverlust-ki>
+                    <template x-if="pending">@svg('heroicon-o-arrow-path', 'w-3.5 h-3.5 animate-spin')<span>Schätzt …</span></template>
+                    <template x-if="!pending && ok"><span class="inline-flex items-center gap-1 text-emerald-500">@svg('heroicon-o-check', 'w-3.5 h-3.5')<span>Übernommen</span></span></template>
+                    <template x-if="!pending && !ok && err"><span class="inline-flex items-center gap-1 text-rose-300">@svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5')<span x-text="err"></span></span></template>
+                    <template x-if="!pending && !ok && !err">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5')<span>Garverluste</span></template>
+                </button>
             </x-slot:actions>
 
             @if($ueberarbeitenOffen)

@@ -134,13 +134,10 @@
                                 @endforeach
                             </select>
                             {{-- A: betextet die GANZE Speisekarte im gewählten Stil neu (foodbook-lokal, nur auf Knopfdruck wegen LLM-Kosten). --}}
-                            <button type="button" wire:click="speisekarteWordingGenerieren" wire:loading.attr="disabled" wire:target="speisekarteWordingGenerieren"
-                                    @disabled(! $writingStyleId)
-                                    title="Alle Positionen der Speisekarte im gewählten Schreibstil neu betexten" data-sk-wording
-                                    class="{{ $btnAi }} shrink-0">
-                                <span wire:loading.remove wire:target="speisekarteWordingGenerieren">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') Wording</span>
-                                <span wire:loading wire:target="speisekarteWordingGenerieren">betextet …</span>
-                            </button>
+                            <x-foodalchemist::ki-action action="speisekarteWordingGenerieren" variant="ai" icon="heroicon-o-sparkles" label="Wording"
+                                    :disabled="! $writingStyleId"
+                                    title="Alle Positionen der Speisekarte im gewählten Schreibstil neu betexten"
+                                    busy="betextet …" class="shrink-0" data-sk-wording />
                         </div>
                         @error('speisekarteWording')<p class="text-[11px] text-rose-500 mt-1" data-sk-wording-fehler>{{ $message }}</p>@enderror
                     </div>
@@ -195,7 +192,7 @@
                 <x-foodalchemist::crm-kunde-picker
                     :ausgabe="$karte" :crm-verfuegbar="$crmVerfuegbar" :firmen="$firmen" :kontakte="$kontakte" />
                 <div class="mt-3 flex flex-wrap gap-2">
-                    <button type="button" wire:click="kiKartenText" class="{{ $btnAi }}">✨ KI-Einleitung</button>
+                    <x-foodalchemist::ki-action action="kiKartenText" variant="ai" icon="heroicon-o-sparkles" label="KI-Einleitung" data-sk-ki-einleitung />
                 </div>
                 @if($kiKartenVorschau !== null)
                     <div class="mt-3 p-3 rounded-lg bg-violet-500/[0.04] ring-1 ring-inset ring-violet-500/15">

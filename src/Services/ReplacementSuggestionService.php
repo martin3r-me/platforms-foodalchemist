@@ -7,6 +7,7 @@ use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Services\Ai\AiGatewayService;
+use Platform\FoodAlchemist\Services\Ai\KnowledgeContextService;
 use Platform\FoodAlchemist\Services\Ai\PoolEmbeddingService;
 use Platform\FoodAlchemist\Services\Ai\SemanticRetrievalService;
 use Platform\FoodAlchemist\Services\Matching\TokenEngine;
@@ -28,6 +29,7 @@ class ReplacementSuggestionService
         private AiGatewayService $ai,
         private LaCandidateFinder $laFinder,
         private SemanticRetrievalService $semantic,
+        private KnowledgeContextService $wissen,
     ) {}
 
     /** @return list<array{kind:string,id:int,name:string,score:float,reason:string,supplier:?string,context:string}> */
@@ -40,6 +42,12 @@ class ReplacementSuggestionService
 
         $byKey = $pool->keyBy(fn (array $c) => $c['kind'].':'.$c['id']);
         try {
+            // Fund Orchestrator (Paket G, MCP-Routing-Audit): component.replacement_suggest hatte
+            // schon einen dritten Options-Parameter (target_table/target_id), aber nie den
+            // Discovery-Block — PREVIEW zeigte brauchbare Substitutions-Dossiers, die nie ankamen.
+            $wissenBlock = $this->wissen->contextFor($team, 'component.replacement_suggest', (string) $source->name);
+            $opts = KnowledgeContextService::proposeOptionen($wissenBlock)
+                + ['target_table' => 'foodalchemist_gps', 'target_id' => $source->id];
             $proposal = $this->ai->propose('component.replacement_suggest', [
                 'quelle' => $this->sourceContext($source),
                 'kandidaten' => $pool->map(fn (array $c) => [
@@ -50,7 +58,7 @@ class ReplacementSuggestionService
                     'datenbank_score' => $c['score'],
                     'merkmale' => $c['context'],
                 ])->values()->all(),
-            ], ['target_table' => 'foodalchemist_gps', 'target_id' => $source->id]);
+            ], $opts);
             $ranked = collect($proposal->werte['vorschlaege'] ?? [])
                 ->map(function ($row) use ($byKey) {
                     if (! is_array($row)) {

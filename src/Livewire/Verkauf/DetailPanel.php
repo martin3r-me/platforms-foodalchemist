@@ -205,7 +205,7 @@ class DetailPanel extends Component
             ->entferneEignung($team, $this->recipeId, $typ, $slug));
     }
 
-    public function kiEignung(): void
+    public function kiEignung(\Platform\FoodAlchemist\Services\Ai\KnowledgeContextService $wissen): void
     {
         $team = Auth::user()?->currentTeamRelation;
         if ($team === null || $this->recipeId === null) {
@@ -216,12 +216,20 @@ class DetailPanel extends Component
         $gateway = app(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class);
         $kontext = ['name' => $r->name, 'komponenten' => $r->ingredients->map(fn ($z) => $z->referencedRecipe?->name ?? $z->gp?->name ?? $z->display_name)->all()];
         $vokabular = \Platform\FoodAlchemist\Services\RecipeService::eignungVokabular();
+        // Fund Lisa (Paket G, MCP-Routing-Audit): recipe.sektor lief bislang ohne Discovery-
+        // Kontext (Routing findet Treffer, kommen aber nie an). Beide Prompt-Keys hängen hier
+        // im selben Loop — jeder zieht seinen EIGENEN Block über contextFor(..., $prompt, ...),
+        // ein leeres Routing bleibt ein no-op (fail-soft), wie bei recipe.geschmack.
+        $geruest = trim(($r->name ?? '').' '.implode(' · ', $kontext['komponenten']));
+        $achsen = \Platform\FoodAlchemist\Services\Knowledge\RezeptAchsen::fuer($r);
 
         try {
             $slugs = [];
             $conf = 0.0;
             foreach (['sektor' => ['recipe.sektor', 'sektoren'], 'level' => ['recipe.level', 'niveaus']] as $typ => [$prompt, $schluessel]) {
-                $v = $gateway->propose($prompt, $kontext + ['vokabular' => $vokabular[$typ]['slugs']]);
+                $wissenBlock = $wissen->contextFor($team, $prompt, $geruest, null, [], $achsen);
+                $opts = \Platform\FoodAlchemist\Services\Ai\KnowledgeContextService::proposeOptionen($wissenBlock);
+                $v = $gateway->propose($prompt, $kontext + ['vokabular' => $vokabular[$typ]['slugs']], $opts);
                 $conf = max($conf, $v->confidence);
                 foreach ((array) ($v->werte[$schluessel] ?? []) as $slug => $urteil) {
                     if (in_array($slug, $vokabular[$typ]['slugs'], true) && (($urteil['eignung'] ?? null) === 'geeignet')) {

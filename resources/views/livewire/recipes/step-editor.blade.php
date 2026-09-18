@@ -64,12 +64,9 @@
                     {{-- Ein Knopf für beide Ebenen: der Prompt folgt der Ebene
                          (StepEditor::promptKey → `recipe.steps` bzw. `vk.plating`), damit
                          Anrichten nicht mit Fertigstellungs-Schritten befüllt wird. --}}
-                    <button type="button" wire:click="kiSchritte" wire:loading.attr="disabled" wire:target="kiSchritte"
-                            class="{{ $btnAi }}" title="{{ $kiTitel }} (Vorschlag — nichts wird gespeichert)" data-ki-schritte>
-                        @svg('heroicon-o-sparkles', 'w-3.5 h-3.5')
-                        <span wire:loading.remove wire:target="kiSchritte">{{ $kiLabel }}</span>
-                        <span wire:loading wire:target="kiSchritte">denkt …</span>
-                    </button>
+                    <x-foodalchemist::ki-action action="kiSchritte" variant="ai" icon="heroicon-o-sparkles"
+                            :label="$kiLabel" :title="$kiTitel . ' (Vorschlag — nichts wird gespeichert)'"
+                            busy="denkt …" data-ki-schritte />
                     <button type="button" wire:click="$toggle('briefingOffen')"
                             class="{{ $btnGhostXs }} @if(trim($kiBriefing) !== '') text-violet-600 @endif"
                             title="Eigene Vorgabe für diesen KI-Knopf — sprechen oder tippen" data-briefing-toggle>
@@ -78,12 +75,8 @@
                              Direktive nicht (\B), das @endif aber doch → ParseError. --}}
                         Briefing {{ trim($kiBriefing) !== '' ? '●' : '' }}
                     </button>
-                    <button type="button" wire:click="kiFotos" wire:loading.attr="disabled" wire:target="kiFotos"
-                            class="{{ $btnAi }}" title="KI-Fotos für alle Schritte ohne Foto erzeugen" data-ki-fotos>
-                        @svg('heroicon-o-photo', 'w-3.5 h-3.5')
-                        <span wire:loading.remove wire:target="kiFotos">KI-Fotos</span>
-                        <span wire:loading wire:target="kiFotos">malt …</span>
-                    </button>
+                    <x-foodalchemist::ki-action action="kiFotos" variant="ai" icon="heroicon-o-photo" label="KI-Fotos"
+                            title="KI-Fotos für alle Schritte ohne Foto erzeugen" busy="malt …" data-ki-fotos />
                     <button type="button" wire:click="$toggle('importOffen')" class="{{ $btnGhostXs }}"
                             title="Markdown einfügen und in Schritte parsen" data-import-toggle>Markdown einfügen</button>
                     @if($schritte->isNotEmpty())
