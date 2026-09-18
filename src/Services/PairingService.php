@@ -87,6 +87,11 @@ class PairingService
 
     private ?array $anchorIndex = null;
 
+    /** Cache für {@see ankerSlugExakt()} — ein Grounding-Lauf prüft mehrere Tokens (bis zu 8 Zutaten
+     * plus Singular-Kandidaten je Token), ohne Cache je Prüfung ein voller Tabellen-Scan (Orchestrierung
+     * 2026-09-18: "sobald der Dossier-Import die Anker-Zahl hebt, lohnt ein Cache je Request"). */
+    private ?\Illuminate\Support\Collection $ankerExaktListe = null;
+
     /** fold(): lowercase, Umlaut→Digraph, nicht-alnum→Space, kollabiert, umrandet. */
     public function fold(string $s): string
     {
@@ -2572,21 +2577,63 @@ class PairingService
      * Wort "Gelee" enthält (z. B. "Apfel Gelee") — nicht die gemeinte Zutat. Grounding lädt
      * deterministisch GENAU EIN Dossier und darf sich diese Verwechslung nicht erlauben: lieber
      * `ohne_anker` (ehrlich sichtbar in der Herkunft) als ein falsches Dossier.
+     *
+     * ★ Konservativer Singular-Fallback (Orchestrierung, 2026-09-18, Live-PREVIEW nach Deploy 21):
+     * `leitTokens()` liefert aus einem Brief oft den Plural ("aprikosen", "tomaten", "kartoffeln"),
+     * das Anker-Label steht im Singular ("Aprikose", "Tomate", "Kartoffel") — exakte Gleichheit trifft
+     * dann nie. Deutsche Pluralbildung ist nicht eindeutig rückführbar (Aprikose→Aprikosen braucht
+     * `-n` weg, nicht `-en`) — deshalb EINE Stufe abschneiden, aber ALLE plausiblen Endungen
+     * gleichzeitig prüfen (`-n`, `-en`, `-e`, `-s`, `-er`) und nur akzeptieren, wenn GENAU EIN Anker
+     * über den gesamten Versuch matcht. Mehrdeutigkeit (zwei Endungen treffen zwei verschiedene
+     * Anker) bleibt bewusst `ohne_anker` statt zu raten — dieselbe Regel wie beim exakten Treffer.
+     *
+     * @return ?array{slug: string, via: 'exakt'|'singular'}
      */
-    public function ankerSlugExakt(string $token): ?string
+    public function ankerSlugExakt(string $token): ?array
     {
         $token = trim($token);
         if ($token === '') {
             return null;
         }
+        if (($anker = $this->ankerExaktGleich($token)) !== null) {
+            return ['slug' => $anker->slug, 'via' => 'exakt'];
+        }
+
+        $treffer = [];
+        foreach (['n', 'en', 'e', 's', 'er'] as $endung) {
+            if (! str_ends_with($token, $endung)) {
+                continue;
+            }
+            $kandidat = mb_substr($token, 0, mb_strlen($token) - mb_strlen($endung));
+            if (mb_strlen($kandidat) < 3) {
+                continue;   // zu kurz, um noch verlässlich zu sein
+            }
+            if (($singularAnker = $this->ankerExaktGleich($kandidat)) !== null) {
+                $treffer[$singularAnker->slug] = $singularAnker;
+            }
+        }
+        if (count($treffer) === 1) {
+            return ['slug' => reset($treffer)->slug, 'via' => 'singular'];
+        }
+
+        return null;
+    }
+
+    /** Exakte Gleichheit von `slug` (normalisiert) ODER `display_de` (gefaltet) — Kern von {@see ankerSlugExakt()}. */
+    private function ankerExaktGleich(string $token): ?object
+    {
         $slugNorm = $this->normalizeAnkerSlug($token);
         $displayNorm = trim($this->fold($token));
-        $anker = DB::table('foodalchemist_vocab_pairing_anchors')->whereNull('deleted_at')
-            ->where('slug', '!=', 'neutral')->get(['slug', 'display_de'])
-            ->first(fn ($a) => $this->normalizeAnkerSlug($a->slug) === $slugNorm
-                || trim($this->fold($a->display_de)) === $displayNorm);
 
-        return $anker->slug ?? null;
+        return $this->ankerExaktListe()->first(fn ($a) => $this->normalizeAnkerSlug($a->slug) === $slugNorm
+            || trim($this->fold($a->display_de)) === $displayNorm);
+    }
+
+    /** @return \Illuminate\Support\Collection<int, object{slug: string, display_de: string}> */
+    private function ankerExaktListe(): \Illuminate\Support\Collection
+    {
+        return $this->ankerExaktListe ??= DB::table('foodalchemist_vocab_pairing_anchors')->whereNull('deleted_at')
+            ->where('slug', '!=', 'neutral')->get(['slug', 'display_de']);
     }
 
     /**

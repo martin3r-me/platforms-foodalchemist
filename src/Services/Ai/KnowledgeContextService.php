@@ -1914,13 +1914,14 @@ class KnowledgeContextService
             if ($hz === '') {
                 continue;
             }
-            $anker = $pairing->ankerSlugExakt($hz);
-            if ($anker === null) {
+            $ankerTreffer = $pairing->ankerSlugExakt($hz);
+            if ($ankerTreffer === null) {
                 // Ehrlich sichtbar statt stillschweigend übersprungen (Dominique: "nimmt er dann
                 // random irgendeins?" — Antwort hier: nein, gar keins, und das steht auch so da).
                 $this->herkunft["zutat:{$hz}"] = ['via' => 'zutat_grounding', 'score' => null, 'status' => 'ohne_anker', 'hauptzutaten_quelle' => $hauptzutatenQuelle];
                 continue;
             }
+            $anker = $ankerTreffer['slug'];
             if (isset($geladen[$anker])) {
                 continue;   // dieselbe Zutat mehrfach im Brief erwähnt
             }
@@ -1930,7 +1931,7 @@ class KnowledgeContextService
             // hier ALLE Teil-Dossiers des gewählten Aspekts, nicht nur eins.
             $docs = $this->zutatDocs($team, $anker, $aspekt);
             if ($docs->isEmpty()) {
-                $this->herkunft["zutat.{$anker}"] = ['via' => 'zutat_grounding', 'score' => null, 'status' => 'ohne_dossier', 'aspekt' => $aspekt, 'hauptzutaten_quelle' => $hauptzutatenQuelle];
+                $this->herkunft["zutat.{$anker}"] = ['via' => 'zutat_grounding', 'score' => null, 'status' => 'ohne_dossier', 'aspekt' => $aspekt, 'hauptzutaten_quelle' => $hauptzutatenQuelle, 'anker_match' => $ankerTreffer['via']];
                 continue;
             }
             $geerdeteAnker[] = $anker;
@@ -1950,6 +1951,7 @@ class KnowledgeContextService
                     'via' => 'zutat_grounding', 'score' => self::DETERMINISTISCHER_SCORE,
                     'chars' => mb_strlen((string) $doc->content_md), 'sent' => mb_strlen((string) $doc->content_md),
                     'aspekt' => $aspekt, 'hauptzutat' => $hz, 'hauptzutaten_quelle' => $hauptzutatenQuelle,
+                    'anker_match' => $ankerTreffer['via'],
                 ];
             }
         }

@@ -395,3 +395,30 @@ it('schliesst category=zutat aus der generischen art-Discovery aus — nur Groun
 
     expect($ctx['files_used'])->not->toContain('zutat.tomate--verwendung@v1');
 });
+
+/**
+ * Fund (Orchestrierung, 2026-09-18, Live-PREVIEW nach Deploy 21): "aprikosen" (Plural aus dem
+ * Brief) blieb ohne_anker, weil das Anker-Label "Aprikose" (Singular) ist. Integrationstest für
+ * PairingAnkerSlugExaktTest hinaus: der Singular-Fallback wirkt END-ZU-END im Grounding, und die
+ * Herkunft weist ehrlich aus, ÜBER WELCHEN Weg (anker_match: exakt|singular).
+ */
+it('erdet einen Plural-Token ueber den Singular-Fallback UND markiert den Weg in der Herkunft', function () {
+    ($this->mkAnker)('apricot', 'Aprikose');
+    ($this->mkZutatDoc)('zutat.apricot--verwendung', 'Aprikose Verwendung');
+    ($this->mkGroundingRouting)('recipe.generator');
+
+    $ctx = app(KnowledgeContextService::class)->contextFor($this->rootTeam, 'recipe.generator', 'Aprikosen-Kompott', null, ['aprikosen']);
+
+    expect($ctx['files_used'])->toContain('zutat.apricot--verwendung@v1')
+        ->and($ctx['herkunft']['zutat.apricot--verwendung']['anker_match'])->toBe('singular');
+});
+
+it('markiert einen exakten Treffer weiterhin als anker_match: exakt', function () {
+    ($this->mkAnker)('acerola', 'Acerola');
+    ($this->mkZutatDoc)('zutat.acerola--verwendung', 'Acerola Verwendung');
+    ($this->mkGroundingRouting)('recipe.generator');
+
+    $ctx = app(KnowledgeContextService::class)->contextFor($this->rootTeam, 'recipe.generator', 'Acerola-Sirup', null, ['acerola']);
+
+    expect($ctx['herkunft']['zutat.acerola--verwendung']['anker_match'])->toBe('exakt');
+});
