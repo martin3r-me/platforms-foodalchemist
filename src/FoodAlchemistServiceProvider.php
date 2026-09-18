@@ -716,6 +716,9 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\KnowledgeCreateTool::class,
                     \Platform\FoodAlchemist\Tools\KnowledgeUpdateTool::class,
                     \Platform\FoodAlchemist\Tools\KnowledgeEinordnenTool::class,
+                    // Zutaten-Bulk-Import (2026-09-18): Massenanlage/-aktualisierung ueber IMPORT,
+                    // idempotent per Slug-Content-Hash — knowledge.POST ist fuer 11.966 Dossiers kein Weg.
+                    \Platform\FoodAlchemist\Tools\KnowledgeImportTool::class,
                     // D12: Wissen-Löschen/Alias (3 neue Service-Methoden) + Canvas-Einträge + Controlling
                     // + Trendradar + Präsentations-Designs. match_proposals.RESOLVE = bereits match_proposals.PUT.
                     \Platform\FoodAlchemist\Tools\KnowledgeDeleteTool::class,
