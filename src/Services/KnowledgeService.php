@@ -198,6 +198,138 @@ class KnowledgeService
         return $fresh;
     }
 
+    /** Max. Einträge je `knowledge.IMPORT`-Aufruf (Briefing Zutaten-Bulk-Import: „100 bis 500"). */
+    public const IMPORT_MAX = 500;
+
+    /**
+     * Massenanlage/-aktualisierung über `foodalchemist.knowledge.IMPORT` (Briefing
+     * Zutaten-Bulk-Import, 2026-09-18: 11.966 Zutaten-Dossiers, 11.966 Einzel-`POST`-Aufrufe sind
+     * über MCP nicht vertretbar).
+     *
+     * Idempotent über den Slug via Content-Hash: neuer Slug → `angelegt`; bestehender Slug mit
+     * gleichem `content_md`-Hash → `unveraendert` (kein Schreiben, keine Versionsbumps); anderer
+     * Hash → `aktualisiert` (version+1). Jeder Eintrag bekommt einen Status
+     * `angelegt|aktualisiert|unveraendert|abgelehnt` + bei `abgelehnt` einen `grund`
+     * (Kategorie unbekannt, Wissensart ungültig, Slug-Muster, > 4.000 Zeichen, Pflichtfeld fehlt,
+     * fremdes Team).
+     *
+     * NICHT über {@see create()}/{@see update()} gebaut: {@see uniqueSlug()} hängt bei einer
+     * Slug-Kollision STILLSCHWEIGEND `-2` an — auch an einen EXPLIZITEN Slug — und prüft dabei
+     * NICHT `deleted_at` (anders als der Idempotenz-Check hier). Ein soft-gelöschtes Dossier mit
+     * demselben Slug würde `create()` also unbemerkt auf einen anderen Slug ausweichen lassen und
+     * die Idempotenz-Zusage dieses Tools brechen — hier deshalb direkte, für den Bulk-Fall
+     * zugeschnittene Schreiblogik, die dieselben Validatoren (`assertKategorie`, `pruefeArt`,
+     * `WissensGeltung::payload`) wie `create()`/`update()` wiederverwendet statt sie zu duplizieren.
+     *
+     * Transaktion JE EINTRAG (bewusste Abweichung von `knowledge.EINORDNEN`, das GAR KEINE
+     * Transaktion nutzt — dort ist ein Eintrag ein einzelnes `UPDATE`, hier sind es mehrere
+     * zusammengehörige Schreibvorgänge, die nicht halb angewendet stehen bleiben sollen). Ein
+     * abgebrochener LAUF bleibt trotzdem beliebig oft wiederholbar: jeder Eintrag ist für sich
+     * idempotent, ein bereits geschriebener Eintrag meldet beim nächsten Versuch `unveraendert`.
+     *
+     * Embedding: async über {@see KnowledgeEmbeddingService::queueDocument()} für jeden `angelegt`/
+     * `aktualisiert`-Eintrag — derselbe Pfad, den `update()`/`setActive()` schon nutzen. Intern auf
+     * `active=1` gegated: bei `active=false` (empfohlener Entwurfs-Weg, s. Regelwerk Zutaten-Dossier
+     * §8) ist der Aufruf ein günstiger No-op, das eigentliche Embedding entsteht erst bei der
+     * (blockweisen) Aktivierung.
+     *
+     * @param  list<array{slug?:string,title?:string,category?:string,art?:string,content_md?:string,frontmatter?:array,active?:bool}>  $eintraege
+     * @return list<array{index:int,slug:?string,status:string,grund?:string,version?:int}>
+     */
+    public function import(Team $team, array $eintraege): array
+    {
+        $ergebnisse = [];
+        foreach (array_values($eintraege) as $index => $eintrag) {
+            $ergebnisse[] = DB::transaction(fn () => $this->importEintrag($team, $index, $eintrag));
+        }
+
+        return $ergebnisse;
+    }
+
+    /**
+     * `frontmatter` wird entgegengenommen, aber NICHT gespeichert — es gibt keine eigene Spalte
+     * dafür, `content_md` trägt die YAML-Frontmatter bereits als Text (Regelwerk Zutaten-Dossier
+     * §5: das ganze Dossier inkl. Frontmatter ist EIN Textblock). Der Parameter existiert nur, damit
+     * ein Aufrufer strukturierte Metadaten (z. B. `anker_slug`) mitschicken kann, ohne dass das Tool
+     * sie ablehnt — für künftige Auswertungen, heute wirkungslos. Das gehört so in die
+     * Tool-Beschreibung, nicht stillschweigend verschluckt.
+     */
+    private function importEintrag(Team $team, int $index, mixed $eintrag): array
+    {
+        if (! is_array($eintrag)) {
+            return ['index' => $index, 'slug' => null, 'status' => 'abgelehnt', 'grund' => 'Eintrag ist kein Objekt.'];
+        }
+        $slug = trim((string) ($eintrag['slug'] ?? ''));
+        $title = trim((string) ($eintrag['title'] ?? ''));
+        $category = trim((string) ($eintrag['category'] ?? ''));
+        $content = (string) ($eintrag['content_md'] ?? '');
+        if ($slug === '' || $title === '' || $category === '' || $content === '') {
+            return ['index' => $index, 'slug' => $slug ?: null, 'status' => 'abgelehnt', 'grund' => 'slug, title, category und content_md sind Pflicht.'];
+        }
+        // Slug-Muster: lowercase + a-z0-9._- (deckt reale Vault-Slugs wie
+        // "zutat.acai_berry--verhalten-aroma-2" ab, ohne raten zu müssen was sonst noch vorkommt).
+        if (preg_match('/^[a-z0-9][a-z0-9._-]*$/', $slug) !== 1) {
+            return ['index' => $index, 'slug' => $slug, 'status' => 'abgelehnt', 'grund' => 'Slug-Muster ungültig — nur a-z, 0-9, ".", "_", "-", muss mit a-z/0-9 beginnen.'];
+        }
+        $zeichen = mb_strlen($content);
+        if ($zeichen > 4000) {
+            return ['index' => $index, 'slug' => $slug, 'status' => 'abgelehnt', 'grund' => "content_md > 4.000 Zeichen ({$zeichen})."];
+        }
+        try {
+            $this->assertKategorie($team, $category);
+            $art = $this->pruefeArt($eintrag['art'] ?? null);
+        } catch (RuntimeException $e) {
+            return ['index' => $index, 'slug' => $slug, 'status' => 'abgelehnt', 'grund' => $e->getMessage()];
+        }
+
+        $bestehend = DB::table('foodalchemist_knowledge_documents')->where('slug', $slug)->whereNull('deleted_at')->first();
+        if ($bestehend !== null && ! TeamScope::mayWrite($bestehend->team_id, $team)) {
+            return ['index' => $index, 'slug' => $slug, 'status' => 'abgelehnt', 'grund' => 'Slug gehört einem anderen Team bzw. ist globales Master-Wissen.'];
+        }
+
+        $hash = hash('sha256', $content);
+        if ($bestehend !== null && $bestehend->content_hash === $hash) {
+            return ['index' => $index, 'slug' => $slug, 'status' => 'unveraendert', 'version' => (int) $bestehend->version];
+        }
+
+        $active = (bool) ($eintrag['active'] ?? false);
+        $now = now();
+        try {
+            if ($bestehend !== null) {
+                $einordnung = \Platform\FoodAlchemist\Services\Knowledge\WissensGeltung::payload(
+                    $art, \Platform\FoodAlchemist\Services\Knowledge\WissensGeltung::lesen($bestehend->geltung ?? null),
+                    \Platform\FoodAlchemist\Services\Knowledge\WissensGeltung::lesen($bestehend->datenwerte ?? null),
+                );
+                $version = (int) $bestehend->version + 1;
+                DB::table('foodalchemist_knowledge_documents')->where('id', $bestehend->id)->update([
+                    'title' => $title, 'category' => $category, ...$einordnung,
+                    'content_md' => $content, 'content_hash' => $hash, 'char_count' => $zeichen,
+                    'version' => $version, 'active' => $active, 'updated_at' => $now,
+                ]);
+                $status = 'aktualisiert';
+            } else {
+                $einordnung = \Platform\FoodAlchemist\Services\Knowledge\WissensGeltung::payload($art, [], []);
+                DB::table('foodalchemist_knowledge_documents')->insert([
+                    'uuid' => (string) UuidV7::generate(),
+                    'team_id' => TeamScope::isMaster($team) ? null : $team->id,
+                    'slug' => $slug, 'title' => $title, 'category' => $category, ...$einordnung,
+                    'content_md' => $content, 'version' => 1, 'content_hash' => $hash,
+                    'imported_hash' => null, 'char_count' => $zeichen, 'active' => $active,
+                    'source_path' => null, 'created_via' => 'mcp_import',
+                    'created_at' => $now, 'updated_at' => $now,
+                ]);
+                $version = 1;
+                $status = 'angelegt';
+            }
+        } catch (RuntimeException $e) {
+            return ['index' => $index, 'slug' => $slug, 'status' => 'abgelehnt', 'grund' => $e->getMessage()];
+        }
+
+        app(KnowledgeEmbeddingService::class)->queueDocument($this->find($slug));
+
+        return ['index' => $index, 'slug' => $slug, 'status' => $status, 'version' => $version];
+    }
+
     /**
      * Team-eigenes Wissensdokument löschen (D12). Globales Master-/Seed-Wissen bleibt read-only.
      * Räumt den Recall-Index best-effort mit. Geteilte Web-/MCP-Wahrheit (Browser + knowledge.DELETE).
@@ -251,6 +383,48 @@ class KnowledgeService
             throw new \RuntimeException('Alias nicht team-eigen.');
         }
         DB::table('foodalchemist_knowledge_aliases')->where('id', $aliasId)->delete();
+    }
+
+    /** Max. Alias-Kandidaten je `knowledge.ALIAS`-Prüfaufruf. */
+    public const ALIAS_CHECK_MAX = 500;
+
+    /**
+     * Massen-Lesezugriff: welche Alias-Kandidaten sind schon belegt, und auf welchem Dossier
+     * (Briefing Zutaten-Bulk-Import, 2026-09-18). {@see addAlias()} schluckt eine Kollision bisher
+     * STILLSCHWEIGEND — `alias_slug` ist system­weit eindeutig (kein Team-Bezug in der Tabelle), der
+     * neue `add`-Aufruf legt das Dossier trotzdem an, nur ohne den Alias, und niemand merkt es
+     * (Anlass: „acerola" lag schon als Alias auf einem völlig fremden Dossier). Normalisiert jeden
+     * Kandidaten GENAU wie `addAlias()` (`Str::slug($a, '_')`), damit `belegt: false` hier wirklich
+     * heißt, dass `add` mit demselben Text nicht kollidiert.
+     *
+     * @param  list<string>  $aliases
+     * @return list<array{alias:string, alias_slug:string, belegt:bool, slug:?string, title:?string}>
+     */
+    public function checkAliases(array $aliases): array
+    {
+        $ergebnisse = [];
+        foreach ($aliases as $roh) {
+            $alias = trim((string) $roh);
+            if ($alias === '') {
+                continue;
+            }
+            $aliasSlug = Str::slug($alias, '_');
+            if ($aliasSlug === '') {
+                $ergebnisse[] = ['alias' => $alias, 'alias_slug' => '', 'belegt' => false, 'slug' => null, 'title' => null];
+
+                continue;
+            }
+            $treffer = DB::table('foodalchemist_knowledge_aliases as a')
+                ->join('foodalchemist_knowledge_documents as d', 'd.id', '=', 'a.knowledge_document_id')
+                ->where('a.alias_slug', $aliasSlug)->whereNull('d.deleted_at')
+                ->first(['d.slug', 'd.title']);
+            $ergebnisse[] = [
+                'alias' => $alias, 'alias_slug' => $aliasSlug, 'belegt' => $treffer !== null,
+                'slug' => $treffer->slug ?? null, 'title' => $treffer->title ?? null,
+            ];
+        }
+
+        return $ergebnisse;
     }
 
     /** Der Satz, den jeder Bindungs-Schreibpfad ausgibt — einmal formuliert, nicht dreimal. */
@@ -487,6 +661,89 @@ class KnowledgeService
             'active' => $active,
             'vault_managed' => $doc->source_path !== null,
             'changed' => $changed,
+        ];
+    }
+
+    /** Max. Slugs je `knowledge.SET_ACTIVE`-Batch-Aufruf (Briefing Zutaten-Bulk-Import: „bis 500"). */
+    public const SET_ACTIVE_BATCH_MAX = 500;
+
+    /** Chunk-Größe + Staffel-Abstand fürs gestaffelte Embedding (s. Docblock unten). */
+    private const SET_ACTIVE_BATCH_CHUNK = 50;
+
+    private const SET_ACTIVE_BATCH_CHUNK_DELAY_SECONDS = 20;
+
+    /**
+     * Blockweises (De-)Aktivieren (Briefing Zutaten-Bulk-Import, 2026-09-18): dieselbe Prüfung wie
+     * {@see setActive()} (Besitzrecht, `findSichtbar`), aber für bis zu {@see SET_ACTIVE_BATCH_MAX}
+     * Slugs in einem Aufruf.
+     *
+     * ★ Embedding gestaffelt, nicht als Burst: `GenerateEmbeddingJob` (Core-Modul, NICHT hier
+     * anfassbar) hat keine Rate-Limiting-Middleware — auf demo laufen nur 2 Worker auf der
+     * `default`-Queue. Eine Aktivierung von 500 Slugs würde sonst 500 gleichzeitige Embedding-
+     * Provider-Aufrufe anstoßen (Memory: schwere Jobs bringen demo off-peak schon in die Knie).
+     * Statt einer Core-Änderung oder einer Queue-Config-Anpassung dispatcht diese Methode den
+     * modul-eigenen {@see \Platform\FoodAlchemist\Jobs\QueueKnowledgeEmbedJob} in Chunks von
+     * {@see SET_ACTIVE_BATCH_CHUNK} Slugs, je Chunk {@see SET_ACTIVE_BATCH_CHUNK_DELAY_SECONDS}
+     * Sekunden später — 500 Slugs verteilen sich damit über ~3 Minuten statt als ein Stoß.
+     * Deaktivieren purgt weiterhin sofort (kein Grund zu staffeln, das ist nur ein DB-Delete).
+     *
+     * @param  list<string>  $slugs
+     * @return array{eintraege: list<array{slug:string,status:string,grund?:string}>, embedding_fertig_ca: ?string}
+     */
+    public function setActiveBatch(Team $team, array $slugs, bool $active): array
+    {
+        $ergebnisse = [];
+        $spaetesteVerzoegerung = 0;
+        $irgendwasAktiviert = false;
+        foreach (array_chunk(array_values($slugs), self::SET_ACTIVE_BATCH_CHUNK) as $chunkIndex => $chunk) {
+            $verzoegerung = $chunkIndex * self::SET_ACTIVE_BATCH_CHUNK_DELAY_SECONDS;
+            foreach ($chunk as $roh) {
+                $slug = trim((string) $roh);
+                if ($slug === '') {
+                    continue;
+                }
+                try {
+                    $doc = $this->findSichtbar($team, $slug);
+                } catch (RuntimeException $e) {
+                    $ergebnisse[] = ['slug' => $slug, 'status' => 'nicht_gefunden', 'grund' => $e->getMessage()];
+
+                    continue;
+                }
+                if (! TeamScope::mayWrite($doc->team_id, $team)) {
+                    $ergebnisse[] = ['slug' => $slug, 'status' => 'gesperrt', 'grund' => 'geerbtes/globales Master-Wissen — nur Besitzer bzw. Master-Team kann es (de)aktivieren.'];
+
+                    continue;
+                }
+                $changed = (bool) $doc->active !== $active;
+                if ($changed) {
+                    DB::table('foodalchemist_knowledge_documents')->where('id', $doc->id)
+                        ->update(['active' => $active, 'updated_at' => now()]);
+                    if ($active) {
+                        // Erster Chunk (Verzögerung 0) ohne delay() dispatchen — "verzögert um 0
+                        // Sekunden" ist technisch dasselbe, aber die Job-Delay-Property bliebe dann ein
+                        // Carbon-"jetzt" statt null, was Aufrufer/Tests unnötig verwirrt.
+                        $dispatch = \Platform\FoodAlchemist\Jobs\QueueKnowledgeEmbedJob::dispatch($doc->slug);
+                        if ($verzoegerung > 0) {
+                            $dispatch->delay(now()->addSeconds($verzoegerung));
+                        }
+                        $irgendwasAktiviert = true;
+                        $spaetesteVerzoegerung = max($spaetesteVerzoegerung, $verzoegerung);
+                    } else {
+                        // Deaktivieren purgt nur den Vektor (DB-Delete) — kein Provider-Aufruf, kein Grund zu staffeln.
+                        app(KnowledgeEmbeddingService::class)->deleteDocument((int) $doc->id, $doc->team_id ?? null);
+                    }
+                }
+                $ergebnisse[] = ['slug' => $doc->slug, 'status' => $changed ? 'geaendert' : 'unveraendert'];
+            }
+        }
+
+        return [
+            'eintraege' => $ergebnisse,
+            // +30s Sicherheitsabstand: der letzte Chunk-Job muss nach seinem eigenen delay() noch
+            // ausgeführt UND der echte GenerateEmbeddingJob dahinter noch verarbeitet werden.
+            'embedding_fertig_ca' => $irgendwasAktiviert
+                ? now()->addSeconds($spaetesteVerzoegerung + 30)->toIso8601String()
+                : null,
         ];
     }
 

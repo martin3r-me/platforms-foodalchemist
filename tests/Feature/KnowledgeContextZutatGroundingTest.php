@@ -323,3 +323,75 @@ it('meldet "sent" korrekt fuer geladene Grounding-Dossiers, nicht 0 trotz gesend
 
     expect($ctx['herkunft']['zutat.acerola--verwendung']['sent'])->toBeGreaterThan(0);
 });
+
+/**
+ * Fund (Orchestrierung, 2026-09-18, Briefing Zutaten-Bulk-Import Punkt 5, bestätigt): `max_docs`
+ * zählt ZUTATEN (Anker), nicht Dokumente — eine Zutat mit geteiltem Aspekt darf nicht zwei der
+ * Plätze für sich beanspruchen. Vorher zählte `zutatGroundingBlock()` `count($blocks)` (Dokumente):
+ * bei `max_docs=2` hätte eine geteilte Zutat (2 Teil-Dossiers) den Deckel allein erreicht und eine
+ * zweite, vollständig unbeteiligte Zutat verdrängt.
+ */
+it('deckelt nach Zutaten, nicht nach Dokumenten — eine geteilte Zutat verdraengt keine andere', function () {
+    ($this->mkAnker)('acerola', 'Acerola');
+    ($this->mkAnker)('passionsfrucht', 'Passionsfrucht');
+    ($this->mkAnker)('vanille', 'Vanille');
+    ($this->mkZutatDoc)('zutat.acerola--verwendung-hitze', 'Acerola Verwendung Hitze');
+    ($this->mkZutatDoc)('zutat.acerola--verwendung-saeure', 'Acerola Verwendung Saeure');
+    ($this->mkZutatDoc)('zutat.passionsfrucht--verwendung', 'Passionsfrucht Verwendung');
+    ($this->mkZutatDoc)('zutat.vanille--verwendung', 'Vanille Verwendung');
+    ($this->mkGroundingRouting)('recipe.generator', maxDocs: 2);
+
+    $ctx = app(KnowledgeContextService::class)->contextFor(
+        $this->rootTeam, 'recipe.generator', 'Acerola-Dessert', null, ['acerola', 'passionsfrucht', 'vanille'],
+    );
+
+    $zutatFiles = array_values(array_filter($ctx['files_used'], fn ($f) => str_starts_with($f, 'zutat.')));
+    // Zutat 1 (acerola, 2 Teil-Dossiers) + Zutat 2 (passionsfrucht, 1 Dossier) = 3 Dokumente, aber
+    // genau 2 ZUTATEN — der Deckel greift erst vor der dritten Zutat (vanille).
+    expect($zutatFiles)->toHaveCount(3)
+        ->toContain('zutat.acerola--verwendung-hitze@v1')
+        ->toContain('zutat.acerola--verwendung-saeure@v1')
+        ->toContain('zutat.passionsfrucht--verwendung@v1')
+        ->not->toContain('zutat.vanille--verwendung@v1');
+});
+
+/**
+ * Fund (Orchestrierung, 2026-09-18, Zutaten-Bulk-Import Punkt 6): 194 von 11.966 realen Slugs
+ * tragen einen Zähler INNERHALB des Teilstück-Suffix (`--verhalten-aroma-2`, `--steckbrief-sorten-2`),
+ * weil ein Teilstück selbst nochmal geteilt werden musste. Das alte Suffix-Muster
+ * `(-[a-z0-9_]+)?` (ohne '-' in der Zeichenklasse) bricht am zweiten Bindestrich ab.
+ */
+it('findet Teilstuecke mit Zaehler-Suffix (--verhalten-aroma-2)', function () {
+    ($this->mkAnker)('acai_berry', 'Açai-Beere');
+    ($this->mkZutatDoc)('zutat.acai_berry--verhalten-aroma-2', 'Acai Beere Verhalten Aroma Teil 2');
+    ($this->mkGroundingRouting)('recipe.steps');   // Aspekt "verhalten"
+
+    $ctx = app(KnowledgeContextService::class)->contextFor($this->rootTeam, 'recipe.steps', 'Acai-Bowl', null, ['acai_berry']);
+
+    expect($ctx['files_used'])->toContain('zutat.acai_berry--verhalten-aroma-2@v1');
+});
+
+/**
+ * Fund (Orchestrierung, 2026-09-18, Zutaten-Bulk-Import Punkt 4): ~12.000 zutat-Dossiers (art=
+ * fachwissen) würden JEDE art-Discovery fluten (RRF-Score-Abstand Rang1↔Rang18 nur 12% bei 18
+ * Kandidaten — bei 12.000 ist der Budget-Schnitt beliebig). Zutaten-Wissen kommt ab jetzt
+ * AUSSCHLIESSLICH über Grounding, nie über den generischen art=fachwissen-Auffangtopf.
+ */
+it('schliesst category=zutat aus der generischen art-Discovery aus — nur Grounding liefert Zutaten-Wissen', function () {
+    ($this->mkAnker)('tomate', 'Tomate');
+    DB::table('foodalchemist_knowledge_documents')->insert([
+        'uuid' => (string) UuidV7::generate(), 'slug' => 'zutat.tomate--verwendung', 'title' => 'zutat.tomate--verwendung',
+        'category' => 'zutat', 'art' => 'fachwissen', 'content_md' => 'Tomate Verwendung in der Suppe unter Hitze',
+        'version' => 1, 'content_hash' => hash('sha256', 'zutat.tomate--verwendung'), 'char_count' => 40,
+        'active' => 1, 'created_at' => now(), 'updated_at' => now(),
+    ]);
+    // Kein Grounding-Routing gesetzt -> nur die generische art-Discovery koennte das Dossier finden.
+    DB::table('foodalchemist_knowledge_routings')->insert([
+        'feature' => 'recipe.generator', 'category' => '', 'art' => 'fachwissen', 'mode' => 'discovery',
+        'max_docs' => 3, 'max_chars_per_doc' => null, 'created_at' => now(), 'updated_at' => now(),
+    ]);
+
+    $ctx = app(KnowledgeContextService::class)->contextFor($this->rootTeam, 'recipe.generator', 'Tomatensuppe mit Basilikum');
+
+    expect($ctx['files_used'])->not->toContain('zutat.tomate--verwendung@v1');
+});

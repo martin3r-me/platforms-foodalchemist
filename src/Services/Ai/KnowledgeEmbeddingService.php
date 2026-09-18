@@ -310,6 +310,69 @@ class KnowledgeEmbeddingService
         }
     }
 
+    /** Max. Slugs in der Stichprobe von {@see embedStatus()}. */
+    private const EMBED_STATUS_STICHPROBE_MAX = 20;
+
+    /**
+     * Briefing Zutaten-Bulk-Import, 2026-09-18: Kontrolle für die blockweise Aktivierung —
+     * wie viele aktive Dossiers (optional gefiltert auf `category`/Slug-`prefix`) haben schon ein
+     * Embedding, wie viele noch nicht, dazu eine Stichprobe der fehlenden Slugs. Rein lesend.
+     *
+     * Zählt PER DOKUMENT über {@see EmbeddingStoreContract::getSourceHash()} — der Store-Contract
+     * bietet keine Bulk-Enumeration (s. Docblock von {@see purgeStale()}). Ein direkter SQL-Zugriff
+     * auf die Core-Embedding-Tabelle wäre HIER FALSCH, nicht nur theoretisch: `embeddings.routing`
+     * zeigt für Wissens-Dokumente auf demo tatsächlich auf **Qdrant**, nicht auf die MySQL-Tabelle
+     * (bestätigt, Orchestrierung 2026-09-18) — eine "Optimierung" auf direkten SQL-Zugriff würde
+     * dort still IMMER 0 zählen. Der Contract ist der einzige backend-unabhängige Weg; das bewusst
+     * NICHT gegen einen vermeintlich schnelleren Direktzugriff tauschen. Für einen kategorie-/
+     * präfix-eingeschränkten Kontroll-Aufruf (nicht "alle 12.000 auf einmal") ist die
+     * Einzel-Lookup-Größenordnung angemessen.
+     *
+     * @return array{aktiv_gesamt:int, mit_embedding:int, ohne_embedding:int, inaktiv:int, stichprobe_ohne_embedding:list<string>, hinweis:?string}
+     */
+    public function embedStatus(?string $category, ?string $prefix): array
+    {
+        $basis = fn () => DB::table('foodalchemist_knowledge_documents')->whereNull('deleted_at')
+            ->when($category !== null, fn ($q) => $q->where('category', $category))
+            ->when($prefix !== null, fn ($q) => $q->where('slug', 'like', $prefix.'%'));
+
+        $inaktiv = (clone $basis())->where('active', 0)->count();
+        $aktive = (clone $basis())->where('active', 1)->get(['id', 'slug', 'team_id']);
+
+        if (! $this->isProviderAvailable()) {
+            return [
+                'aktiv_gesamt' => $aktive->count(), 'mit_embedding' => 0, 'ohne_embedding' => $aktive->count(),
+                'inaktiv' => $inaktiv, 'stichprobe_ohne_embedding' => $aktive->pluck('slug')->take(self::EMBED_STATUS_STICHPROBE_MAX)->values()->all(),
+                'hinweis' => 'Kein Embedding-Provider verfügbar — alle aktiven Dokumente gelten als ohne Embedding.',
+            ];
+        }
+
+        $providerRegistry = app(\Platform\Core\Services\EmbeddingProviderRegistry::class);
+        $provider = ($name = $this->providerName()) !== null ? $providerRegistry->get($name) : null;
+        $provider ??= $providerRegistry->getDefaultProvider();
+        $store = app(\Platform\Core\Services\EmbeddingStoreRegistry::class)->resolve(null, self::ENTITY_TYPE);
+
+        $mitEmbedding = 0;
+        $ohneStichprobe = [];
+        foreach ($aktive as $doc) {
+            $hash = $store->getSourceHash(
+                $this->partitionTeamId($doc->team_id ?? null), self::ENTITY_TYPE, (int) $doc->id,
+                $provider->getName(), $provider->getModel(),
+            );
+            if ($hash !== null) {
+                $mitEmbedding++;
+            } elseif (count($ohneStichprobe) < self::EMBED_STATUS_STICHPROBE_MAX) {
+                $ohneStichprobe[] = $doc->slug;
+            }
+        }
+
+        return [
+            'aktiv_gesamt' => $aktive->count(), 'mit_embedding' => $mitEmbedding,
+            'ohne_embedding' => $aktive->count() - $mitEmbedding, 'inaktiv' => $inaktiv,
+            'stichprobe_ohne_embedding' => $ohneStichprobe, 'hinweis' => null,
+        ];
+    }
+
     /**
      * A2 — Waisen-Purge des Wissens-Index: entfernt Vektoren, die zu keinem AKTIVEN Doc
      * (mehr) gehören. Der Soll-Zustand des Index = exakt die aktiven, nicht gelöschten Docs

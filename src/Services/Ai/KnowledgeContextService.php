@@ -1512,6 +1512,13 @@ class KnowledgeContextService
     {
         $base = DB::table('foodalchemist_knowledge_documents')->tap($art === null ? $this->nurFuerPrompt($team) : $this->nurSichtbar($team))
             ->when($art === null, fn ($q) => $q->where('category', $category), fn ($q) => $q->where('art', $art))->where('active', 1)->whereNull('deleted_at')
+            // Zutaten-Bulk-Import (Orchestrierung, 2026-09-18): ~12.000 zutat-Dossiers tragen
+            // art=fachwissen und würden sonst JEDE art-Discovery fluten (RRF-Score-Abstand Rang 1
+            // zu Rang 18 nur 12% — bei 12.000 statt 18 Kandidaten ist der Budget-Schnitt beliebig).
+            // Zutaten-Wissen kommt ab jetzt AUSSCHLIESSLICH über den Grounding-Zweig (Anker), nie
+            // über den generischen art-Auffangtopf. Nur beim art-Pfad relevant ($art !== null) —
+            // eine echte `category=zutat`-Discovery-Zeile (Übergangs-/Sicherheitsnetz) bleibt möglich.
+            ->when($art !== null, fn ($q) => $q->where('category', '!=', 'zutat'))
             ->when($allowedSlugs !== [], fn ($q) => $q->whereIn('slug', $allowedSlugs))
             ->when($this->ausgeschlossen !== [], fn ($q) => $q->whereNotIn('slug', $this->ausgeschlossen))
             // Familien-Ausschluss (s. Property-Docblock): eine Zutat, die zutatGroundingBlock() schon
@@ -1868,6 +1875,14 @@ class KnowledgeContextService
      * — EXAKTE Gleichheit, kein Nearest-Neighbor (Orchestrierung, 2026-09-18: "gelee" aus
      * "Passionsfrucht-Gelee" darf NICHT auf ein zufälliges Apfelgelee-Dossier matchen).
      *
+     * `$maxDocs` zählt ZUTATEN (Anker), nicht Dokumente (Orchestrierung, 2026-09-18, Briefing
+     * Zutaten-Bulk-Import Punkt 5 bestätigt): eine Zutat mit geteiltem Aspekt (`--verhalten-hitze` +
+     * `--verhalten-saeure`, Regelwerk Zutaten-Dossier §2) darf nicht zwei der acht Plätze für sich
+     * beanspruchen — sonst fallen bei mehreren geteilten Zutaten schneller ganze Zutaten aus dem
+     * Auftrag heraus als eine reine Dokumentzahl vermuten liesse. Ein bereits BEGONNENER Anker läuft
+     * immer vollständig durch (alle seine Teil-Dossiers), auch wenn das den Deckel überschreitet —
+     * der Deckel entscheidet nur, ob eine WEITERE Zutat noch anfängt.
+     *
      * Geschützte Kontingente (Aufgabe C, ursprünglich geplant): NICHT gebaut. Die lokale Nachher-
      * Messung mit A+B (WissenGoldenPassionsfruchtAcerolaTest) zeigt bei `recipe.steps` (kleinstes
      * Budget im Rezept-Pfad, 17.200 Zeichen) bereits `dropped_chars: 0` — das Zutat-Grounding hier
@@ -1892,8 +1907,8 @@ class KnowledgeContextService
         $blocks = [];
         $geladen = [];
         foreach ($hauptzutatSlugs as $hz) {
-            if (count($blocks) >= $maxDocs) {
-                break;
+            if (count($geerdeteAnker) >= $maxDocs) {
+                break;   // Deckel zählt ZUTATEN (s. Docblock), nicht Dokumente
             }
             $hz = trim((string) $hz);
             if ($hz === '') {
@@ -1919,10 +1934,9 @@ class KnowledgeContextService
                 continue;
             }
             $geerdeteAnker[] = $anker;
+            // Kein Doc-Deckel hier: ein einmal begonnener Anker laedt ALLE seine Teil-Dossiers
+            // (s. Docblock) — der Zutaten-Deckel oben entscheidet nur ueber die NAECHSTE Zutat.
             foreach ($docs as $doc) {
-                if (count($blocks) >= $maxDocs) {
-                    break;
-                }
                 $blocks[] = ['file' => "{$doc->slug}@v{$doc->version}", 'text' => "### Zutat: {$anker} ({$aspekt})\n" . (string) $doc->content_md, 'score' => self::DETERMINISTISCHER_SCORE];
                 $filesUsed[] = "{$doc->slug}@v{$doc->version}";
                 // Herkunft-Key MUSS der nackte Slug sein (Fund Orchestrierung, 2026-09-18, Deploy 17):
@@ -1988,7 +2002,11 @@ class KnowledgeContextService
         $base = DB::table('foodalchemist_knowledge_documents')->tap($this->nurSichtbar($team))
             ->whereIn('id', $this->geltendeDokumentIds($team))
             ->where('category', 'zutat')->where('active', 1)->whereNull('deleted_at');
-        $muster = '/^zutat\.'.preg_quote($anker, '/').'(_\d+)?--'.preg_quote($aspekt, '/').'(-[a-z0-9_]+)?$/u';
+        // Suffix-Zeichenklasse enthält '-' (Orchestrierung, 2026-09-18, Zutaten-Bulk-Import Punkt 6):
+        // 194 von 11.966 realen Slugs tragen einen Zähler INNERHALB des Teilstück-Suffix
+        // (`--verhalten-aroma-2`, `--steckbrief-sorten-2`) — ohne '-' in der Klasse bricht das Muster
+        // am zweiten Bindestrich ab und verwirft den Rest als Nicht-Treffer.
+        $muster = '/^zutat\.'.preg_quote($anker, '/').'(_\d+)?--'.preg_quote($aspekt, '/').'(-[a-z0-9_-]+)?$/u';
 
         return $base->where('slug', 'like', "zutat.{$anker}%--{$aspekt}%")
             ->orderBy('slug')->get(['slug', 'content_md', 'version'])
