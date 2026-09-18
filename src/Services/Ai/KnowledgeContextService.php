@@ -1840,6 +1840,14 @@ class KnowledgeContextService
      * — EXAKTE Gleichheit, kein Nearest-Neighbor (Orchestrierung, 2026-09-18: "gelee" aus
      * "Passionsfrucht-Gelee" darf NICHT auf ein zufälliges Apfelgelee-Dossier matchen).
      *
+     * `$maxDocs` zählt ZUTATEN (Anker), nicht Dokumente (Orchestrierung, 2026-09-18, Briefing
+     * Zutaten-Bulk-Import Punkt 5 bestätigt): eine Zutat mit geteiltem Aspekt (`--verhalten-hitze` +
+     * `--verhalten-saeure`, Regelwerk Zutaten-Dossier §2) darf nicht zwei der acht Plätze für sich
+     * beanspruchen — sonst fallen bei mehreren geteilten Zutaten schneller ganze Zutaten aus dem
+     * Auftrag heraus als eine reine Dokumentzahl vermuten liesse. Ein bereits BEGONNENER Anker läuft
+     * immer vollständig durch (alle seine Teil-Dossiers), auch wenn das den Deckel überschreitet —
+     * der Deckel entscheidet nur, ob eine WEITERE Zutat noch anfängt.
+     *
      * Geschützte Kontingente (Aufgabe C, ursprünglich geplant): NICHT gebaut. Die lokale Nachher-
      * Messung mit A+B (WissenGoldenPassionsfruchtAcerolaTest) zeigt bei `recipe.steps` (kleinstes
      * Budget im Rezept-Pfad, 17.200 Zeichen) bereits `dropped_chars: 0` — das Zutat-Grounding hier
@@ -1864,8 +1872,8 @@ class KnowledgeContextService
         $blocks = [];
         $geladen = [];
         foreach ($hauptzutatSlugs as $hz) {
-            if (count($blocks) >= $maxDocs) {
-                break;
+            if (count($geerdeteAnker) >= $maxDocs) {
+                break;   // Deckel zählt ZUTATEN (s. Docblock), nicht Dokumente
             }
             $hz = trim((string) $hz);
             if ($hz === '') {
@@ -1891,10 +1899,9 @@ class KnowledgeContextService
                 continue;
             }
             $geerdeteAnker[] = $anker;
+            // Kein Doc-Deckel hier: ein einmal begonnener Anker laedt ALLE seine Teil-Dossiers
+            // (s. Docblock) — der Zutaten-Deckel oben entscheidet nur ueber die NAECHSTE Zutat.
             foreach ($docs as $doc) {
-                if (count($blocks) >= $maxDocs) {
-                    break;
-                }
                 $blocks[] = ['file' => "{$doc->slug}@v{$doc->version}", 'text' => "### Zutat: {$anker} ({$aspekt})\n" . (string) $doc->content_md, 'score' => self::DETERMINISTISCHER_SCORE];
                 $filesUsed[] = "{$doc->slug}@v{$doc->version}";
                 // Herkunft-Key MUSS der nackte Slug sein (Fund Orchestrierung, 2026-09-18, Deploy 17):

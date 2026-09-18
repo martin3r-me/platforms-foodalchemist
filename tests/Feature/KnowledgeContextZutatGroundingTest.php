@@ -323,3 +323,34 @@ it('meldet "sent" korrekt fuer geladene Grounding-Dossiers, nicht 0 trotz gesend
 
     expect($ctx['herkunft']['zutat.acerola--verwendung']['sent'])->toBeGreaterThan(0);
 });
+
+/**
+ * Fund (Orchestrierung, 2026-09-18, Briefing Zutaten-Bulk-Import Punkt 5, bestätigt): `max_docs`
+ * zählt ZUTATEN (Anker), nicht Dokumente — eine Zutat mit geteiltem Aspekt darf nicht zwei der
+ * Plätze für sich beanspruchen. Vorher zählte `zutatGroundingBlock()` `count($blocks)` (Dokumente):
+ * bei `max_docs=2` hätte eine geteilte Zutat (2 Teil-Dossiers) den Deckel allein erreicht und eine
+ * zweite, vollständig unbeteiligte Zutat verdrängt.
+ */
+it('deckelt nach Zutaten, nicht nach Dokumenten — eine geteilte Zutat verdraengt keine andere', function () {
+    ($this->mkAnker)('acerola', 'Acerola');
+    ($this->mkAnker)('passionsfrucht', 'Passionsfrucht');
+    ($this->mkAnker)('vanille', 'Vanille');
+    ($this->mkZutatDoc)('zutat.acerola--verwendung-hitze', 'Acerola Verwendung Hitze');
+    ($this->mkZutatDoc)('zutat.acerola--verwendung-saeure', 'Acerola Verwendung Saeure');
+    ($this->mkZutatDoc)('zutat.passionsfrucht--verwendung', 'Passionsfrucht Verwendung');
+    ($this->mkZutatDoc)('zutat.vanille--verwendung', 'Vanille Verwendung');
+    ($this->mkGroundingRouting)('recipe.generator', maxDocs: 2);
+
+    $ctx = app(KnowledgeContextService::class)->contextFor(
+        $this->rootTeam, 'recipe.generator', 'Acerola-Dessert', null, ['acerola', 'passionsfrucht', 'vanille'],
+    );
+
+    $zutatFiles = array_values(array_filter($ctx['files_used'], fn ($f) => str_starts_with($f, 'zutat.')));
+    // Zutat 1 (acerola, 2 Teil-Dossiers) + Zutat 2 (passionsfrucht, 1 Dossier) = 3 Dokumente, aber
+    // genau 2 ZUTATEN — der Deckel greift erst vor der dritten Zutat (vanille).
+    expect($zutatFiles)->toHaveCount(3)
+        ->toContain('zutat.acerola--verwendung-hitze@v1')
+        ->toContain('zutat.acerola--verwendung-saeure@v1')
+        ->toContain('zutat.passionsfrucht--verwendung@v1')
+        ->not->toContain('zutat.vanille--verwendung@v1');
+});
