@@ -548,3 +548,22 @@ Frage Dominique „bekommt vk.regeneration trotz Kanon noch Discovery?" → Nein
 
 - `ankerSlugExakt()` → `{slug, via: exakt|singular}`: nach dem exakten Treffer eine Endungsstufe (-n/-en/-e/-s/-er), Treffer nur bei genau EINEM Anker, kein Fuzzy, Anker-Tabelle je Request gecacht; Herkunft `anker_match`. Komposita-Zerlegung bewusst zurückgestellt. Suite 4.759/4.765.
 - Live-Probe `recipe.steps` „Aprikosen-Kompott mit Kartoffeln und Zwiebeln": apricot/potato/onion via Grounding, alle `anker_match: singular`. Dabei fiel bei 3 Zutaten das §3-wenn_platz-Kanon-Dossier wieder aus dem 50k-Budget → **Budget recipe.steps 50.000 → 60.000** (Steuerdaten, ich).
+
+## Deploy 24 — 2026-09-19 00:55: GP-Anker `source` varchar(32) + Validierung (Pin `fb3c7f85` = PR #147, Paul) — Programm-Abschluss
+
+- Migration `widen_gp_anchor_mapping_source` (16 → 32, guarded) + Validierung in `setGpAnker()` (ein Schreibpfad), IMPORT lehnt jetzt mit Grund ab statt SQL-Fehler; PUT hatte `source` fest auf `mcp`. Suite 4.765/4.771.
+
+### Stand am Ende (2026-09-19 01:00, demo Pin `fb3c7f85`)
+
+| Bereich | Stand |
+|---|---|
+| Pakete A–D, F, G, Phasen | live seit Deploys 1–13 |
+| Spec 54 Voice-Latenz | live (Deploy 14); Nachher-Messung obsolet, Agent zog um |
+| Spec 55 Agent in der Planung | live (Deploy 20); Kreis + Sprachbefehl-Knopf entfernt; **Abnahme Dominique offen** |
+| Paket H Zutaten-Dossiers je Aspekt | live (Deploys 15–18, 23); Routing zutat→grounding, Budgets 100k/100k/60k |
+| Paket I Bildstil + KI-Produktfoto | live (Deploy 19); 2 Stil-Dossiers gebunden |
+| Bulk-Import + Import | live (Deploy 21); **11.975 aktive Zutaten-Dossiers, alle embedded, 0 failed** |
+| Paket J GP-Anker | live (Deploys 22, 24); **4.707 Zuordnungen auf 4.195 GPs**; Listen review/offen/vorschlag im Vault |
+| Suite | 4.765 bestanden / 6 skipped / 0 rot |
+
+**Offen (nicht Code):** Dominique Abnahme Planungs-Panel (Brief-Dialog, Übernehmen-Karte, Badge) + Safari; `gp_anker_review.csv` (210) gegenlesen; 3.681 GPs ohne Anker (Convenience/Mischungen, KI-Vorschlagspfad `setGpAnkerInference` existiert); Tarocco-Anker; Komposita-Zerlegung (tomatensuppe → tomate); Generator-Budget 100k → 120k prüfen, wenn Briefs mit 5+ Zutaten dropped zeigen; Nährwert-Referenz-Datenwerk; §4-Dossier splitten; Core-Bitten Spec 45 (Modell je Aufruf).
