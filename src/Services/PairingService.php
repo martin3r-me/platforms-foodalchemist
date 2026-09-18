@@ -1115,11 +1115,24 @@ class PairingService
      * kern); `source`/`ai_confidence`/`ai_reasoning` sind offen für den MCP-Import (Spec 53 Paket J:
      * `bridge_alt_neu`, `exact_name`, … — nicht nur `manual`).
      */
+    /**
+     * Spaltenbreite `foodalchemist_gp_anchor_mappings.source` (Migration
+     * `2026_09_19_000001_widen_gp_anchor_mapping_source`). Hier statt eines rohen SQLSTATE
+     * 22001 geprüft — 506 Zeilen des Vault-Bridge-Imports (`bridge_alt_neu+exact`, 20 Zeichen)
+     * fielen genau darauf herein, bevor die Spalte 16 Zeichen hatte.
+     */
+    public const GP_ANKER_SOURCE_MAX = 32;
+
     public function setGpAnker(
         Team $team, int $gpId, int $ankerId, string $role = 'kern', string $source = 'manual',
         ?float $aiConfidence = null, ?string $aiReasoning = null,
     ): void {
         $role = in_array($role, ['kern', 'neben'], true) ? $role : 'kern';
+        if (mb_strlen($source) > self::GP_ANKER_SOURCE_MAX) {
+            throw new \RuntimeException(
+                'source zu lang (max. ' . self::GP_ANKER_SOURCE_MAX . ' Zeichen): "' . $source . '" hat ' . mb_strlen($source) . '.'
+            );
+        }
         $gp = \Platform\FoodAlchemist\Models\FoodAlchemistGp::visibleToTeam($team)->findOrFail($gpId);
         $vorhanden = DB::table('foodalchemist_gp_anchor_mappings')
             ->where('gp_id', $gp->id)->where('anchor_id', $ankerId)->whereNull('deleted_at')->first();
