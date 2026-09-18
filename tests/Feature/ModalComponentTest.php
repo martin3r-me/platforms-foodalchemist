@@ -65,3 +65,30 @@ it('lässt Aktionen- und Footer-Slot weg, wenn nicht gesetzt', function () {
         ->and($html)->not->toContain('data-modal-zone="actions"')
         ->and($html)->not->toContain('data-modal-zone="footer"');
 });
+
+/**
+ * Live-Befund Dominique (2026-09-18): der schwebende Sprachbefehl-Knopf verschwand hinter
+ * geöffneten Editoren — alle Editoren UND das Sprachbefehl-Modal teilen sich diese Komponente
+ * (z-[100] + `bringToFront`s global wachsendem Zähler = "zuletzt geöffnet gewinnt"). `zFest`
+ * ist additiv (Default false) — dieser Block prüft NUR die neue Abzweigung, die Tests oben
+ * bleiben unverändert die Absicherung für das Standardverhalten.
+ */
+it('zFest pinnt eine feste z-[190] statt am globalen bringToFront-Zähler teilzunehmen', function () {
+    $html = Blade::render('<x-foodalchemist::modal name="demo" title="T" :z-fest="true">X</x-foodalchemist::modal>');
+
+    expect($html)->toContain('z-[190]')
+        ->and($html)->not->toContain('z-[100]')
+        // KEINE Zähler-Zuweisung für dieses Modal — sonst würde ein danach geöffneter
+        // Standard-Editor (der den Zähler weiter hochzählt) es wieder überdecken.
+        ->and($html)->not->toContain('window.__foodAlchemistModalZ')
+        ->and($html)->not->toContain('el.style.zIndex');
+});
+
+it('ohne zFest (Default) bleibt alles beim Alten — z-[100] + Zähler-Teilnahme', function () {
+    $html = Blade::render('<x-foodalchemist::modal name="demo" title="T">X</x-foodalchemist::modal>');
+
+    expect($html)->toContain('z-[100]')
+        ->and($html)->not->toContain('z-[190]')
+        ->and($html)->toContain('window.__foodAlchemistModalZ')
+        ->and($html)->toContain('el.style.zIndex');
+});

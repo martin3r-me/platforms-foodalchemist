@@ -158,6 +158,15 @@ class VoiceModal extends Component
     {
         $this->reset('audio', 'transcript', 'fehler', 'phase');
         $this->kontext = $kontext;
+        // Live-Befund Dominique (2026-09-18): `mount()` liest Modus + "dauerhaft aktiv" NUR beim
+        // ersten Seitenaufbau — ändert sich das Team-Setting danach (z. B. auf der Einstellungen-
+        // Seite selbst, deren Modal ja auch nur einmal mountet), zeigte die Pille weiter den
+        // ALTEN Modus und der Recorder blieb im Ein-Klick-Modus. Öffnen ist der richtige Moment,
+        // beides frisch zu lesen — die Pille ist nur Anzeige, `agentModusAktuell()` bleibt die
+        // EINZIGE Quelle für die tatsächliche Schreib-Entscheidung (unverändert).
+        $this->agentModus = $this->agentModusAktuell();
+        $team = Auth::user()?->currentTeamRelation;
+        $this->konversationAktiv = $team !== null && app(TeamSettingsService::class)->voiceAgentDauerhaftAktiv($team);
         // Spec 53 / Paket F (4): OHNE das hier wäre jedes Öffnen (auch ohne Seitenwechsel —
         // das Modal mountet zwar nur einmal pro Seite, aber `reset('ergebnis', ...)` lief
         // bisher IMMER beim Öffnen) ein sauberer Neustart, der offene Vorschläge wegwirft.

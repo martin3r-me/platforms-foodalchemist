@@ -60,7 +60,13 @@
                 // Spec 53/F (3): dieselbe Entsperrung wie der Sidebar-Knopf — noch im
                 // selben Klick, bevor `$dispatch` das Modal-Event schickt.
                 window.FaVoiceAudioEntsperren && window.FaVoiceAudioEntsperren('fa-voice-tts-audio');
-                $dispatch('voice-modal.oeffnen');
+                // Live-Befund Dominique (2026-09-18): der schwebende Knopf öffnete bisher nur
+                // den Ein-Klick-Zustand ("Aufnahme starten") — im Konversations-Modus musste
+                // NOCH ein zweiter Klick folgen. `autostart` wird HIER unbedingt mitgeschickt
+                // (der Recorder im Modal entscheidet selbst anhand des FRISCH aus dem Team-
+                // Setting gelesenen `konversationAktiv`, ob er wirklich sofort startet — der
+                // Ein-Klick-Modus bleibt dadurch unverändert).
+                $dispatch('voice-modal.oeffnen', { autostart: true });
             }
         },
     }"
@@ -68,7 +74,12 @@
     x-init="init()"
     @mousemove.window="onDrag($event)"
     @mouseup.window="stopDrag()"
-    class="fixed z-[90]"
+    {{-- Live-Befund Dominique (2026-09-18): z-[90] lag UNTER jedem Editor (RecipeModal/VkModal/...
+         alle z-[100]+) — der Knopf verschwand, sobald irgendein Editor offen war. z-[210] liegt
+         über dem fest gepinnten Sprachbefehl-Modal selbst (z-[190], siehe components/modal.blade.php
+         `zFest`) UND über dem Speichern-Toast (z-[200], components/saved-toast.blade.php) — der
+         Knopf muss IMMER erreichbar bleiben, auch während beide offen/sichtbar sind. --}}
+    class="fixed z-[210]"
     :style="x !== null ? ('left:' + x + 'px; top:' + y + 'px;') : 'right:1.5rem; bottom:1.5rem;'"
     data-voice-float-mount
 >
