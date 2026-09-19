@@ -293,7 +293,14 @@
                          am Gericht (Leitplanken-Hygiene 2026-08-18). Den Concept-Umfang steuert die Struktur-Karte. --}}
                     @if($scope !== 'concept')
                         <div>
-                            <label class="block {{ $label }} mb-1">Ziel-Portion (g)</label>
+                            <label class="block {{ $label }} mb-1">Ziel-Portion (g)
+                                {{-- ziel_portion_g steht in AGENT_SCHREIBBARE_REGLER, trug als EINZIGER der
+                                     neun schreibbaren Regler kein Badge — der Agent konnte den Wert setzen,
+                                     ohne dass der Mensch die Herkunft sah. Nachgezogen (Entscheid 03). --}}
+                                @if($reglerVonAgent[$scope]['ziel_portion_g'] ?? false)
+                                    <span class="{{ $pill }} {{ $variantPill['secondary'] }}" data-regler-von-agent="ziel_portion_g" title="Vom Sprachbefehl-Agenten vorgeschlagen — verschwindet bei manueller Änderung">Agent</span>
+                                @endif
+                            </label>
                             <input type="number" min="1" max="5000" step="1" wire:model="regler.{{ $scope }}.ziel_portion_g" placeholder="z. B. 180" class="{{ $input }} !py-1.5 font-mono" data-planung-portion-g />
                         </div>
                     @endif
