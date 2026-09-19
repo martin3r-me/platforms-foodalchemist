@@ -182,3 +182,22 @@ it('Reife-Check weist fehlenden Posten und den richtigen Garverlust-Endpunkt aus
     $this->recipe->update(['is_sales_recipe' => true, 'default_station_id' => null]);
     expect(array_column($adapter->messe($this->rootTeam, $this->recipe->id)['luecken'], 'code'))->not->toContain('default_station_id');
 });
+
+it('MCP-PDF-Snapshots sind im MySQL-Cache UTF-8-sicher und werden unverändert heruntergeladen', function () {
+    $result = ($this->runTool)('recipes.PDF', ['id' => $this->recipe->id, 'profil' => 'kurz']);
+    expect($result->success)->toBeTrue();
+    $token = basename(parse_url($result->data['download_url'], PHP_URL_PATH));
+    $snapshot = \Illuminate\Support\Facades\Cache::get('foodalchemist:mcp-recipe-pdf:' . $token);
+
+    // SQLite kodiert binäre serialisierte Werte selbst als Base64; MySQL tut das
+    // NICHT. Deshalb explizit dessen echten Serializer prüfen, ohne DB-Verbindung.
+    $connection = new \Illuminate\Database\MySqlConnection(fn () => throw new LogicException('Keine Verbindung im Serializer-Test.'));
+    $store = new \Illuminate\Cache\DatabaseStore($connection, 'cache');
+    $serialized = (new ReflectionMethod($store, 'serialize'))->invoke($store, $snapshot);
+    expect(mb_check_encoding($serialized, 'UTF-8'))->toBeTrue('PDF-Snapshot muss in eine MySQL-UTF8-Textspalte passen.');
+
+    $download = $this->get($result->data['download_url'])->assertOk()->getContent();
+    expect($download)->toStartWith('%PDF-')
+        ->and(strlen($download))->toBe($result->data['size_bytes'])
+        ->and(base64_decode($snapshot['content_base64'], true))->toBe($download);
+});
