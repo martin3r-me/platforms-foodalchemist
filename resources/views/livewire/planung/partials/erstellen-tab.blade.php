@@ -1,8 +1,11 @@
 {{-- Erstell-Tab (Basisrezept ODER Gericht): EIGENES Briefing + EIGENE Leitplanken je Scope + Go + Wissen-vorab.
      Erwartet: $scope (rezept|gericht), $vk (bool), $goLabel, $goIcon. Jeder Tab ist unabhängig (eingabe.{scope}
      + regler.{scope}). Der Go schaltet auf den Worker-Tab. --}}
-<div class="space-y-4">
-    <x-foodalchemist::modal-section title="Eingabe — was soll entstehen">
+{{-- Breite-Fix (Dominique-Feedback 2026-09-19): Gesamtcontainer auf Lesebreite begrenzt + zentriert,
+     statt bis an den Rand der (bis zu 2.500px breiten) Modal-Fläche zu laufen. `pb-28` reserviert
+     Platz unter der letzten Karte, damit die sticky Go-Leiste unten sie nicht überdeckt. --}}
+<div class="space-y-4 max-w-7xl mx-auto pb-28">
+    <x-foodalchemist::modal-section icon="heroicon-o-pencil-square" title="Eingabe — was soll entstehen">
         @if(trim((string) ($eingabe[$scope]['titel'] ?? '')) !== '')
             <x-slot:actions>
                 <span class="{{ $pill }} {{ $variantPill['primary'] }}">{{ \Illuminate\Support\Str::limit(trim($eingabe[$scope]['titel']), 32) }}</span>
@@ -88,7 +91,7 @@
 
     {{-- Paket K / Cockpit-Optik: Go-Leiste sticky im Scroll-Container des Tabs (Befund „Go-Knopf
          unter dem Fold") — bleibt beim Scrollen der Karten oben sichtbar/erreichbar. --}}
-    <x-foodalchemist::modal-section class="sticky bottom-0 z-10 shadow-xl"
+    <x-foodalchemist::modal-section class="sticky bottom-0 z-10 shadow-xl" :icon="$goIcon"
         title="Go — {{ $scope === 'gericht' ? 'Gericht-Bauplan vorschlagen' : $goLabel . ' erzeugen (Draft)' }}">
         {{-- Titel-Echo: bleibt sichtbar, auch wenn die Eingabe-Karte weit oben aus dem Bild gescrollt ist. --}}
         @if(trim((string) ($eingabe[$scope]['titel'] ?? '')) !== '')
