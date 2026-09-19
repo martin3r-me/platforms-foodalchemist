@@ -10,9 +10,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Services\RecipeService;
 
 /**
- * Phase A: Voll-Sync der Zutatenliste aus dem LLM-Pfad — NUR stub/draft.
- * Service erzwingt XOR gp/sub, Zyklus-Check, Transaktion + GENAU EIN
- * recomputeAndPropagate (Yield/Allergene/EK inkl. Eltern-Rezepte).
+ * Zutaten-Schreibweg für stub/draft: Voll-Sync oder schmale Garverlust-Korrektur.
  */
 class RecipeIngredientsPutTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
 {
@@ -23,7 +21,9 @@ class RecipeIngredientsPutTool extends FoodAlchemistTool implements ToolContract
 
     public function getDescription(): string
     {
-        return 'Ersetzt die KOMPLETTE Zutatenliste eines stub/draft-Rezepts (Voll-Sync: Reihenfolge = '
+        return 'Pflegt Zutaten eines stub/draft-Rezepts. Für einen Garverlust ausschließlich `garverluste` '
+            . 'mit ingredient_id + cooking_loss_pct senden; das ändert keine anderen Zutatenfelder. Alternativ '
+            . 'ersetzt `zutaten` die KOMPLETTE Zutatenliste (Voll-Sync: Reihenfolge = '
             . 'Array-Reihenfolge, fehlende Zeilen werden gelöscht). Pro Zeile: name + quantity + unit '
             . '(Slug wie g/kg/ml/stk) + gp_id ODER referenced_recipe_id (XOR; via foodalchemist.gps.MATCH erden). '
             . 'Bestehende Zeilen mit id aus recipes.GET senden: ausgelassene optionale Felder (z.B. cooking_loss_pct) bleiben erhalten. '
@@ -58,8 +58,25 @@ class RecipeIngredientsPutTool extends FoodAlchemistTool implements ToolContract
                         'required' => ['name', 'quantity', 'unit'],
                     ],
                 ],
+                'garverluste' => [
+                    'type' => 'array',
+                    'minItems' => 1,
+                    'description' => 'Teilaktualisierung: nur Garverlust vorhandener Zutaten ändern; null löscht den Wert.',
+                    'items' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'ingredient_id' => ['type' => 'integer'],
+                            'cooking_loss_pct' => ['type' => ['number', 'null'], 'minimum' => 0, 'maximum' => 100],
+                        ],
+                        'required' => ['ingredient_id', 'cooking_loss_pct'],
+                    ],
+                ],
             ],
-            'required' => ['recipe_id', 'zutaten'],
+            'required' => ['recipe_id'],
+            'oneOf' => [
+                ['required' => ['zutaten']],
+                ['required' => ['garverluste']],
+            ],
         ];
     }
 
@@ -77,22 +94,33 @@ class RecipeIngredientsPutTool extends FoodAlchemistTool implements ToolContract
             return ToolResult::error($sperre, 'ACCESS_DENIED');
         }
 
+        $hatZutaten = array_key_exists('zutaten', $arguments);
+        $hatVerluste = array_key_exists('garverluste', $arguments);
+        if ($hatZutaten === $hatVerluste) {
+            return ToolResult::error('Genau eines von zutaten oder garverluste ist Pflicht.', 'VALIDATION_ERROR');
+        }
+
         $validator = \Illuminate\Support\Facades\Validator::make($arguments, [
-            'zutaten' => 'required|array|min:1',
+            'zutaten' => 'sometimes|array|min:1',
             'zutaten.*.id' => 'sometimes|integer|min:1|distinct',
             'zutaten.*.name' => 'required|string',
             'zutaten.*.quantity' => 'required|numeric|gt:0',
             'zutaten.*.unit' => 'required|string',
             'zutaten.*.cooking_loss_pct' => 'nullable|numeric|between:0,100',
+            'garverluste' => 'sometimes|array|min:1',
+            'garverluste.*.ingredient_id' => 'required_with:garverluste|integer|min:1|distinct',
+            'garverluste.*.cooking_loss_pct' => 'present|nullable|numeric|between:0,100',
         ]);
         if ($validator->fails()) {
             return ToolResult::error($validator->errors()->first(), 'VALIDATION_ERROR');
         }
 
         try {
-            $recipe = app(RecipeService::class)->syncIngredients(
-                $team, $recipe->id, $this->normalisiereZutatZeilen($team, $arguments['zutaten']), preserveMissing: true,
-            );
+            $recipe = $hatVerluste
+                ? app(RecipeService::class)->updateCookingLosses($team, $recipe->id, $arguments['garverluste'])
+                : app(RecipeService::class)->syncIngredients(
+                    $team, $recipe->id, $this->normalisiereZutatZeilen($team, $arguments['zutaten']), preserveMissing: true,
+                );
         } catch (\RuntimeException $e) {
             return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR');
         }
@@ -119,7 +147,10 @@ class RecipeIngredientsPutTool extends FoodAlchemistTool implements ToolContract
             'side_effects' => ['creates', 'updates', 'deletes'],
             'cost_class' => 'local_db',
             'related_tools' => ['foodalchemist.gps.MATCH', 'foodalchemist.recipes.POST'],
-            'examples' => ['Setze die Zutatenliste von Entwurf 4711 auf diese 6 Positionen'],
+            'examples' => [
+                'Setze die Zutatenliste von Entwurf 4711 auf diese 6 Positionen',
+                'Setze bei Zutaten-ID 812 den Garverlust auf 12 Prozent',
+            ],
         ];
     }
 }

@@ -1154,6 +1154,47 @@ class RecipeService
     }
 
     /**
+     * Aktualisiert ausschließlich den Garverlust vorhandener Zutaten-Zeilen.
+     *
+     * Dieser schmale Schreibweg vermeidet für MCP den gefährlichen Voll-Sync, wenn nur
+     * `cooking_loss_pct` gepflegt werden soll. Alle IDs werden vor dem ersten Update
+     * geprüft; ein fremder oder doppelter Schlüssel lässt die gesamte Änderung scheitern.
+     *
+     * @param array<int, array{ingredient_id: int, cooking_loss_pct: float|int|null}> $verluste
+     */
+    public function updateCookingLosses(Team $team, int $recipeId, array $verluste): FoodAlchemistRecipe
+    {
+        $recipe = FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($recipeId);
+        if ((int) $recipe->team_id !== (int) $team->id) {
+            throw new \RuntimeException('Geerbtes Rezept — Zutaten-Pflege nur durchs Besitzer-Team (D1).');
+        }
+
+        DB::transaction(function () use ($recipe, $verluste): void {
+            $ids = array_map(static fn (array $verlust): int => (int) $verlust['ingredient_id'], $verluste);
+            if (count($ids) !== count(array_unique($ids))) {
+                throw new \RuntimeException('Zutaten-ID wurde doppelt angegeben.');
+            }
+
+            $zutaten = $recipe->ingredients()->whereIn('id', $ids)->get()->keyBy('id');
+            if ($zutaten->count() !== count($ids)) {
+                throw new \RuntimeException('Mindestens eine Zutaten-ID gehört nicht zum Rezept.');
+            }
+
+            foreach ($verluste as $verlust) {
+                $wert = $verlust['cooking_loss_pct'];
+                $zutaten[(int) $verlust['ingredient_id']]->update([
+                    'cooking_loss_pct' => $wert === null ? null : round((float) $wert, 1),
+                    'cooking_loss_source' => $wert === null ? null : 'manual',
+                ]);
+            }
+        });
+
+        app(RecipeRecomputeService::class)->recomputeAndPropagate($recipe->id);
+
+        return $recipe->refresh();
+    }
+
+    /**
      * P-8-Picker: GPs der Team-Kette + Basisrezepte (ohne das Rezept selbst) — Auto-Fill-Daten
      * (ek_pro_g für die Client-Live-Summe) inklusive.
      */
