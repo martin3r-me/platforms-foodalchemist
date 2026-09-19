@@ -10,145 +10,221 @@
     // Concept-Typ (#35): Buffet baut Stationen statt Gänge → Label/Header schalten mit.
     $istBuffet = ($r['menue_typ'] ?? '') === 'buffet';
 @endphp
-<x-foodalchemist::modal-section title="Richtung (optional)">
-    <div class="grid md:grid-cols-2 gap-x-6 gap-y-4" data-planung-regler="{{ $scope }}">
-        @foreach(\Platform\FoodAlchemist\Livewire\Planung\Index::RICHTUNGEN as $g)
-            <div data-richtung="{{ $g['field'] }}">
-                <p class="text-xs font-medium text-gray-900 mb-1">{{ $g['label'] }}</p>
+@if($scope === 'rezept')
+    {{-- Paket K / Cockpit-Optik — PILOT (Dominique, Go 2026-09-18): Kartenlayout bewusst NUR für
+         den Basisrezept-Tab, dieser Zweig ist ein Übergangszustand. Beim Ausrollen auf gericht/
+         concept verschmilzt er mit dem @else unten zu EINER scope-abhängigen Kartenstruktur
+         (Ziel-Karte wird dann Einheit/Menge ODER Pax/Portion/Anlass/Serviceform je nach Scope) —
+         kein Dauerzustand mit zwei Datei-Varianten. Reine Optik: Felder/Bindings/data-Anker
+         unverändert übernommen, nur neu gruppiert + mit Kartenkopf-Zusammenfassung. --}}
+    @php
+        $richtungenByField = collect(\Platform\FoodAlchemist\Livewire\Planung\Index::RICHTUNGEN)->keyBy('field');
+        // Aktive Akzentfarbe der Karten-Pills (Violett statt Emerald) — nur im Pilot-Zweig, damit
+        // der @else-Zweig für gericht/concept byte-identisch zum Vor-Pilot-Stand bleibt.
+        $pillAktivKarte = 'border-violet-500 bg-violet-500/10 text-violet-700 font-medium';
+        $sektorLabels = [
+            'betriebsgastronomie' => 'Betriebsgastronomie', 'catering' => 'Catering / Event',
+            'restaurant' => 'Restaurant / à la carte', 'care' => 'Care / Klinik', 'schule_kita' => 'Schule / Kita',
+        ];
+        $diaetLabels = [
+            'vegan' => 'Vegan', 'vegetarisch' => 'Vegetarisch', 'glutenfrei' => 'Glutenfrei',
+            'laktosefrei' => 'Laktosefrei', 'halal' => 'Halal', 'low_carb' => 'Low Carb',
+        ];
+        // Kartenkopf: „Standard" (nichts vom Default abgewichen) oder die aktiven Werte als Chips —
+        // damit man auf einen Blick sieht, was in einer Karte aktiv ist, ohne sie zu öffnen.
+        $kopf = fn (array $werte) => collect($werte)->filter(fn ($w) => $w !== null && trim((string) $w) !== '')->values();
+        $kartenKopf = function ($werte) use ($pill, $variantPill) {
+            if ($werte->isEmpty()) {
+                return '<span class="' . $pill . ' ' . $variantPill['secondary'] . '">Standard</span>';
+            }
+            return $werte->map(fn ($w) => '<span class="' . $pill . ' ' . $variantPill['primary'] . '">' . e($w) . '</span>')->implode(' ');
+        };
+
+        $kuecheKopf = $kopf([
+            ($r['convenience'] ?? '') !== '' ? ($richtungenByField['convenience']['optionen'][$r['convenience']] ?? null) : null,
+            (($r['bio_praeferenz'] ?? 'konventionell') !== 'konventionell') ? ($richtungenByField['bio_praeferenz']['optionen'][$r['bio_praeferenz']] ?? null) : null,
+            ($r['aroma_kueche'] ?? '') !== '' ? (\Platform\FoodAlchemist\Livewire\Planung\Index::AROMA_KUECHEN[$r['aroma_kueche']] ?? null) : null,
+            trim($r['aroma'] ?? '') !== '' ? '„' . \Illuminate\Support\Str::limit(trim($r['aroma']), 22) . '"' : null,
+        ]);
+        $anspruchKopf = $kopf([
+            ($r['level'] ?? '') !== '' ? ($richtungenByField['level']['optionen'][$r['level']] ?? null) : null,
+            !empty($r['frische'] ?? []) ? collect((array) $r['frische'])->map(fn ($w) => \Platform\FoodAlchemist\Livewire\Planung\Index::FRISCHE_OPTIONEN[$w] ?? $w)->implode(' / ') : null,
+            ($r['sektor'] ?? '') !== '' ? ($sektorLabels[$r['sektor']] ?? null) : null,
+        ]);
+        $anreicherungKopf = $kopf([
+            !($r['voll_anreichern'] ?? true) ? 'Anreicherung aus' : null,
+            ($r['ki_bilder'] ?? false) ? 'KI-Fotos an' : null,
+            ($r['favoriten'] ?? false) ? ('Favoriten' . (($r['favoriten_conv_only'] ?? false) ? ' · nur Convenience' : '')) : null,
+        ]);
+        $constraintsKopf = $kopf([
+            !empty($r['diaet_hart'] ?? []) ? collect((array) $r['diaet_hart'])->map(fn ($w) => $diaetLabels[$w] ?? $w)->implode(' / ') : null,
+            !empty($r['allergen_nogo'] ?? []) ? collect((array) $r['allergen_nogo'])->map(fn ($w) => \Platform\FoodAlchemist\Livewire\Planung\Index::ALLERGEN_LABELS[$w] ?? $w)->implode(' / ') : null,
+        ]);
+        $zielKopf = $kopf([
+            trim((string) ($r['ziel_menge'] ?? '')) !== '' ? (trim((string) $r['ziel_menge']) . ' ' . (\Platform\FoodAlchemist\Livewire\Planung\Index::MENGE_EINHEITEN[$r['ziel_einheit'] ?? ''] ?? '')) : null,
+            ($r['saison'] ?? '') !== '' ? (\Platform\FoodAlchemist\Livewire\Planung\Index::SAISON_OPTIONEN[$r['saison']] ?? null) : null,
+            trim((string) ($r['ziel_we_pct'] ?? '')) !== '' ? (trim((string) $r['ziel_we_pct']) . ' % WE') : null,
+        ]);
+    @endphp
+
+    <x-foodalchemist::modal-section title="Küche">
+        <x-slot:actions>{!! $kartenKopf($kuecheKopf) !!}</x-slot:actions>
+        <div class="grid md:grid-cols-2 gap-x-6 gap-y-4" data-planung-regler="{{ $scope }}">
+            <div data-richtung="{{ $richtungenByField['convenience']['field'] }}">
+                <p class="{{ $label }} mb-1.5">{{ $richtungenByField['convenience']['label'] }}</p>
                 <div class="flex flex-wrap gap-1.5">
-                    @foreach($g['optionen'] as $wert => $lbl)
-                        <button type="button" wire:click="reglerPill('{{ $scope }}', '{{ $g['field'] }}', '{{ $wert }}')"
-                                class="px-2.5 py-1 rounded-full border text-[11px] transition-colors {{ ($r[$g['field']] ?? '') === $wert ? $pillAktiv : $pillRuhe }}">{{ $lbl }}</button>
+                    @foreach($richtungenByField['convenience']['optionen'] as $wert => $lbl)
+                        <button type="button" wire:click="reglerPill('{{ $scope }}', 'convenience', '{{ $wert }}')"
+                                class="px-2.5 py-1 rounded-full border text-[11px] transition-colors {{ ($r['convenience'] ?? '') === $wert ? $pillAktivKarte : $pillRuhe }}">{{ $lbl }}</button>
                     @endforeach
                 </div>
-                <p class="text-[11px] text-gray-500 mt-1">{{ $g['hint'][$r[$g['field']] ?? ''] ?? '' }}</p>
+                <p class="text-[11px] text-gray-500 mt-1.5">{{ $richtungenByField['convenience']['hint'][$r['convenience'] ?? ''] ?? '' }}</p>
             </div>
-        @endforeach
 
-        <div data-richtung="frische">
-            <p class="text-xs font-medium text-gray-900 mb-1">Frische (Zustands-Erlaubnis)</p>
-            <div class="flex flex-wrap gap-1.5">
-                @foreach(\Platform\FoodAlchemist\Livewire\Planung\Index::FRISCHE_OPTIONEN as $wert => $lbl)
-                    <button type="button" wire:click="reglerPill('{{ $scope }}', 'frische', '{{ $wert }}')"
-                            class="px-2.5 py-1 rounded-full border text-[11px] transition-colors {{ in_array($wert, (array) ($r['frische'] ?? []), true) ? $pillAktiv : $pillRuhe }}" data-planung-frische="{{ $wert }}">{{ $lbl }}</button>
-                @endforeach
-            </div>
-            <p class="text-[11px] text-gray-500 mt-1">{{ empty($r['frische'] ?? []) ? 'Egal — kein Zustands-Filter (KI wählt frei)' : 'Nur diese Zustände zugelassen (harter Filter; innerhalb: frisch bevorzugt)' }}</p>
-        </div>
-
-        <div data-richtung="aroma">
-            <p class="text-xs font-medium text-gray-900 mb-1">Aroma-Richtung</p>
-            <select wire:model="regler.{{ $scope }}.aroma_kueche" class="{{ $input }} !py-1.5 mb-1.5" data-planung-aroma-kueche>
-                @foreach(\Platform\FoodAlchemist\Livewire\Planung\Index::AROMA_KUECHEN as $wert => $lbl)
-                    <option value="{{ $wert }}">{{ $lbl }}</option>
-                @endforeach
-            </select>
-            <input type="text" wire:model="regler.{{ $scope }}.aroma" placeholder="Feinjustierung — z. B. rauchig-karamellig, umami-lastig …" class="{{ $input }} !py-1.5" />
-            <p class="text-[11px] text-gray-500 mt-1">Küche steuert die Würzung (Anker/Technik/Archetyp); Freitext justiert zusätzlich. Beides optional.</p>
-        </div>
-
-        <div data-richtung="sektor">
-            <p class="text-xs font-medium text-gray-900 mb-1">Sektor (Verpflegungskontext)
-                @if($reglerVonAgent[$scope]['sektor'] ?? false)
-                    <span class="{{ $pill }} {{ $variantPill['secondary'] }}" data-regler-von-agent="sektor" title="Vom Sprachbefehl-Agenten vorgeschlagen — verschwindet bei manueller Änderung">Agent</span>
-                @endif
-            </p>
-            <select wire:model="regler.{{ $scope }}.sektor" class="{{ $input }} !py-1.5">
-                <option value="">(egal/universell)</option>
-                <option value="betriebsgastronomie">Betriebsgastronomie</option>
-                <option value="catering">Catering / Event</option>
-                <option value="restaurant">Restaurant / à la carte</option>
-                <option value="care">Care / Klinik</option>
-                <option value="schule_kita">Schule / Kita</option>
-            </select>
-            <p class="text-[11px] text-gray-500 mt-1">{{ ($r['sektor'] ?? '') === '' ? 'Kein Sektor-Constraint' : '' }}</p>
-        </div>
-
-        <div data-richtung="favoriten">
-            <label class="flex items-start gap-2 text-xs font-medium text-gray-900">
-                <input type="checkbox" wire:model.live="regler.{{ $scope }}.favoriten" class="mt-0.5" data-planung-favoriten />
-                <span>⭐ Auf Basis meiner Favoriten bauen</span>
-            </label>
-            <p class="text-[11px] text-gray-500 mt-1">Bevorzugt die kuratierten Lieblings-GPs (bevorzugt, nicht ausschließlich). Aus = freie Kreativität.</p>
-            <label x-show="$wire.get('regler.{{ $scope }}.favoriten')" class="flex items-center gap-1.5 text-[11px] text-gray-600 mt-1.5 ml-6">
-                <input type="checkbox" wire:model="regler.{{ $scope }}.favoriten_conv_only" /> nur Convenience-Favoriten
-            </label>
-        </div>
-
-        <div data-richtung="voll-anreichern">
-            <label class="flex items-start gap-2 text-xs font-medium text-gray-900">
-                <input type="checkbox" wire:model="regler.{{ $scope }}.voll_anreichern" class="mt-0.5" data-planung-voll-anreichern />
-                <span>⚡ Voll anreichern</span>
-            </label>
-            <p class="text-[11px] text-gray-500 mt-1">An (Standard) = bei der Freigabe auch Schritte, Sensorik, Arbeits- und Rüstzeit, Equipment, Posten und geerdete Pairings erzeugen. Aus = nur die Kernfelder; Schritte und Zeiten bleiben leer, die Zeile wird als <em>leicht angereichert</em> markiert. Kostet einen Textlauf je Rezept — die teure Achse sind die KI-Fotos darunter.</p>
-        </div>
-
-        <div data-richtung="ki-bilder">
-            <label class="flex items-start gap-2 text-xs font-medium text-gray-900">
-                <input type="checkbox" wire:model="regler.{{ $scope }}.ki_bilder" class="mt-0.5" data-planung-ki-bilder />
-                <span>📷 KI-Fotos bei Anreicherung erstellen</span>
-            </label>
-            <p class="text-[11px] text-gray-500 mt-1">Bei der Freigabe entstehen Schritt-für-Schritt-Fotos + ein Produktfoto (je Bild ein KI-Call → <b>Kosten</b>). Aus = keine Bilder.</p>
-        </div>
-
-        <div class="md:col-span-2" data-richtung="diaet">
-            <p class="text-xs font-medium text-gray-900 mb-1">Diät-Constraints (Multi-Select, hart geprüft)</p>
-            <div class="flex flex-wrap gap-1.5">
-                @foreach(['vegan' => 'Vegan', 'vegetarisch' => 'Vegetarisch', 'glutenfrei' => 'Glutenfrei', 'laktosefrei' => 'Laktosefrei', 'halal' => 'Halal', 'low_carb' => 'Low Carb'] as $wert => $lbl)
-                    <button type="button" wire:click="reglerPill('{{ $scope }}', 'diaet_hart', '{{ $wert }}')"
-                            class="px-2.5 py-1 rounded-full border text-[11px] transition-colors {{ in_array($wert, (array) ($r['diaet_hart'] ?? []), true) ? $pillAktiv : $pillRuhe }}">{{ $lbl }}</button>
-                @endforeach
-            </div>
-            <p class="text-[11px] text-gray-500 mt-1">Nach der Erzeugung geprüft: verletzende Zutaten werden gelöst + gemeldet (keine harte Sperre — du entscheidest).</p>
-        </div>
-
-        <div class="md:col-span-2" data-richtung="allergen-nogo">
-            <p class="text-xs font-medium text-gray-900 mb-1">Allergen-Ausschluss (EU-14, hart geprüft)</p>
-            <div class="flex flex-wrap gap-1.5">
-                @foreach(\Platform\FoodAlchemist\Livewire\Planung\Index::ALLERGEN_LABELS as $wert => $lbl)
-                    <button type="button" wire:click="reglerPill('{{ $scope }}', 'allergen_nogo', '{{ $wert }}')"
-                            class="px-2.5 py-1 rounded-full border text-[11px] transition-colors {{ in_array($wert, (array) ($r['allergen_nogo'] ?? []), true) ? $pillAktiv : $pillRuhe }}" data-planung-allergen-nogo="{{ $wert }}">{{ $lbl }}</button>
-                @endforeach
-            </div>
-            <p class="text-[11px] text-gray-500 mt-1">{{ empty($r['allergen_nogo'] ?? []) ? 'Kein Allergen-Ausschluss' : 'Zutaten mit diesem Allergen werden nach der Erzeugung gelöst + gemeldet.' }}</p>
-        </div>
-
-        <div class="md:col-span-2 grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-2" data-richtung="menge-ziel">
-            @if($scope === 'rezept')
-                {{-- Basisrezept = Halbfabrikat (Charge in einer Einheit), kein Teller für N Gäste:
-                     Ziel-Menge + Einheit statt Pax/Portion (2 L Sauce, 5 kg Teig, 30 Stk …). --}}
-                <div>
-                    <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Einheit</label>
-                    <select wire:model="regler.{{ $scope }}.ziel_einheit" class="{{ $input }} !py-1.5" data-planung-ziel-einheit>
-                        @foreach(\Platform\FoodAlchemist\Livewire\Planung\Index::MENGE_EINHEITEN as $wert => $lbl)
-                            <option value="{{ $wert }}">{{ $lbl }}</option>
-                        @endforeach
-                    </select>
+            <div data-richtung="{{ $richtungenByField['bio_praeferenz']['field'] }}">
+                <p class="{{ $label }} mb-1.5">{{ $richtungenByField['bio_praeferenz']['label'] }}</p>
+                <div class="flex flex-wrap gap-1.5">
+                    @foreach($richtungenByField['bio_praeferenz']['optionen'] as $wert => $lbl)
+                        <button type="button" wire:click="reglerPill('{{ $scope }}', 'bio_praeferenz', '{{ $wert }}')"
+                                class="px-2.5 py-1 rounded-full border text-[11px] transition-colors {{ ($r['bio_praeferenz'] ?? '') === $wert ? $pillAktivKarte : $pillRuhe }}">{{ $lbl }}</button>
+                    @endforeach
                 </div>
-                <div>
-                    <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Ziel-Menge</label>
-                    <input type="number" min="0" step="any" wire:model="regler.{{ $scope }}.ziel_menge" placeholder="z. B. 2" class="{{ $input }} !py-1.5" data-planung-ziel-menge />
+                <p class="text-[11px] text-gray-500 mt-1.5">{{ $richtungenByField['bio_praeferenz']['hint'][$r['bio_praeferenz'] ?? ''] ?? '' }}</p>
+            </div>
+
+            <div class="md:col-span-2" data-richtung="aroma">
+                <p class="{{ $label }} mb-1.5">Aroma-Richtung</p>
+                <select wire:model="regler.{{ $scope }}.aroma_kueche" class="{{ $input }} !py-1.5 mb-1.5 md:max-w-xs" data-planung-aroma-kueche>
+                    @foreach(\Platform\FoodAlchemist\Livewire\Planung\Index::AROMA_KUECHEN as $wert => $lbl)
+                        <option value="{{ $wert }}">{{ $lbl }}</option>
+                    @endforeach
+                </select>
+                <input type="text" wire:model="regler.{{ $scope }}.aroma" placeholder="Feinjustierung — z. B. rauchig-karamellig, umami-lastig …" class="{{ $input }} !py-1.5" />
+                <p class="text-[11px] text-gray-500 mt-1.5">Küche steuert die Würzung (Anker/Technik/Archetyp); Freitext justiert zusätzlich. Beides optional.</p>
+            </div>
+        </div>
+    </x-foodalchemist::modal-section>
+
+    <x-foodalchemist::modal-section title="Anspruch">
+        <x-slot:actions>{!! $kartenKopf($anspruchKopf) !!}</x-slot:actions>
+        <div class="grid md:grid-cols-2 gap-x-6 gap-y-4">
+            <div data-richtung="{{ $richtungenByField['level']['field'] }}">
+                <p class="{{ $label }} mb-1.5">{{ $richtungenByField['level']['label'] }}</p>
+                <div class="flex flex-wrap gap-1.5">
+                    @foreach($richtungenByField['level']['optionen'] as $wert => $lbl)
+                        <button type="button" wire:click="reglerPill('{{ $scope }}', 'level', '{{ $wert }}')"
+                                class="px-2.5 py-1 rounded-full border text-[11px] transition-colors {{ ($r['level'] ?? '') === $wert ? $pillAktivKarte : $pillRuhe }}">{{ $lbl }}</button>
+                    @endforeach
                 </div>
-            @else
-                <div>
-                    <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Pax / Gäste
-                        @if($reglerVonAgent[$scope]['pax'] ?? false)
-                            <span class="{{ $pill }} {{ $variantPill['secondary'] }}" data-regler-von-agent="pax" title="Vom Sprachbefehl-Agenten vorgeschlagen — verschwindet bei manueller Änderung">Agent</span>
-                        @endif
-                    </label>
-                    <input type="number" min="1" max="100000" step="1" wire:model="regler.{{ $scope }}.pax" placeholder="z. B. 50" class="{{ $input }} !py-1.5" data-planung-pax />
+                <p class="text-[11px] text-gray-500 mt-1.5">{{ $richtungenByField['level']['hint'][$r['level'] ?? ''] ?? '' }}</p>
+            </div>
+
+            <div data-richtung="frische">
+                <p class="{{ $label }} mb-1.5">Frische (Zustands-Erlaubnis)</p>
+                <div class="flex flex-wrap gap-1.5">
+                    @foreach(\Platform\FoodAlchemist\Livewire\Planung\Index::FRISCHE_OPTIONEN as $wert => $lbl)
+                        <button type="button" wire:click="reglerPill('{{ $scope }}', 'frische', '{{ $wert }}')"
+                                class="px-2.5 py-1 rounded-full border text-[11px] transition-colors {{ in_array($wert, (array) ($r['frische'] ?? []), true) ? $pillAktivKarte : $pillRuhe }}" data-planung-frische="{{ $wert }}">{{ $lbl }}</button>
+                    @endforeach
                 </div>
-                {{-- Ziel-Portion (g) ist per-Portion — für ein Concept (ganzes Menü) scope-fremd, darum nur
-                     am Gericht (Leitplanken-Hygiene 2026-08-18). Der Concept-Umfang steuert der Menü-Block unten. --}}
-                @if($scope !== 'concept')
-                    <div>
-                        <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Ziel-Portion (g)</label>
-                        <input type="number" min="1" max="5000" step="1" wire:model="regler.{{ $scope }}.ziel_portion_g" placeholder="z. B. 180" class="{{ $input }} !py-1.5" data-planung-portion-g />
-                    </div>
-                @endif
-            @endif
+                <p class="text-[11px] text-gray-500 mt-1.5">{{ empty($r['frische'] ?? []) ? 'Egal — kein Zustands-Filter (KI wählt frei)' : 'Nur diese Zustände zugelassen (harter Filter; innerhalb: frisch bevorzugt)' }}</p>
+            </div>
+
+            <div class="md:col-span-2" data-richtung="sektor">
+                <p class="{{ $label }} mb-1.5">Sektor (Verpflegungskontext)
+                    @if($reglerVonAgent[$scope]['sektor'] ?? false)
+                        <span class="{{ $pill }} {{ $variantPill['secondary'] }}" data-regler-von-agent="sektor" title="Vom Sprachbefehl-Agenten vorgeschlagen — verschwindet bei manueller Änderung">Agent</span>
+                    @endif
+                </p>
+                <select wire:model="regler.{{ $scope }}.sektor" class="{{ $input }} !py-1.5 md:max-w-xs">
+                    <option value="">(egal/universell)</option>
+                    @foreach($sektorLabels as $wert => $lbl)
+                        <option value="{{ $wert }}">{{ $lbl }}</option>
+                    @endforeach
+                </select>
+                <p class="text-[11px] text-gray-500 mt-1.5">{{ ($r['sektor'] ?? '') === '' ? 'Kein Sektor-Constraint' : '' }}</p>
+            </div>
+        </div>
+    </x-foodalchemist::modal-section>
+
+    <x-foodalchemist::modal-section title="Anreicherung">
+        <x-slot:actions>{!! $kartenKopf($anreicherungKopf) !!}</x-slot:actions>
+        <div class="grid md:grid-cols-2 gap-x-6 gap-y-3">
+            <div data-richtung="voll-anreichern">
+                <label class="flex items-start gap-2 text-xs font-medium text-gray-900">
+                    <input type="checkbox" wire:model="regler.{{ $scope }}.voll_anreichern" class="mt-0.5" data-planung-voll-anreichern />
+                    <span>⚡ Voll anreichern</span>
+                </label>
+                <p class="text-[11px] text-gray-500 mt-1.5">An (Standard) = bei der Freigabe auch Schritte, Sensorik, Arbeits- und Rüstzeit, Equipment, Posten und geerdete Pairings erzeugen. Aus = nur die Kernfelder; Schritte und Zeiten bleiben leer, die Zeile wird als <em>leicht angereichert</em> markiert. Kostet einen Textlauf je Rezept — die teure Achse sind die KI-Fotos daneben.</p>
+            </div>
+
+            <div data-richtung="ki-bilder">
+                <label class="flex items-start gap-2 text-xs font-medium text-gray-900">
+                    <input type="checkbox" wire:model="regler.{{ $scope }}.ki_bilder" class="mt-0.5" data-planung-ki-bilder />
+                    <span>📷 KI-Fotos bei Anreicherung erstellen</span>
+                </label>
+                <p class="text-[11px] text-gray-500 mt-1.5">Bei der Freigabe entstehen Schritt-für-Schritt-Fotos + ein Produktfoto (je Bild ein KI-Call → <b>Kosten</b>). Aus = keine Bilder.</p>
+            </div>
+
+            <div class="md:col-span-2 border-t border-black/5 pt-3" data-richtung="favoriten">
+                <label class="flex items-start gap-2 text-xs font-medium text-gray-900">
+                    <input type="checkbox" wire:model.live="regler.{{ $scope }}.favoriten" class="mt-0.5" data-planung-favoriten />
+                    <span>⭐ Auf Basis meiner Favoriten bauen</span>
+                </label>
+                <p class="text-[11px] text-gray-500 mt-1.5">Bevorzugt die kuratierten Lieblings-GPs (bevorzugt, nicht ausschließlich). Aus = freie Kreativität.</p>
+                <label x-show="$wire.get('regler.{{ $scope }}.favoriten')" class="flex items-center gap-1.5 text-[11px] text-gray-600 mt-1.5 ml-6">
+                    <input type="checkbox" wire:model="regler.{{ $scope }}.favoriten_conv_only" /> nur Convenience-Favoriten
+                </label>
+            </div>
+        </div>
+    </x-foodalchemist::modal-section>
+
+    <x-foodalchemist::modal-section title="Constraints">
+        <x-slot:actions>{!! $kartenKopf($constraintsKopf) !!}</x-slot:actions>
+        <div class="space-y-4">
+            <div data-richtung="diaet">
+                <p class="{{ $label }} mb-1.5">Diät-Constraints (Multi-Select, hart geprüft)</p>
+                <div class="flex flex-wrap gap-1.5">
+                    @foreach($diaetLabels as $wert => $lbl)
+                        <button type="button" wire:click="reglerPill('{{ $scope }}', 'diaet_hart', '{{ $wert }}')"
+                                class="px-2.5 py-1 rounded-full border text-[11px] transition-colors {{ in_array($wert, (array) ($r['diaet_hart'] ?? []), true) ? $pillAktivKarte : $pillRuhe }}">{{ $lbl }}</button>
+                    @endforeach
+                </div>
+                <p class="text-[11px] text-gray-500 mt-1.5">Nach der Erzeugung geprüft: verletzende Zutaten werden gelöst + gemeldet (keine harte Sperre — du entscheidest).</p>
+            </div>
+
+            <div data-richtung="allergen-nogo">
+                <p class="{{ $label }} mb-1.5">Allergen-Ausschluss (EU-14, hart geprüft)</p>
+                <div class="flex flex-wrap gap-1.5">
+                    @foreach(\Platform\FoodAlchemist\Livewire\Planung\Index::ALLERGEN_LABELS as $wert => $lbl)
+                        <button type="button" wire:click="reglerPill('{{ $scope }}', 'allergen_nogo', '{{ $wert }}')"
+                                class="px-2.5 py-1 rounded-full border text-[11px] transition-colors {{ in_array($wert, (array) ($r['allergen_nogo'] ?? []), true) ? $pillAktivKarte : $pillRuhe }}" data-planung-allergen-nogo="{{ $wert }}">{{ $lbl }}</button>
+                    @endforeach
+                </div>
+                <p class="text-[11px] text-gray-500 mt-1.5">{{ empty($r['allergen_nogo'] ?? []) ? 'Kein Allergen-Ausschluss' : 'Zutaten mit diesem Allergen werden nach der Erzeugung gelöst + gemeldet.' }}</p>
+            </div>
+        </div>
+    </x-foodalchemist::modal-section>
+
+    <x-foodalchemist::modal-section title="Ziel">
+        <x-slot:actions>{!! $kartenKopf($zielKopf) !!}</x-slot:actions>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-3" data-richtung="menge-ziel">
+            {{-- Basisrezept = Halbfabrikat (Charge in einer Einheit), kein Teller für N Gäste:
+                 Ziel-Menge + Einheit statt Pax/Portion (2 L Sauce, 5 kg Teig, 30 Stk …). --}}
             <div>
-                <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Saison</label>
+                <label class="block {{ $label }} mb-1">Einheit</label>
+                <select wire:model="regler.{{ $scope }}.ziel_einheit" class="{{ $input }} !py-1.5" data-planung-ziel-einheit>
+                    @foreach(\Platform\FoodAlchemist\Livewire\Planung\Index::MENGE_EINHEITEN as $wert => $lbl)
+                        <option value="{{ $wert }}">{{ $lbl }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div>
+                <label class="block {{ $label }} mb-1">Ziel-Menge</label>
+                <input type="number" min="0" step="any" wire:model="regler.{{ $scope }}.ziel_menge" placeholder="z. B. 2" class="{{ $input }} !py-1.5 font-mono" data-planung-ziel-menge />
+            </div>
+            <div>
+                <label class="block {{ $label }} mb-1">Saison</label>
                 <select wire:model="regler.{{ $scope }}.saison" class="{{ $input }} !py-1.5" data-planung-saison>
                     @foreach(\Platform\FoodAlchemist\Livewire\Planung\Index::SAISON_OPTIONEN as $wert => $lbl)
                         <option value="{{ $wert }}">{{ $lbl }}</option>
@@ -156,127 +232,280 @@
                 </select>
             </div>
             <div>
-                <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Ziel-Wareneinsatz (%)</label>
-                <input type="number" min="1" max="100" step="1" wire:model="regler.{{ $scope }}.ziel_we_pct" placeholder="z. B. 28" class="{{ $input }} !py-1.5" data-planung-we-pct />
+                <label class="block {{ $label }} mb-1">Ziel-Wareneinsatz (%)</label>
+                <input type="number" min="1" max="100" step="1" wire:model="regler.{{ $scope }}.ziel_we_pct" placeholder="z. B. 28" class="{{ $input }} !py-1.5 font-mono" data-planung-we-pct />
             </div>
         </div>
+    </x-foodalchemist::modal-section>
+@else
+    <x-foodalchemist::modal-section title="Richtung (optional)">
+        <div class="grid md:grid-cols-2 gap-x-6 gap-y-4" data-planung-regler="{{ $scope }}">
+            @foreach(\Platform\FoodAlchemist\Livewire\Planung\Index::RICHTUNGEN as $g)
+                <div data-richtung="{{ $g['field'] }}">
+                    <p class="text-xs font-medium text-gray-900 mb-1">{{ $g['label'] }}</p>
+                    <div class="flex flex-wrap gap-1.5">
+                        @foreach($g['optionen'] as $wert => $lbl)
+                            <button type="button" wire:click="reglerPill('{{ $scope }}', '{{ $g['field'] }}', '{{ $wert }}')"
+                                    class="px-2.5 py-1 rounded-full border text-[11px] transition-colors {{ ($r[$g['field']] ?? '') === $wert ? $pillAktiv : $pillRuhe }}">{{ $lbl }}</button>
+                        @endforeach
+                    </div>
+                    <p class="text-[11px] text-gray-500 mt-1">{{ $g['hint'][$r[$g['field']] ?? ''] ?? '' }}</p>
+                </div>
+            @endforeach
 
-        @if($scope === 'concept')
-            {{-- Concept-Typ (#35): Menü (Gänge nacheinander) vs. Buffet (Stationen parallel). Steuert
-                 das Positionen-Vokabular (Label + station-Slots + Gänge-Cap). Nur Concept. --}}
-            <div class="md:col-span-2 border-t border-black/5 pt-3 mt-1" data-menue-typ>
-                <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Concept-Typ</label>
-                <select wire:model.live="regler.{{ $scope }}.menue_typ" class="{{ $input }} !py-1.5 md:max-w-xs" data-menue-typ-select>
-                    @foreach(\Platform\FoodAlchemist\Livewire\Planung\Index::MENUE_TYPEN as $wert => $lbl)
+            <div data-richtung="frische">
+                <p class="text-xs font-medium text-gray-900 mb-1">Frische (Zustands-Erlaubnis)</p>
+                <div class="flex flex-wrap gap-1.5">
+                    @foreach(\Platform\FoodAlchemist\Livewire\Planung\Index::FRISCHE_OPTIONEN as $wert => $lbl)
+                        <button type="button" wire:click="reglerPill('{{ $scope }}', 'frische', '{{ $wert }}')"
+                                class="px-2.5 py-1 rounded-full border text-[11px] transition-colors {{ in_array($wert, (array) ($r['frische'] ?? []), true) ? $pillAktiv : $pillRuhe }}" data-planung-frische="{{ $wert }}">{{ $lbl }}</button>
+                    @endforeach
+                </div>
+                <p class="text-[11px] text-gray-500 mt-1">{{ empty($r['frische'] ?? []) ? 'Egal — kein Zustands-Filter (KI wählt frei)' : 'Nur diese Zustände zugelassen (harter Filter; innerhalb: frisch bevorzugt)' }}</p>
+            </div>
+
+            <div data-richtung="aroma">
+                <p class="text-xs font-medium text-gray-900 mb-1">Aroma-Richtung</p>
+                <select wire:model="regler.{{ $scope }}.aroma_kueche" class="{{ $input }} !py-1.5 mb-1.5" data-planung-aroma-kueche>
+                    @foreach(\Platform\FoodAlchemist\Livewire\Planung\Index::AROMA_KUECHEN as $wert => $lbl)
                         <option value="{{ $wert }}">{{ $lbl }}</option>
                     @endforeach
                 </select>
-                <p class="text-[11px] text-gray-500 mt-1.5">{{ $istBuffet ? 'Buffet = parallele Stationen (eigene Positionen-Logik). Die »Anzahl Stationen« deckelt die Stationen — es sind keine Gänge.' : 'Menü = Gänge in Dramaturgie-Reihenfolge. Für ein Buffet auf »Buffet« wechseln (baut Stationen statt Gänge).' }}</p>
+                <input type="text" wire:model="regler.{{ $scope }}.aroma" placeholder="Feinjustierung — z. B. rauchig-karamellig, umami-lastig …" class="{{ $input }} !py-1.5" />
+                <p class="text-[11px] text-gray-500 mt-1">Küche steuert die Würzung (Anker/Technik/Archetyp); Freitext justiert zusätzlich. Beides optional.</p>
             </div>
-            {{-- Menü-Leitplanken (Zusammenstellung) — nur Concept: steuern das GANZE Menü (Anzahl Gänge +
-                 Zielpreis-Korridor je Person), nicht die Rezept-Generierung. Etappe 2a. --}}
-            <div class="md:col-span-2 pt-1" data-menue-leitplanken>
-                <p class="text-xs font-semibold text-gray-900 mb-2">{{ $istBuffet ? '🍽️ Buffet-Leitplanken (Zusammenstellung)' : '🍽️ Menü-Leitplanken (Zusammenstellung)' }}</p>
-                <div class="grid md:grid-cols-4 gap-x-6 gap-y-3">
-                    <div>
-                        <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">{{ $istBuffet ? 'Anzahl Stationen' : 'Anzahl Gänge (nur Menü)' }}</label>
-                        <input type="number" min="1" max="20" step="1" wire:model="regler.{{ $scope }}.menue_gaenge" placeholder="{{ $istBuffet ? 'z. B. 6' : 'z. B. 4' }}" class="{{ $input }} !py-1.5" data-menue-gaenge />
-                    </div>
-                    <div>
-                        <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Preis-Untergrenze p. P.</label>
-                        <input type="text" wire:model="regler.{{ $scope }}.menue_preis_min" placeholder="z. B. 35,00" class="{{ $input }} !py-1.5" data-menue-preis-min />
-                    </div>
-                    <div>
-                        <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Zielpreis p. P.</label>
-                        <input type="text" wire:model="regler.{{ $scope }}.menue_preis_ziel" placeholder="z. B. 45,00" class="{{ $input }} !py-1.5" data-menue-preis-ziel />
-                    </div>
-                    <div>
-                        <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Preis-Obergrenze p. P.</label>
-                        <input type="text" wire:model="regler.{{ $scope }}.menue_preis_max" placeholder="z. B. 60,00" class="{{ $input }} !py-1.5" data-menue-preis-max />
-                    </div>
-                </div>
-                <p class="text-[11px] text-gray-500 mt-1.5">Netto je Person für das gesamte Menü. Leer = keine Vorgabe — die KI wählt Umfang und Preislage passend zum Briefing.</p>
 
-                {{-- Diät-Quoten (Portfolio-ANTEIL) — bewusst getrennt von den harten Diät-Constraints oben:
-                     hier steuert der Anteil der Positionen (»mind. X % vegan«), nicht ein Ausschluss für
-                     das ganze Menü. Etappe 2a, Teil 2. --}}
-                <div class="grid md:grid-cols-2 gap-x-6 gap-y-3 mt-3" data-menue-diaet-quoten>
-                    <div>
-                        <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Vegan-Anteil (%)</label>
-                        <input type="number" min="0" max="100" step="1" wire:model="regler.{{ $scope }}.menue_quote_vegan" placeholder="z. B. 30" class="{{ $input }} !py-1.5" data-menue-quote-vegan />
-                    </div>
-                    <div>
-                        <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Vegetarisch-Anteil (%)</label>
-                        <input type="number" min="0" max="100" step="1" wire:model="regler.{{ $scope }}.menue_quote_vegetarisch" placeholder="z. B. 50" class="{{ $input }} !py-1.5" data-menue-quote-vegetarisch />
-                    </div>
-                </div>
-                <p class="text-[11px] text-gray-500 mt-1.5">Portfolio-Anteil (weiche Zusammenstellungs-Vorgabe), nicht der harte Ausschluss oben. Leer = keine Quote.</p>
+            <div data-richtung="sektor">
+                <p class="text-xs font-medium text-gray-900 mb-1">Sektor (Verpflegungskontext)
+                    @if($reglerVonAgent[$scope]['sektor'] ?? false)
+                        <span class="{{ $pill }} {{ $variantPill['secondary'] }}" data-regler-von-agent="sektor" title="Vom Sprachbefehl-Agenten vorgeschlagen — verschwindet bei manueller Änderung">Agent</span>
+                    @endif
+                </p>
+                <select wire:model="regler.{{ $scope }}.sektor" class="{{ $input }} !py-1.5">
+                    <option value="">(egal/universell)</option>
+                    <option value="betriebsgastronomie">Betriebsgastronomie</option>
+                    <option value="catering">Catering / Event</option>
+                    <option value="restaurant">Restaurant / à la carte</option>
+                    <option value="care">Care / Klinik</option>
+                    <option value="schule_kita">Schule / Kita</option>
+                </select>
+                <p class="text-[11px] text-gray-500 mt-1">{{ ($r['sektor'] ?? '') === '' ? 'Kein Sektor-Constraint' : '' }}</p>
+            </div>
 
-                {{-- Portfolio-Balance (Menü-Vielfalt) — weiche Zusammenstellungs-Vorgabe: wie breit das Menü
-                     über Proteine/Warengruppen/Garmethoden streut. Enum, kein Filter. Etappe 2a, Rest Teil 2. --}}
-                <div class="mt-3" data-menue-balance>
-                    <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Portfolio-Balance (Vielfalt)</label>
-                    <select wire:model="regler.{{ $scope }}.menue_balance" class="{{ $input }} !py-1.5 md:max-w-xs" data-menue-balance-select>
-                        <option value="">— keine Vorgabe</option>
-                        @foreach(\Platform\FoodAlchemist\Livewire\Planung\Index::MENUE_BALANCE as $wert => $lbl)
+            <div data-richtung="favoriten">
+                <label class="flex items-start gap-2 text-xs font-medium text-gray-900">
+                    <input type="checkbox" wire:model.live="regler.{{ $scope }}.favoriten" class="mt-0.5" data-planung-favoriten />
+                    <span>⭐ Auf Basis meiner Favoriten bauen</span>
+                </label>
+                <p class="text-[11px] text-gray-500 mt-1">Bevorzugt die kuratierten Lieblings-GPs (bevorzugt, nicht ausschließlich). Aus = freie Kreativität.</p>
+                <label x-show="$wire.get('regler.{{ $scope }}.favoriten')" class="flex items-center gap-1.5 text-[11px] text-gray-600 mt-1.5 ml-6">
+                    <input type="checkbox" wire:model="regler.{{ $scope }}.favoriten_conv_only" /> nur Convenience-Favoriten
+                </label>
+            </div>
+
+            <div data-richtung="voll-anreichern">
+                <label class="flex items-start gap-2 text-xs font-medium text-gray-900">
+                    <input type="checkbox" wire:model="regler.{{ $scope }}.voll_anreichern" class="mt-0.5" data-planung-voll-anreichern />
+                    <span>⚡ Voll anreichern</span>
+                </label>
+                <p class="text-[11px] text-gray-500 mt-1">An (Standard) = bei der Freigabe auch Schritte, Sensorik, Arbeits- und Rüstzeit, Equipment, Posten und geerdete Pairings erzeugen. Aus = nur die Kernfelder; Schritte und Zeiten bleiben leer, die Zeile wird als <em>leicht angereichert</em> markiert. Kostet einen Textlauf je Rezept — die teure Achse sind die KI-Fotos darunter.</p>
+            </div>
+
+            <div data-richtung="ki-bilder">
+                <label class="flex items-start gap-2 text-xs font-medium text-gray-900">
+                    <input type="checkbox" wire:model="regler.{{ $scope }}.ki_bilder" class="mt-0.5" data-planung-ki-bilder />
+                    <span>📷 KI-Fotos bei Anreicherung erstellen</span>
+                </label>
+                <p class="text-[11px] text-gray-500 mt-1">Bei der Freigabe entstehen Schritt-für-Schritt-Fotos + ein Produktfoto (je Bild ein KI-Call → <b>Kosten</b>). Aus = keine Bilder.</p>
+            </div>
+
+            <div class="md:col-span-2" data-richtung="diaet">
+                <p class="text-xs font-medium text-gray-900 mb-1">Diät-Constraints (Multi-Select, hart geprüft)</p>
+                <div class="flex flex-wrap gap-1.5">
+                    @foreach(['vegan' => 'Vegan', 'vegetarisch' => 'Vegetarisch', 'glutenfrei' => 'Glutenfrei', 'laktosefrei' => 'Laktosefrei', 'halal' => 'Halal', 'low_carb' => 'Low Carb'] as $wert => $lbl)
+                        <button type="button" wire:click="reglerPill('{{ $scope }}', 'diaet_hart', '{{ $wert }}')"
+                                class="px-2.5 py-1 rounded-full border text-[11px] transition-colors {{ in_array($wert, (array) ($r['diaet_hart'] ?? []), true) ? $pillAktiv : $pillRuhe }}">{{ $lbl }}</button>
+                    @endforeach
+                </div>
+                <p class="text-[11px] text-gray-500 mt-1">Nach der Erzeugung geprüft: verletzende Zutaten werden gelöst + gemeldet (keine harte Sperre — du entscheidest).</p>
+            </div>
+
+            <div class="md:col-span-2" data-richtung="allergen-nogo">
+                <p class="text-xs font-medium text-gray-900 mb-1">Allergen-Ausschluss (EU-14, hart geprüft)</p>
+                <div class="flex flex-wrap gap-1.5">
+                    @foreach(\Platform\FoodAlchemist\Livewire\Planung\Index::ALLERGEN_LABELS as $wert => $lbl)
+                        <button type="button" wire:click="reglerPill('{{ $scope }}', 'allergen_nogo', '{{ $wert }}')"
+                                class="px-2.5 py-1 rounded-full border text-[11px] transition-colors {{ in_array($wert, (array) ($r['allergen_nogo'] ?? []), true) ? $pillAktiv : $pillRuhe }}" data-planung-allergen-nogo="{{ $wert }}">{{ $lbl }}</button>
+                    @endforeach
+                </div>
+                <p class="text-[11px] text-gray-500 mt-1">{{ empty($r['allergen_nogo'] ?? []) ? 'Kein Allergen-Ausschluss' : 'Zutaten mit diesem Allergen werden nach der Erzeugung gelöst + gemeldet.' }}</p>
+            </div>
+
+            <div class="md:col-span-2 grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-2" data-richtung="menge-ziel">
+                @if($scope === 'rezept')
+                    {{-- Basisrezept = Halbfabrikat (Charge in einer Einheit), kein Teller für N Gäste:
+                         Ziel-Menge + Einheit statt Pax/Portion (2 L Sauce, 5 kg Teig, 30 Stk …). --}}
+                    <div>
+                        <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Einheit</label>
+                        <select wire:model="regler.{{ $scope }}.ziel_einheit" class="{{ $input }} !py-1.5" data-planung-ziel-einheit>
+                            @foreach(\Platform\FoodAlchemist\Livewire\Planung\Index::MENGE_EINHEITEN as $wert => $lbl)
+                                <option value="{{ $wert }}">{{ $lbl }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Ziel-Menge</label>
+                        <input type="number" min="0" step="any" wire:model="regler.{{ $scope }}.ziel_menge" placeholder="z. B. 2" class="{{ $input }} !py-1.5" data-planung-ziel-menge />
+                    </div>
+                @else
+                    <div>
+                        <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Pax / Gäste
+                            @if($reglerVonAgent[$scope]['pax'] ?? false)
+                                <span class="{{ $pill }} {{ $variantPill['secondary'] }}" data-regler-von-agent="pax" title="Vom Sprachbefehl-Agenten vorgeschlagen — verschwindet bei manueller Änderung">Agent</span>
+                            @endif
+                        </label>
+                        <input type="number" min="1" max="100000" step="1" wire:model="regler.{{ $scope }}.pax" placeholder="z. B. 50" class="{{ $input }} !py-1.5" data-planung-pax />
+                    </div>
+                    {{-- Ziel-Portion (g) ist per-Portion — für ein Concept (ganzes Menü) scope-fremd, darum nur
+                         am Gericht (Leitplanken-Hygiene 2026-08-18). Der Concept-Umfang steuert der Menü-Block unten. --}}
+                    @if($scope !== 'concept')
+                        <div>
+                            <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Ziel-Portion (g)</label>
+                            <input type="number" min="1" max="5000" step="1" wire:model="regler.{{ $scope }}.ziel_portion_g" placeholder="z. B. 180" class="{{ $input }} !py-1.5" data-planung-portion-g />
+                        </div>
+                    @endif
+                @endif
+                <div>
+                    <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Saison</label>
+                    <select wire:model="regler.{{ $scope }}.saison" class="{{ $input }} !py-1.5" data-planung-saison>
+                        @foreach(\Platform\FoodAlchemist\Livewire\Planung\Index::SAISON_OPTIONEN as $wert => $lbl)
                             <option value="{{ $wert }}">{{ $lbl }}</option>
                         @endforeach
                     </select>
-                    <p class="text-[11px] text-gray-500 mt-1.5">Wie breit streut das Menü über Proteine, Warengruppen und Garmethoden? „Ausgewogen" = bewusste Vielfalt, Hauptzutaten nicht wiederholen; „Fokussiert" = ein Thema durchziehen. Leer = die KI entscheidet passend zum Briefing.</p>
+                </div>
+                <div>
+                    <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Ziel-Wareneinsatz (%)</label>
+                    <input type="number" min="1" max="100" step="1" wire:model="regler.{{ $scope }}.ziel_we_pct" placeholder="z. B. 28" class="{{ $input }} !py-1.5" data-planung-we-pct />
                 </div>
             </div>
-        @endif
 
-        @if($vk)
-            {{-- VK-eigene Achsen — nur Gericht/Concept --}}
-            <div class="md:col-span-2 border-t border-black/5 pt-3 mt-1" data-richtung="vk-achsen">
-                <div class="grid md:grid-cols-3 gap-x-6 gap-y-3">
-                    <div>
-                        <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Anlass
-                            @if($reglerVonAgent[$scope]['occasion'] ?? false)
-                                <span class="{{ $pill }} {{ $variantPill['secondary'] }}" data-regler-von-agent="occasion" title="Vom Sprachbefehl-Agenten vorgeschlagen — verschwindet bei manueller Änderung">Agent</span>
-                            @endif
-                        </label>
-                        <select wire:model="regler.{{ $scope }}.occasion" class="{{ $input }} !py-1.5">
-                            <option value="">—</option>
-                            @foreach(['fruehstueck' => 'Frühstück', 'lunch' => 'Lunch', 'konferenz' => 'Konferenz', 'empfang' => 'Empfang', 'dinner' => 'Dinner', 'late_night' => 'Late Night'] as $wert => $lbl)
-                                <option value="{{ $wert }}">{{ $lbl }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Serviceform</label>
-                        <select wire:model="regler.{{ $scope }}.serviceform" class="{{ $input }} !py-1.5">
-                            <option value="">—</option>
-                            @foreach(['tellerservice' => 'Tellerservice', 'buffet' => 'Buffet', 'flying' => 'Flying Service', 'stehempfang' => 'Stehempfang', 'boxed' => 'Boxed'] as $wert => $lbl)
-                                <option value="{{ $wert }}">{{ $lbl }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Kompositions-Stil</label>
-                        <select wire:model="regler.{{ $scope }}.kompositions_stil" class="{{ $input }} !py-1.5">
-                            <option value="">—</option>
-                            <option value="klassisch">klassisch</option>
-                            <option value="kreativ">kreativ</option>
-                            <option value="gewagt">gewagt (nur belegte Paarungen)</option>
-                        </select>
-                    </div>
-                    {{-- Ziel-VK ist der Portions-Preis (Gericht). Für ein Concept ist der Menü-Preis-Korridor
-                         p. P. oben die EINZIGE Preisquelle (Entscheid 2026-08-18) — hier kein zweiter Preis. --}}
-                    @if($scope === 'gericht')
-                        <div class="md:col-span-3">
-                            <p class="text-xs font-medium text-gray-900 mb-1">Ziel-VK (optional)
-                                @if($reglerVonAgent[$scope]['ziel_vk'] ?? false)
-                                    <span class="{{ $pill }} {{ $variantPill['secondary'] }}" data-regler-von-agent="ziel_vk" title="Vom Sprachbefehl-Agenten vorgeschlagen — verschwindet bei manueller Änderung">Agent</span>
-                                @endif
-                            </p>
-                            <input type="text" wire:model="regler.{{ $scope }}.ziel_vk" placeholder="z. B. 8,50" class="{{ $input }} !py-1.5 md:max-w-xs" data-planung-ziel-vk />
-                            <p class="text-[11px] text-gray-500 mt-1">Netto je Portion. Geht als Vorgabe in den Vorschlag; der Preis wird nicht auf das Ziel gedrückt.</p>
-                        </div>
-                    @endif
+            @if($scope === 'concept')
+                {{-- Concept-Typ (#35): Menü (Gänge nacheinander) vs. Buffet (Stationen parallel). Steuert
+                     das Positionen-Vokabular (Label + station-Slots + Gänge-Cap). Nur Concept. --}}
+                <div class="md:col-span-2 border-t border-black/5 pt-3 mt-1" data-menue-typ>
+                    <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Concept-Typ</label>
+                    <select wire:model.live="regler.{{ $scope }}.menue_typ" class="{{ $input }} !py-1.5 md:max-w-xs" data-menue-typ-select>
+                        @foreach(\Platform\FoodAlchemist\Livewire\Planung\Index::MENUE_TYPEN as $wert => $lbl)
+                            <option value="{{ $wert }}">{{ $lbl }}</option>
+                        @endforeach
+                    </select>
+                    <p class="text-[11px] text-gray-500 mt-1.5">{{ $istBuffet ? 'Buffet = parallele Stationen (eigene Positionen-Logik). Die »Anzahl Stationen« deckelt die Stationen — es sind keine Gänge.' : 'Menü = Gänge in Dramaturgie-Reihenfolge. Für ein Buffet auf »Buffet« wechseln (baut Stationen statt Gänge).' }}</p>
                 </div>
-            </div>
-        @endif
-    </div>
-</x-foodalchemist::modal-section>
+                {{-- Menü-Leitplanken (Zusammenstellung) — nur Concept: steuern das GANZE Menü (Anzahl Gänge +
+                     Zielpreis-Korridor je Person), nicht die Rezept-Generierung. Etappe 2a. --}}
+                <div class="md:col-span-2 pt-1" data-menue-leitplanken>
+                    <p class="text-xs font-semibold text-gray-900 mb-2">{{ $istBuffet ? '🍽️ Buffet-Leitplanken (Zusammenstellung)' : '🍽️ Menü-Leitplanken (Zusammenstellung)' }}</p>
+                    <div class="grid md:grid-cols-4 gap-x-6 gap-y-3">
+                        <div>
+                            <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">{{ $istBuffet ? 'Anzahl Stationen' : 'Anzahl Gänge (nur Menü)' }}</label>
+                            <input type="number" min="1" max="20" step="1" wire:model="regler.{{ $scope }}.menue_gaenge" placeholder="{{ $istBuffet ? 'z. B. 6' : 'z. B. 4' }}" class="{{ $input }} !py-1.5" data-menue-gaenge />
+                        </div>
+                        <div>
+                            <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Preis-Untergrenze p. P.</label>
+                            <input type="text" wire:model="regler.{{ $scope }}.menue_preis_min" placeholder="z. B. 35,00" class="{{ $input }} !py-1.5" data-menue-preis-min />
+                        </div>
+                        <div>
+                            <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Zielpreis p. P.</label>
+                            <input type="text" wire:model="regler.{{ $scope }}.menue_preis_ziel" placeholder="z. B. 45,00" class="{{ $input }} !py-1.5" data-menue-preis-ziel />
+                        </div>
+                        <div>
+                            <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Preis-Obergrenze p. P.</label>
+                            <input type="text" wire:model="regler.{{ $scope }}.menue_preis_max" placeholder="z. B. 60,00" class="{{ $input }} !py-1.5" data-menue-preis-max />
+                        </div>
+                    </div>
+                    <p class="text-[11px] text-gray-500 mt-1.5">Netto je Person für das gesamte Menü. Leer = keine Vorgabe — die KI wählt Umfang und Preislage passend zum Briefing.</p>
+
+                    {{-- Diät-Quoten (Portfolio-ANTEIL) — bewusst getrennt von den harten Diät-Constraints oben:
+                         hier steuert der Anteil der Positionen (»mind. X % vegan«), nicht ein Ausschluss für
+                         das ganze Menü. Etappe 2a, Teil 2. --}}
+                    <div class="grid md:grid-cols-2 gap-x-6 gap-y-3 mt-3" data-menue-diaet-quoten>
+                        <div>
+                            <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Vegan-Anteil (%)</label>
+                            <input type="number" min="0" max="100" step="1" wire:model="regler.{{ $scope }}.menue_quote_vegan" placeholder="z. B. 30" class="{{ $input }} !py-1.5" data-menue-quote-vegan />
+                        </div>
+                        <div>
+                            <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Vegetarisch-Anteil (%)</label>
+                            <input type="number" min="0" max="100" step="1" wire:model="regler.{{ $scope }}.menue_quote_vegetarisch" placeholder="z. B. 50" class="{{ $input }} !py-1.5" data-menue-quote-vegetarisch />
+                        </div>
+                    </div>
+                    <p class="text-[11px] text-gray-500 mt-1.5">Portfolio-Anteil (weiche Zusammenstellungs-Vorgabe), nicht der harte Ausschluss oben. Leer = keine Quote.</p>
+
+                    {{-- Portfolio-Balance (Menü-Vielfalt) — weiche Zusammenstellungs-Vorgabe: wie breit das Menü
+                         über Proteine/Warengruppen/Garmethoden streut. Enum, kein Filter. Etappe 2a, Rest Teil 2. --}}
+                    <div class="mt-3" data-menue-balance>
+                        <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Portfolio-Balance (Vielfalt)</label>
+                        <select wire:model="regler.{{ $scope }}.menue_balance" class="{{ $input }} !py-1.5 md:max-w-xs" data-menue-balance-select>
+                            <option value="">— keine Vorgabe</option>
+                            @foreach(\Platform\FoodAlchemist\Livewire\Planung\Index::MENUE_BALANCE as $wert => $lbl)
+                                <option value="{{ $wert }}">{{ $lbl }}</option>
+                            @endforeach
+                        </select>
+                        <p class="text-[11px] text-gray-500 mt-1.5">Wie breit streut das Menü über Proteine, Warengruppen und Garmethoden? „Ausgewogen" = bewusste Vielfalt, Hauptzutaten nicht wiederholen; „Fokussiert" = ein Thema durchziehen. Leer = die KI entscheidet passend zum Briefing.</p>
+                    </div>
+                </div>
+            @endif
+
+            @if($vk)
+                {{-- VK-eigene Achsen — nur Gericht/Concept --}}
+                <div class="md:col-span-2 border-t border-black/5 pt-3 mt-1" data-richtung="vk-achsen">
+                    <div class="grid md:grid-cols-3 gap-x-6 gap-y-3">
+                        <div>
+                            <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Anlass
+                                @if($reglerVonAgent[$scope]['occasion'] ?? false)
+                                    <span class="{{ $pill }} {{ $variantPill['secondary'] }}" data-regler-von-agent="occasion" title="Vom Sprachbefehl-Agenten vorgeschlagen — verschwindet bei manueller Änderung">Agent</span>
+                                @endif
+                            </label>
+                            <select wire:model="regler.{{ $scope }}.occasion" class="{{ $input }} !py-1.5">
+                                <option value="">—</option>
+                                @foreach(['fruehstueck' => 'Frühstück', 'lunch' => 'Lunch', 'konferenz' => 'Konferenz', 'empfang' => 'Empfang', 'dinner' => 'Dinner', 'late_night' => 'Late Night'] as $wert => $lbl)
+                                    <option value="{{ $wert }}">{{ $lbl }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Serviceform</label>
+                            <select wire:model="regler.{{ $scope }}.serviceform" class="{{ $input }} !py-1.5">
+                                <option value="">—</option>
+                                @foreach(['tellerservice' => 'Tellerservice', 'buffet' => 'Buffet', 'flying' => 'Flying Service', 'stehempfang' => 'Stehempfang', 'boxed' => 'Boxed'] as $wert => $lbl)
+                                    <option value="{{ $wert }}">{{ $lbl }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Kompositions-Stil</label>
+                            <select wire:model="regler.{{ $scope }}.kompositions_stil" class="{{ $input }} !py-1.5">
+                                <option value="">—</option>
+                                <option value="klassisch">klassisch</option>
+                                <option value="kreativ">kreativ</option>
+                                <option value="gewagt">gewagt (nur belegte Paarungen)</option>
+                            </select>
+                        </div>
+                        {{-- Ziel-VK ist der Portions-Preis (Gericht). Für ein Concept ist der Menü-Preis-Korridor
+                             p. P. oben die EINZIGE Preisquelle (Entscheid 2026-08-18) — hier kein zweiter Preis. --}}
+                        @if($scope === 'gericht')
+                            <div class="md:col-span-3">
+                                <p class="text-xs font-medium text-gray-900 mb-1">Ziel-VK (optional)
+                                    @if($reglerVonAgent[$scope]['ziel_vk'] ?? false)
+                                        <span class="{{ $pill }} {{ $variantPill['secondary'] }}" data-regler-von-agent="ziel_vk" title="Vom Sprachbefehl-Agenten vorgeschlagen — verschwindet bei manueller Änderung">Agent</span>
+                                    @endif
+                                </p>
+                                <input type="text" wire:model="regler.{{ $scope }}.ziel_vk" placeholder="z. B. 8,50" class="{{ $input }} !py-1.5 md:max-w-xs" data-planung-ziel-vk />
+                                <p class="text-[11px] text-gray-500 mt-1">Netto je Portion. Geht als Vorgabe in den Vorschlag; der Preis wird nicht auf das Ziel gedrückt.</p>
+                            </div>
+                        @endif
+                    </div>
+                </div>
+            @endif
+        </div>
+    </x-foodalchemist::modal-section>
+@endif

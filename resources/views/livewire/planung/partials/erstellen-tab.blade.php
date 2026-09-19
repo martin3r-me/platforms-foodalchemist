@@ -3,6 +3,11 @@
      + regler.{scope}). Der Go schaltet auf den Worker-Tab. --}}
 <div class="space-y-4">
     <x-foodalchemist::modal-section title="Eingabe — was soll entstehen">
+        @if(trim((string) ($eingabe[$scope]['titel'] ?? '')) !== '')
+            <x-slot:actions>
+                <span class="{{ $pill }} {{ $variantPill['primary'] }}">{{ \Illuminate\Support\Str::limit(trim($eingabe[$scope]['titel']), 32) }}</span>
+            </x-slot:actions>
+        @endif
         {{-- Schnellstart-Vorlagen (geteiltes Partial — auch im Concept-Tab): füllen Brief + Kreativ-Modus + Leitplanken. --}}
         @include('foodalchemist::livewire.planung.partials.schnellstart-chips', ['scope' => $scope])
         <label class="{{ $label ?? 'text-[11px] text-gray-500' }}">Titel</label>
@@ -31,6 +36,11 @@
             'ziel' => 'eingabe.' . $scope . '.brief',
             'mitLeitplanken' => $scope,
         ])
+
+        {{-- Paket K / Agent-am-Brief (Oskar, feat/agent-am-brief): reiner Anker, ein Panel je
+             Scope-Tab (diese Partial wird pro Scope separat inkludiert). Kein Höhen-/Breiten-
+             Zwang — das künftige Panel ist selbst x-show-gesteuert, startet eingeklappt. --}}
+        <div data-planung-agent-slot="{{ $scope }}"></div>
 
         {{-- Befund sichtbar: gesetzt / verworfen / ignoriert / offen. Ein stiller Vorschlag
              wäre die schlechtere Hälfte — der Mensch muss sehen, was die KI NICHT wusste. --}}
@@ -76,7 +86,16 @@
 
     @include('foodalchemist::livewire.planung.partials.schnellstart-speichern', ['scope' => $scope])
 
-    <x-foodalchemist::modal-section title="Go — {{ $scope === 'gericht' ? 'Gericht-Bauplan vorschlagen' : $goLabel . ' erzeugen (Draft)' }}">
+    {{-- Paket K / Cockpit-Optik: Go-Leiste sticky im Scroll-Container des Tabs (Befund „Go-Knopf
+         unter dem Fold") — bleibt beim Scrollen der Karten oben sichtbar/erreichbar. --}}
+    <x-foodalchemist::modal-section class="sticky bottom-0 z-10 shadow-xl"
+        title="Go — {{ $scope === 'gericht' ? 'Gericht-Bauplan vorschlagen' : $goLabel . ' erzeugen (Draft)' }}">
+        {{-- Titel-Echo: bleibt sichtbar, auch wenn die Eingabe-Karte weit oben aus dem Bild gescrollt ist. --}}
+        @if(trim((string) ($eingabe[$scope]['titel'] ?? '')) !== '')
+            <x-slot:actions>
+                <span class="{{ $pill }} {{ $variantPill['primary'] }}">{{ \Illuminate\Support\Str::limit(trim($eingabe[$scope]['titel']), 32) }}</span>
+            </x-slot:actions>
+        @endif
         @include('foodalchemist::livewire.planung.partials.worker-praesenz')
         <p class="{{ $label ?? 'text-[11px] text-gray-500' }} mb-2">
             @if($scope === 'gericht')
