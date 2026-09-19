@@ -125,11 +125,11 @@
         {{-- Composer-Übernahme: sichtbar machen, dass der Go auf die gewählten Foodpairing-Anker erdet. --}}
         @if(($composerSeedPin['scope'] ?? null) === $scope && !empty($composerSeedPin['slugs']))
             <div class="mb-2 flex flex-wrap items-center gap-2 rounded-lg bg-violet-500/10 border border-violet-500/30 px-2 py-1.5" data-composer-seed-hint>
-                <span class="text-[11px] text-violet-200">
+                <span class="text-[11px] text-violet-700">
                     🎯 Composer-Anker aktiv (Go erdet darauf): <b>{{ implode(', ', $composerSeedPin['slugs']) }}</b>
                 </span>
                 <button type="button" wire:click="$set('composerSeedPin', [])"
-                        class="text-[10px] text-violet-300/70 hover:text-violet-200 underline">entfernen</button>
+                        class="text-[10px] text-violet-600 hover:text-violet-800 underline">entfernen</button>
             </div>
         @endif
         <div class="flex flex-wrap gap-2 items-center">
