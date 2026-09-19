@@ -61,12 +61,41 @@ it('E-1: recipes.ENRICH stösst den Anreicherungs-Lauf an und meldet den Ausgang
     $res = ($this->run)('foodalchemist.recipes.ENRICH', ['recipe_id' => $r->id]);
 
     expect($res->success)->toBeTrue()
-        ->and($res->data['run_id'])->toBeGreaterThan(0)
+        ->and($res->data['run_namespace'])->toBe('planung_kaskade')
+        ->and($res->data['cascade_run_id'])->toBeGreaterThan(0)
+        ->and($res->data['status_tool'])->toBe('foodalchemist.planung_kaskade.GET')
         ->and($res->data['step_id'])->toBeGreaterThan(0)
         // Der Ausgangszustand kommt mit, damit nach dem Lauf vergleichbar ist, was er bewirkt hat.
         ->and($res->data)->toHaveKey('reife_vorher');
 
-    Queue::assertPushed(EnrichRecipeJob::class);
+    Queue::assertPushed(EnrichRecipeJob::class, fn (EnrichRecipeJob $job) =>
+        $job->recipeId === (int) $r->id && $job->stepId === (int) $res->data['step_id']
+    );
+
+    $status = ($this->run)('foodalchemist.planung_kaskade.GET', ['run_id' => $res->data['cascade_run_id']]);
+    expect($status->success)->toBeTrue()
+        ->and($status->data['run_namespace'])->toBe('planung_kaskade')
+        ->and($status->data['lauf']['scope'])->toBe('rezept')
+        ->and($status->data['lauf']['status'])->toBe('running')
+        ->and($status->data['schritte'][0]['ref_id'])->toBe((int) $r->id)
+        ->and($status->data['schritte'][0]['anreicherung'])->toBe('queued');
+});
+
+it('E-1: Basisrezept- und VK-Anreicherung sind hart getrennte MCP-Wege', function () {
+    Queue::fake();
+    $basis = $this->makeRecipe($this->rootTeam, 'Fond: Getrennt');
+    $vk = $this->makeRecipe($this->rootTeam, 'TEL: Getrennt', ['is_sales_recipe' => true]);
+
+    expect(($this->run)('foodalchemist.recipes.ENRICH', ['recipe_id' => $vk->id])->errorCode)
+        ->toBe('WRONG_RECIPE_TYPE')
+        ->and(($this->run)('foodalchemist.verkaufsrezepte.ENRICH', ['recipe_id' => $basis->id])->errorCode)
+        ->toBe('WRONG_RECIPE_TYPE');
+
+    $res = ($this->run)('foodalchemist.verkaufsrezepte.ENRICH', ['recipe_id' => $vk->id]);
+    expect($res->success)->toBeTrue()
+        ->and($res->data['recipe']['id'])->toBe((int) $vk->id)
+        ->and($res->data['recipe']['ist_gericht'])->toBeTrue();
+    Queue::assertPushed(EnrichRecipeJob::class, fn (EnrichRecipeJob $job) => $job->recipeId === (int) $vk->id);
 });
 
 it('E-1: ki_bilder ist standardmässig AUS — Fotos auf Bedarf', function () {

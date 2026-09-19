@@ -11,7 +11,7 @@ use Platform\FoodAlchemist\Services\PlanningCascadeService;
 use Platform\FoodAlchemist\Services\ReifeService;
 
 /**
- * Spec 50 · E-1 — Anreicherung für ein BESTEHENDES Rezept. Die Wurzel aus §4.1.
+ * Spec 50 · E-1 — Anreicherung für ein BESTEHENDES Basisrezept. Die Wurzel aus §4.1.
  *
  * Bis 2026-09-05 war der Anreicherungs-Pass für den Alltags-Weg unerreichbar:
  * `RecipeOneShotService::anreichern()` läuft nur aus `recipes.GENERATE` (also nur für frisch
@@ -34,15 +34,14 @@ class RecipesEnrichTool extends FoodAlchemistTool implements ToolContract, ToolM
 
     public function getDescription(): string
     {
-        return 'Reichert ein BESTEHENDES Basisrezept oder Verkaufsgericht an (der Weg, den es bisher nur im Editor gab): '
-            . 'füllt die leeren Zielfelder der Schrittfolge, mintet fehlende GPs, und bei einem Gericht zusätzlich '
-            . 'Kohärenz-Urteil und Wirtschaftlichkeit (Preisklasse, Standard-Darreichung, Auto-VK, Food-Cost-Ampel). '
+        return 'Reichert ein BESTEHENDES Basisrezept an (der Weg, den es bisher nur im Editor gab): '
+            . 'füllt die leeren Zielfelder der Schrittfolge und mintet fehlende GPs. Verkaufsgerichte laufen '
+            . 'getrennt über foodalchemist.verkaufsrezepte.ENRICH. '
             . 'Schrittfolge Basisrezept: Beschreibung, 186er-Kategorie, Geschmacksrichtung, Dichteklasse + Behälter '
             . '(Abfüllen/Regenerieren), Regeneration (Gerät/Temperatur/Zeit oder bewusst kalt) und Garverlust je Zutat '
-            . '(Reduktion/Fond → Ausbeute). Gericht: Beschreibung, Wording, Plating, Speisen-Klasse, Geschmacksrichtung, '
-            . 'Servier-Vehikel und Zutaten-Rollen (Aroma-Treiber/Komponente/Beilage/Garnitur). '
+            . '(Reduktion/Fond → Ausbeute). '
             . 'Nährwerte, Allergene und Zusatzstoffe kommen NICHT aus der KI, sondern aus den Lieferantenartikeln. '
-            . 'Sub-Rezepte laufen mit. Läuft ASYNCHRON über den Worker — die Antwort liefert run_id und step_id, '
+            . 'Sub-Rezepte laufen mit. Läuft ASYNCHRON über den Worker — die Antwort liefert cascade_run_id und step_id, '
             . 'den Fortschritt zeigt foodalchemist.planung_kaskade.GET, das Ergebnis foodalchemist.recipes.REIFE. '
             . 'Bereits gefüllte Felder werden nie angetastet (Override-First). Kostet Provider-Calls je fehlendem Feld.';
     }
@@ -52,7 +51,7 @@ class RecipesEnrichTool extends FoodAlchemistTool implements ToolContract, ToolM
         return [
             'type' => 'object',
             'properties' => [
-                'recipe_id' => ['type' => 'integer', 'description' => 'Rezept- oder Gericht-Id (team-eigen). Die Ebene wird selbst erkannt.'],
+                'recipe_id' => ['type' => 'integer', 'description' => 'ID eines team-eigenen Basisrezepts (is_sales_recipe=false).'],
                 'complete_coverage' => ['type' => 'boolean', 'default' => true,
                     'description' => 'Volle Tiefe: zusätzlich Fertigungstiefe, Eigenschaften/Zeiten, Equipment, Posten, Prozessanker, '
                         . 'Aroma-Anker, Pairings, Eignung, Step-by-Step und Sensorik. false = nur die Textfelder (deutlich weniger Calls). '
@@ -79,11 +78,14 @@ class RecipesEnrichTool extends FoodAlchemistTool implements ToolContract, ToolM
         }
 
         $recipe = FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($id);
-        $vorher = app(ReifeService::class)->kurz($team, $recipe->is_sales_recipe ? 'sales_recipe' : 'recipe', $id);
+        if ((bool) $recipe->is_sales_recipe !== $this->salesRecipeExpected()) {
+            return ToolResult::error($this->wrongTypeMessage(), 'WRONG_RECIPE_TYPE');
+        }
+        $vorher = app(ReifeService::class)->kurz($team, $this->salesRecipeExpected() ? 'sales_recipe' : 'recipe', $id);
 
         try {
             $run = app(PlanningCascadeService::class)->enrichBestehendesRezept(
-                $team, $id, (bool) $recipe->is_sales_recipe, null,
+                $team, $id, $this->salesRecipeExpected(), null,
                 (bool) ($arguments['complete_coverage'] ?? true),
                 (bool) ($arguments['ki_bilder'] ?? false),
             );
@@ -92,30 +94,42 @@ class RecipesEnrichTool extends FoodAlchemistTool implements ToolContract, ToolM
         }
 
         return ToolResult::success([
-            'run_id' => (int) $run->id,
+            'run_namespace' => 'planung_kaskade',
+            'cascade_run_id' => (int) $run->id,
+            'status_tool' => 'foodalchemist.planung_kaskade.GET',
             'step_id' => (int) ($run->steps()->value('id') ?? 0),
             'recipe' => ['id' => $recipe->id, 'name' => $recipe->name, 'ist_gericht' => (bool) $recipe->is_sales_recipe],
             // Der Ausgangszustand, damit nach dem Lauf vergleichbar ist, was der Pass bewirkt hat.
             'reife_vorher' => $vorher,
-            'hinweis' => 'Läuft asynchron. Fortschritt: foodalchemist.planung_kaskade.GET (run_id). '
+            'hinweis' => 'Läuft asynchron. Fortschritt ausschließlich mit foodalchemist.planung_kaskade.GET '
+                . '(run_id = cascade_run_id) abfragen; foodalchemist.runs.GET liest eine andere ID-Tabelle. '
                 . 'Danach foodalchemist.recipes.REIFE für den neuen Stand. Freigabe bleibt menschlich.',
         ]);
+    }
+
+    protected function salesRecipeExpected(): bool
+    {
+        return false;
+    }
+
+    protected function wrongTypeMessage(): string
+    {
+        return 'Die ID gehört zu einem Verkaufsgericht. Dafür foodalchemist.verkaufsrezepte.ENRICH verwenden.';
     }
 
     public function getMetadata(): array
     {
         return [
             'category' => 'action',
-            'tags' => ['foodalchemist', 'rezept', 'gericht', 'anreicherung', 'enrich', 'ki'],
+            'tags' => ['foodalchemist', 'basisrezept', 'anreicherung', 'enrich', 'ki'],
             'read_only' => false, 'idempotent' => false, 'risk_level' => 'write',
             'requires_auth' => true, 'requires_team' => true,
             'side_effects' => ['updates'], 'cost_class' => 'llm_call',
             'related_tools' => [
                 'foodalchemist.recipes.REIFE', 'foodalchemist.planung_kaskade.GET',
-                'foodalchemist.recipes.POST', 'foodalchemist.verkaufsrezepte.PUT',
+                'foodalchemist.recipes.POST', 'foodalchemist.recipe_ingredients.PUT',
             ],
             'examples' => [
-                'Reichere Gericht 1373 vollständig an',
                 'Basisrezept 812 anreichern, aber ohne Bilder und nur die Textfelder',
             ],
         ];

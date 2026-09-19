@@ -62,7 +62,8 @@ it('H3c · V-073: ein Lauf über eine leere Arbeitsmenge wird angelegt UND sofor
         ->and($frisch->context['hinweis'])->toBe(FoodAlchemistBulkRun::HINWEIS_LEERE_MENGE);
 
     $zeile = $this->svc->zeile($frisch);
-    expect($zeile['offen'])->toBeFalse()
+    expect($zeile['run_namespace'])->toBe('bulk')
+        ->and($zeile['offen'])->toBeFalse()
         ->and($zeile['verwaist'])->toBeFalse()
         // „nichts zu tun" ist von „hängt" unterscheidbar — genau das war V-073.
         ->and($zeile['hinweis'])->toBe(FoodAlchemistBulkRun::HINWEIS_LEERE_MENGE)

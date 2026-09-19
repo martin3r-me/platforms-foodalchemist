@@ -30,8 +30,10 @@ class RunsGetTool extends FoodAlchemistTool implements ToolContract, ToolMetadat
     public function getDescription(): string
     {
         return 'Stand eingereihter Massen-Läufe des Teams (Anreicherungs-Autopilot auf Rezepten/Gerichten/'
-            . 'Grundprodukten, Artikel-Import, KI-Review) — die allgemeine Quittung zu jeder run_id, die ein '
-            . 'auslösendes Tool zurückgegeben hat. Liefert Art, Zustand, Fortschritt (umfang/verarbeitet/fehler), '
+            . 'Grundprodukten, Artikel-Import, KI-Review). Dieses Tool liest ausschließlich den Namespace `bulk`. '
+            . 'Eine `cascade_run_id` aus recipes.ENRICH oder verkaufsrezepte.ENRICH gehört stattdessen zwingend '
+            . 'zu foodalchemist.planung_kaskade.GET; gleiche Zahlen können in beiden Tabellen vorkommen. '
+            . 'Liefert Art, Zustand, Fortschritt (umfang/verarbeitet/fehler), '
             . 'Auslöser, Gegenstand des Laufs und den Fehlergrund. '
             . 'Das Entscheidungs-Feld ist offen: nur bei offen=true lohnt Warten. '
             . 'offen=false mit status=running heißt verwaist=true — der Lauf hat sich seit über '
