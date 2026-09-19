@@ -1124,6 +1124,13 @@ return [
         // Einkochverlust ist Garverlust je Zutat, abgeseihte Feststoffe (Knochen, Karkassen,
         // Röstgemüse im Fond) sind 100. Mit dem 60er-Deckel war „auf ein Viertel reduzieren" (75)
         // nicht sagbar und der EK/kg einer Jus um den Einkochfaktor zu niedrig.
+        'recipe.posten' => [
+            'tier' => 'B',
+            'task' => 'Ordne das Basisrezept anhand der Zutaten und Zubereitung dem fachlich passenden Küchenposten zu. '
+                . 'Wähle ausschließlich eine ID aus dem mitgegebenen aktiven Postenkatalog. Namen müssen nicht wörtlich im Rezept stehen '
+                . '(z.B. Gemüsebeilage → Entremetier). Erfinde keine Posten. Bei fehlender Eignung oder unauflösbarer Mehrdeutigkeit null. '
+                . 'werte = {station_id: integer|null}. Begründe die Wahl im reasoning.',
+        ],
         'recipe.garverlust' => [
             'tier' => 'C',
             'task' => 'Schätze je Zutat den Garverlust in Prozent (0-100, Regelwerk §6 F6.5): '

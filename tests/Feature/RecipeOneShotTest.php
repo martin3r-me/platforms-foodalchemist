@@ -355,7 +355,9 @@ it('Voll anreichern synchronisiert operative Detail-Felder: Equipment, Posten un
         'evidence' => 'Test-Grounding', 'created_at' => now(), 'updated_at' => now(),
     ]);
 
-    $this->mock(AiGatewayService::class, function ($mock) {
+    $this->mock(AiGatewayService::class, function ($mock) use ($posten) {
+        $mock->shouldReceive('propose')->once()->with('recipe.posten', \Mockery::any(), \Mockery::any())
+            ->andReturn(new AiProposal(['station_id' => $posten->id], 0.9, 'Warme Herstellung', [], 'posten-op'));
         $mock->shouldReceive('propose')->once()->with('recipe.production_depth', \Mockery::any(), \Mockery::any())
             ->andReturn(new AiProposal(['production_depth' => 'from_scratch'], 0.75, 'Mock', [], 'fertigung-op'));
         $mock->shouldReceive('propose')->once()->with('recipe.eigenschaften', \Mockery::any(), \Mockery::any())

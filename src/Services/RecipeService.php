@@ -986,18 +986,21 @@ class RecipeService
      *
      * @param array<int, array> $zeilen
      */
-    public function syncIngredients(Team $team, int $recipeId, array $zeilen): FoodAlchemistRecipe
+    public function syncIngredients(Team $team, int $recipeId, array $zeilen, bool $preserveMissing = false): FoodAlchemistRecipe
     {
         $recipe = FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($recipeId);
         if ((int) $recipe->team_id !== (int) $team->id) {
             throw new \RuntimeException('Geerbtes Rezept — Zutaten-Pflege nur durchs Besitzer-Team (D1).');
         }
 
-        DB::transaction(function () use ($team, $recipe, $zeilen) {
+        DB::transaction(function () use ($team, $recipe, $zeilen, $preserveMissing) {
             $vorhanden = $recipe->ingredients()->get()->keyBy('id');
             $behalten = [];
 
             foreach (array_values($zeilen) as $i => $z) {
+                if ($preserveMissing && isset($z['id']) && (! $vorhanden->has((int) $z['id']) || in_array((int) $z['id'], $behalten, true))) {
+                    throw new \RuntimeException('Zutaten-ID gehört nicht zum Rezept oder wurde doppelt angegeben.');
+                }
                 $gpId = ($z['gp_id'] ?? null) !== null && $z['gp_id'] !== '' ? (int) $z['gp_id'] : null;
                 $subId = ($z['referenced_recipe_id'] ?? null) !== null && $z['referenced_recipe_id'] !== '' ? (int) $z['referenced_recipe_id'] : null;
                 if ($gpId !== null && $subId !== null) {
@@ -1089,6 +1092,20 @@ class RecipeService
 
                 $id = ($z['id'] ?? null) !== null && $vorhanden->has((int) $z['id']) ? (int) $z['id'] : null;
                 if ($id !== null) {
+                    if ($preserveMissing) {
+                        // Unveränderte Rückgabe aus GET ist keine neue KI-Entscheidung.
+                        if (array_key_exists('cooking_loss_pct', $z)
+                            && $z['cooking_loss_pct'] !== null
+                            && $vorhanden[$id]->cooking_loss_pct !== null
+                            && (float) $z['cooking_loss_pct'] === (float) $vorhanden[$id]->cooking_loss_pct) {
+                            unset($attrs['cooking_loss_source']);
+                        }
+                        foreach (['quantity_max', 'trimming_loss_pct', 'cooking_loss_pct', 'cooking_loss_source', 'is_optional', 'note', 'role', 'is_value_relevant'] as $field) {
+                            if (! array_key_exists($field, $z)) {
+                                unset($attrs[$field]);
+                            }
+                        }
+                    }
                     $vorhanden[$id]->update($attrs);
                     $behalten[] = $id;
                 } else {

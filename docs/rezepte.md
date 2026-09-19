@@ -131,3 +131,38 @@ Weil ein Gericht auf Basisrezepten und Grundprodukten steht, kennt es seinen War
 ---
 
 > **Faustregel:** Wiederkehrende Komponenten gehören in ein **Basisrezept**, nicht direkt ins Gericht. Dann pflegst du sie an einer Stelle und jedes Gericht profitiert von der Änderung.
+
+### Rezeptpflege und PDF über MCP
+
+`foodalchemist.recipes.GET` liefert Zutaten-IDs, Garverluste und den Default-Posten.
+Beim Ändern mit `foodalchemist.recipe_ingredients.PUT` die vorhandenen Zutaten-IDs
+mitsenden: nicht angegebene optionale Werte bleiben erhalten. Die Liste ist weiterhin
+ein Voll-Sync; weggelassene Zeilen werden gelöscht. Garverlust wird je Zutat als
+`cooking_loss_pct` (0–100) gesetzt, nicht am Rezeptkopf.
+
+Die Komplett-Anreicherung ordnet einen fehlenden Posten fachlich per KI aus den
+verfügbaren aktiven Posten zu. Vorhandene Zuordnungen bleiben erhalten. Ohne
+passenden Posten bleibt die Zuordnung offen. Für eine gezielte Korrektur liefert
+`foodalchemist.production_stations.GET` die IDs; `recipes.PUT` setzt
+`default_station_id`.
+
+`foodalchemist.recipes.PDF` mit `id` und optional `profil` (`kurz`, `produktion`,
+`kalkulation`, `voll`) liefert über MCP einen zehn Minuten gültigen `download_url`
+für das Plattform-PDF. Der Link ist ohne Browser-Login abrufbar und gewährt jedem,
+der ihn besitzt, bis zum Ablauf Zugriff auf dieses PDF. Alternativ gibt
+`transport=base64` die PDF-Daten als `content_base64` direkt zurück. Ob der Client
+die Datei als Anhang anzeigen kann, hängt von seiner Dateiunterstützung ab.
+Maximale PDF-Größe: 2 MiB.
+
+Einzelne PDF-Inhalte lassen sich unabhängig vom Profil per Boolean filtern:
+`stammdaten`, `zutaten`, `steps`, `sensorik`, `produktion`, `preise`, `lieferanten`,
+`kaskade`, `bilder`, `deklaration`, `naehrwerte`, `notizen`, `regeneration`,
+`anrichten`, `behaelter`. Nicht mitgegebene Filter behalten den Profilstandard.
+`ziel_kg` rechnet die Rezeptmenge hoch; bei Gerichten sind `ziel_menge` und
+`darreichung` möglich. Das Tool gibt die wirksamen `optionen` zurück.
+
+Beispiel für ein Produktions-PDF mit Schritten, ohne Preise und Lieferanten:
+
+```json
+{"id": 3780, "profil": "produktion", "steps": true, "preise": false, "lieferanten": false}
+```

@@ -553,6 +553,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\RecipesSearchTool::class,
                     \Platform\FoodAlchemist\Tools\RecipesListTool::class,
                     \Platform\FoodAlchemist\Tools\RecipesGetTool::class,
+                    \Platform\FoodAlchemist\Tools\RecipesPdfGetTool::class,
+                    \Platform\FoodAlchemist\Tools\ProductionStationsGetTool::class,
                     \Platform\FoodAlchemist\Tools\VerkaufsrezepteSearchTool::class,
                     \Platform\FoodAlchemist\Tools\VerkaufsrezepteListTool::class,
                     \Platform\FoodAlchemist\Tools\FoodbooksGetTool::class,

@@ -483,6 +483,9 @@ class RecipeOneShotService
     /** @return array{status: string, station_id?: ?int, station?: ?string, fehler?: string} */
     private function postenGlied(Team $team, FoodAlchemistRecipe $recipe): array
     {
+        if (! $recipe->isOwnedBy($team)) {
+            return ['status' => 'fehler', 'fehler' => 'Posten-Pflege nur durchs Besitzer-Team.'];
+        }
         // Am GERICHT wird kein Posten gesetzt (Entscheid Dominique 2026-09-04): in der
         // Küche laufen die BASISREZEPTE über Posten; beim Fertigstellen und Anrichten
         // kommen die Posten zusammen und sind wieder ein Team. Ein einzelner „Posten,
@@ -493,10 +496,14 @@ class RecipeOneShotService
             return ['status' => 'uebersprungen', 'grund' => 'Gericht — Fertigstellung ist Team-Arbeit am Pass'];
         }
 
+        if ($recipe->default_station_id !== null) {
+            return ['status' => 'beibehalten', 'station_id' => (int) $recipe->default_station_id];
+        }
+
         try {
             $station = $this->stationVorschlag($team, $recipe);
             if ($station === null) {
-                return ['status' => 'offen'];
+                return ['status' => 'offen', 'grund' => 'Kein geeigneter aktiver Posten aus dem sichtbaren Katalog ableitbar.'];
             }
 
             // Der Vorschlag ordnet nur den Posten zu. Dessen physische Grenze bleibt
@@ -518,34 +525,28 @@ class RecipeOneShotService
             return null;
         }
 
-        $text = mb_strtolower(implode(' ', array_filter([
-            $recipe->name,
-            $recipe->function,
-            $recipe->temperature,
-            $recipe->production_depth,
-            $recipe->preparation,
-            implode(' ', $recipe->equipment()->pluck('slug')->all()),
-            implode(' ', $recipe->equipment()->pluck('name')->all()),
-        ])));
-
-        $best = null;
-        $bestScore = 0;
-        foreach ($stations as $station) {
-            $tokens = preg_split('/[^a-z0-9äöüß]+/iu', mb_strtolower($station->slug . ' ' . $station->name . ' ' . ($station->group_name ?? ''))) ?: [];
-            $tokens = array_values(array_unique(array_filter($tokens, fn ($t) => mb_strlen($t) >= 4)));
-            $score = 0;
-            foreach ($tokens as $token) {
-                if (str_contains($text, $token)) {
-                    $score++;
-                }
-            }
-            if ($score > $bestScore) {
-                $best = $station;
-                $bestScore = $score;
-            }
+        $proposal = app(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class)->propose(
+            'recipe.posten',
+            $this->stepKontext($recipe) + [
+                'description' => $recipe->description,
+                'preparation' => $recipe->preparation,
+                'equipment' => $recipe->equipment()->pluck('name')->all(),
+                'function' => $recipe->function,
+                'temperature' => $recipe->temperature,
+                'posten' => $stations->map(fn ($station) => [
+                    'id' => (int) $station->id, 'name' => $station->name,
+                    'slug' => $station->slug, 'gruppe' => $station->group_name,
+                ])->all(),
+            ],
+            ['target_table' => 'foodalchemist_recipes', 'target_id' => $recipe->id],
+        );
+        $id = $proposal->werte['station_id'] ?? null;
+        if (filter_var($id, FILTER_VALIDATE_INT) === false || (int) $id <= 0) {
+            return null;
         }
 
-        return $bestScore > 0 ? $best : null;
+        // Nur eine tatsächlich sichtbare, aktive Station aus dem Kandidatenkatalog.
+        return $stations->firstWhere('id', (int) $id);
     }
 
     /** @return array{status: string, matched?: list<string>, added?: list<string>, removed?: list<string>, fehler?: string} */

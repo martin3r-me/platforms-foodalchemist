@@ -53,6 +53,7 @@ abstract class FoodAlchemistTool
                 throw new \RuntimeException('Unbekannte Einheit "' . ($z['unit'] ?? '') . '" (Zeile ' . ($i + 1) . "). Verfügbar: {$verfuegbar}");
             }
             $out[] = [
+                'id' => $z['id'] ?? null,
                 'gp_id' => $z['gp_id'] ?? null,
                 'referenced_recipe_id' => $z['referenced_recipe_id'] ?? null,
                 'raw_text' => (string) ($z['name'] ?? ''),
@@ -67,6 +68,14 @@ abstract class FoodAlchemistTool
                 'note' => $z['note'] ?? null,
                 'role' => $z['role'] ?? null,
             ];
+            foreach (['quantity_max', 'trimming_loss_pct', 'cooking_loss_pct', 'is_optional', 'note', 'role'] as $field) {
+                if (! array_key_exists($field, $z)) {
+                    unset($out[$i][$field]);
+                    if ($field === 'cooking_loss_pct') {
+                        unset($out[$i]['cooking_loss_source']);
+                    }
+                }
+            }
         }
 
         return $out;
