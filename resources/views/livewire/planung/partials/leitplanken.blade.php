@@ -67,176 +67,185 @@
         ]);
     @endphp
 
-    <x-foodalchemist::modal-section title="Küche">
-        <x-slot:actions>{!! $kartenKopf($kuecheKopf) !!}</x-slot:actions>
-        <div class="grid md:grid-cols-2 gap-x-6 gap-y-4" data-planung-regler="{{ $scope }}">
-            <div data-richtung="{{ $richtungenByField['convenience']['field'] }}">
-                <p class="{{ $label }} mb-1.5">{{ $richtungenByField['convenience']['label'] }}</p>
-                <div class="flex flex-wrap gap-1.5">
-                    @foreach($richtungenByField['convenience']['optionen'] as $wert => $lbl)
-                        <button type="button" wire:click="reglerPill('{{ $scope }}', 'convenience', '{{ $wert }}')"
-                                class="px-2.5 py-1 rounded-full border text-[11px] transition-colors {{ ($r['convenience'] ?? '') === $wert ? $pillAktivKarte : $pillRuhe }}">{{ $lbl }}</button>
-                    @endforeach
-                </div>
-                <p class="text-[11px] text-gray-500 mt-1.5">{{ $richtungenByField['convenience']['hint'][$r['convenience'] ?? ''] ?? '' }}</p>
-            </div>
+    {{-- Breite-Fix (Dominique-Feedback 2026-09-19): Karten 2-spaltig ab xl statt einzeln über die
+         volle Breite — die Lesebreiten-Begrenzung übernimmt der Gesamtcontainer im Elternteil
+         (erstellen-tab.blade.php: max-w-7xl mx-auto), damit Eingabe/Leitplanken/Go gleich breit sind. --}}
+    <div>
+        <div class="xl:grid xl:grid-cols-2 xl:gap-4">
+            <x-foodalchemist::modal-section class="!mt-0" icon="heroicon-o-fire" title="Küche">
+                <x-slot:actions>{!! $kartenKopf($kuecheKopf) !!}</x-slot:actions>
+                <div class="grid sm:grid-cols-2 gap-x-4 gap-y-3" data-planung-regler="{{ $scope }}">
+                    <div data-richtung="{{ $richtungenByField['convenience']['field'] }}">
+                        <p class="{{ $label }} mb-1">{{ $richtungenByField['convenience']['label'] }}</p>
+                        <div class="flex flex-wrap gap-1">
+                            @foreach($richtungenByField['convenience']['optionen'] as $wert => $lbl)
+                                <button type="button" wire:click="reglerPill('{{ $scope }}', 'convenience', '{{ $wert }}')"
+                                        class="px-2 py-0.5 rounded-full border text-[11px] transition-colors {{ ($r['convenience'] ?? '') === $wert ? $pillAktivKarte : $pillRuhe }}">{{ $lbl }}</button>
+                            @endforeach
+                        </div>
+                        <p class="text-[10px] text-gray-500 mt-1">{{ $richtungenByField['convenience']['hint'][$r['convenience'] ?? ''] ?? '' }}</p>
+                    </div>
 
-            <div data-richtung="{{ $richtungenByField['bio_praeferenz']['field'] }}">
-                <p class="{{ $label }} mb-1.5">{{ $richtungenByField['bio_praeferenz']['label'] }}</p>
-                <div class="flex flex-wrap gap-1.5">
-                    @foreach($richtungenByField['bio_praeferenz']['optionen'] as $wert => $lbl)
-                        <button type="button" wire:click="reglerPill('{{ $scope }}', 'bio_praeferenz', '{{ $wert }}')"
-                                class="px-2.5 py-1 rounded-full border text-[11px] transition-colors {{ ($r['bio_praeferenz'] ?? '') === $wert ? $pillAktivKarte : $pillRuhe }}">{{ $lbl }}</button>
-                    @endforeach
-                </div>
-                <p class="text-[11px] text-gray-500 mt-1.5">{{ $richtungenByField['bio_praeferenz']['hint'][$r['bio_praeferenz'] ?? ''] ?? '' }}</p>
-            </div>
+                    <div data-richtung="{{ $richtungenByField['bio_praeferenz']['field'] }}">
+                        <p class="{{ $label }} mb-1">{{ $richtungenByField['bio_praeferenz']['label'] }}</p>
+                        <div class="flex flex-wrap gap-1">
+                            @foreach($richtungenByField['bio_praeferenz']['optionen'] as $wert => $lbl)
+                                <button type="button" wire:click="reglerPill('{{ $scope }}', 'bio_praeferenz', '{{ $wert }}')"
+                                        class="px-2 py-0.5 rounded-full border text-[11px] transition-colors {{ ($r['bio_praeferenz'] ?? '') === $wert ? $pillAktivKarte : $pillRuhe }}">{{ $lbl }}</button>
+                            @endforeach
+                        </div>
+                        <p class="text-[10px] text-gray-500 mt-1">{{ $richtungenByField['bio_praeferenz']['hint'][$r['bio_praeferenz'] ?? ''] ?? '' }}</p>
+                    </div>
 
-            <div class="md:col-span-2" data-richtung="aroma">
-                <p class="{{ $label }} mb-1.5">Aroma-Richtung</p>
-                <select wire:model="regler.{{ $scope }}.aroma_kueche" class="{{ $input }} !py-1.5 mb-1.5 md:max-w-xs" data-planung-aroma-kueche>
-                    @foreach(\Platform\FoodAlchemist\Livewire\Planung\Index::AROMA_KUECHEN as $wert => $lbl)
-                        <option value="{{ $wert }}">{{ $lbl }}</option>
-                    @endforeach
-                </select>
-                <input type="text" wire:model="regler.{{ $scope }}.aroma" placeholder="Feinjustierung — z. B. rauchig-karamellig, umami-lastig …" class="{{ $input }} !py-1.5" />
-                <p class="text-[11px] text-gray-500 mt-1.5">Küche steuert die Würzung (Anker/Technik/Archetyp); Freitext justiert zusätzlich. Beides optional.</p>
-            </div>
+                    <div class="sm:col-span-2" data-richtung="aroma">
+                        <p class="{{ $label }} mb-1">Aroma-Richtung</p>
+                        <select wire:model="regler.{{ $scope }}.aroma_kueche" class="{{ $input }} !py-1.5 mb-1 max-w-sm" data-planung-aroma-kueche>
+                            @foreach(\Platform\FoodAlchemist\Livewire\Planung\Index::AROMA_KUECHEN as $wert => $lbl)
+                                <option value="{{ $wert }}">{{ $lbl }}</option>
+                            @endforeach
+                        </select>
+                        <input type="text" wire:model="regler.{{ $scope }}.aroma" placeholder="Feinjustierung — z. B. rauchig-karamellig, umami-lastig …" class="{{ $input }} !py-1.5 max-w-sm" />
+                        <p class="text-[10px] text-gray-500 mt-1">Küche steuert die Würzung (Anker/Technik/Archetyp); Freitext justiert zusätzlich. Beides optional.</p>
+                    </div>
+                </div>
+            </x-foodalchemist::modal-section>
+
+            <x-foodalchemist::modal-section class="!mt-0" icon="heroicon-o-star" title="Anspruch">
+                <x-slot:actions>{!! $kartenKopf($anspruchKopf) !!}</x-slot:actions>
+                <div class="grid sm:grid-cols-2 gap-x-4 gap-y-3">
+                    <div data-richtung="{{ $richtungenByField['level']['field'] }}">
+                        <p class="{{ $label }} mb-1">{{ $richtungenByField['level']['label'] }}</p>
+                        <div class="flex flex-wrap gap-1">
+                            @foreach($richtungenByField['level']['optionen'] as $wert => $lbl)
+                                <button type="button" wire:click="reglerPill('{{ $scope }}', 'level', '{{ $wert }}')"
+                                        class="px-2 py-0.5 rounded-full border text-[11px] transition-colors {{ ($r['level'] ?? '') === $wert ? $pillAktivKarte : $pillRuhe }}">{{ $lbl }}</button>
+                            @endforeach
+                        </div>
+                        <p class="text-[10px] text-gray-500 mt-1">{{ $richtungenByField['level']['hint'][$r['level'] ?? ''] ?? '' }}</p>
+                    </div>
+
+                    <div data-richtung="frische">
+                        <p class="{{ $label }} mb-1">Frische (Zustands-Erlaubnis)</p>
+                        <div class="flex flex-wrap gap-1">
+                            @foreach(\Platform\FoodAlchemist\Livewire\Planung\Index::FRISCHE_OPTIONEN as $wert => $lbl)
+                                <button type="button" wire:click="reglerPill('{{ $scope }}', 'frische', '{{ $wert }}')"
+                                        class="px-2 py-0.5 rounded-full border text-[11px] transition-colors {{ in_array($wert, (array) ($r['frische'] ?? []), true) ? $pillAktivKarte : $pillRuhe }}" data-planung-frische="{{ $wert }}">{{ $lbl }}</button>
+                            @endforeach
+                        </div>
+                        <p class="text-[10px] text-gray-500 mt-1">{{ empty($r['frische'] ?? []) ? 'Egal — kein Zustands-Filter' : 'Nur diese Zustände (frisch bevorzugt)' }}</p>
+                    </div>
+
+                    <div class="sm:col-span-2" data-richtung="sektor">
+                        <p class="{{ $label }} mb-1">Sektor (Verpflegungskontext)
+                            @if($reglerVonAgent[$scope]['sektor'] ?? false)
+                                <span class="{{ $pill }} {{ $variantPill['secondary'] }}" data-regler-von-agent="sektor" title="Vom Sprachbefehl-Agenten vorgeschlagen — verschwindet bei manueller Änderung">Agent</span>
+                            @endif
+                        </p>
+                        <select wire:model="regler.{{ $scope }}.sektor" class="{{ $input }} !py-1.5 max-w-sm">
+                            <option value="">(egal/universell)</option>
+                            @foreach($sektorLabels as $wert => $lbl)
+                                <option value="{{ $wert }}">{{ $lbl }}</option>
+                            @endforeach
+                        </select>
+                        <p class="text-[10px] text-gray-500 mt-1">{{ ($r['sektor'] ?? '') === '' ? 'Kein Sektor-Constraint' : '' }}</p>
+                    </div>
+                </div>
+            </x-foodalchemist::modal-section>
         </div>
-    </x-foodalchemist::modal-section>
 
-    <x-foodalchemist::modal-section title="Anspruch">
-        <x-slot:actions>{!! $kartenKopf($anspruchKopf) !!}</x-slot:actions>
-        <div class="grid md:grid-cols-2 gap-x-6 gap-y-4">
-            <div data-richtung="{{ $richtungenByField['level']['field'] }}">
-                <p class="{{ $label }} mb-1.5">{{ $richtungenByField['level']['label'] }}</p>
-                <div class="flex flex-wrap gap-1.5">
-                    @foreach($richtungenByField['level']['optionen'] as $wert => $lbl)
-                        <button type="button" wire:click="reglerPill('{{ $scope }}', 'level', '{{ $wert }}')"
-                                class="px-2.5 py-1 rounded-full border text-[11px] transition-colors {{ ($r['level'] ?? '') === $wert ? $pillAktivKarte : $pillRuhe }}">{{ $lbl }}</button>
-                    @endforeach
+        <div class="xl:grid xl:grid-cols-2 xl:gap-4 mt-4">
+            <x-foodalchemist::modal-section class="!mt-0" icon="heroicon-o-sparkles" title="Anreicherung">
+                <x-slot:actions>{!! $kartenKopf($anreicherungKopf) !!}</x-slot:actions>
+                <div class="space-y-3">
+                    <div data-richtung="voll-anreichern">
+                        <label class="flex items-start gap-2 text-xs font-medium text-gray-900">
+                            <input type="checkbox" wire:model="regler.{{ $scope }}.voll_anreichern" class="mt-0.5" data-planung-voll-anreichern />
+                            <span>⚡ Voll anreichern</span>
+                        </label>
+                        <p class="text-[10px] text-gray-500 mt-1">An (Standard) = bei der Freigabe auch Schritte, Sensorik, Zeiten, Equipment, Posten und Pairings erzeugen. Aus = nur Kernfelder (<em>leicht angereichert</em>).</p>
+                    </div>
+
+                    <div data-richtung="ki-bilder">
+                        <label class="flex items-start gap-2 text-xs font-medium text-gray-900">
+                            <input type="checkbox" wire:model="regler.{{ $scope }}.ki_bilder" class="mt-0.5" data-planung-ki-bilder />
+                            <span>📷 KI-Fotos bei Anreicherung erstellen</span>
+                        </label>
+                        <p class="text-[10px] text-gray-500 mt-1">Schritt-für-Schritt + Produktfoto (je Bild ein KI-Call → <b>Kosten</b>). Aus = keine Bilder.</p>
+                    </div>
+
+                    <div class="border-t border-black/5 pt-2.5" data-richtung="favoriten">
+                        <label class="flex items-start gap-2 text-xs font-medium text-gray-900">
+                            <input type="checkbox" wire:model.live="regler.{{ $scope }}.favoriten" class="mt-0.5" data-planung-favoriten />
+                            <span>⭐ Auf Basis meiner Favoriten bauen</span>
+                        </label>
+                        <p class="text-[10px] text-gray-500 mt-1">Bevorzugt kuratierte Lieblings-GPs. Aus = freie Kreativität.</p>
+                        <label x-show="$wire.get('regler.{{ $scope }}.favoriten')" class="flex items-center gap-1.5 text-[11px] text-gray-600 mt-1 ml-6">
+                            <input type="checkbox" wire:model="regler.{{ $scope }}.favoriten_conv_only" /> nur Convenience-Favoriten
+                        </label>
+                    </div>
                 </div>
-                <p class="text-[11px] text-gray-500 mt-1.5">{{ $richtungenByField['level']['hint'][$r['level'] ?? ''] ?? '' }}</p>
-            </div>
+            </x-foodalchemist::modal-section>
 
-            <div data-richtung="frische">
-                <p class="{{ $label }} mb-1.5">Frische (Zustands-Erlaubnis)</p>
-                <div class="flex flex-wrap gap-1.5">
-                    @foreach(\Platform\FoodAlchemist\Livewire\Planung\Index::FRISCHE_OPTIONEN as $wert => $lbl)
-                        <button type="button" wire:click="reglerPill('{{ $scope }}', 'frische', '{{ $wert }}')"
-                                class="px-2.5 py-1 rounded-full border text-[11px] transition-colors {{ in_array($wert, (array) ($r['frische'] ?? []), true) ? $pillAktivKarte : $pillRuhe }}" data-planung-frische="{{ $wert }}">{{ $lbl }}</button>
-                    @endforeach
+            <x-foodalchemist::modal-section class="!mt-0" icon="heroicon-o-shield-check" title="Constraints">
+                <x-slot:actions>{!! $kartenKopf($constraintsKopf) !!}</x-slot:actions>
+                <div class="space-y-3">
+                    <div data-richtung="diaet">
+                        <p class="{{ $label }} mb-1">Diät-Constraints (Multi-Select, hart geprüft)</p>
+                        <div class="flex flex-wrap gap-1">
+                            @foreach($diaetLabels as $wert => $lbl)
+                                <button type="button" wire:click="reglerPill('{{ $scope }}', 'diaet_hart', '{{ $wert }}')"
+                                        class="px-2 py-0.5 rounded-full border text-[11px] transition-colors {{ in_array($wert, (array) ($r['diaet_hart'] ?? []), true) ? $pillAktivKarte : $pillRuhe }}">{{ $lbl }}</button>
+                            @endforeach
+                        </div>
+                        <p class="text-[10px] text-gray-500 mt-1">Verletzende Zutaten werden nach der Erzeugung gelöst + gemeldet (keine harte Sperre).</p>
+                    </div>
+
+                    <div data-richtung="allergen-nogo">
+                        <p class="{{ $label }} mb-1">Allergen-Ausschluss (EU-14, hart geprüft)</p>
+                        <div class="flex flex-wrap gap-1">
+                            @foreach(\Platform\FoodAlchemist\Livewire\Planung\Index::ALLERGEN_LABELS as $wert => $lbl)
+                                <button type="button" wire:click="reglerPill('{{ $scope }}', 'allergen_nogo', '{{ $wert }}')"
+                                        class="px-2 py-0.5 rounded-full border text-[11px] transition-colors {{ in_array($wert, (array) ($r['allergen_nogo'] ?? []), true) ? $pillAktivKarte : $pillRuhe }}" data-planung-allergen-nogo="{{ $wert }}">{{ $lbl }}</button>
+                            @endforeach
+                        </div>
+                        <p class="text-[10px] text-gray-500 mt-1">{{ empty($r['allergen_nogo'] ?? []) ? 'Kein Allergen-Ausschluss' : 'Zutaten mit diesem Allergen werden gelöst + gemeldet.' }}</p>
+                    </div>
                 </div>
-                <p class="text-[11px] text-gray-500 mt-1.5">{{ empty($r['frische'] ?? []) ? 'Egal — kein Zustands-Filter (KI wählt frei)' : 'Nur diese Zustände zugelassen (harter Filter; innerhalb: frisch bevorzugt)' }}</p>
-            </div>
-
-            <div class="md:col-span-2" data-richtung="sektor">
-                <p class="{{ $label }} mb-1.5">Sektor (Verpflegungskontext)
-                    @if($reglerVonAgent[$scope]['sektor'] ?? false)
-                        <span class="{{ $pill }} {{ $variantPill['secondary'] }}" data-regler-von-agent="sektor" title="Vom Sprachbefehl-Agenten vorgeschlagen — verschwindet bei manueller Änderung">Agent</span>
-                    @endif
-                </p>
-                <select wire:model="regler.{{ $scope }}.sektor" class="{{ $input }} !py-1.5 md:max-w-xs">
-                    <option value="">(egal/universell)</option>
-                    @foreach($sektorLabels as $wert => $lbl)
-                        <option value="{{ $wert }}">{{ $lbl }}</option>
-                    @endforeach
-                </select>
-                <p class="text-[11px] text-gray-500 mt-1.5">{{ ($r['sektor'] ?? '') === '' ? 'Kein Sektor-Constraint' : '' }}</p>
-            </div>
+            </x-foodalchemist::modal-section>
         </div>
-    </x-foodalchemist::modal-section>
 
-    <x-foodalchemist::modal-section title="Anreicherung">
-        <x-slot:actions>{!! $kartenKopf($anreicherungKopf) !!}</x-slot:actions>
-        <div class="grid md:grid-cols-2 gap-x-6 gap-y-3">
-            <div data-richtung="voll-anreichern">
-                <label class="flex items-start gap-2 text-xs font-medium text-gray-900">
-                    <input type="checkbox" wire:model="regler.{{ $scope }}.voll_anreichern" class="mt-0.5" data-planung-voll-anreichern />
-                    <span>⚡ Voll anreichern</span>
-                </label>
-                <p class="text-[11px] text-gray-500 mt-1.5">An (Standard) = bei der Freigabe auch Schritte, Sensorik, Arbeits- und Rüstzeit, Equipment, Posten und geerdete Pairings erzeugen. Aus = nur die Kernfelder; Schritte und Zeiten bleiben leer, die Zeile wird als <em>leicht angereichert</em> markiert. Kostet einen Textlauf je Rezept — die teure Achse sind die KI-Fotos daneben.</p>
-            </div>
-
-            <div data-richtung="ki-bilder">
-                <label class="flex items-start gap-2 text-xs font-medium text-gray-900">
-                    <input type="checkbox" wire:model="regler.{{ $scope }}.ki_bilder" class="mt-0.5" data-planung-ki-bilder />
-                    <span>📷 KI-Fotos bei Anreicherung erstellen</span>
-                </label>
-                <p class="text-[11px] text-gray-500 mt-1.5">Bei der Freigabe entstehen Schritt-für-Schritt-Fotos + ein Produktfoto (je Bild ein KI-Call → <b>Kosten</b>). Aus = keine Bilder.</p>
-            </div>
-
-            <div class="md:col-span-2 border-t border-black/5 pt-3" data-richtung="favoriten">
-                <label class="flex items-start gap-2 text-xs font-medium text-gray-900">
-                    <input type="checkbox" wire:model.live="regler.{{ $scope }}.favoriten" class="mt-0.5" data-planung-favoriten />
-                    <span>⭐ Auf Basis meiner Favoriten bauen</span>
-                </label>
-                <p class="text-[11px] text-gray-500 mt-1.5">Bevorzugt die kuratierten Lieblings-GPs (bevorzugt, nicht ausschließlich). Aus = freie Kreativität.</p>
-                <label x-show="$wire.get('regler.{{ $scope }}.favoriten')" class="flex items-center gap-1.5 text-[11px] text-gray-600 mt-1.5 ml-6">
-                    <input type="checkbox" wire:model="regler.{{ $scope }}.favoriten_conv_only" /> nur Convenience-Favoriten
-                </label>
-            </div>
-        </div>
-    </x-foodalchemist::modal-section>
-
-    <x-foodalchemist::modal-section title="Constraints">
-        <x-slot:actions>{!! $kartenKopf($constraintsKopf) !!}</x-slot:actions>
-        <div class="space-y-4">
-            <div data-richtung="diaet">
-                <p class="{{ $label }} mb-1.5">Diät-Constraints (Multi-Select, hart geprüft)</p>
-                <div class="flex flex-wrap gap-1.5">
-                    @foreach($diaetLabels as $wert => $lbl)
-                        <button type="button" wire:click="reglerPill('{{ $scope }}', 'diaet_hart', '{{ $wert }}')"
-                                class="px-2.5 py-1 rounded-full border text-[11px] transition-colors {{ in_array($wert, (array) ($r['diaet_hart'] ?? []), true) ? $pillAktivKarte : $pillRuhe }}">{{ $lbl }}</button>
-                    @endforeach
+        <x-foodalchemist::modal-section icon="heroicon-o-flag" title="Ziel">
+            <x-slot:actions>{!! $kartenKopf($zielKopf) !!}</x-slot:actions>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-3 max-w-2xl" data-richtung="menge-ziel">
+                {{-- Basisrezept = Halbfabrikat (Charge in einer Einheit), kein Teller für N Gäste:
+                     Ziel-Menge + Einheit statt Pax/Portion (2 L Sauce, 5 kg Teig, 30 Stk …). --}}
+                <div>
+                    <label class="block {{ $label }} mb-1">Einheit</label>
+                    <select wire:model="regler.{{ $scope }}.ziel_einheit" class="{{ $input }} !py-1.5" data-planung-ziel-einheit>
+                        @foreach(\Platform\FoodAlchemist\Livewire\Planung\Index::MENGE_EINHEITEN as $wert => $lbl)
+                            <option value="{{ $wert }}">{{ $lbl }}</option>
+                        @endforeach
+                    </select>
                 </div>
-                <p class="text-[11px] text-gray-500 mt-1.5">Nach der Erzeugung geprüft: verletzende Zutaten werden gelöst + gemeldet (keine harte Sperre — du entscheidest).</p>
-            </div>
-
-            <div data-richtung="allergen-nogo">
-                <p class="{{ $label }} mb-1.5">Allergen-Ausschluss (EU-14, hart geprüft)</p>
-                <div class="flex flex-wrap gap-1.5">
-                    @foreach(\Platform\FoodAlchemist\Livewire\Planung\Index::ALLERGEN_LABELS as $wert => $lbl)
-                        <button type="button" wire:click="reglerPill('{{ $scope }}', 'allergen_nogo', '{{ $wert }}')"
-                                class="px-2.5 py-1 rounded-full border text-[11px] transition-colors {{ in_array($wert, (array) ($r['allergen_nogo'] ?? []), true) ? $pillAktivKarte : $pillRuhe }}" data-planung-allergen-nogo="{{ $wert }}">{{ $lbl }}</button>
-                    @endforeach
+                <div>
+                    <label class="block {{ $label }} mb-1">Ziel-Menge</label>
+                    <input type="number" min="0" step="any" wire:model="regler.{{ $scope }}.ziel_menge" placeholder="z. B. 2" class="{{ $input }} !py-1.5 font-mono" data-planung-ziel-menge />
                 </div>
-                <p class="text-[11px] text-gray-500 mt-1.5">{{ empty($r['allergen_nogo'] ?? []) ? 'Kein Allergen-Ausschluss' : 'Zutaten mit diesem Allergen werden nach der Erzeugung gelöst + gemeldet.' }}</p>
+                <div>
+                    <label class="block {{ $label }} mb-1">Saison</label>
+                    <select wire:model="regler.{{ $scope }}.saison" class="{{ $input }} !py-1.5" data-planung-saison>
+                        @foreach(\Platform\FoodAlchemist\Livewire\Planung\Index::SAISON_OPTIONEN as $wert => $lbl)
+                            <option value="{{ $wert }}">{{ $lbl }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div>
+                    <label class="block {{ $label }} mb-1">Ziel-Wareneinsatz (%)</label>
+                    <input type="number" min="1" max="100" step="1" wire:model="regler.{{ $scope }}.ziel_we_pct" placeholder="z. B. 28" class="{{ $input }} !py-1.5 font-mono" data-planung-we-pct />
+                </div>
             </div>
-        </div>
-    </x-foodalchemist::modal-section>
-
-    <x-foodalchemist::modal-section title="Ziel">
-        <x-slot:actions>{!! $kartenKopf($zielKopf) !!}</x-slot:actions>
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-3" data-richtung="menge-ziel">
-            {{-- Basisrezept = Halbfabrikat (Charge in einer Einheit), kein Teller für N Gäste:
-                 Ziel-Menge + Einheit statt Pax/Portion (2 L Sauce, 5 kg Teig, 30 Stk …). --}}
-            <div>
-                <label class="block {{ $label }} mb-1">Einheit</label>
-                <select wire:model="regler.{{ $scope }}.ziel_einheit" class="{{ $input }} !py-1.5" data-planung-ziel-einheit>
-                    @foreach(\Platform\FoodAlchemist\Livewire\Planung\Index::MENGE_EINHEITEN as $wert => $lbl)
-                        <option value="{{ $wert }}">{{ $lbl }}</option>
-                    @endforeach
-                </select>
-            </div>
-            <div>
-                <label class="block {{ $label }} mb-1">Ziel-Menge</label>
-                <input type="number" min="0" step="any" wire:model="regler.{{ $scope }}.ziel_menge" placeholder="z. B. 2" class="{{ $input }} !py-1.5 font-mono" data-planung-ziel-menge />
-            </div>
-            <div>
-                <label class="block {{ $label }} mb-1">Saison</label>
-                <select wire:model="regler.{{ $scope }}.saison" class="{{ $input }} !py-1.5" data-planung-saison>
-                    @foreach(\Platform\FoodAlchemist\Livewire\Planung\Index::SAISON_OPTIONEN as $wert => $lbl)
-                        <option value="{{ $wert }}">{{ $lbl }}</option>
-                    @endforeach
-                </select>
-            </div>
-            <div>
-                <label class="block {{ $label }} mb-1">Ziel-Wareneinsatz (%)</label>
-                <input type="number" min="1" max="100" step="1" wire:model="regler.{{ $scope }}.ziel_we_pct" placeholder="z. B. 28" class="{{ $input }} !py-1.5 font-mono" data-planung-we-pct />
-            </div>
-        </div>
-    </x-foodalchemist::modal-section>
+        </x-foodalchemist::modal-section>
+    </div>
 @else
     <x-foodalchemist::modal-section title="Richtung (optional)">
         <div class="grid md:grid-cols-2 gap-x-6 gap-y-4" data-planung-regler="{{ $scope }}">
