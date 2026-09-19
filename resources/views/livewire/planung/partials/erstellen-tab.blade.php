@@ -100,7 +100,9 @@
             </x-slot:actions>
         @endif
         @include('foodalchemist::livewire.planung.partials.worker-praesenz')
-        <p class="{{ $label ?? 'text-[11px] text-gray-500' }} mb-2">
+        {{-- Fließtext-Absatz — NICHT $label (das Token ist uppercase, für Mikro-Labels gedacht;
+             ein ganzer Satz in Versalien war der von Nora gemeldete Befund). --}}
+        <p class="text-[11px] text-gray-500 mb-2">
             @if($scope === 'gericht')
                 Zuerst entsteht nur ein textlicher Bauplan mit Komponenten. Erst nach deiner Annahme wird daraus ein Rezept-Draft und die Kaskade läuft weiter.
             @else
