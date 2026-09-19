@@ -328,6 +328,10 @@ class EnrichRecipeJob implements ShouldQueue
         app(\Platform\FoodAlchemist\Services\PlanningCascadeService::class)->setzePhase(
             (int) $this->stepId, $status === 'running' ? \Platform\FoodAlchemist\Services\PlanningCascadeService::PHASE_ANREICHERUNG : null,
         );
+        $runId = FoodAlchemistCascadeRunStep::whereKey($this->stepId)->value('cascade_run_id');
+        if ($runId !== null) {
+            app(\Platform\FoodAlchemist\Services\PlanningCascadeService::class)->recomputeRunStatus((int) $runId);
+        }
     }
 
     /**

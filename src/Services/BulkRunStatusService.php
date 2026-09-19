@@ -92,6 +92,7 @@ final class BulkRunStatusService
         $verwaist = $r->istVerwaist();
 
         return [
+            'run_namespace' => 'bulk',
             'run_id' => (int) $r->id,
             'typ' => $r->type->value,
             'typ_label' => $r->type->label(),

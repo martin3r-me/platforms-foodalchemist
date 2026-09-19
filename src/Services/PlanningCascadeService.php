@@ -1924,7 +1924,12 @@ class PlanningCascadeService
             return;
         }
         $steps = $run->steps()->get(['status', 'deferred']);
-        if ($steps->whereIn('status', ['queued', 'running'])->count() > 0) {
+        $anreicherungLaeuft = $steps->contains(static function ($step): bool {
+            $status = is_array($step->deferred) ? ($step->deferred['enrich']['status'] ?? null) : null;
+
+            return in_array($status, ['queued', 'running'], true);
+        });
+        if ($steps->whereIn('status', ['queued', 'running'])->count() > 0 || $anreicherungLaeuft) {
             if ($run->status !== 'running') {
                 $run->update(['status' => 'running']);
             }
@@ -2144,6 +2149,7 @@ class PlanningCascadeService
         $deferred = is_array($fresh->deferred) ? $fresh->deferred : [];
         $deferred['enrich'] = ['status' => 'queued', 'at' => now()->toIso8601String()];
         $fresh->update(['deferred' => $deferred]);
+        $this->recomputeRunStatus((int) $fresh->cascade_run_id);
     }
 
     /** Bild-Erzeugungs-Status eines Rezept-/Gericht-Steps synchron auf `queued` setzen (Sicht-Signal fürs Polling). */
@@ -2991,6 +2997,7 @@ class PlanningCascadeService
         );
 
         return [
+            'run_namespace' => 'planung_kaskade',
             'lauf' => array_filter([
                 'id' => (int) $run->id,
                 'scope' => (string) $run->scope,

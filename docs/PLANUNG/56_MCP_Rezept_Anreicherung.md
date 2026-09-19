@@ -20,6 +20,18 @@ Ohne ID bleibt die Neuanlage-Semantik bestehen, ausgelassene Zeilen werden weite
 entfernt. Ungültige oder doppelte IDs werden abgewiesen; Garverlust muss 0–100 sein.
 Unverändert zurückgeschriebene Garverluste behalten ihre Quelle.
 
+Für reine Garverlust-Korrekturen akzeptiert `recipe_ingredients.PUT` außerdem die
+schmale Liste `garverluste` (`ingredient_id`, `cooking_loss_pct`). Dieser Pfad ersetzt
+keine Zutatenliste, prüft alle IDs vor dem ersten Schreiben und berechnet den Yield neu.
+
+Basisrezept und Verkaufsgericht haben getrennte MCP-Wurzeln: `recipes.ENRICH` lehnt
+VK-Gerichte ab, `verkaufsrezepte.ENRICH` lehnt Basisrezepte ab. Beide verwenden weiterhin
+denselben Kaskadenservice; Unterrezepte eines VK-Gerichts werden unverändert mitgeführt.
+Die Quittung heißt `cascade_run_id` und gehört zu `planung_kaskade.GET`. `runs.GET` liest
+die unabhängige Bulk-Lauftabelle, deren numerische IDs sich mit Kaskaden-IDs überschneiden
+können. Während die verzögerte Anreicherung queued/running ist, meldet auch der Laufkopf
+running statt vorzeitig done.
+
 Der Reife-Check verweist für Garverlust auf `recipe_ingredients.PUT` und meldet
 den fehlenden Herstellungsposten als wichtige Lücke (nur Basisrezepte).
 

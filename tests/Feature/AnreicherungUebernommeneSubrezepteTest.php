@@ -144,8 +144,8 @@ it('A5: Freigabe reichert eine UNREIFE EIGENE Übernahme mit an — und der Lauf
     Queue::assertPushed(EnrichRecipeJob::class, fn ($job) => $job->recipeId === (int) $bruehe->id);
     expect($kind->fresh()->deferred['enrich']['status'] ?? null)->toBe('queued');
 
-    // Und der Lauf lügt nicht mehr: eine unreife Übernahme ist kein Abschluss.
-    expect($run->fresh()->status)->toBe('review');
+    // Und der Lauf lügt nicht mehr: der eingereihte Enrich-Job ist echte laufende Arbeit.
+    expect($run->fresh()->status)->toBe('running');
 });
 
 it('A6: eine FREMDE unreife Übernahme wird NICHT automatisch angereichert (fremdes, lebendes Gut)', function () {

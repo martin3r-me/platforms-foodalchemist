@@ -806,6 +806,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\AblaufGetTool::class,
                     \Platform\FoodAlchemist\Tools\RegelwerkGetTool::class,
                     \Platform\FoodAlchemist\Tools\RecipesEnrichTool::class,
+                    \Platform\FoodAlchemist\Tools\VerkaufsrezepteEnrichTool::class,
                     \Platform\FoodAlchemist\Tools\RecipesGenerateTool::class, // 03·L5 (Lockstep-Schuld aus #505)
                     \Platform\FoodAlchemist\Tools\RecipesExtractTool::class,  // Rezept-Import (Rohtext/Foto-Umweg → geerdeter Draft)
                     \Platform\FoodAlchemist\Tools\RecipesReviewTool::class,   // 03·L6 Copilot-Pruefpass (read-only)
