@@ -64,6 +64,41 @@ it('MCP weist ungültige Garverluste und fremde Zutaten-IDs atomar zurück', fun
     expect(($this->runTool)('recipe_ingredients.PUT', ['recipe_id' => $this->recipe->id, 'zutaten' => [$input]], $child)->success)->toBeFalse();
 });
 
+it('MCP aktualisiert Garverlust gezielt ohne Voll-Sync der Zutatenliste', function () {
+    $erste = $this->recipe->ingredients()->sole();
+    $zweite = $this->recipe->ingredients()->create([
+        'team_id' => $this->rootTeam->id, 'position' => 2, 'raw_text' => 'Wasser',
+        'display_name' => 'Wasser', 'quantity' => 500, 'unit_vocab_id' => $this->unitG($this->rootTeam)->id,
+        'cooking_loss_pct' => null,
+    ]);
+
+    $put = ($this->runTool)('recipe_ingredients.PUT', [
+        'recipe_id' => $this->recipe->id,
+        'garverluste' => [['ingredient_id' => $zweite->id, 'cooking_loss_pct' => 12]],
+    ]);
+
+    expect($put->success)->toBeTrue($put->error ?? '')
+        ->and((float) $erste->fresh()->cooking_loss_pct)->toBe(12.0)
+        ->and((float) $zweite->fresh()->cooking_loss_pct)->toBe(12.0)
+        ->and($zweite->fresh()->cooking_loss_source)->toBe('manual')
+        ->and($this->recipe->ingredients()->count())->toBe(2)
+        ->and((float) $this->recipe->fresh()->yield_kg)->toBe(1.32);
+
+    $fremd = $this->makeRecipe($this->rootTeam, 'Fremde Zeile')->ingredients()->create([
+        'team_id' => $this->rootTeam->id, 'position' => 1, 'raw_text' => 'Fremd',
+        'display_name' => 'Fremd', 'quantity' => 100, 'unit_vocab_id' => $this->unitG($this->rootTeam)->id,
+    ]);
+    $fehlversuch = ($this->runTool)('recipe_ingredients.PUT', [
+        'recipe_id' => $this->recipe->id,
+        'garverluste' => [
+            ['ingredient_id' => $zweite->id, 'cooking_loss_pct' => 20],
+            ['ingredient_id' => $fremd->id, 'cooking_loss_pct' => 20],
+        ],
+    ]);
+    expect($fehlversuch->errorCode)->toBe('VALIDATION_ERROR')
+        ->and((float) $zweite->fresh()->cooking_loss_pct)->toBe(12.0);
+});
+
 it('Postenkatalog ist team-scoped und MCP kann den Default setzen und lesen', function () {
     $station = FoodAlchemistProductionStation::create(['team_id' => $this->rootTeam->id, 'name' => 'Entremetier', 'slug' => 'entremetier']);
     $foreign = FoodAlchemistProductionStation::create(['team_id' => $this->childB->id, 'name' => 'Fremd', 'slug' => 'fremd']);
