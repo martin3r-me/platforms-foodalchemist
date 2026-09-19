@@ -707,7 +707,7 @@
             {{-- Format als Kickoff-Tab: gebrandetes Foodkonzept — 1 Concept je Slot → docken ans Format (owner_type=format). --}}
             <div wire:key="planung-tab-format" x-show="tab==='format'" x-cloak class="space-y-4 max-w-7xl mx-auto">
                 <div class="xl:grid xl:grid-cols-2 xl:gap-4">
-                <x-foodalchemist::modal-section class="!mt-0" icon="heroicon-o-sparkles" title="Format planen">
+                <x-foodalchemist::modal-section class="!mt-0" icon="heroicon-o-rectangle-stack" title="Format planen">
                     <x-slot:actions>
                         <span class="{{ $pill }} {{ $fmtOwnerId ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $fmtOwnerId ? 'bestehendes Format' : 'neu aus Brief' }}</span>
                     </x-slot:actions>
@@ -932,7 +932,7 @@
                     <x-slot:actions>
                         <span class="{{ $pill }} {{ $variantPill['primary'] }}">empfohlener Weg</span>
                     </x-slot:actions>
-                    <p class="{{ $label ?? 'text-[11px] text-gray-500' }} mb-2 max-w-2xl">Empfohlener Weg: Die KI arbeitet aus dem Briefing einen vollständigen Konzept-Entwurf aus (Leitidee, USP, Inszenierung, Geschmackswelten, Gänge-Gerüst) und öffnet ihn zur Prüfung/Korrektur — <b>noch ohne</b> Gerichte zu erzeugen. Danach der Go „aus geprüftem Plan".</p>
+                    <p class="text-[11px] text-gray-500 mb-2 max-w-2xl">Empfohlener Weg: Die KI arbeitet aus dem Briefing einen vollständigen Konzept-Entwurf aus (Leitidee, USP, Inszenierung, Geschmackswelten, Gänge-Gerüst) und öffnet ihn zur Prüfung/Korrektur — <b>noch ohne</b> Gerichte zu erzeugen. Danach der Go „aus geprüftem Plan".</p>
                     <button type="button" wire:click="kiKopf" @disabled($laeuft)
                             wire:loading.attr="disabled" wire:target="kiKopf"
                             class="{{ $btnPrimary }} disabled:opacity-40" data-planung-kikopf>
@@ -973,7 +973,7 @@
                     @else
                         {{-- DF-2: Schnellweg (sekundär) — ohne Vorab-Plan direkt erzeugen. Empfohlen ist der
                              KI-Kopf oben (ausgearbeiteter, prüfbarer Plan). --}}
-                        <p class="{{ $label ?? 'text-[11px] text-gray-500' }} mb-2">Schnellweg (ohne Vorab-Plan): Die LLM baut aus dem Briefing direkt die Zusammenstellung (Pakete/Buffet) nach den Leitplanken; die Gerichte kommen nach der Freigabe. Für ein ausgearbeitetes Konzept den <b>KI-Kopf</b> oben nutzen. Fortschritt im <b>Worker</b>-Tab.</p>
+                        <p class="text-[11px] text-gray-500 mb-2 max-w-2xl">Schnellweg (ohne Vorab-Plan): Die LLM baut aus dem Briefing direkt die Zusammenstellung (Pakete/Buffet) nach den Leitplanken; die Gerichte kommen nach der Freigabe. Für ein ausgearbeitetes Konzept den <b>KI-Kopf</b> oben nutzen. Fortschritt im <b>Worker</b>-Tab.</p>
                         <x-foodalchemist::ki-action action="goKaskade('concept')" variant="ghost" icon="heroicon-o-squares-2x2"
                             label="Direkt erzeugen (Schnellweg)" busy="Kaskade wird gestartet …" flash="Kaskade gestartet"
                             :disabled="$laeuft" before="tab='worker'" />
@@ -1048,7 +1048,7 @@
                             <span class="{{ $pill }} {{ $variantPill['primary'] }}">{{ count($composerAnker) }} Anker gewählt</span>
                         </x-slot:actions>
                     @endif
-                    <p class="{{ $label ?? 'text-[11px] text-gray-500' }} mb-2">
+                    <p class="text-[11px] text-gray-500 mb-2 max-w-2xl">
                         Zutaten/Anker zusammenstellen — das Netz zeigt live, was harmoniert (★★★ Best · ★★ Good).
                         Filtere/such unten oder klick einen Kandidaten im Netz.
                     </p>
