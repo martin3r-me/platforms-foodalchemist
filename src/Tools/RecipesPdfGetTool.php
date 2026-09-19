@@ -106,7 +106,8 @@ class RecipesPdfGetTool extends FoodAlchemistTool implements ToolContract, ToolM
             $url = \Illuminate\Support\Facades\URL::temporarySignedRoute(
                 'foodalchemist.recipes.pdf_download', $expires, ['token' => $token]);
             $stored = \Illuminate\Support\Facades\Cache::put('foodalchemist:mcp-recipe-pdf:' . $token,
-                ['bytes' => $pdf, 'filename' => $filename], $expires);
+                // MySQL-DatabaseStore serialisiert ohne Binärkodierung in eine UTF-8-Textspalte.
+                ['content_base64' => base64_encode($pdf), 'filename' => $filename], $expires);
             if (! $stored) {
                 return ToolResult::error('PDF-Download konnte nicht zwischengespeichert werden.', 'PDF_DOWNLOAD_FAILED');
             }
