@@ -270,11 +270,26 @@ Formularstand-Event nur für den eigenen Scope, Mount-Parameter. `tests/Feature/
 VoiceInterfaceTest.php geprüft — Livewires `assertDispatched()` matcht bei gleichnamigen
 Events nur den ersten Treffer, keine verlässliche Prüfung aller drei Scopes in einem Test).
 
+### Panel-Umzug + Diktat-Kopplung (GELÖST, nach Peters #149)
+
+Peters Paket-K-PR (Karten-Layout + `data-planung-agent-slot` in der Eingabe-Karte) ist gemergt
+(Deploy 25, main `d66c440c`). Rebase glatt (Kontext-Matching wie vorhergesagt für gericht/
+concept, ein manuell aufgelöster Konflikt in `leitplanken.blade.php` für den neuen
+Rezept-Kartenblock — Sektor-Badge dort schon von Peter übernommen, `$sektorLabels` auf
+`SEKTOR_OPTIONEN` umgestellt, `ziel_menge`/`ziel_einheit`-Badges ergänzt).
+
+- **Panel-Ort**: `@livewire('foodalchemist.voice-modal', [...])` ersetzt den leeren Slot in
+  `erstellen-tab.blade.php` (rezept/gericht) + einen eigenen Block im Concept-Briefing
+  (`index.blade.php` — Concept nutzt die geteilte Partial nicht). Der alte Board-Level-Mount
+  ist komplett entfernt — EIN Panel je Creation-Scope statt einem globalen auf der Board-Ebene.
+- **Diktat→Agent**: `Planung\Index::briefDiktatUebernehmen()` dispatcht nach dem (unveränderten)
+  Feld-Update zusätzlich `voice.diktat-transkribiert` (Scope + Text) — NUR für die drei
+  Creation-Scopes, nicht die fünf flachen Ausgabeform-Ziele ohne Panel.
+  `VoiceModal::diktatTranskribiert()` verarbeitet es über `verarbeiteText()` wie einen normalen
+  Sprachbefehl, gefiltert auf den eigenen Scope.
+
 ### Offen (Nachtrag)
 
-1. Panel-Umzug in den Erstellen-Tab-Slot — blockiert auf Peters PR (Paket K).
-2. Diktat→Agent-Kopplung — selbe Blockade (dieselben Dateien).
-3. „Format"-Scope hat keine eigene Regler-Struktur — volle Unterstützung der von Dominique
+1. „Format"-Scope hat keine eigene Regler-Struktur — volle Unterstützung der von Dominique
    genannten Format-Pflichtfelder (Sektor/Anlass/Personen) ist ein separates Vorhaben.
-4. Volle Suite noch nicht gelaufen für diesen Nachtrag (gezielt getestet, Absprache wie beim
-   Hauptmerge — läuft vor PR/Merge).
+2. Volle Suite lief grün vor PR/Merge (Absprache cooking-jarvis-03).
