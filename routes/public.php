@@ -55,3 +55,10 @@ Route::get('_platform/fa-assets/{file}', function (string $file) {
         'Cache-Control' => 'public, max-age=31536000, immutable',
     ]);
 })->where('file', '[a-zA-Z0-9._-]+\.(js|css)')->name('foodalchemist.platform-asset');
+
+// Bearer-Download nur mit zeitlich begrenzter Signatur. Die Bytes wurden bereits
+// über den Teamkontext des MCP-Aufrufs autorisiert; kein Zugriff auf lebende IDs.
+Route::get('/_platform/fa-recipe-pdf/{token}', \Platform\FoodAlchemist\Http\Controllers\RecipePdfDownloadController::class)
+    ->where('token', '[a-f0-9]{64}')
+    ->middleware('signed')
+    ->name('foodalchemist.recipes.pdf_download');

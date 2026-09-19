@@ -35,6 +35,7 @@ class RecipesPutTool extends FoodAlchemistTool implements ToolContract, ToolMeta
     {
         return [
             'type' => 'object',
+            'additionalProperties' => false,
             'properties' => [
                 'recipe_id' => ['type' => 'integer'],
                 'name' => ['type' => 'string'],
@@ -47,7 +48,7 @@ class RecipesPutTool extends FoodAlchemistTool implements ToolContract, ToolMeta
                 'batch_max_kg' => ['type' => 'number', 'description' => 'Topf-Deckel: max kg je Koch-Vorgang'],
                 'batch_max_pieces' => ['type' => 'number', 'description' => 'Topf-Deckel: max Stück je Koch-Vorgang'],
                 'max_vorlauf_tage' => ['type' => 'integer', 'description' => 'Vorproduzierbarkeit in Tagen (0 = nur am Produktionstag)'],
-                'default_station_id' => ['type' => 'integer', 'description' => 'Default-Posten fürs Planer-Routing'],
+                'default_station_id' => ['type' => ['integer', 'null'], 'description' => 'Default-Posten fürs Planer-Routing. IDs aus production_stations.GET; null hebt die Zuordnung auf.'],
                 'yield_kg_manual' => ['type' => 'number'],
                 'category_id' => ['type' => 'integer'],
                 'status' => ['type' => 'string', 'enum' => ['review'], 'description' => 'Nur draft→review erlaubt'],
@@ -68,6 +69,18 @@ class RecipesPutTool extends FoodAlchemistTool implements ToolContract, ToolMeta
         }
         if (($sperre = $this->kiEditGesperrt($recipe)) !== null) {
             return ToolResult::error($sperre, 'ACCESS_DENIED');
+        }
+
+        $unknown = array_diff(array_keys($arguments), array_keys($this->getSchema()['properties']));
+        if ($unknown !== []) {
+            return ToolResult::error('Unbekannte Rezeptfelder: ' . implode(', ', $unknown)
+                . '. Garverlust gehört je Zutat in recipe_ingredients.PUT: zutaten[].cooking_loss_pct; Posten in default_station_id.', 'VALIDATION_ERROR');
+        }
+        if (isset($arguments['status']) && $arguments['status'] !== 'review') {
+            return ToolResult::error('Nur status=review ist über MCP erlaubt.', 'VALIDATION_ERROR');
+        }
+        if (count($arguments) === 1) {
+            return ToolResult::error('Keine Änderungen angegeben.', 'VALIDATION_ERROR');
         }
 
         $in = array_intersect_key($arguments, array_flip([

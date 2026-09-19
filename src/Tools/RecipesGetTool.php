@@ -21,7 +21,9 @@ class RecipesGetTool extends FoodAlchemistTool implements ToolContract, ToolMeta
         return 'Liefert ein Basisrezept im Detail: Kopf, Zutaten (mit GP-/Sub-Rezept-Verknüpfung), '
             . 'Yield/EK-Aggregate (GL-02) und Allergen-Konfidenz. `ek_price_basis` nennt die '
             . 'Herkunft des EK (lead = gewählte Lieferantenartikel, avg = Lieferanten-Durchschnitt '
-            . 'und damit eine Schätzung, mixed = teils, unknown = nicht nachvollziehbar).';
+            . 'und damit eine Schätzung, mixed = teils, unknown = nicht nachvollziehbar). '
+            . 'Zutaten-IDs und Garverluste sind für recipe_ingredients.PUT enthalten; Default-Posten für recipes.PUT. '
+            . 'PDF direkt über foodalchemist.recipes.PDF, verfügbare Posten über production_stations.GET.';
     }
 
     public function getSchema(): array
@@ -63,7 +65,17 @@ class RecipesGetTool extends FoodAlchemistTool implements ToolContract, ToolMeta
             'standzeit_min' => $r->standzeit_min,
             'batch_max_kg' => $r->batch_max_kg,
             'batch_max_pieces' => $r->batch_max_pieces,
+            'default_station_id' => $r->default_station_id,
+            'max_vorlauf_tage' => $r->max_vorlauf_tage,
             'zutaten' => $r->ingredients->map(fn ($z) => [
+                'id' => $z->id,
+                'cooking_loss_pct' => $z->cooking_loss_pct,
+                'cooking_loss_source' => $z->cooking_loss_source,
+                'trimming_loss_pct' => $z->trimming_loss_pct,
+                'quantity_max' => $z->quantity_max,
+                'is_optional' => (bool) $z->is_optional,
+                'note' => $z->note, 'role' => $z->role,
+                'referenced_recipe_id' => $z->referenced_recipe_id,
                 'quantity' => $z->quantity, 'unit' => $z->unit?->slug,
                 'name' => $z->referencedRecipe?->name ?? $z->gp?->name ?? $z->display_name,
                 'gp_id' => $z->gp_id, 'sub_recipe_id' => $z->referenced_recipe_id,

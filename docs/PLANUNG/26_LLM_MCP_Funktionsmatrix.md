@@ -716,3 +716,16 @@ Eine Business-Funktion mit Web-, LLM- oder MCP-Zugang ist erst fertig, wenn:
 - ein Provider- oder Toolfehler sichtbar und wiederaufnehmbar ist,
 - Kosten und Laufzeit messbar sind,
 - Business-Case-Matrix und Testnachweis aufeinander verlinken.
+
+### MCP-Rezeptpflege und Export (2026-09-19)
+
+- `recipe.posten` (Tier B): fachliche Auswahl aus sichtbaren aktiven Posten;
+  vorhandene Zuordnung geschützt, keine erfundenen IDs.
+- `recipes.GET` / `recipe_ingredients.PUT`: Zutaten-ID und Garverlust im Roundtrip;
+  ausgelassene optionale Felder bei bestehender ID erhalten, null löscht.
+- `recipes.PUT`: unbekannte Felder geben VALIDATION_ERROR statt stiller Verwerfung.
+- `production_stations.GET`: sichtbarer aktiver Postenkatalog für default_station_id.
+- `recipes.PDF`: bestehender Plattform-Report als kurzzeitig gültiger signierter
+  Download-Link oder optional als Base64-PDF; kein Web-Login erforderlich.
+
+Vertrag und Tests: [MCP-Rezept-Anreicherung](56_MCP_Rezept_Anreicherung.md).

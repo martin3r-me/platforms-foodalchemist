@@ -80,7 +80,8 @@ class RecipeReifeAdapter implements ReifeAdapter
                 $luecken[] = $this->luecke(
                     $schritt, $istVk ? 'gericht' : 'basisrezept', 'wichtig',
                     "Zielfeld des Anreicherungs-Schritts «{$schritt}» ist leer.",
-                    $istVk ? 'foodalchemist.verkaufsrezepte.PUT' : 'foodalchemist.recipes.PUT'
+                    $schritt === 'garverlust' ? 'foodalchemist.recipe_ingredients.PUT'
+                        : ($istVk ? 'foodalchemist.verkaufsrezepte.PUT' : 'foodalchemist.recipes.PUT')
                 );
             } else {
                 $erfuellt[] = $schritt;
@@ -105,6 +106,16 @@ class RecipeReifeAdapter implements ReifeAdapter
                     null);
             } else {
                 $erfuellt[] = 'dichteklasse';
+            }
+        }
+
+        if (! $istVk) {
+            if ($r->default_station_id === null) {
+                $luecken[] = $this->luecke('default_station_id', 'basisrezept', 'wichtig',
+                    'Kein Default-Posten für die Herstellung zugeordnet. Verfügbare IDs liefert production_stations.GET.',
+                    'foodalchemist.recipes.PUT');
+            } else {
+                $erfuellt[] = 'default_station_id';
             }
         }
 
@@ -226,7 +237,7 @@ class RecipeReifeAdapter implements ReifeAdapter
 
         $aus = [];
         foreach (BulkEnrichService::SCHRITTE as $schritt) {
-            $aus[] = $aspekt($schritt, 'wichtig', $br, 'basisrezept');
+            $aus[] = $aspekt($schritt, 'wichtig', $schritt === 'garverlust' ? 'foodalchemist.recipe_ingredients.PUT' : $br, 'basisrezept');
         }
         foreach (BulkEnrichService::SCHRITTE_VK as $schritt) {
             $aus[] = $aspekt($schritt, 'wichtig', $vk, 'gericht');
@@ -242,6 +253,8 @@ class RecipeReifeAdapter implements ReifeAdapter
             // Equipment haengt an Stammdaten, nicht am Rezept-Schreibpfad — kein Werkzeug.
             $aus[] = $aspekt('equipment', 'hinweis', null, $ebene);
         }
+
+        $aus[] = $aspekt('default_station_id', 'wichtig', $br, 'basisrezept');
 
         // Nur am Gericht: die VK-Vorbedingungen (T2) und die Dichteklasse fuer den Behaelter.
         $aus[] = $aspekt('portion', 'blockiert', 'foodalchemist.recipe_darreichung.PUT', 'gericht');

@@ -26,6 +26,7 @@ class RecipeIngredientsPutTool extends FoodAlchemistTool implements ToolContract
         return 'Ersetzt die KOMPLETTE Zutatenliste eines stub/draft-Rezepts (Voll-Sync: Reihenfolge = '
             . 'Array-Reihenfolge, fehlende Zeilen werden gelöscht). Pro Zeile: name + quantity + unit '
             . '(Slug wie g/kg/ml/stk) + gp_id ODER referenced_recipe_id (XOR; via foodalchemist.gps.MATCH erden). '
+            . 'Bestehende Zeilen mit id aus recipes.GET senden: ausgelassene optionale Felder (z.B. cooking_loss_pct) bleiben erhalten. '
             . 'Aggregate (Yield/Allergene/EK) werden automatisch neu gerechnet und in Eltern-Rezepte propagiert.';
     }
 
@@ -41,6 +42,7 @@ class RecipeIngredientsPutTool extends FoodAlchemistTool implements ToolContract
                     'items' => [
                         'type' => 'object',
                         'properties' => [
+                            'id' => ['type' => 'integer', 'description' => 'Bestehende Zutaten-ID aus recipes.GET. Weggelassene optionale Felder bleiben bei dieser ID erhalten; null löscht sie. Ohne ID wird eine neue Zeile angelegt.'],
                             'name' => ['type' => 'string'],
                             'gp_id' => ['type' => 'integer'],
                             'referenced_recipe_id' => ['type' => 'integer'],
@@ -48,7 +50,7 @@ class RecipeIngredientsPutTool extends FoodAlchemistTool implements ToolContract
                             'quantity_max' => ['type' => 'number'],
                             'unit' => ['type' => 'string'],
                             'trimming_loss_pct' => ['type' => 'number'],
-                            'cooking_loss_pct' => ['type' => 'number'],
+                            'cooking_loss_pct' => ['type' => ['number', 'null'], 'minimum' => 0, 'maximum' => 100],
                             'is_optional' => ['type' => 'boolean'],
                             'note' => ['type' => 'string'],
                             'role' => ['type' => 'string'],
@@ -75,9 +77,21 @@ class RecipeIngredientsPutTool extends FoodAlchemistTool implements ToolContract
             return ToolResult::error($sperre, 'ACCESS_DENIED');
         }
 
+        $validator = \Illuminate\Support\Facades\Validator::make($arguments, [
+            'zutaten' => 'required|array|min:1',
+            'zutaten.*.id' => 'sometimes|integer|min:1|distinct',
+            'zutaten.*.name' => 'required|string',
+            'zutaten.*.quantity' => 'required|numeric|gt:0',
+            'zutaten.*.unit' => 'required|string',
+            'zutaten.*.cooking_loss_pct' => 'nullable|numeric|between:0,100',
+        ]);
+        if ($validator->fails()) {
+            return ToolResult::error($validator->errors()->first(), 'VALIDATION_ERROR');
+        }
+
         try {
             $recipe = app(RecipeService::class)->syncIngredients(
-                $team, $recipe->id, $this->normalisiereZutatZeilen($team, $arguments['zutaten']),
+                $team, $recipe->id, $this->normalisiereZutatZeilen($team, $arguments['zutaten']), preserveMissing: true,
             );
         } catch (\RuntimeException $e) {
             return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR');
