@@ -499,23 +499,38 @@
             {{-- AUSGABE-FORMEN (Spec-42-Vollzug) — Kickoff-Tabs: aus einem Brief plant die Leitstelle die
                  ganze Ausgabeform (owner-getaggte Voll-Kaskade), die Inhalte docken automatisch zurück.
                  Foodbook + Speisekarte live; Speiseplan folgt (andere Struktur: Linien+Zyklus statt Gänge). --}}
-            <div wire:key="planung-tab-foodbook" x-show="tab==='foodbook'" x-cloak class="space-y-4">
+            {{-- Cockpit-Optik (Paket K, Rollout) für die fünf Ausgabe-Tabs (Foodbook/Speisekarte/Speiseplan/
+                 Angebot/Format): gleiche Bauart überall — Auswahl-Karte und Brief-Karte nebeneinander ab xl,
+                 Lesebreite + zentriert, Kopfzeile auf Button-Niveau mit Icon, rechts eine Status-Pille
+                 (gewähltes Ziel bzw. „neu aus Brief"). Kein Sticky: die Primäraktion sitzt in der zweiten
+                 Karte und ist ohne Scrollen erreichbar. text-slate-* → Grau-Tokens (die Karte ist weiss).
+                 Felder, Reihenfolge, Bindings, Diktat-Ziele und data-tab-*-Anker unverändert. --}}
+            <div wire:key="planung-tab-foodbook" x-show="tab==='foodbook'" x-cloak class="space-y-4 max-w-7xl mx-auto">
+                <div class="xl:grid xl:grid-cols-2 xl:gap-4">
                 {{-- Stage 2 (Dominique): ein BESTEHENDES Foodbook wählen → Gerüst planen → Kaskaden je Kapitel
                      durchgehen. Oder leer lassen = neues Foodbook aus Brief. --}}
-                <x-foodalchemist::modal-section title="Foodbook planen">
-                    <label class="block text-[11px] text-slate-400 mb-1">Bestehendes Foodbook wählen</label>
+                <x-foodalchemist::modal-section class="!mt-0" icon="heroicon-o-book-open" title="Foodbook planen">
+                    <x-slot:actions>
+                        <span class="{{ $pill }} {{ $fbOwnerId ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $fbOwnerId ? 'bestehendes Buch' : 'neu aus Brief' }}</span>
+                    </x-slot:actions>
+                    <label class="block text-[11px] text-gray-500 mb-1">Bestehendes Foodbook wählen</label>
                     <select wire:model.live="fbOwnerId" class="{{ $input }} w-full" data-tab-fb-auswahl>
                         <option value="">— neues Foodbook aus Brief —</option>
                         @foreach($fbAuswahl as $fbo)<option value="{{ $fbo->id }}">{{ $fbo->label }}</option>@endforeach
                     </select>
-                    <p class="text-[11px] text-slate-400 mt-2">
+                    <p class="text-[11px] text-gray-500 mt-2 max-w-2xl">
                         Wählen: Gerüst planen + Kaskaden durchgehen (Buch-Ebene + Kapitel-Steuerung erscheinen unten).
                         Leer: ein neues Foodbook aus einem Brief.
                     </p>
                 </x-foodalchemist::modal-section>
 
-                <x-foodalchemist::modal-section :title="$fbOwnerId ? 'Gerüst aus Brief (füllt das gewählte Foodbook)' : 'Neues Foodbook aus Brief'">
-                    <p class="text-[11px] text-slate-400 mb-2">
+                <x-foodalchemist::modal-section class="!mt-0" icon="heroicon-o-pencil-square" :title="$fbOwnerId ? 'Gerüst aus Brief (füllt das gewählte Foodbook)' : 'Neues Foodbook aus Brief'">
+                    @if(trim((string) ($fbTitel ?? '')) !== '')
+                        <x-slot:actions>
+                            <span class="{{ $pill }} {{ $variantPill['primary'] }}">{{ \Illuminate\Support\Str::limit(trim($fbTitel), 32) }}</span>
+                        </x-slot:actions>
+                    @endif
+                    <p class="text-[11px] text-gray-500 mb-2 max-w-2xl">
                         Struktur (Kapitel) + Inhalte entstehen hier in der Leitstelle und docken automatisch ins Foodbook (reine Ausgabe).
                     </p>
                     @unless($fbOwnerId)
@@ -523,7 +538,12 @@
                     @endunless
                     <textarea wire:model="fbBrief" rows="4" class="{{ $input }} w-full" placeholder="Brief: Anlass, Gäste, Saison, Niveau, Budget …" data-tab-fb-brief></textarea>
                     @include('foodalchemist::livewire.planung.partials.diktat', ['ziel' => 'fbBrief'])
-                    @if($fbMeldung) <p class="text-[11px] text-rose-400 mt-2" data-tab-fb-meldung>{{ $fbMeldung }}</p> @endif
+                    {{-- Leerer Anker für Spec 55 Nachtrag 2 (Entscheid 03): heute bleibt das schlichte Diktat
+                         darüber die EINZIGE Diktierfunktion dieses Tabs; das Agent-Panel braucht je Scope einen
+                         Regler-Satz, den die Ausgabe-Tabs nicht haben. Der Anker steht schon, damit der Umzug
+                         später nur ein Einhängen ist. --}}
+                    <div data-planung-agent-slot="foodbook"></div>
+                    @if($fbMeldung) <p class="text-[11px] text-rose-500 mt-2" data-tab-fb-meldung>{{ $fbMeldung }}</p> @endif
                     <div class="mt-3">
                         <button type="button" wire:click="foodbookAusBrief" wire:loading.attr="disabled" wire:target="foodbookAusBrief" class="{{ $btnPrimary }} disabled:opacity-40" data-tab-fb-erzeugen>
                             <span wire:loading.remove wire:target="foodbookAusBrief">{{ $fbOwnerId ? 'Gerüst planen + Kaskade (KI)' : 'Foodbook erzeugen (KI)' }}</span>
@@ -531,6 +551,7 @@
                         </button>
                     </div>
                 </x-foodalchemist::modal-section>
+                </div>{{-- /Raster Auswahl | Brief --}}
 
                 {{-- Buch-Ebene + Kapitel-Steuerung (die aus dem Foodbook-Modul verschobene Planung): sobald ein
                      Foodbook GEWÄHLT ist (fbOwnerId) ODER die aktive Session ein Foodbook ist. Die Rails brauchen
@@ -541,13 +562,15 @@
                         $fbAktiv = (int) $ownerKontext['owner_id'];
                     }
                 @endphp
+                {{-- Die beiden Rail-Karten bleiben volle Breite: sie hosten eigene Livewire-Komponenten
+                     (fremde Fläche, kein Eingriff) und vertragen die halbe Spalte nicht. --}}
                 @if($fbAktiv !== null)
-                    <x-foodalchemist::modal-section title="Buch-Ebene (Leitplanken · Briefing · Leitidee)">
+                    <x-foodalchemist::modal-section icon="heroicon-o-adjustments-horizontal" title="Buch-Ebene (Leitplanken · Briefing · Leitidee)">
                         <livewire:foodalchemist.planung.foodbook-kontext-rail
                             :foodbook-id="$fbAktiv"
                             :key="'fbkontext-'.$fbAktiv" />
                     </x-foodalchemist::modal-section>
-                    <x-foodalchemist::modal-section title="Kapitel-Steuerung">
+                    <x-foodalchemist::modal-section icon="heroicon-o-list-bullet" title="Kapitel-Steuerung">
                         <livewire:foodalchemist.planung.kapitel-rail
                             :foodbook-id="$fbAktiv"
                             :session-id="$sessionId"
@@ -556,21 +579,30 @@
                 @endif
             </div>
 
-            <div wire:key="planung-tab-speisekarte" x-show="tab==='speisekarte'" x-cloak class="space-y-4">
+            <div wire:key="planung-tab-speisekarte" x-show="tab==='speisekarte'" x-cloak class="space-y-4 max-w-7xl mx-auto">
+                <div class="xl:grid xl:grid-cols-2 xl:gap-4">
                 {{-- Stage 2 (SK/SP-Parität): bestehende Speisekarte wählen ODER neu aus Brief. --}}
-                <x-foodalchemist::modal-section title="Speisekarte planen">
-                    <label class="block text-[11px] text-slate-400 mb-1">Bestehende Speisekarte wählen</label>
+                <x-foodalchemist::modal-section class="!mt-0" icon="heroicon-o-clipboard-document-list" title="Speisekarte planen">
+                    <x-slot:actions>
+                        <span class="{{ $pill }} {{ $skOwnerId ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $skOwnerId ? 'bestehende Karte' : 'neu aus Brief' }}</span>
+                    </x-slot:actions>
+                    <label class="block text-[11px] text-gray-500 mb-1">Bestehende Speisekarte wählen</label>
                     <select wire:model.live="skOwnerId" class="{{ $input }} w-full" data-tab-sk-auswahl>
                         <option value="">— neue Speisekarte aus Brief —</option>
                         @foreach($skAuswahl as $sko)<option value="{{ $sko->id }}">{{ $sko->name }}</option>@endforeach
                     </select>
-                    <p class="text-[11px] text-slate-400 mt-2">
+                    <p class="text-[11px] text-gray-500 mt-2 max-w-2xl">
                         Wählen: Struktur (Rubriken) + Inhalte werden für die gewählte Karte geplant. Leer: eine neue Speisekarte.
                     </p>
                 </x-foodalchemist::modal-section>
 
-                <x-foodalchemist::modal-section :title="$skOwnerId ? 'Aus Brief planen (füllt die gewählte Speisekarte)' : 'Neue Speisekarte aus Brief'">
-                    <p class="text-[11px] text-slate-400 mb-2">
+                <x-foodalchemist::modal-section class="!mt-0" icon="heroicon-o-pencil-square" :title="$skOwnerId ? 'Aus Brief planen (füllt die gewählte Speisekarte)' : 'Neue Speisekarte aus Brief'">
+                    @if(trim((string) ($skTitel ?? '')) !== '')
+                        <x-slot:actions>
+                            <span class="{{ $pill }} {{ $variantPill['primary'] }}">{{ \Illuminate\Support\Str::limit(trim($skTitel), 32) }}</span>
+                        </x-slot:actions>
+                    @endif
+                    <p class="text-[11px] text-gray-500 mb-2 max-w-2xl">
                         Je Gang/Kategorie entsteht eine Rubrik, die Inhalte docken automatisch als Positionen in die Karte.
                     </p>
                     @unless($skOwnerId)
@@ -578,7 +610,8 @@
                     @endunless
                     <textarea wire:model="skBrief" rows="4" class="{{ $input }} w-full" placeholder="Brief: Anlass, Küchenstil, Saison, Niveau, Preis-Korridor …" data-tab-sk-brief></textarea>
                     @include('foodalchemist::livewire.planung.partials.diktat', ['ziel' => 'skBrief'])
-                    @if($skMeldung) <p class="text-[11px] text-rose-400 mt-2" data-tab-sk-meldung>{{ $skMeldung }}</p> @endif
+                    <div data-planung-agent-slot="speisekarte"></div>
+                    @if($skMeldung) <p class="text-[11px] text-rose-500 mt-2" data-tab-sk-meldung>{{ $skMeldung }}</p> @endif
                     <div class="mt-3">
                         <button type="button" wire:click="speisekarteAusBrief" wire:loading.attr="disabled" wire:target="speisekarteAusBrief" class="{{ $btnPrimary }} disabled:opacity-40" data-tab-sk-erzeugen>
                             <span wire:loading.remove wire:target="speisekarteAusBrief">{{ $skOwnerId ? 'Planen + Kaskade (KI)' : 'Speisekarte erzeugen (KI)' }}</span>
@@ -586,23 +619,33 @@
                         </button>
                     </div>
                 </x-foodalchemist::modal-section>
+                </div>{{-- /Raster Auswahl | Brief --}}
             </div>
 
-            <div wire:key="planung-tab-speiseplan" x-show="tab==='speiseplan'" x-cloak class="space-y-4">
+            <div wire:key="planung-tab-speiseplan" x-show="tab==='speiseplan'" x-cloak class="space-y-4 max-w-7xl mx-auto">
+                <div class="xl:grid xl:grid-cols-2 xl:gap-4">
                 {{-- Stage 2 (SK/SP-Parität): bestehenden Speiseplan wählen ODER neu aus Brief. --}}
-                <x-foodalchemist::modal-section title="Speiseplan planen">
-                    <label class="block text-[11px] text-slate-400 mb-1">Bestehenden Speiseplan wählen</label>
+                <x-foodalchemist::modal-section class="!mt-0" icon="heroicon-o-calendar-days" title="Speiseplan planen">
+                    <x-slot:actions>
+                        <span class="{{ $pill }} {{ $spOwnerId ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $spOwnerId ? 'bestehender Plan' : 'neu aus Brief' }}</span>
+                    </x-slot:actions>
+                    <label class="block text-[11px] text-gray-500 mb-1">Bestehenden Speiseplan wählen</label>
                     <select wire:model.live="spOwnerId" class="{{ $input }} w-full" data-tab-sp-auswahl>
                         <option value="">— neuer Speiseplan aus Brief —</option>
                         @foreach($spAuswahl as $spo)<option value="{{ $spo->id }}">{{ $spo->name }}</option>@endforeach
                     </select>
-                    <p class="text-[11px] text-slate-400 mt-2">
+                    <p class="text-[11px] text-gray-500 mt-2 max-w-2xl">
                         Wählen: die Zellen (Tag × Mahlzeit × Linie) werden für den gewählten Plan gefüllt. Leer: ein neuer Speiseplan.
                     </p>
                 </x-foodalchemist::modal-section>
 
-                <x-foodalchemist::modal-section :title="$spOwnerId ? 'Aus Brief planen (füllt den gewählten Speiseplan)' : 'Neuer Speiseplan aus Brief'">
-                    <p class="text-[11px] text-slate-400 mb-2">
+                <x-foodalchemist::modal-section class="!mt-0" icon="heroicon-o-pencil-square" :title="$spOwnerId ? 'Aus Brief planen (füllt den gewählten Speiseplan)' : 'Neuer Speiseplan aus Brief'">
+                    @if(trim((string) ($spTitel ?? '')) !== '')
+                        <x-slot:actions>
+                            <span class="{{ $pill }} {{ $variantPill['primary'] }}">{{ \Illuminate\Support\Str::limit(trim($spTitel), 32) }}</span>
+                        </x-slot:actions>
+                    @endif
+                    <p class="text-[11px] text-gray-500 mb-2 max-w-2xl">
                         @unless($spOwnerId)Menü-Linien (Menü 1 / Vegetarisch / Dessert) + Zyklus entstehen als GV-Standard (im Speiseplan-Editor frei änderbar); @endunless
                         die Kaskade füllt jede Zelle (Tag × Mahlzeit × Linie) brief-gesteuert.
                     </p>
@@ -611,7 +654,8 @@
                     @endunless
                     <textarea wire:model="spBrief" rows="4" class="{{ $input }} w-full" placeholder="Brief: Anlass, Saison, Küchenstil, Zyklus (z. B. „4 Wochen"), Diät-Fokus …" data-tab-sp-brief></textarea>
                     @include('foodalchemist::livewire.planung.partials.diktat', ['ziel' => 'spBrief'])
-                    @if($spMeldung) <p class="text-[11px] text-rose-400 mt-2" data-tab-sp-meldung>{{ $spMeldung }}</p> @endif
+                    <div data-planung-agent-slot="speiseplan"></div>
+                    @if($spMeldung) <p class="text-[11px] text-rose-500 mt-2" data-tab-sp-meldung>{{ $spMeldung }}</p> @endif
                     <div class="mt-3">
                         <button type="button" wire:click="speiseplanAusBrief" wire:loading.attr="disabled" wire:target="speiseplanAusBrief" class="{{ $btnPrimary }} disabled:opacity-40" data-tab-sp-erzeugen>
                             <span wire:loading.remove wire:target="speiseplanAusBrief">{{ $spOwnerId ? 'Planen + Kaskade (KI)' : 'Speiseplan erzeugen (KI)' }}</span>
@@ -619,26 +663,37 @@
                         </button>
                     </div>
                 </x-foodalchemist::modal-section>
+                </div>{{-- /Raster Auswahl | Brief --}}
             </div>
 
             {{-- Angebot als Kickoff-Tab: 1 Concept je Slot → docken ans Angebot (owner_type=offer). --}}
-            <div wire:key="planung-tab-angebot" x-show="tab==='angebot'" x-cloak class="space-y-4">
-                <x-foodalchemist::modal-section title="Angebot planen">
-                    <label class="block text-[11px] text-slate-400 mb-1">Bestehendes Angebot wählen</label>
+            <div wire:key="planung-tab-angebot" x-show="tab==='angebot'" x-cloak class="space-y-4 max-w-7xl mx-auto">
+                <div class="xl:grid xl:grid-cols-2 xl:gap-4">
+                <x-foodalchemist::modal-section class="!mt-0" icon="heroicon-o-document-currency-euro" title="Angebot planen">
+                    <x-slot:actions>
+                        <span class="{{ $pill }} {{ $offerOwnerId ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $offerOwnerId ? 'bestehendes Angebot' : 'neu aus Brief' }}</span>
+                    </x-slot:actions>
+                    <label class="block text-[11px] text-gray-500 mb-1">Bestehendes Angebot wählen</label>
                     <select wire:model.live="offerOwnerId" class="{{ $input }} w-full" data-tab-offer-auswahl>
                         <option value="">— neues Angebot aus Brief —</option>
                         @foreach($offerAuswahl as $ao)<option value="{{ $ao->id }}">{{ $ao->name }}</option>@endforeach
                     </select>
-                    <p class="text-[11px] text-slate-400 mt-2">Wählen: die Positionen entstehen für das gewählte Angebot. Leer: ein neues Angebot.</p>
+                    <p class="text-[11px] text-gray-500 mt-2 max-w-2xl">Wählen: die Positionen entstehen für das gewählte Angebot. Leer: ein neues Angebot.</p>
                 </x-foodalchemist::modal-section>
-                <x-foodalchemist::modal-section :title="$offerOwnerId ? 'Aus Brief planen (füllt das gewählte Angebot)' : 'Neues Angebot aus Brief'">
-                    <p class="text-[11px] text-slate-400 mb-2">Je Slot ein Konzept; die Konzepte docken automatisch ans Angebot (reine Ausgabe).</p>
+                <x-foodalchemist::modal-section class="!mt-0" icon="heroicon-o-pencil-square" :title="$offerOwnerId ? 'Aus Brief planen (füllt das gewählte Angebot)' : 'Neues Angebot aus Brief'">
+                    @if(trim((string) ($offerTitel ?? '')) !== '')
+                        <x-slot:actions>
+                            <span class="{{ $pill }} {{ $variantPill['primary'] }}">{{ \Illuminate\Support\Str::limit(trim($offerTitel), 32) }}</span>
+                        </x-slot:actions>
+                    @endif
+                    <p class="text-[11px] text-gray-500 mb-2 max-w-2xl">Je Slot ein Konzept; die Konzepte docken automatisch ans Angebot (reine Ausgabe).</p>
                     @unless($offerOwnerId)
                         <input type="text" wire:model="offerTitel" class="{{ $input }} w-full mb-2" placeholder="Angebots-Name (optional)" data-tab-offer-titel>
                     @endunless
                     <textarea wire:model="offerBrief" rows="4" class="{{ $input }} w-full" placeholder="Brief: Anlass, Gäste/Pax, Saison, Niveau, Budget, Servierform …" data-tab-offer-brief></textarea>
                     @include('foodalchemist::livewire.planung.partials.diktat', ['ziel' => 'offerBrief'])
-                    @if($offerMeldung) <p class="text-[11px] text-rose-400 mt-2" data-tab-offer-meldung>{{ $offerMeldung }}</p> @endif
+                    <div data-planung-agent-slot="angebot"></div>
+                    @if($offerMeldung) <p class="text-[11px] text-rose-500 mt-2" data-tab-offer-meldung>{{ $offerMeldung }}</p> @endif
                     <div class="mt-3">
                         <button type="button" wire:click="angebotAusBrief" wire:loading.attr="disabled" wire:target="angebotAusBrief" class="{{ $btnPrimary }} disabled:opacity-40" data-tab-offer-erzeugen>
                             <span wire:loading.remove wire:target="angebotAusBrief">{{ $offerOwnerId ? 'Planen + Kaskade (KI)' : 'Angebot erzeugen (KI)' }}</span>
@@ -646,26 +701,37 @@
                         </button>
                     </div>
                 </x-foodalchemist::modal-section>
+                </div>{{-- /Raster Auswahl | Brief --}}
             </div>
 
             {{-- Format als Kickoff-Tab: gebrandetes Foodkonzept — 1 Concept je Slot → docken ans Format (owner_type=format). --}}
-            <div wire:key="planung-tab-format" x-show="tab==='format'" x-cloak class="space-y-4">
-                <x-foodalchemist::modal-section title="Format planen">
-                    <label class="block text-[11px] text-slate-400 mb-1">Bestehendes Format wählen</label>
+            <div wire:key="planung-tab-format" x-show="tab==='format'" x-cloak class="space-y-4 max-w-7xl mx-auto">
+                <div class="xl:grid xl:grid-cols-2 xl:gap-4">
+                <x-foodalchemist::modal-section class="!mt-0" icon="heroicon-o-sparkles" title="Format planen">
+                    <x-slot:actions>
+                        <span class="{{ $pill }} {{ $fmtOwnerId ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $fmtOwnerId ? 'bestehendes Format' : 'neu aus Brief' }}</span>
+                    </x-slot:actions>
+                    <label class="block text-[11px] text-gray-500 mb-1">Bestehendes Format wählen</label>
                     <select wire:model.live="fmtOwnerId" class="{{ $input }} w-full" data-tab-fmt-auswahl>
                         <option value="">— neues Format aus Brief —</option>
                         @foreach($fmtAuswahl as $fo)<option value="{{ $fo->id }}">{{ $fo->name }}</option>@endforeach
                     </select>
-                    <p class="text-[11px] text-slate-400 mt-2">Wählen: die Konzepte entstehen für das gewählte Format. Leer: ein neues, gebrandetes Format (Name/Claim/Story aus dem Brief).</p>
+                    <p class="text-[11px] text-gray-500 mt-2 max-w-2xl">Wählen: die Konzepte entstehen für das gewählte Format. Leer: ein neues, gebrandetes Format (Name/Claim/Story aus dem Brief).</p>
                 </x-foodalchemist::modal-section>
-                <x-foodalchemist::modal-section :title="$fmtOwnerId ? 'Aus Brief planen (füllt das gewählte Format)' : 'Neues Format aus Brief'">
-                    <p class="text-[11px] text-slate-400 mb-2">Marken-Identität + eigenständige Konzepte je Slot entstehen hier und docken automatisch ins Format.</p>
+                <x-foodalchemist::modal-section class="!mt-0" icon="heroicon-o-pencil-square" :title="$fmtOwnerId ? 'Aus Brief planen (füllt das gewählte Format)' : 'Neues Format aus Brief'">
+                    @if(trim((string) ($fmtTitel ?? '')) !== '')
+                        <x-slot:actions>
+                            <span class="{{ $pill }} {{ $variantPill['primary'] }}">{{ \Illuminate\Support\Str::limit(trim($fmtTitel), 32) }}</span>
+                        </x-slot:actions>
+                    @endif
+                    <p class="text-[11px] text-gray-500 mb-2 max-w-2xl">Marken-Identität + eigenständige Konzepte je Slot entstehen hier und docken automatisch ins Format.</p>
                     @unless($fmtOwnerId)
                         <input type="text" wire:model="fmtTitel" class="{{ $input }} w-full mb-2" placeholder="Format-Name (optional)" data-tab-fmt-titel>
                     @endunless
                     <textarea wire:model="fmtBrief" rows="4" class="{{ $input }} w-full" placeholder="Brief: Marke, Anlass, Ausrichtung, Zielgruppe, Niveau, Stationen/Gänge …" data-tab-fmt-brief></textarea>
                     @include('foodalchemist::livewire.planung.partials.diktat', ['ziel' => 'fmtBrief'])
-                    @if($fmtMeldung) <p class="text-[11px] text-rose-400 mt-2" data-tab-fmt-meldung>{{ $fmtMeldung }}</p> @endif
+                    <div data-planung-agent-slot="format"></div>
+                    @if($fmtMeldung) <p class="text-[11px] text-rose-500 mt-2" data-tab-fmt-meldung>{{ $fmtMeldung }}</p> @endif
                     <div class="mt-3">
                         <button type="button" wire:click="formatAusBrief" wire:loading.attr="disabled" wire:target="formatAusBrief" class="{{ $btnPrimary }} disabled:opacity-40" data-tab-fmt-erzeugen>
                             <span wire:loading.remove wire:target="formatAusBrief">{{ $fmtOwnerId ? 'Planen + Kaskade (KI)' : 'Format erzeugen (KI)' }}</span>
@@ -673,32 +739,42 @@
                         </button>
                     </div>
                 </x-foodalchemist::modal-section>
+                </div>{{-- /Raster Auswahl | Brief --}}
             </div>
 
-            <div wire:key="planung-tab-import" x-show="tab==='import'" class="space-y-4">
+            {{-- Cockpit-Optik (Paket K, Rollout): Lesebreite + zentriert. `pb-28` nur im Vorschau-Schritt —
+                 dort hängt die Anlegen-Leiste sticky am unteren Rand und würde sonst die letzte Zeile
+                 überdecken; Schritt 1 und 3 sind kurz und brauchen keinen Reservierungs-Abstand.
+                 Farben: die text-slate-*-Reste stammen aus der Zeit vor dem Karten-Umbau (Text lag direkt
+                 auf dem dunklen Canvas). In der weissen Karte (sectionCard = bg-white/90) sind sie zu
+                 blass bis unsichtbar → auf die Pilot-Tokens gezogen. Felder/Bindings unverändert. --}}
+            <div wire:key="planung-tab-import" x-show="tab==='import'" class="space-y-4 max-w-7xl mx-auto @if($importStep === 'vorschau') pb-28 @endif">
                 @if($importStep === 'eingabe')
-                    <x-foodalchemist::modal-section title="Rezeptur importieren">
-                        <p class="text-[11px] text-slate-400 mb-2">
+                    <x-foodalchemist::modal-section icon="heroicon-o-arrow-down-tray" title="Rezeptur importieren">
+                        <x-slot:actions>
+                            <span class="{{ $pill }} {{ $variantPill['secondary'] }}">Schritt 1 von 3</span>
+                        </x-slot:actions>
+                        <p class="text-[11px] text-gray-500 mb-2 max-w-2xl">
                             Bestehendes Rezept einfügen oder als Text-PDF hochladen — wird TREU übernommen
                             (nichts erfunden) und im System <strong>geerdet</strong> (Zutaten an Grundprodukte
                             gebunden). Verschachtelte Rezepte (Gericht mit Sauce/Püree) werden als verknüpfte
                             Sub-Rezepte angelegt.
                         </p>
                         <div class="flex items-center gap-2 mb-2">
-                            <label class="text-[11px] text-slate-400">Anlegen als</label>
+                            <label class="text-[11px] text-gray-500">Anlegen als</label>
                             <select wire:model="importTyp" class="{{ $input }} sm:w-48">
                                 <option value="basisrezept">Basisrezept</option>
                                 <option value="gericht">Gericht (Verkauf)</option>
                             </select>
-                            <span class="text-[10px] text-slate-500">(Vorschlag wird nach dem Lesen gesetzt)</span>
+                            <span class="text-[10px] text-gray-500">(Vorschlag wird nach dem Lesen gesetzt)</span>
                         </div>
                         <textarea wire:model="importText" rows="10" class="{{ $input }} w-full font-mono text-[12px]"
                                   placeholder="Rezept-Text hier einfügen (Zutaten + Zubereitung; Sektionen wie »Für die Sauce: …« werden als Komponenten erkannt) …"></textarea>
                         <div class="flex items-center gap-3 mt-2">
-                            <input type="file" wire:model="importPdf" accept="application/pdf" class="text-[11px] text-slate-300" />
-                            <span wire:loading wire:target="importPdf" class="text-[10px] text-amber-300">lädt …</span>
+                            <input type="file" wire:model="importPdf" accept="application/pdf" class="text-[11px] text-gray-600" />
+                            <span wire:loading wire:target="importPdf" class="text-[10px] text-amber-600">lädt …</span>
                         </div>
-                        @error('importPdf') <p class="text-[10px] text-rose-400 mt-1">{{ $message }}</p> @enderror
+                        @error('importPdf') <p class="text-[10px] text-rose-500 mt-1">{{ $message }}</p> @enderror
                         <div class="mt-3">
                             <button type="button" wire:click="importExtrahieren" wire:loading.attr="disabled"
                                     wire:target="importExtrahieren,importPdf" class="{{ $btnPrimary }} disabled:opacity-40">
@@ -706,10 +782,23 @@
                                 <span wire:loading wire:target="importExtrahieren">liest … (kann ~15 s dauern)</span>
                             </button>
                         </div>
-                        @if($importMeldung) <p class="text-[11px] text-rose-400 mt-2">{{ $importMeldung }}</p> @endif
+                        @if($importMeldung) <p class="text-[11px] text-rose-500 mt-2">{{ $importMeldung }}</p> @endif
                     </x-foodalchemist::modal-section>
                 @elseif($importStep === 'vorschau')
-                    <x-foodalchemist::modal-section title="Vorschau — prüfen &amp; anlegen">
+                    {{-- Aufgeteilt in Prüf-Karte + sticky Anlegen-Leiste: die Zutatenliste wächst mit der
+                         Quelle, die Knöpfe standen bisher dahinter und rutschten unter den Fold (gleicher
+                         Befund wie beim Go-Knopf der Erstell-Tabs). Felder, Reihenfolge, Bindings und die
+                         data-import-*-Anker bleiben unverändert — nur die Knopfzeile zieht in eine eigene Karte. --}}
+                    <x-foodalchemist::modal-section icon="heroicon-o-eye" title="Vorschau — prüfen">
+                        <x-slot:actions>
+                            <span class="{{ $pill }} {{ $variantPill['secondary'] }}">Schritt 2 von 3</span>
+                            @if(count($importVorschau['zutaten'] ?? []) > 0)
+                                <span class="{{ $pill }} {{ $variantPill['primary'] }}">{{ count($importVorschau['zutaten']) }} Zutaten</span>
+                            @endif
+                            @if(!empty($importVorschau['komponenten']))
+                                <span class="{{ $pill }} {{ $variantPill['primary'] }}">{{ count($importVorschau['komponenten']) }} Komponenten</span>
+                            @endif
+                        </x-slot:actions>
                         {{-- #6: gleicher w-full-Konflikt wie bei den Zutaten-Zeilen — Name-Feld kollabierte,
                              Typ-Dropdown fraß die Breite. Feste Inline-Breiten erzwingen. --}}
                         <div class="flex items-center gap-2 mb-2">
@@ -719,7 +808,7 @@
                                 <option value="gericht">Gericht</option>
                             </select>
                         </div>
-                        <p class="text-[11px] text-slate-400 mb-1">Zutaten (Menge · Einheit · Bezeichnung)</p>
+                        <p class="text-[11px] text-gray-500 mb-1">Zutaten (Menge · Einheit · Bezeichnung)</p>
                         <div class="space-y-1 mb-2">
                             @foreach(($importVorschau['zutaten'] ?? []) as $zi => $z)
                                 {{-- #6 (Dominique 2026-08-28): das geteilte $input trägt w-full → kollidierte mit w-16/flex-1,
@@ -733,17 +822,25 @@
                             @endforeach
                         </div>
                         @if(!empty($importVorschau['komponenten']))
-                            <p class="text-[11px] text-slate-400 mb-1">Erkannte Komponenten (werden als Sub-Rezepte angelegt)</p>
+                            <p class="text-[11px] text-gray-500 mb-1">Erkannte Komponenten (werden als Sub-Rezepte angelegt)</p>
                             <div class="space-y-1 mb-2">
                                 @foreach($importVorschau['komponenten'] as $ki => $k)
-                                    <div class="rounded border border-white/10 px-2 py-1 text-[11px] text-slate-300" wire:key="ikomp-{{ $ki }}">
+                                    <div class="rounded border border-black/10 px-2 py-1 text-[11px] text-gray-600" wire:key="ikomp-{{ $ki }}">
                                         <strong>{{ $k['name'] ?? '—' }}</strong> · {{ count($k['zutaten'] ?? []) }} Zutaten
                                     </div>
                                 @endforeach
                             </div>
                         @endif
-                        <p class="text-[11px] text-slate-400 mb-1">Zubereitung</p>
-                        <textarea wire:model="importVorschau.preparation" rows="6" class="{{ $input }} w-full text-[12px] mb-2"></textarea>
+                        <p class="text-[11px] text-gray-500 mb-1">Zubereitung</p>
+                        <textarea wire:model="importVorschau.preparation" rows="6" class="{{ $input }} w-full text-[12px]"></textarea>
+                    </x-foodalchemist::modal-section>
+
+                    <x-foodalchemist::modal-section class="sticky bottom-0 z-10 shadow-xl" icon="heroicon-o-check-circle" title="Geerdet anlegen">
+                        <x-slot:actions>
+                            @if(trim((string) ($importVorschau['name'] ?? '')) !== '')
+                                <span class="{{ $pill }} {{ $variantPill['primary'] }}">{{ \Illuminate\Support\Str::limit(trim($importVorschau['name']), 32) }}</span>
+                            @endif
+                        </x-slot:actions>
                         <div class="flex gap-2">
                             <button type="button" wire:click="importAnlegen" wire:loading.attr="disabled" wire:target="importAnlegen"
                                     class="{{ $btnPrimary }} disabled:opacity-40">
@@ -752,16 +849,19 @@
                             </button>
                             <button type="button" wire:click="importReset" class="{{ $btnGhost }}">Verwerfen</button>
                         </div>
-                        @if($importMeldung) <p class="text-[11px] text-rose-400 mt-2">{{ $importMeldung }}</p> @endif
+                        @if($importMeldung) <p class="text-[11px] text-rose-500 mt-2">{{ $importMeldung }}</p> @endif
                     </x-foodalchemist::modal-section>
                 @elseif($importStep === 'fertig' && $importErgebnis)
-                    <x-foodalchemist::modal-section title="Importiert (Entwurf)">
-                        <p class="text-[12px] text-slate-200 mb-1">
+                    <x-foodalchemist::modal-section icon="heroicon-o-check-badge" title="Importiert (Entwurf)">
+                        <x-slot:actions>
+                            <span class="{{ $pill }} {{ $variantPill['secondary'] }}">Schritt 3 von 3</span>
+                        </x-slot:actions>
+                        <p class="text-[12px] text-gray-900 mb-1">
                             „{{ $importErgebnis['name'] }}" als Entwurf angelegt
                             @if(!empty($importErgebnis['sub_recipes'])) · {{ count($importErgebnis['sub_recipes']) }} Sub-Rezept(e) @endif
                         </p>
                         {{-- #6/Import: GP-Mint + Anreicherung laufen jetzt im Worker (nicht mehr synchron per Knopf). --}}
-                        <p class="text-[11px] text-sky-300 mb-2">→ An den Worker übergeben — GPs, Beschreibung &amp; Pairings werden im Hintergrund angereichert.</p>
+                        <p class="text-[11px] text-sky-700 mb-2">→ An den Worker übergeben — GPs, Beschreibung &amp; Pairings werden im Hintergrund angereichert.</p>
                         <div class="flex items-center gap-2">
                             <button type="button" @click="tab='worker'" class="{{ $btnGhost }}" data-import-zum-worker>Zum Worker</button>
                             <button type="button" wire:click="importReset" class="{{ $btnGhost }}">Weiteres importieren</button>
@@ -783,8 +883,18 @@
 
             {{-- CONCEPT (= das „Menü"): Briefing → LLM füllt die semantischen Hüllen → Zusammenstellung
                  (Pakete/Buffet) nach den Leitplanken; braucht Gerichte → kaskadiert nach unten. --}}
-            <div wire:key="planung-tab-concept" x-show="tab==='concept'" class="space-y-4">
-                <x-foodalchemist::modal-section title="Briefing — was für ein Menü / Concept">
+            {{-- Cockpit-Optik (Paket K, Rollout): der Concept-Tab läuft NICHT über erstellen-tab.blade.php,
+                 sondern ist hier inline nachgebaut (eigene Briefing-Karte, eigener KI-Kopf, eigener Go).
+                 Darum dieselbe Behandlung von Hand: Lesebreite + zentriert, pb-28 für die sticky Go-Leiste,
+                 Kopfzeilen auf Button-Niveau mit Icon, Titel-Echo als Status-Pille. Die Karten der
+                 Leitplanken (inkl. der neuen Struktur-Karte) kommen aus dem gemeinsamen Partial. --}}
+            <div wire:key="planung-tab-concept" x-show="tab==='concept'" class="space-y-4 max-w-7xl mx-auto pb-28">
+                <x-foodalchemist::modal-section icon="heroicon-o-pencil-square" title="Briefing — was für ein Menü / Concept">
+                    @if(trim((string) ($eingabe['concept']['titel'] ?? '')) !== '')
+                        <x-slot:actions>
+                            <span class="{{ $pill }} {{ $variantPill['primary'] }}">{{ \Illuminate\Support\Str::limit(trim($eingabe['concept']['titel']), 32) }}</span>
+                        </x-slot:actions>
+                    @endif
                     @include('foodalchemist::livewire.planung.partials.schnellstart-chips', ['scope' => 'concept'])
                     <label class="{{ $label ?? 'text-[11px] text-gray-500' }}">Titel (optional)</label>
                     <input type="text" wire:model="eingabe.concept.titel" class="{{ $input }} mb-3" placeholder="z. B. CHEFS.CORNER — Sommer-Menü" data-planung-titel />
@@ -818,8 +928,11 @@
                 {{-- DF-2 (Spec 41, Entscheid 2026-08-21): KI-Kopf ist der EMPFOHLENE Weg fürs Concepting
                      (reicheres Ergebnis: ausgearbeiteter, prüfbarer Plan vor der Erzeugung). Primär-Button;
                      der direkte Go unten ist der Schnellweg (sekundär). --}}
-                <x-foodalchemist::modal-section title="KI-Kopf — Plan ausarbeiten (empfohlen)">
-                    <p class="{{ $label ?? 'text-[11px] text-gray-500' }} mb-2">Empfohlener Weg: Die KI arbeitet aus dem Briefing einen vollständigen Konzept-Entwurf aus (Leitidee, USP, Inszenierung, Geschmackswelten, Gänge-Gerüst) und öffnet ihn zur Prüfung/Korrektur — <b>noch ohne</b> Gerichte zu erzeugen. Danach der Go „aus geprüftem Plan".</p>
+                <x-foodalchemist::modal-section icon="heroicon-o-light-bulb" title="KI-Kopf — Plan ausarbeiten (empfohlen)">
+                    <x-slot:actions>
+                        <span class="{{ $pill }} {{ $variantPill['primary'] }}">empfohlener Weg</span>
+                    </x-slot:actions>
+                    <p class="{{ $label ?? 'text-[11px] text-gray-500' }} mb-2 max-w-2xl">Empfohlener Weg: Die KI arbeitet aus dem Briefing einen vollständigen Konzept-Entwurf aus (Leitidee, USP, Inszenierung, Geschmackswelten, Gänge-Gerüst) und öffnet ihn zur Prüfung/Korrektur — <b>noch ohne</b> Gerichte zu erzeugen. Danach der Go „aus geprüftem Plan".</p>
                     <button type="button" wire:click="kiKopf" @disabled($laeuft)
                             wire:loading.attr="disabled" wire:target="kiKopf"
                             class="{{ $btnPrimary }} disabled:opacity-40" data-planung-kikopf>
@@ -832,7 +945,15 @@
 
                 @include('foodalchemist::livewire.planung.partials.schnellstart-speichern', ['scope' => 'concept'])
 
-                <x-foodalchemist::modal-section title="Go — Concept erzeugen (Draft)">
+                {{-- Go-Leiste sticky im Scroll-Container des Tabs (Befund „Go-Knopf unter dem Fold") —
+                     gleiche Bauart wie in erstellen-tab.blade.php. Titel-Echo im Kopf, damit sichtbar
+                     bleibt, woran gearbeitet wird, wenn die Briefing-Karte weit oben aus dem Bild ist. --}}
+                <x-foodalchemist::modal-section class="sticky bottom-0 z-10 shadow-xl" icon="heroicon-o-squares-2x2" title="Go — Concept erzeugen (Draft)">
+                    @if(trim((string) ($eingabe['concept']['titel'] ?? '')) !== '')
+                        <x-slot:actions>
+                            <span class="{{ $pill }} {{ $variantPill['primary'] }}">{{ \Illuminate\Support\Str::limit(trim($eingabe['concept']['titel']), 32) }}</span>
+                        </x-slot:actions>
+                    @endif
                     @include('foodalchemist::livewire.planung.partials.worker-praesenz')
                     @if($planConceptId)
                         {{-- A0/A1: der ausgearbeitete Plan bleibt hier SICHTBAR + editierbar (Semantik + Menü-
@@ -843,7 +964,8 @@
                         <div class="mb-2 flex items-center gap-2 text-[11px] text-emerald-700" data-planung-plan-bereit>
                             @svg('heroicon-o-check-badge', 'w-4 h-4')
                             <span>Geprüfter Plan vorbereitet — der Go verwendet ihn (statt neu zu generieren).</span>
-                            <button type="button" wire:click="planVerwerfen" @disabled($laeuft) class="underline hover:text-emerald-200 disabled:opacity-40">Plan verwerfen (frisch generieren)</button>
+                            {{-- hover war emerald-200 (Dunkel-Ära) — auf der weissen Karte unsichtbar; jetzt dunkler als der Ruhezustand. --}}
+                            <button type="button" wire:click="planVerwerfen" @disabled($laeuft) class="underline hover:text-emerald-900 disabled:opacity-40">Plan verwerfen (frisch generieren)</button>
                         </div>
                         <x-foodalchemist::ki-action action="goKaskade('concept')" variant="primary" icon="heroicon-o-squares-2x2"
                             label="Go aus geprüftem Plan" busy="Kaskade wird gestartet …" flash="Kaskade gestartet"
@@ -860,7 +982,11 @@
             </div>
 
             {{-- WORKER — alle Läufe/Entwürfe zusammen: Status + Fan-out-Baum + Freigabe --}}
-            <div wire:key="planung-tab-worker" x-show="tab==='worker'" class="space-y-4">
+            {{-- Cockpit-Optik (Paket K, Rollout): Lesebreite + zentriert wie auf den Erstell-Tabs. KEIN
+                 pb-28 und KEINE sticky Leiste — der Worker ist Anzeige, hat keinen Go-Knopf.
+                 Poll-Banner und Watchdog stehen bewusst DIREKT auf dem dunklen Canvas (nicht in einer
+                 Karte): dort ist text-amber-300 richtig und bleibt unverändert. --}}
+            <div wire:key="planung-tab-worker" x-show="tab==='worker'" class="space-y-4 max-w-7xl mx-auto">
                 {{-- Spec 53 / Paket C: $pollAktiv wird JEDES Render frisch aus DB-Wahrheit abgeleitet
                      (Lauf-Status + Step-Phasen), kein gespeichertes Flag mehr — deckt auch Fälle ab,
                      die kein $laeuft/$anreicherungLaeuft setzen (z. B. eine on-demand Konformitätsprüfung). --}}
@@ -892,19 +1018,36 @@
                 @if($lauf)
                     @include('foodalchemist::livewire.planung.partials.ergebnis')
                 @else
-                    <div class="{{ $card }} p-4 text-xs text-gray-500">Noch kein Lauf — starte in „Basisrezept", „Gericht" oder „Concept" einen Go, der Fortschritt läuft hier durch.</div>
+                    {{-- Leer-Zustand als Karte statt rohem $card-Div — gleiche Fläche/Kopfzeile wie überall sonst. --}}
+                    <x-foodalchemist::modal-section icon="heroicon-o-queue-list" title="Kein Lauf">
+                        <p class="text-xs text-gray-500">Noch kein Lauf — starte in „Basisrezept", „Gericht" oder „Concept" einen Go, der Fortschritt läuft hier durch.</p>
+                    </x-foodalchemist::modal-section>
                 @endif
             </div>
 
             {{-- COMPOSER — Foodpairing-Fläche: Anker zusammenstellen, Netz zeigt live was passt (★★★/★★).
                  Gezielte Kreation: aus den gewählten Ankern ein Basisrezept/Gericht erzeugen
                  (Anker = verbindliche Leit-Aromen). Klick auf Kandidat nimmt ihn auf. --}}
-            <div wire:key="planung-tab-composer" x-show="tab==='composer'">
+            {{-- Cockpit-Optik (Paket K, Rollout): Lesebreite + zentriert. Das bestehende 5fr/7fr-Grid
+                 (Picker links, Netz rechts) BLEIBT die Spaltenaufteilung dieses Tabs — kein zweites
+                 xl:grid-cols-2 darübergelegt. Kein Sticky: der Composer hat keinen Go, die Übernahme-
+                 Knöpfe sitzen in der zweiten Karte oben links.
+                 Farben: die text-slate-*-Reste und die violett/weissen Chips stammen aus der Zeit vor dem
+                 Karten-Umbau (Text lag direkt auf dem dunklen Canvas). In der weissen Karte
+                 (sectionCard = bg-white/90) sind slate-100/200 praktisch unsichtbar → auf $pill/
+                 $variantPill und die Grau-Tokens gezogen. Die Hex-Werte am Netz (Stern-Gold, SVG-Grund,
+                 Legende) bleiben unverändert: sie gehören zur dunklen Graph-Fläche (Entscheid 03). --}}
+            <div wire:key="planung-tab-composer" x-show="tab==='composer'" class="max-w-7xl mx-auto">
                 <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] gap-4 items-start">
                 {{-- LINKE SPALTE: Picker + Kohäsion --}}
                 <div class="space-y-4 min-w-0">
                 {{-- Reicher Anker-Picker: Kategorie + Suche + browsebare Liste + gewählte Chips --}}
-                <x-foodalchemist::modal-section title="Foodpairing — Komposition">
+                <x-foodalchemist::modal-section class="!mt-0" icon="heroicon-o-squares-plus" title="Foodpairing — Komposition">
+                    @if(!empty($composerAnker))
+                        <x-slot:actions>
+                            <span class="{{ $pill }} {{ $variantPill['primary'] }}">{{ count($composerAnker) }} Anker gewählt</span>
+                        </x-slot:actions>
+                    @endif
                     <p class="{{ $label ?? 'text-[11px] text-gray-500' }} mb-2">
                         Zutaten/Anker zusammenstellen — das Netz zeigt live, was harmoniert (★★★ Best · ★★ Good).
                         Filtere/such unten oder klick einen Kandidaten im Netz.
@@ -925,37 +1068,37 @@
                         <div class="flex flex-wrap gap-1.5 mb-2">
                             @foreach($composerAnker as $a)
                                 <span wire:key="canker-{{ $a['id'] }}"
-                                      class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] bg-violet-500/25 text-violet-100 border border-violet-400/40">
+                                      class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] {{ $variantPill['primary'] }} border border-violet-500/30">
                                     {{ $a['label'] }}
                                     <button type="button" wire:click="composerRemove({{ $a['id'] }})"
-                                            class="text-violet-200 hover:text-white leading-none">&times;</button>
+                                            class="text-violet-500 hover:text-violet-700 leading-none">&times;</button>
                                 </span>
                             @endforeach
                         </div>
                     @endif
 
-                    <p class="text-[10px] text-slate-500 mb-1">
+                    <p class="text-[10px] text-gray-500 mb-1">
                         @if($composerFocus !== null && $composerFokusLabel)
-                            Punkt = passt zu <span class="text-violet-300">{{ $composerFokusLabel }}</span> · Klick fügt hinzu
+                            Punkt = passt zu <span class="text-violet-600">{{ $composerFokusLabel }}</span> · Klick fügt hinzu
                         @else
                             {{ $composerBrowse['total'] }} Anker · Punkt = Fit zur Auswahl · Klick fügt hinzu
                         @endif
                     </p>
-                    <div class="max-h-64 overflow-y-auto rounded-lg border border-white/10 divide-y divide-white/5">
+                    <div class="max-h-64 overflow-y-auto rounded-lg border border-black/10 divide-y divide-black/5">
                         @forelse($composerBrowse['items'] as $it)
                             <button type="button" wire:key="cbrowse-{{ $it['id'] }}" wire:click="composerAdd({{ $it['id'] }})"
-                                    class="w-full flex items-center gap-2 px-2.5 py-1.5 text-left text-[12px] text-slate-100 hover:bg-white/10">
+                                    class="w-full flex items-center gap-2 px-2.5 py-1.5 text-left text-[12px] text-gray-900 hover:bg-violet-500/5">
                                 <span class="w-2 h-2 rounded-full shrink-0"
                                       style="background: {{ $it['typ'] === 'stern3' ? '#fcd34d' : ($it['typ'] === 'stern2' ? '#f59e0b' : 'transparent') }}; {{ $it['typ'] ? '' : 'border:1px solid rgba(148,163,184,.35);' }}"
                                       title="{{ $it['typ'] === 'stern3' ? '★★★ Best-Match' : ($it['typ'] === 'stern2' ? '★★ Good-Match' : 'kein Match zur Auswahl') }}"></span>
                                 <span class="flex-1 truncate">{{ $it['label'] }}</span>
                                 @if($it['category'])
-                                    <span class="text-[10px] text-slate-500 shrink-0">{{ $it['category'] }}</span>
+                                    <span class="text-[10px] text-gray-500 shrink-0">{{ $it['category'] }}</span>
                                 @endif
-                                <span class="text-violet-300 shrink-0">+</span>
+                                <span class="text-violet-600 shrink-0">+</span>
                             </button>
                         @empty
-                            <p class="px-2.5 py-2 text-[12px] text-slate-500">Keine Anker — Filter/Suche anpassen.</p>
+                            <p class="px-2.5 py-2 text-[12px] text-gray-500">Keine Anker — Filter/Suche anpassen.</p>
                         @endforelse
                     </div>
                 </x-foodalchemist::modal-section>
@@ -963,8 +1106,8 @@
                 {{-- Foodpairing-Composer: aus den gewählten Ankern in den Erstellen-Tab springen. Der Brief
                      wird aus den Ankern vorbefüllt, die Anker reisen als verbindliche Leit-Aromen
                      (seed_anker) mit — im Erstellen-Tab setzt du die Leitplanken (voller Regler) und startest. --}}
-                <x-foodalchemist::modal-section title="Aus diesen Pairings weiterbauen">
-                    <p class="text-[11px] text-slate-400 mb-2">
+                <x-foodalchemist::modal-section icon="heroicon-o-arrow-right-circle" title="Aus diesen Pairings weiterbauen">
+                    <p class="text-[11px] text-gray-500 mb-2">
                         Übernimmt die Anker als <strong>verbindliche Leit-Aromen</strong> und springt in den
                         Erstellen-Tab: Brief ist vorbefüllt, dort die <strong>Leitplanken</strong> setzen und starten.
                     </p>
@@ -981,7 +1124,7 @@
                         </button>
                     </div>
                     @if(empty($composerAnker))
-                        <p class="text-[10px] text-slate-500 mt-1">Erst Anker wählen.</p>
+                        <p class="text-[10px] text-gray-500 mt-1">Erst Anker wählen.</p>
                     @endif
                 </x-foodalchemist::modal-section>
 
@@ -989,29 +1132,32 @@
                      in Inspire fast immer leeren Direktkanten (die die irreführende 0 % erzeugten). --}}
                 @php $bridge = $composerNetz['meta']['bridge'] ?? null; @endphp
                 @if($bridge !== null && count($composerAnker) >= 2)
-                    <x-foodalchemist::modal-section title="Passt das zusammen?">
-                        <div class="flex flex-wrap items-center gap-x-5 gap-y-1 text-[12px] text-slate-200">
+                    <x-foodalchemist::modal-section icon="heroicon-o-link" title="Passt das zusammen?">
+                        <x-slot:actions>
+                            <span class="{{ $pill }} {{ ($bridge['pairs_total'] > 0 && $bridge['pairs_connected'] === $bridge['pairs_total']) ? $variantPill['success'] : ($bridge['pairs_connected'] > 0 ? $variantPill['warning'] : $variantPill['danger']) }}">{{ $bridge['pairs_connected'] }}/{{ $bridge['pairs_total'] }} verbunden</span>
+                        </x-slot:actions>
+                        <div class="flex flex-wrap items-center gap-x-5 gap-y-1 text-[12px] text-gray-900">
                             <span>Verbunden:
-                                <strong class="{{ ($bridge['pairs_total'] > 0 && $bridge['pairs_connected'] === $bridge['pairs_total']) ? 'text-emerald-300' : ($bridge['pairs_connected'] > 0 ? 'text-amber-300' : 'text-rose-300') }}">{{ $bridge['pairs_connected'] }}/{{ $bridge['pairs_total'] }}</strong>
+                                <strong class="{{ ($bridge['pairs_total'] > 0 && $bridge['pairs_connected'] === $bridge['pairs_total']) ? 'text-emerald-600' : ($bridge['pairs_connected'] > 0 ? 'text-amber-600' : 'text-rose-600') }}">{{ $bridge['pairs_connected'] }}/{{ $bridge['pairs_total'] }}</strong>
                                 Anker-Paare über gemeinsame Partner
                             </span>
                             @php $tiers = $bridge['tiers'] ?? []; @endphp
                             @if(($tiers['best'] ?? 0) + ($tiers['good'] ?? 0) > 0)
-                                <span class="text-slate-400">davon
-                                    @if(($tiers['best'] ?? 0) > 0)<strong class="text-violet-300">{{ $tiers['best'] }}× stark</strong>@endif
+                                <span class="text-gray-500">davon
+                                    @if(($tiers['best'] ?? 0) > 0)<strong class="text-violet-600">{{ $tiers['best'] }}× stark</strong>@endif
                                     @if(($tiers['best'] ?? 0) > 0 && ($tiers['good'] ?? 0) > 0), @endif
                                     @if(($tiers['good'] ?? 0) > 0){{ $tiers['good'] }}× mittel @endif
                                 </span>
                             @endif
                             @if(!empty($bridge['top']))
-                                <span class="text-slate-400">stärkste Brücken: {{ implode(', ', $bridge['top']) }}</span>
+                                <span class="text-gray-500">stärkste Brücken: {{ implode(', ', $bridge['top']) }}</span>
                             @endif
                         </div>
                         @if($composerCohesion !== null && ($composerCohesion['rated_pairs'] ?? 0) > 0)
-                            <p class="mt-1 text-[11px] text-slate-500">direktes Pairing: {{ $composerCohesion['rated_pairs'] }}/{{ $composerCohesion['total_pairs'] }} Paare (Kohäsion {{ $composerCohesion['score'] }}%)</p>
+                            <p class="mt-1 text-[11px] text-gray-500">direktes Pairing: {{ $composerCohesion['rated_pairs'] }}/{{ $composerCohesion['total_pairs'] }} Paare (Kohäsion {{ $composerCohesion['score'] }}%)</p>
                         @endif
                         @if(!empty($bridge['orphans']))
-                            <p class="mt-1 text-[12px] text-amber-300">⚠ passt (noch) nicht zu den anderen: {{ implode(', ', $bridge['orphans']) }}</p>
+                            <p class="mt-1 text-[12px] text-amber-600">⚠ passt (noch) nicht zu den anderen: {{ implode(', ', $bridge['orphans']) }}</p>
                         @endif
                     </x-foodalchemist::modal-section>
                 @endif
@@ -1020,23 +1166,28 @@
                 {{-- RECHTE SPALTE: Netz --}}
                 <div class="min-w-0">
                 {{-- Netz + Filter-Chips in EINER Alpine-Instanz (wie im Detail-Modal) --}}
-                <x-foodalchemist::modal-section title="Netz">
+                <x-foodalchemist::modal-section class="!mt-0" icon="heroicon-o-share" title="Netz">
+                    @if($composerFocus !== null && $composerFokusLabel)
+                        <x-slot:actions>
+                            <span class="{{ $pill }} {{ $variantPill['primary'] }}">Fokus: {{ $composerFokusLabel }}</span>
+                        </x-slot:actions>
+                    @endif
                     @if(empty($composerAnker))
-                        <p class="text-[13px] text-slate-400">
+                        <p class="text-[13px] text-gray-500 max-w-2xl">
                             Noch keine Zutat gewählt — oben eine hinzufügen. Dann zeigt das Netz die passenden
                             Kandidaten (★★★/★★), wie die Anker zusammenhängen und wo etwas nicht passt.
                         </p>
                     @else
                         @if($composerFocus !== null && $composerFokusLabel)
                             <div class="mb-2 flex flex-wrap items-center gap-2 text-[11px]">
-                                <span class="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-violet-500/25 text-violet-100 border border-violet-400/40">
+                                <span class="inline-flex items-center gap-1.5 px-2 py-1 rounded-full {{ $variantPill['primary'] }} border border-violet-500/30">
                                     Fokus: {{ $composerFokusLabel }}
-                                    <button type="button" wire:click="composerFocus({{ $composerFocus }})" class="text-violet-200 hover:text-white leading-none" title="Fokus aufheben">&times;</button>
+                                    <button type="button" wire:click="composerFocus({{ $composerFocus }})" class="text-violet-500 hover:text-violet-700 leading-none" title="Fokus aufheben">&times;</button>
                                 </span>
-                                <span class="text-slate-500">nur seine Verbindungen · Klick aufs Zentrum oder × hebt auf</span>
+                                <span class="text-gray-500">nur seine Verbindungen · Klick aufs Zentrum oder × hebt auf</span>
                             </div>
                         @else
-                            <p class="mb-2 text-[10px] text-slate-500">Tipp: Klick auf einen Anker fokussiert ihn — nur seine Verbindungen + Stärke bleiben sichtbar.</p>
+                            <p class="mb-2 text-[10px] text-gray-500">Tipp: Klick auf einen Anker fokussiert ihn — nur seine Verbindungen + Stärke bleiben sichtbar.</p>
                         @endif
                         <div wire:ignore
                              wire:key="composer-netz-{{ $composerNetz['meta']['sig'] ?? '0' }}-f{{ $composerFocus ?? 0 }}"
@@ -1051,17 +1202,21 @@
                                  onKandidatClick: (id) => $wire.composerAdd(id),
                                  onAnkerClick: (id) => $wire.composerFocus(id),
                              })">
+                            {{-- Filter-Chips und Legende liegen AUSSERHALB des SVG, also auf der weissen Karte:
+                                 Schrift auf Grau-Tokens, Ring-Offset auf Weiss (vorher slate-900 → dunkler
+                                 Spalt um den aktiven Chip). Die Stern-Hex bleiben, sie spiegeln die Punktfarben
+                                 im Netz. --}}
                             <div class="flex flex-wrap items-center gap-2 mb-2 text-[11px]">
-                                <span class="text-slate-400 mr-1">Zeigen:</span>
+                                <span class="text-gray-500 mr-1">Zeigen:</span>
                                 <button type="button" @click="toggleTyp('stern3')"
-                                        :class="typAktiv['stern3'] ? 'ring-2 ring-offset-1 ring-offset-slate-900' : 'opacity-45'"
-                                        class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-slate-200"
+                                        :class="typAktiv['stern3'] ? 'ring-2 ring-offset-1 ring-offset-white' : 'opacity-45'"
+                                        class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-gray-700"
                                         style="border-color:#fcd34d; --tw-ring-color:#fcd34d;">
                                     <span class="w-2 h-2 rounded-full" style="background:#fcd34d"></span> ★★★ Best
                                 </button>
                                 <button type="button" @click="toggleTyp('stern2')"
-                                        :class="typAktiv['stern2'] ? 'ring-2 ring-offset-1 ring-offset-slate-900' : 'opacity-45'"
-                                        class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-slate-200"
+                                        :class="typAktiv['stern2'] ? 'ring-2 ring-offset-1 ring-offset-white' : 'opacity-45'"
+                                        class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-gray-700"
                                         style="border-color:#f59e0b; --tw-ring-color:#f59e0b;">
                                     <span class="w-2 h-2 rounded-full" style="background:#f59e0b"></span> ★★ Good
                                 </button>
@@ -1069,12 +1224,12 @@
                             <svg viewBox="0 0 1200 980" preserveAspectRatio="xMidYMid meet"
                                  class="w-full rounded-xl" style="height:70vh; background:#0b1120" data-fa-netz-mount></svg>
                             {{-- Legende: Punkt auf der Anker-Linie = Beziehungsstärke (groß→klein) --}}
-                            <div class="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-[11px] text-slate-300">
-                                <span class="text-slate-500">Beziehungsstärke:</span>
+                            <div class="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-[11px] text-gray-700">
+                                <span class="text-gray-500">Beziehungsstärke:</span>
                                 <span class="inline-flex items-center gap-2"><span class="inline-block rounded-full" style="width:18px;height:18px;background:#a78bfa;box-shadow:0 0 0 2px #ede9fe"></span> Best</span>
                                 <span class="inline-flex items-center gap-2"><span class="inline-block rounded-full" style="width:11px;height:11px;background:#a78bfa;opacity:.82"></span> Good</span>
                                 <span class="inline-flex items-center gap-2"><span class="inline-block rounded-full" style="width:5px;height:5px;background:#a78bfa;opacity:.5"></span> Match</span>
-                                <span class="text-[10px] text-slate-500">· groß→klein = stark→schwach · violett = geteilte Partner, gold = direktes Pairing · Hover zeigt die Partner</span>
+                                <span class="text-[10px] text-gray-500">· groß→klein = stark→schwach · violett = geteilte Partner, gold = direktes Pairing · Hover zeigt die Partner</span>
                             </div>
                         </div>
                     @endif
