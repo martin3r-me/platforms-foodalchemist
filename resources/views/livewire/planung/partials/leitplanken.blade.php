@@ -22,10 +22,6 @@
         // Aktive Akzentfarbe der Karten-Pills (Violett statt Emerald) — nur im Pilot-Zweig, damit
         // der @else-Zweig für gericht/concept byte-identisch zum Vor-Pilot-Stand bleibt.
         $pillAktivKarte = 'border-violet-500 bg-violet-500/10 text-violet-700 font-medium';
-        $sektorLabels = [
-            'betriebsgastronomie' => 'Betriebsgastronomie', 'catering' => 'Catering / Event',
-            'restaurant' => 'Restaurant / à la carte', 'care' => 'Care / Klinik', 'schule_kita' => 'Schule / Kita',
-        ];
         $diaetLabels = [
             'vegan' => 'Vegan', 'vegetarisch' => 'Vegetarisch', 'glutenfrei' => 'Glutenfrei',
             'laktosefrei' => 'Laktosefrei', 'halal' => 'Halal', 'low_carb' => 'Low Carb',
@@ -49,7 +45,7 @@
         $anspruchKopf = $kopf([
             ($r['level'] ?? '') !== '' ? ($richtungenByField['level']['optionen'][$r['level']] ?? null) : null,
             !empty($r['frische'] ?? []) ? collect((array) $r['frische'])->map(fn ($w) => \Platform\FoodAlchemist\Livewire\Planung\Index::FRISCHE_OPTIONEN[$w] ?? $w)->implode(' / ') : null,
-            ($r['sektor'] ?? '') !== '' ? ($sektorLabels[$r['sektor']] ?? null) : null,
+            ($r['sektor'] ?? '') !== '' ? (\Platform\FoodAlchemist\Livewire\Planung\Index::SEKTOR_OPTIONEN[$r['sektor']] ?? null) : null,
         ]);
         $anreicherungKopf = $kopf([
             !($r['voll_anreichern'] ?? true) ? 'Anreicherung aus' : null,
@@ -142,8 +138,7 @@
                             @endif
                         </p>
                         <select wire:model="regler.{{ $scope }}.sektor" class="{{ $input }} !py-1.5 max-w-sm">
-                            <option value="">(egal/universell)</option>
-                            @foreach($sektorLabels as $wert => $lbl)
+                            @foreach(\Platform\FoodAlchemist\Livewire\Planung\Index::SEKTOR_OPTIONEN as $wert => $lbl)
                                 <option value="{{ $wert }}">{{ $lbl }}</option>
                             @endforeach
                         </select>
@@ -220,7 +215,11 @@
                 {{-- Basisrezept = Halbfabrikat (Charge in einer Einheit), kein Teller für N Gäste:
                      Ziel-Menge + Einheit statt Pax/Portion (2 L Sauce, 5 kg Teig, 30 Stk …). --}}
                 <div>
-                    <label class="block {{ $label }} mb-1">Einheit</label>
+                    <label class="block {{ $label }} mb-1">Einheit
+                        @if($reglerVonAgent[$scope]['ziel_einheit'] ?? false)
+                            <span class="{{ $pill }} {{ $variantPill['secondary'] }}" data-regler-von-agent="ziel_einheit" title="Vom Sprachbefehl-Agenten vorgeschlagen — verschwindet bei manueller Änderung">Agent</span>
+                        @endif
+                    </label>
                     <select wire:model="regler.{{ $scope }}.ziel_einheit" class="{{ $input }} !py-1.5" data-planung-ziel-einheit>
                         @foreach(\Platform\FoodAlchemist\Livewire\Planung\Index::MENGE_EINHEITEN as $wert => $lbl)
                             <option value="{{ $wert }}">{{ $lbl }}</option>
@@ -228,7 +227,11 @@
                     </select>
                 </div>
                 <div>
-                    <label class="block {{ $label }} mb-1">Ziel-Menge</label>
+                    <label class="block {{ $label }} mb-1">Ziel-Menge
+                        @if($reglerVonAgent[$scope]['ziel_menge'] ?? false)
+                            <span class="{{ $pill }} {{ $variantPill['secondary'] }}" data-regler-von-agent="ziel_menge" title="Vom Sprachbefehl-Agenten vorgeschlagen — verschwindet bei manueller Änderung">Agent</span>
+                        @endif
+                    </label>
                     <input type="number" min="0" step="any" wire:model="regler.{{ $scope }}.ziel_menge" placeholder="z. B. 2" class="{{ $input }} !py-1.5 font-mono" data-planung-ziel-menge />
                 </div>
                 <div>
@@ -251,7 +254,11 @@
         <div class="grid md:grid-cols-2 gap-x-6 gap-y-4" data-planung-regler="{{ $scope }}">
             @foreach(\Platform\FoodAlchemist\Livewire\Planung\Index::RICHTUNGEN as $g)
                 <div data-richtung="{{ $g['field'] }}">
-                    <p class="text-xs font-medium text-gray-900 mb-1">{{ $g['label'] }}</p>
+                    <p class="text-xs font-medium text-gray-900 mb-1">{{ $g['label'] }}
+                        @if($reglerVonAgent[$scope][$g['field']] ?? false)
+                            <span class="{{ $pill }} {{ $variantPill['secondary'] }}" data-regler-von-agent="{{ $g['field'] }}" title="Vom Sprachbefehl-Agenten vorgeschlagen — verschwindet bei manueller Änderung">Agent</span>
+                        @endif
+                    </p>
                     <div class="flex flex-wrap gap-1.5">
                         @foreach($g['optionen'] as $wert => $lbl)
                             <button type="button" wire:click="reglerPill('{{ $scope }}', '{{ $g['field'] }}', '{{ $wert }}')"
@@ -291,12 +298,9 @@
                     @endif
                 </p>
                 <select wire:model="regler.{{ $scope }}.sektor" class="{{ $input }} !py-1.5">
-                    <option value="">(egal/universell)</option>
-                    <option value="betriebsgastronomie">Betriebsgastronomie</option>
-                    <option value="catering">Catering / Event</option>
-                    <option value="restaurant">Restaurant / à la carte</option>
-                    <option value="care">Care / Klinik</option>
-                    <option value="schule_kita">Schule / Kita</option>
+                    @foreach(\Platform\FoodAlchemist\Livewire\Planung\Index::SEKTOR_OPTIONEN as $wert => $lbl)
+                        <option value="{{ $wert }}">{{ $lbl }}</option>
+                    @endforeach
                 </select>
                 <p class="text-[11px] text-gray-500 mt-1">{{ ($r['sektor'] ?? '') === '' ? 'Kein Sektor-Constraint' : '' }}</p>
             </div>
@@ -475,17 +479,19 @@
                                 @endif
                             </label>
                             <select wire:model="regler.{{ $scope }}.occasion" class="{{ $input }} !py-1.5">
-                                <option value="">—</option>
-                                @foreach(['fruehstueck' => 'Frühstück', 'lunch' => 'Lunch', 'konferenz' => 'Konferenz', 'empfang' => 'Empfang', 'dinner' => 'Dinner', 'late_night' => 'Late Night'] as $wert => $lbl)
+                                @foreach(\Platform\FoodAlchemist\Livewire\Planung\Index::OCCASION_OPTIONEN as $wert => $lbl)
                                     <option value="{{ $wert }}">{{ $lbl }}</option>
                                 @endforeach
                             </select>
                         </div>
                         <div>
-                            <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Serviceform</label>
+                            <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Serviceform
+                                @if($reglerVonAgent[$scope]['serviceform'] ?? false)
+                                    <span class="{{ $pill }} {{ $variantPill['secondary'] }}" data-regler-von-agent="serviceform" title="Vom Sprachbefehl-Agenten vorgeschlagen — verschwindet bei manueller Änderung">Agent</span>
+                                @endif
+                            </label>
                             <select wire:model="regler.{{ $scope }}.serviceform" class="{{ $input }} !py-1.5">
-                                <option value="">—</option>
-                                @foreach(['tellerservice' => 'Tellerservice', 'buffet' => 'Buffet', 'flying' => 'Flying Service', 'stehempfang' => 'Stehempfang', 'boxed' => 'Boxed'] as $wert => $lbl)
+                                @foreach(\Platform\FoodAlchemist\Livewire\Planung\Index::SERVICEFORM_OPTIONEN as $wert => $lbl)
                                     <option value="{{ $wert }}">{{ $lbl }}</option>
                                 @endforeach
                             </select>

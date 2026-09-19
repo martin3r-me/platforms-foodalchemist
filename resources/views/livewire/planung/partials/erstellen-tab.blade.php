@@ -32,18 +32,31 @@
         </label>
         <textarea wire:model="eingabe.{{ $scope }}.brief" rows="3" class="{{ $input }} mb-2" placeholder="Constraints, Anlass, Richtung …"></textarea>
 
-        {{-- Phase C2, zweite Ebene: hier ist Sprache EINGABE, nicht Steuerung. Der Recorder
-             liegt im geteilten Baustein — er sitzt an ALLEN Briefing-Feldern der
-             Planungsstelle, nicht nur hier (Dominique: „in der planungsstelle"). --}}
+        {{-- Kurskorrektur „pro Tab genau EINE Diktierfunktion" (2026-09-19): der Recorder
+             dieses Bausteins ist hier AUS — das Agent-Panel darunter ist die einzige
+             Diktierfunktion in diesem Tab (sein eigenes Mikro füllt dasselbe Feld, siehe
+             VoiceModal::updatedAudio() → Planung\Index::agentDiktatUebernehmen()). Der
+             „Leitplanken aus Briefing"-Knopf bleibt (liest nur das Feld, unabhängig vom
+             Recorder). Die fünf flachen Ausgabeform-Briefings (fbBrief/…) haben kein Panel
+             und behalten ihren Recorder unverändert. --}}
         @include('foodalchemist::livewire.planung.partials.diktat', [
             'ziel' => 'eingabe.' . $scope . '.brief',
             'mitLeitplanken' => $scope,
+            'mitRecorder' => false,
         ])
 
-        {{-- Paket K / Agent-am-Brief (Oskar, feat/agent-am-brief): reiner Anker, ein Panel je
-             Scope-Tab (diese Partial wird pro Scope separat inkludiert). Kein Höhen-/Breiten-
-             Zwang — das künftige Panel ist selbst x-show-gesteuert, startet eingeklappt. --}}
-        <div data-planung-agent-slot="{{ $scope }}"></div>
+        {{-- Paket K / Agent-am-Brief: ein Panel je Scope-Tab (diese Partial wird pro Scope
+             separat inkludiert) — `wire:key` trägt Session-ID + Scope, ein Wechsel remountet
+             komplett (frisches Gedächtnis, siehe VoiceModal::sitzungIds()). Kein Höhen-/
+             Breiten-Zwang — das Panel ist selbst x-show-gesteuert, startet eingeklappt. --}}
+        @if($agentPanelSichtbar)
+            @livewire('foodalchemist.voice-modal', [
+                'planungsSessionId' => $sessionId,
+                'planungScope' => $scope,
+                'formularRegler' => array_intersect_key($regler[$scope] ?? [], array_flip(\Platform\FoodAlchemist\Livewire\Planung\Index::AGENT_SCHREIBBARE_REGLER)),
+                'formularBrief' => (string) ($eingabe[$scope]['brief'] ?? ''),
+            ], key('voice-panel-' . $scope . '-' . ($sessionId ?? 'keine')))
+        @endif
 
         {{-- Befund sichtbar: gesetzt / verworfen / ignoriert / offen. Ein stiller Vorschlag
              wäre die schlechtere Hälfte — der Mensch muss sehen, was die KI NICHT wusste. --}}

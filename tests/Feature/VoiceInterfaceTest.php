@@ -843,3 +843,53 @@ it('„Gespräch vergessen" ist nur sichtbar, wenn es Vorschläge gibt', functio
     expect($mitVorschlag->html())->toContain('data-voice-vergessen');
 });
 
+/**
+ * Spec 55 Nachtrag (Agent-am-Brief): der Formularstand kommt per Browser-Event von
+ * Planung\Index (Geschwister-Komponente, kein #[Reactive]-Prop). Panel bindet NUR den
+ * eigenen Scope — ein Event für einen ANDEREN Scope-Tab darf dieses Panel nicht verändern.
+ */
+it('Nachtrag: formularstandAktualisiert() übernimmt NUR Events für den eigenen Scope', function () {
+    $modal = Livewire::test(VoiceModal::class, ['planungScope' => 'gericht']);
+
+    $modal->dispatch('voice.formularstand-aktualisiert', scope: 'rezept', regler: ['ziel_menge' => '2'], brief: 'Fremder Scope')
+        ->assertSet('formularRegler', [])
+        ->assertSet('formularBrief', '');
+
+    $modal->dispatch('voice.formularstand-aktualisiert', scope: 'gericht', regler: ['pax' => '40'], brief: 'Mein Brief')
+        ->assertSet('formularRegler', ['pax' => '40'])
+        ->assertSet('formularBrief', 'Mein Brief');
+});
+
+it('Nachtrag: planungScope/formularRegler/formularBrief kommen als Mount-Parameter an', function () {
+    Livewire::test(VoiceModal::class, [
+        'planungScope' => 'concept', 'formularRegler' => ['occasion' => 'dinner'], 'formularBrief' => 'Galadinner',
+    ])
+        ->assertSet('planungScope', 'concept')
+        ->assertSet('formularRegler', ['occasion' => 'dinner'])
+        ->assertSet('formularBrief', 'Galadinner');
+});
+
+/**
+ * Kurskorrektur „pro Tab genau EINE Diktierfunktion" (2026-09-19): der alte Diktat-Knopf
+ * des Erstellen-Tabs ist raus, das Panel-Mikro übernimmt seine Funktion mit. Richtung ist
+ * jetzt UMGEKEHRT zur vorherigen Fassung dieses Tests (die ging vom alten Diktat-Knopf ZUM
+ * Panel) — `updatedAudio()` selbst dispatcht das Rohtranskript AN `Planung\Index`, die es
+ * ins Beschreibungsfeld anhängt ({@see agentDiktatUebernehmen()} dort). Der Tool-Loop
+ * (verstehen()) läuft unabhängig weiter, siehe Test oben („Roundtrip-Split").
+ */
+it('Nachtrag: updatedAudio() dispatcht das Rohtranskript an Planung\\Index — nur wenn ein Scope-Tab dranhängt', function () {
+    ($this->skript)(['{"action":"final","text":"ok"}']);
+
+    Livewire::test(VoiceModal::class, ['planungScope' => 'gericht'])
+        ->set('audio', UploadedFile::fake()->create('briefing.mp4', 5, 'audio/mp4'))
+        ->assertDispatched('voice.diktat-transkribiert', scope: 'gericht', text: 'Suche BBQ Sauce');
+});
+
+it('Nachtrag: ohne planungScope kein Diktat-Dispatch (kein Panel-Kontext, z. B. generischer Sprachbefehl)', function () {
+    ($this->skript)(['{"action":"final","text":"ok"}']);
+
+    Livewire::test(VoiceModal::class)
+        ->set('audio', UploadedFile::fake()->create('befehl.mp4', 5, 'audio/mp4'))
+        ->assertNotDispatched('voice.diktat-transkribiert');
+});
+

@@ -790,7 +790,19 @@
                     <input type="text" wire:model="eingabe.concept.titel" class="{{ $input }} mb-3" placeholder="z. B. CHEFS.CORNER — Sommer-Menü" data-planung-titel />
                     <label class="{{ $label ?? 'text-[11px] text-gray-500' }}">Briefing (geht in die Erzeugung)</label>
                     <textarea wire:model="eingabe.concept.brief" rows="4" class="{{ $input }} mb-3" placeholder="Anlass, Zielgruppe, Richtung, Pakete/Buffet-Struktur, Gänge …"></textarea>
-                    @include('foodalchemist::livewire.planung.partials.diktat', ['ziel' => 'eingabe.concept.brief', 'mitLeitplanken' => 'concept'])
+                    @include('foodalchemist::livewire.planung.partials.diktat', ['ziel' => 'eingabe.concept.brief', 'mitLeitplanken' => 'concept', 'mitRecorder' => false])
+                    {{-- Agent-am-Brief: Concept nutzt nicht die geteilte erstellen-tab-Partial (eigener
+                       Block, KI-Kopf-Pfad), darum das Panel-Mount hier direkt statt über die Partial.
+                       Kurskorrektur (2026-09-19): Recorder hier aus, Panel ist die einzige
+                       Diktierfunktion — siehe Kommentar in erstellen-tab.blade.php. --}}
+                    @if($agentPanelSichtbar)
+                        @livewire('foodalchemist.voice-modal', [
+                            'planungsSessionId' => $sessionId,
+                            'planungScope' => 'concept',
+                            'formularRegler' => array_intersect_key($regler['concept'] ?? [], array_flip(\Platform\FoodAlchemist\Livewire\Planung\Index::AGENT_SCHREIBBARE_REGLER)),
+                            'formularBrief' => (string) ($eingabe['concept']['brief'] ?? ''),
+                        ], key('voice-panel-concept-' . ($sessionId ?? 'keine')))
+                    @endif
                     <label class="{{ $label ?? 'text-[11px] text-gray-500' }}">Kreativ-Modus</label>
                     <select wire:model.live="eingabe.concept.creative_mode" class="{{ $input }}">
                         @foreach($modeLabel as $val => $lbl)
@@ -1079,12 +1091,8 @@
     {{-- Vollen Conceptor-Editor inline: ein erzeugtes Concept öffnet mit allen Tabs/KPIs/Score/Kalkulation/
          Geschirr direkt hier (öffnet via concepter-editor.oeffnen aus der step-zeile). Gleiches Muster wie Angebote. --}}
     <livewire:foodalchemist.concepter.editor />
-    {{-- Spec 55: der Agent lebt NUR noch hier, als einklappbares Panel — sichtbar auf JEDEM Tab
-         (dieser Include liegt ausserhalb der Tab-`@if`-Blöcke, wie recipe-modal/vk-modal/
-         concepter.editor oben). `wire:key` trägt die Session-ID: wechselt sie, remountet das
-         Panel komplett (frisches Gedächtnis für die neue Session, siehe VoiceModal::sitzungIds()) —
-         kein `#[Reactive]`-Prop-Update nötig. --}}
-    @if($agentPanelSichtbar)
-        @livewire('foodalchemist.voice-modal', ['planungsSessionId' => $sessionId], key('voice-panel-' . ($sessionId ?? 'keine')))
-    @endif
+    {{-- Agent-am-Brief (Nachtrag, Dominique-Abnahme): das Panel lebt NICHT mehr hier auf der
+         Board-Ebene — es sass falsch (oben rechts neben den Kanban-Spalten, nicht am Brief/
+         den Leitplanken). Je EIN Panel pro Scope-Tab, direkt im Erstellen-Bereich
+         (`erstellen-tab.blade.php` für rezept/gericht, oben im Concept-Block für concept). --}}
 </x-ui-page>

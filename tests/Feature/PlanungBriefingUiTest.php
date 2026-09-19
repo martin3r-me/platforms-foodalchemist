@@ -129,6 +129,55 @@ it('Diktat hängt an und überschreibt ein bestehendes Briefing NIE', function (
     // Angehängt, nicht ersetzt — ein überschriebenes Briefing wäre nicht wiederherstellbar.
     expect($c->get('eingabe.rezept.brief'))->toBe('Tomatensauce, klassisch und bitte glutenfrei')
         ->and($c->get('briefAudio'))->toBeNull();                    // Blob nach der Übernahme freigegeben
+
+    // Kurskorrektur „pro Tab genau EINE Diktierfunktion" (2026-09-19): dieser Knopf/Recorder
+    // ist aus den drei Creation-Scope-Tabs entfernt (siehe erstellen-tab.blade.php), darum
+    // spricht `briefDiktatUebernehmen()` den Agenten nicht mehr an — falls dieser PHP-Pfad
+    // trotzdem (z. B. testweise) direkt aufgerufen wird, bleibt es bei der reinen Feld-
+    // Übernahme. Die Agenten-Kopplung läuft jetzt umgekehrt über das Panel-Mikro selbst,
+    // siehe VoiceInterfaceTest.php „updatedAudio() dispatcht das Rohtranskript …".
+    $c->assertNotDispatched('voice.diktat-transkribiert');
+});
+
+/**
+ * Kurskorrektur „pro Tab genau EINE Diktierfunktion" (2026-09-19): Richtung umgekehrt zu
+ * oben — jetzt liefert das Agent-Panel (VoiceModal) sein eigenes Rohtranskript per Event AN
+ * Planung\Index, die es genau wie briefDiktatUebernehmen() anhängt statt zu überschreiben.
+ */
+it('Nachtrag: agentDiktatUebernehmen() hängt das Panel-Transkript an — nie überschreiben, nur eigener Scope', function () {
+    $c = Livewire::test(Index::class)
+        ->set('eingabe.gericht.brief', 'Filet vom Kalb')
+        ->dispatch('voice.diktat-transkribiert', scope: 'gericht', text: 'mit Kräuterkruste');
+
+    expect($c->get('eingabe.gericht.brief'))->toBe('Filet vom Kalb mit Kräuterkruste');
+
+    // Whitelist: ein unbekannter/fremder Scope-Name schreibt nichts.
+    $c2 = Livewire::test(Index::class)
+        ->set('eingabe.rezept.brief', 'Unberührt')
+        ->dispatch('voice.diktat-transkribiert', scope: 'unbekannt', text: 'sollte nirgends landen');
+
+    expect($c2->get('eingabe.rezept.brief'))->toBe('Unberührt');
+
+    // Leeres Transkript ist ein No-op, kein leerer Anhängsel-Space.
+    $c3 = Livewire::test(Index::class)
+        ->set('eingabe.concept.brief', 'Sommer-Menü')
+        ->dispatch('voice.diktat-transkribiert', scope: 'concept', text: '   ');
+
+    expect($c3->get('eingabe.concept.brief'))->toBe('Sommer-Menü');
+});
+
+it('Nachtrag: der Erstell-Tab hat pro Scope genau EINEN Diktier-Weg — Recorder aus, Leitplanken-Knopf bleibt', function () {
+    $session = app(\Platform\FoodAlchemist\Services\PlanningSessionService::class)
+        ->create($this->rootTeam, ['title' => 'Event']);
+
+    $html = Livewire::test(Index::class)->call('oeffne', $session->id)->html();
+
+    // Kein Mikro-Recorder mehr an den drei Creation-Scope-Briefings (das Panel ist die
+    // einzige Diktierfunktion dort) — der Leitplanken-Knopf bleibt unabhängig davon stehen.
+    foreach (['rezept', 'gericht', 'concept'] as $scope) {
+        expect($html)->not->toContain('data-planung-diktat="eingabe.' . $scope . '.brief"')
+            ->and($html)->toContain('data-planung-leitplanken-vorschlag="' . $scope . '"');
+    }
 });
 
 it('Diktat ohne Blob fasst nichts an', function () {

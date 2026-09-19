@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Str;
 use Livewire\Attributes\Locked;
+use Livewire\Attributes\On;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 use Platform\Core\Contracts\ToolContext;
@@ -116,6 +117,40 @@ class VoiceModal extends Component
     public ?int $planungsSessionId = null;
 
     /**
+     * Spec 55 Nachtrag (Agent-am-Brief): der Creation-Scope, an dem DIESES Panel hängt
+     * (`rezept`|`gericht`|`concept`) — je Scope-Tab EIN eigenes Panel (Peter/Paket K:
+     * `data-planung-agent-slot="{{ $scope }}"`). Bestimmt, welche Teilmenge des
+     * `voice.formularstand-aktualisiert`-Events dieses Panel übernimmt.
+     */
+    public ?string $planungScope = null;
+
+    /**
+     * Formularstand des aktiven Scopes (`Planung\Index::$regler[$scope]`, auf
+     * AGENT_SCHREIBBARE_REGLER gefiltert) — kommt initial über den Mount-Parameter und wird
+     * per Browser-Event aktuell gehalten (Geschwister-Komponente, kein `#[Reactive]`-Prop
+     * zwischen Livewire-Komponenten). Lückencheck/Rückfrage lesen NUR diesen Stand, nie den
+     * gesprochenen Satz allein.
+     *
+     * @var array<string, mixed>
+     */
+    public array $formularRegler = [];
+
+    public string $formularBrief = '';
+
+    /**
+     * @param  array<string, mixed>  $regler
+     */
+    #[On('voice.formularstand-aktualisiert')]
+    public function formularstandAktualisiert(string $scope, array $regler, string $brief): void
+    {
+        if ($scope !== $this->planungScope) {
+            return;                                                  // fremder Scope-Tab — nicht unser Formular
+        }
+        $this->formularRegler = $regler;
+        $this->formularBrief = $brief;
+    }
+
+    /**
      * Die Route, auf der das (global gemountete) Modal beim Öffnen der Seite lag — gemerkt in
      * {@see mount()}, damit `verarbeite()` weiss, ob ein geöffneter Datensatz schon auf der
      * aktuellen Seite sichtbar wäre (⇒ Event) oder eine andere Seite braucht (⇒ Redirect).
@@ -144,9 +179,12 @@ class VoiceModal extends Component
         'production_order' => ['route' => 'foodalchemist.produktion.index', 'param' => 'auftrag', 'event' => null, 'label' => 'Produktionsauftrag öffnen'],
     ];
 
-    public function mount(?int $planungsSessionId = null): void
+    public function mount(?int $planungsSessionId = null, ?string $planungScope = null, array $formularRegler = [], string $formularBrief = ''): void
     {
         $this->planungsSessionId = $planungsSessionId;
+        $this->planungScope = $planungScope;
+        $this->formularRegler = $formularRegler;
+        $this->formularBrief = $formularBrief;
         $stt = app(SttServiceContract::class);
         $this->provider = $stt->name();
         // Fake/None sind nie ein echtes Aufnahmeziel: Fake ignoriert die Aufnahme (fester Fixtext,
@@ -242,6 +280,17 @@ class VoiceModal extends Component
 
             return;
         }
+
+        // Kurskorrektur „pro Tab genau EINE Diktierfunktion" (2026-09-19): der alte Diktat-
+        // Knopf des Erstellen-Tabs ist raus, dieses Panel-Mikro übernimmt seine Funktion mit —
+        // das Rohtranskript geht ZUSÄTZLICH (unabhängig vom Agenten-Tool-Loop unten) an
+        // Planung\Index, die es ins Beschreibungsfeld anhängt (nie überschreibt, siehe
+        // Index::agentDiktatUebernehmen()). Nur wenn dieses Panel an einem Scope hängt — der
+        // getippte Fallback-Pfad (verarbeiteText()) ist reine Agenten-Eingabe, kein Diktat.
+        if ($this->planungScope !== null) {
+            $this->dispatch('voice.diktat-transkribiert', scope: $this->planungScope, text: $this->transcript);
+        }
+
         $this->phase = 'verstehen';
         $this->js('$wire.verstehen()');                                // Schritt 2: eigener, sichtbarer Server-Roundtrip.
     }
@@ -280,8 +329,12 @@ class VoiceModal extends Component
 
         try {
             $verlauf = app(VoiceSessionService::class)->promptKontext($this->sitzungGeladen());
+            $formularStand = $this->planungScope !== null
+                ? ['scope' => $this->planungScope, 'regler' => $this->formularRegler, 'brief' => $this->formularBrief]
+                : null;
             $this->ergebnis = app(VoiceCommandService::class)->verarbeite(
                 (string) $this->transcript, $this->kontextFuerAuftrag(), $modus, $verlauf, $this->planungsSessionId,
+                $formularStand,
             );
         } catch (\Throwable $e) {
             $this->fehler = VoiceFehlerText::aus($e)['text'];
@@ -310,6 +363,17 @@ class VoiceModal extends Component
             }
             $this->ergebnis['aktionen'][$i]['link'] = $ziel['url'];
             $this->ergebnis['aktionen'][$i]['link_label'] = $ziel['label'];
+        }
+        // Spec 55 Nachtrag (Agent-am-Brief): `komponenten_direkt` ist die Antwort auf die EIGENE
+        // Rückfrage des Agenten (oder eine unaufgeforderte, aber eindeutige Angabe) — die schon
+        // servierseitig gegen ihr Vokabular geprüften Felder wenden sich SOFORT an, unabhängig
+        // vom Agenten-Modus (kein Klick, GL-07 gilt hier NICHT — Dominique-Entscheid: die Antwort
+        // auf eine konkrete Frage IST die Bestätigung). Läuft VOR `auto_sicher`, betrifft aber
+        // JEDEN Modus gleich.
+        foreach ($this->ergebnis['proposals'] as $i => $p) {
+            if (($p['type'] ?? null) === 'komponenten_direkt' && ! ($p['accepted'] ?? false)) {
+                $this->komponentenUebernehmen($i);
+            }
         }
         // Spec 53/F: im Modus `auto_sicher` laufen die REVERSIBLEN Vorschläge sofort — dieselben
         // Methoden wie der Bestätigen-Klick, nur ohne Klick. AUTO_ERLAUBT ist die einzige
@@ -659,7 +723,10 @@ class VoiceModal extends Component
     public function komponentenUebernehmen(int $index): void
     {
         $p = $this->ergebnis['proposals'][$index] ?? null;
-        if ($p === null || ($p['type'] ?? null) !== 'komponenten_uebernahme') {
+        // Spec 55 Nachtrag: `komponenten_direkt` (Antwort auf die eigene Rückfrage, s. o.) nutzt
+        // DENSELBEN Schreibpfad wie die Übernehmen-Karte — der einzige Unterschied ist, WER den
+        // Aufruf auslöst (der Klick vs. `verarbeiteText()`/`verstehen()` selbst).
+        if ($p === null || ! in_array($p['type'] ?? null, ['komponenten_uebernahme', 'komponenten_direkt'], true)) {
             return;
         }
         $this->dispatch(
@@ -669,6 +736,66 @@ class VoiceModal extends Component
             brief: $p['brief'] ?? null,
         );
         $this->ergebnis['proposals'][$index]['accepted'] = true;
+    }
+
+    /**
+     * Spec 55 Nachtrag (Agent-am-Brief, Weg 1): Chip-Klick auf eine `rueckfrage`-Karte — setzt
+     * SOFORT, kein Klick-auf-Klick nötig (der Chip-Klick IST die Bestätigung, wie bei der
+     * gesprochenen Antwort). `$wert` kommt aus `$p['vokabular']` (serverseitig gebaut), nicht
+     * vom Client frei erfunden — trotzdem nochmal serverseitig geprüft (Planung\Index-Whitelist).
+     */
+    public function rueckfrageChip(int $index, string $wert): void
+    {
+        $p = $this->ergebnis['proposals'][$index] ?? null;
+        if ($p === null || ($p['type'] ?? null) !== 'rueckfrage') {
+            return;
+        }
+        if (is_array($p['vokabular'] ?? null) && ! array_key_exists($wert, $p['vokabular'])) {
+            return;                                                  // fremder Wert — nie schreiben
+        }
+        $this->dispatch('voice.komponenten-uebernahme', scope: $p['scope'], felder: [$p['feld'] => $wert], brief: null);
+        $this->ergebnis['proposals'][$index]['accepted'] = true;
+        $this->ergebnis['proposals'][$index]['beantwortet_mit'] = $wert;
+    }
+
+    /**
+     * Spec 55 Nachtrag: „Rückgängig" an einer direkt gesetzten Karte — setzt die betroffenen
+     * Felder auf leer zurück (KEIN Wiederherstellen des exakten Vorwerts: dafür müsste der Alt-
+     * Wert über die gesamte Panel-Lebensdauer mitgeführt werden, für einen sofort sichtbaren
+     * "war das falsch, mach's leer"-Knopf reicht Zurücksetzen — der Mensch tippt/spricht den
+     * richtigen Wert danach neu ein, das Feld ist dafür wieder als „fehlend" erkennbar).
+     */
+    public function komponentenRueckgaengig(int $index): void
+    {
+        $p = $this->ergebnis['proposals'][$index] ?? null;
+        if ($p === null || ! in_array($p['type'] ?? null, ['komponenten_direkt', 'rueckfrage'], true) || ! ($p['accepted'] ?? false)) {
+            return;
+        }
+        $felder = isset($p['feld']) ? [$p['feld'] => ''] : array_fill_keys(array_keys($p['felder'] ?? []), '');
+        if ($felder === []) {
+            return;
+        }
+        $this->dispatch('voice.komponenten-uebernahme', scope: $p['scope'], felder: $felder, brief: null);
+        $this->ergebnis['proposals'][$index]['accepted'] = false;
+        $this->ergebnis['proposals'][$index]['rueckgaengig_gemacht'] = true;
+    }
+
+    /**
+     * Spec 55 Nachtrag: Gegenstück zu {@see rueckfrageChip()} für Zahlenfelder ohne Vokabular
+     * (Pax/Menge/Portion/Ziel-VK) — eigenes Eingabefeld statt Chips im Panel.
+     */
+    public function rueckfrageZahl(int $index, string $wert): void
+    {
+        $p = $this->ergebnis['proposals'][$index] ?? null;
+        if ($p === null || ($p['type'] ?? null) !== 'rueckfrage' || ($p['vokabular'] ?? null) !== null) {
+            return;
+        }
+        if (! VoiceCommandService::regelWertGueltig($p['feld'], $wert)) {
+            return;
+        }
+        $this->dispatch('voice.komponenten-uebernahme', scope: $p['scope'], felder: [$p['feld'] => $wert], brief: null);
+        $this->ergebnis['proposals'][$index]['accepted'] = true;
+        $this->ergebnis['proposals'][$index]['beantwortet_mit'] = $wert;
     }
 
     /**

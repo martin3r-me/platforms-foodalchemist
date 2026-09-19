@@ -4,6 +4,7 @@ namespace Platform\FoodAlchemist\Livewire\Planung;
 
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Livewire\Attributes\On;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithFileUploads;
@@ -334,6 +335,65 @@ class Index extends Component
         ['field' => 'bio_praeferenz', 'label' => 'Bio-Präferenz', 'optionen' => ['konventionell' => 'Konventionell', 'bio' => 'Bio', 'egal' => 'Egal'], 'hint' => ['konventionell' => 'Standard — kein Bio erzwungen (Default)', 'bio' => 'Bio bevorzugt (nur auf Ansage)', 'egal' => 'keine Präferenz']],
         // »Frische-Hook« ist jetzt Multi-Select (Erlaubnis-Liste) → eigener Block in leitplanken.blade
         // (FRISCHE_OPTIONEN), nicht mehr Single-Pill hier.
+    ];
+
+    /**
+     * Spec 55 Nachtrag (Agent-am-Brief): vorher NUR als rohe `<option>`-Liste in
+     * leitplanken.blade.php gepflegt — als Konstante extrahiert, damit der Sprachbefehl-Agent
+     * (VoiceCommandService) beim Bau einer Rückfrage-Chip-Auswahl GENAU dieselben Werte
+     * anbietet, nicht eine zweite, unabhängig gepflegte Kopie. Wert=>Label, `''` = kein
+     * Sektor-Constraint (egal/universell).
+     */
+    public const SEKTOR_OPTIONEN = [
+        '' => '(egal/universell)',
+        'betriebsgastronomie' => 'Betriebsgastronomie',
+        'catering' => 'Catering / Event',
+        'restaurant' => 'Restaurant / à la carte',
+        'care' => 'Care / Klinik',
+        'schule_kita' => 'Schule / Kita',
+    ];
+
+    /** Spec 55 Nachtrag: Anlass — dieselbe Extraktions-Begründung wie SEKTOR_OPTIONEN. Nur VK-Scopes (Gericht/Concept). */
+    public const OCCASION_OPTIONEN = [
+        '' => '—',
+        'fruehstueck' => 'Frühstück', 'lunch' => 'Lunch', 'konferenz' => 'Konferenz',
+        'empfang' => 'Empfang', 'dinner' => 'Dinner', 'late_night' => 'Late Night',
+    ];
+
+    /** Spec 55 Nachtrag: Serviceform — dieselbe Extraktions-Begründung wie SEKTOR_OPTIONEN. Nur VK-Scopes. */
+    public const SERVICEFORM_OPTIONEN = [
+        '' => '—',
+        'tellerservice' => 'Tellerservice', 'buffet' => 'Buffet', 'flying' => 'Flying Service',
+        'stehempfang' => 'Stehempfang', 'boxed' => 'Boxed',
+    ];
+
+    /**
+     * Spec 55 Nachtrag (Agent-am-Brief): Pflicht-Leitplanken je Scope, gegen die der
+     * Sprachbefehl-Agent den ECHTEN Regler-Stand prüft (nicht nur den gesprochenen Satz) —
+     * fehlt eines, fragt der Agent GEZIELT danach (VoiceCommandService::luecken()). Dominique
+     * 2026-09-19: Basisrezept = Menge/Einheit (Halbfabrikat, kein Teller); Gericht = Pax/
+     * Portion/Anlass/Serviceform; Concept teilt sich Pax/Anlass/Serviceform mit Gericht (hat
+     * aber KEINE Portion — Concept ist das ganze Menü, s. `ziel_portion_g`-Ausschluss oben).
+     * „Format" (Sektor/Anlass/Personen) hat noch KEINEN eigenen Regler-Satz (`fmtBrief` ist
+     * ein flaches Diktat-Ziel, kein Creation-Scope) — bewusst NICHT hier, siehe Spec 55 „Offene
+     * Punkte" (separates Vorhaben, kein Bestandteil dieses Nachtrags).
+     */
+    public const MANDATORY_LEITPLANKEN = [
+        'rezept' => ['ziel_menge', 'ziel_einheit'],
+        'gericht' => ['pax', 'ziel_portion_g', 'occasion', 'serviceform'],
+        'concept' => ['pax', 'occasion', 'serviceform'],
+    ];
+
+    /**
+     * Spec 55 Nachtrag: die vom Sprachbefehl-Agenten SCHREIBBAREN Regler-Felder — Union aus
+     * MANDATORY_LEITPLANKEN plus den ursprünglichen Spec-55-Feldern (sektor/level waren schon
+     * vorher Teil der freien Lückencheck-Frage, auch ohne in MANDATORY_LEITPLANKEN zu stehen).
+     * EIGENE Konstante statt eines Array-Merges an der Nutzungsstelle: die Whitelist ist eine
+     * Sicherheitsgrenze (`voiceKomponentenUebernehmen()`), sie soll an EINER Stelle stehen,
+     * nicht implizit aus einer Formel entstehen, die sich mit MANDATORY_LEITPLANKEN mitändert.
+     */
+    public const AGENT_SCHREIBBARE_REGLER = [
+        'sektor', 'occasion', 'pax', 'ziel_vk', 'level', 'serviceform', 'ziel_menge', 'ziel_einheit', 'ziel_portion_g',
     ];
 
     /**
@@ -1188,7 +1248,7 @@ class Index extends Component
         if (! in_array($scope, self::SCOPES, true)) {
             return;
         }
-        $erlaubt = array_intersect_key($felder, array_flip(['sektor', 'occasion', 'pax', 'ziel_vk', 'level']));
+        $erlaubt = array_intersect_key($felder, array_flip(self::AGENT_SCHREIBBARE_REGLER));
         foreach ($erlaubt as $feld => $wert) {
             $this->regler[$scope][$feld] = $wert;
             $this->reglerVonAgent[$scope][$feld] = true;
@@ -1681,6 +1741,10 @@ class Index extends Component
         if (! isset($this->regler[$scope])) {
             return;
         }
+        // Spec 55 Nachtrag: ein Pill-Klick ist ein DIREKTER Server-Write (kein `wire:model`-
+        // Property-Sync) — der generische `updated()`-Hook sieht ihn nie, darum hier explizit
+        // dasselbe "manuelle Änderung löscht den Agent-Marker"-Verhalten wie dort.
+        unset($this->reglerVonAgent[$scope][$feld]);
         if (in_array($feld, self::MULTI_REGLER, true)) {
             $cur = (array) ($this->regler[$scope][$feld] ?? []);
             $this->regler[$scope][$feld] = in_array($wert, $cur, true)
@@ -2003,6 +2067,26 @@ class Index extends Component
         $alt = trim((string) $this->diktatWert($ziel));
         $this->diktatSetzen($ziel, $alt === '' ? $text : $alt . ' ' . $text);
         $this->fehler = null;
+        $this->meldung = 'Diktat übernommen — bitte gegenlesen.';
+    }
+
+    /**
+     * Kurskorrektur „pro Tab genau EINE Diktierfunktion" (2026-09-19): das Agent-Panel ist in
+     * den drei Creation-Scopes der einzige Diktier-Weg (der alte Recorder-Knopf dieses Tabs
+     * ist raus, siehe erstellen-tab.blade.php). Sein eigenes Mikro transkribiert selbst
+     * (VoiceModal::updatedAudio()) und liefert das Rohtranskript hier an — Richtung also
+     * UMGEKEHRT zur vorherigen Fassung (die ging vom alten Diktat-Knopf ZUM Panel). Gleiche
+     * Anhängen-nie-überschreiben-Semantik wie briefDiktatUebernehmen()/diktatSetzen().
+     */
+    #[On('voice.diktat-transkribiert')]
+    public function agentDiktatUebernehmen(string $scope, string $text): void
+    {
+        if (! in_array($scope, self::SCOPES, true) || trim($text) === '') {
+            return;
+        }
+        $ziel = 'eingabe.' . $scope . '.brief';
+        $alt = trim((string) $this->diktatWert($ziel));
+        $this->diktatSetzen($ziel, $alt === '' ? $text : $alt . ' ' . $text);
         $this->meldung = 'Diktat übernommen — bitte gegenlesen.';
     }
 
@@ -4185,6 +4269,20 @@ class Index extends Component
         $fmtAuswahl = $team !== null
             ? FoodAlchemistFormat::visibleToTeam($team)->orderByDesc('id')->get(['id', 'name'])
             : collect();
+
+        // Spec 55 Nachtrag (Agent-am-Brief): der Formularstand geht bei JEDEM Render an alle
+        // gemounteten Agenten-Panels (Browser-Event, kein `#[Reactive]`-Prop — Livewire kennt
+        // das für Geschwister-Komponenten nicht). EIN Dispatch-Ort statt an jeder Mutations-
+        // Stelle (reglerPill/updated/leitplankenAusBriefing/...) einzeln — `render()` läuft
+        // nach JEDER Interaktion, ein verpasster Aufrufer kann die Panels nicht veralten
+        // lassen. Nur die AGENT_SCHREIBBARE_REGLER-Teilmenge + Brief je Scope, nicht der ganze
+        // Regler-Satz (Payload klein halten, kein Datenleck an Felder, die der Agent nie liest).
+        foreach (self::SCOPES as $scope) {
+            $this->dispatch('voice.formularstand-aktualisiert', scope: $scope,
+                regler: array_intersect_key($this->regler[$scope] ?? [], array_flip(self::AGENT_SCHREIBBARE_REGLER)),
+                brief: (string) ($this->eingabe[$scope]['brief'] ?? ''),
+            );
+        }
 
         return view('foodalchemist::livewire.planung.index', [
             // Spec 55: Agenten-Panel — sichtbar, wenn das Team es nicht abgeschaltet hat
