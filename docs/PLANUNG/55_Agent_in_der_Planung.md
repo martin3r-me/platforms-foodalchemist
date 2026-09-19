@@ -182,11 +182,13 @@ das Panel technisch noch auf der Board-Ebene (Backend ist unabhängig vom Mount-
 
 ### Diktat wird der Agenten-Einstieg
 
-Nicht in diesem Nachtrag-Batch verändert (blockiert auf denselben Dateikonflikt wie oben) —
-der Plan: Klick auf „Briefing diktieren" startet die Aufnahme WEITERHIN wie bisher, das
-Transkript landet WEITERHIN im Beschreibungsfeld (kein Verlust des bestehenden Verhaltens),
-UND zusätzlich geht es an `VoiceModal::verstehen()`-artige Verarbeitung — sobald der Slot
-existiert, wird `diktat.blade.php`s Recorder-Callback um einen zweiten Aufruf ergänzt.
+~~Nicht in diesem Nachtrag-Batch verändert — der Plan: Klick auf „Briefing diktieren" startet
+die Aufnahme WEITERHIN wie bisher, das Transkript landet WEITERHIN im Beschreibungsfeld, UND
+zusätzlich geht es an den Agenten — `diktat.blade.php`s Recorder-Callback wird um einen zweiten
+Aufruf ergänzt.~~ Gebaut (siehe „Panel-Umzug + Diktat-Kopplung" unten), dann per Kurskorrektur
+(„pro Tab genau EINE Diktierfunktion") NOCHMAL umgebaut — der alte Knopf ist inzwischen ganz
+raus, das Panel selbst ist der Diktier-Weg. Siehe „Kurskorrektur" ganz unten für den finalen
+Stand.
 
 ### Formularstand als Kontext (GELÖST — schliesst die alte Lücke a)
 
@@ -282,14 +284,49 @@ Rezept-Kartenblock — Sektor-Badge dort schon von Peter übernommen, `$sektorLa
   `erstellen-tab.blade.php` (rezept/gericht) + einen eigenen Block im Concept-Briefing
   (`index.blade.php` — Concept nutzt die geteilte Partial nicht). Der alte Board-Level-Mount
   ist komplett entfernt — EIN Panel je Creation-Scope statt einem globalen auf der Board-Ebene.
-- **Diktat→Agent**: `Planung\Index::briefDiktatUebernehmen()` dispatcht nach dem (unveränderten)
-  Feld-Update zusätzlich `voice.diktat-transkribiert` (Scope + Text) — NUR für die drei
-  Creation-Scopes, nicht die fünf flachen Ausgabeform-Ziele ohne Panel.
-  `VoiceModal::diktatTranskribiert()` verarbeitet es über `verarbeiteText()` wie einen normalen
-  Sprachbefehl, gefiltert auf den eigenen Scope.
+- ~~**Diktat→Agent**: `Planung\Index::briefDiktatUebernehmen()` dispatcht nach dem
+  (unveränderten) Feld-Update zusätzlich `voice.diktat-transkribiert` (Scope + Text) — NUR für
+  die drei Creation-Scopes. `VoiceModal::diktatTranskribiert()` verarbeitet es über
+  `verarbeiteText()` wie einen normalen Sprachbefehl, gefiltert auf den eigenen Scope.~~
+  **Superseded** — Dominique wollte in den drei Creation-Scope-Tabs zwei Diktierwege
+  (alter Knopf + neues Panel) nicht nebeneinander, siehe Kurskorrektur unten.
+
+### Kurskorrektur: pro Tab genau EINE Diktierfunktion (2026-09-19)
+
+Dominiques Feedback nach dem Panel-Umzug: der alte „Briefing diktieren"-Knopf UND das neue
+Panel boten in denselben drei Creation-Scope-Tabs zwei Diktier-Wege nebeneinander — verwirrend,
+das Panel sollte der EINZIGE sein. Die Richtung der Diktat→Agent-Kopplung dreht sich damit um.
+
+- **`diktat.blade.php` bleibt als Datei bestehen** (nicht gelöscht) — sie hängt an acht Zielen
+  insgesamt: den drei Creation-Scopes UND den fünf flachen Ausgabeform-Briefings
+  (`fbBrief`/`skBrief`/`spBrief`/`offerBrief`/`fmtBrief`), die kein Panel haben und ihren
+  Recorder unverändert behalten (per Grep verifiziert, nicht geraten). Neuer Parameter
+  `$mitRecorder` (Default `true`) blendet nur den Mikro-Teil aus, wenn `false` — der
+  „Leitplanken aus Briefing"-Knopf (`$mitLeitplanken`) ist davon unabhängig und bleibt an allen
+  drei Creation-Scopes stehen, er liest nur das Feld.
+- `erstellen-tab.blade.php` (rezept/gericht) und der Concept-Block in `index.blade.php` setzen
+  `mitRecorder: false` — der alte Recorder/Knopf ist damit optisch weg, ohne die geteilte
+  Partial für die anderen fünf Ziele anzufassen.
+- **Kopplung umgedreht**: `VoiceModal::updatedAudio()` dispatcht nach erfolgreicher
+  Transkription (bevor der Tool-Loop läuft) sein eigenes Rohtranskript als
+  `voice.diktat-transkribiert` (Scope + Text) — nur wenn `planungScope` gesetzt ist (der
+  getippte Fallback-Pfad `verarbeiteText()` ist reine Agenten-Eingabe, kein Diktat, dispatcht
+  nicht). `Planung\Index::agentDiktatUebernehmen()` (neuer `#[On(...)]`-Listener) hängt den Text
+  an — dieselbe Anhängen-nie-überschreiben-Semantik wie das alte
+  `briefDiktatUebernehmen()`/`diktatSetzen()`. Der alte `VoiceModal`-Listener
+  (`diktatTranskribiert()`) und `briefDiktatUebernehmen()`s Agenten-Dispatch sind komplett raus.
+- Tests angepasst statt gelöscht: `PlanungBriefingUiTest.php` prüft jetzt
+  `assertNotDispatched()` für den alten Weg + einen neuen Test für
+  `agentDiktatUebernehmen()` (anhängen, Fremd-Scope-Whitelist, leeres Transkript = No-op) + einen
+  Markup-Test, dass die drei Creation-Scopes keinen Recorder mehr rendern, aber den
+  Leitplanken-Knopf behalten. `VoiceInterfaceTest.php` prüft den neuen `updatedAudio()`-Dispatch
+  (mit/ohne `planungScope`).
 
 ### Offen (Nachtrag)
 
 1. „Format"-Scope hat keine eigene Regler-Struktur — volle Unterstützung der von Dominique
-   genannten Format-Pflichtfelder (Sektor/Anlass/Personen) ist ein separates Vorhaben.
-2. Volle Suite lief grün vor PR/Merge (Absprache cooking-jarvis-03).
+   genannten Format-Pflichtfelder (Sektor/Anlass/Personen) ist ein separates Vorhaben. Die
+   fünf flachen Ausgabeform-Tabs bekommen laut cooking-jarvis-03 vorerst weiter nur das
+   schlichte Diktat (ein eigenes Agent-Panel dort ist ein separates Vorhaben, Stichwort Nora).
+2. Volle Suite lief grün vor PR/Merge (Absprache cooking-jarvis-03) — PR läuft separat gegen
+   `main` (nicht mehr als gemeinsamer PR mit Peters Breite-Fix, der geht eigenständig zuerst).
