@@ -2067,6 +2067,17 @@ class Index extends Component
         $this->diktatSetzen($ziel, $alt === '' ? $text : $alt . ' ' . $text);
         $this->fehler = null;
         $this->meldung = 'Diktat übernommen — bitte gegenlesen.';
+
+        // Spec 55 Nachtrag (Agent-am-Brief): das Transkript geht ZUSÄTZLICH an den Agenten
+        // (Dominique: „Briefing diktieren" soll der Agenten-Einstieg werden) — NUR für die drei
+        // Creation-Scopes (eingabe.<scope>.brief), die ein eigenes Panel haben; die fünf flachen
+        // Ausgabeform-Ziele (fbBrief/skBrief/spBrief/offerBrief/fmtBrief) haben KEIN Panel.
+        // Feld-Übernahme (oben) bleibt der Kern und läuft IMMER, auch wenn der Agent-Teil
+        // fehlschlägt — nur die geteilte Recorder-Callback wird hier um einen zweiten,
+        // unabhängigen Aufruf ergänzt (kein gemeinsamer try/catch).
+        if (preg_match('#^eingabe\.([^.]+)\.brief$#', $ziel, $m) && in_array($m[1], self::SCOPES, true)) {
+            $this->dispatch('voice.diktat-transkribiert', scope: $m[1], text: $text);
+        }
     }
 
     /** Liest das Whitelist-Ziel; `eingabe.<scope>.brief` ist verschachtelt, der Rest flach. */

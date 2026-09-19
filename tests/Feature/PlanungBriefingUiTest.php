@@ -129,6 +129,20 @@ it('Diktat hängt an und überschreibt ein bestehendes Briefing NIE', function (
     // Angehängt, nicht ersetzt — ein überschriebenes Briefing wäre nicht wiederherstellbar.
     expect($c->get('eingabe.rezept.brief'))->toBe('Tomatensauce, klassisch und bitte glutenfrei')
         ->and($c->get('briefAudio'))->toBeNull();                    // Blob nach der Übernahme freigegeben
+
+    // Spec 55 Nachtrag (Agent-am-Brief, Dominique): „Briefing diktieren" ist jetzt der
+    // Agenten-Einstieg — das Transkript geht ZUSÄTZLICH zum Feld-Update an den Agenten
+    // (VoiceModal hört auf genau dieses Event für seinen eigenen Scope).
+    $c->assertDispatched('voice.diktat-transkribiert', scope: 'rezept', text: 'und bitte glutenfrei');
+});
+
+it('Nachtrag: das Diktat-Transkript geht NICHT an den Agenten, wenn das Ziel ein flaches Ausgabeform-Briefing ist (kein Panel dort)', function () {
+    config(['foodalchemist.stt.provider' => 'fake', 'foodalchemist.stt.fake_text' => 'Text']);
+
+    Livewire::test(Index::class)
+        ->set('diktatZiel', 'fbBrief')
+        ->set('briefAudio', UploadedFile::fake()->create('diktat.webm', 1, 'audio/webm'))
+        ->assertNotDispatched('voice.diktat-transkribiert');
 });
 
 it('Diktat ohne Blob fasst nichts an', function () {

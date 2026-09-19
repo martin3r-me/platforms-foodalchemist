@@ -224,16 +224,33 @@ it('Spec 55: Sidebar hat KEINEN Sprachbefehl-Knopf mehr', function () {
     expect($blade)->not->toContain("voice-modal.oeffnen");
 });
 
-it('Spec 55: Planung/Index rendert das Agenten-Panel GENAU EINMAL, wenn das Team-Setting es nicht abgeschaltet hat', function () {
-    $html = Livewire::test(\Platform\FoodAlchemist\Livewire\Planung\Index::class)->html();
-    expect(substr_count($html, 'data-voice-panel-planung'))->toBe(1);
+/**
+ * Spec 55 Nachtrag (Agent-am-Brief, Dominique-Abnahme): das Panel sass falsch auf der
+ * Board-Ebene (1×) — jetzt EIN Panel JE Creation-Scope (rezept/gericht in erstellen-tab.blade.php,
+ * concept im eigenen Block), also 3× statt 1×, kein Board-Level-Mount mehr.
+ */
+it('Spec 55 Nachtrag: Planung/Index rendert das Agenten-Panel EINMAL JE Creation-Scope (3×), nicht mehr auf Board-Ebene', function () {
+    // Erstellen-Tab (und damit der Panel-Slot) rendert erst im Editor-Zustand MIT offener
+    // Session — ohne die kommt die Landing-Liste (kein Erstellen-Tab, 0 Panels korrekt).
+    $session = app(\Platform\FoodAlchemist\Services\PlanningSessionService::class)
+        ->create($this->rootTeam, ['title' => 'Event']);
+
+    $html = Livewire::test(\Platform\FoodAlchemist\Livewire\Planung\Index::class)
+        ->call('oeffne', $session->id)
+        ->html();
+    expect(substr_count($html, 'data-voice-panel-planung'))->toBe(3);
 });
 
 it('Spec 55: das Agenten-Panel rendert NICHT, wenn voice_agent_panel_planung explizit auf false steht', function () {
     app(\Platform\FoodAlchemist\Services\TeamSettingsService::class)->update($this->rootTeam, [
         'voice_agent_panel_planung' => false,
     ]);
-    $html = Livewire::test(\Platform\FoodAlchemist\Livewire\Planung\Index::class)->html();
+    $session = app(\Platform\FoodAlchemist\Services\PlanningSessionService::class)
+        ->create($this->rootTeam, ['title' => 'Event']);
+
+    $html = Livewire::test(\Platform\FoodAlchemist\Livewire\Planung\Index::class)
+        ->call('oeffne', $session->id)
+        ->html();
     expect($html)->not->toContain('data-voice-panel-planung');
 });
 

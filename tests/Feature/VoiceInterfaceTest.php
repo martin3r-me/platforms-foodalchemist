@@ -869,3 +869,23 @@ it('Nachtrag: planungScope/formularRegler/formularBrief kommen als Mount-Paramet
         ->assertSet('formularBrief', 'Galadinner');
 });
 
+/**
+ * Spec 55 Nachtrag (Agent-am-Brief): „Briefing diktieren" wird der Agenten-Einstieg —
+ * `Planung\Index::briefDiktatUebernehmen()` dispatcht das Transkript zusätzlich zum
+ * Feld-Update, dieses Panel verarbeitet es wie einen normalen Sprachbefehl, NUR für den
+ * eigenen Scope.
+ */
+it('Nachtrag: diktatTranskribiert() verarbeitet das Transkript wie einen Sprachbefehl, NUR für den eigenen Scope', function () {
+    ($this->skript)(['{"action":"final","text":"Verstanden."}']);
+
+    $modal = Livewire::test(VoiceModal::class, ['planungScope' => 'gericht']);
+
+    // Fremder Scope — nichts passiert (kein Tool-Loop, kein Ergebnis).
+    $modal->dispatch('voice.diktat-transkribiert', scope: 'rezept', text: 'Für 40 Personen')
+        ->assertSet('ergebnis', null);
+
+    // Eigener Scope — läuft wie ein normaler Sprachbefehl durch verarbeiteText().
+    $modal->dispatch('voice.diktat-transkribiert', scope: 'gericht', text: 'Für 40 Personen')
+        ->assertSet('ergebnis.text', 'Verstanden.');
+});
+

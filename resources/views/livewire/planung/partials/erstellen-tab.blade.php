@@ -40,10 +40,18 @@
             'mitLeitplanken' => $scope,
         ])
 
-        {{-- Paket K / Agent-am-Brief (Oskar, feat/agent-am-brief): reiner Anker, ein Panel je
-             Scope-Tab (diese Partial wird pro Scope separat inkludiert). Kein Höhen-/Breiten-
-             Zwang — das künftige Panel ist selbst x-show-gesteuert, startet eingeklappt. --}}
-        <div data-planung-agent-slot="{{ $scope }}"></div>
+        {{-- Paket K / Agent-am-Brief: ein Panel je Scope-Tab (diese Partial wird pro Scope
+             separat inkludiert) — `wire:key` trägt Session-ID + Scope, ein Wechsel remountet
+             komplett (frisches Gedächtnis, siehe VoiceModal::sitzungIds()). Kein Höhen-/
+             Breiten-Zwang — das Panel ist selbst x-show-gesteuert, startet eingeklappt. --}}
+        @if($agentPanelSichtbar)
+            @livewire('foodalchemist.voice-modal', [
+                'planungsSessionId' => $sessionId,
+                'planungScope' => $scope,
+                'formularRegler' => array_intersect_key($regler[$scope] ?? [], array_flip(\Platform\FoodAlchemist\Livewire\Planung\Index::AGENT_SCHREIBBARE_REGLER)),
+                'formularBrief' => (string) ($eingabe[$scope]['brief'] ?? ''),
+            ], key('voice-panel-' . $scope . '-' . ($sessionId ?? 'keine')))
+        @endif
 
         {{-- Befund sichtbar: gesetzt / verworfen / ignoriert / offen. Ein stiller Vorschlag
              wäre die schlechtere Hälfte — der Mensch muss sehen, was die KI NICHT wusste. --}}

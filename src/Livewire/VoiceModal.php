@@ -151,6 +151,23 @@ class VoiceModal extends Component
     }
 
     /**
+     * Spec 55 Nachtrag (Agent-am-Brief): „Briefing diktieren" ist der Agenten-Einstieg —
+     * das Transkript landet WEITERHIN im Beschreibungsfeld (das übernimmt
+     * `Planung\Index::briefDiktatUebernehmen()` bereits selbst, unabhängig hiervon), UND läuft
+     * ZUSÄTZLICH durch denselben Tool-Loop wie ein gesprochener Sprachbefehl — der Agent liest
+     * den (inzwischen aktualisierten) Formularstand und kann mit einer Rückfrage oder einem
+     * Vorschlag antworten. Nur für den EIGENEN Scope-Tab.
+     */
+    #[On('voice.diktat-transkribiert')]
+    public function diktatTranskribiert(string $scope, string $text): void
+    {
+        if ($scope !== $this->planungScope) {
+            return;
+        }
+        $this->verarbeiteText($text);
+    }
+
+    /**
      * Die Route, auf der das (global gemountete) Modal beim Öffnen der Seite lag — gemerkt in
      * {@see mount()}, damit `verarbeite()` weiss, ob ein geöffneter Datensatz schon auf der
      * aktuellen Seite sichtbar wäre (⇒ Event) oder eine andere Seite braucht (⇒ Redirect).
