@@ -697,3 +697,195 @@ it('VoiceModal spricht ein reines "wartet"-Signal NICHT vor — sonst hätte sic
         ->call('verarbeiteText', 'ghsjdf mmpf')
         ->assertNotDispatched('voice-tts-bereit');
 });
+
+/**
+ * Spec 55 Nachtrag (Agent-am-Brief): der Lückencheck prüft jetzt den ECHTEN Formularstand
+ * (VoiceModal::$formularRegler), nicht mehr nur den gesprochenen Satz — schliesst die in
+ * Spec 55 dokumentierte Lücke (a).
+ */
+it('Nachtrag: formularstandHinweis nennt NUR die fehlenden Pflicht-Leitplanken, gesetzte Felder werden NICHT erneut erfragt', function () {
+    $spy = new class extends FakeAiProvider
+    {
+        public ?array $gesendet = null;
+
+        public function chat(array $messages, array $options = []): array
+        {
+            $this->gesendet ??= $messages;
+
+            return ['content' => '{"action":"final","text":"ok"}', 'model' => 'fake-voice', 'usage' => []];
+        }
+    };
+    app()->singleton(FakeAiProvider::class, fn () => $spy);
+
+    app(VoiceCommandService::class)->verarbeite('Test', null, 'fragen', null, 1, [
+        'scope' => 'gericht',
+        'regler' => ['pax' => '40', 'occasion' => ''],   // pax gesetzt, occasion/serviceform/ziel_portion_g fehlen
+        'brief' => 'Business-Frühstück',
+    ]);
+
+    $user = collect($spy->gesendet)->firstWhere('role', 'user')['content'] ?? '';
+    expect($user)->toContain('pax=40')
+        ->and($user)->toContain('FEHLENDE Pflicht-Leitplanken')
+        ->and($user)->toContain('occasion')
+        ->and($user)->toContain('serviceform')
+        ->and($user)->toContain('ziel_portion_g')
+        ->and($user)->not->toContain('FEHLENDE Pflicht-Leitplanken: pax');   // pax ist gesetzt, steht nicht in der Fehlt-Liste
+});
+
+it('Nachtrag: formularstandHinweis meldet "alle gesetzt", wenn keine Pflicht-Leitplanke fehlt', function () {
+    $spy = new class extends FakeAiProvider
+    {
+        public ?array $gesendet = null;
+
+        public function chat(array $messages, array $options = []): array
+        {
+            $this->gesendet ??= $messages;
+
+            return ['content' => '{"action":"final","text":"ok"}', 'model' => 'fake-voice', 'usage' => []];
+        }
+    };
+    app()->singleton(FakeAiProvider::class, fn () => $spy);
+
+    app(VoiceCommandService::class)->verarbeite('Test', null, 'fragen', null, 1, [
+        'scope' => 'rezept',
+        'regler' => ['ziel_menge' => '2', 'ziel_einheit' => 'kg'],
+        'brief' => 'Teig',
+    ]);
+
+    $user = collect($spy->gesendet)->firstWhere('role', 'user')['content'] ?? '';
+    expect($user)->toContain('Alle Pflicht-Leitplanken dieses Scopes sind bereits gesetzt.');
+});
+
+it('Nachtrag: regelWertGueltig prüft Enum-Felder gegen das echte Vokabular, Zahlenfelder gegen is_numeric', function () {
+    expect(VoiceCommandService::regelWertGueltig('sektor', 'catering'))->toBeTrue()
+        ->and(VoiceCommandService::regelWertGueltig('sektor', 'erfunden'))->toBeFalse()
+        ->and(VoiceCommandService::regelWertGueltig('level', 'gehoben'))->toBeTrue()
+        ->and(VoiceCommandService::regelWertGueltig('level', 'super_gehoben'))->toBeFalse()
+        ->and(VoiceCommandService::regelWertGueltig('pax', '40'))->toBeTrue()
+        ->and(VoiceCommandService::regelWertGueltig('pax', 'viele'))->toBeFalse()
+        ->and(VoiceCommandService::regelWertGueltig('ziel_menge', '2,5'))->toBeTrue();
+});
+
+it('Nachtrag: "struktur" MIT direkt:true wird zu komponenten_direkt, ungültige Werte werden gefiltert statt geraten', function () {
+    ($this->skript)([
+        '{"action":"final","text":"Sektor gesetzt.","struktur":{"scope":"gericht","felder":{"sektor":"catering","pax":"erfunden_keine_zahl"},"direkt":true}}',
+    ]);
+
+    $r = app(VoiceCommandService::class)->verarbeite('Sektor ist Catering');
+
+    expect($r['proposals'])->toHaveCount(1);
+    $p = $r['proposals'][0];
+    expect($p['type'])->toBe('komponenten_direkt')
+        ->and($p['felder'])->toBe(['sektor' => 'catering']);   // pax verworfen — kein gültiger Zahlenwert
+});
+
+it('Nachtrag: "struktur" OHNE direkt bleibt komponenten_uebernahme (Regression — bestehendes Verhalten unverändert)', function () {
+    ($this->skript)([
+        '{"action":"final","text":"Vorschlag.","struktur":{"scope":"gericht","felder":{"sektor":"catering"}}}',
+    ]);
+
+    $r = app(VoiceCommandService::class)->verarbeite('Freies Briefing mit mehreren Angaben');
+
+    expect($r['proposals'][0]['type'])->toBe('komponenten_uebernahme');
+});
+
+it('Nachtrag: "rueckfrage" wird zur Karte MIT server-gebautem Vokabular — das Modell liefert nur den Feldnamen', function () {
+    ($this->skript)([
+        '{"action":"final","text":"Für welchen Sektor planst du?","rueckfrage":{"scope":"gericht","feld":"sektor"}}',
+    ]);
+
+    $r = app(VoiceCommandService::class)->verarbeite('Erstelle ein Gericht');
+
+    expect($r['proposals'])->toHaveCount(1);
+    $p = $r['proposals'][0];
+    expect($p['type'])->toBe('rueckfrage')
+        ->and($p['feld'])->toBe('sektor')
+        ->and($p['vokabular'])->toBe(\Platform\FoodAlchemist\Livewire\Planung\Index::SEKTOR_OPTIONEN);
+});
+
+it('Nachtrag: "rueckfrage" zu einem Zahlenfeld liefert vokabular=null (Panel zeigt ein Eingabefeld statt Chips)', function () {
+    ($this->skript)([
+        '{"action":"final","text":"Wie viele Personen?","rueckfrage":{"scope":"gericht","feld":"pax"}}',
+    ]);
+
+    $r = app(VoiceCommandService::class)->verarbeite('Erstelle ein Gericht');
+
+    expect($r['proposals'][0]['vokabular'])->toBeNull();
+});
+
+it('Nachtrag: "rueckfrage" zu einem nicht-schreibbaren Feld wird verworfen (Server-Whitelist, nicht das Modell entscheidet)', function () {
+    ($this->skript)([
+        '{"action":"final","text":"...","rueckfrage":{"scope":"gericht","feld":"erfundenes_feld"}}',
+    ]);
+
+    $r = app(VoiceCommandService::class)->verarbeite('Test');
+
+    expect($r['proposals'])->toBe([]);
+});
+
+/**
+ * Spec 55 Nachtrag: VoiceModal-seitige Direkt-Set-Mechanik (Chip/Zahl/Auto-Apply/Rückgängig).
+ */
+it('Nachtrag: rueckfrageChip() setzt den Regler direkt (Chip-Klick IST die Bestätigung)', function () {
+    $modal = Livewire::test(\Platform\FoodAlchemist\Livewire\VoiceModal::class);
+    $modal->set('ergebnis', [
+        'text' => null, 'runden' => 1, 'tool_laeufe' => [], 'aktionen' => [], 'unklar' => false, 'elapsed_ms' => 0,
+        'proposals' => [['type' => 'rueckfrage', 'scope' => 'gericht', 'feld' => 'sektor', 'vokabular' => \Platform\FoodAlchemist\Livewire\Planung\Index::SEKTOR_OPTIONEN]],
+    ]);
+
+    $modal->call('rueckfrageChip', 0, 'catering')
+        ->assertDispatched('voice.komponenten-uebernahme', scope: 'gericht', felder: ['sektor' => 'catering'], brief: null)
+        ->assertSet('ergebnis.proposals.0.accepted', true)
+        ->assertSet('ergebnis.proposals.0.beantwortet_mit', 'catering');
+});
+
+it('Nachtrag: rueckfrageChip() mit einem Wert ausserhalb des Vokabulars schreibt NICHTS', function () {
+    $modal = Livewire::test(\Platform\FoodAlchemist\Livewire\VoiceModal::class);
+    $modal->set('ergebnis', [
+        'text' => null, 'runden' => 1, 'tool_laeufe' => [], 'aktionen' => [], 'unklar' => false, 'elapsed_ms' => 0,
+        'proposals' => [['type' => 'rueckfrage', 'scope' => 'gericht', 'feld' => 'sektor', 'vokabular' => \Platform\FoodAlchemist\Livewire\Planung\Index::SEKTOR_OPTIONEN]],
+    ]);
+
+    $modal->call('rueckfrageChip', 0, 'erfunden')
+        ->assertNotDispatched('voice.komponenten-uebernahme')
+        ->assertSet('ergebnis.proposals.0.accepted', null);
+});
+
+it('Nachtrag: rueckfrageZahl() setzt ein Zahlenfeld direkt, ein ungültiger Wert wird verworfen', function () {
+    $modal = Livewire::test(\Platform\FoodAlchemist\Livewire\VoiceModal::class);
+    $modal->set('ergebnis', [
+        'text' => null, 'runden' => 1, 'tool_laeufe' => [], 'aktionen' => [], 'unklar' => false, 'elapsed_ms' => 0,
+        'proposals' => [['type' => 'rueckfrage', 'scope' => 'gericht', 'feld' => 'pax', 'vokabular' => null]],
+    ]);
+
+    $modal->call('rueckfrageZahl', 0, 'viele')
+        ->assertNotDispatched('voice.komponenten-uebernahme');
+
+    $modal->call('rueckfrageZahl', 0, '60')
+        ->assertDispatched('voice.komponenten-uebernahme', scope: 'gericht', felder: ['pax' => '60'], brief: null)
+        ->assertSet('ergebnis.proposals.0.accepted', true);
+});
+
+it('Nachtrag: komponenten_direkt-Vorschläge wenden sich automatisch an — kein Klick nötig, GL-07 gilt hier bewusst NICHT', function () {
+    ($this->skript)([
+        '{"action":"final","text":"Sektor gesetzt.","struktur":{"scope":"gericht","felder":{"sektor":"catering"},"direkt":true}}',
+    ]);
+
+    Livewire::test(\Platform\FoodAlchemist\Livewire\VoiceModal::class)
+        ->call('verarbeiteText', 'Sektor ist Catering')
+        ->assertDispatched('voice.komponenten-uebernahme', scope: 'gericht', felder: ['sektor' => 'catering'], brief: null)
+        ->assertSet('ergebnis.proposals.0.accepted', true);
+});
+
+it('Nachtrag: komponentenRueckgaengig() setzt die Felder leer zurück und markiert die Karte', function () {
+    $modal = Livewire::test(\Platform\FoodAlchemist\Livewire\VoiceModal::class);
+    $modal->set('ergebnis', [
+        'text' => null, 'runden' => 1, 'tool_laeufe' => [], 'aktionen' => [], 'unklar' => false, 'elapsed_ms' => 0,
+        'proposals' => [['type' => 'komponenten_direkt', 'scope' => 'gericht', 'felder' => ['sektor' => 'catering'], 'brief' => null, 'accepted' => true]],
+    ]);
+
+    $modal->call('komponentenRueckgaengig', 0)
+        ->assertDispatched('voice.komponenten-uebernahme', scope: 'gericht', felder: ['sektor' => ''], brief: null)
+        ->assertSet('ergebnis.proposals.0.accepted', false)
+        ->assertSet('ergebnis.proposals.0.rueckgaengig_gemacht', true);
+});

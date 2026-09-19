@@ -321,6 +321,83 @@ class VoiceCommandService
     }
 
     /**
+     * Spec 55 Nachtrag (Agent-am-Brief): der Lückencheck prüft ab jetzt den ECHTEN Regler-Stand
+     * (`VoiceModal::$formularRegler`, per Browser-Event von `Planung\Index::render()` frisch
+     * gehalten) statt nur den gesprochenen Satz zu lesen — schon gesetzte Felder werden NICHT
+     * nochmal erfragt, egal ob der Mensch sie über die UI oder einen früheren Sprachbefehl
+     * gesetzt hat. Nur für die drei Regler-Scopes (rezept/gericht/concept) — „Format" hat noch
+     * keinen eigenen Regler-Satz, s. Spec 55 „Offene Punkte".
+     *
+     * @param  ?array{scope: ?string, regler: array<string,mixed>, brief: string}  $formularStand
+     */
+    private function formularstandHinweis(?array $formularStand): string
+    {
+        $scope = $formularStand['scope'] ?? null;
+        if ($scope === null || ! isset(\Platform\FoodAlchemist\Livewire\Planung\Index::MANDATORY_LEITPLANKEN[$scope])) {
+            return '';
+        }
+        $regler = is_array($formularStand['regler'] ?? null) ? $formularStand['regler'] : [];
+        $brief = trim((string) ($formularStand['brief'] ?? ''));
+
+        $gesetzt = [];
+        $fehlend = [];
+        foreach (\Platform\FoodAlchemist\Livewire\Planung\Index::MANDATORY_LEITPLANKEN[$scope] as $feld) {
+            $wert = $regler[$feld] ?? null;
+            if ($wert === null || $wert === '') {
+                $fehlend[] = $feld;
+            } else {
+                $gesetzt[] = "{$feld}={$wert}";
+            }
+        }
+
+        $zeilen = ["Scope: {$scope}"];
+        $zeilen[] = $brief !== '' ? "Brief bisher: „{$brief}\"" : 'Brief bisher: (leer)';
+        $zeilen[] = $gesetzt !== [] ? 'Bereits gesetzt: ' . implode(', ', $gesetzt) : 'Bereits gesetzt: nichts';
+        $zeilen[] = $fehlend !== []
+            ? 'FEHLENDE Pflicht-Leitplanken: ' . implode(', ', $fehlend)
+            . ' — frage GEZIELT nach GENAU EINEM davon (das für den Nutzer relevanteste), NIEMALS nach '
+            . 'einem bereits gesetzten Feld.'
+            : 'Alle Pflicht-Leitplanken dieses Scopes sind bereits gesetzt.';
+
+        return "\n\n[Formularstand des aktiven Planungs-Tabs — NUR hieran den Lückencheck prüfen, "
+            . "NICHT am gesprochenen Satz allein:\n" . implode("\n", $zeilen) . ']';
+    }
+
+    /**
+     * Spec 55 Nachtrag: das feste Vokabular EINES Regler-Feldes (für Rückfrage-Chips UND für
+     * die Server-Validierung eines direkten Struktur-Werts) — `null` heisst „numerisches Feld,
+     * kein festes Vokabular" (Pax/Menge/Portion/Ziel-VK), der Aufrufer erwartet dort eine Zahl.
+     *
+     * @return ?array<string, string>
+     */
+    public static function regelVokabular(string $feld): ?array
+    {
+        return match ($feld) {
+            'sektor' => \Platform\FoodAlchemist\Livewire\Planung\Index::SEKTOR_OPTIONEN,
+            'occasion' => \Platform\FoodAlchemist\Livewire\Planung\Index::OCCASION_OPTIONEN,
+            'serviceform' => \Platform\FoodAlchemist\Livewire\Planung\Index::SERVICEFORM_OPTIONEN,
+            'ziel_einheit' => \Platform\FoodAlchemist\Livewire\Planung\Index::MENGE_EINHEITEN,
+            'level' => ['' => '(egal)', 'haute_cuisine' => 'Haute Cuisine', 'gehoben' => 'Gehoben', 'klassisch' => 'Klassisch'],
+            default => null,                                          // pax/ziel_menge/ziel_portion_g/ziel_vk: Zahl, kein Enum
+        };
+    }
+
+    /**
+     * Spec 55 Nachtrag: Server-Validierung EINES Regler-Werts gegen sein Vokabular — die
+     * Instanz, an der „unbekannter Wert → Rückfrage, nie raten" durchgesetzt wird. Enum-Felder
+     * müssen ein bekannter Schlüssel sein, numerische Felder müssen numerisch sein.
+     */
+    public static function regelWertGueltig(string $feld, mixed $wert): bool
+    {
+        $vokabular = self::regelVokabular($feld);
+        if ($vokabular !== null) {
+            return is_string($wert) && array_key_exists($wert, $vokabular);
+        }
+
+        return is_numeric($wert) || (is_string($wert) && is_numeric(str_replace(',', '.', $wert)));
+    }
+
+    /**
      * Rundenbudget UND Zeitbudget (Befund 2026-09-17, demo-Call-Log 16.09.: 2 von 5 Läufen liefen
      * bis `maxRuns` durch — 6 Runden, ~60 s, ~91.560 Input-Token — ohne dass der Nutzer in der
      * Zeit auch nur eine Zwischenmeldung sah). 4 Runden reichen für die gemessenen Fälle (Suche,
@@ -344,6 +421,10 @@ class VoiceCommandService
      *                                    letzten Kaskaden-Lauf (Status, roter Schritt) als Kontext, DAMIT
      *                                    der Agent proaktiv darauf antworten kann, ohne dass der Mensch
      *                                    erst fragt (z. B. „Schritt 3 ist rot — neu anstoßen?").
+     * @param  ?array{scope: ?string, regler: array<string,mixed>, brief: string}  $formularStand  Spec 55
+     *         Nachtrag (Agent-am-Brief): der ECHTE Regler-/Brief-Stand des aktiven Scope-Tabs
+     *         (`VoiceModal::$formularRegler`/`$formularBrief`) — der Lückencheck prüft DAGEGEN,
+     *         nicht nur gegen den gesprochenen Satz (schliesst die in Spec 55 dokumentierte Lücke).
      * @return array{text: ?string, unklar: bool, runden: int, elapsed_ms: int, freigeschaltet: list<string>,
      *               aktionen: list<array>, proposals: list<array>, tool_laeufe: list<array>}
      */
@@ -353,6 +434,7 @@ class VoiceCommandService
         string $modus = 'fragen',
         ?string $verlauf = null,
         ?int $planungsSessionId = null,
+        ?array $formularStand = null,
     ): array {
         $kontextHinweis = ($kontext !== null && isset($kontext['type'], $kontext['id']))
             ? " [Kontext: aktuell geöffnet — {$kontext['type']} ID={$kontext['id']}. Bei \"dieses/das Rezept\" "
@@ -360,6 +442,7 @@ class VoiceCommandService
                 . 'gilt der genannte Name.]'
             : '';
         $planungsHinweis = $this->planungsKaskadenHinweis($planungsSessionId);
+        $formularHinweis = $this->formularstandHinweis($formularStand);
         // Spec 53 / Paket F (4): GEKÜRZTER Gesprächsverlauf (letzte Züge + zuletzt geöffnetes
         // Objekt) — löst Pronomen/Ellipsen über den letzten Turn hinweg auf ("und jetzt lösche
         // das"). Referenz-Bestätigungen ("ja", "das zweite") laufen NICHT hier durch: die fängt
@@ -432,7 +515,7 @@ class VoiceCommandService
             . 'ohne jedes Tool aufzurufen. Ein kurzer, aber ERKENNBARER Befehl (auch unvollständig) ist davon '
             . 'NICHT betroffen — im Zweifel gilt ein Transkript als Befehl, nicht als Rauschen. ';
         $resultat = $this->ki->callWithTools(
-            "Sprachbefehl des Users (Deutsch, Kurz-Audio-Transkript): \"{$transcript}\"{$kontextHinweis}{$verlaufHinweis}{$planungsHinweis}",
+            "Sprachbefehl des Users (Deutsch, Kurz-Audio-Transkript): \"{$transcript}\"{$kontextHinweis}{$verlaufHinweis}{$planungsHinweis}{$formularHinweis}",
             $toolsFuerModus,
             self::MAX_RUNDEN,
             [
@@ -474,20 +557,35 @@ class VoiceCommandService
                     . 'letzten Läufe, keine run_id nötig). '
                     . 'foodalchemist.planung_session.POST und foodalchemist.planung_kaskade.START sind für dich '
                     . 'GESPERRT (echte Schreiber) — NIE versuchen, IMMER stattdessen (1)/(2) vorschlagen. '
-                    . 'LÜCKENCHECK vor (1): nennt der Befehl NICHT mindestens Sektor, Anlass, Personenzahl, '
-                    . 'Budget/Ziel-VK UND Niveau, frage GEZIELT nach den fehlenden davon, BEVOR du '
-                    . 'planung_vorschlag.POST aufrufst — kein Rateversuch mit Platzhaltern. Nennt der Nutzer '
-                    . 'in der Antwort auf deine Nachfrage weitere Angaben, ergänze sie und rufe DANN auf. '
+                    . 'LÜCKENCHECK vor (1) OHNE offene Session: nennt der Befehl NICHT mindestens Sektor, Anlass, '
+                    . 'Personenzahl, Budget/Ziel-VK UND Niveau, frage GEZIELT nach den fehlenden davon, BEVOR du '
+                    . 'planung_vorschlag.POST aufrufst — kein Rateversuch mit Platzhaltern. '
                     . ($planungsSessionId !== null
                         ? 'ES IST BEREITS EINE PLANUNGS-SESSION OFFEN: „erstelle eine neue Planung" bleibt (1) — '
                             . 'aber „ändere den Brief"/„setze Sektor auf …"/„Personenzahl ist 40" betrifft die '
-                            . 'OFFENE Session, NICHT (1). Dafür KEIN Tool aufrufen — stattdessen im finalen '
-                            . '{"action":"final",…} zusätzlich ein "struktur"-Feld mitgeben: '
-                            . '{"struktur":{"scope":"rezept|gericht|concept","felder":{"<Leitplanken-Schlüssel>":'
-                            . '"<Wert>"},"brief":"<optionaler neuer Brief-Text>"}}. Leitplanken-Schlüssel EXAKT: '
-                            . 'sektor, occasion (Anlass), pax (Personen), ziel_vk (Budget), level (Niveau) — '
-                            . 'NUR die tatsächlich genannten Felder, nichts erfinden. Der Mensch bestätigt die '
-                            . 'Übernahme per Klick (GL-07), du schreibst NICHTS direkt. '
+                            . 'OFFENE Session, NICHT (1). Dafür KEIN Tool aufrufen. Den Formularstand (Regler + '
+                            . 'fehlende Pflicht-Leitplanken) bekommst du unten im Kontext — DARAN prüfen, nicht '
+                            . 'am gesprochenen Satz allein. Zwei Fälle: '
+                            . '(A) Pflicht-Leitplanke fehlt laut Formularstand: frage GEZIELT nach GENAU EINER '
+                            . '(der relevantesten), NENNE dabei im finalen Text konkrete Beispiele, UND gib '
+                            . '{"rueckfrage":{"scope":"rezept|gericht|concept","feld":"<EXAKT einer der '
+                            . 'gemeldeten fehlenden Schlüssel>"}} mit — der Server baut daraus die Auswahl, du '
+                            . 'musst die Optionen nicht selbst aufzählen. '
+                            . '(B) Der Nutzer nennt einen Wert — sei es als Antwort auf deine eigene Rückfrage '
+                            . 'ODER unaufgefordert („Sektor ist jetzt Catering"): DANN gib '
+                            . '{"struktur":{"scope":"...","felder":{"<Schlüssel>":"<Wert>"},"direkt":true}} mit '
+                            . '— die Antwort auf eine konkrete Frage IST die Bestätigung, kein Klick nötig. '
+                            . 'Schreibe NUR Werte, die du aus dem Gesagten sicher ableiten kannst (z. B. „gehoben" '
+                            . '→ level=gehoben, „60 Personen" → pax=60); bist du unsicher ob der Wert zum '
+                            . 'Vokabular passt, frage lieber nochmal (Fall A) statt zu raten — ein Wert ausserhalb '
+                            . 'des Vokabulars wird ohnehin serverseitig verworfen. '
+                            . 'NUR bei einem LÄNGEREN, unaufgeforderten Briefing-Text (mehrere Leitplanken auf '
+                            . 'einmal, keine Antwort auf eine eigene Frage) — {"struktur":{...}} OHNE "direkt" '
+                            . '(oder "direkt":false): das bleibt eine Karte zum Bestätigen (GL-07), der Mensch '
+                            . 'soll mehrere gleichzeitig vorgeschlagene Werte vor der Übernahme sehen. '
+                            . 'Leitplanken-Schlüssel EXAKT: sektor, occasion (Anlass), pax (Personen), ziel_vk '
+                            . '(Budget), level (Niveau), serviceform, ziel_menge, ziel_einheit, ziel_portion_g — '
+                            . 'NUR die tatsächlich genannten/erfragten Felder, nichts erfinden. '
                         : '')
                     . 'WISSENS-FUNDIERUNG: für Sektor/Anlass-Empfehlungen ZUERST foodalchemist.formats.SEARCH '
                     . '(passende Formate), foodalchemist.zielgruppen.GET (hinterlegte Segmente) oder '
@@ -536,24 +634,54 @@ class VoiceCommandService
         // Spec 55 (Design-Punkt b): das Modell darf im finalen JSON zusätzlich ein "struktur"-Feld
         // mitgeben (additive Protokoll-Erweiterung, s. AiGatewayService::callWithTools()) — Feld-
         // Vorschläge für die OFFENE Planungs-Session (Regler/Brief), OHNE eigenes MCP-Tool.
-        // Whitelist gegen REGLER_DEFAULT-Schlüssel: das Modell darf NICHTS erfinden, was
+        // Whitelist gegen AGENT_SCHREIBBARE_REGLER: das Modell darf NICHTS erfinden, was
         // Planung\Index::regler() beim Übernehmen nicht kennt (kein Katalog-Wachstum, keine
         // ungeprüften Keys in einer fremden Komponente).
+        //
+        // Spec 55 Nachtrag (Agent-am-Brief, Dominique-Präzisierung): antwortet der Nutzer auf
+        // eine Rückfrage des Agenten, ist die Antwort SELBST die Bestätigung — kein Umweg über
+        // eine Übernehmen-Karte. `direkt: true` markiert genau diesen Fall; JEDER Feldwert wird
+        // trotzdem serverseitig gegen sein Vokabular geprüft (regelWertGueltig()) — ein Wert
+        // ausserhalb des Vokabulars wird NICHT übernommen (weder direkt noch als Vorschlag),
+        // „nie raten" gilt für BEIDE Wege gleich.
         $struktur = $resultat['struktur'] ?? null;
         if (is_array($struktur) && in_array($struktur['scope'] ?? null, ['rezept', 'gericht', 'concept'], true)) {
-            $felder = array_intersect_key(
+            $rohFelder = array_intersect_key(
                 is_array($struktur['felder'] ?? null) ? $struktur['felder'] : [],
-                array_flip(['sektor', 'occasion', 'pax', 'ziel_vk', 'level']),
+                array_flip(\Platform\FoodAlchemist\Livewire\Planung\Index::AGENT_SCHREIBBARE_REGLER),
             );
+            $direkt = ($struktur['direkt'] ?? false) === true;
+            $felder = $direkt
+                ? array_filter($rohFelder, static fn ($wert, $feld) => self::regelWertGueltig($feld, $wert), ARRAY_FILTER_USE_BOTH)
+                : $rohFelder;
             $brief = is_string($struktur['brief'] ?? null) ? trim($struktur['brief']) : null;
             if ($felder !== [] || ($brief !== null && $brief !== '')) {
                 $proposals[] = [
-                    'type' => 'komponenten_uebernahme',
+                    'type' => $direkt ? 'komponenten_direkt' : 'komponenten_uebernahme',
                     'scope' => $struktur['scope'],
                     'felder' => $felder,
                     'brief' => $brief !== '' ? $brief : null,
                 ];
             }
+        }
+
+        // Spec 55 Nachtrag: "rueckfrage" — der Agent fragt GEZIELT nach EINEM fehlenden Feld.
+        // Das VOKABULAR kommt ausschliesslich vom Server (regelVokabular()), NIE vom Modell —
+        // der Katalog/die Chips sind damit unabhängig davon, ob das Modell die Optionen korrekt
+        // aufzählt. `null`-Vokabular (Pax/Menge/Portion/Ziel-VK) heisst „Zahlenfeld", das Panel
+        // zeigt dafür ein Eingabefeld statt Chips.
+        $rueckfrage = $resultat['rueckfrage'] ?? null;
+        if (is_array($rueckfrage)
+            && in_array($rueckfrage['scope'] ?? null, ['rezept', 'gericht', 'concept'], true)
+            && is_string($rueckfrage['feld'] ?? null)
+            && in_array($rueckfrage['feld'], \Platform\FoodAlchemist\Livewire\Planung\Index::AGENT_SCHREIBBARE_REGLER, true)
+        ) {
+            $proposals[] = [
+                'type' => 'rueckfrage',
+                'scope' => $rueckfrage['scope'],
+                'feld' => $rueckfrage['feld'],
+                'vokabular' => self::regelVokabular($rueckfrage['feld']),
+            ];
         }
 
         // Befund 2026-09-17: `text === null` (Runden-/Zeitbudget erschöpft, kein `final`) rendert

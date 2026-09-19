@@ -359,6 +359,60 @@
                                 </button>
                             @endif
                         </div>
+                    {{-- Spec 55 Nachtrag (Agent-am-Brief): Antwort auf die EIGENE Rückfrage des
+                         Agenten (oder eine eindeutige unaufgeforderte Angabe) — schon serverseitig
+                         angewendet (VoiceModal::verstehen(), direkt nach `verarbeite()`), hier NUR
+                         noch die "gesetzt"-Zeile + Rückgängig (Dominique: die Antwort auf eine
+                         konkrete Frage IST die Bestätigung, kein Klick vorher nötig). --}}
+                    @elseif($p['type'] === 'komponenten_direkt')
+                        <div class="rounded bg-emerald-500/10 border border-emerald-500/30 px-2 py-1.5 text-xs space-y-1" wire:key="vp-{{ $i }}" data-voice-proposal-komponenten-direkt>
+                            @if($p['rueckgaengig_gemacht'] ?? false)
+                                <p class="text-gray-500">Zurückgenommen.</p>
+                            @else
+                                <p>
+                                    Gesetzt:
+                                    @foreach($p['felder'] as $k => $v)
+                                        <span class="{{ $pill }} {{ $variantPill['success'] }} mr-1">{{ $k }}: {{ is_array($v) ? implode(',', $v) : $v }}</span>
+                                    @endforeach
+                                    @if($p['brief'])
+                                        <span class="{{ $pill }} {{ $variantPill['success'] }} mr-1">Brief aktualisiert</span>
+                                    @endif
+                                </p>
+                                <button type="button" wire:click="komponentenRueckgaengig({{ $i }})" wire:loading.attr="disabled" wire:target="komponentenRueckgaengig({{ $i }})"
+                                        class="{{ $btnGhostXs }} text-gray-500 disabled:opacity-40" data-voice-proposal-komponenten-direkt-undo>
+                                    Rückgängig
+                                </button>
+                            @endif
+                        </div>
+                    {{-- Spec 55 Nachtrag: Rückfrage des Agenten zu EINER fehlenden Pflicht-
+                         Leitplanke — Vokabular kommt vom Server (VoiceCommandService::regelVokabular()),
+                         NICHT vom Modell. `null` = Zahlenfeld (Pax/Menge/Portion/Ziel-VK), sonst Chips. --}}
+                    @elseif($p['type'] === 'rueckfrage')
+                        <div class="rounded bg-violet-500/10 border border-violet-500/30 px-2 py-1.5 text-xs space-y-1.5" wire:key="vp-{{ $i }}" data-voice-proposal-rueckfrage data-voice-rueckfrage-feld="{{ $p['feld'] }}">
+                            @if($p['accepted'] ?? false)
+                                <span class="{{ $pill }} {{ $variantPill['success'] }}" data-voice-proposal-auto="1">✓ {{ $p['feld'] }}: {{ $p['beantwortet_mit'] ?? '' }}</span>
+                                <button type="button" wire:click="komponentenRueckgaengig({{ $i }})" wire:loading.attr="disabled" wire:target="komponentenRueckgaengig({{ $i }})"
+                                        class="{{ $btnGhostXs }} text-gray-500 disabled:opacity-40 ml-1" data-voice-proposal-rueckfrage-undo>
+                                    Rückgängig
+                                </button>
+                            @elseif(is_array($p['vokabular'] ?? null))
+                                <div class="flex flex-wrap gap-1.5">
+                                    @foreach($p['vokabular'] as $wert => $lbl)
+                                        @if($wert !== '')
+                                            <button type="button" wire:click="rueckfrageChip({{ $i }}, '{{ $wert }}')" wire:loading.attr="disabled" wire:target="rueckfrageChip({{ $i }}, '{{ $wert }}')"
+                                                    class="px-2.5 py-1 rounded-full border text-[11px] border-black/10 text-gray-600 hover:border-violet-400 transition-colors" data-voice-rueckfrage-chip="{{ $wert }}">
+                                                {{ $lbl }}
+                                            </button>
+                                        @endif
+                                    @endforeach
+                                </div>
+                            @else
+                                <form wire:submit.prevent="rueckfrageZahl({{ $i }}, $refs.rueckfrageZahl{{ $i }}.value)" class="flex gap-2">
+                                    <input type="text" x-ref="rueckfrageZahl{{ $i }}" placeholder="Zahl eingeben" class="{{ $input }} !py-1 !text-xs flex-1" data-voice-rueckfrage-zahl />
+                                    <button type="submit" wire:loading.attr="disabled" wire:target="rueckfrageZahl" class="{{ $btnGhostXs }} text-emerald-600 disabled:opacity-40">Setzen</button>
+                                </form>
+                            @endif
+                        </div>
                     {{-- Paket F (1b): generischer Schreibvorschlag für JEDES andere FA-Write-Tool.
                          Mit Alias (VoiceCommandService::SCHREIBAKTION_ALIAS) zeigt die Vorschau
                          alt→neu je Feld; ohne Alias nur die rohen Argumente + Tool-Beschreibung. --}}

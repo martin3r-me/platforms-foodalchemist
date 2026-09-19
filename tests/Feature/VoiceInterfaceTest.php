@@ -843,3 +843,29 @@ it('„Gespräch vergessen" ist nur sichtbar, wenn es Vorschläge gibt', functio
     expect($mitVorschlag->html())->toContain('data-voice-vergessen');
 });
 
+/**
+ * Spec 55 Nachtrag (Agent-am-Brief): der Formularstand kommt per Browser-Event von
+ * Planung\Index (Geschwister-Komponente, kein #[Reactive]-Prop). Panel bindet NUR den
+ * eigenen Scope — ein Event für einen ANDEREN Scope-Tab darf dieses Panel nicht verändern.
+ */
+it('Nachtrag: formularstandAktualisiert() übernimmt NUR Events für den eigenen Scope', function () {
+    $modal = Livewire::test(VoiceModal::class, ['planungScope' => 'gericht']);
+
+    $modal->dispatch('voice.formularstand-aktualisiert', scope: 'rezept', regler: ['ziel_menge' => '2'], brief: 'Fremder Scope')
+        ->assertSet('formularRegler', [])
+        ->assertSet('formularBrief', '');
+
+    $modal->dispatch('voice.formularstand-aktualisiert', scope: 'gericht', regler: ['pax' => '40'], brief: 'Mein Brief')
+        ->assertSet('formularRegler', ['pax' => '40'])
+        ->assertSet('formularBrief', 'Mein Brief');
+});
+
+it('Nachtrag: planungScope/formularRegler/formularBrief kommen als Mount-Parameter an', function () {
+    Livewire::test(VoiceModal::class, [
+        'planungScope' => 'concept', 'formularRegler' => ['occasion' => 'dinner'], 'formularBrief' => 'Galadinner',
+    ])
+        ->assertSet('planungScope', 'concept')
+        ->assertSet('formularRegler', ['occasion' => 'dinner'])
+        ->assertSet('formularBrief', 'Galadinner');
+});
+

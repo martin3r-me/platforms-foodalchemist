@@ -613,6 +613,11 @@ class AiGatewayService
         // zu vergrössern. `null` ändert am bisherigen Verhalten nichts, kein anderer Aufrufer
         // betroffen (niemand sonst liest dieses Feld).
         $finalStruktur = null;
+        // Spec 55 Nachtrag (Agent-am-Brief): zweiter additiver Begleiter — der Aufrufer markiert
+        // damit „ich frage GEZIELT nach einem einzelnen Feld", der Server baut die Chip-Auswahl
+        // aus dem eigenen Vokabular (nicht aus dem Modell-Text). Gleiche Additiv-Garantie wie
+        // `struktur`.
+        $finalRueckfrage = null;
         $runde = 0;
         $usageGesamt = ['input_tokens' => 0, 'output_tokens' => 0, 'input_tokens_details' => ['cached_tokens' => 0]];
         $tatsaechlichesModell = null;
@@ -659,6 +664,7 @@ class AiGatewayService
             if (($parsed['action'] ?? null) === 'final' || $kontext === null) {
                 $finalText = $parsed['text'] ?? null;
                 $finalStruktur = is_array($parsed['struktur'] ?? null) ? $parsed['struktur'] : null;
+                $finalRueckfrage = is_array($parsed['rueckfrage'] ?? null) ? $parsed['rueckfrage'] : null;
                 break;
             }
             if (($parsed['action'] ?? null) === 'tool' && is_string($parsed['name'] ?? null)) {
@@ -746,7 +752,7 @@ class AiGatewayService
             ['knowledge_used' => null, 'target_table' => null, 'target_id' => null, 'layers_used' => null]);
 
         return ['text' => $finalText, 'runden' => $runde, 'tool_laeufe' => $toolLaeufe, 'elapsed_ms' => $elapsedMs,
-            'freigeschaltet' => $freigeschaltet, 'struktur' => $finalStruktur];
+            'freigeschaltet' => $freigeschaltet, 'struktur' => $finalStruktur, 'rueckfrage' => $finalRueckfrage];
     }
 
     /**

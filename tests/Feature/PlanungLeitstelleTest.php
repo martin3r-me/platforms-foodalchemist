@@ -2649,3 +2649,21 @@ it('Spec 55: „vom Agenten"-Badge zeigt sich nach Übernahme im Rendering und v
     expect($test->html())->not->toContain('data-regler-von-agent="sektor"')
         ->and($test->html())->toContain('data-regler-von-agent="pax"');
 });
+
+/**
+ * Spec 55 Nachtrag (Agent-am-Brief): render() ist der EINE Dispatch-Ort für den Formularstand
+ * (statt an jeder Mutations-Stelle einzeln) — jeder Render-Zyklus hält die Agenten-Panels aller
+ * drei Scopes aktuell.
+ */
+it('Nachtrag: render() dispatcht den Formularstand-Event bei jedem Render', function () {
+    // Livewires assertDispatched() matcht bei gleichnamigen Events nur den ERSTEN Treffer —
+    // render() dispatcht denselben Namen 3× (je Scope), darum hier nur "kommt an", die
+    // Scope-Filterung selbst ist bereits Ende-zu-Ende in VoiceInterfaceTest.php geprüft
+    // (VoiceModal::formularstandAktualisiert() übernimmt nur den eigenen Scope).
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Event']);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->set('regler.gericht.pax', '40')
+        ->assertDispatched('voice.formularstand-aktualisiert');
+});

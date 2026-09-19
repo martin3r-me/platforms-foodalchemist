@@ -44,8 +44,13 @@ Felder in `$reglerVonAgent[$scope]`. GL-07 bleibt: kein Schreiben ohne den Klick
 „Agent"-Badge an allen 4 UI-Feldern (`sektor`/`pax`/`occasion`/`ziel_vk`,
 `leitplanken.blade.php`) + am Brief-Feld (`erstellen-tab.blade.php`) — verschwindet bei der
 NÄCHSTEN manuellen Änderung desselben Feldes (`Planung\Index::updated()`, gleiches Muster wie
-die bestehende `aktiveVorlage`-Markierung). `level` hat aktuell GAR KEINE UI-Control, nur den
-Regler-Schlüssel — vorbestehende Lücke, kein Spec-55-Fund, darum auch kein Badge dafür.
+die bestehende `aktiveVorlage`-Markierung; Pill-Klicks laufen über `reglerPill()`, das denselben
+Marker direkt löscht — `updated()` sieht reine Server-Writes nie). **Korrektur (Nachtrag,
+2026-09-19):** `level`/„Niveau" hat entgegen der ursprünglichen Doku HIER SEHR WOHL eine
+UI-Control — über den generischen `RICHTUNGEN`-Pill-Loop am Kopf von `leitplanken.blade.php`
+(`reglerPill('scope','level','gehoben')` etc.), nur eben als Pillen statt als `<select>`. Der
+Fehler kam von einem zu engen Grep (nur nach `wire:model="regler...level"` gesucht). Das Badge
+sitzt jetzt generisch im `RICHTUNGEN`-Loop selbst und deckt `level` korrekt mit ab.
 
 **(c) Leitstelle-Zustand als proaktiver Kontext.**
 `VoiceCommandService::planungsKaskadenHinweis()` liest den LETZTEN Kaskaden-Lauf der aktiven
@@ -142,13 +147,12 @@ dem Umbau, keine Anpassung nötig).
 - `tests/Feature/BladeXDataAttributeGuardTest.php`: unverändert, aber wieder mehrfach
   ausgelöst während des Umbaus (s. u.).
 
-## Offene Punkte
+## Offene Punkte (Stand ursprünglicher Merge — siehe „Nachtrag: Agent am Brief" unten für den Fortschritt)
 
-1. **(a) Formular-Lückencheck vs. gesprochener Befehl**: kein Zugriff auf unbestätigten
-   `Planung\Index`-Formularstand aus VoiceModal — siehe oben.
-2. **`level`-Leitplanke hat keine UI-Control** in `leitplanken.blade.php` — vorbestehende
-   Lücke, betrifft auch den neuen Übernahme-Pfad (Wert landet im Regler-Array, aber nirgends
-   sichtbar bis eine Control gebaut wird — auch kein „Agent"-Badge dafür).
+1. ~~**(a) Formular-Lückencheck vs. gesprochener Befehl**~~ — GELÖST im Nachtrag „Agent am
+   Brief" (`voice.formularstand-aktualisiert`-Event, `VoiceCommandService::formularstandHinweis()`).
+2. ~~**`level`-Leitplanke hat keine UI-Control**~~ — FAKTENFEHLER, korrigiert (siehe oben):
+   `level` hat eine UI-Control über den `RICHTUNGEN`-Pill-Loop, nur kein `<select>`.
 3. **Volle Suite**: nur gezielt getestet in diesem Umbau (Absprache cooking-jarvis-03, Last
    durch parallele Sessions) — vor PR/Merge nachholen.
 
@@ -157,3 +161,120 @@ dem Umbau, keine Anpassung nötig).
 Während des Umbaus erneut (mind. 5. Mal diese Session) ein geradeaus-Anführungszeichen in
 einem NEUEN Kommentar direkt im `x-data`-Block von `voice-modal.blade.php` — der
 Wächter-Test (`BladeXDataAttributeGuardTest`) fing es sofort ab, vor jedem Commit gefixt.
+
+---
+
+## Nachtrag: Agent am Brief (2026-09-19, Branch `feat/agent-am-brief`)
+
+Dominiques Browser-Abnahme von Spec 55: das Panel sass oben rechts auf der Board-Ebene, neben
+den Kanban-Spalten — nicht am Ort, wo Brief/Leitplanken entstehen. Zwei Befunde: (1) Panel-Ort
+falsch, (2) „Briefing diktieren" ist heute reines STT (Transkript → Feld), Dominique erwartet
+einen ECHTEN Agenten-Dialog dahinter.
+
+### Panel-Ort (in Arbeit, abgestimmt mit Peter/cooking-jarvis-7d)
+
+Peter baut parallel Paket K (Karten-Layout, Pilot Tab Basisrezept) in genau denselben Dateien
+(`erstellen-tab.blade.php`, `leitplanken.blade.php`). Abstimmung: Peter baut zuerst durch
+(inkl. `<div data-planung-agent-slot="{{ $scope }}"></div>` direkt unter dem Diktat-Include,
+pro Scope-Tab automatisch vorhanden), pusht + PR; DANACH rebase ich `feat/agent-am-brief` und
+hänge `@livewire('foodalchemist.voice-modal', [...], key(...))` in den Slot — bis dahin bleibt
+das Panel technisch noch auf der Board-Ebene (Backend ist unabhängig vom Mount-Ort fertig).
+
+### Diktat wird der Agenten-Einstieg
+
+Nicht in diesem Nachtrag-Batch verändert (blockiert auf denselben Dateikonflikt wie oben) —
+der Plan: Klick auf „Briefing diktieren" startet die Aufnahme WEITERHIN wie bisher, das
+Transkript landet WEITERHIN im Beschreibungsfeld (kein Verlust des bestehenden Verhaltens),
+UND zusätzlich geht es an `VoiceModal::verstehen()`-artige Verarbeitung — sobald der Slot
+existiert, wird `diktat.blade.php`s Recorder-Callback um einen zweiten Aufruf ergänzt.
+
+### Formularstand als Kontext (GELÖST — schliesst die alte Lücke a)
+
+- `Planung\Index::render()` dispatcht bei JEDEM Render das Event `voice.formularstand-aktualisiert`
+  einmal je Creation-Scope (`rezept`/`gericht`/`concept`) — Payload: die auf
+  `AGENT_SCHREIBBARE_REGLER` gefilterten Regler-Werte + der Brief. EIN Dispatch-Ort statt an
+  jeder Mutations-Stelle (`reglerPill`/`updated`/`leitplankenAusBriefing`/...) einzeln.
+- `VoiceModal` bekommt `planungScope` als Mount-Parameter (welcher Scope-Tab „gehört" diesem
+  Panel) + `formularRegler`/`formularBrief` initial, hält sie über
+  `#[On('voice.formularstand-aktualisiert')]` aktuell — filtert auf den EIGENEN Scope, ein
+  Event für einen anderen Tab wird ignoriert.
+- `VoiceCommandService::formularstandHinweis()` baut daraus den Prompt-Block: was ist schon
+  gesetzt, was fehlt (gegen `Planung\Index::MANDATORY_LEITPLANKEN[$scope]`) — der Lückencheck
+  prüft jetzt den ECHTEN Stand, nicht mehr nur den gesprochenen Satz.
+
+### Pflicht-Leitplanken je Scope
+
+`Planung\Index::MANDATORY_LEITPLANKEN`: Basisrezept = `ziel_menge`/`ziel_einheit`
+(Halbfabrikat, kein Teller); Gericht = `pax`/`ziel_portion_g`/`occasion`/`serviceform`;
+Concept teilt sich `pax`/`occasion`/`serviceform` mit Gericht (keine Portion — Concept ist das
+ganze Menü). **„Format" (Sektor/Anlass/Personen) ist bewusst NICHT dabei** — `fmtBrief` ist ein
+flaches Diktat-Ziel ohne eigenen Regler-Satz (kein Creation-Scope wie rezept/gericht/concept),
+volle Format-Unterstützung wäre ein eigenes, grösseres Vorhaben (Regler-Struktur für Format
+bauen) und ist NICHT Teil dieses Nachtrags — offener Punkt.
+
+### Direkt-Set statt Übernehmen-Karte (Dominique-Präzisierung)
+
+Antwortet der Nutzer auf eine Rückfrage des Agenten (oder macht eine eindeutige, unaufgeforderte
+Angabe während eine Session offen ist), setzt der Agent SOFORT, ohne Bestätigen-Klick — die
+Antwort auf eine konkrete Frage IST die Bestätigung. Die Übernehmen-Karte (GL-07, Klick nötig)
+bleibt NUR für unaufgeforderte Vorschläge aus einem längeren, freien Brief-Text.
+
+Zwei Wege, beide gebaut:
+
+1. **Chips** — der Agent stellt im finalen JSON zusätzlich `{"rueckfrage":{"scope":"...",
+   "feld":"<EXAKT einer der gemeldeten fehlenden Schlüssel>"}}`. Das VOKABULAR kommt
+   AUSSCHLIESSLICH vom Server (`VoiceCommandService::regelVokabular()` — dieselben Konstanten,
+   die auch `leitplanken.blade.php` rendert, s. u.), NICHT vom Modell — ein Klick auf einen
+   Chip (`VoiceModal::rueckfrageChip()`) setzt sofort, ein Wert ausserhalb des Vokabulars wird
+   serverseitig abgelehnt. Zahlenfelder (Pax/Menge/Portion/Ziel-VK, kein festes Vokabular)
+   zeigen ein Eingabefeld statt Chips (`rueckfrageZahl()`), geprüft mit `is_numeric`.
+2. **Gesprochene/getippte Antwort** — der Agent mappt die Antwort selbst auf die Regler und
+   gibt `{"struktur":{"scope":"...","felder":{...},"direkt":true}}` — additive Erweiterung des
+   bestehenden `"struktur"`-Protokolls aus dem ursprünglichen Spec-55-Merge (Design-Punkt b).
+   JEDER Feldwert wird trotzdem serverseitig gegen `VoiceCommandService::regelWertGueltig()`
+   geprüft (Enum-Felder gegen ihr Vokabular, Zahlenfelder gegen `is_numeric`) — ein ungültiger
+   Wert wird NICHT übernommen, weder direkt noch als Vorschlag. `direkt` fehlt/ist `false` →
+   unverändertes Verhalten (Übernehmen-Karte, Klick nötig) — reine additive Erweiterung, der
+   ursprüngliche Spec-55-Pfad bleibt für längere Briefings bestehen.
+
+„Rückgängig" (`VoiceModal::komponentenRueckgaengig()`) setzt die betroffenen Felder auf leer
+zurück — bewusst KEIN Wiederherstellen des exakten Vorwerts (dafür müsste der Alt-Wert über
+die gesamte Panel-Lebensdauer mitgeführt werden); der Mensch tippt/spricht den richtigen Wert
+danach neu ein, das Feld ist als „fehlend" wieder erkennbar.
+
+Vokabular-Konstanten (`Planung\Index::SEKTOR_OPTIONEN`/`OCCASION_OPTIONEN`/
+`SERVICEFORM_OPTIONEN`) waren vorher NUR als rohe `<option>`-Listen in `leitplanken.blade.php`
+gepflegt — als Konstanten extrahiert, damit Blade UND Agent aus DERSELBEN Quelle lesen
+(`MENGE_EINHEITEN`/`RICHTUNGEN` gab es als Konstante schon vorher). `AGENT_SCHREIBBARE_REGLER`
+ist die EINE Whitelist-Stelle (vorher an zwei Stellen dieselbe Literal-Liste dupliziert:
+`Planung\Index::voiceKomponentenUebernehmen()` und `VoiceCommandService::verarbeite()`).
+
+### „Vom Agenten"-Badge erweitert
+
+Jetzt auch an `serviceform`/`ziel_menge`/`ziel_einheit`/`ziel_portion_g` (die neuen
+Pflicht-Leitplanken) sowie generisch im `RICHTUNGEN`-Pill-Loop (`convenience`/`level`/
+`bio_praeferenz` — nur `level` wird je vom Agenten gesetzt, die anderen bleiben durch die
+Whitelist automatisch ohne Badge). `reglerPill()` (Server-Write ohne `wire:model`-Sync) löscht
+den Marker jetzt explizit selbst, `updated()` sieht diesen Schreibweg nie.
+
+### Tests
+
+`tests/Feature/VoiceGlobalPolicyTest.php`: Lückencheck gegen echten Formularstand (gesetzt vs.
+fehlend), `regelWertGueltig()` (Enum + Zahl, gültig + ungültig), `struktur.direkt` →
+`komponenten_direkt` mit Wert-Filter, `struktur` ohne `direkt` bleibt `komponenten_uebernahme`
+(Regression), `rueckfrage` → Server-Vokabular (Enum + Zahlenfeld + unbekanntes Feld verworfen).
+`tests/Feature/VoiceInterfaceTest.php`: `rueckfrageChip()`/`rueckfrageZahl()` (gültig + ungültig),
+`komponenten_direkt` wendet sich automatisch an (kein Klick), `komponentenRueckgaengig()`,
+Formularstand-Event nur für den eigenen Scope, Mount-Parameter. `tests/Feature/PlanungLeitstelleTest.php`:
+`render()` dispatcht den Formularstand-Event (Scope-Filterung selbst Ende-zu-Ende in
+VoiceInterfaceTest.php geprüft — Livewires `assertDispatched()` matcht bei gleichnamigen
+Events nur den ersten Treffer, keine verlässliche Prüfung aller drei Scopes in einem Test).
+
+### Offen (Nachtrag)
+
+1. Panel-Umzug in den Erstellen-Tab-Slot — blockiert auf Peters PR (Paket K).
+2. Diktat→Agent-Kopplung — selbe Blockade (dieselben Dateien).
+3. „Format"-Scope hat keine eigene Regler-Struktur — volle Unterstützung der von Dominique
+   genannten Format-Pflichtfelder (Sektor/Anlass/Personen) ist ein separates Vorhaben.
+4. Volle Suite noch nicht gelaufen für diesen Nachtrag (gezielt getestet, Absprache wie beim
+   Hauptmerge — läuft vor PR/Merge).
