@@ -870,22 +870,26 @@ it('Nachtrag: planungScope/formularRegler/formularBrief kommen als Mount-Paramet
 });
 
 /**
- * Spec 55 Nachtrag (Agent-am-Brief): „Briefing diktieren" wird der Agenten-Einstieg —
- * `Planung\Index::briefDiktatUebernehmen()` dispatcht das Transkript zusätzlich zum
- * Feld-Update, dieses Panel verarbeitet es wie einen normalen Sprachbefehl, NUR für den
- * eigenen Scope.
+ * Kurskorrektur „pro Tab genau EINE Diktierfunktion" (2026-09-19): der alte Diktat-Knopf
+ * des Erstellen-Tabs ist raus, das Panel-Mikro übernimmt seine Funktion mit. Richtung ist
+ * jetzt UMGEKEHRT zur vorherigen Fassung dieses Tests (die ging vom alten Diktat-Knopf ZUM
+ * Panel) — `updatedAudio()` selbst dispatcht das Rohtranskript AN `Planung\Index`, die es
+ * ins Beschreibungsfeld anhängt ({@see agentDiktatUebernehmen()} dort). Der Tool-Loop
+ * (verstehen()) läuft unabhängig weiter, siehe Test oben („Roundtrip-Split").
  */
-it('Nachtrag: diktatTranskribiert() verarbeitet das Transkript wie einen Sprachbefehl, NUR für den eigenen Scope', function () {
-    ($this->skript)(['{"action":"final","text":"Verstanden."}']);
+it('Nachtrag: updatedAudio() dispatcht das Rohtranskript an Planung\\Index — nur wenn ein Scope-Tab dranhängt', function () {
+    ($this->skript)(['{"action":"final","text":"ok"}']);
 
-    $modal = Livewire::test(VoiceModal::class, ['planungScope' => 'gericht']);
+    Livewire::test(VoiceModal::class, ['planungScope' => 'gericht'])
+        ->set('audio', UploadedFile::fake()->create('briefing.mp4', 5, 'audio/mp4'))
+        ->assertDispatched('voice.diktat-transkribiert', scope: 'gericht', text: 'Suche BBQ Sauce');
+});
 
-    // Fremder Scope — nichts passiert (kein Tool-Loop, kein Ergebnis).
-    $modal->dispatch('voice.diktat-transkribiert', scope: 'rezept', text: 'Für 40 Personen')
-        ->assertSet('ergebnis', null);
+it('Nachtrag: ohne planungScope kein Diktat-Dispatch (kein Panel-Kontext, z. B. generischer Sprachbefehl)', function () {
+    ($this->skript)(['{"action":"final","text":"ok"}']);
 
-    // Eigener Scope — läuft wie ein normaler Sprachbefehl durch verarbeiteText().
-    $modal->dispatch('voice.diktat-transkribiert', scope: 'gericht', text: 'Für 40 Personen')
-        ->assertSet('ergebnis.text', 'Verstanden.');
+    Livewire::test(VoiceModal::class)
+        ->set('audio', UploadedFile::fake()->create('befehl.mp4', 5, 'audio/mp4'))
+        ->assertNotDispatched('voice.diktat-transkribiert');
 });
 

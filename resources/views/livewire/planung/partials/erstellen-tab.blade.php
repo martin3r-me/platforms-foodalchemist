@@ -32,12 +32,17 @@
         </label>
         <textarea wire:model="eingabe.{{ $scope }}.brief" rows="3" class="{{ $input }} mb-2" placeholder="Constraints, Anlass, Richtung …"></textarea>
 
-        {{-- Phase C2, zweite Ebene: hier ist Sprache EINGABE, nicht Steuerung. Der Recorder
-             liegt im geteilten Baustein — er sitzt an ALLEN Briefing-Feldern der
-             Planungsstelle, nicht nur hier (Dominique: „in der planungsstelle"). --}}
+        {{-- Kurskorrektur „pro Tab genau EINE Diktierfunktion" (2026-09-19): der Recorder
+             dieses Bausteins ist hier AUS — das Agent-Panel darunter ist die einzige
+             Diktierfunktion in diesem Tab (sein eigenes Mikro füllt dasselbe Feld, siehe
+             VoiceModal::updatedAudio() → Planung\Index::agentDiktatUebernehmen()). Der
+             „Leitplanken aus Briefing"-Knopf bleibt (liest nur das Feld, unabhängig vom
+             Recorder). Die fünf flachen Ausgabeform-Briefings (fbBrief/…) haben kein Panel
+             und behalten ihren Recorder unverändert. --}}
         @include('foodalchemist::livewire.planung.partials.diktat', [
             'ziel' => 'eingabe.' . $scope . '.brief',
             'mitLeitplanken' => $scope,
+            'mitRecorder' => false,
         ])
 
         {{-- Paket K / Agent-am-Brief: ein Panel je Scope-Tab (diese Partial wird pro Scope

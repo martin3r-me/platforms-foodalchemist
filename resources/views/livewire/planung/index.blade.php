@@ -790,9 +790,11 @@
                     <input type="text" wire:model="eingabe.concept.titel" class="{{ $input }} mb-3" placeholder="z. B. CHEFS.CORNER — Sommer-Menü" data-planung-titel />
                     <label class="{{ $label ?? 'text-[11px] text-gray-500' }}">Briefing (geht in die Erzeugung)</label>
                     <textarea wire:model="eingabe.concept.brief" rows="4" class="{{ $input }} mb-3" placeholder="Anlass, Zielgruppe, Richtung, Pakete/Buffet-Struktur, Gänge …"></textarea>
-                    @include('foodalchemist::livewire.planung.partials.diktat', ['ziel' => 'eingabe.concept.brief', 'mitLeitplanken' => 'concept'])
+                    @include('foodalchemist::livewire.planung.partials.diktat', ['ziel' => 'eingabe.concept.brief', 'mitLeitplanken' => 'concept', 'mitRecorder' => false])
                     {{-- Agent-am-Brief: Concept nutzt nicht die geteilte erstellen-tab-Partial (eigener
-                       Block, KI-Kopf-Pfad), darum das Panel-Mount hier direkt statt über die Partial. --}}
+                       Block, KI-Kopf-Pfad), darum das Panel-Mount hier direkt statt über die Partial.
+                       Kurskorrektur (2026-09-19): Recorder hier aus, Panel ist die einzige
+                       Diktierfunktion — siehe Kommentar in erstellen-tab.blade.php. --}}
                     @if($agentPanelSichtbar)
                         @livewire('foodalchemist.voice-modal', [
                             'planungsSessionId' => $sessionId,

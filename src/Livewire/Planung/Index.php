@@ -4,6 +4,7 @@ namespace Platform\FoodAlchemist\Livewire\Planung;
 
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Livewire\Attributes\On;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithFileUploads;
@@ -2067,17 +2068,26 @@ class Index extends Component
         $this->diktatSetzen($ziel, $alt === '' ? $text : $alt . ' ' . $text);
         $this->fehler = null;
         $this->meldung = 'Diktat übernommen — bitte gegenlesen.';
+    }
 
-        // Spec 55 Nachtrag (Agent-am-Brief): das Transkript geht ZUSÄTZLICH an den Agenten
-        // (Dominique: „Briefing diktieren" soll der Agenten-Einstieg werden) — NUR für die drei
-        // Creation-Scopes (eingabe.<scope>.brief), die ein eigenes Panel haben; die fünf flachen
-        // Ausgabeform-Ziele (fbBrief/skBrief/spBrief/offerBrief/fmtBrief) haben KEIN Panel.
-        // Feld-Übernahme (oben) bleibt der Kern und läuft IMMER, auch wenn der Agent-Teil
-        // fehlschlägt — nur die geteilte Recorder-Callback wird hier um einen zweiten,
-        // unabhängigen Aufruf ergänzt (kein gemeinsamer try/catch).
-        if (preg_match('#^eingabe\.([^.]+)\.brief$#', $ziel, $m) && in_array($m[1], self::SCOPES, true)) {
-            $this->dispatch('voice.diktat-transkribiert', scope: $m[1], text: $text);
+    /**
+     * Kurskorrektur „pro Tab genau EINE Diktierfunktion" (2026-09-19): das Agent-Panel ist in
+     * den drei Creation-Scopes der einzige Diktier-Weg (der alte Recorder-Knopf dieses Tabs
+     * ist raus, siehe erstellen-tab.blade.php). Sein eigenes Mikro transkribiert selbst
+     * (VoiceModal::updatedAudio()) und liefert das Rohtranskript hier an — Richtung also
+     * UMGEKEHRT zur vorherigen Fassung (die ging vom alten Diktat-Knopf ZUM Panel). Gleiche
+     * Anhängen-nie-überschreiben-Semantik wie briefDiktatUebernehmen()/diktatSetzen().
+     */
+    #[On('voice.diktat-transkribiert')]
+    public function agentDiktatUebernehmen(string $scope, string $text): void
+    {
+        if (! in_array($scope, self::SCOPES, true) || trim($text) === '') {
+            return;
         }
+        $ziel = 'eingabe.' . $scope . '.brief';
+        $alt = trim((string) $this->diktatWert($ziel));
+        $this->diktatSetzen($ziel, $alt === '' ? $text : $alt . ' ' . $text);
+        $this->meldung = 'Diktat übernommen — bitte gegenlesen.';
     }
 
     /** Liest das Whitelist-Ziel; `eingabe.<scope>.brief` ist verschachtelt, der Rest flach. */
