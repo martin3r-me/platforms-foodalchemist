@@ -153,6 +153,8 @@ class Editor extends Component
                 // Aushang immer Plan-Startwoche + Mittag ein.
                 'mahlzeit' => $this->mahlzeit,
                 'montag' => $this->montag,
+                // Spec 57 · E9: statt einer festen Woche immer die laufende (Montags-Job erneuert).
+                'laufende_woche' => $this->presentationLaufendeWoche,
             ]);
             $this->presentationLoadedId = null;
             $this->presentationHinweis = 'Veröffentlicht — der Aushang-Link ist aktiv.';
@@ -288,6 +290,23 @@ class Editor extends Component
     public string $mengenFaktor = '1';
 
     public ?string $mengenHinweis = null;
+
+    // ── Spec 57 · Paket 4: Bedarf (erst auf Knopfdruck — die Stücklisten-Auflösung ist teuer) ──
+    public bool $bedarfAn = false;
+
+    /** null = ganze Woche, sonst ein Tag (Y-m-d). */
+    public ?string $bedarfTag = null;
+
+    // ── Spec 57 · Paket 6: Druck & Export ──
+    public ?string $ausgabeTag = null;
+
+    /** Untypisiert: Select liefert "" für „alle Linien“. */
+    public $ausgabeLinie = '';
+
+    public bool $ausgabePreise = false;
+
+    /** Spec 57 · E9: Aushang zeigt immer die laufende Woche (wöchentlich neu eingefroren). */
+    public bool $presentationLaufendeWoche = false;
 
     // Stufe C: Rückmeldung der Produktions-Übergabe
     public ?string $prodHinweis = null;
@@ -702,6 +721,19 @@ class Editor extends Component
         }
     }
 
+    // ── Spec 57 · Paket 4: Bedarf ──────────────────────────────────────────
+
+    public function bedarfBerechnen(): void
+    {
+        $this->bedarfAn = true;
+    }
+
+    public function bedarfTagSetzen(?string $tag): void
+    {
+        $this->bedarfTag = $tag !== null && $tag !== '' ? Carbon::parse($tag)->format('Y-m-d') : null;
+        $this->bedarfAn = true;
+    }
+
     /** Eintrag nur, wenn er zu DIESEM Plan gehört (Payload-IDs aus dem Browser nie blind nehmen). */
     private function eintragDesPlans(SpeiseplanService $svc, int $id): ?\Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplanEintrag
     {
@@ -900,6 +932,7 @@ class Editor extends Component
             $this->presentationGueltigBis = $sp->presentation_expires_at?->format('Y-m-d');
             $this->presentationCtaText = $s['cta']['text'] ?? null;
             $this->presentationCtaLink = $s['cta']['link'] ?? null;
+            $this->presentationLaufendeWoche = (bool) ($s['laufende_woche'] ?? false);
             $this->presentationLoadedId = $sp->id;
         }
 
@@ -993,6 +1026,27 @@ class Editor extends Component
         $mengen = $sp !== null ? $svc->mengenMatrix($team, $sp, $this->mahlzeit, $montag, $outlet) : null;
         $zielWochen = collect([-4, -3, -2, -1, 1, 2, 3, 4, 5, 6, 7, 8])
             ->map(fn (int $w) => $montag->copy()->addWeeks($w))->all();
+        // Spec 57 · Paket 4: Bedarf nur, wenn angefordert (Stücklisten-Auflösung bis GP-Ebene).
+        $bedarf = $sp !== null && $this->bedarfAn
+            ? $svc->wochenBedarf($team, $sp, $this->mahlzeit, $montag, $this->bedarfTag)
+            : null;
+        // Spec 57 · Paket 6: Druck-Links der sichtbaren Woche/Mahlzeit (Tag Standard = erster Öffnungstag).
+        $ausgabeTag = $this->ausgabeTag !== null && collect($wochenTage)->contains(fn ($t) => $t->format('Y-m-d') === $this->ausgabeTag)
+            ? $this->ausgabeTag
+            : ($wochenTage[0] ?? $montag)->format('Y-m-d');
+        $ausgabeLinks = [];
+        if ($sp !== null) {
+            $basis = ['id' => $sp->id, 'mahlzeit' => $this->mahlzeit, 'montag' => $montag->format('Y-m-d')] + ($this->ausgabePreise ? ['preise' => 1] : []);
+            $linie = (int) $this->ausgabeLinie > 0 ? ['linie' => (int) $this->ausgabeLinie] : [];
+            $ausgabeLinks = [
+                'woche' => route('foodalchemist.speiseplan.dokument', $basis),
+                'tag' => route('foodalchemist.speiseplan.dokument', $basis + ['format' => 'tag', 'tag' => $ausgabeTag]),
+                'schild' => route('foodalchemist.speiseplan.dokument', $basis + ['format' => 'schild', 'tag' => $ausgabeTag] + $linie),
+                'liste_woche' => route('foodalchemist.speiseplan.dokument', $basis + ['format' => 'liste']),
+                'liste_tag' => route('foodalchemist.speiseplan.dokument', $basis + ['format' => 'liste', 'tag' => $ausgabeTag]),
+                'csv' => route('foodalchemist.speiseplan.dokument', ['id' => $sp->id, 'mahlzeit' => $this->mahlzeit, 'montag' => $montag->format('Y-m-d'), 'format' => 'csv']),
+            ];
+        }
 
         return view('foodalchemist::livewire.speiseplan.editor', [
             'presentationInfo' => $presentationInfo,
@@ -1037,6 +1091,9 @@ class Editor extends Component
             'detailKennzahlen' => $detailKennzahlen,
             'mengen' => $mengen,
             'zielWochen' => $zielWochen,
+            'bedarf' => $bedarf,
+            'ausgabeLinks' => $ausgabeLinks,
+            'ausgabeTagEffektiv' => $ausgabeTag,
             'budget' => $sp !== null && $zk !== null && $kosten !== null ? $svc->budgetAmpel($sp, $zk, $kosten) : null,
             'kostformen' => $sp !== null ? $svc->kostformAbdeckung($sp, $this->mahlzeit, $montag) : [],
             'kennzeichnung' => $sp !== null ? $svc->wochenKennzeichnung($sp, $this->mahlzeit, $montag) : null,

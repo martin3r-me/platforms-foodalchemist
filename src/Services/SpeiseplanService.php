@@ -1501,20 +1501,7 @@ class SpeiseplanService
                 continue;
             }
 
-            $targets = [];
-            foreach ($eintraege as $e) {
-                $pax = $this->effektivePax($e, $plan);
-                $ref = 'menuplan:' . $plan->id . ':' . $ymd . ':' . $e->id;
-                if ($e->concept_id !== null) {
-                    $targets[] = ['concept_id' => (int) $e->concept_id, 'persons' => $pax, 'source_ref' => $ref];
-                } elseif ($e->sales_recipe_id !== null) {
-                    $targets[] = ['recipe_id' => (int) $e->sales_recipe_id, 'portions' => $pax, 'source_ref' => $ref];
-                } elseif ($e->package_id !== null) {
-                    foreach ($this->eintragGerichte($e) as $g) {
-                        $targets[] = ['recipe_id' => (int) $g->id, 'portions' => $pax, 'source_ref' => $ref . ':d' . $g->id];
-                    }
-                }
-            }
+            $targets = $this->produktionsZiele($plan, $eintraege, $ymd);
             if ($targets === []) {
                 continue;
             }
@@ -1547,6 +1534,171 @@ class SpeiseplanService
         }
 
         return ['auftraege' => $auftraege, 'aktualisiert' => $aktualisiert, 'gesperrt' => $gesperrt, 'ziele' => $zieleGesamt, 'tage' => $tage];
+    }
+
+    /**
+     * Produktions-Ziele der Einträge eines Tages — EINE Zielform für Produktion und Bedarf:
+     * Concept → persons, VK-Gericht → portions, Paket → seine Gerichte je portions; Menge =
+     * {@see effektivePax}. `source_ref` bleibt je Eintrag stabil (Idempotenz der Produktion).
+     *
+     * @param  iterable<FoodAlchemistSpeiseplanEintrag>  $eintraege
+     * @return list<array<string, mixed>>
+     */
+    private function produktionsZiele(FoodAlchemistSpeiseplan $plan, iterable $eintraege, string $ymd): array
+    {
+        $targets = [];
+        foreach ($eintraege as $e) {
+            $pax = $this->effektivePax($e, $plan);
+            $ref = 'menuplan:' . $plan->id . ':' . $ymd . ':' . $e->id;
+            if ($e->concept_id !== null) {
+                $targets[] = ['concept_id' => (int) $e->concept_id, 'persons' => $pax, 'source_ref' => $ref];
+            } elseif ($e->sales_recipe_id !== null) {
+                $targets[] = ['recipe_id' => (int) $e->sales_recipe_id, 'portions' => $pax, 'source_ref' => $ref];
+            } elseif ($e->package_id !== null) {
+                foreach ($this->eintragGerichte($e) as $g) {
+                    $targets[] = ['recipe_id' => (int) $g->id, 'portions' => $pax, 'source_ref' => $ref . ':d' . $g->id];
+                }
+            }
+        }
+
+        return $targets;
+    }
+
+    // ── Spec 57 · Paket 4: Bedarf (Zutaten aus Plan × Mengen) ────────────────
+
+    /**
+     * Zutatenbedarf der Woche (oder eines Tages) einer Mahlzeit: dieselben Ziele wie die
+     * Produktion ({@see produktionsZiele}) durch {@see PlanungsblattService::einkaufsliste} —
+     * GP-Ebene, Basiseinheit, Lead-Lieferantenartikel, ganze Gebinde. Keine eigene Rechnung.
+     * Nur lesend: die Übergabe an den Einkauf läuft über die Produktion (Spec 57 · E7).
+     *
+     * @return array{tage: list<string>, ziele: int, liste: ?array}
+     */
+    public function wochenBedarf(Team $team, FoodAlchemistSpeiseplan $plan, string $mahlzeit, Carbon $montag, ?string $tag = null): array
+    {
+        $mahlzeit = array_key_exists($mahlzeit, self::MAHLZEITEN) ? $mahlzeit : 'mittag';
+        $raster = $this->wochenRaster($plan, $mahlzeit, $montag);
+        $tage = array_map(fn (Carbon $t) => $t->format('Y-m-d'), $this->wochenTage($plan, $montag));
+        if ($tag !== null) {
+            $tage = array_values(array_intersect($tage, [Carbon::parse($tag)->format('Y-m-d')]));
+        }
+        $ziele = [];
+        foreach ($tage as $ymd) {
+            $eintraege = collect($raster)->flatMap(fn ($proLinie) => $proLinie[$ymd] ?? []);
+            foreach ($this->produktionsZiele($plan, $eintraege, $ymd) as $z) {
+                unset($z['source_ref']);
+                $ziele[] = $z;
+            }
+        }
+
+        return [
+            'tage' => $tage,
+            'ziele' => count($ziele),
+            'liste' => $ziele !== [] ? app(PlanungsblattService::class)->einkaufsliste($team, $ziele) : null,
+        ];
+    }
+
+    // ── Spec 57 · Paket 6: Ausgabe-Formate (Tischaufsteller, Linienschild, Liste, CSV) ──
+
+    public const AUSGABE_FORMATE = ['woche', 'tag', 'schild', 'liste'];
+
+    /**
+     * Daten für die Druck-Formate neben dem Wochenaushang. Baut auf {@see dokumentDaten}
+     * (Codes, Legende, Kostformen) und {@see zellenKennzahlen} (Titel/Wording, Diät, VK,
+     * Komponenten) auf — keine zweite Kennzeichnungs- oder Preislogik.
+     *
+     * - `tag`: ein Tag, alle Linien (Tischaufsteller)
+     * - `schild`: ein Tag, je Linie ein Schild (optional nur eine Linie), mit Preis nur wenn gewünscht
+     * - `liste`: Allergen- und Komponentenliste der Woche oder eines Tages (für den Ordner an der Ausgabe)
+     *
+     * @return array<string, mixed>
+     */
+    public function ausgabeFormat(Team $team, FoodAlchemistSpeiseplan $plan, string $format, string $mahlzeit = 'mittag', ?string $montag = null, ?string $tag = null, ?int $lineId = null, ?\Platform\FoodAlchemist\Models\FoodAlchemistOutlet $outlet = null, bool $mitPreis = false): array
+    {
+        $format = in_array($format, self::AUSGABE_FORMATE, true) ? $format : 'woche';
+        $dok = $this->dokumentDaten($team, $plan, $mahlzeit, $montag ?? $tag, false, false, $outlet, $mitPreis);
+        if ($format === 'woche') {
+            return $dok + ['format' => 'woche'];
+        }
+        $mo = Carbon::parse($dok['montag']);
+        $zk = $this->zellenKennzahlen($team, $plan, $dok['mahlzeit'], $mo, $outlet, $format === 'liste');
+        $raster = $this->wochenRaster($plan, $dok['mahlzeit'], $mo);
+        $tageDerWoche = array_column($dok['tage'], 'label', 'ymd');
+        $tagYmd = $tag !== null ? Carbon::parse($tag)->format('Y-m-d') : null;
+        $tage = $tagYmd !== null && isset($tageDerWoche[$tagYmd]) ? [$tagYmd] : array_keys($tageDerWoche);
+        if ($format !== 'liste' && $tagYmd === null) {
+            $tage = array_slice($tage, 0, 1);   // Tischaufsteller/Schild: ohne Tag der erste Öffnungstag
+        }
+
+        $linien = $plan->lines->filter(fn ($l) => $l->giltFuerMahlzeit($dok['mahlzeit']) && ($lineId === null || (int) $l->id === $lineId))->values();
+        $bloecke = [];
+        foreach ($tage as $ymd) {
+            $zeilen = [];
+            foreach ($linien as $l) {
+                $eintraege = [];
+                foreach ($raster[(int) $l->id][$ymd] ?? [] as $e) {
+                    $k = $zk['eintraege'][$e->id] ?? [];
+                    $eintraege[] = [
+                        'titel' => $k['titel'] ?? $e->inhaltName(),
+                        'untertitel' => $k['untertitel'] ?? null,
+                        'codes' => $k['codes'] ?? [],
+                        'diaet' => $k['diaet'] ?? [],
+                        'vk' => $mitPreis ? ($k['vk'] ?? null) : null,
+                        'komponenten' => $k['komponenten'] ?? [],
+                        'kcal' => $k['kcal'] ?? null,
+                    ];
+                }
+                if ($eintraege !== [] || $format === 'schild') {
+                    $zeilen[] = ['linie' => $l->name, 'color' => $l->color, 'plu' => $l->plu, 'role' => $l->role, 'eintraege' => $eintraege];
+                }
+            }
+            $bloecke[] = ['ymd' => $ymd, 'label' => $tageDerWoche[$ymd] ?? $ymd, 'zeilen' => $zeilen];
+        }
+
+        return [
+            'format' => $format, 'plan' => $plan, 'mahlzeitLabel' => $dok['mahlzeitLabel'], 'kwLabel' => $dok['kwLabel'],
+            'bloecke' => $bloecke, 'legende' => $dok['legende'], 'mitPreis' => $mitPreis, 'erzeugt' => $dok['erzeugt'],
+            'rollen' => FoodAlchemistSpeiseplanLinie::ROLLEN,
+        ];
+    }
+
+    /**
+     * CSV-Zeilen der Woche (eine Mahlzeit): je Eintrag Datum, Tag, Mahlzeit, Linie, Kassen-Nr.,
+     * Gericht, Kennzeichnung, Essen, VK netto, EK, Wareneinsatz. Für Controlling und Kasse.
+     *
+     * @return list<list<string|int|float|null>>
+     */
+    public function csvZeilen(Team $team, FoodAlchemistSpeiseplan $plan, string $mahlzeit, Carbon $montag, ?\Platform\FoodAlchemist\Models\FoodAlchemistOutlet $outlet = null): array
+    {
+        $mahlzeit = array_key_exists($mahlzeit, self::MAHLZEITEN) ? $mahlzeit : 'mittag';
+        $zk = $this->zellenKennzahlen($team, $plan, $mahlzeit, $montag, $outlet);
+        $linien = $plan->lines->keyBy(fn ($l) => (int) $l->id);
+        $tage = array_map(fn (Carbon $t) => $t->format('Y-m-d'), $this->wochenTage($plan, $montag));
+        $zahl = fn ($v, int $d = 2) => $v === null ? '' : number_format((float) $v, $d, ',', '');
+
+        $zeilen = [['Datum', 'Tag', 'Mahlzeit', 'Linie', 'Kassen-Nr.', 'Gericht', 'Kennzeichnung', 'Essen', 'VK netto', 'EK', 'Wareneinsatz %']];
+        foreach ($this->wochenRaster($plan, $mahlzeit, $montag) as $lineId => $proTag) {
+            foreach ($proTag as $ymd => $liste) {
+                if (! in_array($ymd, $tage, true)) {
+                    continue;
+                }
+                foreach ($liste as $e) {
+                    $k = $zk['eintraege'][$e->id] ?? [];
+                    $l = $linien->get((int) $lineId);
+                    $zeilen[] = [
+                        Carbon::parse($ymd)->format('d.m.Y'), self::WOCHENTAGE[Carbon::parse($ymd)->isoWeekday()],
+                        self::MAHLZEITEN[$mahlzeit], $l?->name ?? 'Ohne Linie', $l?->plu ?? '',
+                        $this->eintragName($e), implode(' ', $k['codes'] ?? []), (int) ($k['pax'] ?? 0),
+                        $zahl($k['vk'] ?? null), $zahl($k['ek'] ?? null), $zahl($k['wes'] ?? null, 1),
+                    ];
+                }
+            }
+        }
+        // Sortiert nach Datum, dann Linie — so liest sich die Datei wie der Plan.
+        $kopf = array_shift($zeilen);
+        usort($zeilen, fn ($a, $b) => [Carbon::createFromFormat('d.m.Y', $a[0])->format('Ymd'), $a[3]] <=> [Carbon::createFromFormat('d.m.Y', $b[0])->format('Ymd'), $b[3]]);
+
+        return [$kopf, ...$zeilen];
     }
 
     // ── Spec 31 / Stufe D: DGE-Nährwertbilanz + Abwechslung ──────────────────

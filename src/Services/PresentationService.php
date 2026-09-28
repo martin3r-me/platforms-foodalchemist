@@ -363,9 +363,14 @@ class PresentationService
             $clean['tokens'] = $settings['tokens'];
         }
         // Speiseplan: welche Mahlzeit/Woche der Aushang einfriert (zum Snapshot-Zeitpunkt bindend).
+        // Spec 57 · E9: „laufende Woche“ friert die AKTUELLE Woche ein; der wöchentliche Befehl
+        // foodalchemist:speiseplan-aushang-rollieren erneuert den Snapshot jeden Montag.
         if ($type === self::TYPE_SPEISEPLAN) {
             $clean['mahlzeit'] = (string) ($settings['mahlzeit'] ?? 'mittag');
-            $clean['montag'] = $settings['montag'] ?? null;
+            $clean['laufende_woche'] = (bool) ($settings['laufende_woche'] ?? false);
+            $clean['montag'] = $clean['laufende_woche']
+                ? now()->startOfWeek(\Illuminate\Support\Carbon::MONDAY)->format('Y-m-d')
+                : ($settings['montag'] ?? null);
         }
         $designSource = $this->cleanDesignSource($settings['design'] ?? ($entity->presentation_design ?? 'editorial'));
 
@@ -1354,7 +1359,10 @@ class PresentationService
         }
         if ($type === self::TYPE_SPEISEPLAN) {
             $out['mahlzeit'] = (string) ($settings['mahlzeit'] ?? 'mittag');
-            $out['montag'] = $settings['montag'] ?? null;
+            $out['laufende_woche'] = (bool) ($settings['laufende_woche'] ?? false);
+            $out['montag'] = $out['laufende_woche']
+                ? now()->startOfWeek(\Illuminate\Support\Carbon::MONDAY)->format('Y-m-d')
+                : ($settings['montag'] ?? null);
         }
 
         return $out;
