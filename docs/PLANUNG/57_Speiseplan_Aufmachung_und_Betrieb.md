@@ -367,7 +367,7 @@ widersprechen. Präzisierungen beim Bau:
 | Welle | Pakete | Branch | Stand |
 |---|---|---|---|
 | A | 0, 1, 2, 9, 10.1 | `feat/spec57-welle-a` | gebaut, Tests geschrieben (`SpeiseplanAusgabestelleTest`), lokal nur `php -l` und Blade-Kompilierung — Pest-Lauf steht aus (E12) |
-| B | 5, 3 | — | offen |
+| B | 5, 3 | `feat/spec57-welle-b` | gebaut, Tests geschrieben (`SpeiseplanUmbauMengenTest`), Pest-Lauf steht aus |
 | C | 4, 6 | — | offen |
 | D | 7, 8, 10.2 | — | offen |
 
@@ -382,3 +382,8 @@ Welle A im Detail:
 - Paket 2: Migration `2026_09_28_000001` (Rolle, PLU, Preis-Modus, Zielband, Standard-Essen, Dauerangebot, Mahlzeit), Linien-Tab, Linien-Ampel in der Rail, Budget je Gast (`budgetAmpel`).
 - Paket 9: `opening_days` am Plan; Matrix, Aushang, Produktion, Aggregate und Kaskade nutzen `wochenTage()`.
 - Paket 10.1: `vollKaskadePruefen` + Bestätigungsfeld; Backlog #54 (keine verwaiste Session) behoben.
+
+Welle B im Detail:
+- Paket 5: `verschiebeEintrag`, `ersetzeEintrag`, `kopiereEintrag`, `kopiereWoche`, `eintragsListe` im Service. Editor: Drag & Drop (Alpine, Muster wie Speisekarte) und Eintrag-Detail als Tastatur-Weg (Ersetzen über den Picker, Verschieben, auf Tage kopieren, Entfernen), „Woche kopieren“ (ersetzen oder zusammenführen, Pax optional).
+- Paket 3: `mengenMatrix`, `setzeZellenPax`, `uebernehmeVorwoche`, `skaliereWoche`; Tab „Mengen“ mit Vorwoche, Ø 4 Wochen (Planwerte), Summe, Anteil, WES, Ø VK, Umsatz.
+- MCP neu: `speiseplan_eintraege.GET`, `speiseplan_eintraege.PUT` (nur Entwürfe, E6), `speiseplan.WOCHE_KOPIEREN` (confirm), `speiseplan_mengen.GET`, `speiseplan_mengen.PUT`. Reife: `eintrag_ohne_linie` zeigt auf `speiseplan_eintraege.PUT`.

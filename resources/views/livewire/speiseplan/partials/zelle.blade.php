@@ -21,15 +21,20 @@
 ])
 @php($bandText = ($band['min'] !== null ? number_format((float) $band['min'], 0) . '–' : 'bis ') . number_format((float) $band['max'], 0) . ' %' . (($band['quelle'] ?? '') === 'team' ? ', Team-Ziel' : ''))
 @php($wesText = $wes !== null ? number_format((float) $wes, 0, ',', '.') . ' %' : '—')
-<div wire:key="e-{{ $e->id }}" class="group rounded-lg border border-white/10 px-2 py-1.5 text-left text-gray-100"
-     style="background: {{ $farbe ? $farbe . '26' : 'rgba(255,255,255,0.06)' }}" data-sp-zelle="{{ $e->id }}">
+{{-- Spec 57 · Paket 5: ziehbar (Drop-Ziel = Zelle in der Matrix, Alpine `dragId`), Titel öffnet das Detail
+     (Ersetzen/Verschieben/Kopieren) — auch per Tastatur. --}}
+<div wire:key="e-{{ $e->id }}" class="group rounded-lg border px-2 py-1.5 text-left text-gray-100 {{ ($detailId ?? null) === $e->id ? 'border-violet-400/60' : 'border-white/10' }}"
+     style="background: {{ $farbe ? $farbe . '26' : 'rgba(255,255,255,0.06)' }}" data-sp-zelle="{{ $e->id }}"
+     draggable="true" x-on:dragstart="dragId = {{ $e->id }}" x-on:dragend="dragId = null"
+     x-bind:class="dragId === {{ $e->id }} ? 'opacity-40' : ''">
     <div class="flex items-start gap-1">
-        <div class="flex-1 min-w-0">
-            <div class="text-[12px] font-medium leading-snug break-words">{{ $titel }}</div>
+        <span class="cursor-move select-none text-gray-500 shrink-0 text-[10px] leading-4" aria-hidden="true" title="Ziehen zum Verschieben">⠿</span>
+        <button type="button" wire:click="eintragOeffnen({{ $e->id }})" class="flex-1 min-w-0 text-left" aria-label="{{ $titel }} — Details, ersetzen, verschieben, kopieren">
+            <span class="block text-[12px] font-medium leading-snug break-words">{{ $titel }}</span>
             @if(! empty($k['untertitel']))
-                <div class="text-[10.5px] text-gray-400 leading-snug line-clamp-2">{{ $k['untertitel'] }}</div>
+                <span class="block text-[10.5px] text-gray-400 leading-snug line-clamp-2">{{ $k['untertitel'] }}</span>
             @endif
-        </div>
+        </button>
         <button type="button" wire:click="eintragRaus({{ $e->id }})" wire:confirm="Eintrag entfernen?"
                 class="opacity-60 group-hover:opacity-100 focus:opacity-100 text-gray-300 hover:text-red-400 shrink-0 text-[11px] leading-none px-0.5"
                 aria-label="{{ $titel }} entfernen">✕</button>

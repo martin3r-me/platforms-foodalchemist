@@ -83,8 +83,9 @@ class SpeiseplanReifeAdapter extends ContainerReifeAdapter
             }
             $ohneLinie = $eintraege->filter(fn ($e) => $e->line_id === null || ! $linienIds->contains((int) $e->line_id));
             if ($ohneLinie->isNotEmpty()) {
+                // Spec 57 · Paket 5: lösbar über speiseplan_eintraege.PUT (line_id setzen).
                 $luecken[] = $this->luecke('eintrag_ohne_linie', 'wichtig',
-                    $ohneLinie->count() . ' Einträge hängen an keiner Linie.', null) + ['entry_ids' => $ids($ohneLinie)];
+                    $ohneLinie->count() . ' Einträge hängen an keiner Linie.', 'foodalchemist.speiseplan_eintraege.PUT') + ['entry_ids' => $ids($ohneLinie)];
             }
         }
 
@@ -123,7 +124,7 @@ class SpeiseplanReifeAdapter extends ContainerReifeAdapter
             ['code' => 'keine_eintraege', 'schwere' => 'blockiert', 'wie' => $eintraege],
             ['code' => 'eintrag_ohne_ziel', 'schwere' => 'blockiert', 'wie' => $eintraege],
             ['code' => 'linie_leer', 'schwere' => 'hinweis', 'wie' => $eintraege, 'bedingt' => 'linien_und_eintraege'],
-            ['code' => 'eintrag_ohne_linie', 'schwere' => 'wichtig', 'wie' => null, 'bedingt' => 'linien_und_eintraege'],
+            ['code' => 'eintrag_ohne_linie', 'schwere' => 'wichtig', 'wie' => 'foodalchemist.speiseplan_eintraege.PUT', 'bedingt' => 'linien_und_eintraege'],
         ];
     }
 
