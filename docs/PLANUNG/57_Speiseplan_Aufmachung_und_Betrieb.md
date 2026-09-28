@@ -1,6 +1,6 @@
 # 57 · Speiseplan: Aufmachung und Betrieb
 
-**Stand 2026-09-28 · Branch `docs/spec57-speiseplan-aufmachung` off main (`02e2dfc7`) · Status: Planung, nichts gebaut**
+**Stand 2026-09-28 · Branch `docs/spec57-speiseplan-aufmachung` off main (`02e2dfc7`) · Status: in Umsetzung (Wellen A–D, siehe „Umsetzungsstand“ am Ende)**
 
 Klickbarer Entwurf mit Beispieldaten: <https://claude.ai/artifact/JoRo6cwY5XWPmR5UXQYJru>
 (privat, Freigabe über das Share-Menü). Die Ideen-Nummern im Entwurf entsprechen den Paketen unten.
@@ -339,6 +339,20 @@ Jede Welle ist ein eigener Branch und PR. Die Doku wird je Welle mitgezogen: `do
 - keine Übersetzungsdomäne
 - nichts an Core oder UI-Modul; Team-Hierarchie wird genutzt, nicht verändert
 
+## Entscheidungen (Max, 2026-09-28)
+
+Die Vorschläge aus der Tabelle oben gelten als entschieden; Dominique kann im jeweiligen PR
+widersprechen. Präzisierungen beim Bau:
+
+- **E3:** keine geratene Tierart. Aus vorhandenen Flags: vegan, vegetarisch, Schwein, Rind, Fisch
+  (Allergen „Fisch“ enthalten); alles andere mit Fleisch heißt „Fleisch“ (Tierart nicht gepflegt).
+- **E5:** Ausrollen lässt belegte Zellen stehen (wie die Oberfläche es verspricht), optional
+  „ersetzen“. Woche kopieren ersetzt standardmäßig, optional „zusammenführen“.
+- **E6:** Service und UI erlauben Änderungen in jedem Status; MCP bleibt bewusst strenger (nur
+  Entwürfe), weil Agenten Vorschläge machen und nicht in laufende Pläne schreiben.
+- **Englisch:** zurückgestellt, eigene Spec.
+- **E10:** Vorlage für Betriebe = verknüpfte Kopie je Betrieb im selben Team, mit Abgleich.
+
 ## Definition of Done je Paket
 
 - Schreibpfad komplett über `SpeiseplanService` (Livewire und MCP ohne eigene Fachlogik)
@@ -347,3 +361,24 @@ Jede Welle ist ein eigener Branch und PR. Die Doku wird je Welle mitgezogen: `do
 - MCP-Tools und Matrix 26 mitgezogen, `docs/speiseplan.md` aktualisiert
 - `php -l`, Blade kompiliert, `npm run build`, passende Pest-Suite grün (E12)
 - Abnahme auf demo durch Dominique
+
+## Umsetzungsstand
+
+| Welle | Pakete | Branch | Stand |
+|---|---|---|---|
+| A | 0, 1, 2, 9, 10.1 | `feat/spec57-welle-a` | gebaut, Tests geschrieben (`SpeiseplanAusgabestelleTest`), lokal nur `php -l` und Blade-Kompilierung — Pest-Lauf steht aus (E12) |
+| B | 5, 3 | — | offen |
+| C | 4, 6 | — | offen |
+| D | 7, 8, 10.2 | — | offen |
+
+Welle A im Detail:
+- 0.1 `addEintrag` prüft Inhalt (genau einer, sichtbar) im Service — Editor und MCP laufen darüber.
+- 0.2 `wocheAnProduktion` aktualisiert offene Aufträge statt zu verdoppeln, lässt laufende stehen.
+- 0.3 Ausrollen je Zelle, Pax wandern mit, optional „ersetzen“.
+- 0.4 Veröffentlichen übergibt Woche und Mahlzeit des Editors.
+- 0.5 `detail()` lädt die Gerichte vollständig (Wording im Aushang).
+- 0.8 Reife-Adapter zeigt auf `speiseplaene.PUT`; 0.9 `veggieCheck` entfernt, N+1 in `inhaltName()` behoben.
+- Paket 1: `SpeiseplanService::zellenKennzahlen()` + `partials/zelle.blade.php`, Dichte kompakt/detail, Tagesfuß.
+- Paket 2: Migration `2026_09_28_000001` (Rolle, PLU, Preis-Modus, Zielband, Standard-Essen, Dauerangebot, Mahlzeit), Linien-Tab, Linien-Ampel in der Rail, Budget je Gast (`budgetAmpel`).
+- Paket 9: `opening_days` am Plan; Matrix, Aushang, Produktion, Aggregate und Kaskade nutzen `wochenTage()`.
+- Paket 10.1: `vollKaskadePruefen` + Bestätigungsfeld; Backlog #54 (keine verwaiste Session) behoben.

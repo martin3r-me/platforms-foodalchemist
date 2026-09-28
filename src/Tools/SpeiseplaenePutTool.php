@@ -13,7 +13,7 @@ use Platform\FoodAlchemist\Services\SpeiseplanService;
 class SpeiseplaenePutTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
 {
     private const FELDER = ['name', 'start_date', 'cycle_weeks', 'min_abstand_tage', 'description', 'note',
-        'default_pax', 'budget_wareneinsatz', 'outlet_id'];
+        'default_pax', 'budget_wareneinsatz', 'outlet_id', 'opening_days'];
 
     public function getName(): string
     {
@@ -23,7 +23,8 @@ class SpeiseplaenePutTool extends FoodAlchemistTool implements ToolContract, Too
     public function getDescription(): string
     {
         return 'Bearbeitet die Stammdaten eines team-eigenen Speiseplans (felder: name, start_date, cycle_weeks, '
-            . 'min_abstand_tage, default_pax, budget_wareneinsatz, outlet_id). Status via speiseplaene.STATUS.';
+            . 'min_abstand_tage, default_pax, budget_wareneinsatz, outlet_id, opening_days = ISO-Wochentage 1–7, '
+            . 'z. B. [1,2,3,4,5,6]; leer = Mo–Fr). Status via speiseplaene.STATUS.';
     }
 
     public function getSchema(): array

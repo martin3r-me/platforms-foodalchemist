@@ -44,6 +44,7 @@ class SpeiseplaeneGetTool extends FoodAlchemistTool implements ToolContract, Too
                 'status' => $plan->status instanceof \BackedEnum ? $plan->status->value : $plan->status,
                 'start_date' => $plan->start_date instanceof \DateTimeInterface ? $plan->start_date->format('Y-m-d') : $plan->start_date,
                 'cycle_weeks' => $plan->cycle_weeks,
+                'opening_days' => $plan->oeffnungstage(),
                 'default_pax' => $plan->default_pax,
                 'budget_wareneinsatz' => $plan->budget_wareneinsatz !== null ? (float) $plan->budget_wareneinsatz : null,
                 'outlet_id' => $plan->outlet_id !== null ? (int) $plan->outlet_id : null,
@@ -52,6 +53,11 @@ class SpeiseplaeneGetTool extends FoodAlchemistTool implements ToolContract, Too
                 'linien' => $plan->lines->sortBy('sort_order')->values()->map(fn ($l) => [
                     'id' => (int) $l->id, 'name' => $l->name, 'color' => $l->color,
                     'is_vegetarian' => (bool) $l->is_vegetarian, 'sort_order' => (int) $l->sort_order,
+                    // Spec 57 · Paket 2
+                    'role' => $l->role, 'meal' => $l->meal, 'plu' => $l->plu,
+                    'price_mode' => $l->price_mode ?: 'auto', 'price_value' => $l->price_value,
+                    'target_wes_min_pct' => $l->target_wes_min_pct, 'target_wes_max_pct' => $l->target_wes_max_pct,
+                    'default_pax' => $l->default_pax, 'is_standing' => (bool) $l->is_standing,
                 ])->all(),
             ],
         ]);

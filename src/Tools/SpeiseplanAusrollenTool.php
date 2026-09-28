@@ -22,7 +22,8 @@ class SpeiseplanAusrollenTool extends FoodAlchemistTool implements ToolContract,
 
     public function getDescription(): string
     {
-        return 'Rollt den Speiseplan-Zyklus bis zu einem Enddatum aus (erzeugt die Einträge der Folgewochen). '
+        return 'Rollt den Speiseplan-Zyklus bis zu einem Enddatum aus (erzeugt die Einträge der Folgewochen, inkl. Pax). '
+            . 'Belegte Zellen (Datum × Mahlzeit × Linie) bleiben unberührt, außer belegte_ersetzen=true. '
             . 'Umfangreicher Massen-Insert — erfordert confirm=true. bis_datum als YYYY-MM-DD.';
     }
 
@@ -33,6 +34,7 @@ class SpeiseplanAusrollenTool extends FoodAlchemistTool implements ToolContract,
             'properties' => [
                 'plan_id' => ['type' => 'integer', 'description' => 'Speiseplan-Id.'],
                 'bis_datum' => ['type' => 'string', 'description' => 'Enddatum YYYY-MM-DD.'],
+                'belegte_ersetzen' => ['type' => 'boolean', 'description' => 'true = belegte Zellen der Folgewochen durch die Vorlage ersetzen (Standard false).'],
                 'confirm' => ['type' => 'boolean', 'description' => 'Muss true sein (Massen-Insert).'],
             ],
             'required' => ['plan_id', 'bis_datum', 'confirm'],
@@ -58,7 +60,7 @@ class SpeiseplanAusrollenTool extends FoodAlchemistTool implements ToolContract,
         }
 
         try {
-            $count = app(SpeiseplanService::class)->vorlageAusrollen($team, $planId, $bisDatum);
+            $count = app(SpeiseplanService::class)->vorlageAusrollen($team, $planId, $bisDatum, ($arguments['belegte_ersetzen'] ?? false) === true);
         } catch (\RuntimeException | \Carbon\Exceptions\InvalidFormatException $e) {
             return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR');
         }

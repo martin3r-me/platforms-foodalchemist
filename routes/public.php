@@ -6,8 +6,7 @@ use Platform\FoodAlchemist\Http\Controllers\PresentationController;
 
 // Spec 43 — Öffentliches digitales Kundenbuch (Präsentation) ohne Login. Token-aufgelöst,
 // rendert NUR aus dem eingefrorenen Snapshot. NoCacheHeaders NUR hier (die fa-assets-Route
-// unten braucht ihren immutable-Cache). Type in Phase 1 auf foodbook beschränkt
-// (speisekarte/speiseplan folgen in Phase 2/3).
+// unten braucht ihren immutable-Cache). Typen: foodbook, speisekarte, speiseplan, angebot.
 // Web-App-Manifest (PWA „Zum Startbildschirm hinzufügen") — additiv zur Präsentation,
 // spezifischer 3-Segment-Pfad, daher VOR der 2-Segment-show-Route registriert.
 Route::get('/p/{type}/{token}/app.webmanifest', [PresentationController::class, 'manifest'])

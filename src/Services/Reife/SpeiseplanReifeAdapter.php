@@ -8,9 +8,8 @@ use Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplan;
 /**
  * Spec 50 · Etappe 7 — Reife eines Speiseplans (GV-Zyklus).
  *
- * Der Speiseplan ist der eine Container ohne MCP-Kopf-Werkzeug: `speiseplan.PLAN_FROM_BRIEF`
- * legt an, danach gibt es nur Linien und Einträge. Kopf-Lücken stehen darum mit `wie: null`
- * — der Agent sieht sie, ohne einen Weg zu erfinden; geschlossen werden sie in der UI.
+ * Spec 57 · 0.8: der Kopf hat seit b369eebc ein MCP-Werkzeug (`foodalchemist.speiseplaene.PUT`) —
+ * die Kopf-Lücken zeigen darum darauf. Vorher standen sie mit `wie: null`, als gäbe es keins.
  *
  * C-9 (Spec): Header-/Text-Struktur ist im Speiseplan nicht anwendbar (Raster aus Woche ×
  * Mahlzeit, keine Dramaturgie) → `nicht_messbar` statt Lücke. Coverage kennt den Owner-Typ
@@ -34,16 +33,18 @@ class SpeiseplanReifeAdapter extends ContainerReifeAdapter
         $erfuellt = [];
         $ids = fn ($c) => $c->pluck('id')->map(fn ($i) => (int) $i)->values()->all();
 
-        // ── 1. Kopf — kein PUT-Werkzeug, darum `wie: null` ──────────────────────────
-        $this->kopfFeld($luecken, $erfuellt, $sp->name, 'name', 'wichtig', 'Kein Name.', null);
+        // ── 1. Kopf — über speiseplaene.PUT pflegbar ──────────────────────────────────
+        $put = 'foodalchemist.speiseplaene.PUT';
+        $putArgs = ['id' => (int) $sp->id];
+        $this->kopfFeld($luecken, $erfuellt, $sp->name, 'name', 'wichtig', 'Kein Name.', $put, $putArgs);
         $this->kopfFeld($luecken, $erfuellt, $sp->start_date, 'start_date', 'wichtig',
-            'Kein Startdatum — Einträge lassen sich nicht auf Kalendertage abbilden (AUSROLLEN).', null);
+            'Kein Startdatum — Einträge lassen sich nicht auf Kalendertage abbilden (AUSROLLEN).', $put, $putArgs);
         // `default_pax` hat DB-Default 100 (Migration 2026_08_01_000010) — nie NULL, also hier nicht
         // messbar; der Wert steht in den Kennzahlen, damit der Agent den Default erkennt.
         $this->kopfFeld($luecken, $erfuellt, $sp->budget_wareneinsatz, 'budget_wareneinsatz', 'hinweis',
-            'Kein Wareneinsatz-Budget — die Kosten-Ampel des Plans hat kein Soll.', null);
+            'Kein Wareneinsatz-Budget — die Kosten-Ampel des Plans hat kein Soll.', $put, $putArgs);
         $this->kopfFeld($luecken, $erfuellt, $sp->outlet_id, 'outlet_id', 'hinweis',
-            'Kein Outlet — Betriebs-Kalkulation und Aushang haben keinen Bezug.', null);
+            'Kein Outlet — Betriebs-Kalkulation und Aushang haben keinen Bezug.', $put, $putArgs);
 
         // ── 2. Struktur — Linien und Einträge ───────────────────────────────────────
         $linien = $sp->lines;
@@ -106,19 +107,18 @@ class SpeiseplanReifeAdapter extends ContainerReifeAdapter
     /**
      * Spec 50 · E-3 — {@see ReifeAdapter::sollAspekte()}.
      *
-     * Auffaellig und richtig so: die Kopf-Felder tragen alle `wie: null`. Es gibt kein
-     * MCP-Werkzeug, das den Kopf eines Speiseplans setzt — der Agent sieht die Lücke,
-     * ohne dass ihm ein Tool-Name vorgegaukelt wird, den er nicht aufrufen kann.
+     * Spec 57 · 0.8: die Kopf-Felder zeigen auf `speiseplaene.PUT` (gibt es seit b369eebc).
      */
     public function sollAspekte(): array
     {
         $eintraege = 'foodalchemist.speiseplan_eintraege.POST';
+        $put = 'foodalchemist.speiseplaene.PUT';
 
         return [
-            ['code' => 'name', 'schwere' => 'wichtig', 'wie' => null],
-            ['code' => 'start_date', 'schwere' => 'wichtig', 'wie' => null],
-            ['code' => 'budget_wareneinsatz', 'schwere' => 'hinweis', 'wie' => null],
-            ['code' => 'outlet_id', 'schwere' => 'hinweis', 'wie' => null],
+            ['code' => 'name', 'schwere' => 'wichtig', 'wie' => $put],
+            ['code' => 'start_date', 'schwere' => 'wichtig', 'wie' => $put],
+            ['code' => 'budget_wareneinsatz', 'schwere' => 'hinweis', 'wie' => $put],
+            ['code' => 'outlet_id', 'schwere' => 'hinweis', 'wie' => $put],
             ['code' => 'keine_linien', 'schwere' => 'blockiert', 'wie' => 'foodalchemist.speiseplan_linien.POST'],
             ['code' => 'keine_eintraege', 'schwere' => 'blockiert', 'wie' => $eintraege],
             ['code' => 'eintrag_ohne_ziel', 'schwere' => 'blockiert', 'wie' => $eintraege],

@@ -114,7 +114,7 @@
     {{-- Kostformen-Abdeckung der Woche (GV-Qualität) --}}
     @if(!empty($kostformen))
         <div class="kostform">
-            <strong>Kostformen (Werktage):</strong>
+            <strong>Kostformen (Öffnungstage):</strong>
             @foreach($kostformen as $kf)
                 <span class="kf">{{ $kf['label'] }}:
                     @if($kf['erfuellt'])<span class="ok">täglich ✓</span>
