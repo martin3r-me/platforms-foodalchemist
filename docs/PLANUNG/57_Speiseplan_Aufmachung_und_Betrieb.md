@@ -1,6 +1,6 @@
 # 57 · Speiseplan: Aufmachung und Betrieb
 
-**Stand 2026-09-28 · Branch `docs/spec57-speiseplan-aufmachung` off main (`02e2dfc7`) · Status: in Umsetzung (Wellen A–D, siehe „Umsetzungsstand“ am Ende)**
+**Stand 2026-09-28 · Branch `docs/spec57-speiseplan-aufmachung` off main (`02e2dfc7`) · Status: umgesetzt, gemergt (main `9157a922`, 2026-10-05), auf demo — Abnahme offen**
 
 Klickbarer Entwurf mit Beispieldaten: <https://claude.ai/artifact/JoRo6cwY5XWPmR5UXQYJru>
 (privat, Freigabe über das Share-Menü). Die Ideen-Nummern im Entwurf entsprechen den Paketen unten.
@@ -399,3 +399,10 @@ Welle D im Detail:
 - Nutzer-Doku `docs/speiseplan.md` neu geschrieben.
 
 Offen nach Spec 57: Englische Namen (eigene Spec), Kassenanbindung/Betrieb im Verkaufsjournal, Betriebs-Links mit „laufender Woche“, Tierart Geflügel/Lamm als Datenfeld.
+
+### Merge und Deploy (2026-10-05)
+
+- Alle vier Wellen samt Spec sind über `main` gemergt (Merge-Commits #159–#163, Spitze `9157a922`). Auf GitHub sind #159 und #163 als gemergt markiert; #160–#162 stehen noch offen, ihr Inhalt ist aber vollständig in `main` und kann geschlossen werden.
+- demo läuft seit 2026-09-30 per FA-Pin auf `a98c9ba5` (demo-Commit `ff025fb`) — inhaltlich identisch mit `main`. Der nächste reguläre `update.sh` zieht demo auf `main`.
+- Migrationen `2026_09_28_000001`/`000002` auf demo gelaufen; lesender MCP-Smoke ok (Einträge, Mengen, Bedarf, Plan/Ist).
+- **Offen:** Pest-Suite (nie gelaufen, keine Sandbox auf dem Bau-Rechner), Abnahme durch Dominique, Datenbefunde demo (Plan 1: „Baguette | Ciabatta“ ~191,90 € VK/Portion, Eintrag 10 auf gelöschtes Concept).
