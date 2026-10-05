@@ -4,6 +4,8 @@ namespace Platform\FoodAlchemist\Livewire\Settings;
 
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
+use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Jobs\RecomputeTeamRecipesJob;
 use Platform\FoodAlchemist\Services\TeamSettingsService;
 use Platform\FoodAlchemist\Services\VocabularyService;
 
@@ -43,9 +45,18 @@ class Kalkulation extends Component
             ->filter(fn ($v) => $v !== '' && is_numeric($v))
             ->map(fn ($v) => (float) $v)->all();
 
-        app(TeamSettingsService::class)->update($this->team(), [
-            'cooking_loss_defaults' => $verlustClean($this->garverlust) ?: null,
-            'trimming_loss_defaults' => $verlustClean($this->putzverlust) ?: null,
+        $svc = app(TeamSettingsService::class);
+        $team = $this->team();
+        $vorher = $svc->for($team);
+        $gar = $verlustClean($this->garverlust) ?: null;
+        $putz = $verlustClean($this->putzverlust) ?: null;
+        // Nur eine echte Änderung der Verluste rechnet Rezepte neu — MwSt/Rundung allein nicht.
+        $verlustGeaendert = self::normiert($gar) !== self::normiert($vorher->cooking_loss_defaults)
+            || self::normiert($putz) !== self::normiert($vorher->trimming_loss_defaults);
+
+        $svc->update($team, [
+            'cooking_loss_defaults' => $gar,
+            'trimming_loss_defaults' => $putz,
             'vat_defaults' => [
                 'regulaer' => (float) str_replace(',', '.', (string) $this->mwst['regulaer']),
                 'ermaessigt' => (float) str_replace(',', '.', (string) $this->mwst['ermaessigt']),
@@ -57,14 +68,50 @@ class Kalkulation extends Component
                     ? $this->rundung['mode'] : 'kaufmaennisch',
             ],
         ]);
-        app(\Platform\FoodAlchemist\Services\PricingCascadeService::class)->recomputeTeam($this->team());
-        $this->meldung = 'Gespeichert — Recompute & Cockpits nutzen diese Werte.';
+
+        if ($verlustGeaendert) {
+            // Rezepte (Ausbeute → EK/kg) des Teams + der erbenden Kind-Teams, danach die Preis-Kaskade.
+            $n = RecomputeTeamRecipesJob::anzahlRezepte($team->id);
+            RecomputeTeamRecipesJob::dispatch($team->id);
+            $this->meldung = "Gespeichert — {$n} Rezepte (inkl. erbender Teams) werden mit den neuen Verlusten neu gerechnet.";
+
+            return;
+        }
+        app(\Platform\FoodAlchemist\Services\PricingCascadeService::class)->recomputeTeam($team);
+        $this->meldung = 'Gespeichert — Preise neu gerechnet.';
+    }
+
+    /** Vergleichsform einer Verlust-Map: Schlüssel als String sortiert, Werte als float. */
+    private static function normiert(?array $map): array
+    {
+        $out = [];
+        foreach ($map ?? [] as $k => $v) {
+            $out[(string) $k] = (float) $v;
+        }
+        ksort($out);
+
+        return $out;
     }
 
     public function render(VocabularyService $vocab)
     {
+        $svc = app(TeamSettingsService::class);
+        $team = $this->team();
+        // Eigene Map leer + Vorfahr hat eine → geerbt. Die geerbten Werte stehen als Platzhalter
+        // in den Feldern; sobald das Team einen eigenen Wert speichert, gilt NUR seine Map.
+        $geerbt = function (string $spalte) use ($svc, $team): ?array {
+            $quelle = $svc->quelleTeamId($team, $spalte);
+            if ($quelle === null || $quelle === (int) $team->id) {
+                return null;
+            }
+
+            return ['von' => Team::find($quelle)?->name ?? "Team {$quelle}", 'werte' => (array) $svc->rohWert($team, $spalte)];
+        };
+
         return view('foodalchemist::livewire.settings.kalkulation', [
-            'warengruppen' => $vocab->listWarengruppen($this->team()),
+            'warengruppen' => $vocab->listWarengruppen($team),
+            'geerbtGar' => $geerbt('cooking_loss_defaults'),
+            'geerbtPutz' => $geerbt('trimming_loss_defaults'),
         ]);
     }
 
