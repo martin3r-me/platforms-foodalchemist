@@ -697,9 +697,13 @@ class PlanningCascadeService
         $wochenMitArbeit = 0;
         $wochenOffen = 0;
         $zellenInOffenenWochen = 0;
+        // Spec 57 · 10.2: Namen/Diät der vorhandenen Einträge einmal laden (Leitplanken je Zelle).
+        $plan->loadMissing(['entries.dish', 'entries.concept', 'entries.package']);
+        $this->zellNamenMemo = [];
         foreach (range(1, $weeks) as $week) {
             $vorWoche = $idx;
             $zellen = $this->leereSpeiseplanZellen($plan, $start, $week, $belegt);
+            $veganZiel = $this->speiseplanVeganZiele($plan, $zellen);
             if ($wochenMitArbeit >= self::SPEISEPLAN_MAX_WOCHEN) {
                 // Budget aufgebraucht: zählen, was diese Woche gekostet hätte, und weiter —
                 // nicht abbrechen, sonst wüssten wir den Rest nicht.
@@ -716,7 +720,8 @@ class PlanningCascadeService
                     continue;
                 }
                 $brief = ($planKontext !== '' ? 'Rahmen: ' . $planKontext . ' — ' : '')
-                    . $this->speiseplanZellBrief($linie, $meal);
+                    . $this->speiseplanZellBrief($linie, $meal)
+                    . $this->speiseplanZellLeitplanken($plan, $datum, $linie, $meal, ($veganZiel[$datum] ?? null) === (int) $linie->id);
                 $step = FoodAlchemistCascadeRunStep::create([
                     'team_id' => $team->id,
                     'cascade_run_id' => $run->id,
@@ -936,6 +941,75 @@ class PlanningCascadeService
 
         return $wort . ($rolle !== null ? ' (' . $rolle . ')' : '')
             . ' für die Linie „' . $linie->name . '“' . ($linie->is_vegetarian ? ' (vegetarisch)' : '') . '.';
+    }
+
+    /** @var array<int, string> Spec 57 · 10.2: Anzeigename je Eintrag-ID (ein Lauf, keine N+1). */
+    private array $zellNamenMemo = [];
+
+    /**
+     * Spec 57 · 10.2: Welche leere Zelle eines Tages soll das vegane Gericht liefern, wenn der Tag
+     * noch keins hat? Bevorzugt eine vegetarische Hauptgang-Linie, sonst die erste Hauptgang-Linie.
+     * Tage mit veganem Eintrag bekommen kein Ziel.
+     *
+     * @param  list<array{0:string, 1:\Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplanLinie, 2:string}>  $zellen
+     * @return array<string, int>  Datum → line_id
+     */
+    private function speiseplanVeganZiele(FoodAlchemistSpeiseplan $plan, array $zellen): array
+    {
+        $svc = app(SpeiseplanService::class);
+        $agg = app(ConcepterAggregateService::class);
+        $ziele = [];
+        foreach (collect($zellen)->groupBy(fn ($z) => $z[0]) as $datum => $tagZellen) {
+            $hatVegan = $plan->entries->contains(fn ($e) => $e->entry_date?->format('Y-m-d') === $datum
+                && $agg->allergenRollupFromGerichte($svc->eintragGerichte($e))['is_vegan']);
+            if ($hatVegan) {
+                continue;
+            }
+            $haupt = $tagZellen->filter(fn ($z) => $z[1]->istHauptgang());
+            $wahl = $haupt->first(fn ($z) => (bool) $z[1]->is_vegetarian) ?? $haupt->first();
+            if ($wahl !== null) {
+                $ziele[$datum] = (int) $wahl[1]->id;
+            }
+        }
+
+        return $ziele;
+    }
+
+    /**
+     * Spec 57 · 10.2: Leitplanken aus dem PLANZUSTAND für eine Zelle — statt jede Zelle isoliert zu
+     * erzeugen. (1) Was in ±max(6, Mindestabstand) Tagen schon steht, nicht wiederholen. (2) Fehlt
+     * dem Tag ein veganes Gericht, fragt genau eine Zelle danach. (3) Preis und Wareneinsatz-Ziel
+     * der Linie (Backlog #90). Heuristisch: Zellen eines Laufs laufen parallel und sehen einander
+     * nicht — verbleibende Wiederholungen zeigt die Rail des Editors (LLM_GUIDE §3).
+     */
+    private function speiseplanZellLeitplanken(FoodAlchemistSpeiseplan $plan, string $datum, \Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplanLinie $linie, string $meal, bool $veganGewuenscht): string
+    {
+        $svc = app(SpeiseplanService::class);
+        $tag = \Illuminate\Support\Carbon::parse($datum)->startOfDay();
+        $fenster = max(6, (int) $plan->min_abstand_tage);
+        $namen = $plan->entries
+            ->filter(fn ($e) => $e->entry_date !== null && $e->meal === $meal && abs((int) $e->entry_date->copy()->startOfDay()->diffInDays($tag, false)) <= $fenster)
+            ->map(fn ($e) => $this->zellNamenMemo[(int) $e->id] ??= $svc->eintragName($e))
+            ->unique()->take(10)->values()->all();
+
+        $teile = [];
+        if ($namen !== []) {
+            $teile[] = 'nicht wiederholen, steht in ±' . $fenster . ' Tagen schon im Plan: ' . implode('; ', $namen);
+        }
+        if ($veganGewuenscht) {
+            $teile[] = 'dem Tag fehlt noch ein veganes Gericht — bitte vegan';
+        }
+        $preis = $linie->manuellerPreis();
+        if ($preis !== null) {
+            $teile[] = 'Verkaufspreis netto ' . number_format($preis, 2, ',', '') . ' € je Portion';
+        }
+        if ($linie->target_wes_max_pct !== null) {
+            $teile[] = 'Wareneinsatz-Ziel ' . ($linie->target_wes_min_pct !== null ? number_format((float) $linie->target_wes_min_pct, 0) . '–' : 'bis ')
+                . number_format((float) $linie->target_wes_max_pct, 0) . ' %'
+                . ($preis !== null ? ' (EK höchstens ' . number_format($preis * (float) $linie->target_wes_max_pct / 100, 2, ',', '') . ' €)' : '');
+        }
+
+        return $teile !== [] ? ' Leitplanken aus dem Plan: ' . implode(' · ', $teile) . '.' : '';
     }
 
     /**

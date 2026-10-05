@@ -369,7 +369,7 @@ widersprechen. Präzisierungen beim Bau:
 | A | 0, 1, 2, 9, 10.1 | `feat/spec57-welle-a` | gebaut, Tests geschrieben (`SpeiseplanAusgabestelleTest`), lokal nur `php -l` und Blade-Kompilierung — Pest-Lauf steht aus (E12) |
 | B | 5, 3 | `feat/spec57-welle-b` | gebaut, Tests geschrieben (`SpeiseplanUmbauMengenTest`), Pest-Lauf steht aus |
 | C | 4, 6 | `feat/spec57-welle-c` | gebaut, Tests geschrieben (`SpeiseplanAusgabeBedarfTest`), Pest-Lauf steht aus |
-| D | 7, 8, 10.2 | — | offen |
+| D | 7, 8, 10.2 | `feat/spec57-welle-d` | gebaut, Tests geschrieben (`SpeiseplanVorlagePlanIstTest`), Pest-Lauf steht aus |
 
 Welle A im Detail:
 - 0.1 `addEintrag` prüft Inhalt (genau einer, sichtbar) im Service — Editor und MCP laufen darüber.
@@ -392,3 +392,10 @@ Welle C im Detail:
 - Paket 6: Dokument-Route mit `?format=tag|schild|liste|csv` (+ `tag`, `linie`, `preise`, `pdf`), Vorlage `dokumente/speiseplan-format.blade.php`; Wochenaushang zeigt optional Preise. Editor-Tab heißt jetzt „Ausgabe & Aushang“ mit „Druck & Export“.
 - E9: Option „immer die laufende Woche“ (Editor + MCP-PUBLISH `laufende_woche`); `foodalchemist:speiseplan-aushang-rollieren` friert Montags 00:20 neu ein (Standard-Link; Betriebs-Links bleiben fest).
 - Englisch: weiterhin zurückgestellt.
+Welle D im Detail:
+- Paket 7: Migration `2026_09_28_000002` (`is_template`, `source_plan_id`, `source_synced_at`, `source_line_id`). `setzeVorlage`, `betriebsKopieAnlegen` (nur eigene Betriebe, je Betrieb einmal), `vorlagenAbgleich` (je Zelle ab heute, `vorlage_geaendert` über Zeitstempel seit dem letzten Abgleich, sonst `lokal_abweichend`; neue Linien), `ausVorlageUebernehmen` (alle Vorlage-Änderungen oder gewählte Zellen, Pax des Betriebs bleiben). Stammdaten-Abschnitt „Vorlage für Betriebe“, MCP `speiseplan_vorlage.PUT` (setzen/kopie/liste) und `speiseplan_vorlage.ABGLEICH` (anzeigen/übernehmen mit confirm).
+- Paket 8: `planIst()` je Gericht gegen `foodalchemist_sales_facts` (strikt eigenes Team, alle Verkaufsstellen, Mo–So), Tab „Plan/Ist“, MCP `speiseplan_planist.GET`. Concepts/Pakete als „nicht vergleichbar“ ausgewiesen.
+- Paket 10.2: `speiseplanZellLeitplanken()` hängt je Zelle Leitplanken aus dem Planzustand an den Brief (nicht wiederholen in ±max(6, Mindestabstand) Tagen, genau eine Zelle je Tag ohne veganes Gericht fragt nach vegan — bevorzugt die vegetarische Linie, Linienpreis und Wareneinsatz-Ziel samt EK-Obergrenze). Heuristisch: parallele Zellen eines Laufs sehen einander nicht; verbleibende Wiederholungen zeigt die Rail.
+- Nutzer-Doku `docs/speiseplan.md` neu geschrieben.
+
+Offen nach Spec 57: Englische Namen (eigene Spec), Kassenanbindung/Betrieb im Verkaufsjournal, Betriebs-Links mit „laufender Woche“, Tierart Geflügel/Lamm als Datenfeld.

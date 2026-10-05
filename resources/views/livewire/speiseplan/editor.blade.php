@@ -82,6 +82,7 @@
                         'kalender' => 'Kalender',
                         'mengen' => 'Mengen',
                         'bedarf' => 'Bedarf',
+                        'planist' => 'Plan/Ist',
                         'linien' => 'Menü-Linien',
                         'stammdaten' => 'Stammdaten',
                         'praesentation' => 'Ausgabe & Aushang',
@@ -525,6 +526,49 @@
                         </x-foodalchemist::modal-section>
                     </div>
 
+                    {{-- ═══ Spec 57 · Paket 8: Tab PLAN/IST (nur lesend, Verkaufsjournal) ═══ --}}
+                    <div x-show="tab === 'planist'" x-cloak class="pt-4 space-y-3" data-sp-tab-planist>
+                        <x-foodalchemist::modal-section title="Plan/Ist · KW {{ (int) $montagDt->format('W') }} · {{ $mahlzeiten[$mahlzeit] ?? '' }}">
+                            @if($planIst)
+                                @php($pis = $planIst['summe'])
+                                <div class="grid grid-cols-2 lg:grid-cols-4 gap-2 mb-3">
+                                    <div class="rounded-xl border border-white/10 bg-white/[0.04] p-3"><div class="{{ $label }}">Essen geplant</div><div class="text-lg font-semibold tabular-nums text-gray-100">{{ number_format($pis['plan'], 0, ',', '.') }}</div></div>
+                                    <div class="rounded-xl border border-white/10 bg-white/[0.04] p-3"><div class="{{ $label }}">Verkauft (Ist)</div><div class="text-lg font-semibold tabular-nums text-gray-100">{{ $planIst['hat_ist'] ? number_format($pis['ist'], 0, ',', '.') : '—' }}</div>
+                                        @if($pis['abweichung_pct'] !== null)<div class="text-[11px] tabular-nums {{ $pis['abweichung_pct'] < 0 ? 'text-rose-300' : 'text-emerald-300' }}">{{ ($pis['abweichung_pct'] > 0 ? '+' : '') . number_format($pis['abweichung_pct'], 1, ',', '.') }} % zum Plan</div>@endif
+                                    </div>
+                                    <div class="rounded-xl border border-white/10 bg-white/[0.04] p-3"><div class="{{ $label }}">Umsatz Plan</div><div class="text-lg font-semibold tabular-nums text-gray-100">{{ number_format($pis['plan_umsatz'], 0, ',', '.') }} €</div></div>
+                                    <div class="rounded-xl border border-white/10 bg-white/[0.04] p-3"><div class="{{ $label }}">Umsatz Ist</div><div class="text-lg font-semibold tabular-nums text-gray-100">{{ $planIst['hat_ist'] ? number_format($pis['ist_umsatz'], 0, ',', '.') . ' €' : '—' }}</div></div>
+                                </div>
+                                @unless($planIst['hat_ist'])
+                                    <p class="text-[11px] text-amber-300/90 mb-2">Für diese Woche liegen keine Verkaufszahlen vor. Verkäufe werden im Controlling importiert (CSV aus der Kasse) und dort den Gerichten zugeordnet.</p>
+                                @endunless
+                                @if($planIst['zeilen'] !== [])
+                                    <div class="overflow-x-auto">
+                                        <table class="{{ $table }}" style="min-width:560px" data-sp-planist>
+                                            <thead><tr class="text-left"><th class="{{ $th }}">Gericht</th><th class="{{ $th }} text-right">Plan</th><th class="{{ $th }} text-right">Ist</th><th class="{{ $th }} text-right">Δ</th><th class="{{ $th }} text-right">Umsatz Plan</th><th class="{{ $th }} text-right">Umsatz Ist</th></tr></thead>
+                                            <tbody>
+                                                @foreach($planIst['zeilen'] as $pz)
+                                                    <tr class="border-t border-white/10">
+                                                        <td class="{{ $td }} text-xs text-gray-200">{{ $pz['name'] }}</td>
+                                                        <td class="{{ $td }} text-xs text-right tabular-nums">{{ number_format($pz['plan'], 0, ',', '.') }}</td>
+                                                        <td class="{{ $td }} text-xs text-right tabular-nums">{{ $pz['ist'] !== null ? number_format($pz['ist'], 0, ',', '.') : '—' }}</td>
+                                                        <td class="{{ $td }} text-xs text-right tabular-nums {{ ($pz['abweichung_pct'] ?? 0) < 0 ? 'text-rose-300' : 'text-emerald-300' }}">{{ $pz['abweichung_pct'] !== null ? (($pz['abweichung_pct'] > 0 ? '+' : '') . number_format($pz['abweichung_pct'], 1, ',', '.') . ' %') : '—' }}</td>
+                                                        <td class="{{ $td }} text-xs text-right tabular-nums text-gray-300">{{ number_format($pz['plan_umsatz'], 2, ',', '.') }} €</td>
+                                                        <td class="{{ $td }} text-xs text-right tabular-nums text-gray-300">{{ $pz['ist_umsatz'] !== null ? number_format($pz['ist_umsatz'], 2, ',', '.') . ' €' : '—' }}</td>
+                                                    </tr>
+                                                @endforeach
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                @endif
+                                @if($planIst['nicht_vergleichbar'] !== [])
+                                    <p class="text-[11px] text-gray-400 mt-2">Nicht vergleichbar (Concept/Paket, in der Kasse kein einzelnes Gericht): {{ implode(', ', $planIst['nicht_vergleichbar']) }}.</p>
+                                @endif
+                                <p class="text-[10px] text-gray-500 mt-1">{{ $planIst['hinweis'] }}</p>
+                            @endif
+                        </x-foodalchemist::modal-section>
+                    </div>
+
                     {{-- ═══ Tab: MENÜ-LINIEN ═══ --}}
                     <div x-show="tab === 'linien'" x-cloak class="pt-4" data-sp-tab-linien>
                         <x-foodalchemist::modal-section title="Menü-Linien">
@@ -663,6 +707,81 @@
                                 <div><label class="{{ $label }}">Teilnehmer (Default)</label><input type="number" min="1" wire:model.live="form.default_pax" wire:change="speichern" class="{{ $input }} text-right tabular-nums" data-sp-default-pax /></div>
                                 <div><label class="{{ $label }}">Budget EK/Person (€)</label><input type="text" inputmode="decimal" wire:model.live="form.budget_wareneinsatz" wire:change="speichern" placeholder="z. B. 1,80" class="{{ $input }} text-right tabular-nums" title="Wareneinsatz-Ziel pro Person/Mahlzeit — Ampel in der Rail" /></div>
                             </div>
+                        </x-foodalchemist::modal-section>
+
+                        {{-- Spec 57 · Paket 7: Vorlage für Betriebe (verknüpfte Kopie je Betrieb, im eigenen Team) --}}
+                        <x-foodalchemist::modal-section title="Vorlage für Betriebe">
+                            @if($vorlageHinweis)<div class="mb-2 rounded-lg bg-violet-500/10 border border-violet-400/30 text-violet-100 text-xs px-3 py-1.5" data-sp-vorlage-hinweis>{{ $vorlageHinweis }}</div>@endif
+                            @if($sp->source_plan_id !== null)
+                                {{-- Dieser Plan ist die Kopie eines Betriebs --}}
+                                <div data-sp-kopie-abgleich>
+                                    <p class="text-[11px] text-gray-400 mb-2">
+                                        Kopie der Vorlage „{{ $vorlagenAbgleich['vorlage']['name'] ?? '—' }}“ · zuletzt abgeglichen {{ $sp->source_synced_at?->format('d.m.Y H:i') ?? '—' }}.
+                                        Preise, Mengen und Öffnungstage pflegt der Betrieb selbst.
+                                    </p>
+                                    @if(($vorlagenAbgleich['vorlage'] ?? null) === null)
+                                        <p class="text-[11px] text-amber-300">Die Vorlage gibt es nicht mehr — dieser Plan ist jetzt frei.</p>
+                                    @elseif($vorlagenAbgleich['zellen'] === [] && $vorlagenAbgleich['neue_linien'] === [])
+                                        <p class="text-[11px] text-emerald-300">Ab heute stimmt der Plan mit der Vorlage überein.</p>
+                                    @else
+                                        @if($vorlagenAbgleich['neue_linien'] !== [])
+                                            <p class="text-[11px] text-violet-200 mb-1">Neue Linien in der Vorlage: {{ collect($vorlagenAbgleich['neue_linien'])->pluck('name')->implode(', ') }}</p>
+                                        @endif
+                                        <div class="overflow-x-auto">
+                                            <table class="{{ $table }}" style="min-width:620px">
+                                                <thead><tr class="text-left"><th class="{{ $th }}">Tag</th><th class="{{ $th }}">Linie</th><th class="{{ $th }}">Vorlage</th><th class="{{ $th }}">Betrieb</th><th class="{{ $th }}"></th></tr></thead>
+                                                <tbody>
+                                                    @foreach(array_slice($vorlagenAbgleich['zellen'], 0, 40) as $vz)
+                                                        <tr class="border-t border-white/10" wire:key="vz-{{ $vz['key'] }}">
+                                                            <td class="{{ $td }} text-xs tabular-nums">{{ \Illuminate\Support\Carbon::parse($vz['datum'])->format('d.m.') }} · {{ $mahlzeiten[$vz['mahlzeit']] ?? $vz['mahlzeit'] }}</td>
+                                                            <td class="{{ $td }} text-xs">{{ $vz['linie'] }}</td>
+                                                            <td class="{{ $td }} text-xs text-gray-200">{{ implode(', ', $vz['vorlage']) ?: '—' }}</td>
+                                                            <td class="{{ $td }} text-xs text-gray-400">{{ implode(', ', $vz['betrieb']) ?: '—' }}</td>
+                                                            <td class="{{ $td }} text-right whitespace-nowrap">
+                                                                <span class="{{ $pill }} {{ $vz['art'] === 'vorlage_geaendert' ? $variantPill['warning'] : $variantPill['secondary'] }}">{{ $vz['art'] === 'vorlage_geaendert' ? 'aus der Vorlage' : 'lokal' }}</span>
+                                                                <button type="button" wire:click="ausVorlageUebernehmen('{{ $vz['key'] }}')" class="{{ $btnGhostXs }}">übernehmen</button>
+                                                            </td>
+                                                        </tr>
+                                                    @endforeach
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                        <button type="button" wire:click="ausVorlageUebernehmen(null)" wire:confirm="Alle Änderungen der Vorlage übernehmen? Lokale Abweichungen bleiben." class="{{ $btnPrimary }} mt-2" data-sp-vorlage-uebernehmen>Änderungen aus der Vorlage übernehmen</button>
+                                    @endif
+                                </div>
+                            @else
+                                <label class="flex items-center gap-2 text-xs text-gray-300" data-sp-vorlage-schalter>
+                                    <input type="checkbox" @checked($sp->is_template) wire:click="vorlageUmschalten" />
+                                    Als Vorlage freigeben — Betriebe bekommen eine verknüpfte Kopie und übernehmen Änderungen per Abgleich.
+                                </label>
+                                @if($sp->is_template)
+                                    <div class="mt-3 space-y-2" data-sp-betriebskopien>
+                                        @forelse($betriebsKopien as $bk)
+                                            <div class="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-xs" wire:key="bk-{{ $bk['id'] }}">
+                                                <span class="text-gray-100">{{ $bk['outlet'] ?? $bk['name'] }} <span class="text-gray-500">· {{ $bk['status'] }}</span></span>
+                                                <span class="flex items-center gap-2">
+                                                    @if($bk['aus_vorlage'] > 0)<span class="{{ $pill }} {{ $variantPill['warning'] }}">{{ $bk['aus_vorlage'] }} Änderung(en) offen</span>@else<span class="{{ $pill }} {{ $variantPill['success'] }}">aktuell</span>@endif
+                                                    @if($bk['lokal'] > 0)<span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $bk['lokal'] }} lokal</span>@endif
+                                                    <button type="button" wire:click="$dispatch('speiseplan-editor.bearbeiten', { id: {{ $bk['id'] }} })" class="{{ $btnGhostXs }}">öffnen</button>
+                                                </span>
+                                            </div>
+                                        @empty
+                                            <p class="text-[11px] text-gray-500">Noch keine Betriebs-Kopie.</p>
+                                        @endforelse
+                                        @if($betriebe->isNotEmpty())
+                                            <div class="flex flex-wrap items-end gap-2">
+                                                <select wire:model="kopieOutletId" class="{{ $input }} h-8 w-56" aria-label="Betrieb für die Kopie">
+                                                    <option value="">— Betrieb wählen —</option>
+                                                    @foreach($betriebe as $b)<option value="{{ $b->id }}">{{ $b->name }}</option>@endforeach
+                                                </select>
+                                                <button type="button" wire:click="betriebsKopieAnlegen" class="{{ $btnGhost }} h-8" data-sp-kopie-anlegen>+ Kopie für Betrieb anlegen</button>
+                                            </div>
+                                        @else
+                                            <p class="text-[11px] text-amber-300">Noch keine Betriebe angelegt — unter <em>Einstellungen › Betriebe</em>.</p>
+                                        @endif
+                                    </div>
+                                @endif
+                            @endif
                         </x-foodalchemist::modal-section>
 
                         <x-foodalchemist::modal-section title="Zyklus ausrollen">

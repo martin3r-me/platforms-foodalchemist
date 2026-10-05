@@ -241,17 +241,20 @@ class SpeiseplanService
      * → Einträge (Zellen, line_id über die Map remappt). Status=Entwurf. Muster wie
      * SpeisekarteService::dupliziere; nutzt das MODELL-::create (KEINE Starter-Linien).
      */
-    public function dupliziere(Team $team, int $id): FoodAlchemistSpeiseplan
+    public function dupliziere(Team $team, int $id, array $ueberschreiben = [], bool $quelleMerken = false): FoodAlchemistSpeiseplan
     {
         $quelle = FoodAlchemistSpeiseplan::visibleToTeam($team)
             ->with(['lines' => fn ($q) => $q->orderBy('sort_order')->orderBy('id'), 'entries'])
             ->findOrFail($id);
         $this->guard($quelle, $team);
 
-        return \Illuminate\Support\Facades\DB::transaction(function () use ($quelle, $team) {
+        return \Illuminate\Support\Facades\DB::transaction(function () use ($quelle, $team, $ueberschreiben, $quelleMerken) {
             $neu = FoodAlchemistSpeiseplan::create($this->pruefeOutlet($team, array_merge(
                 array_intersect_key($quelle->only(self::FELDER), array_flip(self::FELDER)),
                 ['team_id' => $team->id, 'name' => $quelle->name . ' (Kopie)', 'status' => AusgabeStatus::Entwurf->value],
+                // Spec 57 · Paket 7: Betriebs-Kopie merkt sich ihre Vorlage (sonst eine freie Kopie).
+                $quelleMerken ? ['source_plan_id' => $quelle->id, 'source_synced_at' => now()] : [],
+                array_intersect_key($ueberschreiben, array_flip(array_merge(self::FELDER, ['name']))),
             )));
 
             // Linien kopieren + Map alt→neu (Einträge referenzieren die Linie).
@@ -261,6 +264,7 @@ class SpeiseplanService
                 $kopie = FoodAlchemistSpeiseplanLinie::create(array_merge(
                     $l->only(self::LINIEN_FELDER),
                     ['team_id' => $neu->team_id, 'menu_plan_id' => $neu->id, 'sort_order' => $l->sort_order],
+                    $quelleMerken ? ['source_line_id' => $l->id] : [],
                 ));
                 $lineMap[$l->id] = $kopie->id;
             }
@@ -277,6 +281,266 @@ class SpeiseplanService
 
             return $neu->refresh();
         });
+    }
+
+    // ── Spec 57 · Paket 7: Vorlage für Betriebe (verknüpfte Kopie je Betrieb, E10) ──
+
+    /** Plan als Vorlage für Betriebe freigeben oder zurücknehmen. Eine Betriebs-Kopie kann keine Vorlage sein. */
+    public function setzeVorlage(Team $team, int $planId, bool $istVorlage): FoodAlchemistSpeiseplan
+    {
+        $plan = FoodAlchemistSpeiseplan::visibleToTeam($team)->findOrFail($planId);
+        $this->guard($plan, $team);
+        if ($istVorlage && $plan->source_plan_id !== null) {
+            throw new \RuntimeException('Dieser Plan ist selbst eine Betriebs-Kopie und kann keine Vorlage sein.');
+        }
+        $plan->update(['is_template' => $istVorlage]);
+
+        return $plan->refresh();
+    }
+
+    /**
+     * Betriebs-Kopie einer Vorlage anlegen: tiefe Kopie (Linien mit Rückverweis, Einträge),
+     * zugeordnet zum Betrieb, Status Entwurf. Nur im selben Team (der Betrieb muss dem Team
+     * gehören) — Team-Grenzen überschreitet das bewusst nicht (D1, E10).
+     */
+    public function betriebsKopieAnlegen(Team $team, int $vorlageId, int $outletId): FoodAlchemistSpeiseplan
+    {
+        $vorlage = FoodAlchemistSpeiseplan::visibleToTeam($team)->findOrFail($vorlageId);
+        $this->guard($vorlage, $team);
+        if (! $vorlage->is_template) {
+            throw new \RuntimeException('Der Plan ist nicht als Vorlage freigegeben.');
+        }
+        $outlet = \Platform\FoodAlchemist\Models\FoodAlchemistOutlet::where('team_id', $team->id)->find($outletId);
+        if ($outlet === null) {
+            throw new \RuntimeException('Betrieb nicht gefunden oder nicht im eigenen Team.');
+        }
+        if (FoodAlchemistSpeiseplan::where('source_plan_id', $vorlage->id)->where('outlet_id', $outlet->id)->exists()) {
+            throw new \RuntimeException('Für „' . $outlet->name . '“ gibt es schon eine Kopie dieser Vorlage.');
+        }
+
+        return $this->dupliziere($team, $vorlage->id, [
+            'name' => $vorlage->name . ' · ' . $outlet->name,
+            'outlet_id' => $outlet->id,
+        ], true);
+    }
+
+    /**
+     * Betriebs-Kopien einer Vorlage mit Stand des Abgleichs.
+     *
+     * @return list<array{id:int, name:string, outlet:?string, status:string, aus_vorlage:int, lokal:int, synced_at:?string}>
+     */
+    public function betriebsKopien(Team $team, int $vorlageId): array
+    {
+        $kopien = FoodAlchemistSpeiseplan::where('team_id', $team->id)->where('source_plan_id', $vorlageId)->orderBy('name')->get();
+        $outlets = \Platform\FoodAlchemist\Models\FoodAlchemistOutlet::where('team_id', $team->id)->whereIn('id', $kopien->pluck('outlet_id')->filter())->pluck('name', 'id');
+
+        return $kopien->map(function ($k) use ($team, $outlets) {
+            $abgleich = $this->vorlagenAbgleich($team, (int) $k->id);
+
+            return [
+                'id' => (int) $k->id, 'name' => $k->name,
+                'outlet' => $k->outlet_id !== null ? ($outlets[$k->outlet_id] ?? null) : null,
+                'status' => $k->statusWert()->label(),
+                'aus_vorlage' => collect($abgleich['zellen'])->where('art', 'vorlage_geaendert')->count() + count($abgleich['neue_linien']),
+                'lokal' => collect($abgleich['zellen'])->where('art', 'lokal_abweichend')->count(),
+                'synced_at' => $k->source_synced_at?->format('d.m.Y H:i'),
+            ];
+        })->values()->all();
+    }
+
+    /**
+     * Abgleich Betriebs-Kopie ↔ Vorlage ab einem Datum (Standard heute): je Zelle (Datum ×
+     * Mahlzeit × Linie der Vorlage) die Inhalte beider Seiten, wenn sie abweichen. `art`:
+     * `vorlage_geaendert` = die Vorlage hat die Zelle seit dem letzten Abgleich geändert;
+     * `lokal_abweichend` = der Betrieb weicht bewusst ab. Neue Linien der Vorlage extra.
+     *
+     * @return array{vorlage: ?array{id:int, name:string}, zellen: list<array>, neue_linien: list<array{id:int, name:string}>}
+     */
+    public function vorlagenAbgleich(Team $team, int $kopieId, ?string $ab = null): array
+    {
+        $kopie = FoodAlchemistSpeiseplan::visibleToTeam($team)->with(['lines', 'entries'])->findOrFail($kopieId);
+        $leer = ['vorlage' => null, 'zellen' => [], 'neue_linien' => []];
+        if ($kopie->source_plan_id === null) {
+            return $leer;
+        }
+        $vorlage = FoodAlchemistSpeiseplan::visibleToTeam($team)->with('lines')->find($kopie->source_plan_id);
+        if ($vorlage === null) {
+            return $leer;
+        }
+        $abDatum = Carbon::parse($ab ?? 'today')->startOfDay();
+        $seit = $kopie->source_synced_at;
+        // Vorlage-Einträge inkl. gelöschter (eine gelöschte Zelle ist auch eine Änderung).
+        $vEintraege = FoodAlchemistSpeiseplanEintrag::withTrashed()->where('menu_plan_id', $vorlage->id)
+            ->whereDate('entry_date', '>=', $abDatum->format('Y-m-d'))->get();
+        $linienMap = $kopie->lines->filter(fn ($l) => $l->source_line_id !== null)
+            ->mapWithKeys(fn ($l) => [(int) $l->source_line_id => (int) $l->id]);
+        $vLinienName = $vorlage->lines->pluck('name', 'id');
+
+        $zellen = [];
+        $sammeln = function ($eintraege, string $seite) use (&$zellen, $linienMap) {
+            foreach ($eintraege as $e) {
+                $vLinie = $seite === 'v' ? (int) $e->line_id : (int) ($linienMap->search((int) $e->line_id) ?: 0);
+                $key = $e->entry_date->format('Y-m-d') . '|' . $e->meal . '|' . $vLinie;
+                $zellen[$key][$seite][] = $e;
+            }
+        };
+        $sammeln($vEintraege->whereNull('deleted_at'), 'v');
+        $sammeln($kopie->entries->filter(fn ($e) => $e->entry_date !== null && $e->entry_date->gte($abDatum)), 'k');
+        $geaendert = [];
+        foreach ($vEintraege as $e) {
+            $ts = $e->deleted_at ?? $e->updated_at ?? $e->created_at;
+            if ($seit === null || ($ts !== null && $ts->gt($seit))) {
+                $geaendert[$e->entry_date->format('Y-m-d') . '|' . $e->meal . '|' . (int) $e->line_id] = true;
+            }
+        }
+
+        $out = [];
+        ksort($zellen);
+        foreach ($zellen as $key => $z) {
+            $v = collect($z['v'] ?? [])->map(fn ($e) => $e->inhaltKey())->filter()->sort()->values()->all();
+            $k = collect($z['k'] ?? [])->map(fn ($e) => $e->inhaltKey())->filter()->sort()->values()->all();
+            if ($v === $k) {
+                continue;
+            }
+            [$datum, $meal, $vLinie] = explode('|', $key);
+            $out[] = [
+                'key' => $key, 'datum' => $datum, 'mahlzeit' => $meal,
+                'linie' => (int) $vLinie > 0 ? ($vLinienName[(int) $vLinie] ?? 'Linie #' . $vLinie) : 'Ohne Linie',
+                'vorlage' => collect($z['v'] ?? [])->map(fn ($e) => $this->eintragName($e))->values()->all(),
+                'betrieb' => collect($z['k'] ?? [])->map(fn ($e) => $this->eintragName($e))->values()->all(),
+                'art' => isset($geaendert[$key]) ? 'vorlage_geaendert' : 'lokal_abweichend',
+            ];
+        }
+        $neueLinien = $vorlage->lines->reject(fn ($l) => $linienMap->has((int) $l->id))
+            ->map(fn ($l) => ['id' => (int) $l->id, 'name' => $l->name])->values()->all();
+
+        return ['vorlage' => ['id' => (int) $vorlage->id, 'name' => $vorlage->name], 'zellen' => $out, 'neue_linien' => $neueLinien];
+    }
+
+    /**
+     * Änderungen aus der Vorlage übernehmen: neue Linien anlegen, dann die gewählten Zellen (oder
+     * alle mit `vorlage_geaendert`) in der Kopie durch den Vorlage-Inhalt ersetzen. Pax des
+     * Betriebs bleiben, wo es sie gab. Setzt den Abgleich-Zeitpunkt.
+     *
+     * @param  list<string>|null  $zellKeys  Keys aus {@see vorlagenAbgleich}; null = alle Vorlage-Änderungen
+     * @return int Anzahl übernommener Zellen
+     */
+    public function ausVorlageUebernehmen(Team $team, int $kopieId, ?array $zellKeys = null): int
+    {
+        $kopie = FoodAlchemistSpeiseplan::visibleToTeam($team)->with('lines')->findOrFail($kopieId);
+        $this->guard($kopie, $team);
+        $abgleich = $this->vorlagenAbgleich($team, $kopieId);
+        if ($abgleich['vorlage'] === null) {
+            throw new \RuntimeException('Dieser Plan ist keine Betriebs-Kopie einer Vorlage.');
+        }
+        $vorlage = FoodAlchemistSpeiseplan::visibleToTeam($team)->with(['lines', 'entries'])->findOrFail($abgleich['vorlage']['id']);
+
+        return \Illuminate\Support\Facades\DB::transaction(function () use ($kopie, $vorlage, $abgleich, $zellKeys) {
+            foreach ($abgleich['neue_linien'] as $nl) {
+                $vl = $vorlage->lines->firstWhere('id', $nl['id']);
+                FoodAlchemistSpeiseplanLinie::create(array_merge($vl->only(self::LINIEN_FELDER), [
+                    'team_id' => $kopie->team_id, 'menu_plan_id' => $kopie->id, 'source_line_id' => $vl->id,
+                    'sort_order' => (int) $kopie->lines()->max('sort_order') + 1,
+                ]));
+            }
+            $linienMap = $kopie->lines()->whereNotNull('source_line_id')->pluck('id', 'source_line_id');
+            $ziel = collect($abgleich['zellen'])->filter(fn ($z) => $zellKeys === null ? $z['art'] === 'vorlage_geaendert' : in_array($z['key'], $zellKeys, true));
+            $n = 0;
+            foreach ($ziel as $z) {
+                $vLinie = (int) explode('|', $z['key'])[2];
+                $kLinie = $vLinie > 0 ? ($linienMap[$vLinie] ?? null) : null;
+                $alt = FoodAlchemistSpeiseplanEintrag::where('menu_plan_id', $kopie->id)->whereDate('entry_date', $z['datum'])
+                    ->where('meal', $z['mahlzeit'])
+                    ->when($kLinie !== null, fn ($q) => $q->where('line_id', $kLinie), fn ($q) => $q->whereNull('line_id'))->get();
+                $paxBetrieb = $alt->max('pax');
+                foreach ($alt as $a) {
+                    $a->delete();
+                }
+                foreach ($vorlage->entries->filter(fn ($e) => $e->entry_date?->format('Y-m-d') === $z['datum'] && $e->meal === $z['mahlzeit'] && (int) $e->line_id === $vLinie) as $e) {
+                    $kopie->entries()->create([
+                        'team_id' => $kopie->team_id, 'entry_date' => $z['datum'], 'week' => 1, 'weekday' => (int) $e->weekday,
+                        'meal' => $e->meal, 'line_id' => $kLinie, 'position' => $e->position,
+                        'concept_id' => $e->concept_id, 'package_id' => $e->package_id, 'sales_recipe_id' => $e->sales_recipe_id,
+                        'pax' => $paxBetrieb ?? $e->pax,
+                    ]);
+                }
+                $n++;
+            }
+            $kopie->update(['source_synced_at' => now()]);
+
+            return $n;
+        });
+    }
+
+    // ── Spec 57 · Paket 8: Plan/Ist (nur lesend, vorhandene Verkaufsdaten) ──────
+
+    /**
+     * Plan gegen Ist einer Woche und Mahlzeit, je Gericht: geplante Essen und Plan-Umsatz gegen
+     * verkaufte Menge und Umsatz aus dem Verkaufsjournal (`foodalchemist_sales_facts`, strikt das
+     * eigene Team). Concepts und Pakete haben kein Gericht in der Kasse → „nicht vergleichbar“.
+     * Das Journal kennt keinen Betrieb (nur `source_scope_label`) — es zählt jede Verkaufsstelle
+     * des Teams; das steht als Hinweis im Ergebnis.
+     *
+     * @return array{zeilen: list<array>, summe: array, hat_ist: bool, nicht_vergleichbar: list<string>, hinweis: string}
+     */
+    public function planIst(Team $team, FoodAlchemistSpeiseplan $plan, string $mahlzeit, Carbon $montag, ?\Platform\FoodAlchemist\Models\FoodAlchemistOutlet $outlet = null): array
+    {
+        $mahlzeit = array_key_exists($mahlzeit, self::MAHLZEITEN) ? $mahlzeit : 'mittag';
+        $mo = $montag->copy()->startOfWeek(Carbon::MONDAY)->startOfDay();
+        $so = $mo->copy()->addDays(6);
+        $proGericht = [];
+        $nichtVergleichbar = [];
+        foreach ($plan->entries as $e) {
+            if ($e->entry_date === null || $e->meal !== $mahlzeit || ! $e->entry_date->between($mo, $so)) {
+                continue;
+            }
+            if ($e->sales_recipe_id === null) {
+                $nichtVergleichbar[] = $e->inhaltName();
+
+                continue;
+            }
+            $gid = (int) $e->sales_recipe_id;
+            $pax = $this->effektivePax($e, $plan);
+            $proGericht[$gid]['name'] ??= $this->eintragName($e);
+            $proGericht[$gid]['plan'] = ($proGericht[$gid]['plan'] ?? 0) + $pax;
+            $proGericht[$gid]['plan_umsatz'] = ($proGericht[$gid]['plan_umsatz'] ?? 0) + $this->eintragPreis($e, $outlet)['vk'] * $pax;
+        }
+
+        $ist = $proGericht === [] ? collect() : \Platform\FoodAlchemist\Models\FoodAlchemistSalesFact::where('team_id', $team->id)
+            ->whereIn('recipe_id', array_keys($proGericht))
+            ->whereBetween('sold_at', [$mo->format('Y-m-d'), $so->format('Y-m-d')])
+            ->selectRaw('recipe_id, SUM(qty_sold) as menge, SUM(revenue_net) as umsatz')
+            ->groupBy('recipe_id')->get()->keyBy('recipe_id');
+
+        $zeilen = [];
+        $summe = ['plan' => 0, 'ist' => 0.0, 'plan_umsatz' => 0.0, 'ist_umsatz' => 0.0];
+        foreach ($proGericht as $gid => $g) {
+            $i = $ist->get($gid);
+            $menge = $i !== null ? (float) $i->menge : null;
+            $umsatz = $i !== null ? (float) $i->umsatz : null;
+            $zeilen[] = [
+                'recipe_id' => $gid, 'name' => $g['name'], 'plan' => (int) $g['plan'],
+                'ist' => $menge, 'abweichung_pct' => $menge !== null && $g['plan'] > 0 ? round(($menge - $g['plan']) / $g['plan'] * 100, 1) : null,
+                'plan_umsatz' => round($g['plan_umsatz'], 2), 'ist_umsatz' => $umsatz !== null ? round($umsatz, 2) : null,
+            ];
+            $summe['plan'] += (int) $g['plan'];
+            $summe['plan_umsatz'] += $g['plan_umsatz'];
+            if ($menge !== null) {
+                $summe['ist'] += $menge;
+                $summe['ist_umsatz'] += (float) $umsatz;
+            }
+        }
+        usort($zeilen, fn ($a, $b) => strcmp($a['name'], $b['name']));
+        $hatIst = $ist->isNotEmpty();
+        $summe['plan_umsatz'] = round($summe['plan_umsatz'], 2);
+        $summe['ist_umsatz'] = round($summe['ist_umsatz'], 2);
+        $summe['abweichung_pct'] = $hatIst && $summe['plan'] > 0 ? round(($summe['ist'] - $summe['plan']) / $summe['plan'] * 100, 1) : null;
+
+        return [
+            'zeilen' => $zeilen, 'summe' => $summe, 'hat_ist' => $hatIst,
+            'nicht_vergleichbar' => array_values(array_unique($nichtVergleichbar)),
+            'hinweis' => 'Ist aus dem Verkaufsjournal des Teams (alle Verkaufsstellen, Zeitraum Mo–So). Gerichte ohne Zuordnung im Journal zählen nicht.',
+        ];
     }
 
     public function crmVerfuegbar(): bool

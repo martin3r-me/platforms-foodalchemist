@@ -34,7 +34,21 @@ class FoodAlchemistSpeiseplan extends Model
         'default_pax' => 'integer',
         'budget_wareneinsatz' => 'float',
         'opening_days' => 'array',
+        'is_template' => 'boolean',
+        'source_synced_at' => 'datetime',
     ];
+
+    /** Spec 57 · Paket 7: die Vorlage, aus der diese Betriebs-Kopie stammt. */
+    public function sourcePlan(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(self::class, 'source_plan_id');
+    }
+
+    /** Spec 57 · Paket 7: die Betriebs-Kopien dieser Vorlage. */
+    public function betriebsKopien(): HasMany
+    {
+        return $this->hasMany(self::class, 'source_plan_id');
+    }
 
     /** Spec 57 · Paket 9: Standard-Öffnungstage, wenn nichts gepflegt ist (GV-Werktage). */
     public const OEFFNUNGSTAGE_STANDARD = [1, 2, 3, 4, 5];
