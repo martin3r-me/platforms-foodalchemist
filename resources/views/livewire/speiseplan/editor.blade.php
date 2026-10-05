@@ -80,6 +80,7 @@
                 <x-foodalchemist::editor-tabs marker="sp" wire-key="sp-tabs-{{ $sp->id }}" :init="'kalender'"
                     :tabs="[
                         'kalender' => 'Kalender',
+                        'mengen' => 'Mengen',
                         'linien' => 'Menü-Linien',
                         'stammdaten' => 'Stammdaten',
                         'praesentation' => 'Branding & Präsentation',
@@ -109,6 +110,9 @@
                             @endif
                             <a href="{{ route('foodalchemist.speiseplan.dokument', ['id' => $sp->id, 'mahlzeit' => $mahlzeit, 'montag' => $montagDt->format('Y-m-d')]) }}" target="_blank"
                                class="{{ $btnGhostXs }}" title="Wochen-Aushang (Druck/PDF) mit Allergen- & Zusatzstoff-Legende" data-sp-aushang>@svg('heroicon-o-printer', 'w-3.5 h-3.5 inline-block align-middle') Aushang</a>
+                            @if($ansicht === 'woche')
+                                <button type="button" wire:click="wocheKopierenOeffnen" class="{{ $btnGhostXs }}" title="Diese Woche auf eine andere Woche kopieren" data-sp-woche-kopieren-btn>@svg('heroicon-o-document-duplicate', 'w-3.5 h-3.5 inline-block align-middle') Woche kopieren</button>
+                            @endif
                             <button type="button" wire:click="anProduktion"
                                     wire:confirm="Diese Woche ({{ $mahlzeiten[$mahlzeit] ?? '' }}) an die Produktion übergeben? Je Werktag mit Belegung wird ein Produktionsauftrag angelegt (Menge = Teilnehmerzahl)."
                                     class="{{ $btnGhostXs }}" title="Woche × Teilnehmerzahl → Produktionsaufträge (je Werktag einer)" data-sp-produktion>@svg('heroicon-o-fire', 'w-3.5 h-3.5 inline-block align-middle') → Produktion</button>
@@ -134,7 +138,8 @@
                             @php($zkLinien = $zk['linien'] ?? [])
                             @php($tagStatusText = ['ok' => 'text-emerald-300', 'unter' => 'text-sky-300', 'ueber' => 'text-amber-300', 'weit_ueber' => 'text-rose-300', 'unbekannt' => 'text-gray-400'])
                             <x-foodalchemist::modal-section title="Wochen-Matrix">
-                                <div class="overflow-x-auto" data-sp-matrix>
+                                @if($umbauHinweis)<div class="mb-2 rounded-lg bg-violet-500/10 border border-violet-400/30 text-violet-100 text-xs px-3 py-1.5" data-sp-umbau-hinweis>{{ $umbauHinweis }}</div>@endif
+                                <div class="overflow-x-auto" data-sp-matrix x-data="{ dragId: null }">
                                     <table class="{{ $table }}" style="table-layout:fixed; width:100%; min-width:{{ max(640, 150 + count($wochenTage) * 150) }}px;">
                                         <thead><tr class="text-left">
                                             <th class="{{ $th }}" style="width:150px">Linie</th>
@@ -167,10 +172,13 @@
                                                     @foreach($wochenTage as $tag)
                                                         @php($ymd = $tag->format('Y-m-d'))
                                                         @php($eintraege = $raster[$zl['id']][$ymd] ?? [])
-                                                        <td class="{{ $td }} align-top {{ ($cellDatum === $ymd && $cellLinie === ($zl['id'] ?: null)) ? 'bg-violet-500/10 rounded-lg' : '' }}">
+                                                        <td class="{{ $td }} align-top {{ ($cellDatum === $ymd && $cellLinie === ($zl['id'] ?: null)) ? 'bg-violet-500/10 rounded-lg' : '' }}"
+                                                            x-on:dragover.prevent
+                                                            x-on:drop="if (dragId) { $wire.eintragVerschieben(dragId, '{{ $ymd }}', {{ $zl['id'] }}); dragId = null }"
+                                                            data-sp-drop="{{ $zl['id'] }}|{{ $ymd }}">
                                                             <div class="space-y-1">
                                                                 @foreach($eintraege as $e)
-                                                                    @include('foodalchemist::livewire.speiseplan.partials.zelle', ['e' => $e, 'k' => $zkEintraege[$e->id] ?? null, 'farbe' => $zl['color'], 'dichte' => $dichte, 'sp' => $sp])
+                                                                    @include('foodalchemist::livewire.speiseplan.partials.zelle', ['e' => $e, 'k' => $zkEintraege[$e->id] ?? null, 'farbe' => $zl['color'], 'dichte' => $dichte, 'sp' => $sp, 'detailId' => $detailEintragId])
                                                                 @endforeach
                                                                 @if($zl['id'] !== 0)
                                                                     <button type="button" wire:click="zelleOeffnen('{{ $ymd }}', {{ $zl['id'] }})"
@@ -216,11 +224,89 @@
                                     <span>Vg vegan · Vt vegetarisch · Sw Schwein · Rd Rind · Fi Fisch · Fl Fleisch · Buchstaben/Zahlen = LMIV · * am Preis = Linienpreis</span>
                                 </div>
 
+                                {{-- Spec 57 · Paket 5: Woche kopieren --}}
+                                @if($wocheKopierenOffen)
+                                    <div class="mt-3 rounded-xl border border-white/15 bg-white/5 p-3 text-xs text-gray-200 space-y-2" data-sp-woche-kopieren>
+                                        <div class="font-medium">KW {{ (int) $montagDt->format('W') }} kopieren (alle Mahlzeiten)</div>
+                                        <div class="flex flex-wrap items-end gap-3">
+                                            <label class="flex flex-col gap-1"><span class="{{ $label }}">Zielwoche</span>
+                                                <select wire:model="wocheKopierenZiel" class="{{ $input }} h-8">
+                                                    @foreach($zielWochen as $zw)
+                                                        <option value="{{ $zw->format('Y-m-d') }}">KW {{ $zw->isoWeek() }} · {{ $zw->format('d.m.') }}–{{ $zw->copy()->addDays(6)->format('d.m.Y') }}</option>
+                                                    @endforeach
+                                                </select>
+                                            </label>
+                                            <label class="flex items-center gap-1.5"><input type="checkbox" wire:model="wocheKopierenMerge" /> mit vorhandenen Einträgen zusammenführen</label>
+                                            <label class="flex items-center gap-1.5"><input type="checkbox" wire:model="wocheKopierenPax" /> Mengen (Pax) mitnehmen</label>
+                                            <button type="button" wire:click="wocheKopieren" class="{{ $btnPrimary }} h-8">Kopieren</button>
+                                            <button type="button" wire:click="$set('wocheKopierenOffen', false)" class="{{ $btnGhost }} h-8">Abbrechen</button>
+                                        </div>
+                                        <p class="text-[11px] text-gray-400">Ohne Zusammenführen werden belegte Zellen der Zielwoche ersetzt. Einzelne Einträge kopierst du über ihr Detail.</p>
+                                    </div>
+                                @endif
+
+                                {{-- Spec 57 · Paket 5: Eintrag-Detail — Tastatur-Weg zu Ersetzen, Verschieben, Kopieren (MVP-032) --}}
+                                @if($detailEintrag)
+                                    @php($dk = $detailKennzahlen ?? [])
+                                    <div class="mt-3 pt-3 border-t border-white/10 space-y-3" data-sp-eintrag-detail="{{ $detailEintrag->id }}">
+                                        <div class="flex items-start justify-between gap-2">
+                                            <div>
+                                                <div class="{{ $label }}">{{ $linien->firstWhere('id', $detailEintrag->line_id)?->name ?? 'Ohne Linie' }} · {{ $tagKurz[$detailEintrag->entry_date->isoWeekday()] ?? '' }} {{ $detailEintrag->entry_date->format('d.m.') }} · {{ $mahlzeiten[$detailEintrag->meal] ?? $detailEintrag->meal }}</div>
+                                                <div class="text-sm font-medium text-gray-100">{{ $dk['titel'] ?? $detailEintrag->inhaltName() }}</div>
+                                                @if(! empty($dk['untertitel']))<div class="text-[11px] text-gray-400">{{ $dk['untertitel'] }}</div>@endif
+                                            </div>
+                                            <button type="button" wire:click="eintragSchliessen" class="{{ $btnGhostXs }}" aria-label="Detail schließen">schließen</button>
+                                        </div>
+                                        @if($dk !== [])
+                                            <div class="grid grid-cols-3 gap-2 text-center text-xs tabular-nums">
+                                                <div class="rounded-lg bg-white/5 p-2"><div class="{{ $label }}">VK netto</div><div class="text-gray-100">{{ number_format((float) $dk['vk'], 2, ',', '.') }} €</div></div>
+                                                <div class="rounded-lg bg-white/5 p-2"><div class="{{ $label }}">EK</div><div class="text-gray-100">{{ number_format((float) $dk['ek'], 2, ',', '.') }} €</div></div>
+                                                <div class="rounded-lg bg-white/5 p-2"><div class="{{ $label }}">Wareneinsatz</div><div class="text-gray-100">{{ $dk['wes'] !== null ? number_format((float) $dk['wes'], 1, ',', '.') . ' %' : '—' }}</div></div>
+                                            </div>
+                                        @endif
+                                        <div class="flex flex-wrap items-end gap-3 text-xs">
+                                            <button type="button" wire:click="eintragErsetzenStarten({{ $detailEintrag->id }})" class="{{ $btnGhost }} h-8">Ersetzen …</button>
+                                            <div class="flex items-end gap-2" data-sp-verschieben>
+                                                <label class="flex flex-col gap-1"><span class="{{ $label }}">Verschieben nach</span>
+                                                    <select wire:model="verschiebeDatum" class="{{ $input }} h-8">
+                                                        @foreach($wochenTage as $wt)
+                                                            <option value="{{ $wt->format('Y-m-d') }}">{{ $tagKurz[$wt->isoWeekday()] }} {{ $wt->format('d.m.') }}</option>
+                                                        @endforeach
+                                                    </select>
+                                                </label>
+                                                <label class="flex flex-col gap-1"><span class="{{ $label }}">Linie</span>
+                                                    <select wire:model="verschiebeLinie" class="{{ $input }} h-8">
+                                                        <option value="">Ohne Linie</option>
+                                                        @foreach($matrixLinien as $ml)
+                                                            <option value="{{ $ml->id }}">{{ $ml->name }}</option>
+                                                        @endforeach
+                                                    </select>
+                                                </label>
+                                                <button type="button" wire:click="eintragVerschiebenAusDetail" class="{{ $btnGhost }} h-8">Verschieben</button>
+                                            </div>
+                                            <div class="flex items-end gap-2" data-sp-kopieren>
+                                                <fieldset class="flex flex-col gap-1"><legend class="{{ $label }}">Auf Tage kopieren</legend>
+                                                    <span class="flex flex-wrap gap-1">
+                                                        @foreach($wochenTage as $wt)
+                                                            @php($wtYmd = $wt->format('Y-m-d'))
+                                                            <label class="flex items-center gap-1 px-1.5 py-1 rounded border border-white/10 {{ $wtYmd === $detailEintrag->entry_date->format('Y-m-d') ? 'opacity-40' : '' }}">
+                                                                <input type="checkbox" wire:model="kopierTage" value="{{ $wtYmd }}" @disabled($wtYmd === $detailEintrag->entry_date->format('Y-m-d')) /> {{ $tagKurz[$wt->isoWeekday()] }}
+                                                            </label>
+                                                        @endforeach
+                                                    </span>
+                                                </fieldset>
+                                                <button type="button" wire:click="eintragKopieren" class="{{ $btnGhost }} h-8">Kopieren</button>
+                                            </div>
+                                            <button type="button" wire:click="eintragRaus({{ $detailEintrag->id }})" wire:confirm="Eintrag entfernen?" class="{{ $btnGhostXs }} text-red-400 h-8">Entfernen</button>
+                                        </div>
+                                    </div>
+                                @endif
+
                                 {{-- Inhalts-Picker für die aktive Zelle (inline, Livewire-sicher) --}}
                                 @if($cellDatum !== null)
                                     <div class="mt-3 pt-3 border-t border-white/10 space-y-2" data-sp-picker>
                                         <div class="flex items-center gap-2 flex-wrap">
-                                            <span class="{{ $label }}">Einfügen · {{ \Illuminate\Support\Carbon::parse($cellDatum)->format('d.m.') }} · {{ $linien->firstWhere('id', $cellLinie)?->name ?? '—' }}:</span>
+                                            <span class="{{ $label }}">{{ $pickerErsetzenId ? 'Ersetzen' : 'Einfügen' }} · {{ \Illuminate\Support\Carbon::parse($cellDatum)->format('d.m.') }} · {{ $linien->firstWhere('id', $cellLinie)?->name ?? '—' }}:</span>
                                             @foreach(['gericht' => 'Gericht', 'concept' => 'Concept', 'paket' => 'Paket'] as $tv => $tl)
                                                 <button type="button" wire:click="$set('pickerTyp', '{{ $tv }}')" class="{{ $pill }} {{ $pickerTyp === $tv ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $tl }}</button>
                                             @endforeach
@@ -299,6 +385,83 @@
                                 <p class="mt-3 text-[11px] text-gray-400">Tag anklicken → springt in die Wochenansicht. Belegung der Mahlzeit „{{ $mahlzeiten[$mahlzeit] ?? '' }}".</p>
                             </x-foodalchemist::modal-section>
                         @endif
+                    </div>
+
+                    {{-- ═══ Spec 57 · Paket 3: Tab MENGEN (Essen je Linie × Tag) ═══ --}}
+                    <div x-show="tab === 'mengen'" x-cloak class="pt-4 space-y-3" data-sp-tab-mengen>
+                        <x-foodalchemist::modal-section title="Mengen · KW {{ (int) $montagDt->format('W') }} · {{ $mahlzeiten[$mahlzeit] ?? '' }}">
+                            <x-slot:actions>
+                                <span class="text-[11px] text-gray-400">Woche und Mahlzeit wie im Kalender</span>
+                            </x-slot:actions>
+                            <div class="flex flex-wrap items-end gap-3 mb-3 text-xs">
+                                <button type="button" wire:click="mengenVorwoche" class="{{ $btnGhost }} h-8" data-sp-mengen-vorwoche>↺ Mengen aus Vorwoche übernehmen</button>
+                                <label class="flex items-center gap-2 text-gray-300">Skalieren um Faktor
+                                    <input type="text" inputmode="decimal" wire:model="mengenFaktor" class="{{ $input }} h-8 w-20 text-right tabular-nums" aria-label="Skalierungsfaktor" />
+                                </label>
+                                <button type="button" wire:click="mengenSkalieren" class="{{ $btnGhost }} h-8">Anwenden</button>
+                                @if($mengenHinweis)<span class="text-violet-300" data-sp-mengen-hinweis>{{ $mengenHinweis }}</span>@endif
+                            </div>
+                            @if($mengen && $mengen['zeilen'] !== [])
+                                <div class="overflow-x-auto">
+                                    <table class="{{ $table }}" style="min-width:{{ 520 + count($mengen['tage']) * 70 }}px" data-sp-mengen-matrix>
+                                        <thead><tr class="text-left">
+                                            <th class="{{ $th }}">Linie</th>
+                                            <th class="{{ $th }} text-right" title="Summe der Vorwoche (Planwerte)">Vorwoche</th>
+                                            <th class="{{ $th }} text-right" title="Ø der letzten vier Wochen (Planwerte)">Ø 4 Wo.</th>
+                                            @foreach($mengen['tage'] as $mt)
+                                                <th class="{{ $th }} text-center">{{ $tagKurz[\Illuminate\Support\Carbon::parse($mt)->isoWeekday()] }}</th>
+                                            @endforeach
+                                            <th class="{{ $th }} text-right">Σ</th><th class="{{ $th }} text-right">Anteil</th><th class="{{ $th }} text-right">WES</th><th class="{{ $th }} text-right">Ø VK</th><th class="{{ $th }} text-right">Umsatz</th>
+                                        </tr></thead>
+                                        <tbody>
+                                            @foreach($mengen['zeilen'] as $mz)
+                                                <tr class="border-t border-white/10" wire:key="mz-{{ $mz['line_id'] }}">
+                                                    <td class="{{ $td }}"><span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full" style="background: {{ $mz['color'] ?: '#94a3b8' }}"></span><span class="text-xs text-gray-200">{{ $mz['name'] }}</span></span></td>
+                                                    <td class="{{ $td }} text-right text-xs tabular-nums text-gray-400">{{ $mz['vorwoche'] ?: '—' }}</td>
+                                                    <td class="{{ $td }} text-right text-xs tabular-nums text-gray-400">{{ $mz['schnitt4'] > 0 ? number_format($mz['schnitt4'], 0, ',', '.') : '—' }}</td>
+                                                    @foreach($mengen['tage'] as $mt)
+                                                        @php($mp = $mz['zellen'][$mt] ?? null)
+                                                        <td class="{{ $td }} text-center">
+                                                            @if($mp !== null)
+                                                                <input type="number" min="0" value="{{ $mp }}"
+                                                                       wire:change="mengenSetzen({{ $mz['line_id'] }}, '{{ $mt }}', $event.target.value)"
+                                                                       aria-label="Essen {{ $mz['name'] }} am {{ \Illuminate\Support\Carbon::parse($mt)->format('d.m.') }}"
+                                                                       class="{{ $input }} h-7 w-16 text-right tabular-nums text-xs" />
+                                                            @else
+                                                                <span class="text-[11px] text-gray-500" title="Zelle nicht belegt — erst im Kalender ein Gericht setzen">–</span>
+                                                            @endif
+                                                        </td>
+                                                    @endforeach
+                                                    <td class="{{ $td }} text-right text-xs tabular-nums font-medium text-gray-100">{{ number_format($mz['summe'], 0, ',', '.') }}</td>
+                                                    <td class="{{ $td }} text-right text-xs tabular-nums text-gray-400">{{ $mz['anteil'] !== null ? number_format($mz['anteil'], 1, ',', '.') . ' %' : '—' }}</td>
+                                                    <td class="{{ $td }} text-right text-xs tabular-nums text-gray-300">{{ $mz['wes'] !== null ? number_format($mz['wes'], 1, ',', '.') . ' %' : '—' }}</td>
+                                                    <td class="{{ $td }} text-right text-xs tabular-nums text-gray-300">{{ $mz['vk_schnitt'] !== null ? number_format($mz['vk_schnitt'], 2, ',', '.') . ' €' : '—' }}</td>
+                                                    <td class="{{ $td }} text-right text-xs tabular-nums text-gray-100">{{ number_format($mz['umsatz'], 0, ',', '.') }} €</td>
+                                                </tr>
+                                            @endforeach
+                                        </tbody>
+                                        <tfoot>
+                                            <tr class="border-t border-white/15 bg-white/[0.03]">
+                                                <td class="{{ $td }}"><span class="{{ $label }}">Gesamt</span></td>
+                                                <td class="{{ $td }} text-right text-xs tabular-nums text-gray-400">{{ number_format($mengen['summe']['vorwoche'], 0, ',', '.') }}</td>
+                                                <td class="{{ $td }} text-right text-xs tabular-nums text-gray-400">{{ number_format($mengen['summe']['schnitt4'], 0, ',', '.') }}</td>
+                                                @foreach($mengen['tage'] as $mt)
+                                                    <td class="{{ $td }} text-center text-xs tabular-nums text-gray-300">{{ number_format($mengen['summe']['je_tag'][$mt] ?? 0, 0, ',', '.') }}</td>
+                                                @endforeach
+                                                <td class="{{ $td }} text-right text-xs tabular-nums font-semibold text-gray-100">{{ number_format($mengen['summe']['summe'], 0, ',', '.') }}</td>
+                                                <td class="{{ $td }}"></td>
+                                                <td class="{{ $td }} text-right text-xs tabular-nums text-gray-300">{{ $mengen['summe']['wes'] !== null ? number_format($mengen['summe']['wes'], 1, ',', '.') . ' %' : '—' }}</td>
+                                                <td class="{{ $td }}"></td>
+                                                <td class="{{ $td }} text-right text-xs tabular-nums font-semibold text-gray-100">{{ number_format($mengen['summe']['umsatz'], 0, ',', '.') }} €</td>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
+                                </div>
+                                <p class="text-[11px] text-gray-400 mt-2">Eine Zahl gilt für alle Einträge der Zelle. Leer oder 0 setzt zurück auf den Standard der Linie bzw. des Plans. „Vorwoche“ und „Ø 4 Wo.“ sind Planwerte; echte Verkaufszahlen kommen mit dem Plan/Ist-Abgleich.</p>
+                            @else
+                                <p class="text-[11px] text-gray-400">Für diese Mahlzeit gibt es keine Linien.</p>
+                            @endif
+                        </x-foodalchemist::modal-section>
                     </div>
 
                     {{-- ═══ Tab: MENÜ-LINIEN ═══ --}}

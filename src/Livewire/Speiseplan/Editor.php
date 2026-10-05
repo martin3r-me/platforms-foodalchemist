@@ -260,6 +260,35 @@ class Editor extends Component
     /** Spec 57 · 0.3: Ausrollen darf belegte Zellen ersetzen (Standard: belegte bleiben unberührt). */
     public bool $ausrollenErsetzen = false;
 
+    // ── Spec 57 · Paket 5: Eintrag-Detail (Ersetzen/Verschieben/Kopieren) + Woche kopieren ──
+    public ?int $detailEintragId = null;
+
+    public ?string $verschiebeDatum = null;
+
+    /** Untypisiert: das Select liefert "" für „Ohne Linie“ (wird in eintragVerschieben zu null). */
+    public $verschiebeLinie = null;
+
+    /** @var list<string> Zieltage (Y-m-d) für „auf andere Tage kopieren“. */
+    public array $kopierTage = [];
+
+    /** Picker im Ersetzen-Modus: dieser Eintrag bekommt den gewählten Inhalt. */
+    public ?int $pickerErsetzenId = null;
+
+    public bool $wocheKopierenOffen = false;
+
+    public ?string $wocheKopierenZiel = null;
+
+    public bool $wocheKopierenMerge = false;
+
+    public bool $wocheKopierenPax = true;
+
+    public ?string $umbauHinweis = null;
+
+    // ── Spec 57 · Paket 3: Mengen ──
+    public string $mengenFaktor = '1';
+
+    public ?string $mengenHinweis = null;
+
     // Stufe C: Rückmeldung der Produktions-Übergabe
     public ?string $prodHinweis = null;
 
@@ -415,12 +444,16 @@ class Editor extends Component
     {
         $this->montag = Carbon::parse($this->montag ?? 'now')->startOfWeek(Carbon::MONDAY)->addWeeks($wochen)->format('Y-m-d');
         $this->cellSchliessen();
+        $this->eintragSchliessen();
+        $this->wocheKopierenOffen = false;
     }
 
     public function heute(): void
     {
         $this->montag = Carbon::now()->startOfWeek(Carbon::MONDAY)->format('Y-m-d');
         $this->cellSchliessen();
+        $this->eintragSchliessen();
+        $this->wocheKopierenOffen = false;
     }
 
     public function monatVerschieben(int $monate): void
@@ -538,6 +571,146 @@ class Editor extends Component
         $this->pickerSuche = '';
         $this->pickerHauptgruppe = null;
         $this->pickerDishClass = null;
+        $this->pickerErsetzenId = null;
+    }
+
+    // ── Spec 57 · Paket 5: Umbauen ─────────────────────────────────────────
+
+    /** Eintrag-Detail öffnen (Klick auf den Eintrag oder Enter) — Tastatur-Weg zu allen Aktionen. */
+    public function eintragOeffnen(int $id, SpeiseplanService $svc): void
+    {
+        $e = $this->eintragDesPlans($svc, $id);
+        if ($e === null) {
+            return;
+        }
+        $this->detailEintragId = $id;
+        $this->verschiebeDatum = $e->entry_date?->format('Y-m-d');
+        $this->verschiebeLinie = $e->line_id !== null ? (int) $e->line_id : null;
+        $this->kopierTage = [];
+        $this->umbauHinweis = null;
+    }
+
+    public function eintragSchliessen(): void
+    {
+        $this->detailEintragId = null;
+        $this->kopierTage = [];
+    }
+
+    /** Drag & Drop in der Matrix (und „Verschieben“ im Detail): Eintrag in Zelle Datum × Linie legen. */
+    public function eintragVerschieben(int $id, string $datum, $lineId, SpeiseplanService $svc): void
+    {
+        if ($this->planId === null || $this->eintragDesPlans($svc, $id) === null) {
+            return;
+        }
+        $lineId = (int) $lineId > 0 ? (int) $lineId : null;
+        $svc->verschiebeEintrag($this->team(), $id, $datum, $lineId, $this->mahlzeit);
+        $this->umbauHinweis = 'Eintrag verschoben.';
+        $this->dispatch('speiseplan-geaendert');
+    }
+
+    public function eintragVerschiebenAusDetail(SpeiseplanService $svc): void
+    {
+        if ($this->detailEintragId === null || $this->verschiebeDatum === null) {
+            return;
+        }
+        $this->eintragVerschieben($this->detailEintragId, $this->verschiebeDatum, $this->verschiebeLinie, $svc);
+    }
+
+    /** Ersetzen: öffnet den Picker an der Zelle des Eintrags; die Auswahl tauscht den Inhalt. */
+    public function eintragErsetzenStarten(int $id, SpeiseplanService $svc): void
+    {
+        $e = $this->eintragDesPlans($svc, $id);
+        if ($e === null) {
+            return;
+        }
+        $this->zelleOeffnen((string) $e->entry_date?->format('Y-m-d'), $e->line_id !== null ? (int) $e->line_id : null);
+        $this->pickerErsetzenId = $id;
+    }
+
+    public function eintragKopieren(SpeiseplanService $svc): void
+    {
+        if ($this->detailEintragId === null || $this->kopierTage === []) {
+            $this->umbauHinweis = 'Mindestens einen Zieltag wählen.';
+
+            return;
+        }
+        $n = $svc->kopiereEintrag($this->team(), $this->detailEintragId, $this->kopierTage);
+        $this->kopierTage = [];
+        $this->umbauHinweis = $n > 0 ? "Auf {$n} Tag(e) kopiert." : 'Nichts kopiert — der Inhalt steht dort schon.';
+        $this->dispatch('speiseplan-geaendert');
+    }
+
+    public function wocheKopierenOeffnen(): void
+    {
+        $this->wocheKopierenOffen = true;
+        $this->wocheKopierenZiel = Carbon::parse($this->montag ?? 'now')->startOfWeek(Carbon::MONDAY)->addWeek()->format('Y-m-d');
+        $this->umbauHinweis = null;
+    }
+
+    public function wocheKopieren(SpeiseplanService $svc): void
+    {
+        if ($this->planId === null || $this->wocheKopierenZiel === null) {
+            return;
+        }
+        try {
+            $res = $svc->kopiereWoche($this->team(), $this->planId, (string) $this->montag, $this->wocheKopierenZiel, $this->wocheKopierenMerge, $this->wocheKopierenPax);
+            $ziel = Carbon::parse($this->wocheKopierenZiel);
+            $this->umbauHinweis = $res['kopiert'] . ' Einträge nach KW ' . $ziel->isoWeek() . ' kopiert'
+                . ($res['ersetzt'] > 0 ? ', ' . $res['ersetzt'] . ' ersetzt' : '') . '.';
+            $this->wocheKopierenOffen = false;
+            $this->dispatch('speiseplan-geaendert');
+        } catch (\RuntimeException $e) {
+            $this->umbauHinweis = $e->getMessage();
+        }
+    }
+
+    // ── Spec 57 · Paket 3: Mengen ──────────────────────────────────────────
+
+    public function mengenSetzen(int $lineId, string $datum, $wert, SpeiseplanService $svc): void
+    {
+        if ($this->planId === null) {
+            return;
+        }
+        $svc->setzeZellenPax($this->team(), $this->planId, $lineId, $datum, $this->mahlzeit, $wert);
+        $this->mengenHinweis = null;
+        $this->dispatch('speiseplan-geaendert');
+    }
+
+    public function mengenVorwoche(SpeiseplanService $svc): void
+    {
+        if ($this->planId === null) {
+            return;
+        }
+        $n = $svc->uebernehmeVorwoche($this->team(), $this->planId, $this->mahlzeit, Carbon::parse($this->montag ?? 'now'));
+        $this->mengenHinweis = $n > 0 ? "Mengen aus der Vorwoche übernommen ({$n} Einträge)." : 'Die Vorwoche hat für diese Linien keine Mengen.';
+        $this->dispatch('speiseplan-geaendert');
+    }
+
+    public function mengenSkalieren(SpeiseplanService $svc): void
+    {
+        if ($this->planId === null) {
+            return;
+        }
+        $faktor = (float) str_replace(',', '.', $this->mengenFaktor);
+        try {
+            $n = $svc->skaliereWoche($this->team(), $this->planId, $this->mahlzeit, Carbon::parse($this->montag ?? 'now'), $faktor);
+            $this->mengenHinweis = "{$n} Einträge mit Faktor " . str_replace('.', ',', (string) $faktor) . ' skaliert.';
+            $this->mengenFaktor = '1';
+            $this->dispatch('speiseplan-geaendert');
+        } catch (\RuntimeException $e) {
+            $this->mengenHinweis = $e->getMessage();
+        }
+    }
+
+    /** Eintrag nur, wenn er zu DIESEM Plan gehört (Payload-IDs aus dem Browser nie blind nehmen). */
+    private function eintragDesPlans(SpeiseplanService $svc, int $id): ?\Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplanEintrag
+    {
+        if ($this->planId === null) {
+            return null;
+        }
+
+        return \Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplanEintrag::visibleToTeam($this->team())
+            ->where('menu_plan_id', $this->planId)->find($id);
     }
 
     /** Spec 42: Hauptgruppen-Facette umschalten (klick-erneut = löschen); Unterklasse zurücksetzen. */
@@ -559,6 +732,15 @@ class Editor extends Component
             return;
         }
         $feld = ['concept' => 'concept_id', 'paket' => 'package_id', 'gericht' => 'sales_recipe_id'][$typ] ?? 'sales_recipe_id';
+        // Spec 57 · Paket 5: Picker im Ersetzen-Modus tauscht den Inhalt statt einen neuen Eintrag anzulegen.
+        if ($this->pickerErsetzenId !== null && $this->eintragDesPlans($svc, $this->pickerErsetzenId) !== null) {
+            $svc->ersetzeEintrag($this->team(), $this->pickerErsetzenId, [$feld => $id]);
+            $this->umbauHinweis = 'Eintrag ersetzt.';
+            $this->cellSchliessen();
+            $this->dispatch('speiseplan-geaendert');
+
+            return;
+        }
         $svc->addEintrag($this->team(), $this->planId, [
             'entry_date' => $this->cellDatum, 'line_id' => $this->cellLinie, 'mahlzeit' => $this->mahlzeit, $feld => $id,
         ]);
@@ -569,6 +751,9 @@ class Editor extends Component
     public function eintragRaus(int $id, SpeiseplanService $svc): void
     {
         $svc->removeEintrag($this->team(), $id);
+        if ($this->detailEintragId === $id) {
+            $this->eintragSchliessen();
+        }
         $this->dispatch('speiseplan-geaendert');
     }
 
@@ -796,6 +981,18 @@ class Editor extends Component
         $zk = $sp !== null
             ? $svc->zellenKennzahlen($team, $sp, $this->mahlzeit, $montag, $outlet, $this->ansicht === 'woche' && $this->dichte === 'detail')
             : null;
+        // Spec 57 · Paket 5: Eintrag-Detail (nur Einträge dieses Plans; verschwundener Eintrag schließt es).
+        $detailEintrag = $sp !== null && $this->detailEintragId !== null ? $sp->entries->firstWhere('id', $this->detailEintragId) : null;
+        if ($this->detailEintragId !== null && $detailEintrag === null) {
+            $this->detailEintragId = null;
+        }
+        $detailKennzahlen = $detailEintrag !== null
+            ? ($zk['eintraege'][$detailEintrag->id] ?? null)
+            : null;
+        // Spec 57 · Paket 3: Mengen-Matrix der sichtbaren Woche/Mahlzeit.
+        $mengen = $sp !== null ? $svc->mengenMatrix($team, $sp, $this->mahlzeit, $montag, $outlet) : null;
+        $zielWochen = collect([-4, -3, -2, -1, 1, 2, 3, 4, 5, 6, 7, 8])
+            ->map(fn (int $w) => $montag->copy()->addWeeks($w))->all();
 
         return view('foodalchemist::livewire.speiseplan.editor', [
             'presentationInfo' => $presentationInfo,
@@ -836,6 +1033,10 @@ class Editor extends Component
             'monatsRaster' => $sp !== null ? $svc->monatsRaster($sp, (int) $monatStart->year, (int) $monatStart->month, $this->mahlzeit, $outlet) : [],
             'kosten' => $kosten,
             'zk' => $zk,
+            'detailEintrag' => $detailEintrag,
+            'detailKennzahlen' => $detailKennzahlen,
+            'mengen' => $mengen,
+            'zielWochen' => $zielWochen,
             'budget' => $sp !== null && $zk !== null && $kosten !== null ? $svc->budgetAmpel($sp, $zk, $kosten) : null,
             'kostformen' => $sp !== null ? $svc->kostformAbdeckung($sp, $this->mahlzeit, $montag) : [],
             'kennzeichnung' => $sp !== null ? $svc->wochenKennzeichnung($sp, $this->mahlzeit, $montag) : null,

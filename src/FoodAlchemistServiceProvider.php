@@ -1096,6 +1096,12 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\SpeiseplanEintraegeDeleteTool::class,
                     \Platform\FoodAlchemist\Tools\SpeiseplanEintraegePaxTool::class,
                     \Platform\FoodAlchemist\Tools\SpeiseplanAusrollenTool::class,
+                    // Spec 57 · Paket 3+5: Einträge lesen/umbauen, Woche kopieren, Mengen lesen/setzen.
+                    \Platform\FoodAlchemist\Tools\SpeiseplanEintraegeGetTool::class,
+                    \Platform\FoodAlchemist\Tools\SpeiseplanEintraegePutTool::class,
+                    \Platform\FoodAlchemist\Tools\SpeiseplanWocheKopierenTool::class,
+                    \Platform\FoodAlchemist\Tools\SpeiseplanMengenTool::class,
+                    \Platform\FoodAlchemist\Tools\SpeiseplanMengenPutTool::class,
                     // Speisekarte (Gastro-à-la-carte) — MCP-Lockstep
                     \Platform\FoodAlchemist\Tools\SpeisekartenPostTool::class,
                     \Platform\FoodAlchemist\Tools\SpeisekartenPutTool::class,

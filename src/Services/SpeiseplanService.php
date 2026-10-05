@@ -520,6 +520,335 @@ class SpeiseplanService
         $e->update(['pax' => $wert > 0 ? $wert : null]);
     }
 
+    // ── Spec 57 · Paket 5: Umbauen (verschieben, ersetzen, kopieren, Woche kopieren) ──
+
+    /**
+     * Eintrag in eine andere Zelle legen (Datum, Linie, optional Mahlzeit). Die Linie muss zum
+     * Plan gehören, sonst landet er unter „Ohne Linie“ (wie beim Anlegen). Pax bleibt.
+     */
+    public function verschiebeEintrag(Team $team, int $id, string $datum, ?int $lineId, ?string $mahlzeit = null): FoodAlchemistSpeiseplanEintrag
+    {
+        $e = FoodAlchemistSpeiseplanEintrag::visibleToTeam($team)->with('mealPlan.lines')->findOrFail($id);
+        $plan = $e->mealPlan;
+        $this->guard($plan, $team);
+        $ziel = Carbon::parse($datum)->startOfDay();
+        $meal = $mahlzeit !== null && array_key_exists($mahlzeit, self::MAHLZEITEN) ? $mahlzeit : $e->meal;
+        if ($lineId !== null && ! $plan->lines->contains('id', $lineId)) {
+            $lineId = null;
+        }
+        $tag = $ziel->format('Y-m-d');
+        $e->update([
+            'entry_date' => $tag,
+            'weekday' => (int) $ziel->isoWeekday(),   // Back-Compat-Spalte mitpflegen
+            'meal' => $meal,
+            'line_id' => $lineId,
+            'position' => (int) $plan->entries()->whereKeyNot($e->id)
+                ->where('entry_date', $tag)->where('meal', $meal)
+                ->when($lineId !== null, fn ($q) => $q->where('line_id', $lineId), fn ($q) => $q->whereNull('line_id'))
+                ->max('position') + 1,
+        ]);
+
+        return $e->refresh();
+    }
+
+    /** Inhalt eines Eintrags tauschen (Zelle und Pax bleiben). Gleiche Prüfung wie beim Anlegen. */
+    public function ersetzeEintrag(Team $team, int $id, array $inhalt): FoodAlchemistSpeiseplanEintrag
+    {
+        $e = FoodAlchemistSpeiseplanEintrag::visibleToTeam($team)->with('mealPlan')->findOrFail($id);
+        $this->guard($e->mealPlan, $team);
+        $e->update($this->pruefeInhalt($team, $inhalt));
+
+        return $e->refresh();
+    }
+
+    /**
+     * Eintrag auf weitere Tage kopieren (gleiche Linie, Mahlzeit, Inhalt, Pax). Steht derselbe
+     * Inhalt dort schon, wird nicht doppelt angelegt.
+     *
+     * @param  list<string>  $daten
+     * @return int Anzahl neuer Einträge
+     */
+    public function kopiereEintrag(Team $team, int $id, array $daten): int
+    {
+        $e = FoodAlchemistSpeiseplanEintrag::visibleToTeam($team)->with('mealPlan')->findOrFail($id);
+        $plan = $e->mealPlan;
+        $this->guard($plan, $team);
+        $neu = 0;
+        foreach (array_unique(array_map('strval', $daten)) as $d) {
+            $ziel = Carbon::parse($d)->startOfDay();
+            $tag = $ziel->format('Y-m-d');
+            if ($tag === $e->entry_date?->format('Y-m-d')) {
+                continue;
+            }
+            $gleich = $plan->entries()->where('entry_date', $tag)->where('meal', $e->meal)
+                ->when($e->line_id !== null, fn ($q) => $q->where('line_id', $e->line_id), fn ($q) => $q->whereNull('line_id'))
+                ->where('concept_id', $e->concept_id)->where('package_id', $e->package_id)->where('sales_recipe_id', $e->sales_recipe_id)
+                ->exists();
+            if ($gleich) {
+                continue;
+            }
+            $plan->entries()->create([
+                'team_id' => $plan->team_id, 'entry_date' => $tag,
+                'week' => 1, 'weekday' => (int) $ziel->isoWeekday(), 'meal' => $e->meal, 'line_id' => $e->line_id,
+                'concept_id' => $e->concept_id, 'package_id' => $e->package_id, 'sales_recipe_id' => $e->sales_recipe_id,
+                'pax' => $e->pax,
+                'position' => (int) $plan->entries()->where('entry_date', $tag)->where('meal', $e->meal)->max('position') + 1,
+            ]);
+            $neu++;
+        }
+
+        return $neu;
+    }
+
+    /**
+     * Eine Woche (Montag bis Sonntag) auf eine andere Woche kopieren (Spec 57 · E5). Ohne
+     * `zusammenfuehren` wird jede Zielzelle, die Inhalt bekommt, vorher geleert; mit
+     * `zusammenfuehren` kommen die Einträge dazu (gleicher Inhalt in derselben Zelle nicht doppelt).
+     * Optional nur eine Mahlzeit. Pax wandert mit, wenn `mitPax`.
+     *
+     * @return array{kopiert:int, ersetzt:int}
+     */
+    public function kopiereWoche(Team $team, int $planId, string $vonMontag, string $nachMontag, bool $zusammenfuehren = false, bool $mitPax = true, ?string $mahlzeit = null): array
+    {
+        $plan = FoodAlchemistSpeiseplan::visibleToTeam($team)->findOrFail($planId);
+        $this->guard($plan, $team);
+        $von = Carbon::parse($vonMontag)->startOfWeek(Carbon::MONDAY)->startOfDay();
+        $nach = Carbon::parse($nachMontag)->startOfWeek(Carbon::MONDAY)->startOfDay();
+        if ($von->equalTo($nach)) {
+            throw new \RuntimeException('Quell- und Zielwoche sind gleich.');
+        }
+        $offset = (int) $von->diffInDays($nach, false);
+        $mahlzeit = $mahlzeit !== null && array_key_exists($mahlzeit, self::MAHLZEITEN) ? $mahlzeit : null;
+        $inWoche = fn ($e, Carbon $mo) => $e->entry_date !== null && $e->entry_date->between($mo, $mo->copy()->addDays(6))
+            && ($mahlzeit === null || $e->meal === $mahlzeit);
+
+        $quelle = $plan->entries->filter(fn ($e) => $inWoche($e, $von))->values();
+        $zielBestand = [];
+        foreach ($plan->entries->filter(fn ($e) => $inWoche($e, $nach)) as $e) {
+            $zielBestand[$e->entry_date->format('Y-m-d') . '|' . $e->meal . '|' . (int) $e->line_id][] = $e;
+        }
+
+        return \Illuminate\Support\Facades\DB::transaction(function () use ($plan, $quelle, $zielBestand, $offset, $zusammenfuehren, $mitPax) {
+            $kopiert = 0;
+            $ersetzt = 0;
+            $geleert = [];
+            $gesetzt = [];
+            foreach ($quelle as $e) {
+                $ziel = $e->entry_date->copy()->addDays($offset);
+                $zelle = $ziel->format('Y-m-d') . '|' . $e->meal . '|' . (int) $e->line_id;
+                if (! $zusammenfuehren && isset($zielBestand[$zelle]) && ! isset($geleert[$zelle])) {
+                    foreach ($zielBestand[$zelle] as $alt) {
+                        $alt->delete();
+                        $ersetzt++;
+                    }
+                    $geleert[$zelle] = true;
+                    unset($zielBestand[$zelle]);
+                }
+                $sig = $zelle . '|' . $e->inhaltKey();
+                $schonDa = isset($gesetzt[$sig]) || collect($zielBestand[$zelle] ?? [])->contains(fn ($x) => $x->inhaltKey() === $e->inhaltKey());
+                if ($schonDa) {
+                    continue;
+                }
+                $plan->entries()->create([
+                    'team_id' => $plan->team_id, 'entry_date' => $ziel->format('Y-m-d'),
+                    'week' => 1, 'weekday' => (int) $ziel->isoWeekday(), 'meal' => $e->meal, 'line_id' => $e->line_id,
+                    'concept_id' => $e->concept_id, 'package_id' => $e->package_id, 'sales_recipe_id' => $e->sales_recipe_id,
+                    'pax' => $mitPax ? $e->pax : null, 'position' => $e->position,
+                ]);
+                $gesetzt[$sig] = true;
+                $kopiert++;
+            }
+
+            return ['kopiert' => $kopiert, 'ersetzt' => $ersetzt];
+        });
+    }
+
+    /**
+     * Einträge eines Plans lesbar machen (für MCP und Agenten): je Eintrag Zelle, Inhalt, Pax.
+     * Optional auf einen Zeitraum und eine Mahlzeit begrenzt.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function eintragsListe(FoodAlchemistSpeiseplan $plan, ?string $von = null, ?string $bis = null, ?string $mahlzeit = null): array
+    {
+        $vonC = $von !== null ? Carbon::parse($von)->startOfDay() : null;
+        $bisC = $bis !== null ? Carbon::parse($bis)->endOfDay() : null;
+
+        return $plan->entries
+            ->filter(fn ($e) => $e->entry_date !== null
+                && ($vonC === null || $e->entry_date->gte($vonC))
+                && ($bisC === null || $e->entry_date->lte($bisC))
+                && ($mahlzeit === null || $e->meal === $mahlzeit))
+            ->map(fn ($e) => [
+                'id' => (int) $e->id, 'entry_date' => $e->entry_date->format('Y-m-d'), 'mahlzeit' => $e->meal,
+                'line_id' => $e->line_id !== null ? (int) $e->line_id : null,
+                'concept_id' => $e->concept_id !== null ? (int) $e->concept_id : null,
+                'package_id' => $e->package_id !== null ? (int) $e->package_id : null,
+                'sales_recipe_id' => $e->sales_recipe_id !== null ? (int) $e->sales_recipe_id : null,
+                'name' => $this->eintragName($e),
+                'pax' => $e->pax !== null ? (int) $e->pax : null,
+                'pax_effektiv' => $this->effektivePax($e, $plan),
+            ])->values()->all();
+    }
+
+    // ── Spec 57 · Paket 3: Mengen (Essen je Linie × Tag) ─────────────────────
+
+    /**
+     * Mengen-Matrix einer Woche und Mahlzeit: je Linie × Öffnungstag die Essen der Zelle
+     * (effektive Pax je Eintrag; mehrere Einträge einer Zelle = größte Zahl, weil sie dieselben
+     * Gäste bedienen), dazu Vorwoche und Ø der letzten vier Wochen aus den PLANWERTEN, Summe,
+     * Anteil, Wareneinsatz, Ø VK netto und Umsatz der Linie.
+     *
+     * @return array{tage: list<string>, zeilen: list<array>, summe: array}
+     */
+    public function mengenMatrix(Team $team, FoodAlchemistSpeiseplan $plan, string $mahlzeit, Carbon $montag, ?\Platform\FoodAlchemist\Models\FoodAlchemistOutlet $outlet = null): array
+    {
+        $mo = $montag->copy()->startOfWeek(Carbon::MONDAY)->startOfDay();
+        $tage = array_map(fn (Carbon $t) => $t->format('Y-m-d'), $this->wochenTage($plan, $mo));
+        $linien = $plan->lines->filter(fn ($l) => $l->giltFuerMahlzeit($mahlzeit))->values();
+
+        // Einmal indizieren (Linie|Tag) statt je Zelle alle Einträge zu durchsuchen — ein
+        // ausgerollter Jahresplan hat Tausende Einträge.
+        $index = [];
+        foreach ($plan->entries as $e) {
+            if ($e->entry_date !== null && $e->meal === $mahlzeit) {
+                $index[(int) $e->line_id . '|' . $e->entry_date->format('Y-m-d')][] = $e;
+            }
+        }
+        $zellPax = function (int $lineId, string $ymd) use ($plan, $index): ?int {
+            $liste = $index[$lineId . '|' . $ymd] ?? [];
+
+            return $liste === [] ? null : (int) max(array_map(fn ($e) => $this->effektivePax($e, $plan), $liste));
+        };
+        $wochenSumme = function (int $lineId, Carbon $woMo) use ($zellPax, $plan): int {
+            $s = 0;
+            foreach ($this->wochenTage($plan, $woMo) as $t) {
+                $s += (int) ($zellPax($lineId, $t->format('Y-m-d')) ?? 0);
+            }
+
+            return $s;
+        };
+
+        $zeilen = [];
+        $gesamt = ['summe' => 0, 'umsatz' => 0.0, 'ek' => 0.0, 'vorwoche' => 0, 'schnitt4' => 0.0, 'je_tag' => array_fill_keys($tage, 0)];
+        foreach ($linien as $l) {
+            $zellen = [];
+            $summe = 0;
+            $umsatz = 0.0;
+            $ek = 0.0;
+            foreach ($tage as $ymd) {
+                $p = $zellPax((int) $l->id, $ymd);
+                $zellen[$ymd] = $p;
+                $summe += (int) $p;
+                $gesamt['je_tag'][$ymd] += (int) $p;
+                foreach ($index[(int) $l->id . '|' . $ymd] ?? [] as $e) {
+                    $preis = $this->eintragPreis($e, $outlet);
+                    $pax = $this->effektivePax($e, $plan);
+                    $umsatz += $preis['vk'] * $pax;
+                    $ek += $preis['ek'] * $pax;
+                }
+            }
+            $vorwoche = $wochenSumme((int) $l->id, $mo->copy()->subWeek());
+            $vier = [];
+            for ($w = 1; $w <= 4; $w++) {
+                $vier[] = $wochenSumme((int) $l->id, $mo->copy()->subWeeks($w));
+            }
+            $schnitt4 = round(array_sum($vier) / 4, 1);
+            $zeilen[] = [
+                'line_id' => (int) $l->id, 'name' => $l->name, 'color' => $l->color, 'role' => $l->role,
+                'zellen' => $zellen, 'summe' => $summe, 'vorwoche' => $vorwoche, 'schnitt4' => $schnitt4,
+                'umsatz' => round($umsatz, 2),
+                'wes' => $umsatz > 0 ? round($ek / $umsatz * 100, 1) : null,
+                'vk_schnitt' => $summe > 0 ? round($umsatz / max(1, $summe), 2) : null,
+            ];
+            $gesamt['summe'] += $summe;
+            $gesamt['umsatz'] += $umsatz;
+            $gesamt['ek'] += $ek;
+            $gesamt['vorwoche'] += $vorwoche;
+            $gesamt['schnitt4'] += $schnitt4;
+        }
+        foreach ($zeilen as $i => $z) {
+            $zeilen[$i]['anteil'] = $gesamt['summe'] > 0 ? round($z['summe'] / $gesamt['summe'] * 100, 1) : null;
+        }
+        $gesamt['wes'] = $gesamt['umsatz'] > 0 ? round($gesamt['ek'] / $gesamt['umsatz'] * 100, 1) : null;
+        $gesamt['umsatz'] = round($gesamt['umsatz'], 2);
+        $gesamt['ek'] = round($gesamt['ek'], 2);
+
+        return ['tage' => $tage, 'zeilen' => $zeilen, 'summe' => $gesamt];
+    }
+
+    /**
+     * Essen einer Zelle (Linie × Tag × Mahlzeit) setzen — schreibt den Pax-Override aller
+     * Einträge der Zelle. Leer/0 = zurück auf den Standard. Leere Zelle: nichts zu setzen.
+     *
+     * @return int Anzahl geänderter Einträge
+     */
+    public function setzeZellenPax(Team $team, int $planId, int $lineId, string $datum, string $mahlzeit, $pax): int
+    {
+        $plan = FoodAlchemistSpeiseplan::visibleToTeam($team)->findOrFail($planId);
+        $this->guard($plan, $team);
+        $wert = (int) $pax;
+        // Je Model speichern (nicht per Massen-Update), damit das Activity-Log die Änderung sieht.
+        $eintraege = FoodAlchemistSpeiseplanEintrag::where('menu_plan_id', $plan->id)
+            ->whereDate('entry_date', Carbon::parse($datum)->format('Y-m-d'))
+            ->where('meal', $mahlzeit)->where('line_id', $lineId)
+            ->get();
+        foreach ($eintraege as $e) {
+            $e->update(['pax' => $wert > 0 ? $wert : null]);
+        }
+
+        return $eintraege->count();
+    }
+
+    /**
+     * Mengen der Vorwoche übernehmen: jede belegte Zelle dieser Woche bekommt die Essen derselben
+     * Linie am selben Wochentag der Vorwoche (wenn es dort Werte gab).
+     *
+     * @return int Anzahl geänderter Einträge
+     */
+    public function uebernehmeVorwoche(Team $team, int $planId, string $mahlzeit, Carbon $montag): int
+    {
+        $plan = FoodAlchemistSpeiseplan::visibleToTeam($team)->with(['lines', 'entries'])->findOrFail($planId);
+        $this->guard($plan, $team);
+        $vorher = $this->mengenMatrix($team, $plan, $mahlzeit, $montag->copy()->subWeek());
+        $n = 0;
+        foreach ($vorher['zeilen'] as $z) {
+            foreach ($z['zellen'] as $ymd => $pax) {
+                if ($pax === null) {
+                    continue;
+                }
+                $n += $this->setzeZellenPax($team, $planId, $z['line_id'], Carbon::parse($ymd)->addWeek()->format('Y-m-d'), $mahlzeit, $pax);
+            }
+        }
+
+        return $n;
+    }
+
+    /**
+     * Alle Essen der Woche (eine Mahlzeit) mit einem Faktor skalieren und als Override setzen.
+     *
+     * @return int Anzahl geänderter Einträge
+     */
+    public function skaliereWoche(Team $team, int $planId, string $mahlzeit, Carbon $montag, float $faktor): int
+    {
+        if ($faktor <= 0 || $faktor > 10) {
+            throw new \RuntimeException('Skalierungsfaktor muss zwischen 0 und 10 liegen.');
+        }
+        $plan = FoodAlchemistSpeiseplan::visibleToTeam($team)->with(['lines', 'entries'])->findOrFail($planId);
+        $this->guard($plan, $team);
+        $mo = $montag->copy()->startOfWeek(Carbon::MONDAY)->startOfDay();
+        $n = 0;
+        foreach ($plan->entries as $e) {
+            if ($e->entry_date === null || $e->meal !== $mahlzeit || ! $e->entry_date->between($mo, $mo->copy()->addDays(6))) {
+                continue;
+            }
+            $e->update(['pax' => max(1, (int) round($this->effektivePax($e, $plan) * $faktor))]);
+            $n++;
+        }
+
+        return $n;
+    }
+
     // ── Wochen-Matrix + Monats-Kalender ──────────────────────────────────
 
     /**
