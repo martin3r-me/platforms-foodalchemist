@@ -98,8 +98,8 @@ class TeamSettingsPutTool extends FoodAlchemistTool implements ToolContract, Too
                         'voice_agent_mode' => ['type' => 'string', 'description' => 'Agenten-Modus des Sprachbefehls: fragen (Default, jede Schreibaktion nur Vorschlag) | auto_sicher (reversible Vorschläge laufen direkt) | nur_lesen (keine Vorschläge).'],
                         'voice_tts_vorlesen' => ['type' => 'boolean', 'description' => 'Antworten des Sprach-Agenten laut vorlesen (Konversations-Modus, Default AUS).'],
                         'voice_tts_stimme' => ['type' => 'string', 'description' => 'OpenAI-TTS-Stimme: alloy (Default) | echo | fable | onyx | nova | shimmer.'],
-                        'cooking_loss_defaults' => ['type' => 'object', 'description' => 'Garverlust-Default % je WG-Code ("*" = global). Werte numerisch.'],
-                        'trimming_loss_defaults' => ['type' => 'object', 'description' => 'Putzverlust-Default % je WG-Code ("*" = global). Werte numerisch.'],
+                        'cooking_loss_defaults' => ['type' => 'object', 'description' => 'Garverlust-Default % je WG-Code ("*" = global). Werte numerisch. Ersetzt die ganze Map; Kind-Teams ohne eigene Map erben sie. Löst Neuberechnung der Rezepte aus.'],
+                        'trimming_loss_defaults' => ['type' => 'object', 'description' => 'Putzverlust-Default % je WG-Code ("*" = global). Werte numerisch. Ersetzt die ganze Map; Kind-Teams ohne eigene Map erben sie. Löst Neuberechnung der Rezepte aus.'],
                     ],
                     'additionalProperties' => false,
                 ],
@@ -187,12 +187,21 @@ class TeamSettingsPutTool extends FoodAlchemistTool implements ToolContract, Too
 
         $gespeichert = app(TeamSettingsService::class)->update($team, $clean);
 
-        return ToolResult::success([
+        // Verlust-Maps ändern Ausbeute → EK/kg: Rezepte des Teams + der erbenden Kind-Teams neu
+        // rechnen (gleicher Weg wie Settings/Kalkulation). Ohne das bliebe der Wert wirkungslos.
+        $neuGerechnet = null;
+        if (array_intersect(array_keys($clean), self::LOSS_MAP_KEYS) !== []) {
+            $neuGerechnet = \Platform\FoodAlchemist\Jobs\RecomputeTeamRecipesJob::anzahlRezepte((int) $team->id);
+            \Platform\FoodAlchemist\Jobs\RecomputeTeamRecipesJob::dispatch((int) $team->id);
+        }
+
+        return ToolResult::success(array_filter([
             'team_id' => (int) $team->id,
             'updated' => array_keys($clean),
             'settings' => $clean,
             'setting_id' => (int) $gespeichert->id,
-        ]);
+            'rezepte_neu_berechnet' => $neuGerechnet,
+        ], fn ($v) => $v !== null));
     }
 
     public function getMetadata(): array

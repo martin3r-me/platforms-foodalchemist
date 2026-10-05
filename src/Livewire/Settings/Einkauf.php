@@ -6,8 +6,10 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Livewire\Component;
 use Platform\FoodAlchemist\Enums\LeadLaStrategie;
+use Platform\FoodAlchemist\Jobs\LeadRepickJob;
 use Platform\FoodAlchemist\Models\FoodAlchemistInventoryLocation;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplier;
+use Platform\FoodAlchemist\Services\LeadLaService;
 use Platform\FoodAlchemist\Services\StammLieferantService;
 use Platform\FoodAlchemist\Services\TeamSettingsService;
 use Platform\FoodAlchemist\Services\VocabularyService;
@@ -38,6 +40,12 @@ class Einkauf extends Component
 
     /** Phase 3: WG-Strategie-Override, key = WG-Code, '' = keine Override (globale Strategie gilt). */
     public array $strategiePerWg = [];
+
+    /** Lead-Neuwahl: Vorschau-Ergebnis (LeadLaService::repickVorschau) oder null = zu. */
+    public ?array $repick = null;
+
+    /** @var list<int> angehakte GP-IDs der Vorschau (Default: alle Wechsel) */
+    public array $repickAuswahl = [];
 
     /** @var array{name:string,code:string,type:string,note:string} */
     public array $lagerNeu = [
@@ -74,7 +82,7 @@ class Einkauf extends Component
             'lead_la_prioritaeten' => array_values(array_map('intval', $this->prioritaeten)),
             'show_fallback_chain' => $this->ausweichKette,
         ]);
-        $this->meldung = 'Gespeichert — wirkt ab sofort auf die Lead-LA-Wahl (M3-06).';
+        $this->meldung = 'Gespeichert. Bestehende Leads bleiben — über „Leads neu wählen" übernehmen.';
     }
 
     public function prioHinzu(): void
@@ -111,6 +119,7 @@ class Einkauf extends Component
             app(StammLieferantService::class)->setStamm($this->team(), $supplierId, $wgCode === '' ? null : $wgCode);
             $this->stammNeu[$wgCode] = '';
             $this->fehler = null;
+            $this->meldung = 'Stamm gesetzt. Bestehende Leads bleiben — über „Leads neu wählen" übernehmen.';
         } catch (RuntimeException $e) {
             $this->fehler = $e->getMessage();
         }
@@ -121,9 +130,40 @@ class Einkauf extends Component
         try {
             app(StammLieferantService::class)->unsetStamm($this->team(), $supplierId, $wgCode === '' ? null : $wgCode);
             $this->fehler = null;
+            $this->meldung = 'Stamm entfernt. Bestehende Leads bleiben — über „Leads neu wählen" übernehmen.';
         } catch (RuntimeException $e) {
             $this->fehler = $e->getMessage();
         }
+    }
+
+    // ── Lead-Neuwahl mit Vorschau ───────────────────────────────────────
+
+    /** Rechnet die Vorschau: welche eigenen GPs bekämen mit Strategie + Matrix einen anderen Lead? */
+    public function repickVorschau(): void
+    {
+        $this->repick = app(LeadLaService::class)->repickVorschau($this->team());
+        $this->repickAuswahl = array_column($this->repick['wechsel'], 'gp_id');
+        $this->fehler = null;
+    }
+
+    public function repickUebernehmen(): void
+    {
+        $ids = array_values(array_map('intval', $this->repickAuswahl));
+        if ($ids === []) {
+            $this->repick = null;
+
+            return;
+        }
+        LeadRepickJob::dispatch((int) $this->team()->id, $ids);
+        $this->meldung = count($ids) . ' Leads werden umgestellt — die nutzenden Rezepte werden danach neu gerechnet.';
+        $this->repick = null;
+        $this->repickAuswahl = [];
+    }
+
+    public function repickSchliessen(): void
+    {
+        $this->repick = null;
+        $this->repickAuswahl = [];
     }
 
     public function lagerAnlegen(): void

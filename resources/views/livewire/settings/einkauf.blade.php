@@ -162,13 +162,14 @@
     <div class="{{ $card }} p-5 space-y-1" data-stamm-matrix>
         <div class="mb-3">
             <h3 class="font-medium tracking-tight text-gray-900">Stamm-Lieferanten-Matrix</h3>
-            <p class="text-[11px] text-gray-500 mt-0.5">Je Warengruppe (+ global) — gewinnt bei Strategie „Stamm-Lieferant zuerst" (GL-03/V-27). Geerbte Einträge des Eltern-Teams sind fixiert.</p>
+            <p class="text-[11px] text-gray-500 mt-0.5">Je Warengruppe (+ global) — gewinnt bei Strategie „Stamm-Lieferant zuerst" (GL-03/V-27). Eine Warengruppe nutzt ihre eigenen Stämme UND die globalen. Geerbte Einträge des Eltern-Teams sind fixiert.</p>
+            <p class="text-[11px] text-gray-500 mt-0.5">Änderungen hier und an der Strategie wirken auf neue Wahlen — bestehende Leads bleiben, bis du sie über „Leads neu wählen" übernimmst.</p>
         </div>
         @if($fehler)
             <p class="text-xs text-red-600 pb-2">{{ $fehler }}</p>
         @endif
 
-        @foreach(collect([['', 'Global (alle Warengruppen)']])->concat($warengruppen->map(fn ($wg) => [$wg->code, $wg->code . ' ' . $wg->name])) as [$code, $titel])
+        @foreach(collect([['', 'Global (alle Warengruppen)']])->concat($warengruppen->map(fn ($wg) => [$wg->code, str_starts_with((string) $wg->name, (string) $wg->code) ? $wg->name : $wg->code . ' ' . $wg->name])) as [$code, $titel])
             <div wire:key="stamm-zeile-{{ $code ?: 'global' }}" class="flex items-center gap-3 py-2 border-t border-black/5 first:border-t-0">
                 <span class="w-72 shrink-0 text-xs {{ $code === '' ? 'font-medium text-gray-900' : 'text-gray-600' }}">{{ $titel }}</span>
                 <div class="flex-1 min-w-0 flex flex-wrap items-center gap-1.5">
@@ -191,5 +192,53 @@
                 </div>
             </div>
         @endforeach
+
+        {{-- Lead-Neuwahl mit Vorschau (2026-10-05) --}}
+        <div class="pt-3 mt-2 border-t border-black/5 space-y-2" data-lead-repick>
+            <button type="button" wire:click="repickVorschau" class="{{ $btnGhost }}">Leads neu wählen …</button>
+            @if($repick !== null)
+                <div class="text-xs text-gray-700 space-y-2" data-lead-repick-vorschau>
+                    <p>
+                        {{ $repick['geprueft'] }} eigene GPs geprüft ·
+                        <strong>{{ count($repick['wechsel']) }} würden den Lead wechseln</strong> ·
+                        {{ $repick['unveraendert'] }} unverändert ·
+                        {{ $repick['manuell_geschuetzt'] }} manuell gesetzt (bleiben) ·
+                        {{ $repick['ohne_preis'] }} ohne bepreisten Kandidaten (bleiben)
+                    </p>
+                    @if($repick['wechsel'] !== [])
+                        <div class="max-h-80 overflow-y-auto border border-black/5 rounded-md">
+                            <table class="w-full text-[11px]">
+                                <thead class="bg-gray-50 text-gray-500 text-left">
+                                    <tr><th class="px-2 py-1"></th><th class="px-2 py-1">GP</th><th class="px-2 py-1">bisher</th><th class="px-2 py-1">neu</th><th class="px-2 py-1 text-right">Rezepte</th></tr>
+                                </thead>
+                                <tbody>
+                                    @foreach($repick['wechsel'] as $w)
+                                        <tr wire:key="repick-{{ $w['gp_id'] }}" class="border-t border-black/5">
+                                            <td class="px-2 py-1"><input type="checkbox" wire:model="repickAuswahl" value="{{ $w['gp_id'] }}" /></td>
+                                            <td class="px-2 py-1">{{ $w['gp'] }}</td>
+                                            <td class="px-2 py-1 text-gray-500">{{ ($w['alt_lieferant'] ?? '—') . ($w['alt_vergleichspreis'] !== null ? ' · ' . number_format((float) $w['alt_vergleichspreis'], 2, ',', '.') . ' €' : '') }}</td>
+                                            <td class="px-2 py-1">
+                                                {{ $w['neu_lieferant'] . ($w['neu_vergleichspreis'] !== null ? ' · ' . number_format((float) $w['neu_vergleichspreis'], 2, ',', '.') . ' €' : '') }}
+                                                @if($w['neu_ist_stamm'])
+                                                    <span class="text-violet-700">Stamm</span>
+                                                @endif
+                                            </td>
+                                            <td class="px-2 py-1 text-right">{{ $w['rezepte'] }}</td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                        <p class="text-[11px] text-gray-500">Der Lead ist global je GP — der Wechsel gilt für alle Teams, die das GP nutzen. Team-Pins und -Sperren bleiben.</p>
+                    @endif
+                    <div class="flex gap-2">
+                        @if($repick['wechsel'] !== [])
+                            <button type="button" wire:click="repickUebernehmen" class="{{ $btnPrimary }}">Ausgewählte übernehmen</button>
+                        @endif
+                        <button type="button" wire:click="repickSchliessen" class="{{ $btnGhost }}">Schließen</button>
+                    </div>
+                </div>
+            @endif
+        </div>
     </div>
 </div>

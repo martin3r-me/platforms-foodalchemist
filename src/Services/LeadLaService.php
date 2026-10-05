@@ -160,6 +160,103 @@ class LeadLaService
     }
 
     /**
+     * Lead-Neuwahl mit Vorschau (2026-10-05): Matrix-/Strategie-Änderungen wählen KEINEN gespeicherten
+     * Lead neu — das passiert nur hier, bewusst ausgelöst. Kandidaten = GPs, die dem Team GEHÖREN
+     * (der Lead ist global, nur der Katalog-Besitzer wählt ihn, D1), approved + requires_la.
+     *
+     * Kein Wechsel, wenn
+     *  - der neue Rang-1 schon der Lead ist,
+     *  - der neue Rang-1 keinen aktiven Preis hat (Regel aus LeadLaRepickCommand),
+     *  - der aktuelle Lead manuell gesetzt wurde (Begründung auf gp_la_preferences, s. setLeadLa).
+     * Team-Pins/-Sperren leben im Overlay und bleiben unberührt.
+     *
+     * @return array{geprueft: int, unveraendert: int, ohne_preis: int, manuell_geschuetzt: int,
+     *               wechsel: list<array<string, mixed>>}
+     */
+    public function repickVorschau(Team $team, ?string $warengruppeCode = null, ?array $nurGpIds = null): array
+    {
+        $out = ['geprueft' => 0, 'unveraendert' => 0, 'ohne_preis' => 0, 'manuell_geschuetzt' => 0, 'wechsel' => []];
+
+        FoodAlchemistGp::where('team_id', $team->id)
+            ->where('status', 'approved')->where('requires_la', true)
+            ->when($warengruppeCode !== null && $warengruppeCode !== '', fn ($q) => $q->where('commodity_group_code', $warengruppeCode))
+            ->when($nurGpIds !== null, fn ($q) => $q->whereIn('id', $nurGpIds))
+            ->chunkById(200, function ($gps) use ($team, &$out) {
+                $ranglisten = $this->ranglisteBulk($gps, $team);
+                $manuell = FoodAlchemistGpLaPreference::whereIn('gp_id', $gps->pluck('id'))
+                    ->whereNotNull('reason')->get(['gp_id', 'supplier_item_id'])
+                    ->map(fn ($p) => $p->gp_id . ':' . $p->supplier_item_id)->flip();
+
+                foreach ($gps as $gp) {
+                    $out['geprueft']++;
+                    $kette = $ranglisten[(int) $gp->id] ?? collect();
+                    $neu = $kette->first();
+                    $alt = $gp->lead_la_supplier_item_id !== null ? (int) $gp->lead_la_supplier_item_id : null;
+                    if ($neu === null || (int) $neu->id === $alt) {
+                        $out['unveraendert']++;
+                        continue;
+                    }
+                    if (! $neu->hat_aktiven_preis) {
+                        $out['ohne_preis']++;
+                        continue;
+                    }
+                    if ($alt !== null && $manuell->has($gp->id . ':' . $alt)) {
+                        $out['manuell_geschuetzt']++;
+                        continue;
+                    }
+                    $altLa = $alt !== null ? $kette->firstWhere('id', $alt) : null;
+                    $out['wechsel'][] = [
+                        'gp_id' => (int) $gp->id,
+                        'gp' => $gp->name,
+                        'warengruppe' => $gp->commodity_group_code,
+                        'alt_la_id' => $alt,
+                        'alt_lieferant' => $altLa?->supplier_name,
+                        'alt_vergleichspreis' => $altLa?->vergleichspreis_wert,
+                        'neu_la_id' => (int) $neu->id,
+                        'neu_lieferant' => $neu->supplier_name,
+                        'neu_vergleichspreis' => $neu->vergleichspreis_wert,
+                        'neu_ist_stamm' => (bool) $neu->ist_stamm,
+                    ];
+                }
+            });
+
+        if ($out['wechsel'] !== []) {
+            $nutzer = DB::table('foodalchemist_recipe_ingredients')
+                ->whereIn('gp_id', array_column($out['wechsel'], 'gp_id'))->whereNull('deleted_at')
+                ->selectRaw('gp_id, COUNT(DISTINCT recipe_id) AS n')->groupBy('gp_id')->pluck('n', 'gp_id');
+            foreach ($out['wechsel'] as &$w) {
+                $w['rezepte'] = (int) ($nutzer[$w['gp_id']] ?? 0);
+            }
+            unset($w);
+        }
+
+        return $out;
+    }
+
+    /**
+     * Übernimmt die Wechsel aus {@see repickVorschau()} für die gewählten GPs. Die Vorschau wird
+     * dafür NEU gerechnet (keine Client-Daten vertrauen; was seither manuell gesetzt wurde, bleibt).
+     * Danach EIN Recompute über alle nutzenden Rezepte (V-049).
+     *
+     * @param  list<int>  $gpIds
+     * @return array{umgestellt: int, rezepte: int}
+     */
+    public function repickAnwenden(Team $team, array $gpIds): array
+    {
+        $gpIds = array_values(array_unique(array_map('intval', $gpIds)));
+        if ($gpIds === []) {
+            return ['umgestellt' => 0, 'rezepte' => 0];
+        }
+        $wechsel = $this->repickVorschau($team, null, $gpIds)['wechsel'];
+        foreach ($wechsel as $w) {
+            FoodAlchemistGp::whereKey($w['gp_id'])->update(['lead_la_supplier_item_id' => $w['neu_la_id']]);
+        }
+        $rezepte = $this->recomputeNutzerFuerGps(array_column($wechsel, 'gp_id'));
+
+        return ['umgestellt' => count($wechsel), 'rezepte' => $rezepte];
+    }
+
+    /**
      * Effektiver Lead des Teams (V-27): Pin gewinnt (sofern verknüpft + nicht locked),
      * sonst erster nicht gesperrter Rang der Kette. Spec 20 · E3: optionaler
      * Strategie-Override (je Schiene) — der Pin bleibt aber ein harter Team-Override.
@@ -187,7 +284,15 @@ class LeadLaService
         }
         $gp->update(['lead_la_supplier_item_id' => $laId]);
 
-        if ($reason !== null && $laId !== null) {
+        // Jeder Aufruf hier IST ein manueller Override — auch ohne Begründung. Die Zeile ist das
+        // Merkmal, an dem repickVorschau() den Lead vor einer Neuwahl schützt.
+        $reason ??= 'manuell gesetzt';
+        if ($laId === null) {
+            // Override gelöst (zurück auf Heuristik): das Merkmal am bisherigen Lead mit entfernen,
+            // sonst schützt repickVorschau() später einen Lead, den niemand mehr festhält.
+            FoodAlchemistGpLaPreference::where('team_id', $team->id)->where('gp_id', $gp->id)
+                ->whereNotNull('reason')->update(['reason' => null]);
+        } else {
             FoodAlchemistGpLaPreference::withTrashed()->updateOrCreate(
                 ['team_id' => $team->id, 'gp_id' => $gp->id, 'supplier_item_id' => $laId],
                 ['reason' => $reason, 'deleted_at' => null],   // LogsActivity → Historie

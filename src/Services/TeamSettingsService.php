@@ -131,6 +131,10 @@ class TeamSettingsService
         'vat_defaults'  => true,   // MwSt-Sätze: org-weit einheitlich (Dominique-Beispiel)
         'rundungsregeln' => true,   // Rundungs-Konvention: org-weite Buchhaltungsregel
         'type_colors'     => true,   // Branding-Farben: org-weit konsistent
+        // Verlust-Defaults je WG (Dominique 2026-10-05): Kind-Team ohne eigene Map rechnet mit der
+        // des Eltern-Teams. Die eigene Map gewinnt KOMPLETT, keine schlüsselweise Zusammenführung.
+        'cooking_loss_defaults'  => true,
+        'trimming_loss_defaults' => true,
     ];
 
     /**
@@ -385,7 +389,7 @@ class TeamSettingsService
     /** Garverlust-Default in % je GP-Klasse (Warengruppen-Code), '*' = global. */
     public function garverlustDefault(Team $team, ?string $warengruppeCode = null): ?float
     {
-        $defaults = $this->for($team)->cooking_loss_defaults ?? [];
+        $defaults = $this->rohWert($team, 'cooking_loss_defaults') ?? [];   // org-vererbt
 
         $wert = $defaults[$warengruppeCode] ?? $defaults['*'] ?? null;
 
@@ -395,7 +399,7 @@ class TeamSettingsService
     /** Putzverlust-Default in % je GP-Klasse (Warengruppen-Code), '*' = global (Phase 2). */
     public function putzverlustDefault(Team $team, ?string $warengruppeCode = null): ?float
     {
-        $defaults = $this->for($team)->trimming_loss_defaults ?? [];
+        $defaults = $this->rohWert($team, 'trimming_loss_defaults') ?? [];   // org-vererbt
 
         $wert = $defaults[$warengruppeCode] ?? $defaults['*'] ?? null;
 

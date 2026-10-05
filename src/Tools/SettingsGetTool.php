@@ -47,6 +47,11 @@ class SettingsGetTool extends FoodAlchemistTool implements ToolContract, ToolMet
             'lead_la_strategie_pro_wg' => collect($svc->leadLaStrategiePerWg($team))
                 ->map(fn ($s) => $s instanceof \BackedEnum ? $s->value : (string) $s)->all(),
             'cooking_loss_default_pct' => $svc->garverlustDefault($team),
+            // Effektive Verlust-Maps je WG ('*' = global), org-vererbt; *_von_team_id = liefernde Zeile.
+            'cooking_loss_defaults' => $svc->rohWert($team, 'cooking_loss_defaults') ?? (object) [],
+            'cooking_loss_defaults_von_team_id' => $svc->quelleTeamId($team, 'cooking_loss_defaults'),
+            'trimming_loss_defaults' => $svc->rohWert($team, 'trimming_loss_defaults') ?? (object) [],
+            'trimming_loss_defaults_von_team_id' => $svc->quelleTeamId($team, 'trimming_loss_defaults'),
             // MCP-Lockstep zum Produktionszeit-Feature: team-weiter Standard-Topf-Deckel je
             // Koch-Vorgang (Fallback der Zeitrechnung, wenn Rezept/Posten keinen eigenen pflegen).
             // Effektiver Wert inkl. Code-Default (nie null).

@@ -3,23 +3,26 @@
 
 <div class="space-y-4">
     <x-foodalchemist::save-bar :meldung="$meldung"
-        hint="Gilt für alle Rezepte dieses Teams — Recompute liest dieselben Werte." />
+        hint="Verluste gelten für die Rezepte dieses Teams und der Kind-Teams ohne eigene Werte — Speichern rechnet sie neu." />
 
     {{-- Garverlust-Defaults --}}
     <div class="{{ $card }} p-5 space-y-3" data-kalk-garverlust>
         <div>
             <h3 class="font-medium tracking-tight text-gray-900">Garverlust-Defaults</h3>
             <p class="text-[11px] text-gray-500 mt-0.5">In % je GP-Klasse (Warengruppe). Kaskade: Zutat-Wert → GP-Default → dieser Team-Default → 0. Leer = kein Default.</p>
+            @if($geerbtGar)
+                <p class="text-[11px] text-amber-700 mt-1" data-kalk-geerbt>Geerbt von {{ $geerbtGar['von'] }} (grau in den Feldern) — ein eigener Wert ersetzt die ganze geerbte Liste.</p>
+            @endif
         </div>
         <div class="flex items-center gap-3 py-1.5 border-b border-black/5">
             <span class="w-72 shrink-0 text-xs font-medium text-gray-900">* Global (alle Klassen)</span>
-            <input type="text" wire:model="garverlust.*" placeholder="—" class="{{ $input }} !w-24" /> <span class="text-[11px] text-gray-500">%</span>
+            <input type="text" wire:model="garverlust.*" placeholder="{{ isset($geerbtGar['werte']['*']) ? $geerbtGar['werte']['*'] : '—' }}" class="{{ $input }} !w-24" /> <span class="text-[11px] text-gray-500">%</span>
         </div>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-x-8">
             @foreach($warengruppen as $wg)
                 <div class="flex items-center gap-3 py-1" wire:key="gv-{{ $wg->code }}">
-                    <span class="w-64 shrink-0 text-xs text-gray-600 truncate">{{ $wg->name }}</span>
-                    <input type="text" wire:model="garverlust.{{ $wg->code }}" placeholder="—" class="{{ $input }} !w-20 !py-1" /> <span class="text-[11px] text-gray-500">%</span>
+                    <span class="w-64 shrink-0 text-xs text-gray-600 truncate">{{ str_starts_with((string) $wg->name, (string) $wg->code) ? $wg->name : $wg->code . ' ' . $wg->name }}</span>
+                    <input type="text" wire:model="garverlust.{{ $wg->code }}" placeholder="{{ isset($geerbtGar['werte'][$wg->code]) ? $geerbtGar['werte'][$wg->code] : '—' }}" class="{{ $input }} !w-20 !py-1" /> <span class="text-[11px] text-gray-500">%</span>
                 </div>
             @endforeach
         </div>
@@ -30,16 +33,19 @@
         <div>
             <h3 class="font-medium tracking-tight text-gray-900">Putzverlust-Defaults</h3>
             <p class="text-[11px] text-gray-500 mt-0.5">In % je GP-Klasse (Warengruppe). Kaskade: Zutat-Wert → GP-Default → dieser Team-Default → 0. Leer = kein Default.</p>
+            @if($geerbtPutz)
+                <p class="text-[11px] text-amber-700 mt-1" data-kalk-geerbt>Geerbt von {{ $geerbtPutz['von'] }} (grau in den Feldern) — ein eigener Wert ersetzt die ganze geerbte Liste.</p>
+            @endif
         </div>
         <div class="flex items-center gap-3 py-1.5 border-b border-black/5">
             <span class="w-72 shrink-0 text-xs font-medium text-gray-900">* Global (alle Klassen)</span>
-            <input type="text" wire:model="putzverlust.*" placeholder="—" class="{{ $input }} !w-24" /> <span class="text-[11px] text-gray-500">%</span>
+            <input type="text" wire:model="putzverlust.*" placeholder="{{ isset($geerbtPutz['werte']['*']) ? $geerbtPutz['werte']['*'] : '—' }}" class="{{ $input }} !w-24" /> <span class="text-[11px] text-gray-500">%</span>
         </div>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-x-8">
             @foreach($warengruppen as $wg)
                 <div class="flex items-center gap-3 py-1" wire:key="pv-{{ $wg->code }}">
-                    <span class="w-64 shrink-0 text-xs text-gray-600 truncate">{{ $wg->name }}</span>
-                    <input type="text" wire:model="putzverlust.{{ $wg->code }}" placeholder="—" class="{{ $input }} !w-20 !py-1" /> <span class="text-[11px] text-gray-500">%</span>
+                    <span class="w-64 shrink-0 text-xs text-gray-600 truncate">{{ str_starts_with((string) $wg->name, (string) $wg->code) ? $wg->name : $wg->code . ' ' . $wg->name }}</span>
+                    <input type="text" wire:model="putzverlust.{{ $wg->code }}" placeholder="{{ isset($geerbtPutz['werte'][$wg->code]) ? $geerbtPutz['werte'][$wg->code] : '—' }}" class="{{ $input }} !w-20 !py-1" /> <span class="text-[11px] text-gray-500">%</span>
                 </div>
             @endforeach
         </div>
