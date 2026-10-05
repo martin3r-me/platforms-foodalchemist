@@ -81,9 +81,10 @@
                     :tabs="[
                         'kalender' => 'Kalender',
                         'mengen' => 'Mengen',
+                        'bedarf' => 'Bedarf',
                         'linien' => 'Menü-Linien',
                         'stammdaten' => 'Stammdaten',
-                        'praesentation' => 'Branding & Präsentation',
+                        'praesentation' => 'Ausgabe & Aushang',
                     ]">
 
                     {{-- ═══ Tab: KALENDER ═══ --}}
@@ -464,6 +465,66 @@
                         </x-foodalchemist::modal-section>
                     </div>
 
+                    {{-- ═══ Spec 57 · Paket 4: Tab BEDARF (Zutaten aus Plan × Mengen, nur lesend) ═══ --}}
+                    <div x-show="tab === 'bedarf'" x-cloak class="pt-4 space-y-3" data-sp-tab-bedarf>
+                        <x-foodalchemist::modal-section title="Bedarf · KW {{ (int) $montagDt->format('W') }} · {{ $mahlzeiten[$mahlzeit] ?? '' }}">
+                            <div class="flex flex-wrap items-center gap-2 mb-3 text-xs">
+                                <span class="inline-flex rounded-lg overflow-hidden border border-white/15">
+                                    <button type="button" wire:click="bedarfTagSetzen(null)" class="px-2.5 py-1.5 {{ $bedarfTag === null ? 'bg-white/10 text-gray-100 font-medium' : 'text-gray-400' }}">Woche</button>
+                                    @foreach($wochenTage as $wt)
+                                        <button type="button" wire:click="bedarfTagSetzen('{{ $wt->format('Y-m-d') }}')" class="px-2.5 py-1.5 {{ $bedarfTag === $wt->format('Y-m-d') ? 'bg-white/10 text-gray-100 font-medium' : 'text-gray-400' }}">{{ $tagKurz[$wt->isoWeekday()] }}</button>
+                                    @endforeach
+                                </span>
+                                @unless($bedarfAn)
+                                    <button type="button" wire:click="bedarfBerechnen" class="{{ $btnPrimary }} h-8" data-sp-bedarf-berechnen>Bedarf berechnen</button>
+                                @endunless
+                                <span class="text-gray-400">Rezepte bis zum Grundprodukt aufgelöst, in Basiseinheit, mit Lead-Lieferantenartikel und ganzen Gebinden.</span>
+                            </div>
+                            @if($bedarfAn && $bedarf)
+                                @if($bedarf['liste'] === null)
+                                    <p class="text-[11px] text-gray-400">In diesem Zeitraum ist nichts geplant.</p>
+                                @else
+                                    @foreach($bedarf['liste']['lieferanten'] as $lf)
+                                        <div class="rounded-xl border border-white/10 bg-white/[0.03] mb-2" wire:key="bedarf-{{ $loop->index }}">
+                                            <div class="flex items-center justify-between px-3 py-2 border-b border-white/10">
+                                                <span class="text-xs font-medium text-gray-100">{{ $lf['lieferant'] }}</span>
+                                                <span class="text-[11px] tabular-nums text-gray-400">{{ count($lf['positionen']) }} Positionen · EK {{ number_format((float) $lf['ek_summe'], 2, ',', '.') }} €{{ $lf['ek_vollstaendig'] ? '' : ' (unvollständig)' }}</span>
+                                            </div>
+                                            <div class="overflow-x-auto">
+                                                <table class="{{ $table }}" style="min-width:560px">
+                                                    <thead><tr class="text-left"><th class="{{ $th }}">Grundprodukt</th><th class="{{ $th }} text-right">Menge</th><th class="{{ $th }}">Gebinde / Artikel</th><th class="{{ $th }} text-right">EK</th></tr></thead>
+                                                    <tbody>
+                                                        @foreach($lf['positionen'] as $pos)
+                                                            <tr class="border-t border-white/5">
+                                                                <td class="{{ $td }} text-xs text-gray-200">{{ $pos['gp'] }}</td>
+                                                                <td class="{{ $td }} text-xs text-right tabular-nums text-gray-100">{{ number_format((float) $pos['menge_kg'], 3, ',', '.') }} kg</td>
+                                                                <td class="{{ $td }} text-[11px] text-gray-400">
+                                                                    {{ $pos['lead_artikel'] ?? '—' }}{{ $pos['lead_artikel_nr'] ? ' · ' . $pos['lead_artikel_nr'] : '' }}
+                                                                    @if(($pos['gebinde']['berechenbar'] ?? false) && isset($pos['gebinde']['qty_packs']))
+                                                                        · {{ $pos['gebinde']['qty_packs'] }}× {{ $pos['gebinde']['packaging_unit'] ?: 'Gebinde' }}{{ $pos['gebinde']['pack_qty'] ? ' à ' . rtrim(rtrim(number_format((float) $pos['gebinde']['pack_qty'], 3, ',', ''), '0'), ',') . ' ' . ($pos['gebinde']['pack_unit_code'] ?? '') : '' }}
+                                                                    @elseif(! empty($pos['gebinde']['grund']))
+                                                                        · <span class="text-amber-300/80">{{ $pos['gebinde']['grund'] }}</span>
+                                                                    @endif
+                                                                </td>
+                                                                <td class="{{ $td }} text-xs text-right tabular-nums text-gray-300">{{ $pos['bestell_ek_eur'] !== null ? number_format((float) $pos['bestell_ek_eur'], 2, ',', '.') . ' €' : '—' }}</td>
+                                                            </tr>
+                                                        @endforeach
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    @endforeach
+                                    @if(! empty($bedarf['liste']['warnungen']))
+                                        <div class="rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-[11px] text-amber-200">
+                                            @foreach(array_slice($bedarf['liste']['warnungen'], 0, 5) as $w)<div>{{ $w }}</div>@endforeach
+                                        </div>
+                                    @endif
+                                    <p class="text-[11px] text-gray-400 mt-2">An den Einkauf geht der Bedarf über die Produktion: „→ Produktion“ im Kalender, dann im Produktionsauftrag „Bedarf freigeben“. So wird nichts doppelt bestellt.</p>
+                                @endif
+                            @endif
+                        </x-foodalchemist::modal-section>
+                    </div>
+
                     {{-- ═══ Tab: MENÜ-LINIEN ═══ --}}
                     <div x-show="tab === 'linien'" x-cloak class="pt-4" data-sp-tab-linien>
                         <x-foodalchemist::modal-section title="Menü-Linien">
@@ -619,6 +680,42 @@
                     <div x-show="tab === 'praesentation'" x-cloak class="pt-4 space-y-4" data-sp-tab-praesentation>
                         @if($brandingFehler)<div class="rounded-lg bg-rose-500/15 border border-rose-500/30 text-rose-200 text-xs px-3 py-2">{{ $brandingFehler }}</div>@endif
 
+                        {{-- Spec 57 · Paket 6: Druck & Export der sichtbaren Woche/Mahlzeit --}}
+                        <x-foodalchemist::modal-section title="Druck & Export · KW {{ (int) $montagDt->format('W') }} · {{ $mahlzeiten[$mahlzeit] ?? '' }}">
+                            <div class="flex flex-wrap items-end gap-3 mb-3 text-xs">
+                                <label class="flex flex-col gap-1"><span class="{{ $label }}">Tag (Aufsteller, Schild, Tagesliste)</span>
+                                    <select wire:model.live="ausgabeTag" class="{{ $input }} h-8">
+                                        @foreach($wochenTage as $wt)
+                                            <option value="{{ $wt->format('Y-m-d') }}" @selected($wt->format('Y-m-d') === $ausgabeTagEffektiv)>{{ $tagKurz[$wt->isoWeekday()] }} {{ $wt->format('d.m.') }}</option>
+                                        @endforeach
+                                    </select>
+                                </label>
+                                <label class="flex flex-col gap-1"><span class="{{ $label }}">Linie (Schild)</span>
+                                    <select wire:model.live="ausgabeLinie" class="{{ $input }} h-8">
+                                        <option value="">alle Linien</option>
+                                        @foreach($matrixLinien as $ml)<option value="{{ $ml->id }}">{{ $ml->name }}</option>@endforeach
+                                    </select>
+                                </label>
+                                <label class="flex items-center gap-1.5 text-gray-300 pb-1.5"><input type="checkbox" wire:model.live="ausgabePreise" /> Preise zeigen</label>
+                            </div>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2" data-sp-ausgabe-formate>
+                                @foreach([
+                                    ['woche', 'Wochenaushang A4', 'Linien × Tage, Kennzeichnung und Legende'],
+                                    ['tag', 'Tischaufsteller', 'ein Tag, alle Linien, groß gesetzt'],
+                                    ['schild', 'Linienschilder', 'je Linie ein Schild (A5 quer)'],
+                                    ['liste_woche', 'Allergen- & Komponentenliste · Woche', 'für den Ordner an der Ausgabe'],
+                                    ['liste_tag', 'Allergen- & Komponentenliste · Tag', 'nur der gewählte Tag'],
+                                    ['csv', 'CSV-Export', 'Woche als Tabelle (Semikolon, Excel-tauglich)'],
+                                ] as [$fk, $fl, $fs])
+                                    <a href="{{ $ausgabeLinks[$fk] ?? '#' }}" target="_blank" class="rounded-xl border border-white/10 bg-white/[0.03] hover:bg-white/[0.06] px-3 py-2 block" data-sp-format="{{ $fk }}">
+                                        <span class="block text-xs font-medium text-gray-100">{{ $fl }}</span>
+                                        <span class="block text-[11px] text-gray-400">{{ $fs }}</span>
+                                    </a>
+                                @endforeach
+                            </div>
+                            <p class="text-[11px] text-gray-400 mt-2">Kennzeichnung (Allergene, Zusatzstoffe, Kostform) kommt immer aus den Rezepten. Jede Vorlage lässt sich im neuen Tab als PDF herunterladen.</p>
+                        </x-foodalchemist::modal-section>
+
                         <x-foodalchemist::modal-section title="Branding">
                             <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                 <label class="text-xs text-gray-300">Markenfarbe
@@ -660,6 +757,10 @@
                                     <input type="date" wire:model="presentationGueltigBis" class="{{ $input }} w-full" data-sp-praes-gueltig>
                                 </label>
                             </div>
+                            <label class="flex items-center gap-2 text-xs text-gray-300 mt-2" data-sp-praes-laufend>
+                                <input type="checkbox" wire:model="presentationLaufendeWoche">
+                                Immer die laufende Woche zeigen (jeden Montag neu eingefroren) — sonst KW {{ (int) $montagDt->format('W') }}, {{ $mahlzeiten[$mahlzeit] ?? '' }}
+                            </label>
                             <label class="flex items-center gap-2 text-xs text-gray-300 mt-2"><input type="checkbox" wire:model="presentationPreisAnzeige" data-sp-praes-preis> Preise anzeigen (optional — Default aus)</label>
                             {{-- Ebene 2 · Republish-Preis-Schutz (nur relevant mit Preisen) --}}
                             <label class="flex items-center gap-2 text-xs text-gray-300" title="Aus: beim erneuten Veröffentlichen bleiben die eingefrorenen Preise stehen. An: aktuelle VK ziehen. Nur mit Preisen relevant; Erstveröffentlichung immer aktuell."><input type="checkbox" wire:model="presentationPreiseAktualisieren"> Preise aktualisieren</label>

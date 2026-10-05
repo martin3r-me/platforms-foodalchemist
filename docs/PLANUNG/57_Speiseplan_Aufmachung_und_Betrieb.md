@@ -368,7 +368,7 @@ widersprechen. Präzisierungen beim Bau:
 |---|---|---|---|
 | A | 0, 1, 2, 9, 10.1 | `feat/spec57-welle-a` | gebaut, Tests geschrieben (`SpeiseplanAusgabestelleTest`), lokal nur `php -l` und Blade-Kompilierung — Pest-Lauf steht aus (E12) |
 | B | 5, 3 | `feat/spec57-welle-b` | gebaut, Tests geschrieben (`SpeiseplanUmbauMengenTest`), Pest-Lauf steht aus |
-| C | 4, 6 | — | offen |
+| C | 4, 6 | `feat/spec57-welle-c` | gebaut, Tests geschrieben (`SpeiseplanAusgabeBedarfTest`), Pest-Lauf steht aus |
 | D | 7, 8, 10.2 | — | offen |
 
 Welle A im Detail:
@@ -387,3 +387,8 @@ Welle B im Detail:
 - Paket 5: `verschiebeEintrag`, `ersetzeEintrag`, `kopiereEintrag`, `kopiereWoche`, `eintragsListe` im Service. Editor: Drag & Drop (Alpine, Muster wie Speisekarte) und Eintrag-Detail als Tastatur-Weg (Ersetzen über den Picker, Verschieben, auf Tage kopieren, Entfernen), „Woche kopieren“ (ersetzen oder zusammenführen, Pax optional).
 - Paket 3: `mengenMatrix`, `setzeZellenPax`, `uebernehmeVorwoche`, `skaliereWoche`; Tab „Mengen“ mit Vorwoche, Ø 4 Wochen (Planwerte), Summe, Anteil, WES, Ø VK, Umsatz.
 - MCP neu: `speiseplan_eintraege.GET`, `speiseplan_eintraege.PUT` (nur Entwürfe, E6), `speiseplan.WOCHE_KOPIEREN` (confirm), `speiseplan_mengen.GET`, `speiseplan_mengen.PUT`. Reife: `eintrag_ohne_linie` zeigt auf `speiseplan_eintraege.PUT`.
+Welle C im Detail:
+- Paket 4: `wochenBedarf()` baut dieselben Ziele wie die Produktion (`produktionsZiele()`, aus `wocheAnProduktion` herausgezogen) und ruft `PlanungsblattService::einkaufsliste()` — keine zweite Rechnung. Tab „Bedarf“ (Woche oder Tag, erst auf Knopfdruck), MCP `speiseplan_bedarf.GET`. Übergabe an den Einkauf über die Produktion (E7).
+- Paket 6: Dokument-Route mit `?format=tag|schild|liste|csv` (+ `tag`, `linie`, `preise`, `pdf`), Vorlage `dokumente/speiseplan-format.blade.php`; Wochenaushang zeigt optional Preise. Editor-Tab heißt jetzt „Ausgabe & Aushang“ mit „Druck & Export“.
+- E9: Option „immer die laufende Woche“ (Editor + MCP-PUBLISH `laufende_woche`); `foodalchemist:speiseplan-aushang-rollieren` friert Montags 00:20 neu ein (Standard-Link; Betriebs-Links bleiben fest).
+- Englisch: weiterhin zurückgestellt.
