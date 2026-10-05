@@ -308,6 +308,12 @@ class Editor extends Component
     /** Spec 57 · E9: Aushang zeigt immer die laufende Woche (wöchentlich neu eingefroren). */
     public bool $presentationLaufendeWoche = false;
 
+    // ── Spec 57 · Paket 7: Vorlage für Betriebe ──
+    /** Untypisiert: Select liefert "" solange kein Betrieb gewählt ist. */
+    public $kopieOutletId = '';
+
+    public ?string $vorlageHinweis = null;
+
     // Stufe C: Rückmeldung der Produktions-Übergabe
     public ?string $prodHinweis = null;
 
@@ -721,6 +727,57 @@ class Editor extends Component
         }
     }
 
+    // ── Spec 57 · Paket 7: Vorlage für Betriebe ──────────────────────────────
+
+    public function vorlageUmschalten(SpeiseplanService $svc): void
+    {
+        $this->vorlageHinweis = null;
+        $plan = $this->planId !== null ? FoodAlchemistSpeiseplan::visibleToTeam($this->team())->find($this->planId) : null;
+        if ($plan === null) {
+            return;
+        }
+        try {
+            $svc->setzeVorlage($this->team(), $this->planId, ! $plan->is_template);
+            $this->vorlageHinweis = ! $plan->is_template ? 'Als Vorlage für Betriebe freigegeben.' : 'Vorlage zurückgenommen — bestehende Kopien bleiben verknüpft.';
+        } catch (\RuntimeException $e) {
+            $this->vorlageHinweis = $e->getMessage();
+        }
+    }
+
+    public function betriebsKopieAnlegen(SpeiseplanService $svc): void
+    {
+        $this->vorlageHinweis = null;
+        if ($this->planId === null || (int) $this->kopieOutletId <= 0) {
+            $this->vorlageHinweis = 'Bitte einen Betrieb wählen.';
+
+            return;
+        }
+        try {
+            $kopie = $svc->betriebsKopieAnlegen($this->team(), $this->planId, (int) $this->kopieOutletId);
+            $this->vorlageHinweis = 'Kopie „' . $kopie->name . '“ angelegt (Entwurf).';
+            $this->kopieOutletId = '';
+            $this->dispatch('speiseplan-geaendert');
+        } catch (\RuntimeException $e) {
+            $this->vorlageHinweis = $e->getMessage();
+        }
+    }
+
+    /** Änderungen der Vorlage in diese Betriebs-Kopie übernehmen — alle oder eine Zelle ($key). */
+    public function ausVorlageUebernehmen(?string $key, SpeiseplanService $svc): void
+    {
+        $this->vorlageHinweis = null;
+        if ($this->planId === null) {
+            return;
+        }
+        try {
+            $n = $svc->ausVorlageUebernehmen($this->team(), $this->planId, $key !== null && $key !== '' ? [$key] : null);
+            $this->vorlageHinweis = $n > 0 ? "{$n} Zelle(n) aus der Vorlage übernommen." : 'Keine Änderungen aus der Vorlage offen.';
+            $this->dispatch('speiseplan-geaendert');
+        } catch (\RuntimeException $e) {
+            $this->vorlageHinweis = $e->getMessage();
+        }
+    }
+
     // ── Spec 57 · Paket 4: Bedarf ──────────────────────────────────────────
 
     public function bedarfBerechnen(): void
@@ -1026,6 +1083,11 @@ class Editor extends Component
         $mengen = $sp !== null ? $svc->mengenMatrix($team, $sp, $this->mahlzeit, $montag, $outlet) : null;
         $zielWochen = collect([-4, -3, -2, -1, 1, 2, 3, 4, 5, 6, 7, 8])
             ->map(fn (int $w) => $montag->copy()->addWeeks($w))->all();
+        // Spec 57 · Paket 7: Vorlage (Kopien + Stand) bzw. Kopie (Abgleich mit der Vorlage).
+        $betriebsKopien = $sp !== null && $sp->is_template ? $svc->betriebsKopien($team, $sp->id) : [];
+        $vorlagenAbgleich = $sp !== null && $sp->source_plan_id !== null ? $svc->vorlagenAbgleich($team, $sp->id) : null;
+        // Spec 57 · Paket 8: Plan/Ist der sichtbaren Woche (eine Abfrage aufs Verkaufsjournal).
+        $planIst = $sp !== null ? $svc->planIst($team, $sp, $this->mahlzeit, $montag, $outlet) : null;
         // Spec 57 · Paket 4: Bedarf nur, wenn angefordert (Stücklisten-Auflösung bis GP-Ebene).
         $bedarf = $sp !== null && $this->bedarfAn
             ? $svc->wochenBedarf($team, $sp, $this->mahlzeit, $montag, $this->bedarfTag)
@@ -1092,6 +1154,9 @@ class Editor extends Component
             'mengen' => $mengen,
             'zielWochen' => $zielWochen,
             'bedarf' => $bedarf,
+            'betriebsKopien' => $betriebsKopien,
+            'vorlagenAbgleich' => $vorlagenAbgleich,
+            'planIst' => $planIst,
             'ausgabeLinks' => $ausgabeLinks,
             'ausgabeTagEffektiv' => $ausgabeTag,
             'budget' => $sp !== null && $zk !== null && $kosten !== null ? $svc->budgetAmpel($sp, $zk, $kosten) : null,

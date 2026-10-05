@@ -45,6 +45,9 @@ class SpeiseplaeneGetTool extends FoodAlchemistTool implements ToolContract, Too
                 'start_date' => $plan->start_date instanceof \DateTimeInterface ? $plan->start_date->format('Y-m-d') : $plan->start_date,
                 'cycle_weeks' => $plan->cycle_weeks,
                 'opening_days' => $plan->oeffnungstage(),
+                // Spec 57 · Paket 7
+                'is_template' => (bool) $plan->is_template,
+                'source_plan_id' => $plan->source_plan_id !== null ? (int) $plan->source_plan_id : null,
                 'default_pax' => $plan->default_pax,
                 'budget_wareneinsatz' => $plan->budget_wareneinsatz !== null ? (float) $plan->budget_wareneinsatz : null,
                 'outlet_id' => $plan->outlet_id !== null ? (int) $plan->outlet_id : null,

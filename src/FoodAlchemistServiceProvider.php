@@ -1113,6 +1113,10 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\SpeiseplanMengenTool::class,
                     \Platform\FoodAlchemist\Tools\SpeiseplanMengenPutTool::class,
                     \Platform\FoodAlchemist\Tools\SpeiseplanBedarfTool::class,   // Spec 57 · Paket 4
+                    // Spec 57 · Paket 7+8: Vorlage für Betriebe (Kopie/Abgleich) + Plan/Ist.
+                    \Platform\FoodAlchemist\Tools\SpeiseplanVorlageTool::class,
+                    \Platform\FoodAlchemist\Tools\SpeiseplanVorlageAbgleichTool::class,
+                    \Platform\FoodAlchemist\Tools\SpeiseplanPlanIstTool::class,
                     // Speisekarte (Gastro-à-la-carte) — MCP-Lockstep
                     \Platform\FoodAlchemist\Tools\SpeisekartenPostTool::class,
                     \Platform\FoodAlchemist\Tools\SpeisekartenPutTool::class,
