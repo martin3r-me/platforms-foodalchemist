@@ -112,6 +112,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 \Platform\FoodAlchemist\Console\TerminologyImportCommand::class,
                 \Platform\FoodAlchemist\Console\TeamOnboardingCommand::class,
                 \Platform\FoodAlchemist\Console\SignaleDetektorCommand::class,
+                \Platform\FoodAlchemist\Console\SpeiseplanAushangRollierenCommand::class,
                 \Platform\FoodAlchemist\Console\PairingProjectComputedCommand::class,
                 \Platform\FoodAlchemist\Console\InspireImportCommand::class,
                 \Platform\FoodAlchemist\Console\PairingWipeErprobtCommand::class,
@@ -238,6 +239,15 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     ->runInBackground()
                     ->description('FoodAlchemist: Kanon-Sicherung gegen den Live-Kanon prüfen (Drift → Signal)');
             }
+
+            // Spec 57 · E9: Speiseplan-Aushänge „immer die laufende Woche“ jeden Montag früh neu
+            // einfrieren. Nur lesend+veröffentlichend, kein Provider-Call.
+            $schedule->command(\Platform\FoodAlchemist\Console\SpeiseplanAushangRollierenCommand::class)
+                ->weeklyOn(1, config('foodalchemist.scheduler.speiseplan_rollieren_zeit', '00:20'))
+                ->withoutOverlapping()
+                ->onOneServer()
+                ->runInBackground()
+                ->description('FoodAlchemist: Speiseplan-Aushänge auf die laufende Woche neu einfrieren');
 
             // Trendradar-Automatisierung: NUR wenn explizit eingeschaltet (Default aus) —
             // der Lauf ruft das Modell pro Trend/Team und gibt sonst ungefragt Provider-Geld aus.
@@ -1102,6 +1112,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\SpeiseplanWocheKopierenTool::class,
                     \Platform\FoodAlchemist\Tools\SpeiseplanMengenTool::class,
                     \Platform\FoodAlchemist\Tools\SpeiseplanMengenPutTool::class,
+                    \Platform\FoodAlchemist\Tools\SpeiseplanBedarfTool::class,   // Spec 57 · Paket 4
                     // Speisekarte (Gastro-à-la-carte) — MCP-Lockstep
                     \Platform\FoodAlchemist\Tools\SpeisekartenPostTool::class,
                     \Platform\FoodAlchemist\Tools\SpeisekartenPutTool::class,

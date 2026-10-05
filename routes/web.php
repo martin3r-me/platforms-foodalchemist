@@ -525,8 +525,48 @@ Route::get('/speiseplan', \Platform\FoodAlchemist\Livewire\Speiseplan\Index::cla
 Route::get('/speiseplan/{id}/dokument', function (int $id, \Platform\FoodAlchemist\Services\SpeiseplanService $svc) {
     $team = \Illuminate\Support\Facades\Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
     $plan = $svc->detail($team, $id) ?? abort(404);
+    $mahlzeit = (string) request()->query('mahlzeit', 'mittag');
+    $format = (string) request()->query('format', 'woche');
+    $outlet = $plan->outlet_id !== null
+        ? \Platform\FoodAlchemist\Models\FoodAlchemistOutlet::where('team_id', $team->id)->find($plan->outlet_id)
+        : null;
+
+    // Spec 57 · Paket 6: CSV der Woche (Semikolon + BOM wie der Produktionsschein).
+    if ($format === 'csv') {
+        $montag = \Illuminate\Support\Carbon::parse((string) request()->query('montag', $plan->start_date?->format('Y-m-d') ?? 'now'));
+        $zeilen = $svc->csvZeilen($team, $plan, $mahlzeit, $montag, $outlet);
+        $dateiname = 'Speiseplan-' . $id . '-KW' . $montag->isoWeek() . '.csv';
+
+        return response()->streamDownload(function () use ($zeilen) {
+            $out = fopen('php://output', 'w');
+            fwrite($out, "\xEF\xBB\xBF"); // UTF-8 BOM
+            foreach ($zeilen as $z) {
+                fputcsv($out, $z, ';');
+            }
+            fclose($out);
+        }, $dateiname, ['Content-Type' => 'text/csv; charset=UTF-8']);
+    }
+
+    // Spec 57 · Paket 6: Tischaufsteller (tag), Linienschild (schild), Allergen-/Komponentenliste (liste).
+    if (in_array($format, ['tag', 'schild', 'liste'], true)) {
+        $linie = request()->query('linie') !== null ? (int) request()->query('linie') : null;
+        $data = $svc->ausgabeFormat($team, $plan, $format, $mahlzeit, request()->query('montag'), request()->query('tag'), $linie, $outlet, request()->boolean('preise'));
+        if (request()->boolean('pdf')) {
+            if (! class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
+                abort(500, 'PDF-Export nicht verfügbar: DomPDF ist auf diesem Server nicht installiert.');
+            }
+            $papier = ['tag' => ['a4', 'portrait'], 'schild' => ['a5', 'landscape'], 'liste' => ['a4', 'portrait']][$format];
+
+            return \Barryvdh\DomPDF\Facade\Pdf::loadView('foodalchemist::dokumente.speiseplan-format', $data + ['istPdf' => true])
+                ->setPaper($papier[0], $papier[1])
+                ->download('Speiseplan-' . $id . '-' . $format . '.pdf');
+        }
+
+        return view('foodalchemist::dokumente.speiseplan-format', $data + ['istPdf' => false]);
+    }
+
     // #3: ?intern=1 (EK-Kaskade) · ?kaskade=1 (Produktions-Baum je Gericht der Woche).
-    $data = $svc->dokumentDaten($team, $plan, (string) request()->query('mahlzeit', 'mittag'), request()->query('montag'), request()->boolean('intern'), request()->boolean('kaskade'));
+    $data = $svc->dokumentDaten($team, $plan, $mahlzeit, request()->query('montag'), request()->boolean('intern'), request()->boolean('kaskade'), $outlet, request()->boolean('preise'));
 
     if (request()->boolean('pdf')) {
         if (! class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {

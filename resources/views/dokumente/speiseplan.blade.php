@@ -98,7 +98,7 @@
                         <td>
                             @php($cells = $z['zellen'][$t['ymd']] ?? [])
                             @forelse($cells as $c)
-                                <div class="dish">{{ $c['name'] }}@if(!empty($c['codes'])) <span class="codes">{{ implode(', ', $c['codes']) }}</span>@endif</div>
+                                <div class="dish">{{ $c['name'] }}@if(!empty($c['codes'])) <span class="codes">{{ implode(', ', $c['codes']) }}</span>@endif{{ isset($c['vk']) ? ' · ' . number_format((float) $c['vk'], 2, ',', '.') . ' €' : '' }}</div>
                             @empty
                                 <span class="leer">—</span>
                             @endforelse
