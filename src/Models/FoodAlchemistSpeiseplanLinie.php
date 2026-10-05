@@ -23,11 +23,48 @@ class FoodAlchemistSpeiseplanLinie extends Model
 
     protected $guarded = ['id'];
 
+    /** Spec 57 · Paket 2: Rolle der Linie an der Ausgabe. Hauptgänge zählen die Gäste des Tages. */
+    public const ROLLEN = [
+        'suppe' => 'Suppe',
+        'hauptgang' => 'Hauptgang',
+        'salat' => 'Salat',
+        'beilage' => 'Beilage',
+        'dessert' => 'Dessert',
+        'sonstiges' => 'Sonstiges',
+    ];
+
+    /** Spec 57 · Paket 2 (E1): `auto` = VK des Gerichts, `manuell` = Linienpreis netto. */
+    public const PREIS_MODI = ['auto', 'manuell'];
+
     protected $casts = [
         'uuid' => 'string',
         'is_vegetarian' => 'boolean',
         'sort_order' => 'integer',
+        'price_value' => 'float',
+        'target_wes_min_pct' => 'float',
+        'target_wes_max_pct' => 'float',
+        'default_pax' => 'integer',
+        'is_standing' => 'boolean',
     ];
+
+    /** Linie gilt für die Mahlzeit, wenn sie keiner festen Mahlzeit zugeordnet ist oder genau dieser. */
+    public function giltFuerMahlzeit(string $mahlzeit): bool
+    {
+        return $this->meal === null || $this->meal === '' || $this->meal === $mahlzeit;
+    }
+
+    public function istHauptgang(): bool
+    {
+        return $this->role === 'hauptgang';
+    }
+
+    /** Manueller Linienpreis (netto), wenn gesetzt — sonst null (dann gilt der VK des Inhalts). */
+    public function manuellerPreis(): ?float
+    {
+        return $this->price_mode === 'manuell' && $this->price_value !== null && (float) $this->price_value > 0
+            ? (float) $this->price_value
+            : null;
+    }
 
     public function mealPlan(): BelongsTo
     {

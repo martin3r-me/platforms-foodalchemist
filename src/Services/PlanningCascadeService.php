@@ -684,13 +684,7 @@ class PlanningCascadeService
 
         $start = \Illuminate\Support\Carbon::parse($plan->start_date ?? now())->startOfWeek();   // Montag
         $weeks = max(1, (int) ($plan->cycle_weeks ?? 1));
-        $meal = 'mittag';
-        $belegt = [];
-        foreach ($plan->entries as $e) {
-            if ($e->entry_date !== null) {
-                $belegt[$e->entry_date->format('Y-m-d') . '|' . $e->meal . '|' . (int) $e->line_id] = true;
-            }
-        }
+        $belegt = $this->speiseplanBelegt($plan);
 
         // Spec-42-Vollzug S4: der Session-Brief (Anlass/Saison/Richtung) steuert jede Zell-Generierung mit
         // („Speiseplan aus Brief"). Leer = unverändertes Alt-Verhalten (nur Linien-Brief).
@@ -705,47 +699,41 @@ class PlanningCascadeService
         $zellenInOffenenWochen = 0;
         foreach (range(1, $weeks) as $week) {
             $vorWoche = $idx;
+            $zellen = $this->leereSpeiseplanZellen($plan, $start, $week, $belegt);
             if ($wochenMitArbeit >= self::SPEISEPLAN_MAX_WOCHEN) {
                 // Budget aufgebraucht: zählen, was diese Woche gekostet hätte, und weiter —
                 // nicht abbrechen, sonst wüssten wir den Rest nicht.
-                $leerInWoche = $this->leereZellenDerWoche($plan, $start, $week, $meal, $belegt);
-                if ($leerInWoche > 0) {
+                if ($zellen !== []) {
                     $wochenOffen++;
-                    $zellenInOffenenWochen += $leerInWoche;
+                    $zellenInOffenenWochen += count($zellen);
                 }
 
                 continue;
             }
-            foreach (range(1, 5) as $weekday) {   // Mo–Fr (GV-Werktage)
-                $datum = $start->copy()->addDays(($week - 1) * 7 + ($weekday - 1))->format('Y-m-d');
-                foreach ($plan->lines as $linie) {
-                    if (isset($belegt[$datum . '|' . $meal . '|' . (int) $linie->id])) {
-                        continue;   // Zelle belegt
-                    }
-                    if ($idx >= self::SPEISEPLAN_MAX_ZELLEN) {
-                        $offen++;
-                        continue;
-                    }
-                    $brief = ($planKontext !== '' ? 'Rahmen: ' . $planKontext . ' — ' : '')
-                        . 'Mittagsgericht für die Linie „' . $linie->name . '“' . ($linie->is_vegetarian ? ' (vegetarisch)' : '') . '.';
-                    $step = FoodAlchemistCascadeRunStep::create([
-                        'team_id' => $team->id,
-                        'cascade_run_id' => $run->id,
-                        'parent_step_id' => null,
-                        'kind' => 'gericht',
-                        'label' => Str::limit($linie->name . ' · ' . $datum, 120),
-                        'status' => 'running',
-                        'sort' => $idx,
-                    ]);
-                    // Die größte Menge im System: bis 90 Zellen je Klick. Eigene Schlange,
-                    // damit sie nichts anderes verdrängt — und damit die Sub-Rezepte dieser
-                    // Zellen parallel auf `rezepte` weiterlaufen statt dahinter zu warten.
-                    MaterializeSpeiseplanCellJob::dispatch(
-                        $team->id, (int) (\Illuminate\Support\Facades\Auth::id() ?? 0),
-                        $planId, $datum, $meal, (int) $linie->id, $brief, (int) $step->id, $session?->id
-                    )->onQueue(Warteschlange::gerichte());
-                    $idx++;
+            foreach ($zellen as [$datum, $linie, $meal]) {
+                if ($idx >= self::SPEISEPLAN_MAX_ZELLEN) {
+                    $offen++;
+                    continue;
                 }
+                $brief = ($planKontext !== '' ? 'Rahmen: ' . $planKontext . ' — ' : '')
+                    . $this->speiseplanZellBrief($linie, $meal);
+                $step = FoodAlchemistCascadeRunStep::create([
+                    'team_id' => $team->id,
+                    'cascade_run_id' => $run->id,
+                    'parent_step_id' => null,
+                    'kind' => 'gericht',
+                    'label' => Str::limit($linie->name . ' · ' . $datum, 120),
+                    'status' => 'running',
+                    'sort' => $idx,
+                ]);
+                // Die größte Menge im System: bis 90 Zellen je Klick. Eigene Schlange,
+                // damit sie nichts anderes verdrängt — und damit die Sub-Rezepte dieser
+                // Zellen parallel auf `rezepte` weiterlaufen statt dahinter zu warten.
+                MaterializeSpeiseplanCellJob::dispatch(
+                    $team->id, (int) (\Illuminate\Support\Facades\Auth::id() ?? 0),
+                    $planId, $datum, $meal, (int) $linie->id, $brief, (int) $step->id, $session?->id
+                )->onQueue(Warteschlange::gerichte());
+                $idx++;
             }
             if ($idx > $vorWoche) {
                 $wochenMitArbeit++;
@@ -904,19 +892,85 @@ class PlanningCascadeService
      *
      * @param  array<string, bool>  $belegt
      */
-    private function leereZellenDerWoche(FoodAlchemistSpeiseplan $plan, \Illuminate\Support\Carbon $start, int $week, string $meal, array $belegt): int
+    private function leereSpeiseplanZellen(FoodAlchemistSpeiseplan $plan, \Illuminate\Support\Carbon $start, int $week, array $belegt): array
     {
-        $leer = 0;
-        foreach (range(1, 5) as $weekday) {
+        // Spec 57 · Paket 9 + E11: Öffnungstage des Plans (Standard Mo–Fr) × Linien; jede Linie
+        // in IHRER Mahlzeit (ohne feste Mahlzeit: Mittag, wie bisher).
+        $leer = [];
+        foreach ($plan->oeffnungstage() as $weekday) {
             $datum = $start->copy()->addDays(($week - 1) * 7 + ($weekday - 1))->format('Y-m-d');
             foreach ($plan->lines as $linie) {
+                $meal = ($linie->meal ?? '') !== '' ? (string) $linie->meal : 'mittag';
                 if (! isset($belegt[$datum . '|' . $meal . '|' . (int) $linie->id])) {
-                    $leer++;
+                    $leer[] = [$datum, $linie, $meal];
                 }
             }
         }
 
         return $leer;
+    }
+
+    /** @return array<string, bool>  belegte Zellen als `Y-m-d|mahlzeit|line_id` */
+    private function speiseplanBelegt(FoodAlchemistSpeiseplan $plan): array
+    {
+        $belegt = [];
+        foreach ($plan->entries as $e) {
+            if ($e->entry_date !== null) {
+                $belegt[$e->entry_date->format('Y-m-d') . '|' . $e->meal . '|' . (int) $e->line_id] = true;
+            }
+        }
+
+        return $belegt;
+    }
+
+    /** Zell-Brief: Mahlzeit + Rolle der Linie + Linienname (+ vegetarisch). Mittag bleibt „Mittagsgericht“. */
+    private function speiseplanZellBrief(\Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplanLinie $linie, string $meal): string
+    {
+        $wort = [
+            'fruehstueck' => 'Frühstücksgericht', 'mittag' => 'Mittagsgericht',
+            'abend' => 'Abendgericht', 'snack' => 'Snack',
+        ][$meal] ?? 'Mittagsgericht';
+        $rolle = $linie->role !== null && $linie->role !== 'hauptgang'
+            ? (\Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplanLinie::ROLLEN[$linie->role] ?? null)
+            : null;
+
+        return $wort . ($rolle !== null ? ' (' . $rolle . ')' : '')
+            . ' für die Linie „' . $linie->name . '“' . ($linie->is_vegetarian ? ' (vegetarisch)' : '') . '.';
+    }
+
+    /**
+     * Spec 57 · Paket 10.1: Vorschau vor dem Start — wie viele Zellen sind leer und wie viele
+     * würde EIN Lauf jetzt starten (Wochen-Deckel + Notbremse wie {@see starteSpeiseplanVollkaskade}).
+     * Nur lesend, legt nichts an.
+     *
+     * @return array{linien:int, leer:int, dieser_lauf:int, wochen:int, gedeckelt:bool}
+     */
+    public function speiseplanVorschau(Team $team, int $planId): array
+    {
+        $plan = FoodAlchemistSpeiseplan::visibleToTeam($team)->with(['lines', 'entries'])->find($planId);
+        if ($plan === null) {
+            throw new RuntimeException('Speiseplan nicht gefunden.');
+        }
+        $start = \Illuminate\Support\Carbon::parse($plan->start_date ?? now())->startOfWeek();
+        $weeks = max(1, (int) ($plan->cycle_weeks ?? 1));
+        $belegt = $this->speiseplanBelegt($plan);
+        $leer = 0;
+        $diesmal = 0;
+        $wochenMitArbeit = 0;
+        foreach (range(1, $weeks) as $week) {
+            $n = count($this->leereSpeiseplanZellen($plan, $start, $week, $belegt));
+            $leer += $n;
+            if ($n > 0 && $wochenMitArbeit < self::SPEISEPLAN_MAX_WOCHEN) {
+                $diesmal += $n;
+                $wochenMitArbeit++;
+            }
+        }
+        $diesmal = min($diesmal, self::SPEISEPLAN_MAX_ZELLEN);
+
+        return [
+            'linien' => $plan->lines->count(), 'leer' => $leer, 'dieser_lauf' => $diesmal,
+            'wochen' => $weeks, 'gedeckelt' => $diesmal < $leer,
+        ];
     }
 
     /**

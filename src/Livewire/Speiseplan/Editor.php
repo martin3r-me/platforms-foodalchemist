@@ -149,6 +149,10 @@ class Editor extends Component
                 'price_display' => $this->presentationPreisAnzeige,
                 'price_mode' => $this->presentationPreiseAktualisieren ? 'auto' : 'preserve',
                 'cta' => ['text' => $this->presentationCtaText, 'link' => $this->presentationCtaLink],
+                // Spec 57 · 0.4: die Woche und Mahlzeit, die der Mensch gerade sieht — vorher fror der
+                // Aushang immer Plan-Startwoche + Mittag ein.
+                'mahlzeit' => $this->mahlzeit,
+                'montag' => $this->montag,
             ]);
             $this->presentationLoadedId = null;
             $this->presentationHinweis = 'Veröffentlicht — der Aushang-Link ist aktiv.';
@@ -192,6 +196,8 @@ class Editor extends Component
                 'price_display' => $this->presentationPreisAnzeige,
                 'price_mode' => $this->presentationPreiseAktualisieren ? 'auto' : 'preserve',
                 'cta' => ['text' => $this->presentationCtaText, 'link' => $this->presentationCtaLink],
+                'mahlzeit' => $this->mahlzeit,
+                'montag' => $this->montag,
             ];
             // Nur setzen, wenn aktiv gewählt — sonst Fallback-Kette (Betriebs-Vorlage → Dokument) bzw. Zufalls-Token.
             if (trim((string) $this->outletPublishDesign) !== '') {
@@ -243,7 +249,16 @@ class Editor extends Component
         }
     }
 
-    public array $form = ['name' => '', 'start_date' => null, 'cycle_weeks' => 4, 'min_abstand_tage' => 0, 'status' => 'draft', 'default_pax' => 100, 'budget_wareneinsatz' => null];
+    public array $form = ['name' => '', 'start_date' => null, 'cycle_weeks' => 4, 'min_abstand_tage' => 0, 'status' => 'entwurf', 'default_pax' => 100, 'budget_wareneinsatz' => null, 'opening_days' => [1, 2, 3, 4, 5]];
+
+    /** Spec 57 · Paket 1: Zell-Dichte der Matrix — `kompakt` (Kennzahlen) oder `detail` (+ Komponenten). */
+    public string $dichte = 'kompakt';
+
+    /** Spec 57 · Paket 10.1: Vorschau vor dem Kaskaden-Start (null = Bestätigung nicht offen). */
+    public ?array $kaskadeVorschau = null;
+
+    /** Spec 57 · 0.3: Ausrollen darf belegte Zellen ersetzen (Standard: belegte bleiben unberührt). */
+    public bool $ausrollenErsetzen = false;
 
     // Stufe C: Rückmeldung der Produktions-Übergabe
     public ?string $prodHinweis = null;
@@ -267,7 +282,13 @@ class Editor extends Component
 
     public ?int $editLinieId = null;
 
-    public array $linieForm = ['name' => '', 'color' => '', 'is_vegetarian' => false];
+    public array $linieForm = [
+        'name' => '', 'color' => '', 'is_vegetarian' => false,
+        // Spec 57 · Paket 2: Linie als Ausgabestelle
+        'role' => '', 'plu' => '', 'price_mode' => 'auto', 'price_value' => null,
+        'target_wes_min_pct' => null, 'target_wes_max_pct' => null, 'default_pax' => null,
+        'is_standing' => false, 'meal' => '',
+    ];
 
     // Zellen-Picker
     public ?string $cellDatum = null;
@@ -311,9 +332,12 @@ class Editor extends Component
             // Spec 33 P2: beide Zuordnungsachsen — vorher hing der Plan nur an team_id,
             // zwei Kantinen im selben Team waren nicht unterscheidbar.
             'outlet_id' => $sp->outlet_id,
+            'opening_days' => $sp->oeffnungstage(),
         ];
         $this->prodHinweis = null;
         $this->prodFehler = null;
+        $this->kaskadeVorschau = null;
+        $this->kaskadeMeldung = null;
         $start = $sp->start_date ?? Carbon::now();
         $this->montag = $start->copy()->startOfWeek(Carbon::MONDAY)->format('Y-m-d');
         $this->monatStr = $start->copy()->startOfMonth()->format('Y-m-d');
@@ -423,6 +447,29 @@ class Editor extends Component
         $this->cellSchliessen();
     }
 
+    /** Spec 57 · Paket 1: Zell-Dichte umschalten (kompakt | detail). */
+    public function dichteSetzen(string $d): void
+    {
+        $this->dichte = $d === 'detail' ? 'detail' : 'kompakt';
+    }
+
+    /** Spec 57 · Paket 9: einen Öffnungstag (ISO 1–7) an/aus — der letzte bleibt immer an. */
+    public function oeffnungstagUmschalten(int $iso, SpeiseplanService $svc): void
+    {
+        if ($this->planId === null || $iso < 1 || $iso > 7) {
+            return;
+        }
+        $tage = array_map('intval', (array) ($this->form['opening_days'] ?? []));
+        $tage = in_array($iso, $tage, true) ? array_values(array_diff($tage, [$iso])) : [...$tage, $iso];
+        if ($tage === []) {
+            return;
+        }
+        sort($tage);
+        $this->form['opening_days'] = $tage;
+        $svc->update($this->team(), $this->planId, ['opening_days' => $tage]);
+        $this->dispatch('speiseplan-geaendert');
+    }
+
     // ── Linien ─────────────────────────────────────────────────────────
 
     public function linieAdd(SpeiseplanService $svc): void
@@ -442,7 +489,14 @@ class Editor extends Component
             return;
         }
         $this->editLinieId = $id;
-        $this->linieForm = ['name' => $linie->name, 'color' => $linie->color ?? '', 'is_vegetarian' => (bool) $linie->is_vegetarian];
+        $this->linieForm = [
+            'name' => $linie->name, 'color' => $linie->color ?? '', 'is_vegetarian' => (bool) $linie->is_vegetarian,
+            'role' => (string) ($linie->role ?? ''), 'plu' => (string) ($linie->plu ?? ''),
+            'price_mode' => $linie->price_mode ?: 'auto', 'price_value' => $linie->price_value,
+            'target_wes_min_pct' => $linie->target_wes_min_pct, 'target_wes_max_pct' => $linie->target_wes_max_pct,
+            'default_pax' => $linie->default_pax, 'is_standing' => (bool) $linie->is_standing,
+            'meal' => (string) ($linie->meal ?? ''),
+        ];
     }
 
     public function linieSpeichern(SpeiseplanService $svc): void
@@ -540,8 +594,14 @@ class Editor extends Component
             }
             $montag = Carbon::parse($this->montag ?? 'now')->startOfWeek(Carbon::MONDAY);
             $res = $svc->wocheAnProduktion($this->team(), $sp, $this->mahlzeit, $montag, \Illuminate\Support\Facades\Auth::id());
-            $this->prodHinweis = $res['auftraege'] > 0
-                ? $res['auftraege'] . ' Produktionsauftrag(e) mit ' . $res['ziele'] . ' Ziel(en) angelegt.'
+            // Spec 57 · 0.2: ein zweiter Klick aktualisiert statt zu verdoppeln — und sagt das auch.
+            $teile = array_filter([
+                $res['auftraege'] > 0 ? $res['auftraege'] . ' Auftrag/Aufträge angelegt' : null,
+                ($res['aktualisiert'] ?? 0) > 0 ? $res['aktualisiert'] . ' aktualisiert' : null,
+                ($res['gesperrt'] ?? 0) > 0 ? $res['gesperrt'] . ' schon in Produktion (unverändert)' : null,
+            ]);
+            $this->prodHinweis = $teile !== []
+                ? implode(' · ', $teile) . ' — ' . $res['ziele'] . ' Ziel(e).'
                 : 'Nichts zu übergeben — keine Belegung in dieser Woche/Mahlzeit.';
         } catch (\Throwable $e) {
             $this->prodFehler = $e->getMessage();
@@ -553,26 +613,71 @@ class Editor extends Component
         if ($this->planId === null || $this->ausrollenBis === null) {
             return;
         }
-        $n = $svc->vorlageAusrollen($this->team(), $this->planId, $this->ausrollenBis);
+        $n = $svc->vorlageAusrollen($this->team(), $this->planId, $this->ausrollenBis, $this->ausrollenErsetzen);
         $this->ausrollenInfo = $n > 0 ? "{$n} Einträge ausgerollt." : 'Nichts auszurollen (Vorlage leer oder schon belegt).';
         $this->dispatch('speiseplan-geaendert');
     }
 
     /**
-     * Voll-Kaskade (P5): füllt die leeren Zyklus-Zellen (Mo–Fr × Mittag × Linien) mit erfundenen Gerichten.
-     * Legt eine Planungs-Session als Review-Wurzel an und leitet in den Planung-Editor (Fortschritt + Freigabe).
+     * Spec 57 · Paket 10.1: erster Klick auf „Voll-Kaskade“ — zeigt, was passieren würde (leere
+     * Zellen, Zell-Läufe dieses Laufs, Deckel), statt sofort KI-Läufe zu starten. Erst „Starten“
+     * im Bestätigungsfeld ruft {@see vollKaskadeStarten}.
+     */
+    public function vollKaskadePruefen(\Platform\FoodAlchemist\Services\PlanningCascadeService $cascade): void
+    {
+        $this->kaskadeMeldung = null;
+        $this->kaskadeVorschau = null;
+        if ($this->planId === null) {
+            return;
+        }
+        try {
+            $v = $cascade->speiseplanVorschau($this->team(), $this->planId);
+        } catch (\Throwable $e) {
+            $this->kaskadeMeldung = $e->getMessage();
+
+            return;
+        }
+        if ($v['linien'] === 0) {
+            $this->kaskadeMeldung = 'Speiseplan hat keine Menü-Linien — erst Linien anlegen.';
+
+            return;
+        }
+        if ($v['leer'] === 0) {
+            $this->kaskadeMeldung = 'Alle Zellen des Zyklus sind belegt — nichts zu füllen.';
+
+            return;
+        }
+        $this->kaskadeVorschau = $v;
+    }
+
+    public function vollKaskadeAbbrechen(): void
+    {
+        $this->kaskadeVorschau = null;
+    }
+
+    /**
+     * Voll-Kaskade (P5): füllt die leeren Zyklus-Zellen (Öffnungstage × Linien, jede Linie in ihrer
+     * Mahlzeit) mit erfundenen Gerichten. Legt eine Planungs-Session als Review-Wurzel an und leitet
+     * in den Planung-Editor (Fortschritt + Freigabe).
      */
     public function vollKaskadeStarten(
         \Platform\FoodAlchemist\Services\PlanningCascadeService $cascade,
         \Platform\FoodAlchemist\Services\PlanningSessionService $sessions
     ) {
         $this->kaskadeMeldung = null;
+        $this->kaskadeVorschau = null;
         $team = $this->team();
         if ($team === null || $this->planId === null) {
             return null;
         }
         $plan = FoodAlchemistSpeiseplan::visibleToTeam($team)->find($this->planId);
         if ($plan === null) {
+            return null;
+        }
+        // Backlog #54: ohne Linien gar nicht erst eine Session anlegen (sonst blieb sie verwaist).
+        if ($plan->lines()->count() === 0) {
+            $this->kaskadeMeldung = 'Speiseplan hat keine Menü-Linien — erst Linien anlegen.';
+
             return null;
         }
         try {
@@ -620,10 +725,10 @@ class Editor extends Component
         }
 
         $montag = Carbon::parse($this->montag ?? 'now')->startOfWeek(Carbon::MONDAY);
-        $wochenTage = [];
-        for ($i = 0; $i < 5; $i++) {                  // Mo–Fr (Werktage)
-            $wochenTage[] = $montag->copy()->addDays($i);
-        }
+        // Spec 57 · Paket 9: Spalten = Öffnungstage des Plans (Standard Mo–Fr).
+        $wochenTage = $sp !== null
+            ? $svc->wochenTage($sp, $montag)
+            : array_map(fn ($i) => $montag->copy()->addDays($i), range(0, 4));
         $monatStart = Carbon::parse($this->monatStr ?? 'now')->startOfMonth();
 
         // Spec 42: reicher Zell-Picker (wie Speisekarte/Verkauf-Browser) — Browse ohne Tippzwang,
@@ -686,6 +791,12 @@ class Editor extends Component
                 ->map(fn ($o) => ['id' => (int) $o->id, 'name' => (string) $o->name])->all();
         }
 
+        // Spec 57 · Paket 1: Kennzahlen je Zelle/Tag/Linie in EINEM Service-Aufruf (keine Rechnung im Blade).
+        $kosten = $sp !== null ? $svc->wochenKosten($sp, $this->mahlzeit, $montag, $outlet) : null;
+        $zk = $sp !== null
+            ? $svc->zellenKennzahlen($team, $sp, $this->mahlzeit, $montag, $outlet, $this->ansicht === 'woche' && $this->dichte === 'detail')
+            : null;
+
         return view('foodalchemist::livewire.speiseplan.editor', [
             'presentationInfo' => $presentationInfo,
             'presentationLink' => $presentationLink,
@@ -715,13 +826,17 @@ class Editor extends Component
             'firmen' => $svc->sucheFirmen($this->firmaSuche),
             'kontakte' => $svc->sucheKontakte($this->kontaktSuche),
             'linien' => $sp !== null ? $sp->lines : collect(),
+            // Spec 57 · E11: Matrix-Zeilen = Linien DIESER Mahlzeit (ohne feste Mahlzeit: überall).
+            'matrixLinien' => $sp !== null ? $sp->lines->filter(fn ($l) => $l->giltFuerMahlzeit($this->mahlzeit))->values() : collect(),
+            'rollen' => \Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplanLinie::ROLLEN,
             'wochenTage' => $wochenTage,
             'montagDt' => $montag,
             'monatStart' => $monatStart,
             'raster' => $sp !== null ? $svc->wochenRaster($sp, $this->mahlzeit, $montag) : [],
             'monatsRaster' => $sp !== null ? $svc->monatsRaster($sp, (int) $monatStart->year, (int) $monatStart->month, $this->mahlzeit, $outlet) : [],
-            'kosten' => $sp !== null ? $svc->wochenKosten($sp, $this->mahlzeit, $montag, $outlet) : null,
-            'veggie' => $sp !== null ? $svc->veggieCheck($sp, $this->mahlzeit, $montag) : null,
+            'kosten' => $kosten,
+            'zk' => $zk,
+            'budget' => $sp !== null && $zk !== null && $kosten !== null ? $svc->budgetAmpel($sp, $zk, $kosten) : null,
             'kostformen' => $sp !== null ? $svc->kostformAbdeckung($sp, $this->mahlzeit, $montag) : [],
             'kennzeichnung' => $sp !== null ? $svc->wochenKennzeichnung($sp, $this->mahlzeit, $montag) : null,
             'naehrwerte' => $sp !== null ? $svc->wochenNaehrwerte($sp, $this->mahlzeit, $montag) : null,

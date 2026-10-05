@@ -18,7 +18,9 @@ class SpeiseplanLinienPutTool extends FoodAlchemistTool implements ToolContract,
 
     public function getDescription(): string
     {
-        return 'Bearbeitet eine Ausgabe-Linie eines team-eigenen Speiseplans (felder: name, color, is_vegetarian).';
+        return 'Bearbeitet eine Ausgabe-Linie eines team-eigenen Speiseplans (felder: name, color, is_vegetarian, '
+            . 'role [suppe|hauptgang|salat|beilage|dessert|sonstiges], meal [fruehstueck|mittag|abend|snack, leer = alle], '
+            . 'plu, price_mode [auto|manuell], price_value (netto), target_wes_min_pct, target_wes_max_pct, default_pax, is_standing).';
     }
 
     public function getSchema(): array
@@ -27,7 +29,7 @@ class SpeiseplanLinienPutTool extends FoodAlchemistTool implements ToolContract,
             'type' => 'object',
             'properties' => [
                 'linie_id' => ['type' => 'integer', 'description' => 'Linien-Id.'],
-                'felder' => ['type' => 'object', 'description' => 'name, color, is_vegetarian.'],
+                'felder' => ['type' => 'object', 'description' => 'name, color, is_vegetarian, role, meal, plu, price_mode, price_value, target_wes_min_pct, target_wes_max_pct, default_pax, is_standing.'],
             ],
             'required' => ['linie_id', 'felder'],
         ];
@@ -43,7 +45,7 @@ class SpeiseplanLinienPutTool extends FoodAlchemistTool implements ToolContract,
         if (! is_array($felder) || $felder === []) {
             return ToolResult::error('felder muss ein nicht-leeres Objekt sein.', 'VALIDATION_ERROR');
         }
-        $in = array_intersect_key($felder, array_flip(['name', 'color', 'is_vegetarian']));
+        $in = array_intersect_key($felder, array_flip(array_merge(['name', 'is_vegetarian'], SpeiseplanLinienPostTool::LINIEN_FELDER)));
         if ($in === []) {
             return ToolResult::error('Keine bekannten Felder in felder.', 'VALIDATION_ERROR');
         }

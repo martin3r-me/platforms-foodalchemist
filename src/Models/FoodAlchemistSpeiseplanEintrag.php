@@ -92,6 +92,8 @@ class FoodAlchemistSpeiseplanEintrag extends Model
 
     public function inhaltName(): string
     {
-        return $this->concept?->name ?? $this->paket?->name ?? $this->gericht?->name ?? '—';
+        // Spec 57 · 0.9: über die Haupt-Relationen, damit das Eager-Loading aus
+        // SpeiseplanService::detail() greift (die deutschen Aliase luden je Eintrag nach).
+        return $this->concept?->name ?? $this->package?->name ?? $this->dish?->name ?? '—';
     }
 }

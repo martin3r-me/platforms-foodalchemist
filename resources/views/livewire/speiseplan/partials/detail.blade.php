@@ -1,7 +1,5 @@
 {{-- Speiseplan-Detail-Panel (rechts, read-only Info). Kein Branding → Plan-Name oben. Erwartet: $plan. --}}
 @php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
-@php($statusLabel = ['draft' => 'Entwurf', 'active' => 'Aktiv', 'aktiv' => 'Aktiv', 'archiviert' => 'Archiviert'])
-@php($statusVariant = ['draft' => 'secondary', 'active' => 'success', 'aktiv' => 'success', 'archiviert' => 'secondary'])
 
 <div class="p-4 space-y-5">
     <div class="text-center pt-1">

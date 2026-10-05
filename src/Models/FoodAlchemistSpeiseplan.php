@@ -33,7 +33,28 @@ class FoodAlchemistSpeiseplan extends Model
         'min_abstand_tage' => 'integer',
         'default_pax' => 'integer',
         'budget_wareneinsatz' => 'float',
+        'opening_days' => 'array',
     ];
+
+    /** Spec 57 · Paket 9: Standard-Öffnungstage, wenn nichts gepflegt ist (GV-Werktage). */
+    public const OEFFNUNGSTAGE_STANDARD = [1, 2, 3, 4, 5];
+
+    /**
+     * Öffnungstage als ISO-Wochentage (1 = Mo … 7 = So), sortiert und eindeutig. Leer oder
+     * unbrauchbar gepflegt → Mo–Fr, damit ein Plan nie „an keinem Tag“ geöffnet ist.
+     *
+     * @return list<int>
+     */
+    public function oeffnungstage(): array
+    {
+        $tage = array_values(array_unique(array_filter(
+            array_map('intval', (array) ($this->opening_days ?? [])),
+            fn (int $t) => $t >= 1 && $t <= 7,
+        )));
+        sort($tage);
+
+        return $tage !== [] ? $tage : self::OEFFNUNGSTAGE_STANDARD;
+    }
 
     public function entries(): HasMany
     {

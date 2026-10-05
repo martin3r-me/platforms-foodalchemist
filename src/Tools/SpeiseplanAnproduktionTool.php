@@ -22,7 +22,9 @@ class SpeiseplanAnproduktionTool extends FoodAlchemistTool implements ToolContra
 
     public function getDescription(): string
     {
-        return 'Gibt eine Speiseplan-Woche (mahlzeit + Montag YYYY-MM-DD) in die Produktion — erzeugt Produktionsaufträge. Erfordert confirm=true.';
+        return 'Gibt eine Speiseplan-Woche (mahlzeit + Montag YYYY-MM-DD) in die Produktion — je Öffnungstag ein Auftrag. '
+            . 'Wiederholbar: ein noch geplanter Auftrag desselben Tags wird aktualisiert (result.aktualisiert), einer in '
+            . 'Produktion bleibt unverändert (result.gesperrt). Erfordert confirm=true.';
     }
 
     public function getSchema(): array
@@ -73,7 +75,7 @@ class SpeiseplanAnproduktionTool extends FoodAlchemistTool implements ToolContra
         return [
             'category' => 'action',
             'tags' => ['foodalchemist', 'speiseplan', 'produktion', 'write'],
-            'read_only' => false, 'idempotent' => false, 'risk_level' => 'destructive',
+            'read_only' => false, 'idempotent' => true, 'risk_level' => 'destructive',   // Spec 57 · 0.2
             'confirmation_required' => true,
             'requires_auth' => true, 'requires_team' => true, 'cost_class' => 'local_db',
             'side_effects' => ['creates'],

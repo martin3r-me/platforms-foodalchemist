@@ -124,7 +124,7 @@ it('Speisekarte: ohne Rubrik blockiert, Rubrik ohne Position ist wichtig', funct
     expect(($this->codes)($res2))->toContain('kein_inhalt')->not->toContain('keine_rubriken');
 });
 
-it('Speiseplan: Kopf-Lücken tragen wie=null (kein MCP-PUT), default_pax nicht messbar (DB-Default), keine Einträge blockiert', function () {
+it('Speiseplan: Kopf-Lücken zeigen auf speiseplaene.PUT (Spec 57 · 0.8), default_pax nicht messbar (DB-Default), keine Einträge blockiert', function () {
     $plan = app(SpeiseplanService::class)->create($this->rootTeam, ['name' => 'Reife-Plan', 'start_date' => '2026-09-07', 'cycle_weeks' => 1]);
 
     $res = ($this->reife)('speiseplan', (int) $plan->id);
@@ -133,10 +133,12 @@ it('Speiseplan: Kopf-Lücken tragen wie=null (kein MCP-PUT), default_pax nicht m
         ->and(($this->codes)($res))->toContain('keine_eintraege', 'budget_wareneinsatz')
         ->and(($this->nm)($res))->toContain('struktur_text', 'geruest', 'ampel', 'default_pax');
 
+    // Spec 57 · 0.8: der Kopf ist per MCP pflegbar — die Lücke nennt das Werkzeug samt Plan-Id.
     $budget = collect($res->data['luecken'])->firstWhere('code', 'budget_wareneinsatz');
-    expect($budget['wie'])->toBeNull();
+    expect($budget['wie']['tool'])->toBe('foodalchemist.speiseplaene.PUT')
+        ->and($budget['wie']['args']['id'])->toBe((int) $plan->id);
 
-    // Kein erfundenes Werkzeug: Speiseplan-Kopf-Lücken landen nicht in den nächsten Schritten.
+    // Kein erfundenes Werkzeug: jeder nächste Schritt nennt ein echtes Tool.
     $tools = array_column($res->data['naechste_schritte'], 'tool');
     expect($tools)->not->toContain(null);
 });
