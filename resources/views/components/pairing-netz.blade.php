@@ -1,7 +1,7 @@
 {{--
     FA Pairing-Netz — kompakter Inline-Hub fürs Detail-Panel: Gericht zentral,
     Kern-Anker im Innenkreis, die vertrauenswürdigen Pairing-Kandidaten aussen
-    (Stern-Stufen ★★★ / ★★ / ★). Positionen/Buckets fertig aus
+    (★★★ = echtes Food Pairing; Kontrast und Konflikt im Overlay). Positionen/Buckets fertig aus
     PairingService::pairingNetz (deterministisch) — D3 zeichnet nur. Voller Filter
     (kontrast, Basisrezepte) im „Netz öffnen"-Overlay. Schwarzer Grund (kein dark:).
 --}}
@@ -10,14 +10,14 @@
     $zentrumNode = collect($netz['nodes'])->firstWhere('kind', 'zentrum');
     $ankerNodes = collect($netz['nodes'])->where('kind', 'anker')->values();
 
-    // Preview zeigt Gericht + Kern-Anker + die gemessenen Harmonie-Kandidaten (★★/★★★).
-    $sichtbar = ['stern3', 'stern2'];
+    // Preview zeigt Gericht + Kern-Anker + die gemessenen Harmonie-Kandidaten (Spec 60: nur ★★★).
+    $sichtbar = ['stern3'];
     $previewNodes = collect($netz['nodes'])
         ->filter(fn ($n) => in_array($n['kind'], ['zentrum', 'anker'], true) || ($n['kind'] === 'kandidat' && in_array($n['typ'] ?? null, $sichtbar, true)))
         ->values()->all();
     // anker_anker = innere Ebene (wie die Kern-Anker zusammenhängen) — immer mit.
     $previewEdges = collect($netz['edges'])
-        ->filter(fn ($e) => in_array($e['kind'], ['zentrum_anker', 'anker_anker'], true) || ($e['kind'] === 'kandidat' && in_array($e['typ'] ?? null, $sichtbar, true)))
+        ->filter(fn ($e) => in_array($e['kind'], ['zentrum_anker', 'anker_anker', 'konflikt'], true) || ($e['kind'] === 'kandidat' && in_array($e['typ'] ?? null, $sichtbar, true)))
         ->values()->all();
 @endphp
 
@@ -33,7 +33,7 @@
             mode: 'preview',
             canvasW: {{ (float) ($netz['meta']['canvas_w'] ?? 1000) }},
             canvasH: {{ (float) ($netz['meta']['canvas_h'] ?? 760) }},
-            typDefault: { stern3: true, stern2: false, stern1: false },
+            typDefault: { stern3: true, kontrast: false },
         })"
         class="w-full"
     >

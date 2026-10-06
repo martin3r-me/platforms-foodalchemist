@@ -223,9 +223,12 @@ final class Kombinationslogik
         // Süß und herzhaft mischen sich nicht: ein Vorschlag hat die Richtung des Gerichts oder ist neutral.
         $richtung = in_array($geschmacksrichtung, ['herzhaft', 'suess'], true) ? $geschmacksrichtung : null;
 
-        $out = [];
-        foreach ($analyse['offene_bedarfe'] as $b) {
-            $kandidaten = [];
+        // Erst die billigen Filter (Teller, Diät, Richtung, liefert die Achse), dann EINMAL die Kanten
+        // und das Anker-Wissen zwischen den übrigen Kandidaten und den Bestandteilen laden.
+        $jeBedarfKandidaten = [];
+        $kandAnker = [];
+        foreach ($analyse['offene_bedarfe'] as $i => $b) {
+            $jeBedarfKandidaten[$i] = [];
             foreach ($this->basisKatalog($teamId) as $rid => $k) {
                 if (in_array($rid, $vorhanden, true) || ! $k['teller'] || ! $this->passtZurDiaet($k, $diaet)
                     || ($richtung !== null && $k['richtung'] !== null && $k['richtung'] !== $richtung && $k['richtung'] !== 'neutral')) {
@@ -235,6 +238,40 @@ final class Kombinationslogik
                 if ($e === null || (float) $e['stufe'] < 2) {
                     continue;
                 }
+                $jeBedarfKandidaten[$i][$rid] = $e;
+                foreach ($k['profil']['anker'] as $a) {
+                    $kandAnker[$a['anchor_id']] = true;
+                }
+            }
+        }
+        $teilAnker = [];
+        foreach ($teile as $t) {
+            foreach ($t['profil']['anker'] as $a) {
+                $teilAnker[(int) $a['anchor_id']] = true;
+            }
+        }
+        if ($kandAnker !== [] && $teilAnker !== []) {
+            $this->graph->vorladen(array_keys($kandAnker), array_keys($teilAnker));
+        }
+
+        try {
+            return $this->vorschlaegeBewerten($analyse, $teile, $jeBedarfKandidaten, $jeBedarf, $teamId);
+        } finally {
+            $this->graph->vergiss();
+        }
+    }
+
+    /**
+     * @param  array<int, array<int, array>>  $jeBedarfKandidaten  Bedarf-Index → recipe_id → Eigenschaft
+     */
+    private function vorschlaegeBewerten(array $analyse, array $teile, array $jeBedarfKandidaten, int $jeBedarf, ?int $teamId): array
+    {
+        $katalog = $this->basisKatalog($teamId);
+        $out = [];
+        foreach ($analyse['offene_bedarfe'] as $i => $b) {
+            $kandidaten = [];
+            foreach ($jeBedarfKandidaten[$i] as $rid => $e) {
+                $k = $katalog[$rid];
                 $besteHarmonie = 0.0;
                 $mit = null;
                 $konflikt = false;
@@ -271,6 +308,34 @@ final class Kombinationslogik
         }
 
         return $out;
+    }
+
+    /**
+     * Basisrezepte aus dem Bestand, die ein Aroma tragen (Kern-Anteil ≥ $abAnteil %) — für den
+     * Generator die Wahl „vorhandenes Basisrezept nehmen oder neu bauen". Dieselben Filter wie
+     * bei den Vorschlägen: tellerfähig, Ernährungsform nur ausdrücklich, Geschmacksrichtung.
+     *
+     * @return list<array{recipe_id: int, name: string, anteil: float}>
+     */
+    public function basisrezepteMitAroma(int $ankerId, ?int $teamId, ?string $diaet = null, ?string $geschmacksrichtung = null,
+        int $max = 5, float $abAnteil = 25.0): array
+    {
+        $richtung = in_array($geschmacksrichtung, ['herzhaft', 'suess'], true) ? $geschmacksrichtung : null;
+        $out = [];
+        foreach ($this->basisKatalog($teamId) as $rid => $k) {
+            if (! $k['teller'] || ! $this->passtZurDiaet($k, $diaet)
+                || ($richtung !== null && $k['richtung'] !== null && $k['richtung'] !== $richtung && $k['richtung'] !== 'neutral')) {
+                continue;
+            }
+            foreach ($k['profil']['anker'] as $a) {
+                if ($a['anchor_id'] === $ankerId && $a['anteil'] >= $abAnteil) {
+                    $out[] = ['recipe_id' => $rid, 'name' => $k['name'], 'anteil' => round($a['anteil'], 1)];
+                }
+            }
+        }
+        usort($out, fn ($x, $y) => [$y['anteil'], $x['recipe_id']] <=> [$x['anteil'], $y['recipe_id']]);
+
+        return array_slice($out, 0, $max);
     }
 
     /**

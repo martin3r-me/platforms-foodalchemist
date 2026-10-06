@@ -51,10 +51,23 @@ final class KombinationsPlan
                 break;
             }
         }
-        if ($anker === []) {
+
+        return $this->fuerAnker($team, $anker, $gericht, $diaet, $richtung);
+    }
+
+    /**
+     * Derselbe Plan aus gewählten Ankern (Composer): kein Text-Abgleich, die Auswahl IST die Vorgabe.
+     *
+     * @param  list<int>  $anker
+     * @return array<string, mixed>|null
+     */
+    public function fuerAnker(Team $team, array $anker, bool $gericht, ?string $diaet = null, ?string $richtung = null): ?array
+    {
+        $anker = array_values(array_unique(array_filter(array_map('intval', $anker), fn ($i) => $i > 0)));
+        $namen = DB::table('foodalchemist_vocab_pairing_anchors')->whereIn('id', $anker)->pluck('display_de', 'id');
+        if ($namen->isEmpty()) {
             return null;
         }
-        $namen = DB::table('foodalchemist_vocab_pairing_anchors')->whereIn('id', $anker)->pluck('display_de', 'id');
 
         $leit = [];
         foreach ($anker as $id) {
@@ -71,12 +84,21 @@ final class KombinationsPlan
                 $braucht[] = ['achse' => $achse->label(), 'staerke' => (string) $b->staerke,
                     'liefern' => $this->namen($liefern)];
             }
-            $leit[] = [
+            if (! isset($namen[$id])) {
+                continue;
+            }
+            $eintrag = [
                 'aroma' => (string) $namen[$id],
                 'harmonie' => $this->graph->partner($id, AnkerGraph::HARMONIERT, self::PALETTE)->pluck('display_de')->all(),
                 'braucht' => $braucht,
                 'vermeiden' => $this->namen($this->graph->beziehungen([$id], Kantenart::Konflikt)->pluck('zu')->all()),
             ];
+            if ($gericht) {
+                // Vorhandene Basisrezepte, die dieses Aroma tragen — Angebot, kein Zwang.
+                $eintrag['basisrezepte'] = array_map(fn ($b) => ['sub_rezept_id' => $b['recipe_id'], 'name' => $b['name']],
+                    $this->logik->basisrezepteMitAroma($id, (int) $team->id, $diaet, $richtung, self::LIEFERANTEN));
+            }
+            $leit[] = $eintrag;
         }
 
         $plan = [
@@ -85,8 +107,10 @@ final class KombinationsPlan
                 .'je Leit-Aroma — bevorzugt daraus abrunden. `braucht` = was das Leit-Aroma von außen braucht (Kontrast, '
                 .'z. B. Säure gegen Süße/Fett); decke jeden „muss"-Bedarf mit einem der genannten Lieferanten oder einer '
                 .'gleichwertigen Zutat. `vermeiden` nie kombinieren. Erfinde keine unbelegten Paarungen.'
-                .($gericht ? ' `komponenten` = vorhandene Basisrezepte, die einen offenen Bedarf decken — als Komponente '
-                    .'wiederverwenden (sub_rezept_id) statt nachzubauen.' : ''),
+                .($gericht ? ' Ein Gericht besteht aus Basisrezepten. Je Leit-Aroma stehen unter `basisrezepte` vorhandene '
+                    .'Basisrezepte, die das Aroma tragen; `komponenten` = vorhandene Basisrezepte, die einen offenen Bedarf decken. '
+                    .'Entscheide je Komponente: vorhandenes Basisrezept wiederverwenden (sub_rezept_id), wenn es zur Idee passt — '
+                    .'oder eine neue Komponente bauen, wenn die Idee eine eigene braucht. Wiederverwenden ist ein Angebot, kein Zwang.' : ''),
             'leit_aromen' => $leit,
         ];
 

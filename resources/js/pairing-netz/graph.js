@@ -142,7 +142,7 @@ export function pairingNetzGraph(config) {
       const g = this._rootG.append('g').attr('data-fa-edges', '');
       // Zeichen-Reihenfolge: Anker-Verbindungen (Brücke + direktes Pairing) ZULETZT = obenauf,
       // damit die violette Beziehung klar über dem Kandidaten-Gewirr liegt (stabiler Sort).
-      const zLayer = (d) => (d.kind === 'bridge' || d.kind === 'anker_anker' ? 2 : d.kind === 'zentrum_anker' ? 0 : 1);
+      const zLayer = (d) => (d.kind === 'bridge' || d.kind === 'anker_anker' || d.kind === 'konflikt' ? 2 : d.kind === 'zentrum_anker' ? 0 : 1);
       const drawEdges = this.edges.map((e, i) => [e, i]).sort((a, b) => (zLayer(a[0]) - zLayer(b[0])) || (a[1] - b[1])).map((p) => p[0]);
       this._edgeSel = g
         .selectAll('path')
@@ -224,6 +224,7 @@ export function pairingNetzGraph(config) {
     },
 
     _edgeColor(d) {
+      if (d.kind === 'konflikt') return '#f43f5e'; // Spec 60: Konflikt aus dem Anker-Wissen
       if (d.kind === 'bridge') return '#a78bfa'; // Brücke (geteilte Partner) = anker-violett
       if (d.typ) return TYP_FARBE[d.typ] || '#9ca3af';
 
@@ -231,6 +232,7 @@ export function pairingNetzGraph(config) {
     },
 
     _edgeDash(d) {
+      if (d.kind === 'konflikt') return '5 3';
       if (d.kind === 'anker_anker') return null; // direktes Pairing → durchgezogen
       if (d.kind === 'bridge') return null;       // Brücke → durchgezogen (Dicke trägt die Aussage)
       if (d.kind === 'basis') return '3 4';
@@ -245,6 +247,7 @@ export function pairingNetzGraph(config) {
       // Brücke: Dicke nach normalisierter Stärke (Overlap-Tier) — eine Stärke-Dimension,
       // konsistent mit dem Best/Good/Match-Marker (früher: rohe Anzahl → hub-verzerrt).
       if (d.kind === 'bridge') return { best: 4, good: 2.6, match: 1.5 }[this._edgeTier(d)] || 1.5;
+      if (d.kind === 'konflikt') return 2.4;
       if (d.kind === 'zentrum_anker') return 0.8;
       if (d.kind === 'basis') return 1;
       if (d.weight == null) return 1.4;
@@ -253,6 +256,7 @@ export function pairingNetzGraph(config) {
     },
 
     _edgeOpacity(d) {
+      if (d.kind === 'konflikt') return 0.9;
       if (d.kind === 'anker_anker') return 0.85; // Kern-Aussage → präsent (vs. zentrum_anker 0.14)
       if (d.kind === 'bridge') return 0.78;
       if (d.kind === 'zentrum_anker') return 0.14;
@@ -267,6 +271,8 @@ export function pairingNetzGraph(config) {
       const t = this._byId.get(d.target);
       if (!s || !t) return '';
       const name = (n) => n.label || n.slug || '';
+      if (d.kind === 'konflikt') return d.text || `${name(s)} ↔ ${name(t)} · Konflikt`;
+      if (d.kind === 'kandidat' && d.typ === 'kontrast') return `${name(s)} deckt ${d.achse || 'einen Bedarf'} für ${name(t)}`;
       if (d.kind === 'anker_anker') {
         const wort = { 3: 'Best-Match', 2: 'Good-Match', 1: 'Match' }[d.level] || '';
 
@@ -419,10 +425,13 @@ export function pairingNetzGraph(config) {
     _title(d) {
       if (d.kind === 'anker') {
         const base = (d.label || d.slug || '') + ' (Kern-Anker)';
-        if (d.orphan) return base + ' — passt (noch) nicht zu den anderen';
+        if (d.orphan) return base + ' — kein gemessener Bezug zu den anderen (neutral)';
         if (d.fit != null) return base + ` — Fit ${d.fit}%`;
 
         return base;
+      }
+      if (d.kind === 'kandidat' && d.typ === 'kontrast') {
+        return `${d.label} — Kontrast: deckt ${d.achse || 'einen offenen Bedarf'}${d.cover > 1 ? ` für ${d.cover} Anker` : ''}`;
       }
       if (d.kind === 'kandidat') {
         const sym = LEVEL_SYM[d.level] || d.typ;

@@ -7,6 +7,8 @@ use Illuminate\Support\Facades\DB;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
+use Platform\FoodAlchemist\Enums\AussageTyp;
+use Platform\FoodAlchemist\Enums\Kantenart;
 use Platform\FoodAlchemist\Services\Pairing\AnkerGraph;
 
 /**
@@ -1369,6 +1371,9 @@ class PairingService
 
     private const BASIS_MAX = 10;
 
+    /** Spec 60: Kontrast-Lieferanten je offenem Bedarf im Netz. */
+    private const KONTRAST_JE_BEDARF = 4;
+
     private const INNER_ANKER_MAX = 12;
 
     /**
@@ -1441,7 +1446,7 @@ class PairingService
      *
      * @param  \Illuminate\Support\Collection<int,array{id:int,slug:string,display_de:?string}>  $inner
      */
-    private function baueNetz(Team $team, \Illuminate\Support\Collection $inner, string $centerLabel, int $recipeId, bool $withBridges = false): array
+    private function baueNetz(Team $team, \Illuminate\Support\Collection $inner, string $centerLabel, int $recipeId, bool $composer = false): array
     {
         $cx = self::CANVAS_W / 2;
         $cy = self::CANVAS_H / 2;
@@ -1473,96 +1478,20 @@ class PairingService
         // ── Kandidaten: Aroma-Partner der Kern-Anker (ausserhalb), typisiert ──
         [$kandidaten, $candMeta] = $this->kandidatenFuerAnker($innerIds);
 
-        // ── Brücken-Ebene (nur Composer): wie hängen die Anker über GETEILTE Partner
-        // zusammen? Direkte Anker↔Anker-Kanten sind in Inspire fast immer leer — die
-        // Verbindung läuft über gemeinsame Partner (cover ≥ 2). Macht das im Graphen
-        // sichtbar (Linie zwischen Ankern, Dicke = #geteilte Partner) + ehrliche Kohäsion.
-        $bridgeMeta = null;
-        if ($withBridges) {
-            $ankerLabel = [];
-            foreach ($inner as $a) {
-                $ankerLabel[(int) $a['id']] = $a['display_de'] ?: $a['slug'];
-            }
-            $pairPartners = []; // "a:b" (a<b) => [partnerLabel, …]
-            $touched = array_fill_keys($innerIds, false);
-            // Externe Partner-Zahl je Anker (im Kandidat-Raum = „Grad"). Basis für die
-            // NORMALISIERTE Brücken-Stärke: nicht die rohe Anzahl geteilter Partner (hub-
-            // verzerrt → alles wirkt „Best"), sondern ihr ANTEIL am kleineren Grad
-            // (Overlap-Koeffizient). Zählt ALLE Kandidaten, die den Anker bedienen — auch
-            // cover-1 — also vor dem <2-served-Skip.
-            $degCand = array_fill_keys($innerIds, 0);
-            foreach ($kandidaten as $c) {
-                $served = array_values(array_unique(array_map(static fn ($p) => (int) $p['anker_id'], $c['partner'])));
-                foreach ($served as $s) {
-                    if (isset($degCand[$s])) {
-                        $degCand[$s]++;
-                    }
-                }
-                if (count($served) < 2) {
-                    continue;
-                }
-                sort($served);
-                $pl = $c['display_de'] ?: $c['slug'];
-                $n = count($served);
-                for ($i = 0; $i < $n; $i++) {
-                    for ($j = $i + 1; $j < $n; $j++) {
-                        $pairPartners[$served[$i].':'.$served[$j]][] = $pl;
-                        $touched[$served[$i]] = true;
-                        $touched[$served[$j]] = true;
-                    }
-                }
-            }
-            $tierCount = ['best' => 0, 'good' => 0, 'match' => 0];
-            foreach ($pairPartners as $key => $partners) {
-                [$a, $b] = array_map('intval', explode(':', $key));
-                $shared = count($partners);
-                // Overlap-Koeffizient: geteilte Partner / kleinerer Grad. Entzerrt Hubs —
-                // 6 geteilte bei zwei 8er-Ankern (0,75 = Best) ≠ 6 bei einem 65er (0,09 = Match).
-                $minDeg = max(1, min($degCand[$a] ?? 1, $degCand[$b] ?? 1));
-                $overlap = $shared / $minDeg;
-                $tier = $overlap >= 0.4 ? 'best' : ($overlap >= 0.2 ? 'good' : 'match');
-                $tierCount[$tier]++;
-                $edges[] = ['source' => 'a:'.$a, 'target' => 'a:'.$b, 'kind' => 'bridge',
-                    'shared' => $shared,
-                    'overlap' => (int) round($overlap * 100),
-                    'tier' => $tier,
-                    'partners' => array_slice(array_values(array_unique($partners)), 0, 6),
-                    'visible' => true];
-            }
-            // Direkte Anker-Kanten (selten) zählen ebenfalls als „verbunden".
-            $directTouched = [];
-            foreach ($ankerKanten as $e) {
-                $directTouched[(int) substr($e['source'], 2)] = true;
-                $directTouched[(int) substr($e['target'], 2)] = true;
-            }
-            // Orphan = weder geteilter Partner noch direkte Kante → Flag am Anker-Knoten.
-            $orphanLabels = [];
+        // ── Spec 60: Kombinationslogik über die Anker-Auswahl — dieselbe Aussage wie im Panel.
+        // Daraus: Kontrast-Ring (Lieferanten für offene Bedarfe), Konflikt-Linien und — nur im
+        // Composer — der Hinweis „kein gemessener Bezug" an Ankern ohne jede Verbindung (neutral).
+        [$kontrast, $konfliktKanten, $verbunden] = $this->kontrastUndKonflikt($innerIds);
+        // Ein Anker, der einen offenen Bedarf deckt, steht als Kontrast — die stärkere Aussage —
+        // und nicht zusätzlich im ★★★-Ring.
+        $kontrastIds = array_flip(array_map(fn ($c) => (int) $c['id'], $kontrast));
+        $kandidaten = array_values(array_filter($kandidaten, fn ($c) => ! isset($kontrastIds[(int) $c['id']])));
+        $edges = array_merge($edges, $konfliktKanten);
+        if ($composer && count($innerIds) >= 2) {
             foreach ($ankerNodes as &$an) {
-                $aid = (int) substr($an['id'], 2);
-                $isOrphan = ! ($touched[$aid] ?? false) && ! ($directTouched[$aid] ?? false);
-                $an['orphan'] = $isOrphan;
-                if ($isOrphan) {
-                    $orphanLabels[] = $ankerLabel[$aid] ?? (string) $aid;
-                }
+                $an['orphan'] = ! isset($verbunden[(int) substr($an['id'], 2)]);
             }
             unset($an);
-            $topCount = [];
-            foreach ($pairPartners as $partners) {
-                foreach (array_unique($partners) as $pl) {
-                    $topCount[$pl] = ($topCount[$pl] ?? 0) + 1;
-                }
-            }
-            arsort($topCount);
-            $nReal = count($innerIds);
-            $bridgeMeta = [
-                'pairs_connected' => count($pairPartners),
-                'pairs_total' => $nReal >= 2 ? (int) ($nReal * ($nReal - 1) / 2) : 0,
-                'top' => array_slice(array_keys($topCount), 0, 5),
-                'orphans' => $orphanLabels,
-                // Verteilung der Verbindungs-Stärke (normalisierter Overlap-Tier) — trägt den
-                // „davon N stark"-Zusatz in der Kohäsions-Lesung, damit die Stärke auch im Text steht.
-                'tiers' => $tierCount,
-            ];
         }
 
         $jeTyp = fn ($typ) => array_slice(
@@ -1574,10 +1503,8 @@ class PairingService
             })(),
             0, self::KANDIDATEN_PRO_TYP
         );
-        // Zweistufiges Inspire-Modell: nur ★★★ (L3) + ★★ (L2). stern1 (★) ist
-        // strukturell leer (Inspire kennt kein L1) und aus dem UI entfernt.
+        // Spec 60: Harmonie-Kandidaten nur ★★★; der äußere Ring trägt den Kontrast (offene Bedarfe).
         $stern3 = $jeTyp('stern3');
-        $stern2 = $jeTyp('stern2');
 
         $basis = $this->komplementaerBasisrezepte($team, $recipeId, $candMeta);
 
@@ -1599,22 +1526,19 @@ class PairingService
             }
         }
 
-        // Äusserer Vollkreis: ★★ (Inspire L2) + Basisrezepte,
-        // in zusammenhängenden Bögen rund um den ★★★-Kreis.
-        $outerTotal = max(1, count($stern2) + count($basis));
+        // Äusserer Vollkreis: Kontrast-Lieferanten (decken einen offenen Bedarf) + Basisrezepte.
+        $outerTotal = max(1, count($kontrast) + count($basis));
         $oi = 0;
-        foreach ([['stern2', $stern2]] as [$typ, $liste]) {
-            foreach ($liste as $c) {
-                [$x, $y] = $this->positionAufKreis($oi++, $outerTotal, self::R_OUTER, $cx, $cy);
-                $kandidatNodes[] = [
-                    'id' => 'k:'.$c['id'], 'kind' => 'kandidat', 'typ' => $typ, 'level' => $c['level'] ?? (int) substr($typ, -1),
-                    'label' => $c['display_de'], 'slug' => $c['slug'], 'cover' => $c['cover'], 'x' => $x, 'y' => $y,
-                ];
-                foreach ($c['partner'] as $p) {
-                    $edges[] = ['source' => 'k:'.$c['id'], 'target' => 'a:'.$p['anker_id'], 'kind' => 'kandidat',
-                        'typ' => $p['typ'], 'level' => $p['level'] ?? 1, 'weight' => $p['weight'],
-                        'visible' => true];
-                }
+        foreach ($kontrast as $c) {
+            [$x, $y] = $this->positionAufKreis($oi++, $outerTotal, self::R_OUTER, $cx, $cy);
+            $kandidatNodes[] = [
+                'id' => 'k:'.$c['id'], 'kind' => 'kandidat', 'typ' => 'kontrast', 'level' => 0,
+                'label' => $c['display_de'], 'slug' => $c['slug'], 'cover' => count($c['fuer']),
+                'achse' => $c['achse_label'], 'x' => $x, 'y' => $y,
+            ];
+            foreach ($c['fuer'] as $aid) {
+                $edges[] = ['source' => 'k:'.$c['id'], 'target' => 'a:'.$aid, 'kind' => 'kandidat',
+                    'typ' => 'kontrast', 'level' => 0, 'weight' => 1.0, 'achse' => $c['achse_label'], 'visible' => true];
             }
         }
         foreach ($basis as $b) {
@@ -1645,16 +1569,15 @@ class PairingService
                 // mit frischen Daten. Ohne das friert das Modal auf dem Erst-Öffnungsstand ein.
                 'sig' => substr(md5(implode('|', array_map(static fn ($n) => $n['id'], $nodes))), 0, 10),
                 // Filter-Defaults: beide Stern-Stufen an (zweistufige Inspire-Harmonie).
-                'typ_default' => ['stern3' => true, 'stern2' => false],   // Spec 58: 2★ = Rauschen, nur auf Wunsch
+                'typ_default' => ['stern3' => true, 'kontrast' => true],
                 'counts' => [
                     'stern3' => count(array_filter($kandidatNodes, fn ($n) => $n['typ'] === 'stern3')),
-                    'stern2' => count(array_filter($kandidatNodes, fn ($n) => $n['typ'] === 'stern2')),
+                    'kontrast' => count(array_filter($kandidatNodes, fn ($n) => $n['typ'] === 'kontrast')),
                     'basis' => count($basisNodes),
                     // Kanten zwischen den Kern-Ankern (innere Ebene).
                     'anker_anker' => count($ankerKanten),
+                    'konflikt' => count($konfliktKanten),
                 ],
-                // Brücken-Zusammenfassung (nur Composer/withBridges, sonst null).
-                'bridge' => $bridgeMeta,
             ],
         ];
     }
@@ -1724,9 +1647,17 @@ class PairingService
         $badgeBasis = $focusId !== null ? [$focusId] : $selected;
         $badge = [];
         if ($badgeBasis !== []) {
+            // Spec 60: ★★★ = harmoniert · kontrast = deckt einen offenen Bedarf · konflikt = stört sich.
+            // Reihenfolge = Vorrang (später gewinnt): Kontrast vor ★★★, Konflikt vor allem.
             [$kand] = $this->kandidatenFuerAnker($badgeBasis);
             foreach ($kand as $c) {
-                $badge[(int) $c['id']] = $c['typ']; // stern3 | stern2
+                $badge[(int) $c['id']] = $c['typ'];
+            }
+            foreach ($this->kontrastUndKonflikt($badgeBasis)[0] as $c) {
+                $badge[(int) $c['id']] = 'kontrast';                       // wie im Netz: Kontrast vor ★★★
+            }
+            foreach ($this->graph()->beziehungen($badgeBasis, Kantenart::Konflikt) as $k) {
+                $badge[$k->zu] = 'konflikt';
             }
         }
 
@@ -1753,7 +1684,7 @@ class PairingService
      * Beweisführung des Foodpairing-Modells, die im Zutat→Anker-Netz fehlt.
      *
      * Signal = die gemessene Foodpairing-Harmonie ({@see AnkerGraph}): je ungeordnetem Paar
-     * eine Linie mit Stufe ★★/★★★. Existiert keine Kante (Stufe 1), entsteht keine Linie.
+     * mit Stufe ★★★ eine Linie. Darunter (2★ oder keine Kante) entsteht keine Linie.
      *
      * @param  array<int>  $innerIds
      * @return list<array{source:string,target:string,kind:string,typ:string,level:int,weight:float,visible:bool}>
@@ -1765,7 +1696,7 @@ class PairingService
         }
 
         $out = [];
-        foreach ($this->graph()->kanten($innerIds, $innerIds) as $k) {
+        foreach ($this->graph()->kanten($innerIds, $innerIds, AnkerGraph::HARMONIERT) as $k) {   // Spec 60: nur ★★★
             if ($k->von > $k->zu) {
                 continue;                                   // jedes Paar steht in beiden Richtungen — einmal zeigen
             }
@@ -1784,6 +1715,75 @@ class PairingService
     }
 
     /**
+     * Spec 60: Kontrast-Lieferanten und Konflikte einer Anker-Auswahl aus der Kombinationslogik
+     * (Anker als Einzel-Bestandteile — dieselbe Analyse wie „Passt das zusammen?").
+     *
+     *   kontrast   je offenem Bedarf die stärksten Lieferanten (abgeleitete Kontrast-Kante)
+     *   konflikt   Linie zwischen zwei gewählten Ankern, die sich laut Anker-Wissen stören
+     *   verbunden  Anker, die mit einem anderen harmonieren, Spannung bilden oder ein Klassiker sind
+     *
+     * @param  array<int>  $innerIds
+     * @return array{0: list<array{id: int, slug: string, display_de: ?string, achse_label: string, fuer: list<int>}>, 1: list<array>, 2: array<int, true>}
+     */
+    private function kontrastUndKonflikt(array $innerIds): array
+    {
+        if ($innerIds === []) {
+            return [[], [], []];
+        }
+        $logik = app(Pairing\Kombinationslogik::class);
+        $analyse = $logik->analysiereBestandteile($logik->bestandteileAusAnkern($innerIds));
+        $id = fn (string $schluessel) => (int) substr($schluessel, 1);           // 'a123' → 123
+
+        // Ein Lieferant muss zur Auswahl passen: er harmoniert (★★★) mit mindestens einem gewählten
+        // Anker — dieselbe Regel wie bei den Basisrezept-Vorschlägen. Sortiert nach der Zahl dieser
+        // Harmonien, dann nach dem Rang der Kontrast-Kante. Gemessen 2026-10-06: ohne den Filter
+        // kamen für Tomate+Basilikum+Zwiebel „Fett: Ente, Açai-Beere" (nur Verbreitung).
+        $jeBedarf = [];
+        foreach ($analyse['offene_bedarfe'] as $b) {
+            $fuer = $id((string) $b['bestandteil']);
+            $jeBedarf[] = [$fuer, (string) $b['achse'], $this->graph()->beziehungen([$fuer], Kantenart::Kontrast)
+                ->where('achse', (string) $b['achse'])->reject(fn ($k) => in_array($k->zu, $innerIds, true))->values()];
+        }
+        $alle = collect($jeBedarf)->flatMap(fn ($x) => $x[2]->pluck('zu'))->unique()->values()->all();
+        $harmonien = [];
+        foreach ($alle === [] ? [] : $this->graph()->kanten($alle, $innerIds, AnkerGraph::HARMONIERT) as $k) {
+            $harmonien[$k->von] = ($harmonien[$k->von] ?? 0) + 1;
+        }
+        $kontrast = [];
+        foreach ($jeBedarf as [$fuer, $achse, $lieferanten]) {
+            $passend = $lieferanten->filter(fn ($k) => isset($harmonien[$k->zu]))
+                ->sortBy([fn ($x, $y) => $harmonien[$y->zu] <=> $harmonien[$x->zu], fn ($x, $y) => $y->rang <=> $x->rang])
+                ->take(self::KONTRAST_JE_BEDARF);
+            foreach ($passend as $k) {
+                $kontrast[$k->zu] ??= ['id' => $k->zu, 'achse_label' => \Platform\FoodAlchemist\Enums\Achse::from($achse)->label(), 'fuer' => []];
+                $kontrast[$k->zu]['fuer'][] = $fuer;
+            }
+        }
+        $namen = DB::table('foodalchemist_vocab_pairing_anchors')->whereIn('id', array_keys($kontrast))
+            ->get(['id', 'slug', 'display_de'])->keyBy('id');
+        $kontrast = array_values(array_filter(array_map(fn ($c) => isset($namen[$c['id']])
+            ? $c + ['slug' => $namen[$c['id']]->slug, 'display_de' => $namen[$c['id']]->display_de] : null, $kontrast)));
+
+        $konflikt = [];
+        $verbunden = [];
+        foreach ($analyse['aussagen'] as $a) {
+            if (count($a->bestandteile) !== 2) {
+                continue;
+            }
+            [$x, $y] = array_map(fn ($k) => $id((string) $k), $a->bestandteile);
+            if ($a->typ === AussageTyp::Konflikt) {
+                $konflikt[min($x, $y).':'.max($x, $y)] = ['source' => 'a:'.min($x, $y), 'target' => 'a:'.max($x, $y),
+                    'kind' => 'konflikt', 'text' => $a->text, 'visible' => true];
+            } elseif (in_array($a->typ, [AussageTyp::Harmoniert, AussageTyp::Spannung, AussageTyp::Kombination], true)) {
+                $verbunden[$x] = true;
+                $verbunden[$y] = true;
+            }
+        }
+
+        return [$kontrast, array_values($konflikt), $verbunden];
+    }
+
+    /**
      * Pairing-Kandidaten für die Kern-Anker: alle Aroma-Partner AUSSERHALB des
      * Ankersets, aggregiert je Kandidat (dish_cover = Anzahl bedienter Kern-Anker,
      * primärer Typ = stärkste Kante).
@@ -1796,7 +1796,8 @@ class PairingService
             return [[], []];
         }
 
-        $kanten = $this->graph()->kanten($innerIds, null, AnkerGraph::PASST, $innerIds);
+        // Spec 60: Kandidaten sind nur echtes Food Pairing (3★); 2★ ist Rauschen.
+        $kanten = $this->graph()->kanten($innerIds, null, AnkerGraph::HARMONIERT, $innerIds);
         $meta = DB::table('foodalchemist_vocab_pairing_anchors')
             ->whereIn('id', $kanten->pluck('zu')->unique()->all())
             ->get(['id', 'slug', 'display_de'])->keyBy('id');

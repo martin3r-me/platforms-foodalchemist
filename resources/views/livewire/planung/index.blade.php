@@ -1049,8 +1049,8 @@
                         </x-slot:actions>
                     @endif
                     <p class="text-[11px] text-gray-500 mb-2 max-w-2xl">
-                        Zutaten/Anker zusammenstellen — das Netz zeigt live, was harmoniert (★★★ Best · ★★ Good).
-                        Filtere/such unten oder klick einen Kandidaten im Netz.
+                        Zutaten/Anker zusammenstellen — das Netz zeigt live, was harmoniert (★★★), was einen offenen
+                        Bedarf als Kontrast deckt und was sich stört. Filtere/such unten oder klick einen Kandidaten im Netz.
                     </p>
 
                     <div class="flex flex-wrap gap-2 mb-2">
@@ -1088,9 +1088,14 @@
                         @forelse($composerBrowse['items'] as $it)
                             <button type="button" wire:key="cbrowse-{{ $it['id'] }}" wire:click="composerAdd({{ $it['id'] }})"
                                     class="w-full flex items-center gap-2 px-2.5 py-1.5 text-left text-[12px] text-gray-900 hover:bg-violet-500/5">
-                                <span class="w-2 h-2 rounded-full shrink-0"
-                                      style="background: {{ $it['typ'] === 'stern3' ? '#fcd34d' : ($it['typ'] === 'stern2' ? '#f59e0b' : 'transparent') }}; {{ $it['typ'] ? '' : 'border:1px solid rgba(148,163,184,.35);' }}"
-                                      title="{{ $it['typ'] === 'stern3' ? '★★★ Best-Match' : ($it['typ'] === 'stern2' ? '★★ Good-Match' : 'kein Match zur Auswahl') }}"></span>
+                                @php
+                                    // Spec 60: ★★★ harmoniert · Kontrast deckt einen offenen Bedarf · Konflikt stört sich
+                                    $punkt = ['stern3' => ['#fcd34d', '★★★ harmoniert'], 'kontrast' => ['#22d3ee', 'Kontrast: deckt einen offenen Bedarf'],
+                                        'konflikt' => ['#f43f5e', 'Konflikt: stört sich mit der Auswahl']][$it['typ'] ?? ''] ?? null;
+                                @endphp
+                                <span class="w-2 h-2 rounded-full shrink-0" data-picker-typ="{{ $it['typ'] ?? '' }}"
+                                      style="background: {{ $punkt[0] ?? 'transparent' }}; {{ $punkt ? '' : 'border:1px solid rgba(148,163,184,.35);' }}"
+                                      title="{{ $punkt[1] ?? 'kein Bezug zur Auswahl' }}"></span>
                                 <span class="flex-1 truncate">{{ $it['label'] }}</span>
                                 @if($it['category'])
                                     <span class="text-[10px] text-gray-500 shrink-0">{{ $it['category'] }}</span>
@@ -1128,37 +1133,11 @@
                     @endif
                 </x-foodalchemist::modal-section>
 
-                {{-- „Passt das zusammen?" — geerdet auf GETEILTE Partner (Brücken), nicht auf die
-                     in Inspire fast immer leeren Direktkanten (die die irreführende 0 % erzeugten). --}}
-                @php $bridge = $composerNetz['meta']['bridge'] ?? null; @endphp
-                @if($bridge !== null && count($composerAnker) >= 2)
+                {{-- „Passt das zusammen?" — Spec 60: dieselbe Kombinationslogik wie im Gericht-Panel
+                     (Harmonie nur ★★★, Spannung, offener Bedarf, Konflikt, Klassiker — je mit Grundlage). --}}
+                @if($composerKombination !== null)
                     <x-foodalchemist::modal-section icon="heroicon-o-link" title="Passt das zusammen?">
-                        <x-slot:actions>
-                            <span class="{{ $pill }} {{ ($bridge['pairs_total'] > 0 && $bridge['pairs_connected'] === $bridge['pairs_total']) ? $variantPill['success'] : ($bridge['pairs_connected'] > 0 ? $variantPill['warning'] : $variantPill['danger']) }}">{{ $bridge['pairs_connected'] }}/{{ $bridge['pairs_total'] }} verbunden</span>
-                        </x-slot:actions>
-                        <div class="flex flex-wrap items-center gap-x-5 gap-y-1 text-[12px] text-gray-900">
-                            <span>Verbunden:
-                                <strong class="{{ ($bridge['pairs_total'] > 0 && $bridge['pairs_connected'] === $bridge['pairs_total']) ? 'text-emerald-600' : ($bridge['pairs_connected'] > 0 ? 'text-amber-600' : 'text-rose-600') }}">{{ $bridge['pairs_connected'] }}/{{ $bridge['pairs_total'] }}</strong>
-                                Anker-Paare über gemeinsame Partner
-                            </span>
-                            @php $tiers = $bridge['tiers'] ?? []; @endphp
-                            @if(($tiers['best'] ?? 0) + ($tiers['good'] ?? 0) > 0)
-                                <span class="text-gray-500">davon
-                                    @if(($tiers['best'] ?? 0) > 0)<strong class="text-violet-600">{{ $tiers['best'] }}× stark</strong>@endif
-                                    @if(($tiers['best'] ?? 0) > 0 && ($tiers['good'] ?? 0) > 0), @endif
-                                    @if(($tiers['good'] ?? 0) > 0){{ $tiers['good'] }}× mittel @endif
-                                </span>
-                            @endif
-                            @if(!empty($bridge['top']))
-                                <span class="text-gray-500">stärkste Brücken: {{ implode(', ', $bridge['top']) }}</span>
-                            @endif
-                        </div>
-                        @if($composerCohesion !== null && ($composerCohesion['rated_pairs'] ?? 0) > 0)
-                            <p class="mt-1 text-[11px] text-gray-500">direktes Pairing: {{ $composerCohesion['rated_pairs'] }}/{{ $composerCohesion['total_pairs'] }} Paare (Kohäsion {{ $composerCohesion['score'] }}%)</p>
-                        @endif
-                        @if(!empty($bridge['orphans']))
-                            <p class="mt-1 text-[12px] text-amber-600">⚠ passt (noch) nicht zu den anderen: {{ implode(', ', $bridge['orphans']) }}</p>
-                        @endif
+                        <x-foodalchemist::kombination :daten="$composerKombination" />
                     </x-foodalchemist::modal-section>
                 @endif
                 </div>{{-- /linke Spalte --}}
@@ -1197,7 +1176,7 @@
                                  mode: 'modal',
                                  canvasW: {{ (float) ($composerNetz['meta']['canvas_w'] ?? 1000) }},
                                  canvasH: {{ (float) ($composerNetz['meta']['canvas_h'] ?? 760) }},
-                                 typDefault: @js($composerNetz['meta']['typ_default'] ?? ['stern3' => true, 'stern2' => true]),
+                                 typDefault: @js($composerNetz['meta']['typ_default'] ?? ['stern3' => true, 'kontrast' => true]),
                                  focusId: {{ $composerFocus ?? 'null' }},
                                  onKandidatClick: (id) => $wire.composerAdd(id),
                                  onAnkerClick: (id) => $wire.composerFocus(id),
@@ -1212,24 +1191,23 @@
                                         :class="typAktiv['stern3'] ? 'ring-2 ring-offset-1 ring-offset-white' : 'opacity-45'"
                                         class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-gray-700"
                                         style="border-color:#fcd34d; --tw-ring-color:#fcd34d;">
-                                    <span class="w-2 h-2 rounded-full" style="background:#fcd34d"></span> ★★★ Best
+                                    <span class="w-2 h-2 rounded-full" style="background:#fcd34d"></span> ★★★ harmoniert
                                 </button>
-                                <button type="button" @click="toggleTyp('stern2')"
-                                        :class="typAktiv['stern2'] ? 'ring-2 ring-offset-1 ring-offset-white' : 'opacity-45'"
+                                <button type="button" @click="toggleTyp('kontrast')"
+                                        :class="typAktiv['kontrast'] ? 'ring-2 ring-offset-1 ring-offset-white' : 'opacity-45'"
                                         class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-gray-700"
-                                        style="border-color:#f59e0b; --tw-ring-color:#f59e0b;">
-                                    <span class="w-2 h-2 rounded-full" style="background:#f59e0b"></span> ★★ Good
+                                        style="border-color:#22d3ee; --tw-ring-color:#22d3ee;">
+                                    <span class="w-2 h-2 rounded-full" style="background:#22d3ee"></span> Kontrast
                                 </button>
                             </div>
                             <svg viewBox="0 0 1200 980" preserveAspectRatio="xMidYMid meet"
                                  class="w-full rounded-xl" style="height:70vh; background:#0b1120" data-fa-netz-mount></svg>
-                            {{-- Legende: Punkt auf der Anker-Linie = Beziehungsstärke (groß→klein) --}}
+                            {{-- Legende (Spec 60): Linien zwischen den gewählten Ankern --}}
                             <div class="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-[11px] text-gray-700">
-                                <span class="text-gray-500">Beziehungsstärke:</span>
-                                <span class="inline-flex items-center gap-2"><span class="inline-block rounded-full" style="width:18px;height:18px;background:#a78bfa;box-shadow:0 0 0 2px #ede9fe"></span> Best</span>
-                                <span class="inline-flex items-center gap-2"><span class="inline-block rounded-full" style="width:11px;height:11px;background:#a78bfa;opacity:.82"></span> Good</span>
-                                <span class="inline-flex items-center gap-2"><span class="inline-block rounded-full" style="width:5px;height:5px;background:#a78bfa;opacity:.5"></span> Match</span>
-                                <span class="text-[10px] text-gray-500">· groß→klein = stark→schwach · violett = geteilte Partner, gold = direktes Pairing · Hover zeigt die Partner</span>
+                                <span class="inline-flex items-center gap-2"><span class="inline-block w-5" style="border-top:3px solid #fcd34d"></span> harmoniert (★★★, gemessen)</span>
+                                <span class="inline-flex items-center gap-2"><span class="inline-block w-5" style="border-top:2px dashed #f43f5e"></span> Konflikt (Anker-Wissen)</span>
+                                <span class="inline-flex items-center gap-2"><span class="inline-block w-5" style="border-top:2px dotted #22d3ee"></span> Kontrast: deckt einen offenen Bedarf</span>
+                                <span class="text-[10px] text-gray-500">· Hover zeigt, welchen Bedarf ein Kontrast deckt</span>
                             </div>
                         </div>
                     @endif

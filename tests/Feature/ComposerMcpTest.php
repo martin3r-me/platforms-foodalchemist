@@ -99,7 +99,8 @@ it('composer.KOHAESION: bewertet eine Anker-Menge + erdet sie auf echte GPs', fu
     expect($res->success)->toBeTrue()
         ->and($res->data['kohaesion']['rated_pairs'])->toBe(1)
         ->and($res->data['kohaesion']['score'])->toBeGreaterThan(0)
-        ->and($res->data['bruecken'])->toHaveKey('pairs_total')
+        ->and($res->data)->not->toHaveKey('bruecken')                  // Spec 60: keine Zweitbewertung
+        ->and($res->data['kombination']['kennzahlen']['harmoniert'])->toBe(1)
         ->and($res->data['hinweis'])->toBeNull();
 
     // Erdung: beide Anker tragen je einen GP
@@ -115,7 +116,7 @@ it('composer.KOHAESION: ein einzelner Anker â†’ nur Erdung + Hinweis, keine KohÃ
         ->execute(['anker_ids' => [$this->ankerId['rauch']]], $this->ctx);
 
     expect($res->success)->toBeTrue()
-        ->and($res->data['bruecken'])->toBeNull()
+        ->and($res->data['kombination'])->toBeNull()
         ->and($res->data['hinweis'])->not->toBeNull()
         ->and($res->data['erdung'][0]['gp_count'])->toBeGreaterThan(0);
 });

@@ -79,22 +79,21 @@ it('pairingNetz: Zentrum + Kern-Anker innen, Kandidaten nach Stern-Stufe, dish_c
         ->and($anker->every(fn ($a) => $a['kern'] === true))->toBeTrue();
 
     $kand = collect($netz['nodes'])->where('kind', 'kandidat')->keyBy('slug');
+    // Spec 60: nur ★★★ ist Kandidat — granatapfel/minze (2★) sind Rauschen und fehlen.
     expect($kand['knoblauch']['typ'])->toBe('stern3')
         ->and($kand['knoblauch']['level'])->toBe(3)
-        ->and($kand['granatapfel']['typ'])->toBe('stern2')
-        ->and($kand['minze']['typ'])->toBe('stern2');
+        ->and($kand->keys()->all())->toBe(['knoblauch']);
     // knoblauch bedient beide Kern-Anker → cover 2
-    expect($kand['knoblauch']['cover'])->toBe(2)
-        ->and($kand['granatapfel']['cover'])->toBe(1);
+    expect($kand['knoblauch']['cover'])->toBe(2);
 
     // Kandidaten-Kanten tragen ihre Stufe
     $kknob = collect($netz['edges'])->where('kind', 'kandidat')->where('source', 'k:'.$this->knoblauch);
     expect($kknob)->toHaveCount(2)                                      // zu kichererbse + tahin
         ->and($kknob->every(fn ($e) => $e['typ'] === 'stern3'))->toBeTrue();
 
-    // Zweistufiges Modell: stern1 raus; anker_anker (innere Ebene) hier 0 (kichererbse↔tahin ungepaart).
-    expect($netz['meta']['counts'])->toBe(['stern3' => 1, 'stern2' => 2, 'basis' => 1, 'anker_anker' => 0])
-        ->and($netz['meta']['typ_default'])->toBe(['stern3' => true, 'stern2' => false]);   // Spec 58: 2★ nur auf Wunsch
+    // anker_anker (innere Ebene) hier 0 (kichererbse↔tahin ungepaart); kein Anker-Wissen → kein Kontrast/Konflikt.
+    expect($netz['meta']['counts'])->toBe(['stern3' => 1, 'kontrast' => 0, 'basis' => 1, 'anker_anker' => 0, 'konflikt' => 0])
+        ->and($netz['meta']['typ_default'])->toBe(['stern3' => true, 'kontrast' => true]);
 });
 
 it('pairingNetz: Anker↔Anker-Kante aus der Harmonie-Matrix (innere Ebene)', function () {
@@ -256,27 +255,18 @@ it('composerCohesion: Score + Orphan-Erkennung (passt-nicht-Anker)', function ()
     expect($this->svc->composerCohesion([$this->kichererbse])['score'])->toBe(0);
 });
 
-it('pairingNetzForAnkers: Brücken-Kanten aus geteilten Partnern + Orphan-Flag', function () {
-    $fremd = mkAnker('fremd'); // teilt mit niemandem einen Partner
+it('pairingNetzForAnkers: keine Brücken über geteilte Partner — verbunden ist nur, was gemessen harmoniert', function () {
+    $fremd = mkAnker('fremd');
+    mkKante($this->tahin, $fremd, 'erprobt');                           // ★★★ direkt
 
-    // kichererbse & tahin haben KEINE Direktkante, teilen aber knoblauch (beide ★★★, cover 2).
+    // kichererbse & tahin teilen knoblauch, haben aber keine eigene ★★★-Kante.
     $netz = $this->svc->pairingNetzForAnkers($this->rootTeam, [$this->kichererbse, $this->tahin, $fremd]);
 
-    // Genau eine Brücke (kichererbse↔tahin über knoblauch), obwohl keine Direktkante existiert.
-    $bridges = collect($netz['edges'])->where('kind', 'bridge')->values();
-    expect($bridges)->toHaveCount(1)
-        ->and($bridges[0]['partners'])->toContain('Knoblauch')
-        ->and(collect($netz['edges'])->where('kind', 'anker_anker'))->toHaveCount(0);
+    expect(collect($netz['edges'])->where('kind', 'bridge'))->toHaveCount(0)
+        ->and($netz['meta'])->not->toHaveKey('bridge')
+        ->and(collect($netz['edges'])->where('kind', 'anker_anker'))->toHaveCount(1);
 
-    // Brücken-Zusammenfassung: 1 von 3 Paaren verbunden, fremd ist Orphan.
-    $b = $netz['meta']['bridge'];
-    expect($b['pairs_connected'])->toBe(1)
-        ->and($b['pairs_total'])->toBe(3)
-        ->and($b['orphans'])->toBe(['Fremd']);
-
-    // Orphan-Flag steckt am Anker-Knoten (für den Warn-Ring).
+    // Ohne gemessenen Bezug = neutral: das Flag am Knoten (Hinweis, kein Fehler).
     $orphan = collect($netz['nodes'])->where('kind', 'anker')->mapWithKeys(fn ($n) => [$n['slug'] => $n['orphan'] ?? null]);
-    expect($orphan['fremd'])->toBeTrue()
-        ->and($orphan['kichererbse'])->toBeFalse()
-        ->and($orphan['tahin'])->toBeFalse();
+    expect($orphan->all())->toBe(['kichererbse' => true, 'tahin' => false, 'fremd' => false]);
 });

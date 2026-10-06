@@ -4162,19 +4162,21 @@ class Index extends Component
             }
         }
 
-        // Composer-Tab: Ad-hoc-Netz + Kohäsion (fit/orphan je Anker) + browsebarer Picker.
+        // Composer-Tab: Ad-hoc-Netz + „Passt das zusammen?" (Kombinationslogik) + browsebarer Picker.
         $composerNetz = ['nodes' => [], 'edges' => [], 'meta' => []];
-        $composerCohesion = null;
+        $composerKombination = null;
         $composerBrowse = ['items' => [], 'total' => 0, 'kategorien' => []];
         if ($team !== null) {
             $pairing = app(PairingService::class);
             $composerIds = array_map('intval', array_column($this->composerAnker, 'id'));
             if ($composerIds !== []) {
-                // Netz inkl. Brücken-Ebene — das Orphan-Flag (bridge-basiert) steckt schon
-                // in den Anker-Knoten, die Brücken-Zusammenfassung in meta.bridge.
+                // Netz: ★★★-Partner, Kontrast-Lieferanten für offene Bedarfe, Konflikt-Linien.
                 $composerNetz = $pairing->pairingNetzForAnkers($team, $composerIds);
-                // Direkt-Pairing-Kohäsion nur als Sekundär-Info im Readout (Brücken-Metrik = meta.bridge).
-                $composerCohesion = $pairing->composerCohesion($composerIds);
+            }
+            if (count($composerIds) >= 2) {
+                // Spec 60: dieselbe Aussage wie im Gericht-Panel und im MCP (composer.KOHAESION).
+                $composerKombination = app(\Platform\FoodAlchemist\Services\Pairing\Kombinationslogik::class)
+                    ->datenAusAnkern($composerIds, null, null, (int) $team->id);
             }
             // Fokus (falls gesetzt) → Picker-Badge/Sortierung relativ zum fokussierten Anker.
             $composerBrowse = $pairing->composerAnkerBrowse(
@@ -4317,7 +4319,7 @@ class Index extends Component
             'fotoPickerStep' => $this->fotoPickerStep,
             'fotoPickerKandidaten' => $fotoPickerKandidaten,
             'composerNetz' => $composerNetz,
-            'composerCohesion' => $composerCohesion,
+            'composerKombination' => $composerKombination,
             'composerBrowse' => $composerBrowse,
             'composerFocus' => $this->composerFocus,
             'composerFokusLabel' => $composerFokusLabel,

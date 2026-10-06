@@ -199,12 +199,14 @@ class RecipeGenerationContextService
             // Bedarfe/Konflikte der Leit-Aromen liefert der Kombinationsplan (forGeneration).
             $graph = app(\Platform\FoodAlchemist\Services\Pairing\AnkerGraph::class);
             $leitAromen = [];
+            $seedIds = [];
             foreach ($seedAnker as $slug) {
                 $anker = \Illuminate\Support\Facades\DB::table('foodalchemist_vocab_pairing_anchors')
                     ->where('slug', $slug)->whereNull('deleted_at')->first(['id', 'slug', 'display_de']);
                 if ($anker === null) {
                     continue;
                 }
+                $seedIds[] = (int) $anker->id;
                 $leitAromen[] = [
                     'aroma' => $anker->display_de ?: $anker->slug,
                     'palette' => $graph->partner((int) $anker->id, \Platform\FoodAlchemist\Services\Pairing\AnkerGraph::HARMONIERT, 10)
@@ -221,6 +223,15 @@ class RecipeGenerationContextService
                         . '(gp_kandidaten) hat Vorrang bei der Benennung. Baue EIN kohärentes Rezept.',
                     'leit_aromen' => $leitAromen,
                 ];
+                // Spec 60: der Kombinationsplan kommt aus den GEWÄHLTEN Ankern, nicht aus einem
+                // Text-Abgleich der Beschreibung — die Composer-Auswahl ist die Vorgabe.
+                // Ernährungsform aus der harten Leitplanke `diaet_hart` (vegan schlägt vegetarisch).
+                $diaetHart = array_values(array_filter((array) ($parameter['diaet_hart'] ?? []), 'is_string'));
+                $diaet = in_array('vegan', $diaetHart, true) ? 'vegan' : (in_array('vegetarisch', $diaetHart, true) ? 'vegetarisch' : null);
+                $plan = app(\Platform\FoodAlchemist\Services\Pairing\KombinationsPlan::class)->fuerAnker($team, $seedIds, $vkModus, $diaet);
+                if ($plan !== null) {
+                    $prompt['kombinationsplan'] = $plan;
+                }
             }
         }
 

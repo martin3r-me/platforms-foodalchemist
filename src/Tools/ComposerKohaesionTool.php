@@ -9,11 +9,10 @@ use Platform\Core\Contracts\ToolResult;
 use Platform\FoodAlchemist\Services\PairingService;
 
 /**
- * Composer-MCP: Kohäsion + Brücken + Erdung einer freien Anker-MENGE (headless).
- * Spiegelt die Read-Seite des Composer-Tabs:
- *  - {@see PairingService::composerCohesion}    — hält die Auswahl aromatisch zusammen? (Score/Schwachstelle)
- *  - {@see PairingService::pairingNetzForAnkers} — die Anker↔Anker-Brücken-Ebene (über geteilte Partner) aus meta.bridge
- *    (die D3-Knoten/Kanten des Netzes werden bewusst verworfen — headless nutzlos)
+ * Composer-MCP: dieselbe Read-Seite wie der Composer-Tab, headless (Spec 60).
+ *  - {@see \Platform\FoodAlchemist\Services\Pairing\Kombinationslogik::datenAusAnkern} — „Passt das zusammen?"
+ *  - {@see PairingService::composerCohesion}    — Kennzahl derselben Regel (nur 3★ zählt)
+ *  - {@see PairingService::pairingNetzForAnkers} — nur die Zählwerte (★★★, Kontrast, Konflikt); D3-Daten verworfen
  *  - {@see PairingService::gpsForAnkerIds}      — welche echten, kaufbaren GPs die Anker als Kern tragen (Erdung)
  * Anker-IDs kommen aus composer.ANKER_SUCHE. Read-only.
  */
@@ -26,13 +25,12 @@ class ComposerKohaesionTool extends FoodAlchemistTool implements ToolContract, T
 
     public function getDescription(): string
     {
-        return 'Composer: bewertet eine freie Aroma-Anker-Menge headless. Liefert (1) kohaesion = Zusammenhalt der '
-            . 'Auswahl (score/min_score/coverage, schwächstes Paar, Waisen, unbewertete Paare) via composerCohesion, '
-            . '(2) bruecken = Anker↔Anker-Verbindung über geteilte Partner (verbundene/unverbundene Paare, Tiers, Waisen) '
-            . 'aus der Netz-Brückenebene, (3) erdung = welche echten team-sichtbaren GPs die Anker als Kern tragen '
-            . '(Aromaträger zum Einkaufen), (4) kombination = die Kombinationslogik (Spec 60) über die Auswahl: '
-            . 'harmoniert/passt/neutral, spannung, bedarf_offen, konflikt, kombination — je mit Grundlage — plus '
-            . 'Vorschläge (Basisrezepte) für offene Bedarfe. '
+        return 'Composer: bewertet eine freie Aroma-Anker-Menge headless — dieselbe Aussage wie der Composer-Tab. '
+            . 'Liefert (1) kombination = die Kombinationslogik (Spec 60) über die Auswahl: harmoniert (nur 3★), '
+            . 'spannung, bedarf_offen, konflikt, kombination — je mit Grundlage — plus Vorschläge (Basisrezepte) für '
+            . 'offene Bedarfe, (2) kohaesion = Kennzahl derselben Regel (nur 3★ zählt; gemessene Paare ohne 3★ = 0), '
+            . '(3) netz_counts = ★★★-Partner, Kontrast-Lieferanten, Konflikte im Netz, (4) erdung = welche echten '
+            . 'team-sichtbaren GPs die Anker als Kern tragen (Aromaträger zum Einkaufen). '
             . 'Anker-IDs via composer.ANKER_SUCHE holen. Für eine Kohäsions-Aussage '
             . 'mind. 2 IDs. Read-only.';
     }
@@ -65,14 +63,12 @@ class ComposerKohaesionTool extends FoodAlchemistTool implements ToolContract, T
         $svc = app(PairingService::class);
         $kohaesion = $svc->composerCohesion($ankerIds);
 
-        // Netz nur für die Brücken-Ebene + Anker-Labels; nodes/edges (D3) werden verworfen.
-        $bruecken = null;
+        // Netz nur für Zählwerte + Anker-Labels; nodes/edges (D3) werden verworfen.
         $counts = null;
         $labelMap = [];
         if (count($ankerIds) >= 2) {
             $netz = $svc->pairingNetzForAnkers($team, $ankerIds);
             $meta = $netz['meta'] ?? [];
-            $bruecken = $meta['bridge'] ?? null;
             $counts = $meta['counts'] ?? null;
             foreach (($netz['nodes'] ?? []) as $n) {
                 if (($n['kind'] ?? '') === 'anker' && isset($n['id'])) {
@@ -108,7 +104,6 @@ class ComposerKohaesionTool extends FoodAlchemistTool implements ToolContract, T
         return ToolResult::success([
             'anker_ids' => $ankerIds,
             'kohaesion' => $kohaesion,
-            'bruecken' => $bruecken,
             'netz_counts' => $counts,
             'erdung' => $erdung,
             // Spec 60: dieselbe Kombinationslogik wie Gericht und Oberfläche (Anker als Einzel-Bestandteile).
@@ -116,7 +111,7 @@ class ComposerKohaesionTool extends FoodAlchemistTool implements ToolContract, T
                 ? app(\Platform\FoodAlchemist\Services\Pairing\Kombinationslogik::class)->datenAusAnkern($ankerIds, null, null, (int) $team->id)
                 : null,
             'hinweis' => count($ankerIds) < 2
-                ? 'Nur ein Anker — Kohäsion/Brücken brauchen mindestens zwei. Erdung (tragende GPs) trotzdem geliefert.'
+                ? 'Nur ein Anker — Kombination/Kohäsion brauchen mindestens zwei. Erdung (tragende GPs) trotzdem geliefert.'
                 : null,
         ]);
     }
