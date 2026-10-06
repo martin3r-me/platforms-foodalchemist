@@ -1,7 +1,6 @@
 <?php
 
 use Illuminate\Support\Facades\DB;
-use Platform\FoodAlchemist\Services\PairingAnalyseService;
 use Platform\FoodAlchemist\Services\SensorikService;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
 use Platform\FoodAlchemist\Tests\TestCase;
@@ -10,8 +9,9 @@ use Symfony\Component\Uid\UuidV7;
 uses(TestCase::class, SeedsTeamHierarchy::class);
 
 /**
- * Spec 58 · Paket 2 — Harmonie (Foodpairing-Sterne, 3★ zählt, 2★ „passt", Brücke über einen
- * dritten Bestandteil) und Kontrast (Geschmacks-Gegensätze + Textur) eines Gerichts.
+ * Ursprünglich Spec 58 · Paket 2 (PairingAnalyseService). Seit Spec 60 · P7 geht die Analyse in der
+ * Kombinationslogik auf (eigene Tests: KombinationslogikTest). Hier bleiben die Riegel, dass die
+ * MCP-Werkzeuge die Kombinationslogik wirklich ausführen, und die Vorschläge nach Ernährungsform.
  */
 beforeEach(function () {
     $this->seedTeamHierarchy();
@@ -87,86 +87,32 @@ beforeEach(function () {
     $zeile($this->gpFond, '100', 2, 'komponente');
     $zeile($this->gpSauce, '20', 3, 'garnitur');
     $zeile($this->gpRosmarin, '5', 4, null);
-    $this->svc = app(PairingAnalyseService::class);
 });
 
-it('Harmonie: 3★ harmoniert sehr gut, 2★ passt nur, ohne Direktpaar trägt der dritte Bestandteil die Brücke', function () {
-    $a = $this->svc->analyseRezept($this->gericht->id);
-    $stufe = collect($a['harmonie']['paare'])->mapWithKeys(fn ($p) => [
-        $a['komponenten'][$p['a']]['kurz'] . '|' . $a['komponenten'][$p['b']]['kurz'] => $p,
-    ]);
-
-    expect($stufe['Rind|Fond']['stufe'])->toBe('sehr_gut')
-        ->and($stufe['Fond|Sauce']['stufe'])->toBe('sehr_gut')
-        ->and($stufe['Rind|Sauce']['stufe'])->toBe('bruecke')
-        ->and($a['komponenten'][$stufe['Rind|Sauce']['ueber']]['kurz'])->toBe('Fond')
-        ->and($stufe['Rind|Sauce']['satz'])->toContain('beide harmonieren sehr gut mit Fond')
-        ->and($stufe['Rind|Rosmarin']['stufe'])->toBe('passt');
-
-    // Rosmarin ohne Mapping über den exakten Grundnamen (Paket 1), nicht geraten.
-    expect($a['komponenten'][3]['via'])->toBe('exakt_name');
-});
-
-it('Zusammenhalt zählt nur 3★ und nennt die Abdeckung — keine Zahl ohne Abdeckung', function () {
-    $z = $this->svc->analyseRezept($this->gericht->id)['harmonie']['zusammenhalt'];
-
-    expect($z['bewertet'])->toBe(6)->and($z['gesamt'])->toBe(6)->and($z['abdeckung_pct'])->toBe(100)
-        ->and($z['wert'])->toBeGreaterThan(0)->toBeLessThan(100)
-        ->and($z['stufe'])->not->toBeNull();
-});
-
-it('Kontrast: Fett gegen Säure und knusprig gegen weich, Rolle steht im Satz, geschätzte Achsen sind markiert', function () {
-    $k = collect($this->svc->analyseRezept($this->gericht->id)['kontrast']);
-
-    $fettSaeure = $k->first(fn ($c) => $c['achse_a'] === 'fettig' && $c['achse_b'] === 'sauer');
-    expect($fettSaeure)->not->toBeNull()
-        ->and($fettSaeure['satz'])->toBe('Spannung: Fett von Rind (Aromaträger) gegen Säure von Sauce (Garnitur). (geschätzt)')
-        ->and($fettSaeure['belegt'])->toBeFalse();
-
-    $textur = $k->first(fn ($c) => $c['art'] === 'textur');
-    expect($textur['satz'])->toBe('Spannung: das Knusprige von Rind (Aromaträger) gegen das Weiche von Fond.');
-});
-
-it('Lücke: viel Fett ohne Säure wird als fehlender Gegenpol gemeldet', function () {
-    DB::table('foodalchemist_gp_taste_vectors')->where('gp_id', $this->gpSauce->id)->update(['sauer' => 0]);
-
-    $a = $this->svc->analyseRezept($this->gericht->id);
-    expect(array_column($a['luecken'], 'code'))->toContain('saeure_fehlt')
-        ->and($a['zusammenfassung'])->toContain('Lücke');
-});
-
-it('nicht zuordenbare Bestandteile ergeben „keine Aussage", nie eine erfundene Stufe', function () {
-    $this->makeIngredient($this->gericht, 'Xylo Quirk', null, '10', 5);
-
-    $a = $this->svc->analyseRezept($this->gericht->id);
-    $unbekannt = collect($a['harmonie']['paare'])->where('stufe', 'unbekannt');
-    expect($unbekannt)->toHaveCount(4)
-        ->and($unbekannt->first()['satz'])->toContain('Xylo Quirk: noch keinem Aroma zugeordnet')
-        ->and($a['harmonie']['zusammenhalt']['abdeckung_pct'])->toBe(60);
-});
-
-it('Composer: freie Anker-Menge liefert Harmonie ohne Geschmacksprofil', function () {
-    $ids = DB::table('foodalchemist_vocab_pairing_anchors')->whereIn('slug', ['rind', 'fond', 'sauce'])->pluck('id')->all();
-    $a = $this->svc->analyseAnker($ids);
-
-    expect(collect($a['harmonie']['paare'])->pluck('stufe')->sort()->values()->all())->toBe(['bruecke', 'sehr_gut', 'sehr_gut'])
-        ->and($a['kontrast'])->toBe([]);
-});
-
-it('MCP: pairings.SUGGEST und composer.KOHAESION liefern harmonie_kontrast (ausgeführt, nicht nur registriert)', function () {
+it('MCP: pairings.SUGGEST, composer.KOHAESION und kombination.GET führen die Kombinationslogik aus', function () {
     $user = $this->makeUser($this->rootTeam);
     $kontext = new \Platform\Core\Contracts\ToolContext($user, $this->rootTeam);
     $registry = app(\Platform\Core\Tools\ToolRegistry::class);
 
     $suggest = $registry->get('foodalchemist.pairings.SUGGEST')->execute(['recipe_id' => $this->gericht->id], $kontext);
+    $harmoniert = fn ($daten) => collect($daten['aussagen']['harmoniert'] ?? [])->pluck('text')->all();
     expect($suggest->success)->toBeTrue($suggest->error ?? '')
-        ->and($suggest->data['harmonie_kontrast']['harmonie']['zusammenhalt']['bewertet'])->toBe(6)
-        ->and(collect($suggest->data['harmonie_kontrast']['kontrast'])->pluck('satz')->implode(' '))->toContain('Fett von Rind');
+        ->and($harmoniert($suggest->data['kombination']))->toBe(['Rind: Hüfte und Fond: Kalb: harmonieren', 'Fond: Kalb und Sauce: Pfeffer: harmonieren'])
+        ->and(collect($suggest->data['kombination']['aussagen']['passt'] ?? [])->pluck('text')->all())->toBe(['Rind: Hüfte und Rosmarin: frisch: passen'])
+        ->and($suggest->data['kombination']['aussagen']['harmoniert'][0]['grundlage'])->toBe('inspire_gemessen');
 
-    $ids = DB::table('foodalchemist_vocab_pairing_anchors')->whereIn('slug', ['rind', 'fond'])->pluck('id')->all();
+    $get = $registry->get('foodalchemist.kombination.GET')->execute(['recipe_id' => $this->gericht->id], $kontext);
+    expect($get->success)->toBeTrue($get->error ?? '')
+        ->and($harmoniert($get->data))->toBe($harmoniert($suggest->data['kombination']))           // eine Logik, eine Antwort
+        ->and(array_column($get->data['bestandteile'], 'label'))->toBe(['Rind: Hüfte', 'Fond: Kalb', 'Sauce: Pfeffer', 'Rosmarin: frisch']);
+
+    $id = fn (string $slug) => (int) DB::table('foodalchemist_vocab_pairing_anchors')->where('slug', $slug)->value('id');
+    $ids = [$id('rind'), $id('fond')];                                   // Reihenfolge der Auswahl bleibt erhalten
     $kohaesion = $registry->get('foodalchemist.composer.KOHAESION')->execute(['anker_ids' => $ids], $kontext);
     expect($kohaesion->success)->toBeTrue($kohaesion->error ?? '')
-        ->and($kohaesion->data['harmonie_kontrast']['harmonie']['paare'][0]['stufe'])->toBe('sehr_gut');
+        ->and($harmoniert($kohaesion->data['kombination']))->toBe(['Rind und Fond: harmonieren']);
+
+    expect($registry->get('foodalchemist.kombination.GET')->execute(['anker_ids' => [$ids[0]]], $kontext)->success)->toBeFalse();
 });
 
 it('Vorschläge: veganes Gericht bekommt keinen Hühnerfond und keinen Speck, nur 3★ zählt', function () {

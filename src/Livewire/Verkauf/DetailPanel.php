@@ -312,7 +312,7 @@ class DetailPanel extends Component
             // Layer: Pairing-Netz-Daten hier laden statt in der anonymen x-Komponente (gleiche Guard wie im Blade: $rezept !== null).
             'netz' => $rezept !== null ? $pairing->pairingNetz($team, $rezept->id) : ['nodes' => [], 'edges' => [], 'meta' => []],
             // Spec 58 · Paket 6: Harmonie (Foodpairing-Sterne) + Kontrast (Geschmack/Textur) als Sätze.
-            'analyse' => $rezept !== null ? app(\Platform\FoodAlchemist\Services\PairingAnalyseService::class)->analyseRezept($rezept->id) : null,
+            'kombination' => $rezept !== null ? app(\Platform\FoodAlchemist\Services\Pairing\Kombinationslogik::class)->daten($rezept) : null,
             'ankerKandidaten' => $this->ankerSuche !== ''
                 ? TeamScope::applyVisible(\Illuminate\Support\Facades\DB::table('foodalchemist_vocab_pairing_anchors')
                     ->whereRaw('LOWER(slug) LIKE ?', ['%' . mb_strtolower($this->ankerSuche) . '%'])

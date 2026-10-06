@@ -154,8 +154,8 @@
             <x-slot:actions>
                 <button type="button" wire:click="$dispatch('pairing-netz.oeffnen', { recipeId: {{ $rezept->id }} })" class="{{ $btnGhostXs }}" title="Voller Graph: verwandte Rezepte + Vorschläge" data-pairing-netz-btn>Netz öffnen @svg('heroicon-o-arrow-up-right', 'w-3.5 h-3.5')</button>
             </x-slot:actions>
-            @if($analyse ?? null)
-                <x-foodalchemist::passt-zusammen :analyse="$analyse" />
+            @if($kombination ?? null)
+                <x-foodalchemist::kombination :daten="$kombination" />
             @endif
             <x-foodalchemist::pairing-netz :recipe-id="$rezept->id" :netz="$netz" />
             <div class="flex flex-wrap gap-1 mt-2">

@@ -101,7 +101,39 @@ final class Kombinationslogik
      */
     public function analysiere(FoodAlchemistRecipe $gericht): array
     {
-        $teile = $this->bestandteile($gericht);
+        return $this->analysiereBestandteile($this->bestandteile($gericht));
+    }
+
+    /**
+     * Bestandteile aus einzelnen Ankern (Composer: Auswahl ohne Rezept) — je Anker ein Einzelprofil.
+     *
+     * @param  list<int>  $ankerIds
+     * @return list<array{schluessel: string, label: string, recipe_id: null, rolle: null, profil: ?array}>
+     */
+    public function bestandteileAusAnkern(array $ankerIds): array
+    {
+        $namen = DB::table('foodalchemist_vocab_pairing_anchors')->whereIn('id', $ankerIds)->pluck('display_de', 'id');
+        $out = [];
+        foreach (array_values(array_unique(array_map('intval', $ankerIds))) as $id) {
+            if (! isset($namen[$id])) {
+                continue;
+            }
+            $out[] = ['schluessel' => 'a'.$id, 'label' => (string) $namen[$id], 'recipe_id' => null, 'rolle' => null,
+                'profil' => $this->profil->einzel($id)];
+        }
+
+        return $out;
+    }
+
+    /**
+     * Kern der Logik: Aussagen über eine beliebige Menge von Bestandteilen (Gericht, Basisrezept,
+     * Composer-Auswahl). Jeder Bestandteil trägt ein Profil oder ist unbekannt.
+     *
+     * @param  list<array{schluessel: string, label: string, recipe_id: ?int, rolle: ?string, profil: ?array}>  $teile
+     * @return array{bestandteile: list<array>, aussagen: list<Aussage>, offene_bedarfe: list<array>, zusammenfassung: array<string, int>}
+     */
+    public function analysiereBestandteile(array $teile): array
+    {
         $aussagen = [];
         $mit = array_values(array_filter($teile, fn ($t) => $t['profil'] !== null));
         foreach ($teile as $t) {
@@ -169,17 +201,32 @@ final class Kombinationslogik
      */
     public function vorschlaege(FoodAlchemistRecipe $gericht, int $jeBedarf = 5): array
     {
-        $analyse = $this->analysiere($gericht);
+        return $this->vorschlaegeFuer(
+            $this->analysiere($gericht),
+            $gericht->spec_is_vegan === true ? 'vegan' : ($gericht->spec_is_vegetarian === true ? 'vegetarisch' : null),
+            $gericht->taste_direction,
+            $gericht->team_id !== null ? (int) $gericht->team_id : null,
+            $jeBedarf,
+        );
+    }
+
+    /**
+     * Vorschläge zu einer fertigen Analyse — auch ohne Rezept (Composer, Generator-Plan).
+     *
+     * @param  array{bestandteile: list<array>, offene_bedarfe: list<array>}  $analyse
+     * @return list<array>
+     */
+    public function vorschlaegeFuer(array $analyse, ?string $diaet, ?string $geschmacksrichtung, ?int $teamId, int $jeBedarf = 5): array
+    {
         $teile = array_values(array_filter($analyse['bestandteile'], fn ($t) => $t['profil'] !== null));
         $vorhanden = array_filter(array_map(fn ($t) => $t['recipe_id'], $analyse['bestandteile']));
-        $diaet = $gericht->spec_is_vegan === true ? 'vegan' : ($gericht->spec_is_vegetarian === true ? 'vegetarisch' : null);
         // Süß und herzhaft mischen sich nicht: ein Vorschlag hat die Richtung des Gerichts oder ist neutral.
-        $richtung = in_array($gericht->taste_direction, ['herzhaft', 'suess'], true) ? $gericht->taste_direction : null;
+        $richtung = in_array($geschmacksrichtung, ['herzhaft', 'suess'], true) ? $geschmacksrichtung : null;
 
         $out = [];
         foreach ($analyse['offene_bedarfe'] as $b) {
             $kandidaten = [];
-            foreach ($this->basisKatalog($gericht) as $rid => $k) {
+            foreach ($this->basisKatalog($teamId) as $rid => $k) {
                 if (in_array($rid, $vorhanden, true) || ! $k['teller'] || ! $this->passtZurDiaet($k, $diaet)
                     || ($richtung !== null && $k['richtung'] !== null && $k['richtung'] !== $richtung && $k['richtung'] !== 'neutral')) {
                     continue;
@@ -227,6 +274,99 @@ final class Kombinationslogik
     }
 
     /**
+     * Einheitliche Ausgabe für Oberfläche und MCP (keine zweite Formulierung).
+     *   Gericht      Bestandteile = seine Basisrezepte/GPs, mit Vorschlägen
+     *   Basisrezept  Bestandteile = seine Zutaten, dazu das eigene Aromenprofil, ohne Vorschläge
+     *
+     * @return array<string, mixed>
+     */
+    public function daten(FoodAlchemistRecipe $rezept, bool $mitVorschlaegen = true): array
+    {
+        $istGericht = (bool) $rezept->is_sales_recipe;
+        $analyse = $this->analysiere($rezept);
+        $out = $this->ausgabe($analyse, $istGericht ? 'gericht' : 'basisrezept');
+        if (! $istGericht) {
+            $p = $this->profil->fuer((int) $rezept->id);
+            $out['profil'] = [
+                'anker' => $this->ankerNamen($p['anker']),
+                'abdeckung' => $p['abdeckung'],
+                'eigenschaften' => $this->eigenschaftenLesbar($p['eigenschaften']),
+            ];
+        }
+        $out['vorschlaege'] = $istGericht && $mitVorschlaegen
+            ? $this->vorschlaegeFuer($analyse,
+                $rezept->spec_is_vegan === true ? 'vegan' : ($rezept->spec_is_vegetarian === true ? 'vegetarisch' : null),
+                $rezept->taste_direction, $rezept->team_id !== null ? (int) $rezept->team_id : null)
+            : [];
+
+        return $out;
+    }
+
+    /**
+     * Dieselbe Ausgabe für eine Anker-Auswahl ohne Rezept (Composer).
+     *
+     * @param  list<int>  $ankerIds
+     * @return array<string, mixed>
+     */
+    public function datenAusAnkern(array $ankerIds, ?string $diaet = null, ?string $richtung = null, ?int $teamId = null): array
+    {
+        $analyse = $this->analysiereBestandteile($this->bestandteileAusAnkern($ankerIds));
+        $out = $this->ausgabe($analyse, 'auswahl');
+        $out['vorschlaege'] = $this->vorschlaegeFuer($analyse, $diaet, $richtung, $teamId);
+
+        return $out;
+    }
+
+    /** @return array<string, mixed> */
+    private function ausgabe(array $analyse, string $art): array
+    {
+        $gruppen = [];
+        foreach ($analyse['aussagen'] as $a) {
+            $gruppen[$a->typ->value][] = $a->toArray();
+        }
+        $teile = array_map(fn ($t) => [
+            'schluessel' => $t['schluessel'], 'label' => $t['label'], 'recipe_id' => $t['recipe_id'], 'rolle' => $t['rolle'],
+            'kern' => $t['profil'] !== null ? array_slice($this->ankerNamen($t['profil']['anker']), 0, 3) : [],
+            'abdeckung' => $t['profil']['abdeckung'] ?? null,
+        ], $analyse['bestandteile']);
+        $z = $analyse['zusammenfassung'];
+        $fehlt = array_map(fn ($b) => Achse::from($b['achse'])->label(), $analyse['offene_bedarfe']);
+        $satz = count($teile).' Bestandteile · '
+            .($z['harmoniert'] ?? 0).' harmonieren · '.($z['spannung'] ?? 0).' Spannung'
+            .($fehlt !== [] ? ' · fehlt: '.implode(', ', $fehlt) : '')
+            .(($z['konflikt'] ?? 0) > 0 ? ' · '.$z['konflikt'].' Konflikt' : '')
+            .(($z['unbekannt'] ?? 0) > 0 ? ' · '.$z['unbekannt'].' ohne Aroma' : '');
+
+        return ['art' => $art, 'bestandteile' => $teile, 'aussagen' => $gruppen,
+            'offene_bedarfe' => $analyse['offene_bedarfe'], 'kennzahlen' => $z, 'zusammenfassung' => $satz];
+    }
+
+    /** @return list<array{anchor_id: int, name: string, anteil: float, verfahren: ?string}> */
+    private function ankerNamen(array $anker): array
+    {
+        $namen = DB::table('foodalchemist_vocab_pairing_anchors')->whereIn('id', array_column($anker, 'anchor_id'))->pluck('display_de', 'id');
+
+        return array_map(fn ($a) => ['anchor_id' => (int) $a['anchor_id'], 'name' => (string) ($namen[$a['anchor_id']] ?? '?'),
+            'anteil' => (float) $a['anteil'], 'verfahren' => $a['verfahren'] ?? null], $anker);
+    }
+
+    /** @return list<array{achse: string, label: string, stufe: float, grundlage: string}> */
+    private function eigenschaftenLesbar(array $eigenschaften): array
+    {
+        $out = [];
+        foreach ($eigenschaften as $achse => $e) {
+            if ((float) $e['stufe'] < 1 || Achse::tryFrom($achse) === null) {
+                continue;
+            }
+            $out[] = ['achse' => $achse, 'label' => Achse::from($achse)->label(), 'stufe' => (float) $e['stufe'],
+                'grundlage' => Grundlage::aus((string) $e['quelle'])->label()];
+        }
+        usort($out, fn ($a, $b) => $b['stufe'] <=> $a['stufe']);
+
+        return $out;
+    }
+
+    /**
      * Andere Zubereitung bzw. Form eines vorhandenen Bestandteils, die den Bedarf deckt — kommt
      * vor jeder neuen Zutat (küchennäher, kostet keine zusätzliche Ware).
      *
@@ -264,13 +404,13 @@ final class Kombinationslogik
     }
 
     /** @return array<int, array{name: string, profil: array, vegan: ?bool, vegetarisch: ?bool}> */
-    private function basisKatalog(FoodAlchemistRecipe $gericht): array
+    private function basisKatalog(?int $teamId): array
     {
         if ($this->basisKatalog !== null) {
             return $this->basisKatalog;
         }
         // Nur Basisrezepte, die das Team des Gerichts sehen darf.
-        $team = $gericht->team_id !== null ? \Platform\Core\Models\Team::find($gericht->team_id) : null;
+        $team = $teamId !== null ? \Platform\Core\Models\Team::find($teamId) : null;
         $ids = ($team !== null ? FoodAlchemistRecipe::visibleToTeam($team) : FoodAlchemistRecipe::query())
             ->where('is_sales_recipe', false)->pluck('id')->all();
         $profile = DB::table('foodalchemist_recipe_profile')->whereIn('recipe_id', $ids)->get(['recipe_id', 'abdeckung', 'eigenschaften', 'offene_bedarfe'])->keyBy('recipe_id');

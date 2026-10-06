@@ -30,8 +30,9 @@ class ComposerKohaesionTool extends FoodAlchemistTool implements ToolContract, T
             . 'Auswahl (score/min_score/coverage, schwächstes Paar, Waisen, unbewertete Paare) via composerCohesion, '
             . '(2) bruecken = Anker↔Anker-Verbindung über geteilte Partner (verbundene/unverbundene Paare, Tiers, Waisen) '
             . 'aus der Netz-Brückenebene, (3) erdung = welche echten team-sichtbaren GPs die Anker als Kern tragen '
-            . '(Aromaträger zum Einkaufen), (4) harmonie_kontrast = je Anker-Paar die Foodpairing-Stufe als Satz '
-            . '(sehr_gut=3★ zählt, passt=2★ zählt nicht, bruecke über einen dritten Anker der Auswahl; Spec 58). '
+            . '(Aromaträger zum Einkaufen), (4) kombination = die Kombinationslogik (Spec 60) über die Auswahl: '
+            . 'harmoniert/passt/neutral, spannung, bedarf_offen, konflikt, kombination — je mit Grundlage — plus '
+            . 'Vorschläge (Basisrezepte) für offene Bedarfe. '
             . 'Anker-IDs via composer.ANKER_SUCHE holen. Für eine Kohäsions-Aussage '
             . 'mind. 2 IDs. Read-only.';
     }
@@ -110,8 +111,9 @@ class ComposerKohaesionTool extends FoodAlchemistTool implements ToolContract, T
             'bruecken' => $bruecken,
             'netz_counts' => $counts,
             'erdung' => $erdung,
-            'harmonie_kontrast' => count($ankerIds) >= 2
-                ? app(\Platform\FoodAlchemist\Services\PairingAnalyseService::class)->analyseAnker($ankerIds)
+            // Spec 60: dieselbe Kombinationslogik wie Gericht und Oberfläche (Anker als Einzel-Bestandteile).
+            'kombination' => count($ankerIds) >= 2
+                ? app(\Platform\FoodAlchemist\Services\Pairing\Kombinationslogik::class)->datenAusAnkern($ankerIds, null, null, (int) $team->id)
                 : null,
             'hinweis' => count($ankerIds) < 2
                 ? 'Nur ein Anker — Kohäsion/Brücken brauchen mindestens zwei. Erdung (tragende GPs) trotzdem geliefert.'
