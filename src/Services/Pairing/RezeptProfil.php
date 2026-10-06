@@ -76,6 +76,32 @@ final class RezeptProfil
         return $p;
     }
 
+    /**
+     * Profil eines einzeln eingesetzten Grundprodukts bzw. Ankers (Gericht ohne Basisrezept):
+     * derselbe Aufbau wie ein Rezept-Profil, mit 100 % des (ggf. Varianten-)Ankers.
+     *
+     * @return array{anker: list<array{anchor_id: int, anteil: float, verfahren: ?string}>, abdeckung: float, eigenschaften: array<string, array{stufe: float, quelle: string}>, offene_bedarfe: list<array{achse: string, staerke: string, von: int}>}
+     */
+    public function einzel(int $anker, ?Verfahren $verfahren = null): array
+    {
+        $anker = $this->variante($anker, $verfahren);
+        $anteile = [$anker => 100.0];
+        $eigenschaften = [];
+        foreach (DB::table('foodalchemist_anchor_eigenschaften')->where('anchor_id', $anker)
+            ->where('status', '!=', WissensStatus::Verworfen->value)->get(['achse', 'stufe', 'quelle']) as $e) {
+            if ((float) $e->stufe > ($eigenschaften[$e->achse]['stufe'] ?? -1)) {
+                $eigenschaften[$e->achse] = ['stufe' => (float) $e->stufe, 'quelle' => (string) $e->quelle];
+            }
+        }
+
+        return [
+            'anker' => [['anchor_id' => $anker, 'anteil' => 100.0, 'verfahren' => $verfahren?->value]],
+            'abdeckung' => 100.0,
+            'eigenschaften' => $eigenschaften,
+            'offene_bedarfe' => $this->offeneBedarfe($anteile, $eigenschaften),
+        ];
+    }
+
     /** Für Tests und Neuaufbau: Speicher-Cache leeren. */
     public function vergiss(): void
     {

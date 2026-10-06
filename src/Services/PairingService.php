@@ -1027,7 +1027,7 @@ class PairingService
     }
 
     /** Passt ein Anker (Kategorie/Unterkategorie aus dem Inspire-Vokabular) zur Ernährungsform? */
-    private function passtZurDiaet(object $anker, string $diaet): bool
+    public function passtZurDiaet(object $anker, string $diaet): bool
     {
         $kat = (string) ($anker->category ?? '');
         $sub = (string) ($anker->subcategory ?? '');
