@@ -21,7 +21,7 @@ const REGISTRY_SOLL = [
     'recipe.level' => 'B', 'recipe.production_depth' => 'B',
     'recipe.eigenschaften' => 'B', 'recipe.geschmack' => 'B',
     'recipe.steps' => 'A',                                            // Spec 27: strukturierte Schritte (Master), preparation ist nur ihr Spiegel
-    'recipe.review' => 'A', 'recipe.pairing' => 'A', 'recipe.anker' => 'B',
+    'recipe.review' => 'A',
     'recipe.bauart' => 'B',                                           // Spec 21 S5b-2: Gericht-vs-Komponente nach Bauart (Klassifikator, darum Tier B + keine Food-DNA)
     'recipe.equipment' => 'B', 'recipe.extract' => 'C',
     'recipe.verpackungsmasse' => 'B',                                  // D: Verpackungs-Einheit → Masse (zweite Meinung neben der LA-Gebindegrösse)
@@ -79,7 +79,7 @@ it('keine unbekannten Keys außer demo.echo (Inventar-Disziplin)', function () {
 });
 
 it('Compliance- und V-02-Features sind Tier A (06_KI §2-Begründung)', function () {
-    foreach (['gp.allergene', 'recipe.steps', 'vk.plating', 'recipe.pairing', 'vk.marketing'] as $key) {
+    foreach (['gp.allergene', 'recipe.steps', 'vk.plating', 'vk.marketing'] as $key) {
         expect(config('foodalchemist.prompts')[$key]['tier'])->toBe('A', $key);
     }
 });

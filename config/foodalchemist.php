@@ -1518,18 +1518,8 @@ return [
                 . 'frisch|TK|trocken|konserviert), warengruppe (§3-Code), sub_kategorie. Ein Feld, das schon konform '
                 . 'oder nicht sicher aus dem LA ableitbar ist, bleibt null. werte = {name, zustand, warengruppe, sub_kategorie}.',
         ],
-        'recipe.pairing' => [
-            'tier' => 'A',                                            // groesster Ist-Kostenblock — Qualitaet zaehlt
-            'task' => 'Schlage 12-25 BELEGTE Flavor-Pairing-Partner aus dem mitgegebenen '
-                . 'Grounding vor (typ aroma|kontrast, konfidenz hoch|mittel|niedrig; '
-                . 'erfinde KEINE unbelegten Paarungen; Vorschlaege sind KEIN Gold — nie als '
-                . 'erprobt/klassisch/modern einlagern): werte = {pairings: [{slug, typ, konfidenz}]}.',
-        ],
-        'recipe.anker' => [
-            'tier' => 'B',
-            'task' => 'Bestimme die 1-5 Kern-Anker (Aroma-Identitaet) des Rezepts aus dem '
-                . 'mitgegebenen Vokabular (GL-10 Cap 5): werte = {anker_slugs: []}.',
-        ],
+        // Spec 60: recipe.pairing und recipe.anker entfallen — Pairing-Chips und KI-Anker am Rezept sind
+        // durch das Aromenprofil (abgeleitet aus den Zutaten) und die Kombinationslogik ersetzt.
         'recipe.equipment' => [
             'tier' => 'B',
             'task' => 'Schlage das Equipment-Set fuer die Produktion aus dem mitgegebenen '

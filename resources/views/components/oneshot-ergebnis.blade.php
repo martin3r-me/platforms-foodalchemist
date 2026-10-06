@@ -57,8 +57,7 @@
                     'eigenschaften' => 'Eigenschaften',
                     'equipment' => 'Equipment',
                     'posten' => 'Posten',
-                    'aromaanker' => 'Aromaanker',
-                    'pairings' => 'Pairings',
+                    'aromaprofil' => 'Aromenprofil',
                     'eignung' => 'Eignung',
                 ] as $key => $label)
                     @if(($cov[$key] ?? null) !== null)

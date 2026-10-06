@@ -111,7 +111,7 @@ it('Basisrezept: KEINE Teller-Blöcke, stattdessen Graph-Nachbarn', function () 
         'team_id' => $this->rootTeam->id, 'recipe_key' => 'basis-sauce',
         'name' => 'Basis: Sauce', 'status' => 'draft', 'is_sales_recipe' => false,
     ]);
-    $this->svc->setRecipeAnker($this->rootTeam, $basis->id, $erd);   // Anker des Basisrezepts = erdbeere
+    \Platform\FoodAlchemist\Tests\Support\RezeptAnker::gib($basis, $erd);   // Anker des Basisrezepts = erdbeere
 
     $panel = $this->svc->panelRecipe($basis);
 

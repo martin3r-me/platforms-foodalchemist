@@ -161,6 +161,17 @@ class RecipeRecomputeService
             Log::warning("Preis-Kaskade nach Bulk-Recompute fehlgeschlagen: {$e->getMessage()}");
         }
 
+        // Spec 60: Aromenprofile mitziehen (Kinder vor Eltern — der Eltern-Hash enthält die Kinder).
+        // Best-effort: ein Profil-Fehler blockt nie die Bearbeitung (I8).
+        try {
+            $profil = app(Pairing\RezeptProfil::class);
+            foreach ($this->topoOrder($betroffen) as $id) {
+                $profil->fuer((int) $id);
+            }
+        } catch (\Throwable $e) {
+            Log::warning("Aromenprofil nach Recompute fehlgeschlagen: {$e->getMessage()}");
+        }
+
         return $betroffen;
     }
 

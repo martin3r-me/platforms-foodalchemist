@@ -313,7 +313,7 @@ class SignalFixService
         }
 
         return ['wirkt' => true, 'felder' => [
-            'recipe_anchor_mappings (kern)' => count($quellen) . '× — aus: ' . implode(', ', array_slice($quellen, 0, 4)),
+            'Aromenprofil' => count($quellen) . ' Anker — aus: ' . implode(', ', array_slice($quellen, 0, 4)),
         ], 'hinweis' => null];
     }
 
@@ -382,33 +382,15 @@ class SignalFixService
         return $p !== null && (float) $p->price > 0;
     }
 
-    /** Kern-Anker je Rezept aus resolveRecipeAnchors → setRecipeAnker (macht Rezept graph-sichtbar). */
+    /** Spec 60: Aromenprofil des Rezepts bauen (macht es für die Kombinationslogik sichtbar). */
     private function fixRecipeAnker(Team $team, int $recipeId): bool
     {
         $recipe = FoodAlchemistRecipe::visibleToTeam($team)->find($recipeId);
         if ($recipe === null) {
             return false;
         }
-        $kerne = [];
-        foreach ($this->pairing->resolveRecipeAnchors($recipe) as $zeile) {
-            if (($zeile['kern'] ?? null) !== null) {
-                $kerne[(int) $zeile['kern']] = true;
-            }
-        }
-        if ($kerne === []) {
-            return false;
-        }
-        $wrote = false;
-        foreach (array_keys($kerne) as $ankerId) {
-            try {
-                $this->pairing->setRecipeAnker($team, $recipeId, (int) $ankerId);
-                $wrote = true;
-            } catch (\RuntimeException) {
-                break;   // CAP_RECIPE erreicht — Rest ignorieren
-            }
-        }
 
-        return $wrote;
+        return app(\Platform\FoodAlchemist\Services\Pairing\RezeptProfil::class)->fuer((int) $recipe->id)['anker'] !== [];
     }
 
     private function fixGpAnker(Team $team, int $gpId): bool

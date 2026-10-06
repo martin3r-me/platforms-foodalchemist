@@ -42,8 +42,8 @@ class RecipeReifeAdapter implements ReifeAdapter
     private const SATELLITEN = [
         'foodalchemist_recipe_steps' => ['steps', 'Keine Zubereitungsschritte', 'foodalchemist.recipe_steps.PUT'],
         'foodalchemist_recipe_taste_vectors' => ['sensorik', 'Keine Sensorik-Bewertung', 'foodalchemist.recipe_sensorik.POST'],
-        'foodalchemist_recipe_anchor_mappings' => ['aromaanker', 'Keine Aroma-Anker', 'foodalchemist.recipe_anchors.PUT'],
-        'foodalchemist_recipe_pairings' => ['pairings', 'Keine Foodpairing-Partner', 'foodalchemist.recipe_pairings.PUT'],
+        // Spec 60: Aromenprofil statt KI-Anker/Pairing-Chips — entsteht aus den Zutaten-Ankern (GP→Anker).
+        'foodalchemist_recipe_profile_anker' => ['aromaanker', 'Kein Aromenprofil (keine Zutat mit Aroma-Anker)', null],
         'foodalchemist_recipe_equipment' => ['equipment', 'Kein Equipment hinterlegt', null],
     ];
 
@@ -124,16 +124,6 @@ class RecipeReifeAdapter implements ReifeAdapter
             $hat = \Illuminate\Support\Facades\DB::table($tabelle)->where('recipe_id', $r->id)->exists();
             if ($hat) {
                 $erfuellt[] = $code;
-
-                continue;
-            }
-            // Ehrliche Degradation: Pairings ohne Anker sind keine Lücke des Rezepts,
-            // sondern eine Folge — das `pairings`-Glied steigt ohne Anker-Grounding aus
-            // (RecipeOneShotService:673). Als Lücke gemeldet würde es zu einem Auftrag,
-            // der so nicht erfüllbar ist.
-            if ($code === 'pairings' && ! \Illuminate\Support\Facades\DB::table('foodalchemist_recipe_anchor_mappings')
-                ->where('recipe_id', $r->id)->exists()) {
-                $nichtMessbar[] = ['code' => 'pairings', 'warum' => 'Ohne Aroma-Anker gibt es keine Erdung — zuerst «aromaanker» schliessen.'];
 
                 continue;
             }
@@ -248,8 +238,7 @@ class RecipeReifeAdapter implements ReifeAdapter
             $aus[] = $aspekt('work_time_min', 'blockiert', $tool, $ebene);
             $aus[] = $aspekt('steps', 'hinweis', 'foodalchemist.recipe_steps.PUT', $ebene);
             $aus[] = $aspekt('sensorik', 'hinweis', 'foodalchemist.recipe_sensorik.POST', $ebene);
-            $aus[] = $aspekt('aromaanker', 'hinweis', 'foodalchemist.recipe_anchors.PUT', $ebene);
-            $aus[] = $aspekt('pairings', 'hinweis', 'foodalchemist.recipe_pairings.PUT', $ebene, 'mit_anker');
+            $aus[] = $aspekt('aromaanker', 'hinweis', null, $ebene);
             // Equipment haengt an Stammdaten, nicht am Rezept-Schreibpfad — kein Werkzeug.
             $aus[] = $aspekt('equipment', 'hinweis', null, $ebene);
         }

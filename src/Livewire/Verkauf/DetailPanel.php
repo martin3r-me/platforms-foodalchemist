@@ -125,10 +125,6 @@ class DetailPanel extends Component
     /** @var array<string, bool> lazy Sektionen (nur offene rechnen, P-1) */
     public array $offen = [];
 
-    public string $ankerSuche = '';
-
-    public ?string $fehlerAnker = null;
-
     public function toggleSektion(string $sektion): void
     {
         if (in_array($sektion, ['anker', 'pairing', 'kohaerenz', 'heber', 'nachbarn', 'eignung', 'deklaration', 'komponenten'], true)) {
@@ -163,28 +159,6 @@ class DetailPanel extends Component
             app(\Platform\FoodAlchemist\Services\CoherenceService::class)->tellerHeber($team, $this->recipeId);
         } catch (\RuntimeException $e) {
             $this->kiFehler = $e->getMessage();
-        }
-    }
-
-    public function ankerVerknuepfen(int $ankerId): void
-    {
-        $team = Auth::user()?->currentTeamRelation;
-        if ($team === null || $this->recipeId === null) {
-            return;
-        }
-        try {
-            app(\Platform\FoodAlchemist\Services\PairingService::class)->setRecipeAnker($team, $this->recipeId, $ankerId);
-            $this->ankerSuche = '';
-        } catch (\RuntimeException $e) {
-            $this->fehlerAnker = $e->getMessage();
-        }
-    }
-
-    public function ankerLoesen(int $ankerId): void
-    {
-        $team = Auth::user()?->currentTeamRelation;
-        if ($team !== null && $this->recipeId !== null) {
-            app(\Platform\FoodAlchemist\Services\PairingService::class)->removeRecipeAnker($team, $this->recipeId, $ankerId);
         }
     }
 
@@ -304,20 +278,10 @@ class DetailPanel extends Component
                 ? app(\Platform\FoodAlchemist\Services\FoodAlchemistMediaService::class)->url($rezept->image_context_file_id, $rezept->image_path)
                 : null,
             'cockpit' => $rezept !== null ? $verkauf->cockpit($rezept, $team, $outlet) : null,
-            // D-6 §5.x: Kern-Anker · Kohäsions-Score · Pairing-Section (lazy)
-            'kernAnker' => $rezept !== null ? $pairing->recipeAnkers($rezept->id) : collect(),
-            // v3-Redesign: Sektionen nicht mehr ausklappbar → direkt laden (nicht lazy).
-            // Pairings-Sektion entfernt (2026-07-21, Dominique: überschneidet sich mit Pairing-Netz).
-            'kohaesion' => $rezept !== null ? $pairing->recipeCohesion($rezept) : null,
             // Layer: Pairing-Netz-Daten hier laden statt in der anonymen x-Komponente (gleiche Guard wie im Blade: $rezept !== null).
             'netz' => $rezept !== null ? $pairing->pairingNetz($team, $rezept->id) : ['nodes' => [], 'edges' => [], 'meta' => []],
-            // Spec 58 · Paket 6: Harmonie (Foodpairing-Sterne) + Kontrast (Geschmack/Textur) als Sätze.
+            // Spec 60: Kombinationslogik — Aussagen mit Grundlage, Bestandteile = Basisrezepte, Vorschläge.
             'kombination' => $rezept !== null ? app(\Platform\FoodAlchemist\Services\Pairing\Kombinationslogik::class)->daten($rezept) : null,
-            'ankerKandidaten' => $this->ankerSuche !== ''
-                ? TeamScope::applyVisible(\Illuminate\Support\Facades\DB::table('foodalchemist_vocab_pairing_anchors')
-                    ->whereRaw('LOWER(slug) LIKE ?', ['%' . mb_strtolower($this->ankerSuche) . '%'])
-                    ->whereNull('deleted_at'), 'team_id', $team)->orderBy('slug')->limit(6)->get(['id', 'slug', 'display_de'])
-                : collect(),
             // D-6 §5.x: Judge-Achse (gecacht) + deterministische Aroma-Nachbarn (lazy)
             'kohaerenzStatus' => $rezept !== null
                 ? app(\Platform\FoodAlchemist\Services\CoherenceService::class)->status($team, $rezept->id)

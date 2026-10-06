@@ -51,13 +51,16 @@ it('T3: Identitäts-Anker GERICHTET — nie eine Sorte für den generischen GP',
         ->and($this->svc->bestIdentityAnchor('aepfel', $vokabular))->toBe('apfel');
 });
 
-it('T4: Kohäsion durchgerechnet — 97/90/100 %, fits 95/95/100, weakest Stufe 2', function () {
+it('T4: Kohäsion durchgerechnet — nur 3★ zählt; Stufe 2 ist neutral (0), nicht „fast gut"', function () {
     $e = ($this->mkAnker)('erdbeere');
     $b = ($this->mkAnker)('basilikum');
     $bal = ($this->mkAnker)('balsamico');
-    ($this->mkKante)($e, $b, 'aroma');               // Stufe 2 → 0.9 (schwächstes Paar; Spec 60: Kontrast ist keine Harmonie-Kante)
-    ($this->mkKante)($e, $bal, 'erprobt');           // 1.0
-    ($this->mkKante)($b, $bal, 'erprobt');           // 1.0
+    foreach ([$e => 901, $b => 902, $bal => 903] as $id => $inspire) {      // gemessene Inspire-Anker
+        DB::table('foodalchemist_vocab_pairing_anchors')->where('id', $id)->update(['inspire_id' => $inspire]);
+    }
+    ($this->mkKante)($e, $b, 'aroma');               // Stufe 2 → zählt nicht als Harmonie (Spec 60: 2★ = Rauschen)
+    ($this->mkKante)($e, $bal, 'erprobt');           // Stufe 3 → 1.0
+    ($this->mkKante)($b, $bal, 'erprobt');           // Stufe 3 → 1.0
 
     $k = $this->svc->cohesionFor([
         ['label' => 'Erdbeere', 'kern' => $e, 'prozess' => [], 'via' => 'name_match'],
@@ -65,13 +68,13 @@ it('T4: Kohäsion durchgerechnet — 97/90/100 %, fits 95/95/100, weakest Stufe 
         ['label' => 'Balsamico', 'kern' => $bal, 'prozess' => [], 'via' => 'name_match'],
     ]);
 
-    expect($k['score'])->toBe(97)                    // (0.9+1.0+1.0)/3
-        ->and($k['min_score'])->toBe(90)
+    expect($k['score'])->toBe(67)                    // (0+1.0+1.0)/3
+        ->and($k['min_score'])->toBe(0)
         ->and($k['coverage_pct'])->toBe(100)
         ->and($k['rated_pairs'])->toBe(3)
-        ->and(collect($k['komponenten'])->pluck('fit', 'label')->all())->toBe(['Erdbeere' => 95, 'Basilikum' => 95, 'Balsamico' => 100])
-        ->and($k['weakest_pair']['type'])->toBe('aroma')
-        ->and($k['weakest_pair']['score'])->toBe(90)
+        ->and(collect($k['komponenten'])->pluck('fit', 'label')->all())->toBe(['Erdbeere' => 50, 'Basilikum' => 50, 'Balsamico' => 100])
+        ->and($k['weakest_pair']['type'])->toBe('neutral')
+        ->and($k['weakest_pair']['score'])->toBe(0)
         ->and(collect($k['komponenten'])->contains(fn ($c) => $c['is_orphan']))->toBeFalse();
 });
 
@@ -90,26 +93,4 @@ it('T9: neutral zählt nie als Orphan; 0 bewertete Paare ⇒ score 0 und NIEMAND
         ->and($k['rated_pairs'])->toBe(0)
         ->and(collect($k['komponenten'])->contains(fn ($c) => $c['is_orphan']))->toBeFalse()  // any_rated=false
         ->and(count($k['unrated_pairs']))->toBe(1);                   // neutral fällt aus total_pairs
-});
-
-it('Inv. 1/3: Rezept-Cap 5 blockt, manual gewinnt (nullt KI-Lineage)', function () {
-    $rezept = \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::create([
-        'team_id' => $this->rootTeam->id, 'recipe_key' => 'cap_test', 'name' => 'Cap: Test', 'status' => 'draft',
-    ]);
-    $ids = [];
-    foreach (range(1, 6) as $i) {
-        $ids[] = ($this->mkAnker)("anker_{$i}");
-    }
-    foreach (array_slice($ids, 0, 5) as $id) {
-        $this->svc->setRecipeAnker($this->rootTeam, $rezept->id, $id);
-    }
-    expect(fn () => $this->svc->setRecipeAnker($this->rootTeam, $rezept->id, $ids[5]))
-        ->toThrow(RuntimeException::class, 'max 5');
-
-    // manual gewinnt: bestehender KI-Anker wird beim Set auf manual gehoben, Lineage genullt
-    DB::table('foodalchemist_recipe_anchor_mappings')->where('recipe_id', $rezept->id)->where('anchor_id', $ids[0])
-        ->update(['source' => 'ai_inferred', 'ai_confidence' => 0.7]);
-    $this->svc->setRecipeAnker($this->rootTeam, $rezept->id, $ids[0]);  // Update zählt nicht gegen Cap
-    $zeile = DB::table('foodalchemist_recipe_anchor_mappings')->where('recipe_id', $rezept->id)->where('anchor_id', $ids[0])->first();
-    expect($zeile->source)->toBe('manual')->and($zeile->ai_confidence)->toBeNull();
 });

@@ -61,17 +61,6 @@ beforeEach(function () {
         return (int) DB::getPdo()->lastInsertId();
     };
 
-    $this->mkRezeptMapping = function (int $recipeId, string $ankerSlug, ?string $conf, string $role = 'kern'): int {
-        DB::table('foodalchemist_recipe_anchor_mappings')->insert([
-            'uuid' => (string) UuidV7::generate(), 'team_id' => $this->rootTeam->id,
-            'recipe_id' => $recipeId, 'anchor_id' => $this->ankerId[$ankerSlug], 'role' => $role,
-            'source' => 'ai_inferred', 'ai_confidence' => $conf,
-            'created_at' => now(), 'updated_at' => now(),
-        ]);
-
-        return (int) DB::getPdo()->lastInsertId();
-    };
-
     /** Zutaten-Zeile mit Sub-Rezept-Verweis (makeIngredient kennt nur GP/raw_text). */
     $this->mkSubZutat = function (FoodAlchemistRecipe $recipe, FoodAlchemistRecipe $sub, int $position): void {
         FoodAlchemistRecipeIngredient::create([
@@ -170,10 +159,11 @@ beforeEach(function () {
     // (i) Nur raw_text, kein Anker-Term ⇒ unresolved (Label = raw_text).
     $this->makeIngredient($this->r2, 'Xylo Quirk', null, '100', 5);
 
-    // ── R3: Sub-Rezepte (eigene Mapping-Tabelle) ─────────────────────────
+    // ── R3: Sub-Rezepte (Kern aus dem Aromenprofil, Spec 60) ──────────────
     $this->sub1 = $this->makeRecipe($this->rootTeam, 'Basis: Sub Mehrdeutig');
-    ($this->mkRezeptMapping)($this->sub1->id, 'apfel', '0.900'); // kleinste id
-    ($this->mkRezeptMapping)($this->sub1->id, 'birne', null);    // NULL ⇒ 1.0 → GEWINNER
+    // Spec 60: Kern eines Basisrezepts = stärkster Anker seines Aromenprofils (Birne 200 g vor Apfel 100 g).
+    $this->makeIngredient($this->sub1, 'Birne', $this->makeGp($this->rootTeam, 'Birne: reif'), '200', 1);
+    $this->makeIngredient($this->sub1, 'Apfel', $this->makeGp($this->rootTeam, 'Apfel: frisch'), '100', 2);
 
     $this->sub2 = $this->makeRecipe($this->rootTeam, 'Basis: Zimt Sub Ohne Mapping');
 
@@ -214,9 +204,9 @@ it('GOLDEN: die Anker-Auflösung liefert für den Fixture-Satz genau diese Zeile
     ]);
 
     expect(($this->projiziere)($this->svc->resolveRecipeAnchors($this->r3)))->toBe([
-        ['label' => 'Basis: Sub Mehrdeutig', 'kern' => 'birne', 'prozess' => [], 'via' => 'recipe_anker'],
+        ['label' => 'Basis: Sub Mehrdeutig', 'kern' => 'birne', 'prozess' => [], 'via' => 'rezept_profil'],
         ['label' => 'Basis: Zimt Sub Ohne Mapping', 'kern' => null, 'prozess' => [], 'via' => 'unresolved'],
-        ['label' => 'Basis: Sub Ueber Zutaten', 'kern' => 'birne', 'prozess' => [], 'via' => 'rezept_zutaten'],
+        ['label' => 'Basis: Sub Ueber Zutaten', 'kern' => 'birne', 'prozess' => [], 'via' => 'rezept_profil'],
     ]);
 });
 

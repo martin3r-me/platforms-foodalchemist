@@ -42,8 +42,8 @@ beforeEach(function () {
             ]);
         }
     };
-    // Schokolade (kakao) dockt nur SCHWACH an Kräuter an (Stufe 2) — nicht an Anis.
-    $mkKante($this->kakao, $this->kraeuter, 'aroma');
+    // Schokolade (kakao) dockt an Kräuter an (Stufe 3, echtes Food Pairing) — nicht an Anis.
+    $mkKante($this->kakao, $this->kraeuter, 'erprobt');
     // Anis brückt aufs Geflügel (fürs Kohäsions-Delta im Rezept-Kontext).
     $mkKante($this->anis, $this->gefluegel, 'erprobt');
 
@@ -89,7 +89,7 @@ it('rankt den aroma-treuen Ersatz vor dem aroma-fernen, gleich teuren; allein ü
         ->and($kerbel['verlorene_bruecken'])->toBe([])
         ->and($kerbel['flavor_score'])->toBeGreaterThan($scho['flavor_score']);
 
-    // Schokolade: Kräuter über die Stufe-2-Kante erhalten, Anis verloren → 0,5.
+    // Schokolade: Kräuter über die 3★-Kante erhalten, Anis verloren → 0,5.
     expect($scho['flavor_score'])->toBe(0.5)
         ->and($scho['erhaltene_bruecken'])->toBe(['Kraeuter'])
         ->and($scho['verlorene_bruecken'])->toBe(['Anis']);

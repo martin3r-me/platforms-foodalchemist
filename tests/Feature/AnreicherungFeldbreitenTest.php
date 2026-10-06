@@ -1,7 +1,5 @@
 <?php
 
-use Platform\Core\Contracts\ToolContext;
-use Platform\Core\Tools\ToolRegistry;
 use Platform\FoodAlchemist\Services\RecipeService;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
 use Platform\FoodAlchemist\Tests\TestCase;
@@ -74,30 +72,4 @@ it('★ update() haelt denselben Riegel wie create() — sonst ist die Luecke nu
 
 it('das Vokabular steht EINMAL — vier Kopien im Code waren der Grund fuer die Luecke', function () {
     expect(RecipeService::TASTE_DIRECTIONS)->toBe(['suess', 'herzhaft', 'neutral']);
-});
-
-/**
- * ★ Dominiques zweiter Stolperstein: `recipe_anchors.PUT` verlangt eine Id aus dem
- * Aroma-Anker-Vokabular, das Schema sagte aber „Anker-GP-Id" und das Beispiel „Anker-GP 88".
- * Wer dem Etikett folgte, schickte eine gp_id und bekam ein nacktes „nicht sichtbar/vorhanden".
- * Das Etikett log, und die Fehlermeldung half nicht weiter.
- */
-it('★ nennt bei falscher Anker-Id den Weg zur richtigen, statt nur NOT_FOUND zu sagen', function () {
-    $rezept = $this->makeRecipe($this->rootTeam, 'Anker-Test');
-
-    $res = app(ToolRegistry::class)->get('foodalchemist.recipe_anchors.PUT')->execute(
-        ['recipe_id' => $rezept->id, 'anker_id' => 999999, 'action' => 'set'],
-        new ToolContext($this->user, $this->rootTeam)
-    );
-
-    expect($res->errorCode)->toBe('NOT_FOUND')
-        ->and($res->error)->toContain('ANKER_SUCHE')
-        ->and($res->error)->toContain('gp_id');
-});
-
-it('das Schema warnt vor der gp_id, bevor man den Fehler macht', function () {
-    $schema = app(ToolRegistry::class)->get('foodalchemist.recipe_anchors.PUT')->getSchema();
-
-    expect($schema['properties']['anker_id']['description'])->toContain('ANKER_SUCHE')
-        ->and($schema['properties']['anker_id']['description'])->toContain('gp_id');
 });

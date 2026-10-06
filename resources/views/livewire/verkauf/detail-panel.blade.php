@@ -157,22 +157,6 @@
                 <x-foodalchemist::kombination :daten="$kombination" />
             @endif
             <x-foodalchemist::pairing-netz :recipe-id="$rezept->id" :netz="$netz" />
-            <div class="flex flex-wrap gap-1 mt-2">
-                @foreach($kernAnker as $anker)
-                    <span wire:key="vka-{{ $anker->id }}" class="{{ $pill }} {{ $variantPill['primary'] }} group" title="{{ $anker->source }}{{ $anker->ai_confidence !== null ? ' ' . round($anker->ai_confidence * 100) . '%' : '' }}">
-                        ★ {{ $anker->display_de }}
-                        <button type="button" wire:click="ankerLoesen({{ $anker->id }})" class="hidden group-hover:inline text-rose-400 ml-0.5" title="lösen">✕</button>
-                    </span>
-                @endforeach
-            </div>
-            @if($fehlerAnker !== null)<p class="text-[11px] text-rose-500 mt-1" data-vk-anker-fehler>{{ $fehlerAnker }}</p>@endif
-            <div class="relative mt-1.5">
-                <input type="search" wire:model.live.debounce.300ms="ankerSuche" placeholder="Anker verknüpfen …" class="{{ $input }} !py-1" data-vk-anker-suche />
-                @foreach($ankerKandidaten as $kandidat)
-                    <button type="button" wire:key="vkak-{{ $kandidat->id }}" wire:click="ankerVerknuepfen({{ $kandidat->id }})"
-                            class="block w-full text-left px-2 py-1 rounded text-xs text-gray-700 hover:bg-violet-500/10">{{ $kandidat->display_de }} <span class="text-gray-500">{{ $kandidat->slug }}</span></button>
-                @endforeach
-            </div>
         </x-foodalchemist::section>
 
         {{-- Komponenten — volle Liste --}}

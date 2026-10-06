@@ -633,8 +633,6 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     // D2b: Rezept-Assoziationen (Eignung owner; Anker/Pairing team-scoped auf sichtbares
                     // Rezept), Sensorik (KI, owner), Feedback löschen/weiterentwickeln.
                     \Platform\FoodAlchemist\Tools\RecipeEignungPutTool::class,
-                    \Platform\FoodAlchemist\Tools\RecipeAnchorsPutTool::class,
-                    \Platform\FoodAlchemist\Tools\RecipePairingsPutTool::class,
                     \Platform\FoodAlchemist\Tools\RecipeSensorikPostTool::class,
                     \Platform\FoodAlchemist\Tools\RecipeFeedbackDeleteTool::class,
                     \Platform\FoodAlchemist\Tools\RecipeFeedbackDevelopTool::class,

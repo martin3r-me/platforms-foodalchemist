@@ -51,6 +51,7 @@
                 @empty
                     <p class="text-[11px] text-gray-500" data-ersatz-leer>— kein Ersatz hinterlegt —</p>
                 @endforelse
+                @if($fehlerAnker !== null)<p class="text-[11px] text-rose-500" data-ersatz-fehler>{{ $fehlerAnker }}</p>@endif
                 <div class="pt-1" data-ersatz-verknuepfen>
                     <input type="search" wire:model.live.debounce.300ms="ersatzSuche" placeholder="+ Ersatz verknüpfen — Fertig-GP/Rezept suchen …" class="{{ $input }} !py-1" data-ersatz-suche />
                     @foreach($ersatzKandidaten as $k)
@@ -148,9 +149,9 @@
             <p class="text-[13px] text-gray-600 leading-relaxed" data-description>{{ $rezept->description }}</p>
         @endif
 
-        {{-- Pairing-Netz — Inline-Graph + Anker-Pflege (ÜBER den Zutaten, analog Gericht-Panel) --}}
+        {{-- Pairing-Netz — Kombinationslogik + Inline-Graph (Spec 60: Anker ergeben sich aus dem Aromenprofil, keine Handpflege) --}}
         <x-foodalchemist::section title="Pairing-Netz" icon="heroicon-o-share"
-            :meta="$kohaesion !== null ? 'Kohäsion ' . $kohaesion['score'] . ' · Coverage ' . $kohaesion['coverage_pct'] . ' %' : null" data-kern-anker>
+            :meta="($kombination ?? null) !== null ? (($kombination['kennzahlen']['harmoniert'] ?? 0) . ' harmonieren · ' . ($kombination['kennzahlen']['spannung'] ?? 0) . ' Spannung') : null" data-kern-anker>
             <x-slot:actions>
                 <button type="button" wire:click="$dispatch('pairing-netz.oeffnen', { recipeId: {{ $rezept->id }} })" class="{{ $btnGhostXs }}" title="Voller Graph: verwandte Rezepte + Vorschläge" data-pairing-netz-btn>Netz öffnen @svg('heroicon-o-arrow-up-right', 'w-3.5 h-3.5')</button>
             </x-slot:actions>
@@ -158,24 +159,6 @@
                 <x-foodalchemist::kombination :daten="$kombination" />
             @endif
             <x-foodalchemist::pairing-netz :recipe-id="$rezept->id" :netz="$netz" />
-            <div class="flex flex-wrap gap-1 mt-2">
-                @foreach($kernAnker as $anker)
-                    <span wire:key="ka-{{ $anker->id }}" class="{{ $pill }} {{ $variantPill['primary'] }} group" title="{{ $anker->source }}{{ $anker->ai_confidence !== null ? ' ' . round($anker->ai_confidence * 100) . '%' : '' }}">
-                        ★ {{ $anker->display_de }}
-                        <button type="button" wire:click="ankerLoesen({{ $anker->id }})" class="hidden group-hover:inline text-rose-400 ml-0.5" title="lösen">✕</button>
-                    </span>
-                @endforeach
-            </div>
-            @if($fehlerAnker !== null)<p class="text-[11px] text-rose-500 mt-1" data-anker-fehler>{{ $fehlerAnker }}</p>@endif
-            <div class="relative mt-1.5">
-                <input type="search" wire:model.live.debounce.300ms="ankerSuche" placeholder="Anker verknüpfen …" class="{{ $input }} !py-1" data-anker-suche />
-                @foreach($ankerKandidaten as $kandidat)
-                    <button type="button" wire:key="ak-{{ $kandidat->id }}" wire:click="ankerVerknuepfen({{ $kandidat->id }})" class="block w-full text-left px-2 py-1 rounded text-xs text-gray-700 hover:bg-violet-500/10">{{ $kandidat->display_de }} <span class="text-gray-500">{{ $kandidat->slug }}</span></button>
-                @endforeach
-            </div>
-            @if($kohaesion !== null && $kohaesion['weakest_pair'] !== null)
-                <p class="text-[11px] text-gray-500 mt-1.5">Schwächstes Glied: {{ $kohaesion['weakest_pair']['a'] }} ↔ {{ $kohaesion['weakest_pair']['b'] }} ({{ $kohaesion['weakest_pair']['score'] }})</p>
-            @endif
         </x-foodalchemist::section>
 
         {{-- Zutaten — Haupt-Block (Kosten-Essenz): Menge · GP-/Sub-Link · Zeilen-EK --}}
@@ -253,12 +236,6 @@
             </x-foodalchemist::section>
         @endif
 
-        {{-- #5 (2026-08): manuelle Pairings-Sektion (aroma/kontrast) im Editor AUSGEBLENDET.
-             Das echte Pairing kommt aus dem Anker-Graph (Pairing-Netz oben), nicht aus manuellen
-             aroma/kontrast-Links. Service + Daten bleiben (setRecipePairing/recipePairings/
-             removeRecipePairing, Tabelle recipe_pairings) + ManuellePairingTest — reaktivierbar,
-             indem dieser Block wieder eingesetzt wird. --}}
-
         {{-- Allergene & Diät — volle Deklaration --}}
         <x-foodalchemist::section title="Allergene & Diät" icon="heroicon-o-beaker" :meta="'Konf. ' . strtoupper($rezept->allergens_confidence)">
             @include('foodalchemist::livewire.recipes.partials.deklaration')
@@ -298,6 +275,7 @@
                 @empty
                     <p class="text-[11px] text-gray-500" data-ersatz-leer>— kein Ersatz hinterlegt —</p>
                 @endforelse
+                @if($fehlerAnker !== null)<p class="text-[11px] text-rose-500" data-ersatz-fehler>{{ $fehlerAnker }}</p>@endif
                 <div class="pt-1" data-ersatz-verknuepfen>
                     <input type="search" wire:model.live.debounce.300ms="ersatzSuche" placeholder="+ Ersatz verknüpfen — Fertig-GP/Rezept suchen …" class="{{ $input }} !py-1" data-ersatz-suche />
                     @foreach($ersatzKandidaten as $k)

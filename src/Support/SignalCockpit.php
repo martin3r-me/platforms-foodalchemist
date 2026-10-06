@@ -80,8 +80,8 @@ final class SignalCockpit
             . 'persistieren (manuell/KI-kuratierte bleiben unberührt).',
         'lead_la' => 'Lead-Lieferantenartikel je GP neu wählen — aber nur setzen, wo er auf einen gültigen Preis auflöst; '
             . 'danach die nutzenden Rezepte neu rechnen. Echte Beschaffungs-Lücken bleiben offen.',
-        'recipe_anker' => 'Flavor-Kern-Anker je Rezept aus Zutaten-/Rezeptnamen deterministisch auflösen und mappen — '
-            . 'macht das Rezept im Pairing-Graph sichtbar.',
+        'recipe_anker' => 'Aromenprofil je Rezept aus den Zutaten-Ankern bauen — macht das Rezept für die '
+            . 'Kombinationslogik sichtbar. Bleibt es leer, fehlen Anker an den Grundprodukten (GP-Zuordnung).',
         'gp_anker' => 'Flavor-Kern-Anker je GP aus dem GP-Namen auflösen und mappen — macht den GP im Pairing-Graph sichtbar.',
         'recompute' => 'EK-Kette der betroffenen Rezepte neu rechnen. Rezepte, die weiter auf keinen Preis auflösen '
             . '(fehlende Lead-/Preisdaten), bleiben offen.',

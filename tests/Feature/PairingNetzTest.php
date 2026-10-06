@@ -58,15 +58,15 @@ beforeEach(function () {
     mkKante($this->tahin, $this->minze, 'aroma', 2, 0.6);
 
     $this->rezept = FoodAlchemistRecipe::create(['team_id' => $this->rootTeam->id, 'recipe_key' => 'hummus', 'name' => 'Creme: Hummus', 'status' => 'draft']);
-    $this->svc->setRecipeAnker($this->rootTeam, $this->rezept->id, $this->kichererbse);
-    $this->svc->setRecipeAnker($this->rootTeam, $this->rezept->id, $this->tahin);
+    \Platform\FoodAlchemist\Tests\Support\RezeptAnker::gib($this->rezept, $this->kichererbse);
+    \Platform\FoodAlchemist\Tests\Support\RezeptAnker::gib($this->rezept, $this->tahin);
 
     // Komplementäres Basisrezept: baut auf knoblauch auf (Kandidat des Gerichts).
     $this->basis = FoodAlchemistRecipe::create(['team_id' => $this->rootTeam->id, 'recipe_key' => 'aioli', 'name' => 'Sauce: Aioli', 'status' => 'draft', 'is_sales_recipe' => false]);
-    $this->svc->setRecipeAnker($this->rootTeam, $this->basis->id, $this->knoblauch);
+    \Platform\FoodAlchemist\Tests\Support\RezeptAnker::gib($this->basis, $this->knoblauch);
     // VK-Rezept auf knoblauch → darf NICHT als Basisrezept auftauchen.
     $this->vk = FoodAlchemistRecipe::create(['team_id' => $this->rootTeam->id, 'recipe_key' => 'dip', 'name' => 'Dip: Knoblauch', 'status' => 'draft', 'is_sales_recipe' => true]);
-    $this->svc->setRecipeAnker($this->rootTeam, $this->vk->id, $this->knoblauch);
+    \Platform\FoodAlchemist\Tests\Support\RezeptAnker::gib($this->vk, $this->knoblauch);
 });
 
 it('pairingNetz: Zentrum + Kern-Anker innen, Kandidaten nach Stern-Stufe, dish_cover', function () {
@@ -124,7 +124,7 @@ it('pairingNetz: Anker↔Anker — beste Stufe gewinnt, kontrast ausgeschlossen,
     // beforeEach seedt tahin↔minze (aroma), das ergäbe mit minze als Kern eine ZWEITE
     // anker_anker-Linie und bräche toHaveCount(1). `fremd` trägt nur Kontrast (s.u.).
     $fremd = mkAnker('fremd');
-    $this->svc->setRecipeAnker($this->rootTeam, $this->rezept->id, $fremd);
+    \Platform\FoodAlchemist\Tests\Support\RezeptAnker::gib($this->rezept, $fremd);
 
     // kichererbse↔tahin in beiden Richtungen VERSCHIEDEN gestuft (★★ / ★★★) → dedup muss
     // die beste Stufe (★★★) wählen. Direkt-Inserts statt mkKante: UNIQUE(a,b,type) verbietet
@@ -188,7 +188,7 @@ it('pairingNetz: meta.sig ist stabil, ändert sich aber wenn ein Kern-Anker dazu
     expect($a)->toBeString()->toMatch('/^[0-9a-f]{10}$/')
         ->and($b)->toBe($a);                                   // deterministisch bei gleichen Daten
 
-    $this->svc->setRecipeAnker($this->rootTeam, $this->rezept->id, $this->minze); // +1 Kern-Anker
+    \Platform\FoodAlchemist\Tests\Support\RezeptAnker::gib($this->rezept, $this->minze); // +1 Kern-Anker
     $c = $this->svc->pairingNetz($this->rootTeam, $this->rezept->id)['meta']['sig'] ?? null;
 
     expect($c)->not->toBe($a);                                 // Ankersatz änderte sich → neuer Key

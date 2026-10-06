@@ -63,18 +63,16 @@ class SurplusToDishService
             return ['surplus' => $surplusOut, 'kandidaten' => [], 'nicht_verwertbar' => $this->nichtVerwertbar($surplusOut, [])];
         }
 
-        // Portfolio-Gerichte, die diese Anker TRAGEN (kern + prozess).
+        // Portfolio-Gerichte, die diese Anker TRAGEN (Aromenprofil).
         $portfolioIds = FoodAlchemistRecipe::visibleToTeam($team)->where('is_sales_recipe', true)->pluck('id')->all();
         $treffer = [];       // recipe_id => set(anchor_id)
         $abgedeckt = [];     // anchor_id => true
         if ($portfolioIds !== []) {
-            foreach (['foodalchemist_recipe_anchor_mappings'] as $tabelle) {
-                foreach (DB::table($tabelle)->whereIn('recipe_id', $portfolioIds)
-                    ->whereIn('anchor_id', $allAnchorIds)->whereNull('deleted_at')
-                    ->get(['recipe_id', 'anchor_id']) as $r) {
-                    $treffer[(int) $r->recipe_id][(int) $r->anchor_id] = true;
-                    $abgedeckt[(int) $r->anchor_id] = true;
-                }
+            // Spec 60: Gerichte, deren Aromenprofil die Anker trägt.
+            foreach (DB::table('foodalchemist_recipe_profile_anker')->whereIn('recipe_id', $portfolioIds)
+                ->whereIn('anchor_id', $allAnchorIds)->get(['recipe_id', 'anchor_id']) as $r) {
+                $treffer[(int) $r->recipe_id][(int) $r->anchor_id] = true;
+                $abgedeckt[(int) $r->anchor_id] = true;
             }
         }
 

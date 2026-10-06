@@ -1,6 +1,6 @@
 # 60 · Pairing-Backend: Modell
 
-**Stand 2026-10-06 · Branch `feat/pairing-modell-60` (auf Spec 58) · Status: freigegeben (Dominique 06.10.), Umsetzung ab P1**
+**Stand 2026-10-06 · Branch `feat/pairing-modell-60` (auf Spec 58) · Status: P1–P7c gebaut und lokal committet; P7-Rest (Netz, Concept-Ranking) und P8 (Signale) offen · nichts gepusht/deployt**
 
 > **Ziel (Dominique):**
 > - Das Pairing-Backend wird sauber und stabil modelliert.
@@ -243,3 +243,34 @@ Der Schlüssel `prozess` in der Anker-Auflösung bleibt bis P6 als leere Liste s
 - Startwerte der Aroma-Intensität je Kategorie und Schwellen für harmoniert/passt/neutral. Sie werden in P5/P6 an echten Gerichten kalibriert und dann vorgelegt.
 - GP→Anker-Prüfung (`bridge_alt_neu`, `heur_wort`).
 - Verfahren aus den Arbeitsschritten lesen. Bis dahin kommt es nur aus Zutatentext und Rezeptname.
+
+---
+
+## 9 · Umsetzungsstand (2026-10-06)
+
+| Paket | Stand | Belege |
+|---|---|---|
+| P1 Anker-Identität | ✅ | InspireImportTest; Probelauf: Re-Import erkennt alle 2.628 Anker über `inspire_id` |
+| P3 Rückbau | ✅ | 26 Tabellen per Migration; Suite P1–P3: 4.841/4.855 grün, 8 rot = bekannte Speiseplan-Fehler (auch auf unverändertem Modul rot) |
+| P2 Harmonie | ✅ | `anchor_harmonie` (beide Richtungen, 279.920 Zeilen), `AnkerGraph`; Bewertung bewusst unverändert bis P7 |
+| P4 Anker-Wissen | ✅ | Enums Achse/Verfahren/Kantenart/WissensStatus; Pilot 50: 155 Bedarfe, 360 Kombinationen, 801 offen |
+| P4b Kategorie-Regeln | ✅ | Lieferseite Träger/Frische/Aromatik/Röstaroma aus Kategorie bzw. Verfahren (1.321 Werte); Startwerte Aroma-Intensität je Kategorie (alle 2.628) |
+| P5 Rezept-Profil | ✅ | 3.581 Rezepte (demo-Daten) in 47 s, 3.144 mit Profil; Gramm nach T1-Kaskade (Fix: ml lief als Stück → 25 kg) |
+| P6 Kombinationslogik | ✅ | Aussagen + Vorschläge; Schwelle „harmonieren" ab 10 % (obere 20 % von 1.883 Komponenten-Paaren) |
+| P7a Eine Logik | ✅ | Panel (`<x-foodalchemist::kombination>`), MCP `foodalchemist.kombination.GET` und Composer lesen dieselbe `Kombinationslogik` |
+| P7b Generator | ✅ | `KombinationsPlan` ersetzt die alte Partnerliste: Leit-Aromen nur exakt, Harmonie nur 3★, Bedarfe mit Lieferanten, Konflikte, beim Gericht Basisrezepte als Komponente |
+| P7c Eine Bewertungsregel | ✅ | Kohäsion/Ranking/Ersatz: nur 3★ zählt (1,0); zwei gemessene Anker ohne 3★ = neutral 0 (bewertet); ohne Inspire-ID = unbewertet. Rezept-Anker kommen nur noch aus dem Profil (`recipe_profile_anker`). `recipe_pairings` + `recipe_anchor_mappings` per Migration gedroppt, Tools `recipe_anchors.PUT`/`recipe_pairings.PUT`, Prompts `recipe.anker`/`recipe.pairing` und die Handpflege im Panel entfernt; OneShot-Glied `aromaprofil` statt KI-Anker + Pairings |
+| P7 Rest | offen | Netz mit Basisrezept-Knoten, Concept-Ranking über `RezeptGraph` |
+| P8 Signale | offen | |
+
+**Gemessene Abdeckung der Profile (demo-Daten):** ≥ 80 % Masse mit Anker: 1.183 Rezepte · 50–79 %: 878 · 1–49 %: 1.084 · 0: 436.
+Das ist die GP→Anker-Datenqualität (Dominique: später).
+
+**Befunde aus den Probeläufen (Datenqualität, nicht Logik):**
+- Dossier-Auslese liefert Fehler wie „Rohrzucker liefert knusprig" → Freigabe je Anker nötig.
+- Dunkle Schokolade, Lachs u. a. ohne Anker → Profile mit Lücken (ehrlich als Abdeckung sichtbar).
+- `recipes.function` nicht überall gepflegt → Vorschläge prüfen zusätzlich die Klasse im Rezeptnamen.
+
+**Regeln, die in P6 dazukamen:** Vorschläge nur tellerfähig (keine Basis/Marinade/Beize/Lake/Sud/Fond),
+gleiche Geschmacksrichtung (süß ≠ herzhaft, neutral passt immer), Ernährungsform nur ausdrücklich
+(unbekannt ≠ vegan), Formwechsel vor neuer Zutat.

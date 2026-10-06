@@ -40,12 +40,6 @@ class DetailPanel extends Component
     /** @var array<string, bool> M5-04/05: lazy Pairing-Sektionen (Kontext-Erhalt beim Wechsel) */
     public array $offen = [];
 
-    public string $ankerSuche = '';
-
-    public string $pairingSuche = '';
-
-    public string $pairingTyp = 'aroma';
-
     /** Ersatz-Logik: Suchtext für die Gegenseite (GP/Rezept) im Verknüpfen-Feld. */
     public string $ersatzSuche = '';
 
@@ -56,8 +50,6 @@ class DetailPanel extends Component
             return; // eingebettet als Editor-Kartei: bleibt auf dem Editor-Rezept, ignoriert Browser-Auswahl
         }
         $this->recipeId = $id;
-        $this->ankerSuche = '';
-        $this->pairingSuche = '';
         $this->ersatzSuche = '';
         $this->tauschSuche = '';
         $this->fehlerTausch = null;
@@ -125,27 +117,6 @@ class DetailPanel extends Component
         }
     }
 
-    // ── Manuelle Pairings (recipe_pairings, created_via='manual') ──
-    public function pairingVerknuepfen(int $ankerId): void
-    {
-        $team = Auth::user()?->currentTeamRelation;
-        if ($team === null || $this->recipeId === null) {
-            return;
-        }
-        app(\Platform\FoodAlchemist\Services\PairingService::class)
-            ->setRecipePairing($team, $this->recipeId, $ankerId, $this->pairingTyp);
-        $this->pairingSuche = '';
-    }
-
-    public function pairingLoesen(int $ankerId, ?string $typ = null): void
-    {
-        $team = Auth::user()?->currentTeamRelation;
-        if ($team !== null && $this->recipeId !== null) {
-            app(\Platform\FoodAlchemist\Services\PairingService::class)
-                ->removeRecipePairing($team, $this->recipeId, $ankerId, $typ);
-        }
-    }
-
     public function toggleSektion(string $sektion): void
     {
         if (in_array($sektion, ['anker', 'pairing', 'nachbarn'], true)) {
@@ -153,31 +124,8 @@ class DetailPanel extends Component
         }
     }
 
-    // ── M5-04: Kern-Anker-Aktionen (Cap 5, manual gewinnt — GL-10 Inv. 1/3) ──
-
-    public function ankerVerknuepfen(int $ankerId): void
-    {
-        $team = Auth::user()?->currentTeamRelation;
-        if ($team === null || $this->recipeId === null) {
-            return;
-        }
-        try {
-            app(\Platform\FoodAlchemist\Services\PairingService::class)->setRecipeAnker($team, $this->recipeId, $ankerId);
-            $this->ankerSuche = '';
-        } catch (\RuntimeException $e) {
-            $this->fehlerAnker = $e->getMessage();
-        }
-    }
-
+    /** Fehler beim Ersatz-Verknüpfen (Name historisch). */
     public ?string $fehlerAnker = null;
-
-    public function ankerLoesen(int $ankerId): void
-    {
-        $team = Auth::user()?->currentTeamRelation;
-        if ($team !== null && $this->recipeId !== null) {
-            app(\Platform\FoodAlchemist\Services\PairingService::class)->removeRecipeAnker($team, $this->recipeId, $ankerId);
-        }
-    }
 
     public function neuBerechnen(): void
     {
@@ -273,11 +221,6 @@ class DetailPanel extends Component
             'tauschReferenzen' => $rezept !== null && $this->section === null ? $this->tauschReferenzen() : null,
             // v3-Redesign: Standalone-Sidebar nicht mehr ausklappbar → Netz/Kohäsion/Pairings
             // direkt laden, aber NUR standalone (im Editor-Embed/nur-Sektion bleiben sie ungenutzt → gespart).
-            'kernAnker' => $rezept !== null ? app(\Platform\FoodAlchemist\Services\PairingService::class)->recipeAnkers($rezept->id) : collect(),
-            'kohaesion' => $rezept !== null && ! $this->embedded && $this->section === null
-                ? app(\Platform\FoodAlchemist\Services\PairingService::class)->recipeCohesion($rezept) : null,
-            'pairings' => $rezept !== null && ! $this->embedded && $this->section === null
-                ? app(\Platform\FoodAlchemist\Services\PairingService::class)->recipePairings($rezept->id) : null,
             // Layer: Pairing-Netz-Daten hier laden statt in der anonymen x-Komponente (gleiche Guard wie kohaesion/pairings = nur Standalone-Panel).
             'netz' => $rezept !== null && ! $this->embedded && $this->section === null
                 ? app(\Platform\FoodAlchemist\Services\PairingService::class)->pairingNetz($team, $rezept->id)
@@ -285,16 +228,6 @@ class DetailPanel extends Component
             // Spec 60 · P7: Kombinationslogik — Aussagen mit Grundlage (nur Standalone-Panel, wie das Netz).
             'kombination' => $rezept !== null && ! $this->embedded && $this->section === null
                 ? app(\Platform\FoodAlchemist\Services\Pairing\Kombinationslogik::class)->daten($rezept) : null,
-            'ankerKandidaten' => $this->ankerSuche !== ''
-                ? TeamScope::applyVisible(\Illuminate\Support\Facades\DB::table('foodalchemist_vocab_pairing_anchors')
-                    ->whereRaw('LOWER(slug) LIKE ?', ['%' . mb_strtolower($this->ankerSuche) . '%'])
-                    ->whereNull('deleted_at'), 'team_id', $team)->orderBy('slug')->limit(6)->get(['id', 'slug', 'display_de'])
-                : collect(),
-            'pairingKandidaten' => $this->pairingSuche !== ''
-                ? TeamScope::applyVisible(\Illuminate\Support\Facades\DB::table('foodalchemist_vocab_pairing_anchors')
-                    ->whereRaw('LOWER(slug) LIKE ?', ['%' . mb_strtolower($this->pairingSuche) . '%'])
-                    ->whereNull('deleted_at'), 'team_id', $team)->orderBy('slug')->limit(6)->get(['id', 'slug', 'display_de'])
-                : collect(),
         ]);
     }
 }

@@ -1806,10 +1806,10 @@ class DataQualityService
         };
     }
 
-    /** EXISTS: Rezept hat ein Anker-Mapping. */
+    /** EXISTS: Rezept hat ein Aromenprofil (Spec 60: abgeleitet aus den Zutaten-Ankern). */
     private function rezeptHatAnker(): \Closure
     {
-        return fn ($q) => $q->select(DB::raw(1))->from('foodalchemist_recipe_anchor_mappings as m')
+        return fn ($q) => $q->select(DB::raw(1))->from('foodalchemist_recipe_profile_anker as m')
             ->whereColumn('m.recipe_id', 'foodalchemist_recipes.id');
     }
 
