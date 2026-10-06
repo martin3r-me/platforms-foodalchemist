@@ -996,6 +996,15 @@ class RecipeRecomputeService
         return $rang;
     }
 
+    /**
+     * Spec 60 · P5: Gramm einer Zutatenzeile nach derselben T1-Kaskade wie Yield und Kosten —
+     * damit das Aromenprofil keine eigene Mengen-Wahrheit führt. Unbekannte Naturalgröße = 0 g.
+     */
+    public function grammJeZeile(FoodAlchemistRecipeIngredient $z): float
+    {
+        return $this->mengeAvg($z) * $this->grammFaktor($z);
+    }
+
     /** I6 / F6.4: Mittelwert bei Mengen-Bereich. */
     private function mengeAvg(FoodAlchemistRecipeIngredient $z): float
     {

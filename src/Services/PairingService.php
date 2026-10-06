@@ -489,7 +489,7 @@ class PairingService
             ->leftJoin('foodalchemist_gps AS g', 'g.id', '=', 'ri.gp_id')
             ->where('ri.recipe_id', $recipeId)->whereNull('ri.deleted_at')->where('ri.is_optional', false)
             ->get(['ri.gp_id', 'ri.referenced_recipe_id', 'ri.raw_text', 'ri.quantity', 'ri.quantity_max', 'ri.role',
-                'u.dimension', 'u.default_in_g', 'u.slug AS unit_slug', 'g.name AS gp_name']);
+                'u.dimension', 'u.default_in_g', 'u.default_in_ml', 'u.slug AS unit_slug', 'g.name AS gp_name']);
         if ($zeilen->isEmpty()) {
             return null;
         }
@@ -522,13 +522,32 @@ class PairingService
         return $bester;
     }
 
+    /**
+     * Spec 60 · P5: Kern-Anker je Grundprodukt (beste Zuordnung, wie die Anker-Auflösung).
+     *
+     * @param  array<int, int|string>  $gpIds
+     * @return array<int|string, mixed> gp_id → anchor_id
+     */
+    public function gpKernAnker(array $gpIds): array
+    {
+        return $this->kernMappingsBatch('foodalchemist_gp_anchor_mappings', 'gp_id', array_values(array_unique($gpIds)));
+    }
+
+    /** Spec 60 · P5: ID des Ankers „neutral" (kein Aroma), sonst null. */
+    public function neutralAnker(): ?int
+    {
+        $id = $this->neutralAnkerId();
+
+        return $id !== null ? (int) $id : null;
+    }
+
     private function ankerSlugVonId(int $id): ?string
     {
         return $this->ankerExaktListe()->first(fn ($a) => (int) $a->id === $id)?->slug;
     }
 
     /** Menge einer Zutatenzeile in Gramm (Mittelwert bei Bereich), Zähl-Einheiten genähert, „qs" = 0. */
-    private function zeilenGramm(object $z): float
+    public function zeilenGramm(object $z): float
     {
         $menge = $z->quantity_max !== null ? ((float) $z->quantity + (float) $z->quantity_max) / 2 : (float) $z->quantity;
         if (($z->unit_slug ?? null) === 'qs') {
@@ -536,6 +555,11 @@ class PairingService
         }
         if ($z->default_in_g !== null && (float) $z->default_in_g > 0) {
             return $menge * (float) $z->default_in_g;
+        }
+        // Volumen (ml, l, EL): Dichte 1,0 wie die T1-Kaskade — vorher fiel „500 ml" auf den
+        // Stück-Ersatz (500 × 50 g = 25 kg) und verdrängte jede andere Zutat (Spec 60, 06.10.).
+        if (isset($z->default_in_ml) && $z->default_in_ml !== null && (float) $z->default_in_ml > 0) {
+            return $menge * (float) $z->default_in_ml;
         }
 
         return $menge * self::STUECK_ERSATZ_G;
