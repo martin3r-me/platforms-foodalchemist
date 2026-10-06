@@ -187,6 +187,6 @@ class Browser extends Component
             'statusFaelle' => array_values(array_filter(GpStatus::cases(), fn (GpStatus $f) => $f !== GpStatus::Merged)),
             'statusCounts' => $gps->statusCounts($team),
             'kpis' => $kpis->forTeam($team),
-        ])->layout('foodalchemist::layouts.standalone');
+        ])->layout(\Platform\FoodAlchemist\Support\FaShell::layout());
     }
 }

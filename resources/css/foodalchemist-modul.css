@@ -1,0 +1,10 @@
+/*
+ * Einstieg für das vom Modul ausgelieferte CSS (resources/dist/foodalchemist.css, `npm run build:css`).
+ * Gilt im Plattform-Modus (demo/office): FA-Seiten tragen das FA-Design, ohne dass der Host es baut.
+ * KEIN Preflight (Tailwind-Reset): der Host hat seine eigenen Grundstile, die bleiben unberührt.
+ * Im eigenständigen Modus (Host food-alchemist) importiert der Host foodalchemist-pass.css selbst.
+ */
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+@import "./foodalchemist-pass.css";

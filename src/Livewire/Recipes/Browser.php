@@ -324,6 +324,6 @@ class Browser extends Component
                 : collect(),
             'statusFaelle' => RecipeStatus::cases(),
             'statusCounts' => $recipes->statusCounts($team),
-        ])->layout('foodalchemist::layouts.standalone');
+        ])->layout(\Platform\FoodAlchemist\Support\FaShell::layout());
     }
 }

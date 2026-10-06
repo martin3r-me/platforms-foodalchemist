@@ -336,6 +336,6 @@ class Index extends Component
                     \Platform\FoodAlchemist\Models\FoodAlchemistGp::visibleToTeam($team), 'name', $this->bulkGpSuche)
                     ->orderBy('name')->limit(6)->get()
                 : collect(),
-        ])->layout('foodalchemist::layouts.standalone');
+        ])->layout(\Platform\FoodAlchemist\Support\FaShell::layout());
     }
 }

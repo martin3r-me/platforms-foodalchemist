@@ -184,7 +184,7 @@ class Index extends Component
             'selectedQuellen' => is_array($selectedMeta['quellen'] ?? null) ? $selectedMeta['quellen'] : [],
             'semanticNote' => $semanticNote,
             'semanticAktiv' => $semanticAktiv,
-        ])->layout('foodalchemist::layouts.standalone');
+        ])->layout(\Platform\FoodAlchemist\Support\FaShell::layout());
     }
 
     /** Markdown der Trend-Datei ohne YAML-Frontmatter, safe gerendert (wie Knowledge-Browser). */

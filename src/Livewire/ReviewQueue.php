@@ -527,6 +527,6 @@ class ReviewQueue extends Component
             'aktiverBetrieb' => $outlet?->name,
             'signalTypWerte' => $signalSvc->typWerte(),
             'signalStatusWerte' => $signalSvc->statusWerte(),
-        ])->layout('foodalchemist::layouts.standalone');
+        ])->layout(\Platform\FoodAlchemist\Support\FaShell::layout());
     }
 }

@@ -291,7 +291,7 @@ class Browser extends Component
                 ->where('is_inactive', false)->orderBy('sort_order')->get(['id', 'name']),
             'facetteSaisons' => \Platform\FoodAlchemist\Models\FoodAlchemistSaison::visibleToTeam($team)
                 ->where('is_inactive', false)->orderBy('sort_order')->get(['id', 'name']),
-        ])->layout('foodalchemist::layouts.standalone');
+        ])->layout(\Platform\FoodAlchemist\Support\FaShell::layout());
     }
 
     private function team()

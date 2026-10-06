@@ -214,6 +214,6 @@ class Browser extends Component
             'klassenCounts' => $verkauf->klassenCounts($team, $filters),
             'statusFaelle' => RecipeStatus::cases(),
             'statusCounts' => $verkauf->statusCounts($team),
-        ])->layout('foodalchemist::layouts.standalone');
+        ])->layout(\Platform\FoodAlchemist\Support\FaShell::layout());
     }
 }

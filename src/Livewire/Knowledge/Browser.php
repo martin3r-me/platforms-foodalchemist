@@ -666,6 +666,6 @@ class Browser extends Component
             // Master, Changelog-Guard) erzwingt `KnowledgeCanonService::set()`; hier steht
             // nur, ob überhaupt ein Team im Kontext ist.
             'darfKanon' => $selected !== null && Auth::user()?->currentTeamRelation !== null,
-        ])->layout('foodalchemist::layouts.standalone');
+        ])->layout(\Platform\FoodAlchemist\Support\FaShell::layout());
     }
 }

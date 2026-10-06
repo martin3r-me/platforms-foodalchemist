@@ -38,6 +38,6 @@ class Demnaechst extends Component
     public function render()
     {
         return view('foodalchemist::livewire.demnaechst', ['domaenen' => self::DOMAENEN])
-            ->layout('foodalchemist::layouts.standalone');
+            ->layout(\Platform\FoodAlchemist\Support\FaShell::layout());
     }
 }

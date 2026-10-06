@@ -127,6 +127,6 @@ class Index extends Component
             'sektionen' => self::SEKTIONEN,
             'gruppen' => self::GRUPPEN,
             'istKindTeam' => $team !== null && $team->parent_team_id !== null,
-        ])->layout('foodalchemist::layouts.standalone');
+        ])->layout(\Platform\FoodAlchemist\Support\FaShell::layout());
     }
 }

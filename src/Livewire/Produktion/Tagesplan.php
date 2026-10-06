@@ -613,7 +613,7 @@ class Tagesplan extends Component
                 ? FoodAlchemistProductionStation::visibleToTeam($team)->where('is_inactive', false)
                     ->orderBy('sort_order')->orderBy('name')->get(['id', 'name'])
                 : collect(),
-        ])->layout($istWall ? 'foodalchemist::layouts.kiosk' : 'foodalchemist::layouts.standalone');
+        ])->layout($istWall ? 'foodalchemist::layouts.kiosk' : \Platform\FoodAlchemist\Support\FaShell::layout());
     }
 
     /**

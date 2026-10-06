@@ -153,7 +153,7 @@ class Cockpit extends Component
             'verlauf' => $team !== null && $this->tab === 'verlauf'
                 ? $trend->uebersicht($team)
                 : ['measured_at' => null, 'previous_at' => null, 'metriken' => []],
-        ])->layout('foodalchemist::layouts.standalone');
+        ])->layout(\Platform\FoodAlchemist\Support\FaShell::layout());
     }
 
     /**

@@ -761,6 +761,12 @@ return [
     'master_team_id' => env('FOODALCHEMIST_MASTER_TEAM_ID'),
 
     /*
+     | Hülle (Support\FaShell): `plattform` = Modul in einer Plattform-Host-App (demo/office, Core-Layout,
+     | Modul-CSS aus resources/dist) · `eigenstaendig` = FA ist die Plattform (Host food-alchemist, eigene Hülle).
+     */
+    'shell' => env('FOODALCHEMIST_SHELL', 'plattform'),
+
+    /*
      * Schicht 3 — Konformitaets-Critic: die DETERMINISTISCHEN Regeln neben dem LLM-§-Pass.
      * Was exakt entscheidbar ist, wird exakt entschieden (gemessene Lehre aus dem
      * Regelwerk-Programm: code-erzwungen = 0 Befunde, prompt-gebunden = Befunde bleiben).

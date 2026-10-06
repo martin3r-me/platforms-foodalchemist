@@ -110,7 +110,7 @@ class Dashboard extends Component
             // Spec 32: der R2.7-Benchmark ist ins Controlling-Zentrum gezogen. Er kostete hier
             // einen `kpisFuerTeam`-Lauf JE Peer-Team bei jedem Dashboard-Aufruf — für eine
             // Kennzahl, die niemand auf der Bestandsübersicht sucht.
-        ])->layout('foodalchemist::layouts.standalone');
+        ])->layout(\Platform\FoodAlchemist\Support\FaShell::layout());
     }
 
     /**

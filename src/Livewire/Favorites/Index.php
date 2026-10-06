@@ -83,6 +83,6 @@ class Index extends Component
             'favoriten' => $favoriten,
             'vorschlaege' => $vorschlaege,
             'anzahlGepinnt' => $items->where('is_favorite', true)->count(),
-        ])->layout('foodalchemist::layouts.standalone');
+        ])->layout(\Platform\FoodAlchemist\Support\FaShell::layout());
     }
 }

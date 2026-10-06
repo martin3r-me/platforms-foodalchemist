@@ -385,7 +385,7 @@ class Index extends Component
             'kategorienFlat' => $svc->categoriesFlat($team),
             'tauschbar' => $tauschbar,
             'kandidaten' => $kandidaten,
-        ])->layout('foodalchemist::layouts.standalone');
+        ])->layout(\Platform\FoodAlchemist\Support\FaShell::layout());
     }
 
     private function team()

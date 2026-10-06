@@ -37,6 +37,6 @@ class UiKatalog extends Component
         );
 
         return view('foodalchemist::livewire.ui-katalog', ['beispielRezept' => $beispielRezept])
-            ->layout('foodalchemist::layouts.standalone', ['title' => 'Designsystem']);
+            ->layout(\Platform\FoodAlchemist\Support\FaShell::layout(), ['title' => 'Designsystem']);
     }
 }

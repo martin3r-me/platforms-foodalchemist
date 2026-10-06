@@ -142,6 +142,6 @@ class Index extends Component
             'active' => $aktiv,
             'berechnung' => $berechnung,
             'quellen' => $quellen,
-        ])->layout('foodalchemist::layouts.standalone');
+        ])->layout(\Platform\FoodAlchemist\Support\FaShell::layout());
     }
 }

@@ -4325,6 +4325,6 @@ class Index extends Component
             'composerBrowse' => $composerBrowse,
             'composerFocus' => $this->composerFocus,
             'composerFokusLabel' => $composerFokusLabel,
-        ])->layout('foodalchemist::layouts.standalone');
+        ])->layout(\Platform\FoodAlchemist\Support\FaShell::layout());
     }
 }

@@ -208,6 +208,6 @@ class Browser extends Component
             'kpiOffen' => $svc->statusCounts($team, [])[ProductionOrderStatus::Planned->value] ?? 0,
             'kpiHeuteMinuten' => (int) $heuteMinuten,
             'kpiHeuteAuftraege' => $svc->browserGesamt($team, ['von' => $heute, 'bis' => $heute]),
-        ])->layout('foodalchemist::layouts.standalone');
+        ])->layout(\Platform\FoodAlchemist\Support\FaShell::layout());
     }
 }
