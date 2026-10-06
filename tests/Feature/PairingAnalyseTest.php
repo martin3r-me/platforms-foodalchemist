@@ -168,3 +168,47 @@ it('MCP: pairings.SUGGEST und composer.KOHAESION liefern harmonie_kontrast (ausg
     expect($kohaesion->success)->toBeTrue($kohaesion->error ?? '')
         ->and($kohaesion->data['harmonie_kontrast']['harmonie']['paare'][0]['stufe'])->toBe('sehr_gut');
 });
+
+it('Vorschläge: veganes Gericht bekommt keinen Hühnerfond und keinen Speck, nur 3★ zählt', function () {
+    $neu = function (string $slug, string $kat, ?string $sub = null): int {
+        DB::table('foodalchemist_vocab_pairing_anchors')->insert([
+            'uuid' => (string) UuidV7::generate(), 'slug' => $slug, 'display_de' => ucfirst($slug),
+            'category' => $kat, 'subcategory' => $sub, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        return (int) DB::getPdo()->lastInsertId();
+    };
+    $kante = function (int $a, int $b, int $level): void {
+        foreach ([[$a, $b], [$b, $a]] as [$x, $y]) {
+            DB::table('foodalchemist_pairing_anchor_edges')->insert([
+                'uuid' => (string) UuidV7::generate(), 'anchor_a_id' => $x, 'anchor_b_id' => $y,
+                'type' => 'aroma', 'level' => $level, 'axis' => 'harmony', 'created_at' => now(), 'updated_at' => now(),
+            ]);
+        }
+    };
+    $kohl = $neu('kohl', 'Gemüse');
+    $moehre = $neu('moehre', 'Gemüse');
+    $huehnerfond = $neu('chicken_fond', 'Brühen und Fonds');
+    $speck = $neu('speck', 'Protein', 'Protein/Fleisch');
+    $kuemmel = $neu('kuemmel', 'Gewuerze');
+    $nurGut = $neu('apfel', 'Obst');
+    foreach ([$huehnerfond, $speck, $kuemmel] as $partner) {
+        $kante($partner, $kohl, 3);
+        $kante($partner, $moehre, 3);
+    }
+    $kante($nurGut, $kohl, 2);          // nur ★★ → kein Vorschlag
+    $kante($nurGut, $moehre, 2);
+
+    $gericht = $this->makeRecipe($this->rootTeam, 'Kohl und Möhre vegan');
+    $gericht->update(['spec_is_vegan' => true]);
+    foreach (['Kohl: frisch' => $kohl, 'Moehre: frisch' => $moehre] as $name => $anker) {
+        $gp = $this->makeGp($this->rootTeam, $name);
+        ($this->mapping)($gp->id, $anker);
+        $this->makeIngredient($gericht, $name, $gp, '100', 1);
+    }
+
+    $sug = app(\Platform\FoodAlchemist\Services\PairingService::class)->componentSuggestions($gericht->fresh());
+    $slugs = collect($sug['klassiker'])->pluck('slug')->merge(collect($sug['signature'])->pluck('slug'))->unique()->values()->all();
+
+    expect($slugs)->toBe(['kuemmel']);
+});

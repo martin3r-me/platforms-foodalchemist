@@ -1017,8 +1017,12 @@ class PairingService
         $dishIds = array_keys($dish);
 
         $kandidaten = [];
+        // Spec 58 · Paket 4: nur 3★ (echtes Food Pairing) trägt einen Vorschlag — 2★ ist Rauschen.
+        // Kanten ohne Stufe (kuratiert/Altbestand) bleiben gültig.
+        $diaet = $this->diaetFilter($recipe);
         foreach (DB::table('foodalchemist_pairing_anchor_edges')->whereIn('anchor_b_id', $dishIds)
             ->whereNotIn('anchor_a_id', $dishIds)
+            ->where(fn ($q) => $q->where('level', 3)->orWhereNull('level'))
             ->get(['anchor_a_id', 'anchor_b_id', 'type', 'weight']) as $kante) {
             // wie edgeBest(): computed-Gewicht gewinnt, sonst typ-getrieben.
             $w = $kante->weight !== null ? (float) $kante->weight : (self::GEWICHTE[$kante->type] ?? 0.5);
@@ -1033,11 +1037,19 @@ class PairingService
             ->whereIn('id', array_merge(array_keys($kandidaten), $dishIds))   // + dish für »verbindet n/m: …«
             ->pluck('slug', 'id');
 
+        $meta = $diaet !== null
+            ? DB::table('foodalchemist_vocab_pairing_anchors')->whereIn('id', array_keys($kandidaten))
+                ->get(['id', 'slug', 'category', 'subcategory'])->keyBy('id')
+            : collect();
+
         $liste = [];
         foreach ($kandidaten as $id => $daten) {
             $cover = count($daten['best']);
             if ($cover < 2) {
                 continue;                                           // Filter cover ≥ 2
+            }
+            if ($diaet !== null && ($m = $meta->get($id)) !== null && ! $this->passtZurDiaet($m, $diaet)) {
+                continue;                                           // kein Hühnerfond fürs vegane Gericht
             }
             $meanW = (int) round(100 * array_sum($daten['best']) / $cover);
             $degree = (int) ($grade[$id] ?? 0);
@@ -1059,6 +1071,45 @@ class PairingService
         usort($signature, fn ($a, $b) => [$b['spec'], $b['mean_w'], $a['slug']] <=> [$a['spec'], $a['mean_w'], $b['slug']]);
 
         return ['klassiker' => array_slice($klassiker, 0, $top), 'signature' => array_slice($signature, 0, $top)];
+    }
+
+    /** Tierische Fonds/Brühen-Ausnahmen: diese Einträge in „Brühen und Fonds" sind pflanzlich. */
+    private const PFLANZLICHE_FONDS = ['vegetable_bouillon', 'kombu_dashi', 'truffle_juice'];
+
+    /**
+     * Spec 58 · Paket 4: Ernährungsform des Gerichts → 'vegan' | 'vegetarisch' | null (keine Einschränkung).
+     * Nur ein ausdrücklich gesetztes true schränkt ein — unbekannt ist keine Aussage.
+     */
+    private function diaetFilter(FoodAlchemistRecipe $recipe): ?string
+    {
+        if ($recipe->spec_is_vegan === true) {
+            return 'vegan';
+        }
+
+        return $recipe->spec_is_vegetarian === true ? 'vegetarisch' : null;
+    }
+
+    /** Passt ein Anker (Kategorie/Unterkategorie aus dem Inspire-Vokabular) zur Ernährungsform? */
+    private function passtZurDiaet(object $anker, string $diaet): bool
+    {
+        $kat = (string) ($anker->category ?? '');
+        $sub = (string) ($anker->subcategory ?? '');
+        if ($kat === 'Protein' && $sub !== 'Protein/Pflanzliche Proteine') {
+            return false;                                           // Fleisch, Fisch, Meeresfrüchte, Charcuterie
+        }
+        if ($kat === 'Brühen und Fonds' && ! in_array($anker->slug, self::PFLANZLICHE_FONDS, true)) {
+            return false;
+        }
+        if ($diaet === 'vegan') {
+            if ($kat === 'Milchprodukte' && $sub !== 'Milchprodukte/Pflanzliche Milchprodukte') {
+                return false;                                       // Milch, Käse, Butter, Sahne, Ei
+            }
+            if (str_contains((string) $anker->slug, 'honey')) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     // ── Bridge / verwandte Rezepte / Nachbarn (3.4 — T7) ────────────────
