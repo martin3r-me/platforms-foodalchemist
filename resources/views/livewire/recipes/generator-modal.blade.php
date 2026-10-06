@@ -103,9 +103,10 @@
                 @if((int) data_get($ergebnis, 'statistik.kritiker.entdrahtet', 0) > 0)
                     <span class="{{ $pill }} {{ $variantPill['danger'] }}" data-generator-kritiker>{{ (int) data_get($ergebnis, 'statistik.kritiker.entdrahtet', 0) }} Fremdkörper entdrahtet</span>
                 @endif
-                @php($koh = $ergebnis['statistik']['kohaerenz'] ?? null)
-                @if(is_array($koh) && (float) ($koh['coverage_pct'] ?? 0) > 0)
-                    <span class="{{ $pill }} {{ $variantPill['secondary'] }}" data-generator-kohaerenz>Kohärenz {{ number_format((float) ($koh['score'] ?? 0), 2, ',', '.') }} · {{ round((float) $koh['coverage_pct']) }} % Abdeckung</span>
+                {{-- Spec 60: Prüfung mit der Kombinationslogik (dieselbe, die den Plan gebaut hat) --}}
+                @php($komb = $ergebnis['statistik']['kombination'] ?? null)
+                @if(is_array($komb) && isset($komb['zusammenfassung']))
+                    <span class="{{ $pill }} {{ $variantPill['secondary'] }}" data-generator-kombination>{{ $komb['zusammenfassung'] }}</span>
                 @endif
             </div>
             <x-foodalchemist::hardstop-zeilen :offene="$ergebnis['offene']" prefix=""

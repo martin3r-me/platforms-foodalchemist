@@ -302,6 +302,7 @@ class RecipesGenerateTool extends FoodAlchemistTool implements ToolContract, Too
                 'schwacher_treffer' => $o['schwacher_treffer'] ?? null,
             ], $resultat['offene']),
             'kohaerenz' => $statistik['kohaerenz'] ?? null,        // nur VK-Modus: deterministischer Aroma-Score (GL-10 Achse 1)
+            'kombination' => $statistik['kombination'] ?? null,    // Spec 60: Aussagen der Kombinationslogik am Ergebnis
             // nur mit voll_anreichern=true; enthält `kohaerenz_urteil` (GL-10 Achse 2, nie
             // mit Achse 1 verrechnet), bei vk=true `wirtschaftlichkeit` (03·L8) und
             // optional `coverage` (operative Detail-Bausteine: Fertigung, Eigenschaften,

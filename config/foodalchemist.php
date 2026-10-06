@@ -1085,12 +1085,13 @@ return [
                 . '13 Convenience/Komponenten · 14 Vegane Ersatzprodukte · 15 Getränke. '
                 // Spec Foodpairing-Composer C-c (2026-08-22): Kontrast ist ein eigenständiges,
                 // gleichwertiges Pairing-Prinzip neben der Harmonie (geteilte Aromastoffe). Der
-                // Live-Graph liefert nur Harmonie — Kontrast leitet die KI aus Prinzip + Kochwissen ab.
-                . 'FLAVOR-PAIRING-PRINZIP: Harmonie entsteht über geteilte Aroma-/Duftstoffe (die '
-                . 'Harmonie-Liste im Wissen zeigt sie, ●●●=beste/●●=gute). Kontrast ist gleichwertig: '
-                . 'setze bewusst Gegensätze (Säure↔Fett, Schärfe↔Süße, knusprig↔cremig, warm↔kalt) ein, '
-                . 'wo sie die EINE Komponente schärfen — abgeleitet aus Kochwissen/Lebensmittelkunde, '
-                . 'NICHT als erfundene Aromapaarung. '
+                // Spec 60 · P7b: Kombinationsplan liefert Harmonie (3★) UND Kontrast (Bedarfe mit Lieferanten).
+                . 'FLAVOR-PAIRING-PRINZIP: Harmonie entsteht über geteilte Aroma-/Duftstoffe (●●● = echtes '
+                . 'Food Pairing, gemessen). Kontrast ist gleichwertig: Gegensätze (Säure↔Fett, Schärfe↔Süße, '
+                . 'knusprig↔cremig) dort, wo sie die EINE Komponente schärfen. Ist `kombinationsplan` '
+                . 'mitgegeben, gilt er: je Leit-Aroma `harmonie` als bevorzugte Partner, jeden `braucht`-Bedarf '
+                . 'der Stärke „muss" mit einem genannten Lieferanten oder einer gleichwertigen Zutat decken, '
+                . '`vermeiden` nie kombinieren. NICHT als erfundene Aromapaarung. '
                 // Spec Foodpairing-Composer B3 (2026-08-22): verbindliche Leit-Aromen aus dem Composer.
                 . 'Ist `pairing_vorgabe` mitgegeben (gezielte Foodpairing-Kreation): JEDES dort genannte '
                 . 'Leit-Aroma MUSS als Zutat/Komponente vorkommen (nüchtern + matchbar benannt); die je '
@@ -1245,12 +1246,14 @@ return [
                 . 'Saisonware/mehr Saettigungsbeilage; grosses Ziel => hochwertigere Komponenten '
                 . 'und mehr Aufwand). GIB KEINEN PREIS AUS — der VK wird gerechnet, nicht gesetzt. '
                 . 'Diät-harte Vorgaben sind VERBINDLICH. '
-                // Spec Foodpairing-Composer C-c (2026-08-22): Kontrast gleichwertig neben Harmonie.
-                . 'FLAVOR-PAIRING-PRINZIP: Harmonie entsteht über geteilte Aroma-/Duftstoffe (Harmonie-'
-                . 'Liste im Wissen, ●●●=beste/●●=gute). Kontrast ist gleichwertig: setze bewusst '
-                . 'Gegensätze (Säure↔Fett, Schärfe↔Süße, knusprig↔cremig, warm↔kalt) ein, um den Teller '
-                . 'spannend + ausgewogen zu bauen — aus Kochwissen/Lebensmittelkunde, NICHT als erfundene '
-                . 'Aromapaarung. '
+                // Spec 60 · P7b: Kombinationsplan liefert Harmonie (3★), Kontrast (Bedarfe) und Komponenten.
+                . 'FLAVOR-PAIRING-PRINZIP: Harmonie entsteht über geteilte Aroma-/Duftstoffe (●●● = echtes '
+                . 'Food Pairing, gemessen). Kontrast ist gleichwertig: Gegensätze (Säure↔Fett, Schärfe↔Süße, '
+                . 'knusprig↔cremig, warm↔kalt) machen den Teller spannend und ausgewogen. Ist '
+                . '`kombinationsplan` mitgegeben, gilt er: `harmonie` als bevorzugte Partner, jeden '
+                . '„muss"-Bedarf unter `braucht` mit einem genannten Lieferanten decken, `vermeiden` nie '
+                . 'kombinieren, und die unter `komponenten` genannten Basisrezepte als Komponente '
+                . 'wiederverwenden (sub_rezept_id), wenn sie zum Teller passen. NICHT als erfundene Aromapaarung. '
                 // Spec Foodpairing-Composer B3 (2026-08-22): verbindliche Leit-Aromen aus dem Composer.
                 . 'Ist `pairing_vorgabe` mitgegeben (gezielte Foodpairing-Kreation): JEDES dort genannte '
                 . 'Leit-Aroma MUSS als Komponente/Zutat des Tellers vorkommen (nüchtern + matchbar); die je '

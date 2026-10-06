@@ -195,40 +195,29 @@ class RecipeGenerationContextService
         // GETRENNT vom weichen `pairing`-Angebot (GenerationContextService). Der normale Generator
         // (ohne Seeds) bekommt diesen Key NIE → nur die Composer-Kreation ist gezielt-verbindlich.
         if ($seedAnker !== []) {
-            $pairing = app(\Platform\FoodAlchemist\Services\PairingService::class);
+            // Spec 60: Palette = echtes Food Pairing (3★) aus der einzigen Lesestelle AnkerGraph.
+            // Bedarfe/Konflikte der Leit-Aromen liefert der Kombinationsplan (forGeneration).
+            $graph = app(\Platform\FoodAlchemist\Services\Pairing\AnkerGraph::class);
             $leitAromen = [];
             foreach ($seedAnker as $slug) {
-                $res = $pairing->neighborsForName($slug, null, 12);
-                if (($res['anker'] ?? null) === null) {
+                $anker = \Illuminate\Support\Facades\DB::table('foodalchemist_vocab_pairing_anchors')
+                    ->where('slug', $slug)->whereNull('deleted_at')->first(['id', 'slug', 'display_de']);
+                if ($anker === null) {
                     continue;
                 }
-                $palette = [];
-                foreach ($res['partner'] as $p) {
-                    $name = is_array($p) ? ($p['display_de'] ?? $p['slug'] ?? null) : ($p->display_de ?? $p->slug ?? null);
-                    if ($name === null) {
-                        continue;
-                    }
-                    // Harmonie-Stärke wie im Wissens-Textblock (●●● best / ●● gut).
-                    $axis = is_array($p) ? ($p['axis'] ?? null) : ($p->axis ?? null);
-                    $level = is_array($p) ? ($p['level'] ?? null) : ($p->level ?? null);
-                    $sym = $axis === 'harmony' ? ($level >= 3 ? ' ●●●' : ($level >= 2 ? ' ●●' : ' ●')) : '';
-                    $palette[] = $name . $sym;
-                    if (count($palette) >= 10) {
-                        break;
-                    }
-                }
                 $leitAromen[] = [
-                    'aroma' => $res['anker']['display_de'] ?: $res['anker']['slug'],
-                    'palette' => $palette,
+                    'aroma' => $anker->display_de ?: $anker->slug,
+                    'palette' => $graph->partner((int) $anker->id, \Platform\FoodAlchemist\Services\Pairing\AnkerGraph::HARMONIERT, 10)
+                        ->map(fn ($p) => $p->display_de.' ●●●')->all(),
                 ];
             }
             if ($leitAromen !== []) {
                 $prompt['pairing_vorgabe'] = [
                     'rolle' => 'verbindliche_leit_aromen',
                     'hinweis' => 'Diese Leit-Aromen prägen das Rezept BEWUSST (gezielte Foodpairing-Kreation). '
-                        . 'Sie MÜSSEN als Zutaten/Komponenten vorkommen; ihre Harmonie-Palette (●●●/●●) ist die '
-                        . 'bevorzugte Auswahl zum Abrunden. Setze zusätzlich bewusste Kontraste (Säure/Fett/Textur) '
-                        . 'aus Kochwissen + Pairing-Prinzip. Erfinde keine unbelegten Paarungen; Grounding '
+                        . 'Sie MÜSSEN als Zutaten/Komponenten vorkommen; ihre Harmonie-Palette (●●● = echtes Food '
+                        . 'Pairing) ist die bevorzugte Auswahl zum Abrunden. Kontraste (Bedarfe mit Lieferanten) und '
+                        . 'zu Vermeidendes stehen im `kombinationsplan`. Erfinde keine unbelegten Paarungen; Grounding '
                         . '(gp_kandidaten) hat Vorrang bei der Benennung. Baue EIN kohärentes Rezept.',
                     'leit_aromen' => $leitAromen,
                 ];

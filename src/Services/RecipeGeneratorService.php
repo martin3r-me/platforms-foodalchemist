@@ -472,6 +472,13 @@ class RecipeGeneratorService
             } catch (\Throwable $e) {
                 // Kohärenz ist Diagnose, kein Blocker der Generierung.
             }
+            // Spec 60 · P7b: Prüfung mit derselben Kombinationslogik, die den Plan gebaut hat —
+            // Aussagen mit Grundlage (Gericht inkl. „was fehlt"). Diagnose, kein Blocker.
+            try {
+                $statistik['kombination'] = app(\Platform\FoodAlchemist\Services\Pairing\Kombinationslogik::class)->daten($recipe->fresh() ?? $recipe);
+            } catch (\Throwable $e) {
+                $statistik['kombination'] = ['fehler' => mb_strimwidth($e->getMessage(), 0, 200)];
+            }
             // Diagnose-Check, kein Matching/Speichern — zählt zu checks_ms (siehe unten).
             $timings['kohaerenz_ms'] = (int) ((hrtime(true) - $kohaerenzStarted) / 1_000_000);
 

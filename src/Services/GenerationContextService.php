@@ -16,9 +16,8 @@ use Platform\FoodAlchemist\Services\Matching\TokenEngine;
  *                      die KI soll Zutaten auf EXISTIERENDE GPs benennen statt zu erfinden
  *                      (weniger Post-Match-Drift, weniger auto-neue GPs).
  *  - rezept_kandidaten: bestehende (Basis-)Rezepte als Komponenten (v. a. VK).
- *  - pairing         : Anker-Graph (PairingService) ROLLENABHÄNGIG —
- *                      Basisrezept = Aroma ausschöpfen (Partner je Hauptzutat),
- *                      Gericht (VK) = Komposition (dieselben Partner, Kompositions-Framing).
+ *  - kombinationsplan: Kombinationslogik (Spec 60) ROLLENABHÄNGIG — je Leit-Aroma Harmonie (3★),
+ *                      Bedarfe mit Lieferanten, Konflikte; Gericht zusätzlich passende Basisrezepte.
  *
  * Food DNA wird NICHT hier gezogen — die injiziert AiGatewayService::propose bereits
  * (FOOD_DNA_KEYS für recipe.generator/vk.generator). Brand Voice bleibt bewusst draußen
@@ -37,12 +36,9 @@ class GenerationContextService
     private const CAND_PER_TOKEN = 3;
     private const GP_CAND_MAX = 24;
     private const REZEPT_CAND_MAX = 12;
-    /** Pairing-Partner je Hauptzutat. */
-    private const PAIRING_PER_TOKEN = 8;
 
     public function __construct(
         private IngredientMatchService $matcher,
-        private PairingService $pairing,
         private TokenEngine $tokens,
     ) {
     }
@@ -60,7 +56,7 @@ class GenerationContextService
      * getaggte Favoriten (Favoriten ∩ tag_is_convenience) — der alte Convenience-
      * Modus, jetzt als Tag-Filter über dem allgemeinen Favoriten-Pool.
      *
-     * @return array{gp_kandidaten?: list<array>, rezept_kandidaten?: list<array>, pairing?: array, favorites?: array}
+     * @return array{gp_kandidaten?: list<array>, rezept_kandidaten?: list<array>, kombinationsplan?: array, favorites?: array}
      */
     public function forGeneration(Team $team, string $description, bool $vkModus = false, bool $useFavoritesList = false, bool $favoritesConvenienceOnly = false, ?string $bestand = null): array
     {
@@ -80,7 +76,6 @@ class GenerationContextService
 
         $gp = [];
         $rezepte = [];
-        $pairing = [];
         foreach ($tokens as $token) {
             // Kandidaten (kind=gp|recipe, score) — dieselbe Retrieval-Logik wie der Resolver.
             foreach ($this->matcher->candidatesFor($team, $token, null, $candPerToken) as $c) {
@@ -94,26 +89,6 @@ class GenerationContextService
                 } elseif ($kind === 'sub' && ! isset($rezepte[$id])) {
                     $rezepte[$id] = ['id' => (int) $id, 'name' => $c['name'] ?? null, 'score' => round((float) ($c['score'] ?? 0), 3)];
                 }
-            }
-            // Anker-Graph: Pairing-Partner der Hauptzutat.
-            $nb = $this->pairing->neighborsForName($token, null, self::PAIRING_PER_TOKEN);
-            $partner = collect($nb['partner'] ?? [])
-                ->map(function ($p) {
-                    $name = is_array($p) ? ($p['display_de'] ?? $p['slug'] ?? null) : ($p->display_de ?? $p->slug ?? null);
-                    if ($name === null) {
-                        return null;
-                    }
-                    // C-b (2026-08-22): Harmonie-Stärke annotieren (●●● best / ●● gut), konsistent
-                    // zum Wissens-Textblock (pairingBlock). Nur Achse `harmony`; Kontrast liegt live nicht vor.
-                    $axis = is_array($p) ? ($p['axis'] ?? null) : ($p->axis ?? null);
-                    $level = is_array($p) ? ($p['level'] ?? null) : ($p->level ?? null);
-                    $sym = $axis === 'harmony' ? ($level >= 3 ? ' ●●●' : ($level >= 2 ? ' ●●' : ' ●')) : '';
-
-                    return $name . $sym;
-                })
-                ->filter()->values()->all();
-            if ($partner !== []) {
-                $pairing[$token] = $partner;
             }
         }
 
@@ -199,14 +174,12 @@ class GenerationContextService
                 'treffer' => array_slice($sortByScore($rezepte), 0, self::REZEPT_CAND_MAX),
             ];
         }
-        if ($pairing !== []) {
-            $out['pairing'] = [
-                'rolle' => $vkModus ? 'komposition' : 'aroma_ausschoepfen',
-                'hinweis' => $vkModus
-                    ? 'Anker-Graph-Partner je Hauptzutat — für eine zusammenhängende Komposition (Teller-Kohärenz) nutzen.'
-                    : 'Anker-Graph-Partner je Hauptzutat — um das Aroma der Zutat voll auszuschöpfen (abrunden/vertiefen).',
-                'partner' => $pairing,
-            ];
+        // Spec 60 · P7b: Kombinationsplan statt loser Partnerliste — dieselbe Logik, die das fertige
+        // Rezept prüft. Anker nur exakt (kein Wortteil-Raten), Harmonie nur 3★, dazu Bedarfe mit
+        // Lieferanten, Konflikte und (Gericht) Basisrezepte aus dem Bestand.
+        $plan = app(Pairing\KombinationsPlan::class)->fuer($team, $tokens, $vkModus);
+        if ($plan !== null) {
+            $out['kombinationsplan'] = $plan;
         }
 
         // 06·H3: opt-in Favoriten — bewusst SEPARAT vom semantischen
