@@ -43,7 +43,7 @@ beforeEach(function () {
         return (int) DB::getPdo()->lastInsertId();
     };
     $this->mkKante = function (int $a, int $b, string $typ = 'aroma'): void {
-        DB::table('foodalchemist_pairing_anchor_edges')->insert([
+        \Platform\FoodAlchemist\Tests\Support\Harmonie::ausFixture([
             'uuid' => (string) UuidV7::generate(), 'anchor_a_id' => $a, 'anchor_b_id' => $b,
             'type' => $typ, 'created_at' => now(), 'updated_at' => now(),
         ]);

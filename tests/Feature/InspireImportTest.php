@@ -48,7 +48,7 @@ it('mintet je Inspire-Zutat einen Anker mit inspire_id und inspire_ix', function
         ->and(DB::table('foodalchemist_vocab_pairing_anchors')->where('inspire_id', 'uuid-beet')->value('inspire_ix'))->toBe(1)
         // Dubletten-Namen bleiben zwei Anker, unterschieden über die Inspire-ID
         ->and(DB::table('foodalchemist_vocab_pairing_anchors')->whereIn('inspire_id', ['uuid-gochu-a', 'uuid-gochu-b'])->count())->toBe(2)
-        ->and(DB::table('foodalchemist_pairing_anchor_edges')->count())->toBe(4);
+        ->and(DB::table('foodalchemist_anchor_harmonie')->count())->toBe(4);
 });
 
 it('ist idempotent: zweiter Lauf legt nichts an und behält gepflegte Namen', function () {
@@ -64,7 +64,7 @@ it('ist idempotent: zweiter Lauf legt nichts an und behält gepflegte Namen', fu
         ->and(DB::table('foodalchemist_vocab_pairing_anchors')->whereNotNull('inspire_id')->count())->toBe(4)
         ->and(DB::table('foodalchemist_vocab_pairing_anchors')->where('inspire_id', 'uuid-beet')->value('id'))->toBe($idVorher)
         ->and(DB::table('foodalchemist_vocab_pairing_anchors')->where('id', $idVorher)->value('display_de'))->toBe('Rote Bete')
-        ->and(DB::table('foodalchemist_pairing_anchor_edges')->count())->toBe(4);
+        ->and(DB::table('foodalchemist_anchor_harmonie')->count())->toBe(4);
 });
 
 it('mintet bei neuem Lauf nur die neue Zutat', function () {
@@ -82,7 +82,7 @@ it('mintet bei neuem Lauf nur die neue Zutat', function () {
 
     expect($stats['anchors_created'])->toBe(1)
         ->and(DB::table('foodalchemist_vocab_pairing_anchors')->where('inspire_id', 'uuid-cherry')->value('display_en'))->toBe('Sweet Cherry')
-        ->and(DB::table('foodalchemist_pairing_anchor_edges')->count())->toBe(6);
+        ->and(DB::table('foodalchemist_anchor_harmonie')->count())->toBe(6);
 });
 
 it('Backfill-Datei deckt jeden Slug genau einmal ab', function () {
@@ -100,4 +100,24 @@ it('Backfill-Datei deckt jeden Slug genau einmal ab', function () {
         ->and(count($slugs))->toBe(2628)
         ->and(count(array_unique($slugs)))->toBe(2628)
         ->and(count(array_unique($ids)))->toBe(2628);
+});
+
+it('übernimmt beim erneuten Import eine geänderte Stufe', function () {
+    $svc = app(InspireImportService::class);
+    $svc->import(($this->quelle)(), true, 1);
+    $beet = (int) DB::table('foodalchemist_vocab_pairing_anchors')->where('inspire_id', 'uuid-beet')->value('id');
+    $gochu = (int) DB::table('foodalchemist_vocab_pairing_anchors')->where('inspire_id', 'uuid-gochu-a')->value('id');
+    expect(app(\Platform\FoodAlchemist\Services\Pairing\AnkerGraph::class)->stufe($beet, $gochu))->toBe(2);
+
+    $hoch = inspireQuelle([
+        [0, 'uuid-almond', 'Almond', 'nuts', 'nuts'],
+        [1, 'uuid-beet', 'Beetroot', 'vegetables', 'roots'],
+        [2, 'uuid-gochu-a', 'Gochujang', 'condiments', 'pastes'],
+        [3, 'uuid-gochu-b', 'Gochujang', 'condiments', 'pastes'],
+    ], [[0, 1, 3], [1, 2, 3]]);
+    $svc->import($hoch, true, 1);
+
+    expect(app(\Platform\FoodAlchemist\Services\Pairing\AnkerGraph::class)->stufe($beet, $gochu))->toBe(3)
+        ->and(app(\Platform\FoodAlchemist\Services\Pairing\AnkerGraph::class)->stufe($gochu, $beet))->toBe(3)
+        ->and(DB::table('foodalchemist_anchor_harmonie')->count())->toBe(4);
 });

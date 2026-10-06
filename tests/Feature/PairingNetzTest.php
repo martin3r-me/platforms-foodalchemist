@@ -28,7 +28,7 @@ function mkAnker(string $slug): int
 function mkKante(int $a, int $b, string $typ, ?int $level = null, ?float $weight = null): void
 {
     foreach ([[$a, $b], [$b, $a]] as [$x, $y]) {
-        DB::table('foodalchemist_pairing_anchor_edges')->insert([
+        \Platform\FoodAlchemist\Tests\Support\Harmonie::ausFixture([
             'uuid' => (string) UuidV7::generate(), 'anchor_a_id' => $x, 'anchor_b_id' => $y,
             'type' => $typ, 'level' => $level, 'weight' => $weight,
             'created_at' => now(), 'updated_at' => now(),
@@ -129,12 +129,12 @@ it('pairingNetz: Anker↔Anker — beste Stufe gewinnt, kontrast ausgeschlossen,
     // kichererbse↔tahin in beiden Richtungen VERSCHIEDEN gestuft (★★ / ★★★) → dedup muss
     // die beste Stufe (★★★) wählen. Direkt-Inserts statt mkKante: UNIQUE(a,b,type) verbietet
     // zwei gleich-typige Kanten je Richtung, aber die zwei Richtungen dürfen sich stufen.
-    DB::table('foodalchemist_pairing_anchor_edges')->insert([
+    \Platform\FoodAlchemist\Tests\Support\Harmonie::ausFixture([
         'uuid' => (string) UuidV7::generate(), 'anchor_a_id' => $this->kichererbse,
         'anchor_b_id' => $this->tahin, 'type' => 'aroma', 'level' => 2, 'weight' => 0.5,
         'created_at' => now(), 'updated_at' => now(),
     ]);
-    DB::table('foodalchemist_pairing_anchor_edges')->insert([
+    \Platform\FoodAlchemist\Tests\Support\Harmonie::ausFixture([
         'uuid' => (string) UuidV7::generate(), 'anchor_a_id' => $this->tahin,
         'anchor_b_id' => $this->kichererbse, 'type' => 'aroma', 'level' => 3, 'weight' => 0.9,
         'created_at' => now(), 'updated_at' => now(),
@@ -142,7 +142,7 @@ it('pairingNetz: Anker↔Anker — beste Stufe gewinnt, kontrast ausgeschlossen,
     // kichererbse↔fremd nur als Kontrast (eigene Achse) → NICHT als Harmonie-Linie.
     mkKante($this->kichererbse, $fremd, 'kontrast', null, null);
     // Selbst-Loop (defensiv) → darf nie als Kante entstehen.
-    DB::table('foodalchemist_pairing_anchor_edges')->insert([
+    \Platform\FoodAlchemist\Tests\Support\Harmonie::ausFixture([
         'uuid' => (string) UuidV7::generate(),
         'anchor_a_id' => $this->kichererbse, 'anchor_b_id' => $this->kichererbse,
         'type' => 'aroma', 'level' => 3, 'weight' => 1.0, 'created_at' => now(), 'updated_at' => now(),

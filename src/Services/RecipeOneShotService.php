@@ -582,10 +582,9 @@ class RecipeOneShotService
         // (b) 1-Hop-Nachbarn im Graphen, beide Richtungen
         $nachbarIds = [];
         if ($gpAnkerIds !== []) {
-            $nachbarIds = \Illuminate\Support\Facades\DB::table('foodalchemist_pairing_anchor_edges')
-                ->whereIn('anchor_a_id', $gpAnkerIds)->distinct()->pluck('anchor_b_id')->all();
-            $nachbarIds = array_merge($nachbarIds, \Illuminate\Support\Facades\DB::table('foodalchemist_pairing_anchor_edges')
-                ->whereIn('anchor_b_id', $gpAnkerIds)->distinct()->pluck('anchor_a_id')->all());
+            // Harmonie steht in beiden Richtungen — eine Richtung reicht.
+            $nachbarIds = app(\Platform\FoodAlchemist\Services\Pairing\AnkerGraph::class)
+                ->kanten($gpAnkerIds)->pluck('zu')->unique()->all();
         }
 
         $ids = array_values(array_unique(array_map('intval', array_merge($gpAnkerIds, $nachbarIds))));

@@ -85,7 +85,7 @@ it('E9.5: pairing_inspiration.GET liefert Nachbarn je Modus (search→Anker, gee
     $z = $mkAnker('zander');
     $rb = $mkAnker('rote_bete');
     foreach ([[$z, $rb], [$rb, $z]] as [$x, $y]) {
-        DB::table('foodalchemist_pairing_anchor_edges')->insert([
+        \Platform\FoodAlchemist\Tests\Support\Harmonie::ausFixture([
             'uuid' => (string) UuidV7::generate(), 'anchor_a_id' => $x, 'anchor_b_id' => $y,
             'type' => 'klassisch', 'created_at' => now(), 'updated_at' => now(),
         ]);

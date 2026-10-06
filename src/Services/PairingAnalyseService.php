@@ -237,24 +237,13 @@ class PairingAnalyseService
         ];
     }
 
-    /** Beste Foodpairing-Stufe je ungeordnetem Anker-Paar (nur Harmonie-Achse, Inspire-Level 2/3). */
+    /** Foodpairing-Stufe je Anker-Paar (Inspire 2/3, beide Richtungen; fehlend = Stufe 1). */
     private function stufenJePaar(array $ankerIds): array
     {
         if ($ankerIds === []) {
             return [];
         }
-        $out = [];
-        foreach (DB::table('foodalchemist_pairing_anchor_edges')
-            ->whereIn('anchor_a_id', $ankerIds)->whereIn('anchor_b_id', $ankerIds)
-            ->where(fn ($q) => $q->whereNull('axis')->orWhere('axis', 'harmony'))
-            ->get(['anchor_a_id', 'anchor_b_id', 'level']) as $e) {
-            $lvl = (int) ($e->level ?? 0);
-            foreach ([[(int) $e->anchor_a_id, (int) $e->anchor_b_id], [(int) $e->anchor_b_id, (int) $e->anchor_a_id]] as [$a, $b]) {
-                $out[$a][$b] = max($out[$a][$b] ?? 0, $lvl);
-            }
-        }
-
-        return $out;
+        return app(\Platform\FoodAlchemist\Services\Pairing\AnkerGraph::class)->stufen($ankerIds);
     }
 
     private function kontrast(array $k): array

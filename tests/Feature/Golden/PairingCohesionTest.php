@@ -27,7 +27,7 @@ beforeEach(function () {
     };
     $this->mkKante = function (int $a, int $b, string $typ) {
         foreach ([[$a, $b], [$b, $a]] as [$x, $y]) {                 // Inv. 4: bidirektional
-            DB::table('foodalchemist_pairing_anchor_edges')->insert([
+            \Platform\FoodAlchemist\Tests\Support\Harmonie::ausFixture([
                 'uuid' => (string) UuidV7::generate(), 'anchor_a_id' => $x, 'anchor_b_id' => $y,
                 'type' => $typ, 'created_at' => now(), 'updated_at' => now(),
             ]);
@@ -51,11 +51,11 @@ it('T3: Identitäts-Anker GERICHTET — nie eine Sorte für den generischen GP',
         ->and($this->svc->bestIdentityAnchor('aepfel', $vokabular))->toBe('apfel');
 });
 
-it('T4: Kohäsion durchgerechnet — 83/50/100 %, fits 75/75/100, weakest kontrast', function () {
+it('T4: Kohäsion durchgerechnet — 97/90/100 %, fits 95/95/100, weakest Stufe 2', function () {
     $e = ($this->mkAnker)('erdbeere');
     $b = ($this->mkAnker)('basilikum');
     $bal = ($this->mkAnker)('balsamico');
-    ($this->mkKante)($e, $b, 'kontrast');            // 0.5 (schwächstes Paar)
+    ($this->mkKante)($e, $b, 'aroma');               // Stufe 2 → 0.9 (schwächstes Paar; Spec 60: Kontrast ist keine Harmonie-Kante)
     ($this->mkKante)($e, $bal, 'erprobt');           // 1.0
     ($this->mkKante)($b, $bal, 'erprobt');           // 1.0
 
@@ -65,13 +65,13 @@ it('T4: Kohäsion durchgerechnet — 83/50/100 %, fits 75/75/100, weakest kontra
         ['label' => 'Balsamico', 'kern' => $bal, 'prozess' => [], 'via' => 'name_match'],
     ]);
 
-    expect($k['score'])->toBe(83)                    // (0.5+1.0+1.0)/3
-        ->and($k['min_score'])->toBe(50)
+    expect($k['score'])->toBe(97)                    // (0.9+1.0+1.0)/3
+        ->and($k['min_score'])->toBe(90)
         ->and($k['coverage_pct'])->toBe(100)
         ->and($k['rated_pairs'])->toBe(3)
-        ->and(collect($k['komponenten'])->pluck('fit', 'label')->all())->toBe(['Erdbeere' => 75, 'Basilikum' => 75, 'Balsamico' => 100])
-        ->and($k['weakest_pair']['type'])->toBe('kontrast')
-        ->and($k['weakest_pair']['score'])->toBe(50)
+        ->and(collect($k['komponenten'])->pluck('fit', 'label')->all())->toBe(['Erdbeere' => 95, 'Basilikum' => 95, 'Balsamico' => 100])
+        ->and($k['weakest_pair']['type'])->toBe('aroma')
+        ->and($k['weakest_pair']['score'])->toBe(90)
         ->and(collect($k['komponenten'])->contains(fn ($c) => $c['is_orphan']))->toBeFalse();
 });
 

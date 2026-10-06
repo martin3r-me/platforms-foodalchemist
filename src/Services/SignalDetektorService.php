@@ -977,7 +977,7 @@ class SignalDetektorService
     /**
      * R6.11 · S2 — Widerspruchs-Detektor (Wissen ⇄ Anker-Graph). Für jedes `pairing`-
      * Wissensdokument: die im `## Pairings` gelisteten Partner (KnowledgeContextService)
-     * gegen die Kanten des Doc-Ankers (`pairing_anchor_edges`) — Präsenz/Absenz-Set-Diff.
+     * gegen die Harmonie-Kanten des Doc-Ankers (AnkerGraph) — Präsenz/Absenz-Set-Diff.
      * „Doc behauptet Paarung X, Graph hat keine Kante" → EIN Signal je Doc (R&D-Frage,
      * Research-Queue), NICHT still aufgelöst. Ein Doc/Partner ohne auflösbaren Anker ist
      * eine Namens-Lücke, KEIN Widerspruch (übersprungen). Feasibility-Cut (E3): nur
@@ -1004,8 +1004,8 @@ class SignalDetektorService
             if ($partnerNames === []) {
                 continue;
             }
-            $kanten = array_flip(DB::table('foodalchemist_pairing_anchor_edges')
-                ->where('anchor_a_id', $ankerId)->pluck('anchor_b_id')->map(fn ($v) => (int) $v)->all());
+            $kanten = array_flip(app(\Platform\FoodAlchemist\Services\Pairing\AnkerGraph::class)
+                ->kanten([$ankerId])->pluck('zu')->all());
 
             $fehlend = [];   // Doc behauptet Paarung, Graph kennt keine Kante
             foreach ($partnerNames as $pname) {

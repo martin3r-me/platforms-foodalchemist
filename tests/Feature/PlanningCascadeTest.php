@@ -2323,8 +2323,7 @@ beforeEach(function () {
         $aId = $ins('foodalchemist_vocab_pairing_anchors', ['slug' => 'mkg-pilz', 'display_de' => 'Pilz']);
         $bId = $ins('foodalchemist_vocab_pairing_anchors', ['slug' => 'mkg-rind', 'display_de' => 'Rind']);
         // Kante A↔B → bewertetes Gericht-Paar (rated_pairs ≥ 1 ⇒ das Gate hat eine Aussage).
-        $ins('foodalchemist_pairing_anchor_edges',
-            ['anchor_a_id' => $aId, 'anchor_b_id' => $bId, 'type' => 'aroma', 'level' => 3, 'weight' => 0.9]);
+        \Platform\FoodAlchemist\Tests\Support\Harmonie::kante($aId, $bId, 3);
 
         $mkGericht = function (string $key, string $gpName, int $ankerId) use ($ins): \Platform\FoodAlchemist\Models\FoodAlchemistRecipe {
             $gp = \Platform\FoodAlchemist\Models\FoodAlchemistGp::create([

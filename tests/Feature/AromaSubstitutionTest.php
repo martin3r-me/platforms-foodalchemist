@@ -36,14 +36,14 @@ beforeEach(function () {
 
     $mkKante = function (int $a, int $b, string $typ) {
         foreach ([[$a, $b], [$b, $a]] as [$x, $y]) {
-            DB::table('foodalchemist_pairing_anchor_edges')->insert([
+            \Platform\FoodAlchemist\Tests\Support\Harmonie::ausFixture([
                 'uuid' => (string) UuidV7::generate(), 'anchor_a_id' => $x, 'anchor_b_id' => $y,
                 'type' => $typ, 'created_at' => now(), 'updated_at' => now(),
             ]);
         }
     };
-    // Schokolade (kakao) dockt nur SCHWACH an Kräuter an (Kontrast) — nicht an Anis.
-    $mkKante($this->kakao, $this->kraeuter, 'kontrast');
+    // Schokolade (kakao) dockt nur SCHWACH an Kräuter an (Stufe 2) — nicht an Anis.
+    $mkKante($this->kakao, $this->kraeuter, 'aroma');
     // Anis brückt aufs Geflügel (fürs Kohäsions-Delta im Rezept-Kontext).
     $mkKante($this->anis, $this->gefluegel, 'erprobt');
 
@@ -89,7 +89,7 @@ it('rankt den aroma-treuen Ersatz vor dem aroma-fernen, gleich teuren; allein ü
         ->and($kerbel['verlorene_bruecken'])->toBe([])
         ->and($kerbel['flavor_score'])->toBeGreaterThan($scho['flavor_score']);
 
-    // Schokolade: Kräuter über die Kontrast-Kante erhalten, Anis verloren → 0,5.
+    // Schokolade: Kräuter über die Stufe-2-Kante erhalten, Anis verloren → 0,5.
     expect($scho['flavor_score'])->toBe(0.5)
         ->and($scho['erhaltene_bruecken'])->toBe(['Kraeuter'])
         ->and($scho['verlorene_bruecken'])->toBe(['Anis']);

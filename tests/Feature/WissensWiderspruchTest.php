@@ -39,7 +39,7 @@ beforeEach(function () {
 
     // Kante basilikum–tomate (symmetrisch)
     foreach ([[$this->basilikum, $this->tomate], [$this->tomate, $this->basilikum]] as [$x, $y]) {
-        DB::table('foodalchemist_pairing_anchor_edges')->insert([
+        \Platform\FoodAlchemist\Tests\Support\Harmonie::ausFixture([
             'uuid' => (string) UuidV7::generate(), 'anchor_a_id' => $x, 'anchor_b_id' => $y,
             'type' => 'erprobt', 'created_at' => now(), 'updated_at' => now(),
         ]);
@@ -84,7 +84,7 @@ it('ist idempotent — zweiter Lauf dupliziert das Signal nicht (dedup)', functi
 it('feuert kein Signal, wenn alle belegten Paarungen eine Kante haben', function () {
     // Kante basilikum–erdbeere ergänzen → kein Widerspruch mehr.
     foreach ([[$this->basilikum, $this->erdbeere], [$this->erdbeere, $this->basilikum]] as [$x, $y]) {
-        DB::table('foodalchemist_pairing_anchor_edges')->insert([
+        \Platform\FoodAlchemist\Tests\Support\Harmonie::ausFixture([
             'uuid' => (string) UuidV7::generate(), 'anchor_a_id' => $x, 'anchor_b_id' => $y,
             'type' => 'aroma', 'created_at' => now(), 'updated_at' => now(),
         ]);

@@ -349,7 +349,7 @@ it('Voll anreichern synchronisiert operative Detail-Felder: Equipment, Posten, A
     }
     $roest = DB::table('foodalchemist_vocab_pairing_anchors')->where('slug', 'roestaromen')->value('id');
     $basilikum = DB::table('foodalchemist_vocab_pairing_anchors')->where('slug', 'basilikum')->value('id');
-    DB::table('foodalchemist_pairing_anchor_edges')->insert([
+    \Platform\FoodAlchemist\Tests\Support\Harmonie::ausFixture([
         'uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(),
         'anchor_a_id' => $roest, 'anchor_b_id' => $basilikum, 'type' => 'aroma',
         'evidence' => 'Test-Grounding', 'created_at' => now(), 'updated_at' => now(),

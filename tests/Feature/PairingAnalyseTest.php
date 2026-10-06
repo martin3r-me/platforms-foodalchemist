@@ -26,7 +26,7 @@ beforeEach(function () {
     };
     $kante = function (int $a, int $b, int $level): void {
         foreach ([[$a, $b], [$b, $a]] as [$x, $y]) {
-            DB::table('foodalchemist_pairing_anchor_edges')->insert([
+            \Platform\FoodAlchemist\Tests\Support\Harmonie::ausFixture([
                 'uuid' => (string) UuidV7::generate(), 'anchor_a_id' => $x, 'anchor_b_id' => $y,
                 'type' => 'aroma', 'level' => $level, 'axis' => 'harmony', 'created_at' => now(), 'updated_at' => now(),
             ]);
@@ -180,7 +180,7 @@ it('Vorschläge: veganes Gericht bekommt keinen Hühnerfond und keinen Speck, nu
     };
     $kante = function (int $a, int $b, int $level): void {
         foreach ([[$a, $b], [$b, $a]] as [$x, $y]) {
-            DB::table('foodalchemist_pairing_anchor_edges')->insert([
+            \Platform\FoodAlchemist\Tests\Support\Harmonie::ausFixture([
                 'uuid' => (string) UuidV7::generate(), 'anchor_a_id' => $x, 'anchor_b_id' => $y,
                 'type' => 'aroma', 'level' => $level, 'axis' => 'harmony', 'created_at' => now(), 'updated_at' => now(),
             ]);

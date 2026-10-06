@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\DB;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
+use Platform\FoodAlchemist\Services\Pairing\AnkerGraph;
 
 /**
  * M5-04/05: GL-10 — Pairing-Kohäsion & Anker-Graph (deterministisch, ohne KI).
@@ -16,11 +17,11 @@ use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
  */
 class PairingService
 {
-    // Inspire-Umbau 2a (2026-08-06): das Ranking ist jetzt PROVENIENZ-getrieben — jede Kante
-    // trägt ein explizites `weight` (inspire 1.0/0.9, computed 0.6×conf). GEWICHTE ist nur noch
-    // Sicherheitsnetz für Kanten ohne weight: aroma (Buch) 0.9, kontrast (kuratiert) 0.5.
-    // `erprobt` ist gewipt (Gate A: kein Gold) — Schlüssel nur vestigial belassen.
-    private const GEWICHTE = ['erprobt' => 1.0, 'aroma' => 0.9, 'kontrast' => 0.5];
+    /** Spec 60 · P2: einzige Lesestelle für die Harmonie zwischen Ankern. */
+    private function graph(): AnkerGraph
+    {
+        return app(AnkerGraph::class);
+    }
 
     public const CAP_GP = 3;
 
@@ -937,21 +938,14 @@ class PairingService
 
         $kandidaten = [];
         // Spec 58 · Paket 4: nur 3★ (echtes Food Pairing) trägt einen Vorschlag — 2★ ist Rauschen.
-        // Kanten ohne Stufe (kuratiert/Altbestand) bleiben gültig.
         $diaet = $this->diaetFilter($recipe);
-        foreach (DB::table('foodalchemist_pairing_anchor_edges')->whereIn('anchor_b_id', $dishIds)
-            ->whereNotIn('anchor_a_id', $dishIds)
-            ->where(fn ($q) => $q->where('level', 3)->orWhereNull('level'))
-            ->get(['anchor_a_id', 'anchor_b_id', 'type', 'weight']) as $kante) {
-            // wie edgeBest(): computed-Gewicht gewinnt, sonst typ-getrieben.
-            $w = $kante->weight !== null ? (float) $kante->weight : (self::GEWICHTE[$kante->type] ?? 0.5);
-            $k = &$kandidaten[$kante->anchor_a_id];
-            $k['best'][$kante->anchor_b_id] = max($k['best'][$kante->anchor_b_id] ?? 0, $w);
+        foreach ($this->graph()->kanten($dishIds, null, AnkerGraph::HARMONIERT, $dishIds) as $kante) {
+            $k = &$kandidaten[$kante->zu];
+            $k['best'][$kante->von] = AnkerGraph::GEWICHT[AnkerGraph::HARMONIERT];
         }
         unset($k);
 
-        $grade = DB::table('foodalchemist_pairing_anchor_edges')->whereIn('anchor_a_id', array_keys($kandidaten))
-            ->selectRaw('anchor_a_id, COUNT(*) AS n')->groupBy('anchor_a_id')->pluck('n', 'anchor_a_id');
+        $grade = $this->graph()->grad(array_keys($kandidaten));
         $namen = DB::table('foodalchemist_vocab_pairing_anchors')
             ->whereIn('id', array_merge(array_keys($kandidaten), $dishIds))   // + dish für »verbindet n/m: …«
             ->pluck('slug', 'id');
@@ -1041,11 +1035,7 @@ class PairingService
         $direkte = array_values(array_intersect($ankerA, $ankerB));
         // LIMIT 30 deckelt die indirekte Zählung (Ist holt max 30 Zeilen) — COUNT ignoriert
         // LIMIT in SQL, daher explizit über die gedeckelte Ergebnisliste zählen
-        $indirekte = DB::table('foodalchemist_pairing_anchor_edges')
-            ->whereIn('anchor_a_id', $ankerA)->whereIn('anchor_b_id', $ankerB)
-            ->whereColumn('anchor_a_id', '!=', 'anchor_b_id')
-            ->orderByRaw("CASE type WHEN 'erprobt' THEN 1 WHEN 'aroma' THEN 2 WHEN 'kontrast' THEN 3 ELSE 4 END")
-            ->limit(30)->get(['id'])->count();
+        $indirekte = min(30, $this->graph()->kanten($ankerA, $ankerB)->count());
 
         return [
             'direkte' => count($direkte),
@@ -1103,24 +1093,23 @@ class PairingService
             return collect();
         }
 
-        // Typ-Priorität an das reale edges-Vokabular angepasst (2026-07-21): klassisch =
-        // kuratierte Klassiker (stärkstes Signal) zuerst, dann modern/aroma, kontrast zuletzt.
-        // Vorher CASE erprobt/aroma/kontrast → erprobt existiert nicht mehr, klassisch+modern
-        // fielen in den ELSE-Eimer → Vorschläge waren die alphabetisch ersten aroma-Reste.
-        // (erprobt/verbund/trinitas als Fallback belassen, falls Alt-Daten.)
-        return DB::table('foodalchemist_pairing_anchor_edges AS e')
-            ->join('foodalchemist_vocab_pairing_anchors AS a', 'a.id', '=', 'e.anchor_b_id')
-            ->where('e.anchor_a_id', $ankerId)
-            ->when($typ !== null, fn ($q) => $q->where('e.type', $typ))
-            ->orderByRaw("CASE e.type WHEN 'klassisch' THEN 1 WHEN 'erprobt' THEN 1 WHEN 'verbund' THEN 2 WHEN 'modern' THEN 2 WHEN 'aroma' THEN 3 WHEN 'trinitas' THEN 3 WHEN 'kontrast' THEN 4 ELSE 5 END")
-            // Harmonie-Stärke sekundär: L3 ●●● (best) vor L2 ●● (good) vor Rest. Live sind fast alle
-            // Kanten type='aroma' (Inspire) → der Typ-CASE ist dort neutral, `level` ist der echte
-            // Differenzierer. NULLS-last portabel via CASE (sqlite/mysql).
-            ->orderByRaw('CASE WHEN e.level IS NULL THEN 1 ELSE 0 END, e.level DESC')
-            ->orderBy('a.slug')->limit($limit)
-            // C-b (2026-08-22): axis/level/weight additiv — Konsumenten (pairingBlock, forGeneration,
-            // neighborsForName) rahmen damit die Harmonie-Stärke; Altfelder bleiben unverändert.
-            ->get(['a.id', 'a.slug', 'a.display_de', 'e.type', 'e.evidence', 'e.axis', 'e.level', 'e.weight']);
+        // Spec 60 · P2: Partner aus der Harmonie ({@see AnkerGraph}), stärkste Stufe zuerst. Es gibt
+        // nur noch einen Kantentyp (`aroma`, Inspire); ein anderer `$typ` hat keine Partner. Die
+        // Felder type/evidence/axis/level/weight bleiben für die Konsumenten (pairingBlock,
+        // forGeneration, neighborsForName, pairings.GET) in derselben Form erhalten.
+        if ($typ !== null && $typ !== 'aroma') {
+            return collect();
+        }
+
+        return $this->graph()->partner((int) $ankerId, AnkerGraph::PASST, $limit)
+            ->map(fn ($p) => (object) [
+                'id' => $p->id, 'slug' => $p->slug, 'display_de' => $p->display_de,
+                'type' => 'aroma',
+                'evidence' => $p->stufe === AnkerGraph::HARMONIERT ? 'Foodpairing Inspire (best match)' : 'Foodpairing Inspire (good match)',
+                'axis' => 'harmony',
+                'level' => $p->stufe,
+                'weight' => AnkerGraph::GEWICHT[$p->stufe],
+            ]);
     }
 
     // ── Schreibpfade (Inv. 1/3) ──────────────────────────────────────────
@@ -1755,7 +1744,7 @@ class PairingService
             foreach ($c['partner'] as $p) {
                 $edges[] = ['source' => 'k:'.$c['id'], 'target' => 'a:'.$p['anker_id'], 'kind' => 'kandidat',
                     'typ' => $p['typ'], 'level' => $p['level'] ?? 1, 'weight' => $p['weight'],
-                    'computed' => $p['computed'], 'visible' => true];
+                    'visible' => true];
             }
         }
 
@@ -1773,7 +1762,7 @@ class PairingService
                 foreach ($c['partner'] as $p) {
                     $edges[] = ['source' => 'k:'.$c['id'], 'target' => 'a:'.$p['anker_id'], 'kind' => 'kandidat',
                         'typ' => $p['typ'], 'level' => $p['level'] ?? 1, 'weight' => $p['weight'],
-                        'computed' => $p['computed'], 'visible' => true];
+                        'visible' => true];
                 }
             }
         }
@@ -1912,11 +1901,8 @@ class PairingService
      * „wie hängen die ausgewählten Anker untereinander zusammen" — die eigentliche
      * Beweisführung des Foodpairing-Modells, die im Zutat→Anker-Netz fehlt.
      *
-     * Signal = die gemessene Foodpairing-Harmonie-Matrix (`pairing_anchor_edges`):
-     * beste Kante je UNGEORDNETEM Paar (max level, tie-break weight), Selbst-Loops
-     * raus. Nur Harmonie-Stufen ★★/★★★ (kontrast ist eine eigene Achse und wird hier
-     * nicht als Anker-Harmonie gezeigt). Bucket-Ableitung gespiegelt aus
-     * kandidatenFuerAnker. Existiert keine Kante, entsteht keine Linie.
+     * Signal = die gemessene Foodpairing-Harmonie ({@see AnkerGraph}): je ungeordnetem Paar
+     * eine Linie mit Stufe ★★/★★★. Existiert keine Kante (Stufe 1), entsteht keine Linie.
      *
      * @param  array<int>  $innerIds
      * @return list<array{source:string,target:string,kind:string,typ:string,level:int,weight:float,visible:bool}>
@@ -1927,36 +1913,18 @@ class PairingService
             return [];
         }
 
-        $best = []; // "minId:maxId" => [level, weight, a, b]
-        foreach (DB::table('foodalchemist_pairing_anchor_edges')
-            ->whereIn('anchor_a_id', $innerIds)
-            ->whereIn('anchor_b_id', $innerIds)
-            ->whereColumn('anchor_a_id', '<>', 'anchor_b_id')
-            ->get(['anchor_a_id', 'anchor_b_id', 'type', 'weight', 'level']) as $k) {
-            if ($k->type === 'kontrast') {
-                continue; // eigene Achse — nicht als Harmonie zwischen den Ankern zeigen
-            }
-            $level = $k->level !== null ? max(1, min(3, (int) $k->level)) : 1;
-            $w = $k->weight !== null ? (float) $k->weight : (self::GEWICHTE[$k->type] ?? 0.5);
-            $a = (int) $k->anchor_a_id;
-            $b = (int) $k->anchor_b_id;
-            $key = min($a, $b).':'.max($a, $b);
-            if (! isset($best[$key])
-                || $level > $best[$key]['level']
-                || ($level === $best[$key]['level'] && $w > $best[$key]['weight'])) {
-                $best[$key] = ['level' => $level, 'weight' => $w, 'a' => $a, 'b' => $b];
-            }
-        }
-
         $out = [];
-        foreach ($best as $e) {
+        foreach ($this->graph()->kanten($innerIds, $innerIds) as $k) {
+            if ($k->von > $k->zu) {
+                continue;                                   // jedes Paar steht in beiden Richtungen — einmal zeigen
+            }
             $out[] = [
-                'source' => 'a:'.$e['a'],
-                'target' => 'a:'.$e['b'],
+                'source' => 'a:'.$k->von,
+                'target' => 'a:'.$k->zu,
                 'kind' => 'anker_anker',
-                'typ' => 'stern'.$e['level'],
-                'level' => $e['level'],
-                'weight' => $e['weight'],
+                'typ' => 'stern'.$k->stufe,
+                'level' => $k->stufe,
+                'weight' => AnkerGraph::GEWICHT[$k->stufe],
                 'visible' => true,
             ];
         }
@@ -1967,7 +1935,7 @@ class PairingService
     /**
      * Pairing-Kandidaten für die Kern-Anker: alle Aroma-Partner AUSSERHALB des
      * Ankersets, aggregiert je Kandidat (dish_cover = Anzahl bedienter Kern-Anker,
-     * primärer Typ = stärkste Kante). Legacy-Typen werden kanonisiert.
+     * primärer Typ = stärkste Kante).
      *
      * @return array{0: list<array>, 1: array<int,array>}  [kandidaten, candMeta je candId]
      */
@@ -1977,31 +1945,29 @@ class PairingService
             return [[], []];
         }
 
-        $rows = DB::table('foodalchemist_pairing_anchor_edges AS e')
-            ->join('foodalchemist_vocab_pairing_anchors AS a', 'a.id', '=', 'e.anchor_b_id')
-            ->whereIn('e.anchor_a_id', $innerIds)
-            ->whereNotIn('e.anchor_b_id', $innerIds)
-            ->get(['e.anchor_a_id', 'e.anchor_b_id', 'e.type', 'e.weight', 'e.level', 'e.source_slug', 'a.slug', 'a.display_de']);
+        $kanten = $this->graph()->kanten($innerIds, null, AnkerGraph::PASST, $innerIds);
+        $meta = DB::table('foodalchemist_vocab_pairing_anchors')
+            ->whereIn('id', $kanten->pluck('zu')->unique()->all())
+            ->get(['id', 'slug', 'display_de'])->keyBy('id');
 
         $agg = [];
-        foreach ($rows as $r) {
-            // Inspire-Umbau: Bucket = Stern-Stufe (level). stern3 = Inspire L3 (★★★),
-            // stern2 = Inspire L2 (★★), stern1 = schwächste Harmonie (★, aktuell leer —
-            // rein Inspire kennt nur L2/L3). kontrast = eigene Achse (nach drop-legacy leer).
-            $istKontrast = ($r->type === 'kontrast');
-            $level = $r->level !== null ? (int) $r->level : ($istKontrast ? 0 : 1);
-            $bucket = $istKontrast ? 'kontrast' : 'stern'.max(1, min(3, $level));
-            $cid = (int) $r->anchor_b_id;
-            $w = $r->weight !== null ? (float) $r->weight : (self::GEWICHTE[$r->type] ?? 0.5);
-            if (! isset($agg[$cid])) {
-                $agg[$cid] = ['id' => $cid, 'slug' => $r->slug, 'display_de' => $r->display_de,
-                    'partner' => [], 'ankerSet' => [], 'best' => ['typ' => $bucket, 'weight' => -1.0, 'level' => $level]];
+        foreach ($kanten as $k) {
+            // Bucket = Stern-Stufe: stern3 = Inspire best match, stern2 = good match.
+            $cid = $k->zu;
+            $m = $meta[$cid] ?? null;
+            if ($m === null) {
+                continue;
             }
-            $agg[$cid]['partner'][] = ['anker_id' => (int) $r->anchor_a_id, 'typ' => $bucket, 'level' => $level,
-                'weight' => $w, 'computed' => $r->source_slug === 'computed'];
-            $agg[$cid]['ankerSet'][(int) $r->anchor_a_id] = true;
+            $bucket = 'stern'.$k->stufe;
+            $w = AnkerGraph::GEWICHT[$k->stufe];
+            if (! isset($agg[$cid])) {
+                $agg[$cid] = ['id' => $cid, 'slug' => $m->slug, 'display_de' => $m->display_de,
+                    'partner' => [], 'ankerSet' => [], 'best' => ['typ' => $bucket, 'weight' => -1.0, 'level' => $k->stufe]];
+            }
+            $agg[$cid]['partner'][] = ['anker_id' => $k->von, 'typ' => $bucket, 'level' => $k->stufe, 'weight' => $w];
+            $agg[$cid]['ankerSet'][$k->von] = true;
             if ($w > $agg[$cid]['best']['weight']) {
-                $agg[$cid]['best'] = ['typ' => $bucket, 'weight' => $w, 'level' => $level];
+                $agg[$cid]['best'] = ['typ' => $bucket, 'weight' => $w, 'level' => $k->stufe];
             }
         }
 
@@ -2377,23 +2343,18 @@ class PairingService
 
     // ── intern ───────────────────────────────────────────────────────────
 
-    /** Beste Kante je ungeordnetem Anker-Paar: [a][b] => [gewicht, typ]. */
+    /**
+     * Kante je Anker-Paar: [a][b] => [gewicht, typ]. Übergang bis P6: Gewicht aus der Stufe
+     * (3 → 1,0 · 2 → 0,9), Typ immer `aroma`.
+     */
     private function edgeBest(array $ankerIds): array
     {
         if ($ankerIds === []) {
             return [];
         }
         $out = [];
-        foreach (DB::table('foodalchemist_pairing_anchor_edges')
-            ->whereIn('anchor_a_id', $ankerIds)->whereIn('anchor_b_id', $ankerIds)
-            ->get(['anchor_a_id', 'anchor_b_id', 'type', 'weight']) as $kante) {
-            // computed-Kante trägt ihr eigenes (gradiertes) Gewicht; kuratiert (weight NULL) = typ-getrieben.
-            $w = $kante->weight !== null ? (float) $kante->weight : (self::GEWICHTE[$kante->type] ?? 0.5);
-            foreach ([[$kante->anchor_a_id, $kante->anchor_b_id], [$kante->anchor_b_id, $kante->anchor_a_id]] as [$a, $b]) {
-                if (! isset($out[$a][$b]) || $out[$a][$b][0] < $w) {
-                    $out[$a][$b] = [$w, $kante->type];
-                }
-            }
+        foreach ($this->graph()->kanten($ankerIds, $ankerIds) as $k) {
+            $out[$k->von][$k->zu] = [AnkerGraph::GEWICHT[$k->stufe], 'aroma'];
         }
 
         return $out;
@@ -2560,22 +2521,4 @@ class PairingService
             'partner' => $this->ankerNeighbors($anker->slug, $typ, $limit)->all(),
         ];
     }
-
-    // ── R6.11 · S1: Hypothesen-Modus (read-only, 2026-07-19) ─────────────
-    // Offensive Nutzung des Chemie-/Pairing-Fundaments: „paar mir X ungewöhnlich".
-    // Rankt Kandidaten-Anker nach GETEILTEN Aroma-Compound-Klassen (Ahn-Sinn:
-    // ingredient_key_component) + geteilten Molekül-Klassen (molecules.chem_class),
-    // je mit Mechanismus-Text + Evidenz-Stufe. Fällt graceful auf Aroma-Vektor-Cosinus
-    // zurück, wenn die Compound-Daten dünn sind. Ergebnis ist IMMER als Hypothese (T3)
-    // markiert — nie als Fakt (Inv./Nicht-Ziel §6). Keine KI nötig; das optionale
-    // Narrativ ist ein Folge-Add (S1-Rest), der deterministische Kern trägt für sich.
-
-    // ── R6.11 · S4: Kontrast-Hypothesen (read-only, 2026-07-19) ──────────
-    // Der zweite offensive Zug: „paar mir X über SPANNUNG statt Verwandtschaft".
-    // Aroma-Harmonie (hypothesizeFor) findet nur geteilte Moleküle — Kontrast ist das
-    // Gegenteil und für nicht-negative Aroma-Vektoren mathematisch unsichtbar. Darum
-    // zwei geerdete Quellen: (1) die kuratierten `kontrast`-Kanten (T0, bewährt), (2)
-    // generativ über den 7-Achsen-GESCHMACKS-Vektor entlang kulinarischer Gegensatz-
-    // Paare (Fett↔Säure, Süß↔Bitter … = Lehrbuch/Buch-Kontrast-Layer, keine Erfindung).
-
 }
