@@ -58,9 +58,33 @@ class Einkauf extends Component
     /** @var array<int,array{name:string,code:string,type:string,note:string,is_active:bool}> */
     public array $lagerEdit = [];
 
+    /** Spec 63: Bestellversand per Mail — Versandart + Absender-Angaben */
+    public array $versand = [
+        'art' => 'mailprogramm',
+        'absender_name' => '',
+        'antwort_an' => '',
+        'kopie_an' => '',
+        'signatur' => '',
+        'betreff_bestellung' => '',
+        'text_bestellung' => '',
+        'betreff_storno' => '',
+        'text_storno' => '',
+    ];
+
     public function mount(): void
     {
         $settings = app(TeamSettingsService::class)->for($this->team());
+        $this->versand = [
+            'art' => $settings->bestellversand ?? 'mailprogramm',
+            'absender_name' => (string) ($settings->bestellversand_absender_name ?? ''),
+            'antwort_an' => (string) ($settings->bestellversand_antwort_an ?? ''),
+            'kopie_an' => (string) ($settings->bestellversand_kopie_an ?? ''),
+            'signatur' => (string) ($settings->bestellversand_signatur ?? ''),
+            'betreff_bestellung' => (string) ($settings->bestellversand_betreff_bestellung ?? ''),
+            'text_bestellung' => (string) ($settings->bestellversand_text_bestellung ?? ''),
+            'betreff_storno' => (string) ($settings->bestellversand_betreff_storno ?? ''),
+            'text_storno' => (string) ($settings->bestellversand_text_storno ?? ''),
+        ];
         $this->strategie = ($settings->lead_la_strategie ?? LeadLaStrategie::GuenstigsterPreis)->value;
         $this->prioritaeten = $settings->lead_la_prioritaeten ?? [];
         $this->ausweichKette = (bool) ($settings->show_fallback_chain ?? false);
@@ -83,6 +107,56 @@ class Einkauf extends Component
             'show_fallback_chain' => $this->ausweichKette,
         ]);
         $this->meldung = 'Gespeichert. Bestehende Leads bleiben — über „Leads neu wählen" übernehmen.';
+    }
+
+    /** Spec 63: Versandart und Absender speichern. Kopie-an darf mehrere Adressen (kommagetrennt) enthalten. */
+    public function bestellversandSpeichern(): void
+    {
+        $this->fehler = null;
+        $v = array_map(fn ($x) => is_string($x) ? trim($x) : $x, $this->versand);
+        if (! in_array($v['art'], ['mailprogramm', 'server'], true)) {
+            $this->fehler = 'Unbekannte Versandart.';
+
+            return;
+        }
+        if ($v['antwort_an'] !== '' && ! filter_var($v['antwort_an'], FILTER_VALIDATE_EMAIL)) {
+            $this->fehler = 'Antwort-an ist keine gültige E-Mail-Adresse.';
+
+            return;
+        }
+        foreach (array_filter(array_map('trim', explode(',', $v['kopie_an']))) as $adr) {
+            if (! filter_var($adr, FILTER_VALIDATE_EMAIL)) {
+                $this->fehler = "Kopie an: „{$adr}\" ist keine gültige E-Mail-Adresse.";
+
+                return;
+            }
+        }
+        app(TeamSettingsService::class)->update($this->team(), [
+            'bestellversand' => $v['art'],
+            'bestellversand_absender_name' => $v['absender_name'] ?: null,
+            'bestellversand_antwort_an' => $v['antwort_an'] ?: null,
+            'bestellversand_kopie_an' => $v['kopie_an'] ?: null,
+            'bestellversand_signatur' => $v['signatur'] ?: null,
+            'bestellversand_betreff_bestellung' => $v['betreff_bestellung'] ?: null,
+            'bestellversand_text_bestellung' => $v['text_bestellung'] ?: null,
+            'bestellversand_betreff_storno' => $v['betreff_storno'] ?: null,
+            'bestellversand_text_storno' => $v['text_storno'] ?: null,
+        ]);
+        $this->meldung = $v['art'] === 'server'
+            ? 'Gespeichert. Bestellungen gehen ab jetzt beim Absenden per Mail an den Lieferanten.'
+            : 'Gespeichert. Bestellungen öffnen weiter dein Mailprogramm.';
+    }
+
+    /** Spec 63: Standard-Wortlaut als Startpunkt in die Vorlage übernehmen. */
+    public function vorlageStandardEinsetzen(string $typ): void
+    {
+        if ($typ === 'storno') {
+            $this->versand['betreff_storno'] = 'Stornierung unserer Bestellung {referenz}';
+            $this->versand['text_storno'] = "Guten Tag,\n\nbitte stornieren Sie unsere Bestellung {referenz} vollständig.\nLieferant: {lieferant}\nGeplanter Liefertermin: {liefertermin}\n\nBitte bestätigen Sie uns die Stornierung kurz schriftlich.\n\nVielen Dank.";
+        } else {
+            $this->versand['betreff_bestellung'] = 'Bestellung {lieferant} — {referenz}';
+            $this->versand['text_bestellung'] = "Guten Tag,\n\nbitte folgende Bestellung:\n\n{positionen}\n\nWunsch-Liefertermin: {liefertermin}\nNetto gesamt: {summe}\n\nVielen Dank.";
+        }
     }
 
     public function prioHinzu(): void

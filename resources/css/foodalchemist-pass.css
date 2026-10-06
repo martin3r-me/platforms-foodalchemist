@@ -443,3 +443,43 @@ button { transition: transform 120ms ease-out, background-color 120ms ease, box-
   --t-sidebar-hover: var(--fa-hover);
   --t-sidebar-active: rgba(230, 235, 245, 0.1);
 }
+
+/* Einstellungen: Gruppen als aufklappbare Kacheln (2026-10-06) */
+.fa-settings-gruppe {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 10px;
+  border-radius: var(--fa-radius-control);
+  background: var(--fa-accent-soft);
+  color: var(--fa-accent);
+  font-size: var(--fa-text-md);
+  font-weight: 600;
+  transition: background-color 120ms ease;
+}
+.fa-settings-gruppe:hover { background: var(--fa-accent-soft-hover); }
+.fa-settings-gruppe.is-aktiv { background: var(--fa-accent); color: var(--fa-on-accent); }
+.fa-settings-gruppe-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.55);
+  flex-shrink: 0;
+}
+.fa-settings-gruppe.is-aktiv .fa-settings-gruppe-icon { background: rgba(255, 255, 255, 0.18); }
+.fa-settings-gruppe-zahl {
+  flex-shrink: 0;
+  min-width: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 18px;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.6);
+}
+.fa-settings-gruppe.is-aktiv .fa-settings-gruppe-zahl { background: rgba(255, 255, 255, 0.2); }

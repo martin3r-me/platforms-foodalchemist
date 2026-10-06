@@ -233,6 +233,7 @@ class SpeiseplanService
 
     public function verknuepfeKunde(Team $team, int $id, ?int $companyId, ?int $contactId): FoodAlchemistSpeiseplan
     {
+        \Platform\FoodAlchemist\Support\CrmKunden::pruefe($team, $companyId, $contactId);
         return $this->update($team, $id, ['crm_company_id' => $companyId, 'crm_contact_id' => $contactId]);
     }
 
@@ -557,7 +558,7 @@ class SpeiseplanService
             return collect();
         }
 
-        return app(\Platform\Crm\Services\CompanyLinkService::class)->searchCompanies($suche, $limit);
+        return \Platform\FoodAlchemist\Support\CrmKunden::firmen(\Platform\FoodAlchemist\Support\CrmKunden::aktuellesTeam(), $suche, $limit);
     }
 
     public function sucheKontakte(string $suche, int $limit = 10): Collection
@@ -567,7 +568,7 @@ class SpeiseplanService
             return collect();
         }
 
-        return app(\Platform\Crm\Services\ContactLinkService::class)->searchContacts($suche, $limit);
+        return \Platform\FoodAlchemist\Support\CrmKunden::kontakte(\Platform\FoodAlchemist\Support\CrmKunden::aktuellesTeam(), $suche, $limit);
     }
 
     public function delete(Team $team, int $id): void

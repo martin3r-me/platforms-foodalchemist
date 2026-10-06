@@ -44,10 +44,10 @@
         }
     }
     $statusKnopf = fn ($z) => match ($z) {
-        \Platform\FoodAlchemist\Enums\OrderStatus::Sent => 'Absenden',
+        \Platform\FoodAlchemist\Enums\OrderStatus::Sent => $serverVersand ? 'Absenden per E-Mail' : 'Absenden',
         \Platform\FoodAlchemist\Enums\OrderStatus::Confirmed => 'Als bestätigt markieren',
         \Platform\FoodAlchemist\Enums\OrderStatus::Delivered => 'Als geliefert markieren',
-        \Platform\FoodAlchemist\Enums\OrderStatus::Cancelled => ($detail['status'] ?? 'draft') !== 'draft' ? 'Storno bestätigt' : 'Stornieren',
+        \Platform\FoodAlchemist\Enums\OrderStatus::Cancelled => ($detail['status'] ?? 'draft') === 'draft' ? 'Stornieren' : ($serverVersand ? 'Stornieren und Lieferant per E-Mail informieren' : 'Storno bestätigt'),
         default => ucfirst($z->label()),
     };
 
@@ -132,7 +132,11 @@
                                 @svg('heroicon-o-table-cells', 'w-4 h-4 text-[var(--fa-ink-3)]') Als CSV herunterladen
                             </a>
                             <div class="my-1 border-t border-[var(--fa-line)]"></div>
-                            @if($mailto)
+                            @if($serverVersand)
+                                <span role="menuitem" aria-disabled="true" class="{{ $menueAus }}" title="Versandart „Direkt per E-Mail“ (Einstellungen → Einkauf)">
+                                    @svg('heroicon-o-envelope', 'w-4 h-4') {{ $mailto ? 'Geht beim Absenden direkt per E-Mail raus' : 'E-Mail fehlt beim Lieferanten' }}
+                                </span>
+                            @elseif($mailto)
                                 <a href="{{ $mailto }}" role="menuitem" class="{{ $menuePunkt }}" title="Bestellung als E-Mail an den Lieferanten vorbereiten">
                                     @svg('heroicon-o-envelope', 'w-4 h-4 text-[var(--fa-ink-3)]') E-Mail an Lieferant vorbereiten
                                 </a>
@@ -141,7 +145,7 @@
                                     @svg('heroicon-o-envelope', 'w-4 h-4') E-Mail fehlt beim Lieferanten
                                 </span>
                             @endif
-                            @if(in_array($detail['status'], ['sent', 'confirmed'], true))
+                            @if(! $serverVersand && in_array($detail['status'], ['sent', 'confirmed'], true))
                                 @if($cancellationMailto)
                                     <a href="{{ $cancellationMailto }}" role="menuitem" class="{{ $menuePunkt }} text-[var(--fa-crit)]" title="Storno-Mail an den Lieferanten vorbereiten" data-order-cancellation-mail>
                                         @svg('heroicon-o-envelope', 'w-4 h-4') Storno an Lieferant
@@ -173,6 +177,7 @@
                             <x-fa::signal tone="crit" title="{{ implode(', ', $sendBlockers) }}">Versand gesperrt</x-fa::signal>
                         @endif
                         <button type="button" wire:click="setStatus('{{ $hauptStatus->value }}')" class="{{ $knopfPrimaer }}"
+                            @if($serverVersand && $hauptStatus->value === 'sent') wire:confirm="Bestellung jetzt per E-Mail an den Lieferanten senden?" @endif
                             @disabled($versandGesperrt)
                             @if($versandGesperrt) title="Versand gesperrt: {{ implode(', ', $sendBlockers) }}" @endif
                             data-status-{{ $hauptStatus->value }}>@svg($hauptStatus->value === 'sent' ? 'heroicon-m-paper-airplane' : 'heroicon-m-check', 'w-4 h-4 shrink-0'){{ $statusKnopf($hauptStatus) }}</button>
@@ -189,6 +194,32 @@
             <x-fa::kpis data-orders-kpis :items="$kennzahlen" />
         @endif
     </x-slot:kpiHeader>
+
+    {{-- Spec 63: Mail-Protokoll der Bestellung (nur bei Versandart „Direkt per E-Mail") --}}
+    @if(! $istRunde && $mailProtokoll->isNotEmpty())
+        <div class="mb-4 flex flex-col gap-1.5" data-order-mail-protokoll>
+            @foreach($mailProtokoll as $pm)
+                @php
+                    $ton = ['versendet' => 'ok', 'fehlgeschlagen' => 'crit'][$pm->status] ?? 'info';
+                @endphp
+                <x-fa::notice :tone="$ton">
+                    <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+                        <span class="font-medium">{{ $pm->typ === 'storno' ? 'Storno-Mail' : 'Bestell-Mail' }}</span>
+                        <span>an {{ $pm->an }}</span>
+                        <span class="text-[var(--fa-ink-3)]">
+                            @if($pm->status === 'versendet') versendet {{ $pm->versendet_am?->format('d.m.Y H:i') }}
+                            @elseif($pm->status === 'fehlgeschlagen') fehlgeschlagen ({{ $pm->versuche }}×): {{ \Illuminate\Support\Str::limit($pm->fehler, 160) }}
+                            @else wird gesendet …
+                            @endif
+                        </span>
+                        @if($pm->status === 'fehlgeschlagen')
+                            <x-fa::button size="sm" icon="heroicon-m-arrow-path" wire:click="mailErneutSenden({{ $pm->id }})" class="ml-auto">Erneut senden</x-fa::button>
+                        @endif
+                    </div>
+                </x-fa::notice>
+            @endforeach
+        </div>
+    @endif
 
     @if($istRunde)
         {{-- ═══ BESTELLRUNDE: Rahmen · Quellen · Vorschau · Klärliste ═══ --}}

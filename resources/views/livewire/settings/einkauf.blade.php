@@ -83,6 +83,67 @@
         </label>
     </x-fa::section>
 
+    {{-- Spec 63: Bestellversand per Mail --}}
+    <x-fa::section id="bestellversand" title="Bestellversand" icon="heroicon-o-paper-airplane" class="scroll-mt-6" data-bestellversand
+        description="Wie eine Bestellung beim Absenden zum Lieferanten kommt.">
+        <div class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,16rem),1fr))] gap-2" role="radiogroup" aria-label="Versandart">
+            @foreach([
+                'mailprogramm' => ['Mailprogramm', 'Absenden öffnet dein E-Mail-Programm mit vorbereitetem Text. Du verschickst selbst.'],
+                'server' => ['Direkt per E-Mail', 'Absenden schickt die Bestellung mit PDF direkt an den Lieferanten. Stornos ebenso. Jeder Versand wird protokolliert.'],
+            ] as $wert => [$label, $text])
+                @php
+                    $gewaehlt = ($versand['art'] ?? 'mailprogramm') === $wert;
+                @endphp
+                <label class="flex items-start gap-3 p-3 rounded-[var(--fa-radius-control)] border cursor-pointer transition-colors duration-150 {{ $gewaehlt ? 'border-[var(--fa-accent)] bg-[var(--fa-accent-soft)]' : 'border-[var(--fa-line)] hover:bg-[var(--fa-hover)]' }}">
+                    <input type="radio" wire:model.live="versand.art" value="{{ $wert }}" class="mt-0.5 w-4 h-4 accent-[var(--fa-accent)]" />
+                    <span class="min-w-0">
+                        <span class="block text-[length:var(--fa-text-md)] font-medium {{ $gewaehlt ? 'text-[var(--fa-accent)]' : 'text-[var(--fa-ink)]' }}">{{ $label }}</span>
+                        <span class="block mt-0.5 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">{{ $text }}</span>
+                    </span>
+                </label>
+            @endforeach
+        </div>
+
+        @if(($versand['art'] ?? '') === 'server')
+            <div class="mt-4 grid gap-3 sm:grid-cols-2">
+                <x-fa::field label="Absender-Name" for="versand-absender" optional>
+                    <x-fa::input id="versand-absender" wire:model="versand.absender_name" placeholder="{{ $team->name }} Einkauf" />
+                </x-fa::field>
+                <x-fa::field label="Antwort an" for="versand-antwort" optional>
+                    <x-fa::input id="versand-antwort" type="email" wire:model="versand.antwort_an" placeholder="leer = E-Mail der Person, die absendet" />
+                </x-fa::field>
+                <x-fa::field label="Kopie an (BCC)" for="versand-kopie" optional class="sm:col-span-2">
+                    <x-fa::input id="versand-kopie" wire:model="versand.kopie_an" placeholder="einkauf@betrieb.de, kueche@betrieb.de" />
+                </x-fa::field>
+                <x-fa::field label="Signatur" for="versand-signatur" optional class="sm:col-span-2">
+                    <x-fa::textarea id="versand-signatur" wire:model="versand.signatur" placeholder="Mit freundlichen Grüßen" />
+                </x-fa::field>
+            </div>
+            <p class="mt-2 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">Die Bestell-E-Mail steht beim Lieferanten. Fehlt sie, lässt sich die Bestellung nicht absenden.</p>
+
+            <div class="mt-5 grid gap-4 lg:grid-cols-2" data-bestellversand-vorlagen>
+                @foreach(['bestellung' => 'Vorlage Bestellung', 'storno' => 'Vorlage Storno'] as $typ => $titel)
+                    <div class="flex flex-col gap-2">
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="text-[length:var(--fa-text-md)] font-medium">{{ $titel }}</span>
+                            <x-fa::button size="sm" variant="ghost" wire:click="vorlageStandardEinsetzen('{{ $typ }}')">Standardtext einsetzen</x-fa::button>
+                        </div>
+                        <x-fa::input wire:model="versand.betreff_{{ $typ }}" placeholder="Betreff — leer = Standard" aria-label="{{ $titel }}: Betreff" />
+                        <x-fa::textarea rows="8" wire:model="versand.text_{{ $typ }}" placeholder="Text — leer = Standard" aria-label="{{ $titel }}: Text" class="font-mono" />
+                    </div>
+                @endforeach
+                <p class="lg:col-span-2 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">
+                    Platzhalter: @foreach(\Platform\FoodAlchemist\Services\OrderMailService::PLATZHALTER as $ph)<code class="font-mono">{{ $ph }}</code>@if(! $loop->last) · @endif @endforeach.
+                    Die Signatur wird angehängt.
+                </p>
+            </div>
+        @endif
+
+        <div class="mt-4">
+            <x-fa::button variant="primary" icon="heroicon-m-check" wire:click="bestellversandSpeichern">Bestellversand speichern</x-fa::button>
+        </div>
+    </x-fa::section>
+
     <x-fa::section id="lagerorte" title="Lagerorte" icon="heroicon-o-archive-box" class="scroll-mt-6" data-lagerorte
         description="Wareneingänge buchen auf das Standardlager. Weitere Lagerorte sind die Grundlage für Umlagerung, Inventur und Produktion.">
         <div class="flex flex-wrap items-end gap-3">

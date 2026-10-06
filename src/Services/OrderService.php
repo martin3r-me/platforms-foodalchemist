@@ -1912,6 +1912,8 @@ class OrderService
             if ($blocker !== []) {
                 throw new \RuntimeException('Bestellung kann nicht versendet werden: '.implode(', ', $blocker));
             }
+            // Spec 63: bei Versandart „server" muss eine Mail rausgehen können — sonst nicht absenden.
+            app(OrderMailService::class)->pruefeVersandbar($team, $order);
             $order->sent_at = now();
         } elseif ($ziel === OrderStatus::Confirmed) {
             $order->confirmed_at = now();
@@ -1921,6 +1923,17 @@ class OrderService
         }
         $order->status = $ziel;
         $order->save();
+
+        // Spec 63: Bestellversand per Mail (nur Versandart „server"; Standard „mailprogramm" = mailto wie bisher).
+        // Hier im Service, damit Oberfläche, Bestellrunden und MCP denselben Weg nehmen.
+        $mailer = app(OrderMailService::class);
+        if ($mailer->istServerVersand($team)) {
+            if ($ziel === OrderStatus::Sent) {
+                $mailer->planen($team, $order, 'bestellung');
+            } elseif ($ziel === OrderStatus::Cancelled && in_array($aktuell, [OrderStatus::Sent, OrderStatus::Confirmed], true)) {
+                $mailer->planen($team, $order, 'storno');
+            }
+        }
 
         // Einkauf E2: FA-Einkauf → Journal. Storno entfernt die Ist-Buchungen; das Erreichen
         // des konfigurierten Auslöse-Status (sent|delivered, TeamSettingsService) spiegelt die
