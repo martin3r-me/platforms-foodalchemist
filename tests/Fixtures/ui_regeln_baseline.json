@@ -146,6 +146,10 @@
         "mini_schrift": 2,
         "style_statisch": 6
     },
+    "livewire/settings/speiseplan-chips.blade.php": {
+        "important": 6,
+        "mini_schrift": 6
+    },
     "livewire/speisekarte/partials/praesentation-rubrik.blade.php": {
         "mini_schrift": 1
     },
