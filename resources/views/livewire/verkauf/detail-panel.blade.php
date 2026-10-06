@@ -148,11 +148,14 @@
 
         {{-- Pairing-Netz — Inline-Graph (Detail) + Anker-Pflege --}}
         <x-foodalchemist::section title="Pairing-Netz" icon="heroicon-o-share"
-            :meta="$kohaesion !== null ? 'Kohäsion ' . $kohaesion['score'] . ' · Coverage ' . $kohaesion['coverage_pct'] . ' %' : null" data-vk-kern-anker>
+            :meta="($analyse['harmonie']['zusammenhalt']['wert'] ?? null) !== null ? 'Harmonie ' . $analyse['harmonie']['zusammenhalt']['stufe'] . ' · ' . $analyse['harmonie']['zusammenhalt']['abdeckung_pct'] . ' % der Paare bewertbar' : null" data-vk-kern-anker>
             <x-slot:actions>
                 <button type="button" wire:click="$dispatch('pairing-netz.oeffnen', { recipeId: {{ $rezept->id }} })"
                         class="{{ $btnGhostXs }}" title="Voller Graph: verwandte Rezepte + Vorschläge" data-vk-pairing-netz>Netz öffnen @svg('heroicon-o-arrow-up-right', 'w-3.5 h-3.5')</button>
             </x-slot:actions>
+            @if($analyse)
+                <x-foodalchemist::passt-zusammen :analyse="$analyse" />
+            @endif
             <x-foodalchemist::pairing-netz :recipe-id="$rezept->id" :netz="$netz" />
             <div class="flex flex-wrap gap-1 mt-2">
                 @foreach($kernAnker as $anker)

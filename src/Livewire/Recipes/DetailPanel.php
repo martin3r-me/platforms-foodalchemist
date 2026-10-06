@@ -282,6 +282,9 @@ class DetailPanel extends Component
             'netz' => $rezept !== null && ! $this->embedded && $this->section === null
                 ? app(\Platform\FoodAlchemist\Services\PairingService::class)->pairingNetz($team, $rezept->id)
                 : ['nodes' => [], 'edges' => [], 'meta' => []],
+            // Spec 58 · Paket 6: Harmonie + Kontrast als Sätze (nur Standalone-Panel, wie das Netz).
+            'analyse' => $rezept !== null && ! $this->embedded && $this->section === null
+                ? app(\Platform\FoodAlchemist\Services\PairingAnalyseService::class)->analyseRezept($rezept->id) : null,
             'ankerKandidaten' => $this->ankerSuche !== ''
                 ? TeamScope::applyVisible(\Illuminate\Support\Facades\DB::table('foodalchemist_vocab_pairing_anchors')
                     ->whereRaw('LOWER(slug) LIKE ?', ['%' . mb_strtolower($this->ankerSuche) . '%'])
