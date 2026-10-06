@@ -11,29 +11,33 @@ use Livewire\Component;
  */
 class Demnaechst extends Component
 {
-    /** Statisch aus 14_ROADMAP_PHASE2 — bewusst kein DB-Zeug (reine Vorschau). */
+    /**
+     * Statisch aus 14_ROADMAP_PHASE2 — bewusst kein DB-Zeug (reine Vorschau).
+     * fa-pass: `icon` = Heroicon-Name (gleich der Zuordnung im View), `status` muss für
+     * fertige Bereiche „Fertig" enthalten (der View filtert darauf), `name` ist Schlüssel im View.
+     */
     public const DOMAENEN = [
-        ['icon' => '📕', 'name' => 'Foodbook / Portfolio', 'status' => '✓ Fertig — live im Modul',
-            'idee' => 'Speisekarten-/Menü-Builder: Kapitel → Blöcke (VK-Rezepte, Texte, Varianten), Schreibstil-Transformation des VK-Wordings in Brand-Voice, Preis-Snapshot beim Versand (V-25), PDF-Export (V-26).'],
-        ['icon' => '🧮', 'name' => 'Kalkulation (HK2)', 'status' => 'M11+ — Brainstorming offen',
-            'idee' => 'Produktions- und Produkt-Kalkulation auf Basis Herstellkosten 2: EK + Arbeitszeit × Stundensatz + Gemeinkosten-Zuschläge. Arbeitszeit je Rezept ist schon gepflegt.'],
-        ['icon' => '🏭', 'name' => 'Produktionsplanung', 'status' => 'M11+ — Brainstorming offen',
-            'idee' => 'Produktionsaufträge aus Bestellmengen → skalierte Basisrezepte (Yield-Mathematik vorhanden), Tagespläne je Station/Equipment.'],
-        ['icon' => '📅', 'name' => 'Speiseplan', 'status' => '✓ Fertig — live im Modul',
-            'idee' => 'Wochen-/Zyklenpläne aus VK-Rezepten mit Diät- und Allergen-Abdeckung; Sektor-Eignung als Filter.'],
-        ['icon' => '🍽️', 'name' => 'Speisekarte', 'status' => '✓ Fertig — live im Modul',
-            'idee' => 'Restaurant-à-la-carte-Karte (dritte Ausgabeform): Rubriken → Positionen (Gericht/Fix-Menü/Getränk), LMIV-Allergen-/Zusatzstoff-Fußnoten + Brutto-Preise auf der Druckkarte, Branding, Wechsel-/Saisonkarte per Duplizieren, KI-Wording + Leitstelle-Cockpit.'],
-        ['icon' => '🛒', 'name' => 'Einkauf', 'status' => 'M11+ — Brainstorming offen',
-            'idee' => 'Bestellvorschläge aus Produktionsplan × Lead-LA — die Vorbestellzeiten (V-29) sind als Felder schon importiert.'],
-        ['icon' => '📦', 'name' => 'Lager', 'status' => 'M11+ — Brainstorming offen',
-            'idee' => 'Bestände je Artikel/GP, Wareneingang gegen Bestellung, Chargen für die Allergen-Rückverfolgung.'],
-        ['icon' => '📊', 'name' => 'Controlling', 'status' => 'M11+ — Brainstorming offen',
-            'idee' => 'Soll/Ist-Wareneinsatz, Margen-Trends, KI-Kosten-Auswertung.'],
+        ['icon' => 'heroicon-o-book-open', 'name' => 'Foodbook / Portfolio', 'status' => 'Fertig, im Modul verfügbar',
+            'idee' => 'Speisekarten und Menüs zusammenstellen: Kapitel mit Gerichten, Texten und Varianten, Verkaufstexte im Ton der Marke, Preisstand beim Versand festgehalten, PDF-Export.'],
+        ['icon' => 'heroicon-o-calculator', 'name' => 'Kalkulation (HK2)', 'status' => 'Geplant, noch nicht terminiert',
+            'idee' => 'Kalkulation auf Basis der Herstellkosten 2: Wareneinsatz plus Arbeitszeit mal Stundensatz plus Gemeinkosten-Zuschläge. Die Arbeitszeit je Rezept ist schon gepflegt.'],
+        ['icon' => 'heroicon-o-building-office-2', 'name' => 'Produktionsplanung', 'status' => 'Geplant, noch nicht terminiert',
+            'idee' => 'Produktionsaufträge aus Bestellmengen, daraus hochgerechnete Basisrezepte und Tagespläne je Station und Gerät.'],
+        ['icon' => 'heroicon-o-calendar-days', 'name' => 'Speiseplan', 'status' => 'Fertig, im Modul verfügbar',
+            'idee' => 'Wochen- und Zykluspläne aus Gerichten mit Diät- und Allergen-Abdeckung, Eignung je Verpflegungsbereich als Filter.'],
+        ['icon' => 'heroicon-o-document-text', 'name' => 'Speisekarte', 'status' => 'Fertig, im Modul verfügbar',
+            'idee' => 'À-la-carte-Karte fürs Restaurant: Rubriken mit Gerichten, festen Menüs und Getränken, Allergen- und Zusatzstoff-Fußnoten nach LMIV, Bruttopreise auf der Druckkarte, eigenes Erscheinungsbild, Wechsel- und Saisonkarten per Duplizieren, Texte mit KI.'],
+        ['icon' => 'heroicon-o-shopping-cart', 'name' => 'Einkauf', 'status' => 'Geplant, noch nicht terminiert',
+            'idee' => 'Bestellvorschläge aus dem Produktionsplan und dem bevorzugten Lieferantenartikel. Die Vorbestellzeiten der Lieferanten sind schon importiert.'],
+        ['icon' => 'heroicon-o-archive-box', 'name' => 'Lager', 'status' => 'Geplant, noch nicht terminiert',
+            'idee' => 'Bestände je Artikel und Grundprodukt, Wareneingang gegen Bestellung, Chargen für die Allergen-Rückverfolgung.'],
+        ['icon' => 'heroicon-o-chart-bar', 'name' => 'Controlling', 'status' => 'Geplant, noch nicht terminiert',
+            'idee' => 'Soll- und Ist-Wareneinsatz, Margen-Entwicklung, Auswertung der KI-Kosten.'],
     ];
 
     public function render()
     {
         return view('foodalchemist::livewire.demnaechst', ['domaenen' => self::DOMAENEN])
-            ->layout('platform::layouts.app');
+            ->layout('foodalchemist::layouts.standalone');
     }
 }

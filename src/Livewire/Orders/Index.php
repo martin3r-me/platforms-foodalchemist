@@ -523,6 +523,6 @@ class Index extends Component
             'runden' => $runden,
             'selectedRound' => $selectedRound,
             'bedarfe' => $bedarfe,
-        ])->layout('platform::layouts.app');
+        ])->layout('foodalchemist::layouts.standalone');
     }
 }

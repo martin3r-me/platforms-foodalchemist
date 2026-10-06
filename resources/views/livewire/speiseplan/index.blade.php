@@ -1,14 +1,14 @@
-{{-- Speiseplan-Browser (Spec 29 / Editor-Rollout) — Übersichts-Liste; Planen im Fullscreen-Editor.
-     Zeilen-Klick / „+ Neuer Plan" öffnen den Editor per speiseplan-editor.bearbeiten. --}}
-@php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
-{{-- Spec 33 P0: Labels und Farben aus dem Enum statt aus einer eigenen Map (hier stand
-     `active`, das Foodbook-Blade schrieb dasselbe, die Migration meinte `aktiv`). --}}
-@php($statusLabel = \Platform\FoodAlchemist\Enums\AusgabeStatus::optionen())
-@php($statusVariant = collect(\Platform\FoodAlchemist\Enums\AusgabeStatus::cases())->mapWithKeys(fn ($c) => [$c->value => $c->badgeVariant()])->all())
+{{-- Speiseplan-Browser (Spec 29 / Editor-Rollout) — fa-pass (2026-10-05), Bausteine <x-fa::…>.
+     Liste links, Aushang-Vorschau in der Mitte, Info rechts. Geplant wird im Vollbild-Editor:
+     Zeilen-Klick wählt, „Plan bearbeiten" / „Neuer Plan" öffnen ihn per speiseplan-editor.bearbeiten.
+     wire:-Bindungen und data-Marker unverändert. --}}
+@php
+    $statusTon = ['success' => 'ok', 'warning' => 'warn', 'danger' => 'crit', 'info' => 'info'];
+@endphp
 
 <x-ui-page>
     <x-slot:navbar>
-        <x-ui-page-navbar title="Speiseplan" icon="heroicon-o-calendar-days" />
+        <x-foodalchemist::shell.page-navbar title="Speiseplan" icon="heroicon-o-calendar-days" />
     </x-slot:navbar>
 
     <x-slot name="actionbar">
@@ -20,60 +20,62 @@
 
     <x-slot name="sidebar">
         <x-ui-page-sidebar title="Speisepläne" width="w-72">
-            <div class="p-3 space-y-2">
-                <input type="search" wire:model.live.debounce.300ms="search" placeholder="Plan suchen …" class="{{ $input }}" />
-                <button type="button" wire:click="neu" class="{{ $btnPrimary }} w-full justify-center" data-sp-neu>+ Neuer Plan</button>
-                <div class="mt-2 space-y-1">
+            <div class="p-3 flex flex-col gap-3">
+                <div class="relative">
+                    <label for="sp-suche" class="sr-only">Speisepläne durchsuchen</label>
+                    @svg('heroicon-m-magnifying-glass', 'w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--fa-ink-3)] pointer-events-none')
+                    <x-fa::input id="sp-suche" type="search" wire:model.live.debounce.300ms="search" placeholder="Plan suchen" class="pl-8" />
+                </div>
+                <x-fa::button variant="primary" icon="heroicon-m-plus" class="w-full" wire:click="neu" data-sp-neu>Neuer Plan</x-fa::button>
+                <div class="flex flex-col gap-0.5">
                     @forelse($plaene as $p)
                         <button type="button" wire:key="sp-list-{{ $p->id }}" wire:click="waehle({{ $p->id }})" data-sp-zeile="{{ $p->id }}"
-                            class="w-full text-left px-2 py-1.5 rounded-lg text-xs transition-all {{ $selectedId === $p->id ? 'bg-violet-500/10 text-violet-700' : 'hover:bg-black/[0.03] text-gray-700' }}">
-                            <div class="font-medium truncate">{{ $p->name }}</div>
-                            <div class="text-[10px] text-gray-500">{{ $p->statusWert()->label() }} · {{ $p->cycle_weeks }} Wo. · {{ $p->entries_count }} Einträge</div>
+                                @if($selectedId === $p->id) aria-current="true" @endif
+                                class="w-full text-left px-2.5 py-2 rounded-[var(--fa-radius-control)] transition-colors {{ $selectedId === $p->id ? 'bg-[var(--fa-accent-soft)] text-[var(--fa-accent)]' : 'text-[var(--fa-ink)] hover:bg-[var(--fa-hover)]' }}">
+                            <span class="block text-[length:var(--fa-text-md)] font-medium truncate">{{ $p->name }}</span>
+                            <span class="block text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)] tabular-nums">{{ $p->statusWert()->label() }} · {{ $p->cycle_weeks }} {{ $p->cycle_weeks == 1 ? 'Woche' : 'Wochen' }} · {{ number_format($p->entries_count, 0, ',', '.') }} {{ $p->entries_count == 1 ? 'Eintrag' : 'Einträge' }}</span>
                         </button>
                     @empty
-                        <div class="px-2 py-6 text-center text-[11px] text-gray-500">Keine Pläne. Oben „+ Neuer Plan".</div>
+                        <x-fa::empty compact icon="heroicon-o-calendar-days" title="Keine Pläne">{{ $search !== '' ? 'Kein Plan passt zur Suche.' : 'Mit „Neuer Plan" den ersten anlegen.' }}</x-fa::empty>
                     @endforelse
                 </div>
-                <div class="pt-1">{{ $plaene->links() }}</div>
+                <div class="pt-1">{{ $plaene->links('foodalchemist::components.fa.pagination') }}</div>
             </div>
         </x-ui-page-sidebar>
     </x-slot>
 
-    {{-- Rechtes Detail-Panel (read-only Info) — konsistent zu Speisekarte/Foodbook --}}
+    {{-- Rechtes Detail-Panel (nur lesend) — konsistent zu Speisekarte/Foodbook --}}
     <x-slot name="activity">
         <x-foodalchemist::detail-sidebar title="Detail" width="w-80" scope="activity_speiseplan" side="right" icon="heroicon-o-information-circle" :default-open="true">
             @if($plan)
                 @include('foodalchemist::livewire.speiseplan.partials.detail', ['plan' => $plan])
             @else
-                <div class="p-4 text-[11px] text-gray-400">Wähle links einen Plan, um Details zu sehen.</div>
+                <div class="p-4 flex flex-col gap-5 min-h-full bg-[var(--fa-ground)]">
+                    <x-fa::empty icon="heroicon-o-calendar-days" title="Kein Plan gewählt">Links einen Plan anklicken, dann erscheinen hier Einträge, Linien und offene Punkte.</x-fa::empty>
+                </div>
             @endif
         </x-foodalchemist::detail-sidebar>
     </x-slot>
 
-    {{-- Editor (Fullscreen-Dark, pro Plan) statt Master-Detail — geöffnet per speiseplan-editor.bearbeiten --}}
+    {{-- Editor (Vollbild, Werkbank-Modus, pro Plan) — geöffnet per speiseplan-editor.bearbeiten --}}
     <livewire:foodalchemist.speiseplan.editor />
 
-    <x-ui-page-container padding="px-6 pb-6" spacing="space-y-4">
+    <x-ui-page-container padding="px-6 py-6" spacing="space-y-4">
         @if(! $plan)
-            <div class="relative overflow-hidden {{ $card }} p-10 text-center text-sm text-gray-500">
-                <div class="{{ $cardAccent }}"></div>
-                Wähle links einen Speiseplan oder lege einen neuen an.
-            </div>
+            <section class="fa-surface">
+                <x-fa::empty icon="heroicon-o-calendar-days" title="Kein Speiseplan gewählt">Links einen Speiseplan wählen oder mit „Neuer Plan" einen anlegen.</x-fa::empty>
+            </section>
         @else
-            {{-- Vorschau-Kopf: Aktionen. „Bearbeiten" öffnet den Fullscreen-Editor (Wochen-Matrix/Linien). --}}
-            <div class="flex flex-wrap items-center justify-between gap-3">
-                <div class="min-w-0">
-                    <h1 class="text-lg font-semibold tracking-tight text-gray-900 truncate">{{ $plan->name }}</h1>
-                    <p class="text-[11px] text-gray-500">{{ $plan->cycle_weeks }}-Wochen-Zyklus · {{ $plan->entries->count() }} Einträge</p>
-                </div>
-                <div class="flex flex-wrap gap-2">
-                    <button type="button" wire:click="bearbeiten" class="{{ $btnPrimary }}" data-sp-bearbeiten>@svg('heroicon-o-pencil-square', 'w-4 h-4') Bearbeiten</button>
-                    <a href="{{ route('foodalchemist.speiseplan.dokument', $plan->id) }}?mahlzeit={{ $vorschauMahlzeit }}" target="_blank" class="{{ $btnGhost }}">Aushang (Druck)</a>
-                    <button type="button" wire:click="duplizieren" wire:confirm="Diesen Speiseplan mit allen Linien und Zellen als Kopie (Entwurf) anlegen?" class="{{ $btnGhost }}" data-sp-duplizieren>@svg('heroicon-o-document-duplicate', 'w-4 h-4') Duplizieren</button>
-                </div>
-            </div>
+            <x-fa::page-header :title="$plan->name" :subtitle="$plan->cycle_weeks . '-Wochen-Zyklus · ' . number_format($plan->entries->count(), 0, ',', '.') . ' ' . ($plan->entries->count() == 1 ? 'Eintrag' : 'Einträge')">
+                <x-slot:actions>
+                    <x-fa::badge :tone="$statusTon[$plan->statusWert()->badgeVariant()] ?? 'neutral'">{{ $plan->statusWert()->label() }}</x-fa::badge>
+                    <x-fa::button icon="heroicon-m-printer" :href="route('foodalchemist.speiseplan.dokument', $plan->id) . '?mahlzeit=' . $vorschauMahlzeit" target="_blank">Aushang drucken</x-fa::button>
+                    <x-fa::button icon="heroicon-m-document-duplicate" wire:click="duplizieren" wire:confirm="Diesen Speiseplan mit allen Linien und Zellen als Kopie (Entwurf) anlegen?" data-sp-duplizieren>Plan duplizieren</x-fa::button>
+                    <x-fa::button variant="primary" icon="heroicon-m-pencil-square" wire:click="bearbeiten" data-sp-bearbeiten>Plan bearbeiten</x-fa::button>
+                </x-slot:actions>
+            </x-fa::page-header>
 
-            {{-- Aushang (Druck-Layout, read-only) --}}
+            {{-- Aushang (Druck-Layout, nur lesend) --}}
             @include('foodalchemist::livewire.speiseplan.partials.vorschau', ['vorschau' => $vorschau])
         @endif
     </x-ui-page-container>

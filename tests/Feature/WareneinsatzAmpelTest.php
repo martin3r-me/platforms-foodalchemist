@@ -77,8 +77,11 @@ it('der VK-Editor tönt die Wareneinsatz-Kachel nach der Ampel', function () {
 
     expect($html)->toContain('data-kpi="wareneinsatz"');
     // Die Kachel trägt jetzt eine Wertung statt Dauer-Neutral …
-    $kachel = substr($html, strpos($html, 'data-kpi="wareneinsatz"') - 220, 260);
-    expect($kachel)->toContain('kpi-bad');
+    // fa-pass: die Kachel kommt aus x-fa::kpis — der Zustandston sitzt als Token-Farbe am Wert
+    // (rot = --fa-crit), der hinter dem Marker steht statt davor.
+    $start = strpos($html, 'data-kpi="wareneinsatz"');
+    $kachel = substr($html, $start, strpos($html, '</dd>', $start) - $start);   // genau diese eine Kachel
+    expect($kachel)->toContain('text-[var(--fa-crit)]');
     // … und nennt die Vorgabe im Tooltip, damit die Farbe erklärbar ist
     expect($html)->toContain('Ziel des Teams: ' . number_format($ziel, 1, ',', '.') . ' %');
 });

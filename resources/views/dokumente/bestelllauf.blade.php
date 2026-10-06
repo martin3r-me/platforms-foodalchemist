@@ -1,69 +1,144 @@
+@php
+    $pdf = $istPdf ?? false;
+    /* fa-pass Druck-Muster (2026-10-05, wie dokumente/report): gebündeltes Versandprotokoll,
+       ein Lieferantenbeleg je Seite. Feste Werte statt CSS-Variablen (DomPDF kann keine). */
+    $brand = '#0a3dd6';
+    $c = [
+        'ink' => '#131a26', 'ink2' => '#4a5466', 'ink3' => '#657084',
+        'line' => '#dde2ea', 'soft' => '#f3f5f8', 'rail' => '#0d1424', 'railText' => '#b6c0d2',
+    ];
+    $logoPfad = dirname((new \ReflectionClass(\Platform\FoodAlchemist\FoodAlchemistServiceProvider::class))->getFileName(), 2) . '/resources/brand/fa-wordmark-900.png';
+    $logo = is_file($logoPfad) ? 'data:image/png;base64,' . base64_encode((string) file_get_contents($logoPfad)) : null;
+    $geld = fn ($v) => number_format((float) $v, 2, ',', '.') . ' €';
+    $zahl = fn ($v, $dec = 2) => rtrim(rtrim(number_format((float) $v, $dec, ',', '.'), '0'), ',');
+@endphp
 <!DOCTYPE html>
 <html lang="de">
 <head>
     <meta charset="utf-8">
     <title>Versandprotokoll Bestellungen</title>
     <style>
+        @page { size: A4 portrait; margin: {{ $pdf ? '2.15cm 1.4cm 1.5cm 1.4cm' : '1.5cm 1.3cm' }}; }
         * { box-sizing: border-box; }
-        body { margin: 0; padding: 28px; color: #1f2937; font: 12px/1.45 "DejaVu Sans", Arial, sans-serif; }
-        .actions { margin: 0 auto 20px; max-width: 820px; }
-        .btn { display: inline-block; margin-right: 6px; padding: 7px 12px; border-radius: 6px; background: #6d28d9; color: white; text-decoration: none; }
-        .btn.secondary { background: #e5e7eb; color: #374151; }
-        .order { max-width: 820px; margin: 0 auto; page-break-after: always; }
-        .order:last-child { page-break-after: auto; }
-        .head { display: flex; justify-content: space-between; gap: 20px; border-bottom: 2px solid #6d28d9; padding-bottom: 12px; margin-bottom: 14px; }
-        h1 { margin: 0 0 3px; color: #111827; font-size: 20px; }
-        .muted { color: #6b7280; }
-        .status { font-weight: bold; text-align: right; }
-        table { width: 100%; border-collapse: collapse; margin-top: 14px; }
-        th { padding: 5px 6px; border-bottom: 1px solid #d1d5db; color: #6b7280; font-size: 10px; text-align: left; text-transform: uppercase; }
-        td { padding: 5px 6px; border-bottom: 1px solid #eceff3; vertical-align: top; }
-        .right { text-align: right; white-space: nowrap; }
-        .total { margin-top: 12px; padding-top: 8px; border-top: 2px solid #6d28d9; font-size: 15px; font-weight: bold; text-align: right; }
-        .foot { margin-top: 22px; color: #9ca3af; font-size: 10px; }
-        @media print { body { padding: 0; } .actions { display: none; } }
+        body { font-family: "DejaVu Sans", Arial, sans-serif; color: {{ $c['ink'] }}; background: {{ $pdf ? '#fff' : $c['soft'] }}; margin: 0; padding: 0; font-size: 10px; line-height: 1.3; }
+        .doc { max-width: {{ $pdf ? 'none' : '960px' }}; margin: 0 auto; background: #fff; padding: {{ $pdf ? '0' : '2.15cm 1.4cm 1.5cm 1.4cm' }}; }
+        .band-top {
+            {{ $pdf ? 'position: fixed; top: -2.15cm; left: -1.4cm; width: 18.2cm;' : '' }}
+            height: 1.25cm; background: #fff; color: {{ $c['ink3'] }}; padding: 0 1.4cm; border-bottom: 2px solid {{ $brand }};{{ $pdf ? '' : ' max-width: 960px; margin: 0 auto;' }}
+        }
+        .band-top .bt-label { {{ $pdf ? 'display: block; padding-top: 0.44cm;' : 'display: block; line-height: 1.25cm;' }} font-size: 9.5px; letter-spacing: .02em; text-align: right; }
+        .band-top img { height: {{ $pdf ? '0.78cm' : '0.8cm' }}; vertical-align: middle; }
+        .band-top .bt-logo { {{ $pdf ? 'position: absolute; top: 0.22cm; left: 1.4cm;' : 'float: left; padding-top: 0.22cm;' }} }
+        .band-bottom {
+            {{ $pdf ? 'position: fixed; bottom: -1.5cm; left: -1.4cm; width: 18.2cm;' : '' }}
+            height: 0.95cm; border-top: 1px solid {{ $c['line'] }}; color: {{ $c['ink3'] }};{{ $pdf ? '' : ' max-width: 960px; margin: 0 auto; background: #fff;' }} font-size: 8.5px; padding: 0 1.4cm;
+        }
+        .band-bottom .bb-foot { display: block; line-height: 0.95cm; }
+        .actions { background: {{ $c['rail'] }}; color: #fff; padding: 12px 16px; margin: -2.15cm -1.4cm 20px; }
+        .actions a { display: inline-block; color: #fff; text-decoration: none; border: 1px solid rgba(182,192,210,.28); border-radius: 999px; padding: 5px 10px; margin: 2px; font-size: 11px; }
+        .actions a.active { background: {{ $brand }}; border-color: {{ $brand }}; }
+        .actions strong { color: {{ $c['railText'] }}; font-weight: bold; margin-right: 4px; }
+
+        .order { page-break-after: always; }
+        .order.letzte { page-break-after: auto; }
+        .order + .order { {{ $pdf ? '' : 'margin-top: 28px; padding-top: 18px; border-top: 1px dashed ' . $c['line'] . ';' }} }
+        header { margin-bottom: 6px; }
+        .kicker { font-size: 9.5px; letter-spacing: .02em; color: {{ $c['ink3'] }}; }
+        h1 { font-size: 20px; margin: 2px 0 2px; letter-spacing: -.02em; color: {{ $c['ink'] }}; }
+        .rule { height: 3px; width: 3.6cm; background: {{ $brand }}; margin: 5px 0 6px; }
+        .muted { color: {{ $c['ink3'] }}; font-weight: normal; }
+        p { margin: 0 0 5px; }
+
+        .grid { width: 100%; margin: 3px 0 6px; font-size: 0; }
+        .grid > div { display: inline-block; width: {{ $pdf ? '22.4%' : '24.6%' }}; border: 1px solid {{ $c['line'] }}; padding: 2px 6px; vertical-align: top; font-size: 10px; margin-right: -1px; margin-bottom: -1px; overflow-wrap: anywhere; }
+        .grid > div.wide { width: {{ $pdf ? '47.3%' : '49.8%' }}; }
+        .grid span { display: block; color: {{ $c['ink3'] }}; font-size: 8.5px; letter-spacing: .02em; margin-bottom: 0; }
+
+        table { width: 100%; border-collapse: collapse; margin: 3px 0 6px; table-layout: fixed; page-break-inside: auto; }
+        thead { display: table-header-group; }
+        tr { page-break-inside: avoid; page-break-after: auto; }
+        th, td { border: 1px solid {{ $c['line'] }}; padding: 2px 5px; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+        th { background: {{ $c['soft'] }}; color: {{ $c['ink2'] }}; font-size: 8.5px; font-weight: bold; letter-spacing: .02em; }
+        td.num, th.num { text-align: right; }
+        .c-art { width: 13%; }
+        .c-geb { width: 11%; }
+        .c-anz { width: 8%; }
+        .c-preis { width: 12%; }
+        .c-summe { width: 12%; }
+        .sum-line td { border-top: 2px solid {{ $c['ink3'] }}; font-weight: bold; background: {{ $c['soft'] }}; font-size: 11px; }
+        .schluss { margin-top: 8px; color: {{ $c['ink3'] }}; font-size: 8.5px; }
+
+        @media print {
+            .actions { display: none; }
+            body { background: #fff; }
+            .doc { max-width: none; margin: 0; padding: 0; }
+            .order + .order { margin-top: 0; padding-top: 0; border-top: 0; }
+            .band-top { margin-bottom: 12px; }
+            .band-bottom { margin-top: 14px; }
+        }
     </style>
 </head>
 <body>
-@unless($istPdf ?? false)
-    <div class="actions">
-        <a class="btn" href="javascript:window.print()">Gebündelt drucken</a>
-        <a class="btn secondary" href="{{ request()->fullUrlWithQuery(['pdf' => 1]) }}">PDF herunterladen</a>
-    </div>
-@endunless
-
-@foreach($dokumente as $dok)
-    <section class="order">
-        <div class="head">
-            <div>
-                <h1>Bestellung an {{ $dok['lieferant']['name'] ?? '—' }}</h1>
-                <div class="muted">Beleg ord-{{ $dok['id'] }}@if($dok['reference']) · {{ $dok['reference'] }}@endif</div>
-                @if($dok['created_at'])<div>Bestelldatum: <strong>{{ $dok['created_at'] }}</strong></div>@endif
-                @if($dok['desired_delivery_date'])<div>Wunsch-Liefertermin: <strong>{{ \Carbon\Carbon::parse($dok['desired_delivery_date'])->format('d.m.Y') }}</strong></div>@endif
-            </div>
-            <div class="status">
-                {{ $dok['status_label'] }}<br>
-                <span class="muted">{{ $dok['sent_at'] ?: $erstelltAm }}</span>
-            </div>
+<div class="band-top">
+    @if($logo)<span class="bt-logo"><img src="{{ $logo }}" alt="Food.Alchemist"></span>@endif
+    <span class="bt-label">Versandprotokoll Bestellungen</span>
+</div>
+<main class="doc">
+    @unless($pdf)
+        <div class="actions">
+            <strong>Versandprotokoll · {{ count($dokumente) }} {{ count($dokumente) === 1 ? 'Beleg' : 'Belege' }}:</strong>
+            <a class="active" href="javascript:window.print()">Gebündelt drucken</a>
+            <a href="{{ request()->fullUrlWithQuery(['pdf' => 1]) }}">PDF herunterladen</a>
         </div>
+    @endunless
 
-        <table>
-            <thead><tr><th>Artikel</th><th>Gebinde</th><th class="right">Anzahl</th><th class="right">Preis</th><th class="right">Summe</th></tr></thead>
-            <tbody>
-            @foreach($dok['zeilen'] as $zeile)
-                <tr>
-                    <td>{{ $zeile['designation'] ?: '—' }}@if($zeile['article_number'])<br><span class="muted">Art. {{ $zeile['article_number'] }}</span>@endif</td>
-                    <td>{{ $zeile['packaging_unit'] ?: '—' }}</td>
-                    <td class="right">{{ rtrim(rtrim(number_format($zeile['qty_packs'], 2, ',', '.'), '0'), ',') }}</td>
-                    <td class="right">{{ $zeile['pack_price'] !== null ? number_format($zeile['pack_price'], 2, ',', '.') . ' €' : '—' }}</td>
-                    <td class="right">{{ number_format($zeile['line_total'], 2, ',', '.') }} €</td>
-                </tr>
-            @endforeach
-            </tbody>
-        </table>
-        <div class="total">Netto {{ number_format($dok['total_net'], 2, ',', '.') }} €</div>
-        <div class="foot">Food Alchemist · Versandprotokoll erstellt {{ $erstelltAm }} · Bestellung {{ $dok['id'] }}</div>
-    </section>
-@endforeach
+    @foreach($dokumente as $dok)
+        <section class="order{{ $loop->last ? ' letzte' : '' }}">
+            <header>
+                <div class="kicker">Versandprotokoll · Bestell-Nr. ord-{{ $dok['id'] }}@if($dok['reference']) · Referenz: {{ $dok['reference'] }}@endif</div>
+                <h1>Bestellung an {{ $dok['lieferant']['name'] ?? '—' }}</h1>
+                <div class="rule"></div>
+            </header>
+
+            <div class="grid">
+                @if($dok['created_at'])<div><span>Bestelldatum</span><strong>{{ $dok['created_at'] }}</strong></div>@endif
+                @if($dok['desired_delivery_date'])<div><span>Wunsch-Liefertermin</span><strong>{{ \Carbon\Carbon::parse($dok['desired_delivery_date'])->format('d.m.Y') }}</strong></div>@endif
+                <div><span>Status</span><strong>{{ $dok['status_label'] }}</strong></div>
+                <div><span>{{ $dok['sent_at'] ? 'Versendet' : 'Protokoll erstellt' }}</span>{{ $dok['sent_at'] ?: $erstelltAm }}</div>
+            </div>
+
+            <table>
+                <thead><tr>
+                    <th class="c-art">Art.-Nr.</th>
+                    <th>Artikel</th>
+                    <th class="c-geb">Gebinde</th>
+                    <th class="c-anz num">Anzahl</th>
+                    <th class="c-preis num">Preis</th>
+                    <th class="c-summe num">Summe</th>
+                </tr></thead>
+                <tbody>
+                @foreach($dok['zeilen'] as $zeile)
+                    <tr>
+                        <td>{{ $zeile['article_number'] ?: '—' }}</td>
+                        <td>{{ $zeile['designation'] ?: '—' }}</td>
+                        <td>{{ $zeile['packaging_unit'] ?: '—' }}</td>
+                        <td class="num"><strong>{{ $zahl($zeile['qty_packs']) }}</strong></td>
+                        <td class="num">{{ $zeile['pack_price'] !== null ? $geld($zeile['pack_price']) : '—' }}</td>
+                        <td class="num">{{ $geld($zeile['line_total']) }}</td>
+                    </tr>
+                @endforeach
+                    <tr class="sum-line">
+                        <td colspan="4">Netto</td>
+                        <td colspan="2" class="num">{{ $geld($dok['total_net']) }}</td>
+                    </tr>
+                </tbody>
+            </table>
+            <p class="schluss">Versandprotokoll erstellt {{ $erstelltAm }} · Bestellung ord-{{ $dok['id'] }} · alle Preise netto</p>
+        </section>
+    @endforeach
+</main>
+<div class="band-bottom">
+    <span class="bb-foot">Erstellt mit Food.Alchemist</span>
+</div>
 </body>
 </html>

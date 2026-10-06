@@ -280,7 +280,7 @@ class LeadLaService
     public function setLeadLa(Team $team, FoodAlchemistGp $gp, ?int $laId, ?string $reason = null, bool $recompute = false): void
     {
         if ($laId !== null && ! $this->gehoertZuGp($gp, $laId)) {
-            throw new \RuntimeException("LA [{$laId}] ist nicht mit GP [{$gp->name}] verknüpft (GL-03 I2).");
+            throw new \RuntimeException("Lieferantenartikel #{$laId} ist nicht mit dem Grundprodukt „{$gp->name}“ verknüpft.");
         }
         $gp->update(['lead_la_supplier_item_id' => $laId]);
 
@@ -381,7 +381,7 @@ class LeadLaService
     public function sperren(Team $team, FoodAlchemistGp $gp, int $laId, bool $locked = true): void
     {
         if (! $this->gehoertZuGp($gp, $laId)) {
-            throw new \RuntimeException("LA [{$laId}] ist nicht mit GP [{$gp->name}] verknüpft (GL-03 I2).");
+            throw new \RuntimeException("Lieferantenartikel #{$laId} ist nicht mit dem Grundprodukt „{$gp->name}“ verknüpft.");
         }
         FoodAlchemistGpLaPreference::withTrashed()
             ->updateOrCreate(
@@ -395,7 +395,7 @@ class LeadLaService
     public function pinnen(Team $team, FoodAlchemistGp $gp, ?int $laId): void
     {
         if ($laId !== null && ! $this->gehoertZuGp($gp, $laId)) {
-            throw new \RuntimeException("LA [{$laId}] ist nicht mit GP [{$gp->name}] verknüpft (GL-03 I2).");
+            throw new \RuntimeException("Lieferantenartikel #{$laId} ist nicht mit dem Grundprodukt „{$gp->name}“ verknüpft.");
         }
 
         DB::transaction(function () use ($team, $gp, $laId) {
@@ -420,7 +420,7 @@ class LeadLaService
         $struktur = DB::table('foodalchemist_supplier_item_structures')
             ->where('gp_id', $gp->id)->where('supplier_item_id', $laId)->whereNull('deleted_at')->first();
         if ($struktur === null) {
-            throw new \RuntimeException("LA [{$laId}] ist nicht mit GP [{$gp->name}] verknüpft.");
+            throw new \RuntimeException("Lieferantenartikel #{$laId} ist nicht mit dem Grundprodukt „{$gp->name}“ verknüpft.");
         }
 
         DB::transaction(function () use ($gp, $laId, $struktur, $team) {
@@ -447,7 +447,7 @@ class LeadLaService
 
             if ($struktur !== null && $struktur->deleted_at === null
                 && $struktur->gp_id !== null && (int) $struktur->gp_id !== $gp->id) {
-                throw new \RuntimeException('LA ist bereits einem anderen GP zugeordnet — erst dort lösen (GL-05).');
+                throw new \RuntimeException('Der Lieferantenartikel ist bereits einem anderen Grundprodukt zugeordnet. Zuerst dort lösen.');
             }
 
             if ($struktur !== null && $struktur->deleted_at === null && (int) $struktur->gp_id === $gp->id) {
@@ -577,21 +577,21 @@ class LeadLaService
                 $a = $alt->allergens?->{"allergen_{$feld}"};
                 $b = $neu->allergens?->{"allergen_{$feld}"};
                 if ($a !== null && $b !== null && $a !== $b) {
-                    $abweichungen[] = "Allergen {$feld}";
+                    $abweichungen[] = 'Allergen „' . FoodAlchemistItemAllergen::ALLERGENE[$feld] . '“';
                 }
             }
             foreach (array_keys(FoodAlchemistItemDeclaration::STOFFE) as $feld) {
                 $a = $alt->declarations?->{$feld};
                 $b = $neu->declarations?->{$feld};
                 if (in_array((int) $a, [1, 3], true) && in_array((int) $b, [1, 3], true) && (int) $a !== (int) $b) {
-                    $abweichungen[] = "Zusatzstoff {$feld}";
+                    $abweichungen[] = 'Zusatzstoff „' . FoodAlchemistItemDeclaration::STOFFE[$feld] . '“';
                 }
             }
             if ($abweichungen !== []) {
                 throw new \RuntimeException(
-                    'Deklarationsprofil weicht von einem vorhandenen Lieferantenartikel ab ('
+                    'Allergene oder Zusatzstoffe weichen von einem vorhandenen Lieferantenartikel ab ('
                     . implode(', ', array_slice($abweichungen, 0, 3))
-                    . ') — dafür muss ein neues GP angelegt werden.'
+                    . '). Für diesen Artikel ein neues Grundprodukt anlegen.'
                 );
             }
         }

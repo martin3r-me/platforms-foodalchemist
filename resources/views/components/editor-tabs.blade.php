@@ -61,10 +61,10 @@
     $sichtbar = array_filter($tabs, fn ($label) => $label !== null && $label !== false && $label !== '');
     $startTab = $init ?? (array_key_first($sichtbar) ?? '');
     $serverModus = $action !== null;
-    $leiste = 'flex gap-4 border-b border-black/5 sticky top-0 z-20 -mx-6 px-6 bg-white/90 backdrop-blur-xl shadow-md rounded-b-xl';
-    $knopf = 'px-1 py-2 text-xs font-medium border-b-2 -mb-px transition-colors';
-    $an = 'border-violet-500 text-violet-700';
-    $aus = 'border-transparent text-gray-600 hover:text-gray-700';
+    $leiste = 'flex flex-wrap gap-1 border-b border-[var(--fa-line)] sticky top-0 z-20 -mx-6 px-6 bg-[var(--fa-surface)]'; // fa-pass: Token-Leiste, hell + Werkbank
+    $knopf = 'h-11 px-3.5 text-[length:var(--fa-text-base)] font-medium border-b-2 -mb-px rounded-t-[var(--fa-radius-control)] transition-colors whitespace-nowrap focus-visible:-outline-offset-2';
+    $an = 'border-[var(--fa-accent)] text-[var(--fa-accent)] font-semibold bg-[var(--fa-accent-soft)]';
+    $aus = 'border-transparent text-[var(--fa-ink-2)] hover:text-[var(--fa-ink)] hover:bg-[var(--fa-hover)]';
 @endphp
 
 @if($serverModus)
@@ -74,7 +74,7 @@
             @php $cnt = $counts[$tabKey] ?? null; @endphp
             <button type="button" wire:click="{{ $action }}('{{ $tabKey }}')"
                     class="{{ $knopf }} inline-flex items-center {{ $active === $tabKey ? $an : $aus }}"
-                    data-fa-editor-tab="{{ $tabKey }}" @if($marker) data-{{ $marker }}-tab="{{ $tabKey }}" @endif>{{ $tabLabel }}@if($cnt !== null && $cnt > 0)<span class="ml-1.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-semibold {{ $active === $tabKey ? 'bg-violet-500/15 text-violet-700' : 'bg-black/[0.06] text-gray-500' }}">{{ number_format($cnt, 0, ',', '.') }}</span>@endif</button>
+                    data-fa-editor-tab="{{ $tabKey }}" @if($marker) data-{{ $marker }}-tab="{{ $tabKey }}" @endif>{{ $tabLabel }}@if($cnt !== null && $cnt > 0)<span class="ml-1.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[length:var(--fa-text-sm)] font-semibold {{ $active === $tabKey ? 'bg-[var(--fa-accent-soft)] text-[var(--fa-accent)]' : 'bg-[var(--fa-neutral-soft)] text-[var(--fa-ink-2)]' }}">{{ number_format($cnt, 0, ',', '.') }}</span>@endif</button>
         @endforeach
     </div>
 @else

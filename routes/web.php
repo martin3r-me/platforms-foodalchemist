@@ -29,6 +29,11 @@ use Platform\FoodAlchemist\Livewire\Sidebar;
 Route::get('/', Dashboard::class)->name('foodalchemist.dashboard');
 
 /**
+ * fa-pass Welle 0 — Musterseite der Bausteinbibliothek <x-fa::…> (Designsystem-Referenz).
+ */
+Route::get('/_ui', \Platform\FoodAlchemist\Livewire\UiKatalog::class)->name('foodalchemist.ui-katalog');
+
+/**
  * Spec 32 — Controlling-Zentrum. Eine Fläche, an der Befund und Hebel nebeneinander liegen:
  * Lage · Preise · Wareneinsatz · Simulation · Erfolg · Geld-Signale · Kennzahlen.
  *
@@ -713,13 +718,26 @@ Route::get('/produktion/tagesplan/blatt', function (\Platform\FoodAlchemist\Serv
             ->filter(fn ($b) => $b !== [])->all();
     }
 
-    return view('foodalchemist::dokumente.tagesplan_blatt', [
+    $daten = [
         'von' => $von,
         'bis' => $bis,
         'ansicht' => $ansicht,
         'auslastung' => $auslastung,
         'zeilenNachTag' => $zeilen->groupBy(fn ($z) => \Illuminate\Support\Carbon::parse($z->plan_date)->toDateString()),
-    ]);
+    ];
+
+    // ?pdf=1 → PDF-Download (Dominique 2026-10-05), wie Rezept-/Concept-Report; sonst Druck-HTML.
+    if (request()->boolean('pdf')) {
+        if (! class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
+            \Illuminate\Support\Facades\Log::warning('Tagesplan-PDF angefordert, aber DomPDF ist nicht installiert.');
+            abort(500, 'PDF-Export nicht verfügbar: DomPDF ist auf diesem Server nicht installiert.');
+        }
+
+        return \Barryvdh\DomPDF\Facade\Pdf::loadView('foodalchemist::dokumente.tagesplan_blatt', array_merge($daten, ['istPdf' => true]))
+            ->download('Tagesplan-' . $von . ($tage > 1 ? '-' . $bis : '') . '.pdf');
+    }
+
+    return view('foodalchemist::dokumente.tagesplan_blatt', array_merge($daten, ['istPdf' => false]));
 })->name('foodalchemist.produktion.tagesplan.blatt');
 
 Route::get('/produktion', \Platform\FoodAlchemist\Livewire\Produktion\Browser::class)
@@ -771,7 +789,7 @@ Route::get('/produktion/auftraege/{order}/dokument', function (int $order, \Plat
             abort(500, 'PDF-Export nicht verfügbar: DomPDF ist auf diesem Server nicht installiert.');
         }
 
-        return \Barryvdh\DomPDF\Facade\Pdf::loadView('foodalchemist::dokumente.produktionsauftrag', $data + ['istPdf' => true])
+        return \Barryvdh\DomPDF\Facade\Pdf::loadView('foodalchemist::dokumente.produktionsauftrag', array_merge($data, ['istPdf' => true]))
             ->download('Produktionsschein-' . $dok['id'] . '.pdf');
     }
 

@@ -43,13 +43,13 @@ class Schreibstile extends Component
     public function save(): void
     {
         if (trim((string) ($this->form['name'] ?? '')) === '' || trim((string) ($this->form['sprach_duktus'] ?? '')) === '') {
-            $this->fehler = 'Name und Sprach-Duktus sind Pflicht (Prompt-Material).';
+            $this->fehler = 'Name und Sprachstil sind Pflicht.';
 
             return;
         }
         $besitz = DB::table('foodalchemist_writing_styles')->where('id', $this->editId)->first(['team_id']);
         if ($besitz === null || ! TeamScope::owns($besitz->team_id, Auth::user()?->currentTeamRelation)) {
-            $this->fehler = 'Geerbter/Master-Schreibstil — nur das Besitzer-Team kann ändern.';
+            $this->fehler = 'Dieser Schreibstil gehört einem anderen Team. Ändern kann ihn nur das Team, das ihn angelegt hat.';
 
             return;
         }
@@ -68,13 +68,13 @@ class Schreibstile extends Component
     {
         $name = trim($this->neu['name']);
         if ($name === '' || trim($this->neu['sprach_duktus']) === '') {
-            $this->fehler = 'Name und Sprach-Duktus sind Pflicht (Prompt-Material).';
+            $this->fehler = 'Name und Sprachstil sind Pflicht.';
 
             return;
         }
         $slug = Str::slug($name, '_');
         if (DB::table('foodalchemist_writing_styles')->where('slug', $slug)->whereNull('deleted_at')->exists()) {
-            $this->fehler = "Stil «{$name}» existiert schon ({$slug}).";
+            $this->fehler = "Der Schreibstil «{$name}» existiert schon.";
 
             return;
         }
@@ -99,7 +99,7 @@ class Schreibstile extends Component
             return;
         }
         if (! TeamScope::owns($zeile->team_id, Auth::user()?->currentTeamRelation)) {
-            $this->fehler = 'Geerbter/Master-Schreibstil — nur das Besitzer-Team kann ändern.';
+            $this->fehler = 'Dieser Schreibstil gehört einem anderen Team. Ändern kann ihn nur das Team, das ihn angelegt hat.';
 
             return;
         }
@@ -115,7 +115,7 @@ class Schreibstile extends Component
             return;
         }
         if (! TeamScope::owns($zeile->team_id, Auth::user()?->currentTeamRelation)) {
-            $this->fehler = 'Geerbter/Master-Schreibstil — nur das Besitzer-Team kann löschen.';
+            $this->fehler = 'Dieser Schreibstil gehört einem anderen Team. Löschen kann ihn nur das Team, das ihn angelegt hat.';
 
             return;
         }
@@ -124,7 +124,7 @@ class Schreibstile extends Component
         $nFoodbook = \Illuminate\Support\Facades\Schema::hasTable('foodalchemist_foodbooks')
             ? DB::table('foodalchemist_foodbooks')->whereNull('deleted_at')->where('writing_style_id', $id)->count() : 0;
         if ($nConcept + $nFoodbook > 0) {
-            $this->fehler = "Wird von {$nConcept} Concept(s) + {$nFoodbook} Foodbook(s) genutzt — erst umhängen oder deaktivieren.";
+            $this->fehler = "Wird noch verwendet ({$nConcept} Konzepte, {$nFoodbook} Foodbooks). Erst dort einen anderen Stil wählen oder diesen deaktivieren.";
 
             return;
         }

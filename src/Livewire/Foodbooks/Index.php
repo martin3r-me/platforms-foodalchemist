@@ -1506,7 +1506,7 @@ class Index extends Component
                 ->where('is_inactive', false)->orderBy('sort_order')->orderBy('name')->get(['id', 'name']),
             'zielgruppen' => \Platform\FoodAlchemist\Models\FoodAlchemistTargetGroup::visibleToTeam($team)
                 ->where('is_inactive', false)->orderBy('sort_order')->orderBy('name')->get(['id', 'name']),
-        ])->layout('platform::layouts.app');
+        ])->layout('foodalchemist::layouts.standalone');
     }
 
     private function team()

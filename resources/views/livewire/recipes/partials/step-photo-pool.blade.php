@@ -5,60 +5,67 @@
     „Pool ohne Schritt-Bezug" (nur Upload/Löschen allgemeiner Rezept-Fotos).
 
     Erwartet (via @include): $stepId, $pool (Collection), $verlinkteIds (list<int>).
+    fa-pass: nur Tokens (hell + Werkbank-Modus), keine Klassen aus einem Eltern-style-Block.
 --}}
-@php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
+@php
+    $vorschau = 'w-14 h-10 object-cover rounded-[var(--fa-radius-control)] border border-[var(--fa-line)]';
+    $rundKnopf = 'absolute w-5 h-5 items-center justify-center rounded-full';
+@endphp
 
-<div class="fa-step-pool mt-1.5" wire:key="pool-{{ $stepId }}" data-foto-pool>
-    <div class="flex items-center gap-2 mb-1.5">
-        <p class="{{ $dt }}">
-            {{ $stepId === 0 ? 'Rezept-Fotos' : 'Foto für Schritt ' . $stepId . ' wählen' }}
+<div class="mt-1 rounded-[var(--fa-radius-control)] bg-[var(--fa-ground)] border border-[var(--fa-line)] px-3 py-2.5 flex flex-col gap-2.5" wire:key="pool-{{ $stepId }}" data-foto-pool>
+    <div class="flex items-center gap-2">
+        <p class="text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-2)]">
+            {{ $stepId === 0 ? 'Rezept-Fotos' : 'Foto für diesen Schritt wählen' }}
         </p>
-        <button type="button" wire:click="poolOeffnen({{ $stepId }})" class="{{ $btnGhostXs }} ml-auto">schließen</button>
+        <x-fa::button size="sm" variant="ghost" class="ml-auto" wire:click="poolOeffnen({{ $stepId }})">Schließen</x-fa::button>
     </div>
 
     @if($pool->isEmpty())
-        <p class="fa-step-hint mb-1.5">Noch keine Fotos — unten hochladen.</p>
+        <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">Noch keine Fotos. Unten hochladen.</p>
     @else
-        <div class="flex flex-wrap gap-1.5 mb-2">
+        @if($stepId !== 0)
+            <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">Klick auf ein Foto hängt es an diesen Schritt oder löst es wieder.</p>
+        @endif
+        <div class="flex flex-wrap gap-2.5">
             @foreach($pool as $foto)
-                @php($istVerlinkt = in_array($foto->id, $verlinkteIds, true))
+                @php $istVerlinkt = in_array($foto->id, $verlinkteIds, true); @endphp
                 <span class="relative group" wire:key="poolf-{{ $stepId }}-{{ $foto->id }}">
                     @if($stepId === 0)
                         <img src="{{ $foto->url() }}" alt="{{ $foto->caption ?? '' }}" title="{{ $foto->caption ?? '' }}"
-                             class="fa-step-thumb" loading="lazy" />
+                             class="{{ $vorschau }}" loading="lazy" />
                     @else
                         <button type="button" wire:click="fotoUmschalten({{ $stepId }}, {{ $foto->id }})"
-                                title="{{ $istVerlinkt ? 'vom Schritt lösen' : 'an diesen Schritt hängen' }}{{ $foto->caption ? ' — ' . $foto->caption : '' }}"
-                                class="block" data-foto-umschalten>
+                                title="{{ $istVerlinkt ? 'Vom Schritt lösen' : 'An diesen Schritt hängen' }}{{ $foto->caption ? ': ' . $foto->caption : '' }}"
+                                class="block rounded-[var(--fa-radius-control)]" data-foto-umschalten>
                             <img src="{{ $foto->url() }}" alt="{{ $foto->caption ?? '' }}"
-                                 class="fa-step-thumb {{ $istVerlinkt ? 'fa-step-pool-on' : '' }}" loading="lazy" />
+                                 class="{{ $vorschau }} {{ $istVerlinkt ? 'ring-2 ring-[var(--fa-accent)] ring-offset-1 ring-offset-[var(--fa-ground)]' : '' }}" loading="lazy" />
                         </button>
                         @if($istVerlinkt)
-                            <span class="absolute -top-1 -left-1 w-4 h-4 flex items-center justify-center rounded-full bg-violet-600 text-white text-[9px]" title="hängt an diesem Schritt">✓</span>
+                            <span class="{{ $rundKnopf }} flex -top-2 -left-2 bg-[var(--fa-accent)] text-[var(--fa-on-accent)]" title="Hängt an diesem Schritt">@svg('heroicon-m-check', 'w-3.5 h-3.5')</span>
                         @endif
                     @endif
                     <button type="button" wire:click="fotoLoeschen({{ $foto->id }})" wire:confirm="Foto endgültig löschen (aus allen Schritten)?"
-                            class="hidden group-hover:flex absolute -top-1.5 -right-1.5 w-4 h-4 items-center justify-center rounded-full bg-rose-500 text-white text-[9px]"
-                            title="Foto endgültig löschen" data-foto-loeschen>✕</button>
+                            class="{{ $rundKnopf }} hidden group-hover:flex focus-visible:flex -top-2 -right-2 bg-[var(--fa-crit)] text-[var(--fa-surface)]"
+                            title="Foto endgültig löschen" aria-label="Foto endgültig löschen" data-foto-loeschen>@svg('heroicon-m-trash', 'w-3 h-3')</button>
                     {{-- Endprodukt-Bild: „so soll es fertig aussehen" (max. 1 je Rezept) --}}
                     <button type="button" wire:click="endproduktUmschalten({{ $foto->id }})"
-                            title="{{ $foto->is_result ? 'ist das Endprodukt-Bild — Klick hebt auf' : 'als Endprodukt-Bild markieren (so soll es fertig aussehen)' }}"
-                            class="{{ $foto->is_result ? 'flex' : 'hidden group-hover:flex' }} absolute -bottom-1.5 -right-1.5 w-4 h-4 items-center justify-center rounded-full text-[9px] {{ $foto->is_result ? 'fa-step-hero-on' : 'bg-slate-700 text-white' }}"
-                            data-endprodukt-toggle>★</button>
+                            title="{{ $foto->is_result ? 'Ist das Bild vom fertigen Produkt, Klick hebt das auf' : 'Als Bild vom fertigen Produkt markieren' }}"
+                            aria-label="{{ $foto->is_result ? 'Markierung als Endprodukt aufheben' : 'Als Endprodukt markieren' }}"
+                            class="{{ $rundKnopf }} {{ $foto->is_result ? 'flex bg-[var(--fa-warn)] text-[var(--fa-surface)]' : 'hidden group-hover:flex focus-visible:flex bg-[var(--fa-ink)] text-[var(--fa-surface)]' }} -bottom-2 -right-2"
+                            data-endprodukt-toggle>@svg($foto->is_result ? 'heroicon-s-star' : 'heroicon-o-star', 'w-3 h-3')</button>
                 </span>
             @endforeach
         </div>
     @endif
 
     <div class="flex flex-wrap items-center gap-2" data-foto-upload>
-        <input type="file" wire:model="fotoUpload" accept="image/*" data-foto-datei
-               class="text-[11px] text-gray-600 file:mr-2 file:px-2 file:py-1 file:rounded-lg file:border-0 file:bg-violet-500/10 file:text-violet-600 file:text-[11px] file:cursor-pointer" />
-        <input type="text" wire:model="fotoCaption" placeholder="Bildunterschrift (optional)" class="{{ $input }} !py-1 w-56" />
-        <button type="button" wire:click="fotoHochladen" wire:loading.attr="disabled" wire:target="fotoUpload, fotoHochladen"
-                class="{{ $btnAi }}" data-foto-hochladen>
-            <span wire:loading.remove wire:target="fotoUpload, fotoHochladen">Hochladen{{ $stepId === 0 ? '' : ' + verlinken' }}</span>
-            <span wire:loading wire:target="fotoUpload, fotoHochladen">lädt …</span>
-        </button>
-        @error('fotoUpload')<span class="text-[11px] text-rose-500">{{ $message }}</span>@enderror
+        <input type="file" wire:model="fotoUpload" accept="image/*" data-foto-datei aria-label="Foto auswählen"
+               class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)] file:mr-2 file:h-7 file:px-2.5 file:rounded-[var(--fa-radius-control)] file:border file:border-[var(--fa-line-strong)] file:bg-[var(--fa-surface)] file:text-[var(--fa-ink)] file:cursor-pointer" />
+        <x-fa::input size="sm" wire:model="fotoCaption" placeholder="Bildunterschrift (optional)" aria-label="Bildunterschrift" class="w-56 max-w-full" />
+        <x-fa::button size="sm" icon="heroicon-m-arrow-up-tray" wire:click="fotoHochladen" wire:loading.attr="disabled" wire:target="fotoUpload, fotoHochladen" data-foto-hochladen>
+            <span wire:loading.remove wire:target="fotoUpload, fotoHochladen">{{ $stepId === 0 ? 'Foto hochladen' : 'Hochladen und zuordnen' }}</span>
+            <span wire:loading wire:target="fotoUpload, fotoHochladen">Lädt …</span>
+        </x-fa::button>
+        @error('fotoUpload')<span class="text-[length:var(--fa-text-sm)] text-[var(--fa-crit)]">{{ $message }}</span>@enderror
     </div>
 </div>

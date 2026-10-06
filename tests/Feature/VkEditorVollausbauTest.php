@@ -96,7 +96,9 @@ it('VK-Editor rendert die neuen Sektionen (Deklaration, Nährwerte, Spezifikatio
     }
     expect($html)->toContain('Rohertragsquote')
         ->and($html)->toContain('Rohertragsquote = (VK netto − MEK) ÷ VK netto')
-        ->and($html)->toContain('Verkaufs-Block (Live-Rohertrag)');
+        // fa-pass: Abschnitt heißt jetzt «Preis und Rohertrag» (Copy-Umbau, Marker unverändert).
+        ->and($html)->toContain('Preis und Rohertrag')
+        ->and($html)->toContain('data-vk-verkaufsblock');
 });
 
 it('speichert den Wechsel einer Darreichung auf auto unmittelbar', function () {

@@ -83,10 +83,10 @@ class GpFormService
         $formSlug = mb_strtolower(trim($formSlug));
         $erlaubt = self::formSlugs($team);
         if (! in_array($formSlug, $erlaubt, true)) {
-            throw new \RuntimeException("Unbekannte Form „{$formSlug}\" — erlaubt: " . implode(', ', $erlaubt) . '.');
+            throw new \RuntimeException("Unbekannte Form „{$formSlug}“. Erlaubt: " . implode(', ', $erlaubt) . '.');
         }
         if ($gramm <= 0) {
-            throw new \RuntimeException('Gewicht muss > 0 g sein.');
+            throw new \RuntimeException('Das Gewicht muss größer als 0 g sein.');
         }
         $source = in_array($source, ['manual', 'ki'], true) ? $source : 'manual';
 
@@ -160,10 +160,10 @@ class GpFormService
     {
         $gp = FoodAlchemistGp::visibleToTeam($team)->find($gpId);
         if ($gp === null) {
-            throw new \RuntimeException('GP nicht gefunden oder kein Zugriff.');
+            throw new \RuntimeException('Grundprodukt nicht gefunden oder kein Zugriff.');
         }
         if (! Curate::canCurate(\Illuminate\Support\Facades\Auth::user(), $gp)) {
-            throw new \RuntimeException('Formen pflegen ist Katalog-Aktion — nur fürs Besitzer-Team (D1).');
+            throw new \RuntimeException('Formen pflegt nur das Besitzer-Team des Grundprodukts.');
         }
 
         return $gp;

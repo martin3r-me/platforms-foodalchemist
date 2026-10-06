@@ -288,7 +288,7 @@ class KnowledgeCanonService
 
         $global = (bool) ($data['global'] ?? false);
         if ($global && ! TeamScope::isMaster($team)) {
-            throw new RuntimeException('Globale Kanon-Zeilen pflegt nur das Master-Team.');
+            throw new RuntimeException('Verbindliches Wissen für alle Teams pflegt nur das Master-Team.');
         }
         $teamId = $global ? null : (int) $team->id;
 
@@ -296,20 +296,20 @@ class KnowledgeCanonService
             DB::table(self::DOCS)->whereNull('deleted_at')->where('slug', $slug), 'team_id', $team
         )->first();
         if ($doc === null) {
-            throw new RuntimeException("Wissens-Dokument \"{$slug}\" nicht gefunden.");
+            throw new RuntimeException("Dossier „{$slug}\" nicht gefunden.");
         }
         // Invariante: globaler Kanon → nur globale Dossiers (sonst zöge er Team-Wissen in fremde Prompts).
         if ($teamId === null && $doc->team_id !== null) {
             throw new RuntimeException(
-                "\"{$slug}\" ist team-eigenes Wissen — eine GLOBALE Kanon-Zeile darf nur globale Dossiers "
-                . 'referenzieren. Entweder ohne global=true (Team-Kanon) oder das Dossier erst globalisieren.'
+                "„{$slug}\" gehört nur deinem Team. Für alle Teams verbindlich kann nur Wissen sein, das selbst "
+                . 'für alle Teams gilt. Nur für das eigene Team hinterlegen oder das Dossier erst für alle Teams freigeben.'
             );
         }
         // Kurationsregel: kein Changelog im Kanon-Dossier.
         if ($this->hatChangelog((string) $doc->content_md)) {
             throw new RuntimeException(
-                "\"{$slug}\" enthält eine Changelog-Überschrift — Kanon-Dossiers tragen keinen Changelog "
-                . '(er würde bei jedem Treffer in den Prompt wandern). Changelog raus oder als eigenes Dossier ohne Kanon-Bindung.'
+                "„{$slug}\" enthält einen Abschnitt „Changelog\". Verbindliche Dossiers tragen keinen Änderungsverlauf, "
+                . 'er ginge sonst jedes Mal mit an die KI. Den Abschnitt entfernen oder in ein eigenes Dossier verschieben.'
             );
         }
 
@@ -317,12 +317,12 @@ class KnowledgeCanonService
         $deckel = $this->dossierMaxChars();
         if ((int) $doc->char_count > $deckel) {
             $hinweise[] = sprintf(
-                'Dossier hat %d Zeichen, Deckel ist %d — im Kanon landet es KOMPLETT im Prompt. Teilen (ein Thema pro Dossier).',
-                (int) $doc->char_count, $deckel
+                'Dossier hat %s Zeichen, vorgesehen sind höchstens %s. Verbindliches Wissen geht vollständig an die KI. Besser in einzelne Themen teilen.',
+                number_format((int) $doc->char_count, 0, ',', '.'), number_format($deckel, 0, ',', '.')
             );
         }
         if (! (bool) $doc->active) {
-            $hinweise[] = 'Dossier ist inaktiv — die Kanon-Zeile greift erst, wenn es aktiviert wird.';
+            $hinweise[] = 'Dossier ist inaktiv. Es gilt erst, wenn es aktiviert wird.';
         }
 
         $now = now();
@@ -364,7 +364,7 @@ class KnowledgeCanonService
     public function remove(Team $team, string $scope, string $scopeKey, string $slug, string $role = 'root', bool $global = false): int
     {
         if ($global && ! TeamScope::isMaster($team)) {
-            throw new RuntimeException('Globale Kanon-Zeilen pflegt nur das Master-Team.');
+            throw new RuntimeException('Verbindliches Wissen für alle Teams pflegt nur das Master-Team.');
         }
 
         return DB::table(self::TABLE . ' as c')

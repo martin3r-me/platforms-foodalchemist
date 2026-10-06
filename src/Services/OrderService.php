@@ -415,7 +415,7 @@ class OrderService
                 : new FoodAlchemistOrderRound(['team_id' => $team->id, 'created_by' => $userId]);
 
             if ($round->exists && ! $round->isOwnedBy($team)) {
-                throw new \RuntimeException('Bestellrunde nicht im Schreibzugriff (D1).');
+                throw new \RuntimeException('Diese Bestellrunde gehört einem anderen Team und lässt sich hier nicht bearbeiten.');
             }
 
             $round->fill([
@@ -548,7 +548,7 @@ class OrderService
     {
         $round = FoodAlchemistOrderRound::visibleToTeam($team)->with('orders')->findOrFail($roundId);
         if (! $round->isOwnedBy($team)) {
-            throw new \RuntimeException('Bestellrunde nicht im Schreibzugriff (D1).');
+            throw new \RuntimeException('Diese Bestellrunde gehört einem anderen Team und lässt sich hier nicht bearbeiten.');
         }
 
         $drafts = $round->orders->filter(fn (FoodAlchemistOrder $order) => $order->status === OrderStatus::Draft);
@@ -988,7 +988,7 @@ class OrderService
         $lead = $this->leadLa->effektiverLead($gp, $team, $strategie);
         $lead = $this->overrideLead($team, $gp, $overrides[$overrideKey] ?? null) ?? $lead;
         if ($lead?->supplier_id === null || $lead?->id === null) {
-            $unresolved[] = $this->unresolved($source, $label, 'lead_la_fehlt', 'Kein bestellbarer Lead-Artikel für dieses Grundprodukt.');
+            $unresolved[] = $this->unresolved($source, $label, 'lead_la_fehlt', 'Kein bestellbarer Hauptartikel für dieses Grundprodukt. Lieferantenartikel zuordnen.');
 
             return;
         }
@@ -1035,7 +1035,7 @@ class OrderService
                         ['type' => 'recipe', 'id' => $ziel['recipe_id'] ?? null],
                         $label.($pos['gp'] ? ' · '.$pos['gp'] : ''),
                         'lead_la_fehlt',
-                        'Kein bestellbarer Lead-Artikel für diese Bedarfsposition.'
+                        'Kein bestellbarer Hauptartikel für diese Bedarfsposition. Lieferantenartikel zuordnen.'
                     );
                 }
 
@@ -1096,7 +1096,7 @@ class OrderService
                         ['type' => 'recipe', 'id' => $ziel['recipe_id'] ?? null],
                         $label.($pos['gp'] ? ' · '.$pos['gp'] : ''),
                         $leadLaId === null ? 'lead_la_fehlt' : 'gebinde_preis_fehlt',
-                        $leadLaId === null ? 'Kein Lead-Artikel gefunden.' : 'Gebinde oder Preis ist nicht vollständig berechenbar.'
+                        $leadLaId === null ? 'Kein Hauptartikel gefunden. Lieferantenartikel zuordnen.' : 'Gebinde oder Preis ist nicht vollständig berechenbar.'
                     );
                 }
             }
@@ -1208,7 +1208,7 @@ class OrderService
 
         return match ((string) ($source['type'] ?? '')) {
             'supplier_item' => (string) (FoodAlchemistSupplierItem::visibleToTeam($team)->find($id)?->designation ?? ('Artikel #'.$id)),
-            'gp' => (string) (FoodAlchemistGp::visibleToTeam($team)->find($id)?->name ?? ('GP #'.$id)),
+            'gp' => (string) (FoodAlchemistGp::visibleToTeam($team)->find($id)?->name ?? ('Grundprodukt #'.$id)),
             'recipe' => (string) (FoodAlchemistRecipe::visibleToTeam($team)->find($id)?->name ?? ('Rezept #'.$id)),
             'production' => (string) (FoodAlchemistProductionOrder::visibleToTeam($team)->find($id)?->name ?? ('Produktion #'.$id)),
             default => 'Quelle',
@@ -1458,7 +1458,7 @@ class OrderService
             throw new \RuntimeException('Lieferantenartikel nicht gefunden.');
         }
         if ($la->supplier_id === null) {
-            throw new \RuntimeException('Lieferantenartikel ohne Lieferant — nicht bestellbar.');
+            throw new \RuntimeException('Lieferantenartikel ohne Lieferant ist nicht bestellbar.');
         }
         $qty = max(0.0, (float) $qtyPacks);
         $draft = $this->draftForSupplier($team, (int) $la->supplier_id, $deliveryDate, $userId);
@@ -1683,7 +1683,7 @@ class OrderService
         $order = $this->ownedOrder($team, $orderId);
         $status = $order->status instanceof OrderStatus ? $order->status : OrderStatus::from((string) $order->status);
         if (! $status->istOffen()) {
-            throw new \RuntimeException('Nur ein offener Entwurf kann neu gequellt werden.');
+            throw new \RuntimeException('Bezugsquellen lassen sich nur in einem offenen Entwurf neu ermitteln.');
         }
 
         $wechsel = [];
@@ -1857,7 +1857,7 @@ class OrderService
     {
         $line = $this->ownedDraftLine($team, $lineId);
         if ($line->gp_id === null) {
-            throw new \RuntimeException('Zeile ohne Grundprodukt — kein Alternativ-Artikel wählbar.');
+            throw new \RuntimeException('Zeile ohne Grundprodukt: kein Ausweichartikel wählbar.');
         }
         $gp = FoodAlchemistGp::find($line->gp_id);
         if ($gp === null) {
@@ -1868,7 +1868,7 @@ class OrderService
             throw new \RuntimeException('Artikel gehört nicht zu den Ausweichquellen dieses Grundprodukts.');
         }
         if ($kandidat->supplier_id === null) {
-            throw new \RuntimeException('Artikel ohne Lieferant — nicht bestellbar.');
+            throw new \RuntimeException('Artikel ohne Lieferant ist nicht bestellbar.');
         }
         $sourceOrderId = (int) $line->order_id;
         if ((int) $newLaId === ($line->supplier_item_id !== null ? (int) $line->supplier_item_id : null)) {
@@ -1903,7 +1903,7 @@ class OrderService
             return $order;
         }
         if (! $aktuell->darfWechselnZu($ziel)) {
-            throw new \RuntimeException("Status {$aktuell->value} → {$ziel->value} nicht erlaubt.");
+            throw new \RuntimeException("Statuswechsel von „{$aktuell->label()}“ zu „{$ziel->label()}“ ist nicht möglich.");
         }
         // Beim Absenden: Snapshot einfrieren = letzten draft-Stand rechnen, dann Status setzen.
         if ($ziel === OrderStatus::Sent) {
@@ -2662,7 +2662,7 @@ class OrderService
         $line = FoodAlchemistOrderLine::with('order')->findOrFail($lineId);
         $order = $line->order;
         if ($order === null || ! $order->isOwnedBy($team)) {
-            throw new \RuntimeException('Bestellzeile nicht im Schreibzugriff (D1).');
+            throw new \RuntimeException('Diese Bestellzeile gehört einem anderen Team und lässt sich hier nicht bearbeiten.');
         }
         if ($line->supplier_item_id === null) {
             throw new \RuntimeException('Zeile hat keinen Lieferantenartikel für ein Kontingent.');
@@ -2670,7 +2670,7 @@ class OrderService
 
         $item = FoodAlchemistSupplierItem::visibleToTeam($team)->find((int) $line->supplier_item_id);
         if ($item === null) {
-            throw new \RuntimeException('Lieferantenartikel nicht im Zugriff.');
+            throw new \RuntimeException('Kein Zugriff auf diesen Lieferantenartikel.');
         }
 
         foreach (['quota_qty_packs', 'quota_used_packs'] as $field) {
@@ -2732,7 +2732,7 @@ class OrderService
     {
         $order = $line->order;
         if ($order === null || ! $order->isOwnedBy($team)) {
-            throw new \RuntimeException('Bestellzeile nicht im Schreibzugriff (D1).');
+            throw new \RuntimeException('Diese Bestellzeile gehört einem anderen Team und lässt sich hier nicht bearbeiten.');
         }
 
         $status = $order->status instanceof OrderStatus ? $order->status : OrderStatus::from((string) $order->status);
@@ -2745,7 +2745,7 @@ class OrderService
     {
         $order = $line->order;
         if ($order === null || ! $order->isOwnedBy($team)) {
-            throw new \RuntimeException('Bestellzeile nicht im Schreibzugriff (D1).');
+            throw new \RuntimeException('Diese Bestellzeile gehört einem anderen Team und lässt sich hier nicht bearbeiten.');
         }
 
         $status = $order->status instanceof OrderStatus ? $order->status : OrderStatus::from((string) $order->status);
@@ -3357,7 +3357,7 @@ class OrderService
     {
         $order = FoodAlchemistOrder::visibleToTeam($team)->findOrFail($orderId);
         if (! $order->isOwnedBy($team)) {
-            throw new \RuntimeException('Bestellung nicht im Schreibzugriff (D1).');
+            throw new \RuntimeException('Diese Bestellung gehört einem anderen Team und lässt sich hier nicht bearbeiten.');
         }
 
         return $order;
@@ -3368,7 +3368,7 @@ class OrderService
         $line = FoodAlchemistOrderLine::with('order')->findOrFail($lineId);
         $order = $line->order;
         if ($order === null || ! $order->isOwnedBy($team)) {
-            throw new \RuntimeException('Bestellzeile nicht im Schreibzugriff (D1).');
+            throw new \RuntimeException('Diese Bestellzeile gehört einem anderen Team und lässt sich hier nicht bearbeiten.');
         }
         $status = $order->status instanceof OrderStatus ? $order->status : OrderStatus::from((string) $order->status);
         if (! $status->istOffen()) {

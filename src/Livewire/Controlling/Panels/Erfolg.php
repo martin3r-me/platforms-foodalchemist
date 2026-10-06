@@ -145,8 +145,8 @@ class Erfolg extends Component
         try {
             $this->bericht = $import->importiere($team, $this->dateiname, $mapping, $apply);
             $this->hinweis = $apply
-                ? 'Import geschrieben: ' . $this->bericht['neu'] . ' neu, ' . $this->bericht['aktualisiert'] . ' aktualisiert.'
-                : 'Trockenlauf — es wurde nichts geschrieben.';
+                ? 'Verkaufszahlen übernommen: ' . $this->bericht['neu'] . ' neu, ' . $this->bericht['aktualisiert'] . ' aktualisiert.'
+                : 'Probelauf: es wurde noch nichts übernommen.';
         } catch (RuntimeException $e) {
             $this->fehler = $e->getMessage();
         }

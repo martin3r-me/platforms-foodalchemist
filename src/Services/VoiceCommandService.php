@@ -698,11 +698,13 @@ class VoiceCommandService
     {
         $versucht = array_values(array_unique(array_column($toolLaeufe, 'name')));
         if ($versucht === []) {
-            return 'Ich habe den Befehl nicht verstanden — bitte anders formulieren.';
+            return 'Das habe ich nicht verstanden. Bitte anders formulieren.';
         }
 
-        return 'Kein passendes Werkzeug gefunden (versucht: ' . implode(', ', $versucht)
-            . ') — bitte den Befehl präziser formulieren.';
+        // Die versuchten Abfragen bleiben als Nachsatz stehen (Ehrlichkeit, VoiceGlobalPolicyTest),
+        // die Handlung steht vorn und in Klartext.
+        return 'Dazu habe ich nichts Passendes gefunden. Bitte genauer sagen, was gesucht, geöffnet oder geändert werden soll. '
+            . '(Versucht: ' . implode(', ', $versucht) . ')';
     }
 
     /**

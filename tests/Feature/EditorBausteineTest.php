@@ -102,11 +102,9 @@ it('kpi-tiles bildet Tones auf die Palette ab und hält die Marker', function ()
     expect(substr_count($html, 'px-3 py-2 kpi-neutral'))->toBe(2);
     expect($html)->not->toContain('kpi-quatsch');
 
-    // Palette liegt genau einmal im Dokument (@once), nicht pro Kachel
-    expect(substr_count($html, '[data-fa-kpis] .kpi-value'))->toBe(1);
-
-    // Hell UND dunkel bedient — der Editor-Grund ist gescopet, kein `dark:`
-    expect($html)->toContain('.fa-editor-panel [data-fa-kpis] .kpi-accent');
+    // fa-pass: die Kachel-Optik liegt zentral in foodalchemist-pass.css (Tokens) — KEIN style-Block im Markup,
+    // hell und Werkbank-Modus über dieselben Tokens; weiterhin kein `dark:`.
+    expect($html)->not->toContain('<style');
     expect($html)->not->toContain('dark:');
 });
 
@@ -123,8 +121,11 @@ it('der Master-Editor liefert die Marker weiter, die vorher literal in ihm stand
         expect($html)->toContain($marker);
     }
 
-    // Und die Editor-Anatomie steht: Leitwert-Kachel + Zutaten-Tab zuerst
-    expect($html)->toContain('kpi-accent')
+    // Und die Editor-Anatomie steht: Kennzahl-Leiste mit EK je kg + Zutaten-Tab zuerst.
+    // fa-pass: der Rezept-Editor nutzt x-fa::kpis (Hauptzahl = `primary`, nur wenn ein Preis da ist)
+    // statt der kpi-tiles-Palette — die Klasse `kpi-accent` gibt es dort deshalb nicht mehr.
+    expect($html)->toContain('data-fa-kpis')
+        ->toContain('data-kpi="ekkg"')
         ->toContain('data-rezept-tab="aufbau"');
 });
 
@@ -140,14 +141,13 @@ it('E6: der Gericht-Editor trennt Aufbau von Stammdaten', function () {
     expect(strpos($html, 'data-vk-tab="aufbau"'))->toBeLessThan(strpos($html, 'data-vk-tab="stammdaten"'));
 
     // Stammdaten + Klassifikation liegen im Stammdaten-Panel, NICHT mehr im Aufbau-Panel.
-    // Geprüft über die Reihenfolge der Panel-Grenzen: der Marker der Klassifikation muss
-    // hinter dem Beginn des Stammdaten-Panels liegen.
-    $posStammPanel = strpos($html, "tab === 'stammdaten'");
-    $posAufbauPanel = strpos($html, "tab === 'aufbau'", $posStammPanel);
+    // fa-pass: die Panels stehen jetzt in Reiter-Reihenfolge (Aufbau vor Stammdaten) im DOM —
+    // geprüft wird deshalb, in WELCHEM Panel der Klassifikations-Marker liegt: das letzte
+    // Panel-x-show vor dem Marker muss das Stammdaten-Panel sein.
     $posKlass = strpos($html, 'data-vk-klassifikation');
-    expect($posStammPanel)->not->toBeFalse();
-    expect($posAufbauPanel)->not->toBeFalse();
-    expect($posKlass)->toBeGreaterThan($posStammPanel)->toBeLessThan($posAufbauPanel);
+    expect($posKlass)->not->toBeFalse();
+    preg_match_all('/x-show="tab === \'([a-z]+)\'"/', substr($html, 0, $posKlass), $panels);
+    expect(end($panels[1]))->toBe('stammdaten');
 });
 
 it('E6: der Concepter legt Feldleiste, Coverage und Kohäsion in eigene Tabs', function () {
@@ -186,7 +186,10 @@ it('der GP-Editor trägt den KPI-Kopf des GP-Cockpits und eine sticky Leiste', f
         ->toContain('data-kpi="lead-preis"')
         ->toContain('data-kpi="las"')
         ->toContain('data-kpi="allergen"')
-        ->toContain('kpi-accent');
+        ->toContain('data-fa-kpis')
+        // fa-pass: Kennzahl-Leiste x-fa::kpis statt kpi-tiles. Ohne Lead-Artikel ist die Hauptzahl
+        // kein Akzent, sondern der sichtbare Mangel „Preis fehlt" (der FA schätzt nicht).
+        ->toContain('Preis fehlt');
 
     // Status-Regler liegt jetzt in der Aktionsleiste im Kopf, nicht mehr im scrollenden Body.
     // Geprüft über die Zonen-Reihenfolge — NICHT über einen Text-Slice bis
@@ -205,8 +208,8 @@ it('der GP-Editor trägt den KPI-Kopf des GP-Cockpits und eine sticky Leiste', f
         ->toContain('wire:key="gp-tabs-'.$gp->id.'"')
         ->toContain('sticky');
 
-    // Voll-Editor-Hülle im Bestand
-    expect($html)->toContain('fa-editor-panel');
+    // Voll-Editor-Hülle im Bestand (fa-pass: Klasse fa-editor-canvas, Werkbank-Grund über Tokens)
+    expect($html)->toContain('fa-editor-canvas');
 });
 
 it('die GP-Neuanlage ist dark, aber schmal und ohne Ein-Laschen-Navigation', function () {
@@ -216,8 +219,8 @@ it('die GP-Neuanlage ist dark, aber schmal und ohne Ein-Laschen-Navigation', fun
         ->call('oeffnen', null)
         ->html();
 
-    // Dark-Editor-Hülle jetzt auch bei der Neuanlage …
-    expect($html)->toContain('fa-editor-panel');
+    // Editor-Hülle jetzt auch bei der Neuanlage … (fa-pass: fa-editor-canvas)
+    expect($html)->toContain('fa-editor-canvas');
     // … aber weiterhin schmal, kein KPI-Kopf (die Neuanlage hat nichts zu zeigen)
     expect($html)->not->toContain('data-gp-editor-kpis');
 
@@ -248,11 +251,11 @@ it('der LA-Editor trägt Voll-Editor-Anatomie statt acht linearer Sektionen', fu
     expect($html)->toContain('data-la-editor-kpis')
         ->toContain('data-kpi="ek"')
         ->toContain('kpi-accent')
-        ->toContain('nicht gemappt')
+        ->toContain('nicht zugeordnet')
         ->toContain('kpi-warn');
 
     // Voll-Editor-Hülle: dunkler Grund + Name als Akzent-Chip
-    expect($html)->toContain('fa-editor-panel')
+    expect($html)->toContain('fa-editor-canvas')
         ->toContain('data-modal-title-name');
     expect($html)->toContain('Rinderfilet Mittelstück');
 

@@ -782,15 +782,15 @@ class ProductionOrderService
                 return $order;
             }
             if (! $aktuell->darfWechselnZu($ziel)) {
-                throw new \RuntimeException("Status {$aktuell->value} → {$ziel->value} nicht erlaubt.");
+                throw new \RuntimeException("Statuswechsel von „{$aktuell->label()}“ zu „{$ziel->label()}“ ist nicht möglich.");
             }
             // Beim Start: letzten planned-Stand rechnen = Snapshot einfrieren, dann Status setzen.
             if ($ziel === ProductionOrderStatus::InProgress) {
                 if (! empty($options['readiness_blockers'])) {
-                    throw new \RuntimeException('Produktionsstart hat noch Blocker.');
+                    throw new \RuntimeException('Die Produktion kann noch nicht starten: Es gibt offene Hindernisse.');
                 }
                 if (! empty($options['readiness_warnings']) && trim((string) ($options['override_reason'] ?? '')) === '') {
-                    throw new \RuntimeException('Produktionsstart mit Warnungen braucht einen Override-Grund.');
+                    throw new \RuntimeException('Produktion trotz Warnungen starten: Bitte einen Grund angeben.');
                 }
                 $this->recomputeOrder($team, $order);
                 $order->started_at = now();
@@ -1115,7 +1115,7 @@ class ProductionOrderService
     {
         $order = FoodAlchemistProductionOrder::visibleToTeam($team)->findOrFail($orderId);
         if (! $order->isOwnedBy($team)) {
-            throw new \RuntimeException('Produktionsauftrag nicht im Schreibzugriff (D1).');
+            throw new \RuntimeException('Dieser Produktionsauftrag gehört einem anderen Team und lässt sich hier nicht bearbeiten.');
         }
 
         $targets = array_values($order->targets ?? []);
@@ -1294,7 +1294,7 @@ class ProductionOrderService
     {
         $order = FoodAlchemistProductionOrder::visibleToTeam($team)->findOrFail($orderId);
         if (! $order->isOwnedBy($team)) {
-            throw new \RuntimeException('Produktionsauftrag nicht im Schreibzugriff (D1).');
+            throw new \RuntimeException('Dieser Produktionsauftrag gehört einem anderen Team und lässt sich hier nicht bearbeiten.');
         }
 
         return $order;
@@ -1328,7 +1328,7 @@ class ProductionOrderService
         $line = FoodAlchemistProductionOrderLine::with('productionOrder')->findOrFail($lineId);
         $order = $line->productionOrder;
         if ($order === null || ! $order->isOwnedBy($team)) {
-            throw new \RuntimeException('Produktionszeile nicht im Schreibzugriff (D1).');
+            throw new \RuntimeException('Diese Produktionszeile gehört einem anderen Team und lässt sich hier nicht bearbeiten.');
         }
         $status = $order->status instanceof ProductionOrderStatus ? $order->status : ProductionOrderStatus::from((string) $order->status);
         if ($status !== ProductionOrderStatus::InProgress) {
@@ -1343,7 +1343,7 @@ class ProductionOrderService
         $line = FoodAlchemistProductionOrderLine::with('productionOrder')->findOrFail($lineId);
         $order = $line->productionOrder;
         if ($order === null || ! $order->isOwnedBy($team)) {
-            throw new \RuntimeException('Produktionszeile nicht im Schreibzugriff (D1).');
+            throw new \RuntimeException('Diese Produktionszeile gehört einem anderen Team und lässt sich hier nicht bearbeiten.');
         }
         $status = $order->status instanceof ProductionOrderStatus ? $order->status : ProductionOrderStatus::from((string) $order->status);
         if (! in_array($status, [ProductionOrderStatus::Planned, ProductionOrderStatus::InProgress], true)) {
@@ -1358,7 +1358,7 @@ class ProductionOrderService
         $line = FoodAlchemistProductionOrderLine::with('productionOrder')->findOrFail($lineId);
         $order = $line->productionOrder;
         if ($order === null || ! $order->isOwnedBy($team)) {
-            throw new \RuntimeException('Produktionszeile nicht im Schreibzugriff (D1).');
+            throw new \RuntimeException('Diese Produktionszeile gehört einem anderen Team und lässt sich hier nicht bearbeiten.');
         }
         $status = $order->status instanceof ProductionOrderStatus ? $order->status : ProductionOrderStatus::from((string) $order->status);
         if (! $status->istOffen()) {

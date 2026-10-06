@@ -1,329 +1,447 @@
-{{-- M2-06/07/08: LA-Editor-Modal (P-2/P-6) — read-only für Kette, Edit nur Besitzer --}}
-@php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
+{{-- Lieferantenartikel-Editor (M2-06/07/08, P-2/P-6). Lesend für die ganze Team-Kette, Pflege nur
+     durch das Besitzer-Team (Curate/D1). Schließen ohne Speichern setzt den Zustand zurück (modal.closed).
 
-{{-- Spec 28 / E3.2: LA-Editor auf den Master-Standard (Basisrezepte) gezogen — vorher acht
-     Sektionen linear ohne Kopf-Kennzahlen, der datendichteste Editor ohne jede Struktur.
-     Voll-Editor nur mit geladenem Artikel; Titel generisch + Designation als Akzent-Chip. --}}
+     fa-pass (2026-10-05): Werkbank-Umbau. Nur --fa-*-Tokens und x-fa-Bausteine, damit hell UND dunkel
+     stimmen. Logik-Durchgang: Am häufigsten wird ein Artikel geöffnet, um ihn einem Grundprodukt
+     zuzuordnen und den Preis zu prüfen. Deshalb stehen «Grundprodukt» und «Preise» vorn, ein
+     ungemappter Artikel öffnet direkt auf der Zuordnung. Stammdaten kommen meist aus dem Import und
+     stehen hinten. Speichern ist die EINE Hauptaktion; Allergene, Zusatzstoffe und Nährwerte haben
+     weiterhin eigene Speicher-Knöpfe in ihrem Abschnitt (getrennte Server-Methoden, unverändert).
+     EAN-Felder werden von speichern() nicht geschrieben und sind deshalb nur noch lesbar. --}}
+@php
+    $aktivPreis = $aktiverPreis?->price !== null ? (float) $aktiverPreis->price : null;
+    $bestellEinheit = $item?->ordering_unit ?: ($item?->unit_code ?: 'Einheit');
+    $gpName = $item?->structure?->gp?->name;
+    $allergenGesamt = count($allergenLabels);
+    $allergenGepflegt = collect($allergenLabels)->keys()
+        ->filter(fn ($k) => ($allergene[$k] ?? 'unbekannt') !== 'unbekannt')->count();
+    $einheitKurz = fn (?string $u) => $u !== null ? ltrim(str_replace('€/', '', $u)) : null;
+
+    // Herkunft der Deklaration (GL-07): NULL = Lieferanten-Import, manual = hier gepflegt, datei = Datei-Import.
+    $quelleText = fn (?string $q) => match ($q) {
+        'manual' => 'von Hand gepflegt',
+        'datei' => 'aus Datei-Import',
+        null, '' => 'aus dem Lieferanten-Import',
+        default => 'aus einem Import',
+    };
+
+    // Rohe Match-Methoden des Vorschlagsdienstes lesbar machen.
+    $grundText = fn (string $g) => match (true) {
+        $g === 'exact_ean' => 'gleiche EAN',
+        $g === 'exact_artno' => 'gleiche Artikelnummer',
+        $g === 'fuzzy_name', $g === 'hybrid_lexical' => 'ähnlicher Name',
+        str_starts_with($g, 'hybrid_') => 'ähnliche Bedeutung',
+        default => 'ähnlicher Treffer',
+    };
+
+    $datum = fn ($wert) => $wert ? \Illuminate\Support\Carbon::parse($wert)->format('d.m.Y') : null;
+    $proEinheitOk = $item !== null && (float) $item->qty > 0 && in_array($item->unit_code, ['kg', 'l', 'Stk'], true);
+
+    $leise = 'text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]';
+    $zeilenLabel = 'text-[length:var(--fa-text-md)] text-[var(--fa-ink)] min-w-0';
+    $segment = 'h-7 px-2.5 text-[length:var(--fa-text-sm)] font-medium transition-colors duration-150 disabled:cursor-not-allowed';
+    $segmentAus = 'text-[var(--fa-ink-3)]' . ($darfEdit ? ' hover:bg-[var(--fa-hover)] hover:text-[var(--fa-ink)]' : '');
+    $allergenKnoepfe = [
+        'nicht_enthalten' => ['nein', 'nicht enthalten', 'bg-[var(--fa-neutral-soft)] text-[var(--fa-ink)]'],
+        'spuren' => ['Spuren', 'Spuren', 'bg-[var(--fa-warn-soft)] text-[var(--fa-warn)]'],
+        'enthalten' => ['enthalten', 'enthalten', 'bg-[var(--fa-crit-soft)] text-[var(--fa-crit)]'],
+    ];
+    $stoffKnoepfe = [
+        'nein' => ['nein', 'bg-[var(--fa-neutral-soft)] text-[var(--fa-ink)]'],
+        'ja' => ['ja', 'bg-[var(--fa-crit-soft)] text-[var(--fa-crit)]'],
+    ];
+@endphp
 <div>
-    <x-foodalchemist::modal name="item-modal" :title="$item !== null ? ($darfEdit ? 'Artikel bearbeiten' : 'Artikel') : 'Artikel'"
+    <x-foodalchemist::modal name="item-modal" :title="$item !== null && $darfEdit ? 'Artikel bearbeiten' : 'Artikel'"
         :title-name="$item?->designation" :fullscreen="$item !== null" :dark-canvas="$item !== null">
         @if($item)
             <x-slot:actions>
-                @if($darfEdit)
-                    <button type="button" wire:click="speichern" class="{{ $btnPrimary }}" data-la-speichern>Speichern</button>
-                @else
-                    <span class="{{ $pill }} {{ $variantPill['secondary'] }}" title="Geerbter Katalog (D1) — Pflege beim Besitzer-Team">read-only</span>
-                @endif
+                <div class="flex w-full flex-wrap items-center gap-2 min-w-0">
+                    @if($darfEdit)
+                        <p class="{{ $leise }} min-w-0">Speichern sichert Stammdaten, Verpackung und Eigenschaften.</p>
+                        <x-fa::button variant="primary" icon="heroicon-m-check" class="ml-auto" wire:click="speichern"
+                            wire:loading.attr="disabled" wire:target="speichern" data-la-speichern>Speichern</x-fa::button>
+                    @else
+                        <x-fa::badge icon="heroicon-m-lock-closed" class="ml-auto"
+                            title="Dieser Artikel kommt aus einem übergeordneten Katalog und wird dort gepflegt.">Nur lesen</x-fa::badge>
+                    @endif
+                </div>
             </x-slot:actions>
 
-            {{-- KPI-Kopf statt der alten Kopfzeile (Lieferant · EK · Vergleichspreis · GP-Pill):
-                 dieselben Angaben, aber fix im Kopf und bewertet. Leitwert = EK aktuell (accent).
-                 GP-Mapping und Allergen-Pflege sind echte Vollständigkeiten → good/warn.
-                 Allergene: 14 EU-Pflichtangaben, alles außer 'unbekannt' zählt als gepflegt
-                 (GL-01-4-Wert-Modell — fehlende Schlüssel sind ebenfalls unbekannt). --}}
-            @php($allergenGepflegt = collect($allergenLabels)->keys()
-                ->filter(fn ($k) => ($allergene[$k] ?? 'unbekannt') !== 'unbekannt')->count())
-            @php($allergenGesamt = count($allergenLabels))
-            @php($gpName = $item->structure?->gp?->name)
+            {{-- Kennzahlen fix im Kopf. Leitwert = Einkaufspreis (accent). Grundprodukt und Allergene sind
+                 echte Vollständigkeiten (good/warn). Fehlende Werte werden benannt, nicht als Strich versteckt. --}}
             <x-slot:kpiHeader>
                 <x-foodalchemist::kpi-tiles marker="la-editor-kpis" :cols="5" :tiles="[
-                    ['kpi' => 'ek', 'label' => 'EK aktuell', 'tone' => 'accent',
-                     'title' => 'pro ' . ($item->ordering_unit ?? $item->unit_code ?? 'Einheit'),
-                     'value' => $aktiverPreis?->price !== null ? number_format((float) $aktiverPreis->price, 2, ',', '.') . ' €' : '—'],
-                    ['kpi' => 'vergleichspreis', 'label' => 'Vergleichspreis',
-                     'title' => 'Auf die Kalkulationseinheit gerechnet (M2-05)',
-                     'value' => $vergleichspreis !== null ? number_format($vergleichspreis['value'], 2, ',', '.') . ' ' . $vergleichspreis['unit'] : '—'],
+                    ['kpi' => 'ek', 'label' => 'Einkaufspreis je ' . $bestellEinheit, 'tone' => 'accent',
+                     'title' => 'Gültiger Einkaufspreis, netto, je ' . $bestellEinheit,
+                     'value' => $aktivPreis !== null ? number_format($aktivPreis, 2, ',', '.') . ' €' : 'Preis fehlt'],
+                    ['kpi' => 'vergleichspreis', 'label' => $vergleichspreis !== null ? 'Preis je ' . $einheitKurz($vergleichspreis['unit']) : 'Preis je kg',
+                     'title' => 'Auf die Kalkulationseinheit umgerechnet',
+                     'tone' => $vergleichspreis === null && $aktivPreis !== null ? 'warn' : null,
+                     'value' => $vergleichspreis !== null
+                        ? number_format($vergleichspreis['value'], 2, ',', '.') . ' ' . $vergleichspreis['unit']
+                        : ($aktivPreis !== null ? 'Menge fehlt' : 'Preis fehlt')],
                     ['kpi' => 'gp', 'label' => 'Grundprodukt', 'tone' => $gpName !== null ? 'good' : 'warn',
-                     'title' => $gpName ?? 'Ohne GP läuft dieser Artikel in keine Rezept-Kalkulation.',
-                     'value' => $gpName ?? 'nicht gemappt'],
-                    ['kpi' => 'allergene', 'label' => 'Allergene',
+                     'title' => $gpName ?? 'Ohne Grundprodukt fließt dieser Artikel in keine Rezeptkalkulation.',
+                     'value' => $gpName ?? 'nicht zugeordnet'],
+                    ['kpi' => 'allergene', 'label' => 'Allergene bewertet',
                      'tone' => $allergenGepflegt >= $allergenGesamt ? 'good' : 'warn',
-                     'title' => 'Gepflegt von 14 EU-Pflichtangaben — ungesetzt zählt als unbekannt (GL-01).',
-                     'value' => $allergenGepflegt . '/' . $allergenGesamt],
+                     'title' => 'Bewertet von 14 Pflichtangaben. Ohne Angabe zählt als unbekannt.',
+                     'value' => $allergenGepflegt . ' von ' . $allergenGesamt],
                     ['kpi' => 'lieferant', 'label' => 'Lieferant',
-                     'title' => $item->supplier?->name ?? '',
-                     'value' => $item->supplier?->name ?? '—'],
+                     'title' => $item->supplier?->name ?? 'Lieferant unbekannt',
+                     'value' => $item->supplier?->name ?? 'unbekannt'],
                 ]" />
             </x-slot:kpiHeader>
 
-            @if($fehler)<p class="text-xs text-red-600 mb-2" data-la-fehler>{{ $fehler }}</p>@endif
+            @if($fehler)
+                <x-fa::notice tone="crit" class="mb-4" data-la-fehler>{{ $fehler }}</x-fa::notice>
+            @endif
 
-            {{-- Vier Tabs statt acht Sektionen am Stück (E1-8: was man am häufigsten ändert links).
-                 Alpine-Modus: alle Panels bleiben im DOM, damit das entangle-Binding der
-                 Zusatzstoffe und ungespeicherte Eingaben beim Umschalten nicht verloren gehen. --}}
-            <x-foodalchemist::editor-tabs marker="la" wire-key="la-tabs-{{ $item->id }}" :init="'stammdaten'"
+            {{-- Alpine-Modus: alle Reiter bleiben im DOM, damit die entangle-Bindings (Allergene,
+                 Zusatzstoffe) und ungespeicherte Eingaben beim Umschalten erhalten bleiben. --}}
+            <x-foodalchemist::editor-tabs marker="la" wire-key="la-tabs-{{ $item->id }}" :init="$gpName === null ? 'gp' : 'preise'"
                 :tabs="[
-                    'stammdaten' => 'Stammdaten',
-                    'deklaration' => 'Deklaration',
-                    'gp' => 'GP-Mapping',
+                    'gp' => 'Grundprodukt',
                     'preise' => 'Preise',
+                    'deklaration' => 'Allergene und Nährwerte',
+                    'stammdaten' => 'Stammdaten',
                 ]">
 
-            {{-- ── Tab: STAMMDATEN (Stammdaten · Verpackung · Eigenschaften) ── --}}
-            <div x-show="tab === 'stammdaten'" x-cloak class="pt-4 space-y-4">
+            {{-- ── Reiter GRUNDPRODUKT ─────────────────────────────────────────── --}}
+            <div x-show="tab === 'gp'" x-cloak class="pt-4 flex flex-col gap-4">
+                <x-fa::section title="Grundprodukt" icon="heroicon-o-cube"
+                    description="Über das Grundprodukt fließen Preis und Allergene dieses Artikels in die Rezepte.">
+                    <x-slot:actions>
+                        {{-- MatchService: exakte Dubletten (EAN, Artikelnummer), Namensähnlichkeit und semantischer Recall (hybrid_*). Kein Chat-Modell, deshalb Lupe statt Sternchen. --}}
+                        <x-foodalchemist::ki-action action="kiGpVorschlag" variant="ghostXs" icon="heroicon-o-magnifying-glass"
+                            label="Grundprodukte vorschlagen" busy="Wird gesucht …" flash="Vorschläge geladen"
+                            title="Sucht Grundprodukte mit gleicher EAN, gleicher Artikelnummer oder ähnlichem Namen" data-ki-gp-vorschlag />
+                        @if(! $item->structure?->gp)
+                            <x-fa::button size="sm" icon="heroicon-m-plus" wire:click="gpNeuAnlegen" data-gp-neu-aus-la
+                                title="Neues Grundprodukt anlegen, mit diesem Artikel als Quelle">Neues Grundprodukt anlegen</x-fa::button>
+                        @endif
+                    </x-slot:actions>
 
-            <x-foodalchemist::modal-section title="Stammdaten">
-                <div class="grid grid-cols-2 gap-3">
-                    @foreach([['designation', 'Bezeichnung'], ['article_number', 'Artikel-Nr.'], ['brand', 'Marke'], ['manufacturer', 'Hersteller'], ['origin', 'Herkunft'], ['marketing_name', 'Marketing-Name']] as [$feld, $lbl])
-                        <div>
-                            <label class="block {{ $label }} mb-1">{{ $lbl }}</label>
-                            <input type="text" wire:model="stammdaten.{{ $feld }}" @unless($darfEdit) disabled @endunless class="{{ $input }} disabled:opacity-60" />
+                    @if($item->structure?->gp)
+                        <div class="flex flex-wrap items-center justify-between gap-3 rounded-[var(--fa-radius-control)] border border-[var(--fa-accent-line)] bg-[var(--fa-accent-soft)] px-3 py-2.5" data-gp-mapping-aktuell>
+                            <p class="flex items-center gap-2 min-w-0 text-[length:var(--fa-text-base)] font-medium text-[var(--fa-ink)]">
+                                @svg('heroicon-o-cube', 'w-4 h-4 shrink-0 text-[var(--fa-accent)]')
+                                <span class="min-w-0 break-words">{{ $item->structure->gp->name }}</span>
+                            </p>
+                            <x-fa::button size="sm" variant="danger" icon="heroicon-m-link-slash" wire:click="gpLoesen"
+                                wire:confirm="Zuordnung zum Grundprodukt lösen? War dieser Artikel der Leitartikel, wird sofort ein neuer gewählt."
+                                data-gp-loesen>Zuordnung lösen</x-fa::button>
                         </div>
-                    @endforeach
-                </div>
-                <div class="mt-3"><label class="block {{ $label }} mb-1">Zusatztext</label>
-                    <textarea wire:model="stammdaten.additional_text" rows="2" @unless($darfEdit) disabled @endunless class="{{ $input }} disabled:opacity-60"></textarea></div>
-            </x-foodalchemist::modal-section>
-
-            <x-foodalchemist::modal-section title="Verpackung & Mengen">
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    <div><label class="block {{ $label }} mb-1">Gebinde-Menge (qty)</label>
-                        <input type="text" wire:model="verpackung.qty" @unless($darfEdit) disabled @endunless class="{{ $input }} disabled:opacity-60" /></div>
-                    <div><label class="block {{ $label }} mb-1">Kalk-Einheit</label>
-                        <select wire:model="verpackung.unit_code" @unless($darfEdit) disabled @endunless class="{{ $input }} disabled:opacity-60">
-                            <option value="">—</option>
-                            @foreach(['kg', 'l', 'Stk'] as $u)<option value="{{ $u }}">{{ $u }}</option>@endforeach
-                        </select></div>
-                    <div><label class="block {{ $label }} mb-1">Verpackungseinheit</label>
-                        <input type="text" wire:model="verpackung.packaging_unit" @unless($darfEdit) disabled @endunless class="{{ $input }} disabled:opacity-60" /></div>
-                    <div><label class="block {{ $label }} mb-1">Bestelleinheit</label>
-                        <input type="text" wire:model="verpackung.ordering_unit" @unless($darfEdit) disabled @endunless class="{{ $input }} disabled:opacity-60" /></div>
-                    <div><label class="block {{ $label }} mb-1">VPE pro Bestelleinheit</label>
-                        <input type="text" wire:model="verpackung.qty_ordering_per_packaging" @unless($darfEdit) disabled @endunless class="{{ $input }} disabled:opacity-60" /></div>
-                    <div><label class="block {{ $label }} mb-1">EAN VPE</label>
-                        <input type="text" wire:model="verpackung.ean_packaging" @unless($darfEdit) disabled @endunless class="{{ $input }} disabled:opacity-60" /></div>
-                    <div><label class="block {{ $label }} mb-1">EAN Bestelleinheit</label>
-                        <input type="text" wire:model="verpackung.ean_ordering" @unless($darfEdit) disabled @endunless class="{{ $input }} disabled:opacity-60" /></div>
-                </div>
-            </x-foodalchemist::modal-section>
-
-            <x-foodalchemist::modal-section title="Eigenschaften">
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    @foreach([['is_organic', 'Bio'], ['is_vegan', 'Vegan'], ['is_vegetarian', 'Vegetarisch'], ['is_alcohol', 'Alkohol'], ['is_halal', 'Halal'], ['is_gmo_free', 'GVO-frei']] as [$feld, $lbl])
-                        <div><label class="block {{ $label }} mb-1">{{ $lbl }}</label>
-                            <select wire:model="eigenschaften.{{ $feld }}" @unless($darfEdit) disabled @endunless class="{{ $input }} disabled:opacity-60">
-                                <option value="">unbekannt</option>
-                                <option value="1">ja</option>
-                                <option value="0">nein</option>
-                            </select></div>
-                    @endforeach
-                </div>
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
-                    <div><label class="block {{ $label }} mb-1">MwSt %</label>
-                        <input type="text" wire:model="eigenschaften.vat" placeholder="7 oder 19" @unless($darfEdit) disabled @endunless class="{{ $input }} disabled:opacity-60" /></div>
-                    <div><label class="block {{ $label }} mb-1">Ursprungsland</label>
-                        <input type="text" wire:model="eigenschaften.origin_country" @unless($darfEdit) disabled @endunless class="{{ $input }} disabled:opacity-60" /></div>
-                    <div><label class="block {{ $label }} mb-1">Bio-Kontrollnummer</label>
-                        <input type="text" wire:model="eigenschaften.organic_control_number" @unless($darfEdit) disabled @endunless class="{{ $input }} disabled:opacity-60" /></div>
-                    <div data-vorbestellung><label class="block {{ $label }} mb-1">Vorbestellung (V-29)</label>
-                        <div class="flex gap-2">
-                            <select wire:model="eigenschaften.is_preorder" @unless($darfEdit) disabled @endunless class="{{ $input }} disabled:opacity-60 !w-24">
-                                <option value="">—</option><option value="1">ja</option><option value="0">nein</option>
-                            </select>
-                            <input type="number" wire:model="eigenschaften.preorder_days" placeholder="Tage" @unless($darfEdit) disabled @endunless class="{{ $input }} disabled:opacity-60 !w-20" />
-                        </div></div>
-                </div>
-                <div class="mt-3"><label class="block {{ $label }} mb-1">Zutatenliste (vom Lieferanten)</label>
-                    <textarea wire:model="eigenschaften.ingredients_supplier" rows="3" @unless($darfEdit) disabled @endunless class="{{ $input }} disabled:opacity-60"></textarea></div>
-            </x-foodalchemist::modal-section>
-            </div>{{-- /Tab STAMMDATEN --}}
-
-            {{-- ── Tab: DEKLARATION (Nährwerte · Allergene · Zusatzstoffe) ──── --}}
-            <div x-show="tab === 'deklaration'" x-cloak class="pt-4 space-y-4">
-
-            <x-foodalchemist::modal-section title="Nährwerte (je 100 g)">
-                <div class="flex items-center justify-between mb-2">
-                    <p class="text-[11px] text-gray-500">Fließen in die GP-Nährwert-Aggregation (Ø über die LAs, GL-08).</p>
-                    @if($darfEdit)
-                        <button type="button" wire:click="naehrwerteSpeichern" class="{{ $btnGhostXs }} text-violet-600">Nährwerte speichern</button>
+                    @else
+                        <x-fa::empty compact icon="heroicon-o-link" title="Noch keinem Grundprodukt zugeordnet" data-gp-mapping-leer>
+                            Ohne Grundprodukt fließt dieser Artikel in keine Rezeptkalkulation. Grundprodukte vorschlagen lassen, unten nach dem Namen suchen oder ein neues Grundprodukt anlegen.
+                        </x-fa::empty>
                     @endif
-                </div>
-                <div class="grid grid-cols-2 md:grid-cols-3 gap-3" data-naehrwerte>
-                    @foreach($naehrwertFelder as $feld => $meta)
-                        <div>
-                            <label class="block {{ $label }} mb-1">{{ $meta[0] }} ({{ $meta[1] }})</label>
-                            <input type="text" inputmode="decimal" wire:model="naehrwerte.{{ $feld }}" placeholder="—"
-                                   @unless($darfEdit) disabled @endunless class="{{ $input }} disabled:opacity-60" data-naehr-{{ $feld }} />
-                        </div>
-                    @endforeach
-                </div>
-            </x-foodalchemist::modal-section>
 
-            <x-foodalchemist::modal-section title="Allergene (14 EU-Pflichtangaben)">
-                <div class="flex items-center justify-between mb-2" data-allergen-kopf>
-                    <p class="text-[11px] text-gray-500">− nicht enthalten · ≈ Spuren · ✓ enthalten · ungesetzt = unbekannt (GL-01). Quelle:
-                        {{-- Lineage GL-07: NULL = Necta-Bulk, manual = hier gepflegt, datei = Kanal-B-Import (Spec 13 · S1c) --}}
-                        <span class="{{ $pill }} {{ $allergenQuelle === 'manual' ? $variantPill['success'] : $variantPill['secondary'] }}">{{ ['manual' => 'manuell', 'datei' => 'Datei-Import'][$allergenQuelle] ?? ($allergenQuelle ?: 'Import') }}</span>
-                    </p>
-                    @if($darfEdit)
-                        <button type="button" wire:click="allergeneSpeichern" class="{{ $btnGhostXs }} text-violet-600">Allergene speichern</button>
-                    @endif
-                </div>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-x-8">
-                    <x-foodalchemist::tri-state model="allergene" :readonly="! $darfEdit"
-                        :items="collect($allergenLabels)->take(7)->all()" />
-                    <x-foodalchemist::tri-state model="allergene" :readonly="! $darfEdit"
-                        :items="collect($allergenLabels)->skip(7)->all()" />
-                </div>
-            </x-foodalchemist::modal-section>
-
-            <x-foodalchemist::modal-section title="Zusatzstoffe (18 deklarationspflichtige Stoffe, LMIV)">
-                <div class="flex items-center justify-between mb-2" data-deklaration-kopf>
-                    <p class="text-[11px] text-gray-500">− nein · ✓ ja · ungesetzt = keine Angabe (GL-09). Quelle:
-                        <span class="{{ $pill }} {{ $deklarationQuelle === 'manual' ? $variantPill['success'] : $variantPill['secondary'] }}">{{ ['manual' => 'manuell', 'datei' => 'Datei-Import'][$deklarationQuelle] ?? ($deklarationQuelle ?: 'Import') }}</span>
-                    </p>
-                    @if($darfEdit)
-                        <button type="button" wire:click="deklarationenSpeichern" class="{{ $btnGhostXs }} text-violet-600">Zusatzstoffe speichern</button>
-                    @endif
-                </div>
-                {{-- R20 (Dominique): zwei Raster nebeneinander statt voller Breite --}}
-                <div x-data="{ dekl: $wire.entangle('deklarationen') }" class="grid grid-cols-1 md:grid-cols-2 gap-x-8" data-deklarationen>
-                    @foreach(collect($deklarationLabels)->chunk((int) ceil(count($deklarationLabels) / 2)) as $haelfte)
-                    <div class="divide-y divide-black/5">
-                    @foreach($haelfte as $stoff => $lbl)
-                        <div class="flex items-center justify-between gap-3 py-1" data-dekl-row="{{ $stoff }}">
-                            <span class="text-xs text-gray-700 min-w-0 truncate">{{ $lbl }}</span>
-                            <div class="flex items-center gap-1 shrink-0">
-                                @foreach([['nein', '−', 'bg-gray-500/20 text-gray-700 border-gray-500/30'], ['ja', '✓', 'bg-red-500/15 text-red-600 border-red-500/30']] as [$wert, $zeichen, $aktiv])
-                                    <button type="button" title="{{ $wert }}"
-                                            @if($darfEdit)
-                                                @click="dekl['{{ $stoff }}'] = dekl['{{ $stoff }}'] === '{{ $wert }}' ? 'unbekannt' : '{{ $wert }}'"
-                                            @else disabled @endif
-                                            :class="dekl['{{ $stoff }}'] === '{{ $wert }}' ? @js($aktiv) : 'border-black/5 text-gray-300 {{ $darfEdit ? 'hover:text-gray-500 hover:bg-black/5' : 'opacity-60' }}'"
-                                            class="w-5 h-5 inline-flex items-center justify-center text-[10px] font-medium rounded border transition-all duration-150"
-                                            data-dekl-btn="{{ $wert }}">{{ $zeichen }}</button>
+                    @if($gpVorschlaege !== [])
+                        <div class="flex flex-col gap-1" data-gp-vorschlaege>
+                            <p class="text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-2)]">Vorschläge, Klick ordnet zu</p>
+                            <div class="flex flex-col divide-y divide-[var(--fa-line)] rounded-[var(--fa-radius-control)] border border-[var(--fa-line)]">
+                                @foreach($gpVorschlaege as $v)
+                                    <button type="button" wire:key="gpv-{{ $v['gp_id'] }}" wire:click="gpZuweisen({{ $v['gp_id'] }})"
+                                            class="flex items-center gap-3 w-full px-3 py-2 text-left hover:bg-[var(--fa-hover)] transition-colors duration-150" data-gp-vorschlag>
+                                        <x-fa::badge :tone="$v['score'] >= 90 ? 'ok' : 'warn'" class="shrink-0 tabular-nums">{{ $v['score'] }} %</x-fa::badge>
+                                        <span class="min-w-0 flex-1 break-words text-[length:var(--fa-text-md)] text-[var(--fa-ink)]">{{ $v['name'] }}</span>
+                                        @if($v['grund'] !== '')<span class="shrink-0 {{ $leise }}">{{ $grundText($v['grund']) }}</span>@endif
+                                    </button>
                                 @endforeach
                             </div>
                         </div>
-                    @endforeach
-                    </div>
-                    @endforeach
-                </div>
-            </x-foodalchemist::modal-section>
-
-            </div>{{-- /Tab DEKLARATION --}}
-
-            {{-- ── Tab: GP-MAPPING ──────────────────────────────────────────── --}}
-            <div x-show="tab === 'gp'" x-cloak class="pt-4 space-y-4">
-
-            {{-- R9 (Jarvis «GP-MAPPING»): aktuelles Mapping + KI-Vorschlag (MatchService) + manuelle Zuweisung --}}
-            <x-foodalchemist::modal-section title="GP-Mapping">
-                <x-slot:actions>
-                    {{-- E1-11: Emoji raus, Heroicon rein; KI-Chip trägt den btnAi-Stil wie überall --}}
-                    <x-foodalchemist::ki-action action="kiGpVorschlag" variant="ghostXs" icon="heroicon-o-sparkles" label="KI-Vorschlag"
-                            title="MatchService v1: exakte Dubletten (EAN/Art.-Nr) + GL-04-Fuzzy (deterministisch, kein LLM)" data-ki-gp-vorschlag />
-                    @if(! $item->structure?->gp)
-                        <button type="button" wire:click="gpNeuAnlegen" class="{{ $btnGhostXs }} text-violet-600" data-gp-neu-aus-la>
-                            @svg('heroicon-o-plus', 'w-3.5 h-3.5') Neues GP aus Artikel
-                        </button>
                     @endif
-                </x-slot:actions>
 
-                @if($item->structure?->gp)
-                    <div class="flex items-center justify-between gap-2 rounded-lg bg-violet-500/10 border border-violet-500/30 px-3 py-2" data-gp-mapping-aktuell>
-                        <p class="text-xs text-gray-900 min-w-0 truncate inline-flex items-center gap-1.5">@svg('heroicon-o-cube', 'w-3.5 h-3.5 shrink-0') {{ $item->structure->gp->name }}</p>
-                        <button type="button" wire:click="gpLoesen" wire:confirm="GP-Zuordnung lösen? War das LA Lead, wird sofort neu gewählt (GL-03 I4)."
-                                class="{{ $btnGhostXs }} text-rose-500 shrink-0" data-gp-loesen>@svg('heroicon-o-x-mark', 'w-3.5 h-3.5') lösen</button>
+                    <div class="flex flex-col gap-1.5" data-gp-zuweisen>
+                        <label for="la-gp-suche" class="text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-2)]">
+                            {{ $item->structure?->gp ? 'Anderem Grundprodukt zuordnen' : 'Grundprodukt suchen und zuordnen' }}
+                        </label>
+                        <div class="relative">
+                            @svg('heroicon-m-magnifying-glass', 'w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--fa-ink-3)] pointer-events-none')
+                            <x-fa::input id="la-gp-suche" type="search" wire:model.live.debounce.300ms="gpSuche"
+                                placeholder="Name des Grundprodukts" class="pl-8" />
+                        </div>
+                        @if($gpKandidaten->isNotEmpty())
+                            <div class="flex flex-col divide-y divide-[var(--fa-line)] rounded-[var(--fa-radius-control)] border border-[var(--fa-line)]">
+                                @foreach($gpKandidaten as $kandidat)
+                                    <button type="button" wire:key="gpk-{{ $kandidat->id }}" wire:click="gpZuweisen({{ $kandidat->id }})"
+                                            class="flex items-center gap-2 w-full px-3 py-2 text-left text-[length:var(--fa-text-md)] text-[var(--fa-ink)] hover:bg-[var(--fa-hover)] transition-colors duration-150">
+                                        @svg('heroicon-o-cube', 'w-4 h-4 shrink-0 text-[var(--fa-ink-3)]')
+                                        <span class="min-w-0 break-words">{{ $kandidat->name }}</span>
+                                    </button>
+                                @endforeach
+                            </div>
+                        @elseif(trim($gpSuche) !== '')
+                            <p class="{{ $leise }}">Kein Grundprodukt mit diesem Namen gefunden.</p>
+                        @endif
                     </div>
-                @else
-                    <p class="text-xs text-gray-500 italic" data-gp-mapping-leer>— kein GP zugeordnet —</p>
-                @endif
+                </x-fa::section>
+            </div>{{-- /Reiter GRUNDPRODUKT --}}
 
-                @if($gpVorschlaege !== [])
-                    <div class="mt-2 rounded-lg bg-violet-500/5 border border-violet-500/20 px-3 py-2 space-y-1" data-gp-vorschlaege>
-                        <p class="text-[11px] font-medium text-violet-700 inline-flex items-center gap-1.5">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') Match-Kandidaten — Klick weist zu:</p>
-                        @foreach($gpVorschlaege as $v)
-                            <button type="button" wire:key="gpv-{{ $v['gp_id'] }}" wire:click="gpZuweisen({{ $v['gp_id'] }})"
-                                    class="flex items-center gap-2 w-full text-left px-2 py-1 rounded text-[11px] text-gray-700 hover:bg-violet-500/10" data-gp-vorschlag>
-                                <span class="font-semibold {{ $v['score'] >= 90 ? 'text-green-600' : 'text-amber-500' }} shrink-0">{{ $v['score'] }} %</span>
-                                <span class="min-w-0 truncate">{{ $v['name'] }}</span>
-                                <span class="text-gray-500 shrink-0">{{ $v['grund'] }}</span>
-                            </button>
+            {{-- ── Reiter PREISE ───────────────────────────────────────────────── --}}
+            <div x-show="tab === 'preise'" x-cloak class="pt-4 flex flex-col gap-4" x-data="{ neuOffen: false }">
+                <x-fa::section title="Preise" icon="heroicon-o-banknotes" :meta="$historie->count() > 0 ? $historie->count() . ' Einträge' : null">
+                    <x-slot:actions>
+                        @if($darfEdit)
+                            <x-fa::button size="sm" icon="heroicon-m-plus" x-on:click="neuOffen = ! neuOffen"
+                                x-bind:aria-expanded="neuOffen" data-preis-neu-toggle>Preis erfassen</x-fa::button>
+                        @endif
+                    </x-slot:actions>
+
+                    <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-[var(--fa-radius-control)] bg-[var(--fa-neutral-soft)] px-3 py-2.5" data-ek-aktuell>
+                        <span class="text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-2)]">Gültiger Einkaufspreis</span>
+                        <span class="text-[length:var(--fa-text-lg)] font-semibold text-[var(--fa-ink)]"><x-fa::money :value="$aktivPreis" /></span>
+                        <span class="{{ $leise }}">je {{ $bestellEinheit }}</span>
+                        @if($vergleichspreis !== null)
+                            <span class="{{ $leise }}">entspricht <x-fa::money :value="$vergleichspreis['value']" :per="$einheitKurz($vergleichspreis['unit'])" /></span>
+                        @elseif($aktivPreis !== null)
+                            <x-fa::signal tone="warn" title="Ohne Inhalt und Kalkulationseinheit kein Preis je kg, l oder Stück">Menge fehlt für den Preis je kg</x-fa::signal>
+                        @endif
+                    </div>
+
+                    @if($darfEdit)
+                        <div x-show="neuOffen" x-cloak class="flex flex-wrap items-end gap-3 rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] p-3" data-preis-neu>
+                            <x-fa::field label="Neuer Preis (€, netto)" for="la-preis-neu" class="w-40">
+                                <x-fa::input id="la-preis-neu" wire:model="preisNeu.price" inputmode="decimal" placeholder="z. B. 47,50" numeric />
+                            </x-fa::field>
+                            <x-fa::choice name="preisNeu.status" id-prefix="la-preis" label="Art" :live="false"
+                                :options="['0' => 'Standard-EK', '2' => 'Aktion']" />
+                            <div class="flex flex-col gap-1">
+                                <x-fa::button wire:click="preisAnlegen" icon="heroicon-m-plus">Preis anlegen</x-fa::button>
+                            </div>
+                            <p class="basis-full {{ $leise }}">Der bisher gültige Preis endet mit dem neuen Eintrag.</p>
+                        </div>
+                    @endif
+
+                    <div class="overflow-x-auto -mx-1 px-1">
+                        <table class="fa-table" data-preis-historie>
+                            <thead>
+                                <tr>
+                                    <th>Gültig ab</th>
+                                    <th>Gültig bis</th>
+                                    <th>Art</th>
+                                    <th class="num">Preis</th>
+                                    <th class="num">Je {{ $proEinheitOk ? $item->unit_code : 'Einheit' }}</th>
+                                    <th>Notiz</th>
+                                    <th><span class="sr-only">Aktionen</span></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @forelse($historie as $p)
+                                    <tr wire:key="preis-{{ $p->id }}">
+                                        @if($preisEditId === $p->id)
+                                            <td class="whitespace-nowrap text-[var(--fa-ink-2)]">{{ $datum($p->status_valid_from) ?? $datum($p->creation_date) ?? 'unbekannt' }}</td>
+                                            <td>
+                                                <x-fa::input size="sm" type="date" wire:model="preisEdit.valid_to" aria-label="Gültig bis" class="w-36" />
+                                            </td>
+                                            <td><x-fa::badge>{{ $p->category->label() }}</x-fa::badge></td>
+                                            <td class="num">
+                                                <x-fa::input size="sm" wire:model="preisEdit.price" inputmode="decimal" aria-label="Preis in Euro" numeric class="w-24" />
+                                            </td>
+                                            <td class="num text-[var(--fa-ink-3)]">wird neu berechnet</td>
+                                            <td>
+                                                <x-fa::input size="sm" wire:model="preisEdit.note" placeholder="Notiz" aria-label="Notiz" class="min-w-32" />
+                                            </td>
+                                            <td class="whitespace-nowrap text-right">
+                                                <div class="inline-flex items-center gap-1.5">
+                                                    <x-fa::button size="sm" variant="ghost" wire:click="preisEditAbbrechen">Abbrechen</x-fa::button>
+                                                    <x-fa::button size="sm" icon="heroicon-m-check" wire:click="preisUpdate" data-preis-update>Preis sichern</x-fa::button>
+                                                </div>
+                                            </td>
+                                        @else
+                                            <td class="whitespace-nowrap text-[var(--fa-ink-2)]">{{ $datum($p->status_valid_from) ?? $datum($p->creation_date) ?? 'unbekannt' }}</td>
+                                            <td class="whitespace-nowrap text-[var(--fa-ink-2)]">{{ $datum($p->valid_to) ?? 'offen' }}</td>
+                                            <td><x-fa::badge :tone="$p->category->istAktiv() ? 'ok' : 'neutral'">{{ $p->category->label() }}</x-fa::badge></td>
+                                            <td class="num font-medium"><x-fa::money :value="$p->price" /></td>
+                                            <td class="num text-[var(--fa-ink-2)]">
+                                                @if($p->price !== null && $proEinheitOk)
+                                                    <x-fa::money :value="(float) $p->price / (float) $item->qty" :per="$item->unit_code" />
+                                                @else
+                                                    <span class="text-[var(--fa-ink-3)]">nicht berechenbar</span>
+                                                @endif
+                                            </td>
+                                            <td class="text-[var(--fa-ink-2)] min-w-40 break-words">{{ $p->note ?: '' }}</td>
+                                            <td class="whitespace-nowrap text-right">
+                                                @if($darfEdit)
+                                                    <div class="inline-flex items-center gap-0.5">
+                                                        <x-fa::icon-button size="sm" icon="heroicon-o-pencil-square" label="Preis bearbeiten"
+                                                            wire:click="preisBearbeiten({{ $p->id }})" data-preis-edit />
+                                                        <x-fa::icon-button size="sm" tone="danger" icon="heroicon-o-trash" label="Preis löschen"
+                                                            wire:click="preisLoeschen({{ $p->id }})" wire:confirm="Diesen Preis löschen?" />
+                                                    </div>
+                                                @endif
+                                            </td>
+                                        @endif
+                                    </tr>
+                                @empty
+                                    <tr>
+                                        <td colspan="7">
+                                            <x-fa::empty compact icon="heroicon-o-banknotes" title="Noch kein Preis erfasst">
+                                                Ohne Preis rechnen Rezepte mit diesem Artikel nicht vollständig.@if($darfEdit) <span>Über «Preis erfassen» den ersten Preis anlegen.</span>@endif
+                                            </x-fa::empty>
+                                        </td>
+                                    </tr>
+                                @endforelse
+                            </tbody>
+                        </table>
+                    </div>
+                </x-fa::section>
+            </div>{{-- /Reiter PREISE --}}
+
+            {{-- ── Reiter ALLERGENE UND NÄHRWERTE ──────────────────────────────── --}}
+            <div x-show="tab === 'deklaration'" x-cloak class="pt-4 flex flex-col gap-4">
+                <div class="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start">
+
+                    {{-- Allergene: 14 EU-Pflichtangaben, 4-Wert-Modell (GL-01). Erneuter Klick auf den aktiven
+                         Wert setzt zurück auf «ohne Angabe». Ein Binding aufs Array, kein Roundtrip je Klick. --}}
+                    <x-fa::section title="Allergene" icon="heroicon-o-shield-exclamation" :meta="$allergenGepflegt . ' von ' . $allergenGesamt . ' bewertet'">
+                        <div class="flex flex-wrap items-center gap-2" data-allergen-kopf>
+                            <x-fa::badge :tone="$allergenQuelle === 'manual' ? 'ok' : 'neutral'">{{ $quelleText($allergenQuelle) }}</x-fa::badge>
+                            <span class="{{ $leise }}">Ohne Angabe heißt unbekannt, nicht frei von.</span>
+                        </div>
+                        <div class="flex flex-col divide-y divide-[var(--fa-line)]" x-data="{ werte: $wire.entangle('allergene') }" data-tri-state>
+                            @foreach($allergenLabels as $key => $lbl)
+                                <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 py-1.5" data-tri-row="{{ $key }}">
+                                    <span class="{{ $zeilenLabel }}">{{ $lbl }}</span>
+                                    <div class="inline-flex shrink-0 overflow-hidden rounded-[var(--fa-radius-control)] border border-[var(--fa-line-strong)] divide-x divide-[var(--fa-line-strong)]" role="group" aria-label="{{ $lbl }}">
+                                        @foreach($allergenKnoepfe as $wert => [$text, $titel, $an])
+                                            <button type="button" title="{{ $titel }}" @disabled(! $darfEdit)
+                                                    @if($darfEdit) x-on:click="werte['{{ $key }}'] = (werte['{{ $key }}'] ?? 'unbekannt') === '{{ $wert }}' ? 'unbekannt' : '{{ $wert }}'" @endif
+                                                    x-bind:class="(werte['{{ $key }}'] ?? 'unbekannt') === '{{ $wert }}' ? @js($an) : @js($segmentAus)"
+                                                    x-bind:aria-pressed="(werte['{{ $key }}'] ?? 'unbekannt') === '{{ $wert }}'"
+                                                    class="{{ $segment }}" data-tri-btn="{{ $wert }}">{{ $text }}</button>
+                                        @endforeach
+                                    </div>
+                                </div>
+                            @endforeach
+                        </div>
+                    </x-fa::section>
+
+                    {{-- Zusatzstoffe: 18 deklarationspflichtige Stoffe (LMIV, GL-09), ja · nein · ohne Angabe. --}}
+                    <x-fa::section title="Zusatzstoffe" icon="heroicon-o-beaker" :meta="count($deklarationLabels) . ' kennzeichnungspflichtige Stoffe'">
+                        <div class="flex flex-wrap items-center gap-2" data-deklaration-kopf>
+                            <x-fa::badge :tone="$deklarationQuelle === 'manual' ? 'ok' : 'neutral'">{{ $quelleText($deklarationQuelle) }}</x-fa::badge>
+                            <span class="{{ $leise }}">Ohne Angabe heißt unbekannt.</span>
+                        </div>
+                        <div class="flex flex-col divide-y divide-[var(--fa-line)]" x-data="{ dekl: $wire.entangle('deklarationen') }" data-deklarationen>
+                            @foreach($deklarationLabels as $stoff => $lbl)
+                                <div class="flex items-center justify-between gap-3 py-1.5" data-dekl-row="{{ $stoff }}">
+                                    <span class="{{ $zeilenLabel }}">{{ ucfirst($lbl) }}</span>
+                                    <div class="inline-flex shrink-0 overflow-hidden rounded-[var(--fa-radius-control)] border border-[var(--fa-line-strong)] divide-x divide-[var(--fa-line-strong)]" role="group" aria-label="{{ ucfirst($lbl) }}">
+                                        @foreach($stoffKnoepfe as $wert => [$text, $an])
+                                            <button type="button" title="{{ $wert }}" @disabled(! $darfEdit)
+                                                    @if($darfEdit) x-on:click="dekl['{{ $stoff }}'] = dekl['{{ $stoff }}'] === '{{ $wert }}' ? 'unbekannt' : '{{ $wert }}'" @endif
+                                                    x-bind:class="dekl['{{ $stoff }}'] === '{{ $wert }}' ? @js($an) : @js($segmentAus)"
+                                                    x-bind:aria-pressed="dekl['{{ $stoff }}'] === '{{ $wert }}'"
+                                                    class="{{ $segment }}" data-dekl-btn="{{ $wert }}">{{ $text }}</button>
+                                        @endforeach
+                                    </div>
+                                </div>
+                            @endforeach
+                        </div>
+                    </x-fa::section>
+                </div>
+
+                <x-fa::section title="Nährwerte je 100 g" icon="heroicon-o-chart-bar"
+                    description="Fließen als Mittelwert über alle Artikel in die Nährwerte des Grundprodukts.">
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-3" data-naehrwerte>
+                        @foreach($naehrwertFelder as $feld => $meta)
+                            <div class="flex flex-col gap-1.5 min-w-0">
+                                <label for="la-naehr-{{ $feld }}" class="text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-2)]">{{ $meta[0] }} <span class="font-normal text-[var(--fa-ink-3)]">in {{ $meta[1] }}</span></label>
+                                <input id="la-naehr-{{ $feld }}" type="text" inputmode="decimal" wire:model="naehrwerte.{{ $feld }}" placeholder="keine Angabe"
+                                       @disabled(! $darfEdit) class="fa-control h-9 text-[length:var(--fa-text-md)] text-right tabular-nums" data-naehr-{{ $feld }} />
+                            </div>
                         @endforeach
                     </div>
-                @endif
+                </x-fa::section>
+            </div>{{-- /Reiter ALLERGENE UND NÄHRWERTE --}}
 
-                <div class="mt-2" data-gp-zuweisen>
-                    <input type="search" wire:model.live.debounce.300ms="gpSuche"
-                           placeholder="+ GP zuweisen — Name suchen …" class="{{ $input }} !py-1" />
-                    @foreach($gpKandidaten as $kandidat)
-                        <button type="button" wire:key="gpk-{{ $kandidat->id }}" wire:click="gpZuweisen({{ $kandidat->id }})"
-                                class="block w-full text-left px-2 py-1 rounded text-[11px] text-gray-700 hover:bg-violet-500/10">{{ $kandidat->name }}</button>
-                    @endforeach
+            {{-- ── Reiter STAMMDATEN (Artikel · Verpackung · Eigenschaften) ─────── --}}
+            <div x-show="tab === 'stammdaten'" x-cloak class="pt-4 flex flex-col gap-4">
+                <div class="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start">
+                    <x-fa::section title="Artikel" icon="heroicon-o-tag">
+                        <x-fa::field label="Bezeichnung" for="la-designation" error="stammdaten.designation" required>
+                            <x-fa::input id="la-designation" wire:model="stammdaten.designation" :disabled="! $darfEdit" />
+                        </x-fa::field>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            @foreach([['article_number', 'Artikelnummer'], ['marketing_name', 'Verkaufsname des Lieferanten'], ['brand', 'Marke'], ['manufacturer', 'Hersteller'], ['origin', 'Herkunft']] as [$feld, $lbl])
+                                <x-fa::field :label="$lbl" for="la-{{ $feld }}">
+                                    <x-fa::input id="la-{{ $feld }}" wire:model="stammdaten.{{ $feld }}" :disabled="! $darfEdit" />
+                                </x-fa::field>
+                            @endforeach
+                        </div>
+                        <x-fa::field label="Zusatztext" for="la-additional-text">
+                            <x-fa::textarea id="la-additional-text" rows="2" wire:model="stammdaten.additional_text" :disabled="! $darfEdit" />
+                        </x-fa::field>
+                    </x-fa::section>
+
+                    <x-fa::section title="Verpackung und Menge" icon="heroicon-o-archive-box">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <x-fa::field label="Inhalt" for="la-qty" hint="In der Kalkulationseinheit, z. B. 0,8 bei 800 g">
+                                <x-fa::input id="la-qty" wire:model="verpackung.qty" inputmode="decimal" numeric :disabled="! $darfEdit" />
+                            </x-fa::field>
+                            <x-fa::field label="Kalkulationseinheit" for="la-unit-code" hint="Grundlage für den Preis je kg, l oder Stück">
+                                <x-fa::select id="la-unit-code" wire:model="verpackung.unit_code" placeholder="keine Angabe"
+                                    :options="['kg' => 'kg', 'l' => 'l', 'Stk' => 'Stück']" :disabled="! $darfEdit" />
+                            </x-fa::field>
+                            <x-fa::field label="Verpackungseinheit" for="la-packaging-unit">
+                                <x-fa::input id="la-packaging-unit" wire:model="verpackung.packaging_unit" :disabled="! $darfEdit" />
+                            </x-fa::field>
+                            <x-fa::field label="Bestelleinheit" for="la-ordering-unit">
+                                <x-fa::input id="la-ordering-unit" wire:model="verpackung.ordering_unit" :disabled="! $darfEdit" />
+                            </x-fa::field>
+                            <x-fa::field label="Verpackungseinheiten je Bestelleinheit" for="la-qty-ordering">
+                                <x-fa::input id="la-qty-ordering" wire:model="verpackung.qty_ordering_per_packaging" inputmode="decimal" numeric :disabled="! $darfEdit" />
+                            </x-fa::field>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3 border-t border-[var(--fa-line)]">
+                            <x-fa::field label="EAN Verpackungseinheit" for="la-ean-packaging" hint="8 bis 14 Ziffern" error="verpackung.ean_packaging">
+                                <x-fa::input id="la-ean-packaging" wire:model="verpackung.ean_packaging" inputmode="numeric" class="tabular-nums" :disabled="! $darfEdit" />
+                            </x-fa::field>
+                            <x-fa::field label="EAN Bestelleinheit" for="la-ean-ordering" hint="8 bis 14 Ziffern" error="verpackung.ean_ordering">
+                                <x-fa::input id="la-ean-ordering" wire:model="verpackung.ean_ordering" inputmode="numeric" class="tabular-nums" :disabled="! $darfEdit" />
+                            </x-fa::field>
+                        </div>
+                    </x-fa::section>
                 </div>
-            </x-foodalchemist::modal-section>
-            </div>{{-- /Tab GP-MAPPING --}}
 
-            {{-- ── Tab: PREISE ──────────────────────────────────────────────── --}}
-            <div x-show="tab === 'preise'" x-cloak class="pt-4 space-y-4">
-
-            <x-foodalchemist::modal-section title="Preise">
-                {{-- R12 (Jarvis): EK-aktuell-Box + Tabelle gültig von/bis · Kategorie · Preis (+€/kg) · Notiz · ✎ --}}
-                <div class="flex items-center justify-end gap-3 rounded-lg bg-black/[0.03] px-3 py-2 mb-2" data-ek-aktuell>
-                    <p class="text-xs text-gray-900">EK aktuell:
-                        <span class="font-semibold {{ $aktiverPreis !== null ? 'text-green-600' : 'text-gray-500' }}">{{ $aktiverPreis !== null ? number_format((float) $aktiverPreis->price, 2, ',', '.') . ' €' : '—' }}</span>
-                        <span class="text-gray-500">pro {{ $item->ordering_unit ?? $item->unit_code ?? 'Einheit' }}{{ $vergleichspreis !== null ? ' · ' . number_format($vergleichspreis['value'], 2, ',', '.') . ' ' . $vergleichspreis['unit'] : '' }}</span>
-                    </p>
-                    @if($darfEdit)
-                        <button type="button" x-data @click="$el.closest('[data-modal]').querySelector('[data-preis-neu]')?.classList.toggle('hidden')" class="{{ $btnPrimary }}" data-preis-neu-toggle>+ Neuer Preis</button>
-                    @endif
-                </div>
-                @if($darfEdit)
-                    <div class="hidden flex items-end gap-2 mb-3" data-preis-neu>
-                        <div><label class="block {{ $label }} mb-1">Neuer Preis (€, netto)</label>
-                            <input type="text" wire:model="preisNeu.price" placeholder="z. B. 47,50" class="{{ $input }} !w-36" /></div>
-                        <div><label class="block {{ $label }} mb-1">Kategorie</label>
-                            <select wire:model="preisNeu.status" class="{{ $input }} !w-40">
-                                <option value="0">Standard-EK</option>
-                                <option value="2">Aktion</option>
-                            </select></div>
-                        <button type="button" wire:click="preisAnlegen" class="{{ $btnGhostXs }} !px-3 !py-2 text-violet-600">Anlegen (schließt Vorgänger)</button>
+                <x-fa::section title="Eigenschaften" icon="heroicon-o-check-badge">
+                    <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+                        @foreach([['is_organic', 'Bio'], ['is_vegan', 'Vegan'], ['is_vegetarian', 'Vegetarisch'], ['is_alcohol', 'Enthält Alkohol'], ['is_halal', 'Halal'], ['is_gmo_free', 'Gentechnikfrei']] as [$feld, $lbl])
+                            <x-fa::field :label="$lbl" for="la-{{ $feld }}">
+                                <x-fa::select id="la-{{ $feld }}" wire:model="eigenschaften.{{ $feld }}" placeholder="unbekannt"
+                                    :options="['1' => 'ja', '0' => 'nein']" :disabled="! $darfEdit" />
+                            </x-fa::field>
+                        @endforeach
                     </div>
-                @endif
-                <table class="{{ $table }}" data-preis-historie>
-                    <thead><tr class="text-left">
-                        @foreach(['Gültig von', 'Gültig bis', 'Kategorie', 'Preis', 'Notiz', ''] as $head)<th class="{{ $th }} !px-2 {{ $head === 'Preis' ? 'text-right' : '' }}">{{ $head }}</th>@endforeach
-                    </tr></thead>
-                    <tbody>
-                        @forelse($historie as $p)
-                            <tr wire:key="preis-{{ $p->id }}" class="{{ $tr }}">
-                                @if($preisEditId === $p->id)
-                                    <td class="{{ $td }} !px-2 text-gray-600" colspan="2">
-                                        bis: <input type="date" wire:model="preisEdit.valid_to" class="{{ $input }} !py-1 !w-36 inline-block" />
-                                    </td>
-                                    <td class="{{ $td }} !px-2"><span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $p->category->label() }}</span></td>
-                                    <td class="{{ $td }} !px-2 text-right"><input type="text" wire:model="preisEdit.price" class="{{ $input }} !py-1 !w-24 text-right" /></td>
-                                    <td class="{{ $td }} !px-2"><input type="text" wire:model="preisEdit.note" placeholder="Notiz" class="{{ $input }} !py-1 !w-32" /></td>
-                                    <td class="{{ $td }} !px-2 text-right whitespace-nowrap">
-                                        <button type="button" wire:click="preisUpdate" class="{{ $btnGhostXs }} text-emerald-600" data-preis-update>Speichern</button>
-                                        <button type="button" wire:click="preisEditAbbrechen" class="{{ $btnGhostXs }}">Abbrechen</button>
-                                    </td>
-                                @else
-                                    <td class="{{ $td }} !px-2 text-gray-600">{{ $p->status_valid_from ? \Illuminate\Support\Carbon::parse($p->status_valid_from)->format('Y-m-d') : ($p->creation_date ? \Illuminate\Support\Carbon::parse($p->creation_date)->format('Y-m-d') : '—') }}</td>
-                                    <td class="{{ $td }} !px-2 text-gray-600">{{ $p->valid_to ? \Illuminate\Support\Carbon::parse($p->valid_to)->format('Y-m-d') : '—' }}</td>
-                                    <td class="{{ $td }} !px-2"><span class="{{ $pill }} {{ $p->category->istAktiv() ? $variantPill['success'] : $variantPill['secondary'] }}">{{ $p->category->label() }}</span></td>
-                                    <td class="{{ $td }} !px-2 text-right">
-                                        <span class="text-gray-900 font-medium tabular-nums">{{ $p->price !== null ? number_format((float) $p->price, 2, ',', '.') . ' €' : '—' }}</span>
-                                        @if($p->price !== null && (float) $item->qty > 0 && in_array($item->unit_code, ['kg', 'l', 'Stk'], true))
-                                            <span class="block text-[11px] text-gray-500">= {{ number_format((float) $p->price / (float) $item->qty, 2, ',', '.') }} €/{{ $item->unit_code }}</span>
-                                        @endif
-                                    </td>
-                                    <td class="{{ $td }} !px-2 text-gray-600 text-[11px] max-w-[10rem] truncate" title="{{ $p->note ?? '' }}">{{ $p->note ?? '—' }}</td>
-                                    <td class="{{ $td }} !px-2 text-right whitespace-nowrap">
-                                        @if($darfEdit)
-                                            <button type="button" wire:click="preisBearbeiten({{ $p->id }})" class="{{ $btnGhostXs }}" title="bearbeiten" data-preis-edit>@svg('heroicon-o-pencil', 'w-3.5 h-3.5')</button>
-                                            <button type="button" wire:click="preisLoeschen({{ $p->id }})" wire:confirm="Preiszeile löschen?" class="{{ $btnGhostXs }} text-red-500">löschen</button>
-                                        @endif
-                                    </td>
-                                @endif
-                            </tr>
-                        @empty
-                            <tr><td colspan="6" class="px-2 py-6 text-center text-gray-500">Keine Preiszeilen.</td></tr>
-                        @endforelse
-                    </tbody>
-                </table>
-            </x-foodalchemist::modal-section>
-            </div>{{-- /Tab PREISE --}}
+                    <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+                        <x-fa::field label="Mehrwertsteuer in %" for="la-vat">
+                            <x-fa::input id="la-vat" wire:model="eigenschaften.vat" inputmode="decimal" placeholder="7 oder 19" numeric :disabled="! $darfEdit" />
+                        </x-fa::field>
+                        <x-fa::field label="Ursprungsland" for="la-origin-country">
+                            <x-fa::input id="la-origin-country" wire:model="eigenschaften.origin_country" :disabled="! $darfEdit" />
+                        </x-fa::field>
+                        <x-fa::field label="Bio-Kontrollnummer" for="la-organic-control">
+                            <x-fa::input id="la-organic-control" wire:model="eigenschaften.organic_control_number" :disabled="! $darfEdit" />
+                        </x-fa::field>
+                        <div class="flex flex-col gap-1.5 min-w-0" data-vorbestellung>
+                            <label for="la-is-preorder" class="text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-2)]">Vorbestellung</label>
+                            <div class="flex gap-2">
+                                <x-fa::select id="la-is-preorder" wire:model="eigenschaften.is_preorder" placeholder="keine Angabe"
+                                    :options="['1' => 'nötig', '0' => 'nicht nötig']" :disabled="! $darfEdit" class="flex-1 min-w-0" />
+                                <x-fa::input type="number" wire:model="eigenschaften.preorder_days" placeholder="Tage" aria-label="Vorlauf in Tagen"
+                                    numeric :disabled="! $darfEdit" class="w-24 shrink-0" />
+                            </div>
+                        </div>
+                    </div>
+                    <x-fa::field label="Zutatenliste des Lieferanten" for="la-ingredients">
+                        <x-fa::textarea id="la-ingredients" rows="3" wire:model="eigenschaften.ingredients_supplier" :disabled="! $darfEdit" />
+                    </x-fa::field>
+                </x-fa::section>
+            </div>{{-- /Reiter STAMMDATEN --}}
 
             </x-foodalchemist::editor-tabs>
         @endif

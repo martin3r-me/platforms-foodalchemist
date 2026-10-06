@@ -7,6 +7,8 @@
     depth / ancestors / has_children (Format: ConceptService::categoriesFlat()). Der Host
     schleift je Knoten eine tree-node ein und legt Label-Button + Aktionen in deren Slot.
 
+    fa-pass (2026-10-05): Tokens, Props und Alpine-Zustand unverändert.
+
     initialCollapsed: IDs, die zu Beginn eingeklappt sind (z. B. alle Eltern -> nur Wurzeln
     sichtbar). Default []: alles aufgeklappt.
 --}}
@@ -25,7 +27,7 @@
     {{ $attributes->merge(['class' => 'space-y-0.5']) }}
 >
     @if($heading !== null)
-        <span class="text-[10px] font-medium uppercase tracking-wider text-gray-500 block px-1 pb-0.5">{{ $heading }}</span>
+        <span class="block px-1 pb-1 text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-2)]">{{ $heading }}</span>
     @endif
     {{ $slot }}
 </div>

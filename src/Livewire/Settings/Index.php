@@ -26,45 +26,48 @@ class Index extends Component
      *
      * Reihenfolge = FA-Arbeits-Kaskade (2026-08-28, Dominique): erst die Stammdaten/Vokabulare,
      * auf die alles zugreift, dann Einkauf→Kalkulation→Preise, dann KI & Kreativ-Steuerung, dann
-     * Wissen, dann Produktion, zuletzt Ausgabe/Betrieb. Bewusst KEINE UI-Gruppen (mehrere Sektionen
-     * gehören funktional in zwei Töpfe zugleich — Küchen-Profil ist Produktion UND Generator-Default,
-     * Wissens-Kategorien Vokabular UND KI-Futter). Die Blöcke unten sind reine Sortier-Kommentare,
-     * sie rendern nicht. `einheiten` bleibt zuerst → mount()-Default unverändert. Ein Filter über der
-     * Liste (index.blade.php) macht die Reihenfolge nebensächlich fürs schnelle Finden.
+     * Wissen, dann Produktion, zuletzt Ausgabe/Betrieb. Bis 2026-10-05 bewusst ohne UI-Gruppen
+     * (mehrere Sektionen gehören in zwei Töpfe zugleich). fa-pass 2026-10-05: die Navigation
+     * gruppiert jetzt über GRUPPEN (unten) — jede Sektion steht in GENAU einer Gruppe, der Filter
+     * über der Liste sucht weiter über Label UND Hint, damit „falsch einsortiert" nie „nicht
+     * gefunden" heißt. `einheiten` bleibt zuerst → mount()-Default unverändert.
      */
     public const SEKTIONEN = [
         // — Stammdaten & Vokabulare —
-        'einheiten' => ['label' => 'Einheiten', 'hint' => 'Gramm-/ml-Defaults, Stück-Gewichte (GL-02/GL-11)'],
-        'warengruppen' => ['label' => 'Warengruppen & Sub-Kategorien', 'hint' => '§3-Codes fix · Sub-Kategorien-Housekeeping'],
-        'taxonomie' => ['label' => 'Rezept-Taxonomie', 'hint' => 'Hauptgruppen + Kategorien (M4-Browser-Bäume)'],
-        'vk-taxonomie' => ['label' => 'VK-Taxonomie', 'hint' => 'Speisen-Hauptgruppen → Klassen mit Rezept-Zählern (D-6 §4.6)'],
-        'behaelter' => ['label' => 'Behälter & Geräte', 'hint' => 'Behälter · Regen-Geräte · Servier-Vehikel · Koch-Equipment'],
+        // fa-pass 2026-10-05: Beschriftungen in Küchensprache (ohne Spec-/Ticket-Kürzel). Der
+        // fachliche Hintergrund je Sektion steht in den Kommentaren, nicht mehr im sichtbaren Text.
+        'einheiten' => ['label' => 'Einheiten', 'hint' => 'Gramm und Milliliter je Einheit, Stückgewichte für die Umrechnung'],
+        'warengruppen' => ['label' => 'Warengruppen', 'hint' => 'Gruppen der Grundprodukte ordnen, Unterkategorien pflegen'],
+        'taxonomie' => ['label' => 'Rezept-Kategorien', 'hint' => 'Hauptgruppen und Kategorien der Basisrezepte'],
+        'vk-taxonomie' => ['label' => 'Gerichte-Kategorien', 'hint' => 'Speisen-Hauptgruppen und Diätformen der Gerichte'],
+        'behaelter' => ['label' => 'Behälter & Geräte', 'hint' => 'Behälter mit Maßen, Regenerationsgeräte, Servier-Vehikel, Koch-Equipment'],
         // Konzept-Taxonomie (Kategorie/Klasse) ausgemustert 2026-07-25 (Dominique): Concept-Picker filtern
         // jetzt auf die Concepter-Dimensionen. Komponente/Route/DB bleiben (nicht-destruktiv), nur aus dem Nav raus.
-        'concepter-dimensionen' => ['label' => 'Concepter-Dimensionen', 'hint' => 'Facetten: Einsatzmoment · Eventtyp · Saison · Servierform (Darreichungs-Scharnier)'],
+        'concepter-dimensionen' => ['label' => 'Konzept-Merkmale', 'hint' => 'Einsatzmoment, Eventtyp, Saison, Servierform und Zielgruppe für Konzepte'],
 
         // — Einkauf, Kalkulation & Preise —
-        'einkauf' => ['label' => 'Einkauf & Lead-LA', 'hint' => 'Lead-Strategie (V-27) · Stamm-Lieferanten-Matrix · Lagerorte'],
-        'kalkulation' => ['label' => 'Kalkulation', 'hint' => 'Gar-/Putzverlust-, MwSt-Defaults, Rundung (GL-02)'],
+        'einkauf' => ['label' => 'Einkauf & Lieferanten', 'hint' => 'Welcher Artikel führt, Stammlieferanten je Warengruppe, Lagerorte'],
+        'kalkulation' => ['label' => 'Kalkulation', 'hint' => 'Gar- und Putzverlust, Mehrwertsteuer, Rundung'],
         // #502 (2026-07-13): Regel-Cockpit zurück unter Einstellungen (Werkstatt aufgelöst) —
         //   Zuschläge, Fixkosten, Stundensatz, Marge. MwSt-Defaults liegen unter 'kalkulation'.
-        'herstellkosten' => ['label' => 'Herstellkosten & Zuschläge', 'hint' => 'Zuschlagsschema, Fixkosten, Stundensatz, Marge — rollt auf HK2/VK aus (#379/#502)'],
+        'herstellkosten' => ['label' => 'Herstellkosten & Zuschläge', 'hint' => 'Zuschlagsschema, Fixkosten, Stundensatz und Marge bis zum Verkaufspreis'],
         // R5 (Dominique): eigene Seiten statt Sammel-Sektion — mit Anlegen/Bearbeiten
-        'aufschlagsklassen' => ['label' => 'Preisklassen', 'hint' => 'Relative Faktoren auf den dynamischen Unternehmens-Basissatz'],
+        'aufschlagsklassen' => ['label' => 'Preisklassen', 'hint' => 'Faktoren auf den Basissatz für die Preisstufen'],
 
         // — KI & Kreativ-Steuerung (speist die KI-Generierung) —
-        'ki' => ['label' => 'KI', 'hint' => 'Provider · Tiering (V-01) · Nutzung · Kill-Switch (M7-08) · Sprachbefehl (Agenten-Modus, dauerhaft aktiv, Vorlesen)'],
-        'kueche' => ['label' => 'Küchen-Profil', 'hint' => 'Mandanten-Tendenz für den Generator (M7-07, Hooks gewinnen)'],
+        // Test-Anker: der Hint nennt den Sprachbefehl wörtlich (EinstellungenSchirmTest).
+        'ki' => ['label' => 'KI', 'hint' => 'Anbieter, Modellstufen, Verbrauch, Notschalter, Sprachbefehl (Agenten-Modus, dauerhaft aktiv, Vorlesen)'],
+        'kueche' => ['label' => 'Küchen-Profil', 'hint' => 'Küchentyp als Grundrichtung für Vorschläge, Farben je Positionstyp'],
         // Ebene 1 der DNA-Kette (Umzug 2026-07-21): Team-Food-DNA wohnt bei den Einstellungen, nicht als Top-Level-Nav
-        'food-dna' => ['label' => 'Food DNA (Identität)', 'hint' => 'Leitbild · Signature-Stil · Aromatik · No-Gos · Schreibstil — stehende KI-Referenz (Ebene 1)'],
+        'food-dna' => ['label' => 'Food DNA', 'hint' => 'Leitbild, Stil, Aromatik und No-Gos des eigenen Hauses'],
         // Spec 42 F3: Kunde-DNA (Ebene 2) zog aus dem Foodbook hierher — Marken-DNA gehört zum Kunden, nicht pro Foodbook.
-        'kunde-dna' => ['label' => 'Kunde-DNA (pro Kunde)', 'hint' => 'Marken-Positionierung · Ton · No-Gos · Schreibstil je CRM-Kunde — Ebene 2 der DNA-Kette'],
-        'schreibstile' => ['label' => 'Schreibstile', 'hint' => 'Sprach-Duktus = Prompt-Material (GL-06) · anlegen + bearbeiten'],
-        'brief-vorlagen' => ['label' => 'Schnellstart-Vorlagen', 'hint' => 'Brief-Templates für die Planung-Erzeugung — im Editor anlegen (Snapshot), hier verwalten (auch per MCP)'],
-        'trendradar' => ['label' => 'Trendradar', 'hint' => '08:00-Konzept-Automatisierung an/aus · Signal · Trends jetzt importieren & clustern'],
+        'kunde-dna' => ['label' => 'Kunden-DNA', 'hint' => 'Marke, Ton und No-Gos je Kunde'],
+        'schreibstile' => ['label' => 'Schreibstile', 'hint' => 'Tonfall für Karten- und Foodbook-Texte anlegen und pflegen'],
+        'brief-vorlagen' => ['label' => 'Schnellstart-Vorlagen', 'hint' => 'Vorlagen für neue Planungen verwalten'],
+        'trendradar' => ['label' => 'Trendradar', 'hint' => 'Tägliche Konzeptideen aus Trends an- und abschalten, Trends einlesen'],
 
         // — Wissen (#469: Vokabular, das die KI mit Wissen füttert) —
-        'wissenskategorien' => ['label' => 'Wissens-Kategorien', 'hint' => 'Vokabular fürs Wissens-Modul (#469) — Klassifikation + grobe Routing-Ebene'],
+        'wissenskategorien' => ['label' => 'Wissens-Kategorien', 'hint' => 'Ordnung der Wissensbasis'],
         // `einsatzorte` (#469) ist mit Spec 52 · F3 aus der Navigation GENOMMEN: die Seite
         // pflegt das Ziel-Vokabular der Bindungen, und Bindungen wirken nicht mehr. Sie
         // bleibt als Komponente bestehen, solange der Wissens-Browser die Labels der
@@ -74,25 +77,40 @@ class Index extends Component
         // Spec 52 (Grundsatz E): der Kanon — die GEWINNENDE Ebene — hatte keine Oberflaeche,
         // die Routings seit `docs/wissen.md` nur einen „Ausblick"-Eintrag. Wer hier kuratierte,
         // pflegte damit ausschliesslich den Fallback.
-        'wissenssteuerung' => ['label' => 'Wissens-Steuerung', 'hint' => 'Welches Wissen erreicht welchen KI-Schritt — Profil, Befunde, Routing-Editor (Spec 52)'],
+        'wissenssteuerung' => ['label' => 'Wissens-Steuerung', 'hint' => 'Welches Wissen bei welchem KI-Schritt ankommt'],
 
         // — Produktion & Kapazität —
         // Spec 30 E3: Arbeitsplätze mit optionaler Tageskapazität — bewusst getrennt vom
         // Koch-Equipment (das sagt „was braucht ein Rezept", der Posten „wo wird gearbeitet").
-        'posten' => ['label' => 'Posten & Kapazität', 'hint' => 'Küchen-Arbeitsplätze · netto verplanbare Minuten/Tag (freiwillig) · Wochentag-Abweichungen'],
+        'posten' => ['label' => 'Posten & Kapazität', 'hint' => 'Arbeitsplätze der Küche, verplanbare Minuten je Tag, Besetzung'],
         // Stufe 3 P3.1: Rollen als Kostenträger (Küchenchef/Koch/Hilfskoch) — Satz je Rolle.
         // Rolle ≠ Mensch: keine Namen/Schichten. Posten-Besetzung leitet Kapazität + Kosten ab.
-        'rollen' => ['label' => 'Rollen & Sätze', 'hint' => 'Küchen-Rollen als Kostenträger · €/Std je Rolle · speist Kapazität + Produktionskosten'],
+        'rollen' => ['label' => 'Rollen & Stundensätze', 'hint' => 'Küchenrollen mit Stundensatz für Kapazität und Produktionskosten'],
 
         // — Ausgabe & Betrieb —
         // Spec 43: visueller Struktur-Builder für Präsentations-Designs (Block-Palette · Live-Vorschau · Tokens)
-        'praesentations-designs' => ['label' => 'Präsentations-Designs', 'hint' => 'Visueller Struktur-Builder fürs digitale Kundenbuch — Blöcke · Live-Vorschau · Farben/Typo (Spec 43)'],
+        'praesentations-designs' => ['label' => 'Präsentations-Designs', 'hint' => 'Aufbau, Farben und Schrift des digitalen Kundenbuchs'],
         // Spec 33 P2: Die Tabelle gab es seit Spec 19, die Pflege nie — deshalb war sie leer
         // und `outlet_id` an der Speisekarte hatte nicht einmal ein Eingabefeld.
-        'betriebe' => ['label' => 'Betriebe & Standorte', 'hint' => 'Trägt die Betriebsbrille im Controlling — welcher Standort fährt welche Ausgabe'],
+        'betriebe' => ['label' => 'Betriebe & Standorte', 'hint' => 'Standorte und Ausgabestellen, Vorlage und Logo je Betrieb'],
         // Spec 59: zentraler Chip-Katalog für Speiseplan-Vorgaben („mind. 2× vegan je Woche“) —
         // die Vorgaben selbst stehen je Plan im Speiseplan-Editor (Reiter Stammdaten).
-        'speiseplan-chips' => ['label' => 'Speiseplan-Chips', 'hint' => 'Prüf-Chips für Speiseplan-Vorgaben: Ernährungsform oder Hauptgruppe · Standardwerte mind./höchstens'],
+        'speiseplan-chips' => ['label' => 'Speiseplan-Chips', 'hint' => 'Prüf-Chips für Speiseplan-Vorgaben: Ernährungsform oder Hauptgruppe, Standardwerte mindestens und höchstens'],
+    ];
+
+    /**
+     * fa-pass 2026-10-05: Gruppen der Navigation (reine Darstellung). Jede Sektion steht in GENAU
+     * einer Gruppe; was hier fehlt, rendert die View unter „Weitere" (nie verschluckt). Die erste
+     * Gruppe beginnt mit `einheiten` — der mount()-Default steht weiter ganz oben.
+     *
+     * @var array<string, array{label: string, sektionen: list<string>}>
+     */
+    public const GRUPPEN = [
+        'katalog' => ['label' => 'Katalog & Kategorien', 'sektionen' => ['einheiten', 'warengruppen', 'taxonomie', 'vk-taxonomie', 'behaelter', 'concepter-dimensionen']],
+        'betrieb' => ['label' => 'Betrieb & Küche', 'sektionen' => ['betriebe', 'posten', 'rollen', 'kueche']],
+        'kalkulation' => ['label' => 'Einkauf & Kalkulation', 'sektionen' => ['einkauf', 'kalkulation', 'herstellkosten', 'aufschlagsklassen']],
+        'ki' => ['label' => 'KI & Wissen', 'sektionen' => ['ki', 'food-dna', 'kunde-dna', 'brief-vorlagen', 'trendradar', 'wissenskategorien', 'wissenssteuerung']],
+        'ausgabe' => ['label' => 'Ausgabe', 'sektionen' => ['schreibstile', 'praesentations-designs', 'speiseplan-chips']],
     ];
 
     public function mount(string $sektion = 'einheiten'): void
@@ -107,7 +125,8 @@ class Index extends Component
 
         return view('foodalchemist::livewire.settings.index', [
             'sektionen' => self::SEKTIONEN,
+            'gruppen' => self::GRUPPEN,
             'istKindTeam' => $team !== null && $team->parent_team_id !== null,
-        ])->layout('platform::layouts.app');
+        ])->layout('foodalchemist::layouts.standalone');
     }
 }

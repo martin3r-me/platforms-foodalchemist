@@ -337,7 +337,7 @@ class SpeisekarteService
         $this->guard($karte, $team);
         // Status ist auf AusgabeStatus gecastet → über statusWert() vergleichen.
         if ($karte->statusWert() === AusgabeStatus::Archiviert) {
-            throw new \RuntimeException('Speisekarte ist archiviert — keine Rubrik mehr einfügbar.');
+            throw new \RuntimeException('Die Speisekarte ist archiviert. Neue Rubriken lassen sich nicht mehr einfügen.');
         }
         if ($parentId !== null && ! FoodAlchemistSpeisekarteRubrik::where('menu_card_id', $karte->id)->whereKey($parentId)->exists()) {
             throw new \RuntimeException('parent_id gehört nicht zu dieser Speisekarte.');
@@ -1039,10 +1039,10 @@ class SpeisekarteService
 
         $daten = [];
         if (array_key_exists('brand_color', $in)) {
-            $daten['brand_color'] = $this->normHexOderThrow($in['brand_color'], 'brand_color') ?? '#6d28d9';
+            $daten['brand_color'] = $this->normHexOderThrow($in['brand_color'], 'Markenfarbe') ?? '#6d28d9';
         }
         if (array_key_exists('band_color', $in)) {
-            $daten['band_color'] = $this->normHexOderThrow($in['band_color'], 'band_color', erlaubeLeer: true);
+            $daten['band_color'] = $this->normHexOderThrow($in['band_color'], 'Bandfarbe', erlaubeLeer: true);
         }
         if (array_key_exists('footer_text', $in)) {
             $t = trim((string) $in['footer_text']);
@@ -1152,10 +1152,10 @@ class SpeisekarteService
             if ($erlaubeLeer) {
                 return null;
             }
-            throw new \RuntimeException("Farbe {$feld} darf nicht leer sein.");
+            throw new \RuntimeException("{$feld} darf nicht leer sein.");
         }
         if (! preg_match('/^#[0-9a-fA-F]{6}$/', $v)) {
-            throw new \RuntimeException("Ungültige Farbe für {$feld}: \"{$v}\" (erwartet #RRGGBB).");
+            throw new \RuntimeException("{$feld}: ungültiger Farbwert „{$v}“ (erwartet #RRGGBB).");
         }
 
         return strtolower($v);
@@ -1223,7 +1223,7 @@ class SpeisekarteService
 
         $text = trim((string) ($proposal->werte['text'] ?? ''));
         if ($text === '') {
-            throw new \RuntimeException('Die KI hat keinen Text geliefert — bitte erneut versuchen.');
+            throw new \RuntimeException('Die KI hat keinen Text geliefert. Bitte erneut versuchen.');
         }
 
         return ['text' => $text, 'confidence' => $proposal->confidence, 'call_log_id' => $proposal->callLogId];
@@ -1267,7 +1267,7 @@ class SpeisekarteService
 
         $text = trim((string) ($proposal->werte['text'] ?? ''));
         if ($text === '') {
-            throw new \RuntimeException('Die KI hat keinen Text geliefert — bitte erneut versuchen.');
+            throw new \RuntimeException('Die KI hat keinen Text geliefert. Bitte erneut versuchen.');
         }
 
         return ['text' => $text, 'confidence' => $proposal->confidence, 'call_log_id' => $proposal->callLogId];
@@ -1314,7 +1314,7 @@ class SpeisekarteService
     {
         $rubrik = FoodAlchemistSpeisekarteRubrik::visibleToTeam($team)->findOrFail($id);
         if (! $rubrik->isOwnedBy($team)) {
-            throw new \RuntimeException('Geerbte Speisekarte — Pflege nur durchs Besitzer-Team (D1).');
+            throw new \RuntimeException('Geerbte Speisekarte: Ändern kann sie nur das Besitzer-Team.');
         }
 
         return $rubrik;
@@ -1324,7 +1324,7 @@ class SpeisekarteService
     {
         $pos = FoodAlchemistSpeisekartePosition::visibleToTeam($team)->findOrFail($id);
         if (! $pos->isOwnedBy($team)) {
-            throw new \RuntimeException('Geerbte Speisekarte — Pflege nur durchs Besitzer-Team (D1).');
+            throw new \RuntimeException('Geerbte Speisekarte: Ändern kann sie nur das Besitzer-Team.');
         }
 
         return $pos;
@@ -1333,7 +1333,7 @@ class SpeisekarteService
     private function guard(FoodAlchemistSpeisekarte $karte, Team $team): void
     {
         if (! $karte->isOwnedBy($team)) {
-            throw new \RuntimeException('Geerbte Speisekarte — Pflege nur durchs Besitzer-Team (D1).');
+            throw new \RuntimeException('Geerbte Speisekarte: Ändern kann sie nur das Besitzer-Team.');
         }
     }
 

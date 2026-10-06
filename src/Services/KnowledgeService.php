@@ -43,7 +43,7 @@ class KnowledgeService
         $title = trim((string) ($data['title'] ?? ''));
         $category = trim((string) ($data['category'] ?? ''));
         if ($title === '' || $category === '') {
-            throw new RuntimeException('title und category sind Pflicht.');
+            throw new RuntimeException('Bitte Titel und Kategorie angeben.');
         }
         $this->assertKategorie($team, $category);
         $art = $this->pruefeArt($data['art'] ?? null);

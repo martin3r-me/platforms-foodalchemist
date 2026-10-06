@@ -83,7 +83,7 @@ class Index extends Component
                 'status' => $this->statusFilter,
             ], $team),
             'statusWerte' => $svc->statusWerte(),
-        ])->layout('platform::layouts.app');
+        ])->layout('foodalchemist::layouts.standalone');
     }
 
     private function team()

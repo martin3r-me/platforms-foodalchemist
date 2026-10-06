@@ -28,7 +28,7 @@ enum MatchBand: string
         return match ($this) {
             self::Exact => 'sicher',
             self::FuzzyHigh => 'wahrscheinlich',
-            self::FuzzyLow => 'Review nötig',
+            self::FuzzyLow => 'bitte prüfen',
             self::NoMatch => 'kein Treffer',
         };
     }

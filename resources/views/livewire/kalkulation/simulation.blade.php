@@ -1,177 +1,161 @@
-{{-- R2.2 — Was-wäre-wenn-Preissimulation. Read-only: hypothetisches Preisszenario
-     (Warengruppe | Grundprodukt | Artikel, ± X %) → Portfolio-Marge-Delta + Top-20
-     betroffene Gerichte. Spiegelt das MCP-Tool foodalchemist.simulation.POST. --}}
-@php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
+{{-- R2.2: Was-wäre-wenn-Preissimulation. Nur lesend: hypothetisches Preisszenario
+     (Warengruppe | Grundprodukt | Artikel | Lieferant, ± X %) → Marge-Veränderung übers Portfolio
+     + die am stärksten betroffenen Gerichte. Spiegelt das MCP-Tool foodalchemist.simulation.POST.
+     fa-pass 2026-10-05: auf Bausteine <x-fa::…> umgestellt. Sitzt im Controlling-Reiter
+     „Was wäre wenn" (dessen Abschnitt trägt Titel und Rahmen), daher hier keine eigene Karte mehr.
+     Anordnung unverändert (Szenario · Kennzahlen · Gerichte · Ersatz). wire:-Bindungen unverändert.
+     #502: KEIN overflow-hidden um die Grundprodukt-Suche, sonst schneidet es die Trefferliste ab. --}}
+@php
+    $ebenen = ['warengruppe' => 'Warengruppe', 'gp' => 'Grundprodukt', 'artikel' => 'Lieferantenartikel', 'lieferant' => 'Lieferant (ganzes Sortiment)'];
+    $leise = 'text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]';
+@endphp
 
-{{-- #502: KEIN overflow-hidden auf dem Panel — sonst clippt es das GP-Autocomplete-Dropdown
-     am Seitenende. Die cardAccent-Haarlinie (1px, top) fällt an den Ecken nicht ins Gewicht. --}}
-<div class="relative {{ $card }} px-5 py-4" wire:key="sim-panel">
-    <div class="{{ $cardAccent }}"></div>
-
-    <div class="flex items-start justify-between gap-3 flex-wrap">
-        <div>
-            <h3 class="font-medium tracking-tight text-gray-900">
-                Was-wäre-wenn — Preissimulation
-            </h3>
-            <p class="text-[11px] text-gray-500 max-w-2xl">
-                Spiel einen hypothetischen Preissprung durch — <strong>Warengruppe</strong>, <strong>Grundprodukt</strong> oder einzelnen <strong>Artikel</strong> ± X % —
-                und sieh sofort, wie sich die Marge übers ganze Portfolio verschiebt. <strong>Rein lesend</strong>: keine Echtdaten werden verändert.
-            </p>
-        </div>
-        <span class="{{ $pill }} {{ $variantPill['info'] }}" title="Diese Simulation verändert keine Daten.">read-only</span>
+<div class="flex flex-col gap-4 min-w-0" wire:key="sim-panel" data-simulation-panel>
+    <div class="flex flex-wrap items-start justify-between gap-3">
+        <p class="text-[length:var(--fa-text-md)] text-[var(--fa-ink-2)] max-w-[70ch]">
+            Einen Preissprung durchspielen und sofort sehen, wie sich die Marge über alle Gerichte verschiebt.
+            Es werden keine Preise verändert.
+        </p>
+        <x-fa::badge tone="info" icon="heroicon-m-eye" title="Diese Simulation verändert keine Daten.">Nur Berechnung</x-fa::badge>
     </div>
 
-    {{-- ── Szenario-Formular ─────────────────────────────────────────── --}}
-    <div class="grid grid-cols-1 md:grid-cols-12 gap-3 mt-4 items-end">
-        {{-- Ebene --}}
-        <div class="md:col-span-3">
-            <label class="{{ $label }} block mb-1">Ebene</label>
-            <select wire:model.live="scope" class="{{ $input }}">
-                <option value="warengruppe">Warengruppe</option>
-                <option value="gp">Grundprodukt</option>
-                <option value="artikel">Lieferantenartikel</option>
-                {{-- Spec 32: die praxisnächste Frage im Einkauf („X kündigt 5 % an") und bis
-                     dahin die einzige, die sich nicht simulieren ließ. --}}
-                <option value="lieferant">Lieferant (ganzes Sortiment)</option>
-            </select>
-        </div>
+    {{-- Szenario --}}
+    <div class="flex flex-col gap-3">
+        {{-- Spec 32: „Lieferant kündigt 5 % an" ist die praxisnächste Frage im Einkauf. --}}
+        <x-fa::choice name="scope" label="Preisänderung bei" idPrefix="sim" :options="$ebenen" />
 
-        {{-- Bezug --}}
-        <div class="md:col-span-5">
-            <label class="{{ $label }} block mb-1">Bezug</label>
+        <div class="grid gap-3 items-end grid-cols-1 md:grid-cols-[minmax(0,1fr)_9rem_auto]">
+            <x-fa::field :label="$ebenen[$scope] ?? 'Bezug'" for="sim-bezug" error="ref">
+                @if($scope === 'warengruppe')
+                    <x-fa::select id="sim-bezug" wire:model="ref">
+                        <option value="">Warengruppe wählen</option>
+                        @foreach($warengruppen as $wg)
+                            <option value="{{ $wg->code }}">{{ $wg->code }} · {{ $wg->name }}</option>
+                        @endforeach
+                    </x-fa::select>
 
-            @if($scope === 'warengruppe')
-                <select wire:model="ref" class="{{ $input }}">
-                    <option value="">– Warengruppe wählen –</option>
-                    @foreach($warengruppen as $wg)
-                        <option value="{{ $wg->code }}">{{ $wg->code }} · {{ $wg->name }}</option>
-                    @endforeach
-                </select>
+                @elseif($scope === 'gp')
+                    @if($ref !== '' && $refLabel !== '')
+                        <div class="flex items-center gap-2 h-9">
+                            <x-fa::badge tone="accent">{{ $refLabel }}</x-fa::badge>
+                            <x-fa::button size="sm" variant="ghost" wire:click="zuruecksetzen">Anderes wählen</x-fa::button>
+                        </div>
+                    @else
+                        <div class="relative">
+                            @svg('heroicon-m-magnifying-glass', 'w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--fa-ink-3)] pointer-events-none')
+                            <x-fa::input id="sim-bezug" type="search" wire:model.live.debounce.300ms="gpQuery" class="pl-8" placeholder="Grundprodukt suchen (ab 2 Zeichen)" />
+                            @if(count($gpTreffer))
+                                <div class="absolute z-20 mt-1 w-full fa-surface shadow-lg max-h-64 overflow-auto py-1" role="listbox">
+                                    @foreach($gpTreffer as $t)
+                                        <button type="button" role="option" wire:click="waehleGp({{ $t['id'] }}, @js($t['name']))"
+                                                class="flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-[length:var(--fa-text-md)] text-[var(--fa-ink)] hover:bg-[var(--fa-hover)]">
+                                            <span class="min-w-0 break-words">{{ $t['name'] }}</span>
+                                            @unless($t['hat_lead'])
+                                                <x-fa::badge tone="warn" title="Ohne bevorzugten Lieferantenartikel: kein Preis, der sich ändern könnte">ohne Artikel</x-fa::badge>
+                                            @endunless
+                                        </button>
+                                    @endforeach
+                                </div>
+                            @endif
+                        </div>
+                    @endif
 
-            @elseif($scope === 'gp')
-                @if($ref !== '' && $refLabel !== '')
-                    <div class="flex items-center gap-2">
-                        <span class="{{ $pill }} {{ $variantPill['primary'] }}">{{ $refLabel }}</span>
-                        <button type="button" wire:click="zuruecksetzen" class="{{ $btnGhostXs }}">ändern</button>
-                    </div>
+                @elseif($scope === 'lieferant')
+                    <x-fa::select id="sim-bezug" wire:model="ref">
+                        <option value="">Lieferant wählen</option>
+                        @foreach($lieferanten as $l)
+                            <option value="{{ $l->id }}">{{ $l->name }}</option>
+                        @endforeach
+                    </x-fa::select>
+
                 @else
-                    <div class="relative">
-                        <input type="text" wire:model.live.debounce.300ms="gpQuery" placeholder="Grundprodukt suchen (min. 2 Zeichen)…" class="{{ $input }}" />
-                        @if(count($gpTreffer))
-                            <div class="absolute z-20 mt-1 w-full rounded-lg border border-black/10 bg-white shadow-lg max-h-64 overflow-auto">
-                                @foreach($gpTreffer as $t)
-                                    <button type="button" wire:click="waehleGp({{ $t['id'] }}, @js($t['name']))"
-                                            class="flex w-full items-center justify-between gap-2 px-3 py-1.5 text-xs text-left hover:bg-violet-500/5">
-                                        <span class="text-gray-900">{{ $t['name'] }}</span>
-                                        @unless($t['hat_lead'])
-                                            <span class="{{ $pill }} {{ $variantPill['secondary'] }}" title="ohne Lead-Lieferantenartikel — kein Preistreiber">kein Lead</span>
-                                        @endunless
-                                    </button>
-                                @endforeach
-                            </div>
-                        @endif
-                    </div>
+                    <x-fa::input id="sim-bezug" type="number" numeric wire:model="ref" placeholder="Nummer des Lieferantenartikels" />
                 @endif
+            </x-fa::field>
 
-            @elseif($scope === 'lieferant')
-                <select wire:model="ref" class="{{ $input }}">
-                    <option value="">– Lieferant wählen –</option>
-                    @foreach($lieferanten as $l)
-                        <option value="{{ $l->id }}">{{ $l->name }}</option>
-                    @endforeach
-                </select>
+            <x-fa::field label="Änderung (%)" for="sim-delta" error="deltaPct" hint="Minus für günstiger.">
+                <x-fa::input id="sim-delta" type="number" step="1" numeric wire:model="deltaPct" />
+            </x-fa::field>
 
-            @else
-                <input type="number" wire:model="ref" placeholder="supplier_item_id" class="{{ $input }}" />
-            @endif
-        </div>
-
-        {{-- Delta --}}
-        <div class="md:col-span-2">
-            <label class="{{ $label }} block mb-1">Änderung %</label>
-            <div class="flex items-center gap-1">
-                <input type="number" step="1" wire:model="deltaPct" class="{{ $input }} tabular-nums" />
+            <div class="md:pb-6">
+                <x-fa::button variant="primary" icon="heroicon-m-play" wire:click="simuliere" wire:loading.attr="disabled" class="w-full md:w-auto">
+                    <span wire:loading.remove wire:target="simuliere">Simulieren</span>
+                    <span wire:loading wire:target="simuliere">Rechnet …</span>
+                </x-fa::button>
             </div>
-        </div>
-
-        {{-- Auslösen --}}
-        <div class="md:col-span-2">
-            <button type="button" wire:click="simuliere" wire:loading.attr="disabled" class="{{ $btnPrimary }} w-full justify-center">
-                <span wire:loading.remove wire:target="simuliere">Simulieren</span>
-                <span wire:loading wire:target="simuliere">Rechne…</span>
-            </button>
         </div>
     </div>
 
-    @error('ref') <p class="text-[11px] text-red-500 mt-1">{{ $message }}</p> @enderror
-    @error('deltaPct') <p class="text-[11px] text-red-500 mt-1">{{ $message }}</p> @enderror
-
-    {{-- ── Ergebnis ──────────────────────────────────────────────────── --}}
+    {{-- Ergebnis --}}
     @if($result !== null)
-        @php($teurer = (float) $deltaPct > 0)
-        @php($md = (float) ($result['marge_delta_eur'] ?? 0))
-        @php($mdCls = $md < 0 ? 'text-red-600' : ($md > 0 ? 'text-emerald-600' : 'text-gray-900'))
+        @php
+            $teurer = (float) $deltaPct > 0;
+            $md = (float) ($result['marge_delta_eur'] ?? 0);
+            $mdTon = $md < 0 ? 'crit' : ($md > 0 ? 'ok' : null);
+            $bezugText = match ($result['scope'] ?? $scope) {
+                'gp' => $refLabel !== '' ? $refLabel : (string) $result['ref'],
+                'warengruppe' => optional(collect($warengruppen)->firstWhere('code', $result['ref']))->name ?? (string) $result['ref'],
+                'lieferant' => optional(collect($lieferanten)->firstWhere('id', (int) $result['ref']))->name ?? (string) $result['ref'],
+                default => 'Artikel ' . $result['ref'],
+            };
+        @endphp
 
-        <div class="mt-5">
-            <div class="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-5 gap-2">
-                <div class="{{ $kpiTile }}"><div class="{{ $kpiTileAccent }}"></div><div class="{{ $label }}">Betroffene Gerichte</div><div class="text-lg font-semibold tabular-nums text-gray-900">{{ number_format((int) ($result['n_gerichte'] ?? 0), 0, ',', '.') }}</div></div>
-                <div class="{{ $kpiTile }}"><div class="{{ $kpiTileAccent }}"></div><div class="{{ $label }}">Konzepte</div><div class="text-lg font-semibold tabular-nums text-gray-900">{{ number_format((int) ($result['n_concepts'] ?? 0), 0, ',', '.') }}</div></div>
-                <div class="{{ $kpiTile }}"><div class="{{ $kpiTileAccent }}"></div><div class="{{ $label }}">Σ Marge-Delta</div><div class="text-lg font-semibold tabular-nums {{ $mdCls }}">{{ ($md > 0 ? '+' : '') . number_format($md, 2, ',', '.') }} €</div></div>
-                <div class="{{ $kpiTile }}"><div class="{{ $kpiTileAccent }}"></div><div class="{{ $label }}">GPs im Szenario</div><div class="text-lg font-semibold tabular-nums text-gray-900">{{ number_format((int) ($result['n_gps'] ?? 0), 0, ',', '.') }}</div></div>
-                <div class="{{ $kpiTile }}"><div class="{{ $kpiTileAccent }}"></div><div class="{{ $label }}">Preis-Faktor</div><div class="text-lg font-semibold tabular-nums text-gray-900">×{{ number_format((float) ($result['ratio'] ?? 1), 3, ',', '.') }}</div></div>
-            </div>
-
-            <p class="text-[11px] text-gray-500 mt-2">
-                Szenario: <strong>{{ $result['scope'] }}</strong> „{{ $result['ref'] }}" {{ $teurer ? '+' : '' }}{{ number_format((float) $deltaPct, 1, ',', '.') }} % →
-                {{ $teurer ? 'Marge sinkt' : 'Marge steigt' }} in den betroffenen Gerichten.
-                @if($dauerMs !== null) <span class="text-gray-300">·</span> berechnet in {{ number_format($dauerMs, 0, ',', '.') }} ms @endif
+        <div class="flex flex-col gap-3 pt-4 border-t border-[var(--fa-line)]" data-simulation-ergebnis>
+            <p class="text-[length:var(--fa-text-md)] text-[var(--fa-ink-2)]">
+                {{ $ebenen[$result['scope'] ?? $scope] ?? 'Bezug' }} <span class="font-medium text-[var(--fa-ink)]">{{ $bezugText }}</span>
+                <span class="tabular-nums">{{ $teurer ? '+' : '' }}{{ number_format((float) $deltaPct, 1, ',', '.') }} %</span>:
+                {{ $teurer ? 'die Marge sinkt' : 'die Marge steigt' }} in den betroffenen Gerichten.
             </p>
+
+            <x-fa::kpis :items="[
+                ['label' => 'Marge-Veränderung', 'value' => ($md > 0 ? '+' : '') . number_format($md, 2, ',', '.') . ' €', 'primary' => true, 'tone' => $mdTon, 'kpi' => 'marge-delta'],
+                ['label' => 'Betroffene Gerichte', 'value' => number_format((int) ($result['n_gerichte'] ?? 0), 0, ',', '.'), 'kpi' => 'gerichte'],
+                ['label' => 'Konzepte', 'value' => number_format((int) ($result['n_concepts'] ?? 0), 0, ',', '.'), 'kpi' => 'konzepte'],
+                ['label' => 'Grundprodukte im Szenario', 'value' => number_format((int) ($result['n_gps'] ?? 0), 0, ',', '.'), 'kpi' => 'gps'],
+                ['label' => 'Preisfaktor', 'value' => '× ' . number_format((float) ($result['ratio'] ?? 1), 3, ',', '.'), 'kpi' => 'faktor'],
+            ]" />
 
             @if(count($result['top'] ?? []))
-                <div class="mt-3 overflow-x-auto {{ $sectionCard }}">
-                    <div class="{{ $label }} mb-2">Top {{ count($result['top']) }} betroffene Gerichte (nach |Marge-Delta|)</div>
-                    <table class="{{ $table }}">
-                        <thead>
-                            <tr>
-                                <th class="{{ $th }} text-left">Gericht</th>
-                                <th class="{{ $th }} text-right">Marge % (ist → hypo)</th>
-                                <th class="{{ $th }} text-right">Δ Marge €</th>
-                                <th class="{{ $th }} text-right">Wareneinsatz % (hypo)</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach($result['top'] as $r)
-                                @php($rd = (float) ($r['marge_delta_eur'] ?? 0))
-                                <tr class="{{ $tr }}">
-                                    <td class="{{ $td }}">
-                                        <a href="{{ route('foodalchemist.verkauf.index', ['rezept' => $r['recipe_id']]) }}" class="text-violet-600 hover:underline" wire:navigate>
-                                            {{ $r['name'] }}
-                                        </a>
-                                    </td>
-                                    <td class="{{ $td }} text-right tabular-nums">
-                                        {{ number_format((float) $r['marge_pct_ist'], 1, ',', '.') }} → {{ number_format((float) $r['marge_pct_hypo'], 1, ',', '.') }} %
-                                    </td>
-                                    <td class="{{ $td }} text-right tabular-nums {{ $rd < 0 ? 'text-red-600' : ($rd > 0 ? 'text-emerald-600' : '') }}">
-                                        {{ ($rd > 0 ? '+' : '') . number_format($rd, 2, ',', '.') }}
-                                    </td>
-                                    <td class="{{ $td }} text-right tabular-nums">{{ number_format((float) $r['wareneinsatz_pct_hypo'], 1, ',', '.') }} %</td>
+                <div class="fa-surface min-w-0">
+                    <p class="px-4 pt-3 pb-1 text-[length:var(--fa-text-md)] font-semibold text-[var(--fa-ink)]">Am stärksten betroffene Gerichte</p>
+                    <div class="overflow-x-auto">
+                        <table class="fa-table">
+                            <thead>
+                                <tr>
+                                    <th class="w-full">Gericht</th>
+                                    <th class="num">Marge heute → danach</th>
+                                    <th class="num">Veränderung</th>
+                                    <th class="num">Wareneinsatz danach</th>
                                 </tr>
-                            @endforeach
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody>
+                                @foreach($result['top'] as $r)
+                                    @php
+                                        $rd = (float) ($r['marge_delta_eur'] ?? 0);
+                                    @endphp
+                                    <tr wire:key="sim-top-{{ $r['recipe_id'] }}">
+                                        <td class="min-w-[12rem]">
+                                            <a href="{{ route('foodalchemist.verkauf.index', ['rezept' => $r['recipe_id']]) }}" class="font-medium text-[var(--fa-accent)] hover:underline" wire:navigate>{{ $r['name'] }}</a>
+                                        </td>
+                                        <td class="num">{{ number_format((float) $r['marge_pct_ist'], 1, ',', '.') }} → {{ number_format((float) $r['marge_pct_hypo'], 1, ',', '.') }} %</td>
+                                        <td class="num font-medium {{ $rd < 0 ? 'text-[var(--fa-crit)]' : ($rd > 0 ? 'text-[var(--fa-ok)]' : '') }}">{{ ($rd > 0 ? '+' : '') . number_format($rd, 2, ',', '.') }} €</td>
+                                        <td class="num">{{ number_format((float) $r['wareneinsatz_pct_hypo'], 1, ',', '.') }} %</td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             @else
-                <p class="text-xs text-gray-500 mt-3 {{ $sectionCard }}">
-                    Keine bepreisten Gerichte betroffen. (Nur Gerichte mit hinterlegtem Verkaufspreis fließen in das Marge-Delta ein.)
-                </p>
+                <x-fa::notice tone="info">Keine Gerichte mit Verkaufspreis betroffen. In die Marge-Veränderung fließen nur Gerichte mit hinterlegtem Verkaufspreis ein.</x-fa::notice>
             @endif
 
             @if(count($result['substitutions'] ?? []))
-                <div class="mt-3 {{ $sectionCard }}">
-                    <div class="{{ $label }} mb-2">Ersatzvorschläge (Äquivalenz-Katalog)</div>
-                    <div class="flex flex-wrap gap-1">
+                <div class="flex flex-col gap-2">
+                    <p class="text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-2)]">Mögliche Ausweichprodukte</p>
+                    <div class="flex flex-wrap gap-1.5">
                         @foreach($result['substitutions'] as $s)
-                            <span class="{{ $pill }} {{ $variantPill['secondary'] }}">GP #{{ $s['gp_id'] }} → {{ $s['alt_name'] }}</span>
+                            <x-fa::badge icon="heroicon-m-arrows-right-left">{{ $s['alt_name'] }}</x-fa::badge>
                         @endforeach
                     </div>
                 </div>

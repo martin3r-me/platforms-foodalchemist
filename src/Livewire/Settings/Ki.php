@@ -72,7 +72,7 @@ class Ki extends Component
             return;
         }
         app(TeamSettingsService::class)->update($team, ['voice_tts_stimme' => $wert]);
-        $this->meldung = 'Stimme gespeichert: ' . $wert;
+        $this->meldung = 'Stimme gespeichert: ' . ucfirst($wert);
     }
 
     /**
@@ -103,7 +103,7 @@ class Ki extends Component
             return;
         }
         app(TeamSettingsService::class)->update($team, ['voice_agent_mode' => $wert]);
-        $this->meldung = 'Sprachbefehl-Modus gespeichert: ' . self::MODUS_LABEL[$wert];
+        $this->meldung = 'Sprachbefehl gespeichert: ' . self::MODUS_LABEL[$wert];
     }
 
     /** Label + Beschreibung je Modus — geteilt zwischen Blade (Radio-Gruppe) und Pill im Voice-Modal. */
@@ -128,8 +128,8 @@ class Ki extends Component
         $this->kiAktiv = ! $this->kiAktiv;
         app(TeamSettingsService::class)->update($team, ['ai_active' => $this->kiAktiv]);
         $this->meldung = $this->kiAktiv
-            ? 'KI aktiviert — Autopilot-Buttons sind wieder nutzbar.'
-            : 'Kill-Switch AKTIV — alle KI-Calls dieses Teams werden im Gateway gestoppt.';
+            ? 'KI eingeschaltet. Alle KI-Knöpfe sind wieder nutzbar.'
+            : 'KI ausgeschaltet. Alle KI-Aufrufe dieses Teams werden gestoppt.';
     }
 
     public function render()

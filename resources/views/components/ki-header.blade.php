@@ -30,7 +30,7 @@
         'ki' => ['KI', $ui['variantPill']['primary']],
         'auto' => ['Auto', $ui['variantPill']['info']],
         'manual' => ['Manuell', $ui['variantPill']['success']],
-        default => ['unbefüllt', $ui['variantPill']['secondary']],
+        default => ['leer', $ui['variantPill']['secondary']],
     };
     $ghostBtn = $ui['btnGhostXs'];
 @endphp
@@ -42,26 +42,26 @@
             <span class="{{ $ui['pill'] }} {{ $badge[1] }}"
                   @if($reasoning) title="{{ $reasoning }}" @endif>{{ $badge[0] }}</span>
             @if($source === 'ki' && $confidence !== null)
-                <span class="text-[11px] text-gray-500" data-ki-confidence>{{ round($confidence * 100) }}%</span>
+                <span class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)] tabular-nums" data-ki-confidence>{{ round($confidence * 100) }}%</span>
             @endif
         </div>
         <div class="flex items-center gap-1.5 shrink-0">
             @if($hasProposal)
                 <button type="button" wire:click="accept_{{ $field }}"
-                        class="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium text-white bg-gradient-to-r from-violet-500 to-indigo-500 rounded-md shadow-sm shadow-violet-500/25 hover:shadow-md transition-all duration-150">
+                        class="inline-flex items-center gap-1 h-7 px-2.5 text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-on-accent)] bg-[var(--fa-accent)] rounded-[var(--fa-radius-control)] hover:bg-[var(--fa-accent-hover)] transition-colors duration-150">
                     Übernehmen
                 </button>
             @endif
             @if($source !== null)
-                <button type="button" wire:click="clear_{{ $field }}" class="{{ $ghostBtn }}" title="Wert und Lineage zurücksetzen (GL-07 clear)">
-                    Reset
+                <button type="button" wire:click="clear_{{ $field }}" class="{{ $ghostBtn }}" title="Wert und Herkunft zurücksetzen">
+                    Zurücksetzen
                 </button>
             @endif
             {{-- „Manuell" entfernt (Dominique 2026-07-01): redundant — Editieren+Speichern setzt source=manual ohnehin. --}}
             {{-- KI-Chip-Stil wie überall; diese Komponente holt ihre Stile über $ui, nicht per
                  extract() — hier NICHT $btnAi verwenden, das existiert im Scope nicht. --}}
             <button type="button" wire:click="ai_{{ $field }}" class="{{ $ui['btnAi'] }}" title="KI-Vorschlag anfordern (persistiert nichts)">
-                @svg('heroicon-o-sparkles', 'w-3.5 h-3.5') Autopilot
+                @svg('heroicon-o-sparkles', 'w-3.5 h-3.5') KI-Vorschlag
             </button>
         </div>
     </div>

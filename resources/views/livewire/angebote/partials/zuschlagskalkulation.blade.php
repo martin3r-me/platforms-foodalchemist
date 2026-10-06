@@ -8,138 +8,189 @@
      contribution_margin_pct / target_gap / unprofitable / complete / active_person_minutes /
      cost_breakdown[] (key,label,amount,stage) / time_breakdown[] / warnings[].
      Optional (Angebot-Spezifikum, von B1 ergänzt): positionen[] (role,label,ek,price = je Person)
-     + ek_per_person + price_per_person für die WARENEINSATZ-JE-POSITION-Tabelle. --}}
-@php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
-@php($sim = $auftragsKalkulation ?? null)
-@if($sim)
-    @php($simPax = max(1, (int) ($sim['pax'] ?? 0)))
-    @php($simZielPp = (float) ($sim['target_price_per_person'] ?? 0))
-    @php($simCatalogPp = (float) ($sim['catalog_price_per_person'] ?? 0))
-    @php($simAbweichungPp = $simCatalogPp - $simZielPp)
-    @php($simDbPp = (float) ($sim['contribution_margin'] ?? 0) / $simPax)
-    <div class="rounded-xl border border-black/5 p-3 space-y-2" data-angebot-zuschlagskalkulation>
-        <p class="{{ $label }}">Zuschlagskalkulation · {{ number_format((int) ($sim['pax'] ?? 0), 0, ',', '.') }} Pax</p>
-        <p class="text-[11px] text-gray-500">Vollkosten-Kalkulation über das gesamte Angebot (alle Menüs × Pax). Prüft den Katalogpreis, ohne Stammdaten zu verändern.</p>
+     + ek_per_person + price_per_person für die WARENEINSATZ-JE-POSITION-Tabelle.
 
-        {{-- Kopfzeile: Katalog/Person · MEK · FEK · HK2 · Preisempfehlung · Abweichung · Zielpreis · aktive Zeit --}}
-        <div class="grid grid-cols-2 md:grid-cols-5 xl:grid-cols-10 gap-2 text-xs" data-auftrag-preisempfehlung>
-            <div><span class="block text-[10px] text-gray-500">Katalog / Person</span><span class="font-medium tabular-nums">{{ number_format($simCatalogPp, 2, ',', '.') }} €</span></div>
-            <div><span class="block text-[10px] text-gray-500">MEK Auftrag / Person</span><span class="font-medium tabular-nums">{{ number_format((float) ($sim['mek'] ?? 0) / $simPax, 2, ',', '.') }} €</span></div>
-            <div><span class="block text-[10px] text-gray-500">FEK Auftrag / Person</span><span class="font-medium tabular-nums">{{ number_format((float) ($sim['fek'] ?? 0) / $simPax, 2, ',', '.') }} €</span></div>
-            <div><span class="block text-[10px] text-gray-500">HK2 / Person</span><span class="font-medium tabular-nums">{{ number_format((float) ($sim['hk2'] ?? 0) / $simPax, 2, ',', '.') }} €</span></div>
-            <div class="rounded-md bg-violet-500/10 px-2 py-1.5"><span class="block text-[10px] text-violet-500">Preisempfehlung / Person</span><span class="font-semibold text-violet-700 tabular-nums">{{ number_format($simZielPp, 2, ',', '.') }} €</span></div>
-            <div><span class="block text-[10px] text-gray-500" title="Katalogpreis pro Person minus Preisempfehlung pro Person">Abweichung Katalog − Ziel</span><span class="font-medium tabular-nums {{ $simAbweichungPp < 0 ? 'text-amber-600' : 'text-emerald-600' }}">{{ $simAbweichungPp > 0 ? '+' : '' }}{{ number_format($simAbweichungPp, 2, ',', '.') }} €/P</span></div>
-            <div><span class="block text-[10px] text-gray-500">Mindestpreis gesamt</span><span class="font-medium tabular-nums">{{ number_format((float) ($sim['minimum_price'] ?? 0), 2, ',', '.') }} €</span></div>
-            <div><span class="block text-[10px] text-gray-500">Zielpreis gesamt</span><span class="font-medium tabular-nums">{{ number_format((float) ($sim['target_price'] ?? 0), 2, ',', '.') }} €</span></div>
-            <div><span class="block text-[10px] text-gray-500">Deckungsbeitrag Auftrag</span><span class="font-medium tabular-nums {{ ($sim['contribution_margin'] ?? 0) < 0 ? 'text-rose-500' : 'text-emerald-600' }}">{{ number_format($simDbPp, 2, ',', '.') }} €/P <span class="block text-[9px]">{{ number_format((float) ($sim['contribution_margin'] ?? 0), 2, ',', '.') }} € · {{ ($sim['contribution_margin_pct'] ?? null) !== null ? number_format((float) $sim['contribution_margin_pct'], 1, ',', '.') . ' %' : '—' }}</span></span></div>
-            <div><span class="block text-[10px] text-gray-500">Aktive Personenzeit</span><span class="font-medium tabular-nums">{{ number_format((float) ($sim['active_person_minutes'] ?? 0) / 60, 2, ',', '.') }} h</span></div>
-        </div>
+     fa-pass (2026-10-05): Tokens + Bausteine. Zahlen rechtsbündig in fa-table-Zellen (num),
+     Zwischen- und Endsummen fett mit Linie darüber, Kennzahlen als x-fa::kpis ohne eigene
+     Hauptzahl (die Hauptzahl der Ansicht ist die Angebotssumme im Kopf). --}}
+@php
+    $sim = $auftragsKalkulation ?? null;
+    $zkEuro = fn ($wert) => number_format((float) $wert, 2, ',', '.') . ' €';
+@endphp
+@if($sim)
+    @php
+        $simPax = max(1, (int) ($sim['pax'] ?? 0));
+        $simZielPp = (float) ($sim['target_price_per_person'] ?? 0);
+        $simCatalogPp = (float) ($sim['catalog_price_per_person'] ?? 0);
+        $simAbweichungPp = $simCatalogPp - $simZielPp;
+        $simDb = (float) ($sim['contribution_margin'] ?? 0);
+        $simDbPp = $simDb / $simPax;
+        $simDbPct = ($sim['contribution_margin_pct'] ?? null) !== null ? number_format((float) $sim['contribution_margin_pct'], 1, ',', '.') . ' %' : null;
+        $simMinuten = (float) ($sim['active_person_minutes'] ?? 0);
+    @endphp
+    <x-fa::section title="Vollkosten-Kalkulation" icon="heroicon-o-calculator"
+        :meta="number_format((int) ($sim['pax'] ?? 0), 0, ',', '.') . ' Gäste'"
+        description="Alle Kosten des Auftrags über das ganze Angebot. Prüft den Angebotspreis, ohne Stammdaten zu verändern."
+        data-angebot-zuschlagskalkulation>
+
+        <x-fa::kpis data-auftrag-preisempfehlung :items="[
+            ['label' => 'Angebotspreis je Gast', 'value' => $zkEuro($simCatalogPp)],
+            ['label' => 'Preisempfehlung je Gast', 'value' => $zkEuro($simZielPp), 'title' => 'Zielpreis aus den Vollkosten und dem Zuschlag des Teams'],
+            ['label' => 'Abweichung je Gast', 'value' => ($simAbweichungPp > 0 ? '+' : '') . $zkEuro($simAbweichungPp),
+             'tone' => $simAbweichungPp < 0 ? 'warn' : 'ok', 'title' => 'Angebotspreis je Gast minus Preisempfehlung je Gast'],
+            ['label' => 'Deckungsbeitrag je Gast', 'value' => $zkEuro($simDbPp), 'tone' => $simDb < 0 ? 'crit' : 'ok',
+             'title' => 'Gesamt ' . $zkEuro($simDb) . ($simDbPct !== null ? ', ' . $simDbPct : '')],
+            ['label' => 'Wareneinsatz je Gast', 'value' => $zkEuro((float) ($sim['mek'] ?? 0) / $simPax), 'title' => 'Materialeinzelkosten des Auftrags je Gast'],
+            ['label' => 'Fertigung je Gast', 'value' => $zkEuro((float) ($sim['fek'] ?? 0) / $simPax), 'title' => 'Fertigungseinzelkosten des Auftrags je Gast'],
+            ['label' => 'Selbstkosten je Gast', 'value' => $zkEuro((float) ($sim['hk2'] ?? 0) / $simPax), 'title' => 'Herstellkosten inklusive Verwaltung, Vertrieb und Logistik'],
+            ['label' => 'Mindestpreis gesamt', 'value' => $zkEuro($sim['minimum_price'] ?? 0)],
+            ['label' => 'Zielpreis gesamt', 'value' => $zkEuro($sim['target_price'] ?? 0)],
+            ['label' => 'Aktive Arbeitszeit', 'value' => number_format($simMinuten / 60, 2, ',', '.') . ' h'],
+        ]" />
 
         @if($sim['unprofitable'] ?? false)
-            <div class="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                Der Katalogpreis liegt {{ number_format((float) ($sim['target_gap'] ?? 0), 2, ',', '.') }} € unter dem Zielpreis. Der Preis wurde nicht automatisch erhöht.
-            </div>
+            <x-fa::notice tone="warn" title="Angebotspreis unter dem Zielpreis">
+                Der Angebotspreis liegt {{ $zkEuro($sim['target_gap'] ?? 0) }} unter dem Zielpreis. Der Preis wurde nicht automatisch erhöht.
+            </x-fa::notice>
         @endif
         @unless($sim['complete'] ?? false)
-            <div class="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
-                Preisempfehlung nicht belastbar: Die Auftragsdaten sind noch unvollständig. Für die Berechnung wird mindestens der ausgewiesene Katalog-MEK verwendet.
-            </div>
+            <x-fa::notice tone="warn" title="Preisempfehlung noch nicht belastbar">
+                Die Auftragsdaten sind unvollständig. Gerechnet wird mindestens mit dem ausgewiesenen Wareneinsatz aus dem Katalog.
+            </x-fa::notice>
         @endunless
         @if(count($sim['warnings'] ?? []))
-            <p class="text-[10px] text-amber-700">{{ implode(' · ', $sim['warnings']) }}</p>
+            <ul class="flex flex-col gap-1">
+                @foreach($sim['warnings'] as $warnung)
+                    <li><x-fa::signal tone="warn">{{ $warnung }}</x-fa::signal></li>
+                @endforeach
+            </ul>
         @endif
 
         {{-- AUFTRAGSKOSTEN-Wasserfall: MEK → FEK → Schwund → MGK → FGK → HK → V&V → Logistik → HK2 → Preisempfehlung --}}
         @if(count($sim['cost_breakdown'] ?? []))
-            <div class="border-t border-black/5 pt-2" data-auftragskosten-wasserfall>
-                <div class="grid grid-cols-[minmax(0,1fr)_7rem_8rem] gap-2 pb-1 text-[10px] uppercase tracking-wider text-gray-500">
-                    <span>Auftragskosten</span><span class="text-right">je Person</span><span class="text-right">gesamt</span>
-                </div>
-                @foreach($sim['cost_breakdown'] as $kosten)
-                    @php($kostenStufe = $kosten['stage'] ?? 'cost')
-                    <div class="grid grid-cols-[minmax(0,1fr)_7rem_8rem] gap-2 py-0.5 text-xs {{ in_array($kostenStufe, ['subtotal', 'total'], true) ? 'mt-1 border-t border-black/5 pt-1 font-semibold text-gray-900' : 'text-gray-600' }} {{ $kostenStufe === 'total' ? 'text-violet-700' : '' }}">
-                        <span>{{ $kostenStufe === 'surcharge' ? '+ ' : '' }}{{ $kosten['label'] }}</span>
-                        <span class="text-right tabular-nums">{{ number_format((float) ($kosten['amount'] ?? 0) / $simPax, 2, ',', '.') }} €</span>
-                        <span class="text-right tabular-nums">{{ number_format((float) ($kosten['amount'] ?? 0), 2, ',', '.') }} €</span>
-                    </div>
-                @endforeach
-                <div class="grid grid-cols-[minmax(0,1fr)_7rem_8rem] gap-2 mt-1 border-t border-black/5 pt-1 text-xs font-semibold text-violet-700">
-                    <span>Preisempfehlung</span>
-                    <span class="text-right tabular-nums">{{ number_format($simZielPp, 2, ',', '.') }} €</span>
-                    <span class="text-right tabular-nums">{{ number_format((float) ($sim['target_price'] ?? 0), 2, ',', '.') }} €</span>
-                </div>
-                <div class="grid grid-cols-[minmax(0,1fr)_7rem_8rem] gap-2 py-0.5 text-xs {{ ($sim['contribution_margin'] ?? 0) < 0 ? 'text-rose-500' : 'text-emerald-600' }}">
-                    <span>Deckungsbeitrag beim Katalog-VK</span>
-                    <span class="text-right tabular-nums">{{ number_format($simDbPp, 2, ',', '.') }} €</span>
-                    <span class="text-right tabular-nums">{{ number_format((float) ($sim['contribution_margin'] ?? 0), 2, ',', '.') }} €</span>
-                </div>
+            <div class="overflow-x-auto" data-auftragskosten-wasserfall>
+                <table class="fa-table fa-table--compact">
+                    <thead>
+                        <tr>
+                            <th class="w-full">Auftragskosten</th>
+                            <th class="num">je Gast</th>
+                            <th class="num">gesamt</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach($sim['cost_breakdown'] as $kosten)
+                            @php
+                                $kostenStufe = $kosten['stage'] ?? 'cost';
+                                $istSumme = in_array($kostenStufe, ['subtotal', 'total'], true);
+                            @endphp
+                            <tr class="{{ $istSumme ? 'font-semibold text-[var(--fa-ink)] [&>td]:border-t [&>td]:border-[var(--fa-line-strong)]' : 'text-[var(--fa-ink-2)]' }}">
+                                <td>
+                                    @if($kostenStufe === 'surcharge')<span class="text-[var(--fa-ink-3)]" aria-hidden="true">+&nbsp;</span>@endif{{ $kosten['label'] }}
+                                </td>
+                                <td class="num">{{ $zkEuro((float) ($kosten['amount'] ?? 0) / $simPax) }}</td>
+                                <td class="num">{{ $zkEuro($kosten['amount'] ?? 0) }}</td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                    <tfoot>
+                        <tr class="font-semibold text-[var(--fa-accent)] [&>td]:border-t-2 [&>td]:border-[var(--fa-accent-line)]">
+                            <td>Preisempfehlung</td>
+                            <td class="num">{{ $zkEuro($simZielPp) }}</td>
+                            <td class="num">{{ $zkEuro($sim['target_price'] ?? 0) }}</td>
+                        </tr>
+                        <tr class="{{ $simDb < 0 ? 'text-[var(--fa-crit)]' : 'text-[var(--fa-ok)]' }}">
+                            <td>Deckungsbeitrag beim Angebotspreis @if($simDbPct !== null)<span class="text-[var(--fa-ink-3)]">({{ $simDbPct }})</span>@endif</td>
+                            <td class="num">{{ $zkEuro($simDbPp) }}</td>
+                            <td class="num">{{ $zkEuro($simDb) }}</td>
+                        </tr>
+                    </tfoot>
+                </table>
             </div>
         @endif
 
         {{-- Zeitaufschlüsselung je Rezept (aktive Produktionszeit) --}}
         @if(count($sim['time_breakdown'] ?? []))
-            <details class="pt-1" data-zeitaufschluesselung>
-                <summary class="cursor-pointer text-[11px] font-medium text-gray-600">Zeitaufschlüsselung: {{ number_format((float) ($sim['active_person_minutes'] ?? 0) / 60, 2, ',', '.') }} Personenstunden <span class="font-normal text-gray-500">({{ number_format((float) ($sim['active_person_minutes'] ?? 0), 1, ',', '.') }} Personenminuten)</span></summary>
+            <details class="group" data-zeitaufschluesselung>
+                <summary class="inline-flex items-center gap-1 cursor-pointer select-none text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-accent)] hover:text-[var(--fa-accent-hover)]">
+                    @svg('heroicon-m-chevron-right', 'w-4 h-4 transition-transform group-open:rotate-90')
+                    Arbeitszeit je Rezept: {{ number_format($simMinuten / 60, 2, ',', '.') }} Stunden
+                    <span class="font-normal text-[var(--fa-ink-3)]">({{ number_format($simMinuten, 1, ',', '.') }} Minuten)</span>
+                </summary>
                 <div class="overflow-x-auto pt-2">
-                    <table class="w-full min-w-[760px] text-[11px]">
-                        <thead><tr class="text-gray-500">
-                            <th class="py-1 text-left font-medium">Rezept</th><th class="text-right font-medium">Ansätze</th><th class="text-right font-medium">Vorgänge</th><th class="text-right font-medium">Rüsten</th><th class="text-right font-medium">Vorgangszeit</th><th class="text-right font-medium">Variabel</th><th class="text-right font-medium">Aktiv gesamt</th>
-                        </tr></thead>
-                        <tbody>
-                        @foreach($sim['time_breakdown'] as $zeit)
-                            <tr class="border-t border-black/5">
-                                <td class="py-1 pr-3">{{ $zeit['recipe'] ?? '—' }}</td>
-                                <td class="text-right tabular-nums">{{ number_format((float) ($zeit['production_batches'] ?? 0), 2, ',', '.') }}</td>
-                                <td class="text-right tabular-nums">{{ (int) ($zeit['operations'] ?? 0) }}</td>
-                                <td class="text-right tabular-nums">{{ number_format((float) ($zeit['setup_minutes'] ?? 0), 1, ',', '.') }} min</td>
-                                <td class="text-right tabular-nums">{{ number_format((float) ($zeit['batch_minutes'] ?? 0), 1, ',', '.') }} min</td>
-                                <td class="text-right tabular-nums">{{ number_format((float) ($zeit['variable_minutes'] ?? 0), 1, ',', '.') }} min</td>
-                                <td class="text-right font-medium tabular-nums">{{ number_format((float) ($zeit['active_person_minutes'] ?? 0), 1, ',', '.') }} min</td>
+                    <table class="fa-table fa-table--compact min-w-[720px]">
+                        <thead>
+                            <tr>
+                                <th class="w-full">Rezept</th>
+                                <th class="num">Ansätze</th>
+                                <th class="num">Arbeitsgänge</th>
+                                <th class="num">Rüsten</th>
+                                <th class="num">je Ansatz</th>
+                                <th class="num">je Menge</th>
+                                <th class="num">Aktiv gesamt</th>
                             </tr>
-                        @endforeach
+                        </thead>
+                        <tbody>
+                            @foreach($sim['time_breakdown'] as $zeit)
+                                <tr>
+                                    <td>{{ $zeit['recipe'] ?? '–' }}</td>
+                                    <td class="num">{{ number_format((float) ($zeit['production_batches'] ?? 0), 2, ',', '.') }}</td>
+                                    <td class="num">{{ (int) ($zeit['operations'] ?? 0) }}</td>
+                                    <td class="num">{{ number_format((float) ($zeit['setup_minutes'] ?? 0), 1, ',', '.') }} min</td>
+                                    <td class="num">{{ number_format((float) ($zeit['batch_minutes'] ?? 0), 1, ',', '.') }} min</td>
+                                    <td class="num">{{ number_format((float) ($zeit['variable_minutes'] ?? 0), 1, ',', '.') }} min</td>
+                                    <td class="num font-medium">{{ number_format((float) ($zeit['active_person_minutes'] ?? 0), 1, ',', '.') }} min</td>
+                                </tr>
+                            @endforeach
                         </tbody>
                     </table>
                 </div>
             </details>
         @endif
-    </div>
+    </x-fa::section>
 
     {{-- WARENEINSATZ JE POSITION — woraus sich die Kosten zusammensetzen (wie die Zutatenliste beim Gericht).
          Angebot-Spezifikum: $sim['positionen'] = aggregierte Komposition-Zeilen (role,label,ek,price je Person). --}}
     @if(count($sim['positionen'] ?? []))
-        @php($sumEkPp = (float) ($sim['ek_per_person'] ?? 0))
-        @php($sumVkPp = (float) ($sim['price_per_person'] ?? $simCatalogPp))
-        <div class="rounded-xl border border-black/5 p-3">
-            <p class="{{ $label }} mb-1.5">Wareneinsatz je Position / Person</p>
-            <table class="w-full text-xs">
-                <thead><tr class="text-gray-500 text-[10px] uppercase tracking-wider">
-                    <th class="text-left font-medium py-1">Position</th>
-                    <th class="text-right font-medium">Wareneinsatz</th>
-                    <th class="text-right font-medium">VK</th>
-                    <th class="text-right font-medium">W-%</th>
-                </tr></thead>
-                <tbody>
-                @foreach($sim['positionen'] as $z)
-                    @php($zEk = $z['ek'] ?? null)
-                    @php($zVk = $z['price'] ?? null)
-                    @php($zw = ($zVk !== null && (float) $zVk > 0 && $zEk !== null) ? (float) $zEk / (float) $zVk * 100 : null)
-                    <tr class="border-t border-black/5">
-                        <td class="py-1">@if(!empty($z['role']))<span class="text-gray-500">{{ $z['role'] }}:</span> @endif{{ $z['label'] ?? '—' }}</td>
-                        <td class="text-right tabular-nums">{{ $zEk !== null ? number_format((float) $zEk, 2, ',', '.') . ' €' : '—' }}</td>
-                        <td class="text-right tabular-nums text-gray-600">{{ $zVk !== null ? number_format((float) $zVk, 2, ',', '.') . ' €' : '—' }}</td>
-                        <td class="text-right tabular-nums">{{ $zw !== null ? number_format($zw, 1, ',', '.') . ' %' : '—' }}</td>
-                    </tr>
-                @endforeach
-                </tbody>
-                <tfoot>
-                    <tr class="border-t border-black/10 font-semibold text-gray-900">
-                        <td class="py-1">Summe / Person</td>
-                        <td class="text-right tabular-nums">{{ number_format($sumEkPp, 2, ',', '.') }} €</td>
-                        <td class="text-right tabular-nums text-gray-600">{{ number_format($sumVkPp, 2, ',', '.') }} €</td>
-                        <td class="text-right tabular-nums">{{ $sumVkPp > 0 ? number_format($sumEkPp / $sumVkPp * 100, 1, ',', '.') . ' %' : '—' }}</td>
-                    </tr>
-                </tfoot>
-            </table>
-        </div>
+        @php
+            $sumEkPp = (float) ($sim['ek_per_person'] ?? 0);
+            $sumVkPp = (float) ($sim['price_per_person'] ?? $simCatalogPp);
+        @endphp
+        <x-fa::section title="Wareneinsatz je Position" icon="heroicon-o-list-bullet" meta="je Gast" data-angebot-wareneinsatz-positionen>
+            <div class="overflow-x-auto">
+                <table class="fa-table fa-table--compact">
+                    <thead>
+                        <tr>
+                            <th class="w-full">Position</th>
+                            <th class="num">Wareneinsatz</th>
+                            <th class="num">Verkaufspreis</th>
+                            <th class="num">Anteil</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach($sim['positionen'] as $z)
+                            @php
+                                $zEk = $z['ek'] ?? null;
+                                $zVk = $z['price'] ?? null;
+                                $zw = ($zVk !== null && (float) $zVk > 0 && $zEk !== null) ? (float) $zEk / (float) $zVk * 100 : null;
+                            @endphp
+                            <tr>
+                                <td>@if(!empty($z['role']))<span class="text-[var(--fa-ink-3)]">{{ $z['role'] }}:</span> @endif{{ $z['label'] ?? '–' }}</td>
+                                <td class="num"><x-fa::money :value="$zEk" /></td>
+                                <td class="num text-[var(--fa-ink-2)]"><x-fa::money :value="$zVk" /></td>
+                                <td class="num">{{ $zw !== null ? number_format($zw, 1, ',', '.') . ' %' : '–' }}</td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                    <tfoot>
+                        <tr class="font-semibold text-[var(--fa-ink)] [&>td]:border-t [&>td]:border-[var(--fa-line-strong)]">
+                            <td>Summe je Gast</td>
+                            <td class="num">{{ $zkEuro($sumEkPp) }}</td>
+                            <td class="num">{{ $zkEuro($sumVkPp) }}</td>
+                            <td class="num">{{ $sumVkPp > 0 ? number_format($sumEkPp / $sumVkPp * 100, 1, ',', '.') . ' %' : '–' }}</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </x-fa::section>
     @endif
 @endif

@@ -1,188 +1,233 @@
-{{-- Concepter-DetailPanel. Redesign v3 2026-07-21 (Dominique): Menü-Ökonomie-Linse,
-     nicht ausklappbar, größere Typo. Cockpit (€/Person + Menü-Score), section-Köpfe.
-     Kaskade 2026-08-24: Concept ODER Paket = ein kind=paket-Concept. Ein Ladepfad,
-     nur Anzeige unterscheidet sich (→ $istPaket): Paket zeigt Paketpreis, blendet
-     Einzel-VK/Menü-Bewertung aus. Kein embedded-Modus. --}}
-@php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
-@php($konfPill = ['high' => $variantPill['success'], 'medium' => $variantPill['warning'], 'low' => $variantPill['danger'], 'unknown' => $variantPill['secondary']])
+{{-- Concepter-Detail: Menü-Ökonomie-Linse für ein Concept ODER ein Paket (Kaskade 2026-08-24: Paket = kind=paket-Concept,
+     ein Ladepfad, nur die Anzeige unterscheidet sich → $istPaket: Paketpreis statt Einzel-VK, keine Menü-Bewertung).
+     fa-pass Welle 2 (2026-10-05): auf Bausteine <x-fa::…> umgestellt. Funktion, wire:-Bindungen, Events und data-Marker
+     unverändert. Neu: Hauptaktion „Im Editor öffnen" oben, offene Punkte (leere Positionen, veralteter Paketpreis,
+     fehlender Einkauf) direkt unter dem Preis, Löschen getrennt am Ende. --}}
+@php
+    $statusLabel = ['draft' => 'Entwurf', 'active' => 'Aktiv', 'archiviert' => 'Archiv'];
+    $statusTon = ['draft' => 'neutral', 'active' => 'ok', 'archiviert' => 'neutral'];
+    $niveauLabel = ['klassisch' => 'Klassisch', 'gehoben' => 'Gehoben', 'haute' => 'Haute Cuisine'];
+    $konfTon = ['high' => 'ok', 'medium' => 'warn', 'low' => 'crit', 'unknown' => 'neutral'];
+    $konfSatz = [
+        'high' => 'Allergene vollständig belegt',
+        'medium' => 'Allergene teilweise belegt, stichprobenartig prüfen',
+        'low' => 'Allergene unsicher, vor Ausgabe prüfen',
+        'unknown' => 'Allergene noch nicht bewertet',
+    ];
+    $wort = $istPaket ? 'Paket' : 'Concept';
 
-<div class="p-4 space-y-4 min-h-full bg-gray-500/[0.04]" data-concepter-panel>
+    if ($concept !== null) {
+        $proPerson = $cockpit['price_per_person'] ?? null;
+        $score = $bewertung['score'] ?? null;
+        $scoreTone = $score === null ? 'neutral' : ($score >= 80 ? 'success' : ($score >= 50 ? 'warning' : 'danger'));
+        $scoreBadgeTon = ['neutral' => 'neutral', 'success' => 'ok', 'warning' => 'warn', 'danger' => 'crit'][$scoreTone];
+        $hatGerichte = $aggregat !== null && ($aggregat['n_gerichte'] ?? 0) > 0;
+        $konfidenz = $aggregat['allergene']['confidence'] ?? 'unknown';
+
+        $kpis = [
+            $proPerson !== null
+                ? ['label' => $istPaket ? 'Paketpreis / Person' : '€/Person', 'value' => number_format((float) $proPerson, 2, ',', '.') . ' €', 'primary' => true, 'kpi' => 'preis']
+                : ['label' => $istPaket ? 'Paketpreis / Person' : '€/Person', 'value' => 'Preis fehlt', 'tone' => 'crit', 'kpi' => 'preis'],
+            ['label' => 'EK/Person', 'value' => $aggregat !== null ? number_format((float) $aggregat['ek_per_person'], 2, ',', '.') . ' €' : '–', 'kpi' => 'ek'],
+            ['label' => 'Arbeitszeit', 'value' => $aggregat !== null ? $aggregat['work_time_min'] . ' min' : '–', 'kpi' => 'arbeitszeit'],
+        ];
+
+        // Offene Punkte zuerst: was vor dem Angebot noch fehlt.
+        $offen = [];
+        if (! empty($cockpit['hat_leer'])) {
+            $offen[] = ['crit', 'Mindestens eine Position ist noch leer.'];
+        }
+        if (! empty($cockpit['hat_stale'])) {
+            $offen[] = ['warn', 'Ein Paketpreis ist veraltet, im Editor neu berechnen.'];
+        }
+        if (! empty($cockpit['hat_ek_luecke'])) {
+            $offen[] = ['warn', 'Einkauf unvollständig: einem Gericht fehlt das Portionsgewicht.'];
+        }
+
+        $checkIcon = ['ok' => 'heroicon-m-check-circle', 'warn' => 'heroicon-m-exclamation-triangle', 'fail' => 'heroicon-m-x-circle', 'info' => 'heroicon-m-information-circle'];
+        $checkFarbe = ['ok' => 'text-[var(--fa-ok)]', 'warn' => 'text-[var(--fa-warn)]', 'fail' => 'text-[var(--fa-crit)]', 'info' => 'text-[var(--fa-ink-3)]'];
+        $naehrwertFelder = ['kcal' => 'kcal', 'protein_g' => 'Eiweiß', 'fett_g' => 'Fett', 'gesfett_g' => 'davon gesättigt', 'kh_g' => 'Kohlenhydrate', 'zucker_g' => 'davon Zucker', 'salz_g' => 'Salz'];
+    }
+@endphp
+
+<div class="p-4 flex flex-col gap-5 min-h-full bg-[var(--fa-ground)]" data-concepter-panel>
     @if($concept === null)
-        <div class="py-16 text-center text-sm text-gray-500">
-            <div class="text-2xl mb-2">@svg('heroicon-o-banknotes', 'w-3.5 h-3.5 inline-block align-middle')️</div>
-            {{ $istPaket || $type === 'pakete' ? 'Paket auswählen.' : 'Concept auswählen.' }}
-        </div>
+        <x-fa::empty icon="heroicon-o-square-3-stack-3d" title="{{ $istPaket || $type === 'pakete' ? 'Kein Paket gewählt' : 'Kein Concept gewählt' }}">
+            Links in der Tabelle eine Zeile anklicken, dann erscheinen hier Preis, Aufbau und Bewertung.
+        </x-fa::empty>
     @else
-        {{-- Kopf --}}
-        <div>
-            <div class="flex items-start justify-between gap-2">
-                <h3 class="text-base font-semibold tracking-tight text-gray-900 leading-snug">{{ $concept->name }}</h3>
-                @if(! $istPaket && $concept->is_template)<span class="{{ $pill }} {{ $variantPill['secondary'] }} shrink-0">Vorlage</span>@endif
-                @if($istPaket)<span class="{{ $pill }} {{ $variantPill['info'] }} shrink-0">Paket</span>@endif
-            </div>
-            @if($concept->consumer_name)<p class="text-xs italic text-gray-500 mt-0.5">„{{ $concept->consumer_name }}"</p>@endif
-            <div class="flex flex-wrap items-center gap-1.5 mt-2">
-                @if($concept->class)<span class="{{ $pill }} {{ $variantPill['primary'] }}">{{ $concept->class }}</span>@endif
-                @if($concept->level)<span class="{{ $pill }} {{ $variantPill['info'] }}">{{ $concept->level }}</span>@endif
-                @if(! $istPaket && $concept->occasion)<span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $concept->occasion }}</span>@endif
-                @if($istPaket)<span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $concept->price_mode === 'auto' ? 'Auto-Preis' : 'Manueller Preis' }}</span>@endif
-                <span class="{{ $pill }} {{ ['draft' => $variantPill['secondary'], 'active' => $variantPill['success'], 'archiviert' => $variantPill['warning']][$concept->status] ?? $variantPill['secondary'] }}">{{ ['draft' => 'Entwurf', 'active' => 'Aktiv', 'archiviert' => 'Archiv'][$concept->status] ?? $concept->status }}</span>
-            </div>
-            <div class="flex flex-wrap items-center gap-1.5 mt-2">
-                <button type="button" wire:click="$dispatch('concepter-editor.oeffnen', { type: 'concepts', id: {{ $concept->id }} })" class="{{ $btnGhostXs }}">@svg('heroicon-o-pencil-square', 'w-3.5 h-3.5') Bearbeiten</button>
-                {{-- #6: einheitliche Labels — „Druck/Karte" (schöne Ausgabe) + „Report" (technisch).
-                     Karte gilt auch fürs Paket (concepts.karte nimmt eine Concept-ID). --}}
-                <a href="{{ route('foodalchemist.concepts.karte', ['id' => $concept->id]) }}" target="_blank"
-                   class="{{ $btnGhostXs }}" title="Schöne Menü-Karte (Kunden-Ausgabe · Druck/PDF)" data-concepter-panel-karte>
-                    @svg('heroicon-o-printer', 'w-3.5 h-3.5') Druck/Karte
-                </a>
-                <a href="{{ route('foodalchemist.concepts.dokument', ['id' => $concept->id, 'profil' => 'voll']) }}" target="_blank"
-                   class="{{ $btnGhostXs }}" title="Technischer Report mit voller Kaskade" data-concepter-panel-druck>
-                    @svg('heroicon-o-document-text', 'w-3.5 h-3.5') Report
-                </a>
+        {{-- Kopf (Anatomie Detail-Panels): Name, Einordnung, eine Hauptaktion, Weiteres im Menü --}}
+        <x-fa::detail-kopf :title="$concept->name" :subtitle="$concept->consumer_name ? 'Für Gäste: ' . $concept->consumer_name : null">
+            <x-slot:badges>
+                <x-fa::badge :tone="$statusTon[$concept->status] ?? 'neutral'">{{ $statusLabel[$concept->status] ?? $concept->status }}</x-fa::badge>
+                @if(! $istPaket && $concept->is_template)<x-fa::badge tone="info" icon="heroicon-m-square-2-stack">Vorlage</x-fa::badge>@endif
+                @if($istPaket)<x-fa::badge tone="info" icon="heroicon-m-puzzle-piece">Paket</x-fa::badge>@endif
+                @if($concept->class)<x-fa::badge>{{ $concept->class }}</x-fa::badge>@endif
+                @if($concept->level)<x-fa::badge title="Niveau">{{ $niveauLabel[$concept->level] ?? $concept->level }}</x-fa::badge>@endif
+                @if(! $istPaket && $concept->occasion)<x-fa::badge title="Anlass">{{ $concept->occasion }}</x-fa::badge>@endif
+                @if($istPaket)<x-fa::badge>{{ $concept->price_mode === 'auto' ? 'Preis aus den Gerichten' : 'Preis fixiert' }}</x-fa::badge>@endif
+            </x-slot:badges>
+            <x-slot:aktion>
+                <x-fa::button variant="primary" size="sm" icon="heroicon-m-pencil-square"
+                    wire:click="$dispatch('concepter-editor.oeffnen', { type: 'concepts', id: {{ $concept->id }} })">Im Editor öffnen</x-fa::button>
+            </x-slot:aktion>
+            <x-slot:menue>
+                {{-- #6: „Karte drucken" (schöne Kunden-Ausgabe) + „Report" (technisch). Karte gilt auch fürs Paket. --}}
+                <x-fa::menu-item icon="heroicon-m-printer" :href="route('foodalchemist.concepts.karte', ['id' => $concept->id])" target="_blank"
+                    title="Menü-Karte für den Kunden, zum Drucken oder als PDF" data-concepter-panel-karte>Karte drucken</x-fa::menu-item>
+                <x-fa::menu-item icon="heroicon-m-document-text" :href="route('foodalchemist.concepts.dokument', ['id' => $concept->id, 'profil' => 'voll'])" target="_blank"
+                    title="Technischer Report mit allen Gerichten, Basisrezepten und Produkten" data-concepter-panel-druck>Report öffnen</x-fa::menu-item>
                 @unless($istPaket)
                     @if($concept->is_template)
-                        <button type="button" wire:click="ausVorlage" class="{{ $btnGhostXs }} text-violet-600">↧ Als Concept nutzen</button>
+                        <x-fa::menu-item icon="heroicon-m-document-duplicate" wire:click="ausVorlage">Concept aus Vorlage anlegen</x-fa::menu-item>
                     @else
-                        <button type="button" wire:click="alsVorlage" class="{{ $btnGhostXs }}">Als Vorlage</button>
+                        <x-fa::menu-item icon="heroicon-m-square-2-stack" wire:click="alsVorlage">Als Vorlage speichern</x-fa::menu-item>
                     @endif
                 @endunless
-                <button type="button" wire:click="dupliziere" class="{{ $btnGhostXs }}">⎘ Duplizieren</button>
-                <button type="button" wire:click="loeschen" wire:confirm="{{ $istPaket ? 'Paket löschen?' : 'Concept löschen?' }}" class="{{ $btnGhostXs }} text-red-600">Löschen</button>
-            </div>
-        </div>
+                <x-fa::menu-item icon="heroicon-m-document-duplicate" wire:click="dupliziere">{{ $wort }} duplizieren</x-fa::menu-item>
+                <x-fa::menu-item danger icon="heroicon-m-trash" wire:click="loeschen" wire:confirm="{{ $istPaket ? 'Paket löschen?' : 'Concept löschen?' }}">{{ $wort }} löschen</x-fa::menu-item>
+            </x-slot:menue>
+        </x-fa::detail-kopf>
 
-        {{-- Cockpit (Menü-Ökonomie): €/Person + Menü-Score + EK/Person·Arbeitszeit·Gerichte --}}
-        @php($proPerson = $cockpit['price_per_person'] ?? null)
-        @php($score = $bewertung['score'] ?? null)
-        @php($scoreTone = $score === null ? 'neutral' : ($score >= 80 ? 'success' : ($score >= 50 ? 'warning' : 'danger')))
-        @php($scoreBadge = [
-            'neutral' => ['bg-black/5', 'text-gray-500', 'bg-gray-400'],
-            'success' => ['bg-emerald-500/15', 'text-emerald-700', 'bg-emerald-500'],
-            'warning' => ['bg-amber-500/15', 'text-amber-700', 'bg-amber-500'],
-            'danger' => ['bg-rose-500/10', 'text-rose-700', 'bg-rose-500'],
-        ][$scoreTone])
-        <div class="relative overflow-hidden {{ $card }} px-3.5 py-2.5" data-concepter-cockpit>
-            <div class="{{ $cardAccent }}"></div>
-            <div class="flex items-start justify-between gap-3">
-                <div>
-                    <span class="text-[10px] font-medium uppercase tracking-wider text-violet-600">{{ $istPaket ? 'Paketpreis / Person' : '€/Person' }}</span>
-                    <p class="text-2xl font-bold text-violet-700 leading-none mt-1 tabular-nums">{{ $proPerson !== null ? number_format($proPerson, 2, ',', '.') . ' €' : '—' }}</p>
+        {{-- Cockpit (Menü-Ökonomie): €/Person ist die Hauptzahl, Score für echte Concepts --}}
+        <div class="flex flex-col gap-3" data-concepter-cockpit>
+            <x-fa::kpis :items="$kpis" />
+            <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)] tabular-nums">
+                {{ $aggregat['n_gerichte'] ?? 0 }} {{ ($aggregat['n_gerichte'] ?? 0) === 1 ? 'Gericht' : 'Gerichte' }} in {{ $aggregat['n_slots'] ?? 0 }} {{ ($aggregat['n_slots'] ?? 0) === 1 ? 'Position' : 'Positionen' }}
+            </p>
+            @if($offen !== [])
+                <div class="flex flex-col gap-1">
+                    @foreach($offen as [$ton, $text])
+                        <x-fa::signal :tone="$ton">{{ $text }}</x-fa::signal>
+                    @endforeach
                 </div>
-                @if(! $istPaket && $score !== null)
-                    <span class="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-0.5 rounded-full {{ $scoreBadge[0] }} {{ $scoreBadge[1] }}" title="Menü-Bewertung (Anteil bestandener Checks)">
-                        <span class="w-1.5 h-1.5 rounded-full {{ $scoreBadge[2] }}"></span>Score {{ $score }}
-                    </span>
-                @elseif($aggregat !== null)
-                    <span class="{{ $pill }} {{ $konfPill[$aggregat['allergene']['confidence']] ?? $variantPill['secondary'] }}" title="Allergen-Konfidenz">Konf. {{ $aggregat['allergene']['confidence'] }}</span>
-                @endif
-            </div>
-            @if(! $istPaket && $score !== null)
-                <div class="mt-3"><x-foodalchemist::meter :value="$score" :max="100" :tone="$scoreTone" :ticks="[50, 80]" /></div>
             @endif
-            <div class="flex flex-wrap gap-x-5 gap-y-1 mt-3 pt-2.5 border-t border-black/5 text-xs">
-                <span class="text-gray-500">EK/Person <span class="text-gray-900 font-medium tabular-nums">{{ $aggregat !== null ? number_format((float) $aggregat['ek_per_person'], 2, ',', '.') . ' €' : '—' }}</span></span>
-                <span class="text-gray-500">Arbeitszeit <span class="text-gray-900 font-medium tabular-nums">{{ $aggregat !== null ? $aggregat['work_time_min'] . ' min' : '—' }}</span></span>
-                <span class="text-gray-500">Gerichte <span class="text-gray-900 font-medium tabular-nums">{{ ($aggregat['n_gerichte'] ?? 0) . ' · ' . ($aggregat['n_slots'] ?? 0) . ' Slots' }}</span></span>
-            </div>
+            @if(! $istPaket && $score !== null)
+                <div class="flex items-center gap-3" title="Menü-Bewertung: Anteil bestandener Prüfungen">
+                    <x-fa::badge :tone="$scoreBadgeTon">Bewertung {{ $score }}</x-fa::badge>
+                    <x-foodalchemist::meter :value="$score" :max="100" :tone="$scoreTone" :ticks="[50, 80]" class="flex-1" />
+                </div>
+            @endif
         </div>
 
-        @if($aggregat !== null && $aggregat['n_gerichte'] > 0)
-            {{-- Allergen-/Diät-Rollup --}}
-            <div class="flex flex-wrap gap-1" data-concepter-rollup>
-                @if($aggregat['allergene']['is_vegan'])<span class="{{ $pill }} {{ $variantPill['success'] }}">vegan</span>
-                @elseif($aggregat['allergene']['is_vegetarian'])<span class="{{ $pill }} {{ $variantPill['success'] }}">vegetarisch</span>@endif
-                @if($aggregat['allergene']['is_gluten_free'])<span class="{{ $pill }} {{ $variantPill['info'] }}">glutenfrei</span>@endif
-                @if($aggregat['allergene']['is_lactose_free'])<span class="{{ $pill }} {{ $variantPill['info'] }}">laktosefrei</span>@endif
-                @if($aggregat['allergene']['is_halal'])<span class="{{ $pill }} {{ $variantPill['info'] }}">halal</span>@endif
-                @if($aggregat['allergene']['contains_pork'])<span class="{{ $pill }} {{ $variantPill['warning'] }}">enthält Schwein</span>@endif
-                @if($aggregat['allergene']['contains_beef'])<span class="{{ $pill }} {{ $variantPill['warning'] }}">enthält Rind</span>@endif
-                <span class="{{ $pill }} {{ $konfPill[$aggregat['allergene']['confidence']] ?? $variantPill['secondary'] }}" title="Allergen-Konfidenz (schwächstes Gericht)">Konf. {{ $aggregat['allergene']['confidence'] }}</span>
+        @if($hatGerichte)
+            {{-- Allergen-/Diät-Rollup (schwächstes Gericht bestimmt die Konfidenz) --}}
+            <div class="flex flex-col gap-2" data-concepter-rollup>
+                <x-fa::signal :tone="($konfTon[$konfidenz] ?? 'neutral') === 'neutral' ? 'warn' : $konfTon[$konfidenz]" title="Konfidenz: {{ \Platform\FoodAlchemist\Support\Labels::konfidenz($konfidenz) }}">{{ $konfSatz[$konfidenz] ?? $konfidenz }}</x-fa::signal>
+                <div class="flex flex-wrap gap-1.5">
+                    @if($aggregat['allergene']['is_vegan'])<x-fa::badge tone="ok" icon="heroicon-m-check">vegan</x-fa::badge>
+                    @elseif($aggregat['allergene']['is_vegetarian'])<x-fa::badge tone="ok" icon="heroicon-m-check">vegetarisch</x-fa::badge>@endif
+                    @if($aggregat['allergene']['is_gluten_free'])<x-fa::badge tone="ok" icon="heroicon-m-check">glutenfrei</x-fa::badge>@endif
+                    @if($aggregat['allergene']['is_lactose_free'])<x-fa::badge tone="ok" icon="heroicon-m-check">laktosefrei</x-fa::badge>@endif
+                    @if($aggregat['allergene']['is_halal'])<x-fa::badge tone="ok" icon="heroicon-m-check">halal</x-fa::badge>@endif
+                    @if($aggregat['allergene']['contains_pork'])<x-fa::badge tone="warn">enthält Schwein</x-fa::badge>@endif
+                    @if($aggregat['allergene']['contains_beef'])<x-fa::badge tone="warn">enthält Rind</x-fa::badge>@endif
+                </div>
             </div>
         @endif
 
-        {{-- Aufbau — Menü-Struktur (Essenz). Paket: Positionen ohne Einzel-VK (Preis liegt im Paket). --}}
-        @if($cockpit)
-            <x-foodalchemist::section title="{{ $istPaket ? 'Positionen im Paket' : 'Aufbau' }}" icon="heroicon-o-list-bullet" :meta="count($cockpit['zeilen'])">
-                @foreach($cockpit['zeilen'] as $z)
-                    <div class="flex items-center justify-between gap-2 text-[13px] py-1 border-b border-black/5 last:border-0">
-                        <span class="min-w-0 truncate"><span class="text-[10px] text-gray-500 uppercase mr-1">{{ $z['role'] ?? '—' }}</span>{{ $z['label'] }}
-                            @if($z['type'] === 'paket')<span class="{{ $pill }} {{ $variantPill['info'] }} ml-1">Paket</span>@elseif($z['type'] === 'leer')<span class="{{ $pill }} {{ $variantPill['secondary'] }} ml-1">leer</span>@endif
-                        </span>
-                        @unless($istPaket)
-                            <span class="shrink-0 tabular-nums {{ $z['price'] === null ? 'text-gray-300' : 'text-gray-900' }}">{{ $z['price'] !== null ? number_format($z['price'], 2, ',', '.') . ' €' : '—' }}</span>
-                        @endunless
-                    </div>
-                @endforeach
-            </x-foodalchemist::section>
-        @endif
+        <div class="flex flex-col">
+            {{-- Aufbau: Menü-Struktur. Paket: Positionen ohne Einzel-VK (Preis liegt im Paket). --}}
+            @if($cockpit)
+                <x-fa::section variant="plain" title="{{ $istPaket ? 'Positionen im Paket' : 'Aufbau' }}" icon="heroicon-o-list-bullet" :meta="count($cockpit['zeilen'])">
+                    @if(count($cockpit['zeilen']) === 0)
+                        <x-fa::empty compact icon="heroicon-o-list-bullet" title="Noch keine Positionen">Im Editor Gänge anlegen und mit Paketen oder Gerichten füllen.</x-fa::empty>
+                    @else
+                        <ul class="flex flex-col">
+                            @foreach($cockpit['zeilen'] as $z)
+                                <li class="flex items-center justify-between gap-3 py-1.5 border-b border-[var(--fa-line)] last:border-0">
+                                    <span class="min-w-0">
+                                        <span class="block text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">{{ $z['role'] ?: 'Ohne Rolle' }}</span>
+                                        <span class="flex flex-wrap items-center gap-1.5 text-[length:var(--fa-text-md)] text-[var(--fa-ink)]">
+                                            <span class="min-w-0 break-words">{{ $z['label'] }}</span>
+                                            @if($z['type'] === 'paket')<x-fa::badge tone="info">Paket</x-fa::badge>@elseif($z['type'] === 'leer')<x-fa::badge tone="crit">leer</x-fa::badge>@endif
+                                        </span>
+                                    </span>
+                                    @unless($istPaket || $z['type'] === 'leer')
+                                        <x-fa::money :value="$z['price']" class="shrink-0 text-[length:var(--fa-text-md)]" />
+                                    @endunless
+                                </li>
+                            @endforeach
+                        </ul>
+                    @endif
+                </x-fa::section>
+            @endif
 
-        {{-- Menü-Bewertung (deterministisch §10.8) — nur echte Concepts, nicht das Bündel --}}
-        @if(! $istPaket && $bewertung)
-            @php($statusIcon = ['ok' => '✓', 'warn' => '!', 'fail' => '✕', 'info' => 'ℹ'])
-            @php($statusColor = ['ok' => 'text-emerald-600', 'warn' => 'text-amber-600', 'fail' => 'text-red-600', 'info' => 'text-gray-500'])
-            @php($scorePillCls = $bewertung['score'] >= 80 ? $variantPill['success'] : ($bewertung['score'] >= 50 ? $variantPill['warning'] : $variantPill['danger']))
-            <x-foodalchemist::section title="Menü-Bewertung" icon="heroicon-o-clipboard-document-check">
-                <x-slot:actions>
-                    <span class="{{ $pill }} {{ $scorePillCls }}" title="Anteil bestandener Checks">Score {{ $bewertung['score'] }}</span>
-                </x-slot:actions>
-                @foreach($bewertung['checks'] as $c)
-                    <div class="flex items-start gap-2 text-[12px] py-0.5">
-                        <span class="{{ $statusColor[$c['status']] ?? '' }} font-bold w-3 shrink-0 text-center">{{ $statusIcon[$c['status']] ?? '·' }}</span>
-                        <span class="text-gray-600"><span class="font-medium">{{ $c['label'] }}:</span> {{ $c['detail'] }}</span>
-                    </div>
-                @endforeach
-            </x-foodalchemist::section>
-        @endif
-
-        {{-- Nährwerte / Person --}}
-        @if($aggregat !== null && $aggregat['n_gerichte'] > 0)
-            <x-foodalchemist::section title="Nährwerte / Person" icon="heroicon-o-chart-bar">
-                <x-slot:actions>
-                    <span class="{{ $pill }} {{ $konfPill[$aggregat['naehrwerte']['confidence']] ?? $variantPill['secondary'] }}">{{ $aggregat['naehrwerte']['confidence'] }}</span>
-                </x-slot:actions>
-                @if($aggregat['naehrwerte']['kcal'] !== null)
-                    <div class="grid grid-cols-7 gap-1 text-center">
-                        @foreach(['kcal' => 'kcal', 'protein_g' => 'Eiweiß', 'fett_g' => 'Fett', 'gesfett_g' => 'dav. ges.', 'kh_g' => 'KH', 'zucker_g' => 'dav. Zucker', 'salz_g' => 'Salz'] as $k => $lbl)
-                            <div class="rounded-md bg-black/[0.03] py-1.5">
-                                <p class="text-[13px] font-semibold tabular-nums">{{ $aggregat['naehrwerte'][$k] !== null ? rtrim(rtrim(number_format((float) $aggregat['naehrwerte'][$k], $k === 'kcal' ? 0 : 1, ',', '.'), '0'), ',') : '—' }}</p>
-                                <p class="text-[9px] text-gray-500 uppercase">{{ $lbl }}</p>
-                            </div>
+            {{-- Menü-Bewertung (deterministisch §10.8) — nur echte Concepts, nicht das Bündel --}}
+            @if(! $istPaket && $bewertung)
+                <x-fa::section variant="plain" title="Menü-Bewertung" icon="heroicon-o-clipboard-document-check">
+                    <x-slot:actions>
+                        <x-fa::badge :tone="$scoreBadgeTon" title="Anteil bestandener Prüfungen">Bewertung {{ $bewertung['score'] }}</x-fa::badge>
+                    </x-slot:actions>
+                    <ul class="flex flex-col gap-1.5">
+                        @foreach($bewertung['checks'] as $c)
+                            <li class="flex items-start gap-2 text-[length:var(--fa-text-md)]">
+                                @svg($checkIcon[$c['status']] ?? 'heroicon-m-minus', 'w-4 h-4 shrink-0 mt-0.5 ' . ($checkFarbe[$c['status']] ?? 'text-[var(--fa-ink-3)]'))
+                                <span class="text-[var(--fa-ink-2)]"><span class="font-medium text-[var(--fa-ink)]">{{ $c['label'] }}:</span> {{ $c['detail'] }}</span>
+                            </li>
                         @endforeach
-                    </div>
-                @endif
-                @unless($aggregat['naehrwerte']['vollstaendig'])
-                    <p class="text-[11px] text-amber-600 mt-1.5">@svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5 inline-block align-middle') {{ $aggregat['naehrwerte']['n_mit_naehrwerten'] }}/{{ $aggregat['naehrwerte']['n_gerichte'] }} Gerichten mit Nährwert + Portionsgramm — Rest fehlt noch.</p>
-                @endunless
-            </x-foodalchemist::section>
-        @endif
+                    </ul>
+                </x-fa::section>
+            @endif
 
-        {{-- Menü-Karte (Konsumenten-Sicht · C-10) --}}
-        <x-foodalchemist::section title="{{ $istPaket ? 'Paket-Inhalt' : 'Menü-Karte' }}" icon="heroicon-o-document-text" meta="Konsumenten-Sicht">
-            <div class="rounded-lg border border-black/5 px-3 py-2 bg-white/40">
-                <p class="text-sm font-semibold text-gray-900">{{ $concept->consumer_name ?: $concept->name }}</p>
-                @if($concept->additional_text)<p class="text-[11px] italic text-gray-600 mb-1">{{ $concept->additional_text }}</p>@endif
-                @forelse($concept->slots as $slot)
-                    <div class="py-0.5">
-                        <span class="text-[9px] uppercase tracking-wider text-gray-500">{{ $slot->role ?: '—' }}{{ $slot->is_pflicht ? '' : ' · optional' }}</span>
-                        <p class="text-[13px] text-gray-800">{{ $slot->title ?: ($slot->embeddedConcept?->name ?? $slot->package?->name ?? $slot->dish?->name ?? '(leer)') }}</p>
+            {{-- Nährwerte / Person --}}
+            @if($hatGerichte)
+                <x-fa::section variant="plain" title="Nährwerte / Person" icon="heroicon-o-chart-bar">
+                    <x-slot:actions>
+                        <x-fa::badge :tone="$konfTon[$aggregat['naehrwerte']['confidence']] ?? 'neutral'" title="Konfidenz der Nährwerte">{{ \Platform\FoodAlchemist\Support\Labels::konfidenz($aggregat['naehrwerte']['confidence']) }}</x-fa::badge>
+                    </x-slot:actions>
+                    @if($aggregat['naehrwerte']['kcal'] !== null)
+                        <dl class="grid grid-cols-2 gap-x-4">
+                            @foreach($naehrwertFelder as $k => $lbl)
+                                <div class="flex items-baseline justify-between gap-2 py-1 border-b border-[var(--fa-line)] {{ $k === 'kcal' ? 'col-span-2' : '' }}">
+                                    <dt class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]">{{ $lbl }}</dt>
+                                    <dd class="text-[length:var(--fa-text-md)] font-semibold tabular-nums text-[var(--fa-ink)]">
+                                        @if($aggregat['naehrwerte'][$k] !== null && $k === 'kcal')
+                                            <span class="tabular-nums">{{ number_format((float) $aggregat['naehrwerte'][$k], 0, ',', '.') }}</span>
+                                        @elseif($aggregat['naehrwerte'][$k] !== null)
+                                            <x-fa::menge :value="$aggregat['naehrwerte'][$k]" :decimals="1" unit="g" />
+                                        @else
+                                            <span class="font-normal text-[var(--fa-ink-3)]">fehlt</span>
+                                        @endif
+                                    </dd>
+                                </div>
+                            @endforeach
+                        </dl>
+                    @endif
+                    @unless($aggregat['naehrwerte']['vollstaendig'])
+                        <x-fa::signal tone="warn">{{ $aggregat['naehrwerte']['n_mit_naehrwerten'] }} von {{ $aggregat['naehrwerte']['n_gerichte'] }} Gerichten mit Nährwert und Portionsgewicht, der Rest fehlt noch.</x-fa::signal>
+                    @endunless
+                </x-fa::section>
+            @endif
+
+            {{-- Menü-Karte (Konsumenten-Sicht · C-10) --}}
+            <x-fa::section variant="plain" title="{{ $istPaket ? 'Paket-Inhalt' : 'Menü-Karte' }}" icon="heroicon-o-document-text" meta="So sieht es der Gast">
+                <div class="fa-surface px-3 py-2.5 flex flex-col gap-1.5">
+                    <p class="text-[length:var(--fa-text-base)] font-semibold text-[var(--fa-ink)]">{{ $concept->consumer_name ?: $concept->name }}</p>
+                    @if($concept->additional_text)<p class="text-[length:var(--fa-text-sm)] italic text-[var(--fa-ink-2)]">{{ $concept->additional_text }}</p>@endif
+                    @forelse($concept->slots as $slot)
+                        <div>
+                            <span class="block text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">{{ $slot->role ?: 'Ohne Rolle' }}{{ $slot->is_pflicht ? '' : ' · optional' }}</span>
+                            <p class="text-[length:var(--fa-text-md)] text-[var(--fa-ink)]">{{ $slot->title ?: ($slot->embeddedConcept?->name ?? $slot->package?->name ?? $slot->dish?->name ?? 'noch leer') }}</p>
+                        </div>
+                    @empty
+                        <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">Noch keine Positionen.</p>
+                    @endforelse
+                </div>
+            </x-fa::section>
+
+            {{-- Wo verwendet? Concept → Foodbooks; Paket → Concepts (eingebettet) --}}
+            <x-fa::section variant="plain" title="Wo verwendet?" icon="heroicon-o-link" :meta="$verwendung->count()">
+                @forelse($verwendung as $v)
+                    <div class="flex items-center justify-between gap-3 py-1 text-[length:var(--fa-text-md)]">
+                        <span class="min-w-0 break-words text-[var(--fa-ink)]">{{ $istPaket ? $v->name : ($v->label ?? '–') }}</span>
+                        <span class="shrink-0 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">{{ $istPaket ? 'Concept' : ('Foodbook' . ($v->jahr ? ' ' . $v->jahr : '') . ($v->customer ? ' · ' . $v->customer : '')) }}</span>
                     </div>
                 @empty
-                    <p class="text-[11px] text-gray-500">Noch keine Positionen.</p>
+                    <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">{{ $istPaket ? 'In keinem Concept eingesetzt.' : 'In keinem Foodbook verwendet.' }}</p>
                 @endforelse
-            </div>
-        </x-foodalchemist::section>
+            </x-fa::section>
 
-        {{-- Wo verwendet? Concept → Foodbooks; Paket → Concepts (eingebettet) --}}
-        <x-foodalchemist::section title="Wo verwendet?" icon="heroicon-o-link" :meta="$verwendung->count()">
-            @forelse($verwendung as $v)
-                <div class="flex items-center justify-between gap-2 text-[13px] py-0.5">
-                    <span class="min-w-0 truncate">{{ $istPaket ? $v->name : ($v->label ?? '—') }}</span>
-                    <span class="shrink-0 text-[10px] text-gray-500">{{ $istPaket ? 'Concept' : ('Foodbook' . ($v->jahr ? ' ' . $v->jahr : '') . ($v->customer ? ' · ' . $v->customer : '')) }}</span>
-                </div>
-            @empty
-                <p class="text-[11px] text-gray-500 py-0.5">{{ $istPaket ? 'In keinem Concept eingebettet.' : 'In keinem Foodbook referenziert.' }}</p>
-            @endforelse
-        </x-foodalchemist::section>
+        </div>
     @endif
 </div>

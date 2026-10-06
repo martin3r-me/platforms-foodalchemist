@@ -718,7 +718,7 @@ it('reapeVerwaisteSteps: ein verwaister running-Step wird failed und der Run wie
 
     expect($n)->toBe(1)
         ->and($step->refresh()->status)->toBe('failed')
-        ->and($step->error)->toContain('verwaist')
+        ->and($step->error)->toContain('nicht mehr gemeldet')
         ->and($run->refresh()->status)->toBe('failed');   // einziger Step gescheitert
 });
 
@@ -1848,7 +1848,7 @@ it('Positions-Deckel der Speisekarte: nennt die betroffenen RUBRIKEN, nicht nur 
         ->and($h[0]['text'])->toContain('„Käse" ganz leer')
         // … und die RICHTIGE Handlung: von Hand füllen, NICHT zweiter Lauf.
         ->and($h[0]['text'])->toContain('+ Gericht')
-        ->and($h[0]['text'])->toContain('ein zweites Mal')
+        ->and($h[0]['text'])->toContain('doppelt bestücken')   // Warnung vor zweitem Lauf (Wortlaut Hinweistexte 2026-10-05)
         // Und die Leitplanken bleiben unangetastet (der alte params-Write hätte sie gelöscht).
         ->and($run->params)->toBeNull();
 

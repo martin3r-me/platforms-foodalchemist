@@ -40,9 +40,6 @@
                                                                             andere Modal verhält sich exakt wie vorher. --}}
 ])
 
-@php
-    $label = 'text-[11px] font-medium uppercase tracking-wider text-gray-500';
-@endphp
 
 <div x-data="{
         open: false,
@@ -75,34 +72,28 @@
          damit helle Kontexte (Settings, kleine Modals) unberührt bleiben.
          Spec 28 / E0.3: die Kaskade liegt in einer eigenen Partial — sie wächst pro Editor-Fläche
          und gehört nicht mitten ins Modal-Markup. Wartungsregeln stehen dort im Kopf. --}}
-    @if($darkCanvas)
-        @include('foodalchemist::partials.editor-dark')
-    @endif
+    {{-- fa-pass Welle 3: darkCanvas = Werkbank-Modus. Das Panel bekommt data-fa-theme="dark" und schaltet
+         damit NUR Tokens um (resources/css/foodalchemist-pass.css) — keine Überschreib-Kaskade mehr. --}}
 
     {{-- Backdrop --}}
-    <div class="absolute inset-0 bg-black/50 backdrop-blur-md" @click="closeWithState()"></div>
+    <div class="absolute inset-0 bg-[var(--fa-rail)]/60" @click="closeWithState()"></div>
 
     {{-- Panel (frosted, DESIGN.md) --}}
     {{-- max-h: 85vh — Wert MUSS im Host-CSS-Build existieren (arbitrary value!);
          92vh war nie gebaut ⇒ Panel ohne Höhen-Limit ⇒ innerer Scroll tot (Bug 2026-06-12).
          fullscreen: h-full füllt den fixed-Wrapper (Viewport minus p-4) — nur Standard-Klassen. --}}
-    <div class="relative w-full {{ $fullscreen ? 'max-w-none h-full' : $size . ' max-h-[85vh]' }} flex flex-col overflow-hidden rounded-2xl bg-white/80 backdrop-blur-xl border border-white/20 shadow-2xl shadow-black/20 {{ $darkCanvas ? 'fa-editor-panel' : '' }}">
-        <div class="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-violet-500/50 to-transparent"></div>
+    <div class="relative w-full {{ $fullscreen ? 'max-w-none h-full' : $size . ' max-h-[85vh]' }} flex flex-col overflow-hidden rounded-[var(--fa-radius-surface)] bg-[var(--fa-surface)] text-[var(--fa-ink)] border border-[var(--fa-line)] shadow-2xl shadow-black/30 {{ $darkCanvas ? 'fa-editor-canvas' : '' }}" @if($darkCanvas) data-fa-theme="dark" @endif>
 
         {{-- Kopf: Titel + Schließen, darunter fixe Aktionen oben links (P-2) --}}
-        <div class="shrink-0 border-b border-black/5">
+        <div class="shrink-0 border-b border-[var(--fa-line)] bg-[var(--fa-surface)]">
             <div class="px-6 pt-4 pb-3 flex items-center justify-between gap-4">
                 @if($titleName !== null)
                     {{-- Name als gerahmter Akzent-Chip — gleiche Schriftgrösse wie der Titel, aber
                          auffälliger (violetter Rahmen). Farben als rohes CSS, damit sie auf hellem
                          UND dunklem Editor-Grund (.fa-editor-panel) sauber sitzen. --}}
-                    <style>
-                        [data-modal-title-name]{ background:rgba(139,92,246,.10); color:#6d28d9; box-shadow:inset 0 0 0 1px rgba(139,92,246,.30); }
-                        .fa-editor-panel [data-modal-title-name]{ background:rgba(139,92,246,.22); color:#fff; box-shadow:inset 0 0 0 1px rgba(167,139,250,.55); }
-                    </style>
-                    <h2 class="text-lg font-semibold tracking-tight text-gray-900 truncate flex items-center gap-2 min-w-0">
-                        <span class="shrink-0">{{ $title }}</span>
-                        <span class="min-w-0 truncate px-2.5 py-0.5 rounded-lg" data-modal-title-name>{{ $titleName }}</span>
+                    <h2 class="text-[length:var(--fa-text-lg)] font-semibold tracking-tight text-[var(--fa-ink)] truncate flex items-center gap-2 min-w-0">
+                        <span class="shrink-0 text-[var(--fa-ink-2)] font-medium">{{ $title }}</span>
+                        <span class="min-w-0 truncate" data-modal-title-name>{{ $titleName }}</span>
                         @isset($titleExtra)
                             <span class="min-w-0 shrink flex flex-wrap items-center gap-1.5" data-modal-zone="title-extra">
                                 {{ $titleExtra }}
@@ -110,7 +101,7 @@
                         @endisset
                     </h2>
                 @else
-                    <h2 class="text-lg font-semibold tracking-tight text-gray-900 truncate flex items-center gap-2 min-w-0">
+                    <h2 class="text-[length:var(--fa-text-lg)] font-semibold tracking-tight text-[var(--fa-ink)] truncate flex items-center gap-2 min-w-0">
                         <span class="min-w-0 truncate">{{ $title }}</span>
                         @isset($titleExtra)
                             <span class="min-w-0 shrink flex flex-wrap items-center gap-1.5" data-modal-zone="title-extra">
@@ -119,13 +110,7 @@
                         @endisset
                     </h2>
                 @endif
-                <button type="button" @click="closeWithState()"
-                        class="p-1.5 rounded-md text-gray-500 hover:text-violet-600 hover:bg-black/5 transition-colors duration-150"
-                        aria-label="Schließen">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                </button>
+                <x-fa::icon-button icon="heroicon-m-x-mark" label="Schließen" x-on:click="closeWithState()" />
             </div>
             @isset($actions)
                 <div class="px-6 pb-3 flex flex-wrap items-center gap-2 min-w-0" data-modal-zone="actions">
@@ -134,13 +119,13 @@
             @endisset
             {{-- KPI-Streifen: fix im Kopf (scrollt nie weg) — geteilt über alle Editoren --}}
             @isset($kpiHeader)
-                <div class="px-6 pb-3 border-t border-black/5 pt-3 min-w-0" data-modal-zone="kpi-header">
+                <div class="px-6 pb-3 border-t border-[var(--fa-line)] pt-3 min-w-0" data-modal-zone="kpi-header">
                     {{ $kpiHeader }}
                 </div>
             @endisset
             {{-- Tab-Leiste: fix im Kopf unter den KPIs (2026-07-31) — scrollt nie mit dem Body --}}
             @isset($tabs)
-                <div class="px-6 border-t border-black/5 pt-2" data-modal-zone="tabs">
+                <div class="px-6 border-t border-[var(--fa-line)] pt-2" data-modal-zone="tabs">
                     {{ $tabs }}
                 </div>
             @endisset
@@ -150,13 +135,13 @@
              2026-07-31: dunklerer Slate-Canvas (Light-Theme, kein dark: — README §158),
              damit die helleren Frosted-Cards darüber schweben (DESIGN.md-Tiefe). darkCanvas =
              kräftiges Slate für die grossen Editoren, sonst dezent. --}}
-        <div class="flex-1 overflow-y-auto overflow-x-hidden px-6 py-4 space-y-4 {{ $darkCanvas ? 'bg-gradient-to-b from-slate-700 to-slate-800' : 'bg-gradient-to-b from-slate-500/[0.06] to-slate-500/[0.02]' }}" data-modal-zone="body">
+        <div class="flex-1 overflow-y-auto overflow-x-hidden px-6 py-4 space-y-4 bg-[var(--fa-ground)]" data-modal-zone="body">
             {{ $slot }}
         </div>
 
         {{-- Footer-Aktionen-Slot (optional) --}}
         @isset($footer)
-            <div class="shrink-0 px-6 py-4 border-t border-black/5 flex items-center justify-end gap-2" data-modal-zone="footer">
+            <div class="shrink-0 px-6 py-4 border-t border-[var(--fa-line)] bg-[var(--fa-surface)] flex items-center justify-end gap-2" data-modal-zone="footer">
                 {{ $footer }}
             </div>
         @endisset

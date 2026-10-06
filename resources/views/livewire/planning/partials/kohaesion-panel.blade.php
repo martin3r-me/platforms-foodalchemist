@@ -1,50 +1,49 @@
-{{-- R6.1 Kohäsions-Beweis über die Menüfolge (Pairing-Graph, menuCohesion).
-     Erwartet: $menueKohaesion (nullable — null = noch nicht geprüft) + Button ruft
-     kohaesionPruefen() am Host. Ehrlich: unbewertete Paare werden benannt, nie versteckt. --}}
-@php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
+{{-- R6.1 Zusammenhalt der Menüfolge (Pairing-Graph, menuCohesion).
+     Erwartet: $menueKohaesion (nullable — null = noch nicht geprüft) + Knopf ruft
+     kohaesionPruefen() am Host. Ehrlich: unbewertete Paare werden benannt, nie versteckt.
+     Schwellen wie PairingService (≥60 gut, ≥35 schwach, sonst kritisch). fa-pass: nur Tokens. --}}
+<div class="fa-surface flex flex-col gap-3 px-4 py-3" data-kohaesion-panel>
+    <div class="flex flex-wrap items-center gap-2">
+        <h3 class="text-[length:var(--fa-text-base)] font-semibold text-[var(--fa-ink)]">Zusammenhalt der Menüfolge</h3>
+        <span class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">aus dem Aroma-Netz</span>
+        <x-fa::button size="sm" :icon="$menueKohaesion === null ? 'heroicon-m-play' : 'heroicon-m-arrow-path'" wire:click="kohaesionPruefen" class="ml-auto" data-kohaesion-pruefen>
+            {{ $menueKohaesion === null ? 'Zusammenhalt prüfen' : 'Erneut prüfen' }}
+        </x-fa::button>
+    </div>
 
-<div class="relative overflow-hidden {{ $card }}" data-kohaesion-panel>
-    <div class="{{ $cardAccent }}"></div>
-    <div class="px-4 py-3 space-y-2">
-        <div class="flex items-center gap-2">
-            <span class="text-[11px] uppercase tracking-wider text-gray-500">Kohäsion der Menüfolge (Pairing-Graph)</span>
-            <button type="button" wire:click="kohaesionPruefen" class="{{ $btnGhostXs }} ml-auto" data-kohaesion-pruefen>
-                {{ $menueKohaesion === null ? 'Kohäsion prüfen' : '↻ neu prüfen' }}
-            </button>
-        </div>
-
-        @if($menueKohaesion !== null)
-            @if($menueKohaesion['zu_wenig'] ?? false)
-                <p class="text-[11px] text-gray-500">Mindestens 2 Gerichte nötig — erst den Aufbau befüllen.</p>
-            @else
-                @php($score = (int) $menueKohaesion['score'])
-                @php($scoreFarbe = $score >= 60 ? 'text-emerald-600' : ($score >= 35 ? 'text-amber-600' : 'text-rose-600'))
-                <div class="flex items-baseline gap-3">
-                    <span class="text-2xl font-semibold tabular-nums {{ $scoreFarbe }}" data-kohaesion-score>{{ $score }}</span>
-                    <span class="text-[11px] text-gray-500">Score · {{ $menueKohaesion['rated_pairs'] }}/{{ $menueKohaesion['total_pairs'] }} Gericht-Paare bewertet ({{ $menueKohaesion['coverage_pct'] }} % Graph-Abdeckung)</span>
+    @if($menueKohaesion !== null)
+        @if($menueKohaesion['zu_wenig'] ?? false)
+            <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">Es braucht mindestens zwei Gerichte. Erst den Aufbau befüllen.</p>
+        @else
+            @php
+                $score = (int) $menueKohaesion['score'];
+                $scoreFarbe = $score >= 60 ? 'text-[var(--fa-ok)]' : ($score >= 35 ? 'text-[var(--fa-warn)]' : 'text-[var(--fa-crit)]');
+                $warnung = $menueKohaesion['warnung'] ?? null;
+            @endphp
+            <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                <span class="text-[length:var(--fa-text-2xl)] font-semibold tabular-nums {{ $scoreFarbe }}" data-kohaesion-score>{{ $score }}</span>
+                <span class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)] tabular-nums">von 100, {{ $menueKohaesion['rated_pairs'] }} von {{ $menueKohaesion['total_pairs'] }} Gericht-Paaren bewertet ({{ $menueKohaesion['coverage_pct'] }} % im Aroma-Netz)</span>
+            </div>
+            @if($warnung !== null)
+                @php $warnTon = $warnung['stufe'] === 'gut' ? 'ok' : ($warnung['stufe'] === 'schwach' ? 'warn' : 'crit'); @endphp
+                <x-fa::notice :tone="$warnTon" data-kohaesion-warnung data-kohaesion-stufe="{{ $warnung['stufe'] }}">{{ $warnung['text'] }}</x-fa::notice>
+            @endif
+            @if($menueKohaesion['weakest_pair'] !== null)
+                <p class="text-[length:var(--fa-text-md)] text-[var(--fa-ink-2)]">Schwächstes Paar: <span class="font-medium text-[var(--fa-ink)]">{{ $menueKohaesion['weakest_pair']['a'] }}</span> und <span class="font-medium text-[var(--fa-ink)]">{{ $menueKohaesion['weakest_pair']['b'] }}</span> <span class="tabular-nums">({{ $menueKohaesion['weakest_pair']['score'] }}, {{ $menueKohaesion['weakest_pair']['type'] }})</span></p>
+            @endif
+            @if(($menueKohaesion['komponenten'] ?? []) !== [])
+                <div class="flex flex-wrap gap-1.5">
+                    @foreach($menueKohaesion['komponenten'] as $k)
+                        <x-fa::badge :tone="($k['is_orphan'] ?? false) && $k['fit'] === null ? 'warn' : 'neutral'" :icon="($k['is_orphan'] ?? false) && $k['fit'] === null ? 'heroicon-m-exclamation-triangle' : null"
+                            title="{{ ($k['is_orphan'] ?? false) && $k['fit'] === null ? 'Das Aroma-Netz kennt dieses Gericht nicht (keine bewerteten Verbindungen)' : $k['rated_links'] . ' bewertete Verbindungen' }}">
+                            {{ \Illuminate\Support\Str::limit($k['label'], 28) }}@if($k['fit'] !== null)<span class="tabular-nums font-semibold">{{ $k['fit'] }}</span>@endif
+                        </x-fa::badge>
+                    @endforeach
                 </div>
-                @php($warnung = $menueKohaesion['warnung'] ?? null)
-                @if($warnung !== null)
-                    @php($warnFarbe = $warnung['stufe'] === 'gut' ? 'bg-emerald-50 text-emerald-700 ring-emerald-200' : ($warnung['stufe'] === 'schwach' ? 'bg-amber-50 text-amber-700 ring-amber-200' : 'bg-rose-50 text-rose-700 ring-rose-200'))
-                    <p class="text-[11px] px-2 py-1 rounded ring-1 {{ $warnFarbe }}" data-kohaesion-warnung data-kohaesion-stufe="{{ $warnung['stufe'] }}">{{ $warnung['text'] }}</p>
-                @endif
-                @if($menueKohaesion['weakest_pair'] !== null)
-                    <p class="text-[11px] text-gray-600">Schwächstes Paar: <span class="font-medium">{{ $menueKohaesion['weakest_pair']['a'] }}</span> ↔ <span class="font-medium">{{ $menueKohaesion['weakest_pair']['b'] }}</span> ({{ $menueKohaesion['weakest_pair']['score'] }}, {{ $menueKohaesion['weakest_pair']['type'] }})</p>
-                @endif
-                @if(($menueKohaesion['komponenten'] ?? []) !== [])
-                    <div class="flex flex-wrap gap-1">
-                        @foreach($menueKohaesion['komponenten'] as $k)
-                            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] bg-black/[0.03] text-gray-600" title="{{ $k['rated_links'] }} bewertete Verbindungen">
-                                {{ \Illuminate\Support\Str::limit($k['label'], 28) }}
-                                @if($k['fit'] !== null)<span class="tabular-nums font-medium">{{ $k['fit'] }}</span>@elseif($k['is_orphan'] ?? false)<span class="text-amber-500" title="Graph sieht dieses Gericht nicht (keine bewerteten Verbindungen)">@svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5 inline-block align-middle')</span>@endif
-                            </span>
-                        @endforeach
-                    </div>
-                @endif
-                @if(($menueKohaesion['unrated_pairs'] ?? []) !== [])
-                    <p class="text-[10px] text-gray-500">{{ count($menueKohaesion['unrated_pairs']) }} Paar(e) ohne Graph-Daten — ehrlich unbewertet, nicht schlecht.</p>
-                @endif
+            @endif
+            @if(($menueKohaesion['unrated_pairs'] ?? []) !== [])
+                <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">{{ count($menueKohaesion['unrated_pairs']) }} {{ count($menueKohaesion['unrated_pairs']) === 1 ? 'Paar hat' : 'Paare haben' }} keine Daten im Aroma-Netz. Das heißt: unbewertet, nicht schlecht.</p>
             @endif
         @endif
-    </div>
+    @endif
 </div>

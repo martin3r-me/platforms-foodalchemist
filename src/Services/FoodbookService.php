@@ -704,7 +704,7 @@ class FoodbookService
         $this->guard($fb, $team);
         $slot = \Platform\FoodAlchemist\Models\FoodAlchemistPlanningFrameSlot::findOrFail($slotId);
         if ($slot->chapter_id === null) {
-            throw new \RuntimeException('Slot ist noch nicht als Kapitel angelegt — erst „Struktur anwenden".');
+            throw new \RuntimeException('Dieser Platz ist noch kein Kapitel. Zuerst „Struktur anwenden“.');
         }
 
         return $this->uebernehmeGericht($team, $foodbookId, (int) $slot->chapter_id, $recipeId, $slot->label, 'foodbook_slot');
@@ -1009,7 +1009,7 @@ class FoodbookService
         }
         // Harte Grenze (Spec 19 UX 4): ab Snapshot/Versand ist die Anlage eingefroren.
         if ($kapitel->snapshot_at !== null || $kapitel->status === 'sent') {
-            throw new \RuntimeException('Kapitel bereits versendet/eingefroren — Anlage kann nicht zurückgezogen werden.');
+            throw new \RuntimeException('Das Kapitel ist bereits versendet und eingefroren. Die Anlage lässt sich nicht mehr zurückziehen.');
         }
 
         $konzepteGeloescht = 0;
@@ -1152,7 +1152,7 @@ class FoodbookService
     {
         $idee = FoodAlchemistDishIdea::visibleToTeam($team)->find($ideaId);
         if ($idee === null || ! $idee->isOwnedBy($team)) {
-            throw new \RuntimeException('Skizze nicht gefunden oder geerbt (D1).');
+            throw new \RuntimeException('Skizze nicht gefunden oder aus einem anderen Team geerbt.');
         }
         // Nur echte, noch offene Freitext-Skizzen erden; Bestands-Refs / bereits materialisierte überspringen.
         if ($idee->sales_recipe_id !== null || $idee->generation_status !== 'queued' || $idee->materialized_at !== null) {
@@ -1181,7 +1181,7 @@ class FoodbookService
             $gen = app(RecipeGeneratorService::class)->generiere($team, $beschreibung, $parameter, null, true);
             $recipe = $gen['recipe'] ?? null;
             if ($recipe === null) {
-                throw new \RuntimeException('Generierung lieferte kein Rezept.');
+                throw new \RuntimeException('Die KI hat kein Rezept erstellt.');
             }
 
             $ref = DB::transaction(function () use ($team, $idee, $kapitelId, $fbId, $recipe) {
@@ -2327,7 +2327,7 @@ class FoodbookService
         // Status ist auf AusgabeStatus gecastet → über statusWert()->value vergleichen ('versendet'
         // normalisiert auf 'aktiv', bleibt der Vollständigkeit halber gelistet).
         if (in_array($fb->statusWert()->value, ['versendet', 'archiviert'], true)) {
-            throw new \RuntimeException('Foodbook ist ' . $fb->statusWert()->value . ' — kein Kapitel mehr einfügbar.');
+            throw new \RuntimeException('Das Foodbook ist ' . $fb->statusWert()->value . '. Neue Kapitel lassen sich nicht mehr einfügen.');
         }
         if ($parentId !== null && ! FoodAlchemistFoodbookKapitel::where('foodbook_id', $fb->id)->whereKey($parentId)->exists()) {
             throw new \RuntimeException('parent_id gehört nicht zu diesem Foodbook.');
@@ -2340,8 +2340,8 @@ class FoodbookService
         if ($format->origin === 'kunde' && trim((string) $format->customer) !== '') {
             $fbKunde = trim((string) ($fb->customer ?? ''));
             if ($fbKunde !== '' && mb_strtolower($fbKunde) !== mb_strtolower(trim((string) $format->customer))) {
-                throw new \RuntimeException('Kunden-IP: Format „' . $format->name . '" gehört ' . $format->customer
-                    . ' — nicht in ein Buch von ' . $fbKunde . ' einfügbar.');
+                throw new \RuntimeException('Kunden-IP: Das Format „' . $format->name . '“ gehört ' . $format->customer
+                    . ' und darf nicht in ein Foodbook von ' . $fbKunde . ' eingefügt werden.');
             }
         }
 
@@ -2440,7 +2440,7 @@ class FoodbookService
         if ($text === '') {
             // Leere Antwort NICHT als Erfolg verkaufen — sonst zeigt die Vorschau ein leeres
             // Kästchen und „Übernehmen" würde das Feld leeren.
-            throw new \RuntimeException('Die KI hat keinen Text geliefert — bitte erneut versuchen.');
+            throw new \RuntimeException('Die KI hat keinen Text geliefert. Bitte erneut versuchen.');
         }
 
         return ['text' => $text, 'confidence' => $proposal->confidence, 'call_log_id' => $proposal->callLogId];
@@ -2479,7 +2479,7 @@ class FoodbookService
 
         $text = trim((string) ($proposal->werte['text'] ?? ''));
         if ($text === '') {
-            throw new \RuntimeException('Die KI hat keinen Text geliefert — bitte erneut versuchen.');
+            throw new \RuntimeException('Die KI hat keinen Text geliefert. Bitte erneut versuchen.');
         }
 
         return ['text' => $text, 'confidence' => $proposal->confidence, 'call_log_id' => $proposal->callLogId];
@@ -2606,11 +2606,11 @@ class FoodbookService
 
         $daten = [];
         if (array_key_exists('brand_color', $in)) {
-            $daten['brand_color'] = $this->normHexOderThrow($in['brand_color'], 'brand_color') ?? '#6d28d9';
+            $daten['brand_color'] = $this->normHexOderThrow($in['brand_color'], 'Markenfarbe') ?? '#6d28d9';
         }
         if (array_key_exists('band_color', $in)) {
             // Leer → null (Blade leitet dann aus brand_color ab).
-            $daten['band_color'] = $this->normHexOderThrow($in['band_color'], 'band_color', erlaubeLeer: true);
+            $daten['band_color'] = $this->normHexOderThrow($in['band_color'], 'Bandfarbe', erlaubeLeer: true);
         }
         if (array_key_exists('footer_text', $in)) {
             $t = trim((string) $in['footer_text']);
@@ -2721,10 +2721,10 @@ class FoodbookService
             if ($erlaubeLeer) {
                 return null;
             }
-            throw new \RuntimeException("Farbe {$feld} darf nicht leer sein.");
+            throw new \RuntimeException("{$feld} darf nicht leer sein.");
         }
         if (! preg_match('/^#[0-9a-fA-F]{6}$/', $v)) {
-            throw new \RuntimeException("Ungültige Farbe für {$feld}: \"{$v}\" (erwartet #RRGGBB).");
+            throw new \RuntimeException("{$feld}: ungültiger Farbwert „{$v}“ (erwartet #RRGGBB).");
         }
 
         return strtolower($v);
@@ -2736,7 +2736,7 @@ class FoodbookService
     {
         $k = FoodAlchemistFoodbookKapitel::visibleToTeam($team)->findOrFail($id);
         if (! $k->isOwnedBy($team)) {
-            throw new \RuntimeException('Geerbtes Foodbook — Pflege nur durchs Besitzer-Team (D1).');
+            throw new \RuntimeException('Geerbtes Foodbook: Ändern kann es nur das Besitzer-Team.');
         }
 
         return $k;
@@ -2746,7 +2746,7 @@ class FoodbookService
     {
         $block = FoodAlchemistFoodbookBlock::visibleToTeam($team)->findOrFail($id);
         if (! $block->isOwnedBy($team)) {
-            throw new \RuntimeException('Geerbtes Foodbook — Pflege nur durchs Besitzer-Team (D1).');
+            throw new \RuntimeException('Geerbtes Foodbook: Ändern kann es nur das Besitzer-Team.');
         }
 
         return $block;
@@ -2755,7 +2755,7 @@ class FoodbookService
     private function guard(FoodAlchemistFoodbook $fb, Team $team): void
     {
         if (! $fb->isOwnedBy($team)) {
-            throw new \RuntimeException('Geerbtes Foodbook — Pflege nur durchs Besitzer-Team (D1).');
+            throw new \RuntimeException('Geerbtes Foodbook: Ändern kann es nur das Besitzer-Team.');
         }
     }
 }

@@ -15,6 +15,9 @@
     $adresse = (string) ($node['adresse'] ?? '');
     $eltern = $node['eltern'] ?? null;
     $typLabel = $istGericht ? 'Gericht' : ($depth > 0 ? 'Komponente · Basisrezept' : 'Basisrezept');
+    // Status in Küchensprache statt Rohwert (draft/review/approved …) — wie RecipeStatus::label() in der App.
+    $statusRoh = (string) ($node['status'] ?? '');
+    $statusText = $statusRoh === '' ? null : (\Platform\FoodAlchemist\Enums\RecipeStatus::tryFrom($statusRoh)?->label() ?? $statusRoh);
 
     /* Meta-Kachel nur rendern, wenn sie etwas sagt: die „—"-Kacheln (Posten, Rüstzeit,
        Batchdeckel …) füllten vorher halbe Seiten mit Leerwerten. */
@@ -32,6 +35,24 @@
         return $html === '' ? '' : '<div class="grid meta">' . $html . '</div>';
     };
 
+    /* Kompakte Mengen im Druck (Dominique 2026-10-05): „0,015 Kilogramm" → „15 g", „0,25 Liter" → „250 ml".
+       Greift NUR bei eindeutig deutsch formatierten Zahlen (1.234,5) mit genau dieser Einheit —
+       alles andere (Stück, Bund, „1.5 Kilogramm", Freitext) bleibt unverändert. Reine Anzeige. */
+    $kurzMenge = function ($m) {
+        $m = (string) $m;
+        if (! preg_match('/^\s*(\d{1,3}(?:\.\d{3})*(?:,\d+)?)\s*(Kilogramm|Gramm|Liter|Milliliter)\s*$/u', $m, $t)) {
+            return $m;
+        }
+        $wert = (float) str_replace(['.', ','], ['', '.'], $t[1]);
+        $fmt = fn ($v) => rtrim(rtrim(number_format($v, 3, ',', '.'), '0'), ',');
+
+        return match ($t[2]) {
+            'Kilogramm' => $wert < 1 ? $fmt($wert * 1000) . ' g' : $fmt($wert) . ' kg',
+            'Liter' => $wert < 1 ? $fmt($wert * 1000) . ' ml' : $fmt($wert) . ' l',
+            'Gramm' => $fmt($wert) . ' g',
+            'Milliliter' => $fmt($wert) . ' ml',
+        };
+    };
     $preiseAn = ($opt['preise'] ?? false) && ($opt['ek'] ?? true);
     $ekSumme = collect($node['ingredients'] ?? [])->sum(fn ($z) => (float) ($z['ek_anteil_eur'] ?? 0));
     $ekLuecken = collect($node['ingredients'] ?? [])->filter(fn ($z) => ($z['ek_anteil_eur'] ?? null) === null)->count();
@@ -45,9 +66,10 @@
         <div class="node-kicker">
             @if($adresse !== '')<span class="addr">{{ $adresse }}</span>@endif
             <span class="chip {{ $istGericht ? 'chip-dish' : 'chip-base' }}">{{ $typLabel }}</span>
-            <span class="chip">#{{ $node['id'] ?? '—' }}</span>
-            @if($node['category'] ?? $node['dish_main_group'] ?? null)<span class="chip">{{ $node['category'] ?? $node['dish_main_group'] }}</span>@endif
-            @if($node['status'] ?? null)<span class="chip">{{ $node['status'] }}</span>@endif
+            @php($kategorie = $node['category'] ?? $node['dish_main_group'] ?? null)
+            {{-- Sammel-Kategorie „Catch-all" ist Ablage, keine Aussage — im Druck weglassen. --}}
+            @if($kategorie && ! preg_match('/^catch[\s_-]?all$/i', trim((string) $kategorie)))<span class="chip">{{ $kategorie }}</span>@endif
+            @if($statusText)<span class="chip">{{ $statusText }}</span>@endif
         </div>
 
         @unless($istKopf)
@@ -59,13 +81,13 @@
             <div class="from-line">
                 Komponente {{ $eltern['nr'] ?? '?' }} von {{ $eltern['von'] ?? '?' }} in
                 <strong>{{ $eltern['name'] ?? '—' }}</strong>@if($eltern['adresse'] ?? '') <span class="muted">({{ $eltern['adresse'] }})</span>@endif
-                @if($eltern['einsatz'] ?? null) · Einsatz dort: <strong>{{ $eltern['einsatz'] }}</strong>@endif
+                @if($eltern['einsatz'] ?? null) · Einsatz dort: <strong>{{ $kurzMenge($eltern['einsatz']) }}</strong>@endif
             </div>
         @endif
     </div>
 
     @if($node['zyklus'] ?? false)
-        <p class="warn">Zyklische Referenz erkannt — Kaskade hier gestoppt.</p>
+        <p class="warn">Dieses Basisrezept enthält sich selbst über eine andere Komponente. Die Aufschlüsselung endet hier.</p>
     @else
         @if($simulationRequirement)
             <div class="grid meta" data-simulated-recipe-quantity>
@@ -80,7 +102,7 @@
             {{-- Komponenten bekommen eine Kennzahlen-ZEILE statt Kacheln: bei vier
                  Komponenten sparte das im Test rund 6 cm, ohne Information zu verlieren. --}}
             @php($kennzahlen = array_filter([
-                $node['yield_kg'] !== null ? 'Yield ' . $num($node['yield_kg'], 3, ' kg') : ($node['yield_pieces'] !== null ? 'Yield ' . $num($node['yield_pieces'], 2, ' Stk.') : null),
+                $node['yield_kg'] !== null ? 'Ausbeute ' . $num($node['yield_kg'], 3, ' kg') : ($node['yield_pieces'] !== null ? 'Ausbeute ' . $num($node['yield_pieces'], 2, ' Stk.') : null),
                 ($opt['ek'] ?? true) && $node['ek_total_eur'] !== null ? 'EK ' . $money($node['ek_total_eur'], 2) . ' je Ansatz' : null,
                 ($opt['ek'] ?? true) && $node['ek_per_kg_eur'] !== null ? $money($node['ek_per_kg_eur'], 2) . '/kg' : null,
                 ($opt['produktion'] ?? false) && ($node['produktion']['work_time_min'] ?? null) !== null ? 'Arbeitszeit ' . $node['produktion']['work_time_min'] . ' min' : null,
@@ -96,13 +118,13 @@
             @endif
         @elseif($opt['stammdaten'] ?? true)
             {!! $gitter([
-                $kachel('Yield', $node['yield_kg'] !== null ? $num($node['yield_kg'], 3, ' kg') : ($node['yield_pieces'] !== null ? $num($node['yield_pieces'], 2, ' Stk.') : null)),
+                $kachel('Ausbeute', $node['yield_kg'] !== null ? $num($node['yield_kg'], 3, ' kg') : ($node['yield_pieces'] !== null ? $num($node['yield_pieces'], 2, ' Stk.') : null)),
                 /* #3: Kosten (EK / Food Cost) hinter `ek`-Flag. Default true → bestehende Rezept-Reports
                    unverändert; die Foodbook-/Speisekarte-KUNDENsicht setzt ek=false (nur intern EK). */
                 ($opt['ek'] ?? true) ? $kachel('EK gesamt', $node['ek_total_eur'] !== null ? $money($node['ek_total_eur'], 2) : null) : '',
                 ($opt['ek'] ?? true) ? $kachel('EK/kg', $node['ek_per_kg_eur'] !== null ? $money($node['ek_per_kg_eur'], 2) . '/kg' : null) : '',
                 $istGericht ? $kachel('VK netto', $node['sales_net'] !== null ? $money($node['sales_net'], 2) : null) : '',
-                ($istGericht && ($opt['ek'] ?? true)) ? $kachel('Food Cost', $node['food_cost_percent'] !== null ? $num($node['food_cost_percent'], 1, ' %') : null) : '',
+                ($istGericht && ($opt['ek'] ?? true)) ? $kachel('Wareneinsatz', $node['food_cost_percent'] !== null ? $num($node['food_cost_percent'], 1, ' %') : null) : '',
                 $istGericht ? $kachel('VK-Einheit', $node['sales_unit'] ?? null) : '',
             ]) !!}
 
@@ -226,9 +248,9 @@
                 <thead>
                     <tr>
                         <th style="width: 5%">#</th>
-                        <th style="width: {{ $preiseAn ? ($mitLieferant ? '25%' : '40%') : ($mitLieferant ? '32%' : '56%') }}">Name</th>
-                        <th style="width: 13%">Einsatz</th>
-                        <th style="width: 10%">Typ</th>
+                        <th style="width: {{ $preiseAn ? ($mitLieferant ? '21%' : '36%') : ($mitLieferant ? '28%' : '52%') }}">Name</th>
+                        <th style="width: 15%">Einsatz</th>
+                        <th style="width: 12%">Typ</th>
                         @if($preiseAn)
                             <th class="num" style="width: 12%">€ / Einheit</th>
                             <th class="num" style="width: 10%">EK-Anteil</th>
@@ -247,7 +269,7 @@
                                     <strong>{{ $num($simulatedIngredient['menge'] ?? null, 3, ($simulatedIngredient['einheit'] ?? null) ? ' ' . $simulatedIngredient['einheit'] : '') }}</strong>
                                     <span class="muted">für Auftrag</span>
                                 @else
-                                    {{ $z['menge'] ?? '—' }}
+                                    {{ ($z['menge'] ?? null) !== null ? $kurzMenge($z['menge']) : '—' }}
                                 @endif
                             </td>
                             <td>
@@ -257,7 +279,7 @@
                                 @elseif(($z['type'] ?? null) === 'basisrezept')
                                     Basisrezept
                                 @else
-                                    {{ $z['type'] ?? '—' }}
+                                    {{ ['gp' => 'Grundprodukt', 'frei' => 'Freitext', 'text' => 'Freitext'][$z['type'] ?? ''] ?? ($z['type'] ?? '—') }}
                                 @endif
                             </td>
                             @if($preiseAn)
@@ -288,7 +310,7 @@
                     @endforeach
                     @if($preiseAn && $ekSumme > 0)
                         <tr class="sum-line">
-                            <td colspan="{{ 4 }}">Σ EK-Anteile{{ $ekLuecken > 0 ? ' (ohne ' . $ekLuecken . ' unbepreiste Zeile' . ($ekLuecken === 1 ? '' : 'n') . ')' : '' }}</td>
+                            <td colspan="{{ 4 }}">Summe Einkauf{{ $ekLuecken > 0 ? ' (ohne ' . $ekLuecken . ' unbepreiste Zeile' . ($ekLuecken === 1 ? '' : 'n') . ')' : '' }}</td>
                             <td class="num"></td>
                             <td class="num">{{ $geld($ekSumme) }}</td>
                             @if($opt['lieferanten'] ?? false)<td></td>@endif

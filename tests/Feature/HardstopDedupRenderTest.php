@@ -52,6 +52,6 @@ it('rendert die Garnitur-Namens-Warnung additiv auf einer offenen Zeile', functi
 
     $view = $this->blade('<x-foodalchemist::hardstop-zeilen :offene="$offene" prefix="" />', ['offene' => $offene]);
 
-    $view->assertSee('Name nicht im GP-Katalog', false)
+    $view->assertSee('Name nicht im Grundprodukt-Katalog', false)  // fa-pass: Klartext statt Kürzel GP
         ->assertSee('data-namenswarnung="3"', false);
 });

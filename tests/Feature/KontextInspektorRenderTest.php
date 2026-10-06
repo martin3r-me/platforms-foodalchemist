@@ -75,20 +75,23 @@ it('zeigt die ECHTEN Prompt-Groessen, nicht nur den Retrieval-Anteil', function 
 
     $html = Blade::render('<x-foodalchemist::kontext-inspektor :kontext="$kontext" />', ['kontext' => $k]);
 
+    // fa-pass 2026-10-05: nur die sichtbaren Begriffe sind in Küchensprache (Anfrage statt Prompt,
+    // Kontextdaten statt Kontext-JSON, Ersatzweg statt Fallback, Abrechnungseinheiten statt Token).
+    // Die Zahlen und was sie messen sind unverändert.
     expect($html)->toContain('data-prompt-groessen')
         // Die Kopfzeile nennt jetzt den GANZEN Prompt, nicht den Retrieval-Anteil.
-        ->toContain('Prompt 51.008 Zeichen')
+        ->toContain('Anfrage 51.008 Zeichen')
         ->not->toContain('~11.000 Zeichen')
         // Der größte Posten war vorher unsichtbar.
-        ->toContain('Regelwerk gebunden (Fallback) 28.630')
+        ->toContain('Regelwerk gebunden (Ersatzweg) 28.630')
         ->toContain('Kanon (verbindlich) 1.200')
-        ->toContain('Kontext-JSON 6.021')
+        ->toContain('Kontextdaten 6.021')
         ->toContain('Aufgabe 5.024')
         // `dropped` muss sichtbar sein: gebaut-und-weggeworfen ist die Größe, an der man den
         // Deckel überhaupt erst bemerkt.
         ->toContain('verworfen 13.667')
         // Und der Cache-Anteil, weil er über den Preis entscheidet (gecacht = 10 %).
-        ->toContain('16.778 Token, 23 % aus dem Cache');
+        ->toContain('16.778 Abrechnungseinheiten, 23 % wiederverwendet');
 });
 
 it('bleibt bei der alten Anzeige, wenn die Messsonde nichts liefert', function () {

@@ -97,7 +97,7 @@ it('LA und GP werden in zwei getrennten Schritten bestätigt; erst dann wird die
         ->call('hardstopLaWaehlen', 0, $la->id)
         ->assertSet('ergebnis.offene.0.selected_la_id', $la->id)
         ->assertSet('ergebnis.statistik.offen', 1)
-        ->assertSee('Passendes GP bestätigen')
+        ->assertSee('Passendes Grundprodukt bestätigen')  // fa-pass: Klartext statt Kürzel GP
         ->call('hardstopLaGpBestaetigen', 0)
         ->assertSet('ergebnis.statistik.offen', 0);
 

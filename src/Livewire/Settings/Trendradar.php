@@ -50,9 +50,10 @@ class Trendradar extends Component
             'trend_signal_enabled' => $this->signalEnabled,
         ]);
         $this->meldung = $this->autoEnabled
-            ? "Automatisierung AN — täglich morgens {$this->limit} Konzeptvorschlag(e)"
-                . ($this->signalEnabled ? ' mit Signal in der Inbox.' : ' (ohne Signal).')
-            : 'Automatisierung AUS — es werden keine Trend-Konzepte generiert.';
+            ? 'Gespeichert. Automatisierung ist an: jeden Morgen '
+                . ($this->limit === 1 ? 'ein Konzept-Entwurf' : "bis zu {$this->limit} Konzept-Entwürfe")
+                . ($this->signalEnabled ? ', mit Signal.' : ', ohne Signal.')
+            : 'Gespeichert. Automatisierung ist aus, aus Trends entstehen keine Konzepte.';
     }
 
     public function jetztImportieren(): void
@@ -62,8 +63,8 @@ class Trendradar extends Component
             return;
         }
         TrendRefreshJob::dispatch();
-        $this->meldung = 'Import & Clustern gestartet — läuft im Hintergrund. '
-            . 'Der Trendradar füllt sich, sobald der Lauf durch ist (bei vielen Trends einige Minuten).';
+        $this->meldung = 'Einlesen gestartet, läuft im Hintergrund. '
+            . 'Der Trendradar füllt sich, sobald der Lauf fertig ist (bei vielen Trends einige Minuten).';
     }
 
     public function render()

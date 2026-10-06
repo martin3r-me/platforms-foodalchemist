@@ -1,61 +1,56 @@
-{{-- M4-04: Basisrezept-Browser (P-1/Screen 4) — HG-Baum links, dichte Tabelle, Panel rechts (M4-05) --}}
-@php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
+{{-- Basisrezept-Browser — Hauptgruppen links, Tabelle Mitte, Detail rechts.
+     fa-pass Welle 2 (2026-10-05): auf Bausteine <x-fa::…> umgestellt. Funktion, wire:-Bindungen und
+     data-Marker unverändert. Neu: Status-Filter als Chips,
+     Status als Chip mit Menü statt Dropdown je Zeile, fehlender Preis als Signal. --}}
+@php
+    $statusOptionen = ['' => 'Alle ' . number_format($gesamtCount, 0, ',', '.')];
+    foreach ($statusFaelle as $fall) {
+        if (($statusCounts[$fall->value] ?? 0) > 0 || $status === $fall->value) {
+            $statusOptionen[$fall->value] = $fall->label() . ' ' . number_format($statusCounts[$fall->value] ?? 0, 0, ',', '.');
+        }
+    }
+    $konfidenzTon = ['high' => 'ok', 'medium' => 'warn', 'low' => 'crit'];
+    $statusWahl = [\Platform\FoodAlchemist\Enums\RecipeStatus::Draft, \Platform\FoodAlchemist\Enums\RecipeStatus::Review, \Platform\FoodAlchemist\Enums\RecipeStatus::Approved, \Platform\FoodAlchemist\Enums\RecipeStatus::Deprecated];
+@endphp
 
 <x-ui-page>
     <x-slot:navbar>
-        <x-ui-page-navbar title="Basisrezepte" icon="heroicon-o-book-open" />
+        <x-foodalchemist::shell.page-navbar title="Basisrezepte" icon="heroicon-o-book-open" />
     </x-slot:navbar>
-
-    <x-slot name="actionbar">
-        <x-ui-page-actionbar :breadcrumbs="[
-            ['label' => 'Food Alchemist', 'href' => route('foodalchemist.dashboard'), 'icon' => 'cube'],
-            ['label' => 'Basisrezepte'],
-        ]" />
-    </x-slot>
 
     <x-slot name="sidebar">
         <x-ui-page-sidebar title="Hauptgruppen" width="w-80">
-            <div class="p-3 space-y-2" data-rezept-baum>
-                <input type="search" wire:model.live.debounce.300ms="search"
-                       placeholder="Rezept-Name oder Key …" class="{{ $input }}" data-rezept-suche />
-                <select wire:model.live="status" class="{{ $input }}">
-                    <option value="">Alle Status</option>
-                    @foreach($statusFaelle as $fall)
-                        <option value="{{ $fall->value }}">{{ $fall->label() }} ({{ $statusCounts[$fall->value] ?? 0 }})</option>
-                    @endforeach
-                </select>
+            <div class="p-3 flex flex-col gap-3" data-rezept-baum>
+                <div class="relative">
+                    <label for="rezept-suche" class="sr-only">Rezepte durchsuchen</label>
+                    @svg('heroicon-m-magnifying-glass', 'w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--fa-ink-3)] pointer-events-none')
+                    <x-fa::input id="rezept-suche" type="search" wire:model.live.debounce.300ms="search" placeholder="Name oder Schlüssel" class="pl-8" data-rezept-suche />
+                </div>
                 <div class="grid grid-cols-2 gap-2">
-                    {{-- MVP-023: zentrale deutsche Labels statt Rohwerte/„from scratch" --}}
-                    <select wire:model.live="geschmack" class="{{ $input }}">
-                        <option value="">Geschmack</option>
+                    {{-- MVP-023: zentrale deutsche Labels statt Rohwerte --}}
+                    <x-fa::select wire:model.live="geschmack" aria-label="Geschmack" size="sm" placeholder="Jeder Geschmack">
                         @foreach(['suess', 'herzhaft', 'neutral'] as $wert)
                             <option value="{{ $wert }}">{{ \Platform\FoodAlchemist\Support\Labels::geschmack($wert) }}</option>
                         @endforeach
-                    </select>
-                    <select wire:model.live="fertigung" class="{{ $input }}">
-                        <option value="">Fertigung</option>
+                    </x-fa::select>
+                    <x-fa::select wire:model.live="fertigung" aria-label="Fertigung" size="sm" placeholder="Jede Fertigung">
                         @foreach(['from_scratch', 'teilfertig', 'convenience'] as $wert)
                             <option value="{{ $wert }}">{{ \Platform\FoodAlchemist\Support\Labels::fertigung($wert) }}</option>
                         @endforeach
-                    </select>
+                    </x-fa::select>
                 </div>
 
-                {{-- R6: Template-Filter (Jarvis-Sidebar) --}}
-                <button type="button" wire:click="toggleTemplates"
-                        class="w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs transition-all duration-150 {{ $nurTemplates
-                            ? 'bg-gradient-to-r from-orange-500/15 to-amber-500/15 text-orange-700'
-                            : 'text-gray-700 hover:bg-black/[0.03]' }}" data-templates-toggle>
-                    <span class="font-medium">@svg('heroicon-o-square-2-stack', 'w-3.5 h-3.5 inline-block align-middle') Templates</span>
-                    <span class="text-[11px] {{ $nurTemplates ? 'text-orange-500 font-medium' : 'text-gray-500' }}">{{ $nurTemplates ? 'active' : $templateAnzahl }}</span>
-                </button>
+                {{-- R6: Vorlagen-Filter --}}
+                <x-foodalchemist::filter-row wire:click="toggleTemplates" :active="$nurTemplates"
+                    :count="$nurTemplates ? null : $templateAnzahl" data-templates-toggle>
+                    <span class="inline-flex items-center gap-2">@svg('heroicon-o-square-2-stack', 'w-4 h-4 shrink-0') Nur Vorlagen</span>
+                </x-foodalchemist::filter-row>
 
-                {{-- MVP-042: Gesamtzahl kommt aus der Tabellenquery, NICHT aus array_sum($hgCounts) —
-                     die Summe der Hauptgruppen verlor jedes Rezept ohne Kategorie (64 vs. 62). --}}
-                <x-foodalchemist::filter-row wire:click="waehleHauptgruppe(null)"
-                    :active="$hauptgruppe === null && ! $ohneKategorie"
-                    :count="$gesamtCount" data-gesamt-count><span class="font-medium">Alle Hauptgruppen</span></x-foodalchemist::filter-row>
-
-                <div class="space-y-0.5 -mx-1" data-hg-liste>
+                <div class="flex flex-col gap-0.5 pt-2 border-t border-[var(--fa-line)]" data-hg-liste>
+                    {{-- MVP-042: Gesamtzahl aus der Tabellenquery, nicht aus der Summe der Hauptgruppen --}}
+                    <x-foodalchemist::filter-row wire:click="waehleHauptgruppe(null)"
+                        :active="$hauptgruppe === null && ! $ohneKategorie"
+                        :count="$gesamtCount" data-gesamt-count>Alle Hauptgruppen</x-foodalchemist::filter-row>
                     @foreach($hauptgruppen as $hg)
                         <div wire:key="hg-{{ $hg->id }}">
                             <x-foodalchemist::filter-row wire:click="waehleHauptgruppe({{ $hg->id }})"
@@ -76,193 +71,192 @@
                         </div>
                     @endforeach
 
-                    {{-- MVP-042: Rezepte ohne Kategorie waren in der Tabelle sichtbar, über den Baum
-                         aber unerreichbar. Nur zeigen, wenn es welche gibt — sonst wäre es eine
-                         Dauer-Null, die den Baum verrauscht. --}}
+                    {{-- MVP-042: Rezepte ohne Kategorie über den Baum erreichbar machen --}}
                     @if($ohneKategorieCount > 0 || $ohneKategorie)
-                        <button type="button" wire:click="waehleOhneKategorie"
-                                class="w-full flex items-center justify-between px-2 py-1 rounded-lg text-xs transition-all duration-150 {{ $ohneKategorie
-                                    ? 'bg-gradient-to-r from-amber-500/15 to-orange-500/15 text-amber-700'
-                                    : 'text-gray-600 hover:bg-black/[0.03]' }}"
-                                title="Basisrezepte ohne Kategorie — über die Hauptgruppen nicht auffindbar"
-                                data-ohne-kategorie>
-                            <span class="min-w-0 truncate italic">Ohne Kategorie</span>
-                            <span class="text-[11px] text-gray-500 shrink-0 ml-2 tabular-nums">{{ $ohneKategorieCount }}</span>
-                        </button>
+                        <x-foodalchemist::filter-row wire:click="waehleOhneKategorie" :active="$ohneKategorie" :count="$ohneKategorieCount"
+                            title="Basisrezepte ohne Kategorie — über die Hauptgruppen nicht auffindbar" data-ohne-kategorie>
+                            <span class="italic">Ohne Kategorie</span>
+                        </x-foodalchemist::filter-row>
                     @endif
                 </div>
             </div>
         </x-ui-page-sidebar>
     </x-slot>
 
+    {{-- Detail-Spalte erst, wenn ein Rezept gewählt ist — vorher nahm der leere Hinweis ~400 px der Tabelle weg. --}}
+    @if($recipeId !== null)
     <x-slot name="activity">
         <x-foodalchemist::detail-sidebar title="Detail" width="w-96" :maxWidth="760" scope="activity_recipes" side="right">
             <livewire:foodalchemist.recipes.detail-panel :recipe-id="$recipeId" />
         </x-foodalchemist::detail-sidebar>
     </x-slot>
+    @endif
 
-    {{-- M4-06: Stammdaten-Modal (P-2: innerhalb x-ui-page) --}}
+    {{-- Editoren und Dialoge (innerhalb x-ui-page, P-2) --}}
     <livewire:foodalchemist.recipes.recipe-modal />
-    {{-- R7-Fix: Zutat-Klick öffnet das GP als Modal ÜBER dem Editor (neuer Tab bei Dominique blockiert) --}}
     <livewire:foodalchemist.gps.gp-modal />
-    {{-- M9-05-Rest: VK-Eltern aus dem Basis-Panel öffnen den VK-Editor --}}
     <livewire:foodalchemist.verkauf.vk-modal />
-
-    {{-- M4-07/08: Zutaten-Editor (P-8) --}}
     <livewire:foodalchemist.recipes.ingredient-editor />
-
-    {{-- M4-14: Generator --}}
     <livewire:foodalchemist.recipes.generator-modal />
-
-    {{-- D-5: Aus Vorlage instanziieren (Variante + Slot-Binding) --}}
     <livewire:foodalchemist.recipes.template-instantiate-modal />
-
-    {{-- M5-07: Pairing-Netz-Graph (innerhalb x-ui-page, P-2) --}}
     <livewire:foodalchemist.recipes.pairing-netz-modal />
 
-    {{-- M7-10: Voice-Interface --}}
-    {{-- Phase C2: Sprachbedienung ist umgezogen — Mount UND Knopf liegen jetzt global in
-         der Sidebar (Dominique: „aktuell liegt er ja nur in den Basisrezepten, für mich
-         gehört er hierhin"). Ein zweiter Mount hätte dieselbe Modal-Identität doppelt belegt. --}}
-
-    <x-ui-page-container padding="px-6 pb-6" spacing="space-y-4">
-        <div class="flex items-center justify-between pt-1">
-            <div class="flex items-center gap-2">
-                <button type="button" wire:click="$dispatch('recipe-modal.oeffnen')" class="{{ $btnPrimary }}" data-rezept-anlegen>+ Neues Basisrezept</button>
-                {{-- KI-Erstellung ist in die Planung-Leitstelle konsolidiert (2026-08): der KI-Rezept-Knopf lebt jetzt dort mit den Regler-Leitplanken. --}}
-                {{-- R6: «Aus Template» — Liste der 📐-Templates, Klick dupliziert + öffnet den Editor --}}
+    <x-ui-page-container padding="px-6 py-6" spacing="space-y-4">
+        <x-fa::page-header title="Basisrezepte" :subtitle="number_format($rezepte->total(), 0, ',', '.') . ' Treffer'">
+            <x-slot:actions>
+                {{-- R6: Aus Vorlage — Liste der Vorlagen, Klick dupliziert + öffnet den Editor --}}
                 <div class="relative">
-                    <button type="button" wire:click="$toggle('templateWahlOffen')" class="{{ $btnGhostXs }}" data-aus-template>@svg('heroicon-o-square-2-stack', 'w-3.5 h-3.5') Aus Template</button>
+                    <x-fa::button icon="heroicon-m-square-2-stack" iconRight="heroicon-m-chevron-down" wire:click="$toggle('templateWahlOffen')" data-aus-template>Aus Vorlage</x-fa::button>
                     @if($templateWahlOffen)
-                        <div class="absolute left-0 top-full mt-1 z-30 w-80 max-h-80 overflow-y-auto rounded-lg bg-white border border-black/10 shadow-xl" data-template-liste>
+                        <div class="absolute right-0 top-full mt-1 z-30 w-80 max-h-80 overflow-y-auto fa-surface shadow-xl py-1" data-template-liste>
                             @forelse($templateListe as $template)
                                 <button type="button" wire:key="tpl-{{ $template->id }}" wire:click="ausTemplate({{ $template->id }})"
-                                        class="block w-full text-left px-3 py-1.5 text-[11px] text-gray-700 hover:bg-violet-500/10">
-                                    {{ $template->name }}
-                                    <span class="text-gray-500">· {{ $template->n_ingredients_total }} Zutaten{{ $template->yield_kg !== null ? ' · ' . number_format((float) $template->yield_kg, 2, ',', '.') . ' kg' : '' }}</span>
+                                        class="flex w-full flex-col items-start px-3 py-2 text-left hover:bg-[var(--fa-hover)]">
+                                    <span class="text-[length:var(--fa-text-md)] text-[var(--fa-ink)]">{{ $template->name }}</span>
+                                    <span class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)] tabular-nums">{{ $template->n_ingredients_total }} Zutaten{{ $template->yield_kg !== null ? ' · ' . number_format((float) $template->yield_kg, 2, ',', '.') . ' kg' : '' }}</span>
                                 </button>
                             @empty
-                                <p class="px-3 py-2 text-[11px] text-gray-500">Keine Templates — im Editor «@svg('heroicon-o-square-2-stack', 'w-3.5 h-3.5 inline-block align-middle') Template» markieren.</p>
+                                <x-fa::empty compact icon="heroicon-o-square-2-stack" title="Noch keine Vorlagen">Im Rezept-Editor „Als Vorlage" markieren.</x-fa::empty>
                             @endforelse
                         </div>
                     @endif
                 </div>
-            </div>
-            @if($bulkRunId !== null)
-                @php($bulkSvc = app(\Platform\FoodAlchemist\Services\BulkEnrichService::class))
-                @php($run = $bulkSvc->status(\Illuminate\Support\Facades\Auth::user()->currentTeamRelation, $bulkRunId))
-                @if($run !== null)
-                    <div class="flex items-center gap-2" @if($run->status === 'running') wire:poll.2s @endif data-bulk-progress>
-                        @if($run->status === 'running')
-                            <span class="{{ $pill }} {{ $variantPill['info'] }}">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5 inline-block align-middle') Bulk läuft … {{ $run->done }}/{{ $run->total }}</span>
-                        @else
-                            <span class="{{ $pill }} {{ $variantPill['success'] }}">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5 inline-block align-middle') Bulk fertig: {{ $run->done }}/{{ $run->total }}{{ $run->failed > 0 ? " · {$run->failed} Fehler" : '' }}</span>
-                            <span class="text-[11px] text-gray-600">{{ $bulkSvc->offeneVorschlaege(\Illuminate\Support\Facades\Auth::user()->currentTeamRelation, $bulkRunId) }} Vorschläge offen</span>
-                            <button type="button" wire:click="bulkAlleUebernehmen" class="{{ $btnGhostXs }} text-emerald-600" data-bulk-alle-uebernehmen>Alle übernehmen</button>
-                            <button type="button" wire:click="bulkSchliessen" class="{{ $btnGhostXs }}" title="Vorschläge bleiben offen (Review)">Schließen</button>
-                        @endif
-                    </div>
-                @endif
-            @endif
-            @if(count(array_filter($auswahl)) > 0)
-                <div class="flex items-center gap-1.5" data-bulk-status>
-                    <x-foodalchemist::ki-action action="bulkAnreichern" variant="ai" icon="heroicon-o-sparkles" label="Bulk anreichern"
-                            title="Beschreibung · Kategorie · Geschmack als Review-Vorschläge (GL-07: nie Auto-Persistenz)"
-                            flash="Bulk gestartet" data-bulk-anreichern />
-                    <span class="text-xs text-gray-900 font-medium">{{ count(array_filter($auswahl)) }} ausgewählt:</span>
-                    @foreach(['draft' => 'Entwurf', 'review' => 'Review', 'approved' => 'Freigeben'] as $wert => $lbl)
-                        <button type="button" wire:click="bulkStatus('{{ $wert }}')" class="{{ $btnGhostXs }}" data-bulk-status-btn="{{ $wert }}">→ {{ $lbl }}</button>
+                <x-fa::button variant="primary" icon="heroicon-m-plus" wire:click="$dispatch('recipe-modal.oeffnen')" data-rezept-anlegen>Neues Basisrezept</x-fa::button>
+            </x-slot:actions>
+        </x-fa::page-header>
+
+        <div class="flex flex-wrap items-center justify-between gap-3">
+            <x-fa::choice name="status" :options="$statusOptionen" />
+            {{-- E14: Ansichts-Schalter — knappe Spalten je Aufgabe --}}
+            <div class="flex items-center gap-3">
+                <div role="group" aria-label="Ansicht" class="flex p-0.5 gap-0.5 rounded-[var(--fa-radius-control)] bg-[var(--fa-neutral-soft)]" data-ansicht-schalter>
+                    @foreach($ansichten as $ak => [$al, $unused])
+                        <button type="button" wire:click="$set('ansicht', '{{ $ak }}')" aria-pressed="{{ $ansicht === $ak ? 'true' : 'false' }}"
+                                class="h-7 px-3 rounded-[5px] text-[length:var(--fa-text-sm)] font-medium transition-colors {{ $ansicht === $ak ? 'bg-[var(--fa-surface)] text-[var(--fa-ink)] shadow-sm' : 'text-[var(--fa-ink-2)] hover:text-[var(--fa-ink)]' }}"
+                                data-ansicht="{{ $ak }}">{{ $al }}</button>
                     @endforeach
                 </div>
-            @endif
+                <x-fa::select wire:model.live="perPage" size="sm" aria-label="Einträge je Seite" class="w-auto" data-per-page>
+                    @foreach([25, 50, 100, 250, 500] as $n)<option value="{{ $n }}">{{ $n }} je Seite</option>@endforeach
+                </x-fa::select>
+            </div>
         </div>
-        <div class="relative overflow-hidden {{ $card }}" data-rezept-tabelle>
-            <div class="{{ $cardAccent }}"></div>
+
+        @if($bulkRunId !== null)
+            @php
+                $bulkSvc = app(\Platform\FoodAlchemist\Services\BulkEnrichService::class);
+                $run = $bulkSvc->status(\Illuminate\Support\Facades\Auth::user()->currentTeamRelation, $bulkRunId);
+            @endphp
+            @if($run !== null)
+                <div @if($run->status === 'running') wire:poll.2s @endif data-bulk-progress>
+                    @if($run->status === 'running')
+                        <x-fa::notice tone="info">KI-Anreicherung läuft: {{ $run->done }} von {{ $run->total }} Rezepten.</x-fa::notice>
+                    @else
+                        <x-fa::notice :tone="$run->failed > 0 ? 'warn' : 'ok'" title="KI-Anreicherung fertig: {{ $run->done }} von {{ $run->total }}{{ $run->failed > 0 ? ', ' . $run->failed . ' Fehler' : '' }}">
+                            {{ $bulkSvc->offeneVorschlaege(\Illuminate\Support\Facades\Auth::user()->currentTeamRelation, $bulkRunId) }} Vorschläge warten auf deine Prüfung.
+                            <x-slot:actions>
+                                <x-fa::button size="sm" wire:click="bulkSchliessen" title="Vorschläge bleiben offen">Schließen</x-fa::button>
+                                <x-fa::button size="sm" variant="primary" wire:click="bulkAlleUebernehmen" data-bulk-alle-uebernehmen>Alle übernehmen</x-fa::button>
+                            </x-slot:actions>
+                        </x-fa::notice>
+                    @endif
+                </div>
+            @endif
+        @endif
+
+        @if(count(array_filter($auswahl)) > 0)
+            <div class="flex flex-wrap items-center gap-2 px-3 py-2 rounded-[var(--fa-radius-surface)] bg-[var(--fa-accent-soft)]" data-bulk-status>
+                <span class="text-[length:var(--fa-text-md)] font-semibold text-[var(--fa-accent)] tabular-nums">{{ count(array_filter($auswahl)) }} ausgewählt</span>
+                <span class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]">Status setzen:</span>
+                @foreach(['draft' => 'Entwurf', 'review' => 'Prüfen', 'approved' => 'Freigeben'] as $wert => $lbl)
+                    <x-fa::button size="sm" wire:click="bulkStatus('{{ $wert }}')" data-bulk-status-btn="{{ $wert }}">{{ $lbl }}</x-fa::button>
+                @endforeach
+                <span class="ml-auto"></span>
+                <x-foodalchemist::ki-action action="bulkAnreichern" variant="ai" icon="heroicon-o-sparkles" label="Mit KI anreichern"
+                        title="Beschreibung, Kategorie und Geschmack als Vorschläge zur Prüfung (nie automatisch übernommen)"
+                        flash="Anreicherung gestartet" data-bulk-anreichern />
+            </div>
+        @endif
+
+        <div class="fa-surface overflow-hidden" data-rezept-tabelle>
             {{-- MVP-022: Statuswechsel-Fehler sichtbar statt still verschluckt --}}
             @if($statusFehler !== null)
-                <div class="mx-5 mt-4 rounded-lg bg-rose-500/10 border border-rose-500/30 px-3 py-2 text-xs text-rose-700" data-status-fehler>{{ $statusFehler }}</div>
+                <x-fa::notice tone="crit" class="m-3" data-status-fehler>{{ $statusFehler }}</x-fa::notice>
             @endif
-            <div class="px-5 pt-4 pb-2 flex items-baseline justify-between">
-                <h3 class="font-medium tracking-tight text-gray-900">Basisrezepte</h3>
-                <span class="{{ $label }} flex items-center gap-2">
-                    {{-- E14: Ansichts-Schalter — knappe Spalten je Aufgabe statt einer Tabelle für alles --}}
-                    <span class="flex items-center gap-1" data-ansicht-schalter>
-                        @foreach($ansichten as $ak => [$al, $unused])
-                            <button type="button" wire:click="$set('ansicht', '{{ $ak }}')"
-                                    class="{{ $pill }} {{ $ansicht === $ak ? $variantPill['primary'] : $variantPill['secondary'] }}"
-                                    data-ansicht="{{ $ak }}">{{ $al }}</button>
-                        @endforeach
-                    </span>
-                    <span class="text-gray-300">·</span>
-                    {{ number_format($rezepte->total(), 0, ',', '.') }} Treffer ·
-                    <select wire:model.live="perPage" class="bg-transparent border-0 text-[11px] uppercase tracking-wider text-gray-500 cursor-pointer focus:ring-0" data-per-page>
-                        @foreach([25, 50, 100, 250, 500] as $n)<option value="{{ $n }}">{{ $n }}/Seite</option>@endforeach
-                    </select>
-                </span>
+            <div class="max-h-[70vh] overflow-auto">
+                <table class="fa-table">
+                    <thead class="sticky top-0 z-20 bg-[var(--fa-surface)]">
+                        <tr>
+                            <th class="w-10"><span class="sr-only">Auswahl</span></th>
+                            <th class="w-full">Name</th>
+                            @foreach($spalten as $sp)
+                                <th class="{{ $spaltenKatalog[$sp][1] }} {{ in_array($sp, ['ekkg', 'yield', 'zutaten'], true) ? 'num' : '' }}">{{ $spaltenKatalog[$sp][0] }}</th>
+                            @endforeach
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse($rezepte as $r)
+                            <x-foodalchemist::table-row :active="$recipeId === $r->id" wire:key="r-{{ $r->id }}" wire:click="waehleRezept({{ $r->id }})"
+                                x-data x-on:click="$store.ui?.mSet('activity_recipes', 'open', true)"
+                                data-rezept-zeile="{{ $r->id }}">
+                                <td wire:click.stop>
+                                    <input type="checkbox" wire:model.live="auswahl.{{ $r->id }}" aria-label="{{ $r->name }} auswählen" class="rounded border-[var(--fa-line-strong)] text-[var(--fa-accent)] focus:ring-[var(--fa-accent)]" data-rezept-checkbox="{{ $r->id }}" />
+                                </td>
+                                {{-- R6: Namens-Klick öffnet direkt den Voll-Editor (Zeilen-Klick bleibt Panel-Auswahl) --}}
+                                <td class="min-w-[8rem]" x-on:click.stop title="{{ $r->name }} — Klick: bearbeiten">
+                                    <span class="flex items-center gap-2">
+                                        <button type="button"
+                                                x-on:click.stop="$dispatch('modal.open', { name: 'recipe-modal' }); Livewire.dispatch('recipe-modal.oeffnen', { id: {{ $r->id }} })"
+                                                class="text-left font-medium text-[var(--fa-ink)] hover:text-[var(--fa-accent)] hover:underline"
+                                                data-rezept-name>{{ $r->name }}</button>
+                                        @if($r->is_template)<x-fa::badge tone="info" icon="heroicon-m-square-2-stack" data-template-badge>Vorlage</x-fa::badge>@endif
+                                    </span>
+                                </td>
+                                @if(in_array('kategorie', $spalten, true))<td class="whitespace-nowrap text-[var(--fa-ink-2)]">{{ $r->category?->label ?? '–' }}</td>@endif
+                                @if(in_array('geschmack', $spalten, true))<td class="whitespace-nowrap text-[var(--fa-ink-2)]">{{ \Platform\FoodAlchemist\Support\Labels::geschmack($r->taste_direction) }}</td>@endif
+                                @if(in_array('fertigung', $spalten, true))<td class="whitespace-nowrap text-[var(--fa-ink-2)]">{{ \Platform\FoodAlchemist\Support\Labels::fertigung($r->production_depth) }}</td>@endif
+                                @if(in_array('ekkg', $spalten, true))<td class="num" title="Einkaufspreis je Kilogramm">@if($r->ek_per_kg_eur !== null)<x-fa::money :value="$r->ek_per_kg_eur" />@else<x-fa::badge tone="crit">Preis fehlt</x-fa::badge>@endif</td>@endif
+                                @if(in_array('yield', $spalten, true))<td class="num text-[var(--fa-ink-2)]">{{ $r->yield_kg !== null ? number_format((float) $r->yield_kg, 3, ',', '.') . ' kg' : '–' }}</td>@endif
+                                @if(in_array('zutaten', $spalten, true))<td class="num text-[var(--fa-ink-2)]">
+                                    <span class="inline-flex items-center gap-1.5">{{ $r->n_ingredients_total }}
+                                    @if($r->n_ingredients_unmapped > 0)<x-fa::badge tone="warn" title="Zutaten ohne Produkt-Zuordnung: Allergene unbekannt">{{ $r->n_ingredients_unmapped }} offen</x-fa::badge>@endif</span>
+                                </td>@endif
+                                @if(in_array('allergen', $spalten, true))<td class="whitespace-nowrap">
+                                    <x-fa::badge :tone="$konfidenzTon[$r->allergens_confidence] ?? 'neutral'">{{ \Platform\FoodAlchemist\Support\Labels::konfidenz($r->allergens_confidence) }}</x-fa::badge>
+                                </td>@endif
+                                @if(in_array('status', $spalten, true))
+                                {{-- Status als Chip; Kuratoren ändern ihn über ein kleines Menü (Stub bleibt Auto-Zustand) --}}
+                                <td class="whitespace-nowrap" wire:click.stop @click.stop>
+                                    @if(\Platform\FoodAlchemist\Support\Curate::canCurate(auth()->user(), $r) && $r->status !== \Platform\FoodAlchemist\Enums\RecipeStatus::Stub)
+                                        <div class="relative inline-block" x-data="faMenu()" x-on:keydown.escape="offen = false" x-on:click.outside="offen = false" wire:key="rst-{{ $r->id }}-{{ $r->status->value }}">
+                                            <button type="button" x-on:click="toggle($event)" class="inline-flex items-center gap-0.5" aria-haspopup="menu" x-bind:aria-expanded="offen" aria-label="Status von {{ $r->name }} ändern" data-status-select>
+                                                <x-fa::status :value="$r->status" />@svg('heroicon-m-chevron-down', 'w-3.5 h-3.5 text-[var(--fa-ink-3)]')
+                                            </button>
+                                            <div x-bind:class="{ hidden: ! offen }" x-bind:style="pos" role="menu" class="hidden w-40 fa-surface shadow-lg py-1">
+                                                @foreach($statusWahl as $fall)
+                                                    <button type="button" role="menuitem" x-on:click="offen = false" wire:click="statusSetzen({{ $r->id }}, '{{ $fall->value }}')"
+                                                            class="flex w-full items-center justify-between px-3 py-1.5 text-left text-[length:var(--fa-text-md)] hover:bg-[var(--fa-hover)] {{ $r->status === $fall ? 'font-semibold text-[var(--fa-accent)]' : 'text-[var(--fa-ink)]' }}">
+                                                        {{ $fall->label() }}@if($r->status === $fall)@svg('heroicon-m-check', 'w-4 h-4')@endif
+                                                    </button>
+                                                @endforeach
+                                            </div>
+                                        </div>
+                                    @else
+                                        <x-fa::status :value="$r->status" />
+                                    @endif
+                                </td>@endif
+                            </x-foodalchemist::table-row>
+                        @empty
+                            <tr>
+                                <td colspan="{{ count($spalten) + 2 }}">
+                                    <x-fa::empty icon="heroicon-o-book-open" title="Keine Rezepte gefunden">Filter zurücksetzen oder ein neues Basisrezept anlegen.</x-fa::empty>
+                                </td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
             </div>
-            <div class="max-h-[70vh] overflow-auto">{{-- R13: schmaler Mittelteil scrollt statt abzuschneiden --}}
-            <table class="{{ $table }}">
-                <thead><tr class="text-left">
-                    <th class="{{ $th }} !pr-0 w-8 sticky top-0 z-20 bg-white/95 backdrop-blur-xl"></th>
-                    {{-- R13 (Jarvis-Dichte): Name flexibel, Zahlen rechtsbündig --}}
-                    {{-- E14: Kopf folgt der aktiven Ansicht. „Name" steht immer. --}}
-                    <th class="{{ $th }} w-full sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Name</th>
-                    @foreach($spalten as $sp)
-                        <th class="{{ $th }} {{ $spaltenKatalog[$sp][1] }} w-px sticky top-0 z-20 bg-white/95 backdrop-blur-xl">{{ $spaltenKatalog[$sp][0] }}</th>
-                    @endforeach
-                </tr></thead>
-                <tbody>
-                    @forelse($rezepte as $r)
-                        <x-foodalchemist::table-row :active="$recipeId === $r->id" wire:key="r-{{ $r->id }}" wire:click="waehleRezept({{ $r->id }})"
-                            x-data x-on:click="$store.ui?.mSet('activity_recipes', 'open', true)"
-                            data-rezept-zeile="{{ $r->id }}">
-                            <td class="{{ $td }} !pr-0" wire:click.stop>
-                                <input type="checkbox" wire:model.live="auswahl.{{ $r->id }}" class="rounded border-gray-300 text-violet-600 focus:ring-violet-500" data-rezept-checkbox="{{ $r->id }}" />
-                            </td>
-                            {{-- R6: Namens-Klick öffnet direkt den Voll-Editor (Zeilen-Klick bleibt Panel-Selektion) --}}
-                            <td class="{{ $td }} font-medium w-full min-w-[8rem] break-words"
-                                x-on:click.stop title="{{ $r->name }} — Klick: bearbeiten">
-                                <button type="button"
-                                        x-on:click.stop="$dispatch('modal.open', { name: 'recipe-modal' }); Livewire.dispatch('recipe-modal.oeffnen', { id: {{ $r->id }} })"
-                                        class="text-left text-gray-900 hover:text-violet-600 hover:underline cursor-pointer"
-                                        data-rezept-name>{{ $r->name }}</button>
-                                @if($r->is_template)<span class="{{ $pill }} {{ $variantPill['success'] }} ml-1.5" data-template-badge>@svg('heroicon-o-square-2-stack', 'w-3.5 h-3.5 inline-block align-middle') Template</span>@endif
-                            </td>
-                            @if(in_array('kategorie', $spalten, true))<td class="{{ $td }} text-[11px] italic text-gray-600 truncate max-w-[5rem] whitespace-nowrap">{{ $r->category?->label ?? '—' }}</td>@endif
-                            @if(in_array('geschmack', $spalten, true))<td class="{{ $td }} text-gray-600 whitespace-nowrap">{{ \Platform\FoodAlchemist\Support\Labels::geschmack($r->taste_direction) }}</td>@endif
-                            @if(in_array('fertigung', $spalten, true))<td class="{{ $td }} text-gray-600 whitespace-nowrap">{{ \Platform\FoodAlchemist\Support\Labels::fertigung($r->production_depth) }}</td>@endif
-                            @if(in_array('ekkg', $spalten, true))<td class="{{ $td }} text-gray-900 whitespace-nowrap text-right tabular-nums" title="Einkaufspreis je Kilogramm — die Kostenzahl des Rezepts">{{ $r->ek_per_kg_eur !== null ? number_format((float) $r->ek_per_kg_eur, 2, ',', '.') : '—' }}</td>@endif
-                            @if(in_array('yield', $spalten, true))<td class="{{ $td }} text-gray-600 whitespace-nowrap text-right tabular-nums">{{ $r->yield_kg !== null ? number_format((float) $r->yield_kg, 3, ',', '.') . ' kg' : '—' }}</td>@endif
-                            @if(in_array('zutaten', $spalten, true))<td class="{{ $td }} text-gray-600 text-right tabular-nums whitespace-nowrap">
-                                {{ $r->n_ingredients_total }}
-                                @if($r->n_ingredients_unmapped > 0)<span class="{{ $pill }} {{ $variantPill['warning'] }} ml-1" title="ungemappte Zutaten — F7.1: Allergene unbekannt">{{ $r->n_ingredients_unmapped }}?</span>@endif
-                            </td>@endif
-                            @if(in_array('allergen', $spalten, true))<td class="{{ $td }}">
-                                <span class="{{ $pill }} {{ ['high' => $variantPill['success'], 'medium' => $variantPill['warning'], 'low' => $variantPill['danger'], 'unknown' => $variantPill['secondary']][$r->allergens_confidence] ?? $variantPill['secondary'] }}">{{ \Platform\FoodAlchemist\Support\Labels::konfidenz($r->allergens_confidence) }}</span>
-                            </td>@endif
-                            @if(in_array('status', $spalten, true))
-                            {{-- Inline-Status-Pflege wie bei GP (Kuratoren; Stub bleibt Badge — Auto-Zustand) --}}
-                            <td class="{{ $td }} whitespace-nowrap" wire:click.stop @click.stop>
-                                @if(\Platform\FoodAlchemist\Support\Curate::canCurate(auth()->user(), $r) && $r->status !== \Platform\FoodAlchemist\Enums\RecipeStatus::Stub)
-                                    <select wire:key="rst-{{ $r->id }}-{{ $r->status->value }}" wire:change="statusSetzen({{ $r->id }}, $event.target.value)"
-                                            class="{{ $pill }} font-medium {{ $statusPill[$r->status->value] ?? $variantPill['secondary'] }} border-0 cursor-pointer focus:ring-1 focus:ring-violet-400 pr-6 !w-24" data-status-select>
-                                        @foreach([\Platform\FoodAlchemist\Enums\RecipeStatus::Draft, \Platform\FoodAlchemist\Enums\RecipeStatus::Review, \Platform\FoodAlchemist\Enums\RecipeStatus::Approved, \Platform\FoodAlchemist\Enums\RecipeStatus::Deprecated] as $fall)
-                                            <option value="{{ $fall->value }}" @selected($r->status === $fall)>{{ $fall->label() }}</option>
-                                        @endforeach
-                                    </select>
-                                @else
-                                    <span class="{{ $pill }} font-medium {{ $statusPill[$r->status->value] ?? $variantPill['secondary'] }}">{{ $r->status->label() }}</span>
-                                @endif
-                            </td>@endif
-                        </x-foodalchemist::table-row>
-                    @empty
-                        <tr><td colspan="{{ count($spalten) + 2 }}" class="px-5 py-10 text-center text-gray-500">Keine Rezepte gefunden.</td></tr>
-                    @endforelse
-                </tbody>
-            </table>
-            </div>
-            <div class="px-5 py-3 border-t border-black/5">{{ $rezepte->links() }}</div>
+            <div class="px-4 py-3 border-t border-[var(--fa-line)]">{{ $rezepte->links('foodalchemist::components.fa.pagination') }}</div>
         </div>
     </x-ui-page-container>
-    {{-- Spec 53/F Stufe 2: Sprachbefehl-Mount auf Seitenebene (Modal + optionales schwebendes Element). --}}
 </x-ui-page>

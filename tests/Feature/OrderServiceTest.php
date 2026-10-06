@@ -742,8 +742,10 @@ it('S3: dokument() + mailtoData() + Bestell-Dokument-Blade rendert', function ()
         ->and($dok['invoice']['differences'])->toBe(1);
 
     $html = view('foodalchemist::dokumente.bestellung', ['dok' => $dok, 'istPdf' => true])->render();
-    expect($html)->toContain('Chefs')->toContain('ART-MEH')->toContain('Wareneinsatz netto')->toContain('21,00')
-        ->toContain('AB-DOK-1')->toContain('RE-DOK-1')->toContain('2026-08-25')->toContain('strittig')
+    // fa-pass Druck-Muster: Summe heißt jetzt „Bestellwert netto" (das Blatt geht an den Lieferanten —
+    // „Wareneinsatz" ist eine Kalkulationsgröße), Datumsfelder stehen deutsch (25.08.2026) statt ISO.
+    expect($html)->toContain('Chefs')->toContain('ART-MEH')->toContain('Bestellwert netto')->toContain('21,00')
+        ->toContain('AB-DOK-1')->toContain('RE-DOK-1')->toContain('25.08.2026')->toContain('strittig')
         ->toContain('Freigabe')->toContain('freigegeben')->toContain('Budget ok')
         ->toContain('Gutschrift erwartet')->toContain('Preisgutschrift offen')
         ->toContain('Wareneingang')->toContain('Rechnung');
@@ -1385,7 +1387,7 @@ it('S3: Dokument-Route liefert HTML + CSV-Download', function () {
     $this->svc->updateClaimLine($this->rootTeam, $mehlLine->id, ['claim_note' => 'Gutschrift erledigt', 'credit_expected_net' => 1.50, 'claim_status' => 'credited']);
 
     $this->get(route('foodalchemist.orders.dokument', ['order' => $chefs->id]))
-        ->assertOk()->assertSee('Wareneinsatz netto');
+        ->assertOk()->assertSee('Bestellwert netto');
 
     $csv = $this->get(route('foodalchemist.orders.dokument', ['order' => $chefs->id, 'csv' => 1]));
     $csv->assertOk();

@@ -93,7 +93,8 @@ it('KI-Ersatzvorschlag übergibt ungemappten LA an die atomare GP-Ersatz-Anlage'
             'score' => 0.91, 'reason' => 'Gleiche kulinarische Funktion.', 'supplier' => 'Necta',
         ]])
         ->assertSeeHtml('data-ersatz-ki-zeile')
-        ->assertSeeHtml('bg-white/60')
+        // fa-pass: Vorschlagszeile liegt auf der Flächenfarbe (Token) statt auf halbtransparentem Weiß
+        ->assertSeeHtml('bg-[var(--fa-surface)]')
         ->assertDontSeeHtml('bg-white/50')
         ->call('ersatzLaAlsGpAnlegen', $this->la->id)
         ->assertDispatched(
@@ -146,7 +147,7 @@ it('LA-Verknüpfung blockiert ein bekannt abweichendes Allergen- oder Zusatzstof
     ]);
 
     expect(fn () => app(LeadLaService::class)->verknuepfen($this->rootTeam, $this->gp->fresh(), $neu->id))
-        ->toThrow(RuntimeException::class, 'neues GP');
+        ->toThrow(RuntimeException::class, 'neues Grundprodukt');
     expect(FoodAlchemistSupplierItemStructure::where('supplier_item_id', $neu->id)->whereNotNull('gp_id')->exists())->toBeFalse();
 });
 

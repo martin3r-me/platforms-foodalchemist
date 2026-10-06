@@ -82,7 +82,7 @@ class Index extends Component
             'plaene' => $svc->paginateBrowser(['search' => $this->search], $team),
             'plan' => $plan,
             'vorschau' => $vorschau,
-        ])->layout('platform::layouts.app');
+        ])->layout('foodalchemist::layouts.standalone');
     }
 
     private function team()

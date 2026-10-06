@@ -327,6 +327,12 @@ return [
             'group' => 'System',
             'items' => [
                 [
+                    // fa-pass Welle 0: Musterseite der Bausteinbibliothek
+                    'label' => 'Designsystem',
+                    'route' => 'foodalchemist.ui-katalog',
+                    'icon'  => 'heroicon-o-swatch',
+                ],
+                [
                     'label' => 'Trendradar',
                     'route' => 'foodalchemist.trendradar.index',
                     'icon'  => 'heroicon-o-sparkles',

@@ -1,176 +1,205 @@
-{{-- M-K10 / Doc 16 §11: Standalone Kalkulations-Composer — Bibliothek + Positions-Editor --}}
-@php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
-@php($typFarbe = ['gericht' => 'primary', 'basisrezept' => 'info', 'gp' => 'success', 'frei' => 'secondary'])
-@php($typLabel = ['gericht' => 'Gericht', 'basisrezept' => 'Basisrezept', 'gp' => 'Grundprodukt', 'frei' => 'Frei'])
+{{-- M-K10 / Doc 16 §11: Kalkulator. Bibliothek links, Positions-Editor rechts.
+     fa-pass 2026-10-05: auf Bausteine <x-fa::…> umgestellt. Anordnung unverändert
+     (Bibliothek · Kopf · Positionen · Ergebnis). Löschen ins Menü „Weitere Aktionen",
+     fehlender Einzelpreis als „Preis fehlt" statt 0,00 €, Positionstyp als Chips.
+     Funktion, wire:-Bindungen und Feldnamen unverändert. --}}
+@php
+    $typTon = ['gericht' => 'accent', 'basisrezept' => 'info', 'gp' => 'ok', 'frei' => 'neutral'];
+    $typLabel = ['gericht' => 'Gericht', 'basisrezept' => 'Basisrezept', 'gp' => 'Grundprodukt', 'frei' => 'Frei'];
+    $euro = fn ($wert) => number_format((float) $wert, 2, ',', '.') . ' €';
+    $leise = 'text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]';
+@endphp
 
 <x-ui-page>
     <x-slot:navbar>
-        <x-ui-page-navbar title="Kalkulator" icon="heroicon-o-calculator" />
+        <x-foodalchemist::shell.page-navbar title="Kalkulator" icon="heroicon-o-calculator" />
     </x-slot:navbar>
 
-    <x-slot name="actionbar">
-        <x-ui-page-actionbar :breadcrumbs="[
-            ['label' => 'Food Alchemist', 'href' => route('foodalchemist.dashboard'), 'icon' => 'cube'],
-            ['label' => 'Kalkulator'],
-        ]" />
-    </x-slot>
+    <x-ui-page-container padding="px-6 py-6" spacing="space-y-4">
+        <x-fa::page-header title="Kalkulator" subtitle="Positionen zusammenstellen und vom Wareneinsatz bis zum Verkaufspreis rechnen." />
 
-    <x-ui-page-container padding="px-6 pb-6" spacing="space-y-4">
-        <div class="grid grid-cols-1 lg:grid-cols-[18rem_1fr] gap-4 pt-1">
+        <div class="grid grid-cols-1 lg:grid-cols-[18rem_minmax(0,1fr)] gap-4">
 
-            {{-- ── Bibliothek ─────────────────────────────────────────────── --}}
-            <div class="relative overflow-hidden {{ $card }} self-start">
-                <div class="{{ $cardAccent }}"></div>
-                <div class="flex items-center justify-between px-4 py-3 border-b border-black/5">
-                    <p class="{{ $label }}">Kalkulationen</p>
-                    <button type="button" wire:click="neueKalkulation" class="{{ $btnGhostXs }}">+ Neu</button>
+            {{-- Bibliothek --}}
+            <div class="fa-surface self-start min-w-0" data-kalkulator-liste>
+                <div class="flex items-center justify-between gap-2 px-4 py-3 border-b border-[var(--fa-line)]">
+                    <p class="text-[length:var(--fa-text-md)] font-semibold text-[var(--fa-ink)]">Kalkulationen</p>
+                    <x-fa::button size="sm" variant="primary" icon="heroicon-m-plus" wire:click="neueKalkulation">Neue Kalkulation</x-fa::button>
                 </div>
-                <div class="divide-y divide-black/5 max-h-[70vh] overflow-y-auto">
+                <div class="flex flex-col gap-0.5 p-1.5 max-h-[70vh] overflow-y-auto">
                     @forelse($kalkulationen as $k)
                         <button type="button" wire:key="kalk-{{ $k->id }}" wire:click="waehle({{ $k->id }})"
-                            class="w-full text-left px-4 py-2.5 transition-colors {{ $selectedId === $k->id ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10' : 'hover:bg-black/[0.02]' }}">
-                            <div class="text-xs font-medium text-gray-900 truncate">{{ $k->title }}</div>
-                            <div class="text-[10px] text-gray-500">{{ $k->positionen_count }} {{ $k->positionen_count === 1 ? 'Position' : 'Positionen' }}</div>
+                                @if($selectedId === $k->id) aria-current="true" @endif
+                                class="w-full text-left px-2.5 py-2 rounded-[var(--fa-radius-control)] transition-colors duration-150 {{ $selectedId === $k->id ? 'bg-[var(--fa-accent-soft)]' : 'hover:bg-[var(--fa-hover)]' }}">
+                            <span class="block text-[length:var(--fa-text-md)] font-medium break-words {{ $selectedId === $k->id ? 'text-[var(--fa-accent)]' : 'text-[var(--fa-ink)]' }}">{{ $k->title }}</span>
+                            <span class="block {{ $leise }} tabular-nums">{{ $k->positionen_count }} {{ $k->positionen_count === 1 ? 'Position' : 'Positionen' }}</span>
                         </button>
                     @empty
-                        <p class="px-4 py-8 text-center text-xs text-gray-500">Noch keine Kalkulation.<br>Mit <strong>+ Neu</strong> anlegen.</p>
+                        <x-fa::empty compact icon="heroicon-o-calculator" title="Noch keine Kalkulation">Mit „Neue Kalkulation“ die erste anlegen.</x-fa::empty>
                     @endforelse
                 </div>
             </div>
 
-            {{-- ── Editor ─────────────────────────────────────────────────── --}}
+            {{-- Editor --}}
             @if($active === null)
-                <div class="relative overflow-hidden {{ $card }} flex items-center justify-center min-h-[40vh]">
-                    <p class="text-sm text-gray-500">Links eine Kalkulation wählen oder <strong>+ Neu</strong> anlegen.</p>
+                <div class="fa-surface flex items-center justify-center min-h-[40vh]">
+                    <x-fa::empty icon="heroicon-o-cursor-arrow-rays" title="Keine Kalkulation geöffnet">
+                        Links eine Kalkulation wählen oder eine neue anlegen.
+                        <x-slot:action><x-fa::button icon="heroicon-m-plus" wire:click="neueKalkulation">Neue Kalkulation</x-fa::button></x-slot:action>
+                    </x-fa::empty>
                 </div>
             @else
-                <div class="space-y-4">
+                <div class="flex flex-col gap-4 min-w-0">
                     {{-- Kopf --}}
-                    <div class="relative overflow-hidden {{ $card }} p-4">
-                        <div class="{{ $cardAccent }}"></div>
-                        <div class="flex flex-wrap items-end gap-3">
-                            <div class="flex-1 min-w-48">
-                                <label class="{{ $label }}">Titel</label>
-                                <input type="text" wire:model="titel" class="{{ $input }}" placeholder="Kalkulation …" />
+                    <x-fa::section title="Kalkulation" icon="heroicon-o-document-text">
+                        <x-slot:actions>
+                            @if($meldung)<x-fa::signal tone="ok">{{ $meldung }}</x-fa::signal>@endif
+                            <div class="relative" x-data="faMenu()" x-on:keydown.escape="offen = false" x-on:click.outside="offen = false">
+                                <x-fa::icon-button icon="heroicon-m-ellipsis-horizontal" label="Weitere Aktionen" x-on:click="toggle($event)" aria-haspopup="menu" x-bind:aria-expanded="offen" />
+                                <div class="hidden w-52 fa-surface shadow-lg py-1" x-bind:class="{ hidden: ! offen }" x-bind:style="pos" role="menu">
+                                    <button type="button" role="menuitem" x-on:click="offen = false" wire:click="loeschen({{ $active->id }})" wire:confirm="Diese Kalkulation löschen?"
+                                            class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[length:var(--fa-text-md)] text-[var(--fa-crit)] hover:bg-[var(--fa-crit-soft)]">
+                                        @svg('heroicon-o-trash', 'w-4 h-4') Kalkulation löschen
+                                    </button>
+                                </div>
                             </div>
-                            <div class="w-28">
-                                <label class="{{ $label }}">Marge-Override (%)</label>
-                                <input type="number" min="0" step="0.5" wire:model="margeOverride" class="{{ $input }} text-right tabular-nums" placeholder="Team" />
-                            </div>
-                            <button type="button" wire:click="speichereKopf" class="{{ $btnPrimary }}">Speichern</button>
-                            <button type="button" wire:click="loeschen({{ $active->id }})" wire:confirm="Diese Kalkulation löschen?" class="{{ $btnGhost }} !text-red-500">Löschen</button>
-                            @if($meldung)<span class="text-[11px] text-emerald-600">{{ $meldung }}</span>@endif
+                            <x-fa::button variant="primary" icon="heroicon-m-check" wire:click="speichereKopf">Speichern</x-fa::button>
+                        </x-slot:actions>
+                        <div class="grid gap-3 grid-cols-[repeat(auto-fit,minmax(min(100%,14rem),1fr))]">
+                            <x-fa::field label="Titel" for="kalk-titel">
+                                <x-fa::input id="kalk-titel" wire:model="titel" placeholder="Zum Beispiel: Menü Sommerfest" />
+                            </x-fa::field>
+                            <x-fa::field label="Eigene Marge (%)" for="kalk-marge" hint="Leer: Marge aus den Team-Einstellungen.">
+                                <x-fa::input id="kalk-marge" type="number" min="0" step="0.5" numeric wire:model="margeOverride" placeholder="Team" />
+                            </x-fa::field>
                         </div>
-                        <div class="mt-3">
-                            <label class="{{ $label }}">Notiz</label>
-                            <input type="text" wire:model="note" class="{{ $input }}" placeholder="optional …" />
-                        </div>
-                    </div>
+                        <x-fa::field label="Notiz" for="kalk-notiz" optional>
+                            <x-fa::input id="kalk-notiz" wire:model="note" />
+                        </x-fa::field>
+                    </x-fa::section>
 
                     {{-- Positionen --}}
-                    <div class="relative overflow-hidden {{ $card }}">
-                        <div class="{{ $cardAccent }}"></div>
+                    <section class="fa-surface min-w-0" data-kalkulator-positionen>
+                        <header class="px-4 pt-4 pb-2">
+                            <h3 class="flex items-center gap-2 text-[length:var(--fa-text-lg)] font-semibold text-[var(--fa-ink)]">@svg('heroicon-o-queue-list', 'w-[18px] h-[18px] text-[var(--fa-ink-3)]') Positionen</h3>
+                        </header>
                         <div class="overflow-x-auto">
-                            <table class="{{ $table }}">
-                                <thead><tr class="text-left">
-                                    @foreach([['Typ',''], ['Position','w-full'], ['Menge','text-right'], ['Einheit',''], ['Einzel-EK','text-right'], ['= Wareneinsatz','text-right'], ['min','text-right'], ['',''] ] as [$h, $a])
-                                        <th class="{{ $th }} {{ $a }}">{{ $h }}</th>
-                                    @endforeach
-                                </tr></thead>
+                            <table class="fa-table">
+                                <thead>
+                                    <tr>
+                                        <th>Typ</th>
+                                        <th class="w-full">Position</th>
+                                        <th class="num">Menge</th>
+                                        <th>Einheit</th>
+                                        <th class="num">Einzel-EK</th>
+                                        <th class="num">Wareneinsatz</th>
+                                        <th class="num">Minuten</th>
+                                        <th><span class="sr-only">Aktionen</span></th>
+                                    </tr>
+                                </thead>
                                 <tbody>
                                     @forelse($berechnung['positionen'] as $p)
-                                        <tr wire:key="pos-{{ $p['id'] }}" class="{{ $tr }}">
-                                            <td class="{{ $td }}"><span class="{{ $pill }} {{ $variantPill[$typFarbe[$p['type']]] }}">{{ $typLabel[$p['type']] }}</span></td>
-                                            <td class="{{ $td }} w-full">
-                                                <input type="text" value="{{ $p['label'] }}" wire:change="updatePos({{ $p['id'] }}, 'label', $event.target.value)"
-                                                    class="{{ $input }} !py-1" />
+                                        <tr wire:key="pos-{{ $p['id'] }}">
+                                            <td><x-fa::badge :tone="$typTon[$p['type']] ?? 'neutral'">{{ $typLabel[$p['type']] ?? $p['type'] }}</x-fa::badge></td>
+                                            <td class="min-w-[12rem]">
+                                                <x-fa::input size="sm" value="{{ $p['label'] }}" aria-label="Bezeichnung"
+                                                    wire:change="updatePos({{ $p['id'] }}, 'label', $event.target.value)" />
                                             </td>
-                                            <td class="{{ $td }} text-right">
-                                                <input type="number" min="0" step="0.001" value="{{ rtrim(rtrim(number_format($p['quantity'], 3, '.', ''), '0'), '.') }}"
-                                                    wire:change="updatePos({{ $p['id'] }}, 'quantity', $event.target.value)"
-                                                    class="{{ $input }} !py-1 !w-20 text-right tabular-nums" />
+                                            <td class="num">
+                                                <x-fa::input size="sm" numeric type="number" min="0" step="0.001" class="w-24" aria-label="Menge"
+                                                    value="{{ rtrim(rtrim(number_format($p['quantity'], 3, '.', ''), '0'), '.') }}"
+                                                    wire:change="updatePos({{ $p['id'] }}, 'quantity', $event.target.value)" />
                                             </td>
-                                            <td class="{{ $td }}">
-                                                <input type="text" value="{{ $p['unit'] }}" wire:change="updatePos({{ $p['id'] }}, 'unit', $event.target.value)"
-                                                    class="{{ $input }} !py-1 !w-20" placeholder="—" />
+                                            <td>
+                                                <x-fa::input size="sm" class="w-20" aria-label="Einheit" value="{{ $p['unit'] }}" placeholder="Stk"
+                                                    wire:change="updatePos({{ $p['id'] }}, 'unit', $event.target.value)" />
                                             </td>
-                                            <td class="{{ $td }} text-right">
-                                                <input type="number" min="0" step="0.0001" value="{{ rtrim(rtrim(number_format($p['einzel_ek'], 4, '.', ''), '0'), '.') }}"
-                                                    wire:change="updatePos({{ $p['id'] }}, 'einzel_ek', $event.target.value)"
-                                                    class="{{ $input }} !py-1 !w-24 text-right tabular-nums" />
+                                            <td class="num">
+                                                <x-fa::input size="sm" numeric type="number" min="0" step="0.0001" class="w-28" aria-label="Einzel-EK in Euro"
+                                                    value="{{ rtrim(rtrim(number_format($p['einzel_ek'], 4, '.', ''), '0'), '.') }}"
+                                                    wire:change="updatePos({{ $p['id'] }}, 'einzel_ek', $event.target.value)" />
                                             </td>
-                                            <td class="{{ $td }} text-right tabular-nums font-medium text-gray-900 whitespace-nowrap">{{ number_format($p['wareneinsatz'], 2, ',', '.') }} €</td>
-                                            <td class="{{ $td }} text-right tabular-nums text-gray-500">{{ $p['work_time_min'] !== null ? $p['work_time_min'] : '—' }}</td>
-                                            <td class="{{ $td }} whitespace-nowrap text-right">
-                                                @if($p['type'] !== 'frei')
-                                                    <button type="button" wire:click="aktualisierePos({{ $p['id'] }})" title="Snapshot neu ziehen" class="text-gray-500 hover:text-violet-500 mr-1">↻</button>
+                                            <td class="num font-medium">
+                                                @if((float) $p['einzel_ek'] > 0)
+                                                    <x-fa::money :value="$p['wareneinsatz']" />
+                                                @else
+                                                    <x-fa::money :value="null" title="Kein Einzelpreis: der Wareneinsatz dieser Position fehlt in der Summe" />
                                                 @endif
-                                                <button type="button" wire:click="entfernePos({{ $p['id'] }})" title="Entfernen" class="text-gray-500 hover:text-red-500">✕</button>
+                                            </td>
+                                            <td class="num text-[var(--fa-ink-2)]">{{ $p['work_time_min'] !== null ? $p['work_time_min'] : '–' }}</td>
+                                            <td class="whitespace-nowrap text-right">
+                                                @if($p['type'] !== 'frei')
+                                                    <x-fa::icon-button size="sm" icon="heroicon-m-arrow-path" label="Preis und Zeit neu übernehmen" wire:click="aktualisierePos({{ $p['id'] }})" />
+                                                @endif
+                                                <x-fa::icon-button size="sm" tone="danger" icon="heroicon-m-x-mark" label="Position entfernen" wire:click="entfernePos({{ $p['id'] }})" />
                                             </td>
                                         </tr>
                                     @empty
-                                        <tr><td colspan="8" class="px-5 py-8 text-center text-gray-500">Noch keine Positionen — unten hinzufügen.</td></tr>
+                                        <tr>
+                                            <td colspan="8"><x-fa::empty compact icon="heroicon-o-queue-list" title="Noch keine Positionen">Unten ein Gericht, Basisrezept oder Grundprodukt hinzufügen.</x-fa::empty></td>
+                                        </tr>
                                     @endforelse
                                 </tbody>
                             </table>
                         </div>
 
                         {{-- Hinzufügen --}}
-                        <div class="px-4 py-3 border-t border-black/5 bg-black/[0.015]">
-                            <div class="flex flex-wrap items-center gap-2">
-                                <span class="{{ $label }}">Position hinzufügen:</span>
-                                @foreach(['gericht', 'basisrezept', 'gp', 'frei'] as $t)
-                                    <button type="button" wire:click="$set('addTyp', '{{ $t }}')"
-                                        class="{{ $pill }} {{ $addTyp === $t ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $typLabel[$t] }}</button>
-                                @endforeach
-
+                        <div class="px-4 py-3 border-t border-[var(--fa-line)] bg-[var(--fa-ground)] rounded-b-[var(--fa-radius-surface)] flex flex-col gap-3" data-kalkulator-hinzufuegen>
+                            <div class="flex flex-wrap items-end gap-3">
+                                <x-fa::choice name="addTyp" label="Position hinzufügen" idPrefix="kalk" :options="$typLabel" />
                                 @if($addTyp === 'frei')
-                                    <button type="button" wire:click="addPosition" class="{{ $btnGhostXs }} ml-2">+ Freie Zeile</button>
+                                    <x-fa::button icon="heroicon-m-plus" wire:click="addPosition">Freie Zeile hinzufügen</x-fa::button>
                                 @else
-                                    <input type="search" wire:model.live.debounce.300ms="addSuche" placeholder="{{ $typLabel[$addTyp] }} suchen …" class="{{ $input }} !w-56 ml-2" />
+                                    <div class="relative w-full max-w-xs">
+                                        <label for="kalk-suche" class="sr-only">{{ $typLabel[$addTyp] }} suchen</label>
+                                        @svg('heroicon-m-magnifying-glass', 'w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--fa-ink-3)] pointer-events-none')
+                                        <x-fa::input id="kalk-suche" type="search" wire:model.live.debounce.300ms="addSuche" class="pl-8" placeholder="{{ $typLabel[$addTyp] }} suchen" />
+                                    </div>
                                 @endif
                             </div>
 
                             @if($addTyp !== 'frei')
-                                <div class="mt-2 flex flex-wrap gap-1.5 max-h-32 overflow-y-auto">
+                                <div class="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto">
                                     @forelse($quellen as $q)
-                                        <button type="button" wire:key="q-{{ $addTyp }}-{{ $q['id'] }}" wire:click="addPosition({{ $q['id'] }})"
-                                            class="{{ $btnGhostXs }}">+ {{ $q['label'] }}</button>
+                                        <x-fa::button size="sm" icon="heroicon-m-plus" wire:key="q-{{ $addTyp }}-{{ $q['id'] }}" wire:click="addPosition({{ $q['id'] }})">{{ $q['label'] }}</x-fa::button>
                                     @empty
-                                        <span class="text-[11px] text-gray-500">{{ $addSuche !== '' ? 'Nichts gefunden.' : 'Tippe zum Suchen oder wähle aus der Liste.' }}</span>
+                                        <span class="{{ $leise }}">{{ $addSuche !== '' ? 'Nichts gefunden.' : 'Zum Suchen tippen oder aus der Liste wählen.' }}</span>
                                     @endforelse
                                 </div>
                             @endif
                         </div>
-                    </div>
+                    </section>
 
                     {{-- Ergebnis: HK1 → Zuschläge → HK2 → VK --}}
-                    <div class="relative overflow-hidden {{ $card }} p-4">
-                        <div class="{{ $cardAccent }}"></div>
-                        <p class="{{ $label }} mb-2">Kalkulation · Marge {{ rtrim(rtrim(number_format((float) $berechnung['marge_pct'], 2, ',', '.'), '0'), ',') }} %{{ $active->margin_override_pct !== null ? ' (Override)' : '' }}</p>
-                        <div class="max-w-md space-y-1">
-                            <div class="flex items-center justify-between text-xs py-0.5 font-medium text-gray-900">
-                                <span>HK1 — Wareneinsatz (Σ Positionen)</span>
-                                <span class="tabular-nums">{{ number_format((float) $berechnung['hk1'], 2, ',', '.') }} €</span>
+                    @php
+                        $margeText = rtrim(rtrim(number_format((float) $berechnung['marge_pct'], 2, ',', '.'), '0'), ',');
+                    @endphp
+                    <x-fa::section title="Ergebnis" icon="heroicon-o-calculator"
+                        :meta="'Marge ' . $margeText . ' %' . ($active->margin_override_pct !== null ? ', eigene Marge' : ', aus den Team-Einstellungen')">
+                        <dl class="max-w-md flex flex-col text-[length:var(--fa-text-md)]" data-kalkulator-ergebnis>
+                            <div class="flex items-center justify-between gap-3 py-1 font-medium text-[var(--fa-ink)]">
+                                <dt>HK1 · Wareneinsatz (Summe der Positionen)</dt>
+                                <dd class="tabular-nums whitespace-nowrap">{{ $euro($berechnung['hk1']) }}</dd>
                             </div>
                             @foreach($berechnung['bloecke'] as $blk)
                                 @if($blk['key'] !== 'we')
-                                    <div class="flex items-center justify-between text-xs py-0.5 text-gray-600">
-                                        <span>+ {{ $blk['label'] }}</span>
-                                        <span class="tabular-nums">{{ number_format((float) $blk['betrag'], 2, ',', '.') }} €</span>
+                                    <div class="flex items-center justify-between gap-3 py-1 text-[var(--fa-ink-2)]">
+                                        <dt>+ {{ $blk['label'] }}</dt>
+                                        <dd class="tabular-nums whitespace-nowrap">{{ $euro($blk['betrag']) }}</dd>
                                     </div>
                                 @endif
                             @endforeach
-                            <div class="flex items-center justify-between text-sm py-1.5 border-t border-black/10 font-semibold text-gray-900">
-                                <span>= HK2 (Selbstkosten)</span><span class="tabular-nums">{{ number_format((float) $berechnung['hk2'], 2, ',', '.') }} €</span>
+                            <div class="flex items-center justify-between gap-3 py-2 mt-1 border-t border-[var(--fa-line-strong)] font-semibold text-[var(--fa-ink)]">
+                                <dt>= HK2 · Selbstkosten</dt>
+                                <dd class="tabular-nums whitespace-nowrap">{{ $euro($berechnung['hk2']) }}</dd>
                             </div>
-                            <div class="flex items-center justify-between text-sm">
-                                <span class="text-gray-600">VK-Vorschlag (HK2 × Marge)</span>
-                                <span class="tabular-nums text-violet-700 font-medium">{{ number_format((float) $berechnung['vk_vorschlag'], 2, ',', '.') }} €</span>
+                            <div class="flex items-center justify-between gap-3 py-2 rounded-[var(--fa-radius-control)] bg-[var(--fa-accent-soft)] px-3 -mx-3">
+                                <dt class="text-[var(--fa-ink-2)]">VK-Vorschlag (HK2 mit Marge)</dt>
+                                <dd class="tabular-nums whitespace-nowrap text-[length:var(--fa-text-2xl)] font-semibold text-[var(--fa-accent)]">{{ $euro($berechnung['vk_vorschlag']) }}</dd>
                             </div>
-                            <p class="text-[10px] text-gray-500 pt-1">Arbeitszeit-Rollup: {{ number_format((float) $berechnung['work_time_min'], 0, ',', '.') }} min · nicht-lineare Skalierung folgt mit der KI. Sätze/Gemeinkosten in Einstellungen → Kalkulation.</p>
-                        </div>
-                    </div>
+                        </dl>
+                        <p class="{{ $leise }}">Arbeitszeit gesamt: {{ number_format((float) $berechnung['work_time_min'], 0, ',', '.') }} Minuten. Stundensatz und Zuschläge stehen in den Einstellungen unter Kalkulation.</p>
+                    </x-fa::section>
                 </div>
             @endif
         </div>

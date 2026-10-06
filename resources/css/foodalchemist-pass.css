@@ -1,0 +1,445 @@
+/*
+ * Food Alchemist · Design „Labor und Tageslicht" (Richtung C, 2026-10-05), Akzent Logo-Blau
+ *
+ * Eigenständiges Erscheinungsbild für den Food Alchemist als Produkt (nicht mehr als
+ * Plattform-Modul). Dunkle Navigation in Tintenblau, helle Arbeitsfläche, Akzent = Logo-Blau #033CDB.
+ *
+ * Wird von der Host-App NACH `@import "tailwindcss"` importiert. Drei Ebenen:
+ *   1. Tailwind-Paletten umgemappt: violet/indigo/purple → Logo-Blau, gray/slate → kühles Blaugrau.
+ *      Damit übernehmen alle bestehenden Klassen (rund 1.000 violet-*, 3.300 gray-*) das neue Bild,
+ *      ohne dass jede View angefasst wird.
+ *   2. Plattform-Tokens (--nx-*, --ui-*) überschrieben, damit die Seitenrahmen
+ *      (x-ui-page-actionbar, -sidebar, -container) mitziehen.
+ *   3. Eigene Tokens --fa-* für die neue Hülle (layouts/standalone).
+ */
+
+@theme {
+  /* Eigener Bildschirm-Bereich für große Monitore (Zutaten-Editor dreispaltig). Benannt statt
+     min-[1800px]: — arbiträre Breakpoints sortiert Tailwind VOR lg und verlieren gegen lg:-Regeln. */
+  --breakpoint-wide: 112.5rem;
+
+  --font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* Logo-Blau (#033CDB) als Akzentskala — ersetzt Violett/Indigo/Purpur. 600 = Akzent. */
+  --color-violet-50: #eef3ff;
+  --color-violet-100: #dce6fe;
+  --color-violet-200: #bcd3fb;
+  --color-violet-300: #8aaef7;
+  --color-violet-400: #5683f0;
+  --color-violet-500: #2a5ce6;
+  --color-violet-600: #0a3dd6;
+  --color-violet-700: #0832af;
+  --color-violet-800: #0a2a8a;
+  --color-violet-900: #0c246e;
+  --color-violet-950: #08163f;
+
+  --color-indigo-50: #eef3ff;
+  --color-indigo-100: #dce6fe;
+  --color-indigo-200: #bcd3fb;
+  --color-indigo-300: #8aaef7;
+  --color-indigo-400: #5683f0;
+  --color-indigo-500: #2a5ce6;
+  --color-indigo-600: #0a3dd6;
+  --color-indigo-700: #0832af;
+  --color-indigo-800: #0a2a8a;
+  --color-indigo-900: #0c246e;
+  --color-indigo-950: #08163f;
+
+  --color-purple-50: #eef3ff;
+  --color-purple-100: #dce6fe;
+  --color-purple-200: #bcd3fb;
+  --color-purple-300: #8aaef7;
+  --color-purple-400: #5683f0;
+  --color-purple-500: #2a5ce6;
+  --color-purple-600: #0a3dd6;
+  --color-purple-700: #0832af;
+  --color-purple-800: #0a2a8a;
+  --color-purple-900: #0c246e;
+  --color-purple-950: #08163f;
+
+  /* Kühles Blaugrau — ersetzt Gray/Slate. Stufen 500+ auf Weiß >= 4.5:1. */
+  --color-gray-50: #f4f6f9;
+  --color-gray-100: #ebeef3;
+  --color-gray-200: #dde2ea;
+  --color-gray-300: #c5ccd8;
+  --color-gray-400: #97a1b2;
+  --color-gray-500: #657084;
+  --color-gray-600: #4a5466;
+  --color-gray-700: #384152;
+  --color-gray-800: #242c3a;
+  --color-gray-900: #131a26;
+  --color-gray-950: #0a0f18;
+
+  --color-slate-50: #f4f6f9;
+  --color-slate-100: #ebeef3;
+  --color-slate-200: #dde2ea;
+  --color-slate-300: #c5ccd8;
+  --color-slate-400: #97a1b2;
+  --color-slate-500: #657084;
+  --color-slate-600: #4a5466;
+  --color-slate-700: #232d42;
+  --color-slate-800: #151d30;
+  --color-slate-900: #0d1424;
+  --color-slate-950: #080d18;
+}
+
+:root {
+  /* Hülle */
+  --fa-rail: #0d1424;
+  --fa-rail-ink: #b6c0d2;
+  --fa-rail-muted: #8390a6;
+  --fa-rail-hover: rgba(182, 192, 210, 0.08);
+  --fa-rail-active: #18254a;
+  --fa-rail-active-ink: #a9c2ff;
+  --fa-rail-line: rgba(182, 192, 210, 0.12);
+
+  /* Arbeitsfläche */
+  --fa-ground: #f3f5f8;
+  --fa-surface: #fdfdfe;
+  --fa-line: #dde2ea;
+  --fa-line-strong: #c5ccd8;
+  --fa-ink: #131a26;
+  --fa-ink-2: #4a5466;
+  --fa-ink-3: #657084;
+  --fa-accent: #0a3dd6;
+  --fa-accent-hover: #0832af;
+  --fa-accent-soft: #e6edfe;
+  --fa-on-accent: #f7f9ff;
+
+  /* Zustände (eigene Farben, getrennt vom Akzent, auch in der Helligkeit unterscheidbar) */
+  --fa-ok: #1c6e46;
+  --fa-ok-soft: #e2f2e9;
+  --fa-warn: #8a5200;
+  --fa-warn-soft: #fbefd9;
+  --fa-crit: #a8231c;
+  --fa-crit-soft: #fbe6e4;
+  --fa-crit-line: #f0b9b4;
+  --fa-info: #1f5f8b;
+  --fa-info-soft: #e3eff8;
+  --fa-neutral-soft: #ebeef3;
+  --fa-hover: rgba(19, 26, 38, 0.045);
+  --fa-accent-line: #bcd3fb;
+  --fa-accent-soft-hover: #d6e2fd;
+
+  /* Schriftskala — NUR diese sechs Größen (Regel-Test prüft) */
+  --fa-text-sm: 12px;   /* Labels, Hilfetexte, Chips */
+  --fa-text-md: 13px;   /* Tabellen, Formulare, Fließtext in Werkzeugen */
+  --fa-text-base: 14px; /* Fließtext */
+  --fa-text-lg: 16px;   /* Abschnittstitel, Nebenkennzahlen */
+  --fa-text-2xl: 24px;  /* die eine Hauptkennzahl */
+  --fa-text-3xl: 28px;  /* Seitentitel */
+
+  /* Formen — drei Radien */
+  --fa-radius-control: 6px;
+  --fa-radius-surface: 10px;
+  --fa-radius-pill: 999px;
+
+  /* Plattform-Rahmen übernehmen die Werte */
+  --nx-bg: var(--fa-ground);
+  --nx-surface: var(--fa-surface);
+  --nx-elevated: var(--fa-surface);
+  --nx-text: var(--fa-ink);
+  --nx-muted: var(--fa-ink-2);
+  --nx-faint: var(--fa-ink-3);
+  --nx-line: rgba(19, 26, 38, 0.09);
+  --nx-line-strong: rgba(19, 26, 38, 0.16);
+  --nx-hover: rgba(19, 26, 38, 0.045);
+  --nx-active: rgba(19, 26, 38, 0.08);
+  --nx-accent: var(--fa-accent);
+  --nx-accent-hover: var(--fa-accent-hover);
+  --nx-accent-soft: var(--fa-accent-soft);
+  --nx-on-accent: var(--fa-on-accent);
+
+  --ui-body-bg: var(--fa-ground);
+  --ui-body-color: var(--fa-ink);
+  --ui-surface: var(--fa-surface);
+  --ui-border: var(--fa-line);
+  --ui-font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
+}
+
+html, body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3 { text-wrap: balance; }
+
+/* Zahlen stehen in Tabellen immer in gleicher Breite */
+table, .tabular-nums { font-variant-numeric: tabular-nums; }
+
+/* Sichtbarer Fokus in Akzentfarbe */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--fa-accent);
+  outline-offset: 2px;
+}
+
+/* Navigation der Hülle */
+.fa-rail-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 6px;
+  color: var(--fa-rail-ink);
+  font-size: 13px;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+@media (hover: hover) and (pointer: fine) {
+  .fa-rail-link:hover { background: var(--fa-rail-hover); color: #eef2f8; }
+}
+.fa-rail-link[aria-current="page"] {
+  background: var(--fa-rail-active);
+  color: var(--fa-rail-active-ink);
+  font-weight: 500;
+}
+
+/* Knöpfe geben beim Drücken nach */
+button:active:not(:disabled), [role="button"]:active { transform: scale(0.98); }
+button { transition: transform 120ms ease-out, background-color 120ms ease, box-shadow 120ms ease; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+  button:active:not(:disabled) { transform: none; }
+}
+
+/*
+ * Lesbarkeit: die alte Optik nutzte 10–11 px Großbuchstaben mit Sperrung als Label (184 Stellen).
+ * Zentral statt pro View: Labels normal geschrieben, Mindestgröße 12 px.
+ * Ungeschichtete Regeln schlagen Tailwinds @layer utilities, deshalb ohne !important.
+ */
+.uppercase:is(.tracking-wide, .tracking-wider, .tracking-widest) {
+  text-transform: none;
+  letter-spacing: 0;
+}
+.text-\[10px\], .text-\[11px\] { font-size: 12px; }
+
+
+/* ═══ Werkbank-Modus (dunkle Editoren) ═══════════════════════════════════════════════════════
+ * Ein Bereich mit data-fa-theme="dark" schaltet NUR die Tokens um. Alle x-fa-Bausteine färben sich
+ * dadurch mit — keine Überschreib-Kaskade mehr wie im alten editor-dark (43 × !important).
+ * Farben aus der Navigation: Tintenblau als Grund, etwas hellere Flächen, Logo-Blau aufgehellt.
+ */
+[data-fa-theme="dark"] {
+  --fa-ground: #0d1424;
+  --fa-surface: #151e33;
+  --fa-line: #26304a;
+  --fa-line-strong: #34405e;
+  --fa-ink: #e6ebf5;
+  --fa-ink-2: #b6c0d2;
+  --fa-ink-3: #8b97ad;
+  --fa-accent: #8fb0ff;
+  --fa-accent-hover: #b0c8ff;
+  --fa-accent-soft: #1b2a52;
+  --fa-accent-soft-hover: #22346a;
+  --fa-accent-line: #2e4585;
+  --fa-on-accent: #08163f;
+  --fa-ok: #7fd3a3;
+  --fa-ok-soft: #13301f;
+  --fa-warn: #f2c26b;
+  --fa-warn-soft: #3a2b12;
+  --fa-crit: #ff9a90;
+  --fa-crit-soft: #3d1a1a;
+  --fa-crit-line: #6b2b2b;
+  --fa-info: #8cc7f0;
+  --fa-info-soft: #13283d;
+  --fa-neutral-soft: #1f2940;
+  --fa-hover: rgba(230, 235, 245, 0.06);
+  color-scheme: dark;
+  background: var(--fa-ground);
+  color: var(--fa-ink);
+
+  /* Plattform-Tokens neu binden: auf :root aufgelöst würden sie den hellen Wert vererben. */
+  --nx-bg: var(--fa-ground);
+  --nx-surface: var(--fa-surface);
+  --nx-elevated: var(--fa-surface);
+  --nx-text: var(--fa-ink);
+  --nx-muted: var(--fa-ink-2);
+  --nx-faint: var(--fa-ink-3);
+  --nx-line: var(--fa-line);
+  --nx-line-strong: var(--fa-line-strong);
+  --nx-hover: var(--fa-hover);
+  --nx-active: rgba(230, 235, 245, 0.1);
+  --nx-accent: var(--fa-accent);
+  --nx-accent-hover: var(--fa-accent-hover);
+  --nx-accent-soft: var(--fa-accent-soft);
+  --nx-on-accent: var(--fa-on-accent);
+  --ui-body-bg: var(--fa-ground);
+  --ui-body-color: var(--fa-ink);
+  --ui-surface: var(--fa-surface);
+  --ui-border: var(--fa-line);
+
+  /* Brücke für noch nicht umgebaute Views: Tailwind-Paletten im Werkbank-Bereich UMGEDREHT.
+     Tailwind v4 rechnet jede Klasse über --color-*; hier neu gesetzt, wirkt nur innerhalb des Bereichs.
+     → text-gray-900 wird hell, bg-white wird dunkle Fläche, emerald-700 wird helles Grün …
+     Ohne eine einzige Überschreib-Regel. Neue Arbeit nutzt trotzdem die --fa-*-Tokens. */
+  --color-white: #151e33;
+  --color-black: #e6ebf5;
+  --color-gray-50: #111a2c;
+  --color-gray-100: #18223a;
+  --color-gray-200: #26304a;
+  --color-gray-300: #34405e;
+  --color-gray-400: #6f7c95;
+  --color-gray-500: #8b97ad;
+  --color-gray-600: #a9b4c7;
+  --color-gray-700: #c3ccdb;
+  --color-gray-800: #d8dfea;
+  --color-gray-900: #e6ebf5;
+  --color-gray-950: #f3f6fb;
+  --color-slate-50: #111a2c;
+  --color-slate-100: #18223a;
+  --color-slate-200: #26304a;
+  --color-slate-300: #34405e;
+  --color-slate-400: #6f7c95;
+  --color-slate-500: #8b97ad;
+  --color-slate-600: #a9b4c7;
+  --color-slate-700: #c3ccdb;
+  --color-slate-800: #d8dfea;
+  --color-slate-900: #e6ebf5;
+  --color-violet-50: #16244a;
+  --color-violet-100: #1b2a52;
+  --color-violet-200: #2e4585;
+  --color-violet-300: #4566b8;
+  --color-violet-400: #6f92f0;
+  --color-violet-500: #8fb0ff;
+  --color-violet-600: #8fb0ff;
+  --color-violet-700: #b0c8ff;
+  --color-violet-800: #cddcff;
+  --color-indigo-50: #16244a;
+  --color-indigo-100: #1b2a52;
+  --color-indigo-500: #8fb0ff;
+  --color-indigo-600: #8fb0ff;
+  --color-indigo-700: #b0c8ff;
+  --color-purple-50: #16244a;
+  --color-purple-100: #1b2a52;
+  --color-purple-500: #8fb0ff;
+  --color-purple-600: #8fb0ff;
+  --color-purple-700: #b0c8ff;
+  --color-emerald-50: #13301f;
+  --color-emerald-100: #17402a;
+  --color-emerald-500: #5fc48c;
+  --color-emerald-600: #7fd3a3;
+  --color-emerald-700: #9fe0bb;
+  --color-green-50: #13301f;
+  --color-green-100: #17402a;
+  --color-green-600: #7fd3a3;
+  --color-green-700: #9fe0bb;
+  --color-amber-50: #3a2b12;
+  --color-amber-100: #4a3615;
+  --color-amber-500: #e9b65a;
+  --color-amber-600: #f2c26b;
+  --color-amber-700: #f6d28f;
+  --color-amber-800: #f9dfaa;
+  --color-orange-50: #3a2414;
+  --color-orange-100: #4a2d18;
+  --color-orange-500: #f29266;
+  --color-orange-600: #f5a683;
+  --color-orange-700: #f8bb9f;
+  --color-red-50: #3d1a1a;
+  --color-red-100: #4d2020;
+  --color-red-500: #ff7f73;
+  --color-red-600: #ff9a90;
+  --color-red-700: #ffb4ac;
+  --color-rose-50: #3d1a22;
+  --color-rose-100: #4d2029;
+  --color-rose-500: #ff7f8c;
+  --color-rose-600: #ff9aa5;
+  --color-rose-700: #ffb4bc;
+  --color-sky-50: #13283d;
+  --color-sky-100: #17314b;
+  --color-sky-500: #6fb8ea;
+  --color-sky-600: #8cc7f0;
+  --color-sky-700: #a9d6f5;
+}
+
+/* ═══ Basis der x-fa-Bausteine ═════════════════════════════════════════════════════════════ */
+@layer components {
+  .fa-surface {
+    background: var(--fa-surface);
+    border: 1px solid var(--fa-line);
+    border-radius: var(--fa-radius-surface);
+  }
+
+  .fa-control {
+    width: 100%;
+    padding-inline: 10px;
+    border-radius: var(--fa-radius-control);
+    border: 1px solid var(--fa-line-strong);
+    background: var(--fa-surface);
+    color: var(--fa-ink);
+    transition: border-color 120ms ease, box-shadow 120ms ease;
+  }
+  .fa-control::placeholder { color: var(--fa-ink-3); }
+  .fa-control:focus { outline: none; border-color: var(--fa-accent); box-shadow: 0 0 0 3px var(--fa-accent-soft); }
+  .fa-control:disabled { opacity: 0.6; cursor: not-allowed; }
+  .fa-select { appearance: none; background-image: linear-gradient(45deg, transparent 50%, var(--fa-ink-3) 50%), linear-gradient(135deg, var(--fa-ink-3) 50%, transparent 50%); background-position: calc(100% - 15px) 50%, calc(100% - 10px) 50%; background-size: 5px 5px; background-repeat: no-repeat; }
+
+  /* Chip-Auswahl (x-fa::choice): echtes Radio/Checkbox, sichtbar als Chip */
+  .fa-chip { position: relative; cursor: pointer; }
+  .fa-chip > span {
+    display: inline-flex; align-items: center; height: 30px; padding: 0 12px;
+    border-radius: var(--fa-radius-pill); border: 1px solid var(--fa-line-strong);
+    background: var(--fa-surface); color: var(--fa-ink-2); font-size: var(--fa-text-md);
+    transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+  }
+  .fa-chip:hover > span { border-color: var(--fa-ink-3); color: var(--fa-ink); }
+  .fa-chip > input:checked + span { background: var(--fa-accent-soft); border-color: var(--fa-accent); color: var(--fa-accent); font-weight: 500; }
+  .fa-chip > input:focus-visible + span { outline: 2px solid var(--fa-accent); outline-offset: 2px; }
+
+  /* Kennzahl-Leiste (x-fa::kpis) */
+  .fa-kpis {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr));
+    background: var(--fa-surface); border: 1px solid var(--fa-line); border-radius: var(--fa-radius-surface);
+    overflow: hidden;
+  }
+  .fa-kpi { display: flex; flex-direction: column; gap: 2px; padding: 12px 16px; min-width: 0; box-shadow: -1px 0 0 var(--fa-line); }
+
+  /* Datentabelle: <table class="fa-table"> · Zahlen-Zellen mit class="num" */
+  .fa-table { width: 100%; border-collapse: collapse; font-size: var(--fa-text-md); color: var(--fa-ink); }
+  .fa-table th { text-align: left; font-size: var(--fa-text-sm); font-weight: 500; color: var(--fa-ink-2); padding: 8px 12px; white-space: nowrap; border-bottom: 1px solid var(--fa-line); }
+  .fa-table td { padding: 8px 12px; border-bottom: 1px solid var(--fa-line); vertical-align: middle; }
+  .fa-table tbody tr:last-child td { border-bottom: 0; }
+  .fa-table tbody tr:hover td { background: var(--fa-hover); }
+  .fa-table .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .fa-table tr[aria-selected="true"] td { background: var(--fa-accent-soft); }
+  .fa-table--compact td { padding-block: 4px; }
+
+  /* Kennzahl-Kacheln (components/kpi-tiles) — vorher eigener style-Block mit 26 × !important und Dunkel-Kaskade */
+  [data-fa-kpis] > div { min-width: 0; }
+  [data-fa-kpis] .kpi-label { font-size: var(--fa-text-sm); }
+  [data-fa-kpis] .kpi-value { font-size: var(--fa-text-lg); font-weight: 600; line-height: 1.2; margin-top: 2px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  [data-fa-kpis] .kpi-hint { font-weight: 400; color: var(--fa-warn); margin-left: 2px; }
+  [data-fa-kpis] .kpi-neutral { background: var(--fa-surface); border-color: var(--fa-line); box-shadow: none; }
+  [data-fa-kpis] .kpi-accent { background: var(--fa-accent-soft); border-color: var(--fa-accent-line); box-shadow: none; }
+  [data-fa-kpis] .kpi-good { background: var(--fa-ok-soft); border-color: transparent; box-shadow: none; }
+  [data-fa-kpis] .kpi-warn { background: var(--fa-warn-soft); border-color: transparent; box-shadow: none; }
+  [data-fa-kpis] .kpi-bad { background: var(--fa-crit-soft); border-color: var(--fa-crit-line); box-shadow: none; }
+  [data-fa-kpis] .kpi-neutral .kpi-value { color: var(--fa-ink); }
+  [data-fa-kpis] .kpi-accent .kpi-value { color: var(--fa-accent); }
+  [data-fa-kpis] .kpi-good .kpi-value { color: var(--fa-ok); }
+  [data-fa-kpis] .kpi-warn .kpi-value { color: var(--fa-warn); }
+  [data-fa-kpis] .kpi-bad .kpi-value { color: var(--fa-crit); }
+}
+
+[x-cloak] { display: none; }
+[data-fa-table-row][aria-selected="true"] > td { background: var(--fa-accent-soft); }
+
+/* Chat-Leiste (core.terminal) im dunklen Rahmen: der Core setzt die Klasse `terminal-light` fest.
+   Höhere Spezifität (0,2,0 > 0,1,0) bindet seine --t-*-Tokens an unsere — ohne Core-Änderung, ohne !important.
+   Bei der Übernahme des Terminals in den Food.Alchemist (Spur 2) entfällt diese Brücke. */
+[data-fa-theme="dark"] .terminal-light {
+  --t-text: var(--fa-ink);
+  --t-text-muted: var(--fa-ink-3);
+  --t-border: var(--fa-line);
+  --t-border-bright: var(--fa-line-strong);
+  --t-accent: var(--fa-accent);
+  --t-glass: var(--fa-rail);
+  --t-glass-surface: var(--fa-surface);
+  --t-glass-hover: var(--fa-hover);
+  --t-glow: rgba(230, 235, 245, 0.06);
+  --t-sidebar-from: var(--fa-rail);
+  --t-sidebar-to: var(--fa-rail);
+  --t-sidebar-hover: var(--fa-hover);
+  --t-sidebar-active: rgba(230, 235, 245, 0.1);
+}

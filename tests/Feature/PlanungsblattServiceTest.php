@@ -327,12 +327,12 @@ it('Blätter-Dokument-Blade rendert (Produktion + Bestellung)', function () {
         'blatt' => $svc->bestellvorschlag($this->rootTeam, $ziel),
         'typ' => 'bestellung', 'titel' => 'Bestellvorschlag', 'untertitel' => 'Kuchen · 100 Portionen', 'istPdf' => false,
     ])->render();
-    expect($bestHtml)->toContain('Bestellvorschlag')->toContain('Chefs')->toContain('Wareneinsatz gesamt');
+    expect($bestHtml)->toContain('Bestellvorschlag')->toContain('Chefs')->toContain('Einkaufswert gesamt');   // Begriff Dominique 2026-10-05
 
     // Einkaufsliste-Blatt (Lieferanten-Ansicht, mehrere Ziele zusammengeführt)
     $einkHtml = view('foodalchemist::dokumente.blatt', [
         'blatt' => $svc->einkaufsliste($this->rootTeam, [$ziel]),
         'typ' => 'einkauf', 'titel' => 'Einkaufsliste', 'untertitel' => 'Event', 'istPdf' => false,
     ])->render();
-    expect($einkHtml)->toContain('Einkaufsliste')->toContain('Chefs')->toContain('Wareneinsatz gesamt');
+    expect($einkHtml)->toContain('Einkaufsliste')->toContain('Chefs')->toContain('Einkaufswert gesamt');
 });

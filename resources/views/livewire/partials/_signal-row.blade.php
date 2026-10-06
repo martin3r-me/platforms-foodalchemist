@@ -1,67 +1,68 @@
-{{-- Veredelte Signal-Zeile (Cockpit) — genutzt im Überblick + Signale-Tab (DRY).
+{{-- Signal-Zeile (Cockpit) — Überblick + Signale-Reiter.
      Erwartet: $sig, $kiPanelId, $kiDraft (aus ReviewQueue).
-     Spec 21 · S3a: „Reinschauen" öffnet nicht mehr eine 50er-Liste unter der Zeile,
-     sondern das rechte Signal-Panel (volle Liste + objekt-zentrische Sicht). --}}
+     Spec 21 · S3a: „Ansehen" öffnet das rechte Signal-Panel (volle Liste + objekt-zentrische Sicht).
+     fa-pass (2026-10-05): Tokens + Bausteine. Hinweis: review-queue rendert die Zeile inzwischen
+     seitenlokal; dieses Partial bleibt für weitere Einbindungen in derselben Optik. --}}
 @php
-    extract(\Platform\FoodAlchemist\Support\Ui::maps());
     // 22·H4b/V-033: der Knopf hängt am AUSFÜHRBAREN Plan. `navigate` ist ein Weg-Satz
-    // ohne Executor — er wird im Detail-Panel erklärt, nicht hier als Knopf angeboten.
+    // ohne Ausführung — er wird im Detail-Panel erklärt, nicht hier als Knopf angeboten.
     // (Kommentar-Syntax: hier drin gilt PHP, kein Blade — s. BladeCompilesTest.)
     $ki = \Platform\FoodAlchemist\Support\SignalCockpit::kiPlan($sig);
     $sevMap = [
-        'kritisch' => ['bar' => 'bg-rose-500',  'tint' => 'bg-rose-500/10 text-rose-600',  'text' => 'text-rose-600'],
-        'warnung'  => ['bar' => 'bg-amber-400', 'tint' => 'bg-amber-500/10 text-amber-600', 'text' => 'text-amber-600'],
-        'info'     => ['bar' => 'bg-sky-400',   'tint' => 'bg-sky-500/10 text-sky-600',     'text' => 'text-sky-600'],
+        'kritisch' => ['ton' => 'crit', 'bar' => 'bg-[var(--fa-crit)]', 'tint' => 'bg-[var(--fa-crit-soft)] text-[var(--fa-crit)]'],
+        'warnung' => ['ton' => 'warn', 'bar' => 'bg-[var(--fa-warn)]', 'tint' => 'bg-[var(--fa-warn-soft)] text-[var(--fa-warn)]'],
+        'info' => ['ton' => 'info', 'bar' => 'bg-[var(--fa-info)]', 'tint' => 'bg-[var(--fa-info-soft)] text-[var(--fa-info)]'],
     ];
     $sv = $sevMap[$sig->severity->value] ?? $sevMap['info'];
+    $statusTon = ['warning' => 'warn', 'success' => 'ok', 'secondary' => 'neutral', 'danger' => 'crit', 'info' => 'info'];
     $pl = is_array($sig->payload) ? $sig->payload : [];
+    $leise = 'text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]';
+    $geld = fn ($wert) => number_format((float) $wert, 2, ',', '.') . ' €';
 @endphp
-<div class="group relative rounded-xl hover:bg-black/[0.02] transition-colors" wire:key="sig-{{ $sig->id }}">
-    <span class="absolute left-0 top-3 bottom-3 w-[3px] rounded-full {{ $sv['bar'] }}"></span>
+<div class="group relative rounded-[var(--fa-radius-surface)] hover:bg-[var(--fa-hover)] transition-colors" wire:key="sig-{{ $sig->id }}">
+    <span class="absolute left-0 top-3 bottom-3 w-[3px] rounded-full {{ $sv['bar'] }}" aria-hidden="true"></span>
     <div class="flex items-start gap-3 pl-4 pr-1 py-2.5">
-        <span class="shrink-0 grid place-items-center w-9 h-9 rounded-xl {{ $sv['tint'] }}" title="{{ $sig->severity->label() }}">
+        <span class="shrink-0 grid place-items-center w-9 h-9 rounded-[var(--fa-radius-control)] {{ $sv['tint'] }}" title="{{ $sig->severity->label() }}">
             @svg($sig->type->icon(), 'w-[18px] h-[18px]')
         </span>
         <div class="min-w-0 flex-1">
-            <div class="flex items-center gap-2 flex-wrap">
-                <span class="text-[13px] font-medium tracking-tight text-gray-900">{{ $sig->title }}</span>
-                <span class="text-[9px] font-semibold uppercase tracking-wider {{ $sv['text'] }}">{{ $sig->severity->label() }}</span>
-                {{-- Ebene 2: Betriebs-Lane sichtbar machen — NULL = Team-Core (kein Badge), sonst der Betrieb. --}}
+            <div class="flex flex-wrap items-center gap-2">
+                <span class="text-[length:var(--fa-text-md)] font-medium text-[var(--fa-ink)]">{{ $sig->title }}</span>
+                <x-fa::badge :tone="$sv['ton']">{{ $sig->severity->label() }}</x-fa::badge>
+                {{-- Ebene 2: Betrieb sichtbar machen — NULL = ganzes Team (kein Etikett), sonst der Betrieb. --}}
                 @if($sig->outlet_id)
-                    <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-indigo-500/10 text-indigo-600" title="Signal dieses Betriebs (Betriebs-Lane)">
-                        @svg('heroicon-o-building-storefront', 'w-2.5 h-2.5') {{ optional($sig->outlet)->name ?? 'Betrieb' }}
-                    </span>
+                    <x-fa::badge tone="accent" icon="heroicon-m-building-storefront" title="Signal dieses Betriebs">{{ optional($sig->outlet)->name ?? 'Betrieb' }}</x-fa::badge>
                 @endif
             </div>
-            <p class="text-[11px] text-gray-500 mt-0.5">
-                <span class="text-gray-400">{{ $sig->type->label() }}</span>@if($sig->description) · {{ \Illuminate\Support\Str::limit($sig->description, 130) }}@endif
+            <p class="mt-0.5 {{ $leise }}">
+                <span class="text-[var(--fa-ink-2)]">{{ $sig->type->label() }}</span>@if($sig->description) · {{ \Illuminate\Support\Str::limit($sig->description, 130) }}@endif
             </p>
 
             @if($sig->type->value === 'preis_sprung_marge_impact' && $pl)
                 @php
                     $md = (float) ($pl['marge_delta_eur'] ?? 0);
                     $wd = (float) ($pl['wpct_delta'] ?? 0);
-                    $mdClass = $md < 0 ? 'text-rose-600' : 'text-emerald-600';
-                    $wdSign = $wd > 0 ? '+' : '';
+                    $nGerichte = (int) ($pl['n_gerichte'] ?? 0);
+                    $nKonzepte = (int) ($pl['n_concepts'] ?? 0);
                 @endphp
-                <div class="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10px] text-gray-600">
+                <div class="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]">
                     @isset($pl['preis_alt'], $pl['preis_neu'])
-                        <span>{{ number_format($pl['preis_alt'], 2, ',', '.') }} € → <span class="font-medium text-gray-800">{{ number_format($pl['preis_neu'], 2, ',', '.') }} €</span></span>
+                        <span class="inline-flex items-center gap-1 tabular-nums">{{ $geld($pl['preis_alt']) }} @svg('heroicon-m-arrow-right', 'w-3.5 h-3.5 text-[var(--fa-ink-3)]') <span class="font-medium text-[var(--fa-ink)]">{{ $geld($pl['preis_neu']) }}</span></span>
                     @endisset
-                    <span>{{ $pl['n_gerichte'] ?? 0 }} Gericht(e) · {{ $pl['n_concepts'] ?? 0 }} Konzept(e)</span>
+                    <span>{{ $nGerichte }} {{ $nGerichte === 1 ? 'Gericht' : 'Gerichte' }} · {{ $nKonzepte }} {{ $nKonzepte === 1 ? 'Konzept' : 'Konzepte' }}</span>
                     @if($md != 0.0)
-                        <span class="font-medium {{ $mdClass }}">Marge {{ number_format($md, 2, ',', '.') }} €@if($wd != 0.0) ({{ $wdSign }}{{ number_format($wd, 1, ',', '.') }} W%-Pkt.)@endif</span>
+                        <span class="font-medium tabular-nums {{ $md < 0 ? 'text-[var(--fa-crit)]' : 'text-[var(--fa-ok)]' }}">Marge {{ $geld($md) }}@if($wd != 0.0) ({{ $wd > 0 ? '+' : '' }}{{ number_format($wd, 1, ',', '.') }} Prozentpunkte Wareneinsatz)@endif</span>
                     @endif
                     @if(!empty($pl['guenstigere_alternative']['label']))
-                        <span class="text-sky-600" title="günstigere Alternative">↓ {{ \Illuminate\Support\Str::limit($pl['guenstigere_alternative']['label'], 28) }} ({{ $pl['guenstigere_alternative']['diff_pct'] }} %)</span>
+                        <span class="inline-flex items-center gap-1 text-[var(--fa-info)]" title="Günstigere Alternative">@svg('heroicon-m-arrow-trending-down', 'w-3.5 h-3.5') {{ \Illuminate\Support\Str::limit($pl['guenstigere_alternative']['label'], 28) }} ({{ $pl['guenstigere_alternative']['diff_pct'] }} %)</span>
                     @endif
                 </div>
                 @if(!empty($pl['beispiele']))
-                    <div class="mt-1 flex flex-wrap gap-x-2 gap-y-0.5 text-[10px]">
+                    <div class="mt-1 flex flex-wrap gap-x-2.5 gap-y-0.5 text-[length:var(--fa-text-sm)]">
                         @foreach(array_slice($pl['beispiele'], 0, 6) as $bsp)
                             <a href="{{ route('foodalchemist.verkauf.index', ['rezept' => $bsp['recipe_id']]) }}" wire:navigate
-                               class="text-sky-600 hover:underline" title="Marge {{ $bsp['marge_pct_alt'] }} % → {{ $bsp['marge_pct_neu'] }} %">
-                                {{ \Illuminate\Support\Str::limit($bsp['name'], 26) }}@if(($bsp['marge_delta_eur'] ?? 0) != 0) <span class="text-gray-500">({{ number_format($bsp['marge_delta_eur'], 2, ',', '.') }} €)</span>@endif
+                               class="text-[var(--fa-accent)] hover:underline" title="Marge {{ $bsp['marge_pct_alt'] }} % auf {{ $bsp['marge_pct_neu'] }} %">
+                                {{ \Illuminate\Support\Str::limit($bsp['name'], 26) }}@if(($bsp['marge_delta_eur'] ?? 0) != 0) <span class="text-[var(--fa-ink-3)] tabular-nums">({{ $geld($bsp['marge_delta_eur']) }})</span>@endif
                             </a>
                         @endforeach
                     </div>
@@ -72,68 +73,53 @@
         <div class="shrink-0 flex items-center gap-1 pt-0.5">
             {{-- Öffnet das Signal-Detail als Modal: `signal-selected` lädt das DetailPanel,
                  das danach selbst `modal.open` feuert (2026-08-02, s. review-queue). --}}
-            <button type="button" wire:click="$dispatch('signal-selected', { id: {{ $sig->id }} })"
-                    class="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium text-gray-500 hover:text-gray-800 hover:bg-black/5 transition-colors"
-                    title="Betroffene Objekte anzeigen" data-signal-reinschauen="{{ $sig->id }}">
-                @svg('heroicon-o-arrow-right-circle', 'w-3.5 h-3.5')
-                Reinschauen
-            </button>
+            <x-fa::button size="sm" variant="ghost" icon="heroicon-o-arrow-right-circle" wire:click="$dispatch('signal-selected', { id: {{ $sig->id }} })"
+                title="Betroffene Rezepte und Gerichte anzeigen" data-signal-reinschauen="{{ $sig->id }}">Ansehen</x-fa::button>
             @if($sig->status->istOffen())
                 @if($ki)
-                    <button type="button" wire:click="toggleKiPanel({{ $sig->id }})"
-                            class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium text-violet-600 bg-violet-500/[0.06] border border-violet-500/15 hover:bg-violet-500/[0.12] transition-colors {{ $kiPanelId === $sig->id ? 'bg-violet-500/[0.12] ring-1 ring-violet-500/30' : '' }}"
-                            title="{{ $ki['flavorLabel'] }}">
-                        @svg('heroicon-o-sparkles', 'w-3.5 h-3.5') KI erledigen lassen
-                    </button>
+                    <x-fa::button size="sm" variant="ai" icon="heroicon-o-sparkles" wire:click="toggleKiPanel({{ $sig->id }})"
+                        class="{{ $kiPanelId === $sig->id ? 'ring-1 ring-[var(--fa-accent)]' : '' }}" title="{{ $ki['flavorLabel'] }}">KI erledigen lassen</x-fa::button>
                 @endif
-                {{-- „Erledigt"/„Ignorieren" sind KEINE lauten CTAs, sondern Status-Setzer: das offene
-                     Signal bekommt einen End-Status und fällt beim nächsten Laden aus der Offen-Liste.
-                     Die eigentliche Arbeit ist Reinschauen/KI — darum hier nur leise Icon-Knöpfe. --}}
-                <span class="mx-0.5 w-px h-4 bg-black/10"></span>
-                <button type="button" wire:click="signalErledigt({{ $sig->id }})" data-rq-sig-erledigt="{{ $sig->id }}"
-                        class="grid place-items-center w-7 h-7 rounded-lg text-gray-400 hover:text-emerald-600 hover:bg-emerald-500/10 transition-colors" title="Als erledigt markieren (Status)" aria-label="Als erledigt markieren">
-                    @svg('heroicon-o-check-circle', 'w-4 h-4')
-                </button>
-                <button type="button" wire:click="signalIgnorieren({{ $sig->id }})" data-rq-sig-ignorieren="{{ $sig->id }}"
-                        class="grid place-items-center w-7 h-7 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-black/5 transition-colors" title="Bewusst ignorieren (Status)" aria-label="Bewusst ignorieren">
-                    @svg('heroicon-o-no-symbol', 'w-4 h-4')
-                </button>
+                {{-- „Erledigt"/„Ignorieren" sind Status-Setzer, keine lauten Hauptaktionen: das Signal bekommt
+                     einen End-Status und fällt aus der Offen-Liste. Darum leise Symbol-Knöpfe. --}}
+                <span class="mx-0.5 w-px h-4 bg-[var(--fa-line)]" aria-hidden="true"></span>
+                <x-fa::icon-button size="sm" icon="heroicon-o-check-circle" label="Als erledigt markieren" wire:click="signalErledigt({{ $sig->id }})" data-rq-sig-erledigt="{{ $sig->id }}" />
+                <x-fa::icon-button size="sm" icon="heroicon-o-no-symbol" label="Bewusst ignorieren" wire:click="signalIgnorieren({{ $sig->id }})" data-rq-sig-ignorieren="{{ $sig->id }}" />
             @else
-                <span class="{{ $pill }} {{ $variantPill[$sig->status->badgeVariant()] }}">{{ $sig->status->label() }}</span>
-                <button type="button" wire:click="signalWiederOeffnen({{ $sig->id }})"
-                        class="inline-flex items-center px-2.5 py-1 rounded-lg text-[11px] font-medium text-gray-400 hover:text-gray-600 hover:bg-black/5 transition-colors">Wieder öffnen</button>
+                <x-fa::badge :tone="$statusTon[$sig->status->badgeVariant()] ?? 'neutral'">{{ $sig->status->label() }}</x-fa::badge>
+                <x-fa::button size="sm" variant="ghost" icon="heroicon-o-arrow-uturn-left" wire:click="signalWiederOeffnen({{ $sig->id }})">Wieder öffnen</x-fa::button>
             @endif
         </div>
     </div>
 
     @if($ki && $sig->status->istOffen() && $kiPanelId === $sig->id)
-        @php $istFix = $ki['kind'] === 'deterministic'; @endphp
-        <div class="mx-4 mb-3 -mt-1 rounded-xl border border-violet-500/20 bg-gradient-to-br from-violet-500/[0.05] to-indigo-500/[0.03] px-4 py-3" wire:key="kpanel-{{ $sig->id }}">
-            <div class="flex items-center gap-2 mb-1.5">
-                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold {{ $istFix ? 'bg-emerald-500/10 text-emerald-600' : 'bg-sky-500/10 text-sky-600' }}">
-                    @svg($istFix ? 'heroicon-o-bolt' : 'heroicon-o-sparkles', 'w-3 h-3') {{ $ki['flavorLabel'] }}
-                </span>
-                <span class="text-[11px] font-medium text-gray-700">So würde die KI das angehen</span>
+        @php
+            $istFix = $ki['kind'] === 'deterministic';
+        @endphp
+        <div class="mx-4 mb-3 -mt-1 flex flex-col gap-2 rounded-[var(--fa-radius-surface)] border border-[var(--fa-accent-line)] bg-[var(--fa-accent-soft)] px-4 py-3" wire:key="kpanel-{{ $sig->id }}">
+            <div class="flex flex-wrap items-center gap-2">
+                <x-fa::badge :tone="$istFix ? 'ok' : 'info'" :icon="$istFix ? 'heroicon-m-bolt' : 'heroicon-m-sparkles'">{{ $ki['flavorLabel'] }}</x-fa::badge>
+                <span class="text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink)]">So würde die KI das angehen</span>
             </div>
-            <p class="text-[11px] leading-relaxed text-gray-600">{{ $ki['plan'] }}</p>
+            <p class="text-[length:var(--fa-text-md)] leading-relaxed text-[var(--fa-ink-2)]">{{ $ki['plan'] }}</p>
 
             @if(($kiDraft['signal_id'] ?? null) === $sig->id && !empty($kiDraft['draft']))
-                <div class="mt-2.5 rounded-lg border border-sky-500/20 bg-white/70 px-3 py-2" wire:key="kidraft-{{ $sig->id }}">
-                    <div class="flex items-center justify-between mb-1">
-                        <span class="text-[10px] font-medium uppercase tracking-wider text-sky-600">KI-Entwurf</span>
-                        <span class="text-[10px] text-gray-400 tabular-nums">Konfidenz {{ round(((float) ($kiDraft['confidence'] ?? 0)) * 100) }} %</span>
+                <div class="flex flex-col gap-1 rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] bg-[var(--fa-surface)] px-3 py-2" wire:key="kidraft-{{ $sig->id }}">
+                    <div class="flex items-center justify-between gap-2">
+                        <span class="text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-info)]">Entwurf der KI</span>
+                        <span class="{{ $leise }} tabular-nums">{{ round(((float) ($kiDraft['confidence'] ?? 0)) * 100) }} % sicher</span>
                     </div>
-                    <textarea readonly rows="6" onclick="this.select()"
-                              class="w-full text-[11px] leading-relaxed text-gray-700 bg-transparent border-0 resize-y focus:ring-0 p-0">{{ $kiDraft['draft'] }}</textarea>
-                    <p class="text-[10px] text-gray-400 mt-1">Klicken zum Markieren · Entwurf, nicht automatisch versendet.</p>
+                    <textarea readonly rows="6" onclick="this.select()" aria-label="Entwurf der KI"
+                              class="w-full p-0 resize-y border-0 bg-transparent text-[length:var(--fa-text-md)] leading-relaxed text-[var(--fa-ink)] focus:ring-0">{{ $kiDraft['draft'] }}</textarea>
+                    <p class="{{ $leise }}">Klicken markiert den Text. Nur ein Entwurf, nichts wird automatisch versendet.</p>
                 </div>
             @endif
 
-            <div class="mt-2.5 flex items-center gap-2">
+            <div class="flex items-center justify-end gap-2">
+                <x-fa::button size="sm" variant="ghost" wire:click="toggleKiPanel({{ $sig->id }})">Schließen</x-fa::button>
                 <x-foodalchemist::ki-action action="kiFixAusfuehren({{ $sig->id }})" target="kiFixAusfuehren" variant="primary"
                         :icon="$istFix ? 'heroicon-o-play' : 'heroicon-o-sparkles'" :label="$istFix ? 'Automatisch beheben' : 'Entwurf erzeugen'"
-                        busy="Läuft …" class="!px-2.5 !py-1 !text-[11px]" />
-                <button type="button" wire:click="toggleKiPanel({{ $sig->id }})" class="px-2.5 py-1 rounded-lg text-[11px] text-gray-500 hover:bg-black/5 transition-colors">Schließen</button>
+                        busy="Läuft …" />
             </div>
         </div>
     @endif

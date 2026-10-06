@@ -1,0 +1,167 @@
+{
+    "components/chips.blade.php": {
+        "emoji": 1
+    },
+    "components/detail-sidebar.blade.php": {
+        "mini_schrift": 1,
+        "style_statisch": 1
+    },
+    "components/kpi-tiles.blade.php": {
+        "mini_schrift": 1
+    },
+    "components/pairing-netz.blade.php": {
+        "hex_farbe": 1,
+        "emoji": 5,
+        "style_statisch": 1
+    },
+    "dokumente/angebot-karte.blade.php": {
+        "hex_farbe": 22,
+        "style_block": 1
+    },
+    "dokumente/angebot.blade.php": {
+        "hex_farbe": 16,
+        "style_block": 1,
+        "style_statisch": 2
+    },
+    "dokumente/anleitung.blade.php": {
+        "hex_farbe": 11,
+        "style_block": 1
+    },
+    "dokumente/bestelllauf.blade.php": {
+        "hex_farbe": 8,
+        "style_block": 1
+    },
+    "dokumente/bestellung.blade.php": {
+        "hex_farbe": 14,
+        "style_block": 1
+    },
+    "dokumente/blatt.blade.php": {
+        "hex_farbe": 12,
+        "style_block": 1
+    },
+    "dokumente/concept-karte.blade.php": {
+        "hex_farbe": 20,
+        "style_block": 1,
+        "style_statisch": 4
+    },
+    "dokumente/foodbook.blade.php": {
+        "hex_farbe": 51,
+        "style_block": 1,
+        "style_statisch": 21
+    },
+    "dokumente/format.blade.php": {
+        "hex_farbe": 23,
+        "style_block": 1,
+        "style_statisch": 1
+    },
+    "dokumente/partials/report-node-css.blade.php": {
+        "hex_farbe": 28
+    },
+    "dokumente/partials/report-recipe-node.blade.php": {
+        "style_statisch": 11
+    },
+    "dokumente/partials/report-sensory-radar.blade.php": {
+        "hex_farbe": 12
+    },
+    "dokumente/partials/schritt-karten-css.blade.php": {
+        "hex_farbe": 6
+    },
+    "dokumente/produktionsauftrag.blade.php": {
+        "hex_farbe": 13,
+        "style_block": 1
+    },
+    "dokumente/report.blade.php": {
+        "hex_farbe": 15,
+        "important": 1,
+        "style_block": 1,
+        "style_statisch": 3
+    },
+    "dokumente/speisekarte.blade.php": {
+        "hex_farbe": 30,
+        "style_block": 1,
+        "style_statisch": 7
+    },
+    "dokumente/speiseplan-format.blade.php": {
+        "hex_farbe": 26,
+        "style_block": 1,
+        "style_statisch": 4
+    },
+    "dokumente/speiseplan.blade.php": {
+        "hex_farbe": 31,
+        "emoji": 1,
+        "style_block": 1,
+        "style_statisch": 3
+    },
+    "dokumente/tagesplan_blatt.blade.php": {
+        "hex_farbe": 14,
+        "style_block": 1
+    },
+    "layouts/presentation.blade.php": {
+        "hex_farbe": 7,
+        "important": 6,
+        "emoji": 2,
+        "style_block": 2
+    },
+    "layouts/standalone.blade.php": {
+        "hex_farbe": 4,
+        "mini_schrift": 1
+    },
+    "livewire/concepter/partials/pairing-empfehlungen.blade.php": {
+        "hex_farbe": 1,
+        "mini_schrift": 5,
+        "style_statisch": 1
+    },
+    "livewire/concepter/partials/pairing.blade.php": {
+        "hex_farbe": 1,
+        "mini_schrift": 3,
+        "style_statisch": 1
+    },
+    "livewire/foodbooks/praesentation.blade.php": {
+        "mini_schrift": 5,
+        "style_statisch": 2
+    },
+    "livewire/planung/index.blade.php": {
+        "hex_farbe": 13,
+        "important": 1,
+        "emoji": 10,
+        "mini_schrift": 5,
+        "style_statisch": 8
+    },
+    "livewire/recipes/pairing-netz-modal.blade.php": {
+        "hex_farbe": 10,
+        "emoji": 22,
+        "mini_schrift": 2,
+        "style_statisch": 5
+    },
+    "livewire/speisekarte/partials/praesentation-rubrik.blade.php": {
+        "mini_schrift": 1
+    },
+    "livewire/speisekarte/partials/rubrik.blade.php": {
+        "important": 2
+    },
+    "livewire/speisekarte/praesentation.blade.php": {
+        "hex_farbe": 2
+    },
+    "partials/editor-dark.blade.php": {
+        "important": 7,
+        "style_block": 1
+    },
+    "presentation/blocks/_block_body.blade.php": {
+        "style_statisch": 1
+    },
+    "presentation/blocks/_speiseplan_meta.blade.php": {
+        "emoji": 1,
+        "style_statisch": 7
+    },
+    "presentation/blocks/grid.blade.php": {
+        "style_statisch": 4
+    },
+    "presentation/blocks/preis_aufschluesselung.blade.php": {
+        "hex_farbe": 15,
+        "style_statisch": 29
+    },
+    "presentation/blocks/price_summary.blade.php": {
+        "hex_farbe": 1,
+        "style_statisch": 1
+    }
+}

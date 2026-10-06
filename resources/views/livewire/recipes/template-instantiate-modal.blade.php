@@ -1,66 +1,70 @@
-{{-- D-5: Aus Vorlage instanziieren — Variante → Seed-Vorschläge → Slot-Review --}}
-@php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
+{{-- D-5: Rezept aus Vorlage anlegen — Variante → Vorschläge → Platzhalter zuordnen → anlegen.
+     fa-pass (2026-10-05): Bausteine + Tokens, Zuordnungsstand je Platzhalter als Signal. --}}
+@php
+    $leise = 'text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]';
+    $menge = fn ($wert) => rtrim(rtrim(number_format((float) $wert, 2, ',', '.'), '0'), ',');
+@endphp
 
-<x-foodalchemist::modal name="template-instanziieren" title="Aus Vorlage instanziieren" size="max-w-2xl">
+<x-foodalchemist::modal name="template-instanziieren" title="Rezept aus Vorlage anlegen" size="max-w-2xl">
     @if($fehler !== null)
-        <p class="text-xs text-rose-600 mb-3" data-template-fehler>{{ $fehler }}</p>
+        <x-fa::notice tone="crit" data-template-fehler>{{ $fehler }}</x-fa::notice>
     @endif
 
     @if($templateId === null)
-        <p class="text-xs text-gray-500">Kein Template gewählt.</p>
+        <x-fa::empty icon="heroicon-o-document-duplicate" title="Keine Vorlage gewählt">Im Basisrezepte-Browser ein Rezept als Vorlage markieren und von dort aus anlegen.</x-fa::empty>
     @else
         <x-foodalchemist::modal-section title="Vorlage">
-            <p class="text-xs text-gray-900 font-medium" data-template-name>{{ $templateName }}</p>
-            <p class="text-[11px] text-gray-500 mt-0.5">{{ $slotAnzahl }} Platzhalter · Bindemittel-Verhältnis & Zubereitung bleiben fix</p>
+            <p class="text-[length:var(--fa-text-base)] font-semibold text-[var(--fa-ink)]" data-template-name>{{ $templateName }}</p>
+            <p class="mt-0.5 {{ $leise }}">{{ $slotAnzahl }} Platzhalter. Bindemittel-Verhältnis und Zubereitung bleiben wie in der Vorlage.</p>
         </x-foodalchemist::modal-section>
 
         {{-- Variante + Vorschläge --}}
-        <x-foodalchemist::modal-section title="Variante / Geschmack">
-            <div class="flex items-end gap-2">
-                <div class="flex-1">
-                    <input type="text" wire:model="variant" wire:keydown.enter.prevent="vorschlaege"
-                           placeholder="z. B. Brombeere, Salbei, Kürbis …" class="{{ $input }}" data-template-variant />
+        <x-foodalchemist::modal-section title="Variante">
+            <x-fa::field for="template-variante" hint="Die Variante wird zur Hauptzutat, die übrigen Platzhalter bekommen die üblichen Zutaten.">
+                <div class="flex items-center gap-2">
+                    <x-fa::input id="template-variante" wire:model="variant" wire:keydown.enter.prevent="vorschlaege"
+                        placeholder="z. B. Brombeere, Salbei, Kürbis" class="flex-1" data-template-variant />
+                    <x-fa::button icon="heroicon-o-light-bulb" class="shrink-0" wire:click="vorschlaege" wire:loading.attr="disabled" data-template-vorschlaege>
+                        <span wire:loading.remove wire:target="vorschlaege">Vorschläge holen</span>
+                        <span wire:loading wire:target="vorschlaege">Wird gesucht …</span>
+                    </x-fa::button>
                 </div>
-                <button type="button" wire:click="vorschlaege" wire:loading.attr="disabled"
-                        class="{{ $btnGhost }} shrink-0" data-template-vorschlaege>
-                    <span wire:loading.remove wire:target="vorschlaege">Vorschläge holen</span>
-                    <span wire:loading wire:target="vorschlaege">sucht …</span>
-                </button>
-            </div>
-            <p class="text-[11px] text-gray-500 mt-1">
-                Deterministisch (Body = Variante, Träger = Default). KI-Vorschläge folgen mit der LLM-Anbindung.
-            </p>
+            </x-fa::field>
         </x-foodalchemist::modal-section>
 
-        {{-- Name der Instanz --}}
-        <x-foodalchemist::modal-section title="Name der Instanz">
-            <input type="text" wire:model="name" placeholder="z. B. Gelee: Brombeere" class="{{ $input }}" data-template-instanz-name />
+        {{-- Name des neuen Rezepts --}}
+        <x-foodalchemist::modal-section title="Name des neuen Rezepts">
+            <x-fa::input wire:model="name" placeholder="z. B. Gelee: Brombeere" aria-label="Name des neuen Rezepts" data-template-instanz-name />
         </x-foodalchemist::modal-section>
 
-        {{-- Platzhalter-Slots --}}
-        <x-foodalchemist::modal-section title="Platzhalter binden ({{ $gebundenAnzahl }}/{{ $slotAnzahl }})">
-            <div class="space-y-2" data-template-slots>
+        {{-- Platzhalter zuordnen --}}
+        <x-foodalchemist::modal-section title="Platzhalter zuordnen ({{ $gebundenAnzahl }} von {{ $slotAnzahl }})">
+            <div class="flex flex-col gap-2" data-template-slots>
                 @foreach($slotListe as $rid => $slot)
-                    @php($b = $bindings[$rid] ?? ['query' => '', 'target' => 'none', 'id' => null, 'name' => null, 'score' => 0.0])
-                    <div class="rounded-lg border border-black/5 px-3 py-2" wire:key="slot-{{ $rid }}" data-template-slot="{{ $rid }}">
-                        <p class="text-[11px] text-gray-600 mb-1">
-                            <strong class="text-gray-700">{{ $slot['placeholder_name'] }}</strong>
-                            · {{ rtrim(rtrim(number_format($slot['quantity'], 2, ',', '.'), '0'), ',') }} {{ $slot['unit'] }}
-                            @if($slot['raw_text'] !== '')<span class="italic">· „{{ $slot['raw_text'] }}"</span>@endif
+                    @php
+                        $b = $bindings[$rid] ?? ['query' => '', 'target' => 'none', 'id' => null, 'name' => null, 'score' => 0.0];
+                    @endphp
+                    <div class="flex flex-col gap-1.5 rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] bg-[var(--fa-surface)] px-3 py-2.5" wire:key="slot-{{ $rid }}" data-template-slot="{{ $rid }}">
+                        <p class="text-[length:var(--fa-text-md)] text-[var(--fa-ink-2)]">
+                            <span class="font-semibold text-[var(--fa-ink)]">{{ $slot['placeholder_name'] }}</span>
+                            · <span class="tabular-nums">{{ $menge($slot['quantity']) }} {{ $slot['unit'] }}</span>
+                            @if($slot['raw_text'] !== '')<span class="italic text-[var(--fa-ink-3)]"> · „{{ $slot['raw_text'] }}“</span>@endif
                         </p>
-                        <div class="flex items-center gap-2">
-                            <input type="text" wire:model="bindings.{{ $rid }}.query" wire:change="matchSlot({{ $rid }})"
-                                   placeholder="konkreter Artikel (Suchtext)" class="{{ $input }} flex-1" />
-                            <div class="w-48 shrink-0 text-[11px]" data-template-slot-status="{{ $rid }}">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <x-fa::input size="sm" wire:model="bindings.{{ $rid }}.query" wire:change="matchSlot({{ $rid }})"
+                                placeholder="Konkrete Zutat suchen" aria-label="Zutat für {{ $slot['placeholder_name'] }}" class="flex-1 min-w-[12rem]" />
+                            <div class="min-w-0 sm:w-56 shrink-0" data-template-slot-status="{{ $rid }}">
                                 @if($b['id'] !== null)
-                                    @php($farbe = $b['score'] >= 0.85 ? 'text-emerald-600' : ($b['score'] >= 0.7 ? 'text-amber-600' : 'text-orange-600'))
-                                    <span class="{{ $farbe }}">
-                                        → {{ $b['name'] }}{{ $b['target'] === 'sub_recipe' ? ' ⟨Sub⟩' : '' }} ({{ round(($b['score'] ?? 0) * 100) }} %)
-                                    </span>
+                                    @php
+                                        $ton = $b['score'] >= 0.85 ? 'ok' : 'warn';
+                                    @endphp
+                                    <x-fa::signal :tone="$ton" icon="heroicon-m-link" title="{{ round(($b['score'] ?? 0) * 100) }} % Übereinstimmung">
+                                        <span class="min-w-0">{{ $b['name'] }}{{ $b['target'] === 'sub_recipe' ? ' (Unterrezept)' : '' }} · {{ round(($b['score'] ?? 0) * 100) }} %</span>
+                                    </x-fa::signal>
                                 @elseif(trim($b['query']) !== '')
-                                    <span class="text-orange-600">kein Treffer → bleibt Platzhalter</span>
+                                    <x-fa::signal tone="warn">Kein Treffer, bleibt Platzhalter</x-fa::signal>
                                 @else
-                                    <span class="text-gray-500">ungebunden</span>
+                                    <span class="{{ $leise }}">Noch nicht zugeordnet</span>
                                 @endif
                             </div>
                         </div>
@@ -68,19 +72,19 @@
                 @endforeach
             </div>
             @if($gebundenAnzahl < $slotAnzahl)
-                <p class="text-[11px] text-amber-600 mt-2" data-template-warnung>
-                    @svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5 inline-block align-middle') {{ $slotAnzahl - $gebundenAnzahl }} Platzhalter ungebunden — die Instanz bleibt insoweit neutral (status draft, später nachpflegbar).
-                </p>
+                <x-fa::signal tone="warn" class="mt-2" data-template-warnung>
+                    {{ $slotAnzahl - $gebundenAnzahl }} {{ ($slotAnzahl - $gebundenAnzahl) === 1 ? 'Platzhalter bleibt' : 'Platzhalter bleiben' }} offen. Das neue Rezept startet dann als Entwurf und lässt sich später ergänzen.
+                </x-fa::signal>
             @endif
         </x-foodalchemist::modal-section>
     @endif
 
     <x-slot:footer>
-        <button type="button" wire:click="$dispatch('modal.close', { name: 'template-instanziieren' })" class="{{ $btnGhost }}">Abbrechen</button>
-        <button type="button" wire:click="instanziieren" wire:loading.attr="disabled"
-                @disabled($templateId === null || trim($name) === '') class="{{ $btnPrimary }}" data-template-instanziieren>
-            <span wire:loading.remove wire:target="instanziieren">Instanziieren</span>
-            <span wire:loading wire:target="instanziieren">Instanziiere …</span>
-        </button>
+        <x-fa::button variant="ghost" wire:click="$dispatch('modal.close', { name: 'template-instanziieren' })">Abbrechen</x-fa::button>
+        <x-fa::button variant="primary" icon="heroicon-o-plus" wire:click="instanziieren" wire:loading.attr="disabled"
+            :disabled="$templateId === null || trim($name) === ''" data-template-instanziieren>
+            <span wire:loading.remove wire:target="instanziieren">Rezept anlegen</span>
+            <span wire:loading wire:target="instanziieren">Wird angelegt …</span>
+        </x-fa::button>
     </x-slot:footer>
 </x-foodalchemist::modal>

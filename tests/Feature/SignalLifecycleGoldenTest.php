@@ -57,10 +57,10 @@ it('Golden: die Emissions-Form je Lücke bleibt Zeichen für Zeichen stehen', fu
         ->and($abbild)->toHaveCount($n);
 
     // Ein frisch angelegter approved-GP trägt keine Allergen-Konfidenz — Titel-Form
-    // „<zahl> — <label>", Payload mit anzahl/metrik/ebene, source = data-quality.
+    // „<label>: <zahl>", Payload mit anzahl/metrik/ebene, source = data-quality.
     $key = SignalTyp::DatenqualitaetGpLa->value.'|dq-gp-allergen-konfidenz';
     expect($abbild)->toHaveKey($key)
-        ->and($abbild[$key]['titel'])->toBe('1 — approved-GPs ohne Allergen-Konfidenz')
+        ->and($abbild[$key]['titel'])->toBe('Grundprodukte ohne ausgewertete Allergene: 1')
         ->and($abbild[$key]['payload'])->toBe(['anzahl' => 1, 'metrik' => 'gp_allergen_konfidenz', 'ebene' => 'Grundprodukte'])
         ->and($abbild[$key]['severity'])->toBe(SignalSeverity::Warnung->value)
         ->and($abbild[$key]['source'])->toBe('data-quality');

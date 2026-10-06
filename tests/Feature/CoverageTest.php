@@ -137,9 +137,9 @@ it('Live-UI: Coverage-Panel im Concepter sichtbar, Lücken-Klick setzt den Diät
     // Spec 28 / E6: die Coverage liegt jetzt im Tab «Konzept & Planung» — direkt unter dem
     // Planungs-Gerüst, gegen das sie misst (vorher stand sie im Aufbau-Tab, also getrennt von
     // ihrer Messlatte). Im Aufbau-Tab darf sie deshalb NICHT mehr erscheinen.
-    $comp->assertDontSee('Soll/Ist-Coverage');
+    $comp->assertDontSee('Soll-Ist-Abgleich');
     $comp->call('setTab', 'konzept')
-        ->assertSee('Soll/Ist-Coverage')
+        ->assertSee('Soll-Ist-Abgleich')
         ->assertSee('Diät-Quote vegan');
 
     // Lücken-Klick → springt IN den Aufbau-Tab + Diät-Filter gesetzt → Kandidaten nur vegan.

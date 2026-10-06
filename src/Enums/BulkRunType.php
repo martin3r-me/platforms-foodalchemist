@@ -63,7 +63,7 @@ enum BulkRunType: string
             self::EnrichGp => 'Anreicherung (Grundprodukte)',
             self::EnrichConcept => 'Anreicherung (Konzepte)',
             self::Ingest => 'Artikel-Import',
-            self::Review => 'KI-Review',
+            self::Review => 'KI-Prüfung',
             self::Detektor => 'Qualitäts-Lauf (Ampel)',
         };
     }

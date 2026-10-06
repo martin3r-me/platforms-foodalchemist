@@ -88,7 +88,7 @@ class AngebotService
             $effective = $update['total_price'] ?? $angebot->total_price;
             $reason = trim((string) ($update['price_override_reason'] ?? $angebot->price_override_reason));
             if (! is_numeric($effective) || $reason === '') {
-                throw new \RuntimeException('Ein fixierter Angebotspreis benötigt Preis und Begründung.');
+                throw new \RuntimeException('Ein fixierter Angebotspreis braucht Preis und Begründung.');
             }
             $update['price_override_reason'] = $reason;
             $update['price_override_user_id'] = Auth::id();
@@ -177,7 +177,7 @@ class AngebotService
     {
         $concept = FoodAlchemistConcept::visibleToTeam($team)->whereNotNull('offer_id')->findOrFail($conceptId);
         if (! $concept->isOwnedBy($team)) {
-            throw new \RuntimeException('Geerbtes Concept — Pflege nur durchs Besitzer-Team (D1).');
+            throw new \RuntimeException('Geerbtes Konzept: Ändern kann es nur das Besitzer-Team.');
         }
         $angebotId = (int) $concept->offer_id;
         $concept->update(['offer_id' => null]);
@@ -191,7 +191,7 @@ class AngebotService
     {
         $concept = FoodAlchemistConcept::visibleToTeam($team)->whereNotNull('offer_id')->findOrFail($conceptId);
         if (! $concept->isOwnedBy($team)) {
-            throw new \RuntimeException('Geerbtes Concept — Pflege nur durchs Besitzer-Team (D1).');
+            throw new \RuntimeException('Geerbtes Konzept: Ändern kann es nur das Besitzer-Team.');
         }
         $angebotId = (int) $concept->offer_id;
         $concept->delete();
@@ -568,7 +568,7 @@ class AngebotService
 
         $concept = FoodAlchemistConcept::visibleToTeam($team)->whereNull('offer_id')->find($conceptId);
         if ($concept === null) {
-            throw new \RuntimeException('Nur standardisierte Katalog-Concepts können referenziert werden.');
+            throw new \RuntimeException('Nur Konzepte aus dem Katalog lassen sich einbinden.');
         }
         $pos = (int) (DB::table('foodalchemist_offer_concept')->where('offer_id', $angebot->id)->max('position') ?? -1) + 1;
         $angebot->referencedConcepts()->syncWithoutDetaching([$conceptId => ['team_id' => $team->id, 'position' => $pos]]);
@@ -710,11 +710,11 @@ class AngebotService
 
         $daten = [];
         if (array_key_exists('brand_color', $in)) {
-            $daten['brand_color'] = $this->normHexOderThrow($in['brand_color'], 'brand_color') ?? '#6d28d9';
+            $daten['brand_color'] = $this->normHexOderThrow($in['brand_color'], 'Markenfarbe') ?? '#6d28d9';
         }
         if (array_key_exists('band_color', $in)) {
             // Leer → null (Blade leitet dann aus brand_color ab).
-            $daten['band_color'] = $this->normHexOderThrow($in['band_color'], 'band_color', erlaubeLeer: true);
+            $daten['band_color'] = $this->normHexOderThrow($in['band_color'], 'Bandfarbe', erlaubeLeer: true);
         }
         if (array_key_exists('footer_text', $in)) {
             $t = trim((string) $in['footer_text']);
@@ -805,10 +805,10 @@ class AngebotService
             if ($erlaubeLeer) {
                 return null;
             }
-            throw new \RuntimeException("Farbe {$feld} darf nicht leer sein.");
+            throw new \RuntimeException("{$feld} darf nicht leer sein.");
         }
         if (! preg_match('/^#[0-9a-fA-F]{6}$/', $v)) {
-            throw new \RuntimeException("Ungültige Farbe für {$feld}: \"{$v}\" (erwartet #RRGGBB).");
+            throw new \RuntimeException("{$feld}: ungültiger Farbwert „{$v}“ (erwartet #RRGGBB).");
         }
 
         return strtolower($v);
@@ -865,7 +865,7 @@ class AngebotService
     {
         $kapitel = \Platform\FoodAlchemist\Models\FoodAlchemistOfferChapter::visibleToTeam($team)->findOrFail($chapterId);
         if (! $kapitel->isOwnedBy($team)) {
-            throw new \RuntimeException('Geerbtes Angebot — Pflege nur durchs Besitzer-Team (D1).');
+            throw new \RuntimeException('Geerbtes Angebot: Ändern kann es nur das Besitzer-Team.');
         }
         $angebot = FoodAlchemistAngebot::visibleToTeam($team)->findOrFail($kapitel->offer_id);
 
@@ -978,7 +978,7 @@ class AngebotService
     private function guardOwner(FoodAlchemistAngebot $angebot, Team $team): void
     {
         if (! $angebot->isOwnedBy($team)) {
-            throw new \RuntimeException('Geerbtes Angebot — Pflege nur durchs Besitzer-Team (D1).');
+            throw new \RuntimeException('Geerbtes Angebot: Ändern kann es nur das Besitzer-Team.');
         }
     }
 }

@@ -175,7 +175,7 @@ class Index extends Component
                 ? $svc->gerichtKandidaten($team, $this->gerichtSuche)->reject(
                     fn ($r) => $selected->dishes->pluck('sales_recipe_id')->contains($r->id))
                 : collect(),
-        ])->layout('platform::layouts.app');
+        ])->layout('foodalchemist::layouts.standalone');
     }
 
     private function team()

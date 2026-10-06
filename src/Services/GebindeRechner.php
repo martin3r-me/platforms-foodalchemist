@@ -38,7 +38,7 @@ class GebindeRechner
         ];
 
         if ($leadLa === null) {
-            return [...$leer, 'grund' => 'Kein Lead-Lieferantenartikel — Gebinde nicht bestimmbar.'];
+            return [...$leer, 'grund' => 'Kein Hauptartikel hinterlegt. Das Gebinde lässt sich nicht bestimmen.'];
         }
 
         $qty = $leadLa->qty !== null ? (float) $leadLa->qty : null;
@@ -52,7 +52,7 @@ class GebindeRechner
         ];
 
         if ($qty === null || $qty <= 0.0) {
-            return [...$leer, ...$stamm, 'grund' => 'Gebinde-Menge fehlt (Preisfalle) — Bedarf in Grundeinheit.'];
+            return [...$leer, ...$stamm, 'grund' => 'Gebindemenge fehlt am Artikel (Preisfalle). Bedarf bleibt in der Grundeinheit.'];
         }
         if ($needG <= 0.0) {
             return [...$leer, ...$stamm, 'grund' => 'Kein Bedarf.'];
@@ -63,12 +63,12 @@ class GebindeRechner
             $unitLabel = $unit;
         } elseif ($unit === 'Stk') {
             if ($pieceG === null || $pieceG <= 0.0) {
-                return [...$leer, ...$stamm, 'grund' => 'Stück-Artikel ohne Stückgewicht — Bedarf nicht in Gebinde umrechenbar (in Gramm belassen).'];
+                return [...$leer, ...$stamm, 'grund' => 'Stückartikel ohne Stückgewicht. Bedarf lässt sich nicht in Gebinde umrechnen und bleibt in Gramm.'];
             }
             $neededBase = $needG / $pieceG;                // Stück
             $unitLabel = 'Stk';
         } else {
-            return [...$leer, ...$stamm, 'grund' => "Einheit „{$unit}“ nicht bestellbar — Bedarf in Grundeinheit."];
+            return [...$leer, ...$stamm, 'grund' => "Einheit „{$unit}“ ist nicht bestellbar. Bedarf bleibt in der Grundeinheit."];
         }
 
         $packs = max(1, (int) ceil($neededBase / $qty - 1e-9));

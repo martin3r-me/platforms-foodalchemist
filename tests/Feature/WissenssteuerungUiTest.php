@@ -86,7 +86,7 @@ it('weist einen unbekannten Modus ab, statt ihn zu speichern', function () {
         ->set('form.feature', 'test.x')->set('form.category', 'cross_cutting')
         ->set('form.mode', 'quatsch')
         ->call('save')
-        ->assertSet('fehler', 'Modus muss always, discovery, grounding oder none sein.');
+        ->assertSet('fehler', 'Bitte eine Verwendung wählen: „Immer vollständig", „Passendes suchen", „Je Hauptzutat" oder „Bewusst nicht".');
 
     expect(DB::table('foodalchemist_knowledge_routings')->where('feature', 'test.x')->exists())->toBeFalse();
 });
@@ -103,7 +103,7 @@ it('laesst ein Kind-Team die globalen Routings NICHT aendern', function () {
 
     Livewire::test(Wissenssteuerung::class)
         ->call('delete', $zeile->id)
-        ->assertSet('fehler', 'Wissens-Routings sind global — nur das Master-Team darf sie ändern.');
+        ->assertSet('fehler', 'Diese Einstellung gilt für alle Teams. Ändern darf sie nur das Master-Team.');
 
     expect(DB::table('foodalchemist_knowledge_routings')->where('id', $zeile->id)->exists())->toBeTrue();
 });
@@ -119,7 +119,7 @@ it('sagt beim Entfernen, dass die Kategorie danach search-only ist', function ()
 
     Livewire::test(Wissenssteuerung::class)
         ->call('delete', $zeile->id)
-        ->assertSet('hinweis', fn ($h) => str_contains((string) $h, 'search-only'));
+        ->assertSet('hinweis', fn ($h) => str_contains((string) $h, 'nur noch bei Bedarf durchsucht'));
 });
 
 /**

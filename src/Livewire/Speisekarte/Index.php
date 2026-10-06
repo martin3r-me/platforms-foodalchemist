@@ -915,7 +915,7 @@ class Index extends Component
             // Werkstrang M Phase A: Schreibstil-Auswahl fürs Kontext-Panel (nur aktive, team-sichtbar).
             'schreibstile' => \Platform\FoodAlchemist\Models\FoodAlchemistWritingStyle::visibleToTeam($team)
                 ->where('is_inactive', false)->orderBy('sort_order')->orderBy('name')->get(['id', 'name']),
-        ])->layout('platform::layouts.app');
+        ])->layout('foodalchemist::layouts.standalone');
     }
 
     /**

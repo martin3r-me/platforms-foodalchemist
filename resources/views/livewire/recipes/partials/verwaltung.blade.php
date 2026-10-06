@@ -4,78 +4,104 @@
      unfindbarer Reiter). Hier gibt es nur eine Quelle.
 
      Erwartet aus der Komponente: $tauschBilanz · $tauschKandidaten · $tauschReferenzen ·
-     $fehlerTausch · $hinweisTausch (Trait TauschtRezept) sowie Ui-Maps im Kontext.
-     Parameter: $rezeptName (für die Rückfragen) · $kompakt (Panel-Typo statt Editor-Typo). --}}
-@php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
-@php($tt = $kompakt ? 'text-[11px]' : 'text-xs')
-@php($meldung = $kompakt ? 'text-[11px] mt-1' : 'mb-2 rounded-lg px-2.5 py-1.5 text-[11px] border')
+     $fehlerTausch · $hinweisTausch (Trait TauschtRezept) sowie $tauschSuche.
+     Parameter: $rezeptName (für die Rückfragen) · $kompakt (Panel-Typo statt Editor-Typo).
+     fa-pass: nur Tokens und x-fa-Bausteine (hell + Werkbank-Modus). --}}
+@php
+    $tt = $kompakt ? 'text-[length:var(--fa-text-sm)]' : 'text-[length:var(--fa-text-md)]';
+    $leise = 'text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]';
+    $mehrzahl = fn (int $n, string $eins, string $mehr) => $n . ' ' . ($n === 1 ? $eins : $mehr);
+    $statusTon = ['approved' => 'ok', 'review' => 'warn', 'tentative' => 'warn', 'rejected' => 'crit', 'deprecated' => 'crit', 'archived' => 'neutral'];
+@endphp
 
-<div data-rezept-verwaltung>
+<div class="flex flex-col gap-3" data-rezept-verwaltung>
     @if($fehlerTausch !== null)
-        <p class="{{ $meldung }} {{ $kompakt ? 'text-rose-500' : 'bg-rose-500/10 border-rose-500/30 text-rose-700' }}" data-rezept-tausch-fehler>{{ $fehlerTausch }}</p>
+        <x-fa::notice tone="crit" data-rezept-tausch-fehler>{{ $fehlerTausch }}</x-fa::notice>
     @endif
     @if($hinweisTausch !== null)
-        <p class="{{ $meldung }} {{ $kompakt ? 'text-emerald-600' : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700' }}" data-rezept-tausch-hinweis>{{ $hinweisTausch }}</p>
+        <x-fa::notice tone="ok" data-rezept-tausch-hinweis>{{ $hinweisTausch }}</x-fa::notice>
     @endif
 
     {{-- 1. Wo hängt das Rezept? MIT Namen (2026-09-04, Dominique: „es wird nicht angezeigt
          wo es drin ist") — eine Menge ohne Adresse hilft beim Umhängen nicht weiter. --}}
     @if($tauschBilanz !== null && ($tauschBilanz['zeilen'] > 0 || $tauschBilanz['fremd_zeilen'] > 0))
-        <p class="{{ $tt }} text-gray-600" data-rezept-tausch-bilanz>Als Komponente eingesetzt: {{ $tauschBilanz['zeilen'] }} Zeile(n) in {{ $tauschBilanz['rezepte'] }} eigenen Rezept(en) @if($tauschBilanz['fremd_zeilen'] > 0)· {{ $tauschBilanz['fremd_rezepte'] }} geerbte(s) Rezept(e) bleiben unberührt (read-only, D1)@endif</p>
-        @if(($tauschBilanz['eltern_namen'] ?? []) !== [])
-            <ul class="{{ $tt }} mt-1 mb-1 space-y-0.5" data-rezept-tausch-eltern>
-                @foreach($tauschBilanz['eltern_namen'] as $e)
-                    <li class="flex items-center gap-1.5" wire:key="rvw-eltern-{{ $e['id'] }}">
-                        <span class="{{ $pill }} {{ $e['ist_gericht'] ? $variantPill['info'] : $variantPill['secondary'] }} shrink-0">{{ $e['ist_gericht'] ? 'Gericht' : 'Basis' }}</span>
-                        <span class="min-w-0 truncate text-gray-700">{{ $e['name'] }}</span>
-                    </li>
-                @endforeach
-            </ul>
-        @endif
-        @if(($tauschBilanz['fremd_namen'] ?? []) !== [])
-            <p class="{{ $tt }} text-gray-400" data-rezept-tausch-fremd>Geerbt (unberührt): {{ implode(' · ', array_column($tauschBilanz['fremd_namen'], 'name')) }}</p>
-        @endif
+        <div class="flex flex-col gap-1.5">
+            <p class="{{ $tt }} text-[var(--fa-ink)]" data-rezept-tausch-bilanz>
+                Als Komponente eingesetzt: {{ $mehrzahl((int) $tauschBilanz['zeilen'], 'Zeile', 'Zeilen') }} in {{ $mehrzahl((int) $tauschBilanz['rezepte'], 'eigenem Rezept', 'eigenen Rezepten') }}.
+                @if($tauschBilanz['fremd_zeilen'] > 0)<span class="text-[var(--fa-ink-2)]">{{ $mehrzahl((int) $tauschBilanz['fremd_rezepte'], 'geerbtes Rezept bleibt', 'geerbte Rezepte bleiben') }} unberührt, weil sie nur gelesen werden können.</span>@endif
+            </p>
+            @if(($tauschBilanz['eltern_namen'] ?? []) !== [])
+                <ul class="{{ $tt }} flex flex-col gap-1" data-rezept-tausch-eltern>
+                    @foreach($tauschBilanz['eltern_namen'] as $e)
+                        <li class="flex items-center gap-2 min-w-0" wire:key="rvw-eltern-{{ $e['id'] }}">
+                            <x-fa::badge :tone="$e['ist_gericht'] ? 'info' : 'neutral'" class="shrink-0">{{ $e['ist_gericht'] ? 'Gericht' : 'Basisrezept' }}</x-fa::badge>
+                            <span class="min-w-0 truncate text-[var(--fa-ink)]">{{ $e['name'] }}</span>
+                        </li>
+                    @endforeach
+                </ul>
+            @endif
+            @if(($tauschBilanz['fremd_namen'] ?? []) !== [])
+                <p class="{{ $leise }}" data-rezept-tausch-fremd>Geerbt und unberührt: {{ implode(' · ', array_column($tauschBilanz['fremd_namen'], 'name')) }}</p>
+            @endif
+        </div>
     @endif
 
     {{-- 2. Tauschen — der Ausweg aus einer blockierten Löschung --}}
     @if($tauschBilanz !== null && $tauschBilanz['zeilen'] > 0)
-        <div class="pt-1.5" data-rezept-tausch>
-            <p class="{{ $tt }} text-gray-600 mb-1">In allen Verwendungen ersetzen durch … <span class="text-gray-400">(Menge und Einheit bleiben)</span></p>
-            <input type="search" wire:model.live.debounce.300ms="tauschSuche" placeholder="Ersatz-Rezept suchen …" class="{{ $input }} {{ $kompakt ? '!py-1' : '' }}" data-rezept-tausch-suche />
+        <div class="flex flex-col gap-1.5" data-rezept-tausch>
+            <label for="rezept-tausch-suche-{{ $kompakt ? 'panel' : 'editor' }}" class="text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-2)]">
+                In allen Verwendungen ersetzen durch <span class="font-normal text-[var(--fa-ink-3)]">(Menge und Einheit bleiben)</span>
+            </label>
+            <x-fa::input type="search" id="rezept-tausch-suche-{{ $kompakt ? 'panel' : 'editor' }}" wire:model.live.debounce.300ms="tauschSuche"
+                placeholder="Ersatz-Rezept suchen …" :size="$kompakt ? 'sm' : 'md'" data-rezept-tausch-suche />
             @if($tauschKandidaten->isNotEmpty())
-                <div class="mt-1 space-y-0.5">
+                <div class="flex flex-col gap-0.5">
                     @foreach($tauschKandidaten as $k)
-                        <button type="button" wire:key="rvw-tausch-{{ $k->id }}" wire:click="rezeptErsetzen({{ $k->id }})" wire:confirm="„{{ $rezeptName }}“ in {{ $tauschBilanz['rezepte'] }} Rezept(en) durch „{{ $k->name }}“ ersetzen? Menge und Einheit der Zeilen bleiben stehen, die Rezepte werden neu berechnet." class="w-full text-left px-2 py-1 rounded {{ $tt }} text-gray-700 hover:bg-violet-500/10 flex items-center gap-1.5" data-rezept-tausch-kandidat>
-                            <span class="{{ $pill }} {{ $statusPill[$k->status->value] ?? $variantPill['secondary'] }} shrink-0">{{ $k->status->label() }}</span>
-                            @if($k->is_sales_recipe)<span class="{{ $pill }} {{ $variantPill['info'] }} shrink-0">Gericht</span>@endif
+                        <button type="button" wire:key="rvw-tausch-{{ $k->id }}" wire:click="rezeptErsetzen({{ $k->id }})"
+                                wire:confirm="„{{ $rezeptName }}“ in {{ $mehrzahl((int) $tauschBilanz['rezepte'], 'Rezept', 'Rezepten') }} durch „{{ $k->name }}“ ersetzen? Menge und Einheit der Zeilen bleiben stehen, die Rezepte werden neu berechnet."
+                                class="w-full text-left px-2 py-1.5 rounded-[var(--fa-radius-control)] {{ $tt }} text-[var(--fa-ink)] hover:bg-[var(--fa-hover)] flex items-center gap-2" data-rezept-tausch-kandidat>
+                            <x-fa::badge :tone="$statusTon[$k->status->value] ?? 'neutral'" class="shrink-0">{{ $k->status->label() }}</x-fa::badge>
+                            @if($k->is_sales_recipe)<x-fa::badge tone="info" class="shrink-0">Gericht</x-fa::badge>@endif
                             <span class="min-w-0 flex-1 truncate">{{ $k->name }}</span>
+                            @svg('heroicon-m-arrows-right-left', 'w-4 h-4 shrink-0 text-[var(--fa-ink-3)]')
                         </button>
                     @endforeach
                 </div>
             @elseif(trim($tauschSuche) !== '')
-                <p class="{{ $tt }} text-gray-400 mt-1">Kein passendes Ziel-Rezept.</p>
+                <p class="{{ $leise }}">Kein passendes Rezept gefunden.</p>
             @endif
         </div>
     @endif
 
     {{-- 3. Löschen — nur für eigene Basisrezepte; $tauschReferenzen ist sonst null --}}
     @if($tauschReferenzen !== null)
-        <div class="pt-2 mt-2 border-t border-black/5" data-rezept-loeschen-block>
+        <div class="pt-3 border-t border-[var(--fa-line)] flex flex-col gap-1.5" data-rezept-loeschen-block>
             @if($tauschReferenzen['blocker'] === 0)
-                <button type="button" wire:click="rezeptLoeschen" wire:confirm="„{{ $rezeptName }}“ löschen? (Keine Referenzen vorhanden — das Rezept verschwindet aus den Listen.)" class="{{ $btnGhostXs }} text-rose-600" data-rezept-loeschen>Rezept löschen</button>
-                <p class="{{ $tt }} text-gray-500 mt-1">Keine Referenzen — Löschen möglich (Soft-Delete, wiederherstellbar).</p>
+                <div>
+                    <x-fa::button :size="$kompakt ? 'sm' : 'md'" variant="danger" icon="heroicon-m-trash" wire:click="rezeptLoeschen"
+                        wire:confirm="„{{ $rezeptName }}“ löschen? Nichts verweist darauf, das Rezept verschwindet aus den Listen." data-rezept-loeschen>Rezept löschen</x-fa::button>
+                </div>
+                <p class="{{ $leise }}">Nichts verweist auf dieses Rezept. Gelöschte Rezepte lassen sich wiederherstellen.</p>
             @else
-                <p class="{{ $tt }} text-gray-600" data-rezept-ref-zusammenfassung>Löschen blockiert — wird referenziert: {{ implode(' · ', $tauschReferenzen['blocker_teile']) }}. @if($tauschBilanz !== null && $tauschBilanz['zeilen'] > 0)Erst oben umhängen, dann löschen.@endif</p>
+                <p class="{{ $tt }} text-[var(--fa-ink)]" data-rezept-ref-zusammenfassung>
+                    <x-fa::signal tone="warn">Löschen nicht möglich</x-fa::signal>
+                    Wird verwendet: {{ implode(' · ', $tauschReferenzen['blocker_teile']) }}.@if($tauschBilanz !== null && $tauschBilanz['zeilen'] > 0)<span> Erst oben umhängen, dann löschen.</span>@endif
+                </p>
                 @if(($tauschReferenzen['eltern_namen'] ?? []) !== [])
                     {{-- Adresse statt Menge: die Eltern-Rezepte, die das Löschen blockieren.
                          Hier stehen ALLE (auch geerbte) — sie blockieren ebenfalls, tauchen aber
                          in der Tausch-Bilanz oben bewusst nur als „unberührt" auf. --}}
-                    <p class="{{ $tt }} text-gray-500 mt-1" data-rezept-ref-eltern>Referenziert in: {{ implode(' · ', array_column($tauschReferenzen['eltern_namen'], 'name')) }}</p>
+                    <p class="{{ $leise }}" data-rezept-ref-eltern>Verwendet in: {{ implode(' · ', array_column($tauschReferenzen['eltern_namen'], 'name')) }}</p>
                 @endif
             @endif
-            @php($refInfo = array_filter([$tauschReferenzen['produktion_historie'] > 0 ? $tauschReferenzen['produktion_historie'] . ' Zeile(n) in abgeschlossenen Produktionsaufträgen' : null, $tauschReferenzen['instanzen'] > 0 ? $tauschReferenzen['instanzen'] . ' daraus instanziierte(s) Rezept(e)' : null]))
+            @php
+                $refInfo = array_filter([
+                    $tauschReferenzen['produktion_historie'] > 0 ? $mehrzahl((int) $tauschReferenzen['produktion_historie'], 'Zeile', 'Zeilen') . ' in abgeschlossenen Produktionsaufträgen' : null,
+                    $tauschReferenzen['instanzen'] > 0 ? $mehrzahl((int) $tauschReferenzen['instanzen'], 'daraus abgeleitetes Rezept', 'daraus abgeleitete Rezepte') : null,
+                ]);
+            @endphp
             @if($refInfo !== [])
-                <p class="{{ $tt }} text-gray-400 mt-1" data-rezept-ref-info>Nur zur Info (blockiert nicht): {{ implode(' · ', $refInfo) }}</p>
+                <p class="{{ $leise }}" data-rezept-ref-info>Nur zur Info, blockiert nicht: {{ implode(' · ', $refInfo) }}</p>
             @endif
         </div>
     @endif

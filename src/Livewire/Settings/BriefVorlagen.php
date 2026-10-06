@@ -100,7 +100,7 @@ class BriefVorlagen extends Component
             'eigene' => $rows->whereNotNull('team_id')->values(),
             'globals' => $rows->whereNull('team_id')->values(),
             'istMaster' => $team !== null && app(BriefTemplateService::class)->istMaster($team),
-            'scopeLabel' => ['rezept' => 'Basisrezept', 'gericht' => 'Gericht', 'concept' => 'Concept'],
+            'scopeLabel' => ['rezept' => 'Basisrezept', 'gericht' => 'Gericht', 'concept' => 'Konzept'],
         ]);
     }
 }

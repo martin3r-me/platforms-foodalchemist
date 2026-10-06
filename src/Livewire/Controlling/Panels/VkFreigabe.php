@@ -72,8 +72,8 @@ class VkFreigabe extends Component
         $n = $snap->release($team, $this->auswahl, Auth::id());
 
         $this->auswahl = [];
-        $this->hinweis = $n . ' Preis(e) freigegeben — ab jetzt sieht der Kunde diesen Stand.'
-            . ($n < $gewuenscht ? ' ' . ($gewuenscht - $n) . ' übersprungen (nicht team-eigen).' : '');
+        $this->hinweis = $n . ($n === 1 ? ' Preis' : ' Preise') . ' freigegeben. Ab jetzt sieht der Kunde diesen Stand.'
+            . ($n < $gewuenscht ? ' ' . ($gewuenscht - $n) . ' übersprungen, weil sie nicht zu diesem Team gehören.' : '');
     }
 
     public function render(VkSnapshotService $snap, TeamSettingsService $settings)

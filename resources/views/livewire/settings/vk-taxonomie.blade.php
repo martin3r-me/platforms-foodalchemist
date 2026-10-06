@@ -1,83 +1,126 @@
-{{-- D-6 §4.6: VK-Taxonomie — Master-Detail (Speisen-HG links, Klassen-Tabelle rechts); HG + Klassen anlegbar (#372) --}}
-@php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
-@php($katAktiv = 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700')
-@php($katHover = 'text-gray-600 hover:bg-black/[0.03]')
+{{-- D-6 §4.6: VK-Taxonomie — Master-Detail (Speisen-HG links, Klassen-Tabelle rechts); HG + Klassen anlegbar (#372)
+     fa-pass 2026-10-05: Bausteine/Tokens, Anordnung wie bisher (Speisen-Hauptgruppen links, Diätformen rechts).
+     Häufigste Aufgabe = Speisen-Hauptgruppen anlegen, benennen und ordnen. Der Zähler links zählt Gerichte.
+     Die vier Diätformen gelten für alle Hauptgruppen; gewählt wird sie am Gericht. --}}
+@php
+    $zeileBasis = 'group flex items-center gap-1 min-h-9 pr-1 rounded-[var(--fa-radius-control)] transition-colors';
+    $merkmale = fn ($k) => collect(['vegan' => $k->is_vegan, 'vegetarisch' => $k->is_vegi, 'halal' => $k->is_halal, 'koscher' => $k->is_koscher])->filter()->keys();
+@endphp
 
-<div class="space-y-4" data-settings-vk-taxonomie>
-    @if($meldung !== null)<div class="{{ $card }} p-3 border-emerald-500/20"><p class="text-xs text-emerald-600" data-taxo-meldung>{{ $meldung }}</p></div>@endif
-    @if($fehler !== null)<div class="{{ $card }} p-3 border-red-500/20"><p class="text-xs text-red-600" data-taxo-fehler>{{ $fehler }}</p></div>@endif
+<div class="flex flex-col gap-4" data-settings-vk-taxonomie>
+    @if($meldung !== null)<x-fa::notice tone="ok" data-taxo-meldung>{{ $meldung }}</x-fa::notice>@endif
+    @if($fehler !== null)<x-fa::notice tone="crit" data-taxo-fehler>{{ $fehler }}</x-fa::notice>@endif
 
-    <div class="flex gap-4 items-start">
+    <div class="flex flex-wrap gap-4 items-start">
         {{-- Speisen-Hauptgruppen links --}}
-        <div class="w-80 shrink-0 {{ $card }} p-3 space-y-0.5" data-taxo-hgs x-data="{ dragId: null }">
-            <div class="{{ $label }} px-2 pb-2">Speisen-Hauptgruppen ({{ $hauptgruppen->count() }})</div>
-            @foreach($hauptgruppen as $hg)
-                @php($darfEditHg = \Platform\FoodAlchemist\Support\Curate::canCurate(auth()->user(), $hg))
-                @php($nKl = $klassenJeHg[$hg->id] ?? 0)
-                <div wire:key="thg-{{ $hg->id }}" class="group flex items-center gap-1 rounded-lg {{ $hauptgruppeId === $hg->id ? $katAktiv : $katHover }} {{ $hg->is_inactive ? 'opacity-50' : '' }}"
-                        @dragover.prevent
-                        @drop.prevent="if (dragId !== null && dragId !== {{ $hg->id }}) $wire.hgVerschieben(dragId, {{ $hg->id }}); dragId = null"
-                        :class="{ 'ring-1 ring-inset ring-violet-400/40': dragId !== null && dragId !== {{ $hg->id }} }">
-                    @if($hgEditId === $hg->id)
-                        <input type="text" wire:model="hgEditName" wire:keydown.enter="hgSave" wire:keydown.escape="$set('hgEditId', null)" class="{{ $input }} !py-0.5 flex-1" autofocus />
-                        <button type="button" wire:click="hgSave" class="{{ $btnGhostXs }} text-violet-600 shrink-0">OK</button>
-                    @else
-                        <span class="shrink-0 flex items-center pl-1">@include('foodalchemist::livewire.settings.partials.reorder-cell', ['id' => $hg->id, 'upMethod' => 'hgHoch', 'downMethod' => 'hgRunter', 'first' => $loop->first, 'last' => $loop->last])</span>
-                        <button type="button" wire:click="waehleHg({{ $hg->id }})" class="flex-1 min-w-0 flex items-center gap-1.5 text-left px-2 py-1.5 text-xs">
-                            <span class="font-mono text-[10px] text-gray-500">{{ $hg->code }}</span>
-                            <span class="min-w-0 truncate">{{ $hg->label }}</span>
-                        </button>
-                        <span class="text-[11px] text-gray-500 shrink-0">{{ $nKl }}</span>
-                        @if($darfEditHg)
-                            <button type="button" wire:click="startHgEdit({{ $hg->id }}, @js($hg->label))" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-500 hover:text-violet-500 text-[11px] px-1" title="Umbenennen">@svg('heroicon-o-pencil', 'w-3.5 h-3.5 inline-block align-middle')</button>
-                            <button type="button" wire:click="hgDelete({{ $hg->id }})" wire:confirm="Diese Hauptgruppe löschen?" @disabled($nKl > 0)
-                                    class="shrink-0 opacity-0 group-hover:opacity-100 text-[11px] px-1 {{ $nKl > 0 ? 'text-gray-300 cursor-not-allowed' : 'text-gray-500 hover:text-red-500' }}"
-                                    title="{{ $nKl > 0 ? 'Hat Klassen — erst dort entfernen' : 'löschen' }}">@svg('heroicon-o-trash', 'w-3.5 h-3.5 inline-block align-middle')</button>
+        <x-fa::section title="Speisen-Hauptgruppen" :meta="$hauptgruppen->count()" class="w-80 max-w-full shrink-0" data-taxo-hgs x-data="{ dragId: null }">
+            <div class="flex flex-col gap-0.5 -mx-1">
+                @foreach($hauptgruppen as $hg)
+                    @php($darfEditHg = \Platform\FoodAlchemist\Support\Curate::canCurate(auth()->user(), $hg))
+                    @php($nKl = $klassenJeHg[$hg->id] ?? 0)
+                    @php($aktiv = $hauptgruppeId === $hg->id)
+                    <div wire:key="thg-{{ $hg->id }}" class="{{ $zeileBasis }} {{ $aktiv ? 'bg-[var(--fa-accent-soft)] text-[var(--fa-accent)]' : 'text-[var(--fa-ink)] hover:bg-[var(--fa-hover)]' }} {{ $hg->is_inactive ? 'opacity-60' : '' }}"
+                         @dragover.prevent
+                         @drop.prevent="if (dragId !== null && dragId !== {{ $hg->id }}) $wire.hgVerschieben(dragId, {{ $hg->id }}); dragId = null"
+                         :class="{ 'ring-1 ring-inset ring-[var(--fa-accent-line)]': dragId !== null && dragId !== {{ $hg->id }} }">
+                        @if($hgEditId === $hg->id)
+                            <x-fa::input size="sm" wire:model="hgEditName" wire:keydown.enter="hgSave" wire:keydown.escape="$set('hgEditId', null)" aria-label="Name der Hauptgruppe" class="flex-1 min-w-0 ml-1" autofocus />
+                            <x-fa::button size="sm" variant="primary" wire:click="hgSave">Speichern</x-fa::button>
+                        @else
+                            <span class="shrink-0 pl-0.5">@include('foodalchemist::livewire.settings.partials.reorder-cell', ['id' => $hg->id, 'upMethod' => 'hgHoch', 'downMethod' => 'hgRunter', 'first' => $loop->first, 'last' => $loop->last])</span>
+                            <button type="button" wire:click="waehleHg({{ $hg->id }})" @if($aktiv) aria-current="true" @endif
+                                    class="flex-1 min-w-0 flex items-center gap-1.5 text-left px-1.5 py-1.5 text-[length:var(--fa-text-md)] {{ $aktiv ? 'font-medium' : '' }}">
+                                <span class="shrink-0 text-[length:var(--fa-text-sm)] tabular-nums text-[var(--fa-ink-3)]">{{ $hg->code }}</span>
+                                <span class="min-w-0 truncate" title="{{ $hg->label }}">{{ $hg->label }}</span>
+                                @if($hg->is_inactive)<x-fa::badge class="shrink-0">inaktiv</x-fa::badge>@endif
+                            </button>
+                            <span class="shrink-0 text-[length:var(--fa-text-sm)] tabular-nums text-[var(--fa-ink-3)]" title="Gerichte in dieser Hauptgruppe">{{ number_format($nKl, 0, ',', '.') }}</span>
+                            @if($darfEditHg)
+                                <span class="shrink-0 flex opacity-0 group-hover:opacity-100 focus-within:opacity-100">
+                                    <x-fa::icon-button size="sm" icon="heroicon-o-pencil" label="Hauptgruppe umbenennen" wire:click="startHgEdit({{ $hg->id }}, @js($hg->label))" />
+                                    @if($nKl > 0)
+                                        <x-fa::icon-button size="sm" icon="heroicon-o-trash" label="Gerichte hängen daran, erst umhängen" disabled class="opacity-40 cursor-not-allowed" />
+                                    @else
+                                        <x-fa::icon-button size="sm" tone="danger" icon="heroicon-o-trash" label="Hauptgruppe löschen" wire:click="hgDelete({{ $hg->id }})" wire:confirm="Diese Hauptgruppe löschen?" />
+                                    @endif
+                                </span>
+                            @endif
                         @endif
-                    @endif
-                </div>
-            @endforeach
-            <div class="pt-2 mt-1 border-t border-black/5 flex items-center gap-1.5">
-                <input type="text" wire:model="neuHg" wire:keydown.enter="createHg" placeholder="Neue Hauptgruppe …" class="{{ $input }} flex-1" />
-                <button type="button" wire:click="createHg" class="{{ $btnGhostXs }}">+ HG</button>
+                    </div>
+                @endforeach
             </div>
-            <p class="text-[10px] text-gray-500 px-2 pt-2 leading-snug">Kategorie = Hauptgruppe. Klasse = Diätform (4, global). Zähler = Gerichte je HG. Preisklassen, Schreibstile und Behälter: eigene Seiten.</p>
-        </div>
+
+            <div class="flex gap-1.5 pt-3 border-t border-[var(--fa-line)]">
+                <label for="vk-hg-neu" class="sr-only">Neue Hauptgruppe</label>
+                <x-fa::input id="vk-hg-neu" size="sm" wire:model="neuHg" wire:keydown.enter="createHg" placeholder="Neue Hauptgruppe" class="flex-1 min-w-0" />
+                <x-fa::button size="sm" icon="heroicon-m-plus" wire:click="createHg">Anlegen</x-fa::button>
+            </div>
+            <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">
+                Die Zahl rechts zählt die Gerichte je Hauptgruppe. Preisklassen, Schreibstile und Behälter haben eigene Seiten.
+            </p>
+        </x-fa::section>
 
         {{-- Klassen der gewählten HG rechts --}}
-        <div class="flex-1 min-w-0">
-            <div class="relative overflow-hidden {{ $card }}" data-taxo-klassen>
-                <div class="{{ $cardAccent }}"></div>
-                <div class="px-5 pt-4 pb-2 flex items-baseline justify-between">
-                    <h3 class="font-medium tracking-tight text-gray-900">Klassen = Diätformen</h3>
-                    <span class="{{ $label }}">4 global (HG-unabhängig)</span>
-                </div>
-                @if($klassen->isNotEmpty())
-                    <table class="{{ $table }}">
-                        <thead><tr class="text-left">@foreach(['Klasse', 'Diätform', 'Diät-Flags', 'Rezepte', ''] as $h)<th class="{{ $th }}">{{ $h }}</th>@endforeach</tr></thead>
+        <x-fa::section title="Diätformen" meta="gelten für alle Hauptgruppen" class="flex-1 basis-[26rem] min-w-0" data-taxo-klassen
+            description="Fleisch, Fisch, Vegetarisch, Vegan. Die Diätform wird am Gericht gewählt.">
+            @if($klassen->isNotEmpty())
+                <div class="overflow-x-auto -mx-4">
+                    <table class="fa-table">
+                        <thead>
+                            <tr>
+                                <th class="w-full">Klasse</th>
+                                <th>Diätform</th>
+                                <th>Geeignet für</th>
+                                <th class="num">Gerichte</th>
+                                <th><span class="sr-only">Aktionen</span></th>
+                            </tr>
+                        </thead>
                         <tbody>
                             @foreach($klassen as $k)
                                 @php($darfEditK = \Platform\FoodAlchemist\Support\Curate::canCurate(auth()->user(), $k))
                                 @php($nRez = $klassenZaehler[$k->id] ?? 0)
-                                <tr class="{{ $tr }}" wire:key="tk-{{ $k->id }}">
+                                <tr wire:key="tk-{{ $k->id }}">
                                     @if($klasseEditId === $k->id)
-                                        <td class="{{ $td }}" colspan="3"><input type="text" wire:model="klasseEditName" wire:keydown.enter="klasseSave" wire:keydown.escape="$set('klasseEditId', null)" class="{{ $input }} !py-1" autofocus /></td>
-                                        <td class="{{ $td }} text-gray-600">{{ $nRez }}</td>
-                                        <td class="{{ $td }} text-right whitespace-nowrap">
-                                            <button type="button" wire:click="klasseSave" class="{{ $btnGhostXs }} text-violet-600">OK</button>
-                                            <button type="button" wire:click="$set('klasseEditId', null)" class="{{ $btnGhostXs }}">Abbrechen</button>
+                                        <td colspan="3"><x-fa::input size="sm" wire:model="klasseEditName" wire:keydown.enter="klasseSave" wire:keydown.escape="$set('klasseEditId', null)" aria-label="Name der Klasse" class="w-full min-w-40" autofocus /></td>
+                                        <td class="num text-[var(--fa-ink-2)]">{{ number_format($nRez, 0, ',', '.') }}</td>
+                                        <td class="whitespace-nowrap">
+                                            <div class="flex items-center justify-end gap-1.5">
+                                                <x-fa::button size="sm" variant="ghost" wire:click="$set('klasseEditId', null)">Abbrechen</x-fa::button>
+                                                <x-fa::button size="sm" variant="primary" wire:click="klasseSave">Speichern</x-fa::button>
+                                            </div>
                                         </td>
                                     @else
-                                        <td class="{{ $td }} text-gray-900">{{ $k->label }} <span class="text-[10px] font-mono text-gray-500">{{ $k->code }}</span></td>
-                                        <td class="{{ $td }}"><span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $k->diet_form }}</span></td>
-                                        <td class="{{ $td }} text-[11px] text-gray-500">{{ collect(['vegan' => $k->is_vegan, 'vegi' => $k->is_vegi, 'halal' => $k->is_halal, 'koscher' => $k->is_koscher])->filter()->keys()->implode(' · ') ?: '—' }}</td>
-                                        <td class="{{ $td }} text-gray-600">{{ $nRez }}</td>
-                                        <td class="{{ $td }} text-right whitespace-nowrap">
+                                        <td>
+                                            <span class="font-medium">{{ $k->label }}</span>
+                                            <span class="ml-1 text-[length:var(--fa-text-sm)] tabular-nums text-[var(--fa-ink-3)]">{{ $k->code }}</span>
+                                        </td>
+                                        <td><x-fa::badge>{{ ucfirst((string) $k->diet_form) }}</x-fa::badge></td>
+                                        <td class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)] whitespace-nowrap">
+                                            @php($m = $merkmale($k))
+                                            @if($m->isEmpty())<span class="text-[var(--fa-ink-3)]">keine Angabe</span>@else{{ $m->implode(' · ') }}@endif
+                                        </td>
+                                        <td class="num text-[var(--fa-ink-2)]">{{ number_format($nRez, 0, ',', '.') }}</td>
+                                        <td class="whitespace-nowrap">
                                             @if($darfEditK)
-                                                <button type="button" wire:click="startKlasseEdit({{ $k->id }}, @js($k->label))" class="{{ $btnGhostXs }}">Umbenennen</button>
-                                                <button type="button" wire:click="klasseDelete({{ $k->id }})" wire:confirm="Diese Klasse löschen?" @disabled($nRez > 0)
-                                                        class="{{ $btnGhostXs }} {{ $nRez > 0 ? 'opacity-40 cursor-not-allowed' : 'text-red-500' }}"
-                                                        title="{{ $nRez > 0 ? 'Wird von Gerichten genutzt' : 'löschen' }}">Löschen</button>
+                                                <div class="flex items-center justify-end gap-1">
+                                                    <x-fa::button size="sm" variant="ghost" icon="heroicon-o-pencil" wire:click="startKlasseEdit({{ $k->id }}, @js($k->label))">Umbenennen</x-fa::button>
+                                                    <div class="relative" x-data="faMenu()" x-on:keydown.escape="offen = false" x-on:click.outside="offen = false">
+                                                        <x-fa::icon-button size="sm" icon="heroicon-m-ellipsis-horizontal" label="Weitere Aktionen für {{ $k->label }}"
+                                                            x-on:click="toggle($event)" aria-haspopup="menu" x-bind:aria-expanded="offen" />
+                                                        <div class="hidden w-64 fa-surface shadow-lg py-1" x-bind:class="{ hidden: ! offen }" x-bind:style="pos" role="menu">
+                                                            @if($nRez > 0)
+                                                                <p class="flex items-start gap-2 px-3 py-2 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">
+                                                                    @svg('heroicon-o-lock-closed', 'w-4 h-4 shrink-0 mt-px') Löschen gesperrt: Gerichte nutzen diese Klasse.
+                                                                </p>
+                                                            @else
+                                                                <button type="button" role="menuitem" x-on:click="offen = false" wire:click="klasseDelete({{ $k->id }})" wire:confirm="Diese Klasse löschen?"
+                                                                        class="flex w-full items-center gap-2 px-3 py-2 text-left text-[length:var(--fa-text-md)] text-[var(--fa-crit)] hover:bg-[var(--fa-crit-soft)]">
+                                                                    @svg('heroicon-o-trash', 'w-4 h-4 shrink-0') Klasse löschen
+                                                                </button>
+                                                            @endif
+                                                        </div>
+                                                    </div>
+                                                </div>
                                             @endif
                                         </td>
                                     @endif
@@ -85,13 +128,10 @@
                             @endforeach
                         </tbody>
                     </table>
-                @else
-                    <div class="px-5 pb-5 text-xs text-gray-500">Links eine Speisen-Hauptgruppe wählen, um ihre Klassen zu sehen.</div>
-                @endif
-                <div class="px-5 py-3 border-t border-black/5 text-[11px] text-gray-500">
-                    Die Diätform wird am Gericht gewählt (Modell A) — Klassen sind fix: Fleisch · Fisch · Vegetarisch · Vegan.
                 </div>
-            </div>
-        </div>
+            @else
+                <x-fa::empty compact icon="heroicon-o-squares-2x2" title="Keine Diätformen gefunden">Fleisch, Fisch, Vegetarisch und Vegan gehören zum Grundbestand und erscheinen hier, sobald er eingespielt ist.</x-fa::empty>
+            @endif
+        </x-fa::section>
     </div>
 </div>

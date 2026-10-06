@@ -56,12 +56,12 @@ class Browser extends Component
     public const SPALTEN = [
         'klasse' => ['Klasse', ''],
         'geschmack' => ['Geschmack', ''],
-        'hauptgruppe' => ['HG', ''],
+        'hauptgruppe' => ['Gruppe', ''],
         'ek' => ['EK', 'text-right'],
         'vk' => ['VK netto', 'text-right'],
-        'we' => ['W %', 'text-right'],           // Wareneinsatz — die Entscheidungszahl am Gericht
-        'zutaten' => ['Zutaten', 'text-right'],
-        'allergen' => ['Allergen-Konf.', ''],
+        'we' => ['Wareneinsatz', 'text-right'],  // die Entscheidungszahl am Gericht
+        'zutaten' => ['Komponenten', 'text-right'],
+        'allergen' => ['Deklaration', ''],
         'status' => ['Status', ''],
     ];
 
@@ -214,6 +214,6 @@ class Browser extends Component
             'klassenCounts' => $verkauf->klassenCounts($team, $filters),
             'statusFaelle' => RecipeStatus::cases(),
             'statusCounts' => $verkauf->statusCounts($team),
-        ])->layout('platform::layouts.app');
+        ])->layout('foodalchemist::layouts.standalone');
     }
 }

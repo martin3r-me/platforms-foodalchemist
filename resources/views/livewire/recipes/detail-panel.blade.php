@@ -1,334 +1,436 @@
-{{-- M4-05: Rezept-DetailPanel. Redesign v3 2026-07-21 (Dominique): Standalone-Sidebar
-     nicht ausklappbar, größere Typo, Kosten-Linse (EK/kg-Cockpit → Pairing-Netz → Zutaten →
-     Pairings → Allergene → Eignung/Ersatz/Equipment). Editor-Embeds (nurEignung/nurErsatz/
-     embedded-Details-Tab) behalten ihre bisherigen Karteien. --}}
-@php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
-@php($nurErsatz = ($section ?? null) === 'ersatz')
-@php($nurEignung = ($section ?? null) === 'eignung')
-@php($nurSektion = $nurErsatz || $nurEignung)
+{{-- M4-05: Rezept-DetailPanel. fa-pass (2026-10-05): auf Bausteine <x-fa::…> umgestellt, gleiche
+     Sprache wie das GP-Detail. Standalone-Detail nach der Anatomie Detail-Panels (DESIGN.md), Geschwister
+     des Gericht-Details: Kopf (eine Hauptaktion „Im Editor öffnen", Drucken/PDF/Neu berechnen/Status/
+     Duplizieren/Vorlage im Menü) · Kennzahlen (EK je kg, EK je Ansatz, Ausbeute) · Offene Punkte ·
+     Allergene und Diät · Zutaten · Endprodukt · Anleitung · Fotos · Pairing-Netz · Eignung · Nährwerte ·
+     Ersatz · Equipment · KI-Kontext · Wo verwendet? · Verwaltung.
+     Editor-Einbettungen (section=eignung|ersatz, embedded-Details-Reiter) behalten ihre Karteien. --}}
+@php
+    $nurErsatz = ($section ?? null) === 'ersatz';
+    $nurEignung = ($section ?? null) === 'eignung';
+    $nurSektion = $nurErsatz || $nurEignung;
 
-<div class="{{ $nurSektion || ($embedded ?? false) ? 'space-y-2' : 'p-4 space-y-4 min-h-full bg-gray-500/[0.04]' }}" data-rezept-panel>
+    $zahl = fn ($wert, $stellen = 2) => number_format((float) $wert, $stellen, ',', '.');
+    $menge = fn ($wert) => rtrim(rtrim(number_format((float) $wert, 2, ',', '.'), '0'), ',');
+    $leise = 'text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]';
+    $titelKlein = 'text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-2)]';
+    $listenKnopf = 'flex w-full items-center gap-2 px-2 py-1.5 rounded-[var(--fa-radius-control)] text-left text-[length:var(--fa-text-md)] text-[var(--fa-ink)] hover:bg-[var(--fa-hover)]';
+    $chip = 'inline-flex items-center gap-1 h-7 px-2.5 rounded-full border text-[length:var(--fa-text-sm)] transition-colors';
+    $chipAn = 'border-[var(--fa-accent)] bg-[var(--fa-accent-soft)] text-[var(--fa-accent)] font-medium';
+    $chipAus = 'border-[var(--fa-line-strong)] bg-[var(--fa-surface)] text-[var(--fa-ink-2)] hover:border-[var(--fa-ink-3)] hover:text-[var(--fa-ink)]';
+
+    // Eignungs-Vokabular kommt als Kürzel aus dem Service — hier nur lesbar gemacht.
+    $eignungText = [
+        'haute_cuisine' => 'Haute Cuisine', 'gehoben' => 'Gehoben', 'klassisch' => 'Klassisch',
+        'business' => 'Betriebsgastronomie', 'care' => 'Care', 'crew' => 'Crew-Verpflegung',
+        'event_privat' => 'Privates Event', 'kita_schule' => 'Kita und Schule', 'restaurant' => 'Restaurant',
+    ];
+    $eignungLabel = fn (string $slug) => $eignungText[$slug] ?? ucfirst(str_replace('_', ' ', $slug));
+    $statusWahl = ['draft' => 'Zurück auf Entwurf', 'review' => 'Zur Prüfung geben', 'approved' => 'Freigeben'];
+@endphp
+
+<div class="{{ $nurSektion || ($embedded ?? false) ? 'flex flex-col gap-3' : 'p-4 flex flex-col gap-5 min-h-full bg-[var(--fa-ground)]' }}" data-rezept-panel>
     @if($rezept === null)
         @unless($nurSektion)
-            <div class="text-center text-xs text-gray-500 py-12">
-                <div class="text-2xl mb-2">⌘</div>
-                Rezept in der Tabelle anklicken —<br>Details erscheinen hier.
-            </div>
+            <x-fa::empty icon="heroicon-o-cursor-arrow-rays" title="Kein Rezept gewählt">Rezept in der Tabelle anklicken, dann erscheinen hier Kosten, Zutaten und Allergene.</x-fa::empty>
         @endunless
 
-    {{-- ── Editor-Kartei: NUR Eignung (Eigenschaften-Tab, kein Panel-Chrome) ── --}}
+    {{-- ── Editor-Kartei: NUR Eignung (Eigenschaften-Reiter, ohne Panel-Kopf) ── --}}
     @elseif($nurEignung)
-        @php($eignungVokab = \Platform\FoodAlchemist\Services\RecipeService::eignungVokabular())
-        @php($eignungAktiv = ['level' => $rezept->levelSuitabilities->keyBy('level_slug'), 'sektor' => $rezept->sectorSuitabilities->keyBy('sector_slug')])
-        <div data-eignungen>
-            @if($fehlerEignung !== null)<p class="text-[11px] text-rose-500 mb-1" data-eignung-fehler>{{ $fehlerEignung }}</p>@endif
-            <div class="space-y-1.5">
-                @foreach(['level' => 'Niveau', 'sektor' => 'Sektor'] as $typ => $typLabel)
-                    <div class="flex items-center gap-1 flex-wrap">
-                        <span class="text-[10px] uppercase tracking-wider text-gray-500 w-12 shrink-0">{{ $typLabel }}</span>
-                        @foreach($eignungVokab[$typ]['slugs'] as $slug)
-                            @php($eintrag = $eignungAktiv[$typ][$slug] ?? null)
-                            <button type="button" wire:key="eig-{{ $typ }}-{{ $slug }}" wire:click="eignungToggle('{{ $typ }}', '{{ $slug }}')"
-                                    class="{{ $pill }} transition-colors {{ $eintrag !== null ? ($typ === 'level' ? $variantPill['info'] : $variantPill['primary']) : 'border border-black/10 text-gray-500 hover:text-gray-600' }}"
-                                    data-eignung-chip="{{ $typ }}-{{ $slug }}">{{ $slug }}</button>
-                        @endforeach
-                    </div>
+        @php
+            $eignungVokab = \Platform\FoodAlchemist\Services\RecipeService::eignungVokabular();
+            $eignungAktiv = ['level' => $rezept->levelSuitabilities->keyBy('level_slug'), 'sektor' => $rezept->sectorSuitabilities->keyBy('sector_slug')];
+        @endphp
+        <div class="flex flex-col gap-2" data-eignungen>
+            @if($fehlerEignung !== null)<x-fa::signal tone="crit" data-eignung-fehler>{{ $fehlerEignung }}</x-fa::signal>@endif
+            @foreach(['level' => 'Niveau', 'sektor' => 'Sektor'] as $typ => $typLabel)
+                <div class="flex flex-wrap items-center gap-1.5">
+                    <span class="w-16 shrink-0 {{ $titelKlein }}">{{ $typLabel }}</span>
+                    @foreach($eignungVokab[$typ]['slugs'] as $slug)
+                        @php $eintrag = $eignungAktiv[$typ][$slug] ?? null; @endphp
+                        <button type="button" wire:key="eig-{{ $typ }}-{{ $slug }}" wire:click="eignungToggle('{{ $typ }}', '{{ $slug }}')"
+                                class="{{ $chip }} {{ $eintrag !== null ? $chipAn : $chipAus }}" aria-pressed="{{ $eintrag !== null ? 'true' : 'false' }}"
+                                data-eignung-chip="{{ $typ }}-{{ $slug }}">@if($eintrag !== null)@svg('heroicon-m-check', 'w-3.5 h-3.5')@endif{{ $eignungLabel($slug) }}</button>
+                    @endforeach
+                </div>
+            @endforeach
+        </div>
+
+    {{-- ── Editor-Kartei: NUR Ersatz (Eigenschaften-Reiter) ── --}}
+    @elseif($nurErsatz)
+        <div class="flex flex-col gap-1.5" data-sektion="ersatz">
+            @forelse($ersatz as $e)
+                <div class="flex items-center gap-2 text-[length:var(--fa-text-md)]" wire:key="rq-equiv-{{ $e->id }}">
+                    <x-fa::badge :tone="$e->gegen_kind === 'recipe' ? 'info' : 'neutral'" class="shrink-0">{{ $e->gegen_kind === 'recipe' ? 'Rezept' : 'Grundprodukt' }}</x-fa::badge>
+                    <span class="min-w-0 flex-1 truncate text-[var(--fa-ink)]" title="{{ $e->gegen_name }}">{{ $e->gegen_name }}</span>
+                    @if((float) $e->umrechnungsfaktor !== 1.0)<span class="shrink-0 tabular-nums {{ $leise }}" title="Umrechnungsfaktor">× {{ rtrim(rtrim(number_format($e->umrechnungsfaktor, 4, ',', '.'), '0'), ',') }}</span>@endif
+                    <x-fa::icon-button size="sm" tone="danger" icon="heroicon-m-x-mark" label="Ersatz lösen" wire:click="ersatzLoesen({{ $e->id }})" />
+                </div>
+            @empty
+                <p class="{{ $leise }}" data-ersatz-leer>Kein Ersatz hinterlegt.</p>
+            @endforelse
+            @if($fehlerAnker !== null)<x-fa::signal tone="crit" data-ersatz-fehler>{{ $fehlerAnker }}</x-fa::signal>@endif
+            <div class="flex flex-col gap-1 pt-1" data-ersatz-verknuepfen>
+                <x-fa::input size="sm" type="search" wire:model.live.debounce.300ms="ersatzSuche" placeholder="Ersatz verknüpfen: Grundprodukt oder Rezept suchen" aria-label="Ersatz suchen und verknüpfen" data-ersatz-suche />
+                @foreach($ersatzKandidaten as $k)
+                    <button type="button" wire:key="rq-ersk-{{ $k->kind }}-{{ $k->id }}" wire:click="ersatzVerknuepfen('{{ $k->kind }}', {{ $k->id }})" class="{{ $listenKnopf }}">
+                        <x-fa::badge :tone="$k->kind === 'recipe' ? 'info' : 'neutral'" class="shrink-0">{{ $k->kind === 'recipe' ? 'Rezept' : 'Grundprodukt' }}</x-fa::badge>
+                        <span class="min-w-0 flex-1 truncate">{{ $k->name }}</span>
+                    </button>
                 @endforeach
             </div>
         </div>
 
-    {{-- ── Editor-Kartei: NUR Ersatz (Eigenschaften-Tab) ── --}}
-    @elseif($nurErsatz)
-        <div data-sektion="ersatz">
-            <div class="space-y-1">
-                @forelse($ersatz as $e)
-                    <div class="flex items-center gap-2 text-[11px]" wire:key="rq-equiv-{{ $e->id }}">
-                        <span class="{{ $pill }} {{ $e->gegen_kind === 'recipe' ? $variantPill['info'] : $variantPill['secondary'] }} shrink-0">{{ $e->gegen_kind === 'recipe' ? 'Rezept' : 'GP' }}</span>
-                        <span class="min-w-0 flex-1 truncate text-gray-900" title="{{ $e->gegen_name }}">{{ $e->gegen_name }}</span>
-                        @if((float) $e->umrechnungsfaktor !== 1.0)<span class="text-gray-500 tabular-nums shrink-0">×{{ rtrim(rtrim(number_format($e->umrechnungsfaktor, 4, ',', '.'), '0'), ',') }}</span>@endif
-                        <button type="button" wire:click="ersatzLoesen({{ $e->id }})" class="{{ $btnGhostXs }} text-rose-500 shrink-0" title="Ersatz-Verknüpfung lösen">✕</button>
-                    </div>
-                @empty
-                    <p class="text-[11px] text-gray-500" data-ersatz-leer>— kein Ersatz hinterlegt —</p>
-                @endforelse
-                @if($fehlerAnker !== null)<p class="text-[11px] text-rose-500" data-ersatz-fehler>{{ $fehlerAnker }}</p>@endif
-                <div class="pt-1" data-ersatz-verknuepfen>
-                    <input type="search" wire:model.live.debounce.300ms="ersatzSuche" placeholder="+ Ersatz verknüpfen — Fertig-GP/Rezept suchen …" class="{{ $input }} !py-1" data-ersatz-suche />
-                    @foreach($ersatzKandidaten as $k)
-                        <button type="button" wire:key="rq-ersk-{{ $k->kind }}-{{ $k->id }}" wire:click="ersatzVerknuepfen('{{ $k->kind }}', {{ $k->id }})"
-                                class="w-full text-left px-2 py-1 rounded text-[11px] text-gray-700 hover:bg-violet-500/10 flex items-center gap-1.5">
-                            <span class="{{ $pill }} {{ $k->kind === 'recipe' ? $variantPill['info'] : $variantPill['secondary'] }}">{{ $k->kind === 'recipe' ? 'Rezept' : 'GP' }}</span>
-                            <span class="min-w-0 flex-1 truncate">{{ $k->name }}</span>
-                        </button>
-                    @endforeach
-                </div>
-            </div>
-        </div>
-
-    {{-- ── Editor „Details"-Tab (embedded, ohne section): reduzierter Subset ── --}}
+    {{-- ── Editor-Reiter „Details" (embedded, ohne section): reduzierter Ausschnitt ── --}}
     @elseif($embedded ?? false)
         @include('foodalchemist::livewire.recipes.partials.deklaration')
         @if($eltern->isNotEmpty())
-            <div data-eltern>
-                <p class="{{ $dt }} mb-1">Verwendet in ({{ $eltern->count() }})</p>
-                <div class="space-y-0.5">
+            <x-fa::section variant="plain" title="Verwendet in" icon="heroicon-o-link" :meta="$eltern->count()" data-eltern>
+                <div class="flex flex-col gap-0.5">
                     @foreach($eltern as $parent)
                         <button type="button" wire:key="el-{{ $parent->id }}"
                                 @if($parent->is_sales_recipe) wire:click="$dispatch('vk-modal.oeffnen', { id: {{ $parent->id }} })" @else wire:click="$dispatch('recipe-modal.oeffnen', { id: {{ $parent->id }} })" @endif
-                                class="block w-full text-left text-[11px] text-sky-600 hover:underline truncate" data-eltern-link>@if($parent->is_sales_recipe)@svg('heroicon-o-banknotes', 'w-3.5 h-3.5 inline-block align-middle')@else @svg('heroicon-o-arrow-up', 'w-3.5 h-3.5 inline-block align-middle')@endif {{ $parent->name }}</button>
-                    @endforeach
-                </div>
-            </div>
-        @endif
-        <div class="flex flex-wrap items-center gap-1.5 border-t border-black/5 pt-2" data-workflow>
-            @foreach(['draft' => 'Entwurf', 'review' => 'Review', 'approved' => 'Freigeben'] as $wert => $lbl)
-                @if($rezept->status->value !== $wert)<button type="button" wire:click="statusSetzen('{{ $wert }}')" class="{{ $btnGhostXs }}" data-status-btn="{{ $wert }}">→ {{ $lbl }}</button>@endif
-            @endforeach
-            <button type="button" wire:click="duplizieren" class="{{ $btnGhostXs }}" data-duplizieren-btn>Duplizieren</button>
-            <button type="button" wire:click="templateToggle" class="{{ $btnGhostXs }} {{ $rezept->is_template ? 'text-violet-600' : '' }}" data-template-btn>{{ $rezept->is_template ? '★ Template' : 'Als Template' }}</button>
-        </div>
-
-    {{-- ── STANDALONE-Sidebar: v3 Kosten-Linse ── --}}
-    @else
-        {{-- Kopf: Name ÜBER den Aktionen (2026-09-04, Dominique) — identischer Aufbau wie das
-             Verkauf-Panel. Vorher standen Name und Aktionen in EINER Flex-Zeile: im schmalen
-             Panel blieb dem Titel nur eine Wortbreite, „Fond: Dunkler Geflügelfond" brach
-             mitten in die Knopfreihe hinein. --}}
-        <div>
-            <div class="flex items-start gap-2">
-                @if(!empty($rezeptBildUrl))
-                    <img src="{{ $rezeptBildUrl }}" alt="" class="h-10 w-10 object-cover rounded-md border border-black/10 shrink-0" data-rezept-mini-bild>
-                @endif
-                <h3 class="text-base font-semibold tracking-tight text-gray-900 leading-snug">{{ $rezept->name }}</h3>
-            </div>
-            <div class="flex flex-wrap items-center gap-1.5 mt-2.5" data-rezept-aktionen>
-                <button type="button" wire:click="$dispatch('recipe-modal.oeffnen', { id: {{ $rezept->id }} })" class="{{ $btnGhostXs }}" data-rezept-bearbeiten>@svg('heroicon-o-pencil-square', 'w-3.5 h-3.5') Bearbeiten</button>
-                <a href="{{ route('foodalchemist.rezepte.dokument', ['id' => $rezept->id, 'profil' => 'produktion']) }}" target="_blank"
-                   class="{{ $btnGhostXs }}" title="Druck-/PDF-Report mit Profilen und Filtern" data-rezept-panel-druck>
-                    @svg('heroicon-o-printer', 'w-3.5 h-3.5') Druck
-                </a>
-                <a href="{{ route('foodalchemist.rezepte.dokument', ['id' => $rezept->id, 'profil' => 'produktion', 'pdf' => 1]) }}"
-                   class="{{ $btnGhostXs }}" title="PDF herunterladen" data-rezept-panel-pdf>PDF</a>
-                <button type="button" wire:click="neuBerechnen" class="{{ $btnGhostXs }}" title="GL-02-Pipeline + Eltern-Propagation" data-recompute-btn>@svg('heroicon-o-arrow-path', 'w-3.5 h-3.5') Neu rechnen</button>
-            </div>
-            <div class="flex flex-wrap items-center gap-1.5 mt-2">
-                <span class="{{ $pill }} font-medium {{ $statusPill[$rezept->status->value] ?? $variantPill['secondary'] }}">{{ $rezept->status->label() }}</span>
-                <span class="{{ $pill }} {{ $variantPill['info'] }}">{{ $rezept->category?->label ?? '—' }}</span>
-                <span class="text-[11px] text-gray-400">{{ $rezept->recipe_key }}</span>
-            </div>
-        </div>
-
-        {{-- Cockpit (Kosten): EK/kg + Bepreist-Signal + EK gesamt/Yield/Konfidenz --}}
-        @php($priced = $rezept->ek_n_ingredients_priced)
-        @php($ptotal = $rezept->ek_n_ingredients_total)
-        @php($vollstaendig = $priced !== null && $ptotal !== null && $ptotal > 0 && $priced >= $ptotal)
-        @php($komplBadge = $vollstaendig ? ['bg-emerald-500/15', 'text-emerald-700', 'bg-emerald-500'] : ['bg-amber-500/15', 'text-amber-700', 'bg-amber-500'])
-        @php($konfText = ['high' => 'text-emerald-700', 'medium' => 'text-amber-700', 'low' => 'text-rose-700'][$rezept->allergens_confidence] ?? 'text-gray-500')
-        <div class="relative overflow-hidden {{ $card }} px-3.5 py-2.5" data-kpi-karte>
-            <div class="{{ $cardAccent }}"></div>
-            <div class="flex items-start justify-between gap-3">
-                <div>
-                    <span class="text-[10px] font-medium uppercase tracking-wider text-violet-600">EK / kg</span>
-                    <p class="text-2xl font-bold text-violet-700 leading-none mt-1 tabular-nums">{{ $rezept->ek_per_kg_eur !== null ? number_format((float) $rezept->ek_per_kg_eur, 2, ',', '.') . ' €' : '—' }}</p>
-                </div>
-                <span class="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-0.5 rounded-full {{ $komplBadge[0] }} {{ $komplBadge[1] }}" title="Zutaten mit Preis">
-                    <span class="w-1.5 h-1.5 rounded-full {{ $komplBadge[2] }}"></span>{{ ($priced ?? '—') }}/{{ ($ptotal ?? '—') }} bepreist
-                </span>
-            </div>
-            <div class="flex flex-wrap gap-x-5 gap-y-1 mt-3 pt-2.5 border-t border-black/5 text-xs">
-                <span class="text-gray-500">EK gesamt <span class="text-gray-900 font-medium tabular-nums">{{ $rezept->ek_total_eur !== null ? number_format((float) $rezept->ek_total_eur, 2, ',', '.') . ' €' : '—' }}</span></span>
-                <span class="text-gray-500">Yield <span class="text-gray-900 font-medium tabular-nums">{{ $rezept->yield_kg !== null ? number_format((float) ($rezept->yield_kg_manual ?? $rezept->yield_kg), 3, ',', '.') . ' kg' : '—' }}</span></span>
-                <span class="text-gray-500">Konfidenz <span class="font-medium {{ $konfText }}">{{ strtoupper($rezept->allergens_confidence) }}</span></span>
-            </div>
-        </div>
-        @if($rezept->yield_kg_manual !== null)
-            <p class="text-[11px] text-amber-600 -mt-2">Yield manuell überschrieben (Auto: {{ number_format((float) $rezept->yield_kg, 3, ',', '.') }} kg)</p>
-        @endif
-
-        @if($rezept->description)
-            <p class="text-[13px] text-gray-600 leading-relaxed" data-description>{{ $rezept->description }}</p>
-        @endif
-
-        {{-- Pairing-Netz — Kombinationslogik + Inline-Graph (Spec 60: Anker ergeben sich aus dem Aromenprofil, keine Handpflege) --}}
-        <x-foodalchemist::section title="Pairing-Netz" icon="heroicon-o-share"
-            :meta="($kombination ?? null) !== null ? (($kombination['kennzahlen']['harmoniert'] ?? 0) . ' harmonieren · ' . ($kombination['kennzahlen']['spannung'] ?? 0) . ' Spannung') : null" data-kern-anker>
-            <x-slot:actions>
-                <button type="button" wire:click="$dispatch('pairing-netz.oeffnen', { recipeId: {{ $rezept->id }} })" class="{{ $btnGhostXs }}" title="Voller Graph: verwandte Rezepte + Vorschläge" data-pairing-netz-btn>Netz öffnen @svg('heroicon-o-arrow-up-right', 'w-3.5 h-3.5')</button>
-            </x-slot:actions>
-            @if($kombination ?? null)
-                <x-foodalchemist::kombination :daten="$kombination" />
-            @endif
-            <x-foodalchemist::pairing-netz :recipe-id="$rezept->id" :netz="$netz" />
-        </x-foodalchemist::section>
-
-        {{-- Zutaten — Haupt-Block (Kosten-Essenz): Menge · GP-/Sub-Link · Zeilen-EK --}}
-        <x-foodalchemist::section title="Zutaten" icon="heroicon-o-list-bullet" :meta="$rezept->ingredients->count()" data-zutaten>
-            <div class="space-y-0.5">
-                @foreach($rezept->ingredients as $z)
-                    <div wire:key="z-{{ $z->id }}" class="flex items-baseline gap-2 text-[13px] py-1 border-b border-black/5 last:border-0 {{ $z->is_optional ? 'opacity-60' : '' }}">
-                        <span class="text-gray-500 tabular-nums shrink-0 w-20 text-right">{{ rtrim(rtrim(number_format((float) $z->quantity, 2, ',', '.'), '0'), ',') }}{{ $z->quantity_max !== null ? '–' . rtrim(rtrim(number_format((float) $z->quantity_max, 2, ',', '.'), '0'), ',') : '' }} {{ $z->unit?->slug }}</span>
-                        <span class="min-w-0 flex-1">
-                            @if($z->gp !== null)
-                                <a href="{{ route('foodalchemist.gps.index', ['gp' => $z->gp_id]) }}" class="text-violet-600 hover:underline">{{ $z->gp->name }}</a>
-                            @elseif($z->referencedRecipe !== null)
-                                <button type="button" wire:click="zeige({{ $z->referenced_recipe_id }})" class="text-sky-600 hover:underline" title="Sub-Rezept">↳ {{ $z->referencedRecipe->name }}</button>
-                            @else
-                                <span class="text-gray-500" title="ungemappt">{{ $z->display_name ?? $z->raw_text }}</span>
-                            @endif
-                            <span class="block text-[10px] text-gray-400 italic truncate" title="{{ $z->raw_text }}">{{ $z->raw_text }}</span>
-                        </span>
-                        <span class="shrink-0 tabular-nums {{ isset($zeilenEk[$z->id]) ? 'text-gray-900' : 'text-gray-400' }}" data-zeilen-ek>{{ isset($zeilenEk[$z->id]) ? number_format($zeilenEk[$z->id], 2, ',', '.') . ' €' : '—' }}</span>
-                    </div>
-                @endforeach
-            </div>
-        </x-foodalchemist::section>
-
-        {{-- Spec 27: Endprodukt-Bild — „so soll es fertig aussehen", ganz oben im Panel --}}
-        @if($endprodukt !== null)
-            <x-foodalchemist::section title="Endprodukt" icon="heroicon-o-sparkles" data-panel-endprodukt>
-                <img src="{{ $endprodukt->url() }}" alt="{{ $endprodukt->caption ?? 'Endprodukt' }}"
-                     class="w-full max-h-48 object-cover rounded-lg border border-black/10" loading="lazy" />
-                @if($endprodukt->caption)
-                    <p class="text-[11px] text-gray-500 mt-1">{{ $endprodukt->caption }}</p>
-                @endif
-            </x-foodalchemist::section>
-        @endif
-
-        {{-- Spec 27: Anleitung = Schritt-Karten (Nummer + Text + Foto inline), read-only --}}
-        @if($schritte->isNotEmpty())
-            <x-foodalchemist::section title="Anleitung" icon="heroicon-o-list-bullet" data-panel-anleitung>
-                @php($letztePhase = '__init__')
-                <div class="space-y-1.5">
-                    @foreach($schritte as $s)
-                        @if(($s->phase ?? '') !== $letztePhase)
-                            @php($letztePhase = $s->phase ?? '')
-                            @if($letztePhase !== '')
-                                <p class="text-[10px] font-semibold uppercase tracking-wider text-violet-600 pt-1">{{ $letztePhase }}</p>
-                            @endif
-                        @endif
-                        <div class="flex items-start gap-2" wire:key="pstep-{{ $s->id }}">
-                            <span class="shrink-0 w-4 text-[10px] text-gray-500 tabular-nums pt-0.5">{{ $s->position }}.</span>
-                            <div class="min-w-0">
-                                <div class="text-[11px] leading-snug">{!! \Illuminate\Support\Str::inlineMarkdown((string) $s->text) !!}</div>
-                                @if($s->photos->isNotEmpty())
-                                    <div class="flex flex-wrap gap-1.5 mt-1">
-                                        @foreach($s->photos as $foto)
-                                            <img src="{{ $foto->url() }}" alt="{{ $foto->caption ?? '' }}" title="{{ $foto->caption ?? '' }}"
-                                                 class="w-20 h-14 object-cover rounded border border-black/10" loading="lazy" wire:key="pstepf-{{ $s->id }}-{{ $foto->id }}" />
-                                        @endforeach
-                                    </div>
-                                @endif
-                            </div>
-                        </div>
-                    @endforeach
-                </div>
-            </x-foodalchemist::section>
-        @endif
-
-        @if($allgemeineFotos->isNotEmpty())
-            <x-foodalchemist::section title="Rezept-Fotos" icon="heroicon-o-photo" data-panel-rezept-fotos>
-                <div class="flex flex-wrap gap-1.5">
-                    @foreach($allgemeineFotos as $foto)
-                        <img src="{{ $foto->url() }}" alt="{{ $foto->caption ?? '' }}" title="{{ $foto->caption ?? '' }}"
-                             class="w-20 h-14 object-cover rounded border border-black/10" loading="lazy" wire:key="pallgf-{{ $foto->id }}" />
-                    @endforeach
-                </div>
-            </x-foodalchemist::section>
-        @endif
-
-        {{-- Allergene & Diät — volle Deklaration --}}
-        <x-foodalchemist::section title="Allergene & Diät" icon="heroicon-o-beaker" :meta="'Konf. ' . strtoupper($rezept->allergens_confidence)">
-            @include('foodalchemist::livewire.recipes.partials.deklaration')
-        </x-foodalchemist::section>
-
-        {{-- Eignung — Niveau/Sektor Toggle-Chips --}}
-        @php($eignungVokab = \Platform\FoodAlchemist\Services\RecipeService::eignungVokabular())
-        @php($eignungAktiv = ['level' => $rezept->levelSuitabilities->keyBy('level_slug'), 'sektor' => $rezept->sectorSuitabilities->keyBy('sector_slug')])
-        <x-foodalchemist::section title="Eignung" icon="heroicon-o-user-group" data-eignungen>
-            @if($fehlerEignung !== null)<p class="text-[11px] text-rose-500 mb-1" data-eignung-fehler>{{ $fehlerEignung }}</p>@endif
-            <div class="space-y-1.5">
-                @foreach(['level' => 'Niveau', 'sektor' => 'Sektor'] as $typ => $typLabel)
-                    <div class="flex items-center gap-1 flex-wrap">
-                        <span class="text-[10px] uppercase tracking-wider text-gray-500 w-12 shrink-0">{{ $typLabel }}</span>
-                        @foreach($eignungVokab[$typ]['slugs'] as $slug)
-                            @php($eintrag = $eignungAktiv[$typ][$slug] ?? null)
-                            <button type="button" wire:key="eig-{{ $typ }}-{{ $slug }}" wire:click="eignungToggle('{{ $typ }}', '{{ $slug }}')"
-                                    class="{{ $pill }} transition-colors {{ $eintrag !== null ? ($typ === 'level' ? $variantPill['info'] : $variantPill['primary']) : 'border border-black/10 text-gray-500 hover:text-gray-600' }}"
-                                    title="{{ $eintrag !== null ? 'geeignet · ' . $eintrag->source . ($eintrag->ai_confidence !== null ? ' ' . round($eintrag->ai_confidence * 100) . '%' : '') . ' — Klick entfernt' : 'Klick markiert als geeignet' }}"
-                                    data-eignung-chip="{{ $typ }}-{{ $slug }}">{{ $slug }}</button>
-                        @endforeach
-                    </div>
-                @endforeach
-            </div>
-        </x-foodalchemist::section>
-
-        {{-- Ersatz — make-or-buy --}}
-        <x-foodalchemist::section title="Ersatz" icon="heroicon-o-scale" meta="make-or-buy · fertig ↔ selbst" data-sektion="ersatz">
-            <div class="space-y-1">
-                @forelse($ersatz as $e)
-                    <div class="flex items-center gap-2 text-[11px]" wire:key="rq-equiv-{{ $e->id }}">
-                        <span class="{{ $pill }} {{ $e->gegen_kind === 'recipe' ? $variantPill['info'] : $variantPill['secondary'] }} shrink-0">{{ $e->gegen_kind === 'recipe' ? 'Rezept' : 'GP' }}</span>
-                        <span class="min-w-0 flex-1 truncate text-gray-900" title="{{ $e->gegen_name }}">{{ $e->gegen_name }}</span>
-                        @if((float) $e->umrechnungsfaktor !== 1.0)<span class="text-gray-500 tabular-nums shrink-0">×{{ rtrim(rtrim(number_format($e->umrechnungsfaktor, 4, ',', '.'), '0'), ',') }}</span>@endif
-                        <button type="button" wire:click="ersatzLoesen({{ $e->id }})" class="{{ $btnGhostXs }} text-rose-500 shrink-0" title="Ersatz-Verknüpfung lösen">✕</button>
-                    </div>
-                @empty
-                    <p class="text-[11px] text-gray-500" data-ersatz-leer>— kein Ersatz hinterlegt —</p>
-                @endforelse
-                @if($fehlerAnker !== null)<p class="text-[11px] text-rose-500" data-ersatz-fehler>{{ $fehlerAnker }}</p>@endif
-                <div class="pt-1" data-ersatz-verknuepfen>
-                    <input type="search" wire:model.live.debounce.300ms="ersatzSuche" placeholder="+ Ersatz verknüpfen — Fertig-GP/Rezept suchen …" class="{{ $input }} !py-1" data-ersatz-suche />
-                    @foreach($ersatzKandidaten as $k)
-                        <button type="button" wire:key="rq-ersk-{{ $k->kind }}-{{ $k->id }}" wire:click="ersatzVerknuepfen('{{ $k->kind }}', {{ $k->id }})" class="w-full text-left px-2 py-1 rounded text-[11px] text-gray-700 hover:bg-violet-500/10 flex items-center gap-1.5">
-                            <span class="{{ $pill }} {{ $k->kind === 'recipe' ? $variantPill['info'] : $variantPill['secondary'] }}">{{ $k->kind === 'recipe' ? 'Rezept' : 'GP' }}</span>
-                            <span class="min-w-0 flex-1 truncate">{{ $k->name }}</span>
+                                class="{{ $listenKnopf }}" title="{{ $parent->is_sales_recipe ? 'Gericht öffnen' : 'Rezept öffnen' }}" data-eltern-link>
+                            @svg($parent->is_sales_recipe ? 'heroicon-o-banknotes' : 'heroicon-o-arrow-up', 'w-4 h-4 shrink-0 text-[var(--fa-ink-3)]')
+                            <span class="min-w-0 flex-1 truncate">{{ $parent->name }}</span>
                         </button>
                     @endforeach
                 </div>
-            </div>
-        </x-foodalchemist::section>
-
-        @if($rezept->equipment->isNotEmpty())
-            <x-foodalchemist::section title="Equipment" icon="heroicon-o-wrench-screwdriver" data-equipment>
-                <div class="flex flex-wrap gap-1">
-                    @foreach($rezept->equipment as $geraet)<span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $geraet->name }}</span>@endforeach
-                </div>
-            </x-foodalchemist::section>
+            </x-fa::section>
         @endif
+        <div class="flex flex-wrap items-center gap-1.5 pt-3 border-t border-[var(--fa-line)]" data-workflow>
+            @foreach($statusWahl as $wert => $lbl)
+                @if($rezept->status->value !== $wert)<x-fa::button size="sm" wire:click="statusSetzen('{{ $wert }}')" data-status-btn="{{ $wert }}">{{ $lbl }}</x-fa::button>@endif
+            @endforeach
+            <x-fa::button size="sm" variant="ghost" icon="heroicon-o-document-duplicate" wire:click="duplizieren" data-duplizieren-btn>Duplizieren</x-fa::button>
+            <x-fa::button size="sm" variant="ghost" :icon="$rezept->is_template ? 'heroicon-s-star' : 'heroicon-o-star'" wire:click="templateToggle"
+                class="{{ $rezept->is_template ? 'text-[var(--fa-accent)]' : '' }}" title="{{ $rezept->is_template ? 'Ist Vorlage. Klick nimmt die Markierung zurück' : 'Als Vorlage für neue Rezepte markieren' }}" data-template-btn>{{ $rezept->is_template ? 'Vorlage' : 'Als Vorlage markieren' }}</x-fa::button>
+        </div>
 
-        @if($eltern->isNotEmpty())
-            <x-foodalchemist::section title="Verwendet in" icon="heroicon-o-link" :meta="$eltern->count()" data-eltern>
-                <div class="space-y-0.5">
-                    @foreach($eltern as $parent)
-                        <button type="button" wire:key="el-{{ $parent->id }}"
-                                @if($parent->is_sales_recipe) wire:click="$dispatch('vk-modal.oeffnen', { id: {{ $parent->id }} })" @else wire:click="zeige({{ $parent->id }})" @endif
-                                class="block w-full text-left text-[13px] text-sky-600 hover:underline truncate" data-eltern-link>@if($parent->is_sales_recipe)@svg('heroicon-o-banknotes', 'w-3.5 h-3.5 inline-block align-middle')@else @svg('heroicon-o-arrow-up', 'w-3.5 h-3.5 inline-block align-middle')@endif {{ $parent->name }}</button>
+    {{-- ── STANDALONE-Detail rechts im Basisrezepte-Browser (Anatomie Detail-Panels) ── --}}
+    @else
+        @php
+            $priced = $rezept->ek_n_ingredients_priced;
+            $ptotal = $rezept->ek_n_ingredients_total;
+            $vollstaendig = $priced !== null && $ptotal !== null && $ptotal > 0 && $priced >= $ptotal;
+            // Kennzahlen (Kosten): EK je kg ist die eine Hauptzahl. Fehlende Werte werden gezeigt, nicht geschätzt.
+            $kennzahlen = [
+                [
+                    'label' => 'EK je kg',
+                    'value' => $rezept->ek_per_kg_eur !== null ? $zahl($rezept->ek_per_kg_eur) . ' €' : 'Preis fehlt',
+                    'primary' => $rezept->ek_per_kg_eur !== null,
+                    'tone' => $rezept->ek_per_kg_eur === null ? 'crit' : null,
+                    'kpi' => 'ek-kg',
+                ],
+                [
+                    'label' => 'EK je Ansatz',
+                    'value' => $rezept->ek_total_eur !== null ? $zahl($rezept->ek_total_eur) . ' €' : 'fehlt',
+                    'tone' => $rezept->ek_total_eur === null ? 'crit' : null,
+                    'title' => 'Einkauf für die ganze Rezeptmenge',
+                    'kpi' => 'ek-gesamt',
+                ],
+                [
+                    'label' => 'Ausbeute',
+                    'value' => $rezept->yield_kg !== null ? $zahl($rezept->yield_kg_manual ?? $rezept->yield_kg, 3) . ' kg' : 'fehlt',
+                    'tone' => $rezept->yield_kg === null ? 'warn' : null,
+                    'hint' => $rezept->yield_kg_manual !== null ? 'von Hand' : null,
+                    'kpi' => 'ausbeute',
+                ],
+            ];
+            $nichtZugeordnet = $rezept->ingredients->filter(fn ($z) => $z->gp === null && $z->referencedRecipe === null)->count();
+            $konfTon = ['high' => 'ok', 'medium' => 'warn', 'low' => 'crit', 'unknown' => 'neutral'];
+            $naehrwertFelder = [
+                'nutri_kcal_per_100g' => 'kcal', 'nutri_protein_g_per_100g' => 'Eiweiß', 'nutri_fat_g_per_100g' => 'Fett',
+                'nutri_saturated_fat_g_per_100g' => 'davon gesättigt', 'nutri_carbs_g_per_100g' => 'Kohlenhydrate',
+                'nutri_sugar_g_per_100g' => 'davon Zucker', 'nutri_salt_g_per_100g' => 'Salz',
+            ];
+            $untertitel = $rezept->recipe_key . ' · Version ' . $rezept->version . ($rezept->work_time_min ? ' · Arbeitszeit ' . $rezept->work_time_min . ' min' : '');
+        @endphp
+
+        {{-- 1 · Kopf: Name, Einordnung, eine Hauptaktion, Weiteres im Menü --}}
+        <x-fa::detail-kopf :title="$rezept->name" :subtitle="$untertitel" data-rezept-aktionen>
+            @if(!empty($rezeptBildUrl))
+                <img src="{{ $rezeptBildUrl }}" alt="" class="mt-2 h-12 w-12 object-cover rounded-[var(--fa-radius-control)] border border-[var(--fa-line)]" data-rezept-mini-bild>
+            @endif
+            @if($rezept->description)
+                <p class="mt-2 text-[length:var(--fa-text-md)] leading-relaxed text-[var(--fa-ink-2)]" data-description>{{ $rezept->description }}</p>
+            @endif
+            <x-slot:badges>
+                <x-fa::status :value="$rezept->status" />
+                <x-fa::badge tone="info">{{ $rezept->category?->label ?? 'Ohne Kategorie' }}</x-fa::badge>
+                @if($rezept->is_template)<x-fa::badge tone="accent" icon="heroicon-m-star">Vorlage</x-fa::badge>@endif
+            </x-slot:badges>
+            <x-slot:aktion>
+                <x-fa::button size="sm" variant="primary" icon="heroicon-m-pencil-square" wire:click="$dispatch('recipe-modal.oeffnen', { id: {{ $rezept->id }} })" data-rezept-bearbeiten>Im Editor öffnen</x-fa::button>
+            </x-slot:aktion>
+            <x-slot:menue>
+                <x-fa::menu-item icon="heroicon-m-printer" :href="route('foodalchemist.rezepte.dokument', ['id' => $rezept->id, 'profil' => 'produktion'])" target="_blank"
+                    title="Rezeptblatt im neuen Fenster drucken" data-rezept-panel-druck>Rezeptblatt drucken</x-fa::menu-item>
+                <x-fa::menu-item icon="heroicon-m-arrow-down-tray" :href="route('foodalchemist.rezepte.dokument', ['id' => $rezept->id, 'profil' => 'produktion', 'pdf' => 1])"
+                    title="Rezeptblatt als PDF herunterladen" data-rezept-panel-pdf>PDF herunterladen</x-fa::menu-item>
+                <x-fa::menu-item icon="heroicon-m-arrow-path" wire:click="neuBerechnen"
+                    title="Kosten, Allergene und Ausbeute neu berechnen, auch in den Rezepten, die dieses verwenden" data-recompute-btn>Kosten neu berechnen</x-fa::menu-item>
+                <div data-workflow>
+                    @foreach($statusWahl as $wert => $lbl)
+                        @if($rezept->status->value !== $wert)<x-fa::menu-item icon="heroicon-m-flag" wire:click="statusSetzen('{{ $wert }}')" data-status-btn="{{ $wert }}">{{ $lbl }}</x-fa::menu-item>@endif
                     @endforeach
                 </div>
-            </x-foodalchemist::section>
-        @endif
+                <x-fa::menu-item icon="heroicon-m-document-duplicate" wire:click="duplizieren" title="Kopie dieses Rezepts anlegen" data-duplizieren-btn>Rezept duplizieren</x-fa::menu-item>
+                <x-fa::menu-item :icon="$rezept->is_template ? 'heroicon-s-star' : 'heroicon-m-star'" wire:click="templateToggle"
+                    title="{{ $rezept->is_template ? 'Ist Vorlage. Klick nimmt die Markierung zurück' : 'Als Vorlage für neue Rezepte markieren' }}" data-template-btn>{{ $rezept->is_template ? 'Vorlage-Markierung entfernen' : 'Als Vorlage markieren' }}</x-fa::menu-item>
+            </x-slot:menue>
+        </x-fa::detail-kopf>
 
-        {{-- VERWALTUNG — tauschen + löschen (Pendant zum GP-Verwaltungsblock, 2026-09-04).
-             Nur im Standalone-Panel: der Editor zeigt dasselbe Partial in seinem Verwaltungs-Reiter. --}}
-        @if($tauschReferenzen !== null || ($tauschBilanz !== null && ($tauschBilanz['zeilen'] > 0 || $tauschBilanz['fremd_zeilen'] > 0)))
-            <x-foodalchemist::section title="Verwaltung" icon="heroicon-o-cog-6-tooth" data-sektion="verwaltung">
-                @include('foodalchemist::livewire.recipes.partials.verwaltung', ['rezeptName' => $rezept->name, 'kompakt' => true])
-            </x-foodalchemist::section>
-        @endif
+        {{-- 2 · Kennzahlen --}}
+        <div data-kpi-karte>
+            <x-fa::kpis :items="$kennzahlen" />
+        </div>
 
-        {{-- KI-Kontext der Erstellung (Call-Log ↔ Rezept) — nur bei KI-generierten Rezepten befüllt --}}
-        @include('foodalchemist::livewire.recipes.partials.ki-kontext')
-
-        {{-- Workflow + Fuß --}}
-        <div class="border-t border-black/5 pt-3 space-y-2" data-workflow>
-            <div class="flex flex-wrap items-center gap-1.5">
-                @foreach(['draft' => 'Entwurf', 'review' => 'Review', 'approved' => 'Freigeben'] as $wert => $lbl)
-                    @if($rezept->status->value !== $wert)<button type="button" wire:click="statusSetzen('{{ $wert }}')" class="{{ $btnGhostXs }}" data-status-btn="{{ $wert }}">→ {{ $lbl }}</button>@endif
-                @endforeach
-                <button type="button" wire:click="duplizieren" class="{{ $btnGhostXs }}" data-duplizieren-btn>Duplizieren</button>
-                <button type="button" wire:click="templateToggle" class="{{ $btnGhostXs }} {{ $rezept->is_template ? 'text-violet-600' : '' }}" data-template-btn>{{ $rezept->is_template ? '★ Template' : 'Als Template' }}</button>
+        {{-- 3 · Offene Punkte: was vor der Verwendung fehlt --}}
+        @if(($ptotal !== null && $ptotal > 0) || $rezept->yield_kg_manual !== null || $nichtZugeordnet > 0)
+            <div class="flex flex-col gap-1" data-rezept-offen>
+                @if($ptotal !== null && $ptotal > 0)
+                    @if($vollstaendig)
+                        <x-fa::signal tone="ok" data-kpi="bepreist">Alle {{ $ptotal }} Zutaten mit Preis</x-fa::signal>
+                    @else
+                        <x-fa::signal tone="warn" data-kpi="bepreist" title="Zutaten mit Preis">{{ $priced ?? 0 }} von {{ $ptotal }} Zutaten mit Preis, der EK ist nur vorläufig</x-fa::signal>
+                        <p class="{{ $leise }}">Fehlende Preise stehen unten an der Zutat.</p>
+                    @endif
+                @endif
+                @if($nichtZugeordnet > 0)
+                    <x-fa::signal tone="warn">{{ $nichtZugeordnet }} {{ $nichtZugeordnet === 1 ? 'Zutat ist' : 'Zutaten sind' }} keinem Grundprodukt oder Rezept zugeordnet</x-fa::signal>
+                @endif
+                @if($rezept->yield_kg_manual !== null)
+                    <x-fa::signal tone="warn">Ausbeute von Hand gesetzt, berechnet wären {{ $zahl($rezept->yield_kg, 3) }} kg</x-fa::signal>
+                @endif
             </div>
-            <p class="text-[11px] text-gray-500">Nährwerte {{ $rezept->nutri_kcal_per_100g !== null ? number_format((float) $rezept->nutri_kcal_per_100g, 0, ',', '.') . ' kcal/100 g (' . $rezept->nutri_confidence . ')' : '—' }} · v{{ $rezept->version }}{{ $rezept->work_time_min ? ' · ' . $rezept->work_time_min . ' min' : '' }}</p>
+        @endif
+
+        <div class="flex flex-col">
+            {{-- 4 · Deklaration: Allergene und Diät --}}
+            <x-fa::section variant="plain" title="Allergene und Diät" icon="heroicon-o-shield-exclamation"
+                :meta="'Sicherheit ' . \Platform\FoodAlchemist\Support\Labels::konfidenz($rezept->allergens_confidence)" data-allergen-konfidenz>
+                @include('foodalchemist::livewire.recipes.partials.deklaration')
+            </x-fa::section>
+
+            {{-- 5 · Inhalt: Zutaten (Menge · Grundprodukt oder Unterrezept · EK der Zeile) --}}
+            <x-fa::section variant="plain" title="Zutaten" icon="heroicon-o-list-bullet" :meta="$rezept->ingredients->count()" data-zutaten>
+                @if($rezept->ingredients->isEmpty())
+                    <x-fa::empty compact icon="heroicon-o-list-bullet" title="Noch keine Zutaten">Im Editor die Zutaten erfassen, dann rechnet der Food.Alchemist Kosten und Allergene.</x-fa::empty>
+                @else
+                    <div class="flex flex-col">
+                        @foreach($rezept->ingredients as $z)
+                            <div wire:key="z-{{ $z->id }}" class="flex items-baseline gap-2.5 py-1.5 border-b border-[var(--fa-line)] last:border-b-0 text-[length:var(--fa-text-md)] {{ $z->is_optional ? 'opacity-60' : '' }}">
+                                <span class="w-20 shrink-0 text-right tabular-nums text-[var(--fa-ink-2)]">{{ $menge($z->quantity) }}{{ $z->quantity_max !== null ? '–' . $menge($z->quantity_max) : '' }} <span class="text-[var(--fa-ink-3)]">{{ $z->unit?->slug }}</span></span>
+                                <span class="min-w-0 flex-1">
+                                    @if($z->gp !== null)
+                                        <a href="{{ route('foodalchemist.gps.index', ['gp' => $z->gp_id]) }}" class="text-[var(--fa-accent)] hover:underline" title="Grundprodukt öffnen">{{ $z->gp->name }}</a>
+                                    @elseif($z->referencedRecipe !== null)
+                                        <button type="button" wire:click="zeige({{ $z->referenced_recipe_id }})" class="inline-flex items-baseline gap-1 text-left text-[var(--fa-info)] hover:underline" title="Unterrezept anzeigen">
+                                            @svg('heroicon-m-arrow-turn-down-right', 'w-3.5 h-3.5 shrink-0 self-center'){{ $z->referencedRecipe->name }}
+                                        </button>
+                                    @else
+                                        <span class="text-[var(--fa-ink-2)]">{{ $z->display_name ?? $z->raw_text }}</span>
+                                        <x-fa::signal tone="warn" class="ml-1" title="Keinem Grundprodukt oder Rezept zugeordnet">nicht zugeordnet</x-fa::signal>
+                                    @endif
+                                    @if($z->is_optional)<span class="{{ $leise }}"> (optional)</span>@endif
+                                    @if(filled($z->raw_text) && $z->raw_text !== ($z->gp?->name ?? $z->referencedRecipe?->name ?? $z->display_name))
+                                        <span class="block truncate italic {{ $leise }}" title="{{ $z->raw_text }}">{{ $z->raw_text }}</span>
+                                    @endif
+                                </span>
+                                <span class="shrink-0 tabular-nums {{ isset($zeilenEk[$z->id]) ? 'text-[var(--fa-ink)]' : 'text-[length:var(--fa-text-sm)] text-[var(--fa-warn)]' }}" data-zeilen-ek>{{ isset($zeilenEk[$z->id]) ? $zahl($zeilenEk[$z->id]) . ' €' : 'Preis fehlt' }}</span>
+                            </div>
+                        @endforeach
+                    </div>
+                @endif
+            </x-fa::section>
+
+            {{-- Spec 27: Endprodukt-Bild — „so soll es fertig aussehen" --}}
+            @if($endprodukt !== null)
+                <x-fa::section variant="plain" title="Endprodukt" icon="heroicon-o-photo" data-panel-endprodukt>
+                    <figure class="flex flex-col gap-1">
+                        <img src="{{ $endprodukt->url() }}" alt="{{ $endprodukt->caption ?? 'Endprodukt' }}"
+                             class="w-full max-h-48 object-cover rounded-[var(--fa-radius-surface)] border border-[var(--fa-line)]" loading="lazy" />
+                        @if($endprodukt->caption)
+                            <figcaption class="{{ $leise }}">{{ $endprodukt->caption }}</figcaption>
+                        @endif
+                    </figure>
+                </x-fa::section>
+            @endif
+
+            {{-- Spec 27: Anleitung = Schritte (Nummer + Text + Foto), nur lesen --}}
+            @if($schritte->isNotEmpty())
+                <x-fa::section variant="plain" title="Anleitung" icon="heroicon-o-queue-list" :meta="$schritte->count() . ' ' . ($schritte->count() === 1 ? 'Schritt' : 'Schritte')" data-panel-anleitung>
+                    @php $letztePhase = '__init__'; @endphp
+                    <ol class="flex flex-col gap-2">
+                        @foreach($schritte as $s)
+                            @if(($s->phase ?? '') !== $letztePhase)
+                                @php $letztePhase = $s->phase ?? ''; @endphp
+                                @if($letztePhase !== '')
+                                    <li class="pt-1 {{ $titelKlein }} text-[var(--fa-accent)]">{{ $letztePhase }}</li>
+                                @endif
+                            @endif
+                            <li class="flex items-start gap-2.5" wire:key="pstep-{{ $s->id }}">
+                                <span class="shrink-0 grid place-items-center w-6 h-6 rounded-full bg-[var(--fa-neutral-soft)] text-[length:var(--fa-text-sm)] font-medium tabular-nums text-[var(--fa-ink-2)]">{{ $s->position }}</span>
+                                <div class="min-w-0 flex-1 pt-0.5">
+                                    <div class="text-[length:var(--fa-text-md)] leading-snug text-[var(--fa-ink)]">{!! \Illuminate\Support\Str::inlineMarkdown((string) $s->text) !!}</div>
+                                    @if($s->photos->isNotEmpty())
+                                        <div class="flex flex-wrap gap-1.5 mt-1.5">
+                                            @foreach($s->photos as $foto)
+                                                <img src="{{ $foto->url() }}" alt="{{ $foto->caption ?? '' }}" title="{{ $foto->caption ?? '' }}"
+                                                     class="w-20 h-14 object-cover rounded-[var(--fa-radius-control)] border border-[var(--fa-line)]" loading="lazy" wire:key="pstepf-{{ $s->id }}-{{ $foto->id }}" />
+                                            @endforeach
+                                        </div>
+                                    @endif
+                                </div>
+                            </li>
+                        @endforeach
+                    </ol>
+                </x-fa::section>
+            @endif
+
+            @if($allgemeineFotos->isNotEmpty())
+                <x-fa::section variant="plain" title="Rezept-Fotos" icon="heroicon-o-photo" data-panel-rezept-fotos>
+                    <div class="flex flex-wrap gap-1.5">
+                        @foreach($allgemeineFotos as $foto)
+                            <img src="{{ $foto->url() }}" alt="{{ $foto->caption ?? '' }}" title="{{ $foto->caption ?? '' }}"
+                                 class="w-20 h-14 object-cover rounded-[var(--fa-radius-control)] border border-[var(--fa-line)]" loading="lazy" wire:key="pallgf-{{ $foto->id }}" />
+                        @endforeach
+                    </div>
+                </x-fa::section>
+            @endif
+
+            {{-- 6 · Fachabschnitte --}}
+            {{-- Pairing-Netz: Kombinationslogik + Graph (Spec 60: Anker ergeben sich aus dem Aromenprofil, keine Handpflege) --}}
+            <x-fa::section variant="plain" title="Pairing-Netz" icon="heroicon-o-share"
+                :meta="($kombination ?? null) !== null ? (($kombination['kennzahlen']['harmoniert'] ?? 0) . ' harmonieren · ' . ($kombination['kennzahlen']['spannung'] ?? 0) . ' Spannung') : null" data-kern-anker>
+                <x-slot:actions>
+                    <x-fa::button size="sm" variant="ghost" icon-right="heroicon-m-arrow-up-right" wire:click="$dispatch('pairing-netz.oeffnen', { recipeId: {{ $rezept->id }} })"
+                        title="Ganzes Netz mit verwandten Rezepten und Vorschlägen öffnen" data-pairing-netz-btn>Netz öffnen</x-fa::button>
+                </x-slot:actions>
+                @if($kombination ?? null)
+                    <x-foodalchemist::kombination :daten="$kombination" />
+                @endif
+                <x-foodalchemist::pairing-netz :recipe-id="$rezept->id" :netz="$netz" />
+            </x-fa::section>
+
+            {{-- #5 (2026-08): manuelle Pairings-Sektion (aroma/kontrast) bleibt AUSGEBLENDET. Das echte
+                 Pairing kommt aus dem Anker-Graph (Pairing-Netz oben). Service + Daten bleiben
+                 (setRecipePairing/recipePairings/removeRecipePairing) + ManuellePairingTest. --}}
+
+            {{-- Eignung: Niveau und Sektor als Umschalter --}}
+            @php
+                $eignungVokab = \Platform\FoodAlchemist\Services\RecipeService::eignungVokabular();
+                $eignungAktiv = ['level' => $rezept->levelSuitabilities->keyBy('level_slug'), 'sektor' => $rezept->sectorSuitabilities->keyBy('sector_slug')];
+            @endphp
+            <x-fa::section variant="plain" title="Eignung" icon="heroicon-o-user-group" description="Für welches Niveau und welchen Betrieb das Rezept passt. Klick schaltet um." data-eignungen>
+                @if($fehlerEignung !== null)<x-fa::signal tone="crit" data-eignung-fehler>{{ $fehlerEignung }}</x-fa::signal>@endif
+                <div class="flex flex-col gap-2">
+                    @foreach(['level' => 'Niveau', 'sektor' => 'Sektor'] as $typ => $typLabel)
+                        <div class="flex flex-wrap items-center gap-1.5">
+                            <span class="w-16 shrink-0 {{ $titelKlein }}">{{ $typLabel }}</span>
+                            @foreach($eignungVokab[$typ]['slugs'] as $slug)
+                                @php $eintrag = $eignungAktiv[$typ][$slug] ?? null; @endphp
+                                <button type="button" wire:key="eig-{{ $typ }}-{{ $slug }}" wire:click="eignungToggle('{{ $typ }}', '{{ $slug }}')"
+                                        class="{{ $chip }} {{ $eintrag !== null ? $chipAn : $chipAus }}" aria-pressed="{{ $eintrag !== null ? 'true' : 'false' }}"
+                                        title="{{ $eintrag !== null ? 'Geeignet, ' . ($eintrag->source === 'manual' ? 'von Hand gesetzt' : 'von der KI vorgeschlagen') . ($eintrag->ai_confidence !== null ? ', ' . round($eintrag->ai_confidence * 100) . ' % sicher' : '') . '. Klick entfernt die Eignung' : 'Klick markiert als geeignet' }}"
+                                        data-eignung-chip="{{ $typ }}-{{ $slug }}">@if($eintrag !== null)@svg('heroicon-m-check', 'w-3.5 h-3.5')@endif{{ $eignungLabel($slug) }}</button>
+                            @endforeach
+                        </div>
+                    @endforeach
+                </div>
+            </x-fa::section>
+
+            {{-- Nährwerte je 100 g (vorher nur als Fußzeile) --}}
+            <x-fa::section variant="plain" title="Nährwerte je 100 g" icon="heroicon-o-chart-bar" data-rezept-naehrwerte>
+                @if($rezept->nutri_kcal_per_100g !== null)
+                    <x-slot:actions>
+                        <x-fa::badge :tone="$konfTon[$rezept->nutri_confidence] ?? 'neutral'" title="Sicherheit der Nährwerte">{{ \Platform\FoodAlchemist\Support\Labels::konfidenz($rezept->nutri_confidence) }}</x-fa::badge>
+                    </x-slot:actions>
+                    <dl class="grid grid-cols-2 gap-x-4">
+                        @foreach($naehrwertFelder as $feld => $lbl)
+                            <div class="flex items-baseline justify-between gap-2 py-1 border-b border-[var(--fa-line)] {{ $feld === 'nutri_kcal_per_100g' ? 'col-span-2' : '' }}">
+                                <dt class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]">{{ $lbl }}</dt>
+                                <dd class="text-[length:var(--fa-text-md)] font-semibold tabular-nums text-[var(--fa-ink)]">
+                                    @if($rezept->{$feld} !== null && $feld === 'nutri_kcal_per_100g')
+                                        {{ number_format((float) $rezept->{$feld}, 0, ',', '.') }}
+                                    @elseif($rezept->{$feld} !== null)
+                                        <x-fa::menge :value="$rezept->{$feld}" :decimals="1" unit="g" />
+                                    @else
+                                        <span class="font-normal text-[var(--fa-ink-3)]">fehlt</span>
+                                    @endif
+                                </dd>
+                            </div>
+                        @endforeach
+                    </dl>
+                @else
+                    <p class="{{ $leise }}">Nährwerte fehlen noch.</p>
+                @endif
+            </x-fa::section>
+
+            {{-- Ersatz: selbst herstellen oder fertig kaufen --}}
+            <x-fa::section variant="plain" title="Ersatz" icon="heroicon-o-scale" description="Fertigprodukt oder selbst hergestellt: was dieses Rezept ersetzen kann." data-sektion="ersatz">
+                <div class="flex flex-col gap-1.5">
+                    @forelse($ersatz as $e)
+                        <div class="flex items-center gap-2 text-[length:var(--fa-text-md)]" wire:key="rq-equiv-{{ $e->id }}">
+                            <x-fa::badge :tone="$e->gegen_kind === 'recipe' ? 'info' : 'neutral'" class="shrink-0">{{ $e->gegen_kind === 'recipe' ? 'Rezept' : 'Grundprodukt' }}</x-fa::badge>
+                            <span class="min-w-0 flex-1 truncate text-[var(--fa-ink)]" title="{{ $e->gegen_name }}">{{ $e->gegen_name }}</span>
+                            @if((float) $e->umrechnungsfaktor !== 1.0)<span class="shrink-0 tabular-nums {{ $leise }}" title="Umrechnungsfaktor">× {{ rtrim(rtrim(number_format($e->umrechnungsfaktor, 4, ',', '.'), '0'), ',') }}</span>@endif
+                            <x-fa::icon-button size="sm" tone="danger" icon="heroicon-m-x-mark" label="Ersatz lösen" wire:click="ersatzLoesen({{ $e->id }})" />
+                        </div>
+                    @empty
+                        <p class="{{ $leise }}" data-ersatz-leer>Kein Ersatz hinterlegt.</p>
+                    @endforelse
+                    @if($fehlerAnker !== null)<x-fa::signal tone="crit" data-ersatz-fehler>{{ $fehlerAnker }}</x-fa::signal>@endif
+                    <div class="flex flex-col gap-1 pt-1" data-ersatz-verknuepfen>
+                        <x-fa::input size="sm" type="search" wire:model.live.debounce.300ms="ersatzSuche" placeholder="Ersatz verknüpfen: Grundprodukt oder Rezept suchen" aria-label="Ersatz suchen und verknüpfen" data-ersatz-suche />
+                        @foreach($ersatzKandidaten as $k)
+                            <button type="button" wire:key="rq-ersk-{{ $k->kind }}-{{ $k->id }}" wire:click="ersatzVerknuepfen('{{ $k->kind }}', {{ $k->id }})" class="{{ $listenKnopf }}">
+                                <x-fa::badge :tone="$k->kind === 'recipe' ? 'info' : 'neutral'" class="shrink-0">{{ $k->kind === 'recipe' ? 'Rezept' : 'Grundprodukt' }}</x-fa::badge>
+                                <span class="min-w-0 flex-1 truncate">{{ $k->name }}</span>
+                            </button>
+                        @endforeach
+                    </div>
+                </div>
+            </x-fa::section>
+
+            @if($rezept->equipment->isNotEmpty())
+                <x-fa::section variant="plain" title="Equipment" icon="heroicon-o-wrench-screwdriver" data-equipment>
+                    <div class="flex flex-wrap gap-1.5">
+                        @foreach($rezept->equipment as $geraet)<x-fa::badge>{{ $geraet->name }}</x-fa::badge>@endforeach
+                    </div>
+                </x-fa::section>
+            @endif
+
+            {{-- KI-Kontext der Erstellung (Call-Log ↔ Rezept) — nur bei KI-erstellten Rezepten befüllt --}}
+            @include('foodalchemist::livewire.recipes.partials.ki-kontext')
+
+            {{-- 7 · Verwendung: Rezepte und Gerichte, die dieses Rezept als Zutat führen --}}
+            <x-fa::section variant="plain" title="Wo verwendet?" icon="heroicon-o-link" :meta="$eltern->count()" data-eltern>
+                @if($eltern->isNotEmpty())
+                    <div class="flex flex-col gap-0.5">
+                        @foreach($eltern as $parent)
+                            <button type="button" wire:key="el-{{ $parent->id }}"
+                                    @if($parent->is_sales_recipe) wire:click="$dispatch('vk-modal.oeffnen', { id: {{ $parent->id }} })" @else wire:click="zeige({{ $parent->id }})" @endif
+                                    class="{{ $listenKnopf }}" title="{{ $parent->is_sales_recipe ? 'Gericht öffnen' : 'Rezept anzeigen' }}" data-eltern-link>
+                                @svg($parent->is_sales_recipe ? 'heroicon-o-banknotes' : 'heroicon-o-arrow-up', 'w-4 h-4 shrink-0 text-[var(--fa-ink-3)]')
+                                <span class="min-w-0 flex-1 truncate">{{ $parent->name }}</span>
+                                <span class="shrink-0 {{ $leise }}">{{ $parent->is_sales_recipe ? 'Gericht' : 'Rezept' }}</span>
+                            </button>
+                        @endforeach
+                    </div>
+                @else
+                    <p class="{{ $leise }}">In keinem Rezept und keinem Gericht verwendet.</p>
+                @endif
+            </x-fa::section>
+
+            {{-- VERWALTUNG: tauschen + löschen (Pendant zum GP-Verwaltungsblock, 2026-09-04) — bewusst ganz am Ende.
+                 Nur im Standalone-Panel: der Editor zeigt dasselbe Partial in seinem Verwaltungs-Reiter. --}}
+            @if($tauschReferenzen !== null || ($tauschBilanz !== null && ($tauschBilanz['zeilen'] > 0 || $tauschBilanz['fremd_zeilen'] > 0)))
+                <x-fa::section variant="plain" title="Verwaltung" icon="heroicon-o-cog-6-tooth" data-sektion="verwaltung">
+                    @include('foodalchemist::livewire.recipes.partials.verwaltung', ['rezeptName' => $rezept->name, 'kompakt' => true])
+                </x-fa::section>
+            @endif
         </div>
     @endif
 </div>

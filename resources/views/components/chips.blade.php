@@ -1,5 +1,6 @@
 {{--
     M0-11 / P-5: Chip-Editor — Anker, Tags, Pairing, Eignungen.
+    fa-pass (2026-10-05): Tokens (hell + Werkbank-Modus), Heroicon statt ×; Props/Alpine-Logik unverändert.
 
     Chips mit ×-Remove + „+ manuell…"-Add (Input mit Datalist/Combobox gegen das
     Vokabular-Array; Enter fügt hinzu, Duplikate werden ignoriert). Optional ★-Prefix
@@ -16,7 +17,7 @@
     'vocabular' => [],
     'star' => false,
     'readonly' => false,
-    'placeholder' => '+ manuell…',
+    'placeholder' => 'Hinzufügen …',
 ])
 
 @php
@@ -35,14 +36,14 @@
      }"
      data-chips>
     <template x-for="(chip, i) in chips" :key="chip">
-        <span class="inline-flex items-center gap-1 {{ $star ? 'pl-1.5' : 'pl-2.5' }} {{ $readonly ? 'pr-2.5' : 'pr-1' }} py-0.5 rounded-full text-[11px] bg-violet-500/10 text-violet-700"
+        <span class="inline-flex items-center gap-1 h-[26px] {{ $star ? 'pl-2' : 'pl-2.5' }} {{ $readonly ? 'pr-2.5' : 'pr-1' }} rounded-full text-[length:var(--fa-text-sm)] font-medium bg-[var(--fa-accent-soft)] text-[var(--fa-accent)]"
               data-chip>
-            @if($star)<span class="text-amber-500">★</span>@endif
+            @if($star)<span class="text-[var(--fa-warn)]" aria-hidden="true" title="Kern-Anker">★</span>@endif
             <span x-text="chip"></span>
             @unless($readonly)
                 <button type="button" @click="chips.splice(i, 1)"
-                        class="w-4 h-4 inline-flex items-center justify-center rounded-full text-violet-400 hover:text-red-500 hover:bg-red-500/10 transition-colors duration-150"
-                        :aria-label="'Entfernen: ' + chip" data-chip-remove>×</button>
+                        class="w-5 h-5 inline-flex items-center justify-center rounded-full opacity-70 hover:opacity-100 hover:text-[var(--fa-crit)] hover:bg-[var(--fa-crit-soft)] transition-colors duration-150"
+                        :aria-label="'Entfernen: ' + chip" :title="'Entfernen: ' + chip" data-chip-remove>@svg('heroicon-m-x-mark', 'w-3.5 h-3.5')</button>
             @endunless
         </span>
     </template>
@@ -50,7 +51,7 @@
     @unless($readonly)
         <input type="text" x-model="neu" @keydown.enter.prevent="add()" @change="add()"
                list="{{ $listId }}" placeholder="{{ $placeholder }}"
-               class="w-32 px-2 py-0.5 text-[11px] bg-black/[0.03] rounded-full border-0 placeholder-gray-400 focus:ring-2 focus:ring-violet-500/20 focus:bg-white transition-all duration-150"
+               class="fa-control w-36 h-[26px] rounded-full text-[length:var(--fa-text-sm)]"
                data-chip-add />
         <datalist id="{{ $listId }}">
             @foreach($vocabular as $eintrag)

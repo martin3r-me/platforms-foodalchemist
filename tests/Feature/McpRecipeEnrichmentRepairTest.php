@@ -146,7 +146,7 @@ it('MCP liefert ein echtes Plattform-PDF ohne Browser und sperrt fremde Rezepte'
     expect(rtrim($bytes))->toEndWith('%%EOF');
     $service = app(\Platform\FoodAlchemist\Services\ReportExportService::class);
     $data = $service->rezeptDaten($this->rootTeam, $this->recipe->id, $service->optionen(['profil' => 'kurz'], 'recipe'));
-    expect(view('foodalchemist::dokumente.report', $data + ['istPdf' => true])->render())->toContain('Karotten')->toContain('draft');
+    expect(view('foodalchemist::dokumente.report', $data + ['istPdf' => true])->render())->toContain('Karotten')->toContain('Entwurf');   // Status als Label (RecipeStatus::label), nicht als Rohwert 'draft' — fa-pass Druck-Muster 2026-10-05
     if (getenv('FA_MCP_PDF_SMOKE_PATH')) {
         file_put_contents(getenv('FA_MCP_PDF_SMOKE_PATH'), $bytes);
     }

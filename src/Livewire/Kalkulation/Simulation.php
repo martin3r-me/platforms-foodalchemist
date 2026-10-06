@@ -78,7 +78,7 @@ class Simulation extends Component
 
         $team = Auth::user()?->currentTeamRelation;
         if ($team === null) {
-            $this->addError('ref', 'Kein Team im Kontext.');
+            $this->addError('ref', 'Kein Team gewählt.');
 
             return;
         }

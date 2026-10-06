@@ -516,6 +516,10 @@ class FoodAlchemistServiceProvider extends ServiceProvider
          * @return view('foodalchemist::livewire.dashboard')
          */
         $this->loadViewsFrom(__DIR__ . '/../resources/views', 'foodalchemist');
+
+        // fa-pass Welle 0: Bausteinbibliothek <x-fa::…> (resources/views/components/fa).
+        // EINE Quelle für Knöpfe, Felder, Chips, Status, Kennzahlen, Allergene … — Doku: /foodalchemist/_ui
+        \Illuminate\Support\Facades\Blade::anonymousComponentPath(__DIR__ . '/../resources/views/components/fa', 'fa');
         
         /**
          * SCHRITT 6: Livewire Components registrieren

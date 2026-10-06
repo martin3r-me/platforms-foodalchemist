@@ -123,10 +123,10 @@ class PriceService
     public function createFor(Team $team, FoodAlchemistSupplierItem $item, float $preis, string $status = '0'): FoodAlchemistPrice
     {
         if (! $item->isOwnedBy($team)) {
-            throw new \RuntimeException('Geerbter Katalog-Artikel — Preispflege nur durch das Besitzer-Team (D1).');
+            throw new \RuntimeException('Geerbter Katalog-Artikel: Preise pflegt nur das Besitzer-Team.');
         }
         if ($preis < 0) {
-            throw new \RuntimeException('Negative Preise sind Service-Zuschläge — keine manuelle Anlage (GL-11 I5).');
+            throw new \RuntimeException('Negative Preise sind Service-Zuschläge und lassen sich nicht von Hand anlegen.');
         }
         if (! in_array($status, ['0', '2'], true)) {
             throw new \RuntimeException('Status muss 0 (Standard-EK) oder 2 (Aktion) sein.');
@@ -151,7 +151,7 @@ class PriceService
     public function deleteFor(Team $team, FoodAlchemistSupplierItem $item, int $priceId): void
     {
         if (! $item->isOwnedBy($team)) {
-            throw new \RuntimeException('Geerbter Katalog-Artikel — Preispflege nur durch das Besitzer-Team (D1).');
+            throw new \RuntimeException('Geerbter Katalog-Artikel: Preise pflegt nur das Besitzer-Team.');
         }
         FoodAlchemistPrice::where('supplier_item_id', $item->id)->whereKey($priceId)->firstOrFail()->delete();
     }
@@ -163,7 +163,7 @@ class PriceService
     public function updatePrice(Team $team, FoodAlchemistSupplierItem $item, int $priceId, array $felder): FoodAlchemistPrice
     {
         if (! $item->isOwnedBy($team)) {
-            throw new \RuntimeException('Geerbter Katalog-Artikel — Preispflege nur durch das Besitzer-Team (D1).');
+            throw new \RuntimeException('Geerbter Katalog-Artikel: Preise pflegt nur das Besitzer-Team.');
         }
         $price = FoodAlchemistPrice::where('supplier_item_id', $item->id)->whereKey($priceId)->first();
         if ($price === null) {

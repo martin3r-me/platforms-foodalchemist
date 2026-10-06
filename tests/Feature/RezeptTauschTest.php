@@ -192,7 +192,8 @@ it('setzt den Verwaltungs-Titel ohne HTML-Entity — modal-section escapt selbst
 
     // „&amp;" im title-Attribut wird von der Komponente ein ZWEITES Mal escapt → „&AMP;".
     // Derselbe Fehler war am 2026-08-03 schon einmal da; deshalb ein Test statt nur ein Fix.
-    expect($modal)->toContain('title="Verwaltung — Rezept tauschen & löschen"')
+    // fa-pass: Titel ohne Gedankenstrich (Copy-Regel); das rohe „&" bleibt der Prüfgegenstand.
+    expect($modal)->toContain('title="Rezept tauschen & löschen"')
         ->and($modal)->not->toContain('tauschen &amp; löschen');
 
     // Und die Namens-Flächen sind da.

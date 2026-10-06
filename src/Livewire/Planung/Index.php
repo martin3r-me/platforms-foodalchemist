@@ -327,12 +327,12 @@ class Index extends Component
      * Steuerung; die Modal-Knöpfe der Browser-Seiten entfallen.
      */
     public const RICHTUNGEN = [
-        ['field' => 'convenience', 'label' => 'Convenience (Eigenleistung)', 'optionen' => ['' => '(egal)', 'from_scratch' => 'From Scratch', 'teil_convenience' => 'Teil-Convenience', 'voll_convenience' => 'Voll-Convenience'], 'hint' => ['' => 'Keine Vorgabe', 'from_scratch' => 'alles selbst — Pool dreht auf Roh/Sub-Rezepte', 'teil_convenience' => 'Halbfabrikate erlaubt', 'voll_convenience' => 'Fertigprodukte bevorzugt']],
-        ['field' => 'level', 'label' => 'Niveau', 'optionen' => ['' => '(egal)', 'haute_cuisine' => 'Haute Cuisine', 'gehoben' => 'Gehoben', 'klassisch' => 'Klassisch'], 'hint' => ['' => 'Keine Vorgabe']],
+        ['field' => 'convenience', 'label' => 'Eigenleistung', 'optionen' => ['' => 'Keine Vorgabe', 'from_scratch' => 'Alles selbst', 'teil_convenience' => 'Teil-Convenience', 'voll_convenience' => 'Voll-Convenience'], 'hint' => ['' => 'Die KI wählt passend zur Beschreibung.', 'from_scratch' => 'Rohware und eigene Basisrezepte, keine Fertigprodukte.', 'teil_convenience' => 'Halbfabrikate sind erlaubt.', 'voll_convenience' => 'Fertigprodukte werden bevorzugt.']],
+        ['field' => 'level', 'label' => 'Niveau', 'optionen' => ['' => 'Keine Vorgabe', 'haute_cuisine' => 'Haute Cuisine', 'gehoben' => 'Gehoben', 'klassisch' => 'Klassisch'], 'hint' => ['' => 'Die KI wählt passend zur Beschreibung.']],
         // »Bestand-Nutzung« (Chips) entfernt (2026-08-17): die Reuse-Achse ist jetzt EIN Regler — der
         // Kreativ-Modus-Select im Eingabe-Block (voll_kreativ|hybrid|datenbank). `bestand` wird daraus
         // in reglerParams abgeleitet, keine zweite konkurrierende Achse mehr.
-        ['field' => 'bio_praeferenz', 'label' => 'Bio-Präferenz', 'optionen' => ['konventionell' => 'Konventionell', 'bio' => 'Bio', 'egal' => 'Egal'], 'hint' => ['konventionell' => 'Standard — kein Bio erzwungen (Default)', 'bio' => 'Bio bevorzugt (nur auf Ansage)', 'egal' => 'keine Präferenz']],
+        ['field' => 'bio_praeferenz', 'label' => 'Bio', 'optionen' => ['konventionell' => 'Konventionell', 'bio' => 'Bio', 'egal' => 'Keine Präferenz'], 'hint' => ['konventionell' => 'Voreinstellung: Bio wird nicht erzwungen.', 'bio' => 'Bio-Ware wird bevorzugt.', 'egal' => 'Bio und konventionell gleichrangig.']],
         // »Frische-Hook« ist jetzt Multi-Select (Erlaubnis-Liste) → eigener Block in leitplanken.blade
         // (FRISCHE_OPTIONEN), nicht mehr Single-Pill hier.
     ];
@@ -1213,7 +1213,9 @@ class Index extends Component
         $this->ladeForm();
         $this->ladeLetztenLauf();
         // Scope-Treue: ein „Freies Basisrezept"-Start öffnet direkt auf dem Basisrezept-Tab (Ebene ≠ Gericht).
-        // Ohne $startTab bleibt der Editor-Default (tabInit='gericht') — z.B. beim Öffnen aus der Liste.
+        // Ohne $startTab: hat die Planung schon einen Lauf (Ergebnisse/Fortschritt), öffnet sie auf „Fortschritt"
+        // (Dominique 2026-10-05) — sonst auf dem Editor-Default (tabInit='gericht').
+        $startTab ??= $this->laufId !== null ? 'worker' : null;
         $this->dispatch('modal.open', name: 'planung-editor', tab: $startTab);
     }
 
@@ -2808,7 +2810,7 @@ class Index extends Component
         $wartet = $lauf->steps->contains(fn ($s) => in_array($s->status, ['queued', 'running'], true));
         $alterSek = $lauf->created_at !== null ? $lauf->created_at->diffInSeconds(now()) : 0;
         $this->hinweis = (! $jobBewiesen && $wartet && $alterSek > self::WATCHDOG_SEKUNDEN)
-            ? 'Der Lauf läuft ungewöhnlich lange und kein Schritt kommt voran — vermutlich läuft kein Hintergrund-Worker (Queue). Sobald er die Jobs abarbeitet, geht es automatisch weiter.'
+            ? 'Die Erstellung dauert ungewöhnlich lange und kein Schritt kommt voran. Vermutlich läuft die Hintergrund-Erstellung gerade nicht. Sobald sie anläuft, geht es automatisch weiter.'
             : null;
     }
 
@@ -3790,9 +3792,9 @@ class Index extends Component
             if ($this->sessionId !== null) {
                 $this->ladeLetztenLauf();   // laufId auf den neuen Import-Lauf → Worker-Tab zeigt ihn
             }
-            $this->importMeldung = '„' . $recipe->name . '" angelegt und an den Worker übergeben — wird im Hintergrund angereichert (GPs, Beschreibung, Pairings).';
+            $this->importMeldung = '„' . $recipe->name . '" ist angelegt. Grundprodukte, Beschreibung und Pairings werden im Hintergrund ergänzt.';
         } catch (\Throwable $e) {
-            $this->importMeldung = 'Angelegt, aber Worker-Übergabe fehlgeschlagen: ' . $e->getMessage();
+            $this->importMeldung = 'Angelegt, aber die Übergabe an die Hintergrund-Erstellung ist fehlgeschlagen: ' . $e->getMessage();
         }
         $this->importStep = 'fertig';
         $this->dispatch('recipe-gespeichert');
@@ -4238,7 +4240,7 @@ class Index extends Component
         $workerAlter = $workerStatus['alter_sek'] ?? null;
         $workerWarnung = $workerState === 'gesund'
             ? null
-            : 'Kein Hintergrund-Worker aktiv — ein Go bleibt in der Warteschlange liegen, bis der Worker (queue:work) läuft.';
+            : 'Die Hintergrund-Erstellung läuft gerade nicht. Neue Aufträge warten in der Warteschlange, bis sie wieder anläuft.';
         // Board-Poll-Gate: nur pollen, wenn irgendein Lauf tatsächlich läuft (kein Dauer-Poll im Ruhezustand).
         $irgendeinLaeuft = collect($kaskaden)->contains(fn ($k) => (bool) ($k['running'] ?? false));
 
@@ -4323,6 +4325,6 @@ class Index extends Component
             'composerBrowse' => $composerBrowse,
             'composerFocus' => $this->composerFocus,
             'composerFokusLabel' => $composerFokusLabel,
-        ])->layout('platform::layouts.app');
+        ])->layout('foodalchemist::layouts.standalone');
     }
 }

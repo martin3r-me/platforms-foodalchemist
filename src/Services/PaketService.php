@@ -515,7 +515,7 @@ class PaketService
     private function guardOwner(FoodAlchemistPaket $paket, Team $team): void
     {
         if (! $paket->isOwnedBy($team)) {
-            throw new \RuntimeException('Geerbter Paket — Pflege nur durchs Besitzer-Team (D1).');
+            throw new \RuntimeException('Geerbtes Paket: Ändern kann es nur das Besitzer-Team.');
         }
     }
 }

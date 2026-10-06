@@ -1,85 +1,77 @@
 {{-- Spec 33 P6 — Umsatz je laufender Ausgabe. Die Vorbehalte stehen gleichrangig neben den
-     Zahlen, nicht als Fußnote: sonst liest sich die Liste genauer, als sie ist. --}}
-@php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
-@php($eur = fn ($v) => $v === null ? '—' : number_format((float) $v, 2, ',', '.') . ' €')
+     Zahlen, nicht als Fußnote: sonst liest sich die Liste genauer, als sie ist.
 
-<div class="space-y-3" data-ctrl-promotion>
-    <div class="flex items-end justify-between gap-3 flex-wrap">
-        <p class="text-[11px] text-gray-500 max-w-2xl">
-            Umsatz je laufender Ausgabe, jeweils in ihrem eigenen Gültigkeitsfenster. Grundlage
-            ist das Verkaufsjournal — ohne eingelesenes Verkaufs-Ist bleibt die Liste leer.
+     fa-pass 2026-10-05: Tokens + Bausteine, Kennzahlen als x-fa::kpis (Hauptzahl: Umsatz gesamt),
+     Tabelle als fa-table, Vorbehalt als Hinweisfläche, Leerzustand mit nächstem Schritt. --}}
+@php
+    $eur = fn ($v) => $v === null ? '–' : number_format((float) $v, 2, ',', '.') . ' €';
+@endphp
+
+<div class="flex flex-col gap-3" data-ctrl-promotion>
+    <div class="flex flex-wrap items-end justify-between gap-3">
+        <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)] max-w-[75ch]">
+            Umsatz je laufender Speisekarte, Speiseplan oder Angebot, jeweils im eigenen Gültigkeitszeitraum.
+            Grundlage sind die eingelesenen Verkaufszahlen.
         </p>
         <div class="flex items-end gap-2">
-            <div>
-                <label class="{{ $label }} block mb-1">Stichtag</label>
-                <input type="date" wire:model.live="stichtag" class="{{ $input }} !w-40" data-ctrl-promo-stichtag />
-            </div>
-            <button type="button" wire:click="heute" class="{{ $btnGhostXs }}">Heute</button>
+            <x-fa::field label="Stichtag" for="ctrl-promo-stichtag">
+                <x-fa::input type="date" id="ctrl-promo-stichtag" wire:model.live="stichtag" class="w-40" data-ctrl-promo-stichtag />
+            </x-fa::field>
+            <x-fa::button variant="ghost" wire:click="heute">Heute</x-fa::button>
         </div>
     </div>
 
     @if($p === null)
-        <p class="text-xs text-gray-500">Kein Team zugeordnet.</p>
+        <x-fa::empty compact icon="heroicon-o-user-group" title="Kein Team zugeordnet">
+            Ohne Team gibt es keine Verkaufszahlen. Wähle oben ein Team aus.
+        </x-fa::empty>
     @else
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
-            <div class="rounded-lg bg-black/[0.03] px-3 py-2">
-                <div class="{{ $label }}">Umsatz gesamt</div>
-                <div class="text-lg font-semibold tabular-nums text-gray-900">{{ $eur($p['umsatz_gesamt']) }}</div>
-            </div>
-            <div class="rounded-lg bg-black/[0.03] px-3 py-2">
-                <div class="{{ $label }}">davon zugeordnet</div>
-                <div class="text-lg font-semibold tabular-nums text-gray-900">{{ $eur($p['umsatz_zugeordnet']) }}</div>
-                <div class="text-[10px] text-gray-500">
-                    {{ $p['abdeckung_pct'] === null ? '—' : number_format($p['abdeckung_pct'], 1, ',', '.') . ' % an einem Gericht' }}
-                </div>
-            </div>
-            <div class="rounded-lg bg-black/[0.03] px-3 py-2">
-                <div class="{{ $label }}">Laufende Ausgaben</div>
-                <div class="text-lg font-semibold tabular-nums text-gray-900">{{ count($p['zeilen']) }}</div>
-            </div>
-            <div class="rounded-lg bg-black/[0.03] px-3 py-2">
-                <div class="{{ $label }}">Stand</div>
-                <div class="text-lg font-semibold tabular-nums text-gray-900">{{ \Illuminate\Support\Carbon::parse($p['stichtag'])->format('d.m.Y') }}</div>
-            </div>
-        </div>
+        <x-fa::kpis :items="[
+            ['label' => 'Umsatz gesamt', 'value' => $eur($p['umsatz_gesamt']), 'primary' => true],
+            ['label' => 'Davon einem Gericht zugeordnet',
+             'value' => $eur($p['umsatz_zugeordnet']) . ($p['abdeckung_pct'] === null ? '' : ' (' . number_format($p['abdeckung_pct'], 1, ',', '.') . ' %)'),
+             'title' => 'Anteil des Umsatzes, der an einem Gericht hängt'],
+            ['label' => 'Laufende Ausgaben', 'value' => number_format(count($p['zeilen']), 0, ',', '.')],
+            ['label' => 'Stand', 'value' => \Illuminate\Support\Carbon::parse($p['stichtag'])->format('d.m.Y')],
+        ]" />
 
         @if($p['hinweis'])
-            <p class="text-[11px] text-amber-700" data-ctrl-promo-hinweis>{{ $p['hinweis'] }}</p>
+            <x-fa::notice tone="warn" data-ctrl-promo-hinweis>{{ $p['hinweis'] }}</x-fa::notice>
         @endif
 
         @if(count($p['zeilen']))
             <div class="overflow-x-auto">
-                <table class="{{ $table }}">
+                <table class="fa-table">
                     <thead>
                         <tr>
-                            <th class="{{ $th }} text-left">Ausgabe</th>
-                            <th class="{{ $th }} text-left">Art</th>
-                            <th class="{{ $th }} text-left">Zuordnung</th>
-                            <th class="{{ $th }} text-right">Gerichte</th>
-                            <th class="{{ $th }} text-right">Menge</th>
-                            <th class="{{ $th }} text-right">Umsatz</th>
-                            <th class="{{ $th }} text-right">davon exklusiv</th>
+                            <th>Ausgabe</th>
+                            <th>Art</th>
+                            <th>Betrieb oder Kunde</th>
+                            <th class="num">Gerichte</th>
+                            <th class="num">Menge</th>
+                            <th class="num">Umsatz</th>
+                            <th class="num">davon exklusiv</th>
                         </tr>
                     </thead>
                     <tbody>
                         @foreach($p['zeilen'] as $z)
-                            <tr class="{{ $tr }}" wire:key="promo-{{ $z['art'] }}-{{ $z['id'] }}">
-                                <td class="{{ $td }}"><a href="{{ $z['route'] }}" wire:navigate class="text-violet-700 hover:underline">{{ $z['name'] }}</a></td>
-                                <td class="{{ $td }} text-gray-600">{{ $z['art_label'] }}</td>
-                                <td class="{{ $td }} text-gray-600">{{ $z['outlet_name'] ?? $z['kunde'] ?? '—' }}</td>
-                                <td class="{{ $td }} text-right tabular-nums text-gray-500">
+                            <tr wire:key="promo-{{ $z['art'] }}-{{ $z['id'] }}">
+                                <td><a href="{{ $z['route'] }}" wire:navigate class="text-[var(--fa-accent)] hover:underline">{{ $z['name'] }}</a></td>
+                                <td class="text-[var(--fa-ink-2)]">{{ $z['art_label'] }}</td>
+                                <td class="text-[var(--fa-ink-2)]">{{ $z['outlet_name'] ?? $z['kunde'] ?? '–' }}</td>
+                                <td class="num text-[var(--fa-ink-2)]">
                                     {{ $z['n_gerichte'] }}
                                     @if($z['n_gerichte_exklusiv'] < $z['n_gerichte'])
-                                        <span class="text-[10px] text-amber-700" title="Der Rest steckt auch in einer anderen laufenden Ausgabe">({{ $z['n_gerichte_exklusiv'] }} exkl.)</span>
+                                        <span class="text-[length:var(--fa-text-sm)] text-[var(--fa-warn)]" title="Der Rest steckt auch in einer anderen laufenden Ausgabe">({{ $z['n_gerichte_exklusiv'] }} nur hier)</span>
                                     @endif
                                 </td>
-                                <td class="{{ $td }} text-right tabular-nums text-gray-500">{{ number_format((float) $z['menge'], 0, ',', '.') }}</td>
-                                <td class="{{ $td }} text-right tabular-nums font-medium text-gray-900">{{ $eur($z['umsatz']) }}</td>
+                                <td class="num text-[var(--fa-ink-2)]">{{ number_format((float) $z['menge'], 0, ',', '.') }}</td>
+                                <td class="num font-semibold">{{ $eur($z['umsatz']) }}</td>
                                 {{-- Der exklusive Anteil sagt, wie belastbar die Zahl links ist. --}}
-                                <td class="{{ $td }} text-right tabular-nums {{ ($z['exklusiv_pct'] ?? 100) < 100 ? 'text-amber-700' : 'text-gray-500' }}">
+                                <td class="num {{ ($z['exklusiv_pct'] ?? 100) < 100 ? 'text-[var(--fa-warn)]' : 'text-[var(--fa-ink-2)]' }}">
                                     {{ $eur($z['umsatz_exklusiv']) }}
                                     @if($z['exklusiv_pct'] !== null)
-                                        <span class="text-[10px]">({{ number_format($z['exklusiv_pct'], 0, ',', '.') }} %)</span>
+                                        <span class="text-[length:var(--fa-text-sm)]">({{ number_format($z['exklusiv_pct'], 0, ',', '.') }} %)</span>
                                     @endif
                                 </td>
                             </tr>
@@ -88,12 +80,15 @@
                 </table>
             </div>
 
-            <p class="text-[10px] text-gray-500">
-                Ein Gericht kann in mehreren laufenden Ausgaben stehen — sein Umsatz zählt dann
-                bei beiden. Die Summe dieser Spalte ist deshalb <strong>größer</strong> als der
-                Gesamtumsatz oben; das ist kein Rechenfehler, sondern die Natur der Frage.
+            <x-fa::notice tone="info" title="So ist die Spalte Umsatz zu lesen">
+                Ein Gericht kann in mehreren laufenden Ausgaben stehen, sein Umsatz zählt dann bei beiden.
+                Die Summe der Spalte ist deshalb größer als der Gesamtumsatz oben. Das ist kein Rechenfehler.
                 Die Spalte „davon exklusiv" nennt den Teil, der eindeutig dieser Ausgabe gehört.
-            </p>
+            </x-fa::notice>
+        @elseif(! $p['hinweis'])
+            <x-fa::empty compact icon="heroicon-o-banknotes" title="Keine laufende Ausgabe mit Umsatz">
+                Am Stichtag läuft keine Ausgabe mit Verkaufszahlen. Anderen Stichtag wählen oder unten Verkaufszahlen einlesen.
+            </x-fa::empty>
         @endif
     @endif
 </div>

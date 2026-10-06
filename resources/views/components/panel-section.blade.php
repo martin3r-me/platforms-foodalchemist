@@ -6,6 +6,8 @@
     wire:click läuft gegen die umschließende Livewire-Komponente — deren toggleSektion()
     muss den target-Key in ihrer Whitelist führen.
 
+    fa-pass (2026-10-05): Tokens; Props/Slots und toggleSektion unverändert.
+
     Props: title, target, open, count, sub, icon (heroicon-o-…).
     Slots:
       default  → Body, rendert nur wenn :open (eingerückt unter dem Titel).
@@ -14,15 +16,15 @@
 --}}
 @props(['title', 'target', 'open' => false, 'count' => null, 'sub' => null, 'icon' => null])
 
-<div {{ $attributes->merge(['class' => 'border-t border-black/5']) }}>
+<div {{ $attributes->merge(['class' => 'border-t border-[var(--fa-line)]']) }}>
     <div class="flex items-center gap-1">
-        <button type="button" wire:click="toggleSektion('{{ $target }}')"
-                class="group flex-1 flex items-center gap-2.5 py-2.5 text-left transition-colors">
-            @if($icon)<span class="text-gray-400 group-hover:text-violet-500 transition-colors shrink-0">@svg($icon, 'w-4 h-4')</span>@endif
-            <span class="text-[13px] text-gray-800">{{ $title }}</span>
-            @if($count !== null)<span class="text-[11px] text-gray-400 tabular-nums">{{ $count }}</span>@endif
-            @if($sub !== null)<span class="text-[11px] text-gray-400">{{ $sub }}</span>@endif
-            <span class="ml-auto text-gray-300 group-hover:text-gray-500 transition-colors shrink-0">@svg($open ? 'heroicon-o-chevron-down' : 'heroicon-o-chevron-right', 'w-4 h-4')</span>
+        <button type="button" wire:click="toggleSektion('{{ $target }}')" aria-expanded="{{ $open ? 'true' : 'false' }}"
+                class="group flex-1 min-w-0 flex items-center gap-2.5 py-2.5 text-left transition-colors">
+            @if($icon)<span class="shrink-0 text-[var(--fa-ink-3)] group-hover:text-[var(--fa-accent)] transition-colors">@svg($icon, 'w-4 h-4')</span>@endif
+            <span class="min-w-0 truncate text-[length:var(--fa-text-md)] font-medium text-[var(--fa-ink)]">{{ $title }}</span>
+            @if($count !== null)<span class="shrink-0 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)] tabular-nums">{{ $count }}</span>@endif
+            @if($sub !== null)<span class="min-w-0 truncate text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">{{ $sub }}</span>@endif
+            <span class="ml-auto shrink-0 text-[var(--fa-ink-3)] group-hover:text-[var(--fa-ink)] transition-colors">@svg($open ? 'heroicon-m-chevron-down' : 'heroicon-m-chevron-right', 'w-4 h-4')</span>
         </button>
         @isset($actions)<div class="shrink-0">{{ $actions }}</div>@endisset
     </div>

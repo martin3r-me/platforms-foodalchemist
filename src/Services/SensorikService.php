@@ -383,7 +383,7 @@ class SensorikService
                 $messung[$dim] = [
                     'basis' => $m['basis'], 'angewendet' => true,
                     'konflikt' => $delta >= self::KONFLIKT_AB
-                        ? 'deutlich über der Schätzung (' . $nf($werte[$dim]) . ') — LA-Zuordnung prüfen'
+                        ? 'deutlich über der Schätzung (' . $nf($werte[$dim]) . '). Zuordnung des Lieferantenartikels prüfen.'
                         : null,
                 ];
                 $werte[$dim] = $m['wert'];                    // gemessen schlägt geschätzt

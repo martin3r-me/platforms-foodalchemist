@@ -290,6 +290,15 @@ class DetailPanel extends Component
             'niveauEignungen' => $rezept !== null ? $rezept->levelSuitabilities()->get() : collect(),
             'sektorEignungen' => $rezept !== null ? $rezept->sectorSuitabilities()->get() : collect(),
             'eignungVokabular' => \Platform\FoodAlchemist\Services\RecipeService::eignungVokabular(),
+            // Anatomie Detail-Panels (2026-10-05), Abschnitt „Wo verwendet?" — nur lesen, Geschwister des
+            // Basisrezept-Panels: Rezepte, die das Gericht als Komponente führen, plus Concepts/Pakete mit einer Position darauf.
+            'eltern' => $rezept !== null ? app(\Platform\FoodAlchemist\Services\RecipeService::class)->getParents($team, $rezept->id) : collect(),
+            'inConcepts' => $rezept !== null
+                ? \Platform\FoodAlchemist\Models\FoodAlchemistConcept::visibleToTeam($team)
+                    ->whereIn('id', \Platform\FoodAlchemist\Models\FoodAlchemistConceptSlot::where('sales_recipe_id', $rezept->id)
+                        ->whereNull('deleted_at')->distinct()->pluck('concept_id'))
+                    ->orderBy('name')->get(['id', 'name', 'kind'])
+                : collect(),
         ]);
     }
 }

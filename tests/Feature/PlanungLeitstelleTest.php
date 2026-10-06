@@ -193,6 +193,15 @@ it('oeffne aus der Liste (ohne Start-Tab) bleibt auf dem Editor-Default (tab=nul
         ->assertDispatched('modal.open', name: 'planung-editor', tab: null);
 });
 
+it('oeffne: Planung mit Lauf (Ergebnisse/Fortschritt) öffnet auf „Fortschritt" (Dominique 2026-10-05)', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'X', 'brief' => 'y']);
+    FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'planning_session_id' => $session->id, 'scope' => 'gericht', 'status' => 'done']);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->assertDispatched('modal.open', name: 'planung-editor', tab: 'worker');
+});
+
 it('Cockpit rendert die Regler-Leitplanken + die freie Erstell-Leiste (Blade kompiliert, KI-Fläche ist in der Planung)', function () {
     $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'X', 'brief' => 'y']);
 
@@ -530,7 +539,7 @@ it('#4/#1a Cockpit-Baum: Fan-out-Kind eingerückt + „Verwendetes Wissen" aus c
         ->assertSee('Wurzel-Gericht')
         ->assertSee('Kind-Basisrezept')          // #4 Fan-out-Kind sichtbar
         ->assertSee('Verwendetes Wissen')        // #1a aus context_snapshot
-        ->assertSee('↳');                        // Einrückungs-Marker des Kindes
+        ->assertSeeHtml('data-step-unter');       // Einrückungs-Marker des Kindes (Baum mit Führungslinie statt »↳«-Zeichen)
 });
 
 it('A: Inline-Zutaten-Review — Toggle mountet den IngredientEditor on-demand für einen Draft', function () {
@@ -1572,7 +1581,7 @@ it('Cockpit: Gericht-Draft mit KI-Fotos zeigt die Zahl der kostenpflichtigen Bil
     Livewire::test(PlanungIndex::class)
         ->call('oeffne', $session->id)
         ->assertSeeHtml('data-bild-calls="')
-        ->assertSeeHtml('2 KI-Bild-Calls')       // Anzahl (Plural)
+        ->assertSeeHtml('2 kostenpflichtige KI-Bilder')   // Anzahl (Plural; Copy ohne »Calls«)
         ->assertSeeHtml('gpt-image-1.5');        // Modell (Kosten-Transparenz, kein EUR)
 });
 
@@ -1654,7 +1663,7 @@ it('Cockpit Bild-Status: angefordert + Fotos vorhanden zeigt »N Fotos ✓«', f
     Livewire::test(PlanungIndex::class)
         ->call('oeffne', $session->id)
         ->assertSeeHtml('data-bild-status="')
-        ->assertSeeHtml('2 Fotos ✓')
+        ->assertSeeHtml('2 Fotos')   // Haken jetzt als Heroicon, kein ✓-Emoji
         ->assertDontSeeHtml('keine Fotos erzeugt');
 });
 
@@ -1732,7 +1741,7 @@ it('Cockpit Bild-Status: deferred.bilder=done fällt auf »N Fotos ✓« zurück
 
     Livewire::test(PlanungIndex::class)
         ->call('oeffne', $session->id)
-        ->assertSeeHtml('3 Fotos ✓')
+        ->assertSeeHtml('3 Fotos')
         ->assertDontSeeHtml('Fotos fehlgeschlagen');
 });
 
@@ -2505,7 +2514,7 @@ it('Phase 1 „eingereiht — wartet auf Worker": queued/running-Step ohne Phase
 
     Livewire::test(PlanungIndex::class)
         ->call('oeffne', $session->id)
-        ->assertSee('eingereiht — wartet auf Worker');
+        ->assertSee('Eingereiht, wartet auf die Hintergrund-Erstellung');   // Copy ohne »Worker«/Gedankenstrich
 });
 
 it('Phase gesetzt am Step überschreibt den Platzhalter mit dem echten Fortschrittstext', function () {
@@ -2516,7 +2525,7 @@ it('Phase gesetzt am Step überschreibt den Platzhalter mit dem echten Fortschri
     Livewire::test(PlanungIndex::class)
         ->call('oeffne', $session->id)
         ->assertSee('Rezept wird entworfen …')
-        ->assertDontSee('eingereiht — wartet auf Worker');
+        ->assertDontSee('Eingereiht, wartet auf die Hintergrund-Erstellung');
 });
 
 it('Poll-Gate (Worker-Tab, 1500ms): Ruhezustand ohne Lauf zeigt kein wire:poll.1500ms', function () {

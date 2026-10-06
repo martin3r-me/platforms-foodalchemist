@@ -716,13 +716,13 @@ class SpeiseplanService
                 continue;
             }
             if (! $model::visibleToTeam($team)->whereKey($id)->exists()) {
-                throw new \RuntimeException('Inhalt nicht sichtbar oder nicht vorhanden (' . $feld . ' #' . $id . ').');
+                throw new \RuntimeException((['concept_id' => 'Konzept', 'package_id' => 'Paket', 'sales_recipe_id' => 'Gericht'][$feld] ?? 'Inhalt') . ' #' . $id . ' ist nicht vorhanden oder nicht sichtbar.');
             }
 
             return array_merge(array_fill_keys(array_keys($refs), null), [$feld => $id]);
         }
 
-        throw new \RuntimeException('Genau einen Inhalt angeben: Concept, Paket oder Gericht.');
+        throw new \RuntimeException('Genau einen Inhalt angeben: Konzept, Paket oder Gericht.');
     }
 
     /**
@@ -846,6 +846,7 @@ class SpeiseplanService
             if ($tag === $e->entry_date?->format('Y-m-d')) {
                 continue;
             }
+            // whereDate: unabhängig davon, ob die DB das Datum mit Uhrzeit ablegt (SQLite) oder als DATE (MySQL).
             $gleich = $plan->entries()->whereDate('entry_date', $tag)->where('meal', $e->meal)
                 ->when($e->line_id !== null, fn ($q) => $q->where('line_id', $e->line_id), fn ($q) => $q->whereNull('line_id'))
                 ->where('concept_id', $e->concept_id)->where('package_id', $e->package_id)->where('sales_recipe_id', $e->sales_recipe_id)
@@ -2517,7 +2518,7 @@ class SpeiseplanService
     private function guard(FoodAlchemistSpeiseplan $plan, Team $team): void
     {
         if (! $plan->isOwnedBy($team)) {
-            throw new \RuntimeException('Geerbter Speiseplan — Pflege nur durchs Besitzer-Team (D1).');
+            throw new \RuntimeException('Geerbter Speiseplan: Ändern kann ihn nur das Besitzer-Team.');
         }
     }
 
@@ -2530,10 +2531,10 @@ class SpeiseplanService
 
         $daten = [];
         if (array_key_exists('brand_color', $in)) {
-            $daten['brand_color'] = $this->normHexOderThrow($in['brand_color'], 'brand_color') ?? '#6d28d9';
+            $daten['brand_color'] = $this->normHexOderThrow($in['brand_color'], 'Markenfarbe') ?? '#6d28d9';
         }
         if (array_key_exists('band_color', $in)) {
-            $daten['band_color'] = $this->normHexOderThrow($in['band_color'], 'band_color', true);
+            $daten['band_color'] = $this->normHexOderThrow($in['band_color'], 'Bandfarbe', true);
         }
         if (array_key_exists('footer_text', $in)) {
             $t = trim((string) $in['footer_text']);
@@ -2599,10 +2600,10 @@ class SpeiseplanService
             if ($erlaubeLeer) {
                 return null;
             }
-            throw new \RuntimeException("{$feld}: Farbe fehlt.");
+            throw new \RuntimeException("{$feld} fehlt.");
         }
         if (! preg_match('/^#[0-9a-fA-F]{6}$/', $wert)) {
-            throw new \RuntimeException("{$feld}: ungültiger Hex-Farbwert ({$wert}).");
+            throw new \RuntimeException("{$feld}: ungültiger Farbwert „{$wert}“ (erwartet #RRGGBB).");
         }
 
         return $wert;

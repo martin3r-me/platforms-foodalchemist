@@ -99,7 +99,7 @@ it('globale Kanon-Zeile: nur Master, nur globale Dossiers', function () {
 
     // Master + team-eigenes Dossier in globale Zeile → Invariante verletzt
     $inv = $put->execute(['scope' => 'feature', 'scope_key' => 'f', 'slug' => 'rw_team', 'global' => true], $this->kontext);
-    expect($inv->success)->toBeFalse()->and($inv->error)->toContain('GLOBALE');
+    expect($inv->success)->toBeFalse()->and($inv->error)->toContain('Für alle Teams verbindlich');   // nennt die globale Ebene (Wortlaut Hinweistexte 2026-10-05)
 
     // Kind-Team darf keine globale Zeile
     $kind = new ToolContext($this->makeUser($this->childA), $this->childA);
@@ -173,7 +173,7 @@ it('warnt über dem Dossier-Deckel (PUT-Hinweis, knowledge.PUT-Hinweis, GET-Samm
 
     $put = $this->registry->get('foodalchemist.knowledge_canon.PUT')
         ->execute(['scope' => 'feature', 'scope_key' => 'f', 'slug' => 'rw_gross'], $this->kontext);
-    expect($put->success)->toBeTrue()->and(implode(' ', $put->data['hinweise']))->toContain('Deckel');
+    expect($put->success)->toBeTrue()->and(implode(' ', $put->data['hinweise']))->toContain('vorgesehen sind höchstens');
 
     $get = $this->registry->get('foodalchemist.knowledge_canon.GET')->execute(['scope_key' => 'f'], $this->kontext);
     expect($get->data['hinweis'])->toContain('rw_gross');

@@ -160,7 +160,7 @@ it('L6b: ein nicht anwendbarer Befund schreibt nichts, sondern erklärt sich', f
     expect($test->html())->toContain('data-copilot-hardstop');
 
     $test->call('copilotUebernehmen', 0)
-        ->assertSet('fehler', 'Befund ist nicht anwendbar — er ist ein Hinweis, kein Auftrag.')
+        ->assertSet('fehler', 'Dieser Hinweis lässt sich nicht automatisch übernehmen. Bitte im Rezept selbst anpassen.')
         ->assertCount('copilot.befunde', 1);                            // Karte bleibt stehen
 
     expect(DB::table('foodalchemist_recipe_ingredients')

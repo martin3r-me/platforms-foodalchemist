@@ -159,7 +159,7 @@ class SignalTrendService
             return [
                 'source' => (string) $r->source,
                 'metric_key' => (string) $r->metric_key,
-                'label' => $this->label((string) $r->metric_key, $r->signal_type),
+                'label' => $this->label((string) $r->metric_key, $r->signal_type, (string) $r->source),
                 'signal_type' => $r->signal_type,
                 'count' => $count,
                 'previous' => $prevCount,
@@ -192,12 +192,20 @@ class SignalTrendService
     // ---- intern -----------------------------------------------------------
 
     /**
-     * Label für die Anzeige. Signal-Typen bringen ihr Label mit; DQ-Metrik-Keys
-     * bleiben bewusst der rohe Key — ihn hier zu spiegeln würde das Label an zwei
-     * Stellen pflegen (die Ampel liefert es live und darf es jederzeit ändern).
+     * Label für die Anzeige. DQ-Metriken holen ihren Namen bei der Ampel selbst
+     * ({@see DataQualityService::metrikLabel}, eine Pflege-Stelle) — sonst stünde der
+     * rohe Metrik-Schlüssel im Drift-Signal. Signal-Typen bringen ihr Label mit; der
+     * rohe Key bleibt nur der letzte Rückfall für Metriken, die es nicht mehr gibt.
      */
-    private function label(string $metricKey, ?string $signalType): string
+    private function label(string $metricKey, ?string $signalType, string $source): string
     {
+        if ($source === FoodAlchemistSignalSnapshot::SOURCE_DQ) {
+            $dqLabel = $this->dq->metrikLabel($metricKey);
+            if ($dqLabel !== null) {
+                return $dqLabel;
+            }
+        }
+
         return SignalTyp::tryFrom($signalType ?? $metricKey)?->label() ?? $metricKey;
     }
 

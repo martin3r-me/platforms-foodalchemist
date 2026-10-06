@@ -522,7 +522,7 @@ class Editor extends Component
                 ->map(function ($s) use ($outlet) {
                     $c = $s->concept;
                     if ($c === null) {
-                        return ['name' => '— (entfernt)', 'vk' => null, 'ek' => null, 'w' => null];
+                        return ['name' => 'Konzept nicht mehr verfügbar', 'vk' => null, 'ek' => null, 'w' => null];
                     }
                     // Ebene 2: mit Brille den €/Gast live gegen den Betrieb (preisCockpit); ohne Brille
                     // der Cache (= heutiges Verhalten). EK bleibt kostenseitig gleich.
@@ -535,7 +535,7 @@ class Editor extends Component
                         $ek = $c->ek_per_person_cache !== null ? (float) $c->ek_per_person_cache : null;
                     }
                     return [
-                        'name' => $c->consumer_name ?: ($c->name ?? '— (entfernt)'),
+                        'name' => $c->consumer_name ?: ($c->name ?? 'Konzept nicht mehr verfügbar'),
                         'vk' => $vk,
                         'ek' => $ek,
                         'w' => ($vk !== null && $vk > 0 && $ek !== null) ? round($ek / $vk * 100, 1) : null,

@@ -122,7 +122,7 @@ class PlanningCascadeService
         array $optionen = [],
     ): FoodAlchemistCascadeRun {
         if (! in_array($scope, FoodAlchemistCascadeRun::SCOPES, true)) {
-            throw new RuntimeException("Unbekannter Kaskaden-Scope «{$scope}».");
+            throw new RuntimeException("Unbekannte Planungsart „{$scope}\".");
         }
         if (! in_array($creativeMode, FoodAlchemistPlanningSession::CREATIVE_MODES, true)) {
             $creativeMode = 'voll_kreativ';
@@ -142,7 +142,7 @@ class PlanningCascadeService
             $brief = $this->briefAusSession($session);
         }
         if ($brief === '') {
-            throw new RuntimeException('Kein Brief für die Kaskade — Titel/Brief/Analyse fehlen.');
+            throw new RuntimeException('Es fehlt der Auftrag. Bitte Titel oder Brief der Planung ausfüllen.');
         }
 
         $params = is_array($optionen['params'] ?? null) ? $optionen['params'] : [];
@@ -171,7 +171,7 @@ class PlanningCascadeService
         $existingConceptId = $scope === 'concept' ? (int) ($optionen['existing_concept_id'] ?? 0) : 0;
         if ($existingConceptId > 0
             && ! FoodAlchemistConcept::where('team_id', $team->id)->whereKey($existingConceptId)->exists()) {
-            throw new RuntimeException("Geprüftes Konzept #{$existingConceptId} nicht gefunden (Team).");
+            throw new RuntimeException("Das gewählte Konzept (Nr. {$existingConceptId}) wurde nicht gefunden oder gehört zu einem anderen Team.");
         }
 
         // Lineage (Etappe 4, Teil 2a): startet der Lauf aus einer Divergenz-Board-Skizze (Skizze →
@@ -355,12 +355,12 @@ class PlanningCascadeService
         // Angebot referenziert (Pivot). format — je Slot ein Concept-Baustein, ins gebrandete Foodkonzept
         // referenziert (format_slot type=concept, wie offer). Der Speiseplan (P5) läuft über einen eigenen Zell-Pfad.
         if (! in_array($ownerType, ['foodbook', 'speisekarte', 'offer', 'format'], true) || $ownerId <= 0) {
-            throw new RuntimeException('Voll-Kaskade braucht owner_type=foodbook|speisekarte|offer|format + owner_id.');
+            throw new RuntimeException('Die Planung braucht ein Ziel: Foodbook, Speisekarte, Angebot oder Format.');
         }
 
         $frame = app(PlanningFrameService::class)->find($ownerType, $ownerId);
         if ($frame === null || $frame->slots()->count() === 0) {
-            throw new RuntimeException('Ausgabe hat noch kein Planungs-Gerüst — erst Kickoff/Struktur anlegen.');
+            throw new RuntimeException('Es gibt noch kein Planungs-Gerüst. Bitte zuerst die Struktur anlegen.');
         }
 
         // FOODBOOK läuft GESTUFT (Kapitel-Gate): erst das Kapitel-Grundgerüst als geplante Concept-Steps
@@ -451,7 +451,7 @@ class PlanningCascadeService
         }
         $frame = app(PlanningFrameService::class)->find('foodbook', $foodbookId);
         if ($frame === null || $frame->slots()->count() === 0) {
-            throw new RuntimeException('Foodbook hat noch kein Planungs-Gerüst — erst Kickoff/Struktur anlegen.');
+            throw new RuntimeException('Das Foodbook hat noch kein Planungs-Gerüst. Bitte zuerst die Struktur anlegen.');
         }
         // Genau das gekoppelte Slot↔Kapitel-Paar suchen (vollkaskadeSlots stellt strukturAusGeruest-Idempotenz sicher).
         $treffer = null;
@@ -462,7 +462,7 @@ class PlanningCascadeService
             }
         }
         if ($treffer === null) {
-            throw new RuntimeException('Kapitel hat keinen gekoppelten Gerüst-Slot — nur gerüst-basierte Kapitel sind erzeugbar.');
+            throw new RuntimeException('Dieses Kapitel ist nicht aus dem Planungs-Gerüst entstanden. Mit KI füllen lassen sich nur Kapitel aus dem Gerüst.');
         }
 
         $run = FoodAlchemistCascadeRun::create([
@@ -664,7 +664,7 @@ class PlanningCascadeService
             throw new RuntimeException('Speiseplan nicht gefunden.');
         }
         if ($plan->lines->isEmpty()) {
-            throw new RuntimeException('Speiseplan hat keine Menü-Linien — erst Linien anlegen.');
+            throw new RuntimeException('Der Speiseplan hat keine Menü-Linien. Bitte zuerst im Reiter „Menü-Linien" eine Linie anlegen.');
         }
 
         $run = FoodAlchemistCascadeRun::create([
@@ -835,8 +835,8 @@ class PlanningCascadeService
             $slotsLeer,
             $offen,
             sprintf(
-                '%s%d von %d Positionen ohne Skizze — %s. Rest im Konzept besetzen; ein zweiter '
-                . 'Lauf beginnt wieder vorn.',
+                '%s%d von %d Positionen ohne Skizze. Grund: %s. Den Rest im Konzept von Hand besetzen, '
+                . 'ein zweiter KI-Lauf würde wieder vorne beginnen.',
                 $ort,
                 $offen,
                 $slotsLeer,
@@ -880,8 +880,8 @@ class PlanningCascadeService
         }
 
         return sprintf(
-            '%d von %d Gerichten fehlen (je Lauf höchstens %d): %s. Diese Rubriken im Karten-Editor '
-            . 'über „+ Gericht" füllen — ein zweiter Voll-Lauf bestückt die vorderen Rubriken ein zweites Mal.',
+            '%d von %d Gerichten fehlen (je KI-Lauf höchstens %d): %s. Diese Rubriken im Karten-Editor '
+            . 'über „+ Gericht" füllen. Ein zweiter KI-Lauf würde die vorderen Rubriken doppelt bestücken.',
             $offen,
             $verlangt,
             self::SPEISEKARTE_MAX_POSITIONEN,
@@ -1058,8 +1058,8 @@ class PlanningCascadeService
     private function deckelTextWochen(int $gebaut, int $offen, int $zellen): string
     {
         return sprintf(
-            'Wochen %d–%d noch offen (%d Zellen) — ein Lauf baut höchstens %d Wochen. Wenn die '
-            . 'ersten %d im Plan stehen, noch einmal Voll-Kaskade starten: der Lauf nimmt dann die nächsten.',
+            'Wochen %d–%d noch offen (%d Zellen). Ein KI-Lauf füllt höchstens %d Wochen. Sobald die '
+            . 'ersten %d im Plan stehen, noch einmal „Leere Zellen mit KI füllen" starten, dann kommen die nächsten dran.',
             $gebaut + 1,
             $gebaut + $offen,
             $zellen,
@@ -1084,8 +1084,8 @@ class PlanningCascadeService
     private function deckelTextZellen(int $gestartet, int $verlangt, int $offen): string
     {
         return sprintf(
-            '%d von %d Zellen gestartet, %d %s leer — wenn die ersten im Plan stehen, im Speiseplan '
-            . 'noch einmal Voll-Kaskade starten: der Lauf nimmt nur die leeren Zellen.',
+            '%d von %d Zellen gestartet, %d %s leer. Sobald die ersten im Plan stehen, im Speiseplan '
+            . 'noch einmal „Leere Zellen mit KI füllen" starten. Der Lauf nimmt nur die leeren Zellen.',
             $gestartet,
             $verlangt,
             $offen,
@@ -1162,7 +1162,7 @@ class PlanningCascadeService
             );
             $recipe = $gen['recipe'] ?? null;
             if ($recipe === null) {
-                throw new RuntimeException('Generierung lieferte kein Rezept.');
+                throw new RuntimeException('Die KI hat kein Rezept geliefert. Bitte neu erzeugen.');
             }
             app(SpeiseplanService::class)->addEintrag($team, $planId, [
                 'entry_date' => $entryDate, 'mahlzeit' => $meal, 'line_id' => $lineId, 'sales_recipe_id' => (int) $recipe->id,
@@ -1251,7 +1251,7 @@ class PlanningCascadeService
             );
             $recipe = $gen['recipe'] ?? null;
             if ($recipe === null) {
-                throw new RuntimeException('Generierung lieferte kein Rezept.');
+                throw new RuntimeException('Die KI hat kein Rezept geliefert. Bitte neu erzeugen.');
             }
             app(SpeisekarteService::class)->addPosition($team, $rubrikId, [
                 'type' => 'gericht_ref', 'sales_recipe_id' => (int) $recipe->id,
@@ -1422,7 +1422,7 @@ class PlanningCascadeService
     {
         $idee = FoodAlchemistDishIdea::where('team_id', $team->id)->find($ideaId);
         if ($idee === null) {
-            $this->markStepFailed($stepId, 'Idee nicht gefunden.');
+            $this->markStepFailed($stepId, 'Die Gericht-Skizze gibt es nicht mehr.');
 
             return;
         }
@@ -1473,7 +1473,7 @@ class PlanningCascadeService
             );
             $recipe = $gen['recipe'] ?? null;
             if ($recipe === null) {
-                throw new RuntimeException('Generierung lieferte kein Rezept.');
+                throw new RuntimeException('Die KI hat kein Rezept geliefert. Bitte neu erzeugen.');
             }
             if ($slotId > 0) {
                 app(ConceptService::class)->fillSlot($team, $slotId, ['sales_recipe_id' => (int) $recipe->id, 'type' => 'gericht']);
@@ -1648,7 +1648,7 @@ class PlanningCascadeService
         $run->update(['params' => $params, 'status' => 'failed']);
         $run->steps()->whereIn('status', ['geplant', 'queued', 'running'])->update([
             'status' => 'failed',
-            'error' => 'Vom Benutzer abgebrochen — keine weiteren Schritte werden gestartet.',
+            'error' => 'Vom Benutzer abgebrochen. Weitere Schritte werden nicht gestartet.',
         ]);
 
         return true;
@@ -1876,7 +1876,7 @@ class PlanningCascadeService
             && $s->updated_at !== null
             && $s->updated_at->lt($grenze));
         foreach ($verwaist as $s) {
-            $this->markStepFailed((int) $s->id, 'Abgebrochen — keine Rückmeldung vom Worker (verwaist). Neu generieren oder verwerfen.');
+            $this->markStepFailed((int) $s->id, 'Abgebrochen: Die Erstellung hat sich nicht mehr gemeldet. Neu erzeugen oder verwerfen.');
         }
 
         return $verwaist->count();
@@ -2305,7 +2305,7 @@ class PlanningCascadeService
         // erste noch läuft — sonst überschneiden sich zwei RecipeImageService-Läufe am selben Rezept.
         $bilderStatus = is_array($step->deferred) ? ($step->deferred['bilder']['status'] ?? null) : null;
         if (in_array($bilderStatus, ['queued', 'running'], true)) {
-            throw new \Platform\FoodAlchemist\Exceptions\PlanungAktionLaeuftBereitsException('Bild-Erzeugung läuft bereits.');
+            throw new \Platform\FoodAlchemist\Exceptions\PlanungAktionLaeuftBereitsException('Das Bild wird bereits erzeugt. Bitte kurz warten.');
         }
         $this->markBilderQueued($step);
         EnrichRecipeJob::dispatch($team->id, (int) (Auth::id() ?? 0), (int) $step->ref_id, null, false, (int) $step->id, true);
@@ -2454,7 +2454,7 @@ class PlanningCascadeService
         // Server-Guard gegen Doppel-Enqueue (Spec 53 / Paket C): ein zweiter Klick auf „neu generieren"
         // während der erste Versuch noch rechnet, darf keinen zweiten GenerateRecipeJob einreihen.
         if ($step->status === 'running') {
-            throw new \Platform\FoodAlchemist\Exceptions\PlanungAktionLaeuftBereitsException('Läuft bereits — bitte warten, bis der aktuelle Versuch fertig ist.');
+            throw new \Platform\FoodAlchemist\Exceptions\PlanungAktionLaeuftBereitsException('Läuft bereits. Bitte warten, bis der aktuelle Versuch fertig ist.');
         }
         // L4: Regenerieren eines KIND-Basisrezepts — die Eltern-Zutat zeigt noch auf den gleich
         // gelöschten Draft. VOR dem Löschen die Bindung lösen (referenced_recipe_id NULL, unmatched),
@@ -2625,7 +2625,7 @@ class PlanningCascadeService
         $ideeId = (int) (($step->context_snapshot ?? [])['dish_idea_id'] ?? 0);
         $feedback = trim($feedback);
         if ($step->kind !== 'gericht' || $step->status !== 'geplant' || $ideeId <= 0 || $feedback === '') {
-            throw new RuntimeException('Gerichtsvorschlag oder Feedback ist nicht vollständig.');
+            throw new RuntimeException('Überarbeiten geht nur bei einem noch offenen Gerichtsvorschlag und mit einer Rückmeldung. Bitte eine Rückmeldung eingeben.');
         }
         $step->update(['status' => 'running', 'error' => null]);
         $step->run?->update(['status' => 'running']);
@@ -2852,7 +2852,7 @@ class PlanningCascadeService
                     // D2 2026-08-18: nicht mehr NUR ins Log — sichtbar am Step markieren, damit der Mensch
                     // die fehlende Rückbindung sieht (sonst hängt das Sub-Rezept unbemerkt lose am Lauf,
                     // referenced_recipe_id bleibt NULL). Spiegelt den E-P0-Härtungsgrundsatz „nichts still schlucken".
-                    $step->update(['error' => 'Nicht automatisch ans Gericht gebunden — Zutat + Menge am Elterngericht bitte manuell ergänzen.']);
+                    $step->update(['error' => 'Nicht automatisch ins Gericht übernommen. Zutat und Menge bitte im übergeordneten Gericht von Hand ergänzen.']);
                 }
             }
         }
@@ -2891,7 +2891,7 @@ class PlanningCascadeService
     {
         $step = FoodAlchemistCascadeRunStep::visibleToTeam($team)->findOrFail($stepId);
         if (! $step->isOwnedBy($team)) {
-            throw new RuntimeException('Geerbter Kaskaden-Step — Freigabe nur durchs Besitzer-Team (D1).');
+            throw new RuntimeException('Dieser Schritt gehört einem anderen Team. Freigeben und ändern kann nur das Team, das die Planung angelegt hat.');
         }
 
         return $step;

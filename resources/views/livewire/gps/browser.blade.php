@@ -1,38 +1,44 @@
-{{-- M3-01/02: GP-Browser-Neubau (P-1/Screen 1) — Baum links (Page-Sidebar), dichte Tabelle, Panel rechts (M3-03) --}}
-@php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
+{{-- Grundprodukte-Browser — Warengruppen links, Tabelle Mitte, Detail rechts.
+     fa-pass Welle 2 (2026-10-05): auf Bausteine <x-fa::…> umgestellt (Muster wie recipes/browser).
+     Funktion, wire:-Bindungen und data-Marker unverändert. Neu: Status-Filter als Chips über der
+     Tabelle, Status als Chip mit Menü statt Dropdown je Zeile, fehlender Preis als Signal,
+     Detail-Spalte erst sichtbar, wenn ein Grundprodukt gewählt ist. --}}
+@php
+    $statusOptionen = ['' => 'Alle ' . number_format(collect($statusFaelle)->sum(fn ($f) => $statusCounts[$f->value] ?? 0), 0, ',', '.')];
+    foreach ($statusFaelle as $fall) {
+        if (($statusCounts[$fall->value] ?? 0) > 0 || $status === $fall->value) {
+            $statusOptionen[$fall->value] = $fall->label() . ' ' . number_format($statusCounts[$fall->value] ?? 0, 0, ',', '.');
+        }
+    }
+    $statusWahl = [\Platform\FoodAlchemist\Enums\GpStatus::Approved, \Platform\FoodAlchemist\Enums\GpStatus::Tentative, \Platform\FoodAlchemist\Enums\GpStatus::Rejected];
+    $bestand = collect([
+        'gps' => 'Grundprodukte',
+        'las' => 'Lieferantenartikel',
+        'lieferanten' => 'Lieferanten',
+    ])->map(fn ($text, $key) => isset($kpis[$key]) ? number_format($kpis[$key], 0, ',', '.') . ' ' . $text : null)->filter();
+    $untertitel = number_format($gps->total(), 0, ',', '.') . ' Treffer' . ($bestand->isNotEmpty() ? ' · Bestand: ' . $bestand->implode(' · ') : '');
+    $wgName = $commodity_group !== '' ? ($warengruppen->firstWhere('code', $commodity_group)?->name ?? $commodity_group) : null;
+    $allergenKurz = fn ($feld) => explode(' ', \Platform\FoodAlchemist\Models\FoodAlchemistItemAllergen::ALLERGENE[$feld] ?? $feld)[0];
+@endphp
 
 <x-ui-page>
     <x-slot:navbar>
-        <x-ui-page-navbar title="Grundprodukte" icon="heroicon-o-cube" />
+        <x-foodalchemist::shell.page-navbar title="Grundprodukte" icon="heroicon-o-cube" />
     </x-slot:navbar>
 
-    {{-- Kontext-Pfad (Prototyp #breadcrumbs): Food Alchemist › Grundprodukte --}}
-    <x-slot name="actionbar">
-        <x-ui-page-actionbar :breadcrumbs="[
-            ['label' => 'Food Alchemist', 'href' => route('foodalchemist.dashboard'), 'icon' => 'cube'],
-            ['label' => 'Grundprodukte'],
-        ]" />
-    </x-slot>
-
-    {{-- Zone links: Suche · Status · WG-Baum mit Counts · Sub-Kategorien (Platzierungs-Entscheid) --}}
+    {{-- Zone links: Suche · Warengruppen-Baum mit Zahlen · Unterkategorien --}}
     <x-slot name="sidebar">
         <x-ui-page-sidebar title="Warengruppen" width="w-80">
-            <div class="p-3 space-y-2" data-gp-baum>
-                <input type="search" wire:model.live.debounce.300ms="search"
-                       placeholder="GP-Name oder Hauptzutat-Slug …" class="{{ $input }}" data-gp-suche />
-                <select wire:model.live="status" class="{{ $input }}">
-                    <option value="">Alle Status</option>
-                    @foreach($statusFaelle as $fall)
-                        <option value="{{ $fall->value }}">{{ $fall->label() }} ({{ $statusCounts[$fall->value] ?? 0 }})</option>
-                    @endforeach
-                </select>
+            <div class="p-3 flex flex-col gap-3" data-gp-baum>
+                <div class="relative">
+                    <label for="gp-suche" class="sr-only">Grundprodukte durchsuchen</label>
+                    @svg('heroicon-m-magnifying-glass', 'w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--fa-ink-3)] pointer-events-none')
+                    <x-fa::input id="gp-suche" type="search" wire:model.live.debounce.300ms="search" placeholder="Name oder Hauptzutat" class="pl-8" data-gp-suche />
+                </div>
 
-                <x-foodalchemist::filter-row wire:click="waehleWg('')" :active="$commodity_group === ''"
-                    :count="array_sum($wgCounts)"><span class="font-medium">Alle Warengruppen</span></x-foodalchemist::filter-row>
-
-                {{-- Spec 28 / Weg A: Zeilen-Optik + Kontrast-Modell liegen im Baustein `filter-row`,
-                     die Führungslinie der Kind-Ebene in `filter-ast`. --}}
-                <div class="space-y-0.5 -mx-1" data-wg-liste>
+                <div class="flex flex-col gap-0.5 pt-2 border-t border-[var(--fa-line)]" data-wg-liste>
+                    <x-foodalchemist::filter-row wire:click="waehleWg('')" :active="$commodity_group === ''"
+                        :count="array_sum($wgCounts)">Alle Warengruppen</x-foodalchemist::filter-row>
                     @foreach($warengruppen as $wg)
                         <div wire:key="wg-{{ $wg->code }}">
                             <x-foodalchemist::filter-row wire:click="waehleWg('{{ $wg->code }}')"
@@ -54,141 +60,165 @@
         </x-ui-page-sidebar>
     </x-slot>
 
-    {{-- Zone rechts: DetailPanel (M3-03) --}}
+    {{-- Detail-Spalte immer vorhanden: nach dem Anlegen im Dialog wählt `gp-selected` das neue Grundprodukt
+         direkt im Panel aus. Ohne gewähltes Grundprodukt zeigt das Panel einen Leerzustand. --}}
     <x-slot name="activity">
-        {{-- storeKey 'activityOpen' = der einzige rechte Store-Scope der UI-Sidebar (eigene Keys kollidieren mit links) --}}
         <x-foodalchemist::detail-sidebar title="Detail" width="w-96" :maxWidth="760" scope="activity_gps" side="right">
             <livewire:foodalchemist.gps.detail-panel :gp-id="$gpId" />
         </x-foodalchemist::detail-sidebar>
     </x-slot>
 
-    {{-- M3-09: GP-Modal (P-2: Modals immer innerhalb von x-ui-page) --}}
+    {{-- Editoren und Dialoge (innerhalb x-ui-page, P-2) --}}
     <livewire:foodalchemist.gps.gp-modal />
-    {{-- D-5: Platzhalter verwalten (neutrale Abstrakta für Grundrezept-Templates) --}}
+    {{-- D-5: neutrale Platzhalter für Grundrezept-Vorlagen --}}
     <livewire:foodalchemist.gps.platzhalter-modal />
-    {{-- R9/M9-05: Verwendungs-Klicks aus dem Panel öffnen die Rezept-Editoren als Modal --}}
+    {{-- R9/M9-05: Verwendungs-Klicks aus dem Panel öffnen die Rezept-Editoren --}}
     <livewire:foodalchemist.recipes.recipe-modal />
     <livewire:foodalchemist.verkauf.vk-modal />
-    {{-- LA-Sprung: Klick auf einen Lieferantenartikel im Panel öffnet dessen Item-Modal (Allergene/Preise dort pflegen) --}}
+    {{-- Klick auf einen Lieferantenartikel im Panel öffnet dessen Artikel-Dialog --}}
     <livewire:foodalchemist.suppliers.item-modal />
 
-    <x-ui-page-container padding="px-6 pb-6" spacing="space-y-4">
-        <div class="flex items-center justify-between pt-1">
-            <div class="flex items-center gap-2">
-                <button type="button" wire:click="$dispatch('gp-modal.oeffnen')" class="{{ $btnPrimary }}" data-gp-anlegen>+ Neues Grundprodukt</button>
+    <x-ui-page-container padding="px-6 py-6" spacing="space-y-4">
+        <x-fa::page-header title="Grundprodukte" :subtitle="$untertitel">
+            <x-slot:actions>
                 @if($gpId !== null)
-                    <a href="{{ route('foodalchemist.gps.dokument', ['id' => $gpId, 'profil' => 'kalkulation']) }}" target="_blank"
-                       class="{{ $btnGhostXs }}" title="Druck-/PDF-Report zum ausgewählten Grundprodukt inkl. LA/Preis/Verwendung" data-gp-druck>
-                        @svg('heroicon-o-printer', 'w-3.5 h-3.5 inline-block align-middle') Druck
-                    </a>
+                    <x-fa::button variant="ghost" icon="heroicon-o-printer" :href="route('foodalchemist.gps.dokument', ['id' => $gpId, 'profil' => 'kalkulation'])" target="_blank"
+                        title="Blatt zum gewählten Grundprodukt mit Artikeln, Preisen und Verwendung" data-gp-druck>Blatt drucken</x-fa::button>
                 @endif
-                <button type="button" wire:click="$dispatch('platzhalter-modal.oeffnen')" class="{{ $btnGhostXs }}" data-platzhalter-oeffnen title="Neutrale Platzhalter für Grundrezept-Templates verwalten">@svg('heroicon-o-square-2-stack', 'w-3.5 h-3.5 inline-block align-middle') Platzhalter</button>
+                <x-fa::button icon="heroicon-o-square-2-stack" wire:click="$dispatch('platzhalter-modal.oeffnen')"
+                    title="Neutrale Platzhalter für Grundrezept-Vorlagen verwalten" data-platzhalter-oeffnen>Platzhalter verwalten</x-fa::button>
+                <x-fa::button variant="primary" icon="heroicon-m-plus" wire:click="$dispatch('gp-modal.oeffnen')" data-gp-anlegen>Neues Grundprodukt</x-fa::button>
+            </x-slot:actions>
+        </x-fa::page-header>
+
+        <div class="flex flex-wrap items-center justify-between gap-3">
+            <x-fa::choice name="status" :options="$statusOptionen" />
+            {{-- E14: Ansichts-Schalter — knappe Spalten je Aufgabe --}}
+            <div class="flex items-center gap-3">
+                <div role="group" aria-label="Ansicht" class="flex p-0.5 gap-0.5 rounded-[var(--fa-radius-control)] bg-[var(--fa-neutral-soft)]" data-ansicht-schalter>
+                    @foreach($ansichten as $ak => [$al, $unused])
+                        <button type="button" wire:click="$set('ansicht', '{{ $ak }}')" aria-pressed="{{ $ansicht === $ak ? 'true' : 'false' }}"
+                                class="h-7 px-3 rounded-[5px] text-[length:var(--fa-text-sm)] font-medium transition-colors {{ $ansicht === $ak ? 'bg-[var(--fa-surface)] text-[var(--fa-ink)] shadow-sm' : 'text-[var(--fa-ink-2)] hover:text-[var(--fa-ink)]' }}"
+                                data-ansicht="{{ $ak }}">{{ $al }}</button>
+                    @endforeach
+                </div>
+                <x-fa::select wire:model.live="perPage" size="sm" aria-label="Einträge je Seite" class="w-auto" data-per-page>
+                    @foreach([25, 50, 100, 250, 500] as $n)<option value="{{ $n }}">{{ $n }} je Seite</option>@endforeach
+                </x-fa::select>
             </div>
-            <x-foodalchemist::kpi-bar :kpis="$kpis" />
         </div>
 
-        <div class="relative overflow-hidden {{ $card }}" data-gp-tabelle>
-            <div class="{{ $cardAccent }}"></div>
-            <div class="px-5 pt-4 pb-2 flex items-baseline justify-between">
-                <h3 class="font-medium tracking-tight text-gray-900">
-                    Grundprodukte
-                    @if($commodity_group !== '')<span class="text-gray-500 font-normal">· {{ $commodity_group }}{{ $subKategorie !== '' ? ' · ' . $subKategorie : '' }}</span>@endif
-                </h3>
-                <span class="{{ $label }} flex items-center gap-2">
-                    {{-- E14: Ansichts-Schalter --}}
-                    <span class="flex items-center gap-1" data-ansicht-schalter>
-                        @foreach($ansichten as $ak => [$al, $unused])
-                            <button type="button" wire:click="$set('ansicht', '{{ $ak }}')"
-                                    class="{{ $pill }} {{ $ansicht === $ak ? $variantPill['primary'] : $variantPill['secondary'] }}"
-                                    data-ansicht="{{ $ak }}">{{ $al }}</button>
-                        @endforeach
-                    </span>
-                    <span class="text-gray-300">·</span>
-                    {{ number_format($gps->total(), 0, ',', '.') }} Treffer ·
-                    <select wire:model.live="perPage" class="bg-transparent border-0 text-[11px] uppercase tracking-wider text-gray-500 cursor-pointer focus:ring-0" data-per-page>
-                        @foreach([25, 50, 100, 250, 500] as $n)<option value="{{ $n }}">{{ $n }}/Seite</option>@endforeach
-                    </select>
-                </span>
+        <div class="fa-surface overflow-hidden" data-gp-tabelle>
+            @if($wgName !== null)
+                <div class="flex flex-wrap items-center gap-2 px-4 py-2.5 border-b border-[var(--fa-line)] text-[length:var(--fa-text-md)]">
+                    <span class="font-semibold text-[var(--fa-ink)]">{{ $wgName }}</span>
+                    @if($subKategorie !== '')
+                        @svg('heroicon-m-chevron-right', 'w-4 h-4 text-[var(--fa-ink-3)]')
+                        <span class="text-[var(--fa-ink-2)]">{{ $subKategorie }}</span>
+                    @endif
+                </div>
+            @endif
+            {{-- Eigener Scroll-Container: der Tabellenkopf klebt; breite Tabellen scrollen waagerecht statt abzuschneiden. --}}
+            <div class="max-h-[70vh] overflow-auto">
+                <table class="fa-table">
+                    <thead class="sticky top-0 z-20 bg-[var(--fa-surface)]">
+                        <tr>
+                            <th class="w-full">Name</th>
+                            {{-- E14: Kopf folgt dem KATALOG, nicht der Ansicht --}}
+                            @foreach($spaltenKatalog as $sk => [$skLabel, $skAlign])
+                                @if(in_array($sk, $spalten, true))
+                                    <th class="w-px {{ $skAlign === 'text-right' ? 'num' : '' }}">{{ $skLabel }}</th>
+                                @endif
+                            @endforeach
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse($gps as $gp)
+                            <x-foodalchemist::table-row :active="$gpId === $gp->id" wire:key="gp-{{ $gp->id }}" wire:click="waehleGp({{ $gp->id }})"
+                                x-data x-on:click="$store.ui?.mSet('activity_gps', 'open', true)"
+                                data-gp-zeile="{{ $gp->id }}">
+                                {{-- R6: Namens-Klick öffnet direkt den Editor (Zeilen-Klick bleibt Detail-Auswahl) --}}
+                                <td class="min-w-[12rem]">
+                                    <span class="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                        <button type="button" wire:click.stop="bearbeite({{ $gp->id }})" title="{{ $gp->name }} bearbeiten"
+                                                class="text-left font-medium text-[var(--fa-ink)] hover:text-[var(--fa-accent)] hover:underline"
+                                                data-gp-name>{{ $gp->name }}</button>
+                                        @if($gp->is_derivat)<x-fa::badge tone="info">Derivat</x-fa::badge>@endif
+                                        @if($gp->is_platzhalter)<x-fa::badge>Platzhalter</x-fa::badge>@endif
+                                    </span>
+                                </td>
+                                @if(in_array('warengruppe', $spalten, true))<td class="whitespace-nowrap text-[var(--fa-ink-2)]">{{ $gp->commodity_group?->name ?? $gp->commodity_group_code ?? '–' }}</td>@endif
+                                @if(in_array('leadpreis', $spalten, true))<td class="num" data-lead-preis>
+                                    @if($gp->lead_vergleichspreis)
+                                        <x-fa::money :value="$gp->lead_vergleichspreis['value']" :per="\Illuminate\Support\Str::after($gp->lead_vergleichspreis['unit'], '€/')" />
+                                    @elseif($gp->lead_preis !== null)
+                                        <span class="inline-flex items-center gap-1.5" title="Gebindepreis: ohne Menge kein Preis je Kilo oder Liter">
+                                            <x-fa::money :value="$gp->lead_preis" class="text-[var(--fa-ink-2)]" />
+                                            <span class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">Gebinde</span>
+                                        </span>
+                                    @elseif(! $gp->requires_la)
+                                        <span class="text-[var(--fa-ink-3)]" title="Braucht keinen Lieferantenartikel">–</span>
+                                    @else
+                                        <x-fa::money :value="null" />
+                                    @endif
+                                </td>@endif
+                                @if(in_array('las', $spalten, true))<td class="num">
+                                    @if($gp->n_las_total > 0)<span class="text-[var(--fa-ink-2)]">{{ $gp->n_las_total }}</span>
+                                    @elseif(! $gp->requires_la)<span class="text-[var(--fa-ink-3)]" title="Braucht keinen Lieferantenartikel">entfällt</span>
+                                    @else<x-fa::badge tone="warn" title="Kein Lieferantenartikel verknüpft: Preis und Allergene fehlen">keiner</x-fa::badge>@endif
+                                </td>@endif
+                                @if(in_array('rezepte', $spalten, true))<td class="num text-[var(--fa-ink-2)]">{{ $gp->rezepte_count ?? '–' }}</td>@endif
+                                {{-- Drei Zustände: enthält · frei · keine Daten. Effektivwerte (manuell > Mutter > Artikel), nur Anzeige. --}}
+                                @if(in_array('allergene', $spalten, true))<td class="whitespace-nowrap" data-allergen-status="{{ $gp->allergen_status ?? 'keine_daten' }}">
+                                    @php
+                                        $kiSuffix = $gp->allergen_ki ? ', von der KI geschätzt' . ($gp->allergen_ki_conf !== null ? ' (' . round($gp->allergen_ki_conf * 100) . ' %)' : '') . ', nicht durch Lieferantenartikel belegt' : '';
+                                    @endphp
+                                    <span class="inline-flex items-center gap-1.5">
+                                        @if(($gp->allergen_status ?? 'keine_daten') === 'vorhanden')
+                                            <x-fa::badge tone="crit" title="Enthält: {{ collect($gp->allergen_badges)->map($allergenKurz)->implode(', ') ?: 'Spuren' }}{{ $kiSuffix }}">enthält</x-fa::badge>
+                                        @elseif($gp->allergen_status === 'frei')
+                                            <x-fa::signal tone="ok" icon="heroicon-m-check" title="Keines der 14 Hauptallergene deklariert{{ $kiSuffix }}">frei</x-fa::signal>
+                                        @else
+                                            <x-fa::signal tone="warn" title="Die Lieferantenartikel haben keine Allergenangaben. Nicht als frei werten.">keine Daten</x-fa::signal>
+                                        @endif
+                                        @if($gp->allergen_ki && ($gp->allergen_status ?? 'keine_daten') !== 'keine_daten')
+                                            <x-fa::badge tone="accent" icon="heroicon-m-sparkles" data-allergen-ki>KI</x-fa::badge>
+                                        @endif
+                                    </span>
+                                </td>@endif
+                                @if(in_array('status', $spalten, true))
+                                {{-- Status als Chip; Kuratoren ändern ihn über ein kleines Menü --}}
+                                <td class="whitespace-nowrap" wire:click.stop @click.stop>
+                                    @if(\Platform\FoodAlchemist\Support\Curate::canCurate(auth()->user(), $gp) && $gp->status !== \Platform\FoodAlchemist\Enums\GpStatus::Merged)
+                                        <div class="relative inline-block" x-data="faMenu()" x-on:keydown.escape="offen = false" x-on:click.outside="offen = false" wire:key="st-{{ $gp->id }}-{{ $gp->status->value }}">
+                                            <button type="button" x-on:click="toggle($event)" class="inline-flex items-center gap-0.5" aria-haspopup="menu" x-bind:aria-expanded="offen" aria-label="Status von {{ $gp->name }} ändern" data-status-select>
+                                                <x-fa::status :value="$gp->status" />@svg('heroicon-m-chevron-down', 'w-3.5 h-3.5 text-[var(--fa-ink-3)]')
+                                            </button>
+                                            <div x-bind:class="{ hidden: ! offen }" x-bind:style="pos" role="menu" class="hidden w-40 fa-surface shadow-lg py-1">
+                                                @foreach($statusWahl as $fall)
+                                                    <button type="button" role="menuitem" x-on:click="offen = false" wire:click="statusSetzen({{ $gp->id }}, '{{ $fall->value }}')"
+                                                            class="flex w-full items-center justify-between px-3 py-1.5 text-left text-[length:var(--fa-text-md)] hover:bg-[var(--fa-hover)] {{ $gp->status === $fall ? 'font-semibold text-[var(--fa-accent)]' : 'text-[var(--fa-ink)]' }}">
+                                                        {{ $fall->label() }}@if($gp->status === $fall)@svg('heroicon-m-check', 'w-4 h-4')@endif
+                                                    </button>
+                                                @endforeach
+                                            </div>
+                                        </div>
+                                    @else
+                                        <x-fa::status :value="$gp->status" />
+                                    @endif
+                                </td>@endif
+                            </x-foodalchemist::table-row>
+                        @empty
+                            <tr>
+                                <td colspan="{{ count($spalten) + 1 }}">
+                                    <x-fa::empty icon="heroicon-o-cube" title="Keine Grundprodukte gefunden">Suche oder Filter zurücksetzen oder ein neues Grundprodukt anlegen.</x-fa::empty>
+                                </td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
             </div>
-            <div class="max-h-[70vh] overflow-auto">{{-- PROTOTYP Spec 28: eigener Scroll-Container,
-                 damit der sticky Tabellenkopf einen Weg zum Kleben hat. R13 (horizontal
-                 scrollen statt abschneiden) bleibt erhalten. --}}
-            <table class="{{ $table }}">
-                <thead><tr class="text-left">
-                    {{-- R13 (Jarvis-Dichte): Name flexibel, Rest schmal — Zahlen-Spalten rechtsbündig --}}
-                    {{-- E14: Kopf folgt dem KATALOG, nicht der Ansicht --}}
-                    <th class="{{ $th }} w-full sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Name</th>
-                    @foreach($spaltenKatalog as $sk => [$skLabel, $skAlign])
-                        @if(in_array($sk, $spalten, true))
-                            {{-- w-px = auf Inhaltsbreite schrumpfen. Ohne das teilen sich alle Spalten den Platz
-                                 gleichmässig und der Name — die wichtigste Angabe — wird gequetscht. --}}
-                            <th class="{{ $th }} {{ $skAlign }} w-px sticky top-0 z-20 bg-white/95 backdrop-blur-xl">{{ $skLabel }}</th>
-                        @endif
-                    @endforeach
-                </tr></thead>
-                <tbody>
-                    @forelse($gps as $gp)
-                        <x-foodalchemist::table-row :active="$gpId === $gp->id" wire:key="gp-{{ $gp->id }}" wire:click="waehleGp({{ $gp->id }})"
-                            x-data x-on:click="$store.ui?.mSet('activity_gps', 'open', true)"
-                            data-gp-zeile="{{ $gp->id }}">
-                            {{-- R6: Namens-Klick öffnet direkt den GP-Editor (Zeilen-Klick bleibt Panel) --}}
-                            {{-- R13: w-full + max-w-0 = Spalte nimmt allen Restplatz und truncated — Tabelle bläht NIE über den Container --}}
-                            <td class="{{ $td }} font-medium w-full max-w-0 min-w-[8rem] truncate" wire:click.stop="bearbeite({{ $gp->id }})" title="{{ $gp->name }} — Klick: bearbeiten">
-                                <span class="text-gray-900 hover:text-violet-600 hover:underline cursor-pointer" data-gp-name>{{ $gp->name }}</span>
-                                @if($gp->is_derivat)<span class="ml-1.5 {{ $pill }} {{ $variantPill['info'] }}">Derivat</span>@endif
-                            </td>
-                            @if(in_array('warengruppe', $spalten, true))<td class="{{ $td }} text-[11px] italic text-gray-600 whitespace-nowrap max-w-[5rem] truncate" title="{{ $gp->commodity_group?->name ?? '' }}">{{ $gp->commodity_group?->name ?? $gp->commodity_group_code ?? '—' }}</td>@endif
-                            {{-- Inline-Status-Pflege: Kuratoren editieren direkt (Beschleuniger), sonst Badge (D1) --}}
-                            @if(in_array('leadpreis', $spalten, true))<td class="{{ $td }} whitespace-nowrap text-right tabular-nums" data-lead-preis>
-                                @if($gp->lead_vergleichspreis)
-                                    <span class="text-gray-900">{{ number_format($gp->lead_vergleichspreis['value'], 2, ',', '.') }} {{ $gp->lead_vergleichspreis['unit'] }}</span>
-                                @elseif($gp->lead_preis !== null)
-                                    <span class="text-gray-600" title="Gebinde-Preis — kein Vergleichspreis (qty fehlt, GL-03 A-2)">{{ number_format((float) $gp->lead_preis, 2, ',', '.') }} €</span>
-                                @else
-                                    <span class="text-gray-500">—</span>
-                                @endif
-                            </td>@endif
-                            @if(in_array('las', $spalten, true))<td class="{{ $td }} text-right tabular-nums">
-                                @if($gp->n_las_total > 0)<span class="text-gray-600">{{ $gp->n_las_total }}</span>
-                                @elseif(!$gp->requires_la)<span class="text-gray-500" title="bewusst LA-frei">n/a</span>
-                                @else<span class="{{ $pill }} font-medium {{ $variantPill['warning'] }}" title="kein LA verknüpft — EK-/Allergen-Lücke">0</span>@endif
-                            </td>@endif
-                            @if(in_array('rezepte', $spalten, true))<td class="{{ $td }} text-gray-600 text-right tabular-nums">{{ $gp->rezepte_count ?? '—' }}</td>@endif
-                            {{-- 3-Status-Symbol (fixe Zeilenhöhe): vorhanden · frei · keine Daten. Effektivwerte (Override>Mutter>LA-MAX), read-only (Quelle = LA). --}}
-                            @if(in_array('allergene', $spalten, true))<td class="{{ $td }} whitespace-nowrap" data-allergen-status="{{ $gp->allergen_status ?? 'keine_daten' }}">
-                                @php($kiSuffix = $gp->allergen_ki ? ' — KI-geschätzt' . ($gp->allergen_ki_conf !== null ? ' (' . round($gp->allergen_ki_conf * 100) . ' %)' : '') . ', nicht durch Lieferantenartikel belegt' : '')
-                                @if(($gp->allergen_status ?? 'keine_daten') === 'vorhanden')
-                                    <span class="inline-flex items-center gap-1 text-rose-600 text-[11px] font-medium"
-                                          title="Allergene enthalten: {{ collect($gp->allergen_badges)->map(fn ($f) => explode(' ', \Platform\FoodAlchemist\Models\FoodAlchemistItemAllergen::ALLERGENE[$f] ?? $f)[0])->implode(', ') ?: 'inkl. Spuren' }}{{ $kiSuffix }}">@svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5 inline-block align-middle') enthält @if($gp->allergen_ki)<span class="text-violet-500 font-normal" data-allergen-ki>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5 inline-block align-middle') KI</span>@endif</span>
-                                @elseif($gp->allergen_status === 'frei')
-                                    <span class="inline-flex items-center gap-1 text-emerald-600 text-[11px]" title="Keine der 14 EU-Allergene deklariert (allergenfrei){{ $kiSuffix }}">✓ frei @if($gp->allergen_ki)<span class="text-violet-500" data-allergen-ki>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5 inline-block align-middle') KI</span>@endif</span>
-                                @else
-                                    <span class="inline-flex items-center gap-1 text-gray-500 text-[11px]" title="Keine Allergen-Angaben in den Lieferantenartikeln — nicht als frei werten">– keine Daten</span>
-                                @endif
-                            </td>@endif
-                            @if(in_array('status', $spalten, true))<td class="{{ $td }} whitespace-nowrap" wire:click.stop @click.stop>
-                                @if(\Platform\FoodAlchemist\Support\Curate::canCurate(auth()->user(), $gp) && $gp->status !== \Platform\FoodAlchemist\Enums\GpStatus::Merged)
-                                    <select wire:key="st-{{ $gp->id }}-{{ $gp->status->value }}"
-                                            wire:change="statusSetzen({{ $gp->id }}, $event.target.value)"
-                                            class="{{ $pill }} font-medium {{ $statusPill[$gp->status->value] ?? $statusPill['merged'] }} border-0 cursor-pointer focus:ring-1 focus:ring-violet-400 pr-5 !w-24"
-                                            title="Status ändern" data-status-select>
-                                        @foreach([\Platform\FoodAlchemist\Enums\GpStatus::Approved, \Platform\FoodAlchemist\Enums\GpStatus::Tentative, \Platform\FoodAlchemist\Enums\GpStatus::Rejected] as $fall)
-                                            <option value="{{ $fall->value }}" @selected($gp->status === $fall)>{{ $fall->label() }}</option>
-                                        @endforeach
-                                    </select>
-                                @else
-                                    <span class="{{ $pill }} font-medium {{ $statusPill[$gp->status->value] ?? $statusPill['merged'] }}">{{ $gp->status->label() }}</span>
-                                @endif
-                            </td>@endif
-                        </x-foodalchemist::table-row>
-                    @empty
-                        <tr><td colspan="{{ count($spalten) + 1 }}" class="px-5 py-10 text-center text-gray-500">Keine Grundprodukte gefunden.</td></tr>
-                    @endforelse
-                </tbody>
-            </table>
-            </div>
-            <div class="px-5 py-3 border-t border-black/5">{{ $gps->links() }}</div>
+            <div class="px-4 py-3 border-t border-[var(--fa-line)]">{{ $gps->links('foodalchemist::components.fa.pagination') }}</div>
         </div>
     </x-ui-page-container>
-    {{-- Spec 53/F Stufe 2: Sprachbefehl-Mount auf Seitenebene (Modal + optionales schwebendes Element). --}}
 </x-ui-page>

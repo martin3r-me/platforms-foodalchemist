@@ -7,8 +7,18 @@
         'kalkulation' => 'Kalkulation',
         'voll' => 'Volle Kaskade',
     ];
-    $brand = '#6d28d9';
-    $footerText = 'Erstellt mit Food Alchemist';
+    /* fa-pass Druck-Muster (2026-10-05): interner Report im Food.Alchemist-Design. Feste Werte statt
+       CSS-Variablen (DomPDF kann keine), abgeleitet aus den --fa-*-Tokens (foodalchemist-pass.css). */
+    $brand = '#0a3dd6';            // --fa-accent (Logo-Blau)
+    $c = [
+        'ink' => '#131a26', 'ink2' => '#4a5466', 'ink3' => '#657084',
+        'line' => '#dde2ea', 'soft' => '#f3f5f8', 'accentSoft' => '#e6edfe',
+        'rail' => '#0d1424', 'warn' => '#8a5200', 'warnSoft' => '#fbefd9', 'warnLine' => '#f0d49a',
+    ];
+    $footerText = 'Erstellt mit Food.Alchemist';
+    // Wortmarke als data-URI aus dem Modul selbst: gleich im Browser und im PDF, unabhängig vom public/-Ordner.
+    $logoPfad = dirname((new \ReflectionClass(\Platform\FoodAlchemist\FoodAlchemistServiceProvider::class))->getFileName(), 2) . '/resources/brand/fa-wordmark-900.png';
+    $logo = is_file($logoPfad) ? 'data:image/png;base64,' . base64_encode((string) file_get_contents($logoPfad)) : null;
     $money = fn ($v, $dec = 2) => $v !== null && $v !== '' ? number_format((float) $v, $dec, ',', '.') . ' €' : '—';
 @endphp
 <!doctype html>
@@ -24,66 +34,73 @@
            am Blattrand und lief in den nicht druckbaren Bereich. */
         @page { size: A4 portrait; margin: {{ $pdf ? '2.15cm 1.4cm 1.5cm 1.4cm' : '1.5cm 1.3cm' }}; }
         * { box-sizing: border-box; }
-        body { font-family: "DejaVu Sans", Arial, sans-serif; color: #1f2937; background: {{ $pdf ? '#fff' : '#f3f4f6' }}; margin: 0; padding: 0; font-size: 10.5px; line-height: 1.42; }
+        body { font-family: "DejaVu Sans", Arial, sans-serif; color: {{ $c['ink'] }}; background: {{ $pdf ? '#fff' : $c['soft'] }}; margin: 0; padding: 0; font-size: 10px; line-height: 1.3; }
         .doc { max-width: {{ $pdf ? 'none' : '960px' }}; margin: 0 auto; background: #fff; padding: {{ $pdf ? '0' : '2.15cm 1.4cm 1.5cm 1.4cm' }}; }
+        /* DomPDF zählt Padding zur Breite: 18,2 cm + 2 × 1,4 cm = 21 cm Blattbreite. */
         .band-top {
-            {{ $pdf ? 'position: fixed; top: -2.15cm; left: -1.4cm; width: 21cm;' : '' }}
-            height: 1.25cm; background: {{ $brand }}; color: #fff; padding: 0 1.4cm;
+            {{ $pdf ? 'position: fixed; top: -2.15cm; left: -1.4cm; width: 18.2cm;' : '' }}
+            height: 1.25cm; background: #fff; color: {{ $c['ink3'] }}; padding: 0 1.4cm; border-bottom: 2px solid {{ $brand }};{{ $pdf ? '' : ' max-width: 960px; margin: 0 auto;' }}
         }
-        .band-top .bt-label { {{ $pdf ? 'display: block; padding-top: 0.44cm;' : 'display: block; line-height: 1.25cm;' }} font-size: 9.5px; letter-spacing: .08em; text-transform: uppercase; opacity: .94; }
+        .band-top .bt-label { {{ $pdf ? 'display: block; padding-top: 0.44cm;' : 'display: block; line-height: 1.25cm;' }} font-size: 9.5px; letter-spacing: .02em; }
+        .band-top img { height: {{ $pdf ? '0.78cm' : '0.8cm' }}; vertical-align: middle; }
+        .band-top .bt-logo { {{ $pdf ? 'position: absolute; top: 0.22cm; left: 1.4cm;' : 'float: left; padding-top: 0.22cm;' }} }
+        .band-top .bt-label { text-align: right; }
         .band-bottom {
-            {{ $pdf ? 'position: fixed; bottom: -1.5cm; left: -1.4cm; width: 21cm;' : '' }}
-            height: 0.95cm; border-top: 2px solid {{ $brand }}; color: #9ca3af; font-size: 8.5px; padding: 0 1.4cm;
+            {{ $pdf ? 'position: fixed; bottom: -1.5cm; left: -1.4cm; width: 18.2cm;' : '' }}
+            height: 0.95cm; border-top: 1px solid {{ $c['line'] }}; color: {{ $c['ink3'] }};{{ $pdf ? '' : ' max-width: 960px; margin: 0 auto; background: #fff;' }} font-size: 8.5px; padding: 0 1.4cm;
         }
         .band-bottom .bb-foot { display: block; line-height: 0.95cm; }
-        .actions { background: #111827; color: #fff; padding: 12px 16px; margin: {{ $pdf ? '0' : '-2.15cm -1.4cm 20px' }}; }
-        .actions a { display: inline-block; color: #fff; text-decoration: none; border: 1px solid rgba(255,255,255,.25); border-radius: 999px; padding: 5px 10px; margin: 2px; font-size: 11px; }
+        .actions { background: {{ $c['rail'] }}; color: #fff; padding: 12px 16px; margin: {{ $pdf ? '0' : '-2.15cm -1.4cm 20px' }}; }
+        .actions a { display: inline-block; color: #fff; text-decoration: none; border: 1px solid rgba(182,192,210,.28); border-radius: 999px; padding: 5px 10px; margin: 2px; font-size: 11px; }
         .actions a.active { background: {{ $brand }}; border-color: {{ $brand }}; }
-        .actions .secondary a { color: #e5e7eb; }
+        .actions .secondary a { color: #b6c0d2; }
+        .actions strong { color: #b6c0d2; font-weight: bold; margin-right: 4px; }
         .simulation-control { margin-bottom: 9px; padding-bottom: 9px; border-bottom: 1px solid rgba(255,255,255,.16); }
         .simulation-control form { display: inline-block; margin-left: 6px; }
-        .simulation-control input { width: 90px; border: 1px solid rgba(255,255,255,.3); border-radius: 4px; background: #1f2937; color: #fff; padding: 5px 7px; font: inherit; }
-        .simulation-control button { border: 0; border-radius: 4px; background: {{ $brand }}; color: #fff; padding: 6px 10px; font: inherit; cursor: pointer; }
-        header { margin-bottom: 10px; }
-        .kicker { font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase; color: #6b7280; }
-        h1 { font-size: 23px; margin: 2px 0 3px; letter-spacing: -.02em; color: #111827; }
-        .rule { height: 3px; width: 3.6cm; background: {{ $brand }}; margin: 8px 0 9px; }
-        h2 { font-size: 15px; margin: 16px 0 6px; border-top: 2px solid #111827; padding-top: 7px; page-break-after: avoid; }
-        h3 { font-size: 13px; margin: 13px 0 6px; padding-top: 0; page-break-after: avoid; }
-        h4 { font-size: 10px; margin: 11px 0 4px; color: #374151; text-transform: uppercase; letter-spacing: .06em; page-break-after: avoid; }
-        h5 { font-size: 10.5px; margin: 10px 0 5px; color: #4b5563; }
-        .muted { color: #6b7280; font-weight: normal; }
-        .warn { color: #b45309; background: #fffbeb; border: 1px solid #fde68a; padding: 5px 7px; }
-        .intro { margin: 9px 0 13px; color: #374151; white-space: pre-line; }
+        .simulation-control input { width: 90px; border: 1px solid rgba(182,192,210,.3); border-radius: 6px; background: #151e33; color: #fff; padding: 5px 7px; font: inherit; }
+        .simulation-control button { border: 0; border-radius: 6px; background: {{ $brand }}; color: #fff; padding: 6px 10px; font: inherit; cursor: pointer; }
+        header { margin-bottom: 6px; }
+        .kicker { font-size: 9.5px; letter-spacing: .04em; color: {{ $c['ink3'] }}; }
+        h1 { font-size: 20px; margin: 2px 0 2px; letter-spacing: -.02em; color: {{ $c['ink'] }}; }
+        .rule { height: 3px; width: 3.6cm; background: {{ $brand }}; margin: 5px 0 6px; }
+        h2 { font-size: 14px; margin: 12px 0 4px; border-top: 1px solid {{ $c['line'] }}; padding-top: 6px; color: {{ $c['ink'] }}; page-break-after: avoid; }
+        h3 { font-size: 12.5px; margin: 10px 0 4px; padding-top: 0; page-break-after: avoid; }
+        h4 { font-size: 10.5px; margin: 9px 0 3px; color: {{ $brand }}; letter-spacing: .01em; page-break-after: avoid; }
+        h5 { font-size: 10px; margin: 7px 0 3px; color: {{ $c['ink2'] }}; }
+        .muted { color: {{ $c['ink3'] }}; font-weight: normal; }
+        .warn { color: {{ $c['warn'] }}; background: {{ $c['warnSoft'] }}; border: 1px solid {{ $c['warnLine'] }}; padding: 5px 7px; }
+        .intro { margin: 6px 0 8px; color: {{ $c['ink2'] }}; white-space: pre-line; }
 
         /* Meta-Kacheln: 3 Spalten statt 4 (mehr Platz je Wert, weniger Umbruch),
            knapper gesetzt. Leere Werte rendert der Rezept-Partial nicht mehr mit. */
-        .grid { width: 100%; margin: 5px 0 8px; font-size: 0; }
-        .grid > div { display: inline-block; width: 33.33%; border: 1px solid #e5e7eb; padding: 4px 7px; vertical-align: top; font-size: 10.5px; margin-right: -1px; margin-bottom: -1px; overflow-wrap: anywhere; }
-        .grid > div.wide { width: 66.66%; }
-        .grid > div.full { width: 100%; }
-        .grid span { display: block; color: #6b7280; font-size: 8.5px; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 1px; }
+        .grid { width: 100%; margin: 3px 0 6px; font-size: 0; }
+        .grid > div { display: inline-block; width: {{ $pdf ? '22.4%' : '24.6%' }}; border: 1px solid {{ $c['line'] }}; padding: 2px 6px; vertical-align: top; font-size: 10px; margin-right: -1px; margin-bottom: -1px; overflow-wrap: anywhere; }
+        .grid > div.wide { width: {{ $pdf ? '47.3%' : '49.8%' }}; }
+        header > .muted { display: block; margin-bottom: 6px; }
+        .grid > div.full { width: {{ $pdf ? '97.4%' : '100%' }}; }
+        .grid span { display: block; color: {{ $c['ink3'] }}; font-size: 8.5px; letter-spacing: .02em; margin-bottom: 0; }
 
-        table { width: 100%; border-collapse: collapse; margin: 5px 0 9px; table-layout: fixed; page-break-inside: auto; }
+        table { width: 100%; border-collapse: collapse; margin: 3px 0 6px; table-layout: fixed; page-break-inside: auto; }
         thead { display: table-header-group; }
         tr { page-break-inside: avoid; page-break-after: auto; }
-        th, td { border: 1px solid #e5e7eb; padding: 4px 6px; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
-        th { background: #f9fafb; color: #374151; font-size: 8.5px; text-transform: uppercase; letter-spacing: .05em; }
+        th, td { border: 1px solid {{ $c['line'] }}; padding: 2px 5px; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+        th { background: {{ $c['soft'] }}; color: {{ $c['ink2'] }}; font-size: 8.5px; font-weight: bold; letter-spacing: .02em; }
         td.num, th.num { text-align: right; }
-        .sum-line td { border-top: 2px solid #9ca3af; font-weight: 700; background: #f9fafb; }
-        .copy { white-space: pre-line; color: #374151; margin: 4px 0 6px; }
+        table.deklaration th { width: 24%; }
+        .sum-line td { border-top: 2px solid {{ $c['ink3'] }}; font-weight: 700; background: {{ $c['soft'] }}; }
+        .copy { white-space: pre-line; color: {{ $c['ink2'] }}; margin: 3px 0 4px; }
         .copy p, .intro p { margin: 0 0 3px; }
         p { margin: 0 0 5px; }
 
 @include('foodalchemist::dokumente.partials.report-node-css')
-        .slot { border: 1px solid #e5e7eb; padding: 7px 9px; margin: 7px 0; page-break-inside: avoid; }
-        .badge { display: inline-block; background: #f3f4f6; padding: 2px 6px; font-size: 9.5px; color: #374151; }
-        .sensorik-radar { display: table; width: 100%; margin: 7px 0 9px; page-break-inside: avoid; }
-        .sensorik-radar-chart { display: table-cell; width: 44%; vertical-align: top; text-align: center; border: 1px solid #e5e7eb; padding: 7px; }
-        .sensorik-radar-values { display: table-cell; width: 56%; vertical-align: top; padding-left: 9px; }
+        .slot { border: 1px solid {{ $c['line'] }}; padding: 5px 7px; margin: 5px 0; page-break-inside: avoid; }
+        .badge { display: inline-block; background: {{ $c['soft'] }}; padding: 2px 6px; font-size: 9.5px; color: {{ $c['ink2'] }}; }
+        .sensorik-radar { display: table; width: 100%; margin: 4px 0 6px; page-break-inside: avoid; }
+        .sensorik-radar-chart { display: table-cell; width: 32%; vertical-align: top; text-align: center; border: 1px solid {{ $c['line'] }}; padding: 3px; }
+        .sensorik-radar-values { display: table-cell; width: 68%; vertical-align: top; padding-left: 9px; }
         .sensorik-radar-values table { margin-top: 0; }
         .order-simulation { page-break-before: auto; }
-        .order-simulation .sum-row td { border-top: 2px solid #d1d5db; font-weight: 700; }
+        .order-simulation .sum-row td { border-top: 2px solid {{ $c['line'] }}; font-weight: 700; }
         .order-simulation .accent-row td { color: {{ $brand }}; }
         .order-simulation table { font-size: 9px; }
 
@@ -104,7 +121,8 @@
 </head>
 <body>
 <div class="band-top">
-    <span class="bt-label">{{ $titel ?? 'Report' }} · {{ $name ?? '' }}</span>
+    @if($logo)<span class="bt-logo"><img src="{{ $logo }}" alt="Food.Alchemist"></span>@endif
+    <span class="bt-label">{{ $titel ?? 'Report' }}</span>
 </div>
 <main class="doc">
     @unless($pdf)
@@ -148,7 +166,7 @@
                         </a>
                     @endif
                     @if($hochrechnung['hinweis'] ?? null)
-                        <span style="color:#b45309">{{ $hochrechnung['hinweis'] }}</span>
+                        <span style="color:#f2c26b">{{ $hochrechnung['hinweis'] }}</span>
                     @endif
                 </div>
             @endif
@@ -199,7 +217,7 @@
              Grenzen und Standzeit rechnet der Produktionsplaner) — das wird hier gesagt,
              statt eine linear hochgerechnete Zahl hinzustellen. --}}
         @if($hochrechnung['aktiv'] ?? false)
-            <div style="margin-top:6px;padding:6px 10px;border-left:3px solid #7c3aed;background:#f5f3ff;font-size:11px">
+            <div style="margin-top:6px;padding:6px 10px;border-left:3px solid {{ $brand }};background:{{ $c['accentSoft'] }};font-size:11px">
                 <strong>Bedarf für {{ number_format((float) $hochrechnung['ziel_kg'], 3, ',', '.') }} kg</strong>
                 @if(($hochrechnung['ziel_menge'] ?? null) && ($hochrechnung['darreichung'] ?? null))
                     — {{ $hochrechnung['ziel_menge'] }} × {{ $hochrechnung['darreichung']['label'] }}
@@ -212,31 +230,74 @@
         @endif
     </header>
 
+    @php
+        /* Inhaltsteil im Druck-Muster (2026-10-05): Küchensprache statt Rohwerte — keine IDs,
+           keine Status-Codes, keine Feldnamen. Kacheln wie im Rezept-Partial: leere Werte
+           werden nicht als „—"-Kachel gesetzt (Platz), alles mit Inhalt bleibt drin. */
+        $kachel = function (string $label, $wert, string $klasse = '') {
+            if ($wert === null || $wert === '' || $wert === '—') {
+                return '';
+            }
+
+            return '<div' . ($klasse ? ' class="' . $klasse . '"' : '') . '><span>'
+                . e($label) . '</span>' . e($wert) . '</div>';
+        };
+        $gitter = function (array $kacheln) {
+            $html = implode('', array_filter($kacheln));
+
+            return $html === '' ? '' : '<div class="grid meta keep">' . $html . '</div>';
+        };
+        // Rohzahl („2000.0000") → „2.000"; „3.8100" → „3,81".
+        $zahl = fn ($v) => $v === null || $v === '' || ! is_numeric($v) ? ($v ?: '—')
+            : rtrim(rtrim(number_format((float) $v, 3, ',', '.'), '0'), ',');
+        $statusLabel = ['draft' => 'Entwurf', 'active' => 'Aktiv', 'archiviert' => 'Archiviert'];
+        $herkunftLabel = ['eigen' => 'Eigen', 'gruppe' => 'Gruppe', 'kunde' => 'Kunde'];
+        // GP-Merkmale (FoodAlchemistGp::TAG_FIELDS) — Wortlaut wie in der Deklaration.
+        $merkmalLabel = [
+            'is_vegan' => 'Vegan', 'is_vegetarian' => 'Vegetarisch', 'is_halal' => 'Halal',
+            'contains_pork' => 'Enthält Schwein', 'contains_beef' => 'Enthält Rind',
+            'is_organic' => 'Bio', 'is_regional' => 'Regional', 'is_staple_food' => 'Grundnahrungsmittel',
+            'is_convenience' => 'Convenience', 'is_lactose_free' => 'Laktosefrei', 'is_gluten_free' => 'Glutenfrei',
+        ];
+    @endphp
     @if($report ?? null)
-        @php($kind = $report['kind'] ?? null)
+        @php $kind = $report['kind'] ?? null; @endphp
 
         @if($kind === 'gp')
-            @php($gp = $report['gp'])
+            @php
+                $gp = $report['gp'];
+                $gpStatus = ($gp['status'] ?? '') === '' ? null
+                    : (\Platform\FoodAlchemist\Enums\GpStatus::tryFrom((string) $gp['status'])?->label() ?? $gp['status']);
+                $lead = $gp['lead_la'] ?? null;
+                $merkmale = collect($gp['tags'] ?? []);
+                $merkmalText = fn (bool $wert) => $merkmale->filter(fn ($v) => (bool) $v === $wert)
+                    ->keys()->map(fn ($k) => $merkmalLabel[$k] ?? $k)->implode(', ');
+            @endphp
             <section>
                 <h2>Grundprodukt</h2>
-                <div class="grid meta">
-                    <div><span>ID</span>#{{ $gp['id'] }}</div>
-                    <div><span>Status</span>{{ $gp['status'] ?? '—' }}</div>
-                    <div><span>Warengruppe</span>{{ $gp['warengruppe'] ?? '—' }}</div>
-                    <div><span>Sub-Kategorie</span>{{ $gp['sub_category'] ?? '—' }}</div>
-                </div>
-                @if($gp['lead_la'])
-                    <h3>Lead-Lieferantenartikel</h3>
-                    <div class="grid meta">
-                        <div><span>Lieferant</span>{{ $gp['lead_la']['supplier'] ?? '—' }}</div>
-                        <div><span>Artikel-Nr.</span>{{ $gp['lead_la']['article_number'] ?? '—' }}</div>
-                        <div><span>Gebinde</span>{{ $gp['lead_la']['packaging_unit'] ?? '—' }}</div>
-                        <div><span>Preis</span>{{ $money($gp['lead_la']['price'] ?? null) }}</div>
-                        <div class="wide"><span>Bezeichnung</span>{{ $gp['lead_la']['designation'] ?? '—' }}</div>
-                    </div>
+                {!! $gitter([
+                    $kachel('Status', $gpStatus),
+                    $kachel('Warengruppe', $gp['warengruppe'] ?? null),
+                    $kachel('Unterkategorie', $gp['sub_category'] ?? null),
+                ]) !!}
+                @if($lead)
+                    <h4>Hauptartikel</h4>
+                    {!! $gitter([
+                        $kachel('Lieferant', $lead['supplier'] ?? null),
+                        $kachel('Artikel-Nr.', $lead['article_number'] ?? null),
+                        $kachel('Gebinde', trim(($lead['packaging_unit'] ?? '') . ' ' . (($lead['qty'] ?? null) !== null ? $zahl($lead['qty']) : '') . ' ' . ($lead['unit_code'] ?? ''))),
+                        $kachel('Preis', ($lead['price'] ?? null) !== null ? $money($lead['price']) : null),
+                        $kachel('Bezeichnung', $lead['designation'] ?? null, 'wide'),
+                    ]) !!}
+                @else
+                    <p class="muted">Kein Hauptartikel gesetzt.</p>
                 @endif
-                @if(count($gp['tags'] ?? []))
-                    <p class="muted">Tags: {{ collect($gp['tags'])->map(fn ($v, $k) => $k . '=' . ($v ? 'ja' : 'nein'))->implode(' · ') }}</p>
+                @if($merkmale->isNotEmpty())
+                    <p class="muted">
+                        @if($merkmalText(true) !== '')Merkmale: <strong>{{ $merkmalText(true) }}</strong>@endif
+                        @if($merkmalText(true) !== '' && $merkmalText(false) !== '') · @endif
+                        @if($merkmalText(false) !== '')nicht: {{ $merkmalText(false) }}@endif
+                    </p>
                 @endif
                 @if($opt['deklaration'] ?? false)
                     @include('foodalchemist::dokumente.partials.report-declaration', ['deklaration' => $gp['deklaration'] ?? []])
@@ -247,12 +308,12 @@
             </section>
 
             <section>
-                <h2>Lieferantenartikel / Mapping</h2>
+                <h2>Lieferantenartikel</h2>
                 <table>
-                    <thead><tr><th>Lieferant</th><th>ArtNr</th><th>Bezeichnung</th><th>Review</th></tr></thead>
+                    <thead><tr><th width="30%">Lieferant</th><th width="14%">Art.-Nr.</th><th>Bezeichnung</th><th width="13%">Zuordnung</th></tr></thead>
                     <tbody>
                         @forelse($gp['strukturen'] as $s)
-                            <tr><td>{{ $s['supplier'] ?? '—' }}</td><td>{{ $s['article_number'] ?? '—' }}</td><td>{{ $s['designation'] ?? '—' }}</td><td>{{ $s['needs_review'] ? 'ja' : 'nein' }}</td></tr>
+                            <tr><td>{{ $s['supplier'] ?? '—' }}</td><td>{{ $s['article_number'] ?? '—' }}</td><td>{{ $s['designation'] ?? '—' }}</td><td>{{ $s['needs_review'] ? 'zu prüfen' : 'geprüft' }}</td></tr>
                         @empty
                             <tr><td colspan="4" class="muted">Keine Lieferantenartikel verknüpft.</td></tr>
                         @endforelse
@@ -263,41 +324,45 @@
             <section>
                 <h2>Verwendung</h2>
                 <table>
-                    <thead><tr><th>Typ</th><th>Rezept/Gericht</th><th>Menge</th><th>Rohtext</th></tr></thead>
+                    <thead><tr><th width="13%">Typ</th><th>Rezept</th><th width="11%" class="num">Menge</th><th width="34%">Originaltext</th></tr></thead>
                     <tbody>
                         @forelse($gp['verwendung'] as $v)
-                            <tr><td>{{ $v['typ'] }}</td><td>{{ $v['recipe'] ?? '—' }}</td><td>{{ $v['quantity'] ?? '—' }}</td><td>{{ $v['raw_text'] ?? '—' }}</td></tr>
+                            <tr><td>{{ $v['typ'] }}</td><td>{{ $v['recipe'] ?? '—' }}</td><td class="num">{{ $zahl($v['quantity'] ?? null) }}</td><td>{{ $v['raw_text'] ?? '—' }}</td></tr>
                         @empty
-                            <tr><td colspan="4" class="muted">Keine Verwendung gefunden.</td></tr>
+                            <tr><td colspan="4" class="muted">In keinem Rezept verwendet.</td></tr>
                         @endforelse
                     </tbody>
                 </table>
             </section>
         @elseif($kind === 'supplier')
-            @php($supplier = $report['supplier'])
+            @php
+                $supplier = $report['supplier'];
+                $lieferStatus = ($supplier['status'] ?? null)
+                    ? (\Platform\FoodAlchemist\Enums\SupplierStatus::tryFrom((string) $supplier['status'])?->label() ?? $supplier['status'])
+                    : ($supplier['is_inactive'] ? 'inaktiv' : 'aktiv');
+            @endphp
             <section>
                 <h2>Lieferant</h2>
-                <div class="grid meta">
-                    <div><span>ID</span>#{{ $supplier['id'] }}</div>
-                    <div><span>Status</span>{{ $supplier['status'] ?? ($supplier['is_inactive'] ? 'inaktiv' : 'aktiv') }}</div>
-                    <div><span>Ort</span>{{ $supplier['city'] ?? '—' }}</div>
-                    <div><span>Bestell-E-Mail</span>{{ $supplier['email_order'] ?? '—' }}</div>
-                    <div class="wide"><span>Homepage</span>{{ $supplier['homepage'] ?? '—' }}</div>
-                </div>
+                {!! $gitter([
+                    $kachel('Status', $lieferStatus),
+                    $kachel('Ort', $supplier['city'] ?? null),
+                    $kachel('Bestell-E-Mail', $supplier['email_order'] ?? null, 'wide'),
+                    $kachel('Homepage', $supplier['homepage'] ?? null, 'wide'),
+                ]) !!}
             </section>
             <section>
                 <h2>Artikel</h2>
                 <table>
-                    <thead><tr><th>ArtNr</th><th>Bezeichnung</th><th>Gebinde</th><th>Preis</th><th>GP</th><th>Lead</th><th>Status</th></tr></thead>
+                    <thead><tr><th width="11%">Art.-Nr.</th><th width="25%">Bezeichnung</th><th width="11%">Gebinde</th><th width="10%" class="num">Preis</th><th>Grundprodukt</th><th width="13%">Hauptartikel</th><th width="10%">Status</th></tr></thead>
                     <tbody>
                         @forelse($supplier['items'] as $item)
                             <tr>
                                 <td>{{ $item['article_number'] ?? '—' }}</td>
                                 <td>{{ $item['designation'] ?? '—' }}</td>
-                                <td>{{ trim(($item['packaging_unit'] ?? '') . ' ' . ($item['qty'] ?? '') . ' ' . ($item['unit_code'] ?? '')) ?: '—' }}</td>
-                                <td>{{ $money($item['price'] ?? null) }}</td>
+                                <td>{{ trim(($item['packaging_unit'] ?? '') . ' ' . (($item['qty'] ?? null) !== null ? $zahl($item['qty']) : '') . ' ' . ($item['unit_code'] ?? '')) ?: '—' }}</td>
+                                <td class="num">{{ $money($item['price'] ?? null) }}</td>
                                 <td>{{ $item['gp'] ?? '—' }}</td>
-                                <td>{{ $item['is_lead'] ? '★' : '—' }}</td>
+                                <td>{{ $item['is_lead'] ? 'ja' : '—' }}</td>
                                 <td>{{ $item['is_discontinued'] ? 'ausgelistet' : 'aktiv' }}</td>
                             </tr>
                         @empty
@@ -307,21 +372,20 @@
                 </table>
             </section>
         @elseif($kind === 'geschirr')
-            @php($supplier = $report['supplier'])
+            @php $supplier = $report['supplier']; @endphp
             <section>
                 <h2>Geschirr-Lieferant</h2>
-                <div class="grid meta">
-                    <div><span>ID</span>#{{ $supplier['id'] }}</div>
-                    <div><span>Status</span>{{ $supplier['is_inactive'] ? 'inaktiv' : 'aktiv' }}</div>
-                    <div><span>Ort</span>{{ $supplier['city'] ?? '—' }}</div>
-                    <div><span>E-Mail</span>{{ $supplier['email_order'] ?? '—' }}</div>
-                    <div class="wide"><span>Homepage</span>{{ $supplier['homepage'] ?? '—' }}</div>
-                </div>
+                {!! $gitter([
+                    $kachel('Status', $supplier['is_inactive'] ? 'inaktiv' : 'aktiv'),
+                    $kachel('Ort', $supplier['city'] ?? null),
+                    $kachel('E-Mail', $supplier['email_order'] ?? null, 'wide'),
+                    $kachel('Homepage', $supplier['homepage'] ?? null, 'wide'),
+                ]) !!}
             </section>
             <section>
                 <h2>Geschirr-Artikel</h2>
                 <table>
-                    <thead><tr><th>ArtNr</th><th>Bezeichnung</th><th>Kategorie</th><th>Material</th><th>Maße</th><th>Leihpreis</th><th>Pfand</th><th>Status</th></tr></thead>
+                    <thead><tr><th width="10%">Art.-Nr.</th><th width="22%">Bezeichnung</th><th>Kategorie</th><th>Material</th><th>Maße</th><th width="12%" class="num">Leihpreis</th><th width="9%" class="num">Pfand</th><th width="8%">Status</th></tr></thead>
                     <tbody>
                         @forelse($supplier['items'] as $item)
                             <tr>
@@ -330,8 +394,8 @@
                                 <td>{{ $item['category'] ?? '—' }}</td>
                                 <td>{{ $item['material'] ?? '—' }}</td>
                                 <td>{{ $item['masse'] ?? '—' }}</td>
-                                <td>{{ $money($item['rental_price'] ?? null) }}{{ $item['unit'] ? ' / ' . $item['unit'] : '' }}</td>
-                                <td>{{ $money($item['pfand'] ?? null) }}</td>
+                                <td class="num">{{ $money($item['rental_price'] ?? null) }}{{ $item['unit'] ? ' / ' . $item['unit'] : '' }}</td>
+                                <td class="num">{{ $money($item['pfand'] ?? null) }}</td>
                                 <td>{{ $item['is_inactive'] ? 'inaktiv' : 'aktiv' }}</td>
                             </tr>
                         @empty
@@ -343,19 +407,19 @@
         @elseif($kind === 'favoriten')
             <section>
                 <h2>Favoriten-Grundprodukte</h2>
-                <p class="muted">{{ $report['n_favoriten'] ?? 0 }} gepinnt · {{ count($report['items'] ?? []) }} Zeilen</p>
+                <p class="muted">{{ $report['n_favoriten'] ?? 0 }} als Favorit markiert · {{ count($report['items'] ?? []) }} Grundprodukte gelistet</p>
                 <table>
-                    <thead><tr><th>★</th><th>Rang</th><th>GP</th><th>Nutzung</th><th>Lead-LA</th><th>Preis</th><th>Score</th><th>Convenience</th></tr></thead>
+                    <thead><tr><th width="8%">Favorit</th><th width="6%" class="num">Rang</th><th>Grundprodukt</th><th width="9%" class="num">Nutzung</th><th width="11%">Hauptartikel</th><th width="7%">Preis</th><th width="9%" class="num">Relevanz</th><th width="11%">Convenience</th></tr></thead>
                     <tbody>
                         @forelse($report['items'] as $item)
                             <tr>
-                                <td>{{ $item['is_favorite'] ? '★' : '—' }}</td>
-                                <td>{{ $item['favorite_rank'] ?? '—' }}</td>
-                                <td>{{ $item['name'] }} <span class="muted">#{{ $item['gp_id'] }}</span></td>
-                                <td>{{ $item['usage'] }}</td>
-                                <td>{{ $item['has_lead_la'] ? 'ja' : 'nein' }}</td>
-                                <td>{{ $item['has_price'] ? 'ja' : 'nein' }}</td>
-                                <td>{{ number_format((float) $item['score'], 2, ',', '.') }}</td>
+                                <td>{{ $item['is_favorite'] ? 'ja' : '—' }}</td>
+                                <td class="num">{{ $item['favorite_rank'] ?? '—' }}</td>
+                                <td>{{ $item['name'] }}</td>
+                                <td class="num">{{ $item['usage'] }}</td>
+                                <td>{{ $item['has_lead_la'] ? 'ja' : 'fehlt' }}</td>
+                                <td>{{ $item['has_price'] ? 'ja' : 'fehlt' }}</td>
+                                <td class="num">{{ number_format((float) $item['score'], 2, ',', '.') }}</td>
                                 <td>{{ $item['is_convenience'] ? 'ja' : 'nein' }}</td>
                             </tr>
                         @empty
@@ -372,16 +436,16 @@
              GETEILTEN Concept-Körper, damit die Filter LITERAL dieselben sind) + Struktur. --}}
         <section>
             <h2>Format-Übersicht</h2>
-            <div class="grid meta">
-                <div><span>Status</span>{{ $format['status'] ?? '—' }}</div>
-                <div><span>Herkunft</span>{{ $format['origin'] ?? '—' }}</div>
-                <div><span>Servierform</span>{{ $format['serving_form'] ?? '—' }}</div>
-                <div><span>Eventtyp</span>{{ $format['event_type'] ?? '—' }}</div>
-                @php($pr = $format['price_range'] ?? ['min' => null, 'max' => null])
-                <div><span>Preisspanne p. P.</span>{{ ($pr['min'] ?? null) === null ? '—' : ($pr['min'] === $pr['max'] ? $money($pr['min']) : $money($pr['min']) . ' – ' . $money($pr['max'])) }}</div>
-                <div class="wide"><span>Konsumentenbezeichnung</span>{{ $format['consumer_name'] ?? '—' }}</div>
-                <div class="wide"><span>Claim</span>{{ $format['claim'] ?? '—' }}</div>
-            </div>
+            @php $pr = $format['price_range'] ?? ['min' => null, 'max' => null]; @endphp
+            {!! $gitter([
+                $kachel('Status', ($format['status'] ?? null) ? ($statusLabel[$format['status']] ?? $format['status']) : null),
+                $kachel('Herkunft', ($format['origin'] ?? null) ? ($herkunftLabel[$format['origin']] ?? $format['origin']) : null),
+                $kachel('Servierform', $format['serving_form'] ?? null),
+                $kachel('Eventtyp', $format['event_type'] ?? null),
+                $kachel('Preisspanne p. P.', ($pr['min'] ?? null) === null ? null : ($pr['min'] === $pr['max'] ? $money($pr['min']) : $money($pr['min']) . ' – ' . $money($pr['max']))),
+                $kachel('Konsumentenbezeichnung', $format['consumer_name'] ?? null, 'wide'),
+                $kachel('Claim', $format['claim'] ?? null, 'wide'),
+            ]) !!}
             @if($format['story'] ?? null)<p class="intro">{{ $format['story'] }}</p>@endif
             @if(count($format['moments'] ?? []) || count($format['seasons'] ?? []))
                 <p class="muted">Einsatzmomente: {{ implode(', ', $format['moments'] ?? []) ?: '—' }} · Saison: {{ implode(', ', $format['seasons'] ?? []) ?: '—' }}</p>
@@ -397,7 +461,7 @@
         @forelse($format['positionen'] as $pos)
             @if($pos['kind'] === 'edition')
                 <h2>Edition · {{ $pos['concept']['name'] }}@if($pos['concept']['consumer_name'] ?? null)<span class="muted"> · {{ $pos['concept']['consumer_name'] }}</span>@endif</h2>
-                @include('foodalchemist::dokumente.partials.report-concept-body', ['concept' => $pos['concept'], 'optionen' => $opt])
+                @include('foodalchemist::dokumente.partials.report-concept-body', ['concept' => $pos['concept'], 'optionen' => $opt, 'eingebettet' => true])
             @elseif($pos['kind'] === 'header')
                 <h2>{{ $pos['text'] }}</h2>
             @elseif($pos['kind'] === 'text')
@@ -415,19 +479,19 @@
              Rezept-Körper (Filter LITERAL dieselben wie Concept/Format). Die Produktions-Kaskade lebt HIER. --}}
         <section>
             <h2>Foodbook-Übersicht</h2>
-            <div class="grid meta">
-                <div class="wide"><span>Name</span>{{ $foodbook['name'] ?? '—' }}</div>
-                <div><span>Kunde</span>{{ $foodbook['customer'] ?? '—' }}</div>
-                <div><span>Profil</span>{{ $opt['profil'] ?? '—' }}</div>
-            </div>
+            {!! $gitter([
+                $kachel('Name', $foodbook['name'] ?? null, 'wide'),
+                $kachel('Kunde', $foodbook['customer'] ?? null),
+                $kachel('Profil', $profile[$opt['profil'] ?? ''] ?? ($opt['profil'] ?? null)),
+            ]) !!}
         </section>
         @forelse($foodbook['kapitel'] as $kap)
-            @php($hTag = 'h' . min(4, 2 + (int) ($kap['depth'] ?? 0)))
+            @php $hTag = 'h' . min(4, 2 + (int) ($kap['depth'] ?? 0)); @endphp
             <{{ $hTag }} style="margin-left: {{ ($kap['depth'] ?? 0) * 12 }}px">{{ $kap['title'] }}</{{ $hTag }}>
             @forelse($kap['positionen'] as $pos)
                 @if($pos['kind'] === 'concept')
                     <h3 style="margin-left: {{ (($kap['depth'] ?? 0) + 1) * 12 }}px">{{ $pos['concept']['name'] ?? '—' }}@if($pos['concept']['consumer_name'] ?? null)<span class="muted"> · {{ $pos['concept']['consumer_name'] }}</span>@endif</h3>
-                    @include('foodalchemist::dokumente.partials.report-concept-body', ['concept' => $pos['concept'], 'optionen' => $opt])
+                    @include('foodalchemist::dokumente.partials.report-concept-body', ['concept' => $pos['concept'], 'optionen' => $opt, 'eingebettet' => true])
                 @elseif($pos['kind'] === 'recipe')
                     @include('foodalchemist::dokumente.partials.report-recipe-node', ['node' => $pos['recipe'], 'optionen' => $opt])
                 @elseif($pos['kind'] === 'header')
@@ -436,7 +500,7 @@
                     <p class="intro">{{ $pos['text'] }}</p>
                 @endif
             @empty
-                <p class="muted">— leer —</p>
+                <p class="muted">Keine Positionen in diesem Kapitel.</p>
             @endforelse
         @empty
             <p class="muted">Noch keine Kapitel — im Foodbook-Editor anlegen.</p>
@@ -446,19 +510,19 @@
              (Filter LITERAL dieselben wie Concept/Format/Foodbook). Die Produktions-Kaskade lebt HIER. --}}
         <section>
             <h2>Speisekarte-Übersicht</h2>
-            <div class="grid meta">
-                <div class="wide"><span>Name</span>{{ $speisekarte['name'] ?? '—' }}</div>
-                <div><span>Kunde</span>{{ $speisekarte['customer'] ?? '—' }}</div>
-                <div><span>Profil</span>{{ $opt['profil'] ?? '—' }}</div>
-            </div>
+            {!! $gitter([
+                $kachel('Name', $speisekarte['name'] ?? null, 'wide'),
+                $kachel('Kunde', $speisekarte['customer'] ?? null),
+                $kachel('Profil', $profile[$opt['profil'] ?? ''] ?? ($opt['profil'] ?? null)),
+            ]) !!}
         </section>
         @forelse($speisekarte['rubriken'] as $rub)
-            @php($hTag = 'h' . min(4, 2 + (int) ($rub['depth'] ?? 0)))
+            @php $hTag = 'h' . min(4, 2 + (int) ($rub['depth'] ?? 0)); @endphp
             <{{ $hTag }} style="margin-left: {{ ($rub['depth'] ?? 0) * 12 }}px">{{ $rub['title'] }}</{{ $hTag }}>
             @forelse($rub['positionen'] as $pos)
                 @if($pos['kind'] === 'concept')
                     <h3 style="margin-left: {{ (($rub['depth'] ?? 0) + 1) * 12 }}px">{{ $pos['concept']['name'] ?? '—' }}@if($pos['concept']['consumer_name'] ?? null)<span class="muted"> · {{ $pos['concept']['consumer_name'] }}</span>@endif</h3>
-                    @include('foodalchemist::dokumente.partials.report-concept-body', ['concept' => $pos['concept'], 'optionen' => $opt])
+                    @include('foodalchemist::dokumente.partials.report-concept-body', ['concept' => $pos['concept'], 'optionen' => $opt, 'eingebettet' => true])
                 @elseif($pos['kind'] === 'recipe')
                     @include('foodalchemist::dokumente.partials.report-recipe-node', ['node' => $pos['recipe'], 'optionen' => $opt])
                 @elseif($pos['kind'] === 'header')
@@ -467,7 +531,7 @@
                     <p class="intro">{{ $pos['text'] }}</p>
                 @endif
             @empty
-                <p class="muted">— leer —</p>
+                <p class="muted">Keine Positionen in dieser Rubrik.</p>
             @endforelse
         @empty
             <p class="muted">Noch keine Rubriken — im Speisekarte-Editor anlegen.</p>

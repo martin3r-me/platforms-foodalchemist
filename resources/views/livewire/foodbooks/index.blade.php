@@ -1,11 +1,37 @@
-{{-- M11-03 / Doc 15 §9.3: Foodbook-Editor — stellt Concepts zu einem Kunden-Angebot zusammen --}}
-@php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
-@php($aktiv = 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700')
-@php($hover = 'text-gray-600 hover:bg-black/[0.03]')
+{{-- M11-03 / Doc 15 §9.3: Foodbook — stellt Concepts zu einem Kunden-Portfolio zusammen.
+     fa-pass (2026-10-05): Übersicht hell, Editor im Werkbank-Modus (darkCanvas → data-fa-theme="dark"),
+     nur --fa-*-Tokens und x-fa-Bausteine. Grundanordnung wie zuvor: links Foodbook-Liste, Mitte die
+     Kundensicht, rechts Details; im Editor links Kapitelbaum, Mitte Reiter, im Speisen-Reiter rechts der Katalog.
+
+     Häufigste Aufgabe: ein Kapitel öffnen und seine Speisen pflegen (einfügen, sortieren, Gästetext),
+     danach Stand und Preise im Überblick prüfen. Deshalb: Kapitelbaum immer links erreichbar, der Überblick
+     ist der Start-Reiter, Speisen erscheinen, sobald ein Kapitel gewählt ist.
+
+     Laptop-Breite (Dominique 2026-10-05: „auf dem großen Bildschirm passt es, auf dem Laptop nicht"):
+     Seitenleisten etwas schmaler, Kapitelbaum unter 2xl schmaler, Zeilen brechen um statt zu quetschen,
+     selten genutzte Zeilen-Aktionen liegen in einem Menü je Zeile, der Katalog rutscht unter xl unter den Inhalt.
+
+     Alle wire:-Bindungen, wire:keys, Event-Namen (modal.open, fb-goto, fb-cockpit-tab) und data-Marker unverändert. --}}
+@php
+    $aktiv = 'bg-[var(--fa-accent-soft)] text-[var(--fa-accent)] font-medium';
+    $hover = 'text-[var(--fa-ink-2)] hover:bg-[var(--fa-hover)] hover:text-[var(--fa-ink)]';
+    $menuePunkt = 'flex w-full items-center gap-2 px-3 py-2 text-left text-[length:var(--fa-text-md)] text-[var(--fa-ink)] hover:bg-[var(--fa-hover)]';
+    $menuePunktRot = 'flex w-full items-center gap-2 px-3 py-2 text-left text-[length:var(--fa-text-md)] text-[var(--fa-crit)] hover:bg-[var(--fa-crit-soft)]';
+    $menueGruppe = 'px-3 pt-2 pb-1 text-[length:var(--fa-text-sm)] font-semibold text-[var(--fa-ink-3)]';
+    $menueSymbol = 'w-4 h-4 shrink-0 text-[var(--fa-ink-3)]';
+    $hinweis = 'text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]';
+    $kleinSymbol = 'inline-flex items-center justify-center w-7 h-7 shrink-0 rounded-[var(--fa-radius-control)] text-[var(--fa-ink-3)] hover:text-[var(--fa-ink)] hover:bg-[var(--fa-hover)] transition-colors duration-150';
+    $dateiFeld = 'block w-full text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)] cursor-pointer file:mr-2 file:h-7 file:px-2.5 file:rounded-[var(--fa-radius-control)] file:border file:border-[var(--fa-line-strong)] file:bg-[var(--fa-surface)] file:text-[var(--fa-ink)] file:text-[length:var(--fa-text-sm)] file:font-medium hover:file:bg-[var(--fa-hover)]';
+    $farbFeld = 'h-9 w-12 shrink-0 cursor-pointer rounded-[var(--fa-radius-control)] border border-[var(--fa-line-strong)] bg-transparent p-0.5';
+    $haken = 'w-4 h-4 shrink-0 accent-[var(--fa-accent)]';
+    $medien = fn ($fileId, $pfad) => app(\Platform\FoodAlchemist\Services\FoodAlchemistMediaService::class)->url($fileId, $pfad);
+    $euro = fn ($wert) => number_format((float) $wert, 2, ',', '.') . ' €';
+    $statusTon = fn ($ausgabe) => ['success' => 'ok', 'warning' => 'warn', 'danger' => 'crit', 'info' => 'info', 'primary' => 'accent'][$ausgabe->statusWert()->badgeVariant()] ?? 'neutral';
+@endphp
 
 <x-ui-page>
     <x-slot:navbar>
-        <x-ui-page-navbar title="Foodbook / Portfolio" icon="heroicon-o-book-open" />
+        <x-foodalchemist::shell.page-navbar title="Foodbook / Portfolio" icon="heroicon-o-book-open" />
     </x-slot:navbar>
 
     <x-slot name="actionbar">
@@ -15,180 +41,200 @@
         ]" />
     </x-slot>
 
+    {{-- Laptop: w-72 statt w-80 — beide Seitenleisten zusammen geben der Mitte 64 px zurück. --}}
     <x-slot name="sidebar">
-        <x-ui-page-sidebar title="Foodbooks" width="w-80">
-            <div class="p-3 space-y-2">
-                <input type="search" wire:model.live.debounce.300ms="search" placeholder="Foodbook / Kunde suchen …" class="{{ $input }}" />
+        <x-ui-page-sidebar title="Foodbooks" width="w-72">
+            <div class="p-3 flex flex-col gap-3">
+                <x-fa::input type="search" wire:model.live.debounce.300ms="search" placeholder="Foodbook oder Kunde suchen" aria-label="Foodbook oder Kunde suchen" class="w-full" />
                 {{-- Phasen-Filter entfernt (2026-08-31): die alte Foodbook-Statusmaschine ist tot (Planung
                      lebt in der Leitstelle), phase wird nicht mehr fortgeschrieben → Filter filterte auf statischen Daten. --}}
-                <button type="button" wire:click="neu" class="{{ $btnPrimary }} w-full justify-center">+ Neues Foodbook</button>
-                <div class="space-y-0.5 -mx-1">
+                <x-fa::button icon="heroicon-m-plus" wire:click="neu" class="w-full">Foodbook anlegen</x-fa::button>
+                <div class="-mx-1 flex flex-col gap-0.5">
                     @forelse($foodbooks as $f)
                         <button type="button" wire:key="fb-{{ $f->id }}" wire:click="waehle({{ $f->id }})"
-                                class="w-full text-left px-2 py-1 rounded-lg text-xs {{ $selectedId === $f->id ? $aktiv : $hover }}">
-                            <span class="truncate block">{{ $f->label }}</span>
-                            <span class="text-[10px] text-gray-500">{{ $f->crmCompany?->display_name ?? 'ohne Kunde' }} · {{ $f->chapters_count }} Kapitel</span>
+                                class="w-full text-left px-2.5 py-2 rounded-[var(--fa-radius-control)] transition-colors duration-150 {{ $selectedId === $f->id ? $aktiv : $hover }}"
+                                @if($selectedId === $f->id) aria-current="true" @endif>
+                            <span class="block text-[length:var(--fa-text-md)] leading-snug break-words">{{ $f->label }}</span>
+                            <span class="block text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">{{ $f->crmCompany?->display_name ?? 'Kein Kunde' }} · {{ $f->chapters_count }} Kapitel</span>
                         </button>
                     @empty
-                        <p class="px-2 py-3 text-[11px] text-gray-500">Noch keine Foodbooks.</p>
+                        <x-fa::empty icon="heroicon-o-book-open" title="{{ $search !== '' ? 'Kein Treffer' : 'Noch keine Foodbooks' }}" compact>
+                            {{ $search !== '' ? 'Anderen Suchbegriff versuchen.' : 'Mit „Foodbook anlegen“ das erste Portfolio beginnen.' }}
+                        </x-fa::empty>
                     @endforelse
                 </div>
 
-                {{-- Kapitel-Navigation lebt jetzt im Editor-Modal (linke Navi-Spalte, Spec 29 / S8).
-                     Die Seiten-Sidebar führt nur noch die Foodbook-Liste — Kapitel wechselt man beim
-                     Bearbeiten, nicht in der Übersicht (kein doppelter Baum mehr). --}}
+                {{-- Kapitel-Navigation lebt im Editor-Modal (linke Navi-Spalte, Spec 29 / S8).
+                     Die Seiten-Sidebar führt nur die Foodbook-Liste — kein doppelter Baum. --}}
             </div>
         </x-ui-page-sidebar>
     </x-slot>
 
-    {{-- Rechtes Detail-Panel (read-only Info) — konsistent zu Speisekarte/Speiseplan.
-         Die Leitstelle-Rail bleibt IM Editor-Modal (begleitet die Bearbeitung, Spec 29/S8). --}}
+    {{-- Rechtes Detail-Panel (nur lesen) — konsistent zu Speisekarte/Speiseplan. --}}
     <x-slot name="activity">
-        <x-foodalchemist::detail-sidebar title="Detail" width="w-80" scope="activity_foodbook" side="right" icon="heroicon-o-information-circle" :default-open="true">
+        <x-foodalchemist::detail-sidebar title="Detail" width="w-72" scope="activity_foodbook" side="right" icon="heroicon-o-information-circle" :default-open="true">
             @if($fb)
                 @include('foodalchemist::livewire.foodbooks.partials.detail', ['fb' => $fb])
             @else
-                <div class="p-4 text-[11px] text-gray-400">Wähle links ein Foodbook, um Details zu sehen.</div>
+                <div class="p-4 flex flex-col gap-5 min-h-full bg-[var(--fa-ground)]">
+                    <x-fa::empty icon="heroicon-o-book-open" title="Kein Foodbook gewählt">Links ein Foodbook anklicken, dann erscheinen hier Preis, Kapitel und offene Punkte.</x-fa::empty>
+                </div>
             @endif
         </x-foodalchemist::detail-sidebar>
     </x-slot>
 
-    <x-ui-page-container padding="px-6 pb-6" spacing="space-y-4">
+    <x-ui-page-container padding="px-4 sm:px-6 pb-6" spacing="space-y-4">
         @if($fb)
-            {{-- ═══ LISTEN-EBENE: Live-Vorschau + Ausgabe/Bearbeiten (Spec 29) ═══
-                 Der Editor ist ein Fullscreen-Modal (》Bearbeiten《). Die Seite zeigt dauerhaft das
-                 fertige Ergebnis (Kundensicht) + die Ausgabe-Tools. Ansehen ≠ Bearbeiten. --}}
-            <div class="flex flex-wrap items-center justify-between gap-3">
-                <div class="min-w-0">
-                    <h1 class="text-lg font-semibold tracking-tight text-gray-900 truncate">{{ $fb->label }}</h1>
-                    <p class="text-[11px] text-gray-500">{{ $fb->crmCompany?->display_name ?? 'ohne Kunde' }}</p>
-                </div>
-                <div class="flex flex-wrap gap-2">
-                    <button type="button" @click="$dispatch('modal.open', { name: 'foodbook-editor' })" class="{{ $btnPrimary }}" data-fb-bearbeiten>@svg('heroicon-o-pencil-square', 'w-4 h-4') Bearbeiten</button>
-                    <a href="{{ route('foodalchemist.foodbooks.dokument', $fb->id) }}" target="_blank" class="{{ $btnGhost }}" title="Dokument (Druck/PDF) — schöne Kundenausgabe, Allergene/Zusatzstoffe an/aus, Kunden-/interne Sicht">Dokument</a>
-                    {{-- #5a: technischer Report (Profile + Conceptor-Filter + Produktions-Kaskade + Kapitel-Filter). --}}
-                    <a href="{{ route('foodalchemist.foodbooks.report', $fb->id) }}" target="_blank" class="{{ $btnGhost }}" title="Technischer Report — Profile (Kurzblatt … Volle Kaskade) + Filter (Preise/Lieferanten/Deklaration/Nährwerte/Kaskade …) + Kapitel-Filter, wie bei Concept/Format">Report</a>
-                    <a href="{{ route('foodalchemist.foodbooks.praesentation', $fb->id) }}" target="_blank" class="{{ $btnGhost }}" title="Externe Kunden-Präsentation (Web-Seite, Preise pro Person, ohne Interna)">Präsentation</a>
-                    <button type="button" wire:click="duplizieren" wire:confirm="Dieses Foodbook mit allen Kapiteln und Blöcken als Kopie (Entwurf) anlegen?" class="{{ $btnGhost }}" data-fb-duplizieren>@svg('heroicon-o-document-duplicate', 'w-4 h-4') Duplizieren</button>
-                </div>
-            </div>
+            {{-- ═══ LISTEN-EBENE: Kundensicht + Ausgabe (Spec 29). Ansehen ≠ Bearbeiten. ═══ --}}
+            <x-fa::page-header :title="$fb->label" :subtitle="$fb->crmCompany?->display_name ?? 'Kein Kunde zugeordnet'" class="pt-2">
+                <x-slot:actions>
+                    <div class="relative" x-data="faMenu()" x-on:keydown.escape="offen = false" x-on:click.outside="offen = false">
+                        <x-fa::icon-button icon="heroicon-m-ellipsis-horizontal" label="Weitere Aktionen" x-on:click="toggle($event)" aria-haspopup="menu" x-bind:aria-expanded="offen" />
+                        <div x-bind:class="{ hidden: ! offen }" x-bind:style="pos" role="menu" class="hidden w-64 fa-surface shadow-lg py-1">
+                            {{-- #5a: technischer Report (Profile + Filter + Produktions-Kaskade + Kapitel-Filter). --}}
+                            <a href="{{ route('foodalchemist.foodbooks.report', $fb->id) }}" target="_blank" role="menuitem" x-on:click="offen = false" class="{{ $menuePunkt }}"
+                               title="Ausführlicher Bericht mit Preisen, Lieferanten, Deklaration und Nährwerten, nach Kapiteln filterbar">
+                                @svg('heroicon-o-document-text', $menueSymbol) Bericht öffnen
+                            </a>
+                            <a href="{{ route('foodalchemist.foodbooks.praesentation', $fb->id) }}" target="_blank" role="menuitem" x-on:click="offen = false" class="{{ $menuePunkt }}"
+                               title="Web-Seite für den Kunden mit Preisen pro Person, ohne interne Angaben">
+                                @svg('heroicon-o-presentation-chart-bar', $menueSymbol) Präsentation ansehen
+                            </a>
+                            <div class="my-1 border-t border-[var(--fa-line)]"></div>
+                            <button type="button" role="menuitem" wire:click="duplizieren" x-on:click="offen = false"
+                                    wire:confirm="Dieses Foodbook mit allen Kapiteln und Einträgen als Kopie (Entwurf) anlegen?" class="{{ $menuePunkt }}" data-fb-duplizieren>
+                                @svg('heroicon-o-document-duplicate', $menueSymbol) Foodbook duplizieren
+                            </button>
+                        </div>
+                    </div>
+                    <x-fa::button :href="route('foodalchemist.foodbooks.dokument', $fb->id)" target="_blank" icon="heroicon-m-printer"
+                        title="Kundendokument zum Drucken oder als PDF, Allergene und Zusatzstoffe zuschaltbar">Dokument öffnen</x-fa::button>
+                    <x-fa::button variant="primary" icon="heroicon-m-pencil-square" x-on:click="$dispatch('modal.open', { name: 'foodbook-editor' })" data-fb-bearbeiten>Foodbook bearbeiten</x-fa::button>
+                </x-slot:actions>
+            </x-fa::page-header>
 
-            {{-- Live-Ergebnis (read-only, Kundensicht) — dieselbe Quelle wie Dokument/Präsentation --}}
+            {{-- Live-Ergebnis (nur lesen, Kundensicht) — dieselbe Quelle wie Dokument/Präsentation --}}
             @include('foodalchemist::livewire.foodbooks.partials.menue-vorschau')
 
-            {{-- ═══════════════ EDITOR = Fullscreen-Modal (Spec 29) ═══════════════
-                 Gleiche Livewire-Komponente (Index), nur in ein Modal gehüllt — Bus/State/Nested
-                 bleiben. dark-canvas folgt erst, wenn die Panels auf modal-section stehen (S9),
-                 sonst grau-auf-grau. Geöffnet per 》Bearbeiten《 (modal.open). --}}
-            @php($fbKapitelN = $fb->chapters->count())
-            @php($fbSpeisenN = collect($menue['kapitel'] ?? [])->sum(fn ($k) => collect($k['bloecke'] ?? [])->sum(fn ($b) => collect($b['gerichte'] ?? [])->reject(fn ($g) => in_array($g['type'] ?? '', ['paket', 'header'], true))->count())))
-            {{-- Ø Wareneinsatz-% statt buch-weiter „VK/Person" (Dominique 2026-08-27): letzterer war die SUMME
-                 aller Kapitel-Preise (kein Pro-Person-Wert). Die WE-Quote ist ein Verhältnis (ΣEK/ΣVK) → robust,
-                 aussagekräftig als Margen-Gesundheit. Echte Preise stehen je Kapitel im Board. --}}
-            @php($fbWePct = ($menue['gesamt']['food_cost_percent'] ?? null))
-            {{-- „Fertig X/Y" (Dominique 2026-08-27): wie viele Kapitel der/die Planer:in per Board-Dropdown auf
-                 fortschritt=fertig gesetzt hat. Ersetzt die abstrakte 7-Schritt-Checkliste „Fortschritt 2/7". --}}
-            @php($fbFertig = collect($kapitelBoard)->where('fortschritt', 'fertig')->count())
-            <x-foodalchemist::modal name="foodbook-editor" fullscreen dark-canvas title="Foodbook bearbeiten" :title-name="$fb->label">
+            {{-- ═══════════════ EDITOR = Vollbild-Modal (Spec 29), Werkbank-Modus ═══════════════
+                 Gleiche Livewire-Komponente (Index), nur in ein Modal gehüllt — Bus/State/Nested bleiben. --}}
+            @php
+                $fbKapitelN = $fb->chapters->count();
+                $fbSpeisenN = collect($menue['kapitel'] ?? [])->sum(fn ($k) => collect($k['bloecke'] ?? [])->sum(fn ($b) => collect($b['gerichte'] ?? [])->reject(fn ($g) => in_array($g['type'] ?? '', ['paket', 'header'], true))->count()));
+                // Ø Wareneinsatz-% (ΣEK/ΣVK) statt Summe aller Kapitel-Preise (Dominique 2026-08-27): Verhältnis = robust.
+                $fbWePct = ($menue['gesamt']['food_cost_percent'] ?? null);
+                // „Fertig X/Y": Kapitel, die per Überblick-Auswahl auf fortschritt=fertig stehen.
+                $fbFertig = collect($kapitelBoard)->where('fortschritt', 'fertig')->count();
+            @endphp
+            <x-foodalchemist::modal name="foodbook-editor" fullscreen dark-canvas title="Foodbook" :title-name="$fb->label">
+                <x-slot:titleExtra>
+                    <x-fa::badge :tone="$statusTon($fb)">{{ $fb->statusWert()->label() }}</x-fa::badge>
+                </x-slot:titleExtra>
+
                 <x-slot:actions>
-                    <button type="button" wire:click="speichern" class="{{ $btnPrimary }}" data-fb-speichern>Speichern</button>
-                    {{-- Entry in die Leitstelle-Planung (Stage 2): öffnet die Leitstelle im Owner-Kontext dieses
-                         Foodbooks (fb_owner) — Gerüst planen + Kaskaden je Kapitel. Die Planung lebt dort, nicht mehr hier. --}}
-                    <button type="button" wire:click="vollKaskadeStarten" class="{{ $btnGhostXs }} text-violet-600" data-fb-in-leitstelle>In der Leitstelle planen</button>
-                    <button type="button" wire:click="loeschen({{ $fb->id }})" wire:confirm="Foodbook löschen?" class="{{ $btnGhostXs }} text-red-600" data-fb-loeschen>Löschen</button>
+                    <div class="ml-auto flex flex-wrap items-center gap-2">
+                        {{-- Entry in die Leitstelle-Planung (Stage 2): öffnet die Leitstelle im Owner-Kontext dieses
+                             Foodbooks (fb_owner). Die Planung lebt dort, nicht hier. --}}
+                        <x-fa::button icon="heroicon-m-arrow-top-right-on-square" wire:click="vollKaskadeStarten"
+                            title="Gerüst und Speisen je Kapitel in der Leitstelle planen lassen" data-fb-in-leitstelle>In der Leitstelle planen</x-fa::button>
+
+                        <div class="relative" x-data="faMenu()" x-on:keydown.escape="offen = false" x-on:click.outside="offen = false">
+                            <x-fa::icon-button icon="heroicon-m-ellipsis-horizontal" label="Weitere Aktionen" x-on:click="toggle($event)" aria-haspopup="menu" x-bind:aria-expanded="offen" />
+                            <div x-bind:class="{ hidden: ! offen }" x-bind:style="pos" role="menu" class="hidden w-60 fa-surface shadow-lg py-1">
+                                <a href="{{ route('foodalchemist.foodbooks.dokument', $fb->id) }}" target="_blank" role="menuitem" x-on:click="offen = false" class="{{ $menuePunkt }}">
+                                    @svg('heroicon-o-printer', $menueSymbol) Dokument öffnen
+                                </a>
+                                <a href="{{ route('foodalchemist.foodbooks.praesentation', $fb->id) }}" target="_blank" role="menuitem" x-on:click="offen = false" class="{{ $menuePunkt }}">
+                                    @svg('heroicon-o-presentation-chart-bar', $menueSymbol) Präsentation ansehen
+                                </a>
+                                <div class="my-1 border-t border-[var(--fa-line)]"></div>
+                                <button type="button" role="menuitem" wire:click="loeschen({{ $fb->id }})" x-on:click="offen = false" wire:confirm="Foodbook löschen?"
+                                        class="{{ $menuePunktRot }}" data-fb-loeschen>
+                                    @svg('heroicon-o-trash', 'w-4 h-4 shrink-0') Foodbook löschen
+                                </button>
+                            </div>
+                        </div>
+
+                        <x-fa::button variant="primary" icon="heroicon-m-check" wire:click="speichern" data-fb-speichern>Speichern</x-fa::button>
+                    </div>
                 </x-slot:actions>
 
-                {{-- Spec 29 / S4: KPI-Streifen fix im Modal-Kopf (scrollt nie weg) — geteilter Baustein.
-                     Leitwert = VK/Person (accent). Alle Werte aus render()-Daten, keine neuen Service-Calls. --}}
+                {{-- Spec 29 / S4: Kennzahlen fix im Kopf (scrollen nie weg). Eine Leiste statt Kacheln — spart auf dem
+                     Laptop Höhe. Hauptzahl = Ø Wareneinsatz. Alle Werte aus render()-Daten. --}}
                 <x-slot:kpiHeader>
-                    <x-foodalchemist::kpi-tiles marker="fb-kpis" :tiles="[
+                    <x-fa::kpis data-fb-kpis :items="[
                         ['kpi' => 'kapitel', 'label' => 'Kapitel', 'value' => (string) $fbKapitelN],
                         ['kpi' => 'speisen', 'label' => 'Speisen', 'value' => (string) $fbSpeisenN],
-                        ['kpi' => 'we', 'label' => 'Ø Wareneinsatz', 'tone' => 'accent',
-                         'value' => $fbWePct !== null ? number_format((float) $fbWePct, 1, ',', '.') . ' %' : '—'],
-                        ['kpi' => 'fertig', 'label' => 'Fertig',
-                         'tone' => ($fbKapitelN > 0 && $fbFertig >= $fbKapitelN) ? 'good' : 'neutral',
-                         'value' => $fbFertig . '/' . $fbKapitelN],
+                        ['kpi' => 'we', 'label' => 'Ø Wareneinsatz', 'primary' => true,
+                         'value' => $fbWePct !== null ? number_format((float) $fbWePct, 1, ',', '.') . ' %' : 'Noch offen',
+                         'title' => 'Einkauf durch Verkauf über alle bepreisten Positionen'],
+                        ['kpi' => 'fertig', 'label' => 'Kapitel fertig',
+                         'tone' => ($fbKapitelN > 0 && $fbFertig >= $fbKapitelN) ? 'ok' : null,
+                         'value' => $fbFertig . ' von ' . $fbKapitelN],
                     ]" />
                 </x-slot:kpiHeader>
 
-            {{-- ═══════════════ FOODBOOK-KOPF — Planungs-Cockpit (Tabs) ═══════════════ --}}
-            {{-- Das Cockpit rendert IMMER, auch mit gewähltem Kapitel. Bis 2026-07-28 stand hier
-                 `@if($selectedKapitelId === null)` — Cockpit XOR Kapitel. Das machte einen ganzen
-                 Feature-Strang unerreichbar, weil `$kapitel` (Index.php:1177) genau dann gesetzt ist,
-                 wenn `selectedKapitelId` gesetzt ist: innerhalb des Cockpits war `$kapitel` also
-                 IMMER null, und damit rendete nichts, was ein Kapitel braucht — der
-                 3-Modus-Schalter (E9.4), die Skizzen-Inhalte samt „aus Bestand"-Auswahl und
-                 Ideen-/Pakete-Liste (E6.3) und die komplette Pairing-Inspiration.
-                 Die Selbstanzeige des Fehlers stand im Kreativ-Tab: „Wähle links ein Kapitel" —
-                 eine Anweisung, deren Ausführung die Oberfläche selbst unmöglich machte.
-                 Die Absicht war immer Koexistenz (dieser Hinweistext, der `@else`-Zweig und die
-                 E9.4-Tests gehen alle davon aus). Kapitel-Editor kommt darunter. --}}
-            {{-- Tab-Zustand hält Alpine über Livewire-Morphs hinweg (stabiler wire:key), Muster wie Concepter-Editor.
-                 Kalkulations-Leiste bleibt die rechte activity-Sidebar. Phase 1: reiner Reuse, Modals raus. --}}
-            {{-- E5.2: Sprung-Event-Bus — die Checkliste dispatcht `fb-goto` {tab, anker}; der Cockpit-Root
-                 wechselt (falls der Tab existiert) und scrollt nach dem DOM-Flush zum Anker. Graceful:
-                 unbekannter Tab → bleibt stehen (kein Blank), unbekannter Anker → kein Scroll. --}}
-            {{-- E5.3: `x-effect` meldet den aktiven Tab per Window-Event an die Leitstelle-Rail
-                 (Auto-Default je Tab, sofern die Rail nicht manuell gepinnt ist). --}}
-            {{-- Spec 29 / S3: Tab-Zustand + sticky Leiste liegen jetzt im geteilten `editor-tabs`-Baustein
-                 (Alpine-Modus, wie Rezept/GP). Der Cockpit-Root hält KEIN eigenes `tab` mehr — sonst
-                 überschattet ein äußerer Scope den Baustein-Scope (stiller Desync). Der Sprung-/Melde-Bus
-                 (fb-goto ← Checkliste, fb-cockpit-tab → Rail) wandert als headless-Kind IN den Baustein-Scope,
-                 damit `tab` und `$root` (mit data-fb-tab/-anker) dieselbe Wurzel teilen. Vorschau-Tab ist
-                 entfallen — die Live-Vorschau liegt jetzt auf der Listen-Ebene. --}}
-            {{-- Spec 29 / S8 (Option A): 3-Spalten-Cockpit IM Modal — links Navigation (Foodbook-Kopf +
-                 Kapitelbaum), Mitte Editor-Tabs, rechts Leitstelle-Rail. So bleibt Kapitel-/Kopf-Wechsel
-                 erreichbar, obwohl das Vollbild-Modal die Seiten-Sidebar verdeckt.
-                 `-mx-6` hebt das px-6 des Modal-Bodys auf (Spalten randbündig); die Mitte bekommt px-6
-                 zurück, damit die sticky editor-tabs-Leiste (-mx-6) wieder auf Spaltenbreite spannt. --}}
+            {{-- Cockpit rendert IMMER, auch mit gewähltem Kapitel (Koexistenz-Bugfix 2026-07-28):
+                 `$kapitel` ist genau dann gesetzt, wenn `selectedKapitelId` gesetzt ist. --}}
+            {{-- E5.2: Sprung-Event-Bus — `fb-goto` {tab, anker}; E5.3: `fb-cockpit-tab` meldet den aktiven Tab.
+                 Tab-Zustand lebt im editor-tabs-Baustein (kein eigenes `tab` am Cockpit-Root, sonst Desync). --}}
+            {{-- Spec 29 / S8: Spalten-Cockpit IM Modal — links Navigation (Foodbook + Kapitelbaum), Mitte Reiter.
+                 `-mx-6` hebt das px-6 des Modal-Bodys auf; die Mitte bekommt px-6 zurück (sticky Reiterleiste -mx-6). --}}
             <div class="flex gap-4 -mx-6 items-start"
-                 {{-- Picker-Umbau: die rechte Spalte wechselt je Tab. Im Speisen-Tab wird der Katalog die
-                      äußerste rechte Spalte (Leitstelle-Rail ausgeblendet, Mitte füllt auf → Katalog ganz rechts);
-                      in den Kurier-/Ausgabe-Tabs zeigt sich die Leitstelle-Rail. `fb-cockpit-tab` (Z. 194,
-                      im editor-tabs-Scope) bubbelt hierher und trägt den aktiven Tab. --}}
                  x-data="{ ftab: 'board' }" @fb-cockpit-tab="ftab = $event.detail.tab">
-                {{-- LINKS: Navigation (Foodbook-Kopf + Kapitelbaum, gespiegelt aus der Seiten-Sidebar).
-                     #4: x-data hält den Kapitel-Drag-Zustand (Ziehgriff ⠿ = umsortieren). --}}
-                <div class="w-64 shrink-0 pl-6 space-y-1" data-fb-nav x-data="{ dragKapId: null }">
+                {{-- LINKS: Navigation. Unter 2xl schmaler (Laptop). #4: x-data hält den Kapitel-Drag-Zustand. --}}
+                <nav class="w-56 2xl:w-64 shrink-0 pl-6 flex flex-col gap-1" aria-label="Kapitel" data-fb-nav x-data="{ dragKapId: null }">
                     <button type="button" wire:click="kopfAnzeigen"
-                            class="w-full text-left text-xs px-2 py-1 rounded-lg {{ $selectedKapitelId === null ? $aktiv : $hover }}"
-                            data-fb-kopf-modal>@svg('heroicon-o-clipboard-document-list', 'w-3.5 h-3.5 inline-block align-middle') Foodbook-Kopf</button>
-                    <div class="flex items-center gap-1 pt-1">
-                        <input type="text" wire:model="neuesKapitelTitel" wire:keydown.enter="kapitelNeu" placeholder="Neues Kapitel …" class="{{ $input }} py-0.5" />
-                        <button type="button" wire:click="kapitelNeu" class="{{ $btnGhostXs }}" title="Top-Kapitel">+</button>
+                            class="w-full flex items-center gap-2 text-left text-[length:var(--fa-text-md)] px-2.5 py-2 rounded-[var(--fa-radius-control)] transition-colors duration-150 {{ $selectedKapitelId === null ? $aktiv : $hover }}"
+                            data-fb-kopf-modal>@svg('heroicon-o-book-open', 'w-4 h-4 shrink-0') Ganzes Foodbook</button>
+
+                    <p class="mt-3 px-1 text-[length:var(--fa-text-sm)] font-semibold text-[var(--fa-ink-2)]">Kapitel</p>
+                    <div class="flex items-center gap-1">
+                        <x-fa::input size="sm" wire:model="neuesKapitelTitel" wire:keydown.enter="kapitelNeu" placeholder="Neues Kapitel" aria-label="Titel für ein neues Kapitel" class="min-w-0 flex-1" />
+                        <x-fa::icon-button icon="heroicon-m-plus" label="Kapitel anlegen" size="sm" wire:click="kapitelNeu" />
                     </div>
 
-                    @foreach($kapitelTree as $kt)
-                        <div wire:key="ktm-{{ $kt['id'] }}"
-                             @dragover.prevent @drop.prevent="if (dragKapId && dragKapId !== {{ $kt['id'] }}) { $wire.kapitelVerschiebenAuf(dragKapId, {{ $kt['id'] }}); } dragKapId = null"
-                             :class="dragKapId === {{ $kt['id'] }} ? 'opacity-40' : (dragKapId ? 'ring-1 ring-violet-300/60 rounded-lg' : '')"
-                             class="group flex items-center gap-1" style="padding-left: {{ $kt['depth'] * 12 }}px">
-                            {{-- #4: Ziehgriff zum Umsortieren (setData ist Pflicht für Safari) --}}
-                            <span class="cursor-grab active:cursor-grabbing text-gray-400 hover:text-violet-500 select-none shrink-0 opacity-0 group-hover:opacity-100" draggable="true"
-                                  @dragstart="dragKapId = {{ $kt['id'] }}; $event.dataTransfer.setData('text/plain', String({{ $kt['id'] }})); $event.dataTransfer.effectAllowed = 'move'"
-                                  @dragend="dragKapId = null" title="ziehen zum Sortieren" data-kapitel-drag>⠿</span>
-                            <button type="button" wire:click="kapitelWaehle({{ $kt['id'] }})"
-                                    class="flex-1 min-w-0 text-left break-words leading-tight text-xs px-2 py-0.5 rounded-lg {{ $selectedKapitelId === $kt['id'] ? $aktiv : $hover }}">{{ $kt['title'] }}</button>
-                            <button type="button" wire:click="kapitelHoch({{ $kt['id'] }})" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-violet-400 text-[10px]" title="hoch">▲</button>
-                            <button type="button" wire:click="kapitelRunter({{ $kt['id'] }})" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-violet-400 text-[10px]" title="runter">▼</button>
-                            <button type="button" wire:click="kapitelNeu({{ $kt['id'] }})" class="shrink-0 text-violet-400 hover:text-violet-500 text-xs px-1 leading-none" title="Unterkapitel">＋</button>
-                            <button type="button" wire:click="kapitelLoeschen({{ $kt['id'] }})" wire:confirm="Kapitel löschen?" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-400 text-[11px]" title="löschen">✕</button>
-                        </div>
-                    @endforeach
-                </div>
+                    <div class="mt-1 flex flex-col gap-0.5">
+                        @forelse($kapitelTree as $kt)
+                            <div wire:key="ktm-{{ $kt['id'] }}"
+                                 @dragover.prevent @drop.prevent="if (dragKapId && dragKapId !== {{ $kt['id'] }}) { $wire.kapitelVerschiebenAuf(dragKapId, {{ $kt['id'] }}); } dragKapId = null"
+                                 :class="dragKapId === {{ $kt['id'] }} ? 'opacity-40' : (dragKapId ? 'ring-1 ring-[var(--fa-accent-line)] rounded-[var(--fa-radius-control)]' : '')"
+                                 class="group flex items-center gap-0.5" style="padding-left: {{ $kt['depth'] * 12 }}px">
+                                {{-- #4: Ziehgriff zum Umsortieren (setData ist Pflicht für Safari) --}}
+                                <span class="inline-flex shrink-0 cursor-grab active:cursor-grabbing select-none text-[var(--fa-ink-3)] hover:text-[var(--fa-ink)] opacity-0 group-hover:opacity-100 focus-within:opacity-100" draggable="true"
+                                      @dragstart="dragKapId = {{ $kt['id'] }}; $event.dataTransfer.setData('text/plain', String({{ $kt['id'] }})); $event.dataTransfer.effectAllowed = 'move'"
+                                      @dragend="dragKapId = null" title="Ziehen zum Sortieren" data-kapitel-drag>@svg('heroicon-m-bars-2', 'w-4 h-4')</span>
+                                <button type="button" wire:click="kapitelWaehle({{ $kt['id'] }})"
+                                        class="flex-1 min-w-0 text-left break-words leading-snug text-[length:var(--fa-text-md)] px-2 py-1.5 rounded-[var(--fa-radius-control)] transition-colors duration-150 {{ $selectedKapitelId === $kt['id'] ? $aktiv : $hover }}"
+                                        @if($selectedKapitelId === $kt['id']) aria-current="true" @endif>{{ $kt['title'] }}</button>
+                                {{-- Seltene Kapitel-Aktionen in einem Menü je Zeile — spart Breite auf dem Laptop. --}}
+                                <div class="relative shrink-0" x-data="faMenu()" x-on:keydown.escape="offen = false" x-on:click.outside="offen = false">
+                                    <button type="button" x-on:click="toggle($event)" aria-haspopup="menu" x-bind:aria-expanded="offen"
+                                            class="{{ $kleinSymbol }} opacity-0 group-hover:opacity-100 focus:opacity-100" aria-label="Aktionen für {{ $kt['title'] }}" title="Aktionen für das Kapitel">@svg('heroicon-m-ellipsis-horizontal', 'w-4 h-4')</button>
+                                    <div x-bind:class="{ hidden: ! offen }" x-bind:style="pos" role="menu" class="hidden w-56 fa-surface shadow-lg py-1">
+                                        <button type="button" role="menuitem" wire:click="kapitelNeu({{ $kt['id'] }})" x-on:click="offen = false" class="{{ $menuePunkt }}">@svg('heroicon-o-plus', $menueSymbol) Unterkapitel anlegen</button>
+                                        <button type="button" role="menuitem" wire:click="kapitelHoch({{ $kt['id'] }})" x-on:click="offen = false" class="{{ $menuePunkt }}">@svg('heroicon-o-chevron-up', $menueSymbol) Nach oben schieben</button>
+                                        <button type="button" role="menuitem" wire:click="kapitelRunter({{ $kt['id'] }})" x-on:click="offen = false" class="{{ $menuePunkt }}">@svg('heroicon-o-chevron-down', $menueSymbol) Nach unten schieben</button>
+                                        <div class="my-1 border-t border-[var(--fa-line)]"></div>
+                                        <button type="button" role="menuitem" wire:click="kapitelLoeschen({{ $kt['id'] }})" wire:confirm="Kapitel löschen?" x-on:click="offen = false" class="{{ $menuePunktRot }}">@svg('heroicon-o-trash', 'w-4 h-4 shrink-0') Kapitel löschen</button>
+                                    </div>
+                                </div>
+                            </div>
+                        @empty
+                            <p class="px-1 py-2 {{ $hinweis }}">Noch keine Kapitel. Titel eingeben und mit Enter anlegen.</p>
+                        @endforelse
+                    </div>
+                </nav>
 
-                {{-- MITTE: Editor-Tabs --}}
+                {{-- MITTE: Reiter --}}
                 <div class="flex-1 min-w-0 px-6">
             <div wire:key="fbcockpit-{{ $fb->id }}" class="space-y-4">
+                {{-- Spec 42: reine Ausgabe-Form — Planung/Kreativ/DNA/Trend leben in der Leitstelle.
+                     Überblick (2026-08-27): Status + Inhalt + Preis je Kapitel auf EINER Seite, Start-Reiter. --}}
                 <x-foodalchemist::editor-tabs marker="fb" wire-key="fb-tabs-{{ $fb->id }}"
-                    {{-- Spec 42: reine Ausgabe-Form — Planung/Kreativ/DNA/Trend sind in die Leitstelle
-                         gezogen. Es bleiben die Kuratier-/Ausgabe-Tabs. --}}
-                    {{-- Board (2026-08-27, Dominique): Übersicht/Fortschritt/Preise zu EINER Seite fusioniert
-                         (Status + Inhalt + Preis je Kapitel, zugeklappt, Coverage inline). Board = Default-Reiter. --}}
                     :tabs="[
-                        'board' => 'Board',
-                        'briefing' => 'Kontext',
+                        'board' => 'Überblick',
+                        'briefing' => 'Stammdaten',
                         'speisen' => $selectedKapitelId ? 'Speisen' : null,
                         'branding' => 'Branding & Präsentation',
                     ]">
@@ -198,640 +244,641 @@
                 <div x-effect="$dispatch('fb-cockpit-tab', { tab })"
                      @fb-goto.window="let d=$event.detail; if(d.tab && $root.querySelector(`[data-fb-tab='${d.tab}']`)) tab=d.tab; $nextTick(()=>{ if(d.anker){ let el=$root.querySelector(`[data-fb-anker='${d.anker}']`); if(el) el.scrollIntoView({behavior:'smooth',block:'start'}); } });"></div>
 
-                {{-- Phasen-Stepper (Kontext→…→Freigabe) entfernt (Dominique 2026-08-23): die Phase ist ein
-                     Planung-/Leitstelle-Konzept, nicht Sache des reinen Ausgabe-Editors. --}}
-
-                {{-- ═══ Tab: ÜBERSICHT (Speisen-Baum read-only — aus dem aufgelösten rechten Panel) ═══ --}}
-                {{-- ═══ Tab: BOARD — Übersicht + Fortschritt + Preise fusioniert (2026-08-27, Dominique) ═══
-                     Ein Kapitel-Baum, jedes Kapitel eine zugeklappte Zeile mit allen drei Linsen
-                     (WE-Ampel/Status · EK/VK/WE% · Pills), aufklappbar zu Positionen + Coverage inline.
-                     Deep-Links: „Planen" → Kapitel öffnen, „VK →" → VK-Editor. --}}
-                <div x-show="tab === 'board'" x-cloak class="space-y-3" data-fb-panel="board" data-fb-anker="board">
-                    @php($ampelDot = ['gruen' => 'bg-emerald-500', 'gelb' => 'bg-amber-400', 'rot' => 'bg-rose-500', 'unbekannt' => 'bg-gray-300'])
-                    @php($ampelText = ['gruen' => 'text-emerald-700', 'gelb' => 'text-amber-700', 'rot' => 'text-rose-700', 'unbekannt' => 'text-gray-400'])
-                    @php($befundAmpel = ['erfuellt' => 'text-emerald-600', 'teilerfuellt' => 'text-amber-600', 'verletzt' => 'text-rose-600', 'info' => 'text-sky-600'])
-                    @php($fortDot = ['offen' => 'bg-gray-300', 'in_arbeit' => 'bg-amber-400', 'fertig' => 'bg-emerald-500'])
-                    @php($fortLabel = ['offen' => 'Offen', 'in_arbeit' => 'In Arbeit', 'fertig' => 'Fertig'])
-
-                    {{-- Kennzahlen liegen im KPI-Streifen oben (Kapitel/Speisen/…) — hier keine zweite Summen-Leiste
-                         (Overlap + „Ø"-Fehllabel; die 318 € waren die Summe aller Kapitel, kein Pro-Person-Wert). --}}
-                    {{-- Kapitel-Liste = echter Baum. auf{} = expandierte Kapitel-IDs (Default leer → nur Oberkapitel
-                         sichtbar). Caret je Kapitel klappt seinen Ast (Kinder + eigene Positionen) auf/zu; ein Kapitel
-                         ist nur sichtbar, wenn ALLE Vorfahren aufgeklappt sind. Reines Alpine, kein Server-Roundtrip. --}}
-                    @php($byId = collect($kapitelBoard)->keyBy('kapitel_id'))
-                    @php($hatKinder = collect($kapitelBoard)->pluck('parent_id')->filter()->mapWithKeys(fn ($pid) => [(int) $pid => true])->all())
-                    @php($ahnen = function ($kid) use ($byId) { $ids = []; $cur = data_get($byId->get($kid), 'parent_id'); $g = 0; while ($cur !== null && $g++ < 20) { $ids[] = (int) $cur; $cur = data_get($byId->get($cur), 'parent_id'); } return $ids; })
-                    @php($alleIds = collect($kapitelBoard)->pluck('kapitel_id')->map(fn ($i) => (int) $i)->all())
-                    <div x-data="{ auf: {} }">
-                        <div class="flex items-center justify-end gap-4 pb-1.5 text-[11px]">
-                            <button type="button" @click="auf = Object.fromEntries(@js($alleIds).map(i => [i, true]))" class="text-gray-500 hover:text-violet-600 inline-flex items-center gap-1" title="Alle Äste aufklappen"><i class="ti ti-chevrons-down" style="font-size:13px"></i>Alle auf</button>
-                            <button type="button" @click="auf = {}" class="text-gray-500 hover:text-violet-600 inline-flex items-center gap-1" title="Auf Oberkapitel zuklappen"><i class="ti ti-chevrons-up" style="font-size:13px"></i>Alle zu</button>
+                {{-- ═══ Reiter: ÜBERBLICK — Kapitelbaum mit Stand, Preis und Wareneinsatz je Kapitel ═══
+                     Jedes Kapitel eine Zeile, aufklappbar zu Positionen + Abdeckung. „Kapitel öffnen" → Speisen. --}}
+                <div x-show="tab === 'board'" x-cloak class="pt-4 flex flex-col gap-3" data-fb-panel="board" data-fb-anker="board">
+                    @php
+                        $ampelDot = ['gruen' => 'bg-[var(--fa-ok)]', 'gelb' => 'bg-[var(--fa-warn)]', 'rot' => 'bg-[var(--fa-crit)]', 'unbekannt' => 'bg-[var(--fa-line-strong)]'];
+                        $ampelText = ['gruen' => 'text-[var(--fa-ok)]', 'gelb' => 'text-[var(--fa-warn)]', 'rot' => 'text-[var(--fa-crit)]', 'unbekannt' => 'text-[var(--fa-ink-3)]'];
+                        $befundAmpel = ['erfuellt' => 'ok', 'teilerfuellt' => 'warn', 'verletzt' => 'crit', 'info' => 'info'];
+                        $fortDot = ['offen' => 'bg-[var(--fa-line-strong)]', 'in_arbeit' => 'bg-[var(--fa-warn)]', 'fertig' => 'bg-[var(--fa-ok)]'];
+                        $fortLabel = ['offen' => 'Offen', 'in_arbeit' => 'In Arbeit', 'fertig' => 'Fertig'];
+                        $preisModus = ['auto' => 'Preis aus Inhalt', 'manuell' => 'Preis von Hand'];
+                        $pct = fn ($wert) => number_format((float) $wert, 1, ',', '.') . ' %';
+                        // Kapitel-Liste = echter Baum. auf{} = aufgeklappte Kapitel-IDs (Default leer → nur Oberkapitel).
+                        $byId = collect($kapitelBoard)->keyBy('kapitel_id');
+                        $hatKinder = collect($kapitelBoard)->pluck('parent_id')->filter()->mapWithKeys(fn ($pid) => [(int) $pid => true])->all();
+                        $ahnen = function ($kid) use ($byId) { $ids = []; $cur = data_get($byId->get($kid), 'parent_id'); $g = 0; while ($cur !== null && $g++ < 20) { $ids[] = (int) $cur; $cur = data_get($byId->get($cur), 'parent_id'); } return $ids; };
+                        $alleIds = collect($kapitelBoard)->pluck('kapitel_id')->map(fn ($i) => (int) $i)->all();
+                    @endphp
+                    <div class="flex flex-col gap-2" x-data="{ auf: {} }">
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <p class="{{ $hinweis }}">Zeile anklicken klappt Positionen und Abdeckung auf.</p>
+                            <div class="flex items-center gap-1">
+                                <x-fa::button variant="ghost" size="sm" icon="heroicon-m-chevron-double-down" x-on:click="auf = Object.fromEntries({{ json_encode($alleIds) }}.map(i => [i, true]))">Alle aufklappen</x-fa::button>
+                                <x-fa::button variant="ghost" size="sm" icon="heroicon-m-chevron-double-up" x-on:click="auf = {}">Alle zuklappen</x-fa::button>
+                            </div>
                         </div>
-                    <div class="{{ $card }} divide-y divide-black/5 overflow-hidden">
-                        @forelse($kapitelBoard as $kap)
-                            @php($we = $kap['wareneinsatz'])
-                            @php($agg = $kap['aggregat'])
-                            @php($ahnenIds = $ahnen($kap['kapitel_id']))
-                            <div wire:key="board-{{ $kap['kapitel_id'] }}" x-show="{{ empty($ahnenIds) ? 'true' : '[' . implode(',', $ahnenIds) . '].filter(a => auf[a]).length === ' . count($ahnenIds) }}" x-cloak class="even:bg-black/[0.015]">
-                                {{-- Kopfzeile: Klick = Ast auf/zu (Objekt-Reassignment → sichere Alpine-Reaktivität über alle Ebenen);
-                                     Aktions-Cluster rechts stoppt die Propagation --}}
-                                <div class="flex items-center gap-1.5 py-1 px-3 cursor-pointer hover:bg-violet-500/[0.04]" @click="auf = {...auf, {{ $kap['kapitel_id'] }}: !auf[{{ $kap['kapitel_id'] }}]}" style="padding-left: {{ 12 + ($kap['depth'] - 1) * 16 }}px">
-                                    <i class="ti ti-chevron-right text-gray-400 shrink-0 transition-transform" :class="auf[{{ $kap['kapitel_id'] }}] && 'rotate-90'" style="font-size:15px"></i>
-                                    <span class="w-2 h-2 rounded-full shrink-0 {{ $fortDot[$kap['fortschritt']] ?? 'bg-gray-300' }}" title="Fortschritt: {{ $fortLabel[$kap['fortschritt']] ?? 'Offen' }}"></span>
-                                    <span class="text-sm font-medium {{ $kap['is_struktur'] ? 'text-gray-500' : 'text-gray-800' }} min-w-0 break-words">{{ $kap['titel'] }}</span>
-                                    {{-- Textkapitel/Sektion: „Sektion"-Tag statt Preis-Modus, Food-Pills unten ausgeblendet. --}}
-                                    @if($kap['is_struktur'])<span class="text-[10px] uppercase tracking-wide text-violet-400/80 border border-violet-400/30 rounded px-1.5 shrink-0">Sektion</span>@elseif($kap['pricing_mode'])<span class="text-[10px] uppercase tracking-wide text-gray-400 shrink-0">{{ $kap['pricing_mode'] }}</span>@endif
-                                    <div class="ml-auto flex items-center gap-2.5 text-[11px] tabular-nums shrink-0" @click.stop>
-                                        @unless($kap['is_struktur'])
-                                        <span class="{{ $pill }} {{ $kap['hat_ziele'] ? $variantPill['primary'] : $variantPill['secondary'] }}" title="Ziele/Dimensionen gesetzt">Z</span>
-                                        <span class="{{ $pill }} {{ $kap['positionen_count'] > 0 ? $variantPill['info'] : $variantPill['secondary'] }}" title="Positionen">{{ $kap['positionen_count'] }}</span>
-                                        <span class="{{ $pill }} {{ $kap['bepreist'] ? $variantPill['success'] : ($kap['hat_inhalt'] ? $variantPill['warning'] : $variantPill['secondary']) }}" title="{{ $kap['bepreist'] ? 'bepreist' : ($kap['hat_inhalt'] ? 'angelegt/ohne Preis' : 'leer') }}">€</span>
-                                        @endunless
-                                        @php($istRollup = count($kap['positionen']) === 0 && ($agg['vk_pro_person'] > 0 || $agg['pauschal'] > 0))
-                                        @if($agg['ek_per_person'] > 0)<span class="text-gray-400" title="Wareneinsatz €/Gast">EK {{ number_format((float) $agg['ek_per_person'], 2, ',', '.') }}</span>@endif
-                                        @if($agg['vk_pro_person'] > 0)<span class="font-semibold text-gray-800" title="{{ $istRollup ? 'VK = Summe der Unterkapitel' : 'VK €/Gast' }}">@if($istRollup)<span class="text-gray-400 font-normal" title="Summe der Unterkapitel">Σ&nbsp;</span>@endif{{ number_format((float) $agg['vk_pro_person'], 2, ',', '.') }} €/G</span>@endif
-                                        <span class="inline-flex items-center gap-1 {{ $ampelText[$we['status']] ?? 'text-gray-400' }}" title="WE {{ $we['ist_pct'] !== null ? number_format((float) $we['ist_pct'], 1, ',', '.') . ' %' : 'unbekannt' }} · Ziel {{ number_format((float) $we['ziel_pct'], 1, ',', '.') }} %">
-                                            <span class="inline-block h-2 w-2 rounded-full {{ $ampelDot[$we['status']] ?? 'bg-gray-300' }}"></span>{{ $we['ist_pct'] !== null ? number_format((float) $we['ist_pct'], 1, ',', '.') . ' %' : '—' }}
-                                        </span>
-                                        {{-- Fortschritt manuell setzen (offen|in_arbeit|fertig) → treibt Punkt + KPI „Fertig X/Y". --}}
-                                        <select wire:change="kapitelFortschritt({{ $kap['kapitel_id'] }}, $event.target.value)" title="Fortschritt setzen"
-                                                class="text-[11px] rounded border border-black/10 bg-transparent py-0.5 pl-1.5 pr-5 text-gray-500 hover:border-violet-300 focus:outline-none cursor-pointer">
-                                            <option value="offen" @selected($kap['fortschritt'] === 'offen')>Offen</option>
-                                            <option value="in_arbeit" @selected($kap['fortschritt'] === 'in_arbeit')>In Arbeit</option>
-                                            <option value="fertig" @selected($kap['fortschritt'] === 'fertig')>Fertig</option>
-                                        </select>
-                                        <button type="button" wire:click="kapitelWaehle({{ $kap['kapitel_id'] }})" class="text-violet-500 hover:text-violet-700" title="Kapitel öffnen &amp; weiterplanen">Planen</button>
+                        <div class="fa-surface overflow-hidden divide-y divide-[var(--fa-line)]">
+                            @forelse($kapitelBoard as $kap)
+                                @php
+                                    $we = $kap['wareneinsatz'];
+                                    $agg = $kap['aggregat'];
+                                    $ahnenIds = $ahnen($kap['kapitel_id']);
+                                    $istRollup = count($kap['positionen']) === 0 && ($agg['vk_pro_person'] > 0 || $agg['pauschal'] > 0);
+                                @endphp
+                                <div wire:key="board-{{ $kap['kapitel_id'] }}" x-show="{{ empty($ahnenIds) ? 'true' : '[' . implode(',', $ahnenIds) . '].filter(a => auf[a]).length === ' . count($ahnenIds) }}" x-cloak>
+                                    {{-- Kopfzeile: Klick = Ast auf/zu (Objekt-Reassignment → sichere Alpine-Reaktivität);
+                                         Kennzahlen + Aktionen rechts stoppen die Propagation. Bricht auf dem Laptop um. --}}
+                                    <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5 py-2 pr-3 cursor-pointer hover:bg-[var(--fa-hover)]"
+                                         @click="auf = {...auf, {{ $kap['kapitel_id'] }}: ! auf[{{ $kap['kapitel_id'] }}]}"
+                                         style="padding-left: {{ 12 + ($kap['depth'] - 1) * 16 }}px">
+                                        <div class="flex flex-1 min-w-[12rem] items-center gap-2">
+                                            <span class="inline-flex shrink-0 text-[var(--fa-ink-3)] transition-transform duration-150" :class="auf[{{ $kap['kapitel_id'] }}] && 'rotate-90'">@svg('heroicon-m-chevron-right', 'w-4 h-4')</span>
+                                            <span class="w-2.5 h-2.5 rounded-full shrink-0 {{ $fortDot[$kap['fortschritt']] ?? $fortDot['offen'] }}" title="Fortschritt: {{ $fortLabel[$kap['fortschritt']] ?? 'Offen' }}"></span>
+                                            <span class="min-w-0 break-words text-[length:var(--fa-text-base)] font-medium {{ $kap['is_struktur'] ? 'text-[var(--fa-ink-2)]' : 'text-[var(--fa-ink)]' }}">{{ $kap['titel'] }}</span>
+                                            {{-- Textkapitel: Etikett statt Preis-Modus, Speisen-Kennzeichen ausgeblendet. --}}
+                                            @if($kap['is_struktur'])
+                                                <x-fa::badge class="shrink-0">Textkapitel</x-fa::badge>
+                                            @elseif($kap['pricing_mode'])
+                                                <span class="shrink-0 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">{{ $preisModus[$kap['pricing_mode']] ?? $kap['pricing_mode'] }}</span>
+                                            @endif
+                                        </div>
+                                        <div class="ml-auto flex flex-wrap items-center justify-end gap-x-3 gap-y-1.5 text-[length:var(--fa-text-md)] tabular-nums" @click.stop>
+                                            @unless($kap['is_struktur'])
+                                                <span class="flex flex-wrap items-center gap-1">
+                                                    @if($kap['hat_ziele'])<x-fa::badge tone="accent" title="Vorgaben für dieses Kapitel gesetzt">Vorgaben</x-fa::badge>@endif
+                                                    <x-fa::badge :tone="$kap['positionen_count'] > 0 ? 'info' : 'neutral'">{{ $kap['positionen_count'] }} {{ (int) $kap['positionen_count'] === 1 ? 'Position' : 'Positionen' }}</x-fa::badge>
+                                                    @if($kap['bepreist'])
+                                                        <x-fa::badge tone="ok">Bepreist</x-fa::badge>
+                                                    @elseif($kap['hat_inhalt'])
+                                                        <x-fa::badge tone="warn" title="Inhalt angelegt, aber ohne Preis">Preis fehlt</x-fa::badge>
+                                                    @else
+                                                        <x-fa::badge>Leer</x-fa::badge>
+                                                    @endif
+                                                </span>
+                                            @endunless
+                                            @if($agg['ek_per_person'] > 0)<span class="text-[var(--fa-ink-3)]" title="Wareneinsatz pro Gast">EK {{ $euro($agg['ek_per_person']) }}</span>@endif
+                                            @if($agg['vk_pro_person'] > 0)
+                                                <span class="font-semibold text-[var(--fa-ink)]" title="{{ $istRollup ? 'Summe der Unterkapitel' : 'Verkauf pro Gast' }}">@if($istRollup)<span class="font-normal text-[var(--fa-ink-3)]">Summe </span>@endif{{ $euro($agg['vk_pro_person']) }}<span class="font-normal text-[var(--fa-ink-3)]"> pro Gast</span></span>
+                                            @endif
+                                            <span class="inline-flex items-center gap-1.5 {{ $ampelText[$we['status']] ?? $ampelText['unbekannt'] }}"
+                                                  title="Wareneinsatz {{ $we['ist_pct'] !== null ? $pct($we['ist_pct']) : 'nicht berechenbar' }}, Ziel {{ $pct($we['ziel_pct']) }}">
+                                                <span class="inline-block h-2 w-2 rounded-full {{ $ampelDot[$we['status']] ?? $ampelDot['unbekannt'] }}"></span>WE {{ $we['ist_pct'] !== null ? $pct($we['ist_pct']) : '–' }}
+                                            </span>
+                                            {{-- Fortschritt von Hand setzen (offen|in_arbeit|fertig) → treibt Punkt + Kennzahl „Kapitel fertig". --}}
+                                            <x-fa::select size="sm" wire:change="kapitelFortschritt({{ $kap['kapitel_id'] }}, $event.target.value)" aria-label="Fortschritt von {{ $kap['titel'] }}" title="Fortschritt setzen" class="w-auto">
+                                                <option value="offen" @selected($kap['fortschritt'] === 'offen')>Offen</option>
+                                                <option value="in_arbeit" @selected($kap['fortschritt'] === 'in_arbeit')>In Arbeit</option>
+                                                <option value="fertig" @selected($kap['fortschritt'] === 'fertig')>Fertig</option>
+                                            </x-fa::select>
+                                            <x-fa::button size="sm" variant="ghost" icon-right="heroicon-m-arrow-right" wire:click="kapitelWaehle({{ $kap['kapitel_id'] }})" title="Kapitel öffnen und Speisen bearbeiten">Kapitel öffnen</x-fa::button>
+                                        </div>
+                                    </div>
+                                    {{-- Aufgeklappt: eigene Positionen + Abdeckung (Kinder sind eigene Zeilen darunter) --}}
+                                    <div x-show="auf[{{ $kap['kapitel_id'] }}]" x-cloak class="pb-3 pr-3 flex flex-col gap-1" style="padding-left: {{ 40 + ($kap['depth'] - 1) * 16 }}px">
+                                        @forelse($kap['positionen'] as $p)
+                                            @php
+                                                $vkLink = $p['ref_id'] === null ? null : ($p['ref_typ'] === 'concept'
+                                                    ? route('foodalchemist.concepter.index', ['tab' => 'concepts', 'sel' => $p['ref_id']])
+                                                    : route('foodalchemist.verkauf.index', ['rezept' => $p['ref_id']]));
+                                            @endphp
+                                            <div class="flex flex-wrap items-center gap-x-2 gap-y-1 py-1 border-b border-[var(--fa-line)] last:border-b-0 text-[length:var(--fa-text-md)]">
+                                                <x-fa::badge :tone="$p['art'] === 'paket' ? 'info' : 'neutral'" class="shrink-0">{{ $p['art'] === 'paket' ? 'Paket' : 'Einzel' }}</x-fa::badge>
+                                                <span class="flex-1 min-w-[10rem] break-words text-[var(--fa-ink)]">{{ $p['label'] }}</span>
+                                                <div class="ml-auto flex flex-wrap items-center gap-3 tabular-nums">
+                                                    @if($p['ek'] > 0)<span class="text-[var(--fa-ink-3)]">EK {{ $euro($p['ek']) }}</span>@endif
+                                                    <span class="font-semibold text-[var(--fa-ink)]"><x-fa::money :value="$p['vk'] > 0 ? $p['vk'] : null" missing="VK fehlt" :per="$p['preis_einheit'] === 'gast' ? 'Gast' : 'Position'" /></span>
+                                                    @if($p['we_pct'] !== null)<span class="text-[var(--fa-ink-3)]" title="Wareneinsatz dieser Position">{{ $pct($p['we_pct']) }}</span>@endif
+                                                    @if($vkLink)<x-fa::icon-button :href="$vkLink" target="_blank" icon="heroicon-m-arrow-top-right-on-square" label="Im Verkauf öffnen" size="sm" />@endif
+                                                </div>
+                                            </div>
+                                        @empty
+                                            @if(($agg['vk_pro_person'] ?? 0) > 0 || ($agg['pauschal'] ?? 0) > 0)
+                                                <p class="{{ $hinweis }}">Keine eigenen Positionen. Der Preis ist die Summe der Unterkapitel.</p>
+                                            @else
+                                                <p class="{{ $hinweis }}">Noch keine bepreisten Positionen. Im Reiter Speisen oder in der Leitstelle anlegen.</p>
+                                            @endif
+                                        @endforelse
+                                        @if(! empty($boardCoverage[$kap['kapitel_id']] ?? []))
+                                            <div class="flex flex-wrap items-center gap-1.5 pt-2 mt-1 border-t border-[var(--fa-line)]">
+                                                <span class="mr-1 text-[length:var(--fa-text-sm)] font-semibold text-[var(--fa-ink-2)]">Abdeckung</span>
+                                                @foreach($boardCoverage[$kap['kapitel_id']] as $b)
+                                                    <x-fa::badge :tone="$befundAmpel[$b['ampel']] ?? 'neutral'">{{ $b['label'] }}: {{ $b['ist'] }}</x-fa::badge>
+                                                @endforeach
+                                            </div>
+                                        @endif
                                     </div>
                                 </div>
-                                {{-- Aufgeklappt (auf[id]): eigene Positionen + Coverage inline (Kinder sind eigene Zeilen darunter) --}}
-                                <div x-show="auf[{{ $kap['kapitel_id'] }}]" x-cloak class="pb-2 pr-3 space-y-0.5" style="padding-left: {{ 34 + ($kap['depth'] - 1) * 16 }}px">
-                                    @forelse($kap['positionen'] as $p)
-                                        @php($vkLink = $p['ref_id'] === null ? null : ($p['ref_typ'] === 'concept'
-                                            ? route('foodalchemist.concepter.index', ['tab' => 'concepts', 'sel' => $p['ref_id']])
-                                            : route('foodalchemist.verkauf.index', ['rezept' => $p['ref_id']])))
-                                        <div class="flex items-center gap-2 py-0.5 text-xs">
-                                            <span class="shrink-0 rounded px-1.5 py-0.5 text-[9px] uppercase tracking-wide {{ $p['art'] === 'paket' ? 'bg-violet-500/10 text-violet-700' : 'bg-sky-500/10 text-sky-700' }}">{{ $p['art'] === 'paket' ? 'Paket' : 'Einzel' }}</span>
-                                            <span class="truncate text-gray-800">{{ $p['label'] }}</span>
-                                            <div class="ml-auto flex items-center gap-3 tabular-nums shrink-0">
-                                                @if($p['ek'] > 0)<span class="text-gray-400">EK {{ number_format((float) $p['ek'], 2, ',', '.') }}</span>@endif
-                                                @if($p['vk'] > 0)<span class="font-semibold text-gray-700">{{ number_format((float) $p['vk'], 2, ',', '.') }} {{ $p['preis_einheit'] === 'gast' ? '€/G' : '€/Pos' }}</span>@else<span class="text-amber-600">kein VK</span>@endif
-                                                @if($p['we_pct'] !== null)<span class="text-gray-400" title="Wareneinsatz dieser Position">{{ number_format((float) $p['we_pct'], 1, ',', '.') }} %</span>@endif
-                                                @if($vkLink)<a href="{{ $vkLink }}" target="_blank" class="text-violet-600 hover:underline" title="Im VK-Editor öffnen">VK →</a>@endif
-                                            </div>
-                                        </div>
-                                    @empty
-                                        @if(($agg['vk_pro_person'] ?? 0) > 0 || ($agg['pauschal'] ?? 0) > 0)
-                                            <p class="text-[11px] text-gray-400 py-0.5">Keine eigenen Positionen — der Preis ist die <span class="text-gray-500">Summe der Unterkapitel</span>.</p>
-                                        @else
-                                            <p class="text-[11px] text-gray-400 py-0.5">Noch keine bepreisten Positionen — im Speisen-Tab / in der Leitstelle anlegen.</p>
-                                        @endif
-                                    @endforelse
-                                    @if(! empty($boardCoverage[$kap['kapitel_id']] ?? []))
-                                        <div class="flex flex-wrap gap-x-4 gap-y-1 pt-2 mt-1 border-t border-black/5">
-                                            @foreach($boardCoverage[$kap['kapitel_id']] as $b)
-                                                <span class="text-[11px] {{ $befundAmpel[$b['ampel']] ?? 'text-gray-500' }}">{{ $b['label'] }}: {{ $b['ist'] }}</span>
-                                            @endforeach
-                                        </div>
-                                    @endif
-                                </div>
-                            </div>
-                        @empty
-                            <p class="text-sm text-gray-400 p-5">Noch keine Kapitel — links „Neues Kapitel …" anlegen oder in der Leitstelle planen.</p>
-                        @endforelse
-                    </div>
+                            @empty
+                                <x-fa::empty icon="heroicon-o-queue-list" title="Noch keine Kapitel">
+                                    Links ein neues Kapitel anlegen oder das Foodbook in der Leitstelle planen lassen.
+                                </x-fa::empty>
+                            @endforelse
+                        </div>
                     </div>{{-- /auf-Wrapper (Baum-Expand) --}}
                 </div>
 
-                {{-- ═══ Tab: BRIEFING (Stammdaten · Kunde · Leitidee) ═══ --}}
-                <div x-show="tab === 'briefing'" x-cloak class="space-y-3" data-fb-panel="briefing">
-                {{-- Foodbook-Stammdaten --}}
-                <div class="relative overflow-hidden {{ $card }} p-5 space-y-3" wire:key="fbhdr-{{ $fb->id }}">
-                <div class="{{ $cardAccent }}"></div>
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    {{-- „Personen" entfernt (Dominique 2026-08-27): das Foodbook ist ein person-unabhängiges
-                         Portfolio — Pax liegt im Angebot. DB-Spalte/Default bleiben, nur das UI-Feld ist weg. --}}
-                    <div class="md:col-span-2"><label class="{{ $label }}">Bezeichnung</label><input type="text" wire:model="form.label" class="{{ $input }}" /></div>
-                    <div><label class="{{ $label }}">Jahr</label><input type="number" wire:model="form.jahr" class="{{ $input }}" /></div>
-                </div>
+                {{-- ═══ Reiter: STAMMDATEN (Bezeichnung · Status · Segment · Kunde) ═══ --}}
+                <div x-show="tab === 'briefing'" x-cloak class="pt-4 flex flex-col gap-4" data-fb-panel="briefing">
+                    <x-fa::section title="Foodbook" icon="heroicon-o-book-open" wire:key="fbhdr-{{ $fb->id }}">
+                        {{-- „Personen" entfernt (Dominique 2026-08-27): das Foodbook ist ein person-unabhängiges
+                             Portfolio — Pax liegt im Angebot. DB-Spalte/Default bleiben, nur das UI-Feld ist weg. --}}
+                        <div class="grid gap-3 sm:grid-cols-3">
+                            <x-fa::field label="Bezeichnung" for="fb-label" class="sm:col-span-2">
+                                <x-fa::input id="fb-label" wire:model="form.label" />
+                            </x-fa::field>
+                            <x-fa::field label="Jahr" for="fb-jahr">
+                                <x-fa::input id="fb-jahr" type="number" wire:model="form.jahr" numeric />
+                            </x-fa::field>
+                        </div>
 
-                {{-- Spec 33 P5: Status, Gültigkeitsfenster und beide Zuordnungsachsen kommen aus
-                     einem geteilten Bauteil — dieselbe Bedienung in allen drei Ausgabeformen. --}}
-                <div class="pt-1 border-t border-black/5">
-                    <x-foodalchemist::ausgabe-status
-                        status-model="form.status" von-model="form.gueltig_von" bis-model="form.gueltig_bis"
-                        outlet-model="form.outlet_id"
-                        :betriebe="$betriebe" :zustand="$fb->laufZustand()" :grund="$fb->laufGrund()"
-                        :konflikt="$portfolioKonflikt" toggle="aktivUmschalten" />
-                </div>
+                        {{-- Spec 33 P5: Status, Gültigkeitsfenster und beide Zuordnungsachsen aus einem geteilten Bauteil. --}}
+                        <div class="pt-3 border-t border-[var(--fa-line)]">
+                            <x-foodalchemist::ausgabe-status
+                                status-model="form.status" von-model="form.gueltig_von" bis-model="form.gueltig_bis"
+                                outlet-model="form.outlet_id"
+                                :betriebe="$betriebe" :zustand="$fb->laufZustand()" :grund="$fb->laufGrund()"
+                                :konflikt="$portfolioKonflikt" toggle="aktivUmschalten" />
+                        </div>
 
-                {{-- R4.3-Phasen-Stepper wanderte auf Tab-Ebene (E5.2, oben in der Leitstellen-Leiste). --}}
+                        {{-- Phase 5: Segment (aus Küchen-Typ) = Achse für Portionen/Preis/Komplexität/Ton. --}}
+                        <div class="flex flex-wrap items-center gap-x-2 gap-y-1 pt-3 border-t border-[var(--fa-line)]" data-segment>
+                            <span class="text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-2)]">Segment</span>
+                            @if($segment ?? null)
+                                <x-fa::badge tone="accent">{{ $segment['label'] }}</x-fa::badge>
+                                <span class="{{ $hinweis }}">Niveau {{ \Platform\FoodAlchemist\Services\TeamSettingsService::NIVEAU_LABEL[$segment['niveau']] ?? $segment['niveau'] }} · {{ \Platform\FoodAlchemist\Services\TeamSettingsService::CONVENIENCE_LABEL[$segment['convenience']] ?? $segment['convenience'] }}</span>
+                            @else
+                                <x-fa::signal tone="warn">Nicht gesetzt. In den Einstellungen ein Küchenprofil wählen, es steuert Niveau und Convenience der KI.</x-fa::signal>
+                            @endif
+                        </div>
 
-                {{-- Phase 5: Segment (aus Küchen-Typ) = Achse für Portionen/Preis/Komplexität/Ton.
-                     Niveau + Convenience = Default-Erwartung des Segments (Vokabular der KI-Rezept-Regler). --}}
-                <div class="flex flex-wrap items-center gap-x-2 gap-y-1 pt-1 border-t border-black/5" data-segment>
-                    <span class="{{ $label }} !mb-0">Segment</span>
-                    @if($segment ?? null)
-                        <span class="{{ $pill }} {{ $variantPill['primary'] }}">{{ $segment['label'] }}</span>
-                        <span class="text-[11px] text-gray-500">Niveau {{ \Platform\FoodAlchemist\Services\TeamSettingsService::NIVEAU_LABEL[$segment['niveau']] ?? $segment['niveau'] }} · {{ \Platform\FoodAlchemist\Services\TeamSettingsService::CONVENIENCE_LABEL[$segment['convenience']] ?? $segment['convenience'] }}</span>
-                    @else
-                        <span class="text-[11px] text-amber-600">nicht gesetzt — Küchen-Profil in den Einstellungen wählen (steuert Niveau + Convenience der Generierung)</span>
-                    @endif
-                </div>
+                        <x-foodalchemist::crm-kunde-picker
+                            :ausgabe="$fb" :crm-verfuegbar="$crmVerfuegbar" :firmen="$firmen" :kontakte="$kontakte" />
 
-                {{-- Kickoff-Wizard → in den Planung-Tab verschoben (Spec 29 / S7 — Briefing entlastet) --}}
-
-                <x-foodalchemist::crm-kunde-picker
-                    :ausgabe="$fb" :crm-verfuegbar="$crmVerfuegbar" :firmen="$firmen" :kontakte="$kontakte" />
-
-                {{-- Spec-42-Vollzug S3b: Planung raus aus dem Foodbook. Leitplanken (Schreibstil/Kundentyp/
-                     Niveau), Briefing/Einleitung + KI-Text leben jetzt in der Leitstelle (Planung\FoodbookKontextRail).
-                     Das Foodbook ist reine Ausgabe — hier nur Stammdaten/Status/Kunde. --}}
-            </div>
-
-                {{-- Leitidee-Canvas → Leitstelle (Planung\FoodbookKontextRail). --}}
-                </div>{{-- /Briefing --}}
+                        {{-- Spec-42-Vollzug S3b: Leitplanken, Briefing/Einleitung + KI-Text leben in der Leitstelle
+                             (Planung\FoodbookKontextRail). Hier nur Stammdaten/Status/Kunde. --}}
+                    </x-fa::section>
+                </div>{{-- /Stammdaten --}}
 
 
-                {{-- ═══ Tab: BRANDING / CI (pro Foodbook) — Phase 6, verdrahtet FoodbookService-Branding-API ═══ --}}
-                <div x-show="tab === 'branding'" x-cloak class="space-y-3" data-fb-panel="branding"
+                {{-- ═══ Reiter: BRANDING und PRÄSENTATION (pro Foodbook, FoodbookService-Branding-API) ═══
+                     Farben und Logo sind Kundendaten: Felder bleiben, nur die Darstellung ist neu. --}}
+                <div x-show="tab === 'branding'" x-cloak class="pt-4 flex flex-col gap-4" data-fb-panel="branding"
                      x-data="{ brand: @entangle('brandingForm.brand_color'), band: @entangle('brandingForm.band_color'), footer: @entangle('brandingForm.footer_text') }">
-                    <div class="relative overflow-hidden {{ $card }} p-5 space-y-4">
-                        <div class="{{ $cardAccent }}"></div>
-
+                    <x-fa::section title="Branding im Dokument" icon="heroicon-o-swatch" description="Farben, Logo und Titelbild für das gedruckte Foodbook und das PDF.">
                         @if($brandingFehler)
-                            <div class="rounded-lg bg-rose-500/10 border border-rose-500/30 px-2.5 py-1.5 text-[11px] text-rose-700" data-branding-fehler>{{ $brandingFehler }}</div>
+                            <x-fa::notice tone="crit" title="Nicht gespeichert" data-branding-fehler>{{ $brandingFehler }}</x-fa::notice>
                         @endif
                         @if($brandingGespeichert)
-                            <div class="rounded-lg bg-emerald-500/10 border border-emerald-500/25 px-2.5 py-1.5 text-[11px] text-emerald-700">✓ Gespeichert — fließt ins Dokument-PDF.</div>
+                            <x-fa::notice tone="ok">Gespeichert. Das Dokument nutzt ab jetzt dieses Branding.</x-fa::notice>
                         @endif
 
-                        {{-- Live-Vorschau: Kopf-Band (Bandfarbe + Logo) · Fuß-Linie (Marken-Farbe) --}}
-                        <div>
-                            <p class="{{ $label }} mb-1">Vorschau</p>
-                            <div class="rounded-lg overflow-hidden border border-black/10">
-                                <div class="flex items-center justify-between gap-2 px-3 h-9 text-white text-[11px] uppercase tracking-wide" :style="`background:${band || brand}`">
+                        {{-- Live-Vorschau: Kopf-Band (Bandfarbe + Logo) · Fuß-Linie (Marken-Farbe). Kundenfarben nur zur Laufzeit. --}}
+                        <div class="flex flex-col gap-1.5">
+                            <span class="text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-2)]">Vorschau</span>
+                            <div class="overflow-hidden rounded-[var(--fa-radius-surface)] border border-[var(--fa-line)] bg-[var(--fa-surface)]">
+                                <div class="flex items-center justify-between gap-2 px-3 h-10 text-[var(--fa-on-accent)] text-[length:var(--fa-text-sm)] font-semibold" x-bind:style="`background:${band || brand}`">
                                     <span class="truncate">{{ $fb->label }}</span>
-                                    @if($fb->logo_path)<img src="{{ app(\Platform\FoodAlchemist\Services\FoodAlchemistMediaService::class)->url($fb->logo_context_file_id, $fb->logo_path) }}" alt="Logo" class="max-h-5 max-w-[90px] object-contain shrink-0" />@endif
+                                    @if($fb->logo_path)<img src="{{ $medien($fb->logo_context_file_id, $fb->logo_path) }}" alt="Logo" class="max-h-6 max-w-[90px] object-contain shrink-0" />@endif
                                 </div>
-                                <div class="px-3 py-3 text-[11px] text-gray-600" :style="`border-top:3px solid ${brand}`">
+                                <div class="px-3 py-3 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]" x-bind:style="`border-top:3px solid ${brand}`">
                                     <span x-text="footer || 'Erstellt mit Food Alchemist'"></span>
                                 </div>
                             </div>
                         </div>
 
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {{-- Marken-Farbe --}}
-                            <div>
-                                <label class="{{ $label }}">Marken-Farbe</label>
-                                <div class="flex items-center gap-2 mt-1">
-                                    <input type="color" x-model="brand" class="h-9 w-12 rounded border border-black/10 bg-transparent cursor-pointer p-0.5" data-brand-color />
-                                    <input type="text" x-model="brand" class="{{ $input }} w-32 font-mono" placeholder="#6d28d9" />
+                        <div class="grid gap-4 md:grid-cols-2">
+                            <x-fa::field label="Markenfarbe" for="fb-brand" hint="Rahmen, Linien und Etiketten im PDF.">
+                                <div class="flex items-center gap-2">
+                                    <input type="color" x-model="brand" class="{{ $farbFeld }}" aria-label="Markenfarbe wählen" data-brand-color />
+                                    <x-fa::input id="fb-brand" x-model="brand" class="w-32 font-mono" placeholder="Farbcode" />
                                 </div>
-                                <p class="text-[10px] text-gray-500 mt-1">Rahmen, Linien, Badges im PDF.</p>
-                            </div>
-                            {{-- Bandfarbe (optional) --}}
-                            <div>
-                                <label class="{{ $label }}">Bandfarbe (optional)</label>
-                                <div class="flex items-center gap-2 mt-1">
-                                    <input type="color" x-model="band" class="h-9 w-12 rounded border border-black/10 bg-transparent cursor-pointer p-0.5" />
-                                    <input type="text" x-model="band" class="{{ $input }} w-32 font-mono" placeholder="aus Marke" />
-                                    <button type="button" @click="band = ''" class="{{ $btnGhostXs }}" title="leeren → leitet aus der Marken-Farbe ab">✕</button>
+                            </x-fa::field>
+                            <x-fa::field label="Bandfarbe" for="fb-band" optional hint="Kopf- und Fußband. Leer heißt: wie die Markenfarbe.">
+                                <div class="flex items-center gap-2">
+                                    <input type="color" x-model="band" class="{{ $farbFeld }}" aria-label="Bandfarbe wählen" />
+                                    <x-fa::input id="fb-band" x-model="band" class="w-32 font-mono" placeholder="Wie Marke" />
+                                    <x-fa::icon-button icon="heroicon-m-x-mark" label="Bandfarbe leeren, dann gilt die Markenfarbe" size="sm" x-on:click="band = ''" />
                                 </div>
-                                <p class="text-[10px] text-gray-500 mt-1">Kopf-/Fuß-Band. Leer = wie Marken-Farbe.</p>
-                            </div>
+                            </x-fa::field>
                         </div>
 
-                        {{-- Footer-Text --}}
-                        <div>
-                            <label class="{{ $label }}">Footer-Text</label>
-                            <input type="text" x-model="footer" class="{{ $input }}" placeholder="Erstellt mit Food Alchemist" />
-                        </div>
+                        <x-fa::field label="Fußzeile" for="fb-footer">
+                            <x-fa::input id="fb-footer" x-model="footer" placeholder="Erstellt mit Food Alchemist" />
+                        </x-fa::field>
 
-                        {{-- Logo + Cover --}}
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-black/5">
-                            <div>
-                                <label class="{{ $label }}">Logo</label>
+                        {{-- Logo + Titelbild --}}
+                        <div class="grid gap-4 md:grid-cols-2 pt-3 border-t border-[var(--fa-line)]">
+                            <x-fa::field label="Logo">
                                 @if($fb->logo_path)
-                                    <div class="flex items-center gap-2 mt-1 mb-1">
-                                        <img src="{{ app(\Platform\FoodAlchemist\Services\FoodAlchemistMediaService::class)->url($fb->logo_context_file_id, $fb->logo_path) }}" alt="Logo" class="h-10 max-w-[120px] object-contain rounded border border-black/5 bg-white p-1" />
-                                        <button type="button" wire:click="brandingLogoEntfernen" class="{{ $btnGhostXs }} text-red-600" data-logo-entfernen>entfernen</button>
+                                    <div class="flex items-center gap-2">
+                                        <img src="{{ $medien($fb->logo_context_file_id, $fb->logo_path) }}" alt="Logo" class="h-10 max-w-[120px] object-contain rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] bg-[var(--fa-surface)] p-1" />
+                                        <x-fa::button variant="danger" size="sm" icon="heroicon-m-trash" wire:click="brandingLogoEntfernen" data-logo-entfernen>Logo entfernen</x-fa::button>
                                     </div>
                                 @endif
-                                <input type="file" wire:model="logoUpload" accept="image/*" class="block w-full text-[11px] text-gray-600 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-violet-500/10 file:text-violet-700 file:text-[11px] cursor-pointer" data-logo-upload />
-                                <div wire:loading wire:target="logoUpload" class="text-[10px] text-gray-500 mt-0.5">lädt …</div>
-                                @error('logoUpload')<span class="text-[10px] text-rose-600">{{ $message }}</span>@enderror
-                            </div>
-                            <div>
-                                <label class="{{ $label }}">Cover-Bild</label>
+                                <input type="file" wire:model="logoUpload" accept="image/*" class="{{ $dateiFeld }}" aria-label="Logo hochladen" data-logo-upload />
+                                <span wire:loading wire:target="logoUpload" class="{{ $hinweis }}">Wird hochgeladen …</span>
+                                @error('logoUpload')<span class="text-[length:var(--fa-text-sm)] text-[var(--fa-crit)]" role="alert">{{ $message }}</span>@enderror
+                            </x-fa::field>
+                            <x-fa::field label="Titelbild">
                                 @if($fb->cover_image_path)
-                                    <div class="flex items-center gap-2 mt-1 mb-1">
-                                        <img src="{{ app(\Platform\FoodAlchemist\Services\FoodAlchemistMediaService::class)->url($fb->cover_context_file_id, $fb->cover_image_path) }}" alt="Cover" class="h-10 max-w-[120px] object-cover rounded border border-black/5" />
-                                        <button type="button" wire:click="brandingCoverEntfernen" class="{{ $btnGhostXs }} text-red-600" data-cover-entfernen>entfernen</button>
+                                    <div class="flex items-center gap-2">
+                                        <img src="{{ $medien($fb->cover_context_file_id, $fb->cover_image_path) }}" alt="Titelbild" class="h-10 max-w-[120px] object-cover rounded-[var(--fa-radius-control)] border border-[var(--fa-line)]" />
+                                        <x-fa::button variant="danger" size="sm" icon="heroicon-m-trash" wire:click="brandingCoverEntfernen" data-cover-entfernen>Titelbild entfernen</x-fa::button>
                                     </div>
                                 @endif
-                                <input type="file" wire:model="coverUpload" accept="image/*" class="block w-full text-[11px] text-gray-600 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-violet-500/10 file:text-violet-700 file:text-[11px] cursor-pointer" data-cover-upload />
-                                <div wire:loading wire:target="coverUpload" class="text-[10px] text-gray-500 mt-0.5">lädt …</div>
-                                @error('coverUpload')<span class="text-[10px] text-rose-600">{{ $message }}</span>@enderror
-                            </div>
+                                <input type="file" wire:model="coverUpload" accept="image/*" class="{{ $dateiFeld }}" aria-label="Titelbild hochladen" data-cover-upload />
+                                <span wire:loading wire:target="coverUpload" class="{{ $hinweis }}">Wird hochgeladen …</span>
+                                @error('coverUpload')<span class="text-[length:var(--fa-text-sm)] text-[var(--fa-crit)]" role="alert">{{ $message }}</span>@enderror
+                            </x-fa::field>
                         </div>
 
-                        <div class="flex items-center gap-2 pt-2">
-                            <button type="button" wire:click="brandingSpeichern" class="{{ $btnPrimary }}" data-branding-speichern>Speichern</button>
-                            <a href="{{ route('foodalchemist.foodbooks.dokument', $fb->id) }}?pdf=1" target="_blank" class="{{ $btnGhost }}" title="Branding im PDF gegenprüfen">→ Im Dokument (PDF) ansehen</a>
+                        <div class="flex flex-wrap items-center justify-end gap-2 pt-1">
+                            <x-fa::button variant="ghost" :href="route('foodalchemist.foodbooks.dokument', $fb->id) . '?pdf=1'" target="_blank" icon="heroicon-m-arrow-top-right-on-square" title="Branding im PDF gegenprüfen">PDF prüfen</x-fa::button>
+                            <x-fa::button variant="primary" icon="heroicon-m-check" wire:click="brandingSpeichern" data-branding-speichern>Branding speichern</x-fa::button>
                         </div>
-                    </div>
+                    </x-fa::section>
 
-                    {{-- ═══ Spec 43: Präsentation — digitales Kundenbuch (Public-Link + Snapshot + Freigabe) ═══ --}}
-                    <div class="mt-4 pt-4 border-t border-gray-200 space-y-3" data-fb-praesentation>
-                        <div class="flex items-baseline justify-between">
-                            <h3 class="text-sm font-semibold text-gray-900">Präsentation · digitales Kundenbuch</h3>
-                            <a href="{{ route('foodalchemist.einstellungen', ['sektion' => 'praesentations-designs']) }}" target="_blank" class="text-[11px] text-violet-600 hover:underline">Designs gestalten →</a>
-                        </div>
+                    {{-- ═══ Spec 43: Präsentation — digitales Kundenbuch (Kundenlink + eingefrorener Stand + Freigabe) ═══ --}}
+                    <x-fa::section title="Präsentation für den Kunden" icon="heroicon-o-presentation-chart-bar" description="Ein Link zum digitalen Kundenbuch. Beim Veröffentlichen wird der Stand eingefroren." data-fb-praesentation>
+                        <x-slot:actions>
+                            <x-fa::button variant="ghost" size="sm" :href="route('foodalchemist.einstellungen', ['sektion' => 'praesentations-designs'])" target="_blank" icon-right="heroicon-m-arrow-top-right-on-square">Designs gestalten</x-fa::button>
+                        </x-slot:actions>
 
-                        @if($presentationHinweis)<div class="rounded-lg bg-emerald-500/10 border border-emerald-500/25 text-emerald-300 text-xs px-3 py-2" data-fb-praes-hinweis>{{ $presentationHinweis }}</div>@endif
-                        @if($presentationFehler)<div class="rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs px-3 py-2" data-fb-praes-fehler>{{ $presentationFehler }}</div>@endif
+                        @if($presentationHinweis)<x-fa::notice tone="ok" data-fb-praes-hinweis>{{ $presentationHinweis }}</x-fa::notice>@endif
+                        @if($presentationFehler)<x-fa::notice tone="crit" data-fb-praes-fehler>{{ $presentationFehler }}</x-fa::notice>@endif
 
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <label class="block text-xs text-gray-600">Design
-                                <select wire:model="presentationDesign" class="mt-1 block w-full text-sm border border-gray-300 rounded px-2 py-1" data-fb-praes-design>
+                        <div class="grid gap-3 sm:grid-cols-2">
+                            <x-fa::field label="Design" for="fb-praes-design">
+                                <x-fa::select id="fb-praes-design" wire:model="presentationDesign" data-fb-praes-design>
                                     @foreach($presentationDesignOptionen as $opt)
                                         <option value="{{ $opt['value'] }}">{{ $opt['label'] }}</option>
                                     @endforeach
-                                </select>
-                            </label>
-                            <label class="block text-xs text-gray-600">Gültig bis <span class="text-rose-500">*</span>
-                                <input type="date" wire:model="presentationGueltigBis" class="mt-1 block w-full text-sm border border-gray-300 rounded px-2 py-1" data-fb-praes-gueltig>
-                            </label>
+                                </x-fa::select>
+                            </x-fa::field>
+                            <x-fa::field label="Gültig bis" for="fb-praes-gueltig" required>
+                                <x-fa::input id="fb-praes-gueltig" type="date" wire:model="presentationGueltigBis" data-fb-praes-gueltig />
+                            </x-fa::field>
                         </div>
 
-                        <div class="flex flex-wrap gap-4">
-                            <label class="flex items-center gap-2 text-xs text-gray-700"><input type="checkbox" wire:model="presentationPreisAnzeige"> Preise pro Person zeigen</label>
-                            <label class="flex items-center gap-2 text-xs text-gray-700"><input type="checkbox" wire:model="presentationDeklaration"> Allergen-Legende zeigen</label>
-                            {{-- Ebene 2 · Republish-Preis-Schutz: aus = eingefrorene Preise behalten (neue Speisen kommen live rein), an = aktuelle VK ziehen. Nur beim erneuten Veröffentlichen; Erstveröffentlichung immer aktuell. --}}
-                            <label class="flex items-center gap-2 text-xs text-gray-700" title="Aus: beim erneuten Veröffentlichen bleiben die eingefrorenen Preise stehen — neue Speisen kommen mit aktuellem Preis rein. An: alle aktuellen VK ziehen. Erstveröffentlichung ist immer aktuell."><input type="checkbox" wire:model="presentationPreiseAktualisieren"> Preise aktualisieren</label>
+                        <fieldset class="flex flex-wrap gap-x-5 gap-y-2">
+                            <legend class="sr-only">Anzeige</legend>
+                            <label class="inline-flex items-center gap-2 text-[length:var(--fa-text-md)] text-[var(--fa-ink)]"><input type="checkbox" wire:model="presentationPreisAnzeige" class="{{ $haken }}"> Preise pro Person zeigen</label>
+                            <label class="inline-flex items-center gap-2 text-[length:var(--fa-text-md)] text-[var(--fa-ink)]"><input type="checkbox" wire:model="presentationDeklaration" class="{{ $haken }}"> Allergen-Legende zeigen</label>
+                            {{-- Ebene 2 · Republish-Preis-Schutz: aus = eingefrorene Preise behalten (neue Speisen kommen live rein), an = aktuelle VK ziehen. --}}
+                            <label class="inline-flex items-center gap-2 text-[length:var(--fa-text-md)] text-[var(--fa-ink)]"
+                                   title="Aus: beim erneuten Veröffentlichen bleiben die eingefrorenen Preise stehen, neue Speisen kommen mit aktuellem Preis dazu. An: alle aktuellen Verkaufspreise übernehmen. Die erste Veröffentlichung ist immer aktuell."><input type="checkbox" wire:model="presentationPreiseAktualisieren" class="{{ $haken }}"> Preise beim Neu-Veröffentlichen aktualisieren</label>
+                        </fieldset>
+
+                        <div class="grid gap-3 sm:grid-cols-2">
+                            <x-fa::field label="Text für den Kontakt-Knopf" for="fb-praes-cta" optional>
+                                <x-fa::input id="fb-praes-cta" wire:model="presentationCtaText" placeholder="z. B. Jetzt anfragen" />
+                            </x-fa::field>
+                            <x-fa::field label="Ziel des Kontakt-Knopfs" for="fb-praes-cta-link" optional>
+                                <x-fa::input id="fb-praes-cta-link" type="url" wire:model="presentationCtaLink" placeholder="https://…" />
+                            </x-fa::field>
                         </div>
 
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <label class="block text-xs text-gray-600">CTA-Text (optional)
-                                <input type="text" wire:model="presentationCtaText" placeholder="z.B. Jetzt anfragen" class="mt-1 block w-full text-sm border border-gray-300 rounded px-2 py-1">
-                            </label>
-                            <label class="block text-xs text-gray-600">CTA-Link (optional)
-                                <input type="url" wire:model="presentationCtaLink" placeholder="https://…" class="mt-1 block w-full text-sm border border-gray-300 rounded px-2 py-1">
-                            </label>
-                        </div>
-
-                        <div>
-                            <label class="block text-xs text-gray-600">Eigener Link-Name (optional)
-                                <input type="text" wire:model.live.debounce.400ms="presentationSlug" placeholder="z.B. broich-empfang-2027"
-                                    class="mt-1 block w-full text-sm border border-gray-300 rounded px-2 py-1" data-fb-praes-slug>
-                            </label>
-                            <p class="mt-1 text-[11px] text-gray-500">
+                        <x-fa::field label="Eigener Link-Name" for="fb-praes-slug" optional>
+                            <x-fa::input id="fb-praes-slug" wire:model.live.debounce.400ms="presentationSlug" placeholder="z. B. broich-empfang-2027" data-fb-praes-slug />
+                            <p class="{{ $hinweis }}">
                                 Kundenlink:
-                                <span class="font-mono break-all">{{ url('/p/foodbook') }}/{{ trim((string) $presentationSlug) !== '' ? \Illuminate\Support\Str::slug($presentationSlug) : '⟨automatischer Code⟩' }}</span>
-                                — wirkt nach „Veröffentlichen". Leer lassen = zufälliger Code.
+                                <span class="font-mono break-all text-[var(--fa-ink-2)]">{{ url('/p/foodbook') }}/{{ trim((string) $presentationSlug) !== '' ? \Illuminate\Support\Str::slug($presentationSlug) : '(automatischer Code)' }}</span>.
+                                Gilt nach dem Veröffentlichen. Leer lassen ergibt einen zufälligen Code.
                             </p>
-                        </div>
+                        </x-fa::field>
 
                         @if($presentationInfo['design_veraltet'] ?? false)
-                            {{-- Bug-Runde 2026-09-17 #2: Der Link rendert nur den eingefrorenen Snapshot.
-                                 Ohne diesen Hinweis sieht man die Design-Änderung in der Vorschau, im
-                                 Kundenlink aber nie — und hält das für einen Render-Fehler. --}}
-                            <div class="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[12px] text-amber-900" data-fa-design-veraltet>
-                                <strong>Design wurde nach der Veröffentlichung geändert.</strong>
-                                Der Kundenlink zeigt weiter den Stand von {{ $presentationInfo['published_at'] ?? '—' }}.
-                                Zum Übernehmen unten <em>Neu veröffentlichen</em>.
-                            </div>
+                            {{-- Bug-Runde 2026-09-17 #2: Der Link rendert nur den eingefrorenen Snapshot. --}}
+                            <x-fa::notice tone="warn" title="Design nach der Veröffentlichung geändert" data-fa-design-veraltet>
+                                Der Kundenlink zeigt weiter den Stand vom {{ $presentationInfo['published_at'] ?? 'unbekannten Datum' }}. Zum Übernehmen neu veröffentlichen.
+                            </x-fa::notice>
                         @endif
-                        <div class="flex flex-wrap items-center gap-2 pt-1">
-                            <a href="{{ route('foodalchemist.foodbooks.praesentation', ['id' => $fb->id, 'design' => $presentationDesign]) }}" target="_blank" class="{{ $btnGhost }}">Vorschau öffnen</a>
-                            <button type="button" wire:click="veroeffentlichen"
-                                wire:confirm="Diesen Stand als Kundenbuch veröffentlichen? Der Snapshot wird eingefroren."
-                                class="{{ $btnPrimary }}" data-fb-praes-publish @disabled(! $presentationGueltigBis)>
-                                {{ ($presentationInfo['enabled'] ?? false) ? 'Neu veröffentlichen' : 'Veröffentlichen' }}
-                            </button>
+
+                        <div class="flex flex-wrap items-center justify-end gap-2 pt-1">
                             @if($presentationInfo['enabled'] ?? false)
-                                <button type="button" wire:click="zuruckziehen" wire:confirm="Veröffentlichung zurückziehen? Der Link liefert dann 404." class="{{ $btnGhost }}" data-fb-praes-withdraw>Zurückziehen</button>
+                                <x-fa::button variant="danger" wire:click="zuruckziehen" wire:confirm="Veröffentlichung zurückziehen? Der Link ist dann nicht mehr erreichbar." data-fb-praes-withdraw>Veröffentlichung zurückziehen</x-fa::button>
                             @endif
+                            <x-fa::button variant="ghost" :href="route('foodalchemist.foodbooks.praesentation', ['id' => $fb->id, 'design' => $presentationDesign])" target="_blank" icon="heroicon-m-eye">Vorschau öffnen</x-fa::button>
+                            <x-fa::button variant="primary" icon="heroicon-m-globe-alt" wire:click="veroeffentlichen"
+                                wire:confirm="Diesen Stand als Kundenbuch veröffentlichen? Der Stand wird eingefroren."
+                                data-fb-praes-publish :disabled="! $presentationGueltigBis">
+                                {{ ($presentationInfo['enabled'] ?? false) ? 'Neu veröffentlichen' : 'Veröffentlichen' }}
+                            </x-fa::button>
                         </div>
                         @unless($presentationGueltigBis)
-                            <p class="text-[11px] text-amber-600">Zum Veröffentlichen ein „gültig bis"-Datum setzen (Pflicht).</p>
+                            <x-fa::signal tone="warn" class="self-end">Zum Veröffentlichen ein Datum bei „Gültig bis“ setzen.</x-fa::signal>
                         @endunless
 
                         @if($presentationLink)
-                            <div class="rounded-lg bg-white/[0.04] border border-white/10 p-3 text-xs" x-data>
-                                <div class="flex items-center gap-2">
-                                    <div class="flex-1 rounded px-2 py-1 font-mono text-[11px] break-all select-all bg-black/30 border border-white/10 text-gray-200" data-fb-praes-link>{{ $presentationLink }}</div>
-                                    <button type="button" class="{{ $btnGhost }}" x-on:click="navigator.clipboard.writeText('{{ $presentationLink }}'); $el.textContent='Kopiert ✓'">Link kopieren</button>
+                            <div class="flex flex-col gap-1.5 rounded-[var(--fa-radius-surface)] border border-[var(--fa-line)] bg-[var(--fa-ground)] p-3" x-data>
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <div class="flex-1 min-w-[12rem] rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] bg-[var(--fa-surface)] px-2.5 py-1.5 font-mono text-[length:var(--fa-text-sm)] text-[var(--fa-ink)] break-all select-all" data-fb-praes-link>{{ $presentationLink }}</div>
+                                    <x-fa::button size="sm" icon="heroicon-m-link" x-on:click="navigator.clipboard.writeText('{{ $presentationLink }}'); $el.textContent='Kopiert'">Link kopieren</x-fa::button>
                                 </div>
-                                <p class="text-[11px] text-gray-500 mt-1">
-                                    Freigegeben am {{ $presentationInfo['published_at'] ?? '—' }} · gültig bis {{ $presentationInfo['expires_at'] ?? '—' }} ·
-                                    {{ ($presentationInfo['live'] ?? false) ? 'aktiv' : 'inaktiv/abgelaufen' }}
+                                <p class="{{ $hinweis }} flex flex-wrap items-center gap-x-2 gap-y-1">
+                                    <span>Freigegeben am {{ $presentationInfo['published_at'] ?? '–' }}, gültig bis {{ $presentationInfo['expires_at'] ?? '–' }}</span>
+                                    @if($presentationInfo['live'] ?? false)<x-fa::badge tone="ok">Erreichbar</x-fa::badge>@else<x-fa::badge tone="warn">Nicht erreichbar oder abgelaufen</x-fa::badge>@endif
                                 </p>
                             </div>
                         @endif
 
-                        {{-- ── Slice F: Betriebs-Links — pro Betrieb ein eigener Link (dark-editor-konsistent) ── --}}
-                        <div class="rounded-lg border border-violet-400/25 bg-violet-500/[0.06] p-3 space-y-3">
-                            <div class="flex items-center gap-2">
-                                <span class="inline-block w-2 h-2 rounded-full bg-violet-400"></span>
-                                <h4 class="text-xs font-semibold text-violet-200">Betriebs-Links · eigener Link je Betrieb</h4>
+                        {{-- ── Slice F: Betriebs-Links — pro Betrieb ein eigener Link ── --}}
+                        <div class="flex flex-col gap-3 pt-3 border-t border-[var(--fa-line)]">
+                            <div>
+                                <h4 class="text-[length:var(--fa-text-base)] font-semibold text-[var(--fa-ink)]">Eigener Link je Betrieb</h4>
+                                <p class="{{ $hinweis }}">Zusätzlicher Kundenlink pro Betrieb, eingefroren mit den Preisen und der Vorlage dieses Betriebs, mit eigener Freigabe. Der Standard-Link oben bleibt bestehen.</p>
                             </div>
-                            <p class="text-[11px] text-gray-400">Ein zusätzlicher Kundenlink pro Betrieb — eingefroren mit den <strong class="text-gray-200">Preisen</strong> und der <strong class="text-gray-200">Vorlage</strong> dieses Betriebs, eigene Freigabe. Der Standard-Link oben bleibt bestehen.</p>
 
                             @forelse($betriebsLinks as $bl)
-                                <div class="rounded-lg bg-white/[0.04] border border-white/10 p-2 text-xs" x-data>
-                                    <div class="flex items-center gap-2">
-                                        <span class="font-medium text-gray-100">{{ $bl['outlet_name'] }}</span>
-                                        <span class="text-[10px] px-1.5 py-0.5 rounded {{ $bl['enabled'] ? 'bg-emerald-500/15 text-emerald-300' : 'bg-white/10 text-gray-400' }}">{{ $bl['enabled'] ? 'aktiv' : 'inaktiv' }}</span>
-                                        <span class="ml-auto text-[10px] text-gray-500">Vorlage: {{ $bl['design'] }}</span>
+                                <div class="flex flex-col gap-1.5 rounded-[var(--fa-radius-surface)] border border-[var(--fa-line)] bg-[var(--fa-surface)] p-3" x-data>
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <span class="text-[length:var(--fa-text-md)] font-semibold text-[var(--fa-ink)]">{{ $bl['outlet_name'] }}</span>
+                                        @if($bl['enabled'])<x-fa::badge tone="ok">Freigegeben</x-fa::badge>@else<x-fa::badge>Zurückgezogen</x-fa::badge>@endif
+                                        <span class="ml-auto {{ $hinweis }}">Vorlage: {{ $bl['design'] }}</span>
                                     </div>
-                                    <div class="flex items-center gap-2 mt-1">
-                                        <div class="flex-1 rounded px-2 py-1 font-mono text-[11px] break-all select-all bg-black/30 border border-white/10 text-gray-200">{{ $bl['url'] }}</div>
-                                        <button type="button" class="{{ $btnGhost }}" x-on:click="navigator.clipboard.writeText('{{ $bl['url'] }}'); $el.textContent='Kopiert ✓'">Kopieren</button>
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <div class="flex-1 min-w-[12rem] rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] bg-[var(--fa-ground)] px-2.5 py-1.5 font-mono text-[length:var(--fa-text-sm)] text-[var(--fa-ink)] break-all select-all">{{ $bl['url'] }}</div>
+                                        <x-fa::button size="sm" icon="heroicon-m-link" x-on:click="navigator.clipboard.writeText('{{ $bl['url'] }}'); $el.textContent='Kopiert'">Link kopieren</x-fa::button>
                                         @if($bl['enabled'])
-                                            <button type="button" wire:click="betriebZuruckziehen({{ $bl['outlet_id'] }})" wire:confirm="Diesen Betriebs-Link zurückziehen? Er liefert dann 404." class="{{ $btnGhost }}">Zurückziehen</button>
+                                            <x-fa::button size="sm" variant="danger" wire:click="betriebZuruckziehen({{ $bl['outlet_id'] }})" wire:confirm="Diesen Betriebs-Link zurückziehen? Er ist dann nicht mehr erreichbar.">Zurückziehen</x-fa::button>
                                         @else
-                                            <button type="button" wire:click="betriebWiederFreigeben({{ $bl['outlet_id'] }})" class="{{ $btnPrimary }}">Wieder freigeben</button>
+                                            <x-fa::button size="sm" wire:click="betriebWiederFreigeben({{ $bl['outlet_id'] }})">Wieder freigeben</x-fa::button>
                                         @endif
                                     </div>
                                 </div>
                             @empty
-                                <p class="text-[11px] text-gray-500">Noch kein Betriebs-Link angelegt.</p>
+                                <p class="{{ $hinweis }}">Noch kein Betriebs-Link angelegt.</p>
                             @endforelse
 
                             @if(count($betriebsOptionen) > 0)
-                                {{-- eigener „Betrieb hinzufügen"-Kasten — klar als Add-Aktion abgesetzt --}}
-                                <div class="rounded-lg border border-dashed border-violet-400/30 bg-white/[0.02] p-2.5 space-y-2">
-                                    <p class="text-[11px] font-medium text-violet-200">Weiteren Betrieb hinzufügen</p>
-                                    <div class="flex flex-wrap items-end gap-2">
-                                        <div>
-                                            <label class="block text-[10px] text-gray-400">Betrieb</label>
-                                            <select wire:model="outletPublishId" class="mt-1 block text-sm rounded px-2 py-1">
-                                                <option value="">— wählen —</option>
+                                {{-- eigener „Betrieb hinzufügen"-Kasten — klar als Hinzufügen abgesetzt --}}
+                                <div class="flex flex-col gap-3 rounded-[var(--fa-radius-surface)] border border-dashed border-[var(--fa-line-strong)] p-3">
+                                    <p class="text-[length:var(--fa-text-md)] font-semibold text-[var(--fa-ink)]">Link für einen weiteren Betrieb</p>
+                                    <div class="grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
+                                        <x-fa::field label="Betrieb" for="fb-outlet">
+                                            <x-fa::select id="fb-outlet" wire:model="outletPublishId">
+                                                <option value="">Betrieb wählen</option>
                                                 @foreach($betriebsOptionen as $o)
                                                     <option value="{{ $o['id'] }}">{{ $o['name'] }}</option>
                                                 @endforeach
-                                            </select>
-                                        </div>
-                                        <div>
-                                            <label class="block text-[10px] text-gray-400">gültig bis (optional)</label>
-                                            <input type="date" wire:model="outletPublishGueltigBis" class="mt-1 block text-sm rounded px-2 py-1">
-                                        </div>
-                                        <div>
-                                            <label class="block text-[10px] text-gray-400">Vorlage (optional)</label>
-                                            <select wire:model="outletPublishDesign" class="mt-1 block text-sm rounded px-2 py-1">
-                                                <option value="">— Betriebs-Vorlage / wie Dokument —</option>
+                                            </x-fa::select>
+                                        </x-fa::field>
+                                        <x-fa::field label="Gültig bis" for="fb-outlet-gueltig" optional>
+                                            <x-fa::input id="fb-outlet-gueltig" type="date" wire:model="outletPublishGueltigBis" />
+                                        </x-fa::field>
+                                        <x-fa::field label="Vorlage" for="fb-outlet-design" optional>
+                                            <x-fa::select id="fb-outlet-design" wire:model="outletPublishDesign">
+                                                <option value="">Vorlage des Betriebs oder wie Dokument</option>
                                                 @foreach($presentationDesignOptionen as $opt)
                                                     <option value="{{ $opt['value'] }}">{{ $opt['label'] }}</option>
                                                 @endforeach
-                                            </select>
-                                        </div>
-                                        <div>
-                                            <label class="block text-[10px] text-gray-400">Link-Name (optional)</label>
-                                            <input type="text" wire:model="outletPublishSlug" placeholder="z.B. broich-nord-2027" class="mt-1 block text-sm rounded px-2 py-1">
-                                        </div>
-                                        <button type="button" wire:click="betriebVeroeffentlichen" class="{{ $btnPrimary }}">＋ Betrieb hinzufügen</button>
+                                            </x-fa::select>
+                                        </x-fa::field>
+                                        <x-fa::field label="Link-Name" for="fb-outlet-slug" optional>
+                                            <x-fa::input id="fb-outlet-slug" wire:model="outletPublishSlug" placeholder="z. B. broich-nord-2027" />
+                                        </x-fa::field>
                                     </div>
-                                    <p class="text-[10px] text-gray-500">Beliebig viele Betriebe möglich — je Betrieb ein eigener Link. Ohne eigenes Datum gilt das „gültig bis" des Standard-Links.</p>
+                                    <div class="flex flex-wrap items-center justify-between gap-2">
+                                        <p class="{{ $hinweis }}">Beliebig viele Betriebe möglich. Ohne eigenes Datum gilt „Gültig bis“ des Standard-Links.</p>
+                                        <x-fa::button icon="heroicon-m-plus" wire:click="betriebVeroeffentlichen">Betriebs-Link anlegen</x-fa::button>
+                                    </div>
                                 </div>
                             @else
-                                <p class="text-[11px] text-amber-300">Noch keine Betriebe angelegt — lege sie unter <em>Einstellungen › Betriebe</em> an.</p>
+                                <x-fa::signal tone="info">Noch keine Betriebe angelegt. Betriebe stehen in den Einstellungen unter Betriebe.</x-fa::signal>
                             @endif
                         </div>
-                    </div>
+                    </x-fa::section>
                 </div>{{-- /Branding --}}
 
-                {{-- ═══ Tab: SPEISEN — der Kapitel/Block-Editor (Spec 29 / S6) ═══
-                     Früher stapelte er UNTER dem Cockpit (Doppel-Editor). Jetzt eigener Tab, der nur
-                     erscheint, wenn ein Kapitel gewählt ist (Label null ⇒ Tab entfällt, siehe :tabs).
-                     Koexistenz-Bugfix bleibt: die $kapitel-abhängigen Cockpit-Inhalte (Kreativ 3-Modus,
-                     Skizzen, Pairing) rendern weiter in IHREN Panels — hier wird nichts geklammert,
-                     das andere Panels betrifft. --}}
-                <div x-show="tab === 'speisen'" x-cloak class="pt-3 space-y-3" data-fb-panel="speisen">
+                {{-- ═══ Reiter: SPEISEN — Kapitel- und Eintrags-Editor (Spec 29 / S6) ═══
+                     Erscheint nur, wenn ein Kapitel gewählt ist (Label null ⇒ Reiter entfällt). --}}
+                <div x-show="tab === 'speisen'" x-cloak class="pt-4 flex flex-col gap-3" data-fb-panel="speisen">
             @if($kapitel)
-                {{-- Picker-Umbau: 2-Spalten — links [Kapitel-Kopf + Inhalt], rechts der Katalog. Der Kopf liegt
-                     in der linken Spalte, damit der Katalog rechts oben bündig startet (Dominique 2026-08-23). --}}
-                <div class="flex gap-4 items-start" data-fb-speisen-2col>
-                <div class="flex-1 min-w-0 space-y-3" data-fb-speisen-links>
+                {{-- Picker-Umbau: links [Kapitel-Kopf + Inhalt], rechts der Katalog (Dominique 2026-08-23).
+                     Unter xl (kleiner Laptop) rutscht der Katalog unter den Inhalt, statt den Inhalt zu quetschen. --}}
+                <div class="flex flex-col xl:flex-row gap-4 xl:items-start" data-fb-speisen-2col>
+                <div class="flex-1 min-w-0 flex flex-col gap-4" data-fb-speisen-links>
                 {{-- Kapitel-Kopf --}}
-                <div class="relative overflow-hidden {{ $card }} p-5 space-y-3" wire:key="kaphdr-{{ $kapitel->id }}">
-                    <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
-                        <div><label class="{{ $label }}">Kapitel (intern)</label><input type="text" wire:model.blur="kapitelForm.title" wire:change="kapitelSpeichern" class="{{ $input }}" /></div>
-                        <div class="md:col-span-2"><label class="{{ $label }}">Konsumententitel</label><input type="text" wire:model.blur="kapitelForm.consumer_title" wire:change="kapitelSpeichern" class="{{ $input }}" placeholder="Marketing-Titel (PDF)" /></div>
-                        <div><label class="{{ $label }}">Preis-Modus</label>
-                            <select wire:model.live="kapitelForm.price_mode" wire:change="kapitelSpeichern" class="{{ $input }}"><option value="auto">auto (Σ Inhalt)</option><option value="manuell">manuell</option></select>
-                        </div>
+                <x-fa::section title="Kapitel" icon="heroicon-o-bookmark" wire:key="kaphdr-{{ $kapitel->id }}">
+                    <div class="grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
+                        <x-fa::field label="Interner Titel" for="kap-title">
+                            <x-fa::input id="kap-title" wire:model.blur="kapitelForm.title" wire:change="kapitelSpeichern" />
+                        </x-fa::field>
+                        <x-fa::field label="Titel für Gäste" for="kap-consumer" class="2xl:col-span-2" hint="Steht im PDF. Leer lassen, dann gilt der interne Titel.">
+                            <x-fa::input id="kap-consumer" wire:model.blur="kapitelForm.consumer_title" wire:change="kapitelSpeichern" />
+                        </x-fa::field>
+                        <x-fa::field label="Preis" for="kap-price-mode">
+                            <x-fa::select id="kap-price-mode" wire:model.live="kapitelForm.price_mode" wire:change="kapitelSpeichern">
+                                <option value="auto">Aus dem Inhalt berechnen</option>
+                                <option value="manuell">Von Hand festlegen</option>
+                            </x-fa::select>
+                        </x-fa::field>
                     </div>
-                    {{-- Textkapitel/Sektion (Dominique 2026-08-27): reine Überschrift/Text ohne eigenes Food (Intro,
-                         Organisation, Format-Sektion). „Kommt im Food nicht mit" — im Board ohne Food-Chrome; den
-                         Σ-Preis der Food-Unterkapitel zeigt es weiter. --}}
-                    <label class="flex items-start gap-2 text-xs text-gray-500 cursor-pointer">
-                        <input type="checkbox" wire:model.live="kapitelForm.is_struktur" wire:change="kapitelSpeichern" class="mt-0.5 accent-violet-500" />
-                        <span>Textkapitel / Sektion — <span class="text-gray-400">kein eigenes Food (Intro, Überschrift, Format-Sektion). Food-Kennzahlen kommen nur aus Unterkapiteln.</span></span>
+                    {{-- Textkapitel/Sektion (Dominique 2026-08-27): reine Überschrift/Text ohne eigenes Food. --}}
+                    <label class="flex items-start gap-2 cursor-pointer">
+                        <input type="checkbox" wire:model.live="kapitelForm.is_struktur" wire:change="kapitelSpeichern" class="{{ $haken }} mt-0.5" />
+                        <span class="text-[length:var(--fa-text-md)] text-[var(--fa-ink)]">Textkapitel ohne eigene Speisen
+                            <span class="block {{ $hinweis }}">Für Einleitung, Überschrift oder Format-Abschnitt. Kennzahlen kommen dann nur aus den Unterkapiteln.</span>
+                        </span>
                     </label>
 
                     {{-- Spec 43 (Bild-Epic): Kapitel-Bild — überschreibt das Concept-Titelbild im Präsentations-Band --}}
-                    <div data-fb-kapitel-image>
-                        <label class="{{ $label }}">Kapitel-Bild (Präsentation)</label>
-                        <div class="flex items-center gap-3 flex-wrap">
-                            @if($kapitelImageUrl)
-                                <img src="{{ $kapitelImageUrl }}" alt="" class="h-12 w-20 object-cover rounded border border-black/10">
-                                <button type="button" wire:click="kapitelImageEntfernen" class="text-rose-600 text-[11px] underline" data-fb-kapitel-image-remove>entfernen</button>
-                            @endif
-                            <input type="file" wire:model="kapitelImageUpload" accept="image/*" class="text-[11px]" data-fb-kapitel-image-upload>
-                            <div wire:loading wire:target="kapitelImageUpload" class="text-[11px] text-gray-400">lädt …</div>
-                        </div>
-                        @if($kapitelImageFehler)<div class="text-[11px] text-rose-600 mt-1">{{ $kapitelImageFehler }}</div>@endif
-                        @error('kapitelImageUpload')<div class="text-[11px] text-rose-600 mt-1">{{ $message }}</div>@enderror
-                        <p class="text-[11px] text-gray-400 mt-1">Ohne eigenes Bild nutzt das Kapitel-Band automatisch das Titelbild des Konzepts.</p>
+                    <div class="grid gap-4 md:grid-cols-2 pt-3 border-t border-[var(--fa-line)]" data-fb-kapitel-image>
+                        <x-fa::field label="Kapitelbild in der Präsentation" hint="Ohne eigenes Bild nutzt das Kapitel das Titelbild des Konzepts.">
+                            <div class="flex flex-wrap items-center gap-3">
+                                @if($kapitelImageUrl)
+                                    <img src="{{ $kapitelImageUrl }}" alt="" class="h-12 w-20 object-cover rounded-[var(--fa-radius-control)] border border-[var(--fa-line)]">
+                                    <x-fa::button variant="danger" size="sm" icon="heroicon-m-trash" wire:click="kapitelImageEntfernen" data-fb-kapitel-image-remove>Bild entfernen</x-fa::button>
+                                @endif
+                                <input type="file" wire:model="kapitelImageUpload" accept="image/*" class="{{ $dateiFeld }}" aria-label="Kapitelbild hochladen" data-fb-kapitel-image-upload>
+                                <span wire:loading wire:target="kapitelImageUpload" class="{{ $hinweis }}">Wird hochgeladen …</span>
+                            </div>
+                            @if($kapitelImageFehler)<span class="text-[length:var(--fa-text-sm)] text-[var(--fa-crit)]" role="alert">{{ $kapitelImageFehler }}</span>@endif
+                            @error('kapitelImageUpload')<span class="text-[length:var(--fa-text-sm)] text-[var(--fa-crit)]" role="alert">{{ $message }}</span>@enderror
+                        </x-fa::field>
 
                         {{-- Kapitel-Galerie: mehrere Bilder direkt am Kapitel (Vorrang vor den Concept-Bildern) --}}
-                        <div class="mt-3" data-fb-kapitel-gallery>
-                            <label class="{{ $label }}">Weitere Bilder (optional)</label>
-                            <div class="flex items-center gap-3 flex-wrap">
+                        <x-fa::field label="Weitere Bilder" optional hint="Mehrere Bilder für das Kapitelband. Ersetzen die Bilder der Konzepte." data-fb-kapitel-gallery>
+                            <div class="flex flex-wrap items-center gap-3">
                                 @foreach($kapitelGallery as $gi)
-                                    <div class="relative">
-                                        <img src="{{ $gi['url'] }}" alt="" class="h-12 w-20 object-cover rounded border border-black/10">
+                                    <div class="relative" wire:key="kgal-{{ $gi['id'] }}">
+                                        <img src="{{ $gi['url'] }}" alt="" class="h-12 w-20 object-cover rounded-[var(--fa-radius-control)] border border-[var(--fa-line)]">
                                         <button type="button" wire:click="kapitelGalerieBildEntfernen({{ $gi['id'] }})"
-                                            class="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full bg-rose-600 text-white text-[10px] leading-none flex items-center justify-center"
-                                            title="Bild entfernen">×</button>
+                                            class="absolute -top-2 -right-2 inline-flex h-5 w-5 items-center justify-center rounded-full bg-[var(--fa-crit)] text-[var(--fa-on-accent)] shadow"
+                                            aria-label="Bild entfernen" title="Bild entfernen">@svg('heroicon-m-x-mark', 'w-3.5 h-3.5')</button>
                                     </div>
                                 @endforeach
-                                <input type="file" wire:model="kapitelGalleryUpload" accept="image/*" multiple class="text-[11px]" data-fb-kapitel-gallery-upload>
-                                <div wire:loading wire:target="kapitelGalleryUpload" class="text-[11px] text-gray-400">lädt …</div>
+                                <input type="file" wire:model="kapitelGalleryUpload" accept="image/*" multiple class="{{ $dateiFeld }}" aria-label="Weitere Bilder hochladen" data-fb-kapitel-gallery-upload>
+                                <span wire:loading wire:target="kapitelGalleryUpload" class="{{ $hinweis }}">Wird hochgeladen …</span>
                             </div>
-                            @error('kapitelGalleryUpload.*')<div class="text-[11px] text-rose-600 mt-1">{{ $message }}</div>@enderror
-                            <p class="text-[11px] text-gray-400 mt-1">Mehrere Bilder fürs Kapitel-Band — überschreibt die Concept-Bilder.</p>
-                        </div>
+                            @error('kapitelGalleryUpload.*')<span class="text-[length:var(--fa-text-sm)] text-[var(--fa-crit)]" role="alert">{{ $message }}</span>@enderror
+                        </x-fa::field>
                     </div>
 
-                    {{-- Spec 03 · L2b: der Kapitel-Kundentext. Bis hierher existierte das Feld nur in
-                         der DB (`foodbook_chapters.description`) — nicht im Editor UND in keiner
-                         Ausgabe; die Dokument-Projektion ist mit dieser Etappe nachgezogen. --}}
-                    <div>
-                        <div class="flex items-center justify-between">
-                            <label class="{{ $label }}">Hinführung (Kundentext des Kapitels)</label>
-                            <x-foodalchemist::ki-action action="kiKapitelText" variant="ai" icon="heroicon-o-sparkles" label="KI-Text"
-                                    title="foodbook.kundentext (Ebene Kapitel): Hinführung aus Kapitel-Inhalt (Wording-Kette), Buch-Einleitung und Marken-Stimme"
-                                    busy="schreibt …" data-fb-ki-kapiteltext />
+                    {{-- Spec 03 · L2b: der Kapitel-Kundentext (foodbook_chapters.description), auch im Dokument. --}}
+                    <div class="flex flex-col gap-1.5 pt-3 border-t border-[var(--fa-line)]">
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <label for="kap-description" class="text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-2)]">Einleitung für Gäste</label>
+                            <x-foodalchemist::ki-action action="kiKapitelText" variant="ai" icon="heroicon-o-sparkles" label="Text vorschlagen"
+                                    title="Die KI schreibt eine Einleitung aus dem Inhalt des Kapitels, der Einleitung des Foodbooks und der Markenstimme"
+                                    busy="Schreibt …" data-fb-ki-kapiteltext />
                         </div>
-                        <textarea wire:model.blur="kapitelForm.description" wire:change="kapitelSpeichern" rows="2"
-                                  class="{{ $input }} resize-none min-h-[3.5rem]"
-                                  placeholder="Kurzer Kundentext, der ins Kapitel einführt — „KI-Text" schlägt einen vor"></textarea>
+                        <x-fa::textarea id="kap-description" wire:model.blur="kapitelForm.description" wire:change="kapitelSpeichern" rows="2"
+                                  class="resize-y min-h-[3.5rem]"
+                                  placeholder="Kurzer Text, der Gäste ins Kapitel führt. „Text vorschlagen“ liefert einen Entwurf."></x-fa::textarea>
                         @include('foodalchemist::livewire.foodbooks.partials.ki-text-vorschau', [
                             'ziel' => 'kapitel',
                             'vorhanden' => trim((string) ($kapitelForm['description'] ?? '')) !== '',
                         ])
                     </div>
 
-                    {{-- #2: Schreibstil PRO KAPITEL — Standard (aus den Concepten) oder Override. Der ✨-Knopf
-                         betextet alle Konzepte dieses Kapitels im gewählten Stil neu und speichert das
-                         foodbook-LOKAL (Snapshot); das Concept selbst bleibt unangetastet. --}}
-                    <div class="flex items-end gap-2 pt-2 border-t border-black/5" data-fb-kapitel-stil>
-                        <div class="flex-1 max-w-xs">
-                            <label class="{{ $label }}">Schreibstil (Kapitel)</label>
-                            <select wire:model.live="kapitelForm.writing_style_id" wire:change="kapitelSpeichern" class="{{ $input }}" data-fb-kapitel-schreibstil>
-                                <option value="">Standard (aus den Concepten)</option>
+                    {{-- #2: Schreibstil PRO KAPITEL — Standard (aus den Concepten) oder eigener. Der KI-Knopf betextet alle
+                         Konzepte dieses Kapitels im gewählten Stil neu, foodbook-LOKAL (Snapshot); das Concept bleibt unangetastet. --}}
+                    <div class="flex flex-wrap items-end gap-2 pt-3 border-t border-[var(--fa-line)]" data-fb-kapitel-stil>
+                        <x-fa::field label="Schreibstil für dieses Kapitel" for="kap-stil" class="flex-1 min-w-[14rem] max-w-sm">
+                            <x-fa::select id="kap-stil" wire:model.live="kapitelForm.writing_style_id" wire:change="kapitelSpeichern" data-fb-kapitel-schreibstil>
+                                <option value="">Wie in den Concepts</option>
                                 @foreach($schreibstile as $s)<option value="{{ $s->id }}">{{ $s->name }}</option>@endforeach
-                            </select>
-                        </div>
-                        <x-foodalchemist::ki-action action="kapitelWordingGenerieren" variant="ai" icon="heroicon-o-sparkles" label="Kapitel-Wording"
+                            </x-fa::select>
+                        </x-fa::field>
+                        <x-foodalchemist::ki-action action="kapitelWordingGenerieren" variant="ai" icon="heroicon-o-sparkles" label="Speisen neu betexten"
                                 :disabled="($kapitelForm['writing_style_id'] ?? null) === null || ($kapitelForm['writing_style_id'] ?? '') === ''"
-                                title="Betextet alle Konzepte dieses Kapitels im gewählten Schreibstil neu (foodbook-lokaler Snapshot; das Concept bleibt unangetastet)"
-                                busy="betextet …" class="shrink-0" data-fb-kapitel-wording />
+                                title="Schreibt die Gästetexte aller Konzepte dieses Kapitels im gewählten Schreibstil neu. Gilt nur in diesem Foodbook, das Concept bleibt unverändert. Erst einen Schreibstil wählen."
+                                busy="Betextet …" class="shrink-0 mb-0.5" data-fb-kapitel-wording />
                     </div>
-                    @error('kapitelWording')<p class="text-[11px] text-rose-500 mt-1" data-fb-kapitel-fehler>{{ $message }}</p>@enderror
-                </div>
+                    @error('kapitelWording')<p class="text-[length:var(--fa-text-sm)] text-[var(--fa-crit)]" role="alert" data-fb-kapitel-fehler>{{ $message }}</p>@enderror
+                </x-fa::section>
 
-                {{-- Block-Liste (in der linken Spalte, unter dem Kapitel-Kopf) --}}
-                <div class="relative overflow-hidden {{ $card }} p-5 space-y-3" data-fb-inhalt>
-                    <div class="flex items-center justify-between flex-wrap gap-2">
-                        <h3 class="font-medium tracking-tight text-gray-900">Inhalt <span class="text-gray-500 text-xs">({{ $kapitel->blocks->count() }})</span></h3>
-                        <div class="flex items-center gap-2" x-data="{ presets: false }">
-                            @if(count($markiert) >= 2)
-                                <button type="button" wire:click="wahlGruppeBilden" class="{{ $btnGhostXs }} text-amber-600">Wahl-Gruppe ({{ count($markiert) }})</button>
-                            @endif
-                            {{-- Concept/Gericht einfügen → jetzt im permanenten Katalog rechts. --}}
-                            <button type="button" wire:click="blockBasis('text')" class="{{ $btnGhostXs }}">+ Text</button>
-                            <button type="button" wire:click="blockBasis('spacer')" class="{{ $btnGhostXs }}">+ Leerzeile</button>
-                            <div class="relative">
-                                <button type="button" @click="presets = !presets" class="{{ $btnGhost }}">+ Header / Preis</button>
-                                <div x-show="presets" x-cloak @click.outside="presets = false" class="absolute right-0 mt-1 w-56 max-h-80 overflow-y-auto z-20 {{ $card }} p-1 text-xs">
-                                    <button type="button" wire:click="blockBasis('header_frei')" @click="presets=false" class="block w-full text-left px-2 py-1 rounded hover:bg-violet-500/10">— Freier Header</button>
-                                    <button type="button" wire:click="blockBasis('header_frei_preis')" @click="presets=false" class="block w-full text-left px-2 py-1 rounded hover:bg-violet-500/10">€ Header + Preis</button>
-                                    @foreach($headerPresets as $gruppe => $items)
-                                        <div class="{{ $label }} px-2 pt-2 pb-0.5">{{ $gruppe }}</div>
-                                        @foreach($items as $p)
-                                            <button type="button" @click="presets=false"
-                                                    wire:click="presetHinzu(@js($p['type']), @js($p['slug']), @js($p['label']), @js($p['price_basis'] ?? null), {{ ($p['visible'] ?? true) ? 'true' : 'false' }})"
-                                                    class="block w-full text-left px-3 py-0.5 rounded hover:bg-violet-500/10 truncate">{{ $p['label'] }}</button>
-                                        @endforeach
+                {{-- Inhalt (linke Spalte, unter dem Kapitel-Kopf) --}}
+                <x-fa::section title="Inhalt" icon="heroicon-o-queue-list" :meta="$kapitel->blocks->count() === 1 ? '1 Eintrag' : $kapitel->blocks->count() . ' Einträge'" data-fb-inhalt>
+                    {{-- Werkzeugleiste: bricht auf schmalen Bildschirmen um (nicht im Kopf, der umbricht nicht). --}}
+                    <div class="flex flex-wrap items-center gap-2">
+                        @if(count($markiert) >= 2)
+                            <x-fa::button size="sm" icon="heroicon-m-squares-2x2" wire:click="wahlGruppeBilden" title="Die markierten Concepts werden zur Auswahl für den Gast">Wahl-Gruppe bilden ({{ count($markiert) }})</x-fa::button>
+                        @endif
+                        {{-- Concept/Gericht einfügen → im Katalog rechts. --}}
+                        <x-fa::button size="sm" icon="heroicon-m-bars-3-bottom-left" wire:click="blockBasis('text')">Text einfügen</x-fa::button>
+                        <x-fa::button size="sm" icon="heroicon-m-minus" wire:click="blockBasis('spacer')">Leerzeile einfügen</x-fa::button>
+                        <div class="relative" x-data="faMenu()" x-on:keydown.escape="offen = false" x-on:click.outside="offen = false">
+                            <x-fa::button size="sm" icon="heroicon-m-plus" icon-right="heroicon-m-chevron-down" x-on:click="toggle($event)" aria-haspopup="menu" x-bind:aria-expanded="offen">Überschrift einfügen</x-fa::button>
+                            <div x-bind:class="{ hidden: ! offen }" x-bind:style="pos" role="menu" class="hidden w-64 max-h-80 overflow-y-auto fa-surface shadow-lg py-1">
+                                <button type="button" role="menuitem" wire:click="blockBasis('header_frei')" x-on:click="offen = false" class="{{ $menuePunkt }}">Freie Überschrift</button>
+                                <button type="button" role="menuitem" wire:click="blockBasis('header_frei_preis')" x-on:click="offen = false" class="{{ $menuePunkt }}">Überschrift mit Preis</button>
+                                @foreach($headerPresets as $gruppe => $items)
+                                    <div class="{{ $menueGruppe }}">{{ $gruppe }}</div>
+                                    @foreach($items as $p)
+                                        <button type="button" role="menuitem" x-on:click="offen = false"
+                                                wire:click="presetHinzu(@js($p['type']), @js($p['slug']), @js($p['label']), @js($p['price_basis'] ?? null), {{ ($p['visible'] ?? true) ? 'true' : 'false' }})"
+                                                class="{{ $menuePunkt }} pl-5 break-words">{{ $p['label'] }}</button>
                                     @endforeach
-                                </div>
+                                @endforeach
                             </div>
                         </div>
                     </div>
 
-
-                    {{-- x-data hält den Drag-Zustand; Ziehgriff ⠿ = umsortieren, ▲▼ bleibt als Kanten-Alternative (Muster wie Concepter-Slots, 2026-07-21) --}}
-                    <div class="space-y-1" x-data="{ dragBlockId: null }">
+                    {{-- x-data hält den Drag-Zustand; Ziehgriff = umsortieren, Hoch/Runter als Alternative --}}
+                    <div class="flex flex-col gap-1.5" x-data="{ dragBlockId: null }">
+                        @php $hoeheText = ['klein' => 'klein', 'mittel' => 'mittel', 'gross' => 'groß']; @endphp
                         @forelse($kapitel->blocks as $block)
                             <div wire:key="block-{{ $block->id }}"
                                  @dragover.prevent @drop.prevent="if (dragBlockId && dragBlockId !== {{ $block->id }}) { $wire.blockVerschiebenAuf(dragBlockId, {{ $block->id }}); } dragBlockId = null"
-                                 :class="dragBlockId === {{ $block->id }} ? 'opacity-40' : (dragBlockId ? 'ring-1 ring-violet-300/60' : '')"
-                                 class="rounded-lg border {{ $block->variant_group_id ? 'border-amber-400/60' : 'border-black/5' }} px-2 py-1 {{ $block->visible ? '' : 'opacity-60' }}"
+                                 :class="dragBlockId === {{ $block->id }} ? 'opacity-40' : (dragBlockId ? 'ring-1 ring-[var(--fa-accent-line)]' : '')"
+                                 class="rounded-[var(--fa-radius-surface)] border {{ $block->variant_group_id ? 'border-[var(--fa-warn)]' : 'border-[var(--fa-line)]' }} bg-[var(--fa-surface)] px-2 py-1.5 {{ $block->visible ? '' : 'opacity-60' }}"
                                  style="margin-left: {{ $block->level * 20 }}px">
-                                <div class="flex items-center gap-2 text-xs">
-                                    <span class="flex items-center shrink-0">
+                                <div class="flex items-start gap-1.5">
+                                    <span class="flex items-center shrink-0 pt-0.5">
                                         {{-- R4: setData ist Pflicht, sonst startet Safari den Drag nicht --}}
-                                        <span class="cursor-grab active:cursor-grabbing text-gray-400 hover:text-violet-500 select-none mr-0.5" draggable="true"
+                                        <span class="inline-flex cursor-grab active:cursor-grabbing select-none text-[var(--fa-ink-3)] hover:text-[var(--fa-ink)]" draggable="true"
                                               @dragstart="dragBlockId = {{ $block->id }}; $event.dataTransfer.setData('text/plain', String({{ $block->id }})); $event.dataTransfer.effectAllowed = 'move'"
-                                              @dragend="dragBlockId = null" title="ziehen zum Sortieren" data-block-drag>⠿</span>
-                                        <span class="flex flex-col -my-0.5">
-                                            <button type="button" wire:click="blockHoch({{ $block->id }})" class="text-gray-500 hover:text-violet-500 leading-none">▲</button>
-                                            <button type="button" wire:click="blockRunter({{ $block->id }})" class="text-gray-500 hover:text-violet-500 leading-none">▼</button>
+                                              @dragend="dragBlockId = null" title="Ziehen zum Sortieren" data-block-drag>@svg('heroicon-m-bars-2', 'w-4 h-4')</span>
+                                        <span class="inline-flex flex-col">
+                                            <button type="button" wire:click="blockHoch({{ $block->id }})" class="inline-flex text-[var(--fa-ink-3)] hover:text-[var(--fa-ink)]" title="Nach oben" aria-label="Nach oben">@svg('heroicon-m-chevron-up', 'w-3.5 h-3.5')</button>
+                                            <button type="button" wire:click="blockRunter({{ $block->id }})" class="inline-flex text-[var(--fa-ink-3)] hover:text-[var(--fa-ink)]" title="Nach unten" aria-label="Nach unten">@svg('heroicon-m-chevron-down', 'w-3.5 h-3.5')</button>
                                         </span>
                                     </span>
                                     @if($block->type === 'concept_ref')
-                                        <input type="checkbox" wire:click="markiere({{ $block->id }})" @checked(in_array($block->id, $markiert)) title="Für Wahl-Gruppe markieren" class="shrink-0" />
+                                        <input type="checkbox" wire:click="markiere({{ $block->id }})" @checked(in_array($block->id, $markiert)) title="Für eine Wahl-Gruppe markieren" aria-label="Für eine Wahl-Gruppe markieren" class="{{ $haken }} mt-1" />
                                     @else
-                                        <span class="w-3 shrink-0"></span>
+                                        <span class="w-4 shrink-0"></span>
                                     @endif
-                                    <span class="flex-1 min-w-0 truncate">
+                                    <div class="flex-1 min-w-0 pt-0.5 text-[length:var(--fa-text-md)] leading-snug break-words text-[var(--fa-ink)]">
                                         @switch($block->type)
                                             @case('concept_ref')
-                                                <span class="{{ $pill }} {{ $variantPill['primary'] }} mr-1">Concept</span>{{ $block->concept?->name ?? '—' }}
-                                                {{-- Preisdarstellung: einzel-Concept zeigt keinen Summenpreis-Chip (die Preise stehen je Gericht in der Vorschau darunter). --}}
-                                                @if($block->concept?->price_per_person_cache !== null && ! $block->concept?->istEinzelpreis())<span class="text-gray-500 tabular-nums">· {{ number_format((float) $block->concept->price_per_person_cache, 2, ',', '.') }} €/P</span>@elseif($block->concept?->istEinzelpreis())<span class="text-gray-400 tabular-nums text-[10px]">· Einzelpreise</span>@endif
-                                                @if(trim((string) $block->wording) !== '')<span class="italic text-violet-600">· „{{ $block->wording }}“</span>@endif
+                                                <x-fa::badge tone="info" class="mr-1 align-middle">Concept</x-fa::badge><span class="font-medium">{{ $block->concept?->name ?? 'Concept fehlt' }}</span>
+                                                {{-- Einzelpreis-Concept zeigt keinen Summenpreis (die Preise stehen je Gericht in der Vorschau darunter). --}}
+                                                @if($block->concept?->price_per_person_cache !== null && ! $block->concept?->istEinzelpreis())<span class="text-[var(--fa-ink-2)] tabular-nums"> · {{ $euro($block->concept->price_per_person_cache) }} pro Person</span>@elseif($block->concept?->istEinzelpreis())<span class="text-[var(--fa-ink-3)]"> · Preise je Gericht</span>@endif
+                                                @if(trim((string) $block->wording) !== '')<span class="italic text-[var(--fa-ink-2)]"> · „{{ $block->wording }}“</span>@endif
                                                 @break
                                             @case('recipe_ref')
-                                                <span class="{{ $pill }} {{ $variantPill['warning'] }} mr-1">Gericht</span>{{ $block->dish?->name ?? '—' }}
-                                                <span class="text-gray-500 tabular-nums">{{ $block->dish?->sales_net !== null ? '· ' . number_format((float) $block->dish->sales_net, 2, ',', '.') . ' €' . ($block->price_basis === 'pauschal' ? ' pauschal' : '/Pos') : '' }}</span>
-                                                @if(trim((string) $block->wording) !== '')<span class="italic text-violet-600">· „{{ $block->wording }}“</span>@endif
+                                                <x-fa::badge class="mr-1 align-middle">Gericht</x-fa::badge><span class="font-medium">{{ $block->dish?->name ?? 'Gericht fehlt' }}</span>
+                                                <span class="text-[var(--fa-ink-2)] tabular-nums"> · </span><x-fa::money :value="$block->dish?->sales_net" />@if($block->dish?->sales_net !== null)<span class="text-[var(--fa-ink-3)]">{{ $block->price_basis === 'pauschal' ? ' pauschal' : ' pro Position' }}</span>@endif
+                                                @if(trim((string) $block->wording) !== '')<span class="italic text-[var(--fa-ink-2)]"> · „{{ $block->wording }}“</span>@endif
                                                 @break
                                             @case('header_neutral') @case('header_frei')
-                                                <span class="font-semibold">{{ $block->label ?: '(Header)' }}</span>
+                                                @if($block->label)<span class="font-semibold">{{ $block->label }}</span>@else<span class="italic text-[var(--fa-ink-3)]">Überschrift ohne Text</span>@endif
                                                 @break
                                             @case('header_frei_preis')
-                                                <span class="font-semibold">{{ $block->label ?: '(Header)' }}</span>
-                                                <span class="text-gray-600">· {{ $block->price_basis === 'staffel' ? 'Staffel' : number_format((float) ($block->price_value ?? 0), 2, ',', '.') . ' € ' . ($block->price_basis === 'pauschal' ? 'pauschal' : '/P') }}</span>
+                                                @if($block->label)<span class="font-semibold">{{ $block->label }}</span>@else<span class="italic text-[var(--fa-ink-3)]">Überschrift ohne Text</span>@endif
+                                                <span class="text-[var(--fa-ink-2)] tabular-nums"> · {{ $block->price_basis === 'staffel' ? 'Staffelpreis' : $euro($block->price_value ?? 0) . ($block->price_basis === 'pauschal' ? ' pauschal' : ' pro Person') }}</span>
                                                 @break
-                                            @case('spacer') <span class="italic text-gray-500">Leerzeile ({{ $block->height ?? 'mittel' }})</span> @break
-                                            @case('image') <span class="text-gray-600">@svg('heroicon-o-photo', 'w-3.5 h-3.5 inline-block align-middle') Bild</span> @break
-                                            @default <span class="italic">{{ \Illuminate\Support\Str::limit($block->customer_text ?? '(Text)', 80) }}</span>
+                                            @case('spacer') <span class="italic text-[var(--fa-ink-3)]">Leerzeile, {{ $hoeheText[$block->height ?? 'mittel'] ?? ($block->height ?? 'mittel') }}</span> @break
+                                            @case('image') <span class="inline-flex items-center gap-1 text-[var(--fa-ink-2)]">@svg('heroicon-o-photo', 'w-4 h-4') Bild</span> @break
+                                            @default @if(trim((string) $block->customer_text) !== '')<span class="italic">{{ \Illuminate\Support\Str::limit($block->customer_text, 80) }}</span>@else<span class="italic text-[var(--fa-ink-3)]">Text ohne Inhalt</span>@endif
                                         @endswitch
-                                    </span>
-                                    @if($block->variant_group_id)<button type="button" wire:click="wahlGruppeAufheben({{ $block->id }})" class="{{ $pill }} {{ $variantPill['warning'] }} shrink-0" title="aus Wahl-Gruppe">Wahl #{{ $block->variant_group_id }}</button>@endif
-                                    <button type="button" wire:click="blockEbene({{ $block->id }}, -1)" class="text-gray-500 hover:text-violet-500 shrink-0" title="ausrücken">←</button>
-                                    <button type="button" wire:click="blockEbene({{ $block->id }}, 1)" class="text-gray-500 hover:text-violet-500 shrink-0" title="einrücken">→</button>
-                                    {{-- #6: Deep-Jump ins Concept/Paket — öffnet es direkt im Concepter-Editor (neuer Tab), um dort gezielt daran zu arbeiten. --}}
-                                    @if($block->type === 'concept_ref' && $block->concept_id)
-                                        <a href="{{ route('foodalchemist.concepter.index', ['edit' => $block->concept_id]) }}" target="_blank" class="shrink-0 text-gray-500 hover:text-violet-500" title="im Concepter öffnen ↗" data-fb-block-concepter>@svg('heroicon-o-arrow-top-right-on-square', 'w-3.5 h-3.5 inline-block align-middle')</a>
-                                    @endif
-                                    <button type="button" wire:click="blockSichtbar({{ $block->id }})" class="shrink-0 text-[10px] {{ $block->visible ? 'text-gray-500' : 'text-amber-500' }}" title="sichtbar/intern">@if($block->visible)@svg('heroicon-o-eye', 'w-3.5 h-3.5 inline-block align-middle')@else intern @endif</button>
-                                    @if($block->type !== 'spacer')
-                                        <button type="button" wire:click="blockBearbeiten({{ $block->id }})" class="shrink-0 text-gray-500 hover:text-violet-500" title="bearbeiten / Notiz">@svg('heroicon-o-pencil', 'w-3.5 h-3.5 inline-block align-middle')</button>
-                                    @endif
-                                    <button type="button" wire:click="blockRaus({{ $block->id }})" class="shrink-0 text-gray-500 hover:text-red-500" title="entfernen">✕</button>
+                                    </div>
+                                    <div class="flex flex-wrap items-center justify-end gap-0.5 shrink-0">
+                                        @if($block->variant_group_id)
+                                            <button type="button" wire:click="wahlGruppeAufheben({{ $block->id }})" title="Aus der Wahl-Gruppe nehmen">
+                                                <x-fa::badge tone="warn" icon="heroicon-m-x-mark">Wahl {{ $block->variant_group_id }}</x-fa::badge>
+                                            </button>
+                                        @endif
+                                        {{-- #6: Deep-Jump ins Concept/Paket — öffnet es direkt im Concepter-Editor (neuer Tab). --}}
+                                        @if($block->type === 'concept_ref' && $block->concept_id)
+                                            <a href="{{ route('foodalchemist.concepter.index', ['edit' => $block->concept_id]) }}" target="_blank" class="{{ $kleinSymbol }}" title="Im Concepter öffnen" aria-label="Im Concepter öffnen" data-fb-block-concepter>@svg('heroicon-m-arrow-top-right-on-square', 'w-4 h-4')</a>
+                                        @endif
+                                        <button type="button" wire:click="blockSichtbar({{ $block->id }})" class="{{ $block->visible ? $kleinSymbol : 'inline-flex items-center gap-1 h-7 px-2 shrink-0 rounded-[var(--fa-radius-control)] text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-warn)] hover:bg-[var(--fa-hover)]' }}"
+                                                title="{{ $block->visible ? 'Für Gäste sichtbar. Klicken macht den Eintrag intern.' : 'Nur intern. Klicken zeigt den Eintrag wieder für Gäste.' }}">@if($block->visible)@svg('heroicon-m-eye', 'w-4 h-4')@else @svg('heroicon-m-eye-slash', 'w-4 h-4') Intern @endif</button>
+                                        @if($block->type !== 'spacer')
+                                            <button type="button" wire:click="blockBearbeiten({{ $block->id }})" class="{{ $kleinSymbol }}" title="Bearbeiten und Notiz" aria-label="Eintrag bearbeiten">@svg('heroicon-m-pencil', 'w-4 h-4')</button>
+                                        @endif
+                                        <div class="relative" x-data="faMenu()" x-on:keydown.escape="offen = false" x-on:click.outside="offen = false">
+                                            <button type="button" x-on:click="toggle($event)" aria-haspopup="menu" x-bind:aria-expanded="offen" class="{{ $kleinSymbol }}" aria-label="Weitere Aktionen" title="Weitere Aktionen">@svg('heroicon-m-ellipsis-horizontal', 'w-4 h-4')</button>
+                                            <div x-bind:class="{ hidden: ! offen }" x-bind:style="pos" role="menu" class="hidden w-52 fa-surface shadow-lg py-1">
+                                                <button type="button" role="menuitem" wire:click="blockEbene({{ $block->id }}, -1)" x-on:click="offen = false" class="{{ $menuePunkt }}">@svg('heroicon-o-arrow-left', $menueSymbol) Ausrücken</button>
+                                                <button type="button" role="menuitem" wire:click="blockEbene({{ $block->id }}, 1)" x-on:click="offen = false" class="{{ $menuePunkt }}">@svg('heroicon-o-arrow-right', $menueSymbol) Einrücken</button>
+                                                <div class="my-1 border-t border-[var(--fa-line)]"></div>
+                                                <button type="button" role="menuitem" wire:click="blockRaus({{ $block->id }})" x-on:click="offen = false" class="{{ $menuePunktRot }}">@svg('heroicon-o-trash', 'w-4 h-4 shrink-0') Aus dem Kapitel entfernen</button>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
 
-                                {{-- #7/C2: Live-Menü-Vorschau (aufgelöste gerichtZeilen) — Panel statt nackter Zeilen;
-                                     eingebettete Pakete aufgelöst (#1) + Paket-Preis, Einrückung.
-                                     C1: direkte Gericht-Zeilen (slot_id, oberste Ebene) inline editierbar (Bleistift),
-                                     schreibt den foodbook-lokalen Override. Eingebettete Paket-Zeilen sind read-only. --}}
+                                {{-- #7/C2: Live-Menü-Vorschau (aufgelöste gerichtZeilen); eingebettete Pakete aufgelöst (#1).
+                                     C1: Gericht-Zeilen mit slot_id sind inline editierbar (foodbook-lokaler Gästetext). --}}
                                 @if($block->type === 'concept_ref' && ! empty($blockMenus[$block->id]))
-                                    <div class="mt-1.5 ml-6 rounded-lg bg-violet-500/[0.035] border border-black/5 px-3 py-2 space-y-1" data-fb-block-vorschau>
+                                    <div class="mt-2 ml-6 flex flex-col gap-1 rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] bg-[var(--fa-ground)] px-3 py-2" data-fb-block-vorschau>
                                         @foreach($blockMenus[$block->id] as $g)
-                                            {{-- editierbar = jede Gericht-Zeile mit slot_id (direkt ODER eingebettetes Paket —
-                                                 der Block wird in die Paket-Rekursion durchgereicht, Overrides greifen). --}}
-                                            @php($istEditierbar = isset($g['slot_id']))
-                                            @php($slotKey = $istEditierbar ? $block->id . ':' . $g['slot_id'] : null)
+                                            @php
+                                                // editierbar = jede Gericht-Zeile mit slot_id (direkt ODER eingebettetes Paket).
+                                                $istEditierbar = isset($g['slot_id']);
+                                                $slotKey = $istEditierbar ? $block->id . ':' . $g['slot_id'] : null;
+                                            @endphp
                                             @if(($g['type'] ?? '') === 'header')
-                                                <p class="text-[10px] font-semibold uppercase tracking-wider text-gray-500 mt-1.5 first:mt-0" style="margin-left:{{ ($g['einrueckung'] ?? 0) * 12 }}px">{{ $g['text'] }}</p>
+                                                <p class="mt-1.5 first:mt-0 text-[length:var(--fa-text-sm)] font-semibold text-[var(--fa-ink-2)]" style="margin-left:{{ ($g['einrueckung'] ?? 0) * 12 }}px">{{ $g['text'] }}</p>
                                             @elseif(($g['type'] ?? '') === 'paket')
-                                                <div class="flex items-center gap-1.5 mt-1" style="margin-left:{{ ($g['einrueckung'] ?? 0) * 12 }}px">
-                                                    <span class="{{ $pill }} {{ $variantPill['info'] }} normal-case shrink-0">Paket</span>
-                                                    <span class="text-[11px] font-medium text-violet-700 break-words">{{ $g['text'] }}</span>
-                                                    @if(($g['preis'] ?? null) !== null)<span class="ml-auto text-[10px] text-gray-500 tabular-nums shrink-0">{{ number_format((float) $g['preis'], 2, ',', '.') }} €/P</span>@endif
+                                                <div class="mt-1 flex items-center gap-1.5" style="margin-left:{{ ($g['einrueckung'] ?? 0) * 12 }}px">
+                                                    <x-fa::badge tone="info" class="shrink-0">Paket</x-fa::badge>
+                                                    <span class="min-w-0 break-words text-[length:var(--fa-text-md)] font-medium text-[var(--fa-ink)]">{{ $g['text'] }}</span>
+                                                    @if(($g['preis'] ?? null) !== null)<span class="ml-auto shrink-0 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)] tabular-nums">{{ $euro($g['preis']) }} pro Person</span>@endif
                                                 </div>
                                             @elseif($slotKey !== null && $editSlotKey === $slotKey)
                                                 <div class="flex items-center gap-1" style="margin-left:{{ 8 + ($g['einrueckung'] ?? 0) * 12 }}px" data-fb-slot-editor>
-                                                    <input type="text" wire:model="editSlotWording" wire:keydown.enter="slotWordingSpeichern" wire:keydown.escape="slotWordingAbbrechen"
-                                                           class="{{ $input }} !py-0.5 !text-[11px] flex-1" placeholder="Anzeigename (Kunde) — leer = Wording-Kette" data-fb-slot-input />
-                                                    <button type="button" wire:click="slotWordingSpeichern" class="{{ $pill }} {{ $variantPill['primary'] }} shrink-0" title="Speichern">OK</button>
-                                                    <button type="button" wire:click="slotWordingAbbrechen" class="text-gray-400 hover:text-gray-600 shrink-0 text-xs px-1" title="Abbrechen">×</button>
+                                                    <x-fa::input size="sm" wire:model="editSlotWording" wire:keydown.enter="slotWordingSpeichern" wire:keydown.escape="slotWordingAbbrechen"
+                                                           class="flex-1 min-w-0" placeholder="Name für Gäste, leer lassen für den Standard" aria-label="Name für Gäste" data-fb-slot-input />
+                                                    <x-fa::icon-button icon="heroicon-m-check" label="Name speichern" size="sm" wire:click="slotWordingSpeichern" />
+                                                    <x-fa::icon-button icon="heroicon-m-x-mark" label="Abbrechen" size="sm" wire:click="slotWordingAbbrechen" />
                                                 </div>
                                             @else
-                                                <div class="group/dish flex items-center gap-1 text-[11px] {{ ($g['source'] ?? null) === 'name' ? 'text-amber-600 italic' : 'text-gray-600' }}" style="margin-left:{{ 8 + ($g['einrueckung'] ?? 0) * 12 }}px">
-                                                    <span class="text-gray-300 shrink-0">·</span>
-                                                    <span class="break-words">{{ $g['text'] }}</span>
-                                                    @if(($g['source'] ?? null) === 'name')<span class="text-[9px] text-amber-500 shrink-0">Wording fehlt</span>@endif
-                                                    {{-- Einzelpreis-Concept: VK je direkter Gericht-Zeile auch in der Editor-Vorschau (nicht nur beim Paket). --}}
-                                                    @if(($g['preis'] ?? null) !== null)<span class="ml-auto text-[10px] text-gray-500 tabular-nums shrink-0">{{ number_format((float) $g['preis'], 2, ',', '.') }} €/P</span>@endif
+                                                <div class="group/dish flex items-center gap-1.5 text-[length:var(--fa-text-md)] {{ ($g['source'] ?? null) === 'name' ? 'italic text-[var(--fa-warn)]' : 'text-[var(--fa-ink-2)]' }}" style="margin-left:{{ 8 + ($g['einrueckung'] ?? 0) * 12 }}px">
+                                                    <span class="min-w-0 break-words">{{ $g['text'] }}</span>
+                                                    @if(($g['source'] ?? null) === 'name')<span class="shrink-0 not-italic text-[length:var(--fa-text-sm)]">Gästetext fehlt</span>@endif
+                                                    {{-- Einzelpreis-Concept: VK je direkter Gericht-Zeile auch in der Editor-Vorschau. --}}
+                                                    @if(($g['preis'] ?? null) !== null)<span class="ml-auto shrink-0 not-italic text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)] tabular-nums">{{ $euro($g['preis']) }} pro Person</span>@endif
                                                     @if($istEditierbar)
                                                         <button type="button" wire:click="slotWordingBearbeiten({{ $block->id }}, {{ $g['slot_id'] }}, @js(($g['source'] ?? null) === 'name' ? '' : $g['text']))"
-                                                                class="ml-1 shrink-0 text-gray-300 hover:text-violet-500 opacity-0 group-hover/dish:opacity-100 transition-opacity" title="Anzeigename bearbeiten" data-fb-slot-edit>@svg('heroicon-o-pencil', 'w-3 h-3 inline-block align-middle')</button>
+                                                                class="shrink-0 inline-flex text-[var(--fa-ink-3)] hover:text-[var(--fa-ink)] opacity-0 group-hover/dish:opacity-100 focus:opacity-100 transition-opacity" title="Namen für Gäste bearbeiten" aria-label="Namen für Gäste bearbeiten" data-fb-slot-edit>@svg('heroicon-m-pencil', 'w-3.5 h-3.5')</button>
                                                     @endif
                                                 </div>
                                             @endif
@@ -840,156 +887,175 @@
                                 @endif
 
                                 @if($editBlockId === $block->id)
-                                    <div class="mt-2 space-y-2 pl-6">
+                                    <div class="mt-2 ml-6 flex flex-col gap-3 rounded-[var(--fa-radius-control)] border border-[var(--fa-accent-line)] p-3">
                                         @if(in_array($block->type, ['header_neutral', 'header_frei', 'header_frei_preis']))
-                                            <input type="text" wire:model="blockForm.label" placeholder="Header-Text" class="{{ $input }}" />
+                                            <x-fa::field label="Überschrift" for="blk-label-{{ $block->id }}">
+                                                <x-fa::input id="blk-label-{{ $block->id }}" wire:model="blockForm.label" />
+                                            </x-fa::field>
                                         @endif
                                         @if($block->type === 'header_frei_preis')
-                                            <div class="flex gap-2">
-                                                <select wire:model="blockForm.price_basis" class="{{ $input }} w-32"><option value="person">pro Person</option><option value="pauschal">Pauschal</option><option value="staffel">Staffel</option></select>
-                                                <input type="number" step="0.01" wire:model="blockForm.price_value" class="{{ $input }} w-28 text-right tabular-nums" placeholder="0,00 €" />
+                                            <div class="flex flex-wrap gap-3">
+                                                <x-fa::field label="Preisart" for="blk-basis-{{ $block->id }}">
+                                                    <x-fa::select id="blk-basis-{{ $block->id }}" wire:model="blockForm.price_basis" class="w-40"><option value="person">Pro Person</option><option value="pauschal">Pauschal</option><option value="staffel">Staffel</option></x-fa::select>
+                                                </x-fa::field>
+                                                <x-fa::field label="Preis in €" for="blk-preis-{{ $block->id }}">
+                                                    <x-fa::input id="blk-preis-{{ $block->id }}" type="number" step="0.01" wire:model="blockForm.price_value" numeric class="w-32" placeholder="0,00" />
+                                                </x-fa::field>
                                             </div>
                                         @endif
                                         @if($block->type === 'concept_ref')
                                             {{-- Wording-Kette, oberste Stufe: Foodbook-Override → Konzept-Wording → VK-Wording-Standard → Name --}}
-                                            <input type="text" wire:model="blockForm.wording" class="{{ $input }}" placeholder="Anzeigename (Kunde) — leer = Wording-Kette (Konzept → Standard → Name)" data-fb-block-wording />
+                                            <x-fa::field label="Name für Gäste" for="blk-wording-{{ $block->id }}" hint="Leer lassen, dann gilt der Text des Konzepts, sonst der Standard oder der Name.">
+                                                <x-fa::input id="blk-wording-{{ $block->id }}" wire:model="blockForm.wording" data-fb-block-wording />
+                                            </x-fa::field>
                                         @endif
                                         @if($block->type === 'recipe_ref')
                                             {{-- E1.3: Einzel-Gericht — Wording-Override (Foodbook → VK-Wording-Standard → Name) + Preis-Achse (E1.2) --}}
-                                            <input type="text" wire:model="blockForm.wording" class="{{ $input }}" placeholder="Anzeigename (Kunde) — leer = Wording-Kette (Standard → Name)" data-fb-block-wording />
-                                            <select wire:model="blockForm.price_basis" class="{{ $input }} w-40" title="Preis-Achse für dieses Gericht"><option value="person">pro Position (×Pax)</option><option value="pauschal">Pauschal</option></select>
-                                        @endif
-                                        @if($block->type === 'text')
-                                            <textarea wire:model="blockForm.customer_text" rows="3" class="{{ $input }}" placeholder="Marketing-Text (kundensichtbar)"></textarea>
-                                        @else
-                                            <div class="flex gap-1.5 items-start">
-                                                <textarea wire:model="blockForm.customer_text" rows="2" class="{{ $input }}" placeholder="Beschreibungstext / Untertitel (kundensichtbar, optional)"></textarea>
-                                                @if($block->type === 'concept_ref')
-                                                    <x-foodalchemist::ki-action action="kiKundentext" variant="icon" icon="heroicon-o-sparkles" label="KI-Kundentext"
-                                                            title="vk.marketing: verkäuferischer Beschreibungstext zu diesem Concept" class="shrink-0 mt-0.5" data-fb-ki-kundentext />
-                                                @endif
+                                            <div class="flex flex-wrap gap-3">
+                                                <x-fa::field label="Name für Gäste" for="blk-wording-{{ $block->id }}" class="flex-1 min-w-[14rem]" hint="Leer lassen, dann gilt der Standard oder der Name.">
+                                                    <x-fa::input id="blk-wording-{{ $block->id }}" wire:model="blockForm.wording" data-fb-block-wording />
+                                                </x-fa::field>
+                                                <x-fa::field label="Preisart" for="blk-basis-{{ $block->id }}">
+                                                    <x-fa::select id="blk-basis-{{ $block->id }}" wire:model="blockForm.price_basis" class="w-48" title="Wie der Preis dieses Gerichts zählt"><option value="person">Pro Position, mal Gäste</option><option value="pauschal">Pauschal</option></x-fa::select>
+                                                </x-fa::field>
                                             </div>
                                         @endif
-                                        <input type="text" wire:model="blockForm.interne_bemerkung" class="{{ $input }}" placeholder="Interne Notiz (nicht kundensichtbar)" />
-                                        <div class="flex gap-2">
-                                            <button type="button" wire:click="blockSpeichern" class="{{ $btnPrimary }}">OK</button>
-                                            <button type="button" wire:click="$set('editBlockId', null)" class="{{ $btnGhost }}">Abbrechen</button>
+                                        @if($block->type === 'text')
+                                            <x-fa::field label="Text für Gäste" for="blk-text-{{ $block->id }}">
+                                                <x-fa::textarea id="blk-text-{{ $block->id }}" wire:model="blockForm.customer_text" rows="3"></x-fa::textarea>
+                                            </x-fa::field>
+                                        @else
+                                            <x-fa::field label="Beschreibung für Gäste" for="blk-text-{{ $block->id }}" optional>
+                                                <div class="flex items-start gap-1.5">
+                                                    <x-fa::textarea id="blk-text-{{ $block->id }}" wire:model="blockForm.customer_text" rows="2" class="flex-1" placeholder="Untertitel oder kurzer Text"></x-fa::textarea>
+                                                    @if($block->type === 'concept_ref')
+                                                        <x-foodalchemist::ki-action action="kiKundentext" variant="icon" icon="heroicon-o-sparkles" label="Beschreibung vorschlagen"
+                                                                title="Die KI schreibt einen verkaufenden Text zu diesem Concept" class="shrink-0 mt-2" data-fb-ki-kundentext />
+                                                    @endif
+                                                </div>
+                                            </x-fa::field>
+                                        @endif
+                                        <x-fa::field label="Interne Notiz" for="blk-notiz-{{ $block->id }}" hint="Gäste sehen die Notiz nicht.">
+                                            <x-fa::input id="blk-notiz-{{ $block->id }}" wire:model="blockForm.interne_bemerkung" />
+                                        </x-fa::field>
+                                        <div class="flex flex-wrap justify-end gap-2">
+                                            <x-fa::button variant="ghost" size="sm" wire:click="$set('editBlockId', null)">Abbrechen</x-fa::button>
+                                            <x-fa::button variant="primary" size="sm" icon="heroicon-m-check" wire:click="blockSpeichern">Eintrag übernehmen</x-fa::button>
                                         </div>
                                     </div>
                                 @endif
                             </div>
                         @empty
-                            {{-- E1b (Spec 40): Speisen-Tab entzerren — der KI-Weg (Voll-Kaskade) ist NICHT tot, nur woanders.
-                                 Empty-State macht ihn sichtbar, statt gefühlter Sackgasse. Tiefen-Ausbau → Werkstrang M. --}}
-                            <div class="py-4 text-center space-y-1">
-                                <p class="text-xs text-gray-500">Noch kein Inhalt. Rechts im Katalog ein Concept, Paket oder Format einfügen — oder Header/Text/Preis-Block hinzufügen.</p>
-                                <p class="text-[11px] text-violet-600/80">Oder KI-befüllen: die <span class="font-medium">Voll-Kaskade</span> (Planung) erzeugt je Kapitel automatisch ein Konzept — es landet direkt hier im Inhalt.</p>
-                            </div>
+                            {{-- E1b (Spec 40): der KI-Weg (Voll-Kaskade) ist nicht tot, nur woanders — der Leerzustand zeigt ihn. --}}
+                            <x-fa::empty icon="heroicon-o-squares-plus" title="Noch kein Inhalt">
+                                Im Katalog ein Concept, Paket oder Format einfügen oder oben Text und Überschriften ergänzen.
+                                Die Leitstelle kann je Kapitel auch automatisch ein Konzept erstellen, es landet dann hier.
+                            </x-fa::empty>
                         @endforelse
                     </div>
 
-                </div>{{-- /Inhalt --}}
+                </x-fa::section>{{-- /Inhalt --}}
                 </div>{{-- /linke Spalte (Kopf + Inhalt) --}}
 
-                {{-- #3: Persistenter Katalog — ausschließlich Concept · Paket · Format (kein Gericht-Reiter).
-                     Suche + Facetten; „+" bucht Concept/Paket als concept_ref ins gewählte Kapitel, Format
-                     als eigenes Kapitel (F5: live concept_ref-Blöcke, kein Sonderweg). Server-Modus. --}}
+                {{-- #3: Katalog — Concept · Paket · Format. Suche + Filter; „+" bucht Concept/Paket ins gewählte
+                     Kapitel, Format als eigenes Kapitel (F5: live concept_ref-Blöcke). Server-Modus. --}}
                 <x-foodalchemist::katalog-picker marker="fb" switch="katalogModus" :modes="[
-                    ['key' => 'concept', 'label' => 'Concept', 'active' => $pickerModus === 'concept'],
-                    ['key' => 'paket', 'label' => 'Paket', 'active' => $pickerModus === 'paket'],
-                    ['key' => 'format', 'label' => 'Format', 'active' => $pickerModus === 'format'],
+                    ['key' => 'concept', 'label' => 'Concepts', 'active' => $pickerModus === 'concept'],
+                    ['key' => 'paket', 'label' => 'Pakete', 'active' => $pickerModus === 'paket'],
+                    ['key' => 'format', 'label' => 'Formate', 'active' => $pickerModus === 'format'],
                 ]">
                     @if($pickerModus === 'concept')
-                        <input type="search" wire:model.live.debounce.300ms="conceptSuche" placeholder="Concept suchen …" class="{{ $input }} w-full mb-2 shrink-0" data-fb-katalog-concept />
-                        @php($facettenAktiv = collect($conceptFacetten)->filter(fn ($v) => $v !== null)->isNotEmpty())
-                        {{-- Facetten als Dropdowns (Produktions-Muster) statt Pill-Wand — Concepter-Dimensionen. --}}
-                        <div class="grid grid-cols-2 gap-1 mb-2 shrink-0" data-fb-concept-facetten>
-                            <select wire:model.live="conceptFacetten.eventtyp" class="{{ $input }} !py-0.5 !text-[11px]" data-fb-facet-eventtyp>
+                        <x-fa::input type="search" size="sm" wire:model.live.debounce.300ms="conceptSuche" placeholder="Concept suchen" aria-label="Concept suchen" class="w-full mb-2 shrink-0" data-fb-katalog-concept />
+                        @php $facettenAktiv = collect($conceptFacetten)->filter(fn ($v) => $v !== null)->isNotEmpty(); @endphp
+                        <div class="grid grid-cols-2 gap-1.5 mb-2 shrink-0" data-fb-concept-facetten>
+                            <x-fa::select size="sm" wire:model.live="conceptFacetten.eventtyp" aria-label="Eventtyp" data-fb-facet-eventtyp>
                                 <option value="">Alle Eventtypen</option>
                                 @foreach($facetteEventtypen as $et)<option value="{{ $et->id }}">{{ $et->name }}</option>@endforeach
-                            </select>
-                            <select wire:model.live="conceptFacetten.servierform" class="{{ $input }} !py-0.5 !text-[11px]" data-fb-facet-servierform>
+                            </x-fa::select>
+                            <x-fa::select size="sm" wire:model.live="conceptFacetten.servierform" aria-label="Servierform" data-fb-facet-servierform>
                                 <option value="">Alle Servierformen</option>
                                 @foreach($facetteServierformen as $sf)<option value="{{ $sf->id }}">{{ $sf->label }}</option>@endforeach
-                            </select>
-                            <select wire:model.live="conceptFacetten.einsatzmoment" class="{{ $input }} !py-0.5 !text-[11px]" data-fb-facet-einsatzmoment>
+                            </x-fa::select>
+                            <x-fa::select size="sm" wire:model.live="conceptFacetten.einsatzmoment" aria-label="Einsatzmoment" data-fb-facet-einsatzmoment>
                                 <option value="">Alle Einsatzmomente</option>
                                 @foreach($facetteMomente as $em)<option value="{{ $em->id }}">{{ $em->name }}</option>@endforeach
-                            </select>
-                            <select wire:model.live="conceptFacetten.season" class="{{ $input }} !py-0.5 !text-[11px]" data-fb-facet-season>
+                            </x-fa::select>
+                            <x-fa::select size="sm" wire:model.live="conceptFacetten.season" aria-label="Saison" data-fb-facet-season>
                                 <option value="">Alle Saisons</option>
                                 @foreach($facetteSaisons as $sa)<option value="{{ $sa->id }}">{{ $sa->name }}</option>@endforeach
-                            </select>
+                            </x-fa::select>
                         </div>
-                        <div class="flex-1 overflow-y-auto space-y-0.5">
+                        <div class="flex-1 overflow-y-auto flex flex-col gap-0.5">
                             @forelse($conceptKandidaten as $ck)
                                 <x-foodalchemist::katalog-row wire:key="kck-{{ $ck->id }}" wire:click="conceptHinzu({{ $ck->id }})" :title="$ck->name" :price="$ck->price_per_person_cache !== null ? number_format((float) $ck->price_per_person_cache, 2, ',', '.') . ' €' : null">{{ $ck->name }}</x-foodalchemist::katalog-row>
                             @empty
-                                <p class="text-[11px] text-gray-500 px-2 py-2">{{ $conceptSuche !== '' || $facettenAktiv ? 'Keine Concepts für diese Auswahl.' : 'Noch keine Concepts angelegt.' }}</p>
+                                <p class="px-2 py-2 {{ $hinweis }}">{{ $conceptSuche !== '' || $facettenAktiv ? 'Keine Concepts für diese Auswahl.' : 'Noch keine Concepts angelegt.' }}</p>
                             @endforelse
                         </div>
                     @elseif($pickerModus === 'paket')
-                        {{-- #3: Paket-Reiter (kind=paket-Concepts) — dieselben Facetten-Dropdowns wie Concept,
-                             zeigt den Kundennamen (consumer_name). Buchung als concept_ref (paketHinzu). --}}
-                        <input type="search" wire:model.live.debounce.300ms="paketSuche" placeholder="Paket suchen …" class="{{ $input }} w-full mb-2 shrink-0" data-fb-katalog-paket />
-                        @php($paketFacettenAktiv = collect($paketFacetten)->filter(fn ($v) => $v !== null)->isNotEmpty())
-                        <div class="grid grid-cols-2 gap-1 mb-2 shrink-0" data-fb-paket-facetten>
-                            <select wire:model.live="paketFacetten.eventtyp" class="{{ $input }} !py-0.5 !text-[11px]" data-fb-paket-facet-eventtyp>
+                        {{-- #3: Paket-Reiter (kind=paket-Concepts) — zeigt den Kundennamen (consumer_name). --}}
+                        <x-fa::input type="search" size="sm" wire:model.live.debounce.300ms="paketSuche" placeholder="Paket suchen" aria-label="Paket suchen" class="w-full mb-2 shrink-0" data-fb-katalog-paket />
+                        @php $paketFacettenAktiv = collect($paketFacetten)->filter(fn ($v) => $v !== null)->isNotEmpty(); @endphp
+                        <div class="grid grid-cols-2 gap-1.5 mb-2 shrink-0" data-fb-paket-facetten>
+                            <x-fa::select size="sm" wire:model.live="paketFacetten.eventtyp" aria-label="Eventtyp" data-fb-paket-facet-eventtyp>
                                 <option value="">Alle Eventtypen</option>
                                 @foreach($facetteEventtypen as $et)<option value="{{ $et->id }}">{{ $et->name }}</option>@endforeach
-                            </select>
-                            <select wire:model.live="paketFacetten.servierform" class="{{ $input }} !py-0.5 !text-[11px]" data-fb-paket-facet-servierform>
+                            </x-fa::select>
+                            <x-fa::select size="sm" wire:model.live="paketFacetten.servierform" aria-label="Servierform" data-fb-paket-facet-servierform>
                                 <option value="">Alle Servierformen</option>
                                 @foreach($facetteServierformen as $sf)<option value="{{ $sf->id }}">{{ $sf->label }}</option>@endforeach
-                            </select>
-                            <select wire:model.live="paketFacetten.einsatzmoment" class="{{ $input }} !py-0.5 !text-[11px]" data-fb-paket-facet-einsatzmoment>
+                            </x-fa::select>
+                            <x-fa::select size="sm" wire:model.live="paketFacetten.einsatzmoment" aria-label="Einsatzmoment" data-fb-paket-facet-einsatzmoment>
                                 <option value="">Alle Einsatzmomente</option>
                                 @foreach($facetteMomente as $em)<option value="{{ $em->id }}">{{ $em->name }}</option>@endforeach
-                            </select>
-                            <select wire:model.live="paketFacetten.season" class="{{ $input }} !py-0.5 !text-[11px]" data-fb-paket-facet-season>
+                            </x-fa::select>
+                            <x-fa::select size="sm" wire:model.live="paketFacetten.season" aria-label="Saison" data-fb-paket-facet-season>
                                 <option value="">Alle Saisons</option>
                                 @foreach($facetteSaisons as $sa)<option value="{{ $sa->id }}">{{ $sa->name }}</option>@endforeach
-                            </select>
+                            </x-fa::select>
                         </div>
-                        <div class="flex-1 overflow-y-auto space-y-0.5">
+                        <div class="flex-1 overflow-y-auto flex flex-col gap-0.5">
                             @forelse($paketKandidaten as $pk)
                                 <x-foodalchemist::katalog-row wire:key="kpk-{{ $pk->id }}" wire:click="paketHinzu({{ $pk->id }})" :title="$pk->consumer_name ?: $pk->name" :price="$pk->price_per_person_cache !== null ? number_format((float) $pk->price_per_person_cache, 2, ',', '.') . ' €' : null">{{ $pk->consumer_name ?: $pk->name }}</x-foodalchemist::katalog-row>
                             @empty
-                                <p class="text-[11px] text-gray-500 px-2 py-2">{{ $paketSuche !== '' || $paketFacettenAktiv ? 'Keine Pakete für diese Auswahl.' : 'Noch keine Pakete angelegt.' }}</p>
+                                <p class="px-2 py-2 {{ $hinweis }}">{{ $paketSuche !== '' || $paketFacettenAktiv ? 'Keine Pakete für diese Auswahl.' : 'Noch keine Pakete angelegt.' }}</p>
                             @endforelse
                         </div>
                     @else
                         {{-- F5: Format WIE EIN CONCEPT buchen — wird ein eigenes Kapitel (Editionen als live concept_ref-Blöcke). --}}
-                        <input type="search" wire:model.live.debounce.300ms="formatSuche" placeholder="Format suchen …" class="{{ $input }} w-full mb-2 shrink-0" data-fb-katalog-format />
-                        @error('formatKapitel')<p class="text-[11px] text-rose-500 px-1 mb-1 shrink-0">{{ $message }}</p>@enderror
-                        <p class="text-[10px] text-gray-500 mb-1 shrink-0">Bucht ein Format als eigenes Kapitel (Editionen live).</p>
-                        <div class="flex-1 overflow-y-auto space-y-0.5">
+                        <x-fa::input type="search" size="sm" wire:model.live.debounce.300ms="formatSuche" placeholder="Format suchen" aria-label="Format suchen" class="w-full mb-2 shrink-0" data-fb-katalog-format />
+                        @error('formatKapitel')<p class="px-1 mb-1 shrink-0 text-[length:var(--fa-text-sm)] text-[var(--fa-crit)]" role="alert">{{ $message }}</p>@enderror
+                        <p class="mb-1 shrink-0 {{ $hinweis }}">Ein Format wird ein eigenes Kapitel, seine Editionen bleiben aktuell.</p>
+                        <div class="flex-1 overflow-y-auto flex flex-col gap-0.5">
                             @forelse($formatKandidaten as $fk)
-                                <x-foodalchemist::katalog-row wire:key="kfmt-{{ $fk->id }}" wire:click="formatEinfuegen({{ $fk->id }})" :title="$fk->consumer_name ?: $fk->name">{{ $fk->name }}@if($fk->origin === 'kunde')<span class="text-[9px] text-gray-400 ml-1">(Kunde-IP)</span>@endif</x-foodalchemist::katalog-row>
+                                <x-foodalchemist::katalog-row wire:key="kfmt-{{ $fk->id }}" wire:click="formatEinfuegen({{ $fk->id }})" :title="$fk->consumer_name ?: $fk->name">{{ $fk->name }}@if($fk->origin === 'kunde')<span class="ml-1 text-[var(--fa-ink-3)]">(vom Kunden)</span>@endif</x-foodalchemist::katalog-row>
                             @empty
-                                <p class="text-[11px] text-gray-500 px-2 py-2">Keine Formate vorhanden.</p>
+                                <p class="px-2 py-2 {{ $hinweis }}">Noch keine Formate angelegt.</p>
                             @endforelse
                         </div>
                     @endif
                 </x-foodalchemist::katalog-picker>
             </div>{{-- /2col Speisen --}}
             @else
-                <div class="{{ $card }} p-8 text-center text-sm text-gray-500">Links im Kapitelbaum ein Kapitel wählen, um seine Speisen zu bearbeiten.</div>
+                <x-fa::empty icon="heroicon-o-queue-list" title="Kein Kapitel gewählt">Links im Kapitelbaum ein Kapitel wählen, um seine Speisen zu bearbeiten.</x-fa::empty>
             @endif{{-- /Kapitel-Editor --}}
                 </div>{{-- /Speisen-Tab (Spec 29 / S6) --}}
-                </x-foodalchemist::editor-tabs>{{-- /editor-tabs — briefing · planung · speisen · kreativ · trend · branding · preise --}}
+                </x-foodalchemist::editor-tabs>
             </div>{{-- /fbcockpit --}}
                 </div>{{-- /Mitte --}}
 
-                {{-- Rechtes Overview-Panel (Leitstelle-Rail) ENTFERNT (Dominique 2026-08-23): seine drei Views
-                     (Fortschritt · Übersicht · Kalkulation) sind jetzt eigene Haupt-Tabs → alles voll-breit,
-                     Kapitelnamen voll sichtbar. Die Rail-Komponente bleibt (ungemountet) für evtl. Wiederverwendung. --}}
-            </div>{{-- /2-Spalten-Cockpit (nav + mitte; Overview-Panel aufgelöst) --}}
+                {{-- Rechtes Overview-Panel (Leitstelle-Rail) ENTFERNT (Dominique 2026-08-23): seine Views sind eigene
+                     Reiter. Die Rail-Komponente bleibt (ungemountet) für evtl. Wiederverwendung. --}}
+            </div>{{-- /Spalten-Cockpit --}}
             </x-foodalchemist::modal>{{-- /Editor-Modal (Spec 29) --}}
         @else
-            <div class="{{ $card }} p-10 text-center text-sm text-gray-500">
-                Links ein Foodbook wählen oder „+ Neues Foodbook". Das Foodbook bündelt fertige <strong>Concepts</strong> zu einem <strong>person-unabhängigen Portfolio</strong> (Kapitel, €/Person) — Pax &amp; Gesamtpreis liegen im <strong>Angebot</strong>, Einzel-Gerichte im Concepter.
-            </div>
+            <x-fa::empty icon="heroicon-o-book-open" title="Kein Foodbook gewählt" class="fa-surface">
+                Links ein Foodbook wählen oder ein neues anlegen. Das Foodbook bündelt fertige Concepts zu einem Portfolio
+                mit Kapiteln und Preisen pro Person. Gästezahl und Gesamtpreis stehen im Angebot, einzelne Gerichte im Concepter.
+                <x-slot:action>
+                    <x-fa::button variant="primary" icon="heroicon-m-plus" wire:click="neu">Foodbook anlegen</x-fa::button>
+                </x-slot:action>
+            </x-fa::empty>
         @endif
     </x-ui-page-container>
     {{-- Spec 53/F Stufe 2: Sprachbefehl-Mount auf Seitenebene (Modal + optionales schwebendes Element). --}}

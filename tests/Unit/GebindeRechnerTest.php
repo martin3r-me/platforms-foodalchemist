@@ -87,7 +87,7 @@ it('kein Lead-LA: nicht berechenbar', function () {
     $out = $this->r->berechne(null, 1296.0);
 
     expect($out['berechenbar'])->toBeFalse()
-        ->and($out['grund'])->toContain('Kein Lead');
+        ->and($out['grund'])->toContain('Kein Hauptartikel');
 });
 
 it('Preis unbekannt: Gebinde-Anzahl steht, line_total bleibt null', function () {

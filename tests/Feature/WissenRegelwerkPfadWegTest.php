@@ -80,7 +80,7 @@ it('meldet die tote Zeile als BLOCKIERENDEN Befund — sonst wäre der Wegfall s
     $befund = collect($p['befunde'])->firstWhere('code', 'routing_always_tot');
     expect($befund)->not->toBeNull()
         ->and($befund['schwere'])->toBe('blockiert')
-        ->and($befund['text'])->toContain('knowledge_canon.PUT')
+        ->and($befund['text'])->toContain('als verbindliches Wissen hinterlegen')
         ->and($p['zustand'])->toBe('fehlerhaft');
 });
 

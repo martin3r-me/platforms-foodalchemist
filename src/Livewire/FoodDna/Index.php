@@ -28,6 +28,6 @@ class Index extends Component
 
         return view('foodalchemist::livewire.food-dna.index', [
             'kuechenTypLabel' => $kuechenTyp !== null ? TeamSettingsService::KUECHEN_TYPEN[$kuechenTyp] : null,
-        ])->layout('platform::layouts.app');
+        ])->layout('foodalchemist::layouts.standalone');
     }
 }

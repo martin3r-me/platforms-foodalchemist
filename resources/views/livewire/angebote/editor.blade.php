@@ -1,443 +1,510 @@
-{{-- Angebote-Editor (Fullscreen-Dark, pro Angebot) — 1:1-Fork des Foodbook-Editors (Doc 15 §9.3 /
+{{-- Angebote-Editor (Vollbild, pro Angebot) — 1:1-Fork des Foodbook-Editors (Doc 15 §9.3 /
      resources/views/livewire/foodbooks/index.blade.php) auf das ANGEBOT. Methoden/Properties bleiben
      wo möglich IDENTISCH zum Foodbook (B1 spiegelt die Namen); Models/Service sind ersetzt
      (FoodAlchemistAngebot + OfferCompositionService/AngebotService), plus Angebot-Spezifika:
-     Anfrage-Kopf, Zuschlagskalkulation (B3-Partial), Gerüst, Status-Workflow, → Produktion.
-     Der Rahmen ist das bestehende Angebot-Modal (name="angebot-editor", fullscreen, dark-canvas). --}}
-@php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
-@php($aktiv = 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700')
-@php($hover = 'text-gray-600 hover:bg-black/[0.03]')
+     Anfrage-Kopf, Zuschlagskalkulation (B3-Partial), Status-Workflow, → Produktion.
+     Der Rahmen ist das bestehende Angebot-Modal (name="angebot-editor", fullscreen, dark-canvas).
 
-<x-foodalchemist::modal name="angebot-editor" fullscreen dark-canvas title="Angebot bearbeiten"
+     fa-pass (2026-10-05): Werkbank-Modus — nur --fa-*-Tokens und x-fa-Bausteine, damit hell UND
+     dunkel stimmen. Anatomie: Kopf = Titel + Name · Status ändern (Menü) · In der Leitstelle planen
+     (die eine KI-Aktion im Kopf) · Weitere Aktionen (Drucken, Dokument, Präsentation, Produktion,
+     Löschen ganz unten) · Speichern (die eine Hauptaktion). Hauptzahl = Angebotssumme.
+     Häufigste Arbeit = Kapitel füllen und Preis prüfen → Reiter Übersicht · Aufbau · Kalkulation
+     zuerst; ein Angebot ohne Kapitel öffnet auf «Anfrage». --}}
+@php
+    $menuePunkt = 'flex w-full items-center gap-2 px-3 py-2 text-left text-[length:var(--fa-text-md)] text-[var(--fa-ink)] hover:bg-[var(--fa-hover)]';
+    $hinweis = 'text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]';
+    $mini = 'inline-flex items-center justify-center w-6 h-6 shrink-0 rounded-[var(--fa-radius-control)] text-[var(--fa-ink-3)] hover:text-[var(--fa-ink)] hover:bg-[var(--fa-hover)] transition-colors duration-150';
+    $miniKrit = 'inline-flex items-center justify-center w-6 h-6 shrink-0 rounded-[var(--fa-radius-control)] text-[var(--fa-ink-3)] hover:text-[var(--fa-crit)] hover:bg-[var(--fa-crit-soft)] transition-colors duration-150';
+    $navAn = 'bg-[var(--fa-accent-soft)] text-[var(--fa-accent)] font-medium';
+    $navAus = 'text-[var(--fa-ink-2)] hover:bg-[var(--fa-hover)] hover:text-[var(--fa-ink)]';
+    $dateiFeld = 'block w-full text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)] cursor-pointer file:mr-2 file:h-7 file:px-2.5 file:rounded-[var(--fa-radius-control)] file:border-0 file:bg-[var(--fa-accent-soft)] file:text-[var(--fa-accent)] file:font-medium';
+    $knopfLeise = 'inline-flex items-center gap-1.5 h-7 px-2.5 whitespace-nowrap rounded-[var(--fa-radius-control)] text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-2)] hover:bg-[var(--fa-hover)] hover:text-[var(--fa-ink)] transition-colors duration-150';
+    $haken = 'rounded border-[var(--fa-line-strong)] text-[var(--fa-accent)] accent-[var(--fa-accent)] focus:ring-[var(--fa-accent)]';
+    $euro = fn ($wert) => number_format((float) $wert, 2, ',', '.') . ' €';
+    $prozent = fn ($wert) => number_format((float) $wert, 1, ',', '.') . ' %';
+    // Rohwerte lesbar machen (Status-Badge-Variante, Fortschritt, Preis-Modus, Wareneinsatz-Ampel).
+    $statusTon = ['secondary' => 'neutral', 'info' => 'info', 'warning' => 'warn', 'primary' => 'accent', 'success' => 'ok', 'danger' => 'crit'];
+    $fortTon = ['offen' => 'neutral', 'in_arbeit' => 'warn', 'fertig' => 'ok'];
+    $fortLabel = ['offen' => 'Offen', 'in_arbeit' => 'In Arbeit', 'fertig' => 'Fertig'];
+    $weTon = ['gruen' => 'ok', 'gelb' => 'warn', 'rot' => 'crit'];
+    $befundTon = ['erfuellt' => 'ok', 'teilerfuellt' => 'warn', 'verletzt' => 'crit', 'info' => 'info'];
+    $preisModusText = fn (?string $m) => ['auto' => 'Preis aus dem Inhalt', 'manuell' => 'Preis von Hand', 'alternativen' => 'Preis je Auswahl', 'fixed' => 'Festpreis'][$m ?? ''] ?? ucfirst((string) $m);
+    $hatKapitel = count($kapitelTree ?? []) > 0;
+@endphp
+
+<x-foodalchemist::modal name="angebot-editor" fullscreen dark-canvas title="Angebot"
     :title-name="$angebot->name ?? null">
     <x-slot:actions>
         @if($angebot)
-            <button type="button" wire:click="speichern" class="{{ $btnPrimary }}" data-angebot-speichern>Speichern</button>
-            {{-- Workflow-Übergänge (Status-Maschine) --}}
-            @foreach($angebot->status->uebergaenge() as $next)
-                <button type="button" wire:click="statusSetzen('{{ $next->value }}')" class="{{ $btnGhostXs }}" data-angebot-status="{{ $next->value }}">→ {{ $next->label() }}</button>
-            @endforeach
-            <span class="text-gray-300">|</span>
-            {{-- Entry in die Leitstelle-Planung (spiegelt Foodbook »In der Leitstelle planen«). --}}
-            <button type="button" wire:click="vollKaskadeStarten" class="{{ $btnGhostXs }} text-violet-600" data-angebot-in-leitstelle>In der Leitstelle planen</button>
-            <span class="text-gray-300">|</span>
-            <a href="{{ route('foodalchemist.angebote.karte', $angebot->id) }}" target="_blank" class="{{ $btnGhostXs }}" title="Schöne Angebots-Karte (Kundenausgabe, Druck/PDF)">@svg('heroicon-o-printer', 'w-3.5 h-3.5 inline align-text-bottom') Druck/Karte</a>
-            <a href="{{ route('foodalchemist.angebote.dokument', $angebot->id) }}" target="_blank" class="{{ $btnGhostXs }}" title="Schlichtes Angebots-Dokument (Druck/PDF)">Dokument</a>
-            <a href="{{ route('foodalchemist.angebote.praesentation', $angebot->id) }}" target="_blank" class="{{ $btnGhostXs }}" title="Externe Kunden-Präsentation (Web-Seite, ohne Interna)">Präsentation</a>
-            {{-- Stufe 3 — Angebot → Produktion (concept × Pax → Produktionsauftrag am Event-Tag). --}}
-            <button type="button" wire:click="anProduktion" class="{{ $btnGhostXs }}"
-                    title="Angebot in die Produktion übergeben — danach im Tagesplan planbar" data-angebot-produktion>→ Produktion</button>
-            <button type="button" wire:click="loeschen" wire:confirm="Angebot löschen?" class="{{ $btnGhostXs }} text-red-600" data-angebot-loeschen>Löschen</button>
+            <div class="ml-auto flex flex-wrap items-center gap-2">
+                {{-- Workflow-Übergänge (Status-Maschine) gebündelt in einem Menü --}}
+                @if(count($angebot->status->uebergaenge()) > 0)
+                    <div class="relative" x-data="faMenu()" x-on:keydown.escape="offen = false" x-on:click.outside="offen = false" wire:key="ang-status-{{ $angebot->id }}-{{ $angebot->status->value }}">
+                        <x-fa::button icon="heroicon-m-arrow-path-rounded-square" icon-right="heroicon-m-chevron-down"
+                            x-on:click="toggle($event)" aria-haspopup="menu" x-bind:aria-expanded="offen">Status ändern</x-fa::button>
+                        <div x-bind:class="{ hidden: ! offen }" x-bind:style="pos" role="menu" class="hidden w-56 fa-surface shadow-lg py-1">
+                            <p class="px-3 pt-1 pb-1.5 {{ $hinweis }}">Jetzt: {{ $angebot->status->label() }}</p>
+                            @foreach($angebot->status->uebergaenge() as $next)
+                                <button type="button" role="menuitem" wire:click="statusSetzen('{{ $next->value }}')" x-on:click="offen = false"
+                                        class="{{ $menuePunkt }}" data-angebot-status="{{ $next->value }}">
+                                    @svg('heroicon-m-arrow-right', 'w-4 h-4 text-[var(--fa-ink-3)]') Auf {{ $next->label() }} setzen
+                                </button>
+                            @endforeach
+                        </div>
+                    </div>
+                @endif
+
+                {{-- Einstieg in die Leitstelle-Planung (spiegelt Foodbook »In der Leitstelle planen«) — die eine KI-Aktion im Kopf. --}}
+                <x-fa::button variant="ai" icon="heroicon-m-sparkles" wire:click="vollKaskadeStarten"
+                    title="Die KI plant alle Kapitel in der Leitstelle und legt je Kapitel ein Konzept an" data-angebot-in-leitstelle>In der Leitstelle planen</x-fa::button>
+
+                {{-- Weitere Aktionen: Drucken · Dokument · Präsentation · Produktion · Löschen (ganz unten, rot) --}}
+                <div class="relative" x-data="faMenu()" x-on:keydown.escape="offen = false" x-on:click.outside="offen = false">
+                    <x-fa::icon-button icon="heroicon-m-ellipsis-horizontal" label="Weitere Aktionen" x-on:click="toggle($event)" aria-haspopup="menu" x-bind:aria-expanded="offen" />
+                    <div x-bind:class="{ hidden: ! offen }" x-bind:style="pos" role="menu" class="hidden w-72 fa-surface shadow-lg py-1">
+                        <a href="{{ route('foodalchemist.angebote.karte', $angebot->id) }}" target="_blank" role="menuitem" x-on:click="offen = false"
+                           class="{{ $menuePunkt }}" title="Gestaltete Angebotskarte für den Kunden, zum Drucken oder als PDF">
+                            @svg('heroicon-o-printer', 'w-4 h-4 text-[var(--fa-ink-3)]') Angebotskarte drucken
+                        </a>
+                        <a href="{{ route('foodalchemist.angebote.dokument', $angebot->id) }}" target="_blank" role="menuitem" x-on:click="offen = false"
+                           class="{{ $menuePunkt }}" title="Schlichtes Angebotsdokument, zum Drucken oder als PDF">
+                            @svg('heroicon-o-document-text', 'w-4 h-4 text-[var(--fa-ink-3)]') Angebotsdokument öffnen
+                        </a>
+                        <a href="{{ route('foodalchemist.angebote.praesentation', $angebot->id) }}" target="_blank" role="menuitem" x-on:click="offen = false"
+                           class="{{ $menuePunkt }}" title="Kundenpräsentation als Webseite, ohne interne Angaben">
+                            @svg('heroicon-o-presentation-chart-bar', 'w-4 h-4 text-[var(--fa-ink-3)]') Kundenpräsentation ansehen
+                        </a>
+                        <div class="my-1 border-t border-[var(--fa-line)]"></div>
+                        {{-- Stufe 3 — Angebot → Produktion (concept × Pax → Produktionsauftrag am Event-Tag). --}}
+                        <button type="button" role="menuitem" wire:click="anProduktion" x-on:click="offen = false" class="{{ $menuePunkt }}"
+                                title="Angebot in die Produktion übergeben, danach im Tagesplan planbar" data-angebot-produktion>
+                            @svg('heroicon-o-truck', 'w-4 h-4 text-[var(--fa-ink-3)]') An die Produktion übergeben
+                        </button>
+                        <div class="my-1 border-t border-[var(--fa-line)]"></div>
+                        <button type="button" role="menuitem" wire:click="loeschen" wire:confirm="Angebot löschen?" x-on:click="offen = false"
+                                class="flex w-full items-center gap-2 px-3 py-2 text-left text-[length:var(--fa-text-md)] text-[var(--fa-crit)] hover:bg-[var(--fa-crit-soft)]" data-angebot-loeschen>
+                            @svg('heroicon-o-trash', 'w-4 h-4') Angebot löschen
+                        </button>
+                    </div>
+                </div>
+
+                <x-fa::button variant="primary" icon="heroicon-m-check" wire:click="speichern" data-angebot-speichern>Speichern</x-fa::button>
+            </div>
         @endif
     </x-slot:actions>
 
     @if($angebot)
-        {{-- KPI-Streifen: Angebot-Leitwerte (€/Person·Pax·Gesamt·WE·Status) + Foodbook-Kennzahlen
-             (Kapitel·Speisen·Fertig X/Y). Alle aus render()-Daten, keine neuen Service-Calls. --}}
+        {{-- Kennzahlen: Angebotssumme als die eine Hauptzahl, dann Preis je Gast, Gäste, Wareneinsatz,
+             Kapitel, Speisen, fertige Kapitel, Status (data-kpi-Marker unverändert). Alle aus render()-Daten, keine neuen Service-Calls. --}}
         <x-slot:kpiHeader>
-            @php($k = $kalkulation)
-            @php($voll = $k && ! ($k['leer'] ?? true))
-            @php($weTone = match($wareneinsatzAmpel ?? 'unbekannt') { 'gruen' => 'good', 'gelb' => 'warn', 'rot' => 'bad', default => null })
-            @php($angBoard = collect($kapitelBoard ?? []))
-            @php($angKapitelN = count($kapitelTree ?? []))
-            @php($angSpeisenN = (int) $angBoard->sum('positionen_count'))
-            @php($angFertig = $angBoard->where('fortschritt', 'fertig')->count())
+            @php
+                $k = $kalkulation;
+                $voll = $k && ! ($k['leer'] ?? true);
+                $angBoard = collect($kapitelBoard ?? []);
+                $angKapitelN = count($kapitelTree ?? []);
+                $angSpeisenN = (int) $angBoard->sum('positionen_count');
+                $angFertig = $angBoard->where('fortschritt', 'fertig')->count();
+                $kpiWeTon = match ($wareneinsatzAmpel ?? 'unbekannt') { 'gruen' => 'good', 'gelb' => 'warn', 'rot' => 'bad', default => null };
+            @endphp
             <x-foodalchemist::kpi-tiles marker="angebot-kpis" :tiles="[
-                ['kpi' => 'vkpp', 'label' => '€ / Person', 'tone' => 'accent',
-                 'value' => $voll ? number_format((float) $k['vk_pro_person'], 2, ',', '.') . ' €' : '—'],
-                ['kpi' => 'pax', 'label' => 'Pax', 'value' => (string) ($k['pax'] ?? ($angebot->personen ?: '—'))],
-                ['kpi' => 'gesamt', 'label' => 'Gesamt VK',
-                 'value' => $voll ? number_format((float) $k['gesamt_vk'], 2, ',', '.') . ' €' : '—'],
-                ['kpi' => 'we', 'label' => 'Wareneinsatz', 'tone' => $weTone,
-                 'title' => ($voll && $k['wareneinsatz_pct'] !== null) ? 'Ziel des Teams: ' . number_format((float) $zielWareneinsatzPct, 1, ',', '.') . ' %' : null,
-                 'value' => ($voll && $k['wareneinsatz_pct'] !== null) ? number_format((float) $k['wareneinsatz_pct'], 1, ',', '.') . ' %' : '—'],
+                ['kpi' => 'gesamt', 'label' => 'Angebotssumme', 'tone' => 'accent',
+                 'value' => $voll ? $euro($k['gesamt_vk']) : 'Noch kein Preis'],
+                ['kpi' => 'vkpp', 'label' => 'Preis je Gast',
+                 'value' => $voll ? $euro($k['vk_pro_person']) : '–'],
+                ['kpi' => 'pax', 'label' => 'Gäste', 'value' => (string) ($k['pax'] ?? ($angebot->personen ?: '–'))],
+                ['kpi' => 'we', 'label' => 'Wareneinsatz', 'tone' => $kpiWeTon,
+                 'title' => ($voll && $k['wareneinsatz_pct'] !== null) ? 'Ziel des Teams: ' . $prozent($zielWareneinsatzPct) : null,
+                 'value' => ($voll && $k['wareneinsatz_pct'] !== null) ? $prozent($k['wareneinsatz_pct']) : '–'],
                 ['kpi' => 'kapitel', 'label' => 'Kapitel', 'value' => (string) $angKapitelN],
                 ['kpi' => 'speisen', 'label' => 'Speisen', 'value' => (string) $angSpeisenN],
                 ['kpi' => 'fertig', 'label' => 'Fertig',
                  'tone' => ($angKapitelN > 0 && $angFertig >= $angKapitelN) ? 'good' : 'neutral',
-                 'value' => $angFertig . '/' . $angKapitelN],
+                 'value' => $angFertig . ' von ' . $angKapitelN],
                 ['kpi' => 'status', 'label' => 'Status', 'value' => $angebot->status->label()],
             ]" />
         </x-slot:kpiHeader>
     @endif
 
     @if($angebot === null)
-        <p class="pt-4 text-[12px] text-gray-500">Kein Angebot geladen.</p>
+        <x-fa::empty icon="heroicon-o-document-text" title="Kein Angebot geladen">In der Übersicht ein Angebot wählen.</x-fa::empty>
     @else
-    {{-- ═══ 2-Spalten-Cockpit IM Modal — links Navigation (Angebot-Kopf + Kapitelbaum), Mitte Editor-Tabs.
+    @if(session('angebot_produktion'))
+        <x-fa::notice tone="info" data-angebot-produktion-hinweis>{{ session('angebot_produktion') }}</x-fa::notice>
+    @endif
+    {{-- ═══ 2-Spalten-Cockpit IM Modal — links Navigation (Anfrage + Kapitelbaum), Mitte Editor-Reiter.
          `-mx-6` hebt das px-6 des Modal-Bodys auf (Spalten randbündig); die Mitte bekommt px-6 zurück. --}}
     <div class="flex gap-4 -mx-6 items-start">
-        {{-- LINKS: Navigation (Angebot-Kopf + Kapitelbaum). x-data hält den Kapitel-Drag-Zustand. --}}
-        <div class="w-64 shrink-0 pl-6 space-y-1" data-angebot-nav x-data="{ dragKapId: null }">
+        {{-- LINKS: Navigation (Anfrage + Kapitelbaum). x-data hält den Kapitel-Drag-Zustand. --}}
+        <nav class="w-64 shrink-0 pl-6 flex flex-col gap-1" aria-label="Kapitel des Angebots" data-angebot-nav x-data="{ dragKapId: null }">
             <button type="button" wire:click="kopfAnzeigen" @click="$dispatch('angebot-goto', { tab: 'anfrage' })"
-                    class="w-full text-left text-xs px-2 py-1 rounded-lg {{ $selectedKapitelId === null ? $aktiv : $hover }}"
-                    data-angebot-kopf>@svg('heroicon-o-clipboard-document-list', 'w-3.5 h-3.5 inline-block align-middle') Angebot-Kopf</button>
-            <div class="flex items-center gap-1 pt-1">
-                <input type="text" wire:model="neuesKapitelTitel" wire:keydown.enter="kapitelNeu" placeholder="Neues Kapitel …" class="{{ $input }} py-0.5" />
-                <button type="button" wire:click="kapitelNeu" class="{{ $btnGhostXs }}" title="Top-Kapitel">+</button>
-            </div>
+                    class="w-full flex items-center gap-2 h-8 px-2.5 rounded-[var(--fa-radius-control)] text-left text-[length:var(--fa-text-md)] {{ $selectedKapitelId === null ? $navAn : $navAus }}"
+                    data-angebot-kopf>@svg('heroicon-o-clipboard-document-list', 'w-4 h-4 shrink-0') Anfrage und Eckdaten</button>
 
-            @foreach($kapitelTree ?? [] as $kt)
+            <p class="mt-3 mb-0.5 px-2.5 text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-3)]">Kapitel <span class="tabular-nums">{{ count($kapitelTree ?? []) }}</span></p>
+
+            @forelse($kapitelTree ?? [] as $kt)
                 <div wire:key="ktm-{{ $kt['id'] }}"
                      @dragover.prevent @drop.prevent="if (dragKapId && dragKapId !== {{ $kt['id'] }}) { $wire.kapitelVerschiebenAuf(dragKapId, {{ $kt['id'] }}); } dragKapId = null"
-                     :class="dragKapId === {{ $kt['id'] }} ? 'opacity-40' : (dragKapId ? 'ring-1 ring-violet-300/60 rounded-lg' : '')"
-                     class="group flex items-center gap-1" style="padding-left: {{ $kt['depth'] * 12 }}px">
-                    <span class="cursor-grab active:cursor-grabbing text-gray-400 hover:text-violet-500 select-none shrink-0 opacity-0 group-hover:opacity-100" draggable="true"
+                     :class="dragKapId === {{ $kt['id'] }} ? 'opacity-40' : (dragKapId ? 'ring-1 ring-[var(--fa-accent-line)]' : '')"
+                     class="group flex items-center gap-0.5 rounded-[var(--fa-radius-control)]" style="padding-left: {{ $kt['depth'] * 12 }}px">
+                    <span class="inline-flex items-center justify-center w-4 shrink-0 cursor-grab active:cursor-grabbing text-[var(--fa-ink-3)] select-none opacity-0 group-hover:opacity-100" draggable="true"
                           @dragstart="dragKapId = {{ $kt['id'] }}; $event.dataTransfer.setData('text/plain', String({{ $kt['id'] }})); $event.dataTransfer.effectAllowed = 'move'"
-                          @dragend="dragKapId = null" title="ziehen zum Sortieren" data-kapitel-drag>⠿</span>
+                          @dragend="dragKapId = null" title="Ziehen zum Sortieren" data-kapitel-drag>@svg('heroicon-m-bars-2', 'w-3.5 h-3.5')</span>
                     <button type="button" wire:click="kapitelWaehle({{ $kt['id'] }})" @click="$dispatch('angebot-goto', { tab: 'aufbau' })"
-                            class="flex-1 min-w-0 text-left break-words leading-tight text-xs px-2 py-0.5 rounded-lg {{ $selectedKapitelId === $kt['id'] ? $aktiv : $hover }}">{{ $kt['title'] }}</button>
-                    <button type="button" wire:click="kapitelHoch({{ $kt['id'] }})" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-violet-400 text-[10px]" title="hoch">▲</button>
-                    <button type="button" wire:click="kapitelRunter({{ $kt['id'] }})" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-violet-400 text-[10px]" title="runter">▼</button>
-                    <button type="button" wire:click="kapitelNeu({{ $kt['id'] }})" class="shrink-0 text-violet-400 hover:text-violet-500 text-xs px-1 leading-none" title="Unterkapitel">＋</button>
-                    <button type="button" wire:click="kapitelLoeschen({{ $kt['id'] }})" wire:confirm="Kapitel löschen?" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-400 text-[11px]" title="löschen">✕</button>
+                            class="flex-1 min-w-0 text-left break-words leading-snug text-[length:var(--fa-text-md)] px-2 py-1 rounded-[var(--fa-radius-control)] {{ $selectedKapitelId === $kt['id'] ? $navAn : $navAus }}">{{ $kt['title'] }}</button>
+                    <span class="flex items-center opacity-0 group-hover:opacity-100 group-focus-within:opacity-100">
+                        <button type="button" wire:click="kapitelHoch({{ $kt['id'] }})" class="{{ $mini }}" title="Nach oben" aria-label="Kapitel nach oben">@svg('heroicon-m-chevron-up', 'w-3.5 h-3.5')</button>
+                        <button type="button" wire:click="kapitelRunter({{ $kt['id'] }})" class="{{ $mini }}" title="Nach unten" aria-label="Kapitel nach unten">@svg('heroicon-m-chevron-down', 'w-3.5 h-3.5')</button>
+                        <button type="button" wire:click="kapitelNeu({{ $kt['id'] }})" class="{{ $mini }}" title="Unterkapitel anlegen" aria-label="Unterkapitel anlegen">@svg('heroicon-m-plus', 'w-3.5 h-3.5')</button>
+                        <button type="button" wire:click="kapitelLoeschen({{ $kt['id'] }})" wire:confirm="Kapitel löschen?" class="{{ $miniKrit }}" title="Kapitel löschen" aria-label="Kapitel löschen">@svg('heroicon-m-trash', 'w-3.5 h-3.5')</button>
+                    </span>
                 </div>
-            @endforeach
-        </div>
+            @empty
+                <p class="px-2.5 {{ $hinweis }}">Noch keine Kapitel.</p>
+            @endforelse
 
-        {{-- MITTE: Editor-Tabs --}}
+            <div class="flex items-center gap-1 pt-2 mt-1 border-t border-[var(--fa-line)]">
+                <label for="ang-kapitel-neu" class="sr-only">Titel des neuen Kapitels</label>
+                <x-fa::input id="ang-kapitel-neu" size="sm" wire:model="neuesKapitelTitel" wire:keydown.enter="kapitelNeu"
+                    x-on:keydown.enter="$dispatch('angebot-goto', { tab: 'aufbau' })" placeholder="Neues Kapitel" />
+                <x-fa::icon-button icon="heroicon-m-plus" label="Kapitel anlegen" size="sm" wire:click="kapitelNeu" x-on:click="$dispatch('angebot-goto', { tab: 'aufbau' })" />
+            </div>
+        </nav>
+
+        {{-- MITTE: Editor-Reiter --}}
         <div class="flex-1 min-w-0 px-6">
             <div wire:key="angcockpit-{{ $angebot->id }}" class="space-y-4">
-                <x-foodalchemist::editor-tabs marker="angebot" wire-key="angebot-tabs-{{ $angebot->id }}" :init="'anfrage'"
+                <x-foodalchemist::editor-tabs marker="angebot" wire-key="angebot-tabs-{{ $angebot->id }}" :init="$hatKapitel ? 'board' : 'anfrage'"
                     :tabs="[
-                        'anfrage' => 'Anfrage',
-                        'board' => 'Board',
+                        'board' => 'Übersicht',
                         'aufbau' => 'Aufbau',
                         'kalkulation' => 'Kalkulation',
-                        'kunde' => 'Kunde & Business-Case',
-                        'branding' => 'Branding & Präsentation',
+                        'anfrage' => 'Anfrage',
+                        'kunde' => 'Kunde und Business-Case',
+                        'branding' => 'Branding und Präsentation',
                     ]">
 
                 {{-- headless: Sprung-Bus im editor-tabs-Scope (kein sichtbares Element). $root = editor-tabs-Wurzel
                      (trägt die data-angebot-tab-Buttons + data-angebot-anker-Panels). --}}
                 <div @angebot-goto.window="let d=$event.detail; if(d.tab && $root.querySelector(`[data-angebot-tab='${d.tab}']`)) tab=d.tab; $nextTick(()=>{ if(d.anker){ let el=$root.querySelector(`[data-angebot-anker='${d.anker}']`); if(el) el.scrollIntoView({behavior:'smooth',block:'start'}); } });"></div>
 
-                {{-- ═══ Tab: ANFRAGE (bestehende Angebot-Kopf-Felder) ═══ --}}
-                <div x-show="tab === 'anfrage'" x-cloak class="pt-4" data-angebot-panel="anfrage">
-                    <x-foodalchemist::modal-section title="Anfrage / Briefing">
+                {{-- ═══ Reiter: ANFRAGE (Angebot-Kopf-Felder) ═══ --}}
+                <div x-show="tab === 'anfrage'" x-cloak class="pt-4 flex flex-col gap-4" data-angebot-panel="anfrage">
+                    <x-fa::section title="Anfrage und Eckdaten" icon="heroicon-o-clipboard-document-list">
                         <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-                            <div class="md:col-span-2"><label class="{{ $label }}">Name</label><input type="text" wire:model="form.name" class="{{ $input }}" /></div>
-                            <div><label class="{{ $label }}">Pax</label><input type="number" min="0" wire:model="form.personen" wire:change="speichern" class="{{ $input }} text-right tabular-nums" title="treibt den Auto-Gesamtpreis" /></div>
-                            <div><label class="{{ $label }}">Event-Datum</label><input type="date" wire:model="form.event_date" class="{{ $input }}" /></div>
-                            <div class="md:col-span-2"><label class="{{ $label }}">Anlass</label><input type="text" wire:model="form.occasion" class="{{ $input }}" placeholder="Hochzeit, Firmenfeier …" /></div>
-                            <div><label class="{{ $label }}">Budget €</label><input type="number" step="0.01" wire:model="form.budget" class="{{ $input }} text-right tabular-nums" /></div>
-                            <div><label class="{{ $label }}">Gültig bis</label><input type="date" wire:model="form.valid_until" class="{{ $input }}" /></div>
-                            <div class="md:col-span-2"><label class="{{ $label }}">Location</label><input type="text" wire:model="form.location" class="{{ $input }}" /></div>
-                            <div class="md:col-span-2"><label class="{{ $label }}">Diät / Allergien</label><input type="text" wire:model="form.diet_requirement" class="{{ $input }}" /></div>
+                            <x-fa::field label="Name des Angebots" for="ang-name" class="col-span-2">
+                                <x-fa::input id="ang-name" wire:model="form.name" />
+                            </x-fa::field>
+                            <x-fa::field label="Gäste" for="ang-pax" hint="Bestimmt die Angebotssumme">
+                                <x-fa::input id="ang-pax" type="number" min="0" numeric wire:model="form.personen" wire:change="speichern" />
+                            </x-fa::field>
+                            <x-fa::field label="Veranstaltungsdatum" for="ang-datum">
+                                <x-fa::input id="ang-datum" type="date" wire:model="form.event_date" />
+                            </x-fa::field>
+                            <x-fa::field label="Anlass" for="ang-anlass" class="col-span-2">
+                                <x-fa::input id="ang-anlass" wire:model="form.occasion" placeholder="Hochzeit, Firmenfeier …" />
+                            </x-fa::field>
+                            <x-fa::field label="Budget in €" for="ang-budget">
+                                <x-fa::input id="ang-budget" type="number" step="0.01" numeric wire:model="form.budget" />
+                            </x-fa::field>
+                            <x-fa::field label="Angebot gültig bis" for="ang-gueltig">
+                                <x-fa::input id="ang-gueltig" type="date" wire:model="form.valid_until" />
+                            </x-fa::field>
+                            <x-fa::field label="Ort" for="ang-ort" class="col-span-2">
+                                <x-fa::input id="ang-ort" wire:model="form.location" />
+                            </x-fa::field>
+                            <x-fa::field label="Ernährung und Allergien" for="ang-diaet" class="col-span-2">
+                                <x-fa::input id="ang-diaet" wire:model="form.diet_requirement" placeholder="vegetarisch, ohne Nüsse …" />
+                            </x-fa::field>
                         </div>
-                        <div class="mt-3"><label class="{{ $label }}">Briefing</label><textarea rows="4" wire:model="form.brief" class="{{ $input }}"></textarea></div>
-                    </x-foodalchemist::modal-section>
+                        <x-fa::field label="Briefing" for="ang-briefing">
+                            <x-fa::textarea id="ang-briefing" rows="4" wire:model="form.brief" />
+                        </x-fa::field>
+                    </x-fa::section>
                 </div>
 
-                {{-- ═══ Tab: BOARD — Kapitel-Baum (Status + Inhalt + Preis je Kapitel), aufklappbar zu Positionen + Coverage ═══ --}}
-                <div x-show="tab === 'board'" x-cloak class="pt-4 space-y-3" data-angebot-panel="board" data-angebot-anker="board">
-                    @php($ampelDot = ['gruen' => 'bg-emerald-500', 'gelb' => 'bg-amber-400', 'rot' => 'bg-rose-500', 'unbekannt' => 'bg-gray-300'])
-                    @php($ampelText = ['gruen' => 'text-emerald-700', 'gelb' => 'text-amber-700', 'rot' => 'text-rose-700', 'unbekannt' => 'text-gray-400'])
-                    @php($befundAmpel = ['erfuellt' => 'text-emerald-600', 'teilerfuellt' => 'text-amber-600', 'verletzt' => 'text-rose-600', 'info' => 'text-sky-600'])
-                    @php($fortDot = ['offen' => 'bg-gray-300', 'in_arbeit' => 'bg-amber-400', 'fertig' => 'bg-emerald-500'])
-                    @php($fortLabel = ['offen' => 'Offen', 'in_arbeit' => 'In Arbeit', 'fertig' => 'Fertig'])
-                    @php($board = $kapitelBoard ?? [])
-                    @php($byId = collect($board)->keyBy('kapitel_id'))
-                    @php($ahnen = function ($kid) use ($byId) { $ids = []; $cur = data_get($byId->get($kid), 'parent_id'); $g = 0; while ($cur !== null && $g++ < 20) { $ids[] = (int) $cur; $cur = data_get($byId->get($cur), 'parent_id'); } return $ids; })
-                    @php($alleIds = collect($board)->pluck('kapitel_id')->map(fn ($i) => (int) $i)->all())
+                {{-- ═══ Reiter: ÜBERSICHT — Kapitel-Baum (Fortschritt + Inhalt + Preis je Kapitel), aufklappbar zu Positionen ═══ --}}
+                <div x-show="tab === 'board'" x-cloak class="pt-4 flex flex-col gap-4" data-angebot-panel="board" data-angebot-anker="board">
+                    @php
+                        $board = $kapitelBoard ?? [];
+                        $byId = collect($board)->keyBy('kapitel_id');
+                        $ahnen = function ($kid) use ($byId) { $ids = []; $cur = data_get($byId->get($kid), 'parent_id'); $g = 0; while ($cur !== null && $g++ < 20) { $ids[] = (int) $cur; $cur = data_get($byId->get($cur), 'parent_id'); } return $ids; };
+                        $alleIds = collect($board)->pluck('kapitel_id')->map(fn ($i) => (int) $i)->all();
+                    @endphp
                     <div x-data="{ auf: {} }">
-                        <div class="flex items-center justify-end gap-4 pb-1.5 text-[11px]">
-                            <button type="button" @click="auf = Object.fromEntries(@js($alleIds).map(i => [i, true]))" class="text-gray-500 hover:text-violet-600 inline-flex items-center gap-1" title="Alle Äste aufklappen"><i class="ti ti-chevrons-down" style="font-size:13px"></i>Alle auf</button>
-                            <button type="button" @click="auf = {}" class="text-gray-500 hover:text-violet-600 inline-flex items-center gap-1" title="Auf Oberkapitel zuklappen"><i class="ti ti-chevrons-up" style="font-size:13px"></i>Alle zu</button>
-                        </div>
-                        <div class="{{ $card }} divide-y divide-black/5 overflow-hidden">
-                            @forelse($board as $kap)
-                                @php($we = $kap['wareneinsatz'])
-                                @php($agg = $kap['aggregat'])
-                                @php($ahnenIds = $ahnen($kap['kapitel_id']))
-                                <div wire:key="board-{{ $kap['kapitel_id'] }}" x-show="{{ empty($ahnenIds) ? 'true' : '[' . implode(',', $ahnenIds) . '].filter(a => auf[a]).length === ' . count($ahnenIds) }}" x-cloak class="even:bg-black/[0.015]">
-                                    <div class="flex items-center gap-1.5 py-1 px-3 cursor-pointer hover:bg-violet-500/[0.04]" @click="auf = {...auf, {{ $kap['kapitel_id'] }}: !auf[{{ $kap['kapitel_id'] }}]}" style="padding-left: {{ 12 + ($kap['depth'] - 1) * 16 }}px">
-                                        <i class="ti ti-chevron-right text-gray-400 shrink-0 transition-transform" :class="auf[{{ $kap['kapitel_id'] }}] && 'rotate-90'" style="font-size:15px"></i>
-                                        <span class="w-2 h-2 rounded-full shrink-0 {{ $fortDot[$kap['fortschritt']] ?? 'bg-gray-300' }}" title="Fortschritt: {{ $fortLabel[$kap['fortschritt']] ?? 'Offen' }}"></span>
-                                        <span class="text-sm font-medium {{ $kap['is_struktur'] ? 'text-gray-500' : 'text-gray-800' }} min-w-0 break-words">{{ $kap['titel'] }}</span>
-                                        @if($kap['is_struktur'])<span class="text-[10px] uppercase tracking-wide text-violet-400/80 border border-violet-400/30 rounded px-1.5 shrink-0">Sektion</span>@elseif($kap['pricing_mode'])<span class="text-[10px] uppercase tracking-wide text-gray-400 shrink-0">{{ $kap['pricing_mode'] }}</span>@endif
-                                        <div class="ml-auto flex items-center gap-2.5 text-[11px] tabular-nums shrink-0" @click.stop>
-                                            @unless($kap['is_struktur'])
-                                            <span class="{{ $pill }} {{ $kap['hat_ziele'] ? $variantPill['primary'] : $variantPill['secondary'] }}" title="Ziele/Dimensionen gesetzt">Z</span>
-                                            <span class="{{ $pill }} {{ $kap['positionen_count'] > 0 ? $variantPill['info'] : $variantPill['secondary'] }}" title="Positionen">{{ $kap['positionen_count'] }}</span>
-                                            <span class="{{ $pill }} {{ $kap['bepreist'] ? $variantPill['success'] : ($kap['hat_inhalt'] ? $variantPill['warning'] : $variantPill['secondary']) }}" title="{{ $kap['bepreist'] ? 'bepreist' : ($kap['hat_inhalt'] ? 'angelegt/ohne Preis' : 'leer') }}">€</span>
-                                            @endunless
-                                            @php($istRollup = count($kap['positionen']) === 0 && (($agg['vk_pro_person'] ?? 0) > 0 || ($agg['pauschal'] ?? 0) > 0))
-                                            @if(($agg['ek_per_person'] ?? 0) > 0)<span class="text-gray-400" title="Wareneinsatz €/Gast">EK {{ number_format((float) $agg['ek_per_person'], 2, ',', '.') }}</span>@endif
-                                            @if(($agg['vk_pro_person'] ?? 0) > 0)<span class="font-semibold text-gray-800" title="{{ $istRollup ? 'VK = Summe der Unterkapitel' : 'VK €/Gast' }}">@if($istRollup)<span class="text-gray-400 font-normal" title="Summe der Unterkapitel">Σ&nbsp;</span>@endif{{ number_format((float) $agg['vk_pro_person'], 2, ',', '.') }} €/G</span>@endif
-                                            <span class="inline-flex items-center gap-1 {{ $ampelText[$we['status']] ?? 'text-gray-400' }}" title="WE {{ $we['ist_pct'] !== null ? number_format((float) $we['ist_pct'], 1, ',', '.') . ' %' : 'unbekannt' }} · Ziel {{ number_format((float) $we['ziel_pct'], 1, ',', '.') }} %">
-                                                <span class="inline-block h-2 w-2 rounded-full {{ $ampelDot[$we['status']] ?? 'bg-gray-300' }}"></span>{{ $we['ist_pct'] !== null ? number_format((float) $we['ist_pct'], 1, ',', '.') . ' %' : '—' }}
-                                            </span>
-                                            <select wire:change="kapitelFortschritt({{ $kap['kapitel_id'] }}, $event.target.value)" title="Fortschritt setzen"
-                                                    class="text-[11px] rounded border border-black/10 bg-transparent py-0.5 pl-1.5 pr-5 text-gray-500 hover:border-violet-300 focus:outline-none cursor-pointer">
-                                                <option value="offen" @selected($kap['fortschritt'] === 'offen')>Offen</option>
-                                                <option value="in_arbeit" @selected($kap['fortschritt'] === 'in_arbeit')>In Arbeit</option>
-                                                <option value="fertig" @selected($kap['fortschritt'] === 'fertig')>Fertig</option>
-                                            </select>
-                                            <button type="button" wire:click="kapitelWaehle({{ $kap['kapitel_id'] }})" @click="$dispatch('angebot-goto', { tab: 'aufbau' })" class="text-violet-500 hover:text-violet-700" title="Kapitel öffnen &amp; weiterplanen">Planen</button>
+                        <x-fa::section title="Kapitel im Überblick" icon="heroicon-o-queue-list" :meta="count($board) > 0 ? (string) count($board) : null"
+                            description="Fortschritt, Inhalt und Preis je Kapitel. Klick auf eine Zeile zeigt die Positionen.">
+                            @if(count($board) > 0)
+                                <x-slot:actions>
+                                    <button type="button" @click="auf = Object.fromEntries(@js($alleIds).map(i => [i, true]))" class="{{ $knopfLeise }}" title="Alle Äste aufklappen">@svg('heroicon-m-chevron-double-down', 'w-3.5 h-3.5') Alle aufklappen</button>
+                                    <button type="button" @click="auf = {}" class="{{ $knopfLeise }}" title="Auf die Oberkapitel zuklappen">@svg('heroicon-m-chevron-double-up', 'w-3.5 h-3.5') Alle zuklappen</button>
+                                </x-slot:actions>
+                            @endif
+                            <div class="-mx-4 -mb-4 border-t border-[var(--fa-line)]">
+                                @forelse($board as $kap)
+                                    @php
+                                        $we = $kap['wareneinsatz'];
+                                        $agg = $kap['aggregat'];
+                                        $ahnenIds = $ahnen($kap['kapitel_id']);
+                                        $istRollup = count($kap['positionen']) === 0 && (($agg['vk_pro_person'] ?? 0) > 0 || ($agg['pauschal'] ?? 0) > 0);
+                                    @endphp
+                                    <div wire:key="board-{{ $kap['kapitel_id'] }}" x-show="{{ empty($ahnenIds) ? 'true' : '[' . implode(',', $ahnenIds) . '].filter(a => auf[a]).length === ' . count($ahnenIds) }}" x-cloak
+                                         class="border-b border-[var(--fa-line)] last:border-b-0">
+                                        <div class="flex flex-wrap items-center gap-x-2 gap-y-1 py-2 pr-4 cursor-pointer hover:bg-[var(--fa-hover)]" @click="auf = {...auf, {{ $kap['kapitel_id'] }}: ! auf[{{ $kap['kapitel_id'] }}]}" style="padding-left: {{ 16 + ($kap['depth'] - 1) * 16 }}px">
+                                            <span class="inline-flex shrink-0 text-[var(--fa-ink-3)] transition-transform" :class="auf[{{ $kap['kapitel_id'] }}] && 'rotate-90'">@svg('heroicon-m-chevron-right', 'w-4 h-4')</span>
+                                            <span class="min-w-0 break-words text-[length:var(--fa-text-md)] font-medium {{ $kap['is_struktur'] ? 'text-[var(--fa-ink-2)]' : 'text-[var(--fa-ink)]' }}">{{ $kap['titel'] }}</span>
+                                            @if($kap['is_struktur'])
+                                                <x-fa::badge title="Textkapitel ohne eigenes Essen">Textkapitel</x-fa::badge>
+                                            @elseif($kap['pricing_mode'])
+                                                <span class="{{ $hinweis }}">{{ $preisModusText($kap['pricing_mode']) }}</span>
+                                            @endif
+                                            <div class="ml-auto flex flex-wrap items-center justify-end gap-2 tabular-nums" @click.stop>
+                                                @unless($kap['is_struktur'])
+                                                    <x-fa::badge :tone="$kap['hat_ziele'] ? 'accent' : 'neutral'" :title="$kap['hat_ziele'] ? 'Ziele gesetzt (Anzahl oder Preisanker)' : 'Noch keine Ziele gesetzt'">{{ $kap['hat_ziele'] ? 'Ziele gesetzt' : 'Ohne Ziele' }}</x-fa::badge>
+                                                    <x-fa::badge :tone="$kap['positionen_count'] > 0 ? 'info' : 'neutral'">{{ $kap['positionen_count'] }} {{ $kap['positionen_count'] === 1 ? 'Position' : 'Positionen' }}</x-fa::badge>
+                                                    @if($kap['bepreist'])
+                                                        <x-fa::badge tone="ok">bepreist</x-fa::badge>
+                                                    @elseif($kap['hat_inhalt'])
+                                                        <x-fa::badge tone="warn">ohne Preis</x-fa::badge>
+                                                    @else
+                                                        <x-fa::badge>leer</x-fa::badge>
+                                                    @endif
+                                                @endunless
+                                                @if(($agg['ek_per_person'] ?? 0) > 0)
+                                                    <span class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]" title="Wareneinsatz je Gast">EK {{ $euro($agg['ek_per_person']) }}</span>
+                                                @endif
+                                                @if(($agg['vk_pro_person'] ?? 0) > 0)
+                                                    <span class="text-[length:var(--fa-text-md)] font-semibold text-[var(--fa-ink)]" title="{{ $istRollup ? 'Summe der Unterkapitel' : 'Verkaufspreis je Gast' }}">@if($istRollup)<span class="font-normal text-[var(--fa-ink-3)]">Summe&nbsp;</span>@endif{{ $euro($agg['vk_pro_person']) }}<span class="font-normal text-[var(--fa-ink-3)]">/Gast</span></span>
+                                                @endif
+                                                <x-fa::badge :tone="$weTon[$we['status']] ?? 'neutral'"
+                                                    title="Wareneinsatz {{ $we['ist_pct'] !== null ? $prozent($we['ist_pct']) : 'unbekannt' }}, Ziel {{ $prozent($we['ziel_pct']) }}">WE {{ $we['ist_pct'] !== null ? $prozent($we['ist_pct']) : 'offen' }}</x-fa::badge>
+                                                {{-- Fortschritt als Chip mit Menü (statt Dropdown je Zeile) --}}
+                                                <div class="relative inline-block" x-data="faMenu()" x-on:keydown.escape="offen = false" x-on:click.outside="offen = false" wire:key="fort-{{ $kap['kapitel_id'] }}-{{ $kap['fortschritt'] }}">
+                                                    <button type="button" x-on:click="toggle($event)" class="inline-flex items-center gap-0.5" aria-haspopup="menu" x-bind:aria-expanded="offen" aria-label="Fortschritt von {{ $kap['titel'] }} ändern" title="Fortschritt setzen">
+                                                        <x-fa::badge :tone="$fortTon[$kap['fortschritt']] ?? 'neutral'">{{ $fortLabel[$kap['fortschritt']] ?? 'Offen' }}</x-fa::badge>@svg('heroicon-m-chevron-down', 'w-3.5 h-3.5 text-[var(--fa-ink-3)]')
+                                                    </button>
+                                                    <div x-bind:class="{ hidden: ! offen }" x-bind:style="pos" role="menu" class="hidden w-40 fa-surface shadow-lg py-1">
+                                                        @foreach($fortLabel as $fortWert => $fortText)
+                                                            <button type="button" role="menuitem" x-on:click="offen = false" wire:click="kapitelFortschritt({{ $kap['kapitel_id'] }}, '{{ $fortWert }}')"
+                                                                    class="flex w-full items-center justify-between px-3 py-1.5 text-left text-[length:var(--fa-text-md)] hover:bg-[var(--fa-hover)] {{ $kap['fortschritt'] === $fortWert ? 'font-semibold text-[var(--fa-accent)]' : 'text-[var(--fa-ink)]' }}">
+                                                                {{ $fortText }}@if($kap['fortschritt'] === $fortWert)@svg('heroicon-m-check', 'w-4 h-4')@endif
+                                                            </button>
+                                                        @endforeach
+                                                    </div>
+                                                </div>
+                                                <x-fa::button variant="ghost" size="sm" icon="heroicon-m-pencil-square" wire:click="kapitelWaehle({{ $kap['kapitel_id'] }})" x-on:click="$dispatch('angebot-goto', { tab: 'aufbau' })" title="Kapitel öffnen und weiterplanen">Bearbeiten</x-fa::button>
+                                            </div>
+                                        </div>
+                                        <div x-show="auf[{{ $kap['kapitel_id'] }}]" x-cloak class="pb-3 pr-4 flex flex-col gap-1" style="padding-left: {{ 40 + ($kap['depth'] - 1) * 16 }}px">
+                                            @forelse($kap['positionen'] as $p)
+                                                <div class="flex flex-wrap items-center gap-2 py-0.5 text-[length:var(--fa-text-md)]">
+                                                    <x-fa::badge :tone="$p['art'] === 'paket' ? 'accent' : 'info'">{{ $p['art'] === 'paket' ? 'Paket' : 'Einzeln' }}</x-fa::badge>
+                                                    <span class="min-w-0 break-words text-[var(--fa-ink)]">{{ $p['label'] }}</span>
+                                                    <div class="ml-auto flex items-center gap-3 tabular-nums shrink-0">
+                                                        @if(($p['ek'] ?? 0) > 0)<span class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">EK {{ $euro($p['ek']) }}</span>@endif
+                                                        <x-fa::money :value="($p['vk'] ?? 0) > 0 ? $p['vk'] : null" :per="($p['preis_einheit'] ?? 'gast') === 'gast' ? 'Gast' : 'Position'" class="font-semibold text-[var(--fa-ink)]" />
+                                                        @if(($p['we_pct'] ?? null) !== null)<span class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]" title="Wareneinsatz dieser Position">{{ $prozent($p['we_pct']) }}</span>@endif
+                                                    </div>
+                                                </div>
+                                            @empty
+                                                @if($istRollup)
+                                                    <p class="{{ $hinweis }}">Keine eigenen Positionen. Der Preis ist die Summe der Unterkapitel.</p>
+                                                @else
+                                                    <p class="{{ $hinweis }}">Noch keine bepreisten Positionen. Im Reiter «Aufbau» oder in der Leitstelle anlegen.</p>
+                                                @endif
+                                            @endforelse
+                                            @if(! empty($boardCoverage[$kap['kapitel_id']] ?? []))
+                                                <div class="flex flex-wrap gap-x-4 gap-y-1 pt-2 mt-1 border-t border-[var(--fa-line)]">
+                                                    @foreach($boardCoverage[$kap['kapitel_id']] as $b)
+                                                        <x-fa::signal :tone="$befundTon[$b['ampel']] ?? 'info'">{{ $b['label'] }}: {{ $b['ist'] }}</x-fa::signal>
+                                                    @endforeach
+                                                </div>
+                                            @endif
                                         </div>
                                     </div>
-                                    <div x-show="auf[{{ $kap['kapitel_id'] }}]" x-cloak class="pb-2 pr-3 space-y-0.5" style="padding-left: {{ 34 + ($kap['depth'] - 1) * 16 }}px">
-                                        @forelse($kap['positionen'] as $p)
-                                            <div class="flex items-center gap-2 py-0.5 text-xs">
-                                                <span class="shrink-0 rounded px-1.5 py-0.5 text-[9px] uppercase tracking-wide {{ $p['art'] === 'paket' ? 'bg-violet-500/10 text-violet-700' : 'bg-sky-500/10 text-sky-700' }}">{{ $p['art'] === 'paket' ? 'Paket' : 'Einzel' }}</span>
-                                                <span class="truncate text-gray-800">{{ $p['label'] }}</span>
-                                                <div class="ml-auto flex items-center gap-3 tabular-nums shrink-0">
-                                                    @if(($p['ek'] ?? 0) > 0)<span class="text-gray-400">EK {{ number_format((float) $p['ek'], 2, ',', '.') }}</span>@endif
-                                                    @if(($p['vk'] ?? 0) > 0)<span class="font-semibold text-gray-700">{{ number_format((float) $p['vk'], 2, ',', '.') }} {{ ($p['preis_einheit'] ?? 'gast') === 'gast' ? '€/G' : '€/Pos' }}</span>@else<span class="text-amber-600">kein VK</span>@endif
-                                                    @if(($p['we_pct'] ?? null) !== null)<span class="text-gray-400" title="Wareneinsatz dieser Position">{{ number_format((float) $p['we_pct'], 1, ',', '.') }} %</span>@endif
-                                                </div>
-                                            </div>
-                                        @empty
-                                            @if((($agg['vk_pro_person'] ?? 0) > 0) || (($agg['pauschal'] ?? 0) > 0))
-                                                <p class="text-[11px] text-gray-400 py-0.5">Keine eigenen Positionen — der Preis ist die <span class="text-gray-500">Summe der Unterkapitel</span>.</p>
-                                            @else
-                                                <p class="text-[11px] text-gray-400 py-0.5">Noch keine bepreisten Positionen — im Aufbau-Tab / in der Leitstelle anlegen.</p>
-                                            @endif
-                                        @endforelse
-                                        @if(! empty($boardCoverage[$kap['kapitel_id']] ?? []))
-                                            <div class="flex flex-wrap gap-x-4 gap-y-1 pt-2 mt-1 border-t border-black/5">
-                                                @foreach($boardCoverage[$kap['kapitel_id']] as $b)
-                                                    <span class="text-[11px] {{ $befundAmpel[$b['ampel']] ?? 'text-gray-500' }}">{{ $b['label'] }}: {{ $b['ist'] }}</span>
-                                                @endforeach
-                                            </div>
-                                        @endif
-                                    </div>
-                                </div>
-                            @empty
-                                <p class="text-sm text-gray-400 p-5">Noch keine Kapitel — links „Neues Kapitel …" anlegen oder in der Leitstelle planen.</p>
-                            @endforelse
-                        </div>
+                                @empty
+                                    <x-fa::empty icon="heroicon-o-queue-list" title="Noch keine Kapitel">
+                                        Links unter «Neues Kapitel» anlegen oder das Angebot in der Leitstelle planen lassen.
+                                    </x-fa::empty>
+                                @endforelse
+                            </div>
+                        </x-fa::section>
                     </div>
                 </div>
 
-                {{-- ═══ Tab: AUFBAU — Kapitel-Editor (Konsumententitel · Hinführung/KI · Schreibstil · Bild/Galerie ·
-                     Preis-Modus · Textkapitel + Inhalt-Picker Concept/Paket/Format/Gericht + Block-Liste) ═══ --}}
-                <div x-show="tab === 'aufbau'" x-cloak class="pt-3 space-y-3" data-angebot-panel="aufbau" data-angebot-anker="aufbau">
+                {{-- ═══ Reiter: AUFBAU — Kapitel-Editor (Kapitel · Inhalt · Kundentext/KI · Bilder) + Katalog rechts ═══ --}}
+                <div x-show="tab === 'aufbau'" x-cloak class="pt-4 flex flex-col gap-4" data-angebot-panel="aufbau" data-angebot-anker="aufbau">
                 @if($kapitel)
                     <div class="flex gap-4 items-start" data-angebot-aufbau-2col>
-                    <div class="flex-1 min-w-0 space-y-3" data-angebot-aufbau-links>
+                    <div class="flex-1 min-w-0 flex flex-col gap-4" data-angebot-aufbau-links>
                     {{-- Kapitel-Kopf --}}
-                    <div class="relative overflow-hidden {{ $card }} p-5 space-y-3" wire:key="kaphdr-{{ $kapitel->id }}">
+                    <x-fa::section title="Kapitel" icon="heroicon-o-bookmark" wire:key="kaphdr-{{ $kapitel->id }}">
                         <div class="grid grid-cols-1 md:grid-cols-5 gap-3">
-                            <div><label class="{{ $label }}">Kapitel (intern)</label><input type="text" wire:model.blur="kapitelForm.title" wire:change="kapitelSpeichern" class="{{ $input }}" /></div>
-                            <div class="md:col-span-2"><label class="{{ $label }}">Konsumententitel</label><input type="text" wire:model.blur="kapitelForm.consumer_title" wire:change="kapitelSpeichern" class="{{ $input }}" placeholder="Marketing-Titel (Kundenausgabe)" /></div>
-                            <div><label class="{{ $label }}">Preis-Modus</label>
-                                <select wire:model.live="kapitelForm.price_mode" wire:change="kapitelSpeichern" class="{{ $input }}"><option value="auto">auto (Σ Inhalt)</option><option value="manuell">manuell</option></select>
-                            </div>
-                            <div><label class="{{ $label }}">Pax (Kapitel)</label><input type="number" min="0" wire:model.blur="kapitelForm.personen" wire:change="kapitelSpeichern" class="{{ $input }} text-right tabular-nums" placeholder="erbt Angebot ({{ $angebot->personen ?: '—' }})" title="Eigene Gästezahl dieses Kapitels — leer = erbt die Angebots-Pax" /></div>
+                            <x-fa::field label="Interner Name" for="ang-kap-titel">
+                                <x-fa::input id="ang-kap-titel" wire:model.blur="kapitelForm.title" wire:change="kapitelSpeichern" />
+                            </x-fa::field>
+                            <x-fa::field label="Titel für den Kunden" for="ang-kap-kundentitel" class="md:col-span-2">
+                                <x-fa::input id="ang-kap-kundentitel" wire:model.blur="kapitelForm.consumer_title" wire:change="kapitelSpeichern" placeholder="So steht es im Angebot" />
+                            </x-fa::field>
+                            <x-fa::field label="Preis" for="ang-kap-preismodus">
+                                <x-fa::select id="ang-kap-preismodus" wire:model.live="kapitelForm.price_mode" wire:change="kapitelSpeichern">
+                                    <option value="auto">Aus dem Inhalt</option>
+                                    <option value="manuell">Von Hand</option>
+                                </x-fa::select>
+                            </x-fa::field>
+                            <x-fa::field label="Gäste im Kapitel" for="ang-kap-pax" hint="Leer übernimmt die Gäste des Angebots">
+                                <x-fa::input id="ang-kap-pax" type="number" min="0" numeric wire:model.blur="kapitelForm.personen" wire:change="kapitelSpeichern"
+                                    placeholder="{{ $angebot->personen ?: '–' }}" />
+                            </x-fa::field>
                         </div>
-                        <label class="flex items-start gap-2 text-xs text-gray-500 cursor-pointer">
-                            <input type="checkbox" wire:model.live="kapitelForm.is_struktur" wire:change="kapitelSpeichern" class="mt-0.5 accent-violet-500" />
-                            <span>Textkapitel / Sektion — <span class="text-gray-400">kein eigenes Food (Intro, Überschrift, Format-Sektion). Food-Kennzahlen kommen nur aus Unterkapiteln.</span></span>
+                        <label class="flex items-start gap-2 cursor-pointer text-[length:var(--fa-text-md)] text-[var(--fa-ink)]">
+                            <input type="checkbox" wire:model.live="kapitelForm.is_struktur" wire:change="kapitelSpeichern" class="mt-0.5 {{ $haken }}" />
+                            <span>Textkapitel <span class="{{ $hinweis }}">ohne eigenes Essen, etwa Einleitung oder Überschrift. Kennzahlen kommen dann nur aus den Unterkapiteln.</span></span>
                         </label>
+                    </x-fa::section>
 
-                        {{-- Kapitel-Bild (Präsentation) + Galerie --}}
-                        <div data-angebot-kapitel-image>
-                            <label class="{{ $label }}">Kapitel-Bild (Präsentation)</label>
-                            <div class="flex items-center gap-3 flex-wrap">
-                                @if($kapitelImageUrl ?? null)
-                                    <img src="{{ $kapitelImageUrl }}" alt="" class="h-12 w-20 object-cover rounded border border-black/10">
-                                    <button type="button" wire:click="kapitelImageEntfernen" class="text-rose-600 text-[11px] underline" data-angebot-kapitel-image-remove>entfernen</button>
-                                @endif
-                                <input type="file" wire:model="kapitelImageUpload" accept="image/*" class="text-[11px]" data-angebot-kapitel-image-upload>
-                                <div wire:loading wire:target="kapitelImageUpload" class="text-[11px] text-gray-400">lädt …</div>
-                            </div>
-                            @if($kapitelImageFehler ?? null)<div class="text-[11px] text-rose-600 mt-1">{{ $kapitelImageFehler }}</div>@endif
-                            @error('kapitelImageUpload')<div class="text-[11px] text-rose-600 mt-1">{{ $message }}</div>@enderror
-                            <p class="text-[11px] text-gray-400 mt-1">Ohne eigenes Bild nutzt das Kapitel-Band automatisch das Titelbild des Konzepts.</p>
-
-                            <div class="mt-3" data-angebot-kapitel-gallery>
-                                <label class="{{ $label }}">Weitere Bilder (optional)</label>
-                                <div class="flex items-center gap-3 flex-wrap">
-                                    @foreach($kapitelGallery ?? [] as $gi)
-                                        <div class="relative">
-                                            <img src="{{ $gi['url'] }}" alt="" class="h-12 w-20 object-cover rounded border border-black/10">
-                                            <button type="button" wire:click="kapitelGalerieBildEntfernen({{ $gi['id'] }})"
-                                                class="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full bg-rose-600 text-white text-[10px] leading-none flex items-center justify-center"
-                                                title="Bild entfernen">×</button>
-                                        </div>
-                                    @endforeach
-                                    <input type="file" wire:model="kapitelGalleryUpload" accept="image/*" multiple class="text-[11px]" data-angebot-kapitel-gallery-upload>
-                                    <div wire:loading wire:target="kapitelGalleryUpload" class="text-[11px] text-gray-400">lädt …</div>
-                                </div>
-                                @error('kapitelGalleryUpload.*')<div class="text-[11px] text-rose-600 mt-1">{{ $message }}</div>@enderror
-                                <p class="text-[11px] text-gray-400 mt-1">Mehrere Bilder fürs Kapitel-Band — überschreibt die Concept-Bilder.</p>
-                            </div>
-                        </div>
-
-                        {{-- Hinführung (Kundentext des Kapitels) + KI-Text --}}
-                        <div>
-                            <div class="flex items-center justify-between">
-                                <label class="{{ $label }}">Hinführung (Kundentext des Kapitels)</label>
-                                <x-foodalchemist::ki-action action="kiKapitelText" variant="ai" icon="heroicon-o-sparkles" label="KI-Text"
-                                        title="Hinführung aus Kapitel-Inhalt (Wording-Kette), Angebots-Einleitung und Marken-Stimme"
-                                        busy="schreibt …" data-angebot-ki-kapiteltext />
-                            </div>
-                            <textarea wire:model.blur="kapitelForm.description" wire:change="kapitelSpeichern" rows="2"
-                                      class="{{ $input }} resize-none min-h-[3.5rem]"
-                                      placeholder="Kurzer Kundentext, der ins Kapitel einführt — „KI-Text" schlägt einen vor"></textarea>
-                            {{-- KI-Vorschau (inline, geteilter Zustand kiTextZiel/kiTextVorschau) --}}
-                            @if(($kiTextZiel ?? null) === 'kapitel')
-                                @if(($kiTextVorschau ?? null) !== null)
-                                    @php($kapTextVorhanden = trim((string) ($kapitelForm['description'] ?? '')) !== '')
-                                    <div class="mt-2 rounded-xl border border-violet-300/60 bg-violet-500/5 p-3 space-y-2" data-angebot-ki-vorschau>
-                                        <p class="{{ $label }} !mb-0">KI-Vorschlag — noch nicht übernommen
-                                            @if(($kiTextConfidence ?? null) !== null) · Konfidenz {{ number_format($kiTextConfidence * 100, 0) }} %@endif
-                                        </p>
-                                        <p class="text-xs text-gray-700 whitespace-pre-line">{{ $kiTextVorschau }}</p>
-                                        @if($kapTextVorhanden)
-                                            <p class="text-[11px] text-amber-600">Im Feld steht schon ein Text — „Ersetzen" schreibt ihn über (endgültig erst beim Speichern).</p>
-                                        @endif
-                                        <div class="flex gap-2">
-                                            <button type="button" wire:click="kiTextUebernehmen" class="{{ $btnPrimary }}">{{ $kapTextVorhanden ? 'Ersetzen' : 'Übernehmen' }}</button>
-                                            <button type="button" wire:click="kiTextVerwerfen" class="{{ $btnGhost }}">Verwerfen</button>
-                                        </div>
-                                    </div>
-                                @endif
-                                @if(($kiTextHinweis ?? null) !== null)
-                                    <p class="text-[11px] text-amber-600 mt-1" data-angebot-ki-hinweis>{{ $kiTextHinweis }}</p>
-                                @endif
+                    {{-- Inhalt (Block-Liste) — die häufigste Arbeit im Aufbau --}}
+                    <x-fa::section title="Inhalt" icon="heroicon-o-squares-2x2" :meta="(string) $kapitel->blocks->count()" data-angebot-inhalt>
+                        <x-slot:actions>
+                            @if(count($markiert ?? []) >= 2)
+                                <x-fa::button size="sm" icon="heroicon-m-arrows-right-left" wire:click="wahlGruppeBilden" title="Die markierten Konzepte werden zur Auswahl für den Kunden">Wahlgruppe bilden ({{ count($markiert) }})</x-fa::button>
                             @endif
-                        </div>
-
-                        {{-- Schreibstil PRO KAPITEL + Kapitel-Wording neu betexten --}}
-                        <div class="flex items-end gap-2 pt-2 border-t border-black/5" data-angebot-kapitel-stil>
-                            <div class="flex-1 max-w-xs">
-                                <label class="{{ $label }}">Schreibstil (Kapitel)</label>
-                                <select wire:model.live="kapitelForm.writing_style_id" wire:change="kapitelSpeichern" class="{{ $input }}" data-angebot-kapitel-schreibstil>
-                                    <option value="">Standard (aus den Concepten)</option>
-                                    @foreach($schreibstile ?? [] as $s)<option value="{{ $s->id }}">{{ $s->name }}</option>@endforeach
-                                </select>
-                            </div>
-                            <x-foodalchemist::ki-action action="kapitelWordingGenerieren" variant="ai" icon="heroicon-o-sparkles" label="Kapitel-Wording"
-                                    :disabled="($kapitelForm['writing_style_id'] ?? null) === null || ($kapitelForm['writing_style_id'] ?? '') === ''"
-                                    title="Betextet alle Konzepte dieses Kapitels im gewählten Schreibstil neu (angebots-lokaler Snapshot; das Concept bleibt unangetastet)"
-                                    busy="betextet …" data-angebot-kapitel-wording />
-                        </div>
-                        @error('kapitelWording')<p class="text-[11px] text-rose-500 mt-1" data-angebot-kapitel-fehler>{{ $message }}</p>@enderror
-                    </div>
-
-                    {{-- Block-Liste (unter dem Kapitel-Kopf) --}}
-                    <div class="relative overflow-hidden {{ $card }} p-5 space-y-3" data-angebot-inhalt>
-                        <div class="flex items-center justify-between flex-wrap gap-2">
-                            <h3 class="font-medium tracking-tight text-gray-900">Inhalt <span class="text-gray-500 text-xs">({{ $kapitel->blocks->count() }})</span></h3>
-                            <div class="flex items-center gap-2" x-data="{ presets: false }">
-                                @if(count($markiert ?? []) >= 2)
-                                    <button type="button" wire:click="wahlGruppeBilden" class="{{ $btnGhostXs }} text-amber-600">Wahl-Gruppe ({{ count($markiert) }})</button>
-                                @endif
-                                <button type="button" wire:click="blockBasis('text')" class="{{ $btnGhostXs }}">+ Text</button>
-                                <button type="button" wire:click="blockBasis('spacer')" class="{{ $btnGhostXs }}">+ Leerzeile</button>
-                                <div class="relative">
-                                    <button type="button" @click="presets = !presets" class="{{ $btnGhost }}">+ Header / Preis</button>
-                                    <div x-show="presets" x-cloak @click.outside="presets = false" class="absolute right-0 mt-1 w-56 max-h-80 overflow-y-auto z-20 {{ $card }} p-1 text-xs">
-                                        <button type="button" wire:click="blockBasis('header_frei')" @click="presets=false" class="block w-full text-left px-2 py-1 rounded hover:bg-violet-500/10">— Freier Header</button>
-                                        <button type="button" wire:click="blockBasis('header_frei_preis')" @click="presets=false" class="block w-full text-left px-2 py-1 rounded hover:bg-violet-500/10">€ Header + Preis</button>
-                                        @foreach($headerPresets ?? [] as $gruppe => $items)
-                                            <div class="{{ $label }} px-2 pt-2 pb-0.5">{{ $gruppe }}</div>
-                                            @foreach($items as $p)
-                                                <button type="button" @click="presets=false"
-                                                        wire:click="presetHinzu(@js($p['type']), @js($p['slug']), @js($p['label']), @js($p['price_basis'] ?? null), {{ ($p['visible'] ?? true) ? 'true' : 'false' }})"
-                                                        class="block w-full text-left px-3 py-0.5 rounded hover:bg-violet-500/10 truncate">{{ $p['label'] }}</button>
-                                            @endforeach
+                            <x-fa::button variant="ghost" size="sm" icon="heroicon-m-plus" wire:click="blockBasis('text')">Text</x-fa::button>
+                            <x-fa::button variant="ghost" size="sm" icon="heroicon-m-plus" wire:click="blockBasis('spacer')">Leerzeile</x-fa::button>
+                            <div class="relative" x-data="faMenu()" x-on:keydown.escape="offen = false" x-on:click.outside="offen = false">
+                                <x-fa::button size="sm" icon="heroicon-m-plus" icon-right="heroicon-m-chevron-down" x-on:click="toggle($event)" aria-haspopup="menu" x-bind:aria-expanded="offen">Überschrift</x-fa::button>
+                                <div x-bind:class="{ hidden: ! offen }" x-bind:style="pos" role="menu" class="hidden w-64 max-h-80 overflow-y-auto fa-surface shadow-lg py-1">
+                                    <button type="button" role="menuitem" wire:click="blockBasis('header_frei')" x-on:click="offen = false" class="{{ $menuePunkt }}">
+                                        @svg('heroicon-o-bars-3-bottom-left', 'w-4 h-4 text-[var(--fa-ink-3)]') Freie Überschrift
+                                    </button>
+                                    <button type="button" role="menuitem" wire:click="blockBasis('header_frei_preis')" x-on:click="offen = false" class="{{ $menuePunkt }}">
+                                        @svg('heroicon-o-currency-euro', 'w-4 h-4 text-[var(--fa-ink-3)]') Überschrift mit Preis
+                                    </button>
+                                    @foreach($headerPresets ?? [] as $gruppe => $items)
+                                        <p class="px-3 pt-2 pb-0.5 text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-3)]">{{ $gruppe }}</p>
+                                        @foreach($items as $p)
+                                            <button type="button" role="menuitem" x-on:click="offen = false"
+                                                    wire:click="presetHinzu(@js($p['type']), @js($p['slug']), @js($p['label']), @js($p['price_basis'] ?? null), {{ ($p['visible'] ?? true) ? 'true' : 'false' }})"
+                                                    class="block w-full truncate px-3 py-1.5 text-left text-[length:var(--fa-text-md)] text-[var(--fa-ink)] hover:bg-[var(--fa-hover)]">{{ $p['label'] }}</button>
                                         @endforeach
-                                    </div>
+                                    @endforeach
                                 </div>
                             </div>
-                        </div>
+                        </x-slot:actions>
 
-                        <div class="space-y-1" x-data="{ dragBlockId: null }">
+                        <div class="flex flex-col gap-1" x-data="{ dragBlockId: null }">
                             @forelse($kapitel->blocks as $block)
                                 <div wire:key="block-{{ $block->id }}"
                                      @dragover.prevent @drop.prevent="if (dragBlockId && dragBlockId !== {{ $block->id }}) { $wire.blockVerschiebenAuf(dragBlockId, {{ $block->id }}); } dragBlockId = null"
-                                     :class="dragBlockId === {{ $block->id }} ? 'opacity-40' : (dragBlockId ? 'ring-1 ring-violet-300/60' : '')"
-                                     class="rounded-lg border {{ $block->variant_group_id ? 'border-amber-400/60' : 'border-black/5' }} px-2 py-1 {{ $block->visible ? '' : 'opacity-60' }}"
+                                     :class="dragBlockId === {{ $block->id }} ? 'opacity-40' : (dragBlockId ? 'ring-1 ring-[var(--fa-accent-line)]' : '')"
+                                     class="rounded-[var(--fa-radius-control)] border {{ $block->variant_group_id ? 'border-[var(--fa-warn)]' : 'border-[var(--fa-line)]' }} bg-[var(--fa-surface)] px-2 py-1.5 {{ $block->visible ? '' : 'opacity-60' }}"
                                      style="margin-left: {{ $block->level * 20 }}px">
-                                    <div class="flex items-center gap-2 text-xs">
-                                        <span class="flex items-center shrink-0">
-                                            <span class="cursor-grab active:cursor-grabbing text-gray-400 hover:text-violet-500 select-none mr-0.5" draggable="true"
-                                                  @dragstart="dragBlockId = {{ $block->id }}; $event.dataTransfer.setData('text/plain', String({{ $block->id }})); $event.dataTransfer.effectAllowed = 'move'"
-                                                  @dragend="dragBlockId = null" title="ziehen zum Sortieren" data-block-drag>⠿</span>
-                                            <span class="flex flex-col -my-0.5">
-                                                <button type="button" wire:click="blockHoch({{ $block->id }})" class="text-gray-500 hover:text-violet-500 leading-none">▲</button>
-                                                <button type="button" wire:click="blockRunter({{ $block->id }})" class="text-gray-500 hover:text-violet-500 leading-none">▼</button>
-                                            </span>
+                                    <div class="flex items-center gap-1.5 text-[length:var(--fa-text-md)]">
+                                        <span class="inline-flex items-center justify-center w-4 shrink-0 cursor-grab active:cursor-grabbing text-[var(--fa-ink-3)] select-none" draggable="true"
+                                              @dragstart="dragBlockId = {{ $block->id }}; $event.dataTransfer.setData('text/plain', String({{ $block->id }})); $event.dataTransfer.effectAllowed = 'move'"
+                                              @dragend="dragBlockId = null" title="Ziehen zum Sortieren" data-block-drag>@svg('heroicon-m-bars-2', 'w-3.5 h-3.5')</span>
+                                        <span class="flex flex-col shrink-0">
+                                            <button type="button" wire:click="blockHoch({{ $block->id }})" class="inline-flex items-center justify-center w-5 h-3.5 text-[var(--fa-ink-3)] hover:text-[var(--fa-ink)]" title="Nach oben" aria-label="Nach oben">@svg('heroicon-m-chevron-up', 'w-3.5 h-3.5')</button>
+                                            <button type="button" wire:click="blockRunter({{ $block->id }})" class="inline-flex items-center justify-center w-5 h-3.5 text-[var(--fa-ink-3)] hover:text-[var(--fa-ink)]" title="Nach unten" aria-label="Nach unten">@svg('heroicon-m-chevron-down', 'w-3.5 h-3.5')</button>
                                         </span>
                                         @if($block->type === 'concept_ref')
-                                            <input type="checkbox" wire:click="markiere({{ $block->id }})" @checked(in_array($block->id, $markiert ?? [])) title="Für Wahl-Gruppe markieren" class="shrink-0" />
+                                            <input type="checkbox" wire:click="markiere({{ $block->id }})" @checked(in_array($block->id, $markiert ?? [])) title="Für eine Wahlgruppe markieren" aria-label="Für eine Wahlgruppe markieren" class="shrink-0 {{ $haken }}" />
                                         @else
-                                            <span class="w-3 shrink-0"></span>
+                                            <span class="w-3.5 shrink-0"></span>
                                         @endif
-                                        <span class="flex-1 min-w-0 truncate">
+                                        <span class="flex-1 min-w-0 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
                                             @switch($block->type)
                                                 @case('concept_ref')
-                                                    <span class="{{ $pill }} {{ $variantPill['primary'] }} mr-1">Concept</span>{{ $block->concept?->name ?? '—' }}
-                                                    @if($block->concept?->price_per_person_cache !== null && ! $block->concept?->istEinzelpreis())<span class="text-gray-500 tabular-nums">· {{ number_format((float) $block->concept->price_per_person_cache, 2, ',', '.') }} €/P</span>@elseif($block->concept?->istEinzelpreis())<span class="text-gray-400 tabular-nums text-[10px]">· Einzelpreise</span>@endif
-                                                    @if(trim((string) $block->wording) !== '')<span class="italic text-violet-600">· „{{ $block->wording }}“</span>@endif
+                                                    <x-fa::badge tone="accent">Konzept</x-fa::badge>
+                                                    <span class="min-w-0 break-words text-[var(--fa-ink)]">{{ $block->concept?->name ?? '–' }}</span>
+                                                    @if($block->concept?->istEinzelpreis())
+                                                        <span class="{{ $hinweis }}">Einzelpreise</span>
+                                                    @elseif($block->concept !== null)
+                                                        <x-fa::money :value="$block->concept->price_per_person_cache" per="Gast" class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]" />
+                                                    @endif
+                                                    @if(trim((string) $block->wording) !== '')<span class="italic text-[var(--fa-accent)]">„{{ $block->wording }}“</span>@endif
                                                     @break
                                                 @case('recipe_ref')
-                                                    <span class="{{ $pill }} {{ $variantPill['warning'] }} mr-1">Gericht</span>{{ $block->dish?->name ?? '—' }}
-                                                    <span class="text-gray-500 tabular-nums">{{ $block->dish?->sales_net !== null ? '· ' . number_format((float) $block->dish->sales_net, 2, ',', '.') . ' €' . ($block->price_basis === 'pauschal' ? ' pauschal' : '/Pos') : '' }}</span>
-                                                    @if(trim((string) $block->wording) !== '')<span class="italic text-violet-600">· „{{ $block->wording }}“</span>@endif
+                                                    <x-fa::badge tone="info">Gericht</x-fa::badge>
+                                                    <span class="min-w-0 break-words text-[var(--fa-ink)]">{{ $block->dish?->name ?? '–' }}</span>
+                                                    @if($block->dish !== null)
+                                                        <x-fa::money :value="$block->dish->sales_net" :per="$block->price_basis === 'pauschal' ? null : 'Position'" class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]" />
+                                                        @if($block->price_basis === 'pauschal' && $block->dish->sales_net !== null)<span class="{{ $hinweis }}">pauschal</span>@endif
+                                                    @endif
+                                                    @if(trim((string) $block->wording) !== '')<span class="italic text-[var(--fa-accent)]">„{{ $block->wording }}“</span>@endif
                                                     @break
                                                 {{-- Spec 50 · C-7: die PERSISTIERTEN Typen sind `header`/`header_preis`
                                                      (OfferCompositionService::TYP_ALIAS loest die Foodbook-Namen auf).
                                                      Bis hierher standen nur die Foodbook-Namen — jeder Header fiel in
                                                      @default und wurde als kursives „(Text)" gerendert. --}}
                                                 @case('header')
-                                                    <span class="font-semibold">{{ $block->label ?: '(Header)' }}</span>
+                                                    <span class="font-semibold text-[var(--fa-ink)]">{{ $block->label ?: 'Überschrift ohne Text' }}</span>
                                                     @break
                                                 @case('header_preis')
-                                                    <span class="font-semibold">{{ $block->label ?: '(Header)' }}</span>
-                                                    <span class="text-gray-600">· {{ number_format((float) ($block->price_value ?? 0), 2, ',', '.') . ' € ' . ($block->price_basis === 'pauschal' ? 'pauschal' : '/P') }}</span>
+                                                    <span class="font-semibold text-[var(--fa-ink)]">{{ $block->label ?: 'Überschrift ohne Text' }}</span>
+                                                    <x-fa::money :value="$block->price_value" :per="$block->price_basis === 'pauschal' ? null : 'Gast'" class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]" />
+                                                    @if($block->price_basis === 'pauschal')<span class="{{ $hinweis }}">pauschal</span>@endif
                                                     @break
-                                                @case('spacer') <span class="italic text-gray-500">Leerzeile ({{ $block->height ?? 'mittel' }})</span> @break
-                                                @default <span class="italic">{{ \Illuminate\Support\Str::limit($block->customer_text ?? '(Text)', 80) }}</span>
+                                                @case('spacer')
+                                                    <span class="italic text-[var(--fa-ink-3)]">Leerzeile ({{ $block->height ?? 'mittel' }})</span>
+                                                    @break
+                                                @default
+                                                    <span class="italic text-[var(--fa-ink-2)]">{{ \Illuminate\Support\Str::limit($block->customer_text ?? 'Text ohne Inhalt', 80) }}</span>
                                             @endswitch
                                         </span>
-                                        @if($block->variant_group_id)<button type="button" wire:click="wahlGruppeAufheben({{ $block->id }})" class="{{ $pill }} {{ $variantPill['warning'] }} shrink-0" title="aus Wahl-Gruppe">Wahl #{{ $block->variant_group_id }}</button>@endif
-                                        <button type="button" wire:click="blockEbene({{ $block->id }}, -1)" class="text-gray-500 hover:text-violet-500 shrink-0" title="ausrücken">←</button>
-                                        <button type="button" wire:click="blockEbene({{ $block->id }}, 1)" class="text-gray-500 hover:text-violet-500 shrink-0" title="einrücken">→</button>
+                                        @if($block->variant_group_id)
+                                            <button type="button" wire:click="wahlGruppeAufheben({{ $block->id }})" class="shrink-0" title="Aus der Wahlgruppe lösen">
+                                                <x-fa::badge tone="warn" icon="heroicon-m-arrows-right-left">Wahlgruppe {{ $block->variant_group_id }}</x-fa::badge>
+                                            </button>
+                                        @endif
+                                        <button type="button" wire:click="blockEbene({{ $block->id }}, -1)" class="{{ $mini }}" title="Ausrücken" aria-label="Ausrücken">@svg('heroicon-m-arrow-left', 'w-3.5 h-3.5')</button>
+                                        <button type="button" wire:click="blockEbene({{ $block->id }}, 1)" class="{{ $mini }}" title="Einrücken" aria-label="Einrücken">@svg('heroicon-m-arrow-right', 'w-3.5 h-3.5')</button>
                                         @if($block->type === 'concept_ref' && $block->concept_id)
-                                            <a href="{{ route('foodalchemist.concepter.index', ['edit' => $block->concept_id]) }}" target="_blank" class="shrink-0 text-gray-500 hover:text-violet-500" title="im Concepter öffnen ↗" data-angebot-block-concepter>@svg('heroicon-o-arrow-top-right-on-square', 'w-3.5 h-3.5 inline-block align-middle')</a>
+                                            <a href="{{ route('foodalchemist.concepter.index', ['edit' => $block->concept_id]) }}" target="_blank" class="{{ $mini }}" title="Im Concepter öffnen" aria-label="Im Concepter öffnen" data-angebot-block-concepter>@svg('heroicon-m-arrow-top-right-on-square', 'w-3.5 h-3.5')</a>
                                         @endif
-                                        <button type="button" wire:click="blockSichtbar({{ $block->id }})" class="shrink-0 text-[10px] {{ $block->visible ? 'text-gray-500' : 'text-amber-500' }}" title="sichtbar/intern">@if($block->visible)@svg('heroicon-o-eye', 'w-3.5 h-3.5 inline-block align-middle')@else intern @endif</button>
+                                        <button type="button" wire:click="blockSichtbar({{ $block->id }})" class="{{ $block->visible ? $mini : 'inline-flex items-center gap-1 h-6 px-1.5 shrink-0 rounded-[var(--fa-radius-control)] text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-warn)] hover:bg-[var(--fa-warn-soft)]' }}"
+                                                title="{{ $block->visible ? 'Für den Kunden sichtbar, Klick: nur intern' : 'Nur intern, Klick: für den Kunden sichtbar' }}" aria-label="Sichtbarkeit umschalten">
+                                            @if($block->visible)@svg('heroicon-m-eye', 'w-3.5 h-3.5')@else @svg('heroicon-m-eye-slash', 'w-3.5 h-3.5')<span>intern</span>@endif
+                                        </button>
                                         @if($block->type !== 'spacer')
-                                            <button type="button" wire:click="blockBearbeiten({{ $block->id }})" class="shrink-0 text-gray-500 hover:text-violet-500" title="bearbeiten / Notiz">@svg('heroicon-o-pencil', 'w-3.5 h-3.5 inline-block align-middle')</button>
+                                            <button type="button" wire:click="blockBearbeiten({{ $block->id }})" class="{{ $mini }}" title="Bearbeiten und Notiz" aria-label="Bearbeiten">@svg('heroicon-m-pencil', 'w-3.5 h-3.5')</button>
                                         @endif
-                                        <button type="button" wire:click="blockRaus({{ $block->id }})" class="shrink-0 text-gray-500 hover:text-red-500" title="entfernen">✕</button>
+                                        <button type="button" wire:click="blockRaus({{ $block->id }})" class="{{ $miniKrit }}" title="Entfernen" aria-label="Entfernen">@svg('heroicon-m-x-mark', 'w-3.5 h-3.5')</button>
                                     </div>
 
                                     {{-- Live-Menü-Vorschau (aufgelöste gerichtZeilen) je concept_ref-Block --}}
                                     @if($block->type === 'concept_ref' && ! empty($blockMenus[$block->id] ?? []))
-                                        <div class="mt-1.5 ml-6 rounded-lg bg-violet-500/[0.035] border border-black/5 px-3 py-2 space-y-1" data-angebot-block-vorschau>
+                                        <div class="mt-1.5 ml-10 rounded-[var(--fa-radius-control)] bg-[var(--fa-neutral-soft)] px-3 py-2 flex flex-col gap-0.5" data-angebot-block-vorschau>
                                             @foreach($blockMenus[$block->id] as $g)
-                                                @php($istEditierbar = isset($g['slot_id']))
-                                                @php($slotKey = $istEditierbar ? $block->id . ':' . $g['slot_id'] : null)
+                                                @php
+                                                    $istEditierbar = isset($g['slot_id']);
+                                                    $slotKey = $istEditierbar ? $block->id . ':' . $g['slot_id'] : null;
+                                                @endphp
                                                 @if(($g['type'] ?? '') === 'header')
-                                                    <p class="text-[10px] font-semibold uppercase tracking-wider text-gray-500 mt-1.5 first:mt-0" style="margin-left:{{ ($g['einrueckung'] ?? 0) * 12 }}px">{{ $g['text'] }}</p>
+                                                    <p class="mt-1.5 first:mt-0 text-[length:var(--fa-text-sm)] font-semibold text-[var(--fa-ink-2)]" style="margin-left:{{ ($g['einrueckung'] ?? 0) * 12 }}px">{{ $g['text'] }}</p>
                                                 @elseif(($g['type'] ?? '') === 'paket')
                                                     <div class="flex items-center gap-1.5 mt-1" style="margin-left:{{ ($g['einrueckung'] ?? 0) * 12 }}px">
-                                                        <span class="{{ $pill }} {{ $variantPill['info'] }} normal-case shrink-0">Paket</span>
-                                                        <span class="text-[11px] font-medium text-violet-700 break-words">{{ $g['text'] }}</span>
-                                                        @if(($g['preis'] ?? null) !== null)<span class="ml-auto text-[10px] text-gray-500 tabular-nums shrink-0">{{ number_format((float) $g['preis'], 2, ',', '.') }} €/P</span>@endif
+                                                        <x-fa::badge tone="info">Paket</x-fa::badge>
+                                                        <span class="min-w-0 break-words text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink)]">{{ $g['text'] }}</span>
+                                                        @if(($g['preis'] ?? null) !== null)<span class="ml-auto shrink-0 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)] tabular-nums">{{ $euro($g['preis']) }}/Gast</span>@endif
                                                     </div>
                                                 @elseif($slotKey !== null && ($editSlotKey ?? null) === $slotKey)
                                                     <div class="flex items-center gap-1" style="margin-left:{{ 8 + ($g['einrueckung'] ?? 0) * 12 }}px" data-angebot-slot-editor>
-                                                        <input type="text" wire:model="editSlotWording" wire:keydown.enter="slotWordingSpeichern" wire:keydown.escape="slotWordingAbbrechen"
-                                                               class="{{ $input }} !py-0.5 !text-[11px] flex-1" placeholder="Anzeigename (Kunde) — leer = Wording-Kette" data-angebot-slot-input />
-                                                        <button type="button" wire:click="slotWordingSpeichern" class="{{ $pill }} {{ $variantPill['primary'] }} shrink-0" title="Speichern">OK</button>
-                                                        <button type="button" wire:click="slotWordingAbbrechen" class="text-gray-400 hover:text-gray-600 shrink-0 text-xs px-1" title="Abbrechen">×</button>
+                                                        <x-fa::input size="sm" wire:model="editSlotWording" wire:keydown.enter="slotWordingSpeichern" wire:keydown.escape="slotWordingAbbrechen"
+                                                            class="flex-1" placeholder="Anzeigename für den Kunden, leer = Standardtext" aria-label="Anzeigename für den Kunden" data-angebot-slot-input />
+                                                        <x-fa::button size="sm" wire:click="slotWordingSpeichern" title="Anzeigename übernehmen">Übernehmen</x-fa::button>
+                                                        <x-fa::icon-button icon="heroicon-m-x-mark" label="Abbrechen" size="sm" wire:click="slotWordingAbbrechen" />
                                                     </div>
                                                 @else
-                                                    <div class="group/dish flex items-center gap-1 text-[11px] {{ ($g['source'] ?? null) === 'name' ? 'text-amber-600 italic' : 'text-gray-600' }}" style="margin-left:{{ 8 + ($g['einrueckung'] ?? 0) * 12 }}px">
-                                                        <span class="text-gray-300 shrink-0">·</span>
+                                                    <div class="group/dish flex items-center gap-1 text-[length:var(--fa-text-sm)] {{ ($g['source'] ?? null) === 'name' ? 'italic text-[var(--fa-warn)]' : 'text-[var(--fa-ink-2)]' }}" style="margin-left:{{ 8 + ($g['einrueckung'] ?? 0) * 12 }}px">
+                                                        <span class="shrink-0 text-[var(--fa-ink-3)]" aria-hidden="true">·</span>
                                                         <span class="break-words">{{ $g['text'] }}</span>
-                                                        @if(($g['source'] ?? null) === 'name')<span class="text-[9px] text-amber-500 shrink-0">Wording fehlt</span>@endif
-                                                        @if(($g['preis'] ?? null) !== null)<span class="ml-auto text-[10px] text-gray-500 tabular-nums shrink-0">{{ number_format((float) $g['preis'], 2, ',', '.') }} €/P</span>@endif
+                                                        @if(($g['source'] ?? null) === 'name')<x-fa::signal tone="warn" class="shrink-0 not-italic">Anzeigename fehlt</x-fa::signal>@endif
+                                                        @if(($g['preis'] ?? null) !== null)<span class="ml-auto shrink-0 text-[var(--fa-ink-3)] tabular-nums">{{ $euro($g['preis']) }}/Gast</span>@endif
                                                         @if($istEditierbar)
                                                             <button type="button" wire:click="slotWordingBearbeiten({{ $block->id }}, {{ $g['slot_id'] }}, @js(($g['source'] ?? null) === 'name' ? '' : $g['text']))"
-                                                                    class="ml-1 shrink-0 text-gray-300 hover:text-violet-500 opacity-0 group-hover/dish:opacity-100 transition-opacity" title="Anzeigename bearbeiten" data-angebot-slot-edit>@svg('heroicon-o-pencil', 'w-3 h-3 inline-block align-middle')</button>
+                                                                    class="ml-1 {{ $mini }} opacity-0 group-hover/dish:opacity-100 focus:opacity-100 transition-opacity" title="Anzeigename bearbeiten" aria-label="Anzeigename bearbeiten" data-angebot-slot-edit>@svg('heroicon-m-pencil', 'w-3.5 h-3.5')</button>
                                                         @endif
                                                     </div>
                                                 @endif
@@ -446,475 +513,581 @@
                                     @endif
 
                                     @if(($editBlockId ?? null) === $block->id)
-                                        <div class="mt-2 space-y-2 pl-6">
-                                            @if(in_array($block->type, ['header_neutral', 'header_frei', 'header_frei_preis']))
-                                                <input type="text" wire:model="blockForm.label" placeholder="Header-Text" class="{{ $input }}" />
+                                        <div class="mt-2 ml-10 flex flex-col gap-2 border-t border-[var(--fa-line)] pt-2">
+                                            {{-- Persistiert heißen Überschriften `header`/`header_preis` (TYP_ALIAS) — die Foodbook-Namen
+                                                 bleiben für Altdaten in der Liste, sonst liesse sich keine Überschrift beschriften. --}}
+                                            @if(in_array($block->type, ['header', 'header_preis', 'header_neutral', 'header_frei', 'header_frei_preis'], true))
+                                                <x-fa::input wire:model="blockForm.label" placeholder="Text der Überschrift" aria-label="Text der Überschrift" />
                                             @endif
-                                            @if($block->type === 'header_frei_preis')
-                                                <div class="flex gap-2">
-                                                    <select wire:model="blockForm.price_basis" class="{{ $input }} w-32"><option value="person">pro Person</option><option value="pauschal">Pauschal</option><option value="staffel">Staffel</option></select>
-                                                    <input type="number" step="0.01" wire:model="blockForm.price_value" class="{{ $input }} w-28 text-right tabular-nums" placeholder="0,00 €" />
+                                            @if(in_array($block->type, ['header_preis', 'header_frei_preis'], true))
+                                                <div class="flex flex-wrap gap-2">
+                                                    <x-fa::select wire:model="blockForm.price_basis" class="w-40" aria-label="Preisbasis">
+                                                        <option value="person">je Gast</option>
+                                                        <option value="pauschal">pauschal</option>
+                                                    </x-fa::select>
+                                                    <x-fa::input type="number" step="0.01" numeric wire:model="blockForm.price_value" class="w-32" placeholder="0,00" aria-label="Preis in €" />
                                                 </div>
                                             @endif
                                             @if($block->type === 'concept_ref')
-                                                <input type="text" wire:model="blockForm.wording" class="{{ $input }}" placeholder="Anzeigename (Kunde) — leer = Wording-Kette (Konzept → Standard → Name)" data-angebot-block-wording />
+                                                <x-fa::input wire:model="blockForm.wording" placeholder="Anzeigename für den Kunden, leer = Standardtext des Konzepts" aria-label="Anzeigename für den Kunden" data-angebot-block-wording />
                                             @endif
                                             @if($block->type === 'recipe_ref')
-                                                <input type="text" wire:model="blockForm.wording" class="{{ $input }}" placeholder="Anzeigename (Kunde) — leer = Wording-Kette (Standard → Name)" data-angebot-block-wording />
-                                                <select wire:model="blockForm.price_basis" class="{{ $input }} w-40" title="Preis-Achse für dieses Gericht"><option value="person">pro Position (×Pax)</option><option value="pauschal">Pauschal</option></select>
+                                                <x-fa::input wire:model="blockForm.wording" placeholder="Anzeigename für den Kunden, leer = Standardtext des Gerichts" aria-label="Anzeigename für den Kunden" data-angebot-block-wording />
+                                                <x-fa::select wire:model="blockForm.price_basis" class="w-56" aria-label="Preisbasis dieses Gerichts" title="Preisbasis für dieses Gericht">
+                                                    <option value="person">je Position mal Gäste</option>
+                                                    <option value="pauschal">pauschal</option>
+                                                </x-fa::select>
                                             @endif
                                             @if($block->type === 'text')
-                                                <textarea wire:model="blockForm.customer_text" rows="3" class="{{ $input }}" placeholder="Marketing-Text (kundensichtbar)"></textarea>
+                                                <x-fa::textarea wire:model="blockForm.customer_text" rows="3" placeholder="Text für den Kunden" aria-label="Text für den Kunden" />
                                             @else
                                                 <div class="flex gap-1.5 items-start">
-                                                    <textarea wire:model="blockForm.customer_text" rows="2" class="{{ $input }}" placeholder="Beschreibungstext / Untertitel (kundensichtbar, optional)"></textarea>
+                                                    <x-fa::textarea wire:model="blockForm.customer_text" rows="2" placeholder="Beschreibung oder Untertitel für den Kunden (optional)" aria-label="Beschreibung für den Kunden" />
                                                     @if($block->type === 'concept_ref')
-                                                        <x-foodalchemist::ki-action action="kiKundentext" variant="icon" icon="heroicon-o-sparkles" label="KI-Kundentext"
-                                                                title="verkäuferischer Beschreibungstext zu diesem Concept" class="shrink-0 mt-0.5" data-angebot-ki-kundentext />
+                                                        <x-foodalchemist::ki-action action="kiKundentext" variant="icon" icon="heroicon-o-sparkles" label="Kundentext von der KI"
+                                                                title="Verkaufender Beschreibungstext zu diesem Konzept" class="shrink-0 mt-2" data-angebot-ki-kundentext />
                                                     @endif
                                                 </div>
                                             @endif
-                                            <input type="text" wire:model="blockForm.interne_bemerkung" class="{{ $input }}" placeholder="Interne Notiz (nicht kundensichtbar)" />
+                                            <x-fa::input wire:model="blockForm.interne_bemerkung" placeholder="Interne Notiz, für den Kunden nicht sichtbar" aria-label="Interne Notiz" />
                                             <div class="flex gap-2">
-                                                <button type="button" wire:click="blockSpeichern" class="{{ $btnPrimary }}">OK</button>
-                                                <button type="button" wire:click="$set('editBlockId', null)" class="{{ $btnGhost }}">Abbrechen</button>
+                                                <x-fa::button size="sm" icon="heroicon-m-check" wire:click="blockSpeichern">Übernehmen</x-fa::button>
+                                                <x-fa::button variant="ghost" size="sm" wire:click="$set('editBlockId', null)">Abbrechen</x-fa::button>
                                             </div>
                                         </div>
                                     @endif
                                 </div>
                             @empty
-                                <div class="py-4 text-center space-y-1">
-                                    <p class="text-xs text-gray-500">Noch kein Inhalt. Rechts im Katalog ein Concept, Paket, Format oder Gericht einfügen — oder Header/Text/Preis-Block hinzufügen.</p>
-                                    <p class="text-[11px] text-violet-600/80">Oder KI-befüllen: die <span class="font-medium">Voll-Kaskade</span> (Leitstelle) erzeugt je Kapitel automatisch ein Konzept — es landet direkt hier im Inhalt.</p>
-                                </div>
+                                <x-fa::empty compact icon="heroicon-o-squares-2x2" title="Noch kein Inhalt">
+                                    Rechts im Katalog ein Konzept, Paket, Format oder Gericht einfügen oder oben Text, Leerzeile oder Überschrift hinzufügen.
+                                    Die Leitstelle legt beim Planen je Kapitel automatisch ein Konzept an, es landet direkt hier.
+                                </x-fa::empty>
                             @endforelse
                         </div>
-                    </div>{{-- /Inhalt --}}
+                    </x-fa::section>{{-- /Inhalt --}}
+
+                    {{-- Hinführung (Kundentext des Kapitels) + KI-Text · Schreibstil + Kapitel-Wording --}}
+                    <x-fa::section title="Kundentext" icon="heroicon-o-chat-bubble-bottom-center-text"
+                        description="Kurzer Text, der im Angebot in dieses Kapitel einführt.">
+                        <x-slot:actions>
+                            <x-foodalchemist::ki-action action="kiKapitelText" variant="ai" icon="heroicon-o-sparkles" label="Text vorschlagen"
+                                    title="Hinführung aus dem Inhalt des Kapitels, der Einleitung des Angebots und der Markenstimme"
+                                    busy="Schreibt …" data-angebot-ki-kapiteltext />
+                        </x-slot:actions>
+                        <x-fa::textarea wire:model.blur="kapitelForm.description" wire:change="kapitelSpeichern" rows="2"
+                            class="resize-none min-h-[3.5rem]" aria-label="Hinführung für den Kunden"
+                            placeholder="Kurzer Text für den Kunden, «Text vorschlagen» liefert einen Entwurf" />
+                        {{-- KI-Vorschau (inline, geteilter Zustand kiTextZiel/kiTextVorschau) --}}
+                        @if(($kiTextZiel ?? null) === 'kapitel')
+                            @if(($kiTextVorschau ?? null) !== null)
+                                @php
+                                    $kapTextVorhanden = trim((string) ($kapitelForm['description'] ?? '')) !== '';
+                                @endphp
+                                <div data-angebot-ki-vorschau>
+                                    <x-fa::notice tone="info" title="Vorschlag der KI, noch nicht übernommen{{ ($kiTextConfidence ?? null) !== null ? ' (' . number_format($kiTextConfidence * 100, 0) . ' % sicher)' : '' }}">
+                                        <p class="whitespace-pre-line">{{ $kiTextVorschau }}</p>
+                                        @if($kapTextVorhanden)
+                                            <p class="mt-1 text-[length:var(--fa-text-sm)] text-[var(--fa-warn)]">Im Feld steht schon ein Text. «Ersetzen» überschreibt ihn, endgültig erst beim Speichern.</p>
+                                        @endif
+                                        <x-slot:actions>
+                                            <x-fa::button size="sm" variant="ghost" wire:click="kiTextVerwerfen">Verwerfen</x-fa::button>
+                                            <x-fa::button size="sm" icon="heroicon-m-check" wire:click="kiTextUebernehmen">{{ $kapTextVorhanden ? 'Ersetzen' : 'Übernehmen' }}</x-fa::button>
+                                        </x-slot:actions>
+                                    </x-fa::notice>
+                                </div>
+                            @endif
+                            @if(($kiTextHinweis ?? null) !== null)
+                                <x-fa::signal tone="warn" data-angebot-ki-hinweis>{{ $kiTextHinweis }}</x-fa::signal>
+                            @endif
+                        @endif
+
+                        {{-- Schreibstil PRO KAPITEL + Kapitel-Wording neu betexten --}}
+                        <div class="flex flex-wrap items-end gap-2 pt-3 border-t border-[var(--fa-line)]" data-angebot-kapitel-stil>
+                            <x-fa::field label="Schreibstil des Kapitels" for="ang-kap-stil" class="flex-1 max-w-xs">
+                                <x-fa::select id="ang-kap-stil" wire:model.live="kapitelForm.writing_style_id" wire:change="kapitelSpeichern" data-angebot-kapitel-schreibstil>
+                                    <option value="">Standard aus den Konzepten</option>
+                                    @foreach($schreibstile ?? [] as $s)<option value="{{ $s->id }}">{{ $s->name }}</option>@endforeach
+                                </x-fa::select>
+                            </x-fa::field>
+                            <x-foodalchemist::ki-action action="kapitelWordingGenerieren" variant="ai" icon="heroicon-o-sparkles" label="Speisen neu betexten"
+                                    :disabled="($kapitelForm['writing_style_id'] ?? null) === null || ($kapitelForm['writing_style_id'] ?? '') === ''"
+                                    title="Betextet alle Konzepte dieses Kapitels im gewählten Schreibstil neu. Gilt nur für dieses Angebot, das Konzept selbst bleibt unverändert."
+                                    busy="Betextet …" class="mb-1" data-angebot-kapitel-wording />
+                        </div>
+                        @error('kapitelWording')<p class="text-[length:var(--fa-text-sm)] text-[var(--fa-crit)]" role="alert" data-angebot-kapitel-fehler>{{ $message }}</p>@enderror
+                    </x-fa::section>
+
+                    {{-- Kapitel-Bild (Präsentation) + Galerie --}}
+                    <x-fa::section title="Bilder" icon="heroicon-o-photo" description="Ohne eigenes Bild zeigt das Kapitel automatisch das Titelbild des Konzepts." data-angebot-kapitel-image>
+                        <x-fa::field label="Kapitelbild für die Präsentation">
+                            <div class="flex items-center gap-3 flex-wrap">
+                                @if($kapitelImageUrl ?? null)
+                                    <img src="{{ $kapitelImageUrl }}" alt="" class="h-12 w-20 object-cover rounded-[var(--fa-radius-control)] border border-[var(--fa-line)]">
+                                    <x-fa::button variant="danger" size="sm" icon="heroicon-m-trash" wire:click="kapitelImageEntfernen" data-angebot-kapitel-image-remove>Bild entfernen</x-fa::button>
+                                @endif
+                                <input type="file" wire:model="kapitelImageUpload" accept="image/*" class="{{ $dateiFeld }} w-auto" aria-label="Kapitelbild hochladen" data-angebot-kapitel-image-upload>
+                                <span wire:loading wire:target="kapitelImageUpload" class="{{ $hinweis }}">Lädt …</span>
+                            </div>
+                        </x-fa::field>
+                        @if($kapitelImageFehler ?? null)<p class="text-[length:var(--fa-text-sm)] text-[var(--fa-crit)]" role="alert">{{ $kapitelImageFehler }}</p>@endif
+                        @error('kapitelImageUpload')<p class="text-[length:var(--fa-text-sm)] text-[var(--fa-crit)]" role="alert">{{ $message }}</p>@enderror
+
+                        <div class="pt-3 border-t border-[var(--fa-line)]" data-angebot-kapitel-gallery>
+                            <x-fa::field label="Weitere Bilder" optional hint="Mehrere Bilder für das Kapitelband. Ersetzen die Bilder des Konzepts.">
+                                <div class="flex items-center gap-3 flex-wrap">
+                                    @foreach($kapitelGallery ?? [] as $gi)
+                                        <div class="relative">
+                                            <img src="{{ $gi['url'] }}" alt="" class="h-12 w-20 object-cover rounded-[var(--fa-radius-control)] border border-[var(--fa-line)]">
+                                            <button type="button" wire:click="kapitelGalerieBildEntfernen({{ $gi['id'] }})"
+                                                class="absolute -top-2 -right-2 inline-flex items-center justify-center w-5 h-5 rounded-full bg-[var(--fa-crit)] text-[var(--fa-on-accent)]"
+                                                title="Bild entfernen" aria-label="Bild entfernen">@svg('heroicon-m-x-mark', 'w-3.5 h-3.5')</button>
+                                        </div>
+                                    @endforeach
+                                    <input type="file" wire:model="kapitelGalleryUpload" accept="image/*" multiple class="{{ $dateiFeld }} w-auto" aria-label="Weitere Bilder hochladen" data-angebot-kapitel-gallery-upload>
+                                    <span wire:loading wire:target="kapitelGalleryUpload" class="{{ $hinweis }}">Lädt …</span>
+                                </div>
+                            </x-fa::field>
+                            @error('kapitelGalleryUpload.*')<p class="text-[length:var(--fa-text-sm)] text-[var(--fa-crit)]" role="alert">{{ $message }}</p>@enderror
+                        </div>
+                    </x-fa::section>
                     </div>{{-- /linke Spalte --}}
 
-                    {{-- Persistenter Katalog: Concept · Paket · Format · Gericht. „+" bucht ins gewählte Kapitel. --}}
+                    {{-- Persistenter Katalog: Konzept · Paket · Format · Gericht. Ein Klick bucht ins gewählte Kapitel. --}}
                     <x-foodalchemist::katalog-picker marker="angebot" switch="katalogModus" :modes="[
-                        ['key' => 'concept', 'label' => 'Concept', 'active' => ($pickerModus ?? 'concept') === 'concept'],
+                        ['key' => 'concept', 'label' => 'Konzept', 'active' => ($pickerModus ?? 'concept') === 'concept'],
                         ['key' => 'paket', 'label' => 'Paket', 'active' => ($pickerModus ?? 'concept') === 'paket'],
                         ['key' => 'format', 'label' => 'Format', 'active' => ($pickerModus ?? 'concept') === 'format'],
                         ['key' => 'gericht', 'label' => 'Gericht', 'active' => ($pickerModus ?? 'concept') === 'gericht'],
                     ]">
                         @if(($pickerModus ?? 'concept') === 'concept')
-                            <input type="search" wire:model.live.debounce.300ms="conceptSuche" placeholder="Concept suchen …" class="{{ $input }} w-full mb-2 shrink-0" data-angebot-katalog-concept />
-                            @php($facettenAktiv = collect($conceptFacetten ?? [])->filter(fn ($v) => $v !== null)->isNotEmpty())
+                            <x-fa::input type="search" size="sm" wire:model.live.debounce.300ms="conceptSuche" placeholder="Konzept suchen" aria-label="Konzept suchen" class="mb-2 shrink-0" data-angebot-katalog-concept />
+                            @php
+                                $facettenAktiv = collect($conceptFacetten ?? [])->filter(fn ($v) => $v !== null)->isNotEmpty();
+                            @endphp
                             <div class="grid grid-cols-2 gap-1 mb-2 shrink-0" data-angebot-concept-facetten>
-                                <select wire:model.live="conceptFacetten.eventtyp" class="{{ $input }} !py-0.5 !text-[11px]" data-angebot-facet-eventtyp>
+                                <x-fa::select size="sm" wire:model.live="conceptFacetten.eventtyp" aria-label="Eventtyp" data-angebot-facet-eventtyp>
                                     <option value="">Alle Eventtypen</option>
                                     @foreach($facetteEventtypen ?? [] as $et)<option value="{{ $et->id }}">{{ $et->name }}</option>@endforeach
-                                </select>
-                                <select wire:model.live="conceptFacetten.servierform" class="{{ $input }} !py-0.5 !text-[11px]" data-angebot-facet-servierform>
+                                </x-fa::select>
+                                <x-fa::select size="sm" wire:model.live="conceptFacetten.servierform" aria-label="Servierform" data-angebot-facet-servierform>
                                     <option value="">Alle Servierformen</option>
                                     @foreach($facetteServierformen ?? [] as $sf)<option value="{{ $sf->id }}">{{ $sf->label }}</option>@endforeach
-                                </select>
-                                <select wire:model.live="conceptFacetten.einsatzmoment" class="{{ $input }} !py-0.5 !text-[11px]" data-angebot-facet-einsatzmoment>
+                                </x-fa::select>
+                                <x-fa::select size="sm" wire:model.live="conceptFacetten.einsatzmoment" aria-label="Einsatzmoment" data-angebot-facet-einsatzmoment>
                                     <option value="">Alle Einsatzmomente</option>
                                     @foreach($facetteMomente ?? [] as $em)<option value="{{ $em->id }}">{{ $em->name }}</option>@endforeach
-                                </select>
-                                <select wire:model.live="conceptFacetten.season" class="{{ $input }} !py-0.5 !text-[11px]" data-angebot-facet-season>
+                                </x-fa::select>
+                                <x-fa::select size="sm" wire:model.live="conceptFacetten.season" aria-label="Saison" data-angebot-facet-season>
                                     <option value="">Alle Saisons</option>
                                     @foreach($facetteSaisons ?? [] as $sa)<option value="{{ $sa->id }}">{{ $sa->name }}</option>@endforeach
-                                </select>
+                                </x-fa::select>
                             </div>
                             <div class="flex-1 overflow-y-auto space-y-0.5">
                                 @forelse($conceptKandidaten ?? [] as $ck)
-                                    <x-foodalchemist::katalog-row wire:key="ack-{{ $ck->id }}" wire:click="conceptHinzu({{ $ck->id }})" :title="$ck->name" :price="$ck->price_per_person_cache !== null ? number_format((float) $ck->price_per_person_cache, 2, ',', '.') . ' €' : null">{{ $ck->name }}</x-foodalchemist::katalog-row>
+                                    <x-foodalchemist::katalog-row wire:key="ack-{{ $ck->id }}" wire:click="conceptHinzu({{ $ck->id }})" :title="$ck->name" :price="$ck->price_per_person_cache !== null ? $euro($ck->price_per_person_cache) : null">{{ $ck->name }}</x-foodalchemist::katalog-row>
                                 @empty
-                                    <p class="text-[11px] text-gray-500 px-2 py-2">{{ ($conceptSuche ?? '') !== '' || $facettenAktiv ? 'Keine Concepts für diese Auswahl.' : 'Noch keine Concepts angelegt.' }}</p>
+                                    <p class="px-2 py-2 {{ $hinweis }}">{{ ($conceptSuche ?? '') !== '' || $facettenAktiv ? 'Keine Konzepte für diese Auswahl.' : 'Noch keine Konzepte angelegt.' }}</p>
                                 @endforelse
                             </div>
                         @elseif(($pickerModus ?? 'concept') === 'paket')
-                            <input type="search" wire:model.live.debounce.300ms="paketSuche" placeholder="Paket suchen …" class="{{ $input }} w-full mb-2 shrink-0" data-angebot-katalog-paket />
-                            @php($paketFacettenAktiv = collect($paketFacetten ?? [])->filter(fn ($v) => $v !== null)->isNotEmpty())
+                            <x-fa::input type="search" size="sm" wire:model.live.debounce.300ms="paketSuche" placeholder="Paket suchen" aria-label="Paket suchen" class="mb-2 shrink-0" data-angebot-katalog-paket />
+                            @php
+                                $paketFacettenAktiv = collect($paketFacetten ?? [])->filter(fn ($v) => $v !== null)->isNotEmpty();
+                            @endphp
                             <div class="grid grid-cols-2 gap-1 mb-2 shrink-0" data-angebot-paket-facetten>
-                                <select wire:model.live="paketFacetten.eventtyp" class="{{ $input }} !py-0.5 !text-[11px]" data-angebot-paket-facet-eventtyp>
+                                <x-fa::select size="sm" wire:model.live="paketFacetten.eventtyp" aria-label="Eventtyp" data-angebot-paket-facet-eventtyp>
                                     <option value="">Alle Eventtypen</option>
                                     @foreach($facetteEventtypen ?? [] as $et)<option value="{{ $et->id }}">{{ $et->name }}</option>@endforeach
-                                </select>
-                                <select wire:model.live="paketFacetten.servierform" class="{{ $input }} !py-0.5 !text-[11px]" data-angebot-paket-facet-servierform>
+                                </x-fa::select>
+                                <x-fa::select size="sm" wire:model.live="paketFacetten.servierform" aria-label="Servierform" data-angebot-paket-facet-servierform>
                                     <option value="">Alle Servierformen</option>
                                     @foreach($facetteServierformen ?? [] as $sf)<option value="{{ $sf->id }}">{{ $sf->label }}</option>@endforeach
-                                </select>
-                                <select wire:model.live="paketFacetten.einsatzmoment" class="{{ $input }} !py-0.5 !text-[11px]" data-angebot-paket-facet-einsatzmoment>
+                                </x-fa::select>
+                                <x-fa::select size="sm" wire:model.live="paketFacetten.einsatzmoment" aria-label="Einsatzmoment" data-angebot-paket-facet-einsatzmoment>
                                     <option value="">Alle Einsatzmomente</option>
                                     @foreach($facetteMomente ?? [] as $em)<option value="{{ $em->id }}">{{ $em->name }}</option>@endforeach
-                                </select>
-                                <select wire:model.live="paketFacetten.season" class="{{ $input }} !py-0.5 !text-[11px]" data-angebot-paket-facet-season>
+                                </x-fa::select>
+                                <x-fa::select size="sm" wire:model.live="paketFacetten.season" aria-label="Saison" data-angebot-paket-facet-season>
                                     <option value="">Alle Saisons</option>
                                     @foreach($facetteSaisons ?? [] as $sa)<option value="{{ $sa->id }}">{{ $sa->name }}</option>@endforeach
-                                </select>
+                                </x-fa::select>
                             </div>
                             <div class="flex-1 overflow-y-auto space-y-0.5">
                                 @forelse($paketKandidaten ?? [] as $pk)
-                                    <x-foodalchemist::katalog-row wire:key="apk-{{ $pk->id }}" wire:click="paketHinzu({{ $pk->id }})" :title="$pk->consumer_name ?: $pk->name" :price="$pk->price_per_person_cache !== null ? number_format((float) $pk->price_per_person_cache, 2, ',', '.') . ' €' : null">{{ $pk->consumer_name ?: $pk->name }}</x-foodalchemist::katalog-row>
+                                    <x-foodalchemist::katalog-row wire:key="apk-{{ $pk->id }}" wire:click="paketHinzu({{ $pk->id }})" :title="$pk->consumer_name ?: $pk->name" :price="$pk->price_per_person_cache !== null ? $euro($pk->price_per_person_cache) : null">{{ $pk->consumer_name ?: $pk->name }}</x-foodalchemist::katalog-row>
                                 @empty
-                                    <p class="text-[11px] text-gray-500 px-2 py-2">{{ ($paketSuche ?? '') !== '' || $paketFacettenAktiv ? 'Keine Pakete für diese Auswahl.' : 'Noch keine Pakete angelegt.' }}</p>
+                                    <p class="px-2 py-2 {{ $hinweis }}">{{ ($paketSuche ?? '') !== '' || $paketFacettenAktiv ? 'Keine Pakete für diese Auswahl.' : 'Noch keine Pakete angelegt.' }}</p>
                                 @endforelse
                             </div>
                         @elseif(($pickerModus ?? 'concept') === 'format')
-                            <input type="search" wire:model.live.debounce.300ms="formatSuche" placeholder="Format suchen …" class="{{ $input }} w-full mb-2 shrink-0" data-angebot-katalog-format />
-                            @error('formatKapitel')<p class="text-[11px] text-rose-500 px-1 mb-1 shrink-0">{{ $message }}</p>@enderror
-                            <p class="text-[10px] text-gray-500 mb-1 shrink-0">Bucht ein Format als eigenes Kapitel (Editionen live).</p>
+                            <x-fa::input type="search" size="sm" wire:model.live.debounce.300ms="formatSuche" placeholder="Format suchen" aria-label="Format suchen" class="mb-2 shrink-0" data-angebot-katalog-format />
+                            @error('formatKapitel')<p class="px-1 mb-1 shrink-0 text-[length:var(--fa-text-sm)] text-[var(--fa-crit)]" role="alert">{{ $message }}</p>@enderror
+                            <p class="mb-1 shrink-0 {{ $hinweis }}">Bucht ein Format als eigenes Kapitel, die Editionen bleiben aktuell.</p>
                             <div class="flex-1 overflow-y-auto space-y-0.5">
                                 @forelse($formatKandidaten ?? [] as $fk)
-                                    <x-foodalchemist::katalog-row wire:key="afmt-{{ $fk->id }}" wire:click="formatEinfuegen({{ $fk->id }})" :title="$fk->consumer_name ?: $fk->name">{{ $fk->name }}@if($fk->origin === 'kunde')<span class="text-[9px] text-gray-400 ml-1">(Kunde-IP)</span>@endif</x-foodalchemist::katalog-row>
+                                    <x-foodalchemist::katalog-row wire:key="afmt-{{ $fk->id }}" wire:click="formatEinfuegen({{ $fk->id }})" :title="$fk->consumer_name ?: $fk->name">{{ $fk->name }}@if($fk->origin === 'kunde')<span class="ml-1 {{ $hinweis }}">(Kundenkonzept)</span>@endif</x-foodalchemist::katalog-row>
                                 @empty
-                                    <p class="text-[11px] text-gray-500 px-2 py-2">Keine Formate vorhanden.</p>
+                                    <p class="px-2 py-2 {{ $hinweis }}">Keine Formate vorhanden.</p>
                                 @endforelse
                             </div>
                         @else
                             {{-- Gericht (recipe_ref): Suche + Hauptgruppe/Untergruppe --}}
-                            <input type="search" wire:model.live.debounce.300ms="gerichtSuche" placeholder="Gericht suchen …" class="{{ $input }} w-full mb-2 shrink-0" data-angebot-katalog-gericht />
+                            <x-fa::input type="search" size="sm" wire:model.live.debounce.300ms="gerichtSuche" placeholder="Gericht suchen" aria-label="Gericht suchen" class="mb-2 shrink-0" data-angebot-katalog-gericht />
                             <div class="grid grid-cols-2 gap-1 mb-2 shrink-0" data-angebot-gericht-facetten>
-                                <select wire:model.live="gerichtHauptgruppe" class="{{ $input }} !py-0.5 !text-[11px]" data-angebot-gericht-hg>
+                                <x-fa::select size="sm" wire:model.live="gerichtHauptgruppe" aria-label="Hauptgruppe" data-angebot-gericht-hg>
                                     <option value="">Alle Hauptgruppen</option>
                                     @foreach($gerichtHauptgruppen ?? [] as $hg)<option value="{{ $hg->id }}">{{ $hg->label ?? $hg->name }}</option>@endforeach
-                                </select>
-                                <select wire:model.live="gerichtDishClass" class="{{ $input }} !py-0.5 !text-[11px]" data-angebot-gericht-klasse @disabled(($gerichtHauptgruppe ?? null) === null)>
+                                </x-fa::select>
+                                <x-fa::select size="sm" wire:model.live="gerichtDishClass" aria-label="Untergruppe" data-angebot-gericht-klasse :disabled="($gerichtHauptgruppe ?? null) === null">
                                     <option value="">Alle Untergruppen</option>
                                     @foreach($gerichtUntergruppen ?? [] as $ug)<option value="{{ $ug->id }}">{{ $ug->label }}</option>@endforeach
-                                </select>
+                                </x-fa::select>
                             </div>
                             <div class="flex-1 overflow-y-auto space-y-0.5">
                                 @forelse($gerichtKandidaten ?? [] as $gk)
-                                    <x-foodalchemist::katalog-row wire:key="agk-{{ $gk->id }}" wire:click="gerichtHinzu({{ $gk->id }})" :title="$gk->name" :price="$gk->sales_net !== null ? number_format((float) $gk->sales_net, 2, ',', '.') . ' €' : null">{{ $gk->name }}</x-foodalchemist::katalog-row>
+                                    <x-foodalchemist::katalog-row wire:key="agk-{{ $gk->id }}" wire:click="gerichtHinzu({{ $gk->id }})" :title="$gk->name" :price="$gk->sales_net !== null ? $euro($gk->sales_net) : null">{{ $gk->name }}</x-foodalchemist::katalog-row>
                                 @empty
-                                    <p class="text-[11px] text-gray-500 px-2 py-2">{{ ($gerichtSuche ?? '') !== '' ? 'Keine Gerichte für diese Auswahl.' : 'Gericht suchen oder Hauptgruppe wählen.' }}</p>
+                                    <p class="px-2 py-2 {{ $hinweis }}">{{ ($gerichtSuche ?? '') !== '' ? 'Keine Gerichte für diese Auswahl.' : 'Gericht suchen oder Hauptgruppe wählen.' }}</p>
                                 @endforelse
                             </div>
                         @endif
                     </x-foodalchemist::katalog-picker>
                     </div>{{-- /2col Aufbau --}}
                 @else
-                    <div class="{{ $card }} p-8 text-center text-sm text-gray-500">Links im Kapitelbaum ein Kapitel wählen, um seinen Aufbau zu bearbeiten — oder „Neues Kapitel …" anlegen.</div>
+                    <div class="fa-surface">
+                        <x-fa::empty icon="heroicon-o-cursor-arrow-rays" title="Kein Kapitel gewählt">
+                            Links im Kapitelbaum ein Kapitel wählen, um seinen Aufbau zu bearbeiten, oder unter «Neues Kapitel» eines anlegen.
+                        </x-fa::empty>
+                    </div>
                 @endif
-                </div>{{-- /Aufbau-Tab --}}
+                </div>{{-- /Aufbau-Reiter --}}
 
-                {{-- ═══ Tab: KALKULATION (Zuschlagskalkulation-Partial B3 + Preis-Modus + Mengen) ═══ --}}
-                <div x-show="tab === 'kalkulation'" x-cloak class="pt-4 space-y-4" data-angebot-panel="kalkulation">
+                {{-- ═══ Reiter: KALKULATION — Preis je Kapitel (Angebotssumme) · Preis festlegen · Vollkosten (B3) · Mengen ═══ --}}
+                <div x-show="tab === 'kalkulation'" x-cloak class="pt-4 flex flex-col gap-4" data-angebot-panel="kalkulation">
                     {{-- Per-Kapitel-Aufschlüsselung (Σ Kapitel-Pax × €/P) — Kern der Angebots-Kalkulation. --}}
                     @if($kalkulation && ! ($kalkulation['leer'] ?? true) && count($kalkulation['kapitel'] ?? []))
-                    <x-foodalchemist::modal-section title="Aufschlüsselung je Kapitel">
-                        <div class="flex items-center gap-2 pb-1 text-[10px] uppercase tracking-wide text-gray-400">
-                            <span class="flex-1">Kapitel</span><span class="w-16 text-right">Pax</span><span class="w-24 text-right">€/Person</span><span class="w-28 text-right">Gesamt</span>
-                        </div>
-                        @foreach($kalkulation['kapitel'] as $kb)
-                            <div wire:key="kalkkap-{{ $kb['id'] }}" class="flex items-center gap-2 py-1 text-xs border-t border-black/5">
-                                <span class="flex-1 min-w-0 truncate text-gray-800">{{ $kb['titel'] }}</span>
-                                <span class="w-16 text-right tabular-nums text-gray-600">{{ $kb['pax'] ?: '—' }}@if($kb['eigene_pax'] ?? false)<span class="text-violet-500" title="eigene Kapitel-Pax">*</span>@endif</span>
-                                <span class="w-24 text-right tabular-nums text-gray-600">
-                                    @if($kb['ist_format'] && ($kb['format_price_mode'] ?? null) === 'alternativen' && ($kb['preis_range'] ?? null))
-                                        {{ $kb['preis_range']['min'] !== null ? number_format((float) $kb['preis_range']['min'], 2, ',', '.') : '—' }}–{{ $kb['preis_range']['max'] !== null ? number_format((float) $kb['preis_range']['max'], 2, ',', '.') : '—' }} €
-                                    @elseif($kb['vk_pro_person'] !== null)
-                                        {{ number_format((float) $kb['vk_pro_person'], 2, ',', '.') }} €
-                                    @else — @endif
-                                </span>
-                                <span class="w-28 text-right tabular-nums font-medium text-gray-800">{{ number_format((float) ($kb['gesamt'] ?? 0), 2, ',', '.') }} €</span>
+                        <x-fa::section title="Preis je Kapitel" icon="heroicon-o-currency-euro" data-angebot-kalk-kapitel>
+                            <div class="overflow-x-auto -mx-4">
+                                <table class="fa-table">
+                                    <thead>
+                                        <tr>
+                                            <th class="w-full">Kapitel</th>
+                                            <th class="num">Gäste</th>
+                                            <th class="num">Preis je Gast</th>
+                                            <th class="num">Summe</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach($kalkulation['kapitel'] as $kb)
+                                            <tr wire:key="kalkkap-{{ $kb['id'] }}">
+                                                <td class="min-w-[10rem] text-[var(--fa-ink)]">{{ $kb['titel'] }}</td>
+                                                <td class="num text-[var(--fa-ink-2)]">
+                                                    {{ $kb['pax'] ?: '–' }}@if($kb['eigene_pax'] ?? false)<span class="text-[var(--fa-accent)]" title="Eigene Gästezahl des Kapitels">*</span>@endif
+                                                </td>
+                                                <td class="num text-[var(--fa-ink-2)]">
+                                                    @if($kb['ist_format'] && ($kb['format_price_mode'] ?? null) === 'alternativen' && ($kb['preis_range'] ?? null))
+                                                        {{ $kb['preis_range']['min'] !== null ? number_format((float) $kb['preis_range']['min'], 2, ',', '.') : '–' }} bis {{ $kb['preis_range']['max'] !== null ? $euro($kb['preis_range']['max']) : '–' }}
+                                                    @else
+                                                        <x-fa::money :value="$kb['vk_pro_person']" />
+                                                    @endif
+                                                </td>
+                                                <td class="num font-medium text-[var(--fa-ink)]">{{ $euro($kb['gesamt'] ?? 0) }}</td>
+                                            </tr>
+                                        @endforeach
+                                    </tbody>
+                                    <tfoot>
+                                        <tr class="[&>td]:border-t-2 [&>td]:border-[var(--fa-accent-line)]">
+                                            <td class="font-semibold text-[var(--fa-ink)]">Angebotssumme</td>
+                                            <td class="num text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]" title="Durchschnitt der Gäste">Ø {{ $kalkulation['pax'] ?: '–' }}</td>
+                                            <td class="num text-[var(--fa-ink-2)]">{{ $euro($kalkulation['vk_pro_person']) }}</td>
+                                            <td class="num text-[length:var(--fa-text-lg)] font-semibold text-[var(--fa-accent)]" data-angebot-summe>{{ $euro($kalkulation['gesamt_vk']) }}</td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
                             </div>
-                        @endforeach
-                        <div class="flex items-center gap-2 pt-1.5 mt-1 border-t-2 border-violet-500/30 text-sm font-semibold">
-                            <span class="flex-1 text-gray-900">Gesamt</span>
-                            <span class="w-16 text-right tabular-nums text-gray-400 text-[11px]">Ø {{ $kalkulation['pax'] ?: '—' }}</span>
-                            <span class="w-24 text-right tabular-nums text-gray-600 text-[11px]">{{ number_format((float) $kalkulation['vk_pro_person'], 2, ',', '.') }} €/P</span>
-                            <span class="w-28 text-right tabular-nums text-gray-900">{{ number_format((float) $kalkulation['gesamt_vk'], 2, ',', '.') }} €</span>
+                            <p class="{{ $hinweis }}">* eigene Gästezahl des Kapitels, sonst gelten die Gäste des Angebots ({{ $angebot->personen ?: '–' }}). Preis je Gast im Kopf = Angebotssumme geteilt durch die Gäste des Angebots.</p>
+                        </x-fa::section>
+                    @else
+                        <div class="fa-surface">
+                            <x-fa::empty icon="heroicon-o-calculator" title="Noch nichts zu rechnen">
+                                Sobald ein Kapitel Inhalt mit Preis hat, steht hier die Angebotssumme je Kapitel.
+                            </x-fa::empty>
                         </div>
-                        <p class="text-[10px] text-gray-400 pt-1">* eigene Kapitel-Pax — sonst erbt das Kapitel die Angebots-Pax ({{ $angebot->personen ?: '—' }}). Kopf-„€/Person" = Gesamt ÷ Angebots-Pax.</p>
-                    </x-foodalchemist::modal-section>
                     @endif
+
+                    {{-- Preis-Modus (auto/fixiert) + Begründung --}}
+                    <x-fa::section title="Angebotspreis festlegen" icon="heroicon-o-adjustments-horizontal">
+                        <x-fa::choice name="form.price_mode" label="Preisermittlung" id-prefix="ang-preis"
+                            :options="['auto' => 'Automatisch aus Gästen und Aufbau', 'fixed' => 'Festpreis']" />
+                        @if(in_array($form['price_mode'] ?? 'auto', ['fixed', 'manuell'], true))
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                <x-fa::field label="Gesamtpreis in €" for="ang-festpreis">
+                                    <x-fa::input id="ang-festpreis" type="number" step="0.01" numeric wire:model="form.total_price" />
+                                </x-fa::field>
+                                <x-fa::field label="Begründung" for="ang-preis-grund" class="md:col-span-2">
+                                    <x-fa::input id="ang-preis-grund" wire:model="form.price_override_reason" placeholder="Warum weicht der Angebotspreis ab?" />
+                                </x-fa::field>
+                            </div>
+                            <div><x-fa::button size="sm" icon="heroicon-m-check" wire:click="speichern">Festpreis übernehmen</x-fa::button></div>
+                        @else
+                            <div><x-fa::button size="sm" icon="heroicon-m-check" wire:click="speichern">Automatischen Preis übernehmen</x-fa::button></div>
+                        @endif
+                    </x-fa::section>
 
                     {{-- B3: Vollkosten-/Zuschlagskalkulation über das gesamte Angebot × Pax ($auftragsKalkulation von B1). --}}
                     @includeIf('foodalchemist::livewire.angebote.partials.zuschlagskalkulation')
 
-                    {{-- Preis-Modus (auto/fixiert) + Begründung --}}
-                    <x-foodalchemist::modal-section title="Preis-Steuerung">
-                        <div class="grid grid-cols-2 gap-2">
-                            <div><label class="{{ $label }}">Preis-Modus</label>
-                                <select wire:model="form.price_mode" class="{{ $input }}"><option value="auto">Auto (Pax × Aufbau)</option><option value="fixed">Fixiert</option></select></div>
-                            @if(in_array($form['price_mode'] ?? 'auto', ['fixed', 'manuell'], true))
-                                <div><label class="{{ $label }}">Gesamtpreis € (manuell)</label>
-                                    <input type="number" step="0.01" wire:model="form.total_price" class="{{ $input }} text-right tabular-nums" /></div>
-                                <div class="col-span-2"><label class="{{ $label }}">Begründung</label>
-                                    <div class="flex gap-2"><input type="text" wire:model="form.price_override_reason" class="{{ $input }}" placeholder="Warum weicht der Angebotspreis ab?" />
-                                    <button type="button" wire:click="speichern" class="{{ $btnGhostXs }} text-violet-600 shrink-0">Fixpreis übernehmen</button></div></div>
-                            @else
-                                <div class="flex items-end"><button type="button" wire:click="speichern" class="{{ $btnGhostXs }} text-violet-600">Auto-Preis übernehmen</button></div>
-                            @endif
-                        </div>
-                    </x-foodalchemist::modal-section>
-
                     {{-- Mengen-Hochrechnung für die Pax --}}
                     @if($kalkulation && ! ($kalkulation['leer'] ?? true) && ($kalkulation['pax'] ?? 0) > 0 && count($kalkulation['mengen'] ?? []))
-                    <x-foodalchemist::modal-section title="Mengen für {{ $kalkulation['pax'] }} Pax">
-                        <div class="space-y-0.5 max-h-64 overflow-y-auto">
-                            @foreach($kalkulation['mengen'] as $m)
-                                <div wire:key="mng-{{ $loop->index }}" class="flex items-center justify-between gap-2 text-[11px]">
-                                    <span class="truncate text-gray-600">{{ $m['gericht'] ?? '—' }}</span>
-                                    <span class="tabular-nums text-gray-600 shrink-0">{{ $m['gesamt_menge'] !== null ? rtrim(rtrim(number_format($m['gesamt_menge'],2,',','.'),'0'),',').' '.($m['unit'] ?? '') : '—' }}</span>
-                                </div>
-                            @endforeach
-                        </div>
-                    </x-foodalchemist::modal-section>
+                        <x-fa::section title="Mengen für {{ $kalkulation['pax'] }} Gäste" icon="heroicon-o-scale">
+                            <div class="max-h-72 overflow-y-auto -mx-4">
+                                <table class="fa-table fa-table--compact">
+                                    <thead class="sticky top-0 bg-[var(--fa-surface)]">
+                                        <tr><th class="w-full">Gericht</th><th class="num">Menge gesamt</th></tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach($kalkulation['mengen'] as $m)
+                                            <tr wire:key="mng-{{ $loop->index }}">
+                                                <td class="text-[var(--fa-ink-2)]">{{ $m['gericht'] ?? '–' }}</td>
+                                                <td class="num"><x-fa::menge :value="$m['gesamt_menge']" :unit="$m['unit'] ?? ''" :decimals="2" /></td>
+                                            </tr>
+                                        @endforeach
+                                    </tbody>
+                                </table>
+                            </div>
+                        </x-fa::section>
                     @endif
                 </div>
 
-                {{-- ═══ Tab: KUNDE & BUSINESS-CASE ═══ --}}
-                <div x-show="tab === 'kunde'" x-cloak class="pt-4 space-y-4" data-angebot-panel="kunde">
-                    <x-foodalchemist::modal-section title="Kunde (CRM)">
+                {{-- ═══ Reiter: KUNDE & BUSINESS-CASE ═══ --}}
+                <div x-show="tab === 'kunde'" x-cloak class="pt-4 flex flex-col gap-4" data-angebot-panel="kunde">
+                    <x-fa::section title="Kunde" icon="heroicon-o-building-office">
                         <x-foodalchemist::crm-kunde-picker
                             :ausgabe="$angebot" :crm-verfuegbar="$crmVerfuegbar" :firmen="$firmen" :kontakte="$kontakte" />
-                    </x-foodalchemist::modal-section>
+                    </x-fa::section>
 
-                    <x-foodalchemist::modal-section title="Business-Case (Canvas)">
+                    <x-fa::section title="Business-Case" icon="heroicon-o-presentation-chart-line">
                         @include('foodalchemist::livewire.canvas.partials.board')
-                    </x-foodalchemist::modal-section>
+                    </x-fa::section>
                 </div>
 
-                {{-- ═══ Tab: BRANDING & PRÄSENTATION (pro Angebot) ═══ --}}
-                <div x-show="tab === 'branding'" x-cloak class="pt-4 space-y-3" data-angebot-panel="branding"
+                {{-- ═══ Reiter: BRANDING & PRÄSENTATION (pro Angebot) ═══ --}}
+                <div x-show="tab === 'branding'" x-cloak class="pt-4 flex flex-col gap-4" data-angebot-panel="branding"
                      x-data="{ brand: @entangle('brandingForm.brand_color'), band: @entangle('brandingForm.band_color'), footer: @entangle('brandingForm.footer_text') }">
-                    <div class="relative overflow-hidden {{ $card }} p-5 space-y-4">
-                        <div class="{{ $cardAccent }}"></div>
+                    <x-fa::section title="Branding für Dokument und PDF" icon="heroicon-o-swatch">
+                        <x-slot:actions>
+                            <x-fa::button variant="ghost" size="sm" icon="heroicon-m-arrow-top-right-on-square" href="{{ route('foodalchemist.angebote.dokument', $angebot->id) }}?pdf=1" target="_blank" title="Branding im PDF gegenprüfen">Im PDF ansehen</x-fa::button>
+                            <x-fa::button size="sm" icon="heroicon-m-check" wire:click="brandingSpeichern" data-branding-speichern>Branding speichern</x-fa::button>
+                        </x-slot:actions>
 
                         @if($brandingFehler ?? null)
-                            <div class="rounded-lg bg-rose-500/10 border border-rose-500/30 px-2.5 py-1.5 text-[11px] text-rose-700" data-branding-fehler>{{ $brandingFehler }}</div>
+                            <x-fa::notice tone="crit" data-branding-fehler>{{ $brandingFehler }}</x-fa::notice>
                         @endif
                         @if($brandingGespeichert ?? false)
-                            <div class="rounded-lg bg-emerald-500/10 border border-emerald-500/25 px-2.5 py-1.5 text-[11px] text-emerald-700">✓ Gespeichert — fließt ins Dokument-PDF.</div>
+                            <x-fa::notice tone="ok">Gespeichert, gilt ab jetzt im Angebotsdokument.</x-fa::notice>
                         @endif
 
-                        {{-- Live-Vorschau: Kopf-Band (Bandfarbe + Logo) · Fuß-Linie (Marken-Farbe) --}}
-                        <div>
-                            <p class="{{ $label }} mb-1">Vorschau</p>
-                            <div class="rounded-lg overflow-hidden border border-black/10">
-                                <div class="flex items-center justify-between gap-2 px-3 h-9 text-white text-[11px] uppercase tracking-wide" :style="`background:${band || brand}`">
+                        {{-- Live-Vorschau: Kopf-Band (Bandfarbe + Logo) · Fuß-Linie (Marken-Farbe) — die Farben sind Daten des Kunden. --}}
+                        <x-fa::field label="Vorschau">
+                            <div class="rounded-[var(--fa-radius-control)] overflow-hidden border border-[var(--fa-line)]">
+                                <div class="flex items-center justify-between gap-2 px-3 h-9 text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-on-accent)]" :style="`background:${band || brand}`">
                                     <span class="truncate">{{ $angebot->name }}</span>
                                     @if($angebot->logo_path)<img src="{{ app(\Platform\FoodAlchemist\Services\FoodAlchemistMediaService::class)->url($angebot->logo_context_file_id, $angebot->logo_path) }}" alt="Logo" class="max-h-5 max-w-[90px] object-contain shrink-0" />@endif
                                 </div>
-                                <div class="px-3 py-3 text-[11px] text-gray-600" :style="`border-top:3px solid ${brand}`">
+                                <div class="px-3 py-3 bg-[var(--fa-surface)] text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]" :style="`border-top:3px solid ${brand}`">
                                     <span x-text="footer || 'Erstellt mit Food Alchemist'"></span>
                                 </div>
                             </div>
-                        </div>
+                        </x-fa::field>
 
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label class="{{ $label }}">Marken-Farbe</label>
-                                <div class="flex items-center gap-2 mt-1">
-                                    <input type="color" x-model="brand" class="h-9 w-12 rounded border border-black/10 bg-transparent cursor-pointer p-0.5" data-brand-color />
-                                    <input type="text" x-model="brand" class="{{ $input }} w-32 font-mono" placeholder="#6d28d9" />
+                            <x-fa::field label="Markenfarbe" hint="Rahmen, Linien und Etiketten im PDF.">
+                                <div class="flex items-center gap-2">
+                                    <input type="color" x-model="brand" class="h-9 w-12 shrink-0 rounded-[var(--fa-radius-control)] border border-[var(--fa-line-strong)] bg-transparent cursor-pointer p-0.5" aria-label="Markenfarbe wählen" data-brand-color />
+                                    <x-fa::input x-model="brand" class="w-32 font-mono" placeholder="Farbwert" aria-label="Markenfarbe als Farbwert" />
                                 </div>
-                                <p class="text-[10px] text-gray-500 mt-1">Rahmen, Linien, Badges im PDF.</p>
-                            </div>
-                            <div>
-                                <label class="{{ $label }}">Bandfarbe (optional)</label>
-                                <div class="flex items-center gap-2 mt-1">
-                                    <input type="color" x-model="band" class="h-9 w-12 rounded border border-black/10 bg-transparent cursor-pointer p-0.5" />
-                                    <input type="text" x-model="band" class="{{ $input }} w-32 font-mono" placeholder="aus Marke" />
-                                    <button type="button" @click="band = ''" class="{{ $btnGhostXs }}" title="leeren → leitet aus der Marken-Farbe ab">✕</button>
+                            </x-fa::field>
+                            <x-fa::field label="Bandfarbe" optional hint="Band in Kopf und Fuß. Leer übernimmt die Markenfarbe.">
+                                <div class="flex items-center gap-2">
+                                    <input type="color" x-model="band" class="h-9 w-12 shrink-0 rounded-[var(--fa-radius-control)] border border-[var(--fa-line-strong)] bg-transparent cursor-pointer p-0.5" aria-label="Bandfarbe wählen" />
+                                    <x-fa::input x-model="band" class="w-32 font-mono" placeholder="wie Marke" aria-label="Bandfarbe als Farbwert" />
+                                    <x-fa::icon-button icon="heroicon-m-x-mark" label="Bandfarbe leeren, dann gilt die Markenfarbe" size="sm" x-on:click="band = ''" />
                                 </div>
-                                <p class="text-[10px] text-gray-500 mt-1">Kopf-/Fuß-Band. Leer = wie Marken-Farbe.</p>
-                            </div>
+                            </x-fa::field>
                         </div>
 
-                        <div>
-                            <label class="{{ $label }}">Footer-Text</label>
-                            <input type="text" x-model="footer" class="{{ $input }}" placeholder="Erstellt mit Food Alchemist" />
-                        </div>
+                        <x-fa::field label="Fußzeile" for="ang-fusszeile">
+                            <x-fa::input id="ang-fusszeile" x-model="footer" placeholder="Erstellt mit Food Alchemist" />
+                        </x-fa::field>
 
                         {{-- Logo + Cover --}}
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-black/5">
-                            <div>
-                                <label class="{{ $label }}">Logo</label>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-t border-[var(--fa-line)]">
+                            <x-fa::field label="Logo" error="logoUpload">
                                 @if($angebot->logo_path)
-                                    <div class="flex items-center gap-2 mt-1 mb-1">
-                                        <img src="{{ app(\Platform\FoodAlchemist\Services\FoodAlchemistMediaService::class)->url($angebot->logo_context_file_id, $angebot->logo_path) }}" alt="Logo" class="h-10 max-w-[120px] object-contain rounded border border-black/5 bg-white p-1" />
-                                        <button type="button" wire:click="brandingLogoEntfernen" class="{{ $btnGhostXs }} text-red-600" data-logo-entfernen>entfernen</button>
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <img src="{{ app(\Platform\FoodAlchemist\Services\FoodAlchemistMediaService::class)->url($angebot->logo_context_file_id, $angebot->logo_path) }}" alt="Logo" class="h-10 max-w-[120px] object-contain rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] bg-[var(--fa-surface)] p-1" />
+                                        <x-fa::button variant="danger" size="sm" icon="heroicon-m-trash" wire:click="brandingLogoEntfernen" data-logo-entfernen>Logo entfernen</x-fa::button>
                                     </div>
                                 @endif
-                                <input type="file" wire:model="logoUpload" accept="image/*" class="block w-full text-[11px] text-gray-600 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-violet-500/10 file:text-violet-700 file:text-[11px] cursor-pointer" data-logo-upload />
-                                <div wire:loading wire:target="logoUpload" class="text-[10px] text-gray-500 mt-0.5">lädt …</div>
-                                @error('logoUpload')<span class="text-[10px] text-rose-600">{{ $message }}</span>@enderror
-                            </div>
-                            <div>
-                                <label class="{{ $label }}">Cover-Bild</label>
+                                <input type="file" wire:model="logoUpload" accept="image/*" class="{{ $dateiFeld }}" aria-label="Logo hochladen" data-logo-upload />
+                                <span wire:loading wire:target="logoUpload" class="{{ $hinweis }}">Lädt …</span>
+                            </x-fa::field>
+                            <x-fa::field label="Titelbild" error="coverUpload">
                                 @if($angebot->cover_image_path)
-                                    <div class="flex items-center gap-2 mt-1 mb-1">
-                                        <img src="{{ app(\Platform\FoodAlchemist\Services\FoodAlchemistMediaService::class)->url($angebot->cover_context_file_id, $angebot->cover_image_path) }}" alt="Cover" class="h-10 max-w-[120px] object-cover rounded border border-black/5" />
-                                        <button type="button" wire:click="brandingCoverEntfernen" class="{{ $btnGhostXs }} text-red-600" data-cover-entfernen>entfernen</button>
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <img src="{{ app(\Platform\FoodAlchemist\Services\FoodAlchemistMediaService::class)->url($angebot->cover_context_file_id, $angebot->cover_image_path) }}" alt="Titelbild" class="h-10 max-w-[120px] object-cover rounded-[var(--fa-radius-control)] border border-[var(--fa-line)]" />
+                                        <x-fa::button variant="danger" size="sm" icon="heroicon-m-trash" wire:click="brandingCoverEntfernen" data-cover-entfernen>Titelbild entfernen</x-fa::button>
                                     </div>
                                 @endif
-                                <input type="file" wire:model="coverUpload" accept="image/*" class="block w-full text-[11px] text-gray-600 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-violet-500/10 file:text-violet-700 file:text-[11px] cursor-pointer" data-cover-upload />
-                                <div wire:loading wire:target="coverUpload" class="text-[10px] text-gray-500 mt-0.5">lädt …</div>
-                                @error('coverUpload')<span class="text-[10px] text-rose-600">{{ $message }}</span>@enderror
-                            </div>
+                                <input type="file" wire:model="coverUpload" accept="image/*" class="{{ $dateiFeld }}" aria-label="Titelbild hochladen" data-cover-upload />
+                                <span wire:loading wire:target="coverUpload" class="{{ $hinweis }}">Lädt …</span>
+                            </x-fa::field>
                         </div>
+                    </x-fa::section>
 
-                        <div class="flex items-center gap-2 pt-2">
-                            <button type="button" wire:click="brandingSpeichern" class="{{ $btnPrimary }}" data-branding-speichern>Speichern</button>
-                            <a href="{{ route('foodalchemist.angebote.dokument', $angebot->id) }}?pdf=1" target="_blank" class="{{ $btnGhost }}" title="Branding im PDF gegenprüfen">→ Im Dokument (PDF) ansehen</a>
-                        </div>
-                    </div>
+                    {{-- Präsentation — digitales Kundenbuch (Kundenlink + eingefrorener Stand + Freigabe) --}}
+                    <x-fa::section title="Kundenpräsentation" icon="heroicon-o-globe-alt" description="Das Angebot als Webseite für den Kunden. Beim Veröffentlichen wird der aktuelle Stand eingefroren." data-angebot-praesentation>
+                        <x-slot:actions>
+                            <x-fa::button variant="ghost" size="sm" icon="heroicon-m-arrow-top-right-on-square" href="{{ route('foodalchemist.einstellungen', ['sektion' => 'praesentations-designs']) }}" target="_blank">Designs gestalten</x-fa::button>
+                        </x-slot:actions>
 
-                    {{-- Präsentation — digitales Kundenbuch (Public-Link + Snapshot + Freigabe) --}}
-                    <div class="mt-4 pt-4 border-t border-gray-200 space-y-3" data-angebot-praesentation>
-                        <div class="flex items-baseline justify-between">
-                            <h3 class="text-sm font-semibold text-gray-900">Präsentation · digitales Angebot</h3>
-                            <a href="{{ route('foodalchemist.einstellungen', ['sektion' => 'praesentations-designs']) }}" target="_blank" class="text-[11px] text-violet-600 hover:underline">Designs gestalten →</a>
-                        </div>
-
-                        @if($presentationHinweis ?? null)<div class="rounded-lg bg-emerald-500/10 border border-emerald-500/25 text-emerald-300 text-xs px-3 py-2" data-angebot-praes-hinweis>{{ $presentationHinweis }}</div>@endif
-                        @if($presentationFehler ?? null)<div class="rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs px-3 py-2" data-angebot-praes-fehler>{{ $presentationFehler }}</div>@endif
+                        @if($presentationHinweis ?? null)<x-fa::notice tone="ok" data-angebot-praes-hinweis>{{ $presentationHinweis }}</x-fa::notice>@endif
+                        @if($presentationFehler ?? null)<x-fa::notice tone="crit" data-angebot-praes-fehler>{{ $presentationFehler }}</x-fa::notice>@endif
 
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <label class="block text-xs text-gray-600">Design
-                                <select wire:model="presentationDesign" class="mt-1 block w-full text-sm border border-gray-300 rounded px-2 py-1" data-angebot-praes-design>
+                            <x-fa::field label="Design" for="ang-praes-design">
+                                <x-fa::select id="ang-praes-design" wire:model="presentationDesign" data-angebot-praes-design>
                                     @foreach($presentationDesignOptionen ?? [] as $opt)
                                         <option value="{{ $opt['value'] }}">{{ $opt['label'] }}</option>
                                     @endforeach
-                                </select>
-                            </label>
-                            <label class="block text-xs text-gray-600">Gültig bis <span class="text-rose-500">*</span>
-                                <input type="date" wire:model.live="presentationGueltigBis" class="mt-1 block w-full text-sm border border-gray-300 rounded px-2 py-1" data-angebot-praes-gueltig>
-                            </label>
+                                </x-fa::select>
+                            </x-fa::field>
+                            <x-fa::field label="Gültig bis" for="ang-praes-gueltig" required>
+                                <x-fa::input id="ang-praes-gueltig" type="date" wire:model.live="presentationGueltigBis" data-angebot-praes-gueltig />
+                            </x-fa::field>
                         </div>
 
-                        <div class="flex flex-wrap gap-4">
-                            <label class="flex items-center gap-2 text-xs text-gray-700"><input type="checkbox" wire:model="presentationPreisAnzeige"> Preise pro Person zeigen</label>
-                            <label class="flex items-center gap-2 text-xs text-gray-700"><input type="checkbox" wire:model="presentationDeklaration"> Allergen-Legende zeigen</label>
-                            <label class="flex items-center gap-2 text-xs text-gray-700" title="Aus: beim erneuten Veröffentlichen bleiben die eingefrorenen Preise stehen — neue Speisen kommen mit aktuellem Preis rein. An: alle aktuellen VK ziehen. Erstveröffentlichung ist immer aktuell."><input type="checkbox" wire:model="presentationPreiseAktualisieren"> Preise aktualisieren</label>
+                        <div class="flex flex-wrap gap-x-5 gap-y-2">
+                            <label class="flex items-center gap-2 text-[length:var(--fa-text-md)] text-[var(--fa-ink)] cursor-pointer"><input type="checkbox" wire:model="presentationPreisAnzeige" class="{{ $haken }}"> Preise je Gast zeigen</label>
+                            <label class="flex items-center gap-2 text-[length:var(--fa-text-md)] text-[var(--fa-ink)] cursor-pointer"><input type="checkbox" wire:model="presentationDeklaration" class="{{ $haken }}"> Allergen-Legende zeigen</label>
+                            <label class="flex items-center gap-2 text-[length:var(--fa-text-md)] text-[var(--fa-ink)] cursor-pointer" title="Aus: beim erneuten Veröffentlichen bleiben die eingefrorenen Preise stehen, neue Speisen kommen mit aktuellem Preis dazu. An: alle aktuellen Verkaufspreise übernehmen. Die erste Veröffentlichung ist immer aktuell."><input type="checkbox" wire:model="presentationPreiseAktualisieren" class="{{ $haken }}"> Preise aktualisieren</label>
                         </div>
 
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <label class="block text-xs text-gray-600">CTA-Text (optional)
-                                <input type="text" wire:model="presentationCtaText" placeholder="z.B. Jetzt anfragen" class="mt-1 block w-full text-sm border border-gray-300 rounded px-2 py-1">
-                            </label>
-                            <label class="block text-xs text-gray-600">CTA-Link (optional)
-                                <input type="url" wire:model="presentationCtaLink" placeholder="https://…" class="mt-1 block w-full text-sm border border-gray-300 rounded px-2 py-1">
-                            </label>
+                            <x-fa::field label="Text des Aktionsknopfs" for="ang-praes-cta" optional>
+                                <x-fa::input id="ang-praes-cta" wire:model="presentationCtaText" placeholder="z. B. Jetzt anfragen" />
+                            </x-fa::field>
+                            <x-fa::field label="Link des Aktionsknopfs" for="ang-praes-cta-link" optional>
+                                <x-fa::input id="ang-praes-cta-link" type="url" wire:model="presentationCtaLink" placeholder="https://…" />
+                            </x-fa::field>
                         </div>
 
-                        <div>
-                            <label class="block text-xs text-gray-600">Eigener Link-Name (optional)
-                                <input type="text" wire:model.live.debounce.400ms="presentationSlug" placeholder="z.B. broich-empfang-2027"
-                                    class="mt-1 block w-full text-sm border border-gray-300 rounded px-2 py-1" data-angebot-praes-slug>
-                            </label>
-                            <p class="mt-1 text-[11px] text-gray-500">
+                        <x-fa::field label="Eigener Linkname" for="ang-praes-slug" optional>
+                            <x-fa::input id="ang-praes-slug" wire:model.live.debounce.400ms="presentationSlug" placeholder="z. B. broich-empfang-2027" data-angebot-praes-slug />
+                            <p class="{{ $hinweis }}">
                                 Kundenlink:
-                                <span class="font-mono break-all">{{ url('/p/angebot') }}/{{ trim((string) ($presentationSlug ?? '')) !== '' ? \Illuminate\Support\Str::slug($presentationSlug) : '⟨automatischer Code⟩' }}</span>
-                                — wirkt nach „Veröffentlichen". Leer lassen = zufälliger Code.
+                                <span class="font-mono break-all text-[var(--fa-ink-2)]">{{ url('/p/angebot') }}/@if(trim((string) ($presentationSlug ?? '')) !== ''){{ \Illuminate\Support\Str::slug($presentationSlug) }}@else<span class="italic">automatischer Code</span>@endif</span>.
+                                Gilt nach dem Veröffentlichen. Leer lassen ergibt einen zufälligen Code.
                             </p>
-                        </div>
+                        </x-fa::field>
 
                         @if($presentationInfo['design_veraltet'] ?? false)
                             {{-- Bug-Runde 2026-09-17 #2: Der Link rendert nur den eingefrorenen Snapshot.
                                  Ohne diesen Hinweis sieht man die Design-Änderung in der Vorschau, im
                                  Kundenlink aber nie — und hält das für einen Render-Fehler. --}}
-                            <div class="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[12px] text-amber-900" data-fa-design-veraltet>
-                                <strong>Design wurde nach der Veröffentlichung geändert.</strong>
-                                Der Kundenlink zeigt weiter den Stand von {{ $presentationInfo['published_at'] ?? '—' }}.
-                                Zum Übernehmen unten <em>Neu veröffentlichen</em>.
-                            </div>
+                            <x-fa::notice tone="warn" title="Design wurde nach der Veröffentlichung geändert" data-fa-design-veraltet>
+                                Der Kundenlink zeigt weiter den Stand vom {{ $presentationInfo['published_at'] ?? '–' }}. Zum Übernehmen unten «Neu veröffentlichen».
+                            </x-fa::notice>
                         @endif
-                        <div class="flex flex-wrap items-center gap-2 pt-1">
-                            <a href="{{ route('foodalchemist.angebote.praesentation', ['id' => $angebot->id, 'design' => $presentationDesign]) }}" target="_blank" class="{{ $btnGhost }}">Vorschau öffnen</a>
-                            <button type="button" wire:click="veroeffentlichen"
-                                wire:confirm="Diesen Stand als Kundenbuch veröffentlichen? Der Snapshot wird eingefroren."
-                                class="{{ $btnPrimary }}" data-angebot-praes-publish @disabled(! ($presentationGueltigBis ?? null))>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <x-fa::button variant="ghost" icon="heroicon-m-eye" href="{{ route('foodalchemist.angebote.praesentation', ['id' => $angebot->id, 'design' => $presentationDesign]) }}" target="_blank">Vorschau öffnen</x-fa::button>
+                            <x-fa::button icon="heroicon-m-globe-alt" wire:click="veroeffentlichen"
+                                wire:confirm="Diesen Stand als Kundenpräsentation veröffentlichen? Der Stand wird eingefroren."
+                                data-angebot-praes-publish :disabled="! ($presentationGueltigBis ?? null)">
                                 {{ ($presentationInfo['enabled'] ?? false) ? 'Neu veröffentlichen' : 'Veröffentlichen' }}
-                            </button>
+                            </x-fa::button>
                             @if($presentationInfo['enabled'] ?? false)
-                                <button type="button" wire:click="zuruckziehen" wire:confirm="Veröffentlichung zurückziehen? Der Link liefert dann 404." class="{{ $btnGhost }}" data-angebot-praes-withdraw>Zurückziehen</button>
+                                <x-fa::button variant="danger" wire:click="zuruckziehen" wire:confirm="Veröffentlichung zurückziehen? Der Link ist dann nicht mehr erreichbar." data-angebot-praes-withdraw>Veröffentlichung zurückziehen</x-fa::button>
                             @endif
                         </div>
                         @unless($presentationGueltigBis ?? null)
-                            <p class="text-[11px] text-amber-600">Zum Veröffentlichen ein „gültig bis"-Datum setzen (Pflicht).</p>
+                            <x-fa::signal tone="warn">Zum Veröffentlichen ein Datum bei «Gültig bis» setzen.</x-fa::signal>
                         @endunless
 
                         @if($presentationLink ?? null)
-                            <div class="rounded-lg bg-white/[0.04] border border-white/10 p-3 text-xs" x-data>
+                            <div class="rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] bg-[var(--fa-ground)] p-3 flex flex-col gap-1.5" x-data>
                                 <div class="flex items-center gap-2">
-                                    <div class="flex-1 rounded px-2 py-1 font-mono text-[11px] break-all select-all bg-black/30 border border-white/10 text-gray-200" data-angebot-praes-link>{{ $presentationLink }}</div>
-                                    <button type="button" class="{{ $btnGhost }}" x-on:click="navigator.clipboard.writeText('{{ $presentationLink }}'); $el.textContent='Kopiert ✓'">Link kopieren</button>
+                                    <div class="flex-1 min-w-0 rounded-[var(--fa-radius-control)] px-2 py-1 font-mono text-[length:var(--fa-text-sm)] break-all select-all bg-[var(--fa-surface)] border border-[var(--fa-line)] text-[var(--fa-ink)]" data-angebot-praes-link>{{ $presentationLink }}</div>
+                                    <x-fa::button size="sm" icon="heroicon-m-clipboard-document" x-on:click="navigator.clipboard.writeText('{{ $presentationLink }}'); $el.querySelector('span').textContent='Kopiert'"><span>Link kopieren</span></x-fa::button>
                                 </div>
-                                <p class="text-[11px] text-gray-500 mt-1">
-                                    Freigegeben am {{ $presentationInfo['published_at'] ?? '—' }} · gültig bis {{ $presentationInfo['expires_at'] ?? '—' }} ·
-                                    {{ ($presentationInfo['live'] ?? false) ? 'aktiv' : 'inaktiv/abgelaufen' }}
+                                <p class="{{ $hinweis }}">
+                                    Freigegeben am {{ $presentationInfo['published_at'] ?? '–' }}, gültig bis {{ $presentationInfo['expires_at'] ?? '–' }},
+                                    {{ ($presentationInfo['live'] ?? false) ? 'aktiv' : 'inaktiv oder abgelaufen' }}
                                 </p>
                             </div>
                         @endif
 
                         {{-- Betriebs-Links — pro Betrieb ein eigener Link --}}
-                        <div class="rounded-lg border border-violet-400/25 bg-violet-500/[0.06] p-3 space-y-3">
-                            <div class="flex items-center gap-2">
-                                <span class="inline-block w-2 h-2 rounded-full bg-violet-400"></span>
-                                <h4 class="text-xs font-semibold text-violet-200">Betriebs-Links · eigener Link je Betrieb</h4>
+                        <div class="flex flex-col gap-3 pt-3 border-t border-[var(--fa-line)]">
+                            <div>
+                                <h4 class="text-[length:var(--fa-text-md)] font-semibold text-[var(--fa-ink)]">Links je Betrieb</h4>
+                                <p class="{{ $hinweis }}">Ein zusätzlicher Kundenlink je Betrieb, eingefroren mit den Preisen und der Vorlage dieses Betriebs und mit eigener Freigabe. Der Standardlink oben bleibt bestehen.</p>
                             </div>
-                            <p class="text-[11px] text-gray-400">Ein zusätzlicher Kundenlink pro Betrieb — eingefroren mit den <strong class="text-gray-200">Preisen</strong> und der <strong class="text-gray-200">Vorlage</strong> dieses Betriebs, eigene Freigabe. Der Standard-Link oben bleibt bestehen.</p>
 
                             @forelse($betriebsLinks ?? [] as $bl)
-                                <div class="rounded-lg bg-white/[0.04] border border-white/10 p-2 text-xs" x-data>
-                                    <div class="flex items-center gap-2">
-                                        <span class="font-medium text-gray-100">{{ $bl['outlet_name'] }}</span>
-                                        <span class="text-[10px] px-1.5 py-0.5 rounded {{ $bl['enabled'] ? 'bg-emerald-500/15 text-emerald-300' : 'bg-white/10 text-gray-400' }}">{{ $bl['enabled'] ? 'aktiv' : 'inaktiv' }}</span>
-                                        <span class="ml-auto text-[10px] text-gray-500">Vorlage: {{ $bl['design'] }}</span>
+                                <div class="rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] p-2.5 flex flex-col gap-1.5" x-data>
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <span class="font-medium text-[length:var(--fa-text-md)] text-[var(--fa-ink)]">{{ $bl['outlet_name'] }}</span>
+                                        <x-fa::badge :tone="$bl['enabled'] ? 'ok' : 'neutral'">{{ $bl['enabled'] ? 'aktiv' : 'inaktiv' }}</x-fa::badge>
+                                        <span class="ml-auto {{ $hinweis }}">Vorlage: {{ $bl['design'] }}</span>
                                     </div>
-                                    <div class="flex items-center gap-2 mt-1">
-                                        <div class="flex-1 rounded px-2 py-1 font-mono text-[11px] break-all select-all bg-black/30 border border-white/10 text-gray-200">{{ $bl['url'] }}</div>
-                                        <button type="button" class="{{ $btnGhost }}" x-on:click="navigator.clipboard.writeText('{{ $bl['url'] }}'); $el.textContent='Kopiert ✓'">Kopieren</button>
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <div class="flex-1 min-w-0 rounded-[var(--fa-radius-control)] px-2 py-1 font-mono text-[length:var(--fa-text-sm)] break-all select-all bg-[var(--fa-ground)] border border-[var(--fa-line)] text-[var(--fa-ink)]">{{ $bl['url'] }}</div>
+                                        <x-fa::button size="sm" icon="heroicon-m-clipboard-document" x-on:click="navigator.clipboard.writeText('{{ $bl['url'] }}'); $el.querySelector('span').textContent='Kopiert'"><span>Kopieren</span></x-fa::button>
                                         @if($bl['enabled'])
-                                            <button type="button" wire:click="betriebZuruckziehen({{ $bl['outlet_id'] }})" wire:confirm="Diesen Betriebs-Link zurückziehen? Er liefert dann 404." class="{{ $btnGhost }}">Zurückziehen</button>
+                                            <x-fa::button variant="danger" size="sm" wire:click="betriebZuruckziehen({{ $bl['outlet_id'] }})" wire:confirm="Diesen Betriebslink zurückziehen? Er ist dann nicht mehr erreichbar.">Zurückziehen</x-fa::button>
                                         @else
-                                            <button type="button" wire:click="betriebWiederFreigeben({{ $bl['outlet_id'] }})" class="{{ $btnPrimary }}">Wieder freigeben</button>
+                                            <x-fa::button size="sm" wire:click="betriebWiederFreigeben({{ $bl['outlet_id'] }})">Wieder freigeben</x-fa::button>
                                         @endif
                                     </div>
                                 </div>
                             @empty
-                                <p class="text-[11px] text-gray-500">Noch kein Betriebs-Link angelegt.</p>
+                                <p class="{{ $hinweis }}">Noch kein Link für einen Betrieb angelegt.</p>
                             @endforelse
 
                             @if(count($betriebsOptionen ?? []) > 0)
-                                <div class="rounded-lg border border-dashed border-violet-400/30 bg-white/[0.02] p-2.5 space-y-2">
-                                    <p class="text-[11px] font-medium text-violet-200">Weiteren Betrieb hinzufügen</p>
-                                    <div class="flex flex-wrap items-end gap-2">
-                                        <div>
-                                            <label class="block text-[10px] text-gray-400">Betrieb</label>
-                                            <select wire:model="outletPublishId" class="mt-1 block text-sm rounded px-2 py-1">
-                                                <option value="">— wählen —</option>
+                                <div class="rounded-[var(--fa-radius-control)] border border-dashed border-[var(--fa-line-strong)] p-3 flex flex-col gap-2">
+                                    <p class="text-[length:var(--fa-text-md)] font-medium text-[var(--fa-ink)]">Weiteren Betrieb hinzufügen</p>
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 items-end">
+                                        <x-fa::field label="Betrieb" for="ang-betrieb">
+                                            <x-fa::select id="ang-betrieb" wire:model="outletPublishId" placeholder="Betrieb wählen">
                                                 @foreach($betriebsOptionen as $o)
                                                     <option value="{{ $o['id'] }}">{{ $o['name'] }}</option>
                                                 @endforeach
-                                            </select>
-                                        </div>
-                                        <div>
-                                            <label class="block text-[10px] text-gray-400">gültig bis (optional)</label>
-                                            <input type="date" wire:model="outletPublishGueltigBis" class="mt-1 block text-sm rounded px-2 py-1">
-                                        </div>
-                                        <div>
-                                            <label class="block text-[10px] text-gray-400">Vorlage (optional)</label>
-                                            <select wire:model="outletPublishDesign" class="mt-1 block text-sm rounded px-2 py-1">
-                                                <option value="">— Betriebs-Vorlage / wie Dokument —</option>
+                                            </x-fa::select>
+                                        </x-fa::field>
+                                        <x-fa::field label="Gültig bis" for="ang-betrieb-gueltig" optional>
+                                            <x-fa::input id="ang-betrieb-gueltig" type="date" wire:model="outletPublishGueltigBis" />
+                                        </x-fa::field>
+                                        <x-fa::field label="Vorlage" for="ang-betrieb-design" optional>
+                                            <x-fa::select id="ang-betrieb-design" wire:model="outletPublishDesign" placeholder="Vorlage des Betriebs oder wie Dokument">
                                                 @foreach($presentationDesignOptionen ?? [] as $opt)
                                                     <option value="{{ $opt['value'] }}">{{ $opt['label'] }}</option>
                                                 @endforeach
-                                            </select>
-                                        </div>
-                                        <div>
-                                            <label class="block text-[10px] text-gray-400">Link-Name (optional)</label>
-                                            <input type="text" wire:model="outletPublishSlug" placeholder="z.B. broich-nord-2027" class="mt-1 block text-sm rounded px-2 py-1">
-                                        </div>
-                                        <button type="button" wire:click="betriebVeroeffentlichen" class="{{ $btnPrimary }}">＋ Betrieb hinzufügen</button>
+                                            </x-fa::select>
+                                        </x-fa::field>
+                                        <x-fa::field label="Linkname" for="ang-betrieb-slug" optional>
+                                            <x-fa::input id="ang-betrieb-slug" wire:model="outletPublishSlug" placeholder="z. B. broich-nord-2027" />
+                                        </x-fa::field>
                                     </div>
-                                    <p class="text-[10px] text-gray-500">Beliebig viele Betriebe möglich — je Betrieb ein eigener Link. Ohne eigenes Datum gilt das „gültig bis" des Standard-Links.</p>
+                                    <div><x-fa::button size="sm" icon="heroicon-m-plus" wire:click="betriebVeroeffentlichen">Betrieb hinzufügen</x-fa::button></div>
+                                    <p class="{{ $hinweis }}">Beliebig viele Betriebe möglich, je Betrieb ein eigener Link. Ohne eigenes Datum gilt «Gültig bis» des Standardlinks.</p>
                                 </div>
                             @else
-                                <p class="text-[11px] text-amber-300">Noch keine Betriebe angelegt — lege sie unter <em>Einstellungen › Betriebe</em> an.</p>
+                                <x-fa::signal tone="info">Noch keine Betriebe angelegt. Das geht unter Einstellungen, Betriebe.</x-fa::signal>
                             @endif
                         </div>
-                    </div>
+                    </x-fa::section>
                 </div>{{-- /Branding & Präsentation --}}
 
                 </x-foodalchemist::editor-tabs>

@@ -71,16 +71,25 @@ class ItemModal extends Component
         try {
             $item = $this->item($this->itemId);
             if (! Curate::canCurate(Auth::user(), $item)) {
-                throw new RuntimeException('Geerbter Katalog-Artikel — Pflege nur durch das Besitzer-Team (D1).');
+                throw new RuntimeException('Dieser Artikel kommt aus einem übergeordneten Katalog. Ändern kann ihn nur das Team, dem er gehört.');
             }
             $this->validate(
-                ['stammdaten.designation' => 'required|string|max:255'],
-                ['stammdaten.designation.required' => 'Bezeichnung ist Pflicht.'],
+                [
+                    'stammdaten.designation' => 'required|string|max:255',
+                    // Dominique 2026-10-05: EAN im Editor bearbeitbar (vorher nur Import)
+                    'verpackung.ean_packaging' => ['nullable', 'regex:/^\d{8,14}$/'],
+                    'verpackung.ean_ordering' => ['nullable', 'regex:/^\d{8,14}$/'],
+                ],
+                [
+                    'stammdaten.designation.required' => 'Bezeichnung ist Pflicht.',
+                    'verpackung.ean_packaging.regex' => 'EAN bitte als 8 bis 14 Ziffern ohne Leerzeichen.',
+                    'verpackung.ean_ordering.regex' => 'EAN bitte als 8 bis 14 Ziffern ohne Leerzeichen.',
+                ],
             );
 
             app(SupplierItemService::class)->update($this->team(), $item, [
                 ...collect($this->stammdaten)->map(fn ($v) => $v === '' ? null : $v)->all(),
-                ...collect($this->verpackung)->only(['qty', 'unit_code', 'packaging_unit', 'ordering_unit', 'qty_ordering_per_packaging'])
+                ...collect($this->verpackung)->only(['qty', 'unit_code', 'packaging_unit', 'ordering_unit', 'qty_ordering_per_packaging', 'ean_packaging', 'ean_ordering'])
                     ->map(fn ($v) => $v === '' ? null : $v)->all(),
                 ...collect($this->eigenschaften)->only(['is_organic', 'is_vegan', 'is_vegetarian', 'is_alcohol', 'is_halal', 'is_gmo_free', 'is_preorder'])
                     ->map(fn ($v) => $v === '' || $v === null ? null : (bool) (int) $v)->all(),
@@ -89,6 +98,19 @@ class ItemModal extends Component
                 'vat' => ($this->eigenschaften['vat'] ?? '') !== '' ? (float) str_replace(',', '.', (string) $this->eigenschaften['vat']) : null,
                 'preorder_days' => ($this->eigenschaften['preorder_days'] ?? '') !== '' ? (int) $this->eigenschaften['preorder_days'] : null,
             ]);
+            // Dominique 2026-10-05: EIN Speichern für den ganzen Artikel. Allergene, Zusatzstoffe und
+            // Nährwerte gehen über ihre eigenen Service-Methoden — aber nur, wenn sich dort etwas
+            // geändert hat (kein unnötiger Herkunftswechsel auf „manuell").
+            $svc = app(SupplierItemService::class);
+            if ($this->allergene != $svc->getAllergens($item)) {
+                $svc->setAllergens($this->team(), $item, $this->allergene);
+            }
+            if ($this->deklarationen != $svc->getDeclarations($item)) {
+                $svc->setDeclarations($this->team(), $item, $this->deklarationen);
+            }
+            if ($this->naehrwerte != $svc->getNutrition($item)) {
+                $svc->setNutrition($this->team(), $item, $this->naehrwerte);
+            }
             $this->fehler = null;
             $this->dispatch('item-gespeichert');
             $this->savedToast('Artikel gespeichert');
@@ -174,7 +196,7 @@ class ItemModal extends Component
     {
         $p = \Platform\FoodAlchemist\Models\FoodAlchemistPrice::where('supplier_item_id', $this->itemId)->find($this->preisEditId);
         if ($p === null || ! Curate::canCurate(Auth::user(), $this->item($this->itemId))) {
-            $this->fehler = 'Bearbeiten nur fürs Besitzer-Team (D1).';
+            $this->fehler = 'Preise ändern kann nur das Team, dem der Artikel gehört.';
 
             return;
         }
@@ -227,7 +249,7 @@ class ItemModal extends Component
                 'grund' => (string) ($v['grund'] ?? $v['methode'] ?? ''),
             ])->all();
         if ($this->gpVorschlaege === []) {
-            $this->fehler = 'Kein Match-Kandidat gefunden (MatchService v1 — exakt + fuzzy).';
+            $this->fehler = 'Kein passendes Grundprodukt gefunden. Nach dem Namen suchen oder ein neues Grundprodukt anlegen.';
         }
     }
 
@@ -236,7 +258,7 @@ class ItemModal extends Component
     {
         $item = $this->item($this->itemId);
         if ($item->structure?->gp_id !== null) {
-            $this->fehler = 'Lieferantenartikel ist bereits einem GP zugeordnet.';
+            $this->fehler = 'Der Artikel ist schon einem Grundprodukt zugeordnet.';
             return;
         }
         $id = (int) $item->id;
@@ -265,7 +287,7 @@ class ItemModal extends Component
         $team = $this->team();
         $gp = \Platform\FoodAlchemist\Models\FoodAlchemistGp::visibleToTeam($team)->findOrFail($gpId);
         if (! Curate::canCurate(Auth::user(), $gp)) {
-            $this->fehler = 'Globale Katalog-Aktion — nur fürs Kurations-Team (D1).';
+            $this->fehler = 'Dieses Grundprodukt gehört zum gemeinsamen Katalog. Zuordnungen ändert nur das Team, das ihn pflegt.';
 
             return;
         }
@@ -292,7 +314,7 @@ class ItemModal extends Component
             return;
         }
         if (! Curate::canCurate(Auth::user(), $gp)) {
-            $this->fehler = 'Globale Katalog-Aktion — nur fürs Kurations-Team (D1).';
+            $this->fehler = 'Dieses Grundprodukt gehört zum gemeinsamen Katalog. Zuordnungen ändert nur das Team, das ihn pflegt.';
 
             return;
         }

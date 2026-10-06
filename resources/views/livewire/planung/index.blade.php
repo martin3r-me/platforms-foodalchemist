@@ -1,5 +1,10 @@
-{{-- Planungs-/Kreativ-Cockpit (Doppel-Diamant). Haus-Layout: links Kategorie→Session-Baum,
-     Mitte Dashboard/Vorschau, rechts Detail; „Öffnen" → Fullscreen-Dark-Editor (Analyse·Skizzen·Planung·Composer). --}}
+{{-- Planung (Leitstelle). Haus-Anordnung: links Planungen (Suche, Filter, Liste), Mitte Erstellen + Board,
+     rechts Details; „Öffnen" → Vollbild-Editor im Werkbank-Modus (Erstell-Reiter · Ausgabe-Reiter · Fortschritt).
+     fa-pass (2026-10-05): auf Bausteine <x-fa::…> und --fa-*-Tokens umgestellt (hell + Werkbank).
+     Laptop-Tauglichkeit: Board-Spalten haben eine Mindestbreite und scrollen waagerecht statt zu
+     zerquetschen; die Reiterleiste scrollt statt umzubrechen; die klebenden Erstell-Leisten sind
+     eine niedrige Zeile (Plan, Wissens-Vorschau und Hinweise stehen davor im normalen Fluss).
+     Funktion, wire:-Bindungen, Event-Namen, Diktat-Ziele und data-Marker unverändert. --}}
 @assets
 <script src="/_platform/fa-assets/foodalchemist-pairing-netz.iife.js?v={{ config('platform.fa_pairing_netz_hash', '0') }}" defer></script>
 @endassets
@@ -10,49 +15,30 @@
 @endassets
 @php
     extract(\Platform\FoodAlchemist\Support\Ui::maps());
-    $statusLabel = ['divergenz' => 'Divergenz', 'konvergenz' => 'Konvergenz', 'erledigt' => 'Erledigt'];
-    $modeLabel = ['voll_kreativ' => 'Voll kreativ', 'hybrid' => 'Hybrid', 'datenbank' => 'Datenbank'];
-    // Wirkungs-Hints je Modus (die EINE Reuse-Achse — ersetzt den früheren „Bestand-Nutzung"-Regler):
+    $statusLabel = ['divergenz' => 'Ideen sammeln', 'konvergenz' => 'Auswahl treffen', 'erledigt' => 'Abgeschlossen'];
+    $modeLabel = ['voll_kreativ' => 'Frei kreativ', 'hybrid' => 'Kreativ mit Bestand', 'datenbank' => 'Nur Bestand'];
+    // Wirkungs-Hinweise je Modus (die EINE Achse für Wiederverwendung):
     $modeHint = [
-        'voll_kreativ' => 'Freie Gerichtsidee. Bei der Erdung werden vorhandene Basisrezepte trotzdem wiederverwendet; neu entsteht nur eine echte Lücke.',
-        'hybrid' => 'Freie Idee mit Bestandsbezug; vorhandene Gerichte und Basisrezepte werden bevorzugt wiederverwendet.',
-        'datenbank' => 'Nur Bestand — ausschließlich vorhandene Gerichte/Basisrezepte; Lücken bleiben sichtbar und werden nicht neu erzeugt.',
+        'voll_kreativ' => 'Freie Gerichtsidee. Vorhandene Basisrezepte werden trotzdem wiederverwendet, neu entsteht nur eine echte Lücke.',
+        'hybrid' => 'Freie Idee mit Bezug zum Bestand. Vorhandene Gerichte und Basisrezepte werden bevorzugt wiederverwendet.',
+        'datenbank' => 'Ausschließlich vorhandene Gerichte und Basisrezepte. Lücken bleiben sichtbar und werden nicht neu erstellt.',
     ];
-    $chip = fn ($t, $c = 'bg-black/[0.04] text-gray-600') => '<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ' . $c . '">' . e($t) . '</span>';
-    $skizzenAnzahl = $skizzen ? (count($skizzen['einzel']) + collect($skizzen['gruppen'])->sum(fn ($g) => count($g['ideen']))) : 0;
-    // Skizzen-Lauf-Status (Etappe 4, Teil 2b): jüngster aus der Skizze gestarteter Gericht-Go → Karte.
-    $laufStatus = [
-        'running' => ['läuft', 'bg-amber-100 text-amber-700'],
-        'review' => ['prüfen', 'bg-violet-100 text-violet-700'],
-        'done' => ['fertig', 'bg-emerald-100 text-emerald-700'],
-        'failed' => ['fehlgeschlagen', 'bg-rose-100 text-rose-700'],
+    // Etiketten über Tokens (hell + Werkbank). $chip liefert fertiges HTML für die Closures unten.
+    $tonKlasse = [
+        'neutral' => 'bg-[var(--fa-neutral-soft)] text-[var(--fa-ink-2)]',
+        'accent' => 'bg-[var(--fa-accent-soft)] text-[var(--fa-accent)]',
+        'ok' => 'bg-[var(--fa-ok-soft)] text-[var(--fa-ok)]',
+        'warn' => 'bg-[var(--fa-warn-soft)] text-[var(--fa-warn)]',
+        'crit' => 'bg-[var(--fa-crit-soft)] text-[var(--fa-crit)]',
+        'info' => 'bg-[var(--fa-info-soft)] text-[var(--fa-info)]',
     ];
-    $skizzeLaufBadge = function ($ideaId) use ($skizzenLauf, $laufStatus, $chip) {
-        $l = $skizzenLauf[(int) $ideaId] ?? null;
-        if ($l === null) {
-            return '';
-        }
-        [$lbl, $cls] = $laufStatus[$l['status']] ?? [$l['status'], 'bg-black/[0.04] text-gray-600'];
-        $html = $chip('▸ ' . $lbl, $cls);
-        // E5 (Spec 40): „daraus entstanden" — der materialisierte Artefakt-Name (Lern-/Rückblick-Signal).
-        if (trim((string) ($l['ergebnis'] ?? '')) !== '') {
-            $html .= ' <span class="text-[10px] text-gray-500" title="daraus entstanden">→ ' . e($l['ergebnis']) . '</span>';
-        }
-        return $html;
-    };
-    // Finale Etappe (Hauptseite): Kaskaden-Status-Badge je Session aus $kaskaden (jüngster Lauf).
-    // Kein Lauf → „Entwurf" (verwaister Entwurf, sichtbar). Farben spiegeln $laufStatus.
+    $chip = fn ($t, $ton = 'neutral') => '<span class="inline-flex items-center h-[22px] max-w-full px-2 rounded-full text-[length:var(--fa-text-sm)] font-medium whitespace-nowrap truncate ' . ($tonKlasse[$ton] ?? $tonKlasse['neutral']) . '">' . e($t) . '</span>';
+    // Board/Liste: Kaskaden-Status je Session aus $kaskaden (jüngster Lauf). Kein Lauf → „Entwurf".
     $kaskaden = $kaskaden ?? [];
-    $kaskadeStatusStil = [
-        'entwurf' => 'bg-black/[0.04] text-gray-500',
-        'läuft' => 'bg-amber-100 text-amber-700',
-        'prüfen' => 'bg-violet-100 text-violet-700',
-        'fertig' => 'bg-emerald-100 text-emerald-700',
-        'fehlgeschlagen' => 'bg-rose-100 text-rose-700',
-    ];
-    $kaskadeBadge = function ($sessionId) use ($kaskaden, $kaskadeStatusStil, $chip) {
+    $kaskadeStatusTon = ['entwurf' => 'neutral', 'läuft' => 'info', 'prüfen' => 'warn', 'fertig' => 'ok', 'fehlgeschlagen' => 'crit'];
+    $kaskadeBadge = function ($sessionId) use ($kaskaden, $kaskadeStatusTon, $chip) {
         $status = $kaskaden[(int) $sessionId]['status'] ?? 'entwurf';
-        return $chip(\Illuminate\Support\Str::ucfirst($status), $kaskadeStatusStil[$status] ?? $kaskadeStatusStil['entwurf']);
+        return $chip(\Illuminate\Support\Str::ucfirst($status), $kaskadeStatusTon[$status] ?? 'neutral');
     };
     $kaskadeLaeuft = fn ($sessionId) => (bool) ($kaskaden[(int) $sessionId]['running'] ?? false);
     // Stufen-Fortschritt kompakt: „Gerichte 1/1 · Basisrezepte 0/3".
@@ -60,7 +46,7 @@
         $stufen = $kaskaden[(int) $sessionId]['stufen'] ?? [];
         return collect($stufen)->map(fn ($st) => $st['label'] . ' ' . $st['fertig'] . '/' . $st['total'])->implode(' · ');
     };
-    // UX: Auto-Anzeige-Titel — Ergebnis-Name (Kaskaden-Artefakt) → Analyse-Anfang → gespeicherter Titel.
+    // Anzeige-Titel: Ergebnis-Name (Kaskaden-Artefakt) → Anfang der Analyse → gespeicherter Titel.
     $anzeigeTitel = function ($s) use ($kaskaden) {
         $t = $kaskaden[(int) $s->id]['titel'] ?? null;
         if (is_string($t) && trim($t) !== '') {
@@ -69,25 +55,42 @@
         $ana = trim((string) ($s->analysis ?? ''));
         return $ana !== '' ? \Illuminate\Support\Str::limit($ana, 42) : $s->title;
     };
-    // UX: Typ-Icon je Session (aus dem jüngsten Lauf-Scope).
+    // Typ-Symbol je Session (aus dem Scope des jüngsten Laufs).
     $typIconMap = ['concept' => 'heroicon-o-squares-2x2', 'gericht' => 'heroicon-o-cake', 'rezept' => 'heroicon-o-beaker', 'vollkaskade' => 'heroicon-o-bolt'];
     $typIcon = fn ($s) => $typIconMap[$kaskaden[(int) $s->id]['scope'] ?? ''] ?? 'heroicon-o-light-bulb';
-    // Board: Ausgabe-Ziel-Chip (Owner). Kein Owner → „Frei". Text-Chip, keine Emojis.
+    // Board: Ausgabe-Ziel (Owner). Kein Owner → „Frei".
     $ausgabeZielLabel = ['foodbook' => 'Foodbook', 'speisekarte' => 'Speisekarte', 'speiseplan' => 'Speiseplan', 'offer' => 'Angebot', 'format' => 'Format', 'concept' => 'Concept'];
     $ausgabeChip = function ($sessionId) use ($kaskaden, $ausgabeZielLabel, $chip) {
         $ot = $kaskaden[(int) $sessionId]['owner_type'] ?? null;
         if ($ot === null) {
-            return $chip('Frei', 'bg-black/[0.04] text-gray-500');
+            return $chip('Frei');
         }
         $name = trim((string) ($kaskaden[(int) $sessionId]['owner_name'] ?? ''));
         $lbl = ($ausgabeZielLabel[$ot] ?? \Illuminate\Support\Str::ucfirst($ot)) . ($name !== '' ? ' · ' . $name : '');
-        return $chip($lbl, 'bg-sky-500/10 text-sky-700');
+        return $chip($lbl, 'accent');
     };
+    $zustandTon = ['läuft' => 'info', 'prüfen' => 'warn', 'geplant' => 'neutral', 'erledigt' => 'ok'];
+    $menuePunkt = 'flex w-full items-center gap-2 px-3 py-2 text-left text-[length:var(--fa-text-md)] text-[var(--fa-ink)] hover:bg-[var(--fa-hover)]';
+    $menueGruppe = 'px-3 pt-2 pb-1 text-[length:var(--fa-text-sm)] font-semibold text-[var(--fa-ink-3)]';
+    $verwerfenFrage = 'Diese Planung verwerfen? Laufende Erstellungen dieser Planung werden ebenfalls gestoppt. Sie wird archiviert, nicht endgültig gelöscht.';
+    // Editor-Reiter: Erstellen · Ausgaben · Fortschritt. Optik wie x-foodalchemist::editor-tabs; der Baustein selbst
+    // passt hier nicht (der Reiter-Zustand `tab` lebt am Modal, tab-init + modal.open-Detail, die Panels liegen im Body).
+    $reiterGruppen = [
+        ['basisrezept' => 'Basisrezept', 'gericht' => 'Gericht', 'concept' => 'Concept', 'format' => 'Format', 'composer' => 'Composer', 'import' => 'Import'],
+        ['foodbook' => 'Foodbook', 'speisekarte' => 'Speisekarte', 'speiseplan' => 'Speiseplan', 'angebot' => 'Angebot'],
+        ['worker' => 'Fortschritt'],
+    ];
+    $reiterKnopf = 'inline-flex items-center gap-1.5 h-10 px-3.5 shrink-0 text-[length:var(--fa-text-base)] font-medium border-b-2 -mb-px rounded-t-[var(--fa-radius-control)] transition-colors whitespace-nowrap focus-visible:-outline-offset-2';
+    $reiterAn = 'border-[var(--fa-accent)] text-[var(--fa-accent)] font-semibold bg-[var(--fa-accent-soft)]';
+    $reiterAus = 'border-transparent text-[var(--fa-ink-2)] hover:text-[var(--fa-ink)] hover:bg-[var(--fa-hover)]';
+    // Ausgabe-Reiter: Auswahl links schmaler, Brief rechts breiter (ab xl nebeneinander).
+    $ausgabeRaster = 'grid grid-cols-1 xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-4 items-start';
+    $hinweisText = 'text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]';
 @endphp
 
 <x-ui-page>
     <x-slot:navbar>
-        <x-ui-page-navbar title="Planung" icon="heroicon-o-light-bulb" />
+        <x-foodalchemist::shell.page-navbar title="Planung" icon="heroicon-o-light-bulb" />
     </x-slot:navbar>
 
     <x-slot name="actionbar">
@@ -97,32 +100,32 @@
         ]" />
     </x-slot>
 
-    {{-- LINKS: Neue Planung + Kategorie→Session-Baum --}}
+    {{-- LINKS: Neue Planung, Suche, Filter, Liste nach Kategorie --}}
     <x-slot name="sidebar">
         <x-ui-page-sidebar title="Planungen" width="w-80">
-            <div class="p-3 space-y-3">
-                <div class="flex gap-2">
-                    <input type="text" wire:model="neuTitel" wire:keydown.enter="neuePlanung"
-                           placeholder="Neue Planung …" class="{{ $input }}" />
-                    <button wire:click="neuePlanung" class="{{ $btnPrimary }} shrink-0" title="Neue Planung">
-                        @svg('heroicon-o-plus', 'w-4 h-4')
-                    </button>
+            <div class="p-3 flex flex-col gap-3">
+                <div class="flex items-center gap-2">
+                    <x-fa::input wire:model="neuTitel" wire:keydown.enter="neuePlanung" placeholder="Neue Planung benennen" aria-label="Name der neuen Planung" class="flex-1 min-w-0" />
+                    <x-fa::button icon="heroicon-m-plus" wire:click="neuePlanung" title="Planung anlegen" aria-label="Planung anlegen" class="px-2.5" />
                 </div>
 
-                {{-- Suche + Status-Filter (finale Etappe #17) — filtern Liste UND Zuletzt-Karten. --}}
-                <div class="space-y-2">
-                    <input type="text" wire:model.live.debounce.300ms="sucheListe" placeholder="Planungen durchsuchen …"
-                           class="{{ $input }} !py-1.5" data-planung-suche />
-                    <div class="flex gap-2">
-                        <select wire:model.live="filterStatus" class="{{ $input }} !py-1.5 text-xs" data-planung-filter-status>
+                {{-- Suche + Filter (finale Etappe #17): filtern Liste UND Board. --}}
+                <div class="flex flex-col gap-2 pt-3 border-t border-[var(--fa-line)]">
+                    <div class="relative">
+                        <label for="planung-suche" class="sr-only">Planungen durchsuchen</label>
+                        @svg('heroicon-m-magnifying-glass', 'w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--fa-ink-3)] pointer-events-none')
+                        <x-fa::input id="planung-suche" type="search" wire:model.live.debounce.300ms="sucheListe" placeholder="Planungen durchsuchen" class="pl-8" data-planung-suche />
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <x-fa::select size="sm" wire:model.live="filterStatus" aria-label="Nach Status filtern" data-planung-filter-status>
                             <option value="">Alle Status</option>
                             <option value="entwurf">Entwurf</option>
                             <option value="läuft">Läuft</option>
                             <option value="prüfen">Prüfen</option>
                             <option value="fertig">Fertig</option>
                             <option value="fehlgeschlagen">Fehlgeschlagen</option>
-                        </select>
-                        <select wire:model.live="filterTyp" class="{{ $input }} !py-1.5 text-xs" data-planung-filter-typ>
+                        </x-fa::select>
+                        <x-fa::select size="sm" wire:model.live="filterTyp" aria-label="Nach Typ filtern" data-planung-filter-typ>
                             <option value="">Alle Typen</option>
                             <option value="rezept">Basisrezept</option>
                             <option value="gericht">Gericht</option>
@@ -132,49 +135,45 @@
                             <option value="speiseplan">Speiseplan</option>
                             <option value="offer">Angebot</option>
                             <option value="format">Format</option>
-                        </select>
+                        </x-fa::select>
                     </div>
                 </div>
 
-                <div class="space-y-2 max-h-[68vh] overflow-y-auto -mx-1 px-1">
+                <div class="flex flex-col gap-3 max-h-[calc(100vh-17rem)] min-h-40 overflow-y-auto -mx-1 px-1">
                     @forelse($baum as $ast)
-                        <div wire:key="cat-{{ $loop->index }}">
-                            <p class="text-[11px] font-semibold text-gray-500 uppercase tracking-wide px-1 mb-0.5">{{ $ast['category'] }}</p>
-                            <div class="space-y-0.5">
-                                @foreach($ast['sessions'] as $s)
-                                    {{-- Zeile = wählbarer Button + hover-eingeblendeter Papierkorb (Löschen, #17-Rest);
-                                         kein verschachtelter Button (group-flex-div). --}}
-                                    <div wire:key="sess-{{ $s->id }}"
-                                         class="group flex items-center gap-1 rounded-md {{ $active && $active->id === $s->id ? 'bg-violet-500/10' : 'hover:bg-black/[0.04]' }}">
-                                        <button type="button" wire:click="waehle({{ $s->id }})"
-                                                class="flex-1 min-w-0 flex items-center justify-between gap-2 text-left px-2 py-1 text-xs {{ $active && $active->id === $s->id ? 'text-violet-700' : 'text-gray-700' }}">
-                                            {{-- UX: Typ-Icon + Auto-Anzeige-Titel (Ergebnis-Name → Analyse → Titel). --}}
-                                            <span class="flex items-center gap-1.5 min-w-0">
-                                                @svg($typIcon($s), 'w-3.5 h-3.5 shrink-0 text-gray-400')
-                                                <span class="truncate">{{ $anzeigeTitel($s) }}</span>
-                                            </span>
-                                            @php $stat = $kaskaden[$s->id]['status'] ?? 'entwurf'; @endphp
-                                            {{-- UX: deutlicheres Status-Badge (farbige Pille statt kleiner chip). --}}
-                                            <span class="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold {{ $kaskadeStatusStil[$stat] ?? $kaskadeStatusStil['entwurf'] }}" data-planung-status="{{ $stat }}">
-                                                @if($kaskadeLaeuft($s->id))<span class="w-1.5 h-1.5 rounded-full bg-current opacity-70 animate-pulse" data-planung-puls></span>@endif
-                                                {{ \Illuminate\Support\Str::ucfirst($stat) }}
-                                            </span>
-                                        </button>
-                                        <button type="button" wire:click="planungVerwerfen({{ $s->id }})"
-                                                wire:confirm="Diese Planung verwerfen? Aktive Generierungen dieser Planung werden ebenfalls gestoppt. (reversibel — Soft-Delete)"
-                                                class="shrink-0 px-1.5 py-1 rounded text-gray-300 hover:text-rose-600 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
-                                                title="Planung verwerfen" data-planung-listen-verwerfen="{{ $s->id }}">
-                                            @svg('heroicon-o-trash', 'w-3.5 h-3.5')
-                                        </button>
-                                    </div>
-                                @endforeach
-                            </div>
+                        <div wire:key="cat-{{ $loop->index }}" class="flex flex-col gap-0.5">
+                            <p class="px-2 pb-0.5 text-[length:var(--fa-text-sm)] font-semibold text-[var(--fa-ink-3)]">{{ $ast['category'] }}</p>
+                            @foreach($ast['sessions'] as $s)
+                                @php
+                                    $istGewaehlt = $active && $active->id === $s->id;
+                                    $stat = $kaskaden[$s->id]['status'] ?? 'entwurf';
+                                @endphp
+                                {{-- Zeile = wählbarer Button + beim Überfahren eingeblendeter Papierkorb (#17-Rest);
+                                     kein verschachtelter Button (group-flex-div). --}}
+                                <div wire:key="sess-{{ $s->id }}"
+                                     class="group flex items-center gap-1 rounded-[var(--fa-radius-control)] {{ $istGewaehlt ? 'bg-[var(--fa-accent-soft)]' : 'hover:bg-[var(--fa-hover)]' }}">
+                                    <button type="button" wire:click="waehle({{ $s->id }})" x-on:click="$store.ui?.mSet('activity_planung', 'open', true)" @if($istGewaehlt) aria-current="true" @endif
+                                            class="flex-1 min-w-0 flex items-center justify-between gap-2 text-left pl-2 pr-1 py-1.5 text-[length:var(--fa-text-md)] {{ $istGewaehlt ? 'text-[var(--fa-accent)] font-medium' : 'text-[var(--fa-ink)]' }}">
+                                        <span class="flex items-center gap-2 min-w-0">
+                                            @svg($typIcon($s), 'w-4 h-4 shrink-0 text-[var(--fa-ink-3)]')
+                                            <span class="truncate" title="{{ $anzeigeTitel($s) }}">{{ $anzeigeTitel($s) }}</span>
+                                        </span>
+                                        <x-fa::badge :tone="$kaskadeStatusTon[$stat] ?? 'neutral'" class="shrink-0" data-planung-status="{{ $stat }}">
+                                            @if($kaskadeLaeuft($s->id))<span class="w-1.5 h-1.5 rounded-full bg-current animate-pulse" data-planung-puls></span>@endif
+                                            {{ \Illuminate\Support\Str::ucfirst($stat) }}
+                                        </x-fa::badge>
+                                    </button>
+                                    <x-fa::icon-button size="sm" tone="danger" icon="heroicon-o-trash" label="Planung verwerfen"
+                                        wire:click="planungVerwerfen({{ $s->id }})" wire:confirm="{{ $verwerfenFrage }}"
+                                        class="opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity" data-planung-listen-verwerfen="{{ $s->id }}" />
+                                </div>
+                            @endforeach
                         </div>
                     @empty
                         @if($sucheListe !== '' || $filterStatus !== '')
-                            <p class="text-xs text-gray-500 px-1">Keine Planung passt zu Suche/Filter.</p>
+                            <x-fa::empty compact icon="heroicon-o-funnel" title="Keine Planung passt">Suche oder Filter lockern.</x-fa::empty>
                         @else
-                            <p class="text-xs text-gray-500 px-1">Noch keine Planungen — links oben eine starten oder im Trendradar „In Planung öffnen".</p>
+                            <x-fa::empty compact icon="heroicon-o-light-bulb" title="Noch keine Planungen">Oben eine Planung benennen, „Neu erstellen" wählen oder im Trendradar „In Planung öffnen".</x-fa::empty>
                         @endif
                     @endforelse
                 </div>
@@ -182,395 +181,406 @@
         </x-ui-page-sidebar>
     </x-slot>
 
-    {{-- MITTE: Vorschau / Dashboard --}}
-    <x-ui-page-container padding="px-6 pb-6" spacing="space-y-4">
-        {{-- Leitstelle: freie 1-Klick-Erstellung — die eine KI-Erstell-Fläche (de-trend). Legt eine
-             leichte „Freie Erstellung"-Session (cockpit_frei) an und öffnet den Editor auf dem
-             Planung-Tab mit den Regler-Leitplanken. Trend bleibt EIN Input, nicht der Rahmen. --}}
-        <div class="{{ $card }} p-4 relative z-40" x-data="{ fbOpen: @js($fbPanelAuf), skOpen: false, spOpen: false, offOpen: @js($offerPanelAuf), fmtOpen: false, neuMenu: false }">
-            <div class="flex flex-wrap items-center gap-2">
-                {{-- Ein „Neu erstellen"-Knopf (Dominique 2026-08-23) statt sechs Buttons — Dropdown-Menü. --}}
-                <div class="relative" @click.outside="neuMenu = false">
-                    <button type="button" @click="neuMenu = !neuMenu" class="{{ $btnPrimary }}" data-frei-neu :class="neuMenu ? 'ring-2 ring-violet-400' : ''">
-                        @svg('heroicon-o-plus', 'w-4 h-4') Neu erstellen @svg('heroicon-o-chevron-down', 'w-3.5 h-3.5')
-                    </button>
-                    <div x-show="neuMenu" x-cloak x-transition class="absolute left-0 mt-1 z-50 w-60 rounded-xl border border-black/10 bg-white shadow-xl p-1 space-y-0.5" data-frei-menu>
-                        <button wire:click="schnellErstellen('rezept')" @click="neuMenu=false" class="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm text-gray-800 hover:bg-violet-500/10 text-left" data-frei-rezept>@svg('heroicon-o-beaker', 'w-4 h-4 text-violet-500') Basisrezept</button>
-                        <button wire:click="schnellErstellen('gericht')" @click="neuMenu=false" class="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm text-gray-800 hover:bg-violet-500/10 text-left" data-frei-gericht>@svg('heroicon-o-cake', 'w-4 h-4 text-violet-500') Gericht</button>
-                        <button wire:click="schnellErstellen('concept')" @click="neuMenu=false" class="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm text-gray-800 hover:bg-violet-500/10 text-left" data-frei-concept>@svg('heroicon-o-squares-2x2', 'w-4 h-4 text-violet-500') Concept</button>
-                        <button wire:click="schnellImport" @click="neuMenu=false" class="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm text-gray-800 hover:bg-violet-500/10 text-left" data-frei-import>@svg('heroicon-o-document-arrow-down', 'w-4 h-4 text-violet-500') Rezept importieren</button>
-                        <button wire:click="schnellComposer" @click="neuMenu=false" class="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm text-gray-800 hover:bg-violet-500/10 text-left" data-frei-composer>@svg('heroicon-o-sparkles', 'w-4 h-4 text-violet-500') Composer</button>
-                        <button type="button" @click="fbOpen = true; skOpen=false; spOpen=false; offOpen=false; fmtOpen=false; neuMenu=false" class="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm text-gray-800 hover:bg-violet-500/10 text-left" data-frei-foodbook>@svg('heroicon-o-book-open', 'w-4 h-4 text-violet-500') Foodbook aus Brief</button>
-                        <button type="button" @click="skOpen = true; fbOpen=false; spOpen=false; offOpen=false; fmtOpen=false; neuMenu=false" class="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm text-gray-800 hover:bg-violet-500/10 text-left" data-frei-speisekarte>@svg('heroicon-o-clipboard-document-list', 'w-4 h-4 text-violet-500') Speisekarte aus Brief</button>
-                        <button type="button" @click="spOpen = true; fbOpen=false; skOpen=false; offOpen=false; fmtOpen=false; neuMenu=false" class="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm text-gray-800 hover:bg-violet-500/10 text-left" data-frei-speiseplan>@svg('heroicon-o-calendar-days', 'w-4 h-4 text-violet-500') Speiseplan aus Brief</button>
-                        <button type="button" @click="offOpen = true; fbOpen=false; skOpen=false; spOpen=false; fmtOpen=false; neuMenu=false" class="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm text-gray-800 hover:bg-violet-500/10 text-left" data-frei-angebot>@svg('heroicon-o-document-text', 'w-4 h-4 text-violet-500') Angebot aus Brief</button>
-                        <button type="button" @click="fmtOpen = true; fbOpen=false; skOpen=false; spOpen=false; offOpen=false; neuMenu=false" class="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm text-gray-800 hover:bg-violet-500/10 text-left" data-frei-format>@svg('heroicon-o-swatch', 'w-4 h-4 text-violet-500') Format aus Brief</button>
+    {{-- MITTE: Erstellen + Board --}}
+    <x-ui-page-container padding="px-6 py-6" spacing="space-y-4">
+        {{-- Leitstelle: freie Erstellung mit einem Klick, die eine KI-Erstell-Fläche. Legt eine leichte
+             „Freie Erstellung"-Session (cockpit_frei) an und öffnet den Editor auf dem passenden Reiter.
+             Trend bleibt EIN Input, nicht der Rahmen. --}}
+        <div class="flex flex-col gap-4" x-data="{ fbOpen: @js($fbPanelAuf), skOpen: false, spOpen: false, offOpen: @js($offerPanelAuf), fmtOpen: false }">
+            <x-fa::page-header title="Planung" subtitle="Basisrezepte, Gerichte und Concepts mit KI entwerfen, ganze Foodbooks, Karten und Angebote aus einem Brief planen.">
+                <x-slot:actions>
+                    {{-- Ein „Neu erstellen"-Knopf (Dominique 2026-08-23) statt vieler Knöpfe: Menü in drei Gruppen. --}}
+                    <div class="relative" x-data="faMenu()" x-on:keydown.escape="offen = false" x-on:click.outside="offen = false">
+                        <x-fa::button variant="primary" icon="heroicon-m-plus" icon-right="heroicon-m-chevron-down" x-on:click="toggle($event)" aria-haspopup="menu" x-bind:aria-expanded="offen" data-frei-neu>Neu erstellen</x-fa::button>
+                        <div x-bind:class="{ hidden: ! offen }" x-bind:style="pos" role="menu" class="hidden w-72 fa-surface shadow-lg py-1" data-frei-menu>
+                            <p class="{{ $menueGruppe }}">Einzeln mit KI erstellen</p>
+                            <button type="button" role="menuitem" wire:click="schnellErstellen('rezept')" x-on:click="offen = false" class="{{ $menuePunkt }}" data-frei-rezept>@svg('heroicon-o-beaker', 'w-4 h-4 shrink-0 text-[var(--fa-ink-3)]') Basisrezept</button>
+                            <button type="button" role="menuitem" wire:click="schnellErstellen('gericht')" x-on:click="offen = false" class="{{ $menuePunkt }}" data-frei-gericht>@svg('heroicon-o-cake', 'w-4 h-4 shrink-0 text-[var(--fa-ink-3)]') Gericht</button>
+                            <button type="button" role="menuitem" wire:click="schnellErstellen('concept')" x-on:click="offen = false" class="{{ $menuePunkt }}" data-frei-concept>@svg('heroicon-o-squares-2x2', 'w-4 h-4 shrink-0 text-[var(--fa-ink-3)]') Concept</button>
+                            <div class="my-1 border-t border-[var(--fa-line)]" role="separator"></div>
+                            <p class="{{ $menueGruppe }}">Übernehmen und kombinieren</p>
+                            <button type="button" role="menuitem" wire:click="schnellImport" x-on:click="offen = false" class="{{ $menuePunkt }}" data-frei-import>@svg('heroicon-o-document-arrow-down', 'w-4 h-4 shrink-0 text-[var(--fa-ink-3)]') Rezept importieren</button>
+                            <button type="button" role="menuitem" wire:click="schnellComposer" x-on:click="offen = false" class="{{ $menuePunkt }}" data-frei-composer>@svg('heroicon-o-sparkles', 'w-4 h-4 shrink-0 text-[var(--fa-ink-3)]') Aus Zutaten kombinieren (Composer)</button>
+                            <div class="my-1 border-t border-[var(--fa-line)]" role="separator"></div>
+                            <p class="{{ $menueGruppe }}">Ganze Ausgabe aus einem Brief</p>
+                            <button type="button" role="menuitem" x-on:click="fbOpen = true; skOpen = false; spOpen = false; offOpen = false; fmtOpen = false; offen = false" class="{{ $menuePunkt }}" data-frei-foodbook>@svg('heroicon-o-book-open', 'w-4 h-4 shrink-0 text-[var(--fa-ink-3)]') Foodbook</button>
+                            <button type="button" role="menuitem" x-on:click="skOpen = true; fbOpen = false; spOpen = false; offOpen = false; fmtOpen = false; offen = false" class="{{ $menuePunkt }}" data-frei-speisekarte>@svg('heroicon-o-clipboard-document-list', 'w-4 h-4 shrink-0 text-[var(--fa-ink-3)]') Speisekarte</button>
+                            <button type="button" role="menuitem" x-on:click="spOpen = true; fbOpen = false; skOpen = false; offOpen = false; fmtOpen = false; offen = false" class="{{ $menuePunkt }}" data-frei-speiseplan>@svg('heroicon-o-calendar-days', 'w-4 h-4 shrink-0 text-[var(--fa-ink-3)]') Speiseplan</button>
+                            <button type="button" role="menuitem" x-on:click="offOpen = true; fbOpen = false; skOpen = false; spOpen = false; fmtOpen = false; offen = false" class="{{ $menuePunkt }}" data-frei-angebot>@svg('heroicon-o-document-text', 'w-4 h-4 shrink-0 text-[var(--fa-ink-3)]') Angebot</button>
+                            <button type="button" role="menuitem" x-on:click="fmtOpen = true; fbOpen = false; skOpen = false; spOpen = false; offOpen = false; offen = false" class="{{ $menuePunkt }}" data-frei-format>@svg('heroicon-o-swatch', 'w-4 h-4 shrink-0 text-[var(--fa-ink-3)]') Format</button>
+                        </div>
+                    </div>
+                </x-slot:actions>
+            </x-fa::page-header>
+
+            {{-- Spec 42 F1: ein ganzes Foodbook aus einem Brief planen. Rahmen (Gerüst/Struktur) + Inhalte
+                 entstehen HIER in der Leitstelle; das Foodbook ist reine Ausgabe. --}}
+            <x-fa::section x-show="fbOpen" x-cloak icon="heroicon-o-book-open" title="Foodbook aus einem Brief planen"
+                description="Struktur und Inhalte entstehen hier in der Leitstelle und landen automatisch im Foodbook." data-foodbook-brief-panel>
+                <x-slot:actions><x-fa::icon-button icon="heroicon-m-x-mark" label="Schließen" size="sm" x-on:click="fbOpen = false" /></x-slot:actions>
+                <div class="flex flex-col gap-3 max-w-3xl">
+                    @if($fbOwnerId)
+                        <x-fa::notice tone="info" data-fb-owner-hinweis>Planung für ein bestehendes Foodbook. Brief eingeben, Struktur und Inhalte entstehen hier und landen dort.</x-fa::notice>
+                    @else
+                        <x-fa::field label="Name des Foodbooks" optional>
+                            <x-fa::input wire:model="fbTitel" placeholder="zum Beispiel Sommerfest Adler" data-fb-titel />
+                        </x-fa::field>
+                    @endif
+                    <x-fa::field label="Brief">
+                        <x-fa::textarea wire:model="fbBrief" rows="3" placeholder="Anlass, Gäste, Saison, Niveau, Budget …" data-fb-brief />
+                    </x-fa::field>
+                    @include('foodalchemist::livewire.planung.partials.diktat', ['ziel' => 'fbBrief'])
+                    @if($fbMeldung)<x-fa::signal tone="crit" data-fb-meldung>{{ $fbMeldung }}</x-fa::signal>@endif
+                    <div>
+                        <x-fa::button variant="primary" icon="heroicon-o-sparkles" wire:click="foodbookAusBrief" wire:loading.attr="disabled" wire:target="foodbookAusBrief" data-fb-erzeugen>
+                            <span wire:loading.remove wire:target="foodbookAusBrief">Foodbook erstellen</span>
+                            <span wire:loading wire:target="foodbookAusBrief">Wird erstellt …</span>
+                        </x-fa::button>
                     </div>
                 </div>
-                <span class="text-[11px] text-gray-500 ml-1">— Basisrezept · Gericht · Concept · Import · Composer · Foodbook · Speisekarte · Speiseplan · Angebot · Format (KI, mit Regler-Leitplanken).</span>
-            </div>
+            </x-fa::section>
 
-            {{-- Spec 42 F1: Ein ganzes Foodbook aus einem Brief planen — Rahmen (Gerüst/Struktur) +
-                 Inhalte entstehen HIER in der Leitstelle; das Foodbook ist reine Ausgabe. --}}
-            <div x-show="fbOpen" x-cloak class="mt-3 border-t border-gray-200 pt-3 space-y-2" data-foodbook-brief-panel>
-                @if($fbOwnerId)
-                    <p class="text-[11px] text-violet-700 bg-violet-500/10 rounded px-2 py-1" data-fb-owner-hinweis>
-                        Planung für ein bestehendes Foodbook — Brief eingeben, Struktur + Inhalte entstehen hier und docken zurück.
-                    </p>
-                @else
-                    <input type="text" wire:model="fbTitel" data-fb-titel
-                           placeholder="Foodbook-Name (optional)"
-                           class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-violet-400 focus:ring-1 focus:ring-violet-400">
-                @endif
-                <textarea wire:model="fbBrief" rows="3" data-fb-brief
-                          placeholder="Brief: Anlass, Gäste, Saison, Niveau, Budget …"
-                          class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-violet-400 focus:ring-1 focus:ring-violet-400"></textarea>
-                @include('foodalchemist::livewire.planung.partials.diktat', ['ziel' => 'fbBrief'])
-                @if($fbMeldung)
-                    <p class="text-xs text-rose-600" data-fb-meldung>{{ $fbMeldung }}</p>
-                @endif
-                <div class="flex flex-wrap items-center gap-2">
-                    <button wire:click="foodbookAusBrief" wire:loading.attr="disabled" wire:target="foodbookAusBrief"
-                            class="{{ $btnPrimary }}" data-fb-erzeugen>
-                        <span wire:loading.remove wire:target="foodbookAusBrief">@svg('heroicon-o-sparkles', 'w-4 h-4') Foodbook erzeugen (KI)</span>
-                        <span wire:loading wire:target="foodbookAusBrief">Erzeuge …</span>
-                    </button>
-                    <span class="text-[11px] text-gray-500">— Struktur + Inhalte laufen in der Leitstelle und docken automatisch ins Foodbook.</span>
+            {{-- Speisekarte aus Brief (gleiche Bauart wie Foodbook) --}}
+            <x-fa::section x-show="skOpen" x-cloak icon="heroicon-o-clipboard-document-list" title="Speisekarte aus einem Brief planen"
+                description="Je Gang oder Kategorie entsteht eine Rubrik, die Inhalte landen automatisch in der Karte." data-speisekarte-brief-panel>
+                <x-slot:actions><x-fa::icon-button icon="heroicon-m-x-mark" label="Schließen" size="sm" x-on:click="skOpen = false" /></x-slot:actions>
+                <div class="flex flex-col gap-3 max-w-3xl">
+                    <x-fa::field label="Name der Speisekarte" optional>
+                        <x-fa::input wire:model="skTitel" placeholder="zum Beispiel Herbstkarte" data-landing-sk-titel />
+                    </x-fa::field>
+                    <x-fa::field label="Brief">
+                        <x-fa::textarea wire:model="skBrief" rows="3" placeholder="Anlass, Küchenstil, Saison, Niveau, Preisrahmen …" data-landing-sk-brief />
+                    </x-fa::field>
+                    @include('foodalchemist::livewire.planung.partials.diktat', ['ziel' => 'skBrief'])
+                    @if($skMeldung)<x-fa::signal tone="crit" data-landing-sk-meldung>{{ $skMeldung }}</x-fa::signal>@endif
+                    <div>
+                        <x-fa::button variant="primary" icon="heroicon-o-sparkles" wire:click="speisekarteAusBrief" wire:loading.attr="disabled" wire:target="speisekarteAusBrief" data-landing-sk-erzeugen>
+                            <span wire:loading.remove wire:target="speisekarteAusBrief">Speisekarte erstellen</span>
+                            <span wire:loading wire:target="speisekarteAusBrief">Wird erstellt …</span>
+                        </x-fa::button>
+                    </div>
                 </div>
-            </div>
+            </x-fa::section>
 
-            {{-- Speisekarte aus Brief (Landing-Panel, gespiegelt von Foodbook) --}}
-            <div x-show="skOpen" x-cloak class="mt-3 border-t border-gray-200 pt-3 space-y-2" data-speisekarte-brief-panel>
-                <input type="text" wire:model="skTitel" placeholder="Speisekarten-Name (optional)"
-                       class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-violet-400 focus:ring-1 focus:ring-violet-400" data-landing-sk-titel>
-                <textarea wire:model="skBrief" rows="3" placeholder="Brief: Anlass, Küchenstil, Saison, Niveau, Preis-Korridor …"
-                          class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-violet-400 focus:ring-1 focus:ring-violet-400" data-landing-sk-brief></textarea>
-                @include('foodalchemist::livewire.planung.partials.diktat', ['ziel' => 'skBrief'])
-                @if($skMeldung)<p class="text-xs text-rose-600" data-landing-sk-meldung>{{ $skMeldung }}</p>@endif
-                <div class="flex flex-wrap items-center gap-2">
-                    <button wire:click="speisekarteAusBrief" wire:loading.attr="disabled" wire:target="speisekarteAusBrief" class="{{ $btnPrimary }}" data-landing-sk-erzeugen>
-                        <span wire:loading.remove wire:target="speisekarteAusBrief">@svg('heroicon-o-sparkles', 'w-4 h-4') Speisekarte erzeugen (KI)</span>
-                        <span wire:loading wire:target="speisekarteAusBrief">Erzeuge …</span>
-                    </button>
-                    <span class="text-[11px] text-gray-500">— je Gang/Kategorie eine Rubrik; Inhalte docken automatisch in die Karte.</span>
+            {{-- Speiseplan aus Brief (gleiche Bauart wie Foodbook) --}}
+            <x-fa::section x-show="spOpen" x-cloak icon="heroicon-o-calendar-days" title="Speiseplan aus einem Brief planen"
+                description="Menülinien und Zyklus entstehen als Standard für die Gemeinschaftsverpflegung, die Zellen werden nach dem Brief gefüllt." data-speiseplan-brief-panel>
+                <x-slot:actions><x-fa::icon-button icon="heroicon-m-x-mark" label="Schließen" size="sm" x-on:click="spOpen = false" /></x-slot:actions>
+                <div class="flex flex-col gap-3 max-w-3xl">
+                    <x-fa::field label="Name des Speiseplans" optional>
+                        <x-fa::input wire:model="spTitel" placeholder="zum Beispiel Kantine Herbst" data-landing-sp-titel />
+                    </x-fa::field>
+                    <x-fa::field label="Brief">
+                        <x-fa::textarea wire:model="spBrief" rows="3" placeholder="Anlass, Saison, Küchenstil, Zyklus (zum Beispiel 4 Wochen), Ernährungsschwerpunkt …" data-landing-sp-brief />
+                    </x-fa::field>
+                    @include('foodalchemist::livewire.planung.partials.diktat', ['ziel' => 'spBrief'])
+                    @if($spMeldung)<x-fa::signal tone="crit" data-landing-sp-meldung>{{ $spMeldung }}</x-fa::signal>@endif
+                    <div>
+                        <x-fa::button variant="primary" icon="heroicon-o-sparkles" wire:click="speiseplanAusBrief" wire:loading.attr="disabled" wire:target="speiseplanAusBrief" data-landing-sp-erzeugen>
+                            <span wire:loading.remove wire:target="speiseplanAusBrief">Speiseplan erstellen</span>
+                            <span wire:loading wire:target="speiseplanAusBrief">Wird erstellt …</span>
+                        </x-fa::button>
+                    </div>
                 </div>
-            </div>
+            </x-fa::section>
 
-            {{-- Speiseplan aus Brief (Landing-Panel, gespiegelt von Foodbook) --}}
-            <div x-show="spOpen" x-cloak class="mt-3 border-t border-gray-200 pt-3 space-y-2" data-speiseplan-brief-panel>
-                <input type="text" wire:model="spTitel" placeholder="Speiseplan-Name (optional)"
-                       class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-violet-400 focus:ring-1 focus:ring-violet-400" data-landing-sp-titel>
-                <textarea wire:model="spBrief" rows="3" placeholder="Brief: Anlass, Saison, Küchenstil, Zyklus (z. B. „4 Wochen“), Diät-Fokus …"
-                          class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-violet-400 focus:ring-1 focus:ring-violet-400" data-landing-sp-brief></textarea>
-                @include('foodalchemist::livewire.planung.partials.diktat', ['ziel' => 'spBrief'])
-                @if($spMeldung)<p class="text-xs text-rose-600" data-landing-sp-meldung>{{ $spMeldung }}</p>@endif
-                <div class="flex flex-wrap items-center gap-2">
-                    <button wire:click="speiseplanAusBrief" wire:loading.attr="disabled" wire:target="speiseplanAusBrief" class="{{ $btnPrimary }}" data-landing-sp-erzeugen>
-                        <span wire:loading.remove wire:target="speiseplanAusBrief">@svg('heroicon-o-sparkles', 'w-4 h-4') Speiseplan erzeugen (KI)</span>
-                        <span wire:loading wire:target="speiseplanAusBrief">Erzeuge …</span>
-                    </button>
-                    <span class="text-[11px] text-gray-500">— GV-Linien + Zyklus als Standard; die Kaskade füllt die Zellen brief-gesteuert.</span>
+            {{-- #5 (2026-08-28): Angebot aus Brief (gleiche Bauart wie Speisekarte) --}}
+            <x-fa::section x-show="offOpen" x-cloak icon="heroicon-o-document-text" title="Angebot aus einem Brief planen"
+                description="Je Position entsteht ein Concept, das automatisch im Angebot landet. Preise folgen im Angebots-Editor." data-angebot-brief-panel>
+                <x-slot:actions><x-fa::icon-button icon="heroicon-m-x-mark" label="Schließen" size="sm" x-on:click="offOpen = false" /></x-slot:actions>
+                <div class="flex flex-col gap-3 max-w-3xl">
+                    @if($offerOwnerId)
+                        <x-fa::notice tone="info" data-offer-owner-hinweis>Planung für ein bestehendes Angebot. Brief eingeben, die Concepts entstehen hier und landen dort.</x-fa::notice>
+                    @else
+                        <x-fa::field label="Name des Angebots" optional>
+                            <x-fa::input wire:model="offerTitel" placeholder="zum Beispiel Sommerfest Firma Adler" data-landing-offer-titel />
+                        </x-fa::field>
+                    @endif
+                    <x-fa::field label="Brief">
+                        <x-fa::textarea wire:model="offerBrief" rows="3" placeholder="Anlass, Personen, Saison, Niveau, Budget, Servierform …" data-landing-offer-brief />
+                    </x-fa::field>
+                    @include('foodalchemist::livewire.planung.partials.diktat', ['ziel' => 'offerBrief'])
+                    @if($offerMeldung)<x-fa::signal tone="crit" data-landing-offer-meldung>{{ $offerMeldung }}</x-fa::signal>@endif
+                    <div>
+                        <x-fa::button variant="primary" icon="heroicon-o-sparkles" wire:click="angebotAusBrief" wire:loading.attr="disabled" wire:target="angebotAusBrief" data-landing-offer-erzeugen>
+                            <span wire:loading.remove wire:target="angebotAusBrief">Angebot erstellen</span>
+                            <span wire:loading wire:target="angebotAusBrief">Wird erstellt …</span>
+                        </x-fa::button>
+                    </div>
                 </div>
-            </div>
+            </x-fa::section>
 
-            {{-- #5 (2026-08-28): Angebot aus Brief (Landing-Panel, gespiegelt von Speisekarte) --}}
-            <div x-show="offOpen" x-cloak class="mt-3 border-t border-gray-200 pt-3 space-y-2" data-angebot-brief-panel>
-                @if($offerOwnerId)
-                    <p class="text-[11px] text-violet-700 bg-violet-500/10 rounded px-2 py-1" data-offer-owner-hinweis>
-                        Planung für ein bestehendes Angebot — Brief eingeben, die Konzepte entstehen hier und docken ans Angebot zurück.
-                    </p>
-                @else
-                    <input type="text" wire:model="offerTitel" placeholder="Angebots-Name (optional)"
-                           class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-violet-400 focus:ring-1 focus:ring-violet-400" data-landing-offer-titel>
-                @endif
-                <textarea wire:model="offerBrief" rows="3" placeholder="Brief: Anlass, Gäste/Pax, Saison, Niveau, Budget, Servierform …"
-                          class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-violet-400 focus:ring-1 focus:ring-violet-400" data-landing-offer-brief></textarea>
-                @include('foodalchemist::livewire.planung.partials.diktat', ['ziel' => 'offerBrief'])
-                @if($offerMeldung)<p class="text-xs text-rose-600" data-landing-offer-meldung>{{ $offerMeldung }}</p>@endif
-                <div class="flex flex-wrap items-center gap-2">
-                    <button wire:click="angebotAusBrief" wire:loading.attr="disabled" wire:target="angebotAusBrief" class="{{ $btnPrimary }}" data-landing-offer-erzeugen>
-                        <span wire:loading.remove wire:target="angebotAusBrief">@svg('heroicon-o-sparkles', 'w-4 h-4') Angebot erzeugen (KI)</span>
-                        <span wire:loading wire:target="angebotAusBrief">Erzeuge …</span>
-                    </button>
-                    <span class="text-[11px] text-gray-500">— je Slot ein Konzept; die Konzepte docken automatisch ans Angebot (Preise folgen im Angebots-Editor).</span>
+            {{-- Format aus Brief (gleiche Bauart wie Angebot): gebrandetes Foodkonzept. --}}
+            <x-fa::section x-show="fmtOpen" x-cloak icon="heroicon-o-swatch" title="Format aus einem Brief planen"
+                description="Marken-Identität und je Position ein Concept entstehen hier und landen automatisch im Format." data-format-brief-panel>
+                <x-slot:actions><x-fa::icon-button icon="heroicon-m-x-mark" label="Schließen" size="sm" x-on:click="fmtOpen = false" /></x-slot:actions>
+                <div class="flex flex-col gap-3 max-w-3xl">
+                    @if($fmtOwnerId)
+                        <x-fa::notice tone="info" data-fmt-owner-hinweis>Planung für ein bestehendes Format. Brief eingeben, die Concepts entstehen hier und landen dort.</x-fa::notice>
+                    @else
+                        <x-fa::field label="Name des Formats" optional>
+                            <x-fa::input wire:model="fmtTitel" placeholder="zum Beispiel Streetfood Markt" data-landing-fmt-titel />
+                        </x-fa::field>
+                    @endif
+                    <x-fa::field label="Brief">
+                        <x-fa::textarea wire:model="fmtBrief" rows="3" placeholder="Marke, Anlass, Ausrichtung, Zielgruppe, Niveau, Stationen oder Gänge …" data-landing-fmt-brief />
+                    </x-fa::field>
+                    @include('foodalchemist::livewire.planung.partials.diktat', ['ziel' => 'fmtBrief'])
+                    @if($fmtMeldung)<x-fa::signal tone="crit" data-landing-fmt-meldung>{{ $fmtMeldung }}</x-fa::signal>@endif
+                    <div>
+                        <x-fa::button variant="primary" icon="heroicon-o-sparkles" wire:click="formatAusBrief" wire:loading.attr="disabled" wire:target="formatAusBrief" data-landing-fmt-erzeugen>
+                            <span wire:loading.remove wire:target="formatAusBrief">Format erstellen</span>
+                            <span wire:loading wire:target="formatAusBrief">Wird erstellt …</span>
+                        </x-fa::button>
+                    </div>
                 </div>
-            </div>
-
-            {{-- Format aus Brief (Landing-Panel, gespiegelt von Angebot) — gebrandetes Foodkonzept. --}}
-            <div x-show="fmtOpen" x-cloak class="mt-3 border-t border-gray-200 pt-3 space-y-2" data-format-brief-panel>
-                @if($fmtOwnerId)
-                    <p class="text-[11px] text-violet-700 bg-violet-500/10 rounded px-2 py-1" data-fmt-owner-hinweis>
-                        Planung für ein bestehendes Format — Brief eingeben, die Konzepte entstehen hier und docken ans Format zurück.
-                    </p>
-                @else
-                    <input type="text" wire:model="fmtTitel" placeholder="Format-Name (optional)"
-                           class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-violet-400 focus:ring-1 focus:ring-violet-400" data-landing-fmt-titel>
-                @endif
-                <textarea wire:model="fmtBrief" rows="3" placeholder="Brief: Marke, Anlass, Ausrichtung, Zielgruppe, Niveau, Stationen/Gänge …"
-                          class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-violet-400 focus:ring-1 focus:ring-violet-400" data-landing-fmt-brief></textarea>
-                @include('foodalchemist::livewire.planung.partials.diktat', ['ziel' => 'fmtBrief'])
-                @if($fmtMeldung)<p class="text-xs text-rose-600" data-landing-fmt-meldung>{{ $fmtMeldung }}</p>@endif
-                <div class="flex flex-wrap items-center gap-2">
-                    <button wire:click="formatAusBrief" wire:loading.attr="disabled" wire:target="formatAusBrief" class="{{ $btnPrimary }}" data-landing-fmt-erzeugen>
-                        <span wire:loading.remove wire:target="formatAusBrief">@svg('heroicon-o-sparkles', 'w-4 h-4') Format erzeugen (KI)</span>
-                        <span wire:loading wire:target="formatAusBrief">Erzeuge …</span>
-                    </button>
-                    <span class="text-[11px] text-gray-500">— Marken-Identität + je Slot ein Konzept; die Konzepte docken automatisch ans Format.</span>
-                </div>
-            </div>
+            </x-fa::section>
         </div>
 
-            {{-- Board (Leitstelle-Dashboard) — ersetzt die frühere Zuletzt/Prüfen-Ansicht. Immer sichtbar,
-                 auch bei gewählter Session (Karte-Klick füllt NUR die rechte Details-Sidebar + markiert die
-                 Karte — das Board bleibt als Überblick stehen). Der linke Filter grenzt ein: dieselbe
-                 gefilterte $sessions-Menge landet in den Status-Spalten. „Öffnen" = Editor. Poll nur, wenn
-                 tatsächlich etwas läuft (kein Dauer-Poll). --}}
-            <div data-planung-board {{ $irgendeinLaeuft ? 'wire:poll.3s' : '' }}>
-                @include('foodalchemist::livewire.planung.partials.board-worker-kopf')
+        {{-- Board (Leitstelle-Übersicht). Immer sichtbar, auch bei gewählter Session (Karte-Klick füllt NUR
+             die rechte Detail-Spalte + markiert die Karte). Der linke Filter grenzt ein: dieselbe gefilterte
+             $sessions-Menge landet in den Status-Spalten. „Öffnen" = Editor. Poll nur, wenn tatsächlich
+             etwas läuft (kein Dauer-Poll).
+             Laptop: jede Spalte hat eine Mindestbreite; reicht die Breite nicht für fünf, scrollt das Board
+             waagerecht, statt die Karten unlesbar schmal zu drücken. --}}
+        <div class="flex flex-col gap-3" data-planung-board {{ $irgendeinLaeuft ? 'wire:poll.3s' : '' }}>
+            @include('foodalchemist::livewire.planung.partials.board-worker-kopf')
 
-                @php
-                    $spalten = ['entwurf' => 'Entwurf', 'läuft' => 'Läuft', 'prüfen' => 'Zu prüfen', 'fertig' => 'Fertig', 'fehlgeschlagen' => 'Fehlgeschlagen'];
-                    $nachStatus = $sessions->groupBy(fn ($s) => $kaskaden[(int) $s->id]['status'] ?? 'entwurf');
-                @endphp
+            @php
+                $spalten = ['entwurf' => 'Entwurf', 'läuft' => 'Läuft', 'prüfen' => 'Zu prüfen', 'fertig' => 'Fertig', 'fehlgeschlagen' => 'Fehlgeschlagen'];
+                $nachStatus = $sessions->groupBy(fn ($s) => $kaskaden[(int) $s->id]['status'] ?? 'entwurf');
+                $spaltenPunkt = ['entwurf' => 'bg-[var(--fa-ink-3)]', 'läuft' => 'bg-[var(--fa-info)]', 'prüfen' => 'bg-[var(--fa-warn)]', 'fertig' => 'bg-[var(--fa-ok)]', 'fehlgeschlagen' => 'bg-[var(--fa-crit)]'];
+            @endphp
 
-                @if($sessions->count() === 0)
-                    <div class="{{ $card }} p-4 text-xs text-gray-500" data-planung-board-leer>Noch keine Planungen — oben „Neu erstellen".</div>
-                @else
-                    <div class="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-3 items-start" data-planung-board-spalten>
+            @if($sessions->count() === 0)
+                <div class="fa-surface" data-planung-board-leer>
+                    <x-fa::empty icon="heroicon-o-view-columns" title="Noch keine Planungen">Oben „Neu erstellen" wählen. Jede Planung erscheint hier in der Spalte ihres Stands.</x-fa::empty>
+                </div>
+            @else
+                <div class="overflow-x-auto -mx-1 px-1 pb-1">
+                    <div class="grid grid-cols-1 gap-3 items-start md:grid-cols-none md:grid-flow-col md:auto-cols-[minmax(14rem,1fr)]" data-planung-board-spalten>
                         @foreach($spalten as $key => $label)
                             @php $spaltenSessions = ($nachStatus[$key] ?? collect())->values(); @endphp
-                            <div class="min-w-0" data-planung-spalte="{{ $key }}">
-                                <div class="flex items-center gap-1.5 mb-2 px-0.5">
-                                    <span class="text-[11px] font-semibold uppercase tracking-wide text-gray-500">{{ $label }}</span>
-                                    <span class="inline-flex items-center justify-center min-w-[1.25rem] h-4 px-1 rounded-full text-[10px] font-bold {{ $kaskadeStatusStil[$key] ?? 'bg-black/[0.04] text-gray-500' }}" data-planung-spalte-count>{{ $spaltenSessions->count() }}</span>
-                                </div>
-                                <div class="space-y-2">
+                            <section class="min-w-0 flex flex-col gap-2 rounded-[var(--fa-radius-surface)] bg-[var(--fa-neutral-soft)] p-2" data-planung-spalte="{{ $key }}" aria-label="{{ $label }}">
+                                <header class="flex items-center gap-2 px-1 pt-0.5">
+                                    <span class="w-2 h-2 rounded-full {{ $spaltenPunkt[$key] }}"></span>
+                                    <h3 class="text-[length:var(--fa-text-md)] font-semibold text-[var(--fa-ink)]">{{ $label }}</h3>
+                                    <span class="ml-auto text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-3)] tabular-nums" data-planung-spalte-count>{{ $spaltenSessions->count() }}</span>
+                                </header>
+                                <div class="flex flex-col gap-2">
                                     @forelse($spaltenSessions as $s)
                                         @include('foodalchemist::livewire.planung.partials.board-karte', ['s' => $s])
                                     @empty
-                                        <div class="text-[10px] text-gray-300 px-1 py-1.5">—</div>
+                                        <p class="px-1 py-2 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">Keine Planung</p>
                                     @endforelse
                                 </div>
-                            </div>
+                            </section>
                         @endforeach
                     </div>
-                @endif
-            </div>{{-- /board --}}
+                </div>
+            @endif
+        </div>{{-- /board --}}
     </x-ui-page-container>
 
-    {{-- RECHTS: Detail --}}
+    {{-- RECHTS: Details --}}
     <x-slot name="activity">
-        <x-foodalchemist::detail-sidebar title="Details" width="w-80" :maxWidth="560" scope="activity_planung" side="right">
-            @if($active)
-                <div class="p-4 space-y-3">
-                    <h3 class="text-sm font-semibold text-gray-800">{{ $active->title }}</h3>
-                    <div class="flex flex-wrap gap-1">
-                        {!! $kaskadeBadge($active->id) !!}
-                        {!! $chip($statusLabel[$active->status] ?? $active->status, 'bg-violet-500/10 text-violet-700') !!}
-                        {!! $chip($modeLabel[$active->creative_mode] ?? $active->creative_mode) !!}
-                    </div>
-                    <dl class="text-[11px] text-gray-500 space-y-1">
-                        <div class="flex justify-between"><dt>Herkunft</dt><dd>{{ $active->source_knowledge_document_id ? 'Trend #' . $active->source_knowledge_document_id : 'Freier Brief' }}</dd></div>
-                    </dl>
-                    {{-- Kaskaden-Kurzstatus je Stufe — ohne den Editor zu öffnen (finale Etappe). --}}
-                    @php $aktStufen = $kaskaden[$active->id]['stufen'] ?? []; @endphp
-                    @if($aktStufen !== [])
-                        <div class="pt-1" data-planung-kaskadenstand>
-                            <p class="text-[11px] font-semibold text-gray-600 mb-1">Kaskaden-Stand</p>
-                            <div class="space-y-0.5">
-                                @foreach($aktStufen as $st)
-                                    <div class="flex items-center justify-between text-[11px]">
-                                        <span class="text-gray-600">{{ $st['label'] }}</span>
-                                        <span class="text-gray-500">{{ $st['fertig'] }}/{{ $st['total'] }} · {{ $st['zustand'] }}</span>
-                                    </div>
-                                @endforeach
-                            </div>
+        <x-foodalchemist::detail-sidebar title="Detail" width="w-80" :maxWidth="560" scope="activity_planung" side="right">
+            {{-- Anatomie Detail-Panels (DESIGN.md): Kopf (Ergebnis-Name, Stand, „Im Editor öffnen", Verwerfen im Menü)
+                 · offene Punkte · Fortschritt je Stufe. --}}
+            <div class="p-4 flex flex-col gap-5 min-h-full bg-[var(--fa-ground)]">
+                @if($active)
+                    @php
+                        $aktStufen = $kaskaden[$active->id]['stufen'] ?? [];
+                        $aktKaskade = $kaskaden[(int) $active->id]['status'] ?? 'entwurf';
+                        $aktPruefen = collect($aktStufen)->filter(fn ($st) => ($st['zustand'] ?? null) === 'prüfen');
+                    @endphp
+                    <x-fa::detail-kopf :title="$anzeigeTitel($active)"
+                        :subtitle="$active->source_knowledge_document_id ? 'Herkunft: Trendradar, Eintrag ' . $active->source_knowledge_document_id : 'Herkunft: Freier Brief'">
+                        @if(filled($active->title) && trim((string) $active->title) !== $anzeigeTitel($active))
+                            <p class="mt-0.5 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)] break-words">Planung: {{ $active->title }}</p>
+                        @endif
+                        <x-slot:badges>
+                            <x-fa::badge :tone="$kaskadeStatusTon[$aktKaskade] ?? 'neutral'">{{ \Illuminate\Support\Str::ucfirst($aktKaskade) }}</x-fa::badge>
+                            <x-fa::badge tone="accent">{{ $statusLabel[$active->status] ?? $active->status }}</x-fa::badge>
+                            <x-fa::badge title="Kreativ-Modus">{{ $modeLabel[$active->creative_mode] ?? $active->creative_mode }}</x-fa::badge>
+                        </x-slot:badges>
+                        <x-slot:aktion>
+                            <x-fa::button variant="primary" size="sm" icon="heroicon-m-pencil-square" wire:click="oeffne({{ $active->id }})">Im Editor öffnen</x-fa::button>
+                        </x-slot:aktion>
+                        <x-slot:menue>
+                            <x-fa::menu-item danger icon="heroicon-m-trash"
+                                wire:click="planungVerwerfen({{ $active->id }})" wire:confirm="{{ $verwerfenFrage }}" data-planung-details-verwerfen>Planung verwerfen</x-fa::menu-item>
+                        </x-slot:menue>
+                    </x-fa::detail-kopf>
+
+                    @if($aktKaskade === 'fehlgeschlagen' || $aktPruefen->isNotEmpty())
+                        <div class="flex flex-col gap-1">
+                            @if($aktKaskade === 'fehlgeschlagen')
+                                <x-fa::signal tone="crit">Die letzte Erstellung ist fehlgeschlagen.</x-fa::signal>
+                            @endif
+                            @foreach($aktPruefen as $st)
+                                <x-fa::signal tone="warn">{{ $st['label'] }}: Ergebnisse prüfen.</x-fa::signal>
+                            @endforeach
                         </div>
                     @endif
-                    <div class="flex items-center gap-2 pt-1">
-                        <button wire:click="oeffne({{ $active->id }})" class="{{ $btnGhostXs }}">Im Editor öffnen</button>
-                        <button wire:click="planungVerwerfen({{ $active->id }})"
-                                wire:confirm="Diese Planung verwerfen? Aktive Generierungen dieser Planung werden ebenfalls gestoppt. (reversibel — Soft-Delete)"
-                                class="{{ $btnGhostXs }} !text-rose-600" data-planung-details-verwerfen>
-                            @svg('heroicon-o-trash', 'w-3.5 h-3.5') Verwerfen
-                        </button>
+
+                    {{-- Stand je Stufe, ohne den Editor zu öffnen (finale Etappe). --}}
+                    <div class="flex flex-col">
+                        <x-fa::section variant="plain" title="Fortschritt je Stufe" icon="heroicon-o-queue-list" data-planung-kaskadenstand>
+                            @if($aktStufen === [])
+                                <x-fa::empty compact icon="heroicon-o-queue-list" title="Noch nichts erstellt">Im Editor einen Brief formulieren und die Erstellung starten.</x-fa::empty>
+                            @else
+                                <ul class="flex flex-col">
+                                    @foreach($aktStufen as $st)
+                                        <li class="flex items-center justify-between gap-2 py-1.5 border-b border-[var(--fa-line)] last:border-0 text-[length:var(--fa-text-md)]">
+                                            <span class="text-[var(--fa-ink)]">{{ $st['label'] }}</span>
+                                            <span class="flex items-center gap-2">
+                                                <span class="text-[var(--fa-ink-3)] tabular-nums">{{ $st['fertig'] }}/{{ $st['total'] }}</span>
+                                                <x-fa::badge :tone="$zustandTon[$st['zustand']] ?? 'neutral'">{{ \Illuminate\Support\Str::ucfirst($st['zustand']) }}</x-fa::badge>
+                                            </span>
+                                        </li>
+                                    @endforeach
+                                </ul>
+                            @endif
+                        </x-fa::section>
                     </div>
-                </div>
-            @else
-                <div class="p-4 text-xs text-gray-500">Eine Planung wählen, um Herkunft, Status und Lineage zu sehen.</div>
-            @endif
+                @else
+                    <x-fa::empty icon="heroicon-o-cursor-arrow-rays" title="Keine Planung gewählt">Eine Karte anklicken, um Herkunft, Stand und Fortschritt zu sehen.</x-fa::empty>
+                @endif
+            </div>
         </x-foodalchemist::detail-sidebar>
     </x-slot>
 
-    {{-- FULLSCREEN-DARK-EDITOR --}}
+    {{-- VOLLBILD-EDITOR (Werkbank-Modus) --}}
     <x-foodalchemist::modal name="planung-editor" fullscreen dark-canvas title="Planung"
-                            :title-name="$active?->title" tab-init="gericht">
+                            :title-name="$active ? $anzeigeTitel($active) : null" tab-init="gericht">
         <x-slot:actions>
-            <button wire:click="speichern" class="{{ $btnPrimary }}">
-                @svg('heroicon-o-check', 'w-4 h-4')
-                Speichern
-            </button>
+            {{-- Speichern sichert Titel und Eingaben der Planung. Sekundär: die Hauptaktion jedes Reiters
+                 ist das Erstellen in der Leiste unten. --}}
+            <x-fa::button icon="heroicon-m-check" wire:click="speichern">Planung speichern</x-fa::button>
             @if($meldung !== null)
-                <span class="text-xs text-emerald-300">{{ $meldung }}</span>
+                <x-fa::signal tone="ok">{{ $meldung }}</x-fa::signal>
             @endif
             @if($fehler !== null)
-                <span class="text-xs text-rose-300">{{ $fehler }}</span>
+                <x-fa::signal tone="crit">{{ $fehler }}</x-fa::signal>
             @endif
             @if($margenWarnung !== null)
-                <span class="text-xs text-amber-300" data-margen-warnung>⚠ {{ $margenWarnung }}</span>
+                <x-fa::signal tone="warn" data-margen-warnung>{{ $margenWarnung }}</x-fa::signal>
             @endif
-            {{-- Was der Lauf NICHT erzeugt hat. Amber wie die Margen-Warnung: eine Warnung, kein
-                 Fehler (rose) und kein Erfolg (emerald). MUSS innerhalb von x-slot:actions
-                 stehen — dahinter beginnt die Tab-Leiste, dort landete der Hinweis in der
+            {{-- Was der Lauf NICHT erzeugt hat: eine Warnung, kein Fehler und kein Erfolg. MUSS innerhalb von
+                 x-slot:actions stehen; dahinter beginnt die Reiterleiste, dort landete der Hinweis in der
                  falschen Modal-Zone. --}}
             @if($deckelHinweis !== null)
-                <span class="text-xs text-amber-300" data-deckel-hinweis>⚠ {{ $deckelHinweis }}</span>
+                <x-fa::signal tone="warn" data-deckel-hinweis>{{ $deckelHinweis }}</x-fa::signal>
             @endif
-            {{-- Spec 53 / Paket C: globaler KI-Status, sichtbar auf JEDEM Tab (x-slot:actions
-                 überlebt den Tab-Wechsel — die Tab-Leiste beginnt erst danach). --}}
-            @include('foodalchemist::livewire.planung.partials.ki-status-leiste', ['klickbar' => true])
+            {{-- Spec 53 / Paket C: globaler KI-Status, sichtbar auf JEDEM Reiter (x-slot:actions
+                 überlebt den Reiterwechsel; die Reiterleiste beginnt erst danach). --}}
+            <div class="ml-auto">
+                @include('foodalchemist::livewire.planung.partials.ki-status-leiste', ['klickbar' => true])
+            </div>
         </x-slot:actions>
 
         <x-slot:tabs>
-            <div class="flex gap-1">
-                {{-- Analyse + Skizzen (Spec-40-E0-Ideations-Einstieg) retired (Dominique 2026-08-23):
-                     ungeerdeter Brainstorm-Umweg, abgelöst durch Composer (geerdet) + Brief-Kaskaden.
-                     DishIdea/IdeenService bleibt intern (Materialisierung, Kapitel-Ideen-MCP). --}}
-                <button type="button" @click="tab='basisrezept'"
-                        :class="tab==='basisrezept' ? 'bg-violet-500/25 text-white' : 'text-gray-300 hover:text-white'"
-                        class="px-3 py-1.5 rounded-t-md text-xs font-medium">Basisrezept</button>
-                <button type="button" @click="tab='gericht'"
-                        :class="tab==='gericht' ? 'bg-violet-500/25 text-white' : 'text-gray-300 hover:text-white'"
-                        class="px-3 py-1.5 rounded-t-md text-xs font-medium">Gericht</button>
-                <button type="button" @click="tab='concept'"
-                        :class="tab==='concept' ? 'bg-violet-500/25 text-white' : 'text-gray-300 hover:text-white'"
-                        class="px-3 py-1.5 rounded-t-md text-xs font-medium">Concept</button>
-                <button type="button" @click="tab='format'"
-                        :class="tab==='format' ? 'bg-violet-500/25 text-white' : 'text-gray-300 hover:text-white'"
-                        class="px-3 py-1.5 rounded-t-md text-xs font-medium">Format</button>
-                <button type="button" @click="tab='composer'"
-                        :class="tab==='composer' ? 'bg-violet-500/25 text-white' : 'text-gray-300 hover:text-white'"
-                        class="px-3 py-1.5 rounded-t-md text-xs font-medium">Composer</button>
-                <button type="button" @click="tab='import'"
-                        :class="tab==='import' ? 'bg-violet-500/25 text-white' : 'text-gray-300 hover:text-white'"
-                        class="px-3 py-1.5 rounded-t-md text-xs font-medium">Import</button>
-                {{-- Ausgabe-Formen (Spec-42-Vollzug): eigene Kickoff-Tabs — die ganze Planung lebt in der
-                     Leitstelle, die Module kuratieren nur. Optisch abgesetzt (Trennstrich). --}}
-                <span class="mx-1 self-center h-4 w-px bg-white/15"></span>
-                <button type="button" @click="tab='foodbook'"
-                        :class="tab==='foodbook' ? 'bg-violet-500/25 text-white' : 'text-gray-300 hover:text-white'"
-                        class="px-3 py-1.5 rounded-t-md text-xs font-medium">Foodbook</button>
-                <button type="button" @click="tab='speisekarte'"
-                        :class="tab==='speisekarte' ? 'bg-violet-500/25 text-white' : 'text-gray-300 hover:text-white'"
-                        class="px-3 py-1.5 rounded-t-md text-xs font-medium">Speisekarte</button>
-                <button type="button" @click="tab='speiseplan'"
-                        :class="tab==='speiseplan' ? 'bg-violet-500/25 text-white' : 'text-gray-300 hover:text-white'"
-                        class="px-3 py-1.5 rounded-t-md text-xs font-medium">Speiseplan</button>
-                <button type="button" @click="tab='angebot'"
-                        :class="tab==='angebot' ? 'bg-violet-500/25 text-white' : 'text-gray-300 hover:text-white'"
-                        class="px-3 py-1.5 rounded-t-md text-xs font-medium">Angebot</button>
-                {{-- Worker (Ausführung/Status) bewusst ganz am Ende (Dominique 2026-08-24): erst erstellen/
-                     planen, dann die Kaskade beobachten. --}}
-                <span class="mx-1 self-center h-4 w-px bg-white/15"></span>
-                <button type="button" @click="tab='worker'"
-                        :class="tab==='worker' ? 'bg-violet-500/25 text-white' : 'text-gray-300 hover:text-white'"
-                        class="px-3 py-1.5 rounded-t-md text-xs font-medium inline-flex items-center gap-1">Worker @if($laeuft)<span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>@endif</button>
+            {{-- Analyse + Skizzen (Spec-40-E0-Ideations-Einstieg) zurückgezogen (Dominique 2026-08-23):
+                 abgelöst durch Composer (geerdet) + Brief-Kaskaden. DishIdea/IdeenService bleibt intern.
+                 Gruppen: Erstellen · Ausgabe-Formen (Spec-42-Vollzug) · Fortschritt bewusst am Ende
+                 (Dominique 2026-08-24: erst erstellen, dann beobachten).
+                 Laptop: die Leiste scrollt waagerecht, statt in zwei Zeilen umzubrechen. --}}
+            <div class="flex items-center gap-1 overflow-x-auto -mb-px" role="tablist" aria-label="Bereiche der Planung">
+                @foreach($reiterGruppen as $gruppe)
+                    @if(! $loop->first)<span class="mx-1.5 h-5 w-px shrink-0 bg-[var(--fa-line-strong)]" aria-hidden="true"></span>@endif
+                    @foreach($gruppe as $reiterKey => $reiterLabel)
+                        <button type="button" role="tab" x-on:click="tab='{{ $reiterKey }}'"
+                                x-bind:aria-selected="tab==='{{ $reiterKey }}'"
+                                x-bind:class="tab==='{{ $reiterKey }}' ? '{{ $reiterAn }}' : '{{ $reiterAus }}'"
+                                class="{{ $reiterKnopf }}" data-planung-reiter="{{ $reiterKey }}">{{ $reiterLabel }}@if($reiterKey === 'worker' && $laeuft)<span class="w-2 h-2 rounded-full bg-[var(--fa-warn)] animate-pulse" title="läuft gerade"></span>@endif</button>
+                    @endforeach
+                @endforeach
             </div>
         </x-slot:tabs>
 
         @if($active)
             @if(($ownerKontext ?? null))
-                {{-- E1b (Spec 40): Owner-Kontext-Banner — macht den Einbahn-Sprung zum sichtbaren Round-Trip:
-                     WOFÜR wird hier geplant + Rückweg ins Ausgabe-Modul (Deep-Link auf die Ausgabe). --}}
-                <div class="mb-3 flex items-center justify-between gap-2 rounded-lg border border-violet-500/30 bg-violet-500/10 px-3 py-2">
-                    <p class="text-[11px] text-violet-200">
-                        @svg('heroicon-o-link', 'w-3.5 h-3.5 inline align-text-bottom')
-                        Planung für {{ $ownerKontext['typ_label'] }} „{{ $ownerKontext['name'] }}" — die hier erstellten Konzepte landen automatisch dort.
-                    </p>
-                    <a href="{{ route($ownerKontext['route'], $ownerKontext['route_param']) }}"
-                       class="shrink-0 inline-flex items-center gap-1 text-[11px] text-violet-300 hover:text-violet-100">
-                        @svg('heroicon-o-arrow-left', 'w-3.5 h-3.5') zurück zum {{ $ownerKontext['typ_label'] }}
-                    </a>
-                </div>
-            @endif
-            {{-- IMPORT — bestehende Rezeptur (Text/Web-Copy/Text-PDF) TREU übernehmen + GEERDET anlegen.
-                 Getrennt vom Generator (der veredelt): hier 1:1 extrahieren, dann am Resolver an GPs binden.
-                 Foto/Bild NICHT hier (Vision noch nicht in der Plattform-LLM) — Foto gibst du dem Assistenten im Chat. --}}
-            {{-- AUSGABE-FORMEN (Spec-42-Vollzug) — Kickoff-Tabs: aus einem Brief plant die Leitstelle die
-                 ganze Ausgabeform (owner-getaggte Voll-Kaskade), die Inhalte docken automatisch zurück.
-                 Foodbook + Speisekarte live; Speiseplan folgt (andere Struktur: Linien+Zyklus statt Gänge). --}}
-            {{-- Cockpit-Optik (Paket K, Rollout) für die fünf Ausgabe-Tabs (Foodbook/Speisekarte/Speiseplan/
-                 Angebot/Format): gleiche Bauart überall — Auswahl-Karte und Brief-Karte nebeneinander ab xl,
-                 Lesebreite + zentriert, Kopfzeile auf Button-Niveau mit Icon, rechts eine Status-Pille
-                 (gewähltes Ziel bzw. „neu aus Brief"). Kein Sticky: die Primäraktion sitzt in der zweiten
-                 Karte und ist ohne Scrollen erreichbar. text-slate-* → Grau-Tokens (die Karte ist weiss).
-                 Felder, Reihenfolge, Bindings, Diktat-Ziele und data-tab-*-Anker unverändert. --}}
-            <div wire:key="planung-tab-foodbook" x-show="tab==='foodbook'" x-cloak class="space-y-4 max-w-7xl mx-auto">
-                <div class="xl:grid xl:grid-cols-2 xl:gap-4">
-                {{-- Stage 2 (Dominique): ein BESTEHENDES Foodbook wählen → Gerüst planen → Kaskaden je Kapitel
-                     durchgehen. Oder leer lassen = neues Foodbook aus Brief. --}}
-                <x-foodalchemist::modal-section class="!mt-0" icon="heroicon-o-book-open" title="Foodbook planen">
+                {{-- E1b (Spec 40): Owner-Kontext: WOFÜR hier geplant wird + Rückweg ins Ausgabe-Modul. --}}
+                <x-fa::notice tone="info" class="mb-3">
+                    Planung für {{ $ownerKontext['typ_label'] }} „{{ $ownerKontext['name'] }}". Was hier entsteht, landet automatisch dort.
                     <x-slot:actions>
-                        <span class="{{ $pill }} {{ $fbOwnerId ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $fbOwnerId ? 'bestehendes Buch' : 'neu aus Brief' }}</span>
+                        <x-fa::button variant="ghost" size="sm" icon="heroicon-m-arrow-left" :href="route($ownerKontext['route'], $ownerKontext['route_param'])">Zurück zum {{ $ownerKontext['typ_label'] }}</x-fa::button>
                     </x-slot:actions>
-                    <label class="block text-[11px] text-gray-500 mb-1">Bestehendes Foodbook wählen</label>
-                    <select wire:model.live="fbOwnerId" class="{{ $input }} w-full" data-tab-fb-auswahl>
-                        <option value="">— neues Foodbook aus Brief —</option>
-                        @foreach($fbAuswahl as $fbo)<option value="{{ $fbo->id }}">{{ $fbo->label }}</option>@endforeach
-                    </select>
-                    <p class="text-[11px] text-gray-500 mt-2 max-w-2xl">
-                        Wählen: Gerüst planen + Kaskaden durchgehen (Buch-Ebene + Kapitel-Steuerung erscheinen unten).
-                        Leer: ein neues Foodbook aus einem Brief.
-                    </p>
-                </x-foodalchemist::modal-section>
-
-                <x-foodalchemist::modal-section class="!mt-0" icon="heroicon-o-pencil-square" :title="$fbOwnerId ? 'Gerüst aus Brief (füllt das gewählte Foodbook)' : 'Neues Foodbook aus Brief'">
-                    @if(trim((string) ($fbTitel ?? '')) !== '')
-                        <x-slot:actions>
-                            <span class="{{ $pill }} {{ $variantPill['primary'] }}">{{ \Illuminate\Support\Str::limit(trim($fbTitel), 32) }}</span>
-                        </x-slot:actions>
-                    @endif
-                    <p class="text-[11px] text-gray-500 mb-2 max-w-2xl">
-                        Struktur (Kapitel) + Inhalte entstehen hier in der Leitstelle und docken automatisch ins Foodbook (reine Ausgabe).
-                    </p>
-                    @unless($fbOwnerId)
-                        <input type="text" wire:model="fbTitel" class="{{ $input }} w-full mb-2" placeholder="Foodbook-Name (optional)" data-tab-fb-titel>
-                    @endunless
-                    <textarea wire:model="fbBrief" rows="4" class="{{ $input }} w-full" placeholder="Brief: Anlass, Gäste, Saison, Niveau, Budget …" data-tab-fb-brief></textarea>
-                    @include('foodalchemist::livewire.planung.partials.diktat', ['ziel' => 'fbBrief'])
-                    {{-- Leerer Anker für Spec 55 Nachtrag 2 (Entscheid 03): heute bleibt das schlichte Diktat
-                         darüber die EINZIGE Diktierfunktion dieses Tabs; das Agent-Panel braucht je Scope einen
-                         Regler-Satz, den die Ausgabe-Tabs nicht haben. Der Anker steht schon, damit der Umzug
-                         später nur ein Einhängen ist. --}}
-                    <div data-planung-agent-slot="foodbook"></div>
-                    @if($fbMeldung) <p class="text-[11px] text-rose-500 mt-2" data-tab-fb-meldung>{{ $fbMeldung }}</p> @endif
-                    <div class="mt-3">
-                        <button type="button" wire:click="foodbookAusBrief" wire:loading.attr="disabled" wire:target="foodbookAusBrief" class="{{ $btnPrimary }} disabled:opacity-40" data-tab-fb-erzeugen>
-                            <span wire:loading.remove wire:target="foodbookAusBrief">{{ $fbOwnerId ? 'Gerüst planen + Kaskade (KI)' : 'Foodbook erzeugen (KI)' }}</span>
-                            <span wire:loading wire:target="foodbookAusBrief">erzeuge …</span>
-                        </button>
+                </x-fa::notice>
+            @endif
+            {{-- AUSGABE-FORMEN (Spec-42-Vollzug): aus einem Brief plant die Leitstelle die ganze Ausgabeform
+                 (owner-getaggte Voll-Kaskade), die Inhalte landen automatisch dort. Gleiche Bauart überall:
+                 Auswahl links (schmaler), Brief rechts, ab xl nebeneinander. Jede Karte steckt in einem eigenen
+                 Wrapper, damit modal-section ohne Abstand-Überschreibung oben bündig sitzt. --}}
+            <div wire:key="planung-tab-foodbook" x-show="tab==='foodbook'" x-cloak class="flex flex-col gap-4 max-w-7xl mx-auto">
+                <div class="{{ $ausgabeRaster }}">
+                    {{-- Stage 2 (Dominique): ein BESTEHENDES Foodbook wählen → Gerüst planen → Kapitel einzeln
+                         erstellen. Oder leer lassen = neues Foodbook aus Brief. --}}
+                    <div>
+                        <x-foodalchemist::modal-section icon="heroicon-o-book-open" title="Foodbook wählen">
+                            <x-slot:actions>
+                                <x-fa::badge :tone="$fbOwnerId ? 'accent' : 'neutral'">{{ $fbOwnerId ? 'Bestehendes Foodbook' : 'Neu aus Brief' }}</x-fa::badge>
+                            </x-slot:actions>
+                            <x-fa::field label="Bestehendes Foodbook" hint="Gewählt: Gerüst planen und die Kapitel unten einzeln füllen. Leer: ein neues Foodbook aus dem Brief.">
+                                <x-fa::select wire:model.live="fbOwnerId" data-tab-fb-auswahl>
+                                    <option value="">Neues Foodbook aus Brief</option>
+                                    @foreach($fbAuswahl as $fbo)<option value="{{ $fbo->id }}">{{ $fbo->label }}</option>@endforeach
+                                </x-fa::select>
+                            </x-fa::field>
+                        </x-foodalchemist::modal-section>
                     </div>
-                </x-foodalchemist::modal-section>
-                </div>{{-- /Raster Auswahl | Brief --}}
+                    <div>
+                        <x-foodalchemist::modal-section icon="heroicon-o-pencil-square" :title="$fbOwnerId ? 'Gerüst aus dem Brief planen' : 'Neues Foodbook aus dem Brief'">
+                            @if(trim((string) ($fbTitel ?? '')) !== '')
+                                <x-slot:actions>
+                                    <x-fa::badge tone="accent">{{ \Illuminate\Support\Str::limit(trim($fbTitel), 32) }}</x-fa::badge>
+                                </x-slot:actions>
+                            @endif
+                            <div class="flex flex-col gap-3">
+                                <p class="{{ $hinweisText }}">Struktur (Kapitel) und Inhalte entstehen hier in der Leitstelle und landen automatisch im Foodbook.</p>
+                                @unless($fbOwnerId)
+                                    <x-fa::field label="Name des Foodbooks" optional>
+                                        <x-fa::input wire:model="fbTitel" placeholder="zum Beispiel Sommerfest Adler" data-tab-fb-titel />
+                                    </x-fa::field>
+                                @endunless
+                                <x-fa::field label="Brief">
+                                    <x-fa::textarea wire:model="fbBrief" rows="4" placeholder="Anlass, Gäste, Saison, Niveau, Budget …" data-tab-fb-brief />
+                                </x-fa::field>
+                                @include('foodalchemist::livewire.planung.partials.diktat', ['ziel' => 'fbBrief'])
+                                {{-- Leerer Anker für Spec 55 Nachtrag 2 (Entscheid 03): heute bleibt das schlichte Diktat
+                                     darüber die EINZIGE Diktierfunktion dieses Reiters. Der Anker steht schon, damit der
+                                     Umzug des Agent-Panels später nur ein Einhängen ist. --}}
+                                <div data-planung-agent-slot="foodbook"></div>
+                                @if($fbMeldung)<x-fa::signal tone="crit" data-tab-fb-meldung>{{ $fbMeldung }}</x-fa::signal>@endif
+                                <div class="flex justify-end">
+                                    <x-fa::button variant="primary" icon="heroicon-o-sparkles" wire:click="foodbookAusBrief" wire:loading.attr="disabled" wire:target="foodbookAusBrief" data-tab-fb-erzeugen>
+                                        <span wire:loading.remove wire:target="foodbookAusBrief">{{ $fbOwnerId ? 'Gerüst planen und füllen' : 'Foodbook erstellen' }}</span>
+                                        <span wire:loading wire:target="foodbookAusBrief">Wird erstellt …</span>
+                                    </x-fa::button>
+                                </div>
+                            </div>
+                        </x-foodalchemist::modal-section>
+                    </div>
+                </div>
 
-                {{-- Buch-Ebene + Kapitel-Steuerung (die aus dem Foodbook-Modul verschobene Planung): sobald ein
-                     Foodbook GEWÄHLT ist (fbOwnerId) ODER die aktive Session ein Foodbook ist. Die Rails brauchen
-                     nur die foodbook-id; „Kapitel erzeugen" verlangt ein Gerüst (sonst Hinweis in der Rail). --}}
+                {{-- Buch-Ebene + Kapitel (aus dem Foodbook-Modul verschobene Planung): sobald ein Foodbook
+                     GEWÄHLT ist (fbOwnerId) ODER die aktive Session ein Foodbook ist. Die Rails brauchen nur
+                     die foodbook-id; „Kapitel erstellen" verlangt ein Gerüst (sonst Hinweis in der Rail). --}}
                 @php
                     $fbAktiv = $fbOwnerId;
                     if ($fbAktiv === null && ($ownerKontext['owner_type'] ?? null) === 'foodbook') {
                         $fbAktiv = (int) $ownerKontext['owner_id'];
                     }
                 @endphp
-                {{-- Die beiden Rail-Karten bleiben volle Breite: sie hosten eigene Livewire-Komponenten
-                     (fremde Fläche, kein Eingriff) und vertragen die halbe Spalte nicht. --}}
+                {{-- Die beiden Rail-Karten bleiben volle Breite: sie hosten eigene Livewire-Komponenten. --}}
                 @if($fbAktiv !== null)
-                    <x-foodalchemist::modal-section icon="heroicon-o-adjustments-horizontal" title="Buch-Ebene (Leitplanken · Briefing · Leitidee)">
+                    <x-foodalchemist::modal-section icon="heroicon-o-adjustments-horizontal" title="Vorgaben für das ganze Foodbook">
                         <livewire:foodalchemist.planung.foodbook-kontext-rail
                             :foodbook-id="$fbAktiv"
                             :key="'fbkontext-'.$fbAktiv" />
                     </x-foodalchemist::modal-section>
-                    <x-foodalchemist::modal-section icon="heroicon-o-list-bullet" title="Kapitel-Steuerung">
+                    <x-foodalchemist::modal-section icon="heroicon-o-list-bullet" title="Kapitel">
                         <livewire:foodalchemist.planung.kapitel-rail
                             :foodbook-id="$fbAktiv"
                             :session-id="$sessionId"
@@ -579,558 +589,584 @@
                 @endif
             </div>
 
-            <div wire:key="planung-tab-speisekarte" x-show="tab==='speisekarte'" x-cloak class="space-y-4 max-w-7xl mx-auto">
-                <div class="xl:grid xl:grid-cols-2 xl:gap-4">
-                {{-- Stage 2 (SK/SP-Parität): bestehende Speisekarte wählen ODER neu aus Brief. --}}
-                <x-foodalchemist::modal-section class="!mt-0" icon="heroicon-o-clipboard-document-list" title="Speisekarte planen">
-                    <x-slot:actions>
-                        <span class="{{ $pill }} {{ $skOwnerId ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $skOwnerId ? 'bestehende Karte' : 'neu aus Brief' }}</span>
-                    </x-slot:actions>
-                    <label class="block text-[11px] text-gray-500 mb-1">Bestehende Speisekarte wählen</label>
-                    <select wire:model.live="skOwnerId" class="{{ $input }} w-full" data-tab-sk-auswahl>
-                        <option value="">— neue Speisekarte aus Brief —</option>
-                        @foreach($skAuswahl as $sko)<option value="{{ $sko->id }}">{{ $sko->name }}</option>@endforeach
-                    </select>
-                    <p class="text-[11px] text-gray-500 mt-2 max-w-2xl">
-                        Wählen: Struktur (Rubriken) + Inhalte werden für die gewählte Karte geplant. Leer: eine neue Speisekarte.
-                    </p>
-                </x-foodalchemist::modal-section>
-
-                <x-foodalchemist::modal-section class="!mt-0" icon="heroicon-o-pencil-square" :title="$skOwnerId ? 'Aus Brief planen (füllt die gewählte Speisekarte)' : 'Neue Speisekarte aus Brief'">
-                    @if(trim((string) ($skTitel ?? '')) !== '')
-                        <x-slot:actions>
-                            <span class="{{ $pill }} {{ $variantPill['primary'] }}">{{ \Illuminate\Support\Str::limit(trim($skTitel), 32) }}</span>
-                        </x-slot:actions>
-                    @endif
-                    <p class="text-[11px] text-gray-500 mb-2 max-w-2xl">
-                        Je Gang/Kategorie entsteht eine Rubrik, die Inhalte docken automatisch als Positionen in die Karte.
-                    </p>
-                    @unless($skOwnerId)
-                        <input type="text" wire:model="skTitel" class="{{ $input }} w-full mb-2" placeholder="Speisekarten-Name (optional)" data-tab-sk-titel>
-                    @endunless
-                    <textarea wire:model="skBrief" rows="4" class="{{ $input }} w-full" placeholder="Brief: Anlass, Küchenstil, Saison, Niveau, Preis-Korridor …" data-tab-sk-brief></textarea>
-                    @include('foodalchemist::livewire.planung.partials.diktat', ['ziel' => 'skBrief'])
-                    <div data-planung-agent-slot="speisekarte"></div>
-                    @if($skMeldung) <p class="text-[11px] text-rose-500 mt-2" data-tab-sk-meldung>{{ $skMeldung }}</p> @endif
-                    <div class="mt-3">
-                        <button type="button" wire:click="speisekarteAusBrief" wire:loading.attr="disabled" wire:target="speisekarteAusBrief" class="{{ $btnPrimary }} disabled:opacity-40" data-tab-sk-erzeugen>
-                            <span wire:loading.remove wire:target="speisekarteAusBrief">{{ $skOwnerId ? 'Planen + Kaskade (KI)' : 'Speisekarte erzeugen (KI)' }}</span>
-                            <span wire:loading wire:target="speisekarteAusBrief">erzeuge …</span>
-                        </button>
+            <div wire:key="planung-tab-speisekarte" x-show="tab==='speisekarte'" x-cloak class="flex flex-col gap-4 max-w-7xl mx-auto">
+                <div class="{{ $ausgabeRaster }}">
+                    {{-- Stage 2 (Parität Speisekarte/Speiseplan): bestehende Speisekarte wählen ODER neu aus Brief. --}}
+                    <div>
+                        <x-foodalchemist::modal-section icon="heroicon-o-clipboard-document-list" title="Speisekarte wählen">
+                            <x-slot:actions>
+                                <x-fa::badge :tone="$skOwnerId ? 'accent' : 'neutral'">{{ $skOwnerId ? 'Bestehende Karte' : 'Neu aus Brief' }}</x-fa::badge>
+                            </x-slot:actions>
+                            <x-fa::field label="Bestehende Speisekarte" hint="Gewählt: Rubriken und Inhalte werden für diese Karte geplant. Leer: eine neue Speisekarte.">
+                                <x-fa::select wire:model.live="skOwnerId" data-tab-sk-auswahl>
+                                    <option value="">Neue Speisekarte aus Brief</option>
+                                    @foreach($skAuswahl as $sko)<option value="{{ $sko->id }}">{{ $sko->name }}</option>@endforeach
+                                </x-fa::select>
+                            </x-fa::field>
+                        </x-foodalchemist::modal-section>
                     </div>
-                </x-foodalchemist::modal-section>
-                </div>{{-- /Raster Auswahl | Brief --}}
+                    <div>
+                        <x-foodalchemist::modal-section icon="heroicon-o-pencil-square" :title="$skOwnerId ? 'Gewählte Speisekarte aus dem Brief füllen' : 'Neue Speisekarte aus dem Brief'">
+                            @if(trim((string) ($skTitel ?? '')) !== '')
+                                <x-slot:actions>
+                                    <x-fa::badge tone="accent">{{ \Illuminate\Support\Str::limit(trim($skTitel), 32) }}</x-fa::badge>
+                                </x-slot:actions>
+                            @endif
+                            <div class="flex flex-col gap-3">
+                                <p class="{{ $hinweisText }}">Je Gang oder Kategorie entsteht eine Rubrik, die Inhalte landen automatisch als Positionen in der Karte.</p>
+                                @unless($skOwnerId)
+                                    <x-fa::field label="Name der Speisekarte" optional>
+                                        <x-fa::input wire:model="skTitel" placeholder="zum Beispiel Herbstkarte" data-tab-sk-titel />
+                                    </x-fa::field>
+                                @endunless
+                                <x-fa::field label="Brief">
+                                    <x-fa::textarea wire:model="skBrief" rows="4" placeholder="Anlass, Küchenstil, Saison, Niveau, Preisrahmen …" data-tab-sk-brief />
+                                </x-fa::field>
+                                @include('foodalchemist::livewire.planung.partials.diktat', ['ziel' => 'skBrief'])
+                                <div data-planung-agent-slot="speisekarte"></div>
+                                @if($skMeldung)<x-fa::signal tone="crit" data-tab-sk-meldung>{{ $skMeldung }}</x-fa::signal>@endif
+                                <div class="flex justify-end">
+                                    <x-fa::button variant="primary" icon="heroicon-o-sparkles" wire:click="speisekarteAusBrief" wire:loading.attr="disabled" wire:target="speisekarteAusBrief" data-tab-sk-erzeugen>
+                                        <span wire:loading.remove wire:target="speisekarteAusBrief">{{ $skOwnerId ? 'Speisekarte planen und füllen' : 'Speisekarte erstellen' }}</span>
+                                        <span wire:loading wire:target="speisekarteAusBrief">Wird erstellt …</span>
+                                    </x-fa::button>
+                                </div>
+                            </div>
+                        </x-foodalchemist::modal-section>
+                    </div>
+                </div>
             </div>
 
-            <div wire:key="planung-tab-speiseplan" x-show="tab==='speiseplan'" x-cloak class="space-y-4 max-w-7xl mx-auto">
-                <div class="xl:grid xl:grid-cols-2 xl:gap-4">
-                {{-- Stage 2 (SK/SP-Parität): bestehenden Speiseplan wählen ODER neu aus Brief. --}}
-                <x-foodalchemist::modal-section class="!mt-0" icon="heroicon-o-calendar-days" title="Speiseplan planen">
-                    <x-slot:actions>
-                        <span class="{{ $pill }} {{ $spOwnerId ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $spOwnerId ? 'bestehender Plan' : 'neu aus Brief' }}</span>
-                    </x-slot:actions>
-                    <label class="block text-[11px] text-gray-500 mb-1">Bestehenden Speiseplan wählen</label>
-                    <select wire:model.live="spOwnerId" class="{{ $input }} w-full" data-tab-sp-auswahl>
-                        <option value="">— neuer Speiseplan aus Brief —</option>
-                        @foreach($spAuswahl as $spo)<option value="{{ $spo->id }}">{{ $spo->name }}</option>@endforeach
-                    </select>
-                    <p class="text-[11px] text-gray-500 mt-2 max-w-2xl">
-                        Wählen: die Zellen (Tag × Mahlzeit × Linie) werden für den gewählten Plan gefüllt. Leer: ein neuer Speiseplan.
-                    </p>
-                </x-foodalchemist::modal-section>
-
-                <x-foodalchemist::modal-section class="!mt-0" icon="heroicon-o-pencil-square" :title="$spOwnerId ? 'Aus Brief planen (füllt den gewählten Speiseplan)' : 'Neuer Speiseplan aus Brief'">
-                    @if(trim((string) ($spTitel ?? '')) !== '')
-                        <x-slot:actions>
-                            <span class="{{ $pill }} {{ $variantPill['primary'] }}">{{ \Illuminate\Support\Str::limit(trim($spTitel), 32) }}</span>
-                        </x-slot:actions>
-                    @endif
-                    <p class="text-[11px] text-gray-500 mb-2 max-w-2xl">
-                        @unless($spOwnerId)Menü-Linien (Menü 1 / Vegetarisch / Dessert) + Zyklus entstehen als GV-Standard (im Speiseplan-Editor frei änderbar); @endunless
-                        die Kaskade füllt jede Zelle (Tag × Mahlzeit × Linie) brief-gesteuert.
-                    </p>
-                    @unless($spOwnerId)
-                        <input type="text" wire:model="spTitel" class="{{ $input }} w-full mb-2" placeholder="Speiseplan-Name (optional)" data-tab-sp-titel>
-                    @endunless
-                    <textarea wire:model="spBrief" rows="4" class="{{ $input }} w-full" placeholder="Brief: Anlass, Saison, Küchenstil, Zyklus (z. B. „4 Wochen"), Diät-Fokus …" data-tab-sp-brief></textarea>
-                    @include('foodalchemist::livewire.planung.partials.diktat', ['ziel' => 'spBrief'])
-                    <div data-planung-agent-slot="speiseplan"></div>
-                    @if($spMeldung) <p class="text-[11px] text-rose-500 mt-2" data-tab-sp-meldung>{{ $spMeldung }}</p> @endif
-                    <div class="mt-3">
-                        <button type="button" wire:click="speiseplanAusBrief" wire:loading.attr="disabled" wire:target="speiseplanAusBrief" class="{{ $btnPrimary }} disabled:opacity-40" data-tab-sp-erzeugen>
-                            <span wire:loading.remove wire:target="speiseplanAusBrief">{{ $spOwnerId ? 'Planen + Kaskade (KI)' : 'Speiseplan erzeugen (KI)' }}</span>
-                            <span wire:loading wire:target="speiseplanAusBrief">erzeuge …</span>
-                        </button>
+            <div wire:key="planung-tab-speiseplan" x-show="tab==='speiseplan'" x-cloak class="flex flex-col gap-4 max-w-7xl mx-auto">
+                <div class="{{ $ausgabeRaster }}">
+                    {{-- Stage 2 (Parität Speisekarte/Speiseplan): bestehenden Speiseplan wählen ODER neu aus Brief. --}}
+                    <div>
+                        <x-foodalchemist::modal-section icon="heroicon-o-calendar-days" title="Speiseplan wählen">
+                            <x-slot:actions>
+                                <x-fa::badge :tone="$spOwnerId ? 'accent' : 'neutral'">{{ $spOwnerId ? 'Bestehender Plan' : 'Neu aus Brief' }}</x-fa::badge>
+                            </x-slot:actions>
+                            <x-fa::field label="Bestehender Speiseplan" hint="Gewählt: die Zellen (Tag, Mahlzeit, Linie) werden für diesen Plan gefüllt. Leer: ein neuer Speiseplan.">
+                                <x-fa::select wire:model.live="spOwnerId" data-tab-sp-auswahl>
+                                    <option value="">Neuer Speiseplan aus Brief</option>
+                                    @foreach($spAuswahl as $spo)<option value="{{ $spo->id }}">{{ $spo->name }}</option>@endforeach
+                                </x-fa::select>
+                            </x-fa::field>
+                        </x-foodalchemist::modal-section>
                     </div>
-                </x-foodalchemist::modal-section>
-                </div>{{-- /Raster Auswahl | Brief --}}
+                    <div>
+                        <x-foodalchemist::modal-section icon="heroicon-o-pencil-square" :title="$spOwnerId ? 'Gewählten Speiseplan aus dem Brief füllen' : 'Neuer Speiseplan aus dem Brief'">
+                            @if(trim((string) ($spTitel ?? '')) !== '')
+                                <x-slot:actions>
+                                    <x-fa::badge tone="accent">{{ \Illuminate\Support\Str::limit(trim($spTitel), 32) }}</x-fa::badge>
+                                </x-slot:actions>
+                            @endif
+                            <div class="flex flex-col gap-3">
+                                <p class="{{ $hinweisText }}">
+                                    @unless($spOwnerId)Menülinien (Menü 1, Vegetarisch, Dessert) und Zyklus entstehen als Standard für die Gemeinschaftsverpflegung und bleiben im Speiseplan-Editor frei änderbar. @endunless
+                                    Jede Zelle (Tag, Mahlzeit, Linie) wird nach dem Brief gefüllt.
+                                </p>
+                                @unless($spOwnerId)
+                                    <x-fa::field label="Name des Speiseplans" optional>
+                                        <x-fa::input wire:model="spTitel" placeholder="zum Beispiel Kantine Herbst" data-tab-sp-titel />
+                                    </x-fa::field>
+                                @endunless
+                                <x-fa::field label="Brief">
+                                    <x-fa::textarea wire:model="spBrief" rows="4" placeholder="Anlass, Saison, Küchenstil, Zyklus (zum Beispiel 4 Wochen), Ernährungsschwerpunkt …" data-tab-sp-brief />
+                                </x-fa::field>
+                                @include('foodalchemist::livewire.planung.partials.diktat', ['ziel' => 'spBrief'])
+                                <div data-planung-agent-slot="speiseplan"></div>
+                                @if($spMeldung)<x-fa::signal tone="crit" data-tab-sp-meldung>{{ $spMeldung }}</x-fa::signal>@endif
+                                <div class="flex justify-end">
+                                    <x-fa::button variant="primary" icon="heroicon-o-sparkles" wire:click="speiseplanAusBrief" wire:loading.attr="disabled" wire:target="speiseplanAusBrief" data-tab-sp-erzeugen>
+                                        <span wire:loading.remove wire:target="speiseplanAusBrief">{{ $spOwnerId ? 'Speiseplan füllen' : 'Speiseplan erstellen' }}</span>
+                                        <span wire:loading wire:target="speiseplanAusBrief">Wird erstellt …</span>
+                                    </x-fa::button>
+                                </div>
+                            </div>
+                        </x-foodalchemist::modal-section>
+                    </div>
+                </div>
             </div>
 
-            {{-- Angebot als Kickoff-Tab: 1 Concept je Slot → docken ans Angebot (owner_type=offer). --}}
-            <div wire:key="planung-tab-angebot" x-show="tab==='angebot'" x-cloak class="space-y-4 max-w-7xl mx-auto">
-                <div class="xl:grid xl:grid-cols-2 xl:gap-4">
-                <x-foodalchemist::modal-section class="!mt-0" icon="heroicon-o-document-currency-euro" title="Angebot planen">
-                    <x-slot:actions>
-                        <span class="{{ $pill }} {{ $offerOwnerId ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $offerOwnerId ? 'bestehendes Angebot' : 'neu aus Brief' }}</span>
-                    </x-slot:actions>
-                    <label class="block text-[11px] text-gray-500 mb-1">Bestehendes Angebot wählen</label>
-                    <select wire:model.live="offerOwnerId" class="{{ $input }} w-full" data-tab-offer-auswahl>
-                        <option value="">— neues Angebot aus Brief —</option>
-                        @foreach($offerAuswahl as $ao)<option value="{{ $ao->id }}">{{ $ao->name }}</option>@endforeach
-                    </select>
-                    <p class="text-[11px] text-gray-500 mt-2 max-w-2xl">Wählen: die Positionen entstehen für das gewählte Angebot. Leer: ein neues Angebot.</p>
-                </x-foodalchemist::modal-section>
-                <x-foodalchemist::modal-section class="!mt-0" icon="heroicon-o-pencil-square" :title="$offerOwnerId ? 'Aus Brief planen (füllt das gewählte Angebot)' : 'Neues Angebot aus Brief'">
-                    @if(trim((string) ($offerTitel ?? '')) !== '')
-                        <x-slot:actions>
-                            <span class="{{ $pill }} {{ $variantPill['primary'] }}">{{ \Illuminate\Support\Str::limit(trim($offerTitel), 32) }}</span>
-                        </x-slot:actions>
-                    @endif
-                    <p class="text-[11px] text-gray-500 mb-2 max-w-2xl">Je Slot ein Konzept; die Konzepte docken automatisch ans Angebot (reine Ausgabe).</p>
-                    @unless($offerOwnerId)
-                        <input type="text" wire:model="offerTitel" class="{{ $input }} w-full mb-2" placeholder="Angebots-Name (optional)" data-tab-offer-titel>
-                    @endunless
-                    <textarea wire:model="offerBrief" rows="4" class="{{ $input }} w-full" placeholder="Brief: Anlass, Gäste/Pax, Saison, Niveau, Budget, Servierform …" data-tab-offer-brief></textarea>
-                    @include('foodalchemist::livewire.planung.partials.diktat', ['ziel' => 'offerBrief'])
-                    <div data-planung-agent-slot="angebot"></div>
-                    @if($offerMeldung) <p class="text-[11px] text-rose-500 mt-2" data-tab-offer-meldung>{{ $offerMeldung }}</p> @endif
-                    <div class="mt-3">
-                        <button type="button" wire:click="angebotAusBrief" wire:loading.attr="disabled" wire:target="angebotAusBrief" class="{{ $btnPrimary }} disabled:opacity-40" data-tab-offer-erzeugen>
-                            <span wire:loading.remove wire:target="angebotAusBrief">{{ $offerOwnerId ? 'Planen + Kaskade (KI)' : 'Angebot erzeugen (KI)' }}</span>
-                            <span wire:loading wire:target="angebotAusBrief">erzeuge …</span>
-                        </button>
+            {{-- Angebot als Ausgabe-Reiter: 1 Concept je Position → landen im Angebot (owner_type=offer). --}}
+            <div wire:key="planung-tab-angebot" x-show="tab==='angebot'" x-cloak class="flex flex-col gap-4 max-w-7xl mx-auto">
+                <div class="{{ $ausgabeRaster }}">
+                    <div>
+                        <x-foodalchemist::modal-section icon="heroicon-o-document-currency-euro" title="Angebot wählen">
+                            <x-slot:actions>
+                                <x-fa::badge :tone="$offerOwnerId ? 'accent' : 'neutral'">{{ $offerOwnerId ? 'Bestehendes Angebot' : 'Neu aus Brief' }}</x-fa::badge>
+                            </x-slot:actions>
+                            <x-fa::field label="Bestehendes Angebot" hint="Gewählt: die Positionen entstehen für dieses Angebot. Leer: ein neues Angebot.">
+                                <x-fa::select wire:model.live="offerOwnerId" data-tab-offer-auswahl>
+                                    <option value="">Neues Angebot aus Brief</option>
+                                    @foreach($offerAuswahl as $ao)<option value="{{ $ao->id }}">{{ $ao->name }}</option>@endforeach
+                                </x-fa::select>
+                            </x-fa::field>
+                        </x-foodalchemist::modal-section>
                     </div>
-                </x-foodalchemist::modal-section>
-                </div>{{-- /Raster Auswahl | Brief --}}
+                    <div>
+                        <x-foodalchemist::modal-section icon="heroicon-o-pencil-square" :title="$offerOwnerId ? 'Gewähltes Angebot aus dem Brief füllen' : 'Neues Angebot aus dem Brief'">
+                            @if(trim((string) ($offerTitel ?? '')) !== '')
+                                <x-slot:actions>
+                                    <x-fa::badge tone="accent">{{ \Illuminate\Support\Str::limit(trim($offerTitel), 32) }}</x-fa::badge>
+                                </x-slot:actions>
+                            @endif
+                            <div class="flex flex-col gap-3">
+                                <p class="{{ $hinweisText }}">Je Position ein Concept, die Concepts landen automatisch im Angebot.</p>
+                                @unless($offerOwnerId)
+                                    <x-fa::field label="Name des Angebots" optional>
+                                        <x-fa::input wire:model="offerTitel" placeholder="zum Beispiel Sommerfest Firma Adler" data-tab-offer-titel />
+                                    </x-fa::field>
+                                @endunless
+                                <x-fa::field label="Brief">
+                                    <x-fa::textarea wire:model="offerBrief" rows="4" placeholder="Anlass, Personen, Saison, Niveau, Budget, Servierform …" data-tab-offer-brief />
+                                </x-fa::field>
+                                @include('foodalchemist::livewire.planung.partials.diktat', ['ziel' => 'offerBrief'])
+                                <div data-planung-agent-slot="angebot"></div>
+                                @if($offerMeldung)<x-fa::signal tone="crit" data-tab-offer-meldung>{{ $offerMeldung }}</x-fa::signal>@endif
+                                <div class="flex justify-end">
+                                    <x-fa::button variant="primary" icon="heroicon-o-sparkles" wire:click="angebotAusBrief" wire:loading.attr="disabled" wire:target="angebotAusBrief" data-tab-offer-erzeugen>
+                                        <span wire:loading.remove wire:target="angebotAusBrief">{{ $offerOwnerId ? 'Angebot füllen' : 'Angebot erstellen' }}</span>
+                                        <span wire:loading wire:target="angebotAusBrief">Wird erstellt …</span>
+                                    </x-fa::button>
+                                </div>
+                            </div>
+                        </x-foodalchemist::modal-section>
+                    </div>
+                </div>
             </div>
 
-            {{-- Format als Kickoff-Tab: gebrandetes Foodkonzept — 1 Concept je Slot → docken ans Format (owner_type=format). --}}
-            <div wire:key="planung-tab-format" x-show="tab==='format'" x-cloak class="space-y-4 max-w-7xl mx-auto">
-                <div class="xl:grid xl:grid-cols-2 xl:gap-4">
-                <x-foodalchemist::modal-section class="!mt-0" icon="heroicon-o-rectangle-stack" title="Format planen">
-                    <x-slot:actions>
-                        <span class="{{ $pill }} {{ $fmtOwnerId ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $fmtOwnerId ? 'bestehendes Format' : 'neu aus Brief' }}</span>
-                    </x-slot:actions>
-                    <label class="block text-[11px] text-gray-500 mb-1">Bestehendes Format wählen</label>
-                    <select wire:model.live="fmtOwnerId" class="{{ $input }} w-full" data-tab-fmt-auswahl>
-                        <option value="">— neues Format aus Brief —</option>
-                        @foreach($fmtAuswahl as $fo)<option value="{{ $fo->id }}">{{ $fo->name }}</option>@endforeach
-                    </select>
-                    <p class="text-[11px] text-gray-500 mt-2 max-w-2xl">Wählen: die Konzepte entstehen für das gewählte Format. Leer: ein neues, gebrandetes Format (Name/Claim/Story aus dem Brief).</p>
-                </x-foodalchemist::modal-section>
-                <x-foodalchemist::modal-section class="!mt-0" icon="heroicon-o-pencil-square" :title="$fmtOwnerId ? 'Aus Brief planen (füllt das gewählte Format)' : 'Neues Format aus Brief'">
-                    @if(trim((string) ($fmtTitel ?? '')) !== '')
-                        <x-slot:actions>
-                            <span class="{{ $pill }} {{ $variantPill['primary'] }}">{{ \Illuminate\Support\Str::limit(trim($fmtTitel), 32) }}</span>
-                        </x-slot:actions>
-                    @endif
-                    <p class="text-[11px] text-gray-500 mb-2 max-w-2xl">Marken-Identität + eigenständige Konzepte je Slot entstehen hier und docken automatisch ins Format.</p>
-                    @unless($fmtOwnerId)
-                        <input type="text" wire:model="fmtTitel" class="{{ $input }} w-full mb-2" placeholder="Format-Name (optional)" data-tab-fmt-titel>
-                    @endunless
-                    <textarea wire:model="fmtBrief" rows="4" class="{{ $input }} w-full" placeholder="Brief: Marke, Anlass, Ausrichtung, Zielgruppe, Niveau, Stationen/Gänge …" data-tab-fmt-brief></textarea>
-                    @include('foodalchemist::livewire.planung.partials.diktat', ['ziel' => 'fmtBrief'])
-                    <div data-planung-agent-slot="format"></div>
-                    @if($fmtMeldung) <p class="text-[11px] text-rose-500 mt-2" data-tab-fmt-meldung>{{ $fmtMeldung }}</p> @endif
-                    <div class="mt-3">
-                        <button type="button" wire:click="formatAusBrief" wire:loading.attr="disabled" wire:target="formatAusBrief" class="{{ $btnPrimary }} disabled:opacity-40" data-tab-fmt-erzeugen>
-                            <span wire:loading.remove wire:target="formatAusBrief">{{ $fmtOwnerId ? 'Planen + Kaskade (KI)' : 'Format erzeugen (KI)' }}</span>
-                            <span wire:loading wire:target="formatAusBrief">erzeuge …</span>
-                        </button>
+            {{-- Format als Ausgabe-Reiter: gebrandetes Foodkonzept, 1 Concept je Position → landen im Format (owner_type=format). --}}
+            <div wire:key="planung-tab-format" x-show="tab==='format'" x-cloak class="flex flex-col gap-4 max-w-7xl mx-auto">
+                <div class="{{ $ausgabeRaster }}">
+                    <div>
+                        <x-foodalchemist::modal-section icon="heroicon-o-rectangle-stack" title="Format wählen">
+                            <x-slot:actions>
+                                <x-fa::badge :tone="$fmtOwnerId ? 'accent' : 'neutral'">{{ $fmtOwnerId ? 'Bestehendes Format' : 'Neu aus Brief' }}</x-fa::badge>
+                            </x-slot:actions>
+                            <x-fa::field label="Bestehendes Format" hint="Gewählt: die Concepts entstehen für dieses Format. Leer: ein neues, gebrandetes Format mit Name, Claim und Geschichte aus dem Brief.">
+                                <x-fa::select wire:model.live="fmtOwnerId" data-tab-fmt-auswahl>
+                                    <option value="">Neues Format aus Brief</option>
+                                    @foreach($fmtAuswahl as $fo)<option value="{{ $fo->id }}">{{ $fo->name }}</option>@endforeach
+                                </x-fa::select>
+                            </x-fa::field>
+                        </x-foodalchemist::modal-section>
                     </div>
-                </x-foodalchemist::modal-section>
-                </div>{{-- /Raster Auswahl | Brief --}}
+                    <div>
+                        <x-foodalchemist::modal-section icon="heroicon-o-pencil-square" :title="$fmtOwnerId ? 'Gewähltes Format aus dem Brief füllen' : 'Neues Format aus dem Brief'">
+                            @if(trim((string) ($fmtTitel ?? '')) !== '')
+                                <x-slot:actions>
+                                    <x-fa::badge tone="accent">{{ \Illuminate\Support\Str::limit(trim($fmtTitel), 32) }}</x-fa::badge>
+                                </x-slot:actions>
+                            @endif
+                            <div class="flex flex-col gap-3">
+                                <p class="{{ $hinweisText }}">Marken-Identität und eigenständige Concepts je Position entstehen hier und landen automatisch im Format.</p>
+                                @unless($fmtOwnerId)
+                                    <x-fa::field label="Name des Formats" optional>
+                                        <x-fa::input wire:model="fmtTitel" placeholder="zum Beispiel Streetfood Markt" data-tab-fmt-titel />
+                                    </x-fa::field>
+                                @endunless
+                                <x-fa::field label="Brief">
+                                    <x-fa::textarea wire:model="fmtBrief" rows="4" placeholder="Marke, Anlass, Ausrichtung, Zielgruppe, Niveau, Stationen oder Gänge …" data-tab-fmt-brief />
+                                </x-fa::field>
+                                @include('foodalchemist::livewire.planung.partials.diktat', ['ziel' => 'fmtBrief'])
+                                <div data-planung-agent-slot="format"></div>
+                                @if($fmtMeldung)<x-fa::signal tone="crit" data-tab-fmt-meldung>{{ $fmtMeldung }}</x-fa::signal>@endif
+                                <div class="flex justify-end">
+                                    <x-fa::button variant="primary" icon="heroicon-o-sparkles" wire:click="formatAusBrief" wire:loading.attr="disabled" wire:target="formatAusBrief" data-tab-fmt-erzeugen>
+                                        <span wire:loading.remove wire:target="formatAusBrief">{{ $fmtOwnerId ? 'Format füllen' : 'Format erstellen' }}</span>
+                                        <span wire:loading wire:target="formatAusBrief">Wird erstellt …</span>
+                                    </x-fa::button>
+                                </div>
+                            </div>
+                        </x-foodalchemist::modal-section>
+                    </div>
+                </div>
             </div>
 
-            {{-- Cockpit-Optik (Paket K, Rollout): Lesebreite + zentriert. `pb-28` nur im Vorschau-Schritt —
-                 dort hängt die Anlegen-Leiste sticky am unteren Rand und würde sonst die letzte Zeile
-                 überdecken; Schritt 1 und 3 sind kurz und brauchen keinen Reservierungs-Abstand.
-                 Farben: die text-slate-*-Reste stammen aus der Zeit vor dem Karten-Umbau (Text lag direkt
-                 auf dem dunklen Canvas). In der weissen Karte (sectionCard = bg-white/90) sind sie zu
-                 blass bis unsichtbar → auf die Pilot-Tokens gezogen. Felder/Bindings unverändert. --}}
-            <div wire:key="planung-tab-import" x-show="tab==='import'" class="space-y-4 max-w-7xl mx-auto @if($importStep === 'vorschau') pb-28 @endif">
+            {{-- IMPORT: bestehende Rezeptur (Text, Web-Kopie, Text-PDF) TREU übernehmen und mit Grundprodukten
+                 verknüpft anlegen. Getrennt vom Generator (der veredelt): hier 1:1 übernehmen. Foto/Bild NICHT hier
+                 (Vision noch nicht in der Plattform-LLM). Schritt 2 hat eine klebende Anlegen-Leiste (eine Zeile). --}}
+            <div wire:key="planung-tab-import" x-show="tab==='import'" class="flex flex-col gap-4 max-w-7xl mx-auto">
                 @if($importStep === 'eingabe')
-                    <x-foodalchemist::modal-section icon="heroicon-o-arrow-down-tray" title="Rezeptur importieren">
+                    <x-foodalchemist::modal-section icon="heroicon-o-arrow-down-tray" title="Rezept importieren">
                         <x-slot:actions>
-                            <span class="{{ $pill }} {{ $variantPill['secondary'] }}">Schritt 1 von 3</span>
+                            <x-fa::badge>Schritt 1 von 3</x-fa::badge>
                         </x-slot:actions>
-                        <p class="text-[11px] text-gray-500 mb-2 max-w-2xl">
-                            Bestehendes Rezept einfügen oder als Text-PDF hochladen — wird TREU übernommen
-                            (nichts erfunden) und im System <strong>geerdet</strong> (Zutaten an Grundprodukte
-                            gebunden). Verschachtelte Rezepte (Gericht mit Sauce/Püree) werden als verknüpfte
-                            Sub-Rezepte angelegt.
-                        </p>
-                        <div class="flex items-center gap-2 mb-2">
-                            <label class="text-[11px] text-gray-500">Anlegen als</label>
-                            <select wire:model="importTyp" class="{{ $input }} sm:w-48">
-                                <option value="basisrezept">Basisrezept</option>
-                                <option value="gericht">Gericht (Verkauf)</option>
-                            </select>
-                            <span class="text-[10px] text-gray-500">(Vorschlag wird nach dem Lesen gesetzt)</span>
+                        <div class="flex flex-col gap-4">
+                            <p class="{{ $hinweisText }} max-w-2xl">
+                                Bestehendes Rezept einfügen oder als Text-PDF hochladen. Es wird wörtlich übernommen, nichts
+                                wird erfunden, und die Zutaten werden mit den Grundprodukten verknüpft. Verschachtelte Rezepte
+                                (Gericht mit Sauce oder Püree) werden als verknüpfte Unterrezepte angelegt.
+                            </p>
+                            <x-fa::field label="Anlegen als" hint="Nach dem Lesen wird ein Vorschlag gesetzt, deine Wahl hat Vorrang.">
+                                <x-fa::choice name="importTyp" :live="false" id-prefix="import-eingabe" :options="['basisrezept' => 'Basisrezept', 'gericht' => 'Gericht für den Verkauf']" />
+                            </x-fa::field>
+                            <x-fa::field label="Rezepttext">
+                                <x-fa::textarea wire:model="importText" rows="10"
+                                    placeholder="Rezepttext hier einfügen, mit Zutaten und Zubereitung. Abschnitte wie »Für die Sauce: …« werden als Komponenten erkannt." />
+                            </x-fa::field>
+                            <x-fa::field label="Oder Text-PDF hochladen" error="importPdf">
+                                <div class="flex flex-wrap items-center gap-3">
+                                    <input type="file" wire:model="importPdf" accept="application/pdf"
+                                           class="text-[length:var(--fa-text-md)] text-[var(--fa-ink-2)] file:mr-3 file:h-8 file:px-3 file:rounded-[var(--fa-radius-control)] file:border file:border-[var(--fa-line-strong)] file:bg-[var(--fa-surface)] file:text-[var(--fa-ink)] file:font-medium" />
+                                    <span wire:loading wire:target="importPdf" class="{{ $hinweisText }}">wird geladen …</span>
+                                </div>
+                            </x-fa::field>
+                            @if($importMeldung)<x-fa::signal tone="crit">{{ $importMeldung }}</x-fa::signal>@endif
+                            <div class="flex justify-end">
+                                <x-fa::button variant="primary" icon="heroicon-o-document-magnifying-glass" wire:click="importExtrahieren" wire:loading.attr="disabled" wire:target="importExtrahieren,importPdf">
+                                    <span wire:loading.remove wire:target="importExtrahieren">Lesen und gliedern</span>
+                                    <span wire:loading wire:target="importExtrahieren">Wird gelesen, dauert etwa 15 Sekunden …</span>
+                                </x-fa::button>
+                            </div>
                         </div>
-                        <textarea wire:model="importText" rows="10" class="{{ $input }} w-full font-mono text-[12px]"
-                                  placeholder="Rezept-Text hier einfügen (Zutaten + Zubereitung; Sektionen wie »Für die Sauce: …« werden als Komponenten erkannt) …"></textarea>
-                        <div class="flex items-center gap-3 mt-2">
-                            <input type="file" wire:model="importPdf" accept="application/pdf" class="text-[11px] text-gray-600" />
-                            <span wire:loading wire:target="importPdf" class="text-[10px] text-amber-600">lädt …</span>
-                        </div>
-                        @error('importPdf') <p class="text-[10px] text-rose-500 mt-1">{{ $message }}</p> @enderror
-                        <div class="mt-3">
-                            <button type="button" wire:click="importExtrahieren" wire:loading.attr="disabled"
-                                    wire:target="importExtrahieren,importPdf" class="{{ $btnPrimary }} disabled:opacity-40">
-                                <span wire:loading.remove wire:target="importExtrahieren">Lesen &amp; strukturieren</span>
-                                <span wire:loading wire:target="importExtrahieren">liest … (kann ~15 s dauern)</span>
-                            </button>
-                        </div>
-                        @if($importMeldung) <p class="text-[11px] text-rose-500 mt-2">{{ $importMeldung }}</p> @endif
                     </x-foodalchemist::modal-section>
                 @elseif($importStep === 'vorschau')
-                    {{-- Aufgeteilt in Prüf-Karte + sticky Anlegen-Leiste: die Zutatenliste wächst mit der
-                         Quelle, die Knöpfe standen bisher dahinter und rutschten unter den Fold (gleicher
-                         Befund wie beim Go-Knopf der Erstell-Tabs). Felder, Reihenfolge, Bindings und die
-                         data-import-*-Anker bleiben unverändert — nur die Knopfzeile zieht in eine eigene Karte. --}}
-                    <x-foodalchemist::modal-section icon="heroicon-o-eye" title="Vorschau — prüfen">
+                    {{-- Prüf-Karte + klebende Anlegen-Leiste: die Zutatenliste wächst mit der Quelle, die Knöpfe
+                         standen bisher dahinter und rutschten unter den Fold. Felder, Reihenfolge, Bindings und die
+                         data-import-*-Anker bleiben unverändert. --}}
+                    <x-foodalchemist::modal-section icon="heroicon-o-eye" title="Vorschau prüfen">
                         <x-slot:actions>
-                            <span class="{{ $pill }} {{ $variantPill['secondary'] }}">Schritt 2 von 3</span>
+                            <x-fa::badge>Schritt 2 von 3</x-fa::badge>
                             @if(count($importVorschau['zutaten'] ?? []) > 0)
-                                <span class="{{ $pill }} {{ $variantPill['primary'] }}">{{ count($importVorschau['zutaten']) }} Zutaten</span>
+                                <x-fa::badge tone="accent">{{ count($importVorschau['zutaten']) }} Zutaten</x-fa::badge>
                             @endif
                             @if(!empty($importVorschau['komponenten']))
-                                <span class="{{ $pill }} {{ $variantPill['primary'] }}">{{ count($importVorschau['komponenten']) }} Komponenten</span>
+                                <x-fa::badge tone="accent">{{ count($importVorschau['komponenten']) }} Komponenten</x-fa::badge>
                             @endif
                         </x-slot:actions>
-                        {{-- #6: gleicher w-full-Konflikt wie bei den Zutaten-Zeilen — Name-Feld kollabierte,
-                             Typ-Dropdown fraß die Breite. Feste Inline-Breiten erzwingen. --}}
-                        <div class="flex items-center gap-2 mb-2">
-                            <input type="text" wire:model="importVorschau.name" class="{{ $input }}" style="flex:1 1 0;width:auto;min-width:0" placeholder="Name (Pflicht — Quelle ohne Titel)" data-import-name />
-                            <select wire:model="importTyp" class="{{ $input }}" style="flex:0 0 10rem;width:10rem" data-import-typ>
-                                <option value="basisrezept">Basisrezept</option>
-                                <option value="gericht">Gericht</option>
-                            </select>
-                        </div>
-                        <p class="text-[11px] text-gray-500 mb-1">Zutaten (Menge · Einheit · Bezeichnung)</p>
-                        <div class="space-y-1 mb-2">
-                            @foreach(($importVorschau['zutaten'] ?? []) as $zi => $z)
-                                {{-- #6 (Dominique 2026-08-28): das geteilte $input trägt w-full → kollidierte mit w-16/flex-1,
-                                     die breite Bezeichnungs-Spalte kollabierte (Namen unsichtbar, obwohl extrahiert). Feste
-                                     Breiten inline erzwingen (gewinnt gegen w-full, braucht keinen Asset-Rebuild). --}}
-                                <div class="flex items-center gap-1" wire:key="izut-{{ $zi }}">
-                                    <input type="text" wire:model="importVorschau.zutaten.{{ $zi }}.quantity" class="{{ $input }}" style="flex:0 0 4.5rem;width:4.5rem" placeholder="Menge" data-import-zutat-menge />
-                                    <input type="text" wire:model="importVorschau.zutaten.{{ $zi }}.unit" class="{{ $input }}" style="flex:0 0 5.5rem;width:5.5rem" placeholder="Einheit" data-import-zutat-einheit />
-                                    <input type="text" wire:model="importVorschau.zutaten.{{ $zi }}.text" class="{{ $input }}" style="flex:1 1 0;width:auto;min-width:0" placeholder="Bezeichnung" data-import-zutat-text />
+                        <div class="flex flex-col gap-4">
+                            <div class="flex flex-wrap items-end gap-3">
+                                <x-fa::field label="Name" class="flex-1 min-w-[16rem]" hint="Pflicht, wenn die Quelle keinen Titel hat.">
+                                    <x-fa::input wire:model="importVorschau.name" placeholder="Name des Rezepts" data-import-name />
+                                </x-fa::field>
+                                <x-fa::field label="Anlegen als" class="w-44">
+                                    <x-fa::select wire:model="importTyp" data-import-typ>
+                                        <option value="basisrezept">Basisrezept</option>
+                                        <option value="gericht">Gericht</option>
+                                    </x-fa::select>
+                                </x-fa::field>
+                            </div>
+                            <div class="flex flex-col gap-1.5">
+                                <div class="flex items-center gap-2 text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-2)]">
+                                    <span class="w-20 shrink-0">Menge</span><span class="w-24 shrink-0">Einheit</span><span>Zutat</span>
                                 </div>
-                            @endforeach
-                        </div>
-                        @if(!empty($importVorschau['komponenten']))
-                            <p class="text-[11px] text-gray-500 mb-1">Erkannte Komponenten (werden als Sub-Rezepte angelegt)</p>
-                            <div class="space-y-1 mb-2">
-                                @foreach($importVorschau['komponenten'] as $ki => $k)
-                                    <div class="rounded border border-black/10 px-2 py-1 text-[11px] text-gray-600" wire:key="ikomp-{{ $ki }}">
-                                        <strong>{{ $k['name'] ?? '—' }}</strong> · {{ count($k['zutaten'] ?? []) }} Zutaten
+                                @foreach(($importVorschau['zutaten'] ?? []) as $zi => $z)
+                                    {{-- #6 (Dominique 2026-08-28): Menge und Einheit fest schmal, Bezeichnung breit. --}}
+                                    <div class="flex items-center gap-2" wire:key="izut-{{ $zi }}">
+                                        <x-fa::input wire:model="importVorschau.zutaten.{{ $zi }}.quantity" numeric class="w-20 shrink-0" placeholder="Menge" aria-label="Menge" data-import-zutat-menge />
+                                        <x-fa::input wire:model="importVorschau.zutaten.{{ $zi }}.unit" class="w-24 shrink-0" placeholder="Einheit" aria-label="Einheit" data-import-zutat-einheit />
+                                        <x-fa::input wire:model="importVorschau.zutaten.{{ $zi }}.text" class="flex-1 min-w-0" placeholder="Zutat" aria-label="Zutat" data-import-zutat-text />
                                     </div>
                                 @endforeach
                             </div>
-                        @endif
-                        <p class="text-[11px] text-gray-500 mb-1">Zubereitung</p>
-                        <textarea wire:model="importVorschau.preparation" rows="6" class="{{ $input }} w-full text-[12px]"></textarea>
+                            @if(!empty($importVorschau['komponenten']))
+                                <div class="flex flex-col gap-1.5">
+                                    <p class="text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-2)]">Erkannte Komponenten <span class="font-normal text-[var(--fa-ink-3)]">· werden als Unterrezepte angelegt</span></p>
+                                    <ul class="flex flex-col divide-y divide-[var(--fa-line)] rounded-[var(--fa-radius-control)] border border-[var(--fa-line)]">
+                                        @foreach($importVorschau['komponenten'] as $ki => $k)
+                                            <li class="flex items-center justify-between gap-2 px-3 py-1.5 text-[length:var(--fa-text-md)]" wire:key="ikomp-{{ $ki }}">
+                                                <span class="font-medium text-[var(--fa-ink)]">{{ ($k['name'] ?? '') !== '' ? $k['name'] : 'Komponente ohne Namen' }}</span>
+                                                <span class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)] tabular-nums">{{ count($k['zutaten'] ?? []) }} Zutaten</span>
+                                            </li>
+                                        @endforeach
+                                    </ul>
+                                </div>
+                            @endif
+                            <x-fa::field label="Zubereitung">
+                                <x-fa::textarea wire:model="importVorschau.preparation" rows="6" />
+                            </x-fa::field>
+                        </div>
                     </x-foodalchemist::modal-section>
 
-                    <x-foodalchemist::modal-section class="sticky bottom-0 z-10 shadow-xl" icon="heroicon-o-check-circle" title="Geerdet anlegen">
-                        <x-slot:actions>
-                            @if(trim((string) ($importVorschau['name'] ?? '')) !== '')
-                                <span class="{{ $pill }} {{ $variantPill['primary'] }}">{{ \Illuminate\Support\Str::limit(trim($importVorschau['name']), 32) }}</span>
-                            @endif
-                        </x-slot:actions>
-                        <div class="flex gap-2">
-                            <button type="button" wire:click="importAnlegen" wire:loading.attr="disabled" wire:target="importAnlegen"
-                                    class="{{ $btnPrimary }} disabled:opacity-40">
-                                <span wire:loading.remove wire:target="importAnlegen">Geerdet anlegen</span>
-                                <span wire:loading wire:target="importAnlegen">erdet …</span>
-                            </button>
-                            <button type="button" wire:click="importReset" class="{{ $btnGhost }}">Verwerfen</button>
+                    <div class="sticky bottom-0 z-10 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-[var(--fa-radius-surface)] border border-[var(--fa-line-strong)] bg-[var(--fa-surface)] px-4 py-3 shadow-lg shadow-black/20">
+                        <div class="flex-1 min-w-[16rem] flex flex-col gap-1">
+                            <p class="flex flex-wrap items-center gap-2 text-[length:var(--fa-text-base)] font-semibold text-[var(--fa-ink)]">
+                                @svg('heroicon-o-check-circle', 'w-4 h-4 shrink-0 text-[var(--fa-ink-3)]') Rezept anlegen
+                                @if(trim((string) ($importVorschau['name'] ?? '')) !== '')
+                                    <x-fa::badge tone="accent">{{ \Illuminate\Support\Str::limit(trim($importVorschau['name']), 32) }}</x-fa::badge>
+                                @endif
+                            </p>
+                            <p class="{{ $hinweisText }}">Die Zutaten werden mit den Grundprodukten verknüpft. Beschreibung und Pairings folgen im Hintergrund.</p>
+                            @if($importMeldung)<x-fa::signal tone="crit">{{ $importMeldung }}</x-fa::signal>@endif
                         </div>
-                        @if($importMeldung) <p class="text-[11px] text-rose-500 mt-2">{{ $importMeldung }}</p> @endif
-                    </x-foodalchemist::modal-section>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <x-fa::button variant="ghost" wire:click="importReset">Import verwerfen</x-fa::button>
+                            <x-fa::button variant="primary" icon="heroicon-m-check" wire:click="importAnlegen" wire:loading.attr="disabled" wire:target="importAnlegen">
+                                <span wire:loading.remove wire:target="importAnlegen">Rezept anlegen</span>
+                                <span wire:loading wire:target="importAnlegen">Wird verknüpft …</span>
+                            </x-fa::button>
+                        </div>
+                    </div>
                 @elseif($importStep === 'fertig' && $importErgebnis)
-                    <x-foodalchemist::modal-section icon="heroicon-o-check-badge" title="Importiert (Entwurf)">
+                    <x-foodalchemist::modal-section icon="heroicon-o-check-badge" title="Importiert">
                         <x-slot:actions>
-                            <span class="{{ $pill }} {{ $variantPill['secondary'] }}">Schritt 3 von 3</span>
+                            <x-fa::badge>Schritt 3 von 3</x-fa::badge>
                         </x-slot:actions>
-                        <p class="text-[12px] text-gray-900 mb-1">
-                            „{{ $importErgebnis['name'] }}" als Entwurf angelegt
-                            @if(!empty($importErgebnis['sub_recipes'])) · {{ count($importErgebnis['sub_recipes']) }} Sub-Rezept(e) @endif
-                        </p>
-                        {{-- #6/Import: GP-Mint + Anreicherung laufen jetzt im Worker (nicht mehr synchron per Knopf). --}}
-                        <p class="text-[11px] text-sky-700 mb-2">→ An den Worker übergeben — GPs, Beschreibung &amp; Pairings werden im Hintergrund angereichert.</p>
-                        <div class="flex items-center gap-2">
-                            <button type="button" @click="tab='worker'" class="{{ $btnGhost }}" data-import-zum-worker>Zum Worker</button>
-                            <button type="button" wire:click="importReset" class="{{ $btnGhost }}">Weiteres importieren</button>
+                        <div class="flex flex-col gap-3">
+                            <p class="text-[length:var(--fa-text-md)] text-[var(--fa-ink)]">
+                                „{{ $importErgebnis['name'] }}" ist als Entwurf angelegt
+                                @if(!empty($importErgebnis['sub_recipes']))
+                                    , dazu {{ count($importErgebnis['sub_recipes']) }} {{ count($importErgebnis['sub_recipes']) === 1 ? 'Unterrezept' : 'Unterrezepte' }}
+                                @endif
+                            </p>
+                            {{-- #6/Import: Verknüpfung mit Grundprodukten + Anreicherung laufen im Hintergrund (nicht mehr synchron per Knopf). --}}
+                            <x-fa::signal tone="info">Grundprodukte, Beschreibung und Pairings werden im Hintergrund ergänzt.</x-fa::signal>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <x-fa::button variant="primary" icon="heroicon-o-queue-list" x-on:click="tab='worker'" data-import-zum-worker>Fortschritt ansehen</x-fa::button>
+                                <x-fa::button variant="ghost" icon="heroicon-o-arrow-down-tray" wire:click="importReset">Weiteres Rezept importieren</x-fa::button>
+                            </div>
                         </div>
                     </x-foodalchemist::modal-section>
                 @endif
             </div>
 
-            {{-- ANALYSE --}}
-            {{-- BASISREZEPT — eigener Tab mit seinen Leitplanken --}}
+            {{-- BASISREZEPT: eigener Reiter mit seinen Leitplanken --}}
             <div wire:key="planung-tab-basisrezept" x-show="tab==='basisrezept'">
                 @include('foodalchemist::livewire.planung.partials.erstellen-tab', ['scope' => 'rezept', 'vk' => false, 'goLabel' => 'Basisrezept', 'goIcon' => 'heroicon-o-beaker'])
             </div>
 
-            {{-- GERICHT — Leitplanken inkl. VK-Achsen --}}
+            {{-- GERICHT: Leitplanken inkl. Verkaufs-Achsen --}}
             <div wire:key="planung-tab-gericht" x-show="tab==='gericht'">
                 @include('foodalchemist::livewire.planung.partials.erstellen-tab', ['scope' => 'gericht', 'vk' => true, 'goLabel' => 'Gericht', 'goIcon' => 'heroicon-o-cake'])
             </div>
 
-            {{-- CONCEPT (= das „Menü"): Briefing → LLM füllt die semantischen Hüllen → Zusammenstellung
-                 (Pakete/Buffet) nach den Leitplanken; braucht Gerichte → kaskadiert nach unten. --}}
-            {{-- Cockpit-Optik (Paket K, Rollout): der Concept-Tab läuft NICHT über erstellen-tab.blade.php,
-                 sondern ist hier inline nachgebaut (eigene Briefing-Karte, eigener KI-Kopf, eigener Go).
-                 Darum dieselbe Behandlung von Hand: Lesebreite + zentriert, pb-28 für die sticky Go-Leiste,
-                 Kopfzeilen auf Button-Niveau mit Icon, Titel-Echo als Status-Pille. Die Karten der
-                 Leitplanken (inkl. der neuen Struktur-Karte) kommen aus dem gemeinsamen Partial. --}}
-            <div wire:key="planung-tab-concept" x-show="tab==='concept'" class="space-y-4 max-w-7xl mx-auto pb-28">
-                <x-foodalchemist::modal-section icon="heroicon-o-pencil-square" title="Briefing — was für ein Menü / Concept">
-                    @if(trim((string) ($eingabe['concept']['titel'] ?? '')) !== '')
+            {{-- CONCEPT (= das „Menü"): Briefing → KI füllt Leitidee und co. → Zusammenstellung (Pakete/Buffet)
+                 nach den Leitplanken; braucht Gerichte → kaskadiert nach unten. Läuft NICHT über
+                 erstellen-tab.blade.php (eigene Plan-Karte), darum hier dieselbe Bauart von Hand.
+                 Genau EINE Hauptaktion: ohne Plan ist „Plan ausarbeiten lassen" primär, mit Plan das Erstellen. --}}
+            <div wire:key="planung-tab-concept" x-show="tab==='concept'" class="flex flex-col gap-4 max-w-7xl mx-auto">
+                @php $conceptTitel = trim((string) ($eingabe['concept']['titel'] ?? '')); @endphp
+                <x-foodalchemist::modal-section icon="heroicon-o-pencil-square" title="Was für ein Concept soll entstehen?">
+                    @if($conceptTitel !== '')
                         <x-slot:actions>
-                            <span class="{{ $pill }} {{ $variantPill['primary'] }}">{{ \Illuminate\Support\Str::limit(trim($eingabe['concept']['titel']), 32) }}</span>
+                            <x-fa::badge tone="accent">{{ \Illuminate\Support\Str::limit($conceptTitel, 32) }}</x-fa::badge>
                         </x-slot:actions>
                     @endif
-                    @include('foodalchemist::livewire.planung.partials.schnellstart-chips', ['scope' => 'concept'])
-                    <label class="{{ $label ?? 'text-[11px] text-gray-500' }}">Titel (optional)</label>
-                    <input type="text" wire:model="eingabe.concept.titel" class="{{ $input }} mb-3" placeholder="z. B. CHEFS.CORNER — Sommer-Menü" data-planung-titel />
-                    <label class="{{ $label ?? 'text-[11px] text-gray-500' }}">Briefing (geht in die Erzeugung)</label>
-                    <textarea wire:model="eingabe.concept.brief" rows="4" class="{{ $input }} mb-3" placeholder="Anlass, Zielgruppe, Richtung, Pakete/Buffet-Struktur, Gänge …"></textarea>
-                    @include('foodalchemist::livewire.planung.partials.diktat', ['ziel' => 'eingabe.concept.brief', 'mitLeitplanken' => 'concept', 'mitRecorder' => false])
-                    {{-- Agent-am-Brief: Concept nutzt nicht die geteilte erstellen-tab-Partial (eigener
-                       Block, KI-Kopf-Pfad), darum das Panel-Mount hier direkt statt über die Partial.
-                       Kurskorrektur (2026-09-19): Recorder hier aus, Panel ist die einzige
-                       Diktierfunktion — siehe Kommentar in erstellen-tab.blade.php. --}}
-                    @if($agentPanelSichtbar)
-                        @livewire('foodalchemist.voice-modal', [
-                            'planungsSessionId' => $sessionId,
-                            'planungScope' => 'concept',
-                            'formularRegler' => array_intersect_key($regler['concept'] ?? [], array_flip(\Platform\FoodAlchemist\Livewire\Planung\Index::AGENT_SCHREIBBARE_REGLER)),
-                            'formularBrief' => (string) ($eingabe['concept']['brief'] ?? ''),
-                        ], key('voice-panel-concept-' . ($sessionId ?? 'keine')))
-                    @endif
-                    <label class="{{ $label ?? 'text-[11px] text-gray-500' }}">Kreativ-Modus</label>
-                    <select wire:model.live="eingabe.concept.creative_mode" class="{{ $input }}">
-                        @foreach($modeLabel as $val => $lbl)
-                            <option value="{{ $val }}">{{ $lbl }}</option>
-                        @endforeach
-                    </select>
-                    <p class="text-[11px] text-gray-500 mt-1">{{ $modeHint[$eingabe['concept']['creative_mode'] ?? 'voll_kreativ'] ?? '' }}</p>
+                    <div class="flex flex-col gap-4">
+                        @include('foodalchemist::livewire.planung.partials.schnellstart-chips', ['scope' => 'concept'])
+                        <x-fa::field label="Titel" optional>
+                            <x-fa::input wire:model="eingabe.concept.titel" placeholder="zum Beispiel CHEFS.CORNER Sommermenü" data-planung-titel />
+                        </x-fa::field>
+                        <div class="flex flex-col gap-1.5">
+                            <x-fa::field label="Briefing" hint="Geht wörtlich in die Erstellung.">
+                                <x-fa::textarea wire:model="eingabe.concept.brief" rows="4" placeholder="Anlass, Zielgruppe, Richtung, Pakete oder Buffet, Gänge …" />
+                            </x-fa::field>
+                            @include('foodalchemist::livewire.planung.partials.diktat', ['ziel' => 'eingabe.concept.brief', 'mitLeitplanken' => 'concept', 'mitRecorder' => false])
+                        </div>
+                        {{-- Agent-am-Brief: Concept nutzt nicht die geteilte erstellen-tab-Partial, darum das
+                             Panel-Mount hier direkt. Kurskorrektur (2026-09-19): Recorder hier aus, das Panel ist
+                             die einzige Diktierfunktion (siehe Kommentar in erstellen-tab.blade.php). --}}
+                        @if($agentPanelSichtbar)
+                            @livewire('foodalchemist.voice-modal', [
+                                'planungsSessionId' => $sessionId,
+                                'planungScope' => 'concept',
+                                'formularRegler' => array_intersect_key($regler['concept'] ?? [], array_flip(\Platform\FoodAlchemist\Livewire\Planung\Index::AGENT_SCHREIBBARE_REGLER)),
+                                'formularBrief' => (string) ($eingabe['concept']['brief'] ?? ''),
+                            ], key('voice-panel-concept-' . ($sessionId ?? 'keine')))
+                        @endif
+                        <div class="flex flex-col gap-1.5">
+                            <x-fa::choice name="eingabe.concept.creative_mode" :options="$modeLabel" label="Kreativ-Modus" id-prefix="planung-concept" />
+                            <p class="{{ $hinweisText }} max-w-2xl">{{ $modeHint[$eingabe['concept']['creative_mode'] ?? 'voll_kreativ'] ?? '' }}</p>
+                        </div>
+                    </div>
                 </x-foodalchemist::modal-section>
 
-                {{-- KI-Kopf (Etappe 2b, geplanter Pfad): arbeitet den Plan-Entwurf vorab aus (Leitidee/USP/
-                     Inszenierung/Geschmackswelten + Gänge-Gerüst) und öffnet ihn im Conceptor zur Prüfung —
-                     NOCH ohne Gerichte. Danach der Go „aus geprüftem Plan". Neben dem direkten „Go" unten. --}}
-                {{-- DF-2 (Spec 41, Entscheid 2026-08-21): KI-Kopf ist der EMPFOHLENE Weg fürs Concepting
-                     (reicheres Ergebnis: ausgearbeiteter, prüfbarer Plan vor der Erzeugung). Primär-Button;
-                     der direkte Go unten ist der Schnellweg (sekundär). --}}
-                <x-foodalchemist::modal-section icon="heroicon-o-light-bulb" title="KI-Kopf — Plan ausarbeiten (empfohlen)">
+                {{-- KI-Plan (Etappe 2b, geplanter Pfad): arbeitet den Plan vorab aus (Leitidee, Vorteil,
+                     Inszenierung, Geschmackswelten + Gänge-Gerüst) und zeigt ihn zur Prüfung, NOCH ohne
+                     Gerichte. DF-2 (Spec 41, Entscheid 2026-08-21): der EMPFOHLENE Weg fürs Concepting. --}}
+                <x-foodalchemist::modal-section icon="heroicon-o-light-bulb" title="Plan ausarbeiten lassen">
                     <x-slot:actions>
-                        <span class="{{ $pill }} {{ $variantPill['primary'] }}">empfohlener Weg</span>
+                        <x-fa::badge tone="accent">empfohlen</x-fa::badge>
                     </x-slot:actions>
-                    <p class="text-[11px] text-gray-500 mb-2 max-w-2xl">Empfohlener Weg: Die KI arbeitet aus dem Briefing einen vollständigen Konzept-Entwurf aus (Leitidee, USP, Inszenierung, Geschmackswelten, Gänge-Gerüst) und öffnet ihn zur Prüfung/Korrektur — <b>noch ohne</b> Gerichte zu erzeugen. Danach der Go „aus geprüftem Plan".</p>
-                    <button type="button" wire:click="kiKopf" @disabled($laeuft)
-                            wire:loading.attr="disabled" wire:target="kiKopf"
-                            class="{{ $btnPrimary }} disabled:opacity-40" data-planung-kikopf>
-                        <span wire:loading.remove wire:target="kiKopf">@svg('heroicon-o-sparkles', 'w-4 h-4') KI-Kopf: Plan ausarbeiten</span>
-                        <span wire:loading wire:target="kiKopf">Plan wird ausgearbeitet …</span>
-                    </button>
+                    <div class="flex flex-wrap items-center gap-x-4 gap-y-3">
+                        <p class="flex-1 min-w-[16rem] {{ $hinweisText }} max-w-2xl">Die KI arbeitet aus dem Briefing einen vollständigen Entwurf aus: Leitidee, Vorteil, Inszenierung, Geschmackswelten und den Aufbau der Gänge. Du prüfst und korrigierst ihn, <span class="font-semibold text-[var(--fa-ink-2)]">bevor</span> Gerichte entstehen.</p>
+                        <x-fa::button :variant="$planConceptId ? 'secondary' : 'primary'" icon="heroicon-o-sparkles" wire:click="kiKopf" :disabled="$laeuft"
+                            wire:loading.attr="disabled" wire:target="kiKopf" data-planung-kikopf>
+                            <span wire:loading.remove wire:target="kiKopf">{{ $planConceptId ? 'Plan neu ausarbeiten' : 'Plan ausarbeiten lassen' }}</span>
+                            <span wire:loading wire:target="kiKopf">Plan wird ausgearbeitet …</span>
+                        </x-fa::button>
+                    </div>
                 </x-foodalchemist::modal-section>
+
+                {{-- A0/A1: der ausgearbeitete Plan bleibt SICHTBAR + bearbeitbar (Semantik + Menü-Aufbau), kein
+                     Wegsprung in den Conceptor. Steht im normalen Fluss vor der Erstell-Leiste (vorher IN der
+                     klebenden Leiste und überdeckte so auf dem Laptop fast den ganzen Bildschirm). --}}
+                @if($planConceptId)
+                    @include('foodalchemist::livewire.planung.partials.concept-plan')
+                @endif
 
                 @include('foodalchemist::livewire.planung.partials.leitplanken', ['scope' => 'concept'])
 
                 @include('foodalchemist::livewire.planung.partials.schnellstart-speichern', ['scope' => 'concept'])
 
-                {{-- Go-Leiste sticky im Scroll-Container des Tabs (Befund „Go-Knopf unter dem Fold") —
-                     gleiche Bauart wie in erstellen-tab.blade.php. Titel-Echo im Kopf, damit sichtbar
-                     bleibt, woran gearbeitet wird, wenn die Briefing-Karte weit oben aus dem Bild ist. --}}
-                <x-foodalchemist::modal-section class="sticky bottom-0 z-10 shadow-xl" icon="heroicon-o-squares-2x2" title="Go — Concept erzeugen (Draft)">
-                    @if(trim((string) ($eingabe['concept']['titel'] ?? '')) !== '')
-                        <x-slot:actions>
-                            <span class="{{ $pill }} {{ $variantPill['primary'] }}">{{ \Illuminate\Support\Str::limit(trim($eingabe['concept']['titel']), 32) }}</span>
-                        </x-slot:actions>
-                    @endif
-                    @include('foodalchemist::livewire.planung.partials.worker-praesenz')
-                    @if($planConceptId)
-                        {{-- A0/A1: der ausgearbeitete Plan bleibt hier SICHTBAR + editierbar (Semantik + Menü-
-                             Aufbau) — kein Wegsprung in den Conceptor mehr. --}}
-                        @include('foodalchemist::livewire.planung.partials.concept-plan')
-                        {{-- Geplanter Pfad (Etappe 2b): ein KI-Kopf-Plan ist vorbereitet — der Go referenziert ihn
-                             statt neu zu generieren. „Plan verwerfen" wechselt zurück auf den Schnell-Pfad. --}}
-                        <div class="mb-2 flex items-center gap-2 text-[11px] text-emerald-700" data-planung-plan-bereit>
-                            @svg('heroicon-o-check-badge', 'w-4 h-4')
-                            <span>Geprüfter Plan vorbereitet — der Go verwendet ihn (statt neu zu generieren).</span>
-                            {{-- hover war emerald-200 (Dunkel-Ära) — auf der weissen Karte unsichtbar; jetzt dunkler als der Ruhezustand. --}}
-                            <button type="button" wire:click="planVerwerfen" @disabled($laeuft) class="underline hover:text-emerald-900 disabled:opacity-40">Plan verwerfen (frisch generieren)</button>
-                        </div>
-                        <x-foodalchemist::ki-action action="goKaskade('concept')" variant="primary" icon="heroicon-o-squares-2x2"
-                            label="Go aus geprüftem Plan" busy="Kaskade wird gestartet …" flash="Kaskade gestartet"
-                            :disabled="$laeuft" before="tab='worker'" />
-                    @else
-                        {{-- DF-2: Schnellweg (sekundär) — ohne Vorab-Plan direkt erzeugen. Empfohlen ist der
-                             KI-Kopf oben (ausgearbeiteter, prüfbarer Plan). --}}
-                        <p class="text-[11px] text-gray-500 mb-2 max-w-2xl">Schnellweg (ohne Vorab-Plan): Die LLM baut aus dem Briefing direkt die Zusammenstellung (Pakete/Buffet) nach den Leitplanken; die Gerichte kommen nach der Freigabe. Für ein ausgearbeitetes Konzept den <b>KI-Kopf</b> oben nutzen. Fortschritt im <b>Worker</b>-Tab.</p>
-                        <x-foodalchemist::ki-action action="goKaskade('concept')" variant="ghost" icon="heroicon-o-squares-2x2"
-                            label="Direkt erzeugen (Schnellweg)" busy="Kaskade wird gestartet …" flash="Kaskade gestartet"
-                            :disabled="$laeuft" before="tab='worker'" />
-                    @endif
-                </x-foodalchemist::modal-section>
+                {{-- Erstell-Leiste: klebt unten (Befund „Knopf unter dem Fold"), als EINE niedrige Zeile. --}}
+                <div class="sticky bottom-0 z-10 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-[var(--fa-radius-surface)] border border-[var(--fa-line-strong)] bg-[var(--fa-surface)] px-4 py-3 shadow-lg shadow-black/20" data-planung-erstellen-leiste>
+                    <div class="flex-1 min-w-[16rem] flex flex-col gap-1">
+                        <p class="flex flex-wrap items-center gap-2 text-[length:var(--fa-text-base)] font-semibold text-[var(--fa-ink)]">
+                            @svg('heroicon-o-squares-2x2', 'w-4 h-4 shrink-0 text-[var(--fa-ink-3)]') Concept erstellen
+                            @if($conceptTitel !== '')<x-fa::badge tone="accent">{{ \Illuminate\Support\Str::limit($conceptTitel, 32) }}</x-fa::badge>@endif
+                        </p>
+                        @if($planConceptId)
+                            {{-- Geplanter Pfad (Etappe 2b): der Plan ist vorbereitet, das Erstellen verwendet ihn statt neu
+                                 zu erzeugen. „Plan verwerfen" wechselt zurück auf den direkten Weg. --}}
+                            <div class="flex flex-wrap items-center gap-x-3 gap-y-1" data-planung-plan-bereit>
+                                <x-fa::signal tone="ok" icon="heroicon-m-check-badge">Geprüfter Plan liegt vor, die Erstellung verwendet ihn.</x-fa::signal>
+                                <button type="button" wire:click="planVerwerfen" @disabled($laeuft)
+                                        class="text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-2)] underline underline-offset-2 hover:text-[var(--fa-ink)] disabled:opacity-50">Plan verwerfen</button>
+                            </div>
+                        @else
+                            {{-- DF-2: direkter Weg (sekundär), ohne vorab ausgearbeiteten Plan. --}}
+                            <p class="{{ $hinweisText }}">Direkter Weg ohne Plan: die KI stellt Pakete oder Buffet sofort nach den Leitplanken zusammen, die Gerichte folgen nach der Freigabe. Den Stand siehst du im Reiter „Fortschritt".</p>
+                        @endif
+                        @include('foodalchemist::livewire.planung.partials.worker-praesenz')
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2">
+                        @if($planConceptId)
+                            <x-foodalchemist::ki-action action="goKaskade('concept')" variant="primary" icon="heroicon-o-squares-2x2"
+                                label="Concept aus Plan erstellen" busy="Wird gestartet …" flash="Gestartet"
+                                :disabled="$laeuft" before="tab='worker'" />
+                        @else
+                            <x-foodalchemist::ki-action action="goKaskade('concept')" variant="ghost" icon="heroicon-o-squares-2x2"
+                                label="Ohne Plan direkt erstellen" busy="Wird gestartet …" flash="Gestartet"
+                                :disabled="$laeuft" before="tab='worker'" />
+                        @endif
+                    </div>
+                </div>
             </div>
 
-            {{-- WORKER — alle Läufe/Entwürfe zusammen: Status + Fan-out-Baum + Freigabe --}}
-            {{-- Cockpit-Optik (Paket K, Rollout): Lesebreite + zentriert wie auf den Erstell-Tabs. KEIN
-                 pb-28 und KEINE sticky Leiste — der Worker ist Anzeige, hat keinen Go-Knopf.
-                 Poll-Banner und Watchdog stehen bewusst DIREKT auf dem dunklen Canvas (nicht in einer
-                 Karte): dort ist text-amber-300 richtig und bleibt unverändert. --}}
-            <div wire:key="planung-tab-worker" x-show="tab==='worker'" class="space-y-4 max-w-7xl mx-auto">
+            {{-- FORTSCHRITT (Alpine-Tab `worker`): alle Läufe zusammen, Status + Baum + Freigabe.
+                 Anzeige, kein Erstell-Knopf, darum keine klebende Leiste. --}}
+            <div wire:key="planung-tab-worker" x-show="tab==='worker'" class="flex flex-col gap-4 max-w-7xl mx-auto">
                 {{-- Spec 53 / Paket C: $pollAktiv wird JEDES Render frisch aus DB-Wahrheit abgeleitet
-                     (Lauf-Status + Step-Phasen), kein gespeichertes Flag mehr — deckt auch Fälle ab,
-                     die kein $laeuft/$anreicherungLaeuft setzen (z. B. eine on-demand Konformitätsprüfung). --}}
+                     (Lauf-Status + Step-Phasen), kein gespeichertes Flag. --}}
                 @if($pollAktiv)
-                    <div wire:poll.1500ms="pruefeLauf" class="flex items-center gap-2 text-xs text-amber-300">
-                        @svg('heroicon-o-arrow-path', 'w-4 h-4 animate-spin')
+                    <div wire:poll.1500ms="pruefeLauf" class="flex items-center gap-2 rounded-[var(--fa-radius-surface)] bg-[var(--fa-info-soft)] px-3.5 py-2.5 text-[length:var(--fa-text-md)] text-[var(--fa-info)]">
+                        @svg('heroicon-o-arrow-path', 'w-4 h-4 shrink-0 animate-spin')
                         <span>
                             @if($laeuft)
-                                Läuft — der Worker arbeitet die Kaskade ab …
+                                Läuft. Die Hintergrund-Erstellung arbeitet die Schritte ab …
                             @elseif($anreicherungLaeuft)
-                                Freigegeben — die Anreicherung läuft nach (Beschreibung, Kalkulation, Allergene) …
+                                Freigegeben. Beschreibung, Kalkulation und Allergene werden ergänzt …
                             @else
-                                Ein Hintergrund-Schritt läuft noch …
+                                Ein Schritt im Hintergrund läuft noch …
                             @endif
                         </span>
                     </div>
                     @if($hinweis !== null)
-                        <p class="text-[11px] text-amber-400" data-planung-watchdog>⏱ {{ $hinweis }}</p>
-                        {{-- Recovery (Idempotenz/Resume): verwaiste Steps freiräumen → Lauf wieder handlungsfähig --}}
-                        <button type="button" wire:click="laufFortsetzen" wire:loading.attr="disabled"
-                                data-planung-fortsetzen
-                                class="mt-1 text-[11px] text-amber-300 underline underline-offset-2 hover:text-amber-200">
-                            Abgebrochene Schritte freiräumen
-                        </button>
+                        <x-fa::notice tone="warn" data-planung-watchdog>
+                            {{ $hinweis }}
+                            <x-slot:actions>
+                                {{-- Wiederaufnahme: verwaiste Schritte freiräumen → Lauf wieder handlungsfähig --}}
+                                <x-fa::button size="sm" icon="heroicon-o-arrow-path" wire:click="laufFortsetzen" wire:loading.attr="disabled" data-planung-fortsetzen>Abgebrochene Schritte freiräumen</x-fa::button>
+                            </x-slot:actions>
+                        </x-fa::notice>
                     @endif
                 @endif
 
-            {{-- Worker-Ergebnis: Status + Fan-out-Baum + Freigabe (Gate 2) --}}
+                {{-- Ergebnis: Status + Baum + Freigabe (Gate 2) --}}
                 @if($lauf)
                     @include('foodalchemist::livewire.planung.partials.ergebnis')
                 @else
-                    {{-- Leer-Zustand als Karte statt rohem $card-Div — gleiche Fläche/Kopfzeile wie überall sonst. --}}
-                    <x-foodalchemist::modal-section icon="heroicon-o-queue-list" title="Kein Lauf">
-                        <p class="text-xs text-gray-500">Noch kein Lauf — starte in „Basisrezept", „Gericht" oder „Concept" einen Go, der Fortschritt läuft hier durch.</p>
+                    <x-foodalchemist::modal-section icon="heroicon-o-queue-list" title="Fortschritt">
+                        <x-fa::empty icon="heroicon-o-queue-list" title="Noch nichts gestartet">Starte in „Basisrezept", „Gericht" oder „Concept" eine Erstellung. Der Fortschritt erscheint dann hier.</x-fa::empty>
                     </x-foodalchemist::modal-section>
                 @endif
             </div>
 
-            {{-- COMPOSER — Foodpairing-Fläche: Anker zusammenstellen, Netz zeigt live was passt (★★★/★★).
-                 Gezielte Kreation: aus den gewählten Ankern ein Basisrezept/Gericht erzeugen
-                 (Anker = verbindliche Leit-Aromen). Klick auf Kandidat nimmt ihn auf. --}}
-            {{-- Cockpit-Optik (Paket K, Rollout): Lesebreite + zentriert. Das bestehende 5fr/7fr-Grid
-                 (Picker links, Netz rechts) BLEIBT die Spaltenaufteilung dieses Tabs — kein zweites
-                 xl:grid-cols-2 darübergelegt. Kein Sticky: der Composer hat keinen Go, die Übernahme-
-                 Knöpfe sitzen in der zweiten Karte oben links.
-                 Farben: die text-slate-*-Reste und die violett/weissen Chips stammen aus der Zeit vor dem
-                 Karten-Umbau (Text lag direkt auf dem dunklen Canvas). In der weissen Karte
-                 (sectionCard = bg-white/90) sind slate-100/200 praktisch unsichtbar → auf $pill/
-                 $variantPill und die Grau-Tokens gezogen. Die Hex-Werte am Netz (Stern-Gold, SVG-Grund,
-                 Legende) bleiben unverändert: sie gehören zur dunklen Graph-Fläche (Entscheid 03). --}}
+            {{-- COMPOSER: Foodpairing-Fläche. Zutaten zusammenstellen, das Netz zeigt live, was passt.
+                 Gezielte Kreation: aus den gewählten Zutaten ein Basisrezept oder Gericht vorbereiten
+                 (Zutaten = verbindliche Leit-Aromen). Klick auf einen Kandidaten nimmt ihn auf.
+                 Spaltenaufteilung bleibt 5fr/7fr (Auswahl links, Netz rechts). fa-pass: nur die linke Spalte
+                 auf Tokens/Bausteine umgestellt; das Netz samt Legende rechts ist unverändert (eigene Welle). --}}
             <div wire:key="planung-tab-composer" x-show="tab==='composer'" class="max-w-7xl mx-auto">
                 <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] gap-4 items-start">
-                {{-- LINKE SPALTE: Picker + Kohäsion --}}
+                {{-- LINKE SPALTE: Auswahl + Zusammenhalt --}}
                 <div class="space-y-4 min-w-0">
-                {{-- Reicher Anker-Picker: Kategorie + Suche + browsebare Liste + gewählte Chips --}}
-                <x-foodalchemist::modal-section class="!mt-0" icon="heroicon-o-squares-plus" title="Foodpairing — Komposition">
+                <x-foodalchemist::modal-section icon="heroicon-o-squares-plus" title="Zutaten zusammenstellen">
                     @if(!empty($composerAnker))
                         <x-slot:actions>
-                            <span class="{{ $pill }} {{ $variantPill['primary'] }}">{{ count($composerAnker) }} Anker gewählt</span>
+                            <x-fa::badge tone="accent">{{ count($composerAnker) }} gewählt</x-fa::badge>
                         </x-slot:actions>
                     @endif
-                    <p class="text-[11px] text-gray-500 mb-2 max-w-2xl">
-                        Zutaten/Anker zusammenstellen — das Netz zeigt live, was harmoniert (★★★), was einen offenen
-                        Bedarf als Kontrast deckt und was sich stört. Filtere/such unten oder klick einen Kandidaten im Netz.
-                    </p>
+                    <div class="flex flex-col gap-3">
+                        <p class="{{ $hinweisText }} max-w-2xl">Zutaten wählen, das Netz rechts zeigt sofort, was harmoniert (★★★), was einen offenen Bedarf als Kontrast deckt und was sich stört. Unten filtern und suchen oder einen Kandidaten im Netz anklicken.</p>
 
-                    <div class="flex flex-wrap gap-2 mb-2">
-                        <select wire:model.live="composerCategory" class="{{ $input }} sm:w-56">
-                            <option value="">Alle Kategorien</option>
-                            @foreach($composerBrowse['kategorien'] as $kat)
-                                <option value="{{ $kat }}">{{ $kat }}</option>
-                            @endforeach
-                        </select>
-                        <input type="search" wire:model.live.debounce.300ms="composerTerm"
-                               placeholder="Anker suchen …" class="{{ $input }} flex-1 min-w-[12rem]" />
-                    </div>
-
-                    @if(!empty($composerAnker))
-                        <div class="flex flex-wrap gap-1.5 mb-2">
-                            @foreach($composerAnker as $a)
-                                <span wire:key="canker-{{ $a['id'] }}"
-                                      class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] {{ $variantPill['primary'] }} border border-violet-500/30">
-                                    {{ $a['label'] }}
-                                    <button type="button" wire:click="composerRemove({{ $a['id'] }})"
-                                            class="text-violet-500 hover:text-violet-700 leading-none">&times;</button>
-                                </span>
-                            @endforeach
+                        <div class="flex flex-wrap gap-2">
+                            <x-fa::select wire:model.live="composerCategory" aria-label="Kategorie" class="sm:w-56">
+                                <option value="">Alle Kategorien</option>
+                                @foreach($composerBrowse['kategorien'] as $kat)
+                                    <option value="{{ $kat }}">{{ $kat }}</option>
+                                @endforeach
+                            </x-fa::select>
+                            <x-fa::input type="search" wire:model.live.debounce.300ms="composerTerm"
+                                placeholder="Zutat suchen" aria-label="Zutat suchen" class="flex-1 min-w-[12rem]" />
                         </div>
-                    @endif
 
-                    <p class="text-[10px] text-gray-500 mb-1">
-                        @if($composerFocus !== null && $composerFokusLabel)
-                            Punkt = passt zu <span class="text-violet-600">{{ $composerFokusLabel }}</span> · Klick fügt hinzu
-                        @else
-                            {{ $composerBrowse['total'] }} Anker · Punkt = Fit zur Auswahl · Klick fügt hinzu
+                        @if(!empty($composerAnker))
+                            <div class="flex flex-wrap gap-1.5">
+                                @foreach($composerAnker as $a)
+                                    <span wire:key="canker-{{ $a['id'] }}"
+                                          class="inline-flex items-center gap-1 h-7 pl-2.5 pr-1 rounded-full border border-[var(--fa-accent-line)] bg-[var(--fa-accent-soft)] text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-accent)]">
+                                        {{ $a['label'] }}
+                                        <button type="button" wire:click="composerRemove({{ $a['id'] }})" aria-label="{{ $a['label'] }} entfernen" title="Entfernen"
+                                                class="inline-flex items-center justify-center w-5 h-5 rounded-full hover:bg-[var(--fa-accent-soft-hover)]">@svg('heroicon-m-x-mark', 'w-3.5 h-3.5')</button>
+                                    </span>
+                                @endforeach
+                            </div>
                         @endif
-                    </p>
-                    <div class="max-h-64 overflow-y-auto rounded-lg border border-black/10 divide-y divide-black/5">
-                        @forelse($composerBrowse['items'] as $it)
-                            <button type="button" wire:key="cbrowse-{{ $it['id'] }}" wire:click="composerAdd({{ $it['id'] }})"
-                                    class="w-full flex items-center gap-2 px-2.5 py-1.5 text-left text-[12px] text-gray-900 hover:bg-violet-500/5">
-                                @php
-                                    // Spec 60: ★★★ harmoniert · Kontrast deckt einen offenen Bedarf · Konflikt stört sich
-                                    $punkt = ['stern3' => ['#fcd34d', '★★★ harmoniert'], 'kontrast' => ['#22d3ee', 'Kontrast: deckt einen offenen Bedarf'],
-                                        'konflikt' => ['#f43f5e', 'Konflikt: stört sich mit der Auswahl']][$it['typ'] ?? ''] ?? null;
-                                @endphp
-                                <span class="w-2 h-2 rounded-full shrink-0" data-picker-typ="{{ $it['typ'] ?? '' }}"
-                                      style="background: {{ $punkt[0] ?? 'transparent' }}; {{ $punkt ? '' : 'border:1px solid rgba(148,163,184,.35);' }}"
-                                      title="{{ $punkt[1] ?? 'kein Bezug zur Auswahl' }}"></span>
-                                <span class="flex-1 truncate">{{ $it['label'] }}</span>
-                                @if($it['category'])
-                                    <span class="text-[10px] text-gray-500 shrink-0">{{ $it['category'] }}</span>
+
+                        <div class="flex flex-col gap-1.5">
+                            <p class="{{ $hinweisText }}">
+                                @if($composerFocus !== null && $composerFokusLabel)
+                                    Punkt zeigt, was zu <span class="font-medium text-[var(--fa-accent)]">{{ $composerFokusLabel }}</span> passt. Klick nimmt die Zutat auf.
+                                @else
+                                    {{ number_format($composerBrowse['total'], 0, ',', '.') }} Zutaten. Punkt zeigt, wie gut sie zur Auswahl passt. Klick nimmt die Zutat auf.
                                 @endif
-                                <span class="text-violet-600 shrink-0">+</span>
-                            </button>
-                        @empty
-                            <p class="px-2.5 py-2 text-[12px] text-gray-500">Keine Anker — Filter/Suche anpassen.</p>
-                        @endforelse
+                            </p>
+                            <div class="max-h-64 overflow-y-auto rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] divide-y divide-[var(--fa-line)]">
+                                @forelse($composerBrowse['items'] as $it)
+                                    <button type="button" wire:key="cbrowse-{{ $it['id'] }}" wire:click="composerAdd({{ $it['id'] }})"
+                                            class="w-full flex items-center gap-2 px-2.5 py-1.5 text-left text-[length:var(--fa-text-md)] text-[var(--fa-ink)] hover:bg-[var(--fa-hover)]">
+                                        @php
+                                            // Spec 60: ★★★ harmoniert · Kontrast deckt einen offenen Bedarf · Konflikt stört sich
+                                            $punkt = ['stern3' => ['#fcd34d', '★★★ harmoniert'], 'kontrast' => ['#22d3ee', 'Kontrast: deckt einen offenen Bedarf'],
+                                                'konflikt' => ['#f43f5e', 'Konflikt: stört sich mit der Auswahl']][$it['typ'] ?? ''] ?? null;
+                                        @endphp
+                                        <span class="w-2 h-2 rounded-full shrink-0" data-picker-typ="{{ $it['typ'] ?? '' }}"
+                                              style="background: {{ $punkt[0] ?? 'transparent' }}; {{ $punkt ? '' : 'border:1px solid rgba(148,163,184,.35);' }}"
+                                              title="{{ $punkt[1] ?? 'kein Bezug zur Auswahl' }}"></span>
+                                        <span class="flex-1 truncate">{{ $it['label'] }}</span>
+                                        @if($it['category'])
+                                            <span class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)] shrink-0">{{ $it['category'] }}</span>
+                                        @endif
+                                        @svg('heroicon-m-plus', 'w-4 h-4 shrink-0 text-[var(--fa-accent)]')
+                                    </button>
+                                @empty
+                                    <x-fa::empty compact icon="heroicon-o-magnifying-glass" title="Keine Zutat gefunden">Filter oder Suche anpassen.</x-fa::empty>
+                                @endforelse
+                            </div>
+                        </div>
                     </div>
                 </x-foodalchemist::modal-section>
 
-                {{-- Foodpairing-Composer: aus den gewählten Ankern in den Erstellen-Tab springen. Der Brief
-                     wird aus den Ankern vorbefüllt, die Anker reisen als verbindliche Leit-Aromen
-                     (seed_anker) mit — im Erstellen-Tab setzt du die Leitplanken (voller Regler) und startest. --}}
-                <x-foodalchemist::modal-section icon="heroicon-o-arrow-right-circle" title="Aus diesen Pairings weiterbauen">
-                    <p class="text-[11px] text-gray-500 mb-2">
-                        Übernimmt die Anker als <strong>verbindliche Leit-Aromen</strong> und springt in den
-                        Erstellen-Tab: Brief ist vorbefüllt, dort die <strong>Leitplanken</strong> setzen und starten.
-                    </p>
-                    <div class="flex flex-wrap gap-2">
-                        <button type="button" wire:click="composerUebernehmen('rezept')" @click="tab='basisrezept'"
-                                @disabled(empty($composerAnker))
-                                class="{{ $btnPrimary }} disabled:opacity-40" data-composer-go-rezept>
-                            Als Basisrezept vorbereiten →
-                        </button>
-                        <button type="button" wire:click="composerUebernehmen('gericht')" @click="tab='gericht'"
-                                @disabled(empty($composerAnker))
-                                class="{{ $btnGhost }} disabled:opacity-40" data-composer-go-gericht>
-                            Als Gericht vorbereiten →
-                        </button>
+                {{-- Aus den gewählten Zutaten in einen Erstell-Reiter springen. Der Brief wird vorbefüllt, die
+                     Zutaten reisen als verbindliche Leit-Aromen (seed_anker) mit; dort die Leitplanken setzen
+                     und starten. --}}
+                <x-foodalchemist::modal-section icon="heroicon-o-arrow-right-circle" title="Daraus weiterbauen">
+                    <div class="flex flex-col gap-3">
+                        <p class="{{ $hinweisText }}">Übernimmt die Zutaten als <span class="font-semibold text-[var(--fa-ink-2)]">verbindliche Leit-Aromen</span> und springt in den Erstell-Reiter. Der Brief ist vorbefüllt, dort die Leitplanken setzen und erstellen.</p>
+                        <div class="flex flex-wrap gap-2">
+                            <x-fa::button variant="primary" icon-right="heroicon-m-arrow-right" wire:click="composerUebernehmen('rezept')" x-on:click="tab='basisrezept'"
+                                :disabled="empty($composerAnker)" data-composer-go-rezept>Als Basisrezept vorbereiten</x-fa::button>
+                            <x-fa::button icon-right="heroicon-m-arrow-right" wire:click="composerUebernehmen('gericht')" x-on:click="tab='gericht'"
+                                :disabled="empty($composerAnker)" data-composer-go-gericht>Als Gericht vorbereiten</x-fa::button>
+                        </div>
+                        @if(empty($composerAnker))
+                            <p class="{{ $hinweisText }}">Erst mindestens eine Zutat wählen.</p>
+                        @endif
                     </div>
-                    @if(empty($composerAnker))
-                        <p class="text-[10px] text-gray-500 mt-1">Erst Anker wählen.</p>
-                    @endif
                 </x-foodalchemist::modal-section>
 
                 {{-- „Passt das zusammen?" — Spec 60: dieselbe Kombinationslogik wie im Gericht-Panel
