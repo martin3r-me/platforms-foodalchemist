@@ -1,6 +1,6 @@
 # 58 · Pairing: Harmonie und Kontrast
 
-**Stand 2026-10-06 · Branch `feat/pairing-harmonie-kontrast` off main (`16b92b4a`) · Status: in Arbeit**
+**Stand 2026-10-06 · Branch `feat/pairing-harmonie-kontrast` off main (`16b92b4a`) · Status: Pakete 1–6 gebaut, Suite läuft — PR/demo offen**
 
 > **Tracking:** Office Dev-Package 23, Features-Board.
 
@@ -77,6 +77,22 @@ geerdet = „belegt", sauer/bitter/umami/scharf = „geschätzt"), Zubereitungs-
 4. **Vorschläge** — Ernährungsform des Gerichts beachten, spezifisch vor Allrounder.
 5. **MCP** — `pairings.SUGGEST` / `composer.KOHAESION` liefern Harmonie/Kontrast/Lücken.
 6. **Anzeige** — Satz je Paar, Matrix ab 3 Bestandteilen, ruhiges Netz (Liniendicke = Sterne).
+
+## Umsetzung (2026-10-06)
+
+| Paket | Commit | Inhalt |
+|---|---|---|
+| 1 | `4cd594c0` | `PairingService::ankerZeilen` ohne `resolveByName`; GP ohne Mapping nur exakter Grundname (`ankerIdExakt`), Basisrezept rekursiv (`rekursiverKern`, Menge × Rolle, reine Salze nie Kern). Golden-Test nachgezogen. |
+| 2 | `fb913bc4` | Neuer `PairingAnalyseService`: Harmonie (3★/2★/Brücke), Zusammenhalt mit Abdeckung, Kontrast (Geschmack + Textur, je Art das stärkste Beispiel), Zubereitungs-Delta, Lücken, Sätze. |
+| 5 | `6b88702a` | MCP `pairings.SUGGEST` + `composer.KOHAESION` liefern `harmonie_kontrast`; ausführender Test. |
+| 4 | `f40f25d2` | `componentSuggestions`: nur 3★, Ernährungsform (vegan/vegetarisch) filtert Fleisch/Fisch/tierische Fonds bzw. Milch/Ei/Honig. |
+| 3 | `e637f41c` | Netz-Innenring aus derselben Auflösung; 2★ standardmäßig aus. |
+| 6 | `9c495714` | Baustein `passt-zusammen` im Gericht- und Basisrezept-Detail; Kopfzeile „Harmonie … · n % der Paare bewertbar". |
+
+Gemessen lokal (Kopie Dev-DB, ohne GP-Anker-Mappings): Gericht 2619 → „Rosmarinkartoffeln und
+Chimichurri: harmonieren sehr gut", „Spannung: Fett von Rosmarinkartoffeln gegen Säure von
+Chimichurri"; Chimichurri löst sich über die eigenen Zutaten auf statt als A1-Sauce. Auf demo
+(4.708 GP-Anker-Mappings) wird die Auflösung vollständiger.
 
 ## Nicht in dieser Spec
 
