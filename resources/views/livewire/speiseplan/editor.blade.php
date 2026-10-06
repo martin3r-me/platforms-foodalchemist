@@ -802,14 +802,14 @@
                         {{-- Spec 57 · Paket 6: Druck & Export der sichtbaren Woche/Mahlzeit --}}
                         <x-foodalchemist::modal-section title="Druck & Export · KW {{ (int) $montagDt->format('W') }} · {{ $mahlzeiten[$mahlzeit] ?? '' }}">
                             <div class="flex flex-wrap items-end gap-3 mb-3 text-xs">
-                                <label class="flex flex-col gap-1"><span class="{{ $label }}">Tag (Aufsteller, Schild, Tagesliste)</span>
+                                <label class="flex flex-col gap-1"><span class="{{ $label }}">Tag (Aufsteller, Schilder, Tagesliste)</span>
                                     <select wire:model.live="ausgabeTag" class="{{ $input }} h-8">
                                         @foreach($wochenTage as $wt)
                                             <option value="{{ $wt->format('Y-m-d') }}" @selected($wt->format('Y-m-d') === $ausgabeTagEffektiv)>{{ $tagKurz[$wt->isoWeekday()] }} {{ $wt->format('d.m.') }}</option>
                                         @endforeach
                                     </select>
                                 </label>
-                                <label class="flex flex-col gap-1"><span class="{{ $label }}">Linie (Schild)</span>
+                                <label class="flex flex-col gap-1"><span class="{{ $label }}">Linie (Linien-/Buffetschild)</span>
                                     <select wire:model.live="ausgabeLinie" class="{{ $input }} h-8">
                                         <option value="">alle Linien</option>
                                         @foreach($matrixLinien as $ml)<option value="{{ $ml->id }}">{{ $ml->name }}</option>@endforeach
@@ -820,8 +820,9 @@
                             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2" data-sp-ausgabe-formate>
                                 @foreach([
                                     ['woche', 'Wochenaushang A4', 'Linien × Tage, Kennzeichnung und Legende'],
-                                    ['tag', 'Tischaufsteller', 'ein Tag, alle Linien, groß gesetzt'],
+                                    ['tag', 'Tischaufsteller', 'Zeltkarte A4 quer, ein Tag, alle Linien'],
                                     ['schild', 'Linienschilder', 'je Linie ein Schild (A5 quer)'],
+                                    ['buffet', 'Buffetschilder', 'je Gericht und Komponente ein Zeltkärtchen, 6 pro A4'],
                                     ['liste_woche', 'Allergen- & Komponentenliste · Woche', 'für den Ordner an der Ausgabe'],
                                     ['liste_tag', 'Allergen- & Komponentenliste · Tag', 'nur der gewählte Tag'],
                                     ['csv', 'CSV-Export', 'Woche als Tabelle (Semikolon, Excel-tauglich)'],
@@ -832,7 +833,7 @@
                                     </a>
                                 @endforeach
                             </div>
-                            <p class="text-[11px] text-gray-400 mt-2">Kennzeichnung (Allergene, Zusatzstoffe, Kostform) kommt immer aus den Rezepten. Jede Vorlage lässt sich im neuen Tab als PDF herunterladen.</p>
+                            <p class="text-[11px] text-gray-400 mt-2">Kennzeichnung (Allergene, Zusatzstoffe, Kostform) kommt immer aus den Rezepten. Logo und Farben der Gäste-Drucke kommen aus Branding und Präsentations-Design (unten). Jede Vorlage lässt sich im neuen Tab als PDF herunterladen.</p>
                         </x-foodalchemist::modal-section>
 
                         <x-foodalchemist::modal-section title="Branding">

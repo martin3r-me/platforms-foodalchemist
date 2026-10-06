@@ -143,3 +143,84 @@ it('Paket 6 · E9: „laufende Woche“ friert die aktuelle Woche ein; der Monta
     Artisan::call('foodalchemist:speiseplan-aushang-rollieren');
     expect(Artisan::output())->toContain('0 Aushang/Aushänge erneuert');
 });
+
+/** Rezept mit fest gesetzter Kennzeichnung (alle 14 Allergene bewertet, außer $offen). */
+function druckRezept(int $teamId, string $key, string $name, array $enthalten = [], array $extra = [], array $offen = []): FoodAlchemistRecipe
+{
+    $r = FoodAlchemistRecipe::create(['team_id' => $teamId, 'recipe_key' => $key, 'name' => $name, 'status' => 'approved'] + $extra);
+    $werte = [];
+    foreach (array_keys(\Platform\FoodAlchemist\Models\FoodAlchemistItemAllergen::ALLERGENE) as $slug) {
+        $werte["allergen_{$slug}"] = in_array($slug, $offen, true) ? 'unbekannt' : (in_array($slug, $enthalten, true) ? 'enthalten' : 'nicht_enthalten');
+    }
+    \Illuminate\Support\Facades\DB::table($r->getTable())->where('id', $r->id)->update($werte);
+
+    return $r->fresh();
+}
+
+it('Druck: Einträge ohne Linie stehen auf Tischaufsteller und Allergenliste; Legende nur für den gezeigten Tag', function () {
+    $brot = druckRezept($this->rootTeam->id, 'druck-brot', 'Brotkorb', ['gluten'], ['is_sales_recipe' => true, 'sales_wording_standard' => 'Brotkorb']);
+    $fisch = druckRezept($this->rootTeam->id, 'druck-fisch', 'Fischfilet', ['fish'], ['is_sales_recipe' => true, 'sales_wording_standard' => 'Fischfilet']);
+    $this->svc->addEintrag($this->rootTeam, $this->plan->id, ['entry_date' => $this->mo, 'sales_recipe_id' => $brot->id]);   // ohne Linie
+    $this->svc->addEintrag($this->rootTeam, $this->plan->id, ['entry_date' => '2026-10-06', 'line_id' => $this->linie->id, 'sales_recipe_id' => $fisch->id]);
+    $plan = $this->svc->detail($this->rootTeam, $this->plan->id);
+
+    $tag = $this->svc->ausgabeFormat($this->rootTeam, $plan, 'tag', 'mittag', $this->mo, $this->mo);
+    $zeilen = collect($tag['bloecke'][0]['zeilen']);
+    expect($zeilen->pluck('linie')->all())->toContain('Weitere Gerichte')
+        ->and($zeilen->firstWhere('linie', 'Weitere Gerichte')['eintraege'][0]['titel'])->toBe('Brotkorb');
+    // Gluten (Montag) ja, Fisch (Dienstag) nicht in der Legende des Montags.
+    $labels = collect($tag['legende']['allergene'])->pluck('label');
+    expect($labels->all())->toContain('Glutenhaltiges Getreide')->not->toContain('Fisch');
+
+    $liste = $this->svc->ausgabeFormat($this->rootTeam, $plan, 'liste', 'mittag', $this->mo, $this->mo);
+    expect(collect($liste['bloecke'][0]['zeilen'])->pluck('linie')->all())->toContain('Weitere Gerichte');
+
+    // Linienschild: „Weitere Gerichte“ nur wenn belegt, nie als leeres Schild.
+    $schild = $this->svc->ausgabeFormat($this->rootTeam, $plan, 'schild', 'mittag', $this->mo, '2026-10-06');
+    expect(collect($schild['bloecke'][0]['zeilen'])->pluck('linie')->all())->not->toContain('Weitere Gerichte');
+
+    $this->get(route('foodalchemist.speiseplan.dokument', ['id' => $this->plan->id, 'format' => 'tag', 'tag' => $this->mo]))
+        ->assertOk()->assertSee('class="zelt', false)->assertSee('Brotkorb')->assertSee('Weitere Gerichte')->assertDontSee('Kantine Nord ·');
+});
+
+it('Druck: Buffetschilder lösen Pakete auf, ergänzen Unterrezepte und schreiben Allergene aus', function () {
+    $jus = druckRezept($this->rootTeam->id, 'druck-jus', 'Rotweinjus (Basis)', ['celery', 'sulphites']);
+    $braten = druckRezept($this->rootTeam->id, 'druck-braten', 'Rinderbraten', [], ['is_sales_recipe' => true, 'sales_wording_standard' => 'Rinderbraten | Rotweinjus', 'spec_contains_beef' => true]);
+    $g = FoodAlchemistVocabEinheit::where('slug', 'g')->first();
+    $braten->ingredients()->create(['team_id' => $this->rootTeam->id, 'position' => 0, 'referenced_recipe_id' => $jus->id, 'raw_text' => 'Jus', 'quantity' => 100, 'unit_vocab_id' => $g->id]);
+    $gratin = druckRezept($this->rootTeam->id, 'druck-gratin', 'Kartoffelgratin', ['milk'], ['is_sales_recipe' => true, 'sales_wording_standard' => 'Kartoffelgratin', 'spec_is_vegetarian' => true], ['eggs']);
+    $paket = \Platform\FoodAlchemist\Models\FoodAlchemistPaket::create(['team_id' => $this->rootTeam->id, 'name' => 'Buffet Klassik']);
+    foreach ([$braten, $gratin] as $i => $g) {
+        $paket->dishes()->create(['team_id' => $this->rootTeam->id, 'sales_recipe_id' => $g->id, 'position' => $i]);
+    }
+    $this->svc->addEintrag($this->rootTeam, $this->plan->id, ['entry_date' => '2026-10-06', 'line_id' => $this->linie->id, 'package_id' => $paket->id]);
+    $plan = $this->svc->detail($this->rootTeam, $this->plan->id);
+
+    $d = $this->svc->buffetKarten($this->rootTeam, $plan, 'mittag', $this->mo, '2026-10-06');
+    $karten = collect($d['karten']);
+    expect($karten->pluck('titel')->all())->toBe(['Rinderbraten', 'Rotweinjus', 'Kartoffelgratin']);   // „(Basis)“ gekappt
+
+    $j = $karten->firstWhere('titel', 'Rotweinjus');
+    expect($j['zu'])->toBe('Rinderbraten')
+        ->and(collect($j['allergene'])->pluck('label')->all())->toBe(['Sellerie', 'Schwefeldioxid & Sulfite'])
+        ->and($j['diaet'])->toBe([]);                                   // kein geratenes „mit Fleisch“
+    expect($karten->firstWhere('titel', 'Rinderbraten')['diaet'])->toBe(['rind'])
+        ->and($karten->firstWhere('titel', 'Rinderbraten')['wording'])->toBe('Rotweinjus');
+    $g = $karten->firstWhere('titel', 'Kartoffelgratin');
+    expect($g['diaet'])->toBe(['vegetarisch'])->and($g['unvollstaendig'])->toBeTrue();
+
+    // Ohne Unterrezepte nur die Gerichte.
+    expect($this->svc->buffetKarten($this->rootTeam, $plan, 'mittag', $this->mo, '2026-10-06', null, false)['karten'])->toHaveCount(2);
+
+    $this->get(route('foodalchemist.speiseplan.dokument', ['id' => $this->plan->id, 'format' => 'buffet', 'tag' => '2026-10-06']))
+        ->assertOk()->assertSee('Komponente zu Rinderbraten')->assertSee('Schwefeldioxid &amp; Sulfite', false)
+        ->assertSee('Allergene nicht vollständig bewertet');
+});
+
+it('Druck: CSV sortiert nach Linien-Reihenfolge des Plans, nicht alphabetisch', function () {
+    $zweite = $this->svc->addLinie($this->rootTeam, $this->plan->id, ['name' => 'Aktionstheke']);
+    $this->svc->addEintrag($this->rootTeam, $this->plan->id, ['entry_date' => $this->mo, 'line_id' => $zweite->id, 'sales_recipe_id' => $this->suppe->id]);
+    $zeilen = $this->svc->csvZeilen($this->rootTeam, $this->svc->detail($this->rootTeam, $this->plan->id), 'mittag', Carbon::parse($this->mo));
+
+    expect($zeilen[1][3])->toBe($this->linie->name)->and($zeilen[2][3])->toBe('Aktionstheke');
+});

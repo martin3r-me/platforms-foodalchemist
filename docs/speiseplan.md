@@ -47,7 +47,11 @@ Die **Wiederholungsregel** (Mindestabstand in Tagen) meldet in der rechten Spalt
 
 ## Ausgabe & Aushang
 
-- **Druck & Export** der sichtbaren Woche: Wochenaushang A4, Tischaufsteller (ein Tag), Linienschilder (A5 quer), Allergen- und Komponentenliste (Woche/Tag) und CSV. Jede Vorlage lässt sich als PDF laden; Preise optional.
+- **Druck & Export** der sichtbaren Woche: Wochenaushang A4, Tischaufsteller (ein Tag), Linienschilder (A5 quer), Buffetschilder, Allergen- und Komponentenliste (Woche/Tag) und CSV. Jede Vorlage lässt sich als PDF laden; Preise optional.
+  - **Tischaufsteller** = Zeltkarte A4 quer, mittig gefalzt, obere Hälfte kopfstehend; alle Linien des Tages, ab 9 Einträgen eine weitere Zeltkarte.
+  - **Buffetschilder** = je Gericht ein Zeltkärtchen (6 pro A4, gefalzt ca. 10 × 5 cm). Pakete und Concepts werden in ihre Gerichte aufgelöst; Unterrezepte (eine Ebene, z. B. Jus) bekommen ein eigenes Kärtchen „Komponente zu …“ (abschaltbar). Allergene ausgeschrieben; unbewertete Allergene → Hinweis „bitte beim Personal nachfragen“.
+  - **Gäste-Drucke** (Aufsteller, Linien-, Buffetschilder) tragen Logo und Footer aus dem Branding und Farben/Schrift aus dem Präsentations-Design; gedruckt wird immer auf Weiß (dunkle Designs liefern nur den Akzent, abgedunkelt bis lesbar).
+  - Einträge ohne Linie erscheinen als „Weitere Gerichte“ (auch in der Allergenliste). Die Legende gilt jeweils nur für die gezeigten Gerichte.
 - **Digitaler Aushang** (Spec 43): login-freier Link mit LMIV-Kennzeichnung, Kostformen und DGE-Ø, preislos. Veröffentlicht wird die gerade sichtbare Woche und Mahlzeit — oder **immer die laufende Woche** (jeden Montag automatisch neu eingefroren).
 
 ## Plan/Ist

@@ -1864,7 +1864,7 @@ class SpeiseplanService
 
     // ── Spec 57 · Paket 6: Ausgabe-Formate (Tischaufsteller, Linienschild, Liste, CSV) ──
 
-    public const AUSGABE_FORMATE = ['woche', 'tag', 'schild', 'liste'];
+    public const AUSGABE_FORMATE = ['woche', 'tag', 'schild', 'liste', 'buffet'];
 
     /**
      * Daten für die Druck-Formate neben dem Wochenaushang. Baut auf {@see dokumentDaten}
@@ -1874,6 +1874,9 @@ class SpeiseplanService
      * - `tag`: ein Tag, alle Linien (Tischaufsteller)
      * - `schild`: ein Tag, je Linie ein Schild (optional nur eine Linie), mit Preis nur wenn gewünscht
      * - `liste`: Allergen- und Komponentenliste der Woche oder eines Tages (für den Ordner an der Ausgabe)
+     *
+     * Einträge ohne Linie (Raster-Schlüssel 0) laufen als „Weitere Gerichte“ mit — sonst fehlten
+     * sie in der Allergenliste. Die Legende gilt für die gezeigten Einträge, nicht für die Woche.
      *
      * @return array<string, mixed>
      */
@@ -1894,13 +1897,18 @@ class SpeiseplanService
             $tage = array_slice($tage, 0, 1);   // Tischaufsteller/Schild: ohne Tag der erste Öffnungstag
         }
 
-        $linien = $plan->lines->filter(fn ($l) => $l->giltFuerMahlzeit($dok['mahlzeit']) && ($lineId === null || (int) $l->id === $lineId))->values();
+        $linien = $plan->lines->filter(fn ($l) => $l->giltFuerMahlzeit($dok['mahlzeit']) && ($lineId === null || (int) $l->id === $lineId))
+            ->map(fn ($l) => ['id' => (int) $l->id, 'name' => $l->name, 'color' => $l->color, 'plu' => $l->plu, 'role' => $l->role])->values()->all();
+        if ($lineId === null && isset($raster[0])) {
+            $linien[] = ['id' => 0, 'name' => 'Weitere Gerichte', 'color' => null, 'plu' => null, 'role' => null];
+        }
+        $usedCodes = [];
         $bloecke = [];
         foreach ($tage as $ymd) {
             $zeilen = [];
             foreach ($linien as $l) {
                 $eintraege = [];
-                foreach ($raster[(int) $l->id][$ymd] ?? [] as $e) {
+                foreach ($raster[$l['id']][$ymd] ?? [] as $e) {
                     $k = $zk['eintraege'][$e->id] ?? [];
                     $eintraege[] = [
                         'titel' => $k['titel'] ?? $e->inhaltName(),
@@ -1911,9 +1919,13 @@ class SpeiseplanService
                         'komponenten' => $k['komponenten'] ?? [],
                         'kcal' => $k['kcal'] ?? null,
                     ];
+                    foreach ($k['codes'] ?? [] as $c) {
+                        $usedCodes[rtrim((string) $c, '*')] = true;
+                    }
                 }
-                if ($eintraege !== [] || $format === 'schild') {
-                    $zeilen[] = ['linie' => $l->name, 'color' => $l->color, 'plu' => $l->plu, 'role' => $l->role, 'eintraege' => $eintraege];
+                // Leeres Schild nur für echte Linien — „Weitere Gerichte“ erscheint nur, wenn belegt.
+                if ($eintraege !== [] || ($format === 'schild' && $l['id'] !== 0)) {
+                    $zeilen[] = ['linie' => $l['name'], 'color' => $l['color'], 'plu' => $l['plu'], 'role' => $l['role'], 'eintraege' => $eintraege];
                 }
             }
             $bloecke[] = ['ymd' => $ymd, 'label' => $tageDerWoche[$ymd] ?? $ymd, 'zeilen' => $zeilen];
@@ -1921,8 +1933,200 @@ class SpeiseplanService
 
         return [
             'format' => $format, 'plan' => $plan, 'mahlzeitLabel' => $dok['mahlzeitLabel'], 'kwLabel' => $dok['kwLabel'],
-            'bloecke' => $bloecke, 'legende' => $dok['legende'], 'mitPreis' => $mitPreis, 'erzeugt' => $dok['erzeugt'],
-            'rollen' => FoodAlchemistSpeiseplanLinie::ROLLEN,
+            'bloecke' => $bloecke, 'legende' => $this->legendeAusCodes(array_keys($usedCodes)), 'mitPreis' => $mitPreis, 'erzeugt' => $dok['erzeugt'],
+            'rollen' => FoodAlchemistSpeiseplanLinie::ROLLEN, 'optik' => $this->druckOptik($team, $plan),
+        ];
+    }
+
+    /**
+     * Legende nur für die Codes, die im Dokument wirklich stehen (Allergen-Buchstaben,
+     * Zusatzstoff-Nummern; `*` = Spuren ist vorher abgeschnitten). Reihenfolge wie im Katalog.
+     *
+     * @param  list<string>  $codes
+     * @return array{allergene: list<array{code:string,label:string}>, zusatzstoffe: list<array{code:string,label:string}>}
+     */
+    private function legendeAusCodes(array $codes): array
+    {
+        $katalog = app(ConcepterAggregateService::class)->kennzeichnungKatalog();
+        $da = array_flip(array_map('strval', $codes));
+
+        return [
+            'allergene' => array_values(array_filter($katalog['allergene'], fn ($a) => isset($da[$a['code']]))),
+            'zusatzstoffe' => array_values(array_filter($katalog['zusatzstoffe'], fn ($z) => isset($da[$z['code']]))),
+        ];
+    }
+
+    /**
+     * Optik der Gäste-Drucke (Tischaufsteller, Linienschild, Buffetschild) aus dem Präsentationsmodus:
+     * Logo + Footer aus dem Branding des Plans, Farben + Schriftcharakter aus dem gewählten
+     * Präsentations-Design. Gedruckt wird immer auf weißem Papier — ein dunkles Design (Kiosk)
+     * liefert deshalb nur den Akzent, abgedunkelt bis er auf Weiß lesbar ist (≥ 4,5 : 1).
+     *
+     * @return array{logo:?string, footer:?string, akzent:string, band:string, text:string, muted:string, serif:bool, schrift_kopf:string, schrift_text:string}
+     */
+    public function druckOptik(Team $team, FoodAlchemistSpeiseplan $plan): array
+    {
+        $tokens = app(PresentationDesignService::class)->resolveTokens($plan->presentation_design ?: 'kiosk', $team);
+        $pal = $tokens['palette'] ?? [];
+        $hell = $this->luminanz((string) ($pal['bg'] ?? '#ffffff')) >= 0.5;
+        $akzent = $this->lesbarAufWeiss((string) ($pal['primary'] ?? ''), '#6d28d9');
+        $serif = in_array($tokens['typography']['heading'] ?? 'display-serif', ['display-serif', 'serif'], true);
+
+        return [
+            'logo' => app(FoodAlchemistMediaService::class)->dataUri($plan->logo_context_file_id ?? null, $plan->logo_path ?? null),
+            'footer' => trim((string) $plan->footer_text) !== '' ? trim((string) $plan->footer_text) : null,
+            'akzent' => $akzent,
+            'band' => $this->lesbarAufWeiss((string) ($plan->band_color ?? ''), $akzent),
+            'text' => $hell ? $this->lesbarAufWeiss((string) ($pal['text'] ?? ''), '#1a1712') : '#1a1712',
+            'muted' => $hell ? $this->lesbarAufWeiss((string) ($pal['muted'] ?? ''), '#5f5850') : '#5f5850',
+            'serif' => $serif,
+            // Schrift-Stacks fürs Template; PT Serif bettet partials/speiseplan-druck-schrift ein.
+            'schrift_kopf' => $serif ? '"PT Serif", "DejaVu Serif", Georgia, serif' : '"DejaVu Sans", Arial, sans-serif',
+            'schrift_text' => '"DejaVu Sans", Arial, sans-serif',
+        ];
+    }
+
+    /** Relative Leuchtdichte (WCAG) eines #rrggbb-Werts; Nicht-Hex zählt als Weiß. */
+    private function luminanz(string $hex): float
+    {
+        if (! preg_match('/^#?([0-9a-f]{6})$/i', trim($hex), $m)) {
+            return 1.0;
+        }
+        $kanal = function (int $v): float {
+            $c = $v / 255;
+
+            return $c <= 0.03928 ? $c / 12.92 : (($c + 0.055) / 1.055) ** 2.4;
+        };
+        [$r, $g, $b] = array_map('hexdec', str_split($m[1], 2));
+
+        return 0.2126 * $kanal($r) + 0.7152 * $kanal($g) + 0.0722 * $kanal($b);
+    }
+
+    /** Farbe so weit abdunkeln, bis sie auf Weiß 4,5 : 1 erreicht; Nicht-Hex → Ersatzfarbe. */
+    private function lesbarAufWeiss(string $hex, string $ersatz): string
+    {
+        $hex = trim($hex);
+        if (! preg_match('/^#?([0-9a-f]{6})$/i', $hex, $m)) {
+            return $ersatz;
+        }
+        [$r, $g, $b] = array_map('hexdec', str_split($m[1], 2));
+        for ($i = 0; $i < 30; $i++) {
+            $farbe = sprintf('#%02x%02x%02x', $r, $g, $b);
+            if (1.05 / ($this->luminanz($farbe) + 0.05) >= 4.5) {
+                return $farbe;
+            }
+            [$r, $g, $b] = [(int) floor($r * 0.9), (int) floor($g * 0.9), (int) floor($b * 0.9)];
+        }
+
+        return $ersatz;
+    }
+
+    /**
+     * Buffetschilder: ein Zeltkärtchen je Gericht eines Tages — Pakete und Concepts in ihre
+     * Gerichte aufgelöst ({@see eintragGerichte}), optional dazu je Unterrezept (eine Ebene,
+     * z. B. Jus oder Beilage) ein eigenes Kärtchen. Allergene ausgeschrieben, nicht als Code.
+     *
+     * Diät-Hinweise nur aus gesetzten Flags (vegan/vegetarisch, Schwein/Rind/Fisch) — das
+     * unbestimmte „mit Fleisch“ aus {@see diaetMerkmale} steht auf keinem Buffetschild, weil
+     * Unterrezepte die Flags oft gar nicht tragen. Unbewertete Allergene → `unvollstaendig`.
+     *
+     * @return array<string, mixed>
+     */
+    public function buffetKarten(Team $team, FoodAlchemistSpeiseplan $plan, string $mahlzeit = 'mittag', ?string $montag = null, ?string $tag = null, ?int $lineId = null, bool $mitUnterrezepten = true): array
+    {
+        $mahlzeit = array_key_exists($mahlzeit, self::MAHLZEITEN) ? $mahlzeit : 'mittag';
+        $mo = Carbon::parse($montag ?? $tag ?? ($plan->start_date ?? Carbon::now()))->startOfWeek(Carbon::MONDAY);
+        $tage = [];
+        foreach ($this->wochenTage($plan, $mo) as $t) {
+            $tage[$t->format('Y-m-d')] = self::WOCHENTAGE[$t->isoWeekday()] . ' ' . $t->format('d.m.');
+        }
+        $tagYmd = $tag !== null ? Carbon::parse($tag)->format('Y-m-d') : null;
+        if ($tagYmd === null || ! isset($tage[$tagYmd])) {
+            $tagYmd = array_key_first($tage) ?? $mo->format('Y-m-d');
+        }
+
+        $raster = $this->wochenRaster($plan, $mahlzeit, $mo);
+        $linienIds = $plan->lines->filter(fn ($l) => $l->giltFuerMahlzeit($mahlzeit) && ($lineId === null || (int) $l->id === $lineId))
+            ->map(fn ($l) => (int) $l->id)->values()->all();
+        if ($lineId === null) {
+            $linienIds[] = 0;
+        }
+        $linienNamen = $plan->lines->mapWithKeys(fn ($l) => [(int) $l->id => $l->name])->all();
+
+        $agg = app(ConcepterAggregateService::class);
+        $katalog = $agg->kennzeichnungKatalog();
+        $wording = app(WordingResolver::class);
+        $karten = [];
+        $gesehen = [];
+        $karte = function (FoodAlchemistRecipe $r, ?string $zu, ?string $linie) use ($agg, $katalog, $wording): array {
+            $text = $wording->fuerGericht($r)['text'];
+            if (trim((string) $r->sales_wording_standard) === '') {
+                $text = trim(preg_replace('/\s*\([^)]*\)\s*$/u', '', $text) ?? $text);   // „(Basis)“-Suffix ist intern
+            }
+            $teile = array_values(array_filter(array_map('trim', explode('|', $text)), fn ($t) => $t !== ''));
+            $k = $agg->kennzeichnungFromGerichte(collect([$r]));
+            $allergene = [];
+            $unvollstaendig = false;
+            foreach ($k['allergene'] as $a) {
+                if ($a['status'] === 'enthalten' || $a['status'] === 'spuren') {
+                    $allergene[] = ['code' => $katalog['allergene'][$a['slug']]['code'], 'label' => $a['label'], 'spuren' => $a['status'] === 'spuren'];
+                } elseif ($a['status'] === 'unbekannt') {
+                    $unvollstaendig = true;
+                }
+            }
+            $zusatz = [];
+            foreach ($k['zusatzstoffe'] as $z) {
+                if ($z['status'] === 'ja') {
+                    $zusatz[] = ['code' => $katalog['zusatzstoffe'][$z['slug']]['code'], 'label' => $z['label']];
+                }
+            }
+            $diaet = match (true) {
+                (bool) $r->spec_is_vegan => ['vegan'],
+                (bool) $r->spec_is_vegetarian => ['vegetarisch'],
+                default => array_values(array_filter([
+                    $r->spec_contains_pork ? 'schwein' : null,
+                    $r->spec_contains_beef ? 'rind' : null,
+                    collect($k['allergene'])->contains(fn ($a) => $a['slug'] === 'fish' && $a['status'] === 'enthalten') ? 'fisch' : null,
+                ])),
+            };
+
+            return [
+                'recipe_id' => (int) $r->id, 'titel' => $teile[0] ?? (string) $r->name,
+                'wording' => count($teile) > 1 ? implode(' · ', array_slice($teile, 1)) : null,
+                'zu' => $zu, 'linie' => $linie, 'diaet' => $diaet,
+                'allergene' => $allergene, 'zusatzstoffe' => $zusatz, 'unvollstaendig' => $unvollstaendig,
+            ];
+        };
+
+        foreach ($linienIds as $lid) {
+            foreach ($raster[$lid][$tagYmd] ?? [] as $e) {
+                foreach ($this->eintragGerichte($e) as $g) {
+                    if (isset($gesehen[(int) $g->id])) {
+                        continue;
+                    }
+                    $gesehen[(int) $g->id] = true;
+                    $gk = $karte($g, null, $linienNamen[$lid] ?? null);
+                    $karten[] = $gk;
+                    if (! $mitUnterrezepten) {
+                        continue;
+                    }
+                    $subs = $g->ingredients()->whereNotNull('referenced_recipe_id')->with('referencedRecipe')->orderBy('position')->get()
+                        ->pluck('referencedRecipe')->filter();
+                    foreach ($subs as $sub) {
+                        if (isset($gesehen[(int) $sub->id])) {
+                            continue;
+                        }
+                        $gesehen[(int) $sub->id] = true;
+                        $karten[] = $karte($sub, $gk['titel'], $linienNamen[$lid] ?? null);
+                    }
+                }
+            }
+        }
+
+        return [
+            'format' => 'buffet', 'plan' => $plan, 'mahlzeitLabel' => self::MAHLZEITEN[$mahlzeit],
+            'tagLabel' => $tage[$tagYmd] ?? $tagYmd, 'karten' => $karten, 'mitUnterrezepten' => $mitUnterrezepten,
+            'optik' => $this->druckOptik($team, $plan), 'erzeugt' => Carbon::now()->format('d.m.Y'),
         ];
     }
 
@@ -1958,9 +2162,12 @@ class SpeiseplanService
                 }
             }
         }
-        // Sortiert nach Datum, dann Linie — so liest sich die Datei wie der Plan.
+        // Sortiert nach Datum, dann Linien-Reihenfolge des Plans („Ohne Linie“ zuletzt) — so liest
+        // sich die Datei wie der Plan (vorher alphabetisch nach Linienname).
         $kopf = array_shift($zeilen);
-        usort($zeilen, fn ($a, $b) => [Carbon::createFromFormat('d.m.Y', $a[0])->format('Ymd'), $a[3]] <=> [Carbon::createFromFormat('d.m.Y', $b[0])->format('Ymd'), $b[3]]);
+        $rang = array_flip($plan->lines->pluck('name')->all());
+        $schluessel = fn ($z) => [Carbon::createFromFormat('d.m.Y', $z[0])->format('Ymd'), $rang[$z[3]] ?? PHP_INT_MAX];
+        usort($zeilen, fn ($a, $b) => $schluessel($a) <=> $schluessel($b));
 
         return [$kopf, ...$zeilen];
     }
