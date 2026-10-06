@@ -71,8 +71,12 @@ it('BRANDING / CUSTOMER_LINK', function () {
     expect($br->success)->toBeTrue('branding: ' . ($br->error ?? ''));
     expect($this->plan->fresh()->brand_color)->toBe('#00ff88');
 
-    $cl = ($this->run)('foodalchemist.speiseplan.CUSTOMER_LINK', ['id' => $this->plan->id, 'company_id' => 42]);
-    expect($cl->success)->toBeTrue('link: ' . ($cl->error ?? ''))->and($cl->data['crm_company_id'])->toBe(42);
+    // Spec 64 §1: verknüpft wird nur eine CRM-Firma des eigenen Haupt-Teams (vorher reichte eine erfundene ID)
+
+    $firma = \Platform\Crm\Models\CrmCompany::create(['team_id' => $this->rootTeam->id, 'name' => 'Testkunde', 'is_active' => true]);
+
+    $cl = ($this->run)('foodalchemist.speiseplan.CUSTOMER_LINK', ['id' => $this->plan->id, 'company_id' => $firma->id]);
+    expect($cl->success)->toBeTrue('link: ' . ($cl->error ?? ''))->and((int) $cl->data['crm_company_id'])->toBe((int) $firma->id);
 });
 
 it('Linien: POST / PUT / MOVE / DELETE', function () {

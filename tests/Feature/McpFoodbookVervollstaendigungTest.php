@@ -57,8 +57,12 @@ it('foodbooks: LIST / PUT / STATUS / BRANDING / CUSTOMER_LINK', function () {
     expect($br->success)->toBeTrue('branding: ' . ($br->error ?? ''));
     expect($this->fb->fresh()->brand_color)->toBe('#123456');
 
-    $cl = ($this->run)('foodalchemist.foodbooks.CUSTOMER_LINK', ['id' => $this->fb->id, 'company_id' => 42]);
-    expect($cl->success)->toBeTrue('link: ' . ($cl->error ?? ''))->and($cl->data['crm_company_id'])->toBe(42);
+    // Spec 64 §1: verknüpft wird nur eine CRM-Firma des eigenen Haupt-Teams (vorher reichte eine erfundene ID)
+
+    $firma = \Platform\Crm\Models\CrmCompany::create(['team_id' => $this->rootTeam->id, 'name' => 'Testkunde', 'is_active' => true]);
+
+    $cl = ($this->run)('foodalchemist.foodbooks.CUSTOMER_LINK', ['id' => $this->fb->id, 'company_id' => $firma->id]);
+    expect($cl->success)->toBeTrue('link: ' . ($cl->error ?? ''))->and((int) $cl->data['crm_company_id'])->toBe((int) $firma->id);
 
     $st = ($this->run)('foodalchemist.foodbooks.STATUS', ['id' => $this->fb->id, 'status' => 'aktiv']);
     expect($st->success)->toBeTrue('status: ' . ($st->error ?? ''));

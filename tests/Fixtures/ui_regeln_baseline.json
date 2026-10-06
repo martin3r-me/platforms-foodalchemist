@@ -6,12 +6,15 @@
         "mini_schrift": 1,
         "style_statisch": 1
     },
+    "components/kombination.blade.php": {
+        "mini_schrift": 2
+    },
     "components/kpi-tiles.blade.php": {
         "mini_schrift": 1
     },
     "components/pairing-netz.blade.php": {
         "hex_farbe": 1,
-        "emoji": 5,
+        "emoji": 3,
         "style_statisch": 1
     },
     "dokumente/angebot-karte.blade.php": {
@@ -66,6 +69,9 @@
     "dokumente/partials/schritt-karten-css.blade.php": {
         "hex_farbe": 6
     },
+    "dokumente/partials/speiseplan-druck-schrift.blade.php": {
+        "style_block": 1
+    },
     "dokumente/produktionsauftrag.blade.php": {
         "hex_farbe": 13,
         "style_block": 1
@@ -81,10 +87,15 @@
         "style_block": 1,
         "style_statisch": 7
     },
-    "dokumente/speiseplan-format.blade.php": {
-        "hex_farbe": 26,
+    "dokumente/speiseplan-buffet.blade.php": {
+        "hex_farbe": 11,
         "style_block": 1,
-        "style_statisch": 4
+        "style_statisch": 5
+    },
+    "dokumente/speiseplan-format.blade.php": {
+        "hex_farbe": 20,
+        "style_block": 1,
+        "style_statisch": 6
     },
     "dokumente/speiseplan.blade.php": {
         "hex_farbe": 31,
@@ -107,13 +118,15 @@
         "mini_schrift": 1
     },
     "livewire/concepter/partials/pairing-empfehlungen.blade.php": {
-        "hex_farbe": 1,
-        "mini_schrift": 5,
-        "style_statisch": 1
+        "hex_farbe": 2,
+        "emoji": 3,
+        "mini_schrift": 6,
+        "style_statisch": 2
     },
     "livewire/concepter/partials/pairing.blade.php": {
         "hex_farbe": 1,
-        "mini_schrift": 3,
+        "emoji": 6,
+        "mini_schrift": 4,
         "style_statisch": 1
     },
     "livewire/foodbooks/praesentation.blade.php": {
@@ -123,15 +136,15 @@
     "livewire/planung/index.blade.php": {
         "hex_farbe": 13,
         "important": 1,
-        "emoji": 10,
+        "emoji": 18,
         "mini_schrift": 5,
         "style_statisch": 8
     },
     "livewire/recipes/pairing-netz-modal.blade.php": {
-        "hex_farbe": 10,
-        "emoji": 22,
+        "hex_farbe": 13,
+        "emoji": 10,
         "mini_schrift": 2,
-        "style_statisch": 5
+        "style_statisch": 6
     },
     "livewire/speisekarte/partials/praesentation-rubrik.blade.php": {
         "mini_schrift": 1

@@ -49,8 +49,12 @@ it('PUT / STATUS / CUSTOMER_LINK / RECOMPUTE', function () {
     expect($st->success)->toBeTrue('status: ' . ($st->error ?? ''));
     expect($this->angebot->fresh()->status instanceof \BackedEnum ? $this->angebot->fresh()->status->value : $this->angebot->fresh()->status)->toBe('versendet');
 
-    $cl = ($this->run)('foodalchemist.angebote.CUSTOMER_LINK', ['id' => $this->angebot->id, 'company_id' => 42]);
-    expect($cl->success)->toBeTrue('link: ' . ($cl->error ?? ''))->and($cl->data['crm_company_id'])->toBe(42);
+    // Spec 64 §1: verknüpft wird nur eine CRM-Firma des eigenen Haupt-Teams (vorher reichte eine erfundene ID)
+
+    $firma = \Platform\Crm\Models\CrmCompany::create(['team_id' => $this->rootTeam->id, 'name' => 'Testkunde', 'is_active' => true]);
+
+    $cl = ($this->run)('foodalchemist.angebote.CUSTOMER_LINK', ['id' => $this->angebot->id, 'company_id' => $firma->id]);
+    expect($cl->success)->toBeTrue('link: ' . ($cl->error ?? ''))->and((int) $cl->data['crm_company_id'])->toBe((int) $firma->id);
 
     $rc = ($this->run)('foodalchemist.angebote.RECOMPUTE', ['id' => $this->angebot->id]);
     expect($rc->success)->toBeTrue('rc: ' . ($rc->error ?? ''));

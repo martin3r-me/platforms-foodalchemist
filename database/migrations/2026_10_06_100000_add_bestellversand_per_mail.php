@@ -45,6 +45,7 @@ return new class extends Migration
             $table->unsignedBigInteger('ausgeloest_von')->nullable(); // user_id
             $table->timestamp('versendet_am')->nullable();
             $table->timestamps();
+            $table->softDeletes();
             $table->index(['order_id', 'typ'], 'fa_order_mails_order_typ_idx');
         });
     }
