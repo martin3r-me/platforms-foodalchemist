@@ -1104,6 +1104,7 @@ class Editor extends Component
                 'woche' => route('foodalchemist.speiseplan.dokument', $basis),
                 'tag' => route('foodalchemist.speiseplan.dokument', $basis + ['format' => 'tag', 'tag' => $ausgabeTag]),
                 'schild' => route('foodalchemist.speiseplan.dokument', $basis + ['format' => 'schild', 'tag' => $ausgabeTag] + $linie),
+                'buffet' => route('foodalchemist.speiseplan.dokument', $basis + ['format' => 'buffet', 'tag' => $ausgabeTag] + $linie),
                 'liste_woche' => route('foodalchemist.speiseplan.dokument', $basis + ['format' => 'liste']),
                 'liste_tag' => route('foodalchemist.speiseplan.dokument', $basis + ['format' => 'liste', 'tag' => $ausgabeTag]),
                 'csv' => route('foodalchemist.speiseplan.dokument', ['id' => $sp->id, 'mahlzeit' => $this->mahlzeit, 'montag' => $montag->format('Y-m-d'), 'format' => 'csv']),

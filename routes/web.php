@@ -547,6 +547,23 @@ Route::get('/speiseplan/{id}/dokument', function (int $id, \Platform\FoodAlchemi
         }, $dateiname, ['Content-Type' => 'text/csv; charset=UTF-8']);
     }
 
+    // Buffetschilder: je Gericht (+ Unterrezept) ein Zeltkärtchen, 6 pro A4.
+    if ($format === 'buffet') {
+        $linie = request()->query('linie') !== null ? (int) request()->query('linie') : null;
+        $data = $svc->buffetKarten($team, $plan, $mahlzeit, request()->query('montag'), request()->query('tag'), $linie, request()->query('unterrezepte', '1') !== '0');
+        if (request()->boolean('pdf')) {
+            if (! class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
+                abort(500, 'PDF-Export nicht verfügbar: DomPDF ist auf diesem Server nicht installiert.');
+            }
+
+            return \Barryvdh\DomPDF\Facade\Pdf::loadView('foodalchemist::dokumente.speiseplan-buffet', $data + ['istPdf' => true])
+                ->setPaper('a4', 'portrait')
+                ->download('Speiseplan-' . $id . '-Buffetschilder.pdf');
+        }
+
+        return view('foodalchemist::dokumente.speiseplan-buffet', $data + ['istPdf' => false]);
+    }
+
     // Spec 57 · Paket 6: Tischaufsteller (tag), Linienschild (schild), Allergen-/Komponentenliste (liste).
     if (in_array($format, ['tag', 'schild', 'liste'], true)) {
         $linie = request()->query('linie') !== null ? (int) request()->query('linie') : null;
@@ -555,7 +572,7 @@ Route::get('/speiseplan/{id}/dokument', function (int $id, \Platform\FoodAlchemi
             if (! class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
                 abort(500, 'PDF-Export nicht verfügbar: DomPDF ist auf diesem Server nicht installiert.');
             }
-            $papier = ['tag' => ['a4', 'portrait'], 'schild' => ['a5', 'landscape'], 'liste' => ['a4', 'portrait']][$format];
+            $papier = ['tag' => ['a4', 'landscape'], 'schild' => ['a5', 'landscape'], 'liste' => ['a4', 'portrait']][$format];   // tag = Zeltkarte, mittig gefalzt
 
             return \Barryvdh\DomPDF\Facade\Pdf::loadView('foodalchemist::dokumente.speiseplan-format', $data + ['istPdf' => true])
                 ->setPaper($papier[0], $papier[1])
