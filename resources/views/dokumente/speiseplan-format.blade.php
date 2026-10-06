@@ -35,6 +35,9 @@
         .doc { max-width: {{ $zelt ? '297mm' : '820px' }}; margin: 0 auto; }
         @if($zelt && ! ($istPdf ?? false))
         @media screen { body { background: #e5e7eb; } .zelt { margin: 0 auto 24px; box-shadow: 0 2px 12px rgba(0,0,0,.15); } }
+        /* Bildschirm-Vorschau: das Blatt ist 297 mm breit — in schmalen Fenstern verkleinert zeigen statt quer scrollen. */
+        @media screen and (max-width: 1160px) { .zelt, .actions { zoom: .72; } }
+        @media screen and (max-width: 860px) { .zelt, .actions { zoom: .5; } }
         @endif
         @media print { .zelt { margin: 0; box-shadow: none; } }
         .actions { margin-bottom: 16px; }

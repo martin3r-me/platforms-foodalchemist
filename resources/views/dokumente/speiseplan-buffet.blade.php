@@ -22,6 +22,7 @@
         .btn.ghost { background: #fff; color: #374151; }
         .hinweis { font-size: 12px; color: #4b5563; margin-top: 8px; }
         @media screen { body { background: #e5e7eb; } .blatt { margin: 0 auto 24px; box-shadow: 0 2px 12px rgba(0,0,0,.15); } }
+        @media screen and (max-width: 860px) { .blatt { zoom: .6; } }
         @media print { .actions { display: none; } body { padding: 0; background: #fff; } .blatt { margin: 0; box-shadow: none; } }
         .blatt { position: relative; width: 210mm; height: 297mm; overflow: hidden; background: #fff; page-break-after: always; }
         .blatt.letzte { page-break-after: auto; }
