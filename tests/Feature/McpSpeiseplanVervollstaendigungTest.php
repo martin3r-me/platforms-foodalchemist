@@ -2,6 +2,7 @@
 
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Tools\ToolRegistry;
+use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplanEintrag;
 use Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplanLinie;
 use Platform\FoodAlchemist\Services\SpeiseplanService;
@@ -25,7 +26,12 @@ beforeEach(function () {
     $this->svc = app(SpeiseplanService::class);
     $this->plan = $this->svc->create($this->rootTeam, ['name' => 'Kantine KW', 'start_date' => '2027-01-04', 'cycle_weeks' => 1]);
     $this->linie = $this->svc->addLinie($this->rootTeam, $this->plan->id, ['name' => 'Menü 1']);
-    $this->eintrag = $this->svc->addEintrag($this->rootTeam, $this->plan->id, ['entry_date' => '2027-01-04', 'mahlzeit' => 'mittag', 'line_id' => $this->linie->id]);
+    // Spec 57 · 0.1: ein Eintrag braucht genau einen sichtbaren Inhalt (vorher ging ein leerer Eintrag durch).
+    $this->gericht = FoodAlchemistRecipe::create([
+        'team_id' => $this->rootTeam->id, 'recipe_key' => 'mcp-sp-g1', 'name' => 'Tagessuppe', 'status' => 'approved',
+        'is_sales_recipe' => true, 'sales_net' => 3.50, 'ek_total_eur' => 1.00,
+    ]);
+    $this->eintrag = $this->svc->addEintrag($this->rootTeam, $this->plan->id, ['entry_date' => '2027-01-04', 'mahlzeit' => 'mittag', 'line_id' => $this->linie->id, 'sales_recipe_id' => $this->gericht->id]);
 });
 
 it('Registry-Smoke: alle 13 D9-Tools registriert mit type=object', function () {

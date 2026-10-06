@@ -688,7 +688,7 @@ class SpeiseplanService
             'meal' => $mahlzeit,
             'line_id' => $linieId,
             'position' => (int) $plan->entries()
-                ->where('entry_date', $tag)->where('meal', $mahlzeit)
+                ->whereDate('entry_date', $tag)->where('meal', $mahlzeit)
                 ->when($linieId !== null, fn ($q) => $q->where('line_id', $linieId))->max('position') + 1,
         ]));
     }
@@ -807,7 +807,7 @@ class SpeiseplanService
             'meal' => $meal,
             'line_id' => $lineId,
             'position' => (int) $plan->entries()->whereKeyNot($e->id)
-                ->where('entry_date', $tag)->where('meal', $meal)
+                ->whereDate('entry_date', $tag)->where('meal', $meal)
                 ->when($lineId !== null, fn ($q) => $q->where('line_id', $lineId), fn ($q) => $q->whereNull('line_id'))
                 ->max('position') + 1,
         ]);
@@ -844,7 +844,7 @@ class SpeiseplanService
             if ($tag === $e->entry_date?->format('Y-m-d')) {
                 continue;
             }
-            $gleich = $plan->entries()->where('entry_date', $tag)->where('meal', $e->meal)
+            $gleich = $plan->entries()->whereDate('entry_date', $tag)->where('meal', $e->meal)
                 ->when($e->line_id !== null, fn ($q) => $q->where('line_id', $e->line_id), fn ($q) => $q->whereNull('line_id'))
                 ->where('concept_id', $e->concept_id)->where('package_id', $e->package_id)->where('sales_recipe_id', $e->sales_recipe_id)
                 ->exists();
@@ -856,7 +856,7 @@ class SpeiseplanService
                 'week' => 1, 'weekday' => (int) $ziel->isoWeekday(), 'meal' => $e->meal, 'line_id' => $e->line_id,
                 'concept_id' => $e->concept_id, 'package_id' => $e->package_id, 'sales_recipe_id' => $e->sales_recipe_id,
                 'pax' => $e->pax,
-                'position' => (int) $plan->entries()->where('entry_date', $tag)->where('meal', $e->meal)->max('position') + 1,
+                'position' => (int) $plan->entries()->whereDate('entry_date', $tag)->where('meal', $e->meal)->max('position') + 1,
             ]);
             $neu++;
         }
@@ -1420,7 +1420,8 @@ class SpeiseplanService
 
     /**
      * Diät-Merkmale aus vorhandenen Flags — ohne Raten. Geflügel/Lamm/Wild haben kein Datenfeld;
-     * sie erscheinen als „fleisch“ (unbestimmt), nicht als geratene Tierart (Spec 57 · E3).
+     * sie erscheinen als „fleisch“ (Tierart unbestimmt), nicht als geratene Tierart (Spec 57 · E3).
+     * Ist die Diät gar nicht gepflegt (unbekannt), bleibt die Liste leer — unbekannt ist nicht Fleisch.
      *
      * @return list<string>  vegan | vegetarisch | schwein | rind | fisch | fleisch
      */
@@ -1447,7 +1448,14 @@ class SpeiseplanService
             $out[] = 'fisch';
         }
 
-        return $out !== [] ? $out : ['fleisch'];
+        // „Fleisch" nur, wenn es FESTSTEHT (mind. ein Gericht ausdrücklich nicht vegetarisch, oder
+        // Schwein/Rind gepflegt). Unbekannte Diät-Angaben (NULL nach Recompute, GP ohne Tags) sind
+        // kein Fleisch — vorher landeten Suppen und Desserts ohne Pflege als „Fleisch" auf dem Aushang.
+        if ($out === [] && ($roll['fleisch_belegt'] ?? false)) {
+            $out[] = 'fleisch';
+        }
+
+        return $out;
     }
 
     /**

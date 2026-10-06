@@ -35,6 +35,8 @@ beforeEach(function () {
     $g = FoodAlchemistVocabEinheit::create(['team_id' => $this->rootTeam->id, 'slug' => 'g', 'display_de' => 'Gramm', 'dimension' => 'mass', 'default_in_g' => 1]);
     $lieferant = FoodAlchemistSupplier::create(['team_id' => $this->rootTeam->id, 'name' => 'Chefs']);
     $this->linsen = $this->makeGp($this->rootTeam, 'Linsen');
+    // Diät-Flags des Gerichts leitet der Recompute aus den GP-Tags ab (am Gericht gesetzte Werte überschreibt er).
+    $this->linsen->update(['tag_is_vegan' => true, 'tag_is_vegetarian' => true, 'tag_is_halal' => true, 'tag_is_lactose_free' => true, 'tag_contains_pork' => false, 'tag_contains_beef' => false]);
     $la = FoodAlchemistSupplierItem::create([
         'team_id' => $this->rootTeam->id, 'supplier_id' => $lieferant->id,
         'designation' => 'Linsen 1kg', 'article_number' => 'ART-LIN', 'qty' => 1.0, 'unit_code' => 'kg',
@@ -142,6 +144,39 @@ it('Paket 6 · E9: „laufende Woche“ friert die aktuelle Woche ein; der Monta
     // Zweiter Lauf: nichts mehr zu tun.
     Artisan::call('foodalchemist:speiseplan-aushang-rollieren');
     expect(Artisan::output())->toContain('0 Aushang/Aushänge erneuert');
+});
+
+it('Diät-Kennzeichnung: unbekannte Diät-Angaben werden NICHT zu „Fleisch"', function () {
+    // GP ohne Diät-Tags → Recompute setzt spec_is_* auf NULL (unbekannt), nie auf „nicht vegetarisch".
+    $gp = $this->makeGp($this->rootTeam, 'Mascarpone');
+    $dessert = FoodAlchemistRecipe::create([
+        'team_id' => $this->rootTeam->id, 'recipe_key' => 'sp57c-dessert', 'name' => 'Tiramisu',
+        'status' => 'approved', 'is_sales_recipe' => true, 'sales_net' => 3.00, 'sales_unit_count' => 10,
+    ]);
+    $dessert->ingredients()->create(['team_id' => $this->rootTeam->id, 'position' => 0, 'gp_id' => $gp->id, 'raw_text' => 'Mascarpone', 'quantity' => 500, 'unit_vocab_id' => FoodAlchemistVocabEinheit::where('slug', 'g')->value('id')]);
+    app(RecipeRecomputeService::class)->recomputePipeline($dessert->id);
+    expect($dessert->fresh()->spec_is_vegetarian)->toBeNull();
+
+    $linie2 = $this->svc->addLinie($this->rootTeam, $this->plan->id, ['name' => 'Dessert']);
+    $this->svc->addEintrag($this->rootTeam, $this->plan->id, ['entry_date' => $this->mo, 'line_id' => $linie2->id, 'sales_recipe_id' => $dessert->id]);
+    $plan = $this->svc->detail($this->rootTeam, $this->plan->id);
+    $schild = $this->svc->ausgabeFormat($this->rootTeam, $plan, 'schild', 'mittag', $this->mo, $this->mo, $linie2->id, null, true);
+    expect($schild['bloecke'][0]['zeilen'][0]['eintraege'][0]['diaet'])->toBe([]);
+
+    // Belegt nicht vegetarisch → weiterhin „Fleisch" (eigenes Gericht: der Service cached Gerichte je Eintrag).
+    $speck = $this->makeGp($this->rootTeam, 'Speck');
+    $speck->update(['tag_is_vegan' => false, 'tag_is_vegetarian' => false, 'tag_is_halal' => false, 'tag_is_lactose_free' => true, 'tag_contains_pork' => false, 'tag_contains_beef' => false]);
+    $eintopf = FoodAlchemistRecipe::create([
+        'team_id' => $this->rootTeam->id, 'recipe_key' => 'sp57c-eintopf', 'name' => 'Eintopf',
+        'status' => 'approved', 'is_sales_recipe' => true, 'sales_net' => 4.00, 'sales_unit_count' => 10,
+    ]);
+    $eintopf->ingredients()->create(['team_id' => $this->rootTeam->id, 'position' => 0, 'gp_id' => $speck->id, 'raw_text' => 'Speck', 'quantity' => 200, 'unit_vocab_id' => FoodAlchemistVocabEinheit::where('slug', 'g')->value('id')]);
+    app(RecipeRecomputeService::class)->recomputePipeline($eintopf->id);
+    $linie3 = $this->svc->addLinie($this->rootTeam, $this->plan->id, ['name' => 'Eintopf']);
+    $this->svc->addEintrag($this->rootTeam, $this->plan->id, ['entry_date' => $this->mo, 'line_id' => $linie3->id, 'sales_recipe_id' => $eintopf->id]);
+    $plan = $this->svc->detail($this->rootTeam, $this->plan->id);
+    $schild = $this->svc->ausgabeFormat($this->rootTeam, $plan, 'schild', 'mittag', $this->mo, $this->mo, $linie3->id, null, true);
+    expect($schild['bloecke'][0]['zeilen'][0]['eintraege'][0]['diaet'])->toBe(['fleisch']);
 });
 
 /** Rezept mit fest gesetzter Kennzeichnung (alle 14 Allergene bewertet, außer $offen). */
