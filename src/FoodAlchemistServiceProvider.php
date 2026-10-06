@@ -749,6 +749,9 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\PairingsGetTool::class,
                     \Platform\FoodAlchemist\Tools\PairingsSuggestTool::class,
                     \Platform\FoodAlchemist\Tools\KombinationGetTool::class,
+                    // Spec 60 · P8: Anker-Wissen ansehen + anker-weise freigeben (Kurator)
+                    \Platform\FoodAlchemist\Tools\AnkerWissenGetTool::class,
+                    \Platform\FoodAlchemist\Tools\AnkerWissenStatusTool::class,
                     // Composer per MCP (read-only): Anker-Menge browsen/bewerten/erden (Phase 3)
                     \Platform\FoodAlchemist\Tools\ComposerAnkerSucheTool::class,
                     \Platform\FoodAlchemist\Tools\ComposerKohaesionTool::class,

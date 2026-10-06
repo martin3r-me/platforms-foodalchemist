@@ -29,7 +29,15 @@ enum SignalTyp: string
     // R9.1: Vertrags-Kündigungsfrist eines Lieferanten läuft ab.
     case VertragsfristFaellig = 'vertragsfrist_faellig';
     // R6.11 · S2: Pairing-Wissensdokument behauptet eine Paarung, die der Anker-Graph nicht kennt (R&D-Frage).
+    // ABGELÖST (Spec 60 · P8): die Pairing-Dokumente gibt es nicht mehr, der Detektor ist entfernt und der
+    // offene Altbestand per Migration geschlossen. Der Case bleibt, damit die geschlossenen Zeilen lesbar sind.
     case WiderspruchWissenGraph = 'widerspruch_wissen_graph';
+    // Spec 60 · P8: die vier Pairing-Signale ({@see \Platform\FoodAlchemist\Services\Pairing\PairingSignale}).
+    // Präfix `pairing_` statt `rezept_`: sonst zählten sie zur Rezept-Qualitäts-Ebene der Ampel.
+    case PairingWissenPruefen = 'pairing_wissen_pruefen';
+    case PairingWiderspruchMessung = 'pairing_widerspruch_messung';
+    case PairingKonfliktImGericht = 'pairing_konflikt_im_gericht';
+    case PairingWissensluecke = 'pairing_wissensluecke';
     // Spec 19 E9.3: Kreativ-Phase wünscht ein Aroma, das kein beschaffbarer GP trägt (Sortiments-/Buy-Signal).
     case SortimentsLuecke = 'sortiments_luecke';
     // Spec 21 Tranche A: Inhalts-Qualität auf Rezept-Ebene (deterministisch, 0-Egress).
@@ -145,7 +153,11 @@ enum SignalTyp: string
             self::EkKetteUnvollstaendig => 'EK-Kette unvollständig',
             self::VkAnpassungEmpfohlen => 'VK-Anpassung empfohlen',
             self::VertragsfristFaellig => 'Vertragsfrist fällig',
-            self::WiderspruchWissenGraph => 'Widerspruch Wissen ↔ Graph',
+            self::WiderspruchWissenGraph => 'Widerspruch Wissen ↔ Graph (abgelöst)',
+            self::PairingWissenPruefen => 'Anker-Wissen zur Prüfung',
+            self::PairingWiderspruchMessung => 'Widerspruch Anker-Wissen ↔ Messung',
+            self::PairingKonfliktImGericht => 'Aroma-Konflikt im Gericht',
+            self::PairingWissensluecke => 'Anker ohne Wissen (viel genutzt)',
             self::SortimentsLuecke => 'Sortiments-Lücke',
             self::RezeptOhneZubereitung => 'Rezept ohne Zubereitung',
             self::RezeptMengenLuecke => 'Rezept mit Mengen-Lücke',
@@ -198,6 +210,10 @@ enum SignalTyp: string
             self::VkAnpassungEmpfohlen => 'heroicon-o-tag',
             self::VertragsfristFaellig => 'heroicon-o-calendar-days',
             self::WiderspruchWissenGraph => 'heroicon-o-light-bulb',
+            self::PairingWissenPruefen => 'heroicon-o-clipboard-document-check',
+            self::PairingWiderspruchMessung => 'heroicon-o-scale',
+            self::PairingKonfliktImGericht => 'heroicon-o-fire',
+            self::PairingWissensluecke => 'heroicon-o-book-open',
             self::SortimentsLuecke => 'heroicon-o-shopping-bag',
             self::RezeptOhneZubereitung => 'heroicon-o-document-minus',
             self::RezeptMengenLuecke => 'heroicon-o-scale',

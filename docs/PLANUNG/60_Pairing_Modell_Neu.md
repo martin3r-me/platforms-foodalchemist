@@ -1,6 +1,6 @@
 # 60 · Pairing-Backend: Modell
 
-**Stand 2026-10-06 · Branch `feat/pairing-modell-60` (auf Spec 58) · Status: P1–P7c gebaut und lokal committet; P7-Rest (Netz, Concept-Ranking) und P8 (Signale) offen · nichts gepusht/deployt**
+**Stand 2026-10-06 · Branch `feat/pairing-modell-60` (auf Spec 58) · Status: P1–P7c und P8 gebaut und lokal committet; P7-Rest (Netz, Concept-Ranking) offen · nichts gepusht/deployt**
 
 > **Ziel (Dominique):**
 > - Das Pairing-Backend wird sauber und stabil modelliert.
@@ -261,7 +261,9 @@ Der Schlüssel `prozess` in der Anker-Auflösung bleibt bis P6 als leere Liste s
 | P7b Generator | ✅ | `KombinationsPlan` ersetzt die alte Partnerliste: Leit-Aromen nur exakt, Harmonie nur 3★, Bedarfe mit Lieferanten, Konflikte, beim Gericht Basisrezepte als Komponente |
 | P7c Eine Bewertungsregel | ✅ | Kohäsion/Ranking/Ersatz: nur 3★ zählt (1,0); zwei gemessene Anker ohne 3★ = neutral 0 (bewertet); ohne Inspire-ID = unbewertet. Rezept-Anker kommen nur noch aus dem Profil (`recipe_profile_anker`). `recipe_pairings` + `recipe_anchor_mappings` per Migration gedroppt, Tools `recipe_anchors.PUT`/`recipe_pairings.PUT`, Prompts `recipe.anker`/`recipe.pairing` und die Handpflege im Panel entfernt; OneShot-Glied `aromaprofil` statt KI-Anker + Pairings |
 | P7 Rest | offen | Netz mit Basisrezept-Knoten, Concept-Ranking über `RezeptGraph` |
-| P8 Signale | offen | |
+| P8 Signale | ✅ | `PairingSignale`: `pairing_wissen_pruefen` (Entwurfs-Wissen, Anker Kern in ≥ 3 Rezepten), `pairing_widerspruch_messung` (Dossier-Konflikt gegen 3★-Messung), `pairing_konflikt_im_gericht` (Kombinationslogik, Vorfilter übers Profil), `pairing_wissensluecke` (Kern in ≥ 10 Rezepten, kein Dossier-Wissen). Wissens-Signale nur beim Kurator (`TeamScope::isMaster`) und nur für Anker seiner Rezepte. Werkzeug: MCP `anker_wissen.GET` / `anker_wissen.STATUS` (Freigabe anker-weise oder je Eintrag, danach Kontrast + Profile neu). Altes `widerspruch_wissen_graph`: Detektor entfernt, offene Meldungen per Migration 100008 geschlossen (Freigabe Dominique 06.10.; demo: 385 je Team, 8 Teams). Probe-DB: 36 / 1 / 0 / 102 Signale, alle vier zusammen < 0,5 s |
+
+**Befund P8 (Probe-DB):** Kardamom × Minze — Dossier sagt „stört sich", Foodpairing misst 3★. Größte Wissenslücken nach Nutzung: Sahne (Kern in 441 Rezepten), Butter (286), Kartoffel (232), Milch (224) — Reihenfolge für die Dossier-Auslese.
 
 **Gemessene Abdeckung der Profile (demo-Daten):** ≥ 80 % Masse mit Anker: 1.183 Rezepte · 50–79 %: 878 · 1–49 %: 1.084 · 0: 436.
 Das ist die GP→Anker-Datenqualität (Dominique: später).
