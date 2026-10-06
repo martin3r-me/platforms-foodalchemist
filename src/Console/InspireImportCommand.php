@@ -8,7 +8,9 @@ use Platform\FoodAlchemist\Services\InspireImportService;
 /**
  * Inspire-Voll-Import — mintet je Inspire-Zutat einen Anker (+ label_en-Brücke) und
  * schreibt die Kanten (pairings_strong L2+L3) in einem Pass. Kein Merge auf Bestand.
- * Default = Dry-Run. Redo mit --purge (löscht alle Inspire-Anker/-Kanten vorher).
+ * Default = Dry-Run. Idempotent (Spec 60 · P1): vorhandene Anker werden über `inspire_id`
+ * wiedererkannt, nur neue Zutaten gemintet. --purge löscht alle Inspire-Anker samt ihrer
+ * Zuordnungen (Cascade) — nur für einen bewussten Neuaufbau.
  * Schreibt KEINE Embeddings — danach `foodalchemist:embed --pool=knowledge` off-peak
  * (sonst findet die semantische Anker-Auflösung / Qdrant-RAG die neuen Anker nicht).
  *
@@ -52,19 +54,13 @@ class InspireImportCommand extends Command
             $this->warn("Purge: {$p['anchors']} Anker, {$p['map']} Brücken, {$p['edges']} Kanten gelöscht.");
         }
 
-        $already = $svc->existingInspireAnchors();
-        if ($apply && $already > 0) {
-            $this->error("Es existieren bereits {$already} Inspire-Anker. Redo mit --purge.");
-
-            return self::FAILURE;
-        }
-
         $this->info(($apply ? 'APPLY' : 'DRY-RUN')." — source={$source}, team={$teamId}");
         $stats = $svc->import($pdo, $apply, $teamId);
 
         $this->table(['Kennzahl', 'Wert'], [
             ['Inspire-Zutaten (has_pairing_data=1)', $stats['ingredients']],
             [$apply ? 'Anker angelegt' : 'würde anlegen', $stats['anchors_created']],
+            ['schon vorhanden (über inspire_id)', $stats['anchors_known']],
             ['Slug-Kollisionen aufgelöst', $stats['slug_collisions_fixed']],
             ['Kandidaten-Kanten (beide Richtungen)', $stats['edge_candidates']],
             ['übersprungen (self)', $stats['skipped_self']],

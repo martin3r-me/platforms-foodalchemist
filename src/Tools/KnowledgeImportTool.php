@@ -71,7 +71,7 @@ class KnowledgeImportTool extends FoodAlchemistTool implements ToolContract, Too
                         'category' => ['type' => 'string', 'description' => 'Wissens-Kategorie-Slug, muss existieren (foodalchemist.knowledge_categories.POST vorher).'],
                         'art' => ['type' => 'string', 'description' => 'regel | datenwerk | fachwissen | referenz | ablauf. Leer = noch nicht eingeordnet.'],
                         'content_md' => ['type' => 'string', 'description' => 'Volltext inkl. YAML-Frontmatter, max. 4.000 Zeichen.'],
-                        'frontmatter' => ['type' => 'object', 'description' => 'Optionale strukturierte Metadaten (z. B. anker_slug) — wird NICHT gespeichert, nur entgegengenommen.'],
+                        'frontmatter' => ['type' => 'object', 'description' => 'Optionale strukturierte Metadaten — wird NICHT gespeichert, nur entgegengenommen. Den Aroma-Anker verknüpft das System aus dem Frontmatter im content_md (anker_id + anker_slug, beide müssen zum Vokabular passen).'],
                         'active' => ['type' => 'boolean', 'default' => false, 'description' => 'Standard: inaktiv (Entwurf). true legt sofort aktiv an inkl. Embedding.'],
                     ], 'required' => ['slug', 'title', 'category', 'content_md']]],
             ],

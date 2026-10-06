@@ -19,6 +19,11 @@ use Symfony\Component\Uid\UuidV7;
  * 3 Dubletten-Namen (Apricot Puree/Chinese Cabbage/Gochujang), die als „alles einzeln"
  * eigene Anker bleiben müssen. level 3 → weight 1.0 (●) · level 2 → weight 0.9 (◕).
  * Kein Override (Inspire trifft keinen Bestands-Anker). Redo via purgeInspire().
+ *
+ * Spec 60 · P1: Identität = Inspire-UUID (`inspire_id`). Der Import ist idempotent: ein Anker,
+ * dessen inspire_id schon existiert, wird NICHT neu angelegt und NICHT überschrieben (Name,
+ * Übersetzung und Kategorie sind dort gepflegt); nur neue Inspire-Zutaten werden gemintet.
+ * Kanten laufen über insertOrIgnore und sind damit ebenfalls wiederholbar.
  */
 class InspireImportService
 {
@@ -31,7 +36,7 @@ class InspireImportService
     /** Zählt bereits importierte Inspire-Anker (für den „schon importiert?"-Guard). */
     public function existingInspireAnchors(): int
     {
-        return (int) DB::table(self::ANCHORS)->where('source_path', 'foodpairing_inspire')->count();
+        return (int) DB::table(self::ANCHORS)->whereNotNull('inspire_id')->count();
     }
 
     /** Rollback: löscht alle Inspire-Kanten, -Brücken und -Anker (für sauberen Redo). */
@@ -39,7 +44,7 @@ class InspireImportService
     {
         $edges = DB::table(self::EDGES)->where('source', 'inspire')->delete();
         $map = DB::table(self::MAP)->where('match_method', 'inspire')->delete();
-        $anchors = DB::table(self::ANCHORS)->where('source_path', 'foodpairing_inspire')->delete();
+        $anchors = DB::table(self::ANCHORS)->whereNotNull('inspire_id')->delete();
 
         return ['edges' => $edges, 'map' => $map, 'anchors' => $anchors];
     }
@@ -53,19 +58,30 @@ class InspireImportService
     {
         $usedSlugs = array_flip(DB::table(self::ANCHORS)->pluck('slug')->all());
         $ingredients = $src->query(
-            'SELECT ix, name, category, subcategory FROM ingredients WHERE has_pairing_data = 1 ORDER BY ix'
+            'SELECT ix, id, name, category, subcategory FROM ingredients WHERE has_pairing_data = 1 ORDER BY ix'
         )->fetchAll(\PDO::FETCH_ASSOC);
 
         $ts = now()->toDateTimeString();
         $ixToAnchor = [];
         $anchorsCreated = 0;
+        $anchorsKnown = 0;
+        // inspire_id → Anker-ID der schon vorhandenen Inspire-Anker (Wiedererkennung).
+        $bekannt = DB::table(self::ANCHORS)->whereNotNull('inspire_id')->pluck('id', 'inspire_id')->all();
         $slugFixes = 0;
 
         // --- Phase 1: Anker minten (in einer Transaktion) ---------------------
-        $mint = function () use ($ingredients, $apply, $teamId, $ts, &$usedSlugs, &$ixToAnchor, &$anchorsCreated, &$slugFixes): void {
+        $mint = function () use ($ingredients, $apply, $teamId, $ts, $bekannt, &$usedSlugs, &$ixToAnchor, &$anchorsCreated, &$anchorsKnown, &$slugFixes): void {
             foreach ($ingredients as $r) {
                 $ix = (int) $r['ix'];
                 $name = (string) $r['name'];
+                $inspireId = (string) $r['id'];
+
+                if (isset($bekannt[$inspireId])) {
+                    $ixToAnchor[$ix] = (int) $bekannt[$inspireId];
+                    $anchorsKnown++;
+
+                    continue;
+                }
 
                 $slug = Str::slug($name, '_');
                 if ($slug === '') {
@@ -85,7 +101,10 @@ class InspireImportService
                         'uuid' => (string) UuidV7::generate(),
                         'team_id' => $teamId,
                         'slug' => $slug,
+                        'inspire_id' => $inspireId,
+                        'inspire_ix' => $ix,
                         'display_de' => $name,
+                        'display_en' => $name,
                         'source_path' => 'foodpairing_inspire',
                         'note' => $note !== '' ? $note : null,
                         // Strukturiert für den Composer-Picker-Filter (parallel zu note).
@@ -163,6 +182,7 @@ class InspireImportService
         return [
             'ingredients' => count($ingredients),
             'anchors_created' => $anchorsCreated,
+            'anchors_known' => $anchorsKnown,
             'slug_collisions_fixed' => $slugFixes,
             'edge_candidates' => $candidates,
             'skipped_self' => $skipped,

@@ -52,6 +52,8 @@ class KnowledgeGetTool extends FoodAlchemistTool implements ToolContract, ToolMe
             'slug' => $doc->slug,
             'title' => $doc->title,
             'category' => $doc->category,
+            // Spec 60: verknüpfter Aroma-Anker (aus dem Frontmatter, nur wenn ID und Slug zum Vokabular passen).
+            'anchor_id' => isset($doc->anchor_id) ? (int) $doc->anchor_id : null,
             'art' => $doc->art ?? null,
             'geltung' => json_decode($doc->geltung ?? '[]', true),
             'datenwerte' => json_decode($doc->datenwerte ?? '[]', true),

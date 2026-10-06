@@ -11,8 +11,8 @@ use Symfony\Component\Uid\UuidV7;
  * dem Seed aktualisiert). Scope = NUR Klasse A: Cross_Cutting (33) + Domains (36)
  * + 07.02 pairings/ (767) ; Aliasse (258, aus vault_context.rs) + Routings
  * (GL-13 §4.1) als Seed. Upsert per slug + content_hash (unverändert ⇒ skip,
- * geändert ⇒ version+1). Nachlauf: vocab_pairing_ankers.knowledge_document_id
- * über source_path verdrahten (ersetzt file_path, D4).
+ * geändert ⇒ version+1). Die Anker-Verknüpfung liest jedes Dossier aus seinem
+ * Frontmatter ({@see \Platform\FoodAlchemist\Support\DossierAnker}, Spec 60).
  *
  * 07.03–07.06 werden NICHT importiert (Klasse B Vault-only / Klasse C Phase 2);
  * Niveau_System geht NICHT hierher (→ Hüllen, GL-06/⚠D3).
@@ -62,7 +62,6 @@ class KnowledgeImportCommand extends Command
         // was den toten `regelwerkBlock`-Pfad wiederbelebt hätte). Ein Import liest Dokumente; er
         // entscheidet keine Politik. → {@see KnowledgePolicySeedCommand}
         $stats['routings'] = ['hinweis' => 'getrennt: foodalchemist:knowledge-policy-seed'];
-        $stats['anker_links'] = $this->verdrahteAnker($dryRun);
 
         $this->table(['Phase', 'Quelle', 'neu', 'aktualisiert', 'unverändert/übersprungen', 'geschützt'],
             collect($stats)->map(fn ($s, $k) => [$k, $s['source'] ?? '—', $s['neu'] ?? '—', $s['geaendert'] ?? '—', $s['skip'] ?? '—', $s['geschuetzt'] ?? '—'])->all());
@@ -84,8 +83,6 @@ class KnowledgeImportCommand extends Command
             }
             $aliasIst = DB::table('foodalchemist_knowledge_aliases')->count();
             $this->line(($aliasIst === 258 ? '✅' : '⚠️ ') . " aliases: {$aliasIst} (Soll 258)");
-            $offen = DB::table('foodalchemist_vocab_pairing_anchors')->whereNotNull('source_path')->whereNull('knowledge_document_id')->count();
-            $this->line(($offen === 0 ? '✅' : '⚠️ ') . " anker→knowledge-Links: {$offen} offen");
         }
 
         return self::SUCCESS;
@@ -148,6 +145,7 @@ class KnowledgeImportCommand extends Command
                     'title' => $this->titel($inhalt, $basis),
                     'category' => $kategorie,
                     'content_md' => $inhalt,
+                    'anchor_id' => \Platform\FoodAlchemist\Support\DossierAnker::ausInhalt($inhalt),
                     'version' => 1,
                     'content_hash' => $hash,
                     'imported_hash' => $hash,                         // Guard-Baseline = importierter Stand
@@ -171,6 +169,7 @@ class KnowledgeImportCommand extends Command
                 }
                 DB::table('foodalchemist_knowledge_documents')->where('id', $vorhanden->id)->update([
                     'content_md' => $inhalt,
+                    'anchor_id' => \Platform\FoodAlchemist\Support\DossierAnker::ausInhalt($inhalt),
                     'title' => $this->titel($inhalt, $basis),
                     'version' => $vorhanden->version + 1,            // monoton bei Inhalts-Änderung
                     'content_hash' => $hash,
@@ -242,28 +241,6 @@ class KnowledgeImportCommand extends Command
         }
 
         return ['source' => count($paare), 'neu' => $neu, 'geaendert' => 0, 'skip' => $skip];
-    }
-
-    /** GL-13 Tabelle 4.1 als Daten (pro KI-Feature konfigurierbar). */
-    private function verdrahteAnker(bool $dryRun): array
-    {
-        if ($dryRun) {
-            return ['source' => 0, 'neu' => 0, 'geaendert' => 0, 'skip' => 0];
-        }
-        $docs = DB::table('foodalchemist_knowledge_documents')->where('category', 'pairing')
-            ->pluck('id', 'source_path');
-        $neu = 0;
-        foreach (DB::table('foodalchemist_vocab_pairing_anchors')
-            ->whereNotNull('source_path')->whereNull('knowledge_document_id')->get(['id', 'source_path']) as $anker) {
-            $docId = $docs[$anker->source_path] ?? null;
-            if ($docId !== null) {
-                DB::table('foodalchemist_vocab_pairing_anchors')->where('id', $anker->id)
-                    ->update(['knowledge_document_id' => $docId, 'updated_at' => now()]);
-                $neu++;
-            }
-        }
-
-        return ['source' => $docs->count(), 'neu' => $neu, 'geaendert' => 0, 'skip' => 0];
     }
 
     private function slug(string $s): string
