@@ -185,12 +185,17 @@ beforeEach(function () {
     ($this->mkGpMapping)($gpNeutralNein->id, 'birne', '0.900');
     $this->makeIngredient($this->r2, 'Neutral verliert', $gpNeutralNein, '100', 2);
 
-    // (h) GP ohne Mapping ⇒ Name-Match.
+    // (h) GP ohne Mapping, Anker-Wort nur als WORTTEIL im Namen ⇒ unresolved (Spec 58 · Paket 1:
+    //     kein Namensraten mehr — vorher `name_match` → zimt, gemessen „Sauce: Chimichurri" → A1-Sauce).
     $gpOhne = $this->makeGp($this->rootTeam, 'GP Zimt Ohne Mapping');
     $this->makeIngredient($this->r2, 'Ohne Mapping', $gpOhne, '100', 3);
 
+    // (h2) GP ohne Mapping, GRUNDNAME (vor dem Doppelpunkt) = Anker exakt ⇒ exakt_name.
+    $gpExakt = $this->makeGp($this->rootTeam, 'Zimt: gemahlen');
+    $this->makeIngredient($this->r2, 'Exakter Grundname', $gpExakt, '100', 4);
+
     // (i) Nur raw_text, kein Anker-Term ⇒ unresolved (Label = raw_text).
-    $this->makeIngredient($this->r2, 'Xylo Quirk', null, '100', 4);
+    $this->makeIngredient($this->r2, 'Xylo Quirk', null, '100', 5);
 
     // ── R3: Sub-Rezepte (eigene Mapping-Tabelle + Prozess-Anker) ─────────
     $this->sub1 = $this->makeRecipe($this->rootTeam, 'Basis: Sub Mehrdeutig');
@@ -204,9 +209,14 @@ beforeEach(function () {
     $this->sub2 = $this->makeRecipe($this->rootTeam, 'Basis: Zimt Sub Ohne Mapping');
     ($this->mkProzessAnker)($this->sub2->id, 'rauch');
 
+    // Spec 58 · Paket 1: Sub-Rezept ohne Mapping wird über SEINE Zutaten aufgelöst.
+    $this->sub3 = $this->makeRecipe($this->rootTeam, 'Basis: Sub Ueber Zutaten');
+    $this->makeIngredient($this->sub3, 'Birne exakt', $this->makeGp($this->rootTeam, 'Birne: frisch'), '100', 1);
+
     $this->r3 = $this->makeRecipe($this->rootTeam, 'Basis: Sub-Kette');
     ($this->mkSubZutat)($this->r3, $this->sub1, 1);
     ($this->mkSubZutat)($this->r3, $this->sub2, 2);
+    ($this->mkSubZutat)($this->r3, $this->sub3, 3);
 
     // ── R4: Eigen-Zustand am Rezept selbst (angehängter Block + Dedupe) ──
     $this->r4 = $this->makeRecipe($this->rootTeam, 'Basis: Eigen-Zustand');
@@ -240,13 +250,15 @@ it('GOLDEN: die Anker-Auflösung liefert für den Fixture-Satz genau diese Zeile
     expect(($this->projiziere)($this->svc->resolveRecipeAnchors($this->r2)))->toBe([
         ['label' => 'GP Zimt Neutral Gewinnt', 'kern' => null, 'prozess' => [], 'via' => 'neutral'],
         ['label' => 'GP Zimt Neutral Verliert', 'kern' => 'birne', 'prozess' => [], 'via' => 'gp_anker'],
-        ['label' => 'GP Zimt Ohne Mapping', 'kern' => 'zimt', 'prozess' => [], 'via' => 'name_match'],
+        ['label' => 'GP Zimt Ohne Mapping', 'kern' => null, 'prozess' => [], 'via' => 'unresolved'],
+        ['label' => 'Zimt: gemahlen', 'kern' => 'zimt', 'prozess' => [], 'via' => 'exakt_name'],
         ['label' => 'Xylo Quirk', 'kern' => null, 'prozess' => [], 'via' => 'unresolved'],
     ]);
 
     expect(($this->projiziere)($this->svc->resolveRecipeAnchors($this->r3)))->toBe([
         ['label' => 'Basis: Sub Mehrdeutig', 'kern' => 'birne', 'prozess' => ['rauch', 'roestaromen'], 'via' => 'recipe_anker'],
-        ['label' => 'Basis: Zimt Sub Ohne Mapping', 'kern' => 'zimt', 'prozess' => ['rauch'], 'via' => 'name_match'],
+        ['label' => 'Basis: Zimt Sub Ohne Mapping', 'kern' => null, 'prozess' => ['rauch'], 'via' => 'unresolved'],
+        ['label' => 'Basis: Sub Ueber Zutaten', 'kern' => 'birne', 'prozess' => [], 'via' => 'rezept_zutaten'],
     ]);
 
     expect(($this->projiziere)($this->svc->resolveRecipeAnchors($this->r4)))->toBe([
@@ -319,6 +331,6 @@ it('die flache Anker-Menge eines Rezepts bleibt dieselbe', function () {
 
     expect($slugs($this->r1))->toBe(['apfel', 'birne', 'zimt'])
         ->and($slugs($this->r2))->toBe(['birne', 'zimt'])
-        ->and($slugs($this->r3))->toBe(['birne', 'rauch', 'roestaromen', 'zimt'])
+        ->and($slugs($this->r3))->toBe(['birne', 'rauch', 'roestaromen'])
         ->and($slugs($this->r4))->toBe(['apfel', 'rauch', 'roestaromen']);
 });

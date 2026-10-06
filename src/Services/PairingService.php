@@ -477,8 +477,10 @@ class PairingService
                 if ($mapping !== null) {
                     [$kern, $via] = $mapping === $neutralId ? [null, 'neutral'] : [$mapping, 'recipe_anker'];
                 } else {
-                    $kern = $this->resolveByName($z->referencedRecipe->name);
-                    $via = $kern !== null ? 'name_match' : 'unresolved';
+                    // Spec 58 · Paket 1: Basisrezept ohne eigenes Mapping über SEINE Zutaten auflösen
+                    // (stärkster Bestandteil = Kern), nicht über Wortteile des Rezeptnamens.
+                    $kern = $this->rekursiverKern((int) $z->referenced_recipe_id);
+                    $via = $kern !== null ? 'rezept_zutaten' : 'unresolved';
                 }
                 // `anchor_id != $kern` lief vorher in SQL; in PHP numerisch vergleichen, weil
                 // beide Seiten je Treiber int ODER string sein können (SQL verglich numerisch).
@@ -492,12 +494,13 @@ class PairingService
                 if ($mapping !== null) {
                     [$kern, $via] = $mapping === $neutralId ? [null, 'neutral'] : [$mapping, 'gp_anker'];
                 } else {
-                    $kern = $this->resolveByName($z->gp->name);
-                    $via = $kern !== null ? 'name_match' : 'unresolved';
+                    // Spec 58 · Paket 1: nur exakter Grundname, kein Wortteil-Treffer.
+                    $kern = $this->ankerIdExakt($z->gp->name);
+                    $via = $kern !== null ? 'exakt_name' : 'unresolved';
                 }
             } else {
-                $kern = $this->resolveByName($z->raw_text);
-                $via = $kern !== null ? 'name_match' : 'unresolved';
+                $kern = $this->ankerIdExakt($z->raw_text);
+                $via = $kern !== null ? 'exakt_name' : 'unresolved';
             }
 
             // B: semantischer Fallback NUR für sonst unauflösbare Zeilen (opt-in,
@@ -529,6 +532,93 @@ class PairingService
         }
 
         return $out;
+    }
+
+    /**
+     * Spec 58: Gewicht einer Zutat nach Rolle (Dominique 2026-10-06). Aromaträger prägen das
+     * Gericht, Garnitur setzt Akzente — ohne Rolle zählt eine Zutat wie eine Komponente.
+     */
+    public const ROLLEN_GEWICHT = ['aroma_treiber' => 1.5, 'komponente' => 1.0, 'beilage' => 0.6, 'garnitur' => 0.4];
+
+    /** Zähl-Einheiten ohne Gramm-Angabe: grobe Näherung, nur für die Rangfolge der Bestandteile. */
+    private const STUECK_ERSATZ_G = 50.0;
+
+    /** Reine Salze prägen kein Aroma — sie dürfen nie Kern eines Basisrezepts werden (sonst „Rote Bete" → Meersalz). */
+    private const KEIN_KERN_SLUGS = ['sea_salt', 'black_lava_salt'];
+
+    /** Max. Rekursionstiefe der Basisrezept-Auflösung (Regelwerk Basisrezepte §4: 3 Ebenen). */
+    private const REKURSION_MAX = 3;
+
+    /**
+     * Spec 58 · Paket 1: Kern-Anker eines Basisrezepts ohne eigenes Mapping — der mengen- und
+     * rollengewichtet stärkste aufgelöste Bestandteil (Grundprodukt-Mapping, exakter Name oder
+     * rekursiv ein tieferes Basisrezept). Null, wenn nichts auflösbar ist.
+     *
+     * @param  array<int, true>  $besucht  Zyklus-Schutz
+     */
+    private function rekursiverKern(int $recipeId, int $tiefe = 1, array $besucht = []): ?int
+    {
+        if ($tiefe > self::REKURSION_MAX || isset($besucht[$recipeId])) {
+            return null;
+        }
+        $besucht[$recipeId] = true;
+        $neutralId = $this->neutralAnkerId();
+
+        $zeilen = DB::table('foodalchemist_recipe_ingredients AS ri')
+            ->leftJoin('foodalchemist_vocab_units AS u', 'u.id', '=', 'ri.unit_vocab_id')
+            ->leftJoin('foodalchemist_gps AS g', 'g.id', '=', 'ri.gp_id')
+            ->where('ri.recipe_id', $recipeId)->whereNull('ri.deleted_at')->where('ri.is_optional', false)
+            ->get(['ri.gp_id', 'ri.referenced_recipe_id', 'ri.raw_text', 'ri.quantity', 'ri.quantity_max', 'ri.role',
+                'u.dimension', 'u.default_in_g', 'u.slug AS unit_slug', 'g.name AS gp_name']);
+        if ($zeilen->isEmpty()) {
+            return null;
+        }
+
+        $gpKerne = $this->kernMappingsBatch('foodalchemist_gp_anchor_mappings', 'gp_id',
+            $zeilen->pluck('gp_id')->filter()->unique()->values()->all());
+        $subKerne = $this->kernMappingsBatch('foodalchemist_recipe_anchor_mappings', 'recipe_id',
+            $zeilen->pluck('referenced_recipe_id')->filter()->unique()->values()->all());
+
+        $bester = null;
+        $besteGewicht = -1.0;
+        foreach ($zeilen as $z) {
+            $anker = null;
+            if ($z->gp_id !== null) {
+                $anker = $gpKerne[$z->gp_id] ?? $this->ankerIdExakt($z->gp_name);
+            } elseif ($z->referenced_recipe_id !== null) {
+                $anker = $subKerne[$z->referenced_recipe_id] ?? $this->rekursiverKern((int) $z->referenced_recipe_id, $tiefe + 1, $besucht);
+            } else {
+                $anker = $this->ankerIdExakt($z->raw_text);
+            }
+            if ($anker === null || $anker === $neutralId || in_array($this->ankerSlugVonId((int) $anker), self::KEIN_KERN_SLUGS, true)) {
+                continue;
+            }
+            $gewicht = $this->zeilenGramm($z) * (self::ROLLEN_GEWICHT[$z->role ?? ''] ?? 1.0);
+            if ($gewicht > $besteGewicht) {
+                [$bester, $besteGewicht] = [(int) $anker, $gewicht];
+            }
+        }
+
+        return $bester;
+    }
+
+    private function ankerSlugVonId(int $id): ?string
+    {
+        return $this->ankerExaktListe()->first(fn ($a) => (int) $a->id === $id)?->slug;
+    }
+
+    /** Menge einer Zutatenzeile in Gramm (Mittelwert bei Bereich), Zähl-Einheiten genähert, „qs" = 0. */
+    private function zeilenGramm(object $z): float
+    {
+        $menge = $z->quantity_max !== null ? ((float) $z->quantity + (float) $z->quantity_max) / 2 : (float) $z->quantity;
+        if (($z->unit_slug ?? null) === 'qs') {
+            return 0.0;
+        }
+        if ($z->default_in_g !== null && (float) $z->default_in_g > 0) {
+            return $menge * (float) $z->default_in_g;
+        }
+
+        return $menge * self::STUECK_ERSATZ_G;
     }
 
     // ── Kohäsion (3.2 — T4/T5/T6/T9) ─────────────────────────────────────
@@ -2646,7 +2736,32 @@ class PairingService
     private function ankerExaktListe(): \Illuminate\Support\Collection
     {
         return $this->ankerExaktListe ??= DB::table('foodalchemist_vocab_pairing_anchors')->whereNull('deleted_at')
-            ->where('slug', '!=', 'neutral')->get(['slug', 'display_de']);
+            ->where('slug', '!=', 'neutral')->get(['id', 'slug', 'display_de']);
+    }
+
+    /**
+     * Spec 58 · Paket 1: Anker-ID nur bei EXAKTER Gleichheit (inkl. eindeutigem Singular) — für
+     * Zutaten ohne Mapping. Grundprodukt-Namen tragen den Zustand nach dem Doppelpunkt
+     * („Möhre: frisch, Stifte") → nur der Grundname davor zählt. Kein Wortteil-Treffer: lieber
+     * eine sichtbare Lücke als „Sauce: Chimichurri" → A1-Sauce.
+     */
+    private function ankerIdExakt(?string $name): ?int
+    {
+        $basis = trim((string) strtok((string) $name, ':'));
+        if ($basis === '') {
+            return null;
+        }
+        $treffer = $this->ankerSlugExakt($basis);
+        // „Petersilie, glatt" → „Petersilie": Teil vor dem Komma, ebenfalls nur exakt.
+        if ($treffer === null && str_contains($basis, ',')) {
+            $treffer = $this->ankerSlugExakt(trim((string) strtok($basis, ',')));
+        }
+        if ($treffer === null) {
+            return null;
+        }
+        $anker = $this->ankerExaktListe()->first(fn ($a) => $a->slug === $treffer['slug']);
+
+        return $anker !== null ? (int) $anker->id : null;
     }
 
     /**
