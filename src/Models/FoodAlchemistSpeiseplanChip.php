@@ -3,6 +3,7 @@
 namespace Platform\FoodAlchemist\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Platform\ActivityLog\Traits\LogsActivity;
 use Platform\FoodAlchemist\Models\Concerns\BelongsToTeamHierarchy;
 use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
@@ -19,11 +20,12 @@ use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
  * Lösch-Schutz wie bei Posten (V-06): nur stilllegen. Pläne referenzieren den Chip per id im
  * `vorgaben`-JSON (kein FK) — ein gelöschter Chip ließe die Vorgabe still verschwinden.
  * Ein stillgelegter Chip wird in bestehenden Vorgaben weiter ausgewertet, ist aber für neue
- * Vorgaben nicht mehr wählbar.
+ * Vorgaben nicht mehr wählbar. SoftDeletes trägt er trotzdem — Modell-Vertrag aller FA-Models
+ * (PolicyTest); im Alltag wird stillgelegt, nicht gelöscht.
  */
 class FoodAlchemistSpeiseplanChip extends Model
 {
-    use HasUuidV7, LogsActivity, BelongsToTeamHierarchy;
+    use HasUuidV7, LogsActivity, BelongsToTeamHierarchy, SoftDeletes;
 
     /** Ernährungsformen, die ein Chip prüfen kann — Schlüssel = Merkmal aus diaetMerkmale(). */
     public const DIAETEN = [
@@ -46,5 +48,6 @@ class FoodAlchemistSpeiseplanChip extends Model
         'default_max' => 'integer',
         'sort_order' => 'integer',
         'is_active' => 'boolean',
+        'deleted_at' => 'datetime',
     ];
 }
