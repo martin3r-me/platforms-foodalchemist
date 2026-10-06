@@ -24,7 +24,10 @@ class PairingsSuggestTool extends FoodAlchemistTool implements ToolContract, Too
     {
         return 'Analysiert ein Rezept über den Pairing-Anker-Graph: cohesion (hängt der Teller '
             . 'aromatisch zusammen) + suggestions (Klassiker/Signature-Komponenten, die das Gericht '
-            . 'komplettieren). recipe_id vorher per foodalchemist.recipes.SEARCH ermitteln.';
+            . 'komplettieren) + harmonie_kontrast (Spec 58: je Bestandteil-Paar Harmonie nach Foodpairing-'
+            . 'Sternen — sehr_gut=3★ zählt, passt=2★ zählt nicht, bruecke=über einen dritten Bestandteil, '
+            . 'kein_bezug, unbekannt —, Zusammenhalt mit Abdeckung, Geschmacks-/Textur-Kontraste und Lücken, '
+            . 'jeweils mit fertigem Satz). recipe_id vorher per foodalchemist.recipes.SEARCH ermitteln.';
     }
 
     public function getSchema(): array
@@ -55,6 +58,7 @@ class PairingsSuggestTool extends FoodAlchemistTool implements ToolContract, Too
             'recipe' => ['id' => $recipe->id, 'name' => $recipe->name],
             'cohesion' => $svc->recipeCohesion($recipe),
             'suggestions' => $svc->componentSuggestions($recipe, min(20, max(1, (int) ($arguments['top'] ?? 8)))),
+            'harmonie_kontrast' => app(\Platform\FoodAlchemist\Services\PairingAnalyseService::class)->analyseRezept($recipe->id),
         ]);
     }
 

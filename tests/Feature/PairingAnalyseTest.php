@@ -152,3 +152,19 @@ it('Composer: freie Anker-Menge liefert Harmonie ohne Geschmacksprofil', functio
     expect(collect($a['harmonie']['paare'])->pluck('stufe')->sort()->values()->all())->toBe(['bruecke', 'sehr_gut', 'sehr_gut'])
         ->and($a['kontrast'])->toBe([]);
 });
+
+it('MCP: pairings.SUGGEST und composer.KOHAESION liefern harmonie_kontrast (ausgeführt, nicht nur registriert)', function () {
+    $user = $this->makeUser($this->rootTeam);
+    $kontext = new \Platform\Core\Contracts\ToolContext($user, $this->rootTeam);
+    $registry = app(\Platform\Core\Tools\ToolRegistry::class);
+
+    $suggest = $registry->get('foodalchemist.pairings.SUGGEST')->execute(['recipe_id' => $this->gericht->id], $kontext);
+    expect($suggest->success)->toBeTrue($suggest->error ?? '')
+        ->and($suggest->data['harmonie_kontrast']['harmonie']['zusammenhalt']['bewertet'])->toBe(6)
+        ->and(collect($suggest->data['harmonie_kontrast']['kontrast'])->pluck('satz')->implode(' '))->toContain('Fett von Rind');
+
+    $ids = DB::table('foodalchemist_vocab_pairing_anchors')->whereIn('slug', ['rind', 'fond'])->pluck('id')->all();
+    $kohaesion = $registry->get('foodalchemist.composer.KOHAESION')->execute(['anker_ids' => $ids], $kontext);
+    expect($kohaesion->success)->toBeTrue($kohaesion->error ?? '')
+        ->and($kohaesion->data['harmonie_kontrast']['harmonie']['paare'][0]['stufe'])->toBe('sehr_gut');
+});
