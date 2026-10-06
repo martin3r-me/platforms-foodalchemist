@@ -5,6 +5,7 @@ namespace Platform\FoodAlchemist\Console;
 use Illuminate\Console\Command;
 use Platform\FoodAlchemist\Services\Pairing\AnkerVarianten;
 use Platform\FoodAlchemist\Services\Pairing\AnkerWissenImport;
+use Platform\FoodAlchemist\Services\Pairing\KategorieRegeln;
 use Platform\FoodAlchemist\Services\Pairing\KontrastAbleitung;
 
 /**
@@ -12,14 +13,18 @@ use Platform\FoodAlchemist\Services\Pairing\KontrastAbleitung;
  *
  *   php artisan foodalchemist:anker-wissen varianten            Grundname/Verfahren/Grund-Anker aus den Inspire-Namen
  *   php artisan foodalchemist:anker-wissen import --pfad=DIR    Profile (*.json, Format der Pilot-Auslese) übernehmen
+ *   php artisan foodalchemist:anker-wissen kategorie            Lieferseite Träger/Frische/Aromatik/Röstaroma aus Kategorie + Verfahren
+ *   php artisan foodalchemist:anker-wissen intensitaet          Startwerte der Aroma-Intensität je Kategorie (nur leere)
  *   php artisan foodalchemist:anker-wissen kontrast             Kontrast-Kanten aus Bedarf × Eigenschaft neu bauen
+ *
+ * Reihenfolge bei einem Neuaufbau: varianten → import → kategorie → intensitaet → kontrast.
  *
  * Default ist Dry-Run für `varianten`; `import` und `kontrast` schreiben nur mit --apply.
  */
 class AnkerWissenCommand extends Command
 {
     protected $signature = 'foodalchemist:anker-wissen
-        {schritt : varianten | import | kontrast}
+        {schritt : varianten | import | kategorie | intensitaet | kontrast}
         {--pfad= : Ordner mit Profil-JSON-Dateien (import)}
         {--apply : wirklich schreiben}';
 
@@ -32,8 +37,10 @@ class AnkerWissenCommand extends Command
         return match ((string) $this->argument('schritt')) {
             'varianten' => $this->varianten($apply),
             'import' => $this->import($apply),
+            'kategorie' => $this->regel($apply, fn () => app(KategorieRegeln::class)->eigenschaften(), 'Eigenschaften aus Kategorie/Verfahren'),
+            'intensitaet' => $this->regel($apply, fn () => app(KategorieRegeln::class)->intensitaet(), 'Anker mit Startwert Aroma-Intensität'),
             'kontrast' => $this->kontrast($apply),
-            default => $this->fehler('Schritt unbekannt. Erlaubt: varianten, import, kontrast.'),
+            default => $this->fehler('Schritt unbekannt. Erlaubt: varianten, import, kategorie, intensitaet, kontrast.'),
         };
     }
 
@@ -76,6 +83,18 @@ class AnkerWissenCommand extends Command
         }
         $this->table(['Kennzahl', 'Wert'], collect($summe)->map(fn ($v, $k) => [$k, $v])->values()->all());
         $this->line('Danach: foodalchemist:anker-wissen kontrast --apply');
+
+        return self::SUCCESS;
+    }
+
+    private function regel(bool $apply, \Closure $lauf, string $was): int
+    {
+        if (! $apply) {
+            $this->line('→ Dry-Run. Mit --apply schreiben.');
+
+            return self::SUCCESS;
+        }
+        $this->info($was.': '.$lauf());
 
         return self::SUCCESS;
     }

@@ -83,7 +83,7 @@ return new class extends Migration
             $t->foreignId('anchor_b_id')->constrained('foodalchemist_vocab_pairing_anchors', 'id', 'fa_abez_b_fk')->cascadeOnDelete();
             $t->string('art', 12)->comment('kontrast | kombination | konflikt');
             $t->string('achse', 24)->default('')->comment('bei kontrast die gedeckte Achse, sonst leer (eindeutig, kein NULL im Unique)');
-            $t->unsignedTinyInteger('rang')->default(0);
+            $t->unsignedInteger('rang')->default(0)->comment('höher = besser; Aufbau siehe KontrastAbleitung');
             $t->string('grundlage', 24)->comment('bedarf_x_eigenschaft | dossier');
             $t->string('status', 12)->default('entwurf');
             $t->unsignedBigInteger('knowledge_document_id')->nullable();

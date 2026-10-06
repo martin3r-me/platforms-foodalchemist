@@ -15,10 +15,13 @@ use Platform\FoodAlchemist\Enums\WissensStatus;
  * NICHT: Kontrast hängt nicht an geteilten Aromen (Kürbis + Reisessig ist aromatisch Stufe 1,
  * aber ein klassischer Kontrast).
  *
- * Rang (höher = besser): Stärke des Bedarfs (muss 2, soll 1) · 100 + Stufe der Eigenschaft · 10
- * + Harmonie-Stufe zwischen a und b (ein Lieferant, der zusätzlich harmoniert, gewinnt den
- * Gleichstand). Je (a, Achse) werden nur die besten {@see MAX_JE_BEDARF} gespeichert — der Graph
- * bleibt so lesbar, und die Lieferanten jenseits davon sind gleichwertig austauschbar.
+ * Rang (höher = besser), in dieser Rangfolge:
+ *   Stärke des Bedarfs (muss 2, soll 1)            · 10 000
+ *   Stufe der Eigenschaft (2–3)                     ·  1 000
+ *   Harmonie-Stufe zwischen a und b (1–3)           ·    100  — wer zusätzlich harmoniert, gewinnt
+ *   Grundform statt Variante                        +     50
+ *   Verbreitung im Katalog (Anzahl GP-Zuordnungen)  + bis 49 — Alltagszutat vor Exot
+ * Je (a, Achse) werden nur die besten {@see MAX_JE_BEDARF} gespeichert.
  *
  * Verworfene Bedarfe/Eigenschaften zählen nicht. Status der Kante: geprüft nur, wenn Bedarf UND
  * Eigenschaft geprüft sind; sonst Entwurf. Der Lauf ersetzt alle abgeleiteten Kanten (die
@@ -53,6 +56,11 @@ final class KontrastAbleitung
             $konflikt[(int) $k->anchor_b_id][(int) $k->anchor_a_id] = true;
         }
 
+        $verbreitung = DB::table('foodalchemist_gp_anchor_mappings')->whereNull('deleted_at')
+            ->selectRaw('anchor_id, COUNT(*) AS n')->groupBy('anchor_id')->pluck('n', 'anchor_id')->all();
+        $grundform = DB::table('foodalchemist_vocab_pairing_anchors')->whereNull('verfahren')
+            ->pluck('id')->flip()->all();
+
         $zeilen = [];
         $ts = now();
         foreach ($bedarfe as $b) {
@@ -72,14 +80,16 @@ final class KontrastAbleitung
                 if (isset($konflikt[$a][$id])) {
                     continue;
                 }
-                $rang = ($b->staerke === 'muss' ? 2 : 1) * 100 + $l['stufe'] * 10 + ($harmonie[$id] ?? AnkerGraph::NEUTRAL);
+                $rang = ($b->staerke === 'muss' ? 2 : 1) * 10000 + $l['stufe'] * 1000
+                    + ($harmonie[$id] ?? AnkerGraph::NEUTRAL) * 100
+                    + (isset($grundform[$id]) ? 50 : 0) + min(49, (int) ($verbreitung[$id] ?? 0));
                 $rangliste[] = [$id, $rang, $l['geprueft'] && $b->status === WissensStatus::Geprueft->value];
             }
             usort($rangliste, fn ($x, $y) => [$y[1], $x[0]] <=> [$x[1], $y[0]]);
             foreach (array_slice($rangliste, 0, self::MAX_JE_BEDARF) as [$id, $rang, $geprueft]) {
                 $zeilen[] = [
                     'anchor_a_id' => $a, 'anchor_b_id' => $id, 'art' => Kantenart::Kontrast->value,
-                    'achse' => $achse->value, 'rang' => min(255, $rang), 'grundlage' => 'bedarf_x_eigenschaft',
+                    'achse' => $achse->value, 'rang' => $rang, 'grundlage' => 'bedarf_x_eigenschaft',
                     'status' => $geprueft ? WissensStatus::Geprueft->value : WissensStatus::Entwurf->value,
                     'created_at' => $ts, 'updated_at' => $ts,
                 ];

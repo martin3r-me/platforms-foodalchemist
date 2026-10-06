@@ -5,6 +5,7 @@ use Platform\FoodAlchemist\Enums\Kantenart;
 use Platform\FoodAlchemist\Services\Pairing\AnkerGraph;
 use Platform\FoodAlchemist\Services\Pairing\AnkerVarianten;
 use Platform\FoodAlchemist\Services\Pairing\AnkerWissenImport;
+use Platform\FoodAlchemist\Services\Pairing\KategorieRegeln;
 use Platform\FoodAlchemist\Services\Pairing\KontrastAbleitung;
 use Platform\FoodAlchemist\Tests\Support\Harmonie;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
@@ -119,4 +120,54 @@ it('verworfenes Wissen trägt keine Kontrast-Kante', function () {
     DB::table('foodalchemist_anchor_bedarfe')->where('anchor_id', $this->kuerbis)->update(['status' => 'verworfen']);
 
     expect(app(KontrastAbleitung::class)->baue()['kanten'])->toBe(0);
+});
+
+it('Kategorie-Regeln: Träger, Frische und Röstaroma aus Kategorie bzw. Verfahren, gekennzeichnet', function () {
+    $kat = fn (int $id, string $c, ?string $sub) => DB::table('foodalchemist_vocab_pairing_anchors')->where('id', $id)
+        ->update(['category' => $c, 'subcategory' => $sub]);
+    $reis = ($this->mk)('rice', 'Reis');
+    $kat($reis, 'Getreide', 'Getreide/Reis');
+    $kat($this->salbei, 'Kräuter', 'Kräuter/Küchenkräuter');
+    $kat($this->zitrone, 'Obst', 'Obst/Zitrusfrüchte');
+    $kat($this->kuerbis, 'Gemüse', 'Gemüse/Fruchtgemüse');
+    $kat($this->kuerbisGeroestet, 'Gemüse', 'Gemüse/Fruchtgemüse');
+    $salz = ($this->mk)('sea_salt', 'Meersalz');
+    $kat($salz, 'Gewuerze', 'Gewuerze/Salz');
+    app(AnkerVarianten::class)->ableiten();
+
+    expect(app(KategorieRegeln::class)->eigenschaften())->toBeGreaterThan(0);
+    $e = fn (int $id) => DB::table('foodalchemist_anchor_eigenschaften')->where('anchor_id', $id)->pluck('stufe', 'achse')->all();
+
+    expect($e($reis))->toBe(['traeger' => 3])
+        ->and($e($this->salbei))->toEqualCanonicalizing(['frische' => 3, 'aromatik' => 2])
+        ->and($e($this->zitrone))->toBe(['frische' => 3])
+        ->and($e($this->kuerbisGeroestet))->toBe(['roestaroma' => 3])       // Zubereitung liefert Röstaroma
+        ->and($e($this->kuerbis))->toBe([])
+        ->and($e($salz))->toBe([])                                          // Salz ist keine Aromatik
+        ->and(DB::table('foodalchemist_anchor_eigenschaften')->distinct()->pluck('quelle')->all())->toBe(['kategorie']);
+
+    // Pfifferling-Fall: Bedarf „Träger" findet jetzt einen Lieferanten.
+    ($this->importiere)(['anker_id' => $this->kuerbis, 'anker_slug' => 'pumpkin', 'braucht' => [['achse' => 'traeger', 'staerke' => 'soll']]]);
+    app(KontrastAbleitung::class)->baue();
+    expect(app(AnkerGraph::class)->beziehungen([$this->kuerbis], Kantenart::Kontrast)->pluck('zu')->all())->toBe([$reis]);
+});
+
+it('Intensität: Startwert je Kategorie, längstes Präfix gewinnt, gesetzte Werte bleiben', function () {
+    $kat = fn (int $id, string $c, ?string $sub) => DB::table('foodalchemist_vocab_pairing_anchors')->where('id', $id)
+        ->update(['category' => $c, 'subcategory' => $sub]);
+    $kat($this->salbei, 'Kräuter', 'Kräuter/Küchenkräuter');
+    $kat($this->anis, 'Gewuerze', 'Gewuerze/Anis- und Lakritzgewuerze');
+    $kat($this->kuerbis, 'Gemüse', 'Gemüse/Fruchtgemüse');
+    $chili = ($this->mk)('chili', 'Chili');
+    $kat($chili, 'Gemüse', 'Gemüse/Fruchtgemüse/Chili');
+    DB::table('foodalchemist_vocab_pairing_anchors')->where('id', $this->essig)->update(['aroma_intensitaet' => 2.5, 'category' => 'Würzmittel']);
+
+    app(KategorieRegeln::class)->intensitaet();
+    $i = fn (int $id) => (float) DB::table('foodalchemist_vocab_pairing_anchors')->where('id', $id)->value('aroma_intensitaet');
+
+    expect($i($this->salbei))->toBe(3.0)
+        ->and($i($this->anis))->toBe(5.0)
+        ->and($i($this->kuerbis))->toBe(1.0)
+        ->and($i($chili))->toBe(4.0)
+        ->and($i($this->essig))->toBe(2.5);
 });
