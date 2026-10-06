@@ -93,7 +93,9 @@ function pipelineLaeufe(array $recipeIds, callable $arbeit): array
     $treffer = array_fill_keys($recipeIds, 0);
     $reihenfolge = [];
     DB::listen(function ($q) use (&$treffer, &$reihenfolge) {
-        if (! str_contains($q->sql, 'from "foodalchemist_recipes"') || ! str_contains($q->sql, 'limit 1')) {
+        // Nur die Eloquent-Ladung der Pipeline (`select *`). Seit Spec 60 liest die Profil-Neuberechnung
+        // `id, name` desselben Rezepts — das ist kein zweiter Pipeline-Lauf.
+        if (! str_contains($q->sql, 'select * from "foodalchemist_recipes"') || ! str_contains($q->sql, 'limit 1')) {
             return;
         }
         foreach ($q->bindings as $b) {
