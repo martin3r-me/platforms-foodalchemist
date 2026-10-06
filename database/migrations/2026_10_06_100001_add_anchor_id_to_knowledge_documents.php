@@ -17,12 +17,22 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('foodalchemist_knowledge_documents', function (Blueprint $table) {
-            $table->unsignedBigInteger('anchor_id')->nullable()->after('category');
-            $table->index('anchor_id', 'fa_knowledge_anchor_idx');
-        });
+        // Idempotent: in der fa-pass-Variante lag dieselbe Spalte als Kopie unter
+        // 2026_10_06_000002_add_anchor_id_to_knowledge_documents — auf diesen DBs gibt es
+        // Spalte und Index schon („Duplicate column name 'anchor_id'").
+        if (! Schema::hasColumn('foodalchemist_knowledge_documents', 'anchor_id')) {
+            Schema::table('foodalchemist_knowledge_documents', function (Blueprint $table) {
+                $table->unsignedBigInteger('anchor_id')->nullable()->after('category');
+            });
+        }
+        if (! Schema::hasIndex('foodalchemist_knowledge_documents', 'fa_knowledge_anchor_idx')) {
+            Schema::table('foodalchemist_knowledge_documents', function (Blueprint $table) {
+                $table->index('anchor_id', 'fa_knowledge_anchor_idx');
+            });
+        }
 
         DB::table('foodalchemist_knowledge_documents')
+            ->whereNull('anchor_id')
             ->where('content_md', 'like', '%anker_id:%')
             ->select(['id', 'content_md'])
             ->orderBy('id')
