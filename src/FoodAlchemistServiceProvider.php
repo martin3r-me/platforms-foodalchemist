@@ -114,6 +114,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 \Platform\FoodAlchemist\Console\SignaleDetektorCommand::class,
                 \Platform\FoodAlchemist\Console\SpeiseplanAushangRollierenCommand::class,
                 \Platform\FoodAlchemist\Console\InspireImportCommand::class,
+                \Platform\FoodAlchemist\Console\AnkerWissenCommand::class,
                 \Platform\FoodAlchemist\Console\DataQualityCommand::class,
                 \Platform\FoodAlchemist\Console\LeadLaRepickCommand::class,
                 \Platform\FoodAlchemist\Console\RecomputeCommand::class,

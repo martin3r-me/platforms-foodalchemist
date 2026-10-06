@@ -2436,7 +2436,7 @@ class PairingService
      * („Möhre: frisch, Stifte") → nur der Grundname davor zählt. Kein Wortteil-Treffer: lieber
      * eine sichtbare Lücke als „Sauce: Chimichurri" → A1-Sauce.
      */
-    private function ankerIdExakt(?string $name): ?int
+    public function ankerIdExakt(?string $name): ?int
     {
         $basis = trim((string) strtok((string) $name, ':'));
         if ($basis === '') {

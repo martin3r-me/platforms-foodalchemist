@@ -4,6 +4,8 @@ namespace Platform\FoodAlchemist\Services\Pairing;
 
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Platform\FoodAlchemist\Enums\Kantenart;
+use Platform\FoodAlchemist\Enums\WissensStatus;
 
 /**
  * Spec 60 · P2: die EINZIGE Lesestelle für die gemessene Harmonie zwischen Aroma-Ankern.
@@ -14,11 +16,15 @@ use Illuminate\Support\Facades\DB;
  * Index-Zugriffe). Ein Paar ohne Zeile hat Stufe 1 („kein nennenswerter Bezug") — gemessen,
  * keine Datenlücke.
  *
- * Wer eine Stufe braucht, fragt hier. Kein anderer Code liest die Tabelle direkt.
+ * Wer eine Stufe braucht, fragt hier. Kein anderer Code liest die Tabelle direkt. Dasselbe gilt
+ * ab P4 für die Wissens-Beziehungen ({@see beziehungen}).
  */
 final class AnkerGraph
 {
     public const TABELLE = 'foodalchemist_anchor_harmonie';
+
+    /** Spec 60 · P4: Kontrast/Kombination/Konflikt (gerichtet, mit Status). */
+    public const BEZIEHUNGEN = 'foodalchemist_anchor_beziehungen';
 
     /** Stufen. */
     public const HARMONIERT = 3;
@@ -124,6 +130,33 @@ final class AnkerGraph
         return DB::table(self::TABELLE)->whereIn('anchor_a_id', $ids)->where('stufe', '>=', $min)
             ->selectRaw('anchor_a_id, COUNT(*) AS n')->groupBy('anchor_a_id')
             ->pluck('n', 'anchor_a_id')->map(fn ($n) => (int) $n)->all();
+    }
+
+    /**
+     * Wissens-Beziehungen (Spec 60 · P4) von einer Anker-Menge aus: Kontrast (abgeleitet),
+     * Kombination und Konflikt (aus Dossiers). Verworfene zählen nie; stärkster Rang zuerst.
+     *
+     * @param  array<int, int|string>  $von
+     * @param  array<int, int|string>|null  $zu
+     * @return Collection<int, object{von: int, zu: int, art: string, achse: string, rang: int, status: string, grundlage: string}>
+     */
+    public function beziehungen(array $von, ?Kantenart $art = null, ?array $zu = null, bool $nurGeprueft = false): Collection
+    {
+        $von = $this->ids($von);
+        if ($von === [] || ($zu !== null && $this->ids($zu) === [])) {
+            return collect();
+        }
+
+        return DB::table(self::BEZIEHUNGEN)
+            ->whereIn('anchor_a_id', $von)
+            ->when($zu !== null, fn ($q) => $q->whereIn('anchor_b_id', $this->ids($zu)))
+            ->when($art !== null, fn ($q) => $q->where('art', $art->value))
+            ->where('status', '!=', WissensStatus::Verworfen->value)
+            ->when($nurGeprueft, fn ($q) => $q->where('status', WissensStatus::Geprueft->value))
+            ->orderByDesc('rang')->orderBy('anchor_b_id')
+            ->get(['anchor_a_id', 'anchor_b_id', 'art', 'achse', 'rang', 'status', 'grundlage'])
+            ->map(fn ($r) => (object) ['von' => (int) $r->anchor_a_id, 'zu' => (int) $r->anchor_b_id, 'art' => $r->art,
+                'achse' => (string) $r->achse, 'rang' => (int) $r->rang, 'status' => $r->status, 'grundlage' => $r->grundlage]);
     }
 
     /**
