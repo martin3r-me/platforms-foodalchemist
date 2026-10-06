@@ -57,7 +57,6 @@
                     'eigenschaften' => 'Eigenschaften',
                     'equipment' => 'Equipment',
                     'posten' => 'Posten',
-                    'prozessanker' => 'Prozessanker',
                     'aromaanker' => 'Aromaanker',
                     'pairings' => 'Pairings',
                     'eignung' => 'Eignung',

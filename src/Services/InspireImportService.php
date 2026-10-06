@@ -14,7 +14,7 @@ use Symfony\Component\Uid\UuidV7;
  *   - ingredients     2.630 Zutaten → je eine ein eigener Anker (has_pairing_data=1 → 2.628)
  *   - pairings_strong Level 2+3 in beide Richtungen → aroma-Kanten (source='inspire')
  *
- * Ein Pass (import): mintet die Anker + label_en-Brücke UND schreibt die Kanten. Die
+ * Ein Pass (import): mintet die Anker UND schreibt die Kanten. Die
  * ix→Anker-Auflösung läuft über die IX (PK, eindeutig) — NICHT über den Namen: Inspire hat
  * 3 Dubletten-Namen (Apricot Puree/Chinese Cabbage/Gochujang), die als „alles einzeln"
  * eigene Anker bleiben müssen. level 3 → weight 1.0 (●) · level 2 → weight 0.9 (◕).
@@ -29,8 +29,6 @@ class InspireImportService
 {
     private const ANCHORS = 'foodalchemist_vocab_pairing_anchors';
 
-    private const MAP = 'foodalchemist_anchor_ingredient_map';
-
     private const EDGES = 'foodalchemist_pairing_anchor_edges';
 
     /** Zählt bereits importierte Inspire-Anker (für den „schon importiert?"-Guard). */
@@ -39,14 +37,13 @@ class InspireImportService
         return (int) DB::table(self::ANCHORS)->whereNotNull('inspire_id')->count();
     }
 
-    /** Rollback: löscht alle Inspire-Kanten, -Brücken und -Anker (für sauberen Redo). */
+    /** Rollback: löscht alle Inspire-Kanten und -Anker (für sauberen Redo). */
     public function purgeInspire(): array
     {
         $edges = DB::table(self::EDGES)->where('source', 'inspire')->delete();
-        $map = DB::table(self::MAP)->where('match_method', 'inspire')->delete();
         $anchors = DB::table(self::ANCHORS)->whereNotNull('inspire_id')->delete();
 
-        return ['edges' => $edges, 'map' => $map, 'anchors' => $anchors];
+        return ['edges' => $edges, 'anchors' => $anchors];
     }
 
     /**
@@ -112,15 +109,6 @@ class InspireImportService
                         'subcategory' => $sub !== '' ? $sub : null,
                         'created_at' => $ts,
                         'updated_at' => $ts,
-                    ]);
-                    DB::table(self::MAP)->insert([
-                        'anchor_id' => $anchorId,
-                        'slug_de' => $slug,
-                        'ingredient_id' => null,
-                        'label_en' => $name,
-                        'has_profile' => 0,
-                        'n_key_components' => 0,
-                        'match_method' => 'inspire',
                     ]);
                 } else {
                     $anchorId = $ix; // Platzhalter für die Dry-Run-Kantenzählung

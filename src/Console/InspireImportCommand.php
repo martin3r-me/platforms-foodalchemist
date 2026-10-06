@@ -6,7 +6,7 @@ use Illuminate\Console\Command;
 use Platform\FoodAlchemist\Services\InspireImportService;
 
 /**
- * Inspire-Voll-Import — mintet je Inspire-Zutat einen Anker (+ label_en-Brücke) und
+ * Inspire-Voll-Import — mintet je Inspire-Zutat einen Anker und
  * schreibt die Kanten (pairings_strong L2+L3) in einem Pass. Kein Merge auf Bestand.
  * Default = Dry-Run. Idempotent (Spec 60 · P1): vorhandene Anker werden über `inspire_id`
  * wiedererkannt, nur neue Zutaten gemintet. --purge löscht alle Inspire-Anker samt ihrer
@@ -51,7 +51,7 @@ class InspireImportCommand extends Command
 
         if ($apply && (bool) $this->option('purge')) {
             $p = $svc->purgeInspire();
-            $this->warn("Purge: {$p['anchors']} Anker, {$p['map']} Brücken, {$p['edges']} Kanten gelöscht.");
+            $this->warn("Purge: {$p['anchors']} Anker, {$p['edges']} Kanten gelöscht.");
         }
 
         $this->info(($apply ? 'APPLY' : 'DRY-RUN')." — source={$source}, team={$teamId}");

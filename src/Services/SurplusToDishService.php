@@ -68,7 +68,7 @@ class SurplusToDishService
         $treffer = [];       // recipe_id => set(anchor_id)
         $abgedeckt = [];     // anchor_id => true
         if ($portfolioIds !== []) {
-            foreach (['foodalchemist_recipe_anchor_mappings', 'foodalchemist_recipe_process_anchors'] as $tabelle) {
+            foreach (['foodalchemist_recipe_anchor_mappings'] as $tabelle) {
                 foreach (DB::table($tabelle)->whereIn('recipe_id', $portfolioIds)
                     ->whereIn('anchor_id', $allAnchorIds)->whereNull('deleted_at')
                     ->get(['recipe_id', 'anchor_id']) as $r) {

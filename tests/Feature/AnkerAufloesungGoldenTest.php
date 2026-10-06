@@ -27,13 +27,8 @@ uses(TestCase::class, SeedsTeamHierarchy::class);
  * *Zusammensetzung* (welche Zeilen mit welchem `via` herauskommen) — projiziert auf
  * Anker-**Slugs** statt Auto-Increment-IDs, damit die Erwartung lesbar und lauf-stabil ist.
  *
- * **Was bewusst NICHT eingefroren wird:** die Reihenfolge *innerhalb* von `prozess` und
- * innerhalb des angehängten Eigen-Zustands-Blocks. Beide kommen heute aus einem `pluck()`
- * bzw. `get()` **ohne ORDER BY** — das ist Treiber-Zufall (SQLite hier, MySQL auf demo), und
- * ein Golden-Set, das Zufall festnagelt, ist auf der falschen Datenbank rot ohne Befund.
- * Sortiert wird darum in der Projektion; dass der Zustands-Block ein zusammenhängender
- * **Suffix** bleibt, prüft ein eigener Riegel. (Die fehlende Sortierung selbst ist ein
- * Code-Befund und gehört ins Backlog, nicht in diesen Test.)
+ * Spec 60 · P3: Prozess-Anker (und mit ihnen der Eigen-Zustands-Block) gibt es nicht mehr;
+ * `prozess` ist immer leer, bis die Leser in P6 umgestellt sind.
  */
 beforeEach(function () {
     $this->seedTeamHierarchy();
@@ -77,15 +72,6 @@ beforeEach(function () {
         return (int) DB::getPdo()->lastInsertId();
     };
 
-    $this->mkProzessAnker = function (int $recipeId, string $ankerSlug, bool $geloescht = false): void {
-        DB::table('foodalchemist_recipe_process_anchors')->insert([
-            'uuid' => (string) UuidV7::generate(), 'team_id' => $this->rootTeam->id,
-            'recipe_id' => $recipeId, 'anchor_id' => $this->ankerId[$ankerSlug],
-            'source' => 'ai_inferred', 'created_at' => now(), 'updated_at' => now(),
-            'deleted_at' => $geloescht ? now() : null,
-        ]);
-    };
-
     /** Zutaten-Zeile mit Sub-Rezept-Verweis (makeIngredient kennt nur GP/raw_text). */
     $this->mkSubZutat = function (FoodAlchemistRecipe $recipe, FoodAlchemistRecipe $sub, int $position): void {
         FoodAlchemistRecipeIngredient::create([
@@ -98,7 +84,7 @@ beforeEach(function () {
 
     /**
      * Projektion auf das, was der Umbau nicht verschieben darf. IDs → Slugs, `prozess`
-     * sortiert (kein ORDER BY im SQL, s. Kopf-Docblock), Zustands-Suffix sortiert.
+     * sortiert.
      */
     $this->projiziere = function (array $zeilen): array {
         $slug = fn (?int $id) => $id === null ? null : ($this->ankerSlug[$id] ?? "unbekannt#$id");
@@ -110,24 +96,11 @@ beforeEach(function () {
             $out[] = ['label' => $z['label'], 'kern' => $slug($z['kern']), 'prozess' => $prozess, 'via' => $z['via']];
         }
 
-        // Zustands-Zeilen (angehängter Block) untereinander sortieren — ihre Reihenfolge
-        // ist heute Treiber-Zufall. Dass sie ein Suffix bilden, prüft ein eigener Test.
-        $kopf = [];
-        $suffix = [];
-        foreach ($out as $zeile) {
-            if ($zeile['via'] === 'prozess_raw_text') {
-                $suffix[] = $zeile;
-            } else {
-                $kopf[] = $zeile;
-            }
-        }
-        usort($suffix, fn ($a, $b) => strcmp($a['label'], $b['label']));
-
-        return array_merge($kopf, $suffix);
+        return $out;
     };
 
     // ── Anker-Vokabular ───────────────────────────────────────────────────
-    foreach (['neutral', 'apfel', 'birne', 'zimt', 'roestaromen', 'rauch'] as $s) {
+    foreach (['neutral', 'apfel', 'birne', 'zimt'] as $s) {
         ($this->mkAnker)($s);
     }
 
@@ -197,17 +170,12 @@ beforeEach(function () {
     // (i) Nur raw_text, kein Anker-Term ⇒ unresolved (Label = raw_text).
     $this->makeIngredient($this->r2, 'Xylo Quirk', null, '100', 5);
 
-    // ── R3: Sub-Rezepte (eigene Mapping-Tabelle + Prozess-Anker) ─────────
+    // ── R3: Sub-Rezepte (eigene Mapping-Tabelle) ─────────────────────────
     $this->sub1 = $this->makeRecipe($this->rootTeam, 'Basis: Sub Mehrdeutig');
     ($this->mkRezeptMapping)($this->sub1->id, 'apfel', '0.900'); // kleinste id
     ($this->mkRezeptMapping)($this->sub1->id, 'birne', null);    // NULL ⇒ 1.0 → GEWINNER
-    ($this->mkProzessAnker)($this->sub1->id, 'roestaromen');
-    ($this->mkProzessAnker)($this->sub1->id, 'rauch');
-    ($this->mkProzessAnker)($this->sub1->id, 'birne');           // = kern ⇒ fliegt raus
-    ($this->mkProzessAnker)($this->sub1->id, 'zimt', true);      // gelöscht ⇒ fliegt raus
 
     $this->sub2 = $this->makeRecipe($this->rootTeam, 'Basis: Zimt Sub Ohne Mapping');
-    ($this->mkProzessAnker)($this->sub2->id, 'rauch');
 
     // Spec 58 · Paket 1: Sub-Rezept ohne Mapping wird über SEINE Zutaten aufgelöst.
     $this->sub3 = $this->makeRecipe($this->rootTeam, 'Basis: Sub Ueber Zutaten');
@@ -217,16 +185,6 @@ beforeEach(function () {
     ($this->mkSubZutat)($this->r3, $this->sub1, 1);
     ($this->mkSubZutat)($this->r3, $this->sub2, 2);
     ($this->mkSubZutat)($this->r3, $this->sub3, 3);
-
-    // ── R4: Eigen-Zustand am Rezept selbst (angehängter Block + Dedupe) ──
-    $this->r4 = $this->makeRecipe($this->rootTeam, 'Basis: Eigen-Zustand');
-    $gpApfel = $this->makeGp($this->rootTeam, 'GP Nur Apfel');
-    ($this->mkGpMapping)($gpApfel->id, 'apfel', '1.000');
-    $this->makeIngredient($this->r4, 'Apfel-Zeile', $gpApfel, '100', 1);
-    ($this->mkProzessAnker)($this->r4->id, 'apfel');             // schon kern ⇒ Dedupe
-    ($this->mkProzessAnker)($this->r4->id, 'roestaromen');       // → Zustands-Zeile
-    ($this->mkProzessAnker)($this->r4->id, 'rauch');             // → Zustands-Zeile
-    ($this->mkProzessAnker)($this->r4->id, 'zimt', true);        // gelöscht ⇒ raus
 
     // Dienst erst NACH den Fixtures holen: `anchorIndex` und der `neutral`-Lookup sind
     // je Instanz memoisiert (V-045-Halbschritt) — eine früher erzeugte Instanz kennte
@@ -256,29 +214,10 @@ it('GOLDEN: die Anker-Auflösung liefert für den Fixture-Satz genau diese Zeile
     ]);
 
     expect(($this->projiziere)($this->svc->resolveRecipeAnchors($this->r3)))->toBe([
-        ['label' => 'Basis: Sub Mehrdeutig', 'kern' => 'birne', 'prozess' => ['rauch', 'roestaromen'], 'via' => 'recipe_anker'],
-        ['label' => 'Basis: Zimt Sub Ohne Mapping', 'kern' => null, 'prozess' => ['rauch'], 'via' => 'unresolved'],
+        ['label' => 'Basis: Sub Mehrdeutig', 'kern' => 'birne', 'prozess' => [], 'via' => 'recipe_anker'],
+        ['label' => 'Basis: Zimt Sub Ohne Mapping', 'kern' => null, 'prozess' => [], 'via' => 'unresolved'],
         ['label' => 'Basis: Sub Ueber Zutaten', 'kern' => 'birne', 'prozess' => [], 'via' => 'rezept_zutaten'],
     ]);
-
-    expect(($this->projiziere)($this->svc->resolveRecipeAnchors($this->r4)))->toBe([
-        ['label' => 'GP Nur Apfel', 'kern' => 'apfel', 'prozess' => [], 'via' => 'gp_anker'],
-        ['label' => 'rauch (Zustand)', 'kern' => 'rauch', 'prozess' => [], 'via' => 'prozess_raw_text'],
-        ['label' => 'roestaromen (Zustand)', 'kern' => 'roestaromen', 'prozess' => [], 'via' => 'prozess_raw_text'],
-    ]);
-});
-
-/**
- * Der Riegel zur Projektions-Freiheit: die Zustands-Zeilen dürfen untereinander in
- * beliebiger Reihenfolge kommen (kein ORDER BY), aber sie müssen ein zusammenhängender
- * Suffix bleiben. Sonst verschöbe die Projektion eine echte Regression aus dem Blick.
- */
-it('der Eigen-Zustands-Block bleibt ein zusammenhängender Suffix', function () {
-    $vias = array_column($this->svc->resolveRecipeAnchors($this->r4), 'via');
-    $ersterZustand = array_search('prozess_raw_text', $vias, true);
-
-    expect($ersterZustand)->not->toBeFalse()
-        ->and(array_slice($vias, $ersterZustand))->toBe(array_fill(0, count($vias) - $ersterZustand, 'prozess_raw_text'));
 });
 
 /**
@@ -322,8 +261,7 @@ it('GEGENBEWEIS: die zwei naheliegenden Fehl-Nachbauten liefern ein ANDERES Erge
 
 /**
  * `anchorsForRecipe` ist der order-tragende Konsument (flache Liste, die in den
- * Kandidaten-Pool geht). Hier wird die MENGE festgenagelt — die Reihenfolge nicht,
- * weil sie aus derselben ORDER-BY-freien Quelle stammt wie `prozess`.
+ * Kandidaten-Pool geht). Hier wird die MENGE festgenagelt, nicht die Reihenfolge.
  */
 it('die flache Anker-Menge eines Rezepts bleibt dieselbe', function () {
     $slugs = fn (FoodAlchemistRecipe $r) => collect($this->svc->anchorsForRecipe($r))
@@ -331,6 +269,5 @@ it('die flache Anker-Menge eines Rezepts bleibt dieselbe', function () {
 
     expect($slugs($this->r1))->toBe(['apfel', 'birne', 'zimt'])
         ->and($slugs($this->r2))->toBe(['birne', 'zimt'])
-        ->and($slugs($this->r3))->toBe(['birne', 'rauch', 'roestaromen'])
-        ->and($slugs($this->r4))->toBe(['apfel', 'rauch', 'roestaromen']);
+        ->and($slugs($this->r3))->toBe(['birne']);
 });

@@ -10,7 +10,7 @@ use Platform\FoodAlchemist\Services\LabNoteService;
 
 /**
  * R6.11 · S3 (write): Lab-Journal-Notiz anlegen — die Senke für Hypothesen-/
- * Widerspruchs-Ergebnisse (aus knowledge.HYPOTHESIZE bzw. dem Widerspruchs-Signal).
+ * Widerspruchs-Ergebnisse (aus dem Widerspruchs-Signal).
  * Evidenz-Stufe Pflicht-Default T3 (Hypothese). Datensatz gehört dem aktuellen Team.
  */
 class LabNotesPostTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
@@ -79,7 +79,7 @@ class LabNotesPostTool extends FoodAlchemistTool implements ToolContract, ToolMe
             'requires_auth' => true,
             'requires_team' => true,
             'cost_class' => 'local_db',
-            'related_tools' => ['foodalchemist.knowledge.HYPOTHESIZE', 'foodalchemist.recipes.POST'],
+            'related_tools' => ['foodalchemist.recipes.POST'],
             'examples' => ['Halte die Hypothese Erdbeere×Basilikum als Lab-Notiz fest'],
         ];
     }

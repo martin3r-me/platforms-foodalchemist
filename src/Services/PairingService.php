@@ -22,9 +22,6 @@ class PairingService
     // `erprobt` ist gewipt (Gate A: kein Gold) — Schlüssel nur vestigial belassen.
     private const GEWICHTE = ['erprobt' => 1.0, 'aroma' => 0.9, 'kontrast' => 0.5];
 
-    /** Geschmacks-Achsen (anchor_taste_vectors / vocab_process_sensory_deltas). */
-    private const TASTE_ACHSEN = ['suess', 'salzig', 'sauer', 'bitter', 'umami', 'fettig', 'scharf'];
-
     public const CAP_GP = 3;
 
     public const CAP_RECIPE = 5;
@@ -346,18 +343,10 @@ class PairingService
 
         $rezeptKerne = $this->kernMappingsBatch('foodalchemist_recipe_anchor_mappings', 'recipe_id', array_keys($subRezeptIds));
         $gpKerne = $this->kernMappingsBatch('foodalchemist_gp_anchor_mappings', 'gp_id', array_keys($gpIds));
-        $subProzess = $this->prozessAnkerBatch(array_keys($subRezeptIds));
-        $eigenerZustand = $this->eigenerZustandBatch($rezepte->keys()->all());
 
         $out = [];
         foreach ($zutatenJeRezept as $rid => $zutaten) {
-            $out[$rid] = $this->ankerZeilen(
-                $zutaten,
-                $rezeptKerne,
-                $gpKerne,
-                $subProzess,
-                $eigenerZustand[$rid] ?? [],
-            );
+            $out[$rid] = $this->ankerZeilen($zutaten, $rezeptKerne, $gpKerne);
         }
 
         return $out;
@@ -389,53 +378,6 @@ class PairingService
     }
 
     /**
-     * Prozess-Anker der Sub-Rezepte. Ohne Join auf das Anker-Vokabular — genau wie der
-     * frühere Einzel-Read; der Zustands-Block unten prüft dagegen die Anker-Soft-Deletes
-     * mit. Diesen Unterschied nicht einzuziehen ist Absicht: er wäre ein Verhaltenswechsel
-     * (→ als Befund notiert, nicht hier geheilt).
-     *
-     * @param  array<int, int|string>  $subRezeptIds
-     * @return array<int|string, array<int, mixed>>
-     */
-    private function prozessAnkerBatch(array $subRezeptIds): array
-    {
-        if ($subRezeptIds === []) {
-            return [];
-        }
-        $je = [];
-        foreach (DB::table('foodalchemist_recipe_process_anchors')
-            ->whereIn('recipe_id', $subRezeptIds)->whereNull('deleted_at')
-            ->get(['recipe_id', 'anchor_id']) as $zeile) {
-            $je[$zeile->recipe_id][] = $zeile->anchor_id;
-        }
-
-        return $je;
-    }
-
-    /**
-     * Eigen-Zustands-Block je Rezept (Prozess-Anker AM Gericht, mit Anker-Soft-Delete-Prüfung).
-     *
-     * @param  array<int, int>  $recipeIds
-     * @return array<int, array<int, object>>
-     */
-    private function eigenerZustandBatch(array $recipeIds): array
-    {
-        if ($recipeIds === []) {
-            return [];
-        }
-        $je = [];
-        foreach (DB::table('foodalchemist_recipe_process_anchors AS p')
-            ->join('foodalchemist_vocab_pairing_anchors AS a', 'a.id', '=', 'p.anchor_id')
-            ->whereIn('p.recipe_id', $recipeIds)->whereNull('p.deleted_at')
-            ->whereNull('a.deleted_at')
-            ->get(['p.recipe_id', 'p.anchor_id', 'a.slug']) as $zeile) {
-            $je[(int) $zeile->recipe_id][] = $zeile;
-        }
-
-        return $je;
-    }
-
-    /**
      * resolve_recipe_anchors (Tabelle 4): pro Zutaten-Zeile GENAU EIN Kern
      * (+ Prozess-Anker nur bei Sub-Rezepten).
      *
@@ -453,16 +395,12 @@ class PairingService
      * @param  iterable<int, \Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient>  $zutaten
      * @param  array<int|string, mixed>  $rezeptKerne
      * @param  array<int|string, mixed>  $gpKerne
-     * @param  array<int|string, array<int, mixed>>  $subProzess
-     * @param  array<int, object>  $eigenerZustand
      * @return array<int, array{label: string, kern: ?int, prozess: array<int>, via: string}>
      */
     private function ankerZeilen(
         iterable $zutaten,
         array $rezeptKerne,
         array $gpKerne,
-        array $subProzess,
-        array $eigenerZustand,
     ): array {
         $neutralId = $this->neutralAnkerId();
         $out = [];
@@ -470,6 +408,8 @@ class PairingService
             $label = $z->referencedRecipe?->name ?? $z->gp?->name ?? $z->raw_text;
             $kern = null;
             $via = 'unresolved';
+            // Spec 60 · P3: Prozess-Anker gibt es nicht mehr (Zubereitung = Verfahren, P4). Der
+            // Schlüssel bleibt bis zur Umstellung der Leser (P6) als leere Liste stehen.
             $prozess = [];
 
             if ($z->referenced_recipe_id !== null) {
@@ -482,13 +422,6 @@ class PairingService
                     $kern = $this->rekursiverKern((int) $z->referenced_recipe_id);
                     $via = $kern !== null ? 'rezept_zutaten' : 'unresolved';
                 }
-                // `anchor_id != $kern` lief vorher in SQL; in PHP numerisch vergleichen, weil
-                // beide Seiten je Treiber int ODER string sein können (SQL verglich numerisch).
-                $ausschluss = (int) ($kern ?? 0);
-                $prozess = array_values(array_filter(
-                    $subProzess[$z->referenced_recipe_id] ?? [],
-                    fn ($a) => (int) $a !== $ausschluss,
-                ));
             } elseif ($z->gp_id !== null) {
                 $mapping = $gpKerne[$z->gp_id] ?? null;
                 if ($mapping !== null) {
@@ -515,20 +448,6 @@ class PairingService
             }
 
             $out[] = ['label' => $label, 'kern' => $kern, 'prozess' => $prozess, 'via' => $via];
-        }
-
-        // Eigen-Zustand (Datenmodell Ebene 2/3): die Prozess-Charakter-Anker DIESES
-        // Rezepts (raw_text-Prep + KI, z. B. roestaromen/rauch/karamell) gehören ins
-        // eigene Netz — eine geröstete/geräucherte Komponente ist eine eigene Aroma-
-        // Dimension, nicht nur die Rohzutat. Bisher flossen nur Prozess-Anker von
-        // SUB-Rezepten (oben via referenced_recipe_id). Dedupe gegen bereits als kern
-        // aufgelöste Anker, damit keine Selbst-Paare entstehen.
-        $vorhandeneKerne = array_map('intval', array_filter(array_map(fn ($k) => $k['kern'], $out)));
-        foreach ($eigenerZustand as $pa) {
-            if (in_array((int) $pa->anchor_id, $vorhandeneKerne, true)) {
-                continue;
-            }
-            $out[] = ['label' => $pa->slug . ' (Zustand)', 'kern' => (int) $pa->anchor_id, 'prozess' => [], 'via' => 'prozess_raw_text'];
         }
 
         return $out;
@@ -1510,21 +1429,6 @@ class PairingService
         $slugs = $ankerRows->pluck('slug')->all();
         $eigene = $ankerRows->pluck('id')->map(fn ($i) => (int) $i)->all();
 
-        // Zustands-Charakter (Ebene 2/3) prägt das EMERGENTE Paarungsprofil mit: die
-        // eigenen Prozess-Anker (roestaromen/rauch/karamell) in die auswärtige
-        // Nachbar-Aggregation (aroma/modern/kontrast) einspeisen — sonst bliebe das
-        // Röst-/Rauch-Profil unsichtbar, obwohl es die Kohäsion schon mitträgt.
-        $prozessRows = DB::table('foodalchemist_recipe_process_anchors AS p')
-            ->join('foodalchemist_vocab_pairing_anchors AS a', 'a.id', '=', 'p.anchor_id')
-            ->where('p.recipe_id', $recipe->id)->whereNull('p.deleted_at')->whereNull('a.deleted_at')
-            ->get(['a.id', 'a.slug']);
-        foreach ($prozessRows as $pr) {
-            if (! in_array((int) $pr->id, $eigene, true)) {
-                $slugs[] = $pr->slug;
-                $eigene[] = (int) $pr->id;
-            }
-        }
-
         // Teller-Logik (»komplettiert den Teller« + »macht den Teller eigen«) ergibt
         // NUR fürs GERICHT Sinn — ein Basisrezept ist eine Komponente, kein Teller.
         // Basisrezept ⇒ stattdessen die Graph-Sicht: klassische Aroma-Nachbarn +
@@ -1569,7 +1473,6 @@ class PairingService
             'verwandte' => $verwandte,
             'aroma' => $this->ankerNachbarnAggregiert($slugs, $eigene, 'aroma'),
             'kontrast' => $this->ankerNachbarnAggregiert($slugs, $eigene, 'kontrast'),
-            'geschmack' => $this->aggregatedTaste($eigene),
         ];
     }
 
@@ -1587,7 +1490,6 @@ class PairingService
             'nachbarn' => $this->ankerNachbarnAggregiert($slugs, $eigene, 'aroma'),
             'aroma' => $this->ankerNachbarnAggregiert($slugs, $eigene, 'aroma'),
             'kontrast' => $this->ankerNachbarnAggregiert($slugs, $eigene, 'kontrast'),
-            'geschmack' => $this->aggregatedTaste($eigene),
         ];
     }
 
@@ -1620,13 +1522,6 @@ class PairingService
     private const BASIS_MAX = 10;
 
     private const INNER_ANKER_MAX = 12;
-
-    // Legacy-Kantentypen auf die drei kanonischen normalisieren (§ Taxonomie 2026-07-12).
-    private const TYP_NORMALISIERT = [
-        'klassisch' => 'erprobt', 'modern' => 'erprobt', 'erprobt' => 'erprobt',
-        'verbund' => 'aroma', 'trinitas' => 'aroma', 'aroma' => 'aroma',
-        'kontrast' => 'kontrast',
-    ];
 
     /**
      * Pairing-Empfehler fürs Netz (2026-07-22 Redesign): beantwortet »was passt
@@ -2191,229 +2086,13 @@ class PairingService
         return [round($cx + $radius * cos($rad), 1), round($cy + $radius * sin($rad), 1)];
     }
 
-    // ── Geschmacks-Vektoren & Zubereitungs-Deltas (read-only, 2026-07-11) ─
-    // Quelle: anchor_taste_vectors (anker-level, 7 Achsen) + vocab_process_sensory_deltas
-    // (Zubereitungs-Deltas). Aus der chemie_db-Migration; speisen Kontrast/Balance + Prep.
-
-    /** Geschmacks-Vektor eines Ankers (7 Achsen), oder null wenn keiner. */
-    public function anchorTasteVector(int $anchorId): ?array
-    {
-        $row = DB::table('foodalchemist_anchor_taste_vectors')->where('anchor_id', $anchorId)->first();
-        if ($row === null) {
-            return null;
-        }
-        $out = [];
-        foreach (self::TASTE_ACHSEN as $a) {
-            $out[$a] = (float) $row->$a;
-        }
-
-        return $out;
-    }
-
-    /** Gemittelter Geschmacks-Vektor über mehrere Anker (nur die mit Vektor); leere Achsen = 0. */
-    private function aggregatedTaste(array $anchorIds): array
-    {
-        $out = array_fill_keys(self::TASTE_ACHSEN, 0.0);
-        $anchorIds = array_values(array_unique(array_filter($anchorIds)));
-        if ($anchorIds === []) {
-            return $out;
-        }
-        $rows = DB::table('foodalchemist_anchor_taste_vectors')->whereIn('anchor_id', $anchorIds)->get();
-        if ($rows->isEmpty()) {
-            return $out;
-        }
-        foreach ($rows as $r) {
-            foreach (self::TASTE_ACHSEN as $a) {
-                $out[$a] += (float) $r->$a;
-            }
-        }
-        foreach (self::TASTE_ACHSEN as $a) {
-            $out[$a] = round($out[$a] / $rows->count(), 3);
-        }
-
-        return $out;
-    }
-
-    /**
-     * PreparedForm: effektiver Geschmack = Basis-Anker-Vektor ⊕ Prozess-Delta
-     * (vocab_process_sensory_deltas), on-demand, geklemmt auf [0,1]. Kein N×M-Speicher.
-     * Null wenn der Anker keinen Basis-Vektor hat; unbekannte Zubereitung ⇒ Basis unverändert.
-     */
-    public function preparedTaste(int $anchorId, string $prepSlug): ?array
-    {
-        $basis = $this->anchorTasteVector($anchorId);
-        if ($basis === null) {
-            return null;
-        }
-        $delta = DB::table('foodalchemist_vocab_process_sensory_deltas')->where('anchor_slug', $prepSlug)->first();
-        if ($delta === null) {
-            return $basis;
-        }
-        $spalte = ['suess' => 'd_suess', 'salzig' => 'd_salzig', 'sauer' => 'd_sauer', 'bitter' => 'd_bitter',
-            'umami' => 'd_umami', 'fettig' => 'd_fettig', 'scharf' => 'd_scharf'];
-        $out = [];
-        foreach (self::TASTE_ACHSEN as $a) {
-            $out[$a] = round(max(0.0, min(1.0, $basis[$a] + (float) $delta->{$spalte[$a]})), 3);
-        }
-
-        return $out;
-    }
-
-    // ── Zustands-abhängiges Pairing (Ebene 2, 2026-07-11) ────────────────
-    // Spec §3 Ebene 2: eine Zubereitung verschiebt das Aromaprofil KONSTANT
-    // (geröstet → +roasted/nutty/caramel). PreparedForm-Vektor = unit(Basis-14-Typ)
-    // ⊕ scale·prep_aroma_delta; Pairing wird auf DEM verschobenen Vektor neu
-    // gerechnet (Kosinus) → geröstete Mandel paart anders als rohe. On-demand.
-    // Grenze: nur Anker mit ingredient_aroma_vector; Preps ohne Aroma-Delta → [].
-
-    private const AROMA_TYPES = ['fruity', 'citrus', 'floral', 'green', 'herbal', 'vegetable', 'caramel',
-        'roasted', 'nutty', 'woody', 'spicy', 'cheesy', 'animal', 'chemical'];
-
-    private const STATE_SCALE = 0.5;
-
-    /** Basis-14-Typ-Aromavektor eines Ankers (via anchor_ingredient_map → ingredient_aroma_vector), oder null. */
-    private function anchorAromaVector(int $anchorId): ?array
-    {
-        $iid = DB::table('foodalchemist_anchor_ingredient_map')->where('anchor_id', $anchorId)->value('ingredient_id');
-        if ($iid === null) {
-            return null;
-        }
-        $row = DB::table('foodalchemist_ingredient_aroma_vector')->where('ingredient_id', $iid)->first();
-        if ($row === null) {
-            return null;
-        }
-        $v = [];
-        foreach (self::AROMA_TYPES as $t) {
-            $v[] = (float) ($row->$t ?? 0.0);
-        }
-
-        return $v;
-    }
-
-    /** Alle Anker mit Aromavektor: [anchor_id => ['slug'=>..., 'vec'=>[14]]]. Für Kandidaten-Scoring. */
-    private function allAnchorAromaVectors(): array
-    {
-        $rows = DB::table('foodalchemist_anchor_ingredient_map AS m')
-            ->join('foodalchemist_ingredient_aroma_vector AS v', 'v.ingredient_id', '=', 'm.ingredient_id')
-            ->join('foodalchemist_vocab_pairing_anchors AS a', 'a.id', '=', 'm.anchor_id')
-            ->get(array_merge(['m.anchor_id', 'a.slug', 'a.display_de'], array_map(fn ($t) => 'v.'.$t, self::AROMA_TYPES)));
-        $out = [];
-        foreach ($rows as $r) {
-            $vec = [];
-            foreach (self::AROMA_TYPES as $t) {
-                $vec[] = (float) ($r->$t ?? 0.0);
-            }
-            $out[(int) $r->anchor_id] = ['slug' => $r->slug, 'display_de' => $r->display_de, 'vec' => $vec];
-        }
-
-        return $out;
-    }
-
-    private function vecUnit(array $v): array
-    {
-        $n = sqrt(array_sum(array_map(fn ($x) => $x * $x, $v)));
-
-        return $n > 0 ? array_map(fn ($x) => $x / $n, $v) : $v;
-    }
-
-    private function vecCos(array $a, array $b): float
-    {
-        $d = 0.0;
-        $na = 0.0;
-        $nb = 0.0;
-        foreach ($a as $i => $x) {
-            $d += $x * $b[$i];
-            $na += $x * $x;
-            $nb += $b[$i] * $b[$i];
-        }
-
-        return ($na > 0 && $nb > 0) ? $d / (sqrt($na) * sqrt($nb)) : 0.0;
-    }
-
-    /**
-     * Zustands-abhängige Pairing-Partner der Form (Anker ⊕ Zubereitung).
-     * @return list<array{anchor_id:int, slug:string, display_de:?string, score:float}>
-     */
-    public function statePairingNeighbors(int $anchorId, string $prepSlug, int $limit = 12): array
-    {
-        $base = $this->anchorAromaVector($anchorId);
-        if ($base === null) {
-            return [];  // Anker ohne Aromavektor → kein Zustands-Pairing
-        }
-        // Prep-Aroma-Delta (leer bei Preps mit nur Geschmacks-Delta, z.B. getrocknet)
-        $delta = array_fill_keys(self::AROMA_TYPES, 0.0);
-        $rows = DB::table('foodalchemist_prep_aroma_delta AS d')
-            ->join('foodalchemist_preparations AS p', 'p.id', '=', 'd.prep_id')
-            ->join('foodalchemist_aroma_types AS at', 'at.id', '=', 'd.aroma_type_id')
-            ->where('p.slug', $prepSlug)->get(['at.type_key', 'd.delta']);
-        if ($rows->isEmpty()) {
-            return [];  // kein Aroma-Shift für diese Zubereitung
-        }
-        foreach ($rows as $r) {
-            $delta[$r->type_key] = (float) $r->delta;
-        }
-        $u = $this->vecUnit($base);
-        $prepared = [];
-        foreach (self::AROMA_TYPES as $i => $t) {
-            $prepared[$i] = $u[$i] + self::STATE_SCALE * $delta[$t];
-        }
-        $scored = [];
-        foreach ($this->allAnchorAromaVectors() as $cid => $c) {
-            if ($cid === $anchorId) {
-                continue;
-            }
-            $scored[] = ['anchor_id' => $cid, 'slug' => $c['slug'], 'display_de' => $c['display_de'],
-                'score' => round($this->vecCos($prepared, $c['vec']), 4)];
-        }
-        usort($scored, fn ($a, $b) => $b['score'] <=> $a['score']);
-
-        return array_slice($scored, 0, $limit);
-    }
-
     // ── R6.8: Aroma-treue Substitution (read-only, 2026-07-19) ───────────
     // Ersatz, der den GESCHMACK erhält — nicht nur den Preis senkt. Zwei vorhandene
     // Basen kombiniert (kein Neubau der Mathematik): (1) Anker-Kanten-Überlappung —
     // welche der Aroma-Brücken des Quell-GP trägt/erreicht der Kandidat (edgeBest über
-    // die gpAnkers beider Seiten); (2) Aroma-Vektor-Cosinus (14-Typ) der aggregierten
-    // GP-Aromaprofile. Bewusste Abweichung von der Spec-Notation »× Cosinus«: ein hartes
-    // Produkt würde das Ranking überall dort auf 0 kollabieren, wo Aroma-Vektoren fehlen
-    // (sie sind dünn — nur Anker mit ingredient_aroma_vector). Darum GRACEFUL gewichtete
-    // Mischung: nur Kanten wenn kein Vektor da ist, sonst 0.6·Kanten + 0.4·Cosinus. Manuell
-    // kuratierte Äquivalente (ComponentEquivalentService) werden geboostet (Inv. 3: manual
+    // die gpAnkers beider Seiten). Der frühere Aroma-Vektor-Cosinus (Moleküle) ist mit
+    // Spec 60 · P3 entfallen. Manuell kuratierte Äquivalente (ComponentEquivalentService) werden geboostet (Inv. 3: manual
     // gewinnt). Der eigentliche Tausch bleibt tauscheZutat (Allergen-/swap_locked-Guards dort).
-
-    private const SUBST_W_EDGE = 0.6;
-
-    private const SUBST_W_AROMA = 0.4;
-
-    /**
-     * Aggregierter 14-Typ-Aromavektor eines GP (Mittel über seine kern-Anker mit Vektor),
-     * aus einer vorgeladenen anchor_id→vec-Map. Null, wenn kein kern-Anker einen Vektor hat.
-     *
-     * @param  list<int>  $anchorIds
-     * @param  array<int, array{vec: list<float>}>  $aromaByAnchor
-     */
-    private function gpAromaVectorFromMap(array $anchorIds, array $aromaByAnchor): ?array
-    {
-        $sum = null;
-        $n = 0;
-        foreach ($anchorIds as $aid) {
-            if (! isset($aromaByAnchor[$aid])) {
-                continue;
-            }
-            $vec = $aromaByAnchor[$aid]['vec'];
-            $sum ??= array_fill(0, count(self::AROMA_TYPES), 0.0);
-            foreach ($vec as $i => $x) {
-                $sum[$i] += $x;
-            }
-            $n++;
-        }
-        if ($sum === null || $n === 0) {
-            return null;
-        }
-
-        return array_map(fn ($x) => $x / $n, $sum);
-    }
 
     /** Listen-EK (indikativ) der Lead-LA eines GP — aktive Preiszeile (valid_to NULL). Null wenn keine. */
     private function gpLeadListenEk(?int $leadLaId): ?float
@@ -2513,9 +2192,7 @@ class PairingService
             $candAnkerByGp[(int) $row->gp_id][] = ['id' => (int) $row->id, 'label' => $row->display_de ?: $row->slug];
         }
 
-        // Aroma-Vektoren (ein Query) + Kanten über die Anker-Union (ein Query).
-        $aromaByAnchor = $this->allAnchorAromaVectors();
-        $sourceAroma = $this->gpAromaVectorFromMap($sourceAnkerIds, $aromaByAnchor);
+        // Kanten über die Anker-Union (ein Query).
         $unionAnker = $sourceAnkerIds;
         foreach ($candAnkerByGp as $rows) {
             foreach ($rows as $r) {
@@ -2553,13 +2230,9 @@ class PairingService
             }
             $edgeOverlap = round(count($erhalten) / $nSource, 4);
 
-            $candAroma = $this->gpAromaVectorFromMap($candIds, $aromaByAnchor);
-            $aromaCos = ($sourceAroma !== null && $candAroma !== null)
-                ? round($this->vecCos($sourceAroma, $candAroma), 4) : null;
-
-            $flavorScore = $aromaCos !== null
-                ? round(self::SUBST_W_EDGE * $edgeOverlap + self::SUBST_W_AROMA * $aromaCos, 4)
-                : $edgeOverlap;
+            // Spec 60 · P3: Aroma-Vektoren (Moleküle) sind raus — der Geschmack wird allein über
+            // die gemessenen Anker-Kanten erhalten.
+            $flavorScore = $edgeOverlap;
 
             $isManual = isset($manuelleIds[$cid]);
             // Rein-lexikalische Warengruppen-Nachbarn ohne jede Aroma-Beziehung fliegen raus
@@ -2574,7 +2247,6 @@ class PairingService
                 'lead_la_supplier_item_id' => $cand->lead_la_supplier_item_id !== null ? (int) $cand->lead_la_supplier_item_id : null,
                 'flavor_score' => $flavorScore,
                 'edge_overlap' => $edgeOverlap,
-                'aroma_cos' => $aromaCos,
                 'erhaltene_bruecken' => $erhalten,
                 'verlorene_bruecken' => $verloren,
                 'is_manual_equiv' => $isManual,
@@ -2642,7 +2314,6 @@ class PairingService
                 'name' => $c['name'],
                 'flavor_score' => $c['flavor_score'],
                 'edge_overlap' => $c['edge_overlap'],
-                'aroma_cos' => $c['aroma_cos'],
                 'erhaltene_bruecken' => $c['erhaltene_bruecken'],
                 'verlorene_bruecken' => $c['verlorene_bruecken'],
                 'kohaesions_delta' => $kohaesionsDelta,
@@ -2651,8 +2322,7 @@ class PairingService
                 'cost' => $cost,
                 'evidenz' => [
                     'tier' => $c['is_manual_equiv'] ? 'kuratiert' : 'abgeleitet',
-                    'basis' => $c['is_manual_equiv'] ? 'manuelles Äquivalent' : 'Anker-Kanten' . ($c['aroma_cos'] !== null ? ' + Aroma-Vektor' : ''),
-                    'aroma_vektor' => $c['aroma_cos'] !== null,
+                    'basis' => $c['is_manual_equiv'] ? 'manuelles Äquivalent' : 'Anker-Kanten',
                 ],
             ];
         }
@@ -2900,168 +2570,6 @@ class PairingService
     // markiert — nie als Fakt (Inv./Nicht-Ziel §6). Keine KI nötig; das optionale
     // Narrativ ist ein Folge-Add (S1-Rest), der deterministische Kern trägt für sich.
 
-    /**
-     * Geteilte Compound-Klassen zweier Anker: Aroma-key_components (Schnitt) +
-     * Molekül-chem_class (Schnitt). Graceful leer, wenn ein Anker keine Zutat/kein
-     * Profil hat. Basis für hypothesizeFor + den Mechanismus-Text.
-     *
-     * @return array{key_components: list<array{key:?string, family:?string, aroma_type:?string}>, chem_classes: list<string>, n_key_components:int, n_chem_classes:int}
-     */
-    public function sharedCompoundClasses(int $anchorA, int $anchorB): array
-    {
-        $leer = ['key_components' => [], 'chem_classes' => [], 'n_key_components' => 0, 'n_chem_classes' => 0];
-        $ingA = $this->anchorIngredientId($anchorA);
-        $ingB = $this->anchorIngredientId($anchorB);
-        if ($ingA === null || $ingB === null) {
-            return $leer;
-        }
-
-        $compA = $this->ingredientKeyComponentIds($ingA);
-        $compB = $this->ingredientKeyComponentIds($ingB);
-        $sharedComp = array_values(array_intersect($compA, $compB));
-
-        $classA = $this->ingredientChemClasses($ingA);
-        $classB = $this->ingredientChemClasses($ingB);
-        $sharedClass = array_values(array_intersect($classA, $classB));
-
-        $keyComponents = [];
-        if ($sharedComp !== []) {
-            foreach (DB::table('foodalchemist_key_components')->whereIn('id', $sharedComp)
-                ->get(['key', 'family', 'aroma_type']) as $kc) {
-                $keyComponents[] = ['key' => $kc->key, 'family' => $kc->family, 'aroma_type' => $kc->aroma_type];
-            }
-        }
-
-        return [
-            'key_components' => $keyComponents,
-            'chem_classes' => $sharedClass,
-            'n_key_components' => count($sharedComp),
-            'n_chem_classes' => count($sharedClass),
-        ];
-    }
-
-    /**
-     * Hypothesen-Modus: für eine Quelle (GP oder Anker) Kandidaten-Anker nach
-     * geteilten Compound-Klassen ranken. Jede Zeile trägt Mechanismus + Evidenz-Stufe
-     * (T3 = Hypothese) + ob die Paarung im Graphen schon ETABLIERT ist (dann kein
-     * „ungewöhnlicher" Vorschlag, sondern bekannt).
-     *
-     * @param  array{gp?:int, anchor?:int}  $source
-     * @return array{source:array, methode:string, hypothesen:list<array>, hinweis:string}
-     */
-    public function hypothesizeFor(array $source, int $limit = 12): array
-    {
-        $limit = max(1, min(50, $limit));
-
-        // 1) Quell-Anker auflösen (GP → kern-Anker; oder direkter Anker).
-        $resolved = $this->resolveSource($source);
-        if ($resolved === null) {
-            return ['source' => [], 'methode' => 'none', 'hypothesen' => [], 'hinweis' => 'Keine Quelle (gp/anchor) angegeben.'];
-        }
-        $anchorIds = $resolved['anchorIds'];
-        $srcMeta = $resolved['meta'];
-        if ($anchorIds === []) {
-            return ['source' => $srcMeta, 'methode' => 'none', 'hypothesen' => [],
-                'hinweis' => 'Quelle hat keine kern-Anker — kein Hypothesen-Ranking möglich.'];
-        }
-
-        // 2) Quell-Compound-Profil (Aroma-key_components + Molekül-chem_class) aggregiert.
-        $srcComp = [];
-        $srcClass = [];
-        $srcIngredientIds = [];
-        foreach ($anchorIds as $aid) {
-            $iid = $this->anchorIngredientId($aid);
-            if ($iid === null) {
-                continue;
-            }
-            $srcIngredientIds[] = $iid;
-            $srcComp = array_merge($srcComp, $this->ingredientKeyComponentIds($iid));
-            $srcClass = array_merge($srcClass, $this->ingredientChemClasses($iid));
-        }
-        $srcComp = array_values(array_unique($srcComp));
-        $srcClass = array_values(array_unique($srcClass));
-        $srcMeta['anchor_ids'] = $anchorIds;
-        $srcMeta['n_key_components'] = count($srcComp);
-        $srcMeta['n_chem_classes'] = count($srcClass);
-
-        // 3) Etablierte Kanten der Quelle (für die „ungewöhnlich?"-Markierung).
-        $edges = [];
-        foreach (DB::table('foodalchemist_pairing_anchor_edges')
-            ->whereIn('anchor_a_id', $anchorIds)->get(['anchor_b_id', 'type']) as $e) {
-            $edges[(int) $e->anchor_b_id] = $e->type;   // ein Typ je Kandidat reicht für die Markierung
-        }
-
-        // 4) Compound-Klassen-Ranking (primär); Fallback Aroma-Vektor-Cosinus.
-        if ($srcComp !== []) {
-            $kompMap = $this->keyComponentsByAnchor();          // anchor_id => [component_id,...]
-            $scored = [];
-            foreach ($kompMap as $cid => $comps) {
-                if (in_array($cid, $anchorIds, true)) {
-                    continue;
-                }
-                $shared = array_intersect($srcComp, $comps);
-                if ($shared === []) {
-                    continue;
-                }
-                $scored[$cid] = count($shared);
-            }
-            arsort($scored);
-            $methode = 'compound_class';
-            $kandidaten = array_slice(array_keys($scored), 0, $limit, true);
-        } else {
-            // Fallback: kein Compound-Profil → Aroma-Vektor-Cosinus über die Quell-Anker.
-            $methode = 'aroma_vector_fallback';
-            $kandidaten = $this->aromaCosineCandidates($anchorIds, $limit);
-            $scored = $kandidaten;                              // [anchor_id => cosine]
-            $kandidaten = array_keys($kandidaten);
-        }
-        if ($kandidaten === []) {
-            return ['source' => $srcMeta, 'methode' => $methode, 'hypothesen' => [],
-                'hinweis' => 'Keine Kandidaten mit geteilten Klassen gefunden.'];
-        }
-
-        // 5) Kandidaten anreichern: Namen, Mechanismus, Novität, Evidenz-Stufe.
-        $names = DB::table('foodalchemist_vocab_pairing_anchors')->whereIn('id', $kandidaten)
-            ->get(['id', 'slug', 'display_de'])->keyBy('id');
-        $hypothesen = [];
-        foreach ($kandidaten as $cid) {
-            $meta = $names[$cid] ?? null;
-            if ($meta === null) {
-                continue;
-            }
-            // Mechanismus + geteilte Klassen: gegen den ERSTEN Quell-Anker (repräsentativ,
-            // günstig); der Score bleibt der aggregierte Overlap oben.
-            $shared = $this->sharedCompoundClasses($anchorIds[0], (int) $cid);
-            $etabliert = isset($edges[(int) $cid]);
-            $familien = array_values(array_unique(array_map(fn ($k) => $k['family'] ?? $k['key'] ?? '?', $shared['key_components'])));
-            $klassenText = $familien !== []
-                ? implode(', ', array_slice($familien, 0, 6))
-                : ($methode === 'aroma_vector_fallback' ? 'ähnliches Aroma-Vektor-Profil (kein Compound-Profil)' : 'geteilte Klassen quell-übergreifend');
-            $hypothesen[] = [
-                'anchor_id' => (int) $cid,
-                'slug' => $meta->slug,
-                'display_de' => $meta->display_de,
-                'score' => $methode === 'compound_class' ? (int) ($scored[$cid] ?? 0) : round((float) ($scored[$cid] ?? 0), 4),
-                'geteilte_klassen' => $shared['key_components'],
-                'n_geteilt' => $shared['n_key_components'],
-                'geteilte_chem_klassen' => array_slice($shared['chem_classes'], 0, 8),
-                'mechanismus' => 'Teilt: ' . $klassenText,
-                'ist_etabliert' => $etabliert,
-                'edge_typ' => $edges[(int) $cid] ?? null,
-                'evidenz_tier' => 'T3',   // Hypothese (E1) — nie Fakt
-            ];
-        }
-
-        return [
-            'source' => $srcMeta,
-            'methode' => $methode,
-            'hypothesen' => $hypothesen,
-            'hinweis' => 'Hypothesen — markierte Spekulation (Evidenz-Stufe T3), KEIN Fakt. '
-                . 'Mechanismus = geteilte Aroma-/Molekül-Klassen aus den Daten (ingredient_key_component / molecules.chem_class). '
-                . 'ist_etabliert=true ⇒ die Paarung ist im Graphen bereits bekannt (nicht „ungewöhnlich").',
-        ];
-    }
-
     // ── R6.11 · S4: Kontrast-Hypothesen (read-only, 2026-07-19) ──────────
     // Der zweite offensive Zug: „paar mir X über SPANNUNG statt Verwandtschaft".
     // Aroma-Harmonie (hypothesizeFor) findet nur geteilte Moleküle — Kontrast ist das
@@ -3070,211 +2578,4 @@ class PairingService
     // generativ über den 7-Achsen-GESCHMACKS-Vektor entlang kulinarischer Gegensatz-
     // Paare (Fett↔Säure, Süß↔Bitter … = Lehrbuch/Buch-Kontrast-Layer, keine Erfindung).
 
-    /**
-     * Kulinarische Gegensatz-Paare (undirektional) über die 7 Geschmacks-Achsen.
-     * Quelle: Foodpairing-Kontrast-Layer (Buch S.36) + Küchen-Grundlagen (Säure
-     * schneidet Fett, Süße mildert Bitter/Schärfe, süß-salzig/süß-sauer-Spannung).
-     *
-     * @var list<array{0:string,1:string}>
-     */
-    private const GESCHMACK_GEGENSATZ = [
-        ['fettig', 'sauer'], ['fettig', 'scharf'], ['suess', 'bitter'],
-        ['suess', 'scharf'], ['suess', 'salzig'], ['suess', 'sauer'], ['umami', 'sauer'],
-    ];
-
-    /**
-     * Kontrast-Hypothesen zu einer Quelle (GP/Anker): kuratierte kontrast-Kanten (T0)
-     * + generative Kandidaten nach Geschmacks-Gegensatz (T3). Ergebnis ist markierte
-     * Spekulation, nie Fakt.
-     *
-     * @param  array{gp?:int, anchor?:int}  $source
-     * @return array{source:array, methode:string, kuratiert:list<array>, hypothesen:list<array>, hinweis:string}
-     */
-    public function contrastHypothesesFor(array $source, int $limit = 12): array
-    {
-        $limit = max(1, min(50, $limit));
-        $resolved = $this->resolveSource($source);
-        if ($resolved === null) {
-            return ['source' => [], 'methode' => 'none', 'kuratiert' => [], 'hypothesen' => [], 'hinweis' => 'Keine Quelle (gp/anchor) angegeben.'];
-        }
-        $anchorIds = $resolved['anchorIds'];
-        $srcMeta = $resolved['meta'];
-        if ($anchorIds === []) {
-            return ['source' => $srcMeta, 'methode' => 'none', 'kuratiert' => [], 'hypothesen' => [],
-                'hinweis' => 'Quelle hat keine kern-Anker — kein Kontrast-Ranking möglich.'];
-        }
-
-        // (1) Kuratierte kontrast-Kanten — bewährte Gegensätze, bisher offensiv ungenutzt.
-        $kuratiert = [];
-        $kontrastPartner = [];
-        foreach (DB::table('foodalchemist_pairing_anchor_edges AS e')
-            ->join('foodalchemist_vocab_pairing_anchors AS a', 'a.id', '=', 'e.anchor_b_id')
-            ->whereIn('e.anchor_a_id', $anchorIds)->where('e.type', 'kontrast')
-            ->whereNotIn('e.anchor_b_id', $anchorIds)->whereNull('a.deleted_at')
-            ->distinct()->get(['a.id', 'a.slug', 'a.display_de']) as $r) {
-            $kontrastPartner[(int) $r->id] = true;
-            $kuratiert[] = ['anchor_id' => (int) $r->id, 'slug' => $r->slug, 'display_de' => $r->display_de,
-                'typ' => 'kontrast', 'evidenz_tier' => 'T0'];
-        }
-
-        // (2) Generativ über Geschmacks-Gegensatz.
-        $srcTaste = $this->aggregatedTaste($anchorIds);
-        $methode = array_sum($srcTaste) > 0 ? 'kontrast_geschmack' : 'nur_kuratiert';
-        $hypothesen = [];
-        if ($methode === 'kontrast_geschmack') {
-            $rows = DB::table('foodalchemist_anchor_taste_vectors AS t')
-                ->join('foodalchemist_vocab_pairing_anchors AS a', 'a.id', '=', 't.anchor_id')
-                ->whereNotIn('t.anchor_id', $anchorIds)->whereNull('a.deleted_at')
-                ->get(array_merge(['t.anchor_id', 'a.slug', 'a.display_de'], self::TASTE_ACHSEN));
-            $scored = [];
-            foreach ($rows as $r) {
-                if (in_array($r->slug, self::NICHT_ZUTAT_ANKER, true)) {
-                    continue;   // Prozess/Neutral sind keine Kontrast-Partner
-                }
-                $cand = [];
-                foreach (self::TASTE_ACHSEN as $ax) {
-                    $cand[$ax] = (float) $r->$ax;
-                }
-                [$score, $achsen] = $this->contrastScore($srcTaste, $cand);
-                if ($score <= 0) {
-                    continue;
-                }
-                $scored[] = ['anchor_id' => (int) $r->anchor_id, 'slug' => $r->slug, 'display_de' => $r->display_de,
-                    'score' => round($score, 3), 'opponierende_achsen' => $achsen,
-                    'mechanismus' => 'Spannung über: ' . implode(', ', array_slice($achsen, 0, 4)),
-                    'ist_etabliert' => isset($kontrastPartner[(int) $r->anchor_id]),
-                    'evidenz_tier' => 'T3'];
-            }
-            usort($scored, fn ($a, $b) => $b['score'] <=> $a['score']);
-            $hypothesen = array_slice($scored, 0, $limit);
-        }
-
-        $srcMeta['geschmack'] = $srcTaste;
-
-        return [
-            'source' => $srcMeta,
-            'methode' => $methode,
-            'kuratiert' => $kuratiert,
-            'hypothesen' => $hypothesen,
-            'hinweis' => 'Kontrast = Paarung durch SPANNUNG (Gegensatz), nicht Verwandtschaft. '
-                . 'kuratiert = bewährte kontrast-Kanten (T0); hypothesen = generative Geschmacks-Gegensätze (T3, markierte Spekulation). '
-                . ($methode === 'nur_kuratiert' ? 'Quelle ohne Geschmacks-Vektor → nur kuratierte Kontraste.' : ''),
-        ];
-    }
-
-    /**
-     * Kontrast-Score zweier 7-Achsen-Geschmacksvektoren entlang der Gegensatz-Paare:
-     * belohnt „Quelle stark auf x ⊕ Kandidat stark auf gegensätzlicher y" (und umgekehrt).
-     * Harmonie/identisch → 0. @return array{0:float, 1:list<string>} score + beteiligte Achsen.
-     */
-    private function contrastScore(array $src, array $cand): array
-    {
-        $score = 0.0;
-        $achsen = [];
-        foreach (self::GESCHMACK_GEGENSATZ as [$x, $y]) {
-            $vorwaerts = ($src[$x] ?? 0.0) * ($cand[$y] ?? 0.0);
-            $rueckwaerts = ($src[$y] ?? 0.0) * ($cand[$x] ?? 0.0);
-            $beitrag = $vorwaerts + $rueckwaerts;
-            if ($beitrag > 0.05) {   // Rausch-Schwelle: nur nennenswerte Spannung
-                $score += $beitrag;
-                $achsen[] = $vorwaerts >= $rueckwaerts ? "{$x}↔{$y}" : "{$y}↔{$x}";
-            }
-        }
-
-        return [$score, $achsen];
-    }
-
-    /**
-     * Quell-Anker + Meta aus {gp:id}|{anchor:id} auflösen (geteilt von Harmonie- und
-     * Kontrast-Hypothesen). @return array{anchorIds:list<int>, meta:array}|null
-     */
-    private function resolveSource(array $source): ?array
-    {
-        if (isset($source['gp'])) {
-            $ids = $this->gpAnkers((int) $source['gp'])->pluck('id')->map(fn ($v) => (int) $v)->all();
-            $name = DB::table('foodalchemist_gps')->where('id', (int) $source['gp'])->value('name');
-            $meta = ['typ' => 'gp', 'id' => (int) $source['gp'], 'name' => $name];
-        } elseif (isset($source['anchor'])) {
-            $ids = [(int) $source['anchor']];
-            $a = DB::table('foodalchemist_vocab_pairing_anchors')->where('id', (int) $source['anchor'])->first(['slug', 'display_de']);
-            $meta = ['typ' => 'anchor', 'id' => (int) $source['anchor'], 'name' => $a?->display_de ?? $a?->slug];
-        } else {
-            return null;
-        }
-        $ids = array_values(array_unique(array_filter($ids)));
-        $meta['anchor_ids'] = $ids;
-
-        return ['anchorIds' => $ids, 'meta' => $meta];
-    }
-
-    /** anchor_id → ingredient_id (memoierbar; hier direkt, da selten je Aufruf). */
-    private function anchorIngredientId(int $anchorId): ?int
-    {
-        $v = DB::table('foodalchemist_anchor_ingredient_map')->where('anchor_id', $anchorId)->value('ingredient_id');
-
-        return $v !== null ? (int) $v : null;
-    }
-
-    /** @return list<int> component_ids der Zutat (Aroma-Compound-Klassen). */
-    private function ingredientKeyComponentIds(int $ingredientId): array
-    {
-        return DB::table('foodalchemist_ingredient_key_component')
-            ->where('ingredient_id', $ingredientId)->pluck('component_id')
-            ->map(fn ($v) => (int) $v)->all();
-    }
-
-    /** @return list<string> distinkte chem_class-Werte der Moleküle der Zutat. */
-    private function ingredientChemClasses(int $ingredientId): array
-    {
-        return DB::table('foodalchemist_ingredient_molecule AS im')
-            ->join('foodalchemist_molecules AS m', 'm.id', '=', 'im.molecule_id')
-            ->where('im.ingredient_id', $ingredientId)
-            ->whereNotNull('m.chem_class')->distinct()->pluck('m.chem_class')
-            ->map(fn ($v) => (string) $v)->all();
-    }
-
-    /**
-     * anchor_id → [component_id,...] für ALLE profil-tragenden Anker in einem Rutsch
-     * (ein Join statt N Queries — Kandidaten-Scoring).
-     *
-     * @return array<int, list<int>>
-     */
-    private function keyComponentsByAnchor(): array
-    {
-        $rows = DB::table('foodalchemist_anchor_ingredient_map AS m')
-            ->join('foodalchemist_ingredient_key_component AS ikc', 'ikc.ingredient_id', '=', 'm.ingredient_id')
-            ->get(['m.anchor_id', 'ikc.component_id']);
-        $out = [];
-        foreach ($rows as $r) {
-            $out[(int) $r->anchor_id][] = (int) $r->component_id;
-        }
-
-        return $out;
-    }
-
-    /**
-     * Aroma-Vektor-Cosinus-Fallback: aggregierter Quell-Vektor über die Quell-Anker,
-     * gegen alle anderen Anker mit Vektor. @return array<int,float> anchor_id => cosine.
-     */
-    private function aromaCosineCandidates(array $anchorIds, int $limit): array
-    {
-        $all = $this->allAnchorAromaVectors();
-        $src = $this->gpAromaVectorFromMap($anchorIds, $all);
-        if ($src === null) {
-            return [];
-        }
-        $scored = [];
-        foreach ($all as $cid => $c) {
-            if (in_array($cid, $anchorIds, true)) {
-                continue;
-            }
-            $cos = $this->vecCos($src, $c['vec']);
-            if ($cos > 0) {
-                $scored[$cid] = $cos;
-            }
-        }
-        arsort($scored);
-
-        return array_slice($scored, 0, $limit, true);
-    }
 }

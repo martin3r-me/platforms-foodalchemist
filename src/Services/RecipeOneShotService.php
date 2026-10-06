@@ -17,7 +17,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistVocabKochequipment;
  * Aggregation; die Anreicherung war ein SEPARATER Klick („✨ Alles anreichern")
  * mit Review-Liste dahinter. Dieser Service verkettet beides zu einem Durchlauf.
  * Für den KI-Erstell-Knopf kann zusätzlich die Coverage-Phase laufen:
- * Step-by-step, Sensorik, Produktions-/Equipment-Felder und Prozessanker werden
+ * Step-by-step, Sensorik und Produktions-/Equipment-Felder werden
  * neu synchronisiert, weil sie vom aktuellen Rezeptstand abhängen.
  *
  * Drei Entscheidungen tragen ihn:
@@ -287,7 +287,6 @@ class RecipeOneShotService
             'equipment' => fn () => $this->equipmentGlied($team, $recipe->fresh() ?? $recipe),
             'posten' => fn () => $this->postenGlied($team, $recipe->fresh() ?? $recipe),
             'steps' => fn () => $this->stepGlied($recipe->fresh() ?? $recipe),
-            'prozessanker' => fn () => $this->prozessankerGlied($recipe->fresh() ?? $recipe),
             'aromaanker' => fn () => $this->aromaankerGlied($team, $recipe->fresh() ?? $recipe),
             'pairings' => fn () => $this->pairingGlied($team, $recipe->fresh() ?? $recipe),
             'eignung' => fn () => $this->eignungsGlied($team, $recipe->fresh() ?? $recipe),
@@ -547,23 +546,6 @@ class RecipeOneShotService
 
         // Nur eine tatsächlich sichtbare, aktive Station aus dem Kandidatenkatalog.
         return $stations->firstWhere('id', (int) $id);
-    }
-
-    /** @return array{status: string, matched?: list<string>, added?: list<string>, removed?: list<string>, fehler?: string} */
-    private function prozessankerGlied(FoodAlchemistRecipe $recipe): array
-    {
-        try {
-            $r = app(ProcessAnchorService::class)->groundRecipe($recipe, true);
-
-            return [
-                'status' => ($r['matched'] ?? []) === [] ? 'leer' : 'aktualisiert',
-                'matched' => $r['matched'] ?? [],
-                'added' => $r['added'] ?? [],
-                'removed' => $r['removed'] ?? [],
-            ];
-        } catch (\Throwable $e) {
-            return ['status' => 'fehler', 'fehler' => mb_strimwidth($e->getMessage(), 0, 300)];
-        }
     }
 
     /**

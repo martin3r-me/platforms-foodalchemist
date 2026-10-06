@@ -1,7 +1,6 @@
 <?php
 
 use Illuminate\Support\Facades\DB;
-use Platform\FoodAlchemist\Services\PairingProjectionService;
 use Platform\FoodAlchemist\Services\PairingService;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
 use Platform\FoodAlchemist\Tests\TestCase;
@@ -65,9 +64,4 @@ it('kuratiert gewinnt bei Kollision — stärkere kuratierte Kante schlägt schw
     // edgeBest nimmt das MAX → kuratiert 1.0 gewinnt, computed verzerrt nicht nach unten.
     $k = $this->svc->cohesionFor([($this->komp)($a), ($this->komp)($b)]);
     expect($k['score'])->toBe(100);
-});
-
-it('Projektions-Service verlangt MySQL (Guard greift auf SQLite)', function () {
-    expect(fn () => app(PairingProjectionService::class)->project(false, 0.0, 1, 0.6))
-        ->toThrow(RuntimeException::class);
 });

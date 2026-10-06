@@ -113,7 +113,7 @@ class RecipesGenerateTool extends FoodAlchemistTool implements ToolContract, Too
             . '(Beschreibung, VK-Wording, Plating, Klassifikation) — je fehlendes Feld ein weiterer Provider-Call — und bei vk=true '
             . 'zum Schluss das Wirtschaftlichkeits-Glied: das Gericht kommt bepreist zurueck (EK, VK, Wareneinsatz-% gegen das Team-Ziel). '
             . 'Mit complete_coverage=true synchronisiert der MCP-Pfad zusaetzlich operative Detail-Bausteine neu: Fertigungstiefe, '
-            . 'Arbeitszeit/Eigenschaften, Equipment, Default-Posten soweit belastbar ableitbar, Prozessanker, Step-by-step und Sensorik. Bestehende '
+            . 'Arbeitszeit/Eigenschaften, Equipment, Default-Posten soweit belastbar ableitbar, Step-by-step und Sensorik. Bestehende '
             . 'Schritte und vorhandene Sensorik werden dabei bewusst ueberschrieben, damit Aenderungen am Rezept wieder konsistent sind. '
             . 'Die Antwort enthaelt unter kontext die Prompt-Messsonde (kontext.prompt: chars/huelle/kanon/bound/task/retrieval/dropped, tokens_in/tokens_cached) '
             . 'und die geladenen Wissens-Dossiers je Kanal (kontext.wissen: kanon, gebunden, regelwerk, cross_cutting, …) — identisch zum Kontext-Inspektor der UI. '
@@ -305,7 +305,7 @@ class RecipesGenerateTool extends FoodAlchemistTool implements ToolContract, Too
             // nur mit voll_anreichern=true; enthält `kohaerenz_urteil` (GL-10 Achse 2, nie
             // mit Achse 1 verrechnet), bei vk=true `wirtschaftlichkeit` (03·L8) und
             // optional `coverage` (operative Detail-Bausteine: Fertigung, Eigenschaften,
-            // Equipment, Posten, Prozessanker, Step-by-step, Sensorik; nur wenn complete_coverage=true).
+            // Equipment, Posten, Step-by-step, Sensorik; nur wenn complete_coverage=true).
             'anreicherung' => $anreicherung,
             // Spec 50 Welle 2 (MCP-Lockstep): dieselbe Messsonde wie der Kontext-Inspektor der UI —
             // `kontext.prompt` trägt die Prompt-Größen (chars/huelle/kanon/bound/task/retrieval/dropped

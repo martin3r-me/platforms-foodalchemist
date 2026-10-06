@@ -53,7 +53,7 @@ class RecipesEnrichTool extends FoodAlchemistTool implements ToolContract, ToolM
             'properties' => [
                 'recipe_id' => ['type' => 'integer', 'description' => 'ID eines team-eigenen Basisrezepts (is_sales_recipe=false).'],
                 'complete_coverage' => ['type' => 'boolean', 'default' => true,
-                    'description' => 'Volle Tiefe: zusätzlich Fertigungstiefe, Eigenschaften/Zeiten, Equipment, Posten, Prozessanker, '
+                    'description' => 'Volle Tiefe: zusätzlich Fertigungstiefe, Eigenschaften/Zeiten, Equipment, Posten, '
                         . 'Aroma-Anker, Pairings, Eignung, Step-by-Step und Sensorik. false = nur die Textfelder (deutlich weniger Calls). '
                         . 'Hinweis: `work_time_min` — ohne das die Kalkulation FEK = 0 rechnet — kommt aus dem Eigenschaften-Glied, also nur mit true.'],
                 'ki_bilder' => ['type' => 'boolean', 'default' => false,

@@ -165,7 +165,7 @@ class DishReverseService
 
         $treffer = [];       // recipe_id => [anchor_id => true]
         $abgedeckt = [];     // anchor_id => true (irgendwo im Bestand)
-        foreach (['foodalchemist_recipe_anchor_mappings', 'foodalchemist_recipe_process_anchors'] as $tabelle) {
+        foreach (['foodalchemist_recipe_anchor_mappings'] as $tabelle) {
             foreach (DB::table($tabelle)->whereIn('recipe_id', $portfolioIds)
                 ->whereIn('anchor_id', $anchorIds)->whereNull('deleted_at')
                 ->get(['recipe_id', 'anchor_id']) as $r) {

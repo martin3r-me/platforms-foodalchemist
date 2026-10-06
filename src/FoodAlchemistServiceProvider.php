@@ -113,10 +113,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 \Platform\FoodAlchemist\Console\TeamOnboardingCommand::class,
                 \Platform\FoodAlchemist\Console\SignaleDetektorCommand::class,
                 \Platform\FoodAlchemist\Console\SpeiseplanAushangRollierenCommand::class,
-                \Platform\FoodAlchemist\Console\PairingProjectComputedCommand::class,
                 \Platform\FoodAlchemist\Console\InspireImportCommand::class,
-                \Platform\FoodAlchemist\Console\PairingWipeErprobtCommand::class,
-                \Platform\FoodAlchemist\Console\PairingDropLegacyAnchorsCommand::class,
                 \Platform\FoodAlchemist\Console\DataQualityCommand::class,
                 \Platform\FoodAlchemist\Console\LeadLaRepickCommand::class,
                 \Platform\FoodAlchemist\Console\RecomputeCommand::class,
@@ -124,7 +121,6 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 \Platform\FoodAlchemist\Console\GpFormsEstimateCommand::class,
                 \Platform\FoodAlchemist\Console\RecipePackagingUnitsCommand::class,
                 \Platform\FoodAlchemist\Console\VocabUnitsDedupeCommand::class,
-                \Platform\FoodAlchemist\Console\ProcessAnchorGroundCommand::class,
                 \Platform\FoodAlchemist\Console\FavoriteGpsCommand::class,
                 \Platform\FoodAlchemist\Console\BackfillKapitelZieleCommand::class,
                 \Platform\FoodAlchemist\Console\RecipeFindingsCommand::class,
@@ -759,7 +755,6 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\SubstitutionSuggestTool::class,
                     \Platform\FoodAlchemist\Tools\DishReverseTool::class,
                     \Platform\FoodAlchemist\Tools\SurplusSuggestTool::class,
-                    \Platform\FoodAlchemist\Tools\KnowledgeHypothesizeTool::class,
                     \Platform\FoodAlchemist\Tools\LabNotesPostTool::class,
                     \Platform\FoodAlchemist\Tools\VkSnapshotsGetTool::class,
                     \Platform\FoodAlchemist\Tools\VkSnapshotsReleaseTool::class,
@@ -804,7 +799,6 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     // 2026-10-05: Lead-Neuwahl nach Strategie + Stamm-Matrix (Spiegel von Settings/Einkauf)
                     \Platform\FoodAlchemist\Tools\LeadLaRepickTool::class,
                     // 05·P5: Prozessanker deterministisch erden (MCP-Lockstep)
-                    \Platform\FoodAlchemist\Tools\ProcessAnchorsGroundTool::class,
                     // 06·H2: Convenience-Highlights kuratieren (MCP-Lockstep)
                     \Platform\FoodAlchemist\Tools\FavoritesGetTool::class,
                     \Platform\FoodAlchemist\Tools\FavoritesPutTool::class,

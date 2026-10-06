@@ -213,16 +213,20 @@ Die Kartierung stammt vom 2026-10-06. Auf keine der Abriss-Tabellen zeigt ein Fr
 
 | # | Paket | Inhalt |
 |---|---|---|
-| P1 | Anker-Identität | `inspire_id` + Backfill-CSV, Altspalten raus, Import idempotent |
-| P2 | Harmonie | `anchor_harmonie` + `Pairing\AnkerGraph` (stufe/partner). Alle Leser umstellen, edges droppen |
-| P3 | Rückbau | Chemie, alte IDs, Prozess-Anker, Legacy-Typen, recipe_pairings/recipe_anchor_mappings, Tools und Commands |
+| P1 | Anker-Identität | `inspire_id` + Backfill-CSV, `knowledge_document_id` raus, Import idempotent, Dossier ↔ Anker ins Modul ✅ |
+| P3 | Rückbau (vor P2 gezogen) | Chemie, alte IDs, Prozess-Anker, Molekül-Hypothesen, Projektion, Einmal-Befehle, import-slice ohne Pairing, Wissensblock nur Stufe 3 |
+| P2 | Harmonie | `anchor_harmonie` + `Pairing\AnkerGraph` (stufe/partner). Alle Leser umstellen, edges droppen, Legacy-Typ-CASEs raus |
 | P4 | Anker-Wissen | Enums Achse/Verfahren/Kantenart/Status, Wissens-Tabellen, Beziehungs-Tabelle, Varianten (`grund_anchor_id`, `verfahren`), Intensität, Auslese-Command, Pilot-Import, Ableitung Kontrast |
 | P5 | Rezept-Profil | `recipe_aroma_profile` + Eigenschaften + offene Bedarfe, Builder mit Hash, Befehl |
 | P6 | RezeptGraph + Gericht | Beziehungen, Aussagen, Vorschlag; Spec-58-Analyse geht darin auf |
-| P7 | Konsumenten | Panel, Netz (Basisrezept-Knoten), Kohäsion, Concept-Ranking, Generator-Kombinationsplan + Nachprüfung, MCP |
+| P7 | Konsumenten | Panel, Netz (Basisrezept-Knoten), Kohäsion, Concept-Ranking, Generator-Kombinationsplan + Nachprüfung, MCP. **Danach** `recipe_pairings` + `recipe_anchor_mappings` droppen (ihre ~10 Leser werden hier ersetzt, nicht doppelt umgebaut) |
 | P8 | Signale | 4 neue, altes raus (50 offene Meldungen schließen) |
 
 Für jedes Paket gilt: Tests grün, Commit lokal. Push, PR und Deploy nur mit Freigabe.
+
+**Reihenfolge geändert (2026-10-06):** P3 vor P2. Die Kanten-Leser waren eng mit totem Code verflochten
+(Projektion, Molekül-Hypothesen, Prozess-Anker); nach dem Rückbau bleiben für P2 nur die echten Leser.
+Der Schlüssel `prozess` in der Anker-Auflösung bleibt bis P6 als leere Liste stehen.
 
 ## 7 · Entschieden (Dominique 2026-10-06)
 

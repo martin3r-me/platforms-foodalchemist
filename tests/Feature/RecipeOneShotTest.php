@@ -324,7 +324,7 @@ it('GL-07: der automatische Coverage-Pass laesst eine handgepflegte Sensorik ste
         ->and((float) $taste->suess)->toBe(1.0);       // Handwert unangetastet
 });
 
-it('Voll anreichern synchronisiert operative Detail-Felder: Equipment, Posten und Prozessanker', function () {
+it('Voll anreichern synchronisiert operative Detail-Felder: Equipment, Posten, Anker und Pairings', function () {
     \Platform\FoodAlchemist\Models\FoodAlchemistVocabKochequipment::create([
         'team_id' => $this->rootTeam->id,
         'slug' => 'kombi',
@@ -398,7 +398,7 @@ it('Voll anreichern synchronisiert operative Detail-Felder: Equipment, Posten un
 
     expect($erg['coverage']['equipment']['status'])->toBe('aktualisiert')
         ->and($erg['coverage']['posten']['status'])->toBe('aktualisiert')
-        ->and($erg['coverage']['prozessanker']['matched'])->toContain('roestaromen')
+        ->and($erg['coverage'])->not->toHaveKey('prozessanker')            // Spec 60: Prozess-Anker entfallen
         ->and($erg['coverage']['aromaanker']['n_anker'])->toBe(1)
         ->and($erg['coverage']['pairings']['n_pairings'])->toBe(1)
         ->and($erg['coverage']['eignung']['n_level'])->toBe(1)

@@ -59,14 +59,6 @@ beforeEach(function () {
         ]);
     };
 
-    $this->mkProzessAnker = function (int $recipeId, string $ankerSlug): void {
-        DB::table('foodalchemist_recipe_process_anchors')->insert([
-            'uuid' => (string) UuidV7::generate(), 'team_id' => $this->rootTeam->id,
-            'recipe_id' => $recipeId, 'anchor_id' => $this->ankerId[$ankerSlug],
-            'source' => 'ai_inferred', 'created_at' => now(), 'updated_at' => now(),
-        ]);
-    };
-
     $this->mkRezept = fn (string $key, string $name, bool $vk = true) => FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id, 'recipe_key' => $key, 'name' => $name,
         'status' => 'approved', 'is_sales_recipe' => $vk,
@@ -94,7 +86,6 @@ beforeEach(function () {
 
     $this->sub = ($this->mkRezept)('batch-sub', 'Basis: Fond', false);
     ($this->mkRezeptMapping)($this->sub->id, 'fond', '0.900');
-    ($this->mkProzessAnker)($this->sub->id, 'roestaromen');
 
     /**
      * Ein Gericht mit allen vier Auflösungs-Wegen in einer Zeile-Garnitur: GP-Mapping,
@@ -108,7 +99,6 @@ beforeEach(function () {
         $this->makeIngredient($r, 'Apfel', $this->gp, '100', 1);
         $this->makeIngredient($r, 'Sonstwas ohne GP', null, '50', 2);
         ($this->mkSubZutat)($r, $this->sub, 3);
-        ($this->mkProzessAnker)($r->id, 'roestaromen');
 
         return $r;
     };
