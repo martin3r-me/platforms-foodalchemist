@@ -61,7 +61,7 @@
     $sichtbar = array_filter($tabs, fn ($label) => $label !== null && $label !== false && $label !== '');
     $startTab = $init ?? (array_key_first($sichtbar) ?? '');
     $serverModus = $action !== null;
-    $leiste = 'flex flex-wrap gap-1 border-b border-[var(--fa-line)] sticky top-0 z-20 -mx-6 px-6 bg-[var(--fa-surface)]'; // fa-pass: Token-Leiste, hell + Werkbank
+    $leiste = 'flex flex-wrap gap-1 border-b border-[var(--fa-line)] sticky -top-4 z-20 -mx-6 px-6 bg-[var(--fa-surface)]'; // fa-pass: Token-Leiste, hell + Werkbank. -top-4 = Body-Padding (py-4): mit top-0 klebte sie 16 px tiefer und überlappte das erste Panel
     $knopf = 'h-11 px-3.5 text-[length:var(--fa-text-base)] font-medium border-b-2 -mb-px rounded-t-[var(--fa-radius-control)] transition-colors whitespace-nowrap focus-visible:-outline-offset-2';
     $an = 'border-[var(--fa-accent)] text-[var(--fa-accent)] font-semibold bg-[var(--fa-accent-soft)]';
     $aus = 'border-transparent text-[var(--fa-ink-2)] hover:text-[var(--fa-ink)] hover:bg-[var(--fa-hover)]';
@@ -87,8 +87,12 @@
 
         {{-- Eine einzige Lasche ist keine Navigation, sondern Rauschen (z. B. GP-Neuanlage, die
              nur „Allgemein" hat). Der Alpine-Scope bleibt trotzdem — die Panels binden an `tab`. --}}
+        {{-- wire:ignore (2026-10-06): der erste Besuch eines Reiters ruft visitAction → Livewire-Morph
+             setzt das class-Attribut auf den Server-Stand zurück, Alpines :class-Buchführung kippt →
+             zwei Reiter gleichzeitig markiert, die blaue Lasche „springt" auf Aufbau. Die Leiste ist
+             serverseitig statisch; ein Datensatz-Wechsel ersetzt sie ohnehin über wire:key. --}}
         @if(count($sichtbar) > 1)
-            <div class="{{ $leiste }} -mt-4 pt-4">
+            <div wire:ignore class="{{ $leiste }} -mt-4 pt-4">
                 @foreach($sichtbar as $tabKey => $tabLabel)
                     <button type="button" @click="tab = @js($tabKey)@if($visitAction); if (! visited.includes(@js($tabKey))) { visited.push(@js($tabKey)); $wire.{{ $visitAction }}(@js($tabKey)); }@endif"
                             :class="tab === @js($tabKey) ? '{{ $an }}' : '{{ $aus }}'"

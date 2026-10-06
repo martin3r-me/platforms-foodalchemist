@@ -93,7 +93,7 @@
                          UND dunklem Editor-Grund (.fa-editor-panel) sauber sitzen. --}}
                     <h2 class="text-[length:var(--fa-text-lg)] font-semibold tracking-tight text-[var(--fa-ink)] truncate flex items-center gap-2 min-w-0">
                         <span class="shrink-0 text-[var(--fa-ink-2)] font-medium">{{ $title }}</span>
-                        <span class="min-w-0 truncate" data-modal-title-name>{{ $titleName }}</span>
+                        <span class="min-w-0 truncate fa-titel-name" data-modal-title-name>{{ $titleName }}</span>
                         @isset($titleExtra)
                             <span class="min-w-0 shrink flex flex-wrap items-center gap-1.5" data-modal-zone="title-extra">
                                 {{ $titleExtra }}

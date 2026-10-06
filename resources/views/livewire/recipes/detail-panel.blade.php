@@ -144,7 +144,8 @@
                 'nutri_saturated_fat_g_per_100g' => 'davon gesättigt', 'nutri_carbs_g_per_100g' => 'Kohlenhydrate',
                 'nutri_sugar_g_per_100g' => 'davon Zucker', 'nutri_salt_g_per_100g' => 'Salz',
             ];
-            $untertitel = $rezept->recipe_key . ' · Version ' . $rezept->version . ($rezept->work_time_min ? ' · Arbeitszeit ' . $rezept->work_time_min . ' min' : '');
+            // Kennung (recipe_key) bewusst nicht im Untertitel (Dominique 2026-10-06): für die Küche wertlos, wirkt wie eine ID.
+            $untertitel = 'Version ' . $rezept->version . ($rezept->work_time_min ? ' · Arbeitszeit ' . $rezept->work_time_min . ' min' : '');
         @endphp
 
         {{-- 1 · Kopf: Name, Einordnung, eine Hauptaktion, Weiteres im Menü --}}

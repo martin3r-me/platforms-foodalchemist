@@ -105,6 +105,11 @@
   --fa-accent: #0a3dd6;
   --fa-accent-hover: #0832af;
   --fa-accent-soft: #e6edfe;
+  /* Pairing-Netz (gleich in hell und dunkel; das Netz liegt immer auf dunklem Grund):
+     Gold = Foodpairing-Sterne, helles Blau = Aroma-Anker. Spiegeln graph.js. */
+  --fa-gold: #fcd34d;
+  --fa-gold-2: #f59e0b;
+  --fa-netz-anker: #c7d2fe;
   --fa-on-accent: #f7f9ff;
 
   /* Zustände (eigene Farben, getrennt vom Akzent, auch in der Helligkeit unterscheidbar) */
@@ -223,9 +228,10 @@ button { transition: transform 120ms ease-out, background-color 120ms ease, box-
  */
 [data-fa-theme="dark"] {
   --fa-ground: #0d1424;
-  --fa-surface: #151e33;
-  --fa-line: #26304a;
-  --fa-line-strong: #34405e;
+  --fa-surface: #1a2540;
+  --fa-line: #34405e;
+  --fa-line-strong: #46557a;
+  --fa-field: #0f1729;       /* Eingabefelder eingelassen: dunkler als die Karte, heller als der Grund */
   --fa-ink: #e6ebf5;
   --fa-ink-2: #b6c0d2;
   --fa-ink-3: #8b97ad;
@@ -274,12 +280,12 @@ button { transition: transform 120ms ease-out, background-color 120ms ease, box-
      Tailwind v4 rechnet jede Klasse über --color-*; hier neu gesetzt, wirkt nur innerhalb des Bereichs.
      → text-gray-900 wird hell, bg-white wird dunkle Fläche, emerald-700 wird helles Grün …
      Ohne eine einzige Überschreib-Regel. Neue Arbeit nutzt trotzdem die --fa-*-Tokens. */
-  --color-white: #151e33;
+  --color-white: #1a2540;
   --color-black: #e6ebf5;
-  --color-gray-50: #111a2c;
-  --color-gray-100: #18223a;
-  --color-gray-200: #26304a;
-  --color-gray-300: #34405e;
+  --color-gray-50: #151e33;
+  --color-gray-100: #222d4a;
+  --color-gray-200: #34405e;
+  --color-gray-300: #46557a;
   --color-gray-400: #6f7c95;
   --color-gray-500: #8b97ad;
   --color-gray-600: #a9b4c7;
@@ -287,10 +293,10 @@ button { transition: transform 120ms ease-out, background-color 120ms ease, box-
   --color-gray-800: #d8dfea;
   --color-gray-900: #e6ebf5;
   --color-gray-950: #f3f6fb;
-  --color-slate-50: #111a2c;
-  --color-slate-100: #18223a;
-  --color-slate-200: #26304a;
-  --color-slate-300: #34405e;
+  --color-slate-50: #151e33;
+  --color-slate-100: #222d4a;
+  --color-slate-200: #34405e;
+  --color-slate-300: #46557a;
   --color-slate-400: #6f7c95;
   --color-slate-500: #8b97ad;
   --color-slate-600: #a9b4c7;
@@ -366,7 +372,7 @@ button { transition: transform 120ms ease-out, background-color 120ms ease, box-
     padding-inline: 10px;
     border-radius: var(--fa-radius-control);
     border: 1px solid var(--fa-line-strong);
-    background: var(--fa-surface);
+    background: var(--fa-field, var(--fa-surface));
     color: var(--fa-ink);
     transition: border-color 120ms ease, box-shadow 120ms ease;
   }
@@ -394,6 +400,23 @@ button { transition: transform 120ms ease-out, background-color 120ms ease, box-
     overflow: hidden;
   }
   .fa-kpi { display: flex; flex-direction: column; gap: 2px; padding: 12px 16px; min-width: 0; box-shadow: -1px 0 0 var(--fa-line); }
+  /* Im Editor-Kopf: einzelne Kacheln (Dominique 2026-10-06, Variante C). Hauptwert in Akzent,
+     Zustände als eigene Farbfläche; color-mix trägt hell und dunkel mit denselben Tokens. */
+  /* Name im Editor-Titel als Akzent-Chip (war im Kommentar der Modal-Komponente beschrieben, im Redesign verloren) */
+  .fa-titel-name { padding: 3px 12px; border-radius: var(--fa-radius-control); border: 1.5px solid var(--fa-accent); background: var(--fa-accent-soft-hover); color: var(--fa-ink); }
+  [data-modal-zone="kpi-header"] .fa-kpis { gap: 8px; background: none; border: 0; border-radius: 0; overflow: visible; }
+  [data-modal-zone="kpi-header"] .fa-kpi {
+    --kachel: var(--fa-ink-3);
+    box-shadow: none; padding: 10px 14px; border-radius: var(--fa-radius-surface);
+    background: color-mix(in srgb, var(--kachel) 12%, var(--fa-surface));
+    border: 1px solid color-mix(in srgb, var(--kachel) 35%, var(--fa-surface));
+  }
+  [data-modal-zone="kpi-header"] .fa-kpi[data-primary] { --kachel: var(--fa-accent); background: var(--fa-accent-soft-hover); border: 1.5px solid var(--fa-accent); }
+  [data-modal-zone="kpi-header"] .fa-kpi[data-tone="ok"] { --kachel: var(--fa-ok); background: color-mix(in srgb, var(--kachel) 22%, var(--fa-surface)); }
+  [data-modal-zone="kpi-header"] .fa-kpi[data-tone="warn"] { --kachel: var(--fa-warn); background: color-mix(in srgb, var(--kachel) 22%, var(--fa-surface)); }
+  [data-modal-zone="kpi-header"] .fa-kpi[data-tone="crit"] { --kachel: var(--fa-crit); background: color-mix(in srgb, var(--kachel) 22%, var(--fa-surface)); }
+  [data-modal-zone="kpi-header"] .fa-kpi[data-tone] dt,
+  [data-modal-zone="kpi-header"] .fa-kpi[data-primary] dt { color: color-mix(in srgb, var(--kachel) 55%, var(--fa-ink)); }
 
   /* Datentabelle: <table class="fa-table"> · Zahlen-Zellen mit class="num" */
   .fa-table { width: 100%; border-collapse: collapse; font-size: var(--fa-text-md); color: var(--fa-ink); }
