@@ -1734,10 +1734,14 @@ class PairingService
         $analyse = $logik->analysiereBestandteile($logik->bestandteileAusAnkern($innerIds));
         $id = fn (string $schluessel) => (int) substr($schluessel, 1);           // 'a123' → 123
 
-        // Ein Lieferant muss zur Auswahl passen: er harmoniert (★★★) mit mindestens einem gewählten
-        // Anker — dieselbe Regel wie bei den Basisrezept-Vorschlägen. Sortiert nach der Zahl dieser
-        // Harmonien, dann nach dem Rang der Kontrast-Kante. Gemessen 2026-10-06: ohne den Filter
-        // kamen für Tomate+Basilikum+Zwiebel „Fett: Ente, Açai-Beere" (nur Verbreitung).
+        // Ein Lieferant muss zur Auswahl passen. Zwei Arten:
+        //   reiner Träger   Stufe 3 auf der Achse (Öl = Fett, Meersalz = Salz, Zucker = Süße) — aromatisch
+        //                   neutral, darf ohne Harmonie stehen, solange er keinen Konflikt auslöst;
+        //   Aroma-Lieferant Stufe 2 (Parmesan, Ente, Avocado …) bringt eigenes Aroma mit und muss mit
+        //                   mindestens einem gewählten Anker ★★★ harmonieren.
+        // Sortiert: Harmonien mit der Auswahl, dann belegte Träger (Nährwert gemessen / Dossier geprüft)
+        // vor ungeprüften, dann Rang der Kontrast-Kante.
+        // Gemessen 2026-10-06: ohne Filter kam „Fett für Tomate: Ente, Açai-Beere"; nur mit ★★★-Filter fehlte Olivenöl.
         $jeBedarf = [];
         foreach ($analyse['offene_bedarfe'] as $b) {
             $fuer = $id((string) $b['bestandteil']);
@@ -1749,10 +1753,26 @@ class PairingService
         foreach ($alle === [] ? [] : $this->graph()->kanten($alle, $innerIds, AnkerGraph::HARMONIERT) as $k) {
             $harmonien[$k->von] = ($harmonien[$k->von] ?? 0) + 1;
         }
+        $stoert = $alle === [] ? [] : $this->graph()->beziehungen($alle, Kantenart::Konflikt, $innerIds)
+            ->merge($this->graph()->beziehungen($innerIds, Kantenart::Konflikt, $alle))
+            ->flatMap(fn ($k) => [$k->von, $k->zu])->flip()->all();
+        $traeger = [];
+        foreach ($alle === [] ? [] : DB::table('foodalchemist_anchor_eigenschaften')->whereIn('anchor_id', $alle)
+            ->where('stufe', '>=', 3)->where('status', '!=', \Platform\FoodAlchemist\Enums\WissensStatus::Verworfen->value)
+            ->get(['anchor_id', 'achse', 'quelle', 'status']) as $e) {
+            $belegt = $e->quelle === 'naehrwert' || $e->status === \Platform\FoodAlchemist\Enums\WissensStatus::Geprueft->value;
+            $schluessel = (int) $e->anchor_id.'|'.$e->achse;
+            $traeger[$schluessel] = ($traeger[$schluessel] ?? 0) === 2 || $belegt ? 2 : 1;   // 2 = belegt, 1 = ungeprüft
+        }
         $kontrast = [];
         foreach ($jeBedarf as [$fuer, $achse, $lieferanten]) {
-            $passend = $lieferanten->filter(fn ($k) => isset($harmonien[$k->zu]))
-                ->sortBy([fn ($x, $y) => $harmonien[$y->zu] <=> $harmonien[$x->zu], fn ($x, $y) => $y->rang <=> $x->rang])
+            $passend = $lieferanten
+                ->filter(fn ($k) => ! isset($stoert[$k->zu]) && (isset($harmonien[$k->zu]) || isset($traeger[$k->zu.'|'.$achse])))
+                ->sortBy([
+                    fn ($x, $y) => ($harmonien[$y->zu] ?? 0) <=> ($harmonien[$x->zu] ?? 0),
+                    fn ($x, $y) => ($traeger[$y->zu.'|'.$achse] ?? 0) <=> ($traeger[$x->zu.'|'.$achse] ?? 0),
+                    fn ($x, $y) => $y->rang <=> $x->rang,
+                ])
                 ->take(self::KONTRAST_JE_BEDARF);
             foreach ($passend as $k) {
                 $kontrast[$k->zu] ??= ['id' => $k->zu, 'achse_label' => \Platform\FoodAlchemist\Enums\Achse::from($achse)->label(), 'fuer' => []];

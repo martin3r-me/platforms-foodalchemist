@@ -122,8 +122,11 @@ it('Composer-Tab rendert „Passt das zusammen?" aus der Kombinationslogik, Kont
         ->and($html)->toContain('data-picker-typ="kontrast"');
 });
 
-it('Kontrast-Lieferant ohne ★★★ zur Auswahl wird nicht angeboten (kulinarisch beliebig)', function () {
+it('Kontrast ohne ★★★: reiner Träger (Stufe 3) ja, Aroma-Lieferant (Stufe 2) nein', function () {
     app(\Platform\FoodAlchemist\Services\Pairing\AnkerGraph::class)->setze($this->a['pumpkin'], $this->a['rice_vinegar'], 1);
+    expect(($this->knoten)(($this->netz)(['pumpkin']), 'kontrast'))->toBe(['Reisessig']);          // Säure 3 = Träger
 
-    expect(($this->knoten)(($this->netz)(['pumpkin']), 'kontrast'))->toBe([]);
+    DB::table('foodalchemist_anchor_eigenschaften')->where('anchor_id', $this->a['rice_vinegar'])->update(['stufe' => 2]);
+    app(KontrastAbleitung::class)->baue();
+    expect(($this->knoten)(($this->netz)(['pumpkin']), 'kontrast'))->toBe([]);                       // Säure 2, ohne ★★★
 });

@@ -3,6 +3,7 @@
 namespace Platform\FoodAlchemist\Console;
 
 use Illuminate\Console\Command;
+use Platform\FoodAlchemist\Services\Pairing\AnkerNaehrwerte;
 use Platform\FoodAlchemist\Services\Pairing\AnkerVarianten;
 use Platform\FoodAlchemist\Services\Pairing\AnkerWissenImport;
 use Platform\FoodAlchemist\Services\Pairing\KategorieRegeln;
@@ -14,17 +15,19 @@ use Platform\FoodAlchemist\Services\Pairing\KontrastAbleitung;
  *   php artisan foodalchemist:anker-wissen varianten            Grundname/Verfahren/Grund-Anker aus den Inspire-Namen
  *   php artisan foodalchemist:anker-wissen import --pfad=DIR    Profile (*.json, Format der Pilot-Auslese) übernehmen
  *   php artisan foodalchemist:anker-wissen kategorie            Lieferseite Träger/Frische/Aromatik/Röstaroma aus Kategorie + Verfahren
+ *   php artisan foodalchemist:anker-wissen naehrwert            Lieferseite Salz/Süße/Fett aus den Nährwerten der Kern-GPs
  *   php artisan foodalchemist:anker-wissen intensitaet          Startwerte der Aroma-Intensität je Kategorie (nur leere)
  *   php artisan foodalchemist:anker-wissen kontrast             Kontrast-Kanten aus Bedarf × Eigenschaft neu bauen
  *
- * Reihenfolge bei einem Neuaufbau: varianten → import → kategorie → intensitaet → kontrast.
+ * Reihenfolge bei einem Neuaufbau: varianten → import → kategorie → naehrwert → intensitaet → kontrast
+ * (danach `foodalchemist:rezept-profile --alle`, damit die Profile die neuen Eigenschaften tragen).
  *
  * Default ist Dry-Run für `varianten`; `import` und `kontrast` schreiben nur mit --apply.
  */
 class AnkerWissenCommand extends Command
 {
     protected $signature = 'foodalchemist:anker-wissen
-        {schritt : varianten | import | kategorie | intensitaet | kontrast}
+        {schritt : varianten | import | kategorie | naehrwert | intensitaet | kontrast}
         {--pfad= : Ordner mit Profil-JSON-Dateien (import)}
         {--apply : wirklich schreiben}';
 
@@ -38,9 +41,14 @@ class AnkerWissenCommand extends Command
             'varianten' => $this->varianten($apply),
             'import' => $this->import($apply),
             'kategorie' => $this->regel($apply, fn () => app(KategorieRegeln::class)->eigenschaften(), 'Eigenschaften aus Kategorie/Verfahren'),
+            'naehrwert' => $this->regel($apply, function () {
+                $r = app(AnkerNaehrwerte::class)->ableiten();
+
+                return $r['zeilen'].' Eigenschaften an '.$r['anker'].' Ankern';
+            }, 'Salz/Süße/Fett aus Nährwerten'),
             'intensitaet' => $this->regel($apply, fn () => app(KategorieRegeln::class)->intensitaet(), 'Anker mit Startwert Aroma-Intensität'),
             'kontrast' => $this->kontrast($apply),
-            default => $this->fehler('Schritt unbekannt. Erlaubt: varianten, import, kategorie, intensitaet, kontrast.'),
+            default => $this->fehler('Schritt unbekannt. Erlaubt: varianten, import, kategorie, naehrwert, intensitaet, kontrast.'),
         };
     }
 
