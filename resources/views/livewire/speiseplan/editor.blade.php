@@ -75,7 +75,9 @@
              -mx-6 hebt das Body-px-6 auf (Spalten randbündig); die Mitte bekommt px-6 zurück,
              damit die sticky editor-tabs-Leiste (-mx-6) wieder auf Spaltenbreite spannt; die
              Rail behält pr-6. --}}
-        <div class="flex gap-4 -mx-6 items-start">
+        {{-- Spec 59: `markiert` = Eintrag-Ids, die ein Chip der Abwechslungs-Karte hervorhebt (rein clientseitig;
+             die Zellen in der Matrix lesen es per :class, siehe partials/zelle). --}}
+        <div class="flex gap-4 -mx-6 items-start" x-data="{ markiert: null, markierKey: null }">
             <div class="flex-1 min-w-0 px-6">
                 <x-foodalchemist::editor-tabs marker="sp" wire-key="sp-tabs-{{ $sp->id }}" :init="'kalender'"
                     :tabs="[
@@ -709,6 +711,9 @@
                             </div>
                         </x-foodalchemist::modal-section>
 
+                        {{-- Spec 59: Vorgaben je Woche (mind./höchstens je Prüf-Chip) --}}
+                        @include('foodalchemist::livewire.speiseplan.partials.vorgaben')
+
                         {{-- Spec 57 · Paket 7: Vorlage für Betriebe (verknüpfte Kopie je Betrieb, im eigenen Team) --}}
                         <x-foodalchemist::modal-section title="Vorlage für Betriebe">
                             @if($vorlageHinweis)<div class="mb-2 rounded-lg bg-violet-500/10 border border-violet-400/30 text-violet-100 text-xs px-3 py-1.5" data-sp-vorlage-hinweis>{{ $vorlageHinweis }}</div>@endif
@@ -1110,25 +1115,9 @@
                     </div>
                 @endif
 
-                {{-- Abwechslung/Häufigkeit: Diät-Mix + Warengruppen der Woche --}}
+                {{-- Abwechslung/Häufigkeit: Diät-Mix + Warengruppen der Woche + Spec 59 Plan-Vorgaben --}}
                 @if($abwechslung)
-                    @php($dm = $abwechslung['diaet'])
-                    <div class="rounded-xl border border-white/10 bg-white/[0.04] p-3 space-y-1.5" data-sp-abwechslung>
-                        <div class="{{ $label }}">Abwechslung · Woche</div>
-                        <div class="flex flex-wrap gap-1 text-[11px]">
-                            <span class="{{ $pill }} {{ $variantPill['success'] }}">Vegan {{ $dm['vegan'] }}</span>
-                            <span class="{{ $pill }} {{ $variantPill['info'] }}">Vegetarisch {{ $dm['vegetarisch'] }}</span>
-                            <span class="{{ $pill }} {{ $variantPill['secondary'] }}">mit Fleisch/Fisch {{ $dm['omnivor'] }}</span>
-                        </div>
-                        @if(!empty($abwechslung['warengruppen']))
-                            <div class="flex flex-wrap gap-1 pt-1.5 border-t border-white/10">
-                                @foreach($abwechslung['warengruppen'] as $w)
-                                    <span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $w['name'] }} ×{{ $w['count'] }}</span>
-                                @endforeach
-                            </div>
-                        @endif
-                        @if($abwechslung['hinweis'])<p class="text-[10px] text-amber-300/80">{{ $abwechslung['hinweis'] }}</p>@endif
-                    </div>
+                    @include('foodalchemist::livewire.speiseplan.partials.abwechslung', ['ab' => $abwechslung])
                 @endif
 
                 <div class="rounded-xl border border-white/10 bg-white/[0.04] p-3 space-y-1">

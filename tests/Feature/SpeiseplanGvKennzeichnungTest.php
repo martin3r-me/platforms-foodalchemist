@@ -129,7 +129,10 @@ it('Stufe D: Nährwert-Ø/Person/Tag + Abwechslungs-Mix', function () {
         ->and($nw['schnitt']['salz_g'])->toBe(2.5);
 
     $ab = $this->plan->wochenAbwechslung($sp, 'mittag', $montag);
-    expect($ab['diaet']['omnivor'])->toBe(1)
+    // Spec 59: das Gericht hat KEINE Diät-Pflege — früher zählte es als „mit Fleisch/Fisch“
+    // (omnivor 1), das war der Zählfehler. Unbekannt ist nicht Fleisch → ohne_angabe.
+    expect($ab['diaet']['omnivor'])->toBe(0)
+        ->and($ab['diaet']['ohne_angabe'])->toBe(1)
         ->and($ab['diaet']['vegan'])->toBe(0)
         ->and(collect($ab['warengruppen'])->firstWhere('name', 'Fleischgericht')['count'])->toBe(1);
 });

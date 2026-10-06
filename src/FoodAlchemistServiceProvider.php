@@ -1117,6 +1117,10 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\SpeiseplanVorlageTool::class,
                     \Platform\FoodAlchemist\Tools\SpeiseplanVorlageAbgleichTool::class,
                     \Platform\FoodAlchemist\Tools\SpeiseplanPlanIstTool::class,
+                    // Spec 59: Prüf-Chip-Katalog für Plan-Vorgaben (Vorgaben selbst via speiseplaene.GET/PUT).
+                    \Platform\FoodAlchemist\Tools\SpeiseplanChipsGetTool::class,
+                    \Platform\FoodAlchemist\Tools\SpeiseplanChipsPostTool::class,
+                    \Platform\FoodAlchemist\Tools\SpeiseplanChipsPutTool::class,
                     // Speisekarte (Gastro-à-la-carte) — MCP-Lockstep
                     \Platform\FoodAlchemist\Tools\SpeisekartenPostTool::class,
                     \Platform\FoodAlchemist\Tools\SpeisekartenPutTool::class,

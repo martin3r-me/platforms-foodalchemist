@@ -22,11 +22,12 @@
 @php($bandText = ($band['min'] !== null ? number_format((float) $band['min'], 0) . '–' : 'bis ') . number_format((float) $band['max'], 0) . ' %' . (($band['quelle'] ?? '') === 'team' ? ', Team-Ziel' : ''))
 @php($wesText = $wes !== null ? number_format((float) $wes, 0, ',', '.') . ' %' : '—')
 {{-- Spec 57 · Paket 5: ziehbar (Drop-Ziel = Zelle in der Matrix, Alpine `dragId`), Titel öffnet das Detail
-     (Ersetzen/Verschieben/Kopieren) — auch per Tastatur. --}}
+     (Ersetzen/Verschieben/Kopieren) — auch per Tastatur.
+     Spec 59: `markiert` (Eintrag-Ids aus der Abwechslungs-Karte) hebt hervor bzw. dunkelt ab. --}}
 <div wire:key="e-{{ $e->id }}" class="group rounded-lg border px-2 py-1.5 text-left text-gray-100 {{ ($detailId ?? null) === $e->id ? 'border-violet-400/60' : 'border-white/10' }}"
      style="background: {{ $farbe ? $farbe . '26' : 'rgba(255,255,255,0.06)' }}" data-sp-zelle="{{ $e->id }}"
      draggable="true" x-on:dragstart="dragId = {{ $e->id }}" x-on:dragend="dragId = null"
-     x-bind:class="dragId === {{ $e->id }} ? 'opacity-40' : ''">
+     x-bind:class="(dragId === {{ $e->id }} ? 'opacity-40 ' : '') + (typeof markiert !== 'undefined' && markiert !== null ? (markiert.includes({{ $e->id }}) ? 'ring-2 ring-violet-400 shadow-lg shadow-violet-500/20' : 'opacity-30') : '')">
     <div class="flex items-start gap-1">
         <span class="cursor-move select-none text-gray-500 shrink-0 text-[10px] leading-4" aria-hidden="true" title="Ziehen zum Verschieben">⠿</span>
         <button type="button" wire:click="eintragOeffnen({{ $e->id }})" class="flex-1 min-w-0 text-left" aria-label="{{ $titel }} — Details, ersetzen, verschieben, kopieren">

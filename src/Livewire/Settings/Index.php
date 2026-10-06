@@ -90,6 +90,9 @@ class Index extends Component
         // Spec 33 P2: Die Tabelle gab es seit Spec 19, die Pflege nie — deshalb war sie leer
         // und `outlet_id` an der Speisekarte hatte nicht einmal ein Eingabefeld.
         'betriebe' => ['label' => 'Betriebe & Standorte', 'hint' => 'Trägt die Betriebsbrille im Controlling — welcher Standort fährt welche Ausgabe'],
+        // Spec 59: zentraler Chip-Katalog für Speiseplan-Vorgaben („mind. 2× vegan je Woche“) —
+        // die Vorgaben selbst stehen je Plan im Speiseplan-Editor (Reiter Stammdaten).
+        'speiseplan-chips' => ['label' => 'Speiseplan-Chips', 'hint' => 'Prüf-Chips für Speiseplan-Vorgaben: Ernährungsform oder Hauptgruppe · Standardwerte mind./höchstens'],
     ];
 
     public function mount(string $sektion = 'einheiten'): void

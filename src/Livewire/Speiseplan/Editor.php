@@ -1177,4 +1177,82 @@ class Editor extends Component
     {
         return Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
     }
+
+    // ── Spec 59: Vorgaben je Woche (Reiter Stammdaten, Partial `partials/vorgaben`) ──
+    // Kein eigener Formular-State: jede Änderung schreibt sofort über den Service (gleiche
+    // Validierung wie MCP `speiseplaene.PUT`), das Partial liest `$sp->vorgaben`.
+
+    /** Untypisiert: Select liefert "" solange kein Chip gewählt ist. */
+    public $neueVorgabeChip = '';
+
+    public ?string $vorgabenFehler = null;
+
+    /** Sichtbarer Chip-Katalog des Teams (inkl. stillgelegter — bestehende Vorgaben brauchen ihr Label). */
+    #[\Livewire\Attributes\Computed]
+    public function vorgabenKatalog(): \Illuminate\Support\Collection
+    {
+        return app(\Platform\FoodAlchemist\Services\SpeiseplanVorgabenService::class)->katalog($this->team());
+    }
+
+    /** Vorgabe aus dem gewählten Chip hinzufügen — übernimmt dessen Standardwerte (mind./höchstens). */
+    public function vorgabeHinzu(): void
+    {
+        $chip = $this->vorgabenKatalog->first(fn ($c) => (int) $c->id === (int) $this->neueVorgabeChip && $c->is_active);
+        if ($chip === null) {
+            $this->vorgabenFehler = 'Bitte einen Chip wählen.';
+
+            return;
+        }
+        $svc = app(\Platform\FoodAlchemist\Services\SpeiseplanVorgabenService::class);
+        if ($this->vorgabenSchreiben(fn (array $v) => [...$v, $svc->vorgabeAusChip($chip)])) {
+            $this->neueVorgabeChip = '';
+        }
+    }
+
+    /** Ein Feld einer Vorgabe setzen: chip_id | mahlzeit | min | max (Index = Position in der Liste). */
+    public function vorgabeSetzen(int $index, string $feld, $wert): void
+    {
+        if (! in_array($feld, ['chip_id', 'mahlzeit', 'min', 'max'], true)) {
+            return;
+        }
+        $this->vorgabenSchreiben(function (array $v) use ($index, $feld, $wert) {
+            if (isset($v[$index])) {
+                $v[$index][$feld] = $feld === 'chip_id' ? (int) $wert : $wert;
+            }
+
+            return $v;
+        });
+    }
+
+    public function vorgabeEntfernen(int $index): void
+    {
+        $this->vorgabenSchreiben(function (array $v) use ($index) {
+            unset($v[$index]);
+
+            return array_values($v);
+        });
+    }
+
+    /** Liest die gespeicherten Vorgaben, wendet $aendern an und speichert validiert. */
+    private function vorgabenSchreiben(\Closure $aendern): bool
+    {
+        $this->vorgabenFehler = null;
+        if ($this->planId === null) {
+            return false;
+        }
+        $plan = FoodAlchemistSpeiseplan::visibleToTeam($this->team())->find($this->planId);
+        if ($plan === null) {
+            return false;
+        }
+        try {
+            app(\Platform\FoodAlchemist\Services\SpeiseplanVorgabenService::class)
+                ->setzeVorgaben($this->team(), $this->planId, $aendern(array_values((array) ($plan->vorgaben ?? []))));
+        } catch (\RuntimeException $e) {
+            $this->vorgabenFehler = $e->getMessage();
+
+            return false;
+        }
+
+        return true;
+    }
 }

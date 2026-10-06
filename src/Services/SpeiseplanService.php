@@ -252,6 +252,8 @@ class SpeiseplanService
             $neu = FoodAlchemistSpeiseplan::create($this->pruefeOutlet($team, array_merge(
                 array_intersect_key($quelle->only(self::FELDER), array_flip(self::FELDER)),
                 ['team_id' => $team->id, 'name' => $quelle->name . ' (Kopie)', 'status' => AusgabeStatus::Entwurf->value],
+                // Spec 59: Vorgaben gehören zum Plan — Kopie (auch Betriebs-Kopie) übernimmt sie.
+                ['vorgaben' => $quelle->vorgaben],
                 // Spec 57 · Paket 7: Betriebs-Kopie merkt sich ihre Vorlage (sonst eine freie Kopie).
                 $quelleMerken ? ['source_plan_id' => $quelle->id, 'source_synced_at' => now()] : [],
                 array_intersect_key($ueberschreiben, array_flip(array_merge(self::FELDER, ['name']))),
@@ -1420,8 +1422,9 @@ class SpeiseplanService
 
     /**
      * Diät-Merkmale aus vorhandenen Flags — ohne Raten. Geflügel/Lamm/Wild haben kein Datenfeld;
-     * sie erscheinen als „fleisch“ (Tierart unbestimmt), nicht als geratene Tierart (Spec 57 · E3).
-     * Ist die Diät gar nicht gepflegt (unbekannt), bleibt die Liste leer — unbekannt ist nicht Fleisch.
+     * sie erscheinen als „fleisch“ (unbestimmt), nicht als geratene Tierart (Spec 57 · E3).
+     * Spec 59: „fleisch“ nur bei BELEGTEM Fleisch (`fleisch_belegt` im Rollup). Gerichte ganz ohne
+     * Diät-Pflege liefern `[]` (= ohne Angabe) — unbekannt ist nicht Fleisch.
      *
      * @return list<string>  vegan | vegetarisch | schwein | rind | fisch | fleisch
      */
@@ -2238,18 +2241,32 @@ class SpeiseplanService
     }
 
     /**
-     * Abwechslung/Häufigkeit der Woche: Diät-Mix (vegan/vegetarisch/mit Fleisch·Fisch) je serviertem
-     * Gericht + Warengruppen-Häufigkeit (dish_main_group). Weicher Hinweis, wenn eine Warengruppe die
-     * Woche dominiert (≥ $tage Vorkommen). Alles aus vorhandenen Feldern (spec_*, dish_main_group_id).
+     * Abwechslung/Häufigkeit der Woche: Diät-Mix je serviertem GERICHT + Warengruppen-Häufigkeit
+     * (dish_main_group) + Spec 59 Plan-Vorgaben (mind./höchstens je Chip). Weicher Hinweis, wenn
+     * eine Warengruppe die Woche dominiert (≥ $tage Vorkommen). Alles aus vorhandenen Feldern.
      *
-     * @return array{diaet: array{vegan:int, vegetarisch:int, omnivor:int}, warengruppen: list<array{name:string,count:int}>, hinweis: ?string}
+     * Spec 59: Diät je Gericht über denselben Rollup wie die Zellen-Chips ({@see diaetMerkmale}).
+     * Vorher zählte alles Nicht-Vegane/-Vegetarische als „mit Fleisch oder Fisch“ — auch Gerichte
+     * ganz ohne Diät-Pflege. Jetzt: Fleisch nur belegt, Rest unter `ohne_angabe`.
+     * Zählbasis = Gericht-Vorkommen (ein Paket/Concept mit 3 Gerichten zählt 3).
+     * `diaet_eintraege`/`wg_eintraege`/`treffer` liefern die Eintrag-Ids fürs Hervorheben in der Matrix.
+     *
+     * @return array{diaet: array{vegan:int, vegetarisch:int, fleisch:int, fisch:int, schwein:int, rind:int, ohne_angabe:int, omnivor:int},
+     *               warengruppen: list<array{id:int, name:string, count:int}>, hinweis: ?string,
+     *               vorgaben: list<array>, treffer: array<int, list<int>>,
+     *               diaet_eintraege: array<string, list<int>>, wg_eintraege: array<int, list<int>>}
      */
     public function wochenAbwechslung(FoodAlchemistSpeiseplan $plan, string $mahlzeit, Carbon $montag, ?int $tage = null): array
     {
-        $vegan = 0;
-        $veg = 0;
+        $agg = app(ConcepterAggregateService::class);
+        $diaetKeys = ['vegan', 'vegetarisch', 'fleisch', 'fisch', 'schwein', 'rind', 'ohne_angabe'];
+        $diaet = array_fill_keys($diaetKeys, 0);
         $omni = 0;
-        $wg = [];   // dish_main_group_id => count
+        $diaetEintraege = array_fill_keys($diaetKeys, []);
+        $wg = [];            // dish_main_group_id => count
+        $wgEintraege = [];   // dish_main_group_id => [entry_id => true]
+        $paare = [];         // je Gericht-Vorkommen: Merkmale für die Vorgaben-Prüfung
+        $merkmaleCache = [];
         $tageListe = $this->aggregatTage($plan, $montag, $tage);
         $tage = count($tageListe);
         foreach ($tageListe as $tag) {
@@ -2258,17 +2275,26 @@ class SpeiseplanService
                     continue;
                 }
                 foreach ($this->eintragGerichte($e) as $g) {
-                    if ((bool) $g->spec_is_vegan) {
-                        $vegan++;
-                    } elseif ((bool) $g->spec_is_vegetarian) {
-                        $veg++;
-                    } else {
+                    $gc = collect([$g]);
+                    $m = $merkmaleCache[$g->id] ??= $this->diaetMerkmale($agg->allergenRollupFromGerichte($gc), $agg->kennzeichnungFromGerichte($gc));
+                    // Schwein/Rind sind Fleisch — für Zählung und Chip „Fleisch“.
+                    if (array_intersect($m, ['schwein', 'rind']) !== [] && ! in_array('fleisch', $m, true)) {
+                        $m[] = 'fleisch';
+                    }
+                    $schluessel = $m === [] ? ['ohne_angabe'] : $m;
+                    foreach ($schluessel as $k) {
+                        $diaet[$k]++;
+                        $diaetEintraege[$k][$e->id] = true;
+                    }
+                    if (in_array('fleisch', $m, true) || in_array('fisch', $m, true)) {
                         $omni++;
                     }
-                    $gid = $g->dish_main_group_id;
+                    $gid = $g->dish_main_group_id !== null ? (int) $g->dish_main_group_id : null;
                     if ($gid !== null) {
-                        $wg[(int) $gid] = ($wg[(int) $gid] ?? 0) + 1;
+                        $wg[$gid] = ($wg[$gid] ?? 0) + 1;
+                        $wgEintraege[$gid][$e->id] = true;
                     }
+                    $paare[] = ['entry_id' => (int) $e->id, 'gericht_id' => (int) $g->id, 'diaet' => $m, 'hauptgruppe' => $gid];
                 }
             }
         }
@@ -2284,16 +2310,22 @@ class SpeiseplanService
         $dominant = null;
         foreach ($wg as $gid => $count) {
             $name = $namen[$gid] ?? ('#' . $gid);
-            $warengruppen[] = ['name' => $name, 'count' => $count];
+            $warengruppen[] = ['id' => (int) $gid, 'name' => $name, 'count' => $count];
             if ($dominant === null && $count >= $tage) {
                 $dominant = $name;
             }
         }
+        $vorgaben = app(SpeiseplanVorgabenService::class)->auswerten($plan, $mahlzeit, $paare);
 
         return [
-            'diaet' => ['vegan' => $vegan, 'vegetarisch' => $veg, 'omnivor' => $omni],
+            // `omnivor` (= Gerichte mit Fleisch ∪ Fisch) bleibt für Altverwender.
+            'diaet' => $diaet + ['omnivor' => $omni],
             'warengruppen' => array_slice($warengruppen, 0, 6),
             'hinweis' => $dominant !== null ? 'Warengruppe „' . $dominant . '" dominiert die Woche — mehr Abwechslung erwägen.' : null,
+            'vorgaben' => $vorgaben['vorgaben'],
+            'treffer' => $vorgaben['treffer'],
+            'diaet_eintraege' => array_map('array_keys', $diaetEintraege),
+            'wg_eintraege' => array_map('array_keys', $wgEintraege),
         ];
     }
 
