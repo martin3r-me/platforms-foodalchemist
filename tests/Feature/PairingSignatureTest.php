@@ -84,39 +84,67 @@ it('signature stuft den Allrounder runter, klassiker nicht', function () {
         ->and($sug['signature'][0]['slug'])->toBe('vanille');
 });
 
-it('Gericht: panelRecipe spielt die signature-Liste mit aus', function () {
+it('Gericht: panelRecipe liefert dieselbe Aussage wie die Detail-Spalte (Kombinationslogik + Netz)', function () {
     $erd = ($this->mkAnker)('erdbeere');
     $bas = ($this->mkAnker)('basilikum');
-    $vanille = ($this->mkAnker)('vanille');
-    ($this->mkKante)($vanille, $erd);
-    ($this->mkKante)($vanille, $bas);
+    ($this->mkKante)($erd, $bas);
 
     $recipe = ($this->mkRezeptMitZutaten)(['Erdbeere', 'Basilikum'], istGericht: true);
-
     $panel = $this->svc->panelRecipe($recipe);
 
     expect($panel['ist_gericht'])->toBeTrue()
-        ->and($panel)->toHaveKey('signature')
-        ->and(collect($panel['signature'])->pluck('slug'))->toContain('vanille');
+        ->and($panel['kombination']['art'])->toBe('gericht')
+        ->and($panel['kombination']['kennzahlen']['harmoniert'] ?? 0)->toBe(1)
+        ->and($panel['netz']['meta']['art'])->toBe('gericht')
+        ->and($panel)->toHaveKeys(['passt_dazu', 'deckt_bedarf', 'profil'])
+        ->and($panel)->not->toHaveKey('signature')                           // alte Anker-Teller-Listen sind raus
+        ->and($panel)->not->toHaveKey('score');
 });
 
-it('Basisrezept: KEINE Teller-Blöcke, stattdessen Graph-Nachbarn', function () {
+it('Basisrezept: Aromenprofil mit Anteil, nur ★★★-Partner, keine Teller-Blöcke', function () {
     $erd = ($this->mkAnker)('erdbeere');
     $van = ($this->mkAnker)('vanille');
     $salz = ($this->mkAnker)('salz');
-    ($this->mkKante)($erd, $van, 'aroma');   // ankerNeighbors filtert auf type=aroma (erprobt wird gewipt)
-    ($this->mkKante)($erd, $salz, 'aroma');
+    ($this->mkKante)($erd, $van);              // ★★★
+    ($this->mkKante)($erd, $salz, 'aroma');    // nur ★★ → kein Partner
 
     $basis = FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id, 'recipe_key' => 'basis-sauce',
         'name' => 'Basis: Sauce', 'status' => 'draft', 'is_sales_recipe' => false,
     ]);
-    \Platform\FoodAlchemist\Tests\Support\RezeptAnker::gib($basis, $erd);   // Anker des Basisrezepts = erdbeere
+    \Platform\FoodAlchemist\Tests\Support\RezeptAnker::gib($basis, $erd);
 
     $panel = $this->svc->panelRecipe($basis);
 
     expect($panel['ist_gericht'])->toBeFalse()
-        ->and($panel['vorschlaege'])->toBe([])          // Teller-Completion AUS beim Basisrezept
-        ->and($panel['signature'])->toBe([])
-        ->and(collect($panel['nachbarn']))->toContain('Vanille');   // Graph-Nachbar via Kante
+        ->and($panel['profil'])->toBe([['name' => 'Erdbeere', 'anteil' => 100.0]])
+        ->and($panel['partner'])->toBe(['Vanille'])
+        ->and($panel['passt_dazu'])->toBe([]);
+});
+
+it('GP-Editor: nur ★★★-Partner, was der Anker braucht, wer es liefert, womit er sich stört', function () {
+    $kuerbis = ($this->mkAnker)('kuerbis');
+    $salbei = ($this->mkAnker)('salbei');
+    $nuss = ($this->mkAnker)('walnuss');
+    $essig = ($this->mkAnker)('reisessig');
+    $anis = ($this->mkAnker)('anis');
+    ($this->mkKante)($kuerbis, $salbei);                 // ★★★
+    ($this->mkKante)($kuerbis, $nuss, 'aroma');          // ★★ → kein Partner
+    ($this->mkKante)($kuerbis, $essig);                  // ★★★ (Lieferant muss zur Auswahl passen)
+    $w = fn (string $t, array $z) => DB::table($t)->insert($z + ['status' => 'entwurf', 'created_at' => now(), 'updated_at' => now()]);
+    $w('foodalchemist_anchor_bedarfe', ['anchor_id' => $kuerbis, 'achse' => 'saeure', 'staerke' => 'muss']);
+    $w('foodalchemist_anchor_eigenschaften', ['anchor_id' => $essig, 'achse' => 'saeure', 'stufe' => 2, 'quelle' => 'dossier']);
+    DB::table('foodalchemist_anchor_beziehungen')->insert(['anchor_a_id' => $kuerbis, 'anchor_b_id' => $anis, 'art' => 'konflikt',
+        'achse' => '', 'grundlage' => 'dossier', 'status' => 'entwurf', 'created_at' => now(), 'updated_at' => now()]);
+    app(\Platform\FoodAlchemist\Services\Pairing\KontrastAbleitung::class)->baue();
+    $gp = $this->makeGp($this->rootTeam, 'Kürbis: frisch');
+    DB::table('foodalchemist_gp_anchor_mappings')->insert(['uuid' => (string) UuidV7::generate(), 'team_id' => $this->rootTeam->id,
+        'gp_id' => $gp->id, 'anchor_id' => $kuerbis, 'role' => 'kern', 'created_at' => now(), 'updated_at' => now()]);
+
+    $p = $this->svc->panelGp((int) $gp->id);
+
+    expect($p['aroma'])->toBe(['Reisessig', 'Salbei'])
+        ->and($p['braucht'])->toBe([['achse' => 'Säure', 'staerke' => 'muss', 'grundlage' => 'aus Dossier, ungeprüft']])
+        ->and($p['kontrast'])->toBe([['name' => 'Reisessig', 'achse' => 'Säure']])
+        ->and($p['konflikt'])->toBe(['Anis']);
 });

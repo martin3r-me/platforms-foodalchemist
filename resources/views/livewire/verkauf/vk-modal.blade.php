@@ -127,7 +127,7 @@
              wire:key (Gericht-Wechsel) und Tab-Reset beim Öffnen, die hier vorher fehlten.
              'allergene'-Key bleibt stabil, Label seit 2026-07-02 „Deklaration" (bündelt Allergene ·
              Zusatzstoffe · Nährwerte · Spezifikation — Rezept-Editor-Parität). --}}
-        <x-foodalchemist::editor-tabs marker="vk" wire-key="vk-tabs-{{ $rezept->id }}" :init="'aufbau'"
+        <x-foodalchemist::editor-tabs marker="vk" wire-key="vk-tabs-{{ $rezept->id }}" :init="'aufbau'" visit-action="tabLaden"
             {{-- Tab-Namen folgen den drei Anleitungs-Ebenen (Regelwerk Verkaufsgerichte §3,
                  User-Entscheid 2026-09-04) in ihrer Prozess-Reihenfolge: regenerieren →
                  fertigstellen → anrichten. Der alte Sammel-Tab „Service" ist aufgeteilt; er
@@ -1001,7 +1001,11 @@
                 @include('foodalchemist::livewire.concepter.partials.sensorik')
             @endif
             <h3 class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 mt-5 mb-2">Pairing</h3>
-            @include('foodalchemist::livewire.concepter.partials.pairing')
+            @if($pairingGeladen)
+                @include('foodalchemist::livewire.concepter.partials.pairing')
+            @else
+                <p class="py-6 text-center text-xs text-gray-500" data-vk-pairing-laedt>Pairing wird geladen …</p>
+            @endif
         </div>
 
         {{-- ── Tab: FEEDBACK (R2.6 — Praxis-Feedback Küche/Kunde/Event) ── --}}

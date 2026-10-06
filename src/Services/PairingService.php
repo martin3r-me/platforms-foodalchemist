@@ -1243,104 +1243,103 @@ class PairingService
     private const NICHT_ZUTAT_ANKER = ['neutral', 'roestaromen', 'ferment', 'karamell', 'rauch'];
 
     /**
-     * Aroma-Nachbarn eines Kanten-Typs über mehrere Anker, dedupliziert, ohne die eigenen.
-     * Quelle = dieselben Anker-Kanten wie der Pairing-Netz-Graph (klassisch | kontrast). Ranking
-     * nach »cover« (mit wie vielen Teller-Ankern bringt der Kandidat den Typ) — relevanteste zuerst;
-     * Prozess-/Neutral-Anker rausgefiltert (keine Zutat).
-     */
-    private function ankerNachbarnAggregiert(array $ankerSlugs, array $eigeneIds, string $typ): array
-    {
-        $treffer = [];
-        foreach ($ankerSlugs as $slug) {
-            foreach ($this->ankerNeighbors($slug, $typ, 20) as $n) {
-                $id = (int) $n->id;
-                if (in_array($id, $eigeneIds, true) || in_array($n->slug, self::NICHT_ZUTAT_ANKER, true)) {
-                    continue;
-                }
-                $treffer[$id] ??= ['name' => $n->display_de ?: $n->slug, 'cover' => 0];
-                $treffer[$id]['cover']++;
-            }
-        }
-        uasort($treffer, fn ($a, $b) => [$b['cover'], $a['name']] <=> [$a['cover'], $b['name']]);
-
-        return array_slice(array_map(fn ($t) => $t['name'], array_values($treffer)), 0, 18);
-    }
-
-    /**
-     * Pairing-Panel (read-only, keine KI). Immer: Kohäsion + Kern-Anker + Kontrast.
-     * GERICHT zusätzlich: »komplettiert den Teller« (klassiker) + »macht den Teller
-     * eigen« (signature) — Teller-Logik. BASISREZEPT (Komponente) stattdessen die
-     * Graph-Sicht: klassische Aroma-Nachbarn + verwandte Basisrezepte.
+     * Pairing-Panel der Editoren (Gericht, Basisrezept) — Spec 60 · P10: dieselbe Aussage wie die
+     * Detail-Spalte (Kombinationslogik + Netz), nicht mehr die alte Kohäsion über Anker-Paare.
+     *
+     *   kombination   „Passt das zusammen?" ({@see Pairing\Kombinationslogik::daten})
+     *   netz          das Netz (Gericht: Basisrezepte; Basisrezept: Kern-Anker mit Anteil)
+     *   profil        Kern-Anker des Aromenprofils mit Anteil
+     *   Gericht       passt_dazu / deckt_bedarf — die Basisrezepte aus dem Netz (eine Rechnung)
+     *   Basisrezept   partner (★★★ der Kern-Anker), kontrast (Lieferanten für offene Bedarfe),
+     *                 verwandte (Basisrezepte mit denselben Kern-Ankern)
      */
     public function panelRecipe(FoodAlchemistRecipe $recipe): array
     {
-        $k = $this->recipeCohesion($recipe);
-        $ankerRows = $this->recipeAnkers($recipe->id);
-        $slugs = $ankerRows->pluck('slug')->all();
-        $eigene = $ankerRows->pluck('id')->map(fn ($i) => (int) $i)->all();
-
-        // Teller-Logik (»komplettiert den Teller« + »macht den Teller eigen«) ergibt
-        // NUR fürs GERICHT Sinn — ein Basisrezept ist eine Komponente, kein Teller.
-        // Basisrezept ⇒ stattdessen die Graph-Sicht: klassische Aroma-Nachbarn +
-        // verwandte Basisrezepte (geteilte Pairing-Anker).
+        $team = Team::find((int) $recipe->team_id);
         $istGericht = (bool) $recipe->is_sales_recipe;
-        $vorschlaege = $signature = $nachbarn = $verwandte = [];
+        $netz = $team !== null ? $this->pairingNetz($team, (int) $recipe->id) : ['nodes' => [], 'edges' => [], 'meta' => []];
+        $profil = app(Pairing\RezeptProfil::class)->fuer((int) $recipe->id);
+        $anteil = collect($profil['anker'])->sortByDesc('anteil')->take(8);
+        $namen = DB::table('foodalchemist_vocab_pairing_anchors')->whereIn('id', $anteil->pluck('anchor_id')->all())->pluck('display_de', 'id');
 
-        if ($istGericht) {
-            $sug = $this->componentSuggestions($recipe, 6);
-            $mapV = fn ($v) => [
-                'slug' => $v['slug'], 'cover' => $v['cover'], 'dish_n' => $v['dish_n'],
-                'mean_w' => $v['mean_w'], 'allrounder' => $v['allrounder'],
-            ];
-            $vorschlaege = collect($sug['klassiker'])->map($mapV)->all();
-            $signature = collect($sug['signature'])->map($mapV)->all();
-        } else {
-            // erprobt ist gewipt → vertrauenswürdige Harmonie-Nachbarn (Inspire+Molekül).
-            $nachbarn = $this->ankerNachbarnAggregiert($slugs, $eigene, 'aroma');
-            $team = Team::find((int) $recipe->team_id);
-            $verwandte = $team !== null
-                ? $this->recipesSharingPairings($team, $recipe->id)->all()
-                : [];
-        }
-
-        return [
+        $out = [
             'type' => 'recipe',
             'ist_gericht' => $istGericht,
-            'score' => $k['score'],
-            'coverage_pct' => $k['coverage_pct'],
-            'rated_pairs' => $k['rated_pairs'],
-            'total_pairs' => $k['total_pairs'],
-            'weakest_pair' => $k['weakest_pair'],
-            'orphans' => array_values(array_map(
-                fn ($c) => $c['label'],
-                array_filter($k['komponenten'], fn ($c) => $c['is_orphan']),
-            )),
-            'anker' => $ankerRows
-                ->map(fn ($a) => ['slug' => $a->slug, 'display_de' => $a->display_de, 'source' => $a->source])->all(),
-            'vorschlaege' => $vorschlaege,
-            'signature' => $signature,
-            'nachbarn' => $nachbarn,
-            'verwandte' => $verwandte,
-            'aroma' => $this->ankerNachbarnAggregiert($slugs, $eigene, 'aroma'),
-            'kontrast' => $this->ankerNachbarnAggregiert($slugs, $eigene, 'kontrast'),
+            'kombination' => app(Pairing\Kombinationslogik::class)->daten($recipe),
+            'netz' => $netz,
+            'profil' => $anteil->map(fn ($a) => ['name' => (string) ($namen[$a['anchor_id']] ?? '#'.$a['anchor_id']), 'anteil' => round((float) $a['anteil'])])->values()->all(),
+            'passt_dazu' => [], 'deckt_bedarf' => [], 'partner' => [], 'kontrast' => [], 'verwandte' => [],
         ];
+        if ($istGericht) {
+            $basis = collect($netz['nodes'])->where('kind', 'basisrezept');
+            $out['passt_dazu'] = $basis->where('typ', 'stern3')->map(fn ($n) => ['recipe_id' => $n['recipe_id'], 'name' => $n['label'], 'mit' => $n['via']])->values()->all();
+            $out['deckt_bedarf'] = $basis->where('typ', 'kontrast')->map(fn ($n) => ['recipe_id' => $n['recipe_id'], 'name' => $n['label'], 'achse' => $n['achse'] ?? $n['via']])->values()->all();
+
+            return $out;
+        }
+        $kern = $anteil->filter(fn ($a) => $a['anteil'] >= Pairing\RezeptGraph::KERN)->pluck('anchor_id')->map(fn ($i) => (int) $i)->all();
+        $out['partner'] = $this->harmoniePartnerNamen($kern);
+        $out['kontrast'] = array_map(fn ($c) => ['name' => (string) ($c['display_de'] ?: $c['slug']), 'achse' => $c['achse_label']],
+            $this->kontrastUndKonflikt($kern)[0]);
+        $out['verwandte'] = $team !== null ? $this->recipesSharingPairings($team, (int) $recipe->id)->all() : [];
+
+        return $out;
     }
 
-    /** GP: eigene Aroma-Anker + klassische Nachbarn (»passt zu«) + Kontrast (Gegenpol). */
+    /**
+     * Pairing-Panel im GP-Editor — Spec 60 · P10: Anker des GP, echtes Food Pairing (★★★), was der
+     * Anker braucht (Anker-Wissen), wer das liefert (Kontrast) und womit er sich stört.
+     */
     public function panelGp(int $gpId): array
     {
         $anker = $this->gpAnkers($gpId);
-        $slugs = $anker->pluck('slug')->all();
-        $eigene = $anker->pluck('id')->map(fn ($i) => (int) $i)->all();
+        $ids = $anker->pluck('id')->map(fn ($i) => (int) $i)->all();
+        $bedarfe = $ids === [] ? collect() : DB::table('foodalchemist_anchor_bedarfe')->whereIn('anchor_id', $ids)
+            ->where('status', '!=', \Platform\FoodAlchemist\Enums\WissensStatus::Verworfen->value)
+            ->orderByRaw("CASE staerke WHEN 'muss' THEN 0 ELSE 1 END")->get(['achse', 'staerke', 'status']);
+        $konflikt = $ids === [] ? [] : DB::table('foodalchemist_vocab_pairing_anchors')
+            ->whereIn('id', $this->graph()->beziehungen($ids, Kantenart::Konflikt)->pluck('zu')->unique()->all())
+            ->orderBy('display_de')->pluck('display_de')->all();
 
         return [
             'type' => 'gp',
             'anker' => $anker->map(fn ($a) => ['slug' => $a->slug, 'display_de' => $a->display_de, 'source' => $a->source])->all(),
-            // erprobt ist gewipt → vertrauenswürdige Harmonie-Nachbarn.
-            'nachbarn' => $this->ankerNachbarnAggregiert($slugs, $eigene, 'aroma'),
-            'aroma' => $this->ankerNachbarnAggregiert($slugs, $eigene, 'aroma'),
-            'kontrast' => $this->ankerNachbarnAggregiert($slugs, $eigene, 'kontrast'),
+            'aroma' => $this->harmoniePartnerNamen($ids),
+            'braucht' => $bedarfe->map(fn ($b) => [
+                'achse' => \Platform\FoodAlchemist\Enums\Achse::tryFrom((string) $b->achse)?->label() ?? (string) $b->achse,
+                'staerke' => $b->staerke,
+                'grundlage' => \Platform\FoodAlchemist\Enums\Grundlage::aus('dossier', (string) $b->status)->label(),
+            ])->unique('achse')->values()->all(),
+            'kontrast' => array_map(fn ($c) => ['name' => (string) ($c['display_de'] ?: $c['slug']), 'achse' => $c['achse_label']],
+                $this->kontrastUndKonflikt($ids)[0]),
+            'konflikt' => array_values(array_map('strval', $konflikt)),
         ];
+    }
+
+    /**
+     * ★★★-Partner einer Anker-Menge (echtes Food Pairing), nach Zahl der bedienten Anker, dann Name.
+     *
+     * @param  list<int>  $ids
+     * @return list<string>
+     */
+    private function harmoniePartnerNamen(array $ids, int $max = 14): array
+    {
+        if ($ids === []) {
+            return [];
+        }
+        $cover = $this->graph()->kanten($ids, null, AnkerGraph::HARMONIERT, $ids)->groupBy('zu')->map->count();
+        $namen = DB::table('foodalchemist_vocab_pairing_anchors')->whereIn('id', $cover->keys()->all())
+            ->whereNotIn('slug', self::NICHT_ZUTAT_ANKER)->pluck('display_de', 'id');
+
+        $liste = [];
+        foreach ($cover as $id => $n) {
+            if (isset($namen[$id])) {
+                $liste[] = [(int) $n, (string) $namen[$id]];
+            }
+        }
+        usort($liste, fn ($x, $y) => [$y[0], $x[1]] <=> [$x[0], $y[1]]);
+
+        return array_slice(array_column($liste, 1), 0, $max);
     }
 
     // ── M5-07: Pairing-Netz-Graph (D-7) ───────────────────────────────────
@@ -1363,7 +1362,10 @@ class PairingService
     // als äusserer Kreis drumherum (nach Typ in zusammenhängende Bögen sortiert).
     private const R_ANKER = 150.0;      // Innenring Kern-Anker
 
-    private const R_BEST = 320.0;       // mittlerer Vollkreis: best-Kandidaten (Inspire L3, ★★★)
+    private const R_BEST = 320.0;
+
+    /** Gericht-Netz: Bestandteile tragen lange Rezeptnamen — weiter innen als die Anker (150) überlappten sie. */
+    private const R_BESTANDTEIL = 215.0;       // mittlerer Vollkreis: best-Kandidaten (Inspire L3, ★★★)
 
     private const R_OUTER = 470.0;      // Aussenkreis: harmonie (★★/★) + kontrast (⇄) + Basisrezepte
 
@@ -1438,7 +1440,7 @@ class PairingService
         $edges = [];
         $teile = array_values($analyse['bestandteile']);
         foreach ($teile as $i => $t) {
-            [$x, $y] = $this->positionAufKreis($i, max(1, count($teile)), self::R_ANKER, $cx, $cy);
+            [$x, $y] = $this->positionAufKreis($i, max(1, count($teile)), self::R_BESTANDTEIL, $cx, $cy);
             $nodes[] = ['id' => 't:'.$t['schluessel'], 'kind' => 'bestandteil', 'label' => $t['label'],
                 'recipe_id' => $t['recipe_id'], 'ohne_profil' => $t['profil'] === null,
                 'kern' => $t['profil'] !== null ? array_slice(array_map(fn ($a) => (int) $a['anchor_id'], $t['profil']['anker']), 0, 3) : [],

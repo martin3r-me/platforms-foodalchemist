@@ -223,8 +223,14 @@ final class Kombinationslogik
         // Süß und herzhaft mischen sich nicht: ein Vorschlag hat die Richtung des Gerichts oder ist neutral.
         $richtung = in_array($geschmacksrichtung, ['herzhaft', 'suess'], true) ? $geschmacksrichtung : null;
 
-        // Erst die billigen Filter (Teller, Diät, Richtung, liefert die Achse), dann EINMAL die Kanten
-        // und das Anker-Wissen zwischen den übrigen Kandidaten und den Bestandteilen laden.
+        // Erst die billigen Filter (Teller, Diät, Richtung, liefert die Achse, keine Alternative zu einem
+        // Bestandteil), dann EINMAL die Kanten und das Anker-Wissen zu den Bestandteilen laden.
+        // Alternative = gleicher Haupt-Anker wie ein Bestandteil (gemessen: „Klare Tomatensuppe" als
+        // Fett-Lieferant für Tomate) — dieselbe Regel wie bei {@see passendeBasisrezepte}.
+        $teilHaupt = [];
+        foreach ($teile as $t) {
+            $teilHaupt[$this->hauptAnker($t['profil'])] = true;
+        }
         $jeBedarfKandidaten = [];
         $kandAnker = [];
         foreach ($analyse['offene_bedarfe'] as $i => $b) {
@@ -235,7 +241,7 @@ final class Kombinationslogik
                     continue;
                 }
                 $e = $k['profil']['eigenschaften'][$b['achse']] ?? null;
-                if ($e === null || (float) $e['stufe'] < 2) {
+                if ($e === null || (float) $e['stufe'] < 2 || isset($teilHaupt[$this->hauptAnker($k['profil'])])) {
                     continue;
                 }
                 $jeBedarfKandidaten[$i][$rid] = $e;

@@ -6,6 +6,10 @@
     (kontrast, Basisrezepte) im „Netz öffnen"-Overlay. Schwarzer Grund (kein dark:).
 --}}
 @props(['recipeId', 'netz' => ['nodes' => [], 'edges' => [], 'meta' => []]])
+{{-- Bundle hier mitladen: die Vorschau steht auch in Editoren ohne Netz-Modal (Planung, Concepter). @assets lädt einmal. --}}
+@assets
+<script src="/_platform/fa-assets/foodalchemist-pairing-netz.iife.js?v={{ config('platform.fa_pairing_netz_hash', '0') }}" defer></script>
+@endassets
 @php
     $zentrumNode = collect($netz['nodes'])->firstWhere('kind', 'zentrum');
     $ankerNodes = collect($netz['nodes'])->whereIn('kind', ['anker', 'bestandteil'])->values();
@@ -13,12 +17,17 @@
 
     // Preview zeigt Gericht + Kern-Anker + die gemessenen Harmonie-Kandidaten (Spec 60: nur ★★★).
     $sichtbar = ['stern3'];
+    // Vorschau knapp halten: höchstens 8 Vorschläge (das volle Netz zeigt das Modal).
     $previewNodes = collect($netz['nodes'])
         ->filter(fn ($n) => in_array($n['kind'], ['zentrum', 'anker', 'bestandteil'], true)
             || (in_array($n['kind'], ['kandidat', 'basisrezept'], true) && in_array($n['typ'] ?? null, $sichtbar, true) && ($n['kind'] === 'kandidat' || $istGericht)))
-        ->values()->all();
+        ->values();
+    $aussen = $previewNodes->filter(fn ($n) => in_array($n['kind'], ['kandidat', 'basisrezept'], true))->take(8)->pluck('id')->flip();
+    $previewNodes = $previewNodes->filter(fn ($n) => ! in_array($n['kind'], ['kandidat', 'basisrezept'], true) || isset($aussen[$n['id']]))->values()->all();
+    $previewIds = collect($previewNodes)->pluck('id')->flip();
     // anker_anker = innere Ebene (wie die Kern-Anker zusammenhängen) — immer mit.
     $previewEdges = collect($netz['edges'])
+        ->filter(fn ($e) => isset($previewIds[$e['source']], $previewIds[$e['target']]))
         ->filter(fn ($e) => in_array($e['kind'], ['zentrum_anker', 'anker_anker', 'konflikt', 'teil_teil'], true)
             || ($istGericht && $e['kind'] === 'basis' && in_array($e['typ'] ?? null, $sichtbar, true)) || ($e['kind'] === 'kandidat' && in_array($e['typ'] ?? null, $sichtbar, true)))
         ->values()->all();

@@ -121,3 +121,27 @@ it('Basisrezept: Kern-Anker des Aromenprofils mit Anteil', function () {
         ->and($anker->pluck('label')->all())->toBe(['Kartoffel', 'Rosmarin'])          // nach Anteil
         ->and($anker[0]['anteil'])->toBeGreaterThan($anker[1]['anteil']);
 });
+
+it('Gericht-Editor: Tab Sensorik & Pairing zeigt Kombinationslogik und Netz statt der alten Kohäsion', function () {
+    $this->actingAs($this->makeUser($this->rootTeam));
+    $c = \Livewire\Livewire::test(\Platform\FoodAlchemist\Livewire\Verkauf\VkModal::class)->call('oeffnen', $this->gericht->id);
+    // erst beim Besuch des Tabs gerechnet (sonst bei jedem Neuzeichnen des Editors)
+    expect($c->html())->toContain('data-vk-pairing-laedt')->and($c->html())->not->toContain('data-editor-kombination');
+    $html = $c->call('tabLaden', 'sensorik')->html();
+
+    expect($html)->toContain('data-editor-kombination')
+        ->and($html)->toContain('Beilage: Rosmarinkartoffeln und Sauce: Chimichurri: harmonieren')
+        ->and($html)->toContain('data-editor-netz')
+        ->and($html)->toContain('data-pairing-empfehlungen')
+        ->and($html)->not->toContain('Aroma-Kohäsion')
+        ->and($html)->not->toContain('Macht den Teller eigen');
+});
+
+it('Rezept-Editor (Basisrezept): Aromenprofil mit Anteil statt Kern-Anker-Liste', function () {
+    $this->actingAs($this->makeUser($this->rootTeam));
+    $html = \Livewire\Livewire::test(\Platform\FoodAlchemist\Livewire\Recipes\RecipeModal::class)
+        ->call('oeffnen', $this->kartoffeln->id)->call('tabLaden', 'sensorik')->html();
+
+    expect($html)->toContain('data-editor-kombination')
+        ->and($html)->not->toContain('Aroma-Kohäsion');
+});

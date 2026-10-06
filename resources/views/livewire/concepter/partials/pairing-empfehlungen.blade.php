@@ -1,48 +1,55 @@
-{{-- Kompakte Pairing-Empfehlungen (read-only), rechts neben dem Geschmacks-Radar.
-     Aus dem großen Pairing-Block hochgezogen — die komplette Pairing-Intelligenz sitzt hier
-     gebündelt neben dem Radar (Kern-Anker / Passt dazu / Macht den Teller eigen / Kontrast /
-     Molekular verwandt / Verwandte Basisrezepte), nur recipe-Typ.
+{{-- Kompakte Pairing-Empfehlungen (read-only), rechts neben dem Geschmacks-Radar — nur recipe-Typ.
+     Spec 60 · P10: aus derselben Rechnung wie Netz und „Passt das zusammen?".
+       Gericht      Aromenprofil · passt dazu (Basisrezepte) · deckt offenen Bedarf (Basisrezepte)
+       Basisrezept  Aromenprofil · harmoniert (★★★) · Kontrast-Lieferanten · verwandte Basisrezepte
      Erwartet $pairing (PairingService::panelRecipe). Tokens ($pill/$variantPill) aus dem einbindenden Partial (Ui::maps()). --}}
 @php($pr = $pairing ?? [])
 @php($istRecipe = ($pr['type'] ?? null) === 'recipe')
-@php($anker = $istRecipe ? ($pr['anker'] ?? []) : [])
-@php($vorschlaege = $istRecipe ? ($pr['vorschlaege'] ?? []) : [])
-@php($signature = $istRecipe ? ($pr['signature'] ?? []) : [])
-@php($nachbarn = $istRecipe ? ($pr['nachbarn'] ?? []) : [])
+@php($profil = $istRecipe ? ($pr['profil'] ?? []) : [])
+@php($passt = $istRecipe ? ($pr['passt_dazu'] ?? []) : [])
+@php($deckt = $istRecipe ? ($pr['deckt_bedarf'] ?? []) : [])
+@php($partner = $istRecipe ? ($pr['partner'] ?? []) : [])
 @php($kontrast = $istRecipe ? ($pr['kontrast'] ?? []) : [])
 @php($verwandte = $istRecipe ? ($pr['verwandte'] ?? []) : [])
-@if(count($anker) || count($vorschlaege) || count($signature) || count($nachbarn) || count($kontrast) || count($verwandte))
-    <div class="space-y-3">
-        @if(count($anker))
+@if(count($profil) || count($passt) || count($deckt) || count($partner) || count($kontrast) || count($verwandte))
+    <div class="space-y-3" data-pairing-empfehlungen>
+        @if(count($profil))
             <div>
-                <h4 class="text-[11px] font-medium text-gray-600 mb-1.5">Kern-Anker</h4>
+                <h4 class="text-[11px] font-medium text-gray-600 mb-1.5">Aromenprofil</h4>
                 <div class="flex flex-wrap gap-1">
-                    @foreach($anker as $a)<span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ is_array($a) ? ($a['display_de'] ?: $a['slug']) : $a }}</span>@endforeach
+                    @foreach($profil as $a)<span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $a['name'] }} <span class="opacity-60">{{ (int) $a['anteil'] }} %</span></span>@endforeach
                 </div>
             </div>
         @endif
-        @if(count($vorschlaege) || count($nachbarn))
+        @if(count($passt))
             <div>
                 <h4 class="text-[11px] font-medium text-gray-600 mb-1.5">Passt dazu</h4>
                 <div class="flex flex-wrap gap-1">
-                    @foreach($vorschlaege as $v)<span class="{{ $pill }} {{ $v['allrounder'] ? $variantPill['secondary'] : $variantPill['info'] }}" title="passt zu {{ $v['cover'] }}/{{ $v['dish_n'] }} Komponenten{{ $v['allrounder'] ? ' · Allrounder' : '' }}">{{ $v['slug'] }} <span class="opacity-60">{{ $v['cover'] }}/{{ $v['dish_n'] }}</span></span>@endforeach
-                    @foreach($nachbarn as $n)<span class="{{ $pill }} {{ $variantPill['info'] }}">{{ $n }}</span>@endforeach
+                    @foreach($passt as $b)<span class="{{ $pill }} {{ $variantPill['info'] }}" title="harmoniert mit {{ $b['mit'] }}">{{ $b['name'] }}</span>@endforeach
                 </div>
             </div>
         @endif
-        @if(count($signature))
+        @if(count($deckt))
             <div>
-                <h4 class="text-[11px] font-medium text-gray-600 mb-1.5">Macht den Teller eigen</h4>
+                <h4 class="text-[11px] font-medium text-gray-600 mb-1.5">Deckt offenen Bedarf</h4>
                 <div class="flex flex-wrap gap-1">
-                    @foreach($signature as $v)<span class="{{ $pill }} {{ $variantPill['info'] }}" title="passt zu {{ $v['cover'] }}/{{ $v['dish_n'] }} Komponenten, kein Allrounder">{{ $v['slug'] }} <span class="opacity-60">{{ $v['cover'] }}/{{ $v['dish_n'] }}</span></span>@endforeach
+                    @foreach($deckt as $b)<span class="{{ $pill }}" style="background-color: rgba(6,182,212,0.14); color: #0891b2;" title="deckt {{ $b['achse'] }}">{{ $b['name'] }} <span class="opacity-60">{{ $b['achse'] }}</span></span>@endforeach
+                </div>
+            </div>
+        @endif
+        @if(count($partner))
+            <div>
+                <h4 class="text-[11px] font-medium text-gray-600 mb-1.5">Harmoniert (★★★)</h4>
+                <div class="flex flex-wrap gap-1">
+                    @foreach($partner as $n)<span class="{{ $pill }} {{ $variantPill['info'] }}">{{ $n }}</span>@endforeach
                 </div>
             </div>
         @endif
         @if(count($kontrast))
             <div>
-                <h4 class="text-[11px] font-medium text-gray-600 mb-1.5">Kontrast (Aroma-Gegenpol)</h4>
+                <h4 class="text-[11px] font-medium text-gray-600 mb-1.5">Kontrast (deckt offenen Bedarf)</h4>
                 <div class="flex flex-wrap gap-1">
-                    @foreach($kontrast as $n)<span class="{{ $pill }}" style="background-color: rgba(6,182,212,0.14); color: #0891b2;">↔ {{ $n }}</span>@endforeach
+                    @foreach($kontrast as $c)<span class="{{ $pill }}" style="background-color: rgba(6,182,212,0.14); color: #0891b2;">{{ $c['name'] }} <span class="opacity-60">{{ $c['achse'] }}</span></span>@endforeach
                 </div>
             </div>
         @endif
@@ -51,7 +58,7 @@
                 <h4 class="text-[11px] font-medium text-gray-600 mb-1.5">Verwandte Basisrezepte</h4>
                 <div class="flex flex-wrap gap-1">
                     @foreach($verwandte as $r)
-                        <span class="{{ $pill }} {{ $variantPill['secondary'] }}" title="{{ $r['shared'] }} geteilte Anker{{ count($r['shared_slugs'] ?? []) ? ': ' . implode(', ', $r['shared_slugs']) : '' }}">{{ $r['name'] }} <span class="opacity-60">{{ $r['shared'] }}</span></span>
+                        <span class="{{ $pill }} {{ $variantPill['secondary'] }}" title="{{ $r['shared'] }} gemeinsame Kern-Anker{{ count($r['shared_slugs'] ?? []) ? ': ' . implode(', ', $r['shared_slugs']) : '' }}">{{ $r['name'] }} <span class="opacity-60">{{ $r['shared'] }}</span></span>
                     @endforeach
                 </div>
             </div>

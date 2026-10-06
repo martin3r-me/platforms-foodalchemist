@@ -1153,8 +1153,8 @@
                     @endif
                     @if(empty($composerAnker))
                         <p class="text-[13px] text-gray-500 max-w-2xl">
-                            Noch keine Zutat gewählt — oben eine hinzufügen. Dann zeigt das Netz die passenden
-                            Kandidaten (★★★/★★), wie die Anker zusammenhängen und wo etwas nicht passt.
+                            Noch keine Zutat gewählt — oben eine hinzufügen. Dann zeigt das Netz die ★★★-Partner,
+                            welche Zutat einen offenen Bedarf als Kontrast deckt und was sich stört.
                         </p>
                     @else
                         @if($composerFocus !== null && $composerFokusLabel)

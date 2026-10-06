@@ -118,12 +118,14 @@ export function pairingNetzGraph(config) {
           node.y = cy + r * Math.sin(w);
         });
       };
-      ring(anker, 78);
-      ring(kand, 150);
+      // Bestandteile (Gericht-Netz) tragen lange Rezeptnamen → weiterer Innenring als bei Ankern.
+      const mitBestandteilen = anker.some((n) => n.kind === 'bestandteil');
+      ring(anker, mitBestandteilen ? 105 : 78);
+      ring(kand, mitBestandteilen ? 185 : 150);
     },
 
     _buildViewBox() {
-      const pad = this.mode === 'preview' ? 44 : 130; // Reserve für radiale Aussen-Labels
+      const pad = this.mode === 'preview' ? 80 : 130; // Reserve für radiale Aussen-Labels (Vorschau: Rezeptnamen bis 20 Zeichen)
       const vis = this.nodes.filter((n) => this._nodeVisible(n));
       const xs = vis.map((n) => n.x);
       const ys = vis.map((n) => n.y);
@@ -456,6 +458,8 @@ export function pairingNetzGraph(config) {
 
     _labelText(d) {
       if (d.kind === 'zentrum') return ''; // Titel steht schon im Modal-Header / ist aus Kontext bekannt
+      // Vorschau: Rezeptnamen kurz halten (der volle Name steht im Tooltip und im Netz-Modal).
+      if (this.mode === 'preview' && (d.kind === 'basisrezept' || d.kind === 'bestandteil')) return this._trunc(d.label, 20);
       if (d.kind === 'basisrezept') return this._trunc(d.label, 38);
       if (d.kind === 'anker') return d.anteil != null ? `${d.label || d.slug || ''} ${Math.round(d.anteil)} %` : (d.label || d.slug || '');
       if (d.kind === 'bestandteil') return this._trunc(d.label, 34);
