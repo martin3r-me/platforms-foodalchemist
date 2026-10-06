@@ -1652,10 +1652,19 @@ class PairingService
             return ['nodes' => [], 'edges' => [], 'meta' => ['recipe_id' => $recipeId]];
         }
 
-        // Innenring = Kern-Anker (Identität). Fallback: gespeicherte Pairing-Anker,
-        // falls das Rezept (noch) keine Kern-Anker gemappt hat.
-        $inner = $this->recipeAnkers($recipeId)
+        // Spec 58 · Paket 3: Innenring = die Anker der BESTANDTEILE (dieselbe Auflösung wie Zusammenhalt
+        // und Harmonie/Kontrast — eine Wahrheit). Vorher kam er aus dem Mapping-Beutel am Gericht (bis 24
+        // KI-Anker) und zeigte andere Anker als der Score. Beutel und Pairing-Anker bleiben Rückfall für
+        // Gerichte ohne auflösbare Zutaten.
+        $kernIds = collect($this->resolveRecipeAnchors($recipe))->pluck('kern')->filter()->map(fn ($v) => (int) $v)->unique()->values();
+        $inner = $kernIds->isEmpty() ? collect() : DB::table('foodalchemist_vocab_pairing_anchors')
+            ->whereIn('id', $kernIds->all())->whereNull('deleted_at')->get(['id', 'slug', 'display_de'])
+            ->sortBy(fn ($a) => $kernIds->search((int) $a->id))->values()
             ->map(fn ($a) => ['id' => (int) $a->id, 'slug' => $a->slug, 'display_de' => $a->display_de]);
+        if ($inner->isEmpty()) {
+            $inner = $this->recipeAnkers($recipeId)
+                ->map(fn ($a) => ['id' => (int) $a->id, 'slug' => $a->slug, 'display_de' => $a->display_de]);
+        }
         if ($inner->isEmpty()) {
             $inner = DB::table('foodalchemist_recipe_pairings AS rp')
                 ->join('foodalchemist_vocab_pairing_anchors AS a', 'a.id', '=', 'rp.anchor_id')
@@ -1901,7 +1910,7 @@ class PairingService
                 // mit frischen Daten. Ohne das friert das Modal auf dem Erst-Öffnungsstand ein.
                 'sig' => substr(md5(implode('|', array_map(static fn ($n) => $n['id'], $nodes))), 0, 10),
                 // Filter-Defaults: beide Stern-Stufen an (zweistufige Inspire-Harmonie).
-                'typ_default' => ['stern3' => true, 'stern2' => true],
+                'typ_default' => ['stern3' => true, 'stern2' => false],   // Spec 58: 2★ = Rauschen, nur auf Wunsch
                 'counts' => [
                     'stern3' => count(array_filter($kandidatNodes, fn ($n) => $n['typ'] === 'stern3')),
                     'stern2' => count(array_filter($kandidatNodes, fn ($n) => $n['typ'] === 'stern2')),

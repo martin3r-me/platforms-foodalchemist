@@ -94,7 +94,7 @@ it('pairingNetz: Zentrum + Kern-Anker innen, Kandidaten nach Stern-Stufe, dish_c
 
     // Zweistufiges Modell: stern1 raus; anker_anker (innere Ebene) hier 0 (kichererbse↔tahin ungepaart).
     expect($netz['meta']['counts'])->toBe(['stern3' => 1, 'stern2' => 2, 'basis' => 1, 'anker_anker' => 0])
-        ->and($netz['meta']['typ_default'])->toBe(['stern3' => true, 'stern2' => true]);
+        ->and($netz['meta']['typ_default'])->toBe(['stern3' => true, 'stern2' => false]);   // Spec 58: 2★ nur auf Wunsch
 });
 
 it('pairingNetz: Anker↔Anker-Kante aus der Harmonie-Matrix (innere Ebene)', function () {

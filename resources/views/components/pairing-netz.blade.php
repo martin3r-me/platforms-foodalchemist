@@ -33,7 +33,7 @@
             mode: 'preview',
             canvasW: {{ (float) ($netz['meta']['canvas_w'] ?? 1000) }},
             canvasH: {{ (float) ($netz['meta']['canvas_h'] ?? 760) }},
-            typDefault: { stern3: true, stern2: true, stern1: true },
+            typDefault: { stern3: true, stern2: false, stern1: false },
         })"
         class="w-full"
     >
