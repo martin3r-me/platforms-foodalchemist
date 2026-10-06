@@ -274,6 +274,7 @@ final class Kombinationslogik
                 $k = $katalog[$rid];
                 $besteHarmonie = 0.0;
                 $mit = null;
+                $mitSchluessel = null;
                 $konflikt = false;
                 $klassiker = false;
                 foreach ($teile as $t) {
@@ -283,7 +284,7 @@ final class Kombinationslogik
                     }
                     $h = $this->graph->harmonie($k['profil'], $t['profil'])['wert'];
                     if ($h > $besteHarmonie) {
-                        [$besteHarmonie, $mit] = [$h, $t['label']];
+                        [$besteHarmonie, $mit, $mitSchluessel] = [$h, $t['label'], $t['schluessel']];
                     }
                     $klassiker = $klassiker || array_filter($this->graph->kombinationen($k['profil'], $t['profil']),
                         fn ($x) => $x->status === WissensStatus::Geprueft->value) !== [];
@@ -292,7 +293,7 @@ final class Kombinationslogik
                     continue;
                 }
                 $kandidaten[] = ['recipe_id' => $rid, 'name' => $k['name'], 'stufe' => (float) $e['stufe'],
-                    'harmonie' => round($besteHarmonie, 3), 'mit' => $mit, 'grundlage' => Grundlage::aus((string) $e['quelle'])->value,
+                    'harmonie' => round($besteHarmonie, 3), 'mit' => $mit, 'mit_schluessel' => $mitSchluessel, 'grundlage' => Grundlage::aus((string) $e['quelle'])->value,
                     'sort' => (float) $e['stufe'] / 3 + $besteHarmonie + ($klassiker ? 0.5 : 0)];
             }
             usort($kandidaten, fn ($x, $y) => [$y['sort'], $x['recipe_id']] <=> [$x['sort'], $y['recipe_id']]);
@@ -308,6 +309,88 @@ final class Kombinationslogik
         }
 
         return $out;
+    }
+
+    /**
+     * Basisrezepte aus dem Bestand, die zu den Bestandteilen eines Gerichts passen — „was passt
+     * noch dazu" fürs Netz im Gericht. Dieselben Filter wie {@see vorschlaegeFuer} (tellerfähig,
+     * Ernährungsform nur ausdrücklich, Geschmacksrichtung, kein Konflikt), aber ohne Bedarf:
+     * Kriterium ist die gemessene Harmonie (≥ HARMONIERT_AB) mit mindestens einem Bestandteil.
+     * Ein Basisrezept, dessen Haupt-Anker schon Haupt-Anker eines Bestandteils ist, ist eine
+     * Alternative, keine Ergänzung (gemessen: Cordon Bleu mit Kartoffelpüree → „Salzkartoffeln") —
+     * es wird nicht angeboten.
+     *
+     * @return list<array{recipe_id: int, name: string, harmonie: float, mit: string, mit_schluessel: string}>
+     */
+    public function passendeBasisrezepte(array $analyse, ?string $diaet, ?string $geschmacksrichtung, ?int $teamId, int $max = 10): array
+    {
+        $teile = array_values(array_filter($analyse['bestandteile'], fn ($t) => $t['profil'] !== null));
+        if ($teile === []) {
+            return [];
+        }
+        $vorhanden = array_filter(array_map(fn ($t) => $t['recipe_id'], $analyse['bestandteile']));
+        $richtung = in_array($geschmacksrichtung, ['herzhaft', 'suess'], true) ? $geschmacksrichtung : null;
+        $katalog = array_filter($this->basisKatalog($teamId), fn ($k, $rid) => ! in_array($rid, $vorhanden, true) && $k['teller']
+            && $this->passtZurDiaet($k, $diaet)
+            && ($richtung === null || $k['richtung'] === null || $k['richtung'] === $richtung || $k['richtung'] === 'neutral'),
+            ARRAY_FILTER_USE_BOTH);
+        $kandAnker = [];
+        foreach ($katalog as $k) {
+            foreach ($k['profil']['anker'] as $a) {
+                $kandAnker[$a['anchor_id']] = true;
+            }
+        }
+        $teilAnker = [];
+        $teilHaupt = [];
+        foreach ($teile as $t) {
+            foreach ($t['profil']['anker'] as $a) {
+                $teilAnker[(int) $a['anchor_id']] = true;
+            }
+            $teilHaupt[$this->hauptAnker($t['profil'])] = true;
+        }
+        $katalog = array_filter($katalog, fn ($k) => ! isset($teilHaupt[$this->hauptAnker($k['profil'])]));
+        if ($kandAnker === []) {
+            return [];
+        }
+        $this->graph->vorladen(array_keys($kandAnker), array_keys($teilAnker));
+        try {
+            $out = [];
+            foreach ($katalog as $rid => $k) {
+                $beste = 0.0;
+                $mit = null;
+                foreach ($teile as $t) {
+                    if ($this->graph->konflikte($k['profil'], $t['profil']) !== []) {
+                        continue 2;
+                    }
+                    $h = $this->graph->harmonie($k['profil'], $t['profil'])['wert'];
+                    if ($h > $beste) {
+                        [$beste, $mit] = [$h, $t];
+                    }
+                }
+                if ($mit !== null && $beste >= self::HARMONIERT_AB) {
+                    $out[] = ['recipe_id' => $rid, 'name' => $k['name'], 'harmonie' => round($beste, 3),
+                        'mit' => $mit['label'], 'mit_schluessel' => $mit['schluessel']];
+                }
+            }
+        } finally {
+            $this->graph->vergiss();
+        }
+        usort($out, fn ($x, $y) => [$y['harmonie'], $x['recipe_id']] <=> [$x['harmonie'], $y['recipe_id']]);
+
+        return array_slice($out, 0, $max);
+    }
+
+    /** Anker mit dem größten Anteil eines Profils (0 = leer). */
+    private function hauptAnker(array $profil): int
+    {
+        $best = [0, -1.0];
+        foreach ($profil['anker'] ?? [] as $a) {
+            if ((float) $a['anteil'] > $best[1]) {
+                $best = [(int) $a['anchor_id'], (float) $a['anteil']];
+            }
+        }
+
+        return $best[0];
     }
 
     /**

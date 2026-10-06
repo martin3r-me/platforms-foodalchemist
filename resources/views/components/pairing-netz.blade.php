@@ -8,21 +8,24 @@
 @props(['recipeId', 'netz' => ['nodes' => [], 'edges' => [], 'meta' => []]])
 @php
     $zentrumNode = collect($netz['nodes'])->firstWhere('kind', 'zentrum');
-    $ankerNodes = collect($netz['nodes'])->where('kind', 'anker')->values();
+    $ankerNodes = collect($netz['nodes'])->whereIn('kind', ['anker', 'bestandteil'])->values();
+    $istGericht = ($netz['meta']['art'] ?? null) === 'gericht';   // Spec 60: Gericht = Basisrezepte, Anker im Hintergrund
 
     // Preview zeigt Gericht + Kern-Anker + die gemessenen Harmonie-Kandidaten (Spec 60: nur ★★★).
     $sichtbar = ['stern3'];
     $previewNodes = collect($netz['nodes'])
-        ->filter(fn ($n) => in_array($n['kind'], ['zentrum', 'anker'], true) || ($n['kind'] === 'kandidat' && in_array($n['typ'] ?? null, $sichtbar, true)))
+        ->filter(fn ($n) => in_array($n['kind'], ['zentrum', 'anker', 'bestandteil'], true)
+            || (in_array($n['kind'], ['kandidat', 'basisrezept'], true) && in_array($n['typ'] ?? null, $sichtbar, true) && ($n['kind'] === 'kandidat' || $istGericht)))
         ->values()->all();
     // anker_anker = innere Ebene (wie die Kern-Anker zusammenhängen) — immer mit.
     $previewEdges = collect($netz['edges'])
-        ->filter(fn ($e) => in_array($e['kind'], ['zentrum_anker', 'anker_anker', 'konflikt'], true) || ($e['kind'] === 'kandidat' && in_array($e['typ'] ?? null, $sichtbar, true)))
+        ->filter(fn ($e) => in_array($e['kind'], ['zentrum_anker', 'anker_anker', 'konflikt', 'teil_teil'], true)
+            || ($istGericht && $e['kind'] === 'basis' && in_array($e['typ'] ?? null, $sichtbar, true)) || ($e['kind'] === 'kandidat' && in_array($e['typ'] ?? null, $sichtbar, true)))
         ->values()->all();
 @endphp
 
 @if($zentrumNode === null || $ankerNodes->count() < 1)
-    <p class="text-[13px] text-slate-400">Noch keine Kern-Anker verknüpft — Pairing-Netz sobald Anker gesetzt sind.</p>
+    <p class="text-[13px] text-slate-400">{{ $istGericht ? 'Noch keine Bestandteile — das Netz zeigt die Basisrezepte des Gerichts, sobald welche eingesetzt sind.' : 'Noch kein Aromenprofil — das Netz erscheint, sobald eine Zutat einem Aroma zugeordnet ist.' }}</p>
 @else
     <div
         wire:ignore

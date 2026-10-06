@@ -1400,20 +1400,115 @@ class PairingService
             return ['nodes' => [], 'edges' => [], 'meta' => ['recipe_id' => $recipeId]];
         }
 
-        // Spec 58 · Paket 3: Innenring = die Anker der BESTANDTEILE (dieselbe Auflösung wie Zusammenhalt
-        // und Harmonie/Kontrast — eine Wahrheit). Vorher kam er aus dem Mapping-Beutel am Gericht (bis 24
-        // KI-Anker) und zeigte andere Anker als der Score. Rückfall (Spec 60): das Aromenprofil.
-        $kernIds = collect($this->resolveRecipeAnchors($recipe))->pluck('kern')->filter()->map(fn ($v) => (int) $v)->unique()->values();
-        $inner = $kernIds->isEmpty() ? collect() : DB::table('foodalchemist_vocab_pairing_anchors')
-            ->whereIn('id', $kernIds->all())->whereNull('deleted_at')->get(['id', 'slug', 'display_de'])
-            ->sortBy(fn ($a) => $kernIds->search((int) $a->id))->values()
-            ->map(fn ($a) => ['id' => (int) $a->id, 'slug' => $a->slug, 'display_de' => $a->display_de]);
-        if ($inner->isEmpty()) {
-            $inner = $this->recipeAnkers($recipeId)
-                ->map(fn ($a) => ['id' => (int) $a->id, 'slug' => $a->slug, 'display_de' => $a->display_de]);
+        // Spec 60 · P7: im Gericht stehen Basisrezepte im Vordergrund, die Anker im Hintergrund.
+        if ((bool) $recipe->is_sales_recipe) {
+            return $this->gerichtNetz($team, $recipe);
         }
+        // Basisrezept: Innenring = Kern-Anker seines Aromenprofils, mit Anteil (Hintergrund sichtbar).
+        $profil = app(Pairing\RezeptProfil::class)->fuer((int) $recipe->id);
+        $anteil = collect($profil['anker'])->mapWithKeys(fn ($a) => [(int) $a['anchor_id'] => (float) $a['anteil']]);
+        $inner = $anteil->isEmpty() ? collect() : DB::table('foodalchemist_vocab_pairing_anchors')
+            ->whereIn('id', $anteil->keys()->all())->whereNull('deleted_at')->get(['id', 'slug', 'display_de'])
+            ->sortByDesc(fn ($a) => $anteil[(int) $a->id])->values()
+            ->map(fn ($a) => ['id' => (int) $a->id, 'slug' => $a->slug, 'display_de' => $a->display_de, 'anteil' => round($anteil[(int) $a->id], 1)]);
 
         return $this->baueNetz($team, $inner, (string) $recipe->name, $recipeId);
+    }
+
+    /**
+     * Spec 60 · P7: Netz eines Gerichts — Basisrezepte statt Anker (Dominique 06.10.: „im Gericht-Netz
+     * keine Anker, sondern andere Basisrezepte, die dazu passen").
+     *
+     *   Innenring   die Bestandteile des Gerichts (Basisrezepte, einzeln eingesetzte GPs)
+     *   Linien      zwischen Bestandteilen: harmoniert / Klassiker (gold), Spannung (türkis), Konflikt (rot)
+     *   Mittelring  Basisrezepte aus dem Bestand, die mit einem Bestandteil harmonieren
+     *   Außenring   Basisrezepte, die einen offenen Bedarf decken (Kontrast)
+     * Dieselbe Kombinationslogik wie „Passt das zusammen?" im Panel.
+     */
+    private function gerichtNetz(Team $team, FoodAlchemistRecipe $gericht): array
+    {
+        $cx = self::CANVAS_W / 2;
+        $cy = self::CANVAS_H / 2;
+        $logik = app(Pairing\Kombinationslogik::class);
+        $analyse = $logik->analysiere($gericht);
+        $diaet = $gericht->spec_is_vegan === true ? 'vegan' : ($gericht->spec_is_vegetarian === true ? 'vegetarisch' : null);
+        $teamId = $gericht->team_id !== null ? (int) $gericht->team_id : (int) $team->id;
+
+        $nodes = [['id' => 'z', 'kind' => 'zentrum', 'label' => (string) $gericht->name, 'x' => $cx, 'y' => $cy]];
+        $edges = [];
+        $teile = array_values($analyse['bestandteile']);
+        foreach ($teile as $i => $t) {
+            [$x, $y] = $this->positionAufKreis($i, max(1, count($teile)), self::R_ANKER, $cx, $cy);
+            $nodes[] = ['id' => 't:'.$t['schluessel'], 'kind' => 'bestandteil', 'label' => $t['label'],
+                'recipe_id' => $t['recipe_id'], 'ohne_profil' => $t['profil'] === null,
+                'kern' => $t['profil'] !== null ? array_slice(array_map(fn ($a) => (int) $a['anchor_id'], $t['profil']['anker']), 0, 3) : [],
+                'x' => $x, 'y' => $y];
+            $edges[] = ['source' => 'z', 'target' => 't:'.$t['schluessel'], 'kind' => 'zentrum_anker', 'visible' => true];
+        }
+        $typ = [AussageTyp::Harmoniert->value => 'stern3', AussageTyp::Kombination->value => 'stern3', AussageTyp::Spannung->value => 'kontrast'];
+        $gesehen = [];
+        foreach ($analyse['aussagen'] as $a) {
+            if (count($a->bestandteile) !== 2) {
+                continue;
+            }
+            [$p, $q] = $a->bestandteile;
+            if ($a->typ === AussageTyp::Konflikt) {
+                $edges[] = ['source' => 't:'.$p, 'target' => 't:'.$q, 'kind' => 'konflikt', 'text' => $a->text, 'visible' => true];
+            } elseif (isset($typ[$a->typ->value]) && ! isset($gesehen[$a->typ->value.$p.$q])) {
+                $gesehen[$a->typ->value.$p.$q] = true;
+                $edges[] = ['source' => 't:'.$p, 'target' => 't:'.$q, 'kind' => 'teil_teil', 'typ' => $typ[$a->typ->value],
+                    'text' => $a->text, 'visible' => true];
+            }
+        }
+
+        $passend = $logik->passendeBasisrezepte($analyse, $diaet, $gericht->taste_direction, $teamId, self::KANDIDATEN_PRO_TYP);
+        foreach ($passend as $i => $b) {
+            [$x, $y] = $this->positionAufKreis($i, max(1, count($passend)), self::R_BEST, $cx, $cy);
+            $nodes[] = ['id' => 'b:'.$b['recipe_id'], 'kind' => 'basisrezept', 'typ' => 'stern3', 'label' => $b['name'],
+                'recipe_id' => $b['recipe_id'], 'via' => $b['mit'], 'x' => $x, 'y' => $y];
+            $edges[] = ['source' => 'b:'.$b['recipe_id'], 'target' => 't:'.$b['mit_schluessel'], 'kind' => 'basis', 'typ' => 'stern3',
+                'text' => $b['name'].' harmoniert mit '.$b['mit'], 'visible' => true];
+        }
+        $schon = array_flip(array_column($passend, 'recipe_id'));
+        $kontrast = [];
+        foreach ($logik->vorschlaegeFuer($analyse, $diaet, $gericht->taste_direction, $teamId, 3) as $v) {
+            $achse = \Platform\FoodAlchemist\Enums\Achse::from($v['achse'])->label();
+            foreach ($v['basisrezepte'] as $b) {
+                if (! isset($schon[$b['recipe_id']]) && ! isset($kontrast[$b['recipe_id']])) {
+                    $kontrast[$b['recipe_id']] = $b + ['achse' => $achse];
+                }
+            }
+        }
+        $kontrast = array_values($kontrast);
+        foreach ($kontrast as $i => $b) {
+            [$x, $y] = $this->positionAufKreis($i, max(1, count($kontrast)), self::R_OUTER, $cx, $cy);
+            $nodes[] = ['id' => 'b:'.$b['recipe_id'], 'kind' => 'basisrezept', 'typ' => 'kontrast', 'label' => $b['name'],
+                'recipe_id' => $b['recipe_id'], 'via' => $b['achse'], 'achse' => $b['achse'], 'x' => $x, 'y' => $y];
+            if ($b['mit_schluessel'] !== null) {
+                $edges[] = ['source' => 'b:'.$b['recipe_id'], 'target' => 't:'.$b['mit_schluessel'], 'kind' => 'basis', 'typ' => 'kontrast',
+                    'text' => $b['name'].' deckt '.$b['achse'], 'visible' => true];
+            }
+        }
+
+        return [
+            'nodes' => $nodes,
+            'edges' => $edges,
+            'meta' => [
+                'recipe_id' => (int) $gericht->id,
+                'art' => 'gericht',
+                'canvas_w' => self::CANVAS_W,
+                'canvas_h' => self::CANVAS_H,
+                'sig' => substr(md5(implode('|', array_map(static fn ($n) => $n['id'], $nodes))), 0, 10),
+                'typ_default' => ['stern3' => true, 'kontrast' => true],
+                'counts' => [
+                    'bestandteile' => count($teile),
+                    'stern3' => count($passend),
+                    'kontrast' => count($kontrast),
+                    'basis' => count($passend) + count($kontrast),
+                    'konflikt' => count(array_filter($edges, fn ($e) => $e['kind'] === 'konflikt')),
+                ],
+            ],
+        ];
     }
 
     /**
@@ -1463,7 +1558,7 @@ class PairingService
             $y = round($cy + self::R_ANKER * sin($w), 1);
             $ankerNodes[] = [
                 'id' => 'a:'.$a['id'], 'kind' => 'anker', 'label' => $a['display_de'], 'slug' => $a['slug'],
-                'kern' => true, 'x' => $x, 'y' => $y,
+                'kern' => true, 'anteil' => $a['anteil'] ?? null, 'x' => $x, 'y' => $y,
             ];
             $edges[] = ['source' => 'z', 'target' => 'a:'.$a['id'], 'kind' => 'zentrum_anker', 'visible' => true];
         }

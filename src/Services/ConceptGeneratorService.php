@@ -1107,7 +1107,7 @@ class ConceptGeneratorService
 
         $protokoll = [];
         $gewaehlt = collect();
-        $gewaehlteAnker = [];
+        $gewaehlteIds = [];
         $letzterHeader = null;
         foreach ($frame->slots as $frameSlot) {
             $n = max(1, (int) ($frameSlot->target_count ?? 1));
@@ -1118,22 +1118,22 @@ class ConceptGeneratorService
             foreach ($quoten as $q) {
                 $bedarf = (int) ceil((float) $q->value_num);
                 while ($bedarf > 0 && $slotWahl->count() < $n) {
-                    $treffer = $this->besterKandidat($kandidaten->filter(fn ($k) => $k['diet_form'] === $q->ref_key && ! $slotWahl->has($k['id'])), $gewaehlteAnker, $frameSlot);
+                    $treffer = $this->besterKandidat($kandidaten->filter(fn ($k) => $k['diet_form'] === $q->ref_key && ! $slotWahl->has($k['id'])), $gewaehlteIds, $frameSlot);
                     if ($treffer === null) {
                         break;
                     }
                     $slotWahl->put($treffer['id'], $treffer);
-                    $gewaehlteAnker = array_unique(array_merge($gewaehlteAnker, $treffer['anker']));
+                    $gewaehlteIds[] = (int) $treffer['id'];
                     $bedarf--;
                 }
             }
             while ($slotWahl->count() < $n) {
-                $treffer = $this->besterKandidat($kandidaten->reject(fn ($k) => $slotWahl->has($k['id'])), $gewaehlteAnker, $frameSlot);
+                $treffer = $this->besterKandidat($kandidaten->reject(fn ($k) => $slotWahl->has($k['id'])), $gewaehlteIds, $frameSlot);
                 if ($treffer === null) {
                     break;
                 }
                 $slotWahl->put($treffer['id'], $treffer);
-                $gewaehlteAnker = array_unique(array_merge($gewaehlteAnker, $treffer['anker']));
+                $gewaehlteIds[] = (int) $treffer['id'];
             }
 
             $this->headerFuerFrameSlot($team, (int) $concept->id, $frameSlot->label, $letzterHeader);   // C-1
@@ -1214,16 +1214,9 @@ class ConceptGeneratorService
         $mitConvenience = in_array($zielConvenience, ['from_scratch', 'voll_convenience'], true);
         $pool = $this->pool->fuerFrame($team, $frame, $mitConvenience);
 
-        // Kohäsions-Basis aus dem Pool selbst (keine zweite Anker-Auflösung): Gerichte, die
-        // nicht im Pool sind (draft/Slot-Variante), liefern eben keine Anker — ehrlich, nicht geraten.
+        // Spec 60: Kohäsions-Basis sind die Aromenprofile der gesetzten Gerichte — jedes Rezept hat
+        // eines, auch eines außerhalb des Pools (draft/Slot-Variante). Ohne Profil zählt es nicht.
         $belegteRecipeIds = array_values(array_unique(array_map('intval', $belegteRecipeIds)));
-        $basisAnker = [];
-        foreach ($belegteRecipeIds as $rid) {
-            if ($pool->has($rid)) {
-                $basisAnker = array_merge($basisAnker, $pool[$rid]['anker']);
-            }
-        }
-        $basisAnker = array_values(array_unique($basisAnker));
 
         $kandidaten = $this->pool->filterFuerSlot($pool, $frame, $slot)
             ->reject(fn ($k) => in_array((int) $k['id'], $belegteRecipeIds, true));
@@ -1233,11 +1226,11 @@ class ConceptGeneratorService
 
         $limit = max(1, $limit);
         $out = [];
-        $gewaehlteAnker = $basisAnker;
+        $folge = $belegteRecipeIds;
         $gewaehltIds = [];
         while (count($out) < $limit) {
             $rest = $kandidaten->reject(fn ($k) => in_array($k['id'], $gewaehltIds, true));
-            $treffer = $this->besterKandidat($rest, $gewaehlteAnker, $slot, $zielNiveau, $zielConvenience);
+            $treffer = $this->besterKandidat($rest, $folge, $slot, $zielNiveau, $zielConvenience);
             if ($treffer === null) {
                 break;
             }
@@ -1254,12 +1247,12 @@ class ConceptGeneratorService
                 'diet_form' => $treffer['diet_form'], 'sales_net' => $treffer['sales_net'],
                 'faktoren' => $faktoren,
                 'begruendung' => $this->rankingBegruendung(
-                    $faktoren, $slot, $basisAnker !== [], $zielNiveau, $zielConvenience,
+                    $faktoren, $slot, $belegteRecipeIds !== [], $zielNiveau, $zielConvenience,
                     $treffer['sales_net'] !== null ? (float) $treffer['sales_net'] : null,
                 ),
             ];
             $gewaehltIds[] = $treffer['id'];
-            $gewaehlteAnker = array_unique(array_merge($gewaehlteAnker, $treffer['anker']));
+            $folge[] = (int) $treffer['id'];
         }
 
         return [
@@ -1293,8 +1286,8 @@ class ConceptGeneratorService
         }
         if ($mitKohaesion) {
             $teile[] = $f['kohaesion'] > 0.0
-                ? 'Aroma-Nähe zur gesetzten Folge ' . number_format($f['kohaesion'], 2, ',', '.')
-                : 'keine Aroma-Kante zur gesetzten Folge';
+                ? 'Aroma-Harmonie zur gesetzten Folge ' . number_format($f['kohaesion'] * 100, 0, ',', '.') . ' %'
+                : 'keine gemessene Aroma-Harmonie zur gesetzten Folge';
         }
         $teile[] = $f['ankerdichte'] . ' Aroma-Anker';
         if ($slot->price_anchor !== null) {
@@ -1327,18 +1320,23 @@ class ConceptGeneratorService
     }
 
     /**
-     * Ranking: Slot-Semantik (HG passt zum Slot-Label) → Kanten-Gewinn zur bisherigen
-     * Menüfolge (Pairing-Graph) → Anker-Anzahl (graph-erreichbare Gerichte zuerst) →
-     * Nähe zum Preis-Anker → Name (stabil).
+     * Ranking: Slot-Semantik (HG passt zum Slot-Label) → Niveau → Convenience → Aroma-Harmonie zur
+     * bisherigen Menüfolge → Anker-Anzahl (graph-erreichbare Gerichte zuerst) → Nähe zum Preis-Anker
+     * → Name (stabil).
+     *
+     * Spec 60 · P7: die Aroma-Harmonie misst auf Rezept-Ebene — welcher Teil der Aromamasse des
+     * Kandidaten mit einem gesetzten Gericht gemessen harmoniert ({@see Pairing\RezeptGraph::harmonie},
+     * nur 3★), gemittelt über die Folge. Vorher: Anker-Paare gezählt, aber nur die MIT Kante —
+     * ein 3★-Paar unter zehn neutralen ergab 1,0.
+     *
+     * @param  list<int>  $folgeIds  bereits gesetzte Gerichte (Rezept-IDs)
      */
-    private function besterKandidat(Collection $kandidaten, array $gewaehlteAnker, $frameSlot, ?string $zielNiveau = null, ?string $zielConvenience = null): ?array
+    private function besterKandidat(Collection $kandidaten, array $folgeIds, $frameSlot, ?string $zielNiveau = null, ?string $zielConvenience = null): ?array
     {
         if ($kandidaten->isEmpty()) {
             return null;
         }
-        $kanten = $gewaehlteAnker !== []
-            ? $this->pairing->edgesFor(array_unique(array_merge($gewaehlteAnker, $kandidaten->flatMap(fn ($k) => $k['anker'])->unique()->values()->all())))
-            : [];
+        $harmonie = $this->harmonieZurFolge($kandidaten->pluck('id')->map(fn ($i) => (int) $i)->all(), $folgeIds);
         // Semantik EINMAL je Kandidat über die geteilte Naht (12·S3a) statt zweimal inline.
         // Das Gate „nur anwenden, wenn überhaupt einer passt" bleibt stehen wie im Bestand;
         // es ist beweisbar folgenlos (ohne Treffer ist jeder Wert ohnehin 0) und wird
@@ -1346,7 +1344,7 @@ class ConceptGeneratorService
         $semantik = MenuCandidatePoolService::semantikJeKandidat($kandidaten, $frameSlot);
         $hatSemantik = in_array(1, $semantik, true);
 
-        return $kandidaten->map(function ($k) use ($kanten, $gewaehlteAnker, $frameSlot, $hatSemantik, $semantik, $zielNiveau, $zielConvenience) {
+        return $kandidaten->map(function ($k) use ($harmonie, $frameSlot, $hatSemantik, $semantik, $zielNiveau, $zielConvenience) {
             $k['semantik'] = $hatSemantik ? ($semantik[(int) $k['id']] ?? 0) : 0;
             // Phase 5: Segment-Niveau bevorzugen (neutral, wenn kein Ziel-Niveau übergeben wird).
             $k['niveau_match'] = ($zielNiveau !== null && in_array($zielNiveau, $k['niveaus'] ?? [], true)) ? 1 : 0;
@@ -1359,20 +1357,7 @@ class ConceptGeneratorService
                 'voll_convenience' => $ratio ?? 0.0,
                 default => 0.0,
             };
-            $gewinn = 0.0;
-            $paare = 0;
-            foreach ($k['anker'] as $a) {
-                foreach ($gewaehlteAnker as $b) {
-                    if ($a === $b) {
-                        $gewinn += 1.0;
-                        $paare++;
-                    } elseif (isset($kanten[$a][$b])) {
-                        $gewinn += $kanten[$a][$b][0];
-                        $paare++;
-                    }
-                }
-            }
-            $k['score'] = $paare > 0 ? $gewinn / $paare : 0.0;
+            $k['score'] = $harmonie[(int) $k['id']] ?? 0.0;
             $k['ankerdichte'] = count($k['anker']);
             $k['preisnaehe'] = $frameSlot->price_anchor !== null && $k['sales_net'] !== null
                 ? -abs($k['sales_net'] - (float) $frameSlot->price_anchor)
@@ -1380,6 +1365,61 @@ class ConceptGeneratorService
 
             return $k;
         })->sortBy([['semantik', 'desc'], ['niveau_match', 'desc'], ['convenience_match', 'desc'], ['score', 'desc'], ['ankerdichte', 'desc'], ['preisnaehe', 'desc'], ['name', 'asc']])->first();
+    }
+
+    /**
+     * Mittlere Aroma-Harmonie je Kandidat zu den gesetzten Gerichten (0–1), aus den gespeicherten
+     * Aromenprofilen. Kanten und Wissen werden EINMAL für alle Paare geladen (RezeptGraph::vorladen).
+     *
+     * @param  list<int>  $kandidatIds
+     * @param  list<int>  $folgeIds
+     * @return array<int, float>
+     */
+    private function harmonieZurFolge(array $kandidatIds, array $folgeIds): array
+    {
+        $folgeIds = array_values(array_unique(array_map('intval', $folgeIds)));
+        if ($kandidatIds === [] || $folgeIds === []) {
+            return [];
+        }
+        $alle = array_values(array_unique(array_merge($kandidatIds, $folgeIds)));
+        // Noch nie berechnete Profile jetzt bauen (Neuberechnung legt sie sonst an) — fehlend ≠ ohne Aroma.
+        $berechnet = \Illuminate\Support\Facades\DB::table('foodalchemist_recipe_profile')->whereIn('recipe_id', $alle)
+            ->pluck('recipe_id')->map(fn ($i) => (int) $i)->flip()->all();
+        foreach ($alle as $id) {
+            if (! isset($berechnet[$id])) {
+                app(Pairing\RezeptProfil::class)->fuer($id);
+            }
+        }
+        $profile = \Illuminate\Support\Facades\DB::table('foodalchemist_recipe_profile_anker')
+            ->whereIn('recipe_id', $alle)->get(['recipe_id', 'anchor_id', 'anteil'])
+            ->groupBy('recipe_id')->map(fn ($z) => ['anker' => $z->map(fn ($a) => ['anchor_id' => (int) $a->anchor_id, 'anteil' => (float) $a->anteil])->all()]);
+        $folge = array_values(array_filter(array_map(fn ($id) => $profile[$id] ?? null, $folgeIds)));
+        if ($folge === []) {
+            return [];
+        }
+        $graph = app(Pairing\RezeptGraph::class);
+        $anker = fn (array $ps) => array_values(array_unique(array_merge(...array_map(fn ($p) => array_column($p['anker'], 'anchor_id'), $ps))));
+        $kand = array_values(array_filter(array_map(fn ($id) => $profile[$id] ?? null, $kandidatIds)));
+        if ($kand !== []) {
+            $graph->vorladen($anker($kand), $anker($folge));
+        }
+        try {
+            $out = [];
+            foreach ($kandidatIds as $id) {
+                if (! isset($profile[$id])) {
+                    continue;
+                }
+                $summe = 0.0;
+                foreach ($folge as $f) {
+                    $summe += $graph->harmonie($profile[$id], $f)['wert'];
+                }
+                $out[$id] = round($summe / count($folge), 4);
+            }
+
+            return $out;
+        } finally {
+            $graph->vergiss();
+        }
     }
 
     /**
