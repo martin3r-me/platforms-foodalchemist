@@ -16,6 +16,14 @@ use Platform\FoodAlchemist\Support\TeamScope;
  */
 class ConcepterDimensionen extends Component
 {
+    /** Spec 65: Bereich settings.concepter_dimensionen je Team — Sofort-Aktionen (Liste), Leiste Bearbeiten → Fertig. */
+    use Concerns\MitEinstellungsSperre;
+
+    protected function sperrBereich(): string
+    {
+        return 'concepter_dimensionen';
+    }
+
     /** Whitelist: key => [tabelle, label, hint] */
     public const VOKABULARE = [
         'einsatzmomente' => ['tabelle' => 'foodalchemist_service_moments', 'label' => 'Einsatzmomente', 'hint' => 'Mehrere je Konzept möglich, zum Beispiel Frühstück, Lunch, Apéro.'],
@@ -162,6 +170,6 @@ class ConcepterDimensionen extends Component
             ];
         }
 
-        return view('foodalchemist::livewire.settings.concepter-dimensionen', ['listen' => $listen]);
+        return view('foodalchemist::livewire.settings.concepter-dimensionen', ['sperr' => $this->sperrZustand(), 'listen' => $listen]);
     }
 }

@@ -83,7 +83,11 @@
                 @endif
             </x-slot:badges>
             <x-slot:aktion>
-                <x-fa::button size="sm" variant="primary" icon="heroicon-m-pencil-square" wire:click="$dispatch('vk-modal.oeffnen', { id: {{ $rezept->id }} })" data-vk-bearbeiten>Im Editor öffnen</x-fa::button>
+                <div class="flex flex-wrap items-center gap-2">
+                    {{-- Spec 65: Änderungen in der Spalte erst nach „Bearbeiten" (gleiche Sperre wie der Gericht-Editor), „Fertig" gibt frei --}}
+                    <x-foodalchemist::bearbeiten-leiste :zustand="$sperr" sofort />
+                    <x-fa::button size="sm" variant="ghost" icon="heroicon-m-arrow-top-right-on-square" wire:click="$dispatch('vk-modal.oeffnen', { id: {{ $rezept->id }} })" data-vk-bearbeiten>Im Editor öffnen</x-fa::button>
+                </div>
             </x-slot:aktion>
             <x-slot:menue>
                 <x-fa::menu-item icon="heroicon-m-squares-2x2" wire:click="$dispatch('zutaten-editor.oeffnen', { id: {{ $rezept->id }} })" data-vk-komponenten>Komponenten bearbeiten</x-fa::menu-item>
@@ -96,6 +100,9 @@
                 @endif
             </x-slot:menue>
         </x-fa::detail-kopf>
+
+        {{-- Spec 65: Detailspalte — Änderungen erst nach „Bearbeiten" (gleiche Sperre wie der Editor), „Fertig" gibt frei --}}
+        <fieldset @disabled(in_array($sperr['modus'], ['lesen', 'fremd'], true)) class="contents" data-fa-lesemodus="{{ in_array($sperr['modus'], ['lesen', 'fremd'], true) ? '1' : '0' }}">
 
         {{-- 2 · Kennzahlen: VK brutto, EK, Wareneinsatz — darunter Balken mit Schwellen 30/35 % und VK-Herleitung --}}
         <div class="flex flex-col gap-3" data-vk-kpis>
@@ -241,7 +248,7 @@
             <x-fa::section variant="plain" title="Pairing-Netz" icon="heroicon-o-share"
                 :meta="($kombination ?? null) !== null ? (($kombination['kennzahlen']['harmoniert'] ?? 0) . ' harmonieren · ' . ($kombination['kennzahlen']['spannung'] ?? 0) . ' Spannung') : null" data-vk-kern-anker>
                 <x-slot:actions>
-                    <x-fa::button size="sm" variant="ghost" iconRight="heroicon-m-arrow-up-right" wire:click="$dispatch('pairing-netz.oeffnen', { recipeId: {{ $rezept->id }} })"
+                    <x-fa::button size="sm" variant="ghost" iconRight="heroicon-m-arrow-up-right" href="#" x-on:click.prevent="" wire:click="$dispatch('pairing-netz.oeffnen', { recipeId: {{ $rezept->id }} })"
                         title="Voller Graph mit verwandten Rezepten und Vorschlägen" data-vk-pairing-netz>Netz öffnen</x-fa::button>
                 </x-slot:actions>
                 {{-- Spec 60: Kombinationslogik statt Kern-Anker-Pflege --}}
@@ -382,17 +389,18 @@
                             </div>
                         @endforeach
                         @foreach($eltern as $parent)
-                            <button type="button" wire:key="vkel-{{ $parent->id }}"
-                                    @if($parent->is_sales_recipe) wire:click="zeige({{ $parent->id }})" @else wire:click="$dispatch('recipe-modal.oeffnen', { id: {{ $parent->id }} })" @endif
+                            <a href="#" role="button" wire:key="vkel-{{ $parent->id }}"
+                                    @if($parent->is_sales_recipe) wire:click.prevent="zeige({{ $parent->id }})" @else wire:click.prevent="$dispatch('recipe-modal.oeffnen', { id: {{ $parent->id }} })" @endif
                                     class="{{ $listenKnopf }}" title="{{ $parent->is_sales_recipe ? 'Gericht anzeigen' : 'Rezept öffnen' }}">
                                 @svg($parent->is_sales_recipe ? 'heroicon-o-banknotes' : 'heroicon-o-arrow-up', 'w-4 h-4 shrink-0 text-[var(--fa-ink-3)]')
                                 <span class="min-w-0 flex-1 truncate">{{ $parent->name }}</span>
                                 <span class="shrink-0 {{ $leise }}">{{ $parent->is_sales_recipe ? 'Gericht' : 'Rezept' }}</span>
-                            </button>
+                            </a>{{-- Spec 65: <a> statt <button> — bleibt im gesperrten Lesemodus (fieldset) bedienbar --}}
                         @endforeach
                     </div>
                 @endif
             </x-fa::section>
         </div>
+        </fieldset>
     @endif
 </div>

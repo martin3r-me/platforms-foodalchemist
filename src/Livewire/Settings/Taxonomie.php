@@ -14,6 +14,20 @@ use RuntimeException;
  */
 class Taxonomie extends Component
 {
+    /** Spec 65: Bereich settings.taxonomie je Team — Sofort-Aktionen, Leiste Bearbeiten → Fertig. Auswahl/Navigation bleibt frei (Link statt Knopf im gesperrten Bereich). */
+    use Concerns\MitEinstellungsSperre;
+
+    protected function sperrBereich(): string
+    {
+        return 'taxonomie';
+    }
+
+    /** Lesend (ohne Sperre): waehleHg. */
+    protected function sperrFreiExtra(): array
+    {
+        return ['waehleHg'];
+    }
+
     use ReordersLists;
 
     public ?int $hauptgruppeId = null;
@@ -198,6 +212,7 @@ class Taxonomie extends Component
         $this->hauptgruppeId ??= $hauptgruppen->first()?->id;
 
         return view('foodalchemist::livewire.settings.taxonomie', [
+            'sperr' => $this->sperrZustand(),   // Spec 65
             'team' => $team,
             'hauptgruppen' => $hauptgruppen,
             'kategorien' => $this->hauptgruppeId ? $vocab->listRecipeCategories($team, $this->hauptgruppeId) : collect(),

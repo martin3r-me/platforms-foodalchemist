@@ -9,6 +9,9 @@
 @endphp
 
 <div class="flex flex-col gap-4">
+    {{-- Spec 65: „Bearbeiten" sperrt den Bereich für das Team, „Fertig" gibt frei --}}
+    @php $sperrLesen = in_array($sperr['modus'], ['lesen', 'fremd'], true); @endphp
+    @include('foodalchemist::livewire.settings.partials.sperr-leiste', ['sofort' => true])
     @if($fehler)
         <x-fa::notice tone="crit">{{ $fehler }}</x-fa::notice>
     @endif
@@ -21,6 +24,7 @@
                 Inaktive zeigen
             </label>
         </x-slot:actions>
+        <fieldset @disabled($sperrLesen) class="contents" data-fa-lesemodus="{{ $sperrLesen ? '1' : '0' }}">
 
         <div class="overflow-x-auto -mx-4">
             <table class="fa-table">
@@ -99,9 +103,11 @@
                 </tbody>
             </table>
         </div>
+        </fieldset>
     </x-fa::section>
 
     {{-- Neu anlegen (eigenes Team — Kind-Teams ergänzen Eigenes, D1) --}}
+    <fieldset @disabled($sperrLesen) class="contents" data-fa-lesemodus="{{ $sperrLesen ? '1' : '0' }}">
     <x-fa::section title="Neue Einheit" description="Wird für dein Team angelegt." data-unit-neu>
         <div class="grid gap-3 grid-cols-[repeat(auto-fit,minmax(min(100%,10rem),1fr))] items-start">
             <x-fa::field label="Kürzel" for="unit-neu-slug" hint="Kleinbuchstaben, z. B. el">
@@ -122,4 +128,5 @@
             <x-fa::button variant="primary" icon="heroicon-m-plus" wire:click="create">Einheit anlegen</x-fa::button>
         </div>
     </x-fa::section>
+    </fieldset>
 </div>

@@ -22,6 +22,14 @@ use Platform\FoodAlchemist\Services\SpeiseplanVorgabenService;
  */
 class SpeiseplanChips extends Component
 {
+    /** Spec 65: Bereich settings.speiseplan_chips je Team — Felder schreiben sofort, Leiste Bearbeiten → Fertig. */
+    use Concerns\MitEinstellungsSperre;
+
+    protected function sperrBereich(): string
+    {
+        return 'speiseplan_chips';
+    }
+
     /** @var array{label: string, kriterien: list<string>, default_min: string, default_max: string} */
     public array $neu = ['label' => '', 'kriterien' => [], 'default_min' => '', 'default_max' => ''];
 
@@ -151,6 +159,7 @@ class SpeiseplanChips extends Component
         $hauptgruppen = $team !== null ? app(SalesRecipeService::class)->dishMainGroups($team) : collect();
 
         return view('foodalchemist::livewire.settings.speiseplan-chips', [
+            'sperr' => $this->sperrZustand(),   // Spec 65
             'chips' => $chips,
             'chipTokens' => $chips->mapWithKeys(fn ($c) => [$c->id => $this->tokensAusKriterien((array) $c->kriterien)])->all(),
             'diaeten' => FoodAlchemistSpeiseplanChip::DIAETEN,

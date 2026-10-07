@@ -31,6 +31,8 @@
     $befundTon = ['erfuellt' => 'ok', 'teilerfuellt' => 'warn', 'verletzt' => 'crit', 'info' => 'info'];
     $preisModusText = fn (?string $m) => ['auto' => 'Preis aus dem Inhalt', 'manuell' => 'Preis von Hand', 'alternativen' => 'Preis je Auswahl', 'fixed' => 'Festpreis'][$m ?? ''] ?? ucfirst((string) $m);
     $hatKapitel = count($kapitelTree ?? []) > 0;
+    // Spec 65: Lesemodus = keine eigene Bearbeitungssperre (lesen/fremd) — Eingaben und Schreib-Knöpfe aus
+    $gesperrt = in_array($sperr['modus'], ['lesen', 'fremd'], true);
 @endphp
 
 <x-foodalchemist::modal name="angebot-editor" fullscreen dark-canvas title="Angebot"
@@ -38,6 +40,8 @@
     <x-slot:actions>
         @if($angebot)
             <div class="ml-auto flex flex-wrap items-center gap-2">
+                {{-- Spec 65: Status und Leitstelle schreiben → im Lesemodus aus --}}
+                <fieldset @disabled($gesperrt) class="contents" data-fa-lesemodus="{{ $gesperrt ? '1' : '0' }}">
                 {{-- Workflow-Übergänge (Status-Maschine) gebündelt in einem Menü --}}
                 @if(count($angebot->status->uebergaenge()) > 0)
                     <div class="relative" x-data="faMenu()" x-on:keydown.escape="offen = false" x-on:click.outside="offen = false" wire:key="ang-status-{{ $angebot->id }}-{{ $angebot->status->value }}">
@@ -58,6 +62,7 @@
                 {{-- Einstieg in die Leitstelle-Planung (spiegelt Foodbook »In der Leitstelle planen«) — die eine KI-Aktion im Kopf. --}}
                 <x-fa::button variant="ai" icon="heroicon-m-sparkles" wire:click="vollKaskadeStarten"
                     title="Die KI plant alle Kapitel in der Leitstelle und legt je Kapitel ein Konzept an" data-angebot-in-leitstelle>In der Leitstelle planen</x-fa::button>
+                </fieldset>
 
                 {{-- Weitere Aktionen: Drucken · Dokument · Präsentation · Produktion · Löschen (ganz unten, rot) --}}
                 <div class="relative" x-data="faMenu()" x-on:keydown.escape="offen = false" x-on:click.outside="offen = false">
@@ -76,6 +81,8 @@
                             @svg('heroicon-o-presentation-chart-bar', 'w-4 h-4 text-[var(--fa-ink-3)]') Kundenpräsentation ansehen
                         </a>
                         <div class="my-1 border-t border-[var(--fa-line)]"></div>
+                        {{-- Spec 65: Drucken/Ansehen bleiben frei (Links), Produktion + Löschen nur im Bearbeiten-Modus --}}
+                        <fieldset @disabled($gesperrt) class="contents">
                         {{-- Stufe 3 — Angebot → Produktion (concept × Pax → Produktionsauftrag am Event-Tag). --}}
                         <button type="button" role="menuitem" wire:click="anProduktion" x-on:click="offen = false" class="{{ $menuePunkt }}"
                                 title="Angebot in die Produktion übergeben, danach im Tagesplan planbar" data-angebot-produktion>
@@ -86,10 +93,14 @@
                                 class="flex w-full items-center gap-2 px-3 py-2 text-left text-[length:var(--fa-text-md)] text-[var(--fa-crit)] hover:bg-[var(--fa-crit-soft)]" data-angebot-loeschen>
                             @svg('heroicon-o-trash', 'w-4 h-4') Angebot löschen
                         </button>
+                        </fieldset>
                     </div>
                 </div>
 
-                <x-fa::button variant="primary" icon="heroicon-m-check" wire:click="speichern" data-angebot-speichern>Speichern</x-fa::button>
+                {{-- Spec 65: erst „Bearbeiten" (Sperre), dann Abbrechen/Speichern; Speichern beendet die Bearbeitung, Editor bleibt offen --}}
+                <x-foodalchemist::bearbeiten-leiste :zustand="$sperr">
+                    <x-fa::button variant="primary" icon="heroicon-m-check" wire:click="speichern" data-angebot-speichern>Speichern</x-fa::button>
+                </x-foodalchemist::bearbeiten-leiste>
             </div>
         @endif
     </x-slot:actions>
@@ -148,34 +159,36 @@
                      @dragover.prevent @drop.prevent="if (dragKapId && dragKapId !== {{ $kt['id'] }}) { $wire.kapitelVerschiebenAuf(dragKapId, {{ $kt['id'] }}); } dragKapId = null"
                      :class="dragKapId === {{ $kt['id'] }} ? 'opacity-40' : (dragKapId ? 'ring-1 ring-[var(--fa-accent-line)]' : '')"
                      class="group flex items-center gap-0.5 rounded-[var(--fa-radius-control)]" style="padding-left: {{ $kt['depth'] * 12 }}px">
-                    <span class="inline-flex items-center justify-center w-4 shrink-0 cursor-grab active:cursor-grabbing text-[var(--fa-ink-3)] select-none opacity-0 group-hover:opacity-100" draggable="true"
+                    <span class="inline-flex items-center justify-center w-4 shrink-0 cursor-grab active:cursor-grabbing text-[var(--fa-ink-3)] select-none opacity-0 {{ $gesperrt ? 'invisible' : 'group-hover:opacity-100' }}" draggable="{{ $gesperrt ? 'false' : 'true' }}"
                           @dragstart="dragKapId = {{ $kt['id'] }}; $event.dataTransfer.setData('text/plain', String({{ $kt['id'] }})); $event.dataTransfer.effectAllowed = 'move'"
                           @dragend="dragKapId = null" title="Ziehen zum Sortieren" data-kapitel-drag>@svg('heroicon-m-bars-2', 'w-3.5 h-3.5')</span>
                     <button type="button" wire:click="kapitelWaehle({{ $kt['id'] }})" @click="$dispatch('angebot-goto', { tab: 'aufbau' })"
                             class="flex-1 min-w-0 text-left break-words leading-snug text-[length:var(--fa-text-md)] px-2 py-1 rounded-[var(--fa-radius-control)] {{ $selectedKapitelId === $kt['id'] ? $navAn : $navAus }}">{{ $kt['title'] }}</button>
                     <span class="flex items-center opacity-0 group-hover:opacity-100 group-focus-within:opacity-100">
+                        <fieldset @disabled($gesperrt) class="contents">{{-- Spec 65: Kapitel ändern nur im Bearbeiten-Modus --}}
                         <button type="button" wire:click="kapitelHoch({{ $kt['id'] }})" class="{{ $mini }}" title="Nach oben" aria-label="Kapitel nach oben">@svg('heroicon-m-chevron-up', 'w-3.5 h-3.5')</button>
                         <button type="button" wire:click="kapitelRunter({{ $kt['id'] }})" class="{{ $mini }}" title="Nach unten" aria-label="Kapitel nach unten">@svg('heroicon-m-chevron-down', 'w-3.5 h-3.5')</button>
                         <button type="button" wire:click="kapitelNeu({{ $kt['id'] }})" class="{{ $mini }}" title="Unterkapitel anlegen" aria-label="Unterkapitel anlegen">@svg('heroicon-m-plus', 'w-3.5 h-3.5')</button>
                         <button type="button" wire:click="kapitelLoeschen({{ $kt['id'] }})" wire:confirm="Kapitel löschen?" class="{{ $miniKrit }}" title="Kapitel löschen" aria-label="Kapitel löschen">@svg('heroicon-m-trash', 'w-3.5 h-3.5')</button>
+                        </fieldset>
                     </span>
                 </div>
             @empty
                 <p class="px-2.5 {{ $hinweis }}">Noch keine Kapitel.</p>
             @endforelse
 
-            <div class="flex items-center gap-1 pt-2 mt-1 border-t border-[var(--fa-line)]">
+            <div class="flex items-center gap-1 pt-2 mt-1 border-t border-[var(--fa-line)]"><fieldset @disabled($gesperrt) class="contents">
                 <label for="ang-kapitel-neu" class="sr-only">Titel des neuen Kapitels</label>
                 <x-fa::input id="ang-kapitel-neu" size="sm" wire:model="neuesKapitelTitel" wire:keydown.enter="kapitelNeu"
                     x-on:keydown.enter="$dispatch('angebot-goto', { tab: 'aufbau' })" placeholder="Neues Kapitel" />
                 <x-fa::icon-button icon="heroicon-m-plus" label="Kapitel anlegen" size="sm" wire:click="kapitelNeu" x-on:click="$dispatch('angebot-goto', { tab: 'aufbau' })" />
-            </div>
+            </fieldset></div>
         </nav>
 
         {{-- MITTE: Editor-Reiter --}}
         <div class="flex-1 min-w-0 px-6">
             <div wire:key="angcockpit-{{ $angebot->id }}" class="space-y-4">
-                <x-foodalchemist::editor-tabs marker="angebot" wire-key="angebot-tabs-{{ $angebot->id }}" :init="$hatKapitel ? 'board' : 'anfrage'"
+                <x-foodalchemist::editor-tabs marker="angebot" wire-key="angebot-tabs-{{ $angebot->id }}" :init="$hatKapitel ? 'board' : 'anfrage'" :gesperrt="$gesperrt"
                     :tabs="[
                         'board' => 'Übersicht',
                         'aufbau' => 'Aufbau',
@@ -197,7 +210,7 @@
                                 <x-fa::input id="ang-name" wire:model="form.name" />
                             </x-fa::field>
                             <x-fa::field label="Gäste" for="ang-pax" hint="Bestimmt die Angebotssumme">
-                                <x-fa::input id="ang-pax" type="number" min="0" numeric wire:model="form.personen" wire:change="speichern" />
+                                <x-fa::input id="ang-pax" type="number" min="0" numeric wire:model="form.personen" wire:change="kopfUebernehmen" />
                             </x-fa::field>
                             <x-fa::field label="Veranstaltungsdatum" for="ang-datum">
                                 <x-fa::input id="ang-datum" type="date" wire:model="form.event_date" />
@@ -237,8 +250,8 @@
                             description="Fortschritt, Inhalt und Preis je Kapitel. Klick auf eine Zeile zeigt die Positionen.">
                             @if(count($board) > 0)
                                 <x-slot:actions>
-                                    <button type="button" @click="auf = Object.fromEntries(@js($alleIds).map(i => [i, true]))" class="{{ $knopfLeise }}" title="Alle Äste aufklappen">@svg('heroicon-m-chevron-double-down', 'w-3.5 h-3.5') Alle aufklappen</button>
-                                    <button type="button" @click="auf = {}" class="{{ $knopfLeise }}" title="Auf die Oberkapitel zuklappen">@svg('heroicon-m-chevron-double-up', 'w-3.5 h-3.5') Alle zuklappen</button>
+                                    <a href="#" role="button" @click.prevent="auf = Object.fromEntries(@js($alleIds).map(i => [i, true]))" class="{{ $knopfLeise }}" title="Alle Äste aufklappen">@svg('heroicon-m-chevron-double-down', 'w-3.5 h-3.5') Alle aufklappen</a>
+                                    <a href="#" role="button" @click.prevent="auf = {}" class="{{ $knopfLeise }}" title="Auf die Oberkapitel zuklappen">@svg('heroicon-m-chevron-double-up', 'w-3.5 h-3.5') Alle zuklappen</a>
                                 </x-slot:actions>
                             @endif
                             <div class="-mx-4 -mb-4 border-t border-[var(--fa-line)]">
@@ -293,7 +306,7 @@
                                                         @endforeach
                                                     </div>
                                                 </div>
-                                                <x-fa::button variant="ghost" size="sm" icon="heroicon-m-pencil-square" wire:click="kapitelWaehle({{ $kap['kapitel_id'] }})" x-on:click="$dispatch('angebot-goto', { tab: 'aufbau' })" title="Kapitel öffnen und weiterplanen">Bearbeiten</x-fa::button>
+                                                <x-fa::button variant="ghost" size="sm" icon="heroicon-m-pencil-square" href="#" wire:click="kapitelWaehle({{ $kap['kapitel_id'] }})" x-on:click.prevent="$dispatch('angebot-goto', { tab: 'aufbau' })" title="Kapitel öffnen und weiterplanen">Öffnen</x-fa::button>
                                             </div>
                                         </div>
                                         <div x-show="auf[{{ $kap['kapitel_id'] }}]" x-cloak class="pb-3 pr-4 flex flex-col gap-1" style="padding-left: {{ 40 + ($kap['depth'] - 1) * 16 }}px">
@@ -828,9 +841,9 @@
                                     <x-fa::input id="ang-preis-grund" wire:model="form.price_override_reason" placeholder="Warum weicht der Angebotspreis ab?" />
                                 </x-fa::field>
                             </div>
-                            <div><x-fa::button size="sm" icon="heroicon-m-check" wire:click="speichern">Festpreis übernehmen</x-fa::button></div>
+                            <div><x-fa::button size="sm" icon="heroicon-m-check" wire:click="kopfUebernehmen">Festpreis übernehmen</x-fa::button></div>
                         @else
-                            <div><x-fa::button size="sm" icon="heroicon-m-check" wire:click="speichern">Automatischen Preis übernehmen</x-fa::button></div>
+                            <div><x-fa::button size="sm" icon="heroicon-m-check" wire:click="kopfUebernehmen">Automatischen Preis übernehmen</x-fa::button></div>
                         @endif
                     </x-fa::section>
 
@@ -1018,7 +1031,7 @@
                             <div class="rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] bg-[var(--fa-ground)] p-3 flex flex-col gap-1.5" x-data>
                                 <div class="flex items-center gap-2">
                                     <div class="flex-1 min-w-0 rounded-[var(--fa-radius-control)] px-2 py-1 font-mono text-[length:var(--fa-text-sm)] break-all select-all bg-[var(--fa-surface)] border border-[var(--fa-line)] text-[var(--fa-ink)]" data-angebot-praes-link>{{ $presentationLink }}</div>
-                                    <x-fa::button size="sm" icon="heroicon-m-clipboard-document" x-on:click="navigator.clipboard.writeText('{{ $presentationLink }}'); $el.querySelector('span').textContent='Kopiert'"><span>Link kopieren</span></x-fa::button>
+                                    <x-fa::button size="sm" icon="heroicon-m-clipboard-document" href="#" x-on:click.prevent="navigator.clipboard.writeText('{{ $presentationLink }}'); $el.querySelector('span').textContent='Kopiert'"><span>Link kopieren</span></x-fa::button>
                                 </div>
                                 <p class="{{ $hinweis }}">
                                     Freigegeben am {{ $presentationInfo['published_at'] ?? '–' }}, gültig bis {{ $presentationInfo['expires_at'] ?? '–' }},
@@ -1043,7 +1056,7 @@
                                     </div>
                                     <div class="flex flex-wrap items-center gap-2">
                                         <div class="flex-1 min-w-0 rounded-[var(--fa-radius-control)] px-2 py-1 font-mono text-[length:var(--fa-text-sm)] break-all select-all bg-[var(--fa-ground)] border border-[var(--fa-line)] text-[var(--fa-ink)]">{{ $bl['url'] }}</div>
-                                        <x-fa::button size="sm" icon="heroicon-m-clipboard-document" x-on:click="navigator.clipboard.writeText('{{ $bl['url'] }}'); $el.querySelector('span').textContent='Kopiert'"><span>Kopieren</span></x-fa::button>
+                                        <x-fa::button size="sm" icon="heroicon-m-clipboard-document" href="#" x-on:click.prevent="navigator.clipboard.writeText('{{ $bl['url'] }}'); $el.querySelector('span').textContent='Kopiert'"><span>Kopieren</span></x-fa::button>
                                         @if($bl['enabled'])
                                             <x-fa::button variant="danger" size="sm" wire:click="betriebZuruckziehen({{ $bl['outlet_id'] }})" wire:confirm="Diesen Betriebslink zurückziehen? Er ist dann nicht mehr erreichbar.">Zurückziehen</x-fa::button>
                                         @else

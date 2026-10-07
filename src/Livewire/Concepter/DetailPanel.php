@@ -17,6 +17,23 @@ use Platform\FoodAlchemist\Services\ConcepterBewertungService;
  */
 class DetailPanel extends Component
 {
+    use \Platform\FoodAlchemist\Livewire\Concerns\MitBearbeitungssperre;   // Spec 65
+
+    /** Spec 65: gleiche Sperre wie der Concepter-Editor — beide Reiter sind Concepts (Kaskade) → Typ concept. */
+    protected function sperrZiel(): ?array
+    {
+        return $this->selectedId !== null ? ['concept', $this->selectedId] : null;
+    }
+
+    /**
+     * Ohne Sperre: Anzeige/Auswahl, Neu-Rendern; Kopien (Als Vorlage speichern, Aus Vorlage anlegen, Duplizieren)
+     * ändern das gewählte Concept nicht. Löschen nur mit Sperre.
+     */
+    protected function sperrFreiExtra(): array
+    {
+        return ['zeige', 'aktualisiere', 'alsVorlage', 'ausVorlage', 'dupliziere'];
+    }
+
     public ?int $selectedId = null;
 
     public string $type = 'concepts';   // concepts | pakete
@@ -24,6 +41,10 @@ class DetailPanel extends Component
     #[On('concepter-selected')]
     public function zeige(string $type, ?int $id): void
     {
+        // Spec 65: anderes Concept gewählt → eigene Sperre am bisherigen freigeben.
+        if ($this->selectedId !== null && $this->selectedId !== $id) {
+            $this->sperreBeiWechselFreigeben();
+        }
         $this->type = in_array($type, ['concepts', 'pakete'], true) ? $type : 'concepts';
         $this->selectedId = $id;
     }
@@ -64,6 +85,7 @@ class DetailPanel extends Component
             return;
         }
         $neu = $concepts->duplicate($this->team(), $this->selectedId);
+        $this->bearbeitenBeenden();   // Spec 65: Auswahl springt auf die Kopie → eigene Sperre am Original frei
         $this->selectedId = $neu->id;
         $this->dispatch('concepter-gespeichert');
         $this->dispatch('concepter-selected', type: $this->type, id: $neu->id);
@@ -77,6 +99,7 @@ class DetailPanel extends Component
         }
         $id = $this->selectedId;
         $concepts->delete($this->team(), $id);
+        $this->bearbeitenBeenden();   // Spec 65: gelöscht → Sperre frei
         $this->selectedId = null;
         $this->dispatch('concepter-geloescht', id: $id);
     }
@@ -112,6 +135,7 @@ class DetailPanel extends Component
         }
 
         return view('foodalchemist::livewire.concepter.detail-panel', [
+            'sperr' => $this->sperrZustand(),   // Spec 65
             'concept' => $concept,
             'istPaket' => $istPaket,
             'cockpit' => $cockpit,

@@ -37,6 +37,9 @@
 
     $gaesteAusRollen = (bool) ($zk['gaeste_aus_rollen'] ?? false);
     $kwText = 'KW ' . (int) $montagDt->format('W') . ' · ' . ($mahlzeiten[$mahlzeit] ?? '');
+    // Spec 65: Lesemodus = keine eigene Bearbeitungssperre. Gesperrt werden nur die Schreib-Bereiche — Navigation
+    // (Woche, Mahlzeit, Ansicht), Eintrag-Detail ansehen, Bedarf, Plan/Ist und Druck bleiben bedienbar.
+    $gesperrt = in_array($sperr['modus'], ['lesen', 'fremd'], true);
 @endphp
 
 <x-foodalchemist::modal name="speiseplan-editor" fullscreen dark-canvas title="Speiseplan bearbeiten"
@@ -52,10 +55,12 @@
             </div>
             <div class="ml-auto flex flex-wrap items-center gap-2">
                 {{-- P5 / Spec 57 · 10.1: erst prüfen (leere Zellen, Umfang), dann im Hinweis oben starten. --}}
+                <fieldset @disabled($gesperrt) class="contents">{{-- Spec 65: KI-Lauf nur im Bearbeiten-Modus --}}
                 <x-fa::button variant="ai" icon="heroicon-m-sparkles" wire:click="vollKaskadePruefen" wire:loading.attr="disabled" wire:target="vollKaskadePruefen" data-sp-voll-kaskade>
                     <span wire:loading.remove wire:target="vollKaskadePruefen">Leere Zellen mit KI füllen</span>
                     <span wire:loading wire:target="vollKaskadePruefen">Prüfe …</span>
                 </x-fa::button>
+                </fieldset>
                 <div class="relative" x-data="faMenu()" x-on:keydown.escape="offen = false" x-on:click.outside="offen = false">
                     <x-fa::icon-button icon="heroicon-m-ellipsis-horizontal" label="Weitere Aktionen" x-on:click="toggle($event)" aria-haspopup="menu" x-bind:aria-expanded="offen" />
                     <div x-bind:class="{ hidden: ! offen }" x-bind:style="pos" role="menu" class="hidden w-72 fa-surface shadow-lg py-1">
@@ -63,6 +68,7 @@
                            class="{{ $menuePunkt }}" title="Wochenaushang zum Drucken oder als PDF, mit Legende der Allergene und Zusatzstoffe" data-sp-aushang>
                             @svg('heroicon-o-printer', 'w-4 h-4 shrink-0 text-[var(--fa-ink-3)]') Woche drucken
                         </a>
+                        <fieldset @disabled($gesperrt) class="contents">{{-- Spec 65: Drucken bleibt frei, Kopieren/Produktion/Löschen nur im Bearbeiten-Modus --}}
                         @if($ansicht === 'woche')
                             <button type="button" role="menuitem" x-on:click="offen = false" wire:click="wocheKopierenOeffnen" class="{{ $menuePunkt }}" data-sp-woche-kopieren-btn>
                                 @svg('heroicon-o-document-duplicate', 'w-4 h-4 shrink-0 text-[var(--fa-ink-3)]') Woche kopieren
@@ -78,9 +84,14 @@
                                 class="{{ $menuePunkt }} text-[var(--fa-crit)]" data-sp-loeschen>
                             @svg('heroicon-o-trash', 'w-4 h-4 shrink-0') Speiseplan löschen
                         </button>
+                        </fieldset>
                     </div>
                 </div>
-                <x-fa::button variant="primary" icon="heroicon-m-check" wire:click="speichern" wire:loading.attr="disabled" wire:target="speichern" data-sp-speichern>Speichern</x-fa::button>
+                {{-- Spec 65: der Speiseplan schreibt sofort (Zellen, Mengen, Linien, Stammdaten bei Änderung) — darum
+                     „Bearbeiten" (Sperre) und „Fertig" (frei). Der Speichern-Knopf erscheint nur ohne Sperr-Schalter. --}}
+                <x-foodalchemist::bearbeiten-leiste :zustand="$sperr" sofort>
+                    <x-fa::button variant="primary" icon="heroicon-m-check" wire:click="speichern" wire:loading.attr="disabled" wire:target="speichern" data-sp-speichern>Speichern</x-fa::button>
+                </x-foodalchemist::bearbeiten-leiste>
             </div>
         @endif
     </x-slot:actions>
@@ -123,10 +134,10 @@
                 @if($kaskadeVorschau['gedeckelt']) Der Rest folgt mit dem nächsten Lauf (höchstens 6 Wochen je Lauf). @endif
                 <x-slot:actions>
                     <x-fa::button variant="ghost" size="sm" wire:click="vollKaskadeAbbrechen">Abbrechen</x-fa::button>
-                    <x-fa::button variant="ai" size="sm" icon="heroicon-m-sparkles" wire:click="vollKaskadeStarten" wire:loading.attr="disabled" wire:target="vollKaskadeStarten" data-sp-kaskade-start>
+                    <fieldset @disabled($gesperrt) class="contents"><x-fa::button variant="ai" size="sm" icon="heroicon-m-sparkles" wire:click="vollKaskadeStarten" wire:loading.attr="disabled" wire:target="vollKaskadeStarten" data-sp-kaskade-start>
                         <span wire:loading.remove wire:target="vollKaskadeStarten">KI-Lauf starten</span>
                         <span wire:loading wire:target="vollKaskadeStarten">Starte …</span>
-                    </x-fa::button>
+                    </x-fa::button></fieldset>
                 </x-slot:actions>
             </x-fa::notice>
         @endif
@@ -196,6 +207,7 @@
 
                             {{-- Spec 57 · Paket 5: Woche kopieren (geöffnet über „Weitere Aktionen") --}}
                             @if($wocheKopierenOffen)
+                                <fieldset @disabled($gesperrt) class="contents">
                                 <x-fa::section title="KW {{ (int) $montagDt->format('W') }} kopieren" meta="alle Mahlzeiten" icon="heroicon-o-document-duplicate" data-sp-woche-kopieren>
                                     <div class="flex flex-wrap items-end gap-4">
                                         <x-fa::field label="Zielwoche" for="sp-kopie-ziel" class="w-72">
@@ -214,6 +226,7 @@
                                     </div>
                                     <p class="{{ $leise }}">Ohne Zusammenführen werden belegte Zellen der Zielwoche ersetzt. Einzelne Einträge kopierst du über ihr Detail.</p>
                                 </x-fa::section>
+                                </fieldset>
                             @endif
 
                             {{-- Wochen-Raster: Linien × Öffnungstage (Spec 57 · Paket 1/2/9) --}}
@@ -270,13 +283,13 @@
                                                         @endphp
                                                         <td class="align-top p-1.5 {{ $aktiv ? 'bg-[var(--fa-accent-soft)]' : '' }}"
                                                             x-on:dragover.prevent
-                                                            x-on:drop="if (dragId) { $wire.eintragVerschieben(dragId, '{{ $ymd }}', {{ $zl['id'] }}); dragId = null }"
+                                                            @unless($gesperrt) x-on:drop="if (dragId) { $wire.eintragVerschieben(dragId, '{{ $ymd }}', {{ $zl['id'] }}); dragId = null }" @endunless
                                                             data-sp-drop="{{ $zl['id'] }}|{{ $ymd }}">
                                                             <div class="flex flex-col gap-1.5">
                                                                 @foreach($eintraege as $e)
                                                                     @include('foodalchemist::livewire.speiseplan.partials.zelle', ['e' => $e, 'k' => $zkEintraege[$e->id] ?? null, 'farbe' => $zl['color'], 'dichte' => $dichte, 'sp' => $sp, 'detailId' => $detailEintragId])
                                                                 @endforeach
-                                                                @if($zl['id'] !== 0)
+                                                                @if($zl['id'] !== 0 && ! $gesperrt){{-- Spec 65: Belegen nur im Bearbeiten-Modus --}}
                                                                     <button type="button" wire:click="zelleOeffnen('{{ $ymd }}', {{ $zl['id'] }})"
                                                                             aria-label="{{ $zl['name'] }} am {{ $tagKurz[$tag->isoWeekday()] }} {{ $tag->format('d.m.') }} belegen"
                                                                             title="Gericht setzen"
@@ -330,6 +343,7 @@
                                  Stand vorher als schmales Seitenpanel rechts; die Grundanordnung des Originals gilt. --}}
                             @if($cellDatum !== null)
                                 <section class="fa-surface p-4 flex flex-col gap-3 border-[var(--fa-accent-line)]" data-sp-picker>
+                                    <fieldset @disabled($gesperrt) class="contents" data-fa-lesemodus="{{ $gesperrt ? '1' : '0' }}">
                                     <div class="flex flex-wrap items-center gap-3">
                                         <p class="text-[length:var(--fa-text-md)] font-semibold text-[var(--fa-ink)]">
                                             {{ $pickerErsetzenId ? 'Ersetzen' : 'Einfügen' }} · {{ $tagKurz[\Illuminate\Support\Carbon::parse($cellDatum)->isoWeekday()] ?? '' }} {{ \Illuminate\Support\Carbon::parse($cellDatum)->format('d.m.') }} · {{ $linien->firstWhere('id', $cellLinie)?->name ?? 'Ohne Linie' }}
@@ -343,7 +357,7 @@
                                             @svg('heroicon-m-magnifying-glass', 'w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--fa-ink-3)] pointer-events-none')
                                             <x-fa::input type="search" wire:model.live.debounce.300ms="pickerSuche" placeholder="{{ $typLabel[$pickerTyp] ?? 'Gericht' }} suchen" class="pl-8" aria-label="{{ $typLabel[$pickerTyp] ?? 'Gericht' }} suchen" />
                                         </div>
-                                        <x-fa::button size="sm" variant="ghost" icon="heroicon-m-x-mark" wire:click="cellSchliessen">Schließen</x-fa::button>
+                                        <x-fa::button size="sm" variant="ghost" icon="heroicon-m-x-mark" href="#" x-on:click.prevent="" wire:click="cellSchliessen">Schließen</x-fa::button>
                                     </div>
 
                                     {{-- Spec 42: Facetten (Hauptgruppe → Unterklasse) nur für Gerichte --}}
@@ -384,6 +398,7 @@
                                     @else
                                         <x-fa::empty compact icon="heroicon-o-magnifying-glass" title="Keine Treffer">Suchbegriff oder Gruppe ändern.</x-fa::empty>
                                     @endif
+                                    </fieldset>
                                 </section>
                             @endif
                         @else
@@ -421,6 +436,7 @@
 
                     {{-- ═══ Spec 57 · Paket 3: Reiter MENGEN (Essen je Linie × Tag) ═══ --}}
                     <div x-show="tab === 'mengen'" x-cloak class="pt-4 flex flex-col gap-4" data-sp-tab-mengen>
+                        <fieldset @disabled($gesperrt) class="contents" data-fa-lesemodus="{{ $gesperrt ? '1' : '0' }}">
                         <x-fa::section title="Mengen" icon="heroicon-o-users" :meta="$kwText" description="Woche und Mahlzeit wie im Kalender. Eine Zahl gilt für alle Einträge der Zelle; leer oder 0 setzt auf den Standard der Linie bzw. des Plans zurück.">
                             <x-slot:actions>
                                 <x-fa::button size="sm" icon="heroicon-m-arrow-uturn-left" wire:click="mengenVorwoche" data-sp-mengen-vorwoche>Mengen aus Vorwoche übernehmen</x-fa::button>
@@ -493,6 +509,7 @@
                                 <x-fa::empty compact icon="heroicon-o-queue-list" title="Für diese Mahlzeit gibt es keine Linien" />
                             @endif
                         </x-fa::section>
+                        </fieldset>
                     </div>
 
                     {{-- ═══ Spec 57 · Paket 4: Reiter BEDARF (Zutaten aus Plan × Mengen, nur lesend) ═══ --}}
@@ -603,6 +620,7 @@
 
                     {{-- ═══ Reiter: MENÜ-LINIEN ═══ --}}
                     <div x-show="tab === 'linien'" x-cloak class="pt-4 flex flex-col gap-4" data-sp-tab-linien>
+                        <fieldset @disabled($gesperrt) class="contents" data-fa-lesemodus="{{ $gesperrt ? '1' : '0' }}">
                         <x-fa::section title="Menü-Linien" icon="heroicon-o-queue-list" :meta="$mehrzahl($linien->count(), 'Linie', 'Linien')" description="Jede Linie ist eine Ausgabestelle und eine Zeile im Kalender. Das Zielband ersetzt für die Linie das Ziel des Betriebs: Suppe und Dessert dürfen anders kalkulieren als der Hauptgang. Hauptgang-Linien zählen die Gäste des Tages.">
                             {{-- Spec 57 · Paket 2: jede Linie ist eine Ausgabestelle (Rolle, Kasse, Preis, Zielband). --}}
                             <div class="overflow-x-auto -mx-4">
@@ -689,16 +707,18 @@
                                 </div>
                             </x-fa::section>
                         @endif
+                        </fieldset>
                     </div>
 
                     {{-- ═══ Reiter: STAMMDATEN ═══ --}}
                     <div x-show="tab === 'stammdaten'" x-cloak class="pt-4 flex flex-col gap-4" data-sp-tab-stammdaten>
+                        <fieldset @disabled($gesperrt) class="contents" data-fa-lesemodus="{{ $gesperrt ? '1' : '0' }}">
                         <x-fa::section title="Plan" icon="heroicon-o-identification">
                             <x-slot:actions>
                                 <x-fa::button size="sm" icon="heroicon-m-check" wire:click="speichern" data-sp-stammdaten-speichern>Stammdaten speichern</x-fa::button>
                             </x-slot:actions>
                             <div class="grid grid-cols-2 md:grid-cols-6 gap-3">
-                                <x-fa::field label="Name" for="sp-form-name" class="md:col-span-2"><x-fa::input id="sp-form-name" wire:model="form.name" /></x-fa::field>
+                                <x-fa::field label="Name" for="sp-form-name" class="md:col-span-2"><x-fa::input id="sp-form-name" wire:model="form.name" wire:change="speichern" /></x-fa::field>
                                 <x-fa::field label="Start (Montag)" for="sp-form-start"><x-fa::input id="sp-form-start" type="date" wire:model.live="form.start_date" wire:change="speichern" /></x-fa::field>
                                 <x-fa::field label="Zyklus (Wochen)" for="sp-form-zyklus"><x-fa::input id="sp-form-zyklus" type="number" min="1" wire:model.live="form.cycle_weeks" wire:change="speichern" numeric /></x-fa::field>
                                 <x-fa::field label="Mindestabstand (Tage)" for="sp-form-abstand" hint="0 = keine Wiederholungsregel"><x-fa::input id="sp-form-abstand" type="number" min="0" wire:model.live="form.min_abstand_tage" wire:change="speichern" numeric /></x-fa::field>
@@ -798,7 +818,7 @@
                                                 <span class="flex items-center gap-2">
                                                     @if($bk['aus_vorlage'] > 0)<x-fa::badge tone="warn">{{ $mehrzahl((int) $bk['aus_vorlage'], 'Änderung offen', 'Änderungen offen') }}</x-fa::badge>@else<x-fa::badge tone="ok">Aktuell</x-fa::badge>@endif
                                                     @if($bk['lokal'] > 0)<x-fa::badge>{{ $mehrzahl((int) $bk['lokal'], 'lokale Änderung', 'lokale Änderungen') }}</x-fa::badge>@endif
-                                                    <x-fa::button variant="ghost" size="sm" icon="heroicon-m-arrow-top-right-on-square" wire:click="$dispatch('speiseplan-editor.bearbeiten', { id: {{ $bk['id'] }} })">Kopie öffnen</x-fa::button>
+                                                    <x-fa::button variant="ghost" size="sm" icon="heroicon-m-arrow-top-right-on-square" href="#" x-on:click.prevent="" wire:click="$dispatch('speiseplan-editor.bearbeiten', { id: {{ $bk['id'] }} })">Kopie öffnen</x-fa::button>
                                                 </span>
                                             </div>
                                         @empty
@@ -825,6 +845,7 @@
                                 @if($ausrollenInfo)<x-fa::signal tone="info" class="self-center">{{ $ausrollenInfo }}</x-fa::signal>@endif
                             </div>
                         </x-fa::section>
+                        </fieldset>
                     </div>
 
                     {{-- ═══ Spec 43: Reiter DRUCK UND AUSHANG (Ausgabe, Erscheinungsbild, digitaler Aushang) ═══ --}}
@@ -868,6 +889,7 @@
                             </div>
                         </x-fa::section>
 
+                        <fieldset @disabled($gesperrt) class="contents" data-fa-lesemodus="{{ $gesperrt ? '1' : '0' }}">{{-- Spec 65: Druck/Export oben bleibt frei --}}
                         <x-fa::section title="Erscheinungsbild" icon="heroicon-o-swatch">
                             <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                 <x-fa::field label="Markenfarbe" for="sp-brand-farbe"><input id="sp-brand-farbe" type="color" wire:model="brandColor" class="fa-control h-9 p-1"></x-fa::field>
@@ -955,7 +977,7 @@
                                 <div class="flex flex-col gap-1.5 rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] bg-[var(--fa-ground)] p-3" x-data>
                                     <div class="flex items-center gap-2">
                                         <div class="flex-1 min-w-0 rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] bg-[var(--fa-surface)] px-2 py-1.5 font-mono text-[length:var(--fa-text-sm)] break-all select-all text-[var(--fa-ink)]" data-sp-praes-link>{{ $presentationLink }}</div>
-                                        <x-fa::button size="sm" icon="heroicon-m-clipboard-document" x-on:click="navigator.clipboard.writeText('{{ $presentationLink }}'); $el.lastChild.textContent = ' Kopiert'">Link kopieren</x-fa::button>
+                                        <x-fa::button size="sm" icon="heroicon-m-clipboard-document" href="#" x-on:click.prevent="navigator.clipboard.writeText('{{ $presentationLink }}'); $el.lastChild.textContent = ' Kopiert'">Link kopieren</x-fa::button>
                                     </div>
                                     <p class="{{ $leise }}">Freigegeben am {{ $presentationInfo['published_at'] ?? 'unbekannt' }} · gültig bis {{ $presentationInfo['expires_at'] ?? 'offen' }} · {{ ($presentationInfo['live'] ?? false) ? 'aktiv' : 'inaktiv oder abgelaufen' }}</p>
                                 </div>
@@ -973,7 +995,7 @@
                                     </div>
                                     <div class="flex flex-wrap items-center gap-2">
                                         <div class="flex-1 min-w-0 rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] bg-[var(--fa-ground)] px-2 py-1.5 font-mono text-[length:var(--fa-text-sm)] break-all select-all text-[var(--fa-ink)]">{{ $bl['url'] }}</div>
-                                        <x-fa::button size="sm" icon="heroicon-m-clipboard-document" x-on:click="navigator.clipboard.writeText('{{ $bl['url'] }}'); $el.lastChild.textContent = ' Kopiert'">Link kopieren</x-fa::button>
+                                        <x-fa::button size="sm" icon="heroicon-m-clipboard-document" href="#" x-on:click.prevent="navigator.clipboard.writeText('{{ $bl['url'] }}'); $el.lastChild.textContent = ' Kopiert'">Link kopieren</x-fa::button>
                                         @if($bl['enabled'])
                                             <x-fa::button variant="danger" size="sm" wire:click="betriebZuruckziehen({{ $bl['outlet_id'] }})" wire:confirm="Diesen Betriebs-Link zurückziehen? Er funktioniert dann nicht mehr.">Link zurückziehen</x-fa::button>
                                         @else
@@ -1011,6 +1033,7 @@
                                 <x-fa::signal tone="warn">Noch keine Betriebe angelegt. Das geht unter Einstellungen › Betriebe.</x-fa::signal>
                             @endif
                         </x-fa::section>
+                        </fieldset>
                     </div>
                 </x-foodalchemist::editor-tabs>
             </div>
@@ -1052,6 +1075,7 @@
                             </dl>
                         @endif
 
+                        <fieldset @disabled($gesperrt) class="contents" data-fa-lesemodus="{{ $gesperrt ? '1' : '0' }}">{{-- Spec 65: Umbauen nur im Bearbeiten-Modus --}}
                         <x-fa::button icon="heroicon-m-arrows-right-left" class="w-full" wire:click="eintragErsetzenStarten({{ $detailEintrag->id }})">Eintrag ersetzen</x-fa::button>
 
                         <div class="flex flex-col gap-2 pt-3 border-t border-[var(--fa-line)]" data-sp-verschieben>
@@ -1087,6 +1111,7 @@
                         <div class="pt-3 border-t border-[var(--fa-line)]">
                             <x-fa::button variant="danger" size="sm" icon="heroicon-m-trash" class="w-full" wire:click="eintragRaus({{ $detailEintrag->id }})" wire:confirm="Eintrag entfernen?">Eintrag entfernen</x-fa::button>
                         </div>
+                        </fieldset>
                     </section>
                 @endif
 

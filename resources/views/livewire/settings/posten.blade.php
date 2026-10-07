@@ -3,6 +3,10 @@
      Anlegen unten). Häufigste Aufgabe = Kapazität und Besetzung je Posten pflegen → Direkteingabe in der
      Tabelle, die Besetzung steht als eigene Zeile unter dem Posten. --}}
 <div class="flex flex-col gap-4" data-settings-posten>
+    {{-- Spec 65: „Bearbeiten" sperrt den Bereich für das Team, „Fertig" gibt frei --}}
+    @php $sperrLesen = in_array($sperr['modus'], ['lesen', 'fremd'], true); @endphp
+    @include('foodalchemist::livewire.settings.partials.sperr-leiste', ['sofort' => true])
+    <fieldset @disabled($sperrLesen) class="contents" data-fa-lesemodus="{{ $sperrLesen ? '1' : '0' }}">
     @if($fehler)<x-fa::notice tone="crit" data-posten-fehler>{{ $fehler }}</x-fa::notice>@endif
     @if($meldung)<x-fa::notice tone="ok" data-posten-meldung>{{ $meldung }}</x-fa::notice>@endif
 
@@ -151,4 +155,5 @@
             <x-fa::button variant="primary" icon="heroicon-m-plus" wire:click="create" data-posten-anlegen>Posten anlegen</x-fa::button>
         </div>
     </x-fa::section>
+    </fieldset>
 </div>

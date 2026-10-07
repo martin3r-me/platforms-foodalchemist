@@ -46,7 +46,7 @@ class Index extends Component
         $sp = $svc->create($this->team(), ['name' => 'Neuer Speiseplan']);
         $this->selectedId = $sp->id;
         // Neuer Plan ist leer → direkt in den Editor (Vorschau käme leer).
-        $this->dispatch('speiseplan-editor.bearbeiten', id: $sp->id);
+        $this->dispatch('speiseplan-editor.bearbeiten', id: $sp->id, neu: true);
     }
 
     /** Plan wählen → Aushang-Vorschau. Bearbeiten öffnet erst das Editor-Modal. */

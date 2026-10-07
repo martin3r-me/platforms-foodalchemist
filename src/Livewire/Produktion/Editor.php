@@ -32,6 +32,43 @@ use Platform\FoodAlchemist\Support\TeamScope;
 class Editor extends Component
 {
     use \Platform\FoodAlchemist\Livewire\Concerns\InteractsWithSavedToast;
+    use \Platform\FoodAlchemist\Livewire\Concerns\MitBearbeitungssperre;   // Spec 65
+
+    /** Spec 65: Sperre gilt dem Produktionsauftrag — dasselbe Ziel wie in der Detailspalte. Neuer Auftrag: frei. */
+    protected function sperrZiel(): ?array
+    {
+        return $this->orderId !== null ? ['production_order', $this->orderId] : null;
+    }
+
+    protected function sperrModalName(): ?string
+    {
+        return 'produktion-editor';
+    }
+
+    /** Spec 65: Editor geschlossen → eigene Sperre frei (einziger modal.closed-Handler dieser Komponente). */
+    #[On('modal.closed')]
+    public function beiModalGeschlossen(?string $name = null): void
+    {
+        $this->sperreBeiSchliessen($name);
+    }
+
+    /**
+     * Lesend (ohne Sperre): Öffnen, Ziele-Browser (renderless Liste), Modal-Schließen.
+     * Alles andere — Ziele ändern, Speichern, Zeilen-Eingriffe, Status, Materialbedarf — schreibt bzw. ändert den Auftrag.
+     */
+    protected function sperrFreiExtra(): array
+    {
+        // zeileAbhaken: Küche hakt im laufenden Auftrag ab, ohne „Bearbeiten“ (Dominique 2026-10-07)
+        return ['oeffnenNeu', 'oeffnenBearbeiten', 'browseZiele', 'beiModalGeschlossen', 'zeileAbhaken'];
+    }
+
+    /** Abbrechen: ungespeicherten Stand verwerfen, Auftrag frisch laden. */
+    protected function nachAbbrechen(): void
+    {
+        if ($this->orderId !== null) {
+            $this->ladeAuftrag($this->orderId);
+        }
+    }
 
     public ?int $orderId = null;
 
@@ -85,6 +122,7 @@ class Editor extends Component
     #[On('produktion-editor.oeffnen')]
     public function oeffnenNeu(): void
     {
+        $this->bearbeitenBeenden();   // Spec 65: eine noch gehaltene Sperre des vorher offenen Auftrags freigeben
         $this->reset(['orderId', 'name', 'reference', 'note', 'puffer', 'targets', 'auswahlConceptId', 'auswahlRecipeId', 'suche', 'vorschau', 'fehler', 'basisEinheit', 'auswahlFoodbookId', 'auswahlChapterId', 'auswahlPersonen', 'variantChoices']);
         $this->productionDate = now()->toDateString();
         $this->auswahlMenge = 100;
@@ -94,8 +132,18 @@ class Editor extends Component
     #[On('produktion-editor.bearbeiten')]
     public function oeffnenBearbeiten(int $id, ProductionOrderService $svc): void
     {
+        if ($this->orderId !== null && $this->orderId !== $id) {
+            $this->bearbeitenBeenden();   // Spec 65: Sperre des vorher offenen Auftrags freigeben
+        }
+        $this->ladeAuftrag($id);
+        $this->dispatch('modal.open', name: 'produktion-editor');
+    }
+
+    /** Auftrag in die Form laden (Öffnen, Abbrechen, nach dem Speichern). */
+    private function ladeAuftrag(int $id): void
+    {
         $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
-        $detail = $svc->detail($team, $id);
+        $detail = app(ProductionOrderService::class)->detail($team, $id);
         $this->orderId = $id;
         $this->productionDate = (string) $detail['production_date'];
         $this->name = $detail['name'];
@@ -105,7 +153,6 @@ class Editor extends Component
         $this->targets = $detail['targets'];
         $this->fehler = null;
         $this->berechneVorschau();
-        $this->dispatch('modal.open', name: 'produktion-editor');
     }
 
     public function updatedZielTyp(): void
@@ -524,7 +571,11 @@ class Editor extends Component
                     'targets' => $this->targets,
                 ]);
             }
-            $this->dispatch('modal.close', name: 'produktion-editor');
+            // Spec 65 (Dominique 2026-10-07): Speichern beendet die Bearbeitung und gibt die Sperre frei, der Editor
+            // BLEIBT offen im Lesemodus (frisch gerechnete Vorschau prüfen, selbst schließen). Ein neuer Auftrag
+            // ist ab jetzt ein bestehender — der Editor zeigt ihn mit Positionen/Status wie beim Öffnen.
+            $this->bearbeitenBeenden();
+            $this->ladeAuftrag((int) $order->id);
             $this->dispatch('produktion-gespeichert', id: (int) $order->id);
             $this->savedToast('Produktionsauftrag gespeichert');
         } catch (\Throwable $e) {
@@ -603,6 +654,7 @@ class Editor extends Component
         $id = $this->orderId;
         $this->fuehreAus(fn ($team) => $svc->deleteOrder($team, $id), null);
         if ($this->fehler === null) {
+            app(\Platform\FoodAlchemist\Services\BearbeitungssperreService::class)->freigeben('production_order', $id, (int) Auth::id());   // Spec 65
             $this->dispatch('modal.close', name: 'produktion-editor');
             $this->dispatch('produktion-geloescht');
         }
@@ -745,6 +797,7 @@ class Editor extends Component
                 ->warnungenFuer($team, (int) $this->orderId) : [];
 
         return view('foodalchemist::livewire.produktion.editor', [
+            'sperr' => $this->sperrZustand(),   // Spec 65
             'postenListe' => $postenListe,
             'postenSummen' => $postenSummen,
             'kapazitaetsWarnungen' => $kapazitaetsWarnungen,

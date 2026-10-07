@@ -10,6 +10,9 @@
 @endphp
 
 <div class="flex flex-col gap-4" data-settings-aufschlagsklassen>
+    {{-- Spec 65: „Bearbeiten" sperrt den Bereich für das Team, „Fertig" gibt frei --}}
+    @php $sperrLesen = in_array($sperr['modus'], ['lesen', 'fremd'], true); @endphp
+    @include('foodalchemist::livewire.settings.partials.sperr-leiste', ['sofort' => true])
     @if($fehler !== null)
         <x-fa::notice tone="crit" data-ak-fehler>{{ $fehler }}</x-fa::notice>
     @endif
@@ -35,6 +38,7 @@
         </div>
     @endif
 
+    <fieldset @disabled($sperrLesen) class="contents" data-fa-lesemodus="{{ $sperrLesen ? '1' : '0' }}">
     {{-- Basissatz + Formel --}}
     <x-fa::section title="Unternehmens-Basissatz" icon="heroicon-o-scale" :meta="$scopeOutletName"
         description="Errechnet aus Monatsbasen, Gemeinkosten und Marge unter „Herstellkosten & Zuschläge“. Preisklassen verändern diesen Satz nur relativ.">
@@ -198,4 +202,5 @@
             <x-fa::button variant="primary" icon="heroicon-m-plus" wire:click="create">Preisklasse anlegen</x-fa::button>
         </div>
     </x-fa::section>
+    </fieldset>
 </div>

@@ -5,6 +5,10 @@
 @endphp
 
 <div class="flex flex-col gap-5" data-settings-trendradar>
+    {{-- Spec 65: erst „Bearbeiten" (sperrt den Bereich für das Team), dann Abbrechen/Speichern --}}
+    @php $sperrLesen = in_array($sperr['modus'], ['lesen', 'fremd'], true); @endphp
+    @include('foodalchemist::livewire.settings.partials.sperr-leiste', ['sofort' => false])
+
     {{-- Bestand --}}
     <x-fa::kpis :items="[
         ['label' => 'Trend-Dossiers', 'value' => number_format($trendDocs, 0, ',', '.')],
@@ -29,6 +33,7 @@
         </x-fa::notice>
     @endif
 
+    <fieldset @disabled($sperrLesen) class="contents" data-fa-lesemodus="{{ $sperrLesen ? '1' : '0' }}">
     {{-- Automatisierung --}}
     <x-fa::section title="Tägliche Konzept-Automatisierung" icon="heroicon-o-clock"
                    description="Holt jeden Morgen um {{ $zeit }} Uhr die stärksten Trends und legt daraus Konzept-Entwürfe im Concepter an.">
@@ -54,9 +59,11 @@
             </label>
         </div>
 
-        <div class="flex justify-end pt-3 border-t border-[var(--fa-line)]">
-            <x-fa::button variant="primary" icon="heroicon-m-check" wire:click="speichern">Einstellungen speichern</x-fa::button>
-        </div>
+        @unless($sperrLesen)
+            <div class="flex justify-end pt-3 border-t border-[var(--fa-line)]">
+                <x-fa::button variant="primary" icon="heroicon-m-check" wire:click="speichern" data-trendradar-speichern>Einstellungen speichern</x-fa::button>
+            </div>
+        @endunless
     </x-fa::section>
 
     {{-- Manueller Anstoß --}}
@@ -69,4 +76,5 @@
             </x-fa::button>
         </div>
     </x-fa::section>
+    </fieldset>
 </div>

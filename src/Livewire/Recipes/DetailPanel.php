@@ -91,6 +91,9 @@ class DetailPanel extends Component
         if ($this->embedded) {
             return; // eingebettet als Editor-Kartei: bleibt auf dem Editor-Rezept, ignoriert Browser-Auswahl
         }
+        if ($this->recipeId !== $id) {
+            $this->sperreBeiWechselFreigeben();   // Spec 65: Wechsel gibt eine hier geholte Sperre frei
+        }
         $this->recipeId = $id;
         $this->ersatzSuche = '';
         $this->tauschSuche = '';

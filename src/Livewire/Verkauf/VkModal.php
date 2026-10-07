@@ -411,6 +411,7 @@ class VkModal extends Component
             return;
         }
         $this->oeffnen($vk->id);                                     // direkt in den Edit-Modus
+        $this->bearbeitenStarten();                                  // Spec 65: Neuanlage startet im Bearbeiten-Modus
         $this->dispatch('recipe-gespeichert');
         $this->dispatch('vk-recipe-selected', id: $vk->id);
         $this->savedToast('Gericht angelegt');

@@ -21,6 +21,14 @@ use Platform\FoodAlchemist\Support\TeamScope;
  */
 class Einsatzorte extends Component
 {
+    /** Spec 65: Bereich settings.einsatzorte je Team — Sofort-Aktionen (Liste), Leiste Bearbeiten → Fertig. */
+    use Concerns\MitEinstellungsSperre;
+
+    protected function sperrBereich(): string
+    {
+        return 'einsatzorte';
+    }
+
     public ?int $editId = null;
 
     public array $form = [];
@@ -106,6 +114,7 @@ class Einsatzorte extends Component
             ->select('target_key', DB::raw('COUNT(*) as n'))->groupBy('target_key')->pluck('n', 'target_key');
 
         return view('foodalchemist::livewire.settings.einsatzorte', [
+            'sperr' => $this->sperrZustand(),   // Spec 65
             'bereiche' => $rows->where('kind', 'bereich')->values(),
             'prompts' => $rows->where('kind', 'prompt')->values(),
             'bindCounts' => $counts,

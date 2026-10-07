@@ -3,8 +3,16 @@
      Küchentyp als Auswahlkarten (Name + Merkmale), Typ-Farben als eigene Gruppe darunter. --}}
 <div class="flex flex-col gap-4" data-settings-kueche>
 
+    {{-- Spec 65: erst „Bearbeiten" (sperrt den Bereich für das Team), dann Abbrechen/Speichern --}}
+    @php $sperrLesen = in_array($sperr['modus'], ['lesen', 'fremd'], true); @endphp
+    @include('foodalchemist::livewire.settings.partials.sperr-leiste', ['sofort' => false, 'hint' => 'Grundrichtung für Rezeptvorschläge.'])
+    @unless($sperrLesen)
     <x-foodalchemist::save-bar :meldung="$meldung" data-kueche-meldung
         hint="Grundrichtung für Rezeptvorschläge. Was du im Rezept ausdrücklich vorgibst, geht immer vor." />
+    @endunless
+    @if($sperrLesen && $meldung)<x-fa::notice tone="ok" data-kueche-meldung>{{ $meldung }}</x-fa::notice>@endif
+
+    <fieldset @disabled($sperrLesen) class="contents" data-fa-lesemodus="{{ $sperrLesen ? '1' : '0' }}">
 
     <x-fa::section title="Küchentyp" description="Gibt der KI die Grundrichtung für Chargen, Technik und Convenience vor.">
         <div class="grid gap-2 grid-cols-[repeat(auto-fit,minmax(min(100%,20rem),1fr))]" role="radiogroup" aria-label="Küchentyp" data-kueche-typen>
@@ -43,5 +51,6 @@
         </div>
         <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">Neue Farben gelten nach dem Speichern oben.</p>
     </x-fa::section>
+    </fieldset>
 
 </div>

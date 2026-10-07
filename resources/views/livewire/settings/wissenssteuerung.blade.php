@@ -15,6 +15,9 @@
 @endphp
 
 <div class="flex flex-col gap-6" data-settings-wissenssteuerung>
+    {{-- Spec 65: „Bearbeiten" sperrt den Bereich für das Team, „Fertig" gibt frei --}}
+    @php $sperrLesen = in_array($sperr['modus'], ['lesen', 'fremd'], true); @endphp
+    @include('foodalchemist::livewire.settings.partials.sperr-leiste', ['sofort' => true])
     @if($fehler !== null)
         <x-fa::notice tone="crit" data-ws-fehler>{{ $fehler }}</x-fa::notice>
     @endif
@@ -57,6 +60,7 @@
             </div>
         </x-slot:actions>
 
+        <fieldset @disabled($sperrLesen) class="contents" data-fa-lesemodus="{{ $sperrLesen ? '1' : '0' }}">
         <div class="overflow-x-auto -mx-4">
             <table class="fa-table min-w-[760px]" data-ws-profile>
                 <thead>
@@ -276,8 +280,10 @@
                 </tbody>
             </table>
         </div>
+        </fieldset>
     </x-fa::section>
 
+    <fieldset @disabled($sperrLesen) class="contents" data-fa-lesemodus="{{ $sperrLesen ? '1' : '0' }}">
     {{-- ── Achsen-Bindungen (Spec 52/H2) ── --}}
     @php
         $achsenNamen = collect(array_keys($achsen))->merge(array_keys($achsenConfig))->unique()->sort()->values();
@@ -522,4 +528,5 @@
             </div>
         @endif
     </x-fa::section>
+    </fieldset>
 </div>

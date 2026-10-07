@@ -19,6 +19,36 @@ class Index extends Component
 {
     use WithPagination;
     use \Platform\FoodAlchemist\Livewire\Concerns\InteractsWithSavedToast;
+    use \Platform\FoodAlchemist\Livewire\Concerns\MitBearbeitungssperre;   // Spec 65
+
+    /** Spec 65: Sperre gilt dem gewählten Concept — dasselbe Ziel wie der Concepter-Editor (Typ concept). */
+    protected function sperrZiel(): ?array
+    {
+        return $this->selectedId !== null ? ['concept', $this->selectedId] : null;
+    }
+
+    /**
+     * Ohne Sperre: Auswahl, Liste/Filter/Kategorie-Filter, Picker auf-/zuklappen, Zielpreis-Vorschlag rechnen
+     * (persistiert nichts), Generator-Panel öffnen. Außerdem alles, was das GEWÄHLTE Concept nicht ändert:
+     * Neuanlage, Concept aus Vorlage und „Als Vorlage speichern" (legen je eine Kopie an), Kundenbrief-Generator
+     * (legt ein NEUES Concept an) und die Kategorien-Pflege der linken Spalte (Team-Kategorienbaum, kein Concept).
+     */
+    protected function sperrFreiExtra(): array
+    {
+        return [
+            'waehle', 'kategorieWaehlen', 'gerichtPicker', 'zielpreisToggle', 'zielpreisBerechnen', 'generatorOeffnen', '$set',
+            'neu', 'ausVorlage', 'alsVorlage', 'generatorStart',
+            'kategorieNeu', 'kategorieEditStart', 'kategorieRename', 'kategorieLoeschen',
+        ];
+    }
+
+    /** Abbrechen: ungespeicherten Formularstand verwerfen, Concept frisch laden. */
+    protected function nachAbbrechen(): void
+    {
+        if ($this->selectedId !== null) {
+            $this->waehle($this->selectedId, app(ConceptService::class));
+        }
+    }
 
     #[Url(as: 'q')]
     public string $search = '';
@@ -172,6 +202,10 @@ class Index extends Component
         if ($c === null) {
             return;
         }
+        // Spec 65: anderes Concept gewählt → eigene Sperre am bisherigen freigeben.
+        if ($this->selectedId !== null && $this->selectedId !== $id) {
+            $this->bearbeitenBeenden();
+        }
         $this->selectedId = $id;
         $this->form = [
             'name' => $c->name, 'occasion' => $c->occasion ?? '', 'level' => $c->level ?? '',
@@ -218,13 +252,19 @@ class Index extends Component
         if ($this->selectedId !== null) {
             $svc->update($this->team(), $this->selectedId, $this->form);
             $this->savedToast('Konzept-Vorlage gespeichert');
+            $this->bearbeitenBeenden();   // Spec 65: Speichern beendet die Bearbeitung, das Concept bleibt im Lesemodus offen
         }
     }
 
     public function loeschen(int $id, ConceptService $svc): void
     {
+        // Spec 65: der call-Haken prüft die Sperre des GEWÄHLTEN Concepts — ein anderes nicht ungeprüft löschen.
+        if (self::sperreAktiv() && $id !== $this->selectedId) {
+            return;
+        }
         $svc->delete($this->team(), $id);
         if ($this->selectedId === $id) {
+            $this->bearbeitenBeenden();   // Spec 65: gelöscht → Sperre frei
             $this->selectedId = null;
         }
     }
@@ -376,6 +416,7 @@ class Index extends Component
             : collect();
 
         return view('foodalchemist::livewire.concepts.index', [
+            'sperr' => $this->sperrZustand(),   // Spec 65
             'concepts' => $concepts,
             'vkDisplay' => $svc->outletPreisMap($team, collect($concepts->items()), $outlet),
             'aktiverBetrieb' => $outlet?->name,

@@ -18,6 +18,9 @@
     $opsStatus = $ops !== null ? \Platform\FoodAlchemist\Enums\ProductionOrderStatus::from($ops['status']) : null;
     $darfLoeschen = $ops !== null && $ops['is_owned'] && in_array($ops['status'], ['planned', 'cancelled'], true);
     $hatDokument = $ops !== null && \Illuminate\Support\Facades\Route::has('foodalchemist.produktion.auftraege.dokument');
+    // Spec 65: Lesemodus (keine eigene Sperre) — Eingaben/Knöpfe der Reiter sind aus, Löschen erst nach „Bearbeiten".
+    $sperrLesen = in_array($sperr['modus'], ['lesen', 'fremd'], true);
+    $darfLoeschen = $darfLoeschen && ! $sperrLesen;
 @endphp
 
 {{-- Spec 29-Rollout: Produktion-Editor auf Editor-Page-Muster (fullscreen · dark · editor-tabs · KPI). --}}
@@ -57,7 +60,10 @@
                     </div>
                 </div>
             @endif
-            <x-fa::button variant="primary" icon="heroicon-m-check" wire:click="speichern" wire:loading.attr="disabled" wire:target="speichern" data-produktion-speichern>{{ $orderId === null ? 'Auftrag anlegen' : 'Speichern' }}</x-fa::button>
+            {{-- Spec 65: erst „Bearbeiten" (Sperre), dann Abbrechen/Speichern; Speichern beendet die Bearbeitung --}}
+            <x-foodalchemist::bearbeiten-leiste :zustand="$sperr">
+                <x-fa::button variant="primary" icon="heroicon-m-check" wire:click="speichern" wire:loading.attr="disabled" wire:target="speichern" data-produktion-speichern>{{ $orderId === null ? 'Auftrag anlegen' : 'Speichern' }}</x-fa::button>
+            </x-foodalchemist::bearbeiten-leiste>
         </div>
     </x-slot:actions>
 
@@ -73,7 +79,7 @@
         ]" />
     </x-slot:kpiHeader>
 
-    <x-foodalchemist::editor-tabs marker="produktion" wire-key="produktion-tabs-{{ $orderId ?? 'neu' }}" :init="'stammdaten'"
+    <x-foodalchemist::editor-tabs marker="produktion" wire-key="produktion-tabs-{{ $orderId ?? 'neu' }}" :init="'stammdaten'" :gesperrt="$sperrLesen"
         :tabs="['stammdaten' => 'Stammdaten', 'ziele' => 'Ziele', 'vorschau' => 'Vorschau', 'zeilen' => $orderId ? 'Positionen' : null, 'einkauf' => $orderId ? 'Status und Einkauf' : null]">
 
     @include('foodalchemist::livewire.produktion.partials.editor-stammdaten')

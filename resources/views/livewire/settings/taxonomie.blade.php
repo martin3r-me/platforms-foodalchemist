@@ -8,6 +8,10 @@
 @endphp
 
 <div class="flex flex-col gap-4">
+    {{-- Spec 65: „Bearbeiten" sperrt den Bereich für das Team, „Fertig" gibt frei --}}
+    @php $sperrLesen = in_array($sperr['modus'], ['lesen', 'fremd'], true); @endphp
+    @include('foodalchemist::livewire.settings.partials.sperr-leiste', ['sofort' => true])
+    <fieldset @disabled($sperrLesen) class="contents" data-fa-lesemodus="{{ $sperrLesen ? '1' : '0' }}">
     @if($fehler)<x-fa::notice tone="crit">{{ $fehler }}</x-fa::notice>@endif
 
     <div class="flex flex-wrap gap-4 items-start">
@@ -26,8 +30,8 @@
                             <x-fa::button size="sm" variant="primary" wire:click="hgSave">Speichern</x-fa::button>
                         @else
                             <span class="shrink-0 pl-0.5">@include('foodalchemist::livewire.settings.partials.reorder-cell', ['id' => $hg->id, 'upMethod' => 'hgHoch', 'downMethod' => 'hgRunter', 'first' => $loop->first, 'last' => $loop->last])</span>
-                            <button type="button" wire:click="waehleHg({{ $hg->id }})" @if($aktiv) aria-current="true" @endif
-                                    class="flex-1 min-w-0 truncate text-left px-1.5 py-1.5 text-[length:var(--fa-text-md)] {{ $aktiv ? 'font-medium' : '' }}" title="{{ $hg->label }}">{{ $hg->label }}</button>
+                            <a href="#" role="button" wire:click.prevent="waehleHg({{ $hg->id }})" @if($aktiv) aria-current="true" @endif
+                                    class="flex-1 min-w-0 truncate text-left px-1.5 py-1.5 text-[length:var(--fa-text-md)] {{ $aktiv ? 'font-medium' : '' }}" title="{{ $hg->label }}">{{ $hg->label }}</a>
                             <span class="shrink-0 text-[length:var(--fa-text-sm)] tabular-nums text-[var(--fa-ink-3)]" title="Kategorien">{{ $hg->kategorie_count }}</span>
                             @if($darfEditHg)
                                 <span class="shrink-0 flex opacity-0 group-hover:opacity-100 focus-within:opacity-100">
@@ -146,4 +150,5 @@
             </x-fa::section>
         </div>
     </div>
+    </fieldset>
 </div>

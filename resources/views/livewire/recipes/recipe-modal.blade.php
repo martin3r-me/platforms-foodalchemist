@@ -96,9 +96,13 @@
                      Erfolg und nur im Bestand (Anlage hat noch keine Zutaten) — adressiert das Zutaten-
                      Speichern anstoßen (MVP-046). Der eingebettete Editor meldet `zutaten-persistiert`
                      zurück → beiZutatenPersistiert schließt. Kein paralleler Race, kein Früh-Schließen. --}}
-                <x-fa::button variant="primary" icon="heroicon-m-check"
-                    x-on:click="const warBestand = $wire.recipeId !== null; $wire.speichern().then(() => { if (warBestand && ! $wire.fehler && $wire.recipeId) $dispatch('zutaten-speichern', { recipeId: $wire.recipeId }) })"
-                    data-rezept-speichern>{{ $neu ? 'Rezept anlegen' : 'Speichern' }}</x-fa::button>
+                {{-- Spec 65: erst „Bearbeiten" (Sperre), dann Abbrechen/Speichern; Speichern beendet die Bearbeitung,
+                     der Editor bleibt im Lesemodus offen. Neuanlage braucht keine Sperre (modus neu = nur der Knopf). --}}
+                <x-foodalchemist::bearbeiten-leiste :zustand="$sperr">
+                    <x-fa::button variant="primary" icon="heroicon-m-check"
+                        x-on:click="const warBestand = $wire.recipeId !== null; $wire.speichern().then(() => { if (warBestand && ! $wire.fehler && $wire.recipeId) $dispatch('zutaten-speichern', { recipeId: $wire.recipeId }) })"
+                        data-rezept-speichern>{{ $neu ? 'Rezept anlegen' : 'Speichern' }}</x-fa::button>
+                </x-foodalchemist::bearbeiten-leiste>
             </div>
         @endif
     </x-slot:actions>
@@ -236,7 +240,7 @@
          gemountet werden). Start-Tab: «Aufbau», bei Neuanlage «Stammdaten» (Aufbau ist ohne
          Zutaten leer). Die drei Morph-Fallen (wire:key · x-effect-Reset · ein Scope für Leiste
          und Panels) stecken im Baustein. --}}
-    <x-foodalchemist::editor-tabs marker="rezept" wire-key="rezept-tabs-{{ $recipeId ?? 'neu' }}" visit-action="tabLaden"
+    <x-foodalchemist::editor-tabs marker="rezept" wire-key="rezept-tabs-{{ $recipeId ?? 'neu' }}" visit-action="tabLaden" :gesperrt="in_array($sperr['modus'], ['lesen', 'fremd'], true)"
         :visited="array_keys($geladeneTabs)"
         :init="$neu ? 'eigenschaften' : 'aufbau'"
         :tabs="[
@@ -754,13 +758,6 @@
 
     {{-- ── Reiter: FEEDBACK (R2.6 — Praxis-Feedback Küche/Kunde/Event) ───── --}}
     @if(! $neu && $recipeId !== null)
-    <div x-show="tab === 'feedback'" x-cloak class="pt-4">
-        @if($geladeneTabs['feedback'] ?? false)
-        <livewire:foodalchemist.recipes.feedback-panel :recipe-id="$recipeId" wire:key="feedback-rez-{{ $recipeId }}" />
-        @else
-            <p class="{{ $laedt }}" data-rezept-tab-laedt="feedback">Feedback wird geladen …</p>
-        @endif
-    </div>
     @endif
 
     {{-- ── Reiter: NOTIZEN (§9.1 — manuelle Insel) ───────────────────────── --}}
@@ -779,6 +776,16 @@
         @include('foodalchemist::livewire.recipes.partials.verwaltung', ['rezeptName' => $form['name'] ?: 'dieses Rezept', 'kompakt' => false])
     </x-fa::section>
     </div>{{-- /Reiter VERWALTUNG --}}
+        {{-- Spec 65: KI-Feedback auch ohne „Bearbeiten“ (Dominique 2026-10-07) --}}
+        <x-slot:frei>
+    <div x-show="tab === 'feedback'" x-cloak class="pt-4">
+        @if($geladeneTabs['feedback'] ?? false)
+        <livewire:foodalchemist.recipes.feedback-panel :recipe-id="$recipeId" wire:key="feedback-rez-{{ $recipeId }}" />
+        @else
+            <p class="{{ $laedt }}" data-rezept-tab-laedt="feedback">Feedback wird geladen …</p>
+        @endif
+    </div>
+        </x-slot:frei>
     </x-foodalchemist::editor-tabs>
 
     @endif

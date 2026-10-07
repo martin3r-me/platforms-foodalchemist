@@ -68,8 +68,11 @@
                 @if($istPaket)<x-fa::badge>{{ $concept->price_mode === 'auto' ? 'Preis aus den Gerichten' : 'Preis fixiert' }}</x-fa::badge>@endif
             </x-slot:badges>
             <x-slot:aktion>
-                <x-fa::button variant="primary" size="sm" icon="heroicon-m-pencil-square"
-                    wire:click="$dispatch('concepter-editor.oeffnen', { type: 'concepts', id: {{ $concept->id }} })">Im Editor öffnen</x-fa::button>
+                <div class="flex flex-wrap items-center gap-2">
+                    <x-foodalchemist::bearbeiten-leiste :zustand="$sperr" sofort />
+                    <x-fa::button variant="ghost" size="sm" icon="heroicon-m-arrow-top-right-on-square"
+                        wire:click="$dispatch('concepter-editor.oeffnen', { type: 'concepts', id: {{ $concept->id }} })">Im Editor öffnen</x-fa::button>
+                </div>
             </x-slot:aktion>
             <x-slot:menue>
                 {{-- #6: „Karte drucken" (schöne Kunden-Ausgabe) + „Report" (technisch). Karte gilt auch fürs Paket. --}}
@@ -88,6 +91,9 @@
                 <x-fa::menu-item danger icon="heroicon-m-trash" wire:click="loeschen" wire:confirm="{{ $istPaket ? 'Paket löschen?' : 'Concept löschen?' }}">{{ $wort }} löschen</x-fa::menu-item>
             </x-slot:menue>
         </x-fa::detail-kopf>
+
+        {{-- Spec 65: Detailspalte — Änderungen erst nach „Bearbeiten" (gleiche Sperre wie der Concepter-Editor), „Fertig" gibt frei --}}
+        <fieldset @disabled(in_array($sperr['modus'], ['lesen', 'fremd'], true)) class="contents" data-fa-lesemodus="{{ in_array($sperr['modus'], ['lesen', 'fremd'], true) ? '1' : '0' }}">
 
         {{-- Cockpit (Menü-Ökonomie): €/Person ist die Hauptzahl, Score für echte Concepts --}}
         <div class="flex flex-col gap-3" data-concepter-cockpit>
@@ -229,5 +235,6 @@
             </x-fa::section>
 
         </div>
+        </fieldset>
     @endif
 </div>

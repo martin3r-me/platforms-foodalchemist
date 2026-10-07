@@ -8,14 +8,18 @@
 @endphp
 
 <div class="flex flex-col gap-4">
+    {{-- Spec 65: „Bearbeiten" sperrt den Bereich für das Team, „Fertig" gibt frei --}}
+    @php $sperrLesen = in_array($sperr['modus'], ['lesen', 'fremd'], true); @endphp
+    @include('foodalchemist::livewire.settings.partials.sperr-leiste', ['sofort' => true])
+    <fieldset @disabled($sperrLesen) class="contents" data-fa-lesemodus="{{ $sperrLesen ? '1' : '0' }}">
     @if($fehler)<x-fa::notice tone="crit">{{ $fehler }}</x-fa::notice>@endif
 
     {{-- Achsen-Umschalter --}}
     <div class="flex flex-wrap items-center gap-3">
         <div role="group" aria-label="Achse" class="flex p-0.5 gap-0.5 rounded-[var(--fa-radius-control)] bg-[var(--fa-neutral-soft)]">
             @foreach(['category' => 'Kategorien', 'class' => 'Klassen'] as $ak => $al)
-                <button type="button" wire:click="setAchse('{{ $ak }}')" aria-pressed="{{ $achse === $ak ? 'true' : 'false' }}"
-                        class="h-7 px-3 rounded-[5px] text-[length:var(--fa-text-sm)] font-medium transition-colors {{ $achse === $ak ? 'bg-[var(--fa-surface)] text-[var(--fa-ink)] shadow-sm' : 'text-[var(--fa-ink-2)] hover:text-[var(--fa-ink)]' }}">{{ $al }}</button>
+                <a href="#" role="button" wire:click.prevent="setAchse('{{ $ak }}')" aria-pressed="{{ $achse === $ak ? 'true' : 'false' }}"
+                        class="h-7 px-3 rounded-[5px] text-[length:var(--fa-text-sm)] font-medium transition-colors {{ $achse === $ak ? 'bg-[var(--fa-surface)] text-[var(--fa-ink)] shadow-sm' : 'text-[var(--fa-ink-2)] hover:text-[var(--fa-ink)]' }}">{{ $al }}</a>
             @endforeach
         </div>
         <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">Rein zum Ordnen und Filtern von Konzepten in Foodbook und Angebot, ohne Einfluss auf den Preis.</p>
@@ -37,8 +41,8 @@
                                 <x-fa::input size="sm" wire:model="editKatName" wire:keydown.enter="katRename" wire:keydown.escape="$set('editKatId', null)" aria-label="Name der Kategorie" class="flex-1 min-w-0" autofocus />
                                 <x-fa::button size="sm" variant="primary" wire:click="katRename">Speichern</x-fa::button>
                             @else
-                                <button type="button" wire:click="katWaehlen({{ $kat['id'] }})" @if($aktiv) aria-current="true" @endif
-                                        class="flex-1 min-w-0 truncate text-left px-1.5 py-1.5 text-[length:var(--fa-text-md)] {{ $aktiv ? 'font-medium' : '' }}">{{ $kat['name'] }}</button>
+                                <a href="#" role="button" wire:click.prevent="katWaehlen({{ $kat['id'] }})" @if($aktiv) aria-current="true" @endif
+                                        class="flex-1 min-w-0 truncate text-left px-1.5 py-1.5 text-[length:var(--fa-text-md)] {{ $aktiv ? 'font-medium' : '' }}">{{ $kat['name'] }}</a>
                                 <span class="shrink-0 text-[length:var(--fa-text-sm)] tabular-nums text-[var(--fa-ink-3)]" title="Unterkategorien">{{ $kinder }}</span>
                                 <span class="shrink-0 flex opacity-0 group-hover:opacity-100 focus-within:opacity-100">
                                     <x-fa::icon-button size="sm" icon="heroicon-o-pencil" label="Kategorie umbenennen" wire:click="katEditStart({{ $kat['id'] }}, @js($kat['name']))" />
@@ -127,8 +131,8 @@
                                 <x-fa::input size="sm" wire:model="editKlasseName" wire:keydown.enter="klasseRename" wire:keydown.escape="$set('editKlasseId', null)" aria-label="Name der Klasse" class="flex-1 min-w-0" autofocus />
                                 <x-fa::button size="sm" variant="primary" wire:click="klasseRename">Speichern</x-fa::button>
                             @else
-                                <button type="button" wire:click="klasseWaehlen({{ $kl['id'] }})" @if($aktiv) aria-current="true" @endif
-                                        class="flex-1 min-w-0 truncate text-left px-1.5 py-1.5 text-[length:var(--fa-text-md)] {{ $aktiv ? 'font-medium' : '' }}">{{ $kl['name'] }}</button>
+                                <a href="#" role="button" wire:click.prevent="klasseWaehlen({{ $kl['id'] }})" @if($aktiv) aria-current="true" @endif
+                                        class="flex-1 min-w-0 truncate text-left px-1.5 py-1.5 text-[length:var(--fa-text-md)] {{ $aktiv ? 'font-medium' : '' }}">{{ $kl['name'] }}</a>
                                 <span class="shrink-0 text-[length:var(--fa-text-sm)] tabular-nums text-[var(--fa-ink-3)]" title="Unterklassen">{{ $kinder }}</span>
                                 <span class="shrink-0 flex opacity-0 group-hover:opacity-100 focus-within:opacity-100">
                                     <x-fa::icon-button size="sm" icon="heroicon-o-pencil" label="Klasse umbenennen" wire:click="klasseEditStart({{ $kl['id'] }}, @js($kl['name']))" />
@@ -202,4 +206,5 @@
             </x-fa::section>
         </div>
     @endif
+    </fieldset>
 </div>

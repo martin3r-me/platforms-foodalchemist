@@ -72,12 +72,18 @@
                             <x-fa::badge :tone="$selected->price_mode === 'auto' ? 'info' : 'neutral'" title="Preis">{{ 'Preis ' . ($modusLabel[$selected->price_mode] ?? $selected->price_mode) }}</x-fa::badge>
                         </x-slot:badges>
                         <x-slot:aktion>
-                            <x-fa::button variant="primary" size="sm" icon="heroicon-m-check" wire:click="speichern">Speichern</x-fa::button>
+                            {{-- Spec 65: erst „Bearbeiten" (Sperre), dann Abbrechen/Speichern; Speichern beendet die Bearbeitung --}}
+                            <x-foodalchemist::bearbeiten-leiste :zustand="$sperr">
+                                <x-fa::button variant="primary" size="sm" icon="heroicon-m-check" wire:click="speichern" data-paket-speichern>Speichern</x-fa::button>
+                            </x-foodalchemist::bearbeiten-leiste>
                         </x-slot:aktion>
                         <x-slot:menue>
                             <x-fa::menu-item danger icon="heroicon-m-trash" wire:click="loeschen({{ $selected->id }})" wire:confirm="Paket löschen?">Paket löschen</x-fa::menu-item>
                         </x-slot:menue>
                     </x-fa::detail-kopf>
+
+                    {{-- Spec 65: Inhalt unter dem Kopf im Lesemodus gesperrt (Gerichte, Preis, Angaben) --}}
+                    <fieldset @disabled(in_array($sperr['modus'], ['lesen', 'fremd'], true)) class="contents" data-fa-lesemodus="{{ in_array($sperr['modus'], ['lesen', 'fremd'], true) ? '1' : '0' }}">
 
                     {{-- B-07: Kennzahlen + offene Punkte --}}
                     <div class="flex flex-col gap-3">
@@ -180,6 +186,7 @@
                             <x-fa::choice name="form.level" label="Niveau" :live="false" idPrefix="paket" :options="['' => 'Ohne'] + $niveauLabel" />
                         </x-fa::section>
                     </div>
+                    </fieldset>
                 </div>
             @else
                 <div class="p-4 flex flex-col gap-5 min-h-full bg-[var(--fa-ground)]">

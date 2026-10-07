@@ -6,6 +6,10 @@
      Anlegen oben rechts als Hauptaktion; Deaktivieren im Menü „Weitere Aktionen", nie neben Speichern.
      Präsentations-Vorlage und -Logo stehen beim Bearbeiten in einer eigenen Zeile unter dem Betrieb. --}}
 <div class="flex flex-col gap-4" data-settings-betriebe>
+    {{-- Spec 65: „Bearbeiten" sperrt den Bereich für das Team, „Fertig" gibt frei --}}
+    @php $sperrLesen = in_array($sperr['modus'], ['lesen', 'fremd'], true); @endphp
+    @include('foodalchemist::livewire.settings.partials.sperr-leiste', ['sofort' => true])
+    <fieldset @disabled($sperrLesen) class="contents" data-fa-lesemodus="{{ $sperrLesen ? '1' : '0' }}">
 
     <x-fa::section title="Betriebe" :meta="$betriebe->isNotEmpty() ? $betriebe->count() . ' angelegt' : null"
         description="Standorte, Filialen oder Ausgabestellen. Im Controlling zeigen sie, welcher Betrieb gerade welche Karte, welchen Plan und welches Foodbook fährt. Die Zuordnung an der einzelnen Ausgabe bleibt freiwillig.">
@@ -147,4 +151,5 @@
             </p>
         @endif
     </x-fa::section>
+    </fieldset>
 </div>

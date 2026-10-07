@@ -25,6 +25,68 @@ use Platform\FoodAlchemist\Support\Suche;
  */
 class Editor extends Component
 {
+    use \Platform\FoodAlchemist\Livewire\Concerns\MitBearbeitungssperre;   // Spec 65
+
+    /**
+     * Spec 65: Sperre gilt der Bestellschiene (Ziel order). Die Bestellrunde/Direktbestellung ohne Beleg
+     * (orderId null) erzeugt erst neue Schienen und braucht keine Sperre.
+     */
+    protected function sperrZiel(): ?array
+    {
+        return $this->orderId !== null ? ['order', $this->orderId] : null;
+    }
+
+    protected function sperrModalName(): ?string
+    {
+        return 'orders-editor';
+    }
+
+    /** Spec 65: Editor geschlossen → eigene Sperre frei (einziger modal.closed-Handler dieser Komponente). */
+    #[On('modal.closed')]
+    public function beiModalGeschlossen(?string $name = null): void
+    {
+        $this->sperreBeiSchliessen($name);
+    }
+
+    /**
+     * Lesend (ohne Sperre): Öffnen (alle Einstiege), Ausweichquellen auf-/zuklappen, Lieferantenwechsel-Vorschau
+     * (persistiert nichts) und deren Schließen, Alternativen der Runde nachschlagen, Modal-Schließen.
+     */
+    protected function sperrFreiExtra(): array
+    {
+        return [
+            'oeffnenBearbeiten', 'oeffnenNeu', 'oeffnenProduktion', 'oeffnenRunde', 'oeffnenProduktionen',
+            'alternativenUmschalten', 'neuQuellenVorschau', 'neuQuellenAbbrechen', 'cockpitAlternativenUmschalten',
+            'beiModalGeschlossen',
+        ];
+    }
+
+    /** Abbrechen bzw. „Fertig": Kopf-Formular frisch aus dem Beleg laden. */
+    protected function nachAbbrechen(): void
+    {
+        $this->resourceVorschau = null;
+        $this->altLineId = null;
+        $this->ladeKopf();
+    }
+
+    /**
+     * Spec 65: Eine Schreibaktion hat den Editor auf eine ANDERE Schiene geführt (Artikel-Tausch mit
+     * Lieferantenwechsel, Direktbestellung legt Schienen an). Die Sperre folgt: alte freigeben, neue
+     * holen — sonst stünde der Editor nach dem eigenen Schreiben im Lesemodus und die alte Sperre bliebe liegen.
+     */
+    private function sperreFolgtBeleg(?int $alteId): void
+    {
+        if ($alteId === $this->orderId || $this->orderId === null) {
+            return;
+        }
+        if ($alteId !== null && Auth::id() !== null) {
+            app(\Platform\FoodAlchemist\Services\BearbeitungssperreService::class)->freigeben('order', $alteId, (int) Auth::id());
+        }
+        if (self::sperreAktiv()) {
+            $this->bearbeitenStarten();
+        }
+    }
+
     public ?int $orderId = null;
 
     // Kopf-Edit-Form.
@@ -118,6 +180,9 @@ class Editor extends Component
     #[On('orders-editor.bearbeiten')]
     public function oeffnenBearbeiten(int $id): void
     {
+        if ($this->orderId !== null && $this->orderId !== $id) {
+            $this->bearbeitenBeenden();   // Spec 65: Sperre der vorher offenen Schiene freigeben
+        }
         $this->orderId = $id;
         $this->hinweis = null;
         $this->fehler = null;
@@ -135,6 +200,7 @@ class Editor extends Component
     #[On('orders-editor.neu')]
     public function oeffnenNeu(?string $deliveryDate = null, ?string $strategy = null, ?int $productionId = null): void
     {
+        $this->bearbeitenBeenden();   // Spec 65: Sperre der vorher offenen Schiene freigeben
         $this->orderId = null;
         $this->hinweis = null;
         $this->fehler = null;
@@ -462,7 +528,9 @@ class Editor extends Component
             $this->altLineId = null;
             // Bei Schienen-Wechsel folgt der Editor der Zeile in ihre neue Schiene.
             if ($res['schiene_wechsel'] && $res['target_order_id'] !== null) {
+                $alt = $this->orderId;
                 $this->orderId = (int) $res['target_order_id'];
+                $this->sperreFolgtBeleg($alt);   // Spec 65
                 $this->ladeKopf();
             }
         }, 'Artikel umgestellt.');
@@ -741,7 +809,9 @@ class Editor extends Component
     {
         $this->fuehreAus(function ($team) use ($orders, $supplierItemId) {
             $line = $orders->addManualLine($team, $supplierItemId, 1.0, null, Auth::id(), $this->formDeliveryDate ?: null);
+            $alt = $this->orderId;
             $this->orderId = (int) $line->order_id;
+            $this->sperreFolgtBeleg($alt);   // Spec 65
             $this->kopfNachStartSpeichern($orders, [$this->orderId]);
             $this->ladeKopf();
         }, 'Artikel hinzugefügt.');
@@ -803,7 +873,9 @@ class Editor extends Component
             $res = $orders->addNeedFromTarget($team, $ziel, $sourceRef, Auth::id(), null, $this->formDeliveryDate ?: null);
             $this->kopfNachStartSpeichern($orders, array_map('intval', $res['orders'] ?? []));
             if (! empty($res['orders'])) {
+                $alt = $this->orderId;
                 $this->orderId = (int) $res['orders'][0];
+                $this->sperreFolgtBeleg($alt);   // Spec 65
                 $this->ladeKopf();
             }
             if (empty($res['orders']) && empty($res['skipped_ohne_la'])) {
@@ -969,6 +1041,7 @@ class Editor extends Component
         }
 
         return view('foodalchemist::livewire.orders.editor', [
+            'sperr' => $this->sperrZustand(),   // Spec 65
             'detail' => $detail,
             'erlaubteStatus' => $erlaubteStatus,
             'mailto' => $mailto,

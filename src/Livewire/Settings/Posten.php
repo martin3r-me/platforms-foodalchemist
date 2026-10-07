@@ -25,6 +25,14 @@ use Platform\FoodAlchemist\Services\TeamSettingsService;
  */
 class Posten extends Component
 {
+    /** Spec 65: Bereich settings.posten je Team — Felder/Besetzung schreiben sofort, Leiste Bearbeiten → Fertig. */
+    use Concerns\MitEinstellungsSperre;
+
+    protected function sperrBereich(): string
+    {
+        return 'posten';
+    }
+
     /** @var array{name: string, group_name: string, kapazitaet: string} */
     public array $neu = ['name' => '', 'group_name' => '', 'kapazitaet' => ''];
 
@@ -220,6 +228,7 @@ class Posten extends Component
         $team = Auth::user()?->currentTeamRelation;
 
         return view('foodalchemist::livewire.settings.posten', [
+            'sperr' => $this->sperrZustand(),   // Spec 65
             'posten' => $team !== null
                 ? FoodAlchemistProductionStation::visibleToTeam($team)
                     ->orderBy('sort_order')->orderBy('name')->get()

@@ -108,5 +108,10 @@
         <fieldset @disabled($gesperrt) class="contents" data-fa-lesemodus="{{ $gesperrt ? '1' : '0' }}">
             {{ $slot }}
         </fieldset>
+        {{-- Spec 65: Panels, die auch ohne „Bearbeiten“ bedienbar sind (z.B. KI-Feedback) — außerhalb des fieldsets,
+             aber im selben Alpine-Scope (x-show="tab === …" wirkt weiter). --}}
+        @isset($frei)
+            {{ $frei }}
+        @endisset
     </div>
 @endif

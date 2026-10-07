@@ -104,7 +104,11 @@
 
                 {{-- #5 (2026-08-13): EIN Speichern pro Tab — auf «Konzept & Planung» sichert der Knopf
                      Stammdaten + Canvas + Rahmen zusammen (konzeptSpeichern), sonst nur die Stammdaten. --}}
-                <x-fa::button variant="primary" icon="heroicon-m-check" wire:click="{{ $tab === 'konzept' ? 'konzeptSpeichern' : 'speichern' }}" data-concepter-speichern>Speichern</x-fa::button>
+                {{-- Spec 65: erst „Bearbeiten" (Sperre), dann Abbrechen/Speichern; Speichern beendet die Bearbeitung,
+                     der Editor bleibt offen (bearbeitungSpeichern wählt konzeptSpeichern/speichern je Reiter). --}}
+                <x-foodalchemist::bearbeiten-leiste :zustand="$sperr">
+                    <x-fa::button variant="primary" icon="heroicon-m-check" wire:click="bearbeitungSpeichern" data-concepter-speichern>Speichern</x-fa::button>
+                </x-foodalchemist::bearbeiten-leiste>
             </div>
         </x-slot:actions>
 
@@ -149,6 +153,12 @@
                 'geschirr' => ($concept || $paket) ? 'Geschirr' : null,
                 'notes' => 'Notizen',
             ]" />
+
+            {{-- Spec 65: Reiter im Server-Modus liefern nur die Leiste — die Panels sperrt im Lesemodus ein fieldset
+                 (Reiterleiste bleibt bedienbar). Im Reiter Kalkulation einzeln je Abschnitt, damit „Auftrag hochrechnen"
+                 (reine Vorschau, schreibt nichts) auch im Lesemodus bedienbar bleibt. --}}
+            @php $lesemodus = in_array($sperr['modus'], ['lesen', 'fremd'], true); @endphp
+            <fieldset @disabled($lesemodus) class="contents" data-fa-lesemodus="{{ $lesemodus ? '1' : '0' }}">
 
             @if($fehler)
                 <x-fa::notice tone="crit" data-concepter-fehler>{{ $fehler }}</x-fa::notice>
@@ -319,7 +329,7 @@
                                         <div wire:key="kgr-{{ $gr->id }}" draggable="true" @dragstart="dragTyp = 'gericht'; dragId = {{ $gr->id }}; $event.dataTransfer.effectAllowed = 'copy'" @dragend="dragTyp = null; dragId = null" class="{{ $listeZeile }}">
                                             <span class="min-w-0 flex-1 break-words leading-snug text-[length:var(--fa-text-md)] text-[var(--fa-ink)]" title="{{ $gr->name }}">{{ $gr->name }}</span>
                                             <span class="shrink-0 {{ $klein }} text-[var(--fa-ink-3)] tabular-nums">{{ $euro($gr->sales_net) ?? 'kein Preis' }}</span>
-                                            <x-fa::icon-button icon="heroicon-o-eye" label="Gericht ansehen" size="sm" x-on:click="Livewire.dispatch('vk-modal.oeffnen', { id: {{ $gr->id }} })" />
+                                            <x-fa::icon-button href="#" icon="heroicon-o-eye" label="Gericht ansehen" size="sm" x-on:click.prevent="Livewire.dispatch('vk-modal.oeffnen', { id: {{ $gr->id }} })" />
                                             <x-fa::icon-button icon="heroicon-m-plus" label="Als Position einfügen" size="sm" wire:click="positionEinfuegen('gericht', {{ $gr->id }})" />
                                         </div>
                                     @empty
@@ -385,7 +395,7 @@
                                         <div wire:key="kbr-{{ $br->id }}" draggable="true" @dragstart="dragTyp = 'basisrezept'; dragId = {{ $br->id }}; $event.dataTransfer.effectAllowed = 'copy'" @dragend="dragTyp = null; dragId = null" class="{{ $listeZeile }}">
                                             <span class="min-w-0 flex-1 break-words leading-snug text-[length:var(--fa-text-md)] text-[var(--fa-ink)]" title="{{ $br->name }}">{{ $br->name }}</span>
                                             <span class="shrink-0 {{ $klein }} text-[var(--fa-ink-3)] tabular-nums">{{ $br->ek_total_eur !== null ? 'EK ' . $euro($br->ek_total_eur) : 'kein EK' }}</span>
-                                            <x-fa::icon-button icon="heroicon-o-book-open" label="Rezept ansehen" size="sm" x-on:click="Livewire.dispatch('recipe-modal.oeffnen', { id: {{ $br->id }} })" />
+                                            <x-fa::icon-button href="#" icon="heroicon-o-book-open" label="Rezept ansehen" size="sm" x-on:click.prevent="Livewire.dispatch('recipe-modal.oeffnen', { id: {{ $br->id }} })" />
                                             <x-fa::icon-button icon="heroicon-m-plus" label="Als Position einfügen" size="sm" wire:click="positionEinfuegen('basisrezept', {{ $br->id }})" />
                                         </div>
                                     @empty
@@ -407,8 +417,9 @@
                                     @endif
                                     {{-- UX-Umbau 2026-07-03: Umschalter Bearbeiten ⇄ Menü (Gäste-Sicht mit aufgelöstem Wording) --}}
                                     <div class="{{ $segment }}" role="group" aria-label="Ansicht" data-konzept-ansicht-toggle>
-                                        <button type="button" @click="bauModus = true" :class="bauModus ? '{{ $segAn }}' : '{{ $segAus }}'" class="{{ $segKnopf }}" data-ansicht-bearbeiten>@svg('heroicon-m-adjustments-horizontal', 'w-4 h-4') Bearbeiten</button>
-                                        <button type="button" @click="bauModus = false" :class="!bauModus ? '{{ $segAn }}' : '{{ $segAus }}'" class="{{ $segKnopf }}" data-ansicht-menue>@svg('heroicon-m-book-open', 'w-4 h-4') Menü</button>
+                                        {{-- Spec 65: Ansichts-Umschalter als <a role=button> — bleibt im gesperrten Lesemodus (fieldset) bedienbar --}}
+                                        <a href="#" role="button" @click.prevent="bauModus = true" :class="bauModus ? '{{ $segAn }}' : '{{ $segAus }}'" class="{{ $segKnopf }}" data-ansicht-bearbeiten>@svg('heroicon-m-adjustments-horizontal', 'w-4 h-4') Bearbeiten</a>
+                                        <a href="#" role="button" @click.prevent="bauModus = false" :class="!bauModus ? '{{ $segAn }}' : '{{ $segAus }}'" class="{{ $segKnopf }}" data-ansicht-menue>@svg('heroicon-m-book-open', 'w-4 h-4') Menü</a>
                                     </div>
                                 </div>
                             </div>
@@ -484,7 +495,7 @@
                                                     <article wire:key="mpcard-{{ $pg->id }}" class="fa-surface flex flex-col gap-2 px-3.5 py-3">
                                                         <div class="flex items-start justify-between gap-2">
                                                             <x-fa::badge :tone="$qbTon">{{ $qbText }}</x-fa::badge>
-                                                            @if($pg->sales_recipe_id)<x-fa::icon-button icon="heroicon-o-eye" label="Gericht öffnen" size="sm" x-on:click="Livewire.dispatch('vk-modal.oeffnen', { id: {{ $pg->sales_recipe_id }} })" />@endif
+                                                            @if($pg->sales_recipe_id)<x-fa::icon-button href="#" icon="heroicon-o-eye" label="Gericht öffnen" size="sm" x-on:click.prevent="Livewire.dispatch('vk-modal.oeffnen', { id: {{ $pg->sales_recipe_id }} })" />@endif
                                                         </div>
                                                         <div class="min-w-0">
                                                             <p class="text-[length:var(--fa-text-base)] font-semibold leading-snug {{ $pw['source'] === 'name' ? 'italic text-[var(--fa-warn)]' : 'text-[var(--fa-ink)]' }}">{{ $pw['text'] }}</p>
@@ -493,7 +504,7 @@
                                                         <div class="flex flex-wrap items-center gap-1.5">
                                                             @if($pgG?->spec_is_vegan)<x-fa::badge tone="ok">vegan</x-fa::badge>@elseif($pgG?->spec_is_vegetarian)<x-fa::badge tone="ok">vegetarisch</x-fa::badge>@endif
                                                             @if(count($pgEnthaelt))<x-fa::badge tone="warn">enthält {{ implode(', ', $pgEnthaelt) }}</x-fa::badge>@endif
-                                                            @if($pw['source'] === 'name')<x-fa::button size="sm" variant="ghost" icon="heroicon-m-pencil" x-on:click="Livewire.dispatch('vk-modal.oeffnen', { id: {{ $pg->sales_recipe_id }} })" title="Wording am Gericht ergänzen">Wording ergänzen</x-fa::button>@endif
+                                                            @if($pw['source'] === 'name')<x-fa::button href="#" size="sm" variant="ghost" icon="heroicon-m-pencil" x-on:click.prevent="Livewire.dispatch('vk-modal.oeffnen', { id: {{ $pg->sales_recipe_id }} })" title="Wording am Gericht ergänzen">Wording ergänzen</x-fa::button>@endif
                                                         </div>
                                                         <dl class="flex gap-4 pt-2 border-t border-[var(--fa-line)] tabular-nums">
                                                             <div class="flex flex-col"><dt class="{{ $kopfzelle }}">VK je Person</dt><dd class="text-[length:var(--fa-text-md)] font-semibold text-[var(--fa-ink-2)]">im Paketpreis</dd></div>
@@ -515,7 +526,7 @@
                                                     <article wire:key="mcard-{{ $s->id }}" class="fa-surface flex flex-col gap-2 px-3.5 py-3">
                                                         <div class="flex items-start justify-between gap-2">
                                                             <x-fa::badge :tone="$qbTon">{{ $qbText }}</x-fa::badge>
-                                                            <x-fa::icon-button icon="heroicon-o-eye" label="Gericht öffnen" size="sm" x-on:click="Livewire.dispatch('vk-modal.oeffnen', { id: {{ $s->sales_recipe_id }} })" />
+                                                            <x-fa::icon-button href="#" icon="heroicon-o-eye" label="Gericht öffnen" size="sm" x-on:click.prevent="Livewire.dispatch('vk-modal.oeffnen', { id: {{ $s->sales_recipe_id }} })" />
                                                         </div>
                                                         <div class="min-w-0">
                                                             <p class="text-[length:var(--fa-text-base)] font-semibold leading-snug {{ $w['source'] === 'name' ? 'italic text-[var(--fa-warn)]' : 'text-[var(--fa-ink)]' }}">{{ $w['text'] }}</p>
@@ -679,7 +690,7 @@
                                                                 <span class="text-[length:var(--fa-text-base)] font-semibold text-[var(--fa-ink)] break-words">{{ $epk->name }}</span>
                                                                 @if($epk->class ?? null)<x-fa::badge>{{ $epk->class }}</x-fa::badge>@endif
                                                                 @if($epkPreis !== null)<span class="{{ $klein }} text-[var(--fa-ink-2)] tabular-nums">{{ $euro($epkPreis) }} je Person</span>@endif
-                                                                <x-fa::button size="sm" variant="ghost" icon="heroicon-m-arrow-top-right-on-square" wire:click="paketOeffnen({{ $epkOpenId }})">Paket öffnen</x-fa::button>
+                                                                <x-fa::button size="sm" variant="ghost" icon="heroicon-m-arrow-top-right-on-square" href="#" x-on:click.prevent="" wire:click="paketOeffnen({{ $epkOpenId }})">Paket öffnen</x-fa::button>
                                                             </div>
                                                         @elseif($slot->sales_recipe_id && $slot->dish)
                                                             @php
@@ -692,12 +703,12 @@
                                                                     <span class="inline-flex items-center h-[22px] px-2 rounded-full {{ $klein }} font-medium bg-[var(--fa-neutral-soft)] text-[var(--fa-ink-2)]" style="{{ $typStyle($istBasisPos ? 'basisrezept' : 'gericht') }}">{{ $istBasisPos ? 'Basisrezept' : 'Gericht' }}</span>
                                                                     <span class="text-[length:var(--fa-text-md)] font-medium text-[var(--fa-ink)] break-words">{{ $g->name }}</span>
                                                                     {{-- Phase 6: ansehen — Basisrezept → Rezept-Fenster, VK-Gericht → Gericht-Fenster (über dem Editor) --}}
-                                                                    <x-fa::icon-button :icon="$istBasisPos ? 'heroicon-o-book-open' : 'heroicon-o-eye'" :label="$istBasisPos ? 'Rezept ansehen' : 'Gericht ansehen'" size="sm"
-                                                                        x-on:click="Livewire.dispatch('{{ $istBasisPos ? 'recipe-modal' : 'vk-modal' }}.oeffnen', { id: {{ $slot->sales_recipe_id }} })" />
+                                                                    <x-fa::icon-button href="#" :icon="$istBasisPos ? 'heroicon-o-book-open' : 'heroicon-o-eye'" :label="$istBasisPos ? 'Rezept ansehen' : 'Gericht ansehen'" size="sm"
+                                                                        x-on:click.prevent="Livewire.dispatch('{{ $istBasisPos ? 'recipe-modal' : 'vk-modal' }}.oeffnen', { id: {{ $slot->sales_recipe_id }} })" />
                                                                     {{-- R4.4: Zutaten lesen + konzept-lokale Variante --}}
-                                                                    <button type="button" wire:click="zutatenToggle({{ $slot->id }})" aria-pressed="{{ $zutatenOffenSlotId === $slot->id ? 'true' : 'false' }}"
+                                                                    <a href="#" role="button" wire:click.prevent="zutatenToggle({{ $slot->id }})" aria-pressed="{{ $zutatenOffenSlotId === $slot->id ? 'true' : 'false' }}"
                                                                         class="inline-flex items-center gap-1 h-7 px-2 rounded-[var(--fa-radius-control)] {{ $klein }} font-medium {{ $zutatenOffenSlotId === $slot->id ? 'bg-[var(--fa-accent-soft)] text-[var(--fa-accent)]' : 'text-[var(--fa-ink-2)] hover:bg-[var(--fa-hover)] hover:text-[var(--fa-ink)]' }}"
-                                                                        title="Zutaten zeigen. Ein Tausch erzeugt eine Variante nur für dieses Konzept, das Gericht selbst bleibt unverändert." data-slot-zutaten-toggle>@svg('heroicon-m-list-bullet', 'w-4 h-4') Zutaten</button>
+                                                                        title="Zutaten zeigen. Ein Tausch erzeugt eine Variante nur für dieses Konzept, das Gericht selbst bleibt unverändert." data-slot-zutaten-toggle>@svg('heroicon-m-list-bullet', 'w-4 h-4') Zutaten</a>
                                                                 </div>
                                                                 <div class="flex flex-wrap items-center gap-1.5">
                                                                     @if($g->dishClass)<x-fa::badge>{{ $g->dishClass->label }}</x-fa::badge>@endif
@@ -777,7 +788,7 @@
                                                                         <span class="flex-1 min-w-0 break-words leading-snug text-[var(--fa-ink)]">{{ $eps->dish?->name ?? 'Gericht fehlt' }}</span>
                                                                         @if($eps->quantity !== null)<span class="shrink-0 {{ $klein }} text-[var(--fa-ink-2)] tabular-nums">{{ $menge($eps->quantity) }} ×</span>@endif
                                                                         <span class="shrink-0 {{ $klein }} text-[var(--fa-ink-2)] tabular-nums w-20 text-right">{{ $euro($eps->dish?->sales_net) }}</span>
-                                                                        @if($eps->sales_recipe_id)<x-fa::icon-button icon="heroicon-o-eye" label="Gericht ansehen" size="sm" x-on:click="Livewire.dispatch('vk-modal.oeffnen', { id: {{ $eps->sales_recipe_id }} })" />@endif
+                                                                        @if($eps->sales_recipe_id)<x-fa::icon-button href="#" icon="heroicon-o-eye" label="Gericht ansehen" size="sm" x-on:click.prevent="Livewire.dispatch('vk-modal.oeffnen', { id: {{ $eps->sales_recipe_id }} })" />@endif
                                                                     </div>
                                                                 @empty
                                                                     <p class="px-3 py-2 {{ $hinweis }}">Paket ohne Posten. Im Paket-Editor pflegen.</p>
@@ -788,7 +799,7 @@
                                                                         <span class="flex-1 min-w-0 break-words leading-snug text-[var(--fa-ink)]">{{ $pg->dish?->name ?? 'Gericht fehlt' }}</span>
                                                                         @if($pg->quantity !== null)<span class="shrink-0 {{ $klein }} text-[var(--fa-ink-2)] tabular-nums">{{ $menge($pg->quantity) }} ×</span>@endif
                                                                         <span class="shrink-0 {{ $klein }} text-[var(--fa-ink-2)] tabular-nums w-20 text-right">{{ $euro($pg->dish?->sales_net) }}</span>
-                                                                        @if($pg->sales_recipe_id)<x-fa::icon-button icon="heroicon-o-eye" label="Gericht ansehen" size="sm" x-on:click="Livewire.dispatch('vk-modal.oeffnen', { id: {{ $pg->sales_recipe_id }} })" />@endif
+                                                                        @if($pg->sales_recipe_id)<x-fa::icon-button href="#" icon="heroicon-o-eye" label="Gericht ansehen" size="sm" x-on:click.prevent="Livewire.dispatch('vk-modal.oeffnen', { id: {{ $pg->sales_recipe_id }} })" />@endif
                                                                     </div>
                                                                 @empty
                                                                     <p class="px-3 py-2 {{ $hinweis }}">Paket ohne Gerichte. Im Paket-Editor pflegen.</p>
@@ -815,7 +826,7 @@
                                                                                 title="Nur in diesem Konzept tauschen. Das Original-Gericht bleibt unverändert." data-slot-zutat-tausch>Tauschen gegen {{ $z['ersatz'] }}</x-fa::button>
                                                                     @endif
                                                                     @if($z['peek_recipe_id'] !== null)
-                                                                        <x-fa::icon-button icon="heroicon-o-book-open" label="Unterrezept ansehen" size="sm" x-on:click="Livewire.dispatch('recipe-modal.oeffnen', { id: {{ $z['peek_recipe_id'] }} })" />
+                                                                        <x-fa::icon-button href="#" icon="heroicon-o-book-open" label="Unterrezept ansehen" size="sm" x-on:click.prevent="Livewire.dispatch('recipe-modal.oeffnen', { id: {{ $z['peek_recipe_id'] }} })" />
                                                                     @endif
                                                                 </div>
                                                             @empty
@@ -977,8 +988,8 @@
                                         <span class="inline-flex items-center h-[22px] px-2 rounded-full {{ $klein }} font-medium bg-[var(--fa-neutral-soft)] text-[var(--fa-ink-2)] shrink-0" style="{{ $typStyle($istBasis ? 'basisrezept' : 'gericht') }}">{{ $istBasis ? 'Basisrezept' : 'Gericht' }}</span>
                                         <span class="flex-1 min-w-[10rem] break-words text-[length:var(--fa-text-md)] font-medium text-[var(--fa-ink)]">{{ $pg->dish?->name ?? 'Gericht fehlt' }}</span>
                                         @if($pg->sales_recipe_id)
-                                            <x-fa::icon-button :icon="$istBasis ? 'heroicon-o-book-open' : 'heroicon-o-eye'" :label="$istBasis ? 'Basisrezept ansehen' : 'Gericht ansehen'" size="sm"
-                                                x-on:click="Livewire.dispatch('{{ $istBasis ? 'recipe-modal.oeffnen' : 'vk-modal.oeffnen' }}', { id: {{ $pg->sales_recipe_id }} })" />
+                                            <x-fa::icon-button href="#" :icon="$istBasis ? 'heroicon-o-book-open' : 'heroicon-o-eye'" :label="$istBasis ? 'Basisrezept ansehen' : 'Gericht ansehen'" size="sm"
+                                                x-on:click.prevent="Livewire.dispatch('{{ $istBasis ? 'recipe-modal.oeffnen' : 'vk-modal.oeffnen' }}', { id: {{ $pg->sales_recipe_id }} })" />
                                         @endif
                                         <label class="inline-flex items-center gap-1.5 {{ $klein }} text-[var(--fa-ink-2)]">
                                             {{ $istBasis ? 'Gramm je Person' : 'Menge je Person' }}
@@ -1110,12 +1121,15 @@
                 @endif
             @endif
 
+            </fieldset>
+
             {{-- ── Reiter: KALKULATION ───────────────────────────────────────────── --}}
             @if($tab === 'kalkulation')
                 <div class="flex flex-col gap-4">
                     {{-- Konzept-VK: automatisch (Summe der Positionen) ODER fixiert (z. B. Lunchbuffet, Preis auf EK-Basis) --}}
                     @if($concept)
                         @php $preisModus = $form['price_mode'] ?? 'auto'; $istFix = in_array($preisModus, ['fixed', 'manuell'], true); @endphp
+                        <fieldset @disabled($lesemodus) class="contents" data-fa-lesemodus="{{ $lesemodus ? '1' : '0' }}">
                         <x-fa::section :title="$istPaket ? 'Paketpreis je Person' : 'VK je Person'" icon="heroicon-o-banknotes" data-concept-vk>
                             <x-slot:actions>
                                 <div class="{{ $segment }}" role="group" aria-label="Preisermittlung">
@@ -1157,6 +1171,7 @@
                                 </div>
                             @endif
                         </x-fa::section>
+                        </fieldset>
 
                         <x-fa::section title="Auftrag hochrechnen" icon="heroicon-o-calculator" description="Rechnet den Katalogpreis für eine Personenzahl durch, ohne Stammdaten zu verändern.">
                             <x-fa::field label="Personen" for="cc-pax" class="w-40">
@@ -1330,6 +1345,7 @@
                         </x-fa::section>
                     @endif
 
+                    <fieldset @disabled($lesemodus) class="contents" data-fa-lesemodus="{{ $lesemodus ? '1' : '0' }}">
                     @if($concept && $cockpit)
                         {{-- Die Kennzahlen VK, Wareneinsatz und Prozent stehen fix im Kopf; hier nur das Ziel. --}}
                         <x-fa::section title="Zielpreis" icon="heroicon-o-flag">
@@ -1397,8 +1413,11 @@
                             </div>
                         </x-fa::section>
                     @endif
+                    </fieldset>
                 </div>
             @endif
+
+            <fieldset @disabled($lesemodus) class="contents" data-fa-lesemodus="{{ $lesemodus ? '1' : '0' }}">
 
             {{-- ── Reiter: NOTIZEN ───────────────────────────────────────────────── --}}
             @if($tab === 'notes')
@@ -1566,6 +1585,7 @@
                     @endforelse
                 </div>
             @endif
+            </fieldset>
         @endif
     </x-foodalchemist::modal>
 </div>

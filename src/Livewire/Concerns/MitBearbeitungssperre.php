@@ -24,6 +24,9 @@ trait MitBearbeitungssperre
     /** Inhaber einer fremden Sperre (Anzeige „wird von … bearbeitet"), sonst null. */
     public ?array $sperreFremd = null;
 
+    /** Sperre wurde in DIESER Komponente per „Bearbeiten" geholt (Detailspalte: beim Wechsel freigeben). */
+    public bool $sperreHierGeholt = false;
+
     /** @return array{0: string, 1: int|string}|null */
     abstract protected function sperrZiel(): ?array;
 
@@ -47,7 +50,7 @@ trait MitBearbeitungssperre
     {
         $ziel = $this->sperrZiel();
         $uid = Auth::id();
-        if ($ziel === null) {
+        if (! self::sperreAktiv() || $ziel === null) {   // Schalter aus (Tests/Notfall) oder Neuanlage: frei
             return true;
         }
 
@@ -93,6 +96,7 @@ trait MitBearbeitungssperre
         }
         $r = app(BearbeitungssperreService::class)->sperren($ziel[0], $ziel[1], (int) $user->id, $user->name ?? null, $user->current_team_id ?? null);
         $this->sperreFremd = $r['ok'] ? null : $r['inhaber'];
+        $this->sperreHierGeholt = $r['ok'];
         if (! $r['ok']) {
             $this->dispatch('fa-saved', message: 'Wird gerade von '.($r['inhaber']['name'] ?? 'jemand anderem').' bearbeitet.', type: 'error');
         }
@@ -101,6 +105,7 @@ trait MitBearbeitungssperre
     /** Nach erfolgreichem Speichern aufrufen: Bearbeitung beenden, Datensatz wieder frei. */
     protected function bearbeitenBeenden(): void
     {
+        $this->sperreHierGeholt = false;
         $ziel = $this->sperrZiel();
         if ($ziel !== null && Auth::id() !== null) {
             app(BearbeitungssperreService::class)->freigeben($ziel[0], $ziel[1], (int) Auth::id());
@@ -115,6 +120,19 @@ trait MitBearbeitungssperre
     }
 
     protected function nachAbbrechen(): void {}
+
+    /**
+     * Detailspalte wechselt den Datensatz: eine HIER geholte Sperre am bisherigen freigeben (Dominique 2026-10-07).
+     * Eine im Editor geholte Sperre (gleiches Ziel, gleiche Person) bleibt stehen — der Editor ist dann noch offen.
+     * Aufruf in zeige()/waehle() VOR dem Umsetzen der ID.
+     */
+    protected function sperreBeiWechselFreigeben(): void
+    {
+        if ($this->sperreHierGeholt) {
+            $this->bearbeitenBeenden();
+        }
+        $this->sperreFremd = null;
+    }
 
     /** Detailspalten speichern jede Aktion sofort — „Fertig" beendet nur die Bearbeitung (Sperre frei). */
     public function bearbeitenFertig(): void

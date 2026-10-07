@@ -18,6 +18,14 @@ use Platform\FoodAlchemist\Services\TeamSettingsService;
  */
 class Ki extends Component
 {
+    /** Spec 65: Bereich settings.ki je Team — Notschalter/Sprachbefehl schreiben sofort (auch über updated-Hooks), Leiste Bearbeiten → Fertig. Zeitraum der Nutzung bleibt Lese-Filter. */
+    use Concerns\MitEinstellungsSperre;
+
+    protected function sperrBereich(): string
+    {
+        return 'ki';
+    }
+
     public bool $kiAktiv = true;
 
     public ?string $meldung = null;
@@ -67,6 +75,11 @@ class Ki extends Component
     /** Livewire-Hook: `wire:model.live="sprachTtsStimme"` speichert sofort bei Auswahl. */
     public function updatedSprachTtsStimme(string $wert): void
     {
+        if ($this->schreibenAbgewiesen('updatedSprachTtsStimme')) {   // Spec 65: Hook schreibt direkt
+            $this->sprachTtsStimme = app(TeamSettingsService::class)->voiceTtsStimme(Auth::user()->currentTeamRelation);
+
+            return;
+        }
         $team = Auth::user()?->currentTeamRelation;
         if ($team === null || ! in_array($wert, TeamSettingsService::VOICE_TTS_STIMMEN, true)) {
             return;
@@ -98,6 +111,11 @@ class Ki extends Component
     /** Livewire-Hook: `wire:model.live="sprachAgentModus"` speichert sofort bei Auswahl. */
     public function updatedSprachAgentModus(string $wert): void
     {
+        if ($this->schreibenAbgewiesen('updatedSprachAgentModus')) {   // Spec 65: Hook schreibt direkt
+            $this->sprachAgentModus = app(TeamSettingsService::class)->voiceAgentModus(Auth::user()->currentTeamRelation);
+
+            return;
+        }
         $team = Auth::user()?->currentTeamRelation;
         if ($team === null || ! in_array($wert, TeamSettingsService::VOICE_AGENT_MODES, true)) {
             return;
@@ -161,6 +179,7 @@ class Ki extends Component
         $registryLuecken = $statistik->pluck('feature')->unique()->diff($registry->keys()->merge($auditOhnePrompt))->sort()->values();
 
         return view('foodalchemist::livewire.settings.ki', [
+            'sperr' => $this->sperrZustand(),   // Spec 65
             'kosten' => $kosten,
             'kostenGesamt' => $bekannteKosten->sum(),
             'kostenUnbekannt' => $kosten->count() - $bekannteKosten->count(),

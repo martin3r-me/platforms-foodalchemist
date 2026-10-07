@@ -18,6 +18,30 @@ class Index extends Component
 {
     use WithPagination;
     use \Platform\FoodAlchemist\Livewire\Concerns\InteractsWithSavedToast;
+    use \Platform\FoodAlchemist\Livewire\Concerns\MitBearbeitungssperre;   // Spec 65
+
+    /** Spec 65: Sperre gilt dem gewählten Paket (dasselbe Ziel wie der Concepter-Editor im Paket-Modus). */
+    protected function sperrZiel(): ?array
+    {
+        return $this->selectedId !== null ? ['paket', $this->selectedId] : null;
+    }
+
+    /**
+     * Ohne Sperre: Auswahl/Liste/Filter ($set für den Rollen-Filter), Neuanlage (legt ein NEUES Paket an,
+     * das gewählte bleibt unberührt — danach steht das neue im Lesemodus).
+     */
+    protected function sperrFreiExtra(): array
+    {
+        return ['waehle', 'neu', '$set'];
+    }
+
+    /** Abbrechen: ungespeicherten Formularstand verwerfen, Paket frisch laden. */
+    protected function nachAbbrechen(): void
+    {
+        if ($this->selectedId !== null) {
+            $this->waehle($this->selectedId, app(PaketService::class));
+        }
+    }
 
     #[Url(as: 'q')]
     public string $search = '';
@@ -57,6 +81,10 @@ class Index extends Component
         $b = $svc->detail($this->team(), $id);
         if ($b === null) {
             return;
+        }
+        // Spec 65: anderes Paket gewählt → eigene Sperre am bisherigen freigeben.
+        if ($this->selectedId !== null && $this->selectedId !== $id) {
+            $this->bearbeitenBeenden();
         }
         $this->selectedId = $id;
         $this->form = [
@@ -113,13 +141,20 @@ class Index extends Component
         $svc->update($this->team(), $this->selectedId, $this->form);
         $this->dispatch('paket-gespeichert');
         $this->savedToast('Paket gespeichert');
+        // Spec 65: Speichern beendet die Bearbeitung (Sperre frei), das Paket bleibt im Lesemodus offen.
+        $this->bearbeitenBeenden();
         $this->waehle($this->selectedId, $svc);
     }
 
     public function loeschen(int $id, PaketService $svc): void
     {
+        // Spec 65: der call-Haken prüft die Sperre des GEWÄHLTEN Pakets — ein anderes nicht ungeprüft löschen.
+        if (self::sperreAktiv() && $id !== $this->selectedId) {
+            return;
+        }
         $svc->delete($this->team(), $id);
         if ($this->selectedId === $id) {
+            $this->bearbeitenBeenden();   // Spec 65: gelöscht → Sperre frei
             $this->selectedId = null;
         }
     }
@@ -166,6 +201,7 @@ class Index extends Component
         $pakete = $svc->paginateBrowser(['search' => $this->search, 'role' => $this->rolleFilter], $team);
 
         return view('foodalchemist::livewire.pakete.index', [
+            'sperr' => $this->sperrZustand(),   // Spec 65
             'pakete' => $pakete,
             'rollen' => $svc->rollen($team),
             'selected' => $selected,

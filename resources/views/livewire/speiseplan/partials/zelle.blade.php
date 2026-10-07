@@ -33,7 +33,7 @@
      Spec 59: `markiert` (Eintrag-Ids aus der Abwechslungs-Karte) hebt per Akzent-Ring hervor, der Rest tritt zurück. --}}
 <div wire:key="e-{{ $e->id }}" class="group rounded-[var(--fa-radius-control)] border border-l-[3px] bg-[var(--fa-surface)] px-2 py-1.5 text-left text-[var(--fa-ink)] {{ $offen ? 'border-[var(--fa-accent)] ring-1 ring-[var(--fa-accent)]' : 'border-[var(--fa-line)]' }}"
      @if($farbe && ! $offen) style="border-left-color: {{ $farbe }}" @endif data-sp-zelle="{{ $e->id }}"
-     draggable="true" x-on:dragstart="dragId = {{ $e->id }}" x-on:dragend="dragId = null"
+     draggable="{{ ($gesperrt ?? false) ? 'false' : 'true' }}" x-on:dragstart="dragId = {{ $e->id }}" x-on:dragend="dragId = null"
      x-bind:class="(dragId === {{ $e->id }} ? 'opacity-40 ' : '') + (typeof markiert !== 'undefined' && markiert !== null ? (markiert.includes({{ $e->id }}) ? 'ring-2 ring-[var(--fa-accent)]' : 'opacity-40') : '')">
     <div class="flex items-start gap-1">
         <button type="button" wire:click="eintragOeffnen({{ $e->id }})" class="flex-1 min-w-0 text-left rounded-sm hover:text-[var(--fa-accent)]" aria-label="{{ $titel }}: Details, ersetzen, verschieben, kopieren">
@@ -44,9 +44,11 @@
         </button>
         <span class="shrink-0 flex items-center">
             <span class="cursor-move select-none text-[var(--fa-ink-3)] opacity-0 group-hover:opacity-100" aria-hidden="true" title="Ziehen zum Verschieben">@svg('heroicon-m-bars-2', 'w-3.5 h-3.5')</span>
+            <fieldset @disabled($gesperrt ?? false) class="contents">{{-- Spec 65: Entfernen/Essen-Zahl nur im Bearbeiten-Modus; Titel öffnet das Detail immer --}}
             <button type="button" wire:click="eintragRaus({{ $e->id }})" wire:confirm="Eintrag entfernen?"
                     class="inline-flex items-center justify-center w-6 h-6 rounded-[var(--fa-radius-control)] text-[var(--fa-ink-3)] opacity-60 group-hover:opacity-100 focus:opacity-100 hover:text-[var(--fa-crit)] hover:bg-[var(--fa-crit-soft)]"
                     aria-label="{{ $titel }} entfernen" title="Eintrag entfernen">@svg('heroicon-m-x-mark', 'w-3.5 h-3.5')</button>
+            </fieldset>
         </span>
     </div>
 
@@ -74,7 +76,7 @@
         </span>
         <label class="inline-flex items-center gap-1 text-[var(--fa-ink-3)]" title="Essen bzw. Portionen (leer = Standard der Linie bzw. des Plans: {{ $paxStandard }})">
             @svg('heroicon-m-user', 'w-3.5 h-3.5 shrink-0')
-            <input type="number" min="0" value="{{ $e->pax }}" placeholder="{{ $paxStandard }}"
+            <input type="number" min="0" value="{{ $e->pax }}" placeholder="{{ $paxStandard }}" @disabled($gesperrt ?? false)
                    wire:change="setPax({{ $e->id }}, $event.target.value)"
                    aria-label="Essen für {{ $titel }}"
                    class="fa-control h-6 w-14 px-1.5 text-right tabular-nums text-[length:var(--fa-text-sm)]" />

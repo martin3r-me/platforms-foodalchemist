@@ -39,6 +39,8 @@
                 'title' => 'Einkauf zu Verkauf über alle Positionen mit beiden Preisen'],
         ];
     }
+    // Spec 65: Lesemodus = keine eigene Bearbeitungssperre (lesen/fremd) — Editor-Inhalte und Schreib-Knöpfe aus
+    $gesperrt = isset($sperr) && in_array($sperr['modus'], ['lesen', 'fremd'], true);
 @endphp
 
 <x-ui-page>
@@ -151,19 +153,24 @@
                                     @svg('heroicon-o-printer', 'w-4 h-4 text-[var(--fa-ink-3)]') Karte drucken
                                 </a>
                                 <div class="my-1 border-t border-[var(--fa-line)]"></div>
+                                <fieldset @disabled($gesperrt) class="contents">{{-- Spec 65: Löschen nur im Bearbeiten-Modus --}}
                                 <button type="button" role="menuitem" wire:click="loeschen" wire:confirm="Diese Speisekarte wirklich löschen?" x-on:click="offen = false" class="{{ $menueLoeschen }}" data-sk-loeschen>
                                     @svg('heroicon-o-trash', 'w-4 h-4') Karte löschen
                                 </button>
+                                </fieldset>
                             </div>
                         </div>
-                        <x-fa::button variant="primary" icon="heroicon-m-check" wire:click="speichern" wire:loading.attr="disabled" wire:target="speichern" data-sk-speichern>Speichern</x-fa::button>
+                        {{-- Spec 65: erst „Bearbeiten" (Sperre), dann Abbrechen/Speichern; Speichern beendet die Bearbeitung, Editor bleibt offen --}}
+                        <x-foodalchemist::bearbeiten-leiste :zustand="$sperr">
+                            <x-fa::button variant="primary" icon="heroicon-m-check" wire:click="speichern" wire:loading.attr="disabled" wire:target="speichern" data-sk-speichern>Speichern</x-fa::button>
+                        </x-foodalchemist::bearbeiten-leiste>
                     </div>
                 </x-slot:actions>
 
                 {{-- Reiter über den Baustein editor-tabs. Werkstrang M Phase A (Spec 40 §6): vom Groben zum
                      Kleinen, Kontext zuerst (Zielgruppe und Niveau als Leitplanken), dann Aufbau. Panels bleiben
                      im DOM (x-show); die Leitstelle wird nicht neu eingehängt. --}}
-                <x-foodalchemist::editor-tabs marker="sk" wire-key="sk-tabs-{{ $karte->id }}" :init="'kontext'"
+                <x-foodalchemist::editor-tabs marker="sk" wire-key="sk-tabs-{{ $karte->id }}" :init="'kontext'" :gesperrt="$gesperrt"
                     :tabs="[
                         'kontext' => 'Kontext',
                         'aufbau' => 'Aufbau',
@@ -496,13 +503,13 @@
                             <x-fa::input wire:model="neueRubrik" wire:keydown.enter="rubrikNeu" placeholder="Neue Rubrik, z. B. Vorspeisen" aria-label="Name der neuen Rubrik" class="w-full sm:w-64" />
                             <x-fa::button icon="heroicon-m-plus" wire:click="rubrikNeu">Rubrik anlegen</x-fa::button>
                             @if(count($alleRubrikIds) > 0)
-                                <x-fa::button size="sm" variant="ghost" icon="heroicon-m-chevron-down" x-on:click="zu = {}" title="Alle Rubriken aufklappen" data-sk-alle-auf>Alle aufklappen</x-fa::button>
-                                <x-fa::button size="sm" variant="ghost" icon="heroicon-m-chevron-right" x-on:click="zu = Object.fromEntries(alleIds.map(i => [i, true]))" title="Alle Rubriken zuklappen, zum Umsortieren" data-sk-alle-zu>Alle zuklappen</x-fa::button>
+                                <x-fa::button size="sm" variant="ghost" icon="heroicon-m-chevron-down" href="#" x-on:click.prevent="zu = {}" title="Alle Rubriken aufklappen" data-sk-alle-auf>Alle aufklappen</x-fa::button>
+                                <x-fa::button size="sm" variant="ghost" icon="heroicon-m-chevron-right" href="#" x-on:click.prevent="zu = Object.fromEntries(alleIds.map(i => [i, true]))" title="Alle Rubriken zuklappen, zum Umsortieren" data-sk-alle-zu>Alle zuklappen</x-fa::button>
                             @endif
                             <span class="flex-1"></span>
                             {{-- Spec 42: Planung (Auftrag, Gerüst, Hintergrund-Erstellung) lebt in der Leitstelle,
                                  die Karte ist reine Ausgabe. Der Knopf springt in die Leitstelle dieser Karte. --}}
-                            <x-fa::button icon="heroicon-m-bolt" wire:click="vollKaskadeStarten" wire:loading.attr="disabled" data-sk-leitstelle>
+                            <x-fa::button icon="heroicon-m-bolt" href="#" x-on:click.prevent="" wire:click="vollKaskadeStarten" data-sk-leitstelle>
                                 <span wire:loading.remove wire:target="vollKaskadeStarten">In der Leitstelle planen</span>
                                 <span wire:loading wire:target="vollKaskadeStarten">Wird geöffnet …</span>
                             </x-fa::button>

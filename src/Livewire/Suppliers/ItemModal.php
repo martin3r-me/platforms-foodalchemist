@@ -21,6 +21,39 @@ use RuntimeException;
 class ItemModal extends Component
 {
     use \Platform\FoodAlchemist\Livewire\Concerns\InteractsWithSavedToast;
+    use \Platform\FoodAlchemist\Livewire\Concerns\MitBearbeitungssperre;   // Spec 65
+
+    /** Spec 65: Sperre gilt dem Lieferantenartikel. */
+    protected function sperrZiel(): ?array
+    {
+        return $this->itemId !== null ? ['supplier_item', $this->itemId] : null;
+    }
+
+    protected function sperrModalName(): ?string
+    {
+        return 'item-modal';
+    }
+
+    /**
+     * Spec 65 · ohne Sperre erlaubt — schreibt nichts: Schließen-Handler, Reaktion auf eine GP-Anlage
+     * (lädt nur und schließt ggf.), Preis-Bearbeitungszeile zuklappen.
+     */
+    protected function sperrFreiExtra(): array
+    {
+        return ['geschlossen', 'gpGespeichert', 'preisEditAbbrechen'];
+    }
+
+    /** Abbrechen: ungespeicherten Formularstand verwerfen, Artikel frisch laden. */
+    protected function nachAbbrechen(): void
+    {
+        if ($this->itemId !== null) {
+            $this->preisEditId = null;
+            $this->preisNeu = ['price' => '', 'status' => '0'];
+            $this->gpSuche = '';
+            $this->gpVorschlaege = [];
+            $this->oeffnen($this->itemId);
+        }
+    }
 
     public ?int $itemId = null;
 
@@ -61,6 +94,7 @@ class ItemModal extends Component
     #[On('modal.closed')]
     public function geschlossen(string $name): void
     {
+        $this->sperreBeiSchliessen($name);   // Spec 65: eigene Sperre frei — VOR dem Reset (braucht itemId)
         if ($name === 'item-modal') {
             $this->reset(); // P-2: kein State-Leak
         }
@@ -112,6 +146,7 @@ class ItemModal extends Component
                 $svc->setNutrition($this->team(), $item, $this->naehrwerte);
             }
             $this->fehler = null;
+            $this->bearbeitenBeenden();   // Spec 65: Speichern beendet die Bearbeitung, der Editor bleibt im Lesemodus offen
             $this->dispatch('item-gespeichert');
             $this->savedToast('Artikel gespeichert');
         } catch (RuntimeException $e) {
@@ -334,6 +369,7 @@ class ItemModal extends Component
         $aktiv = $item !== null ? $preise->activeFor($item->id) : null;
 
         return view('foodalchemist::livewire.suppliers.item-modal', [
+            'sperr' => $this->sperrZustand(),   // Spec 65
             'item' => $item,
             'darfEdit' => $item !== null && Curate::canCurate(Auth::user(), $item),
             'historie' => $item !== null ? $preise->historyFor($item->id) : collect(),

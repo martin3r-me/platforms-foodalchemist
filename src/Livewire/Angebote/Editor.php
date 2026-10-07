@@ -39,6 +39,72 @@ class Editor extends Component
     use ManagesCanvas;
     use WithFileUploads;
     use \Platform\FoodAlchemist\Livewire\Concerns\InteractsWithSavedToast;
+    use \Platform\FoodAlchemist\Livewire\Concerns\MitBearbeitungssperre;   // Spec 65
+
+    /** Spec 65: Sperre gilt dem geöffneten Angebot. */
+    protected function sperrZiel(): ?array
+    {
+        return $this->selectedId !== null ? ['angebot', $this->selectedId] : null;
+    }
+
+    protected function sperrModalName(): ?string
+    {
+        return 'angebot-editor';
+    }
+
+    /**
+     * Spec 65 · ohne Sperre: Navigation (Kopf/Kapitel wählen), Katalog-Filter, Menü im Concepter öffnen (eigener Editor
+     * mit eigener Sperre), Vorschlag/Inline-Edit verwerfen, Signale (Concepter-Recompute = abgeleitete Preise, Betrieb).
+     * Block-/Slot-Bearbeiten öffnet ein Formular → erst im Bearbeiten-Modus.
+     */
+    protected function sperrFreiExtra(): array
+    {
+        return [
+            'beiModalGeschlossen', 'kopfAnzeigen', 'kapitelWaehle', 'bearbeiteMenue',
+            'katalogModus', 'waehleGerichtHg', 'waehleGerichtKlasse', 'toggleConceptFacet', 'resetConceptFacetten',
+            'slotWordingAbbrechen', 'kiTextVerwerfen', 'nachConcepterEdit', 'betriebGewechselt',
+            'canvasLaden', 'canvasTemplateData', 'canvasSchreibstile',
+        ];
+    }
+
+    /** Spec 65: Editor geschlossen → eigene Sperre frei (einziger modal.closed-Handler dieser Komponente). */
+    #[On('modal.closed')]
+    public function beiModalGeschlossen(?string $name = null): void
+    {
+        $this->sperreBeiSchliessen($name);
+    }
+
+    /** Abbrechen: ungespeicherten Formularstand verwerfen, Angebot frisch laden. */
+    protected function nachAbbrechen(): void
+    {
+        if ($this->selectedId === null) {
+            return;
+        }
+        $this->ladeForm();
+        $this->ladeKapitelForm();
+        $this->editBlockId = null;
+        $this->blockForm = [];
+        $this->slotWordingAbbrechen();
+        $this->kiTextVerwerfen();
+        $this->neuesKapitelTitel = '';
+        $this->neuerSlot = '';
+        $this->brandingLoadedId = null;        // render() lädt Branding + Präsentation neu
+        $this->presentationLoadedId = null;
+        $this->canvasLaden();
+    }
+
+    /** Upload-Hooks (updated*) laufen nicht über den call-Haken — hier selbst prüfen. */
+    private function uploadGesperrt(string $prop): bool
+    {
+        if (self::sperreAktiv() && ! $this->darfSchreiben()) {
+            $this->reset($prop);
+            $this->sperreAbgewiesen('updated'.ucfirst($prop));
+
+            return true;
+        }
+
+        return false;
+    }
 
     public ?int $selectedId = null;
 
@@ -173,6 +239,9 @@ class Editor extends Component
     #[On('angebot-editor.bearbeiten')]
     public function oeffnen(int $id): void
     {
+        if ($this->selectedId !== null && $this->selectedId !== $id) {
+            $this->bearbeitenBeenden();   // Spec 65: Wechsel auf ein anderes Angebot gibt die eigene Sperre frei
+        }
         $this->selectedId = $id;
         $this->selectedKapitelId = null;
         $this->editBlockId = null;
@@ -218,11 +287,29 @@ class Editor extends Component
         ];
     }
 
+    /** Spec 65: „Speichern" schreibt und beendet die Bearbeitung — der Editor bleibt offen im Lesemodus. */
     public function speichern(AngebotService $svc): void
     {
         if ($this->selectedId === null) {
             return;
         }
+        $this->kopfSchreiben($svc);
+        $this->bearbeitenBeenden();
+    }
+
+    /**
+     * Sofort-Übernahme im Bearbeiten-Modus (Gäste-Feld, „Preis übernehmen" in der Kalkulation): schreibt den Kopf,
+     * die Bearbeitung läuft weiter. Ohne Sperre weist der call-Haken ab.
+     */
+    public function kopfUebernehmen(AngebotService $svc): void
+    {
+        if ($this->selectedId !== null) {
+            $this->kopfSchreiben($svc);
+        }
+    }
+
+    private function kopfSchreiben(AngebotService $svc): void
+    {
         $svc->update($this->team(), $this->selectedId, $this->form);
         // Tab-übergreifend: der prominente „Speichern" sichert auch das Branding-Tab
         // (Marken-Farbe/Bandfarbe/Footer) — spiegelt Foodbook::speichern. Idempotent,
@@ -265,6 +352,7 @@ class Editor extends Component
         }
         $id = $this->selectedId;
         $svc->delete($this->team(), $id);
+        $this->bearbeitenBeenden();   // Spec 65: Sperre am gelöschten Angebot nicht stehen lassen
         $this->selectedId = null;
         $this->dispatch('modal.close', name: 'angebot-editor');
         $this->dispatch('angebot-geloescht', id: $id);
@@ -1082,11 +1170,17 @@ class Editor extends Component
 
     public function updatedLogoUpload(): void
     {
+        if ($this->uploadGesperrt('logoUpload')) {
+            return;
+        }
         $this->brandingBildHochladen('logoUpload', 'storeLogo');
     }
 
     public function updatedCoverUpload(): void
     {
+        if ($this->uploadGesperrt('coverUpload')) {
+            return;
+        }
         $this->brandingBildHochladen('coverUpload', 'storeCover');
     }
 
@@ -1123,6 +1217,9 @@ class Editor extends Component
     // ── Kapitel-Bild (überschreibt das Concept-Titelbild im Kapitel-Band) ──────
     public function updatedKapitelImageUpload(): void
     {
+        if ($this->uploadGesperrt('kapitelImageUpload')) {
+            return;
+        }
         $this->kapitelImageFehler = null;
         if ($this->selectedKapitelId === null || $this->kapitelImageUpload === null) {
             return;
@@ -1146,6 +1243,9 @@ class Editor extends Component
     // ── Kapitel-Galerie (Mehrfach-Upload) ──────────────────────────────────────
     public function updatedKapitelGalleryUpload(): void
     {
+        if ($this->uploadGesperrt('kapitelGalleryUpload')) {
+            return;
+        }
         $this->kapitelImageFehler = null;
         $dateien = array_filter(is_array($this->kapitelGalleryUpload) ? $this->kapitelGalleryUpload : [$this->kapitelGalleryUpload]);
         if ($this->selectedKapitelId === null || $dateien === []) {
@@ -1551,6 +1651,7 @@ class Editor extends Component
         $media = app(\Platform\FoodAlchemist\Services\FoodAlchemistMediaService::class);
 
         return view('foodalchemist::livewire.angebote.editor', [
+            'sperr' => $this->sperrZustand(),   // Spec 65
             'angebot' => $angebot,
             // Komposition (intern) + Kundensicht + Kalkulation
             'komposition' => $komposition,

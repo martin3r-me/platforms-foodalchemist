@@ -59,8 +59,13 @@
                 <div class="flex w-full flex-wrap items-center gap-2 min-w-0">
                     @if($darfEdit)
                         <p class="{{ $leise }} min-w-0">Speichern sichert Stammdaten, Verpackung und Eigenschaften.</p>
-                        <x-fa::button variant="primary" icon="heroicon-m-check" class="ml-auto" wire:click="speichern"
-                            wire:loading.attr="disabled" wire:target="speichern" data-la-speichern>Speichern</x-fa::button>
+                        {{-- Spec 65: erst „Bearbeiten" (Sperre), dann Abbrechen/Speichern; Speichern beendet die Bearbeitung --}}
+                        <div class="ml-auto">
+                            <x-foodalchemist::bearbeiten-leiste :zustand="$sperr">
+                                <x-fa::button variant="primary" icon="heroicon-m-check" wire:click="speichern"
+                                    wire:loading.attr="disabled" wire:target="speichern" data-la-speichern>Speichern</x-fa::button>
+                            </x-foodalchemist::bearbeiten-leiste>
+                        </div>
                     @else
                         <x-fa::badge icon="heroicon-m-lock-closed" class="ml-auto"
                             title="Dieser Artikel kommt aus einem übergeordneten Katalog und wird dort gepflegt.">Nur lesen</x-fa::badge>
@@ -100,7 +105,7 @@
 
             {{-- Alpine-Modus: alle Reiter bleiben im DOM, damit die entangle-Bindings (Allergene,
                  Zusatzstoffe) und ungespeicherte Eingaben beim Umschalten erhalten bleiben. --}}
-            <x-foodalchemist::editor-tabs marker="la" wire-key="la-tabs-{{ $item->id }}" :init="$gpName === null ? 'gp' : 'preise'"
+            <x-foodalchemist::editor-tabs marker="la" wire-key="la-tabs-{{ $item->id }}" :init="$gpName === null ? 'gp' : 'preise'" :gesperrt="$darfEdit && in_array($sperr['modus'], ['lesen', 'fremd'], true)"
                 :tabs="[
                     'gp' => 'Grundprodukt',
                     'preise' => 'Preise',

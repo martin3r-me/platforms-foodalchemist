@@ -6,6 +6,10 @@
 @endphp
 
 <div class="flex flex-col gap-5" data-settings-schreibstile>
+    {{-- Spec 65: „Bearbeiten" sperrt den Bereich für das Team, „Fertig" gibt frei --}}
+    @php $sperrLesen = in_array($sperr['modus'], ['lesen', 'fremd'], true); @endphp
+    @include('foodalchemist::livewire.settings.partials.sperr-leiste', ['sofort' => true])
+    <fieldset @disabled($sperrLesen) class="contents" data-fa-lesemodus="{{ $sperrLesen ? '1' : '0' }}">
     @if($fehler !== null)
         <x-fa::notice tone="crit" data-stil-fehler>{{ $fehler }}</x-fa::notice>
     @endif
@@ -116,4 +120,5 @@
             <x-fa::button variant="primary" icon="heroicon-m-plus" wire:click="create" data-stil-neu-anlegen>Schreibstil anlegen</x-fa::button>
         </div>
     </x-fa::section>
+    </fieldset>
 </div>

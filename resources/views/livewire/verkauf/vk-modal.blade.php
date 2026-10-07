@@ -1033,9 +1033,6 @@
         </div>
 
         {{-- ── Reiter: FEEDBACK (R2.6 — Praxis-Feedback Küche/Kunde/Event) ── --}}
-        <div x-show="tab === 'feedback'" x-cloak class="pt-4">
-            @livewire('foodalchemist.recipes.feedback-panel', ['recipeId' => $rezept->id], key('feedback-vk-'.$rezept->id))
-        </div>
 
         {{-- ── Reiter: NOTIZEN (Notizen + Verwendungsnachweise) ───────────── --}}
         <div x-show="tab === 'notes'" x-cloak class="pt-4 flex flex-col gap-4">
@@ -1062,6 +1059,12 @@
             </x-fa::section>
         </div>{{-- /Reiter NOTIZEN --}}
 
+            {{-- Spec 65: KI-Feedback auch ohne „Bearbeiten“ (Dominique 2026-10-07) --}}
+            <x-slot:frei>
+        <div x-show="tab === 'feedback'" x-cloak class="pt-4">
+            @livewire('foodalchemist.recipes.feedback-panel', ['recipeId' => $rezept->id], key('feedback-vk-'.$rezept->id))
+        </div>
+            </x-slot:frei>
         </x-foodalchemist::editor-tabs>
     @endif
 </x-foodalchemist::modal>

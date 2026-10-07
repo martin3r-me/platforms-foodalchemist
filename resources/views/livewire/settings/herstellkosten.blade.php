@@ -13,8 +13,14 @@
 @endphp
 
 <div class="flex flex-col gap-4" data-settings-herstellkosten>
+    {{-- Spec 65: „Bearbeiten" sperrt den Bereich für das Team; mehrere Schreibwege → Bearbeiten/Fertig --}}
+    @php $sperrLesen = in_array($sperr['modus'], ['lesen', 'fremd'], true); @endphp
+    @include('foodalchemist::livewire.settings.partials.sperr-leiste', ['sofort' => true, 'hint' => 'Zuschläge, Fixkosten und Marge wirken erst nach dem Speichern auf Selbstkosten und Verkaufspreise.'])
+    @unless($sperrLesen)
     <x-foodalchemist::save-bar :meldung="$meldung"
         hint="Zuschläge, Fixkosten und Marge wirken erst nach dem Speichern auf Selbstkosten und Verkaufspreise." />
+    @endunless
+    @if($sperrLesen && $meldung)<x-fa::notice tone="ok" data-save-bar-meldung>{{ $meldung }}</x-fa::notice>@endif
     @if($fehler)
         <x-fa::notice tone="crit">{{ $fehler }}</x-fa::notice>
     @endif
@@ -31,7 +37,7 @@
                         @endforeach
                     </x-fa::select>
                 </x-fa::field>
-                @if($scopeOutletName)
+                @if($scopeOutletName && ! $sperrLesen)
                     <x-fa::button variant="danger" size="sm" icon="heroicon-m-arrow-uturn-left" class="ml-auto mb-1"
                         wire:click="aufTeamZuruecksetzen"
                         wire:confirm="„{{ $scopeOutletName }}“ komplett zurücksetzen? Alle eigenen Werte und Fixkosten dieses Betriebs werden gelöscht, danach gelten wieder die Team-Werte.">
@@ -50,6 +56,8 @@
         </div>
     @endif
 
+    {{-- Spec 65: der Betriebs-Wähler oben bleibt im Lesemodus bedienbar (lädt nur), alles darunter ist gesperrt --}}
+    <fieldset @disabled($sperrLesen) class="contents" data-fa-lesemodus="{{ $sperrLesen ? '1' : '0' }}">
     {{-- Doc 16 §10: mehrstufiges Kostenblock-Schema --}}
     <x-fa::section title="Zuschlagskalkulation" icon="heroicon-o-calculator" data-hk-schema
         description="Gemeinkosten stehen auf automatisch: Du trägst unten deine Fixkosten in Euro ein, der Zuschlag rechnet sich selbst (Fixkosten je Monat geteilt durch die Bezugsbasis). Manuell nur als Ausnahme.">
@@ -303,4 +311,5 @@
             @endif
         </div>
     </x-fa::section>
+    </fieldset>
 </div>

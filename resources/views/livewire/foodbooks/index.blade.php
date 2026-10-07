@@ -26,6 +26,8 @@
     $haken = 'w-4 h-4 shrink-0 accent-[var(--fa-accent)]';
     $medien = fn ($fileId, $pfad) => app(\Platform\FoodAlchemist\Services\FoodAlchemistMediaService::class)->url($fileId, $pfad);
     $euro = fn ($wert) => number_format((float) $wert, 2, ',', '.') . ' €';
+    // Spec 65: Lesemodus = keine eigene Bearbeitungssperre (lesen/fremd) — Editor-Inhalte und Schreib-Knöpfe aus
+    $gesperrt = isset($sperr) && in_array($sperr['modus'], ['lesen', 'fremd'], true);
     $statusTon = fn ($ausgabe) => ['success' => 'ok', 'warning' => 'warn', 'danger' => 'crit', 'info' => 'info', 'primary' => 'accent'][$ausgabe->statusWert()->badgeVariant()] ?? 'neutral';
 @endphp
 
@@ -148,14 +150,19 @@
                                     @svg('heroicon-o-presentation-chart-bar', $menueSymbol) Präsentation ansehen
                                 </a>
                                 <div class="my-1 border-t border-[var(--fa-line)]"></div>
+                                <fieldset @disabled($gesperrt) class="contents">{{-- Spec 65: Löschen nur im Bearbeiten-Modus --}}
                                 <button type="button" role="menuitem" wire:click="loeschen({{ $fb->id }})" x-on:click="offen = false" wire:confirm="Foodbook löschen?"
                                         class="{{ $menuePunktRot }}" data-fb-loeschen>
                                     @svg('heroicon-o-trash', 'w-4 h-4 shrink-0') Foodbook löschen
                                 </button>
+                                </fieldset>
                             </div>
                         </div>
 
-                        <x-fa::button variant="primary" icon="heroicon-m-check" wire:click="speichern" data-fb-speichern>Speichern</x-fa::button>
+                        {{-- Spec 65: erst „Bearbeiten" (Sperre), dann Abbrechen/Speichern; Speichern beendet die Bearbeitung, Editor bleibt offen --}}
+                        <x-foodalchemist::bearbeiten-leiste :zustand="$sperr">
+                            <x-fa::button variant="primary" icon="heroicon-m-check" wire:click="speichern" data-fb-speichern>Speichern</x-fa::button>
+                        </x-foodalchemist::bearbeiten-leiste>
                     </div>
                 </x-slot:actions>
 
@@ -189,10 +196,10 @@
                             data-fb-kopf-modal>@svg('heroicon-o-book-open', 'w-4 h-4 shrink-0') Ganzes Foodbook</button>
 
                     <p class="mt-3 px-1 text-[length:var(--fa-text-sm)] font-semibold text-[var(--fa-ink-2)]">Kapitel</p>
-                    <div class="flex items-center gap-1">
+                    <div class="flex items-center gap-1"><fieldset @disabled($gesperrt) class="contents">{{-- Spec 65 --}}
                         <x-fa::input size="sm" wire:model="neuesKapitelTitel" wire:keydown.enter="kapitelNeu" placeholder="Neues Kapitel" aria-label="Titel für ein neues Kapitel" class="min-w-0 flex-1" />
                         <x-fa::icon-button icon="heroicon-m-plus" label="Kapitel anlegen" size="sm" wire:click="kapitelNeu" />
-                    </div>
+                    </fieldset></div>
 
                     <div class="mt-1 flex flex-col gap-0.5">
                         @forelse($kapitelTree as $kt)
@@ -201,13 +208,14 @@
                                  :class="dragKapId === {{ $kt['id'] }} ? 'opacity-40' : (dragKapId ? 'ring-1 ring-[var(--fa-accent-line)] rounded-[var(--fa-radius-control)]' : '')"
                                  class="group flex items-center gap-0.5" style="padding-left: {{ $kt['depth'] * 12 }}px">
                                 {{-- #4: Ziehgriff zum Umsortieren (setData ist Pflicht für Safari) --}}
-                                <span class="inline-flex shrink-0 cursor-grab active:cursor-grabbing select-none text-[var(--fa-ink-3)] hover:text-[var(--fa-ink)] opacity-0 group-hover:opacity-100 focus-within:opacity-100" draggable="true"
+                                <span class="inline-flex shrink-0 cursor-grab active:cursor-grabbing select-none text-[var(--fa-ink-3)] hover:text-[var(--fa-ink)] opacity-0 {{ $gesperrt ? 'invisible' : 'group-hover:opacity-100 focus-within:opacity-100' }}" draggable="{{ $gesperrt ? 'false' : 'true' }}"
                                       @dragstart="dragKapId = {{ $kt['id'] }}; $event.dataTransfer.setData('text/plain', String({{ $kt['id'] }})); $event.dataTransfer.effectAllowed = 'move'"
                                       @dragend="dragKapId = null" title="Ziehen zum Sortieren" data-kapitel-drag>@svg('heroicon-m-bars-2', 'w-4 h-4')</span>
                                 <button type="button" wire:click="kapitelWaehle({{ $kt['id'] }})"
                                         class="flex-1 min-w-0 text-left break-words leading-snug text-[length:var(--fa-text-md)] px-2 py-1.5 rounded-[var(--fa-radius-control)] transition-colors duration-150 {{ $selectedKapitelId === $kt['id'] ? $aktiv : $hover }}"
                                         @if($selectedKapitelId === $kt['id']) aria-current="true" @endif>{{ $kt['title'] }}</button>
                                 {{-- Seltene Kapitel-Aktionen in einem Menü je Zeile — spart Breite auf dem Laptop. --}}
+                                <fieldset @disabled($gesperrt) class="contents">{{-- Spec 65: Kapitel ändern nur im Bearbeiten-Modus --}}
                                 <div class="relative shrink-0" x-data="faMenu()" x-on:keydown.escape="offen = false" x-on:click.outside="offen = false">
                                     <button type="button" x-on:click="toggle($event)" aria-haspopup="menu" x-bind:aria-expanded="offen"
                                             class="{{ $kleinSymbol }} opacity-0 group-hover:opacity-100 focus:opacity-100" aria-label="Aktionen für {{ $kt['title'] }}" title="Aktionen für das Kapitel">@svg('heroicon-m-ellipsis-horizontal', 'w-4 h-4')</button>
@@ -219,6 +227,7 @@
                                         <button type="button" role="menuitem" wire:click="kapitelLoeschen({{ $kt['id'] }})" wire:confirm="Kapitel löschen?" x-on:click="offen = false" class="{{ $menuePunktRot }}">@svg('heroicon-o-trash', 'w-4 h-4 shrink-0') Kapitel löschen</button>
                                     </div>
                                 </div>
+                                </fieldset>
                             </div>
                         @empty
                             <p class="px-1 py-2 {{ $hinweis }}">Noch keine Kapitel. Titel eingeben und mit Enter anlegen.</p>
@@ -231,7 +240,7 @@
             <div wire:key="fbcockpit-{{ $fb->id }}" class="space-y-4">
                 {{-- Spec 42: reine Ausgabe-Form — Planung/Kreativ/DNA/Trend leben in der Leitstelle.
                      Überblick (2026-08-27): Status + Inhalt + Preis je Kapitel auf EINER Seite, Start-Reiter. --}}
-                <x-foodalchemist::editor-tabs marker="fb" wire-key="fb-tabs-{{ $fb->id }}"
+                <x-foodalchemist::editor-tabs marker="fb" wire-key="fb-tabs-{{ $fb->id }}" :gesperrt="$gesperrt"
                     :tabs="[
                         'board' => 'Überblick',
                         'briefing' => 'Stammdaten',
@@ -265,8 +274,8 @@
                         <div class="flex flex-wrap items-center justify-between gap-2">
                             <p class="{{ $hinweis }}">Zeile anklicken klappt Positionen und Abdeckung auf.</p>
                             <div class="flex items-center gap-1">
-                                <x-fa::button variant="ghost" size="sm" icon="heroicon-m-chevron-double-down" x-on:click="auf = Object.fromEntries({{ json_encode($alleIds) }}.map(i => [i, true]))">Alle aufklappen</x-fa::button>
-                                <x-fa::button variant="ghost" size="sm" icon="heroicon-m-chevron-double-up" x-on:click="auf = {}">Alle zuklappen</x-fa::button>
+                                <x-fa::button variant="ghost" size="sm" icon="heroicon-m-chevron-double-down" href="#" x-on:click.prevent="auf = Object.fromEntries({{ json_encode($alleIds) }}.map(i => [i, true]))">Alle aufklappen</x-fa::button>
+                                <x-fa::button variant="ghost" size="sm" icon="heroicon-m-chevron-double-up" href="#" x-on:click.prevent="auf = {}">Alle zuklappen</x-fa::button>
                             </div>
                         </div>
                         <div class="fa-surface overflow-hidden divide-y divide-[var(--fa-line)]">
@@ -322,7 +331,7 @@
                                                 <option value="in_arbeit" @selected($kap['fortschritt'] === 'in_arbeit')>In Arbeit</option>
                                                 <option value="fertig" @selected($kap['fortschritt'] === 'fertig')>Fertig</option>
                                             </x-fa::select>
-                                            <x-fa::button size="sm" variant="ghost" icon-right="heroicon-m-arrow-right" wire:click="kapitelWaehle({{ $kap['kapitel_id'] }})" title="Kapitel öffnen und Speisen bearbeiten">Kapitel öffnen</x-fa::button>
+                                            <x-fa::button size="sm" variant="ghost" icon-right="heroicon-m-arrow-right" href="#" x-on:click.prevent="" wire:click="kapitelWaehle({{ $kap['kapitel_id'] }})" title="Kapitel öffnen und Speisen bearbeiten">Kapitel öffnen</x-fa::button>
                                         </div>
                                     </div>
                                     {{-- Aufgeklappt: eigene Positionen + Abdeckung (Kinder sind eigene Zeilen darunter) --}}
@@ -565,7 +574,7 @@
                             <div class="flex flex-col gap-1.5 rounded-[var(--fa-radius-surface)] border border-[var(--fa-line)] bg-[var(--fa-ground)] p-3" x-data>
                                 <div class="flex flex-wrap items-center gap-2">
                                     <div class="flex-1 min-w-[12rem] rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] bg-[var(--fa-surface)] px-2.5 py-1.5 font-mono text-[length:var(--fa-text-sm)] text-[var(--fa-ink)] break-all select-all" data-fb-praes-link>{{ $presentationLink }}</div>
-                                    <x-fa::button size="sm" icon="heroicon-m-link" x-on:click="navigator.clipboard.writeText('{{ $presentationLink }}'); $el.textContent='Kopiert'">Link kopieren</x-fa::button>
+                                    <x-fa::button size="sm" icon="heroicon-m-link" href="#" x-on:click.prevent="navigator.clipboard.writeText('{{ $presentationLink }}'); $el.textContent='Kopiert'">Link kopieren</x-fa::button>
                                 </div>
                                 <p class="{{ $hinweis }} flex flex-wrap items-center gap-x-2 gap-y-1">
                                     <span>Freigegeben am {{ $presentationInfo['published_at'] ?? '–' }}, gültig bis {{ $presentationInfo['expires_at'] ?? '–' }}</span>
@@ -590,7 +599,7 @@
                                     </div>
                                     <div class="flex flex-wrap items-center gap-2">
                                         <div class="flex-1 min-w-[12rem] rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] bg-[var(--fa-ground)] px-2.5 py-1.5 font-mono text-[length:var(--fa-text-sm)] text-[var(--fa-ink)] break-all select-all">{{ $bl['url'] }}</div>
-                                        <x-fa::button size="sm" icon="heroicon-m-link" x-on:click="navigator.clipboard.writeText('{{ $bl['url'] }}'); $el.textContent='Kopiert'">Link kopieren</x-fa::button>
+                                        <x-fa::button size="sm" icon="heroicon-m-link" href="#" x-on:click.prevent="navigator.clipboard.writeText('{{ $bl['url'] }}'); $el.textContent='Kopiert'">Link kopieren</x-fa::button>
                                         @if($bl['enabled'])
                                             <x-fa::button size="sm" variant="danger" wire:click="betriebZuruckziehen({{ $bl['outlet_id'] }})" wire:confirm="Diesen Betriebs-Link zurückziehen? Er ist dann nicht mehr erreichbar.">Zurückziehen</x-fa::button>
                                         @else

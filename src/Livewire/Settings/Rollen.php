@@ -21,6 +21,14 @@ use Platform\FoodAlchemist\Services\TeamSettingsService;
  */
 class Rollen extends Component
 {
+    /** Spec 65: Bereich settings.rollen je Team — Felder schreiben sofort, Leiste Bearbeiten → Fertig. Der Betriebs-Wähler (outletId) bleibt bedienbar. */
+    use Concerns\MitEinstellungsSperre;
+
+    protected function sperrBereich(): string
+    {
+        return 'rollen';
+    }
+
     /** @var array{name: string, satz: string} */
     public array $neu = ['name' => '', 'satz' => ''];
 
@@ -174,6 +182,7 @@ class Rollen extends Component
         }
 
         return view('foodalchemist::livewire.settings.rollen', [
+            'sperr' => $this->sperrZustand(),   // Spec 65
             'rollen' => $team !== null
                 ? FoodAlchemistKitchenRole::visibleToTeam($team)
                     ->orderBy('sort_order')->orderBy('name')->get()

@@ -101,3 +101,23 @@ it('Gericht-Editor: nach dem Speichern bleibt er offen im Lesemodus, die Sperre 
     expect($this->gericht->refresh()->name)->toBe('Brisket gespeichert')
         ->and($this->svc->haelt('recipe', $this->gericht->id, $this->anna->id))->toBeFalse();
 });
+
+it('Detailspalte: Wechsel zu einem anderen Rezept gibt die hier geholte Sperre frei (Dominique 2026-10-07)', function () {
+    $zweites = FoodAlchemistRecipe::create(['team_id' => $this->rootTeam->id, 'recipe_key' => 'zwei', 'name' => 'Zwei', 'status' => 'approved']);
+    $this->actingAs($this->anna);
+    Livewire::test(\Platform\FoodAlchemist\Livewire\Recipes\DetailPanel::class)
+        ->dispatch('recipe-selected', id: $this->gericht->id)
+        ->call('bearbeitenStarten')
+        ->dispatch('recipe-selected', id: $zweites->id);
+    expect($this->svc->haelt('recipe', $this->gericht->id, $this->anna->id))->toBeFalse();
+});
+
+it('Detailspalte: Wechsel lässt eine im Editor geholte Sperre stehen', function () {
+    $zweites = FoodAlchemistRecipe::create(['team_id' => $this->rootTeam->id, 'recipe_key' => 'zwei', 'name' => 'Zwei', 'status' => 'approved']);
+    $this->svc->sperren('recipe', $this->gericht->id, $this->anna->id, 'Anna');   // Editor hat gesperrt
+    $this->actingAs($this->anna);
+    Livewire::test(\Platform\FoodAlchemist\Livewire\Recipes\DetailPanel::class)
+        ->dispatch('recipe-selected', id: $this->gericht->id)
+        ->dispatch('recipe-selected', id: $zweites->id);
+    expect($this->svc->haelt('recipe', $this->gericht->id, $this->anna->id))->toBeTrue();
+});

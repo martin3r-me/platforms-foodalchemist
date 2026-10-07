@@ -22,6 +22,22 @@ use RuntimeException;
  */
 class Einkauf extends Component
 {
+    /**
+     * Spec 65: Bereich settings.einkauf je Team. Mehrere Abschnitts-Speichern (Strategie, Bestellversand,
+     * Lagerorte, Stamm-Matrix) → Leiste „sofort": Bearbeiten → Fertig; einzelnes Speichern gibt nicht frei.
+     */
+    use Concerns\MitEinstellungsSperre;
+
+    protected function sperrBereich(): string
+    {
+        return 'einkauf';
+    }
+
+    /** Lesend: Lead-Neuwahl-Vorschau rechnet nur (nichts wird persistiert), Schließen klappt sie zu. */
+    protected function sperrFreiExtra(): array
+    {
+        return ['repickVorschau', 'repickSchliessen'];
+    }
     public string $strategie = 'guenstigster_preis';
 
     /** @var array<int> geordnete supplier_ids für prioritaets_kette */
@@ -350,6 +366,7 @@ class Einkauf extends Component
             ->get();
 
         return view('foodalchemist::livewire.settings.einkauf', [
+            'sperr' => $this->sperrZustand(),   // Spec 65
             'team' => $team,
             'strategien' => LeadLaStrategie::cases(),
             'lieferanten' => $lieferanten,

@@ -20,6 +20,20 @@ use RuntimeException;
  */
 class KonzeptTaxonomie extends Component
 {
+    /** Spec 65: Bereich settings.konzept_taxonomie je Team — Sofort-Aktionen, Leiste Bearbeiten → Fertig. Auswahl/Navigation bleibt frei (Link statt Knopf im gesperrten Bereich). */
+    use Concerns\MitEinstellungsSperre;
+
+    protected function sperrBereich(): string
+    {
+        return 'konzept_taxonomie';
+    }
+
+    /** Lesend (ohne Sperre): setAchse, katWaehlen, klasseWaehlen. */
+    protected function sperrFreiExtra(): array
+    {
+        return ['setAchse', 'katWaehlen', 'klasseWaehlen'];
+    }
+
     /** Achse der Master-Detail-Ansicht: kategorie|klasse. */
     public string $achse = 'category';
 
@@ -204,6 +218,7 @@ class KonzeptTaxonomie extends Component
             ->groupBy('class')->pluck('n', 'class');
 
         return view('foodalchemist::livewire.settings.konzept-taxonomie', [
+            'sperr' => $this->sperrZustand(),   // Spec 65
             'kategorien' => $svc->categoriesFlat($team),
             'klassen' => $svc->klassenFlat($team),
             'katCounts' => $katCounts,
