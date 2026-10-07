@@ -18,15 +18,14 @@
         ? ['stern3' => ['#fcd34d', 'passt dazu'], 'kontrast' => ['#22d3ee', 'deckt offenen Bedarf']]
         : ['stern3' => ['#fcd34d', '★★★ harmoniert'], 'kontrast' => ['#22d3ee', 'Kontrast']];
 @endphp
-<x-foodalchemist::modal name="pairing-netz" title="Pairing-Netz: {{ $zentrumNode['label'] ?? '' }}" size="max-w-7xl">
+<x-foodalchemist::modal name="pairing-netz" title="Pairing-Netz" :title-name="$zentrumNode['label'] ?? null" size="max-w-7xl" dark-canvas>
     @if($zentrumNode === null)
-        <p class="text-xs text-gray-500">Kein Rezept gewählt.</p>
+        <x-fa::empty compact icon="heroicon-o-share" title="Kein Rezept gewählt" />
     @else
         <div
             wire:ignore
             wire:key="pairing-netz-{{ $recipeId }}-{{ $netz['meta']['sig'] ?? '' }}"
-            class="rounded-xl p-3"
-            style="background:#0b1120"
+            class="flex flex-col gap-2"
             x-data="pairingNetzGraph({
                 nodes: @js($netz['nodes']),
                 edges: @js($netz['edges']),
@@ -37,37 +36,35 @@
                 onNodeClick: (id) => $wire.zeigeRezept(id),
             })"
         >
-            {{-- Kopf: Filter-Chips (Stern-Stufen ★★★ / ★★ / ★) --}}
-            <div class="flex flex-wrap items-center gap-2 mb-2 text-[11px]" data-netz-kopf>
-                <span class="text-slate-400 mr-1">Was passt dazu:</span>
+            {{-- Kopf: Filter ★★★ (echtes Food Pairing) / Kontrast (Spec 60) — Optik aus fa-pass, Farbpunkt = Linienfarbe im Netz --}}
+            <div class="flex flex-wrap items-center gap-2 text-[length:var(--fa-text-sm)]" data-netz-kopf>
+                <span class="text-[var(--fa-ink-2)]">Was passt dazu</span>
                 @foreach($chips as $typ => [$farbe, $label])
                     <button type="button" @click="toggleTyp('{{ $typ }}')"
-                            :class="typAktiv['{{ $typ }}'] ? 'ring-2 ring-offset-1 ring-offset-slate-900' : 'opacity-45'"
-                            class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 transition text-slate-200"
-                            style="border-color: {{ $farbe }}; --tw-ring-color: {{ $farbe }};"
+                            :class="typAktiv['{{ $typ }}'] ? 'border-[var(--fa-accent)] bg-[var(--fa-hover)] text-[var(--fa-ink)]' : 'border-[var(--fa-line)] text-[var(--fa-ink-3)]'"
+                            class="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-full border transition"
                             data-netz-chip="{{ $typ }}">
                         <span class="w-2 h-2 rounded-full" style="background: {{ $farbe }}"></span>
-                        {{ $label }} ({{ $counts[$typ] ?? 0 }})
+                        {{ $label }} <span class="tabular-nums text-[var(--fa-ink-3)]">{{ $counts[$typ] ?? 0 }}</span>
                     </button>
                 @endforeach
-                <span class="text-slate-500 ml-2">{{ $istGericht ? 'Bestandteile: '.($counts['bestandteile'] ?? 0).' · Vorschläge: '.($counts['basis'] ?? 0) : 'Basisrezepte: '.($counts['basis'] ?? 0) }} · Klick auf Rezept = öffnen · Scroll/Ziehen = Zoom/Pan</span>
+                <span class="ml-auto text-[var(--fa-ink-3)]">{{ $istGericht ? 'Bestandteile '.($counts['bestandteile'] ?? 0).' · Vorschläge '.($counts['basis'] ?? 0) : 'Basisrezepte '.($counts['basis'] ?? 0) }} · Klick auf ein Rezept öffnet es · Mausrad und Ziehen zoomen und verschieben</span>
             </div>
 
-            <svg viewBox="0 0 1200 980" preserveAspectRatio="xMidYMid meet" class="w-full rounded-xl" style="height:76vh; background:#0b1120" data-fa-netz-mount></svg>
+            <svg viewBox="0 0 1200 980" preserveAspectRatio="xMidYMid meet" class="w-full h-[70vh] rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] bg-[var(--fa-surface)]" data-fa-netz-mount></svg>
 
             {{-- Legende --}}
-            <div class="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-[10px] text-slate-400" data-netz-legende>
-                <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full" style="background:#fdba74"></span> Gericht</span>
+            <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]" data-netz-legende>
+                <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full border-2 border-[var(--fa-accent)]"></span> Gericht</span>
                 @if($istGericht)
-                    <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full" style="background:#bbf7d0"></span> Bestandteil (Basisrezept des Gerichts)</span>
+                    <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full border-2 border-[var(--fa-ok)] bg-[var(--fa-ok-soft)]"></span> Bestandteil (Basisrezept des Gerichts)</span>
                 @else
-                    <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full" style="background:#ddd6fe"></span> Kern-Anker mit Anteil am Aromenprofil</span>
+                    <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-[var(--fa-netz-anker)]"></span> Kern-Anker mit Anteil am Aromenprofil</span>
                 @endif
-                <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full" style="background:#86efac"></span> Basisrezept</span>
-                <span class="text-slate-600">|</span>
-                <span class="inline-flex items-center gap-1"><svg width="22" height="6"><line x1="0" y1="3" x2="22" y2="3" stroke="#fcd34d" stroke-width="2.4"/></svg> ★★★ harmoniert (gemessen)</span>
-                <span class="inline-flex items-center gap-1"><svg width="22" height="6"><line x1="0" y1="3" x2="22" y2="3" stroke="#22d3ee" stroke-width="2" stroke-dasharray="1 4"/></svg> Kontrast: deckt einen offenen Bedarf</span>
-                <span class="inline-flex items-center gap-1"><svg width="22" height="6"><line x1="0" y1="3" x2="22" y2="3" stroke="#f43f5e" stroke-width="2" stroke-dasharray="5 3"/></svg> Konflikt zwischen Kern-Ankern</span>
+                <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-[var(--fa-ok)]"></span> Basisrezept</span>
+                <span class="inline-flex items-center gap-1.5"><svg width="22" height="6"><line x1="0" y1="3" x2="22" y2="3" stroke="#fcd34d" stroke-width="2.4"/></svg> ★★★ harmoniert (gemessen)</span>
+                <span class="inline-flex items-center gap-1.5"><svg width="22" height="6"><line x1="0" y1="3" x2="22" y2="3" stroke="#22d3ee" stroke-width="2" stroke-dasharray="1 4"/></svg> Kontrast: deckt einen offenen Bedarf</span>
+                <span class="inline-flex items-center gap-1.5"><svg width="22" height="6"><line x1="0" y1="3" x2="22" y2="3" stroke="#f43f5e" stroke-width="2" stroke-dasharray="5 3"/></svg> Konflikt zwischen Kern-Ankern</span>
             </div>
         </div>
     @endif
