@@ -18,6 +18,11 @@ use Platform\FoodAlchemist\Services\SensorikService;
  *
  *   Aromamasse je Zutat = Gramm × Aroma-Intensität des Ankers × Rollen-Gewicht
  *                         (Gramm nach der T1-Kaskade von Yield/Kosten, {@see RecipeRecomputeService::grammJeZeile})
+ *   Würzzutat           = nach Wirk-Dosis statt nach Gramm ({@see WIRKDOSIS}): Rezeptmasse × WUERZ_GEWICHT
+ *                         × Intensität × √(Anteil / Wirk-Dosis), gedeckelt bei WUERZ_DECKEL, × Rollen-Gewicht.
+ *                         Gewürze und Kräuter werden in Gramm dosiert, prägen das Aroma aber weit über
+ *                         ihre Masse — linear fielen 58 % der Gewürz- und 63 % der Kräuter-Zeilen aus dem
+ *                         Profil (demo 2026-10-07, z. B. „Mousse Dulcey-Ras el Hanout" = 100 % Sahne).
  *   Unterrezept         = sein eigenes Profil, anteilig nach der eingesetzten Menge (max. 3 Ebenen)
  *   Profil              = Aromamassen je Anker, normiert auf 100 %; Anker < 5 % fallen weg, neu normiert
  *
@@ -42,6 +47,28 @@ final class RezeptProfil
     public const VOLL_AB_ANTEIL = 10.0;
 
     private const REKURSION_MAX = 3;
+
+    /**
+     * Wirk-Dosis je Anker-Kategorie (längstes Präfix gewinnt), in % der Rezeptmasse: der Median der
+     * tatsächlichen Dosierung über 2.336 Basisrezepte (gemessen 2026-10-07, T1-Gramm, Kern-Anker).
+     * Nur Zutaten, die in Gramm dosiert werden und trotzdem aromaprägend sind; alles andere bleibt linear.
+     * Salz hat Intensität 0 und kommt gar nicht erst hierher.
+     */
+    public const WIRKDOSIS = [
+        'Gewuerze' => 0.5,
+        'Gewuerze/Zitrusgewuerze' => 1.3,
+        'Kräuter' => 0.7,
+        'Gemüse/Fruchtgemüse/Chili' => 0.3,
+    ];
+
+    /** Eine Würzzutat in Wirk-Dosis zählt wie WUERZ_GEWICHT × Intensität der Rezeptmasse (Gewürz 5 × 0,04 = ⅕). */
+    public const WUERZ_GEWICHT = 0.04;
+
+    /** Überdosis wirkt nur bis zum Anderthalbfachen — sonst verdrängt ein Datenfehler (123 g Gewürz) das ganze Profil. */
+    public const WUERZ_DECKEL = 1.5;
+
+    /** @var array<int, ?float> anchor_id → Wirk-Dosis (null = linear) */
+    private array $dosisCache = [];
 
     /** Sensorik-Dimension → Achse; nur die aus Nährwerten belegten. */
     private const SENSORIK_BELEGT = ['suess' => 'suesse', 'salzig' => 'salz', 'fettig' => 'fett'];
@@ -106,6 +133,7 @@ final class RezeptProfil
     public function vergiss(): void
     {
         $this->cache = [];
+        $this->dosisCache = [];
     }
 
     /** @return array<string, mixed> */
@@ -133,6 +161,7 @@ final class RezeptProfil
         $namensVerfahren = Verfahren::ausText((string) $rezept->name);
         $gramm = $zeilen->mapWithKeys(fn ($z) => [$z->id => $this->recompute->grammJeZeile($z)]);
         $staerksteZeile = $gramm->sortDesc()->keys()->first();
+        $gesamt = (float) $gramm->sum();
 
         $roh = [];          // anchor_id => Aromamasse
         $verfahrenJe = [];  // anchor_id => Verfahren
@@ -176,7 +205,7 @@ final class RezeptProfil
             if ($intensitaet <= 0) {
                 continue;
             }
-            $roh[$anker] = ($roh[$anker] ?? 0) + $g * $intensitaet * $rolle;
+            $roh[$anker] = ($roh[$anker] ?? 0) + $this->aromamasse($anker, $g, $gesamt, $intensitaet) * $rolle;
             $verfahrenJe[$anker] = $verfahren?->value ?? ($verfahrenJe[$anker] ?? null);
         }
 
@@ -287,6 +316,35 @@ final class RezeptProfil
             ->where('grundname', $a->grundname)->where('verfahren', $verfahren->value)->orderBy('id')->pluck('id');
 
         return $treffer->count() === 1 ? (int) $treffer->first() : $anker;
+    }
+
+    /** Aromamasse einer Zutatenzeile: linear nach Gramm, Würzzutaten nach Wirk-Dosis (siehe Klassen-Doc). */
+    private function aromamasse(int $anker, float $g, float $gesamt, float $intensitaet): float
+    {
+        $dosis = $this->wirkDosis($anker);
+        if ($dosis === null || $gesamt <= 0) {
+            return $g * $intensitaet;
+        }
+        $wirkung = min(self::WUERZ_DECKEL, sqrt((100 * $g / $gesamt) / $dosis));
+
+        return $gesamt * self::WUERZ_GEWICHT * $intensitaet * $wirkung;
+    }
+
+    private function wirkDosis(int $anker): ?float
+    {
+        if (! array_key_exists($anker, $this->dosisCache)) {
+            $a = DB::table('foodalchemist_vocab_pairing_anchors')->where('id', $anker)->first(['category', 'subcategory']);
+            $pfad = (string) ($a->subcategory ?? $a->category ?? '');
+            $treffer = null;
+            foreach (self::WIRKDOSIS as $praefix => $dosis) {
+                if (($pfad === $praefix || str_starts_with($pfad, $praefix.'/')) && ($treffer === null || strlen($praefix) > strlen($treffer))) {
+                    $treffer = $praefix;
+                }
+            }
+            $this->dosisCache[$anker] = $treffer !== null ? self::WIRKDOSIS[$treffer] : null;
+        }
+
+        return $this->dosisCache[$anker];
     }
 
     private function intensitaet(int $anker): float

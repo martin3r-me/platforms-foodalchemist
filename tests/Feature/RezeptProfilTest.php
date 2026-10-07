@@ -71,6 +71,27 @@ it('Anteil = Gramm × Intensität; Salz ohne Aroma, Anteile unter 5 % fallen weg
         ->and(DB::table('foodalchemist_recipe_profile_anker')->where('recipe_id', $r->id)->count())->toBe(2);
 });
 
+it('Würzzutat zählt nach Wirk-Dosis, nicht nach Gramm — sonst fiele das Gewürz aus dem Profil', function () {
+    DB::table('foodalchemist_vocab_pairing_anchors')->insert(['uuid' => (string) UuidV7::generate(), 'slug' => 'ras_el_hanout',
+        'display_de' => 'Ras el Hanout', 'aroma_intensitaet' => 5.0, 'category' => 'Gewuerze', 'subcategory' => 'Gewuerze/Gewuerzmischungen',
+        'created_at' => now(), 'updated_at' => now()]);
+    $this->anker['ras_el_hanout'] = (int) DB::getPdo()->lastInsertId();
+
+    $r = $this->makeRecipe($this->rootTeam, 'Gewürzkartoffeln');
+    $this->makeIngredient($r, 'Kartoffeln', ($this->gp)('Kartoffeln: frisch', 'potato'), '995', 1);
+    $this->makeIngredient($r, 'Ras el Hanout', ($this->gp)('Ras el Hanout: trocken', 'ras_el_hanout'), '5', 2);
+
+    $p = ($this->svc)()->fuer($r->id);
+
+    // linear: 5 × 5 = 25 gegen 995 → 2,4 % → fiele weg.
+    // Wirk-Dosis: 0,5 % der Masse = genau die Gewürz-Dosis → 1000 × 0,04 × 5 × √1 = 200 → 200 / 1195 = 16,74 %
+    expect(($this->anteile)($p))->toBe(['potato' => 83.26, 'ras_el_hanout' => 16.74]);
+
+    // Überdosis (Datenfehler 100 g) wirkt höchstens anderthalbfach: 1095 × 0,04 × 5 × 1,5 = 328,5 gegen 995
+    DB::table('foodalchemist_recipe_ingredients')->where('recipe_id', $r->id)->where('position', 2)->update(['quantity' => '100']);
+    expect(($this->anteile)(($this->svc)()->fuer($r->id)))->toBe(['potato' => 75.18, 'ras_el_hanout' => 24.82]);
+});
+
 it('Verfahren im Zutatentext wählt die Inspire-Variante', function () {
     $r = $this->makeRecipe($this->rootTeam, 'Kürbisspalten');
     $this->makeIngredient($r, 'Kürbis, im Ofen geröstet', ($this->gp)('Kürbis: frisch', 'pumpkin'), '500', 1);
