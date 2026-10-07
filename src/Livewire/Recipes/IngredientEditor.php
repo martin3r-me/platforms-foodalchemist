@@ -37,6 +37,22 @@ use Platform\FoodAlchemist\Support\TeamScope;
 class IngredientEditor extends Component
 {
     use InteractsWithSavedToast;
+    use \Platform\FoodAlchemist\Livewire\Concerns\MitBearbeitungssperre;   // Spec 65
+
+    /**
+     * Spec 65: eingebettet teilt sich der Zutaten-Editor die Sperre seines Voll-Editors (gleiches Ziel 'recipe').
+     * Standalone (Zutaten-Modal aus Planung u. a.) noch ohne Sperre — eigene Leiste folgt mit Paket A2.
+     */
+    protected function sperrZiel(): ?array
+    {
+        return $this->eingebettet && $this->recipeId !== null ? ['recipe', $this->recipeId] : null;
+    }
+
+    /** Lesen/Suchen im Katalog darf auch ohne Sperre laufen (schreibt nichts). */
+    protected function sperrFreiExtra(): array
+    {
+        return ['beiModalClosed', 'garverlustVorschlag', 'gpArtikel', 'ersatzFuer', 'sucheZiel', 'browseKatalog', 'zielDaten', 'ekFuerZiel'];
+    }
 
     public ?int $recipeId = null;
 

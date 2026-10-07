@@ -44,6 +44,9 @@ abstract class TestCase extends BaseTestCase
         // Default-Connection-Namen hereinkommt.
         $this->assertFreshTestDatabase();
 
+        // Spec 65: Bestandstests rufen Editor-Methoden direkt — Sperre hier aus; BearbeitungssperreTest schaltet sie ein.
+        config(['foodalchemist.bearbeitungssperre' => false]);
+
         // Ancestry-Ketten aus früheren Tests desselben Prozesses verwerfen (V-048).
         // Bewusst hier und nicht als Handliste im Harness: der Cache ist eine Trait-Statik
         // PRO nutzender Model-Klasse (77 Models) und lebt im Test pro Prozess. Eine

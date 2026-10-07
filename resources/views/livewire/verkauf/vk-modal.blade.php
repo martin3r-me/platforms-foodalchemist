@@ -108,9 +108,12 @@
                 {{-- #1b: EIN Speichern-Weg, sequenziert — erst die Gericht-Daten (`speichern`), dann bei
                      Erfolg adressiert das Zutaten-Speichern der eingebetteten Komponenten (MVP-046).
                      Der Editor meldet `zutaten-persistiert` zurück → beiZutatenPersistiert schließt. --}}
-                <x-fa::button variant="primary" icon="heroicon-m-check"
-                    x-on:click="$wire.speichern().then(() => { if (! $wire.fehler && $wire.recipeId) $dispatch('zutaten-speichern', { recipeId: $wire.recipeId }) })"
-                    data-vk-speichern>Speichern</x-fa::button>
+                {{-- Spec 65: erst „Bearbeiten" (Sperre), dann Abbrechen/Speichern; Speichern beendet die Bearbeitung --}}
+                <x-foodalchemist::bearbeiten-leiste :zustand="$sperr">
+                    <x-fa::button variant="primary" icon="heroicon-m-check"
+                        x-on:click="$wire.speichern().then(() => { if (! $wire.fehler && $wire.recipeId) $dispatch('zutaten-speichern', { recipeId: $wire.recipeId }) })"
+                        data-vk-speichern>Speichern</x-fa::button>
+                </x-foodalchemist::bearbeiten-leiste>
             @else
                 <x-fa::button variant="primary" icon="heroicon-m-plus" wire:click="anlegen" data-vk-anlegen>Gericht anlegen</x-fa::button>
             @endif
@@ -281,7 +284,7 @@
              'allergene'-Key bleibt stabil, Label «Deklaration» (Allergene · Zusatzstoffe · Nährwerte · Anteile).
              fa-pass: «Darreichungen» ist in «Kalkulation» aufgegangen — Preisklasse, MwSt und VK entstehen
              je Darreichung, getrennte Reiter zwangen zum Hin- und Herspringen. --}}
-        <x-foodalchemist::editor-tabs marker="vk" wire-key="vk-tabs-{{ $rezept->id }}" :init="'aufbau'" visit-action="tabLaden"
+        <x-foodalchemist::editor-tabs marker="vk" wire-key="vk-tabs-{{ $rezept->id }}" :init="'aufbau'" visit-action="tabLaden" :gesperrt="in_array($sperr['modus'], ['lesen', 'fremd'], true)"
             :tabs="[
                 'aufbau' => 'Aufbau',
                 'kalkulation' => 'Kalkulation',

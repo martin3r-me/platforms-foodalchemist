@@ -274,6 +274,17 @@ class FoodAlchemistServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Spec 65 · Bearbeitungssperre: serverseitige Durchsetzung für alle Editoren mit MitBearbeitungssperre.
+        // Jede Methode außerhalb von sperrFreieMethoden() läuft nur, wenn die aufrufende Person die Sperre hält
+        // (Klick auf „Bearbeiten"); sonst Abweisung mit Hinweis statt stillem Schreiben.
+        \Livewire\on('call', function ($component, $method, $params, $context, $returnEarly) {
+            if (! method_exists($component, 'sperreErlaubt') || $component->sperreErlaubt((string) $method)) {
+                return;
+            }
+            $component->sperreAbgewiesen((string) $method);
+            $returnEarly(null);
+        });
+
         // M7-10 / D8: STT-Fassade — Binding-Tausch genügt für einen späteren Core-Contract
         // STT-Treiber: 'auto' nimmt den Dienst, für den ein Zugang existiert. Der
         // frühere Default 'fake' hat auf demo jeden gesprochenen Befehl durch den

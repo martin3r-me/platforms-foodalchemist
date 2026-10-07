@@ -56,6 +56,7 @@
     'visitAction' => null,         {{-- Alpine-Modus: beim ersten Besuch schwere Inhalte serverseitig freischalten --}}
     'visited' => [],               {{-- bereits serverseitig aufgebaute Reiter; verhindert Folge-Roundtrips --}}
     'counts' => [],                {{-- Server-Modus (optional): ['key' => int] → Zähler-Badge, nur wenn > 0 --}}
+    'gesperrt' => false,           {{-- Spec 65: Lesemodus — Panels als <fieldset disabled>, Reiter bleiben klickbar --}}
 ])
 @php
     $sichtbar = array_filter($tabs, fn ($label) => $label !== null && $label !== false && $label !== '');
@@ -102,6 +103,10 @@
             </div>
         @endif
 
-        {{ $slot }}
+        {{-- Spec 65: im Lesemodus (keine eigene Bearbeitungssperre) sind alle Eingaben und Knöpfe der Panels aus;
+             die Reiterleiste steht außerhalb und bleibt bedienbar. display:contents = kein eigener Kasten. --}}
+        <fieldset @disabled($gesperrt) class="contents" data-fa-lesemodus="{{ $gesperrt ? '1' : '0' }}">
+            {{ $slot }}
+        </fieldset>
     </div>
 @endif

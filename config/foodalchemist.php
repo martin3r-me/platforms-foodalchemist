@@ -766,6 +766,10 @@ return [
      */
     'shell' => env('FOODALCHEMIST_SHELL', 'plattform'),
 
+    // Spec 65 · Bearbeitungssperre: Editoren erst nach „Bearbeiten“ beschreibbar, Datensatz für andere gesperrt.
+    // Notschalter FOODALCHEMIST_BEARBEITUNGSSPERRE=false → Verhalten wie vorher (Test-Grundlage schaltet aus).
+    'bearbeitungssperre' => env('FOODALCHEMIST_BEARBEITUNGSSPERRE', true),
+
     /*
      * Schicht 3 — Konformitaets-Critic: die DETERMINISTISCHEN Regeln neben dem LLM-§-Pass.
      * Was exakt entscheidbar ist, wird exakt entschieden (gemessene Lehre aus dem

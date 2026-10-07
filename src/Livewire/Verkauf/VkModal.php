@@ -31,6 +31,39 @@ class VkModal extends Component
     use \Platform\FoodAlchemist\Livewire\Concerns\HatRezeptCopilot;   // Spec 03 L6b
     use \Platform\FoodAlchemist\Livewire\Concerns\InteractsWithSavedToast;
     use \Livewire\WithFileUploads;
+    use \Platform\FoodAlchemist\Livewire\Concerns\MitBearbeitungssperre;   // Spec 65
+
+    /** Spec 65: Sperre gilt dem Rezept-Datensatz (Gericht = recipe) — derselbe Schlüssel wie im eingebetteten Zutaten-Editor. */
+    protected function sperrZiel(): ?array
+    {
+        return $this->recipeId !== null ? ['recipe', $this->recipeId] : null;
+    }
+
+    protected function sperrModalName(): ?string
+    {
+        return 'vk-modal';
+    }
+
+    /** Spec 65: Editor geschlossen → eigene Sperre frei (einziger modal.closed-Handler dieser Komponente). */
+    #[On('modal.closed')]
+    public function beiModalGeschlossen(?string $name = null): void
+    {
+        $this->sperreBeiSchliessen($name);
+    }
+
+    /** Lesend/Polling: ohne Bearbeiten-Sperre erlaubt. */
+    protected function sperrFreiExtra(): array
+    {
+        return ['pruefeProduktfotoErgebnis', 'beiZutatenPersistiert', 'beiModalGeschlossen'];
+    }
+
+    /** Abbrechen: ungespeicherten Formularstand verwerfen, Datensatz frisch laden. */
+    protected function nachAbbrechen(): void
+    {
+        if ($this->recipeId !== null) {
+            $this->oeffnen($this->recipeId);
+        }
+    }
 
     /** Spec 43 (Bild-Epic): Gericht-Foto — dasselbe Bild-Feld wie am Basisrezept (recipes.image_*). */
     public $dishImageUpload = null;
@@ -430,6 +463,7 @@ class VkModal extends Component
     public function beiZutatenPersistiert(?int $recipeId = null): void
     {
         if ($this->recipeId !== null && $this->recipeId === $recipeId) {
+            $this->bearbeitenBeenden();   // Spec 65: Speichern beendet die Bearbeitung
             $this->dispatch('modal.close', name: 'vk-modal');
         }
     }
@@ -1253,6 +1287,7 @@ class VkModal extends Component
             ? app(\Platform\FoodAlchemist\Services\BulkEnrichService::class)->status($team, $this->bulkRunId) : null;
 
         return view('foodalchemist::livewire.verkauf.vk-modal', [
+            'sperr' => $this->sperrZustand(),   // Spec 65
             'rezept' => $rezept,
             'dishImageUrl' => ($rezept !== null && ($rezept->image_context_file_id || $rezept->image_path))
                 ? app(\Platform\FoodAlchemist\Services\FoodAlchemistMediaService::class)->url($rezept->image_context_file_id, $rezept->image_path)
