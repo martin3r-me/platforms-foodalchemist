@@ -74,6 +74,7 @@
     <livewire:foodalchemist.gps.platzhalter-modal />
     {{-- R9/M9-05: Verwendungs-Klicks aus dem Panel öffnen die Rezept-Editoren --}}
     <livewire:foodalchemist.recipes.recipe-modal />
+    <livewire:foodalchemist.recipes.pairing-netz-modal />{{-- „Netz öffnen" aus dem Rezept-/Gericht-Editor --}}
     <livewire:foodalchemist.verkauf.vk-modal />
     {{-- Klick auf einen Lieferantenartikel im Panel öffnet dessen Artikel-Dialog --}}
     <livewire:foodalchemist.suppliers.item-modal />

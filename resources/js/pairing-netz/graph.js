@@ -125,14 +125,17 @@ export function pairingNetzGraph(config) {
     },
 
     _buildViewBox() {
-      const pad = this.mode === 'preview' ? 80 : 130; // Reserve für radiale Aussen-Labels (Vorschau: Rezeptnamen bis 20 Zeichen)
+      // Reserve für radiale Aussen-Labels. fa-pass: Vorschau seitlich breiter (Labels laufen
+      // waagerecht nach aussen), oben/unten knapper — vorher schnitt das Panel die Namen ab.
+      const padX = this.mode === 'preview' ? 108 : 130;
+      const padY = this.mode === 'preview' ? 26 : 130;
       const vis = this.nodes.filter((n) => this._nodeVisible(n));
       const xs = vis.map((n) => n.x);
       const ys = vis.map((n) => n.y);
-      const minX = Math.min(...xs) - pad;
-      const maxX = Math.max(...xs) + pad;
-      const minY = Math.min(...ys) - pad;
-      const maxY = Math.max(...ys) + pad;
+      const minX = Math.min(...xs) - padX;
+      const maxX = Math.max(...xs) + padX;
+      const minY = Math.min(...ys) - padY;
+      const maxY = Math.max(...ys) + padY;
       this._svg.attr('viewBox', `${minX} ${minY} ${maxX - minX} ${maxY - minY}`);
     },
 
@@ -164,7 +167,7 @@ export function pairingNetzGraph(config) {
       // Stärke-Marker auf den Anker-Verbindungen (Foodpairing-Stil: Best/Good/Match).
       // Deutlich distinkte Stufen: grosser Grössensprung + Best heller Ring + Match blasser,
       // damit man gross/mittel/klein klar auseinanderhält.
-      const tierR = { best: 11, good: 6.5, match: 3.2 };
+      const tierR = this.mode === 'preview' ? { best: 5.5, good: 3.6, match: 2 } : { best: 11, good: 6.5, match: 3.2 };
       const tierOp = { best: 1, good: 0.82, match: 0.5 };
       const marks = drawEdges.filter((d) => this._edgeTier(d) && this._edgeMidpoint(d, cx, cy));
       this._markSel = g.selectAll('circle.fa-strength').data(marks).enter().append('circle')
@@ -173,8 +176,8 @@ export function pairingNetzGraph(config) {
         .attr('cy', (d) => this._edgeMidpoint(d, cx, cy)[1])
         .attr('r', (d) => tierR[this._edgeTier(d)])
         .attr('fill', (d) => this._edgeColor(d))
-        .attr('stroke', (d) => (this._edgeTier(d) === 'best' ? '#ede9fe' : '#0b1120'))
-        .attr('stroke-width', (d) => (this._edgeTier(d) === 'best' ? 2.2 : 1))
+        .attr('stroke', (d) => (this._edgeTier(d) === 'best' ? '#e0e7ff' : '#0b1120'))
+        .attr('stroke-width', (d) => (this._edgeTier(d) === 'best' ? (this.mode === 'preview' ? 1.2 : 2.2) : 1))
         .style('opacity', (d) => tierOp[this._edgeTier(d)]);
       this._markSel.append('title').text((d) => this._edgeTitle(d));
     },
@@ -245,6 +248,14 @@ export function pairingNetzGraph(config) {
 
     _edgeWidth(d) {
       if (d.kind === 'teil_teil') return d.typ === 'stern3' ? 3.2 : 2.2;
+      if (this.mode === 'preview') {
+        // fa-pass: ruhige Vorschau — Stern-Stufe bleibt lesbar, aber kein Gewirr dicker Linien.
+        if (d.kind === 'anker_anker') return { 3: 2, 2: 1.3, 1: 0.8 }[d.level] || 1.2;
+        if (d.kind === 'bridge') return { best: 2.2, good: 1.4, match: 0.9 }[this._edgeTier(d)] || 0.9;
+        if (d.kind === 'zentrum_anker') return 0.6;
+
+        return 0.7;
+      }
       // Anker↔Anker: Dicke nach Stern-Stufe (★★★ dick … ★ dünn) — deine 1/2/3-Matrix.
       if (d.kind === 'anker_anker') return { 3: 3.2, 2: 2.2, 1: 1.3 }[d.level] || 2;
       // Brücke: Dicke nach normalisierter Stärke (Overlap-Tier) — eine Stärke-Dimension,
@@ -261,6 +272,7 @@ export function pairingNetzGraph(config) {
     _edgeOpacity(d) {
       if (d.kind === 'teil_teil') return 0.85;
       if (d.kind === 'konflikt') return 0.9;
+      if (d.kind === 'kandidat') return this.mode === 'preview' ? 0.32 : 0.5;
       if (d.kind === 'anker_anker') return 0.85; // Kern-Aussage → präsent (vs. zentrum_anker 0.14)
       if (d.kind === 'bridge') return 0.78;
       if (d.kind === 'zentrum_anker') return 0.14;
@@ -362,7 +374,7 @@ export function pairingNetzGraph(config) {
     // auf ~0.6 runter, daher sind die Werte gross gewählt, damit auf dem Schirm
     // ~13-16px ankommen. Preview zeigt ~1:1, dort etwas kleiner.
     _fontSize(d) {
-      if (this.mode === 'preview') return d.kind === 'zentrum' ? 13 : 11;
+      if (this.mode === 'preview') return d.kind === 'zentrum' ? 11 : 9.5;
       if (d.kind === 'zentrum') return 22;
       if (d.kind === 'anker' || d.kind === 'bestandteil') return 19;
 
@@ -405,7 +417,7 @@ export function pairingNetzGraph(config) {
     },
 
     _radius(d) {
-      if (d.kind === 'zentrum') return this.mode === 'preview' ? 22 : 30;
+      if (d.kind === 'zentrum') return this.mode === 'preview' ? 15 : 30;
       if (d.kind === 'anker' || d.kind === 'bestandteil') return this.mode === 'preview' ? 8 : 11;
       if (d.kind === 'basisrezept') return 9;
       // Brücken-Zutat (bedient ≥2 Kern-Anker) = grösser, als Verbindungs-Hub sichtbar.
@@ -415,8 +427,8 @@ export function pairingNetzGraph(config) {
     },
 
     _fill(d) {
-      if (d.kind === 'zentrum') return '#fdba74';
-      if (d.kind === 'anker') return d.orphan ? '#fde68a' : '#ddd6fe'; // Orphan = warm (passt nicht), sonst Violett
+      if (d.kind === 'zentrum') return 'rgba(79,110,247,.22)';
+      if (d.kind === 'anker') return d.orphan ? '#fde68a' : '#c7d2fe'; // Orphan = warm (passt nicht), sonst Logo-Blau hell
       if (d.kind === 'bestandteil') return d.ohne_profil ? '#e5e7eb' : '#bbf7d0'; // Basisrezept des Gerichts
       if (d.kind === 'basisrezept') return d.typ === 'kontrast' ? TYP_FILL.kontrast : '#86efac';
 
@@ -424,8 +436,8 @@ export function pairingNetzGraph(config) {
     },
 
     _stroke(d) {
-      if (d.kind === 'zentrum') return '#ea580c';
-      if (d.kind === 'anker') return d.orphan ? '#d97706' : '#7c3aed'; // Orphan = Bernstein-Warn-Ring
+      if (d.kind === 'zentrum') return '#4f6ef7';
+      if (d.kind === 'anker') return d.orphan ? '#d97706' : '#4f6ef7'; // Orphan = Bernstein-Warn-Ring
       if (d.kind === 'bestandteil') return d.ohne_profil ? '#9ca3af' : '#15803d';
       if (d.kind === 'basisrezept') return d.typ === 'kontrast' ? TYP_FARBE.kontrast : '#16a34a';
 
@@ -464,7 +476,9 @@ export function pairingNetzGraph(config) {
       if (d.kind === 'anker') return d.anteil != null ? `${d.label || d.slug || ''} ${Math.round(d.anteil)} %` : (d.label || d.slug || '');
       if (d.kind === 'bestandteil') return this._trunc(d.label, 34);
 
-      return d.label || d.slug || ''; // kandidat — Anzeigename (display_de) statt technischem Slug
+      const name = d.label || d.slug || ''; // kandidat — Anzeigename (display_de) statt technischem Slug
+
+      return this.mode === 'preview' ? this._trunc(name, 16) : name;
     },
 
     _trunc(s, n) {
@@ -483,7 +497,7 @@ export function pairingNetzGraph(config) {
     _labelFill(d) {
       // Helle Schrift auf schwarzem Editor-Grund.
       if (d.kind === 'zentrum') return '#f8fafc';
-      if (d.kind === 'anker') return '#c4b5fd';        // helles Violett, passend zum Anker-Knoten
+      if (d.kind === 'anker') return '#c7d2fe'; // helles Logo-Blau, passend zum Anker-Knoten
       if (d.kind === 'bestandteil') return '#bbf7d0';
       if (d.kind === 'basisrezept') return '#86efac';
       if (d.kind === 'kandidat') return TYP_FARBE[d.typ] || '#cbd5e1';

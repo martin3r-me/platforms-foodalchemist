@@ -34,7 +34,7 @@
 @endphp
 
 @if($zentrumNode === null || $ankerNodes->count() < 1)
-    <p class="text-[13px] text-slate-400">{{ $istGericht ? 'Noch keine Bestandteile — das Netz zeigt die Basisrezepte des Gerichts, sobald welche eingesetzt sind.' : 'Noch kein Aromenprofil — das Netz erscheint, sobald eine Zutat einem Aroma zugeordnet ist.' }}</p>
+    <p class="text-[length:var(--fa-text-md)] text-[var(--fa-ink-3)]">{{ $istGericht ? 'Noch keine Bestandteile — das Netz zeigt die Basisrezepte des Gerichts, sobald welche eingesetzt sind.' : 'Noch kein Aromenprofil — das Netz erscheint, sobald eine Zutat einem Aroma zugeordnet ist.' }}</p>
 @else
     <div
         wire:ignore
@@ -49,6 +49,6 @@
         })"
         class="w-full"
     >
-        <svg viewBox="0 0 360 230" class="w-full rounded-xl" style="background:#0b1120" data-fa-netz-mount></svg>
+        <svg viewBox="0 0 360 230" class="w-full rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] bg-[var(--fa-surface)]" data-fa-netz-mount></svg>
     </div>
 @endif

@@ -72,6 +72,7 @@
          DetailPanel, das danach selbst `modal.open` feuert). Kein `activity`-Slot: der liess
          auf dieser Seite die Inhaltsfläche auf Höhe 0 kollabieren (2026-08-02). --}}
     <livewire:foodalchemist.recipes.recipe-modal />
+    <livewire:foodalchemist.recipes.pairing-netz-modal />{{-- „Netz öffnen" aus dem Rezept-/Gericht-Editor --}}
     <livewire:foodalchemist.verkauf.vk-modal />
     <livewire:foodalchemist.signale.detail-panel />
 
