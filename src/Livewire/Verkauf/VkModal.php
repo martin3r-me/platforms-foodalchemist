@@ -463,8 +463,9 @@ class VkModal extends Component
     public function beiZutatenPersistiert(?int $recipeId = null): void
     {
         if ($this->recipeId !== null && $this->recipeId === $recipeId) {
-            $this->bearbeitenBeenden();   // Spec 65: Speichern beendet die Bearbeitung
-            $this->dispatch('modal.close', name: 'vk-modal');
+            // Spec 65 (Dominique 2026-10-07): Speichern beendet die Bearbeitung und gibt die Sperre frei, der Editor
+            // BLEIBT offen im Lesemodus — man prüft das Ergebnis (frisch gerechnete Kennzahlen) und schließt selbst.
+            $this->bearbeitenBeenden();
         }
     }
 

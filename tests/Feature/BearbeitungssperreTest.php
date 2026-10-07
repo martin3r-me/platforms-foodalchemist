@@ -88,3 +88,16 @@ it('Gericht-Editor: Schließen gibt die eigene Sperre frei', function () {
         ->dispatch('modal.closed', name: 'vk-modal');
     expect($this->svc->haelt('recipe', $this->gericht->id, $this->anna->id))->toBeFalse();
 });
+
+it('Gericht-Editor: nach dem Speichern bleibt er offen im Lesemodus, die Sperre ist frei', function () {
+    $this->actingAs($this->anna);
+    Livewire::test(VkModal::class)->call('oeffnen', $this->gericht->id)
+        ->call('bearbeitenStarten')
+        ->set('form.name', 'Brisket gespeichert')->call('speichern')
+        ->dispatch('zutaten-persistiert', recipeId: $this->gericht->id)
+        ->assertNotDispatched('modal.close')
+        ->assertSeeHtml('data-bearbeiten-starten')
+        ->assertSeeHtml('data-fa-lesemodus="1"');
+    expect($this->gericht->refresh()->name)->toBe('Brisket gespeichert')
+        ->and($this->svc->haelt('recipe', $this->gericht->id, $this->anna->id))->toBeFalse();
+});

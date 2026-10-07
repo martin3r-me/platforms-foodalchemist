@@ -31,7 +31,7 @@
 3. **Während des Bearbeitens:**
    - Ein Herzschlag (alle 60 s, nur bei Aktivität) verlängert die Sperre.
    - Kopf des Editors: Status „Du bearbeitest · nicht gespeichert“.
-4. **„Speichern“:** schreibt alle Änderungen in **einer** Transaktion, gibt die Sperre frei und beendet die Bearbeitung. Der Editor geht zurück in den Lesemodus. Wer weiterarbeiten will, klickt erneut „Bearbeiten“.
+4. **„Speichern“:** schreibt alle Änderungen in **einer** Transaktion, gibt die Sperre frei und beendet die Bearbeitung. Der Editor **bleibt offen** und geht in den Lesemodus. Man prüft das Ergebnis mit frisch gerechneten Kennzahlen und schließt selbst. Wer weiterarbeiten will, klickt erneut „Bearbeiten“. Entscheidung Dominique 2026-10-07: nicht automatisch schließen.
 5. **„Verwerfen“ / Schließen mit ungespeicherten Änderungen:**
    - Nachfrage „Änderungen verwerfen?“.
    - Danach Sperre frei, nichts geschrieben.
