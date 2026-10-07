@@ -17,31 +17,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
 
-  <script>
-    // faMenu — gemeinsamer Aufklapp-Helfer für Menüs (Status-Chips, „Weitere Aktionen" …).
-    // Das Menü steht FEST am Bildschirm (nicht im scrollenden Tabellenkasten → wird nicht abgeschnitten),
-    // rechtsbündig am Auslöser, klappt nach oben, wenn unten kein Platz ist, und schließt beim Scrollen.
-    // Nutzung: x-data="faMenu()" · Auslöser x-on:click="toggle($event)" · Menü class="hidden" x-bind:class="{ hidden: ! offen }" x-bind:style="pos"
-    // (Menü ist von Haus aus versteckt → fehlt der Helfer einmal, bleibt es zu statt die Tabelle aufzublähen.)
-    document.addEventListener('alpine:init', () => {
-      Alpine.data('faMenu', () => ({
-        offen: false,
-        pos: '',
-        toggle(e) {
-          if (this.offen) { this.offen = false; return; }
-          const r = e.currentTarget.getBoundingClientRect();
-          const oben = r.bottom + 280 > window.innerHeight && r.top > 280;
-          this.pos = 'position:fixed;z-index:1000;left:' + r.right + 'px;top:' + (oben ? r.top - 4 : r.bottom + 4) + 'px;transform:translate(-100%,' + (oben ? '-100%' : '0') + ')';
-          this.offen = true;
-        },
-        init() {
-          const zu = () => { this.offen = false; };
-          window.addEventListener('scroll', zu, true);
-          window.addEventListener('resize', zu);
-        },
-      }));
-    });
-  </script>
+  <x-foodalchemist::shell.fa-menu-script />
   <x-ui-styles />
   @vite(['resources/css/app.css', 'resources/js/app.js'])
   @livewireStyles
