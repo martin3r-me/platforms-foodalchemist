@@ -329,8 +329,8 @@ export function pairingNetzGraph(config) {
         .attr('class', 'fa-node')
         .attr('transform', (d) => `translate(${d.x},${d.y})`)
         .style('cursor', (d) => this._clickable(d) ? 'pointer' : 'default')
-        .on('mouseenter', (event, d) => this._setHover(d.id))
-        .on('mouseleave', () => this._setHover(null))
+        .on('mouseenter', (event, d) => { this._setHover(d.id); this._vollerName(event.currentTarget, d, true); })
+        .on('mouseleave', (event, d) => { this._setHover(null); this._vollerName(event.currentTarget, d, false); })
         .on('click', (event, d) => {
           if (d.kind === 'basisrezept' && typeof this.onNodeClick === 'function') {
             this.onNodeClick(parseInt(String(d.id).replace('b:', ''), 10));
@@ -481,6 +481,17 @@ export function pairingNetzGraph(config) {
       const name = d.label || d.slug || ''; // kandidat — Anzeigename (display_de) statt technischem Slug
 
       return this.mode === 'preview' ? this._trunc(name, 16) : name;
+    },
+
+    // Hover: gekürzte Beschriftung (Vorschau 16/20 Zeichen, Modal 34/38) zeigt den vollen Namen;
+    // Knoten nach vorn, damit der lange Name über den Nachbarn liegt (Wunsch Dominique 2026-10-07).
+    _vollerName(el, d, an) {
+      const kurz = this._labelText(d);
+      const voll = d.kind === 'kandidat' || d.kind === 'basisrezept' || d.kind === 'bestandteil' ? (d.label || d.slug || '') : kurz;
+      if (voll === kurz) return;
+      const text = el.querySelector('text');
+      if (text) text.textContent = an ? voll : kurz;
+      if (an) el.parentNode.appendChild(el);
     },
 
     _trunc(s, n) {
