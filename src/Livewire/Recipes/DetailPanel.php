@@ -30,6 +30,32 @@ class DetailPanel extends Component
     /** GP-Modal-Muster: section = genau EINE Kartei rendern (z.B. 'ersatz' als eigener Tab). */
     public ?string $section = null;
 
+    /**
+     * Pairing (Kombinationslogik + Netz) wird NACHGELADEN (Dominique 2026-10-07: Detailspalte lädt sehr langsam —
+     * gemessen ~2–4 s nur fürs Pairing, bei jedem Klick). Der Platzhalter im Blade ruft pairingLaden() einmal je
+     * Rezept (wire:key je Rezept, x-init). Ergebnis kurz gecacht, Schlüssel inkl. updated_at des Rezepts: Aktionen
+     * in der Spalte (Eignung, Status …) rechnen es nicht neu; nach Speichern/Recompute ist der Schlüssel neu.
+     * Achtung: Kombinationslogik::daten schreibt bei Basisrezepten das Rezept-Profil (Hash-Wechsel) — deshalb nur
+     * einmal je Rezept anstoßen, nie pro Render.
+     */
+    public ?int $pairingFuer = null;
+
+    public function pairingLaden(): void
+    {
+        $this->pairingFuer = $this->recipeId;
+    }
+
+    /** @return array{netz: array, kombination: ?array} */
+    private function pairingDaten($team, FoodAlchemistRecipe $rezept): array
+    {
+        $schluessel = 'fa.detail.pairing.'.$team->id.'.'.$rezept->id.'.'.optional($rezept->updated_at)->timestamp;
+
+        return \Illuminate\Support\Facades\Cache::remember($schluessel, 300, fn () => [
+            'netz' => app(\Platform\FoodAlchemist\Services\PairingService::class)->pairingNetz($team, $rezept->id),
+            'kombination' => app(\Platform\FoodAlchemist\Services\Pairing\Kombinationslogik::class)->daten($rezept),
+        ]);
+    }
+
     public function mount(?int $recipeId = null, bool $embedded = false, ?string $section = null): void
     {
         $this->recipeId = $recipeId;
@@ -222,12 +248,17 @@ class DetailPanel extends Component
             // v3-Redesign: Standalone-Sidebar nicht mehr ausklappbar → Netz/Kohäsion/Pairings
             // direkt laden, aber NUR standalone (im Editor-Embed/nur-Sektion bleiben sie ungenutzt → gespart).
             // Layer: Pairing-Netz-Daten hier laden statt in der anonymen x-Komponente (gleiche Guard wie kohaesion/pairings = nur Standalone-Panel).
-            'netz' => $rezept !== null && ! $this->embedded && $this->section === null
-                ? app(\Platform\FoodAlchemist\Services\PairingService::class)->pairingNetz($team, $rezept->id)
-                : ['nodes' => [], 'edges' => [], 'meta' => []],
-            // Spec 60 · P7: Kombinationslogik — Aussagen mit Grundlage (nur Standalone-Panel, wie das Netz).
-            'kombination' => $rezept !== null && ! $this->embedded && $this->section === null
-                ? app(\Platform\FoodAlchemist\Services\Pairing\Kombinationslogik::class)->daten($rezept) : null,
+            // Spec 60 · P7: Kombinationslogik + Netz — nur Standalone-Panel, NACHGELADEN (pairingLaden).
+            ...$this->pairingFuerView($team, $rezept, $rezept !== null && ! $this->embedded && $this->section === null),
         ]);
+    }
+
+    /** View-Variablen fürs Pairing: leer, bis pairingLaden() für dieses Rezept gelaufen ist. */
+    private function pairingFuerView($team, ?FoodAlchemistRecipe $rezept, bool $erlaubt): array
+    {
+        $bereit = $erlaubt && $rezept !== null && $team !== null && $this->pairingFuer === $rezept->id;
+        $daten = $bereit ? $this->pairingDaten($team, $rezept) : ['netz' => ['nodes' => [], 'edges' => [], 'meta' => []], 'kombination' => null];
+
+        return ['pairingBereit' => $bereit, 'pairingErlaubt' => $erlaubt] + $daten;
     }
 }

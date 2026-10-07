@@ -5,6 +5,7 @@ namespace Platform\FoodAlchemist\Livewire\Verkauf;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\On;
 use Livewire\Component;
+use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Services\SalesRecipeService;
 use Platform\FoodAlchemist\Support\TeamScope;
 
@@ -26,6 +27,32 @@ class DetailPanel extends Component
     }
 
     #[On('vk-recipe-selected')]
+    /**
+     * Pairing (Kombinationslogik + Netz) wird NACHGELADEN (Dominique 2026-10-07: Detailspalte lädt sehr langsam —
+     * gemessen ~2–4 s nur fürs Pairing, bei jedem Klick). Der Platzhalter im Blade ruft pairingLaden() einmal je
+     * Rezept (wire:key je Rezept, x-init). Ergebnis kurz gecacht, Schlüssel inkl. updated_at des Rezepts: Aktionen
+     * in der Spalte (Eignung, Status …) rechnen es nicht neu; nach Speichern/Recompute ist der Schlüssel neu.
+     * Achtung: Kombinationslogik::daten schreibt bei Basisrezepten das Rezept-Profil (Hash-Wechsel) — deshalb nur
+     * einmal je Rezept anstoßen, nie pro Render.
+     */
+    public ?int $pairingFuer = null;
+
+    public function pairingLaden(): void
+    {
+        $this->pairingFuer = $this->recipeId;
+    }
+
+    /** @return array{netz: array, kombination: ?array} */
+    private function pairingDaten($team, FoodAlchemistRecipe $rezept): array
+    {
+        $schluessel = 'fa.detail.pairing.'.$team->id.'.'.$rezept->id.'.'.optional($rezept->updated_at)->timestamp;
+
+        return \Illuminate\Support\Facades\Cache::remember($schluessel, 300, fn () => [
+            'netz' => app(\Platform\FoodAlchemist\Services\PairingService::class)->pairingNetz($team, $rezept->id),
+            'kombination' => app(\Platform\FoodAlchemist\Services\Pairing\Kombinationslogik::class)->daten($rezept),
+        ]);
+    }
+
     public function zeige(int $id): void
     {
         $this->recipeId = $id;
@@ -264,7 +291,6 @@ class DetailPanel extends Component
     {
         $team = Auth::user()?->currentTeamRelation;
         $rezept = $team !== null && $this->recipeId !== null ? $verkauf->detail($team, $this->recipeId) : null;
-        $pairing = app(\Platform\FoodAlchemist\Services\PairingService::class);
         // Ebene 2 (D3): VK folgt dem aktiven Betrieb.
         $outlet = $team !== null ? app(\Platform\FoodAlchemist\Services\ActiveOutletContext::class)->current($team) : null;
 
@@ -279,9 +305,8 @@ class DetailPanel extends Component
                 : null,
             'cockpit' => $rezept !== null ? $verkauf->cockpit($rezept, $team, $outlet) : null,
             // Layer: Pairing-Netz-Daten hier laden statt in der anonymen x-Komponente (gleiche Guard wie im Blade: $rezept !== null).
-            'netz' => $rezept !== null ? $pairing->pairingNetz($team, $rezept->id) : ['nodes' => [], 'edges' => [], 'meta' => []],
-            // Spec 60: Kombinationslogik — Aussagen mit Grundlage, Bestandteile = Basisrezepte, Vorschläge.
-            'kombination' => $rezept !== null ? app(\Platform\FoodAlchemist\Services\Pairing\Kombinationslogik::class)->daten($rezept) : null,
+            // Spec 60: Kombinationslogik + Netz — NACHGELADEN (pairingLaden), Bestandteile = Basisrezepte, Vorschläge.
+            ...$this->pairingFuerView($team, $rezept, $rezept !== null),
             // D-6 §5.x: Judge-Achse (gecacht) + deterministische Aroma-Nachbarn (lazy)
             'kohaerenzStatus' => $rezept !== null
                 ? app(\Platform\FoodAlchemist\Services\CoherenceService::class)->status($team, $rezept->id)
@@ -300,5 +325,14 @@ class DetailPanel extends Component
                     ->orderBy('name')->get(['id', 'name', 'kind'])
                 : collect(),
         ]);
+    }
+
+    /** View-Variablen fürs Pairing: leer, bis pairingLaden() für dieses Rezept gelaufen ist. */
+    private function pairingFuerView($team, ?FoodAlchemistRecipe $rezept, bool $erlaubt): array
+    {
+        $bereit = $erlaubt && $rezept !== null && $team !== null && $this->pairingFuer === $rezept->id;
+        $daten = $bereit ? $this->pairingDaten($team, $rezept) : ['netz' => ['nodes' => [], 'edges' => [], 'meta' => []], 'kombination' => null];
+
+        return ['pairingBereit' => $bereit, 'pairingErlaubt' => $erlaubt] + $daten;
     }
 }
