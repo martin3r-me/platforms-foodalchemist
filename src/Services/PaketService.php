@@ -171,6 +171,9 @@ class PaketService
                 $neu->dishes()->create([
                     'team_id' => $team->id, 'sales_recipe_id' => $g->sales_recipe_id,
                     'quantity' => $g->quantity, 'unit_vocab_id' => $g->unit_vocab_id, 'position' => $g->position,
+                    // Darreichung + Geschirr je Gericht gehören zur Position und wandern mit.
+                    'presentation_id' => $g->presentation_id,
+                    'tableware_item_id' => $g->tableware_item_id, 'tableware_alt_item_id' => $g->tableware_alt_item_id,
                 ]);
             }
             app(ConcepterAggregateService::class)->cachePaket($neu);
@@ -183,27 +186,44 @@ class PaketService
      * Setzt die Gerichte des Pakets (Vollersatz) in EINER Transaktion (V-07),
      * danach Preis-Recompute im Auto-Modus.
      *
-     * @param  array<int, array{sales_recipe_id:int, quantity?:float|null, unit_vocab_id?:int|null}>  $items
+     * @param  array<int, array{sales_recipe_id:int, quantity?:float|null, unit_vocab_id?:int|null, presentation_id?:int|null}>  $items
      */
     public function syncGerichte(Team $team, int $paketId, array $items): FoodAlchemistPaket
     {
         $paket = FoodAlchemistPaket::visibleToTeam($team)->findOrFail($paketId);
         $this->guardOwner($paket, $team);
 
+        // Bestehende Zeilen ERHALTEN statt löschen+neu anlegen: vorher gingen bei jedem Hinzufügen/
+        // Entfernen Darreichung und Geschirr je Gericht verloren (die Paket-Übersicht verlor sogar
+        // Menge+Einheit, weil sie nur die Gericht-IDs schickt). Zuordnung je Gericht in Reihenfolge;
+        // ein Feld wird nur überschrieben, wenn das Item es ausdrücklich mitbringt.
         DB::transaction(function () use ($paket, $items) {
-            $paket->dishes()->forceDelete();
-            foreach (array_values($items) as $i => $row) {
-                if (empty($row['sales_recipe_id'])) {
+            $bestand = $paket->dishes()->orderBy('position')->get()->groupBy(fn ($g) => (int) $g->sales_recipe_id);
+            $behalten = [];
+            $position = 0;
+            foreach (array_values($items) as $row) {
+                $rid = (int) ($row['sales_recipe_id'] ?? 0);
+                if ($rid <= 0) {
                     continue;
                 }
-                $paket->dishes()->create([
-                    'team_id' => $paket->team_id,
-                    'sales_recipe_id' => (int) $row['sales_recipe_id'],
-                    'quantity' => $row['quantity'] ?? null,
-                    'unit_vocab_id' => $row['unit_vocab_id'] ?? null,
-                    'position' => $i,
-                ]);
+                $zeile = $bestand->get($rid)?->shift();
+                $werte = ['position' => $position++];
+                foreach (['quantity', 'unit_vocab_id'] as $feld) {
+                    if (array_key_exists($feld, $row) || $zeile === null) {
+                        $werte[$feld] = $row[$feld] ?? null;
+                    }
+                }
+                if (array_key_exists('presentation_id', $row)) {
+                    $werte['presentation_id'] = $this->pruefeDarreichung($rid, $row['presentation_id']);
+                }
+                if ($zeile !== null) {
+                    $zeile->update($werte);
+                    $behalten[] = (int) $zeile->id;
+                } else {
+                    $behalten[] = (int) $paket->dishes()->create(['team_id' => $paket->team_id, 'sales_recipe_id' => $rid] + $werte)->id;
+                }
             }
+            $paket->dishes()->whereNotIn('id', $behalten ?: [0])->forceDelete();
         });
 
         // EK/W% (im auto-Modus zusätzlich der Preis) aus den Gerichten ableiten —
@@ -243,6 +263,37 @@ class PaketService
         }
         $spalte = $role === 'alt' ? 'tableware_alt_item_id' : 'tableware_item_id';
         $row->update([$spalte => $itemId]);
+    }
+
+    /**
+     * Darreichung je Paket-Gericht setzen (null = Standard). Wie ConceptService::setSlotDarreichung:
+     * nur an Gerichten, die Form muss zum Gericht der Zeile gehören. Preis/EK + Aggregat neu.
+     */
+    public function setGerichtDarreichung(Team $team, int $gerichtRowId, ?int $darreichungId): \Platform\FoodAlchemist\Models\FoodAlchemistPaketGericht
+    {
+        $row = \Platform\FoodAlchemist\Models\FoodAlchemistPaketGericht::findOrFail($gerichtRowId);
+        $paket = FoodAlchemistPaket::visibleToTeam($team)->findOrFail($row->package_id);
+        $this->guardOwner($paket, $team);
+        $row->update(['presentation_id' => $this->pruefeDarreichung((int) $row->sales_recipe_id, $darreichungId)]);
+
+        $this->recomputePrice($paket->refresh());
+        app(ConcepterAggregateService::class)->cachePaket($paket->refresh());
+
+        return $row->refresh();
+    }
+
+    /** null/0 ⇒ null (Standard). Sonst muss die Darreichung zum Gericht gehören. */
+    private function pruefeDarreichung(int $salesRecipeId, mixed $darreichungId): ?int
+    {
+        $id = (int) ($darreichungId ?? 0);
+        if ($id <= 0) {
+            return null;
+        }
+        if (! \Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung::whereKey($id)->where('recipe_id', $salesRecipeId)->exists()) {
+            throw new \RuntimeException('Darreichung #' . $id . ' gehört nicht zu diesem Gericht.');
+        }
+
+        return $id;
     }
 
     /** @param list<int> $ids neue Reihenfolge der paket_gerichte-IDs */

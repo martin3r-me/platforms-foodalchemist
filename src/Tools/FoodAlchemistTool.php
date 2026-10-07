@@ -562,6 +562,8 @@ abstract class FoodAlchemistTool
                 'name' => $g->dish?->name,
                 'quantity' => $g->quantity !== null ? (float) $g->quantity : null,
                 'unit' => $g->unit?->slug,
+                'presentation_id' => $g->presentation_id !== null ? (int) $g->presentation_id : null,
+                'darreichung' => $g->presentation_id !== null ? $g->presentation?->servingForm?->label : null,
             ])->values()->all();
         }
 

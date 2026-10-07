@@ -1208,6 +1208,22 @@ class Editor extends Component
         $this->dispatch('concepter-gespeichert', id: $this->id);
     }
 
+    /** Darreichung je Paket-Gericht ('' = Standard). Preis und Produktion folgen der Form. */
+    public function paketGerichtDarreichungSetzen(int $rowId, ?string $wert): void
+    {
+        if ($this->type !== 'pakete' || $this->id === null) {
+            return;
+        }
+        try {
+            app(PaketService::class)->setGerichtDarreichung($this->team(), $rowId, ctype_digit((string) $wert) ? (int) $wert : null);
+        } catch (\Throwable $e) {
+            $this->fehler = $e->getMessage();
+
+            return;
+        }
+        $this->dispatch('concepter-gespeichert', id: $this->id);
+    }
+
     public function gerichtMengeSpeichern(int $rowId, $quantity): void
     {
         app(PaketService::class)->setGerichtMenge($this->team(), $this->id, $rowId, $quantity !== '' ? (float) $quantity : null);
@@ -1302,6 +1318,8 @@ class Editor extends Component
         $team = $this->team();
         $concept = null;
         $paket = null;
+        $paketFormen = [];      // pg-id ⇒ Formen des Gerichts (nur bei ≥ 2), für die Auswahl je Posten
+        $paketPosten = [];      // pg-id ⇒ geltende Form (Label, Gramm, VK) für die Anzeige
         $cockpit = null;
         $aggregat = null;
         $bewertet = null;
@@ -1442,6 +1460,27 @@ class Editor extends Component
                 $aggregat = $agg->paketAggregat($paket);
                 $deklaration = $istDeklarationTab ? $agg->paketDeklaration($paket) : null;
                 $kalkulation = $kalk->paketHk($team, $paket, $outlet);
+                if ($istAufbau) {
+                    $resolver = app(\Platform\FoodAlchemist\Services\DarreichungResolver::class);
+                    $darSvc = app(\Platform\FoodAlchemist\Services\DarreichungService::class);
+                    $alleFormen = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung::with('servingForm')
+                        ->whereIn('recipe_id', $paket->dishes->pluck('sales_recipe_id')->filter()->all())
+                        ->orderByDesc('is_standard')->orderBy('id')->get()->groupBy('recipe_id');
+                    foreach ($paket->dishes as $pg) {
+                        if (! ($pg->dish?->is_sales_recipe ?? false)) {
+                            continue;
+                        }
+                        $formen = $alleFormen->get($pg->sales_recipe_id, collect());
+                        $gramm = fn ($f) => ($g = $darSvc->grammJeEinheit($f, $pg->dish)) !== null ? (int) round($g * (float) ($f->unit_count ?: 1)) : null;
+                        if ($formen->count() > 1) {
+                            $paketFormen[$pg->id] = $formen->map(fn ($f) => ['id' => (int) $f->id, 'label' => $f->servingForm?->label ?? '—', 'gramm' => $gramm($f), 'standard' => (bool) $f->is_standard])->all();
+                        }
+                        $dar = $resolver->fuerPaketGericht($pg);
+                        if ($dar !== null) {
+                            $paketPosten[$pg->id] = ['label' => $dar->servingForm?->label, 'gramm' => $gramm($dar), 'vk' => $dar->sales_net !== null ? (float) $dar->sales_net : null];
+                        }
+                    }
+                }
                 if ($istAufbau && $this->paketQuelle === 'basisrezept') {
                     $paketKandidaten = $this->paketGerichtSuche !== ''
                         ? $pakete->basisKandidaten($team, $this->paketGerichtSuche)
@@ -1506,6 +1545,8 @@ class Editor extends Component
             'pickKlassenCounts' => $istAufbau && $this->pickHg !== null ? $sales->klassenCounts($team, ['hauptgruppe' => $this->pickHg]) : [],
             'concept' => $concept,
             'paket' => $paket,
+            'paketFormen' => $paketFormen,
+            'paketPosten' => $paketPosten,
             'cockpit' => $cockpit,
             'cockpitZeilen' => $cockpit ? collect($cockpit['zeilen'])->keyBy('slot_id') : collect(),
             'sektionSumme' => $sektionSumme,

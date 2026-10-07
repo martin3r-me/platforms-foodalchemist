@@ -995,7 +995,19 @@
                                             {{ $istBasis ? 'Gramm je Person' : 'Menge je Person' }}
                                             <input type="number" step="0.01" min="0" value="{{ $pg->quantity }}" wire:change="gerichtMengeSpeichern({{ $pg->id }}, $event.target.value)" class="fa-control h-7 w-24 text-right tabular-nums {{ $klein }}" wire:key="epg-menge-{{ $pg->id }}" />
                                         </label>
-                                        <span class="{{ $klein }} text-[var(--fa-ink-2)] tabular-nums w-24 text-right">@if($istBasis){{ $pg->dish?->ek_total_eur !== null ? 'EK ' . $euro($pg->dish->ek_total_eur) : 'kein EK' }}@else{{ $euro($pg->dish?->sales_net) ?? 'kein Preis' }}@endif</span>
+                                        @if(isset($paketFormen[$pg->id]))
+                                            {{-- Darreichung je Posten: Preis und Produktion folgen der gewählten Form. --}}
+                                            <select wire:key="epg-form-{{ $pg->id }}" wire:change="paketGerichtDarreichungSetzen({{ $pg->id }}, $event.target.value)"
+                                                    class="fa-control fa-select pr-8 h-7 w-auto {{ $klein }}" aria-label="Darreichung dieses Postens" data-paket-form-picker
+                                                    title="Form dieses Gerichts im Paket. Standard folgt der Standard-Darreichung des Gerichts.">
+                                                @foreach($paketFormen[$pg->id] as $f)
+                                                    <option value="{{ $f['standard'] ? '' : $f['id'] }}" @selected($f['standard'] ? $pg->presentation_id === null : (int) $pg->presentation_id === $f['id'])>{{ $f['label'] }}{{ $f['gramm'] !== null ? ' · ' . $f['gramm'] . ' g' : '' }}{{ $f['standard'] ? ' (Standard)' : '' }}</option>
+                                                @endforeach
+                                            </select>
+                                        @elseif(! $istBasis && isset($paketPosten[$pg->id]['label']))
+                                            <span class="{{ $klein }} text-[var(--fa-ink-3)]" data-paket-form>{{ $paketPosten[$pg->id]['label'] }}{{ ($paketPosten[$pg->id]['gramm'] ?? null) !== null ? ' · ' . $paketPosten[$pg->id]['gramm'] . ' g' : '' }}</span>
+                                        @endif
+                                        <span class="{{ $klein }} text-[var(--fa-ink-2)] tabular-nums w-24 text-right">@if($istBasis){{ $pg->dish?->ek_total_eur !== null ? 'EK ' . $euro($pg->dish->ek_total_eur) : 'kein EK' }}@else{{ $euro($paketPosten[$pg->id]['vk'] ?? $pg->dish?->sales_net) ?? 'kein Preis' }}@endif</span>
                                         <x-fa::icon-button icon="heroicon-m-x-mark" label="Posten entfernen" size="sm" tone="danger" wire:click="gerichtRaus({{ $pg->sales_recipe_id }})" />
                                     </div>
                                 @empty

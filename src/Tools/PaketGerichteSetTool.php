@@ -24,7 +24,9 @@ class PaketGerichteSetTool extends FoodAlchemistTool implements ToolContract, To
     public function getDescription(): string
     {
         return 'Setzt die Gericht-Positionen eines team-eigenen Pakets (Vollersatz der Liste). '
-            . 'items: [{sales_recipe_id, quantity?, unit_vocab_id?}]. Zum Hinzufügen/Entfernen die ganze Ziel-Liste übergeben.';
+            . 'items: [{sales_recipe_id, quantity?, unit_vocab_id?, presentation_id?}]. Zum Hinzufügen/Entfernen die ganze Ziel-Liste übergeben. '
+            . 'Bestehende Positionen bleiben erhalten (Menge, Einheit, Darreichung, Geschirr), solange das Item das Feld nicht mitbringt. '
+            . 'presentation_id = Darreichung des Gerichts (0 = Standard); Preis und Produktion folgen ihr.';
     }
 
     public function getSchema(): array
@@ -42,6 +44,7 @@ class PaketGerichteSetTool extends FoodAlchemistTool implements ToolContract, To
                             'sales_recipe_id' => ['type' => 'integer'],
                             'quantity' => ['type' => 'number'],
                             'unit_vocab_id' => ['type' => 'integer'],
+                            'presentation_id' => ['type' => 'integer', 'description' => 'Darreichung des Gerichts (0 = Standard, weglassen = unverändert).'],
                         ],
                         'required' => ['sales_recipe_id'],
                     ],
@@ -74,11 +77,18 @@ class PaketGerichteSetTool extends FoodAlchemistTool implements ToolContract, To
                 continue;
             }
             $recipeIds[] = $rid;
-            $items[] = [
-                'sales_recipe_id' => $rid,
-                'quantity' => isset($row['quantity']) ? (float) $row['quantity'] : null,
-                'unit_vocab_id' => isset($row['unit_vocab_id']) ? (int) $row['unit_vocab_id'] : null,
-            ];
+            // Nur mitgebrachte Felder setzen — fehlende bleiben an der bestehenden Position erhalten.
+            $item = ['sales_recipe_id' => $rid];
+            if (array_key_exists('quantity', $row)) {
+                $item['quantity'] = $row['quantity'] !== null ? (float) $row['quantity'] : null;
+            }
+            if (array_key_exists('unit_vocab_id', $row)) {
+                $item['unit_vocab_id'] = $row['unit_vocab_id'] !== null ? (int) $row['unit_vocab_id'] : null;
+            }
+            if (array_key_exists('presentation_id', $row)) {
+                $item['presentation_id'] = (int) ($row['presentation_id'] ?? 0) > 0 ? (int) $row['presentation_id'] : null;
+            }
+            $items[] = $item;
         }
         try {
             if ($recipeIds !== []) {
