@@ -10,7 +10,14 @@
 
 <div class="flex flex-col gap-4">
     {{-- Die Leiste speichert die Strategie; Lagerorte und Stamm-Lieferanten speichern je Zeile. --}}
+    {{-- Spec 65: „Bearbeiten" sperrt den Bereich für das Team; mehrere Abschnitts-Speichern → Bearbeiten/Fertig --}}
+    @php $sperrLesen = in_array($sperr['modus'] ?? 'aus', ['lesen', 'fremd'], true); @endphp
+    @include('foodalchemist::livewire.settings.partials.sperr-leiste', ['sofort' => true, 'hint' => 'Strategie, Bestellversand, Lagerorte und Stamm-Lieferanten.'])
+    @unless($sperrLesen)
     <x-foodalchemist::save-bar :meldung="$meldung" hint="Speichert die Strategie für den kalkulierenden Artikel." />
+    @endunless
+    @if($sperrLesen && $meldung)<x-fa::notice tone="ok" data-save-bar-meldung>{{ $meldung }}</x-fa::notice>@endif
+    <fieldset @disabled($sperrLesen) class="contents" data-fa-lesemodus="{{ $sperrLesen ? '1' : '0' }}">
     @if($fehler)
         <x-fa::notice tone="crit">{{ $fehler }}</x-fa::notice>
     @endif
@@ -256,7 +263,7 @@
         {{-- Lead-Neuwahl mit Vorschau (PR #164, 2026-10-05) --}}
         <div class="mt-3 pt-3 border-t border-[var(--fa-line)] flex flex-col gap-3" data-lead-repick>
             <div>
-                <x-fa::button icon="heroicon-m-arrow-path" wire:click="repickVorschau">Leads neu wählen …</x-fa::button>
+                <x-fa::button icon="heroicon-m-arrow-path" href="#" x-on:click.prevent="" wire:click="repickVorschau">Leads neu wählen …</x-fa::button>
             </div>
             @if($repick !== null)
                 <div class="flex flex-col gap-2 text-[length:var(--fa-text-md)] text-[var(--fa-ink-2)]" data-lead-repick-vorschau>
@@ -303,4 +310,5 @@
             @endif
         </div>
     </x-fa::section>
+    </fieldset>
 </div>

@@ -17,6 +17,12 @@ use Platform\FoodAlchemist\Services\VocabularyService;
  */
 class Kalkulation extends Component
 {
+    use Concerns\MitEinstellungsSperre;   // Spec 65: Bereich settings.kalkulation je Team
+
+    protected function sperrBereich(): string
+    {
+        return 'kalkulation';
+    }
     /** @var array<string, string> WG-Code|'*' => Prozent */
     public array $garverlust = [];
 
@@ -74,11 +80,13 @@ class Kalkulation extends Component
             $n = RecomputeTeamRecipesJob::anzahlRezepte($team->id);
             RecomputeTeamRecipesJob::dispatch($team->id);
             $this->meldung = "Gespeichert — {$n} Rezepte (inkl. erbender Teams) werden mit den neuen Verlusten neu gerechnet.";
+            $this->bearbeitenBeenden();   // Spec 65
 
             return;
         }
         app(\Platform\FoodAlchemist\Services\PricingCascadeService::class)->recomputeTeam($team);
         $this->meldung = 'Gespeichert — Preise neu gerechnet.';
+        $this->bearbeitenBeenden();   // Spec 65: Speichern gibt den Bereich frei, Ansicht bleibt im Lesemodus
     }
 
     /** Vergleichsform einer Verlust-Map: Schlüssel als String sortiert, Werte als float. */
@@ -109,6 +117,7 @@ class Kalkulation extends Component
         };
 
         return view('foodalchemist::livewire.settings.kalkulation', [
+            'sperr' => $this->sperrZustand(),   // Spec 65
             'warengruppen' => $vocab->listWarengruppen($team),
             'geerbtGar' => $geerbt('cooking_loss_defaults'),
             'geerbtPutz' => $geerbt('trimming_loss_defaults'),

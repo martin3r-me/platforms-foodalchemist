@@ -506,3 +506,9 @@ button { transition: transform 120ms ease-out, background-color 120ms ease, box-
   background: rgba(255, 255, 255, 0.6);
 }
 .fa-settings-gruppe.is-aktiv .fa-settings-gruppe-zahl { background: rgba(255, 255, 255, 0.2); }
+
+/* Spec 65 · Lesemodus der Editoren: Panels liegen in <fieldset disabled> (editor-tabs `gesperrt`).
+   Deaktivierte Eingaben und Knöpfe sichtbar ruhig, damit klar ist: erst „Bearbeiten". */
+fieldset[data-fa-lesemodus="1"] :is(input, select, textarea, button) { cursor: not-allowed; }
+fieldset[data-fa-lesemodus="1"] :is(.fa-btn, button[class*="bg-"]) { opacity: .55; }
+fieldset[data-fa-lesemodus="1"] :is(input, select, textarea) { opacity: .85; }

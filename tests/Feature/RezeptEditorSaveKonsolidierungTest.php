@@ -78,14 +78,15 @@ it('#1b: speichern() eines Bestandsrezepts schließt NICHT selbst — Name persi
     expect($r->fresh()->name)->toBe('Bestand neu');
 });
 
-it('#1b: RecipeModal schließt auf ADRESSIERTES zutaten-persistiert', function () {
+it('#1b: RecipeModal bleibt nach ADRESSIERTEM zutaten-persistiert offen (Spec 65: Speichern beendet nur die Bearbeitung)', function () {
     $r = $this->makeRecipe($this->rootTeam, 'Offen', ['status' => 'draft']);
 
     Livewire::test(RecipeModal::class)
         ->call('oeffnen', $r->id)
         ->assertSet('recipeId', $r->id)
         ->call('beiZutatenPersistiert', $r->id)
-        ->assertDispatched('modal.close', name: 'recipe-modal');
+        ->assertSet('recipeId', $r->id)
+        ->assertNotDispatched('modal.close');
 });
 
 it('#1b: RecipeModal ignoriert ein zutaten-persistiert für ein FREMDES Rezept', function () {

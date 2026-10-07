@@ -69,9 +69,15 @@
             </div>
         @endif
 
-        <x-fa::button variant="primary" icon="heroicon-m-check" class="ml-auto" wire:click="speichern"
-            :disabled="$autoSuggestPending" wire:loading.attr="disabled" wire:target="autoSuggestFromSupplierItem"
-            data-gp-speichern data-gp-speichern-kopf>{{ $neu ? ($autoSuggestPending ? 'KI analysiert …' : 'Grundprodukt anlegen') : 'Speichern' }}</x-fa::button>
+        {{-- Spec 65: erst „Bearbeiten" (Sperre), dann Abbrechen/Speichern; Speichern beendet die Bearbeitung,
+             der Editor bleibt im Lesemodus offen. Neuanlage: nur der Knopf (keine Sperre nötig). --}}
+        <div class="ml-auto">
+            <x-foodalchemist::bearbeiten-leiste :zustand="$sperr">
+                <x-fa::button variant="primary" icon="heroicon-m-check" wire:click="speichern"
+                    :disabled="$autoSuggestPending" wire:loading.attr="disabled" wire:target="autoSuggestFromSupplierItem"
+                    data-gp-speichern data-gp-speichern-kopf>{{ $neu ? ($autoSuggestPending ? 'KI analysiert …' : 'Grundprodukt anlegen') : 'Speichern' }}</x-fa::button>
+            </x-foodalchemist::bearbeiten-leiste>
+        </div>
     </x-slot:actions>
 
     {{-- Kennzahlen: Preis des Lead-Artikels (Hauptzahl) · Artikel · Allergenangaben · Warengruppe · Zustand.
@@ -146,7 +152,7 @@
         </div>
     @endif
 
-    <x-foodalchemist::editor-tabs marker="gp" wire-key="gp-tabs-{{ $gp?->id ?? 'neu' }}" :init="$neu ? 'allgemein' : 'price'"
+    <x-foodalchemist::editor-tabs marker="gp" wire-key="gp-tabs-{{ $gp?->id ?? 'neu' }}" :init="$neu ? 'allgemein' : 'price'" :gesperrt="in_array($sperr['modus'] ?? 'aus', ['lesen', 'fremd'], true)"
         :tabs="[
             'price' => $neu ? null : 'Lieferantenartikel',
             'allergene' => $neu ? null : 'Allergene und Zusatzstoffe',

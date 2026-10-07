@@ -18,6 +18,14 @@ use Platform\FoodAlchemist\Support\TeamScope;
  */
 class Aufschlagsklassen extends Component
 {
+    /** Spec 65: Bereich settings.aufschlagsklassen je Team — Sofort-Aktionen, Leiste Bearbeiten → Fertig. Der Betriebs-Wähler (outletId) ist nur Vorschau. */
+    use Concerns\MitEinstellungsSperre;
+
+    protected function sperrBereich(): string
+    {
+        return 'aufschlagsklassen';
+    }
+
     public ?int $editId = null;
 
     public array $form = [];
@@ -231,6 +239,7 @@ class Aufschlagsklassen extends Component
             : [];
 
         return view('foodalchemist::livewire.settings.aufschlagsklassen', [
+            'sperr' => $this->sperrZustand(),   // Spec 65
             'team' => $team,
             'base' => $base,
             'betriebeOptionen' => $betriebeOptionen,

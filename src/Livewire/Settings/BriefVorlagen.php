@@ -17,6 +17,14 @@ use RuntimeException;
  */
 class BriefVorlagen extends Component
 {
+    /** Spec 65: Bereich settings.brief_vorlagen je Team — Sofort-Aktionen (Liste), Leiste Bearbeiten → Fertig. */
+    use Concerns\MitEinstellungsSperre;
+
+    protected function sperrBereich(): string
+    {
+        return 'brief_vorlagen';
+    }
+
     public ?int $editId = null;
 
     public string $editLabel = '';
@@ -97,6 +105,7 @@ class BriefVorlagen extends Component
         $rows = $team ? app(BriefTemplateService::class)->verwaltung($team) : collect();
 
         return view('foodalchemist::livewire.settings.brief-vorlagen', [
+            'sperr' => $this->sperrZustand(),   // Spec 65
             'eigene' => $rows->whereNotNull('team_id')->values(),
             'globals' => $rows->whereNull('team_id')->values(),
             'istMaster' => $team !== null && app(BriefTemplateService::class)->istMaster($team),

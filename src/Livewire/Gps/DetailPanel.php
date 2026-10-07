@@ -21,6 +21,23 @@ use Platform\FoodAlchemist\Support\Curate;
  */
 class DetailPanel extends Component
 {
+    use \Platform\FoodAlchemist\Livewire\Concerns\MitBearbeitungssperre;   // Spec 65
+
+    /** Spec 65: gleiche Sperre wie der GP-Editor (Ziel gp) — auch eingebettet als Kartei im GP-Dialog. */
+    protected function sperrZiel(): ?array
+    {
+        return $this->gpId !== null ? ['gp', $this->gpId] : null;
+    }
+
+    /**
+     * Ohne Sperre: Anzeige/Navigation (GP wechseln, Anker-Netz aufklappen) und das Verwerfen transienter
+     * Vorschläge (KI-Schätzung, LA-Kandidaten, Ersatz-Vorschläge) — nichts davon schreibt.
+     */
+    protected function sperrFreiExtra(): array
+    {
+        return ['zeige', 'ankerNetzUmschalten', 'ersatzKiVerwerfen', 'laVorschlaegeVerwerfen', 'kiVerwerfen'];
+    }
+
     public ?int $gpId = null;
 
     public string $laSuche = '';
@@ -63,6 +80,9 @@ class DetailPanel extends Component
     #[On('gp-selected')]
     public function zeige(int $id): void
     {
+        if ($this->gpId !== $id) {
+            $this->sperreBeiWechselFreigeben();   // Spec 65: Wechsel gibt eine hier geholte Sperre frei
+        }
         $this->gpId = $id;
         $this->laSuche = '';
         $this->ersatzSuche = '';
@@ -376,6 +396,7 @@ class DetailPanel extends Component
 
             return;
         }
+        $this->bearbeitenBeenden();   // Spec 65: Sperre des gelöschten GP sofort frei
         $this->gpId = null;
         $this->dispatch('gp-geloescht');
     }
@@ -483,6 +504,7 @@ class DetailPanel extends Component
         $leadSteuerung = ($gp !== null && $brauchtLas) ? $leads->leadSteuerung($gp, $team) : null;
 
         return view('foodalchemist::livewire.gps.detail-panel', [
+            'sperr' => $this->sperrZustand(),   // Spec 65
             'gp' => $gp,
             'team' => $team,
             'kannKuratieren' => $gp !== null && Curate::canCurate(Auth::user(), $gp),

@@ -42,6 +42,48 @@ class RecipeModal extends Component
     use InteractsWithSavedToast;
     use TauschtRezept;      // Verwaltungs-Reiter: tauschen + löschen (dieselbe Mechanik wie im Panel)
     use WithFileUploads;
+    use \Platform\FoodAlchemist\Livewire\Concerns\MitBearbeitungssperre;   // Spec 65
+
+    /** Spec 65: Sperre gilt dem Rezept-Datensatz — derselbe Schlüssel wie im eingebetteten Zutaten-/Schritt-Editor. */
+    protected function sperrZiel(): ?array
+    {
+        return $this->recipeId !== null ? ['recipe', $this->recipeId] : null;
+    }
+
+    protected function sperrModalName(): ?string
+    {
+        return 'recipe-modal';
+    }
+
+    /** Spec 65: Editor geschlossen → eigene Sperre frei (einziger modal.closed-Handler dieser Komponente). */
+    #[On('modal.closed')]
+    public function beiModalGeschlossen(?string $name = null): void
+    {
+        $this->sperreBeiSchliessen($name);
+    }
+
+    /**
+     * Spec 65 · ohne Sperre erlaubt — schreibt nichts: Polling/Laden (Produktfoto, Regeneration-Formular),
+     * Ereignis-Handler, Vorschauen verwerfen, Copilot-Prüfung (read-only, nur Gateway-Audit) bzw. Ablage zeigen/zuklappen,
+     * Match-Vorschau (reine Rechnung).
+     */
+    protected function sperrFreiExtra(): array
+    {
+        return [
+            'pruefeProduktfotoErgebnis', 'beiZutatenPersistiert', 'beiModalGeschlossen', 'regenerationLaden',
+            'ueberarbeitungVerwerfen', 'matchVorschau', 'copilotPruefen', 'copilotAusAblage', 'copilotVerwerfen',
+        ];
+    }
+
+    /** Abbrechen: ungespeicherten Formularstand verwerfen, Datensatz frisch laden (eingebettete Editoren neu mounten). */
+    protected function nachAbbrechen(): void
+    {
+        if ($this->recipeId !== null) {
+            $version = $this->zutatenVersion;
+            $this->oeffnen($this->recipeId);                 // setzt zutatenVersion auf 0 zurück
+            $this->zutatenVersion = $version + 1;            // Zutaten-Zeilen leben im Client → neu mounten, sonst bleiben verworfene Eingaben stehen
+        }
+    }
 
     /** Spec 43 (Bild-Epic): Gericht-Foto (Stammdaten). */
     public $dishImageUpload = null;
@@ -49,6 +91,12 @@ class RecipeModal extends Component
     public function updatedDishImageUpload(): void
     {
         if ($this->recipeId === null || $this->dishImageUpload === null) {
+            return;
+        }
+        // Spec 65: updated-Hooks laufen NICHT über den call-Haken — ohne eigene Sperre nicht schreiben.
+        if (self::sperreAktiv() && ! $this->darfSchreiben()) {
+            $this->reset('dishImageUpload');
+
             return;
         }
         $team = Auth::user()?->currentTeamRelation;
@@ -181,6 +229,7 @@ class RecipeModal extends Component
     /** Nach dem Löschen schließt der Editor zusätzlich — das gelöschte Rezept ist nicht mehr da. */
     protected function nachRezeptLoeschung(): void
     {
+        $this->bearbeitenBeenden();                     // Spec 65: Sperre des gelöschten Rezepts sofort frei
         $this->recipeId = null;
         $this->istOffen = false;
         $this->dispatch('modal.close', name: 'recipe-modal');
@@ -265,6 +314,7 @@ class RecipeModal extends Component
                 // Deklaration/Darreichungen sind erst @if($recipeId !== null) befüllbar). Es gibt
                 // noch keine Zutaten → kein Zutaten-Save, das Modal bleibt bewusst offen.
                 $this->ladeRezept($recipe->id);
+                $this->bearbeitenStarten();   // Spec 65: nach Neuanlage direkt im Bearbeiten-Modus (Zutaten pflegen)
                 $this->dispatch('recipe-gespeichert');
                 $this->dispatch('recipe-selected', id: $recipe->id);
                 $this->savedToast('Rezept angelegt');
@@ -292,7 +342,9 @@ class RecipeModal extends Component
     public function beiZutatenPersistiert(?int $recipeId = null): void
     {
         if ($this->istOffen && $recipeId !== null && $this->recipeId === $recipeId) {
-            $this->dispatch('modal.close', name: 'recipe-modal');
+            // Spec 65 (Dominique 2026-10-07): Speichern beendet die Bearbeitung und gibt die Sperre frei, der Editor
+            // BLEIBT offen im Lesemodus — man prüft das Ergebnis (frisch gerechnete Kennzahlen) und schließt selbst.
+            $this->bearbeitenBeenden();
         }
     }
 
@@ -609,6 +661,7 @@ class RecipeModal extends Component
 
             return;
         }
+        $this->bearbeitenBeenden();                     // Spec 65: Sperre des gelöschten Rezepts sofort frei
         $this->dispatch('modal.close', name: 'recipe-modal');
         $this->dispatch('recipe-gespeichert');
     }
@@ -1252,6 +1305,7 @@ class RecipeModal extends Component
         )->orderBy('group_name')->orderBy('sort_order')->orderBy('name')->get();
 
         return view('foodalchemist::livewire.recipes.recipe-modal', [
+            'sperr' => $this->sperrZustand(),   // Spec 65
             'behaelterListe' => $vokabular('foodalchemist_vocab_containers'),
             'geraeteListe' => $vokabular('foodalchemist_vocab_regeneration_devices'),
             'neu' => $this->recipeId === null,

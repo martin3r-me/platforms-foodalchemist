@@ -11,8 +11,16 @@
 @endphp
 
 <div class="flex flex-col gap-4">
+    {{-- Spec 65: erst „Bearbeiten" (sperrt den Bereich für das Team), dann Abbrechen/Speichern --}}
+    @php $sperrLesen = in_array($sperr['modus'] ?? 'aus', ['lesen', 'fremd'], true); @endphp
+    @include('foodalchemist::livewire.settings.partials.sperr-leiste', ['sofort' => false, 'hint' => 'Verluste gelten für die Rezepte dieses Teams und der Kind-Teams ohne eigene Werte.'])
+    @unless($sperrLesen)
     <x-foodalchemist::save-bar :meldung="$meldung"
         hint="Verluste gelten für die Rezepte dieses Teams und der Kind-Teams ohne eigene Werte. Speichern rechnet sie neu." />
+    @endunless
+    @if($sperrLesen && $meldung)<x-fa::notice tone="ok" data-save-bar-meldung>{{ $meldung }}</x-fa::notice>@endif
+
+    <fieldset @disabled($sperrLesen) class="contents" data-fa-lesemodus="{{ $sperrLesen ? '1' : '0' }}">
 
     {{-- Garverlust: häufigste Pflege, deshalb oben --}}
     <x-fa::section title="Garverlust" icon="heroicon-o-fire" data-kalk-garverlust
@@ -114,4 +122,5 @@
         @svg('heroicon-o-information-circle', 'w-4 h-4 shrink-0')
         Zuschläge, Fixkosten, Stundensatz und Marge pflegst du unter „Herstellkosten &amp; Zuschläge“.
     </p>
+    </fieldset>
 </div>

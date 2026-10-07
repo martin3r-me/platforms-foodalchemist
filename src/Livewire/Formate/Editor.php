@@ -20,6 +20,37 @@ use Platform\FoodAlchemist\Services\WordingResolver;
 class Editor extends Component
 {
     use WithFileUploads;
+    use \Platform\FoodAlchemist\Livewire\Concerns\MitBearbeitungssperre;   // Spec 65
+
+    /** Spec 65: Sperre gilt dem Format-Datensatz (gleiches Ziel wie die Format-Detailspalte). */
+    protected function sperrZiel(): ?array
+    {
+        return $this->id !== null ? ['format', $this->id] : null;
+    }
+
+    protected function sperrModalName(): ?string
+    {
+        return 'formate-editor';
+    }
+
+    /**
+     * Ohne Sperre: Reiter, Picker-Reiter/-Filter, Einfügeziel wählen (nur Anzeige-Zustand), Inline-Wording
+     * aufklappen/abbrechen (das Speichern bleibt gesperrt), Schließen.
+     */
+    protected function sperrFreiExtra(): array
+    {
+        return ['setTab', 'setPickerTab', 'pickerFilter', 'einfuegenZiel', 'slotWordingBearbeiten', 'slotWordingAbbrechen', 'beimSchliessen'];
+    }
+
+    /** Abbrechen: ungespeicherten Formularstand verwerfen, Format frisch laden (Reiter bleibt). */
+    protected function nachAbbrechen(): void
+    {
+        if ($this->id !== null) {
+            $tab = $this->tab;
+            $this->oeffnen($this->id);
+            $this->tab = $tab;
+        }
+    }
 
     public ?int $id = null;
 
@@ -70,6 +101,10 @@ class Editor extends Component
     #[On('formate-editor.oeffnen')]
     public function oeffnen(?int $id): void
     {
+        // Spec 65: anderes Format → eigene Sperre am bisherigen freigeben (gleiches Format: Sperre bleibt).
+        if ($this->sperrZiel() !== null && $this->sperrZiel() !== ($id !== null ? ['format', $id] : null)) {
+            $this->bearbeitenBeenden();
+        }
         $this->reset(['form', 'editionSuche', 'paketSuche', 'pickerTab', 'pickerKlasse', 'pickerServierform',
             'pickerEventtyp', 'pickerMoment', 'pickerSaison', 'neueEditionName', 'einfuegenNachId', 'bildUpload', 'fehler']);
         $this->id = $id;
@@ -157,6 +192,7 @@ class Editor extends Component
     public function beimSchliessen(?string $name = null): void
     {
         if ($name === 'formate-editor') {
+            $this->sperreBeiSchliessen($name);   // Spec 65: eigene Sperre frei (vor dem Zurücksetzen der ID)
             $this->reset(['form', 'editionSuche', 'paketSuche', 'pickerTab', 'pickerKlasse', 'pickerServierform',
             'pickerEventtyp', 'pickerMoment', 'pickerSaison', 'neueEditionName', 'einfuegenNachId', 'bildUpload', 'fehler']);
             $this->id = null;
@@ -177,6 +213,19 @@ class Editor extends Component
             return;
         }
         $this->dispatch('formate-gespeichert');
+    }
+
+    /**
+     * Spec 65: Haupt-Speichern im Kopf — sichert die Identität und beendet die Bearbeitung (Sperre frei),
+     * der Editor bleibt offen im Lesemodus. `speichern` selbst bleibt das Sofort-Speichern der Auswahlfelder
+     * (wire:change) und beendet die Bearbeitung NICHT.
+     */
+    public function bearbeitungSpeichern(): void
+    {
+        $this->speichern(app(FormatService::class));
+        if ($this->fehler === null) {
+            $this->bearbeitenBeenden();
+        }
     }
 
     // ── Aufbau / Slots (F2: „Conceptor eine Ebene höher") ─────────────────────
@@ -398,6 +447,13 @@ class Editor extends Component
         if ($this->id === null || $this->bildUpload === null) {
             return;
         }
+        // Spec 65: updated*-Hooks laufen nicht über den call-Haken — Schreibrecht hier selbst prüfen.
+        if (self::sperreAktiv() && ! $this->darfSchreiben()) {
+            $this->reset('bildUpload');
+            $this->sperreAbgewiesen('updatedBildUpload');
+
+            return;
+        }
         $this->fehler = null;
         try {
             $this->validate(['bildUpload' => 'image|max:8192']);
@@ -566,6 +622,7 @@ class Editor extends Component
             ->orderBy('name')->get(['id', 'name']);
 
         return view('foodalchemist::livewire.formate.editor', [
+            'sperr' => $this->sperrZustand(),   // Spec 65
             'format' => $format,
             'aufbauSlots' => $slots,
             'kandidaten' => $kandidaten,

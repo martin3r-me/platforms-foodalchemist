@@ -15,6 +15,20 @@ use RuntimeException;
  */
 class Warengruppen extends Component
 {
+    /** Spec 65: Bereich settings.warengruppen je Team — Sofort-Aktionen, Leiste Bearbeiten → Fertig. Auswahl/Navigation bleibt frei (Link statt Knopf im gesperrten Bereich). */
+    use Concerns\MitEinstellungsSperre;
+
+    protected function sperrBereich(): string
+    {
+        return 'warengruppen';
+    }
+
+    /** Lesend (ohne Sperre): waehleWg. */
+    protected function sperrFreiExtra(): array
+    {
+        return ['waehleWg'];
+    }
+
     use ReordersLists;
 
     public ?int $editId = null;
@@ -209,6 +223,7 @@ class Warengruppen extends Component
         }
 
         return view('foodalchemist::livewire.settings.warengruppen', [
+            'sperr' => $this->sperrZustand(),   // Spec 65
             'team' => $team,
             'warengruppen' => $warengruppen,
             'paragraf3' => VocabularyService::PARAGRAF3_CODES,

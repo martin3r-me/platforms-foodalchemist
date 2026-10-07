@@ -15,6 +15,9 @@
 
 <div class="@container flex flex-col gap-4 min-w-0" data-fa-designs-builder>
     {{-- Feedback --}}
+    {{-- Spec 65: „Bearbeiten" (am Speichern-Knopf) sperrt den Bereich für das Team; Design wählen, Vorschau und
+         Block anklicken bleiben im Lesemodus bedienbar, alles Ändernde liegt in gesperrten <fieldset>s. --}}
+    @php $sperrLesen = in_array($sperr['modus'] ?? 'aus', ['lesen', 'fremd'], true); @endphp
     @if($status)
         <x-fa::notice tone="ok" data-fa-designs-status>{{ $status }}</x-fa::notice>
     @endif
@@ -25,15 +28,16 @@
     <div class="grid grid-cols-1 gap-4 items-start @2xl:grid-cols-[13rem_minmax(0,1fr)] @6xl:grid-cols-[15rem_minmax(0,1fr)_minmax(0,23rem)]">
         {{-- ── Links: Designs + Bausteine ─────────────────────────────── --}}
         <aside class="flex flex-col gap-4 min-w-0">
+            <fieldset @disabled($sperrLesen) class="contents" data-fa-lesemodus="{{ $sperrLesen ? '1' : '0' }}">
             <x-fa::section title="Meine Designs" icon="heroicon-o-swatch">
                 <div class="flex flex-col gap-0.5 -mx-1.5">
                     @forelse($designs as $d)
                         <div class="flex items-center gap-1 min-w-0" wire:key="design-{{ $d['id'] }}">
-                            <button type="button" wire:click="waehlen({{ $d['id'] }})" aria-pressed="{{ $selectedId === $d['id'] ? 'true' : 'false' }}"
+                            <a href="#" role="button" wire:click.prevent="waehlen({{ $d['id'] }})" aria-pressed="{{ $selectedId === $d['id'] ? 'true' : 'false' }}"
                                 class="flex-1 min-w-0 flex items-center gap-1.5 text-left text-[length:var(--fa-text-md)] px-2 py-1.5 rounded-[var(--fa-radius-control)] transition-colors duration-150 {{ $selectedId === $d['id'] ? 'bg-[var(--fa-accent-soft)] text-[var(--fa-accent)] font-medium' : 'text-[var(--fa-ink)] hover:bg-[var(--fa-hover)]' }}">
                                 <span class="truncate">{{ $d['name'] }}</span>
                                 @unless($d['owned'])<x-fa::badge class="shrink-0">Geerbt</x-fa::badge>@endunless
-                            </button>
+                            </a>
                             <div class="relative inline-block" x-data="faMenu()" x-on:keydown.escape="offen = false" x-on:click.outside="offen = false">
                                 <x-fa::icon-button icon="heroicon-m-ellipsis-horizontal" label="Weitere Aktionen für {{ $d['name'] }}" size="sm" x-on:click="toggle($event)" aria-haspopup="menu" x-bind:aria-expanded="offen" />
                                 <div class="hidden w-48 fa-surface shadow-lg py-1" x-bind:class="{ hidden: ! offen }" x-bind:style="pos" role="menu">
@@ -58,10 +62,10 @@
                 <div class="flex flex-col gap-1.5 pt-3 border-t border-[var(--fa-line)]">
                     <p class="text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-2)]">Neu aus Vorlage</p>
                     <div class="flex flex-wrap gap-1.5">
-                        <x-fa::button size="sm" wire:click="neuAusBuiltin('editorial')">Editorial</x-fa::button>
-                        <x-fa::button size="sm" wire:click="neuAusBuiltin('angebot')">Angebot</x-fa::button>
-                        <x-fa::button size="sm" wire:click="neuAusBuiltin('menu')">Speisekarte</x-fa::button>
-                        <x-fa::button size="sm" wire:click="neuAusBuiltin('kiosk')">Kiosk</x-fa::button>
+                        <x-fa::button size="sm" href="#" x-on:click.prevent="" wire:click="neuAusBuiltin('editorial')">Editorial</x-fa::button>
+                        <x-fa::button size="sm" href="#" x-on:click.prevent="" wire:click="neuAusBuiltin('angebot')">Angebot</x-fa::button>
+                        <x-fa::button size="sm" href="#" x-on:click.prevent="" wire:click="neuAusBuiltin('menu')">Speisekarte</x-fa::button>
+                        <x-fa::button size="sm" href="#" x-on:click.prevent="" wire:click="neuAusBuiltin('kiosk')">Kiosk</x-fa::button>
                     </div>
                 </div>
             </x-fa::section>
@@ -78,20 +82,26 @@
                 </div>
                 <p class="{{ $hilfe }}">Alle Blöcke zeigen nur Daten für den Gast. Einkaufspreise und Interna erscheinen nie.</p>
             </x-fa::section>
+            </fieldset>
         </aside>
 
         {{-- ── Mitte: Kopf + Live-Vorschau ──────────────────────────── --}}
         <section class="flex flex-col gap-3 min-w-0">
             <div class="flex flex-wrap items-end gap-2">
+                <fieldset @disabled($sperrLesen) class="contents" data-fa-lesemodus="{{ $sperrLesen ? '1' : '0' }}">
                 <x-fa::field label="Name des Designs" for="design-name" class="flex-1 min-w-[12rem]">
                     <x-fa::input id="design-name" wire:model="name" placeholder="z. B. Hochzeit Sommer" data-fa-design-name />
                 </x-fa::field>
+                </fieldset>
                 @if($ungespeichert)
                     <x-fa::badge tone="warn" icon="heroicon-m-pencil" class="mb-2">Ungespeichert</x-fa::badge>
                 @endif
-                <x-fa::button variant="primary" icon="heroicon-m-check" wire:click="speichern" data-fa-design-save>
-                    {{ $selectedId ? 'Design speichern' : 'Design anlegen' }}
-                </x-fa::button>
+                {{-- Spec 65: erst „Bearbeiten", dann Abbrechen/Speichern; Speichern gibt den Bereich frei --}}
+                <x-foodalchemist::bearbeiten-leiste :zustand="$sperr">
+                    <x-fa::button variant="primary" icon="heroicon-m-check" wire:click="speichern" data-fa-design-save>
+                        {{ $selectedId ? 'Design speichern' : 'Design anlegen' }}
+                    </x-fa::button>
+                </x-foodalchemist::bearbeiten-leiste>
             </div>
 
             {{-- Bug-Runde 2026-09-17 #2: Die Vorschau zeigt den Editor-Zustand, der Kundenlink den
@@ -103,10 +113,12 @@
             @endif
 
             {{-- Form-Scoping: für welche Ausgabeformen dieses Design im Picker auftaucht (leer = alle). --}}
+            <fieldset @disabled($sperrLesen) class="contents" data-fa-lesemodus="{{ $sperrLesen ? '1' : '0' }}">
             <div class="flex flex-col gap-1" data-fa-output-types>
                 <x-fa::choice name="outputTypes" multiple label="Gilt für" :options="$formen" />
                 <p class="{{ $hilfe }}">Nichts gewählt heißt: für alle Formen.</p>
             </div>
+            </fieldset>
 
             <div class="flex flex-wrap items-end gap-3">
                 <x-fa::choice name="previewType" label="Vorschau als" :options="$formen" />
@@ -136,6 +148,7 @@
 
         {{-- ── Rechts: Struktur + Block-Einstellungen + Farben/Schrift ────────────────────── --}}
         <aside class="grid gap-4 items-start min-w-0 @2xl:col-span-2 @2xl:grid-cols-2 @6xl:col-span-1 @6xl:grid-cols-1">
+            <fieldset @disabled($sperrLesen) class="contents" data-fa-lesemodus="{{ $sperrLesen ? '1' : '0' }}">
             <x-fa::section title="Aufbau" icon="heroicon-o-queue-list" :meta="count($layout) . ' ' . (count($layout) === 1 ? 'Block' : 'Blöcke')" x-data="{ from: null }">
                 <div class="flex flex-col gap-1" data-fa-structure>
                     @forelse($layout as $i => $b)
@@ -146,9 +159,9 @@
                              wire:key="block-{{ $i }}-{{ $b['block_type'] }}"
                              class="flex items-center gap-1 min-w-0 pl-1.5 pr-1 py-0.5 rounded-[var(--fa-radius-control)] border cursor-move {{ $selectedBlockIndex === $i ? 'border-[var(--fa-accent)] bg-[var(--fa-accent-soft)]' : 'border-[var(--fa-line)] hover:bg-[var(--fa-hover)]' }}">
                             @svg('heroicon-m-bars-3', 'w-4 h-4 shrink-0 text-[var(--fa-ink-3)]')
-                            <button type="button" wire:click="blockWaehlen({{ $i }})" class="flex-1 min-w-0 truncate text-left text-[length:var(--fa-text-md)] py-1 {{ $selectedBlockIndex === $i ? 'font-medium text-[var(--fa-accent)]' : 'text-[var(--fa-ink)]' }}" data-fa-block="{{ $b['block_type'] }}">
+                            <a href="#" role="button" wire:click.prevent="blockWaehlen({{ $i }})" class="flex-1 min-w-0 truncate text-left text-[length:var(--fa-text-md)] py-1 {{ $selectedBlockIndex === $i ? 'font-medium text-[var(--fa-accent)]' : 'text-[var(--fa-ink)]' }}" data-fa-block="{{ $b['block_type'] }}">
                                 {{ $blockLabels[$b['block_type']] ?? $b['block_type'] }}
-                            </button>
+                            </a>
                             <x-fa::icon-button icon="heroicon-m-chevron-up" label="Block nach oben" size="sm" wire:click="blockVerschieben({{ $i }}, -1)" :disabled="$i === 0" class="disabled:opacity-40" />
                             <x-fa::icon-button icon="heroicon-m-chevron-down" label="Block nach unten" size="sm" wire:click="blockVerschieben({{ $i }}, 1)" :disabled="$i === count($layout) - 1" class="disabled:opacity-40" />
                             <x-fa::icon-button icon="heroicon-m-x-mark" label="Block entfernen" size="sm" tone="danger" wire:click="blockEntfernen({{ $i }})" />
@@ -307,6 +320,7 @@
 .pt-section-title { text-transform: uppercase; }" data-fa-design-css></textarea>
                 </x-fa::field>
             </x-fa::section>
+            </fieldset>
         </aside>
     </div>
 </div>

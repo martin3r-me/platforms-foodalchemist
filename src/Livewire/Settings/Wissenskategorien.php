@@ -19,6 +19,14 @@ use Platform\FoodAlchemist\Support\TeamScope;
  */
 class Wissenskategorien extends Component
 {
+    /** Spec 65: Bereich settings.wissenskategorien je Team — Sofort-Aktionen (Liste), Leiste Bearbeiten → Fertig. */
+    use Concerns\MitEinstellungsSperre;
+
+    protected function sperrBereich(): string
+    {
+        return 'wissenskategorien';
+    }
+
     use InteractsWithSavedToast;
 
     public ?int $editId = null;
@@ -240,6 +248,7 @@ class Wissenskategorien extends Component
             ->select('category', DB::raw('COUNT(*) as n'))->groupBy('category')->pluck('n', 'category');
 
         return view('foodalchemist::livewire.settings.wissenskategorien', [
+            'sperr' => $this->sperrZustand(),   // Spec 65
             'kategorien' => $rows,
             'docCounts' => $counts,
         ]);

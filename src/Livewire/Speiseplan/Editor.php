@@ -29,6 +29,69 @@ class Editor extends Component
 {
     use WithFileUploads;
     use \Platform\FoodAlchemist\Livewire\Concerns\InteractsWithSavedToast;
+    use \Platform\FoodAlchemist\Livewire\Concerns\MitBearbeitungssperre;   // Spec 65
+
+    /** Spec 65: Sperre gilt dem geöffneten Speiseplan. */
+    protected function sperrZiel(): ?array
+    {
+        return $this->planId !== null ? ['speiseplan', $this->planId] : null;
+    }
+
+    protected function sperrModalName(): ?string
+    {
+        return 'speiseplan-editor';
+    }
+
+    /**
+     * Spec 65 · ohne Sperre: Navigation im Kalender (Woche/Monat/Mahlzeit/Dichte), Eintrag-Detail ansehen, Picker-Filter
+     * und Schließen, Bedarf berechnen (nur lesend), KI-Bestätigung verwerfen. Der Speiseplan schreibt fast alles sofort
+     * (Zellen, Mengen, Linien, Stammdaten bei Änderung) — darum Leiste „Bearbeiten / Fertig" statt Abbrechen/Speichern.
+     */
+    protected function sperrFreiExtra(): array
+    {
+        return [
+            'beiModalGeschlossen', 'oeffnenBearbeiten',
+            'wocheVerschieben', 'heute', 'monatVerschieben', 'tagOeffnen', 'ansichtSetzen', 'mahlzeitSetzen', 'dichteSetzen',
+            'cellSchliessen', 'eintragOeffnen', 'eintragSchliessen', 'pickerWaehleHg', 'pickerWaehleKlasse',
+            'bedarfBerechnen', 'bedarfTagSetzen', 'vollKaskadeAbbrechen', 'vorgabenKatalog',
+        ];
+    }
+
+    /** Spec 65: Editor geschlossen → eigene Sperre frei (einziger modal.closed-Handler dieser Komponente). */
+    #[On('modal.closed')]
+    public function beiModalGeschlossen(?string $name = null): void
+    {
+        $this->sperreBeiSchliessen($name);
+    }
+
+    /** Abbrechen (nur bei Schalter-Wechsel/Admin-Lösen relevant): Stammdaten frisch laden, offene Formulare zu. */
+    protected function nachAbbrechen(): void
+    {
+        if ($this->planId === null) {
+            return;
+        }
+        $this->formLaden();
+        $this->cellSchliessen();
+        $this->eintragSchliessen();
+        $this->editLinieId = null;
+        $this->wocheKopierenOffen = false;
+        $this->kaskadeVorschau = null;
+        $this->brandingLoadedId = null;        // render() lädt Branding + Präsentation neu
+        $this->presentationLoadedId = null;
+    }
+
+    /** Upload-Hooks (updated*) laufen nicht über den call-Haken — hier selbst prüfen. */
+    private function uploadGesperrt(string $prop): bool
+    {
+        if (self::sperreAktiv() && ! $this->darfSchreiben()) {
+            $this->reset($prop);
+            $this->sperreAbgewiesen('updated'.ucfirst($prop));
+
+            return true;
+        }
+
+        return false;
+    }
 
     public ?int $planId = null;
 
@@ -95,6 +158,9 @@ class Editor extends Component
 
     public function updatedLogoUpload(): void
     {
+        if ($this->uploadGesperrt('logoUpload')) {
+            return;
+        }
         if ($this->planId === null || $this->logoUpload === null) {
             return;
         }
@@ -109,6 +175,9 @@ class Editor extends Component
 
     public function updatedCoverUpload(): void
     {
+        if ($this->uploadGesperrt('coverUpload')) {
+            return;
+        }
         if ($this->planId === null || $this->coverUpload === null) {
             return;
         }
@@ -367,14 +436,35 @@ class Editor extends Component
     public ?string $kaskadeMeldung = null;
 
     #[On('speiseplan-editor.bearbeiten')]
-    public function oeffnenBearbeiten(int $id): void
+    public function oeffnenBearbeiten(int $id, bool $neu = false): void
     {
         $svc = app(SpeiseplanService::class);
         $sp = $svc->detail($this->team(), $id);
         if ($sp === null) {
             return;
         }
+        if ($this->planId !== null && $this->planId !== $id) {
+            $this->bearbeitenBeenden();   // Spec 65: Wechsel (z. B. „Kopie öffnen") gibt die Sperre am vorigen Plan frei
+        }
         $this->planId = $id;
+        $this->formAus($sp);
+        $this->nachOeffnen($sp);
+        if ($neu) {
+            $this->bearbeitenStarten();   // Spec 65: neuer Plan startet im Bearbeiten-Modus
+        }
+    }
+
+    private function formLaden(): void
+    {
+        $sp = $this->planId !== null ? app(SpeiseplanService::class)->detail($this->team(), $this->planId) : null;
+        if ($sp !== null) {
+            $this->formAus($sp);
+        }
+    }
+
+    /** @param  \Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplan  $sp */
+    private function formAus($sp): void
+    {
         $this->form = [
             'name' => $sp->name,
             'start_date' => optional($sp->start_date)->format('Y-m-d'),
@@ -388,6 +478,10 @@ class Editor extends Component
             'outlet_id' => $sp->outlet_id,
             'opening_days' => $sp->oeffnungstage(),
         ];
+    }
+
+    private function nachOeffnen(\Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplan $sp): void
+    {
         $this->prodHinweis = null;
         $this->prodFehler = null;
         $this->kaskadeVorschau = null;
@@ -402,6 +496,10 @@ class Editor extends Component
         $this->dispatch('modal.open', name: 'speiseplan-editor');
     }
 
+    /**
+     * Stammdaten schreiben. Spec 65: der Speiseplan arbeitet mit Sofort-Aktionen (Felder speichern bei Änderung) —
+     * Speichern beendet die Bearbeitung hier NICHT, das tut „Fertig" in der Leiste.
+     */
     public function speichern(SpeiseplanService $svc): void
     {
         if ($this->planId !== null) {
@@ -457,6 +555,7 @@ class Editor extends Component
     {
         $svc->delete($this->team(), $id);
         if ($this->planId === $id) {
+            $this->bearbeitenBeenden();   // Spec 65: Sperre am gelöschten Plan nicht stehen lassen
             $this->planId = null;
         }
         $this->dispatch('speiseplan-geaendert');
@@ -1112,6 +1211,7 @@ class Editor extends Component
         }
 
         return view('foodalchemist::livewire.speiseplan.editor', [
+            'sperr' => $this->sperrZustand(),   // Spec 65
             'presentationInfo' => $presentationInfo,
             'presentationLink' => $presentationLink,
             'presentationDesignOptionen' => $presentationDesignOptionen,

@@ -22,14 +22,15 @@
          Position in diese Rubrik verschieben). --}}
     <div class="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-[var(--fa-radius-control)] bg-[var(--fa-neutral-soft)] px-2 py-1.5"
          x-on:dragover.prevent
-         x-on:drop="if (dragPosId) { $wire.positionInRubrik(dragPosId, {{ $rubrik->id }}); dragPosId = null } else if (dragRubrikId && dragRubrikId !== {{ $rubrik->id }}) { $wire.rubrikAblegen(dragRubrikId, {{ $rubrik->id }}); dragRubrikId = null }">
-        <button type="button" class="inline-flex items-center justify-center w-6 h-6 shrink-0 rounded-[var(--fa-radius-control)] text-[var(--fa-ink-3)] hover:text-[var(--fa-ink)] hover:bg-[var(--fa-hover)]"
+         @unless($gesperrt ?? false) x-on:drop="if (dragPosId) { $wire.positionInRubrik(dragPosId, {{ $rubrik->id }}); dragPosId = null } else if (dragRubrikId && dragRubrikId !== {{ $rubrik->id }}) { $wire.rubrikAblegen(dragRubrikId, {{ $rubrik->id }}); dragRubrikId = null }" @endunless>
+        {{-- Spec 65: <a> statt <button> — Auf/zu bleibt im gesperrten Lesemodus (fieldset) bedienbar --}}
+        <a href="#" role="button" class="inline-flex items-center justify-center w-6 h-6 shrink-0 rounded-[var(--fa-radius-control)] text-[var(--fa-ink-3)] hover:text-[var(--fa-ink)] hover:bg-[var(--fa-hover)]"
                 title="Rubrik auf- oder zuklappen" aria-label="Rubrik auf- oder zuklappen"
-                @click="zu = {...zu, {{ $rubrik->id }}: !zu[{{ $rubrik->id }}]}">
+                @click.prevent="zu = {...zu, {{ $rubrik->id }}: !zu[{{ $rubrik->id }}]}">
             <span class="inline-flex transition-transform duration-150" x-bind:class="zu[{{ $rubrik->id }}] ? '-rotate-90' : ''">@svg('heroicon-m-chevron-down', 'w-4 h-4')</span>
-        </button>
+        </a>
         <span class="inline-flex shrink-0 cursor-move select-none text-[var(--fa-ink-3)] hover:text-[var(--fa-ink)]" title="Ziehen, um die Rubrik umzusortieren"
-              draggable="true" x-on:dragstart="dragRubrikId = {{ $rubrik->id }}" x-on:dragend="dragRubrikId = null">@svg('heroicon-m-bars-2', 'w-4 h-4')</span>
+              draggable="{{ ($gesperrt ?? false) ? 'false' : 'true' }}" x-on:dragstart="dragRubrikId = {{ $rubrik->id }}" x-on:dragend="dragRubrikId = null">@svg('heroicon-m-bars-2', 'w-4 h-4')</span>
         <span class="min-w-0 break-words font-semibold text-[length:var(--fa-text-base)] text-[var(--fa-ink)]">{{ $rubrikTitel }}</span>
         <x-fa::badge>{{ $artLabel[$rubrik->art] ?? ucfirst((string) $rubrik->art) }}</x-fa::badge>
         @if($agg && $agg['n'] > 0)
@@ -114,19 +115,19 @@
         @endphp
         {{-- Position ziehbar + Ablageziel (ablegen VOR dieser Position). --}}
         <div wire:key="sk-pos-{{ $pos->id }}" class="flex items-center gap-2 min-w-0 px-2 py-1 rounded-[var(--fa-radius-control)] text-[length:var(--fa-text-md)] hover:bg-[var(--fa-hover)] {{ $editPosId === $pos->id ? 'bg-[var(--fa-accent-soft)]' : '' }}"
-             draggable="true"
+             draggable="{{ ($gesperrt ?? false) ? 'false' : 'true' }}"
              x-on:dragstart="dragPosId = {{ $pos->id }}" x-on:dragend="dragPosId = null"
              x-on:dragover.prevent
-             x-on:drop="if (dragPosId && dragPosId !== {{ $pos->id }}) { $wire.positionAblegen(dragPosId, {{ $pos->id }}); dragPosId = null }"
+             @unless($gesperrt ?? false) x-on:drop="if (dragPosId && dragPosId !== {{ $pos->id }}) { $wire.positionAblegen(dragPosId, {{ $pos->id }}); dragPosId = null }" @endunless
              x-bind:class="dragPosId === {{ $pos->id }} ? 'opacity-40' : ''">
             <span class="inline-flex shrink-0 cursor-move select-none text-[var(--fa-ink-3)]" title="Ziehen, um die Position zu verschieben">@svg('heroicon-m-bars-2', 'w-4 h-4')</span>
 
             <span class="min-w-0 flex-1 break-words leading-snug text-[var(--fa-ink)]">
                 @if($posName !== null)
                     @if($sprungAufruf)
-                        <button type="button" draggable="false" class="text-left hover:text-[var(--fa-accent)] hover:underline underline-offset-2"
-                                wire:click="{{ $sprungAufruf }}"
-                                title="{{ $sprungTitel }}">{{ $posName }}</button>
+                        <a href="#" role="button" draggable="false" class="text-left hover:text-[var(--fa-accent)] hover:underline underline-offset-2"
+                                wire:click.prevent="{{ $sprungAufruf }}"
+                                title="{{ $sprungTitel }}">{{ $posName }}</a>{{-- Spec 65: Link, bleibt im Lesemodus bedienbar --}}
                     @else
                         {{ $posName }}
                     @endif
@@ -155,6 +156,7 @@
             <div class="flex items-center shrink-0">
                 {{-- Bug-Runde 2026-09-17 #1: sichtbarer Einstieg ins Gericht/Konzept — der Name allein wurde nicht gefunden. --}}
                 @if($sprungAufruf)
+                    {{-- Spec 65: bleibt <button> (SpeisekarteGerichtSprungTest verbietet <a> hier) — im Lesemodus öffnet der Name-Link --}}
                     <x-fa::icon-button icon="heroicon-o-arrow-top-right-on-square" :label="$sprungTitel" size="sm"
                         wire:click="{{ $sprungAufruf }}" data-sk-pos-oeffnen />
                 @endif

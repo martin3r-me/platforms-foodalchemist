@@ -17,6 +17,12 @@ use Platform\FoodAlchemist\Services\TeamSettingsService;
  */
 class Trendradar extends Component
 {
+    use Concerns\MitEinstellungsSperre;   // Spec 65: Bereich settings.trendradar je Team
+
+    protected function sperrBereich(): string
+    {
+        return 'trendradar';
+    }
     public bool $autoEnabled = false;
 
     public int $limit = 3;
@@ -54,6 +60,7 @@ class Trendradar extends Component
                 . ($this->limit === 1 ? 'ein Konzept-Entwurf' : "bis zu {$this->limit} Konzept-Entwürfe")
                 . ($this->signalEnabled ? ', mit Signal.' : ', ohne Signal.')
             : 'Gespeichert. Automatisierung ist aus, aus Trends entstehen keine Konzepte.';
+        $this->bearbeitenBeenden();   // Spec 65: Speichern gibt frei, Ansicht bleibt im Lesemodus
     }
 
     public function jetztImportieren(): void
@@ -77,6 +84,7 @@ class Trendradar extends Component
         $team = Auth::user()?->currentTeamRelation;
 
         return view('foodalchemist::livewire.settings.trendradar', [
+            'sperr' => $this->sperrZustand(),   // Spec 65
             'trendDocs' => $trendDocs,
             'geclustert' => $geclustert,
             'ungeclustert' => max(0, $trendDocs - $geclustert),

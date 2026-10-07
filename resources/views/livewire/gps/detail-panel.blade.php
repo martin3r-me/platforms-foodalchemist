@@ -95,8 +95,12 @@
             </x-slot:badges>
             <x-slot:aktion>
                 @if($kannKuratieren)
-                    <x-fa::button variant="primary" size="sm" icon="heroicon-m-pencil-square"
-                        wire:click="$dispatch('gp-modal.oeffnen', { id: {{ $gp->id }} })" data-gp-bearbeiten>Im Editor öffnen</x-fa::button>
+                    <div class="flex flex-wrap items-center gap-2">
+                        {{-- Spec 65: Änderungen in der Spalte erst nach „Bearbeiten" (gleiche Sperre wie der Editor), „Fertig" gibt frei --}}
+                        <x-foodalchemist::bearbeiten-leiste :zustand="$sperr" sofort />
+                        <x-fa::button variant="ghost" size="sm" icon="heroicon-m-arrow-top-right-on-square"
+                            wire:click="$dispatch('gp-modal.oeffnen', { id: {{ $gp->id }} })" data-gp-bearbeiten>Im Editor öffnen</x-fa::button>
+                    </div>
                 @else
                     {{-- Ohne Kurationsrecht kein Editor: Drucken ist dann die wichtigste Aktion --}}
                     <x-fa::button variant="primary" size="sm" icon="heroicon-m-printer" :href="route('foodalchemist.gps.dokument', ['id' => $gp->id, 'profil' => 'kalkulation'])" target="_blank"
@@ -116,6 +120,11 @@
             </x-slot:menue>
         </x-fa::detail-kopf>
         @endif
+
+        {{-- Spec 65: Sidebar — Änderungen erst nach „Bearbeiten". Eingebettet im GP-Dialog sperrt dessen
+             editor-tabs-fieldset (diese Instanz rendert beim Klick auf „Bearbeiten" im Dialog nicht neu). --}}
+        @php $lesemodus = ! $embedded && in_array($sperr['modus'] ?? 'aus', ['lesen', 'fremd'], true); @endphp
+        <fieldset @disabled($lesemodus) class="contents" data-fa-lesemodus="{{ $lesemodus ? '1' : '0' }}">
 
         @if($fehler !== null)<x-fa::notice tone="crit" data-la-fehler>{{ $fehler }}</x-fa::notice>@endif
         @if($hinweis !== null)<x-fa::notice tone="ok" data-hinweis>{{ $hinweis }}</x-fa::notice>@endif
@@ -492,12 +501,12 @@
         <x-fa::section variant="plain" title="Aroma-Anker" icon="heroicon-o-sparkles" data-gp-panel-anker>
             <div class="flex flex-wrap gap-1.5">
                 @foreach($gpAnker as $a)
-                    <button type="button" wire:key="pa-{{ $a->id }}" wire:click="ankerNetzUmschalten({{ $a->id }})"
+                    <a href="#" role="button" wire:key="pa-{{ $a->id }}" wire:click.prevent="ankerNetzUmschalten({{ $a->id }})"
                             aria-pressed="{{ $ankerNetzOffenId === $a->id ? 'true' : 'false' }}"
                             class="inline-flex items-center gap-1 h-7 px-2.5 rounded-full border text-[length:var(--fa-text-sm)] font-medium transition-colors {{ $ankerNetzOffenId === $a->id ? 'border-[var(--fa-accent)] bg-[var(--fa-accent-soft)] text-[var(--fa-accent)]' : ($a->role === 'kern' ? 'border-[var(--fa-accent-line)] text-[var(--fa-accent)] hover:bg-[var(--fa-accent-soft)]' : 'border-[var(--fa-line-strong)] text-[var(--fa-ink-2)] hover:bg-[var(--fa-hover)]') }}"
                             title="{{ $a->role === 'kern' ? 'Kern-Aroma' : 'Begleit-Aroma' }} · weitere Grundprodukte mit diesem Anker zeigen" data-gp-anker-chip>
                         @if($a->role === 'kern')@svg('heroicon-s-star', 'w-3.5 h-3.5')@endif{{ $a->display_de }}
-                    </button>
+                    </a>{{-- Spec 65: <a> statt <button> — bleibt im gesperrten Lesemodus (fieldset) bedienbar --}}
                 @endforeach
             </div>
             @if($ankerNetzOffenId !== null)
@@ -586,11 +595,11 @@
         <x-fa::section variant="plain" :title="'Verwendet in Rezepten (' . $verwendungen->count() . ($verwendungen->count() === 30 ? '+' : '') . ')'" icon="heroicon-o-link" data-sektion="verwendungen">
             <div class="flex flex-col">
                 @forelse($verwendungen as $v)
-                    <button type="button" wire:key="verw-{{ $v->id }}" wire:click="$dispatch('{{ $v->is_sales_recipe ? 'vk-modal.oeffnen' : 'recipe-modal.oeffnen' }}', { id: {{ $v->id }} })"
+                    <a href="#" role="button" wire:key="verw-{{ $v->id }}" wire:click.prevent="$dispatch('{{ $v->is_sales_recipe ? 'vk-modal.oeffnen' : 'recipe-modal.oeffnen' }}', { id: {{ $v->id }} })"
                             class="{{ $listenKnopf }} text-[var(--fa-accent)]" title="{{ $v->is_sales_recipe ? 'Gericht' : 'Basisrezept' }} öffnen" data-verwendung-link>
                         @svg($v->is_sales_recipe ? 'heroicon-o-banknotes' : 'heroicon-o-book-open', 'w-4 h-4 shrink-0 text-[var(--fa-ink-3)]')
                         <span class="min-w-0 flex-1 hover:underline">{{ $v->name }}</span>
-                    </button>
+                    </a>
                 @empty
                     <p class="{{ $leise }}" data-verwendungen-leer>In keinem Rezept eingesetzt.</p>
                 @endforelse
@@ -634,5 +643,6 @@
         @if($section === null)
         <p class="pt-3 border-t border-[var(--fa-line)] {{ $leise }}"><span class="font-mono">{{ $gp->uuid }}</span>@if($gp->team_id === null)<span> · zentral gepflegt, für alle Teams</span>@endif</p>
         @endif
+        </fieldset>
     @endif
 </div>

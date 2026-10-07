@@ -31,6 +31,14 @@ use Platform\FoodAlchemist\Services\FoodAlchemistMediaService;
  */
 class Betriebe extends Component
 {
+    /** Spec 65: Bereich settings.betriebe je Team — Zeilen-Speichern/Anlegen/Logo schreiben sofort, Leiste Bearbeiten → Fertig. */
+    use Concerns\MitEinstellungsSperre;
+
+    protected function sperrBereich(): string
+    {
+        return 'betriebe';
+    }
+
     use WithFileUploads;
 
     public ?int $editId = null;
@@ -97,6 +105,11 @@ class Betriebe extends Component
     /** Betriebs-Logo hochladen (sofort beim Auswählen) — ersetzt beim Betriebs-Link das Dokument-Logo. */
     public function updatedLogoUpload(): void
     {
+        if ($this->schreibenAbgewiesen('updatedLogoUpload')) {   // Spec 65: Upload-Hook schreibt direkt
+            $this->logoUpload = null;
+
+            return;
+        }
         $this->fehler = null;
         $o = $this->editId !== null ? $this->eigenes($this->editId) : null;
         $team = $this->team();
@@ -211,6 +224,7 @@ class Betriebe extends Component
         }
 
         return view('foodalchemist::livewire.settings.betriebe', [
+            'sperr' => $this->sperrZustand(),   // Spec 65
             'betriebe' => $betriebe,
             'nutzung' => $nutzung,
             'vorlagenOptionen' => $vorlagenOptionen,

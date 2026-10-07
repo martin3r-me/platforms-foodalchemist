@@ -28,6 +28,8 @@
     $strategieLabel = fn ($wert) => $wert ? (\Platform\FoodAlchemist\Enums\LeadLaStrategie::tryFrom($wert)?->label() ?? $wert) : 'Team-Standard';
 
     $istRunde = $detail === null;
+    // Spec 65: Beleg ohne eigene Sperre = Lesemodus (Reiter-Eingaben aus, Status/Storno/Mail erst nach „Bearbeiten").
+    $sperrLesen = ! $istRunde && in_array($sperr['modus'] ?? 'aus', ['lesen', 'fremd'], true);
     $sendBlockers = $detail['send_blockers'] ?? [];
 
     // Statusschritte: der erste Folgeschritt ist die Hauptaktion, weitere stehen daneben, Storno ins Menü.
@@ -118,6 +120,8 @@
                     <x-fa::button icon="heroicon-m-arrow-path" wire:click="cockpitVorschau" data-orders-cockpit-preview>Vorschau berechnen</x-fa::button>
                     <x-fa::button variant="primary" icon="heroicon-m-check" wire:click="cockpitSpeichern" :disabled="count($cockpitSources) === 0" data-orders-cockpit-save>Bestellungen speichern</x-fa::button>
                 @else
+                    {{-- Spec 65: Beleg-Aktionen schreiben sofort — „Bearbeiten" sperrt die Schiene, „Fertig" gibt frei --}}
+                    <x-foodalchemist::bearbeiten-leiste :zustand="$sperr" sofort />
                     {{-- Weitere Aktionen: Belege, E-Mails, Storno (ganz unten, rot) --}}
                     <div class="relative inline-block" x-data="faMenu()" x-on:keydown.escape="offen = false" x-on:click.outside="offen = false">
                         <x-fa::button variant="ghost" icon="heroicon-m-ellipsis-horizontal" iconRight="heroicon-m-chevron-down" x-on:click="toggle($event)" aria-haspopup="menu" x-bind:aria-expanded="offen">Weitere Aktionen</x-fa::button>
@@ -156,7 +160,7 @@
                                     </span>
                                 @endif
                             @endif
-                            @if($stornoStatus)
+                            @if($stornoStatus && ! $sperrLesen)
                                 <div class="my-1 border-t border-[var(--fa-line)]"></div>
                                 <button type="button" role="menuitem" x-on:click="offen = false" wire:click="setStatus('{{ $stornoStatus->value }}')" wire:confirm="Bestellung stornieren?"
                                     class="{{ $menuePunkt }} text-[var(--fa-crit)] hover:bg-[var(--fa-crit-soft)]" data-status-{{ $stornoStatus->value }}>
@@ -166,6 +170,7 @@
                         </div>
                     </div>
 
+                    @unless($sperrLesen)
                     @foreach($nebenStatus as $z)
                         <button type="button" wire:click="setStatus('{{ $z->value }}')" class="{{ $knopfSekundaer }}" data-status-{{ $z->value }}>{{ $statusKnopf($z) }}</button>
                     @endforeach
@@ -182,6 +187,7 @@
                             @if($versandGesperrt) title="Versand gesperrt: {{ implode(', ', $sendBlockers) }}" @endif
                             data-status-{{ $hauptStatus->value }}>@svg($hauptStatus->value === 'sent' ? 'heroicon-m-paper-airplane' : 'heroicon-m-check', 'w-4 h-4 shrink-0'){{ $statusKnopf($hauptStatus) }}</button>
                     @endif
+                    @endunless
                 @endif
             </div>
         </div>
@@ -212,7 +218,7 @@
                             @else wird gesendet …
                             @endif
                         </span>
-                        @if($pm->status === 'fehlgeschlagen')
+                        @if($pm->status === 'fehlgeschlagen' && ! $sperrLesen)
                             <x-fa::button size="sm" icon="heroicon-m-arrow-path" wire:click="mailErneutSenden({{ $pm->id }})" class="ml-auto">Erneut senden</x-fa::button>
                         @endif
                     </div>
@@ -496,7 +502,7 @@
             </div>
         </div>
     @else
-    <x-foodalchemist::editor-tabs marker="orders" wire-key="orders-tabs-{{ $detail['id'] }}-{{ $detail['status'] }}" :init="$startTab" :tabs="$reiter">
+    <x-foodalchemist::editor-tabs marker="orders" wire-key="orders-tabs-{{ $detail['id'] }}-{{ $detail['status'] }}" :init="$startTab" :tabs="$reiter" :gesperrt="$sperrLesen">
 
         {{-- ═══ Reiter: POSITIONEN ═══ --}}
         <div x-show="tab === 'positionen'" x-cloak class="pt-4 flex flex-col gap-4">

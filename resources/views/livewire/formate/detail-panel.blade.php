@@ -73,7 +73,10 @@
                 @if($format->customer)<x-fa::badge icon="heroicon-m-building-office" title="Kunde">{{ $format->customer }}</x-fa::badge>@endif
             </x-slot:badges>
             <x-slot:aktion>
-                <x-fa::button variant="primary" size="sm" icon="heroicon-m-pencil-square" wire:click="bearbeiten">Im Editor öffnen</x-fa::button>
+                <div class="flex flex-wrap items-center gap-2">
+                    <x-foodalchemist::bearbeiten-leiste :zustand="$sperr" sofort />
+                    <x-fa::button size="sm" variant="ghost" icon="heroicon-m-arrow-top-right-on-square" wire:click="bearbeiten">Im Editor öffnen</x-fa::button>
+                </div>
             </x-slot:aktion>
             <x-slot:menue>
                 <x-fa::menu-item icon="heroicon-m-printer" :href="route('foodalchemist.formate.dokument', ['id' => $format->id])" target="_blank"
@@ -84,6 +87,9 @@
                     wire:confirm="Format wirklich löschen? Die Editionen bleiben als eigenständige Konzepte erhalten.">Format löschen</x-fa::menu-item>
             </x-slot:menue>
         </x-fa::detail-kopf>
+
+        {{-- Spec 65: Detailspalte — Änderungen erst nach „Bearbeiten" (gleiche Sperre wie der Format-Editor), „Fertig" gibt frei --}}
+        <fieldset @disabled(in_array($sperr['modus'] ?? 'aus', ['lesen', 'fremd'], true)) class="contents" data-fa-lesemodus="{{ in_array($sperr['modus'] ?? 'aus', ['lesen', 'fremd'], true) ? '1' : '0' }}">
 
         {{-- Kennzahlen (Format-Ökonomie): Preisspanne ist die Hauptzahl, dazu Ø und Zahl der Editionen --}}
         <div class="flex flex-col gap-3" data-formate-cockpit>
@@ -158,5 +164,6 @@
                 </x-fa::section>
             @endif
         </div>
+        </fieldset>
     @endif
 </div>

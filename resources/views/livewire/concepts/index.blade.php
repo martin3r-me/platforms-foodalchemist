@@ -282,8 +282,11 @@
         @endif
 
         @if($selected)
+            @php $lesemodus = in_array($sperr['modus'] ?? 'aus', ['lesen', 'fremd'], true); @endphp
             {{-- Concept-Stammdaten --}}
             <x-fa::section title="Stammdaten" icon="heroicon-o-identification" wire:key="hdr-{{ $selected->id }}">
+                {{-- Spec 65: Felder erst nach „Bearbeiten" (Sperre) änderbar; die Bearbeiten-Leiste steht außerhalb --}}
+                <fieldset @disabled($lesemodus) class="contents" data-fa-lesemodus="{{ $lesemodus ? '1' : '0' }}">
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
                     <x-fa::field :label="$selected->is_template ? 'Name der Vorlage' : 'Name'" for="concept-name" class="lg:col-span-2">
                         <x-fa::input id="concept-name" wire:model="form.name" />
@@ -302,13 +305,17 @@
                         </x-fa::select>
                     </x-fa::field>
                 </div>
+                </fieldset>
                 <div class="flex flex-wrap items-center justify-between gap-2 pt-1">
-                    <x-fa::button variant="danger" size="sm" icon="heroicon-m-trash" wire:click="loeschen({{ $selected->id }})" wire:confirm="Concept löschen?">Concept löschen</x-fa::button>
+                    <x-fa::button variant="danger" size="sm" icon="heroicon-m-trash" wire:click="loeschen({{ $selected->id }})" wire:confirm="Concept löschen?" :disabled="$lesemodus">Concept löschen</x-fa::button>
                     <div class="flex flex-wrap items-center gap-2">
                         <x-fa::button variant="ghost" icon="heroicon-m-printer" :href="route('foodalchemist.concepts.dokument', ['id' => $selected->id, 'profil' => 'voll'])" target="_blank"
                             title="Druck- und PDF-Report mit allen Gerichten, Basisrezepten und Produkten" data-concept-druck>Report drucken</x-fa::button>
                         <x-fa::button :variant="$zielModus ? 'ai' : 'secondary'" icon="heroicon-m-flag" wire:click="zielpreisToggle" aria-pressed="{{ $zielModus ? 'true' : 'false' }}">Zielpreis planen</x-fa::button>
-                        <x-fa::button variant="primary" wire:click="speichern">Speichern</x-fa::button>
+                        {{-- Spec 65: erst „Bearbeiten" (Sperre), dann Abbrechen/Speichern; Speichern beendet die Bearbeitung --}}
+                        <x-foodalchemist::bearbeiten-leiste :zustand="$sperr">
+                            <x-fa::button variant="primary" wire:click="speichern" data-concept-speichern>Speichern</x-fa::button>
+                        </x-foodalchemist::bearbeiten-leiste>
                     </div>
                 </div>
 
@@ -336,14 +343,15 @@
                             <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)] tabular-nums">Mit den vorhandenen Paketen erreichbar: {{ $geld($zielVorschlag['min']) }} bis {{ $geld($zielVorschlag['max']) }} je Person{{ $zielVorschlag['fix'] > 0 ? ' (inkl. ' . $geld($zielVorschlag['fix']) . ' feste Gerichte)' : '' }}.</p>
                             <div class="flex justify-end gap-2">
                                 <x-fa::button variant="ghost" wire:click="$set('zielVorschlag', null)">Vorschlag verwerfen</x-fa::button>
-                                <x-fa::button variant="primary" wire:click="zielpreisUebernehmen" :disabled="$zielVorschlag['aenderungen'] === 0">{{ $zielVorschlag['aenderungen'] === 1 ? '1 Tausch übernehmen' : $zielVorschlag['aenderungen'] . ' Tausche übernehmen' }}</x-fa::button>
+                                <x-fa::button variant="primary" wire:click="zielpreisUebernehmen" :disabled="$lesemodus || $zielVorschlag['aenderungen'] === 0">{{ $zielVorschlag['aenderungen'] === 1 ? '1 Tausch übernehmen' : $zielVorschlag['aenderungen'] . ' Tausche übernehmen' }}</x-fa::button>
                             </div>
                         @endif
                     </div>
                 @endif
             </x-fa::section>
 
-            {{-- Positionen-Gerüst --}}
+            {{-- Positionen-Gerüst — Spec 65: im Lesemodus gesperrt --}}
+            <fieldset @disabled($lesemodus) class="contents" data-fa-lesemodus="{{ $lesemodus ? '1' : '0' }}">
             <x-fa::section title="Positionen" icon="heroicon-o-list-bullet" :meta="$selected->slots->count()"
                 description="Jede Position wird mit einem Paket derselben Rolle oder einem festen Gericht gefüllt.">
                 <x-slot:actions>
@@ -420,6 +428,7 @@
                     @endforelse
                 </div>
             </x-fa::section>
+            </fieldset>
         @else
             <div class="fa-surface">
                 <x-fa::empty icon="heroicon-o-rectangle-stack" title="Kein Concept gewählt">

@@ -28,6 +28,85 @@ class Index extends Component
 {
     use WithPagination, WithFileUploads, ManagesCanvas, ManagesPlanningFrame, ManagesPhase;
     use \Platform\FoodAlchemist\Livewire\Concerns\InteractsWithSavedToast;
+    use \Platform\FoodAlchemist\Livewire\Concerns\MitBearbeitungssperre;   // Spec 65
+
+    /** Spec 65: Sperre gilt dem gewählten Foodbook. */
+    protected function sperrZiel(): ?array
+    {
+        return $this->selectedId !== null ? ['foodbook', $this->selectedId] : null;
+    }
+
+    protected function sperrModalName(): ?string
+    {
+        return 'foodbook-editor';
+    }
+
+    /**
+     * Spec 65 · ohne Sperre: Liste (Suche, Blättern), Foodbook wählen, neues Foodbook und Duplikat anlegen (NEUER
+     * Datensatz, das gewählte bleibt unberührt), Navigation Kopf/Kapitel, Katalog-Filter, Inline-Edit und KI-Vorschlag
+     * verwerfen, Sprung in die Leitstelle (nur Weiterleitung), Leitstelle-Signal (Re-Render), Lese-Helfer der Concerns.
+     * Block-/Slot-Bearbeiten öffnet ein Formular → erst im Bearbeiten-Modus.
+     */
+    protected function sperrFreiExtra(): array
+    {
+        return [
+            'beiModalGeschlossen', 'neu', 'waehle', 'duplizieren',
+            'gotoPage', 'previousPage', 'nextPage', 'setPage', 'resetPage',
+            'kopfAnzeigen', 'kapitelWaehle', 'leitstelleAktualisiert',
+            'katalogModus', 'waehleGerichtHg', 'waehleGerichtKlasse', 'toggleConceptFacet', 'resetConceptFacetten',
+            'slotWordingAbbrechen', 'kiTextVerwerfen', 'vollKaskadeStarten',
+            'canvasLaden', 'canvasTemplateData', 'canvasSchreibstile', 'frameLaden', 'framePlanningVokabular', 'frameRegelLabel', 'phasenListe',
+        ];
+    }
+
+    /** Spec 65: Editor-Modal geschlossen → eigene Sperre frei (einziger modal.closed-Handler dieser Komponente). */
+    #[On('modal.closed')]
+    public function beiModalGeschlossen(?string $name = null): void
+    {
+        $this->sperreBeiSchliessen($name);
+    }
+
+    /** Abbrechen: ungespeicherten Formularstand verwerfen, Foodbook frisch laden (Kapitel-Auswahl bleibt). */
+    protected function nachAbbrechen(): void
+    {
+        if ($this->selectedId === null) {
+            return;
+        }
+        $svc = app(FoodbookService::class);
+        $kapitelId = $this->selectedKapitelId;
+        $this->waehle($this->selectedId, $svc);
+        if ($kapitelId !== null && $this->eigenesKapitel($kapitelId) !== null) {
+            $this->selectedKapitelId = $kapitelId;
+            $this->ladeKapitelForm($svc);
+        }
+        $this->slotWordingAbbrechen();
+        $this->kiTextVerwerfen();
+        $this->neuesKapitelTitel = '';
+        $this->brandingLoadedId = null;        // render() lädt Branding + Präsentation neu
+        $this->presentationLoadedId = null;
+        $this->canvasLaden();
+    }
+
+    /** Neu angelegtes Foodbook (neu/duplizieren): direkt im Bearbeiten-Modus öffnen. */
+    private function gleichBearbeiten(): void
+    {
+        if (self::sperreAktiv()) {
+            $this->bearbeitenStarten();
+        }
+    }
+
+    /** Upload-Hooks (updated*) laufen nicht über den call-Haken — hier selbst prüfen. */
+    private function uploadGesperrt(string $prop): bool
+    {
+        if (self::sperreAktiv() && ! $this->darfSchreiben()) {
+            $this->reset($prop);
+            $this->sperreAbgewiesen('updated'.ucfirst($prop));
+
+            return true;
+        }
+
+        return false;
+    }
 
     // ── Phase 6: Branding / CI (pro Foodbook) — verdrahtet die FoodbookService-Branding-API ──
     public array $brandingForm = ['brand_color' => '#6d28d9', 'band_color' => '', 'footer_text' => ''];
@@ -216,11 +295,17 @@ class Index extends Component
 
     public function updatedLogoUpload(): void
     {
+        if ($this->uploadGesperrt('logoUpload')) {
+            return;
+        }
         $this->brandingBildHochladen('logoUpload', 'storeLogo');
     }
 
     public function updatedCoverUpload(): void
     {
+        if ($this->uploadGesperrt('coverUpload')) {
+            return;
+        }
         $this->brandingBildHochladen('coverUpload', 'storeCover');
     }
 
@@ -261,6 +346,9 @@ class Index extends Component
 
     public function updatedKapitelImageUpload(): void
     {
+        if ($this->uploadGesperrt('kapitelImageUpload')) {
+            return;
+        }
         $this->kapitelImageFehler = null;
         if ($this->selectedKapitelId === null || $this->kapitelImageUpload === null) {
             return;
@@ -287,6 +375,9 @@ class Index extends Component
 
     public function updatedKapitelGalleryUpload(): void
     {
+        if ($this->uploadGesperrt('kapitelGalleryUpload')) {
+            return;
+        }
         $this->kapitelImageFehler = null;
         $dateien = array_filter(is_array($this->kapitelGalleryUpload) ? $this->kapitelGalleryUpload : [$this->kapitelGalleryUpload]);
         if ($this->selectedKapitelId === null || $dateien === []) {
@@ -444,6 +535,7 @@ class Index extends Component
     {
         $fb = $svc->create($this->team(), ['label' => 'Neues Foodbook']);
         $this->waehle($fb->id, $svc);
+        $this->gleichBearbeiten();
     }
 
     public function waehle(int $id, FoodbookService $svc): void
@@ -451,6 +543,9 @@ class Index extends Component
         $fb = $svc->detail($this->team(), $id);
         if ($fb === null) {
             return;
+        }
+        if ($this->selectedId !== null && $this->selectedId !== $id) {
+            $this->bearbeitenBeenden();   // Spec 65: Wechsel auf ein anderes Foodbook gibt die eigene Sperre frei
         }
         $this->selectedId = $id;
         $this->form = [
@@ -505,11 +600,18 @@ class Index extends Component
         $this->form['status'] = $neu->value;
     }
 
+    /** Spec 65: „Speichern" schreibt und beendet die Bearbeitung — der Editor bleibt offen im Lesemodus. */
     public function speichern(FoodbookService $svc): void
     {
         if ($this->selectedId === null) {
             return;
         }
+        $this->buchSchreiben($svc);
+        $this->bearbeitenBeenden();
+    }
+
+    private function buchSchreiben(FoodbookService $svc): void
+    {
         $svc->update($this->team(), $this->selectedId, $this->form);
         // Der Tab-übergreifende „Speichern" sichert die GANZE Foodbook-Ebene — inkl. Branding
         // (Marken-Farbe/Bandfarbe/Footer). Sonst greift er nicht auf dem Branding-Tab und der
@@ -678,6 +780,7 @@ class Index extends Component
     {
         $svc->delete($this->team(), $id);
         if ($this->selectedId === $id) {
+            $this->bearbeitenBeenden();   // Spec 65: Sperre am gelöschten Foodbook nicht stehen lassen
             $this->selectedId = null;
             $this->selectedKapitelId = null;
         }
@@ -691,6 +794,7 @@ class Index extends Component
         }
         $neu = $svc->dupliziere($this->team(), $this->selectedId);
         $this->waehle($neu->id, $svc);
+        $this->gleichBearbeiten();
     }
 
     // ── Kapitel ───────────────────────────────────────────────────────────
@@ -1396,6 +1500,7 @@ class Index extends Component
         }
 
         return view('foodalchemist::livewire.foodbooks.index', [
+            'sperr' => $this->sperrZustand(),   // Spec 65
             'betriebsLinks' => $betriebsLinks,
             'betriebsOptionen' => $betriebsOptionen,
             'kapitelImageUrl' => ($kapitel !== null && ($kapitel->image_context_file_id || $kapitel->image_path))

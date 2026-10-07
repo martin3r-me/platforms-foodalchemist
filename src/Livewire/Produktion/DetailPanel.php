@@ -16,6 +16,20 @@ use Platform\FoodAlchemist\Services\ProductionOrderService;
  */
 class DetailPanel extends Component
 {
+    use \Platform\FoodAlchemist\Livewire\Concerns\MitBearbeitungssperre;   // Spec 65
+
+    /** Spec 65: gleiche Sperre wie der Produktion-Editor (Ziel production_order). */
+    protected function sperrZiel(): ?array
+    {
+        return $this->orderId !== null ? ['production_order', $this->orderId] : null;
+    }
+
+    /** Ohne Sperre: Auswahl/Anzeige. Status setzen, Notizen und Materialbedarf-Freigabe schreiben. */
+    protected function sperrFreiExtra(): array
+    {
+        return ['waehle'];
+    }
+
     public ?int $orderId = null;
 
     public ?string $hinweis = null;
@@ -32,6 +46,9 @@ class DetailPanel extends Component
     {
         // 0 = „nichts mehr ausgewählt" (z. B. nach dem Löschen) — sonst suchte das Panel
         // beharrlich nach Auftrag #0 und zeigte einen Fehler statt des Leer-Zustands.
+        if ($this->orderId !== ($id > 0 ? $id : null)) {
+            $this->sperreBeiWechselFreigeben();   // Spec 65: Wechsel gibt eine hier geholte Sperre frei
+        }
         $this->orderId = $id > 0 ? $id : null;
         $this->hinweis = null;
         $this->fehler = null;
@@ -102,6 +119,7 @@ class DetailPanel extends Component
             : [];
 
         return view('foodalchemist::livewire.produktion.detail-panel', [
+            'sperr' => $this->sperrZustand(),   // Spec 65
             'postenSummen' => $postenSummen,
             'kapazitaetsWarnungen' => $kapazitaetsWarnungen,
             'detail' => $detail,

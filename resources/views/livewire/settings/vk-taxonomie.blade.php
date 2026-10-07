@@ -8,6 +8,10 @@
 @endphp
 
 <div class="flex flex-col gap-4" data-settings-vk-taxonomie>
+    {{-- Spec 65: „Bearbeiten" sperrt den Bereich für das Team, „Fertig" gibt frei --}}
+    @php $sperrLesen = in_array($sperr['modus'] ?? 'aus', ['lesen', 'fremd'], true); @endphp
+    @include('foodalchemist::livewire.settings.partials.sperr-leiste', ['sofort' => true])
+    <fieldset @disabled($sperrLesen) class="contents" data-fa-lesemodus="{{ $sperrLesen ? '1' : '0' }}">
     @if($meldung !== null)<x-fa::notice tone="ok" data-taxo-meldung>{{ $meldung }}</x-fa::notice>@endif
     @if($fehler !== null)<x-fa::notice tone="crit" data-taxo-fehler>{{ $fehler }}</x-fa::notice>@endif
 
@@ -28,12 +32,12 @@
                             <x-fa::button size="sm" variant="primary" wire:click="hgSave">Speichern</x-fa::button>
                         @else
                             <span class="shrink-0 pl-0.5">@include('foodalchemist::livewire.settings.partials.reorder-cell', ['id' => $hg->id, 'upMethod' => 'hgHoch', 'downMethod' => 'hgRunter', 'first' => $loop->first, 'last' => $loop->last])</span>
-                            <button type="button" wire:click="waehleHg({{ $hg->id }})" @if($aktiv) aria-current="true" @endif
+                            <a href="#" role="button" wire:click.prevent="waehleHg({{ $hg->id }})" @if($aktiv) aria-current="true" @endif
                                     class="flex-1 min-w-0 flex items-center gap-1.5 text-left px-1.5 py-1.5 text-[length:var(--fa-text-md)] {{ $aktiv ? 'font-medium' : '' }}">
                                 <span class="shrink-0 text-[length:var(--fa-text-sm)] tabular-nums text-[var(--fa-ink-3)]">{{ $hg->code }}</span>
                                 <span class="min-w-0 truncate" title="{{ $hg->label }}">{{ $hg->label }}</span>
                                 @if($hg->is_inactive)<x-fa::badge class="shrink-0">inaktiv</x-fa::badge>@endif
-                            </button>
+                            </a>
                             <span class="shrink-0 text-[length:var(--fa-text-sm)] tabular-nums text-[var(--fa-ink-3)]" title="Gerichte in dieser Hauptgruppe">{{ number_format($nKl, 0, ',', '.') }}</span>
                             @if($darfEditHg)
                                 <span class="shrink-0 flex opacity-0 group-hover:opacity-100 focus-within:opacity-100">
@@ -134,4 +138,5 @@
             @endif
         </x-fa::section>
     </div>
+    </fieldset>
 </div>

@@ -39,6 +39,20 @@ use Platform\FoodAlchemist\Support\TeamScope;
  */
 class Wissenssteuerung extends Component
 {
+    /** Spec 65: Bereich settings.wissenssteuerung je Team (Schreiben darf ohnehin nur das Master-Team, darfGlobalSchreiben) — Sofort-Aktionen, Leiste Bearbeiten → Fertig. Filter und Aufklappen bleiben frei. */
+    use Concerns\MitEinstellungsSperre;
+
+    protected function sperrBereich(): string
+    {
+        return 'wissenssteuerung';
+    }
+
+    /** Lesend (ohne Sperre): toggleOffen. */
+    protected function sperrFreiExtra(): array
+    {
+        return ['toggleOffen'];
+    }
+
     public array $artForm = ['feature' => '', 'art' => 'fachwissen', 'mode' => 'discovery', 'max_docs' => '3', 'max_chars_per_doc' => ''];
 
     public string $bereich = '';
@@ -169,7 +183,7 @@ class Wissenssteuerung extends Component
      * Eine Fehlkonfiguration legt damit die KI-Versorgung aller Mandanten still, nicht nur die
      * eigene. Deshalb dieselbe Master-Regel wie bei globalem Wissen.
      */
-    private function darfSchreiben(): bool
+    private function darfGlobalSchreiben(): bool
     {
         return TeamScope::mayWrite(null, Auth::user()?->currentTeamRelation);
     }
@@ -192,7 +206,7 @@ class Wissenssteuerung extends Component
     {
         $this->fehler = $this->hinweis = null;
         if ($this->budgetKey === null) return;
-        if (! $this->darfSchreiben()) { $this->fehler = 'Der Wissensumfang gilt für alle Teams. Ändern darf ihn nur das Master-Team.'; return; }
+        if (! $this->darfGlobalSchreiben()) { $this->fehler = 'Der Wissensumfang gilt für alle Teams. Ändern darf ihn nur das Master-Team.'; return; }
         $wert = (int) $this->budgetWert;
         $team = Auth::user()?->currentTeamRelation;
         $pflicht = 0;
@@ -222,7 +236,7 @@ class Wissenssteuerung extends Component
     public function resetBudget(string $key): void
     {
         $this->fehler = $this->hinweis = null;
-        if (! $this->darfSchreiben()) { $this->fehler = 'Der Wissensumfang gilt für alle Teams. Ändern darf ihn nur das Master-Team.'; return; }
+        if (! $this->darfGlobalSchreiben()) { $this->fehler = 'Der Wissensumfang gilt für alle Teams. Ändern darf ihn nur das Master-Team.'; return; }
         KnowledgeBudget::setze($key, null);
         $this->budgetKey = null;
         $this->hinweis = 'Wissensumfang steht wieder auf dem Standard.';
@@ -238,7 +252,7 @@ class Wissenssteuerung extends Component
     public function saveArt(): void
     {
         $this->fehler = $this->hinweis = null;
-        if (! $this->darfSchreiben()) { $this->fehler = 'Diese Einstellung gilt für alle Teams. Ändern darf sie nur das Master-Team.'; return; }
+        if (! $this->darfGlobalSchreiben()) { $this->fehler = 'Diese Einstellung gilt für alle Teams. Ändern darf sie nur das Master-Team.'; return; }
         try {
             app(\Platform\FoodAlchemist\Services\KnowledgeRoutingService::class)->setArt(
                 $this->artForm['feature'], $this->artForm['art'], $this->artForm['mode'], (int) $this->artForm['max_docs'],
@@ -276,7 +290,7 @@ class Wissenssteuerung extends Component
     public function save(): void
     {
         $this->fehler = $this->hinweis = null;
-        if (! $this->darfSchreiben()) {
+        if (! $this->darfGlobalSchreiben()) {
             $this->fehler = 'Diese Einstellung gilt für alle Teams. Ändern darf sie nur das Master-Team.';
 
             return;
@@ -325,7 +339,7 @@ class Wissenssteuerung extends Component
     public function delete(int $id): void
     {
         $this->fehler = $this->hinweis = null;
-        if (! $this->darfSchreiben()) {
+        if (! $this->darfGlobalSchreiben()) {
             $this->fehler = 'Diese Einstellung gilt für alle Teams. Ändern darf sie nur das Master-Team.';
 
             return;
@@ -432,6 +446,7 @@ class Wissenssteuerung extends Component
             ->unique()->sort()->values()->all();
 
         return view('foodalchemist::livewire.settings.wissenssteuerung', [
+            'sperr' => $this->sperrZustand(),   // Spec 65
             'bericht' => $bericht,
             'profile' => $profile,
             'eingestellteBudgets' => KnowledgeBudget::eingestellt(),
@@ -448,7 +463,7 @@ class Wissenssteuerung extends Component
                 : [],
             'achsenConfig' => (array) config('foodalchemist.ai.knowledge_axis_map', []),
             'datenwerkOhneAchse' => $bericht['datenwerk_ohne_achse'] ?? [],
-            'darfSchreiben' => $this->darfSchreiben(),
+            'darfSchreiben' => $this->darfGlobalSchreiben(),
             // Dossier-Wähler: erst ab 2 Zeichen suchen — eine Liste über 1.100 Dossiers ist
             // kein Wähler, sondern eine Wand. Inaktive bewusst MIT: eine Kanon-Zeile darauf ist
             // ein legitimer Vorbereitungs-Schritt, und der Service warnt beim Setzen.

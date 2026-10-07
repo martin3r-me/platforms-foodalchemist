@@ -197,8 +197,8 @@
                                             <x-fa::button size="sm" :variant="$z['line_status'] === 'done' ? 'ghost' : 'secondary'"
                                                     :icon="$z['line_status'] === 'done' ? 'heroicon-m-check-circle' : 'heroicon-m-check'"
                                                     :class="$z['line_status'] === 'done' ? 'text-[var(--fa-ok)]' : ''"
-                                                    wire:click="zeileAbhaken({{ $z['id'] }})"
-                                                    data-zeile-abhaken>{{ $z['line_status'] === 'done' ? 'Erledigt' : 'Abhaken' }}</x-fa::button>
+                                                    href="#" x-on:click.prevent="" wire:click="zeileAbhaken({{ $z['id'] }})"
+                                                    data-zeile-abhaken>{{-- Spec 65 (Dominique): Abhaken in der laufenden Küche ohne „Bearbeiten“ — als Link, damit das gesperrte fieldset ihn nicht ausschaltet --}}{{ $z['line_status'] === 'done' ? 'Erledigt' : 'Abhaken' }}</x-fa::button>
                                         @endif
                                     </td>
                                 </tr>

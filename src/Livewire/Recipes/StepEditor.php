@@ -34,6 +34,28 @@ class StepEditor extends Component
 {
     use ReordersLists;
     use WithFileUploads;
+    use \Platform\FoodAlchemist\Livewire\Concerns\MitBearbeitungssperre;   // Spec 65
+
+    /**
+     * Spec 65: der Schritt-Editor ist immer in einen Voll-Editor eingebettet (Basisrezept, Gericht) und teilt sich
+     * dessen Sperre (gleiches Ziel 'recipe') — keine eigene Leiste. Ohne Rezept (Neuanlage) gibt es nichts zu sperren.
+     */
+    protected function sperrZiel(): ?array
+    {
+        return $this->recipeId !== null ? ['recipe', $this->recipeId] : null;
+    }
+
+    /** Ohne Sperre: neu laden (Ereignis), Foto-Pool auf-/zuklappen, KI-Vorschau verwerfen — alles ohne Schreiben. */
+    protected function sperrFreiExtra(): array
+    {
+        return ['schritteNeuLaden', 'poolOeffnen', 'kiVerwerfen'];
+    }
+
+    /** updated-Hooks laufen NICHT über den call-Haken: hier selbst prüfen (Schalter aus = Verhalten wie vor Spec 65). */
+    private function sofortSchreibenErlaubt(): bool
+    {
+        return ! self::sperreAktiv() || $this->darfSchreiben();
+    }
 
     public ?int $recipeId = null;
 
@@ -162,11 +184,21 @@ class StepEditor extends Component
 
     public function updatedTexte(mixed $value, ?string $key = null): void
     {
+        if (! $this->sofortSchreibenErlaubt()) {   // Spec 65
+            $this->hydrierePuffer();
+
+            return;
+        }
         $this->feldSchreiben((int) $key, 'text', (string) $value);
     }
 
     public function updatedPhasen(mixed $value, ?string $key = null): void
     {
+        if (! $this->sofortSchreibenErlaubt()) {   // Spec 65
+            $this->hydrierePuffer();
+
+            return;
+        }
         $this->feldSchreiben((int) $key, 'phase', (string) $value);
     }
 

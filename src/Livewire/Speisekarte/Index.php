@@ -3,6 +3,7 @@
 namespace Platform\FoodAlchemist\Livewire\Speisekarte;
 
 use Illuminate\Support\Facades\Auth;
+use Livewire\Attributes\On;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithFileUploads;
@@ -23,6 +24,71 @@ class Index extends Component
 {
     use WithFileUploads, WithPagination;
     use \Platform\FoodAlchemist\Livewire\Concerns\InteractsWithSavedToast;
+    use \Platform\FoodAlchemist\Livewire\Concerns\MitBearbeitungssperre;   // Spec 65
+
+    /** Spec 65: Sperre gilt der gewählten Speisekarte. */
+    protected function sperrZiel(): ?array
+    {
+        return $this->karteId !== null ? ['speisekarte', $this->karteId] : null;
+    }
+
+    protected function sperrModalName(): ?string
+    {
+        return 'speisekarte-editor';
+    }
+
+    /**
+     * Spec 65 · ohne Sperre: Liste (Suche, Blättern), Karte wählen/schließen, neue Karte anlegen und Karte duplizieren
+     * (legen einen NEUEN Datensatz an, ändern die gewählte Karte nicht), Katalog-Filter, Positions-Formular und
+     * KI-Vorschau verwerfen, Sprung in die Leitstelle (nur Weiterleitung).
+     */
+    protected function sperrFreiExtra(): array
+    {
+        return [
+            'beiModalGeschlossen', 'neu', 'waehle', 'schliessen', 'duplizieren',
+            'gotoPage', 'previousPage', 'nextPage', 'setPage', 'resetPage',
+            'katalogModus', 'pickerWaehleHg', 'pickerWaehleKlasse', 'positionAbbrechen', 'kiKartenVerwerfen',
+            'vollKaskadeStarten',
+        ];
+    }
+
+    /** Spec 65: Editor-Modal geschlossen → eigene Sperre frei (einziger modal.closed-Handler dieser Komponente). */
+    #[On('modal.closed')]
+    public function beiModalGeschlossen(?string $name = null): void
+    {
+        $this->sperreBeiSchliessen($name);
+    }
+
+    /** Abbrechen: ungespeicherten Formularstand verwerfen, Karte frisch laden. */
+    protected function nachAbbrechen(): void
+    {
+        if ($this->karteId !== null) {
+            $this->waehle($this->karteId);
+            $this->kiKartenVorschau = null;
+            $this->neueRubrik = '';
+        }
+    }
+
+    /** Neu angelegte Karte (neu/duplizieren): direkt im Bearbeiten-Modus öffnen. */
+    private function gleichBearbeiten(): void
+    {
+        if (self::sperreAktiv()) {
+            $this->bearbeitenStarten();
+        }
+    }
+
+    /** Upload-Hooks (updated*) laufen nicht über den call-Haken — hier selbst prüfen. */
+    private function uploadGesperrt(string $prop): bool
+    {
+        if (self::sperreAktiv() && ! $this->darfSchreiben()) {
+            $this->reset($prop);
+            $this->sperreAbgewiesen('updated'.ucfirst($prop));
+
+            return true;
+        }
+
+        return false;
+    }
 
     #[Url(as: 'q')]
     public string $search = '';
@@ -244,6 +310,7 @@ class Index extends Component
     {
         $karte = $svc->create($this->team(), ['name' => 'Neue Speisekarte']);
         $this->waehle($karte->id);
+        $this->gleichBearbeiten();
     }
 
     public function waehle(int $id): void
@@ -251,6 +318,9 @@ class Index extends Component
         $karte = FoodAlchemistSpeisekarte::visibleToTeam($this->team())->find($id);
         if (! $karte) {
             return;
+        }
+        if ($this->karteId !== null && $this->karteId !== $id) {
+            $this->bearbeitenBeenden();   // Spec 65: Wechsel auf eine andere Karte gibt die eigene Sperre frei
         }
         $this->karteId = $id;
         $this->name = $karte->name;
@@ -283,14 +353,22 @@ class Index extends Component
 
     public function schliessen(): void
     {
+        $this->bearbeitenBeenden();   // Spec 65
         $this->karteId = null;
     }
 
+    /** Spec 65: „Speichern" schreibt und beendet die Bearbeitung — der Editor bleibt offen im Lesemodus. */
     public function speichern(SpeisekarteService $svc): void
     {
         if (! $this->karteId) {
             return;
         }
+        $this->kartenSchreiben($svc);
+        $this->bearbeitenBeenden();
+    }
+
+    private function kartenSchreiben(SpeisekarteService $svc): void
+    {
         $svc->update($this->team(), $this->karteId, [
             'name' => $this->name,
             'karten_typ' => $this->kartenTyp,
@@ -359,6 +437,7 @@ class Index extends Component
         }
         $neu = $svc->dupliziere($this->team(), $this->karteId);
         $this->waehle($neu->id);
+        $this->gleichBearbeiten();
     }
 
     public function loeschen(SpeisekarteService $svc): void
@@ -367,6 +446,7 @@ class Index extends Component
             return;
         }
         $svc->delete($this->team(), $this->karteId);
+        $this->bearbeitenBeenden();   // Spec 65: Sperre an der gelöschten Karte nicht stehen lassen
         $this->karteId = null;
     }
 
@@ -391,6 +471,9 @@ class Index extends Component
 
     public function updatedLogoUpload(SpeisekarteService $svc): void
     {
+        if ($this->uploadGesperrt('logoUpload')) {
+            return;
+        }
         if (! $this->karteId || ! $this->logoUpload) {
             return;
         }
@@ -401,6 +484,9 @@ class Index extends Component
 
     public function updatedCoverUpload(SpeisekarteService $svc): void
     {
+        if ($this->uploadGesperrt('coverUpload')) {
+            return;
+        }
         if (! $this->karteId || ! $this->coverUpload) {
             return;
         }
@@ -747,7 +833,7 @@ class Index extends Component
             return;
         }
         $this->resetErrorBag('speisekarteWording');
-        $this->speichern($svc);   // Stil-Override + Leitplanken persistieren
+        $this->kartenSchreiben($svc);   // Stil-Override + Leitplanken persistieren (Bearbeitung läuft weiter)
         if (! $this->writingStyleId) {
             $this->addError('speisekarteWording', 'Kein Schreibstil gewählt — nichts zu betexten (Wording bleibt Standard-Kette).');
 
@@ -884,6 +970,7 @@ class Index extends Component
         }
 
         return view('foodalchemist::livewire.speisekarte.index', [
+            'sperr' => $this->sperrZustand(),   // Spec 65
             'presentationInfo' => $presentationInfo,
             'presentationLink' => $presentationLink,
             'presentationDesignOptionen' => $presentationDesignOptionen,

@@ -16,6 +16,14 @@ use Platform\FoodAlchemist\Support\TeamScope;
  */
 class Schreibstile extends Component
 {
+    /** Spec 65: Bereich settings.schreibstile je Team — Sofort-Aktionen (Liste), Leiste Bearbeiten → Fertig. */
+    use Concerns\MitEinstellungsSperre;
+
+    protected function sperrBereich(): string
+    {
+        return 'schreibstile';
+    }
+
     public ?int $editId = null;
 
     public array $form = [];
@@ -135,6 +143,7 @@ class Schreibstile extends Component
     public function render()
     {
         return view('foodalchemist::livewire.settings.schreibstile', [
+            'sperr' => $this->sperrZustand(),   // Spec 65
             'stile' => TeamScope::applyVisible(
                 DB::table('foodalchemist_writing_styles')->whereNull('deleted_at'),
                 'team_id', Auth::user()?->currentTeamRelation

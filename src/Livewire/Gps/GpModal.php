@@ -30,6 +30,35 @@ use Platform\FoodAlchemist\Support\Curate;
 class GpModal extends Component
 {
     use \Platform\FoodAlchemist\Livewire\Concerns\InteractsWithSavedToast;
+    use \Platform\FoodAlchemist\Livewire\Concerns\MitBearbeitungssperre;   // Spec 65
+
+    /** Spec 65: Sperre gilt dem GP — dasselbe Ziel wie die eingebetteten GP-Detail-Karteien und die Detailspalte. */
+    protected function sperrZiel(): ?array
+    {
+        return $this->gpId !== null ? ['gp', $this->gpId] : null;
+    }
+
+    protected function sperrModalName(): ?string
+    {
+        return 'gp-modal';
+    }
+
+    /**
+     * Spec 65 · ohne Sperre erlaubt — schreibt nichts: Schließen-Handler, Auto-Vorschlag der Neuanlage (Ziel null),
+     * Anreicherungs-Box schließen, Namensvorschlag verwerfen.
+     */
+    protected function sperrFreiExtra(): array
+    {
+        return ['geschlossen', 'autoSuggestFromSupplierItem', 'bulkVerwerfen', 'nameVorschlagVerwerfen'];
+    }
+
+    /** Abbrechen: ungespeicherten Formularstand verwerfen, GP frisch laden. */
+    protected function nachAbbrechen(): void
+    {
+        if ($this->gpId !== null) {
+            $this->oeffnen($this->gpId);
+        }
+    }
 
     private const BUILDER_LEER = [
         'hauptzutat' => '', 'condition' => '', 'processing' => '', 'form' => '',
@@ -187,6 +216,7 @@ class GpModal extends Component
     #[On('modal.closed')]
     public function geschlossen(string $name): void
     {
+        $this->sperreBeiSchliessen($name);   // Spec 65: eigene Sperre frei — VOR dem Reset (braucht gpId)
         if ($name === 'gp-modal') {
             $this->reset('gpId', 'builder', 'manuellerName', 'defaults', 'fehler', 'force', 'kiVorschlag', 'kiRohtext', 'laSuche', 'supplierItemId', 'autoSuggestPending', 'equivalentSourceKind', 'equivalentSourceId', 'equivalentReason', 'equivalentConfidence');
         }
@@ -248,7 +278,14 @@ class GpModal extends Component
                 $this->speichereDefaults($gp);
             }
 
-            $this->dispatch('modal.close', name: 'gp-modal');
+            if ($this->gpId === null) {
+                // Neuanlage (LA-first, Ersatz-Katalog …): schließt wie bisher — die Aufrufer warten darauf.
+                $this->dispatch('modal.close', name: 'gp-modal');
+            } else {
+                // Spec 65 (Dominique 2026-10-07): Speichern beendet die Bearbeitung, der Editor BLEIBT offen im Lesemodus.
+                $this->bearbeitenBeenden();
+                $this->manuellerName = $gp->name;   // ggf. vom Naming-Service normalisiert
+            }
             $this->dispatch('gp-gespeichert');
             if ($this->equivalentSourceId === null) {
                 $this->dispatch('gp-selected', id: $gp->id);
@@ -844,6 +881,7 @@ class GpModal extends Component
             : null;
 
         return view('foodalchemist::livewire.gps.gp-modal', [
+            'sperr' => $this->sperrZustand(),   // Spec 65
             'gp' => $gp,
             'neu' => $this->gpId === null,
             'leadLa' => $leadLa,

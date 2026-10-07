@@ -19,6 +19,20 @@ use RuntimeException;
  */
 class VkTaxonomie extends Component
 {
+    /** Spec 65: Bereich settings.vk_taxonomie je Team — Sofort-Aktionen, Leiste Bearbeiten → Fertig. Auswahl/Navigation bleibt frei (Link statt Knopf im gesperrten Bereich). */
+    use Concerns\MitEinstellungsSperre;
+
+    protected function sperrBereich(): string
+    {
+        return 'vk_taxonomie';
+    }
+
+    /** Lesend (ohne Sperre): waehleHg. */
+    protected function sperrFreiExtra(): array
+    {
+        return ['waehleHg'];
+    }
+
     use ReordersLists;
 
     public ?int $hauptgruppeId = null;
@@ -194,6 +208,7 @@ class VkTaxonomie extends Component
             ->groupBy('dish_main_group_id')->pluck('n', 'dish_main_group_id');
 
         return view('foodalchemist::livewire.settings.vk-taxonomie', [
+            'sperr' => $this->sperrZustand(),   // Spec 65
             'hauptgruppen' => FoodAlchemistDishMainGroup::visibleToTeam($team)->orderBy('sort_order')->orderBy('code')->get(),
             // Die 4 globalen Diät-Klassen (HG-unabhängig), immer sichtbar.
             'klassen' => FoodAlchemistDishClass::visibleToTeam($team)->whereNull('dish_main_group_id')->orderBy('id')->get(),

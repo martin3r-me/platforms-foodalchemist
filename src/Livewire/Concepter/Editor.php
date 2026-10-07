@@ -34,6 +34,88 @@ use Platform\FoodAlchemist\Services\SalesRecipeService;
 class Editor extends Component
 {
     use ManagesCanvas, ManagesPlanningFrame, ManagesPhase, InteractsWithSavedToast, WithFileUploads;
+    use \Platform\FoodAlchemist\Livewire\Concerns\MitBearbeitungssperre;   // Spec 65
+
+    /**
+     * Spec 65: Sperre gilt dem geöffneten Datensatz. Konzept UND kind=paket-Concept (Kaskade) sind Concepts → Typ
+     * 'concept' (gleich mit Concepts-Seite und Concepter-Detailspalte); das Alt-Paket (type pakete,
+     * FoodAlchemistPaket) → Typ 'paket' (gleich mit der Pakete-Seite).
+     */
+    protected function sperrZiel(): ?array
+    {
+        if ($this->id === null) {
+            return null;
+        }
+
+        return [$this->type === 'pakete' ? 'paket' : 'concept', $this->id];
+    }
+
+    protected function sperrModalName(): ?string
+    {
+        return 'concepter-editor';
+    }
+
+    /** Spec 65: Editor geschlossen → eigene Sperre frei (einziger modal.closed-Handler dieser Komponente). */
+    #[On('modal.closed')]
+    public function beiModalGeschlossen(?string $name = null): void
+    {
+        $this->sperreBeiSchliessen($name);
+    }
+
+    /**
+     * Ohne Sperre: Reiter, Aufklappen/Picker-Zustand/Filter, Einfügeziel und Auswahl markieren (nur Anzeige),
+     * Rechnen ohne Persistenz (Kohäsion, Slot-Vorschlag, Zielpreis-Vorschlag), Navigation ins Paket und zurück,
+     * Lese-Helfer der Canvas/Rahmen/Phase-Traits, „Als Vorlage speichern" (legt eine Kopie an).
+     * KI-/Generator-Läufe (wordingGenerieren) schreiben → nur mit Sperre.
+     */
+    protected function sperrFreiExtra(): array
+    {
+        return [
+            'beiModalGeschlossen', 'setTab', 'geschirrPicker', 'kohaesionPruefen', 'zutatenToggle', 'gerichtPicker', 'fillToggle',
+            'pickTypWaehle', 'pickHgWaehle', 'pickKlasseWaehle', 'pickGeschmackWaehle', 'pickDiaetWaehle', 'coverageFuellen',
+            'vorschlagFuerSlot', 'vorschlagVerwerfen', 'zielSetzen', 'toggleAuswahl', 'zielpreisToggle', 'zielpreisBerechnen',
+            'paketOeffnen', 'zurueckZumConcept', 'alsVorlage', '$set',
+            'canvasLaden', 'canvasTemplateData', 'canvasSchreibstile', 'frameLaden', 'framePlanningVokabular', 'frameRegelLabel', 'phasenListe',
+        ];
+    }
+
+    /** Abbrechen: ungespeicherten Formularstand verwerfen, Datensatz frisch laden (Reiter + Rücksprung bleiben). */
+    protected function nachAbbrechen(): void
+    {
+        if ($this->id !== null) {
+            [$tab, $rueck] = [$this->tab, $this->rueckSprungConceptId];
+            $this->oeffnen($this->type, $this->id, $tab);
+            $this->rueckSprungConceptId = $rueck;
+        }
+    }
+
+    /** Spec 65: updated*-Hooks laufen nicht über den call-Haken — Schreibrecht dort selbst prüfen. */
+    private function hookDarfSchreiben(string $hook): bool
+    {
+        if (! self::sperreAktiv() || $this->darfSchreiben()) {
+            return true;
+        }
+        $this->sperreAbgewiesen($hook);
+
+        return false;
+    }
+
+    /**
+     * Spec 65: Haupt-Speichern im Kopf — sichert (auf «Konzept & Planung» Stammdaten + Canvas + Rahmen) und beendet
+     * die Bearbeitung (Sperre frei), der Editor bleibt offen im Lesemodus. `speichern` selbst bleibt das
+     * Sofort-Speichern der Auswahlfelder/Facetten (wire:change) und beendet die Bearbeitung NICHT.
+     */
+    public function bearbeitungSpeichern(): void
+    {
+        if ($this->tab === 'konzept' && $this->type === 'concepts') {
+            $this->konzeptSpeichern();
+        } else {
+            $this->speichern();
+        }
+        if ($this->fehler === null) {
+            $this->bearbeitenBeenden();
+        }
+    }
 
     // ── Spec 43 (Bild-Epic): Concept-Titelbild ──
     public $conceptImageUpload = null;
@@ -44,6 +126,11 @@ class Editor extends Component
     {
         $this->conceptImageFehler = null;
         if ($this->id === null || $this->conceptImageUpload === null) {
+            return;
+        }
+        if (! $this->hookDarfSchreiben('updatedConceptImageUpload')) {
+            $this->reset('conceptImageUpload');
+
             return;
         }
         $this->validate(['conceptImageUpload' => 'image|max:8192'], [], ['conceptImageUpload' => 'Bild']);
@@ -72,6 +159,11 @@ class Editor extends Component
         $dateien = is_array($this->conceptGalleryUpload) ? $this->conceptGalleryUpload : [$this->conceptGalleryUpload];
         $dateien = array_filter($dateien);
         if ($this->id === null || $dateien === []) {
+            return;
+        }
+        if (! $this->hookDarfSchreiben('updatedConceptGalleryUpload')) {
+            $this->reset('conceptGalleryUpload');
+
             return;
         }
         $this->validate(['conceptGalleryUpload.*' => 'image|max:8192'], [], ['conceptGalleryUpload.*' => 'Bild']);
@@ -211,6 +303,11 @@ class Editor extends Component
     #[On('concepter-editor.oeffnen')]
     public function oeffnen(string $type, ?int $id, ?string $startTab = null): void
     {
+        // Spec 65: anderer Datensatz (auch Sprung ins Paket und zurück) → eigene Sperre am bisherigen freigeben.
+        $neuesZiel = $id !== null ? [$type === 'pakete' ? 'paket' : 'concept', $id] : null;
+        if ($this->sperrZiel() !== null && $this->sperrZiel() !== $neuesZiel) {
+            $this->bearbeitenBeenden();
+        }
         $this->reset(['form', 'slotForm', 'blockForm', 'auswahl', 'paketName', 'neuerSlotRolle', 'fillSlotId', 'fillOpenId', 'einfuegenNachId', 'linkeListe', 'paketKlasse', 'paketServierform', 'paketEventtyp', 'paketMoment', 'paketSaison', 'basisSuche', 'kombiSuche', 'basisHg', 'basisKat', 'basisNiveau', 'gerichtSuche', 'pickTyp',
             'paketGerichtSuche', 'paketQuelle', 'pickHg', 'pickKlasse', 'pickGeschmack', 'pickDiaet', 'zutatenOffenSlotId', 'menueKohaesion', 'slotVorschlaege',
             'zielModus', 'zielPreis', 'zielVorschlag', 'simulationPax', 'rueckSprungConceptId', 'fehler']);
@@ -923,7 +1020,8 @@ class Editor extends Component
     public function zurueckZumConcept(): void
     {
         $ziel = $this->rueckSprungConceptId;
-        if ($this->type === 'pakete' && $this->id !== null) {
+        // Spec 65: Navigation ist frei; das Mit-Sichern des Paket-Kopfs nur mit eigener Sperre (sonst nur zurück).
+        if ($this->type === 'pakete' && $this->id !== null && (! self::sperreAktiv() || $this->darfSchreiben())) {
             $this->speichern();
         }
         if ($ziel !== null) {
@@ -1387,6 +1485,7 @@ class Editor extends Component
         }
 
         return view('foodalchemist::livewire.concepter.editor', [
+            'sperr' => $this->sperrZustand(),   // Spec 65
             'conceptImageUrl' => ($concept !== null && ($concept->image_context_file_id || $concept->image_path))
                 ? app(\Platform\FoodAlchemist\Services\FoodAlchemistMediaService::class)->url($concept->image_context_file_id, $concept->image_path)
                 : null,

@@ -29,12 +29,14 @@
         {{-- ── Kopfzeile: Ansicht + Aktionen ───────────────────────────── --}}
         <div class="flex flex-wrap items-center gap-2">
             <div class="inline-flex items-center gap-0.5 p-0.5 rounded-[var(--fa-radius-control)] bg-[var(--fa-neutral-soft)]" role="group" aria-label="Ansicht">
-                <button type="button" @click="ansicht = 'bearbeiten'"
+                {{-- Spec 65: <a role=button> statt <button> — die Ansicht bleibt auch im gesperrten Lesemodus
+                     (fieldset disabled des Voll-Editors) umschaltbar; reine Alpine-Ansicht, schreibt nichts. --}}
+                <a href="#" role="button" @click.prevent="ansicht = 'bearbeiten'"
                         :class="ansicht === 'bearbeiten' ? '{{ $segAn }}' : '{{ $segAus }}'"
-                        class="h-7 px-2.5 rounded-[var(--fa-radius-control)] text-[length:var(--fa-text-sm)] font-medium transition-colors" data-tab-bearbeiten>Bearbeiten</button>
-                <button type="button" @click="ansicht = 'anleitung'"
+                        class="inline-flex items-center h-7 px-2.5 rounded-[var(--fa-radius-control)] text-[length:var(--fa-text-sm)] font-medium transition-colors" data-tab-bearbeiten>Bearbeiten</a>
+                <a href="#" role="button" @click.prevent="ansicht = 'anleitung'"
                         :class="ansicht === 'anleitung' ? '{{ $segAn }}' : '{{ $segAus }}'"
-                        class="h-7 px-2.5 rounded-[var(--fa-radius-control)] text-[length:var(--fa-text-sm)] font-medium transition-colors" data-tab-anleitung>Anleitung ansehen</button>
+                        class="inline-flex items-center h-7 px-2.5 rounded-[var(--fa-radius-control)] text-[length:var(--fa-text-sm)] font-medium transition-colors" data-tab-anleitung>Anleitung ansehen</a>
             </div>
             <span class="{{ $hinweis }} tabular-nums">{{ $anzahl($schritte->count(), 'Schritt', 'Schritte') }} · {{ $anzahl($pool->count(), 'Foto', 'Fotos') }}</span>
 

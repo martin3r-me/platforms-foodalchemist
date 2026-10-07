@@ -14,11 +14,29 @@ use Platform\FoodAlchemist\Services\FormatService;
  */
 class DetailPanel extends Component
 {
+    use \Platform\FoodAlchemist\Livewire\Concerns\MitBearbeitungssperre;   // Spec 65
+
+    /** Spec 65: gleiche Sperre wie der Format-Editor (Ziel format). */
+    protected function sperrZiel(): ?array
+    {
+        return $this->selectedId !== null ? ['format', $this->selectedId] : null;
+    }
+
+    /** Ohne Sperre: Anzeige/Auswahl, Neu-Rendern nach Speichern, Editor öffnen (Navigation). */
+    protected function sperrFreiExtra(): array
+    {
+        return ['zeige', 'aktualisiere', 'bearbeiten'];
+    }
+
     public ?int $selectedId = null;
 
     #[On('formate-selected')]
     public function zeige(?int $id): void
     {
+        // Spec 65: anderes Format gewählt → eigene Sperre am bisherigen freigeben.
+        if ($this->selectedId !== null && $this->selectedId !== $id) {
+            $this->sperreBeiWechselFreigeben();
+        }
         $this->selectedId = $id;
     }
 
@@ -46,6 +64,7 @@ class DetailPanel extends Component
         } catch (\RuntimeException) {
             return;
         }
+        $this->bearbeitenBeenden();   // Spec 65: gelöscht → Sperre am Format frei
         $this->selectedId = null;
         $this->dispatch('formate-geloescht', id: $id);
     }
@@ -85,6 +104,7 @@ class DetailPanel extends Component
         ];
 
         return view('foodalchemist::livewire.formate.detail-panel', [
+            'sperr' => $this->sperrZustand(),   // Spec 65
             'format' => $format,
             // Range = min/max der (brillen-scharfen) Editions-Preise — spiegelt das Cockpit.
             'range' => ['min' => $cockpit['min'], 'max' => $cockpit['max']],

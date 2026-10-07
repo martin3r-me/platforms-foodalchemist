@@ -48,7 +48,10 @@
                         </div>
                     </div>
                 @endif
-                <x-fa::button variant="primary" icon="heroicon-m-check" wire:click="speichern" wire:loading.attr="disabled" wire:target="speichern">Speichern</x-fa::button>
+                {{-- Spec 65: erst „Bearbeiten" (Sperre), dann Abbrechen/Speichern; Speichern beendet die Bearbeitung, der Editor bleibt offen --}}
+                <x-foodalchemist::bearbeiten-leiste :zustand="$sperr">
+                    <x-fa::button variant="primary" icon="heroicon-m-check" wire:click="bearbeitungSpeichern" wire:loading.attr="disabled" wire:target="bearbeitungSpeichern" data-format-speichern>Speichern</x-fa::button>
+                </x-foodalchemist::bearbeiten-leiste>
             </div>
         </x-slot:actions>
 
@@ -62,6 +65,10 @@
                 'bilder' => 'Bilder',
                 'notizen' => 'Notizen',
             ]" />
+
+            {{-- Spec 65: Reiter im Server-Modus liefern nur die Leiste — den Panel-Bereich sperrt im Lesemodus
+                 dieses fieldset (Reiterleiste bleibt außerhalb bedienbar). --}}
+            <fieldset @disabled(in_array($sperr['modus'] ?? 'aus', ['lesen', 'fremd'], true)) class="contents" data-fa-lesemodus="{{ in_array($sperr['modus'] ?? 'aus', ['lesen', 'fremd'], true) ? '1' : '0' }}">
 
             @if($fehler)
                 <x-fa::notice tone="crit" title="Nicht gespeichert">{{ $fehler }}</x-fa::notice>
@@ -512,6 +519,7 @@
                     <x-fa::textarea wire:model="form.note" rows="10" placeholder="Interne Notizen zum Format …" aria-label="Interne Notiz" />
                 </x-fa::section>
             @endif
+            </fieldset>
         @endif
     </x-foodalchemist::modal>
 </div>

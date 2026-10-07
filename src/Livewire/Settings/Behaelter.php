@@ -17,6 +17,14 @@ use Platform\FoodAlchemist\Support\TeamScope;
  */
 class Behaelter extends Component
 {
+    /** Spec 65: Bereich settings.behaelter je Team — Sofort-Aktionen, Leiste Bearbeiten → Fertig. (Zeilen-Abbrechen heißt zeileAbbrechen — bearbeitenAbbrechen gehört der Sperre.) */
+    use Concerns\MitEinstellungsSperre;
+
+    protected function sperrBereich(): string
+    {
+        return 'behaelter';
+    }
+
     /** Whitelist: vokabular-key => [tabelle, label, hat kapazitaet_kg] */
     public const VOKABULARE = [
         'behaelter' => ['tabelle' => 'foodalchemist_vocab_containers', 'label' => 'Behälter (GN & Co.)', 'kapazitaet' => true],
@@ -222,7 +230,7 @@ class Behaelter extends Component
         $this->fehler = null;
     }
 
-    public function bearbeitenAbbrechen(): void
+    public function zeileAbbrechen(): void
     {
         $this->editId = null;
         $this->edit = [];
@@ -254,7 +262,7 @@ class Behaelter extends Component
 
         $this->meldung = "«{$name}» gespeichert.";
         $this->fehler = null;
-        $this->bearbeitenAbbrechen();
+        $this->zeileAbbrechen();
     }
 
     /** V-06: nur deaktivieren — inaktive bleiben an Rezepten sichtbar. */
@@ -415,6 +423,6 @@ class Behaelter extends Component
             ];
         }
 
-        return view('foodalchemist::livewire.settings.behaelter', ['listen' => $listen]);
+        return view('foodalchemist::livewire.settings.behaelter', ['sperr' => $this->sperrZustand(), 'listen' => $listen]);
     }
 }

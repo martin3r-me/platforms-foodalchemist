@@ -19,6 +19,24 @@ use Platform\FoodAlchemist\Support\TeamScope;
  */
 class DetailPanel extends Component
 {
+    use \Platform\FoodAlchemist\Livewire\Concerns\MitBearbeitungssperre;   // Spec 65
+
+    /** Spec 65: gleiche Sperre wie der Gericht-Editor (Ziel recipe). */
+    protected function sperrZiel(): ?array
+    {
+        return $this->recipeId !== null ? ['recipe', $this->recipeId] : null;
+    }
+
+    /**
+     * Ohne Sperre: Anzeige/Navigation (Gericht wechseln, neu rendern), Pairing nachladen, Sektionen aufklappen,
+     * transiente KI-Vorschläge verwerfen — nichts davon schreibt. KI-Läufe (Klasse, Rollen, Eignung, Kohärenz,
+     * Teller-Heber) bleiben hinter „Bearbeiten": sie sind Pflege-Aktionen bzw. schreiben den Analyse-Cache.
+     */
+    protected function sperrFreiExtra(): array
+    {
+        return ['zeige', 'aktualisiere', 'pairingLaden', 'toggleSektion', 'reject_klasse', 'reject_rollen', 'eignungVerwerfen'];
+    }
+
     public ?int $recipeId = null;
 
     public function mount(?int $recipeId = null): void
@@ -55,6 +73,9 @@ class DetailPanel extends Component
     #[On('vk-recipe-selected')]
     public function zeige(int $id): void
     {
+        if ($this->recipeId !== $id) {
+            $this->sperreBeiWechselFreigeben();   // Spec 65: Wechsel gibt eine hier geholte Sperre frei
+        }
         $this->recipeId = $id;
     }
 
@@ -295,6 +316,7 @@ class DetailPanel extends Component
         $outlet = $team !== null ? app(\Platform\FoodAlchemist\Services\ActiveOutletContext::class)->current($team) : null;
 
         return view('foodalchemist::livewire.verkauf.detail-panel', [
+            'sperr' => $this->sperrZustand(),   // Spec 65
             'rezept' => $rezept,
             // KI-Kontext der Erstellung (2026-09-06): Call-Log-Zeile des Generators, ans Rezept gehängt.
             'kiKontext' => $rezept !== null ? app(\Platform\FoodAlchemist\Services\Ai\RecipeKiKontextService::class)->fuerRezept($rezept) : null,

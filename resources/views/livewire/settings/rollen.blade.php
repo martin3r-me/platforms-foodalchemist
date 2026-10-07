@@ -3,6 +3,9 @@
      Tabelle mit Direkteingabe zuerst, Betriebs-Wahl darüber, Anlegen darunter (Anordnung wie bisher).
      Stilllegen bleibt am Zeilenende, abgesetzt als leiser Knopf (kein Löschen: Besetzungen hängen daran). --}}
 <div class="flex flex-col gap-4" data-settings-rollen>
+    {{-- Spec 65: „Bearbeiten" sperrt den Bereich für das Team, „Fertig" gibt frei --}}
+    @php $sperrLesen = in_array($sperr['modus'] ?? 'aus', ['lesen', 'fremd'], true); @endphp
+    @include('foodalchemist::livewire.settings.partials.sperr-leiste', ['sofort' => true])
     @if($fehler)<x-fa::notice tone="crit" data-rollen-fehler>{{ $fehler }}</x-fa::notice>@endif
     @if($meldung)<x-fa::notice tone="ok" data-rollen-meldung>{{ $meldung }}</x-fa::notice>@endif
 
@@ -30,6 +33,7 @@
             </div>
         @endif
 
+        <fieldset @disabled($sperrLesen) class="contents" data-fa-lesemodus="{{ $sperrLesen ? '1' : '0' }}">
         <div class="overflow-x-auto -mx-4">
             <table class="fa-table">
                 <thead>
@@ -111,5 +115,6 @@
                 <x-fa::button variant="primary" icon="heroicon-m-plus" wire:click="create" data-rollen-anlegen>Rolle anlegen</x-fa::button>
             </div>
         @endunless
+        </fieldset>
     </x-fa::section>
 </div>

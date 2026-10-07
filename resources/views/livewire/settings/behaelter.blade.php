@@ -9,6 +9,10 @@
 @endphp
 
 <div class="flex flex-col gap-4" data-settings-behaelter>
+    {{-- Spec 65: „Bearbeiten" sperrt den Bereich für das Team, „Fertig" gibt frei --}}
+    @php $sperrLesen = in_array($sperr['modus'] ?? 'aus', ['lesen', 'fremd'], true); @endphp
+    @include('foodalchemist::livewire.settings.partials.sperr-leiste', ['sofort' => true])
+    <fieldset @disabled($sperrLesen) class="contents" data-fa-lesemodus="{{ $sperrLesen ? '1' : '0' }}">
     @if($fehler !== null)<x-fa::notice tone="crit" data-behaelter-fehler>{{ $fehler }}</x-fa::notice>@endif
     @if($meldung !== null)<x-fa::notice tone="ok" data-behaelter-meldung>{{ $meldung }}</x-fa::notice>@endif
 
@@ -63,7 +67,7 @@
                     </div>
                     @include('foodalchemist::livewire.settings.partials.behaelter-felder', ['praefix' => 'edit', 'f' => $edit])
                     <div class="flex justify-end gap-2">
-                        <x-fa::button size="sm" variant="ghost" wire:click="bearbeitenAbbrechen">Abbrechen</x-fa::button>
+                        <x-fa::button size="sm" variant="ghost" wire:click="zeileAbbrechen">Abbrechen</x-fa::button>
                         <x-fa::button size="sm" variant="primary" wire:click="bearbeitenSpeichern" data-behaelter-edit-speichern>Speichern</x-fa::button>
                     </div>
                 </div>
@@ -92,4 +96,5 @@
             </div>
         </x-fa::section>
     @endforeach
+    </fieldset>
 </div>

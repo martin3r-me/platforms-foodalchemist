@@ -24,6 +24,33 @@ class PraesentationsDesigns extends Component
 {
     use WithFileUploads;
 
+    /**
+     * Spec 65: Bereich settings.praesentations_designs je Team. Ein Speichern-Knopf → Leiste
+     * Bearbeiten → Abbrechen/Speichern, Speichern gibt frei. Design wählen, „Neu aus Vorlage",
+     * Block anklicken und die Vorschau-Steuerung bleiben ohne Sperre (reiner Ansichts-Zustand).
+     */
+    use Concerns\MitEinstellungsSperre;
+
+    protected function sperrBereich(): string
+    {
+        return 'praesentations_designs';
+    }
+
+    protected function sperrFreiExtra(): array
+    {
+        return ['waehlen', 'neuAusBuiltin', 'blockWaehlen'];
+    }
+
+    /** Abbrechen: ungespeicherte Änderungen verwerfen, gewähltes Design frisch laden. */
+    protected function nachAbbrechen(): void
+    {
+        if ($this->selectedId !== null) {
+            $this->waehlen($this->selectedId);
+        } else {
+            $this->neuAusBuiltin('editorial');
+        }
+    }
+
     /** @var list<array{block_type:string, style:array}> */
     public array $layout = [];
 
@@ -32,6 +59,11 @@ class PraesentationsDesigns extends Component
 
     public function updatedBlockImageUpload(): void
     {
+        if ($this->schreibenAbgewiesen('updatedBlockImageUpload')) {   // Spec 65: Upload-Hook legt die Datei sofort ab
+            $this->reset('blockImageUpload');
+
+            return;
+        }
         $i = $this->selectedBlockIndex;
         if ($i === null || ! isset($this->layout[$i]) || ($this->layout[$i]['block_type'] ?? '') !== 'image' || $this->blockImageUpload === null) {
             return;
@@ -217,6 +249,7 @@ class PraesentationsDesigns extends Component
             $this->ungespeichert = false;
             $this->status = 'Design gespeichert.'
                 . ' Damit der Kundenlink folgt, die Ausgabe danach noch einmal veröffentlichen.';
+            $this->bearbeitenBeenden();   // Spec 65: Speichern gibt frei, Ansicht bleibt im Lesemodus
         } catch (\Throwable $e) {
             $this->fehler = $e->getMessage();
         }
@@ -425,6 +458,7 @@ class PraesentationsDesigns extends Component
     public function render()
     {
         return view('foodalchemist::livewire.settings.praesentations-designs', [
+            'sperr' => $this->sperrZustand(),   // Spec 65
             'designs' => $this->designListe(),
             'quellenOptionen' => $this->quellenOptionen(),
             'blockTypen' => PresentationDesignService::BLOCK_TYPES,

@@ -14,6 +14,14 @@ use RuntimeException;
  */
 class Einheiten extends Component
 {
+    /** Spec 65: Bereich settings.einheiten je Team — Sofort-Aktionen, Leiste Bearbeiten → Fertig. Filter „Inaktive zeigen" bleibt bedienbar. */
+    use Concerns\MitEinstellungsSperre;
+
+    protected function sperrBereich(): string
+    {
+        return 'einheiten';
+    }
+
     public bool $includeInactive = false;
 
     public ?int $editId = null;
@@ -87,6 +95,7 @@ class Einheiten extends Component
         $team = $this->team();
 
         return view('foodalchemist::livewire.settings.einheiten', [
+            'sperr' => $this->sperrZustand(),   // Spec 65
             'team' => $team,
             'einheiten' => $vocab->listEinheiten($team, $this->includeInactive),
         ]);

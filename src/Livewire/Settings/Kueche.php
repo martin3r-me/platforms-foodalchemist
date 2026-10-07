@@ -12,6 +12,12 @@ use Platform\FoodAlchemist\Services\TeamSettingsService;
  */
 class Kueche extends Component
 {
+    use Concerns\MitEinstellungsSperre;   // Spec 65: Bereich settings.kueche je Team
+
+    protected function sperrBereich(): string
+    {
+        return 'kueche';
+    }
     public string $kuechenTyp = '';
 
     /** Phase 5: Typ-Farben (Hex) — GP / Basisrezept / Gericht. */
@@ -41,6 +47,7 @@ class Kueche extends Component
             'type_colors' => $this->sanitizeFarben(),
         ]);
         $this->meldung = 'Gespeichert — der Generator nutzt das Profil ab dem nächsten Lauf.';
+        $this->bearbeitenBeenden();   // Spec 65: Speichern gibt frei, Ansicht bleibt im Lesemodus
     }
 
     /** Nur valide #rrggbb-Werte je bekanntem Typ übernehmen (Rest fällt auf Default zurück). */
@@ -63,6 +70,7 @@ class Kueche extends Component
     public function render()
     {
         return view('foodalchemist::livewire.settings.kueche', [
+            'sperr' => $this->sperrZustand(),   // Spec 65
             'typen' => TeamSettingsService::KUECHEN_TYPEN,
             'farbTypen' => ['gp' => 'Grundprodukt', 'basisrezept' => 'Basisrezept', 'gericht' => 'Gericht'],
         ]);

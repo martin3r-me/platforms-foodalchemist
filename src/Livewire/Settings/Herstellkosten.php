@@ -22,6 +22,17 @@ use Platform\FoodAlchemist\Services\TeamSettingsService;
  */
 class Herstellkosten extends Component
 {
+    /**
+     * Spec 65: Bereich settings.herstellkosten je Team (gilt auch für die Betriebs-Kalkulationen der Seite).
+     * Mehrere Schreibwege (Speichern, Fixkosten-Zeilen, Betrieb zurücksetzen) → Leiste „sofort":
+     * Bearbeiten → Fertig, Speichern gibt NICHT frei. Der Betriebs-Wähler (updatedOutletId) lädt nur.
+     */
+    use Concerns\MitEinstellungsSperre;
+
+    protected function sperrBereich(): string
+    {
+        return 'herstellkosten';
+    }
     public string $marge = '15';
 
     /** #379+: Ziel-Wareneinsatzquote (Food-Cost-%) — Controlling-Ziel. */
@@ -384,6 +395,7 @@ class Herstellkosten extends Component
             ->get(['id', 'name'])->map(fn ($o) => ['id' => (int) $o->id, 'name' => (string) $o->name])->all();
 
         return view('foodalchemist::livewire.settings.herstellkosten', [
+            'sperr' => $this->sperrZustand(),   // Spec 65
             'abgeleitet' => $abgeleitet,
             'fixSummen' => $summen,
             'liveBasen' => $liveBasen,

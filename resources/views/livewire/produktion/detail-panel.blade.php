@@ -29,7 +29,11 @@
             // Status-Schritte: Stornieren immer ins Menü (letzter Eintrag). Hauptaktion ist der NÄCHSTE Arbeitsschritt
             // („Produktion starten", „Fertig melden" — das tut die Küche am Auftrag); „Auftrag bearbeiten" steht dann
             // als erster Menüeintrag. Gibt es keinen Vorwärts-Schritt mehr, ist Bearbeiten die Hauptaktion (2026-10-05).
-            $schritte = $detail['is_owned'] ? $erlaubteStatus : [];
+            // Spec 65: Status-Schritte und Materialbedarf schreiben sofort — erst nach „Bearbeiten" (gleiche Sperre wie
+            // der Editor). Im Lesemodus zeigt der Kopf „Bearbeiten" statt der Schritte, „Auftrag bearbeiten" öffnet den Editor.
+            $sperrLesen = in_array($sperr['modus'] ?? 'aus', ['lesen', 'fremd'], true);
+            $hatSchreibAktion = $detail['is_owned'] && ($erlaubteStatus !== [] || in_array($detail['status'], ['planned', 'in_progress'], true));
+            $schritte = ($detail['is_owned'] && ! $sperrLesen) ? $erlaubteStatus : [];
             $vorwaerts = array_values(array_filter($schritte, fn ($z) => $z->value !== 'cancelled'));
             $storno = collect($schritte)->first(fn ($z) => $z->value === 'cancelled');
             $hauptSchritt = $vorwaerts !== [] ? array_shift($vorwaerts) : null;
@@ -41,7 +45,7 @@
             $doneOffen = fn ($z) => $z->value === 'done' && $nochOffen > 0 ? (string) $nochOffen : null;
 
             $hatMenue = $bearbeitenImMenue || $vorwaerts !== [] || $storno !== null
-                || ($detail['is_owned'] && in_array($detail['status'], ['planned', 'in_progress'], true))
+                || ($detail['is_owned'] && ! $sperrLesen && in_array($detail['status'], ['planned', 'in_progress'], true))
                 || $detail['procurement_released_at']
                 || \Illuminate\Support\Facades\Route::has('foodalchemist.produktion.auftraege.dokument');
 
@@ -64,11 +68,14 @@
                     <x-fa::badge tone="ok" icon="heroicon-m-archive-box-arrow-down">Bedarf freigegeben</x-fa::badge>
                 @endif
             </x-slot:badges>
-            @if($detail['editierbar'] || $hauptSchritt !== null)
+            @if($detail['editierbar'] || $hauptSchritt !== null || $hatSchreibAktion)
                 <x-slot:aktion>
-                    @if($hauptSchritt === null)
-                        <x-fa::button size="sm" variant="primary" icon="heroicon-m-pencil-square" wire:click="$dispatch('produktion-editor.bearbeiten', { id: {{ $detail['id'] }} })" data-produktion-bearbeiten>Auftrag bearbeiten</x-fa::button>
-                    @else
+                    @if($hatSchreibAktion)
+                        <x-foodalchemist::bearbeiten-leiste :zustand="$sperr" sofort />
+                    @endif
+                    @if($hauptSchritt === null && $detail['editierbar'])
+                        <x-fa::button size="sm" :variant="$sperrLesen ? 'ghost' : 'primary'" icon="heroicon-m-pencil-square" wire:click="$dispatch('produktion-editor.bearbeiten', { id: {{ $detail['id'] }} })" data-produktion-bearbeiten>Auftrag bearbeiten</x-fa::button>
+                    @elseif($hauptSchritt !== null)
                         <x-fa::button size="sm" variant="primary" :icon="$statusIcon[$hauptSchritt->value] ?? null"
                             wire:click="setStatus('{{ $hauptSchritt->value }}')" wire:key="pstatus-{{ $hauptSchritt->value }}"
                             :onclick="$onclick($hauptSchritt)" :data-produktion-done-offen="$doneOffen($hauptSchritt)"
@@ -86,7 +93,7 @@
                             :onclick="$onclick($z)" :data-produktion-done-offen="$doneOffen($z)"
                             data-produktion-status="{{ $z->value }}">{{ $statusAktion[$z->value] ?? ucfirst($z->label()) }}</x-fa::menu-item>
                     @endforeach
-                    @if($detail['is_owned'] && in_array($detail['status'], ['planned', 'in_progress'], true))
+                    @if($detail['is_owned'] && ! $sperrLesen && in_array($detail['status'], ['planned', 'in_progress'], true))
                         <x-fa::menu-item icon="heroicon-m-check-circle" wire:click="materialbedarfFreigeben" data-materialbedarf-freigeben>{{ $detail['procurement_released_at'] ? 'Bedarf erneut freigeben' : 'Materialbedarf freigeben' }}</x-fa::menu-item>
                     @endif
                     @if($detail['procurement_released_at'])

@@ -83,7 +83,10 @@
                 title="Web-Seite für den Kunden mit Preisen pro Person, ohne interne Angaben">Präsentation ansehen</x-fa::menu-item>
             <x-fa::menu-item icon="heroicon-m-document-duplicate" wire:click="duplizieren"
                 wire:confirm="Dieses Foodbook mit allen Kapiteln und Einträgen als Kopie (Entwurf) anlegen?" data-fb-panel-duplizieren>Foodbook duplizieren</x-fa::menu-item>
-            <x-fa::menu-item danger icon="heroicon-m-trash" wire:click="loeschen({{ $fb->id }})" wire:confirm="Foodbook löschen?" data-fb-panel-loeschen>Foodbook löschen</x-fa::menu-item>
+            {{-- Spec 65: Löschen nur mit eigener Bearbeitungssperre (Editor → Bearbeiten) --}}
+            <fieldset @disabled($gesperrt ?? false) class="contents">
+                <x-fa::menu-item danger icon="heroicon-m-trash" wire:click="loeschen({{ $fb->id }})" wire:confirm="Foodbook löschen?" data-fb-panel-loeschen>Foodbook löschen</x-fa::menu-item>
+            </fieldset>
         </x-slot:menue>
     </x-fa::detail-kopf>
 
