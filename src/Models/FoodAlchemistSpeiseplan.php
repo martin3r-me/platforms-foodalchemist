@@ -4,6 +4,7 @@ namespace Platform\FoodAlchemist\Models;
 
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Carbon;
@@ -117,6 +118,12 @@ class FoodAlchemistSpeiseplan extends Model
     public function eintraege(): HasMany
     {
         return $this->entries();
+    }
+
+    /** Schreibstil für das KI-Wording der Einträge (wie Speisekarte). */
+    public function writingStyle(): BelongsTo
+    {
+        return $this->belongsTo(FoodAlchemistWritingStyle::class, 'writing_style_id');
     }
 
     public function lines(): HasMany

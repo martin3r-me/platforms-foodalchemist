@@ -83,19 +83,19 @@
     @if($recipeId !== null)
     <x-slot name="activity">
         <x-foodalchemist::detail-sidebar title="Detail" width="w-96" :maxWidth="760" scope="activity_verkauf" side="right" :aufziehen="$sprungDetail">
-            <livewire:foodalchemist.verkauf.detail-panel :recipe-id="$recipeId" />
+            <livewire:foodalchemist.verkauf.detail-panel :recipe-id="$recipeId" key="verkauf-browser--verkauf.detail-panel" />
         </x-foodalchemist::detail-sidebar>
     </x-slot>
     @endif
 
     {{-- M6-04: VK-Editor + geteilter Zutaten-Editor (P-2: innerhalb x-ui-page) --}}
-    <livewire:foodalchemist.verkauf.vk-modal />
-    <livewire:foodalchemist.verkauf.vk-generator-modal />
-    <livewire:foodalchemist.recipes.ingredient-editor />
-    <livewire:foodalchemist.recipes.pairing-netz-modal />
+    <livewire:foodalchemist.verkauf.vk-modal key="verkauf-browser--verkauf.vk-modal" />
+    <livewire:foodalchemist.verkauf.vk-generator-modal key="verkauf-browser--verkauf.vk-generator-modal" />
+    <livewire:foodalchemist.recipes.ingredient-editor key="verkauf-browser--recipes.ingredient-editor" />
+    <livewire:foodalchemist.recipes.pairing-netz-modal key="verkauf-browser--recipes.pairing-netz-modal" />
     {{-- R7-Fix: Sprung-Ziele des Zutaten-Editors als Modals (GP + Basisrezept) --}}
-    <livewire:foodalchemist.gps.gp-modal />
-    <livewire:foodalchemist.recipes.recipe-modal />
+    <livewire:foodalchemist.gps.gp-modal key="verkauf-browser--gps.gp-modal" />
+    <livewire:foodalchemist.recipes.recipe-modal key="verkauf-browser--recipes.recipe-modal" />
 
     <x-ui-page-container padding="px-6 py-6" spacing="space-y-4">
         <x-fa::page-header title="Gerichte" :subtitle="number_format($rezepte->total(), 0, ',', '.') . ' Treffer'">

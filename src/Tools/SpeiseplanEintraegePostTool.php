@@ -25,7 +25,8 @@ class SpeiseplanEintraegePostTool extends FoodAlchemistTool implements ToolContr
     {
         return 'Hängt einen Eintrag an einen draft-Speiseplan: datum (YYYY-MM-DD) + mahlzeit '
             . '(fruehstueck|mittag|abend|snack) + line_id (aus speiseplaene.POST) + GENAU EINES von '
-            . 'concept_id | package_id | sales_recipe_id.';
+            . 'concept_id | package_id | sales_recipe_id (nur Gerichte, keine Basisrezepte). Optional presentation_id = '
+            . 'Darreichung des Gerichts (ohne Angabe gilt die Standard-Darreichung).';
     }
 
     public function getSchema(): array
@@ -40,6 +41,7 @@ class SpeiseplanEintraegePostTool extends FoodAlchemistTool implements ToolContr
                 'concept_id' => ['type' => 'integer'],
                 'package_id' => ['type' => 'integer'],
                 'sales_recipe_id' => ['type' => 'integer'],
+                'presentation_id' => ['type' => 'integer', 'description' => 'Optional: Darreichung des Gerichts (nur mit sales_recipe_id).'],
             ],
             'required' => ['menu_plan_id', 'entry_date'],
         ];
@@ -79,6 +81,7 @@ class SpeiseplanEintraegePostTool extends FoodAlchemistTool implements ToolContr
                 'concept_id' => $arguments['concept_id'] ?? null,
                 'package_id' => $arguments['package_id'] ?? null,
                 'sales_recipe_id' => $arguments['sales_recipe_id'] ?? null,
+                'presentation_id' => $arguments['presentation_id'] ?? null,
             ]);
         } catch (\Throwable $ex) {
             return ToolResult::error($ex->getMessage(), 'VALIDATION_ERROR');
@@ -88,6 +91,7 @@ class SpeiseplanEintraegePostTool extends FoodAlchemistTool implements ToolContr
             'id' => $e->id, 'entry_date' => (string) $e->entry_date, 'mahlzeit' => $e->meal,
             'line_id' => $e->line_id, 'concept_id' => $e->concept_id,
             'package_id' => $e->package_id, 'sales_recipe_id' => $e->sales_recipe_id,
+            'presentation_id' => $e->presentation_id,
         ]]);
     }
 

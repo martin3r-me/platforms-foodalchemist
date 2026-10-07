@@ -40,6 +40,10 @@ class DarreichungService
     public function anlegen(Team $team, int $recipeId, int $servierformId, array $attrs = [], string $createdVia = 'fa_ui'): FoodAlchemistRecipeDarreichung
     {
         $recipe = FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($recipeId);
+        if (! $recipe->is_sales_recipe) {
+            // Darreichung = Verkaufsform. Ein Basisrezept wird über ein Gericht verkauft, das es als Komponente trägt.
+            throw new \RuntimeException('„' . $recipe->name . '" ist ein Basisrezept — Darreichungen gibt es nur an Gerichten.');
+        }
         if ($recipe->presentations()->where('serving_form_id', $servierformId)->exists()) {
             throw new \RuntimeException('Diese Servierform existiert schon an diesem Gericht.');
         }
@@ -83,6 +87,9 @@ class DarreichungService
     public function ensureStandard(Team $team, int $recipeId, string $createdVia = 'mcp'): ?FoodAlchemistRecipeDarreichung
     {
         $recipe = FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($recipeId);
+        if (! $recipe->is_sales_recipe) {
+            return null; // Basisrezept: keine Verkaufsform (s. anlegen())
+        }
 
         $standard = $recipe->standardPresentation()->first();
         if ($standard !== null) {

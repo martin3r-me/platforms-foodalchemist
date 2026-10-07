@@ -24,7 +24,7 @@
     </x-slot>
 
     {{-- Editor (Vollbild, pro Angebot) — geöffnet per angebot-editor.bearbeiten --}}
-    <livewire:foodalchemist.angebote.editor />
+    <livewire:foodalchemist.angebote.editor key="angebote-index--angebote.editor" />
 
     <x-ui-page-container padding="px-6 py-6" spacing="space-y-4">
         <x-fa::page-header title="Angebote" :subtitle="number_format($items->total(), 0, ',', '.') . ' ' . ($items->total() === 1 ? 'Angebot' : 'Angebote')">
@@ -95,9 +95,9 @@
     {{-- #380: Concepter-Editor wiederverwendet — bearbeitet angebots-lokale Menü-Entwürfe
          (öffnet via concepter-editor.oeffnen aus dem Angebote-Editor). Gleiche
          Einbettung wie im Concepter-Browser, damit die Konzept-Bausteine identisch laufen. --}}
-    <livewire:foodalchemist.concepter.editor />
-    <livewire:foodalchemist.recipes.recipe-modal />
-    <livewire:foodalchemist.recipes.pairing-netz-modal />{{-- „Netz öffnen" aus dem Rezept-/Gericht-Editor --}}
-    <livewire:foodalchemist.verkauf.vk-modal />
+    <livewire:foodalchemist.concepter.editor key="angebote-index--concepter.editor" />
+    <livewire:foodalchemist.recipes.recipe-modal key="angebote-index--recipes.recipe-modal" />
+    <livewire:foodalchemist.recipes.pairing-netz-modal key="angebote-index--recipes.pairing-netz-modal" />{{-- „Netz öffnen" aus dem Rezept-/Gericht-Editor --}}
+    <livewire:foodalchemist.verkauf.vk-modal key="angebote-index--verkauf.vk-modal" />
     {{-- Spec 53/F Stufe 2: Sprachbefehl-Mount auf Seitenebene (Modal + optionales schwebendes Element). --}}
 </x-ui-page>

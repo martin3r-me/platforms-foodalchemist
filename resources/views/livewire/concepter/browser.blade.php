@@ -127,7 +127,7 @@
     @if($selectedId !== null)
         <x-slot name="activity">
             <x-foodalchemist::detail-sidebar title="Detail" width="w-96" :maxWidth="640" scope="activity_concepter" side="right">
-                <livewire:foodalchemist.concepter.detail-panel :selected-id="$selectedId" :type="$tab" />
+                <livewire:foodalchemist.concepter.detail-panel :selected-id="$selectedId" :type="$tab" key="concepter-browser--concepter.detail-panel" />
             </x-foodalchemist::detail-sidebar>
         </x-slot>
     @endif
@@ -250,12 +250,12 @@
     </x-ui-page-container>
 
     {{-- Voll-Editor-Modal (M10R-3) — auf Seitenebene, öffnet via concepter-editor.oeffnen --}}
-    <livewire:foodalchemist.concepter.editor />
+    <livewire:foodalchemist.concepter.editor key="concepter-browser--concepter.editor" />
 
     {{-- Phase 6: Typ-Einsehen — Basisrezept/VK-Gericht als Fenster ÜBER dem Concepter-Editor.
          Nach dem Editor platziert → stapelt obenauf (gleiche z-[100]-Konvention). --}}
-    <livewire:foodalchemist.recipes.recipe-modal />
-    <livewire:foodalchemist.recipes.pairing-netz-modal />{{-- „Netz öffnen" aus dem Rezept-/Gericht-Editor --}}
-    <livewire:foodalchemist.verkauf.vk-modal />
+    <livewire:foodalchemist.recipes.recipe-modal key="concepter-browser--recipes.recipe-modal" />
+    <livewire:foodalchemist.recipes.pairing-netz-modal key="concepter-browser--recipes.pairing-netz-modal" />{{-- „Netz öffnen" aus dem Rezept-/Gericht-Editor --}}
+    <livewire:foodalchemist.verkauf.vk-modal key="concepter-browser--verkauf.vk-modal" />
     {{-- Spec 53/F Stufe 2: Sprachbefehl-Mount auf Seitenebene (Modal + optionales schwebendes Element). --}}
 </x-ui-page>

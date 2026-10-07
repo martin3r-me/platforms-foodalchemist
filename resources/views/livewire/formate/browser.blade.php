@@ -93,7 +93,7 @@
     @if($selectedId !== null)
         <x-slot name="activity">
             <x-foodalchemist::detail-sidebar title="Detail" width="w-96" :maxWidth="640" scope="activity_formate" side="right">
-                <livewire:foodalchemist.formate.detail-panel :selected-id="$selectedId" />
+                <livewire:foodalchemist.formate.detail-panel :selected-id="$selectedId" key="formate-browser--formate.detail-panel" />
             </x-foodalchemist::detail-sidebar>
         </x-slot>
     @endif
@@ -176,5 +176,5 @@
     </x-ui-page-container>
 
     {{-- Voll-Editor-Modal — auf Seitenebene, öffnet via formate-editor.oeffnen --}}
-    <livewire:foodalchemist.formate.editor />
+    <livewire:foodalchemist.formate.editor key="formate-browser--formate.editor" />
 </x-ui-page>

@@ -79,6 +79,12 @@ class FoodAlchemistSpeiseplanEintrag extends Model
         return $this->dish();
     }
 
+    /** Optionale Darreichung des Gerichts (null = Standard-Darreichung, s. DarreichungResolver::fuerSpeiseplanEintrag). */
+    public function presentation(): BelongsTo
+    {
+        return $this->belongsTo(FoodAlchemistRecipeDarreichung::class, 'presentation_id');
+    }
+
     /** Identitäts-Schlüssel des Inhalts (für Wiederholungs-Check). */
     public function inhaltKey(): ?string
     {

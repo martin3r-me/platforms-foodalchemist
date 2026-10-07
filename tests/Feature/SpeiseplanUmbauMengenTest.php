@@ -129,7 +129,8 @@ it('Editor: Drag & Drop verschiebt, fremde Eintrags-IDs bleiben wirkungslos; Det
         ->call('eintragOeffnen', $e->id)
         ->assertSeeHtml('data-sp-eintrag-detail="' . $e->id . '"')
         ->assertSeeHtml('data-sp-inhalt-link')                                  // Detail führt zum Gericht
-        ->assertSeeHtml(e(route('foodalchemist.verkauf.index', ['rezept' => $a->id])))
+        ->assertSeeHtml('vk-modal.oeffnen')                                     // 2026-10-07: im Vordergrund (Modal), kein neuer Tab
+        ->assertSeeHtml('id: ' . $a->id . ' })')
         ->call('eintragErsetzenStarten', $e->id)
         ->assertSet('pickerErsetzenId', $e->id)
         ->call('inhaltHinzu', 'gericht', $b->id)

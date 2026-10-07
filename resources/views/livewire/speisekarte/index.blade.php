@@ -600,10 +600,10 @@
          Konzept IM Editor, nicht in einem neuen Tab. Dieselben Editor-Modale wie im Rezept-/
          Concepter-Browser; sie stehen auf Seitenebene NACH dem Speisekarten-Modal, damit sie
          darüber liegen (beide tragen z-[100], der spätere im DOM gewinnt). --}}
-    <livewire:foodalchemist.verkauf.vk-modal />
-    <livewire:foodalchemist.recipes.recipe-modal />
-    <livewire:foodalchemist.recipes.pairing-netz-modal />{{-- „Netz öffnen" aus dem Rezept-/Gericht-Editor --}}
-    <livewire:foodalchemist.concepter.editor />
+    <livewire:foodalchemist.verkauf.vk-modal key="speisekarte-index--verkauf.vk-modal" />
+    <livewire:foodalchemist.recipes.recipe-modal key="speisekarte-index--recipes.recipe-modal" />
+    <livewire:foodalchemist.recipes.pairing-netz-modal key="speisekarte-index--recipes.pairing-netz-modal" />{{-- „Netz öffnen" aus dem Rezept-/Gericht-Editor --}}
+    <livewire:foodalchemist.concepter.editor key="speisekarte-index--concepter.editor" />
     </x-ui-page-container>
     {{-- Spec 53/F Stufe 2: Sprachbefehl-Mount auf Seitenebene (Modal + optionales schwebendes Element). --}}
 </x-ui-page>

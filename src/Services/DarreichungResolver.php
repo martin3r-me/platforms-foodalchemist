@@ -9,6 +9,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistOutlet;
 use Platform\FoodAlchemist\Models\FoodAlchemistPaketGericht;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung;
+use Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplanEintrag;
 
 /**
  * Löst auf, WELCHE Darreichung eines Gerichts in einem Kontext gilt
@@ -88,6 +89,23 @@ class DarreichungResolver
         }
 
         return $this->standardFuer($block->dish);
+    }
+
+    /**
+     * Darreichung eines Speiseplan-Eintrags: explizit gesetzte Form (nur wenn sie noch zum
+     * Gericht des Eintrags gehört) → Standard-Darreichung. Concept-/Paket-Einträge ⇒ null.
+     */
+    public function fuerSpeiseplanEintrag(FoodAlchemistSpeiseplanEintrag $e): ?FoodAlchemistRecipeDarreichung
+    {
+        if ($e->sales_recipe_id === null || $e->dish === null) {
+            return null;
+        }
+        if ($e->presentation_id !== null && $e->presentation !== null
+            && (int) $e->presentation->recipe_id === (int) $e->sales_recipe_id) {
+            return $e->presentation;
+        }
+
+        return $this->standardFuer($e->dish);
     }
 
     public function standardFuer(FoodAlchemistRecipe $recipe): ?FoodAlchemistRecipeDarreichung

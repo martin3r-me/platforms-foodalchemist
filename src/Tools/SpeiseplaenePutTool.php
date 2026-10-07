@@ -14,7 +14,7 @@ use Platform\FoodAlchemist\Services\SpeiseplanVorgabenService;
 class SpeiseplaenePutTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
 {
     private const FELDER = ['name', 'start_date', 'cycle_weeks', 'min_abstand_tage', 'description', 'note',
-        'default_pax', 'budget_wareneinsatz', 'outlet_id', 'opening_days'];
+        'default_pax', 'budget_wareneinsatz', 'outlet_id', 'opening_days', 'writing_style_id'];
 
     public function getName(): string
     {
@@ -24,7 +24,7 @@ class SpeiseplaenePutTool extends FoodAlchemistTool implements ToolContract, Too
     public function getDescription(): string
     {
         return 'Bearbeitet die Stammdaten eines team-eigenen Speiseplans (felder: name, start_date, cycle_weeks, '
-            . 'min_abstand_tage, default_pax, budget_wareneinsatz, outlet_id, opening_days = ISO-Wochentage 1–7, '
+            . 'min_abstand_tage, default_pax, budget_wareneinsatz, outlet_id, writing_style_id = Schreibstil fürs Wording, opening_days = ISO-Wochentage 1–7, '
             . 'z. B. [1,2,3,4,5,6]; leer = Mo–Fr; vorgaben = Wochen-Vorgaben, ersetzt die Liste komplett: '
             . '[{chip_id, mahlzeit: null|fruehstueck|mittag|abend|snack, min, max}], Chips via speiseplan_chips.GET). '
             . 'Status via speiseplaene.STATUS.';

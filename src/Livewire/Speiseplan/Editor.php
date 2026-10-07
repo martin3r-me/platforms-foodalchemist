@@ -54,6 +54,8 @@ class Editor extends Component
             'wocheVerschieben', 'heute', 'monatVerschieben', 'tagOeffnen', 'ansichtSetzen', 'mahlzeitSetzen', 'dichteSetzen',
             'cellSchliessen', 'eintragOeffnen', 'eintragSchliessen', 'pickerWaehleHg', 'pickerWaehleKlasse',
             'bedarfBerechnen', 'bedarfTagSetzen', 'vollKaskadeAbbrechen', 'vorgabenKatalog',
+            // 2026-10-07: reines Neuzeichnen nach Gericht/Konzept-Speichern im Vordergrund-Modal.
+            'inhaltGespeichert',
         ];
     }
 
@@ -320,7 +322,7 @@ class Editor extends Component
         }
     }
 
-    public array $form = ['name' => '', 'start_date' => null, 'cycle_weeks' => 4, 'min_abstand_tage' => 0, 'status' => 'entwurf', 'default_pax' => 100, 'budget_wareneinsatz' => null, 'opening_days' => [1, 2, 3, 4, 5]];
+    public array $form = ['name' => '', 'start_date' => null, 'cycle_weeks' => 4, 'min_abstand_tage' => 0, 'status' => 'entwurf', 'default_pax' => 100, 'budget_wareneinsatz' => null, 'opening_days' => [1, 2, 3, 4, 5], 'writing_style_id' => null];
 
     /** Spec 57 · Paket 1: Zell-Dichte der Matrix — `kompakt` (Kennzahlen) oder `detail` (+ Komponenten). */
     public string $dichte = 'kompakt';
@@ -435,6 +437,11 @@ class Editor extends Component
     /** Meldung des Voll-Kaskade-Go (P5). */
     public ?string $kaskadeMeldung = null;
 
+    /** Gericht/Konzept im Vordergrund bearbeitet → Preise, Formen und Namen im Plan neu zeichnen. */
+    #[On('recipe-gespeichert')]
+    #[On('concepter-gespeichert')]
+    public function inhaltGespeichert(): void {}
+
     #[On('speiseplan-editor.bearbeiten')]
     public function oeffnenBearbeiten(int $id, bool $neu = false): void
     {
@@ -477,6 +484,7 @@ class Editor extends Component
             // zwei Kantinen im selben Team waren nicht unterscheidbar.
             'outlet_id' => $sp->outlet_id,
             'opening_days' => $sp->oeffnungstage(),
+            'writing_style_id' => $sp->writing_style_id !== null ? (int) $sp->writing_style_id : null,
         ];
     }
 
@@ -708,6 +716,8 @@ class Editor extends Component
             return;
         }
         $this->detailEintragId = $id;
+        $this->detailWording = (string) ($e->wording ?? '');
+        $this->wordingHinweis = null;
         $this->verschiebeDatum = $e->entry_date?->format('Y-m-d');
         $this->verschiebeLinie = $e->line_id !== null ? (int) $e->line_id : null;
         $this->kopierTage = [];
@@ -749,6 +759,76 @@ class Editor extends Component
         }
         $this->zelleOeffnen((string) $e->entry_date?->format('Y-m-d'), $e->line_id !== null ? (int) $e->line_id : null);
         $this->pickerErsetzenId = $id;
+    }
+
+    // ── KI-Wording (wie Speisekarte) ─────────────────────────────────────────
+
+    /** Name des geöffneten Eintrags im Plan (leer = Wording des Gerichts). */
+    public string $detailWording = '';
+
+    public ?string $wordingHinweis = null;
+
+    public function eintragWordingSpeichern(SpeiseplanService $svc): void
+    {
+        if ($this->detailEintragId === null) {
+            return;
+        }
+        try {
+            $svc->setEintragWording($this->team(), $this->detailEintragId, $this->detailWording);
+            $this->wordingHinweis = null;
+            $this->dispatch('speiseplan-geaendert');
+            $this->savedToast('Name gespeichert');
+        } catch (\RuntimeException $e) {
+            $this->wordingHinweis = $e->getMessage();
+        }
+    }
+
+    /** KI-Vorschlag ins Feld (nicht gespeichert — Übernehmen speichert). */
+    public function eintragWordingKi(SpeiseplanService $svc): void
+    {
+        if ($this->detailEintragId === null) {
+            return;
+        }
+        try {
+            $this->detailWording = $svc->kiWordingVorschlag($this->team(), $this->detailEintragId)['text'];
+            $this->wordingHinweis = null;
+        } catch (\Platform\FoodAlchemist\Exceptions\KiNichtVerfuegbarException|\Platform\FoodAlchemist\Exceptions\KiDeaktiviertException $e) {
+            $this->wordingHinweis = 'KI derzeit nicht verfügbar.';
+        } catch (\RuntimeException $e) {
+            $this->wordingHinweis = $e->getMessage();
+        }
+    }
+
+    /** Ganzen Plan im gewählten Schreibstil betexten (speichert vorher den Stil). Nur auf Knopfdruck. */
+    public function planWordingGenerieren(SpeiseplanService $svc): void
+    {
+        if ($this->planId === null) {
+            return;
+        }
+        try {
+            $svc->update($this->team(), $this->planId, ['writing_style_id' => $this->form['writing_style_id'] ?? null]);
+            $res = $svc->planWordingRegenerieren($this->team(), $this->planId);
+            $this->wordingHinweis = $res['gerichte'] > 0
+                ? "{$res['gerichte']} Gericht(e) in {$res['eintraege']} Einträgen neu betextet" . ($res['fehler'] > 0 ? ", {$res['fehler']} ohne Ergebnis." : '.')
+                : 'Keine Gericht-Einträge zum Betexten.';
+            $this->dispatch('speiseplan-geaendert');
+        } catch (\Platform\FoodAlchemist\Exceptions\KiNichtVerfuegbarException|\Platform\FoodAlchemist\Exceptions\KiDeaktiviertException $e) {
+            $this->wordingHinweis = 'KI derzeit nicht verfügbar.';
+        } catch (\RuntimeException $e) {
+            $this->wordingHinweis = $e->getMessage();
+        }
+    }
+
+    /** Form des Gerichts für diesen Eintrag ('' = Standard-Darreichung). */
+    public function eintragDarreichungSetzen(int $id, ?string $wert, SpeiseplanService $svc): void
+    {
+        try {
+            $svc->setEintragDarreichung($this->team(), $id, ctype_digit((string) $wert) ? (int) $wert : null);
+            $this->umbauHinweis = null;
+            $this->dispatch('speiseplan-geaendert');
+        } catch (\RuntimeException $e) {
+            $this->umbauHinweis = $e->getMessage();
+        }
     }
 
     public function eintragKopieren(SpeiseplanService $svc): void
@@ -1178,6 +1258,12 @@ class Editor extends Component
         $detailKennzahlen = $detailEintrag !== null
             ? ($zk['eintraege'][$detailEintrag->id] ?? null)
             : null;
+        // Darreichung im Detail: bei jedem Gericht-Eintrag. Ab zwei Formen als Auswahl, sonst als
+        // Anzeige mit dem Weg zum Gericht (dort werden Darreichungen angelegt).
+        $detailFormen = $detailEintrag?->sales_recipe_id !== null
+            ? \Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung::with('servingForm')
+                ->where('recipe_id', $detailEintrag->sales_recipe_id)->orderByDesc('is_standard')->orderBy('id')->get()
+            : collect();
         // Spec 57 · Paket 3: Mengen-Matrix der sichtbaren Woche/Mahlzeit.
         $mengen = $sp !== null ? $svc->mengenMatrix($team, $sp, $this->mahlzeit, $montag, $outlet) : null;
         $zielWochen = collect([-4, -3, -2, -1, 1, 2, 3, 4, 5, 6, 7, 8])
@@ -1252,6 +1338,8 @@ class Editor extends Component
             'zk' => $zk,
             'detailEintrag' => $detailEintrag,
             'detailKennzahlen' => $detailKennzahlen,
+            'detailFormen' => $detailFormen,
+            'schreibstile' => \Platform\FoodAlchemist\Models\FoodAlchemistWritingStyle::visibleToTeam($team)->orderBy('name')->get(['id', 'name']),
             'mengen' => $mengen,
             'zielWochen' => $zielWochen,
             'bedarf' => $bedarf,

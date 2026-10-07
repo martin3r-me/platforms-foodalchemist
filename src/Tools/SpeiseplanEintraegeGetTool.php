@@ -23,7 +23,9 @@ class SpeiseplanEintraegeGetTool extends FoodAlchemistTool implements ToolContra
     public function getDescription(): string
     {
         return 'Listet die Einträge eines Speiseplans (id, entry_date, mahlzeit, line_id, Inhalt concept_id|package_id|'
-            . 'sales_recipe_id, Anzeigename, pax, pax_effektiv). Optional von/bis (YYYY-MM-DD) und mahlzeit.';
+            . 'sales_recipe_id, presentation_id + darreichung (geltende Form, null = Standard), wording (Name im Plan), Anzeigename, '
+            . 'vk/ek je Person (ek null = Portion unbekannt), '
+            . 'pax, pax_effektiv). Optional von/bis (YYYY-MM-DD) und mahlzeit.';
     }
 
     public function getSchema(): array

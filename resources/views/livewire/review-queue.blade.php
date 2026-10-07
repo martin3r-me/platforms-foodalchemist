@@ -71,10 +71,10 @@
     {{-- Klick-Ziele der Rezept-Listen + Signal-Detail als Modal (`signal-selected` lädt das
          DetailPanel, das danach selbst `modal.open` feuert). Kein `activity`-Slot: der liess
          auf dieser Seite die Inhaltsfläche auf Höhe 0 kollabieren (2026-08-02). --}}
-    <livewire:foodalchemist.recipes.recipe-modal />
-    <livewire:foodalchemist.recipes.pairing-netz-modal />{{-- „Netz öffnen" aus dem Rezept-/Gericht-Editor --}}
-    <livewire:foodalchemist.verkauf.vk-modal />
-    <livewire:foodalchemist.signale.detail-panel />
+    <livewire:foodalchemist.recipes.recipe-modal key="review-queue--recipes.recipe-modal" />
+    <livewire:foodalchemist.recipes.pairing-netz-modal key="review-queue--recipes.pairing-netz-modal" />{{-- „Netz öffnen" aus dem Rezept-/Gericht-Editor --}}
+    <livewire:foodalchemist.verkauf.vk-modal key="review-queue--verkauf.vk-modal" />
+    <livewire:foodalchemist.signale.detail-panel key="review-queue--signale.detail-panel" />
 
     <x-ui-page-container padding="px-6 py-6" spacing="space-y-5">
         <x-fa::page-header title="Signale" :subtitle="$aktiverBetrieb ? 'Betrieb: ' . $aktiverBetrieb : null">
