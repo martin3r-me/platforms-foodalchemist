@@ -1,505 +1,638 @@
-{{-- GP-DetailPanel. Redesign v3 2026-07-21 (Dominique): Sourcing-/Stammdaten-Linse —
-     Cockpit (Lead-Preis + Quellen + Konfidenz), section-Köpfe (Icon), größere Typo.
-     War schon nicht-ausklappbar (R9). Editor-Karteien (section=las|allergene|zusatzstoffe|
-     naehrwerte|ersatz) über die @if($section)-Guards 1:1 erhalten. --}}
-@php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
+{{-- GP-Detail. fa-pass Welle 2 (2026-10-05): auf Bausteine <x-fa::…> umgestellt.
+     Anatomie Detail-Panels (DESIGN.md, Muster concepter/detail-panel): Kopf mit EINER Hauptaktion
+     („Im Editor öffnen", Drucken/PDF/Löschen im Menü) · Kennzahlen · offene Punkte · KI-Schätzung zur Prüfung ·
+     Deklaration (Allergene, Zusatzstoffe, Eigenschaften) · Inhalt (Lieferantenartikel) ·
+     Fachabschnitte (Stammdaten, Einheit, Nährwerte, Aroma, Ersatz) · Verwendung (Rezepte, Verwaltung).
+     Die Editor-Karteien im GP-Dialog (embedded, section=las|allergene|zusatzstoffe|naehrwerte|ersatz)
+     laufen über dieselben @if($section)-Guards wie vorher. --}}
+@php
+    $tagLabels = [
+        'is_vegan' => 'vegan', 'is_vegetarian' => 'vegetarisch', 'is_halal' => 'halal',
+        'contains_pork' => 'enthält Schwein', 'contains_beef' => 'enthält Rind',
+        'is_organic' => 'Bio', 'is_regional' => 'regional', 'is_staple_food' => 'Grundnahrungsmittel',
+        'is_convenience' => 'Convenience', 'is_lactose_free' => 'laktosefrei', 'is_gluten_free' => 'glutenfrei',
+    ];
+    $konfTon = ['high' => 'ok', 'medium' => 'warn', 'low' => 'crit'];
+    $konfSatz = [
+        'high' => 'Allergene vollständig durch Artikel belegt',
+        'medium' => 'Allergene teilweise belegt, stichprobenartig prüfen',
+        'low' => 'Allergene unsicher, vor Verwendung prüfen',
+        'none' => 'Allergene noch nicht durch Artikel belegt',
+    ];
+    $zahl = fn ($wert, $stellen = 2) => number_format((float) $wert, $stellen, ',', '.');
+    $proEinheit = fn (?string $unit) => $unit !== null ? \Illuminate\Support\Str::after($unit, '€/') : null;
+    $titelKlein = 'text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-2)]';
+    $leise = 'text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]';
+    $listenKnopf = 'flex w-full items-center gap-2 px-2 py-1.5 rounded-[var(--fa-radius-control)] text-left text-[length:var(--fa-text-md)] text-[var(--fa-ink)] hover:bg-[var(--fa-hover)]';
 
-<div class="{{ $embedded ? 'space-y-4' : 'p-4 space-y-4 min-h-full bg-gray-500/[0.04]' }}" data-gp-panel>
+    if ($gp !== null && $section === null) {
+        $leadWert = $preisBand['lead'] ?? null;
+        $kennzahlen = [
+            [
+                'label' => 'Preis (Lead)',
+                'value' => $leadWert !== null ? $zahl($leadWert) . ' ' . $preisBand['unit'] : (! $gp->requires_la ? 'entfällt' : 'Preis fehlt'),
+                'primary' => $leadWert !== null,
+                'tone' => $leadWert === null && $gp->requires_la ? 'crit' : null,
+                'kpi' => 'lead-preis',
+            ],
+            [
+                'label' => 'Artikel',
+                'value' => (string) $gp->n_las_total,
+                'tone' => $gp->n_las_total === 0 && $gp->requires_la ? 'warn' : null,
+                'kpi' => 'artikel',
+            ],
+        ];
+        if ($allergenKonfidenz !== null) {
+            $kennzahlen[] = [
+                'label' => 'Allergenangaben',
+                'value' => \Platform\FoodAlchemist\Support\Labels::konfidenz($allergenKonfidenz['confidence'] ?? null),
+                'tone' => $konfTon[$allergenKonfidenz['confidence'] ?? ''] ?? null,
+                'kpi' => 'allergen-konfidenz',
+                'title' => 'Wie gut die Allergene durch Lieferantenartikel belegt sind',
+            ];
+        }
+
+        // Offene Punkte: was vor der Verwendung im Rezept noch fehlt (nur aus vorhandenen Daten abgeleitet).
+        $offen = [];
+        if ($gp->requires_la && $gp->n_las_total === 0) {
+            $offen[] = ['crit', 'Kein Lieferantenartikel verknüpft, Preis und Allergene fehlen.'];
+        } elseif ($gp->requires_la && $leadWert === null) {
+            $offen[] = ['crit', 'Lead-Artikel ohne Preis je Einheit, Preis oder Menge im Artikel prüfen.'];
+        }
+        if (! empty($allergenKonfidenz['needs_review'])) {
+            $offen[] = ['crit', 'Artikel widersprechen sich bei den Allergenen: ' . implode(', ', $allergenKonfidenz['konflikt_felder']) . '.'];
+        }
+        $nUnbekannt = $allergene !== null ? collect($allergene)->filter(fn ($a) => $a['value']->value === 'unbekannt')->count() : 0;
+        if ($nUnbekannt > 0) {
+            $offen[] = ['warn', $nUnbekannt . ' von 14 Allergenen ohne Angabe.'];
+        }
+        if ($naehrwerte !== null && $naehrwerte['energy_kcal']['avg'] === null) {
+            $offen[] = ['warn', 'Nährwerte fehlen.'];
+        }
+        if ($gp->preferredCountUnit !== null && $gp->piece_default_g === null) {
+            $offen[] = ['warn', 'Stückgewicht fehlt, Umrechnung in Gramm nicht möglich.'];
+        }
+
+        $einordnung = implode(' · ', array_filter([$gp->commodity_group?->name ?? $gp->commodity_group_code, $gp->sub_category]));
+        $darfLoeschen = $kannKuratieren && ! $gp->is_platzhalter && $referenzen !== null && $referenzen['summe'] === 0;
+    }
+@endphp
+
+<div class="{{ $embedded ? 'flex flex-col gap-3' : 'p-4 flex flex-col gap-5 min-h-full bg-[var(--fa-ground)]' }}" data-gp-panel>
     @if($gp === null)
-        <div class="text-center text-xs text-gray-500 py-12">
-            <div class="text-2xl mb-2">⌘</div>
-            Grundprodukt in der Tabelle anklicken —<br>Details erscheinen hier.
-        </div>
+        <x-fa::empty icon="heroicon-o-cursor-arrow-rays" title="Kein Grundprodukt gewählt">Grundprodukt in der Tabelle anklicken, dann erscheinen hier Preis, Artikel und Allergene.</x-fa::empty>
     @else
-        {{-- Kopf --}}
+        {{-- Kopf (Anatomie Detail-Panels): Name, Einordnung, eine Hauptaktion, Weiteres im Menü --}}
         @if($section === null)
-        <div>
-            <div class="flex items-start justify-between gap-2">
-                <h3 class="text-base font-semibold tracking-tight text-gray-900 leading-snug">{{ $gp->name }}</h3>
-                <span class="{{ $pill }} font-medium shrink-0 {{ $statusPill[$gp->status->value] ?? $statusPill['merged'] }}">{{ $gp->status->label() }}</span>
-            </div>
-            <div class="flex items-center gap-1.5 mt-1.5 flex-wrap">
+        <x-fa::detail-kopf :title="$gp->name" :subtitle="$einordnung !== '' ? $einordnung : null">
+            <x-slot:badges>
+                <x-fa::status :value="$gp->status" />
                 @if($gp->main_ingredient_slug !== null)
-                    <span class="rounded-md bg-black/5 px-2 py-0.5 text-[11px] font-mono text-gray-600" data-gp-slug>{{ $gp->main_ingredient_slug }}</span>
+                    <span class="inline-flex items-center h-[22px] px-2 rounded-[var(--fa-radius-control)] bg-[var(--fa-neutral-soft)] font-mono text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]" title="Hauptzutat" data-gp-slug>{{ $gp->main_ingredient_slug }}</span>
                 @endif
-                @if($gp->is_derivat)<span class="{{ $pill }} {{ $variantPill['info'] }}">Derivat{{ $gp->derivedFrom ? ' von ' . $gp->derivedFrom->name : '' }}</span>@endif
-                @if($gp->is_platzhalter)<span class="{{ $pill }} {{ $variantPill['secondary'] }}">Platzhalter</span>@endif
-                <a href="{{ route('foodalchemist.gps.dokument', ['id' => $gp->id, 'profil' => 'kalkulation']) }}" target="_blank"
-                   class="{{ $btnGhostXs }} ml-auto" title="Druck-/PDF-Report zum Grundprodukt" data-gp-panel-druck>
-                    @svg('heroicon-o-printer', 'w-3.5 h-3.5') Druck
-                </a>
-                <a href="{{ route('foodalchemist.gps.dokument', ['id' => $gp->id, 'profil' => 'kalkulation', 'pdf' => 1]) }}"
-                   class="{{ $btnGhostXs }}" title="PDF herunterladen" data-gp-panel-pdf>PDF</a>
+                @if($gp->is_derivat)<x-fa::badge tone="info">Derivat{{ $gp->derivedFrom ? ' von ' . $gp->derivedFrom->name : '' }}</x-fa::badge>@endif
+                @if($gp->is_platzhalter)<x-fa::badge>Platzhalter</x-fa::badge>@endif
+            </x-slot:badges>
+            <x-slot:aktion>
                 @if($kannKuratieren)
-                    <button type="button" wire:click="$dispatch('gp-modal.oeffnen', { id: {{ $gp->id }} })" class="{{ $btnGhostXs }}" data-gp-bearbeiten>@svg('heroicon-o-pencil-square', 'w-3.5 h-3.5') Bearbeiten</button>
+                    <x-fa::button variant="primary" size="sm" icon="heroicon-m-pencil-square"
+                        wire:click="$dispatch('gp-modal.oeffnen', { id: {{ $gp->id }} })" data-gp-bearbeiten>Im Editor öffnen</x-fa::button>
+                @else
+                    {{-- Ohne Kurationsrecht kein Editor: Drucken ist dann die wichtigste Aktion --}}
+                    <x-fa::button variant="primary" size="sm" icon="heroicon-m-printer" :href="route('foodalchemist.gps.dokument', ['id' => $gp->id, 'profil' => 'kalkulation'])" target="_blank"
+                        title="Blatt zum Grundprodukt im neuen Fenster" data-gp-panel-druck>Blatt drucken</x-fa::button>
                 @endif
-            </div>
-        </div>
+            </x-slot:aktion>
+            <x-slot:menue>
+                @if($kannKuratieren)
+                    <x-fa::menu-item icon="heroicon-m-printer" :href="route('foodalchemist.gps.dokument', ['id' => $gp->id, 'profil' => 'kalkulation'])" target="_blank"
+                        title="Blatt zum Grundprodukt im neuen Fenster" data-gp-panel-druck>Blatt drucken</x-fa::menu-item>
+                @endif
+                <x-fa::menu-item icon="heroicon-m-arrow-down-tray" :href="route('foodalchemist.gps.dokument', ['id' => $gp->id, 'profil' => 'kalkulation', 'pdf' => 1])"
+                    title="Blatt als PDF herunterladen" data-gp-panel-pdf>PDF herunterladen</x-fa::menu-item>
+                @if($darfLoeschen)
+                    <x-fa::menu-item danger icon="heroicon-m-trash" wire:click="gpLoeschen" wire:confirm="„{{ $gp->name }}“ löschen? Es gibt keine Verweise darauf." data-gp-loeschen>Grundprodukt löschen</x-fa::menu-item>
+                @endif
+            </x-slot:menue>
+        </x-fa::detail-kopf>
         @endif
 
-        @if($fehler !== null)<p class="text-[11px] text-rose-600" data-la-fehler>{{ $fehler }}</p>@endif
-        @if($hinweis !== null)<p class="text-[11px] text-emerald-600" data-hinweis>{{ $hinweis }}</p>@endif
+        @if($fehler !== null)<x-fa::notice tone="crit" data-la-fehler>{{ $fehler }}</x-fa::notice>@endif
+        @if($hinweis !== null)<x-fa::notice tone="ok" data-hinweis>{{ $hinweis }}</x-fa::notice>@endif
 
-        {{-- Cockpit (Sourcing): Lead-Preis + Quellen-Zahl + Preis-Spanne + Konfidenz --}}
+        {{-- Kennzahlen: Preis des Lead-Artikels · Zahl der Artikel · Sicherheit der Allergenangaben --}}
         @if($section === null)
-        @php($konfText = ['high' => 'text-emerald-700', 'medium' => 'text-amber-700', 'low' => 'text-rose-700'][$allergenKonfidenz['confidence'] ?? ''] ?? 'text-gray-500')
-        <div class="relative overflow-hidden {{ $card }} px-3.5 py-2.5" data-gp-cockpit>
-            <div class="{{ $cardAccent }}"></div>
-            <div class="flex items-start justify-between gap-3">
-                <div>
-                    <span class="text-[10px] font-medium uppercase tracking-wider text-violet-600">Lead-Preis</span>
-                    <p class="text-2xl font-bold text-violet-700 leading-none mt-1 tabular-nums">{{ ($preisBand['lead'] ?? null) !== null ? number_format($preisBand['lead'], 2, ',', '.') . ' ' . $preisBand['unit'] : '—' }}</p>
-                </div>
-                <span class="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-0.5 rounded-full {{ $gp->n_las_total > 0 ? 'bg-black/5 text-gray-600' : 'bg-amber-500/15 text-amber-700' }}">
-                    <span class="w-1.5 h-1.5 rounded-full {{ $gp->n_las_total > 0 ? 'bg-gray-400' : 'bg-amber-500' }}"></span>{{ $gp->n_las_total }} LA{{ $gp->n_las_total === 1 ? '' : 's' }}
-                </span>
-            </div>
-            <div class="flex flex-wrap gap-x-5 gap-y-1 mt-3 pt-2.5 border-t border-black/5 text-xs">
-                @if(($preisBand ?? null) !== null && $preisBand['max'] > 0)
-                    <span class="text-gray-500">Spanne <span class="text-gray-900 font-medium tabular-nums">{{ number_format($preisBand['min'], 2, ',', '.') }}–{{ number_format($preisBand['max'], 2, ',', '.') }} {{ $preisBand['unit'] }}</span></span>
-                @endif
-                @if($allergenKonfidenz !== null)
-                    <span class="text-gray-500">Allergen-Konfidenz <span class="font-medium {{ $konfText }}">{{ strtoupper($allergenKonfidenz['confidence']) }}</span></span>
-                @endif
-            </div>
-        </div>
-        @endif
-
-        {{-- Stammdaten --}}
-        @if($section === null)
-        <x-foodalchemist::section title="Stammdaten" icon="heroicon-o-information-circle" data-stammdaten>
-            <dl class="grid grid-cols-2 gap-x-4 gap-y-2">
-                @foreach([
-                    ['Warengruppe', $gp->commodity_group?->name ?? $gp->commodity_group_code ?? '—'],
-                    ['Sub-Kategorie', $gp->sub_category ?? '—'],
-                    ['Zustand', $gp->condition ?? '—'],
-                    ['Garverlust-Default', $gp->cooking_loss_default_pct !== null ? number_format((float) $gp->cooking_loss_default_pct, 1, ',', '.') . ' %' : '—'],
-                ] as [$lbl, $wert])
-                    <div class="min-w-0">
-                        <dt class="{{ $dt }}">{{ $lbl }}</dt>
-                        <dd class="text-[13px] text-gray-900 truncate" title="{{ $wert }}">{{ $wert }}</dd>
+            <div class="flex flex-col gap-3" data-gp-cockpit>
+                <x-fa::kpis :items="$kennzahlen" />
+                @if($offen !== [])
+                    {{-- Offene Punkte: was vor der Verwendung fehlt --}}
+                    <div class="flex flex-col gap-1" data-gp-offen>
+                        @foreach($offen as [$ton, $text])
+                            <x-fa::signal :tone="$ton">{{ $text }}</x-fa::signal>
+                        @endforeach
                     </div>
-                @endforeach
-            </dl>
-        </x-foodalchemist::section>
+                @endif
+            </div>
         @endif
 
-        {{-- Spec 53 Paket J: Aroma-Anker als Chip, Klick zeigt „weitere GPs mit diesem Anker"
-             (Reverse-Lookup, kein Graph). Pflege des Ankers selbst → GP-Modal, Tab Sensorik & Pairing. --}}
-        @if($section === null && $gpAnker->isNotEmpty())
-        <x-foodalchemist::section title="Aroma-Anker" icon="heroicon-o-sparkles" data-gp-panel-anker>
-            <div class="flex flex-wrap gap-1">
-                @foreach($gpAnker as $a)
-                    <button type="button" wire:key="pa-{{ $a->id }}" wire:click="ankerNetzUmschalten({{ $a->id }})"
-                            class="{{ $pill }} {{ $a->role === 'kern' ? $variantPill['primary'] : $variantPill['secondary'] }} {{ $ankerNetzOffenId === $a->id ? 'ring-1 ring-violet-500/40' : '' }}"
-                            title="{{ $a->role }} · weitere GPs mit diesem Anker anzeigen" data-gp-anker-chip>
-                        {{ $a->role === 'kern' ? '★' : '·' }} {{ $a->display_de }}
-                    </button>
-                @endforeach
+        {{-- KI-Schätzung (Allergene/Nährwerte) zur Prüfung --}}
+        @if($kiVorschlag !== null && ($section === null || $section === $kiVorschlag['type']))
+            <div class="flex flex-col gap-2 p-3 rounded-[var(--fa-radius-control)] border border-[var(--fa-accent-line)] bg-[var(--fa-accent-soft)]" data-gp-ki-vorschlag>
+                <p class="flex flex-wrap items-center gap-1.5 text-[length:var(--fa-text-md)] font-medium text-[var(--fa-ink)]">
+                    @svg('heroicon-m-sparkles', 'w-4 h-4 text-[var(--fa-accent)]')
+                    {{ $kiVorschlag['type'] === 'allergene' ? 'Allergen-Schätzung' : 'Nährwert-Schätzung' }}
+                    <span class="font-normal {{ $leise }}">{{ round($kiVorschlag['confidence'] * 100) }} % sicher · Übernehmen überschreibt die Werte von Hand</span>
+                </p>
+                <div class="flex flex-wrap gap-1">
+                    @foreach($kiVorschlag['werte'] as $feld => $wert)
+                        <x-fa::badge :tone="$kiVorschlag['type'] === 'allergene' ? (['enthalten' => 'crit', 'spuren' => 'warn'][$wert] ?? 'neutral') : 'info'" wire:key="kiw-{{ $feld }}">{{ $feld }}: {{ $wert }}</x-fa::badge>
+                    @endforeach
+                </div>
+                <div class="flex items-center justify-end gap-1.5">
+                    <x-fa::button size="sm" variant="ghost" wire:click="kiVerwerfen" data-gp-ki-verwerfen>Verwerfen</x-fa::button>
+                    <x-fa::button size="sm" variant="primary" wire:click="kiUebernehmen" data-gp-ki-uebernehmen>Schätzung übernehmen</x-fa::button>
+                </div>
             </div>
-            @if($ankerNetzOffenId !== null)
-                <div class="mt-2 rounded-lg bg-black/[0.03] px-2.5 py-2" data-gp-anker-netz>
-                    @if($ankerNetz->isEmpty())
-                        <p class="text-[11px] text-gray-500">Keine weiteren GPs mit diesem Anker (als Kern-Träger).</p>
-                    @else
-                        <p class="{{ $dt }} mb-1">Weitere GPs mit diesem Anker</p>
-                        <div class="flex flex-wrap gap-1">
-                            @foreach($ankerNetz as $verwandt)
-                                <a href="{{ route('foodalchemist.gps.index', ['gp' => $verwandt->id]) }}" wire:navigate
-                                   class="{{ $pill }} {{ $variantPill['secondary'] }} hover:bg-violet-500/10">{{ $verwandt->name }}</a>
-                            @endforeach
-                        </div>
-                    @endif
+        @endif
+
+        <div class="flex flex-col">
+        {{-- Deklaration --}}
+        {{-- ALLERGENE (effektiv) --}}
+        @if($section === null || $section === 'allergene')
+        @php
+            $allergKiConf = $gp->allergens_confidence;
+            $nurKiOverride = $allergene !== null && ($allergenKonfidenz['n_las_mit_daten'] ?? 0) === 0 && ($gp->allergens_source === 'ki' || $gp->allergens_confidence !== null) && collect($allergene)->contains(fn ($a) => $a['source'] === 'override');
+        @endphp
+        <x-fa::section variant="plain" title="Allergene" icon="heroicon-o-shield-exclamation" data-sektion="allergene">
+            @if($kannKuratieren && ($allergenKonfidenz['n_las_mit_daten'] ?? 0) === 0)
+                <x-slot:actions>
+                    <x-foodalchemist::ki-action action="kiAllergene" variant="ai" icon="heroicon-o-sparkles" label="Mit KI schätzen"
+                        title="Ohne Artikeldaten per KI schätzen. Übernehmen schreibt die Werte von Hand." data-ki-allergene
+                        busy="Wird geschätzt …" flash="Geschätzt" />
+                </x-slot:actions>
+            @endif
+            <div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-[length:var(--fa-text-sm)]">
+                @if($nurKiOverride)
+                    <x-fa::badge tone="accent" icon="heroicon-m-sparkles" title="Von der KI geschätzt, keine Artikeldaten{{ $allergKiConf !== null ? ' · ' . round($allergKiConf * 100) . ' %' : '' }}" data-allergene-ki-marker>KI</x-fa::badge>
+                    <span class="text-[var(--fa-ink-3)]">aus 0/{{ $gp->n_las_total }} Artikeln</span>
+                @elseif($allergenKonfidenz !== null)
+                    <x-fa::signal :tone="$konfTon[$allergenKonfidenz['confidence']] ?? 'warn'" data-allergen-konfidenz="{{ $allergenKonfidenz['confidence'] }}">{{ $konfSatz[$allergenKonfidenz['confidence']] ?? $konfSatz['none'] }}</x-fa::signal>
+                    <span class="text-[var(--fa-ink-3)]">Belegt: {{ \Platform\FoodAlchemist\Support\Labels::konfidenz($allergenKonfidenz['confidence']) }}, aus {{ $allergenKonfidenz['n_las_mit_daten'] }}/{{ $gp->n_las_total }} Artikeln</span>
+                    @if($allergenKonfidenz['needs_review'])<x-fa::badge tone="crit" title="Artikel widersprechen sich (enthalten gegen nicht enthalten): {{ implode(', ', $allergenKonfidenz['konflikt_felder']) }}">Prüfen nötig</x-fa::badge>@endif
+                @endif
+            </div>
+            @if($allergene !== null)
+                @php
+                    $labels = \Platform\FoodAlchemist\Models\FoodAlchemistItemAllergen::ALLERGENE;
+                    $marker = fn ($q) => $q === 'override' ? ' (von Hand)' : ($q === 'mutter' ? ' (geerbt)' : '');
+                    $herkunft = fn ($q) => $q === 'override' ? ' · von Hand gesetzt' : ($q === 'mutter' ? ' · vom Ausgangsprodukt geerbt' : '');
+                    $enthalten = collect($allergene)->filter(fn ($a) => $a['value']->value === 'enthalten');
+                    $spuren = collect($allergene)->filter(fn ($a) => $a['value']->value === 'spuren');
+                    $unbekannt = collect($allergene)->filter(fn ($a) => $a['value']->value === 'unbekannt');
+                    $freiAnzahl = collect($allergene)->filter(fn ($a) => $a['value']->value === 'nicht_enthalten')->count();
+                @endphp
+                @if($enthalten->isEmpty() && $spuren->isEmpty() && $unbekannt->isEmpty())
+                    <p class="flex flex-wrap items-center gap-2" data-allergene-frei>
+                        <x-fa::signal tone="ok">Keines der 14 Hauptallergene deklariert</x-fa::signal>
+                        @if($nurKiOverride)<x-fa::signal tone="info" icon="heroicon-m-sparkles" title="Schätzung ohne Beleg durch Lieferantenartikel. Für die Deklaration Artikeldaten ergänzen.">KI-geschätzt, nicht belegt</x-fa::signal>@endif
+                    </p>
+                @else
+                    <div class="flex flex-col gap-2" data-allergen-grid>
+                        @if($enthalten->isNotEmpty())
+                            <div class="flex flex-wrap items-center gap-1.5"><span class="w-[84px] shrink-0 {{ $titelKlein }}">Enthält</span>
+                                @foreach($enthalten as $feld => $a)<x-fa::badge tone="crit" title="{{ $labels[$feld] ?? $feld }}{{ $herkunft($a['source']) }}">{{ $labels[$feld] ?? $feld }}{{ $marker($a['source']) }}</x-fa::badge>@endforeach
+                            </div>
+                        @endif
+                        @if($spuren->isNotEmpty())
+                            <div class="flex flex-wrap items-center gap-1.5"><span class="w-[84px] shrink-0 {{ $titelKlein }}">Spuren von</span>
+                                @foreach($spuren as $feld => $a)<x-fa::badge tone="warn" title="{{ $labels[$feld] ?? $feld }}{{ $herkunft($a['source']) }}">{{ $labels[$feld] ?? $feld }}{{ $marker($a['source']) }}</x-fa::badge>@endforeach
+                            </div>
+                        @endif
+                        @if($unbekannt->isNotEmpty())
+                            <x-fa::signal tone="warn" data-allergene-unbekannt title="Ohne Angabe im Artikel. Unbekannt heißt nicht frei von.">{{ $unbekannt->count() }} von 14 ohne Angabe (unbekannt)</x-fa::signal>
+                        @endif
+                        @if($freiAnzahl > 0)<p class="{{ $leise }}">Frei von den übrigen {{ $freiAnzahl }} {{ $freiAnzahl === 1 ? 'Hauptallergen' : 'Hauptallergenen' }}</p>@endif
+                    </div>
+                @endif
+            @endif
+        </x-fa::section>
+        @endif
+
+        {{-- ZUSATZSTOFFE --}}
+        @if($section === null || $section === 'zusatzstoffe')
+        <x-fa::section variant="plain" title="Zusatzstoffe" icon="heroicon-o-beaker" meta="aus den Artikeln" data-sektion="zusatzstoffe">
+            @if($zusatzstoffe !== null)
+                @php
+                    $stoffLabels = \Platform\FoodAlchemist\Models\FoodAlchemistItemDeclaration::STOFFE;
+                    $zsJa = collect($zusatzstoffe)->filter(fn ($v) => $v === 3);
+                    $zsUnbekannt = collect($zusatzstoffe)->filter(fn ($v) => $v === 0 || $v === null);
+                    $zsFrei = collect($zusatzstoffe)->filter(fn ($v) => $v === 1)->count();
+                @endphp
+                @if($zsJa->isEmpty() && $zsUnbekannt->isEmpty())
+                    <x-fa::signal tone="ok" data-zusatz-frei>Keine Zusatzstoffe deklariert</x-fa::signal>
+                @else
+                    <div class="flex flex-col gap-2">
+                        @if($zsJa->isNotEmpty())
+                            <div class="flex flex-wrap items-center gap-1.5" data-zusatz-ja><span class="w-[84px] shrink-0 {{ $titelKlein }}">Enthält</span>
+                                @foreach($zsJa as $stoff => $v)<x-fa::badge tone="warn">{{ $stoffLabels[$stoff] ?? $stoff }}</x-fa::badge>@endforeach
+                            </div>
+                        @endif
+                        @if($zsUnbekannt->isNotEmpty())<x-fa::signal tone="warn" data-zusatz-unbekannt title="Ohne Angabe im Artikel. Nicht als frei werten.">{{ $zsUnbekannt->count() }} ohne Angabe</x-fa::signal>@endif
+                        @if($zsFrei > 0)<p class="{{ $leise }}">Frei von {{ $zsFrei }} weiteren</p>@endif
+                    </div>
+                @endif
+            @endif
+        </x-fa::section>
+        @endif
+
+        {{-- Eigenschaften: zutreffende zuerst, Rest als Text --}}
+        @if($section === null)
+        @php
+            $tagJa = $tagNein = $tagOffen = [];
+            foreach (\Platform\FoodAlchemist\Models\FoodAlchemistGp::TAG_FIELDS as $tag) {
+                $wert = $gp->getAttribute("tag_{$tag}");
+                $text = $tagLabels[$tag] ?? str_replace('_', ' ', $tag);
+                if ($wert === true) { $tagJa[$tag] = $text; } elseif ($wert === false) { $tagNein[$tag] = $text; } else { $tagOffen[$tag] = $text; }
+            }
+        @endphp
+        <x-fa::section variant="plain" title="Eigenschaften" icon="heroicon-o-tag" data-tags>
+            @if($tagJa !== [])
+                <div class="flex flex-wrap gap-1.5">
+                    @foreach($tagJa as $tag => $text)<x-fa::badge tone="ok" icon="heroicon-m-check" title="trifft zu">{{ $text }}</x-fa::badge>@endforeach
                 </div>
             @endif
-        </x-foodalchemist::section>
+            @if($tagNein !== [])<p class="{{ $leise }}"><span class="font-medium text-[var(--fa-ink-2)]">Nicht:</span> {{ implode(' · ', $tagNein) }}</p>@endif
+            @if($tagOffen !== [])<p class="{{ $leise }}" data-tags-offen><span class="font-medium text-[var(--fa-ink-2)]">Noch nicht bewertet ({{ count($tagOffen) }} von {{ count(\Platform\FoodAlchemist\Models\FoodAlchemistGp::TAG_FIELDS) }}):</span> {{ implode(' · ', $tagOffen) }}</p>@endif
+        </x-fa::section>
         @endif
 
-        {{-- Natürliche Einheit & Gewicht (auch im Nährwerte-Tab) --}}
-        @if($section === null || $section === 'naehrwerte')
-        <div class="rounded-lg bg-black/[0.03] px-3 py-2" data-unit-gewicht>
-            <p class="{{ $dt }} mb-0.5">Natürliche Einheit &amp; Gewicht</p>
-            @if($gp->preferredCountUnit !== null || $gp->piece_default_g !== null)
-                <p class="text-[13px] text-gray-900">1 {{ $gp->preferredCountUnit?->name ?? 'Stück' }}
-                    @if($gp->piece_default_g !== null)≈ <span class="font-semibold">{{ number_format((float) $gp->piece_default_g, 0, ',', '.') }} g</span>
-                    @else<span class="text-gray-500">— Gewicht nicht hinterlegt</span>@endif
-                </p>
-            @else
-                <p class="text-[13px] text-gray-500">— keine Zähleinheit hinterlegt —</p>
-            @endif
-        </div>
-        @endif
-
-        {{-- Eigenschaften-Tags --}}
-        @if($section === null)
-        <x-foodalchemist::section title="Eigenschaften" icon="heroicon-o-tag" data-tags>
-            <div class="flex flex-wrap gap-1">
-                @foreach(\Platform\FoodAlchemist\Models\FoodAlchemistGp::TAG_FIELDS as $tag)
-                    @php($wert = $gp->getAttribute("tag_{$tag}"))
-                    <span class="{{ $pill }} {{ $wert === true ? $variantPill['success'] : ($wert === false ? $variantPill['secondary'] . ' line-through' : $variantPill['secondary'] . ' opacity-40 italic') }}"
-                          title="{{ $wert === null ? 'unbewertet' : ($wert ? 'ja' : 'nein') }}">{{ str_replace(['is_', 'contains_', '_'], ['', 'enth. ', ' '], $tag) }}</span>
-                @endforeach
-            </div>
-        </x-foodalchemist::section>
-        @endif
-
-        {{-- ★ LIEFERANTENARTIKEL --}}
+        {{-- Inhalt --}}
+        {{-- LIEFERANTENARTIKEL --}}
         @if($section === null || $section === 'las')
-        <x-foodalchemist::section title="Lieferantenartikel" icon="heroicon-o-building-storefront" :meta="$gp->n_las_total" data-sektion="las">
+        <x-fa::section variant="plain" title="Lieferantenartikel" icon="heroicon-o-building-storefront" :meta="$gp->n_las_total" data-sektion="las">
             @if($kannKuratieren)
                 <x-slot:actions>
-                    <x-foodalchemist::ki-action action="laVorschlaege" variant="ghostXs" icon="heroicon-o-sparkles" label="KI-Vorschlag"
-                        title="Unverknüpfte Artikel finden, die zum GP-Namen passen" data-la-ki-vorschlag
-                        class="!text-violet-600" busy="Wird gesucht …" flash="Vorschläge da" />
+                    <x-foodalchemist::ki-action action="laVorschlaege" variant="ai" icon="heroicon-o-sparkles" label="Artikel vorschlagen"
+                        title="Nicht verknüpfte Artikel finden, die zum Namen passen" data-la-ki-vorschlag
+                        busy="Wird gesucht …" flash="Vorschläge da" />
                 </x-slot:actions>
             @endif
 
             @if(($preisBand ?? null) !== null && $preisBand['max'] > 0)
-                <div class="rounded-lg bg-black/[0.03] px-2.5 py-1.5 mb-2 text-[11px]" data-preis-band>
-                    <div class="flex items-baseline justify-between">
-                        <span class="text-gray-600">Preis-Spanne <span class="text-gray-500">({{ $preisBand['n'] }} LA{{ $preisBand['n'] === 1 ? '' : 's' }})</span></span>
-                        <span class="tabular-nums text-gray-900"><span class="text-emerald-600 font-medium">{{ number_format($preisBand['min'], 2, ',', '.') }}</span> – {{ number_format($preisBand['max'], 2, ',', '.') }} {{ $preisBand['unit'] }}</span>
+                <div class="fa-surface flex flex-col gap-2 px-3 py-2.5" data-preis-band>
+                    <div class="flex items-baseline justify-between gap-2 text-[length:var(--fa-text-sm)]">
+                        <span class="text-[var(--fa-ink-2)]">Preisspanne <span class="text-[var(--fa-ink-3)]">aus {{ $preisBand['n'] }} {{ $preisBand['n'] === 1 ? 'Artikel' : 'Artikeln' }}</span></span>
+                        <span class="tabular-nums text-[var(--fa-ink)]">{{ $zahl($preisBand['min']) }} bis {{ $zahl($preisBand['max']) }} {{ $preisBand['unit'] }}</span>
                     </div>
                     @if($preisBand['lead'] !== null && $preisBand['max'] > $preisBand['min'])
-                        @php($pos = min(100, max(0, ($preisBand['lead'] - $preisBand['min']) / ($preisBand['max'] - $preisBand['min']) * 100)))
-                        <div class="mt-1.5 flex items-center gap-2">
-                            <div class="relative flex-1 h-1.5 rounded-full bg-gradient-to-r from-emerald-400/70 via-amber-400/70 to-rose-400/70">
-                                <span class="absolute top-1/2 w-2.5 h-2.5 rounded-full bg-orange-500 ring-2 ring-white" style="left: {{ round($pos) }}%; transform: translate(-50%, -50%);" title="Lead im Preisband"></span>
+                        @php
+                            $pos = min(100, max(0, ($preisBand['lead'] - $preisBand['min']) / ($preisBand['max'] - $preisBand['min']) * 100));
+                        @endphp
+                        <div class="flex items-center gap-2">
+                            <div class="relative flex-1 h-1.5 rounded-full bg-[var(--fa-line-strong)]" role="img" aria-label="Lead liegt bei {{ round($pos) }} Prozent der Spanne">
+                                <span class="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-[var(--fa-accent)] ring-2 ring-[var(--fa-surface)]" style="left: {{ round($pos) }}%" title="Lead in der Preisspanne"></span>
                             </div>
-                            <span class="text-orange-500 tabular-nums shrink-0">Lead {{ number_format($preisBand['lead'], 2, ',', '.') }}</span>
+                            <span class="shrink-0 text-[length:var(--fa-text-sm)] font-medium tabular-nums text-[var(--fa-accent)]">Lead {{ $zahl($preisBand['lead']) }}</span>
                         </div>
                     @endif
                 </div>
             @endif
 
             @if(($leadSteuerung ?? null) !== null && $gp->n_las_total > 0)
-                <div class="rounded-lg bg-black/[0.03] px-2.5 py-1.5 mb-2 text-[11px] space-y-1" data-lead-steuerung>
+                <div class="flex flex-col gap-1.5 text-[length:var(--fa-text-sm)]" data-lead-steuerung>
                     @if($leadSteuerung['override_reason'])
-                        <p class="text-gray-700" data-lead-reason>Manueller Lead — Grund: <span class="text-gray-900">{{ $leadSteuerung['override_reason'] }}</span></p>
+                        <p class="text-[var(--fa-ink-2)]" data-lead-reason>Lead von Hand gesetzt. Grund: <span class="text-[var(--fa-ink)]">{{ $leadSteuerung['override_reason'] }}</span></p>
                     @elseif($leadSteuerung['lead_gesetzt_la_id'] === null && $leadSteuerung['vorschlag_la_id'] !== null)
-                        <p class="text-gray-500">Kein manueller Lead — automatischer Vorschlag (günstigster/Stamm) greift.</p>
+                        <p class="text-[var(--fa-ink-3)]">Lead automatisch gewählt (günstigster oder Stammlieferant).</p>
                     @endif
                     @if(count($leadSteuerung['ausweichquellen']) > 0)
-                        <p class="text-gray-500" data-ausweichquellen>{{ count($leadSteuerung['ausweichquellen']) }} Ausweichquelle(n): {{ collect($leadSteuerung['ausweichquellen'])->pluck('supplier')->filter()->take(3)->implode(', ') ?: '—' }}</p>
+                        <p class="text-[var(--fa-ink-3)]" data-ausweichquellen>{{ count($leadSteuerung['ausweichquellen']) }} {{ count($leadSteuerung['ausweichquellen']) === 1 ? 'Ausweichquelle' : 'Ausweichquellen' }}: {{ collect($leadSteuerung['ausweichquellen'])->pluck('supplier')->filter()->take(3)->implode(', ') ?: '–' }}</p>
                     @endif
                     @if($kannKuratieren)
-                        <input type="text" wire:model="leadReason" maxlength="255" placeholder="Grund für manuellen Lead (optional) — wird beim ★ protokolliert" class="{{ $input }} !text-[11px] !py-1" data-lead-reason-input />
+                        <x-fa::input size="sm" wire:model="leadReason" maxlength="255" placeholder="Grund für einen Lead von Hand (optional)" aria-label="Grund für einen Lead von Hand" data-lead-reason-input />
                     @endif
                 </div>
             @endif
 
-            <div class="space-y-1.5">
+            <div class="flex flex-col gap-1.5">
                 @forelse($kette ?? [] as $rang => $la)
-                    @php($istLead = $la->id === $effektiverLeadId)
-                    <div wire:key="la-{{ $la->id }}" class="group rounded-lg border px-2.5 py-2 {{ $istLead ? 'bg-orange-500/10 border-orange-500/40' : 'border-black/5 hover:bg-black/[0.03]' }} {{ $la->locked ? 'opacity-50' : '' }}" data-la-zeile="{{ $la->id }}">
+                    @php
+                        $istLead = $la->id === $effektiverLeadId;
+                    @endphp
+                    <div wire:key="la-{{ $la->id }}" class="group rounded-[var(--fa-radius-control)] border px-2.5 py-2 {{ $istLead ? 'bg-[var(--fa-accent-soft)] border-[var(--fa-accent-line)]' : 'border-[var(--fa-line)] hover:bg-[var(--fa-hover)]' }} {{ $la->locked ? 'opacity-60' : '' }}" data-la-zeile="{{ $la->id }}">
                         <div class="flex items-start gap-2">
-                            <button type="button" wire:click="leadSetzen({{ $la->id }})" class="shrink-0 text-base leading-5 transition-colors {{ $istLead ? 'text-orange-500' : 'text-gray-300 hover:text-orange-400' }}" title="{{ $istLead ? 'Effektiver Lead (Team-Sicht)' : 'Klick: als Lead setzen (GL-03, Kurations-Team)' }}" data-lead-stern>★</button>
-                            <div class="min-w-0 flex-1 cursor-pointer" wire:click="$dispatch('item-modal.oeffnen', { id: {{ $la->id }} })" title="Lieferantenartikel öffnen — Allergene/Preise dort pflegen" data-la-oeffnen>
-                                <p class="text-[13px] font-medium text-gray-900 leading-snug hover:text-violet-600 hover:underline" title="{{ $la->designation }}">{{ $la->designation }}</p>
-                                <p class="text-[11px] text-gray-500 truncate mt-0.5">{{ $la->supplier_name ?? '—' }}@if($la->qty !== null && $la->unit_code !== null) · {{ rtrim(rtrim(number_format((float) $la->qty, 3, ',', '.'), '0'), ',') }} {{ $la->unit_code }}@endif @if($la->order_number !== null) · Art-Nr {{ $la->order_number }}@endif</p>
+                            <button type="button" wire:click="leadSetzen({{ $la->id }})"
+                                    class="shrink-0 mt-px transition-colors {{ $istLead ? 'text-[var(--fa-accent)]' : 'text-[var(--fa-ink-3)] hover:text-[var(--fa-accent)]' }}"
+                                    aria-label="{{ $istLead ? 'Lead-Artikel' : 'Als Lead setzen' }}"
+                                    title="{{ $istLead ? 'Lead-Artikel für dein Team' : 'Als Lead setzen (nur Kurations-Team)' }}" data-lead-stern>
+                                @svg($istLead ? 'heroicon-s-star' : 'heroicon-o-star', 'w-[18px] h-[18px]')
+                            </button>
+                            <div class="min-w-0 flex-1 cursor-pointer" wire:click="$dispatch('item-modal.oeffnen', { id: {{ $la->id }} })" title="Artikel öffnen, Allergene und Preise dort pflegen" data-la-oeffnen>
+                                <p class="text-[length:var(--fa-text-md)] font-medium leading-snug text-[var(--fa-ink)] hover:text-[var(--fa-accent)] hover:underline">{{ $la->designation }}</p>
+                                <p class="mt-0.5 {{ $leise }}">{{ $la->supplier_name ?? 'Lieferant unbekannt' }}@if($la->qty !== null && $la->unit_code !== null) · <x-fa::menge :value="$la->qty" :unit="$la->unit_code" />@endif @if($la->order_number !== null) · Art.-Nr. {{ $la->order_number }}@endif</p>
                                 @if($gp->lead_la_supplier_item_id === $la->id || $la->ist_stamm || $la->is_discontinued || $la->gepinnt || $la->locked)
-                                    <p class="text-[11px] truncate">
-                                        @if($gp->lead_la_supplier_item_id === $la->id)<span class="text-orange-500" title="globaler Default-Lead (GL-03)">global ★</span>@endif
-                                        {{ $la->ist_stamm ? ' · Stamm' : '' }}@if($la->is_discontinued) · <span class="text-rose-400">ausgelistet</span>@endif @if($la->gepinnt) · <span class="text-violet-500">gepinnt</span>@endif @if($la->locked) · <span class="text-rose-500">locked</span>@endif
-                                    </p>
+                                    <div class="mt-1 flex flex-wrap gap-1">
+                                        @if($gp->lead_la_supplier_item_id === $la->id)<x-fa::badge tone="accent" title="Lead für alle Teams">Lead global</x-fa::badge>@endif
+                                        @if($la->ist_stamm)<x-fa::badge>Stammlieferant</x-fa::badge>@endif
+                                        @if($la->is_discontinued)<x-fa::badge tone="crit">ausgelistet</x-fa::badge>@endif
+                                        @if($la->gepinnt)<x-fa::badge tone="info">angeheftet</x-fa::badge>@endif
+                                        @if($la->locked)<x-fa::badge tone="crit">gesperrt</x-fa::badge>@endif
+                                    </div>
                                 @endif
                             </div>
                             <div class="shrink-0 text-right" data-la-preis>
                                 @if($la->aktiver_preis !== null)
-                                    <p class="text-[13px] font-semibold tabular-nums text-gray-900">{{ number_format((float) $la->aktiver_preis, 2, ',', '.') }} €
+                                    <p class="flex items-center justify-end gap-1 text-[length:var(--fa-text-md)] font-semibold text-[var(--fa-ink)]">
+                                        <x-fa::money :value="$la->aktiver_preis" />
                                         @isset($preisTrend[$la->id])
                                             @if($preisTrend[$la->id]['plausibel'])
-                                                @php($d = $preisTrend[$la->id]['delta_pct'])
-                                                <span class="text-[10px] font-medium tabular-nums {{ $d > 0 ? 'text-rose-500' : ($d < 0 ? 'text-emerald-600' : 'text-gray-500') }}" title="vorher {{ number_format($preisTrend[$la->id]['vorher'], 2, ',', '.') }} €">{{ $d > 0 ? '▲' : ($d < 0 ? '▼' : '') }}{{ number_format(abs($d), 1, ',', '.') }} %</span>
+                                                @php
+                                                    $d = $preisTrend[$la->id]['delta_pct'];
+                                                @endphp
+                                                <span class="inline-flex items-center text-[length:var(--fa-text-sm)] font-medium tabular-nums {{ $d > 0 ? 'text-[var(--fa-crit)]' : ($d < 0 ? 'text-[var(--fa-ok)]' : 'text-[var(--fa-ink-3)]') }}" title="vorher {{ $zahl($preisTrend[$la->id]['vorher']) }} €">@if($d > 0)@svg('heroicon-m-arrow-up', 'w-3.5 h-3.5')@elseif($d < 0)@svg('heroicon-m-arrow-down', 'w-3.5 h-3.5')@endif{{ $zahl(abs($d), 1) }} %</span>
                                             @else
-                                                <span class="text-[10px] text-amber-500 cursor-help" title="Vorpreis unplausibel — Preis-Historie prüfen." data-preis-trend-warnung>@svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5 inline-block align-middle')</span>
+                                                <span class="text-[var(--fa-warn)] cursor-help" title="Vorpreis unplausibel, Preisverlauf prüfen" data-preis-trend-warnung>@svg('heroicon-m-exclamation-triangle', 'w-4 h-4')</span>
                                             @endif
                                         @endisset
                                     </p>
                                     @if($la->vergleichspreis !== null)
-                                        <p class="text-[11px] tabular-nums text-gray-500">{{ number_format($la->vergleichspreis['value'], 2, ',', '.') }} {{ $la->vergleichspreis['unit'] }}</p>
+                                        <p class="{{ $leise }}"><x-fa::money :value="$la->vergleichspreis['value']" :per="$proEinheit($la->vergleichspreis['unit'])" /></p>
                                     @else
-                                        <p class="text-[11px] text-gray-500" title="kein Vergleichspreis — qty fehlt (GL-03 A-2)">@svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5 inline-block align-middle') ohne €/kg</p>
+                                        <x-fa::signal tone="warn" title="Ohne Menge kein Preis je Kilo oder Liter">ohne Preis je kg</x-fa::signal>
                                     @endif
                                 @else
-                                    <p class="text-[13px] text-gray-500">—</p>
+                                    <x-fa::money :value="null" />
                                 @endif
                             </div>
                         </div>
-                        <div class="hidden group-hover:flex items-center gap-1 mt-1.5 ml-6" data-la-aktionen>
-                            <button type="button" wire:click="pinToggle({{ $la->id }}, {{ $la->gepinnt ? 'false' : 'true' }})" class="{{ $btnGhostXs }}">{{ $la->gepinnt ? 'Pin lösen' : 'Pinnen' }}</button>
-                            <button type="button" wire:click="sperreToggle({{ $la->id }}, {{ $la->locked ? 'false' : 'true' }})" class="{{ $btnGhostXs }}">{{ $la->locked ? 'Entsperren' : 'Sperren' }}</button>
+                        <div class="hidden group-hover:flex group-focus-within:flex flex-wrap items-center gap-1 mt-2 ml-7" data-la-aktionen>
+                            <x-fa::button size="sm" variant="ghost" wire:click="pinToggle({{ $la->id }}, {{ $la->gepinnt ? 'false' : 'true' }})">{{ $la->gepinnt ? 'Nicht mehr anheften' : 'Anheften' }}</x-fa::button>
+                            <x-fa::button size="sm" variant="ghost" wire:click="sperreToggle({{ $la->id }}, {{ $la->locked ? 'false' : 'true' }})">{{ $la->locked ? 'Entsperren' : 'Sperren' }}</x-fa::button>
                             @if($kannKuratieren)
-                                <button type="button" wire:click="loesen({{ $la->id }})" wire:confirm="LA vom GP lösen? War er Lead, wird sofort neu gewählt (GL-03 I4)." class="{{ $btnGhostXs }} text-rose-500">✕ Lösen</button>
+                                <x-fa::button size="sm" variant="danger" class="ml-auto" wire:click="loesen({{ $la->id }})" wire:confirm="Artikel vom Grundprodukt lösen? War er Lead, wird sofort ein neuer gewählt.">Verknüpfung lösen</x-fa::button>
                             @endif
                         </div>
                     </div>
                 @empty
-                    <p class="text-[11px] text-gray-500">Keine LAs verknüpft{{ !$gp->requires_la ? ' — bewusst LA-frei' : '' }}.</p>
+                    @if(! $gp->requires_la)
+                        <p class="{{ $leise }}">Braucht keinen Lieferantenartikel.</p>
+                    @else
+                        <x-fa::empty compact icon="heroicon-o-building-storefront" title="Noch kein Lieferantenartikel verknüpft">Ohne Artikel fehlen Preis und Allergene. Unten nach der Bezeichnung suchen oder Artikel vorschlagen lassen.</x-fa::empty>
+                    @endif
                 @endforelse
 
                 @if($laKandidaten !== null)
-                    <div class="rounded-lg bg-violet-500/10 border border-violet-500/30 px-2.5 py-2" data-la-kandidaten>
-                        <p class="text-[11px] text-gray-900 mb-1">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5 inline-block align-middle') Passende unverknüpfte Artikel <span class="text-gray-500">· Klick = verknüpfen</span></p>
+                    <div class="flex flex-col gap-1 p-2.5 rounded-[var(--fa-radius-control)] border border-[var(--fa-accent-line)] bg-[var(--fa-accent-soft)]" data-la-kandidaten>
+                        <p class="flex items-center gap-1.5 text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink)]">@svg('heroicon-m-sparkles', 'w-4 h-4 text-[var(--fa-accent)]') Passende Artikel ohne Zuordnung <span class="font-normal text-[var(--fa-ink-3)]">Klick verknüpft</span></p>
                         @foreach($laKandidaten as $kandidat)
-                            <button type="button" wire:key="lakand-{{ $kandidat['id'] }}" wire:click="verknuepfe({{ $kandidat['id'] }})" class="w-full text-left px-2 py-1 rounded text-[11px] text-gray-700 hover:bg-violet-500/15 flex items-baseline gap-2">
-                                <span class="min-w-0 flex-1 truncate">{{ $kandidat['designation'] }} <span class="text-gray-500">· {{ $kandidat['supplier'] ?? '—' }}</span></span>
-                                <span class="shrink-0 tabular-nums text-violet-500">{{ round($kandidat['score'] * 100) }} %</span>
+                            <button type="button" wire:key="lakand-{{ $kandidat['id'] }}" wire:click="verknuepfe({{ $kandidat['id'] }})" class="{{ $listenKnopf }} hover:bg-[var(--fa-surface)]">
+                                <span class="min-w-0 flex-1">{{ $kandidat['designation'] }} <span class="text-[var(--fa-ink-3)]">· {{ $kandidat['supplier'] ?? 'Lieferant unbekannt' }}</span></span>
+                                <span class="shrink-0 tabular-nums text-[length:var(--fa-text-sm)] text-[var(--fa-accent)]">{{ round($kandidat['score'] * 100) }} %</span>
                             </button>
                         @endforeach
-                        <button type="button" wire:click="laVorschlaegeVerwerfen" class="{{ $btnGhostXs }} mt-1" data-la-kandidaten-verwerfen>Verwerfen</button>
+                        <div><x-fa::button size="sm" variant="ghost" wire:click="laVorschlaegeVerwerfen" data-la-kandidaten-verwerfen>Vorschläge verwerfen</x-fa::button></div>
                     </div>
                 @endif
 
                 @if($kannKuratieren)
-                    <div class="pt-1" data-la-verknuepfen>
-                        <input type="search" wire:model.live.debounce.300ms="laSuche" placeholder="+ LA verknüpfen — Bezeichnung suchen …" class="{{ $input }} !py-1" />
+                    <div class="flex flex-col gap-1 pt-1" data-la-verknuepfen>
+                        <div class="relative">
+                            @svg('heroicon-m-plus', 'w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--fa-ink-3)] pointer-events-none')
+                            <x-fa::input size="sm" type="search" wire:model.live.debounce.300ms="laSuche" placeholder="Artikel verknüpfen: Bezeichnung suchen" aria-label="Lieferantenartikel suchen und verknüpfen" class="pl-8" />
+                        </div>
                         @foreach($verknuepfbare as $kandidat)
-                            <button type="button" wire:key="vk-{{ $kandidat->id }}" wire:click="verknuepfe({{ $kandidat->id }})" class="w-full text-left px-2 py-1 rounded text-[11px] text-gray-700 hover:bg-violet-500/10">{{ $kandidat->designation }} <span class="text-gray-500">· {{ $kandidat->supplier_name ?? '—' }}</span></button>
+                            <button type="button" wire:key="vk-{{ $kandidat->id }}" wire:click="verknuepfe({{ $kandidat->id }})" class="{{ $listenKnopf }}">{{ $kandidat->designation }} <span class="text-[var(--fa-ink-3)]">· {{ $kandidat->supplier_name ?? 'Lieferant unbekannt' }}</span></button>
                         @endforeach
                         @if($laSuche !== '' && $verknuepfbare->isEmpty())
-                            <p class="text-[11px] text-gray-500 px-2 py-1" data-la-suche-leer>Kein ungemappter Artikel zu „{{ $laSuche }}" — ein LA gehört zu genau einem GP, evtl. ist er schon zugeordnet.</p>
+                            <p class="px-2 py-1 {{ $leise }}" data-la-suche-leer>Kein freier Artikel zu „{{ $laSuche }}". Ein Artikel gehört zu genau einem Grundprodukt, vielleicht ist er schon zugeordnet.</p>
                         @endif
                     </div>
                 @endif
             </div>
-        </x-foodalchemist::section>
+        </x-fa::section>
         @endif
 
-        {{-- GL-07-Vorschlags-Box (Allergene/Nährwerte) --}}
-        @if($kiVorschlag !== null && ($section === null || $section === $kiVorschlag['type']))
-            <div class="rounded-lg bg-violet-500/10 border border-violet-500/30 px-3 py-2 text-xs" data-gp-ki-vorschlag>
-                <p class="text-gray-900">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5 inline-block align-middle') {{ $kiVorschlag['type'] === 'allergene' ? 'Allergen-Schätzung' : 'Nährwert-Schätzung' }}
-                    <span class="text-[11px] text-gray-500">· {{ round($kiVorschlag['confidence'] * 100) }} % · schreibt als Override (GL-01 Prio 1)</span></p>
-                <div class="flex flex-wrap gap-1 mt-1">
-                    @foreach($kiVorschlag['werte'] as $feld => $wert)
-                        <span class="{{ $pill }} {{ $kiVorschlag['type'] === 'allergene' ? (['enthalten' => $variantPill['danger'], 'spuren' => $variantPill['warning'], 'nicht_enthalten' => $variantPill['secondary']][$wert] ?? $variantPill['secondary']) : $variantPill['info'] }}" wire:key="kiw-{{ $feld }}">{{ $feld }}: {{ $wert }}</span>
-                    @endforeach
-                </div>
-                <div class="flex gap-1.5 mt-1.5">
-                    <button type="button" wire:click="kiUebernehmen" class="{{ $btnGhostXs }} text-emerald-600" data-gp-ki-uebernehmen>Übernehmen</button>
-                    <button type="button" wire:click="kiVerwerfen" class="{{ $btnGhostXs }}" data-gp-ki-verwerfen>Verwerfen</button>
-                </div>
-            </div>
-        @endif
-
-        {{-- ALLERGENE (effektiv) --}}
-        @if($section === null || $section === 'allergene')
-        @php($allergKiConf = $gp->allergens_confidence)
-        @php($nurKiOverride = $allergene !== null && ($allergenKonfidenz['n_las_mit_daten'] ?? 0) === 0 && ($gp->allergens_source === 'ki' || $gp->allergens_confidence !== null) && collect($allergene)->contains(fn ($a) => $a['source'] === 'override'))
-        <x-foodalchemist::section title="Allergene" icon="heroicon-o-shield-exclamation" meta="effektiv" data-sektion="allergene">
-            @if($kannKuratieren && ($allergenKonfidenz['n_las_mit_daten'] ?? 0) === 0)
-                <x-slot:actions>
-                    <x-foodalchemist::ki-action action="kiAllergene" variant="ai" icon="heroicon-o-sparkles" label="per KI schätzen"
-                        title="ohne LA-Daten per KI schätzen — Übernehmen schreibt Override (GL-01)" data-ki-allergene
-                        busy="Wird geschätzt …" flash="Geschätzt" />
-                </x-slot:actions>
-            @endif
-            <div class="flex flex-wrap items-center gap-x-2 gap-y-1 mb-1.5 text-[11px]">
-                @if($nurKiOverride)
-                    <span class="{{ $pill }} {{ $variantPill['info'] }}" title="KI-geschätzt — keine LA-Daten{{ $allergKiConf !== null ? ' · ' . round($allergKiConf * 100) . ' %' : '' }}" data-allergene-ki-marker>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5 inline-block align-middle') KI</span>
-                    <span class="text-gray-500">aus 0/{{ $gp->n_las_total }} LAs</span>
-                @elseif($allergenKonfidenz !== null)
-                    <span class="font-semibold {{ ['high' => 'text-green-600', 'medium' => 'text-amber-500', 'low' => 'text-rose-500'][$allergenKonfidenz['confidence']] ?? 'text-gray-500' }}">{{ strtoupper($allergenKonfidenz['confidence']) }}</span>
-                    <span class="text-gray-500">aus {{ $allergenKonfidenz['n_las_mit_daten'] }}/{{ $gp->n_las_total }} LAs</span>
-                    @if($allergenKonfidenz['needs_review'])<span class="{{ $pill }} {{ $variantPill['danger'] }}" title="enthalten ↔ nicht_enthalten ohne spuren-Mittelweg: {{ implode(', ', $allergenKonfidenz['konflikt_felder']) }}">Review nötig</span>@endif
-                @endif
-            </div>
-            @if($allergene !== null)
-                @php($labels = \Platform\FoodAlchemist\Models\FoodAlchemistItemAllergen::ALLERGENE)
-                @php($marker = fn ($q) => $q === 'override' ? ' (manuell)' : ($q === 'mutter' ? ' ↑' : ''))
-                @php($enthalten = collect($allergene)->filter(fn ($a) => $a['value']->value === 'enthalten'))
-                @php($spuren = collect($allergene)->filter(fn ($a) => $a['value']->value === 'spuren'))
-                @php($unbekannt = collect($allergene)->filter(fn ($a) => $a['value']->value === 'unbekannt'))
-                @php($freiAnzahl = collect($allergene)->filter(fn ($a) => $a['value']->value === 'nicht_enthalten')->count())
-                @if($enthalten->isEmpty() && $spuren->isEmpty() && $unbekannt->isEmpty())
-                    <p class="text-[13px] text-emerald-600" data-allergene-frei>✓ Keine der 14 EU-Allergene deklariert.@if($nurKiOverride) <span class="text-violet-500" title="Schätzung ohne Lieferantenartikel-Beleg — für LMIV-Deklaration LA-Daten ergänzen">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5 inline-block align-middle') KI-geschätzt, nicht LA-belegt</span>@endif</p>
-                @else
-                    <div class="space-y-1.5" data-allergen-grid>
-                        @if($enthalten->isNotEmpty())
-                            <div class="flex flex-wrap items-center gap-1"><span class="text-[11px] font-medium text-rose-600 mr-1 shrink-0">Enthält:</span>
-                                @foreach($enthalten as $feld => $a)<span class="{{ $pill }} {{ $variantPill['danger'] }}" title="{{ $labels[$feld] ?? $feld }}{{ $a['source'] === 'override' ? ' · manueller Override' : ($a['source'] === 'mutter' ? ' · live vom Mutter-GP' : '') }}">{{ $labels[$feld] ?? $feld }}{{ $marker($a['source']) }}</span>@endforeach
-                            </div>
-                        @endif
-                        @if($spuren->isNotEmpty())
-                            <div class="flex flex-wrap items-center gap-1"><span class="text-[11px] font-medium text-amber-600 mr-1 shrink-0">Spuren von:</span>
-                                @foreach($spuren as $feld => $a)<span class="{{ $pill }} {{ $variantPill['warning'] }}" title="{{ $labels[$feld] ?? $feld }}">{{ $labels[$feld] ?? $feld }}{{ $marker($a['source']) }}</span>@endforeach
-                            </div>
-                        @endif
-                        @if($unbekannt->isNotEmpty())
-                            <p class="text-[11px] text-amber-600" data-allergene-unbekannt title="Keine LA-Angabe — LMIV: unbekannt ist NICHT gleich frei von.">@svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5 inline-block align-middle') {{ $unbekannt->count() }} von 14 ohne LA-Angabe (unbekannt)</p>
-                        @endif
-                        @if($freiAnzahl > 0)<p class="text-[11px] text-gray-500">✓ frei von den übrigen {{ $freiAnzahl }} EU-Allergen{{ $freiAnzahl === 1 ? '' : 'en' }}</p>@endif
+        {{-- Fachabschnitte --}}
+        {{-- Stammdaten --}}
+        @if($section === null)
+        <x-fa::section variant="plain" title="Stammdaten" icon="heroicon-o-information-circle" data-stammdaten>
+            <dl class="grid grid-cols-2 gap-x-4 gap-y-3">
+                @foreach([
+                    ['Warengruppe', $gp->commodity_group?->name ?? $gp->commodity_group_code],
+                    ['Unterkategorie', $gp->sub_category],
+                    ['Zustand', $gp->condition],
+                    ['Garverlust', $gp->cooking_loss_default_pct !== null ? $zahl($gp->cooking_loss_default_pct, 1) . ' %' : null],
+                ] as [$lbl, $wert])
+                    <div class="min-w-0">
+                        <dt class="{{ $titelKlein }}">{{ $lbl }}</dt>
+                        <dd class="text-[length:var(--fa-text-md)] {{ $wert !== null ? 'text-[var(--fa-ink)]' : 'italic text-[var(--fa-ink-3)]' }}">{{ $wert ?? 'nicht gepflegt' }}</dd>
                     </div>
-                @endif
-            @endif
-        </x-foodalchemist::section>
+                @endforeach
+            </dl>
+        </x-fa::section>
         @endif
 
-        {{-- ZUSATZSTOFFE --}}
-        @if($section === null || $section === 'zusatzstoffe')
-        <x-foodalchemist::section title="Zusatzstoffe" icon="heroicon-o-beaker" meta="LMIV, aggregiert" data-sektion="zusatzstoffe">
-            @if($zusatzstoffe !== null)
-                @php($stoffLabels = \Platform\FoodAlchemist\Models\FoodAlchemistItemDeclaration::STOFFE)
-                @php($zsJa = collect($zusatzstoffe)->filter(fn ($v) => $v === 3))
-                @php($zsUnbekannt = collect($zusatzstoffe)->filter(fn ($v) => $v === 0 || $v === null))
-                @php($zsFrei = collect($zusatzstoffe)->filter(fn ($v) => $v === 1)->count())
-                @if($zsJa->isEmpty() && $zsUnbekannt->isEmpty())
-                    <p class="text-[13px] text-emerald-600" data-zusatz-frei>✓ Keine Zusatzstoffe deklariert.</p>
-                @else
-                    <div class="space-y-1.5">
-                        @if($zsJa->isNotEmpty())
-                            <div class="flex flex-wrap items-center gap-1" data-zusatz-ja><span class="text-[11px] font-medium text-amber-600 mr-1 shrink-0">Enthält:</span>
-                                @foreach($zsJa as $stoff => $v)<span class="{{ $pill }} {{ $variantPill['warning'] }}">{{ $stoffLabels[$stoff] ?? $stoff }}</span>@endforeach
-                            </div>
-                        @endif
-                        @if($zsUnbekannt->isNotEmpty())<p class="text-[11px] text-amber-600" data-zusatz-unbekannt title="Keine LA-Angabe — nicht als frei werten.">@svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5 inline-block align-middle') {{ $zsUnbekannt->count() }} ohne LA-Angabe</p>@endif
-                        @if($zsFrei > 0)<p class="text-[11px] text-gray-500">✓ frei von {{ $zsFrei }} weiteren</p>@endif
-                    </div>
-                @endif
+        {{-- Natürliche Einheit & Gewicht (auch in der Nährwerte-Kartei) --}}
+        @if($section === null || $section === 'naehrwerte')
+        <x-fa::section variant="plain" title="Natürliche Einheit und Gewicht" icon="heroicon-o-cube" data-unit-gewicht>
+            @if($gp->preferredCountUnit !== null || $gp->piece_default_g !== null)
+                <p class="text-[length:var(--fa-text-md)] text-[var(--fa-ink)]">1 {{ $gp->preferredCountUnit?->name ?? 'Stück' }}
+                    @if($gp->piece_default_g !== null)≈ <span class="font-semibold tabular-nums">{{ $zahl($gp->piece_default_g, 0) }} g</span>
+                    @else<span class="text-[var(--fa-warn)]">, Gewicht fehlt</span>@endif
+                </p>
+            @else
+                <p class="text-[length:var(--fa-text-md)] italic text-[var(--fa-ink-3)]">Keine Zähleinheit hinterlegt</p>
             @endif
-        </x-foodalchemist::section>
+        </x-fa::section>
         @endif
 
         {{-- NÄHRWERTE --}}
         @if($section === null || $section === 'naehrwerte')
-        <x-foodalchemist::section title="Nährwerte" icon="heroicon-o-chart-bar"
-            :meta="($naehrwerte['source'] ?? 'la') === 'la' ? 'Ø aus LAs, je 100 g' : (($naehrwerte['source'] ?? '') === 'ki' ? 'KI-Schätzung je 100 g' : 'je 100 g')" data-sektion="naehrwerte">
+        <x-fa::section variant="plain" title="Nährwerte" icon="heroicon-o-chart-bar"
+            :meta="($naehrwerte['source'] ?? 'la') === 'la' ? 'je 100 g, Mittel der Artikel' : (($naehrwerte['source'] ?? '') === 'ki' ? 'je 100 g, KI-Schätzung' : 'je 100 g')" data-sektion="naehrwerte">
             @if($kannKuratieren && $naehrwerte !== null && $naehrwerte['energy_kcal']['avg'] === null)
                 <x-slot:actions>
-                    <x-foodalchemist::ki-action action="kiNaehrwerte" variant="ai" icon="heroicon-o-sparkles" label="per KI schätzen"
-                        title="ohne LA-Daten per KI schätzen (nur Panel-Anzeige)" data-ki-naehrwerte
+                    <x-foodalchemist::ki-action action="kiNaehrwerte" variant="ai" icon="heroicon-o-sparkles" label="Mit KI schätzen"
+                        title="Ohne Artikeldaten per KI schätzen" data-ki-naehrwerte
                         busy="Wird geschätzt …" flash="Geschätzt" />
                 </x-slot:actions>
             @endif
             @if(($naehrwerte['source'] ?? null) === 'ki')
-                <p class="text-[11px] mb-1"><span class="{{ $pill }} {{ $variantPill['info'] }}" title="KI-geschätzt — keine LA-Daten{{ $gp->nutri_ai_confidence !== null ? ' · ' . round($gp->nutri_ai_confidence * 100) . ' %' : '' }}" data-naehrwerte-ki-marker>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5 inline-block align-middle') KI-geschätzt</span></p>
+                <div><x-fa::badge tone="accent" icon="heroicon-m-sparkles" title="Von der KI geschätzt, keine Artikeldaten{{ $gp->nutri_ai_confidence !== null ? ' · ' . round($gp->nutri_ai_confidence * 100) . ' %' : '' }}" data-naehrwerte-ki-marker>KI-geschätzt</x-fa::badge></div>
             @endif
             @if($naehrwerte !== null && $naehrwerte['energy_kcal']['avg'] !== null)
-                <dl class="space-y-0.5">
-                    @foreach([
-                        ['energy_kcal', 'Energie', 'kcal', 1], ['protein', 'Eiweiß', 'g', 2], ['fat', 'Fett', 'g', 2],
-                        ['saturated_fat', '— davon gesättigte Fettsäuren', 'g', 2], ['carbs_absorbable', 'Kohlenhydrate', 'g', 2],
-                        ['sugar', '— davon Zucker', 'g', 2], ['salt_g', 'Salz', 'g', 3],
-                    ] as [$key, $label, $unit, $stellen])
-                        <div class="flex items-baseline justify-between">
-                            <dt class="text-[12px] text-gray-600">{{ $label }}</dt>
-                            <dd class="text-[12px] text-gray-900 tabular-nums">
-                                @if($naehrwerte[$key]['avg'] !== null){{ number_format($naehrwerte[$key]['avg'], $stellen, ',', '.') }} {{ $unit }} <span class="text-gray-500">({{ $naehrwerte[$key]['n'] }} LA{{ $naehrwerte[$key]['n'] === 1 ? '' : 's' }})</span>@else<span class="text-gray-500">—</span>@endif
-                            </dd>
-                        </div>
-                    @endforeach
-                </dl>
+                <table class="fa-table fa-table--compact">
+                    <caption class="sr-only">Nährwerte je 100 g</caption>
+                    <tbody>
+                        @foreach([
+                            ['energy_kcal', 'Energie', 'kcal', 1, false], ['protein', 'Eiweiß', 'g', 2, false], ['fat', 'Fett', 'g', 2, false],
+                            ['saturated_fat', 'davon gesättigte Fettsäuren', 'g', 2, true], ['carbs_absorbable', 'Kohlenhydrate', 'g', 2, false],
+                            ['sugar', 'davon Zucker', 'g', 2, true], ['salt_g', 'Salz', 'g', 3, false],
+                        ] as [$key, $label, $unit, $stellen, $eingerueckt])
+                            <tr>
+                                <td class="{{ $eingerueckt ? 'pl-6 text-[var(--fa-ink-2)]' : '' }}">{{ $label }}</td>
+                                <td class="num">
+                                    @if($naehrwerte[$key]['avg'] !== null)<x-fa::menge :value="$naehrwerte[$key]['avg']" :unit="$unit" :decimals="$stellen" />
+                                        <span class="ml-1 {{ $leise }}" title="Mittel aus {{ $naehrwerte[$key]['n'] }} {{ $naehrwerte[$key]['n'] === 1 ? 'Artikel' : 'Artikeln' }}">({{ $naehrwerte[$key]['n'] }} Artikel)</span>
+                                    @else<span class="text-[var(--fa-ink-3)]">–</span>@endif
+                                </td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
             @else
-                <p class="text-[11px] text-gray-500" data-naehrwerte-leer>— keine Nährwert-Daten —</p>
+                <p class="{{ $leise }}" data-naehrwerte-leer>Keine Nährwerte in den Artikeln.</p>
             @endif
-        </x-foodalchemist::section>
+        </x-fa::section>
+        @endif
+
+        {{-- Spec 53 Paket J: Aroma-Anker als Chip, Klick zeigt weitere Grundprodukte mit diesem Anker.
+             Pflege des Ankers selbst im GP-Dialog, Kartei Sensorik & Pairing. --}}
+        @if($section === null && $gpAnker->isNotEmpty())
+        <x-fa::section variant="plain" title="Aroma-Anker" icon="heroicon-o-sparkles" data-gp-panel-anker>
+            <div class="flex flex-wrap gap-1.5">
+                @foreach($gpAnker as $a)
+                    <button type="button" wire:key="pa-{{ $a->id }}" wire:click="ankerNetzUmschalten({{ $a->id }})"
+                            aria-pressed="{{ $ankerNetzOffenId === $a->id ? 'true' : 'false' }}"
+                            class="inline-flex items-center gap-1 h-7 px-2.5 rounded-full border text-[length:var(--fa-text-sm)] font-medium transition-colors {{ $ankerNetzOffenId === $a->id ? 'border-[var(--fa-accent)] bg-[var(--fa-accent-soft)] text-[var(--fa-accent)]' : ($a->role === 'kern' ? 'border-[var(--fa-accent-line)] text-[var(--fa-accent)] hover:bg-[var(--fa-accent-soft)]' : 'border-[var(--fa-line-strong)] text-[var(--fa-ink-2)] hover:bg-[var(--fa-hover)]') }}"
+                            title="{{ $a->role === 'kern' ? 'Kern-Aroma' : 'Begleit-Aroma' }} · weitere Grundprodukte mit diesem Anker zeigen" data-gp-anker-chip>
+                        @if($a->role === 'kern')@svg('heroicon-s-star', 'w-3.5 h-3.5')@endif{{ $a->display_de }}
+                    </button>
+                @endforeach
+            </div>
+            @if($ankerNetzOffenId !== null)
+                <div class="fa-surface flex flex-col gap-1.5 px-3 py-2.5" data-gp-anker-netz>
+                    @if($ankerNetz->isEmpty())
+                        <p class="{{ $leise }}">Kein weiteres Grundprodukt trägt diesen Anker als Kern.</p>
+                    @else
+                        <p class="{{ $titelKlein }}">Weitere Grundprodukte mit diesem Anker</p>
+                        <div class="flex flex-wrap gap-1.5">
+                            @foreach($ankerNetz as $verwandt)
+                                <a href="{{ route('foodalchemist.gps.index', ['gp' => $verwandt->id]) }}" wire:navigate
+                                   class="inline-flex items-center h-7 px-2.5 rounded-full border border-[var(--fa-line-strong)] bg-[var(--fa-surface)] text-[length:var(--fa-text-sm)] text-[var(--fa-ink)] hover:border-[var(--fa-accent)] hover:text-[var(--fa-accent)]">{{ $verwandt->name }}</a>
+                            @endforeach
+                        </div>
+                    @endif
+                </div>
+            @endif
+        </x-fa::section>
         @endif
 
         {{-- ERSATZ --}}
         @if($section === null || $section === 'ersatz')
-        <x-foodalchemist::section title="Ersatz-Produkte" icon="heroicon-o-scale" meta="make-or-buy · Artikel-Ersatz" data-sektion="ersatz">
+        <x-fa::section variant="plain" title="Ersatzprodukte" icon="heroicon-o-scale" meta="selbst machen oder kaufen" data-sektion="ersatz">
             @if($kannKuratieren)
                 <x-slot:actions>
-                    <x-foodalchemist::ki-action action="ersatzKiRelevant" variant="ai" icon="heroicon-o-sparkles" label="KI relevant"
+                    <x-foodalchemist::ki-action action="ersatzKiRelevant" variant="ai" icon="heroicon-o-sparkles" label="Ersatz vorschlagen"
                         data-ersatz-ki-relevant busy="Prüft …" flash="Geprüft" />
                 </x-slot:actions>
             @endif
-            <div class="space-y-1">
+            <div class="flex flex-col gap-1">
                 @forelse($ersatz as $e)
-                    <div class="flex items-center gap-2 text-[11px]" wire:key="equiv-{{ $e->id }}">
-                        <span class="{{ $pill }} {{ $e->gegen_kind === 'recipe' ? $variantPill['info'] : $variantPill['secondary'] }} shrink-0">{{ $e->gegen_kind === 'recipe' ? 'Rezept' : 'GP' }}</span>
-                        <span class="min-w-0 flex-1 truncate text-gray-900" title="{{ $e->gegen_name }}">{{ $e->gegen_name }}</span>
-                        @if((float) $e->umrechnungsfaktor !== 1.0)<span class="text-gray-500 tabular-nums shrink-0">×{{ rtrim(rtrim(number_format($e->umrechnungsfaktor, 4, ',', '.'), '0'), ',') }}</span>@endif
-                        @if($kannKuratieren)<button type="button" wire:click="ersatzLoesen({{ $e->id }})" class="{{ $btnGhostXs }} text-rose-500 shrink-0" title="Ersatz-Verknüpfung lösen">✕</button>@endif
+                    <div class="flex items-center gap-2 py-0.5 text-[length:var(--fa-text-md)]" wire:key="equiv-{{ $e->id }}">
+                        <x-fa::badge :tone="$e->gegen_kind === 'recipe' ? 'info' : 'neutral'" class="shrink-0">{{ $e->gegen_kind === 'recipe' ? 'Rezept' : 'Grundprodukt' }}</x-fa::badge>
+                        <span class="min-w-0 flex-1 text-[var(--fa-ink)]">{{ $e->gegen_name }}</span>
+                        @if((float) $e->umrechnungsfaktor !== 1.0)<span class="shrink-0 tabular-nums {{ $leise }}" title="Umrechnungsfaktor">×{{ rtrim(rtrim(number_format($e->umrechnungsfaktor, 4, ',', '.'), '0'), ',') }}</span>@endif
+                        @if($kannKuratieren)<x-fa::icon-button size="sm" tone="danger" icon="heroicon-m-x-mark" label="Ersatz-Verknüpfung lösen" wire:click="ersatzLoesen({{ $e->id }})" />@endif
                     </div>
                 @empty
-                    <p class="text-[11px] text-gray-500" data-ersatz-leer>— kein Ersatz hinterlegt —</p>
+                    <p class="{{ $leise }}" data-ersatz-leer>Kein Ersatz hinterlegt. Unten suchen oder vorschlagen lassen.</p>
                 @endforelse
                 @if($ersatzKiVorschlaege !== null)
-                    <div class="rounded-lg border border-violet-500/20 bg-violet-500/5 p-2 space-y-1.5" data-ersatz-ki-vorschlaege>
+                    <div class="flex flex-col gap-1.5 p-2.5 rounded-[var(--fa-radius-control)] border border-[var(--fa-accent-line)] bg-[var(--fa-accent-soft)]" data-ersatz-ki-vorschlaege>
                         <div class="flex items-center justify-between gap-2">
-                            <span class="text-[11px] font-medium text-violet-700">Relevante Alternativen aus dem Datenbestand</span>
-                            <button type="button" wire:click="ersatzKiVerwerfen" class="text-[10px] text-gray-500 hover:text-gray-700">verwerfen</button>
+                            <span class="text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink)]">Passende Alternativen aus dem Bestand</span>
+                            <x-fa::button size="sm" variant="ghost" wire:click="ersatzKiVerwerfen">Verwerfen</x-fa::button>
                         </div>
                         @foreach($ersatzKiVorschlaege as $k)
-                            <div class="flex items-start gap-2 rounded-md bg-white/60 px-2 py-1.5 text-[11px]" wire:key="ersatz-ki-{{ $k['kind'] }}-{{ $k['id'] }}" data-ersatz-ki-zeile>
-                                <span class="{{ $pill }} {{ $k['kind'] === 'recipe' ? $variantPill['info'] : ($k['kind'] === 'supplier_item' ? $variantPill['warning'] : $variantPill['secondary']) }} shrink-0">
-                                    {{ $k['kind'] === 'recipe' ? 'Rezept' : ($k['kind'] === 'supplier_item' ? 'LA ohne GP' : 'GP') }}
-                                </span>
+                            <div class="flex items-start gap-2 px-2 py-1.5 rounded-[var(--fa-radius-control)] bg-[var(--fa-surface)]" wire:key="ersatz-ki-{{ $k['kind'] }}-{{ $k['id'] }}" data-ersatz-ki-zeile>
+                                <x-fa::badge :tone="$k['kind'] === 'recipe' ? 'info' : ($k['kind'] === 'supplier_item' ? 'warn' : 'neutral')" class="shrink-0">
+                                    {{ $k['kind'] === 'recipe' ? 'Rezept' : ($k['kind'] === 'supplier_item' ? 'Artikel ohne Grundprodukt' : 'Grundprodukt') }}
+                                </x-fa::badge>
                                 <div class="min-w-0 flex-1">
-                                    <p class="font-medium text-gray-900 truncate" title="{{ $k['name'] }}">{{ $k['name'] }}</p>
-                                    <p class="text-gray-500">{{ $k['reason'] }}@if($k['supplier']) · {{ $k['supplier'] }}@endif · {{ round($k['score'] * 100) }} %</p>
+                                    <p class="text-[length:var(--fa-text-md)] font-medium text-[var(--fa-ink)]">{{ $k['name'] }}</p>
+                                    <p class="{{ $leise }}">{{ $k['reason'] }}@if($k['supplier']) · {{ $k['supplier'] }}@endif · {{ round($k['score'] * 100) }} %</p>
                                 </div>
                                 @if($k['kind'] === 'supplier_item')
-                                    <button type="button" wire:click="ersatzLaAlsGpAnlegen({{ $k['id'] }})" class="{{ $btnGhostXs }} text-violet-600 shrink-0">GP anlegen &amp; verknüpfen</button>
+                                    <x-fa::button size="sm" class="shrink-0" wire:click="ersatzLaAlsGpAnlegen({{ $k['id'] }})">Als Grundprodukt anlegen</x-fa::button>
                                 @else
-                                    <button type="button" wire:click="ersatzVerknuepfen('{{ $k['kind'] }}', {{ $k['id'] }})" class="{{ $btnGhostXs }} text-violet-600 shrink-0">verknüpfen</button>
+                                    <x-fa::button size="sm" class="shrink-0" wire:click="ersatzVerknuepfen('{{ $k['kind'] }}', {{ $k['id'] }})">Verknüpfen</x-fa::button>
                                 @endif
                             </div>
                         @endforeach
                     </div>
                 @endif
                 @if($kannKuratieren)
-                    <div class="pt-1" data-ersatz-verknuepfen>
-                        <input type="search" wire:model.live.debounce.300ms="ersatzSuche" placeholder="+ Ersatz verknüpfen — GP/Rezept suchen …" class="{{ $input }} !py-1" />
+                    <div class="flex flex-col gap-1 pt-1" data-ersatz-verknuepfen>
+                        <div class="relative">
+                            @svg('heroicon-m-plus', 'w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--fa-ink-3)] pointer-events-none')
+                            <x-fa::input size="sm" type="search" wire:model.live.debounce.300ms="ersatzSuche" placeholder="Ersatz verknüpfen: Grundprodukt oder Rezept suchen" aria-label="Ersatz suchen und verknüpfen" class="pl-8" />
+                        </div>
                         @foreach($ersatzKandidaten as $k)
-                            <button type="button" wire:key="ersk-{{ $k->kind }}-{{ $k->id }}" wire:click="ersatzVerknuepfen('{{ $k->kind }}', {{ $k->id }})" class="w-full text-left px-2 py-1 rounded text-[11px] text-gray-700 hover:bg-violet-500/10 flex items-center gap-1.5">
-                                <span class="{{ $pill }} {{ $k->kind === 'recipe' ? $variantPill['info'] : $variantPill['secondary'] }}">{{ $k->kind === 'recipe' ? 'Rezept' : 'GP' }}</span>
-                                <span class="min-w-0 flex-1 truncate">{{ $k->name }}</span>
+                            <button type="button" wire:key="ersk-{{ $k->kind }}-{{ $k->id }}" wire:click="ersatzVerknuepfen('{{ $k->kind }}', {{ $k->id }})" class="{{ $listenKnopf }}">
+                                <x-fa::badge :tone="$k->kind === 'recipe' ? 'info' : 'neutral'">{{ $k->kind === 'recipe' ? 'Rezept' : 'Grundprodukt' }}</x-fa::badge>
+                                <span class="min-w-0 flex-1">{{ $k->name }}</span>
                             </button>
                         @endforeach
                     </div>
                 @endif
             </div>
-        </x-foodalchemist::section>
+        </x-fa::section>
         @endif
 
+        {{-- Verwendung --}}
         {{-- VERWENDET IN REZEPTEN --}}
         @if($section === null || $section === 'las')
-        <x-foodalchemist::section :title="'Verwendet in Rezepten (' . $verwendungen->count() . ($verwendungen->count() === 30 ? '+' : '') . ')'" icon="heroicon-o-link" data-sektion="verwendungen">
-            @forelse($verwendungen as $v)
-                <button type="button" wire:key="verw-{{ $v->id }}" wire:click="$dispatch('{{ $v->is_sales_recipe ? 'vk-modal.oeffnen' : 'recipe-modal.oeffnen' }}', { id: {{ $v->id }} })" class="block w-full text-left text-[13px] text-sky-600 hover:underline truncate py-0.5" data-verwendung-link>@if($v->is_sales_recipe)@svg('heroicon-o-banknotes', 'w-3.5 h-3.5 inline-block align-middle')@else @svg('heroicon-o-book-open', 'w-3.5 h-3.5 inline-block align-middle')@endif {{ $v->name }}</button>
-            @empty
-                <p class="text-[11px] text-gray-500" data-verwendungen-leer>— in keinem Rezept eingesetzt —</p>
-            @endforelse
-        </x-foodalchemist::section>
+        <x-fa::section variant="plain" :title="'Verwendet in Rezepten (' . $verwendungen->count() . ($verwendungen->count() === 30 ? '+' : '') . ')'" icon="heroicon-o-link" data-sektion="verwendungen">
+            <div class="flex flex-col">
+                @forelse($verwendungen as $v)
+                    <button type="button" wire:key="verw-{{ $v->id }}" wire:click="$dispatch('{{ $v->is_sales_recipe ? 'vk-modal.oeffnen' : 'recipe-modal.oeffnen' }}', { id: {{ $v->id }} })"
+                            class="{{ $listenKnopf }} text-[var(--fa-accent)]" title="{{ $v->is_sales_recipe ? 'Gericht' : 'Basisrezept' }} öffnen" data-verwendung-link>
+                        @svg($v->is_sales_recipe ? 'heroicon-o-banknotes' : 'heroicon-o-book-open', 'w-4 h-4 shrink-0 text-[var(--fa-ink-3)]')
+                        <span class="min-w-0 flex-1 hover:underline">{{ $v->name }}</span>
+                    </button>
+                @empty
+                    <p class="{{ $leise }}" data-verwendungen-leer>In keinem Rezept eingesetzt.</p>
+                @endforelse
+            </div>
+        </x-fa::section>
         @endif
 
         {{-- VERWALTUNG --}}
         @if($section === null && $kannKuratieren && ! $gp->is_platzhalter && $referenzen !== null)
-        <x-foodalchemist::section title="Verwaltung" icon="heroicon-o-cog-6-tooth" data-sektion="verwaltung">
+        <x-fa::section variant="plain" title="Verwaltung" icon="heroicon-o-cog-6-tooth" data-sektion="verwaltung">
             @if($referenzen['summe'] === 0)
-                <button type="button" wire:click="gpLoeschen" wire:confirm="„{{ $gp->name }}“ endgültig löschen? (Keine Referenzen vorhanden)" class="{{ $btnGhostXs }} text-rose-600" data-gp-loeschen>@svg('heroicon-o-trash', 'w-3.5 h-3.5 inline-block align-middle') GP löschen</button>
-                <p class="text-[11px] text-gray-500 mt-1">Keine Referenzen — Löschen möglich (Soft-Delete).</p>
+                <p class="{{ $leise }}">Nirgends verwendet, Löschen ist möglich (Weitere Aktionen oben).</p>
             @else
-                <p class="text-[11px] text-gray-600" data-ref-zusammenfassung>Löschen blockiert — wird referenziert:
+                <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]" data-ref-zusammenfassung>Löschen nicht möglich, noch verwendet in:
                     {{ implode(' · ', array_filter([
-                        $referenzen['las'] > 0 ? $referenzen['las'] . ' LA(s)' : null,
-                        $referenzen['rezept_zeilen'] > 0 ? $referenzen['rezept_zeilen'] . ' Zeile(n) in ' . $referenzen['rezepte'] . ' Rezept(en)' : null,
-                        $referenzen['derivate'] > 0 ? $referenzen['derivate'] . ' Derivat(e)' : null,
-                        $referenzen['merge_quellen'] > 0 ? $referenzen['merge_quellen'] . ' Merge-Verweis(e)' : null,
-                        $referenzen['ersatz'] > 0 ? $referenzen['ersatz'] . ' Ersatz-Verknüpfung(en)' : null,
+                        $referenzen['las'] > 0 ? $referenzen['las'] . ' ' . ($referenzen['las'] === 1 ? 'Artikel' : 'Artikeln') : null,
+                        $referenzen['rezept_zeilen'] > 0 ? $referenzen['rezept_zeilen'] . ' ' . ($referenzen['rezept_zeilen'] === 1 ? 'Zeile' : 'Zeilen') . ' in ' . $referenzen['rezepte'] . ' ' . ($referenzen['rezepte'] === 1 ? 'Rezept' : 'Rezepten') : null,
+                        $referenzen['derivate'] > 0 ? $referenzen['derivate'] . ' ' . ($referenzen['derivate'] === 1 ? 'Derivat' : 'Derivaten') : null,
+                        $referenzen['merge_quellen'] > 0 ? $referenzen['merge_quellen'] . ' zusammengeführten Grundprodukten' : null,
+                        $referenzen['ersatz'] > 0 ? $referenzen['ersatz'] . ' ' . ($referenzen['ersatz'] === 1 ? 'Ersatz-Verknüpfung' : 'Ersatz-Verknüpfungen') : null,
                     ])) }}
                 </p>
                 @if($referenzen['rezept_zeilen'] > 0)
-                    <div class="pt-1.5" data-gp-tausch>
-                        <p class="text-[11px] text-gray-600 mb-1">In allen Rezepten ersetzen durch …</p>
-                        <input type="search" wire:model.live.debounce.300ms="tauschSuche" placeholder="Ersatz-GP suchen …" class="{{ $input }} !py-1" data-tausch-suche />
+                    <div class="flex flex-col gap-1 pt-1" data-gp-tausch>
+                        <x-fa::field label="In allen Rezepten ersetzen durch" for="gp-tausch-suche">
+                            <x-fa::input id="gp-tausch-suche" size="sm" type="search" wire:model.live.debounce.300ms="tauschSuche" placeholder="Ersatz-Grundprodukt suchen" data-tausch-suche />
+                        </x-fa::field>
                         @foreach($tauschKandidaten as $k)
-                            <button type="button" wire:key="tausch-{{ $k->id }}" wire:click="gpErsetzen({{ $k->id }})" wire:confirm="„{{ $gp->name }}“ in {{ $referenzen['rezepte'] }} Rezept(en) durch „{{ $k->name }}“ ersetzen? Die Rezepte werden neu berechnet." class="w-full text-left px-2 py-1 rounded text-[11px] text-gray-700 hover:bg-violet-500/10 flex items-center gap-1.5">
-                                <span class="{{ $pill }} {{ $variantPill[$k->status->badgeVariant()] ?? $variantPill['secondary'] }} shrink-0">{{ $k->status->label() }}</span>
-                                <span class="min-w-0 flex-1 truncate">{{ $k->name }}</span>
+                            <button type="button" wire:key="tausch-{{ $k->id }}" wire:click="gpErsetzen({{ $k->id }})" wire:confirm="„{{ $gp->name }}“ in {{ $referenzen['rezepte'] }} Rezept(en) durch „{{ $k->name }}“ ersetzen? Die Rezepte werden neu berechnet." class="{{ $listenKnopf }}">
+                                <x-fa::status :value="$k->status" class="shrink-0" />
+                                <span class="min-w-0 flex-1">{{ $k->name }}</span>
                             </button>
                         @endforeach
                     </div>
                 @endif
             @endif
-        </x-foodalchemist::section>
+        </x-fa::section>
         @endif
+        </div>
 
         @if($section === null)
-        <p class="text-[11px] text-gray-500 border-t border-black/5 pt-2">UUID {{ $gp->uuid }}@if($gp->team_id === null) · global/BHG-kuratiert (D1)@endif</p>
+        <p class="pt-3 border-t border-[var(--fa-line)] {{ $leise }}"><span class="font-mono">{{ $gp->uuid }}</span>@if($gp->team_id === null)<span> · zentral gepflegt, für alle Teams</span>@endif</p>
         @endif
     @endif
 </div>

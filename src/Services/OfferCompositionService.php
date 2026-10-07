@@ -127,7 +127,7 @@ class OfferCompositionService
     {
         $k = $this->ownedKapitel($team, $id);
         if ($k->format_id === null || ! in_array($mode, FoodAlchemistOfferChapter::FORMAT_PRICE_MODES, true)) {
-            throw new \RuntimeException('Preis-Modus nur für Format-Kapitel (additiv|alternativen).');
+            throw new \RuntimeException('Die Preisart „additiv“ oder „Alternativen“ gibt es nur bei Format-Kapiteln.');
         }
         $k->update(['format_price_mode' => $mode]);
 
@@ -349,7 +349,7 @@ class OfferCompositionService
     {
         $k = $this->ownedKapitel($team, $chapterId);
         if ($k->format_id !== null) {
-            throw new \RuntimeException('Format-Kapitel trägt keine eigenen Blöcke (Inhalt kommt live aus dem Format).');
+            throw new \RuntimeException('Ein Format-Kapitel hat keine eigenen Inhalte. Sie kommen direkt aus dem Format.');
         }
         $daten = array_intersect_key($in, array_flip(self::BLOCK_FELDER));
         $daten['type'] = self::aufloesenBlockTyp($in['type'] ?? '');
@@ -988,7 +988,7 @@ class OfferCompositionService
     {
         $offer = FoodAlchemistAngebot::visibleToTeam($team)->findOrFail($id);
         if (! $offer->isOwnedBy($team)) {
-            throw new \RuntimeException('Geerbtes Angebot — Pflege nur durchs Besitzer-Team (D1).');
+            throw new \RuntimeException('Geerbtes Angebot: Ändern kann es nur das Besitzer-Team.');
         }
 
         return $offer;
@@ -998,7 +998,7 @@ class OfferCompositionService
     {
         $k = FoodAlchemistOfferChapter::visibleToTeam($team)->findOrFail($id);
         if (! $k->isOwnedBy($team)) {
-            throw new \RuntimeException('Geerbtes Angebot — Pflege nur durchs Besitzer-Team (D1).');
+            throw new \RuntimeException('Geerbtes Angebot: Ändern kann es nur das Besitzer-Team.');
         }
 
         return $k;
@@ -1008,7 +1008,7 @@ class OfferCompositionService
     {
         $block = FoodAlchemistOfferBlock::visibleToTeam($team)->findOrFail($id);
         if (! $block->isOwnedBy($team)) {
-            throw new \RuntimeException('Geerbtes Angebot — Pflege nur durchs Besitzer-Team (D1).');
+            throw new \RuntimeException('Geerbtes Angebot: Ändern kann es nur das Besitzer-Team.');
         }
 
         return $block;

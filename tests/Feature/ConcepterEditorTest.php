@@ -74,7 +74,7 @@ it('rendert die Auftrags-Hochrechnung im Kalkulations-Tab', function () {
 
     expect($html)->toContain('simulation=1')
         ->and($html)->toContain('pax=100')
-        ->and($html)->toContain('xl:grid-cols-10');
+        ->and($html)->toContain('xl:grid-cols-5'); // fa-pass: Laptop-Breite, höchstens fünf Spalten statt zehn in einer Reihe
 
     $template = file_get_contents(dirname(__DIR__, 2).'/resources/views/livewire/concepter/editor.blade.php');
     expect($template)->toContain('Personenstunden')

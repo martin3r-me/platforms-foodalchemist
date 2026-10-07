@@ -1,96 +1,135 @@
 {{-- Spec 32 — Controlling-Zentrum: Lagebild (Seite) + Werkbank (Voll-Editor).
 
      Die Seite darunter ist bewusst schmal. Sie existiert, damit das Schließen des Editors nicht
-     auf einer leeren Fläche landet und damit Deep-Links (`?editor=0`) ein Ziel haben — gearbeitet
-     wird im Editor. --}}
-@php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
-@php($eur = fn ($v) => number_format((float) $v, 2, ',', '.') . ' €')
-@php($pct = fn ($v) => $v === null ? '—' : number_format((float) $v, 1, ',', '.') . ' %')
-{{-- Ampel → kpi-tiles-Tone. „unbekannt" bleibt neutral: ohne bepreiste Gerichte gibt es nichts
-     zu bewerten, und eine graue Kachel lügt weniger als eine grüne. --}}
-@php($ampelTone = ['gruen' => 'good', 'gelb' => 'warn', 'rot' => 'bad', 'unbekannt' => 'neutral'])
+     auf einer leeren Fläche landet und damit Deep-Links (`?editor=0`) ein Ziel haben. Gearbeitet
+     wird im Editor.
+
+     fa-pass 2026-10-05: auf Bausteine <x-fa::…> und --fa-*-Tokens umgestellt. Lagebild als
+     klickbare Kennzahl-Leiste (fa-kpis-Optik, eine Hauptzahl), Seitenkopf mit der einen
+     Hauptaktion, fehlende Werte als Hinweis statt 0,00 €. Anordnung, Tabs, Panels und alle
+     wire:-/data-Marker unverändert. --}}
+@php
+    $eur = fn ($v) => number_format((float) $v, 2, ',', '.') . ' €';
+    $pct = fn ($v) => $v === null ? null : number_format((float) $v, 1, ',', '.') . ' %';
+    // Ampel → kpi-tiles-Tone. „unbekannt" bleibt neutral: ohne bepreiste Gerichte gibt es nichts
+    // zu bewerten, und eine graue Kachel lügt weniger als eine grüne.
+    $ampelTone = ['gruen' => 'good', 'gelb' => 'warn', 'rot' => 'bad', 'unbekannt' => 'neutral'];
+    $ampelBadge = [
+        'gruen' => ['ok', 'Im Ziel'],
+        'gelb' => ['warn', 'Über Ziel'],
+        'rot' => ['crit', 'Deutlich über Ziel'],
+    ];
+
+    // Fehlende Werte zeigen, nicht als 0 ausgeben: ohne Fixkosten gibt es keinen Break-even,
+    // ohne Einkaufsjournal keinen Einkauf. Der Food.Alchemist schätzt nicht.
+    $kacheln = [];
+    if (! ($kpi['leer'] ?? true)) {
+        $breakEvenText = ($kpi['fixkosten_monat'] ?? 0) > 0 ? $eur($kpi['break_even']) : null;
+        $spendText = ($kpi['spend_30d'] ?? 0) > 0 ? $eur($kpi['spend_30d']) : null;
+        $kacheln = [
+            ['label' => 'Ø Wareneinsatz', 'wert' => $pct($kpi['avg_w_pct']), 'fehlt' => 'Keine bepreisten Gerichte', 'tab' => 'wareneinsatz', 'primary' => true,
+                'satz' => 'Einkaufspreis gegen Verkaufspreis über alle bepreisten Gerichte'],
+            ['label' => 'Ziel-Wareneinsatz', 'wert' => $pct($kpi['ziel_we_pct']), 'fehlt' => 'Kein Ziel gesetzt', 'tab' => 'kennzahlen',
+                'satz' => 'Zielquote aus den Kalkulations-Einstellungen'],
+            ['label' => 'EK-Abdeckung', 'wert' => $pct($kpi['ek_coverage_pct']), 'fehlt' => 'Keine Gerichte', 'tab' => 'lage',
+                'satz' => number_format((int) $kpi['n_dishes'], 0, ',', '.') . ' Gerichte im Portfolio, Anteil mit Einkaufspreis'],
+            ['label' => 'Einkauf 30 Tage', 'wert' => $spendText, 'fehlt' => 'Kein Einkauf erfasst', 'tab' => 'wareneinsatz',
+                'satz' => 'Tatsächliche Ausgaben laut Einkaufsjournal'],
+            ['label' => 'Break-even je Monat', 'wert' => $breakEvenText, 'fehlt' => 'Fixkosten fehlen', 'tab' => 'kennzahlen',
+                'satz' => 'Fixkosten geteilt durch die Deckungsbeitragsquote, eine Planungsgröße'],
+            ['label' => 'Offene Geld-Signale', 'wert' => number_format($kpi['geld_signale'], 0, ',', '.'), 'fehlt' => null, 'tab' => 'signale',
+                'satz' => 'Befunde zu Preis, Marge und Wareneinsatz', 'ton' => $kpi['geld_signale'] > 0 ? 'warn' : null],
+        ];
+    }
+@endphp
 
 <x-ui-page>
     <x-slot name="navbar">
-        <x-ui-page-navbar title="Controlling" icon="heroicon-o-presentation-chart-line" />
+        <x-foodalchemist::shell.page-navbar title="Controlling" icon="heroicon-o-presentation-chart-line" />
     </x-slot>
 
     <x-slot name="actionbar">
         <x-ui-page-actionbar :breadcrumbs="[
             ['label' => 'Food Alchemist', 'href' => route('foodalchemist.dashboard'), 'icon' => 'cube'],
             ['label' => 'Controlling'],
-        ]">
-            <button type="button" wire:click="oeffnen" class="{{ $btnPrimary }}" data-ctrl-oeffnen>
-                @svg('heroicon-o-arrows-pointing-out', 'w-4 h-4')
-                Werkbank öffnen
-            </button>
-        </x-ui-page-actionbar>
+        ]" />
     </x-slot>
 
-    <x-ui-page-container>
+    <x-ui-page-container padding="px-6 py-6" spacing="space-y-5">
+        <x-fa::page-header title="Controlling" subtitle="Wareneinsatz, Preise, Erlöse und Kennzahlen eines Betriebs an einem Ort.">
+            <x-slot:actions>
+                <x-fa::button variant="primary" icon="heroicon-o-arrows-pointing-out" wire:click="oeffnen" data-ctrl-oeffnen>
+                    Werkbank öffnen
+                </x-fa::button>
+            </x-slot:actions>
+        </x-fa::page-header>
+
         @if($kpi['leer'])
-            <div class="relative {{ $card }} px-5 py-8 text-center">
-                <div class="{{ $cardAccent }}"></div>
-                <p class="text-sm text-gray-500">Kein Team zugeordnet — ohne Team gibt es keine Zahlen.</p>
+            <div class="fa-surface">
+                <x-fa::empty icon="heroicon-o-user-group" title="Kein Team zugeordnet">
+                    Ohne Team gibt es keine Zahlen. Wähle oben ein Team aus oder lass dich einem Team zuordnen.
+                </x-fa::empty>
             </div>
         @else
-            {{-- Ebene 2: welcher Betrieb treibt die kostenstruktur-KPIs (aktiver Betrieb aus dem Sidebar-Balken). --}}
+            {{-- Ebene 2: welcher Betrieb treibt die Kostenstruktur-Werte (aktiver Betrieb aus dem Sidebar-Balken). --}}
             @if(!empty($kpi['betrieb_name']))
-                <div class="mb-3 inline-flex items-center gap-2 rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-[11px] text-violet-700" data-ctrl-betrieb>
-                    <span class="w-1.5 h-1.5 rounded-full bg-violet-500"></span>
-                    Kostenstruktur-KPIs (Ziel-WE, Break-even) für Betrieb <strong>{{ $kpi['betrieb_name'] }}</strong> · Ist-Werte (Ø Wareneinsatz, EK-Abdeckung, Einkauf) team-weit
+                <div data-ctrl-betrieb>
+                    <x-fa::notice tone="info" :title="'Betrieb ' . $kpi['betrieb_name']">
+                        Ziel-Wareneinsatz und Break-even gelten für diesen Betrieb. Ø Wareneinsatz, EK-Abdeckung und Einkauf gelten für das ganze Team.
+                    </x-fa::notice>
                 </div>
             @endif
 
             {{-- Lagebild: dieselben sechs Werte wie im Editor-Kopf, hier als Sprungbrett.
-                 Ein Klick öffnet die Werkbank direkt im zuständigen Tab. --}}
-            <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3" data-ctrl-lagebild>
-                @php($kacheln = [
-                    ['Ø Wareneinsatz', $pct($kpi['avg_w_pct']), 'wareneinsatz', 'Durchschnitt über die bepreisten Gerichte (EK gegen VK)'],
-                    ['Ziel-Wareneinsatz', $pct($kpi['ziel_we_pct']), 'kennzahlen', 'Zielquote aus den Kalkulations-Einstellungen'],
-                    ['EK-Abdeckung', $pct($kpi['ek_coverage_pct']), 'lage', $kpi['n_dishes'] . ' Gerichte im Portfolio — wie viele davon einen EK tragen'],
-                    ['Einkauf 30 Tage', $eur($kpi['spend_30d']), 'wareneinsatz', 'Ist-Ausgaben aus dem Einkaufsjournal'],
-                    ['Break-even / Monat', $eur($kpi['break_even']), 'kennzahlen', 'Σ Fixkosten ÷ Deckungsbeitragsquote — Planungs-Näherung'],
-                    ['Geld-Signale offen', number_format($kpi['geld_signale'], 0, ',', '.'), 'signale', 'Preis-, Marge- und Wareneinsatz-Befunde'],
-                ])
-                @foreach($kacheln as [$titel, $wert, $zielTab, $hinweis])
-                    <button type="button" wire:click="oeffnen('{{ $zielTab }}')" title="{{ $hinweis }}"
-                            class="relative {{ $card }} px-4 py-3 text-left hover:-translate-y-0.5 hover:shadow-md transition-all duration-150">
-                        <div class="{{ $cardAccent }}"></div>
-                        <div class="{{ $label }}">{{ $titel }}</div>
-                        <div class="mt-1 text-xl font-semibold tracking-tight text-gray-900">{{ $wert }}</div>
+                 Ein Klick öffnet die Werkbank direkt im zuständigen Tab. Optik der Kennzahl-Leiste
+                 (fa-kpis), eine Hauptzahl: der Ø Wareneinsatz. --}}
+            <div class="fa-kpis" data-ctrl-lagebild>
+                @foreach($kacheln as $k)
+                    <button type="button" wire:click="oeffnen('{{ $k['tab'] }}')" title="{{ $k['satz'] }}"
+                            class="fa-kpi text-left transition-colors duration-150 hover:bg-[var(--fa-hover)] focus-visible:outline-2 focus-visible:outline-[color:var(--fa-accent)]">
+                        <span class="text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-2)] truncate">{{ $k['label'] }}</span>
+                        @if($k['wert'] === null)
+                            <span class="mt-1"><x-fa::badge tone="warn">{{ $k['fehlt'] }}</x-fa::badge></span>
+                        @elseif(!empty($k['primary']))
+                            <span class="text-[length:var(--fa-text-2xl)] font-semibold tracking-tight leading-tight tabular-nums text-[var(--fa-accent)]">{{ $k['wert'] }}</span>
+                            @if(isset($ampelBadge[$kpi['we_ampel']]))
+                                <span class="mt-0.5"><x-fa::badge :tone="$ampelBadge[$kpi['we_ampel']][0]">{{ $ampelBadge[$kpi['we_ampel']][1] }}</x-fa::badge></span>
+                            @endif
+                        @else
+                            <span class="text-[length:var(--fa-text-lg)] font-semibold leading-snug tabular-nums {{ ($k['ton'] ?? null) === 'warn' ? 'text-[var(--fa-warn)]' : 'text-[var(--fa-ink)]' }}">{{ $k['wert'] }}</span>
+                        @endif
+                        <span class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)] line-clamp-2">{{ $k['satz'] }}</span>
                     </button>
                 @endforeach
             </div>
 
-            <p class="mt-4 text-xs text-gray-500">
-                Die Auswertung passiert in der Werkbank — Portfolio, Preise, Wareneinsatz,
-                Simulation, Erfolg, Geld-Signale, Kennzahlen und Verlauf liegen dort als Tabs
-                nebeneinander, jeweils mit den Hebeln daneben.
+            <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)] max-w-[75ch]">
+                Ein Klick auf eine Kennzahl öffnet die Werkbank im passenden Bereich. Dort liegen Portfolio, Preise,
+                Wareneinsatz, Simulation, Erfolg, Geld-Signale, Kennzahlen und Verlauf nebeneinander, jeweils mit den Hebeln dazu.
             </p>
         @endif
 
         {{-- ── Werkbank ────────────────────────────────────────────────────────────────
              Voll-Editor im dunklen Grund (Spec 28/29-Muster). Server-Modus-Tabs: die Panels
              sind zu schwer, um alle gleichzeitig zu leben (Journal-Optimierung, Peer-Benchmark).
-             Detail-Sprünge gehören in eigene Modals, NICHT in den activity-Slot — dort kollabiert
+             Detail-Sprünge gehören in eigene Modals, NICHT in den activity-Slot: dort kollabiert
              die Hauptspalte auf Höhe 0 (Signale-Blank-Bug 2026-08-02). --}}
         <x-foodalchemist::modal name="controlling-editor" fullscreen dark-canvas
                                 title="Controlling" :title-name="\Platform\FoodAlchemist\Livewire\Controlling\Cockpit::TABS[$tab] ?? null">
 
             @unless($kpi['leer'])
                 <x-slot:kpiHeader>
-                    {{-- Leitwert (accent) ist der Ø Wareneinsatz — die eine Zahl, an der in diesem
-                         Modul Geld hängt. Ampel nur dort; nie zwei Alarmfarben nebeneinander. --}}
+                    {{-- Leitwert ist der Ø Wareneinsatz, die eine Zahl, an der in diesem Modul Geld
+                         hängt. Ampel nur dort; nie zwei Alarmfarben nebeneinander. --}}
                     <x-foodalchemist::kpi-tiles :cols="6" marker="controlling-kpis" :tiles="[
                         ['kpi' => 'we-pct', 'label' => 'Ø Wareneinsatz', 'tone' => $ampelTone[$kpi['we_ampel']] ?? 'neutral',
-                         'value' => $pct($kpi['avg_w_pct']),
-                         'title' => 'Ø EK gegen VK über die bepreisten Gerichte'],
-                        ['kpi' => 'we-ziel', 'label' => 'Ziel', 'value' => $pct($kpi['ziel_we_pct'])],
-                        ['kpi' => 'ek-coverage', 'label' => 'EK-Abdeckung', 'value' => $pct($kpi['ek_coverage_pct']),
+                         'value' => $pct($kpi['avg_w_pct']) ?? '–',
+                         'title' => 'Einkaufspreis gegen Verkaufspreis über die bepreisten Gerichte'],
+                        ['kpi' => 'we-ziel', 'label' => 'Ziel', 'value' => $pct($kpi['ziel_we_pct']) ?? '–'],
+                        ['kpi' => 'ek-coverage', 'label' => 'EK-Abdeckung', 'value' => $pct($kpi['ek_coverage_pct']) ?? '–',
                          'title' => $kpi['n_dishes'] . ' Gerichte im Portfolio'],
-                        ['kpi' => 'spend', 'label' => 'Einkauf 30 T.', 'value' => $eur($kpi['spend_30d'])],
-                        ['kpi' => 'break-even', 'label' => 'Break-even/Mon.', 'value' => $eur($kpi['break_even'])],
+                        ['kpi' => 'spend', 'label' => 'Einkauf 30 Tage', 'value' => $kpi['spend_30d'] > 0 ? $eur($kpi['spend_30d']) : 'Nichts erfasst'],
+                        ['kpi' => 'break-even', 'label' => 'Break-even je Monat', 'value' => $kpi['fixkosten_monat'] > 0 ? $eur($kpi['break_even']) : 'Fixkosten fehlen'],
                         ['kpi' => 'geld-signale', 'label' => 'Geld-Signale', 'value' => number_format($kpi['geld_signale'], 0, ',', '.')],
                     ]" />
                 </x-slot:kpiHeader>
@@ -100,31 +139,31 @@
                 :tabs="\Platform\FoodAlchemist\Livewire\Controlling\Cockpit::TABS" />
 
             @if($tab === 'lage')
-                {{-- Spec 33 P7: der Signal-Verlauf ist raus — er hatte die Lage überladen.
+                {{-- Spec 33 P7: der Signal-Verlauf ist raus, er hatte die Lage überladen.
                      Lage ist die Momentaufnahme, Verlauf ist die Bewegung. --}}
-                <x-foodalchemist::modal-section title="Portfolio-Benchmark">
+                <x-foodalchemist::modal-section title="Vergleich mit der Gruppe" icon="heroicon-o-scale">
                     @include('foodalchemist::livewire.controlling.partials._benchmark', ['benchmark' => $benchmark])
                 </x-foodalchemist::modal-section>
             @endif
 
             @if($tab === 'portfolio')
-                <x-foodalchemist::modal-section title="Wer fährt gerade was">
+                <x-foodalchemist::modal-section title="Was läuft wo" icon="heroicon-o-squares-2x2">
                     <livewire:foodalchemist.controlling.panels.portfolio />
                 </x-foodalchemist::modal-section>
             @endif
 
             @if($tab === 'verlauf')
-                <x-foodalchemist::modal-section title="Signal-Verlauf">
+                <x-foodalchemist::modal-section title="Signal-Verlauf" icon="heroicon-o-arrow-trending-down">
                     @include('foodalchemist::livewire.controlling.partials._verlauf', ['verlauf' => $verlauf])
                 </x-foodalchemist::modal-section>
             @endif
 
             @if($tab === 'preise')
-                <x-foodalchemist::modal-section title="Preisvergleich über Lieferanten">
+                <x-foodalchemist::modal-section title="Preisvergleich über Lieferanten" icon="heroicon-o-currency-euro">
                     <livewire:foodalchemist.controlling.panels.preisvergleich />
                 </x-foodalchemist::modal-section>
 
-                <x-foodalchemist::modal-section title="Auffällige Buchungen">
+                <x-foodalchemist::modal-section title="Auffällige Buchungen" icon="heroicon-o-exclamation-triangle">
                     <livewire:foodalchemist.controlling.panels.ausreisser />
                 </x-foodalchemist::modal-section>
             @endif
@@ -132,47 +171,47 @@
             @if($tab === 'wareneinsatz')
                 {{-- Erst die gemessene Quote (C4), dann die Optimierung: die Frage „stimmt der
                      Wareneinsatz überhaupt" kommt vor „wo könnte er günstiger sein". --}}
-                <x-foodalchemist::modal-section title="Ist gegen Rezeptur">
+                <x-foodalchemist::modal-section title="Ist gegen Rezeptur" icon="heroicon-o-scale">
                     <livewire:foodalchemist.controlling.panels.abweichung />
                 </x-foodalchemist::modal-section>
 
-                <x-foodalchemist::modal-section title="Ist gegen optimalen Bezug">
+                <x-foodalchemist::modal-section title="Ist gegen günstigsten Bezug" icon="heroicon-o-arrows-right-left">
                     <livewire:foodalchemist.controlling.panels.wareneinsatz />
                 </x-foodalchemist::modal-section>
             @endif
 
             @if($tab === 'simulation')
-                <x-foodalchemist::modal-section title="Was wäre wenn">
+                <x-foodalchemist::modal-section title="Was wäre wenn" icon="heroicon-o-adjustments-horizontal">
                     @livewire('foodalchemist.kalkulation.simulation')
                 </x-foodalchemist::modal-section>
             @endif
 
             @if($tab === 'erfolg')
                 {{-- Spec 33 P6: erst was die laufenden Ausgaben bringen, dann das Gericht-Detail.
-                     Die Ausgabe ist die Einheit, in der entschieden wird — das Gericht die, in
+                     Die Ausgabe ist die Einheit, in der entschieden wird, das Gericht die, in
                      der nachgesehen wird. --}}
-                <x-foodalchemist::modal-section title="Was bringen die laufenden Ausgaben">
+                <x-foodalchemist::modal-section title="Was bringen die laufenden Ausgaben" icon="heroicon-o-banknotes">
                     <livewire:foodalchemist.controlling.panels.promotion />
                 </x-foodalchemist::modal-section>
 
                 {{-- Kein „&amp;" im Titel: der Slot escaped den Wert erneut und im Kopf stand „&AMP;". --}}
-                <x-foodalchemist::modal-section title="Verkaufs-Ist und Menu-Engineering">
+                <x-foodalchemist::modal-section title="Verkaufszahlen und Menu-Engineering" icon="heroicon-o-chart-bar">
                     <livewire:foodalchemist.controlling.panels.erfolg />
                 </x-foodalchemist::modal-section>
 
-                <x-foodalchemist::modal-section title="Verkaufspreise freigeben">
+                <x-foodalchemist::modal-section title="Verkaufspreise freigeben" icon="heroicon-o-check-badge">
                     <livewire:foodalchemist.controlling.panels.vk-freigabe />
                 </x-foodalchemist::modal-section>
             @endif
 
             @if($tab === 'signale')
-                <x-foodalchemist::modal-section title="Geld-Signale">
+                <x-foodalchemist::modal-section title="Geld-Signale" icon="heroicon-o-bell-alert">
                     @include('foodalchemist::livewire.controlling.partials._geld-signale', ['kpi' => $kpi])
                 </x-foodalchemist::modal-section>
             @endif
 
             @if($tab === 'kennzahlen')
-                <x-foodalchemist::modal-section title="Kalkulations-Kennzahlen">
+                <x-foodalchemist::modal-section title="Kalkulations-Kennzahlen" icon="heroicon-o-calculator">
                     <livewire:foodalchemist.controlling.panels.kennzahlen />
                 </x-foodalchemist::modal-section>
             @endif

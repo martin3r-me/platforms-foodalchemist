@@ -61,10 +61,10 @@
     $sichtbar = array_filter($tabs, fn ($label) => $label !== null && $label !== false && $label !== '');
     $startTab = $init ?? (array_key_first($sichtbar) ?? '');
     $serverModus = $action !== null;
-    $leiste = 'flex gap-4 border-b border-black/5 sticky top-0 z-20 -mx-6 px-6 bg-white/90 backdrop-blur-xl shadow-md rounded-b-xl';
-    $knopf = 'px-1 py-2 text-xs font-medium border-b-2 -mb-px transition-colors';
-    $an = 'border-violet-500 text-violet-700';
-    $aus = 'border-transparent text-gray-600 hover:text-gray-700';
+    $leiste = 'flex flex-wrap gap-1 border-b border-[var(--fa-line)] sticky -top-4 z-20 -mx-6 px-6 bg-[var(--fa-surface)]'; // fa-pass: Token-Leiste, hell + Werkbank. -top-4 = Body-Padding (py-4): mit top-0 klebte sie 16 px tiefer und überlappte das erste Panel
+    $knopf = 'h-11 px-3.5 text-[length:var(--fa-text-base)] font-medium border-b-2 -mb-px rounded-t-[var(--fa-radius-control)] transition-colors whitespace-nowrap focus-visible:-outline-offset-2';
+    $an = 'border-[var(--fa-accent)] text-[var(--fa-accent)] font-semibold bg-[var(--fa-accent-soft)]';
+    $aus = 'border-transparent text-[var(--fa-ink-2)] hover:text-[var(--fa-ink)] hover:bg-[var(--fa-hover)]';
 @endphp
 
 @if($serverModus)
@@ -74,7 +74,7 @@
             @php $cnt = $counts[$tabKey] ?? null; @endphp
             <button type="button" wire:click="{{ $action }}('{{ $tabKey }}')"
                     class="{{ $knopf }} inline-flex items-center {{ $active === $tabKey ? $an : $aus }}"
-                    data-fa-editor-tab="{{ $tabKey }}" @if($marker) data-{{ $marker }}-tab="{{ $tabKey }}" @endif>{{ $tabLabel }}@if($cnt !== null && $cnt > 0)<span class="ml-1.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-semibold {{ $active === $tabKey ? 'bg-violet-500/15 text-violet-700' : 'bg-black/[0.06] text-gray-500' }}">{{ number_format($cnt, 0, ',', '.') }}</span>@endif</button>
+                    data-fa-editor-tab="{{ $tabKey }}" @if($marker) data-{{ $marker }}-tab="{{ $tabKey }}" @endif>{{ $tabLabel }}@if($cnt !== null && $cnt > 0)<span class="ml-1.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[length:var(--fa-text-sm)] font-semibold {{ $active === $tabKey ? 'bg-[var(--fa-accent-soft)] text-[var(--fa-accent)]' : 'bg-[var(--fa-neutral-soft)] text-[var(--fa-ink-2)]' }}">{{ number_format($cnt, 0, ',', '.') }}</span>@endif</button>
         @endforeach
     </div>
 @else
@@ -87,8 +87,12 @@
 
         {{-- Eine einzige Lasche ist keine Navigation, sondern Rauschen (z. B. GP-Neuanlage, die
              nur „Allgemein" hat). Der Alpine-Scope bleibt trotzdem — die Panels binden an `tab`. --}}
+        {{-- wire:ignore (2026-10-06): der erste Besuch eines Reiters ruft visitAction → Livewire-Morph
+             setzt das class-Attribut auf den Server-Stand zurück, Alpines :class-Buchführung kippt →
+             zwei Reiter gleichzeitig markiert, die blaue Lasche „springt" auf Aufbau. Die Leiste ist
+             serverseitig statisch; ein Datensatz-Wechsel ersetzt sie ohnehin über wire:key. --}}
         @if(count($sichtbar) > 1)
-            <div class="{{ $leiste }} -mt-4 pt-4">
+            <div wire:ignore class="{{ $leiste }} -mt-4 pt-4">
                 @foreach($sichtbar as $tabKey => $tabLabel)
                     <button type="button" @click="tab = @js($tabKey)@if($visitAction); if (! visited.includes(@js($tabKey))) { visited.push(@js($tabKey)); $wire.{{ $visitAction }}(@js($tabKey)); }@endif"
                             :class="tab === @js($tabKey) ? '{{ $an }}' : '{{ $aus }}'"

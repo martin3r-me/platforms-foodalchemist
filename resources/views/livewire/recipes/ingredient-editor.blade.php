@@ -1,21 +1,21 @@
-{{-- M4-07/08 / P-8: Zutaten-Editor — Alpine-first; Kern geteilt mit dem Voll-Editor (partials/zutaten-kern) --}}
-@php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
-
+{{-- M4-07/08 / P-8: Zutaten-Editor — Alpine-first; Kern geteilt mit dem Voll-Editor (partials/zutaten-kern).
+     fa-pass 2026-10: Werkbank-Optik. Standalone-Hülle mit EINER Hauptaktion rechts im Kopf;
+     Schließen läuft über das Kreuz oder „Abbrechen" daneben. --}}
 <div data-zutaten-editor-root>
     @if($eingebettet)
         @include('foodalchemist::livewire.recipes.partials.zutaten-kern')
     @else
-        {{-- Spec 28 / E3.3: eingebettet erbt der Kern den Editor-Grund vom Eltern-Modal; die
-             STANDALONE-Hülle war dagegen hell und schmaler als der Voll-Editor. Jetzt gleiche
-             Hülle wie Rezept-/Gericht-Editor, Rezeptname als Akzent-Chip statt im Titel-String. --}}
+        {{-- Spec 28 / E3.3: gleiche Hülle wie Rezept-/Gericht-Editor, Rezeptname im Titel-Chip. --}}
         <x-foodalchemist::modal name="zutaten-editor" title="Zutaten bearbeiten"
             :title-name="$rezept?->name" fullscreen dark-canvas>
-            @include('foodalchemist::livewire.recipes.partials.zutaten-kern')
+            <x-slot:actions>
+                <div class="ml-auto flex items-center gap-2">
+                    <x-fa::button variant="ghost" wire:click="$dispatch('modal.close', { name: 'zutaten-editor' })">Abbrechen</x-fa::button>
+                    <x-fa::button variant="primary" icon="heroicon-m-check" x-data x-on:click="$dispatch('zutaten-speichern', { recipeId: $wire.recipeId })" data-zutaten-speichern>Zutaten speichern</x-fa::button>
+                </div>
+            </x-slot:actions>
 
-            <x-slot:footer>
-                <button type="button" wire:click="$dispatch('modal.close', { name: 'zutaten-editor' })" class="{{ $btnGhost }}">Abbrechen</button>
-                <button type="button" x-data @click="$dispatch('zutaten-speichern', { recipeId: $wire.recipeId })" class="{{ $btnPrimary }}" data-zutaten-speichern>Speichern</button>
-            </x-slot:footer>
+            @include('foodalchemist::livewire.recipes.partials.zutaten-kern')
         </x-foodalchemist::modal>
     @endif
 
@@ -40,9 +40,14 @@
             browserGeladen: false,
             geparkt: null,                                           // [+]-Klick parkt das Ziel in der Anzeigezeile
             tauschIdx: null,                                         // ⇄: Index der Zeile, deren Produkt getauscht wird (null = normaler Add-Flow)
+            // fa-pass 2026-10: EINE Hinzufügen-Zeile statt zweier fester Seitenspalten.
+            // Filter sind eingeklappt, die Trefferliste klappt erst beim Suchen/Filtern auf.
+            filterOffen: false,
+            trefferOffen: false,
 
             async browse() {
                 this.browserGeladen = true;
+                this.trefferOffen = true;
                 const r = await this.$wire.browseKatalog(
                     { wg: this.gpFilter.wg, sub: this.gpFilter.sub, condition: this.gpFilter.condition, bio: this.gpFilter.bio, regional: this.gpFilter.regional, nur_favoriten: this.gpFilter.nur_favoriten },
                     { hg: this.rezFilter.hg, kat: this.rezFilter.kat, level: this.rezFilter.level },
@@ -52,7 +57,51 @@
                 this.rezListe = r.rezepte.items; this.rezTotal = r.rezepte.total;
             },
             browseOnce() {
+                this.trefferOffen = true;
                 if (!this.browserGeladen) this.browse();
+            },
+            // Zahl der gesetzten Filter (Knopf „Filter" zeigt sie an, damit eingeklappte Filter nicht vergessen werden)
+            aktiveFilter() {
+                const g = this.gpFilter, r = this.rezFilter;
+                return [g.wg, g.sub, g.condition, r.hg, r.kat, r.level].filter(v => v !== '' && v !== null).length
+                    + [g.bio, g.regional, g.nur_favoriten].filter(Boolean).length;
+            },
+            filterZuruecksetzen() {
+                Object.assign(this.gpFilter, { wg: '', sub: '', condition: '', bio: false, regional: false, nur_favoriten: false });
+                Object.assign(this.rezFilter, { hg: '', kat: '', level: '' });
+                this.browse();
+            },
+            niveauText(ziel) {
+                const labels = Object.fromEntries((this.vokabular?.niveaus ?? []).map(n => [n.slug, n.label]));
+                return (ziel?.niveaus ?? []).map(n => labels[n] ?? n).join(', ');
+            },
+            // Herkunft der Verknüpfung lesbar (match_method), nur als Tooltip am Zutat-Namen
+            herkunftText(z) {
+                return {
+                    gemini_proposed: 'Von der KI zugeordnet', manual: 'Verknüpft', recipe_ref: 'Als Basisrezept verknüpft',
+                    override_gp: 'Von Hand festgelegt', override_subrecipe: 'Von Hand festgelegt', gp_v2_fk: 'Aus dem Katalog übernommen',
+                    unmatched: 'Nicht zugeordnet', ignored: 'Ignoriert',
+                }[z?.lineage] ?? '';
+            },
+            // Anzeige je Preis-Spalte: null = kein Wert, 'ohne Preis' = Preis bewusst 0 (z. B. Leitungswasser)
+            ohnePreis(z, feld = 'ek_pro_g') {
+                if (feld === 'ek_pro_g' && this.einheiten[z.unit_vocab_id]?.slug === 'stk'
+                    && z.ek_pro_stk !== null && z.ek_pro_stk !== undefined) return Number(z.ek_pro_stk) === 0;
+                return z[feld] !== null && z[feld] !== undefined && Number(z[feld]) === 0;
+            },
+            ekAnzeige(z, feld = 'ek_pro_g') {
+                if (this.ohnePreis(z, feld) && this.zeilenEk(z, feld) !== null) return 'ohne Preis';
+                return this.zeilenEk(z, feld) ?? '–';
+            },
+            // Wie der alte Hinweis: verknüpft, nicht optional, kein €/g. Ausnahme Stück-Zeile mit €/Stück:
+            // die ist bepreist (zeilenEk/bepreistInfo rechnen sie), also kein „Preis fehlt".
+            preisFehlt(z) {
+                if (!(z.gp_id || z.referenced_recipe_id) || z.is_optional) return false;
+                if (this.einheiten[z.unit_vocab_id]?.slug === 'stk' && z.ek_pro_stk !== null && z.ek_pro_stk !== undefined) return false;
+                return z.ek_pro_g === null || z.ek_pro_g === undefined;
+            },
+            summeAnzeige(feld = 'ek_pro_g') {
+                return this.rows.some(z => this.zeilenEk(z, feld) !== null) ? this.summe(feld) : '–';
             },
             subKategorienFuerWg() {
                 return (this.vokabular?.subKategorien ?? []).filter(s => this.gpFilter.wg === '' || s.commodity_group_code === this.gpFilter.wg);
@@ -75,9 +124,6 @@
                 const cur = z?.unit_vocab_id != null ? this.einheiten[z.unit_vocab_id]?.slug : null;
                 if (cur) set.add(cur);
                 return alle.filter(e => set.has(e.slug));
-            },
-            niveauFarbe(n) {
-                return { haute_cuisine: 'bg-violet-500', gehoben: 'bg-amber-500', klassisch: 'bg-sky-400' }[n] ?? 'bg-gray-300';
             },
             // Spec-Flow: [+] parkt das Ziel, Einheit kommt vom Produkt, Cursor springt in die Menge
             parke(ziel) {
@@ -106,7 +152,7 @@
                 this.browse();
             },
 
-            // ── ♻ Ersatz-Tausch (Äquivalenz-Katalog): 1 Klick tauscht auf die hinterlegte
+            // ── Ersatz-Tausch (Äquivalenz-Katalog): 1 Klick tauscht auf die hinterlegte
             //    Gegenseite (make-or-buy / Artikel-Ersatz), Menge × faktor. Der inverse
             //    Hinweis wird direkt gesetzt — nochmal klicken tauscht zurück. ──
             ersatzTausch(i) {
@@ -136,7 +182,7 @@
                 z.ersatz = zurueck;
                 z._flash = true; setTimeout(() => { z._flash = false; }, 1600);
                 // EIN Round-Trip für Preis UND Gramm-Umrechnung: sonst blieb die Zeile nach einem
-                // ♻ auf ein Stück-/Formen-Produkt bis zum Speichern rechnerisch blind.
+                // Ersatz-Tausch auf ein Stück-/Formen-Produkt bis zum Speichern rechnerisch blind.
                 this.$wire.zielDaten(e.kind === 'gp' ? 'gp' : 'sub', e.id).then(d => {
                     if (!d) return;
                     z.ek_pro_g = d.ek_pro_g; z.ek_pro_stk = d.ek_pro_stk;
@@ -144,18 +190,19 @@
                     z.formen_g = d.formen_g;
                 });
             },
-            ladeErsatz(z) {                                          // neue/gebrowste Zeile: Hinweis leise nachladen
+            ladeErsatz(z) {                                          // neue/gebrowste Zeile: Ersatz-Hinweis leise nachladen
                 this.$wire.ersatzFuer(z.gp_id, z.referenced_recipe_id).then(e => { z.ersatz = e; });
             },
             ersatzTitel(z) {
                 if (!z.ersatz) return '';
                 const f = z.ersatz.faktor;
-                return 'Ersatz: ' + z.ersatz.name + (f && f !== 1 ? ' (Menge ×' + String(f).replace('.', ',') + ')' : '') + ' — Klick tauscht um';
+                return 'Ersatz tauschen: ' + String(z.ersatz.name ?? '').replace('↳ ', '') + (f && f !== 1 ? ' (Menge ×' + String(f).replace('.', ',') + ')' : '') + '. Ein weiterer Klick tauscht zurück.';
             },
 
             // ── ⇄ Tausch: Produkt einer bestehenden Zeile ersetzen (Menge/Einheit/Rolle/Note/Position bleiben) ──
             starteTausch(i) {
                 this.tauschIdx = i;
+                this.trefferOffen = true;
                 this.geparkt = null;                                 // evtl. laufenden Park-Flow abbrechen
                 this.$nextTick(() => this.$root.querySelector('[data-browse-suche]')?.focus());
             },
@@ -183,7 +230,7 @@
                 }
                 z.ek_pro_g_min = null; z.ek_pro_g_avg = null;        // alte Min/Ø verwerfen — Save rechnet präzise nach
                 z._peek = null;
-                z.ersatz = null; this.ladeErsatz(z);                 // ♻-Hinweis fürs neue Produkt nachladen
+                z.ersatz = null; this.ladeErsatz(z);                 // Ersatz-Hinweis fürs neue Produkt nachladen
                 z._flash = true; setTimeout(() => { z._flash = false; }, 1600);
                 this.$wire.ekFuerZiel(ziel.type, ziel.id).then(ek => { if (ek !== null) z.ek_pro_g = ek; });
                 this.tauschIdx = null;
@@ -336,7 +383,7 @@
                     }
                     window.dispatchEvent(new CustomEvent('garverluste-fertig'));
                 } catch (e) {
-                    window.dispatchEvent(new CustomEvent('garverluste-fehler', { detail: { message: (e && e.message) ? e.message : 'Fehler — bitte erneut versuchen.' } }));
+                    window.dispatchEvent(new CustomEvent('garverluste-fehler', { detail: { message: (e && e.message) ? e.message : 'Vorschlag fehlgeschlagen, bitte erneut versuchen.' } }));
                 }
             },
             hinzufuegen(ziel) {  // Auto-Fill (M4-08) — R18: interner Schritt des Park-Flows
@@ -364,7 +411,7 @@
                     einheiten: ziel.einheiten ?? null,               // #9c: erlaubte Einheiten des Produkts
                     ersatz: null,
                 });
-                this.ladeErsatz(this.rows[this.rows.length - 1]);     // ♻-Hinweis leise nachladen
+                this.ladeErsatz(this.rows[this.rows.length - 1]);     // Ersatz-Hinweis leise nachladen
                 this.neu.quantity = ''; this.neu.is_optional = false;
             },
         };

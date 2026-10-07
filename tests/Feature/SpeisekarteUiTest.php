@@ -198,7 +198,7 @@ it('Phase E: Leitstelle zeigt Checkliste immer, Coverage nur bei Planungs-Gerüs
     Livewire::test(\Platform\FoodAlchemist\Livewire\Speisekarte\LeitstelleRail::class, ['karteId' => $karte->id])
         ->assertOk()
         ->assertSee('Was fehlt der Karte noch?')
-        ->assertDontSee('Soll/Ist-Coverage');
+        ->assertDontSee('Soll-Ist-Abgleich');
 
     // Mit Gerüst (Frame + Slot): Coverage-Panel erscheint.
     $frames = app(\Platform\FoodAlchemist\Services\PlanningFrameService::class);
@@ -207,7 +207,7 @@ it('Phase E: Leitstelle zeigt Checkliste immer, Coverage nur bei Planungs-Gerüs
 
     Livewire::test(\Platform\FoodAlchemist\Livewire\Speisekarte\LeitstelleRail::class, ['karteId' => $karte->id])
         ->assertOk()
-        ->assertSee('Soll/Ist-Coverage');
+        ->assertSee('Soll-Ist-Abgleich');
 });
 
 // ── Werkstrang M UX-Ausbau: Drag & Drop (positionAblegen / rubrikAblegen) ─────

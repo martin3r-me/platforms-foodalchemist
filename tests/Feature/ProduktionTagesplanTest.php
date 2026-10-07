@@ -861,6 +861,17 @@ it('druckt ein Posten-Blatt über alle Aufträge des Fensters', function () {
         ->assertSee('Hochzeit Meyer');
 });
 
+it('liefert das Posten-Blatt mit ?pdf=1 als PDF-Download (Dominique 2026-10-05)', function () {
+    if (! class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
+        $this->markTestSkipped('DomPDF nicht installiert.');
+    }
+    $res = $this->get(route('foodalchemist.produktion.tagesplan.blatt', ['von' => '2026-08-18', 'tage' => 1, 'pdf' => 1]))
+        ->assertOk()
+        ->assertHeader('Content-Type', 'application/pdf');
+    expect($res->headers->get('Content-Disposition'))->toContain('Tagesplan-2026-08-18.pdf');
+    expect($res->getContent())->toStartWith('%PDF-');
+});
+
 it('respektiert den Posten-Filter im Posten-Blatt', function () {
     $p = Posten::create(['team_id' => $this->rootTeam->id, 'slug' => 'wk', 'name' => 'Warme Küche']);
     $this->svc->assignLine($this->rootTeam, Line::where('production_order_id', $this->a1->id)->value('id'), ['station_id' => $p->id]);

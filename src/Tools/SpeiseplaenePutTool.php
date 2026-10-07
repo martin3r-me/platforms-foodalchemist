@@ -8,6 +8,7 @@ use Platform\Core\Contracts\ToolMetadataContract;
 use Platform\Core\Contracts\ToolResult;
 use Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplan;
 use Platform\FoodAlchemist\Services\SpeiseplanService;
+use Platform\FoodAlchemist\Services\SpeiseplanVorgabenService;
 
 /** MCP-Steuerbarkeit · D9: Speiseplan-Stammdaten bearbeiten (Zyklus, Pax, Budget, Betrieb). */
 class SpeiseplaenePutTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
@@ -24,7 +25,9 @@ class SpeiseplaenePutTool extends FoodAlchemistTool implements ToolContract, Too
     {
         return 'Bearbeitet die Stammdaten eines team-eigenen Speiseplans (felder: name, start_date, cycle_weeks, '
             . 'min_abstand_tage, default_pax, budget_wareneinsatz, outlet_id, opening_days = ISO-Wochentage 1–7, '
-            . 'z. B. [1,2,3,4,5,6]; leer = Mo–Fr). Status via speiseplaene.STATUS.';
+            . 'z. B. [1,2,3,4,5,6]; leer = Mo–Fr; vorgaben = Wochen-Vorgaben, ersetzt die Liste komplett: '
+            . '[{chip_id, mahlzeit: null|fruehstueck|mittag|abend|snack, min, max}], Chips via speiseplan_chips.GET). '
+            . 'Status via speiseplaene.STATUS.';
     }
 
     public function getSchema(): array
@@ -50,7 +53,10 @@ class SpeiseplaenePutTool extends FoodAlchemistTool implements ToolContract, Too
             return ToolResult::error('felder muss ein nicht-leeres Objekt sein.', 'VALIDATION_ERROR');
         }
         $in = array_intersect_key($felder, array_flip(self::FELDER));
-        if ($in === []) {
+        // Spec 59: Vorgaben laufen NICHT über update()/FELDER, sondern über den Vorgaben-Service
+        // (dieselbe Validierung wie im Editor: Chip im Team, min ≤ max, nicht negativ).
+        $mitVorgaben = array_key_exists('vorgaben', $felder);
+        if ($in === [] && ! $mitVorgaben) {
             return ToolResult::error('Keine bekannten Felder in felder (Status via speiseplaene.STATUS).', 'VALIDATION_ERROR');
         }
         $id = (int) ($arguments['id'] ?? 0);
@@ -59,7 +65,17 @@ class SpeiseplaenePutTool extends FoodAlchemistTool implements ToolContract, Too
         }
 
         try {
-            app(SpeiseplanService::class)->update($team, $id, $in);
+            if ($mitVorgaben) {
+                // zuerst validieren — ein Fehler hier lässt auch die übrigen Felder unangetastet
+                $vorgaben = app(SpeiseplanVorgabenService::class)->normVorgaben($team, $felder['vorgaben']);
+            }
+            if ($in !== []) {
+                app(SpeiseplanService::class)->update($team, $id, $in);
+            }
+            if ($mitVorgaben) {
+                app(SpeiseplanVorgabenService::class)->setzeVorgaben($team, $id, $vorgaben);
+                $in['vorgaben'] = true;
+            }
         } catch (\RuntimeException $e) {
             return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR');
         }

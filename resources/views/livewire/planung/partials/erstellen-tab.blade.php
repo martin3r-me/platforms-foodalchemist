@@ -1,154 +1,181 @@
-{{-- Erstell-Tab (Basisrezept ODER Gericht): EIGENES Briefing + EIGENE Leitplanken je Scope + Go + Wissen-vorab.
-     Erwartet: $scope (rezept|gericht), $vk (bool), $goLabel, $goIcon. Jeder Tab ist unabhängig (eingabe.{scope}
-     + regler.{scope}). Der Go schaltet auf den Worker-Tab. --}}
-{{-- Breite-Fix (Dominique-Feedback 2026-09-19): Gesamtcontainer auf Lesebreite begrenzt + zentriert,
-     statt bis an den Rand der (bis zu 2.500px breiten) Modal-Fläche zu laufen. `pb-28` reserviert
-     Platz unter der letzten Karte, damit die sticky Go-Leiste unten sie nicht überdeckt. --}}
-<div class="space-y-4 max-w-7xl mx-auto pb-28">
-    <x-foodalchemist::modal-section icon="heroicon-o-pencil-square" title="Eingabe — was soll entstehen">
-        @if(trim((string) ($eingabe[$scope]['titel'] ?? '')) !== '')
+{{-- Erstell-Reiter (Basisrezept ODER Gericht): EIGENES Briefing + EIGENE Leitplanken je Scope + Erstellen + Wissen vorab.
+     Erwartet: $scope (rezept|gericht), $vk (bool), $goLabel, $goIcon. Jeder Reiter ist unabhängig (eingabe.{scope}
+     + regler.{scope}). Erstellen schaltet auf den Reiter „Fortschritt" (Alpine-Tab `worker`).
+     fa-pass (Laptop-Höhe): die klebende Erstell-Leiste unten ist EINE kompakte Zeile. Wissens-Vorschau und
+     Composer-Hinweis stehen davor im normalen Fluss, damit die Leiste nicht den halben Bildschirm
+     überdeckt. Felder, Bindings, Diktat-Ziel und data-Marker unverändert. --}}
+@php
+    $titelEcho = trim((string) ($eingabe[$scope]['titel'] ?? ''));
+    // Leitplanken-Befund: die KI liefert Feldschlüssel (occasion, ziel_portion_g …). Für die Anzeige lesbar machen.
+    $feldNamen = [
+        'occasion' => 'Anlass', 'serviceform' => 'Servierform', 'kompositions_stil' => 'Kompositionsstil',
+        'pax' => 'Personen', 'ziel_portion_g' => 'Portionsgewicht', 'saison' => 'Saison', 'ziel_we_pct' => 'Wareneinsatz-Ziel',
+        'ziel_einheit' => 'Ziel-Einheit', 'ziel_menge' => 'Ziel-Menge', 'ziel_vk' => 'Ziel-Verkaufspreis',
+        'convenience' => 'Convenience', 'frische' => 'Frische', 'bestand' => 'Bestand', 'bio_praeferenz' => 'Bio',
+        'level' => 'Niveau', 'sektor' => 'Sektor', 'diaet_hart' => 'Ernährungsform', 'allergen_nogo' => 'Allergen-Ausschluss',
+        'aroma' => 'Aroma', 'aroma_kueche' => 'Küche', 'menue_typ' => 'Menü oder Buffet', 'menue_gaenge' => 'Gänge',
+        'menue_preis_min' => 'Preis ab', 'menue_preis_ziel' => 'Zielpreis', 'menue_preis_max' => 'Preis bis',
+        'menue_quote_vegan' => 'Anteil vegan', 'menue_quote_vegetarisch' => 'Anteil vegetarisch', 'menue_balance' => 'Vielfalt',
+    ];
+    $feldName = function (string $roh) use ($feldNamen) {
+        [$schluessel, $wert] = array_pad(explode('=', $roh, 2), 2, null);
+        $schluessel = preg_replace('/_(pct|pp)$/', '', trim($schluessel));
+        $name = $feldNamen[$schluessel] ?? \Illuminate\Support\Str::ucfirst(str_replace('_', ' ', $schluessel));
+
+        return $wert !== null && $wert !== '' ? $name . ': ' . $wert : $name;
+    };
+    $befund = ($leitplankenBefund['scope'] ?? null) === $scope ? $leitplankenBefund : null;
+    $goTitel = $scope === 'gericht' ? 'Gericht-Bauplan vorschlagen' : $goLabel . ' erstellen';
+@endphp
+<div class="flex flex-col gap-4 max-w-7xl mx-auto">
+    <x-foodalchemist::modal-section icon="heroicon-o-pencil-square" title="Was soll entstehen?">
+        @if($titelEcho !== '')
             <x-slot:actions>
-                <span class="{{ $pill }} {{ $variantPill['primary'] }}">{{ \Illuminate\Support\Str::limit(trim($eingabe[$scope]['titel']), 32) }}</span>
+                <x-fa::badge tone="accent">{{ \Illuminate\Support\Str::limit($titelEcho, 32) }}</x-fa::badge>
             </x-slot:actions>
         @endif
-        {{-- Schnellstart-Vorlagen (geteiltes Partial — auch im Concept-Tab): füllen Brief + Kreativ-Modus + Leitplanken. --}}
-        @include('foodalchemist::livewire.planung.partials.schnellstart-chips', ['scope' => $scope])
-        <label class="{{ $label ?? 'text-[11px] text-gray-500' }}">Titel</label>
-        <div class="flex items-center gap-2 mb-3">
-            <input type="text" wire:model="eingabe.{{ $scope }}.titel" class="{{ $input }} flex-1" placeholder="z. B. Tomatensauce" data-planung-titel />
-            {{-- Et.4 Teil 3: nüchterner §-konformer Titelvorschlag aus dem Briefing (nur wenn Titelfeld leer). Kein Go. --}}
-            <button type="button" wire:click="titelVorschlagen('{{ $scope }}')" @disabled($laeuft)
-                    wire:loading.attr="disabled" wire:target="titelVorschlagen"
-                    class="{{ $btnGhost }} disabled:opacity-40 inline-flex items-center gap-1 whitespace-nowrap" data-planung-titel-vorschlag>
-                @svg('heroicon-o-sparkles', 'w-3.5 h-3.5')
-                <span wire:loading.remove wire:target="titelVorschlagen">Titel vorschlagen</span>
-                <span wire:loading wire:target="titelVorschlagen">…</span>
-            </button>
-        </div>
-        <label class="{{ $label ?? 'text-[11px] text-gray-500' }}">Beschreibung (geht in die Erzeugung)
-            @if($reglerVonAgent[$scope]['brief'] ?? false)
-                <span class="{{ $pill }} {{ $variantPill['secondary'] }}" data-regler-von-agent="brief" title="Vom Sprachbefehl-Agenten vorgeschlagen — verschwindet bei manueller Änderung">Agent</span>
-            @endif
-        </label>
-        <textarea wire:model="eingabe.{{ $scope }}.brief" rows="3" class="{{ $input }} mb-2" placeholder="Constraints, Anlass, Richtung …"></textarea>
+        <div class="flex flex-col gap-4">
+            {{-- Schnellstart-Vorlagen (geteiltes Partial, auch im Concept-Reiter): füllen Brief + Kreativ-Modus + Leitplanken. --}}
+            @include('foodalchemist::livewire.planung.partials.schnellstart-chips', ['scope' => $scope])
 
-        {{-- Kurskorrektur „pro Tab genau EINE Diktierfunktion" (2026-09-19): der Recorder
-             dieses Bausteins ist hier AUS — das Agent-Panel darunter ist die einzige
-             Diktierfunktion in diesem Tab (sein eigenes Mikro füllt dasselbe Feld, siehe
-             VoiceModal::updatedAudio() → Planung\Index::agentDiktatUebernehmen()). Der
-             „Leitplanken aus Briefing"-Knopf bleibt (liest nur das Feld, unabhängig vom
-             Recorder). Die fünf flachen Ausgabeform-Briefings (fbBrief/…) haben kein Panel
-             und behalten ihren Recorder unverändert. --}}
-        @include('foodalchemist::livewire.planung.partials.diktat', [
-            'ziel' => 'eingabe.' . $scope . '.brief',
-            'mitLeitplanken' => $scope,
-            'mitRecorder' => false,
-        ])
+            <x-fa::field label="Titel" hint="Leer lassen geht auch, dann schlägt die KI einen Titel aus dem Briefing vor.">
+                <div class="flex flex-wrap items-center gap-2">
+                    <x-fa::input wire:model="eingabe.{{ $scope }}.titel" class="flex-1 min-w-[14rem]" placeholder="{{ $scope === 'gericht' ? 'zum Beispiel Kalbsrücken mit Morcheln' : 'zum Beispiel Tomatensauce' }}" data-planung-titel />
+                    {{-- Et.4 Teil 3: nüchterner, regelkonformer Titelvorschlag aus dem Briefing (nur wenn Titelfeld leer). Kein Erstellen. --}}
+                    <x-fa::button variant="ai" size="sm" icon="heroicon-o-sparkles" wire:click="titelVorschlagen('{{ $scope }}')" :disabled="$laeuft"
+                        wire:loading.attr="disabled" wire:target="titelVorschlagen" data-planung-titel-vorschlag>
+                        <span wire:loading.remove wire:target="titelVorschlagen">Titel vorschlagen</span>
+                        <span wire:loading wire:target="titelVorschlagen">Titel wird gesucht …</span>
+                    </x-fa::button>
+                </div>
+            </x-fa::field>
 
-        {{-- Paket K / Agent-am-Brief: ein Panel je Scope-Tab (diese Partial wird pro Scope
-             separat inkludiert) — `wire:key` trägt Session-ID + Scope, ein Wechsel remountet
-             komplett (frisches Gedächtnis, siehe VoiceModal::sitzungIds()). Kein Höhen-/
-             Breiten-Zwang — das Panel ist selbst x-show-gesteuert, startet eingeklappt. --}}
-        @if($agentPanelSichtbar)
-            @livewire('foodalchemist.voice-modal', [
-                'planungsSessionId' => $sessionId,
-                'planungScope' => $scope,
-                'formularRegler' => array_intersect_key($regler[$scope] ?? [], array_flip(\Platform\FoodAlchemist\Livewire\Planung\Index::AGENT_SCHREIBBARE_REGLER)),
-                'formularBrief' => (string) ($eingabe[$scope]['brief'] ?? ''),
-            ], key('voice-panel-' . $scope . '-' . ($sessionId ?? 'keine')))
-        @endif
+            <div class="flex flex-col gap-1.5">
+                <label for="planung-brief-{{ $scope }}" class="flex items-center gap-2 text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-2)]">
+                    Briefing
+                    @if($reglerVonAgent[$scope]['brief'] ?? false)
+                        <x-fa::badge tone="info" data-regler-von-agent="brief" title="Vom Sprachassistenten vorgeschlagen. Verschwindet, sobald du selbst etwas änderst.">vom Assistenten</x-fa::badge>
+                    @endif
+                </label>
+                <x-fa::textarea id="planung-brief-{{ $scope }}" wire:model="eingabe.{{ $scope }}.brief" rows="3" placeholder="Anlass, Richtung, Vorgaben, was auf keinen Fall hinein soll …" />
+                <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">Geht wörtlich in die Erstellung.</p>
 
-        {{-- Befund sichtbar: gesetzt / verworfen / ignoriert / offen. Ein stiller Vorschlag
-             wäre die schlechtere Hälfte — der Mensch muss sehen, was die KI NICHT wusste. --}}
-        @if(($leitplankenBefund['scope'] ?? null) === $scope)
-            <div class="mb-3 rounded-lg bg-black/[0.03] px-3 py-2 space-y-1.5 text-[11px]" data-planung-leitplanken-befund>
-                @if(!empty($leitplankenBefund['gesetzt']))
-                    <p class="text-gray-900">Gesetzt: <b>{{ implode(', ', $leitplankenBefund['gesetzt']) }}</b>
-                        <span class="text-gray-500">· Konfidenz {{ round(($leitplankenBefund['confidence'] ?? 0) * 100) }} %</span></p>
-                @endif
-                @if(!empty($leitplankenBefund['unklar']))
-                    <div class="rounded bg-amber-500/10 border border-amber-500/30 px-2 py-1.5">
-                        <p class="font-medium text-amber-700">Offen — bitte entscheiden:</p>
-                        <ul class="list-disc pl-4 text-amber-700/90">
-                            @foreach($leitplankenBefund['unklar'] as $u)<li>{{ $u }}</li>@endforeach
-                        </ul>
-                    </div>
-                @endif
-                @if(!empty($leitplankenBefund['verworfen']))
-                    <p class="text-rose-500">Verworfen (kein gültiger Wert): {{ implode(', ', $leitplankenBefund['verworfen']) }}</p>
-                @endif
-                @if(!empty($leitplankenBefund['ignoriert']))
-                    <p class="text-gray-500">Nicht auf diesem Tab: {{ implode(', ', $leitplankenBefund['ignoriert']) }}</p>
-                @endif
-                @if(($leitplankenBefund['begruendung'] ?? null) !== null)
-                    <p class="text-gray-500">{{ $leitplankenBefund['begruendung'] }}</p>
-                @endif
+                {{-- Kurskorrektur „pro Reiter genau EINE Diktierfunktion" (2026-09-19): der Recorder
+                     dieses Bausteins ist hier AUS. Das Agent-Panel darunter ist die einzige
+                     Diktierfunktion in diesem Reiter (sein eigenes Mikro füllt dasselbe Feld, siehe
+                     VoiceModal::updatedAudio() → Planung\Index::agentDiktatUebernehmen()). Der
+                     „Leitplanken aus Briefing"-Knopf bleibt (liest nur das Feld, unabhängig vom
+                     Recorder). Die fünf flachen Ausgabeform-Briefings (fbBrief/…) haben kein Panel
+                     und behalten ihren Recorder unverändert. --}}
+                @include('foodalchemist::livewire.planung.partials.diktat', [
+                    'ziel' => 'eingabe.' . $scope . '.brief',
+                    'mitLeitplanken' => $scope,
+                    'mitRecorder' => false,
+                ])
             </div>
-        @endif
-        @if($scope === 'rezept')
-            <p class="text-[11px] text-gray-500">Basisrezepte haben keinen Kreativ-Modus. Vorhandene Basisrezepte und Grundprodukte werden zuerst geprüft; neu entsteht nur eine echte Lücke.</p>
-        @else
-            <label class="{{ $label ?? 'text-[11px] text-gray-500' }}">Kreativ-Modus</label>
-            <select wire:model.live="eingabe.{{ $scope }}.creative_mode" class="{{ $input }}">
-                @foreach($modeLabel as $val => $lbl)
-                    <option value="{{ $val }}">{{ $lbl }}</option>
-                @endforeach
-            </select>
-            <p class="text-[11px] text-gray-500 mt-1">{{ ($modeHint ?? [])[$eingabe[$scope]['creative_mode'] ?? 'voll_kreativ'] ?? '' }}</p>
-        @endif
+
+            {{-- Paket K / Agent-am-Brief: ein Panel je Scope-Reiter (diese Partial wird pro Scope
+                 separat inkludiert). `wire:key` trägt Session-ID + Scope, ein Wechsel remountet
+                 komplett (frisches Gedächtnis, siehe VoiceModal::sitzungIds()). Kein Höhen-/
+                 Breiten-Zwang: das Panel ist selbst x-show-gesteuert, startet eingeklappt. --}}
+            @if($agentPanelSichtbar)
+                @livewire('foodalchemist.voice-modal', [
+                    'planungsSessionId' => $sessionId,
+                    'planungScope' => $scope,
+                    'formularRegler' => array_intersect_key($regler[$scope] ?? [], array_flip(\Platform\FoodAlchemist\Livewire\Planung\Index::AGENT_SCHREIBBARE_REGLER)),
+                    'formularBrief' => (string) ($eingabe[$scope]['brief'] ?? ''),
+                ], key('voice-panel-' . $scope . '-' . ($sessionId ?? 'keine')))
+            @endif
+
+            {{-- Befund sichtbar: gesetzt / verworfen / ignoriert / offen. Ein stiller Vorschlag
+                 wäre die schlechtere Hälfte: der Mensch muss sehen, was die KI NICHT wusste. --}}
+            @if($befund !== null)
+                <div class="flex flex-col gap-2 rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] bg-[var(--fa-ground)] px-3 py-2.5 text-[length:var(--fa-text-md)]" data-planung-leitplanken-befund>
+                    <p class="text-[length:var(--fa-text-sm)] font-semibold text-[var(--fa-ink-2)]">Leitplanken aus dem Briefing</p>
+                    @if(!empty($befund['gesetzt']))
+                        <p class="text-[var(--fa-ink)]">
+                            <x-fa::signal tone="ok">Gesetzt</x-fa::signal>
+                            <span class="font-medium">{{ collect($befund['gesetzt'])->map($feldName)->implode(', ') }}</span>
+                            <span class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">· Sicherheit {{ round(($befund['confidence'] ?? 0) * 100) }} %</span>
+                        </p>
+                    @endif
+                    @if(!empty($befund['unklar']))
+                        <x-fa::notice tone="warn" title="Offen, bitte selbst entscheiden">
+                            <ul class="list-disc pl-4">
+                                @foreach($befund['unklar'] as $u)<li>{{ $u }}</li>@endforeach
+                            </ul>
+                        </x-fa::notice>
+                    @endif
+                    @if(!empty($befund['verworfen']))
+                        <p><x-fa::signal tone="crit">Nicht übernommen, kein gültiger Wert:</x-fa::signal> <span class="text-[var(--fa-ink-2)]">{{ collect($befund['verworfen'])->map($feldName)->implode(', ') }}</span></p>
+                    @endif
+                    @if(!empty($befund['ignoriert']))
+                        <p class="text-[var(--fa-ink-3)]">Gilt nicht für diesen Reiter: {{ collect($befund['ignoriert'])->map($feldName)->implode(', ') }}</p>
+                    @endif
+                    @if(($befund['begruendung'] ?? null) !== null)
+                        <p class="text-[var(--fa-ink-2)]">{{ $befund['begruendung'] }}</p>
+                    @endif
+                </div>
+            @endif
+
+            @if($scope === 'rezept')
+                <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">Basisrezepte haben keinen Kreativ-Modus. Vorhandene Basisrezepte und Grundprodukte werden zuerst geprüft, neu entsteht nur eine echte Lücke.</p>
+            @else
+                <div class="flex flex-col gap-1.5">
+                    <x-fa::choice name="eingabe.{{ $scope }}.creative_mode" :options="$modeLabel" label="Kreativ-Modus" :id-prefix="'planung-' . $scope" />
+                    <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)] max-w-2xl">{{ ($modeHint ?? [])[$eingabe[$scope]['creative_mode'] ?? 'voll_kreativ'] ?? '' }}</p>
+                </div>
+            @endif
+        </div>
     </x-foodalchemist::modal-section>
 
     @include('foodalchemist::livewire.planung.partials.leitplanken', ['scope' => $scope])
 
     @include('foodalchemist::livewire.planung.partials.schnellstart-speichern', ['scope' => $scope])
 
-    {{-- Paket K / Cockpit-Optik: Go-Leiste sticky im Scroll-Container des Tabs (Befund „Go-Knopf
-         unter dem Fold") — bleibt beim Scrollen der Karten oben sichtbar/erreichbar. --}}
-    <x-foodalchemist::modal-section class="sticky bottom-0 z-10 shadow-xl" :icon="$goIcon"
-        title="Go — {{ $scope === 'gericht' ? 'Gericht-Bauplan vorschlagen' : $goLabel . ' erzeugen (Draft)' }}">
-        {{-- Titel-Echo: bleibt sichtbar, auch wenn die Eingabe-Karte weit oben aus dem Bild gescrollt ist. --}}
-        @if(trim((string) ($eingabe[$scope]['titel'] ?? '')) !== '')
+    {{-- Composer-Übernahme: sichtbar machen, dass das Erstellen auf die gewählten Leit-Aromen aufsetzt. --}}
+    @if(($composerSeedPin['scope'] ?? null) === $scope && !empty($composerSeedPin['slugs']))
+        <x-fa::notice tone="info" title="Leit-Aromen aus dem Composer" data-composer-seed-hint>
+            Die Erstellung baut verbindlich auf diesen Zutaten auf: <span class="font-medium">{{ implode(', ', $composerSeedPin['slugs']) }}</span>
             <x-slot:actions>
-                <span class="{{ $pill }} {{ $variantPill['primary'] }}">{{ \Illuminate\Support\Str::limit(trim($eingabe[$scope]['titel']), 32) }}</span>
+                <x-fa::button variant="ghost" size="sm" icon="heroicon-m-x-mark" wire:click="$set('composerSeedPin', [])">Leit-Aromen entfernen</x-fa::button>
             </x-slot:actions>
-        @endif
-        @include('foodalchemist::livewire.planung.partials.worker-praesenz')
-        {{-- Fließtext-Absatz — NICHT $label (das Token ist uppercase, für Mikro-Labels gedacht;
-             ein ganzer Satz in Versalien war der von Nora gemeldete Befund). --}}
-        <p class="text-[11px] text-gray-500 mb-2">
-            @if($scope === 'gericht')
-                Zuerst entsteht nur ein textlicher Bauplan mit Komponenten. Erst nach deiner Annahme wird daraus ein Rezept-Draft und die Kaskade läuft weiter.
-            @else
-                Der Entwurf entsteht im Hintergrund (Draft); der Fortschritt läuft im <b>Worker</b>-Tab sichtbar durch.
-            @endif
-        </p>
-        {{-- Composer-Übernahme: sichtbar machen, dass der Go auf die gewählten Foodpairing-Anker erdet. --}}
-        @if(($composerSeedPin['scope'] ?? null) === $scope && !empty($composerSeedPin['slugs']))
-            <div class="mb-2 flex flex-wrap items-center gap-2 rounded-lg bg-violet-500/10 border border-violet-500/30 px-2 py-1.5" data-composer-seed-hint>
-                <span class="text-[11px] text-violet-700">
-                    🎯 Composer-Anker aktiv (Go erdet darauf): <b>{{ implode(', ', $composerSeedPin['slugs']) }}</b>
-                </span>
-                <button type="button" wire:click="$set('composerSeedPin', [])"
-                        class="text-[10px] text-violet-600 hover:text-violet-800 underline">entfernen</button>
-            </div>
-        @endif
-        <div class="flex flex-wrap gap-2 items-center">
-            <x-foodalchemist::ki-action action="goKaskade('{{ $scope }}')" variant="primary" :icon="$goIcon"
-                :label="$scope === 'gericht' ? 'Bauplan vorschlagen' : $goLabel . ' erzeugen'"
-                busy="Kaskade wird gestartet …" flash="Kaskade gestartet" :disabled="$laeuft" before="tab='worker'" />
-            <button type="button" wire:click="wissenVorschau('{{ $scope }}')" @disabled($laeuft)
-                    wire:loading.attr="disabled" wire:target="wissenVorschau"
-                    class="{{ $btnGhost }} disabled:opacity-40 inline-flex items-center gap-1" data-planung-wissen-vorab>
-                @svg('heroicon-o-magnifying-glass', 'w-3.5 h-3.5')
+        </x-fa::notice>
+    @endif
+
+    @if($wissenVorschau !== null)
+        <x-foodalchemist::modal-section icon="heroicon-o-book-open" title="Wissen, das die KI nutzen würde" data-planung-wissen-vorschau>
+            <p class="mb-2 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">Vorschau, es wurde noch nichts erstellt.</p>
+            <x-foodalchemist::kontext-inspektor :kontext="$wissenVorschau" />
+        </x-foodalchemist::modal-section>
+    @endif
+
+    {{-- Erstell-Leiste: klebt unten im Scroll-Bereich (Befund „Knopf unter dem Fold"), aber als EINE
+         niedrige Zeile. Titel-Echo, damit sichtbar bleibt, woran gearbeitet wird. --}}
+    <div class="sticky bottom-0 z-10 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-[var(--fa-radius-surface)] border border-[var(--fa-line-strong)] bg-[var(--fa-surface)] px-4 py-3 shadow-lg shadow-black/20" data-planung-erstellen-leiste>
+        <div class="flex-1 min-w-[16rem] flex flex-col gap-1">
+            <p class="flex flex-wrap items-center gap-2 text-[length:var(--fa-text-base)] font-semibold text-[var(--fa-ink)]">
+                @svg($goIcon, 'w-4 h-4 shrink-0 text-[var(--fa-ink-3)]') {{ $goTitel }}
+                @if($titelEcho !== '')<x-fa::badge tone="accent">{{ \Illuminate\Support\Str::limit($titelEcho, 32) }}</x-fa::badge>@endif
+            </p>
+            <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">
+                @if($scope === 'gericht')
+                    Zuerst entsteht nur ein Bauplan mit Komponenten. Erst wenn du ihn annimmst, wird daraus ein Rezept und die Erstellung läuft weiter.
+                @else
+                    Entsteht im Hintergrund als Entwurf. Den Stand siehst du im Reiter „Fortschritt".
+                @endif
+            </p>
+            @include('foodalchemist::livewire.planung.partials.worker-praesenz')
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+            <x-fa::button variant="ghost" icon="heroicon-o-magnifying-glass" wire:click="wissenVorschau('{{ $scope }}')" :disabled="$laeuft"
+                wire:loading.attr="disabled" wire:target="wissenVorschau" title="Zeigt, welches Wissen die KI für diese Eingabe heranziehen würde. Erstellt nichts." data-planung-wissen-vorab>
                 <span wire:loading.remove wire:target="wissenVorschau">Wissen vorab prüfen</span>
                 <span wire:loading wire:target="wissenVorschau">Wissen wird geladen …</span>
-            </button>
+            </x-fa::button>
+            <x-foodalchemist::ki-action action="goKaskade('{{ $scope }}')" variant="primary" :icon="$goIcon"
+                :label="$scope === 'gericht' ? 'Bauplan vorschlagen' : $goLabel . ' erstellen'"
+                busy="Wird gestartet …" flash="Gestartet" :disabled="$laeuft" before="tab='worker'" />
         </div>
-        @if($wissenVorschau !== null)
-            <div class="mt-2 rounded-lg bg-white/5 p-2" data-planung-wissen-vorschau>
-                <p class="text-[10px] text-gray-400 mb-1">Das würde die KI nutzen (Vorschau — noch nicht generiert):</p>
-                <x-foodalchemist::kontext-inspektor :kontext="$wissenVorschau" />
-            </div>
-        @endif
-    </x-foodalchemist::modal-section>
+    </div>
 </div>

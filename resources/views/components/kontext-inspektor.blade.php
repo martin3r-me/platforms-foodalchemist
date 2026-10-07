@@ -1,6 +1,9 @@
 {{-- Kontext-Inspektor (2026-08-07): zeigt transparent, AUF WELCHES WISSEN der Generator beim
      Erstellen zugegriffen hat — gruppiert je Kanal (Cross-Cutting/Domäne/Niveau/Pairing/…),
-     plus gematchte Rezept-Templates + Zeichen-Budget. Read-only, fail-safe bei null/leer. --}}
+     plus gematchte Rezept-Templates + Zeichen-Budget. Read-only, fail-safe bei null/leer.
+     fa-pass 2026-10-05: nur Tokens (läuft hell und im Werkbank-Modus), Heroicon statt Emoji,
+     Schrift ab 12 px, Küchensprache statt Technikbegriffen (Anfrage statt Prompt, Recherche statt
+     Retrieval, Kontextdaten statt Kontext-JSON). Werte und data-Marker unverändert. --}}
 @props(['kontext' => null])
 
 @php
@@ -45,59 +48,64 @@
 
     // Quellen behalten ihre Version; nur das technische graph:-Präfix entfällt.
     $pretty = fn (string $e): string => (string) preg_replace('/^graph:/', '', $e);
+
+    $gruppenTitel = 'mb-1 text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-2)]';
+    $chip = 'inline-block rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] bg-[var(--fa-surface)] px-1.5 py-0.5 text-[length:var(--fa-text-sm)] text-[var(--fa-ink)] break-all';
+    $chipWarn = 'inline-block rounded-[var(--fa-radius-control)] bg-[var(--fa-warn-soft)] px-1.5 py-0.5 text-[length:var(--fa-text-sm)] text-[var(--fa-warn)] break-all';
+    $chipLeise = 'inline-block rounded-[var(--fa-radius-control)] bg-[var(--fa-neutral-soft)] px-1.5 py-0.5 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]';
 @endphp
 
 @if($hatInhalt)
-    <details class="mt-3 rounded-lg border border-black/10 bg-gray-50/70" data-generator-kontext>
-        <summary class="cursor-pointer select-none px-3 py-2 text-[11px] font-medium text-gray-700 flex items-center gap-1.5">
-            🧠 Verwendetes Wissen
-            <span class="text-gray-400 font-normal">· {{ $docCount }} Doc{{ $docCount === 1 ? '' : 's' }}@if($templates !== []), {{ count($templates) }} Template{{ count($templates) === 1 ? '' : 's' }}@endif@if($prompt) · Prompt {{ number_format($prompt['chars'], 0, ',', '.') }} Zeichen @elseif($chars > 0) · ~{{ number_format($chars, 0, ',', '.') }} Zeichen @endif</span>
+    <details class="group mt-3 rounded-[var(--fa-radius-surface)] border border-[var(--fa-line)] bg-[var(--fa-ground)]" data-generator-kontext>
+        <summary class="cursor-pointer select-none px-3 py-2 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[length:var(--fa-text-md)] font-medium text-[var(--fa-ink)]">
+            @svg('heroicon-o-academic-cap', 'w-4 h-4 shrink-0 text-[var(--fa-ink-3)]')
+            Verwendetes Wissen
+            <span class="font-normal text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)] tabular-nums">· {{ $docCount }} {{ $docCount === 1 ? 'Dokument' : 'Dokumente' }}@if($templates !== []), {{ count($templates) }} {{ count($templates) === 1 ? 'Rezept-Vorlage' : 'Rezept-Vorlagen' }}@endif @if($prompt) · Anfrage {{ number_format($prompt['chars'], 0, ',', '.') }} Zeichen @elseif($chars > 0) · ~{{ number_format($chars, 0, ',', '.') }} Zeichen @endif</span>
+            @svg('heroicon-m-chevron-down', 'w-4 h-4 ml-auto text-[var(--fa-ink-3)] transition-transform group-open:rotate-180')
         </summary>
-        <div class="px-3 pb-3 pt-1 space-y-2">
-            {{-- Die sechs Töpfe des Prompts. Vorher zeigte der Inspektor nur den Retrieval-Anteil
+        <div class="px-3 pb-3 pt-1 flex flex-col gap-2.5">
+            {{-- Die sechs Töpfe der Anfrage. Vorher zeigte der Inspektor nur den Retrieval-Anteil
                  und ließ damit den größten Posten (das verbindliche Regelwerk) UND den Kontext
                  unsichtbar. `dropped` steht bewusst mit dabei: gebaut-und-weggeworfen ist eine
                  Größe, die man sehen muss, sonst sucht man den Deckel nicht. --}}
             @if($prompt)
                 <div>
-                    <p class="text-[10px] uppercase tracking-wide text-gray-400 mb-1">Prompt-Größen</p>
+                    <p class="{{ $gruppenTitel }}">Umfang der Anfrage in Zeichen</p>
                     <div class="flex flex-wrap gap-1" data-prompt-groessen>
                         @foreach([
                             'Kanon (verbindlich)' => $prompt['kanon'] ?? 0,
-                            'Regelwerk gebunden (Fallback)' => $prompt['bound'],
-                            'Retrieval' => $prompt['retrieval'],
-                            'Kontext-JSON' => $prompt['kontext'],
+                            'Regelwerk gebunden (Ersatzweg)' => $prompt['bound'],
+                            'Recherche' => $prompt['retrieval'],
+                            'Kontextdaten' => $prompt['kontext'],
                             'Aufgabe' => $prompt['task'],
-                            'Hüllen' => $prompt['huelle'],
+                            'Rahmentext' => $prompt['huelle'],
                         ] as $label => $wert)
                             @if($wert > 0)
-                                <span class="inline-block rounded bg-white border border-black/10 px-1.5 py-0.5 text-[10px] text-gray-700">
-                                    {{ $label }} {{ number_format($wert, 0, ',', '.') }}
-                                </span>
+                                <span class="{{ $chip }} tabular-nums">{{ $label }} {{ number_format($wert, 0, ',', '.') }}</span>
                             @endif
                         @endforeach
                         @if($prompt['dropped'] > 0)
-                            <span class="inline-block rounded bg-amber-50 border border-amber-200 px-1.5 py-0.5 text-[10px] text-amber-800" title="Gebaut und wieder verworfen, weil ein Deckel gegriffen hat">
-                                verworfen {{ number_format($prompt['dropped'], 0, ',', '.') }}
-                            </span>
+                            <span class="{{ $chipWarn }} tabular-nums" title="Gebaut und wieder verworfen, weil ein Deckel gegriffen hat">verworfen {{ number_format($prompt['dropped'], 0, ',', '.') }}</span>
                         @endif
                         @if($prompt['tokens_in'] > 0)
-                            <span class="inline-block rounded bg-gray-100 border border-black/10 px-1.5 py-0.5 text-[10px] text-gray-600">
-                                @php($cacheAnteil = $prompt['tokens_cached'] > 0 ? round($prompt['tokens_cached'] / $prompt['tokens_in'] * 100) : null)
-                                {{ number_format($prompt['tokens_in'], 0, ',', '.') }} Token{{ $cacheAnteil !== null ? ', ' . $cacheAnteil . ' % aus dem Cache' : '' }}
-                            </span>
+                            @php
+                                $cacheAnteil = $prompt['tokens_cached'] > 0 ? round($prompt['tokens_cached'] / $prompt['tokens_in'] * 100) : null;
+                            @endphp
+                            <span class="{{ $chipLeise }} tabular-nums" title="Abgerechnete Texteinheiten der KI; der wiederverwendete Anteil kostet nur einen Bruchteil">{{ number_format($prompt['tokens_in'], 0, ',', '.') }} Abrechnungseinheiten{{ $cacheAnteil !== null ? ', ' . $cacheAnteil . ' % wiederverwendet' : '' }}</span>
                         @endif
                     </div>
                 </div>
             @endif
             @foreach($kanaele as $cat)
-                @php($eintraege = (array) ($wissen[$cat] ?? []))
+                @php
+                    $eintraege = (array) ($wissen[$cat] ?? []);
+                @endphp
                 @if($eintraege !== [])
                     <div>
-                        <p class="text-[10px] uppercase tracking-wide text-gray-400 mb-1">{{ $labels[$cat] ?? ucfirst(str_replace('_', ' ', $cat)) }}</p>
+                        <p class="{{ $gruppenTitel }}">{{ $labels[$cat] ?? ucfirst(str_replace('_', ' ', $cat)) }}</p>
                         <div class="flex flex-wrap gap-1">
                             @foreach($eintraege as $e)
-                                <span class="inline-block rounded bg-white border border-black/10 px-1.5 py-0.5 text-[10px] text-gray-700">{{ $pretty((string) $e) }}</span>
+                                <span class="{{ $chip }}">{{ $pretty((string) $e) }}</span>
                             @endforeach
                         </div>
                     </div>
@@ -105,21 +113,16 @@
             @endforeach
 
             {{-- Aufgabe 6: verworfen getrennt ausweisen — eigene Chip-Gruppe je Kanal (Recherche
-                 = Fuzzy-Discovery, Kanon = gedroppte wenn_platz-Dossiers), nicht nur die
-                 Zeichenzahl aus den Prompt-Größen oben. --}}
+                 = Fuzzy-Discovery, Kanon = gedroppte wenn_platz-Dossiers). --}}
             @if($verworfenRetrieval !== [] || $verworfenKanon !== [])
                 <div>
-                    <p class="text-[10px] uppercase tracking-wide text-gray-400 mb-1">Verworfen (nicht gesendet)</p>
+                    <p class="{{ $gruppenTitel }}">Verworfen (nicht gesendet)</p>
                     <div class="flex flex-wrap gap-1">
                         @foreach($verworfenRetrieval as $e)
-                            <span class="inline-block rounded bg-amber-50 border border-amber-200 px-1.5 py-0.5 text-[10px] text-amber-800" title="Gebaut, aber vom Budget-Schnitt der Recherche verworfen">
-                                Recherche: {{ $pretty((string) $e) }}
-                            </span>
+                            <span class="{{ $chipWarn }}" title="Gefunden, aber aus Platzgründen nicht mitgeschickt">Recherche: {{ $pretty((string) $e) }}</span>
                         @endforeach
                         @foreach($verworfenKanon as $e)
-                            <span class="inline-block rounded bg-amber-50 border border-amber-200 px-1.5 py-0.5 text-[10px] text-amber-800" title="Als wenn_platz vorgesehen, aber vom Kanon-Budget gedroppt">
-                                Kanon: {{ $pretty((string) $e) }}
-                            </span>
+                            <span class="{{ $chipWarn }}" title="Nur „wenn Platz ist“ vorgesehen und aus Platzgründen weggelassen">Kanon: {{ $pretty((string) $e) }}</span>
                         @endforeach
                     </div>
                 </div>
@@ -127,16 +130,16 @@
 
             @if($templates !== [])
                 <div>
-                    <p class="text-[10px] uppercase tracking-wide text-gray-400 mb-1">Rezept-Templates (gematcht)</p>
+                    <p class="{{ $gruppenTitel }}">Passende Rezept-Vorlagen</p>
                     <div class="flex flex-wrap gap-1">
                         @foreach($templates as $t)
-                            <span class="inline-block rounded bg-white border border-black/10 px-1.5 py-0.5 text-[10px] text-gray-700">{{ $t['name'] ?? '—' }}</span>
+                            <span class="{{ $chip }}">{{ $t['name'] ?? '–' }}</span>
                         @endforeach
                     </div>
                 </div>
             @endif
 
-            <p class="text-[10px] text-gray-400 pt-1 leading-snug">Für diesen Aufruf protokollierte Wissensquellen mit Versionsnummer. GP-Kandidaten und Bestands-Inventar sind hier nicht enthalten.</p>
+            <p class="pt-1 text-[length:var(--fa-text-sm)] leading-snug text-[var(--fa-ink-3)]">Für diesen Aufruf festgehaltene Wissensquellen mit Versionsnummer. Grundprodukt-Vorschläge und der Bestand sind hier nicht enthalten.</p>
         </div>
     </details>
 @endif

@@ -152,7 +152,7 @@ it('gp_anchors.IMPORT: CAP_GP respektiert (vierter Eintrag desselben GP → abge
 });
 
 it('gp_anchors.PUT: Kind-Team sieht das GP des Eltern-Teams (Ancestry-Sichtbarkeit) und kann den Anker setzen', function () {
-    // Wie recipe_anchors.PUT: team-scoped auf ein SICHTBARES GP, keine Owner-Sperre — Anker-
+    // Team-scoped auf ein SICHTBARES GP, keine Owner-Sperre — Anker-
     // Pflege ist ein geteiltes kuratorisches Anliegen, kein Struktur-Mapping (anders als gp_la.PUT
     // link/unlink, das isOwnedBy verlangt).
     $gpId = ($this->neuGp)('Eigenes-Gp');

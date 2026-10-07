@@ -1,30 +1,33 @@
-{{-- Spec 19 E5.2 — Leitstellen-Checkliste: 7 abgeleitete Arbeits-Schritte (Bedarf→Preise)
+{{-- Spec 19 E5.2 — Leitstellen-Checkliste: abgeleitete Arbeits-Schritte (Bedarf bis Preise)
      als klickbare Chips (offen/teil/erledigt). Klick springt via Alpine-Event-Bus (`fb-goto`)
      auf Tab + Anker; die Root des Cockpits (`x-data`) hört darauf. Die Foodbook-Freigabe/
      „Versand" ist NIE Teil dieser Liste (UX 1) — das ist der Phasen-Stepper daneben.
+     fa-pass: Zustandsfarben über Tokens, Zustand zusätzlich als Symbol (nicht nur Farbe).
      Erwartet: $checkliste (list<array{key,nr,label,status,tab,anker,hinweis?}>). --}}
-@php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
-@php($statusStil = [
-    'erledigt' => 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700 hover:bg-emerald-500/15',
-    'teil'     => 'bg-amber-500/10 border-amber-500/30 text-amber-700 hover:bg-amber-500/15',
-    'offen'    => 'bg-black/[0.03] border-black/10 text-gray-500 hover:bg-black/[0.06]',
-])
-@php($statusPunkt = ['erledigt' => 'bg-emerald-500', 'teil' => 'bg-amber-500', 'offen' => 'bg-gray-300'])
+@php
+    $statusStil = [
+        'erledigt' => 'bg-[var(--fa-ok-soft)] border-transparent text-[var(--fa-ok)]',
+        'teil' => 'bg-[var(--fa-warn-soft)] border-transparent text-[var(--fa-warn)]',
+        'offen' => 'bg-[var(--fa-surface)] border-[var(--fa-line-strong)] text-[var(--fa-ink-2)] hover:bg-[var(--fa-hover)]',
+    ];
+    $statusSymbol = ['erledigt' => 'heroicon-m-check-circle', 'teil' => 'heroicon-m-ellipsis-horizontal-circle', 'offen' => 'heroicon-o-stop-circle'];
+    $statusText = ['erledigt' => 'erledigt', 'teil' => 'teilweise erledigt', 'offen' => 'offen'];
+@endphp
 
 @if(! empty($checkliste))
-    <div class="flex items-center gap-x-2 gap-y-1.5 flex-wrap" data-leitstelle-checkliste>
-        <span class="text-[10px] text-gray-500 uppercase tracking-wider mr-1">Schritte</span>
+    <nav class="flex flex-wrap items-center gap-x-1.5 gap-y-2" aria-label="Arbeitsschritte" data-leitstelle-checkliste>
+        <span class="mr-1 text-[length:var(--fa-text-sm)] font-semibold text-[var(--fa-ink-2)]">Schritte</span>
         @foreach($checkliste as $s)
             <button type="button"
                     @click="$dispatch('fb-goto', { tab: @js($s['tab']), anker: @js($s['anker']) })"
-                    class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] border transition-colors {{ $statusStil[$s['status']] ?? $statusStil['offen'] }}"
-                    title="{{ $s['hinweis'] ?? $s['label'] }}"
+                    class="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-full border text-[length:var(--fa-text-sm)] transition-colors duration-150 {{ $statusStil[$s['status']] ?? $statusStil['offen'] }}"
+                    title="{{ ($s['hinweis'] ?? $s['label']) . ' (' . ($statusText[$s['status']] ?? 'offen') . ')' }}"
                     data-checkliste-schritt="{{ $s['key'] }}" data-status="{{ $s['status'] }}">
-                <span class="w-1.5 h-1.5 rounded-full {{ $statusPunkt[$s['status']] ?? $statusPunkt['offen'] }}"></span>
-                <span class="tabular-nums opacity-60">{{ $s['nr'] }}</span>
+                @svg($statusSymbol[$s['status']] ?? $statusSymbol['offen'], 'w-4 h-4 shrink-0')
+                <span class="tabular-nums text-[var(--fa-ink-3)]">{{ $s['nr'] }}</span>
                 <span class="font-medium">{{ $s['label'] }}</span>
             </button>
-            @if(! $loop->last)<span class="text-gray-300 text-[10px]">›</span>@endif
+            @if(! $loop->last)@svg('heroicon-m-chevron-right', 'w-3.5 h-3.5 text-[var(--fa-ink-3)] shrink-0')@endif
         @endforeach
-    </div>
+    </nav>
 @endif

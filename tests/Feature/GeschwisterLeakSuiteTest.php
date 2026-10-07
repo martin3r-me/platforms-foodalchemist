@@ -65,18 +65,6 @@ it('M4+M6/Rezepte: Basis- und VK-Sicht — Geschwister nie, Kette aufwärts ja',
         ->and(app(SalesRecipeService::class)->detail($this->childA, $bVk->id))->toBeNull();
 });
 
-it('M5/Pairing-Schreibpfad: setRecipeAnker auf Geschwister-Rezept wirft (visibleToTeam)', function () {
-    $bBasis = ($this->mkRezept)($this->childB, 'b_geheim');
-    \Illuminate\Support\Facades\DB::table('foodalchemist_vocab_pairing_anchors')->insert([
-        'uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(), 'slug' => 'zimt', 'display_de' => 'Zimt',
-        'created_at' => now(), 'updated_at' => now(),
-    ]);
-    $ankerId = (int) \Illuminate\Support\Facades\DB::getPdo()->lastInsertId();
-
-    expect(fn () => app(\Platform\FoodAlchemist\Services\PairingService::class)->setRecipeAnker($this->childA, $bBasis->id, $ankerId))
-        ->toThrow(\Illuminate\Database\Eloquent\ModelNotFoundException::class);
-});
-
 it('M7/Bulk + M8/Tools: Run-Status fremder Teams unsichtbar; Tools antworten team-scoped', function () {
     $this->actingAs($this->makeUser($this->childB, 'B-User'));
     config(['foodalchemist.ai.provider' => 'fake', 'foodalchemist.ai.backoff' => []]);

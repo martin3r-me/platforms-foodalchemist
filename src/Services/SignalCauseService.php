@@ -47,31 +47,31 @@ class SignalCauseService
      */
     private const NAMING_PARAGRAPHEN = [
         'leerraum' => [
-            'paragraph' => 'Regelwerk_Basisrezepte §1',
+            'paragraph' => 'Regelwerk Basisrezepte, Abschnitt 1 (Benennung)',
             'slug' => 'regelwerk.regelwerk_basisrezepte',
-            'regel' => 'Mehrfach-Leerzeichen im Namen — Rest aus Import/Split, nicht Teil der Benennung.',
+            'regel' => 'Doppelte Leerzeichen im Namen, ein Rest aus Import oder Aufteilung.',
         ],
         'trenner_rand' => [
-            'paragraph' => 'Regelwerk_Basisrezepte §1',
+            'paragraph' => 'Regelwerk Basisrezepte, Abschnitt 1 (Benennung)',
             'slug' => 'regelwerk.regelwerk_basisrezepte',
-            'regel' => 'Trennzeichen am Namensanfang oder -ende (| , ; : – -) — Rest aus Import/Split.',
+            'regel' => 'Trennzeichen am Anfang oder Ende des Namens (| , ; : – -), ein Rest aus Import oder Aufteilung.',
         ],
         'grammatur' => [
-            'paragraph' => 'Regelwerk_Verkaufsgerichte §1.2a (Basisrezepte §1.8)',
+            'paragraph' => 'Regelwerk Verkaufsgerichte, Abschnitt 1.2a (Benennung)',
             'slug' => 'regelwerk.regelwerk_verkaufsgerichte',
-            'regel' => 'Grammatur im Namen ist nur als Diskriminator zwischen sonst gleichnamigen '
-                . 'Gerichten erlaubt. Diesen Zwilling gibt es nicht → die Angabe gehört ins Datenfeld.',
+            'regel' => 'Eine Grammatur im Namen ist nur erlaubt, um sonst gleichnamige Gerichte zu unterscheiden. '
+                . 'Ein solches Gericht gibt es hier nicht, die Angabe gehört in das passende Feld.',
         ],
         'vk_marker' => [
-            'paragraph' => 'Regelwerk_Verkaufsgerichte §1.2',
+            'paragraph' => 'Regelwerk Verkaufsgerichte, Abschnitt 1.2 (Benennung)',
             'slug' => 'regelwerk.regelwerk_verkaufsgerichte',
-            'regel' => 'Katalog-/Marker-Code im VK-Namen (CC: · STF: · MS: · (SG) · (BOX) · ADD ON · [FC]) — '
-                . 'ersatzlos raus, die Information gehört in ein Feld.',
+            'regel' => 'Katalog-Kennzeichen im Gerichtsnamen (CC: · STF: · MS: · (SG) · (BOX) · ADD ON · [FC]) '
+                . 'ersatzlos entfernen, die Information gehört in ein eigenes Feld.',
         ],
         'vk_praefix' => [
-            'paragraph' => 'Regelwerk_Verkaufsgerichte §1.1',
+            'paragraph' => 'Regelwerk Verkaufsgerichte, Abschnitt 1.1 (Benennung)',
             'slug' => 'regelwerk.regelwerk_verkaufsgerichte',
-            'regel' => 'VK-Gericht ohne führendes [HG]-Hauptgruppen-Kürzel (Pipe-Skelett „[HG] A | B").',
+            'regel' => 'Am Anfang des Gerichtsnamens fehlt das Kürzel der Hauptgruppe (Aufbau „[HG] A | B“).',
         ],
     ];
 
@@ -165,10 +165,10 @@ class SignalCauseService
 
         return [
             'art' => 'ek',
-            'titel' => 'Warum die EK-Kette nicht auflöst',
+            'titel' => 'Warum der Einkaufspreis unvollständig ist',
             'kopf' => $total > 0
-                ? $priced . ' von ' . $total . ' Zutaten bepreist'
-                : 'Keine bepreisbare Zutat in der Kette',
+                ? $priced . ' von ' . $total . ' Zutaten mit Preis'
+                : 'Keine Zutat mit Preis',
             'glieder' => $glieder,
             'offen' => $offen,
             'gekappt' => max(0, $offen - count($glieder)),
@@ -201,18 +201,18 @@ class SignalCauseService
             $basis['recipe_id'] = $sub?->id !== null ? (int) $sub->id : null;
 
             return $basis + [
-                'ursache' => 'Sub-Rezept ohne eigenen EK',
+                'ursache' => 'Unterrezept ohne Einkaufspreis',
                 'weiter' => $sub !== null
-                    ? 'Das Sub-Rezept „' . $sub->name . '" hat selbst keinen EK je kg — die Kette bricht eine Ebene tiefer.'
-                    : 'Referenziertes Sub-Rezept nicht auffindbar.',
+                    ? 'Das Unterrezept „' . $sub->name . '“ hat selbst keinen Einkaufspreis je kg, der Preis fehlt eine Ebene tiefer.'
+                    : 'Das verwendete Unterrezept ist nicht auffindbar.',
             ];
         }
 
         $gp = $z->gp;
         if ($gp === null) {
             return $basis + [
-                'ursache' => 'Zutat auf keinen GP gemappt',
-                'weiter' => 'Ohne GP gibt es keine Preisquelle — im Rezept-Editor mappen.',
+                'ursache' => 'Zutat keinem Grundprodukt zugeordnet',
+                'weiter' => 'Ohne Grundprodukt gibt es keinen Preis. Die Zutat im Rezept einem Grundprodukt zuordnen.',
             ];
         }
 
@@ -228,10 +228,10 @@ class SignalCauseService
         // als Nebenbefund angehängt statt als Ursache behauptet.
         if ($lage['loest_auf']) {
             return $basis + [
-                'ursache' => 'Menge nicht umrechenbar',
-                'weiter' => 'Der GP hat eine Preisquelle, aber die Einheit „' . ($z->unit?->slug ?? '?')
-                    . '" liefert kein Gewicht (kein Stückgewicht am GP / Menge 0 / „qs").'
-                    . ($lage['status'] !== 'ok' ? ' Nebenbefund: ' . lcfirst($lage['ursache']) . '.' : ''),
+                'ursache' => 'Menge nicht in Gewicht umrechenbar',
+                'weiter' => 'Das Grundprodukt hat einen Preis, aber die Einheit „' . ($z->unit?->slug ?? '?')
+                    . '“ ergibt kein Gewicht (kein Stückgewicht am Grundprodukt, Menge 0 oder „qs“).'
+                    . ($lage['status'] !== 'ok' ? ' Außerdem: ' . $lage['ursache'] . '.' : ''),
             ];
         }
 
@@ -254,7 +254,7 @@ class SignalCauseService
 
         return [
             'art' => 'gp',
-            'titel' => 'Warum dieser GP nicht auf einen Preis auflöst',
+            'titel' => 'Warum dieses Grundprodukt keinen Preis hat',
             'kopf' => $lage['ursache'],
             'glieder' => [[
                 'zutat' => (string) $gp->name,
@@ -300,8 +300,8 @@ class SignalCauseService
 
         $n = $las->count();
         if ($n === 0) {
-            return ['status' => 'kein_la', 'ursache' => 'GP ohne Lieferantenartikel',
-                'weiter' => 'Kein einziger LA ist auf diesen GP strukturiert — Beschaffungs-Lücke, kein Fix möglich.',
+            return ['status' => 'kein_la', 'ursache' => 'Grundprodukt ohne Lieferantenartikel',
+                'weiter' => 'Diesem Grundprodukt ist kein Lieferantenartikel zugeordnet. Das ist eine Einkaufsfrage und nicht automatisch lösbar.',
                 'fixbar' => false, 'loest_auf' => false];
         }
 
@@ -315,27 +315,27 @@ class SignalCauseService
 
         if ($nB === 0) {
             return ['status' => 'kein_preis', 'ursache' => 'Kein Lieferantenartikel mit gültigem Preis',
-                'weiter' => $n . ' LA verknüpft, aber keiner mit aktivem Preis > 0 (gesperrt/ausgelistet/ohne Preiszeile) '
-                    . '— Preispflege oder Einkauf.',
+                'weiter' => $n . ' Lieferantenartikel zugeordnet, aber keiner mit gültigem Preis (gesperrt, ausgelistet oder ohne Preis). '
+                    . 'Preise pflegen oder neu einkaufen.',
                 'fixbar' => false, 'loest_auf' => false];
         }
 
         $lead = $gp->lead_la_supplier_item_id !== null ? (int) $gp->lead_la_supplier_item_id : null;
         if ($lead === null) {
-            return ['status' => 'kein_lead', 'ursache' => 'Kein Lead-Lieferantenartikel gesetzt',
-                'weiter' => $nB . ' von ' . $n . ' LA sind bepreist — der Lead-LA-Fixer kann einen davon setzen. '
-                    . 'Die EK-Kette rechnet solange mit dem Durchschnitt statt mit einem gewählten Artikel.',
+            return ['status' => 'kein_lead', 'ursache' => 'Kein Hauptartikel gewählt',
+                'weiter' => $nB . ' von ' . $n . ' Lieferantenartikeln haben einen Preis, die automatische Korrektur kann einen davon als Hauptartikel wählen. '
+                    . 'Bis dahin rechnet der Einkaufspreis mit dem Durchschnitt statt mit einem gewählten Artikel.',
                 'fixbar' => true, 'loest_auf' => true];
         }
         if (! in_array($lead, $bepreist, true)) {
-            return ['status' => 'lead_ohne_preis', 'ursache' => 'Lead-LA ohne gültigen Preis',
-                'weiter' => 'Der gesetzte Lead-LA (#' . $lead . ') löst nicht auf, ' . $nB . ' andere schon '
-                    . '— der Lead-LA-Fixer kann umhängen. Die EK-Kette weicht solange auf den Durchschnitt aus.',
+            return ['status' => 'lead_ohne_preis', 'ursache' => 'Hauptartikel ohne gültigen Preis',
+                'weiter' => 'Der gewählte Hauptartikel (Nr. ' . $lead . ') hat keinen gültigen Preis, ' . $nB . ' andere schon. '
+                    . 'Die automatische Korrektur kann umstellen. Bis dahin rechnet der Einkaufspreis mit dem Durchschnitt.',
                 'fixbar' => true, 'loest_auf' => true];
         }
 
-        return ['status' => 'ok', 'ursache' => 'GP löst auf einen Preis auf',
-            'weiter' => 'Lead-LA #' . $lead . ' ist bepreist.', 'fixbar' => false, 'loest_auf' => true];
+        return ['status' => 'ok', 'ursache' => 'Grundprodukt hat einen Preis',
+            'weiter' => 'Hauptartikel Nr. ' . $lead . ' hat einen Preis.', 'fixbar' => false, 'loest_auf' => true];
     }
 
     private function preisLoestAuf(int $laId): bool
@@ -380,7 +380,7 @@ class SignalCauseService
 
         return $glieder === [] ? null : [
             'art' => 'regelwerk',
-            'titel' => 'Verletzte Benennungs-Regel',
+            'titel' => 'Verletzte Benennungsregel',
             'kopf' => count($glieder) === 1 ? '1 Regel' : count($glieder) . ' Regeln',
             'glieder' => $glieder,
         ];

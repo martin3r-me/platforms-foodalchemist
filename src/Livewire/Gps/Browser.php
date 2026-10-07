@@ -54,8 +54,8 @@ class Browser extends Component
 
     public const SPALTEN = [
         'warengruppe' => ['Warengruppe', ''],
-        'leadpreis' => ['Lead-Preis', 'text-right'],
-        'las' => ['LAs', 'text-right'],
+        'leadpreis' => ['Preis', 'text-right'],
+        'las' => ['Artikel', 'text-right'],
         'rezepte' => ['Rezepte', 'text-right'],
         'allergene' => ['Allergene', ''],
         'status' => ['Status', ''],
@@ -187,6 +187,6 @@ class Browser extends Component
             'statusFaelle' => array_values(array_filter(GpStatus::cases(), fn (GpStatus $f) => $f !== GpStatus::Merged)),
             'statusCounts' => $gps->statusCounts($team),
             'kpis' => $kpis->forTeam($team),
-        ])->layout('platform::layouts.app');
+        ])->layout(\Platform\FoodAlchemist\Support\FaShell::layout());
     }
 }

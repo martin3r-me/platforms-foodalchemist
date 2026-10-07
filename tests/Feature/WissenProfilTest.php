@@ -103,7 +103,7 @@ it('meldet Alt-Bindungen als Ballast — nicht mehr als lauernde Gefahr', functi
     expect($p['alt_bindungen'])->toBe(['alte-bindung'])
         ->and(collect($p['befunde'])->pluck('code'))->toContain('bindung_altlast')
         ->and(collect($p['befunde'])->pluck('code'))->not->toContain('bindung_wuerde_scharf')
-        ->and(collect($p['befunde'])->firstWhere('code', 'bindung_altlast')['text'])->toContain('UNBIND')
+        ->and(collect($p['befunde'])->firstWhere('code', 'bindung_altlast')['text'])->toContain('Im Wissens-Browser beim Dossier lösen')
         // Ein Hinweis darf den Zustand NICHT kippen, sonst waeren die gesunden Keys fehlerhaft.
         ->and($p['zustand'])->toBe('gesteuert');
 });

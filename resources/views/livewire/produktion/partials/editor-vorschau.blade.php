@@ -1,67 +1,94 @@
-    <div x-show="tab === 'vorschau'" x-cloak class="pt-4 space-y-4">
-    {{-- Küchen-Manager: Diät-/Allergen-Übersicht über die ganze Produktion (Rollup der Rezepte) --}}
-    @if($allergenRollup)
-        @php($ja = 'px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-700')
-        @php($nein = 'px-2 py-0.5 rounded-md bg-black/10 text-gray-500')
-        @php($warn = 'px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-700')
-        <x-foodalchemist::modal-section title="Diät & Allergene (über die ganze Produktion)">
-            <div class="flex flex-wrap gap-1.5 items-center text-[11px]" data-produktion-allergene>
-                <span class="{{ $allergenRollup['is_vegan'] ? $ja : $nein }}">{{ $allergenRollup['is_vegan'] ? '✓ ' : '' }}vegan</span>
-                <span class="{{ $allergenRollup['is_vegetarian'] ? $ja : $nein }}">{{ $allergenRollup['is_vegetarian'] ? '✓ ' : '' }}vegetarisch</span>
-                <span class="{{ $allergenRollup['is_halal'] ? $ja : $nein }}">{{ $allergenRollup['is_halal'] ? '✓ ' : '' }}halal</span>
-                <span class="{{ $allergenRollup['is_gluten_free'] ? $ja : $nein }}">{{ $allergenRollup['is_gluten_free'] ? '✓ ' : '' }}glutenfrei</span>
-                <span class="{{ $allergenRollup['is_lactose_free'] ? $ja : $nein }}">{{ $allergenRollup['is_lactose_free'] ? '✓ ' : '' }}laktosefrei</span>
-                @if($allergenRollup['contains_pork'])<span class="{{ $warn }}">enthält Schwein</span>@endif
-                @if($allergenRollup['contains_beef'])<span class="{{ $warn }}">enthält Rind</span>@endif
-                <span class="ml-auto text-gray-400">Konfidenz {{ $allergenRollup['confidence'] }} · {{ $allergenRollup['n_gerichte'] }} Rezepte</span>
-            </div>
-            <p class="text-[10px] text-gray-500 mt-2">„vegan/…/frei" = trifft auf ALLE Rezepte zu · „enthält" = mind. ein Rezept. Rollup aus den Rezept-Spezifikationen (schwächste Konfidenz gewinnt).</p>
-        </x-foodalchemist::modal-section>
-    @endif
-    {{-- Spec 51: was insgesamt gepackt werden muss. Die Kueche packt nicht je Rezept, sie packt
-         den Wagen — nur die Basis-Variante zaehlt, Alternativen sind ein Angebot, keine zweite Wahrheit. --}}
-    @if($behaelterRollup)
-        <x-foodalchemist::modal-section title="Behälter (über die ganze Produktion)">
-            <div class="flex flex-wrap gap-1.5 items-center text-[11px]" data-produktion-behaelter>
-                @forelse($behaelterRollup['summe'] as $name => $anzahl)
-                    <span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $anzahl }}× {{ $name }}</span>
-                @empty
-                    <span class="text-gray-500">kein Behälter-Bedarf gerechnet</span>
-                @endforelse
-                @if($behaelterRollup['ohne'] > 0)
-                    <span class="ml-auto text-amber-600">{{ $behaelterRollup['ohne'] }} Zeile(n) nicht bemessbar — Referenzmenge oder Ausbeute fehlt</span>
-                @endif
-            </div>
-        </x-foodalchemist::modal-section>
-    @endif
-    <x-foodalchemist::modal-section title="Vorschau">
-        @if($vorschau === null)
-            <p class="text-[12px] text-gray-500">Ziele hinzufügen, um die Ansätze-Vorschau zu sehen.</p>
-        @else
-            <table class="{{ $table }}">
-                <thead><tr>
-                    <th class="{{ $th }} text-left">Rezept</th>
-                    <th class="{{ $th }} text-right">Ansätze</th>
-                    <th class="{{ $th }} text-right">Portionen/kg</th>
-                    <th class="{{ $th }} text-left">Behälter</th>
-                    <th class="{{ $th }} text-right">Arbeitszeit</th>
-                </tr></thead>
-                <tbody>
-                    @foreach($vorschau['rezepte'] as $r)
-                        <tr class="border-t border-black/5">
-                            <td class="{{ $td }}">{{ $r['name'] }} @if($r['ist_basisrezept'])<span class="{{ $pill }} {{ $variantPill['secondary'] }} ml-1">Basisrezept</span>@endif</td>
-                            <td class="{{ $td }} text-right tabular-nums">{{ rtrim(rtrim(number_format($r['ansaetze'], 2, ',', '.'), '0'), ',') }}</td>
-                            <td class="{{ $td }} text-right tabular-nums">{{ $r['portionen'] !== null ? $r['portionen'] . ' Port.' : ($r['produzierte_menge_kg'] !== null ? number_format($r['produzierte_menge_kg'], 2, ',', '.') . ' kg' : '—') }}</td>
-                            @php($behaelter = \Platform\FoodAlchemist\Services\BehaelterBedarfService::kurz($r['behaelter'] ?? null))
-                            <td class="{{ $td }} text-[11px]" data-vorschau-behaelter>{{ $behaelter ?? '—' }}</td>
-                            <td class="{{ $td }} text-right tabular-nums">{{ $r['arbeitszeit_min'] !== null ? $r['arbeitszeit_min'] . ' min' : '—' }}</td>
-                        </tr>
+    <div x-show="tab === 'vorschau'" x-cloak class="pt-4 flex flex-col gap-4">
+    {{-- Reiter VORSCHAU: was die Ziele ergeben, bevor gespeichert wird. Reihenfolge wie bisher:
+         erst, was die ganze Produktion betrifft (Diät, Behälter), dann die Ansätze je Rezept. --}}
+        {{-- Küchen-Manager: Diät-/Allergen-Übersicht über die ganze Produktion (Rollup der Rezepte) --}}
+        @if($allergenRollup)
+            @php
+                $diaeten = ['is_vegan' => 'vegan', 'is_vegetarian' => 'vegetarisch', 'is_halal' => 'halal', 'is_gluten_free' => 'glutenfrei', 'is_lactose_free' => 'laktosefrei'];
+            @endphp
+            <x-fa::section title="Diät und Allergene" icon="heroicon-o-shield-check"
+                           :meta="'aus ' . $allergenRollup['n_gerichte'] . ' Rezepten'"
+                           description="Vegan, vegetarisch, halal, gluten- und laktosefrei gilt nur, wenn alle Rezepte es erfüllen. „Enthält“ heißt: mindestens ein Rezept.">
+                <div class="flex flex-wrap items-center gap-1.5" data-produktion-allergene>
+                    @foreach($diaeten as $feld => $text)
+                        @if($allergenRollup[$feld])
+                            <x-fa::badge tone="ok" icon="heroicon-m-check">{{ $text }}</x-fa::badge>
+                        @else
+                            <x-fa::badge>nicht {{ $text }}</x-fa::badge>
+                        @endif
                     @endforeach
-                </tbody>
-            </table>
+                    @if($allergenRollup['contains_pork'])<x-fa::badge tone="warn">enthält Schwein</x-fa::badge>@endif
+                    @if($allergenRollup['contains_beef'])<x-fa::badge tone="warn">enthält Rind</x-fa::badge>@endif
+                </div>
+                <p class="{{ $leise }}">Sicherheit der Angaben: {{ \Platform\FoodAlchemist\Support\Labels::konfidenz($allergenRollup['confidence'] ?? null) }}. Die schwächste Angabe eines Rezepts zählt.</p>
+            </x-fa::section>
+        @endif
+
+        {{-- Spec 51: was insgesamt gepackt werden muss. Die Kueche packt nicht je Rezept, sie packt
+             den Wagen — nur die Basis-Variante zaehlt, Alternativen sind ein Angebot, keine zweite Wahrheit. --}}
+        @if($behaelterRollup)
+            <x-fa::section title="Behälter" icon="heroicon-o-archive-box" description="Was für die ganze Produktion gepackt werden muss.">
+                <div class="flex flex-wrap items-center gap-1.5" data-produktion-behaelter>
+                    @forelse($behaelterRollup['summe'] as $name => $anzahl)
+                        <x-fa::badge>{{ $anzahl }} × {{ $name }}</x-fa::badge>
+                    @empty
+                        <span class="{{ $leise }}">Kein Behälter-Bedarf gerechnet.</span>
+                    @endforelse
+                </div>
+                @if($behaelterRollup['ohne'] > 0)
+                    <x-fa::signal tone="warn">{{ $behaelterRollup['ohne'] }} {{ $behaelterRollup['ohne'] === 1 ? 'Rezept' : 'Rezepte' }} nicht bemessbar: Referenzmenge oder Ausbeute fehlt</x-fa::signal>
+                @endif
+            </x-fa::section>
+        @endif
+    <x-fa::section title="Ansätze je Rezept" icon="heroicon-o-calculator">
+        @if($vorschau === null)
+            <x-fa::empty compact icon="heroicon-o-calculator" title="Noch keine Vorschau">Im Reiter Ziele mindestens ein Ziel einfügen, dann stehen hier Ansätze, Mengen und Arbeitszeit.</x-fa::empty>
+        @else
+            <div class="overflow-x-auto -mx-4 px-4">
+                <table class="fa-table">
+                    <thead><tr>
+                        <th class="w-full min-w-[12rem]">Rezept</th>
+                        <th class="num">Ansätze</th>
+                        <th class="num">Menge</th>
+                        <th>Behälter</th>
+                        <th class="num">Arbeitszeit</th>
+                    </tr></thead>
+                    <tbody>
+                        @foreach($vorschau['rezepte'] as $r)
+                            @php
+                                $behaelter = \Platform\FoodAlchemist\Services\BehaelterBedarfService::kurz($r['behaelter'] ?? null);
+                            @endphp
+                            <tr>
+                                <td>
+                                    <span class="text-[var(--fa-ink)]">{{ $r['name'] }}</span>
+                                    @if($r['ist_basisrezept'])<x-fa::badge class="ml-1">Basisrezept</x-fa::badge>@endif
+                                </td>
+                                <td class="num font-medium">{{ $menge($r['ansaetze']) }}</td>
+                                <td class="num">
+                                    @if($r['portionen'] !== null)
+                                        <x-fa::menge :value="$r['portionen']" unit="Portionen" :decimals="0" />
+                                    @elseif($r['produzierte_menge_kg'] !== null)
+                                        <x-fa::menge :value="$r['produzierte_menge_kg']" unit="kg" />
+                                    @else
+                                        <span class="text-[var(--fa-ink-3)]">–</span>
+                                    @endif
+                                </td>
+                                <td class="whitespace-nowrap text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]" data-vorschau-behaelter>{{ $behaelter ?? '–' }}</td>
+                                <td class="num">
+                                    @if($r['arbeitszeit_min'] !== null)
+                                        <x-fa::menge :value="$r['arbeitszeit_min']" unit="min" :decimals="0" />
+                                    @else
+                                        <x-fa::signal tone="warn" title="Am Rezept ist keine Arbeitszeit hinterlegt">fehlt</x-fa::signal>
+                                    @endif
+                                </td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
             @foreach($vorschau['warnungen'] as $w)
-                <x-foodalchemist::alert tone="warning" class="mt-2">{{ $w }}</x-foodalchemist::alert>
+                <x-fa::notice tone="warn">{{ $w }}</x-fa::notice>
             @endforeach
         @endif
-    </x-foodalchemist::modal-section>
+    </x-fa::section>
     </div>{{-- /Vorschau-Panel --}}

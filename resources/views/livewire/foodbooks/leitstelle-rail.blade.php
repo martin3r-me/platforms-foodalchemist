@@ -1,27 +1,33 @@
-{{-- Spec 19 E5.3 — Leitstelle-Rail (Nested-Livewire, rechte activity-Sidebar).
+{{-- Spec 19 E5.3 — Leitstelle-Rail (Nested-Livewire, rechte Seitenleiste).
      Kontextsensitiv: Kopf-Modus = 3-Panel-Umschalter (Fortschritt/Speisen/Kalkulation,
-     Alpine + localStorage-Pin); Kapitel-Modus = Kapitel-Planung (Ziele-Editing) +
-     Coverage + Kalkulation + Ideen-Stand. --}}
-@php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
-@php($aktiv = 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700')
-@php($hover = 'text-gray-600 hover:bg-black/[0.03]')
-@php($weStil =['gruen' => 'text-emerald-600', 'gelb' => 'text-amber-600', 'rot' => 'text-red-600', 'unbekannt' => 'text-gray-400'])
-@php($wePunkt = ['gruen' => 'bg-emerald-500', 'gelb' => 'bg-amber-500', 'rot' => 'bg-red-500', 'unbekannt' => 'bg-gray-300'])
-@php($statusBadge = [
-    'bepreist' => $variantPill['success'], 'angelegt' => $variantPill['primary'],
-    'entwurf' => $variantPill['secondary'], 'ki_queue' => $variantPill['info'],
-])
+     Alpine + localStorage-Pin); Kapitel-Modus = Kuration/QC des Kapitels (Kalkulation + Abdeckung).
+     fa-pass: Tokens und x-fa-Bausteine (hell und Werkbank), Zustände als Wort statt Kürzel. --}}
+@php
+    $aktiv = 'bg-[var(--fa-accent-soft)] text-[var(--fa-accent)]';
+    $hover = 'text-[var(--fa-ink-2)] hover:bg-[var(--fa-hover)] hover:text-[var(--fa-ink)]';
+    $weStil = ['gruen' => 'text-[var(--fa-ok)]', 'gelb' => 'text-[var(--fa-warn)]', 'rot' => 'text-[var(--fa-crit)]', 'unbekannt' => 'text-[var(--fa-ink-3)]'];
+    $wePunkt = ['gruen' => 'bg-[var(--fa-ok)]', 'gelb' => 'bg-[var(--fa-warn)]', 'rot' => 'bg-[var(--fa-crit)]', 'unbekannt' => 'bg-[var(--fa-line-strong)]'];
+    $weWort = ['gruen' => 'im Ziel', 'gelb' => 'knapp am Ziel', 'rot' => 'über dem Ziel', 'unbekannt' => 'nicht berechenbar'];
+    $statusTon = ['bepreist' => 'ok', 'angelegt' => 'accent', 'entwurf' => 'neutral', 'ki_queue' => 'info'];
+    $befundTon = ['erfuellt' => 'ok', 'teilerfuellt' => 'warn', 'verletzt' => 'crit', 'info' => 'info'];
+    $artText = ['paket' => 'Paket', 'einzel' => 'Einzel', 'idee' => 'Idee'];
+    $titel = 'text-[length:var(--fa-text-sm)] font-semibold text-[var(--fa-ink-2)]';
+    $zeile = 'text-[length:var(--fa-text-md)]';
+    $leer = 'text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]';
+    $pct = fn ($wert, $stellen = 1) => $wert !== null ? number_format((float) $wert, $stellen, ',', '.') . ' %' : '–';
+    $euro = fn ($wert) => number_format((float) $wert, 2, ',', '.') . ' €';
+@endphp
 
 <div data-leitstelle-rail>
 @if($modus === 'leer' || ! $fb)
-    <div class="p-6 text-center text-sm text-gray-500">Foodbook auswählen.</div>
+    <x-fa::empty icon="heroicon-o-book-open" title="Kein Foodbook gewählt" compact class="px-4">Ein Foodbook auswählen, dann stehen hier Stand und Kalkulation.</x-fa::empty>
 
 @elseif($modus === 'kapitel')
-    {{-- ═══════════════ KAPITEL-PLANUNG ═══════════════ --}}
-    <div class="p-4 space-y-4" data-rail-kapitel data-fb-anker="kapitel-rail">
-        <div>
-            <p class="{{ $label }}">Kapitel-Planung</p>
-            <p class="text-sm font-medium text-gray-900 truncate">{{ $stand['titel'] ?? '—' }}</p>
+    {{-- ═══════════════ KAPITEL: Kuration und Prüfung ═══════════════ --}}
+    <div class="p-4 flex flex-col gap-4" data-rail-kapitel data-fb-anker="kapitel-rail">
+        <div class="min-w-0">
+            <p class="{{ $titel }}">Kapitel</p>
+            <p class="text-[length:var(--fa-text-base)] font-semibold text-[var(--fa-ink)] break-words">{{ $stand['titel'] ?? 'Ohne Titel' }}</p>
         </div>
 
         {{-- S3b: Zielgruppen-Stempel + M3-Ziele-Editor → Leitstelle (Planung\KapitelRail). Hier bleibt nur
@@ -29,35 +35,36 @@
 
         {{-- Kapitel-Kalkulation --}}
         @if($stand)
-            <div class="pt-3 border-t border-black/5 space-y-1 text-xs" data-rail-kalk>
-                <span class="{{ $label }}">Kalkulation</span>
-                <div class="flex justify-between"><span class="text-gray-600">€/Person</span><span class="tabular-nums">{{ number_format($stand['aggregat']['vk_pro_person'], 2, ',', '.') }} €</span></div>
-                <div class="flex justify-between"><span class="text-gray-600">EK/Person</span><span class="tabular-nums">{{ number_format($stand['aggregat']['ek_per_person'], 2, ',', '.') }} €</span></div>
-                @php($we = $stand['wareneinsatz'])
-                <div class="flex justify-between items-center">
-                    <span class="text-gray-600">Wareneinsatz</span>
-                    <span class="inline-flex items-center gap-1 {{ $weStil[$we['status']] ?? '' }}">
-                        <span class="w-1.5 h-1.5 rounded-full {{ $wePunkt[$we['status']] ?? 'bg-gray-300' }}"></span>
-                        <span class="tabular-nums">{{ $we['ist_pct'] !== null ? number_format($we['ist_pct'], 1, ',', '.') . ' %' : '—' }}</span>
-                        <span class="text-gray-400">/ Ziel {{ number_format($we['ziel_pct'], 1, ',', '.') }} %</span>
-                    </span>
-                </div>
-                @if($we['partiell'])<p class="text-[10px] text-amber-600">@svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5 inline-block align-middle') partiell — Pauschal-Blöcke ohne EK, IST unterschätzt.</p>@endif
-            </div>
+            @php $we = $stand['wareneinsatz']; @endphp
+            <section class="flex flex-col gap-1.5 pt-3 border-t border-[var(--fa-line)]" data-rail-kalk>
+                <h3 class="{{ $titel }}">Kalkulation</h3>
+                <dl class="flex flex-col gap-1 {{ $zeile }}">
+                    <div class="flex items-baseline justify-between gap-2"><dt class="text-[var(--fa-ink-2)]">Verkauf pro Person</dt><dd class="tabular-nums font-semibold text-[var(--fa-ink)]">{{ $euro($stand['aggregat']['vk_pro_person']) }}</dd></div>
+                    <div class="flex items-baseline justify-between gap-2"><dt class="text-[var(--fa-ink-2)]">Wareneinsatz pro Person</dt><dd class="tabular-nums text-[var(--fa-ink)]">{{ $euro($stand['aggregat']['ek_per_person']) }}</dd></div>
+                    <div class="flex items-baseline justify-between gap-2">
+                        <dt class="text-[var(--fa-ink-2)]">Wareneinsatz-Quote</dt>
+                        <dd class="inline-flex items-center gap-1.5 {{ $weStil[$we['status']] ?? '' }}" title="{{ $weWort[$we['status']] ?? '' }}">
+                            <span class="w-2 h-2 rounded-full {{ $wePunkt[$we['status']] ?? $wePunkt['unbekannt'] }}"></span>
+                            <span class="tabular-nums font-medium">{{ $pct($we['ist_pct']) }}</span>
+                            <span class="text-[var(--fa-ink-3)] tabular-nums">Ziel {{ $pct($we['ziel_pct']) }}</span>
+                        </dd>
+                    </div>
+                </dl>
+                @if($we['partiell'])<x-fa::signal tone="warn">Pauschal-Positionen ohne Einkaufspreis. Die Quote ist zu niedrig.</x-fa::signal>@endif
+            </section>
         @endif
 
-        {{-- Kapitel-Coverage (Scope = Kapitel + Nachfahren) --}}
+        {{-- Kapitel-Abdeckung (Scope = Kapitel + Nachfahren) --}}
         @if(! empty($befunde))
-            <div class="pt-3 border-t border-black/5 space-y-1" data-rail-coverage>
-                <span class="{{ $label }}">Coverage</span>
+            <section class="flex flex-col gap-1.5 pt-3 border-t border-[var(--fa-line)]" data-rail-coverage>
+                <h3 class="{{ $titel }}">Abdeckung der Vorgaben</h3>
                 @foreach($befunde as $b)
-                    @php($amp = ['erfuellt' => $variantPill['success'], 'teilerfuellt' => $variantPill['warning'], 'verletzt' => $variantPill['danger'], 'info' => $variantPill['info']][$b['ampel']] ?? $variantPill['secondary'])
-                    <div class="flex items-start justify-between gap-2 text-[11px]">
-                        <span class="text-gray-600">{{ $b['label'] }}</span>
-                        <span class="{{ $pill }} {{ $amp }} shrink-0">{{ $b['ist'] }}</span>
+                    <div class="flex items-start justify-between gap-2 {{ $zeile }}">
+                        <span class="min-w-0 text-[var(--fa-ink-2)] break-words">{{ $b['label'] }}</span>
+                        <x-fa::badge :tone="$befundTon[$b['ampel']] ?? 'neutral'" class="shrink-0">{{ $b['ist'] }}</x-fa::badge>
                     </div>
                 @endforeach
-            </div>
+            </section>
         @endif
 
         {{-- S3b: Ideen-Stand + Kapitel-Go „Anlegen" (kapitelFreigeben-Bypass) + Anlage/Undo-Modals ENTFERNT.
@@ -68,7 +75,7 @@
     {{-- ═══════════════ KOPF-MODUS: 3-Panel-Umschalter ═══════════════ --}}
     {{-- Auto-Default je Cockpit-Tab NUR ohne manuellen Pin (localStorage). Der Cockpit-Root
          dispatcht `fb-cockpit-tab` beim Tab-Wechsel; ohne Pin folgt die Rail der tabMap. --}}
-    <div class="p-4 space-y-3"
+    <div class="p-4 flex flex-col gap-4"
          x-data="{
             pin: localStorage.getItem('fbRailPin') || null,
             panel: 'fortschritt',
@@ -81,108 +88,115 @@
          data-rail-kopf>
 
         {{-- Umschalter --}}
-        <div class="flex items-center gap-1" role="tablist" data-rail-umschalter>
+        <div class="flex items-center gap-1 p-0.5 rounded-[var(--fa-radius-control)] bg-[var(--fa-neutral-soft)]" role="tablist" data-rail-umschalter>
             @foreach(['fortschritt' => 'Fortschritt', 'speisen' => 'Speisen', 'kalkulation' => 'Kalkulation'] as $pk => $pl)
-                <button type="button" @click="setPanel(@js($pk))"
+                <button type="button" role="tab" @click="setPanel(@js($pk))"
                         :class="panel === @js($pk) ? '{{ $aktiv }}' : '{{ $hover }}'"
-                        class="px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors" data-rail-panel-btn="{{ $pk }}">{{ $pl }}</button>
+                        :aria-selected="panel === @js($pk)"
+                        class="flex-1 h-7 px-2 rounded-[var(--fa-radius-control)] text-[length:var(--fa-text-sm)] font-medium transition-colors duration-150" data-rail-panel-btn="{{ $pk }}">{{ $pl }}</button>
             @endforeach
-            <button type="button" x-show="pin" x-cloak @click="loesePin()" class="ml-auto text-[10px] text-gray-400 hover:text-violet-500" title="Auto-Umschaltung je Tab wieder aktivieren">@svg('heroicon-o-map-pin', 'w-3.5 h-3.5 inline-block align-middle') lösen</button>
         </div>
+        <button type="button" x-show="pin" x-cloak @click="loesePin()"
+                class="-mt-2 self-end inline-flex items-center gap-1 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)] hover:text-[var(--fa-ink)]"
+                title="Die Ansicht wechselt dann wieder mit dem Reiter im Editor">@svg('heroicon-m-map-pin', 'w-3.5 h-3.5') Ansicht nicht mehr festhalten</button>
 
         {{-- ── Panel: FORTSCHRITT ── --}}
-        {{-- Der volle 7-Chip-Strip lebt in der Tab-Leiste (E5.2, aus allen Tabs sichtbar) —
-             hier nur ein kompakter Zähler, um Doppel-Darstellung zu vermeiden. --}}
         {{-- S3b: Fortschritt-Zähler (Checkliste) + Komplex-Hinweis entfallen (Planung → Leitstelle).
              Die Kapitel-Matrix (Kuration/Status-Übersicht) bleibt. --}}
-        <div x-show="panel === 'fortschritt'" x-cloak class="space-y-3" data-rail-fortschritt>
-            <div class="space-y-1" data-rail-matrix>
-                <span class="{{ $label }}">Kapitel-Matrix</span>
+        <div x-show="panel === 'fortschritt'" x-cloak class="flex flex-col gap-3" data-rail-fortschritt>
+            <section class="flex flex-col gap-1" data-rail-matrix>
+                <h3 class="{{ $titel }}">Kapitel im Überblick</h3>
                 @forelse($matrix as $m)
-                    @php($we = $m['wareneinsatz'])
-                    <div class="flex items-center gap-2 text-[11px] py-0.5" wire:key="rm-{{ $m['kapitel_id'] }}" style="padding-left: {{ ($m['depth'] - 1) * 10 }}px">
-                        <span class="w-1.5 h-1.5 rounded-full shrink-0 {{ $wePunkt[$we['status']] ?? 'bg-gray-300' }}" title="Wareneinsatz {{ $we['status'] }}"></span>
-                        <span class="flex-1 min-w-0 truncate text-gray-700">{{ $m['titel'] }}</span>
-                        <span class="shrink-0 flex items-center gap-0.5">
-                            <span class="{{ $pill }} {{ $m['hat_ziele'] ? $variantPill['primary'] : $variantPill['secondary'] }}" title="Ziele/Dimensionen">{{ $m['hat_ziele'] ? 'Z' : '·' }}</span>
-                            <span class="{{ $pill }} {{ $m['positionen'] > 0 ? $variantPill['info'] : $variantPill['secondary'] }}" title="Positionen">{{ $m['positionen'] }}</span>
-                            <span class="{{ $pill }} {{ $m['bepreist'] ? $variantPill['success'] : ($m['hat_inhalt'] ? $variantPill['warning'] : $variantPill['secondary']) }}" title="{{ $m['bepreist'] ? 'bepreist' : ($m['hat_inhalt'] ? 'angelegt/ohne Preis' : 'leer') }}">€</span>
+                    @php $we = $m['wareneinsatz']; @endphp
+                    <div class="flex flex-wrap items-center gap-x-2 gap-y-1 py-1.5 border-b border-[var(--fa-line)] last:border-b-0 {{ $zeile }}" wire:key="rm-{{ $m['kapitel_id'] }}" style="padding-left: {{ ($m['depth'] - 1) * 10 }}px">
+                        <span class="w-2 h-2 rounded-full shrink-0 {{ $wePunkt[$we['status']] ?? $wePunkt['unbekannt'] }}" title="Wareneinsatz {{ $weWort[$we['status']] ?? '' }}"></span>
+                        <span class="flex-1 min-w-[8rem] break-words text-[var(--fa-ink)]">{{ $m['titel'] }}</span>
+                        <span class="shrink-0 flex flex-wrap items-center gap-1">
+                            @if($m['hat_ziele'])<x-fa::badge tone="accent" title="Vorgaben für dieses Kapitel gesetzt">Vorgaben</x-fa::badge>@endif
+                            <x-fa::badge :tone="$m['positionen'] > 0 ? 'info' : 'neutral'">{{ $m['positionen'] }} {{ (int) $m['positionen'] === 1 ? 'Position' : 'Positionen' }}</x-fa::badge>
+                            @if($m['bepreist'])
+                                <x-fa::badge tone="ok">Bepreist</x-fa::badge>
+                            @elseif($m['hat_inhalt'])
+                                <x-fa::badge tone="warn">Preis fehlt</x-fa::badge>
+                            @endif
                         </span>
                         @if($m['released'])
-                            <span class="text-emerald-500 text-[10px] shrink-0" title="angelegt">✓</span>
+                            <span class="shrink-0 text-[var(--fa-ok)]" title="Angelegt">@svg('heroicon-m-check-circle', 'w-4 h-4')</span>
                         @else
-                            {{-- Shortcut: Kapitel selektieren → Rail flippt in den Kapitel-Modus mit „Kapitel anlegen" (E7.5). --}}
-                            <button type="button" wire:click="$parent.kapitelWaehle({{ $m['kapitel_id'] }})" title="Kapitel öffnen zum Anlegen" class="text-violet-500 hover:text-violet-700 text-[10px] shrink-0" data-rail-matrix-go>Go</button>
+                            {{-- Shortcut: Kapitel selektieren → Rail flippt in den Kapitel-Modus (E7.5). --}}
+                            <button type="button" wire:click="$parent.kapitelWaehle({{ $m['kapitel_id'] }})" title="Kapitel öffnen, um es anzulegen"
+                                    class="shrink-0 text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-accent)] hover:text-[var(--fa-accent-hover)]" data-rail-matrix-go>Öffnen</button>
                         @endif
                     </div>
                 @empty
-                    <p class="text-[11px] text-gray-400">Noch keine Kapitel.</p>
+                    <p class="{{ $leer }}">Noch keine Kapitel.</p>
                 @endforelse
-            </div>
+            </section>
         </div>
 
-        {{-- ── Panel: SPEISEN (heterogener Baum) ── --}}
-        <div x-show="panel === 'speisen'" x-cloak class="space-y-2" data-rail-speisen>
+        {{-- ── Panel: SPEISEN (Baum je Kapitel) ── --}}
+        <div x-show="panel === 'speisen'" x-cloak class="flex flex-col gap-3" data-rail-speisen>
             @forelse($baum as $k)
-                <div wire:key="rb-{{ $k['kapitel_id'] }}" style="padding-left: {{ ($k['depth'] - 1) * 8 }}px">
-                    <div class="flex items-center gap-1 text-[11px] font-medium text-gray-700">
-                        <span class="truncate">{{ $k['titel'] }}</span>
-                        @if($k['released'])<span class="text-emerald-500 text-[10px]">✓</span>@endif
+                <div class="flex flex-col gap-1" wire:key="rb-{{ $k['kapitel_id'] }}" style="padding-left: {{ ($k['depth'] - 1) * 8 }}px">
+                    <div class="flex items-center gap-1.5 text-[length:var(--fa-text-md)] font-semibold text-[var(--fa-ink)]">
+                        <span class="min-w-0 break-words">{{ $k['titel'] }}</span>
+                        @if($k['released'])<span class="shrink-0 text-[var(--fa-ok)]" title="Angelegt">@svg('heroicon-m-check-circle', 'w-4 h-4')</span>@endif
                     </div>
                     @foreach($k['positionen'] as $p)
-                        <div class="flex items-center gap-1.5 text-[11px] pl-2 py-px">
-                            <span class="{{ $pill }} {{ $statusBadge[$p['status']] ?? $variantPill['secondary'] }} shrink-0">{{ ['paket' => 'Paket', 'einzel' => 'Einzel', 'idee' => 'Idee'][$p['art']] ?? $p['art'] }}</span>
-                            <span class="flex-1 min-w-0 truncate text-gray-600">{{ $p['label'] }}</span>
+                        <div class="flex items-start gap-1.5 pl-2 {{ $zeile }}">
+                            <x-fa::badge :tone="$statusTon[$p['status']] ?? 'neutral'" class="shrink-0">{{ $artText[$p['art']] ?? ucfirst((string) $p['art']) }}</x-fa::badge>
+                            <span class="flex-1 min-w-0 break-words text-[var(--fa-ink-2)]">{{ $p['label'] }}</span>
                             @if($p['preis'] !== null)
-                                <span class="shrink-0 tabular-nums text-gray-500">{{ number_format($p['preis'], 2, ',', '.') }} €{{ $p['preis_einheit'] === 'gast' ? '/G' : '/Pos' }}</span>
+                                <span class="shrink-0 tabular-nums text-[var(--fa-ink-2)]">{{ $euro($p['preis']) }}<span class="text-[var(--fa-ink-3)]">{{ $p['preis_einheit'] === 'gast' ? ' pro Gast' : ' pro Position' }}</span></span>
                             @endif
                         </div>
                     @endforeach
-                    @if(empty($k['positionen']))<p class="text-[10px] text-gray-400 pl-2">leer</p>@endif
+                    @if(empty($k['positionen']))<p class="pl-2 {{ $leer }}">Noch leer</p>@endif
                 </div>
             @empty
-                <p class="text-[11px] text-gray-400">Noch keine Kapitel.</p>
+                <p class="{{ $leer }}">Noch keine Kapitel.</p>
             @endforelse
         </div>
 
         {{-- ── Panel: KALKULATION (Portfolio + WE-Ampel je Kapitel) ── --}}
-        <div x-show="panel === 'kalkulation'" x-cloak class="space-y-3" data-rail-kalkulation>
-            <div class="text-center py-1">
-                <div class="text-2xl font-semibold text-gray-900 tabular-nums">{{ number_format($gesamt['vk_pro_person'], 2, ',', '.') }} €</div>
-                <div class="{{ $label }}">pro Person · EK {{ number_format($gesamt['ek_per_person'], 2, ',', '.') }} €</div>
+        <div x-show="panel === 'kalkulation'" x-cloak class="flex flex-col gap-3" data-rail-kalkulation>
+            <div class="fa-surface px-4 py-3 text-center">
+                <p class="text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-2)]">Verkauf pro Person</p>
+                <p class="text-[length:var(--fa-text-2xl)] font-semibold tracking-tight text-[var(--fa-accent)] tabular-nums">{{ $euro($gesamt['vk_pro_person']) }}</p>
+                <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)] tabular-nums">Wareneinsatz {{ $euro($gesamt['ek_per_person']) }}</p>
                 @if($gesamt['gesamt_vk'] !== null)
-                    <div class="text-[11px] text-gray-500 mt-0.5">{{ $gesamt['personen'] }} Gäste · gesamt {{ number_format($gesamt['gesamt_vk'], 2, ',', '.') }} €</div>
+                    <p class="mt-1 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)] tabular-nums">{{ $gesamt['personen'] }} Gäste, zusammen {{ $euro($gesamt['gesamt_vk']) }}</p>
                 @else
-                    <div class="text-[11px] text-gray-400 mt-0.5">Pax + Gesamtpreis liegen im Angebot.</div>
+                    <p class="mt-1 {{ $leer }}">Gästezahl und Gesamtpreis stehen im Angebot.</p>
                 @endif
             </div>
             {{-- Portfolio-WE-Ampel (E8.2): Gesamt-Wareneinsatz des Foodbooks gegen Ziel + Toleranz. --}}
-            <div class="flex items-center justify-between rounded-lg bg-black/[0.02] px-3 py-1.5" data-rail-we-portfolio>
-                <span class="{{ $label }}">Wareneinsatz gesamt</span>
-                <span class="inline-flex items-center gap-1.5 text-xs font-medium {{ $weStil[$weGesamt['status']] ?? '' }}"
-                      title="IST {{ $weGesamt['ist_pct'] !== null ? number_format($weGesamt['ist_pct'], 1, ',', '.') . '%' : 'unbekannt' }} · Ziel {{ number_format($weGesamt['ziel_pct'], 1, ',', '.') }}% (±{{ number_format($weGesamt['toleranz_pp'], 1, ',', '.') }} pp, {{ $weGesamt['quelle'] }}){{ $weGesamt['partiell'] ? ' · partiell (Pauschal-EK ungezählt)' : '' }}">
-                    <span class="w-2 h-2 rounded-full {{ $wePunkt[$weGesamt['status']] ?? 'bg-gray-300' }}"></span>
-                    <span class="tabular-nums">{{ $weGesamt['ist_pct'] !== null ? number_format($weGesamt['ist_pct'], 1, ',', '.') . '%' : '—' }}</span>
-                    <span class="text-[10px] text-gray-400">/ {{ number_format($weGesamt['ziel_pct'], 0, ',', '.') }}%</span>
-                    @if($weGesamt['partiell'])<span title="partiell — Pauschal ohne EK">@svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5 inline-block align-middle')</span>@endif
+            <div class="flex items-center justify-between gap-2 rounded-[var(--fa-radius-control)] bg-[var(--fa-neutral-soft)] px-3 py-2" data-rail-we-portfolio>
+                <span class="{{ $titel }}">Wareneinsatz gesamt</span>
+                <span class="inline-flex items-center gap-1.5 text-[length:var(--fa-text-md)] font-medium {{ $weStil[$weGesamt['status']] ?? '' }}"
+                      title="Ist {{ $pct($weGesamt['ist_pct']) }}, Ziel {{ $pct($weGesamt['ziel_pct']) }} (Spielraum {{ number_format((float) $weGesamt['toleranz_pp'], 1, ',', '.') }} Prozentpunkte){{ $weGesamt['partiell'] ? '. Pauschal-Positionen ohne Einkaufspreis sind nicht mitgezählt.' : '' }}">
+                    <span class="w-2 h-2 rounded-full {{ $wePunkt[$weGesamt['status']] ?? $wePunkt['unbekannt'] }}"></span>
+                    <span class="tabular-nums">{{ $pct($weGesamt['ist_pct']) }}</span>
+                    <span class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)] tabular-nums">Ziel {{ $pct($weGesamt['ziel_pct'], 0) }}</span>
+                    @if($weGesamt['partiell'])@svg('heroicon-m-exclamation-triangle', 'w-4 h-4 text-[var(--fa-warn)]')@endif
                 </span>
             </div>
-            <div class="space-y-0.5" data-rail-we-matrix>
-                <span class="{{ $label }}">Wareneinsatz je Kapitel</span>
+            <section class="flex flex-col gap-1" data-rail-we-matrix>
+                <h3 class="{{ $titel }}">Wareneinsatz je Kapitel</h3>
                 @forelse($matrix as $m)
-                    @php($we = $m['wareneinsatz'])
-                    <div class="flex items-center gap-2 text-[11px] py-0.5" wire:key="rwe-{{ $m['kapitel_id'] }}" style="padding-left: {{ ($m['depth'] - 1) * 10 }}px">
-                        <span class="flex-1 min-w-0 truncate text-gray-600">{{ $m['titel'] }}</span>
-                        <span class="inline-flex items-center gap-1 shrink-0 {{ $weStil[$we['status']] ?? '' }}">
-                            <span class="w-1.5 h-1.5 rounded-full {{ $wePunkt[$we['status']] ?? 'bg-gray-300' }}"></span>
-                            <span class="tabular-nums">{{ $we['ist_pct'] !== null ? number_format($we['ist_pct'], 1, ',', '.') . '%' : '—' }}</span>
-                            @if($we['partiell'])<span title="partiell — Pauschal ohne EK">@svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5 inline-block align-middle')</span>@endif
+                    @php $we = $m['wareneinsatz']; @endphp
+                    <div class="flex items-center gap-2 py-1 {{ $zeile }}" wire:key="rwe-{{ $m['kapitel_id'] }}" style="padding-left: {{ ($m['depth'] - 1) * 10 }}px">
+                        <span class="flex-1 min-w-0 break-words text-[var(--fa-ink-2)]">{{ $m['titel'] }}</span>
+                        <span class="inline-flex items-center gap-1 shrink-0 {{ $weStil[$we['status']] ?? '' }}" title="{{ $weWort[$we['status']] ?? '' }}">
+                            <span class="w-2 h-2 rounded-full {{ $wePunkt[$we['status']] ?? $wePunkt['unbekannt'] }}"></span>
+                            <span class="tabular-nums">{{ $pct($we['ist_pct']) }}</span>
+                            @if($we['partiell'])<span title="Pauschal-Positionen ohne Einkaufspreis">@svg('heroicon-m-exclamation-triangle', 'w-4 h-4 text-[var(--fa-warn)]')</span>@endif
                         </span>
                     </div>
                 @empty
-                    <p class="text-[11px] text-gray-400">Noch keine Kapitel.</p>
+                    <p class="{{ $leer }}">Noch keine Kapitel.</p>
                 @endforelse
-            </div>
+            </section>
         </div>
     </div>
 @endif

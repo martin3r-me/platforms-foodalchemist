@@ -20,7 +20,7 @@
             </tr>
         </tbody>
     </table>
-    <p class="muted">Konfidenz/Quelle: {{ strtoupper((string) ($n['confidence'] ?? $n['source'] ?? '—')) }}@if(($n['mapped'] ?? null) !== null) · {{ $n['mapped'] }}/{{ $n['total'] ?? '—' }} Zutaten mit Nährwertdaten @endif</p>
+    <p class="muted">Sicherheit der Angaben: {{ ($n['confidence'] ?? null) !== null ? \Platform\FoodAlchemist\Support\Labels::konfidenz($n['confidence']) : ($n['source'] ?? '—') }}@if(($n['mapped'] ?? null) !== null) · {{ $n['mapped'] }}/{{ $n['total'] ?? '—' }} Zutaten mit Nährwertdaten @endif</p>
 @else
     <p class="muted">Keine Nährwerte aggregiert.</p>
 @endif

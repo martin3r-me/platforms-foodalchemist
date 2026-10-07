@@ -355,7 +355,7 @@ class RecipeReviewService
             throw new \RuntimeException('Rezept nicht gefunden oder nicht sichtbar.');
         }
         if (($befund['auto_applicable'] ?? false) !== true) {
-            throw new \RuntimeException('Befund ist nicht anwendbar — er ist ein Hinweis, kein Auftrag.');
+            throw new \RuntimeException('Dieser Hinweis lässt sich nicht automatisch übernehmen. Bitte im Rezept selbst anpassen.');
         }
 
         // Kohärenz-Gate: Fremdkörper wird ENTdrahtet, nicht überschrieben. Der direkte
@@ -366,7 +366,7 @@ class RecipeReviewService
         if (($befund['art'] ?? '') === 'fremdkoerper') {
             $zielId = ($befund['zutat_id'] ?? null) !== null ? (int) $befund['zutat_id'] : null;
             if ($zielId === null) {
-                throw new \RuntimeException('Fremdkörper-Befund ohne Zielzeile — nichts zu lösen.');
+                throw new \RuntimeException('Der Hinweis nennt keine Zutatenzeile, es gibt nichts zu übernehmen.');
             }
 
             return app(HardstopResolveService::class)->entdrahte($team, $recipeId, $zielId);
@@ -414,7 +414,7 @@ class RecipeReviewService
         }
 
         if ($zeilen === []) {
-            throw new \RuntimeException('Übernahme würde das Rezept ohne Zutaten zurücklassen.');
+            throw new \RuntimeException('Nach der Übernahme hätte das Rezept keine Zutaten mehr. Nicht übernommen.');
         }
 
         // Sync = Schreiben + Grounding + recomputeAndPropagate in einem.

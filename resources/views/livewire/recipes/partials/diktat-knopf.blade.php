@@ -2,8 +2,9 @@
     Diktat-Knopf für EIN Textfeld einer beliebigen Livewire-Komponente.
 
     Erwartet: $audio  = Name der Upload-Property (z. B. 'briefingAudio')
-              $btnAi  = Button-Klasse aus dem Eltern-Scope (Ui::maps(), wie im Planungs-Pendant)
-    Optional:  $label = Knopf-Text (Default „diktieren"), $marker = data-Attribut
+    Optional:  $label = Knopf-Text (Default „Diktieren"), $marker = data-Attribut,
+               $btnAi = eigene Knopf-Klasse (z. B. Küchen-Wand im Tagesplan). Ohne Angabe gilt die
+                        KI-Knopf-Optik aus den Tokens (hell + Werkbank-Modus).
 
     Gegenstück in der Komponente: `updated<Audio>()` transkribiert über SttServiceContract
     und HÄNGT den Text an das Zielfeld an (nie ersetzen — ein Diktat ist ein Nachtrag).
@@ -16,7 +17,10 @@
 
     Reines STT, kein Tool-Loop: was gesagt wurde, steht danach im Feld.
 --}}
-@php($label = $label ?? 'diktieren')
+@php
+    $label = $label ?? 'Diktieren';
+    $knopfKlasse = $btnAi ?? 'inline-flex items-center gap-1.5 h-7 px-2.5 whitespace-nowrap rounded-[var(--fa-radius-control)] text-[length:var(--fa-text-sm)] font-medium bg-[var(--fa-accent-soft)] text-[var(--fa-accent)] border border-[var(--fa-accent-line)] hover:bg-[var(--fa-accent-soft-hover)] transition-colors duration-150';
+@endphp
 
 <span x-data="{
         rec: null, chunks: [], laeuft: false,
@@ -34,10 +38,10 @@
         stop() { this.rec?.stop(); this.laeuft = false; },
      }">
     <button type="button" @click="laeuft ? stop() : start()" :class="laeuft ? 'animate-pulse' : ''"
-            class="{{ $btnAi }}" @isset($marker) data-diktat="{{ $marker }}" @endisset
-            :title="laeuft ? 'Aufnahme beenden und übernehmen' : 'Statt tippen: sprechen'">
+            class="{{ $knopfKlasse }}" @isset($marker) data-diktat="{{ $marker }}" @endisset
+            :title="laeuft ? 'Aufnahme beenden und übernehmen' : 'Sprechen statt tippen'">
         <span x-show="laeuft" x-cloak>@svg('heroicon-o-stop', 'w-3.5 h-3.5')</span>
         <span x-show="! laeuft">@svg('heroicon-o-microphone', 'w-3.5 h-3.5')</span>
-        <span x-text="laeuft ? 'Stopp & übernehmen' : @js($label)"></span>
+        <span x-text="laeuft ? 'Stoppen und übernehmen' : @js($label)"></span>
     </button>
 </span>

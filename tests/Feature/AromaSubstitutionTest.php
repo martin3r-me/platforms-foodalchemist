@@ -14,8 +14,8 @@ uses(TestCase::class, SeedsTeamHierarchy::class);
 /**
  * R6.8 — Aroma-treue Substitution: Ersatz, der den GESCHMACK erhält, nicht nur den
  * Preis. Estragon↔Kerbel (Klassiker-Tausch, geteilte Anker) muss vor einem aroma-fernen,
- * gleich teuren Ersatz (Schokolade) ranken. Aroma-Vektoren sind hier NICHT geseedet →
- * Ranking läuft graceful über die reine Kanten-Überlappung (aroma_cos = null).
+ * gleich teuren Ersatz (Schokolade) ranken. Das Ranking läuft allein über die
+ * Kanten-Überlappung (Spec 60: Aroma-Vektoren/Moleküle sind raus).
  */
 beforeEach(function () {
     $this->seedTeamHierarchy();
@@ -36,14 +36,14 @@ beforeEach(function () {
 
     $mkKante = function (int $a, int $b, string $typ) {
         foreach ([[$a, $b], [$b, $a]] as [$x, $y]) {
-            DB::table('foodalchemist_pairing_anchor_edges')->insert([
+            \Platform\FoodAlchemist\Tests\Support\Harmonie::ausFixture([
                 'uuid' => (string) UuidV7::generate(), 'anchor_a_id' => $x, 'anchor_b_id' => $y,
                 'type' => $typ, 'created_at' => now(), 'updated_at' => now(),
             ]);
         }
     };
-    // Schokolade (kakao) dockt nur SCHWACH an Kräuter an (Kontrast) — nicht an Anis.
-    $mkKante($this->kakao, $this->kraeuter, 'kontrast');
+    // Schokolade (kakao) dockt an Kräuter an (Stufe 3, echtes Food Pairing) — nicht an Anis.
+    $mkKante($this->kakao, $this->kraeuter, 'erprobt');
     // Anis brückt aufs Geflügel (fürs Kohäsions-Delta im Rezept-Kontext).
     $mkKante($this->anis, $this->gefluegel, 'erprobt');
 
@@ -67,7 +67,7 @@ beforeEach(function () {
     $this->schokolade = ($this->mkGpMitAnkern)('Schokolade', [$this->kakao]);
 });
 
-it('rankt den aroma-treuen Ersatz vor dem aroma-fernen, gleich teuren; graceful ohne Aroma-Vektoren', function () {
+it('rankt den aroma-treuen Ersatz vor dem aroma-fernen, gleich teuren; allein über Anker-Kanten', function () {
     $out = $this->svc->aromaTrueSubstitutes($this->rootTeam, $this->estragon->id, 8);
 
     expect($out['source']['name'])->toBe('Estragon')
@@ -85,12 +85,11 @@ it('rankt den aroma-treuen Ersatz vor dem aroma-fernen, gleich teuren; graceful 
     $scho = $out['candidates'][$idxScho];
 
     expect($kerbel['flavor_score'])->toBe(1.0)                   // beide Anker erhalten
-        ->and($kerbel['aroma_cos'])->toBeNull()                 // keine Aroma-Vektoren → graceful
         ->and($kerbel['erhaltene_bruecken'])->toEqualCanonicalizing(['Anis', 'Kraeuter'])
         ->and($kerbel['verlorene_bruecken'])->toBe([])
         ->and($kerbel['flavor_score'])->toBeGreaterThan($scho['flavor_score']);
 
-    // Schokolade: Kräuter über die Kontrast-Kante erhalten, Anis verloren → 0,5.
+    // Schokolade: Kräuter über die 3★-Kante erhalten, Anis verloren → 0,5.
     expect($scho['flavor_score'])->toBe(0.5)
         ->and($scho['erhaltene_bruecken'])->toBe(['Kraeuter'])
         ->and($scho['verlorene_bruecken'])->toBe(['Anis']);
@@ -100,9 +99,9 @@ it('rankt den aroma-treuen Ersatz vor dem aroma-fernen, gleich teuren; graceful 
         ->and($kerbel['allergen_warnungen']['gluten'])->toBe('enthalten')
         ->and($scho['allergen_warnungen'])->toBe([]);
 
-    // Evidenz durchgereicht (E1): abgeleitet, ohne Aroma-Vektor.
+    // Evidenz durchgereicht (E1): abgeleitet, allein über Anker-Kanten (Spec 60: keine Aroma-Vektoren mehr).
     expect($kerbel['evidenz']['tier'])->toBe('abgeleitet')
-        ->and($kerbel['evidenz']['aroma_vektor'])->toBeFalse();
+        ->and($kerbel['evidenz']['basis'])->toBe('Anker-Kanten');
 });
 
 it('boostet manuell kuratierte Äquivalente (kuratiert zuerst, trotz schwacher Aroma-Treue)', function () {

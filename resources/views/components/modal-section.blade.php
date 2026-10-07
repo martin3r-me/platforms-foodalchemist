@@ -19,12 +19,12 @@
 <section {{ $attributes->merge(['class' => $sectionCard . ' mt-4 first:mt-0 min-w-0']) }} data-modal-zone="section">
     <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
         @if($icon)
-            <h3 class="flex items-center gap-1.5 text-[13px] font-semibold text-gray-900 min-w-0">
-                @svg($icon, 'w-4 h-4 text-violet-600 shrink-0')
+            <h3 class="flex items-center gap-2 text-[length:var(--fa-text-base)] font-semibold text-[var(--fa-ink)] min-w-0">
+                @svg($icon, 'w-4 h-4 text-[var(--fa-ink-3)] shrink-0')
                 <span class="min-w-0">{{ $title }}</span>
             </h3>
         @else
-            <h3 class="text-[11px] font-medium uppercase tracking-wider text-gray-500 min-w-0">{{ $title }}</h3>
+            <h3 class="text-[length:var(--fa-text-md)] font-semibold text-[var(--fa-ink)] min-w-0">{{ $title }}</h3>
         @endif
         @isset($actions)
             <div class="flex flex-wrap items-center justify-end gap-1.5 min-w-0" data-section-actions>{{ $actions }}</div>

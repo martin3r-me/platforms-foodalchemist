@@ -1,81 +1,142 @@
-{{-- Speiseplan-Editor (Fullscreen-Dark, pro Plan) — Kalender (Wochen-Matrix/Monat + Inline-Picker)
-     · Menü-Linien · Stammdaten (+ Öffnungstage, Zyklus-Ausrollen). Rechts eine Live-Kennzahlen-Rail
-     (VK/EK · Budget je Gast · Wareneinsatz je Linie · Kostformen · LMIV · DGE · Wiederholungen), die
-     bei jeder Zellen-Änderung mitrechnet. Spec 57: Zellen „auf einen Blick“ (partials/zelle), Linie
-     als Ausgabestelle, Tagesfuß — alle Zahlen aus SpeiseplanService::zellenKennzahlen. --}}
-@php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
-@php($tagKurz = [1 => 'Mo', 2 => 'Di', 3 => 'Mi', 4 => 'Do', 5 => 'Fr', 6 => 'Sa', 7 => 'So'])
-@php($monatNamen = [1 => 'Januar', 2 => 'Februar', 3 => 'März', 4 => 'April', 5 => 'Mai', 6 => 'Juni', 7 => 'Juli', 8 => 'August', 9 => 'September', 10 => 'Oktober', 11 => 'November', 12 => 'Dezember'])
+{{-- Speiseplan-Editor — fa-pass (2026-10-05), Werkbank-Modus auf Bausteinen <x-fa::…>.
+     Häufigste Aufgabe: die Woche belegen (Gericht in eine Zelle setzen, verschieben, Essen eintragen).
+     Darum steht der Kalender vorn, die Werkzeugleiste ist auf Mahlzeit + Woche reduziert, und der
+     Zell-Picker bzw. das Eintrag-Detail öffnen rechts neben dem Raster (kein Scrollen unter die Matrix).
+     Die Kennzahlen-Spalte rechts lässt sich einklappen; bei sieben Öffnungstagen startet sie
+     eingeklappt, damit das Raster auf 1440 px ohne Querscrollen passt.
+     Kopf: genau eine Hauptaktion (Speichern), eine KI-Aktion (leere Zellen füllen), Woche drucken/kopieren,
+     Produktion und Löschen im Menü „Weitere Aktionen". Alle wire:-Bindungen, wire:keys, Event-Namen und
+     data-Marker unverändert. --}}
+@php
+    $tagKurz = [1 => 'Mo', 2 => 'Di', 3 => 'Mi', 4 => 'Do', 5 => 'Fr', 6 => 'Sa', 7 => 'So'];
+    $monatNamen = [1 => 'Januar', 2 => 'Februar', 3 => 'März', 4 => 'April', 5 => 'Mai', 6 => 'Juni', 7 => 'Juli', 8 => 'August', 9 => 'September', 10 => 'Oktober', 11 => 'November', 12 => 'Dezember'];
+
+    $zahl = fn ($wert, int $stellen = 0) => number_format((float) $wert, $stellen, ',', '.');
+    $mehrzahl = fn (int $n, string $eins, string $viele) => number_format($n, 0, ',', '.') . ' ' . ($n === 1 ? $eins : $viele);
+
+    // Seitenlokale Klassen — nur Tokens, damit hell und Werkbank stimmen.
+    $etikett = 'text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-2)]';
+    $leise = 'text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]';
+    $seg = 'inline-flex p-0.5 gap-0.5 rounded-[var(--fa-radius-control)] bg-[var(--fa-neutral-soft)]';
+    $segKnopf = 'h-7 px-3 rounded-[5px] text-[length:var(--fa-text-sm)] font-medium transition-colors';
+    $segAn = 'bg-[var(--fa-surface)] text-[var(--fa-ink)] shadow-sm';
+    $segAus = 'text-[var(--fa-ink-2)] hover:text-[var(--fa-ink)]';
+    $chip = 'inline-flex items-center h-7 px-2.5 rounded-full border text-[length:var(--fa-text-sm)] transition-colors duration-150';
+    $chipAn = 'bg-[var(--fa-accent-soft)] border-[var(--fa-accent)] text-[var(--fa-accent)] font-medium';
+    $chipAus = 'bg-[var(--fa-surface)] border-[var(--fa-line-strong)] text-[var(--fa-ink-2)] hover:text-[var(--fa-ink)] hover:border-[var(--fa-ink-3)]';
+    $menuePunkt = 'flex w-full items-center gap-2 px-3 py-2 text-left text-[length:var(--fa-text-md)] text-[var(--fa-ink)] hover:bg-[var(--fa-hover)]';
+    $karte = 'fa-surface p-3 flex flex-col gap-2';
+    $haken = 'rounded accent-[var(--fa-accent)]';
+
+    // Wareneinsatz-Zustand gegen das Zielband (Service liefert ok · unter · ueber · weit_ueber · unbekannt).
+    $wesText = ['ok' => 'text-[var(--fa-ok)]', 'unter' => 'text-[var(--fa-info)]', 'ueber' => 'text-[var(--fa-warn)]', 'weit_ueber' => 'text-[var(--fa-crit)]', 'unbekannt' => 'text-[var(--fa-ink-3)]'];
+    $wesPunkt = ['ok' => 'bg-[var(--fa-ok)]', 'unter' => 'bg-[var(--fa-info)]', 'ueber' => 'bg-[var(--fa-warn)]', 'weit_ueber' => 'bg-[var(--fa-crit)]', 'unbekannt' => 'bg-[var(--fa-ink-3)]'];
+    $ampelTon = ['success' => 'ok', 'warning' => 'warn', 'danger' => 'crit'];
+    $konfidenzText = ['high' => 'hoch', 'medium' => 'mittel', 'low' => 'niedrig', 'none' => 'keine'];
+    $typLabel = ['gericht' => 'Gericht', 'concept' => 'Konzept', 'paket' => 'Paket'];
+
+    $gaesteAusRollen = (bool) ($zk['gaeste_aus_rollen'] ?? false);
+    $kwText = 'KW ' . (int) $montagDt->format('W') . ' · ' . ($mahlzeiten[$mahlzeit] ?? '');
+@endphp
 
 <x-foodalchemist::modal name="speiseplan-editor" fullscreen dark-canvas title="Speiseplan bearbeiten"
     :title-name="$sp?->name">
 
     <x-slot:actions>
         @if($sp)
-            <button type="button" wire:click="speichern" class="{{ $btnPrimary }}" data-sp-speichern>Speichern</button>
-            {{-- P5 / Spec 57 · 10.1: Voll-Kaskade — erst prüfen (leere Zellen, Kosten-Hinweis), dann im Feld unten starten. --}}
-            <button type="button" wire:click="vollKaskadePruefen" class="{{ $btnPrimary }}" wire:loading.attr="disabled" data-sp-voll-kaskade>
-                <span wire:loading.remove wire:target="vollKaskadePruefen">@svg('heroicon-o-bolt', 'w-4 h-4 inline-block align-middle') Voll-Kaskade …</span>
-                <span wire:loading wire:target="vollKaskadePruefen">Prüfe …</span>
-            </button>
-            <button type="button" wire:click="loeschen({{ $sp->id }})" wire:confirm="Speiseplan löschen?" class="{{ $btnGhostXs }} text-red-600" data-sp-loeschen>Löschen</button>
-            @if($ausrollenInfo)<span class="text-[12px] text-violet-300 ml-2 self-center" data-sp-ausrollen-info>{{ $ausrollenInfo }}</span>@endif
-            @if($kaskadeMeldung)<span class="text-[12px] text-amber-300 ml-2 self-center">{{ $kaskadeMeldung }}</span>@endif
-            @if($prodHinweis)<span class="text-[12px] text-emerald-300 ml-2 self-center" data-sp-prod-hinweis>✓ {{ $prodHinweis }}</span>@endif
-            @if($prodFehler)<span class="text-[12px] text-rose-300 ml-2 self-center" data-sp-prod-fehler>{{ $prodFehler }}</span>@endif
+            <div class="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
+                @if($ausrollenInfo)<x-fa::signal tone="info" data-sp-ausrollen-info>{{ $ausrollenInfo }}</x-fa::signal>@endif
+                @if($kaskadeMeldung)<x-fa::signal tone="warn">{{ $kaskadeMeldung }}</x-fa::signal>@endif
+                @if($prodHinweis)<x-fa::signal tone="ok" data-sp-prod-hinweis>{{ $prodHinweis }}</x-fa::signal>@endif
+                @if($prodFehler)<x-fa::signal tone="crit" data-sp-prod-fehler>{{ $prodFehler }}</x-fa::signal>@endif
+            </div>
+            <div class="ml-auto flex flex-wrap items-center gap-2">
+                {{-- P5 / Spec 57 · 10.1: erst prüfen (leere Zellen, Umfang), dann im Hinweis oben starten. --}}
+                <x-fa::button variant="ai" icon="heroicon-m-sparkles" wire:click="vollKaskadePruefen" wire:loading.attr="disabled" wire:target="vollKaskadePruefen" data-sp-voll-kaskade>
+                    <span wire:loading.remove wire:target="vollKaskadePruefen">Leere Zellen mit KI füllen</span>
+                    <span wire:loading wire:target="vollKaskadePruefen">Prüfe …</span>
+                </x-fa::button>
+                <div class="relative" x-data="faMenu()" x-on:keydown.escape="offen = false" x-on:click.outside="offen = false">
+                    <x-fa::icon-button icon="heroicon-m-ellipsis-horizontal" label="Weitere Aktionen" x-on:click="toggle($event)" aria-haspopup="menu" x-bind:aria-expanded="offen" />
+                    <div x-bind:class="{ hidden: ! offen }" x-bind:style="pos" role="menu" class="hidden w-72 fa-surface shadow-lg py-1">
+                        <a href="{{ route('foodalchemist.speiseplan.dokument', ['id' => $sp->id, 'mahlzeit' => $mahlzeit, 'montag' => $montagDt->format('Y-m-d')]) }}" target="_blank" role="menuitem" x-on:click="offen = false"
+                           class="{{ $menuePunkt }}" title="Wochenaushang zum Drucken oder als PDF, mit Legende der Allergene und Zusatzstoffe" data-sp-aushang>
+                            @svg('heroicon-o-printer', 'w-4 h-4 shrink-0 text-[var(--fa-ink-3)]') Woche drucken
+                        </a>
+                        @if($ansicht === 'woche')
+                            <button type="button" role="menuitem" x-on:click="offen = false" wire:click="wocheKopierenOeffnen" class="{{ $menuePunkt }}" data-sp-woche-kopieren-btn>
+                                @svg('heroicon-o-document-duplicate', 'w-4 h-4 shrink-0 text-[var(--fa-ink-3)]') Woche kopieren
+                            </button>
+                        @endif
+                        <button type="button" role="menuitem" x-on:click="offen = false" wire:click="anProduktion"
+                                wire:confirm="Diese Woche ({{ $mahlzeiten[$mahlzeit] ?? '' }}) an die Produktion übergeben? Je Werktag mit Belegung wird ein Produktionsauftrag angelegt (Menge = Teilnehmerzahl)."
+                                class="{{ $menuePunkt }}" title="Je Werktag mit Belegung ein Produktionsauftrag, Menge = Teilnehmerzahl" data-sp-produktion>
+                            @svg('heroicon-o-fire', 'w-4 h-4 shrink-0 text-[var(--fa-ink-3)]') Woche an Produktion übergeben
+                        </button>
+                        <div class="my-1 border-t border-[var(--fa-line)]" role="separator"></div>
+                        <button type="button" role="menuitem" x-on:click="offen = false" wire:click="loeschen({{ $sp->id }})" wire:confirm="Speiseplan löschen?"
+                                class="{{ $menuePunkt }} text-[var(--fa-crit)]" data-sp-loeschen>
+                            @svg('heroicon-o-trash', 'w-4 h-4 shrink-0') Speiseplan löschen
+                        </button>
+                    </div>
+                </div>
+                <x-fa::button variant="primary" icon="heroicon-m-check" wire:click="speichern" wire:loading.attr="disabled" wire:target="speichern" data-sp-speichern>Speichern</x-fa::button>
+            </div>
         @endif
     </x-slot:actions>
 
     @if($sp && $kosten)
-        @php($kfOk = collect($kostformen)->where('erfuellt', true)->count())
-        @php($kfN = count($kostformen))
-        @php($zkWoche = $zk['woche'] ?? null)
+        @php
+            $kfOk = collect($kostformen)->where('erfuellt', true)->count();
+            $kfN = count($kostformen);
+            $zkWoche = $zk['woche'] ?? null;
+            $wesStatus = $zkWoche['status'] ?? 'unbekannt';
+        @endphp
         <x-slot:kpiHeader>
-            <x-foodalchemist::kpi-tiles marker="sp-kpis" :tiles="[
-                ['kpi' => 'umsatz', 'label' => 'Umsatz · Woche (Prognose)', 'tone' => 'accent',
-                 'value' => $zkWoche ? number_format($zkWoche['umsatz'], 0, ',', '.') . ' €' : '—'],
-                ['kpi' => 'wes', 'label' => 'Ø Wareneinsatz · Woche',
-                 'tone' => ($zkWoche['status'] ?? 'unbekannt') === 'ok' ? 'good' : (in_array($zkWoche['status'] ?? '', ['ueber', 'weit_ueber'], true) ? 'warn' : 'neutral'),
-                 'value' => ($zkWoche['wes'] ?? null) !== null ? number_format($zkWoche['wes'], 1, ',', '.') . ' %' : '—'],
-                ['kpi' => 'essen', 'label' => ($zk['gaeste_aus_rollen'] ?? false) ? 'Gäste · Woche (Hauptgänge)' : 'Portionen · Woche',
-                 'value' => $zkWoche ? number_format(($zk['gaeste_aus_rollen'] ?? false) ? $zkWoche['gaeste'] : $zkWoche['portionen'], 0, ',', '.') : '—'],
-                ['kpi' => 'kostform', 'label' => 'Kostformen · Woche',
-                 'tone' => $kfN > 0 && $kfOk === $kfN ? 'good' : ($kfOk > 0 ? 'warn' : 'neutral'),
-                 'value' => $kfN > 0 ? $kfOk . '/' . $kfN . ' abgedeckt' : '—'],
-                ['kpi' => 'wdh', 'label' => 'Wdh.-Konflikte',
-                 'tone' => count($wiederholungen) > 0 ? 'warn' : 'good',
+            <x-fa::kpis data-sp-kpis :items="[
+                ['kpi' => 'umsatz', 'label' => 'Umsatz der Woche (Prognose)', 'primary' => true,
+                 'value' => $zkWoche ? $zahl($zkWoche['umsatz']) . ' €' : '–'],
+                ['kpi' => 'wes', 'label' => 'Ø Wareneinsatz',
+                 'tone' => $wesStatus === 'ok' ? 'ok' : (in_array($wesStatus, ['ueber', 'weit_ueber'], true) ? 'warn' : null),
+                 'value' => ($zkWoche['wes'] ?? null) !== null ? $zahl($zkWoche['wes'], 1) . ' %' : '–'],
+                ['kpi' => 'essen', 'label' => $gaesteAusRollen ? 'Gäste der Woche (Hauptgänge)' : 'Portionen der Woche',
+                 'value' => $zkWoche ? $zahl($gaesteAusRollen ? $zkWoche['gaeste'] : $zkWoche['portionen']) : '–'],
+                ['kpi' => 'kostform', 'label' => 'Kostformen',
+                 'tone' => $kfN > 0 && $kfOk === $kfN ? 'ok' : ($kfOk > 0 ? 'warn' : null),
+                 'value' => $kfN > 0 ? $kfOk . ' von ' . $kfN . ' abgedeckt' : '–'],
+                ['kpi' => 'wdh', 'label' => 'Zu frühe Wiederholungen',
+                 'tone' => count($wiederholungen) > 0 ? 'warn' : 'ok',
                  'value' => (string) count($wiederholungen)],
             ]" />
         </x-slot:kpiHeader>
     @endif
 
     @if($sp === null)
-        <p class="pt-4 text-[12px] text-gray-500">Kein Plan geladen.</p>
+        <x-fa::empty icon="heroicon-o-calendar-days" title="Kein Plan geladen">Den Editor schließen und in der Liste einen Speiseplan wählen.</x-fa::empty>
     @else
-        {{-- Spec 57 · 10.1: Bestätigung vor der Voll-Kaskade (KI-Läufe kosten Zeit und Tokens). --}}
+        {{-- Spec 57 · 10.1: Bestätigung vor dem KI-Lauf (kostet Zeit und Rechenleistung). --}}
         @if($kaskadeVorschau)
-            <div class="mt-4 rounded-xl border border-violet-400/30 bg-violet-500/10 p-3 text-[12px] text-gray-200" data-sp-kaskade-bestaetigung>
-                <div class="font-medium text-violet-100">Voll-Kaskade starten?</div>
-                <p class="text-gray-300 mt-1">
-                    {{ $kaskadeVorschau['leer'] }} leere Zelle(n) im {{ $kaskadeVorschau['wochen'] }}-Wochen-Zyklus
-                    ({{ $kaskadeVorschau['linien'] }} Linien × Öffnungstage, jede Linie in ihrer Mahlzeit).
-                    Dieser Lauf startet {{ $kaskadeVorschau['dieser_lauf'] }} KI-Läufe — jeder erzeugt ein Gericht als Entwurf, das in der Leitstelle freigegeben wird.
-                    @if($kaskadeVorschau['gedeckelt']) Der Rest folgt mit dem nächsten Lauf (höchstens 6 Wochen je Lauf). @endif
-                </p>
-                <div class="flex gap-2 mt-2">
-                    <button type="button" wire:click="vollKaskadeStarten" wire:loading.attr="disabled" class="{{ $btnPrimary }}" data-sp-kaskade-start>
-                        <span wire:loading.remove wire:target="vollKaskadeStarten">Starten</span>
+            <x-fa::notice tone="info" title="Leere Zellen mit KI füllen?" data-sp-kaskade-bestaetigung>
+                {{ $mehrzahl((int) $kaskadeVorschau['leer'], 'leere Zelle', 'leere Zellen') }} im {{ $kaskadeVorschau['wochen'] }}-Wochen-Zyklus
+                ({{ $mehrzahl((int) $kaskadeVorschau['linien'], 'Linie', 'Linien') }} an den Öffnungstagen, jede Linie in ihrer Mahlzeit).
+                Dieser Lauf schlägt {{ $mehrzahl((int) $kaskadeVorschau['dieser_lauf'], 'Gericht', 'Gerichte') }} vor. Jedes entsteht als Entwurf und wird in der Leitstelle freigegeben.
+                @if($kaskadeVorschau['gedeckelt']) Der Rest folgt mit dem nächsten Lauf (höchstens 6 Wochen je Lauf). @endif
+                <x-slot:actions>
+                    <x-fa::button variant="ghost" size="sm" wire:click="vollKaskadeAbbrechen">Abbrechen</x-fa::button>
+                    <x-fa::button variant="ai" size="sm" icon="heroicon-m-sparkles" wire:click="vollKaskadeStarten" wire:loading.attr="disabled" wire:target="vollKaskadeStarten" data-sp-kaskade-start>
+                        <span wire:loading.remove wire:target="vollKaskadeStarten">KI-Lauf starten</span>
                         <span wire:loading wire:target="vollKaskadeStarten">Starte …</span>
-                    </button>
-                    <button type="button" wire:click="vollKaskadeAbbrechen" class="{{ $btnGhost }}">Abbrechen</button>
-                </div>
-            </div>
+                    </x-fa::button>
+                </x-slot:actions>
+            </x-fa::notice>
         @endif
-        {{-- 2-Spalten: Editor-Tabs (links, breit) + Live-Kennzahlen-Rail (rechts).
-             -mx-6 hebt das Body-px-6 auf (Spalten randbündig); die Mitte bekommt px-6 zurück,
-             damit die sticky editor-tabs-Leiste (-mx-6) wieder auf Spaltenbreite spannt; die
-             Rail behält pr-6. --}}
-        <div class="flex gap-4 -mx-6 items-start">
+
+        {{-- Zwei Spalten: Reiter (links, breit) + Kontext-Spalte (rechts: Picker/Detail, darunter Kennzahlen).
+             -mx-6 hebt das Body-px-6 auf; die Mitte bekommt px-6 zurück, damit die klebende Reiterleiste
+             (-mx-6) wieder auf Spaltenbreite spannt. `rail` = Kennzahlen sichtbar (nur Client-Zustand).
+             Spec 59: `markiert` = Eintrag-Ids, die ein Chip der Abwechslungs-Karte hervorhebt (rein clientseitig;
+             die Zellen im Raster lesen es per :class, siehe partials/zelle). --}}
+        <div class="flex gap-4 -mx-6 items-start" x-data="{ rail: {{ count($wochenTage) <= 6 ? 'true' : 'false' }}, markiert: null, markierKey: null }">
             <div class="flex-1 min-w-0 px-6">
                 <x-foodalchemist::editor-tabs marker="sp" wire-key="sp-tabs-{{ $sp->id }}" :init="'kalender'"
                     :tabs="[
@@ -85,107 +146,141 @@
                         'planist' => 'Plan/Ist',
                         'linien' => 'Menü-Linien',
                         'stammdaten' => 'Stammdaten',
-                        'praesentation' => 'Ausgabe & Aushang',
+                        'praesentation' => 'Druck und Aushang',
                     ]">
 
-                    {{-- ═══ Tab: KALENDER ═══ --}}
-                    <div x-show="tab === 'kalender'" x-cloak class="pt-4 space-y-4" data-sp-tab-kalender>
-                        {{-- Toolbar: Ansicht + Mahlzeit + Navigation --}}
-                        <div class="flex items-center gap-3 flex-wrap">
-                            <span class="inline-flex rounded-lg overflow-hidden border border-white/15">
+                    {{-- ═══ Reiter: KALENDER ═══ --}}
+                    <div x-show="tab === 'kalender'" x-cloak class="pt-4 flex flex-col gap-4" data-sp-tab-kalender>
+                        {{-- Werkzeugleiste in Demo-Reihenfolge: Woche/Monat · Mahlzeit · Kompakt/Detail, Navigation rechts --}}
+                        <div class="flex flex-wrap items-center gap-3">
+                            <div role="group" aria-label="Ansicht" class="{{ $seg }}">
                                 @foreach(['woche' => 'Woche', 'monat' => 'Monat'] as $av => $al)
-                                    <button type="button" wire:click="ansichtSetzen('{{ $av }}')" class="px-3 py-1.5 text-xs {{ $ansicht === $av ? 'bg-violet-500/20 text-violet-200 font-medium' : 'text-gray-400 hover:bg-white/[0.04]' }}">{{ $al }}</button>
+                                    <button type="button" wire:click="ansichtSetzen('{{ $av }}')" aria-pressed="{{ $ansicht === $av ? 'true' : 'false' }}"
+                                            class="{{ $segKnopf }} {{ $ansicht === $av ? $segAn : $segAus }}">{{ $al }}</button>
                                 @endforeach
-                            </span>
-                            <span class="flex items-center gap-1 flex-wrap">
+                            </div>
+                            <div role="group" aria-label="Mahlzeit" class="{{ $seg }}">
                                 @foreach($mahlzeiten as $mk => $ml)
-                                    <button type="button" wire:click="mahlzeitSetzen('{{ $mk }}')" class="{{ $pill }} {{ $mahlzeit === $mk ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $ml }}</button>
+                                    <button type="button" wire:click="mahlzeitSetzen('{{ $mk }}')" aria-pressed="{{ $mahlzeit === $mk ? 'true' : 'false' }}"
+                                            class="{{ $segKnopf }} {{ $mahlzeit === $mk ? $segAn : $segAus }}">{{ $ml }}</button>
                                 @endforeach
-                            </span>
+                            </div>
+
                             @if($ansicht === 'woche')
                                 {{-- Spec 57 · Paket 1: Zell-Dichte --}}
-                                <span class="inline-flex rounded-lg overflow-hidden border border-white/15" data-sp-dichte>
+                                <div role="group" aria-label="Zell-Dichte" class="{{ $seg }}" data-sp-dichte>
                                     @foreach(['kompakt' => 'Kompakt', 'detail' => 'Detail'] as $dv => $dl)
-                                        <button type="button" wire:click="dichteSetzen('{{ $dv }}')" class="px-2.5 py-1.5 text-xs {{ $dichte === $dv ? 'bg-white/10 text-gray-100 font-medium' : 'text-gray-400 hover:bg-white/[0.04]' }}" aria-pressed="{{ $dichte === $dv ? 'true' : 'false' }}">{{ $dl }}</button>
+                                        <button type="button" wire:click="dichteSetzen('{{ $dv }}')" class="{{ $segKnopf }} {{ $dichte === $dv ? $segAn : $segAus }}" aria-pressed="{{ $dichte === $dv ? 'true' : 'false' }}">{{ $dl }}</button>
                                     @endforeach
-                                </span>
+                                </div>
                             @endif
-                            <a href="{{ route('foodalchemist.speiseplan.dokument', ['id' => $sp->id, 'mahlzeit' => $mahlzeit, 'montag' => $montagDt->format('Y-m-d')]) }}" target="_blank"
-                               class="{{ $btnGhostXs }}" title="Wochen-Aushang (Druck/PDF) mit Allergen- & Zusatzstoff-Legende" data-sp-aushang>@svg('heroicon-o-printer', 'w-3.5 h-3.5 inline-block align-middle') Aushang</a>
-                            @if($ansicht === 'woche')
-                                <button type="button" wire:click="wocheKopierenOeffnen" class="{{ $btnGhostXs }}" title="Diese Woche auf eine andere Woche kopieren" data-sp-woche-kopieren-btn>@svg('heroicon-o-document-duplicate', 'w-3.5 h-3.5 inline-block align-middle') Woche kopieren</button>
-                            @endif
-                            <button type="button" wire:click="anProduktion"
-                                    wire:confirm="Diese Woche ({{ $mahlzeiten[$mahlzeit] ?? '' }}) an die Produktion übergeben? Je Werktag mit Belegung wird ein Produktionsauftrag angelegt (Menge = Teilnehmerzahl)."
-                                    class="{{ $btnGhostXs }}" title="Woche × Teilnehmerzahl → Produktionsaufträge (je Werktag einer)" data-sp-produktion>@svg('heroicon-o-fire', 'w-3.5 h-3.5 inline-block align-middle') → Produktion</button>
-                            <span class="flex items-center gap-2 ml-auto">
+                            <div class="ml-auto flex items-center gap-1">
                                 @if($ansicht === 'woche')
-                                    <button type="button" wire:click="wocheVerschieben(-1)" class="{{ $btnGhostXs }}">◀</button>
-                                    @php($letzterTag = $wochenTage !== [] ? end($wochenTage) : $montagDt->copy()->addDays(4))
-                                    <span class="text-sm font-medium tabular-nums text-gray-200">KW {{ (int) $montagDt->format('W') }} · {{ ($wochenTage[0] ?? $montagDt)->format('d.m.') }}–{{ $letzterTag->format('d.m.Y') }}</span>
-                                    <button type="button" wire:click="wocheVerschieben(1)" class="{{ $btnGhostXs }}">▶</button>
-                                    <button type="button" wire:click="heute" class="{{ $btnGhostXs }}">Heute</button>
+                                    @php $letzterTag = $wochenTage !== [] ? end($wochenTage) : $montagDt->copy()->addDays(4); @endphp
+                                    <x-fa::icon-button icon="heroicon-m-chevron-left" label="Vorherige Woche" size="sm" wire:click="wocheVerschieben(-1)" />
+                                    <span class="px-1 text-[length:var(--fa-text-base)] font-semibold tabular-nums text-[var(--fa-ink)] whitespace-nowrap">KW {{ (int) $montagDt->format('W') }}
+                                        <span class="font-normal text-[var(--fa-ink-2)]">{{ ($wochenTage[0] ?? $montagDt)->format('d.m.') }} bis {{ $letzterTag->format('d.m.Y') }}</span></span>
+                                    <x-fa::icon-button icon="heroicon-m-chevron-right" label="Nächste Woche" size="sm" wire:click="wocheVerschieben(1)" />
+                                    <x-fa::button variant="ghost" size="sm" wire:click="heute">Heute</x-fa::button>
                                 @else
-                                    <button type="button" wire:click="monatVerschieben(-1)" class="{{ $btnGhostXs }}">◀</button>
-                                    <span class="text-sm font-medium text-gray-200">{{ $monatNamen[(int) $monatStart->month] }} {{ $monatStart->year }}</span>
-                                    <button type="button" wire:click="monatVerschieben(1)" class="{{ $btnGhostXs }}">▶</button>
+                                    <x-fa::icon-button icon="heroicon-m-chevron-left" label="Vorheriger Monat" size="sm" wire:click="monatVerschieben(-1)" />
+                                    <span class="px-1 text-[length:var(--fa-text-base)] font-semibold text-[var(--fa-ink)] whitespace-nowrap">{{ $monatNamen[(int) $monatStart->month] }} {{ $monatStart->year }}</span>
+                                    <x-fa::icon-button icon="heroicon-m-chevron-right" label="Nächster Monat" size="sm" wire:click="monatVerschieben(1)" />
                                 @endif
-                            </span>
+                            </div>
+
                         </div>
 
                         @if($ansicht === 'woche')
-                            {{-- Wochen-Matrix: Linien × Öffnungstage (Spec 57 · Paket 1/2/9) --}}
-                            @php($zkEintraege = $zk['eintraege'] ?? [])
-                            @php($zkTage = $zk['tage'] ?? [])
-                            @php($zkLinien = $zk['linien'] ?? [])
-                            @php($tagStatusText = ['ok' => 'text-emerald-300', 'unter' => 'text-sky-300', 'ueber' => 'text-amber-300', 'weit_ueber' => 'text-rose-300', 'unbekannt' => 'text-gray-400'])
-                            <x-foodalchemist::modal-section title="Wochen-Matrix">
-                                @if($umbauHinweis)<div class="mb-2 rounded-lg bg-violet-500/10 border border-violet-400/30 text-violet-100 text-xs px-3 py-1.5" data-sp-umbau-hinweis>{{ $umbauHinweis }}</div>@endif
+                            @if($umbauHinweis)<x-fa::notice tone="info" data-sp-umbau-hinweis>{{ $umbauHinweis }}</x-fa::notice>@endif
+
+                            {{-- Spec 57 · Paket 5: Woche kopieren (geöffnet über „Weitere Aktionen") --}}
+                            @if($wocheKopierenOffen)
+                                <x-fa::section title="KW {{ (int) $montagDt->format('W') }} kopieren" meta="alle Mahlzeiten" icon="heroicon-o-document-duplicate" data-sp-woche-kopieren>
+                                    <div class="flex flex-wrap items-end gap-4">
+                                        <x-fa::field label="Zielwoche" for="sp-kopie-ziel" class="w-72">
+                                            <x-fa::select id="sp-kopie-ziel" wire:model="wocheKopierenZiel">
+                                                @foreach($zielWochen as $zw)
+                                                    <option value="{{ $zw->format('Y-m-d') }}">KW {{ $zw->isoWeek() }} · {{ $zw->format('d.m.') }} bis {{ $zw->copy()->addDays(6)->format('d.m.Y') }}</option>
+                                                @endforeach
+                                            </x-fa::select>
+                                        </x-fa::field>
+                                        <label class="flex items-center gap-2 h-9 text-[length:var(--fa-text-md)] text-[var(--fa-ink)]"><input type="checkbox" wire:model="wocheKopierenMerge" class="{{ $haken }}" /> Mit vorhandenen Einträgen zusammenführen</label>
+                                        <label class="flex items-center gap-2 h-9 text-[length:var(--fa-text-md)] text-[var(--fa-ink)]"><input type="checkbox" wire:model="wocheKopierenPax" class="{{ $haken }}" /> Essen-Zahlen mitnehmen</label>
+                                        <div class="ml-auto flex items-center gap-2">
+                                            <x-fa::button variant="ghost" wire:click="$set('wocheKopierenOffen', false)">Abbrechen</x-fa::button>
+                                            <x-fa::button icon="heroicon-m-document-duplicate" wire:click="wocheKopieren">Woche kopieren</x-fa::button>
+                                        </div>
+                                    </div>
+                                    <p class="{{ $leise }}">Ohne Zusammenführen werden belegte Zellen der Zielwoche ersetzt. Einzelne Einträge kopierst du über ihr Detail.</p>
+                                </x-fa::section>
+                            @endif
+
+                            {{-- Wochen-Raster: Linien × Öffnungstage (Spec 57 · Paket 1/2/9) --}}
+                            @php
+                                $zkEintraege = $zk['eintraege'] ?? [];
+                                $zkTage = $zk['tage'] ?? [];
+                                $zkLinien = $zk['linien'] ?? [];
+                                $zeilenLinien = $matrixLinien->map(fn ($l) => ['id' => (int) $l->id, 'name' => $l->name, 'color' => $l->color, 'role' => $l->role, 'plu' => $l->plu, 'is_standing' => (bool) $l->is_standing])->values();
+                                if (isset($raster[0])) {
+                                    $zeilenLinien->push(['id' => 0, 'name' => 'Ohne Linie', 'color' => null, 'role' => null, 'plu' => null, 'is_standing' => false]);
+                                }
+                            @endphp
+                            <section class="fa-surface min-w-0" aria-label="Wochenraster">
                                 <div class="overflow-x-auto" data-sp-matrix x-data="{ dragId: null }">
-                                    <table class="{{ $table }}" style="table-layout:fixed; width:100%; min-width:{{ max(640, 150 + count($wochenTage) * 150) }}px;">
-                                        <thead><tr class="text-left">
-                                            <th class="{{ $th }}" style="width:150px">Linie</th>
+                                    <table class="fa-table table-fixed" style="min-width: {{ 152 + count($wochenTage) * 136 }}px">
+                                        <thead><tr>
+                                            <th class="w-36">Linie</th>
                                             @foreach($wochenTage as $tag)
-                                                <th class="{{ $th }} text-center {{ $tag->isToday() ? 'text-violet-300' : '' }}">{{ $tagKurz[$tag->isoWeekday()] }} <span class="text-gray-400 font-normal">{{ $tag->format('d.m.') }}</span></th>
+                                                <th class="{{ $tag->isToday() ? 'text-[var(--fa-accent)]' : '' }}">
+                                                    <span class="font-semibold">{{ $tagKurz[$tag->isoWeekday()] }}</span>
+                                                    <span class="font-normal tabular-nums {{ $tag->isToday() ? '' : 'text-[var(--fa-ink-3)]' }}">{{ $tag->format('d.m.') }}</span>
+                                                    @if($tag->isToday())<span class="sr-only">(heute)</span>@endif
+                                                </th>
                                             @endforeach
                                         </tr></thead>
                                         <tbody>
-                                            @php($zeilenLinien = $matrixLinien->map(fn ($l) => ['id' => (int) $l->id, 'name' => $l->name, 'color' => $l->color, 'role' => $l->role, 'plu' => $l->plu, 'is_standing' => (bool) $l->is_standing])->values())
-                                            @if(isset($raster[0]))
-                                                @php($zeilenLinien->push(['id' => 0, 'name' => 'Ohne Linie', 'color' => null, 'role' => null, 'plu' => null, 'is_standing' => false]))
-                                            @endif
                                             @foreach($zeilenLinien as $zl)
-                                                @php($lk = $zkLinien[$zl['id']] ?? null)
-                                                <tr class="border-t border-white/10 align-top" wire:key="zeile-{{ $zl['id'] }}">
-                                                    <td class="{{ $td }}" data-sp-linie-kopf="{{ $zl['id'] }}">
-                                                        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full shrink-0" style="background: {{ $zl['color'] ?: '#94a3b8' }}"></span><span class="font-medium {{ $zl['id'] === 0 ? 'text-amber-200' : 'text-gray-200' }}">{{ $zl['name'] }}</span></span>
-                                                        @if($zl['id'] === 0)
-                                                            <div class="text-[10px] text-amber-200/70 mt-0.5">Keiner Linie zugeordnet</div>
-                                                        @else
-                                                            <div class="text-[10px] text-gray-400 mt-0.5">{{ collect([$rollen[$zl['role']] ?? null, $zl['plu'] ? 'Kasse ' . $zl['plu'] : null])->filter()->implode(' · ') ?: 'ohne Rolle' }}</div>
-                                                            @if($lk)
-                                                                <div class="text-[10px] text-gray-400 tabular-nums" title="{{ ($lk['band']['quelle'] ?? '') === 'team' ? 'Kein eigenes Zielband — es gilt das Team-/Betriebs-Ziel' : 'Zielband der Linie' }}">
-                                                                    Ziel {{ $lk['band']['min'] !== null ? number_format((float) $lk['band']['min'], 0) . '–' : '≤ ' }}{{ number_format((float) $lk['band']['max'], 0) }} %
-                                                                </div>
+                                                @php $lk = $zkLinien[$zl['id']] ?? null; @endphp
+                                                <tr class="align-top" wire:key="zeile-{{ $zl['id'] }}">
+                                                    <td class="align-top" data-sp-linie-kopf="{{ $zl['id'] }}">
+                                                        <span class="flex items-start gap-2">
+                                                            <span class="mt-1 w-2.5 h-2.5 rounded-full shrink-0 {{ $zl['color'] ? '' : 'bg-[var(--fa-ink-3)]' }}" @if($zl['color']) style="background: {{ $zl['color'] }}" @endif></span>
+                                                            <span class="min-w-0 font-semibold break-words {{ $zl['id'] === 0 ? 'text-[var(--fa-warn)]' : 'text-[var(--fa-ink)]' }}">{{ $zl['name'] }}</span>
+                                                        </span>
+                                                        <span class="mt-1 flex flex-col gap-0.5 {{ $leise }}">
+                                                            @if($zl['id'] === 0)
+                                                                <span>Keiner Linie zugeordnet</span>
+                                                            @else
+                                                                <span>{{ collect([$rollen[$zl['role']] ?? null, $zl['plu'] ? 'Kasse ' . $zl['plu'] : null])->filter()->implode(' · ') ?: 'Ohne Rolle' }}</span>
+                                                                @if($lk)
+                                                                    <span class="tabular-nums" title="{{ ($lk['band']['quelle'] ?? '') === 'team' ? 'Kein eigenes Zielband, es gilt das Ziel des Betriebs' : 'Zielband der Linie' }}">
+                                                                        Ziel {{ $lk['band']['min'] !== null ? number_format((float) $lk['band']['min'], 0) . ' bis ' : 'bis ' }}{{ number_format((float) $lk['band']['max'], 0) }} %
+                                                                    </span>
+                                                                @endif
+                                                                @if($zl['is_standing'])<span>Dauerangebot</span>@endif
                                                             @endif
-                                                            @if($zl['is_standing'])<div class="text-[10px] text-lime-300/80">Dauerangebot</div>@endif
-                                                        @endif
+                                                        </span>
                                                     </td>
                                                     @foreach($wochenTage as $tag)
-                                                        @php($ymd = $tag->format('Y-m-d'))
-                                                        @php($eintraege = $raster[$zl['id']][$ymd] ?? [])
-                                                        <td class="{{ $td }} align-top {{ ($cellDatum === $ymd && $cellLinie === ($zl['id'] ?: null)) ? 'bg-violet-500/10 rounded-lg' : '' }}"
+                                                        @php
+                                                            $ymd = $tag->format('Y-m-d');
+                                                            $eintraege = $raster[$zl['id']][$ymd] ?? [];
+                                                            $aktiv = $cellDatum === $ymd && $cellLinie === ($zl['id'] ?: null);
+                                                        @endphp
+                                                        <td class="align-top p-1.5 {{ $aktiv ? 'bg-[var(--fa-accent-soft)]' : '' }}"
                                                             x-on:dragover.prevent
                                                             x-on:drop="if (dragId) { $wire.eintragVerschieben(dragId, '{{ $ymd }}', {{ $zl['id'] }}); dragId = null }"
                                                             data-sp-drop="{{ $zl['id'] }}|{{ $ymd }}">
-                                                            <div class="space-y-1">
+                                                            <div class="flex flex-col gap-1.5">
                                                                 @foreach($eintraege as $e)
                                                                     @include('foodalchemist::livewire.speiseplan.partials.zelle', ['e' => $e, 'k' => $zkEintraege[$e->id] ?? null, 'farbe' => $zl['color'], 'dichte' => $dichte, 'sp' => $sp, 'detailId' => $detailEintragId])
                                                                 @endforeach
                                                                 @if($zl['id'] !== 0)
                                                                     <button type="button" wire:click="zelleOeffnen('{{ $ymd }}', {{ $zl['id'] }})"
                                                                             aria-label="{{ $zl['name'] }} am {{ $tagKurz[$tag->isoWeekday()] }} {{ $tag->format('d.m.') }} belegen"
-                                                                            class="w-full text-[11px] text-gray-400 hover:text-violet-300 rounded-lg border border-dashed border-white/15 hover:border-violet-400/40 py-0.5">+</button>
+                                                                            title="Gericht setzen"
+                                                                            class="flex w-full items-center justify-center h-7 rounded-[var(--fa-radius-control)] border border-dashed transition-colors {{ $aktiv ? 'border-[var(--fa-accent)] text-[var(--fa-accent)]' : 'border-[var(--fa-line-strong)] text-[var(--fa-ink-3)] hover:border-[var(--fa-accent)] hover:text-[var(--fa-accent)]' }}">@svg('heroicon-m-plus', 'w-4 h-4')</button>
                                                                 @endif
                                                             </div>
                                                         </td>
@@ -193,23 +288,27 @@
                                                 </tr>
                                             @endforeach
                                             @if($zeilenLinien->isEmpty())
-                                                <tr><td colspan="{{ count($wochenTage) + 1 }}" class="{{ $td }} text-center text-gray-400 text-xs py-4">Für diese Mahlzeit gibt es keine Linie. Im Tab „Menü-Linien“ eine anlegen (oder eine Linie „alle Mahlzeiten“ lassen), dann Gerichte in die Tage setzen.</td></tr>
+                                                <tr><td colspan="{{ count($wochenTage) + 1 }}">
+                                                    <x-fa::empty compact icon="heroicon-o-queue-list" title="Für diese Mahlzeit gibt es keine Linie">Im Reiter „Menü-Linien" eine Linie anlegen (oder eine Linie für alle Mahlzeiten lassen), dann Gerichte in die Tage setzen.</x-fa::empty>
+                                                </td></tr>
                                             @else
                                                 {{-- Spec 57 · Paket 1: Tagesfuß --}}
-                                                <tr class="border-t border-white/15 bg-white/[0.03]" data-sp-tagesfuss>
-                                                    <td class="{{ $td }}"><span class="{{ $label }}">Tag gesamt</span></td>
+                                                <tr class="bg-[var(--fa-ground)]" data-sp-tagesfuss>
+                                                    <td class="align-top"><span class="{{ $etikett }}">Tag gesamt</span></td>
                                                     @foreach($wochenTage as $tag)
-                                                        @php($tf = $zkTage[$tag->format('Y-m-d')] ?? null)
-                                                        <td class="{{ $td }} text-[10.5px] tabular-nums text-gray-300">
+                                                        @php $tf = $zkTage[$tag->format('Y-m-d')] ?? null; @endphp
+                                                        <td class="align-top text-[length:var(--fa-text-sm)] tabular-nums">
                                                             @if($tf && $tf['portionen'] > 0)
-                                                                <div class="flex justify-between"><span class="text-gray-500">{{ ($zk['gaeste_aus_rollen'] ?? false) ? 'Gäste' : 'Portionen' }}</span><span>{{ number_format(($zk['gaeste_aus_rollen'] ?? false) ? $tf['gaeste'] : $tf['portionen'], 0, ',', '.') }}</span></div>
-                                                                <div class="flex justify-between"><span class="text-gray-500">Umsatz</span><span>{{ number_format($tf['umsatz'], 0, ',', '.') }} €</span></div>
-                                                                <div class="flex justify-between"><span class="text-gray-500">WES</span><span class="{{ $tagStatusText[$tf['status']] ?? 'text-gray-400' }}">{{ $tf['wes'] !== null ? number_format($tf['wes'], 0, ',', '.') . ' %' : '—' }}</span></div>
-                                                                @if($tf['ek_je_gast'] !== null)
-                                                                    <div class="flex justify-between"><span class="text-gray-500">EK/Gast</span><span>{{ number_format($tf['ek_je_gast'], 2, ',', '.') }} €</span></div>
-                                                                @endif
+                                                                <dl class="flex flex-col gap-0.5">
+                                                                    <div class="flex justify-between gap-2"><dt class="text-[var(--fa-ink-3)]">{{ $gaesteAusRollen ? 'Gäste' : 'Portionen' }}</dt><dd class="text-[var(--fa-ink)]">{{ $zahl($gaesteAusRollen ? $tf['gaeste'] : $tf['portionen']) }}</dd></div>
+                                                                    <div class="flex justify-between gap-2"><dt class="text-[var(--fa-ink-3)]">Umsatz</dt><dd class="text-[var(--fa-ink)]">{{ $zahl($tf['umsatz']) }} €</dd></div>
+                                                                    <div class="flex justify-between gap-2"><dt class="text-[var(--fa-ink-3)]">Wareneinsatz</dt><dd class="font-medium {{ $wesText[$tf['status']] ?? 'text-[var(--fa-ink-3)]' }}">{{ $tf['wes'] !== null ? $zahl($tf['wes']) . ' %' : '–' }}</dd></div>
+                                                                    @if($tf['ek_je_gast'] !== null)
+                                                                        <div class="flex justify-between gap-2"><dt class="text-[var(--fa-ink-3)]">EK je Gast</dt><dd class="text-[var(--fa-ink)]">{{ $zahl($tf['ek_je_gast'], 2) }} €</dd></div>
+                                                                    @endif
+                                                                </dl>
                                                             @else
-                                                                <span class="text-gray-500">–</span>
+                                                                <span class="text-[var(--fa-ink-3)]">Nicht belegt</span>
                                                             @endif
                                                         </td>
                                                     @endforeach
@@ -218,296 +317,228 @@
                                         </tbody>
                                     </table>
                                 </div>
-                                <div class="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-[10.5px] text-gray-400" data-sp-legende>
-                                    <span class="inline-flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>Wareneinsatz im Zielband</span>
-                                    <span class="inline-flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>darüber</span>
-                                    <span class="inline-flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-rose-400"></span>weit darüber</span>
-                                    <span class="inline-flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-sky-400"></span>darunter</span>
-                                    <span>Vg vegan · Vt vegetarisch · Sw Schwein · Rd Rind · Fi Fisch · Fl Fleisch · Buchstaben/Zahlen = LMIV · * am Preis = Linienpreis</span>
-                                </div>
-
-                                {{-- Spec 57 · Paket 5: Woche kopieren --}}
-                                @if($wocheKopierenOffen)
-                                    <div class="mt-3 rounded-xl border border-white/15 bg-white/5 p-3 text-xs text-gray-200 space-y-2" data-sp-woche-kopieren>
-                                        <div class="font-medium">KW {{ (int) $montagDt->format('W') }} kopieren (alle Mahlzeiten)</div>
-                                        <div class="flex flex-wrap items-end gap-3">
-                                            <label class="flex flex-col gap-1"><span class="{{ $label }}">Zielwoche</span>
-                                                <select wire:model="wocheKopierenZiel" class="{{ $input }} h-8">
-                                                    @foreach($zielWochen as $zw)
-                                                        <option value="{{ $zw->format('Y-m-d') }}">KW {{ $zw->isoWeek() }} · {{ $zw->format('d.m.') }}–{{ $zw->copy()->addDays(6)->format('d.m.Y') }}</option>
-                                                    @endforeach
-                                                </select>
-                                            </label>
-                                            <label class="flex items-center gap-1.5"><input type="checkbox" wire:model="wocheKopierenMerge" /> mit vorhandenen Einträgen zusammenführen</label>
-                                            <label class="flex items-center gap-1.5"><input type="checkbox" wire:model="wocheKopierenPax" /> Mengen (Pax) mitnehmen</label>
-                                            <button type="button" wire:click="wocheKopieren" class="{{ $btnPrimary }} h-8">Kopieren</button>
-                                            <button type="button" wire:click="$set('wocheKopierenOffen', false)" class="{{ $btnGhost }} h-8">Abbrechen</button>
-                                        </div>
-                                        <p class="text-[11px] text-gray-400">Ohne Zusammenführen werden belegte Zellen der Zielwoche ersetzt. Einzelne Einträge kopierst du über ihr Detail.</p>
-                                    </div>
-                                @endif
-
-                                {{-- Spec 57 · Paket 5: Eintrag-Detail — Tastatur-Weg zu Ersetzen, Verschieben, Kopieren (MVP-032) --}}
-                                @if($detailEintrag)
-                                    @php($dk = $detailKennzahlen ?? [])
-                                    <div class="mt-3 pt-3 border-t border-white/10 space-y-3" data-sp-eintrag-detail="{{ $detailEintrag->id }}">
-                                        <div class="flex items-start justify-between gap-2">
-                                            <div>
-                                                <div class="{{ $label }}">{{ $linien->firstWhere('id', $detailEintrag->line_id)?->name ?? 'Ohne Linie' }} · {{ $tagKurz[$detailEintrag->entry_date->isoWeekday()] ?? '' }} {{ $detailEintrag->entry_date->format('d.m.') }} · {{ $mahlzeiten[$detailEintrag->meal] ?? $detailEintrag->meal }}</div>
-                                                <div class="text-sm font-medium text-gray-100">{{ $dk['titel'] ?? $detailEintrag->inhaltName() }}</div>
-                                                @if(! empty($dk['untertitel']))<div class="text-[11px] text-gray-400">{{ $dk['untertitel'] }}</div>@endif
-                                            </div>
-                                            <button type="button" wire:click="eintragSchliessen" class="{{ $btnGhostXs }}" aria-label="Detail schließen">schließen</button>
-                                        </div>
-                                        @if($dk !== [])
-                                            <div class="grid grid-cols-3 gap-2 text-center text-xs tabular-nums">
-                                                <div class="rounded-lg bg-white/5 p-2"><div class="{{ $label }}">VK netto</div><div class="text-gray-100">{{ number_format((float) $dk['vk'], 2, ',', '.') }} €</div></div>
-                                                <div class="rounded-lg bg-white/5 p-2"><div class="{{ $label }}">EK</div><div class="text-gray-100">{{ number_format((float) $dk['ek'], 2, ',', '.') }} €</div></div>
-                                                <div class="rounded-lg bg-white/5 p-2"><div class="{{ $label }}">Wareneinsatz</div><div class="text-gray-100">{{ $dk['wes'] !== null ? number_format((float) $dk['wes'], 1, ',', '.') . ' %' : '—' }}</div></div>
-                                            </div>
-                                        @endif
-                                        <div class="flex flex-wrap items-end gap-3 text-xs">
-                                            <button type="button" wire:click="eintragErsetzenStarten({{ $detailEintrag->id }})" class="{{ $btnGhost }} h-8">Ersetzen …</button>
-                                            <div class="flex items-end gap-2" data-sp-verschieben>
-                                                <label class="flex flex-col gap-1"><span class="{{ $label }}">Verschieben nach</span>
-                                                    <select wire:model="verschiebeDatum" class="{{ $input }} h-8">
-                                                        @foreach($wochenTage as $wt)
-                                                            <option value="{{ $wt->format('Y-m-d') }}">{{ $tagKurz[$wt->isoWeekday()] }} {{ $wt->format('d.m.') }}</option>
-                                                        @endforeach
-                                                    </select>
-                                                </label>
-                                                <label class="flex flex-col gap-1"><span class="{{ $label }}">Linie</span>
-                                                    <select wire:model="verschiebeLinie" class="{{ $input }} h-8">
-                                                        <option value="">Ohne Linie</option>
-                                                        @foreach($matrixLinien as $ml)
-                                                            <option value="{{ $ml->id }}">{{ $ml->name }}</option>
-                                                        @endforeach
-                                                    </select>
-                                                </label>
-                                                <button type="button" wire:click="eintragVerschiebenAusDetail" class="{{ $btnGhost }} h-8">Verschieben</button>
-                                            </div>
-                                            <div class="flex items-end gap-2" data-sp-kopieren>
-                                                <fieldset class="flex flex-col gap-1"><legend class="{{ $label }}">Auf Tage kopieren</legend>
-                                                    <span class="flex flex-wrap gap-1">
-                                                        @foreach($wochenTage as $wt)
-                                                            @php($wtYmd = $wt->format('Y-m-d'))
-                                                            <label class="flex items-center gap-1 px-1.5 py-1 rounded border border-white/10 {{ $wtYmd === $detailEintrag->entry_date->format('Y-m-d') ? 'opacity-40' : '' }}">
-                                                                <input type="checkbox" wire:model="kopierTage" value="{{ $wtYmd }}" @disabled($wtYmd === $detailEintrag->entry_date->format('Y-m-d')) /> {{ $tagKurz[$wt->isoWeekday()] }}
-                                                            </label>
-                                                        @endforeach
-                                                    </span>
-                                                </fieldset>
-                                                <button type="button" wire:click="eintragKopieren" class="{{ $btnGhost }} h-8">Kopieren</button>
-                                            </div>
-                                            <button type="button" wire:click="eintragRaus({{ $detailEintrag->id }})" wire:confirm="Eintrag entfernen?" class="{{ $btnGhostXs }} text-red-400 h-8">Entfernen</button>
-                                        </div>
-                                    </div>
-                                @endif
-
-                                {{-- Inhalts-Picker für die aktive Zelle (inline, Livewire-sicher) --}}
-                                @if($cellDatum !== null)
-                                    <div class="mt-3 pt-3 border-t border-white/10 space-y-2" data-sp-picker>
-                                        <div class="flex items-center gap-2 flex-wrap">
-                                            <span class="{{ $label }}">{{ $pickerErsetzenId ? 'Ersetzen' : 'Einfügen' }} · {{ \Illuminate\Support\Carbon::parse($cellDatum)->format('d.m.') }} · {{ $linien->firstWhere('id', $cellLinie)?->name ?? '—' }}:</span>
-                                            @foreach(['gericht' => 'Gericht', 'concept' => 'Concept', 'paket' => 'Paket'] as $tv => $tl)
-                                                <button type="button" wire:click="$set('pickerTyp', '{{ $tv }}')" class="{{ $pill }} {{ $pickerTyp === $tv ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $tl }}</button>
+                            </section>
+                            <div class="flex flex-wrap items-center gap-x-4 gap-y-1 {{ $leise }}" data-sp-legende>
+                                <span class="inline-flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-[var(--fa-ok)]"></span>Wareneinsatz im Zielband</span>
+                                <span class="inline-flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-[var(--fa-warn)]"></span>darüber</span>
+                                <span class="inline-flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-[var(--fa-crit)]"></span>weit darüber</span>
+                                <span class="inline-flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-[var(--fa-info)]"></span>darunter</span>
+                                <span>Vg vegan · Vt vegetarisch · Sw Schwein · Rd Rind · Fi Fisch · Fl Fleisch</span>
+                                <span>Buchstaben und Zahlen: Allergene und Zusatzstoffe · Stern am Preis: Linienpreis</span>
+                            </div>
+                            {{-- Einfügen unter der Matrix, in voller Breite (Dominique 2026-10-06: „wie in der Demo unten drunter").
+                                 Stand vorher als schmales Seitenpanel rechts; die Grundanordnung des Originals gilt. --}}
+                            @if($cellDatum !== null)
+                                <section class="fa-surface p-4 flex flex-col gap-3 border-[var(--fa-accent-line)]" data-sp-picker>
+                                    <div class="flex flex-wrap items-center gap-3">
+                                        <p class="text-[length:var(--fa-text-md)] font-semibold text-[var(--fa-ink)]">
+                                            {{ $pickerErsetzenId ? 'Ersetzen' : 'Einfügen' }} · {{ $tagKurz[\Illuminate\Support\Carbon::parse($cellDatum)->isoWeekday()] ?? '' }} {{ \Illuminate\Support\Carbon::parse($cellDatum)->format('d.m.') }} · {{ $linien->firstWhere('id', $cellLinie)?->name ?? 'Ohne Linie' }}
+                                        </p>
+                                        <div role="group" aria-label="Art des Inhalts" class="{{ $seg }}">
+                                            @foreach($typLabel as $tv => $tl)
+                                                <button type="button" wire:click="$set('pickerTyp', '{{ $tv }}')" aria-pressed="{{ $pickerTyp === $tv ? 'true' : 'false' }}" class="{{ $segKnopf }} {{ $pickerTyp === $tv ? $segAn : $segAus }}">{{ $tl }}</button>
                                             @endforeach
-                                            <input type="search" wire:model.live.debounce.300ms="pickerSuche" placeholder="{{ ['gericht' => 'Gericht', 'concept' => 'Concept', 'paket' => 'Paket'][$pickerTyp] }} suchen …" class="{{ $input }} w-56" />
-                                            <button type="button" wire:click="cellSchliessen" class="{{ $btnGhostXs }}">schließen</button>
                                         </div>
-
-                                        {{-- Spec 42: Facetten (Hauptgruppe → Unterklasse) nur für Gerichte — wie Speisekarte/Verkauf-Browser --}}
-                                        @if($pickerTyp === 'gericht' && $pickerHauptgruppen->isNotEmpty())
-                                            <div class="flex items-center gap-1 flex-wrap" data-sp-picker-facetten>
-                                                <button type="button" wire:click="pickerWaehleHg(null)" class="{{ $pill }} {{ $pickerHauptgruppe === null ? $variantPill['primary'] : $variantPill['secondary'] }}">Alle</button>
-                                                @foreach($pickerHauptgruppen as $hg)
-                                                    <button type="button" wire:click="pickerWaehleHg({{ $hg->id }})" class="{{ $pill }} {{ (int) $pickerHauptgruppe === (int) $hg->id ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $hg->label }}</button>
-                                                @endforeach
-                                            </div>
-                                            @if($pickerUntergruppen->isNotEmpty())
-                                                <div class="flex items-center gap-1 flex-wrap pl-3" data-sp-picker-unterklassen>
-                                                    @foreach($pickerUntergruppen as $uk)
-                                                        <button type="button" wire:click="pickerWaehleKlasse({{ $uk->id }})" class="{{ $pill }} {{ (int) $pickerDishClass === (int) $uk->id ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $uk->label }}</button>
-                                                    @endforeach
-                                                </div>
-                                            @endif
-                                        @endif
-
-                                        @if($kandidaten->isNotEmpty())
-                                            <div class="grid grid-cols-1 md:grid-cols-3 gap-1 max-h-56 overflow-y-auto">
-                                                @foreach($kandidaten as $k)
-                                                    <button type="button" wire:key="kand-{{ $pickerTyp }}-{{ $k->id }}" wire:click="inhaltHinzu('{{ $pickerTyp }}', {{ $k->id }})"
-                                                            class="flex items-center justify-between gap-2 px-2 py-1 rounded-lg text-xs hover:bg-violet-500/15 text-left text-gray-200">
-                                                        <span class="truncate">{{ $k->name }}</span>
-                                                        <span class="flex items-center gap-1 shrink-0">
-                                                            @if($pickerTyp === 'gericht' && ($k->dishClass?->diet_form))
-                                                                <span class="text-[10px] px-1 rounded bg-white/10 text-gray-300">{{ $k->dishClass->diet_form }}</span>
-                                                            @endif
-                                                            @if($pickerTyp === 'gericht' && $k->sales_net)
-                                                                <span class="text-[10px] text-gray-400">{{ number_format((float) $k->sales_net, 2, ',', '.') }} €</span>
-                                                            @elseif($pickerTyp === 'concept' && ($k->price_per_person_cache ?? null))
-                                                                <span class="text-[10px] text-gray-400">{{ number_format((float) $k->price_per_person_cache, 2, ',', '.') }} €/P</span>
-                                                            @endif
-                                                            <span class="text-violet-300">+</span>
-                                                        </span>
-                                                    </button>
-                                                @endforeach
-                                            </div>
-                                        @else
-                                            <p class="text-[11px] text-gray-400">Keine Treffer.</p>
-                                        @endif
+                                        <div class="relative flex-1 min-w-[14rem]">
+                                            @svg('heroicon-m-magnifying-glass', 'w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--fa-ink-3)] pointer-events-none')
+                                            <x-fa::input type="search" wire:model.live.debounce.300ms="pickerSuche" placeholder="{{ $typLabel[$pickerTyp] ?? 'Gericht' }} suchen" class="pl-8" aria-label="{{ $typLabel[$pickerTyp] ?? 'Gericht' }} suchen" />
+                                        </div>
+                                        <x-fa::button size="sm" variant="ghost" icon="heroicon-m-x-mark" wire:click="cellSchliessen">Schließen</x-fa::button>
                                     </div>
-                                @endif
-                            </x-foodalchemist::modal-section>
+
+                                    {{-- Spec 42: Facetten (Hauptgruppe → Unterklasse) nur für Gerichte --}}
+                                    @if($pickerTyp === 'gericht' && $pickerHauptgruppen->isNotEmpty())
+                                        <div class="flex flex-wrap gap-1.5" data-sp-picker-facetten>
+                                            <button type="button" wire:click="pickerWaehleHg(null)" class="{{ $chip }} {{ $pickerHauptgruppe === null ? $chipAn : $chipAus }}">Alle</button>
+                                            @foreach($pickerHauptgruppen as $hg)
+                                                <button type="button" wire:click="pickerWaehleHg({{ $hg->id }})" class="{{ $chip }} {{ (int) $pickerHauptgruppe === (int) $hg->id ? $chipAn : $chipAus }}">{{ $hg->label }}</button>
+                                            @endforeach
+                                        </div>
+                                        @if($pickerUntergruppen->isNotEmpty())
+                                            <div class="flex flex-wrap gap-1.5 pl-3 border-l-2 border-[var(--fa-line)]" data-sp-picker-unterklassen>
+                                                @foreach($pickerUntergruppen as $uk)
+                                                    <button type="button" wire:click="pickerWaehleKlasse({{ $uk->id }})" class="{{ $chip }} {{ (int) $pickerDishClass === (int) $uk->id ? $chipAn : $chipAus }}">{{ $uk->label }}</button>
+                                                @endforeach
+                                            </div>
+                                        @endif
+                                    @endif
+
+                                    @if($kandidaten->isNotEmpty())
+                                        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-x-4 gap-y-0.5 max-h-80 overflow-y-auto">
+                                            @foreach($kandidaten as $k)
+                                                <button type="button" wire:key="kand-{{ $pickerTyp }}-{{ $k->id }}" wire:click="inhaltHinzu('{{ $pickerTyp }}', {{ $k->id }})"
+                                                        class="group flex items-center justify-between gap-2 px-2 py-1.5 rounded-[var(--fa-radius-control)] text-left hover:bg-[var(--fa-hover)]">
+                                                    <span class="min-w-0 truncate text-[length:var(--fa-text-md)] text-[var(--fa-ink)]" title="{{ $k->name }}">{{ $k->name }}</span>
+                                                    <span class="flex items-center gap-2 shrink-0 {{ $leise }} tabular-nums">
+                                                        @if($pickerTyp === 'gericht' && ($k->dishClass?->diet_form))<span>{{ ucfirst($k->dishClass->diet_form) }}</span>@endif
+                                                        @if($pickerTyp === 'gericht' && $k->sales_net)
+                                                            <span>{{ $zahl($k->sales_net, 2) }} €</span>
+                                                        @elseif($pickerTyp === 'concept' && ($k->price_per_person_cache ?? null))
+                                                            <span>{{ $zahl($k->price_per_person_cache, 2) }} € je Person</span>
+                                                        @endif
+                                                        @svg('heroicon-m-plus-circle', 'w-5 h-5 text-[var(--fa-ink-3)] group-hover:text-[var(--fa-accent)]')
+                                                    </span>
+                                                </button>
+                                            @endforeach
+                                        </div>
+                                    @else
+                                        <x-fa::empty compact icon="heroicon-o-magnifying-glass" title="Keine Treffer">Suchbegriff oder Gruppe ändern.</x-fa::empty>
+                                    @endif
+                                </section>
+                            @endif
                         @else
                             {{-- Monats-Kalender --}}
-                            @php($gridStart = $monatStart->copy()->startOfWeek(\Illuminate\Support\Carbon::MONDAY))
-                            <x-foodalchemist::modal-section title="Monat">
-                                <div style="display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:4px;">
-                                    @foreach([1,2,3,4,5,6,7] as $wd)
-                                        <div class="text-center {{ $label }} pb-1">{{ $tagKurz[$wd] }}</div>
+                            @php $gridStart = $monatStart->copy()->startOfWeek(\Illuminate\Support\Carbon::MONDAY); @endphp
+                            <x-fa::section title="{{ $monatNamen[(int) $monatStart->month] }} {{ $monatStart->year }}" icon="heroicon-o-calendar" :meta="$mahlzeiten[$mahlzeit] ?? ''">
+                                <div class="grid grid-cols-7 gap-1">
+                                    @foreach([1, 2, 3, 4, 5, 6, 7] as $wd)
+                                        <div class="pb-1 text-center {{ $etikett }}">{{ $tagKurz[$wd] }}</div>
                                     @endforeach
                                     @for($i = 0; $i < 42; $i++)
-                                        @php($tag = $gridStart->copy()->addDays($i))
-                                        @php($ymd = $tag->format('Y-m-d'))
-                                        @php($imMonat = (int) $tag->month === (int) $monatStart->month)
-                                        @php($info = $monatsRaster[$ymd] ?? null)
+                                        @php
+                                            $tag = $gridStart->copy()->addDays($i);
+                                            $ymd = $tag->format('Y-m-d');
+                                            $imMonat = (int) $tag->month === (int) $monatStart->month;
+                                            $info = $monatsRaster[$ymd] ?? null;
+                                        @endphp
                                         <button type="button" wire:key="cal-{{ $ymd }}" wire:click="tagOeffnen('{{ $ymd }}')"
-                                                class="text-left rounded-lg border p-1.5 h-20 transition-colors {{ $imMonat ? 'border-white/10 hover:bg-violet-500/10' : 'border-transparent opacity-40' }} {{ $tag->isToday() ? 'ring-1 ring-violet-400' : '' }}">
-                                            <div class="flex items-center justify-between">
-                                                <span class="text-[11px] {{ $tag->isToday() ? 'text-violet-300 font-semibold' : 'text-gray-400' }}">{{ $tag->format('j') }}</span>
-                                                @if($info)<span class="{{ $pill }} {{ $variantPill['secondary'] }} text-[9px]">{{ $info['count'] }}</span>@endif
-                                            </div>
+                                                aria-label="{{ $tag->format('d.m.Y') }} in der Wochenansicht öffnen"
+                                                class="flex flex-col items-stretch text-left rounded-[var(--fa-radius-control)] border p-2 h-20 transition-colors {{ $imMonat ? 'border-[var(--fa-line)] bg-[var(--fa-surface)] hover:bg-[var(--fa-hover)]' : 'border-transparent opacity-40' }} {{ $tag->isToday() ? 'ring-2 ring-[var(--fa-accent)]' : '' }}">
+                                            <span class="flex items-center justify-between">
+                                                <span class="text-[length:var(--fa-text-sm)] tabular-nums {{ $tag->isToday() ? 'font-semibold text-[var(--fa-accent)]' : 'text-[var(--fa-ink-2)]' }}">{{ $tag->format('j') }}</span>
+                                                @if($info)<x-fa::badge>{{ $mehrzahl((int) $info['count'], 'Eintrag', 'Einträge') }}</x-fa::badge>@endif
+                                            </span>
                                             @if($info && $info['vk'] > 0)
-                                                <div class="mt-1 text-[10px] text-gray-400 tabular-nums">{{ number_format($info['vk'], 2, ',', '.') }} €</div>
+                                                <span class="mt-auto text-[length:var(--fa-text-sm)] tabular-nums text-[var(--fa-ink-2)]">{{ $zahl($info['vk'], 2) }} €</span>
                                             @endif
                                         </button>
                                     @endfor
                                 </div>
-                                <p class="mt-3 text-[11px] text-gray-400">Tag anklicken → springt in die Wochenansicht. Belegung der Mahlzeit „{{ $mahlzeiten[$mahlzeit] ?? '' }}".</p>
-                            </x-foodalchemist::modal-section>
+                                <p class="{{ $leise }}">Tag anklicken, um ihn in der Wochenansicht zu öffnen. Gezeigt wird die Belegung der Mahlzeit „{{ $mahlzeiten[$mahlzeit] ?? '' }}".</p>
+                            </x-fa::section>
                         @endif
                     </div>
 
-                    {{-- ═══ Spec 57 · Paket 3: Tab MENGEN (Essen je Linie × Tag) ═══ --}}
-                    <div x-show="tab === 'mengen'" x-cloak class="pt-4 space-y-3" data-sp-tab-mengen>
-                        <x-foodalchemist::modal-section title="Mengen · KW {{ (int) $montagDt->format('W') }} · {{ $mahlzeiten[$mahlzeit] ?? '' }}">
+                    {{-- ═══ Spec 57 · Paket 3: Reiter MENGEN (Essen je Linie × Tag) ═══ --}}
+                    <div x-show="tab === 'mengen'" x-cloak class="pt-4 flex flex-col gap-4" data-sp-tab-mengen>
+                        <x-fa::section title="Mengen" icon="heroicon-o-users" :meta="$kwText" description="Woche und Mahlzeit wie im Kalender. Eine Zahl gilt für alle Einträge der Zelle; leer oder 0 setzt auf den Standard der Linie bzw. des Plans zurück.">
                             <x-slot:actions>
-                                <span class="text-[11px] text-gray-400">Woche und Mahlzeit wie im Kalender</span>
+                                <x-fa::button size="sm" icon="heroicon-m-arrow-uturn-left" wire:click="mengenVorwoche" data-sp-mengen-vorwoche>Mengen aus Vorwoche übernehmen</x-fa::button>
                             </x-slot:actions>
-                            <div class="flex flex-wrap items-end gap-3 mb-3 text-xs">
-                                <button type="button" wire:click="mengenVorwoche" class="{{ $btnGhost }} h-8" data-sp-mengen-vorwoche>↺ Mengen aus Vorwoche übernehmen</button>
-                                <label class="flex items-center gap-2 text-gray-300">Skalieren um Faktor
-                                    <input type="text" inputmode="decimal" wire:model="mengenFaktor" class="{{ $input }} h-8 w-20 text-right tabular-nums" aria-label="Skalierungsfaktor" />
-                                </label>
-                                <button type="button" wire:click="mengenSkalieren" class="{{ $btnGhost }} h-8">Anwenden</button>
-                                @if($mengenHinweis)<span class="text-violet-300" data-sp-mengen-hinweis>{{ $mengenHinweis }}</span>@endif
+                            <div class="flex flex-wrap items-end gap-2">
+                                <x-fa::field label="Alle Mengen skalieren um Faktor" for="sp-mengen-faktor" class="w-56">
+                                    <x-fa::input id="sp-mengen-faktor" inputmode="decimal" wire:model="mengenFaktor" numeric aria-label="Skalierungsfaktor" />
+                                </x-fa::field>
+                                <x-fa::button wire:click="mengenSkalieren">Faktor anwenden</x-fa::button>
+                                @if($mengenHinweis)<x-fa::signal tone="info" class="self-center" data-sp-mengen-hinweis>{{ $mengenHinweis }}</x-fa::signal>@endif
                             </div>
                             @if($mengen && $mengen['zeilen'] !== [])
-                                <div class="overflow-x-auto">
-                                    <table class="{{ $table }}" style="min-width:{{ 520 + count($mengen['tage']) * 70 }}px" data-sp-mengen-matrix>
-                                        <thead><tr class="text-left">
-                                            <th class="{{ $th }}">Linie</th>
-                                            <th class="{{ $th }} text-right" title="Summe der Vorwoche (Planwerte)">Vorwoche</th>
-                                            <th class="{{ $th }} text-right" title="Ø der letzten vier Wochen (Planwerte)">Ø 4 Wo.</th>
+                                <div class="overflow-x-auto -mx-4">
+                                    <table class="fa-table fa-table--compact" data-sp-mengen-matrix>
+                                        <thead><tr>
+                                            <th class="pl-4">Linie</th>
+                                            <th class="num" title="Summe der Vorwoche (Planwerte)">Vorwoche</th>
+                                            <th class="num" title="Durchschnitt der letzten vier Wochen (Planwerte)">Ø 4 Wochen</th>
                                             @foreach($mengen['tage'] as $mt)
-                                                <th class="{{ $th }} text-center">{{ $tagKurz[\Illuminate\Support\Carbon::parse($mt)->isoWeekday()] }}</th>
+                                                <th class="text-center">{{ $tagKurz[\Illuminate\Support\Carbon::parse($mt)->isoWeekday()] }}</th>
                                             @endforeach
-                                            <th class="{{ $th }} text-right">Σ</th><th class="{{ $th }} text-right">Anteil</th><th class="{{ $th }} text-right">WES</th><th class="{{ $th }} text-right">Ø VK</th><th class="{{ $th }} text-right">Umsatz</th>
+                                            <th class="num">Summe</th><th class="num">Anteil</th><th class="num">Wareneinsatz</th><th class="num">Ø Preis</th><th class="num pr-4">Umsatz</th>
                                         </tr></thead>
                                         <tbody>
                                             @foreach($mengen['zeilen'] as $mz)
-                                                <tr class="border-t border-white/10" wire:key="mz-{{ $mz['line_id'] }}">
-                                                    <td class="{{ $td }}"><span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full" style="background: {{ $mz['color'] ?: '#94a3b8' }}"></span><span class="text-xs text-gray-200">{{ $mz['name'] }}</span></span></td>
-                                                    <td class="{{ $td }} text-right text-xs tabular-nums text-gray-400">{{ $mz['vorwoche'] ?: '—' }}</td>
-                                                    <td class="{{ $td }} text-right text-xs tabular-nums text-gray-400">{{ $mz['schnitt4'] > 0 ? number_format($mz['schnitt4'], 0, ',', '.') : '—' }}</td>
+                                                <tr wire:key="mz-{{ $mz['line_id'] }}">
+                                                    <td class="pl-4"><span class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full shrink-0 {{ $mz['color'] ? '' : 'bg-[var(--fa-ink-3)]' }}" @if($mz['color']) style="background: {{ $mz['color'] }}" @endif></span><span class="whitespace-nowrap">{{ $mz['name'] }}</span></span></td>
+                                                    <td class="num text-[var(--fa-ink-2)]">{{ $mz['vorwoche'] ?: '–' }}</td>
+                                                    <td class="num text-[var(--fa-ink-2)]">{{ $mz['schnitt4'] > 0 ? $zahl($mz['schnitt4']) : '–' }}</td>
                                                     @foreach($mengen['tage'] as $mt)
-                                                        @php($mp = $mz['zellen'][$mt] ?? null)
-                                                        <td class="{{ $td }} text-center">
+                                                        @php $mp = $mz['zellen'][$mt] ?? null; @endphp
+                                                        <td class="text-center">
                                                             @if($mp !== null)
                                                                 <input type="number" min="0" value="{{ $mp }}"
                                                                        wire:change="mengenSetzen({{ $mz['line_id'] }}, '{{ $mt }}', $event.target.value)"
                                                                        aria-label="Essen {{ $mz['name'] }} am {{ \Illuminate\Support\Carbon::parse($mt)->format('d.m.') }}"
-                                                                       class="{{ $input }} h-7 w-16 text-right tabular-nums text-xs" />
+                                                                       class="fa-control h-7 w-20 text-right tabular-nums text-[length:var(--fa-text-md)]" />
                                                             @else
-                                                                <span class="text-[11px] text-gray-500" title="Zelle nicht belegt — erst im Kalender ein Gericht setzen">–</span>
+                                                                <span class="text-[var(--fa-ink-3)]" title="Zelle nicht belegt, erst im Kalender ein Gericht setzen">–</span>
                                                             @endif
                                                         </td>
                                                     @endforeach
-                                                    <td class="{{ $td }} text-right text-xs tabular-nums font-medium text-gray-100">{{ number_format($mz['summe'], 0, ',', '.') }}</td>
-                                                    <td class="{{ $td }} text-right text-xs tabular-nums text-gray-400">{{ $mz['anteil'] !== null ? number_format($mz['anteil'], 1, ',', '.') . ' %' : '—' }}</td>
-                                                    <td class="{{ $td }} text-right text-xs tabular-nums text-gray-300">{{ $mz['wes'] !== null ? number_format($mz['wes'], 1, ',', '.') . ' %' : '—' }}</td>
-                                                    <td class="{{ $td }} text-right text-xs tabular-nums text-gray-300">{{ $mz['vk_schnitt'] !== null ? number_format($mz['vk_schnitt'], 2, ',', '.') . ' €' : '—' }}</td>
-                                                    <td class="{{ $td }} text-right text-xs tabular-nums text-gray-100">{{ number_format($mz['umsatz'], 0, ',', '.') }} €</td>
+                                                    <td class="num font-semibold">{{ $zahl($mz['summe']) }}</td>
+                                                    <td class="num text-[var(--fa-ink-2)]">{{ $mz['anteil'] !== null ? $zahl($mz['anteil'], 1) . ' %' : '–' }}</td>
+                                                    <td class="num">{{ $mz['wes'] !== null ? $zahl($mz['wes'], 1) . ' %' : '–' }}</td>
+                                                    <td class="num"><x-fa::money :value="$mz['vk_schnitt']" /></td>
+                                                    <td class="num pr-4">{{ $zahl($mz['umsatz']) }} €</td>
                                                 </tr>
                                             @endforeach
                                         </tbody>
                                         <tfoot>
-                                            <tr class="border-t border-white/15 bg-white/[0.03]">
-                                                <td class="{{ $td }}"><span class="{{ $label }}">Gesamt</span></td>
-                                                <td class="{{ $td }} text-right text-xs tabular-nums text-gray-400">{{ number_format($mengen['summe']['vorwoche'], 0, ',', '.') }}</td>
-                                                <td class="{{ $td }} text-right text-xs tabular-nums text-gray-400">{{ number_format($mengen['summe']['schnitt4'], 0, ',', '.') }}</td>
+                                            <tr class="bg-[var(--fa-ground)] font-semibold">
+                                                <td class="pl-4 py-2"><span class="{{ $etikett }}">Gesamt</span></td>
+                                                <td class="num py-2 text-[var(--fa-ink-2)]">{{ $zahl($mengen['summe']['vorwoche']) }}</td>
+                                                <td class="num py-2 text-[var(--fa-ink-2)]">{{ $zahl($mengen['summe']['schnitt4']) }}</td>
                                                 @foreach($mengen['tage'] as $mt)
-                                                    <td class="{{ $td }} text-center text-xs tabular-nums text-gray-300">{{ number_format($mengen['summe']['je_tag'][$mt] ?? 0, 0, ',', '.') }}</td>
+                                                    <td class="py-2 text-center tabular-nums">{{ $zahl($mengen['summe']['je_tag'][$mt] ?? 0) }}</td>
                                                 @endforeach
-                                                <td class="{{ $td }} text-right text-xs tabular-nums font-semibold text-gray-100">{{ number_format($mengen['summe']['summe'], 0, ',', '.') }}</td>
-                                                <td class="{{ $td }}"></td>
-                                                <td class="{{ $td }} text-right text-xs tabular-nums text-gray-300">{{ $mengen['summe']['wes'] !== null ? number_format($mengen['summe']['wes'], 1, ',', '.') . ' %' : '—' }}</td>
-                                                <td class="{{ $td }}"></td>
-                                                <td class="{{ $td }} text-right text-xs tabular-nums font-semibold text-gray-100">{{ number_format($mengen['summe']['umsatz'], 0, ',', '.') }} €</td>
+                                                <td class="num py-2">{{ $zahl($mengen['summe']['summe']) }}</td>
+                                                <td class="py-2"></td>
+                                                <td class="num py-2">{{ $mengen['summe']['wes'] !== null ? $zahl($mengen['summe']['wes'], 1) . ' %' : '–' }}</td>
+                                                <td class="py-2"></td>
+                                                <td class="num py-2 pr-4">{{ $zahl($mengen['summe']['umsatz']) }} €</td>
                                             </tr>
                                         </tfoot>
                                     </table>
                                 </div>
-                                <p class="text-[11px] text-gray-400 mt-2">Eine Zahl gilt für alle Einträge der Zelle. Leer oder 0 setzt zurück auf den Standard der Linie bzw. des Plans. „Vorwoche“ und „Ø 4 Wo.“ sind Planwerte; echte Verkaufszahlen kommen mit dem Plan/Ist-Abgleich.</p>
+                                <p class="{{ $leise }}">„Vorwoche" und „Ø 4 Wochen" sind Planwerte. Echte Verkaufszahlen stehen im Reiter „Plan/Ist".</p>
                             @else
-                                <p class="text-[11px] text-gray-400">Für diese Mahlzeit gibt es keine Linien.</p>
+                                <x-fa::empty compact icon="heroicon-o-queue-list" title="Für diese Mahlzeit gibt es keine Linien" />
                             @endif
-                        </x-foodalchemist::modal-section>
+                        </x-fa::section>
                     </div>
 
-                    {{-- ═══ Spec 57 · Paket 4: Tab BEDARF (Zutaten aus Plan × Mengen, nur lesend) ═══ --}}
-                    <div x-show="tab === 'bedarf'" x-cloak class="pt-4 space-y-3" data-sp-tab-bedarf>
-                        <x-foodalchemist::modal-section title="Bedarf · KW {{ (int) $montagDt->format('W') }} · {{ $mahlzeiten[$mahlzeit] ?? '' }}">
-                            <div class="flex flex-wrap items-center gap-2 mb-3 text-xs">
-                                <span class="inline-flex rounded-lg overflow-hidden border border-white/15">
-                                    <button type="button" wire:click="bedarfTagSetzen(null)" class="px-2.5 py-1.5 {{ $bedarfTag === null ? 'bg-white/10 text-gray-100 font-medium' : 'text-gray-400' }}">Woche</button>
+                    {{-- ═══ Spec 57 · Paket 4: Reiter BEDARF (Zutaten aus Plan × Mengen, nur lesend) ═══ --}}
+                    <div x-show="tab === 'bedarf'" x-cloak class="pt-4 flex flex-col gap-4" data-sp-tab-bedarf>
+                        <x-fa::section title="Bedarf" icon="heroicon-o-shopping-cart" :meta="$kwText" description="Rezepte bis zum Grundprodukt aufgelöst, in der Basiseinheit, mit dem Hauptartikel des Lieferanten und ganzen Gebinden.">
+                            <div class="flex flex-wrap items-center gap-3">
+                                <div role="group" aria-label="Zeitraum" class="{{ $seg }}">
+                                    <button type="button" wire:click="bedarfTagSetzen(null)" aria-pressed="{{ $bedarfTag === null ? 'true' : 'false' }}" class="{{ $segKnopf }} {{ $bedarfTag === null ? $segAn : $segAus }}">Ganze Woche</button>
                                     @foreach($wochenTage as $wt)
-                                        <button type="button" wire:click="bedarfTagSetzen('{{ $wt->format('Y-m-d') }}')" class="px-2.5 py-1.5 {{ $bedarfTag === $wt->format('Y-m-d') ? 'bg-white/10 text-gray-100 font-medium' : 'text-gray-400' }}">{{ $tagKurz[$wt->isoWeekday()] }}</button>
+                                        <button type="button" wire:click="bedarfTagSetzen('{{ $wt->format('Y-m-d') }}')" aria-pressed="{{ $bedarfTag === $wt->format('Y-m-d') ? 'true' : 'false' }}" class="{{ $segKnopf }} {{ $bedarfTag === $wt->format('Y-m-d') ? $segAn : $segAus }}">{{ $tagKurz[$wt->isoWeekday()] }}</button>
                                     @endforeach
-                                </span>
+                                </div>
                                 @unless($bedarfAn)
-                                    <button type="button" wire:click="bedarfBerechnen" class="{{ $btnPrimary }} h-8" data-sp-bedarf-berechnen>Bedarf berechnen</button>
+                                    <x-fa::button icon="heroicon-m-calculator" wire:click="bedarfBerechnen" data-sp-bedarf-berechnen>Bedarf berechnen</x-fa::button>
                                 @endunless
-                                <span class="text-gray-400">Rezepte bis zum Grundprodukt aufgelöst, in Basiseinheit, mit Lead-Lieferantenartikel und ganzen Gebinden.</span>
                             </div>
                             @if($bedarfAn && $bedarf)
                                 @if($bedarf['liste'] === null)
-                                    <p class="text-[11px] text-gray-400">In diesem Zeitraum ist nichts geplant.</p>
+                                    <x-fa::empty compact icon="heroicon-o-shopping-cart" title="In diesem Zeitraum ist nichts geplant" />
                                 @else
                                     @foreach($bedarf['liste']['lieferanten'] as $lf)
-                                        <div class="rounded-xl border border-white/10 bg-white/[0.03] mb-2" wire:key="bedarf-{{ $loop->index }}">
-                                            <div class="flex items-center justify-between px-3 py-2 border-b border-white/10">
-                                                <span class="text-xs font-medium text-gray-100">{{ $lf['lieferant'] }}</span>
-                                                <span class="text-[11px] tabular-nums text-gray-400">{{ count($lf['positionen']) }} Positionen · EK {{ number_format((float) $lf['ek_summe'], 2, ',', '.') }} €{{ $lf['ek_vollstaendig'] ? '' : ' (unvollständig)' }}</span>
+                                        <div class="rounded-[var(--fa-radius-surface)] border border-[var(--fa-line)] overflow-hidden" wire:key="bedarf-{{ $loop->index }}">
+                                            <div class="flex flex-wrap items-center justify-between gap-2 px-3 py-2 bg-[var(--fa-ground)] border-b border-[var(--fa-line)]">
+                                                <span class="text-[length:var(--fa-text-md)] font-semibold text-[var(--fa-ink)]">{{ $lf['lieferant'] }}</span>
+                                                <span class="flex items-center gap-2 text-[length:var(--fa-text-sm)] tabular-nums text-[var(--fa-ink-2)]">
+                                                    {{ $mehrzahl(count($lf['positionen']), 'Position', 'Positionen') }} · EK {{ $zahl($lf['ek_summe'], 2) }} €
+                                                    @unless($lf['ek_vollstaendig'])<x-fa::badge tone="warn">unvollständig</x-fa::badge>@endunless
+                                                </span>
                                             </div>
                                             <div class="overflow-x-auto">
-                                                <table class="{{ $table }}" style="min-width:560px">
-                                                    <thead><tr class="text-left"><th class="{{ $th }}">Grundprodukt</th><th class="{{ $th }} text-right">Menge</th><th class="{{ $th }}">Gebinde / Artikel</th><th class="{{ $th }} text-right">EK</th></tr></thead>
+                                                <table class="fa-table fa-table--compact">
+                                                    <thead><tr><th>Grundprodukt</th><th class="num">Menge</th><th>Gebinde und Artikel</th><th class="num">EK</th></tr></thead>
                                                     <tbody>
                                                         @foreach($lf['positionen'] as $pos)
-                                                            <tr class="border-t border-white/5">
-                                                                <td class="{{ $td }} text-xs text-gray-200">{{ $pos['gp'] }}</td>
-                                                                <td class="{{ $td }} text-xs text-right tabular-nums text-gray-100">{{ number_format((float) $pos['menge_kg'], 3, ',', '.') }} kg</td>
-                                                                <td class="{{ $td }} text-[11px] text-gray-400">
-                                                                    {{ $pos['lead_artikel'] ?? '—' }}{{ $pos['lead_artikel_nr'] ? ' · ' . $pos['lead_artikel_nr'] : '' }}
+                                                            <tr>
+                                                                <td>{{ $pos['gp'] }}</td>
+                                                                <td class="num"><x-fa::menge :value="(float) $pos['menge_kg']" unit="kg" /></td>
+                                                                <td class="text-[var(--fa-ink-2)]">
+                                                                    {{ $pos['lead_artikel'] ?? 'Kein Artikel hinterlegt' }}{{ $pos['lead_artikel_nr'] ? ' · ' . $pos['lead_artikel_nr'] : '' }}
                                                                     @if(($pos['gebinde']['berechenbar'] ?? false) && isset($pos['gebinde']['qty_packs']))
                                                                         · {{ $pos['gebinde']['qty_packs'] }}× {{ $pos['gebinde']['packaging_unit'] ?: 'Gebinde' }}{{ $pos['gebinde']['pack_qty'] ? ' à ' . rtrim(rtrim(number_format((float) $pos['gebinde']['pack_qty'], 3, ',', ''), '0'), ',') . ' ' . ($pos['gebinde']['pack_unit_code'] ?? '') : '' }}
                                                                     @elseif(! empty($pos['gebinde']['grund']))
-                                                                        · <span class="text-amber-300/80">{{ $pos['gebinde']['grund'] }}</span>
+                                                                        · <x-fa::signal tone="warn">{{ $pos['gebinde']['grund'] }}</x-fa::signal>
                                                                     @endif
                                                                 </td>
-                                                                <td class="{{ $td }} text-xs text-right tabular-nums text-gray-300">{{ $pos['bestell_ek_eur'] !== null ? number_format((float) $pos['bestell_ek_eur'], 2, ',', '.') . ' €' : '—' }}</td>
+                                                                <td class="num"><x-fa::money :value="$pos['bestell_ek_eur']" /></td>
                                                             </tr>
                                                         @endforeach
                                                     </tbody>
@@ -516,45 +547,46 @@
                                         </div>
                                     @endforeach
                                     @if(! empty($bedarf['liste']['warnungen']))
-                                        <div class="rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-[11px] text-amber-200">
-                                            @foreach(array_slice($bedarf['liste']['warnungen'], 0, 5) as $w)<div>{{ $w }}</div>@endforeach
-                                        </div>
+                                        <x-fa::notice tone="warn">
+                                            @foreach(array_slice($bedarf['liste']['warnungen'], 0, 5) as $w)<p>{{ $w }}</p>@endforeach
+                                        </x-fa::notice>
                                     @endif
-                                    <p class="text-[11px] text-gray-400 mt-2">An den Einkauf geht der Bedarf über die Produktion: „→ Produktion“ im Kalender, dann im Produktionsauftrag „Bedarf freigeben“. So wird nichts doppelt bestellt.</p>
+                                    <p class="{{ $leise }}">An den Einkauf geht der Bedarf über die Produktion: im Menü „Weitere Aktionen" die Woche an die Produktion übergeben, dann im Produktionsauftrag den Bedarf freigeben. So wird nichts doppelt bestellt.</p>
                                 @endif
                             @endif
-                        </x-foodalchemist::modal-section>
+                        </x-fa::section>
                     </div>
 
-                    {{-- ═══ Spec 57 · Paket 8: Tab PLAN/IST (nur lesend, Verkaufsjournal) ═══ --}}
-                    <div x-show="tab === 'planist'" x-cloak class="pt-4 space-y-3" data-sp-tab-planist>
-                        <x-foodalchemist::modal-section title="Plan/Ist · KW {{ (int) $montagDt->format('W') }} · {{ $mahlzeiten[$mahlzeit] ?? '' }}">
+                    {{-- ═══ Spec 57 · Paket 8: Reiter PLAN/IST (nur lesend, Verkaufsjournal) ═══ --}}
+                    <div x-show="tab === 'planist'" x-cloak class="pt-4 flex flex-col gap-4" data-sp-tab-planist>
+                        <x-fa::section title="Plan und Ist" icon="heroicon-o-scale" :meta="$kwText">
                             @if($planIst)
-                                @php($pis = $planIst['summe'])
-                                <div class="grid grid-cols-2 lg:grid-cols-4 gap-2 mb-3">
-                                    <div class="rounded-xl border border-white/10 bg-white/[0.04] p-3"><div class="{{ $label }}">Essen geplant</div><div class="text-lg font-semibold tabular-nums text-gray-100">{{ number_format($pis['plan'], 0, ',', '.') }}</div></div>
-                                    <div class="rounded-xl border border-white/10 bg-white/[0.04] p-3"><div class="{{ $label }}">Verkauft (Ist)</div><div class="text-lg font-semibold tabular-nums text-gray-100">{{ $planIst['hat_ist'] ? number_format($pis['ist'], 0, ',', '.') : '—' }}</div>
-                                        @if($pis['abweichung_pct'] !== null)<div class="text-[11px] tabular-nums {{ $pis['abweichung_pct'] < 0 ? 'text-rose-300' : 'text-emerald-300' }}">{{ ($pis['abweichung_pct'] > 0 ? '+' : '') . number_format($pis['abweichung_pct'], 1, ',', '.') }} % zum Plan</div>@endif
-                                    </div>
-                                    <div class="rounded-xl border border-white/10 bg-white/[0.04] p-3"><div class="{{ $label }}">Umsatz Plan</div><div class="text-lg font-semibold tabular-nums text-gray-100">{{ number_format($pis['plan_umsatz'], 0, ',', '.') }} €</div></div>
-                                    <div class="rounded-xl border border-white/10 bg-white/[0.04] p-3"><div class="{{ $label }}">Umsatz Ist</div><div class="text-lg font-semibold tabular-nums text-gray-100">{{ $planIst['hat_ist'] ? number_format($pis['ist_umsatz'], 0, ',', '.') . ' €' : '—' }}</div></div>
-                                </div>
+                                @php $pis = $planIst['summe']; @endphp
+                                <x-fa::kpis :items="[
+                                    ['label' => 'Essen geplant', 'value' => $zahl($pis['plan'])],
+                                    ['label' => 'Verkauft (Ist)', 'value' => $planIst['hat_ist'] ? $zahl($pis['ist']) : 'Keine Daten', 'primary' => $planIst['hat_ist']],
+                                    ['label' => 'Umsatz Plan', 'value' => $zahl($pis['plan_umsatz']) . ' €'],
+                                    ['label' => 'Umsatz Ist', 'value' => $planIst['hat_ist'] ? $zahl($pis['ist_umsatz']) . ' €' : 'Keine Daten'],
+                                ]" />
+                                @if($pis['abweichung_pct'] !== null)
+                                    <x-fa::signal :tone="$pis['abweichung_pct'] < 0 ? 'crit' : 'ok'">Verkauft {{ $zahl(abs($pis['abweichung_pct']), 1) }} % {{ $pis['abweichung_pct'] < 0 ? 'unter' : 'über' }} Plan</x-fa::signal>
+                                @endif
                                 @unless($planIst['hat_ist'])
-                                    <p class="text-[11px] text-amber-300/90 mb-2">Für diese Woche liegen keine Verkaufszahlen vor. Verkäufe werden im Controlling importiert (CSV aus der Kasse) und dort den Gerichten zugeordnet.</p>
+                                    <x-fa::notice tone="warn">Für diese Woche liegen keine Verkaufszahlen vor. Verkäufe werden im Controlling importiert (Datei aus der Kasse) und dort den Gerichten zugeordnet.</x-fa::notice>
                                 @endunless
                                 @if($planIst['zeilen'] !== [])
-                                    <div class="overflow-x-auto">
-                                        <table class="{{ $table }}" style="min-width:560px" data-sp-planist>
-                                            <thead><tr class="text-left"><th class="{{ $th }}">Gericht</th><th class="{{ $th }} text-right">Plan</th><th class="{{ $th }} text-right">Ist</th><th class="{{ $th }} text-right">Δ</th><th class="{{ $th }} text-right">Umsatz Plan</th><th class="{{ $th }} text-right">Umsatz Ist</th></tr></thead>
+                                    <div class="overflow-x-auto -mx-4">
+                                        <table class="fa-table fa-table--compact" data-sp-planist>
+                                            <thead><tr><th class="pl-4">Gericht</th><th class="num">Plan</th><th class="num">Ist</th><th class="num">Abweichung</th><th class="num">Umsatz Plan</th><th class="num pr-4">Umsatz Ist</th></tr></thead>
                                             <tbody>
                                                 @foreach($planIst['zeilen'] as $pz)
-                                                    <tr class="border-t border-white/10">
-                                                        <td class="{{ $td }} text-xs text-gray-200">{{ $pz['name'] }}</td>
-                                                        <td class="{{ $td }} text-xs text-right tabular-nums">{{ number_format($pz['plan'], 0, ',', '.') }}</td>
-                                                        <td class="{{ $td }} text-xs text-right tabular-nums">{{ $pz['ist'] !== null ? number_format($pz['ist'], 0, ',', '.') : '—' }}</td>
-                                                        <td class="{{ $td }} text-xs text-right tabular-nums {{ ($pz['abweichung_pct'] ?? 0) < 0 ? 'text-rose-300' : 'text-emerald-300' }}">{{ $pz['abweichung_pct'] !== null ? (($pz['abweichung_pct'] > 0 ? '+' : '') . number_format($pz['abweichung_pct'], 1, ',', '.') . ' %') : '—' }}</td>
-                                                        <td class="{{ $td }} text-xs text-right tabular-nums text-gray-300">{{ number_format($pz['plan_umsatz'], 2, ',', '.') }} €</td>
-                                                        <td class="{{ $td }} text-xs text-right tabular-nums text-gray-300">{{ $pz['ist_umsatz'] !== null ? number_format($pz['ist_umsatz'], 2, ',', '.') . ' €' : '—' }}</td>
+                                                    <tr>
+                                                        <td class="pl-4">{{ $pz['name'] }}</td>
+                                                        <td class="num">{{ $zahl($pz['plan']) }}</td>
+                                                        <td class="num">{{ $pz['ist'] !== null ? $zahl($pz['ist']) : '–' }}</td>
+                                                        <td class="num {{ ($pz['abweichung_pct'] ?? 0) < 0 ? 'text-[var(--fa-crit)]' : 'text-[var(--fa-ok)]' }}">{{ $pz['abweichung_pct'] !== null ? (($pz['abweichung_pct'] > 0 ? '+' : '') . $zahl($pz['abweichung_pct'], 1) . ' %') : '–' }}</td>
+                                                        <td class="num">{{ $zahl($pz['plan_umsatz'], 2) }} €</td>
+                                                        <td class="num pr-4">{{ $pz['ist_umsatz'] !== null ? $zahl($pz['ist_umsatz'], 2) . ' €' : '–' }}</td>
                                                     </tr>
                                                 @endforeach
                                             </tbody>
@@ -562,134 +594,132 @@
                                     </div>
                                 @endif
                                 @if($planIst['nicht_vergleichbar'] !== [])
-                                    <p class="text-[11px] text-gray-400 mt-2">Nicht vergleichbar (Concept/Paket, in der Kasse kein einzelnes Gericht): {{ implode(', ', $planIst['nicht_vergleichbar']) }}.</p>
+                                    <p class="{{ $leise }}">Nicht vergleichbar (Konzept oder Paket, in der Kasse kein einzelnes Gericht): {{ implode(', ', $planIst['nicht_vergleichbar']) }}.</p>
                                 @endif
-                                <p class="text-[10px] text-gray-500 mt-1">{{ $planIst['hinweis'] }}</p>
+                                <p class="{{ $leise }}">{{ $planIst['hinweis'] }}</p>
                             @endif
-                        </x-foodalchemist::modal-section>
+                        </x-fa::section>
                     </div>
 
-                    {{-- ═══ Tab: MENÜ-LINIEN ═══ --}}
-                    <div x-show="tab === 'linien'" x-cloak class="pt-4" data-sp-tab-linien>
-                        <x-foodalchemist::modal-section title="Menü-Linien">
-                            <x-slot:actions>
-                                <span class="text-[11px] text-gray-400">Zeilen der Matrix · pro Plan frei</span>
-                            </x-slot:actions>
+                    {{-- ═══ Reiter: MENÜ-LINIEN ═══ --}}
+                    <div x-show="tab === 'linien'" x-cloak class="pt-4 flex flex-col gap-4" data-sp-tab-linien>
+                        <x-fa::section title="Menü-Linien" icon="heroicon-o-queue-list" :meta="$mehrzahl($linien->count(), 'Linie', 'Linien')" description="Jede Linie ist eine Ausgabestelle und eine Zeile im Kalender. Das Zielband ersetzt für die Linie das Ziel des Betriebs: Suppe und Dessert dürfen anders kalkulieren als der Hauptgang. Hauptgang-Linien zählen die Gäste des Tages.">
                             {{-- Spec 57 · Paket 2: jede Linie ist eine Ausgabestelle (Rolle, Kasse, Preis, Zielband). --}}
-                            <div class="overflow-x-auto">
-                                <table class="{{ $table }}" style="min-width:760px">
-                                    <thead><tr class="text-left">
-                                        <th class="{{ $th }}">Linie</th><th class="{{ $th }}">Rolle</th><th class="{{ $th }}">Mahlzeit</th><th class="{{ $th }}">Kasse</th>
-                                        <th class="{{ $th }} text-right">Preis</th><th class="{{ $th }} text-center">Zielband WES</th><th class="{{ $th }} text-right">Essen</th><th class="{{ $th }}"></th>
+                            <div class="overflow-x-auto -mx-4">
+                                <table class="fa-table">
+                                    <thead><tr>
+                                        <th class="pl-4">Linie</th><th>Rolle</th><th>Mahlzeit</th><th>Kasse</th>
+                                        <th class="num">Preis</th><th class="num">Zielband Wareneinsatz</th><th class="num">Essen je Tag</th><th class="pr-4"><span class="sr-only">Aktionen</span></th>
                                     </tr></thead>
                                     <tbody>
                                         @foreach($linien as $linie)
-                                            <tr wire:key="linie-{{ $linie->id }}" class="border-t border-white/10">
-                                                <td class="{{ $td }}">
-                                                    <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full shrink-0" style="background: {{ $linie->color ?: '#94a3b8' }}"></span><span class="text-xs text-gray-200">{{ $linie->name }}</span></span>
-                                                    <span class="flex gap-1 mt-0.5">
-                                                        @if($linie->is_vegetarian)<span class="{{ $pill }} {{ $variantPill['success'] }}">veg</span>@endif
-                                                        @if($linie->is_standing)<span class="{{ $pill }} {{ $variantPill['secondary'] }}" title="Zählt nicht für die Wiederholungsregel">Dauerangebot</span>@endif
+                                            <tr wire:key="linie-{{ $linie->id }}" @if($editLinieId === $linie->id) aria-selected="true" @endif>
+                                                <td class="pl-4">
+                                                    <span class="flex items-center gap-2">
+                                                        <span class="w-3 h-3 rounded-full shrink-0 {{ $linie->color ? '' : 'bg-[var(--fa-ink-3)]' }}" @if($linie->color) style="background: {{ $linie->color }}" @endif></span>
+                                                        <span class="font-medium">{{ $linie->name }}</span>
+                                                        @if($linie->is_vegetarian)<x-fa::badge tone="ok">vegetarisch</x-fa::badge>@endif
+                                                        @if($linie->is_standing)<x-fa::badge title="Zählt nicht für die Wiederholungsregel">Dauerangebot</x-fa::badge>@endif
                                                     </span>
                                                 </td>
-                                                <td class="{{ $td }} text-xs text-gray-300">{{ $rollen[$linie->role] ?? '—' }}</td>
-                                                <td class="{{ $td }} text-xs text-gray-300">{{ $linie->meal ? ($mahlzeiten[$linie->meal] ?? $linie->meal) : 'alle' }}</td>
-                                                <td class="{{ $td }} text-xs text-gray-300 tabular-nums">{{ $linie->plu ?: '—' }}</td>
-                                                <td class="{{ $td }} text-xs text-right tabular-nums text-gray-300">{{ $linie->manuellerPreis() !== null ? number_format($linie->manuellerPreis(), 2, ',', '.') . ' € (fest)' : 'vom Gericht' }}</td>
-                                                <td class="{{ $td }} text-xs text-center tabular-nums text-gray-300">
-                                                    @if($linie->target_wes_min_pct !== null || $linie->target_wes_max_pct !== null)
-                                                        {{ $linie->target_wes_min_pct !== null ? number_format($linie->target_wes_min_pct, 0) : '0' }}–{{ $linie->target_wes_max_pct !== null ? number_format($linie->target_wes_max_pct, 0) : '…' }} %
+                                                <td>{{ $rollen[$linie->role] ?? 'Ohne Rolle' }}</td>
+                                                <td>{{ $linie->meal ? ($mahlzeiten[$linie->meal] ?? $linie->meal) : 'Alle Mahlzeiten' }}</td>
+                                                <td class="tabular-nums">{{ $linie->plu ?: '–' }}</td>
+                                                <td class="num">
+                                                    @if($linie->manuellerPreis() !== null)
+                                                        <x-fa::money :value="$linie->manuellerPreis()" /> <span class="text-[var(--fa-ink-3)]">fest</span>
                                                     @else
-                                                        <span class="text-gray-500" title="Es gilt das Team-/Betriebs-Ziel">Team-Ziel</span>
+                                                        <span class="text-[var(--fa-ink-2)]">vom Gericht</span>
                                                     @endif
                                                 </td>
-                                                <td class="{{ $td }} text-xs text-right tabular-nums text-gray-300">{{ $linie->default_pax ?: '—' }}</td>
-                                                <td class="{{ $td }} whitespace-nowrap text-right">
-                                                    <button type="button" wire:click="linieVerschieben({{ $linie->id }}, -1)" class="text-gray-500 hover:text-violet-300 text-[10px] px-0.5" aria-label="{{ $linie->name }} nach oben">▲</button>
-                                                    <button type="button" wire:click="linieVerschieben({{ $linie->id }}, 1)" class="text-gray-500 hover:text-violet-300 text-[10px] px-0.5" aria-label="{{ $linie->name }} nach unten">▼</button>
-                                                    <button type="button" wire:click="linieEdit({{ $linie->id }})" class="text-gray-400 hover:text-violet-300 text-xs px-0.5" aria-label="{{ $linie->name }} bearbeiten">@svg('heroicon-o-pencil', 'w-3.5 h-3.5 inline-block align-middle')</button>
-                                                    <button type="button" wire:click="linieRaus({{ $linie->id }})" wire:confirm="Linie entfernen? Einträge bleiben (ohne Linie)." class="text-gray-400 hover:text-red-400 text-xs px-0.5" aria-label="{{ $linie->name }} entfernen">✕</button>
+                                                <td class="num">
+                                                    @if($linie->target_wes_min_pct !== null || $linie->target_wes_max_pct !== null)
+                                                        {{ $linie->target_wes_min_pct !== null ? number_format($linie->target_wes_min_pct, 0) : '0' }} bis {{ $linie->target_wes_max_pct !== null ? number_format($linie->target_wes_max_pct, 0) : 'offen' }} %
+                                                    @else
+                                                        <span class="text-[var(--fa-ink-3)]" title="Es gilt das Ziel des Betriebs">Ziel des Betriebs</span>
+                                                    @endif
+                                                </td>
+                                                <td class="num">{{ $linie->default_pax ?: 'Standard' }}</td>
+                                                <td class="pr-4">
+                                                    <span class="flex items-center justify-end gap-0.5">
+                                                        <x-fa::icon-button icon="heroicon-m-chevron-up" size="sm" label="{{ $linie->name }} nach oben" wire:click="linieVerschieben({{ $linie->id }}, -1)" />
+                                                        <x-fa::icon-button icon="heroicon-m-chevron-down" size="sm" label="{{ $linie->name }} nach unten" wire:click="linieVerschieben({{ $linie->id }}, 1)" />
+                                                        <x-fa::icon-button icon="heroicon-m-pencil-square" size="sm" label="{{ $linie->name }} bearbeiten" wire:click="linieEdit({{ $linie->id }})" />
+                                                        <x-fa::icon-button icon="heroicon-m-trash" size="sm" tone="danger" label="{{ $linie->name }} entfernen" wire:click="linieRaus({{ $linie->id }})" wire:confirm="Linie entfernen? Einträge bleiben (ohne Linie)." />
+                                                    </span>
                                                 </td>
                                             </tr>
                                         @endforeach
                                     </tbody>
                                 </table>
                             </div>
-                            <div class="flex items-center gap-1 mt-2">
-                                <input type="text" wire:model="neueLinie" wire:keydown.enter="linieAdd" placeholder="+ Linie …" class="{{ $input }} w-40 h-8 text-xs" aria-label="Name der neuen Linie" />
-                                <button type="button" wire:click="linieAdd" class="{{ $btnGhostXs }}">Linie hinzufügen</button>
+                            <div class="flex items-center gap-2">
+                                <x-fa::input wire:model="neueLinie" wire:keydown.enter="linieAdd" placeholder="Name der neuen Linie" class="w-64" aria-label="Name der neuen Linie" />
+                                <x-fa::button icon="heroicon-m-plus" wire:click="linieAdd">Linie hinzufügen</x-fa::button>
                             </div>
-                            @if($editLinieId !== null)
-                                <div class="mt-3 pt-3 border-t border-white/10 grid grid-cols-2 md:grid-cols-6 gap-3 items-end" data-sp-linie-form>
-                                    <div class="md:col-span-2"><label class="{{ $label }}">Name</label><input type="text" wire:model="linieForm.name" class="{{ $input }} h-8" /></div>
-                                    <div><label class="{{ $label }}">Farbe</label><input type="color" wire:model="linieForm.color" class="h-8 w-12 rounded border border-white/15 bg-transparent" /></div>
-                                    <div><label class="{{ $label }}">Rolle</label>
-                                        <select wire:model="linieForm.role" class="{{ $input }} h-8">
-                                            <option value="">— keine —</option>
-                                            @foreach($rollen as $rk => $rl)<option value="{{ $rk }}">{{ $rl }}</option>@endforeach
-                                        </select>
-                                    </div>
-                                    <div><label class="{{ $label }}">Mahlzeit</label>
-                                        <select wire:model="linieForm.meal" class="{{ $input }} h-8">
-                                            <option value="">alle Mahlzeiten</option>
-                                            @foreach($mahlzeiten as $mk => $ml)<option value="{{ $mk }}">{{ $ml }}</option>@endforeach
-                                        </select>
-                                    </div>
-                                    <div><label class="{{ $label }}">Kassen-Nr.</label><input type="text" wire:model="linieForm.plu" maxlength="32" class="{{ $input }} h-8" /></div>
-                                    <div><label class="{{ $label }}">Preis</label>
-                                        <select wire:model.live="linieForm.price_mode" class="{{ $input }} h-8">
-                                            <option value="auto">vom Gericht</option>
-                                            <option value="manuell">fester Linienpreis</option>
-                                        </select>
-                                    </div>
+                        </x-fa::section>
+
+                        @if($editLinieId !== null)
+                            <x-fa::section title="Linie bearbeiten" icon="heroicon-o-pencil-square" :meta="$linieForm['name'] ?? ''" data-sp-linie-form>
+                                <x-slot:actions>
+                                    <x-fa::button variant="ghost" size="sm" wire:click="$set('editLinieId', null)">Abbrechen</x-fa::button>
+                                    <x-fa::button size="sm" icon="heroicon-m-check" wire:click="linieSpeichern">Linie speichern</x-fa::button>
+                                </x-slot:actions>
+                                <div class="grid grid-cols-2 md:grid-cols-6 gap-3 items-end">
+                                    <x-fa::field label="Name" for="sp-linie-name" class="md:col-span-2"><x-fa::input id="sp-linie-name" wire:model="linieForm.name" /></x-fa::field>
+                                    <x-fa::field label="Farbe" for="sp-linie-farbe"><input id="sp-linie-farbe" type="color" wire:model="linieForm.color" class="fa-control h-9 w-16 p-1" /></x-fa::field>
+                                    <x-fa::field label="Rolle" for="sp-linie-rolle">
+                                        <x-fa::select id="sp-linie-rolle" wire:model="linieForm.role" placeholder="Keine Rolle" :options="$rollen" />
+                                    </x-fa::field>
+                                    <x-fa::field label="Mahlzeit" for="sp-linie-mahlzeit">
+                                        <x-fa::select id="sp-linie-mahlzeit" wire:model="linieForm.meal" placeholder="Alle Mahlzeiten" :options="$mahlzeiten" />
+                                    </x-fa::field>
+                                    <x-fa::field label="Kassen-Nr." for="sp-linie-plu"><x-fa::input id="sp-linie-plu" wire:model="linieForm.plu" maxlength="32" /></x-fa::field>
+                                    <x-fa::field label="Preis" for="sp-linie-preis">
+                                        <x-fa::select id="sp-linie-preis" wire:model.live="linieForm.price_mode" :options="['auto' => 'Vom Gericht', 'manuell' => 'Fester Linienpreis']" />
+                                    </x-fa::field>
                                     @if(($linieForm['price_mode'] ?? 'auto') === 'manuell')
-                                        <div><label class="{{ $label }}">Linienpreis netto (€)</label><input type="text" inputmode="decimal" wire:model="linieForm.price_value" class="{{ $input }} h-8 text-right tabular-nums" placeholder="z. B. 6,40" /></div>
+                                        <x-fa::field label="Linienpreis netto (€)" for="sp-linie-preiswert"><x-fa::input id="sp-linie-preiswert" inputmode="decimal" wire:model="linieForm.price_value" numeric placeholder="z. B. 6,40" /></x-fa::field>
                                     @endif
-                                    <div><label class="{{ $label }}">WES von (%)</label><input type="text" inputmode="decimal" wire:model="linieForm.target_wes_min_pct" class="{{ $input }} h-8 text-right tabular-nums" placeholder="leer = keine" /></div>
-                                    <div><label class="{{ $label }}">WES bis (%)</label><input type="text" inputmode="decimal" wire:model="linieForm.target_wes_max_pct" class="{{ $input }} h-8 text-right tabular-nums" placeholder="leer = Team-Ziel" /></div>
-                                    <div><label class="{{ $label }}">Essen je Tag</label><input type="number" min="0" wire:model="linieForm.default_pax" class="{{ $input }} h-8 text-right tabular-nums" placeholder="Plan-Standard" /></div>
-                                    <label class="flex items-center gap-1.5 text-xs pb-1.5 text-gray-300"><input type="checkbox" wire:model="linieForm.is_vegetarian" /> nur vegetarisch</label>
-                                    <label class="flex items-center gap-1.5 text-xs pb-1.5 text-gray-300" title="Dauerangebote (Salatbar …) zählen nicht für die Wiederholungsregel"><input type="checkbox" wire:model="linieForm.is_standing" /> Dauerangebot</label>
-                                    <div class="flex gap-2 md:col-span-2">
-                                        <button type="button" wire:click="linieSpeichern" class="{{ $btnPrimary }} h-8">Speichern</button>
-                                        <button type="button" wire:click="$set('editLinieId', null)" class="{{ $btnGhost }} h-8">Abbrechen</button>
-                                    </div>
+                                    <x-fa::field label="Wareneinsatz von (%)" for="sp-linie-wesmin"><x-fa::input id="sp-linie-wesmin" inputmode="decimal" wire:model="linieForm.target_wes_min_pct" numeric placeholder="leer = keine Grenze" /></x-fa::field>
+                                    <x-fa::field label="Wareneinsatz bis (%)" for="sp-linie-wesmax"><x-fa::input id="sp-linie-wesmax" inputmode="decimal" wire:model="linieForm.target_wes_max_pct" numeric placeholder="leer = Ziel des Betriebs" /></x-fa::field>
+                                    <x-fa::field label="Essen je Tag" for="sp-linie-pax"><x-fa::input id="sp-linie-pax" type="number" min="0" wire:model="linieForm.default_pax" numeric placeholder="Standard des Plans" /></x-fa::field>
+                                    <label class="flex items-center gap-2 h-9 text-[length:var(--fa-text-md)] text-[var(--fa-ink)]"><input type="checkbox" wire:model="linieForm.is_vegetarian" class="{{ $haken }}" /> Nur vegetarisch</label>
+                                    <label class="flex items-center gap-2 h-9 text-[length:var(--fa-text-md)] text-[var(--fa-ink)]" title="Dauerangebote (Salatbar …) zählen nicht für die Wiederholungsregel"><input type="checkbox" wire:model="linieForm.is_standing" class="{{ $haken }}" /> Dauerangebot</label>
                                 </div>
-                            @endif
-                            <p class="text-[11px] text-gray-400 mt-2">Das Zielband ersetzt für diese Linie das eine Team-Ziel: Suppe und Dessert dürfen anders kalkulieren als der Hauptgang. Hauptgang-Linien zählen die Gäste des Tages (Tagesfuß, Budget je Gast).</p>
-                        </x-foodalchemist::modal-section>
+                            </x-fa::section>
+                        @endif
                     </div>
 
-                    {{-- ═══ Tab: STAMMDATEN ═══ --}}
-                    <div x-show="tab === 'stammdaten'" x-cloak class="pt-4 space-y-4" data-sp-tab-stammdaten>
-                        <x-foodalchemist::modal-section title="Plan-Stammdaten">
+                    {{-- ═══ Reiter: STAMMDATEN ═══ --}}
+                    <div x-show="tab === 'stammdaten'" x-cloak class="pt-4 flex flex-col gap-4" data-sp-tab-stammdaten>
+                        <x-fa::section title="Plan" icon="heroicon-o-identification">
                             <x-slot:actions>
-                                <button type="button" wire:click="speichern" class="{{ $btnGhostXs }}" data-sp-stammdaten-speichern>Speichern</button>
+                                <x-fa::button size="sm" icon="heroicon-m-check" wire:click="speichern" data-sp-stammdaten-speichern>Stammdaten speichern</x-fa::button>
                             </x-slot:actions>
                             <div class="grid grid-cols-2 md:grid-cols-6 gap-3">
-                                <div class="md:col-span-2"><label class="{{ $label }}">Name</label><input type="text" wire:model="form.name" class="{{ $input }}" /></div>
-                                <div><label class="{{ $label }}">Start (Montag)</label><input type="date" wire:model.live="form.start_date" wire:change="speichern" class="{{ $input }}" /></div>
-                                <div><label class="{{ $label }}">Zyklus (Wochen)</label><input type="number" min="1" wire:model.live="form.cycle_weeks" wire:change="speichern" class="{{ $input }} text-right tabular-nums" /></div>
-                                <div><label class="{{ $label }}">Min. Abstand (T.)</label><input type="number" min="0" wire:model.live="form.min_abstand_tage" wire:change="speichern" class="{{ $input }} text-right tabular-nums" title="0 = keine Wiederholungsregel" /></div>
+                                <x-fa::field label="Name" for="sp-form-name" class="md:col-span-2"><x-fa::input id="sp-form-name" wire:model="form.name" /></x-fa::field>
+                                <x-fa::field label="Start (Montag)" for="sp-form-start"><x-fa::input id="sp-form-start" type="date" wire:model.live="form.start_date" wire:change="speichern" /></x-fa::field>
+                                <x-fa::field label="Zyklus (Wochen)" for="sp-form-zyklus"><x-fa::input id="sp-form-zyklus" type="number" min="1" wire:model.live="form.cycle_weeks" wire:change="speichern" numeric /></x-fa::field>
+                                <x-fa::field label="Mindestabstand (Tage)" for="sp-form-abstand" hint="0 = keine Wiederholungsregel"><x-fa::input id="sp-form-abstand" type="number" min="0" wire:model.live="form.min_abstand_tage" wire:change="speichern" numeric /></x-fa::field>
                             </div>
 
-                            {{-- Spec 57 · Paket 9: Öffnungstage — steuern Matrix, Aushang, Produktion und Kaskade. --}}
-                            <div class="mt-3" data-sp-oeffnungstage>
-                                <label class="{{ $label }}">Öffnungstage</label>
-                                <div class="flex flex-wrap gap-1 mt-1" role="group" aria-label="Öffnungstage">
+                            {{-- Spec 57 · Paket 9: Öffnungstage — steuern Kalender, Aushang, Produktion und KI-Lauf. --}}
+                            <div class="flex flex-col gap-1.5" data-sp-oeffnungstage>
+                                <span class="{{ $etikett }}">Öffnungstage</span>
+                                <div class="flex flex-wrap gap-1.5" role="group" aria-label="Öffnungstage">
                                     @foreach($tagKurz as $iso => $kurz)
-                                        @php($offen = in_array($iso, array_map('intval', (array) ($form['opening_days'] ?? [])), true))
+                                        @php $offen = in_array($iso, array_map('intval', (array) ($form['opening_days'] ?? [])), true); @endphp
                                         <button type="button" wire:click="oeffnungstagUmschalten({{ $iso }})" aria-pressed="{{ $offen ? 'true' : 'false' }}"
-                                                class="px-2.5 py-1 rounded-md border text-xs {{ $offen ? 'border-violet-400/50 bg-violet-500/15 text-violet-100' : 'border-white/10 text-gray-500 hover:text-gray-300' }}">{{ $kurz }}</button>
+                                                class="{{ $chip }} min-w-11 justify-center {{ $offen ? $chipAn : $chipAus }}">{{ $kurz }}</button>
                                     @endforeach
                                 </div>
+                                <p class="{{ $leise }}">Steuern die Spalten im Kalender, den Aushang, die Produktion und den KI-Lauf.</p>
                             </div>
 
-                            {{-- Spec 33 P5: Status und Zuordnung aus dem geteilten Bauteil. Hier stand
-                                 bis dahin ein eigenes Dropdown mit `draft`/`active` — Werte, die weder
-                                 Migration noch Service kannten. Ein Gültigkeitsfenster hat der Plan
-                                 bewusst nicht: es steht in seinen Einträgen. --}}
-                            <div class="mt-3 pt-3 border-t border-black/5">
+                            {{-- Spec 33 P5: Status und Zuordnung aus dem geteilten Bauteil. Ein Gültigkeitsfenster
+                                 hat der Plan bewusst nicht: es steht in seinen Einträgen. --}}
+                            <div class="pt-3 border-t border-[var(--fa-line)]">
                                 <x-foodalchemist::ausgabe-status
                                     status-model="form.status"
                                     outlet-model="form.outlet_id"
@@ -699,447 +729,505 @@
                             </div>
                             <x-foodalchemist::crm-kunde-picker
                                 :ausgabe="$plan" :crm-verfuegbar="$crmVerfuegbar" :firmen="$firmen" :kontakte="$kontakte" />
-                        </x-foodalchemist::modal-section>
+                        </x-fa::section>
 
-                        <x-foodalchemist::modal-section title="Teilnehmer & Wareneinsatz-Budget">
-                            <p class="text-[11px] text-gray-400 mb-2">Default-Kopfzahl für die Produktions-Übergabe (je Zelle überschreibbar) + EK-Zielwert pro Person für die Budget-Ampel.</p>
+                        <x-fa::section title="Teilnehmer und Budget" icon="heroicon-o-banknotes" description="Standard-Kopfzahl für die Übergabe an die Produktion (je Zelle überschreibbar) und das Wareneinsatz-Ziel je Person für die Budget-Anzeige.">
                             <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-                                <div><label class="{{ $label }}">Teilnehmer (Default)</label><input type="number" min="1" wire:model.live="form.default_pax" wire:change="speichern" class="{{ $input }} text-right tabular-nums" data-sp-default-pax /></div>
-                                <div><label class="{{ $label }}">Budget EK/Person (€)</label><input type="text" inputmode="decimal" wire:model.live="form.budget_wareneinsatz" wire:change="speichern" placeholder="z. B. 1,80" class="{{ $input }} text-right tabular-nums" title="Wareneinsatz-Ziel pro Person/Mahlzeit — Ampel in der Rail" /></div>
+                                <x-fa::field label="Teilnehmer (Standard)" for="sp-form-pax"><x-fa::input id="sp-form-pax" type="number" min="1" wire:model.live="form.default_pax" wire:change="speichern" numeric data-sp-default-pax /></x-fa::field>
+                                <x-fa::field label="Budget EK je Person (€)" for="sp-form-budget"><x-fa::input id="sp-form-budget" inputmode="decimal" wire:model.live="form.budget_wareneinsatz" wire:change="speichern" placeholder="z. B. 1,80" numeric title="Wareneinsatz-Ziel je Person und Mahlzeit" /></x-fa::field>
                             </div>
-                        </x-foodalchemist::modal-section>
+                        </x-fa::section>
+
+                        {{-- Spec 59: Vorgaben je Woche (mind./höchstens je Prüf-Chip) --}}
+                        @include('foodalchemist::livewire.speiseplan.partials.vorgaben')
 
                         {{-- Spec 57 · Paket 7: Vorlage für Betriebe (verknüpfte Kopie je Betrieb, im eigenen Team) --}}
-                        <x-foodalchemist::modal-section title="Vorlage für Betriebe">
-                            @if($vorlageHinweis)<div class="mb-2 rounded-lg bg-violet-500/10 border border-violet-400/30 text-violet-100 text-xs px-3 py-1.5" data-sp-vorlage-hinweis>{{ $vorlageHinweis }}</div>@endif
+                        <x-fa::section title="Vorlage für Betriebe" icon="heroicon-o-building-storefront">
+                            @if($vorlageHinweis)<x-fa::notice tone="info" data-sp-vorlage-hinweis>{{ $vorlageHinweis }}</x-fa::notice>@endif
                             @if($sp->source_plan_id !== null)
                                 {{-- Dieser Plan ist die Kopie eines Betriebs --}}
-                                <div data-sp-kopie-abgleich>
-                                    <p class="text-[11px] text-gray-400 mb-2">
-                                        Kopie der Vorlage „{{ $vorlagenAbgleich['vorlage']['name'] ?? '—' }}“ · zuletzt abgeglichen {{ $sp->source_synced_at?->format('d.m.Y H:i') ?? '—' }}.
+                                <div class="flex flex-col gap-3" data-sp-kopie-abgleich>
+                                    <p class="text-[length:var(--fa-text-md)] text-[var(--fa-ink-2)]">
+                                        Kopie der Vorlage „{{ $vorlagenAbgleich['vorlage']['name'] ?? 'unbekannt' }}", zuletzt abgeglichen {{ $sp->source_synced_at?->format('d.m.Y H:i') ?? 'noch nie' }}.
                                         Preise, Mengen und Öffnungstage pflegt der Betrieb selbst.
                                     </p>
                                     @if(($vorlagenAbgleich['vorlage'] ?? null) === null)
-                                        <p class="text-[11px] text-amber-300">Die Vorlage gibt es nicht mehr — dieser Plan ist jetzt frei.</p>
+                                        <x-fa::notice tone="warn">Die Vorlage gibt es nicht mehr. Dieser Plan ist jetzt frei.</x-fa::notice>
                                     @elseif($vorlagenAbgleich['zellen'] === [] && $vorlagenAbgleich['neue_linien'] === [])
-                                        <p class="text-[11px] text-emerald-300">Ab heute stimmt der Plan mit der Vorlage überein.</p>
+                                        <x-fa::signal tone="ok">Ab heute stimmt der Plan mit der Vorlage überein.</x-fa::signal>
                                     @else
                                         @if($vorlagenAbgleich['neue_linien'] !== [])
-                                            <p class="text-[11px] text-violet-200 mb-1">Neue Linien in der Vorlage: {{ collect($vorlagenAbgleich['neue_linien'])->pluck('name')->implode(', ') }}</p>
+                                            <x-fa::signal tone="info">Neue Linien in der Vorlage: {{ collect($vorlagenAbgleich['neue_linien'])->pluck('name')->implode(', ') }}</x-fa::signal>
                                         @endif
-                                        <div class="overflow-x-auto">
-                                            <table class="{{ $table }}" style="min-width:620px">
-                                                <thead><tr class="text-left"><th class="{{ $th }}">Tag</th><th class="{{ $th }}">Linie</th><th class="{{ $th }}">Vorlage</th><th class="{{ $th }}">Betrieb</th><th class="{{ $th }}"></th></tr></thead>
+                                        <div class="overflow-x-auto -mx-4">
+                                            <table class="fa-table fa-table--compact">
+                                                <thead><tr><th class="pl-4">Tag</th><th>Linie</th><th>Vorlage</th><th>Betrieb</th><th class="pr-4"><span class="sr-only">Aktion</span></th></tr></thead>
                                                 <tbody>
                                                     @foreach(array_slice($vorlagenAbgleich['zellen'], 0, 40) as $vz)
-                                                        <tr class="border-t border-white/10" wire:key="vz-{{ $vz['key'] }}">
-                                                            <td class="{{ $td }} text-xs tabular-nums">{{ \Illuminate\Support\Carbon::parse($vz['datum'])->format('d.m.') }} · {{ $mahlzeiten[$vz['mahlzeit']] ?? $vz['mahlzeit'] }}</td>
-                                                            <td class="{{ $td }} text-xs">{{ $vz['linie'] }}</td>
-                                                            <td class="{{ $td }} text-xs text-gray-200">{{ implode(', ', $vz['vorlage']) ?: '—' }}</td>
-                                                            <td class="{{ $td }} text-xs text-gray-400">{{ implode(', ', $vz['betrieb']) ?: '—' }}</td>
-                                                            <td class="{{ $td }} text-right whitespace-nowrap">
-                                                                <span class="{{ $pill }} {{ $vz['art'] === 'vorlage_geaendert' ? $variantPill['warning'] : $variantPill['secondary'] }}">{{ $vz['art'] === 'vorlage_geaendert' ? 'aus der Vorlage' : 'lokal' }}</span>
-                                                                <button type="button" wire:click="ausVorlageUebernehmen('{{ $vz['key'] }}')" class="{{ $btnGhostXs }}">übernehmen</button>
+                                                        <tr wire:key="vz-{{ $vz['key'] }}">
+                                                            <td class="pl-4 tabular-nums whitespace-nowrap">{{ \Illuminate\Support\Carbon::parse($vz['datum'])->format('d.m.') }} · {{ $mahlzeiten[$vz['mahlzeit']] ?? $vz['mahlzeit'] }}</td>
+                                                            <td>{{ $vz['linie'] }}</td>
+                                                            <td>{{ implode(', ', $vz['vorlage']) ?: 'leer' }}</td>
+                                                            <td class="text-[var(--fa-ink-2)]">{{ implode(', ', $vz['betrieb']) ?: 'leer' }}</td>
+                                                            <td class="pr-4">
+                                                                <span class="flex items-center justify-end gap-2">
+                                                                    <x-fa::badge :tone="$vz['art'] === 'vorlage_geaendert' ? 'warn' : 'neutral'">{{ $vz['art'] === 'vorlage_geaendert' ? 'Aus der Vorlage' : 'Lokal geändert' }}</x-fa::badge>
+                                                                    <x-fa::button variant="ghost" size="sm" wire:click="ausVorlageUebernehmen('{{ $vz['key'] }}')">Übernehmen</x-fa::button>
+                                                                </span>
                                                             </td>
                                                         </tr>
                                                     @endforeach
                                                 </tbody>
                                             </table>
                                         </div>
-                                        <button type="button" wire:click="ausVorlageUebernehmen(null)" wire:confirm="Alle Änderungen der Vorlage übernehmen? Lokale Abweichungen bleiben." class="{{ $btnPrimary }} mt-2" data-sp-vorlage-uebernehmen>Änderungen aus der Vorlage übernehmen</button>
+                                        <div>
+                                            <x-fa::button icon="heroicon-m-arrow-down-tray" wire:click="ausVorlageUebernehmen(null)" wire:confirm="Alle Änderungen der Vorlage übernehmen? Lokale Abweichungen bleiben." data-sp-vorlage-uebernehmen>Änderungen aus der Vorlage übernehmen</x-fa::button>
+                                        </div>
                                     @endif
                                 </div>
                             @else
-                                <label class="flex items-center gap-2 text-xs text-gray-300" data-sp-vorlage-schalter>
-                                    <input type="checkbox" @checked($sp->is_template) wire:click="vorlageUmschalten" />
-                                    Als Vorlage freigeben — Betriebe bekommen eine verknüpfte Kopie und übernehmen Änderungen per Abgleich.
+                                <label class="flex items-start gap-2 text-[length:var(--fa-text-md)] text-[var(--fa-ink)]" data-sp-vorlage-schalter>
+                                    <input type="checkbox" @checked($sp->is_template) wire:click="vorlageUmschalten" class="{{ $haken }} mt-0.5" />
+                                    <span>Als Vorlage freigeben. Betriebe bekommen eine verknüpfte Kopie und übernehmen Änderungen per Abgleich.</span>
                                 </label>
                                 @if($sp->is_template)
-                                    <div class="mt-3 space-y-2" data-sp-betriebskopien>
+                                    <div class="flex flex-col gap-2" data-sp-betriebskopien>
                                         @forelse($betriebsKopien as $bk)
-                                            <div class="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-xs" wire:key="bk-{{ $bk['id'] }}">
-                                                <span class="text-gray-100">{{ $bk['outlet'] ?? $bk['name'] }} <span class="text-gray-500">· {{ $bk['status'] }}</span></span>
+                                            <div class="flex flex-wrap items-center justify-between gap-2 rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] px-3 py-2" wire:key="bk-{{ $bk['id'] }}">
+                                                <span class="text-[length:var(--fa-text-md)] text-[var(--fa-ink)]">{{ $bk['outlet'] ?? $bk['name'] }} <span class="text-[var(--fa-ink-3)]">· {{ $bk['status'] }}</span></span>
                                                 <span class="flex items-center gap-2">
-                                                    @if($bk['aus_vorlage'] > 0)<span class="{{ $pill }} {{ $variantPill['warning'] }}">{{ $bk['aus_vorlage'] }} Änderung(en) offen</span>@else<span class="{{ $pill }} {{ $variantPill['success'] }}">aktuell</span>@endif
-                                                    @if($bk['lokal'] > 0)<span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $bk['lokal'] }} lokal</span>@endif
-                                                    <button type="button" wire:click="$dispatch('speiseplan-editor.bearbeiten', { id: {{ $bk['id'] }} })" class="{{ $btnGhostXs }}">öffnen</button>
+                                                    @if($bk['aus_vorlage'] > 0)<x-fa::badge tone="warn">{{ $mehrzahl((int) $bk['aus_vorlage'], 'Änderung offen', 'Änderungen offen') }}</x-fa::badge>@else<x-fa::badge tone="ok">Aktuell</x-fa::badge>@endif
+                                                    @if($bk['lokal'] > 0)<x-fa::badge>{{ $mehrzahl((int) $bk['lokal'], 'lokale Änderung', 'lokale Änderungen') }}</x-fa::badge>@endif
+                                                    <x-fa::button variant="ghost" size="sm" icon="heroicon-m-arrow-top-right-on-square" wire:click="$dispatch('speiseplan-editor.bearbeiten', { id: {{ $bk['id'] }} })">Kopie öffnen</x-fa::button>
                                                 </span>
                                             </div>
                                         @empty
-                                            <p class="text-[11px] text-gray-500">Noch keine Betriebs-Kopie.</p>
+                                            <p class="{{ $leise }}">Noch keine Kopie für einen Betrieb.</p>
                                         @endforelse
                                         @if($betriebe->isNotEmpty())
-                                            <div class="flex flex-wrap items-end gap-2">
-                                                <select wire:model="kopieOutletId" class="{{ $input }} h-8 w-56" aria-label="Betrieb für die Kopie">
-                                                    <option value="">— Betrieb wählen —</option>
-                                                    @foreach($betriebe as $b)<option value="{{ $b->id }}">{{ $b->name }}</option>@endforeach
-                                                </select>
-                                                <button type="button" wire:click="betriebsKopieAnlegen" class="{{ $btnGhost }} h-8" data-sp-kopie-anlegen>+ Kopie für Betrieb anlegen</button>
+                                            <div class="flex flex-wrap items-center gap-2">
+                                                <x-fa::select wire:model="kopieOutletId" class="w-64" aria-label="Betrieb für die Kopie" placeholder="Betrieb wählen" :options="$betriebe->pluck('name', 'id')" />
+                                                <x-fa::button icon="heroicon-m-plus" wire:click="betriebsKopieAnlegen" data-sp-kopie-anlegen>Kopie für Betrieb anlegen</x-fa::button>
                                             </div>
                                         @else
-                                            <p class="text-[11px] text-amber-300">Noch keine Betriebe angelegt — unter <em>Einstellungen › Betriebe</em>.</p>
+                                            <x-fa::signal tone="warn">Noch keine Betriebe angelegt. Das geht unter Einstellungen › Betriebe.</x-fa::signal>
                                         @endif
                                     </div>
                                 @endif
                             @endif
-                        </x-foodalchemist::modal-section>
+                        </x-fa::section>
 
-                        <x-foodalchemist::modal-section title="Zyklus ausrollen">
-                            <p class="text-[11px] text-gray-400 mb-2">Den {{ $sp->cycle_weeks }}-Wochen-Block ab Start auf alle Folgewochen bis zum Zieldatum kopieren. Belegte Zellen bleiben unberührt, außer du wählst „ersetzen“. Mengen (Pax) wandern mit.</p>
-                            <div class="flex items-center gap-2 flex-wrap">
-                                <input type="date" wire:model="ausrollenBis" class="{{ $input }} w-44" title="Zyklus-Vorlage bis zu diesem Datum ausrollen" />
-                                <label class="flex items-center gap-1.5 text-xs text-gray-300"><input type="checkbox" wire:model.live="ausrollenErsetzen" /> belegte Zellen ersetzen</label>
-                                <button type="button" wire:click="ausrollen" @if($ausrollenErsetzen) wire:confirm="Belegte Zellen in den Folgewochen werden durch die Vorlage ersetzt. Fortfahren?" @endif class="{{ $btnGhost }}" data-sp-ausrollen>⟳ Zyklus ausrollen</button>
-                                @if($ausrollenInfo)<span class="text-[11px] text-violet-300">{{ $ausrollenInfo }}</span>@endif
+                        <x-fa::section title="Zyklus ausrollen" icon="heroicon-o-arrow-path" description="Den {{ $sp->cycle_weeks }}-Wochen-Block ab Start auf alle Folgewochen bis zum Zieldatum kopieren. Belegte Zellen bleiben unberührt, außer du wählst „Belegte Zellen ersetzen“. Die Essen-Zahlen wandern mit.">
+                            <div class="flex flex-wrap items-end gap-3">
+                                <x-fa::field label="Ausrollen bis" for="sp-ausrollen-bis" class="w-48"><x-fa::input id="sp-ausrollen-bis" type="date" wire:model="ausrollenBis" title="Zyklus bis zu diesem Datum ausrollen" /></x-fa::field>
+                                <label class="flex items-center gap-2 h-9 text-[length:var(--fa-text-md)] text-[var(--fa-ink)]"><input type="checkbox" wire:model.live="ausrollenErsetzen" class="{{ $haken }}" /> Belegte Zellen ersetzen</label>
+                                <x-fa::button icon="heroicon-m-arrow-path" wire:click="ausrollen" :wire:confirm="$ausrollenErsetzen ? 'Belegte Zellen in den Folgewochen werden durch die Vorlage ersetzt. Fortfahren?' : null" data-sp-ausrollen>Zyklus ausrollen</x-fa::button>
+                                @if($ausrollenInfo)<x-fa::signal tone="info" class="self-center">{{ $ausrollenInfo }}</x-fa::signal>@endif
                             </div>
-                        </x-foodalchemist::modal-section>
+                        </x-fa::section>
                     </div>
 
-                    {{-- ═══ Spec 43: Tab BRANDING & PRÄSENTATION (digitaler Aushang) ═══ --}}
-                    <div x-show="tab === 'praesentation'" x-cloak class="pt-4 space-y-4" data-sp-tab-praesentation>
-                        @if($brandingFehler)<div class="rounded-lg bg-rose-500/15 border border-rose-500/30 text-rose-200 text-xs px-3 py-2">{{ $brandingFehler }}</div>@endif
+                    {{-- ═══ Spec 43: Reiter DRUCK UND AUSHANG (Ausgabe, Erscheinungsbild, digitaler Aushang) ═══ --}}
+                    <div x-show="tab === 'praesentation'" x-cloak class="pt-4 flex flex-col gap-4" data-sp-tab-praesentation>
+                        @if($brandingFehler)<x-fa::notice tone="crit">{{ $brandingFehler }}</x-fa::notice>@endif
 
-                        {{-- Spec 57 · Paket 6: Druck & Export der sichtbaren Woche/Mahlzeit --}}
-                        <x-foodalchemist::modal-section title="Druck & Export · KW {{ (int) $montagDt->format('W') }} · {{ $mahlzeiten[$mahlzeit] ?? '' }}">
-                            <div class="flex flex-wrap items-end gap-3 mb-3 text-xs">
-                                <label class="flex flex-col gap-1"><span class="{{ $label }}">Tag (Aufsteller, Schilder, Tagesliste)</span>
-                                    <select wire:model.live="ausgabeTag" class="{{ $input }} h-8">
+                        {{-- Spec 57 · Paket 6: Druck und Export der sichtbaren Woche/Mahlzeit --}}
+                        <x-fa::section title="Drucken und exportieren" icon="heroicon-o-printer" :meta="$kwText" description="Kennzeichnung (Allergene, Zusatzstoffe, Kostform) kommt immer aus den Rezepten. Logo und Farben der Gäste-Drucke kommen aus Erscheinungsbild und Präsentations-Design. Jede Vorlage öffnet im neuen Tab und lässt sich dort als PDF speichern.">
+                            <div class="flex flex-wrap items-end gap-3">
+                                <x-fa::field label="Tag (Aufsteller, Schilder, Tagesliste)" for="sp-ausgabe-tag" class="w-64">
+                                    <x-fa::select id="sp-ausgabe-tag" wire:model.live="ausgabeTag">
                                         @foreach($wochenTage as $wt)
                                             <option value="{{ $wt->format('Y-m-d') }}" @selected($wt->format('Y-m-d') === $ausgabeTagEffektiv)>{{ $tagKurz[$wt->isoWeekday()] }} {{ $wt->format('d.m.') }}</option>
                                         @endforeach
-                                    </select>
-                                </label>
-                                <label class="flex flex-col gap-1"><span class="{{ $label }}">Linie (Linien-/Buffetschild)</span>
-                                    <select wire:model.live="ausgabeLinie" class="{{ $input }} h-8">
-                                        <option value="">alle Linien</option>
-                                        @foreach($matrixLinien as $ml)<option value="{{ $ml->id }}">{{ $ml->name }}</option>@endforeach
-                                    </select>
-                                </label>
-                                <label class="flex items-center gap-1.5 text-gray-300 pb-1.5"><input type="checkbox" wire:model.live="ausgabePreise" /> Preise zeigen</label>
+                                    </x-fa::select>
+                                </x-fa::field>
+                                <x-fa::field label="Linie (Linien- und Buffetschild)" for="sp-ausgabe-linie" class="w-64">
+                                    <x-fa::select id="sp-ausgabe-linie" wire:model.live="ausgabeLinie" placeholder="Alle Linien" :options="$matrixLinien->pluck('name', 'id')" />
+                                </x-fa::field>
+                                <label class="flex items-center gap-2 h-9 text-[length:var(--fa-text-md)] text-[var(--fa-ink)]"><input type="checkbox" wire:model.live="ausgabePreise" class="{{ $haken }}" /> Preise zeigen</label>
                             </div>
-                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2" data-sp-ausgabe-formate>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2" data-sp-ausgabe-formate>
                                 @foreach([
-                                    ['woche', 'Wochenaushang A4', 'Linien × Tage, Kennzeichnung und Legende'],
-                                    ['tag', 'Tischaufsteller', 'Zeltkarte A4 quer, ein Tag, alle Linien'],
-                                    ['schild', 'Linienschilder', 'je Linie ein Schild (A5 quer)'],
-                                    ['buffet', 'Buffetschilder', 'je Gericht und Komponente ein Zeltkärtchen, 6 pro A4'],
-                                    ['liste_woche', 'Allergen- & Komponentenliste · Woche', 'für den Ordner an der Ausgabe'],
-                                    ['liste_tag', 'Allergen- & Komponentenliste · Tag', 'nur der gewählte Tag'],
-                                    ['csv', 'CSV-Export', 'Woche als Tabelle (Semikolon, Excel-tauglich)'],
-                                ] as [$fk, $fl, $fs])
-                                    <a href="{{ $ausgabeLinks[$fk] ?? '#' }}" target="_blank" class="rounded-xl border border-white/10 bg-white/[0.03] hover:bg-white/[0.06] px-3 py-2 block" data-sp-format="{{ $fk }}">
-                                        <span class="block text-xs font-medium text-gray-100">{{ $fl }}</span>
-                                        <span class="block text-[11px] text-gray-400">{{ $fs }}</span>
+                                    ['woche', 'Wochenaushang A4', 'Linien × Tage, Kennzeichnung und Legende', 'heroicon-o-calendar-days'],
+                                    ['tag', 'Tischaufsteller', 'Zeltkarte A4 quer, ein Tag, alle Linien', 'heroicon-o-rectangle-stack'],
+                                    ['schild', 'Linienschilder', 'Je Linie ein Schild (A5 quer)', 'heroicon-o-tag'],
+                                    ['buffet', 'Buffetschilder', 'Je Gericht und Komponente ein Zeltkärtchen, 6 pro A4', 'heroicon-o-squares-2x2'],
+                                    ['liste_woche', 'Allergen- und Komponentenliste der Woche', 'Für den Ordner an der Ausgabe', 'heroicon-o-clipboard-document-list'],
+                                    ['liste_tag', 'Allergen- und Komponentenliste des Tages', 'Nur der gewählte Tag', 'heroicon-o-clipboard-document'],
+                                    ['csv', 'Tabelle für Excel', 'Woche als CSV-Datei (Semikolon getrennt)', 'heroicon-o-table-cells'],
+                                ] as [$fk, $fl, $fs, $fi])
+                                    <a href="{{ $ausgabeLinks[$fk] ?? '#' }}" target="_blank"
+                                       class="flex items-start gap-3 rounded-[var(--fa-radius-surface)] border border-[var(--fa-line)] bg-[var(--fa-surface)] hover:bg-[var(--fa-hover)] hover:border-[var(--fa-accent-line)] px-3 py-2.5 transition-colors" data-sp-format="{{ $fk }}">
+                                        @svg($fi, 'w-5 h-5 shrink-0 mt-0.5 text-[var(--fa-ink-3)]')
+                                        <span class="min-w-0">
+                                            <span class="block text-[length:var(--fa-text-md)] font-medium text-[var(--fa-ink)]">{{ $fl }}</span>
+                                            <span class="block {{ $leise }}">{{ $fs }}</span>
+                                        </span>
                                     </a>
                                 @endforeach
                             </div>
-                            <p class="text-[11px] text-gray-400 mt-2">Kennzeichnung (Allergene, Zusatzstoffe, Kostform) kommt immer aus den Rezepten. Logo und Farben der Gäste-Drucke kommen aus Branding und Präsentations-Design (unten). Jede Vorlage lässt sich im neuen Tab als PDF herunterladen.</p>
-                        </x-foodalchemist::modal-section>
+                        </x-fa::section>
 
-                        <x-foodalchemist::modal-section title="Branding">
+                        <x-fa::section title="Erscheinungsbild" icon="heroicon-o-swatch">
                             <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                <label class="text-xs text-gray-300">Markenfarbe
-                                    <input type="color" wire:model="brandColor" class="block w-full h-8 rounded border border-white/10 bg-transparent">
-                                </label>
-                                <label class="text-xs text-gray-300">Bandfarbe (optional)
-                                    <input type="color" wire:model="bandColor" class="block w-full h-8 rounded border border-white/10 bg-transparent">
-                                </label>
-                                <label class="text-xs text-gray-300">Footer-Text
-                                    <input type="text" wire:model="footerText" class="{{ $input }} w-full" placeholder="z.B. Küche XY">
-                                </label>
+                                <x-fa::field label="Markenfarbe" for="sp-brand-farbe"><input id="sp-brand-farbe" type="color" wire:model="brandColor" class="fa-control h-9 p-1"></x-fa::field>
+                                <x-fa::field label="Bandfarbe" for="sp-band-farbe" optional><input id="sp-band-farbe" type="color" wire:model="bandColor" class="fa-control h-9 p-1"></x-fa::field>
+                                <x-fa::field label="Text in der Fußzeile" for="sp-footer"><x-fa::input id="sp-footer" wire:model="footerText" placeholder="z. B. Küche XY" /></x-fa::field>
                             </div>
-                            <div class="flex flex-wrap items-center gap-3 mt-3">
-                                <button type="button" wire:click="brandingSpeichern" class="{{ $btnGhost }}" data-sp-branding-speichern>Branding speichern</button>
-                                <div class="text-xs text-gray-400">Logo
-                                    @if($brandingBilder['logo'])<img src="{{ $brandingBilder['logo'] }}" class="inline-block h-6 align-middle ml-1 rounded bg-white/10"> <button type="button" wire:click="brandingLogoEntfernen" class="text-rose-300 text-[11px]">entfernen</button>@endif
-                                    <input type="file" wire:model="logoUpload" accept="image/*" class="block text-[11px] mt-1">
-                                </div>
-                                <div class="text-xs text-gray-400">Coverbild
-                                    @if($brandingBilder['cover'])<img src="{{ $brandingBilder['cover'] }}" class="inline-block h-6 align-middle ml-1 rounded bg-white/10"> <button type="button" wire:click="brandingCoverEntfernen" class="text-rose-300 text-[11px]">entfernen</button>@endif
-                                    <input type="file" wire:model="coverUpload" accept="image/*" class="block text-[11px] mt-1">
-                                </div>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <x-fa::field label="Logo">
+                                    <div class="flex items-center gap-3">
+                                        @if($brandingBilder['logo'])
+                                            <img src="{{ $brandingBilder['logo'] }}" alt="Logo" class="h-9 rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] bg-[var(--fa-ground)]">
+                                            <x-fa::button variant="ghost" size="sm" wire:click="brandingLogoEntfernen">Logo entfernen</x-fa::button>
+                                        @endif
+                                        <input type="file" wire:model="logoUpload" accept="image/*" aria-label="Logo hochladen" class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]">
+                                    </div>
+                                </x-fa::field>
+                                <x-fa::field label="Titelbild">
+                                    <div class="flex items-center gap-3">
+                                        @if($brandingBilder['cover'])
+                                            <img src="{{ $brandingBilder['cover'] }}" alt="Titelbild" class="h-9 rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] bg-[var(--fa-ground)]">
+                                            <x-fa::button variant="ghost" size="sm" wire:click="brandingCoverEntfernen">Titelbild entfernen</x-fa::button>
+                                        @endif
+                                        <input type="file" wire:model="coverUpload" accept="image/*" aria-label="Titelbild hochladen" class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]">
+                                    </div>
+                                </x-fa::field>
                             </div>
-                        </x-foodalchemist::modal-section>
+                            <div>
+                                <x-fa::button icon="heroicon-m-check" wire:click="brandingSpeichern" data-sp-branding-speichern>Erscheinungsbild speichern</x-fa::button>
+                            </div>
+                        </x-fa::section>
 
-                        <x-foodalchemist::modal-section title="Präsentation · digitaler Aushang">
-                            @if($presentationHinweis)<div class="rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-200 text-xs px-3 py-2 mb-2" data-sp-praes-hinweis>{{ $presentationHinweis }}</div>@endif
-                            @if($presentationFehler)<div class="rounded-lg bg-rose-500/15 border border-rose-500/30 text-rose-200 text-xs px-3 py-2 mb-2" data-sp-praes-fehler>{{ $presentationFehler }}</div>@endif
+                        <x-fa::section title="Digitaler Aushang" icon="heroicon-o-tv">
+                            @if($presentationHinweis)<x-fa::notice tone="ok" data-sp-praes-hinweis>{{ $presentationHinweis }}</x-fa::notice>@endif
+                            @if($presentationFehler)<x-fa::notice tone="crit" data-sp-praes-fehler>{{ $presentationFehler }}</x-fa::notice>@endif
 
                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <label class="text-xs text-gray-300">Design
-                                    <select wire:model="presentationDesign" class="{{ $input }} w-full" data-sp-praes-design>
+                                <x-fa::field label="Design" for="sp-praes-design">
+                                    <x-fa::select id="sp-praes-design" wire:model="presentationDesign" data-sp-praes-design>
                                         @foreach($presentationDesignOptionen as $opt)
                                             <option value="{{ $opt['value'] }}">{{ $opt['label'] }}</option>
                                         @endforeach
-                                    </select>
-                                </label>
-                                <label class="text-xs text-gray-300">Gültig bis <span class="text-rose-400">*</span>
-                                    <input type="date" wire:model="presentationGueltigBis" class="{{ $input }} w-full" data-sp-praes-gueltig>
-                                </label>
+                                    </x-fa::select>
+                                </x-fa::field>
+                                <x-fa::field label="Gültig bis" for="sp-praes-gueltig" required>
+                                    <x-fa::input id="sp-praes-gueltig" type="date" wire:model="presentationGueltigBis" data-sp-praes-gueltig />
+                                </x-fa::field>
                             </div>
-                            <label class="flex items-center gap-2 text-xs text-gray-300 mt-2" data-sp-praes-laufend>
-                                <input type="checkbox" wire:model="presentationLaufendeWoche">
-                                Immer die laufende Woche zeigen (jeden Montag neu eingefroren) — sonst KW {{ (int) $montagDt->format('W') }}, {{ $mahlzeiten[$mahlzeit] ?? '' }}
-                            </label>
-                            <label class="flex items-center gap-2 text-xs text-gray-300 mt-2"><input type="checkbox" wire:model="presentationPreisAnzeige" data-sp-praes-preis> Preise anzeigen (optional — Default aus)</label>
-                            {{-- Ebene 2 · Republish-Preis-Schutz (nur relevant mit Preisen) --}}
-                            <label class="flex items-center gap-2 text-xs text-gray-300" title="Aus: beim erneuten Veröffentlichen bleiben die eingefrorenen Preise stehen. An: aktuelle VK ziehen. Nur mit Preisen relevant; Erstveröffentlichung immer aktuell."><input type="checkbox" wire:model="presentationPreiseAktualisieren"> Preise aktualisieren</label>
-                            <p class="text-[11px] text-gray-400 mt-1">GV-Aushang ist per Default preislos; die LMIV-Kennzeichnung ist immer Pflicht und sichtbar. Preise z.B. für Café-/Bistro-Pläne — folgen dem aktiven Betrieb.</p>
+                            <div class="flex flex-col gap-2">
+                                <label class="flex items-start gap-2 text-[length:var(--fa-text-md)] text-[var(--fa-ink)]" data-sp-praes-laufend>
+                                    <input type="checkbox" wire:model="presentationLaufendeWoche" class="{{ $haken }} mt-0.5">
+                                    <span>Immer die laufende Woche zeigen (jeden Montag neu eingefroren). Sonst {{ $kwText }}.</span>
+                                </label>
+                                <label class="flex items-center gap-2 text-[length:var(--fa-text-md)] text-[var(--fa-ink)]"><input type="checkbox" wire:model="presentationPreisAnzeige" class="{{ $haken }}" data-sp-praes-preis> Preise anzeigen</label>
+                                {{-- Ebene 2 · Republish-Preis-Schutz (nur relevant mit Preisen) --}}
+                                <label class="flex items-center gap-2 text-[length:var(--fa-text-md)] text-[var(--fa-ink)]" title="Aus: beim erneuten Veröffentlichen bleiben die eingefrorenen Preise stehen. An: aktuelle Verkaufspreise übernehmen. Nur mit Preisen relevant; die erste Veröffentlichung ist immer aktuell."><input type="checkbox" wire:model="presentationPreiseAktualisieren" class="{{ $haken }}"> Preise beim erneuten Veröffentlichen aktualisieren</label>
+                                <p class="{{ $leise }}">Der Aushang in der Gemeinschaftsverpflegung ist ohne Preise üblich; die Kennzeichnung der Allergene und Zusatzstoffe ist immer sichtbar. Preise z. B. für Café- oder Bistro-Pläne, sie folgen dem aktiven Betrieb.</p>
+                            </div>
 
-                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
-                                <label class="text-xs text-gray-300">CTA-Text (optional)
-                                    <input type="text" wire:model="presentationCtaText" class="{{ $input }} w-full" placeholder="z.B. Mehr Infos">
-                                </label>
-                                <label class="text-xs text-gray-300">CTA-Link (optional)
-                                    <input type="url" wire:model="presentationCtaLink" class="{{ $input }} w-full" placeholder="https://…">
-                                </label>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <x-fa::field label="Text auf dem Knopf" for="sp-praes-cta" optional><x-fa::input id="sp-praes-cta" wire:model="presentationCtaText" placeholder="z. B. Mehr Infos" /></x-fa::field>
+                                <x-fa::field label="Ziel des Knopfs (Link)" for="sp-praes-ctalink" optional><x-fa::input id="sp-praes-ctalink" type="url" wire:model="presentationCtaLink" placeholder="https://…" /></x-fa::field>
                             </div>
 
                             @if($presentationInfo['design_veraltet'] ?? false)
-                                {{-- Bug-Runde 2026-09-17 #2: Aushang rendert nur den eingefrorenen Snapshot
-                                     (Editor ist dunkel gescopet — eigene Tonwerte statt der hellen Variante). --}}
-                                <div class="rounded-lg border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-[12px] text-amber-200 mt-3" data-fa-design-veraltet>
-                                    <strong>Design wurde nach der Veröffentlichung geändert.</strong>
-                                    Der Aushang zeigt weiter den Stand von {{ $presentationInfo['published_at'] ?? '—' }}.
-                                    Zum Übernehmen unten <em>Neu veröffentlichen</em>.
-                                </div>
+                                {{-- Bug-Runde 2026-09-17 #2: Aushang rendert nur den eingefrorenen Stand. --}}
+                                <x-fa::notice tone="warn" title="Design wurde nach der Veröffentlichung geändert" data-fa-design-veraltet>
+                                    Der Aushang zeigt weiter den Stand von {{ $presentationInfo['published_at'] ?? 'unbekannt' }}. Zum Übernehmen unten „Neu veröffentlichen".
+                                </x-fa::notice>
                             @endif
 
-                            <div class="flex flex-wrap items-center gap-2 mt-3">
-                                <a href="{{ route('foodalchemist.speiseplan.praesentation', ['id' => $sp->id, 'design' => $presentationDesign]) }}" target="_blank" class="{{ $btnGhost }}">Vorschau öffnen</a>
-                                <button type="button" wire:click="veroeffentlichen" wire:confirm="Diesen Aushang veröffentlichen? Der Snapshot wird eingefroren." class="{{ $btnPrimary }}" data-sp-praes-publish @disabled(! $presentationGueltigBis)>
-                                    {{ ($presentationInfo['enabled'] ?? false) ? 'Neu veröffentlichen' : 'Veröffentlichen' }}
-                                </button>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <x-fa::button variant="ghost" icon="heroicon-m-eye" :href="route('foodalchemist.speiseplan.praesentation', ['id' => $sp->id, 'design' => $presentationDesign])" target="_blank">Vorschau öffnen</x-fa::button>
+                                <x-fa::button icon="heroicon-m-signal" wire:click="veroeffentlichen" wire:confirm="Diesen Aushang veröffentlichen? Der aktuelle Stand wird eingefroren." data-sp-praes-publish :disabled="! $presentationGueltigBis">
+                                    {{ ($presentationInfo['enabled'] ?? false) ? 'Neu veröffentlichen' : 'Aushang veröffentlichen' }}
+                                </x-fa::button>
                                 @if($presentationInfo['enabled'] ?? false)
-                                    <button type="button" wire:click="zuruckziehen" wire:confirm="Veröffentlichung zurückziehen? Der Link liefert dann 404." class="{{ $btnGhost }}" data-sp-praes-withdraw>Zurückziehen</button>
+                                    <x-fa::button variant="danger" wire:click="zuruckziehen" wire:confirm="Veröffentlichung zurückziehen? Der Link funktioniert dann nicht mehr." data-sp-praes-withdraw>Veröffentlichung zurückziehen</x-fa::button>
                                 @endif
                             </div>
                             @unless($presentationGueltigBis)
-                                <p class="text-[11px] text-amber-300 mt-1">Zum Veröffentlichen ein „gültig bis"-Datum setzen (Pflicht).</p>
+                                <x-fa::signal tone="warn">Zum Veröffentlichen ein Datum bei „Gültig bis" setzen.</x-fa::signal>
                             @endunless
 
                             @if($presentationLink)
-                                <div class="rounded-lg bg-white/5 border border-white/10 p-3 text-xs mt-3" x-data>
+                                <div class="flex flex-col gap-1.5 rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] bg-[var(--fa-ground)] p-3" x-data>
                                     <div class="flex items-center gap-2">
-                                        <div class="flex-1 rounded px-2 py-1 font-mono text-[11px] break-all select-all bg-black/30 border border-white/10 text-gray-200" data-sp-praes-link>{{ $presentationLink }}</div>
-                                        <button type="button" class="{{ $btnGhost }}" x-on:click="navigator.clipboard.writeText('{{ $presentationLink }}'); $el.textContent='Kopiert ✓'">Link kopieren</button>
+                                        <div class="flex-1 min-w-0 rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] bg-[var(--fa-surface)] px-2 py-1.5 font-mono text-[length:var(--fa-text-sm)] break-all select-all text-[var(--fa-ink)]" data-sp-praes-link>{{ $presentationLink }}</div>
+                                        <x-fa::button size="sm" icon="heroicon-m-clipboard-document" x-on:click="navigator.clipboard.writeText('{{ $presentationLink }}'); $el.lastChild.textContent = ' Kopiert'">Link kopieren</x-fa::button>
                                     </div>
-                                    <p class="text-[11px] text-gray-400 mt-1">Freigegeben am {{ $presentationInfo['published_at'] ?? '—' }} · gültig bis {{ $presentationInfo['expires_at'] ?? '—' }} · {{ ($presentationInfo['live'] ?? false) ? 'aktiv' : 'inaktiv/abgelaufen' }}</p>
+                                    <p class="{{ $leise }}">Freigegeben am {{ $presentationInfo['published_at'] ?? 'unbekannt' }} · gültig bis {{ $presentationInfo['expires_at'] ?? 'offen' }} · {{ ($presentationInfo['live'] ?? false) ? 'aktiv' : 'inaktiv oder abgelaufen' }}</p>
                                 </div>
                             @endif
+                        </x-fa::section>
 
-                            {{-- ── Slice F: Betriebs-Links — pro Betrieb ein eigener Aushang-Link (eigene Vorlage + Name) ── --}}
-                            <div class="rounded-lg border border-violet-400/25 bg-violet-500/[0.06] p-3 space-y-3 mt-3">
-                                <div class="flex items-center gap-2">
-                                    <span class="inline-block w-2 h-2 rounded-full bg-violet-400"></span>
-                                    <h4 class="text-xs font-semibold text-violet-200">Betriebs-Links · eigener Aushang je Betrieb</h4>
+                        {{-- Slice F: Betriebs-Links — pro Betrieb ein eigener Aushang-Link (eigene Vorlage + Name) --}}
+                        <x-fa::section title="Aushang je Betrieb" icon="heroicon-o-building-storefront" :meta="$mehrzahl(count($betriebsLinks), 'Link', 'Links')" description="Ein zusätzlicher Aushang-Link pro Betrieb, mit der Vorlage und dem Namen dieses Betriebs und eigener Freigabe. Der Standard-Link oben bleibt bestehen.">
+                            @forelse($betriebsLinks as $bl)
+                                <div class="flex flex-col gap-1.5 rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] p-3" x-data>
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <span class="text-[length:var(--fa-text-md)] font-medium text-[var(--fa-ink)]">{{ $bl['outlet_name'] }}</span>
+                                        <x-fa::badge :tone="$bl['enabled'] ? 'ok' : 'neutral'">{{ $bl['enabled'] ? 'Aktiv' : 'Inaktiv' }}</x-fa::badge>
+                                        <span class="ml-auto {{ $leise }}">Vorlage: {{ $bl['design'] }}</span>
+                                    </div>
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <div class="flex-1 min-w-0 rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] bg-[var(--fa-ground)] px-2 py-1.5 font-mono text-[length:var(--fa-text-sm)] break-all select-all text-[var(--fa-ink)]">{{ $bl['url'] }}</div>
+                                        <x-fa::button size="sm" icon="heroicon-m-clipboard-document" x-on:click="navigator.clipboard.writeText('{{ $bl['url'] }}'); $el.lastChild.textContent = ' Kopiert'">Link kopieren</x-fa::button>
+                                        @if($bl['enabled'])
+                                            <x-fa::button variant="danger" size="sm" wire:click="betriebZuruckziehen({{ $bl['outlet_id'] }})" wire:confirm="Diesen Betriebs-Link zurückziehen? Er funktioniert dann nicht mehr.">Link zurückziehen</x-fa::button>
+                                        @else
+                                            <x-fa::button size="sm" wire:click="betriebWiederFreigeben({{ $bl['outlet_id'] }})">Link wieder freigeben</x-fa::button>
+                                        @endif
+                                    </div>
                                 </div>
-                                <p class="text-[11px] text-gray-400">Ein zusätzlicher Aushang-Link pro Betrieb — mit der <strong class="text-gray-200">Vorlage</strong> und dem <strong class="text-gray-200">Namen</strong> dieses Betriebs, eigene Freigabe. Der Standard-Link oben bleibt bestehen.</p>
+                            @empty
+                                <p class="{{ $leise }}">Noch kein Betriebs-Link angelegt.</p>
+                            @endforelse
 
-                                @forelse($betriebsLinks as $bl)
-                                    <div class="rounded-lg bg-white/[0.04] border border-white/10 p-2 text-xs" x-data>
-                                        <div class="flex items-center gap-2">
-                                            <span class="font-medium text-gray-100">{{ $bl['outlet_name'] }}</span>
-                                            <span class="text-[10px] px-1.5 py-0.5 rounded {{ $bl['enabled'] ? 'bg-emerald-500/15 text-emerald-300' : 'bg-white/10 text-gray-400' }}">{{ $bl['enabled'] ? 'aktiv' : 'inaktiv' }}</span>
-                                            <span class="ml-auto text-[10px] text-gray-500">Vorlage: {{ $bl['design'] }}</span>
-                                        </div>
-                                        <div class="flex items-center gap-2 mt-1">
-                                            <div class="flex-1 rounded px-2 py-1 font-mono text-[11px] break-all select-all bg-black/30 border border-white/10 text-gray-200">{{ $bl['url'] }}</div>
-                                            <button type="button" class="{{ $btnGhost }}" x-on:click="navigator.clipboard.writeText('{{ $bl['url'] }}'); $el.textContent='Kopiert ✓'">Kopieren</button>
-                                            @if($bl['enabled'])
-                                                <button type="button" wire:click="betriebZuruckziehen({{ $bl['outlet_id'] }})" wire:confirm="Diesen Betriebs-Link zurückziehen? Er liefert dann 404." class="{{ $btnGhost }}">Zurückziehen</button>
-                                            @else
-                                                <button type="button" wire:click="betriebWiederFreigeben({{ $bl['outlet_id'] }})" class="{{ $btnPrimary }}">Wieder freigeben</button>
-                                            @endif
-                                        </div>
+                            @if(count($betriebsOptionen) > 0)
+                                <div class="flex flex-col gap-3 rounded-[var(--fa-radius-control)] border border-dashed border-[var(--fa-line-strong)] p-3">
+                                    <span class="{{ $etikett }}">Weiteren Betrieb hinzufügen</span>
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 items-end">
+                                        <x-fa::field label="Betrieb" for="sp-outlet-publish">
+                                            <x-fa::select id="sp-outlet-publish" wire:model="outletPublishId" placeholder="Betrieb wählen" :options="collect($betriebsOptionen)->pluck('name', 'id')" />
+                                        </x-fa::field>
+                                        <x-fa::field label="Gültig bis" for="sp-outlet-gueltig" optional><x-fa::input id="sp-outlet-gueltig" type="date" wire:model="outletPublishGueltigBis" /></x-fa::field>
+                                        <x-fa::field label="Vorlage" for="sp-outlet-design" optional>
+                                            <x-fa::select id="sp-outlet-design" wire:model="outletPublishDesign" placeholder="Wie Betrieb oder Dokument">
+                                                @foreach($presentationDesignOptionen as $opt)
+                                                    <option value="{{ $opt['value'] }}">{{ $opt['label'] }}</option>
+                                                @endforeach
+                                            </x-fa::select>
+                                        </x-fa::field>
+                                        <x-fa::field label="Name im Link" for="sp-outlet-slug" optional><x-fa::input id="sp-outlet-slug" wire:model="outletPublishSlug" placeholder="z. B. broich-nord-2027" /></x-fa::field>
                                     </div>
-                                @empty
-                                    <p class="text-[11px] text-gray-500">Noch kein Betriebs-Link angelegt.</p>
-                                @endforelse
-
-                                @if(count($betriebsOptionen) > 0)
-                                    <div class="rounded-lg border border-dashed border-violet-400/30 bg-white/[0.02] p-2.5 space-y-2">
-                                        <p class="text-[11px] font-medium text-violet-200">Weiteren Betrieb hinzufügen</p>
-                                        <div class="flex flex-wrap items-end gap-2">
-                                            <div>
-                                                <label class="block text-[10px] text-gray-400">Betrieb</label>
-                                                <select wire:model="outletPublishId" class="mt-1 block text-sm rounded px-2 py-1">
-                                                    <option value="">— wählen —</option>
-                                                    @foreach($betriebsOptionen as $o)
-                                                        <option value="{{ $o['id'] }}">{{ $o['name'] }}</option>
-                                                    @endforeach
-                                                </select>
-                                            </div>
-                                            <div>
-                                                <label class="block text-[10px] text-gray-400">gültig bis (optional)</label>
-                                                <input type="date" wire:model="outletPublishGueltigBis" class="mt-1 block text-sm rounded px-2 py-1">
-                                            </div>
-                                            <div>
-                                                <label class="block text-[10px] text-gray-400">Vorlage (optional)</label>
-                                                <select wire:model="outletPublishDesign" class="mt-1 block text-sm rounded px-2 py-1">
-                                                    <option value="">— Betriebs-Vorlage / wie Dokument —</option>
-                                                    @foreach($presentationDesignOptionen as $opt)
-                                                        <option value="{{ $opt['value'] }}">{{ $opt['label'] }}</option>
-                                                    @endforeach
-                                                </select>
-                                            </div>
-                                            <div>
-                                                <label class="block text-[10px] text-gray-400">Link-Name (optional)</label>
-                                                <input type="text" wire:model="outletPublishSlug" placeholder="z.B. broich-nord-2027" class="mt-1 block text-sm rounded px-2 py-1">
-                                            </div>
-                                            <button type="button" wire:click="betriebVeroeffentlichen" class="{{ $btnPrimary }}">＋ Betrieb hinzufügen</button>
-                                        </div>
-                                        <p class="text-[10px] text-gray-500">Beliebig viele Betriebe möglich — je Betrieb ein eigener Link. Ohne eigenes Datum gilt das „gültig bis" des Standard-Links.</p>
+                                    <div class="flex flex-wrap items-center justify-between gap-2">
+                                        <p class="{{ $leise }}">Beliebig viele Betriebe möglich, je Betrieb ein eigener Link. Ohne eigenes Datum gilt „Gültig bis" des Standard-Links.</p>
+                                        <x-fa::button icon="heroicon-m-plus" wire:click="betriebVeroeffentlichen">Betrieb hinzufügen</x-fa::button>
                                     </div>
-                                @else
-                                    <p class="text-[11px] text-amber-300">Noch keine Betriebe angelegt — lege sie unter <em>Einstellungen › Betriebe</em> an.</p>
-                                @endif
-                            </div>
-                        </x-foodalchemist::modal-section>
+                                </div>
+                            @else
+                                <x-fa::signal tone="warn">Noch keine Betriebe angelegt. Das geht unter Einstellungen › Betriebe.</x-fa::signal>
+                            @endif
+                        </x-fa::section>
                     </div>
                 </x-foodalchemist::editor-tabs>
             </div>
 
-            {{-- ═══ Live-Kennzahlen-Rail (Cockpit) ═══
-                 Rechnet bei jeder Zellen-/Linien-Änderung mit — VK/EK je Person, Veggie-Tagescheck,
-                 Wiederholungs-Konflikte. Bewusst auf Tab-Ebene: aus jedem Tab sichtbar. --}}
-            <aside class="w-72 shrink-0 pr-6 sticky top-0 self-start max-h-[85vh] overflow-y-auto space-y-3 pt-4" data-sp-kennzahlen>
-                <h3 class="{{ $label }} px-1">Kennzahlen · Woche</h3>
+            {{-- ═══ Kontext-Spalte rechts ═══
+                 Oben das Eintrag-Detail (der Einfüge-Bereich steht unter der Matrix). Darunter die Live-Kennzahlen, die bei jeder Änderung
+                 mitrechnen (aus jedem Reiter sichtbar, einklappbar). --}}
+            <aside class="shrink-0 pr-6 pt-4 sticky top-0 self-start max-h-[85vh] overflow-y-auto flex flex-col gap-3" x-bind:class="rail ? 'w-80' : ''">
 
-                @if($kosten)
-                    <div class="rounded-xl border border-white/10 bg-white/[0.04] p-4 text-center">
-                        <div class="text-2xl font-semibold text-gray-100 tabular-nums">{{ number_format($kosten['woche']['vk'], 2, ',', '.') }} €</div>
-                        <div class="{{ $label }}">VK/Person · {{ $mahlzeiten[$mahlzeit] ?? '' }} · EK {{ number_format($kosten['woche']['ek'], 2, ',', '.') }} €</div>
-                        <div class="text-[10px] text-gray-500 mt-1">Default {{ $sp->default_pax }} Teilnehmer</div>
-                    </div>
-                @endif
-
-                {{-- Wareneinsatz-Budget-Ampel (GV) · Spec 57 · E2: Ø EK je GAST und Tag (Hauptgang-Linien) vs. Budget —
-                     gerechnet im Service (budgetAmpel), nicht hier. --}}
-                @if($budget)
-                    <div class="rounded-xl border border-white/10 bg-white/[0.04] p-3 space-y-1" data-sp-budget>
-                        <div class="flex items-center justify-between text-[11px]">
-                            <span class="{{ $label }}">Wareneinsatz-Budget</span>
-                            <span class="{{ $pill }} {{ $variantPill[$budget['ampel']] }}">{{ $budget['ampel'] === 'success' ? 'im Ziel' : ($budget['ampel'] === 'warning' ? $budget['ueber_tage'] . ' Tag(e) drüber' : 'über Ziel') }}</span>
-                        </div>
-                        <div class="text-[11px] text-gray-400">Ø EK {{ number_format($budget['avg'], 2, ',', '.') }} € / Budget {{ number_format($budget['budget'], 2, ',', '.') }} € {{ $budget['basis'] === 'je_gast' ? 'je Gast und Tag' : 'p. P./Tag (Summe aller Linien)' }}</div>
-                        @if($budget['basis'] !== 'je_gast')
-                            <p class="text-[10px] text-amber-300/80">Für „je Gast“ im Tab „Menü-Linien“ die Hauptgang-Linien als Rolle „Hauptgang“ markieren.</p>
-                        @endif
-                    </div>
-                @endif
-
-                {{-- Spec 57 · Paket 2: Wareneinsatz je Linie gegen ihr Zielband (Woche). --}}
-                @if(! empty($zk['linien']))
-                    @php($ampelBalken = ['ok' => 'bg-emerald-400', 'unter' => 'bg-sky-400', 'ueber' => 'bg-amber-400', 'weit_ueber' => 'bg-rose-400', 'unbekannt' => 'bg-gray-500'])
-                    @php($ampelText = ['ok' => 'text-emerald-300', 'unter' => 'text-sky-300', 'ueber' => 'text-amber-300', 'weit_ueber' => 'text-rose-300', 'unbekannt' => 'text-gray-400'])
-                    <div class="rounded-xl border border-white/10 bg-white/[0.04] p-3 space-y-2" data-sp-linien-ampel>
-                        <div class="{{ $label }}">Wareneinsatz je Linie</div>
-                        @foreach($zk['linien'] as $lid => $la)
-                            <div class="text-[11px]" wire:key="la-{{ $lid }}">
-                                <div class="flex justify-between gap-2"><span class="text-gray-300 truncate">{{ $la['name'] }}</span><span class="tabular-nums {{ $ampelText[$la['status']] ?? 'text-gray-400' }}">{{ $la['wes'] !== null ? number_format($la['wes'], 0, ',', '.') . ' %' : '—' }}</span></div>
-                                <div class="relative h-1.5 rounded-full bg-white/10 mt-0.5" aria-hidden="true">
-                                    <div class="absolute h-full rounded-full bg-emerald-400/25" style="left: {{ min(100, (float) ($la['band']['min'] ?? 0)) }}%; width: {{ max(0, min(100, (float) $la['band']['max']) - min(100, (float) ($la['band']['min'] ?? 0))) }}%"></div>
-                                    @if($la['wes'] !== null)
-                                        <div class="absolute -top-0.5 w-1 h-2.5 rounded {{ $ampelBalken[$la['status']] ?? 'bg-gray-500' }}" style="left: calc({{ min(98, max(0, (float) $la['wes'])) }}% - 2px)"></div>
-                                    @endif
-                                </div>
+                {{-- Spec 57 · Paket 5: Eintrag-Detail — Tastatur-Weg zu Ersetzen, Verschieben, Kopieren (MVP-032) --}}
+                @if($detailEintrag)
+                    @php $dk = $detailKennzahlen ?? []; @endphp
+                    <section class="fa-surface w-80 max-w-full p-3 flex flex-col gap-3 border-[var(--fa-accent-line)]" data-sp-eintrag-detail="{{ $detailEintrag->id }}">
+                        <header class="flex items-start justify-between gap-2">
+                            <div class="min-w-0">
+                                <p class="{{ $etikett }}">{{ $linien->firstWhere('id', $detailEintrag->line_id)?->name ?? 'Ohne Linie' }} · {{ $tagKurz[$detailEintrag->entry_date->isoWeekday()] ?? '' }} {{ $detailEintrag->entry_date->format('d.m.') }} · {{ $mahlzeiten[$detailEintrag->meal] ?? $detailEintrag->meal }}</p>
+                                <p class="text-[length:var(--fa-text-base)] font-semibold text-[var(--fa-ink)] break-words">{{ $dk['titel'] ?? $detailEintrag->inhaltName() }}</p>
+                                @if(! empty($dk['untertitel']))<p class="{{ $leise }}">{{ $dk['untertitel'] }}</p>@endif
+                                @php
+                                    $inhaltLink = $detailEintrag->sales_recipe_id !== null
+                                        ? ['Gericht öffnen', route('foodalchemist.verkauf.index', ['rezept' => $detailEintrag->sales_recipe_id])]
+                                        : ($detailEintrag->concept_id !== null
+                                            ? ['Konzept öffnen', route('foodalchemist.concepter.index', ['tab' => 'concepts', 'sel' => $detailEintrag->concept_id])]
+                                            : null);
+                                @endphp
+                                @if($inhaltLink)
+                                    <a href="{{ $inhaltLink[1] }}" target="_blank" class="mt-1 inline-flex items-center gap-1 text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-accent)] hover:underline" data-sp-inhalt-link>
+                                        {{ $inhaltLink[0] }} @svg('heroicon-m-arrow-top-right-on-square', 'w-3.5 h-3.5')
+                                    </a>
+                                @endif
                             </div>
-                        @endforeach
-                        <p class="text-[10px] text-gray-500">Grün hinterlegt: Zielband (Skala 0–100 %). Ohne eigenes Band gilt das Team-Ziel {{ number_format($zk['team_ziel'] ?? 0, 0) }} %.</p>
-                    </div>
+                            <x-fa::icon-button icon="heroicon-m-x-mark" size="sm" label="Detail schließen" wire:click="eintragSchliessen" />
+                        </header>
+                        @if($dk !== [])
+                            <dl class="grid grid-cols-3 rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] divide-x divide-[var(--fa-line)] text-center">
+                                <div class="px-2 py-1.5"><dt class="{{ $leise }}">Verkauf netto</dt><dd class="text-[length:var(--fa-text-md)] font-semibold"><x-fa::money :value="((float) ($dk['vk'] ?? 0)) > 0 ? $dk['vk'] : null" /></dd></div>
+                                <div class="px-2 py-1.5"><dt class="{{ $leise }}">EK</dt><dd class="text-[length:var(--fa-text-md)] font-semibold"><x-fa::money :value="$dk['ek'] ?? null" /></dd></div>
+                                <div class="px-2 py-1.5"><dt class="{{ $leise }}">Wareneinsatz</dt><dd class="text-[length:var(--fa-text-md)] font-semibold tabular-nums {{ $wesText[$dk['status'] ?? 'unbekannt'] ?? '' }}">{{ ($dk['wes'] ?? null) !== null ? $zahl($dk['wes'], 1) . ' %' : '–' }}</dd></div>
+                            </dl>
+                        @endif
+
+                        <x-fa::button icon="heroicon-m-arrows-right-left" class="w-full" wire:click="eintragErsetzenStarten({{ $detailEintrag->id }})">Eintrag ersetzen</x-fa::button>
+
+                        <div class="flex flex-col gap-2 pt-3 border-t border-[var(--fa-line)]" data-sp-verschieben>
+                            <span class="{{ $etikett }}">Verschieben</span>
+                            <div class="grid grid-cols-2 gap-2">
+                                <x-fa::select wire:model="verschiebeDatum" size="sm" aria-label="Verschieben auf Tag">
+                                    @foreach($wochenTage as $wt)
+                                        <option value="{{ $wt->format('Y-m-d') }}">{{ $tagKurz[$wt->isoWeekday()] }} {{ $wt->format('d.m.') }}</option>
+                                    @endforeach
+                                </x-fa::select>
+                                <x-fa::select wire:model="verschiebeLinie" size="sm" aria-label="Verschieben in Linie" placeholder="Ohne Linie" :options="$matrixLinien->pluck('name', 'id')" />
+                            </div>
+                            <x-fa::button size="sm" icon="heroicon-m-arrow-right" wire:click="eintragVerschiebenAusDetail">Eintrag verschieben</x-fa::button>
+                        </div>
+
+                        <div class="flex flex-col gap-2 pt-3 border-t border-[var(--fa-line)]" data-sp-kopieren>
+                            <fieldset class="flex flex-col gap-1.5">
+                                <legend class="{{ $etikett }} mb-1.5">Auf weitere Tage kopieren</legend>
+                                <span class="flex flex-wrap gap-1.5">
+                                    @foreach($wochenTage as $wt)
+                                        @php $wtYmd = $wt->format('Y-m-d'); @endphp
+                                        @php $gleicherTag = $wtYmd === $detailEintrag->entry_date->format('Y-m-d'); @endphp
+                                        <label class="fa-chip {{ $gleicherTag ? 'opacity-40 pointer-events-none' : '' }}">
+                                            <input type="checkbox" wire:model="kopierTage" value="{{ $wtYmd }}" class="sr-only peer" @disabled($gleicherTag) />
+                                            <span>{{ $tagKurz[$wt->isoWeekday()] }}</span>
+                                        </label>
+                                    @endforeach
+                                </span>
+                            </fieldset>
+                            <x-fa::button size="sm" icon="heroicon-m-document-duplicate" wire:click="eintragKopieren">Eintrag kopieren</x-fa::button>
+                        </div>
+
+                        <div class="pt-3 border-t border-[var(--fa-line)]">
+                            <x-fa::button variant="danger" size="sm" icon="heroicon-m-trash" class="w-full" wire:click="eintragRaus({{ $detailEintrag->id }})" wire:confirm="Eintrag entfernen?">Eintrag entfernen</x-fa::button>
+                        </div>
+                    </section>
                 @endif
 
-                {{-- Kostformen-Abdeckung (GV): ist jede Kostform an jedem Werktag vertreten? --}}
-                <div class="rounded-xl border border-white/10 bg-white/[0.04] p-3 space-y-1.5" data-sp-kostformen>
-                    <div class="{{ $label }}">Kostformen-Abdeckung</div>
-                    @foreach($kostformen as $kf)
-                        <div class="flex items-center justify-between gap-2 text-[11px]">
-                            <span class="text-gray-300 truncate">{{ $kf['label'] }}</span>
-                            @if($kf['erfuellt'])
-                                <span class="{{ $pill }} {{ $variantPill['success'] }} shrink-0" title="an jedem Werktag vertreten">✓ täglich</span>
-                            @elseif($kf['abgedeckt'] > 0)
-                                <span class="{{ $pill }} {{ $variantPill['warning'] }} shrink-0" title="fehlt: {{ implode(', ', array_map(fn($d) => \Illuminate\Support\Carbon::parse($d)->format('d.m.'), $kf['fehltage'])) }}">{{ $kf['abgedeckt'] }}/{{ $kf['tage'] }}</span>
-                            @else
-                                <span class="{{ $pill }} {{ $variantPill['secondary'] }} shrink-0">—</span>
-                            @endif
-                        </div>
-                    @endforeach
+                {{-- Kennzahlen-Kopf mit Ein-/Ausklappen --}}
+                <div class="flex items-center justify-between gap-2" x-show="rail" x-cloak>
+                    <h3 class="text-[length:var(--fa-text-md)] font-semibold text-[var(--fa-ink)]">Kennzahlen der Woche</h3>
+                    <x-fa::icon-button icon="heroicon-m-chevron-double-right" size="sm" label="Kennzahlen ausblenden" x-on:click="rail = false" />
+                </div>
+                <div x-show="! rail" x-cloak>
+                    <x-fa::icon-button icon="heroicon-o-chart-bar" label="Kennzahlen einblenden" x-on:click="rail = true" />
                 </div>
 
-                {{-- LMIV-Kennzeichnung der Woche (deklarationspflichtig, ALL-MAXIMAL über alle Gerichte) --}}
-                @if($kennzeichnung)
-                    @php($algEnth = collect($kennzeichnung['woche']['allergene'])->whereIn('status', ['enthalten', 'spuren']))
-                    @php($zusJa = collect($kennzeichnung['woche']['zusatzstoffe'])->where('status', 'ja'))
-                    <div class="rounded-xl border border-white/10 bg-white/[0.04] p-3 space-y-1.5" data-sp-kennzeichnung>
-                        <div class="{{ $label }}">Kennzeichnung · Woche</div>
-                        @if($algEnth->isEmpty())
-                            <p class="text-[11px] text-gray-400">Keine Allergene deklariert (oder unbekannt).</p>
-                        @else
-                            <div class="flex flex-wrap gap-1">
-                                @foreach($algEnth as $a)
-                                    <span class="{{ $pill }} {{ $a['status'] === 'enthalten' ? $variantPill['danger'] : $variantPill['warning'] }}" title="{{ $a['status'] === 'spuren' ? 'Spuren' : 'enthalten' }}">{{ $a['label'] }}{{ $a['status'] === 'spuren' ? ' (Sp.)' : '' }}</span>
-                                @endforeach
-                            </div>
-                        @endif
-                        @if($zusJa->isNotEmpty())
-                            <div class="flex flex-wrap gap-1 pt-1.5 border-t border-white/10">
-                                @foreach($zusJa as $z)
-                                    <span class="{{ $pill }} {{ $variantPill['secondary'] }}" title="Zusatzstoff (LMIV)">{{ $z['label'] }}</span>
-                                @endforeach
-                            </div>
-                        @endif
-                        <p class="text-[10px] text-gray-500">Vollständige Tages-Kennzeichnung im Aushang-Export.</p>
-                    </div>
-                @endif
-
-                {{-- DGE-Nährwert-Wochenbilanz (Ø je Person/Tag) --}}
-                @if($naehrwerte && $naehrwerte['tage_mit_daten'] > 0)
-                    @php($n = $naehrwerte['schnitt'])
-                    <div class="rounded-xl border border-white/10 bg-white/[0.04] p-3 space-y-1" data-sp-naehrwerte>
-                        <div class="{{ $label }}">Nährwerte · Ø/Person/Tag</div>
-                        <div class="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[11px] text-gray-300">
-                            <div class="flex justify-between"><span class="text-gray-500">kcal</span><span class="tabular-nums">{{ $n['kcal'] !== null ? number_format($n['kcal'], 0, ',', '.') : '—' }}</span></div>
-                            <div class="flex justify-between"><span class="text-gray-500">Eiweiß</span><span class="tabular-nums">{{ $n['protein_g'] !== null ? number_format($n['protein_g'], 1, ',', '.') . ' g' : '—' }}</span></div>
-                            <div class="flex justify-between"><span class="text-gray-500">Fett</span><span class="tabular-nums">{{ $n['fett_g'] !== null ? number_format($n['fett_g'], 1, ',', '.') . ' g' : '—' }}</span></div>
-                            <div class="flex justify-between"><span class="text-gray-500">ges. Fett</span><span class="tabular-nums">{{ $n['gesfett_g'] !== null ? number_format($n['gesfett_g'], 1, ',', '.') . ' g' : '—' }}</span></div>
-                            <div class="flex justify-between"><span class="text-gray-500">Salz</span><span class="tabular-nums">{{ $n['salz_g'] !== null ? number_format($n['salz_g'], 2, ',', '.') . ' g' : '—' }}</span></div>
-                            <div class="flex justify-between"><span class="text-gray-500">Zucker</span><span class="tabular-nums">{{ $n['zucker_g'] !== null ? number_format($n['zucker_g'], 1, ',', '.') . ' g' : '—' }}</span></div>
+                <div class="flex flex-col gap-3" x-show="rail" x-cloak data-sp-kennzahlen>
+                    @if($kosten)
+                        <div class="{{ $karte }} text-center">
+                            <p class="text-[length:var(--fa-text-2xl)] font-semibold tabular-nums text-[var(--fa-ink)] leading-tight">{{ $zahl($kosten['woche']['vk'], 2) }} €</p>
+                            <p class="{{ $etikett }}">Verkaufspreis je Person · {{ $mahlzeiten[$mahlzeit] ?? '' }}</p>
+                            <p class="{{ $leise }} tabular-nums">EK {{ $zahl($kosten['woche']['ek'], 2) }} € · Standard {{ $sp->default_pax }} Teilnehmer</p>
                         </div>
-                        @if($naehrwerte['confidence'] !== 'high')<p class="text-[10px] text-amber-300/80">Konfidenz {{ $naehrwerte['confidence'] }} — nicht alle Gerichte mit Nährwert/Portionsgramm.</p>@endif
-                    </div>
-                @endif
-
-                {{-- Abwechslung/Häufigkeit: Diät-Mix + Warengruppen der Woche --}}
-                @if($abwechslung)
-                    @php($dm = $abwechslung['diaet'])
-                    <div class="rounded-xl border border-white/10 bg-white/[0.04] p-3 space-y-1.5" data-sp-abwechslung>
-                        <div class="{{ $label }}">Abwechslung · Woche</div>
-                        <div class="flex flex-wrap gap-1 text-[11px]">
-                            <span class="{{ $pill }} {{ $variantPill['success'] }}">Vegan {{ $dm['vegan'] }}</span>
-                            <span class="{{ $pill }} {{ $variantPill['info'] }}">Vegetarisch {{ $dm['vegetarisch'] }}</span>
-                            <span class="{{ $pill }} {{ $variantPill['secondary'] }}">mit Fleisch/Fisch {{ $dm['omnivor'] }}</span>
-                        </div>
-                        @if(!empty($abwechslung['warengruppen']))
-                            <div class="flex flex-wrap gap-1 pt-1.5 border-t border-white/10">
-                                @foreach($abwechslung['warengruppen'] as $w)
-                                    <span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $w['name'] }} ×{{ $w['count'] }}</span>
-                                @endforeach
-                            </div>
-                        @endif
-                        @if($abwechslung['hinweis'])<p class="text-[10px] text-amber-300/80">{{ $abwechslung['hinweis'] }}</p>@endif
-                    </div>
-                @endif
-
-                <div class="rounded-xl border border-white/10 bg-white/[0.04] p-3 space-y-1">
-                    @if(!empty($wiederholungen))
-                        <div class="{{ $label }} text-amber-300">Wiederholungen ({{ count($wiederholungen) }})</div>
-                        @foreach($wiederholungen as $w)
-                            <p class="text-[11px] {{ $variantPill['warning'] }} {{ $pill }} w-full justify-between"><span class="truncate">{{ $w['name'] }}</span><span class="shrink-0 ml-2">{{ $w['vorkommen'] }}× · {{ $w['min_abstand'] }} T.</span></p>
-                        @endforeach
-                    @else
-                        <p class="text-[11px] text-gray-400 text-center">Keine Wiederholungs-Konflikte.</p>
                     @endif
+
+                    {{-- Wareneinsatz-Budget · Spec 57 · E2: Ø EK je GAST und Tag (Hauptgang-Linien) gegen Budget,
+                         gerechnet im Service (budgetAmpel), nicht hier. --}}
+                    @if($budget)
+                        <div class="{{ $karte }}" data-sp-budget>
+                            <div class="flex items-center justify-between gap-2">
+                                <span class="{{ $etikett }}">Wareneinsatz-Budget</span>
+                                <x-fa::badge :tone="$ampelTon[$budget['ampel']] ?? 'neutral'">{{ $budget['ampel'] === 'success' ? 'Im Ziel' : ($budget['ampel'] === 'warning' ? $mehrzahl((int) $budget['ueber_tage'], 'Tag darüber', 'Tage darüber') : 'Über dem Ziel') }}</x-fa::badge>
+                            </div>
+                            <p class="text-[length:var(--fa-text-sm)] tabular-nums text-[var(--fa-ink-2)]">Ø EK {{ $zahl($budget['avg'], 2) }} € bei Budget {{ $zahl($budget['budget'], 2) }} € {{ $budget['basis'] === 'je_gast' ? 'je Gast und Tag' : 'je Person und Tag (Summe aller Linien)' }}</p>
+                            @if($budget['basis'] !== 'je_gast')
+                                <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-warn)]">Für „je Gast" im Reiter „Menü-Linien" die Hauptgang-Linien mit der Rolle „Hauptgang" markieren.</p>
+                            @endif
+                        </div>
+                    @endif
+
+                    {{-- Spec 57 · Paket 2: Wareneinsatz je Linie gegen ihr Zielband (Woche). --}}
+                    @if(! empty($zk['linien']))
+                        <div class="{{ $karte }}" data-sp-linien-ampel>
+                            <span class="{{ $etikett }}">Wareneinsatz je Linie</span>
+                            @foreach($zk['linien'] as $lid => $la)
+                                <div class="flex flex-col gap-1" wire:key="la-{{ $lid }}">
+                                    <div class="flex justify-between gap-2 text-[length:var(--fa-text-sm)]"><span class="truncate text-[var(--fa-ink)]">{{ $la['name'] }}</span><span class="tabular-nums font-medium {{ $wesText[$la['status']] ?? 'text-[var(--fa-ink-3)]' }}">{{ $la['wes'] !== null ? $zahl($la['wes']) . ' %' : 'ohne Preis' }}</span></div>
+                                    <div class="relative h-1.5 rounded-full bg-[var(--fa-neutral-soft)]" aria-hidden="true">
+                                        <div class="absolute h-full rounded-full bg-[var(--fa-ok-soft)]" style="left: {{ min(100, (float) ($la['band']['min'] ?? 0)) }}%; width: {{ max(0, min(100, (float) $la['band']['max']) - min(100, (float) ($la['band']['min'] ?? 0))) }}%"></div>
+                                        @if($la['wes'] !== null)
+                                            <div class="absolute -top-0.5 w-1 h-2.5 rounded {{ $wesPunkt[$la['status']] ?? 'bg-[var(--fa-ink-3)]' }}" style="left: calc({{ min(98, max(0, (float) $la['wes'])) }}% - 2px)"></div>
+                                        @endif
+                                    </div>
+                                </div>
+                            @endforeach
+                            <p class="{{ $leise }}">Hell hinterlegt: Zielband (Skala 0 bis 100 %). Ohne eigenes Band gilt das Ziel des Betriebs von {{ number_format($zk['team_ziel'] ?? 0, 0) }} %.</p>
+                        </div>
+                    @endif
+
+                    {{-- Kostformen-Abdeckung: ist jede Kostform an jedem Werktag vertreten? --}}
+                    <div class="{{ $karte }}" data-sp-kostformen>
+                        <span class="{{ $etikett }}">Kostformen</span>
+                        @forelse($kostformen as $kf)
+                            <div class="flex items-center justify-between gap-2 text-[length:var(--fa-text-sm)]">
+                                <span class="truncate text-[var(--fa-ink)]">{{ $kf['label'] }}</span>
+                                @if($kf['erfuellt'])
+                                    <x-fa::badge tone="ok" icon="heroicon-m-check" title="An jedem Werktag vertreten">Täglich</x-fa::badge>
+                                @elseif($kf['abgedeckt'] > 0)
+                                    <x-fa::badge tone="warn" title="Fehlt am {{ implode(', ', array_map(fn ($d) => \Illuminate\Support\Carbon::parse($d)->format('d.m.'), $kf['fehltage'])) }}">{{ $kf['abgedeckt'] }} von {{ $kf['tage'] }} Tagen</x-fa::badge>
+                                @else
+                                    <x-fa::badge>Fehlt</x-fa::badge>
+                                @endif
+                            </div>
+                        @empty
+                            <p class="{{ $leise }}">Keine Kostformen hinterlegt.</p>
+                        @endforelse
+                    </div>
+
+                    {{-- Kennzeichnung der Woche (deklarationspflichtig, Vorsorgeprinzip über alle Gerichte) --}}
+                    @if($kennzeichnung)
+                        @php
+                            $algEnth = collect($kennzeichnung['woche']['allergene'])->whereIn('status', ['enthalten', 'spuren']);
+                            $zusJa = collect($kennzeichnung['woche']['zusatzstoffe'])->where('status', 'ja');
+                        @endphp
+                        <div class="{{ $karte }}" data-sp-kennzeichnung>
+                            <span class="{{ $etikett }}">Kennzeichnung der Woche</span>
+                            @if($algEnth->isEmpty())
+                                <p class="{{ $leise }}">Keine Allergene deklariert oder noch unbekannt.</p>
+                            @else
+                                <div class="flex flex-wrap gap-1">
+                                    @foreach($algEnth as $a)
+                                        <x-fa::badge :tone="$a['status'] === 'enthalten' ? 'crit' : 'warn'" title="{{ $a['status'] === 'spuren' ? 'Spuren' : 'Enthalten' }}">{{ $a['label'] }}{{ $a['status'] === 'spuren' ? ' (Spuren)' : '' }}</x-fa::badge>
+                                    @endforeach
+                                </div>
+                            @endif
+                            @if($zusJa->isNotEmpty())
+                                <div class="flex flex-wrap gap-1 pt-2 border-t border-[var(--fa-line)]">
+                                    @foreach($zusJa as $z)
+                                        <x-fa::badge title="Zusatzstoff">{{ $z['label'] }}</x-fa::badge>
+                                    @endforeach
+                                </div>
+                            @endif
+                            <p class="{{ $leise }}">Die vollständige Kennzeichnung je Tag steht im Aushang.</p>
+                        </div>
+                    @endif
+
+                    {{-- Nährwert-Wochenbilanz (Ø je Person und Tag) --}}
+                    @if($naehrwerte && $naehrwerte['tage_mit_daten'] > 0)
+                        @php $n = $naehrwerte['schnitt']; @endphp
+                        <div class="{{ $karte }}" data-sp-naehrwerte>
+                            <span class="{{ $etikett }}">Nährwerte · Ø je Person und Tag</span>
+                            <dl class="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[length:var(--fa-text-sm)]">
+                                @foreach([
+                                    ['kcal', 'kcal', 0, ''],
+                                    ['Eiweiß', 'protein_g', 1, ' g'],
+                                    ['Fett', 'fett_g', 1, ' g'],
+                                    ['davon gesättigt', 'gesfett_g', 1, ' g'],
+                                    ['Salz', 'salz_g', 2, ' g'],
+                                    ['Zucker', 'zucker_g', 1, ' g'],
+                                ] as [$nl, $nk, $ns, $ne])
+                                    <div class="flex justify-between gap-2"><dt class="text-[var(--fa-ink-3)]">{{ $nl }}</dt><dd class="tabular-nums text-[var(--fa-ink)]">{{ $n[$nk] !== null ? $zahl($n[$nk], $ns) . $ne : '–' }}</dd></div>
+                                @endforeach
+                            </dl>
+                            @if($naehrwerte['confidence'] !== 'high')<p class="text-[length:var(--fa-text-sm)] text-[var(--fa-warn)]">Verlässlichkeit {{ $konfidenzText[$naehrwerte['confidence']] ?? $naehrwerte['confidence'] }}: nicht alle Gerichte haben Nährwerte und Portionsgewicht.</p>@endif
+                        </div>
+                    @endif
+
+                    {{-- Abwechslung: Diät-Mix + Warengruppen der Woche + Vorgaben des Plans (Spec 59) --}}
+                    @if($abwechslung)
+                        @include('foodalchemist::livewire.speiseplan.partials.abwechslung', ['ab' => $abwechslung])
+                    @endif
+
+                    <div class="{{ $karte }}">
+                        @if(!empty($wiederholungen))
+                            <span class="text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-warn)]">Zu frühe Wiederholungen ({{ count($wiederholungen) }})</span>
+                            @foreach($wiederholungen as $w)
+                                <div class="flex items-center justify-between gap-2 text-[length:var(--fa-text-sm)]">
+                                    <span class="truncate text-[var(--fa-ink)]">{{ $w['name'] }}</span>
+                                    <x-fa::badge tone="warn">{{ $w['vorkommen'] }}× · {{ $w['min_abstand'] }} Tage</x-fa::badge>
+                                </div>
+                            @endforeach
+                        @else
+                            <x-fa::signal tone="ok">Keine zu frühen Wiederholungen</x-fa::signal>
+                        @endif
+                    </div>
                 </div>
             </aside>
         </div>

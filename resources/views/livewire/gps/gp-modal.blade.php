@@ -1,534 +1,572 @@
-{{-- M3-09/10: GP-Modal — Naming-Builder (GL-12 AUTO-SYNC) + KI-Felder (GL-07, ki-header).
-     Getabt (Alpine x-show, alle Sektionen im DOM — Marker/Tests bleiben grün, kein Server-
-     Roundtrip beim Umschalten; Muster = recipe-modal). Status-Regler im Kopf. --}}
-@php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
+{{-- Grundprodukt-Editor. fa-pass (2026-10-05): auf Bausteine <x-fa::…> umgestellt, Werkbank-tauglich
+     (nur --fa-*-Tokens, keine festen Farben).
 
-{{-- Spec 28 / E3.1: GP-Editor auf den Master-Standard. Voll-Editor nur im Bestand
-     (Neuanlage bleibt hell und schmal — sie hat nur „Allgemein"). --}}
+     Anatomie: Kopf = Titel + Name · Status · ein KI-Knopf · „Weitere Aktionen" · Speichern (rechts, einzige
+     Hauptaktion). Kennzahlen fest im Kopf. Reiter in der Reihenfolge des GP-Detail-Panels:
+     Lieferantenartikel (Preis) · Allergene und Zusatzstoffe · Stammdaten · Eigenschaften · Kalkulation ·
+     Aroma · Ersatz · Verwaltung. Die Neuanlage bleibt schmal und ohne Reiter (nur „Allgemein").
+
+     Alle Reiter-Panels bleiben im DOM (x-show), weil sie eingebettete Detail-Panel-Kinder halten. --}}
+@php
+    $kannKuratieren = $gp !== null && \Platform\FoodAlchemist\Support\Curate::canCurate(auth()->user(), $gp);
+    $tagLabels = [
+        'is_vegan' => 'Vegan', 'is_vegetarian' => 'Vegetarisch', 'is_halal' => 'Halal',
+        'contains_pork' => 'Enthält Schwein', 'contains_beef' => 'Enthält Rind',
+        'is_organic' => 'Bio', 'is_regional' => 'Regional', 'is_staple_food' => 'Grundnahrungsmittel',
+        'is_convenience' => 'Convenience', 'is_lactose_free' => 'Laktosefrei', 'is_gluten_free' => 'Glutenfrei',
+    ];
+    $quelleLabel = ['ki' => 'KI', 'manual' => 'von Hand', 'auto' => 'automatisch'];
+    $formLabel = fn (?string $slug) => ['stk' => 'Stück'][$slug] ?? ucfirst((string) $slug);
+    $leise = 'text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]';
+    $titelKlein = 'text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-2)]';
+    $listenKnopf = 'flex w-full items-center justify-between gap-2 px-2 py-1.5 rounded-[var(--fa-radius-control)] text-left text-[length:var(--fa-text-md)] text-[var(--fa-ink)] hover:bg-[var(--fa-hover)]';
+    $menuePunkt = 'flex w-full items-center gap-2 px-3 py-2 text-left text-[length:var(--fa-text-md)] text-[var(--fa-ink)] hover:bg-[var(--fa-hover)]';
+    $haken = 'w-4 h-4 shrink-0 rounded accent-[var(--fa-accent)]';
+@endphp
+
 <x-foodalchemist::modal name="gp-modal" :title="$neu ? 'Grundprodukt anlegen' : 'Grundprodukt bearbeiten'"
-    :title-name="$neu ? null : $gp?->name" size="max-w-4xl"
+    :title-name="$neu ? null : $gp?->name" :size="$neu ? 'max-w-3xl' : 'max-w-4xl'"
     :fullscreen="! $neu && $gp !== null" :dark-canvas="true">
 
-    {{-- Aktionsleiste (E1-4/5): Speichern zuerst, dann Status-Regler, dann KI-Chips.
-         Status und „Alles anreichern" lagen vorher IM Body und scrollten weg. --}}
+    {{-- Kopf: Status · KI · Weitere Aktionen · Speichern (rechts) --}}
     <x-slot:actions>
-        <button type="button" wire:click="speichern" class="{{ $btnPrimary }}"
-                @disabled($autoSuggestPending) wire:loading.attr="disabled" wire:target="autoSuggestFromSupplierItem"
-                data-gp-speichern-kopf>{{ $neu ? ($autoSuggestPending ? 'KI analysiert …' : 'Anlegen') : 'Speichern' }}</button>
-
-        @if($neu)
-            <span class="text-gray-300">|</span>
-            <div class="flex items-center gap-1.5" data-ki-naming>
-                <input type="text" wire:model="kiRohtext" placeholder="Roh-Bezeichnung, z. B. Lieferanten-Text …"
-                       class="{{ $input }} !w-72" />
-                <x-foodalchemist::ki-action action="kiVorschlagNaming" variant="ai" icon="heroicon-o-sparkles" label="KI-Vorschlag"
-                    title="gp.suggest: Builder-Felder aus Roh-Bezeichnung (§6)" busy="Wird vorgeschlagen …" flash="Vorschlag da" />
-            </div>
-        @elseif($gp !== null)
-            <span class="text-gray-300">|</span>
-            {{-- Status-Regler (Kurator) — sonst statisches Badge --}}
-            <span class="{{ $label }}" data-gp-status-kopf>Status</span>
-            @if(\Platform\FoodAlchemist\Support\Curate::canCurate(auth()->user(), $gp) && $gp->status !== \Platform\FoodAlchemist\Enums\GpStatus::Merged)
-                <select wire:change="statusSetzen($event.target.value)"
-                        class="{{ $pill }} font-medium {{ $statusPill[$gp->status->value] ?? $statusPill['merged'] }} border-0 cursor-pointer focus:ring-1 focus:ring-violet-400 pr-6"
-                        data-gp-status-select>
-                    @foreach($statusFaelle as $fall)
-                        <option value="{{ $fall->value }}" @selected($gp->status === $fall)>{{ $fall->label() }}</option>
-                    @endforeach
-                </select>
+        @if(! $neu && $gp !== null)
+            <span class="{{ $titelKlein }}" data-gp-status-kopf>Status</span>
+            @if($kannKuratieren && $gp->status !== \Platform\FoodAlchemist\Enums\GpStatus::Merged)
+                <div class="relative inline-block" x-data="faMenu()" x-on:keydown.escape="offen = false" x-on:click.outside="offen = false" wire:key="gp-status-{{ $gp->id }}-{{ $gp->status->value }}">
+                    <button type="button" x-on:click="toggle($event)" class="inline-flex items-center gap-0.5" aria-haspopup="menu" x-bind:aria-expanded="offen" aria-label="Status ändern" data-gp-status-select>
+                        <x-fa::status :value="$gp->status" />@svg('heroicon-m-chevron-down', 'w-3.5 h-3.5 text-[var(--fa-ink-3)]')
+                    </button>
+                    <div x-bind:class="{ hidden: ! offen }" x-bind:style="pos" role="menu" class="hidden w-44 fa-surface shadow-lg py-1">
+                        @foreach($statusFaelle as $fall)
+                            <button type="button" role="menuitem" x-on:click="offen = false" wire:click="statusSetzen('{{ $fall->value }}')"
+                                    class="flex w-full items-center justify-between px-3 py-1.5 text-left text-[length:var(--fa-text-md)] hover:bg-[var(--fa-hover)] {{ $gp->status === $fall ? 'font-semibold text-[var(--fa-accent)]' : 'text-[var(--fa-ink)]' }}">
+                                {{ $fall->label() }}@if($gp->status === $fall)@svg('heroicon-m-check', 'w-4 h-4')@endif
+                            </button>
+                        @endforeach
+                    </div>
+                </div>
             @else
-                <span class="{{ $pill }} font-medium {{ $statusPill[$gp->status->value] ?? $statusPill['merged'] }}">{{ $gp->status->label() }}</span>
+                <x-fa::status :value="$gp->status" />
             @endif
 
-            @if(\Platform\FoodAlchemist\Support\Curate::canCurate(auth()->user(), $gp))
+            @if($kannKuratieren)
                 <x-foodalchemist::ki-action action="allesAnreichern" variant="ai" icon="heroicon-o-sparkles" label="Alles anreichern"
-                    title="Zustand + Tags + Allergene + Nährwerte in EINEM Lauf vorschlagen (Review-Liste, Übernahme bleibt manuell)" data-gp-alles-anreichern
-                    busy="… läuft" flash="Vorschläge da" />
+                    title="Zustand, Eigenschaften, Allergene und Nährwerte in einem Lauf vorschlagen. Übernehmen bleibt deine Entscheidung."
+                    data-gp-alles-anreichern busy="Läuft …" flash="Vorschläge da" />
             @endif
+
+            <div class="relative" x-data="faMenu()" x-on:keydown.escape="offen = false" x-on:click.outside="offen = false">
+                <x-fa::icon-button icon="heroicon-m-ellipsis-horizontal" label="Weitere Aktionen" x-on:click="toggle($event)" aria-haspopup="menu" x-bind:aria-expanded="offen" data-gp-weitere-aktionen />
+                <div x-bind:class="{ hidden: ! offen }" x-bind:style="pos" role="menu" class="hidden w-56 fa-surface shadow-lg py-1">
+                    <a role="menuitem" href="{{ route('foodalchemist.gps.dokument', ['id' => $gp->id, 'profil' => 'kalkulation']) }}" target="_blank" x-on:click="offen = false" class="{{ $menuePunkt }}" data-gp-druck>
+                        @svg('heroicon-o-printer', 'w-4 h-4 text-[var(--fa-ink-3)]') Blatt drucken
+                    </a>
+                    <a role="menuitem" href="{{ route('foodalchemist.gps.dokument', ['id' => $gp->id, 'profil' => 'kalkulation', 'pdf' => 1]) }}" x-on:click="offen = false" class="{{ $menuePunkt }}" data-gp-pdf>
+                        @svg('heroicon-o-arrow-down-tray', 'w-4 h-4 text-[var(--fa-ink-3)]') Blatt als PDF laden
+                    </a>
+                </div>
+            </div>
         @endif
+
+        <x-fa::button variant="primary" icon="heroicon-m-check" class="ml-auto" wire:click="speichern"
+            :disabled="$autoSuggestPending" wire:loading.attr="disabled" wire:target="autoSuggestFromSupplierItem"
+            data-gp-speichern data-gp-speichern-kopf>{{ $neu ? ($autoSuggestPending ? 'KI analysiert …' : 'Grundprodukt anlegen') : 'Speichern' }}</x-fa::button>
     </x-slot:actions>
 
-    {{-- KPI-Kopf (E1-6): dieselben Größen wie das GP-Cockpit im Detail-Panel.
-         Leitwert = Lead-Preis (accent). „LAs" ist die folgenreichste Lücke am GP: ohne LA
-         gibt es keinen Preis, also kann kein Rezept damit rechnen — good/warn.
-         Bei `requires_la = false` (Derivate/Platzhalter nach GP-Regelwerk §11.2) ist 0 LAs
-         KEIN Mangel, deshalb dort neutral statt warn.
-         Allergen-Konfidenz kommt aus GpAggregateService (none|low|medium|high). --}}
+    {{-- Kennzahlen: Preis des Lead-Artikels (Hauptzahl) · Artikel · Allergenangaben · Warengruppe · Zustand.
+         Fehlender Preis wird gezeigt, nicht versteckt. Ohne Artikelpflicht (Derivat, Platzhalter) ist 0 kein Mangel. --}}
     @if(! $neu && $gp !== null)
         <x-slot:kpiHeader>
-            @php($lasPflicht = (bool) ($gp->requires_la ?? true))
-            <x-foodalchemist::kpi-tiles marker="gp-editor-kpis" :cols="5" :tiles="[
-                ['kpi' => 'lead-preis', 'label' => 'Lead-Preis', 'tone' => 'accent',
-                 'title' => $leadLa?->designation ?? 'Kein Lead-Lieferantenartikel gesetzt',
-                 'value' => $leadPreis?->price !== null
-                    ? number_format((float) $leadPreis->price, 2, ',', '.') . ' € / ' . ($leadLa->ordering_unit ?? $leadLa->unit_code ?? 'Einheit')
-                    : '—'],
-                ['kpi' => 'las', 'label' => 'Lieferantenartikel',
-                 'tone' => ($gp->n_las_total ?? 0) > 0 ? 'good' : ($lasPflicht ? 'warn' : 'neutral'),
-                 'title' => $lasPflicht
-                    ? 'Ohne LA hat der GP keinen Preis — Rezepte mit ihm bleiben unbepreist.'
-                    : 'Kein LA nötig (Derivat/Platzhalter, GP-Regelwerk §11.2).',
-                 'value' => ($gp->n_las_total ?? 0) . ($lasPflicht ? '' : ' (kein LA nötig)')],
-                ['kpi' => 'allergen', 'label' => 'Allergen-Konf.',
-                 'tone' => ['high' => 'good', 'medium' => 'warn', 'low' => 'bad'][$allergenKonfidenz['confidence'] ?? ''] ?? 'neutral',
-                 'title' => 'Aus ' . ($allergenKonfidenz['n_las_mit_daten'] ?? 0) . ' von ' . ($gp->n_las_total ?? 0) . ' LAs mit Allergen-Daten aggregiert (ALL-MAXIMAL).',
-                 'value' => strtoupper((string) ($allergenKonfidenz['confidence'] ?? '—'))],
-                ['kpi' => 'warengruppe', 'label' => 'Warengruppe',
-                 'title' => $gp->sub_category ?? '',
-                 'value' => $gp->commodity_group?->name ?? $gp->commodity_group_code ?? '—'],
-                ['kpi' => 'zustand', 'label' => 'Zustand (§9)',
-                 'value' => $gp->condition ?: '—'],
-            ]" />
+            @php
+                $lasPflicht = (bool) ($gp->requires_la ?? true);
+                $nLas = (int) ($gp->n_las_total ?? 0);
+                $hatPreis = $leadPreis?->price !== null;
+                $konfidenz = $allergenKonfidenz['confidence'] ?? null;
+                $kennzahlen = [
+                    [
+                        'kpi' => 'lead-preis', 'label' => 'Preis (Lead)',
+                        'value' => $hatPreis
+                            ? number_format((float) $leadPreis->price, 2, ',', '.') . ' € / ' . ($leadLa->ordering_unit ?? $leadLa->unit_code ?? 'Einheit')
+                            : ($lasPflicht ? 'Preis fehlt' : 'entfällt'),
+                        'primary' => $hatPreis,
+                        'tone' => ! $hatPreis && $lasPflicht ? 'crit' : null,
+                        'title' => $leadLa?->designation ?? 'Kein Lead-Artikel gesetzt',
+                    ],
+                    [
+                        'kpi' => 'las', 'label' => 'Lieferantenartikel',
+                        'value' => (string) $nLas,
+                        'tone' => $nLas === 0 && $lasPflicht ? 'warn' : null,
+                        'title' => $lasPflicht
+                            ? 'Ohne Lieferantenartikel kein Preis, Rezepte mit diesem Grundprodukt bleiben ohne Preis.'
+                            : 'Braucht keinen Lieferantenartikel (Nebenprodukt oder Platzhalter).',
+                    ],
+                    [
+                        'kpi' => 'allergen', 'label' => 'Allergenangaben',
+                        'value' => \Platform\FoodAlchemist\Support\Labels::konfidenz($konfidenz),
+                        'tone' => ['high' => 'ok', 'medium' => 'warn', 'low' => 'crit'][$konfidenz ?? ''] ?? null,
+                        'title' => 'Aus ' . ($allergenKonfidenz['n_las_mit_daten'] ?? 0) . ' von ' . $nLas . ' Artikeln mit Allergenangaben zusammengeführt',
+                    ],
+                    [
+                        'kpi' => 'warengruppe', 'label' => 'Warengruppe',
+                        'value' => $gp->commodity_group?->name ?? $gp->commodity_group_code ?? '–',
+                        'title' => $gp->sub_category ?? '',
+                    ],
+                    [
+                        'kpi' => 'zustand', 'label' => 'Zustand',
+                        'value' => $gp->condition ?: '–',
+                    ],
+                ];
+            @endphp
+            <x-fa::kpis :items="$kennzahlen" data-gp-editor-kpis />
         </x-slot:kpiHeader>
     @endif
 
     @if($fehler !== null)
-        <p class="text-xs text-rose-600 mb-3" data-modal-fehler>{{ $fehler }}</p>
+        <x-fa::notice tone="crit" data-modal-fehler>{{ $fehler }}</x-fa::notice>
     @endif
     @if($autoSuggestPending)
-        <div class="rounded-lg bg-violet-500/10 border border-violet-500/30 px-3 py-2 mb-3 text-xs text-violet-700 inline-flex items-center gap-2" data-gp-auto-suggest-laeuft>
-            @svg('heroicon-o-sparkles', 'w-3.5 h-3.5') Lieferantenartikel wird analysiert – GP-Vorschlag wird vorbereitet …
-        </div>
+        <x-fa::notice tone="info" data-gp-auto-suggest-laeuft>Lieferantenartikel wird gelesen, die KI bereitet einen Vorschlag für das Grundprodukt vor …</x-fa::notice>
     @endif
 
-    {{-- Anreichern-Lauf (Bulk-Mechanik auf EIN GP; Vorschläge landen in den Feldern nach
-         „Alle übernehmen"). Braucht den Tab-Scope nicht — steht deshalb davor. --}}
+    {{-- Anreichern-Lauf: Vorschläge landen nach „Alle übernehmen" in den Feldern --}}
     @if(! $neu && ($bulkRun ?? null) !== null)
-        <div class="rounded-lg bg-violet-500/10 border border-violet-500/30 px-3 py-2 mb-2 text-xs flex items-center gap-2"
-             @if($bulkRun->status === 'running') wire:poll.2s @endif data-gp-anreichern-status>
+        <div @if($bulkRun->status === 'running') wire:poll.2s @endif data-gp-anreichern-status>
             @if($bulkRun->status === 'running')
-                <span class="text-gray-900 inline-flex items-center gap-1.5">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') Anreicherung läuft …</span>
+                <x-fa::notice tone="info">Anreicherung läuft …</x-fa::notice>
             @else
-                <span class="text-gray-900 inline-flex items-center gap-1.5">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') Fertig — {{ $bulkOffen }} Vorschlag/Vorschläge zum Übernehmen</span>
-                <button type="button" wire:click="bulkAlleUebernehmen" class="{{ $btnGhostXs }} text-emerald-600 ml-auto" data-gp-anreichern-uebernehmen>Alle übernehmen</button>
-                <button type="button" wire:click="bulkVerwerfen" class="{{ $btnGhostXs }}">Schließen</button>
+                <x-fa::notice tone="ok">
+                    Anreicherung fertig: {{ $bulkOffen }} {{ $bulkOffen === 1 ? 'Vorschlag' : 'Vorschläge' }} zum Übernehmen.
+                    <x-slot:actions>
+                        <x-fa::button size="sm" variant="secondary" wire:click="bulkAlleUebernehmen" data-gp-anreichern-uebernehmen>Alle übernehmen</x-fa::button>
+                        <x-fa::button size="sm" variant="ghost" wire:click="bulkVerwerfen">Schließen</x-fa::button>
+                    </x-slot:actions>
+                </x-fa::notice>
             @endif
         </div>
     @endif
 
-    {{-- Tabs über den Baustein: sticky (vorher scrollte die Leiste weg) + wire:key beim
-         GP-Wechsel + Reset beim Öffnen. Bei Neuanlage bleibt genau „Allgemein" — der Baustein
-         zeichnet dann keine Leiste. Alpine-Modus, weil die Tab-Panels eingebettete
-         Detail-Panel-Kinder halten, die nicht neu mounten sollen. --}}
-    <x-foodalchemist::editor-tabs marker="gp" wire-key="gp-tabs-{{ $gp?->id ?? 'neu' }}" :init="'allgemein'"
+    <x-foodalchemist::editor-tabs marker="gp" wire-key="gp-tabs-{{ $gp?->id ?? 'neu' }}" :init="$neu ? 'allgemein' : 'price'"
         :tabs="[
-            'allgemein' => 'Allgemein',
+            'price' => $neu ? null : 'Lieferantenartikel',
+            'allergene' => $neu ? null : 'Allergene und Zusatzstoffe',
+            'allgemein' => 'Stammdaten',
             'eigenschaften' => $neu ? null : 'Eigenschaften',
-            'allergene' => $neu ? null : 'Allergene',
-            'zusatzstoffe' => $neu ? null : 'Zusatzstoffe',
-            'price' => $neu ? null : 'Preis & Lieferanten',
-            'ersatz' => $neu ? null : 'Ersatz',
-            'sensorik' => $neu ? null : 'Sensorik & Pairing',
             'kalkulation' => $neu ? null : 'Kalkulation',
+            'sensorik' => $neu ? null : 'Aroma',
+            'ersatz' => $neu ? null : 'Ersatz',
             'verwaltung' => $neu ? null : 'Verwaltung',
         ]">
 
-        {{-- ── Tab: ALLGEMEIN (Benennung · Klassifikation · Derivat) ──────── --}}
-        <div x-show="tab === 'allgemein'" class="pt-2">
-            {{-- Naming-Builder (Neuanlage) / Name (Edit) --}}
-            <x-foodalchemist::modal-section title="Benennung (§6)">
-                @if($neu)
-                    <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
-                        <div class="md:col-span-1">
-                            <label class="block {{ $label }} mb-1">Hauptzutat *</label>
-                            <input type="text" wire:model.live.debounce.300ms="builder.hauptzutat" placeholder="z. B. Zander" class="{{ $input }}" data-builder-hauptzutat />
-                        </div>
-                        <div>
-                            <label class="block {{ $label }} mb-1">Zustand (§9)</label>
-                            <select wire:model.live="builder.condition" class="{{ $input }}">
-                                <option value="">—</option>
-                                @foreach($zustandVocab as $z)<option value="{{ $z }}">{{ $z }}</option>@endforeach
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block {{ $label }} mb-1">Verarbeitung</label>
-                            <input type="text" wire:model.live.debounce.300ms="builder.processing" placeholder="z. B. Wuerfel 5 mm" class="{{ $input }}" />
-                        </div>
-                        <div>
-                            <label class="block {{ $label }} mb-1">Form</label>
-                            <input type="text" wire:model.live.debounce.300ms="builder.form" placeholder="Ganz / Filet / Pueree …" class="{{ $input }}" />
-                        </div>
-                        <div>
-                            <label class="block {{ $label }} mb-1">Portion (§7)</label>
-                            <input type="text" wire:model.live.debounce.300ms="builder.portion" placeholder="180 g" class="{{ $input }}" />
-                        </div>
-                        <div>
-                            <label class="block {{ $label }} mb-1">Pflichtangabe (§8)</label>
-                            <input type="text" wire:model.live.debounce.300ms="builder.pflichtangabe" placeholder="3,5 % / Type 405 / 16/20" class="{{ $input }}" />
-                        </div>
-                    </div>
-                    <div class="flex flex-wrap gap-4 mt-2" data-zusatz-klammern>
-                        @foreach(['bio' => '(Bio)', 'vegan' => '(Vegan)', 'glutenfrei' => '(Glutenfrei)', 'laktosefrei' => '(Laktosefrei)'] as $flag => $klammer)
-                            <label class="inline-flex items-center gap-1.5 text-xs text-gray-600">
-                                <input type="checkbox" wire:model.live="builder.{{ $flag }}" class="rounded border-gray-300 text-violet-600 focus:ring-violet-500" />
-                                {{ $klammer }}
-                            </label>
-                        @endforeach
-                    </div>
-                @endif
+        {{-- ── Reiter: STAMMDATEN (bei der Neuanlage der einzige Inhalt) ────────── --}}
+        <div x-show="tab === 'allgemein'" class="pt-4 flex flex-col gap-4">
 
-                <div class="mt-3">
-                    <label class="block {{ $label }} mb-1">Name {{ $neu ? '(AUTO-SYNC — Überschreiben erzeugt Drift-Warnung)' : '' }}</label>
-                    <input type="text" wire:model.live.debounce.300ms="manuellerName" placeholder="{{ $vorschauName }}" class="{{ $input }}" data-name-feld />
-                </div>
-
-                {{-- AUTO-SYNC-Vorschau: Name + Slug + gp_key --}}
-                <div class="mt-2 rounded-lg bg-black/[0.03] px-3 py-2 space-y-0.5" data-naming-vorschau>
-                    <p class="text-xs text-gray-900 font-medium" data-vorschau-name>{{ $vorschauName !== '' ? $vorschauName : '—' }}</p>
-                    <p class="text-[11px] text-gray-500 font-mono">slug: {{ $vorschauSlug !== '' ? $vorschauSlug : '—' }} · gp_key: {{ $vorschauKey !== '' && $vorschauKey !== '||' ? $vorschauKey : '—' }}</p>
-                </div>
-                @foreach($liveFehler as $f)
-                    <p class="text-[11px] text-rose-600 mt-1" data-live-fehler>{{ $f }}</p>
-                @endforeach
-                @foreach($warnungen as $w)
-                    <p class="text-[11px] text-amber-600 mt-1" data-live-warnung>{{ $w }}</p>
-                @endforeach
-
-                {{-- Wording aus dem Lieferantenartikel ableiten (Override-First: Vorschlag → Übernehmen) --}}
-                @if(! $neu)
-                    <div class="mt-2" data-name-aus-la>
-                        <x-foodalchemist::ki-action action="nameAusLeadLa" variant="ghostXs" icon="heroicon-o-sparkles" label="Name aus Lieferantenartikel ableiten"
-                            title="gp.suggest: §6-Namensvorschlag aus der Bezeichnung des Lead-Lieferantenartikels"
-                            class="!text-violet-600" busy="Wird abgeleitet …" flash="Vorschlag da" />
-                        @if($nameVorschlag !== null)
-                            <div class="mt-1.5 rounded-lg bg-violet-500/10 border border-violet-500/30 px-2.5 py-1.5 text-[11px]" data-name-vorschlag>
-                                <p class="text-gray-900">Vorschlag: <span class="font-medium">{{ $nameVorschlag }}</span></p>
-                                <div class="flex gap-1.5 mt-1">
-                                    <button type="button" wire:click="nameVorschlagUebernehmen" class="{{ $btnGhostXs }} text-emerald-600" data-name-vorschlag-uebernehmen>Übernehmen</button>
-                                    <button type="button" wire:click="nameVorschlagVerwerfen" class="{{ $btnGhostXs }}">Verwerfen</button>
-                                </div>
-                            </div>
-                        @endif
-                    </div>
-                @endif
-            </x-foodalchemist::modal-section>
-
-            {{-- Klassifikation --}}
-            <x-foodalchemist::modal-section title="Klassifikation">
-                <div class="grid grid-cols-2 gap-3">
-                    <div>
-                        <label class="block {{ $label }} mb-1">Warengruppe</label>
-                        <select wire:model.live="builder.commodity_group_code" class="{{ $input }}">
-                            <option value="">—</option>
-                            @foreach($warengruppen as $wg)<option value="{{ $wg->code }}">{{ $wg->codedLabel() }}</option>@endforeach
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block {{ $label }} mb-1">Sub-Kategorie</label>
-                        {{-- Punkt C: WG-gescopetes Dropdown gegen Drift (verwaltet + Bestand gemerged, #371) --}}
-                        <select wire:model.live="builder.sub_category" class="{{ $input }}" data-sub-kategorie
-                                @disabled(($builder['commodity_group_code'] ?? '') === '')>
-                            <option value="">—</option>
-                            @foreach($subKategorien as $sk)
-                                <option value="{{ $sk->sub_category }}">{{ $sk->sub_category }}</option>
-                            @endforeach
-                            @if(($builder['sub_category'] ?? '') !== '' && ! $subKategorien->contains('sub_category', $builder['sub_category']))
-                                <option value="{{ $builder['sub_category'] }}" selected>{{ $builder['sub_category'] }} (Bestand)</option>
-                            @endif
-                        </select>
-                        <p class="text-[11px] text-gray-500 mt-1">
-                            @if(($builder['commodity_group_code'] ?? '') === '') Erst Warengruppe wählen. @else Neue Werte in Einstellungen → Warengruppen pflegen. @endif
-                        </p>
-                    </div>
-                </div>
-            </x-foodalchemist::modal-section>
-
+            {{-- Neuanlage: Ausgangspunkt ist meist ein Lieferantenartikel — deshalb zuerst --}}
             @if($neu)
-                <x-foodalchemist::modal-section title="Lieferantenartikel">
+                <x-fa::section title="Lieferantenartikel" icon="heroicon-o-building-storefront" description="Wird beim Anlegen direkt verknüpft. Abweichende Allergene oder Zusatzstoffe werden gemeldet.">
                     @if($supplierItem !== null)
-                        <div class="flex items-center justify-between gap-3 rounded-lg border border-violet-300 bg-violet-500/5 px-3 py-2 text-xs" data-gp-la-selected>
-                            <div>
-                                <span class="font-medium text-gray-900">{{ $supplierItem->designation }}</span>
-                                <span class="text-gray-500"> · {{ $supplierItem->supplier?->name ?? 'Lieferant' }} · {{ $supplierItem->article_number ?? 'ohne Artikelnr.' }}</span>
+                        <div class="flex items-center justify-between gap-3 rounded-[var(--fa-radius-control)] border border-[var(--fa-accent-line)] bg-[var(--fa-accent-soft)] px-3 py-2" data-gp-la-selected>
+                            <div class="min-w-0">
+                                <p class="text-[length:var(--fa-text-md)] font-medium text-[var(--fa-ink)]">{{ $supplierItem->designation }}</p>
+                                <p class="{{ $leise }}">{{ $supplierItem->supplier?->name ?? 'Lieferant unbekannt' }} · {{ $supplierItem->article_number ? 'Art.-Nr. ' . $supplierItem->article_number : 'ohne Artikelnummer' }}</p>
                             </div>
-                            <button type="button" wire:click="supplierItemLoesen" class="{{ $btnGhostXs }}">Lösen</button>
+                            <x-fa::button size="sm" variant="ghost" wire:click="supplierItemLoesen">Verknüpfung lösen</x-fa::button>
                         </div>
-                        <p class="text-[11px] text-gray-500 mt-1">Wird beim Anlegen direkt mit dem GP verknüpft. Abweichende bekannte Allergene/Zusatzstoffe werden geblockt.</p>
                     @else
-                        <input type="search" wire:model.live.debounce.300ms="laSuche"
-                               placeholder="Bezeichnung oder Artikelnummer suchen …" class="{{ $input }}" data-gp-la-search />
+                        <x-fa::input type="search" wire:model.live.debounce.300ms="laSuche" placeholder="Bezeichnung oder Artikelnummer suchen …" aria-label="Lieferantenartikel suchen" data-gp-la-search />
                         @if($supplierItemKandidaten->isNotEmpty())
-                            <div class="mt-1 rounded-lg border border-gray-200 divide-y divide-gray-100" data-gp-la-results>
+                            <div class="flex flex-col" data-gp-la-results>
                                 @foreach($supplierItemKandidaten as $la)
-                                    <button type="button" wire:click="supplierItemWaehlen({{ $la->id }})"
-                                            class="w-full text-left px-3 py-2 text-xs hover:bg-violet-500/5">
-                                        <span class="font-medium text-gray-900">{{ $la->designation }}</span>
-                                        <span class="text-gray-500"> · {{ $la->supplier_name ?? 'Lieferant' }} · {{ $la->article_number ?? 'ohne Artikelnr.' }}</span>
+                                    <button type="button" wire:key="la-k-{{ $la->id }}" wire:click="supplierItemWaehlen({{ $la->id }})" class="{{ $listenKnopf }}">
+                                        <span class="min-w-0">
+                                            <span class="block font-medium">{{ $la->designation }}</span>
+                                            <span class="block {{ $leise }}">{{ $la->supplier_name ?? 'Lieferant unbekannt' }} · {{ $la->article_number ? 'Art.-Nr. ' . $la->article_number : 'ohne Artikelnummer' }}</span>
+                                        </span>
+                                        @svg('heroicon-m-plus', 'w-4 h-4 shrink-0 text-[var(--fa-ink-3)]')
                                     </button>
                                 @endforeach
                             </div>
                         @elseif(trim($laSuche) !== '')
-                            <p class="text-[11px] text-gray-500 mt-1">Kein freier Lieferantenartikel gefunden.</p>
+                            <p class="{{ $leise }}">Kein freier Lieferantenartikel gefunden.</p>
                         @endif
                     @endif
-                </x-foodalchemist::modal-section>
+                </x-fa::section>
+
+                <x-fa::section title="Vorschlag aus der Bezeichnung" icon="heroicon-o-sparkles" description="Lieferanten-Text einfügen, die KI füllt die Felder darunter. Prüfen und anpassen bleibt bei dir.">
+                    <div class="flex flex-wrap items-center gap-2" data-ki-naming>
+                        <x-fa::input wire:model="kiRohtext" placeholder="z. B. Zanderfilet TK 400 g" aria-label="Bezeichnung für den KI-Vorschlag" class="flex-1 min-w-[16rem]" />
+                        <x-foodalchemist::ki-action action="kiVorschlagNaming" variant="ai" icon="heroicon-o-sparkles" label="Felder vorschlagen"
+                            title="Hauptzutat, Zustand, Verarbeitung und Form aus der Bezeichnung vorschlagen" busy="Wird vorgeschlagen …" flash="Vorschlag da" />
+                    </div>
+                </x-fa::section>
             @endif
 
-            {{-- Zustand (§9) — Klassifikations-Attribut, gehört zu Allgemein (nicht Eigenschaften). Nur Edit. --}}
-            @if(! $neu && $gp !== null)
-                <x-foodalchemist::modal-section title="Zustand (§9)">
-                    <x-foodalchemist::ki-header label="Zustand (§9)" field="condition"
-                        :source="$gp->condition_source" :confidence="$gp->condition_ai_confidence !== null ? (float) $gp->condition_ai_confidence : null"
-                        :reasoning="$gp->condition_ai_reasoning" :hasProposal="isset($kiVorschlag['condition'])">
-                        <div class="flex items-center gap-2">
-                            <select wire:model.live="builder.condition" class="{{ $input }} !w-44">
-                                <option value="">—</option>
+            {{-- Name --}}
+            <x-fa::section title="Name" icon="heroicon-o-pencil-square">
+                @if($neu)
+                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                        <x-fa::field label="Hauptzutat" for="gp-hauptzutat" required>
+                            <x-fa::input id="gp-hauptzutat" wire:model.live.debounce.300ms="builder.hauptzutat" placeholder="z. B. Zander" data-builder-hauptzutat />
+                        </x-fa::field>
+                        <x-fa::field label="Zustand" for="gp-zustand-neu">
+                            <x-fa::select id="gp-zustand-neu" wire:model.live="builder.condition" placeholder="Bitte wählen">
                                 @foreach($zustandVocab as $z)<option value="{{ $z }}">{{ $z }}</option>@endforeach
-                            </select>
-                            @if(isset($kiVorschlag['condition']))
-                                <span class="{{ $pill }} {{ $variantPill['primary'] }}" data-condition-vorschlag>
-                                    Vorschlag: {{ $kiVorschlag['condition']['werte']['condition'] ?? '—' }} ({{ round($kiVorschlag['condition']['confidence'] * 100) }}%)
-                                </span>
-                            @endif
-                        </div>
-                    </x-foodalchemist::ki-header>
-                </x-foodalchemist::modal-section>
-            @endif
-
-            {{-- Derivat (§11) --}}
-            <x-foodalchemist::modal-section title="Derivat (§11)">
-                <label class="inline-flex items-center gap-1.5 text-xs text-gray-600">
-                    <input type="checkbox" wire:model.live="builder.is_derivat" class="rounded border-gray-300 text-violet-600 focus:ring-violet-500" data-derivat-toggle />
-                    Küchen-Nebenprodukt (Schale, Saft, Parüren, Karkasse …) — <code class="text-[11px]">requires_la=0</code>, erbt Allergene LIVE vom Mutter-GP (§16)
-                </label>
-                @if($builder['is_derivat'])
-                    <div class="mt-2" data-derivat-mutter>
-                        <label class="block {{ $label }} mb-1">Mutter-GP</label>
-                        @if($builder['derivat_von_gp_id'])
-                            <p class="text-xs text-gray-900">
-                                {{ $derivatMutterName ?? '—' }}
-                                <button type="button" wire:click="$set('builder.derivat_von_gp_id', null)" class="{{ $btnGhostXs }} ml-1">ändern</button>
-                            </p>
-                        @else
-                            <input type="search" wire:model.live.debounce.300ms="derivatSuche" placeholder="Mutter-GP suchen …" class="{{ $input }}" />
-                            @foreach($derivatKandidaten as $kandidat)
-                                <button type="button" wire:key="dk-{{ $kandidat->id }}"
-                                        wire:click="$set('builder.derivat_von_gp_id', {{ $kandidat->id }})"
-                                        class="block w-full text-left px-2 py-1 rounded text-[11px] text-gray-700 hover:bg-violet-500/10 transition-colors duration-150">
-                                    {{ $kandidat->name }}
-                                </button>
+                            </x-fa::select>
+                        </x-fa::field>
+                        <x-fa::field label="Verarbeitung" for="gp-verarbeitung" optional>
+                            <x-fa::input id="gp-verarbeitung" wire:model.live.debounce.300ms="builder.processing" placeholder="z. B. Würfel 5 mm" />
+                        </x-fa::field>
+                        <x-fa::field label="Form" for="gp-form" optional>
+                            <x-fa::input id="gp-form" wire:model.live.debounce.300ms="builder.form" placeholder="Ganz, Filet, Püree …" />
+                        </x-fa::field>
+                        <x-fa::field label="Gewicht oder Portion" for="gp-portion" optional>
+                            <x-fa::input id="gp-portion" wire:model.live.debounce.300ms="builder.portion" placeholder="z. B. 180 g" />
+                        </x-fa::field>
+                        <x-fa::field label="Pflichtangabe" for="gp-pflicht" optional>
+                            <x-fa::input id="gp-pflicht" wire:model.live.debounce.300ms="builder.pflichtangabe" placeholder="z. B. 3,5 %, Type 405, 16/20" />
+                        </x-fa::field>
+                    </div>
+                    <fieldset class="min-w-0" data-zusatz-klammern>
+                        <legend class="mb-1.5 {{ $titelKlein }}">Zusatz im Namen</legend>
+                        <div class="flex flex-wrap gap-1.5">
+                            @foreach(['bio' => 'Bio', 'vegan' => 'Vegan', 'glutenfrei' => 'Glutenfrei', 'laktosefrei' => 'Laktosefrei'] as $flag => $text)
+                                <label for="gp-zusatz-{{ $flag }}" class="fa-chip" wire:key="gp-zusatz-{{ $flag }}">
+                                    <input id="gp-zusatz-{{ $flag }}" type="checkbox" wire:model.live="builder.{{ $flag }}" class="sr-only peer" />
+                                    <span>{{ $text }}</span>
+                                </label>
                             @endforeach
+                        </div>
+                    </fieldset>
+                @endif
+
+                <x-fa::field label="Name" for="gp-name" :hint="$neu ? 'Wird aus den Feldern gebildet. Nur bei Bedarf von Hand überschreiben.' : null">
+                    <x-fa::input id="gp-name" wire:model.live.debounce.300ms="manuellerName" placeholder="{{ $vorschauName }}" data-name-feld />
+                </x-fa::field>
+
+                {{-- Vorschau: so heißt das Grundprodukt nach dem Speichern --}}
+                <div class="flex flex-col gap-0.5 rounded-[var(--fa-radius-control)] bg-[var(--fa-ground)] px-3 py-2" data-naming-vorschau>
+                    <p class="{{ $leise }}">So heißt es nach dem Speichern</p>
+                    <p class="text-[length:var(--fa-text-md)] font-medium text-[var(--fa-ink)]" data-vorschau-name>{{ $vorschauName !== '' ? $vorschauName : '–' }}</p>
+                    <p class="{{ $leise }}" title="Hauptzutat und Kennung, über die doppelte Grundprodukte erkannt werden">
+                        Hauptzutat <span class="font-mono">{{ $vorschauSlug !== '' ? $vorschauSlug : '–' }}</span> · Kennung <span class="font-mono">{{ $vorschauKey !== '' && $vorschauKey !== '||' ? $vorschauKey : '–' }}</span>
+                    </p>
+                </div>
+                @if($liveFehler !== [] || $warnungen !== [])
+                    <div class="flex flex-col gap-1">
+                        @foreach($liveFehler as $f)
+                            <x-fa::signal tone="crit" data-live-fehler>{{ $f }}</x-fa::signal>
+                        @endforeach
+                        @foreach($warnungen as $w)
+                            <x-fa::signal tone="warn" data-live-warnung>{{ $w }}</x-fa::signal>
+                        @endforeach
+                    </div>
+                @endif
+
+                {{-- Namensvorschlag aus dem Lead-Artikel (Vorschlag → Übernehmen) --}}
+                @if(! $neu)
+                    <div class="flex flex-col gap-2" data-name-aus-la>
+                        <div>
+                            <x-foodalchemist::ki-action action="nameAusLeadLa" variant="ai" icon="heroicon-o-sparkles" label="Name aus Lieferantenartikel ableiten"
+                                title="Namensvorschlag aus der Bezeichnung des Lead-Artikels" busy="Wird abgeleitet …" flash="Vorschlag da" />
+                        </div>
+                        @if($nameVorschlag !== null)
+                            <div class="flex flex-wrap items-center justify-between gap-2 rounded-[var(--fa-radius-control)] border border-[var(--fa-accent-line)] bg-[var(--fa-accent-soft)] px-3 py-2" data-name-vorschlag>
+                                <p class="text-[length:var(--fa-text-md)] text-[var(--fa-ink)]">Vorschlag: <span class="font-medium">{{ $nameVorschlag }}</span></p>
+                                <div class="flex items-center gap-1.5">
+                                    <x-fa::button size="sm" variant="secondary" wire:click="nameVorschlagUebernehmen" data-name-vorschlag-uebernehmen>Vorschlag übernehmen</x-fa::button>
+                                    <x-fa::button size="sm" variant="ghost" wire:click="nameVorschlagVerwerfen">Verwerfen</x-fa::button>
+                                </div>
+                            </div>
                         @endif
                     </div>
                 @endif
-            </x-foodalchemist::modal-section>
-        </div>{{-- /Tab ALLGEMEIN --}}
 
-        {{-- KI-Felder + Sensorik + Kalkulation brauchen ein persistiertes GP (nur Edit) --}}
-        @if(! $neu && $gp !== null)
-            {{-- ── Tab: EIGENSCHAFTEN (KI-Felder GL-07) ──────────────────── --}}
-            <div x-show="tab === 'eigenschaften'" x-cloak class="pt-2">
-                <x-foodalchemist::modal-section title="Eigenschafts-Tags (GL-07)">
-                    <div class="space-y-4">
-                        <x-foodalchemist::ki-header label="Eigenschafts-Tags" field="tags"
-                            :source="$gp->tag_source" :confidence="$gp->tag_ai_confidence !== null ? (float) $gp->tag_ai_confidence : null"
-                            :reasoning="$gp->tag_ai_reasoning" :hasProposal="isset($kiVorschlag['tags'])">
-                            <div class="grid grid-cols-2 md:grid-cols-3 gap-x-3 gap-y-1.5" data-tags-grid>
-                                @foreach(\Platform\FoodAlchemist\Models\FoodAlchemistGp::TAG_FIELDS as $tag)
-                                    <div class="flex items-center justify-between gap-1">
-                                        <span class="text-[11px] text-gray-600 truncate">{{ str_replace(['is_', 'contains_', '_'], ['', 'enth. ', ' '], $tag) }}</span>
-                                        <select wire:model.live="tags.{{ $tag }}" class="bg-transparent border-0 text-[11px] text-gray-700 cursor-pointer focus:ring-0 py-0">
-                                            <option value="">unbewertet</option>
-                                            <option value="1">ja</option>
-                                            <option value="0">nein</option>
-                                        </select>
-                                    </div>
-                                @endforeach
+                @if($neu)
+                    <label class="inline-flex items-center gap-2 {{ $leise }}" title="Legt das Grundprodukt auch an, wenn es schon ein sehr ähnliches gibt">
+                        <input type="checkbox" wire:model.live="force" class="{{ $haken }}" data-force-flag />
+                        Auch anlegen, wenn es schon ein sehr ähnliches Grundprodukt gibt
+                    </label>
+                @endif
+            </x-fa::section>
+
+            {{-- Einordnung: Warengruppe · Unterkategorie · Zustand --}}
+            <x-fa::section title="Einordnung" icon="heroicon-o-squares-2x2">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <x-fa::field label="Warengruppe" for="gp-wg">
+                        <x-fa::select id="gp-wg" wire:model.live="builder.commodity_group_code" placeholder="Bitte wählen">
+                            @foreach($warengruppen as $wg)<option value="{{ $wg->code }}">{{ $wg->codedLabel() }}</option>@endforeach
+                        </x-fa::select>
+                    </x-fa::field>
+                    <x-fa::field label="Unterkategorie" for="gp-sub"
+                        :hint="($builder['commodity_group_code'] ?? '') === '' ? 'Erst Warengruppe wählen.' : 'Neue Unterkategorien legst du in den Einstellungen unter Warengruppen an.'">
+                        <x-fa::select id="gp-sub" wire:model.live="builder.sub_category" placeholder="Bitte wählen" data-sub-kategorie
+                            :disabled="($builder['commodity_group_code'] ?? '') === ''">
+                            @foreach($subKategorien as $sk)
+                                <option value="{{ $sk->sub_category }}">{{ $sk->sub_category }}</option>
+                            @endforeach
+                            @if(($builder['sub_category'] ?? '') !== '' && ! $subKategorien->contains('sub_category', $builder['sub_category']))
+                                <option value="{{ $builder['sub_category'] }}" selected>{{ $builder['sub_category'] }} (bisheriger Wert)</option>
+                            @endif
+                        </x-fa::select>
+                    </x-fa::field>
+                </div>
+
+                @if(! $neu && $gp !== null)
+                    <div class="pt-3 border-t border-[var(--fa-line)]">
+                        <x-foodalchemist::ki-header label="Zustand" field="zustand"
+                            :source="$gp->condition_source" :confidence="$gp->condition_ai_confidence !== null ? (float) $gp->condition_ai_confidence : null"
+                            :reasoning="$gp->condition_ai_reasoning" :hasProposal="isset($kiVorschlag['condition'])">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <x-fa::select wire:model.live="builder.condition" placeholder="Bitte wählen" aria-label="Zustand" class="w-44">
+                                    @foreach($zustandVocab as $z)<option value="{{ $z }}">{{ $z }}</option>@endforeach
+                                </x-fa::select>
+                                @if(isset($kiVorschlag['condition']))
+                                    <x-fa::badge tone="accent" data-condition-vorschlag>
+                                        Vorschlag: {{ $kiVorschlag['condition']['werte']['condition'] ?? '–' }} ({{ round($kiVorschlag['condition']['confidence'] * 100) }} %)
+                                    </x-fa::badge>
+                                @endif
                             </div>
                         </x-foodalchemist::ki-header>
+                    </div>
+                @endif
+            </x-fa::section>
 
-                        {{-- 06·H4b: Favorit direkt am GP pinnen (2. Andockpunkt zum Favoriten-Screen). --}}
-                        <div class="flex items-center justify-between gap-3 pt-3 border-t border-gray-100">
-                            <div class="min-w-0">
-                                <div class="text-[11px] font-medium text-gray-700">⭐ Favorit (Lieblings-GP)</div>
-                                <div class="text-[10px] text-gray-500">
-                                    @if($gp->is_favorite)
-                                        Gepinnt in deinen Favoriten{{ $gp->favorite_rank !== null ? ' · Rang '.$gp->favorite_rank : '' }}.
-                                    @else
-                                        Fließt im Generator nur mit aktivem „⭐ Auf Basis meiner Favoriten bauen"-Modus ein.
-                                    @endif
+            {{-- Nebenprodukt (Derivat) --}}
+            <x-fa::section title="Nebenprodukt" icon="heroicon-o-arrow-turn-down-right">
+                <label class="inline-flex items-start gap-2 text-[length:var(--fa-text-md)] text-[var(--fa-ink)]">
+                    <input type="checkbox" wire:model.live="builder.is_derivat" class="{{ $haken }} mt-0.5" data-derivat-toggle />
+                    <span>
+                        Küchen-Nebenprodukt (Schale, Saft, Parüren, Karkasse …)
+                        <span class="block {{ $leise }}">Braucht keinen Lieferantenartikel und übernimmt die Allergene laufend vom Ausgangsprodukt.</span>
+                    </span>
+                </label>
+                @if($builder['is_derivat'])
+                    <div class="flex flex-col gap-1.5" data-derivat-mutter>
+                        <p class="{{ $titelKlein }}">Ausgangsprodukt</p>
+                        @if($builder['derivat_von_gp_id'])
+                            <div class="flex items-center gap-2">
+                                <span class="text-[length:var(--fa-text-md)] text-[var(--fa-ink)]">{{ $derivatMutterName ?? '–' }}</span>
+                                <x-fa::button size="sm" variant="ghost" wire:click="$set('builder.derivat_von_gp_id', null)">Ausgangsprodukt ändern</x-fa::button>
+                            </div>
+                        @else
+                            <x-fa::input type="search" wire:model.live.debounce.300ms="derivatSuche" placeholder="Ausgangsprodukt suchen …" aria-label="Ausgangsprodukt suchen" />
+                            @if($derivatKandidaten->isNotEmpty())
+                                <div class="flex flex-col">
+                                    @foreach($derivatKandidaten as $kandidat)
+                                        <button type="button" wire:key="dk-{{ $kandidat->id }}"
+                                                wire:click="$set('builder.derivat_von_gp_id', {{ $kandidat->id }})" class="{{ $listenKnopf }}">
+                                            <span class="min-w-0 truncate">{{ $kandidat->name }}</span>
+                                        </button>
+                                    @endforeach
                                 </div>
-                            </div>
-                            @if(\Platform\FoodAlchemist\Support\Curate::canCurate(auth()->user(), $gp))
-                                <button type="button" wire:click="favoriteToggle"
-                                    @class([
-                                        $btnGhostXs,
-                                        'text-amber-600' => $gp->is_favorite,
-                                    ])
-                                    data-gp-favoriten-toggle>
-                                    {{ $gp->is_favorite ? '★ aus Favoriten nehmen' : '☆ zu Favoriten' }}
-                                </button>
-                            @elseif($gp->is_favorite)
-                                <span class="text-amber-500 text-sm" title="Favorit (read-only)">★</span>
                             @endif
-                        </div>
+                        @endif
                     </div>
-                </x-foodalchemist::modal-section>
-                {{-- Natürliche Einheit + Nährwerte (eingebettetes DetailPanel, geteilte Render-Quelle) --}}
-                <x-foodalchemist::modal-section title="Einheit & Nährwerte">
+                @endif
+            </x-fa::section>
+        </div>{{-- /Reiter STAMMDATEN --}}
+
+        {{-- Alle weiteren Reiter brauchen ein gespeichertes Grundprodukt --}}
+        @if(! $neu && $gp !== null)
+            {{-- ── Reiter: LIEFERANTENARTIKEL (Preis, Lead, Verwendungen) ───────── --}}
+            <div x-show="tab === 'price'" x-cloak class="pt-4">
+                <x-fa::section>
+                    <livewire:foodalchemist.gps.detail-panel :gp-id="$gpId" :embedded="true" section="las" :key="'gpd-las-'.$gpId" />
+                </x-fa::section>
+            </div>
+
+            {{-- ── Reiter: ALLERGENE UND ZUSATZSTOFFE ───────────────────────────── --}}
+            <div x-show="tab === 'allergene'" x-cloak class="pt-4 flex flex-col gap-4">
+                <x-fa::section>
+                    <livewire:foodalchemist.gps.detail-panel :gp-id="$gpId" :embedded="true" section="allergene" :key="'gpd-allerg-'.$gpId" />
+                </x-fa::section>
+                <x-fa::section>
+                    <livewire:foodalchemist.gps.detail-panel :gp-id="$gpId" :embedded="true" section="zusatzstoffe" :key="'gpd-zusatz-'.$gpId" />
+                </x-fa::section>
+            </div>
+
+            {{-- ── Reiter: EIGENSCHAFTEN (Merkmale, Favorit, Nährwerte) ───────────── --}}
+            <div x-show="tab === 'eigenschaften'" x-cloak class="pt-4 flex flex-col gap-4">
+                <x-fa::section title="Merkmale" icon="heroicon-o-tag">
+                    <x-foodalchemist::ki-header label="Merkmale" field="tags"
+                        :source="$gp->tag_source" :confidence="$gp->tag_ai_confidence !== null ? (float) $gp->tag_ai_confidence : null"
+                        :reasoning="$gp->tag_ai_reasoning" :hasProposal="isset($kiVorschlag['tags'])">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-2" data-tags-grid>
+                            @foreach(\Platform\FoodAlchemist\Models\FoodAlchemistGp::TAG_FIELDS as $tag)
+                                <div class="flex items-center justify-between gap-2 min-w-0" wire:key="gp-tag-{{ $tag }}">
+                                    <label for="gp-tag-{{ $tag }}" class="min-w-0 text-[length:var(--fa-text-md)] text-[var(--fa-ink)]">{{ $tagLabels[$tag] ?? $tag }}</label>
+                                    <x-fa::select id="gp-tag-{{ $tag }}" size="sm" wire:model.live="tags.{{ $tag }}" class="w-32 shrink-0">
+                                        <option value="">offen</option>
+                                        <option value="1">ja</option>
+                                        <option value="0">nein</option>
+                                    </x-fa::select>
+                                </div>
+                            @endforeach
+                        </div>
+                    </x-foodalchemist::ki-header>
+                </x-fa::section>
+
+                <x-fa::section title="Favorit" icon="heroicon-o-star">
+                    <div class="flex flex-wrap items-center justify-between gap-3">
+                        <p class="{{ $leise }} min-w-0">
+                            @if($gp->is_favorite)
+                                In deinen Favoriten{{ $gp->favorite_rank !== null ? ', Rang ' . $gp->favorite_rank : '' }}.
+                            @else
+                                Favoriten nutzt der Generator, wenn „Auf Basis meiner Favoriten bauen" eingeschaltet ist.
+                            @endif
+                        </p>
+                        @if($kannKuratieren)
+                            <x-fa::button size="sm" :variant="$gp->is_favorite ? 'ghost' : 'secondary'" :icon="$gp->is_favorite ? 'heroicon-s-star' : 'heroicon-o-star'"
+                                wire:click="favoriteToggle" data-gp-favoriten-toggle>{{ $gp->is_favorite ? 'Aus Favoriten entfernen' : 'Zu Favoriten hinzufügen' }}</x-fa::button>
+                        @elseif($gp->is_favorite)
+                            <x-fa::badge tone="accent" icon="heroicon-s-star" title="Favorit (nur lesen)">Favorit</x-fa::badge>
+                        @endif
+                    </div>
+                </x-fa::section>
+
+                <x-fa::section>
                     <livewire:foodalchemist.gps.detail-panel :gp-id="$gpId" :embedded="true" section="naehrwerte" :key="'gpd-naehr-'.$gpId" />
-                </x-foodalchemist::modal-section>
+                </x-fa::section>
+            </div>
 
-                {{-- #9 (2026-08-28): Naturaleinheit-Formen (Gramm je Form) — steuert Rezept-Einheiten-Dropdown + EK-Umrechnung. --}}
-                <x-foodalchemist::modal-section title="Naturaleinheit & Formen">
-                    <p class="{{ $label }} mb-2 normal-case">Gewicht je Form (Stück/Scheibe/Würfel …) — legt fest, welche Einheiten im Rezept-Dropdown erscheinen, und erdet die EK-Umrechnung. „stk" = Stück-Gewicht.</p>
-                    @if($hinweis)<div class="mb-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 px-2.5 py-1.5 text-[11px] text-emerald-700" data-gp-formen-hinweis>{{ $hinweis }}</div>@endif
-                    <div class="space-y-1 mb-2">
-                        @forelse($formen as $f)
-                            <div class="flex items-center gap-2 text-sm" wire:key="gpform-{{ $f->form_slug }}">
-                                <span class="w-24 font-medium">{{ $f->form_slug }}</span>
-                                <span class="tabular-nums">{{ number_format((float) $f->gramm, 0, ',', '.') }} g</span>
-                                <span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $f->source }}</span>
-                                <span class="flex-1"></span>
-                                <button type="button" wire:click="formEntfernen('{{ $f->form_slug }}')" class="{{ $btnGhostXs }} text-red-600" data-gp-form-remove>✕</button>
-                            </div>
-                        @empty
-                            <p class="text-[11px] text-gray-400" data-gp-formen-leer>Noch keine Formen — per KI schätzen oder unten hinzufügen.</p>
-                        @endforelse
+            {{-- ── Reiter: KALKULATION (Verluste, Gewichte je Form) ─────────────── --}}
+            <div x-show="tab === 'kalkulation'" x-cloak class="pt-4 flex flex-col gap-4">
+                <x-fa::section title="Verluste und Stückgewicht" icon="heroicon-o-calculator"
+                    description="Gilt, wenn eine Rezept-Zutat keinen eigenen Wert hat. Leer lassen übernimmt die Vorgabe der Warengruppe.">
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3" data-gp-defaults>
+                        <x-fa::field label="Garverlust in %" for="gp-garverlust">
+                            <x-fa::input id="gp-garverlust" numeric inputmode="decimal" wire:model="defaults.cooking_loss_default_pct" placeholder="–" data-gp-garverlust />
+                        </x-fa::field>
+                        <x-fa::field label="Putzverlust in %" for="gp-putzverlust">
+                            <x-fa::input id="gp-putzverlust" numeric inputmode="decimal" wire:model="defaults.trimming_loss_default_pct" placeholder="–" data-gp-putzverlust />
+                        </x-fa::field>
+                        <x-fa::field label="Stückgewicht in g" for="gp-stk">
+                            <x-fa::input id="gp-stk" numeric inputmode="decimal" wire:model="defaults.piece_default_g" placeholder="–" data-gp-stk />
+                        </x-fa::field>
                     </div>
-                    <div class="flex items-end gap-2 flex-wrap">
-                        <div>
-                            <div class="{{ $label }} mb-1">Form</div>
-                            <select wire:model="formNeuSlug" class="{{ $input }} w-28" data-gp-form-slug>
-                                @foreach($formSlugs as $slug)<option value="{{ $slug }}">{{ $slug }}</option>@endforeach
-                            </select>
-                        </div>
-                        <div>
-                            <div class="{{ $label }} mb-1">Gramm</div>
-                            <input type="text" inputmode="decimal" wire:model="formNeuGramm" placeholder="z. B. 150" class="{{ $input }} w-24" data-gp-form-gramm />
-                        </div>
-                        <button type="button" wire:click="formSetzen" class="{{ $btnGhostXs }}" data-gp-form-add>+ Form</button>
-                        <span class="flex-1"></span>
-                        <x-foodalchemist::ki-action action="formenKiSchaetzen" variant="ai" icon="heroicon-o-sparkles" label="KI schätzen"
+                </x-fa::section>
+
+                <x-fa::section title="Gewicht je Form" icon="heroicon-o-scale" :meta="$formen->count() ?: null"
+                    description="Legt fest, welche Einheiten im Rezept wählbar sind (Stück, Scheibe, Würfel …), und rechnet den Einkaufspreis um.">
+                    <x-slot:actions>
+                        <x-foodalchemist::ki-action action="formenKiSchaetzen" variant="ai" icon="heroicon-o-sparkles" label="Gewichte schätzen"
                             data-gp-formen-ki busy="Wird geschätzt …" flash="Geschätzt" />
+                    </x-slot:actions>
+                    @if($hinweis)<x-fa::notice tone="ok" data-gp-formen-hinweis>{{ $hinweis }}</x-fa::notice>@endif
+                    @if($formen->isNotEmpty())
+                        <div class="overflow-x-auto">
+                            <table class="fa-table fa-table--compact">
+                                <thead><tr><th>Form</th><th class="num">Gewicht</th><th>Herkunft</th><th><span class="sr-only">Aktion</span></th></tr></thead>
+                                <tbody>
+                                    @foreach($formen as $f)
+                                        <tr wire:key="gpform-{{ $f->form_slug }}">
+                                            <td class="font-medium">{{ $formLabel($f->form_slug) }}</td>
+                                            <td class="num"><x-fa::menge :value="(float) $f->gramm" unit="g" :decimals="0" /></td>
+                                            <td><x-fa::badge :tone="$f->source === 'ki' ? 'accent' : 'neutral'">{{ $quelleLabel[$f->source] ?? $f->source }}</x-fa::badge></td>
+                                            <td class="text-right">
+                                                <x-fa::icon-button size="sm" tone="danger" icon="heroicon-m-x-mark" label="Form {{ $formLabel($f->form_slug) }} entfernen"
+                                                    wire:click="formEntfernen('{{ $f->form_slug }}')" data-gp-form-remove />
+                                            </td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                    @else
+                        <p class="{{ $leise }}" data-gp-formen-leer>Noch keine Gewichte je Form. Schätzen lassen oder unten eintragen.</p>
+                    @endif
+                    <div class="flex flex-wrap items-end gap-2">
+                        <x-fa::field label="Form" for="gp-form-neu">
+                            <x-fa::select id="gp-form-neu" wire:model="formNeuSlug" class="w-36" data-gp-form-slug>
+                                @foreach($formSlugs as $slug)<option value="{{ $slug }}">{{ $formLabel($slug) }}</option>@endforeach
+                            </x-fa::select>
+                        </x-fa::field>
+                        <x-fa::field label="Gewicht in g" for="gp-form-gramm" error="formNeuGramm">
+                            <x-fa::input id="gp-form-gramm" numeric inputmode="decimal" wire:model="formNeuGramm" placeholder="z. B. 150" class="w-28" data-gp-form-gramm />
+                        </x-fa::field>
+                        <x-fa::button icon="heroicon-m-plus" wire:click="formSetzen" data-gp-form-add>Form hinzufügen</x-fa::button>
                     </div>
-                    @error('formNeuGramm')<div class="mt-1 text-[11px] text-red-500">{{ $message }}</div>@enderror
-                </x-foodalchemist::modal-section>
-            </div>{{-- /Tab EIGENSCHAFTEN --}}
+                </x-fa::section>
+            </div>
 
-            {{-- ── Tab: ALLERGENE (eingebettet, GL-01) — Panel bringt eigenen Header ── --}}
-            <div x-show="tab === 'allergene'" x-cloak class="pt-3">
-                <livewire:foodalchemist.gps.detail-panel :gp-id="$gpId" :embedded="true" section="allergene" :key="'gpd-allerg-'.$gpId" />
-            </div>{{-- /Tab ALLERGENE --}}
-
-            {{-- ── Tab: ZUSATZSTOFFE (eingebettet, LMIV GL-09) ────────────── --}}
-            <div x-show="tab === 'zusatzstoffe'" x-cloak class="pt-3">
-                <livewire:foodalchemist.gps.detail-panel :gp-id="$gpId" :embedded="true" section="zusatzstoffe" :key="'gpd-zusatz-'.$gpId" />
-            </div>{{-- /Tab ZUSATZSTOFFE --}}
-
-            {{-- ── Tab: PREIS & LIEFERANTEN (eingebettet — LA-Kette + Verwendungen) ── --}}
-            <div x-show="tab === 'price'" x-cloak class="pt-3">
-                <livewire:foodalchemist.gps.detail-panel :gp-id="$gpId" :embedded="true" section="las" :key="'gpd-las-'.$gpId" />
-            </div>{{-- /Tab PREIS & LIEFERANTEN --}}
-
-            {{-- ── Tab: ERSATZ (make-or-buy / Artikel-Ersatz — Äquivalenz-Katalog) ── --}}
-            <div x-show="tab === 'ersatz'" x-cloak class="pt-3">
-                <livewire:foodalchemist.gps.detail-panel :gp-id="$gpId" :embedded="true" section="ersatz" :key="'gpd-ersatz-'.$gpId" />
-            </div>{{-- /Tab ERSATZ --}}
-
-            {{-- ── Tab: SENSORIK & PAIRING ────────────────────────────────── --}}
-            <div x-show="tab === 'sensorik'" x-cloak class="pt-2">
-                <x-foodalchemist::modal-section title="Sensorik & Pairing">
+            {{-- ── Reiter: AROMA (Sensorik, Aroma-Anker, Pairing) ───────────────── --}}
+            <div x-show="tab === 'sensorik'" x-cloak class="pt-4 flex flex-col gap-4">
+                <x-fa::section title="Geschmack" icon="heroicon-o-beaker">
                     @include('foodalchemist::livewire.concepter.partials.sensorik')
+                </x-fa::section>
 
-                    {{-- Spec 53 Paket J: Aroma-Anker editierbar (mehrere je GP, kern|neben) — die
-                         Netz-Daten (Passt dazu/Kontrast) DARUNTER kommen aus dem read-only Pairing-
-                         Partial und aktualisieren sich automatisch, sobald hier ein Anker steht. --}}
-                    @if($gpId !== null)
-                        <h3 class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 mt-5 mb-2">Aroma-Anker</h3>
-                        <div class="flex flex-wrap gap-1" data-gp-anker-liste>
+                {{-- Aroma-Anker editierbar (mehrere je Grundprodukt, Haupt- oder Nebenanker). Das Pairing darunter
+                     ist nur lesend und aktualisiert sich, sobald hier ein Anker steht. --}}
+                @if($gpId !== null)
+                    <x-fa::section title="Aroma-Anker" icon="heroicon-o-sparkles" :meta="$gpAnker->count() ?: null">
+                        <div class="flex flex-wrap gap-1.5" data-gp-anker-liste>
                             @forelse($gpAnker as $a)
-                                <span wire:key="ga-{{ $a->id }}" class="{{ $pill }} {{ $a->role === 'kern' ? $variantPill['primary'] : $variantPill['secondary'] }} group" title="{{ $a->role }} · {{ $a->source }}{{ $a->ai_confidence !== null ? ' ' . round($a->ai_confidence * 100) . '%' : '' }}">
-                                    {{ $a->role === 'kern' ? '★' : '·' }} {{ $a->display_de }}
-                                    <button type="button" wire:click="gpAnkerLoesen({{ $a->id }})" class="hidden group-hover:inline text-rose-400 ml-0.5" title="lösen" data-gp-anker-loesen>✕</button>
-                                </span>
+                                <x-fa::badge wire:key="ga-{{ $a->id }}" :tone="$a->role === 'kern' ? 'accent' : 'neutral'" :icon="$a->role === 'kern' ? 'heroicon-s-star' : null"
+                                    title="{{ $a->role === 'kern' ? 'Hauptanker' : 'Nebenanker' }} · {{ $quelleLabel[$a->source] ?? $a->source }}{{ $a->ai_confidence !== null ? ' ' . round($a->ai_confidence * 100) . ' %' : '' }}">
+                                    {{ $a->display_de }}
+                                    <button type="button" wire:click="gpAnkerLoesen({{ $a->id }})" class="-mr-1 inline-flex items-center rounded-full hover:text-[var(--fa-crit)]" aria-label="Anker {{ $a->display_de }} lösen" title="Anker lösen" data-gp-anker-loesen>
+                                        @svg('heroicon-m-x-mark', 'w-3.5 h-3.5')
+                                    </button>
+                                </x-fa::badge>
                             @empty
-                                <span class="text-[11px] text-gray-400">Noch kein Aroma-Anker gesetzt.</span>
+                                <p class="{{ $leise }}">Noch kein Aroma-Anker gesetzt.</p>
                             @endforelse
                         </div>
-                        @if($gpAnkerFehler !== null)<p class="text-[11px] text-rose-500 mt-1" data-gp-anker-fehler>{{ $gpAnkerFehler }}</p>@endif
-                        <div class="relative mt-1.5 flex items-center gap-1.5">
-                            <select wire:model="gpAnkerRolle" class="{{ $input }} !py-1 !w-24 text-[11px]" title="Rolle des nächsten verknüpften Ankers" data-gp-anker-rolle>
-                                <option value="kern">kern</option>
-                                <option value="neben">neben</option>
-                            </select>
-                            <div class="relative flex-1">
-                                <input type="search" wire:model.live.debounce.300ms="gpAnkerSuche" placeholder="Anker verknüpfen — Slug oder Name …" class="{{ $input }} !py-1" data-gp-anker-suche />
+                        @if($gpAnkerFehler !== null)<x-fa::signal tone="crit" data-gp-anker-fehler>{{ $gpAnkerFehler }}</x-fa::signal>@endif
+                        <div class="flex flex-wrap items-start gap-2">
+                            <x-fa::select size="md" wire:model="gpAnkerRolle" class="w-40" aria-label="Rolle des nächsten Ankers" title="Rolle des nächsten verknüpften Ankers" data-gp-anker-rolle>
+                                <option value="kern">Hauptanker</option>
+                                <option value="neben">Nebenanker</option>
+                            </x-fa::select>
+                            <div class="flex-1 min-w-[14rem] flex flex-col gap-1">
+                                <x-fa::input type="search" wire:model.live.debounce.300ms="gpAnkerSuche" placeholder="Anker suchen und verknüpfen …" aria-label="Aroma-Anker suchen" data-gp-anker-suche />
                                 @foreach($gpAnkerKandidaten as $kandidat)
-                                    <button type="button" wire:key="gak-{{ $kandidat->id }}" wire:click="gpAnkerVerknuepfen({{ $kandidat->id }})" class="block w-full text-left px-2 py-1 rounded text-xs text-gray-700 hover:bg-violet-500/10" data-gp-anker-kandidat>
-                                        {{ $kandidat->display_de }} <span class="text-gray-500">{{ $kandidat->slug }}{{ $kandidat->category ? ' · ' . $kandidat->category : '' }}</span>
+                                    <button type="button" wire:key="gak-{{ $kandidat->id }}" wire:click="gpAnkerVerknuepfen({{ $kandidat->id }})" class="{{ $listenKnopf }}" data-gp-anker-kandidat>
+                                        <span class="min-w-0 truncate">{{ $kandidat->display_de }}</span>
+                                        <span class="shrink-0 {{ $leise }}">{{ $kandidat->category ?: $kandidat->slug }}</span>
                                     </button>
                                 @endforeach
                             </div>
                         </div>
-                    @endif
+                    </x-fa::section>
+                @endif
 
-                    <h3 class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 mt-5 mb-2">Pairing</h3>
+                <x-fa::section title="Pairing" icon="heroicon-o-link">
                     @include('foodalchemist::livewire.concepter.partials.pairing')
-                </x-foodalchemist::modal-section>
-            </div>{{-- /Tab SENSORIK --}}
+                </x-fa::section>
+            </div>
 
-            {{-- ── Tab: KALKULATION (Defaults, Phase 2 — speisen die Verlust-Kaskade GL-02) ── --}}
-            <div x-show="tab === 'kalkulation'" x-cloak class="pt-2">
-                <x-foodalchemist::modal-section title="Kalkulations-Defaults (GL-02)">
-                    <p class="text-[11px] text-gray-500 mb-2">Greifen, wenn eine Rezept-Zutat keinen eigenen Wert hat. Leer = nächste Stufe (Team-WG-Default → 0).</p>
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3" data-gp-defaults>
-                        <div>
-                            <label class="{{ $label }}">Garverlust-Default %</label>
-                            <input type="text" wire:model="defaults.cooking_loss_default_pct" placeholder="—" class="{{ $input }} mt-1" data-gp-garverlust />
-                        </div>
-                        <div>
-                            <label class="{{ $label }}">Putzverlust-Default %</label>
-                            <input type="text" wire:model="defaults.trimming_loss_default_pct" placeholder="—" class="{{ $input }} mt-1" data-gp-putzverlust />
-                        </div>
-                        <div>
-                            <label class="{{ $label }}">Stück-Gewicht (g)</label>
-                            <input type="text" wire:model="defaults.piece_default_g" placeholder="—" class="{{ $input }} mt-1" data-gp-stk />
-                        </div>
-                    </div>
-                </x-foodalchemist::modal-section>
+            {{-- ── Reiter: ERSATZ (selbst machen oder kaufen, Artikel-Ersatz) ───── --}}
+            <div x-show="tab === 'ersatz'" x-cloak class="pt-4">
+                <x-fa::section>
+                    <livewire:foodalchemist.gps.detail-panel :gp-id="$gpId" :embedded="true" section="ersatz" :key="'gpd-ersatz-'.$gpId" />
+                </x-fa::section>
+            </div>
 
-            </div>{{-- /Tab KALKULATION --}}
-
-            {{-- Tab: VERWALTUNG — 2026-09-04 aus «Kalkulation» hierher geholt: dort hat es
-                 niemand gefunden. Steht jetzt an derselben Stelle wie beim Rezept-Editor. --}}
-            <div x-show="tab === 'verwaltung'" x-cloak class="pt-2">
-                {{-- #8 (2026-08-27): „GP in allen Rezepten tauschen" — aus dem Detail-Panel in den Editor gezogen. --}}
-                <x-foodalchemist::modal-section title="Verwaltung — GP tauschen">
-                    <p class="text-[11px] text-gray-500 mb-2">GP in ALLEN Rezepten durch einen anderen ersetzen (Vorstufe zum Löschen). Alle Rezept-Zeilen werden umgehängt + neu berechnet.</p>
-                    @if($hinweis)<div class="mb-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 px-2.5 py-1.5 text-[11px] text-emerald-700" data-gp-tausch-hinweis>{{ $hinweis }}</div>@endif
-                    <input type="search" wire:model.live.debounce.300ms="tauschSuche" placeholder="Ziel-GP suchen …" class="{{ $input }}" data-gp-tausch-suche />
+            {{-- ── Reiter: VERWALTUNG (in allen Rezepten ersetzen) ──────────────── --}}
+            <div x-show="tab === 'verwaltung'" x-cloak class="pt-4">
+                <x-fa::section title="In allen Rezepten ersetzen" icon="heroicon-o-arrows-right-left"
+                    description="Hängt jede Rezept-Zeile mit diesem Grundprodukt auf ein anderes um und rechnet die Rezepte neu. Danach lässt es sich gefahrlos aussortieren.">
+                    @if($hinweis)<x-fa::notice tone="ok" data-gp-tausch-hinweis>{{ $hinweis }}</x-fa::notice>@endif
+                    <x-fa::field label="Ersetzen durch" for="gp-tausch" error="tauschSuche">
+                        <x-fa::input id="gp-tausch" type="search" wire:model.live.debounce.300ms="tauschSuche" placeholder="Grundprodukt suchen …" data-gp-tausch-suche />
+                    </x-fa::field>
                     @if($tauschKandidaten->isNotEmpty())
-                        <div class="mt-1 space-y-0.5">
+                        <div class="flex flex-col">
                             @foreach($tauschKandidaten as $k)
                                 <button type="button" wire:key="tausch-{{ $k->id }}" wire:click="gpErsetzen({{ $k->id }})"
-                                        wire:confirm="Diesen GP in ALLEN Rezepten durch „{{ $k->name }}“ ersetzen?"
-                                        class="w-full text-left px-2 py-1 rounded hover:bg-black/[0.05] text-sm flex items-center justify-between gap-2" data-gp-tausch-kandidat>
+                                        wire:confirm="Dieses Grundprodukt in ALLEN Rezepten durch „{{ $k->name }}“ ersetzen?"
+                                        class="{{ $listenKnopf }}" data-gp-tausch-kandidat>
                                     <span class="min-w-0 truncate">{{ $k->name }}</span>
-                                    <span class="{{ $pill }} {{ $variantPill[$k->status->badgeVariant()] ?? $variantPill['secondary'] }} shrink-0">{{ $k->status->label() }}</span>
+                                    <x-fa::status :value="$k->status" class="shrink-0" />
                                 </button>
                             @endforeach
                         </div>
                     @elseif(trim($tauschSuche) !== '')
-                        <p class="text-[11px] text-gray-400 mt-1">Kein passender Ziel-GP.</p>
+                        <p class="{{ $leise }}">Kein passendes Grundprodukt gefunden.</p>
                     @endif
-                    @error('tauschSuche')<div class="mt-1 text-[11px] text-red-500">{{ $message }}</div>@enderror
-                </x-foodalchemist::modal-section>
-            </div>{{-- /Tab VERWALTUNG --}}
+                </x-fa::section>
+            </div>
         @endif
     </x-foodalchemist::editor-tabs>
-
-    <x-slot:footer>
-        <div class="flex items-center justify-between gap-3 w-full">
-            <label class="inline-flex items-center gap-1.5 text-[11px] text-gray-500" title="GT-12-10: HARD_STOP bei vorhandenem gp_key/Jaccard ≥ 0.92 — force legt bewusst trotzdem an">
-                @if($neu)<input type="checkbox" wire:model.live="force" class="rounded border-gray-300 text-rose-500 focus:ring-rose-400" data-force-flag /> bewusst trotzdem anlegen (force)@endif
-            </label>
-            <div class="flex items-center gap-2">
-                <button type="button" wire:click="$dispatch('modal.close', { name: 'gp-modal' })" class="{{ $btnGhost }}">Abbrechen</button>
-                <button type="button" wire:click="speichern" class="{{ $btnPrimary }}" data-gp-speichern>
-                    {{ $neu ? 'Anlegen' : 'Speichern' }}
-                </button>
-            </div>
-        </div>
-    </x-slot:footer>
 </x-foodalchemist::modal>

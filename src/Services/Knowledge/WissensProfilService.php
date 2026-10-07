@@ -137,10 +137,9 @@ class WissensProfilService
                     'schwere' => 'blockiert',
                     'nachfolger' => [],
                     'slug' => null,
-                    'text' => 'Routing `regelwerk:always` lädt seit Spec 52 NICHTS — der dedizierte '
-                        .'always-Zweig ist gelöscht, der generische Pfad kennt nur `discovery`. Diese Zeile '
-                        .'sieht aus wie Versorgung und ist keine. Verbindlich machen: `knowledge_canon.PUT`; '
-                        .'suchen lassen: Modus auf `discovery` stellen.',
+                    'text' => 'Die Einstellung „Regelwerk: Immer vollständig" liefert kein Wissen mehr. Sie sieht '
+                        .'aus wie Versorgung, wirkt aber nicht. Regeln, die immer gelten sollen, als verbindliches '
+                        .'Wissen hinterlegen. Sonst die Einstellung auf „Passendes suchen" umstellen.',
                 ];
             }
         }
@@ -150,10 +149,9 @@ class WissensProfilService
                 'schwere' => 'hinweis',
                 'nachfolger' => [],
                 'slug' => null,
-                'text' => count($altBindungen).' Alt-Bindung(en) an diesem Key ('
-                    .implode(', ', $altBindungen).'). Sie wirken seit Spec 52 nicht mehr — der Gateway '
-                    .'liest die Tabelle nicht. Loesen mit `knowledge.UNBIND`; verbindlich machen '
-                    .'stattdessen ueber den Kanon.',
+                'text' => (count($altBindungen) === 1 ? '1 alte Bindung' : count($altBindungen).' alte Bindungen')
+                    .' an diesem Arbeitsschritt ('.implode(', ', $altBindungen).'). Sie wirken nicht mehr. '
+                    .'Im Wissens-Browser beim Dossier lösen. Was immer gelten soll, als verbindliches Wissen hinterlegen.',
             ];
         }
         // NUR `blockiert` kippt den Zustand. Ein `hinweis` (z. B. Alt-Bindungen) ist eine
@@ -231,7 +229,7 @@ class WissensProfilService
             // den der Korpus-Umbau braucht.
             $nachfolger = $z['slug'] !== null ? $this->links->nachfolgerVon($team, $z['slug']) : [];
             $zusatz = $nachfolger !== []
-                ? ' Nachfolger laut Verbindung: '.implode(', ', $nachfolger).' — Kanon-Zeile dorthin umhängen.'
+                ? ' Ersetzt durch: '.implode(', ', $nachfolger).'. Das neue Dossier als verbindliches Wissen hinterlegen und das alte entfernen.'
                 : '';
 
             $befunde[] = [
@@ -240,11 +238,12 @@ class WissensProfilService
                 'nachfolger' => $nachfolger,
                 'slug' => $z['slug'] ?? ('#'.$z['document_id']),
                 'text' => match ($z['grund']) {
-                    'dossier_fehlt' => 'Kanon-Zeile zeigt auf ein Dossier, das es nicht mehr gibt.',
-                    'dossier_geloescht' => 'Dossier ist gelöscht — die Kanon-Zeile ist über keinen Lesepfad mehr sichtbar.',
-                    'art_nie_im_prompt' => 'Dieses Dossier ist eine Ablauf-Anleitung für Agenten und gehört in keinen '
-                        .'Prompt — der Generator ruft keine Werkzeuge. Aus dem Kanon nehmen; Agenten erreichen es über `ablauf.GET`.',
-                    default => 'Dossier ist deaktiviert — die Zeile wird beim Prompt-Bau still übersprungen.',
+                    'dossier_fehlt' => 'Als verbindlich hinterlegt, das Dossier gibt es aber nicht mehr. Die KI bekommt diese Regel nicht.',
+                    'dossier_geloescht' => 'Dossier ist gelöscht. Die KI bekommt es nicht mehr, obwohl es als verbindlich hinterlegt ist.',
+                    'art_nie_im_prompt' => 'Dieses Dossier ist eine Arbeitsanleitung für den KI-Assistenten und gehört nicht '
+                        .'ins verbindliche Wissen. Die Erstellung nutzt es nicht. Aus dem verbindlichen Wissen nehmen; '
+                        .'der Assistent findet es weiterhin.',
+                    default => 'Dossier ist deaktiviert. Die KI bekommt es nicht, obwohl es als verbindlich hinterlegt ist. Aktivieren oder entfernen.',
                 }.$zusatz,
             ];
         }
@@ -258,8 +257,9 @@ class WissensProfilService
                 'schwere' => 'blockiert',
                 'nachfolger' => [],
                 'slug' => null,
-                'text' => 'Pflichtwissen ('.number_format($pflichtZeichen, 0, ',', '.').' Z.) überschreitet das Budget ('
-                    .number_format($budgetTotal, 0, ',', '.').' Z.). Pflicht wird nicht gekappt — es verdrängt das übrige Wissen.',
+                'text' => 'Verbindliches Wissen ('.number_format($pflichtZeichen, 0, ',', '.').' Zeichen) ist größer als der Wissensumfang ('
+                    .number_format($budgetTotal, 0, ',', '.').' Zeichen). Es wird nicht gekürzt, für weiteres Wissen bleibt kein Platz. '
+                    .'Wissensumfang erhöhen oder verbindliches Wissen verkleinern.',
             ];
         }
 
@@ -271,8 +271,8 @@ class WissensProfilService
                     'schwere' => 'hinweis',
                     'nachfolger' => [],
                     'slug' => (string) $d->slug,
-                    'text' => 'Pflicht-Dossier ist '.number_format((int) $d->char_count, 0, ',', '.').' Z. gross (Deckel '
-                        .number_format($deckel, 0, ',', '.').' Z.) — ein Thema pro Dossier ist verletzt.',
+                    'text' => 'Verbindliches Dossier hat '.number_format((int) $d->char_count, 0, ',', '.').' Zeichen, vorgesehen sind höchstens '
+                        .number_format($deckel, 0, ',', '.').'. Besser in einzelne Themen teilen.',
                 ];
             }
         }

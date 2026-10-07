@@ -72,6 +72,98 @@ class Wissenssteuerung extends Component
 
     public ?string $hinweis = null;
 
+
+    /*
+     * ── Darstellung ─────────────────────────────────────────────────────────────────────
+     * Die Seite zeigte bisher nur technische Schlüssel (recipe.generator, discovery, …).
+     * Diese Tabellen übersetzen sie in Küchensprache. Reine Anzeige: gespeichert und
+     * verglichen wird weiter mit den Schlüsseln, sie bleiben klein daneben sichtbar.
+     */
+
+    /** Bereich = Teil vor dem ersten Punkt eines Prompt-Keys. */
+    public const BEREICH_LABEL = [
+        'chat' => 'Chat', 'component' => 'Komponente', 'concept' => 'Konzept', 'conformance' => 'Regelwerk-Prüfung',
+        'demo' => 'Test', 'foodbook' => 'Foodbook', 'format' => 'Format', 'gp' => 'Grundprodukt',
+        'planning' => 'Planung', 'planung' => 'Planung', 'praesentation' => 'Präsentation', 'price' => 'Preis',
+        'recipe' => 'Basisrezept', 'signal' => 'Signal', 'trend' => 'Trendradar', 'vk' => 'Gericht', 'voice' => 'Sprachbefehl',
+    ];
+
+    /** Arbeitsschritt = Teil nach dem ersten Punkt. Unbekanntes wird lesbar gemacht statt versteckt. */
+    public const SCHRITT_WORT = [
+        'allergene' => 'Allergene', 'anker' => 'Aroma-Anker', 'bauart' => 'Bauart', 'brief_geruest' => 'Grundgerüst aus dem Auftrag',
+        'category' => 'Kategorie', 'check' => 'Prüfung', 'cluster_label' => 'Trends einordnen', 'command' => 'Befehl',
+        'condition' => 'Zustand', 'conformance_revise' => 'Regelwerk-Korrektur', 'description' => 'Beschreibung',
+        'design_css' => 'Eigenes Design', 'dichteklasse' => 'Dichteklasse', 'dish_proposal_revise' => 'Gerichtvorschlag überarbeiten',
+        'domain' => 'Warenkunde', 'echo' => 'Echo', 'eigenschaften' => 'Eigenschaften', 'equipment' => 'Geräte',
+        'extract' => 'Rezept einlesen', 'garverlust' => 'Garverlust', 'generator' => 'Erzeugen', 'geschmack' => 'Geschmack',
+        'grundgeruest' => 'Grundgerüst', 'kapitel_ideen' => 'Kapitel-Ideen', 'kohaerenz' => 'Stimmigkeit', 'kundentext' => 'Kundentext',
+        'la_suggest' => 'Artikelvorschlag', 'leitplanken' => 'Leitplanken aus dem Auftrag', 'level' => 'Niveau',
+        'margin_levers' => 'Margen-Hebel', 'marketing' => 'Verkaufstext', 'message' => 'Nachricht', 'naehrwerte' => 'Nährwerte',
+        'name_putzen' => 'Namen bereinigen', 'pairing' => 'Pairing', 'piece_default_g' => 'Stückgewicht', 'plan' => 'Plan',
+        'plating' => 'Anrichten', 'plausi' => 'Plausibilität', 'posten' => 'Posten', 'production_depth' => 'Fertigungstiefe',
+        'recipe_category_suggest' => 'Rezept-Kategorie vorschlagen', 'recipe_naming_suggest' => 'Rezeptnamen vorschlagen',
+        'regeneration' => 'Regenerieren', 'replacement_suggest' => 'Ersatz vorschlagen', 'review' => 'Prüfen', 'role' => 'Rolle',
+        'rollen' => 'Rollen', 'sektor' => 'Sektor', 'sensorik' => 'Sensorik', 'servier_vehikel' => 'Servier-Vehikel',
+        'serving_form_suggest' => 'Servierform vorschlagen', 'speisen_klasse' => 'Speisenklasse', 'steps' => 'Arbeitsschritte',
+        'suggest' => 'Vorschlag', 'supplier_inquiry' => 'Lieferanten-Anfrage', 'tags' => 'Schlagworte', 'teller_heber' => 'Teller-Heber',
+        'term_la_rank' => 'Artikel-Rangfolge', 'titel_vorschlag' => 'Titelvorschlag', 'ueberarbeiten' => 'Überarbeiten',
+        'verpackungsmasse' => 'Verpackungsmaße', 'vk_release_advice' => 'Freigabe-Empfehlung', 'wording' => 'Formulierung',
+        'zaehl_einheiten' => 'Zähleinheiten',
+    ];
+
+    /** Schlüssel ohne Punkt-Schema (Alt-Schlüssel der Routing-Ebene). */
+    public const SCHRITT_SONDER = [
+        'ai_generate_recipe' => 'Rezept- und Gericht-Erzeugung',
+        'ai_suggest_pairings' => 'Pairing-Vorschläge',
+        'ai_infer_ankers' => 'Aroma-Anker ableiten',
+    ];
+
+    /** Verwendung einer Kategorie bzw. Art (Routing-Modus). */
+    public const MODUS_LABEL = [
+        'always' => 'Immer vollständig', 'discovery' => 'Passendes suchen', 'grounding' => 'Je Hauptzutat',
+        'none' => 'Bewusst nicht', 'resolve' => 'Werte auflösen',
+    ];
+
+    /** Zustand je Arbeitsschritt: [Text, Ton]. */
+    public const ZUSTAND_LABEL = [
+        'gesteuert' => ['Versorgt', 'ok'], 'bewusst_leer' => ['Bewusst ohne', 'neutral'],
+        'ungesteuert' => ['Ohne Wissen', 'warn'], 'fehlerhaft' => ['Fehlerhaft', 'crit'],
+    ];
+
+    public const ART_LABEL = ['fachwissen' => 'Fachwissen', 'referenz' => 'Referenz', 'datenwerk' => 'Datenwerk'];
+
+    public const ACHSE_LABEL = [
+        'occasion' => 'Anlass', 'sektor' => 'Sektor', 'level' => 'Niveau', 'niveau' => 'Niveau', 'serviceform' => 'Serviceform',
+        'convenience' => 'Convenience', 'bestand' => 'Bestand', 'bio_praeferenz' => 'Bio',
+    ];
+
+    /** Lesbarer Name eines Prompt- oder Routing-Schlüssels (z. B. recipe.generator → Basisrezept · Erzeugen). */
+    public static function schrittLabel(?string $key): string
+    {
+        $key = (string) $key;
+        if ($key === '') {
+            return '–';
+        }
+        if (isset(self::SCHRITT_SONDER[$key])) {
+            return self::SCHRITT_SONDER[$key];
+        }
+        [$bereich, $rest] = str_contains($key, '.') ? explode('.', $key, 2) : [$key, ''];
+        $bereichText = self::BEREICH_LABEL[$bereich] ?? self::lesbar($bereich);
+
+        return $rest === '' ? $bereichText : $bereichText.' · '.(self::SCHRITT_WORT[$rest] ?? self::lesbar($rest));
+    }
+
+    /** snake_case/Punkt-Werte als lesbarer Text, z. B. schule_kita → Schule kita. */
+    public static function lesbar(?string $wert): string
+    {
+        return ucfirst(trim(str_replace(['_', '.'], ' ', (string) $wert)));
+    }
+
+    public static function modusLabel(?string $modus): string
+    {
+        return self::MODUS_LABEL[(string) $modus] ?? self::lesbar($modus);
+    }
+
     /**
      * Routings sind global (die Tabelle hat keine `team_id`) — sie gelten für JEDES Team.
      * Eine Fehlkonfiguration legt damit die KI-Versorgung aller Mandanten still, nicht nur die
@@ -100,7 +192,7 @@ class Wissenssteuerung extends Component
     {
         $this->fehler = $this->hinweis = null;
         if ($this->budgetKey === null) return;
-        if (! $this->darfSchreiben()) { $this->fehler = 'Das Wissensbudget ist global — nur das Master-Team darf es ändern.'; return; }
+        if (! $this->darfSchreiben()) { $this->fehler = 'Der Wissensumfang gilt für alle Teams. Ändern darf ihn nur das Master-Team.'; return; }
         $wert = (int) $this->budgetWert;
         $team = Auth::user()?->currentTeamRelation;
         $pflicht = 0;
@@ -115,14 +207,14 @@ class Wissenssteuerung extends Component
         // Budget legt den Schritt beim naechsten Aufruf still — und niemand braechte das mit
         // dieser Zahl in Verbindung.
         if ($pflicht > 0 && $wert < $pflicht) {
-            $this->fehler = sprintf('Budget %s liegt unter der Pflichtmenge von %s Zeichen — der Schritt wuerde abbrechen statt zu kuerzen. Erst den Kanon kuerzen.',
+            $this->fehler = sprintf('%s Zeichen sind weniger als das verbindliche Wissen dieses Schritts (%s Zeichen). Der Schritt würde abbrechen statt zu kürzen. Erst das verbindliche Wissen verkleinern.',
                 number_format($wert, 0, ',', '.'), number_format($pflicht, 0, ',', '.'));
 
             return;
         }
         try {
             KnowledgeBudget::setze($this->budgetKey, $wert);
-            $this->hinweis = 'Budget gespeichert.';
+            $this->hinweis = 'Wissensumfang gespeichert. Gilt ab dem nächsten KI-Aufruf.';
             $this->budgetKey = null;
         } catch (\RuntimeException $e) { $this->fehler = $e->getMessage(); }
     }
@@ -130,10 +222,10 @@ class Wissenssteuerung extends Component
     public function resetBudget(string $key): void
     {
         $this->fehler = $this->hinweis = null;
-        if (! $this->darfSchreiben()) { $this->fehler = 'Das Wissensbudget ist global — nur das Master-Team darf es ändern.'; return; }
+        if (! $this->darfSchreiben()) { $this->fehler = 'Der Wissensumfang gilt für alle Teams. Ändern darf ihn nur das Master-Team.'; return; }
         KnowledgeBudget::setze($key, null);
         $this->budgetKey = null;
-        $this->hinweis = 'Budget zurueck auf den ausgelieferten Standard.';
+        $this->hinweis = 'Wissensumfang steht wieder auf dem Standard.';
     }
 
     public function editArt(int $id): void
@@ -146,12 +238,12 @@ class Wissenssteuerung extends Component
     public function saveArt(): void
     {
         $this->fehler = $this->hinweis = null;
-        if (! $this->darfSchreiben()) { $this->fehler = 'Arten-Routings sind global — nur das Master-Team darf sie ändern.'; return; }
+        if (! $this->darfSchreiben()) { $this->fehler = 'Diese Einstellung gilt für alle Teams. Ändern darf sie nur das Master-Team.'; return; }
         try {
             app(\Platform\FoodAlchemist\Services\KnowledgeRoutingService::class)->setArt(
                 $this->artForm['feature'], $this->artForm['art'], $this->artForm['mode'], (int) $this->artForm['max_docs'],
                 $this->artForm['max_chars_per_doc'] === '' ? null : (int) $this->artForm['max_chars_per_doc']);
-            $this->hinweis = 'Arten-Routing gespeichert.';
+            $this->hinweis = 'Gespeichert. Gilt ab dem nächsten KI-Aufruf.';
         } catch (\InvalidArgumentException $e) { $this->fehler = $e->getMessage(); }
     }
 
@@ -160,7 +252,7 @@ class Wissenssteuerung extends Component
         $this->fehler = $this->hinweis = null;
         $r = DB::table('foodalchemist_knowledge_routings')->where('id', $id)->first();
         if ($r === null) {
-            $this->fehler = 'Routing-Zeile nicht gefunden.';
+            $this->fehler = 'Diese Einstellung gibt es nicht mehr. Bitte die Seite neu laden.';
 
             return;
         }
@@ -185,12 +277,12 @@ class Wissenssteuerung extends Component
     {
         $this->fehler = $this->hinweis = null;
         if (! $this->darfSchreiben()) {
-            $this->fehler = 'Wissens-Routings sind global — nur das Master-Team darf sie ändern.';
+            $this->fehler = 'Diese Einstellung gilt für alle Teams. Ändern darf sie nur das Master-Team.';
 
             return;
         }
         if (! in_array($this->form['mode'], ['always', 'discovery', 'grounding', 'none'], true)) {
-            $this->fehler = 'Modus muss always, discovery, grounding oder none sein.';
+            $this->fehler = 'Bitte eine Verwendung wählen: „Immer vollständig", „Passendes suchen", „Je Hauptzutat" oder „Bewusst nicht".';
 
             return;
         }
@@ -204,11 +296,11 @@ class Wissenssteuerung extends Component
 
         if ($this->editId !== null) {
             if (DB::table('foodalchemist_knowledge_routings')->where('id', $this->editId)->whereNotNull('art')->exists()) {
-                $this->fehler = 'Bitte Arten-Routings über den Arten-Editor bearbeiten.';
+                $this->fehler = 'Diese Einstellung gehört zu einer Wissensart. Bitte unter „Wissen nach Art" bearbeiten.';
                 return;
             }
             DB::table('foodalchemist_knowledge_routings')->where('id', $this->editId)->update($daten);
-            $this->hinweis = 'Routing gespeichert — wirkt ab dem nächsten KI-Aufruf.';
+            $this->hinweis = 'Gespeichert. Gilt ab dem nächsten KI-Aufruf.';
             $this->cancel();
 
             return;
@@ -217,7 +309,7 @@ class Wissenssteuerung extends Component
         $feature = trim($this->form['feature']);
         $category = trim($this->form['category']);
         if ($feature === '' || $category === '') {
-            $this->fehler = 'Feature und Kategorie sind Pflicht.';
+            $this->fehler = 'Bitte Arbeitsschritt und Kategorie angeben.';
 
             return;
         }
@@ -226,7 +318,7 @@ class Wissenssteuerung extends Component
             ['feature' => $feature, 'category' => $category],
             $daten + ['created_at' => now()],
         );
-        $this->hinweis = 'Routing gesetzt.';
+        $this->hinweis = 'Gespeichert. Gilt ab dem nächsten KI-Aufruf.';
         $this->cancel();
     }
 
@@ -234,14 +326,14 @@ class Wissenssteuerung extends Component
     {
         $this->fehler = $this->hinweis = null;
         if (! $this->darfSchreiben()) {
-            $this->fehler = 'Wissens-Routings sind global — nur das Master-Team darf sie ändern.';
+            $this->fehler = 'Diese Einstellung gilt für alle Teams. Ändern darf sie nur das Master-Team.';
 
             return;
         }
         DB::table('foodalchemist_knowledge_routings')->where('id', $id)->delete();
         // Ohne Zeile ist die Kategorie search-only — das ist etwas ANDERES als `none`
         // (bewusst leer). Deshalb sagen, was passiert ist, statt nur „gelöscht".
-        $this->hinweis = 'Routing entfernt — die Kategorie ist für dieses Feature jetzt search-only (kein Auto-Grounding).';
+        $this->hinweis = 'Entfernt. Diese Kategorie wird für den Arbeitsschritt nicht mehr automatisch mitgegeben, nur noch bei Bedarf durchsucht.';
     }
 
     public function toggleOffen(string $key): void
@@ -298,8 +390,8 @@ class Wissenssteuerung extends Component
         // Die Hinweise des Service NICHT schlucken: „Dossier über dem Deckel" und „Dossier ist
         // inaktiv" sind genau die Fälle, in denen die Zeile entsteht und trotzdem nicht liefert.
         $this->hinweis = $ergebnis['hinweise'] !== []
-            ? 'Gesetzt — mit Hinweis: '.implode(' · ', $ergebnis['hinweise'])
-            : 'Dossier ist jetzt verbindlich für «'.$this->kanonKey.'».';
+            ? 'Hinterlegt. Bitte beachten: '.implode(' · ', $ergebnis['hinweise'])
+            : 'Dossier gilt jetzt verbindlich für „'.self::schrittLabel($this->kanonKey).'".';
         $this->kanonForm = ['slug' => '', 'mode' => 'pflicht', 'ord' => ''];
         $this->kanonSuche = '';
     }
@@ -320,8 +412,8 @@ class Wissenssteuerung extends Component
             return;
         }
         $this->hinweis = $n > 0
-            ? '«'.$slug.'» ist für «'.$promptKey.'» nicht mehr verbindlich.'
-            : 'Nichts entfernt — die Zeile gehört einem anderen Team oder ist global.';
+            ? '„'.$slug.'" gilt für „'.self::schrittLabel($promptKey).'" nicht mehr verbindlich.'
+            : 'Nichts entfernt. Dieser Eintrag gehört einem anderen Team oder gilt für alle Teams.';
     }
 
     public function render()
@@ -370,6 +462,13 @@ class Wissenssteuerung extends Component
                     ->get(['slug', 'title', 'category', 'char_count', 'active'])
                 : collect(),
             'alias' => KnowledgeContextService::ROUTING_ALIAS,
+            // Anzeige: Kategorie-Kennung → Name (die Kennung bleibt Schlüssel der Steuerung).
+            'kategorieLabels' => DB::table('foodalchemist_knowledge_categories')
+                ->whereNull('deleted_at')->pluck('label', 'slug')->all(),
+            // Vorschläge für das Feld „Arbeitsschritt" (Datalist) — Eingabe bleibt frei.
+            'schrittVorschlaege' => collect(array_keys((array) config('foodalchemist.prompts', [])))
+                ->merge(array_values(KnowledgeContextService::ROUTING_ALIAS))
+                ->map(fn ($k) => (string) $k)->unique()->sort()->values()->all(),
         ]);
     }
 }

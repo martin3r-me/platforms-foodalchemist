@@ -64,7 +64,7 @@ class Kueche extends Component
     {
         return view('foodalchemist::livewire.settings.kueche', [
             'typen' => TeamSettingsService::KUECHEN_TYPEN,
-            'farbTypen' => ['gp' => 'Produkt (GP)', 'basisrezept' => 'Basisrezept', 'gericht' => 'Gericht (VK)'],
+            'farbTypen' => ['gp' => 'Grundprodukt', 'basisrezept' => 'Basisrezept', 'gericht' => 'Gericht'],
         ]);
     }
 }

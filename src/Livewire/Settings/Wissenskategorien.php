@@ -69,7 +69,7 @@ class Wissenskategorien extends Component
     public function save(): void
     {
         if (trim((string) ($this->form['label'] ?? '')) === '') {
-            $this->fehler = 'Label ist Pflicht.';
+            $this->fehler = 'Name ist Pflicht.';
 
             return;
         }
@@ -92,7 +92,7 @@ class Wissenskategorien extends Component
     {
         $label = trim($this->neu['label']);
         if ($label === '') {
-            $this->fehler = 'Label ist Pflicht.';
+            $this->fehler = 'Name ist Pflicht.';
 
             return;
         }

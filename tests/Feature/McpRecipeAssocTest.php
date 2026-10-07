@@ -40,7 +40,7 @@ beforeEach(function () {
 
 it('Registry-Smoke: D2b-Tools registriert', function () {
     foreach ([
-        'foodalchemist.recipe_eignung.PUT', 'foodalchemist.recipe_anchors.PUT', 'foodalchemist.recipe_pairings.PUT',
+        'foodalchemist.recipe_eignung.PUT',
         'foodalchemist.recipe_sensorik.POST', 'foodalchemist.recipe_feedback.DELETE', 'foodalchemist.recipe_feedback.DEVELOP',
     ] as $name) {
         expect($this->registry->get($name))->not->toBeNull($name);
@@ -54,23 +54,6 @@ it('recipe_eignung.PUT: set/remove; ungültiger Slug → VALIDATION_ERROR; fremd
     expect(($this->run)('foodalchemist.recipe_eignung.PUT', ['recipe_id' => $r->id, 'typ' => 'level', 'slug' => 'gehoben', 'action' => 'remove'])->success)->toBeTrue();
     expect(($this->run)('foodalchemist.recipe_eignung.PUT', ['recipe_id' => $r->id, 'typ' => 'level', 'slug' => 'quatsch', 'action' => 'set'])->errorCode)->toBe('VALIDATION_ERROR');
     expect(($this->runChild)('foodalchemist.recipe_eignung.PUT', ['recipe_id' => $r->id, 'typ' => 'sektor', 'slug' => 'care', 'action' => 'set'])->errorCode)->toBe('ACCESS_DENIED');
-});
-
-it('recipe_anchors.PUT: set + remove echten Anker; unbekanntes Rezept + invalider Anker → NOT_FOUND', function () {
-    $r = ($this->mkRecipe)();
-    $anker = ($this->neuAnker)('Zitrone');
-    expect(($this->run)('foodalchemist.recipe_anchors.PUT', ['recipe_id' => $r->id, 'anker_id' => $anker, 'action' => 'set'])->success)->toBeTrue();
-    expect(($this->run)('foodalchemist.recipe_anchors.PUT', ['recipe_id' => $r->id, 'anker_id' => $anker, 'action' => 'remove'])->success)->toBeTrue();
-    expect(($this->run)('foodalchemist.recipe_anchors.PUT', ['recipe_id' => 999999, 'anker_id' => $anker, 'action' => 'set'])->errorCode)->toBe('NOT_FOUND');
-    expect(($this->run)('foodalchemist.recipe_anchors.PUT', ['recipe_id' => $r->id, 'anker_id' => 999999, 'action' => 'set'])->errorCode)->toBe('NOT_FOUND');
-});
-
-it('recipe_pairings.PUT: set mit Typ + remove; ungültiger Typ → VALIDATION_ERROR', function () {
-    $r = ($this->mkRecipe)();
-    $anker = ($this->neuAnker)('Estragon');
-    expect(($this->run)('foodalchemist.recipe_pairings.PUT', ['recipe_id' => $r->id, 'anker_id' => $anker, 'typ' => 'klassisch', 'action' => 'set'])->success)->toBeTrue();
-    expect(($this->run)('foodalchemist.recipe_pairings.PUT', ['recipe_id' => $r->id, 'anker_id' => $anker, 'action' => 'remove'])->success)->toBeTrue();
-    expect(($this->run)('foodalchemist.recipe_pairings.PUT', ['recipe_id' => $r->id, 'anker_id' => $anker, 'typ' => 'schräg', 'action' => 'set'])->errorCode)->toBe('VALIDATION_ERROR');
 });
 
 it('recipe_sensorik.POST: eigenes ok (KI), fremd → ACCESS_DENIED', function () {

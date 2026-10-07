@@ -18,16 +18,16 @@ class ConcepterDimensionen extends Component
 {
     /** Whitelist: key => [tabelle, label, hint] */
     public const VOKABULARE = [
-        'einsatzmomente' => ['tabelle' => 'foodalchemist_service_moments', 'label' => 'Einsatzmomente', 'hint' => 'mehrfach pro Concept (Frühstück, Lunch, Apéro …)'],
-        'eventtypen' => ['tabelle' => 'foodalchemist_event_types', 'label' => 'Eventtypen', 'hint' => 'einfach pro Concept (Konferenz, Gala, Sommerfest …)'],
-        'saisons' => ['tabelle' => 'foodalchemist_seasons', 'label' => 'Saisons', 'hint' => 'mehrfach pro Concept'],
-        'servierformen' => ['tabelle' => 'foodalchemist_serving_forms', 'label' => 'Servierformen', 'hint' => 'Scharnier Concept ⇄ Gericht-Darreichung — WaWi-Master, Zusätze FA-nativ'],
+        'einsatzmomente' => ['tabelle' => 'foodalchemist_service_moments', 'label' => 'Einsatzmomente', 'hint' => 'Mehrere je Konzept möglich, zum Beispiel Frühstück, Lunch, Apéro.'],
+        'eventtypen' => ['tabelle' => 'foodalchemist_event_types', 'label' => 'Eventtypen', 'hint' => 'Einer je Konzept, zum Beispiel Konferenz, Gala, Sommerfest.'],
+        'saisons' => ['tabelle' => 'foodalchemist_seasons', 'label' => 'Saisons', 'hint' => 'Mehrere je Konzept möglich.'],
+        'servierformen' => ['tabelle' => 'foodalchemist_serving_forms', 'label' => 'Servierformen', 'hint' => 'Verbindet Konzept und Darreichung am Gericht. Der Grundbestand kommt aus der Warenwirtschaft, eigene Einträge lassen sich ergänzen.'],
         // Spec 19 „Foodbook-Leitstelle" (E3.3): Zielgruppen-Vokabular (FA-nativ). Default am Foodbook,
         // Auswahl pro Kapitel, Stempel aufs Konzept beim Kapitel-Go (Pivots aus M1).
-        'zielgruppen' => ['tabelle' => 'foodalchemist_target_groups', 'label' => 'Zielgruppen', 'hint' => 'Default am Foodbook + Auswahl pro Kapitel (Tagungsgast, Bankett-Gast, VIP-Gala …)'],
+        'zielgruppen' => ['tabelle' => 'foodalchemist_target_groups', 'label' => 'Zielgruppen', 'hint' => 'Vorgabe am Foodbook, Auswahl je Kapitel, zum Beispiel Tagungsgast, Bankettgast, VIP-Gala.'],
         // Spec 19 „Foodbook-Leitstelle" (E3.6): Outlet-Vokabular (FA-nativ). NUR optionaler Kapitel-Tag
         // (Ausgabestelle) — KEINE Planungs-Ebene, NICHT in leitplanken(). Keine Seeds — rein team-definiert.
-        'outlets' => ['tabelle' => 'foodalchemist_outlets', 'label' => 'Outlets', 'hint' => 'optionaler Kapitel-Tag = Ausgabestelle (Restaurant, Bankett, Bar …) — keine Planungs-Ebene'],
+        'outlets' => ['tabelle' => 'foodalchemist_outlets', 'label' => 'Ausgabestellen', 'hint' => 'Freiwillige Markierung am Kapitel, zum Beispiel Restaurant, Bankett, Bar. Keine eigene Planungsebene.'],
     ];
 
     /** @var array<string, string> Add-Form (Name) je Vokabular */

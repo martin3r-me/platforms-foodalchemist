@@ -408,7 +408,7 @@ class ConcepterAggregateService
      * @param  Collection<int, object>  $gerichte  bereits deduplizierte Recipe-Sammlung
      * @return array{n_gerichte:int, is_vegan:bool, is_vegetarian:bool, is_halal:bool,
      *               is_gluten_free:bool, is_lactose_free:bool, contains_pork:bool,
-     *               contains_beef:bool, konfidenz:string}
+     *               contains_beef:bool, fleisch_belegt:bool, konfidenz:string}
      */
     public function allergenRollupFromGerichte(Collection $gerichte): array
     {
@@ -426,6 +426,11 @@ class ConcepterAggregateService
             'is_lactose_free' => $alle('spec_is_lactose_free'),
             'contains_pork' => $eines('spec_contains_pork'),
             'contains_beef' => $eines('spec_contains_beef'),
+            // Spec 59: Fleisch nur, wenn BELEGT — `spec_is_vegetarian` ausdrücklich false (nicht
+            // null = unbekannt, siehe RecipeRecomputeService::mergeAssure) oder Schwein/Rind.
+            // Vorher galt alles Nicht-Vegetarische als Fleisch, auch Gerichte ganz ohne Diät-Pflege.
+            'fleisch_belegt' => $gerichte->contains(fn ($g) => (($g->spec_is_vegetarian ?? null) !== null && ! (bool) $g->spec_is_vegetarian)
+                || (bool) ($g->spec_contains_pork ?? false) || (bool) ($g->spec_contains_beef ?? false)),
             'confidence' => array_search($minKonf, self::KONF_RANG, true) ?: 'unknown',
         ];
     }

@@ -227,14 +227,14 @@ class SignalPolicyService
     {
         $teile = [$count . ' offen'];
         $teile[] = match ($state) {
-            self::STATE_STUMM => 'stummgeschaltet (auch kein Drift-Alarm)',
+            self::STATE_STUMM => 'stumm geschaltet, auch keine Meldung bei Verschlechterung',
             self::STATE_AKZEPTIERT => 'bekannt, akzeptiert bis ' . $policy?->accepted_until?->format('d.m.Y'),
-            self::STATE_FRIST_ABGELAUFEN => 'Akzeptanz-Frist abgelaufen (' . $policy?->accepted_until?->format('d.m.Y') . ')',
+            self::STATE_FRIST_ABGELAUFEN => 'Frist abgelaufen am ' . $policy?->accepted_until?->format('d.m.Y'),
             default => 'offener Befund',
         };
         $d = $delta['delta'] ?? null;
         if ($d !== null && $d !== 0) {
-            $teile[] = ($d > 0 ? '+' : '') . $d . ' seit dem letzten Lauf';
+            $teile[] = ($d > 0 ? '+' : '') . $d . ' seit der letzten Prüfung';
         }
 
         return implode(' · ', $teile);

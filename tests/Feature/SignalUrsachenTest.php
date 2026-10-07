@@ -75,7 +75,7 @@ it('nennt bei einem GP ohne Lieferantenartikel den GP als Glied der Kette', func
     expect($ek)->not->toBeNull()
         ->and($ek['glieder'][0]['gp_name'])->toBe('Trüffelbutter')
         ->and($ek['glieder'][0]['gp_id'])->toBe($gp->id)
-        ->and($ek['glieder'][0]['ursache'])->toBe('GP ohne Lieferantenartikel')
+        ->and($ek['glieder'][0]['ursache'])->toBe('Grundprodukt ohne Lieferantenartikel')
         ->and($ek['glieder'][0]['fixbar'])->toBeFalse();
 });
 
@@ -91,7 +91,7 @@ it('unterscheidet die Beschaffungs-Lücke vom Lead-Problem — sie ist NICHT fix
     $ekA = collect($this->ursachen->fuerObjekt($this->rootTeam, 'recipe', $a->id))->firstWhere('art', 'ek');
     $ekB = collect($this->ursachen->fuerObjekt($this->rootTeam, 'recipe', $b->id))->firstWhere('art', 'ek');
 
-    expect($ekA['glieder'][0]['ursache'])->toBe('GP ohne Lieferantenartikel')
+    expect($ekA['glieder'][0]['ursache'])->toBe('Grundprodukt ohne Lieferantenartikel')
         ->and($ekA['glieder'][0]['fixbar'])->toBeFalse()
         ->and($ekB['glieder'][0]['ursache'])->toBe('Kein Lieferantenartikel mit gültigem Preis')
         ->and($ekB['glieder'][0]['fixbar'])->toBeFalse();
@@ -163,7 +163,7 @@ it('beantwortet die Frage auch direkt am GP', function () {
     $block = collect($this->ursachen->fuerObjekt($this->rootTeam, 'gp', $gp->id))->firstWhere('art', 'gp');
 
     expect($block)->not->toBeNull()
-        ->and($block['kopf'])->toBe('Kein Lead-Lieferantenartikel gesetzt')
+        ->and($block['kopf'])->toBe('Kein Hauptartikel gewählt')
         ->and($block['glieder'][0]['fixbar'])->toBeTrue();
 });
 

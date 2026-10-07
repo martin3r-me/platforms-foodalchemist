@@ -44,12 +44,12 @@ class Aufschlagsklassen extends Component
         $team = Auth::user()?->currentTeamRelation;
         $ak = TeamScope::applyVisible(FoodAlchemistMarkupClass::query(), 'team_id', $team)->find($id);
         if ($ak === null) {
-            $this->fehler = 'Aufschlagsklasse nicht gefunden oder nicht sichtbar.';
+            $this->fehler = 'Diese Preisklasse gibt es nicht oder sie ist für dein Team nicht sichtbar.';
 
             return null;
         }
         if (! TeamScope::owns($ak->team_id, $team)) {
-            $this->fehler = 'Geerbte oder globale Aufschlagsklasse — Pflege nur durchs Besitzer-Team (D1).';
+            $this->fehler = 'Diese Preisklasse ist geerbt oder eine Vorgabe. Ändern kann sie nur das Team, dem sie gehört.';
 
             return null;
         }

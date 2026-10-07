@@ -1,12 +1,34 @@
-{{-- M10R-2 / Doc 15 §10.2+§10.4: vereinheitlichter Concepter-Browser (Concepts | Pakete in einem Screen) --}}
-@php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
-@php($tabAktiv = 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700')
-@php($filterHover = 'text-gray-600 hover:bg-black/[0.03]')
-@php($niveauDot = ['klassisch' => 'bg-sky-400', 'gehoben' => 'bg-amber-400', 'haute' => 'bg-violet-500'])
+{{-- Concepter — Concepts und Pakete in einem Screen (M10R-2 / Doc 15 §10.2+§10.4).
+     fa-pass Welle 2 (2026-10-05): auf Bausteine <x-fa::…> umgestellt. Funktion, wire:-Bindungen, Event-Namen
+     und data-Marker unverändert. Neu: Umschalter Concepts | Pakete und Hauptaktion im Seitenkopf,
+     Filter als Filterzeilen (Einsatz-Dimensionen eingeklappt, offen sobald gewählt), Status als Chip mit Menü
+     statt Dropdown je Zeile, fehlender Preis als Signal, Detail-Spalte erst nach Auswahl. --}}
+@php
+    $istPakete = $tab === 'pakete';
+    $statusLabel = ['draft' => 'Entwurf', 'active' => 'Aktiv', 'archiviert' => 'Archiv'];
+    $statusTon = ['draft' => 'neutral', 'active' => 'ok', 'archiviert' => 'neutral'];
+    $statusIcon = ['draft' => 'heroicon-m-pencil', 'active' => 'heroicon-m-check', 'archiviert' => 'heroicon-m-archive-box'];
+    $niveauLabel = ['klassisch' => 'Klassisch', 'gehoben' => 'Gehoben', 'haute' => 'Haute Cuisine'];
+
+    // Einsatz-Dimensionen: [Überschrift, aktueller Wert, Methoden-Feld, Vokabular, Label-Feld, wire:key-Präfix]
+    $facetten = [
+        ['Eventtyp', $eventtypFilter, 'eventtypFilter', $facetteEventtypen, 'name', 'fev'],
+        ['Servierform', $servierformFilter, 'servierformFilter', $facetteServierformen, 'label', 'fsf'],
+        ['Einsatzmoment', $momentFilter, 'momentFilter', $facetteMomente, 'name', 'fem'],
+        ['Saison', $saisonFilter, 'saisonFilter', $facetteSaisons, 'name', 'fsa'],
+    ];
+    $filterAktiv = $search !== '' || $klasse !== '' || $statusFilter !== '' || $rolleFilter !== ''
+        || $eventtypFilter !== '' || $servierformFilter !== '' || $momentFilter !== '' || $saisonFilter !== '';
+
+    $einheit = $istPakete ? ($items->total() === 1 ? ' Paket' : ' Pakete')
+        : ($showVorlagen ? ($items->total() === 1 ? ' Vorlage' : ' Vorlagen') : ' Concepts');
+    $neuText = $istPakete ? 'Neues Paket' : ($showVorlagen ? 'Neue Vorlage' : 'Neues Concept');
+    $spaltenZahl = 6;
+@endphp
 
 <x-ui-page>
     <x-slot:navbar>
-        <x-ui-page-navbar title="Concepter" icon="heroicon-o-square-3-stack-3d" />
+        <x-foodalchemist::shell.page-navbar title="Concepter" icon="heroicon-o-square-3-stack-3d" />
     </x-slot:navbar>
 
     <x-slot name="actionbar">
@@ -17,204 +39,214 @@
     </x-slot>
 
     <x-slot name="sidebar">
-        <x-ui-page-sidebar title="Concepter" width="w-80">
-            <div class="p-3 space-y-3">
-                {{-- Umschalter Concepts | Pakete (§10.2) --}}
-                <div class="flex gap-1.5 p-0.5 rounded-lg bg-black/[0.03]">
-                    <button type="button" wire:click="wechselTab('concepts')"
-                            class="flex-1 text-xs py-1 rounded-md transition-all {{ $tab === 'concepts' ? 'bg-white shadow-sm font-medium text-violet-700' : 'text-gray-600' }}">Concepts</button>
-                    <button type="button" wire:click="wechselTab('pakete')"
-                            class="flex-1 text-xs py-1 rounded-md transition-all {{ $tab === 'pakete' ? 'bg-white shadow-sm font-medium text-violet-700' : 'text-gray-600' }}">Pakete</button>
+        <x-ui-page-sidebar title="Filter" width="w-80">
+            <div class="p-3 flex flex-col gap-3">
+                <div class="relative">
+                    <label for="concepter-suche" class="sr-only">{{ $istPakete ? 'Pakete durchsuchen' : 'Concepts durchsuchen' }}</label>
+                    @svg('heroicon-m-magnifying-glass', 'w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--fa-ink-3)] pointer-events-none')
+                    <x-fa::input id="concepter-suche" type="search" wire:model.live.debounce.300ms="search"
+                        placeholder="{{ $istPakete ? 'Paket suchen' : 'Concept suchen' }}" class="pl-8" />
                 </div>
 
-                <input type="search" wire:model.live.debounce.300ms="search"
-                       placeholder="{{ $tab === 'pakete' ? 'Paket suchen …' : 'Concept suchen …' }}" class="{{ $input }}" />
+                @unless($istPakete)
+                    {{-- Vorlagen: eigene Liste, aus der neue Concepts entstehen --}}
+                    <x-foodalchemist::filter-row wire:click="$set('showVorlagen', {{ $showVorlagen ? 'false' : 'true' }})" :active="$showVorlagen">
+                        <span class="inline-flex items-center gap-2">@svg('heroicon-o-square-2-stack', 'w-4 h-4 shrink-0') Nur Vorlagen</span>
+                    </x-foodalchemist::filter-row>
+                @endunless
 
-                {{-- Primär-Aktion OBEN (Dominique 2026-08-27): „+ Neu" wie bei Gerichten/Basisrezepten über die Filter, nicht darunter. --}}
-                <button type="button" wire:click="neu" class="{{ $btnPrimary }} w-full justify-center">
-                    + {{ $tab === 'pakete' ? 'Neues Paket' : ($showVorlagen ? 'Neue Vorlage' : 'Neues Concept') }}
-                </button>
+                {{-- Status (geteilte Dimension, gilt für beide Reiter) --}}
+                <div class="flex flex-col gap-0.5 pt-2 border-t border-[var(--fa-line)]">
+                    <p class="px-2.5 pb-1 text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-3)]">Status</p>
+                    <x-foodalchemist::filter-row wire:click="waehleStatus('')" :active="$statusFilter === ''">Alle Status</x-foodalchemist::filter-row>
+                    @foreach($statusLabel as $val => $lbl)
+                        <x-foodalchemist::filter-row wire:key="stf-{{ $val }}" wire:click="waehleStatus('{{ $val }}')" :active="$statusFilter === $val">{{ $lbl }}</x-foodalchemist::filter-row>
+                    @endforeach
+                </div>
 
-                @if($tab === 'concepts')
-                    <div class="flex gap-1.5">
-                        <button type="button" wire:click="$set('showVorlagen', false)"
-                                class="{{ $pill }} {{ ! $showVorlagen ? $variantPill['primary'] : $variantPill['secondary'] }}">Concepts</button>
-                        <button type="button" wire:click="$set('showVorlagen', true)"
-                                class="{{ $pill }} {{ $showVorlagen ? $variantPill['primary'] : $variantPill['secondary'] }}">Vorlagen</button>
-                    </div>
-                @endif
-
-                {{-- Klasse-Filter (geteilte Dimension §10.3) --}}
+                {{-- Klasse (geteilte Dimension §10.3) --}}
                 @if(! empty($klassen))
-                    <div class="space-y-0.5 pt-2 border-t border-black/5">
-                        <span class="{{ $label }}">Klasse</span>
-                        <div class="flex flex-wrap gap-1">
-                            <button type="button" wire:click="waehleKlasse('')" class="{{ $pill }} {{ $klasse === '' ? $variantPill['primary'] : $variantPill['secondary'] }}">Alle</button>
-                            @foreach($klassen as $k)
-                                <button type="button" wire:key="kl-{{ $loop->index }}" wire:click="waehleKlasse(@js($k))"
-                                        class="{{ $pill }} {{ $klasse === $k ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $k }}</button>
-                            @endforeach
-                        </div>
-                    </div>
-                @endif
-
-                {{-- Status-Filter (geteilte Dimension, 2026-08-24): draft|active|archiviert, gilt für beide Reiter --}}
-                <div class="space-y-0.5 pt-2 border-t border-black/5">
-                    <span class="{{ $label }}">Status</span>
-                    <div class="flex flex-wrap gap-1">
-                        <button type="button" wire:click="waehleStatus('')" class="{{ $pill }} {{ $statusFilter === '' ? $variantPill['primary'] : $variantPill['secondary'] }}">Alle</button>
-                        @foreach(['draft' => 'Entwurf', 'active' => 'Aktiv', 'archiviert' => 'Archiv'] as $val => $lbl)
-                            <button type="button" wire:key="stf-{{ $val }}" wire:click="waehleStatus('{{ $val }}')"
-                                    class="{{ $pill }} {{ $statusFilter === $val ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $lbl }}</button>
+                    <div class="flex flex-col gap-0.5 pt-2 border-t border-[var(--fa-line)]">
+                        <p class="px-2.5 pb-1 text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-3)]">Klasse</p>
+                        <x-foodalchemist::filter-row wire:click="waehleKlasse('')" :active="$klasse === ''">Alle Klassen</x-foodalchemist::filter-row>
+                        @foreach($klassen as $k)
+                            <x-foodalchemist::filter-row wire:key="kl-{{ $loop->index }}" wire:click="waehleKlasse(@js($k))" :active="$klasse === $k">{{ $k }}</x-foodalchemist::filter-row>
                         @endforeach
                     </div>
-                </div>
+                @endif
 
-                @if($tab === 'pakete' && ! empty($rollen))
-                    {{-- Rollen-Filter (Pakete) --}}
-                    <div class="space-y-0.5 pt-2 border-t border-black/5">
-                        <span class="{{ $label }}">Rolle</span>
-                        <div class="flex flex-wrap gap-1">
-                            <button type="button" wire:click="waehleRolle('')" class="{{ $pill }} {{ $rolleFilter === '' ? $variantPill['primary'] : $variantPill['secondary'] }}">Alle</button>
-                            @foreach($rollen as $r)
-                                <button type="button" wire:key="ro-{{ $loop->index }}" wire:click="waehleRolle(@js($r))"
-                                        class="{{ $pill }} {{ $rolleFilter === $r ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $r }}</button>
-                            @endforeach
-                        </div>
+                @if($istPakete && ! empty($rollen))
+                    <div class="flex flex-col gap-0.5 pt-2 border-t border-[var(--fa-line)]">
+                        <p class="px-2.5 pb-1 text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-3)]">Rolle</p>
+                        <x-foodalchemist::filter-row wire:click="waehleRolle('')" :active="$rolleFilter === ''">Alle Rollen</x-foodalchemist::filter-row>
+                        @foreach($rollen as $r)
+                            <x-foodalchemist::filter-row wire:key="ro-{{ $loop->index }}" wire:click="waehleRolle(@js($r))" :active="$rolleFilter === $r">{{ $r }}</x-foodalchemist::filter-row>
+                        @endforeach
                     </div>
                 @endif
 
-                @if(in_array($tab, ['concepts', 'pakete'], true))
-                    {{-- Facetten-Filter (Umbau-Spec Phase 4b + Kaskade 2026-08-24): Eventtyp · Servierform ·
-                         Einsatzmoment · Saison — geteilte Concept-Dimensionen, gelten auch für Pakete (kind=paket). --}}
-                    <div class="space-y-0.5 pt-2 border-t border-black/5">
-                        <span class="{{ $label }}">Eventtyp</span>
-                        <div class="flex flex-wrap gap-1">
-                            <button type="button" wire:click="waehleFacette('eventtypFilter', '')" class="{{ $pill }} {{ $eventtypFilter === '' ? $variantPill['primary'] : $variantPill['secondary'] }}">Alle</button>
-                            @foreach($facetteEventtypen as $et)
-                                <button type="button" wire:key="fev-{{ $et->id }}" wire:click="waehleFacette('eventtypFilter', '{{ $et->id }}')"
-                                        class="{{ $pill }} {{ $eventtypFilter === (string) $et->id ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $et->name }}</button>
-                            @endforeach
-                        </div>
-                    </div>
-                    <div class="space-y-0.5 pt-2 border-t border-black/5">
-                        <span class="{{ $label }}">Servierform</span>
-                        <div class="flex flex-wrap gap-1">
-                            @foreach($facetteServierformen as $sf)
-                                <button type="button" wire:key="fsf-{{ $sf->id }}" wire:click="waehleFacette('servierformFilter', '{{ $sf->id }}')"
-                                        class="{{ $pill }} {{ $servierformFilter === (string) $sf->id ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $sf->label }}</button>
-                            @endforeach
-                        </div>
-                    </div>
-                    <div class="space-y-0.5 pt-2 border-t border-black/5">
-                        <span class="{{ $label }}">Einsatzmoment</span>
-                        <div class="flex flex-wrap gap-1">
-                            @foreach($facetteMomente as $em)
-                                <button type="button" wire:key="fem-{{ $em->id }}" wire:click="waehleFacette('momentFilter', '{{ $em->id }}')"
-                                        class="{{ $pill }} {{ $momentFilter === (string) $em->id ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $em->name }}</button>
-                            @endforeach
-                        </div>
-                    </div>
-                    <div class="space-y-0.5 pt-2 border-t border-black/5">
-                        <span class="{{ $label }}">Saison</span>
-                        <div class="flex flex-wrap gap-1">
-                            @foreach($facetteSaisons as $sa)
-                                <button type="button" wire:key="fsa-{{ $sa->id }}" wire:click="waehleFacette('saisonFilter', '{{ $sa->id }}')"
-                                        class="{{ $pill }} {{ $saisonFilter === (string) $sa->id ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $sa->name }}</button>
-                            @endforeach
-                        </div>
-                    </div>
+                {{-- Einsatz (Umbau-Spec 4b + Kaskade 2026-08-24): Eventtyp · Servierform · Einsatzmoment · Saison,
+                     gelten auch für Pakete. Eingeklappt, offen sobald gewählt. --}}
+                <div class="flex flex-col gap-1 pt-2 border-t border-[var(--fa-line)]">
+                    <p class="px-2.5 text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-3)]">Einsatz</p>
+                    @foreach($facetten as [$titel, $wert, $feld, $vokabular, $labelFeld, $praefix])
+                        @continue($vokabular->isEmpty())
+                        @php
+                            $gewaehlt = $vokabular->firstWhere('id', (int) $wert);
+                        @endphp
+                        <details class="group" @if($wert !== '') open @endif wire:key="fgrp-{{ $feld }}">
+                            <summary class="flex items-center justify-between gap-2 h-8 px-2.5 rounded-[var(--fa-radius-control)] cursor-pointer select-none text-[length:var(--fa-text-md)] text-[var(--fa-ink-2)] hover:bg-[var(--fa-hover)] hover:text-[var(--fa-ink)]">
+                                <span class="inline-flex items-center gap-1.5 min-w-0">
+                                    @svg('heroicon-m-chevron-right', 'w-4 h-4 shrink-0 transition-transform group-open:rotate-90')
+                                    <span class="truncate {{ $gewaehlt ? 'font-semibold text-[var(--fa-ink)]' : '' }}">{{ $titel }}</span>
+                                </span>
+                                @if($gewaehlt)<x-fa::badge tone="accent" class="max-w-[9rem]"><span class="truncate" title="{{ $gewaehlt->{$labelFeld} }}">{{ $gewaehlt->{$labelFeld} }}</span></x-fa::badge>@endif
+                            </summary>
+                            <x-foodalchemist::filter-ast>
+                                <x-foodalchemist::filter-row level="child" wire:click="waehleFacette('{{ $feld }}', '')" :active="$wert === ''">Alle</x-foodalchemist::filter-row>
+                                @foreach($vokabular as $eintrag)
+                                    <x-foodalchemist::filter-row level="child" wire:key="{{ $praefix }}-{{ $eintrag->id }}"
+                                        wire:click="waehleFacette('{{ $feld }}', '{{ $eintrag->id }}')"
+                                        :active="$wert === (string) $eintrag->id">{{ $eintrag->{$labelFeld} }}</x-foodalchemist::filter-row>
+                                @endforeach
+                            </x-foodalchemist::filter-ast>
+                        </details>
+                    @endforeach
+                </div>
 
-                    {{-- 4c (Umbau-Spec F6, 2026-07-03): Kategorie-Baum abgelöst — Eventtyp/Servierform/
-                         Einsatzmoment/Saison-Facetten übernehmen die Filter-Achse. Daten + Settings-Pflege
-                         (konzept-taxonomie) bleiben; Foodbook-Picker unberührt. --}}
+                @if($filterAktiv)
+                    <div class="pt-2 border-t border-[var(--fa-line)]">
+                        <x-fa::button variant="ghost" size="sm" icon="heroicon-m-x-mark" wire:click="filterZuruecksetzen" class="w-full">Filter zurücksetzen</x-fa::button>
+                    </div>
                 @endif
             </div>
         </x-ui-page-sidebar>
     </x-slot>
 
-    <x-slot name="activity">
-        <x-foodalchemist::detail-sidebar title="Detail" width="w-96" :maxWidth="640" scope="activity_concepter" side="right">
-            <livewire:foodalchemist.concepter.detail-panel />
-        </x-foodalchemist::detail-sidebar>
-    </x-slot>
+    {{-- Detail-Spalte erst, wenn etwas gewählt ist (vorher nahm der leere Hinweis Platz der Tabelle weg). --}}
+    @if($selectedId !== null)
+        <x-slot name="activity">
+            <x-foodalchemist::detail-sidebar title="Detail" width="w-96" :maxWidth="640" scope="activity_concepter" side="right">
+                <livewire:foodalchemist.concepter.detail-panel :selected-id="$selectedId" :type="$tab" />
+            </x-foodalchemist::detail-sidebar>
+        </x-slot>
+    @endif
 
-    <x-ui-page-container padding="px-6 pb-6" spacing="space-y-4">
-        <div class="relative overflow-hidden {{ $card }}">
-            <div class="{{ $cardAccent }}"></div>
+    <x-ui-page-container padding="px-6 py-6" spacing="space-y-4">
+        <x-fa::page-header title="Concepter" :subtitle="number_format($items->total(), 0, ',', '.') . $einheit">
+            <x-slot:actions>
+                <x-fa::button variant="primary" icon="heroicon-m-plus" wire:click="neu">{{ $neuText }}</x-fa::button>
+            </x-slot:actions>
+        </x-fa::page-header>
+
+        {{-- Umschalter Concepts | Pakete (§10.2) --}}
+        <div class="flex flex-wrap items-center justify-between gap-3">
+            <div role="group" aria-label="Ansicht" class="flex p-0.5 gap-0.5 rounded-[var(--fa-radius-control)] bg-[var(--fa-neutral-soft)]">
+                @foreach(['concepts' => 'Concepts', 'pakete' => 'Pakete'] as $tk => $tl)
+                    <button type="button" wire:click="wechselTab('{{ $tk }}')" aria-pressed="{{ $tab === $tk ? 'true' : 'false' }}"
+                            class="h-8 px-4 rounded-[5px] text-[length:var(--fa-text-md)] font-medium transition-colors {{ $tab === $tk ? 'bg-[var(--fa-surface)] text-[var(--fa-ink)] shadow-sm' : 'text-[var(--fa-ink-2)] hover:text-[var(--fa-ink)]' }}">{{ $tl }}</button>
+                @endforeach
+            </div>
+            <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)] max-w-[60ch]">
+                {{ $istPakete ? 'Ein Paket bündelt mehrere Gerichte zu einem Preis je Person und lässt sich in Concepts einsetzen.' : 'Ein Concept ist ein ganzes Menü oder Buffet aus Positionen. Klick auf den Namen öffnet den Editor.' }}
+            </p>
+        </div>
+
+        <div class="fa-surface overflow-hidden">
             {{-- Spec 28: eigener Scroll-Kasten, damit der Tabellenkopf kleben kann --}}
             <div class="max-h-[70vh] overflow-auto">
-            <table class="{{ $table }}">
-                <thead>
-                    <tr>
-                        <th class="{{ $th }} w-full text-left sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Name</th>
-                        @if($tab === 'pakete')
-                            <th class="{{ $th }} text-left sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Klasse</th>
-                            <th class="{{ $th }} text-left sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Eventtyp · Servierform</th>
-                            <th class="{{ $th }} text-right sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Posten</th>
-                            <th class="{{ $th }} text-right sticky top-0 z-20 bg-white/95 backdrop-blur-xl">€/Person</th>
-                            <th class="{{ $th }} text-right sticky top-0 z-20 bg-white/95 backdrop-blur-xl">W%</th>
-                        @else
-                            <th class="{{ $th }} text-left sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Klasse</th>
-                            <th class="{{ $th }} text-left sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Eventtyp · Servierform</th>
-                            <th class="{{ $th }} text-left sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Status</th>
-                            <th class="{{ $th }} text-right sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Slots</th>
-                            <th class="{{ $th }} text-right sticky top-0 z-20 bg-white/95 backdrop-blur-xl">€/Person</th>
-                        @endif
-                    </tr>
-                </thead>
-                <tbody>
-                    @forelse($items as $it)
-                        <x-foodalchemist::table-row :active="$selectedId === $it->id" wire:key="row-{{ $tab }}-{{ $it->id }}" wire:click="waehle({{ $it->id }})"
-                            x-data x-on:click="$store.ui?.mSet('activity_concepter', 'open', true)"
->
-                            <td wire:click.stop="bearbeite({{ $it->id }})" class="{{ $td }} font-medium text-gray-900 hover:text-violet-600 cursor-pointer" title="Editor öffnen">
-                                @if($it->level)<span class="inline-block w-1.5 h-1.5 rounded-full {{ $niveauDot[$it->level] ?? 'bg-gray-300' }} mr-1 align-middle" title="Niveau: {{ $it->level }}"></span>@endif
-                                {{ $it->name }}
-                                @if($tab === 'concepts' && $it->is_template)<span class="{{ $pill }} {{ $variantPill['secondary'] }} ml-1">Vorlage</span>@endif
-                            </td>
-                            @if($tab === 'pakete')
-                                <td class="{{ $td }} text-gray-600">{{ $it->class ?: '—' }}</td>
-                                <td class="{{ $td }} text-gray-600">{{ collect([$it->eventType?->name, $it->servingForm?->label])->filter()->join(' · ') ?: '—' }}</td>
-                                <td class="{{ $td }} text-right tabular-nums text-gray-600">{{ $it->slots_count }}</td>
-                                {{-- Ebene 2: mit Brille der betriebsscharfe €/Gast ($vkDisplay), sonst der Cache; W% folgt demselben Preis. --}}
-                                @php($pR = ($vkDisplay[$it->id] ?? null) !== null ? (float) $vkDisplay[$it->id] : ($it->price_per_person_cache !== null ? (float) $it->price_per_person_cache : null))
-                                <td class="{{ $td }} text-right tabular-nums {{ isset($vkDisplay[$it->id]) ? 'text-indigo-700 font-medium' : '' }}" @if(isset($vkDisplay[$it->id]))title="€/Gast für {{ $aktiverBetrieb }}"@endif>{{ $pR !== null ? number_format($pR, 2, ',', '.') . ' €' : '—' }}</td>
-                                @php($wpPk = ($pR !== null && $pR > 0 && $it->ek_per_person_cache !== null) ? (float) $it->ek_per_person_cache / $pR * 100 : null)
-                                <td class="{{ $td }} text-right tabular-nums text-gray-600">{{ $wpPk !== null ? number_format($wpPk, 1, ',', '.') . ' %' : '—' }}</td>
-                            @else
-                                <td class="{{ $td }} text-gray-600">{{ $it->class ?: '—' }}</td>
-                                <td class="{{ $td }} text-gray-600">{{ collect([$it->eventType?->name, $it->servingForm?->label])->filter()->join(' · ') ?: '—' }}</td>
-                                {{-- Inline-Status-Pflege wie bei GP (Concepts; Server gated canCurate/D1) --}}
-                                <td class="{{ $td }} whitespace-nowrap" wire:click.stop @click.stop>
-                                    @php($stMap = ['draft' => $variantPill['secondary'], 'active' => $variantPill['success'], 'archiviert' => $variantPill['warning']])
-                                    @if(! isset($it->team_id) || \Platform\FoodAlchemist\Support\Curate::canCurate(auth()->user(), $it))
-                                        <select wire:key="cst-{{ $it->id }}-{{ $it->status }}" wire:change="statusSetzen({{ $it->id }}, $event.target.value)"
-                                                class="{{ $pill }} font-medium {{ $stMap[$it->status] ?? $variantPill['secondary'] }} border-0 cursor-pointer focus:ring-1 focus:ring-violet-400 pr-6" data-status-select>
-                                            @foreach(['draft' => 'Entwurf', 'active' => 'Aktiv', 'archiviert' => 'Archiv'] as $val => $lbl)
-                                                <option value="{{ $val }}" @selected($it->status === $val)>{{ $lbl }}</option>
-                                            @endforeach
-                                        </select>
+                <table class="fa-table">
+                    <thead class="sticky top-0 z-20 bg-[var(--fa-surface)]">
+                        <tr>
+                            <th class="w-full">Name</th>
+                            <th>Klasse</th>
+                            <th title="Eventtyp · Servierform">Einsatz</th>
+                            <th>Status</th>
+                            <th class="num" title="Anzahl Positionen (Gänge, Pakete, Gerichte)">Positionen</th>
+                            <th class="num">€/Person</th>
+                            @if($istPakete)
+                                <th class="num" title="Wareneinsatz: Einkauf im Verhältnis zum Verkaufspreis">Wareneinsatz</th>
+                            @endif
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse($items as $it)
+                            @php
+                                // Ebene 2: mit Brille der betriebsscharfe €/Gast ($vkDisplay), sonst der Cache.
+                                $betriebsPreis = isset($vkDisplay[$it->id]) && $vkDisplay[$it->id] !== null;
+                                $preis = $betriebsPreis ? (float) $vkDisplay[$it->id] : ($it->price_per_person_cache !== null ? (float) $it->price_per_person_cache : null);
+                                $wareneinsatz = ($istPakete && $preis !== null && $preis > 0 && $it->ek_per_person_cache !== null) ? (float) $it->ek_per_person_cache / $preis * 100 : null;
+                                $darfStatus = ! $istPakete && (! isset($it->team_id) || \Platform\FoodAlchemist\Support\Curate::canCurate(auth()->user(), $it));
+                            @endphp
+                            <x-foodalchemist::table-row :active="$selectedId === $it->id" wire:key="row-{{ $tab }}-{{ $it->id }}" wire:click="waehle({{ $it->id }})"
+                                x-data x-on:click="$store.ui?.mSet('activity_concepter', 'open', true)">
+                                {{-- Namens-Klick öffnet den Editor, Zeilen-Klick nur das Detail --}}
+                                <td class="min-w-[12rem]">
+                                    <span class="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                        <button type="button" wire:click.stop="bearbeite({{ $it->id }})" title="{{ $it->name }} im Editor öffnen"
+                                                class="text-left font-medium text-[var(--fa-ink)] hover:text-[var(--fa-accent)] hover:underline">{{ $it->name }}</button>
+                                        @if(! $istPakete && $it->is_template)<x-fa::badge tone="info" icon="heroicon-m-square-2-stack">Vorlage</x-fa::badge>@endif
+                                        @if($it->level)<x-fa::badge title="Niveau">{{ $niveauLabel[$it->level] ?? $it->level }}</x-fa::badge>@endif
+                                    </span>
+                                </td>
+                                <td class="whitespace-nowrap text-[var(--fa-ink-2)]">{{ $it->class ?: '–' }}</td>
+                                <td class="min-w-32 text-[var(--fa-ink-2)]">{{ collect([$it->eventType?->name, $it->servingForm?->label])->filter()->join(' · ') ?: '–' }}</td>
+                                {{-- Status als Chip; Kuratoren ändern ihn bei Concepts über ein kleines Menü (Server gated canCurate/D1) --}}
+                                <td class="whitespace-nowrap" wire:click.stop @click.stop>
+                                    @if($darfStatus)
+                                        <div class="relative inline-block" x-data="faMenu()" x-on:keydown.escape="offen = false" x-on:click.outside="offen = false" wire:key="cst-{{ $it->id }}-{{ $it->status }}">
+                                            <button type="button" x-on:click="toggle($event)" class="inline-flex items-center gap-0.5" aria-haspopup="menu" x-bind:aria-expanded="offen" aria-label="Status von {{ $it->name }} ändern" data-status-select>
+                                                <x-fa::badge :tone="$statusTon[$it->status] ?? 'neutral'" :icon="$statusIcon[$it->status] ?? null">{{ $statusLabel[$it->status] ?? $it->status }}</x-fa::badge>@svg('heroicon-m-chevron-down', 'w-3.5 h-3.5 text-[var(--fa-ink-3)]')
+                                            </button>
+                                            <div x-bind:class="{ hidden: ! offen }" x-bind:style="pos" role="menu" class="hidden w-40 fa-surface shadow-lg py-1">
+                                                @foreach($statusLabel as $val => $lbl)
+                                                    <button type="button" role="menuitem" x-on:click="offen = false" wire:click="statusSetzen({{ $it->id }}, '{{ $val }}')"
+                                                            class="flex w-full items-center justify-between px-3 py-1.5 text-left text-[length:var(--fa-text-md)] hover:bg-[var(--fa-hover)] {{ $it->status === $val ? 'font-semibold text-[var(--fa-accent)]' : 'text-[var(--fa-ink)]' }}">
+                                                        {{ $lbl }}@if($it->status === $val)@svg('heroicon-m-check', 'w-4 h-4')@endif
+                                                    </button>
+                                                @endforeach
+                                            </div>
+                                        </div>
                                     @else
-                                        <span class="{{ $pill }} {{ $stMap[$it->status] ?? $variantPill['secondary'] }}">{{ ['draft' => 'Entwurf', 'active' => 'Aktiv', 'archiviert' => 'Archiv'][$it->status] ?? $it->status }}</span>
+                                        <x-fa::badge :tone="$statusTon[$it->status] ?? 'neutral'" :icon="$statusIcon[$it->status] ?? null">{{ $statusLabel[$it->status] ?? $it->status }}</x-fa::badge>
                                     @endif
                                 </td>
-                                <td class="{{ $td }} text-right tabular-nums text-gray-600">{{ $it->slots_count }}</td>
-                                {{-- Ebene 2: mit Brille der betriebsscharfe €/Gast, sonst der Cache. --}}
-                                @php($pRc = ($vkDisplay[$it->id] ?? null) !== null ? (float) $vkDisplay[$it->id] : ($it->price_per_person_cache !== null ? (float) $it->price_per_person_cache : null))
-                                <td class="{{ $td }} text-right tabular-nums {{ isset($vkDisplay[$it->id]) ? 'text-indigo-700 font-medium' : '' }}" @if(isset($vkDisplay[$it->id]))title="€/Gast für {{ $aktiverBetrieb }}"@endif>{{ $pRc !== null ? number_format($pRc, 2, ',', '.') . ' €' : '—' }}</td>
-                            @endif
-                        </x-foodalchemist::table-row>
-                    @empty
-                        <tr><td colspan="6" class="px-3 py-10 text-center text-sm text-gray-500">
-                            {{ $tab === 'pakete' ? 'Keine Pakete. Oben „+ Neues Paket".' : ($showVorlagen ? 'Keine Vorlagen.' : 'Keine Concepts. Oben „+ Neues Concept".') }}
-                        </td></tr>
-                    @endforelse
-                </tbody>
-            </table>
+                                <td class="num {{ $it->slots_count === 0 ? 'text-[var(--fa-ink-3)]' : 'text-[var(--fa-ink-2)]' }}">{{ $it->slots_count }}</td>
+                                <td class="num" @if($betriebsPreis) title="€/Gast für {{ $aktiverBetrieb }}" @endif>
+                                    @if($preis === null || ($preis <= 0 && $it->slots_count > 0))
+                                        {{-- 0,00 € bei vorhandenen Positionen heißt: keine Position bepreist — nicht „kostet nichts". --}}
+                                        <x-fa::money :value="null" />
+                                    @else
+                                        <span class="inline-flex items-center gap-1 {{ $betriebsPreis ? 'font-medium text-[var(--fa-ink)]' : '' }}">
+                                            @if($betriebsPreis)@svg('heroicon-m-building-storefront', 'w-3.5 h-3.5 text-[var(--fa-ink-3)]')@endif
+                                            <x-fa::money :value="$preis" />
+                                        </span>
+                                    @endif
+                                </td>
+                                @if($istPakete)
+                                    <td class="num text-[var(--fa-ink-2)]">{{ $wareneinsatz !== null ? number_format($wareneinsatz, 1, ',', '.') . ' %' : '–' }}</td>
+                                @endif
+                            </x-foodalchemist::table-row>
+                        @empty
+                            <tr>
+                                <td colspan="{{ $istPakete ? $spaltenZahl + 1 : $spaltenZahl }}">
+                                    @if($filterAktiv)
+                                        <x-fa::empty icon="heroicon-o-funnel" title="Keine Treffer für diese Filter">Filter zurücksetzen oder die Suche lockern.</x-fa::empty>
+                                    @elseif($istPakete)
+                                        <x-fa::empty icon="heroicon-o-puzzle-piece" title="Noch keine Pakete">Mit „Neues Paket“ oben rechts ein Bündel aus Gerichten anlegen.</x-fa::empty>
+                                    @elseif($showVorlagen)
+                                        <x-fa::empty icon="heroicon-o-square-2-stack" title="Noch keine Vorlagen">Ein Concept im Detail als Vorlage speichern oder mit „Neue Vorlage“ anlegen.</x-fa::empty>
+                                    @else
+                                        <x-fa::empty icon="heroicon-o-square-3-stack-3d" title="Noch keine Concepts">Mit „Neues Concept“ oben rechts ein Menü oder Buffet anlegen.</x-fa::empty>
+                                    @endif
+                                </td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
             </div>
+            <div class="px-4 py-3 border-t border-[var(--fa-line)]">{{ $items->links('foodalchemist::components.fa.pagination') }}</div>
         </div>
-        <div>{{ $items->links() }}</div>
     </x-ui-page-container>
 
     {{-- Voll-Editor-Modal (M10R-3) — auf Seitenebene, öffnet via concepter-editor.oeffnen --}}

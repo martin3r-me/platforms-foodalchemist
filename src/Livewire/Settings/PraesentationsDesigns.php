@@ -81,7 +81,7 @@ class PraesentationsDesigns extends Component
             $res = app(PresentationDesignService::class)->generateCss($this->team(), $this->cssBrief);
             $this->customCss = $res['css'];
             $this->markiereGeaendert();
-            $this->status = 'CSS von der KI erzeugt — Live-Vorschau aktualisiert. Zum Sichern „Speichern".';
+            $this->status = 'Eigenes CSS von der KI erzeugt. Die Vorschau zeigt es bereits, zum Behalten das Design speichern.';
         } catch (\Throwable $e) {
             $this->fehler = $e->getMessage();
         }
@@ -139,9 +139,9 @@ class PraesentationsDesigns extends Component
     ];
 
     public const BLOCK_LABELS = [
-        'cover' => 'Cover', 'chapter_loop' => 'Kapitel-Schleife', 'dish_list' => 'Gericht-Liste',
-        'price_summary' => 'Preis-Summe', 'preis_aufschluesselung' => 'Preis-Aufschlüsselung (Angebot)', 'legend' => 'Legende (LMIV)', 'grid' => 'Wochenraster',
-        'text' => 'Text', 'heading' => 'Überschrift', 'image' => 'Bild', 'spacer' => 'Abstand', 'cta' => 'Call-to-Action',
+        'cover' => 'Titelseite', 'chapter_loop' => 'Alle Kapitel', 'dish_list' => 'Gerichteliste',
+        'price_summary' => 'Preis je Person', 'preis_aufschluesselung' => 'Preis-Aufschlüsselung (Angebot)', 'legend' => 'Legende (LMIV)', 'grid' => 'Wochenraster',
+        'text' => 'Text', 'heading' => 'Überschrift', 'image' => 'Bild', 'spacer' => 'Abstand', 'cta' => 'Kontakt-Aufruf',
     ];
 
     public function mount(): void

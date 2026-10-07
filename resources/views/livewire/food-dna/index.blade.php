@@ -1,37 +1,32 @@
-{{-- #389/Canvas: Food-DNA-Seite — Team-Canvas über die zentrale Mechanik (Board-Partial). --}}
-@php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
-
+{{-- #389/Canvas: Food-DNA-Seite. Team-Canvas über die zentrale Mechanik (Board-Partial).
+     fa-pass 2026-10-05: Seitenkopf und Bausteine <x-fa::…>; Anordnung unverändert
+     (Erklärung, Board, Verweis auf das Küchen-Profil). --}}
 <x-ui-page>
     <x-slot:navbar>
-        <x-ui-page-navbar title="Food DNA" icon="heroicon-o-finger-print" />
+        <x-foodalchemist::shell.page-navbar title="Food DNA" icon="heroicon-o-finger-print" />
     </x-slot:navbar>
 
-    <x-slot name="actionbar">
-        <x-ui-page-actionbar :breadcrumbs="[
-            ['label' => 'Food Alchemist', 'href' => route('foodalchemist.dashboard'), 'icon' => 'cube'],
-            ['label' => 'Food DNA'],
-        ]" />
-    </x-slot>
-
-    <x-ui-page-container padding="px-6 pb-6" spacing="space-y-4">
-        <div class="max-w-3xl space-y-4">
-            <p class="text-[11px] text-gray-500">
-                Der „Markenkern Küche" deines Teams. Diese DNA wird <strong>allen KI-Generatoren</strong>
-                (Rezept, Wording, Komposition, Angebot) als verbindlicher Stil-/Geschmacks-Rahmen vorangestellt —
-                kaskadiert mit Foodbook- und Concept-Canvas.
+    <x-ui-page-container padding="px-6 py-6" spacing="space-y-4">
+        <div class="max-w-3xl flex flex-col gap-4">
+            <x-fa::page-header title="Food DNA" />
+            <p class="text-[length:var(--fa-text-md)] text-[var(--fa-ink-2)] max-w-[70ch]">
+                Der Markenkern der Küche deines Teams. Die KI stellt diese DNA allen Texten und Vorschlägen voran
+                (Rezept, Wording, Komposition, Angebot) als verbindlichen Rahmen für Stil und Geschmack.
+                Kunden-DNA und Foodbook ergänzen sie, sie ersetzen sie nicht.
             </p>
 
             @include('foodalchemist::livewire.canvas.partials.board')
 
-            <div class="relative overflow-hidden {{ $card }}">
-                <div class="px-4 py-3">
-                    <p class="text-[11px] uppercase tracking-wider text-gray-500 mb-1">Referenziert (nicht dupliziert)</p>
-                    <p class="text-xs text-gray-700">
-                        Küchen-Profil: {{ $kuechenTypLabel ?? '— nicht gesetzt —' }}
-                        <a href="{{ route('foodalchemist.einstellungen', ['sektion' => 'kueche']) }}" class="ml-2 text-violet-600 hover:underline text-[11px]">in Einstellungen ändern</a>
-                    </p>
-                </div>
-            </div>
+            <x-fa::section title="Küchen-Profil" icon="heroicon-o-building-storefront" description="Wird hier nur angezeigt, gepflegt wird es in den Einstellungen.">
+                <x-slot:actions>
+                    <x-fa::button size="sm" variant="ghost" icon="heroicon-o-cog-6-tooth" :href="route('foodalchemist.einstellungen', ['sektion' => 'kueche'])">In Einstellungen ändern</x-fa::button>
+                </x-slot:actions>
+                @if($kuechenTypLabel !== null)
+                    <p class="text-[length:var(--fa-text-base)] font-medium text-[var(--fa-ink)]">{{ $kuechenTypLabel }}</p>
+                @else
+                    <x-fa::signal tone="warn">Noch kein Küchen-Profil gewählt</x-fa::signal>
+                @endif
+            </x-fa::section>
         </div>
     </x-ui-page-container>
     {{-- Spec 53/F Stufe 2: Sprachbefehl-Mount auf Seitenebene (Modal + optionales schwebendes Element). --}}

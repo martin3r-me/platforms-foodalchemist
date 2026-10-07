@@ -14,7 +14,7 @@ it('rendert Zustand unbefüllt: kein Reset, keine Konfidenz, Autopilot verdrahte
     $html = Blade::render('<x-foodalchemist::ki-header label="Tags" field="tags" />');
 
     expect($html)->toContain('data-source="leer"')
-        ->and($html)->toContain('unbefüllt')
+        ->and($html)->toContain('>leer<')   // fa-pass: „leer“ statt „unbefüllt“
         ->and($html)->toContain('wire:click="ai_tags"')
         ->and($html)->not->toContain('wire:click="manual_tags"')
         ->and($html)->not->toContain('wire:click="clear_tags"')

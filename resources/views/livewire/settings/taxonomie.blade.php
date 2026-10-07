@@ -1,106 +1,149 @@
-{{-- M1-04: Rezept-Taxonomie — HG-Baum links, Kategorien rechts (M4 liest dieselben Service-Methoden) --}}
-@php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
+{{-- M1-04: Rezept-Taxonomie — HG-Baum links, Kategorien rechts (M4 liest dieselben Service-Methoden)
+     fa-pass 2026-10-05: Bausteine/Tokens, Anordnung wie bisher (Hauptgruppen links, Kategorien und
+     „Neue Kategorie" rechts). Häufigste Aufgabe = Kategorien einer Hauptgruppe pflegen und ordnen.
+     Löschen im Menü „Weitere Aktionen" (rot), gesperrt solange Rezepte daran hängen. --}}
+@php
+    $gewaehlt = $hauptgruppen->firstWhere('id', $hauptgruppeId);
+    $zeileBasis = 'group flex items-center gap-1 min-h-9 pr-1 rounded-[var(--fa-radius-control)] transition-colors';
+@endphp
 
-<div class="space-y-4">
-    @if($fehler)
-        <div class="{{ $card }} p-3 border-red-500/20"><p class="text-xs text-red-600">{{ $fehler }}</p></div>
-    @endif
+<div class="flex flex-col gap-4">
+    @if($fehler)<x-fa::notice tone="crit">{{ $fehler }}</x-fa::notice>@endif
 
-    <div class="flex gap-4 items-start">
+    <div class="flex flex-wrap gap-4 items-start">
         {{-- Hauptgruppen --}}
-        <div class="w-80 shrink-0 {{ $card }} p-3 space-y-0.5" data-taxonomie-hg x-data="{ dragId: null }">
-            <div class="{{ $label }} px-2 pb-2">Hauptgruppen ({{ $hauptgruppen->count() }})</div>
-            @foreach($hauptgruppen as $hg)
-                @php($darfEditHg = \Platform\FoodAlchemist\Support\Curate::canCurate(auth()->user(), $hg))
-                <div wire:key="hg-{{ $hg->id }}" class="group flex items-center gap-1 rounded-lg {{ $hauptgruppeId === $hg->id
-                        ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700'
-                        : 'text-gray-600 hover:bg-black/[0.03]' }}"
-                        @dragover.prevent
-                        @drop.prevent="if (dragId !== null && dragId !== {{ $hg->id }}) $wire.hgVerschieben(dragId, {{ $hg->id }}); dragId = null"
-                        :class="{ 'ring-1 ring-inset ring-violet-400/40': dragId !== null && dragId !== {{ $hg->id }} }">
-                    @if($hgEditId === $hg->id)
-                        <input type="text" wire:model="hgEditName" wire:keydown.enter="hgSave" wire:keydown.escape="$set('hgEditId', null)" class="{{ $input }} !py-0.5 flex-1" autofocus />
-                        <button type="button" wire:click="hgSave" class="{{ $btnGhostXs }} text-violet-600 shrink-0">OK</button>
-                    @else
-                        <span class="shrink-0 flex items-center pl-1">@include('foodalchemist::livewire.settings.partials.reorder-cell', ['id' => $hg->id, 'upMethod' => 'hgHoch', 'downMethod' => 'hgRunter', 'first' => $loop->first, 'last' => $loop->last])</span>
-                        <button type="button" wire:click="waehleHg({{ $hg->id }})" class="flex-1 min-w-0 truncate text-left px-2 py-1.5 text-xs">{{ $hg->label }}</button>
-                        <span class="text-[11px] text-gray-500 shrink-0">{{ $hg->kategorie_count }}</span>
-                        @if($darfEditHg)
-                            <button type="button" wire:click="startHgEdit({{ $hg->id }}, @js($hg->label))" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-500 hover:text-violet-500 text-[11px] px-1" title="Umbenennen">@svg('heroicon-o-pencil', 'w-3.5 h-3.5 inline-block align-middle')</button>
-                            <button type="button" wire:click="hgDelete({{ $hg->id }})" wire:confirm="Diese Hauptgruppe löschen?" @disabled($hg->kategorie_count > 0)
-                                    class="shrink-0 opacity-0 group-hover:opacity-100 text-[11px] px-1 {{ $hg->kategorie_count > 0 ? 'text-gray-300 cursor-not-allowed' : 'text-gray-500 hover:text-red-500' }}"
-                                    title="{{ $hg->kategorie_count > 0 ? 'Hat Kategorien — erst dort entfernen' : 'löschen' }}">@svg('heroicon-o-trash', 'w-3.5 h-3.5 inline-block align-middle')</button>
+        <x-fa::section title="Hauptgruppen" :meta="$hauptgruppen->count()" class="w-72 max-w-full shrink-0" data-taxonomie-hg x-data="{ dragId: null }">
+            <div class="flex flex-col gap-0.5 -mx-1">
+                @foreach($hauptgruppen as $hg)
+                    @php($darfEditHg = \Platform\FoodAlchemist\Support\Curate::canCurate(auth()->user(), $hg))
+                    @php($aktiv = $hauptgruppeId === $hg->id)
+                    <div wire:key="hg-{{ $hg->id }}" class="{{ $zeileBasis }} {{ $aktiv ? 'bg-[var(--fa-accent-soft)] text-[var(--fa-accent)]' : 'text-[var(--fa-ink)] hover:bg-[var(--fa-hover)]' }}"
+                         @dragover.prevent
+                         @drop.prevent="if (dragId !== null && dragId !== {{ $hg->id }}) $wire.hgVerschieben(dragId, {{ $hg->id }}); dragId = null"
+                         :class="{ 'ring-1 ring-inset ring-[var(--fa-accent-line)]': dragId !== null && dragId !== {{ $hg->id }} }">
+                        @if($hgEditId === $hg->id)
+                            <x-fa::input size="sm" wire:model="hgEditName" wire:keydown.enter="hgSave" wire:keydown.escape="$set('hgEditId', null)" aria-label="Name der Hauptgruppe" class="flex-1 min-w-0 ml-1" autofocus />
+                            <x-fa::button size="sm" variant="primary" wire:click="hgSave">Speichern</x-fa::button>
+                        @else
+                            <span class="shrink-0 pl-0.5">@include('foodalchemist::livewire.settings.partials.reorder-cell', ['id' => $hg->id, 'upMethod' => 'hgHoch', 'downMethod' => 'hgRunter', 'first' => $loop->first, 'last' => $loop->last])</span>
+                            <button type="button" wire:click="waehleHg({{ $hg->id }})" @if($aktiv) aria-current="true" @endif
+                                    class="flex-1 min-w-0 truncate text-left px-1.5 py-1.5 text-[length:var(--fa-text-md)] {{ $aktiv ? 'font-medium' : '' }}" title="{{ $hg->label }}">{{ $hg->label }}</button>
+                            <span class="shrink-0 text-[length:var(--fa-text-sm)] tabular-nums text-[var(--fa-ink-3)]" title="Kategorien">{{ $hg->kategorie_count }}</span>
+                            @if($darfEditHg)
+                                <span class="shrink-0 flex opacity-0 group-hover:opacity-100 focus-within:opacity-100">
+                                    <x-fa::icon-button size="sm" icon="heroicon-o-pencil" label="Hauptgruppe umbenennen" wire:click="startHgEdit({{ $hg->id }}, @js($hg->label))" />
+                                    @if($hg->kategorie_count > 0)
+                                        <x-fa::icon-button size="sm" icon="heroicon-o-trash" label="Hat Kategorien, erst dort entfernen" disabled class="opacity-40 cursor-not-allowed" />
+                                    @else
+                                        <x-fa::icon-button size="sm" tone="danger" icon="heroicon-o-trash" label="Hauptgruppe löschen" wire:click="hgDelete({{ $hg->id }})" wire:confirm="Diese Hauptgruppe löschen?" />
+                                    @endif
+                                </span>
+                            @endif
                         @endif
-                    @endif
-                </div>
-            @endforeach
-
-            <div class="flex gap-1 pt-2 mt-1 border-t border-black/5" data-taxonomie-hg-neu>
-                <input type="text" wire:model="neueHauptgruppe" wire:keydown.enter="hgNeu"
-                       placeholder="Neue Hauptgruppe …" class="{{ $input }} py-0.5" />
-                <button type="button" wire:click="hgNeu" class="{{ $btnGhostXs }}" title="Hauptgruppe anlegen">+</button>
+                    </div>
+                @endforeach
             </div>
-        </div>
+
+            <div class="flex gap-1.5 pt-3 border-t border-[var(--fa-line)]" data-taxonomie-hg-neu>
+                <label for="hg-neu" class="sr-only">Neue Hauptgruppe</label>
+                <x-fa::input id="hg-neu" size="sm" wire:model="neueHauptgruppe" wire:keydown.enter="hgNeu" placeholder="Neue Hauptgruppe" class="flex-1 min-w-0" />
+                <x-fa::button size="sm" icon="heroicon-m-plus" wire:click="hgNeu" title="Hauptgruppe anlegen">Anlegen</x-fa::button>
+            </div>
+        </x-fa::section>
 
         {{-- Kategorien der gewählten HG --}}
-        <div class="flex-1 min-w-0 space-y-4">
-            <div class="relative overflow-hidden {{ $card }}" data-taxonomie-kategorien x-data="{ dragId: null }">
-                <div class="{{ $cardAccent }}"></div>
-                <div class="px-5 pt-4 pb-2 flex items-baseline justify-between">
-                    <h3 class="font-medium tracking-tight text-gray-900">Kategorien</h3>
-                    <span class="{{ $label }}">{{ $kategorien->count() }} in dieser Hauptgruppe</span>
-                </div>
-                <table class="{{ $table }}">
-                    <thead><tr class="text-left">
-                        @foreach(['', 'Bezeichnung', 'Technik', 'Sort', 'Rezepte', ''] as $head)<th class="{{ $th }}">{{ $head }}</th>@endforeach
-                    </tr></thead>
-                    <tbody>
-                        @foreach($kategorien as $kat)
-                            @php($darfEdit = \Platform\FoodAlchemist\Support\Curate::canCurate(auth()->user(), $kat))
-                            <tr wire:key="kat-{{ $kat->id }}" class="{{ $tr }}"
-                                @dragover.prevent
-                                @drop.prevent="if (dragId !== null && dragId !== {{ $kat->id }}) $wire.katVerschieben(dragId, {{ $kat->id }}); dragId = null"
-                                :class="{ 'ring-1 ring-inset ring-violet-400/40': dragId !== null && dragId !== {{ $kat->id }} }">
-                                <td class="{{ $td }} !px-1.5 whitespace-nowrap align-middle">@include('foodalchemist::livewire.settings.partials.reorder-cell', ['id' => $kat->id, 'upMethod' => 'katHoch', 'downMethod' => 'katRunter', 'first' => $loop->first, 'last' => $loop->last])</td>
-                                @if($editId === $kat->id)
-                                    <td class="{{ $td }}"><input type="text" wire:model="form.label" wire:keydown.enter="save" class="{{ $input }} !py-1" /></td>
-                                    <td class="{{ $td }}"><input type="text" wire:model="form.technik" wire:keydown.enter="save" class="{{ $input }} !py-1" /></td>
-                                    <td class="{{ $td }}"><input type="number" wire:model="form.sort_order" class="{{ $input }} !py-1 w-16" /></td>
-                                    <td class="{{ $td }}"></td>
-                                    <td class="{{ $td }} text-right whitespace-nowrap">
-                                        <button type="button" wire:click="save" class="{{ $btnGhostXs }} text-violet-600">Speichern</button>
-                                        <button type="button" wire:click="$set('editId', null)" class="{{ $btnGhostXs }}">Abbrechen</button>
-                                    </td>
-                                @else
-                                    <td class="{{ $td }} font-medium text-gray-900">{{ $kat->label }}</td>
-                                    <td class="{{ $td }} text-gray-600">{{ $kat->technik ?? '—' }}</td>
-                                    <td class="{{ $td }} text-gray-500">{{ $kat->sort_order }}</td>
-                                    <td class="{{ $td }} text-gray-600">{{ $kat->recipe_count }}</td>
-                                    <td class="{{ $td }} text-right whitespace-nowrap">
-                                        @if($darfEdit)
-                                            <button type="button" wire:click="edit({{ $kat->id }})" class="{{ $btnGhostXs }}">Bearbeiten</button>
-                                            <button type="button" wire:click="delete({{ $kat->id }})"
-                                                    @if($kat->recipe_count > 0) disabled title="Hat {{ $kat->recipe_count }} Rezepte — erst mergen/umhängen (AT-D1-02)" @endif
-                                                    wire:confirm="Kategorie „{{ $kat->label }}" löschen?"
-                                                    class="{{ $btnGhostXs }} {{ $kat->recipe_count > 0 ? 'opacity-40 cursor-not-allowed' : 'text-red-500' }}">Löschen</button>
-                                        @endif
-                                    </td>
-                                @endif
+        <div class="flex-1 basis-[26rem] min-w-0 flex flex-col gap-4">
+            <x-fa::section title="Kategorien" :meta="$gewaehlt ? $gewaehlt->label . ' · ' . $kategorien->count() . ' Kategorien' : null" data-taxonomie-kategorien x-data="{ dragId: null }">
+                <div class="overflow-x-auto -mx-4">
+                    <table class="fa-table">
+                        <thead>
+                            <tr>
+                                <th class="w-px"><span class="sr-only">Reihenfolge</span></th>
+                                <th class="w-full">Bezeichnung</th>
+                                <th>Technik</th>
+                                <th class="num">Position</th>
+                                <th class="num">Rezepte</th>
+                                <th><span class="sr-only">Aktionen</span></th>
                             </tr>
-                        @endforeach
-                    </tbody>
-                </table>
-            </div>
-
-            <div class="{{ $card }} p-5" data-taxonomie-neu>
-                <h4 class="{{ $label }} mb-3">Neue Kategorie in dieser Hauptgruppe</h4>
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
-                    <input type="text" wire:model="neu.label" placeholder="Bezeichnung" class="{{ $input }}" />
-                    <input type="text" wire:model="neu.technik" placeholder="Technik (optional)" class="{{ $input }}" />
-                    <input type="number" wire:model="neu.sort_order" placeholder="Sort" class="{{ $input }}" />
-                    <button type="button" wire:click="create" class="{{ $btnPrimary }} justify-center">Anlegen</button>
+                        </thead>
+                        <tbody>
+                            @forelse($kategorien as $kat)
+                                @php($darfEdit = \Platform\FoodAlchemist\Support\Curate::canCurate(auth()->user(), $kat))
+                                <tr wire:key="kat-{{ $kat->id }}"
+                                    @dragover.prevent
+                                    @drop.prevent="if (dragId !== null && dragId !== {{ $kat->id }}) $wire.katVerschieben(dragId, {{ $kat->id }}); dragId = null"
+                                    :class="{ 'ring-1 ring-inset ring-[var(--fa-accent-line)]': dragId !== null && dragId !== {{ $kat->id }} }">
+                                    <td class="whitespace-nowrap">@include('foodalchemist::livewire.settings.partials.reorder-cell', ['id' => $kat->id, 'upMethod' => 'katHoch', 'downMethod' => 'katRunter', 'first' => $loop->first, 'last' => $loop->last])</td>
+                                    @if($editId === $kat->id)
+                                        <td><x-fa::input size="sm" wire:model="form.label" wire:keydown.enter="save" aria-label="Bezeichnung" class="w-full min-w-40" /></td>
+                                        <td><x-fa::input size="sm" wire:model="form.technik" wire:keydown.enter="save" aria-label="Technik" class="w-36" /></td>
+                                        <td class="num"><x-fa::input size="sm" type="number" numeric wire:model="form.sort_order" aria-label="Position" class="w-20" /></td>
+                                        <td></td>
+                                        <td class="whitespace-nowrap">
+                                            <div class="flex items-center justify-end gap-1.5">
+                                                <x-fa::button size="sm" variant="ghost" wire:click="$set('editId', null)">Abbrechen</x-fa::button>
+                                                <x-fa::button size="sm" variant="primary" wire:click="save">Speichern</x-fa::button>
+                                            </div>
+                                        </td>
+                                    @else
+                                        <td class="font-medium">{{ $kat->label }}</td>
+                                        <td class="text-[var(--fa-ink-2)]">{{ $kat->technik ?? '' }}</td>
+                                        <td class="num text-[var(--fa-ink-2)]">{{ $kat->sort_order }}</td>
+                                        <td class="num text-[var(--fa-ink-2)]">{{ number_format($kat->recipe_count, 0, ',', '.') }}</td>
+                                        <td class="whitespace-nowrap">
+                                            @if($darfEdit)
+                                                <div class="flex items-center justify-end gap-1">
+                                                    <x-fa::button size="sm" variant="ghost" icon="heroicon-o-pencil-square" wire:click="edit({{ $kat->id }})">Bearbeiten</x-fa::button>
+                                                    <div class="relative" x-data="faMenu()" x-on:keydown.escape="offen = false" x-on:click.outside="offen = false">
+                                                        <x-fa::icon-button size="sm" icon="heroicon-m-ellipsis-horizontal" label="Weitere Aktionen für {{ $kat->label }}"
+                                                            x-on:click="toggle($event)" aria-haspopup="menu" x-bind:aria-expanded="offen" />
+                                                        <div class="hidden w-64 fa-surface shadow-lg py-1" x-bind:class="{ hidden: ! offen }" x-bind:style="pos" role="menu">
+                                                            @if($kat->recipe_count > 0)
+                                                                <p class="flex items-start gap-2 px-3 py-2 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">
+                                                                    @svg('heroicon-o-lock-closed', 'w-4 h-4 shrink-0 mt-px') Löschen gesperrt: {{ $kat->recipe_count }} Rezepte hängen daran. Erst zusammenführen oder umhängen.
+                                                                </p>
+                                                            @else
+                                                                <button type="button" role="menuitem" x-on:click="offen = false" wire:click="delete({{ $kat->id }})"
+                                                                        wire:confirm="Kategorie „{{ $kat->label }}“ löschen?"
+                                                                        class="flex w-full items-center gap-2 px-3 py-2 text-left text-[length:var(--fa-text-md)] text-[var(--fa-crit)] hover:bg-[var(--fa-crit-soft)]">
+                                                                    @svg('heroicon-o-trash', 'w-4 h-4 shrink-0') Kategorie löschen
+                                                                </button>
+                                                            @endif
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            @endif
+                                        </td>
+                                    @endif
+                                </tr>
+                            @empty
+                                <tr>
+                                    <td colspan="6">
+                                        <x-fa::empty compact icon="heroicon-o-folder-open" title="{{ $gewaehlt ? 'Noch keine Kategorien in dieser Hauptgruppe' : 'Keine Hauptgruppe gewählt' }}">
+                                            {{ $gewaehlt ? 'Unten die erste Kategorie anlegen.' : 'Links eine Hauptgruppe wählen oder anlegen.' }}
+                                        </x-fa::empty>
+                                    </td>
+                                </tr>
+                            @endforelse
+                        </tbody>
+                    </table>
                 </div>
-            </div>
+            </x-fa::section>
+
+            <x-fa::section title="Neue Kategorie" :meta="$gewaehlt ? 'in ' . $gewaehlt->label : null" data-taxonomie-neu>
+                <div class="flex flex-wrap items-end gap-3">
+                    <x-fa::field label="Bezeichnung" for="kat-neu-label" class="flex-1 min-w-48">
+                        <x-fa::input id="kat-neu-label" wire:model="neu.label" placeholder="z. B. Helle Fonds" />
+                    </x-fa::field>
+                    <x-fa::field label="Technik" for="kat-neu-technik" optional class="w-44">
+                        <x-fa::input id="kat-neu-technik" wire:model="neu.technik" />
+                    </x-fa::field>
+                    <x-fa::field label="Position" for="kat-neu-sort" class="w-24">
+                        <x-fa::input id="kat-neu-sort" type="number" numeric wire:model="neu.sort_order" />
+                    </x-fa::field>
+                    <x-fa::button variant="primary" icon="heroicon-m-plus" wire:click="create">Kategorie anlegen</x-fa::button>
+                </div>
+            </x-fa::section>
         </div>
     </div>
 </div>

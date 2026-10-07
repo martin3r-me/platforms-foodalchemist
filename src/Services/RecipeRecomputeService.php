@@ -161,6 +161,17 @@ class RecipeRecomputeService
             Log::warning("Preis-Kaskade nach Bulk-Recompute fehlgeschlagen: {$e->getMessage()}");
         }
 
+        // Spec 60: Aromenprofile mitziehen (Kinder vor Eltern — der Eltern-Hash enthält die Kinder).
+        // Best-effort: ein Profil-Fehler blockt nie die Bearbeitung (I8).
+        try {
+            $profil = app(Pairing\RezeptProfil::class);
+            foreach ($this->topoOrder($betroffen) as $id) {
+                $profil->fuer((int) $id);
+            }
+        } catch (\Throwable $e) {
+            Log::warning("Aromenprofil nach Recompute fehlgeschlagen: {$e->getMessage()}");
+        }
+
         return $betroffen;
     }
 
@@ -994,6 +1005,15 @@ class RecipeRecomputeService
         }
 
         return $rang;
+    }
+
+    /**
+     * Spec 60 · P5: Gramm einer Zutatenzeile nach derselben T1-Kaskade wie Yield und Kosten —
+     * damit das Aromenprofil keine eigene Mengen-Wahrheit führt. Unbekannte Naturalgröße = 0 g.
+     */
+    public function grammJeZeile(FoodAlchemistRecipeIngredient $z): float
+    {
+        return $this->mengeAvg($z) * $this->grammFaktor($z);
     }
 
     /** I6 / F6.4: Mittelwert bei Mengen-Bereich. */

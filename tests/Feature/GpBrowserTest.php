@@ -116,7 +116,7 @@ it('DetailPanel R9: Sektionen IMMER sichtbar — Allergene/Nährwerte/Verwendung
     ]);
 
     Livewire::test(DetailPanel::class, ['gpId' => $this->zander->id])
-        ->assertSee('HIGH')                                // R9: Konfidenz direkt sichtbar
+        ->assertSee('Hoch')                                // R9: Konfidenz direkt sichtbar (deutsches Label statt HIGH)
         ->assertSee('aus 1/')
         ->assertSee('Nährwerte')
         ->assertSee('Verwendet in Rezepten')

@@ -81,7 +81,7 @@ enum AusgabeStatus: string
     {
         return match ($this) {
             self::Aktiv => null,
-            self::Entwurf => 'Entwurf — war nie draußen',
+            self::Entwurf => 'Entwurf, war noch nie im Einsatz',
             self::Inaktiv => 'Bewusst vom Netz genommen',
             self::Archiviert => 'Abgeschlossen',
         };

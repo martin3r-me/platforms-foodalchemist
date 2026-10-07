@@ -1,157 +1,154 @@
-{{-- Spec 30 E3 — Posten (Küchen-Arbeitsplätze) mit optionaler Tageskapazität. --}}
-@php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
-
-<div data-settings-posten>
-    @if($fehler)<x-foodalchemist::alert tone="danger" class="mb-2" data-posten-fehler>{{ $fehler }}</x-foodalchemist::alert>@endif
-    @if($meldung)<x-foodalchemist::alert tone="success" class="mb-2" data-posten-meldung>{{ $meldung }}</x-foodalchemist::alert>@endif
-
-    <p class="text-[11px] text-gray-500 mb-3">
-        Ein Posten ist ein <strong>Arbeitsplatz</strong>, kein Mensch. Die Kapazität ist
-        <strong>netto</strong> — produktiv verplanbare Minuten, Rüsten und Reinigen schon abgezogen.
-        Sie ist <strong>freiwillig</strong>: ohne Zahl warnt der Posten nie, du siehst nur die Minutensumme.
-        Zwei Kombidämpfer trägst du als einen Posten mit doppelter Kapazität ein.
-    </p>
+{{-- Spec 30 E3 — Posten (Küchen-Arbeitsplätze) mit optionaler Tageskapazität.
+     fa-pass 2026-10-05: Bausteine/Tokens, Anordnung wie bisher (Standard-Topf-Deckel oben, Posten-Tabelle,
+     Anlegen unten). Häufigste Aufgabe = Kapazität und Besetzung je Posten pflegen → Direkteingabe in der
+     Tabelle, die Besetzung steht als eigene Zeile unter dem Posten. --}}
+<div class="flex flex-col gap-4" data-settings-posten>
+    @if($fehler)<x-fa::notice tone="crit" data-posten-fehler>{{ $fehler }}</x-fa::notice>@endif
+    @if($meldung)<x-fa::notice tone="ok" data-posten-meldung>{{ $meldung }}</x-fa::notice>@endif
 
     {{-- Standard-Topf-Deckel: Fallback für die Produktionszeit, wenn Rezept/Posten keinen eigenen Deckel haben. --}}
-    <div class="mb-4 rounded-lg border border-black/10 p-3" data-posten-standarddeckel>
-        <p class="text-xs font-semibold mb-1">Standard-Topf-Deckel</p>
-        <p class="text-[11px] text-gray-500 mb-2">
-            Größte Charge je <strong>Koch-Vorgang</strong>, solange ein Rezept oder Posten keinen eigenen
-            Deckel hat. Verhindert, dass große Mengen als viele Einzel-Ansätze gezählt werden (sonst würde
-            ein Kessel Sauce fälschlich als zehn kleine Töpfe die Arbeitszeit ver-10-fachen). Leer =
-            System-Standard (20&nbsp;kg / 200&nbsp;Stück). Rezept- und Posten-Deckel gehen immer vor — der kleinere gilt.
-        </p>
+    <x-fa::section title="Standard-Topf-Deckel" data-posten-standarddeckel
+        description="Größte Charge je Koch-Vorgang, solange ein Rezept oder Posten keinen eigenen Deckel hat. So zählt ein Kessel Sauce als ein Vorgang und nicht als zehn kleine Töpfe. Leer gilt der Standard von 20 kg bzw. 200 Stück. Rezept- und Posten-Deckel gehen immer vor, der kleinere gilt.">
         <div class="flex flex-wrap items-end gap-3">
-            <label class="text-[11px] text-gray-500">
-                <span class="block mb-0.5">kg je Koch-Vorgang</span>
-                <input type="text" inputmode="decimal" wire:model="standardTopfKg" placeholder="20"
-                       class="{{ $input }} !w-28 tabular-nums" data-posten-standard-kg />
-            </label>
-            <label class="text-[11px] text-gray-500">
-                <span class="block mb-0.5">Stück je Koch-Vorgang</span>
-                <input type="text" inputmode="decimal" wire:model="standardTopfStueck" placeholder="200"
-                       class="{{ $input }} !w-28 tabular-nums" data-posten-standard-stueck />
-            </label>
-            <button type="button" wire:click="standardDeckelSpeichern" class="{{ $btnPrimary }}" data-posten-standard-speichern>Speichern</button>
+            <x-fa::field label="kg je Koch-Vorgang" for="posten-standard-kg" class="w-40">
+                <x-fa::input id="posten-standard-kg" numeric inputmode="decimal" wire:model="standardTopfKg" placeholder="20" data-posten-standard-kg />
+            </x-fa::field>
+            <x-fa::field label="Stück je Koch-Vorgang" for="posten-standard-stueck" class="w-40">
+                <x-fa::input id="posten-standard-stueck" numeric inputmode="decimal" wire:model="standardTopfStueck" placeholder="200" data-posten-standard-stueck />
+            </x-fa::field>
+            <x-fa::button variant="primary" wire:click="standardDeckelSpeichern" class="ml-auto" data-posten-standard-speichern>Deckel speichern</x-fa::button>
         </div>
-    </div>
+    </x-fa::section>
 
-    <table class="{{ $table }}">
-        <thead>
-            <tr>
-                <th class="{{ $th }} w-full">Posten</th>
-                <th class="{{ $th }}">Bereich</th>
-                <th class="{{ $th }} text-right whitespace-nowrap">Min./Tag</th>
-                <th class="{{ $th }} text-right whitespace-nowrap" title="Abweichende Kapazität am Samstag — leer = wie sonst">Sa</th>
-                <th class="{{ $th }} text-right whitespace-nowrap" title="Abweichende Kapazität am Sonntag — leer = wie sonst, 0 = geschlossen">So</th>
-                <th class="{{ $th }} w-px"></th>
-            </tr>
-        </thead>
-        <tbody>
-            @forelse($posten as $p)
-                @php($eigen = (int) $p->team_id === (int) $eigenesTeamId)
-                <tr class="{{ $tr }} {{ $p->is_inactive ? 'opacity-50' : '' }}" wire:key="posten-{{ $p->id }}" data-posten="{{ $p->id }}">
-                    <td class="{{ $td }}">
-                        @if($eigen)
-                            <input type="text" value="{{ $p->name }}" wire:change="feldSetzen({{ $p->id }}, 'name', $event.target.value)"
-                                   class="{{ $input }} !py-0.5" data-posten-name />
-                        @else
-                            {{ $p->name }} <span class="{{ $pill }} {{ $variantPill['secondary'] }} ml-1" title="Vorlage aus dem Eltern-Team — die Auslastung rechnet trotzdem je Betrieb">geerbt</span>
-                        @endif
-                    </td>
-                    <td class="{{ $td }}">
-                        @if($eigen)
-                            <input type="text" value="{{ $p->group_name }}" wire:change="feldSetzen({{ $p->id }}, 'group_name', $event.target.value)"
-                                   class="{{ $input }} !py-0.5 !w-40" placeholder="z. B. Warme Küche" data-posten-gruppe />
-                        @else
-                            <span class="text-[11px] text-gray-500">{{ $p->group_name }}</span>
-                        @endif
-                    </td>
-                    <td class="{{ $td }} text-right">
-                        @if($eigen)
-                            <input type="text" inputmode="numeric" value="{{ $p->kapazitaet_min_pro_tag }}"
-                                   wire:change="feldSetzen({{ $p->id }}, 'kapazitaet', $event.target.value)"
-                                   class="{{ $input }} !py-0.5 !w-20 text-right tabular-nums" placeholder="—"
-                                   title="leer = plant nicht mit Kapazität und warnt nie" data-posten-kapazitaet />
-                        @else
-                            <span class="tabular-nums">{{ $p->kapazitaet_min_pro_tag ?? '—' }}</span>
-                        @endif
-                    </td>
-                    @foreach([6 => 'sa', 7 => 'so'] as $iso => $marker)
-                        <td class="{{ $td }} text-right">
-                            @if($eigen)
-                                <input type="text" inputmode="numeric" value="{{ ($p->kapazitaet_wochentag ?? [])[(string) $iso] ?? '' }}"
-                                       wire:change="wochentagSetzen({{ $p->id }}, {{ $iso }}, $event.target.value)"
-                                       class="{{ $input }} !py-0.5 !w-14 text-right tabular-nums" placeholder="—"
-                                       data-posten-{{ $marker }} />
-                            @else
-                                <span class="tabular-nums text-[11px] text-gray-500">{{ ($p->kapazitaet_wochentag ?? [])[(string) $iso] ?? '—' }}</span>
-                            @endif
-                        </td>
-                    @endforeach
-                    <td class="{{ $td }} whitespace-nowrap">
-                        @if($eigen)
-                            <button type="button" wire:click="aktivToggle({{ $p->id }})" class="{{ $btnGhostXs }}"
-                                    title="Lösch-Schutz: Posten werden stillgelegt, nicht gelöscht — sonst liefen bestehende Zuteilungen ins Leere"
-                                    data-posten-toggle>{{ $p->is_inactive ? 'reaktivieren' : 'stilllegen' }}</button>
-                        @endif
-                    </td>
-                </tr>
-                @if($eigen)
-                    {{-- Stufe 3 — Rollen-Besetzung → Kapazität (Köpfe × Schicht) + Kosten; Topf-Deckel. --}}
-                    <tr class="border-b border-black/5" wire:key="pbes-{{ $p->id }}" data-posten-besetzung="{{ $p->id }}">
-                        <td colspan="6" class="px-3 pb-2">
-                            <div class="flex flex-wrap items-end gap-3 text-[11px] text-gray-600 pl-1">
-                                @if($rollen->isEmpty())
-                                    <span class="text-amber-600">Erst <a href="{{ route('foodalchemist.einstellungen', ['sektion' => 'rollen']) }}" class="underline">Rollen &amp; Sätze</a> anlegen, dann hier besetzen.</span>
-                                @else
-                                    <span class="text-gray-400">Besetzung:</span>
-                                    @foreach($rollen as $rolle)
-                                        <label class="flex items-center gap-1">{{ $rolle->name }}
-                                            <input type="text" inputmode="numeric" value="{{ ($p->besetzung ?? [])[(string) $rolle->id] ?? '' }}"
-                                                   wire:change="besetzungSetzen({{ $p->id }}, {{ $rolle->id }}, $event.target.value)"
-                                                   class="{{ $input }} !py-0.5 !w-12 text-right tabular-nums" placeholder="0"
-                                                   data-posten-besetzung-rolle="{{ $rolle->id }}" />
-                                        </label>
-                                    @endforeach
-                                    <label class="flex items-center gap-1">Schicht min
-                                        <input type="text" inputmode="numeric" value="{{ $p->schicht_minuten }}"
-                                               wire:change="feldSetzen({{ $p->id }}, 'schicht', $event.target.value)"
-                                               class="{{ $input }} !py-0.5 !w-16 text-right tabular-nums" placeholder="480" data-posten-schicht />
-                                    </label>
-                                    <label class="flex items-center gap-1">Topf kg
-                                        <input type="text" inputmode="decimal" value="{{ $p->batch_max_kg }}"
-                                               wire:change="feldSetzen({{ $p->id }}, 'batch_max_kg', $event.target.value)"
-                                               class="{{ $input }} !py-0.5 !w-16 text-right tabular-nums" placeholder="—" data-posten-topf />
-                                    </label>
-                                    @php($abg = $p->abgeleiteteKapazitaet())
-                                    @if($abg !== null)
-                                        <span class="text-violet-700" title="Wird als Kapazität genutzt und überschreibt Min./Tag">aktiv: {{ $abg }} min/Tag aus Besetzung</span>
-                                    @endif
-                                @endif
-                            </div>
-                        </td>
+    <x-fa::section title="Posten"
+        description="Ein Posten ist ein Arbeitsplatz, kein Mensch. Die Kapazität ist netto: produktiv verplanbare Minuten, Rüsten und Reinigen schon abgezogen. Sie ist freiwillig, ohne Zahl warnt der Posten nie. Zwei Kombidämpfer trägst du als einen Posten mit doppelter Kapazität ein.">
+        <div class="overflow-x-auto -mx-4">
+            <table class="fa-table">
+                <thead>
+                    <tr>
+                        <th class="w-full">Posten</th>
+                        <th>Bereich</th>
+                        <th class="num">Minuten je Tag</th>
+                        <th class="num" title="Abweichende Kapazität am Samstag. Leer: wie sonst">Samstag</th>
+                        <th class="num" title="Abweichende Kapazität am Sonntag. Leer: wie sonst, 0: geschlossen">Sonntag</th>
+                        <th><span class="sr-only">Aktionen</span></th>
                     </tr>
-                @endif
-            @empty
-                <tr><td colspan="6" class="{{ $td }} text-[12px] text-gray-500">Noch keine Posten. Unten anlegen — z. B. „Warme Küche", „Kalte Küche", „Patisserie".</td></tr>
-            @endforelse
-        </tbody>
-    </table>
+                </thead>
+                <tbody>
+                    @forelse($posten as $p)
+                        @php($eigen = (int) $p->team_id === (int) $eigenesTeamId)
+                        <tr class="{{ $p->is_inactive ? 'opacity-60' : '' }}" wire:key="posten-{{ $p->id }}" data-posten="{{ $p->id }}">
+                            <td>
+                                @if($eigen)
+                                    <x-fa::input size="sm" value="{{ $p->name }}" wire:change="feldSetzen({{ $p->id }}, 'name', $event.target.value)"
+                                        aria-label="Name des Postens" class="w-full min-w-44" data-posten-name />
+                                @else
+                                    <span class="inline-flex flex-wrap items-center gap-1.5">
+                                        {{ $p->name }}
+                                        <x-fa::badge title="Vorlage aus dem Eltern-Team. Die Auslastung rechnet trotzdem je Betrieb.">geerbt</x-fa::badge>
+                                    </span>
+                                @endif
+                            </td>
+                            <td>
+                                @if($eigen)
+                                    <x-fa::input size="sm" value="{{ $p->group_name }}" wire:change="feldSetzen({{ $p->id }}, 'group_name', $event.target.value)"
+                                        aria-label="Bereich" class="w-40" placeholder="z. B. Warme Küche" data-posten-gruppe />
+                                @else
+                                    <span class="text-[var(--fa-ink-2)]">{{ $p->group_name }}</span>
+                                @endif
+                            </td>
+                            <td class="num">
+                                @if($eigen)
+                                    <x-fa::input size="sm" numeric inputmode="numeric" value="{{ $p->kapazitaet_min_pro_tag }}"
+                                        wire:change="feldSetzen({{ $p->id }}, 'kapazitaet', $event.target.value)"
+                                        aria-label="Minuten je Tag" class="w-20" placeholder="frei"
+                                        title="Leer: plant ohne Kapazität und warnt nie" data-posten-kapazitaet />
+                                @else
+                                    {{ $p->kapazitaet_min_pro_tag ?? 'frei' }}
+                                @endif
+                            </td>
+                            @foreach([6 => 'sa', 7 => 'so'] as $iso => $marker)
+                                <td class="num">
+                                    @if($eigen)
+                                        <input type="text" inputmode="numeric" value="{{ ($p->kapazitaet_wochentag ?? [])[(string) $iso] ?? '' }}"
+                                               wire:change="wochentagSetzen({{ $p->id }}, {{ $iso }}, $event.target.value)"
+                                               aria-label="{{ $iso === 6 ? 'Minuten am Samstag' : 'Minuten am Sonntag' }}" placeholder="wie sonst"
+                                               class="fa-control h-7 w-20 text-[length:var(--fa-text-sm)] text-right tabular-nums"
+                                               data-posten-{{ $marker }} />
+                                    @else
+                                        <span class="text-[var(--fa-ink-2)]">{{ ($p->kapazitaet_wochentag ?? [])[(string) $iso] ?? 'wie sonst' }}</span>
+                                    @endif
+                                </td>
+                            @endforeach
+                            <td class="whitespace-nowrap text-right">
+                                @if($eigen)
+                                    <x-fa::button size="sm" variant="ghost" wire:click="aktivToggle({{ $p->id }})"
+                                        :icon="$p->is_inactive ? 'heroicon-o-arrow-uturn-left' : 'heroicon-o-pause-circle'"
+                                        title="Posten werden stillgelegt, nicht gelöscht. Sonst liefen bestehende Zuteilungen ins Leere."
+                                        data-posten-toggle>{{ $p->is_inactive ? 'Reaktivieren' : 'Stilllegen' }}</x-fa::button>
+                                @endif
+                            </td>
+                        </tr>
+                        @if($eigen)
+                            {{-- Stufe 3 — Rollen-Besetzung → Kapazität (Köpfe × Schicht) + Kosten; Topf-Deckel. --}}
+                            <tr wire:key="pbes-{{ $p->id }}" data-posten-besetzung="{{ $p->id }}">
+                                <td colspan="6" class="pt-1 pb-3">
+                                    <div class="flex flex-wrap items-center gap-x-4 gap-y-2 pl-1 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]">
+                                        @if($rollen->isEmpty())
+                                            <x-fa::signal tone="warn">
+                                                Erst <a href="{{ route('foodalchemist.einstellungen', ['sektion' => 'rollen']) }}" class="underline">Rollen und Stundensätze</a> anlegen, dann hier besetzen.
+                                            </x-fa::signal>
+                                        @else
+                                            <span class="font-medium text-[var(--fa-ink-3)]">Besetzung</span>
+                                            @foreach($rollen as $rolle)
+                                                <label class="inline-flex items-center gap-1.5">{{ $rolle->name }}
+                                                    <x-fa::input size="sm" numeric inputmode="numeric" value="{{ ($p->besetzung ?? [])[(string) $rolle->id] ?? '' }}"
+                                                        wire:change="besetzungSetzen({{ $p->id }}, {{ $rolle->id }}, $event.target.value)"
+                                                        class="w-12" placeholder="0"
+                                                        data-posten-besetzung-rolle="{{ $rolle->id }}" />
+                                                </label>
+                                            @endforeach
+                                            <label class="inline-flex items-center gap-1.5">Schicht in Minuten
+                                                <x-fa::input size="sm" numeric inputmode="numeric" value="{{ $p->schicht_minuten }}"
+                                                    wire:change="feldSetzen({{ $p->id }}, 'schicht', $event.target.value)"
+                                                    class="w-16" placeholder="480" data-posten-schicht />
+                                            </label>
+                                            <label class="inline-flex items-center gap-1.5">Topf-Deckel in kg
+                                                <x-fa::input size="sm" numeric inputmode="decimal" value="{{ $p->batch_max_kg }}"
+                                                    wire:change="feldSetzen({{ $p->id }}, 'batch_max_kg', $event.target.value)"
+                                                    class="w-16" placeholder="Standard" data-posten-topf />
+                                            </label>
+                                            @php($abg = $p->abgeleiteteKapazitaet())
+                                            @if($abg !== null)
+                                                <x-fa::badge tone="accent" icon="heroicon-m-calculator" title="Wird als Kapazität genutzt und ersetzt die Minuten je Tag">{{ $abg }} Minuten je Tag aus der Besetzung</x-fa::badge>
+                                            @endif
+                                        @endif
+                                    </div>
+                                </td>
+                            </tr>
+                        @endif
+                    @empty
+                        <tr>
+                            <td colspan="6">
+                                <x-fa::empty compact icon="heroicon-o-fire" title="Noch keine Posten">Unten den ersten Posten anlegen, zum Beispiel Warme Küche, Kalte Küche oder Patisserie.</x-fa::empty>
+                            </td>
+                        </tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
 
-    <div class="flex flex-wrap items-end gap-2 mt-3 pt-3 border-t border-black/5" data-posten-neu>
-        <label class="block">
-            <span class="{{ $label }}">Posten</span>
-            <input type="text" wire:model="neu.name" wire:keydown.enter="create" class="{{ $input }} !py-1 w-56" placeholder="Warme Küche" data-neu-name />
-        </label>
-        <label class="block">
-            <span class="{{ $label }}">Bereich (optional)</span>
-            <input type="text" wire:model="neu.group_name" class="{{ $input }} !py-1 w-40" placeholder="Küche" data-neu-gruppe />
-        </label>
-        <label class="block">
-            <span class="{{ $label }}">Min./Tag (optional)</span>
-            <input type="text" inputmode="numeric" wire:model="neu.kapazitaet" class="{{ $input }} !py-1 w-24 text-right" placeholder="480" data-neu-kapazitaet />
-        </label>
-        <button type="button" wire:click="create" class="{{ $btnPrimary }}" data-posten-anlegen>Anlegen</button>
-    </div>
+        <div class="flex flex-wrap items-end gap-2 pt-3 border-t border-[var(--fa-line)]" data-posten-neu>
+            <x-fa::field label="Neuer Posten" for="posten-neu-name" class="w-60 max-w-full">
+                <x-fa::input id="posten-neu-name" wire:model="neu.name" wire:keydown.enter="create" placeholder="z. B. Warme Küche" data-neu-name />
+            </x-fa::field>
+            <x-fa::field label="Bereich" for="posten-neu-gruppe" optional class="w-44">
+                <x-fa::input id="posten-neu-gruppe" wire:model="neu.group_name" placeholder="Küche" data-neu-gruppe />
+            </x-fa::field>
+            <x-fa::field label="Minuten je Tag" for="posten-neu-kapazitaet" optional class="w-40">
+                <x-fa::input id="posten-neu-kapazitaet" numeric inputmode="numeric" wire:model="neu.kapazitaet" placeholder="480" data-neu-kapazitaet />
+            </x-fa::field>
+            <x-fa::button variant="primary" icon="heroicon-m-plus" wire:click="create" data-posten-anlegen>Posten anlegen</x-fa::button>
+        </div>
+    </x-fa::section>
 </div>

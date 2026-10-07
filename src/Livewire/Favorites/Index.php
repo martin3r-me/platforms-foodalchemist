@@ -69,9 +69,20 @@ class Index extends Component
         // des Score-Caps nicht (Pool ist jetzt der ganze approved-Bestand).
         $items = app(FavoriteGpService::class)->suggest($team, $this->limit, $this->q, $this->nurGepinnt);
 
+        // Nur Anzeige: gepinnte Favoriten oben in ihrer Reihenfolge (Rang, dann Score),
+        // darunter die Vorschläge nach Score — gleiche Zeilen wie $items, nur gruppiert.
+        $favoriten = $items->where('is_favorite', true)
+            ->sortBy([
+                fn ($a, $b) => ($a['favorite_rank'] ?? PHP_INT_MAX) <=> ($b['favorite_rank'] ?? PHP_INT_MAX),
+                fn ($a, $b) => $b['score'] <=> $a['score'],
+            ])->values();
+        $vorschlaege = $items->where('is_favorite', false)->values();
+
         return view('foodalchemist::livewire.favorites.index', [
             'items' => $items,
+            'favoriten' => $favoriten,
+            'vorschlaege' => $vorschlaege,
             'anzahlGepinnt' => $items->where('is_favorite', true)->count(),
-        ])->layout('platform::layouts.app');
+        ])->layout(\Platform\FoodAlchemist\Support\FaShell::layout());
     }
 }

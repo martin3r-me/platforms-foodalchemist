@@ -42,6 +42,6 @@ class Praesentation extends Component
         $data = $svc->dokumentDaten($team, $fb, false, [], false, $outlet);
 
         return view('foodalchemist::livewire.foodbooks.praesentation', $data)
-            ->layout('platform::layouts.app');
+            ->layout(\Platform\FoodAlchemist\Support\FaShell::layout());
     }
 }

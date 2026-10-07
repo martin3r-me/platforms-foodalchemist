@@ -73,7 +73,7 @@ it('meldet das ablauf-Dossier im Kanon als Befund, statt es still zu schlucken',
 
     expect($befund)->not->toBeNull()
         ->and($befund['schwere'])->toBe('blockiert')
-        ->and($befund['text'])->toContain('ablauf.GET')
+        ->and($befund['text'])->toContain('Arbeitsanleitung für den KI-Assistenten')
         ->and($p['zustand'])->toBe('fehlerhaft');
 });
 

@@ -1,38 +1,39 @@
-{{-- Wiederverwendbares Sensorik-Panel: erwartet $sensorik (SensorikService::fuer*). Genutzt in Concept-/Gericht-/Basisrezept-/GP-Editor. --}}
-@php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
-@php($dimLabel = ['suess' => 'Süß', 'salzig' => 'Salzig', 'sauer' => 'Sauer', 'bitter' => 'Bitter', 'umami' => 'Umami', 'fettig' => 'Fettig', 'scharf' => 'Scharf'])
+{{-- Wiederverwendbares Sensorik-Panel: erwartet $sensorik (SensorikService::fuer*). Genutzt in Gericht-, Basisrezept- und GP-Editor.
+     fa-pass: nur Tokens + x-fa-Bausteine. Ui::maps() bleibt, weil pairing-empfehlungen ($pill/$variantPill) aus diesem Scope liest. --}}
+@php
+    extract(\Platform\FoodAlchemist\Support\Ui::maps());
+    $dimLabel = ['suess' => 'süß', 'salzig' => 'salzig', 'sauer' => 'sauer', 'bitter' => 'bitter', 'umami' => 'umami', 'fettig' => 'fettig', 'scharf' => 'scharf'];
+@endphp
 
 @if(! $sensorik || ($sensorik['leer'] ?? true))
-    <p class="text-xs text-gray-500 py-4">Noch keine Sensorik-Daten (keine Grundprodukte mit Vektor).</p>
+    <x-fa::empty compact icon="heroicon-o-beaker" title="Noch keine Sensorik">Keines der Grundprodukte hat ein Geschmacksprofil.</x-fa::empty>
 @else
-    @php($sQuelle = $sensorik['source'] ?? 'roh')
-    <div class="flex items-center gap-2 mb-2 flex-wrap">
-        @if($sQuelle === 'ki')
-            <span class="{{ $pill }} {{ $variantPill['success'] }}">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5 inline-block align-middle') KI-bewertet · gegart</span>
-            @if(($sensorik['confidence'] ?? null) !== null)<span class="text-[11px] text-gray-500">Konfidenz {{ number_format((float) $sensorik['confidence'], 2, ',', '.') }}</span>@endif
-        @elseif($sQuelle === 'manual')
-            <span class="{{ $pill }} {{ $variantPill['info'] }}">@svg('heroicon-o-pencil', 'w-3.5 h-3.5 inline-block align-middle') manuell gesetzt · gegart</span>
-        @elseif($sQuelle === 'gp')
-            <span class="{{ $pill }} {{ $variantPill['secondary'] }}">Grundprodukt · Roh-Profil</span>
-        @else
-            <span class="{{ $pill }} {{ $variantPill['warning'] }}">aus Rohzutaten geschätzt</span>
-            @if(isset($sensorik['abdeckung']))<span class="text-[11px] text-gray-500">{{ $sensorik['abdeckung']['mit'] }}/{{ $sensorik['abdeckung']['gesamt'] }} GPs mit Daten · noch nicht KI-bewertet</span>@endif
+    @php $sQuelle = $sensorik['source'] ?? 'roh'; @endphp
+    <div class="flex flex-col gap-3" data-sensorik-panel>
+        <div class="flex flex-wrap items-center gap-2">
+            @if($sQuelle === 'ki')
+                <x-fa::badge tone="ok" icon="heroicon-m-sparkles">Von der KI bewertet, gegart</x-fa::badge>
+                @if(($sensorik['confidence'] ?? null) !== null)<span class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)] tabular-nums">Sicherheit {{ number_format((float) $sensorik['confidence'] * 100, 0, ',', '.') }} %</span>@endif
+            @elseif($sQuelle === 'manual')
+                <x-fa::badge tone="info" icon="heroicon-m-pencil">Von Hand gesetzt, gegart</x-fa::badge>
+            @elseif($sQuelle === 'gp')
+                <x-fa::badge>Grundprodukt, Rohprofil</x-fa::badge>
+            @else
+                <x-fa::badge tone="warn">Aus den Rohzutaten geschätzt</x-fa::badge>
+                @if(isset($sensorik['abdeckung']))<span class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)] tabular-nums">{{ $sensorik['abdeckung']['mit'] }} von {{ $sensorik['abdeckung']['gesamt'] }} Grundprodukten mit Daten, noch nicht von der KI bewertet</span>@endif
+            @endif
+        </div>
+        @if(($sensorik['reasoning'] ?? null) !== null && $sQuelle === 'ki')
+            <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)] italic">{{ $sensorik['reasoning'] }}</p>
         @endif
-    </div>
-    @if(($sensorik['reasoning'] ?? null) !== null && $sQuelle === 'ki')
-        <p class="text-[11px] text-gray-500 mb-2 italic">{{ $sensorik['reasoning'] }}</p>
-    @endif
 
-    <div class="relative overflow-hidden {{ $card }} mb-3">
-        <div class="{{ $cardAccent }}"></div>
-        <div class="px-5 py-4">
-            <h3 class="font-medium tracking-tight text-gray-900">Geschmacks-Profil <span class="text-[11px] font-normal text-gray-400">· sensorisch</span></h3>
+        <x-fa::section title="Geschmacksprofil" icon="heroicon-o-beaker" meta="sensorisch">
             {{-- #503: Fläche = gegarte Sensorik, Aroma-Anker-Wert je Achse im Tooltip.
-                 Rechts: Geschmack-Kontext + logische Pairing-Empfehlungen (aus $pairing, recipe-Typ — aus dem Pairing-Block hochgezogen). --}}
-            <div class="flex flex-col lg:flex-row gap-6 mt-3">
-                {{-- Radar in eigenem Container --}}
-                <div class="shrink-0 mx-auto lg:mx-0 w-full max-w-[400px]">
-                    <div class="rounded-xl border border-black/[0.06] bg-black/[0.015] p-3">
+                 Rechts: Geschmack + Pairing-Empfehlungen (aus $pairing, recipe-Typ). Laptop: Radar
+                 über dem Text bis xl, erst ab xl nebeneinander. --}}
+            <div class="flex flex-col xl:flex-row gap-6">
+                <div class="shrink-0 mx-auto xl:mx-0 w-full max-w-[360px]">
+                    <div class="rounded-[var(--fa-radius-surface)] border border-[var(--fa-line)] bg-[var(--fa-ground)] p-3">
                         @include('foodalchemist::livewire.concepter.partials.geschmack-radar', [
                             'sensGeschmack' => $sensorik['geschmack'] ?? [],
                             'ankerGeschmack' => $pairing['geschmack'] ?? [],
@@ -41,54 +42,53 @@
                         ])
                     </div>
                 </div>
-                {{-- Rechts: Geschmack-Kontext (Chips + Textur) | Pairing-Empfehlungen --}}
-                <div class="flex-1 min-w-0 grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 content-start">
-                    <div class="space-y-3">
-                        <p class="text-[11px] text-gray-500">Netz = gegarte Sensorik je Achse (0–1), Quelle s. Badge oben. Aroma-Anker-Wert je Achse im Tooltip (Hover).</p>
-                        {{-- Erdung: Achsen, die auf dem Etikett stehen, sind gerechnet (LA-Nährwerte), nicht geschätzt. --}}
+                <div class="flex-1 min-w-0 grid grid-cols-1 lg:grid-cols-2 gap-x-6 gap-y-4 content-start">
+                    <div class="flex flex-col gap-3">
+                        <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">Die Fläche zeigt den Geschmack nach dem Garen je Achse von 0 bis 1. Zeigen auf eine Achse nennt zusätzlich den Wert der Aroma-Anker.</p>
+                        {{-- Erdung: Achsen, die auf dem Etikett stehen, sind gerechnet (Nährwerte der Lieferantenartikel), nicht geschätzt. --}}
                         @if(count($sensorik['erdung'] ?? []))
-                            <div class="rounded-lg border border-emerald-600/20 bg-emerald-50/60 px-2.5 py-2">
-                                <p class="text-[11px] font-medium text-emerald-800 mb-1">@svg('heroicon-o-chart-bar', 'w-3.5 h-3.5 inline-block align-middle') Aus LA-Nährwerten gemessen</p>
-                                <ul class="space-y-1">
+                            <div class="flex flex-col gap-1.5 rounded-[var(--fa-radius-control)] bg-[var(--fa-ok-soft)] px-3 py-2">
+                                <p class="flex items-center gap-1.5 text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ok)]">@svg('heroicon-m-chart-bar', 'w-4 h-4') Aus den Nährwerten der Lieferantenartikel gemessen</p>
+                                <ul class="flex flex-col gap-1">
                                     @foreach($sensorik['erdung'] as $dim => $e)
-                                        <li class="text-[11px] {{ $e['angewendet'] ? 'text-emerald-900/80' : 'text-emerald-900/50' }}">
-                                            <span class="font-medium">{{ $dimLabel[$dim] ?? $dim }} {{ number_format((float) ($sensorik['geschmack'][$dim] ?? 0), 2, ',', '.') }}</span>
-                                            <span class="opacity-70">· {{ $e['basis'] }}</span>
-                                            @unless($e['angewendet'])<span class="opacity-70">· geschätzt</span>@endunless
+                                        <li class="text-[length:var(--fa-text-sm)] {{ $e['angewendet'] ? 'text-[var(--fa-ink)]' : 'text-[var(--fa-ink-3)]' }}">
+                                            <span class="font-medium">{{ ucfirst($dimLabel[$dim] ?? $dim) }} {{ number_format((float) ($sensorik['geschmack'][$dim] ?? 0), 2, ',', '.') }}</span>
+                                            <span class="text-[var(--fa-ink-2)]">, {{ $e['basis'] }}</span>
+                                            @unless($e['angewendet'])<span>, geschätzt</span>@endunless
                                             @if($e['konflikt'])
-                                                <span class="block text-amber-700">@svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5 inline-block align-middle') {{ $e['konflikt'] }}</span>
+                                                <span class="block"><x-fa::signal tone="warn">{{ $e['konflikt'] }}</x-fa::signal></span>
                                             @endif
                                         </li>
                                     @endforeach
                                 </ul>
-                                <p class="text-[10px] text-emerald-900/50 mt-1">Übrige Achsen = KI-Schätzung (nicht aus dem Label ableitbar).</p>
+                                <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">Die übrigen Achsen schätzt die KI, sie stehen auf keinem Etikett.</p>
                             </div>
                         @endif
                         @if(count($sensorik['dominant']) || count($sensorik['luecken']))
-                            <div class="flex flex-wrap gap-1">
-                                @foreach($sensorik['dominant'] as $d)<span class="{{ $pill }} {{ $variantPill['success'] }}">dominant: {{ $dimLabel[$d] ?? $d }}</span>@endforeach
-                                @foreach($sensorik['luecken'] as $d)<span class="{{ $pill }} {{ $variantPill['warning'] }}">Lücke: {{ $dimLabel[$d] ?? $d }}</span>@endforeach
+                            <div class="flex flex-wrap gap-1.5">
+                                @foreach($sensorik['dominant'] as $d)<x-fa::badge tone="ok">dominant: {{ $dimLabel[$d] ?? $d }}</x-fa::badge>@endforeach
+                                @foreach($sensorik['luecken'] as $d)<x-fa::badge tone="warn">Lücke: {{ $dimLabel[$d] ?? $d }}</x-fa::badge>@endforeach
                             </div>
                         @endif
-                        <div class="pt-3 border-t border-black/[0.06]">
-                            <h4 class="text-[11px] font-medium text-gray-600 mb-1.5">Textur-Profil</h4>
+                        <div class="flex flex-col gap-1.5 pt-3 border-t border-[var(--fa-line)]">
+                            <h4 class="text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-2)]">Textur</h4>
                             @if(count($sensorik['textur']))
-                                <div class="flex flex-wrap gap-1">
-                                    @foreach($sensorik['textur'] as $t)<span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $t['label'] }}</span>@endforeach
+                                <div class="flex flex-wrap gap-1.5">
+                                    @foreach($sensorik['textur'] as $t)<x-fa::badge>{{ $t['label'] }}</x-fa::badge>@endforeach
                                 </div>
                             @else
-                                <p class="text-[11px] text-gray-500">Keine Textur-Daten.</p>
+                                <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">Keine Textur-Daten.</p>
                             @endif
                             @if($sensorik['monotonie'])
-                                <p class="text-[11px] text-amber-600 mt-1.5">@svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5 inline-block align-middle') {{ $sensorik['monotonie'] }}</p>
+                                <x-fa::signal tone="warn">{{ $sensorik['monotonie'] }}</x-fa::signal>
                             @endif
                         </div>
                     </div>
                     @include('foodalchemist::livewire.concepter.partials.pairing-empfehlungen', ['pairing' => $pairing ?? null])
                 </div>
             </div>
-        </div>
+        </x-fa::section>
+        {{-- Kein „Ausgleich/Kontrast"-Vorschlag hier: Grundgeschmack = reine Diagnose.
+             Kontrast/Komplettierung liefert der Anker-Graph (Pairing-Block: klassisch + kontrast). --}}
     </div>
-    {{-- Kein „Ausgleich/Kontrast"-Vorschlag hier: Grundgeschmack = reine Diagnose.
-         Kontrast/Komplettierung liefert der Anker-Graph (Pairing-Block: klassisch + kontrast). --}}
 @endif

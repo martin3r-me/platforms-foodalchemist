@@ -1,14 +1,15 @@
-{{-- Ebene 2 (D2): aktiver Betrieb — treibt die Preise auf allen FA-Seiten (ambienter Kontext). --}}
-<div class="px-3 py-2 mb-2 rounded-md" style="background-color:#f5f3ff;border:1px solid #ddd6fe">
-    <div class="text-[10px] font-semibold uppercase tracking-wide mb-1" style="color:#6d28d9">Aktiver Betrieb</div>
-    <select wire:model.live="aktiverBetrieb"
-            class="w-full text-xs rounded border-purple-300 focus:border-purple-500 focus:ring-purple-500 py-1">
-        <option value="">— Team-Standard —</option>
+{{-- Ebene 2 (D2): aktiver Betrieb — treibt die Preise auf allen FA-Seiten (ambienter Kontext).
+     Design „Labor und Tageslicht": kompakt in der Kopfzeile statt Kasten in der Sidebar. --}}
+<div class="flex items-center gap-2">
+    <label for="fa-aktiver-betrieb" class="text-[12px] font-medium text-gray-600 whitespace-nowrap">Betrieb</label>
+    <select id="fa-aktiver-betrieb" wire:model.live="aktiverBetrieb"
+            class="h-8 min-w-[160px] max-w-[240px] text-[13px] rounded-md border border-gray-300 bg-[var(--fa-surface)] text-gray-900 py-0 pl-2.5 pr-8 focus:border-violet-600 focus:ring-violet-600/20">
+        <option value="">Team-Standard</option>
         @foreach($betriebe as $b)
             <option value="{{ $b->id }}">{{ $b->name }}</option>
         @endforeach
     </select>
     @if($betriebe->isEmpty())
-        <div class="text-[10px] text-gray-500 mt-1">Noch keine Betriebe — Einstellungen&nbsp;→&nbsp;Betriebe.</div>
+        <a href="{{ route('foodalchemist.einstellungen') }}" wire:navigate class="text-[12px] text-violet-600 hover:text-violet-700 whitespace-nowrap">Betrieb anlegen</a>
     @endif
 </div>

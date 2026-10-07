@@ -1,79 +1,68 @@
-{{-- Inline-Plan-Panel (A0/A1): der vorbereitete KI-Kopf-Plan bleibt SICHTBAR + editierbar in der
-     Leitstelle — kein Wegsprung mehr in den Conceptor. „Ein Ort, ein Kontext": die Semantik-Felder
-     (Leitidee & co.) SIND der LLM-Kontext fürs Erzeugen; hier ändern steuert direkt, was beim Go
-     entsteht. Erwartet $planConceptId gesetzt. Lese-Anzeige via $this->planVorschau(). --}}
+{{-- Inline-Plan (A0/A1): der von der KI ausgearbeitete Plan bleibt SICHTBAR + bearbeitbar in der
+     Leitstelle, kein Wegsprung in den Conceptor. „Ein Ort, ein Kontext": die Felder (Leitidee und co.)
+     SIND der Kontext fürs Erstellen; hier ändern steuert direkt, was beim Erstellen entsteht.
+     Erwartet $planConceptId gesetzt. Lese-Anzeige via $this->planVorschau().
+     fa-pass: eigene Karte mit Bausteinen (Tokens, hell + Werkbank) statt grüner Sonderfläche. --}}
 @php $pv = $this->planVorschau(); @endphp
 @if($pv !== null)
-    <div class="rounded-lg border border-emerald-500/40 bg-emerald-50/50 p-3 mb-3 space-y-3" data-planung-plan-panel>
-        <div class="flex items-center justify-between gap-2 flex-wrap">
-            <p class="text-xs font-semibold text-gray-900 inline-flex items-center gap-1.5">
-                @svg('heroicon-o-sparkles', 'w-4 h-4 text-emerald-600') Ausgearbeiteter Plan{{ $pv['name'] !== '' ? ' — ' . $pv['name'] : '' }}
-            </p>
-            {{-- Conceptor bleibt optionaler Tiefen-Editor (Entscheid 2026-08-18) — per Knopf, kein Pflicht-Sprung. --}}
-            <button type="button"
-                    wire:click="$dispatch('concepter-editor.oeffnen', { type: 'concepts', id: {{ (int) $planConceptId }}, startTab: 'konzept' })"
-                    class="text-[11px] text-violet-600 hover:text-violet-500 underline inline-flex items-center gap-1">
-                @svg('heroicon-o-arrow-top-right-on-square', 'w-3.5 h-3.5') Im Conceptor tief bearbeiten
-            </button>
-        </div>
+    <x-foodalchemist::modal-section icon="heroicon-o-document-text" :title="'Ausgearbeiteter Plan' . ($pv['name'] !== '' ? ': ' . $pv['name'] : '')" data-planung-plan-panel>
+        <x-slot:actions>
+            <x-fa::badge tone="ok" icon="heroicon-m-check">Plan liegt vor</x-fa::badge>
+            {{-- Conceptor bleibt optionaler Tiefen-Editor (Entscheid 2026-08-18): per Knopf, kein Pflicht-Sprung. --}}
+            <x-fa::button variant="ghost" size="sm" icon="heroicon-o-arrow-top-right-on-square"
+                wire:click="$dispatch('concepter-editor.oeffnen', { type: 'concepts', id: {{ (int) $planConceptId }}, startTab: 'konzept' })">Im Conceptor bearbeiten</x-fa::button>
+        </x-slot:actions>
 
-        {{-- Semantik-Felder — editierbar. „Plan-Text speichern" schreibt in die concept.plan-Canvas
-             (= der LLM-Kontext, der beim Go in die Gerichte fließt). --}}
+        <p class="mb-3 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)] max-w-2xl">Leitidee, Vorteil und Inszenierung fließen als Vorgabe in die Erstellung. Was du hier änderst, steuert das Ergebnis.</p>
+
+        {{-- Semantik-Felder, bearbeitbar. „Plan-Text speichern" schreibt in die concept.plan-Canvas
+             (= der Kontext, der beim Erstellen in die Gerichte fließt). --}}
         <div class="grid md:grid-cols-2 gap-x-4 gap-y-3">
-            <div class="md:col-span-2">
-                <label class="{{ $label ?? 'text-[11px] text-gray-500' }} mb-1 block">Name + Claim</label>
-                <input type="text" wire:model="planForm.name_claim" class="{{ $input }} !py-1.5" data-plan-name-claim />
-            </div>
-            <div class="md:col-span-2">
-                <label class="{{ $label ?? 'text-[11px] text-gray-500' }} mb-1 block">Leitidee</label>
-                <textarea wire:model="planForm.leitidee" rows="2" class="{{ $input }}" data-plan-leitidee></textarea>
-            </div>
-            <div>
-                <label class="{{ $label ?? 'text-[11px] text-gray-500' }} mb-1 block">Vorteil / USP + Eignung</label>
-                <textarea wire:model="planForm.usp_eignung" rows="2" class="{{ $input }}"></textarea>
-            </div>
-            <div>
-                <label class="{{ $label ?? 'text-[11px] text-gray-500' }} mb-1 block">Inszenierung &amp; Servierform</label>
-                <textarea wire:model="planForm.inszenierung" rows="2" class="{{ $input }}"></textarea>
-            </div>
+            <x-fa::field label="Name und Claim" class="md:col-span-2">
+                <x-fa::input wire:model="planForm.name_claim" data-plan-name-claim />
+            </x-fa::field>
+            <x-fa::field label="Leitidee" class="md:col-span-2">
+                <x-fa::textarea wire:model="planForm.leitidee" rows="2" data-plan-leitidee />
+            </x-fa::field>
+            <x-fa::field label="Vorteil und Eignung">
+                <x-fa::textarea wire:model="planForm.usp_eignung" rows="2" />
+            </x-fa::field>
+            <x-fa::field label="Inszenierung und Servierform">
+                <x-fa::textarea wire:model="planForm.inszenierung" rows="2" />
+            </x-fa::field>
         </div>
-        <div class="flex items-center gap-3 flex-wrap">
-            <button type="button" wire:click="planFeldSpeichern" @disabled($laeuft)
-                    class="text-[11px] text-emerald-700 hover:text-emerald-600 underline inline-flex items-center gap-1 disabled:opacity-40" data-plan-speichern>
-                @svg('heroicon-o-check', 'w-3.5 h-3.5') Plan-Text speichern
-            </button>
-            <span class="text-[11px] text-gray-500">Leitidee &amp; co. fließen als Kontext in die Erzeugung — hier ändern steuert das Ergebnis.</span>
+        <div class="mt-3">
+            <x-fa::button size="sm" icon="heroicon-o-check" wire:click="planFeldSpeichern" :disabled="$laeuft" data-plan-speichern>Plan-Text speichern</x-fa::button>
         </div>
 
-        {{-- Geschmackswelten (Lese-Anzeige; feinjustiert wird im Conceptor). --}}
+        {{-- Geschmackswelten (nur Anzeige; fein eingestellt wird im Conceptor). --}}
         @if($pv['geschmackswelten'] !== [])
-            <div>
-                <p class="{{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Geschmackswelten</p>
+            <div class="mt-4 flex flex-col gap-1.5">
+                <p class="text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-2)]">Geschmackswelten</p>
                 <div class="flex flex-wrap gap-1.5">
                     @foreach($pv['geschmackswelten'] as $welt)
-                        <span class="px-2 py-0.5 rounded-full border border-black/10 bg-white/60 text-[11px] text-gray-700"
-                              title="{{ $welt['meta']['description'] ?? '' }}">{{ $welt['value'] }}</span>
+                        <x-fa::badge title="{{ $welt['meta']['description'] ?? '' }}">{{ $welt['value'] }}</x-fa::badge>
                     @endforeach
                 </div>
             </div>
         @endif
 
-        {{-- Vorgeschlagene Menü-Positionen — WELCHE Speisen der Plan vorsieht (die Gerichte selbst
-             entstehen beim „Go"). Genau das, was vorher nur im Conceptor sichtbar war. --}}
+        {{-- Vorgesehene Menü-Positionen: WELCHE Speisen der Plan vorsieht (die Gerichte selbst
+             entstehen beim Erstellen). Genau das, was vorher nur im Conceptor sichtbar war. --}}
         @if($pv['speisen'] !== [])
-            <div>
-                <p class="{{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Menü-Aufbau — {{ count($pv['speisen']) }} Position(en); die Gerichte entstehen beim „Go"</p>
-                <ol class="space-y-1">
+            <div class="mt-4 flex flex-col gap-1.5">
+                <p class="text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-2)]">Menü-Aufbau <span class="font-normal text-[var(--fa-ink-3)]">· {{ count($pv['speisen']) }} {{ count($pv['speisen']) === 1 ? 'Position' : 'Positionen' }}, die Gerichte entstehen beim Erstellen</span></p>
+                <ol class="flex flex-col divide-y divide-[var(--fa-line)] rounded-[var(--fa-radius-control)] border border-[var(--fa-line)]">
                     @foreach($pv['speisen'] as $sp)
-                        <li class="flex items-center gap-2 text-[11px] text-gray-700" data-plan-speise>
-                            <span class="text-gray-400 tabular-nums">{{ $loop->iteration }}.</span>
-                            <span class="font-medium">{{ $sp['titel'] !== '' ? $sp['titel'] : ($sp['rolle'] !== '' ? $sp['rolle'] : 'Position') }}</span>
-                            @if($sp['titel'] !== '' && $sp['rolle'] !== '')<span class="text-gray-400">· {{ $sp['rolle'] }}</span>@endif
-                            @if($sp['pflicht'])<span class="text-[10px] text-emerald-600 uppercase tracking-wide">Pflicht</span>@endif
+                        <li class="flex items-center gap-2 px-3 py-1.5 text-[length:var(--fa-text-md)] text-[var(--fa-ink)]" data-plan-speise>
+                            <span class="w-5 text-right text-[var(--fa-ink-3)] tabular-nums">{{ $loop->iteration }}.</span>
+                            <span class="font-medium min-w-0 break-words">{{ $sp['titel'] !== '' ? $sp['titel'] : ($sp['rolle'] !== '' ? $sp['rolle'] : 'Position') }}</span>
+                            @if($sp['titel'] !== '' && $sp['rolle'] !== '')<span class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">· {{ $sp['rolle'] }}</span>@endif
+                            @if($sp['pflicht'])<x-fa::badge tone="accent" class="ml-auto">Pflicht</x-fa::badge>@endif
                         </li>
                     @endforeach
                 </ol>
             </div>
         @endif
-    </div>
+    </x-foodalchemist::modal-section>
 @endif

@@ -28,7 +28,7 @@ function mkAnker(string $slug): int
 function mkKante(int $a, int $b, string $typ, ?int $level = null, ?float $weight = null): void
 {
     foreach ([[$a, $b], [$b, $a]] as [$x, $y]) {
-        DB::table('foodalchemist_pairing_anchor_edges')->insert([
+        \Platform\FoodAlchemist\Tests\Support\Harmonie::ausFixture([
             'uuid' => (string) UuidV7::generate(), 'anchor_a_id' => $x, 'anchor_b_id' => $y,
             'type' => $typ, 'level' => $level, 'weight' => $weight,
             'created_at' => now(), 'updated_at' => now(),
@@ -58,15 +58,15 @@ beforeEach(function () {
     mkKante($this->tahin, $this->minze, 'aroma', 2, 0.6);
 
     $this->rezept = FoodAlchemistRecipe::create(['team_id' => $this->rootTeam->id, 'recipe_key' => 'hummus', 'name' => 'Creme: Hummus', 'status' => 'draft']);
-    $this->svc->setRecipeAnker($this->rootTeam, $this->rezept->id, $this->kichererbse);
-    $this->svc->setRecipeAnker($this->rootTeam, $this->rezept->id, $this->tahin);
+    \Platform\FoodAlchemist\Tests\Support\RezeptAnker::gib($this->rezept, $this->kichererbse);
+    \Platform\FoodAlchemist\Tests\Support\RezeptAnker::gib($this->rezept, $this->tahin);
 
     // Komplementäres Basisrezept: baut auf knoblauch auf (Kandidat des Gerichts).
     $this->basis = FoodAlchemistRecipe::create(['team_id' => $this->rootTeam->id, 'recipe_key' => 'aioli', 'name' => 'Sauce: Aioli', 'status' => 'draft', 'is_sales_recipe' => false]);
-    $this->svc->setRecipeAnker($this->rootTeam, $this->basis->id, $this->knoblauch);
+    \Platform\FoodAlchemist\Tests\Support\RezeptAnker::gib($this->basis, $this->knoblauch);
     // VK-Rezept auf knoblauch → darf NICHT als Basisrezept auftauchen.
     $this->vk = FoodAlchemistRecipe::create(['team_id' => $this->rootTeam->id, 'recipe_key' => 'dip', 'name' => 'Dip: Knoblauch', 'status' => 'draft', 'is_sales_recipe' => true]);
-    $this->svc->setRecipeAnker($this->rootTeam, $this->vk->id, $this->knoblauch);
+    \Platform\FoodAlchemist\Tests\Support\RezeptAnker::gib($this->vk, $this->knoblauch);
 });
 
 it('pairingNetz: Zentrum + Kern-Anker innen, Kandidaten nach Stern-Stufe, dish_cover', function () {
@@ -79,22 +79,21 @@ it('pairingNetz: Zentrum + Kern-Anker innen, Kandidaten nach Stern-Stufe, dish_c
         ->and($anker->every(fn ($a) => $a['kern'] === true))->toBeTrue();
 
     $kand = collect($netz['nodes'])->where('kind', 'kandidat')->keyBy('slug');
+    // Spec 60: nur ★★★ ist Kandidat — granatapfel/minze (2★) sind Rauschen und fehlen.
     expect($kand['knoblauch']['typ'])->toBe('stern3')
         ->and($kand['knoblauch']['level'])->toBe(3)
-        ->and($kand['granatapfel']['typ'])->toBe('stern2')
-        ->and($kand['minze']['typ'])->toBe('stern2');
+        ->and($kand->keys()->all())->toBe(['knoblauch']);
     // knoblauch bedient beide Kern-Anker → cover 2
-    expect($kand['knoblauch']['cover'])->toBe(2)
-        ->and($kand['granatapfel']['cover'])->toBe(1);
+    expect($kand['knoblauch']['cover'])->toBe(2);
 
     // Kandidaten-Kanten tragen ihre Stufe
     $kknob = collect($netz['edges'])->where('kind', 'kandidat')->where('source', 'k:'.$this->knoblauch);
     expect($kknob)->toHaveCount(2)                                      // zu kichererbse + tahin
         ->and($kknob->every(fn ($e) => $e['typ'] === 'stern3'))->toBeTrue();
 
-    // Zweistufiges Modell: stern1 raus; anker_anker (innere Ebene) hier 0 (kichererbse↔tahin ungepaart).
-    expect($netz['meta']['counts'])->toBe(['stern3' => 1, 'stern2' => 2, 'basis' => 1, 'anker_anker' => 0])
-        ->and($netz['meta']['typ_default'])->toBe(['stern3' => true, 'stern2' => true]);
+    // anker_anker (innere Ebene) hier 0 (kichererbse↔tahin ungepaart); kein Anker-Wissen → kein Kontrast/Konflikt.
+    expect($netz['meta']['counts'])->toBe(['stern3' => 1, 'kontrast' => 0, 'basis' => 1, 'anker_anker' => 0, 'konflikt' => 0])
+        ->and($netz['meta']['typ_default'])->toBe(['stern3' => true, 'kontrast' => true]);
 });
 
 it('pairingNetz: Anker↔Anker-Kante aus der Harmonie-Matrix (innere Ebene)', function () {
@@ -124,17 +123,17 @@ it('pairingNetz: Anker↔Anker — beste Stufe gewinnt, kontrast ausgeschlossen,
     // beforeEach seedt tahin↔minze (aroma), das ergäbe mit minze als Kern eine ZWEITE
     // anker_anker-Linie und bräche toHaveCount(1). `fremd` trägt nur Kontrast (s.u.).
     $fremd = mkAnker('fremd');
-    $this->svc->setRecipeAnker($this->rootTeam, $this->rezept->id, $fremd);
+    \Platform\FoodAlchemist\Tests\Support\RezeptAnker::gib($this->rezept, $fremd);
 
     // kichererbse↔tahin in beiden Richtungen VERSCHIEDEN gestuft (★★ / ★★★) → dedup muss
     // die beste Stufe (★★★) wählen. Direkt-Inserts statt mkKante: UNIQUE(a,b,type) verbietet
     // zwei gleich-typige Kanten je Richtung, aber die zwei Richtungen dürfen sich stufen.
-    DB::table('foodalchemist_pairing_anchor_edges')->insert([
+    \Platform\FoodAlchemist\Tests\Support\Harmonie::ausFixture([
         'uuid' => (string) UuidV7::generate(), 'anchor_a_id' => $this->kichererbse,
         'anchor_b_id' => $this->tahin, 'type' => 'aroma', 'level' => 2, 'weight' => 0.5,
         'created_at' => now(), 'updated_at' => now(),
     ]);
-    DB::table('foodalchemist_pairing_anchor_edges')->insert([
+    \Platform\FoodAlchemist\Tests\Support\Harmonie::ausFixture([
         'uuid' => (string) UuidV7::generate(), 'anchor_a_id' => $this->tahin,
         'anchor_b_id' => $this->kichererbse, 'type' => 'aroma', 'level' => 3, 'weight' => 0.9,
         'created_at' => now(), 'updated_at' => now(),
@@ -142,7 +141,7 @@ it('pairingNetz: Anker↔Anker — beste Stufe gewinnt, kontrast ausgeschlossen,
     // kichererbse↔fremd nur als Kontrast (eigene Achse) → NICHT als Harmonie-Linie.
     mkKante($this->kichererbse, $fremd, 'kontrast', null, null);
     // Selbst-Loop (defensiv) → darf nie als Kante entstehen.
-    DB::table('foodalchemist_pairing_anchor_edges')->insert([
+    \Platform\FoodAlchemist\Tests\Support\Harmonie::ausFixture([
         'uuid' => (string) UuidV7::generate(),
         'anchor_a_id' => $this->kichererbse, 'anchor_b_id' => $this->kichererbse,
         'type' => 'aroma', 'level' => 3, 'weight' => 1.0, 'created_at' => now(), 'updated_at' => now(),
@@ -188,7 +187,7 @@ it('pairingNetz: meta.sig ist stabil, ändert sich aber wenn ein Kern-Anker dazu
     expect($a)->toBeString()->toMatch('/^[0-9a-f]{10}$/')
         ->and($b)->toBe($a);                                   // deterministisch bei gleichen Daten
 
-    $this->svc->setRecipeAnker($this->rootTeam, $this->rezept->id, $this->minze); // +1 Kern-Anker
+    \Platform\FoodAlchemist\Tests\Support\RezeptAnker::gib($this->rezept, $this->minze); // +1 Kern-Anker
     $c = $this->svc->pairingNetz($this->rootTeam, $this->rezept->id)['meta']['sig'] ?? null;
 
     expect($c)->not->toBe($a);                                 // Ankersatz änderte sich → neuer Key
@@ -256,27 +255,18 @@ it('composerCohesion: Score + Orphan-Erkennung (passt-nicht-Anker)', function ()
     expect($this->svc->composerCohesion([$this->kichererbse])['score'])->toBe(0);
 });
 
-it('pairingNetzForAnkers: Brücken-Kanten aus geteilten Partnern + Orphan-Flag', function () {
-    $fremd = mkAnker('fremd'); // teilt mit niemandem einen Partner
+it('pairingNetzForAnkers: keine Brücken über geteilte Partner — verbunden ist nur, was gemessen harmoniert', function () {
+    $fremd = mkAnker('fremd');
+    mkKante($this->tahin, $fremd, 'erprobt');                           // ★★★ direkt
 
-    // kichererbse & tahin haben KEINE Direktkante, teilen aber knoblauch (beide ★★★, cover 2).
+    // kichererbse & tahin teilen knoblauch, haben aber keine eigene ★★★-Kante.
     $netz = $this->svc->pairingNetzForAnkers($this->rootTeam, [$this->kichererbse, $this->tahin, $fremd]);
 
-    // Genau eine Brücke (kichererbse↔tahin über knoblauch), obwohl keine Direktkante existiert.
-    $bridges = collect($netz['edges'])->where('kind', 'bridge')->values();
-    expect($bridges)->toHaveCount(1)
-        ->and($bridges[0]['partners'])->toContain('Knoblauch')
-        ->and(collect($netz['edges'])->where('kind', 'anker_anker'))->toHaveCount(0);
+    expect(collect($netz['edges'])->where('kind', 'bridge'))->toHaveCount(0)
+        ->and($netz['meta'])->not->toHaveKey('bridge')
+        ->and(collect($netz['edges'])->where('kind', 'anker_anker'))->toHaveCount(1);
 
-    // Brücken-Zusammenfassung: 1 von 3 Paaren verbunden, fremd ist Orphan.
-    $b = $netz['meta']['bridge'];
-    expect($b['pairs_connected'])->toBe(1)
-        ->and($b['pairs_total'])->toBe(3)
-        ->and($b['orphans'])->toBe(['Fremd']);
-
-    // Orphan-Flag steckt am Anker-Knoten (für den Warn-Ring).
+    // Ohne gemessenen Bezug = neutral: das Flag am Knoten (Hinweis, kein Fehler).
     $orphan = collect($netz['nodes'])->where('kind', 'anker')->mapWithKeys(fn ($n) => [$n['slug'] => $n['orphan'] ?? null]);
-    expect($orphan['fremd'])->toBeTrue()
-        ->and($orphan['kichererbse'])->toBeFalse()
-        ->and($orphan['tahin'])->toBeFalse();
+    expect($orphan->all())->toBe(['kichererbse' => true, 'tahin' => false, 'fremd' => false]);
 });

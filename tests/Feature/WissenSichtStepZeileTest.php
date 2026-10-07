@@ -104,8 +104,8 @@ it('Step-Zeile: zeigt Kanon + Recherche komplett — 20 Recherche-Chips ohne „
 
     $t = Livewire::test(PlanungIndex::class)->set('sessionId', $session->id)->set('laufId', $run->id)
         ->assertSee('Verwendetes Wissen (22)')
-        ->assertSee('Kanon (2)')
-        ->assertSee('Recherche (20)')
+        ->assertSee('2 verbindlich vorgegeben')   // Copy-Umbau 2026-10-05: »Kanon« → »verbindlich vorgegeben«
+        ->assertSee('20 nachgeschlagen')          // »Recherche« → »nachgeschlagen«
         ->assertSee('regelwerk-basisrezepte-6-mengen-einheiten-yield')
         ->assertSee('workflow.basisrezept_erstellungs_dossier')   // Punkt-Slug ungekürzt
         ->assertDontSee('+6');                                    // 20 − 14: die alte Kappung
@@ -124,7 +124,7 @@ it('Step-Zeile: alter Snapshot ohne kanon_files rendert weiter (nur Recherche-Gr
 
     Livewire::test(PlanungIndex::class)->set('sessionId', $session->id)->set('laufId', $run->id)
         ->assertSee('Verwendetes Wissen (2)')
-        ->assertSee('Kanon (0)')
+        ->assertSee('0 verbindlich vorgegeben')
         ->assertSee('tomate')->assertSee('suppen')
-        ->assertDontSee('Kanon (verbindlich)');
+        ->assertDontSee('Verbindlich vorgegeben');   // Gruppen-Überschrift fehlt ohne kanon_files
 });

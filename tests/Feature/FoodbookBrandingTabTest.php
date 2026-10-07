@@ -30,7 +30,7 @@ it('rendert den Branding/CI-Tab im Cockpit', function () {
         ->call('waehle', $this->fb->id)
         ->assertOk()
         ->assertSee('Branding & Präsentation')
-        ->assertSee('Marken-Farbe');
+        ->assertSee('Markenfarbe');   // fa-pass: Beschriftung als ein Wort (vorher „Marken-Farbe“), Feld unverändert
 });
 
 it('Speichern setzt Marken-Farbe + Footer (leere Bandfarbe → null)', function () {

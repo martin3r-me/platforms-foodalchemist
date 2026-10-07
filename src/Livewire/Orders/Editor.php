@@ -298,6 +298,15 @@ class Editor extends Component
         $this->fuehreAus(fn ($team) => $orders->setStatus($team, $this->orderId, $ziel), 'Status gesetzt.');
     }
 
+    /** Spec 63: fehlgeschlagene Bestell-/Storno-Mail erneut senden. */
+    public function mailErneutSenden(int $mailId): void
+    {
+        $this->fuehreAus(
+            fn ($team) => app(\Platform\FoodAlchemist\Services\OrderMailService::class)->erneutSenden($team, $mailId),
+            'Mail wird erneut gesendet.'
+        );
+    }
+
     public function saveSupplierConfirmation(OrderService $orders): void
     {
         if ($this->orderId === null) {
@@ -841,6 +850,9 @@ class Editor extends Component
         $erlaubteStatus = [];
         $mailto = null;
         $cancellationMailto = null;
+        $mailDienst = app(\Platform\FoodAlchemist\Services\OrderMailService::class);
+        $serverVersand = $mailDienst->istServerVersand($team);
+        $mailProtokoll = collect();
         if ($this->orderId !== null) {
             try {
                 $detail = $orders->detail($team, $this->orderId);
@@ -854,6 +866,7 @@ class Editor extends Component
                 if (($m['to'] ?? '') !== '') {
                     $mailto = 'mailto:'.$m['to'].'?subject='.rawurlencode($m['subject']).'&body='.rawurlencode($m['body']);
                 }
+                $mailProtokoll = $mailDienst->protokoll($team, $this->orderId);
                 $cancelMail = $orders->cancellationMailtoData($team, $this->orderId);
                 if (($cancelMail['to'] ?? '') !== '') {
                     $cancellationMailto = 'mailto:'.$cancelMail['to'].'?subject='.rawurlencode($cancelMail['subject']).'&body='.rawurlencode($cancelMail['body']);
@@ -960,6 +973,8 @@ class Editor extends Component
             'erlaubteStatus' => $erlaubteStatus,
             'mailto' => $mailto,
             'cancellationMailto' => $cancellationMailto,
+            'serverVersand' => $serverVersand,
+            'mailProtokoll' => $mailProtokoll,
             'alternativen' => $alternativen,
             'cockpitAlternativen' => $this->cockpitAlternativen,
             'cockpitAltKey' => $this->cockpitAltKey,

@@ -29,7 +29,15 @@ enum SignalTyp: string
     // R9.1: Vertrags-Kündigungsfrist eines Lieferanten läuft ab.
     case VertragsfristFaellig = 'vertragsfrist_faellig';
     // R6.11 · S2: Pairing-Wissensdokument behauptet eine Paarung, die der Anker-Graph nicht kennt (R&D-Frage).
+    // ABGELÖST (Spec 60 · P8): die Pairing-Dokumente gibt es nicht mehr, der Detektor ist entfernt und der
+    // offene Altbestand per Migration geschlossen. Der Case bleibt, damit die geschlossenen Zeilen lesbar sind.
     case WiderspruchWissenGraph = 'widerspruch_wissen_graph';
+    // Spec 60 · P8: die vier Pairing-Signale ({@see \Platform\FoodAlchemist\Services\Pairing\PairingSignale}).
+    // Präfix `pairing_` statt `rezept_`: sonst zählten sie zur Rezept-Qualitäts-Ebene der Ampel.
+    case PairingWissenPruefen = 'pairing_wissen_pruefen';
+    case PairingWiderspruchMessung = 'pairing_widerspruch_messung';
+    case PairingKonfliktImGericht = 'pairing_konflikt_im_gericht';
+    case PairingWissensluecke = 'pairing_wissensluecke';
     // Spec 19 E9.3: Kreativ-Phase wünscht ein Aroma, das kein beschaffbarer GP trägt (Sortiments-/Buy-Signal).
     case SortimentsLuecke = 'sortiments_luecke';
     // Spec 21 Tranche A: Inhalts-Qualität auf Rezept-Ebene (deterministisch, 0-Egress).
@@ -131,51 +139,55 @@ enum SignalTyp: string
     public function label(): string
     {
         return match ($this) {
-            self::SteuerdatenDrift => 'Wissens-Steuerdaten weichen ab',
-            self::PreisAnomalie => 'Preis-Anomalie',
-            self::PreisSprungMargeImpact => 'Preis-Sprung (Marge-Impact)',
+            self::SteuerdatenDrift => 'Wissenseinstellungen der KI weichen ab',
+            self::PreisAnomalie => 'Auffälliger Lieferantenpreis',
+            self::PreisSprungMargeImpact => 'Preissprung mit Folgen für die Marge',
             self::VeraltetePreise => 'Veraltete Preise',
             self::MargeUnterZiel => 'Marge unter Ziel',
             self::WareneinsatzUeberZiel => 'Wareneinsatz über Ziel',
-            self::WareneinsatzIstAbweichung => 'Wareneinsatz Ist ≠ Rezeptur',
-            self::DatenqualitaetGpLa => 'Datenqualität GP/LA',
-            self::NaehrwertPlausi => 'Nährwert-Plausibilität',
-            self::AnkerFehlt => 'Flavor-Anker fehlt',
-            self::ServierformUnbestimmt => 'Servierform unbestimmt',
-            self::EkKetteUnvollstaendig => 'EK-Kette unvollständig',
-            self::VkAnpassungEmpfohlen => 'VK-Anpassung empfohlen',
+            self::WareneinsatzIstAbweichung => 'Einkauf weicht von der Rezeptur ab',
+            self::DatenqualitaetGpLa => 'Lücken bei Grundprodukten',
+            self::NaehrwertPlausi => 'Unplausible Nährwerte',
+            self::AnkerFehlt => 'Aromaprofil fehlt',
+            self::ServierformUnbestimmt => 'Servierform nicht festgelegt',
+            self::EkKetteUnvollstaendig => 'Einkaufspreis unvollständig',
+            self::VkAnpassungEmpfohlen => 'Veröffentlichte Preise veraltet',
             self::VertragsfristFaellig => 'Vertragsfrist fällig',
-            self::WiderspruchWissenGraph => 'Widerspruch Wissen ↔ Graph',
-            self::SortimentsLuecke => 'Sortiments-Lücke',
+            self::WiderspruchWissenGraph => 'Widerspruch Wissen ↔ Graph (abgelöst)',
+            self::PairingWissenPruefen => 'Anker-Wissen zur Prüfung',
+            self::PairingWiderspruchMessung => 'Widerspruch Anker-Wissen ↔ Messung',
+            self::PairingKonfliktImGericht => 'Aroma-Konflikt im Gericht',
+            self::PairingWissensluecke => 'Anker ohne Wissen (viel genutzt)',
+            self::SortimentsLuecke => 'Lücke im Sortiment',
             self::RezeptOhneZubereitung => 'Rezept ohne Zubereitung',
-            self::RezeptMengenLuecke => 'Rezept mit Mengen-Lücke',
-            self::RezeptYieldImplausibel => 'Rezept-Ausbeute implausibel',
+            self::RezeptMengenLuecke => 'Rezept mit Zutat ohne Menge',
+            self::RezeptYieldImplausibel => 'Ausbeute fehlt oder ist unmöglich',
             self::RezeptEinZutat => 'Rezept mit nur einer Zutat',
-            self::RezeptNamingRegelwerk => 'Rezept-Name gegen Regelwerk',
-            self::RezeptDublette => 'Rezept-Dublette',
-            self::RezeptKategorieProblem => 'Rezept-Kategorie fehlt/stillgelegt',
-            self::RezeptAllergenUnbelastbar => 'Rezept-Allergene unbelastbar',
-            self::RezeptZutatenUngemappt => 'Rezept mit ungemappten Zutaten',
-            self::RezeptSubStubOffen => 'Sub-Rezept-Stub offen',
-            self::RezeptVerwaist => 'Rezept verwaist',
-            self::RezeptPlausiKi => 'Rezept mit offenem KI-Befund',
-            self::RezeptGerichtVsKomponente => 'Gericht oder Komponente? (Bauart-Zweifel)',
+            self::RezeptNamingRegelwerk => 'Rezeptname verstößt gegen Benennungsregeln',
+            self::RezeptDublette => 'Rezept doppelt vorhanden',
+            self::RezeptKategorieProblem => 'Rezept ohne gültige Kategorie',
+            self::RezeptAllergenUnbelastbar => 'Allergenangabe nicht gesichert',
+            self::RezeptZutatenUngemappt => 'Rezept mit Zutaten ohne Grundprodukt',
+            self::RezeptSubStubOffen => 'Unterrezept noch leer',
+            self::RezeptVerwaist => 'Rezept lange ungenutzt',
+            self::RezeptPlausiKi => 'Rezept mit offenem KI-Hinweis',
+            self::RezeptGerichtVsKomponente => 'Gericht oder Komponente unklar',
             self::RezeptFeedbackKritisch => 'Küchen-Feedback kritisch',
             self::RezeptFeedbackStark => 'Küchen-Favorit (wiederholt Bestnoten)',
-            self::KonzeptSlotLuecke => 'Konzept mit unbesetztem Pflicht-Slot',
-            self::KonzeptOhneWording => 'Konzept ohne Kunden-Wording',
-            self::KonzeptPreisbandVerletzt => 'Konzept außerhalb des Preisbands',
-            self::KonzeptRegelVerletzt => 'Konzept verletzt eine Gerüst-Regel',
+            self::KonzeptSlotLuecke => 'Konzept mit unbesetzter Pflichtposition',
+            self::KonzeptOhneWording => 'Konzept mit Gericht ohne Kundentext',
+            self::KonzeptPreisbandVerletzt => 'Konzept außerhalb der Preisspanne',
+            self::KonzeptRegelVerletzt => 'Konzept verletzt eine Kundenvorgabe',
             self::KonzeptDramaturgie => 'Konzept wiederholt eine Hauptzutat',
             self::FoodbookKapitelLeer => 'Foodbook-Kapitel ohne Inhalt',
-            self::FoodbookSkizzeUngeerdet => 'Kreativ-Skizze nach dem Go nicht geerdet',
+            self::FoodbookSkizzeUngeerdet => 'Gerichtsidee im Foodbook nicht umgesetzt',
             self::FoodbookZielVerfehlt => 'Foodbook verfehlt ein Kapitel-Ziel',
             self::FoodbookStale => 'Foodbook zeigt einen überholten Preis',
             self::FoodbookKapitelOhneText => 'Foodbook-Kapitel ohne Hinführung',
             self::QualitaetDrift => 'Qualität verschlechtert sich',
-            self::TrendKonzeptVorschlag => 'Trend-Konzeptvorschläge',
-            self::KonformitaetGp => 'GP-Konformität (Regelwerk-Verstoß)',
-            self::KonformitaetLa => 'LA-Konformität (Regelwerk-Verstoß)',
+            self::TrendKonzeptVorschlag => 'Konzeptvorschläge aus Trends',
+            self::KonformitaetGp => 'Grundprodukt verstößt gegen Anlageregeln',
+            self::KonformitaetLa => 'Lieferantenartikel verstößt gegen Anlageregeln',
         };
     }
 
@@ -198,6 +210,10 @@ enum SignalTyp: string
             self::VkAnpassungEmpfohlen => 'heroicon-o-tag',
             self::VertragsfristFaellig => 'heroicon-o-calendar-days',
             self::WiderspruchWissenGraph => 'heroicon-o-light-bulb',
+            self::PairingWissenPruefen => 'heroicon-o-clipboard-document-check',
+            self::PairingWiderspruchMessung => 'heroicon-o-scale',
+            self::PairingKonfliktImGericht => 'heroicon-o-fire',
+            self::PairingWissensluecke => 'heroicon-o-book-open',
             self::SortimentsLuecke => 'heroicon-o-shopping-bag',
             self::RezeptOhneZubereitung => 'heroicon-o-document-minus',
             self::RezeptMengenLuecke => 'heroicon-o-scale',

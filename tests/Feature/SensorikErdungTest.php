@@ -154,7 +154,7 @@ it('weicht die Messung stark von der Schätzung ab, wird der Widerspruch ausgewi
 
     expect($s['geschmack']['salzig'])->toBeGreaterThan(0.9)              // Messung gewinnt nach oben …
         ->and($s['erdung']['salzig']['angewendet'])->toBeTrue()
-        ->and($s['erdung']['salzig']['konflikt'])->toContain('LA-Zuordnung prüfen');   // … aber sichtbar
+        ->and($s['erdung']['salzig']['konflikt'])->toContain('Zuordnung des Lieferantenartikels prüfen');   // … aber sichtbar
 });
 
 it('ohne Nährwerte bleibt alles wie bisher (reine KI-Schätzung)', function () {

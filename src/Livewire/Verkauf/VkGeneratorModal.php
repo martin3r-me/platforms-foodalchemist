@@ -48,10 +48,11 @@ class VkGeneratorModal extends Component
      * bleiben Selects (VK-eigene Achsen).
      */
     public const RICHTUNGEN = [
-        ['field' => 'convenience', 'label' => 'Convenience (Eigenleistung)', 'optionen' => ['' => '(egal)', 'from_scratch' => 'From Scratch', 'teil_convenience' => 'Teil-Convenience', 'voll_convenience' => 'Voll-Convenience'], 'hint' => ['' => 'Standard-Eigenleistung', 'from_scratch' => 'alles selbst — Pool dreht auf Roh/Sub-Rezepte', 'teil_convenience' => 'Halbfabrikate erlaubt', 'voll_convenience' => 'Fertigprodukte bevorzugt']],
-        ['field' => 'level', 'label' => 'Niveau', 'optionen' => ['' => '(egal)', 'haute_cuisine' => 'Haute Cuisine', 'gehoben' => 'Gehoben', 'klassisch' => 'Klassisch'], 'hint' => ['' => 'Keine Vorgabe']],
-        ['field' => 'frische', 'label' => 'Frische-Hook', 'optionen' => ['frisch' => 'Frisch', 'tk' => 'Alles aus TK', 'konserve' => 'Konserve/haltbar'], 'hint' => ['frisch' => 'fresh_first (Default)']],
-        ['field' => 'bio_praeferenz', 'label' => 'Bio-Präferenz', 'optionen' => ['konventionell' => 'Konventionell', 'bio' => 'Bio', 'egal' => 'Egal'], 'hint' => ['konventionell' => 'Standard — kein Bio erzwungen (Default)', 'bio' => 'Bio bevorzugt (nur auf Ansage)', 'egal' => 'keine Präferenz']],
+        // fa-pass: Beschriftungen und Hinweise sind reine Anzeige (nur die Blade liest sie) — Küchensprache statt Hook-Namen.
+        ['field' => 'convenience', 'label' => 'Eigenleistung', 'optionen' => ['' => 'Keine Vorgabe', 'from_scratch' => 'Alles selbst', 'teil_convenience' => 'Teil-Convenience', 'voll_convenience' => 'Voll-Convenience'], 'hint' => ['' => 'Die KI wählt passend zur Beschreibung.', 'from_scratch' => 'Rohware und eigene Basisrezepte, keine Fertigprodukte.', 'teil_convenience' => 'Halbfabrikate sind erlaubt.', 'voll_convenience' => 'Fertigprodukte werden bevorzugt.']],
+        ['field' => 'level', 'label' => 'Niveau', 'optionen' => ['' => 'Keine Vorgabe', 'haute_cuisine' => 'Haute Cuisine', 'gehoben' => 'Gehoben', 'klassisch' => 'Klassisch'], 'hint' => ['' => 'Die KI wählt passend zur Beschreibung.']],
+        ['field' => 'frische', 'label' => 'Frische', 'optionen' => ['frisch' => 'Frisch', 'tk' => 'Alles aus TK', 'konserve' => 'Konserve und haltbar'], 'hint' => ['frisch' => 'Voreinstellung: frische Ware zuerst.']],
+        ['field' => 'bio_praeferenz', 'label' => 'Bio', 'optionen' => ['konventionell' => 'Konventionell', 'bio' => 'Bio', 'egal' => 'Keine Präferenz'], 'hint' => ['konventionell' => 'Voreinstellung: Bio wird nicht erzwungen.', 'bio' => 'Bio-Ware wird bevorzugt.', 'egal' => 'Bio und konventionell gleichrangig.']],
     ];
 
     /**

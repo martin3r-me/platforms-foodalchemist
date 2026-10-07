@@ -1,11 +1,68 @@
-{{-- Bestellungen: bestell-zentrierter Browser (Liefertag/Bestelldatum + Filter + Neue Bestellung). Bearbeiten im Fullscreen-Editor. --}}
-@php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
-@php($statusLabels = ['draft' => 'Entwurf', 'sent' => 'versendet', 'confirmed' => 'bestätigt', 'delivered' => 'geliefert', 'cancelled' => 'storniert'])
-@php($zeitraeume = ['' => 'alle', 'heute' => 'heute', 'woche' => 'diese Woche', 'naechste' => 'nächste Woche'])
+{{-- Bestellungen: Übersicht (Filter links, Liste Mitte, Detail rechts). Bearbeiten im Werkbank-Editor.
+     fa-pass (2026-10-05): auf Bausteine <x-fa::…> umgestellt. Häufigste Aufgabe: offene Bestellungen finden,
+     versandfähige auswählen und gesammelt auslösen. Deshalb oben Kennzahlen + Auswahlleiste, darunter EINE
+     Tabelle für die Sichten Bestellungen · Liefertage · Lieferanten (gleiche Spalten, Gruppenkopf je Sicht).
+     Funktion, wire:-Bindungen, Event-Namen und data-Marker unverändert. --}}
+@php
+    $statusLabels = ['draft' => 'Entwurf', 'sent' => 'Versendet', 'confirmed' => 'Bestätigt', 'delivered' => 'Geliefert', 'cancelled' => 'Storniert'];
+    $zeitraeume = ['' => 'Alle', 'heute' => 'Heute', 'woche' => 'Diese Woche', 'naechste' => 'Nächste Woche'];
+    $statusTon = ['secondary' => 'neutral', 'info' => 'info', 'success' => 'ok', 'danger' => 'crit', 'warning' => 'warn', 'primary' => 'accent'];
+    $datum = fn ($wert) => $wert ? \Carbon\Carbon::parse($wert)->format('d.m.Y') : null;
+    $zahl = fn ($wert) => number_format((float) $wert, 0, ',', '.');
+    $leise = 'text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]';
+    $checkbox = 'rounded border-[var(--fa-line-strong)] text-[var(--fa-accent)] focus:ring-[var(--fa-accent)]';
+    $segment = 'h-7 px-3 rounded-[5px] text-[length:var(--fa-text-sm)] font-medium transition-colors';
+    $segmentAn = 'bg-[var(--fa-surface)] text-[var(--fa-ink)] shadow-sm';
+    $segmentAus = 'text-[var(--fa-ink-2)] hover:text-[var(--fa-ink)]';
+    $menuePunkt = 'flex w-full items-center gap-2 px-3 py-1.5 text-left text-[length:var(--fa-text-md)] text-[var(--fa-ink)] hover:bg-[var(--fa-hover)]';
+
+    $sichten = ['bestellungen' => 'Bestellungen', 'liefertage' => 'Liefertage', 'lieferanten' => 'Lieferanten', 'runden' => 'Runden', 'bedarfe' => 'Bedarfe'];
+    $sichtTitel = ['bestellungen' => 'Bestellungen finden', 'liefertage' => 'Nach Liefertag planen', 'lieferanten' => 'Nach Lieferant bündeln', 'runden' => 'Bestellrunden', 'bedarfe' => 'Freigegebene Materialbedarfe'];
+    $trefferZahl = $sicht === 'runden' ? $runden->count() : ($sicht === 'bedarfe' ? $bedarfe->count() : $liste->count());
+
+    // EINE Tabelle für drei Sichten: Gruppenkopf + Zeilen. Spalten je Sicht ausgeblendet, wo sie doppelt wären.
+    $tabellenGruppen = collect();
+    if ($sicht === 'bestellungen') {
+        foreach ($gruppen as $tag => $zeilen) {
+            $tabellenGruppen->push([
+                'label' => $gruppiert ? ($tag === '' ? 'Ohne Liefertag' : \Carbon\Carbon::parse($tag)->locale('de')->isoFormat('dddd, DD.MM.YYYY')) : null,
+                'meta' => $zahl($zeilen->count()) . ' ' . ($zeilen->count() === 1 ? 'Bestellung' : 'Bestellungen'),
+                'total' => null,
+                'orders' => $zeilen,
+                'key' => fn ($o) => 'ord-' . $o['id'],
+            ]);
+        }
+    } elseif ($sicht === 'liefertage') {
+        foreach ($liefertagGruppen as $gruppe) {
+            $tabellenGruppen->push([
+                'label' => $gruppe['label'],
+                'meta' => $gruppe['suppliers'] . ' Lieferanten · ' . $gruppe['orders']->count() . ' Bestellungen · ' . $gruppe['line_count'] . ' Positionen',
+                'total' => $gruppe['total_net'],
+                'orders' => $gruppe['orders'],
+                'key' => fn ($o) => 'day-' . md5($gruppe['key']) . '-' . $o['id'],
+            ]);
+        }
+    } elseif ($sicht === 'lieferanten') {
+        foreach ($lieferantGruppen as $gruppe) {
+            $tabellenGruppen->push([
+                'label' => $gruppe['supplier'],
+                'meta' => $gruppe['dates'] . ' Liefertage · ' . $gruppe['orders']->count() . ' Bestellungen · ' . $gruppe['line_count'] . ' Positionen',
+                'total' => $gruppe['total_net'],
+                'orders' => $gruppe['orders'],
+                'key' => fn ($o) => 'supplier-' . md5($gruppe['supplier']) . '-' . $o['id'],
+            ]);
+        }
+    }
+    $mitAuswahl = $sicht === 'bestellungen';
+    $mitBestelldatum = $sicht === 'bestellungen';
+    $mitLiefertag = $sicht !== 'liefertage';
+    $mitLieferant = $sicht !== 'lieferanten';
+    $spaltenZahl = 6 + ($mitAuswahl ? 1 : 0) + ($mitBestelldatum ? 1 : 0) + ($mitLiefertag ? 1 : 0) + ($mitLieferant ? 1 : 0);
+@endphp
 
 <x-ui-page>
     <x-slot name="navbar">
-        <x-ui-page-navbar title="Bestellungen" icon="heroicon-o-shopping-cart" />
+        <x-foodalchemist::shell.page-navbar title="Bestellungen" icon="heroicon-o-shopping-cart" />
     </x-slot>
 
     <x-slot name="actionbar">
@@ -17,41 +74,58 @@
 
     <x-slot name="sidebar">
         <x-ui-page-sidebar title="Filter" width="w-72">
-            <div class="p-3 space-y-3">
-                <input type="search" wire:model.live.debounce.300ms="suche" placeholder="{{ $sicht === 'bedarfe' ? 'Produktion suchen …' : 'Beleg, Artikel, Produktion …' }}" class="{{ $input }}" />
+            <div class="p-3 flex flex-col gap-4">
+                <div class="relative">
+                    <label for="orders-suche" class="sr-only">Bestellungen durchsuchen</label>
+                    @svg('heroicon-m-magnifying-glass', 'w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--fa-ink-3)] pointer-events-none')
+                    <x-fa::input id="orders-suche" type="search" wire:model.live.debounce.300ms="suche" class="pl-8"
+                        placeholder="{{ $sicht === 'bedarfe' ? 'Produktion suchen' : 'Beleg, Artikel, Produktion' }}" />
+                </div>
+
                 @if($sicht !== 'bedarfe')
-                    <div class="inline-flex rounded-lg bg-black/[0.03] p-0.5 text-xs w-full">
-                        <button type="button" wire:click="$set('datumsbasis','liefertag')" class="flex-1 px-2 py-1 rounded-md {{ $datumsbasis === 'liefertag' ? 'bg-white shadow-sm text-violet-600' : 'text-gray-600' }}">Liefertag</button>
-                        <button type="button" wire:click="$set('datumsbasis','bestelldatum')" class="flex-1 px-2 py-1 rounded-md {{ $datumsbasis === 'bestelldatum' ? 'bg-white shadow-sm text-violet-600' : 'text-gray-600' }}">Bestelldatum</button>
-                    </div>
-                    <div>
-                        <span class="{{ $label }}">Status</span>
-                        <div class="mt-1 space-y-0.5">
-                            <x-foodalchemist::filter-row wire:click="$set('statusFilter','')" :active="$statusFilter === ''"><span>Alle Status</span></x-foodalchemist::filter-row>
-                            @foreach(['draft','sent','confirmed','delivered','cancelled'] as $s)
-                                <x-foodalchemist::filter-row wire:key="order-status-{{ $s }}" wire:click="$set('statusFilter','{{ $s }}')" :active="$statusFilter === $s">{{ $statusLabels[$s] }}</x-foodalchemist::filter-row>
-                            @endforeach
+                    <div class="flex flex-col gap-1.5">
+                        <span class="text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-2)]">Datum bezieht sich auf</span>
+                        <div role="group" aria-label="Datumsbasis" class="flex p-0.5 gap-0.5 rounded-[var(--fa-radius-control)] bg-[var(--fa-neutral-soft)]">
+                            <button type="button" wire:click="$set('datumsbasis','liefertag')" aria-pressed="{{ $datumsbasis === 'liefertag' ? 'true' : 'false' }}" class="flex-1 {{ $segment }} {{ $datumsbasis === 'liefertag' ? $segmentAn : $segmentAus }}">Liefertag</button>
+                            <button type="button" wire:click="$set('datumsbasis','bestelldatum')" aria-pressed="{{ $datumsbasis === 'bestelldatum' ? 'true' : 'false' }}" class="flex-1 {{ $segment }} {{ $datumsbasis === 'bestelldatum' ? $segmentAn : $segmentAus }}">Bestelldatum</button>
                         </div>
                     </div>
                 @endif
-                <div>
-                    <span class="{{ $label }}">Zeitraum</span>
-                    <div class="flex flex-wrap gap-1 mt-1">
-                        @foreach($zeitraeume as $key => $lbl)<button type="button" wire:click="waehleZeitraum('{{ $key }}')" class="{{ $pill }} {{ $zeitraum === $key ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $lbl }}</button>@endforeach
+
+                <div class="flex flex-col gap-1.5">
+                    <span class="text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-2)]">Zeitraum</span>
+                    <div class="flex flex-wrap gap-1">
+                        @foreach($zeitraeume as $key => $lbl)
+                            <button type="button" wire:click="waehleZeitraum('{{ $key }}')" aria-pressed="{{ $zeitraum === $key ? 'true' : 'false' }}"
+                                class="h-7 px-2.5 rounded-full border text-[length:var(--fa-text-sm)] font-medium transition-colors {{ $zeitraum === $key ? 'bg-[var(--fa-accent-soft)] border-[var(--fa-accent)] text-[var(--fa-accent)]' : 'bg-[var(--fa-surface)] border-[var(--fa-line-strong)] text-[var(--fa-ink-2)] hover:text-[var(--fa-ink)]' }}">{{ $lbl }}</button>
+                        @endforeach
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <x-fa::input size="sm" type="date" wire:model.live="von" title="Von" aria-label="Von" />
+                        <x-fa::input size="sm" type="date" wire:model.live="bis" title="Bis" aria-label="Bis" />
                     </div>
                 </div>
-                <div class="grid grid-cols-2 gap-2">
-                    <input type="date" wire:model.live="von" class="{{ $input }}" title="Von" />
-                    <input type="date" wire:model.live="bis" class="{{ $input }}" title="Bis" />
-                </div>
+
                 @if($sicht !== 'bedarfe')
-                    <select wire:model.live="supplierFilter" class="{{ $input }}">
-                        <option value="">alle Lieferanten</option>
-                        @foreach($lieferanten as $l)<option value="{{ $l['id'] }}">{{ $l['name'] }}</option>@endforeach
-                    </select>
-                    <label class="flex items-center gap-2 text-[12px] text-gray-600"><input type="checkbox" wire:model.live="nurMitPositionen" /> nur mit Positionen</label>
-                    <label class="flex items-center gap-2 text-[12px] text-gray-600"><input type="checkbox" wire:model.live="nurMitKlaerung" /> nur mit Klärung</label>
-                    <button type="button" wire:click="leereEntwuerfeLoeschen" onclick="return confirm('Alle leeren Entwürfe ohne Positionen löschen?')" class="{{ $btnGhostXs }}">Leere Entwürfe löschen</button>
+                    <div class="flex flex-col gap-0.5">
+                        <span class="mb-1 text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-2)]">Status</span>
+                        <x-foodalchemist::filter-row wire:click="$set('statusFilter','')" :active="$statusFilter === ''"><span>Alle Status</span></x-foodalchemist::filter-row>
+                        @foreach(['draft','sent','confirmed','delivered','cancelled'] as $s)
+                            <x-foodalchemist::filter-row wire:key="order-status-{{ $s }}" wire:click="$set('statusFilter','{{ $s }}')" :active="$statusFilter === $s">{{ $statusLabels[$s] }}</x-foodalchemist::filter-row>
+                        @endforeach
+                    </div>
+
+                    <x-fa::field label="Lieferant" for="orders-lieferant">
+                        <x-fa::select id="orders-lieferant" size="sm" wire:model.live="supplierFilter">
+                            <option value="">Alle Lieferanten</option>
+                            @foreach($lieferanten as $l)<option value="{{ $l['id'] }}">{{ $l['name'] }}</option>@endforeach
+                        </x-fa::select>
+                    </x-fa::field>
+
+                    <div class="flex flex-col gap-1.5">
+                        <label class="flex items-center gap-2 text-[length:var(--fa-text-md)] text-[var(--fa-ink-2)]"><input type="checkbox" wire:model.live="nurMitPositionen" class="{{ $checkbox }}" /> Nur mit Positionen</label>
+                        <label class="flex items-center gap-2 text-[length:var(--fa-text-md)] text-[var(--fa-ink-2)]"><input type="checkbox" wire:model.live="nurMitKlaerung" class="{{ $checkbox }}" /> Nur mit Klärpunkten</label>
+                    </div>
                 @endif
             </div>
         </x-ui-page-sidebar>
@@ -63,442 +137,353 @@
         </x-foodalchemist::detail-sidebar>
     </x-slot>
 
-    {{-- Fullscreen-Editor (pro Bestellung), geöffnet per orders-editor.bearbeiten --}}
+    {{-- Werkbank-Editor (pro Bestellung und für Bestellrunden), geöffnet per orders-editor.* --}}
     <livewire:foodalchemist.orders.editor key="orders-editor-shell" />
 
     <x-foodalchemist::modal name="orders-batch" title="Bestellungen auslösen">
-        <div class="space-y-4 p-1" data-orders-batch>
+        <div class="flex flex-col gap-4" data-orders-batch>
             @if($batchResult)
-                <div class="rounded-lg border border-emerald-500/20 bg-emerald-500/[0.07] p-4">
-                    <div class="flex items-start gap-3">
-                        @svg('heroicon-o-check-circle', 'w-5 h-5 text-emerald-600 shrink-0')
-                        <div>
-                            <h3 class="text-[14px] font-semibold text-gray-900">{{ $batchResult['sent'] }} Bestellung(en) ausgelöst</h3>
-                            <p class="text-[11px] text-gray-500 mt-0.5">Versandzeitpunkt {{ $batchResult['sent_at'] }}</p>
-                        </div>
-                    </div>
-                </div>
+                <x-fa::notice tone="ok" title="{{ $batchResult['sent'] }} {{ (int) $batchResult['sent'] === 1 ? 'Bestellung' : 'Bestellungen' }} ausgelöst">
+                    Versandzeitpunkt {{ $batchResult['sent_at'] }}
+                </x-fa::notice>
                 @if(!empty($batchResult['sent_ids']))
                     <div class="flex flex-wrap gap-2">
-                        <a href="{{ route('foodalchemist.orders.versandprotokoll', ['ids' => implode(',', $batchResult['sent_ids'])]) }}" target="_blank" class="{{ $btnPrimary }}">@svg('heroicon-o-printer', 'w-3.5 h-3.5') Versandprotokoll drucken</a>
-                        <a href="{{ route('foodalchemist.orders.versandprotokoll', ['ids' => implode(',', $batchResult['sent_ids']), 'pdf' => 1]) }}" class="{{ $btnGhost }}">PDF</a>
+                        <x-fa::button variant="primary" icon="heroicon-o-printer" :href="route('foodalchemist.orders.versandprotokoll', ['ids' => implode(',', $batchResult['sent_ids'])])" target="_blank">Versandprotokoll drucken</x-fa::button>
+                        <x-fa::button icon="heroicon-o-arrow-down-tray" :href="route('foodalchemist.orders.versandprotokoll', ['ids' => implode(',', $batchResult['sent_ids']), 'pdf' => 1])">PDF</x-fa::button>
                     </div>
                 @endif
                 @if($batchResult['blocked'] > 0)
-                    <x-foodalchemist::alert tone="warning">{{ $batchResult['blocked'] }} Beleg(e) blieben wegen Klärpunkten offen.</x-foodalchemist::alert>
+                    <x-fa::notice tone="warn">{{ $batchResult['blocked'] }} {{ (int) $batchResult['blocked'] === 1 ? 'Bestellung blieb' : 'Bestellungen blieben' }} wegen Klärpunkten offen.</x-fa::notice>
                 @endif
             @elseif($batchPreview)
-                <div class="grid grid-cols-3 gap-2">
-                    <div class="rounded-lg border border-black/5 p-3"><div class="{{ $label }}">Auswahl</div><div class="text-lg font-semibold">{{ $batchPreview['selected'] }}</div></div>
-                    <div class="rounded-lg border border-emerald-500/20 bg-emerald-500/[0.05] p-3"><div class="{{ $label }}">Versandfähig</div><div class="text-lg font-semibold text-emerald-700">{{ $batchPreview['ready'] }}</div></div>
-                    <div class="rounded-lg border border-amber-500/20 bg-amber-500/[0.05] p-3"><div class="{{ $label }}">Klärung</div><div class="text-lg font-semibold text-amber-700">{{ $batchPreview['blocked'] }}</div></div>
-                </div>
+                <x-fa::kpis :items="[
+                    ['label' => 'Ausgewählt', 'value' => $zahl($batchPreview['selected'])],
+                    ['label' => 'Versandfähig', 'value' => $zahl($batchPreview['ready']), 'tone' => $batchPreview['ready'] > 0 ? 'ok' : null],
+                    ['label' => 'Mit Klärpunkten', 'value' => $zahl($batchPreview['blocked']), 'tone' => $batchPreview['blocked'] > 0 ? 'warn' : null],
+                ]" />
                 <div class="flex flex-wrap items-center justify-between gap-2">
-                    <div class="flex items-center gap-2">
-                        <button type="button" wire:click="batchAlleWaehlen" class="{{ $btnGhostXs }}">Alle auswählen</button>
-                        <button type="button" wire:click="batchAuswahlLeeren" class="{{ $btnGhostXs }}">Keine</button>
+                    <div class="flex items-center gap-1">
+                        <x-fa::button size="sm" variant="ghost" wire:click="batchAlleWaehlen">Alle auswählen</x-fa::button>
+                        <x-fa::button size="sm" variant="ghost" wire:click="batchAuswahlLeeren">Auswahl aufheben</x-fa::button>
                     </div>
                     @if(count($selectedOrderIds) > 0)
-                        <div class="flex items-center gap-2">
-                            <a href="{{ route('foodalchemist.orders.versandprotokoll', ['ids' => implode(',', $selectedOrderIds)]) }}" target="_blank" class="{{ $btnGhostXs }}" title="Auswahl gebündelt drucken">@svg('heroicon-o-printer', 'w-3.5 h-3.5') Drucken</a>
-                            <a href="{{ route('foodalchemist.orders.versandprotokoll', ['ids' => implode(',', $selectedOrderIds), 'pdf' => 1]) }}" class="{{ $btnGhostXs }}" title="Auswahl als PDF herunterladen">PDF</a>
+                        <div class="flex items-center gap-1">
+                            <x-fa::button size="sm" variant="ghost" icon="heroicon-o-printer" :href="route('foodalchemist.orders.versandprotokoll', ['ids' => implode(',', $selectedOrderIds)])" target="_blank" title="Auswahl gebündelt drucken">Drucken</x-fa::button>
+                            <x-fa::button size="sm" variant="ghost" icon="heroicon-o-arrow-down-tray" :href="route('foodalchemist.orders.versandprotokoll', ['ids' => implode(',', $selectedOrderIds), 'pdf' => 1])" title="Auswahl als PDF herunterladen">PDF</x-fa::button>
                         </div>
                     @endif
                 </div>
-                <div class="max-h-[44vh] overflow-auto divide-y divide-black/5 border-y border-black/5">
+                <div class="max-h-[44vh] overflow-auto fa-surface divide-y divide-[var(--fa-line)]">
                     @foreach(($batchCandidates['orders'] ?? []) as $order)
-                        <div wire:key="batch-order-{{ $order['id'] }}" class="py-2.5 flex items-start justify-between gap-4" data-orders-batch-row="{{ $order['id'] }}">
+                        <div wire:key="batch-order-{{ $order['id'] }}" class="px-3 py-2.5 flex items-start justify-between gap-4" data-orders-batch-row="{{ $order['id'] }}">
                             <div class="min-w-0 flex items-start gap-3">
                                 <input type="checkbox"
-                                       class="mt-0.5"
+                                       class="mt-0.5 {{ $checkbox }}"
                                        wire:click="batchBestellungUmschalten({{ $order['id'] }})"
                                        @checked(in_array((int) $order['id'], array_map('intval', $selectedOrderIds), true))
                                        aria-label="Bestellung ord-{{ $order['id'] }} von {{ $order['supplier'] }} auswählen" />
                                 <div class="min-w-0">
-                                <div class="text-[13px] font-medium text-gray-900">{{ $order['supplier'] }} · ord-{{ $order['id'] }}</div>
-                                <div class="text-[11px] text-gray-500 flex flex-wrap gap-x-3">
-                                    <span>{{ $order['positions'] }} Positionen</span>
-                                    <span>Bestelldatum: {{ $order['created_at'] ? \Carbon\Carbon::parse($order['created_at'])->format('d.m.Y') : '—' }}</span>
-                                    <span>Liefertag: {{ $order['desired_delivery_date'] ? \Carbon\Carbon::parse($order['desired_delivery_date'])->format('d.m.Y') : '—' }}</span>
-                                </div>
-                                @if(!$order['sendable'])<div class="text-[11px] text-amber-700 mt-1">{{ implode(' · ', $order['blockers']) }}</div>@endif
+                                    <p class="text-[length:var(--fa-text-md)] font-medium text-[var(--fa-ink)]">{{ $order['supplier'] }} <span class="font-normal text-[var(--fa-ink-3)]">· ord-{{ $order['id'] }}</span></p>
+                                    <p class="{{ $leise }} flex flex-wrap gap-x-3 tabular-nums">
+                                        <span>{{ $order['positions'] }} Positionen</span>
+                                        <span>Bestelldatum: {{ $datum($order['created_at']) ?? '–' }}</span>
+                                        <span>Liefertag: {{ $datum($order['desired_delivery_date']) ?? '–' }}</span>
+                                    </p>
+                                    @if(!$order['sendable'])<x-fa::signal tone="warn" class="mt-1">{{ implode(' · ', $order['blockers']) }}</x-fa::signal>@endif
                                 </div>
                             </div>
-                            <div class="text-right shrink-0">
-                                <div class="text-[13px] font-semibold tabular-nums">{{ number_format($order['total_net'], 2, ',', '.') }} €</div>
-                                <span class="{{ $pill }} {{ $order['sendable'] ? $variantPill['success'] : $variantPill['warning'] }}">{{ $order['sendable'] ? 'bereit' : 'Klärung' }}</span>
+                            <div class="flex flex-col items-end gap-1 shrink-0">
+                                <x-fa::money :value="$order['total_net']" class="text-[length:var(--fa-text-md)] font-semibold" />
+                                <x-fa::badge :tone="$order['sendable'] ? 'ok' : 'warn'">{{ $order['sendable'] ? 'Bereit' : 'Klärung' }}</x-fa::badge>
                             </div>
                         </div>
                     @endforeach
                 </div>
                 <div class="flex flex-wrap items-center justify-between gap-3">
-                    <div class="text-[12px] text-gray-600">Versandfähige Summe <strong>{{ number_format($batchPreview['total_net'], 2, ',', '.') }} €</strong></div>
-                    <div class="flex gap-2">
-                        <button type="button" wire:click="auswahlStornieren" onclick="return confirm('Ausgewählte Entwürfe wirklich stornieren?')" class="{{ $btnGhost }}">Stornieren</button>
-                        <button type="button" wire:click="auswahlAusloesen" onclick="return confirm('{{ $batchPreview['ready'] }} versandfähige Bestellungen jetzt auslösen?')" class="{{ $btnPrimary }}" @disabled($batchPreview['ready'] === 0)>{{ $batchPreview['ready'] }} auslösen</button>
+                    <x-fa::button variant="danger" wire:click="auswahlStornieren" wire:confirm="Ausgewählte Entwürfe wirklich stornieren?">Auswahl stornieren</x-fa::button>
+                    <div class="flex items-center gap-3">
+                        <span class="text-[length:var(--fa-text-md)] text-[var(--fa-ink-2)]">Versandfähig <x-fa::money :value="$batchPreview['total_net']" class="font-semibold text-[var(--fa-ink)]" /></span>
+                        <x-fa::button variant="primary" icon="heroicon-m-paper-airplane" wire:click="auswahlAusloesen" wire:confirm="{{ $batchPreview['ready'] }} versandfähige Bestellungen jetzt auslösen?" :disabled="$batchPreview['ready'] === 0">{{ $batchPreview['ready'] }} {{ (int) $batchPreview['ready'] === 1 ? 'Bestellung' : 'Bestellungen' }} auslösen</x-fa::button>
                     </div>
                 </div>
             @else
-                <p class="text-[12px] text-gray-500">Keine Entwürfe ausgewählt.</p>
+                <x-fa::empty compact icon="heroicon-o-paper-airplane" title="Keine Entwürfe ausgewählt">In der Liste Entwürfe ankreuzen und erneut prüfen.</x-fa::empty>
             @endif
         </div>
     </x-foodalchemist::modal>
 
-    <x-ui-page-container padding="px-6 pt-4 pb-6" spacing="space-y-4">
-
-        @if($hinweis)<div class="{{ $sectionCard }} !bg-emerald-500/[0.06] !border-emerald-500/20 text-[12px] text-emerald-700">✓ {{ $hinweis }}</div>@endif
-        @if($fehler)<div class="{{ $sectionCard }} !bg-rose-500/[0.06] !border-rose-500/20 text-[12px] text-rose-700">{{ $fehler }}</div>@endif
-
-        {{-- Neue Bestellung: neutral öffnen; Lieferant entsteht erst aus Artikel/Bedarf. --}}
-        <div class="flex flex-wrap items-end justify-between gap-3">
-            <div>
-                <span class="{{ $label }} block mb-1">Neue Bestellrunde</span>
-                <div class="flex flex-wrap gap-1">
-                    <input type="date" wire:model="neuerLiefertag" class="{{ $input }}" title="Liefertag" />
-                    <select wire:model="neueStrategie" class="{{ $input }}" title="Einkaufsstrategie">
-                        <option value="">Team-Standard</option>
-                        @foreach($strategieOptionen as $s)
-                            <option value="{{ $s->value }}">{{ $s->label() }}</option>
-                        @endforeach
-                    </select>
-                    <button type="button" wire:click="neueBestellung" class="{{ $btnPrimary }} shrink-0" data-orders-neu>+ Bestellrunde öffnen</button>
+    <x-ui-page-container padding="px-6 py-6" spacing="space-y-4">
+        <x-fa::page-header title="Bestellungen" :subtitle="$zahl($trefferZahl) . ' Treffer'">
+            <x-slot:actions>
+                <div class="relative inline-block" x-data="faMenu()" x-on:keydown.escape="offen = false" x-on:click.outside="offen = false">
+                    <x-fa::button variant="ghost" icon="heroicon-m-ellipsis-horizontal" iconRight="heroicon-m-chevron-down" x-on:click="toggle($event)" aria-haspopup="menu" x-bind:aria-expanded="offen">Weitere Aktionen</x-fa::button>
+                    <div x-bind:class="{ hidden: ! offen }" x-bind:style="pos" role="menu" class="hidden w-56 fa-surface shadow-lg py-1">
+                        <a href="{{ route('foodalchemist.einstellungen', ['sektion' => 'einkauf']) }}#lagerorte" role="menuitem" class="{{ $menuePunkt }}">
+                            @svg('heroicon-o-archive-box', 'w-4 h-4 text-[var(--fa-ink-3)]') Lagerorte verwalten
+                        </a>
+                        @if($sicht !== 'bedarfe')
+                            <div class="my-1 border-t border-[var(--fa-line)]"></div>
+                            <button type="button" role="menuitem" x-on:click="offen = false" wire:click="leereEntwuerfeLoeschen" wire:confirm="Alle leeren Entwürfe ohne Positionen löschen?"
+                                class="{{ $menuePunkt }} text-[var(--fa-crit)] hover:bg-[var(--fa-crit-soft)]">
+                                @svg('heroicon-o-trash', 'w-4 h-4') Leere Entwürfe löschen
+                            </button>
+                        @endif
+                    </div>
                 </div>
-                <p class="text-[11px] text-gray-500 mt-1">Eine Runde erzeugt beim Speichern die passenden Lieferanten-Belege je Lieferant + Liefertag.</p>
+
+                {{-- Neue Bestellrunde: Liefertag und Strategie optional vorgeben, Lieferanten entstehen erst aus Artikeln/Bedarf. --}}
+                <div class="relative inline-block" x-data="faMenu()" x-on:keydown.escape="offen = false" x-on:click.outside="offen = false">
+                    <x-fa::button variant="primary" icon="heroicon-m-plus" iconRight="heroicon-m-chevron-down" x-on:click="toggle($event)" aria-haspopup="dialog" x-bind:aria-expanded="offen">Neue Bestellrunde</x-fa::button>
+                    <div x-bind:class="{ hidden: ! offen }" x-bind:style="pos" role="dialog" aria-label="Neue Bestellrunde" class="hidden w-80 fa-surface shadow-lg p-3">
+                        <div class="flex flex-col gap-3">
+                        <x-fa::field label="Liefertag" for="orders-neu-liefertag" optional>
+                            <x-fa::input id="orders-neu-liefertag" type="date" wire:model="neuerLiefertag" />
+                        </x-fa::field>
+                        <x-fa::field label="Einkaufsstrategie" for="orders-neu-strategie">
+                            <x-fa::select id="orders-neu-strategie" wire:model="neueStrategie">
+                                <option value="">Team-Standard</option>
+                                @foreach($strategieOptionen as $s)
+                                    <option value="{{ $s->value }}">{{ $s->label() }}</option>
+                                @endforeach
+                            </x-fa::select>
+                        </x-fa::field>
+                        <p class="{{ $leise }}">Beim Speichern entsteht je Lieferant und Liefertag eine eigene Bestellung.</p>
+                        <x-fa::button variant="primary" x-on:click="offen = false" wire:click="neueBestellung" data-orders-neu>Bestellrunde öffnen</x-fa::button>
+                        </div>
+                    </div>
+                </div>
+            </x-slot:actions>
+        </x-fa::page-header>
+
+        @if($hinweis)<x-fa::notice tone="ok">{{ $hinweis }}</x-fa::notice>@endif
+        @if($fehler)<x-fa::notice tone="crit">{{ $fehler }}</x-fa::notice>@endif
+
+        <div data-orders-overview-kpis>
+            <x-fa::kpis :items="[
+                ['kpi' => 'netto', 'label' => 'Netto gesamt', 'primary' => true, 'value' => number_format($kpis['total_net'], 2, ',', '.') . ' €'],
+                ['kpi' => 'orders', 'label' => 'Bestellungen', 'value' => $zahl($kpis['orders'])],
+                ['kpi' => 'ready', 'label' => 'Versandfähig', 'tone' => $kpis['ready'] > 0 ? 'ok' : null, 'value' => $zahl($kpis['ready'])],
+                ['kpi' => 'clarifications', 'label' => 'Mit Klärpunkten', 'tone' => $kpis['clarifications'] > 0 ? 'warn' : null, 'value' => $zahl($kpis['clarifications'])],
+                ['kpi' => 'positions', 'label' => 'Positionen', 'value' => $zahl($kpis['positions'])],
+                ['kpi' => 'suppliers', 'label' => 'Lieferanten', 'value' => $zahl($kpis['suppliers'])],
+            ]" />
+        </div>
+
+        <div class="flex flex-wrap items-center justify-between gap-3">
+            <div role="group" aria-label="Sicht" class="flex p-0.5 gap-0.5 rounded-[var(--fa-radius-control)] bg-[var(--fa-neutral-soft)]">
+                @foreach($sichten as $key => $lbl)
+                    <button type="button" wire:click="$set('sicht','{{ $key }}')" aria-pressed="{{ $sicht === $key ? 'true' : 'false' }}"
+                        class="{{ $segment }} {{ $sicht === $key ? $segmentAn : $segmentAus }}">{{ $lbl }}</button>
+                @endforeach
             </div>
-            <div class="flex flex-wrap items-center gap-2 pb-0.5">
-                @if($sicht === 'bestellungen')
-                    <button type="button" wire:click="alleVersandfaehigenWaehlen" class="{{ $btnGhostXs }}" @disabled($kpis['ready'] === 0)>Alle versandfähigen</button>
+
+            {{-- Auswahlleiste für den Sammelversand (nur Entwürfe sind auswählbar) --}}
+            @if($sicht === 'bestellungen')
+                <div class="flex flex-wrap items-center gap-2">
+                    <x-fa::button size="sm" variant="ghost" wire:click="alleVersandfaehigenWaehlen" :disabled="$kpis['ready'] === 0">Alle versandfähigen auswählen</x-fa::button>
                     @if(count($selectedOrderIds) > 0)
-                        <button type="button" wire:click="auswahlLeeren" class="{{ $btnGhostXs }}" title="Auswahl aufheben">@svg('heroicon-o-x-mark', 'w-3.5 h-3.5')</button>
-                        <a href="{{ route('foodalchemist.orders.versandprotokoll', ['ids' => implode(',', $selectedOrderIds)]) }}" target="_blank" class="{{ $btnGhostXs }}" title="Ausgewählte Bestellungen gebündelt drucken">@svg('heroicon-o-printer', 'w-3.5 h-3.5') Drucken</a>
-                        <a href="{{ route('foodalchemist.orders.versandprotokoll', ['ids' => implode(',', $selectedOrderIds), 'pdf' => 1]) }}" class="{{ $btnGhostXs }}" title="Ausgewählte Bestellungen als PDF herunterladen">PDF</a>
+                        <span class="text-[length:var(--fa-text-md)] font-semibold text-[var(--fa-accent)] tabular-nums">{{ count($selectedOrderIds) }} ausgewählt</span>
+                        <x-fa::icon-button size="sm" icon="heroicon-m-x-mark" label="Auswahl aufheben" wire:click="auswahlLeeren" />
+                        <x-fa::button size="sm" variant="ghost" icon="heroicon-o-printer" :href="route('foodalchemist.orders.versandprotokoll', ['ids' => implode(',', $selectedOrderIds)])" target="_blank" title="Ausgewählte Bestellungen gebündelt drucken">Drucken</x-fa::button>
+                        <x-fa::button size="sm" variant="ghost" icon="heroicon-o-arrow-down-tray" :href="route('foodalchemist.orders.versandprotokoll', ['ids' => implode(',', $selectedOrderIds), 'pdf' => 1])" title="Ausgewählte Bestellungen als PDF herunterladen">PDF</x-fa::button>
                     @endif
-                    <button type="button" wire:click="sammelversandPruefen" class="{{ $btnPrimary }}" @disabled(count($selectedOrderIds) === 0)>
-                        @svg('heroicon-o-paper-airplane', 'w-3.5 h-3.5') Auswahl prüfen{{ count($selectedOrderIds) > 0 ? ' (' . count($selectedOrderIds) . ')' : '' }}
-                    </button>
-                @endif
-                <a href="{{ route('foodalchemist.einstellungen', ['sektion' => 'einkauf']) }}#lagerorte"
-                   class="{{ $btnGhostXs }}">Lagerorte</a>
-            </div>
+                    <x-fa::button size="sm" :variant="count($selectedOrderIds) > 0 ? 'primary' : 'secondary'" icon="heroicon-m-paper-airplane" wire:click="sammelversandPruefen" :disabled="count($selectedOrderIds) === 0">Auswahl prüfen</x-fa::button>
+                </div>
+            @endif
         </div>
 
-        <x-foodalchemist::kpi-tiles marker="orders-overview-kpis" :cols="6" :tiles="[
-            ['kpi' => 'orders', 'label' => 'Bestellungen', 'value' => number_format($kpis['orders'], 0, ',', '.')],
-            ['kpi' => 'ready', 'label' => 'Versandfähig', 'tone' => $kpis['ready'] > 0 ? 'good' : 'neutral', 'value' => number_format($kpis['ready'], 0, ',', '.')],
-            ['kpi' => 'positions', 'label' => 'Positionen', 'value' => number_format($kpis['positions'], 0, ',', '.')],
-            ['kpi' => 'netto', 'label' => 'Netto gesamt', 'tone' => 'accent', 'value' => number_format($kpis['total_net'], 2, ',', '.') . ' €'],
-            ['kpi' => 'suppliers', 'label' => 'Lieferanten', 'value' => number_format($kpis['suppliers'], 0, ',', '.')],
-            ['kpi' => 'clarifications', 'label' => 'Klärpunkte', 'tone' => $kpis['clarifications'] > 0 ? 'warn' : 'good', 'value' => number_format($kpis['clarifications'], 0, ',', '.')],
-        ]" />
-
-        <div class="flex flex-wrap gap-2 text-[12px]">
-            @foreach(['bestellungen' => 'Bestellungen', 'liefertage' => 'Liefertage', 'lieferanten' => 'Lieferanten', 'runden' => 'Runden', 'bedarfe' => 'Bedarfe'] as $key => $lbl)
-                <button type="button" wire:click="$set('sicht','{{ $key }}')"
-                    class="px-3 py-1.5 rounded-md font-medium {{ $sicht === $key ? 'bg-violet-600 text-white shadow-sm' : 'bg-black/[0.04] text-gray-600 hover:bg-black/[0.07]' }}">
-                    {{ $lbl }}
-                </button>
-            @endforeach
-        </div>
-
-        {{-- Bestell-Hub: drei Sichten auf dieselben gefilterten Daten. --}}
-        <div class="relative overflow-hidden {{ $card }}" data-orders-tabelle>
-            <div class="{{ $cardAccent }}"></div>
-            <div class="px-5 pt-4 pb-2 flex items-baseline justify-between">
-                <div>
-                    <h3 class="font-medium tracking-tight text-gray-900">{{ ['bestellungen' => 'Bestellungen finden', 'liefertage' => 'Nach Liefertag planen', 'lieferanten' => 'Nach Lieferant bündeln', 'runden' => 'Bestellrunden', 'bedarfe' => 'Freigegebene Materialbedarfe'][$sicht] ?? 'Bestellungen' }}</h3>
+        <div class="fa-surface overflow-hidden" data-orders-tabelle>
+            <div class="px-4 pt-4 pb-3 flex items-start justify-between gap-3 border-b border-[var(--fa-line)]">
+                <div class="min-w-0">
+                    <h2 class="text-[length:var(--fa-text-lg)] font-semibold text-[var(--fa-ink)]">{{ $sichtTitel[$sicht] ?? 'Bestellungen' }}</h2>
                     @if($sicht === 'bestellungen')
-                        <p class="text-[11px] text-gray-500 mt-0.5">Zeilen sind Lieferanten-Belege einer Bestellrunde; Suche geht über Beleg, Referenz, Artikel, Produktion und Lieferant.</p>
+                        <p class="mt-0.5 {{ $leise }}">Jede Zeile ist eine Bestellung bei einem Lieferanten. Die Suche findet Beleg, Anlass, Artikel, Produktion und Lieferant.</p>
                     @endif
                 </div>
-                <span class="{{ $label }}">{{ number_format($sicht === 'runden' ? $runden->count() : ($sicht === 'bedarfe' ? $bedarfe->count() : $liste->count()), 0, ',', '.') }} Treffer</span>
             </div>
+
             <div class="max-h-[70vh] overflow-auto">
                 @if($sicht === 'runden')
                     <div class="grid min-h-[420px] lg:grid-cols-[minmax(0,1fr)_340px]">
-                        <div class="divide-y divide-black/5">
+                        <div class="divide-y divide-[var(--fa-line)]">
                             @forelse($runden as $runde)
                                 <button type="button" wire:click="rundeWaehlen({{ $runde['id'] }})" wire:key="round-{{ $runde['id'] }}"
-                                    class="w-full px-5 py-3 text-left hover:bg-black/[0.025] {{ $selectedRoundId === $runde['id'] ? 'bg-violet-500/[0.06]' : '' }}">
+                                    aria-pressed="{{ $selectedRoundId === $runde['id'] ? 'true' : 'false' }}"
+                                    class="w-full px-4 py-3 text-left transition-colors {{ $selectedRoundId === $runde['id'] ? 'bg-[var(--fa-accent-soft)]' : 'hover:bg-[var(--fa-hover)]' }}">
                                     <div class="flex items-start justify-between gap-3">
                                         <div class="min-w-0">
-                                            <div class="text-[13px] font-semibold text-gray-900 truncate">{{ $runde['label'] }}</div>
-                                            <div class="text-[11px] text-gray-500 mt-0.5">{{ $runde['supplier_count'] }} Lieferanten · {{ $runde['order_count'] }} Belege · {{ $runde['position_count'] }} Positionen</div>
+                                            <p class="text-[length:var(--fa-text-md)] font-semibold text-[var(--fa-ink)] truncate">{{ $runde['label'] }}</p>
+                                            <p class="mt-0.5 {{ $leise }} tabular-nums">{{ $runde['supplier_count'] }} Lieferanten · {{ $runde['order_count'] }} Bestellungen · {{ $runde['position_count'] }} Positionen</p>
                                         </div>
-                                        <div class="text-right shrink-0">
-                                            <div class="text-[13px] font-semibold tabular-nums text-gray-900">{{ number_format($runde['total_net'], 2, ',', '.') }} €</div>
-                                            <span class="{{ $pill }} {{ $runde['sendable'] ? $variantPill['success'] : $variantPill['secondary'] }}">{{ $runde['draft_count'] }} offen</span>
+                                        <div class="flex flex-col items-end gap-1 shrink-0">
+                                            <x-fa::money :value="$runde['total_net']" class="text-[length:var(--fa-text-md)] font-semibold text-[var(--fa-ink)]" />
+                                            <x-fa::badge :tone="$runde['sendable'] ? 'ok' : 'neutral'">{{ $runde['draft_count'] }} offen</x-fa::badge>
                                         </div>
                                     </div>
                                 </button>
                             @empty
-                                <div class="px-5 py-10 text-center text-gray-500">Noch keine gespeicherte Bestellrunde.</div>
+                                <x-fa::empty icon="heroicon-o-rectangle-stack" title="Noch keine gespeicherte Bestellrunde">Über „Neue Bestellrunde" Artikel, Rezepte oder Produktionen sammeln und speichern.</x-fa::empty>
                             @endforelse
                         </div>
-                        <aside class="border-l border-black/5 bg-black/[0.015] p-4">
+                        <aside class="border-t lg:border-t-0 lg:border-l border-[var(--fa-line)] bg-[var(--fa-ground)] p-4">
                             @if($selectedRound)
                                 <div class="flex items-start justify-between gap-2 mb-3">
-                                    <div>
-                                        <h4 class="text-[14px] font-semibold text-gray-900">{{ $selectedRound['label'] }}</h4>
-                                        <p class="text-[11px] text-gray-500">{{ $selectedRound['supplier_count'] }} Lieferanten · {{ $selectedRound['position_count'] }} Positionen</p>
+                                    <div class="min-w-0">
+                                        <h3 class="text-[length:var(--fa-text-base)] font-semibold text-[var(--fa-ink)]">{{ $selectedRound['label'] }}</h3>
+                                        <p class="{{ $leise }} tabular-nums">{{ $selectedRound['supplier_count'] }} Lieferanten · {{ $selectedRound['position_count'] }} Positionen</p>
                                     </div>
-                                    <span class="text-[13px] font-semibold tabular-nums">{{ number_format($selectedRound['total_net'], 2, ',', '.') }} €</span>
+                                    <x-fa::money :value="$selectedRound['total_net']" class="text-[length:var(--fa-text-md)] font-semibold" />
                                 </div>
-                                <div class="divide-y divide-black/5 border-y border-black/5">
+                                <div class="fa-surface divide-y divide-[var(--fa-line)]">
                                     @foreach($selectedRound['orders'] as $order)
-                                        <button type="button" wire:click="oeffnen({{ $order['id'] }})" class="w-full py-2 text-left flex items-center justify-between gap-2">
-                                            <span class="text-[12px] text-gray-900">{{ $order['supplier'] }}</span>
-                                            <span class="text-[11px] text-gray-500">{{ $order['positions'] }} Pos. · {{ number_format($order['total_net'], 2, ',', '.') }} €</span>
+                                        <button type="button" wire:click="oeffnen({{ $order['id'] }})" wire:key="round-order-{{ $order['id'] }}" class="w-full px-3 py-2 text-left flex items-center justify-between gap-2 hover:bg-[var(--fa-hover)]">
+                                            <span class="text-[length:var(--fa-text-md)] text-[var(--fa-ink)] truncate">{{ $order['supplier'] }}</span>
+                                            <span class="shrink-0 {{ $leise }} tabular-nums">{{ $order['positions'] }} Pos. · {{ number_format($order['total_net'], 2, ',', '.') }} €</span>
                                         </button>
                                     @endforeach
                                 </div>
                                 @if(!empty($selectedRound['blockers']))
-                                    <div class="mt-3 text-[11px] text-amber-700">{{ implode(' · ', $selectedRound['blockers']) }}</div>
+                                    <x-fa::signal tone="warn" class="mt-3">{{ implode(' · ', $selectedRound['blockers']) }}</x-fa::signal>
                                 @endif
                                 <div class="mt-3 grid grid-cols-2 gap-2">
-                                    <button type="button" wire:click="rundeBearbeiten" class="{{ $btnGhost }}" @disabled(!$selectedRound['editable']) data-orders-round-edit>Runde bearbeiten</button>
-                                    <button type="button" wire:click="rundeVersenden" class="{{ $btnPrimary }}" @disabled(!$selectedRound['sendable'])>Runde versenden</button>
+                                    <x-fa::button wire:click="rundeBearbeiten" :disabled="!$selectedRound['editable']" data-orders-round-edit>Runde bearbeiten</x-fa::button>
+                                    <x-fa::button variant="primary" icon="heroicon-m-paper-airplane" wire:click="rundeVersenden" :disabled="!$selectedRound['sendable']">Runde versenden</x-fa::button>
                                 </div>
                                 @if(!$selectedRound['editable'])
-                                    <p class="mt-2 text-[11px] text-gray-500">Ausgelöste Runden sind eingefroren. Änderungen erfolgen als Korrektur über die einzelnen Belege.</p>
+                                    <p class="mt-2 {{ $leise }}">Ausgelöste Runden sind eingefroren. Korrekturen laufen über die einzelnen Bestellungen.</p>
                                 @endif
                             @else
-                                <div class="py-12 text-center text-[12px] text-gray-500">Bestellrunde auswählen.</div>
+                                <x-fa::empty compact icon="heroicon-o-cursor-arrow-rays" title="Bestellrunde auswählen">Links eine Runde anklicken, dann erscheinen hier ihre Bestellungen.</x-fa::empty>
                             @endif
                         </aside>
                     </div>
                 @elseif($sicht === 'bedarfe')
                     @if(count($selectedDemandIds) > 0)
-                        <div class="px-5 py-2.5 border-b border-black/5 bg-violet-500/[0.04] flex items-center justify-between gap-3">
-                            <span class="text-[12px] font-medium text-gray-700">{{ count($selectedDemandIds) }} Produktionen ausgewählt</span>
-                            <button type="button" wire:click="ausgewaehlteBedarfePlanen" class="{{ $btnPrimary }}">Gemeinsam planen</button>
+                        <div class="px-4 py-2.5 border-b border-[var(--fa-line)] bg-[var(--fa-accent-soft)] flex items-center justify-between gap-3">
+                            <span class="text-[length:var(--fa-text-md)] font-semibold text-[var(--fa-accent)] tabular-nums">{{ count($selectedDemandIds) }} Produktionen ausgewählt</span>
+                            <x-fa::button size="sm" variant="primary" wire:click="ausgewaehlteBedarfePlanen">Gemeinsam planen</x-fa::button>
                         </div>
                     @endif
-                    <div class="divide-y divide-black/5">
+                    <div class="divide-y divide-[var(--fa-line)]">
                         @forelse($bedarfe as $bedarf)
-                            <div class="px-5 py-3 flex items-center justify-between gap-4" wire:key="demand-{{ $bedarf['id'] }}">
+                            <div class="px-4 py-3 flex items-center justify-between gap-4" wire:key="demand-{{ $bedarf['id'] }}">
                                 <div class="min-w-0 flex items-start gap-3">
-                                    <input type="checkbox" wire:model.live="selectedDemandIds" value="{{ $bedarf['id'] }}" class="mt-1" @disabled($bedarf['stale'] || $bedarf['triggered']) aria-label="{{ $bedarf['name'] }} auswählen" />
+                                    <input type="checkbox" wire:model.live="selectedDemandIds" value="{{ $bedarf['id'] }}" class="mt-1 {{ $checkbox }}" @disabled($bedarf['stale'] || $bedarf['triggered']) aria-label="{{ $bedarf['name'] }} auswählen" />
                                     <div class="min-w-0">
-                                    <div class="text-[13px] font-semibold text-gray-900 truncate">{{ $bedarf['name'] }}</div>
-                                    <div class="text-[11px] text-gray-500 mt-0.5">{{ $bedarf['production_date'] ? \Carbon\Carbon::parse($bedarf['production_date'])->format('d.m.Y') : 'ohne Datum' }} · {{ $bedarf['targets'] }} Ziele · {{ $bedarf['orders'] }} Bestellungen</div>
+                                        <p class="text-[length:var(--fa-text-md)] font-semibold text-[var(--fa-ink)] truncate">{{ $bedarf['name'] }}</p>
+                                        <p class="mt-0.5 {{ $leise }} tabular-nums">{{ $datum($bedarf['production_date']) ?? 'ohne Datum' }} · {{ $bedarf['targets'] }} Ziele · {{ $bedarf['orders'] }} Bestellungen</p>
                                     </div>
                                 </div>
                                 <div class="flex items-center gap-2 shrink-0">
-                                    <span class="{{ $pill }} {{ $bedarf['stale'] ? $variantPill['warning'] : ($bedarf['status'] === 'geplant' ? $variantPill['success'] : $variantPill['info']) }}">{{ $bedarf['status'] }}</span>
-                                    <button type="button" wire:click="$dispatch('orders-editor.production', { id: {{ $bedarf['id'] }}, roundId: {{ $bedarf['round_id'] ?? 'null' }} })" class="{{ $btnPrimary }}" @disabled($bedarf['stale'] || $bedarf['triggered'])>{{ $bedarf['triggered'] ? 'Ausgelöst' : ($bedarf['round_id'] ? 'Planung öffnen' : 'Planen') }}</button>
+                                    <x-fa::badge :tone="$bedarf['stale'] ? 'warn' : ($bedarf['status'] === 'geplant' ? 'ok' : 'info')">{{ $bedarf['status'] }}</x-fa::badge>
+                                    <x-fa::button size="sm" wire:click="$dispatch('orders-editor.production', { id: {{ $bedarf['id'] }}, roundId: {{ $bedarf['round_id'] ?? 'null' }} })" :disabled="$bedarf['stale'] || $bedarf['triggered']">{{ $bedarf['triggered'] ? 'Ausgelöst' : ($bedarf['round_id'] ? 'Planung öffnen' : 'Planen') }}</x-fa::button>
                                 </div>
                             </div>
                         @empty
-                            <div class="px-5 py-10 text-center text-gray-500">Keine freigegebenen Materialbedarfe.</div>
-                        @endforelse
-                    </div>
-                @elseif($sicht === 'liefertage')
-                    <div class="divide-y divide-black/5">
-                        @forelse($liefertagGruppen as $gruppe)
-                            <div class="px-5 py-3">
-                                <div class="flex flex-wrap items-baseline justify-between gap-2 mb-2">
-                                    <div>
-                                        <div class="text-[13px] font-semibold text-gray-900">{{ $gruppe['label'] }}</div>
-                                        <div class="text-[11px] text-gray-500">{{ $gruppe['suppliers'] }} Lieferanten · {{ $gruppe['orders']->count() }} Bestellungen · {{ $gruppe['line_count'] }} Positionen</div>
-                                    </div>
-                                    <div class="text-[13px] font-semibold text-gray-900">{{ number_format($gruppe['total_net'], 2, ',', '.') }} €</div>
-                                </div>
-                                <table class="{{ $table }}">
-                                    <thead><tr>
-                                        <th class="{{ $th }} text-left">Beleg</th>
-                                        <th class="{{ $th }} text-left">Lieferant</th>
-                                        <th class="{{ $th }} text-left">Produktion / Anlass</th>
-                                        <th class="{{ $th }} text-right">Pos.</th>
-                                        <th class="{{ $th }} text-right">Netto</th>
-                                        <th class="{{ $th }}">Status</th>
-                                        <th class="{{ $th }}">Strategie</th>
-                                        <th class="{{ $th }}">Hinweise</th>
-                                    </tr></thead>
-                                    <tbody>
-                                        @foreach($gruppe['orders'] as $o)
-                                            <x-foodalchemist::table-row wire:key="day-{{ md5($gruppe['key']) }}-{{ $o['id'] }}" wire:click="oeffnen({{ $o['id'] }})">
-                                                <td class="{{ $td }} text-gray-600 whitespace-nowrap">
-                                                    <div class="font-medium text-gray-900">{{ $o['order_label'] }}</div>
-                                                    @if($o['supplier_order_number'])<div class="text-[10px] text-gray-400">AB {{ $o['supplier_order_number'] }}</div>@endif
-                                                    @if($o['invoice_number'])<div class="text-[10px] text-gray-400">RE {{ $o['invoice_number'] }}</div>@endif
-                                                    @if($o['invoice_due_date'])<div class="text-[10px] text-amber-600">fällig {{ \Carbon\Carbon::parse($o['invoice_due_date'])->format('d.m.Y') }}</div>@endif
-                                                    @if(($o['payment']['status'] ?? null))<div class="text-[10px] {{ ($o['payment']['state'] ?? '') === 'paid' ? 'text-emerald-600' : ((($o['payment']['state'] ?? '') === 'overdue') ? 'text-amber-600' : 'text-gray-400') }}">OP {{ $o['payment']['label'] }}</div>@endif
-                                                    @if(($o['approval']['status'] ?? null))<div class="text-[10px] {{ ($o['approval']['state'] ?? '') === 'approved' ? 'text-emerald-600' : ((($o['approval']['state'] ?? '') === 'rejected') ? 'text-rose-600' : 'text-amber-600') }}">Freigabe {{ $o['approval']['label'] }}</div>@endif
-                                                </td>
-                                                <td class="{{ $td }} font-medium text-gray-900 whitespace-nowrap">{{ $o['supplier'] }}</td>
-                                                <td class="{{ $td }} text-gray-600">
-                                                    @if(!empty($o['herkunft']))
-                                                        <div class="flex flex-wrap gap-1">
-                                                            @foreach($o['herkunft'] as $h)
-                                                                <span class="{{ $pill }} {{ $variantPill[($h['production_order_id'] ?? null) !== null ? 'primary' : ($h['type'] === 'concept' ? 'info' : 'secondary')] }}">{{ $h['label'] }}</span>
-                                                            @endforeach
-                                                        </div>
-                                                    @else
-                                                        {{ $o['reference'] ?: '—' }}
-                                                    @endif
-                                                </td>
-                                                <td class="{{ $td }} text-right tabular-nums">{{ $o['line_count'] }}</td>
-                                                <td class="{{ $td }} text-right tabular-nums">{{ number_format($o['total_net'], 2, ',', '.') }} €</td>
-                                                <td class="{{ $td }}"><span class="{{ $pill }} font-medium {{ $variantPill[$o['status']->badgeVariant()] ?? $variantPill['secondary'] }}">{{ $o['status']->label() }}</span></td>
-                                                <td class="{{ $td }}"><span class="{{ $pill }} {{ $o['strategy'] !== '' ? $variantPill['info'] : $variantPill['secondary'] }}">{{ $o['strategy_label'] }}</span></td>
-                                                <td class="{{ $td }}">@foreach($o['warnings'] as $w)<span class="{{ $pill }} {{ $variantPill['warning'] ?? $variantPill['secondary'] }}">{{ $w }}</span>@endforeach</td>
-                                            </x-foodalchemist::table-row>
-                                        @endforeach
-                                    </tbody>
-                                </table>
-                            </div>
-                        @empty
-                            <div class="px-5 py-10 text-center text-gray-500">Keine Liefertage im Filter.</div>
-                        @endforelse
-                    </div>
-                @elseif($sicht === 'lieferanten')
-                    <div class="divide-y divide-black/5">
-                        @forelse($lieferantGruppen as $gruppe)
-                            <div class="px-5 py-3">
-                                <div class="flex flex-wrap items-baseline justify-between gap-2 mb-2">
-                                    <div>
-                                        <div class="text-[13px] font-semibold text-gray-900">{{ $gruppe['supplier'] }}</div>
-                                        <div class="text-[11px] text-gray-500">{{ $gruppe['dates'] }} Liefertage · {{ $gruppe['orders']->count() }} Bestellungen · {{ $gruppe['line_count'] }} Positionen</div>
-                                    </div>
-                                    <div class="text-[13px] font-semibold text-gray-900">{{ number_format($gruppe['total_net'], 2, ',', '.') }} €</div>
-                                </div>
-                                <table class="{{ $table }}">
-                                    <thead><tr>
-                                        <th class="{{ $th }} text-left">Beleg</th>
-                                        <th class="{{ $th }} text-left">Datum</th>
-                                        <th class="{{ $th }} text-left">Produktion / Anlass</th>
-                                        <th class="{{ $th }} text-right">Pos.</th>
-                                        <th class="{{ $th }} text-right">Netto</th>
-                                        <th class="{{ $th }}">Status</th>
-                                        <th class="{{ $th }}">Strategie</th>
-                                        <th class="{{ $th }}">Hinweise</th>
-                                    </tr></thead>
-                                    <tbody>
-                                        @foreach($gruppe['orders'] as $o)
-                                            <x-foodalchemist::table-row wire:key="supplier-{{ md5($gruppe['supplier']) }}-{{ $o['id'] }}" wire:click="oeffnen({{ $o['id'] }})">
-                                                <td class="{{ $td }} text-gray-600 whitespace-nowrap">
-                                                    <div class="font-medium text-gray-900">{{ $o['order_label'] }}</div>
-                                                    @if($o['supplier_order_number'])<div class="text-[10px] text-gray-400">AB {{ $o['supplier_order_number'] }}</div>@endif
-                                                    @if($o['invoice_number'])<div class="text-[10px] text-gray-400">RE {{ $o['invoice_number'] }}</div>@endif
-                                                    @if($o['invoice_due_date'])<div class="text-[10px] text-amber-600">fällig {{ \Carbon\Carbon::parse($o['invoice_due_date'])->format('d.m.Y') }}</div>@endif
-                                                    @if(($o['payment']['status'] ?? null))<div class="text-[10px] {{ ($o['payment']['state'] ?? '') === 'paid' ? 'text-emerald-600' : ((($o['payment']['state'] ?? '') === 'overdue') ? 'text-amber-600' : 'text-gray-400') }}">OP {{ $o['payment']['label'] }}</div>@endif
-                                                    @if(($o['approval']['status'] ?? null))<div class="text-[10px] {{ ($o['approval']['state'] ?? '') === 'approved' ? 'text-emerald-600' : ((($o['approval']['state'] ?? '') === 'rejected') ? 'text-rose-600' : 'text-amber-600') }}">Freigabe {{ $o['approval']['label'] }}</div>@endif
-                                                </td>
-                                                <td class="{{ $td }} whitespace-nowrap tabular-nums text-gray-700">{{ $o['liefertag'] ? \Carbon\Carbon::parse($o['liefertag'])->format('d.m.Y') : '—' }}</td>
-                                                <td class="{{ $td }} text-gray-600">
-                                                    @if(!empty($o['herkunft']))
-                                                        <div class="flex flex-wrap gap-1">
-                                                            @foreach($o['herkunft'] as $h)
-                                                                <span class="{{ $pill }} {{ $variantPill[($h['production_order_id'] ?? null) !== null ? 'primary' : ($h['type'] === 'concept' ? 'info' : 'secondary')] }}">{{ $h['label'] }}</span>
-                                                            @endforeach
-                                                        </div>
-                                                    @else
-                                                        {{ $o['reference'] ?: '—' }}
-                                                    @endif
-                                                </td>
-                                                <td class="{{ $td }} text-right tabular-nums">{{ $o['line_count'] }}</td>
-                                                <td class="{{ $td }} text-right tabular-nums">{{ number_format($o['total_net'], 2, ',', '.') }} €</td>
-                                                <td class="{{ $td }}"><span class="{{ $pill }} font-medium {{ $variantPill[$o['status']->badgeVariant()] ?? $variantPill['secondary'] }}">{{ $o['status']->label() }}</span></td>
-                                                <td class="{{ $td }}"><span class="{{ $pill }} {{ $o['strategy'] !== '' ? $variantPill['info'] : $variantPill['secondary'] }}">{{ $o['strategy_label'] }}</span></td>
-                                                <td class="{{ $td }}">@foreach($o['warnings'] as $w)<span class="{{ $pill }} {{ $variantPill['warning'] ?? $variantPill['secondary'] }}">{{ $w }}</span>@endforeach</td>
-                                            </x-foodalchemist::table-row>
-                                        @endforeach
-                                    </tbody>
-                                </table>
-                            </div>
-                        @empty
-                            <div class="px-5 py-10 text-center text-gray-500">Keine Lieferanten im Filter.</div>
+                            <x-fa::empty icon="heroicon-o-clipboard-document-list" title="Keine freigegebenen Materialbedarfe">In der Produktion den Materialbedarf freigeben, dann erscheint er hier zum Planen.</x-fa::empty>
                         @endforelse
                     </div>
                 @else
-                <table class="{{ $table }}">
-                    <thead><tr class="text-left">
-                        <th class="{{ $th }} w-10 sticky top-0 z-20 bg-white/95 backdrop-blur-xl">
-                            <input type="checkbox" wire:click="versandfaehigeAuswahlUmschalten" @checked($kpis['ready'] > 0 && count($selectedOrderIds) === $kpis['ready']) @disabled($kpis['ready'] === 0) aria-label="Alle versandfähigen Bestellungen auswählen" />
-                        </th>
-                        <th class="{{ $th }} whitespace-nowrap sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Beleg</th>
-                        <th class="{{ $th }} whitespace-nowrap sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Bestelldatum</th>
-                        <th class="{{ $th }} whitespace-nowrap sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Liefertag</th>
-                        <th class="{{ $th }} sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Lieferant</th>
-                        <th class="{{ $th }} w-full sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Produktion / Anlass</th>
-                        <th class="{{ $th }} text-right whitespace-nowrap sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Pos.</th>
-                        <th class="{{ $th }} text-right whitespace-nowrap sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Netto</th>
-                        <th class="{{ $th }} sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Status</th>
-                        <th class="{{ $th }} sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Strategie</th>
-                        <th class="{{ $th }} sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Hinweise</th>
-                    </tr></thead>
-                    <tbody>
-                        @if($liste->isEmpty())
-                            <tr><td colspan="11" class="px-5 py-10 text-center text-gray-500">Keine Bestellungen. „Neue Bestellrunde" oben oder Bedarf aus der Produktion übergeben.</td></tr>
-                        @else
-                            @foreach($gruppen as $tag => $zeilen)
-                                @if($gruppiert)
-                                    <tr class="bg-black/[0.02]">
-                                        <td colspan="11" class="px-5 py-1.5 text-[11px] font-medium uppercase tracking-wide text-gray-500">
-                                            {{ $tag === '' ? 'Ohne Liefertag' : \Carbon\Carbon::parse($tag)->locale('de')->isoFormat('dddd, DD.MM.YYYY') }}
-                                            <span class="text-gray-400">· {{ $zeilen->count() }}</span>
-                                        </td>
-                                    </tr>
+                    <table class="fa-table">
+                        <thead class="sticky top-0 z-20 bg-[var(--fa-surface)]">
+                            <tr>
+                                @if($mitAuswahl)
+                                    <th class="w-10">
+                                        <input type="checkbox" wire:click="versandfaehigeAuswahlUmschalten" class="{{ $checkbox }}" @checked($kpis['ready'] > 0 && count($selectedOrderIds) === $kpis['ready']) @disabled($kpis['ready'] === 0) aria-label="Alle versandfähigen Bestellungen auswählen" />
+                                    </th>
                                 @endif
-                                @foreach($zeilen as $o)
-                                    <x-foodalchemist::table-row wire:key="ord-{{ $o['id'] }}" wire:click="oeffnen({{ $o['id'] }})" data-orders-zeile="{{ $o['id'] }}">
-                                        <td class="{{ $td }}" onclick="event.stopPropagation()">
-                                            <input type="checkbox" wire:model.live="selectedOrderIds" value="{{ $o['id'] }}" @disabled($o['status'] !== \Platform\FoodAlchemist\Enums\OrderStatus::Draft) aria-label="ord-{{ $o['id'] }} auswählen" />
-                                        </td>
-                                        <td class="{{ $td }} text-gray-600 whitespace-nowrap">
-                                            <div class="font-medium text-gray-900">{{ $o['order_label'] }}</div>
-                                            @if($o['supplier_order_number'])<div class="text-[10px] text-gray-400">AB {{ $o['supplier_order_number'] }}</div>@endif
-                                            @if($o['invoice_number'])<div class="text-[10px] text-gray-400">RE {{ $o['invoice_number'] }}</div>@endif
-                                            @if($o['invoice_due_date'])<div class="text-[10px] text-amber-600">fällig {{ \Carbon\Carbon::parse($o['invoice_due_date'])->format('d.m.Y') }}</div>@endif
-                                            @if(($o['payment']['status'] ?? null))<div class="text-[10px] {{ ($o['payment']['state'] ?? '') === 'paid' ? 'text-emerald-600' : ((($o['payment']['state'] ?? '') === 'overdue') ? 'text-amber-600' : 'text-gray-400') }}">OP {{ $o['payment']['label'] }}</div>@endif
-                                            @if(($o['approval']['status'] ?? null))<div class="text-[10px] {{ ($o['approval']['state'] ?? '') === 'approved' ? 'text-emerald-600' : ((($o['approval']['state'] ?? '') === 'rejected') ? 'text-rose-600' : 'text-amber-600') }}">Freigabe {{ $o['approval']['label'] }}</div>@endif
-                                        </td>
-                                        <td class="{{ $td }} whitespace-nowrap tabular-nums text-gray-700">{{ $o['bestelldatum'] ? \Carbon\Carbon::parse($o['bestelldatum'])->format('d.m.Y') : '—' }}</td>
-                                        <td class="{{ $td }} whitespace-nowrap tabular-nums text-gray-700">{{ $o['liefertag'] ? \Carbon\Carbon::parse($o['liefertag'])->format('d.m.Y') : '—' }}</td>
-                                        <td class="{{ $td }} font-medium text-gray-900 whitespace-nowrap">{{ $o['supplier'] }}</td>
-                                        <td class="{{ $td }} text-gray-600">
-                                            @if(!empty($o['herkunft']))
-                                                <div class="flex flex-wrap gap-1">
-                                                    @foreach($o['herkunft'] as $h)
-                                                        @if(($h['production_order_id'] ?? null) !== null)
-                                                            <a href="{{ route('foodalchemist.produktion.index', ['auftrag' => $h['production_order_id']]) }}"
-                                                               onclick="event.stopPropagation()"
-                                                               class="{{ $pill }} {{ $variantPill['primary'] }} hover:underline"
-                                                               title="{{ $h['key'] }}">{{ $h['label'] }} ↗</a>
-                                                        @else
-                                                            <span class="{{ $pill }} {{ $variantPill[$h['type'] === 'concept' ? 'info' : 'secondary'] }}" title="{{ $h['key'] }}">{{ $h['label'] }}</span>
-                                                        @endif
-                                                    @endforeach
+                                <th>Beleg</th>
+                                @if($mitBestelldatum)<th>Bestelldatum</th>@endif
+                                @if($mitLiefertag)<th>Liefertag</th>@endif
+                                @if($mitLieferant)<th>Lieferant</th>@endif
+                                <th class="w-full">Produktion / Anlass</th>
+                                <th class="num">Pos.</th>
+                                <th class="num">Netto</th>
+                                <th>Status</th>
+                                <th>Hinweise</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if($tabellenGruppen->isEmpty() || $liste->isEmpty())
+                                <tr>
+                                    <td colspan="{{ $spaltenZahl }}">
+                                        <x-fa::empty icon="heroicon-o-shopping-cart" title="{{ $sicht === 'lieferanten' ? 'Keine Lieferanten im Filter' : ($sicht === 'liefertage' ? 'Keine Liefertage im Filter' : 'Keine Bestellungen im Filter') }}">Filter lockern, eine neue Bestellrunde öffnen oder freigegebenen Bedarf aus der Produktion planen.</x-fa::empty>
+                                    </td>
+                                </tr>
+                            @else
+                                @foreach($tabellenGruppen as $gruppe)
+                                    @if($gruppe['label'] !== null)
+                                        <tr class="bg-[var(--fa-ground)]">
+                                            <td colspan="{{ $spaltenZahl }}" class="py-2">
+                                                <div class="flex flex-wrap items-baseline justify-between gap-2">
+                                                    <span class="text-[length:var(--fa-text-md)] font-semibold text-[var(--fa-ink)]">{{ $gruppe['label'] }} <span class="ml-1 font-normal {{ $leise }} tabular-nums">{{ $gruppe['meta'] }}</span></span>
+                                                    @if($gruppe['total'] !== null)<x-fa::money :value="$gruppe['total']" class="text-[length:var(--fa-text-md)] font-semibold" />@endif
                                                 </div>
-                                                @if($o['reference'])
-                                                    <div class="mt-1 text-[11px] text-gray-500">{{ $o['reference'] }}</div>
+                                            </td>
+                                        </tr>
+                                    @endif
+                                    @foreach($gruppe['orders'] as $o)
+                                        <x-foodalchemist::table-row :active="$selectedOrderId === $o['id']" wire:key="{{ ($gruppe['key'])($o) }}" wire:click="oeffnen({{ $o['id'] }})" data-orders-zeile="{{ $o['id'] }}">
+                                            @if($mitAuswahl)
+                                                <td onclick="event.stopPropagation()">
+                                                    <input type="checkbox" wire:model.live="selectedOrderIds" value="{{ $o['id'] }}" class="{{ $checkbox }}" @disabled($o['status'] !== \Platform\FoodAlchemist\Enums\OrderStatus::Draft) aria-label="ord-{{ $o['id'] }} auswählen" />
+                                                </td>
+                                            @endif
+                                            <td class="whitespace-nowrap">
+                                                <div class="font-medium text-[var(--fa-ink)]">{{ $o['order_label'] }}</div>
+                                                @if($o['supplier_order_number'])<div class="{{ $leise }}" title="Auftragsbestätigung des Lieferanten">Bestätigung {{ $o['supplier_order_number'] }}</div>@endif
+                                                @if($o['invoice_number'])<div class="{{ $leise }}">Rechnung {{ $o['invoice_number'] }}</div>@endif
+                                                @if($o['invoice_due_date'])<div class="text-[length:var(--fa-text-sm)] text-[var(--fa-warn)]">fällig {{ $datum($o['invoice_due_date']) }}</div>@endif
+                                                @if(($o['payment']['status'] ?? null))<div class="text-[length:var(--fa-text-sm)] {{ ($o['payment']['state'] ?? '') === 'paid' ? 'text-[var(--fa-ok)]' : ((($o['payment']['state'] ?? '') === 'overdue') ? 'text-[var(--fa-warn)]' : 'text-[var(--fa-ink-3)]') }}">Zahlung {{ $o['payment']['label'] }}</div>@endif
+                                                @if(($o['approval']['status'] ?? null))<div class="text-[length:var(--fa-text-sm)] {{ ($o['approval']['state'] ?? '') === 'approved' ? 'text-[var(--fa-ok)]' : ((($o['approval']['state'] ?? '') === 'rejected') ? 'text-[var(--fa-crit)]' : 'text-[var(--fa-warn)]') }}">Freigabe {{ $o['approval']['label'] }}</div>@endif
+                                                @if($o['strategy'] !== '')<x-fa::badge tone="info" class="mt-1" title="Einkaufsstrategie dieser Bestellung">{{ $o['strategy_label'] }}</x-fa::badge>@endif
+                                            </td>
+                                            @if($mitBestelldatum)<td class="whitespace-nowrap tabular-nums text-[var(--fa-ink-2)]">{{ $datum($o['bestelldatum']) ?? '–' }}</td>@endif
+                                            @if($mitLiefertag)<td class="whitespace-nowrap tabular-nums text-[var(--fa-ink-2)]">{{ $datum($o['liefertag']) ?? '–' }}</td>@endif
+                                            @if($mitLieferant)<td class="whitespace-nowrap font-medium text-[var(--fa-ink)]">{{ $o['supplier'] }}</td>@endif
+                                            <td class="text-[var(--fa-ink-2)]">
+                                                @if(!empty($o['herkunft']))
+                                                    <div class="flex flex-wrap gap-1">
+                                                        @foreach($o['herkunft'] as $h)
+                                                            @if(($h['production_order_id'] ?? null) !== null)
+                                                                <a href="{{ route('foodalchemist.produktion.index', ['auftrag' => $h['production_order_id']]) }}"
+                                                                   onclick="event.stopPropagation()"
+                                                                   class="inline-flex items-center gap-1 h-[22px] px-2 rounded-full bg-[var(--fa-accent-soft)] text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-accent)] hover:underline"
+                                                                   title="Produktion öffnen">{{ $h['label'] }}@svg('heroicon-m-arrow-top-right-on-square', 'w-3.5 h-3.5')</a>
+                                                            @else
+                                                                <x-fa::badge :tone="$h['type'] === 'concept' ? 'info' : 'neutral'">{{ $h['label'] }}</x-fa::badge>
+                                                            @endif
+                                                        @endforeach
+                                                    </div>
+                                                    @if($o['reference'])<div class="mt-1 {{ $leise }}">{{ $o['reference'] }}</div>@endif
+                                                @else
+                                                    {{ $o['reference'] ?: '–' }}
                                                 @endif
-                                            @else
-                                                {{ $o['reference'] ?: '—' }}
-                                            @endif
-                                        </td>
-                                        <td class="{{ $td }} text-right whitespace-nowrap tabular-nums text-gray-700">{{ $o['line_count'] }}</td>
-                                        <td class="{{ $td }} text-right whitespace-nowrap tabular-nums text-gray-700">
-                                            {{ number_format($o['total_net'], 2, ',', '.') }} €
-                                            @if($o['line_count'] === 0)
-                                                <div class="text-[10px] text-amber-600">leer</div>
-                                            @elseif((float) $o['total_net'] === 0.0)
-                                                <div class="text-[10px] text-amber-600">Preis/Klärung</div>
-                                            @endif
-                                        </td>
-                                        <td class="{{ $td }}"><span class="{{ $pill }} font-medium {{ $variantPill[$o['status']->badgeVariant()] ?? $variantPill['secondary'] }}">{{ $o['status']->label() }}</span></td>
-                                        <td class="{{ $td }}"><span class="{{ $pill }} {{ $o['strategy'] !== '' ? $variantPill['info'] : $variantPill['secondary'] }}">{{ $o['strategy_label'] }}</span></td>
-                                        <td class="{{ $td }}">@foreach($o['warnings'] as $w)<span class="{{ $pill }} {{ $variantPill['warning'] ?? $variantPill['secondary'] }}">{{ $w }}</span>@endforeach</td>
-                                    </x-foodalchemist::table-row>
+                                            </td>
+                                            <td class="num text-[var(--fa-ink-2)]">{{ $o['line_count'] }}</td>
+                                            <td class="num">
+                                                <x-fa::money :value="$o['total_net']" />
+                                                @if($o['line_count'] === 0)
+                                                    <div><x-fa::signal tone="warn">leer</x-fa::signal></div>
+                                                @elseif((float) $o['total_net'] === 0.0)
+                                                    <div><x-fa::signal tone="warn">Preis fehlt</x-fa::signal></div>
+                                                @endif
+                                            </td>
+                                            <td class="whitespace-nowrap"><x-fa::badge :tone="$statusTon[$o['status']->badgeVariant()] ?? 'neutral'" data-status="{{ $o['status']->value }}">{{ ucfirst($o['status']->label()) }}</x-fa::badge></td>
+                                            <td>
+                                                <div class="flex flex-wrap gap-1">
+                                                    @foreach($o['warnings'] as $w)<x-fa::badge tone="warn">{{ $w }}</x-fa::badge>@endforeach
+                                                </div>
+                                            </td>
+                                        </x-foodalchemist::table-row>
+                                    @endforeach
                                 @endforeach
-                            @endforeach
-                        @endif
-                    </tbody>
-                </table>
+                            @endif
+                        </tbody>
+                    </table>
                 @endif
             </div>
         </div>
-
     </x-ui-page-container>
     {{-- Spec 53/F Stufe 2: Sprachbefehl-Mount auf Seitenebene (Modal + optionales schwebendes Element). --}}
 </x-ui-page>

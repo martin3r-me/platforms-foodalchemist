@@ -352,7 +352,7 @@ class SalesRecipeService
     {
         $recipe = FoodAlchemistRecipe::visibleToTeam($team)->verkauf()->findOrFail($id);
         if (! $recipe->isOwnedBy($team)) {
-            throw new \RuntimeException('Geerbtes Rezept — VK-Pflege nur durchs Besitzer-Team (D1).');
+            throw new \RuntimeException('Geerbtes Rezept: Den VK kann nur das Besitzer-Team pflegen.');
         }
 
         return DB::transaction(function () use ($team, $recipe, $in, $kiLineage) {
@@ -736,7 +736,7 @@ class SalesRecipeService
     {
         $recipe = FoodAlchemistRecipe::visibleToTeam($team)->verkauf()->findOrFail($recipeId);
         if ((int) $recipe->team_id !== (int) $team->id) {
-            throw new \RuntimeException('Geerbtes Gericht — Löschen nur durchs Besitzer-Team (D1).');
+            throw new \RuntimeException('Geerbtes Gericht: Löschen kann es nur das Besitzer-Team.');
         }
 
         // Referenz-Guard — Schema::hasTable-gesichert, weil nicht jede Umgebung alle Module
@@ -756,7 +756,7 @@ class SalesRecipeService
             }
         }
         if ($refs !== []) {
-            throw new \RuntimeException('Gericht wird noch verwendet (' . implode(', ', $refs) . ') — dort erst entfernen.');
+            throw new \RuntimeException('Das Gericht wird noch verwendet (' . implode(', ', $refs) . '). Zuerst dort entfernen.');
         }
 
         DB::transaction(function () use ($recipe) {

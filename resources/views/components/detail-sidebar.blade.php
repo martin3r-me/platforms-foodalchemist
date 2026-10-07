@@ -29,9 +29,21 @@
     $defaultWidthPx = $widthMap[$width] ?? 320;
 @endphp
 
+{{-- fa-pass 2026-10-05: unter 1536 px (Laptop) legt sich das offene Panel als Schublade ÜBER den Inhalt,
+     statt ihn zusammenzudrücken (Concepter 1280 px: Mitte schrumpfte auf ~90 px). Im Fluss bleibt nur die
+     Rail-Breite. Ab 1536 px wie bisher daneben, aber höchstens 30 % der Fensterbreite. --}}
 <div
     x-data="{
         scope: @js($scope),
+        weit: window.matchMedia('(min-width: 96rem)').matches,
+        vw: window.innerWidth,
+        init() {
+            const mq = window.matchMedia('(min-width: 96rem)');
+            mq.addEventListener('change', (e) => { this.weit = e.matches; });
+            window.addEventListener('resize', () => { this.vw = window.innerWidth; });
+        },
+        get schublade() { return this.open && ! this.weit; },
+        get breite() { return Math.min(this.width, Math.round(this.vw * (this.weit ? 0.3 : 0.9))); },
         defaultOpen: @js((bool) $defaultOpen),
         defaultWidth: {{ $defaultWidthPx }},
         resizing: false,
@@ -67,11 +79,18 @@
             document.addEventListener('mouseup', onMouseUp);
         }
     }"
-    :style="open ? ('width: ' + width + 'px') : 'width: 44px'"
+    :style="(open && weit) ? ('width: ' + breite + 'px') : 'width: 44px'"
     :class="resizing ? '' : 'transition-all duration-200'"
-    class="relative flex-shrink-0 h-full bg-[var(--ui-muted-5)] overflow-x-hidden {{ $borderClass }}"
+    class="relative flex-shrink-0 h-full"
     {{ $attributes }}
 >
+  {{-- Dunkler Rahmen: Detail-Panels im Werkbank-Modus (wie Navigation, Chat-Leiste, Editoren). --}}
+  <div
+    data-fa-theme="dark"
+    :style="open ? ('width: ' + breite + 'px') : 'width: 44px'"
+    :class="schublade ? 'absolute inset-y-0 {{ $side === 'right' ? 'right-0' : 'left-0' }} z-40 shadow-2xl' : 'relative h-full'"
+    class="h-full bg-[var(--fa-ground)] overflow-x-hidden {{ $borderClass }}"
+  >
     {{-- Collapsed Rail --}}
     <button
         type="button"
@@ -155,4 +174,5 @@
         <div class="absolute inset-y-0 {{ $side === 'right' ? 'left-0' : 'right-0' }} w-px bg-transparent group-hover/resize:bg-[var(--ui-primary)]/40 transition"></div>
         <div class="absolute top-1/2 -translate-y-1/2 {{ $side === 'right' ? 'left-0' : 'right-0' }} h-8 w-1 rounded-full bg-transparent group-hover/resize:bg-[var(--ui-primary)]/30 transition"></div>
     </div>
+  </div>
 </div>

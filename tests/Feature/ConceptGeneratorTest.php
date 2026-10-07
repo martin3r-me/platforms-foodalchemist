@@ -41,7 +41,7 @@ beforeEach(function () {
     $basilikum = $mkAnker('basilikum');
     $vanille = $mkAnker('vanille');
     foreach ([[$tomate, $basilikum], [$basilikum, $tomate]] as [$a, $b]) {
-        DB::table('foodalchemist_pairing_anchor_edges')->insert([
+        \Platform\FoodAlchemist\Tests\Support\Harmonie::ausFixture([
             'uuid' => (string) UuidV7::generate(), 'anchor_a_id' => $a, 'anchor_b_id' => $b,
             'type' => 'erprobt', 'created_at' => now(), 'updated_at' => now(),
         ]);

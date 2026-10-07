@@ -14,7 +14,7 @@ enum SignalSeverity: string
     public function label(): string
     {
         return match ($this) {
-            self::Info => 'Info',
+            self::Info => 'Hinweis',
             self::Warnung => 'Warnung',
             self::Kritisch => 'Kritisch',
         };

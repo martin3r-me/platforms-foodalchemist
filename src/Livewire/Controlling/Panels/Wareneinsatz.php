@@ -185,8 +185,10 @@ class Wareneinsatz extends Component
         $this->laufCache = null;
         $this->auswahl = [];
         $this->vorschau = null;
-        $this->hinweis = count($gesetzt) . ' Bezugsquelle(n) umgestellt, ' . $nRezepte . ' Rezept(e) nachgerechnet.'
-            . ($fehlgeschlagen > 0 ? ' ' . $fehlgeschlagen . ' Position(en) übersprungen.' : '');
+        $nGesetzt = count($gesetzt);
+        $this->hinweis = $nGesetzt . ($nGesetzt === 1 ? ' Bezugsquelle' : ' Bezugsquellen') . ' umgestellt, '
+            . $nRezepte . ($nRezepte === 1 ? ' Rezept' : ' Rezepte') . ' nachgerechnet.'
+            . ($fehlgeschlagen > 0 ? ' ' . $fehlgeschlagen . ($fehlgeschlagen === 1 ? ' Position' : ' Positionen') . ' übersprungen.' : '');
     }
 
     /**

@@ -21,7 +21,7 @@ use Throwable;
  *  - Diese Klasse embeddet den globalen Wissens-Korpus über Cores
  *    {@see EmbeddingService} (Commit 32b66074) und findet semantisch das passende
  *    Domain-/Pairing-Doc, WENN die Lexik dünn bleibt.
- *  - Der präzise Anker-Edge-Graph (foodalchemist_pairing_anchor_edges) bleibt
+ *  - Der präzise Anker-Graph (foodalchemist_anchor_harmonie, AnkerGraph) bleibt
  *    unangetastet: Semantik löst Freitext → Doc-/Stem-Slug auf, der Graph paart.
  *
  * Was wird embeddet (die Qualitäts-Stellschraube):

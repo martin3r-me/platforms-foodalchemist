@@ -80,7 +80,7 @@ class SignalFixService
     {
         $plan = SignalCockpit::planFor($sig);
         if ($plan === null || $plan['kind'] !== 'deterministic') {
-            throw new \RuntimeException('Für dieses Signal gibt es keinen automatischen Fix.');
+            throw new \RuntimeException('Für diesen Befund gibt es keine automatische Korrektur.');
         }
         $metrik = $plan['metrik'];
         $fixer = $plan['fixer'];
@@ -144,7 +144,7 @@ class SignalFixService
     {
         $plan = SignalCockpit::planFor($sig);
         if ($plan === null || $plan['kind'] !== 'deterministic') {
-            throw new \RuntimeException('Eine Fix-Vorschau gibt es nur für automatische Fixes.');
+            throw new \RuntimeException('Eine Vorschau gibt es nur für automatische Korrekturen.');
         }
         $metrik = $plan['metrik'];
         $fixer = $plan['fixer'];
@@ -160,7 +160,7 @@ class SignalFixService
             try {
                 $d = $this->dryRunFixer($team, $fixer, $it);
             } catch (\Throwable $e) {
-                $d = ['wirkt' => false, 'felder' => [], 'hinweis' => 'Vorschau nicht auflösbar: ' . $e->getMessage()];
+                $d = ['wirkt' => false, 'felder' => [], 'hinweis' => 'Vorschau nicht möglich: ' . $e->getMessage()];
             }
             $wirkt += $d['wirkt'] ? 1 : 0;
             $items[] = $it + $d;
@@ -202,7 +202,7 @@ class SignalFixService
     {
         $plan = SignalCockpit::planFor($sig);
         if ($plan === null || $plan['kind'] !== 'assist') {
-            throw new \RuntimeException('Für dieses Signal gibt es keinen KI-Assistenz-Schritt.');
+            throw new \RuntimeException('Für diesen Befund kann die KI keinen Entwurf schreiben.');
         }
 
         $pl = is_array($sig->payload) ? $sig->payload : [];
@@ -253,7 +253,7 @@ class SignalFixService
             'recipe_anker' => $this->dryRecipeAnker($team, (int) $it['id']),
             'gp_anker' => $this->dryGpAnker($team, (int) $it['id']),
             'recompute' => $this->dryRecompute((int) $it['id']),
-            default => ['wirkt' => false, 'felder' => [], 'hinweis' => 'Unbekannter Fixer.'],
+            default => ['wirkt' => false, 'felder' => [], 'hinweis' => 'Unbekannte Korrektur.'],
         };
     }
 
@@ -261,45 +261,45 @@ class SignalFixService
     {
         $gp = FoodAlchemistGp::visibleToTeam($team)->find($gpId);
         if ($gp === null) {
-            return ['wirkt' => false, 'felder' => [], 'hinweis' => 'GP nicht (mehr) sichtbar.'];
+            return ['wirkt' => false, 'felder' => [], 'hinweis' => 'Grundprodukt nicht mehr vorhanden oder nicht sichtbar.'];
         }
         $r = $this->gpAgg->backfillAllergenKonfidenz($gp, false);   // apply=false ⇒ nur rechnen
         if ($r['skipped']) {
             return ['wirkt' => false, 'felder' => [],
-                'hinweis' => 'Allergene sind manuell/KI-kuratiert — bleiben unberührt.'];
+                'hinweis' => 'Allergene wurden von Hand oder per KI gepflegt und bleiben unverändert.'];
         }
 
         return ['wirkt' => true, 'felder' => [
             'allergens_confidence' => (string) $gp->allergens_confidence . ' → ' . $r['confidence'],
             'allergens_source' => ((string) $gp->allergens_source ?: '—') . ' → ' . $r['source'],
-        ], 'hinweis' => $r['needs_review'] ? 'Widersprüchliche LA-Angaben → bleibt review-pflichtig.' : null];
+        ], 'hinweis' => $r['needs_review'] ? 'Die Lieferantenartikel widersprechen sich, das Grundprodukt bleibt zur Prüfung markiert.' : null];
     }
 
     private function dryLeadLa(Team $team, int $gpId): array
     {
         $gp = FoodAlchemistGp::visibleToTeam($team)->find($gpId);
         if ($gp === null) {
-            return ['wirkt' => false, 'felder' => [], 'hinweis' => 'GP nicht (mehr) sichtbar.'];
+            return ['wirkt' => false, 'felder' => [], 'hinweis' => 'Grundprodukt nicht mehr vorhanden oder nicht sichtbar.'];
         }
         if ($this->preisLoestAuf($gp->lead_la_supplier_item_id)) {
-            return ['wirkt' => false, 'felder' => [], 'hinweis' => 'Lead-LA löst bereits auf — unangetastet.'];
+            return ['wirkt' => false, 'felder' => [], 'hinweis' => 'Hauptartikel hat bereits einen Preis und bleibt unverändert.'];
         }
         $neu = $this->leadLa->pickLeadLa($gp, $team);
         if ($neu === null || (int) $neu === (int) $gp->lead_la_supplier_item_id || ! $this->preisLoestAuf($neu)) {
             return ['wirkt' => false, 'felder' => [],
-                'hinweis' => 'Kein bepreister Lieferantenartikel wählbar — echte Beschaffungs-Lücke.'];
+                'hinweis' => 'Kein Lieferantenartikel mit Preis vorhanden. Das ist eine Einkaufsfrage.'];
         }
 
         return ['wirkt' => true, 'felder' => [
             'lead_la_supplier_item_id' => ((string) $gp->lead_la_supplier_item_id ?: '—') . ' → ' . $neu,
-        ], 'hinweis' => 'Danach werden die nutzenden Rezepte neu gerechnet.'];
+        ], 'hinweis' => 'Danach werden alle Rezepte mit diesem Grundprodukt neu berechnet.'];
     }
 
     private function dryRecipeAnker(Team $team, int $recipeId): array
     {
         $recipe = FoodAlchemistRecipe::visibleToTeam($team)->find($recipeId);
         if ($recipe === null) {
-            return ['wirkt' => false, 'felder' => [], 'hinweis' => 'Rezept nicht (mehr) sichtbar.'];
+            return ['wirkt' => false, 'felder' => [], 'hinweis' => 'Rezept nicht mehr vorhanden oder nicht sichtbar.'];
         }
         $quellen = [];
         foreach ($this->pairing->resolveRecipeAnchors($recipe) as $zeile) {
@@ -309,11 +309,11 @@ class SignalFixService
         }
         if ($quellen === []) {
             return ['wirkt' => false, 'felder' => [],
-                'hinweis' => 'Aus Zutaten/Namen löst kein Kern-Anker auf — Vokabular-Lücke.'];
+                'hinweis' => 'Aus Zutaten und Namen lässt sich kein Aromaprofil ableiten, der Begriff fehlt im Aromawortschatz.'];
         }
 
         return ['wirkt' => true, 'felder' => [
-            'recipe_anchor_mappings (kern)' => count($quellen) . '× — aus: ' . implode(', ', array_slice($quellen, 0, 4)),
+            'Aromenprofil' => count($quellen) . ' Anker — aus: ' . implode(', ', array_slice($quellen, 0, 4)),
         ], 'hinweis' => null];
     }
 
@@ -321,16 +321,16 @@ class SignalFixService
     {
         $gp = FoodAlchemistGp::visibleToTeam($team)->find($gpId);
         if ($gp === null) {
-            return ['wirkt' => false, 'felder' => [], 'hinweis' => 'GP nicht (mehr) sichtbar.'];
+            return ['wirkt' => false, 'felder' => [], 'hinweis' => 'Grundprodukt nicht mehr vorhanden oder nicht sichtbar.'];
         }
         $ankerId = $this->pairing->resolveByName((string) $gp->name);
         if ($ankerId === null) {
             return ['wirkt' => false, 'felder' => [],
-                'hinweis' => 'GP-Name löst auf keinen Anker auf — Vokabular-Lücke.'];
+                'hinweis' => 'Zum Namen des Grundprodukts gibt es kein Aromaprofil, der Begriff fehlt im Aromawortschatz.'];
         }
 
-        return ['wirkt' => true, 'felder' => ['gp_anchor_mappings (kern)' => 'Anker #' . $ankerId . ' (ai_inferred, lexikalisch)'],
-            'hinweis' => 'Namens-Match, keine Handarbeit — ein bestehendes manuelles Mapping bleibt unangetastet.'];
+        return ['wirkt' => true, 'felder' => ['gp_anchor_mappings (kern)' => 'Aromaprofil Nr. ' . $ankerId . ' (aus dem Namen abgeleitet)'],
+            'hinweis' => 'Aus dem Namen abgeleitet, nicht von Hand geprüft. Eine vorhandene Zuordnung von Hand bleibt unverändert.'];
     }
 
     /**
@@ -343,10 +343,10 @@ class SignalFixService
         $kaskade = count($this->recompute->betroffeneRezepte($recipeId));
 
         return ['wirkt' => true, 'felder' => [
-            'EK-/Aggregat-Felder' => 'werden neu gerechnet (Kaskade: ' . $kaskade . ' Rezept(e))',
+            'EK-/Aggregat-Felder' => 'werden neu berechnet (' . $kaskade . ($kaskade === 1 ? ' Rezept)' : ' Rezepte)'),
         ], 'hinweis' => $kaskade > 1
-            ? 'Wirkt auch auf ' . ($kaskade - 1) . ' übergeordnete(s) Rezept(e).'
-            : 'Zielwerte stehen erst nach dem Lauf fest — Rezepte ohne Preisbasis bleiben offen.'];
+            ? 'Wirkt auch auf ' . ($kaskade - 1) . ($kaskade - 1 === 1 ? ' übergeordnetes Rezept.' : ' übergeordnete Rezepte.')
+            : 'Die neuen Werte stehen erst nach der Berechnung fest. Rezepte ohne Preise bleiben offen.'];
     }
 
     private function fixAllergen(Team $team, int $gpId): bool
@@ -382,33 +382,15 @@ class SignalFixService
         return $p !== null && (float) $p->price > 0;
     }
 
-    /** Kern-Anker je Rezept aus resolveRecipeAnchors → setRecipeAnker (macht Rezept graph-sichtbar). */
+    /** Spec 60: Aromenprofil des Rezepts bauen (macht es für die Kombinationslogik sichtbar). */
     private function fixRecipeAnker(Team $team, int $recipeId): bool
     {
         $recipe = FoodAlchemistRecipe::visibleToTeam($team)->find($recipeId);
         if ($recipe === null) {
             return false;
         }
-        $kerne = [];
-        foreach ($this->pairing->resolveRecipeAnchors($recipe) as $zeile) {
-            if (($zeile['kern'] ?? null) !== null) {
-                $kerne[(int) $zeile['kern']] = true;
-            }
-        }
-        if ($kerne === []) {
-            return false;
-        }
-        $wrote = false;
-        foreach (array_keys($kerne) as $ankerId) {
-            try {
-                $this->pairing->setRecipeAnker($team, $recipeId, (int) $ankerId);
-                $wrote = true;
-            } catch (\RuntimeException) {
-                break;   // CAP_RECIPE erreicht — Rest ignorieren
-            }
-        }
 
-        return $wrote;
+        return app(\Platform\FoodAlchemist\Services\Pairing\RezeptProfil::class)->fuer((int) $recipe->id)['anker'] !== [];
     }
 
     private function fixGpAnker(Team $team, int $gpId): bool

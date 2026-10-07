@@ -200,8 +200,8 @@ class VollstaendigkeitReportService
         $coverage = [
             'ohne_steps' => $this->ohneSatellit($team, 'foodalchemist_recipe_steps'),
             'ohne_sensorik' => $this->ohneSatellit($team, 'foodalchemist_recipe_taste_vectors'),
-            'ohne_aromaanker' => $this->ohneSatellit($team, 'foodalchemist_recipe_anchor_mappings'),
-            'ohne_pairings' => $this->ohneSatellit($team, 'foodalchemist_recipe_pairings'),
+            // Spec 60: Aroma-Anker eines Rezepts = sein Aromenprofil (abgeleitet aus den Zutaten).
+            'ohne_aromaanker' => $this->ohneSatellit($team, 'foodalchemist_recipe_profile_anker'),
             'ohne_equipment' => $this->ohneSatellit($team, 'foodalchemist_recipe_equipment'),
         ];
 

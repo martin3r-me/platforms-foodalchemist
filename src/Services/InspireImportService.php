@@ -14,34 +14,38 @@ use Symfony\Component\Uid\UuidV7;
  *   - ingredients     2.630 Zutaten → je eine ein eigener Anker (has_pairing_data=1 → 2.628)
  *   - pairings_strong Level 2+3 in beide Richtungen → aroma-Kanten (source='inspire')
  *
- * Ein Pass (import): mintet die Anker + label_en-Brücke UND schreibt die Kanten. Die
+ * Ein Pass (import): mintet die Anker UND schreibt die Kanten. Die
  * ix→Anker-Auflösung läuft über die IX (PK, eindeutig) — NICHT über den Namen: Inspire hat
  * 3 Dubletten-Namen (Apricot Puree/Chinese Cabbage/Gochujang), die als „alles einzeln"
- * eigene Anker bleiben müssen. level 3 → weight 1.0 (●) · level 2 → weight 0.9 (◕).
+ * eigene Anker bleiben müssen. Kanten → `anchor_harmonie` (stufe 3/2, Spec 60 · P2).
  * Kein Override (Inspire trifft keinen Bestands-Anker). Redo via purgeInspire().
+ *
+ * Spec 60 · P1: Identität = Inspire-UUID (`inspire_id`). Der Import ist idempotent: ein Anker,
+ * dessen inspire_id schon existiert, wird NICHT neu angelegt und NICHT überschrieben (Name,
+ * Übersetzung und Kategorie sind dort gepflegt); nur neue Inspire-Zutaten werden gemintet.
+ * Kanten laufen über insertOrIgnore und sind damit ebenfalls wiederholbar.
  */
 class InspireImportService
 {
     private const ANCHORS = 'foodalchemist_vocab_pairing_anchors';
 
-    private const MAP = 'foodalchemist_anchor_ingredient_map';
-
-    private const EDGES = 'foodalchemist_pairing_anchor_edges';
+    /** Spec 60 · P2: Harmonie-Tabelle (stufe 2|3, beide Richtungen). */
+    private const EDGES = \Platform\FoodAlchemist\Services\Pairing\AnkerGraph::TABELLE;
 
     /** Zählt bereits importierte Inspire-Anker (für den „schon importiert?"-Guard). */
     public function existingInspireAnchors(): int
     {
-        return (int) DB::table(self::ANCHORS)->where('source_path', 'foodpairing_inspire')->count();
+        return (int) DB::table(self::ANCHORS)->whereNotNull('inspire_id')->count();
     }
 
-    /** Rollback: löscht alle Inspire-Kanten, -Brücken und -Anker (für sauberen Redo). */
+    /** Rollback: löscht alle Inspire-Kanten und -Anker (für sauberen Redo). */
     public function purgeInspire(): array
     {
-        $edges = DB::table(self::EDGES)->where('source', 'inspire')->delete();
-        $map = DB::table(self::MAP)->where('match_method', 'inspire')->delete();
-        $anchors = DB::table(self::ANCHORS)->where('source_path', 'foodpairing_inspire')->delete();
+        $inspire = DB::table(self::ANCHORS)->whereNotNull('inspire_id')->pluck('id')->all();
+        $edges = $inspire === [] ? 0 : DB::table(self::EDGES)->whereIn('anchor_a_id', $inspire)->delete();
+        $anchors = DB::table(self::ANCHORS)->whereNotNull('inspire_id')->delete();
 
-        return ['edges' => $edges, 'map' => $map, 'anchors' => $anchors];
+        return ['edges' => $edges, 'anchors' => $anchors];
     }
 
     /**
@@ -53,19 +57,30 @@ class InspireImportService
     {
         $usedSlugs = array_flip(DB::table(self::ANCHORS)->pluck('slug')->all());
         $ingredients = $src->query(
-            'SELECT ix, name, category, subcategory FROM ingredients WHERE has_pairing_data = 1 ORDER BY ix'
+            'SELECT ix, id, name, category, subcategory FROM ingredients WHERE has_pairing_data = 1 ORDER BY ix'
         )->fetchAll(\PDO::FETCH_ASSOC);
 
         $ts = now()->toDateTimeString();
         $ixToAnchor = [];
         $anchorsCreated = 0;
+        $anchorsKnown = 0;
+        // inspire_id → Anker-ID der schon vorhandenen Inspire-Anker (Wiedererkennung).
+        $bekannt = DB::table(self::ANCHORS)->whereNotNull('inspire_id')->pluck('id', 'inspire_id')->all();
         $slugFixes = 0;
 
         // --- Phase 1: Anker minten (in einer Transaktion) ---------------------
-        $mint = function () use ($ingredients, $apply, $teamId, $ts, &$usedSlugs, &$ixToAnchor, &$anchorsCreated, &$slugFixes): void {
+        $mint = function () use ($ingredients, $apply, $teamId, $ts, $bekannt, &$usedSlugs, &$ixToAnchor, &$anchorsCreated, &$anchorsKnown, &$slugFixes): void {
             foreach ($ingredients as $r) {
                 $ix = (int) $r['ix'];
                 $name = (string) $r['name'];
+                $inspireId = (string) $r['id'];
+
+                if (isset($bekannt[$inspireId])) {
+                    $ixToAnchor[$ix] = (int) $bekannt[$inspireId];
+                    $anchorsKnown++;
+
+                    continue;
+                }
 
                 $slug = Str::slug($name, '_');
                 if ($slug === '') {
@@ -85,7 +100,10 @@ class InspireImportService
                         'uuid' => (string) UuidV7::generate(),
                         'team_id' => $teamId,
                         'slug' => $slug,
+                        'inspire_id' => $inspireId,
+                        'inspire_ix' => $ix,
                         'display_de' => $name,
+                        'display_en' => $name,
                         'source_path' => 'foodpairing_inspire',
                         'note' => $note !== '' ? $note : null,
                         // Strukturiert für den Composer-Picker-Filter (parallel zu note).
@@ -93,15 +111,6 @@ class InspireImportService
                         'subcategory' => $sub !== '' ? $sub : null,
                         'created_at' => $ts,
                         'updated_at' => $ts,
-                    ]);
-                    DB::table(self::MAP)->insert([
-                        'anchor_id' => $anchorId,
-                        'slug_de' => $slug,
-                        'ingredient_id' => null,
-                        'label_en' => $name,
-                        'has_profile' => 0,
-                        'n_key_components' => 0,
-                        'match_method' => 'inspire',
                     ]);
                 } else {
                     $anchorId = $ix; // Platzhalter für die Dry-Run-Kantenzählung
@@ -118,9 +127,11 @@ class InspireImportService
         $inserted = 0;
         $skipped = 0;
         $chunk = [];
+        // Upsert: ein erneuter Import übernimmt geänderte Stufen, legt aber nichts doppelt an.
         $flush = function () use (&$chunk, &$inserted): void {
             if ($chunk) {
-                $inserted += DB::table(self::EDGES)->insertOrIgnore($chunk);
+                DB::table(self::EDGES)->upsert($chunk, ['anchor_a_id', 'anchor_b_id'], ['stufe']);
+                $inserted += count($chunk);
                 $chunk = [];
             }
         };
@@ -137,23 +148,7 @@ class InspireImportService
             if (! $apply) {
                 continue;
             }
-            $lvl = (int) $row['level'];
-            $chunk[] = [
-                'uuid' => (string) UuidV7::generate(),
-                'team_id' => $teamId,
-                'anchor_a_id' => $a,
-                'anchor_b_id' => $b,
-                'type' => 'aroma',
-                'weight' => $lvl === 3 ? 1.0 : 0.9,
-                'source' => 'inspire',
-                'axis' => 'harmony',
-                'level' => $lvl,
-                'evidence' => $lvl === 3
-                    ? 'Foodpairing Inspire (best match)'
-                    : 'Foodpairing Inspire (good match)',
-                'created_at' => $ts,
-                'updated_at' => $ts,
-            ];
+            $chunk[] = ['anchor_a_id' => $a, 'anchor_b_id' => $b, 'stufe' => min(3, (int) $row['level'])];
             if (count($chunk) >= 2000) {
                 $flush();
             }
@@ -163,6 +158,7 @@ class InspireImportService
         return [
             'ingredients' => count($ingredients),
             'anchors_created' => $anchorsCreated,
+            'anchors_known' => $anchorsKnown,
             'slug_collisions_fixed' => $slugFixes,
             'edge_candidates' => $candidates,
             'skipped_self' => $skipped,

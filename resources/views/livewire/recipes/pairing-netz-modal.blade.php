@@ -1,7 +1,7 @@
 {{-- M5-07 / D-7: Pairing-Netz — Empfehler (Inspire-Umbau 2a): »was passt zum Gericht«.
      Zentrum = Gericht, Innenring = Kern-Anker, aussen die Kandidaten nach Stufe:
-     ★★★ (Inspire L3, Best-Match) im Mittelkreis, ★★ (L2) + ★ (Basis) aussen,
-     unten komplementäre Basisrezepte. Positionen fertig aus PairingService::pairingNetz —
+     ★★★ (Inspire L3, echtes Food Pairing) im Mittelkreis, aussen Kontrast-Lieferanten für
+     offene Bedarfe und komplementäre Basisrezepte; Konflikte als rote Linie (Spec 60). Positionen fertig aus PairingService::pairingNetz —
      D3 (resources/js/pairing-netz) zeichnet nur. Schwarzer Editor-Grund (kein dark:). --}}
 
 @assets
@@ -10,11 +10,13 @@
 
 @php
     $zentrumNode = collect($netz['nodes'])->firstWhere('kind', 'zentrum');
-    $counts = $netz['meta']['counts'] ?? ['stern3' => 0, 'stern2' => 0, 'basis' => 0];
-    $typDefault = $netz['meta']['typ_default'] ?? ['stern3' => true, 'stern2' => true];
-    // Zweistufige Inspire-Harmonie: nur ★★★ (L3) + ★★ (L2). „★ Basis" (stern1) war
-    // strukturell leer und kollidierte mit den grünen „Basisrezept"-Knoten — entfernt.
-    $chips = ['stern3' => ['#fcd34d', '★★★ Best'], 'stern2' => ['#f59e0b', '★★ Good']];
+    $counts = $netz['meta']['counts'] ?? ['stern3' => 0, 'kontrast' => 0, 'basis' => 0];
+    $typDefault = $netz['meta']['typ_default'] ?? ['stern3' => true, 'kontrast' => true];
+    // Spec 60: ★★★ = echtes Food Pairing; Kontrast = Lieferant für einen offenen Bedarf. 2★ ist Rauschen.
+    $istGericht = ($netz['meta']['art'] ?? null) === 'gericht';
+    $chips = $istGericht
+        ? ['stern3' => ['#fcd34d', 'passt dazu'], 'kontrast' => ['#22d3ee', 'deckt offenen Bedarf']]
+        : ['stern3' => ['#fcd34d', '★★★ harmoniert'], 'kontrast' => ['#22d3ee', 'Kontrast']];
 @endphp
 <x-foodalchemist::modal name="pairing-netz" title="Pairing-Netz: {{ $zentrumNode['label'] ?? '' }}" size="max-w-7xl">
     @if($zentrumNode === null)
@@ -48,7 +50,7 @@
                         {{ $label }} ({{ $counts[$typ] ?? 0 }})
                     </button>
                 @endforeach
-                <span class="text-slate-500 ml-2">Basisrezepte: {{ $counts['basis'] ?? 0 }} · Klick auf Rezept = öffnen · Scroll/Ziehen = Zoom/Pan</span>
+                <span class="text-slate-500 ml-2">{{ $istGericht ? 'Bestandteile: '.($counts['bestandteile'] ?? 0).' · Vorschläge: '.($counts['basis'] ?? 0) : 'Basisrezepte: '.($counts['basis'] ?? 0) }} · Klick auf Rezept = öffnen · Scroll/Ziehen = Zoom/Pan</span>
             </div>
 
             <svg viewBox="0 0 1200 980" preserveAspectRatio="xMidYMid meet" class="w-full rounded-xl" style="height:76vh; background:#0b1120" data-fa-netz-mount></svg>
@@ -56,13 +58,16 @@
             {{-- Legende --}}
             <div class="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-[10px] text-slate-400" data-netz-legende>
                 <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full" style="background:#fdba74"></span> Gericht</span>
-                <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full" style="background:#ddd6fe"></span> Kern-Anker (★)</span>
+                @if($istGericht)
+                    <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full" style="background:#bbf7d0"></span> Bestandteil (Basisrezept des Gerichts)</span>
+                @else
+                    <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full" style="background:#ddd6fe"></span> Kern-Anker mit Anteil am Aromenprofil</span>
+                @endif
                 <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full" style="background:#86efac"></span> Basisrezept</span>
                 <span class="text-slate-600">|</span>
-                <span class="inline-flex items-center gap-1"><svg width="22" height="6"><line x1="0" y1="3" x2="22" y2="3" stroke="#fcd34d" stroke-width="2.4"/></svg> ★★★ Best-Match</span>
-                <span class="inline-flex items-center gap-1"><svg width="22" height="6"><line x1="0" y1="3" x2="22" y2="3" stroke="#f59e0b" stroke-width="2" stroke-dasharray="5 3"/></svg> ★★ Good-Match</span>
-                <span class="text-slate-600">|</span>
-                <span class="inline-flex items-center gap-1"><svg width="22" height="6"><line x1="0" y1="3" x2="22" y2="3" stroke="#fcd34d" stroke-width="3.2"/></svg> Linie zwischen Kern-Ankern = wie gut sie zusammenpassen (★★–★★★)</span>
+                <span class="inline-flex items-center gap-1"><svg width="22" height="6"><line x1="0" y1="3" x2="22" y2="3" stroke="#fcd34d" stroke-width="2.4"/></svg> ★★★ harmoniert (gemessen)</span>
+                <span class="inline-flex items-center gap-1"><svg width="22" height="6"><line x1="0" y1="3" x2="22" y2="3" stroke="#22d3ee" stroke-width="2" stroke-dasharray="1 4"/></svg> Kontrast: deckt einen offenen Bedarf</span>
+                <span class="inline-flex items-center gap-1"><svg width="22" height="6"><line x1="0" y1="3" x2="22" y2="3" stroke="#f43f5e" stroke-width="2" stroke-dasharray="5 3"/></svg> Konflikt zwischen Kern-Ankern</span>
             </div>
         </div>
     @endif

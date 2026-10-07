@@ -18,15 +18,17 @@ it('liefert alle Map-Schlüssel, die Views und Bausteine erwarten', function () 
     }
 });
 
-it('trägt die Jarvis-Skala (R14): Tabelle 12px, Zellen py-1/px-3, Header einzeilig, Labels 10px', function () {
+it('trägt die fa-pass-Skala: Tabelle 13 px, Labels 12 px normal geschrieben, keine Großbuchstaben-Labels', function () {
+    // fa-pass Welle 0 (2026-10-05): die 10-px-Großbuchstaben-Labels der Jarvis-Skala (R14) sind abgelöst —
+    // Mindestgröße 12 px, Labels normal geschrieben (Lesbarkeit an der Ausgabe).
     $maps = Ui::maps();
 
-    expect($maps['table'])->toContain('text-xs')
-        ->and($maps['td'])->toContain('py-1')->toContain('px-3')
-        ->and($maps['th'])->toContain('whitespace-nowrap')
-        ->and($maps['input'])->toContain('text-xs')
-        ->and($maps['dt'])->toContain('text-[10px]')->toContain('uppercase')
-        ->and($maps['label'])->toContain('uppercase tracking-wider');
+    expect($maps['table'])->toContain('text-[13px]')
+        ->and($maps['td'])->toContain('px-3')
+        ->and($maps['th'])->toContain('whitespace-nowrap')->toContain('text-[12px]')
+        ->and($maps['input'])->toContain('text-[13px]')
+        ->and($maps['dt'])->toContain('text-[12px]')->not->toContain('uppercase')
+        ->and($maps['label'])->toContain('text-[12px]')->not->toContain('uppercase');
 });
 
 it('kennt GP- UND Rezept-/Gericht-Status als einheitliche Pills (#4)', function () {

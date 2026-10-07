@@ -3,7 +3,7 @@
 
 <x-ui-page>
     <x-slot:navbar>
-        <x-ui-page-navbar :title="$karte->name" icon="heroicon-o-clipboard-document-list" />
+        <x-foodalchemist::shell.page-navbar :title="$karte->name" icon="heroicon-o-clipboard-document-list" />
     </x-slot:navbar>
 
     @php($brand = ($branding['color'] ?? '#6d28d9') ?: '#6d28d9')

@@ -135,6 +135,55 @@ class DataQualityService
     private const NAME_TRENNER_RAND = '/(^[\s|,;:\-\x{2013}]|[\s|,;:\-\x{2013}]$)/u';
 
     /**
+     * Anzeige-Namen der Kaskaden-Metriken, die nicht aus einem Register (Tranche A/C/D) kommen.
+     * Eine Stelle für Messung und Anzeige: die Ebenen-Messung liest sie, und
+     * {@see metrikLabel} gibt sie an Verlauf und Drift-Signal weiter, damit dort kein
+     * roher Metrik-Schlüssel auf dem Bildschirm landet.
+     */
+    private const METRIK_LABELS = [
+        'la_strukturiert' => 'Erfasste Lieferantenartikel',
+        'la_gemappt' => 'davon einem Grundprodukt zugeordnet',
+        'la_needs_review' => 'Lieferantenartikel zur Prüfung',
+        'la_konformitaet' => 'Lieferantenartikel mit Verstoß gegen die Anlageregeln',
+        'gp_approved' => 'Freigegebene Grundprodukte',
+        'gp_tentative' => 'Grundprodukte im Entwurf (zur Prüfung)',
+        'gp_kein_la' => 'Grundprodukte ohne Lieferantenartikel',
+        'gp_kein_preis' => 'Grundprodukte mit Artikeln, aber ohne Preis',
+        'gp_kein_lead' => 'Grundprodukte ohne gewählten Hauptartikel',
+        'gp_lead_ohne_preis' => 'Grundprodukte, deren Hauptartikel keinen gültigen Preis hat',
+        'gp_allergen_konfidenz' => 'Grundprodukte ohne ausgewertete Allergene',
+        'gp_anker_fehlt' => 'Genutzte Grundprodukte ohne Aromaprofil',
+        'gp_tentative_genutzt' => 'Grundprodukte im Entwurf, die schon in Rezepten stecken',
+        'gp_konformitaet' => 'Grundprodukte mit Verstoß gegen die Anlageregeln',
+        'br_ek_null' => 'Basisrezepte ohne Einkaufspreis',
+        'br_ek_teil' => 'Basisrezepte mit Zutaten ohne Preis',
+        'br_anker_fehlt' => 'Basisrezepte ohne Aromaprofil',
+        'vk_ek_null' => 'Gerichte ohne Einkaufspreis',
+        'vk_ek_teil' => 'Gerichte mit Zutaten ohne Preis',
+        'vk_anker_fehlt' => 'Gerichte ohne Aromaprofil',
+        'vk_servierform_unbestimmt' => 'Gerichte ohne festgelegte Servierform',
+        'ri_gemini_unverifiziert' => 'Zutatenzuordnungen der KI, noch nicht geprüft',
+    ];
+
+    /**
+     * Anzeige-Name einer Metrik (Kaskade oder Register) oder null, wenn der Schlüssel
+     * keiner Metrik dieses Service gehört. Liest nur die Definitionen, misst nichts.
+     */
+    public function metrikLabel(string $key): ?string
+    {
+        if (isset(self::METRIK_LABELS[$key])) {
+            return self::METRIK_LABELS[$key];
+        }
+        foreach ([$this->rezeptQualitaetChecks(), $this->konzeptChecks(), $this->foodbookChecks()] as $checks) {
+            if (isset($checks[$key])) {
+                return $checks[$key]['label'];
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Voll-Messung aller Kaskaden-Ebenen.
      *
      * @return array<string,array{label:string,metriken:list<array<string,mixed>>}>
@@ -211,7 +260,7 @@ class DataQualityService
                     // Fester Schweregrad je Check schlägt die reine Mengen-Heuristik: „ohne Zubereitung"
                     // ist auch bei 3 Treffern kritisch, „verwaist" auch bei 300 nur Info (Spec 21 §2).
                     $m['signal']['sev'] ?? ($wert > self::ROT_SCHWELLE ? SignalSeverity::Kritisch : SignalSeverity::Warnung),
-                    $wert . ' — ' . $m['label'],
+                    $m['label'] . ': ' . $wert,
                     [
                         'dedup_key' => $m['signal']['dedup'],
                         'description' => $m['signal']['desc'] ?? $m['label'],
@@ -243,11 +292,11 @@ class DataQualityService
             ->distinct()->count('artifact_id');
 
         return [
-            $this->info('la_strukturiert', 'Strukturierte LAs (Arbeitsmenge)', $strukturiert),
-            $this->info('la_gemappt', 'davon GP-gemappt', $gemappt),
-            $this->gap('la_needs_review', 'LAs in Review-Queue', $needsReview),
-            $this->gap('la_konformitaet', 'LAs mit offenem Konformitäts-Hinweis (Regelwerk)', $konfLa, SignalTyp::KonformitaetLa, 'dq-la-konformitaet',
-                'Lieferantenartikel, deren gespiegelte Necta-Felder gegen das LA-Regelwerk verstoßen (offene §-Hinweise).'),
+            $this->info('la_strukturiert', self::METRIK_LABELS['la_strukturiert'], $strukturiert),
+            $this->info('la_gemappt', self::METRIK_LABELS['la_gemappt'], $gemappt),
+            $this->gap('la_needs_review', self::METRIK_LABELS['la_needs_review'], $needsReview),
+            $this->gap('la_konformitaet', self::METRIK_LABELS['la_konformitaet'], $konfLa, SignalTyp::KonformitaetLa, 'dq-la-konformitaet',
+                'Bei diesen Lieferantenartikeln verstoßen Angaben aus dem Lieferantenkatalog gegen die Anlageregeln. Artikel öffnen und die markierten Felder prüfen.'),
         ];
     }
 
@@ -291,8 +340,8 @@ class DataQualityService
             ->distinct()->count('artifact_id');
 
         return [
-            $this->info('gp_approved', 'GPs approved', $approved),
-            $this->info('gp_tentative', 'GPs tentative (Review-Queue)', $tentative),
+            $this->info('gp_approved', self::METRIK_LABELS['gp_approved'], $approved),
+            $this->info('gp_tentative', self::METRIK_LABELS['gp_tentative'], $tentative),
             // Signal-Emission bewusst ohne Deskriptor: SignalDetektorService::datenqualitaetGpLa
             // besitzt diesen Befund bereits (kein Doppel-Signal im Scheduler). Bleiben Mess-Metriken.
             //
@@ -301,19 +350,19 @@ class DataQualityService
             // eine Auswahl-Entscheidung (kein Lead). Nur die letzte trägt den Auto-Fix-Knopf
             // (SignalCockpit::DETERMINISTIC); vorher versprach er eine Reparatur über alle
             // drei und bewegte in der Mehrzahl der Fälle keine Zahl.
-            $this->gap('gp_kein_la', 'approved-GPs ohne Lieferantenartikel (Beschaffungs-Lücke)', $keinLa),
-            $this->gap('gp_kein_preis', 'approved-GPs: LAs vorhanden, keiner bepreist', $keinPreis),
-            $this->gap('gp_kein_lead', 'approved-GPs: bepreister LA vorhanden, kein Lead gewählt', $keinLead),
-            $this->gap('gp_lead_ohne_preis', 'approved-GPs: Lead-LA ohne gültigen Preis', $leadOhnePreis, SignalTyp::DatenqualitaetGpLa, 'dq-gp-lead-ohne-preis',
-                'Lead-LA gesetzt, aber ohne aktiven Preis in der Lesart des Money-Paths (GL-11 T1: Status 0/2, nicht gesperrt, Betrag > 0) → GP löst nicht auf einen EK auf.'),
-            $this->gap('gp_allergen_konfidenz', 'approved-GPs ohne Allergen-Konfidenz', $allergenKonfidenzFehlt, SignalTyp::DatenqualitaetGpLa, 'dq-gp-allergen-konfidenz',
-                'Allergen-Aggregation (ALL-MAXIMAL + Konfidenz) nie auf GP-Ebene persistiert.'),
-            $this->gap('gp_anker_fehlt', 'genutzte approved-GPs ohne Flavor-Anker', $ankerFehlt, SignalTyp::AnkerFehlt, 'dq-gp-anker-fehlt',
-                'Genutzte GPs ohne Anker-Mapping sind für den Pairing-Graph unsichtbar.'),
-            $this->gap('gp_tentative_genutzt', 'tentative GPs in Rezepten genutzt', $tentativeGenutzt, SignalTyp::DatenqualitaetGpLa, 'dq-gp-tentative-genutzt',
-                'Tentative (unkuratierte) GPs sollten nicht in Rezepten hängen — approven oder ersetzen.'),
-            $this->gap('gp_konformitaet', 'GPs mit offenem Konformitäts-Hinweis (Regelwerk)', $konfGp, SignalTyp::KonformitaetGp, 'dq-gp-konformitaet',
-                'Grundprodukte, deren Felder gegen das GP-Regelwerk verstoßen (offene §-Hinweise aus dem Konformitäts-Critic).'),
+            $this->gap('gp_kein_la', self::METRIK_LABELS['gp_kein_la'], $keinLa),
+            $this->gap('gp_kein_preis', self::METRIK_LABELS['gp_kein_preis'], $keinPreis),
+            $this->gap('gp_kein_lead', self::METRIK_LABELS['gp_kein_lead'], $keinLead),
+            $this->gap('gp_lead_ohne_preis', self::METRIK_LABELS['gp_lead_ohne_preis'], $leadOhnePreis, SignalTyp::DatenqualitaetGpLa, 'dq-gp-lead-ohne-preis',
+                'Der gewählte Hauptartikel hat keinen gültigen Preis (gesperrt, ohne Preis oder Betrag 0). Das Grundprodukt bekommt dadurch keinen Einkaufspreis. Einen Artikel mit Preis als Hauptartikel wählen oder den Preis pflegen.'),
+            $this->gap('gp_allergen_konfidenz', self::METRIK_LABELS['gp_allergen_konfidenz'], $allergenKonfidenzFehlt, SignalTyp::DatenqualitaetGpLa, 'dq-gp-allergen-konfidenz',
+                'Die Allergene der Lieferantenartikel wurden für diese Grundprodukte nie zusammengeführt. Die Allergenangaben in den Rezepten sind dadurch nicht gesichert.'),
+            $this->gap('gp_anker_fehlt', self::METRIK_LABELS['gp_anker_fehlt'], $ankerFehlt, SignalTyp::AnkerFehlt, 'dq-gp-anker-fehlt',
+                'Diese Grundprodukte stecken in Rezepten, haben aber kein Aromaprofil. Für Kombinationsvorschläge sind sie dadurch unsichtbar.'),
+            $this->gap('gp_tentative_genutzt', self::METRIK_LABELS['gp_tentative_genutzt'], $tentativeGenutzt, SignalTyp::DatenqualitaetGpLa, 'dq-gp-tentative-genutzt',
+                'Nicht freigegebene Grundprodukte sollten nicht in Rezepten stecken. Grundprodukt prüfen und freigeben oder in den Rezepten ersetzen.'),
+            $this->gap('gp_konformitaet', self::METRIK_LABELS['gp_konformitaet'], $konfGp, SignalTyp::KonformitaetGp, 'dq-gp-konformitaet',
+                'Bei diesen Grundprodukten verstoßen Angaben gegen die Anlageregeln, zum Beispiel bei Benennung oder Pflichtangaben. Grundprodukt öffnen und die markierten Felder prüfen.'),
         ];
     }
 
@@ -326,11 +375,12 @@ class DataQualityService
         $ankerFehlt = $this->rezepte($team, false)->whereNotExists($this->rezeptHatAnker())->count();
 
         return [
-            $this->gap('br_ek_null', 'Basisrezepte ohne EK', $ekNull, SignalTyp::EkKetteUnvollstaendig, 'dq-br-ek-null',
-                'Basisrezepte, deren Zutaten-Kette auf keinen Preis auflöst.'),
-            $this->gap('br_ek_teil', 'Basisrezepte teil-unbepreist', $ekTeil, SignalTyp::EkKetteUnvollstaendig, 'dq-br-ek-teil',
-                'Nur ein Teil der Zutaten hat einen Preis → EK unterschätzt.'),
-            $this->gap('br_anker_fehlt', 'Basisrezepte ohne Flavor-Anker', $ankerFehlt, SignalTyp::AnkerFehlt, 'dq-br-anker-fehlt'),
+            $this->gap('br_ek_null', self::METRIK_LABELS['br_ek_null'], $ekNull, SignalTyp::EkKetteUnvollstaendig, 'dq-br-ek-null',
+                'Für keine Zutat dieser Basisrezepte ist ein Preis hinterlegt, der Einkaufspreis lässt sich nicht berechnen. Zutaten Grundprodukten mit Lieferantenpreis zuordnen.'),
+            $this->gap('br_ek_teil', self::METRIK_LABELS['br_ek_teil'], $ekTeil, SignalTyp::EkKetteUnvollstaendig, 'dq-br-ek-teil',
+                'Einzelne Zutaten haben keinen Preis. Der Einkaufspreis ist dadurch zu niedrig. Fehlende Preise ergänzen.'),
+            $this->gap('br_anker_fehlt', self::METRIK_LABELS['br_anker_fehlt'], $ankerFehlt, SignalTyp::AnkerFehlt, 'dq-br-anker-fehlt',
+                'Diese Basisrezepte haben kein Aromaprofil. Für Kombinationsvorschläge sind sie dadurch unsichtbar.'),
         ];
     }
 
@@ -344,11 +394,14 @@ class DataQualityService
         $unbestimmt = $this->unbestimmteServierform($team);
 
         return [
-            $this->gap('vk_ek_null', 'VK-Gerichte ohne EK', $ekNull, SignalTyp::EkKetteUnvollstaendig, 'dq-vk-ek-null'),
-            $this->gap('vk_ek_teil', 'VK-Gerichte teil-unbepreist', $ekTeil, SignalTyp::EkKetteUnvollstaendig, 'dq-vk-ek-teil'),
-            $this->gap('vk_anker_fehlt', 'VK-Gerichte ohne Flavor-Anker (graph-blind)', $ankerFehlt, SignalTyp::AnkerFehlt, 'dq-vk-anker-fehlt'),
-            $this->gap('vk_servierform_unbestimmt', 'VK-Gerichte mit Servierform „unbestimmt"', $unbestimmt, SignalTyp::ServierformUnbestimmt, 'dq-vk-servierform-unbestimmt',
-                'Standard-Darreichung steht auf „unbestimmt" (Review) — Servierform kuratieren.'),
+            $this->gap('vk_ek_null', self::METRIK_LABELS['vk_ek_null'], $ekNull, SignalTyp::EkKetteUnvollstaendig, 'dq-vk-ek-null',
+                'Für keine Zutat dieser Gerichte ist ein Preis hinterlegt. Wareneinsatz und Marge lassen sich nicht berechnen. Zutaten Grundprodukten mit Lieferantenpreis zuordnen.'),
+            $this->gap('vk_ek_teil', self::METRIK_LABELS['vk_ek_teil'], $ekTeil, SignalTyp::EkKetteUnvollstaendig, 'dq-vk-ek-teil',
+                'Einzelne Zutaten haben keinen Preis. Der Wareneinsatz ist dadurch zu niedrig und die Marge zu hoch ausgewiesen. Fehlende Preise ergänzen.'),
+            $this->gap('vk_anker_fehlt', self::METRIK_LABELS['vk_anker_fehlt'], $ankerFehlt, SignalTyp::AnkerFehlt, 'dq-vk-anker-fehlt',
+                'Diese Gerichte haben kein Aromaprofil. Für Kombinationsvorschläge und Menüplanung sind sie dadurch unsichtbar.'),
+            $this->gap('vk_servierform_unbestimmt', self::METRIK_LABELS['vk_servierform_unbestimmt'], $unbestimmt, SignalTyp::ServierformUnbestimmt, 'dq-vk-servierform-unbestimmt',
+                'Die Standard-Servierform steht noch auf „unbestimmt“. Im Gericht festlegen, wie es serviert wird.'),
         ];
     }
 
@@ -392,9 +445,8 @@ class DataQualityService
                 'typ' => SignalTyp::RezeptOhneZubereitung,
                 'dedup' => 'dq-rezept-ohne-zubereitung',
                 'sev' => SignalSeverity::Kritisch,
-                'desc' => 'Ohne Zubereitungstext ist das Rezept nicht produzierbar — Küche kann es nicht ausführen, '
-                    . 'Regeneration/Prozessanker hängen daran. Prüfen: steht der Text noch unübernommen in '
-                    . '`excel_raw_preparation` (Import-Rest)?',
+                'desc' => 'Ohne Zubereitungstext kann die Küche das Rezept nicht nachkochen, und die Angaben zum '
+                    . 'Regenerieren und zum Ablauf fehlen ebenfalls. Zubereitung im Rezept ergänzen.',
                 // LENGTH: SQLite zählt Zeichen, MySQL Bytes — bei Schwelle 20 fachlich belanglos
                 // (Umlaute machen MySQL nur minimal nachsichtiger), dafür ohne Dialekt-Fallunterscheidung.
                 'q' => fn (Team $t) => $this->produktiveRezepte($t)
@@ -405,11 +457,10 @@ class DataQualityService
                 'typ' => SignalTyp::RezeptFeedbackKritisch,
                 'dedup' => 'dq-rezept-feedback-kritisch',
                 'sev' => SignalSeverity::Warnung,
-                'desc' => 'Die Küche hat dieses Rezept mehrfach schlecht bewertet (Ø ≤ '
-                    . self::FEEDBACK_SCHWELLE . ' bei mindestens ' . self::FEEDBACK_MIN_N . ' Bewertungen). '
-                    . 'Das ist der einzige Rezept-Befund, der von Menschen kommt, die es gekocht haben — '
-                    . 'ein Datenfehler ist es nicht, ein Rezeptfehler oft schon. Die Einträge stehen im '
-                    . 'Feedback-Tab des Rezepts; von dort führt „Weiterentwickeln" direkt in eine Iteration.',
+                'desc' => 'Die Küche hat dieses Rezept mehrfach schlecht bewertet (Durchschnitt höchstens '
+                    . str_replace('.', ',', (string) self::FEEDBACK_SCHWELLE) . ' bei mindestens ' . self::FEEDBACK_MIN_N . ' Bewertungen). '
+                    . 'Das ist kein Datenfehler, aber oft ein Rezeptfehler. Die Bewertungen stehen im Rezept '
+                    . 'unter „Feedback“, von dort führt „Weiterentwickeln“ direkt in eine neue Fassung.',
                 // Einzelne Ausreisser erzeugen kein Signal: eine schlechte Schicht ist kein
                 // schlechtes Rezept. Erst die WIEDERHOLUNG ist ein Befund.
                 'q' => fn (Team $t) => $this->produktiveRezepte($t)->whereIn('id',
@@ -427,15 +478,14 @@ class DataQualityService
                 ),
             ],
             'rezept_feedback_stark' => [
-                'label' => 'Küchen-Favoriten (wiederholt Bestnoten)',
+                'label' => 'Küchen-Favoriten mit wiederholten Bestnoten',
                 'typ' => SignalTyp::RezeptFeedbackStark,
                 'dedup' => 'dq-rezept-feedback-stark',
                 'sev' => SignalSeverity::Info,
-                'desc' => 'Die Küche bewertet dieses Rezept wiederholt mit Bestnoten (Ø ≥ '
-                    . self::FEEDBACK_STARK_SCHWELLE . ' bei mindestens ' . self::FEEDBACK_STARK_MIN_N . ' Bewertungen). '
-                    . 'Kein Mangel, sondern eine Empfehlung: solche Rezepte gehören ins Standardrepertoire, in die '
-                    . 'nächste Karte oder als Vorlage für Varianten. Ein System, das nur Probleme meldet, wird als '
-                    . 'Nörgler gelesen — und was am Posten funktioniert, weiß sonst niemand ausser dem Posten.',
+                'desc' => 'Die Küche bewertet dieses Rezept wiederholt mit Bestnoten (Durchschnitt mindestens '
+                    . str_replace('.', ',', (string) self::FEEDBACK_STARK_SCHWELLE) . ' bei mindestens ' . self::FEEDBACK_STARK_MIN_N . ' Bewertungen). '
+                    . 'Kein Mangel, sondern eine Empfehlung: ins Standardrepertoire aufnehmen, auf die nächste Karte '
+                    . 'setzen oder als Vorlage für Varianten nutzen.',
                 'q' => fn (Team $t) => $this->produktiveRezepte($t)->whereIn('id',
                     FoodAlchemistRecipeFeedback::visibleToTeam($t)
                         ->where('quelle', FeedbackQuelle::Kueche->value)
@@ -448,27 +498,26 @@ class DataQualityService
                 ),
             ],
             'rezept_mengen_luecke' => [
-                'label' => 'Rezepte mit Mengen-Lücke (Zutat ohne Menge)',
+                'label' => 'Rezepte mit Zutat ohne Menge',
                 'typ' => SignalTyp::RezeptMengenLuecke,
                 'dedup' => 'dq-rezept-mengen-luecke',
                 'sev' => SignalSeverity::Kritisch,
-                'desc' => 'Mindestens eine Zutat steht auf Menge 0 (die Spalte ist NOT NULL, 0 ist der Marker für '
-                    . '„nicht bekannt"). Solche Zutaten fallen aus EK, Yield und Nährwerten heraus — die Kalkulation '
-                    . 'des Rezepts ist zu niedrig, ohne dass man es sieht.',
+                'desc' => 'Mindestens eine Zutat steht auf Menge 0. Sie fällt aus Einkaufspreis, Ausbeute und '
+                    . 'Nährwerten heraus, der Wareneinsatz ist dadurch unbemerkt zu niedrig. Mengen im Rezept ergänzen.',
                 'q' => fn (Team $t) => $this->alleRezepte($t)->whereExists(fn ($q) => $q->select(DB::raw(1))
                     ->from('foodalchemist_recipe_ingredients as ri')
                     ->whereColumn('ri.recipe_id', 'foodalchemist_recipes.id')
                     ->whereNull('ri.deleted_at')->where('ri.quantity', 0)),
             ],
             'rezept_allergen_unbelastbar' => [
-                'label' => 'Kundenexponierte Rezepte mit unbelastbaren Allergenen',
+                'label' => 'Rezepte für Gäste mit ungesicherten Allergenen',
                 'typ' => SignalTyp::RezeptAllergenUnbelastbar,
                 'dedup' => 'dq-rezept-allergen-unbelastbar',
                 'sev' => SignalSeverity::Kritisch,
-                'desc' => 'Das Rezept erreicht über Konzept, Foodbook, Speiseplan oder Paket den Gast, aber seine '
-                    . 'Allergen-Auskunft ist nicht belastbar: Konfidenz `unknown` oder mindestens ein Allergen steht '
-                    . 'auf `unbekannt`. Kritisch, weil daraus eine Kunden-Auskunft wird. Nicht exponierte Rezepte '
-                    . 'bleiben bewusst außen vor — dort ist die Lücke Pflege, keine Haftung.',
+                'desc' => 'Das Rezept geht über Konzept, Foodbook, Speiseplan oder Paket an den Gast, aber seine '
+                    . 'Allergenangabe ist nicht gesichert: die Angaben sind ungeprüft oder mindestens ein Allergen '
+                    . 'steht auf „unbekannt“. Kritisch, weil daraus eine Auskunft an den Gast wird. Zutaten prüfen '
+                    . 'und Allergene vervollständigen. Rezepte, die nicht beim Gast landen, zählen hier nicht mit.',
                 'q' => fn (Team $t) => $this->kundenExponiert($this->alleRezepte($t))->where(function ($w) {
                     $w->where('allergens_confidence', 'unknown')->orWhereNull('allergens_confidence');
                     foreach (self::ALLERGEN_SPALTEN as $spalte) {
@@ -477,12 +526,13 @@ class DataQualityService
                 }),
             ],
             'rezept_zutaten_ungemappt' => [
-                'label' => 'Rezepte mit ungemappten Zutaten',
+                'label' => 'Rezepte mit Zutaten ohne Grundprodukt',
                 'typ' => SignalTyp::RezeptZutatenUngemappt,
                 'dedup' => 'dq-rezept-zutaten-ungemappt',
                 'sev' => SignalSeverity::Warnung,
-                'desc' => 'Zutaten ohne GP-Mapping zählen weder in EK noch in Allergene/Nährwerte — jede Aggregation '
-                    . 'am Rezept ist damit systematisch unvollständig.',
+                'desc' => 'Zutaten ohne Zuordnung zu einem Grundprodukt fehlen im Einkaufspreis, bei den Allergenen '
+                    . 'und in den Nährwerten. Alle Summen am Rezept sind dadurch unvollständig. Zutaten im Rezept '
+                    . 'einem Grundprodukt zuordnen.',
                 'q' => fn (Team $t) => $this->alleRezepte($t)->where('n_ingredients_unmapped', '>', 0),
             ],
             'rezept_ein_zutat' => [
@@ -490,19 +540,18 @@ class DataQualityService
                 'typ' => SignalTyp::RezeptEinZutat,
                 'dedup' => 'dq-rezept-ein-zutat',
                 'sev' => SignalSeverity::Warnung,
-                'desc' => 'Ein „Rezept" mit einer oder keiner Zutat ist nach Regelwerk_Basisrezepte §10 meist gar '
-                    . 'keins: entweder ein Grundprodukt, das als Rezept angelegt wurde, oder ein Fehl-Import, dessen '
-                    . 'Zutatenliste nie ankam.',
+                'desc' => 'Ein Rezept mit einer oder keiner Zutat ist meist keins: entweder ein Grundprodukt, das '
+                    . 'als Rezept angelegt wurde, oder ein unvollständiger Import, bei dem die Zutatenliste fehlt.',
                 'q' => fn (Team $t) => $this->produktiveRezepte($t)->where('n_ingredients_total', '<=', 1),
             ],
             'rezept_kategorie_problem' => [
-                'label' => 'Rezepte ohne/mit stillgelegter Kategorie',
+                'label' => 'Rezepte ohne gültige Kategorie',
                 'typ' => SignalTyp::RezeptKategorieProblem,
                 'dedup' => 'dq-rezept-kategorie-problem',
                 'sev' => SignalSeverity::Warnung,
-                'desc' => 'Kategorie fehlt, oder das Gericht hängt an einer stillgelegten Speisen-Hauptgruppe '
-                    . '(Taxonomie-Neutralisierung: APE/SNK/ALC/BVK/ALL sind inaktiv). Ohne gültige Kategorie ist das '
-                    . 'Rezept in Browser, Slot-Filtern und Gericht-Pickern unauffindbar.',
+                'desc' => 'Die Kategorie fehlt, oder das Gericht hängt an einer Hauptgruppe, die nicht mehr verwendet '
+                    . 'wird. Ohne gültige Kategorie findet man das Rezept weder in der Rezeptliste noch bei der '
+                    . 'Gerichtauswahl. Kategorie im Rezept setzen.',
                 // Zwei getrennte Taxonomien, deshalb zwei Zweige (verifiziert an den Migrationen):
                 //  · VK-Gericht  → `dish_main_group_id` direkt am Rezept (Modell A), Ziel `dish_main_groups`
                 //    — DIESE Tabelle trägt `is_inactive` (269er-Neutralisierung).
@@ -515,14 +564,14 @@ class DataQualityService
                     ->orWhere(fn ($br) => $br->where('is_sales_recipe', false)->whereNull('category_id'))),
             ],
             'rezept_yield_implausibel' => [
-                'label' => 'Rezepte mit fehlender/unmöglicher Ausbeute',
+                'label' => 'Rezepte mit fehlender oder unmöglicher Ausbeute',
                 'typ' => SignalTyp::RezeptYieldImplausibel,
                 'dedup' => 'dq-rezept-yield-implausibel',
                 'sev' => SignalSeverity::Warnung,
-                'desc' => 'Entweder fehlt die Ausbeute trotz vorhandener Zutaten (dann rechnet nichts pro kg/Portion), '
-                    . 'oder sie übersteigt die Roh-Einsatzmasse — physikalisch unmöglich, weil Putz- und Garverlust '
-                    . 'die Masse nur senken können. Zweiter Fall heißt fast immer: Ausbeute ist manuell übersteuert '
-                    . 'oder stammt aus einem Stand vor der letzten Zutaten-Änderung → Neuberechnung anstoßen.',
+                'desc' => 'Entweder fehlt die Ausbeute, obwohl Zutaten da sind (dann rechnet nichts pro kg oder '
+                    . 'Portion), oder sie ist höher als die eingesetzte Rohware. Das ist unmöglich, weil Putz- und '
+                    . 'Garverlust die Menge nur senken. Meist wurde die Ausbeute von Hand überschrieben oder stammt '
+                    . 'aus einer älteren Zutatenliste. Rezept neu berechnen lassen.',
                 // Bewusst NICHT gebaut: der Spec-Zweig „yield < 0,3 × Einsatzmasse = >70 % Verlust".
                 // Er ist deterministisch nicht bewertbar, weil genau dieser Wert das REGULÄRE Ergebnis
                 // des Recomputes ist, sobald Putz-/Garverlust deklariert sind (Reduktionen, Fonds,
@@ -544,37 +593,35 @@ class DataQualityService
                             . $this->einsatzmasseGrammSql() . ')'))),
             ],
             'rezept_naming_regelwerk' => [
-                'label' => 'Rezepte mit Naming-Verstoß',
+                'label' => 'Rezepte mit Verstoß gegen die Benennungsregeln',
                 'typ' => SignalTyp::RezeptNamingRegelwerk,
                 'dedup' => 'dq-rezept-naming-regelwerk',
                 'sev' => SignalSeverity::Warnung,
-                'desc' => 'Deterministisch prüfbare Verstöße gegen das Naming: doppelte Leerzeichen, führende/'
-                    . 'schließende Trennzeichen, Grammatur im Namen ohne unterscheidende Funktion — bei VK-Gerichten '
-                    . 'zusätzlich fehlendes [HG]-Präfix (Pipe-Skelett, Regelwerk_Verkaufsgerichte §1) und '
-                    . 'Katalog-Marker (CC:, STF:, (BOX) …). Namen sind die Suchoberfläche des Bestands: was falsch '
-                    . 'heißt, wird doppelt angelegt.',
+                'desc' => 'Der Name verstößt gegen die Benennungsregeln: doppelte Leerzeichen, Trennzeichen am Anfang '
+                    . 'oder Ende, eine Grammatur ohne Grund. Bei Gerichten zusätzlich: das Kürzel der Hauptgruppe am '
+                    . 'Anfang fehlt, oder Katalog-Kennzeichen wie „CC:“, „STF:“ oder „(BOX)“ stehen im Namen. Falsch '
+                    . 'benannte Rezepte findet man schlecht und legt sie doppelt an.',
                 'q' => fn (Team $t) => $this->alleRezepte($t)->whereIn('id', $this->namingVerstossIds($t)),
             ],
             'rezept_dublette' => [
-                'label' => 'Rezepte mit Namens-Dublette',
+                'label' => 'Rezepte mit gleichem Namen',
                 'typ' => SignalTyp::RezeptDublette,
                 'dedup' => 'dq-rezept-dublette',
                 'sev' => SignalSeverity::Warnung,
-                'desc' => 'Zwei oder mehr Rezepte derselben Art und Kategorie tragen denselben Namen (normalisiert: '
-                    . 'Groß-/Kleinschreibung, Satzzeichen und Mehrfach-Leerzeichen ignoriert). Beide Seiten werden '
-                    . 'gelistet — zusammenführen oder über die Kategorie/einen Zusatz unterscheiden. Eine andere '
-                    . 'Kategorie ist laut Regelwerk_Basisrezepte §1 ein zulässiger Diskriminator und zählt deshalb '
-                    . 'nicht als Dublette.',
+                'desc' => 'Zwei oder mehr Rezepte derselben Art und Kategorie heißen gleich (Groß- und '
+                    . 'Kleinschreibung, Satzzeichen und Leerzeichen nicht mitgezählt). Alle werden gelistet. '
+                    . 'Zusammenführen oder durch einen Zusatz im Namen unterscheiden. Gleiche Namen in '
+                    . 'unterschiedlichen Kategorien sind erlaubt und zählen nicht.',
                 'q' => fn (Team $t) => $this->alleRezepte($t)->whereIn('id', $this->dubletteIds($t)),
             ],
             'rezept_sub_stub_offen' => [
-                'label' => 'Referenzierte Sub-Rezept-Stubs ohne Inhalt',
+                'label' => 'Leere Unterrezepte, die schon verwendet werden',
                 'typ' => SignalTyp::RezeptSubStubOffen,
                 'dedup' => 'dq-rezept-sub-stub-offen',
                 'sev' => SignalSeverity::Warnung,
-                'desc' => 'Ein anderes Rezept verweist auf dieses als Sub-Rezept, aber es ist ein leerer Auto-Stub '
-                    . '(Regelwerk_Basisrezepte §4). Solange der Stub leer ist, fehlen dem Eltern-Rezept dessen Masse, '
-                    . 'Kosten und Allergene — die Aggregation des Eltern-Rezepts ist damit still unvollständig.',
+                'desc' => 'Ein anderes Rezept verwendet dieses als Unterrezept, aber es ist noch ein leerer Platzhalter. '
+                    . 'Solange es leer ist, fehlen dem übergeordneten Rezept Menge, Einkaufspreis und Allergene. '
+                    . 'Unterrezept ausarbeiten.',
                 // Spec 21 §2 schreibt `status=draft`; `RecipeService::createSubRecipeStub()` setzt real
                 // `status=stub` (ein per Hand angelegter Sub-Verweis kann als draft entstehen) → beide
                 // Status zählen, sonst geht der Regelfall durch. 0 Zutaten ist die eigentliche Aussage.
@@ -587,13 +634,13 @@ class DataQualityService
                         ->whereNull('ri.deleted_at')),
             ],
             'rezept_verwaist' => [
-                'label' => 'Rezepte verwaist (unreferenziert + unberührt)',
+                'label' => 'Rezepte, die lange nicht genutzt wurden',
                 'typ' => SignalTyp::RezeptVerwaist,
                 'dedup' => 'dq-rezept-verwaist',
                 'sev' => SignalSeverity::Info,
-                'desc' => 'Seit über ' . self::VERWAIST_TAGE . ' Tagen unberührt und in keinem Gericht, Konzept, '
-                    . 'Foodbook, Speiseplan oder Paket referenziert — Pflege-Kandidat (aktualisieren, ausmustern '
-                    . 'oder bewusst behalten). Bewusst nur Info: Bestand ist kein Fehler.',
+                'desc' => 'Seit über ' . self::VERWAIST_TAGE . ' Tagen nicht bearbeitet und in keinem Gericht, Konzept, '
+                    . 'Foodbook, Speiseplan oder Paket verwendet. Prüfen: aktualisieren, ausmustern oder bewusst '
+                    . 'behalten. Nur ein Hinweis, Bestand ist kein Fehler.',
                 'q' => fn (Team $t) => $this->unreferenziert(
                     $this->produktiveRezepte($t)->where('updated_at', '<', now()->subDays(self::VERWAIST_TAGE))
                 ),
@@ -605,15 +652,14 @@ class DataQualityService
             // eine eigene Schwelle hier hieße, dass ein Befund in der Rezept-Ansicht
             // erledigt aussieht und im Cockpit noch zählt.
             'rezept_plausi_ki' => [
-                'label' => 'Rezepte mit offenem KI-Befund',
+                'label' => 'Rezepte mit offenem KI-Hinweis',
                 'typ' => SignalTyp::RezeptPlausiKi,
                 'dedup' => 'dq-rezept-plausi-ki',
                 'sev' => SignalSeverity::Warnung,
-                'desc' => 'Der Rezept-Copilot hat am Rezept mindestens einen unentschiedenen Befund mit Konfidenz ≥ '
-                    . RecipeFindingService::KONFIDENZ_SCHWELLE . ' hinterlassen (falsche Menge, unpassende Zutat, '
-                    . 'fehlende Schlüsselkomponente). Das ist die Fehlerklasse Pfefferkörner→Pfefferrahm-Sauce, die '
-                    . 'bisher nur einmalig per Skript gefunden wurde. Aufgelöst wird sie im Rezept selbst — je '
-                    . 'Befund übernehmen oder verwerfen; ein verworfener Befund kommt nicht wieder.',
+                'desc' => 'Die KI-Prüfung hat am Rezept mindestens einen offenen Hinweis hinterlassen, bei dem sie '
+                    . 'sich sicher ist (falsche Menge, unpassende Zutat, fehlende Kernzutat). Typischer Fall: '
+                    . 'Pfefferkörner wurden als Pfefferrahmsauce erkannt. Im Rezept je Hinweis übernehmen oder '
+                    . 'verwerfen. Ein verworfener Hinweis kommt nicht wieder.',
                 // `whereIn` mit Sub-Builder statt eigenem EXISTS: die Befund-Zeilen sind
                 // bewusst NICHT team-hierarchisch (Messreihen-Ausnahme aus S5a), ihr Scope
                 // steckt im Service. Nachgebaut wäre er hier eine zweite Wahrheit.
@@ -627,17 +673,15 @@ class DataQualityService
                 ),
             ],
             'rezept_gericht_vs_komponente' => [
-                'label' => 'Rezepte mit Bauart-Zweifel (Gericht oder Komponente?)',
+                'label' => 'Rezepte, bei denen Gericht oder Komponente unklar ist',
                 'typ' => SignalTyp::RezeptGerichtVsKomponente,
                 'dedup' => 'dq-rezept-gericht-vs-komponente',
                 'sev' => SignalSeverity::Warnung,
-                'desc' => 'Der Bauart-Pass widerspricht der bestehenden Einordnung: was hier als Gericht geführt '
-                    . 'wird, ist nach Bauart eine Komponente — oder umgekehrt. Maßstab ist die 269er-Regel '
-                    . '„Wie ist es gebaut?", nie „Wo wird es eingesetzt?". Die Folgen einer falschen Einordnung '
-                    . 'sind still, aber breit: eine als Gericht geführte Sauce taucht in Gericht-Pickern und '
-                    . 'Slot-Vorschlägen auf, ein als Komponente geführtes Gericht bekommt weder Verkaufs-Facetten '
-                    . 'noch Darreichungen. Aufgelöst wird das im Rezept selbst — die Umstellung ist eine '
-                    . 'Struktur-Entscheidung und bewusst kein Knopf.',
+                'desc' => 'Die KI-Prüfung widerspricht der Einordnung: was hier als Gericht geführt wird, ist nach '
+                    . 'seinem Aufbau eine Komponente, oder umgekehrt. Maßstab ist, wie es gebaut ist, nicht wo es '
+                    . 'eingesetzt wird. Eine falsche Einordnung wirkt still, aber breit: eine als Gericht geführte '
+                    . 'Sauce erscheint in der Gerichtauswahl, ein als Komponente geführtes Gericht bekommt weder '
+                    . 'Verkaufsangaben noch Servierformen. Im Rezept selbst umstellen.',
                 'q' => fn (Team $t) => $this->alleRezepte($t)->whereIn(
                     'foodalchemist_recipes.id',
                     app(RecipeFindingService::class)
@@ -683,64 +727,60 @@ class DataQualityService
     {
         return [
             'konzept_slot_luecke' => [
-                'label' => 'Konzepte in Gebrauch mit unbesetztem Pflicht-Slot',
+                'label' => 'Konzepte im Einsatz mit unbesetzter Pflichtposition',
                 'typ' => SignalTyp::KonzeptSlotLuecke,
                 'dedup' => 'dq-konzept-slot-luecke',
                 'sev' => SignalSeverity::Warnung,
-                'desc' => 'Das Konzept ist in Gebrauch (aktiv, an einem Angebot oder in einem Foodbook), aber '
-                    . 'mindestens ein als Pflicht markierter Slot ist weder mit einem Gericht noch mit einem Paket '
-                    . 'belegt — oder es hat überhaupt keinen belegten Inhalts-Slot. Solche Lücken schlagen bis in '
-                    . 'Angebot und Kundendokument durch: der Preis pro Person rechnet ohne die fehlende Position, '
-                    . 'die Zeile fehlt im Menü.',
+                'desc' => 'Das Konzept ist im Einsatz (aktiv, in einem Angebot oder in einem Foodbook), aber '
+                    . 'mindestens eine Pflichtposition ist weder mit einem Gericht noch mit einem Paket belegt, oder '
+                    . 'es ist gar keine Position belegt. Die Lücke schlägt bis ins Angebot und ins Kundendokument '
+                    . 'durch: der Preis pro Person rechnet ohne die fehlende Position, die Zeile fehlt im Menü.',
                 'q' => fn (Team $t) => $this->konzepteInGebrauch($t)->where(fn ($w) => $w
                     ->whereExists($this->offenerPflichtSlot())
                     ->orWhereNotExists($this->belegterInhaltsSlot())),
             ],
             'konzept_ohne_wording' => [
-                'label' => 'Konzepte in Gebrauch mit Gericht ohne Kunden-Wording',
+                'label' => 'Konzepte im Einsatz mit Gericht ohne Kundentext',
                 'typ' => SignalTyp::KonzeptOhneWording,
                 'dedup' => 'dq-konzept-ohne-wording',
                 'sev' => SignalSeverity::Warnung,
-                'desc' => 'Mindestens eine Gericht-Zeile dieses Konzepts hat keine kundenfähige Bezeichnung: weder '
-                    . 'am Slot (`wording`) noch am Gericht (`sales_wording_standard`). Die Wording-Kette fällt dort '
-                    . 'auf den INTERNEN Pipe-Namen zurück ([HG]-Präfix, Bausteine mit | getrennt) — genau der Text, '
-                    . 'der nie beim Kunden landen darf. Der Foodbook-Override ist bewusst nicht mitgeprüft: er hängt '
-                    . 'am Buch, nicht am Konzept, und würde die Lücke nur an einer von n Stellen kaschieren.',
+                'desc' => 'Mindestens ein Gericht in diesem Konzept hat keinen Text für den Gast, weder an der Position '
+                    . 'noch am Gericht. Dann erscheint dort der interne Arbeitsname mit Kürzeln und Trennstrichen, '
+                    . 'genau der Text, der nie beim Kunden landen darf. Kundentext am Gericht oder an der Position '
+                    . 'ergänzen.',
                 'q' => fn (Team $t) => $this->konzepteInGebrauch($t)->whereExists($this->slotOhneWording()),
             ],
             'konzept_preisband_verletzt' => [
-                'label' => 'Konzepte in Gebrauch außerhalb des Preisbands',
+                'label' => 'Konzepte im Einsatz außerhalb der Preisspanne',
                 'typ' => SignalTyp::KonzeptPreisbandVerletzt,
                 'dedup' => 'dq-konzept-preisband-verletzt',
                 'sev' => SignalSeverity::Warnung,
-                'desc' => 'Der Ist-Preis pro Person liegt außerhalb der im Planungs-Gerüst gesetzten Spanne '
-                    . '(`price_min_pp`/`price_max_pp`) — oder ein Slot-Preisrahmen ist gerissen. Gemeldet wird nur '
-                    . 'die rote Lage: eine Abweichung vom Zielpreis INNERHALB der Spanne ist gelb und bleibt eine '
-                    . 'Kalkulations-Frage, kein Signal. Ohne Gerüst gibt es kein Soll und damit keinen Befund.',
+                'desc' => 'Der Preis pro Person liegt außerhalb der Spanne aus der Planungsvorgabe, oder der '
+                    . 'Preisrahmen einer Position ist nicht eingehalten. Gemeldet wird nur der rote Fall: eine Abweichung '
+                    . 'vom Zielpreis innerhalb der Spanne bleibt eine Kalkulationsfrage. Ohne Planungsvorgabe gibt '
+                    . 'es keinen Befund.',
                 'q' => fn (Team $t) => $this->konzepteMitFrameBefund($t, 'preis'),
             ],
             'konzept_regel_verletzt' => [
-                'label' => 'Konzepte in Gebrauch mit verletzter Gerüst-Regel',
+                'label' => 'Konzepte im Einsatz mit verletzter Kundenvorgabe',
                 'typ' => SignalTyp::KonzeptRegelVerletzt,
                 'dedup' => 'dq-konzept-regel-verletzt',
                 'sev' => SignalSeverity::Warnung,
-                'desc' => 'Mindestens eine Kunden-Politik aus dem Planungs-Gerüst ist gerissen: Diät-Quote nicht '
-                    . 'erreicht, eine No-Go-Zutat kommt vor, ein No-Go-Allergen ist enthalten, oder eine geforderte '
-                    . 'Saison fehlt. Das sind Zusagen an den Kunden — anders als eine Struktur-Lücke fällt eine '
-                    . 'verletzte Zusage nicht beim Lesen auf. Weiche Regeln (`severity=weich`) sind gelb und zählen '
-                    . 'hier nicht mit; die Allergen-Linie ist Freitext und maschinell nicht messbar.',
+                'desc' => 'Mindestens eine Kundenvorgabe aus der Planung ist verletzt: der geforderte Anteil einer '
+                    . 'Ernährungsform ist nicht erreicht, eine ausgeschlossene Zutat oder ein ausgeschlossenes '
+                    . 'Allergen kommt vor, oder eine geforderte Saison fehlt. Das sind Zusagen an den Kunden, und '
+                    . 'eine gebrochene Zusage fällt beim Lesen nicht auf. Weiche Vorgaben zählen hier nicht mit.',
                 'q' => fn (Team $t) => $this->konzepteMitFrameBefund($t, 'regel'),
             ],
             'konzept_dramaturgie' => [
-                'label' => 'Konzepte in Gebrauch mit wiederholter Hauptzutat',
+                'label' => 'Konzepte im Einsatz mit wiederholter Hauptzutat',
                 'typ' => SignalTyp::KonzeptDramaturgie,
                 'dedup' => 'dq-konzept-dramaturgie',
                 'sev' => SignalSeverity::Info,
-                'desc' => 'Zwei oder mehr Gänge dieses Konzepts tragen dieselbe Hauptzutat — als Hauptzutat gilt '
-                    . 'die mengenmäßig dominierende Zutat des Gerichts, ihr Aroma-Anker identifiziert sie; '
-                    . 'Sorten-Varianten zählen mit (lachs / lachs_wild). Das ist bewusst nur ein Hinweis und keine '
-                    . 'Warnung: ein Themen-Menü darf sich wiederholen. Gerichte ohne massen-vergleichbare Zutaten '
-                    . 'oder ohne Anker bleiben unbewertet — fehlende Erdung ist keine Aussage über das Menü.',
+                'desc' => 'Zwei oder mehr Gänge dieses Konzepts haben dieselbe Hauptzutat, also die mengenmäßig '
+                    . 'größte Zutat des Gerichts. Sorten zählen zusammen (Lachs und Wildlachs). Nur ein Hinweis: '
+                    . 'ein Themenmenü darf sich wiederholen. Gerichte ohne vergleichbare Mengen oder ohne '
+                    . 'Aromaprofil bleiben unbewertet.',
                 'q' => fn (Team $t) => $this->konzepteMitWiederholung($t),
             ],
         ];
@@ -994,46 +1034,40 @@ class DataQualityService
     {
         return [
             'foodbook_kapitel_leer' => [
-                'label' => 'Foodbooks in Gebrauch mit leerem Kapitel oder ohne jeden Inhalt',
+                'label' => 'Foodbooks im Einsatz mit leerem Kapitel oder ganz ohne Inhalt',
                 'typ' => SignalTyp::FoodbookKapitelLeer,
                 'dedup' => 'dq-foodbook-kapitel-leer',
                 'sev' => SignalSeverity::Warnung,
-                'desc' => 'Mindestens ein Kapitel dieses Foodbooks trägt keine Inhalts-Zeile: weder einen '
-                    . 'Paket-/Konzept-Block (`concept_ref`) noch ein einzelnes Gericht (`recipe_ref`). Kopfzeilen, '
-                    . 'Text, Abstand und Bild zählen nicht als Inhalt — sie beschreiben ihn. Gemessen werden nur '
-                    . 'Kapitel OHNE Unterkapitel: ein Eltern-Kapitel ist eine Klammer, sein Inhalt steht darunter. '
-                    . 'Ein unsichtbar geschalteter Block zählt ebenfalls nicht: im Kundendokument druckt das '
-                    . 'Kapitel dann leer, und genau das ist der Befund. Zweiter Zweig: ein Buch mit überhaupt '
-                    . 'keinem befüllten Kapitel — es hat kein LEERES Kapitel und käme sonst unauffällig durch.',
+                'desc' => 'Mindestens ein Kapitel dieses Foodbooks hat keinen Inhalt: weder ein Paket oder Konzept '
+                    . 'noch ein einzelnes Gericht. Überschriften, Texte, Abstände und Bilder zählen nicht als Inhalt. '
+                    . 'Kapitel mit Unterkapiteln werden nicht geprüft, ihr Inhalt steht darunter. Ein ausgeblendeter '
+                    . 'Block zählt ebenfalls nicht: im Kundendokument erscheint das Kapitel dann leer. Gemeldet '
+                    . 'werden auch Foodbooks ganz ohne befülltes Kapitel.',
                 'q' => fn (Team $t) => $this->foodbooksInGebrauch($t)->where(fn ($w) => $w
                     ->whereExists($this->kapitelOhneInhalt())
                     ->orWhereNotExists($this->kapitelMitInhalt())),
             ],
             'foodbook_skizze_ungeerdet' => [
-                'label' => 'Foodbooks mit Kreativ-Skizze, die nach dem Go nicht geerdet wurde',
+                'label' => 'Foodbooks mit Gerichtsidee, die nie umgesetzt wurde',
                 'typ' => SignalTyp::FoodbookSkizzeUngeerdet,
                 'dedup' => 'dq-foodbook-skizze-ungeerdet',
                 'sev' => SignalSeverity::Warnung,
-                'desc' => 'Beim Kapitel-Go wurde eine Freitext-Skizze in die KI-Queue gestellt '
-                    . '(`generation_status=queued`), aber es ist nie ein Gericht daraus geworden. Ohne '
-                    . 'LLM-Provider bleibt eine Skizze bewusst queued und retrybar — deshalb greift der Befund '
-                    . 'erst ' . self::SKIZZE_STUCK_STUNDEN . ' Stunden nach dem Go: davor ist sie in Arbeit, '
-                    . 'danach steckt sie. Es geht um verlorene Kreativarbeit, nicht um einen Datenfehler: die Idee '
-                    . 'steht im Buch-Entwurf, im Sortiment steht sie nicht.',
+                'desc' => 'Beim Anlegen eines Kapitels wurde eine Gerichtsidee an die KI übergeben, aber daraus ist '
+                    . 'nie ein Gericht geworden. Der Hinweis erscheint erst ' . self::SKIZZE_STUCK_STUNDEN . ' Stunden '
+                    . 'danach: vorher ist die Idee in Arbeit, danach hängt sie fest. Es geht um verlorene '
+                    . 'Kreativarbeit: die Idee steht im Foodbook-Entwurf, im Sortiment fehlt sie.',
                 'q' => fn (Team $t) => $this->foodbooksNichtArchiviert($t)->whereExists($this->ungeerdeteSkizze()),
             ],
             'foodbook_ziel_verfehlt' => [
-                'label' => 'Foodbooks in Gebrauch mit verfehltem Kapitel-Ziel',
+                'label' => 'Foodbooks im Einsatz mit verfehltem Kapitelziel',
                 'typ' => SignalTyp::FoodbookZielVerfehlt,
                 'dedup' => 'dq-foodbook-ziel-verfehlt',
                 'sev' => SignalSeverity::Warnung,
-                'desc' => 'Mindestens ein Kapitel dieses Foodbooks reißt sein gesetztes SOLL: das Mengengerüst '
-                    . '(`target_count`) ist mit NULL Gerichten unbesetzt, oder der Ø-VK der Gerichte im Kapitel '
-                    . 'liegt außerhalb der Kapitel-Preisspanne. Das Ziel wird n-tief vererbt (Kapitel → Eltern), '
-                    . 'ein Unterkapitel erbt also die Vorgabe der Klammer darüber; der Ist-Bezug rollt umgekehrt '
-                    . 'über alle Nachfahren hoch. Gemeldet wird nur die ROTE Lage — „3 von 5 Gerichten da" oder '
-                    . '„weicht >15 % vom Preis-Anker ab" ist gelb und bleibt Arbeitsstand. Ohne Planungs-Gerüst '
-                    . 'gibt es keinen Befund: die Kapitel-Ziele werden nur innerhalb der Coverage ausgewertet.',
+                'desc' => 'Mindestens ein Kapitel dieses Foodbooks verfehlt sein Ziel: für die geplante Anzahl '
+                    . 'Gerichte ist kein einziges Gericht da, oder der durchschnittliche VK im Kapitel liegt '
+                    . 'außerhalb der geplanten Preisspanne. Unterkapitel übernehmen das Ziel des Kapitels darüber. '
+                    . 'Gemeldet wird nur der rote Fall, „3 von 5 Gerichten da“ bleibt Arbeitsstand. Ohne '
+                    . 'Planungsvorgabe gibt es keinen Befund.',
                 'q' => fn (Team $t) => $this->foodbooksMitKapitelZielBefund($t),
             ],
             'foodbook_stale' => [
@@ -1041,30 +1075,26 @@ class DataQualityService
                 'typ' => SignalTyp::FoodbookStale,
                 'dedup' => 'dq-foodbook-stale',
                 'sev' => SignalSeverity::Warnung,
-                'desc' => 'Das Buch ist freigegeben bzw. beim Kunden, aber mindestens eines seiner Gerichte hat '
-                    . 'seinen freigegebenen VK-Snapshot (R2.5) verlassen: der live gerechnete Preis weicht über die '
-                    . 'Team-Leitplanke (`max_vk_delta_pct`) hinaus ab. Das Dokument nennt damit einen Preis, den das '
-                    . 'System nicht mehr rechnet. Bücher in der Kalkulation zählen bewusst nicht mit — dort SOLLEN '
-                    . 'Preise sich bewegen. Gerichte ohne je freigegebenen Snapshot ebenfalls nicht: ohne Freigabe '
-                    . 'gibt es keinen Kundenpreis, von dem etwas abweichen könnte.',
+                'desc' => 'Das Foodbook ist freigegeben oder beim Kunden, aber der aktuell berechnete VK mindestens '
+                    . 'eines Gerichts weicht stärker vom freigegebenen Preis ab, als das Team erlaubt. Das Dokument '
+                    . 'nennt damit einen Preis, den die Kalkulation nicht mehr ergibt. Foodbooks in der Kalkulation '
+                    . 'zählen nicht mit, dort dürfen Preise sich bewegen.',
                 'q' => fn (Team $t) => $this->foodbooksMitPreisDrift($t),
             ],
             // Spec 03 · L2b hat den Fixer nachgeliefert (Kapitel-Textfeld + KI-Knopf je Kapitel),
             // damit ist der §9-Vorbehalt erledigt und der Check darf scharf sein.
             'foodbook_kapitel_ohne_text' => [
-                'label' => 'Foodbooks in Gebrauch mit Kapitel ohne Hinführung',
+                'label' => 'Foodbooks im Einsatz mit Kapitel ohne Hinführung',
                 'typ' => SignalTyp::FoodbookKapitelOhneText,
                 'dedup' => 'dq-foodbook-kapitel-ohne-text',
                 // Bewusst `info`, nicht `warnung`: das Kapitel ist druckbar und inhaltlich
                 // vollständig, es ist nur nicht ausformuliert. Als Warnung stünde eine
                 // Formulierungs-Aufgabe neben einem falschen Kundenpreis.
                 'sev' => SignalSeverity::Info,
-                'desc' => 'Mindestens ein befülltes Kapitel dieses Foodbooks hat keinen Kundentext '
-                    . '(`description`) — im Dokument folgt auf die Kapitel-Überschrift direkt die Liste, '
-                    . 'ohne Hinführung. Gemessen werden nur Kapitel, die auch Inhalt TRAGEN: ein leeres '
-                    . 'Kapitel ist bereits `foodbook_kapitel_leer` und braucht keinen Text, sondern '
-                    . 'Gerichte — zwei Signale auf denselben Sachverhalt wären Rauschen. Auflösen im '
-                    . 'Kapitel-Kopf der Leitstelle: das Feld „Hinführung" mit ✨ KI-Text (Spec 03 L2b).',
+                'desc' => 'Mindestens ein befülltes Kapitel dieses Foodbooks hat keinen Text für den Gast: im '
+                    . 'Dokument folgt auf die Kapitelüberschrift direkt die Liste. Leere Kapitel zählen hier nicht, '
+                    . 'sie brauchen zuerst Gerichte. Ergänzen im Kapitelkopf der Leitstelle über das Feld '
+                    . '„Hinführung“, auf Wunsch mit KI-Text.',
                 'q' => fn (Team $t) => $this->foodbooksInGebrauch($t)->whereExists($this->kapitelOhneText()),
             ],
         ];
@@ -1383,7 +1413,7 @@ class DataQualityService
             ->count();
 
         return [
-            $this->gap('ri_gemini_unverifiziert', 'Zutat-Mappings (KI-Vorschlag, unverifiziert)', $geminiUnverifiziert, null, null),
+            $this->gap('ri_gemini_unverifiziert', self::METRIK_LABELS['ri_gemini_unverifiziert'], $geminiUnverifiziert, null, null),
         ];
     }
 
@@ -1806,10 +1836,10 @@ class DataQualityService
         };
     }
 
-    /** EXISTS: Rezept hat ein Anker-Mapping. */
+    /** EXISTS: Rezept hat ein Aromenprofil (Spec 60: abgeleitet aus den Zutaten-Ankern). */
     private function rezeptHatAnker(): \Closure
     {
-        return fn ($q) => $q->select(DB::raw(1))->from('foodalchemist_recipe_anchor_mappings as m')
+        return fn ($q) => $q->select(DB::raw(1))->from('foodalchemist_recipe_profile_anker as m')
             ->whereColumn('m.recipe_id', 'foodalchemist_recipes.id');
     }
 

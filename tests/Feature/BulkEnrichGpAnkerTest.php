@@ -204,13 +204,15 @@ it('B-3: nichts nachzuziehen → kein Lauf, kein Provider-Call', function () {
         ->toBe(['run_id' => null, 'geprueft' => 0, 'uebernommen' => 0, 'offen' => 0]);
 });
 
-// ── B-4: ehrliches Pairing-Glied ──────────────────────────────────────────────────────
+// ── B-4: ehrliches Aromaprofil-Glied ──────────────────────────────────────────────────
 
-it('B-4: ohne Kern-Anker meldet das Pairing-Glied `uebersprungen_ohne_anker` mit Grund — und ruft die KI nicht', function () {
+it('B-4: ohne Aroma-Anker am GP bleibt das Aromaprofil leer — und es wird keine KI nach Rezept-Ankern gefragt', function () {
+    ($this->fake)('neutral');                     // GP-Anker-Nachzug wählt „neutral" = kein Aroma
+    $this->gp->update(['name' => 'Xylo-Wurzel: frisch']);   // kein exakter Namenstreffer als Fallback
     $this->mock(AiGatewayService::class, function ($mock) {
+        $mock->shouldReceive('propose')->with('recipe.anker', \Mockery::any(), \Mockery::any())->never();
         $mock->shouldReceive('propose')->with('recipe.pairing', \Mockery::any(), \Mockery::any())->never();
         $mock->shouldReceive('propose')->andReturnUsing(fn (string $key) => match ($key) {
-            'recipe.anker' => new AiProposal(['anker_slugs' => []], 0.5, 'Mock', [], 'anker-op'),
             'recipe.steps' => new AiProposal(['steps' => [['phase' => 'Garen', 'text' => 'Kochen.']]], 0.9, 'Mock', [], 'steps-op'),
             default => new AiProposal([], 0.5, 'Mock', [], 'op'),
         });
@@ -226,10 +228,10 @@ it('B-4: ohne Kern-Anker meldet das Pairing-Glied `uebersprungen_ohne_anker` mit
 
     $erg = app(RecipeOneShotService::class)->anreichern($this->rootTeam, $r->refresh(), completeCoverage: true);
 
-    expect($erg['coverage']['aromaanker']['status'])->toBe('leer')
-        ->and($erg['coverage']['pairings']['status'])->toBe('uebersprungen_ohne_anker')
-        ->and($erg['coverage']['pairings']['n_pairings'])->toBe(0)
-        ->and($erg['coverage']['pairings']['grund'])->toContain('gps.ENRICH');
+    expect($erg['coverage']['aromaprofil']['status'])->toBe('leer')
+        ->and($erg['coverage']['aromaprofil']['n_anker'])->toBe(0)
+        ->and($erg['coverage'])->not->toHaveKey('aromaanker')
+        ->and($erg['coverage'])->not->toHaveKey('pairings');
 });
 
 // ── B-8: Signal-Baseline ──────────────────────────────────────────────────────────────

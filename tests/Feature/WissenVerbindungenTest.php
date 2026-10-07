@@ -60,7 +60,7 @@ it('nennt den Nachfolger, wenn eine Kanon-Zeile auf ein abgeloestes Dossier zeig
     $befund = collect($p['befunde'])->firstWhere('code', 'dossier_inaktiv');
 
     expect($befund['nachfolger'])->toBe(['regel-neu'])
-        ->and($befund['text'])->toContain('Kanon-Zeile dorthin umhängen');
+        ->and($befund['text'])->toContain('Ersetzt durch: regel-neu');
 });
 
 it('haelt drei alte Dossiers zusammen, die zu einem neuen wurden', function () {

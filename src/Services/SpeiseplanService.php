@@ -233,6 +233,7 @@ class SpeiseplanService
 
     public function verknuepfeKunde(Team $team, int $id, ?int $companyId, ?int $contactId): FoodAlchemistSpeiseplan
     {
+        \Platform\FoodAlchemist\Support\CrmKunden::pruefe($team, $companyId, $contactId);
         return $this->update($team, $id, ['crm_company_id' => $companyId, 'crm_contact_id' => $contactId]);
     }
 
@@ -252,6 +253,8 @@ class SpeiseplanService
             $neu = FoodAlchemistSpeiseplan::create($this->pruefeOutlet($team, array_merge(
                 array_intersect_key($quelle->only(self::FELDER), array_flip(self::FELDER)),
                 ['team_id' => $team->id, 'name' => $quelle->name . ' (Kopie)', 'status' => AusgabeStatus::Entwurf->value],
+                // Spec 59: Vorgaben gehören zum Plan — Kopie (auch Betriebs-Kopie) übernimmt sie.
+                ['vorgaben' => $quelle->vorgaben],
                 // Spec 57 · Paket 7: Betriebs-Kopie merkt sich ihre Vorlage (sonst eine freie Kopie).
                 $quelleMerken ? ['source_plan_id' => $quelle->id, 'source_synced_at' => now()] : [],
                 array_intersect_key($ueberschreiben, array_flip(array_merge(self::FELDER, ['name']))),
@@ -555,7 +558,7 @@ class SpeiseplanService
             return collect();
         }
 
-        return app(\Platform\Crm\Services\CompanyLinkService::class)->searchCompanies($suche, $limit);
+        return \Platform\FoodAlchemist\Support\CrmKunden::firmen(\Platform\FoodAlchemist\Support\CrmKunden::aktuellesTeam(), $suche, $limit);
     }
 
     public function sucheKontakte(string $suche, int $limit = 10): Collection
@@ -565,7 +568,7 @@ class SpeiseplanService
             return collect();
         }
 
-        return app(\Platform\Crm\Services\ContactLinkService::class)->searchContacts($suche, $limit);
+        return \Platform\FoodAlchemist\Support\CrmKunden::kontakte(\Platform\FoodAlchemist\Support\CrmKunden::aktuellesTeam(), $suche, $limit);
     }
 
     public function delete(Team $team, int $id): void
@@ -688,7 +691,7 @@ class SpeiseplanService
             'meal' => $mahlzeit,
             'line_id' => $linieId,
             'position' => (int) $plan->entries()
-                ->where('entry_date', $tag)->where('meal', $mahlzeit)
+                ->whereDate('entry_date', $tag)->where('meal', $mahlzeit)
                 ->when($linieId !== null, fn ($q) => $q->where('line_id', $linieId))->max('position') + 1,
         ]));
     }
@@ -714,13 +717,13 @@ class SpeiseplanService
                 continue;
             }
             if (! $model::visibleToTeam($team)->whereKey($id)->exists()) {
-                throw new \RuntimeException('Inhalt nicht sichtbar oder nicht vorhanden (' . $feld . ' #' . $id . ').');
+                throw new \RuntimeException((['concept_id' => 'Konzept', 'package_id' => 'Paket', 'sales_recipe_id' => 'Gericht'][$feld] ?? 'Inhalt') . ' #' . $id . ' ist nicht vorhanden oder nicht sichtbar.');
             }
 
             return array_merge(array_fill_keys(array_keys($refs), null), [$feld => $id]);
         }
 
-        throw new \RuntimeException('Genau einen Inhalt angeben: Concept, Paket oder Gericht.');
+        throw new \RuntimeException('Genau einen Inhalt angeben: Konzept, Paket oder Gericht.');
     }
 
     /**
@@ -807,7 +810,7 @@ class SpeiseplanService
             'meal' => $meal,
             'line_id' => $lineId,
             'position' => (int) $plan->entries()->whereKeyNot($e->id)
-                ->where('entry_date', $tag)->where('meal', $meal)
+                ->whereDate('entry_date', $tag)->where('meal', $meal)
                 ->when($lineId !== null, fn ($q) => $q->where('line_id', $lineId), fn ($q) => $q->whereNull('line_id'))
                 ->max('position') + 1,
         ]);
@@ -844,7 +847,8 @@ class SpeiseplanService
             if ($tag === $e->entry_date?->format('Y-m-d')) {
                 continue;
             }
-            $gleich = $plan->entries()->where('entry_date', $tag)->where('meal', $e->meal)
+            // whereDate: unabhängig davon, ob die DB das Datum mit Uhrzeit ablegt (SQLite) oder als DATE (MySQL).
+            $gleich = $plan->entries()->whereDate('entry_date', $tag)->where('meal', $e->meal)
                 ->when($e->line_id !== null, fn ($q) => $q->where('line_id', $e->line_id), fn ($q) => $q->whereNull('line_id'))
                 ->where('concept_id', $e->concept_id)->where('package_id', $e->package_id)->where('sales_recipe_id', $e->sales_recipe_id)
                 ->exists();
@@ -856,7 +860,7 @@ class SpeiseplanService
                 'week' => 1, 'weekday' => (int) $ziel->isoWeekday(), 'meal' => $e->meal, 'line_id' => $e->line_id,
                 'concept_id' => $e->concept_id, 'package_id' => $e->package_id, 'sales_recipe_id' => $e->sales_recipe_id,
                 'pax' => $e->pax,
-                'position' => (int) $plan->entries()->where('entry_date', $tag)->where('meal', $e->meal)->max('position') + 1,
+                'position' => (int) $plan->entries()->whereDate('entry_date', $tag)->where('meal', $e->meal)->max('position') + 1,
             ]);
             $neu++;
         }
@@ -1421,6 +1425,8 @@ class SpeiseplanService
     /**
      * Diät-Merkmale aus vorhandenen Flags — ohne Raten. Geflügel/Lamm/Wild haben kein Datenfeld;
      * sie erscheinen als „fleisch“ (unbestimmt), nicht als geratene Tierart (Spec 57 · E3).
+     * Spec 59: „fleisch“ nur bei BELEGTEM Fleisch (`fleisch_belegt` im Rollup). Gerichte ganz ohne
+     * Diät-Pflege liefern `[]` (= ohne Angabe) — unbekannt ist nicht Fleisch.
      *
      * @return list<string>  vegan | vegetarisch | schwein | rind | fisch | fleisch
      */
@@ -1447,7 +1453,14 @@ class SpeiseplanService
             $out[] = 'fisch';
         }
 
-        return $out !== [] ? $out : ['fleisch'];
+        // „Fleisch" nur, wenn es FESTSTEHT (mind. ein Gericht ausdrücklich nicht vegetarisch, oder
+        // Schwein/Rind gepflegt). Unbekannte Diät-Angaben (NULL nach Recompute, GP ohne Tags) sind
+        // kein Fleisch — vorher landeten Suppen und Desserts ohne Pflege als „Fleisch" auf dem Aushang.
+        if ($out === [] && ($roll['fleisch_belegt'] ?? false)) {
+            $out[] = 'fleisch';
+        }
+
+        return $out;
     }
 
     /**
@@ -2230,18 +2243,32 @@ class SpeiseplanService
     }
 
     /**
-     * Abwechslung/Häufigkeit der Woche: Diät-Mix (vegan/vegetarisch/mit Fleisch·Fisch) je serviertem
-     * Gericht + Warengruppen-Häufigkeit (dish_main_group). Weicher Hinweis, wenn eine Warengruppe die
-     * Woche dominiert (≥ $tage Vorkommen). Alles aus vorhandenen Feldern (spec_*, dish_main_group_id).
+     * Abwechslung/Häufigkeit der Woche: Diät-Mix je serviertem GERICHT + Warengruppen-Häufigkeit
+     * (dish_main_group) + Spec 59 Plan-Vorgaben (mind./höchstens je Chip). Weicher Hinweis, wenn
+     * eine Warengruppe die Woche dominiert (≥ $tage Vorkommen). Alles aus vorhandenen Feldern.
      *
-     * @return array{diaet: array{vegan:int, vegetarisch:int, omnivor:int}, warengruppen: list<array{name:string,count:int}>, hinweis: ?string}
+     * Spec 59: Diät je Gericht über denselben Rollup wie die Zellen-Chips ({@see diaetMerkmale}).
+     * Vorher zählte alles Nicht-Vegane/-Vegetarische als „mit Fleisch oder Fisch“ — auch Gerichte
+     * ganz ohne Diät-Pflege. Jetzt: Fleisch nur belegt, Rest unter `ohne_angabe`.
+     * Zählbasis = Gericht-Vorkommen (ein Paket/Concept mit 3 Gerichten zählt 3).
+     * `diaet_eintraege`/`wg_eintraege`/`treffer` liefern die Eintrag-Ids fürs Hervorheben in der Matrix.
+     *
+     * @return array{diaet: array{vegan:int, vegetarisch:int, fleisch:int, fisch:int, schwein:int, rind:int, ohne_angabe:int, omnivor:int},
+     *               warengruppen: list<array{id:int, name:string, count:int}>, hinweis: ?string,
+     *               vorgaben: list<array>, treffer: array<int, list<int>>,
+     *               diaet_eintraege: array<string, list<int>>, wg_eintraege: array<int, list<int>>}
      */
     public function wochenAbwechslung(FoodAlchemistSpeiseplan $plan, string $mahlzeit, Carbon $montag, ?int $tage = null): array
     {
-        $vegan = 0;
-        $veg = 0;
+        $agg = app(ConcepterAggregateService::class);
+        $diaetKeys = ['vegan', 'vegetarisch', 'fleisch', 'fisch', 'schwein', 'rind', 'ohne_angabe'];
+        $diaet = array_fill_keys($diaetKeys, 0);
         $omni = 0;
-        $wg = [];   // dish_main_group_id => count
+        $diaetEintraege = array_fill_keys($diaetKeys, []);
+        $wg = [];            // dish_main_group_id => count
+        $wgEintraege = [];   // dish_main_group_id => [entry_id => true]
+        $paare = [];         // je Gericht-Vorkommen: Merkmale für die Vorgaben-Prüfung
+        $merkmaleCache = [];
         $tageListe = $this->aggregatTage($plan, $montag, $tage);
         $tage = count($tageListe);
         foreach ($tageListe as $tag) {
@@ -2250,17 +2277,26 @@ class SpeiseplanService
                     continue;
                 }
                 foreach ($this->eintragGerichte($e) as $g) {
-                    if ((bool) $g->spec_is_vegan) {
-                        $vegan++;
-                    } elseif ((bool) $g->spec_is_vegetarian) {
-                        $veg++;
-                    } else {
+                    $gc = collect([$g]);
+                    $m = $merkmaleCache[$g->id] ??= $this->diaetMerkmale($agg->allergenRollupFromGerichte($gc), $agg->kennzeichnungFromGerichte($gc));
+                    // Schwein/Rind sind Fleisch — für Zählung und Chip „Fleisch“.
+                    if (array_intersect($m, ['schwein', 'rind']) !== [] && ! in_array('fleisch', $m, true)) {
+                        $m[] = 'fleisch';
+                    }
+                    $schluessel = $m === [] ? ['ohne_angabe'] : $m;
+                    foreach ($schluessel as $k) {
+                        $diaet[$k]++;
+                        $diaetEintraege[$k][$e->id] = true;
+                    }
+                    if (in_array('fleisch', $m, true) || in_array('fisch', $m, true)) {
                         $omni++;
                     }
-                    $gid = $g->dish_main_group_id;
+                    $gid = $g->dish_main_group_id !== null ? (int) $g->dish_main_group_id : null;
                     if ($gid !== null) {
-                        $wg[(int) $gid] = ($wg[(int) $gid] ?? 0) + 1;
+                        $wg[$gid] = ($wg[$gid] ?? 0) + 1;
+                        $wgEintraege[$gid][$e->id] = true;
                     }
+                    $paare[] = ['entry_id' => (int) $e->id, 'gericht_id' => (int) $g->id, 'diaet' => $m, 'hauptgruppe' => $gid];
                 }
             }
         }
@@ -2276,16 +2312,22 @@ class SpeiseplanService
         $dominant = null;
         foreach ($wg as $gid => $count) {
             $name = $namen[$gid] ?? ('#' . $gid);
-            $warengruppen[] = ['name' => $name, 'count' => $count];
+            $warengruppen[] = ['id' => (int) $gid, 'name' => $name, 'count' => $count];
             if ($dominant === null && $count >= $tage) {
                 $dominant = $name;
             }
         }
+        $vorgaben = app(SpeiseplanVorgabenService::class)->auswerten($plan, $mahlzeit, $paare);
 
         return [
-            'diaet' => ['vegan' => $vegan, 'vegetarisch' => $veg, 'omnivor' => $omni],
+            // `omnivor` (= Gerichte mit Fleisch ∪ Fisch) bleibt für Altverwender.
+            'diaet' => $diaet + ['omnivor' => $omni],
             'warengruppen' => array_slice($warengruppen, 0, 6),
             'hinweis' => $dominant !== null ? 'Warengruppe „' . $dominant . '" dominiert die Woche — mehr Abwechslung erwägen.' : null,
+            'vorgaben' => $vorgaben['vorgaben'],
+            'treffer' => $vorgaben['treffer'],
+            'diaet_eintraege' => array_map('array_keys', $diaetEintraege),
+            'wg_eintraege' => array_map('array_keys', $wgEintraege),
         ];
     }
 
@@ -2477,7 +2519,7 @@ class SpeiseplanService
     private function guard(FoodAlchemistSpeiseplan $plan, Team $team): void
     {
         if (! $plan->isOwnedBy($team)) {
-            throw new \RuntimeException('Geerbter Speiseplan — Pflege nur durchs Besitzer-Team (D1).');
+            throw new \RuntimeException('Geerbter Speiseplan: Ändern kann ihn nur das Besitzer-Team.');
         }
     }
 
@@ -2490,10 +2532,10 @@ class SpeiseplanService
 
         $daten = [];
         if (array_key_exists('brand_color', $in)) {
-            $daten['brand_color'] = $this->normHexOderThrow($in['brand_color'], 'brand_color') ?? '#6d28d9';
+            $daten['brand_color'] = $this->normHexOderThrow($in['brand_color'], 'Markenfarbe') ?? '#6d28d9';
         }
         if (array_key_exists('band_color', $in)) {
-            $daten['band_color'] = $this->normHexOderThrow($in['band_color'], 'band_color', true);
+            $daten['band_color'] = $this->normHexOderThrow($in['band_color'], 'Bandfarbe', true);
         }
         if (array_key_exists('footer_text', $in)) {
             $t = trim((string) $in['footer_text']);
@@ -2559,10 +2601,10 @@ class SpeiseplanService
             if ($erlaubeLeer) {
                 return null;
             }
-            throw new \RuntimeException("{$feld}: Farbe fehlt.");
+            throw new \RuntimeException("{$feld} fehlt.");
         }
         if (! preg_match('/^#[0-9a-fA-F]{6}$/', $wert)) {
-            throw new \RuntimeException("{$feld}: ungültiger Hex-Farbwert ({$wert}).");
+            throw new \RuntimeException("{$feld}: ungültiger Farbwert „{$wert}“ (erwartet #RRGGBB).");
         }
 
         return $wert;

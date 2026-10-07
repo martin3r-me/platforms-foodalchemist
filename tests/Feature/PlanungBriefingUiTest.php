@@ -268,8 +268,11 @@ it('Die Whitelist deckt genau die Felder ab, die im Blade auch einen Knopf haben
             continue;
         }
         $davor = $zeilen[$nr - 1] ?? '';
-        expect(str_contains($davor, '</textarea>'))->toBeTrue(
-            'Diktat-Include in Zeile ' . ($nr + 1) . ' steht nicht direkt nach </textarea>');
+        // fa-pass (2026-10-05): das Briefing-Feld steckt jetzt im Baustein x-fa::field (Label + Feld),
+        // dessen schliessendes Tag ist dann die Zeile davor. Gleiche Absicht: der Include steht HINTER
+        // einem geschlossenen Element, nie in einem offenen Tag.
+        expect(str_contains($davor, '</textarea>') || str_contains($davor, '</x-fa::field>'))->toBeTrue(
+            'Diktat-Include in Zeile ' . ($nr + 1) . ' steht nicht direkt nach </textarea> bzw. </x-fa::field>');
     }
     expect(Index::DIKTAT_ZIELE)->toContain('eingabe.rezept.brief')->toContain('eingabe.gericht.brief');
 });

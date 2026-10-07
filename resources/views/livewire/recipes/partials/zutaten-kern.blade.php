@@ -1,355 +1,411 @@
-{{-- P-8-Zutaten-Kern — EINE Quelle für Modal (M4-07) und Voll-Editor (Editor-Parität) --}}
-    {{-- Phase 5: Typ-Farben (Settings) als Inline-Style — Text = Hex, Hintergrund = Hex+1a (10%). --}}
-    @php($typFarben = $typFarben ?? \Platform\FoodAlchemist\Services\TeamSettingsService::TYP_FARBEN_DEFAULTS)
-    @php($typStyle = fn (string $t) => isset($typFarben[$t]) ? 'color:' . $typFarben[$t] . ';background-color:' . $typFarben[$t] . '1a' : '')
-    {{-- Zutaten-Editor — grössere, ruhigere Typografie + mehr Zeilenluft (2026-07-31, Dominique).
-         EIN Ort statt ~15 Inline-Bumps; gescopet auf die Editier-Tabelle + Add-Zeile — die
-         Browser-Seitenspalten bleiben kompakt. Rohes CSS (nicht Tailwind): Attribut-Selektor +
-         !important schlagen die Zell-Klassen !text-[11px]/!py-0.5, und ein arbitrary !text-[13px]
-         wäre im Host-Build gar nicht kompiliert (JIT-Lücke, s. DESIGN.md / modal.blade.php). --}}
-    <style>
-        [data-zutaten-tabelle]{ font-size:13px; }
-        [data-zutaten-tabelle] td{ padding-top:.4rem !important; padding-bottom:.4rem !important; }
-        [data-zutaten-tabelle] input,
-        [data-zutaten-tabelle] select,
-        [data-add-zeile] input,
-        [data-add-zeile] select{ font-size:13px !important; }
-        [data-zutaten-tabelle] .fa-zk-name{ font-size:13.5px !important; }
-        [data-zutaten-tabelle] .fa-zk-num{ font-size:13px !important; }
-        /* GP-Peek (Lieferantenartikel-Tabelle hinter dem GP) — gleicher, ruhigerer Stil. */
-        [data-zutaten-tabelle] [data-gp-peek-tabelle] table{ font-size:12px; }
-        [data-zutaten-tabelle] [data-gp-peek-tabelle] thead{ font-size:10.5px; }
-    </style>
-    @if($fehler !== null)
-        <p class="text-xs text-rose-600 mb-3" data-editor-fehler>{{ $fehler }}</p>
-    @endif
+{{-- P-8-Zutaten-Kern — EINE Quelle für Modal (M4-07), Voll-Editor (Rezept/Gericht) und Worker-Kaskade.
 
-    {{-- wire:key: Alpine wertet x-data bei morphdom NICHT neu aus — Rezept-Wechsel muss das Element ersetzen --}}
-    <div wire:key="zutaten-editor-{{ $rezept?->id ?? 0 }}"
-         x-data="zutatenEditor(@js($zeilenJson), @js(! $eingebettet), @js($einheiten->keyBy('id')->map(fn ($e) => ['slug' => $e->slug, 'dim' => $e->dimension, 'g' => $e->default_in_g !== null ? (float) $e->default_in_g : ($e->default_in_ml !== null ? (float) $e->default_in_ml : null)])->all()), @js($browserVokabular ?? null))"
-         data-zutaten-editor
-         @garverluste-vorschlagen.window="garverluste()">
-        {{-- R18: Drei-Spalten-Layout — Browsen (links GPs, rechts Basisrezepte) und Editieren
-             (Mitte) konkurrieren nicht mehr um denselben Platz; Spalten scrollen intern. --}}
-        {{-- 2026-08-20: flex-wrap + w-full<xl statt hidden xl:flex — sonst ist der Picker in der
-             schmalen Worker-Spalte (eingebettet) komplett unsichtbar (Trefferliste + [+] fehlen). --}}
-        <div class="flex flex-wrap gap-3 items-start">
-        {{-- R19 (Dominique): Seitenspalten als ECHTE Panels — farblich abgehoben, stehen fest
-             (sticky), nur die Mitte scrollt; die Trefferlisten scrollen intern. --}}
-        <aside class="w-full xl:w-72 shrink-0 flex flex-col rounded-xl bg-gray-500/[0.07] border border-black/5 p-2.5 xl:sticky xl:top-0 self-start max-h-[70vh]" data-browser-gps>
-            <p class="{{ $dt }} mb-1">Produkte (<span x-text="gpTotal"></span>)</p>
-            <div class="space-y-1 mb-1.5">
-                <select x-model="gpFilter.wg" @change="gpFilter.sub = ''; browse()" class="{{ $input }} !py-0.5 !text-[11px]" data-gp-filter-wg>
-                    <option value="">Alle Warengruppen</option>
-                    <template x-for="w in (vokabular?.warengruppen ?? [])" :key="w.code">
-                        <option :value="w.code" x-text="w.name"></option>
-                    </template>
-                </select>
-                <select x-model="gpFilter.sub" @change="browse()" class="{{ $input }} !py-0.5 !text-[11px]" data-gp-filter-sub>
-                    <option value="">Alle Kategorien</option>
-                    <template x-for="su in subKategorienFuerWg()" :key="su.commodity_group_code + su.sub_category">
-                        <option :value="su.sub_category" x-text="su.sub_category"></option>
-                    </template>
-                </select>
+     fa-pass 2026-10 (Werkbank-Umbau): Die häufigste Aufgabe ist Mengen und Einheiten prüfen und
+     Zutaten ergänzen/tauschen. Darum oben EINE Hinzufügen-Zeile (Suche + eingeklappte Filter,
+     Trefferliste klappt erst beim Suchen auf) statt zweier fester Seitenspalten, die meist leer
+     waren und in der schmalen Worker-Spalte die Tabelle abschnitten. Darunter die Tabelle,
+     Summen unter den Preisspalten, Ausbeute und Preis-Hinweis UNTER der Tabelle (bricht um,
+     wird nie abgeschnitten). Nur --fa-*-Tokens und x-fa-Bausteine → hell und Werkbank stimmen. --}}
+@php($typFarben = $typFarben ?? \Platform\FoodAlchemist\Services\TeamSettingsService::TYP_FARBEN_DEFAULTS)
+{{-- Phase 5: Typ-Farben (Team-Einstellung) als Laufzeit-Stil — Text = Farbe, Grund = Farbe + 1a (10 %). --}}
+@php($typStyle = fn (string $t) => isset($typFarben[$t]) ? 'color:' . $typFarben[$t] . ';background-color:' . $typFarben[$t] . '1a' : '')
+@php($rollenText = ['aroma_treiber' => 'Aromaträger', 'komponente' => 'Komponente', 'beilage' => 'Beilage', 'garnitur' => 'Garnitur'])
+@php($ib = 'inline-flex items-center justify-center shrink-0 w-7 h-7 rounded-[var(--fa-radius-control)] text-[var(--fa-ink-3)] hover:text-[var(--fa-ink)] hover:bg-[var(--fa-hover)] transition-colors duration-150 disabled:opacity-30 disabled:pointer-events-none')
+@php($feld = 'fa-control h-8 text-[length:var(--fa-text-md)]')
+@php($spalten = $vkKontext ? 11 : 10)
+
+@if($fehler !== null)
+    <x-fa::notice tone="crit" class="mb-3" data-editor-fehler>{{ $fehler }}</x-fa::notice>
+@endif
+
+{{-- wire:key: Alpine wertet x-data bei morphdom NICHT neu aus — Rezept-Wechsel muss das Element ersetzen --}}
+<div wire:key="zutaten-editor-{{ $rezept?->id ?? 0 }}"
+     x-data="zutatenEditor(@js($zeilenJson), @js(! $eingebettet), @js($einheiten->keyBy('id')->map(fn ($e) => ['slug' => $e->slug, 'dim' => $e->dimension, 'g' => $e->default_in_g !== null ? (float) $e->default_in_g : ($e->default_in_ml !== null ? (float) $e->default_in_ml : null)])->all()), @js($browserVokabular ?? null))"
+     data-zutaten-editor
+     class="flex flex-col gap-3 min-w-0"
+     @garverluste-vorschlagen.window="garverluste()">
+
+    {{-- ── Zutaten einfügen wie im Original (Dominique 2026-10-05): links Grundprodukte, Mitte Suche + Tabelle,
+         rechts Basisrezepte. Ab 1.800 px drei Spalten; auf dem Laptop eine Einfüge-Spalte mit Umschalter + Tabelle; schmal untereinander. ── --}}
+        <x-fa::notice tone="warn" x-show="tauschIdx !== null" x-cloak data-tausch-banner>
+            Zutat in Zeile <span class="font-semibold tabular-nums" x-text="(tauschIdx ?? 0) + 1"></span> tauschen: Ersatz in der Trefferliste mit Plus wählen. Menge und Einheit bleiben.
+            <x-slot:actions>
+                <x-fa::button size="sm" variant="ghost" x-on:click="tauschIdx = null" data-tausch-abbrechen>Tausch abbrechen</x-fa::button>
+            </x-slot:actions>
+        </x-fa::notice>
+
+    <div x-data="{ einfuegenAus: 'gp' }" class="grid grid-cols-1 lg:grid-cols-[minmax(17rem,22rem)_minmax(0,1fr)] wide:grid-cols-[minmax(16rem,1fr)_minmax(0,2.6fr)_minmax(16rem,1fr)] gap-3 items-start" data-zutaten-layout>
+        <aside class="fa-surface p-3 flex flex-col gap-3 min-w-0 lg:col-start-1 lg:row-start-1 lg:sticky lg:top-0" :class="einfuegenAus === 'gp' ? '' : 'max-wide:hidden'" aria-label="Grundprodukte einfügen">
+            {{-- Laptop (< 1.800 px): EINE Einfüge-Spalte mit Umschalter; ab 1.800 px stehen beide Spalten nebeneinander --}}
+            <div role="group" aria-label="Einfügen aus" class="flex p-0.5 gap-0.5 rounded-[var(--fa-radius-control)] bg-[var(--fa-neutral-soft)] wide:hidden">
+                <button type="button" @click="einfuegenAus = 'gp'" :aria-pressed="einfuegenAus === 'gp'"
+                        class="flex-1 h-8 px-2 rounded-[5px] text-[length:var(--fa-text-sm)] font-medium transition-colors"
+                        :class="einfuegenAus === 'gp' ? 'bg-[var(--fa-surface)] text-[var(--fa-ink)] shadow-sm' : 'text-[var(--fa-ink-2)] hover:text-[var(--fa-ink)]'">Grundprodukte <span class="tabular-nums text-[var(--fa-ink-3)]" x-text="gpTotal"></span></button>
+                <button type="button" @click="einfuegenAus = 'rez'" :aria-pressed="einfuegenAus === 'rez'"
+                        class="flex-1 h-8 px-2 rounded-[5px] text-[length:var(--fa-text-sm)] font-medium transition-colors"
+                        :class="einfuegenAus === 'rez' ? 'bg-[var(--fa-surface)] text-[var(--fa-ink)] shadow-sm' : 'text-[var(--fa-ink-2)] hover:text-[var(--fa-ink)]'">Basisrezepte <span class="tabular-nums text-[var(--fa-ink-3)]" x-text="rezTotal"></span></button>
+            </div>
+<fieldset class="flex flex-col gap-2 min-w-0">
+                <legend class="sr-only">Grundprodukte filtern</legend>
+                <div class="grid grid-cols-1 gap-2">
+                    <select x-model="gpFilter.wg" @change="gpFilter.sub = ''; browse()" aria-label="Warengruppe" class="{{ $feld }} fa-select pr-8" data-gp-filter-wg>
+                        <option value="">Alle Warengruppen</option>
+                        <template x-for="w in (vokabular?.warengruppen ?? [])" :key="w.code">
+                            <option :value="w.code" x-text="w.name"></option>
+                        </template>
+                    </select>
+                    <select x-model="gpFilter.sub" @change="browse()" aria-label="Kategorie" class="{{ $feld }} fa-select pr-8" data-gp-filter-sub>
+                        <option value="">Alle Kategorien</option>
+                        <template x-for="su in subKategorienFuerWg()" :key="su.commodity_group_code + su.sub_category">
+                            <option :value="su.sub_category" x-text="su.sub_category"></option>
+                        </template>
+                    </select>
+                </div>
                 <button type="button" @click="gpFilter.mehr = !gpFilter.mehr"
-                        class="text-[10px] text-gray-500 hover:text-violet-500" data-gp-mehr-filter
-                        x-text="gpFilter.mehr ? '− Weniger Filter' : '+ Mehr Filter'"></button>
-                <div x-show="gpFilter.mehr" x-cloak class="space-y-1">
-                    <select x-model="gpFilter.condition" @change="browse()" class="{{ $input }} !py-0.5 !text-[11px]">
+                        class="self-start inline-flex items-center gap-1 text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-accent)] hover:text-[var(--fa-accent-hover)]" data-gp-mehr-filter>
+                    <span class="inline-flex transition-transform" :class="gpFilter.mehr ? 'rotate-90' : ''">@svg('heroicon-m-chevron-right', 'w-4 h-4')</span> <span x-text="gpFilter.mehr ? 'Weniger Filter' : 'Zustand, Bio, Regional, Favoriten'"></span>
+                </button>
+                <div x-show="gpFilter.mehr" x-cloak class="flex flex-wrap items-center gap-2">
+                    <select x-model="gpFilter.condition" @change="browse()" aria-label="Zustand" class="{{ $feld }} fa-select w-full pr-8">
                         <option value="">Jeder Zustand</option>
                         <template x-for="z in (vokabular?.zustande ?? [])" :key="z"><option :value="z" x-text="z"></option></template>
                     </select>
-                    <label class="flex items-center gap-1.5 text-[11px] text-gray-600">
-                        <input type="checkbox" x-model="gpFilter.bio" @change="browse()" class="rounded border-gray-300 !w-3 !h-3" /> Bio
-                    </label>
-                    <label class="flex items-center gap-1.5 text-[11px] text-gray-600">
-                        <input type="checkbox" x-model="gpFilter.regional" @change="browse()" class="rounded border-gray-300 !w-3 !h-3" /> Regional
-                    </label>
-                    {{-- 06·H4: Picker auf die kuratierten Favoriten-GPs verengen --}}
-                    <label class="flex items-center gap-1.5 text-[11px] text-gray-600" title="Nur kuratierte Favoriten-GPs">
-                        <input type="checkbox" x-model="gpFilter.nur_favoriten" @change="browse()" class="rounded border-gray-300 !w-3 !h-3" /> ⭐ Favoriten
-                    </label>
+                    <label class="fa-chip"><input type="checkbox" x-model="gpFilter.bio" @change="browse()" class="sr-only peer" /><span>Bio</span></label>
+                    <label class="fa-chip"><input type="checkbox" x-model="gpFilter.regional" @change="browse()" class="sr-only peer" /><span>Regional</span></label>
+                    {{-- 06·H4: Picker auf die kuratierten Favoriten verengen --}}
+                    <label class="fa-chip" title="Nur kuratierte Favoriten"><input type="checkbox" x-model="gpFilter.nur_favoriten" @change="browse()" class="sr-only peer" /><span class="gap-1">@svg('heroicon-m-star', 'w-3.5 h-3.5') Favoriten</span></label>
+                </div>
+            </fieldset>
+            <div class="flex flex-col min-w-0" data-browser-gps>
+                <p class="mb-1.5 flex items-center gap-2 text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-2)]">
+                    <span class="inline-flex items-center h-[22px] px-2 rounded-full" style="{{ $typStyle('gp') }}">Grundprodukte</span>
+                    <span class="tabular-nums" x-text="gpTotal"></span>
+                </p>
+                <div class="flex flex-col max-h-[28rem] overflow-y-auto rounded-[var(--fa-radius-control)] border border-[var(--fa-line)]" data-gp-liste>
+                    <template x-for="ziel in gpListe" :key="'bg' + ziel.id">
+                        <div class="flex items-center gap-1.5 px-2 py-1 border-b border-[var(--fa-line)] last:border-b-0 hover:bg-[var(--fa-hover)]">
+                            <button type="button" @click="parke(ziel)" class="min-w-0 flex-1 text-left leading-snug text-[length:var(--fa-text-md)] text-[var(--fa-ink)] break-words" x-text="ziel.name" :title="'Übernehmen: ' + ziel.name"></button>
+                            <span class="shrink-0 tabular-nums text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]" x-text="ziel.preis_label ?? 'Preis fehlt'"></span>
+                            <button type="button" x-show="ziel.id" @click="Livewire.dispatch('gp-modal.oeffnen', { id: ziel.id })"
+                                    class="{{ $ib }}" title="Grundprodukt ansehen" aria-label="Grundprodukt ansehen">@svg('heroicon-o-cube', 'w-4 h-4')</button>
+                            <button type="button" @click="parke(ziel)" data-parke
+                                    class="{{ $ib }} text-[var(--fa-accent)] hover:text-[var(--fa-accent-hover)] hover:bg-[var(--fa-accent-soft)]"
+                                    title="Übernehmen, dann Menge eingeben" aria-label="Übernehmen">@svg('heroicon-m-plus', 'w-4 h-4')</button>
+                        </div>
+                    </template>
+                    {{-- Erst wenn wirklich gesucht wurde „keine Treffer" (2026-08-20). --}}
+                    <p x-show="!browserGeladen" class="px-2 py-2 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">Suchbegriff eingeben oder Filter wählen.</p>
+                    <p x-show="browserGeladen && gpListe.length === 0" class="px-2 py-2 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">Keine Grundprodukte gefunden.</p>
+                    <p x-show="gpTotal > 200" x-cloak class="px-2 py-2 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]" x-text="(gpTotal - 200) + ' weitere, bitte Suche oder Filter verfeinern'"></p>
                 </div>
             </div>
-            <div class="space-y-px flex-1 min-h-0 overflow-y-auto -mx-1 px-1" data-gp-liste>
-                <template x-for="ziel in gpListe" :key="'bg' + ziel.id">
-                    <div class="group flex items-center gap-1 px-1 py-0.5 rounded hover:bg-violet-500/5 text-[11px]">
-                        <span class="shrink-0 px-1 rounded text-[9px] font-medium uppercase tracking-wider" style="{{ $typStyle('gp') }}">GP</span>
-                        <span class="min-w-0 flex-1 break-words leading-snug text-gray-700" x-text="ziel.name" :title="ziel.name"></span>
-                        <span class="shrink-0 text-[10px] text-gray-500 tabular-nums" x-text="ziel.preis_label ?? ''"></span>
-                        <button type="button" x-show="ziel.id" @click="Livewire.dispatch('gp-modal.oeffnen', { id: ziel.id })"
-                                class="shrink-0 text-gray-300 hover:text-violet-500 leading-none" title="Produkt einsehen">@svg('heroicon-o-cube', 'w-4 h-4')</button>
-                        <button type="button" @click="parke(ziel)" data-parke
-                                class="shrink-0 px-1 rounded font-medium text-violet-500 hover:bg-violet-500/15 leading-none"
-                                title="übernehmen → Menge eingeben">+</button>
-                    </div>
-                </template>
-                {{-- Erst wenn wirklich gesucht wurde „keine Treffer" — sonst neutraler Hinweis
-                     (sonst liest sich der ungeladene Zustand wie ein kaputter Filter, 2026-08-20). --}}
-                <p x-show="!browserGeladen" class="text-[10px] text-gray-500 px-1">Tippe oben zum Suchen oder wähle einen Filter …</p>
-                <p x-show="browserGeladen && gpListe.length === 0" class="text-[10px] text-gray-500 px-1">— keine Treffer —</p>
-                <p x-show="gpTotal > 200" x-cloak class="text-[10px] text-gray-500 px-1" x-text="'… ' + (gpTotal - 200) + ' weitere — Filter verengen'"></p>
-            </div>
         </aside>
-        <div class="w-full xl:flex-1 min-w-0 order-first xl:order-none">
-        {{-- Such-/Park-Zeile FIX oben (sticky) — filtert beide Seitenspalten; die Tabelle scrollt darunter --}}
-        <div class="sticky top-0 z-10 mb-3 rounded-lg bg-white/90 backdrop-blur border border-black/5 px-3 py-2" data-add-zeile>
-            <div x-show="tauschIdx !== null" x-cloak class="flex items-center gap-2 mb-2 rounded-md bg-amber-500/10 border border-amber-500/30 px-2 py-1 text-[11px] text-amber-700" data-tausch-banner>
-                <span>@svg('heroicon-o-arrows-right-left', 'w-3.5 h-3.5 inline align-text-bottom mr-1') Tausch-Modus — Ersatz für Zeile <span class="font-semibold" x-text="(tauschIdx ?? 0) + 1"></span> per <span class="font-semibold">+</span> in den Spalten wählen. Menge &amp; Einheit bleiben.</span>
-                <button type="button" @click="tauschIdx = null" class="{{ $btnGhostXs }} shrink-0 ml-auto" data-tausch-abbrechen>Abbrechen</button>
-            </div>
-            <div x-show="geparkt === null" class="flex items-center gap-2">
+
+        <div class="flex flex-col gap-3 min-w-0 lg:col-start-2 lg:row-start-1">
+    <div class="sticky top-0 z-10 flex flex-col gap-2 p-3 rounded-[var(--fa-radius-surface)] bg-[var(--fa-surface)] border border-[var(--fa-line)] shadow-sm" data-add-zeile>
+        {{-- Suche (ohne geparktes Ziel) --}}
+        <div x-show="geparkt === null" class="flex flex-wrap items-center gap-2">
+            <div class="relative flex-1 min-w-[14rem]">
+                @svg('heroicon-m-magnifying-glass', 'pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--fa-ink-3)]')
                 <input type="search" x-model="browseQ" @focus="browseOnce()" @input.debounce.300ms="sucheGetippt()"
-                       placeholder="Suchen — filtert Produkte UND Rezepte … (Übernehmen per [+] in den Spalten)"
-                       class="{{ $input }} !py-1 flex-1" data-browse-suche />
+                       placeholder="Zutat oder Basisrezept hinzufügen"
+                       aria-label="Zutat oder Basisrezept suchen"
+                       class="fa-control h-9 pl-8 text-[length:var(--fa-text-md)]" data-browse-suche />
             </div>
-            <div x-show="geparkt !== null" x-cloak class="flex items-center gap-2" data-park-zeile>
-                <span class="shrink-0 px-1 rounded text-[9px] font-medium uppercase tracking-wider"
-                      :style="geparkt?.typ === 'gp' ? '{{ $typStyle('gp') }}' : '{{ $typStyle('basisrezept') }}'"
-                      x-text="geparkt?.typ === 'gp' ? 'GP' : 'Rezept'"></span>
-                <span class="min-w-0 flex-1 truncate text-[11px] font-medium text-gray-900" x-text="geparkt?.name" data-park-name></span>
-                <input type="text" x-model="neu.quantity" @keydown.enter.prevent="einfuegen()" placeholder="Menge"
-                       class="{{ $input }} !w-20 !py-1 text-right" data-park-quantity />
-                {{-- #9c: nur die für das geparkte Produkt hinterlegten/umrechenbaren Einheiten --}}
-                <select x-model.number="neu.unit_vocab_id" class="{{ $input }} !w-24 !py-0.5 !text-[11px]" data-park-unit>
-                    <template x-for="e in erlaubteEinheiten(geparkt)" :key="e.id"><option :value="e.id" x-text="e.slug"></option></template>
-                </select>
-                <label class="inline-flex items-center gap-1 text-[11px] text-gray-500 shrink-0">
-                    <input type="checkbox" x-model="neu.is_optional" class="rounded border-gray-300" /> optional
-                </label>
-                <button type="button" @click="einfuegen()" class="{{ $btnGhostXs }} text-emerald-600 shrink-0" data-park-einfuegen>Einfügen ⏎</button>
-                <button type="button" @click="verwerfen()" class="{{ $btnGhostXs }} shrink-0" title="Verwerfen" data-park-verwerfen>@svg('heroicon-o-x-mark', 'w-3.5 h-3.5')</button>
-            </div>
-            <p class="text-[10px] text-gray-500 mt-1">Erst Produkt/Rezept per [+] wählen — Einheit kommt automatisch mit, dann Menge + Enter (§1.2)</p>
         </div>
-        <div class="overflow-x-auto">{{-- R18: Mitte scrollt intern statt unter die Seitenspalten zu laufen --}}
-        <table class="{{ $table }} border-collapse" data-zutaten-tabelle>
-            {{-- R5: BIS-Spalte raus (Dominique) — quantity_max bleibt in den Daten erhalten; 3 EK-Sichten statt einer --}}
-            <thead><tr class="text-left">
-                @php($koepfe = ['#' => null, 'Menge' => null, 'Einheit' => null, 'Verknüpfung / Beschreibung' => 'Klick auf den Namen öffnet GP/Rezept als Fenster über dem Editor']
-                    + ($vkKontext ? ['Rolle' => 'V-21: aroma_treiber · komponente · beilage · garnitur (🎭 verteilt per KI)'] : [])
-                    + ['Garv. %' => null, 'Anteil %' => 'Gewichtsanteil = % vom Gesamtgewicht des Rezepts (Summe = 100 %). Optionale Zutaten und Zeilen ohne Gramm-Umrechnung zählen nicht. Reine Anzeige — Bäckerprozent (Referenz-Sicht) lebt im Grammaturen-Rechner.', 'EK €' => 'EK nach Lead-LA-Strategie (V-27 — damit rechnet das Rezept)', 'EK ↓' => 'günstigster Lieferantenartikel hinter dem GP', 'EK Ø' => 'Durchschnitt über alle Lieferantenartikel hinter dem GP', '' => null])
-                {{-- R22: schmale Spalten auf Inhaltsbreite (w-px) — der Restplatz gehört der Zutat --}}
+
+        {{-- Park-Zeile: Ziel gewählt → Menge tippen, Enter fügt ein --}}
+        <div x-show="geparkt !== null" x-cloak class="flex flex-wrap items-center gap-2" data-park-zeile>
+            <span class="shrink-0 inline-flex items-center h-[22px] px-2 rounded-full text-[length:var(--fa-text-sm)] font-medium"
+                  :style="geparkt?.type === 'gp' ? '{{ $typStyle('gp') }}' : '{{ $typStyle('basisrezept') }}'"
+                  x-text="geparkt?.type === 'gp' ? 'Grundprodukt' : 'Basisrezept'"></span>
+            <span class="min-w-[8rem] flex-1 truncate text-[length:var(--fa-text-md)] font-medium text-[var(--fa-ink)]" x-text="geparkt?.name?.replace('↳ ', '')" data-park-name></span>
+            <input type="text" inputmode="decimal" x-model="neu.quantity" @keydown.enter.prevent="einfuegen()" placeholder="Menge" aria-label="Menge"
+                   class="{{ $feld }} w-24 text-right tabular-nums" data-park-quantity />
+            {{-- #9c: nur die für das geparkte Produkt hinterlegten/umrechenbaren Einheiten --}}
+            <select x-model.number="neu.unit_vocab_id" aria-label="Einheit" class="{{ $feld }} fa-select w-24 pr-7" data-park-unit>
+                <template x-for="e in erlaubteEinheiten(geparkt)" :key="e.id"><option :value="e.id" x-text="e.slug"></option></template>
+            </select>
+            <label class="inline-flex items-center gap-1.5 shrink-0 text-[length:var(--fa-text-md)] text-[var(--fa-ink-2)]">
+                <input type="checkbox" x-model="neu.is_optional" class="w-4 h-4 accent-[var(--fa-accent)]" /> optional
+            </label>
+            <x-fa::button size="sm" icon="heroicon-m-plus" x-on:click="einfuegen()" title="Einfügen (Enter)" data-park-einfuegen>Zutat einfügen</x-fa::button>
+            <button type="button" @click="verwerfen()" class="{{ $ib }}" title="Auswahl verwerfen" aria-label="Auswahl verwerfen" data-park-verwerfen>@svg('heroicon-m-x-mark', 'w-4 h-4')</button>
+        </div>
+
+        <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">Treffer mit Plus übernehmen, Menge eingeben, Enter fügt die Zutat ein. Die Einheit kommt vom Produkt.</p>
+
+            <div x-show="aktiveFilter() > 0" x-cloak>
+                <x-fa::button size="sm" variant="ghost" icon="heroicon-m-x-mark" x-on:click="filterZuruecksetzen()">Filter zurücksetzen</x-fa::button>
+            </div>
+
+    </div>
+    {{-- ── Zutaten-Tabelle: scrollt seitlich in schmalen Spalten (Worker), statt abzuschneiden ── --}}
+    <div class="overflow-x-auto rounded-[var(--fa-radius-surface)] border border-[var(--fa-line)] bg-[var(--fa-surface)]">
+        <table class="fa-table fa-table--compact" data-zutaten-tabelle>
+            {{-- R5: BIS-Spalte raus (quantity_max bleibt in den Daten); drei EK-Sichten --}}
+            @php($koepfe = ['Pos.' => null, 'Menge' => null, 'Einheit' => null, 'Zutat' => 'Klick auf den Namen öffnet Grundprodukt oder Basisrezept als Fenster über dem Editor']
+                + ($vkKontext ? ['Rolle' => 'Rolle im Gericht: Aromaträger, Komponente, Beilage oder Garnitur'] : [])
+                + ['Garverlust %' => 'Gewichtsverlust beim Garen', 'Anteil %' => 'Anteil am Gesamtgewicht des Rezepts (Summe 100 %). Optionale Zutaten und Zutaten ohne Gramm-Umrechnung zählen nicht. Bäckerprozent rechnet der Grammaturen-Rechner.', 'EK' => 'Einkaufspreis mit dem Hauptartikel. Damit rechnet das Rezept.', 'Günstigster' => 'Einkaufspreis mit dem günstigsten Artikel hinter dem Grundprodukt', 'Ø' => 'Einkaufspreis im Durchschnitt aller Artikel hinter dem Grundprodukt', '' => null])
+            <thead><tr>
                 @foreach($koepfe as $head => $tip)
-                    <th class="{{ $th }} !px-2 {{ str_starts_with($head, 'Verknüpfung') ? 'w-full' : 'w-px' }} {{ $tip ? 'cursor-help underline decoration-dotted decoration-gray-300 underline-offset-2' : '' }}" @if($tip) title="{{ $tip }}" @endif>{{ $head }}</th>
+                    <th class="{{ $head === 'Zutat' ? 'w-full' : 'w-px' }} {{ in_array($head, ['Garverlust %', 'Anteil %', 'EK', 'Günstigster', 'Ø'], true) ? 'text-right' : '' }}" @if($tip) title="{{ $tip }}" @endif>
+                        @if($tip)<span class="cursor-help underline decoration-dotted decoration-[var(--fa-ink-3)] underline-offset-2">{{ $head }}</span>@else{{ $head }}@endif
+                        @if($head === '')<span class="sr-only">Aktionen</span>@endif
+                    </th>
                 @endforeach
             </tr></thead>
-            {{-- tbody je Zutat: Haupt-Zeile + aufklappbare LA-Peek-Zeile (HTML erlaubt mehrere tbody) --}}
-                <template x-for="(zeile, i) in rows" :key="zeile._key">
-                    <tbody @dragover.prevent @dragenter.prevent @drop.prevent="dropAuf(i)"
-                           :class="dragIdx === i ? 'opacity-40' : ''" data-editor-zeile>
-                    <tr class="{{ $tr }} !border-b-0 transition-colors duration-500" :class="(zeile.is_optional ? 'opacity-60 ' : '') + (zeile._flash ? 'bg-emerald-500/15' : '')">
-                        <td class="{{ $td }} !px-1.5 !py-0.5 whitespace-nowrap">
+            {{-- tbody je Zutat: Haupt-Zeile + aufklappbare Artikel-Zeile (HTML erlaubt mehrere tbody) --}}
+            <template x-for="(zeile, i) in rows" :key="zeile._key">
+                <tbody @dragover.prevent @dragenter.prevent @drop.prevent="dropAuf(i)"
+                       :class="dragIdx === i ? 'opacity-40' : ''" data-editor-zeile>
+                <tr class="transition-colors duration-500" :class="(zeile.is_optional ? 'opacity-60 ' : '') + (zeile._flash ? 'bg-[var(--fa-ok-soft)]' : '')">
+                    <td class="whitespace-nowrap">
+                        <div class="flex items-center gap-0.5">
                             {{-- R4: setData ist PFLICHT, sonst startet Safari den Drag gar nicht --}}
-                            <span class="inline-block cursor-grab active:cursor-grabbing text-gray-600 hover:text-violet-500 select-none" draggable="true"
+                            <span class="inline-flex cursor-grab active:cursor-grabbing text-[var(--fa-ink-3)] hover:text-[var(--fa-ink)] select-none" draggable="true"
                                   @dragstart="dragIdx = i; $event.dataTransfer.setData('text/plain', String(i)); $event.dataTransfer.effectAllowed = 'move'"
-                                  @dragend="dragIdx = null" title="ziehen zum Sortieren" data-drag-handle>⠿</span>
-                            {{-- R15 (Jarvis moveUpDown): ▲▼ als zuverlässige Sortier-Alternative zu DnD --}}
-                            <span class="inline-flex flex-col align-middle leading-none">
-                                <button type="button" class="text-[9px] text-gray-600 hover:text-violet-500 leading-none disabled:opacity-20"
-                                        :disabled="i === 0" @click="verschiebe(i, -1)" title="nach oben" data-zeile-hoch>▲</button>
-                                <button type="button" class="text-[9px] text-gray-600 hover:text-violet-500 leading-none disabled:opacity-20"
-                                        :disabled="i === rows.length - 1" @click="verschiebe(i, 1)" title="nach unten" data-zeile-runter>▼</button>
+                                  @dragend="dragIdx = null" title="Ziehen zum Sortieren" data-drag-handle>@svg('heroicon-m-bars-2', 'w-4 h-4')</span>
+                            {{-- R15: Hoch/Runter als zuverlässige Sortier-Alternative zu Ziehen --}}
+                            <span class="inline-flex flex-col">
+                                <button type="button" class="inline-flex text-[var(--fa-ink-3)] hover:text-[var(--fa-ink)] disabled:opacity-30"
+                                        :disabled="i === 0" @click="verschiebe(i, -1)" title="Nach oben" aria-label="Nach oben" data-zeile-hoch>@svg('heroicon-m-chevron-up', 'w-3.5 h-3.5')</button>
+                                <button type="button" class="inline-flex text-[var(--fa-ink-3)] hover:text-[var(--fa-ink)] disabled:opacity-30"
+                                        :disabled="i === rows.length - 1" @click="verschiebe(i, 1)" title="Nach unten" aria-label="Nach unten" data-zeile-runter>@svg('heroicon-m-chevron-down', 'w-3.5 h-3.5')</button>
                             </span>
-                            <span class="text-gray-500 tabular-nums text-[11px] ml-0.5" x-text="i + 1"></span>
-                        </td>
-                        <td class="{{ $td }} !px-2 !py-0.5"><input type="text" x-model="zeile.quantity" class="{{ $input }} !w-20 !py-0.5 !text-[11px] text-right" data-quantity /></td>
-                        <td class="{{ $td }} !px-2 !py-0.5">
-                            {{-- #9c: nur die für dieses Produkt hinterlegten/umrechenbaren Einheiten (Fallback: alle) --}}
-                            {{-- :selected ist PFLICHT, nicht Deko (2026-09-04, Dominique). x-model schiebt
-                                 seinen Wert EINMAL beim Aufbau in den Select — die Optionen aus dem
-                                 verschachtelten x-for existieren da noch nicht, der Wert fällt weg, und der
-                                 Select bleibt auf der ersten Option stehen. Ergebnis: jede Zeile, deren
-                                 Einheit nicht die erste erlaubte ist (bei GPs immer „g"), zeigte kg/stk/
-                                 scheibe als „g" an, WÄHREND gerechnet wurde wie hinterlegt — 1 stk Sub-Rezept
-                                 stand als „1 g" da und trug 199 g bei. Am Minimal-Nachbau gemessen: x-effect
-                                 + $nextTick heilt nur die beim Laden vorhandene Zeile, nicht die nachträglich
-                                 eingefügte; :selected heilt beide, und x-model schreibt weiter zurück. --}}
-                            <select x-model.number="zeile.unit_vocab_id" class="{{ $input }} !w-24 !py-0.5 !text-[11px]">
-                                <template x-for="e in erlaubteEinheiten(zeile)" :key="e.id"><option :value="e.id" :selected="e.id === zeile.unit_vocab_id" x-text="e.slug"></option></template>
-                            </select>
-                        </td>
-                        {{-- R19: Hinweis-Spalte raus → Platz für die EINZEILIGE Zutat (note bleibt im Datensatz) --}}
-                        <td class="{{ $td }} !px-2 !py-0.5 whitespace-nowrap">
-                            {{-- R4 (Dichte): Lineage als Tooltip; R7-Fix: neuer Tab ist bei Dominique
-                                 blockiert → Klick öffnet das Ziel als MODAL über dem Editor (Stand bleibt) --}}
+                            <span class="ml-0.5 tabular-nums text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]" x-text="i + 1"></span>
+                        </div>
+                    </td>
+                    <td><input type="text" inputmode="decimal" x-model="zeile.quantity" aria-label="Menge" class="{{ $feld }} w-[4.5rem] text-right tabular-nums" data-quantity /></td>
+                    <td>
+                        {{-- #9c: nur die für dieses Produkt hinterlegten/umrechenbaren Einheiten (Fallback: alle).
+                             :selected ist PFLICHT (2026-09-04): x-model schiebt seinen Wert nur EINMAL in den Select,
+                             bevor die x-for-Optionen existieren; ohne :selected stand jede Zeile optisch auf „g". --}}
+                        <select x-model.number="zeile.unit_vocab_id" aria-label="Einheit" class="{{ $feld }} fa-select w-[4.5rem] pr-6">
+                            <template x-for="e in erlaubteEinheiten(zeile)" :key="e.id"><option :value="e.id" :selected="e.id === zeile.unit_vocab_id" x-text="e.slug"></option></template>
+                        </select>
+                    </td>
+                    <td class="min-w-[10rem]">
+                        <div class="flex items-center gap-1 min-w-0">
+                            {{-- R7: Klick öffnet das Ziel als Fenster über dem Editor (Stand bleibt) --}}
                             <template x-if="zeile.gp_id || zeile.referenced_recipe_id">
                                 <button type="button"
-                                        class="fa-zk-name text-[11px] text-violet-600 hover:underline text-left"
-                                        x-text="zeile.ziel_name ?? (zeile.display_name ?? zeile.raw_text)"
-                                        :title="(zeile.lineage ? 'via ' + zeile.lineage + ' — ' : '') + (zeile.gp_id ? 'GP öffnen' : 'Rezept öffnen')"
+                                        class="min-w-0 text-left leading-snug text-[var(--fa-accent)] hover:text-[var(--fa-accent-hover)] hover:underline"
+                                        x-text="(zeile.ziel_name ?? (zeile.display_name ?? zeile.raw_text) ?? '').replace('↳ ', '')"
+                                        :title="(zeile.gp_id ? 'Grundprodukt öffnen' : 'Basisrezept öffnen') + (herkunftText(zeile) ? ' · ' + herkunftText(zeile) : '')"
                                         @click="zeile.gp_id
                                             ? Livewire.dispatch('gp-modal.oeffnen', { id: zeile.gp_id })
                                             : Livewire.dispatch('recipe-modal.oeffnen', { id: zeile.referenced_recipe_id })"
                                         data-ziel-link></button>
                             </template>
                             <template x-if="!zeile.gp_id && !zeile.referenced_recipe_id">
-                                <span class="fa-zk-name text-[11px] text-gray-500" x-text="zeile.ziel_name ?? (zeile.display_name ?? zeile.raw_text)"
-                                      :title="zeile.lineage ? 'Verknüpfung via ' + zeile.lineage : ''"></span>
+                                <span class="min-w-0 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                                    <span class="leading-snug text-[var(--fa-ink-2)]" x-text="zeile.ziel_name ?? (zeile.display_name ?? zeile.raw_text)"></span>
+                                    <x-fa::signal tone="warn" title="Ohne Verknüpfung zählt die Zutat nicht in Preis und Deklaration">nicht verknüpft</x-fa::signal>
+                                </span>
                             </template>
-                            <button type="button" x-show="zeile.gp_id" class="text-gray-300 hover:text-violet-500 ml-1 align-middle" title="Lieferantenartikel hinter dem GP (Peek)"
+                            <button type="button" x-show="zeile.gp_id" class="{{ $ib }}" :class="zeile._peek ? 'text-[var(--fa-accent)]' : ''"
+                                    title="Artikel hinter dem Grundprodukt zeigen" aria-label="Artikel zeigen"
                                     @click="peek(zeile)" data-gp-peek>@svg('heroicon-o-cube', 'w-4 h-4')</button>
-                            {{-- Concepter-Logik überall: Basisrezept als Fenster öffnen (kein Sprung), eigenes Symbol --}}
-                            <button type="button" x-show="zeile.referenced_recipe_id" class="text-gray-300 hover:text-violet-500 ml-1 align-middle" title="Rezept einsehen"
+                            {{-- Basisrezept als Fenster öffnen (kein Sprung) --}}
+                            <button type="button" x-show="zeile.referenced_recipe_id" class="{{ $ib }}" title="Basisrezept ansehen" aria-label="Basisrezept ansehen"
                                     @click="Livewire.dispatch('recipe-modal.oeffnen', { id: zeile.referenced_recipe_id })" data-rez-oeffnen>@svg('heroicon-o-book-open', 'w-4 h-4')</button>
+                        </div>
+                    </td>
+                    @if($vkKontext)
+                        <td>
+                            <select x-model="zeile.role" aria-label="Rolle" class="{{ $feld }} fa-select w-36 pr-7" data-role-select>
+                                <option value="">Ohne Rolle</option>
+                                @foreach(\Platform\FoodAlchemist\Services\SpeisenKlassenService::ROLLEN as $role)
+                                    <option value="{{ $role }}">{{ $rollenText[$role] ?? ucfirst(str_replace('_', ' ', $role)) }}</option>
+                                @endforeach
+                            </select>
                         </td>
-                        @if($vkKontext)
-                            <td class="{{ $td }} !px-2 !py-0.5">
-                                <select x-model="zeile.role" class="{{ $input }} !w-32 !py-0.5 !text-[11px]" data-role-select>
-                                    <option value="">—</option>
-                                    @foreach(\Platform\FoodAlchemist\Services\SpeisenKlassenService::ROLLEN as $role)
-                                        <option value="{{ $role }}">{{ $role }}</option>
-                                    @endforeach
-                                </select>
-                            </td>
-                        @endif
-                        {{-- Garverlust: KI-Schätzung (Generator/Vorschlag) violett markiert; Tippen macht den Wert manuell --}}
-                        <td class="{{ $td }} !px-2 !py-0.5"><input type="text" x-model="zeile.cooking_loss_pct" placeholder="0" class="{{ $input }} !w-14 !py-0.5 !text-[11px] text-right" :class="zeile._garverlust_ki ? '!text-violet-700 !border-violet-300' : ''" :title="zeile._garverlust_ki ? 'Garverlust: KI-Schätzung — Tippen übernimmt den Wert als manuell' : ''" @input="zeile._garverlust_ki = false" data-garverlust-input /></td>
-                        {{-- Gewichtsanteil — % vom Gesamtgewicht (Summe 100 %), reine Anzeige.
-                             Bäckerprozent (Referenz-Sicht + %→Gramm-Rückschreiben) lebt jetzt im
-                             Grammaturen-Rechner (ProportionService/MCP), nicht mehr im Editor. --}}
-                        <td class="{{ $td }} !px-2 !py-0.5 text-right tabular-nums whitespace-nowrap">
-                            <span class="fa-zk-num text-[11px] text-gray-500" x-text="anteilPctFmt(zeile)"
-                                  :title="anteilPct(zeile) !== null ? 'Anteil am Gesamtgewicht' : (zeile.is_optional ? 'optional — zählt nicht' : 'keine Gramm-Umrechnung')"></span>
-                        </td>
-                        <td class="{{ $td }} !px-2 !py-0.5 text-right tabular-nums whitespace-nowrap" data-zeilen-ek-live>
-                            {{-- F2 (#511a): Tausch/Add auf einen unbepreisten GP zeigt jetzt einen sichtbaren
-                                 amber-Hinweis statt eines stillen grauen „—". Greift live, weil ekFuerZiel
-                                 beim Tausch genau dann null liefert (⇄ und ♻ setzen ek_pro_g=null vorher). --}}
-                            <span x-show="(zeile.gp_id || zeile.referenced_recipe_id) && (zeile.ek_pro_g === null || zeile.ek_pro_g === undefined) && !zeile.is_optional"
-                                  x-cloak class="mr-1 text-amber-600 cursor-help" title="Kein Preis hinterlegt — diese Zutat fehlt im EK" data-ek-unpriced>@svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5 inline-block align-middle')︎</span>
-                            <span x-text="zeilenEk(zeile) ?? '—'" :class="zeilenEk(zeile) ? 'text-gray-900' : 'text-gray-500'"></span>
-                        </td>
-                        <td class="{{ $td }} !px-2 !py-0.5 text-right tabular-nums whitespace-nowrap text-gray-600" data-zeilen-ek-min>
-                            <span x-text="zeilenEk(zeile, 'ek_pro_g_min') ?? '—'"></span>
-                        </td>
-                        <td class="{{ $td }} !px-2 !py-0.5 text-right tabular-nums whitespace-nowrap text-gray-600" data-zeilen-ek-avg>
-                            <span x-text="zeilenEk(zeile, 'ek_pro_g_avg') ?? '—'"></span>
-                        </td>
-                        <td class="{{ $td }} !px-2 !py-0.5 whitespace-nowrap">
-                            <label class="inline-flex items-center gap-1 text-[10px] text-gray-500 mr-1" title="optional: zählt nicht in Yield/Kosten">
-                                <input type="checkbox" x-model="zeile.is_optional" class="rounded border-gray-300 !w-3 !h-3" />opt
+                    @endif
+                    {{-- Garverlust: KI-Schätzung in Akzent markiert; Tippen macht den Wert manuell --}}
+                    <td class="num">
+                        <div class="inline-flex items-center gap-1">
+                            <span x-show="zeile._garverlust_ki" x-cloak class="inline-flex text-[var(--fa-accent)]" title="Von der KI geschätzt">@svg('heroicon-m-sparkles', 'w-3.5 h-3.5')</span>
+                            <input type="text" inputmode="decimal" x-model="zeile.cooking_loss_pct" placeholder="0" aria-label="Garverlust in Prozent"
+                                   class="{{ $feld }} w-14 text-right tabular-nums"
+                                   :class="zeile._garverlust_ki ? 'text-[var(--fa-accent)] border-[var(--fa-accent-line)]' : ''"
+                                   :title="zeile._garverlust_ki ? 'Von der KI geschätzt. Tippen übernimmt den Wert als eigenen.' : ''"
+                                   @input="zeile._garverlust_ki = false" data-garverlust-input />
+                        </div>
+                    </td>
+                    {{-- Gewichtsanteil — % vom Gesamtgewicht (Summe 100 %), reine Anzeige --}}
+                    <td class="num">
+                        <span class="text-[var(--fa-ink-2)]" x-text="anteilPctFmt(zeile)"
+                              :title="anteilPct(zeile) !== null ? 'Anteil am Gesamtgewicht' : (zeile.is_optional ? 'Optional, zählt nicht' : 'Keine Gramm-Umrechnung hinterlegt')"></span>
+                    </td>
+                    <td class="num" data-zeilen-ek-live>
+                        {{-- F2 (#511a): unbepreiste Zutat zeigt „Preis fehlt" statt eines stillen Strichs --}}
+                        <x-fa::badge tone="crit" x-show="preisFehlt(zeile)" x-cloak title="Kein Preis hinterlegt, diese Zutat fehlt im Wareneinsatz" data-ek-unpriced>Preis fehlt</x-fa::badge>
+                        <span x-show="!preisFehlt(zeile)" x-text="ekAnzeige(zeile)"
+                              :class="ohnePreis(zeile) || zeilenEk(zeile) === null ? 'text-[var(--fa-ink-3)]' : 'font-medium text-[var(--fa-ink)]'"></span>
+                    </td>
+                    <td class="num text-[var(--fa-ink-2)]" data-zeilen-ek-min>
+                        <span x-text="ekAnzeige(zeile, 'ek_pro_g_min')"></span>
+                    </td>
+                    <td class="num text-[var(--fa-ink-2)]" data-zeilen-ek-avg>
+                        <span x-text="ekAnzeige(zeile, 'ek_pro_g_avg')"></span>
+                    </td>
+                    <td class="whitespace-nowrap">
+                        <div class="flex items-center justify-end gap-0.5">
+                            <label class="inline-flex items-center gap-1 mr-1 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]" title="Optional: zählt nicht in Ausbeute und Kosten">
+                                <input type="checkbox" x-model="zeile.is_optional" class="w-3.5 h-3.5 accent-[var(--fa-accent)]" aria-label="Optional" /><span class="sr-only">optional</span>
                             </label>
-                            {{-- ♻ Ersatz (Äquivalenz-Katalog): nur sichtbar wenn hinterlegt — 1 Klick tauscht um, Menge × Faktor --}}
-                            <button type="button" x-show="zeile.ersatz" x-cloak class="text-emerald-500/60 hover:text-emerald-600 mr-1"
-                                    :title="ersatzTitel(zeile)" @click="ersatzTausch(i)" data-zeile-ersatz>♻</button>
-                            <button type="button" class="hover:text-violet-600 mr-1" :class="tauschIdx === i ? 'text-violet-600' : 'text-gray-300'" @click="starteTausch(i)" title="Zutat tauschen — Menge & Einheit bleiben" data-zeile-tausch>@svg('heroicon-o-arrows-right-left', 'w-3.5 h-3.5')</button>
-                            <button type="button" class="text-rose-400 hover:text-rose-600" @click="rows.splice(i, 1)" title="Zeile entfernen" data-zeile-entfernen>@svg('heroicon-o-x-mark', 'w-3.5 h-3.5')</button>
-                        </td>
-                    </tr>
-                    {{-- GP-Peek (D-5 §4.2.3, Ist-App): LA-Tabelle hinter dem GP, ★ = Lead --}}
-                    <tr x-show="zeile._peek" x-cloak>
-                        <td colspan="{{ $vkKontext ? 11 : 10 }}" class="!px-3 !py-1.5 bg-black/[0.02]">
-                            <div class="rounded-lg border-l-2 border-orange-400 bg-white px-3 py-1.5" data-gp-peek-tabelle>
-                                <p class="text-[11px] font-medium text-gray-900 mb-1">
-                                    @svg('heroicon-o-cube', 'w-3 h-3 inline-block align-[-2px]') <span x-text="(zeile._peek?.length ?? 0) + ' Lieferantenartikel · GP '"></span><span class="font-semibold" x-text="zeile.ziel_name"></span>
-                                </p>
-                                <table class="w-full text-[11px]">
-                                    <thead><tr class="text-left text-[10px] uppercase tracking-wider text-gray-500">
-                                        <th class="px-1.5 py-0.5"></th><th class="px-1.5 py-0.5">Lieferant</th><th class="px-1.5 py-0.5">Art.-Nr</th>
-                                        <th class="px-1.5 py-0.5">Bezeichnung</th><th class="px-1.5 py-0.5">Marke</th><th class="px-1.5 py-0.5">VPE</th>
-                                        <th class="px-1.5 py-0.5 text-right">Preis</th><th class="px-1.5 py-0.5 text-right">Vergleichspreis</th><th class="px-1.5 py-0.5 text-right">Match</th>
+                            {{-- Ersatz (Äquivalenz-Katalog): nur sichtbar, wenn hinterlegt; 1 Klick tauscht um, Menge × Faktor --}}
+                            <button type="button" x-show="zeile.ersatz" x-cloak class="{{ $ib }} text-[var(--fa-ok)] hover:text-[var(--fa-ok)] hover:bg-[var(--fa-ok-soft)]"
+                                    :title="ersatzTitel(zeile)" :aria-label="ersatzTitel(zeile)" @click="ersatzTausch(i)" data-zeile-ersatz>@svg('heroicon-m-arrow-path', 'w-4 h-4')</button>
+                            <button type="button" class="{{ $ib }}" :class="tauschIdx === i ? 'text-[var(--fa-accent)] bg-[var(--fa-accent-soft)]' : ''" @click="starteTausch(i)"
+                                    title="Zutat tauschen, Menge und Einheit bleiben" aria-label="Zutat tauschen" data-zeile-tausch>@svg('heroicon-m-arrows-right-left', 'w-4 h-4')</button>
+                            <button type="button" class="{{ $ib }} hover:text-[var(--fa-crit)] hover:bg-[var(--fa-crit-soft)]" @click="rows.splice(i, 1)"
+                                    title="Zutat entfernen" aria-label="Zutat entfernen" data-zeile-entfernen>@svg('heroicon-m-trash', 'w-4 h-4')</button>
+                        </div>
+                    </td>
+                </tr>
+                {{-- Artikel hinter dem Grundprodukt (D-5 §4.2.3), Stern = Hauptartikel --}}
+                <tr x-show="zeile._peek" x-cloak>
+                    <td colspan="{{ $spalten }}" class="bg-[var(--fa-ground)]">
+                        <div class="flex flex-col gap-1.5 py-1" data-gp-peek-tabelle>
+                            <p class="flex items-center gap-1.5 text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-2)]">
+                                @svg('heroicon-o-cube', 'w-4 h-4 text-[var(--fa-ink-3)]')
+                                <span class="tabular-nums" x-text="(zeile._peek?.length ?? 0) + ' Artikel für'"></span><span class="font-semibold text-[var(--fa-ink)]" x-text="zeile.ziel_name"></span>
+                            </p>
+                            <div class="overflow-x-auto rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] bg-[var(--fa-surface)]">
+                                <table class="fa-table fa-table--compact">
+                                    <thead><tr>
+                                        <th class="w-px"><span class="sr-only">Hauptartikel</span></th><th>Lieferant</th><th>Art.-Nr.</th>
+                                        <th>Bezeichnung</th><th>Marke</th><th>Gebinde</th>
+                                        <th class="text-right">Preis</th><th class="text-right">Vergleichspreis</th><th class="text-right" title="Wie sicher der Artikel zum Grundprodukt passt">Treffer</th>
                                     </tr></thead>
                                     <tbody>
                                         <template x-for="(la, j) in (zeile._peek ?? [])" :key="j">
-                                            <tr class="border-t border-black/5" :class="la.lead ? 'bg-orange-500/10' : ''">
-                                                <td class="px-1.5 py-0.5"><span x-show="la.lead" class="text-orange-500" title="Lead-LA (GL-03)">★</span></td>
-                                                <td class="px-1.5 py-0.5 text-gray-600" x-text="la.lieferant"></td>
-                                                <td class="px-1.5 py-0.5 font-mono text-gray-600" x-text="la.artikelnr"></td>
-                                                <td class="px-1.5 py-0.5 text-gray-900" x-text="la.label"></td>
-                                                <td class="px-1.5 py-0.5 text-gray-600" x-text="la.marke ?? '—'"></td>
-                                                <td class="px-1.5 py-0.5 text-gray-600 italic" x-text="la.vpe ?? '—'"></td>
-                                                <td class="px-1.5 py-0.5 text-right tabular-nums" x-text="la.price ?? '—'"></td>
-                                                <td class="px-1.5 py-0.5 text-right tabular-nums text-gray-600" x-text="la.vergleichspreis ?? '—'"></td>
-                                                <td class="px-1.5 py-0.5 text-right text-gray-600" x-text="la.match ?? '—'"></td>
+                                            <tr :aria-selected="la.lead ? 'true' : 'false'">
+                                                <td><span x-show="la.lead" class="inline-flex text-[var(--fa-accent)]" title="Hauptartikel, damit rechnet das Rezept">@svg('heroicon-s-star', 'w-4 h-4')</span></td>
+                                                <td class="whitespace-nowrap text-[var(--fa-ink-2)]" x-text="la.lieferant"></td>
+                                                <td class="whitespace-nowrap tabular-nums text-[var(--fa-ink-2)]" x-text="la.artikelnr"></td>
+                                                <td class="min-w-[12rem]" x-text="la.label"></td>
+                                                <td class="text-[var(--fa-ink-2)]" x-text="la.marke ?? '–'"></td>
+                                                <td class="whitespace-nowrap text-[var(--fa-ink-2)]" x-text="la.vpe ?? '–'"></td>
+                                                <td class="num"><span x-show="la.price" x-text="la.price"></span><x-fa::badge tone="crit" x-show="!la.price">Preis fehlt</x-fa::badge></td>
+                                                <td class="num text-[var(--fa-ink-2)]" x-text="la.vergleichspreis ?? '–'"></td>
+                                                <td class="num text-[var(--fa-ink-2)]" x-text="la.match ?? '–'"></td>
                                             </tr>
                                         </template>
+                                        <tr x-show="(zeile._peek ?? []).length === 0">
+                                            <td colspan="9" class="text-[var(--fa-ink-3)]">Keine Artikel mit diesem Grundprodukt verknüpft.</td>
+                                        </tr>
                                     </tbody>
                                 </table>
                             </div>
-                        </td>
-                    </tr>
-                    </tbody>
-                </template>
+                        </div>
+                    </td>
+                </tr>
+                </tbody>
+            </template>
+            <tbody x-show="rows.length === 0" x-cloak>
+                <tr><td colspan="{{ $spalten }}">
+                    <x-fa::empty compact icon="heroicon-o-queue-list" title="Noch keine Zutaten">Oben suchen und mit Plus übernehmen.</x-fa::empty>
+                </td></tr>
+            </tbody>
             <tfoot>
-                <tr class="border-t border-black/10">
-                    <td colspan="{{ $vkKontext ? 7 : 6 }}" class="{{ $td }} !px-2 text-right text-[11px] text-gray-500">
-                        <span data-yield-live>Yield ≈ <span class="font-medium text-gray-700" x-text="yieldLive()"></span></span>
-                        · Σ live (Näherung — Putzverlust-Defaults & Brücken rechnet der Save-Recompute)
+                <tr class="border-t border-[var(--fa-line-strong)]">
+                    <td colspan="{{ $vkKontext ? 7 : 6 }}" class="text-right text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-2)]">Summe</td>
+                    <td class="num font-semibold text-[var(--fa-ink)]" data-summe-live>
+                        <span x-text="summeAnzeige()"></span>
                     </td>
-                    <td class="{{ $td }} !px-2 text-right font-medium tabular-nums text-gray-900" data-summe-live>
-                        <span x-text="summe()"></span>
+                    <td class="num text-[var(--fa-ink-2)]" data-summe-min>
+                        <span x-text="summeAnzeige('ek_pro_g_min')"></span>
                     </td>
-                    <td class="{{ $td }} !px-2 text-right tabular-nums text-gray-600" data-summe-min>
-                        <span x-text="summe('ek_pro_g_min')"></span>
-                    </td>
-                    <td class="{{ $td }} !px-2 text-right tabular-nums text-gray-600" data-summe-avg>
-                        <span x-text="summe('ek_pro_g_avg')"></span>
+                    <td class="num text-[var(--fa-ink-2)]" data-summe-avg>
+                        <span x-text="summeAnzeige('ek_pro_g_avg')"></span>
                     </td>
                     <td></td>
                 </tr>
-                {{-- F2 (#511a): EK-Vollständigkeits-Zeile — sichtbar, sobald wert-relevante
-                     Zutaten ohne auflösbaren Preis dabei sind (der Server-Zähler
-                     ek_n_ingredients_priced < _total gespiegelt auf den Client). --}}
-                <tr x-show="bepreistInfo().total > bepreistInfo().priced" x-cloak class="border-t border-amber-500/20">
-                    <td colspan="{{ $vkKontext ? 11 : 10 }}" class="{{ $td }} !px-2 text-right text-[11px] text-amber-700" data-ek-unvollstaendig>
-                        @svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5 inline-block align-middle')︎ nur <span class="font-medium" x-text="bepreistInfo().priced"></span> von <span class="font-medium" x-text="bepreistInfo().total"></span> Zutaten bepreist — EK unvollständig (Preis am GP/Lieferantenartikel ergänzen)
-                    </td>
-                </tr>
             </tfoot>
         </table>
+    </div>
+
+    {{-- Unter der Tabelle: Ausbeute + Preis-Hinweis — bricht um, wird in schmalen Spalten nie abgeschnitten --}}
+    <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <p class="inline-flex items-center gap-1.5 text-[length:var(--fa-text-md)] text-[var(--fa-ink-2)]" data-yield-live
+           title="Vorläufig. Putzverluste aus den Grundprodukten und Umrechnungen rechnet das Speichern genau nach.">
+            Ausbeute ca. <span class="font-semibold tabular-nums text-[var(--fa-ink)]" x-text="yieldLive()"></span>
+            @svg('heroicon-m-information-circle', 'w-4 h-4 text-[var(--fa-ink-3)]')
+        </p>
+        <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">Werte rechnen beim Tippen mit, verbindlich nach dem Speichern.</p>
+    </div>
+    {{-- F2 (#511a): EK-Vollständigkeit, sobald wert-relevante Zutaten ohne Preis dabei sind --}}
+    <x-fa::notice tone="warn" x-show="bepreistInfo().total > bepreistInfo().priced" x-cloak data-ek-unvollstaendig>
+        Nur <span class="font-semibold tabular-nums" x-text="bepreistInfo().priced"></span> von <span class="font-semibold tabular-nums" x-text="bepreistInfo().total"></span> Zutaten haben einen Preis. Der Wareneinsatz ist unvollständig, bitte Preis am Grundprodukt oder Artikel ergänzen.
+    </x-fa::notice>
+
+    {{-- Konsolidierung 2026-08 (#1b): kein eigener Speichern-Knopf im Kern. Der Zutaten-Save wird vom
+         JEWEILIGEN Host adressiert angestoßen (`zutaten-speichern`, MVP-046): Rezept-/Gericht-Editor über
+         ihren Haupt-„Speichern", das Planungs-Cockpit über den Knopf in step-zeile, das Standalone-Modal
+         über seinen Kopf. So gibt es pro Editor nur EINEN Speichern-Weg. --}}
         </div>
 
-        {{-- Such-/Park-Zeile ist jetzt sticky am Anfang der Mittelspalte (oben). --}}
-
-        {{-- Konsolidierung 2026-08 (#1b): der frühere eingebettete „Zutaten speichern"-Knopf ist
-             entfallen. Der Zutaten-Save wird jetzt vom JEWEILIGEN Host getriggert (adressiert per
-             `zutaten-speichern`-Event, MVP-046): Rezept-/Gericht-Editor über ihren Haupt-„Speichern"
-             (sequenziert nach den Stammdaten), das Planungs-Cockpit über den Per-Step-Knopf in
-             step-zeile.blade. So gibt es pro Editor nur EINEN Speichern-Weg. --}}
-        </div>{{-- /Mitte --}}
-        <aside class="w-full xl:w-72 shrink-0 flex flex-col rounded-xl bg-gray-500/[0.07] border border-black/5 p-2.5 xl:sticky xl:top-0 self-start max-h-[70vh]" data-browser-rezepte>
-            <p class="{{ $dt }} mb-1">Basisrezepte (<span x-text="rezTotal"></span>)</p>
-            <div class="space-y-1 mb-1.5">
-                <select x-model="rezFilter.hg" @change="rezFilter.kat = ''; browse()" class="{{ $input }} !py-0.5 !text-[11px]" data-rez-filter-hg>
-                    <option value="">Alle Hauptgruppen</option>
-                    <template x-for="h in (vokabular?.hauptgruppen ?? [])" :key="h.id">
-                        <option :value="h.id" x-text="h.label"></option>
-                    </template>
-                </select>
-                <select x-model="rezFilter.kat" @change="browse()" class="{{ $input }} !py-0.5 !text-[11px]" data-rez-filter-kat>
-                    <option value="">Alle Kategorien</option>
-                    <template x-for="k in kategorienFuerHg()" :key="k.id">
-                        <option :value="k.id" x-text="k.label"></option>
-                    </template>
-                </select>
-                <select x-model="rezFilter.level" @change="browse()" class="{{ $input }} !py-0.5 !text-[11px]" data-rez-filter-niveau>
-                    <option value="">Jedes Niveau</option>
-                    <template x-for="n in (vokabular?.niveaus ?? [])" :key="n.slug">
-                        <option :value="n.slug" x-text="n.label"></option>
-                    </template>
-                </select>
+        <aside class="fa-surface p-3 flex flex-col gap-3 min-w-0 lg:col-start-1 lg:row-start-1 wide:col-start-3 lg:sticky lg:top-0" :class="einfuegenAus === 'rez' ? '' : 'max-wide:hidden'" aria-label="Basisrezepte einfügen">
+            {{-- Laptop (< 1.800 px): EINE Einfüge-Spalte mit Umschalter; ab 1.800 px stehen beide Spalten nebeneinander --}}
+            <div role="group" aria-label="Einfügen aus" class="flex p-0.5 gap-0.5 rounded-[var(--fa-radius-control)] bg-[var(--fa-neutral-soft)] wide:hidden">
+                <button type="button" @click="einfuegenAus = 'gp'" :aria-pressed="einfuegenAus === 'gp'"
+                        class="flex-1 h-8 px-2 rounded-[5px] text-[length:var(--fa-text-sm)] font-medium transition-colors"
+                        :class="einfuegenAus === 'gp' ? 'bg-[var(--fa-surface)] text-[var(--fa-ink)] shadow-sm' : 'text-[var(--fa-ink-2)] hover:text-[var(--fa-ink)]'">Grundprodukte <span class="tabular-nums text-[var(--fa-ink-3)]" x-text="gpTotal"></span></button>
+                <button type="button" @click="einfuegenAus = 'rez'" :aria-pressed="einfuegenAus === 'rez'"
+                        class="flex-1 h-8 px-2 rounded-[5px] text-[length:var(--fa-text-sm)] font-medium transition-colors"
+                        :class="einfuegenAus === 'rez' ? 'bg-[var(--fa-surface)] text-[var(--fa-ink)] shadow-sm' : 'text-[var(--fa-ink-2)] hover:text-[var(--fa-ink)]'">Basisrezepte <span class="tabular-nums text-[var(--fa-ink-3)]" x-text="rezTotal"></span></button>
             </div>
-            <div class="space-y-px flex-1 min-h-0 overflow-y-auto -mx-1 px-1" data-rez-liste>
-                <template x-for="ziel in rezListe" :key="'br' + ziel.id">
-                    <div class="group flex items-center gap-1 px-1 py-0.5 rounded hover:bg-emerald-500/5 text-[11px]">
-                        <span class="shrink-0 px-1 rounded text-[9px] font-medium uppercase tracking-wider" style="{{ $typStyle('basisrezept') }}">REZ</span>
-                        {{-- Niveau-Farbpunkt (haute=violett · gehoben=amber · klassisch=blau) --}}
-                        <span class="shrink-0 w-1.5 h-1.5 rounded-full" x-show="(ziel.niveaus ?? []).length > 0"
-                              :class="niveauFarbe(ziel.niveaus?.[0])" :title="(ziel.niveaus ?? []).join(' · ')"></span>
-                        <span class="min-w-0 flex-1 break-words leading-snug text-gray-700" x-text="ziel.name.replace('↳ ', '')" :title="ziel.name"></span>
-                        <span class="shrink-0 text-[10px] text-gray-500 tabular-nums" x-text="ziel.preis_label ?? ''"></span>
-                        <button type="button" x-show="ziel.id" @click="Livewire.dispatch('recipe-modal.oeffnen', { id: ziel.id })"
-                                class="shrink-0 text-gray-300 hover:text-violet-500 leading-none" title="Rezept einsehen">@svg('heroicon-o-book-open', 'w-4 h-4')</button>
-                        <button type="button" @click="parke(ziel)" data-parke
-                                class="shrink-0 px-1 rounded font-medium text-emerald-500 hover:bg-emerald-500/15 leading-none"
-                                title="übernehmen → Menge eingeben">+</button>
-                    </div>
-                </template>
-                <p x-show="!browserGeladen" class="text-[10px] text-gray-500 px-1">Tippe oben zum Suchen oder wähle einen Filter …</p>
-                <p x-show="browserGeladen && rezListe.length === 0" class="text-[10px] text-gray-500 px-1">— keine Treffer —</p>
-                <p x-show="rezTotal > 200" x-cloak class="text-[10px] text-gray-500 px-1" x-text="'… ' + (rezTotal - 200) + ' weitere — Filter verengen'"></p>
+<fieldset class="flex flex-col gap-2 min-w-0">
+                <legend class="sr-only">Basisrezepte filtern</legend>
+                <div class="grid grid-cols-1 gap-2">
+                    <select x-model="rezFilter.hg" @change="rezFilter.kat = ''; browse()" aria-label="Hauptgruppe" class="{{ $feld }} fa-select pr-8" data-rez-filter-hg>
+                        <option value="">Alle Hauptgruppen</option>
+                        <template x-for="h in (vokabular?.hauptgruppen ?? [])" :key="h.id">
+                            <option :value="h.id" x-text="h.label"></option>
+                        </template>
+                    </select>
+                    <select x-model="rezFilter.kat" @change="browse()" aria-label="Kategorie" class="{{ $feld }} fa-select pr-8" data-rez-filter-kat>
+                        <option value="">Alle Kategorien</option>
+                        <template x-for="k in kategorienFuerHg()" :key="k.id">
+                            <option :value="k.id" x-text="k.label"></option>
+                        </template>
+                    </select>
+                    <select x-model="rezFilter.level" @change="browse()" aria-label="Niveau" class="{{ $feld }} fa-select pr-8" data-rez-filter-niveau>
+                        <option value="">Jedes Niveau</option>
+                        <template x-for="n in (vokabular?.niveaus ?? [])" :key="n.slug">
+                            <option :value="n.slug" x-text="n.label"></option>
+                        </template>
+                    </select>
+                </div>
+            </fieldset>
+            <div class="flex flex-col min-w-0" data-browser-rezepte>
+                <p class="mb-1.5 flex items-center gap-2 text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-2)]">
+                    <span class="inline-flex items-center h-[22px] px-2 rounded-full" style="{{ $typStyle('basisrezept') }}">Basisrezepte</span>
+                    <span class="tabular-nums" x-text="rezTotal"></span>
+                </p>
+                <div class="flex flex-col max-h-[28rem] overflow-y-auto rounded-[var(--fa-radius-control)] border border-[var(--fa-line)]" data-rez-liste>
+                    <template x-for="ziel in rezListe" :key="'br' + ziel.id">
+                        <div class="flex items-center gap-1.5 px-2 py-1 border-b border-[var(--fa-line)] last:border-b-0 hover:bg-[var(--fa-hover)]">
+                            <button type="button" @click="parke(ziel)" class="min-w-0 flex-1 text-left leading-snug text-[length:var(--fa-text-md)] text-[var(--fa-ink)] break-words" :title="'Übernehmen: ' + ziel.name.replace('↳ ', '')">
+                                <span x-text="ziel.name.replace('↳ ', '')"></span>
+                                <span x-show="(ziel.niveaus ?? []).length > 0" class="ml-1 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]" x-text="niveauText(ziel)"></span>
+                            </button>
+                            <span class="shrink-0 tabular-nums text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]" x-text="ziel.preis_label ?? 'Preis fehlt'"></span>
+                            <button type="button" x-show="ziel.id" @click="Livewire.dispatch('recipe-modal.oeffnen', { id: ziel.id })"
+                                    class="{{ $ib }}" title="Basisrezept ansehen" aria-label="Basisrezept ansehen">@svg('heroicon-o-book-open', 'w-4 h-4')</button>
+                            <button type="button" @click="parke(ziel)" data-parke
+                                    class="{{ $ib }} text-[var(--fa-accent)] hover:text-[var(--fa-accent-hover)] hover:bg-[var(--fa-accent-soft)]"
+                                    title="Übernehmen, dann Menge eingeben" aria-label="Übernehmen">@svg('heroicon-m-plus', 'w-4 h-4')</button>
+                        </div>
+                    </template>
+                    <p x-show="!browserGeladen" class="px-2 py-2 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">Suchbegriff eingeben oder Filter wählen.</p>
+                    <p x-show="browserGeladen && rezListe.length === 0" class="px-2 py-2 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">Keine Basisrezepte gefunden.</p>
+                    <p x-show="rezTotal > 200" x-cloak class="px-2 py-2 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]" x-text="(rezTotal - 200) + ' weitere, bitte Suche oder Filter verfeinern'"></p>
+                </div>
             </div>
         </aside>
-        </div>{{-- /Drei-Spalten-Flex --}}
     </div>
+</div>

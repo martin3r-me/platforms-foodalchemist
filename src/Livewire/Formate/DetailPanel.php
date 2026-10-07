@@ -76,6 +76,8 @@ class DetailPanel extends Component
             ->values();
         $cockpit = [
             'n_editionen' => $conceptSlots->count(),
+            // Nur Anzeige (Offene Punkte im Detail): Editionen, für die kein Preis vorliegt.
+            'n_ohne_preis' => $conceptSlots->count() - $vks->count(),
             'n_struktur' => $format !== null ? $format->slots->whereIn('type', ['header', 'text', 'spacer'])->count() : 0,
             'min' => $vks->isEmpty() ? null : round((float) $vks->min(), 2),
             'max' => $vks->isEmpty() ? null : round((float) $vks->max(), 2),

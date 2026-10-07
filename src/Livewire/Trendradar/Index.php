@@ -116,11 +116,10 @@ class Index extends Component
                 $semanticAktiv = true;
                 $semanticIds = $svc->searchDocIds($suche, 60);
                 if ($semanticIds === []) {
-                    $semanticNote = 'Keine semantischen Treffer — evtl. ist der Korpus noch nicht indiziert '
-                        . '(php artisan foodalchemist:knowledge-embed).';
+                    $semanticNote = 'Keine Treffer nach Bedeutung. Möglicherweise sind die Trends noch nicht für diese Suche aufbereitet.';
                 }
             } else {
-                $semanticNote = 'Semantische Suche nicht verfügbar (kein Embedding-Provider) — Textsuche aktiv.';
+                $semanticNote = 'Die Suche nach Bedeutung ist gerade nicht verfügbar. Es wird nach dem Wortlaut gesucht.';
             }
         }
 
@@ -185,7 +184,7 @@ class Index extends Component
             'selectedQuellen' => is_array($selectedMeta['quellen'] ?? null) ? $selectedMeta['quellen'] : [],
             'semanticNote' => $semanticNote,
             'semanticAktiv' => $semanticAktiv,
-        ])->layout('platform::layouts.app');
+        ])->layout(\Platform\FoodAlchemist\Support\FaShell::layout());
     }
 
     /** Markdown der Trend-Datei ohne YAML-Frontmatter, safe gerendert (wie Knowledge-Browser). */

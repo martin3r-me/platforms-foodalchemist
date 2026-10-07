@@ -451,7 +451,7 @@ it('S3-Bundle: Produktionsdokument enthält keine Lieferanten- oder EK-Planung',
     expect($dok)->not->toHaveKey('einkauf');
 
     $html = view('foodalchemist::dokumente.produktionsauftrag', ['dok' => $dok, 'istPdf' => true])->render();
-    expect($html)->not->toContain('Einkauf / Bestellvorschlag')->not->toContain('Wareneinsatz gesamt');
+    expect($html)->not->toContain('Einkauf / Bestellvorschlag')->not->toContain('Einkaufswert gesamt');
 });
 
 it('V1: saveNew legt IMMER einen neuen Auftrag an — zwei benannte Aufträge am selben Tag koexistieren', function () {

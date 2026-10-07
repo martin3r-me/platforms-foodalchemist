@@ -56,11 +56,15 @@ it('Produktionsblatt-Druck zeigt Schritt-Karten, ?fotos=0 druckt kein Bild', fun
 
     $url = route('foodalchemist.blaetter.dokument', ['typ' => 'produktion', 'recipe_id' => $r->id, 'portions' => 1]);
 
+    // fa-pass Druck-Muster: der Kopf trägt die Wortmarke als <img> — geprüft wird deshalb das
+    // Schritt-Foto selbst, nicht irgendein Bild auf der Seite.
     $mit = $this->get($url);
-    $mit->assertOk()->assertSee('Karkassen rösten.')->assertSee('anleitung-phase', false)->assertSee('<img', false);
+    $mit->assertOk()->assertSee('Karkassen rösten.')->assertSee('anleitung-phase', false)->assertSee('class="schritt-foto"', false);
 
     $ohne = $this->get($url . '&fotos=0');
-    $ohne->assertOk()->assertSee('Karkassen rösten.')->assertDontSee('<img', false);
+    $ohne->assertOk()->assertSee('Karkassen rösten.')->assertDontSee('class="schritt-foto"', false)->assertDontSee('spec27/foto.jpg', false);
+    // garantiert KEIN Bild ausser der Wortmarke im Kopf
+    expect(substr_count($ohne->getContent(), '<img') - substr_count($ohne->getContent(), 'alt="Food.Alchemist"'))->toBe(0);
 
     \Illuminate\Support\Facades\Storage::disk('public')->delete('spec27/foto.jpg');
 });
@@ -93,9 +97,10 @@ it('Postenzettel „Anleitung" druckt nur die Schritte und schaltet Fotos um', f
         ->assertSee('Anleitung mit Fotos')
         ->assertDontSee('Bestellvorschlag');          // kein Einkauf auf dem Postenzettel
 
-    $this->get($url . '?fotos=0')->assertOk()
+    $textfassung = $this->get($url . '?fotos=0')->assertOk()
         ->assertSee('Textfassung')
-        ->assertDontSee('<img', false);
+        ->assertDontSee('class="schritt-foto"', false);   // Wortmarke im Kopf ist ein <img>, Fotos nicht
+    expect(substr_count($textfassung->getContent(), '<img') - substr_count($textfassung->getContent(), 'alt="Food.Alchemist"'))->toBe(0);
 });
 
 it('Postenzettel zeigt das Endprodukt-Bild, aber nicht bei ?fotos=0', function () {
@@ -115,9 +120,11 @@ it('Postenzettel zeigt das Endprodukt-Bild, aber nicht bei ?fotos=0', function (
         ->assertSee('So soll es fertig aussehen')
         ->assertSee('Auf flachem Teller, Sauce separat');
 
-    $this->get($url . '?fotos=0')->assertOk()
+    $ohneFotos = $this->get($url . '?fotos=0')->assertOk()
         ->assertDontSee('So soll es fertig aussehen')
-        ->assertDontSee('<img', false);
+        ->assertDontSee('class="endprodukt"', false)     // Wortmarke im Kopf ist ein <img>, das Endprodukt nicht
+        ->assertDontSee('spec27/teller.jpg', false);
+    expect(substr_count($ohneFotos->getContent(), '<img') - substr_count($ohneFotos->getContent(), 'alt="Food.Alchemist"'))->toBe(0);
 
     \Illuminate\Support\Facades\Storage::disk('public')->delete('spec27/teller.jpg');
 });

@@ -1,47 +1,44 @@
-{{-- D-5: Platzhalter verwalten — anlegen / umbenennen / löschen --}}
-@php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
-
+{{-- D-5: Platzhalter verwalten (anlegen, umbenennen, löschen). fa-pass Welle 2: Bausteine <x-fa::…>. --}}
 <x-foodalchemist::modal name="platzhalter-modal" title="Platzhalter verwalten" size="max-w-xl">
     @if($fehler !== null)
-        <p class="text-xs text-rose-600 mb-3" data-platzhalter-fehler>{{ $fehler }}</p>
+        <x-fa::notice tone="crit" class="mb-3" data-platzhalter-fehler>{{ $fehler }}</x-fa::notice>
     @endif
 
     <x-foodalchemist::modal-section title="Neuer Platzhalter">
-        <div class="flex items-end gap-2">
-            <div class="flex-1">
-                <input type="text" wire:model="neuName" wire:keydown.enter.prevent="anlegen"
-                       placeholder="z. B. Flüssigkeit/Fond, Aromat, Stärke …" class="{{ $input }}" data-platzhalter-neu />
-                <p class="text-[11px] text-gray-500 mt-1">„(neutral)" wird automatisch angehängt. Abstrakt — kein Lieferantenartikel, vom Matcher ausgeschlossen.</p>
-            </div>
-            <button type="button" wire:click="anlegen" wire:loading.attr="disabled" class="{{ $btnPrimary }} shrink-0" data-platzhalter-anlegen>+ Anlegen</button>
+        <div class="flex items-start gap-2">
+            <x-fa::field class="flex-1" for="platzhalter-neu" hint="„(neutral)“ wird angehängt. Ein Platzhalter hat keinen Lieferantenartikel und wird bei der Zuordnung übersprungen.">
+                <x-fa::input id="platzhalter-neu" wire:model="neuName" wire:keydown.enter.prevent="anlegen"
+                    placeholder="z. B. Flüssigkeit/Fond, Aromat, Stärke" aria-label="Name des neuen Platzhalters" data-platzhalter-neu />
+            </x-fa::field>
+            <x-fa::button variant="primary" icon="heroicon-m-plus" class="shrink-0" wire:click="anlegen" wire:loading.attr="disabled" data-platzhalter-anlegen>Platzhalter anlegen</x-fa::button>
         </div>
     </x-foodalchemist::modal-section>
 
     <x-foodalchemist::modal-section title="Vorhandene Platzhalter ({{ $platzhalter->count() }})">
-        <div class="space-y-1" data-platzhalter-liste>
+        <div class="flex flex-col gap-1" data-platzhalter-liste>
             @forelse($platzhalter as $ph)
-                <div class="flex items-center gap-2 rounded-lg border border-black/5 px-3 py-1.5" wire:key="ph-{{ $ph->id }}" data-platzhalter-row="{{ $ph->id }}">
+                <div class="flex items-center gap-2 px-3 py-1.5 rounded-[var(--fa-radius-control)] border border-[var(--fa-line)]" wire:key="ph-{{ $ph->id }}" data-platzhalter-row="{{ $ph->id }}">
                     @if($editId === $ph->id)
-                        <input type="text" wire:model="editName" wire:keydown.enter.prevent="speichernEdit"
-                               class="{{ $input }} flex-1" data-platzhalter-edit />
-                        <button type="button" wire:click="speichernEdit" class="{{ $btnGhostXs }} text-emerald-600" title="Speichern">✓</button>
-                        <button type="button" wire:click="abbrechenEdit" class="{{ $btnGhostXs }}" title="Abbrechen">✕</button>
+                        <x-fa::input size="sm" class="flex-1" wire:model="editName" wire:keydown.enter.prevent="speichernEdit" aria-label="Neuer Name" data-platzhalter-edit />
+                        <x-fa::button size="sm" wire:click="abbrechenEdit">Abbrechen</x-fa::button>
+                        <x-fa::button size="sm" variant="primary" wire:click="speichernEdit">Namen speichern</x-fa::button>
                     @else
-                        <span class="flex-1 text-xs text-gray-800">{{ $ph->name }}</span>
-                        <span class="{{ $pill }} {{ $ph->in_zeilen > 0 ? $variantPill['info'] : $variantPill['secondary'] }}">{{ $ph->in_zeilen }}× genutzt</span>
-                        <button type="button" wire:click="startEdit({{ $ph->id }}, @js($ph->name))" class="{{ $btnGhostXs }}" title="Umbenennen">@svg('heroicon-o-pencil', 'w-3.5 h-3.5')</button>
-                        <button type="button" wire:click="loeschen({{ $ph->id }})" wire:confirm="Diesen Platzhalter wirklich löschen?"
-                                @disabled($ph->in_zeilen > 0) class="{{ $btnGhostXs }} text-rose-600 disabled:opacity-40"
-                                title="{{ $ph->in_zeilen > 0 ? 'Wird genutzt — erst aus Rezepten entfernen' : 'Löschen' }}">@svg('heroicon-o-trash', 'w-3.5 h-3.5')</button>
+                        <span class="flex-1 min-w-0 text-[length:var(--fa-text-md)] text-[var(--fa-ink)]">{{ $ph->name }}</span>
+                        <x-fa::badge :tone="$ph->in_zeilen > 0 ? 'info' : 'neutral'" class="shrink-0">{{ $ph->in_zeilen }}× genutzt</x-fa::badge>
+                        <x-fa::icon-button size="sm" icon="heroicon-o-pencil" label="Umbenennen" wire:click="startEdit({{ $ph->id }}, @js($ph->name))" />
+                        <x-fa::icon-button size="sm" tone="danger" icon="heroicon-o-trash"
+                            :label="$ph->in_zeilen > 0 ? 'Wird genutzt, erst aus den Rezepten entfernen' : 'Löschen'"
+                            wire:click="loeschen({{ $ph->id }})" wire:confirm="Diesen Platzhalter wirklich löschen?"
+                            :disabled="$ph->in_zeilen > 0" class="disabled:opacity-40 disabled:pointer-events-none" />
                     @endif
                 </div>
             @empty
-                <p class="text-[11px] text-gray-500">Noch keine Platzhalter. Lege oben den ersten an.</p>
+                <x-fa::empty compact icon="heroicon-o-square-2-stack" title="Noch keine Platzhalter">Oben einen Namen eingeben und anlegen.</x-fa::empty>
             @endforelse
         </div>
     </x-foodalchemist::modal-section>
 
     <x-slot:footer>
-        <button type="button" wire:click="$dispatch('modal.close', { name: 'platzhalter-modal' })" class="{{ $btnGhost }}">Schließen</button>
+        <x-fa::button variant="ghost" wire:click="$dispatch('modal.close', { name: 'platzhalter-modal' })">Schließen</x-fa::button>
     </x-slot:footer>
 </x-foodalchemist::modal>

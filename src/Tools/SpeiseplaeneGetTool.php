@@ -48,6 +48,8 @@ class SpeiseplaeneGetTool extends FoodAlchemistTool implements ToolContract, Too
                 // Spec 57 · Paket 7
                 'is_template' => (bool) $plan->is_template,
                 'source_plan_id' => $plan->source_plan_id !== null ? (int) $plan->source_plan_id : null,
+                // Spec 59: Wochen-Vorgaben (Chip-Katalog via speiseplan_chips.GET)
+                'vorgaben' => array_values((array) ($plan->vorgaben ?? [])),
                 'default_pax' => $plan->default_pax,
                 'budget_wareneinsatz' => $plan->budget_wareneinsatz !== null ? (float) $plan->budget_wareneinsatz : null,
                 'outlet_id' => $plan->outlet_id !== null ? (int) $plan->outlet_id : null,

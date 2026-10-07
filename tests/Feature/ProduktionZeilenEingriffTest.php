@@ -341,5 +341,5 @@ it('ein fremdes Team kann keine Zeile anfassen (D1)', function () {
     $zeile = ($this->zeile)($order, $this->sauce->id);
 
     expect(fn () => $this->svc->setLineAnsaetze($this->childA, $zeile->id, 2.0))
-        ->toThrow(RuntimeException::class, 'D1');
+        ->toThrow(RuntimeException::class, 'anderen Team');
 });

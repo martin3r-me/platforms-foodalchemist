@@ -1,32 +1,45 @@
-{{-- Speisekarte-Leitstelle-Rail: abgeleitete Fertigstellungs-Checkliste (read-only)
-     + Werkstrang M Phase E: Soll/Ist-Coverage gegen das Planungs-Gerüst (nur wenn eines existiert). --}}
-@php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
-@php($ampel = ['erledigt' => 'bg-emerald-500', 'teil' => 'bg-amber-500', 'offen' => 'bg-gray-300'])
-@php($ampelText = ['erledigt' => 'text-emerald-600', 'teil' => 'text-amber-600', 'offen' => 'text-gray-400'])
+{{-- Speisekarte-Leitstelle (fa-pass 2026-10-05): abgeleitete Fertigstellungs-Liste (nur lesend)
+     + Werkstrang M Phase E: Soll/Ist-Abgleich gegen das Planungs-Gerüst (nur wenn eines existiert).
+     Je Punkt eine klar abgegrenzte Zeile mit Zustand als Wort und Symbol, nicht nur als Farbpunkt. --}}
+@php
+    $zustand = [
+        'erledigt' => ['Erledigt', 'ok', 'heroicon-m-check-circle'],
+        'teil' => ['Teilweise', 'warn', 'heroicon-m-exclamation-triangle'],
+        'offen' => ['Offen', 'neutral', 'heroicon-m-minus-circle'],
+    ];
+    $symbolFarbe = ['ok' => 'text-[var(--fa-ok)]', 'warn' => 'text-[var(--fa-warn)]', 'neutral' => 'text-[var(--fa-ink-3)]'];
+    $erledigt = collect($stand['punkte'])->where('status', 'erledigt')->count();
+@endphp
 
-<div class="space-y-3">
-    <div class="relative overflow-hidden {{ $card }} p-4">
-        <div class="{{ $cardAccent }}"></div>
-        <div class="flex items-center gap-2 mb-3">
-            <span class="font-semibold text-gray-900 text-sm">Was fehlt der Karte noch?</span>
+<div class="flex flex-col gap-4">
+    <x-fa::section title="Was fehlt der Karte noch?" icon="heroicon-o-clipboard-document-check"
+        :meta="$erledigt . ' von ' . count($stand['punkte']) . ' erledigt'">
+        <x-slot:actions>
             @if($stand['bereit'])
-                <span class="{{ $pill }} {{ $variantPill['success'] }}">bereit</span>
+                <x-fa::badge tone="ok" icon="heroicon-m-check">Bereit zur Ausgabe</x-fa::badge>
             @else
-                <span class="{{ $pill }} {{ $variantPill['warning'] }}">in Arbeit</span>
+                <x-fa::badge tone="warn">In Arbeit</x-fa::badge>
             @endif
-        </div>
-        <div class="space-y-2">
-            @foreach($stand['punkte'] as $punkt)
-                <div wire:key="sk-ls-{{ $punkt['key'] }}" class="flex items-center gap-2">
-                    <span class="h-2.5 w-2.5 rounded-full {{ $ampel[$punkt['status']] ?? 'bg-gray-300' }}"></span>
-                    <span class="flex-1 text-xs text-gray-700">{{ $punkt['label'] }}</span>
-                    <span class="text-[10px] {{ $ampelText[$punkt['status']] ?? 'text-gray-400' }}">{{ $punkt['hinweis'] }}</span>
-                </div>
-            @endforeach
-        </div>
-    </div>
+        </x-slot:actions>
 
-    {{-- Werkstrang M Phase E: Coverage-Panel NUR bei vorhandenem Planungs-Gerüst (kein Frame-Zwang). --}}
+        <ul class="flex flex-col divide-y divide-[var(--fa-line)] border border-[var(--fa-line)] rounded-[var(--fa-radius-control)]">
+            @foreach($stand['punkte'] as $punkt)
+                @php
+                    [$text, $ton, $symbol] = $zustand[$punkt['status']] ?? $zustand['offen'];
+                @endphp
+                <li wire:key="sk-ls-{{ $punkt['key'] }}" class="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2.5 min-w-0">
+                    <span class="inline-flex shrink-0 {{ $symbolFarbe[$ton] }}">@svg($symbol, 'w-[18px] h-[18px]')</span>
+                    <span class="min-w-0 flex-1 text-[length:var(--fa-text-md)] font-medium text-[var(--fa-ink)]">{{ $punkt['label'] }}</span>
+                    @if(($punkt['hinweis'] ?? '') !== '')
+                        <span class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]">{{ $punkt['hinweis'] }}</span>
+                    @endif
+                    <x-fa::badge :tone="$ton">{{ $text }}</x-fa::badge>
+                </li>
+            @endforeach
+        </ul>
+    </x-fa::section>
+
+    {{-- Werkstrang M Phase E: Soll/Ist-Abgleich NUR bei vorhandenem Planungs-Gerüst (kein Gerüst-Zwang). --}}
     @if($coverage['hat_geruest'] ?? false)
         @include('foodalchemist::livewire.planning.partials.coverage-panel', ['coverage' => $coverage])
     @endif

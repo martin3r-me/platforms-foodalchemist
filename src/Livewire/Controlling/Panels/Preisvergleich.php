@@ -70,7 +70,7 @@ class Preisvergleich extends Component
         }
         try {
             $line = app(OrderService::class)->addManualLine($team, $laId, 1.0, 'aus Preisvergleich', Auth::id());
-            $this->hinweis = '„' . ($line->designation ?? 'Artikel') . '" in die Bestellschiene übernommen (1 Gebinde).';
+            $this->hinweis = '„' . ($line->designation ?? 'Artikel') . '" in die Bestellung übernommen (1 Gebinde).';
         } catch (RuntimeException $e) {
             $this->fehler = $e->getMessage();
         }
@@ -108,7 +108,7 @@ class Preisvergleich extends Component
 
         try {
             $lead->setLeadLa($team, $gp, $laId, 'Controlling · Preisvergleich', recompute: true);
-            $this->hinweis = 'Bezugsquelle für „' . $gp->name . '" umgestellt — EK ist durch den Rezeptbaum nachgerechnet.';
+            $this->hinweis = 'Bezugsquelle für „' . $gp->name . '" umgestellt. Der Einkaufspreis ist in allen Rezepten nachgerechnet.';
         } catch (RuntimeException $e) {
             $this->fehler = $e->getMessage();
         }

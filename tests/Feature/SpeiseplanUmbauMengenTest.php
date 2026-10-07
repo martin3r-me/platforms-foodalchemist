@@ -128,6 +128,8 @@ it('Editor: Drag & Drop verschiebt, fremde Eintrags-IDs bleiben wirkungslos; Det
         ->call('eintragVerschieben', $fremd->id, $dienstag, $linie->id)
         ->call('eintragOeffnen', $e->id)
         ->assertSeeHtml('data-sp-eintrag-detail="' . $e->id . '"')
+        ->assertSeeHtml('data-sp-inhalt-link')                                  // Detail führt zum Gericht
+        ->assertSeeHtml(e(route('foodalchemist.verkauf.index', ['rezept' => $a->id])))
         ->call('eintragErsetzenStarten', $e->id)
         ->assertSet('pickerErsetzenId', $e->id)
         ->call('inhaltHinzu', 'gericht', $b->id)

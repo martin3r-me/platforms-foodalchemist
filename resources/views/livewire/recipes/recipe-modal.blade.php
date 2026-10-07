@@ -1,39 +1,105 @@
-{{-- Editor-Parität (Ist-App-Vorbild): EIN Voll-Editor — Stammdaten · Zutaten inline (P-8-Kern)
-     · KPI-Leiste · Equipment gruppiert · Eigenschaften · Beschreibung · Zubereitung (Tabs) · Notizen --}}
-@php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
+{{-- Rezept-Editor (Basisrezept) — EIN Voll-Editor im Werkbank-Modus (darkCanvas → data-fa-theme="dark").
+     fa-pass: nur --fa-*-Tokens und x-fa-Bausteine, damit hell UND dunkel stimmen.
+
+     Anatomie: Kopf = Titel + Name + Status · rechts KI-Assistent (Menü) · Weitere Aktionen (Menü,
+     Löschen ganz unten) · Speichern (die eine Hauptaktion). Kennzahlen fix im Kopf, EK je kg als
+     Hauptzahl. Häufigste Arbeit = Zutaten und Mengen → Reiter «Aufbau» zuerst. --}}
+@php
+    $kg = fn ($wert) => $wert === null ? null : rtrim(rtrim(number_format((float) $wert, 3, ',', '.'), '0'), ',');
+    $euro = fn ($wert) => $wert === null ? null : number_format((float) $wert, 2, ',', '.') . ' €';
+    // Herkunft eines KI-fähigen Textfelds (RecipeModal::render → $zustaende) lesbar statt Rohwert.
+    $herkunftText = fn (?string $z) => [
+        'unbefüllt' => 'noch leer',
+        'import' => 'importiert',
+        'ki' => 'von der KI geschrieben',
+        'manual' => 'von Hand gepflegt, die KI überschreibt ihn nicht',
+        'auto' => 'automatisch erzeugt',
+    ][$z ?? ''] ?? (string) $z;
+    $menuePunkt = 'flex w-full items-center gap-2 px-3 py-2 text-left text-[length:var(--fa-text-md)] text-[var(--fa-ink)] hover:bg-[var(--fa-hover)]';
+    $knopfKi = 'inline-flex items-center gap-1.5 h-7 px-2.5 whitespace-nowrap rounded-[var(--fa-radius-control)] text-[length:var(--fa-text-sm)] font-medium bg-[var(--fa-accent-soft)] text-[var(--fa-accent)] border border-[var(--fa-accent-line)] hover:bg-[var(--fa-accent-soft-hover)] transition-colors duration-150';
+    $hinweis = 'text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]';
+    $laedt = 'py-12 text-center text-[length:var(--fa-text-md)] text-[var(--fa-ink-3)]';
+    $statusWahl = ['stub' => 'Platzhalter', 'draft' => 'Entwurf', 'review' => 'Prüfen', 'approved' => 'Freigegeben', 'archived' => 'Archiviert'];
+@endphp
 
 {{-- R4 (Dominique): Voll-Editor nimmt den ganzen Bildschirm — 19-Zutaten-Rezepte brauchen die Fläche --}}
 <x-foodalchemist::modal name="recipe-modal"
-    :title="! $istOffen ? 'Basisrezept wird geladen' : ($neu ? 'Basisrezept anlegen' : 'Rezept bearbeiten')"
+    :title="! $istOffen ? 'Basisrezept wird geladen' : ($neu ? 'Basisrezept anlegen' : 'Basisrezept')"
     :title-name="$istOffen && ! $neu ? $form['name'] : null"
     size="max-w-3xl" :fullscreen="! $neu" :dark-canvas="true">
-    {{-- Aktionsleiste (D-5 §4.2.1) --}}
+
+    @if($istOffen && ! $neu)
+        <x-slot:titleExtra>
+            {{-- x-fa::status kennt «archived» (noch) nicht → sonst stünde dort englisch „Archived". --}}
+            @if(($form['status'] ?? null) === 'archived')
+                <x-fa::badge data-status="archived">Archiviert</x-fa::badge>
+            @else
+                <x-fa::status :value="$form['status'] ?? 'draft'" />
+            @endif
+            @if($istTemplate)<x-fa::badge tone="info" icon="heroicon-m-square-2-stack">Vorlage</x-fa::badge>@endif
+        </x-slot:titleExtra>
+    @endif
+
     <x-slot:actions>
         @if($istOffen)
-        {{-- #1b: EIN Speichern-Weg, sequenziert. Erst Stammdaten (`speichern`), dann — nur bei
-             Erfolg und nur im Bestand (Anlage hat noch keine Zutaten) — adressiert das Zutaten-
-             Speichern anstoßen (MVP-046). Der eingebettete Editor meldet `zutaten-persistiert`
-             zurück → beiZutatenPersistiert schließt. Kein paralleler Race, kein Früh-Schließen. --}}
-        <button type="button"
-                x-on:click="const warBestand = $wire.recipeId !== null; $wire.speichern().then(() => { if (warBestand && ! $wire.fehler && $wire.recipeId) $dispatch('zutaten-speichern', { recipeId: $wire.recipeId }) })"
-                class="{{ $btnPrimary }}" data-rezept-speichern>{{ $neu ? 'Anlegen' : 'Speichern' }}</button>
-        @if(!$neu)
-            <a href="{{ route('foodalchemist.rezepte.dokument', ['id' => $recipeId, 'profil' => 'produktion']) }}" target="_blank"
-               class="{{ $btnGhostXs }}" title="Druck-/PDF-Report mit Profilen und Filtern" data-rezept-druck>
-                @svg('heroicon-o-printer', 'w-3.5 h-3.5') Druck
-            </a>
-            <button type="button" wire:click="loeschen" wire:confirm="Rezept wirklich löschen? (Als Sub-Rezept referenzierte Rezepte sind geschützt)"
-                    class="{{ $btnGhostXs }} text-rose-600" data-rezept-loeschen>Löschen</button>
-            <span class="text-gray-300">|</span>
-            <x-foodalchemist::ki-action action="allesAnreichern" variant="ai" icon="heroicon-o-sparkles" label="Alles anreichern"
-                title="Text, Eigenschaften, Produktionsrouting, Equipment, Schritte, Aromaanker, Pairings, Eignung und Sensorik synchronisieren. KI-Fotos laufen separat; Ersatz bleibt eine bewusste manuelle Verknüpfung."
-                data-alles-anreichern busy="Wird angereichert …" flash="Angereichert" />
-            {{-- R6: Template-Markierung (Basis für «Aus Template» im Browser) --}}
-            <button type="button" wire:click="templateToggle" class="{{ $btnGhostXs }} {{ $istTemplate ? '!text-orange-600 !bg-orange-500/10 !border-orange-500/20' : '' }}"
-                    title="Template = Vorlage für neue Rezepte (Browser: «Aus Template»)" data-template-toggle>
-                @svg('heroicon-o-square-2-stack', 'w-3.5 h-3.5') {{ $istTemplate ? 'Template ✓' : 'Als Template' }}
-            </button>
-        @endif
+            <div class="ml-auto flex flex-wrap items-center gap-2">
+                @if(! $neu)
+                    {{-- KI-Assistent: die drei rezeptweiten KI-Funktionen in EINEM Menü. Die Felder-KI
+                         (Name, Kategorie, Beschreibung …) bleibt am jeweiligen Feld. --}}
+                    <div class="relative" x-data="faMenu()" x-on:keydown.escape="offen = false" x-on:click.outside="offen = false">
+                        <x-fa::button variant="ai" icon="heroicon-m-sparkles" icon-right="heroicon-m-chevron-down"
+                            x-on:click="toggle($event)" aria-haspopup="menu" x-bind:aria-expanded="offen" data-ki-assistent>KI-Assistent</x-fa::button>
+                        <div x-bind:class="{ hidden: ! offen }" x-bind:style="pos" role="menu" class="hidden w-72 fa-surface shadow-lg py-1">
+                            {{-- Alles anreichern bleibt ein ki-action: Fortschritt und Erfolg sieht man im Menü. --}}
+                            <div class="px-3 py-2 flex flex-col gap-1">
+                                <x-foodalchemist::ki-action action="allesAnreichern" variant="ai" icon="heroicon-o-sparkles" label="Alles anreichern"
+                                    title="Text, Eigenschaften, Produktionsplanung, Equipment, Schritte, Aromen, Pairings, Eignung und Sensorik in einem Lauf. KI-Fotos laufen separat, Ersatz bleibt eine bewusste Verknüpfung von Hand."
+                                    class="w-full justify-center" data-alles-anreichern busy="Wird angereichert …" flash="Angereichert" />
+                                <span class="{{ $hinweis }}">Füllt alle leeren Felder in einem Lauf. Von Hand Gepflegtes bleibt stehen.</span>
+                            </div>
+                            <div class="my-1 border-t border-[var(--fa-line)]"></div>
+                            <button type="button" role="menuitem" wire:click="$toggle('ueberarbeitenOffen')" x-on:click="offen = false" class="{{ $menuePunkt }}"
+                                    title="Freie Anweisung: die KI überarbeitet Zutaten, Mengen, Zubereitung und Beschreibung. Erst Vorschau, dann übernehmen." data-ki-ueberarbeiten>
+                                @svg('heroicon-o-pencil-square', 'w-4 h-4 text-[var(--fa-ink-3)]') Mit Anweisung überarbeiten
+                            </button>
+                            <button type="button" role="menuitem" wire:click="$toggle('copilotOffen')" x-on:click="offen = false" class="{{ $menuePunkt }}"
+                                    title="Die KI prüft Mengen, Einheiten, überflüssige und fehlende Zutaten. Jeder Befund lässt sich einzeln übernehmen, das Rezept bleibt stehen." data-copilot>
+                                @svg('heroicon-o-clipboard-document-check', 'w-4 h-4 text-[var(--fa-ink-3)]') Rezept prüfen lassen
+                            </button>
+                        </div>
+                    </div>
+
+                    {{-- Weitere Aktionen: Drucken · Vorlage · Löschen (ganz unten, rot — nie neben Speichern) --}}
+                    <div class="relative" x-data="faMenu()" x-on:keydown.escape="offen = false" x-on:click.outside="offen = false">
+                        <x-fa::icon-button icon="heroicon-m-ellipsis-horizontal" label="Weitere Aktionen" x-on:click="toggle($event)" aria-haspopup="menu" x-bind:aria-expanded="offen" />
+                        <div x-bind:class="{ hidden: ! offen }" x-bind:style="pos" role="menu" class="hidden w-60 fa-surface shadow-lg py-1">
+                            <a href="{{ route('foodalchemist.rezepte.dokument', ['id' => $recipeId, 'profil' => 'produktion']) }}" target="_blank" role="menuitem"
+                               x-on:click="offen = false" class="{{ $menuePunkt }}" title="Druck- und PDF-Bericht mit Profilen und Filtern" data-rezept-druck>
+                                @svg('heroicon-o-printer', 'w-4 h-4 text-[var(--fa-ink-3)]') Rezept drucken
+                            </a>
+                            {{-- R6: Vorlage-Markierung (Basis für «Aus Vorlage» im Browser) --}}
+                            <button type="button" role="menuitem" wire:click="templateToggle" x-on:click="offen = false" class="{{ $menuePunkt }}"
+                                    title="Vorlage für neue Rezepte (im Browser: aus Vorlage anlegen)" data-template-toggle>
+                                @svg('heroicon-o-square-2-stack', 'w-4 h-4 text-[var(--fa-ink-3)]') {{ $istTemplate ? 'Vorlage aufheben' : 'Als Vorlage markieren' }}
+                            </button>
+                            <div class="my-1 border-t border-[var(--fa-line)]"></div>
+                            <button type="button" role="menuitem" wire:click="loeschen" x-on:click="offen = false"
+                                    wire:confirm="Rezept wirklich löschen? Rezepte, die in anderen Rezepten stecken, bleiben geschützt."
+                                    class="flex w-full items-center gap-2 px-3 py-2 text-left text-[length:var(--fa-text-md)] text-[var(--fa-crit)] hover:bg-[var(--fa-crit-soft)]" data-rezept-loeschen>
+                                @svg('heroicon-o-trash', 'w-4 h-4') Rezept löschen
+                            </button>
+                        </div>
+                    </div>
+                @endif
+
+                {{-- #1b: EIN Speichern-Weg, sequenziert. Erst Stammdaten (`speichern`), dann — nur bei
+                     Erfolg und nur im Bestand (Anlage hat noch keine Zutaten) — adressiert das Zutaten-
+                     Speichern anstoßen (MVP-046). Der eingebettete Editor meldet `zutaten-persistiert`
+                     zurück → beiZutatenPersistiert schließt. Kein paralleler Race, kein Früh-Schließen. --}}
+                <x-fa::button variant="primary" icon="heroicon-m-check"
+                    x-on:click="const warBestand = $wire.recipeId !== null; $wire.speichern().then(() => { if (warBestand && ! $wire.fehler && $wire.recipeId) $dispatch('zutaten-speichern', { recipeId: $wire.recipeId }) })"
+                    data-rezept-speichern>{{ $neu ? 'Rezept anlegen' : 'Speichern' }}</x-fa::button>
+            </div>
         @endif
     </x-slot:actions>
 
@@ -42,54 +108,128 @@
              Rezept kommt im folgenden Livewire-Roundtrip; bis dahin niemals das leere
              Neuanlageformular vortäuschen. --}}
         <div class="h-full min-h-72 flex items-center justify-center" data-rezept-laedt>
-            <div class="text-center space-y-2">
-                <div class="mx-auto h-8 w-8 rounded-full border-2 border-violet-300 border-t-violet-600 animate-spin"></div>
-                <p class="text-sm font-medium text-gray-700">Basisrezept wird geladen …</p>
+            <div class="text-center flex flex-col items-center gap-2">
+                <span class="h-8 w-8 rounded-full border-2 border-[var(--fa-accent-line)] border-t-[var(--fa-accent)] animate-spin"></span>
+                <p class="text-[length:var(--fa-text-md)] font-medium text-[var(--fa-ink-2)]">Basisrezept wird geladen …</p>
             </div>
         </div>
     @else
 
-    {{-- Phase 1: KPI-Streifen fix im Modal-Kopf (immer sichtbar, scrollt nie weg) --}}
+    {{-- Kennzahlen fix im Modal-Kopf (scrollen nie weg). EIN Hauptwert: EK je kg. Fehlende Preise
+         werden gezeigt, nicht als 0,00 € versteckt. --}}
     @if($voll !== null)
+        @php
+            $nPreis = (int) ($voll->ek_n_ingredients_priced ?? 0);
+            $nZutat = (int) ($voll->ek_n_ingredients_total ?? 0);
+            [$konfText, $konfTon] = ['high' => ['hoch', 'ok'], 'medium' => ['mittel', 'warn'], 'low' => ['niedrig', 'crit']][$voll->allergens_confidence ?? ''] ?? ['nicht bewertet', 'warn'];
+            $ekKg = $voll->ek_per_kg_eur;
+            $kennzahlen = [
+                ['kpi' => 'yield', 'label' => 'Ertrag', 'value' => $kg($voll->yield_kg) !== null ? $kg($voll->yield_kg) . ' kg' : 'fehlt', 'tone' => $voll->yield_kg === null ? 'warn' : null],
+                ['kpi' => 'ek', 'label' => 'EK gesamt', 'value' => $euro($voll->ek_total_eur) ?? 'Preis fehlt', 'tone' => $voll->ek_total_eur === null ? 'crit' : null],
+                ['kpi' => 'ekkg', 'label' => 'EK je kg', 'value' => $ekKg !== null ? $euro($ekKg) : 'Preis fehlt', 'primary' => $ekKg !== null, 'tone' => $ekKg === null ? 'crit' : null],
+                ['kpi' => 'priced', 'label' => 'Preise', 'value' => $nZutat === 0 ? 'keine Zutaten' : $nPreis . ' von ' . $nZutat,
+                 'tone' => $nZutat > 0 && $nPreis >= $nZutat ? 'ok' : 'warn', 'title' => 'Zutaten mit Preis von allen Zutaten'],
+                ['kpi' => 'allergen', 'label' => 'Allergen-Konfidenz', 'value' => $konfText, 'tone' => $konfTon],
+            ];
+        @endphp
         <x-slot:kpiHeader>
-            @php($ekComplete = ($voll->ek_n_ingredients_total ?? 0) > 0 && ($voll->ek_n_ingredients_priced ?? 0) >= ($voll->ek_n_ingredients_total ?? 0))
-            {{-- Spec 28 / E0.2: Kacheln + Palette liegen im Baustein `kpi-tiles`.
-                 Leitwert = EK/kg (accent, kein Alarm-Orange) · „Mit Preis" grün/bernstein je
-                 Vollständigkeit · Allergen-Konf. in der Konfidenz-Farbe. --}}
-            <x-foodalchemist::kpi-tiles marker="editor-kpis" :tiles="[
-                ['kpi' => 'yield', 'label' => 'Yield',
-                 'value' => $voll->yield_kg !== null ? number_format((float) $voll->yield_kg, 3, ',', '.') . ' kg' : '—'],
-                ['kpi' => 'ek', 'label' => 'EK gesamt',
-                 'value' => $voll->ek_total_eur !== null ? number_format((float) $voll->ek_total_eur, 2, ',', '.') . ' €' : '—'],
-                ['kpi' => 'ekkg', 'label' => 'EK / kg', 'tone' => 'accent',
-                 'value' => $voll->ek_per_kg_eur !== null ? number_format((float) $voll->ek_per_kg_eur, 2, ',', '.') . ' €/kg' : '—'],
-                ['kpi' => 'priced', 'label' => 'Mit Preis', 'tone' => $ekComplete ? 'good' : 'warn',
-                 'value' => ($voll->ek_n_ingredients_priced ?? 0) . '/' . ($voll->ek_n_ingredients_total ?? 0)],
-                ['kpi' => 'allergen', 'label' => 'Allergen-Konf.',
-                 'tone' => ['high' => 'good', 'medium' => 'warn', 'low' => 'bad'][$voll->allergens_confidence] ?? 'neutral',
-                 'value' => strtoupper((string) $voll->allergens_confidence)],
-            ]" />
+            <x-fa::kpis :items="$kennzahlen" data-editor-kpis />
         </x-slot:kpiHeader>
     @endif
 
     @if($fehler !== null)
-        <p class="text-xs text-rose-600 mb-3" data-modal-fehler>{{ $fehler }}</p>
+        <x-fa::notice tone="crit" data-modal-fehler>{{ $fehler }}</x-fa::notice>
     @endif
 
-    {{-- Legacy-Bulk-Status (falls ein alter Lauf noch offen ist); der Button nutzt inzwischen OneShot-Coverage. --}}
+    {{-- Älterer Anreicherungslauf (falls noch offen); der Knopf nutzt inzwischen den Einzel-Lauf darunter. --}}
     @if($bulkRun !== null)
-        <div class="mb-3 rounded-lg bg-violet-500/10 border border-violet-500/30 px-3 py-2 text-xs flex items-center gap-2"
-             @if($bulkRun->status === 'running') wire:poll.2s @endif data-anreichern-status>
-            @if($bulkRun->status === 'running')
-                <span class="inline-flex items-center gap-1.5">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') Anreicherung läuft …</span>
-            @else
-                <span class="inline-flex items-center gap-1.5">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') {{ $bulkOffen }} Vorschläge offen{{ $bulkRun->failed > 0 ? " · {$bulkRun->failed} Fehler" : '' }}</span>
-                <button type="button" wire:click="bulkAlleUebernehmen" class="{{ $btnGhostXs }} text-emerald-600" data-anreichern-uebernehmen>Alle übernehmen</button>
-            @endif
+        <div @if($bulkRun->status === 'running') wire:poll.2s @endif data-anreichern-status>
+            <x-fa::notice tone="info">
+                @if($bulkRun->status === 'running')
+                    Anreicherung läuft …
+                @else
+                    <span>{{ $bulkOffen }} {{ $bulkOffen === 1 ? 'Vorschlag' : 'Vorschläge' }} offen</span>@if($bulkRun->failed > 0)<span>, {{ $bulkRun->failed }} Fehler</span>@endif
+                @endif
+                @if($bulkRun->status !== 'running')
+                    <x-slot:actions>
+                        <x-fa::button size="sm" icon="heroicon-m-check" wire:click="bulkAlleUebernehmen" data-anreichern-uebernehmen>Alle übernehmen</x-fa::button>
+                    </x-slot:actions>
+                @endif
+            </x-fa::notice>
         </div>
     @endif
 
     <x-foodalchemist::oneshot-ergebnis :anreicherung="$anreicherung" />
+
+    {{-- KI-Überarbeiten (aus dem KI-Assistent): rezeptweit, deshalb über den Reitern — sichtbar,
+         egal welcher Reiter gerade offen ist. --}}
+    @if(! $neu && $ueberarbeitenOffen)
+        <x-fa::section title="Mit Anweisung überarbeiten" icon="heroicon-o-pencil-square" data-ueberarbeiten-box>
+            <x-slot:actions>
+                <x-fa::icon-button icon="heroicon-m-x-mark" label="Schließen" size="sm" wire:click="$toggle('ueberarbeitenOffen')" />
+            </x-slot:actions>
+            <div class="flex flex-wrap items-center gap-2">
+                <x-fa::input wire:model="anweisung" wire:keydown.enter="kiUeberarbeiten"
+                    placeholder="z. B. «mach das Rezept vegan und halbiere den Zucker»" class="flex-1 min-w-[16rem]" data-anweisung />
+                <x-foodalchemist::ki-action action="kiUeberarbeiten" variant="ai" icon="heroicon-o-sparkles" label="Vorschlag holen"
+                    data-ueberarbeiten-start busy="Denkt nach …" flash="Vorschlag da" />
+            </div>
+            @if($ueberarbeitung !== null)
+                <div class="flex flex-col gap-2 max-h-72 overflow-y-auto rounded-[var(--fa-radius-control)] bg-[var(--fa-ground)] px-3 py-2.5 text-[length:var(--fa-text-md)]" data-ueberarbeiten-vorschau>
+                    @if(is_string($ueberarbeitung['werte']['aenderungs_notiz'] ?? null))
+                        <p class="font-medium text-[var(--fa-ink)]">{{ $ueberarbeitung['werte']['aenderungs_notiz'] }}</p>
+                    @endif
+                    @if(!empty($ueberarbeitung['werte']['zutaten']))
+                        <p class="text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-2)]">Zutaten nach der Überarbeitung</p>
+                        <ul class="flex flex-col gap-1">
+                            @foreach($ueberarbeitung['werte']['zutaten'] as $z)
+                                @if(is_array($z))
+                                    @php $mv = $ueberarbeitung['match_vorschau'][$loop->index] ?? null; @endphp
+                                    <li class="flex flex-wrap items-center gap-x-2 gap-y-1 text-[var(--fa-ink-2)]" wire:key="uz-{{ $loop->index }}">
+                                        <span class="text-[var(--fa-ink)]"><span class="tabular-nums">{{ $z['quantity'] ?? '?' }} {{ $z['einheit_slug'] ?? '' }}</span> {{ $z['text'] ?? 'ohne Text' }}</span>
+                                        <x-fa::badge>{{ isset($z['id']) ? 'bestehende Zeile' : 'neue Zeile' }}</x-fa::badge>
+                                        @if($mv)
+                                            @php $zielArt = $mv['kind'] === 'gp' ? 'Grundprodukt' : 'Rezept'; @endphp
+                                            @if($mv['status'] === 'matched')
+                                                <x-fa::signal tone="ok" title="Bestehende Verknüpfung bleibt">{{ $zielArt }}: {{ $mv['ziel'] ?? 'ohne Namen' }}</x-fa::signal>
+                                            @elseif($mv['status'] === 'grounded')
+                                                <x-fa::signal tone="ok" icon="heroicon-m-link" title="Wird beim Übernehmen automatisch verknüpft">{{ $zielArt }}: {{ $mv['ziel'] ?? 'ohne Namen' }}</x-fa::signal>
+                                            @else
+                                                <x-fa::signal tone="warn" title="Kein Treffer im Bestand, nach dem Übernehmen anlegen">{{ $mv['primaer'] === 'basisrezept_anlegen' ? 'Basisrezept anlegen' : 'Grundprodukt anlegen' }}@if(($mv['shortlist'] ?? 0) > 0)<span>, {{ $mv['shortlist'] }} {{ $mv['shortlist'] === 1 ? 'Kandidat' : 'Kandidaten' }}</span>@endif</x-fa::signal>
+                                            @endif
+                                        @endif
+                                    </li>
+                                @endif
+                            @endforeach
+                        </ul>
+                        @php $hardstops = collect($ueberarbeitung['match_vorschau'] ?? [])->where('status', 'hardstop')->count(); @endphp
+                        @if($hardstops > 0)
+                            <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-warn)]" data-ueberarbeiten-hardstops>
+                                {{ $hardstops }} {{ $hardstops === 1 ? 'Zutat hat' : 'Zutaten haben' }} keinen Treffer im Bestand. Nach dem Übernehmen als Grundprodukt oder Basisrezept anlegen, alle anderen werden automatisch verknüpft.
+                            </p>
+                        @endif
+                    @endif
+                    @if(is_string($ueberarbeitung['werte']['description'] ?? null))
+                        <p class="text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-2)]">Neue Beschreibung</p>
+                        <p class="text-[var(--fa-ink)]">{{ \Illuminate\Support\Str::limit($ueberarbeitung['werte']['description'], 280) }}</p>
+                    @endif
+                    @if(is_string($ueberarbeitung['werte']['preparation'] ?? null))
+                        <p class="text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-2)]">Neue Zubereitung</p>
+                        <p class="text-[var(--fa-ink)] whitespace-pre-line">{{ \Illuminate\Support\Str::limit($ueberarbeitung['werte']['preparation'], 400) }}</p>
+                    @endif
+                </div>
+                <div class="flex flex-wrap items-center gap-2">
+                    <x-fa::button size="sm" icon="heroicon-m-check" wire:click="ueberarbeitungUebernehmen" data-ueberarbeiten-uebernehmen>Vorschlag übernehmen ({{ round($ueberarbeitung['confidence'] * 100) }} %)</x-fa::button>
+                    <x-fa::button size="sm" variant="ghost" wire:click="ueberarbeitungVerwerfen" data-ueberarbeiten-verwerfen>Verwerfen</x-fa::button>
+                    <span class="{{ $hinweis }}">Übernehmen schreibt Zutaten und Texte. Von Hand Gepflegtes bleibt stehen.</span>
+                </div>
+            @endif
+        </x-fa::section>
+    @endif
+
+    @if(! $neu && $copilotOffen)
+        <x-foodalchemist::copilot-box :copilot="$copilot" :status="$copilotStatus" zeilen-wort="Zutat" />
+    @endif
 
     {{-- Spec 28 / E0.1: sticky Tab-Leiste + Alpine-Scope liegen im Baustein `editor-tabs`
          (Panels bleiben hier und alle im DOM — der eingebettete Zutaten-Editor darf nicht neu
@@ -100,30 +240,22 @@
         :visited="array_keys($geladeneTabs)"
         :init="$neu ? 'eigenschaften' : 'aufbau'"
         :tabs="[
-            'aufbau' => 'Aufbau',
+            'aufbau' => $neu ? null : 'Aufbau',
             'eigenschaften' => 'Stammdaten',
             'preparation' => 'Zubereitung',
             'details' => 'Deklaration',
-            'regeneration' => $neu ? null : 'Regeneration & Behälter',
-            'sensorik' => $neu ? null : 'Sensorik & Pairing',
+            'regeneration' => $neu ? null : 'Regeneration und Behälter',
+            'sensorik' => $neu ? null : 'Sensorik und Pairing',
             'feedback' => $neu ? null : 'Feedback',
             'notes' => 'Notizen',
             'verwaltung' => $neu ? null : 'Verwaltung',
         ]">
 
-    {{-- ── Tab: AUFBAU (nur Zutaten) ───────────────────────── --}}
-    <div x-show="tab === 'aufbau'" x-cloak class="pt-4 space-y-4">
-    {{-- Aufbau = nur Zutaten (Stammdaten liegt jetzt im „Stammdaten"-Tab, 2026-07-31) --}}
-    {{-- ZUTATEN (§4.2.3) — der P-8-Kern eingebettet + KPI-Leiste (Ist-App unten) --}}
+    {{-- ── Reiter: AUFBAU (Zutaten und Ertrag) ──────────────────────────── --}}
+    <div x-show="tab === 'aufbau'" x-cloak class="pt-4 flex flex-col gap-4">
     @if(!$neu)
-        <x-foodalchemist::modal-section title="Zutaten ({{ $voll?->ingredients?->count() ?? 0 }})">
-            {{-- R6e: ✨ KI-Überarbeiten (Ist-Button) — freie Anweisung, Vorschau, Übernehmen --}}
+        <x-fa::section title="Zutaten" icon="heroicon-o-list-bullet" :meta="(string) ($voll?->ingredients?->count() ?? 0)">
             <x-slot:actions>
-                <button type="button" wire:click="$toggle('ueberarbeitenOffen')" class="{{ $btnAi }}"
-                        title="Freie Anweisung — KI überarbeitet Zutaten, Mengen, Zubereitung & Beschreibung (Vorschau + Übernehmen)" data-ki-ueberarbeiten>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') KI-Überarbeiten</button>
-                {{-- Spec 03 L6b: Copilot — Prüf-Pass statt Neu-Schreiben (Befunde einzeln annehmen) --}}
-                <button type="button" wire:click="$toggle('copilotOffen')" class="{{ $btnAi }}"
-                        title="Prüf-Pass: die KI beurteilt Mengen, Einheiten, überflüssige und fehlende Zutaten — je Befund einzeln übernehmbar. Das Rezept bleibt stehen." data-copilot>@svg('heroicon-o-clipboard-document-check', 'w-3.5 h-3.5') Copilot</button>
                 {{-- Garverluste: feuert ins eingebettete zutaten-kern (Alpine garverluste() via Window-Event) —
                      lebt in einem ANDEREN x-data-Scope als der $wire-Call selbst, darum kein
                      <x-foodalchemist::ki-action> (das ruft $wire.<action> direkt); die Rückmeldung
@@ -131,422 +263,353 @@
                      visuell identisch zur Komponente (Spinner/Haken/Fehler). --}}
                 <button type="button" x-data="{ pending: false, ok: false, err: null }"
                         x-on:garverluste-fertig.window="pending = false; ok = true; err = null; setTimeout(() => ok = false, 1600)"
-                        x-on:garverluste-fehler.window="pending = false; ok = false; err = $event.detail?.message || 'Fehler — bitte erneut versuchen.'"
+                        x-on:garverluste-fehler.window="pending = false; ok = false; err = $event.detail?.message || 'Fehler, bitte erneut versuchen.'"
                         x-on:click="pending = true; ok = false; err = null; $dispatch('garverluste-vorschlagen')"
                         :class="{ 'opacity-50 cursor-wait': pending }" :disabled="pending"
-                        class="{{ $btnAi }}" :title="err || 'M4-11: KI-Schätzung der Garverluste je Zutat (GL-07 — geschrieben erst beim Speichern)'" data-garverlust-ki>
-                    <template x-if="pending">@svg('heroicon-o-arrow-path', 'w-3.5 h-3.5 animate-spin')<span>Schätzt …</span></template>
-                    <template x-if="!pending && ok"><span class="inline-flex items-center gap-1 text-emerald-500">@svg('heroicon-o-check', 'w-3.5 h-3.5')<span>Übernommen</span></span></template>
-                    <template x-if="!pending && !ok && err"><span class="inline-flex items-center gap-1 text-rose-300">@svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5')<span x-text="err"></span></span></template>
-                    <template x-if="!pending && !ok && !err">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5')<span>Garverluste</span></template>
+                        class="{{ $knopfKi }}" :title="err || 'Die KI schätzt den Garverlust je Zutat. Gespeichert wird erst mit Speichern.'" data-garverlust-ki>
+                    <template x-if="pending"><span class="inline-flex items-center gap-1">@svg('heroicon-o-arrow-path', 'w-3.5 h-3.5 animate-spin')<span>Schätzt …</span></span></template>
+                    <template x-if="!pending && ok"><span class="inline-flex items-center gap-1 text-[var(--fa-ok)]">@svg('heroicon-o-check', 'w-3.5 h-3.5')<span>Übernommen</span></span></template>
+                    <template x-if="!pending && !ok && err"><span class="inline-flex items-center gap-1 text-[var(--fa-crit)]">@svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5')<span x-text="err"></span></span></template>
+                    <template x-if="!pending && !ok && !err"><span class="inline-flex items-center gap-1">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5')<span>Garverluste schätzen</span></span></template>
                 </button>
             </x-slot:actions>
 
-            @if($ueberarbeitenOffen)
-                <div class="mb-3 rounded-lg bg-violet-500/5 border border-violet-500/20 px-3 py-2 space-y-2" data-ueberarbeiten-box>
-                    <div class="flex items-center gap-2">
-                        <input type="text" wire:model="anweisung" wire:keydown.enter="kiUeberarbeiten"
-                               placeholder="z. B. «mach das Rezept vegan und halbiere den Zucker»" class="{{ $input }} !py-1.5 flex-1" data-anweisung />
-                        <x-foodalchemist::ki-action action="kiUeberarbeiten" variant="primary" icon="heroicon-o-sparkles" label="Vorschlagen"
-                            data-ueberarbeiten-start busy="denkt …" flash="Vorschlag da" />
-                    </div>
-                    @if($ueberarbeitung !== null)
-                        <div class="rounded-lg bg-white/60 px-3 py-2 space-y-1.5 max-h-72 overflow-y-auto" data-ueberarbeiten-vorschau>
-                            @if(is_string($ueberarbeitung['werte']['aenderungs_notiz'] ?? null))
-                                <p class="text-[11px] font-medium text-violet-700">{{ $ueberarbeitung['werte']['aenderungs_notiz'] }}</p>
-                            @endif
-                            @if(!empty($ueberarbeitung['werte']['zutaten']))
-                                <p class="{{ $dt }}">Zutaten (neu)</p>
-                                @foreach($ueberarbeitung['werte']['zutaten'] as $z)
-                                    @if(is_array($z))
-                                        @php($mv = $ueberarbeitung['match_vorschau'][$loop->index] ?? null)
-                                        <p class="text-[11px] text-gray-600 flex flex-wrap items-center gap-x-1.5" wire:key="uz-{{ $loop->index }}">
-                                            <span>{{ $z['quantity'] ?? '?' }} {{ $z['einheit_slug'] ?? '' }} · {{ $z['text'] ?? '—' }}</span>
-                                            <span class="text-gray-500">{{ isset($z['id']) ? '(bestehend #' . $z['id'] . ')' : '(neu)' }}</span>
-                                            @if($mv)
-                                                @if($mv['status'] === 'matched')
-                                                    <span class="text-emerald-600" title="Bestehende Verknüpfung bleibt">✓ {{ $mv['kind'] === 'gp' ? 'GP' : 'Rezept' }}: {{ $mv['ziel'] ?? '—' }}</span>
-                                                @elseif($mv['status'] === 'grounded')
-                                                    <span class="text-emerald-600" title="Wird beim Übernehmen automatisch verknüpft">→ {{ $mv['kind'] === 'gp' ? 'GP' : 'Rezept' }}: {{ $mv['ziel'] ?? '—' }}</span>
-                                                @else
-                                                    <span class="text-violet-600" title="Kein Bestandstreffer — nach dem Übernehmen anlegen">@svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5 inline-block align-middle') {{ $mv['primaer'] === 'basisrezept_anlegen' ? 'Basisrezept anlegen' : 'GP anlegen' }}{{ ($mv['shortlist'] ?? 0) > 0 ? ' · ' . $mv['shortlist'] . ' Kandidaten' : '' }}</span>
-                                                @endif
-                                            @endif
-                                        </p>
-                                    @endif
-                                @endforeach
-                                @php($hardstops = collect($ueberarbeitung['match_vorschau'] ?? [])->where('status', 'hardstop')->count())
-                                @if($hardstops > 0)
-                                    <p class="text-[10px] text-violet-700 mt-0.5" data-ueberarbeiten-hardstops>
-                                        {{ $hardstops }} Zutat(en) ohne Bestandstreffer → nach dem Übernehmen als GP/Basisrezept anlegen (Hard-Stop). Alle anderen werden automatisch verknüpft.
-                                    </p>
-                                @endif
-                            @endif
-                            @if(is_string($ueberarbeitung['werte']['description'] ?? null))
-                                <p class="{{ $dt }}">Beschreibung (neu)</p>
-                                <p class="text-[11px] text-gray-600">{{ \Illuminate\Support\Str::limit($ueberarbeitung['werte']['description'], 280) }}</p>
-                            @endif
-                            @if(is_string($ueberarbeitung['werte']['preparation'] ?? null))
-                                <p class="{{ $dt }}">Zubereitung (neu)</p>
-                                <p class="text-[11px] text-gray-600 whitespace-pre-line">{{ \Illuminate\Support\Str::limit($ueberarbeitung['werte']['preparation'], 400) }}</p>
-                            @endif
-                        </div>
-                        <div class="flex items-center gap-1.5">
-                            <button type="button" wire:click="ueberarbeitungUebernehmen" class="{{ $btnGhostXs }} text-emerald-600" data-ueberarbeiten-uebernehmen>Übernehmen ({{ round($ueberarbeitung['confidence'] * 100) }} %)</button>
-                            <button type="button" wire:click="ueberarbeitungVerwerfen" class="{{ $btnGhostXs }}" data-ueberarbeiten-verwerfen>Verwerfen</button>
-                            <span class="text-[10px] text-gray-500">Übernehmen schreibt Zutaten-Sync + Texte mit Lineage ki — manuell Gepflegtes bleibt (GL-07).</span>
-                        </div>
-                    @endif
-                </div>
-            @endif
-
-            @if($copilotOffen)
-                <x-foodalchemist::copilot-box :copilot="$copilot" :status="$copilotStatus" zeilen-wort="Zutat" />
-            @endif
-
             <livewire:foodalchemist.recipes.ingredient-editor :recipe-id="$recipeId" :eingebettet="true" wire:key="zutaten-inline-{{ $recipeId }}-v{{ $zutatenVersion }}" />
+        </x-fa::section>
 
-            @if($voll !== null)
-                <div class="mt-2 flex flex-wrap items-end gap-4">
-                    <div>
-                        <label class="block {{ $label }} mb-1">Yield manuell (kg, A-3 — Vorrang vor Auto-Summe)</label>
-                        <input type="text" wire:model="form.yield_kg_manual" placeholder="leer = Auto ({{ $voll->yield_kg !== null ? number_format((float) $voll->yield_kg, 3, ',', '.') : '—' }})" class="{{ $input }} !w-48" data-yield-manual />
-                    </div>
-                    <div>
-                        <label class="block {{ $label }} mb-1">Ertrag in Stück (kg ↔ Stück)</label>
-                        <input type="text" wire:model.live.debounce.500ms="form.yield_pieces" placeholder="z. B. 50 (Törtchen)" class="{{ $input }} !w-40" data-ertrag-stueck />
-                        @php($es = is_numeric(str_replace(',', '.', (string) ($form['yield_pieces'] ?? ''))) ? (float) str_replace(',', '.', (string) $form['yield_pieces']) : null)
-                        @if($es !== null && $es > 0 && $voll->yield_kg !== null)
-                            <p class="text-[11px] text-gray-600 mt-1">1 Stück ≈ {{ number_format((float) $voll->yield_kg / $es * 1000, 0, ',', '.') }} g{{ $voll->ek_total_eur !== null ? ' · EK/Stück ≈ ' . number_format((float) $voll->ek_total_eur / $es, 2, ',', '.') . ' €' : '' }}</p>
-                        @endif
+        @if($voll !== null)
+            @php
+                $es = is_numeric(str_replace(',', '.', (string) ($form['yield_pieces'] ?? ''))) ? (float) str_replace(',', '.', (string) $form['yield_pieces']) : null;
+                $stueckHinweis = $es !== null && $es > 0 && $voll->yield_kg !== null
+                    ? '1 Stück ≈ ' . number_format((float) $voll->yield_kg / $es * 1000, 0, ',', '.') . ' g' . ($voll->ek_total_eur !== null ? ' · EK je Stück ≈ ' . number_format((float) $voll->ek_total_eur / $es, 2, ',', '.') . ' €' : '')
+                    : 'Für Stückrezepte, z. B. 50 Törtchen. Rechnet kg und Stück ineinander um.';
+            @endphp
+            <x-fa::section title="Ertrag" icon="heroicon-o-scale">
+                <div class="grid gap-4 sm:grid-cols-2">
+                    <x-fa::field label="Ertrag von Hand (kg)" for="rezept-yield-manuell" optional
+                        hint="{{ 'Leer lassen = Summe der Zutaten' . ($kg($voll->yield_kg) !== null ? ' (' . $kg($voll->yield_kg) . ' kg)' : '') . '. Ein Wert hier hat Vorrang.' }}">
+                        <x-fa::input id="rezept-yield-manuell" wire:model="form.yield_kg_manual" numeric inputmode="decimal"
+                            placeholder="{{ $kg($voll->yield_kg) !== null ? 'Summe: ' . $kg($voll->yield_kg) : 'Summe fehlt' }}" data-yield-manual />
+                    </x-fa::field>
+                    <x-fa::field label="Ertrag in Stück" for="rezept-ertrag-stueck" optional :hint="$stueckHinweis">
+                        <x-fa::input id="rezept-ertrag-stueck" wire:model.live.debounce.500ms="form.yield_pieces" numeric inputmode="decimal" placeholder="z. B. 50" data-ertrag-stueck />
+                    </x-fa::field>
+                </div>
+            </x-fa::section>
+        @endif
+    @endif
+    </div>{{-- /Reiter AUFBAU --}}
+
+    {{-- ── Reiter: ZUBEREITUNG (Equipment + Schritte) ───────────────────── --}}
+    <div x-show="tab === 'preparation'" x-cloak class="pt-4 flex flex-col gap-4">
+    @if($geladeneTabs['preparation'] ?? false)
+    {{-- ZUBEREITUNG zuerst (wird häufiger gepflegt als das Equipment). Spec 27: strukturierte
+         Schritte sind der Master, `recipes.preparation` ist nur ihr gerenderter Lese-Spiegel. --}}
+    <x-fa::section title="Zubereitung" icon="heroicon-o-queue-list">
+        @if(!$neu)
+            <x-slot:actions>
+                {{-- Spec 53: Produktfoto (Hero) erzeugen/ersetzen — läuft async (EnrichRecipeJob,
+                     nurProduktfoto), gepollt über pruefeProduktfotoErgebnis. --}}
+                @php $bildkosten = config('foodalchemist.ai.bildkosten_usd.models')['gpt-image-1.5'] ?? null; @endphp
+                <x-foodalchemist::ki-action action="kiProduktfoto" variant="ai" icon="heroicon-o-photo" label="Produktfoto erzeugen"
+                        busy="Malt …" flash="Foto erzeugt"
+                        title="{{ 'Erzeugt oder ersetzt das Foto des fertigen Gerichts' . ($bildkosten !== null ? ', ca. ' . number_format($bildkosten, 3, ',', '.') . ' $ je Bild' : '') . '.' }}"
+                        data-ki-produktfoto />
+                <div class="relative" x-data="faMenu()" x-on:keydown.escape="offen = false" x-on:click.outside="offen = false">
+                    <x-fa::icon-button icon="heroicon-m-ellipsis-horizontal" label="Weitere Aktionen zur Zubereitung" size="sm" x-on:click="toggle($event)" aria-haspopup="menu" x-bind:aria-expanded="offen" />
+                    <div x-bind:class="{ hidden: ! offen }" x-bind:style="pos" role="menu" class="hidden w-64 fa-surface shadow-lg py-1">
+                        <button type="button" role="menuitem" wire:click="manual_zubereitung" x-on:click="offen = false" class="{{ $menuePunkt }}" title="Die KI überschreibt die Zubereitung dann nicht mehr">
+                            @svg('heroicon-o-lock-closed', 'w-4 h-4 text-[var(--fa-ink-3)]') Vor KI schützen
+                        </button>
+                        <button type="button" role="menuitem" wire:click="clear_zubereitung" x-on:click="offen = false" class="{{ $menuePunkt }}" title="Hebt die Herkunfts-Markierung auf, der Text bleibt stehen">
+                            @svg('heroicon-o-arrow-uturn-left', 'w-4 h-4 text-[var(--fa-ink-3)]') Herkunft zurücksetzen
+                        </button>
                     </div>
                 </div>
-            @endif
-        </x-foodalchemist::modal-section>
-    @endif
-    </div>{{-- /Tab AUFBAU --}}
+            </x-slot:actions>
+        @endif
+        @if($produktfotoLaeuft)
+            <div wire:poll.2s="pruefeProduktfotoErgebnis" class="flex items-center gap-2 text-[length:var(--fa-text-sm)] text-[var(--fa-info)]" data-produktfoto-laeuft>
+                @svg('heroicon-o-arrow-path', 'w-4 h-4 animate-spin') KI-Produktfoto wird erzeugt …
+            </div>
+        @endif
+        @if($produktfotoFehler)
+            <x-fa::notice tone="crit" data-produktfoto-fehler>{{ $produktfotoFehler }}</x-fa::notice>
+        @endif
+        @if($neu)
+            {{-- Anlage-Modus: es gibt noch keine Schritt-IDs (und damit keine Foto-Verknüpfung).
+                 Freitext ist hier weiter erlaubt und wird beim Speichern in Schritte geparst. --}}
+            <x-fa::field for="rezept-preparation-neu" hint="Zeilen mit ## werden Abschnitte, Zeilen mit 1. oder - werden Schritte. Nach dem Anlegen gibt es den Schritt-Editor mit Fotos.">
+                {{-- Bewusst roh: der Platzhalter braucht echte Zeilenumbrüche (&#10;), ein Baustein-Attribut würde sie escapen. --}}
+                <textarea id="rezept-preparation-neu" wire:model="form.preparation" rows="6" data-rezept-preparation
+                          class="fa-control py-2 font-mono text-[length:var(--fa-text-md)] leading-relaxed"
+                          placeholder="Optional schon eintippen, wird beim Speichern in Schritte umgewandelt.&#10;## Mise en Place&#10;1. …"></textarea>
+            </x-fa::field>
+        @else
+            <livewire:foodalchemist.recipes.step-editor :recipe-id="$recipeId" wire:key="schritt-editor-{{ $recipeId }}-v{{ $fotoVersion }}" />
+            <p class="{{ $hinweis }}">
+                Text {{ $herkunftText($zustaende['preparation']) }}. Druck, Suche und Produktionsplanung lesen die Anleitung aus diesen Schritten.
+            </p>
+        @endif
+    </x-fa::section>
 
-    {{-- ── Tab: ZUBEREITUNG (Equipment + Zubereitung) ────────────────── --}}
-    <div x-show="tab === 'preparation'" x-cloak class="pt-4 space-y-4">
-    @if($geladeneTabs['preparation'] ?? false)
-    {{-- EQUIPMENT (§4.2.6) — gruppiert nach Vokabular-Gruppe (Ist-App-Layout) --}}
-    <x-foodalchemist::modal-section title="Equipment">
-        <x-slot:actions>
-            @if(!$neu)
-                <x-foodalchemist::ki-action action="kiEquipment" variant="ai" icon="heroicon-o-sparkles" label="Equipment"
-                    title="Set-Vorschlag aus den Zutaten (in die Auswahl, nichts persistiert)"
+    {{-- EQUIPMENT (§4.2.6) — gruppiert nach Vokabular-Gruppe. Chips = x-fa-Chip-Optik (echte Checkboxen). --}}
+    @php $eqGewaehlt = $equipmentListe->filter(fn ($g) => in_array((string) $g->id, $form['equipment_ids'], true)); @endphp
+    <x-fa::section title="Equipment" icon="heroicon-o-wrench-screwdriver" :meta="$eqGewaehlt->count() . ' gewählt'">
+        @if(!$neu)
+            <x-slot:actions>
+                <x-foodalchemist::ki-action action="kiEquipment" variant="ai" icon="heroicon-o-sparkles" label="Equipment vorschlagen"
+                    title="Vorschlag aus den Zutaten, landet in der Auswahl. Gespeichert wird erst mit Speichern."
                     busy="Wird ermittelt …" flash="Equipment ermittelt" />
-            @endif
-        </x-slot:actions>
-        {{-- Gewählte Geräte deutlich hervorheben (gefüllt violett + ✓) + Zusammenfassung oben,
-             damit die Auswahl im ~40-Chip-Raster nicht untergeht. Farben als rohes CSS (hell + dunkel). --}}
-        <style>
-            [data-rezept-equipment] .fa-eq{ transition:background-color .15s, color .15s, box-shadow .15s; }
-            [data-rezept-equipment] .fa-eq-off{ background:rgba(148,163,184,.16); color:#64748b; }
-            [data-rezept-equipment] .fa-eq-off:hover{ background:rgba(139,92,246,.12); color:#6d28d9; }
-            [data-rezept-equipment] .fa-eq-on{ background:#7c3aed; color:#fff; font-weight:600; box-shadow:0 1px 5px rgba(124,58,237,.35); }
-            [data-rezept-equipment] .fa-eq-summary{ color:#6d28d9; }
-            .fa-editor-panel [data-rezept-equipment] .fa-eq-off{ background:rgba(255,255,255,.07); color:#94a3b8; }
-            .fa-editor-panel [data-rezept-equipment] .fa-eq-off:hover{ background:rgba(139,92,246,.22); color:#e9d5ff; }
-            .fa-editor-panel [data-rezept-equipment] .fa-eq-on{ background:#8b5cf6; color:#fff; box-shadow:0 1px 6px rgba(139,92,246,.5); }
-            .fa-editor-panel [data-rezept-equipment] .fa-eq-summary{ color:#c4b5fd; }
-        </style>
-        <div class="space-y-1.5" data-rezept-equipment>
-            @php($eqGewaehlt = $equipmentListe->filter(fn ($g) => in_array((string) $g->id, $form['equipment_ids'], true)))
-            <div class="flex items-start gap-2 pb-1.5 mb-1 border-b border-black/5" data-equipment-gewaehlt>
-                <span class="{{ $dt }} w-28 shrink-0 pt-0.5">Gewählt ({{ $eqGewaehlt->count() }})</span>
+            </x-slot:actions>
+        @endif
+        <div class="flex flex-col gap-3" data-rezept-equipment>
+            <div class="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-3 pb-3 border-b border-[var(--fa-line)]" data-equipment-gewaehlt>
+                <span class="sm:w-32 shrink-0 text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-2)]">Gewählt</span>
                 @if($eqGewaehlt->isNotEmpty())
-                    <span class="fa-eq-summary text-xs font-medium leading-snug">{{ $eqGewaehlt->pluck('name')->join(' · ') }}</span>
+                    <span class="text-[length:var(--fa-text-md)] font-medium text-[var(--fa-accent)] leading-snug">{{ $eqGewaehlt->pluck('name')->join(' · ') }}</span>
                 @else
-                    <span class="text-[11px] text-gray-400">— noch nichts gewählt —</span>
+                    <span class="{{ $hinweis }}">Noch nichts gewählt.</span>
                 @endif
             </div>
             @foreach($equipmentListe->groupBy(fn ($g) => $g->group_name ?? 'sonstig') as $gruppe => $geraete)
-                <div class="flex items-start gap-2">
-                    <span class="{{ $dt }} w-28 shrink-0 pt-1">{{ $gruppe }}</span>
-                    <div class="flex flex-wrap gap-1.5">
+                <div class="flex flex-col sm:flex-row sm:items-start gap-1.5 sm:gap-3">
+                    <span class="sm:w-32 shrink-0 sm:pt-1.5 text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-2)]">{{ ucfirst($gruppe) }}</span>
+                    <div class="flex flex-wrap gap-1.5 min-w-0">
                         @foreach($geraete as $geraet)
-                            @php($eqOn = in_array((string) $geraet->id, $form['equipment_ids'], true))
-                            <label class="fa-eq {{ $eqOn ? 'fa-eq-on' : 'fa-eq-off' }} inline-flex items-center gap-1 {{ $pill }} cursor-pointer"
-                                   wire:key="eq-{{ $geraet->id }}">
-                                <input type="checkbox" wire:model.live="form.equipment_ids" value="{{ $geraet->id }}" class="hidden" />
-                                @if($eqOn)@svg('heroicon-o-check', 'w-3 h-3 shrink-0')@endif
-                                {{ $geraet->name }}
+                            @php $eqOn = in_array((string) $geraet->id, $form['equipment_ids'], true); @endphp
+                            <label class="fa-chip" wire:key="eq-{{ $geraet->id }}">
+                                <input type="checkbox" wire:model.live="form.equipment_ids" value="{{ $geraet->id }}" class="sr-only" />
+                                <span class="gap-1">@if($eqOn)@svg('heroicon-m-check', 'w-3.5 h-3.5 shrink-0')@endif{{ $geraet->name }}</span>
                             </label>
                         @endforeach
                     </div>
                 </div>
             @endforeach
         </div>
-    </x-foodalchemist::modal-section>
-
-    {{-- ZUBEREITUNG (§4.2.5) — Spec 27: strukturierte Schritte sind der Master,
-         `recipes.preparation` ist nur noch ihr gerenderter Lese-Spiegel. Inhalt + KI
-         + Fotos leben im eingebetteten Schritt-Editor; hier bleibt die Lineage-Steuerung. --}}
-    <x-foodalchemist::modal-section title="Zubereitung">
-        <x-slot:actions>
-            @if(!$neu)
-                <button type="button" wire:click="manual_zubereitung" class="{{ $btnGhostXs }}" title="gegen KI-Überschreiben sperren">als manuell</button>
-                <button type="button" wire:click="clear_zubereitung" class="{{ $btnGhostXs }}" title="Lineage-Markierung aufheben — der Text bleibt">Lineage-Reset</button>
-                {{-- Spec 53: Produktfoto (Hero) erzeugen/ersetzen — läuft async (EnrichRecipeJob,
-                     nurProduktfoto), gepollt über pruefeProduktfotoErgebnis. --}}
-                @php($bildkosten = config('foodalchemist.ai.bildkosten_usd.models')['gpt-image-1.5'] ?? null)
-                <x-foodalchemist::ki-action action="kiProduktfoto" variant="ai" icon="heroicon-o-photo" label="KI-Produktfoto"
-                        busy="malt …" flash="Foto erzeugt"
-                        title="{{ 'Erzeugt/ersetzt das Hero-Foto des fertigen Gerichts' . ($bildkosten !== null ? ' — ca. ' . number_format($bildkosten, 3, ',', '.') . ' $ je Bild' : '') . '.' }}"
-                        data-ki-produktfoto />
-            @endif
-        </x-slot:actions>
-        @if($produktfotoLaeuft)
-            <div wire:poll.2s="pruefeProduktfotoErgebnis" class="mb-2 flex items-center gap-2 text-[11px] text-violet-700" data-produktfoto-laeuft>
-                @svg('heroicon-o-arrow-path', 'w-3.5 h-3.5 animate-spin') KI-Produktfoto wird erzeugt …
-            </div>
-        @endif
-        @if($produktfotoFehler)
-            <p class="mb-2 text-[11px] text-rose-600" data-produktfoto-fehler>{{ $produktfotoFehler }}</p>
-        @endif
-        @if($neu)
-            {{-- Anlage-Modus: es gibt noch keine Schritt-IDs (und damit keine Foto-Verknüpfung).
-                 Freitext ist hier weiter erlaubt und wird beim Speichern in Schritte geparst. --}}
-            <textarea wire:model="form.preparation" rows="6" class="{{ $input }} font-mono text-[11px]" data-rezept-preparation
-                      placeholder="Optional schon eintippen — wird beim Speichern in Schritte umgewandelt.&#10;## Mise en Place&#10;1. …"></textarea>
-            <p class="text-[10px] text-gray-500 mt-1">
-                <code>##</code> = Abschnitt · <code>1.</code> / <code>-</code> = Schritt. Nach dem Speichern gibt es den Schritt-Editor mit Fotos.
-            </p>
-        @else
-            <livewire:foodalchemist.recipes.step-editor :recipe-id="$recipeId" wire:key="schritt-editor-{{ $recipeId }}-v{{ $fotoVersion }}" />
-            <p class="text-[10px] text-gray-500 mt-1">
-                Lineage: {{ $zustaende['preparation'] }} — der Markdown-Text in <code>preparation</code> wird aus den Schritten erzeugt
-                (Produktionsdruck, Suche und Prozessanker lesen ihn).
-            </p>
-        @endif
-    </x-foodalchemist::modal-section>
+    </x-fa::section>
     @else
-        <p class="py-12 text-center text-xs text-gray-500" data-rezept-tab-laedt="preparation">Zubereitung wird geladen …</p>
+        <p class="{{ $laedt }}" data-rezept-tab-laedt="preparation">Zubereitung wird geladen …</p>
     @endif
-    </div>{{-- /Tab ZUBEREITUNG --}}
+    </div>{{-- /Reiter ZUBEREITUNG --}}
 
-    {{-- ── Tab: STAMMDATEN (Stammdaten + Eigenschaften, 2026-07-31 zusammengelegt) ── --}}
-    <div x-show="tab === 'eigenschaften'" x-cloak class="pt-4 space-y-4">
+    {{-- ── Reiter: STAMMDATEN (Name, Einordnung, Eigenschaften, Text) ───── --}}
+    <div x-show="tab === 'eigenschaften'" x-cloak class="pt-4 flex flex-col gap-4">
     @if($geladeneTabs['eigenschaften'] ?? false)
-    {{-- STAMMDATEN (§4.2.2) — Name/Herkunft/Status/Taxonomie --}}
-    <x-foodalchemist::modal-section title="Stammdaten" class="!p-3">
-        <x-slot:actions>
-            <x-foodalchemist::ki-action action="namePutzen" variant="ai" icon="heroicon-o-sparkles" label="Name putzen"
-                title="§1-Syntax normalisieren" busy="Wird geputzt …" flash="Name geputzt" />
-            @if(!$neu)
-                <x-foodalchemist::ki-action action="ai_kategorie" variant="ai" icon="heroicon-o-sparkles" label="Kategorie"
-                    title="D-1-Klassifikation (GL-07-Vorschlag unten)" busy="Wird ermittelt …" flash="Kategorie ermittelt" />
-            @endif
-            <x-foodalchemist::ki-action action="kiFertigung" variant="ai" icon="heroicon-o-sparkles" label="Fertigung"
-                title="Fertigungstiefe aus den Zutaten" busy="Wird ermittelt …" flash="Fertigung ermittelt" />
-        </x-slot:actions>
-
-        {{-- Kompakt: ein enges Raster, Name volle Breite --}}
-        <div class="grid grid-cols-2 gap-x-4 gap-y-2">
-            <div class="col-span-2">
-                <label class="block {{ $label }} mb-1">Name *</label>
-                <input type="text" wire:model.live.debounce.300ms="form.name" placeholder="Schaumsauce: Beurre Blanc" class="{{ $input }}" data-rezept-name />
-                <p class="text-[10px] text-gray-500 mt-0.5">§1.2: <code>Typ: Bezeichnung (Variante)</code>, Title Case @if($keyVorschau !== '')· <span class="font-mono" data-key-vorschau>{{ $keyVorschau }}{{ $neu ? '' : ' (stabil)' }}</span>@endif</p>
+    <x-fa::section title="Stammdaten" icon="heroicon-o-identification">
+        <div class="grid gap-4 sm:grid-cols-2">
+            {{-- Name: volle Breite, KI-Hilfe direkt am Feld --}}
+            <div class="sm:col-span-2 flex flex-col gap-1.5">
+                <div class="flex items-center justify-between gap-2">
+                    <label for="rezept-name" class="text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-2)]">Name<span class="text-[var(--fa-crit)]" aria-hidden="true"> *</span></label>
+                    <x-foodalchemist::ki-action action="namePutzen" variant="ai" icon="heroicon-o-sparkles" label="Namen glätten"
+                        title="Schreibweise nach dem Rezept-Regelwerk vereinheitlichen" busy="Wird geglättet …" flash="Name geglättet" />
+                </div>
+                <x-fa::input id="rezept-name" wire:model.live.debounce.300ms="form.name" placeholder="Schaumsauce: Beurre Blanc" data-rezept-name />
+                <p class="{{ $hinweis }}">Schema «Typ: Bezeichnung (Variante)», jedes Wort groß.@if($keyVorschau !== '')<span> Kennung <span class="font-mono text-[var(--fa-ink-2)]" data-key-vorschau>{{ $keyVorschau }}</span>{{ $neu ? '' : ', bleibt stabil' }}.</span>@endif</p>
             </div>
-            @if(!$neu)
-                {{-- Spec 43 (Bild-Epic): Gericht-Foto — optional in der Präsentation (Builder-Toggle „Gericht-Fotos") --}}
-                <div class="col-span-2" data-rezept-bild>
-                    <label class="block {{ $label }} mb-1">Gericht-Foto <span class="normal-case text-gray-400">(optional, für die Präsentation)</span></label>
-                    <div class="flex items-center gap-3 flex-wrap">
-                        @if($dishImageUrl)
-                            <img src="{{ $dishImageUrl }}" alt="" class="h-12 w-20 object-cover rounded border border-black/10">
-                            <button type="button" wire:click="dishImageEntfernen" class="text-rose-600 text-[11px] underline">entfernen</button>
-                        @endif
-                        <input type="file" wire:model="dishImageUpload" accept="image/*" class="text-[11px]" data-rezept-bild-upload>
-                        <div wire:loading wire:target="dishImageUpload" class="text-[11px] text-gray-400">lädt …</div>
-                    </div>
-                    @error('dishImageUpload')<div class="text-[11px] text-rose-600 mt-1">{{ $message }}</div>@enderror
-                    <p class="text-[10px] text-gray-500 mt-0.5">Wird nur gezeigt, wenn im Präsentations-Design „Gericht-Fotos" aktiv ist.</p>
+
+            <x-fa::field label="Hauptgruppe" for="rezept-hauptgruppe" required hint="{{ $hauptgruppen->count() }} Hauptgruppen zur Auswahl">
+                <x-fa::select id="rezept-hauptgruppe" wire:model.live="form.hauptgruppe_id" placeholder="Bitte wählen">
+                    @foreach($hauptgruppen as $hg)<option value="{{ $hg->id }}">{{ $hg->label }}</option>@endforeach
+                </x-fa::select>
+            </x-fa::field>
+
+            <div class="flex flex-col gap-1.5 min-w-0">
+                <div class="flex items-center justify-between gap-2">
+                    <label for="rezept-kategorie" class="text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-2)]">Kategorie<span class="text-[var(--fa-crit)]" aria-hidden="true"> *</span></label>
+                    @if(!$neu)
+                        <x-foodalchemist::ki-action action="ai_kategorie" variant="ai" icon="heroicon-o-sparkles" label="Kategorie vorschlagen"
+                            title="Vorschlag erscheint unter dem Feld, übernommen wird erst per Klick" busy="Wird ermittelt …" flash="Kategorie ermittelt" />
+                    @endif
+                </div>
+                <x-fa::select id="rezept-kategorie" wire:model.live="form.category_id" placeholder="{{ $kategorien->isEmpty() ? 'Erst Hauptgruppe wählen' : 'Bitte wählen' }}" :disabled="$kategorien->isEmpty()">
+                    @foreach($kategorien as $kat)<option value="{{ $kat->id }}">{{ $kat->label }}</option>@endforeach
+                </x-fa::select>
+                @if($kategorien->isNotEmpty())<p class="{{ $hinweis }}">{{ $kategorien->count() }} {{ $kategorien->count() === 1 ? 'Kategorie' : 'Kategorien' }} in dieser Hauptgruppe</p>@endif
+            </div>
+
+            @if(isset($kiVorschlag['category']))
+                <div class="sm:col-span-2" data-kategorie-vorschlag>
+                    <x-fa::notice tone="info">
+                        KI-Vorschlag: <strong>{{ $kiVorschlag['category']['werte']['kategorie_name'] ?? $kiVorschlag['category']['werte']['category_id'] ?? 'ohne Namen' }}</strong> ({{ round($kiVorschlag['category']['confidence'] * 100) }} % sicher)
+                        <x-slot:actions>
+                            <x-fa::button size="sm" icon="heroicon-m-check" wire:click="accept_kategorie">Übernehmen</x-fa::button>
+                        </x-slot:actions>
+                    </x-fa::notice>
                 </div>
             @endif
-            <div>
-                <label class="block {{ $label }} mb-1">Herkunft / Quelle <span class="normal-case text-gray-400">(nicht im Namen — §1.6)</span></label>
-                <input type="text" wire:model="form.origin_source" placeholder="z. B. Broich, nach Paul, nach Omas Art" class="{{ $input }}" />
-            </div>
-            <div>
-                <label class="block {{ $label }} mb-1">Status (§4.2.8)</label>
-                <select wire:model="form.status" class="{{ $input }}" data-rezept-status @disabled($neu)>
-                    @foreach(['stub' => 'Stub', 'draft' => 'Entwurf', 'review' => 'Review', 'approved' => 'Freigegeben', 'archived' => 'Archiviert'] as $wert => $lbl)
-                        <option value="{{ $wert }}">{{ $lbl }}</option>
-                    @endforeach
-                </select>
-            </div>
-            <div>
-                <label class="block {{ $label }} mb-1">Hauptgruppe * <span class="normal-case text-gray-400">({{ $hauptgruppen->count() }} kuratiert)</span></label>
-                <select wire:model.live="form.hauptgruppe_id" class="{{ $input }}">
-                    <option value="">—</option>
-                    @foreach($hauptgruppen as $hg)<option value="{{ $hg->id }}">{{ $hg->label }}</option>@endforeach
-                </select>
-            </div>
-            <div>
-                <label class="block {{ $label }} mb-1">Kategorie * <span class="normal-case text-gray-400">({{ $kategorien->count() }} in dieser HG)</span></label>
-                <select wire:model.live="form.category_id" class="{{ $input }}" @disabled($kategorien->isEmpty())>
-                    <option value="">—</option>
-                    @foreach($kategorien as $kat)<option value="{{ $kat->id }}">{{ $kat->label }}</option>@endforeach
-                </select>
-            </div>
+
+            @if($neu)
+                <x-fa::field label="Status" hint="Neue Rezepte starten als Entwurf.">
+                    <span data-rezept-status><x-fa::status value="draft" /></span>
+                </x-fa::field>
+            @else
+                <x-fa::choice name="form.status" :live="false" label="Status" :options="$statusWahl" class="sm:col-span-2" data-rezept-status />
+            @endif
+
+            <x-fa::field label="Herkunft oder Quelle" for="rezept-herkunft" optional hint="Gehört nicht in den Namen.">
+                <x-fa::input id="rezept-herkunft" wire:model="form.origin_source" placeholder="z. B. Broich, nach Paul, nach Omas Art" />
+            </x-fa::field>
+
+            <label class="sm:col-span-2 inline-flex items-center gap-2 text-[length:var(--fa-text-md)] text-[var(--fa-ink)]">
+                <input type="checkbox" wire:model="form.is_sales_recipe" class="h-4 w-4 rounded border-[var(--fa-line-strong)] accent-[var(--fa-accent)]" />
+                Wird als Gericht verkauft <span class="{{ $hinweis }}">(Verkaufsfelder pflegt der Gericht-Editor)</span>
+            </label>
+
+            @if(!$neu)
+                {{-- Spec 43 (Bild-Epic): Gericht-Foto — optional in der Präsentation (Builder-Toggle „Gericht-Fotos") --}}
+                <x-fa::field label="Gericht-Foto" optional class="sm:col-span-2" hint="Erscheint nur, wenn im Präsentations-Design die Gericht-Fotos eingeschaltet sind." data-rezept-bild>
+                    <div class="flex flex-wrap items-center gap-3">
+                        @if($dishImageUrl)
+                            <img src="{{ $dishImageUrl }}" alt="" class="h-12 w-20 object-cover rounded-[var(--fa-radius-control)] border border-[var(--fa-line)]">
+                            <x-fa::button size="sm" variant="danger" icon="heroicon-m-trash" wire:click="dishImageEntfernen">Foto entfernen</x-fa::button>
+                        @endif
+                        <input type="file" wire:model="dishImageUpload" accept="image/*" data-rezept-bild-upload
+                               class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)] file:mr-2 file:h-7 file:px-2.5 file:rounded-[var(--fa-radius-control)] file:border file:border-[var(--fa-line-strong)] file:bg-[var(--fa-surface)] file:text-[var(--fa-ink)] file:cursor-pointer">
+                        <span wire:loading wire:target="dishImageUpload" class="{{ $hinweis }}">Lädt …</span>
+                    </div>
+                    @error('dishImageUpload')<p class="text-[length:var(--fa-text-sm)] text-[var(--fa-crit)]">{{ $message }}</p>@enderror
+                </x-fa::field>
+            @endif
         </div>
-        @if(isset($kiVorschlag['category']))
-            <div class="mt-2 text-xs flex items-center gap-2" data-kategorie-vorschlag>
-                <span class="{{ $pill }} {{ $variantPill['primary'] }}">Kategorie: {{ $kiVorschlag['category']['werte']['kategorie_name'] ?? $kiVorschlag['category']['werte']['category_id'] ?? '—' }} · {{ round($kiVorschlag['category']['confidence'] * 100) }} %</span>
-                <button type="button" wire:click="accept_kategorie" class="{{ $btnGhostXs }} text-emerald-600">Übernehmen</button>
+    </x-fa::section>
+
+    {{-- BESCHREIBUNG (§8) --}}
+    <x-fa::section title="Beschreibung" icon="heroicon-o-document-text" description="Drei bis fünf sachliche Sätze.">
+        @if(!$neu)
+            <x-slot:actions>
+                <x-foodalchemist::ki-action action="ai_beschreibung" variant="ai" icon="heroicon-o-sparkles" label="Beschreibung schreiben"
+                    data-ai-description busy="Wird geschrieben …" flash="Beschreibung erstellt" />
+                <div class="relative" x-data="faMenu()" x-on:keydown.escape="offen = false" x-on:click.outside="offen = false">
+                    <x-fa::icon-button icon="heroicon-m-ellipsis-horizontal" label="Weitere Aktionen zur Beschreibung" size="sm" x-on:click="toggle($event)" aria-haspopup="menu" x-bind:aria-expanded="offen" />
+                    <div x-bind:class="{ hidden: ! offen }" x-bind:style="pos" role="menu" class="hidden w-64 fa-surface shadow-lg py-1">
+                        <button type="button" role="menuitem" wire:click="manual_beschreibung" x-on:click="offen = false" class="{{ $menuePunkt }}" title="Aktuellen Text als von Hand gepflegt markieren, die KI überschreibt ihn dann nicht">
+                            @svg('heroicon-o-lock-closed', 'w-4 h-4 text-[var(--fa-ink-3)]') Vor KI schützen
+                        </button>
+                        <button type="button" role="menuitem" wire:click="clear_beschreibung" x-on:click="offen = false" class="{{ $menuePunkt }}" title="Text und Herkunft leeren">
+                            @svg('heroicon-o-arrow-uturn-left', 'w-4 h-4 text-[var(--fa-ink-3)]') Beschreibung leeren
+                        </button>
+                    </div>
+                </div>
+            </x-slot:actions>
+        @endif
+        <x-fa::textarea wire:model="form.description" rows="3" aria-label="Beschreibung" />
+        @if(isset($kiVorschlag['description']))
+            <div data-description-vorschlag>
+                <x-fa::notice tone="info" title="KI-Vorschlag ({{ round($kiVorschlag['description']['confidence'] * 100) }} % sicher)">
+                    {{ $kiVorschlag['description']['werte']['description'] ?? 'ohne Text' }}
+                    <x-slot:actions>
+                        <x-fa::button size="sm" icon="heroicon-m-check" wire:click="accept_beschreibung">Übernehmen</x-fa::button>
+                    </x-slot:actions>
+                </x-fa::notice>
             </div>
         @endif
-        <label class="inline-flex items-center gap-1.5 text-xs text-gray-600 mt-2">
-            <input type="checkbox" wire:model="form.is_sales_recipe" class="rounded border-gray-300 text-violet-600 focus:ring-violet-500" />
-            Gericht (D-6 — VK-Felder im VK-Editor)
-        </label>
-    </x-foodalchemist::modal-section>
+        @if(!$neu)<p class="{{ $hinweis }}">Text {{ $herkunftText($zustaende['description']) }}.</p>@endif
+    </x-fa::section>
 
-    {{-- EIGENSCHAFTEN (§4.2.4) --}}
-    <x-foodalchemist::modal-section title="Eigenschaften">
+    {{-- EIGENSCHAFTEN (§4.2.4) — Zeiten, Mengen je Kochvorgang, Charakter --}}
+    <x-fa::section title="Eigenschaften" icon="heroicon-o-adjustments-horizontal">
         <x-slot:actions>
-            <x-foodalchemist::ki-action action="kiEigenschaften" variant="ai" icon="heroicon-o-sparkles" label="Eigenschaften"
-                title="Arbeitszeit/Temperatur/Funktion + Geschmack (in die Felder, nichts persistiert)"
+            <x-foodalchemist::ki-action action="kiEigenschaften" variant="ai" icon="heroicon-o-sparkles" label="Eigenschaften schätzen"
+                title="Arbeitszeit, Temperatur, Funktion und Geschmack schätzen. Landet in den Feldern, gespeichert wird erst mit Speichern."
                 busy="Wird geschätzt …" flash="Eigenschaften geschätzt" />
         </x-slot:actions>
-        <div class="grid grid-cols-2 gap-3">
-            <div>
-                <label class="block {{ $label }} mb-1">Arbeitszeit (min) <span class="normal-case text-gray-500">aktiv, je Koch-Vorgang</span></label>
-                <input type="number" wire:model="form.work_time_min" min="0" class="{{ $input }}" />
-            </div>
-            <div>
-                <label class="block {{ $label }} mb-1">Gar-/Standzeit (min) <span class="normal-case text-gray-500">passiv: Köcheln/Ziehen (Durchlaufzeit)</span></label>
-                <input type="number" wire:model="form.standzeit_min" min="0" class="{{ $input }}" placeholder="0" data-recipe-standzeit />
-            </div>
-            <div>
-                <label class="block {{ $label }} mb-1">Variable Personenminuten</label>
-                <input type="text" inputmode="decimal" wire:model="form.variable_work_time_min" class="{{ $input }}" placeholder="0" />
-            </div>
-            <div>
-                <label class="block {{ $label }} mb-1">Variable Zeit je</label>
-                <select wire:model="form.variable_work_time_basis" class="{{ $input }}"><option value="kg">kg</option><option value="piece">Stück</option><option value="portion">Portion</option></select>
-            </div>
-            <div>
-                <label class="block {{ $label }} mb-1">Topf-Deckel (kg) <span class="normal-case text-gray-500">max je Koch-Vorgang</span></label>
-                <input type="text" inputmode="decimal" wire:model="form.batch_max_kg" class="{{ $input }}" placeholder="20 (Default-Kessel)" data-recipe-topf />
-            </div>
-            <div>
-                <label class="block {{ $label }} mb-1">Topf-Deckel (Stück) <span class="normal-case text-gray-500">für Stück-Rezepte</span></label>
-                <input type="text" inputmode="decimal" wire:model="form.batch_max_pieces" class="{{ $input }}" placeholder="200 (Default)" data-recipe-topf-stueck />
-            </div>
-            <div>
-                <label class="block {{ $label }} mb-1">Temperatur</label>
-                <input type="text" wire:model="form.temperature" placeholder="z. B. raumtemperatur, warm, kalt" class="{{ $input }}" />
-            </div>
-            <div>
-                <label class="block {{ $label }} mb-1">Funktion</label>
+        <div class="grid gap-4 sm:grid-cols-2">
+            <x-fa::field label="Arbeitszeit (min)" for="rezept-arbeitszeit" hint="Aktiv, je Kochvorgang">
+                <x-fa::input id="rezept-arbeitszeit" type="number" min="0" wire:model="form.work_time_min" numeric />
+            </x-fa::field>
+            <x-fa::field label="Gar- und Standzeit (min)" for="rezept-standzeit" hint="Passiv, z. B. Köcheln oder Ziehen (Durchlaufzeit)">
+                <x-fa::input id="rezept-standzeit" type="number" min="0" wire:model="form.standzeit_min" numeric placeholder="0" data-recipe-standzeit />
+            </x-fa::field>
+            <x-fa::field label="Zusätzliche Personenminuten" for="rezept-var-zeit" hint="Wächst mit der Menge">
+                <x-fa::input id="rezept-var-zeit" inputmode="decimal" wire:model="form.variable_work_time_min" numeric placeholder="0" />
+            </x-fa::field>
+            <x-fa::choice name="form.variable_work_time_basis" :live="false" label="Personenminuten je" :options="['kg' => 'kg', 'piece' => 'Stück', 'portion' => 'Portion']" />
+            <x-fa::field label="Höchstmenge je Kochvorgang (kg)" for="rezept-topf-kg" hint="Leer = Standardkessel (20 kg)">
+                <x-fa::input id="rezept-topf-kg" inputmode="decimal" wire:model="form.batch_max_kg" numeric placeholder="20" data-recipe-topf />
+            </x-fa::field>
+            <x-fa::field label="Höchstmenge je Kochvorgang (Stück)" for="rezept-topf-stueck" hint="Für Stückrezepte, leer = 200">
+                <x-fa::input id="rezept-topf-stueck" inputmode="decimal" wire:model="form.batch_max_pieces" numeric placeholder="200" data-recipe-topf-stueck />
+            </x-fa::field>
+            <x-fa::field label="Temperatur" for="rezept-temperatur">
+                <x-fa::input id="rezept-temperatur" wire:model="form.temperature" placeholder="z. B. raumtemperatur, warm, kalt" />
+            </x-fa::field>
+            <x-fa::field label="Funktion" for="rezept-funktion" hint="Vorschläge oder freier Text">
                 {{-- Dropdown-Vorschläge via datalist — freie Eingabe bleibt möglich (bestehende Freitext-Werte gehen nicht verloren). --}}
-                <input type="text" wire:model="form.function" list="fa-function-optionen" placeholder="z. B. Komponente, Sauce, Bindung …" class="{{ $input }}" />
+                <x-fa::input id="rezept-funktion" wire:model="form.function" list="fa-function-optionen" placeholder="z. B. Komponente, Sauce, Bindung …" />
                 <datalist id="fa-function-optionen">
                     @foreach(['Komponente', 'Hauptkomponente', 'Sauce', 'Bindung', 'Topping', 'Beilage', 'Garnitur', 'Fond / Basis', 'Marinade', 'Dekor', 'Füllung', 'Teig'] as $opt)
                         <option value="{{ $opt }}"></option>
                     @endforeach
                 </datalist>
-            </div>
-            <div>
-                <label class="block {{ $label }} mb-1">Geschmacksrichtung <span class="normal-case text-gray-500">(via KI oder manuell)</span></label>
-                <select wire:model="form.taste_direction" class="{{ $input }}">
-                    <option value="">—</option>
-                    <option value="suess">süß</option><option value="herzhaft">herzhaft</option><option value="neutral">neutral</option>
-                </select>
-            </div>
-            <div>
-                <label class="block {{ $label }} mb-1">Fertigungstiefe <span class="normal-case text-gray-500">(via KI-Fertigung oder manuell)</span></label>
-                <select wire:model="form.production_depth" class="{{ $input }}">
-                    <option value="">—</option>
-                    <option value="from_scratch">From Scratch</option><option value="teilfertig">teilfertig</option><option value="convenience">Convenience</option>
-                </select>
+            </x-fa::field>
+            <x-fa::choice name="form.taste_direction" :live="false" label="Geschmacksrichtung" :options="['' => 'Keine Angabe', 'suess' => 'süß', 'herzhaft' => 'herzhaft', 'neutral' => 'neutral']" />
+            <div class="flex flex-col gap-1.5 min-w-0">
+                <x-fa::choice name="form.production_depth" :live="false" label="Fertigungstiefe" :options="['' => 'Keine Angabe', 'from_scratch' => 'selbst gemacht', 'teilfertig' => 'teilfertig', 'convenience' => 'Convenience']" />
+                <div>
+                    <x-foodalchemist::ki-action action="kiFertigung" variant="ai" icon="heroicon-o-sparkles" label="Aus Zutaten ermitteln"
+                        title="Fertigungstiefe aus den Zutaten ableiten" busy="Wird ermittelt …" flash="Fertigung ermittelt" />
+                </div>
             </div>
         </div>
-    </x-foodalchemist::modal-section>
+    </x-fa::section>
 
-    {{-- Produktion / Auto-Planer (2026-08-03): aus „Eigenschaften" herausgelöst in eine eigene,
-         klar benannte Sektion — Parität mit dem Gericht-Editor + Auffindbarkeit. Der Auto-Planer
-         (ProductionPlanService) routet über recipe.default_station_id. --}}
-    <x-foodalchemist::modal-section title="Produktion (Auto-Planer)">
-        <div class="grid grid-cols-3 gap-3" data-recipe-produktion>
-            <div>
-                <label class="block {{ $label }} mb-1">Default-Posten <span class="normal-case text-gray-500">(Planer-Routing)</span></label>
-                <select wire:model="form.default_station_id" class="{{ $input }}" data-recipe-default-station>
-                    <option value="">— keiner —</option>
+    {{-- Produktion / Auto-Planer (2026-08-03): eigene Sektion — Parität mit dem Gericht-Editor.
+         Der Auto-Planer (ProductionPlanService) routet über recipe.default_station_id. --}}
+    <x-fa::section title="Produktionsplanung" icon="heroicon-o-calendar-days" description="Danach plant die Produktion dieses Rezept automatisch ein.">
+        <div class="grid gap-4 sm:grid-cols-3" data-recipe-produktion>
+            <x-fa::field label="Posten" for="rezept-posten">
+                <x-fa::select id="rezept-posten" wire:model="form.default_station_id" placeholder="Kein Posten" data-recipe-default-station>
                     @foreach($posten as $p)<option value="{{ $p->id }}">{{ $p->name }}</option>@endforeach
-                </select>
-            </div>
-            <div>
-                <label class="block {{ $label }} mb-1">Rüstzeit (min) <span class="normal-case text-gray-500">einmal je Lauf</span></label>
-                <input type="number" wire:model="form.setup_time_min" min="0" class="{{ $input }}" placeholder="0" data-recipe-setup />
-            </div>
-            <div>
-                <label class="block {{ $label }} mb-1">Vorproduzierbar (Tage) <span class="normal-case text-gray-500">0 = nur am Tag</span></label>
-                <input type="number" wire:model="form.max_vorlauf_tage" min="0" max="14" class="{{ $input }}" placeholder="—" data-recipe-vorlauf />
-            </div>
+                </x-fa::select>
+            </x-fa::field>
+            <x-fa::field label="Rüstzeit (min)" for="rezept-ruestzeit" hint="Einmal je Lauf">
+                <x-fa::input id="rezept-ruestzeit" type="number" min="0" wire:model="form.setup_time_min" numeric placeholder="0" data-recipe-setup />
+            </x-fa::field>
+            <x-fa::field label="Vorproduzierbar (Tage)" for="rezept-vorlauf" hint="0 = nur am Einsatztag">
+                <x-fa::input id="rezept-vorlauf" type="number" min="0" max="14" wire:model="form.max_vorlauf_tage" numeric placeholder="offen" data-recipe-vorlauf />
+            </x-fa::field>
         </div>
         @if($posten->isEmpty())
-            <p class="text-[10px] text-amber-600 mt-2">Noch keine Posten angelegt — unter Einstellungen → „Posten &amp; Kapazität" anlegen, dann hier zuweisen.</p>
+            <x-fa::signal tone="warn">Noch keine Posten angelegt. Unter Einstellungen, Posten und Kapazität anlegen, dann hier zuweisen.</x-fa::signal>
         @endif
-    </x-foodalchemist::modal-section>
+    </x-fa::section>
 
-    {{-- EIGNUNG (M9-01k) — klickbare Toggle-Chips, Detail-Panel-Kartei via section-Prop --}}
-    <x-foodalchemist::modal-section title="Eignung (Niveau · Sektor)">
+    {{-- EIGNUNG (M9-01k) — Detail-Panel-Kartei via section-Prop --}}
+    <x-fa::section title="Eignung" icon="heroicon-o-check-badge" description="Für welches Niveau und welchen Sektor das Rezept passt.">
         @if($recipeId !== null)
             <livewire:foodalchemist.recipes.detail-panel :recipe-id="$recipeId" :embedded="true" section="eignung" wire:key="reignung-{{ $recipeId }}" />
         @else
-            <p class="text-xs text-gray-500">Eignung lässt sich nach dem ersten Speichern pflegen.</p>
+            <p class="{{ $hinweis }}">Die Eignung lässt sich nach dem ersten Speichern pflegen.</p>
         @endif
-    </x-foodalchemist::modal-section>
+    </x-fa::section>
 
-    {{-- BESCHREIBUNG (§8) --}}
-    <x-foodalchemist::modal-section title="Beschreibung (§8.3 — 3-5 Sätze nüchtern)">
-        <x-slot:actions>
-            @if(!$neu)
-                <x-foodalchemist::ki-action action="ai_beschreibung" variant="ai" icon="heroicon-o-sparkles" label="Beschreibung"
-                    data-ai-description busy="Wird geschrieben …" flash="Beschreibung erstellt" />
-                <button type="button" wire:click="manual_beschreibung" class="{{ $btnGhostXs }}" title="aktuellen Text als manuell markieren (Override-First-Schutz)">als manuell</button>
-                <button type="button" wire:click="clear_beschreibung" class="{{ $btnGhostXs }}" title="Feld + Lineage leeren">Reset</button>
-            @endif
-        </x-slot:actions>
-        <textarea wire:model="form.description" rows="3" class="{{ $input }}"></textarea>
-        @if(isset($kiVorschlag['description']))
-            <div class="mt-1.5 rounded-lg bg-violet-500/10 border border-violet-500/30 px-3 py-2" data-description-vorschlag>
-                <p class="text-[11px] text-violet-700 italic">{{ $kiVorschlag['description']['werte']['description'] ?? '—' }}</p>
-                <button type="button" wire:click="accept_beschreibung" class="{{ $btnGhostXs }} text-emerald-600 mt-1">Übernehmen ({{ round($kiVorschlag['description']['confidence'] * 100) }} %)</button>
-            </div>
-        @endif
-        @if(!$neu)<p class="text-[10px] text-gray-500 mt-1">Lineage: {{ $zustaende['description'] }}</p>@endif
-    </x-foodalchemist::modal-section>
-
-    {{-- ERSATZ (make-or-buy / Artikel-Ersatz) — Detail-Panel-Kartei via section-Prop (eine Quelle, keine Duplikation) --}}
-    <x-foodalchemist::modal-section title="Ersatz (make-or-buy · fertig ↔ selbst)">
+    {{-- ERSATZ (make-or-buy / Artikel-Ersatz) — Detail-Panel-Kartei via section-Prop (eine Quelle) --}}
+    <x-fa::section title="Ersatz" icon="heroicon-o-arrows-right-left" description="Fertigprodukt statt Eigenherstellung oder umgekehrt.">
         @if($recipeId !== null)
             <livewire:foodalchemist.recipes.detail-panel :recipe-id="$recipeId" :embedded="true" section="ersatz" wire:key="rersatz-{{ $recipeId }}" />
         @else
-            <p class="text-xs text-gray-500">Ersatz lässt sich nach dem ersten Speichern verknüpfen.</p>
+            <p class="{{ $hinweis }}">Ersatz lässt sich nach dem ersten Speichern verknüpfen.</p>
         @endif
-    </x-foodalchemist::modal-section>
+    </x-fa::section>
     @else
-        <p class="py-12 text-center text-xs text-gray-500" data-rezept-tab-laedt="eigenschaften">Stammdaten werden geladen …</p>
+        <p class="{{ $laedt }}" data-rezept-tab-laedt="eigenschaften">Stammdaten werden geladen …</p>
     @endif
-    </div>{{-- /Tab EIGENSCHAFTEN --}}
+    </div>{{-- /Reiter STAMMDATEN --}}
 
-    {{-- ── Tab: DEKLARATION — Allergene · Zusatzstoffe (Detail-Panel-Embed) + Nährwerte ── --}}
-    <div x-show="tab === 'details'" x-cloak class="pt-4 space-y-4">
+    {{-- ── Reiter: DEKLARATION — Allergene · Zusatzstoffe (Detail-Panel-Embed) + Nährwerte ── --}}
+    <div x-show="tab === 'details'" x-cloak class="pt-4 flex flex-col gap-4">
         @if($geladeneTabs['details'] ?? false)
         @if($recipeId !== null)
             <livewire:foodalchemist.recipes.detail-panel :recipe-id="$recipeId" :embedded="true" wire:key="rdetail-{{ $recipeId }}" />
 
-            {{-- NÄHRWERTE (GL-08-Aggregat, read-only — Quelle: Zutaten-Recompute; hierher verschoben 2026-07-02, gehört zur Deklaration) --}}
-            <x-foodalchemist::modal-section title="Nährwerte (pro 100 g)">
+            {{-- NÄHRWERTE (GL-08-Aggregat, nur lesen — Quelle: Zutaten-Neuberechnung) --}}
+            <x-fa::section title="Nährwerte je 100 g" icon="heroicon-o-chart-pie">
                 @if($voll?->nutri_kcal_per_100g === null)
-                    <p class="text-[11px] text-gray-500" data-naehrwerte-leer>Noch nicht aggregiert — läuft mit dem nächsten Zutaten-Speichern (GL-08).</p>
+                    <x-fa::signal tone="warn" data-naehrwerte-leer>Noch nicht berechnet. Das passiert beim nächsten Speichern der Zutaten.</x-fa::signal>
                 @else
-                    <div class="grid grid-cols-5 gap-2 rounded-lg bg-black/[0.03] px-3 py-2" data-naehrwerte>
+                    <dl class="grid grid-cols-2 sm:grid-cols-5 gap-3 rounded-[var(--fa-radius-control)] bg-[var(--fa-ground)] px-3 py-3" data-naehrwerte>
                         @foreach([
                             ['Brennwert', $voll->nutri_kcal_per_100g, 'kcal', 0, null, null],
                             ['Eiweiß', $voll->nutri_protein_g_per_100g, 'g', 1, null, null],
@@ -554,164 +617,175 @@
                             ['Kohlenhydrate', $voll->nutri_carbs_g_per_100g, 'g', 1, 'davon Zucker', $voll->nutri_sugar_g_per_100g],
                             ['Salz', $voll->nutri_salt_g_per_100g, 'g', 2, null, null],
                         ] as [$lbl, $wert, $unit, $dez, $subLbl, $subWert])
-                            <div class="text-center" wire:key="rn-{{ $lbl }}">
-                                <p class="text-[10px] uppercase tracking-wider text-gray-500">{{ $lbl }}</p>
-                                <p class="text-xs font-medium text-gray-900 tabular-nums">{{ $wert !== null ? number_format((float) $wert, $dez, ',', '.') . ' ' . $unit : '—' }}</p>
+                            <div class="flex flex-col gap-0.5 min-w-0" wire:key="rn-{{ $lbl }}">
+                                <dt class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]">{{ $lbl }}</dt>
+                                <dd class="text-[length:var(--fa-text-base)] font-semibold tabular-nums text-[var(--fa-ink)]">{{ $wert !== null ? number_format((float) $wert, $dez, ',', '.') . ' ' . $unit : 'fehlt' }}</dd>
                                 @if($subLbl !== null)
-                                    <p class="text-[10px] text-gray-500 tabular-nums" data-naehrwert-sub="{{ $subLbl }}">{{ $subLbl }} {{ $subWert !== null ? number_format((float) $subWert, 1, ',', '.') . ' g' : '—' }}</p>
+                                    <dd class="text-[length:var(--fa-text-sm)] tabular-nums text-[var(--fa-ink-3)]" data-naehrwert-sub="{{ $subLbl }}">{{ $subLbl }} {{ $subWert !== null ? number_format((float) $subWert, 1, ',', '.') . ' g' : 'fehlt' }}</dd>
                                 @endif
                             </div>
                         @endforeach
-                    </div>
-                    <p class="text-[10px] text-gray-500 mt-1">
-                        Konfidenz: <span class="font-medium {{ ['high' => 'text-green-600', 'medium' => 'text-amber-500', 'low' => 'text-rose-500'][$voll->nutri_confidence] ?? '' }}">{{ strtoupper($voll->nutri_confidence ?? '—') }}</span>
-                        · {{ $voll->nutri_n_ingredients_mapped ?? 0 }}/{{ $voll->nutri_n_ingredients_total ?? 0 }} Zutaten mit Nährwert-Daten
-                        — BLS-Rohwerte, Garverlust/Putzverlust nicht angewendet (GL-08)
+                    </dl>
+                    @php [$nKonf, $nTon] = ['high' => ['hoch', 'ok'], 'medium' => ['mittel', 'warn'], 'low' => ['niedrig', 'crit']][$voll->nutri_confidence ?? ''] ?? ['nicht bewertet', 'warn']; @endphp
+                    <p class="flex flex-wrap items-center gap-x-2 gap-y-1 {{ $hinweis }}">
+                        <x-fa::signal :tone="$nTon">Konfidenz {{ $nKonf }}</x-fa::signal>
+                        <span>{{ $voll->nutri_n_ingredients_mapped ?? 0 }} von {{ $voll->nutri_n_ingredients_total ?? 0 }} Zutaten mit Nährwerten. Rohwerte aus dem Bundeslebensmittelschlüssel, Gar- und Putzverluste nicht eingerechnet.</span>
                     </p>
                 @endif
-            </x-foodalchemist::modal-section>
+            </x-fa::section>
         @else
-            <p class="text-xs text-gray-500 py-6 text-center">Deklaration erscheint nach dem ersten Speichern.</p>
+            <x-fa::empty compact icon="heroicon-o-shield-check" title="Deklaration erscheint nach dem ersten Speichern" />
         @endif
         @else
-            <p class="py-12 text-center text-xs text-gray-500" data-rezept-tab-laedt="details">Deklaration wird geladen …</p>
+            <p class="{{ $laedt }}" data-rezept-tab-laedt="details">Deklaration wird geladen …</p>
         @endif
     </div>
 
-    {{-- ── Tab: SENSORIK & PAIRING (Geschmacks-Balance + Textur + Aroma-Kohäsion über die Zutaten-GPs) ── --}}
-    {{-- ── Tab: REGENERATION & BEHÄLTER (Spec 51) ──────────────────────────────
+    {{-- ── Reiter: REGENERATION UND BEHÄLTER (Spec 51) ──────────────────────
          Der Default der Komponente: einmal hier gepflegt, von jedem Gericht geerbt. Gespeichert
-         wird mit dem GLOBALEN Speichern-Knopf oben — kein zweiter Knopf im Tab. --}}
-    <div x-show="tab === 'regeneration'" x-cloak class="pt-6 space-y-4">
-        @if($regenMeldung !== null)<p class="text-xs text-emerald-600" data-regen-meldung>{{ $regenMeldung }}</p>@endif
+         wird mit dem GLOBALEN Speichern-Knopf oben — kein zweiter Knopf im Reiter. --}}
+    <div x-show="tab === 'regeneration'" x-cloak class="pt-4 flex flex-col gap-4">
+        @if($regenMeldung !== null)<x-fa::notice tone="ok" data-regen-meldung>{{ $regenMeldung }}</x-fa::notice>@endif
 
-        <x-foodalchemist::modal-section title="Regeneration — so wird diese Komponente auf Temperatur gebracht">
-            <p class="text-[11px] text-gray-500 mb-2">
-                Gilt als Default in jedem Gericht, das diese Komponente enthält. Kein Gerät gewählt heisst
-                <strong>kalt servieren</strong> — alles leer heisst „keine Angabe“ und wird als Lücke gemeldet.
-            </p>
-            <div class="flex flex-wrap items-center gap-2" data-regen-selbst>
-                <select wire:model="regenForm.device_vocab_id" class="{{ $input }} !py-1 !w-48">
-                    <option value="">kalt servieren</option>
-                    @foreach($geraeteListe as $g)<option value="{{ $g->id }}">{{ $g->name }}</option>@endforeach
-                </select>
-                <input type="text" wire:model="regenForm.temp_c" placeholder="°C" class="{{ $input }} !py-1 !w-20 text-right" />
-                <input type="text" wire:model="regenForm.duration_min" placeholder="min" class="{{ $input }} !py-1 !w-20 text-right" />
-                <input type="text" wire:model="regenForm.core_temp_c" placeholder="KT °C" class="{{ $input }} !py-1 !w-20 text-right" />
-                <input type="text" wire:model="regenForm.note" placeholder="Hinweis (z. B. abgedeckt)" class="{{ $input }} !py-1 !w-72" />
+        <x-fa::section title="Regeneration" icon="heroicon-o-fire"
+            description="So kommt diese Komponente auf Temperatur. Gilt als Vorgabe in jedem Gericht, das sie enthält. Kein Gerät heißt kalt servieren, alles leer heißt keine Angabe und wird als Lücke gemeldet.">
+            <div class="grid gap-3 grid-cols-2 sm:grid-cols-4" data-regen-selbst>
+                <x-fa::field label="Gerät" for="regen-geraet" class="col-span-2 sm:col-span-1">
+                    <x-fa::select id="regen-geraet" wire:model="regenForm.device_vocab_id" placeholder="kalt servieren">
+                        @foreach($geraeteListe as $g)<option value="{{ $g->id }}">{{ $g->name }}</option>@endforeach
+                    </x-fa::select>
+                </x-fa::field>
+                <x-fa::field label="Temperatur (°C)" for="regen-temp">
+                    <x-fa::input id="regen-temp" wire:model="regenForm.temp_c" numeric inputmode="decimal" />
+                </x-fa::field>
+                <x-fa::field label="Dauer (min)" for="regen-dauer">
+                    <x-fa::input id="regen-dauer" wire:model="regenForm.duration_min" numeric inputmode="decimal" />
+                </x-fa::field>
+                <x-fa::field label="Kerntemperatur (°C)" for="regen-kern">
+                    <x-fa::input id="regen-kern" wire:model="regenForm.core_temp_c" numeric inputmode="decimal" />
+                </x-fa::field>
+                <x-fa::field label="Hinweis" for="regen-hinweis" optional class="col-span-2 sm:col-span-4">
+                    <x-fa::input id="regen-hinweis" wire:model="regenForm.note" placeholder="z. B. abgedeckt" />
+                </x-fa::field>
             </div>
-        </x-foodalchemist::modal-section>
+        </x-fa::section>
 
-        <x-foodalchemist::modal-section title="Behälter je Zweck">
+        @php
+            $dichteText = ['fluessig' => 'flüssig', 'dicht' => 'dicht', 'schuettfaehig' => 'schüttfähig', 'locker' => 'locker'];
+            $zweckText = ['abfuellen' => 'Abfüllen', 'regenerieren' => 'Regenerieren', 'ausgabe' => 'Ausgabe', 'transport' => 'Transport'];
+        @endphp
+        <x-fa::section title="Behälter je Zweck" icon="heroicon-o-archive-box"
+            description="Abfüllen ist nicht Regenerieren: die Suppe kommt aus dem Kipper in Eimer und geht erst am Einsatztag ins GN. Ist der Behälter beim Regenerieren derselbe wie beim Abfüllen, zählt die Produktion ihn nur einmal.">
             <x-slot:actions>
-                <x-foodalchemist::ki-action action="kiDichteklasse" variant="ai" icon="heroicon-o-sparkles" label="Schätzen"
-                    title="recipe.dichteklasse: Produkteigenschaft schaetzen — nie die Behaelterzahl"
+                <x-foodalchemist::ki-action action="kiDichteklasse" variant="ai" icon="heroicon-o-sparkles" label="Dichteklasse schätzen"
+                    title="Schätzt die Dichte des Produkts, nie die Zahl der Behälter"
                     data-ki-dichteklasse busy="Wird geschätzt …" flash="Geschätzt" />
             </x-slot:actions>
 
-            <p class="text-[11px] text-gray-500 mb-2">
-                Abfüllen ist nicht Regenerieren: die Suppe kommt aus dem Kipper in Eimer und geht erst am
-                Einsatztag ins GN. Wählt man beim Regenerieren <em>denselben</em> Behälter wie beim Abfüllen,
-                zählt die Produktion ihn einmal — „durchgängig, kein Umfüllen“.
-            </p>
-
-            <div class="flex flex-wrap items-center gap-2 mb-2">
-                <span class="text-[11px] text-gray-500 !w-24 shrink-0">Dichteklasse</span>
-                <select wire:model="dichteklasse" class="{{ $input }} !py-1 !w-56">
-                    <option value="">— nicht gepflegt —</option>
+            <x-fa::field label="Dichteklasse" for="rezept-dichteklasse" hint="Auffangnetz: greift nur, wo keine Menge je Behälter steht." class="sm:max-w-sm">
+                <x-fa::select id="rezept-dichteklasse" wire:model="dichteklasse" placeholder="Nicht gepflegt">
                     @foreach(\Platform\FoodAlchemist\Services\BehaelterRechner::DICHTE as $klasse => $kgProLiter)
-                        <option value="{{ $klasse }}">{{ $klasse }} ({{ number_format($kgProLiter, 2, ',', '') }} kg/l)</option>
+                        <option value="{{ $klasse }}">{{ $dichteText[$klasse] ?? $klasse }} ({{ number_format($kgProLiter, 2, ',', '') }} kg/l)</option>
                     @endforeach
-                </select>
-                <span class="text-[11px] text-gray-400">Auffangnetz — greift nur, wo keine Referenzmenge steht</span>
-            </div>
+                </x-fa::select>
+            </x-fa::field>
 
-            {{-- Zwei Spalten: vier Zwecke untereinander machten die Seite unnoetig lang.
-                 Breiten mit !w-, sonst gewinnt das w-full aus $input und alles bricht um. --}}
-            <div class="grid grid-cols-1 xl:grid-cols-2 gap-x-5 gap-y-2">
-                @foreach(\Platform\FoodAlchemist\Models\FoodAlchemistVocabContainer::ZWECKE as $zweck)
-                    @php($lagen = ($behaelterForm[$zweck]['skalierung'] ?? '') === 'lagenware')
-                    <div class="flex flex-wrap items-center gap-1.5" wire:key="bh-{{ $zweck }}" data-behaelter-zweck="{{ $zweck }}">
-                        <span class="text-[11px] text-gray-500 !w-24 shrink-0">{{ ucfirst($zweck) }}</span>
-                        <select wire:model="behaelterForm.{{ $zweck }}.container_vocab_id" class="{{ $input }} !py-1 !w-44">
-                            <option value="">— keiner —</option>
-                            @foreach($behaelterListe as $b)<option value="{{ $b->id }}">{{ $b->name }}</option>@endforeach
-                        </select>
-                        <input type="text" wire:model="behaelterForm.{{ $zweck }}.{{ $lagen ? 'stueck_je_behaelter' : 'referenz_menge_kg' }}"
-                               placeholder="{{ $lagen ? 'Stk.' : 'passt: kg' }}" class="{{ $input }} !py-1 !w-20 text-right"
-                               title="{{ $lagen ? 'Wie viele Stück auf/in GENAU diesen Behälter' : 'So viel passt in GENAU diesen Behälter — am grössten praktikablen angeben' }}" />
-                        <select wire:model.live="behaelterForm.{{ $zweck }}.skalierung" class="{{ $input }} !py-1 !w-36">
-                            <option value="">Skalierung …</option>
-                            <option value="tiefer_fuellbar">tiefer füllbar</option>
-                            <option value="hoehe_gebunden">höhengebunden</option>
-                            <option value="lagenware">Lagenware</option>
-                        </select>
-                        @if($zweck === 'regenerieren')
-                            <button type="button" wire:click="behaelterUebernehmen('abfuellen', 'regenerieren')"
-                                    class="{{ $btnGhostXs }} text-violet-600 shrink-0" title="Derselbe Behälter — kein Umfüllen"
-                                    data-behaelter-durchgaengig>= wie Abfüllen</button>
-                        @endif
-                    </div>
-                @endforeach
+            <div class="overflow-x-auto">
+                <table class="fa-table">
+                    <thead>
+                        <tr><th>Zweck</th><th>Behälter</th><th class="num">Menge je Behälter</th><th>Skalierung</th><th><span class="sr-only">Aktion</span></th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach(\Platform\FoodAlchemist\Models\FoodAlchemistVocabContainer::ZWECKE as $zweck)
+                            @php $lagen = ($behaelterForm[$zweck]['skalierung'] ?? '') === 'lagenware'; @endphp
+                            <tr wire:key="bh-{{ $zweck }}" data-behaelter-zweck="{{ $zweck }}">
+                                <td class="whitespace-nowrap font-medium">{{ $zweckText[$zweck] ?? ucfirst($zweck) }}</td>
+                                <td class="min-w-[11rem]">
+                                    <x-fa::select size="sm" wire:model="behaelterForm.{{ $zweck }}.container_vocab_id" placeholder="Kein Behälter" aria-label="Behälter für {{ $zweckText[$zweck] ?? $zweck }}">
+                                        @foreach($behaelterListe as $b)<option value="{{ $b->id }}">{{ $b->name }}</option>@endforeach
+                                    </x-fa::select>
+                                </td>
+                                <td class="num min-w-[7rem]">
+                                    <x-fa::input size="sm" numeric wire:model="behaelterForm.{{ $zweck }}.{{ $lagen ? 'stueck_je_behaelter' : 'referenz_menge_kg' }}"
+                                        placeholder="{{ $lagen ? 'Stück' : 'kg' }}" aria-label="{{ $lagen ? 'Stück je Behälter' : 'kg je Behälter' }}"
+                                        title="{{ $lagen ? 'Wie viele Stück auf oder in genau diesen Behälter passen' : 'So viel passt in genau diesen Behälter. Am größten praktikablen angeben.' }}" />
+                                </td>
+                                <td class="min-w-[10rem]">
+                                    <x-fa::select size="sm" wire:model.live="behaelterForm.{{ $zweck }}.skalierung" placeholder="Bitte wählen" aria-label="Skalierung">
+                                        <option value="tiefer_fuellbar">tiefer füllbar</option>
+                                        <option value="hoehe_gebunden">höhengebunden</option>
+                                        <option value="lagenware">Lagenware</option>
+                                    </x-fa::select>
+                                </td>
+                                <td class="whitespace-nowrap">
+                                    @if($zweck === 'regenerieren')
+                                        <x-fa::button size="sm" variant="ghost" icon="heroicon-m-arrow-down-on-square" wire:click="behaelterUebernehmen('abfuellen', 'regenerieren')"
+                                            title="Derselbe Behälter wie beim Abfüllen, kein Umfüllen" data-behaelter-durchgaengig>Wie Abfüllen</x-fa::button>
+                                    @endif
+                                </td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
             </div>
-            <p class="text-[11px] text-gray-400 mt-2">
-                tiefer füllbar = Sauce, Suppe · höhengebunden = Gulasch, Reis, Salat · Lagenware = wird gelegt (Schnitzel, Papadam)
-            </p>
-        </x-foodalchemist::modal-section>
+            <p class="{{ $hinweis }}">Tiefer füllbar: Sauce, Suppe · höhengebunden: Gulasch, Reis, Salat · Lagenware: wird gelegt, z. B. Schnitzel, Papadam</p>
+        </x-fa::section>
     </div>
 
-    <div x-show="tab === 'sensorik'" x-cloak class="pt-4">
+    {{-- ── Reiter: SENSORIK UND PAIRING (Geschmacks-Balance, Textur, Aroma-Zusammenhalt der Zutaten) ── --}}
+    <div x-show="tab === 'sensorik'" x-cloak class="pt-4 flex flex-col gap-4">
         @if($geladeneTabs['sensorik'] ?? false)
-        @unless($neu)
-            <div class="flex items-center justify-between gap-2 mb-2">
-                <span class="text-[11px] text-gray-500">Gegartes Profil — KI liest Zutaten + Zubereitung.</span>
-                <x-foodalchemist::ki-action action="sensorikBewerten" variant="ai" icon="heroicon-o-sparkles" label="Sensorik neu bewerten"
-                    busy="… bewertet" flash="Sensorik bewertet" />
-            </div>
-        @endunless
-        @include('foodalchemist::livewire.concepter.partials.sensorik')
-        <h3 class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 mt-5 mb-2">Pairing</h3>
-        @include('foodalchemist::livewire.concepter.partials.pairing')
+        <x-fa::section title="Sensorik" icon="heroicon-o-beaker" description="Profil im gegarten Zustand. Die KI liest dafür Zutaten und Zubereitung.">
+            @unless($neu)
+                <x-slot:actions>
+                    <x-foodalchemist::ki-action action="sensorikBewerten" variant="ai" icon="heroicon-o-sparkles" label="Sensorik neu bewerten"
+                        busy="Bewertet …" flash="Sensorik bewertet" />
+                </x-slot:actions>
+            @endunless
+            @include('foodalchemist::livewire.concepter.partials.sensorik')
+        </x-fa::section>
+        <x-fa::section title="Pairing" icon="heroicon-o-share">
+            @include('foodalchemist::livewire.concepter.partials.pairing')
+        </x-fa::section>
         @else
-            <p class="py-12 text-center text-xs text-gray-500" data-rezept-tab-laedt="sensorik">Sensorik und Pairing werden geladen …</p>
+            <p class="{{ $laedt }}" data-rezept-tab-laedt="sensorik">Sensorik und Pairing werden geladen …</p>
         @endif
     </div>
 
-    {{-- ── Tab: FEEDBACK (R2.6 — Praxis-Feedback Küche/Kunde/Event) ───── --}}
+    {{-- ── Reiter: FEEDBACK (R2.6 — Praxis-Feedback Küche/Kunde/Event) ───── --}}
     @if(! $neu && $recipeId !== null)
     <div x-show="tab === 'feedback'" x-cloak class="pt-4">
         @if($geladeneTabs['feedback'] ?? false)
         <livewire:foodalchemist.recipes.feedback-panel :recipe-id="$recipeId" wire:key="feedback-rez-{{ $recipeId }}" />
         @else
-            <p class="py-12 text-center text-xs text-gray-500" data-rezept-tab-laedt="feedback">Feedback wird geladen …</p>
+            <p class="{{ $laedt }}" data-rezept-tab-laedt="feedback">Feedback wird geladen …</p>
         @endif
     </div>
     @endif
 
-    {{-- ── Tab: NOTIZEN ──────────────────────────────────────────────── --}}
-    <div x-show="tab === 'notes'" x-cloak class="pt-4 space-y-4">
-    {{-- NOTIZEN (§9.1 — manuelle Insel) --}}
-    <x-foodalchemist::modal-section title="Notizen (§9.1 — bleibt bei jedem KI-Sync erhalten)">
-        <textarea wire:model="form.notes_manual" rows="3" class="{{ $input }}" data-rezept-notes
-                  placeholder="z. B. Anpassung im Catering-Kontext, Mengen-Korrektur, …"></textarea>
-    </x-foodalchemist::modal-section>
-    </div>{{-- /Tab NOTIZEN --}}
+    {{-- ── Reiter: NOTIZEN (§9.1 — manuelle Insel) ───────────────────────── --}}
+    <div x-show="tab === 'notes'" x-cloak class="pt-4 flex flex-col gap-4">
+    <x-fa::section title="Notizen" icon="heroicon-o-pencil" description="Bleibt bei jeder KI-Anreicherung unverändert.">
+        <x-fa::textarea wire:model="form.notes_manual" rows="4" aria-label="Notizen" data-rezept-notes
+            placeholder="z. B. Anpassung im Catering, Mengen-Korrektur, …" />
+    </x-fa::section>
+    </div>{{-- /Reiter NOTIZEN --}}
 
-    {{-- ── Tab: VERWALTUNG (tauschen + löschen — dasselbe Partial wie im Detail-Panel) ── --}}
-    <div x-show="tab === 'verwaltung'" x-cloak class="pt-4 space-y-4">
-    {{-- KEIN &amp; im Titel: modal-section escapt {{ $title }} selbst → „&AMP;". --}}
-    <x-foodalchemist::modal-section title="Verwaltung — Rezept tauschen & löschen">
-        <p class="text-[11px] text-gray-500 mb-2">Der Tausch hängt dieses Rezept in ALLEN eigenen Gerichten und Basisrezepten, die es als Komponente führen, auf ein anderes um — Menge, Einheit und Verlust-Overrides der Zeilen bleiben stehen, die betroffenen Rezepte werden neu berechnet. Gelöscht werden kann erst, wenn nichts mehr darauf zeigt.</p>
+    {{-- ── Reiter: VERWALTUNG (tauschen + löschen — dasselbe Partial wie im Detail-Panel) ── --}}
+    <div x-show="tab === 'verwaltung'" x-cloak class="pt-4 flex flex-col gap-4">
+    {{-- KEIN &amp; im Titel: der Abschnitt escapt {{ $title }} selbst → „&AMP;". --}}
+    <x-fa::section title="Rezept tauschen & löschen" icon="heroicon-o-arrows-right-left"
+        description="Der Tausch hängt dieses Rezept in allen eigenen Gerichten und Basisrezepten, die es als Komponente führen, auf ein anderes um. Menge, Einheit und Verlust-Angaben der Zeilen bleiben stehen, die betroffenen Rezepte werden neu berechnet. Löschen geht erst, wenn nichts mehr darauf zeigt.">
         @include('foodalchemist::livewire.recipes.partials.verwaltung', ['rezeptName' => $form['name'] ?: 'dieses Rezept', 'kompakt' => false])
-    </x-foodalchemist::modal-section>
-    </div>{{-- /Tab VERWALTUNG --}}
+    </x-fa::section>
+    </div>{{-- /Reiter VERWALTUNG --}}
     </x-foodalchemist::editor-tabs>
 
     @endif
 
     <x-slot:footer>
-        {{-- #1b: Footer-„Speichern" entfernt — es gibt nur noch den EINEN Speichern-Knopf oben in
-             der Aktionsleiste (data-rezept-speichern). Hier bleibt bewusst nur „Abbrechen". --}}
-        <button type="button" wire:click="$dispatch('modal.close', { name: 'recipe-modal' })" class="{{ $btnGhost }}">Abbrechen</button>
+        {{-- #1b: es gibt nur den EINEN Speichern-Knopf oben in der Aktionsleiste (data-rezept-speichern).
+             Hier bleibt bewusst nur „Abbrechen". --}}
+        <x-fa::button variant="ghost" wire:click="$dispatch('modal.close', { name: 'recipe-modal' })">Abbrechen</x-fa::button>
     </x-slot:footer>
 </x-foodalchemist::modal>

@@ -1,38 +1,68 @@
-{{-- R7: «In Planung» — Phase-2-Domänen als Vorschau (Scope: docs/14_ROADMAP_PHASE2.md) --}}
-@php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
+{{-- R7: «In Planung». Was im Food.Alchemist noch kommt, ehrlich und knapp.
+     fa-pass 2026-10-05: Bausteine statt Ui-Maps, Heroicons statt Emoji (die Symbole aus
+     Demnaechst::DOMAENEN werden nicht mehr gezeigt), interne Meilenstein- und Ticket-Codes
+     ausgeblendet. Bereiche, die schon verfügbar sind, stehen nicht mehr als „geplant" da,
+     sondern als kurzer Hinweis darunter. data-demnaechst-liste bleibt. --}}
+@php
+    $symbol = [
+        'Foodbook / Portfolio' => 'heroicon-o-book-open', 'Kalkulation (HK2)' => 'heroicon-o-calculator',
+        'Produktionsplanung' => 'heroicon-o-building-office-2', 'Speiseplan' => 'heroicon-o-calendar-days',
+        'Speisekarte' => 'heroicon-o-document-text', 'Einkauf' => 'heroicon-o-shopping-cart',
+        'Lager' => 'heroicon-o-archive-box', 'Controlling' => 'heroicon-o-chart-bar',
+    ];
+    // Demnaechst::DOMAENEN ist älter als Controlling-Cockpit (Simulation, Ist gegen Rezeptur) und
+    // Produktions-Tagesplan. Damit die Seite nichts als „geplant" ausgibt, was es schon gibt,
+    // gelten diese hier als verfügbar bzw. teilweise verfügbar.
+    $schonDa = ['Kalkulation (HK2)' => 'Kalkulation', 'Controlling' => 'Controlling'];
+    $teilweise = ['Produktionsplanung' => 'Der Tagesplan unter Produktion ist schon nutzbar.'];
+    $istFertig = fn (array $d): bool => str_contains((string) $d['status'], 'Fertig') || isset($schonDa[$d['name']]);
+    // Interne Kürzel (V-25, M11+ …) gehören nicht in den sichtbaren Text.
+    $sauber = fn (string $text): string => trim((string) preg_replace_callback(
+        '/\s+[—–]\s+(\p{L})/u',
+        fn ($m) => '. ' . mb_strtoupper($m[1]),
+        (string) preg_replace(
+            ['/\s*\((?:V|M)-?\d+\+?\)/u', '/\s*×\s*Lead-LA/u', '/Yield-Mathematik/u', '/Artikel\/GP/u', '/\s+/u'],
+            ['', ' und bevorzugtem Lieferantenartikel', 'Mengenumrechnung', 'Artikel und Grundprodukt', ' '],
+            $text
+        )
+    ));
+    $geplant = array_values(array_filter($domaenen, fn ($d) => ! $istFertig($d)));
+    $verfuegbar = array_values(array_filter($domaenen, $istFertig));
+@endphp
 
 <x-ui-page>
     <x-slot name="navbar">
-        <x-ui-page-navbar title="In Planung" icon="heroicon-o-light-bulb" />
+        <x-foodalchemist::shell.page-navbar title="In Planung" icon="heroicon-o-light-bulb" />
     </x-slot>
 
-    <x-slot name="actionbar">
-        <x-ui-page-actionbar :breadcrumbs="[
-            ['label' => 'Food Alchemist', 'href' => route('foodalchemist.dashboard'), 'icon' => 'cube'],
-            ['label' => 'In Planung'],
-        ]" />
-    </x-slot>
+    <x-ui-page-container padding="px-6 py-6" spacing="space-y-5">
+        <x-fa::page-header title="In Planung" subtitle="Diese Bereiche sind geplant, aber noch nicht terminiert." />
 
-    <x-ui-page-container padding="px-6 pb-6" spacing="space-y-4">
-        <div>
-            <h3 class="font-medium tracking-tight text-gray-900">Kommende Domänen</h3>
-            <p class="text-[11px] text-gray-500 mt-0.5">Entschieden 2026-06-12: erst die Basis fertig (M9), dann Foodbook (M10), dann Brainstorming je Domäne. Der Chat-Assistent wurde verworfen.</p>
-        </div>
-
-        <div class="grid md:grid-cols-2 gap-3" data-demnaechst-liste>
-            @foreach($domaenen as $d)
-                <div class="relative overflow-hidden {{ $card }} px-4 py-3" wire:key="dom-{{ $loop->index }}">
-                    <div class="{{ $cardAccent }}"></div>
-                    <div class="flex items-center justify-between gap-2">
-                        <p class="font-medium text-gray-900">{{ $d['icon'] }} {{ $d['name'] }}</p>
-                        <span class="{{ $pill }} {{ str_starts_with($d['status'], 'M10') ? $variantPill['info'] : $variantPill['secondary'] }} shrink-0">{{ $d['status'] }}</span>
+        <div class="grid gap-3 grid-cols-[repeat(auto-fit,minmax(min(100%,22rem),1fr))]" data-demnaechst-liste>
+            @foreach($geplant as $d)
+                <div class="fa-surface p-4 flex gap-3 min-w-0" wire:key="dom-{{ $loop->index }}">
+                    @svg($symbol[$d['name']] ?? 'heroicon-o-light-bulb', 'w-5 h-5 shrink-0 mt-0.5 text-[var(--fa-ink-3)]')
+                    <div class="min-w-0 flex flex-col gap-1.5">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <p class="text-[length:var(--fa-text-base)] font-semibold text-[var(--fa-ink)]">{{ $d['name'] }}</p>
+                            @if(isset($teilweise[$d['name']]))
+                                <x-fa::badge tone="info">Teilweise verfügbar</x-fa::badge>
+                            @else
+                                <x-fa::badge>Geplant</x-fa::badge>
+                            @endif
+                        </div>
+                        <p class="text-[length:var(--fa-text-md)] leading-relaxed text-[var(--fa-ink-2)]">{{ $sauber($d['idee']) }}</p>
+                        @if(isset($teilweise[$d['name']]))<p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">{{ $teilweise[$d['name']] }}</p>@endif
                     </div>
-                    <p class="text-[11px] text-gray-600 mt-1.5 leading-relaxed">{{ $d['idee'] }}</p>
                 </div>
             @endforeach
         </div>
 
-        <p class="text-[11px] text-gray-500">Vollständiger Plan: <code class="font-mono">docs/14_ROADMAP_PHASE2.md</code> im Modul-Repo.</p>
+        @if($verfuegbar !== [])
+            <x-fa::notice tone="ok" title="Schon verfügbar">
+                {{ collect($verfuegbar)->map(fn ($d) => $schonDa[$d['name']] ?? $d['name'])->implode(', ') }}. Diese Bereiche findest du in der Navigation.
+            </x-fa::notice>
+        @endif
     </x-ui-page-container>
     {{-- Spec 53/F Stufe 2: Sprachbefehl-Mount auf Seitenebene (Modal + optionales schwebendes Element). --}}
 </x-ui-page>

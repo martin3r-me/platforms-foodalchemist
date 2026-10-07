@@ -145,7 +145,7 @@ class ConceptService
     public function setStatus(Team $team, int $id, string $status): void
     {
         if (! in_array($status, ['draft', 'active', 'archiviert'], true)) {
-            throw new \RuntimeException("Unbekannter Concept-Status [{$status}].");
+            throw new \RuntimeException("Unbekannter Konzept-Status „{$status}“.");
         }
         FoodAlchemistConcept::visibleToTeam($team)->findOrFail($id)->update(['status' => $status]);
     }
@@ -205,7 +205,7 @@ class ConceptService
             $effective = $update['price_per_person_manual'] ?? $concept->price_per_person_manual;
             $reason = trim((string) ($update['price_override_reason'] ?? $concept->price_override_reason));
             if (! is_numeric($effective) || $reason === '') {
-                throw new \RuntimeException('Ein fixierter Concept-Preis benötigt Preis und Begründung.');
+                throw new \RuntimeException('Ein fixierter Konzept-Preis braucht Preis und Begründung.');
             }
             $update['price_override_reason'] = $reason;
             $update['price_override_user_id'] = Auth::id();
@@ -359,7 +359,7 @@ class ConceptService
         // GT-FB-4 / V-06: referenziertes Concept nicht still löschen — erst aus den Foodbooks nehmen.
         $fbs = $this->verwendetInFoodbooks($team, $id);
         if ($fbs->isNotEmpty()) {
-            throw new \RuntimeException('Concept wird in '.$fbs->count().' Foodbook(s) verwendet — dort zuerst entfernen.');
+            throw new \RuntimeException('Das Konzept wird in '.$fbs->count().($fbs->count() === 1 ? ' Foodbook' : ' Foodbooks').' verwendet. Zuerst dort entfernen.');
         }
 
         $concept->delete();
@@ -608,7 +608,7 @@ class ConceptService
             $slots = $concept->slots()->whereIn('id', $slotIds)->whereNotNull('sales_recipe_id')
                 ->orderBy('position')->get();
             if ($slots->isEmpty()) {
-                throw new \RuntimeException('Keine Gericht-/Basisrezept-Positionen ausgewählt.');
+                throw new \RuntimeException('Keine Gerichte oder Basisrezepte ausgewählt.');
             }
             $minPos = (int) $slots->min('position');
 
@@ -1514,14 +1514,14 @@ class ConceptService
     private function guardOwnerCategory(FoodAlchemistConceptCategory $cat, Team $team): void
     {
         if (! $cat->isOwnedBy($team)) {
-            throw new \RuntimeException('Geerbte Kategorie — Pflege nur durchs Besitzer-Team (D1).');
+            throw new \RuntimeException('Geerbte Kategorie: Ändern kann sie nur das Besitzer-Team.');
         }
     }
 
     private function guardOwnerKlasse(FoodAlchemistVocabKlasse $klasse, Team $team): void
     {
         if (! $klasse->isOwnedBy($team)) {
-            throw new \RuntimeException('Geerbte Klasse — Pflege nur durchs Besitzer-Team (D1).');
+            throw new \RuntimeException('Geerbte Klasse: Ändern kann sie nur das Besitzer-Team.');
         }
     }
 
@@ -1539,7 +1539,7 @@ class ConceptService
     private function guardOwner(FoodAlchemistConcept $concept, Team $team): void
     {
         if (! $concept->isOwnedBy($team)) {
-            throw new \RuntimeException('Geerbtes Concept — Pflege nur durchs Besitzer-Team (D1).');
+            throw new \RuntimeException('Geerbtes Konzept: Ändern kann es nur das Besitzer-Team.');
         }
     }
 

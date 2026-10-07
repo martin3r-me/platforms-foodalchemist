@@ -17,7 +17,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistVocabKochequipment;
  * Aggregation; die Anreicherung war ein SEPARATER Klick („✨ Alles anreichern")
  * mit Review-Liste dahinter. Dieser Service verkettet beides zu einem Durchlauf.
  * Für den KI-Erstell-Knopf kann zusätzlich die Coverage-Phase laufen:
- * Step-by-step, Sensorik, Produktions-/Equipment-Felder und Prozessanker werden
+ * Step-by-step, Sensorik und Produktions-/Equipment-Felder werden
  * neu synchronisiert, weil sie vom aktuellen Rezeptstand abhängen.
  *
  * Drei Entscheidungen tragen ihn:
@@ -287,9 +287,8 @@ class RecipeOneShotService
             'equipment' => fn () => $this->equipmentGlied($team, $recipe->fresh() ?? $recipe),
             'posten' => fn () => $this->postenGlied($team, $recipe->fresh() ?? $recipe),
             'steps' => fn () => $this->stepGlied($recipe->fresh() ?? $recipe),
-            'prozessanker' => fn () => $this->prozessankerGlied($recipe->fresh() ?? $recipe),
-            'aromaanker' => fn () => $this->aromaankerGlied($team, $recipe->fresh() ?? $recipe),
-            'pairings' => fn () => $this->pairingGlied($team, $recipe->fresh() ?? $recipe),
+            // Spec 60: Aromenprofil deterministisch aus den Zutaten (ersetzt KI-Anker + Pairing-Chips).
+            'aromaprofil' => fn () => $this->aromaprofilGlied($recipe->fresh() ?? $recipe),
             'eignung' => fn () => $this->eignungsGlied($team, $recipe->fresh() ?? $recipe),
             'sensorik' => fn () => $this->sensorikGlied($recipe->fresh() ?? $recipe),
         ];
@@ -549,184 +548,13 @@ class RecipeOneShotService
         return $stations->firstWhere('id', (int) $id);
     }
 
-    /** @return array{status: string, matched?: list<string>, added?: list<string>, removed?: list<string>, fehler?: string} */
-    private function prozessankerGlied(FoodAlchemistRecipe $recipe): array
+    /** @return array{status: string, n_anker?: int, abdeckung?: float, fehler?: string} */
+    private function aromaprofilGlied(FoodAlchemistRecipe $recipe): array
     {
         try {
-            $r = app(ProcessAnchorService::class)->groundRecipe($recipe, true);
+            $p = app(Pairing\RezeptProfil::class)->fuer((int) $recipe->id);
 
-            return [
-                'status' => ($r['matched'] ?? []) === [] ? 'leer' : 'aktualisiert',
-                'matched' => $r['matched'] ?? [],
-                'added' => $r['added'] ?? [],
-                'removed' => $r['removed'] ?? [],
-            ];
-        } catch (\Throwable $e) {
-            return ['status' => 'fehler', 'fehler' => mb_strimwidth($e->getMessage(), 0, 300)];
-        }
-    }
-
-    /**
-     * W0-7 — Anker-Kandidatenmenge für `recipe.anker`.
-     *
-     * Drei Quellen, vereinigt und gedeckelt:
-     *   (a) Anker der bereits gemappten GPs der Rezeptzutaten — die faktisch belegte Basis,
-     *   (b) 1-Hop-Nachbarn dieser Anker im Pairing-Graphen (beide Kantenrichtungen),
-     *   (c) semantischer Recall über Name + Zutaten (searchAnkerSlugs).
-     *
-     * ⚠ Diese Liste ist gleichzeitig die Validierungs-Whitelist des Aufrufers
-     * (`in_array($slug, $vokabular, true)`): was hier fehlt, kann die KI nicht wählen —
-     * ein Vorfilter ist also eine Verhaltensänderung, nicht nur eine Sparmaßnahme.
-     * Darum großzügig gedeckelt (120) und mit (a) immer vollständig drin.
-     *
-     * Fallback: liefern alle drei Quellen nichts (ungemapptes Rezept ohne Provider), wird
-     * auf die häufigsten Anker zurückgefallen, statt eine leere Whitelist zu senden —
-     * leer hieße „kein Anker wählbar" und das Glied liefe still ins Nichts.
-     *
-     * @param  list<string>  $zutaten
-     * @return list<string>
-     */
-    private function ankerKandidaten(FoodAlchemistRecipe $recipe, array $zutaten): array
-    {
-        $deckel = 120;
-
-        // (a) Anker der gemappten GPs dieses Rezepts
-        $gpAnkerIds = \Illuminate\Support\Facades\DB::table('foodalchemist_gp_anchor_mappings as m')
-            ->join('foodalchemist_recipe_ingredients as ri', 'ri.gp_id', '=', 'm.gp_id')
-            ->where('ri.recipe_id', $recipe->id)
-            ->whereNull('ri.deleted_at')->whereNull('m.deleted_at')
-            ->distinct()->pluck('m.anchor_id')->all();
-
-        // (b) 1-Hop-Nachbarn im Graphen, beide Richtungen
-        $nachbarIds = [];
-        if ($gpAnkerIds !== []) {
-            $nachbarIds = \Illuminate\Support\Facades\DB::table('foodalchemist_pairing_anchor_edges')
-                ->whereIn('anchor_a_id', $gpAnkerIds)->distinct()->pluck('anchor_b_id')->all();
-            $nachbarIds = array_merge($nachbarIds, \Illuminate\Support\Facades\DB::table('foodalchemist_pairing_anchor_edges')
-                ->whereIn('anchor_b_id', $gpAnkerIds)->distinct()->pluck('anchor_a_id')->all());
-        }
-
-        $ids = array_values(array_unique(array_map('intval', array_merge($gpAnkerIds, $nachbarIds))));
-        $slugs = $ids === [] ? [] : \Illuminate\Support\Facades\DB::table('foodalchemist_vocab_pairing_anchors')
-            ->whereIn('id', $ids)->whereNull('deleted_at')->orderBy('slug')->pluck('slug')->all();
-
-        // (c) semantischer Recall — fängt Anker, die über kein gemapptes GP erreichbar sind
-        try {
-            $semantisch = app(Ai\KnowledgeEmbeddingService::class)
-                ->searchAnkerSlugs(trim($recipe->name . ' ' . implode(' ', array_slice($zutaten, 0, 15))), 40);
-        } catch (\Throwable) {
-            $semantisch = [];                                        // Recall ist Beigabe, nie Bedingung
-        }
-
-        $vereint = array_values(array_unique(array_merge($slugs, $semantisch)));
-
-        if ($vereint === []) {
-            // Kein gemapptes GP UND kein semantischer Treffer: hier ist NICHTS über das
-            // Rezept bekannt, also gibt es auch keine begründete Vorauswahl. Dann bewusst
-            // das Alt-Verhalten (Vollvokabular) statt einer willkürlichen Teilmenge —
-            // eine geratene Whitelist wäre schlimmer als ein teurer Call, weil sie die
-            // richtige Antwort unerreichbar macht. Betrifft nur ungemappte Rezepte.
-            return \Illuminate\Support\Facades\DB::table('foodalchemist_vocab_pairing_anchors')
-                ->whereNull('deleted_at')->orderBy('slug')->pluck('slug')->all();
-        }
-
-        return array_slice($vereint, 0, $deckel);
-    }
-
-    /** @return array{status: string, n_anker?: int, fehler?: string} */
-    private function aromaankerGlied(Team $team, FoodAlchemistRecipe $recipe): array
-    {
-        try {
-            $pairings = app(PairingService::class);
-            $zutaten = $recipe->ingredients()->whereNull('deleted_at')->pluck('raw_text')->take(30)->all();
-            // W0-7: Kandidaten statt Vollvokabular. Vorher gingen ALLE Anker (live 2.628
-            // Slugs / 39.478 Zeichen) in jeden Call — gemessen ⌀ 25.007 Input-Token, der
-            // vierthöchste Posten im System, für eine Aufgabe die 3–7 Anker zurückgibt.
-            $vokabular = $this->ankerKandidaten($recipe, $zutaten);
-            $vorschlag = app(Ai\AiGatewayService::class)->propose('recipe.anker', [
-                'name' => $recipe->name,
-                'zubereitung' => $recipe->preparation,
-                'zutaten' => $zutaten,
-                'vokabular' => $vokabular,
-            ], ['target_table' => 'foodalchemist_recipe_anchor_mappings', 'target_id' => $recipe->id]);
-
-            $manualCount = \Illuminate\Support\Facades\DB::table('foodalchemist_recipe_anchor_mappings')
-                ->where('recipe_id', $recipe->id)->where('source', 'manual')->whereNull('deleted_at')->count();
-            $freiePlaetze = max(0, PairingService::CAP_RECIPE - $manualCount);
-            $slugs = array_slice(array_values(array_unique(array_filter(
-                (array) ($vorschlag->werte['anker_slugs'] ?? []),
-                fn ($slug) => is_string($slug) && in_array($slug, $vokabular, true)
-            ))), 0, $freiePlaetze);
-            $ids = $slugs === [] ? collect() : \Illuminate\Support\Facades\DB::table('foodalchemist_vocab_pairing_anchors')
-                ->whereIn('slug', $slugs)->pluck('id', 'slug');
-
-            \Illuminate\Support\Facades\DB::table('foodalchemist_recipe_anchor_mappings')
-                ->where('recipe_id', $recipe->id)->where('source', 'ai_inferred')->whereNull('deleted_at')
-                ->update(['deleted_at' => now(), 'updated_at' => now()]);
-            foreach ($slugs as $slug) {
-                $pairings->setRecipeAnkerInference($team, (int) $recipe->id, (int) $ids[$slug], (float) $vorschlag->confidence);
-            }
-
-            return ['status' => $slugs === [] ? 'leer' : 'aktualisiert', 'n_anker' => count($slugs)];
-        } catch (\Throwable $e) {
-            return ['status' => 'fehler', 'fehler' => mb_strimwidth($e->getMessage(), 0, 300)];
-        }
-    }
-
-    /** @return array{status: string, n_pairings?: int, grund?: string, fehler?: string} */
-    private function pairingGlied(Team $team, FoodAlchemistRecipe $recipe): array
-    {
-        try {
-            $pairings = app(PairingService::class);
-            $anker = $pairings->recipeAnkers((int) $recipe->id);
-            // Spec 50 · B-4: ehrlich sagen, WARUM nichts passiert — „ohne Anker" (Rezept hat keinen
-            // Kern-Anker: Aromaanker-Glied leer / GPs ohne Anker) ist ein anderer Befund als „ohne
-            // Grounding" (Anker da, aber keine Kanten im Graph). Vorher sah beides gleich aus.
-            if ($anker->isEmpty()) {
-                return ['status' => 'uebersprungen_ohne_anker', 'n_pairings' => 0,
-                    'grund' => 'Rezept hat keinen Kern-Anker — Aromaanker-Glied leer oder GPs ohne Anker (gps.ENRICH felder [anker]).'];
-            }
-            $grounding = $anker->flatMap(fn ($a) => $pairings->ankerNeighbors($a->slug, 'aroma', 30)
-                ->concat($pairings->ankerNeighbors($a->slug, 'kontrast', 30)))
-                ->unique(fn ($a) => $a->slug . '|' . $a->type)->values();
-            if ($grounding->isEmpty()) {
-                return ['status' => 'uebersprungen_ohne_grounding', 'n_pairings' => 0,
-                    'grund' => 'Anker ' . implode(', ', $anker->pluck('slug')->all()) . ' haben keine Aroma-/Kontrast-Kanten im Pairing-Graph.'];
-            }
-
-            $vorschlag = app(Ai\AiGatewayService::class)->propose('recipe.pairing', [
-                'name' => $recipe->name,
-                'anker' => $anker->pluck('slug')->all(),
-                'grounding' => $grounding->map(fn ($a) => [
-                    'slug' => $a->slug, 'typ' => $a->type, 'evidence' => $a->evidence,
-                ])->all(),
-            ], ['target_table' => 'foodalchemist_recipe_pairings', 'target_id' => $recipe->id]);
-
-            $erlaubt = $grounding->groupBy('slug');
-            $werte = collect((array) ($vorschlag->werte['pairings'] ?? []))
-                ->filter(function ($p) use ($erlaubt) {
-                    if (! is_array($p) || ! is_string($p['slug'] ?? null) || ! $erlaubt->has($p['slug'])) {
-                        return false;
-                    }
-
-                    return $erlaubt->get($p['slug'])->pluck('type')->contains($p['typ'] ?? null);
-                })
-                ->take(25)->values();
-            \Illuminate\Support\Facades\DB::table('foodalchemist_recipe_pairings')
-                ->where('recipe_id', $recipe->id)->where('created_via', 'ai_gateway')->whereNull('deleted_at')
-                ->update(['deleted_at' => now(), 'updated_at' => now()]);
-            foreach ($werte as $wert) {
-                $ankerZeile = $erlaubt->get($wert['slug'])->firstWhere('type', $wert['typ']);
-                $pairings->setRecipePairingInference(
-                    $team,
-                    (int) $recipe->id,
-                    (int) $ankerZeile->id,
-                    $wert['typ'],
-                    in_array($wert['konfidenz'] ?? null, ['hoch', 'mittel', 'niedrig'], true) ? $wert['konfidenz'] : 'mittel',
-                );
-            }
-
-            return ['status' => $werte->isEmpty() ? 'leer' : 'aktualisiert', 'n_pairings' => $werte->count()];
+            return ['status' => $p['anker'] === [] ? 'leer' : 'aktualisiert', 'n_anker' => count($p['anker']), 'abdeckung' => $p['abdeckung']];
         } catch (\Throwable $e) {
             return ['status' => 'fehler', 'fehler' => mb_strimwidth($e->getMessage(), 0, 300)];
         }

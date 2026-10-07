@@ -61,7 +61,7 @@ it('DetailPanel: KPI-Karte zeigt die GL-02-Aggregate, Diät-Sektion die spec_*-F
         ->assertSee('5,61 €')
         ->assertSee('2,17 €')
         ->assertSee('0,387 kg')
-        ->assertSee('Vegan ✕');                                  // spec_is_vegan = false (R6: Jarvis-Format «Label ✓/✕»)
+        ->assertSee('Nicht geeignet')->assertSee('vegan');      // spec_is_vegan = false (fa-pass: x-fa::deklaration „Nicht geeignet: vegan“ statt «Vegan ✕»)
 });
 
 it('DetailPanel respektiert D1: fremdes Team-Rezept bleibt unsichtbar', function () {
@@ -80,7 +80,7 @@ it('Punkt 5: DetailPanel embedded = Detail-Sektionen ohne KPI/Zutaten-Doppelung 
 
     $c = Livewire::test(DetailPanel::class, ['recipeId' => $this->bbq->id, 'embedded' => true])
         ->assertSet('embedded', true)
-        ->assertSee('Vegan ✕')          // Deklaration-Sektion sichtbar (Detail-Inhalt)
+        ->assertSeeHtml('data-deklaration-diaet')   // Deklaration-Sektion sichtbar (Detail-Inhalt)
         ->assertDontSee('0,387 kg')      // Yield/KPI-Karte ausgeblendet (im Editor schon im Kopf)
         ->assertDontSee('Zutaten (');    // Zutaten-Liste ausgeblendet (im Aufbau-Tab)
 

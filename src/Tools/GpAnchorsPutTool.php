@@ -10,9 +10,9 @@ use Platform\FoodAlchemist\Services\GpService;
 use Platform\FoodAlchemist\Services\PairingService;
 
 /**
- * Spec 53 Paket J: Aroma-Anker eines GP verknüpfen/lösen. Anders als
- * {@see RecipeAnchorsPutTool} (numerische anker_id) adressiert dieses Tool den Anker über den
- * SLUG — stabiler für die Vault-Brücke alt→neu (Legacy-IDs sind hier nicht die Wahrheit).
+ * Spec 53 Paket J: Aroma-Anker eines GP verknüpfen/lösen. Adressiert den Anker über den SLUG —
+ * stabiler für die Vault-Brücke alt→neu (Legacy-IDs sind hier nicht die Wahrheit). Seit Spec 60 der
+ * einzige Weg, Anker zu pflegen: Rezepte erben ihre Anker über das Aromenprofil aus den GPs.
  * Mehrere Anker je GP erlaubt (role kern|neben, CAP_GP im Service — s. Altdaten: zusammengesetzte
  * Produkte wie Ratatouille tragen mehrere Kern-Anker).
  */

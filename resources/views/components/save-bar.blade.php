@@ -13,14 +13,14 @@
 @props(['action' => 'speichern', 'label' => 'Speichern', 'meldung' => null, 'hint' => null])
 @php($saveUi = \Platform\FoodAlchemist\Support\Ui::maps())
 
-<div {{ $attributes->merge(['class' => 'sticky top-0 z-20 -mx-1 px-1 py-2 bg-white/90 backdrop-blur-sm flex items-center gap-3']) }} data-save-bar>
+<div {{ $attributes->merge(['class' => 'sticky top-0 z-20 -mx-1 px-1 py-2 bg-[var(--fa-surface)] border-b border-[var(--fa-line)] flex items-center gap-3']) }} data-save-bar>
     <button type="button" wire:click="{{ $action }}" class="{{ $saveUi['btnPrimary'] }} shrink-0" data-save-bar-button>
         {{ $label }}
     </button>
 
     @if($meldung)
-        <p class="text-xs text-emerald-600 truncate" data-save-bar-meldung>{{ $meldung }}</p>
+        <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ok)] truncate" data-save-bar-meldung>{{ $meldung }}</p>
     @elseif($hint)
-        <p class="text-[11px] text-gray-500 truncate">{{ $hint }}</p>
+        <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)] truncate">{{ $hint }}</p>
     @endif
 </div>

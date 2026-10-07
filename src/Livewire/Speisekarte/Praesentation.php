@@ -52,6 +52,6 @@ class Praesentation extends Component
             'karte' => $karte,
             'preise' => $preise,
             'branding' => $svc->brandingDaten($karte),
-        ])->layout('platform::layouts.app');
+        ])->layout(\Platform\FoodAlchemist\Support\FaShell::layout());
     }
 }

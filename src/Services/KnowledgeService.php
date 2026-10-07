@@ -43,7 +43,7 @@ class KnowledgeService
         $title = trim((string) ($data['title'] ?? ''));
         $category = trim((string) ($data['category'] ?? ''));
         if ($title === '' || $category === '') {
-            throw new RuntimeException('title und category sind Pflicht.');
+            throw new RuntimeException('Bitte Titel und Kategorie angeben.');
         }
         $this->assertKategorie($team, $category);
         $art = $this->pruefeArt($data['art'] ?? null);
@@ -67,6 +67,7 @@ class KnowledgeService
             'category' => $category,
             ...$einordnung,
             'content_md' => $content,
+            'anchor_id' => \Platform\FoodAlchemist\Support\DossierAnker::ausInhalt($content),
             'version' => 1,
             'content_hash' => hash('sha256', $content),
             'imported_hash' => null,       // nicht Vault-verwaltet → Import-Guard N/A
@@ -167,6 +168,7 @@ class KnowledgeService
         if (array_key_exists('content_md', $data)) {
             $content = (string) $data['content_md'];
             $payload['content_md'] = $content;
+            $payload['anchor_id'] = \Platform\FoodAlchemist\Support\DossierAnker::ausInhalt($content);
             $payload['content_hash'] = hash('sha256', $content);
             $payload['char_count'] = mb_strlen($content);
             $payload['version'] = (int) $doc->version + 1;
@@ -304,6 +306,7 @@ class KnowledgeService
                 DB::table('foodalchemist_knowledge_documents')->where('id', $bestehend->id)->update([
                     'title' => $title, 'category' => $category, ...$einordnung,
                     'content_md' => $content, 'content_hash' => $hash, 'char_count' => $zeichen,
+                    'anchor_id' => \Platform\FoodAlchemist\Support\DossierAnker::ausInhalt($content),
                     'version' => $version, 'active' => $active, 'updated_at' => $now,
                 ]);
                 $status = 'aktualisiert';
@@ -314,6 +317,7 @@ class KnowledgeService
                     'team_id' => TeamScope::isMaster($team) ? null : $team->id,
                     'slug' => $slug, 'title' => $title, 'category' => $category, ...$einordnung,
                     'content_md' => $content, 'version' => 1, 'content_hash' => $hash,
+                    'anchor_id' => \Platform\FoodAlchemist\Support\DossierAnker::ausInhalt($content),
                     'imported_hash' => null, 'char_count' => $zeichen, 'active' => $active,
                     'source_path' => null, 'created_via' => 'mcp_import',
                     'created_at' => $now, 'updated_at' => $now,

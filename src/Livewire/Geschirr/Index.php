@@ -209,6 +209,6 @@ class Index extends Component
             'vehikelListe' => TeamScope::applyVisible(\Illuminate\Support\Facades\DB::table('foodalchemist_vocab_serving_vehicles')
                 ->whereNull('deleted_at')->where('is_inactive', false), 'team_id', $team)
                 ->orderBy('group_name')->orderBy('sort_order')->orderBy('name')->get(['id', 'name', 'group_name']),
-        ])->layout('platform::layouts.app');
+        ])->layout(\Platform\FoodAlchemist\Support\FaShell::layout());
     }
 }

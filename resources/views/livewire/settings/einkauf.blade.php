@@ -1,244 +1,306 @@
-{{-- M1-05: Lead-LA-Strategie (V-27) — M1-06 ergänzt die Stamm-Lieferanten-Matrix --}}
-@php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
+{{-- M1-05: Lead-LA-Strategie (V-27), M1-06: Stamm-Lieferanten-Matrix, dazu Lagerorte (WaWi light) --}}
+@php
+    // Sichtbare Beschreibungen ohne interne Kürzel; Fallback auf die Enum-Beschreibung.
+    $strategieText = [
+        'guenstigster_preis' => 'Der Artikel mit dem niedrigsten Vergleichspreis liefert den Preis.',
+        'stamm_lieferant' => 'Artikel deiner Stamm-Lieferanten (je Warengruppe, siehe unten) haben Vorrang. Innerhalb derselben Stufe entscheidet der Preis.',
+        'prioritaets_kette' => 'Eine feste Reihenfolge deiner Lieferanten entscheidet. Innerhalb derselben Stufe entscheidet der Preis.',
+    ];
+@endphp
 
-<div class="space-y-4">
-    {{-- Die Leiste speichert die Lead-LA-Strategie; die Stamm-Matrix darunter speichert je Zeile. --}}
-    <x-foodalchemist::save-bar :meldung="$meldung" hint="Speichert die Lead-LA-Strategie." />
+<div class="flex flex-col gap-4">
+    {{-- Die Leiste speichert die Strategie; Lagerorte und Stamm-Lieferanten speichern je Zeile. --}}
+    <x-foodalchemist::save-bar :meldung="$meldung" hint="Speichert die Strategie für den kalkulierenden Artikel." />
+    @if($fehler)
+        <x-fa::notice tone="crit">{{ $fehler }}</x-fa::notice>
+    @endif
 
-    <div class="{{ $card }} p-5 space-y-4" data-einkauf-strategie>
-        <div>
-            <h3 class="font-medium tracking-tight text-gray-900">Lead-LA-Strategie</h3>
-            <p class="text-[11px] text-gray-500 mt-0.5">Entscheidet, welcher Lieferantenartikel je GP kalkulationsführend wird (V-27, speist die GL-03-Kette ab M3-06). Gilt nur für dein Team.</p>
-        </div>
-
-        <div class="space-y-2">
+    <x-fa::section title="Welcher Artikel kalkuliert" icon="heroicon-o-shopping-cart" data-einkauf-strategie
+        description="Legt fest, welcher Lieferantenartikel je Grundprodukt den Preis für die Kalkulation liefert. Gilt nur für dein Team.">
+        <div class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,16rem),1fr))] gap-2" role="radiogroup" aria-label="Strategie">
             @foreach($strategien as $s)
-                <label class="flex items-start gap-3 p-3 rounded-lg cursor-pointer transition-all duration-150 {{ $strategie === $s->value ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10' : 'hover:bg-black/[0.03]' }}">
-                    <input type="radio" wire:model.live="strategie" value="{{ $s->value }}" class="mt-0.5" />
-                    <span>
-                        <span class="block text-xs font-medium text-gray-900">{{ $s->label() }}</span>
-                        <span class="block text-[11px] text-gray-500 mt-0.5">{{ $s->description() }}</span>
+                @php
+                    $gewaehlt = $strategie === $s->value;
+                @endphp
+                <label class="flex items-start gap-3 p-3 rounded-[var(--fa-radius-control)] border cursor-pointer transition-colors duration-150 {{ $gewaehlt ? 'border-[var(--fa-accent)] bg-[var(--fa-accent-soft)]' : 'border-[var(--fa-line)] hover:bg-[var(--fa-hover)]' }}">
+                    <input type="radio" wire:model.live="strategie" value="{{ $s->value }}" class="mt-0.5 w-4 h-4 accent-[var(--fa-accent)]" />
+                    <span class="min-w-0">
+                        <span class="block text-[length:var(--fa-text-md)] font-medium {{ $gewaehlt ? 'text-[var(--fa-accent)]' : 'text-[var(--fa-ink)]' }}">{{ $s->label() }}</span>
+                        <span class="block mt-0.5 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">{{ $strategieText[$s->value] ?? $s->description() }}</span>
                     </span>
                 </label>
             @endforeach
         </div>
 
         @if($strategie === 'prioritaets_kette')
-            <div class="pt-3 border-t border-black/5 space-y-2" data-prio-kette>
-                <div class="{{ $label }}">Prioritäts-Kette (oben = höchste Priorität)</div>
+            <div class="pt-3 border-t border-[var(--fa-line)] flex flex-col gap-2" data-prio-kette>
+                <p class="text-[length:var(--fa-text-md)] font-medium text-[var(--fa-ink)]">Reihenfolge der Lieferanten <span class="font-normal text-[var(--fa-ink-3)]">(oben hat Vorrang)</span></p>
                 @forelse($prioritaeten as $i => $supplierId)
-                    <div class="flex items-center gap-2" wire:key="prio-{{ $supplierId }}">
-                        <span class="text-[11px] text-gray-500 w-5">{{ $i + 1 }}.</span>
-                        <span class="text-xs text-gray-700 flex-1">{{ $lieferantenNamen[$supplierId] ?? "Lieferant #{$supplierId}" }}</span>
-                        <button type="button" wire:click="prioHoch({{ $i }})" class="{{ $btnGhostXs }}" @if($i === 0) disabled @endif>@svg('heroicon-o-chevron-up', 'w-3.5 h-3.5 inline-block align-middle')</button>
-                        <button type="button" wire:click="prioEntfernen({{ $i }})" class="{{ $btnGhostXs }} text-red-500">@svg('heroicon-o-x-mark', 'w-3.5 h-3.5 inline-block align-middle')</button>
+                    <div class="flex items-center gap-2 py-1 border-b border-[var(--fa-line)]" wire:key="prio-{{ $supplierId }}">
+                        <span class="w-6 text-right tabular-nums text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">{{ $i + 1 }}.</span>
+                        <span class="flex-1 min-w-0 text-[length:var(--fa-text-md)] text-[var(--fa-ink)]">{{ $lieferantenNamen[$supplierId] ?? 'Lieferant nicht mehr verfügbar' }}</span>
+                        <x-fa::icon-button icon="heroicon-m-chevron-up" size="sm" label="Nach oben" wire:click="prioHoch({{ $i }})" :disabled="$i === 0" class="disabled:opacity-40 disabled:pointer-events-none" />
+                        <x-fa::icon-button icon="heroicon-m-x-mark" size="sm" tone="danger" label="Aus der Reihenfolge entfernen" wire:click="prioEntfernen({{ $i }})" />
                     </div>
                 @empty
-                    <p class="text-[11px] text-gray-500">Noch keine Lieferanten in der Kette.</p>
+                    <x-fa::empty icon="heroicon-o-queue-list" title="Noch keine Lieferanten in der Reihenfolge" compact>Wähle unten den Lieferanten, der Vorrang haben soll.</x-fa::empty>
                 @endforelse
-                <div class="flex gap-2">
-                    <select wire:model="neuerPrioLieferant" class="{{ $input }} !w-72">
-                        <option value="">Lieferant wählen…</option>
-                        @foreach($lieferanten as $l)<option value="{{ $l->id }}">{{ $l->name }}</option>@endforeach
-                    </select>
-                    <button type="button" wire:click="prioHinzu" class="{{ $btnGhostXs }}">+ zur Kette</button>
+                <div class="flex flex-wrap items-end gap-2">
+                    <x-fa::field label="Lieferant hinzufügen" for="einkauf-prio-neu" class="w-72 max-w-full">
+                        <x-fa::select id="einkauf-prio-neu" wire:model="neuerPrioLieferant" placeholder="Lieferant wählen">
+                            @foreach($lieferanten as $l)<option value="{{ $l->id }}">{{ $l->name }}</option>@endforeach
+                        </x-fa::select>
+                    </x-fa::field>
+                    <x-fa::button icon="heroicon-m-plus" wire:click="prioHinzu">Zur Reihenfolge hinzufügen</x-fa::button>
                 </div>
             </div>
         @endif
 
         {{-- Phase 3: Strategie je Warengruppe (überschreibt die globale oben) --}}
-        <div class="pt-3 border-t border-black/5 space-y-2" data-strategie-per-wg>
-            <div class="{{ $label }}">Strategie je Warengruppe (optional — überschreibt die globale)</div>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-1">
+        <div class="pt-3 border-t border-[var(--fa-line)] flex flex-col gap-2" data-strategie-per-wg>
+            <div>
+                <p class="text-[length:var(--fa-text-md)] font-medium text-[var(--fa-ink)]">Abweichend je Warengruppe <span class="font-normal text-[var(--fa-ink-3)]">(optional)</span></p>
+                <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">Ohne Auswahl gilt die Strategie oben.</p>
+            </div>
+            <div class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,22rem),1fr))] gap-x-8">
                 @foreach($warengruppen as $wg)
-                    <div class="flex items-center gap-2 py-0.5" wire:key="strat-wg-{{ $wg->code }}">
-                        <span class="flex-1 min-w-0 truncate text-xs text-gray-600">{{ $wg->name }}</span>
-                        <select wire:model="strategiePerWg.{{ $wg->code }}" class="{{ $input }} !w-48 !py-0.5 !text-[11px]">
-                            <option value="">— globale Strategie —</option>
+                    <div class="flex items-center gap-3 py-1.5 border-b border-[var(--fa-line)]" wire:key="strat-wg-{{ $wg->code }}">
+                        <label for="einkauf-wg-{{ $wg->code }}" class="flex-1 min-w-0 text-[length:var(--fa-text-md)] text-[var(--fa-ink-2)]">{{ $wg->name }}</label>
+                        <x-fa::select id="einkauf-wg-{{ $wg->code }}" wire:model="strategiePerWg.{{ $wg->code }}" size="sm" class="w-52 shrink-0" placeholder="Wie oben">
                             @foreach($strategien as $s)<option value="{{ $s->value }}">{{ $s->label() }}</option>@endforeach
-                        </select>
+                        </x-fa::select>
                     </div>
                 @endforeach
             </div>
         </div>
 
-        <label class="flex items-center gap-2 pt-3 border-t border-black/5 text-xs text-gray-700 cursor-pointer">
-            <input type="checkbox" wire:model="ausweichKette" class="rounded border-gray-300" />
-            Ausweich-Kette anzeigen (im GP-Detail: wer würde Lead, wenn der aktuelle ausfällt)
+        <label class="flex items-start gap-2 pt-3 border-t border-[var(--fa-line)] cursor-pointer">
+            <input type="checkbox" wire:model="ausweichKette" class="mt-0.5 w-4 h-4 accent-[var(--fa-accent)]" />
+            <span class="min-w-0">
+                <span class="block text-[length:var(--fa-text-md)] text-[var(--fa-ink)]">Ausweich-Reihenfolge anzeigen</span>
+                <span class="block text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">Im Grundprodukt sichtbar: welcher Artikel übernimmt, wenn der aktuelle ausfällt.</span>
+            </span>
         </label>
+    </x-fa::section>
 
-    </div>
-
-    <div id="lagerorte" class="{{ $card }} p-5 space-y-3 scroll-mt-6" data-lagerorte>
-        <div>
-            <h3 class="font-medium tracking-tight text-gray-900">Lagerorte</h3>
-            <p class="text-[11px] text-gray-500 mt-0.5">WaWi light: Wareneingänge buchen auf das Standardlager. Weitere Lagerorte sind die Grundlage für spätere Umlagerung, Inventur und Produktion.</p>
+    {{-- Spec 63: Bestellversand per Mail --}}
+    <x-fa::section id="bestellversand" title="Bestellversand" icon="heroicon-o-paper-airplane" class="scroll-mt-6" data-bestellversand
+        description="Wie eine Bestellung beim Absenden zum Lieferanten kommt.">
+        <div class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,16rem),1fr))] gap-2" role="radiogroup" aria-label="Versandart">
+            @foreach([
+                'mailprogramm' => ['Mailprogramm', 'Absenden öffnet dein E-Mail-Programm mit vorbereitetem Text. Du verschickst selbst.'],
+                'server' => ['Direkt per E-Mail', 'Absenden schickt die Bestellung mit PDF direkt an den Lieferanten. Stornos ebenso. Jeder Versand wird protokolliert.'],
+            ] as $wert => [$label, $text])
+                @php
+                    $gewaehlt = ($versand['art'] ?? 'mailprogramm') === $wert;
+                @endphp
+                <label class="flex items-start gap-3 p-3 rounded-[var(--fa-radius-control)] border cursor-pointer transition-colors duration-150 {{ $gewaehlt ? 'border-[var(--fa-accent)] bg-[var(--fa-accent-soft)]' : 'border-[var(--fa-line)] hover:bg-[var(--fa-hover)]' }}">
+                    <input type="radio" wire:model.live="versand.art" value="{{ $wert }}" class="mt-0.5 w-4 h-4 accent-[var(--fa-accent)]" />
+                    <span class="min-w-0">
+                        <span class="block text-[length:var(--fa-text-md)] font-medium {{ $gewaehlt ? 'text-[var(--fa-accent)]' : 'text-[var(--fa-ink)]' }}">{{ $label }}</span>
+                        <span class="block mt-0.5 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">{{ $text }}</span>
+                    </span>
+                </label>
+            @endforeach
         </div>
 
-        <div class="grid grid-cols-1 xl:grid-cols-[1fr_auto] gap-2 items-end">
-            <div class="grid grid-cols-1 md:grid-cols-[1.2fr_.6fr_.7fr_1.4fr] gap-2">
-                <label class="block">
-                    <span class="{{ $label }}">Name</span>
-                    <input type="text" wire:model="lagerNeu.name" class="{{ $input }}" placeholder="z. B. Hauptlager" />
-                </label>
-                <label class="block">
-                    <span class="{{ $label }}">Code</span>
-                    <input type="text" wire:model="lagerNeu.code" class="{{ $input }}" placeholder="MAIN" />
-                </label>
-                <label class="block">
-                    <span class="{{ $label }}">Typ</span>
-                    <select wire:model="lagerNeu.type" class="{{ $input }}">
-                        @foreach($lagerTypen as $key => $labelText)
-                            <option value="{{ $key }}">{{ $labelText }}</option>
-                        @endforeach
-                    </select>
-                </label>
-                <label class="block">
-                    <span class="{{ $label }}">Notiz</span>
-                    <input type="text" wire:model="lagerNeu.note" class="{{ $input }}" placeholder="optional" />
-                </label>
+        @if(($versand['art'] ?? '') === 'server')
+            <div class="mt-4 grid gap-3 sm:grid-cols-2">
+                <x-fa::field label="Absender-Name" for="versand-absender" optional>
+                    <x-fa::input id="versand-absender" wire:model="versand.absender_name" placeholder="{{ $team->name }} Einkauf" />
+                </x-fa::field>
+                <x-fa::field label="Antwort an" for="versand-antwort" optional>
+                    <x-fa::input id="versand-antwort" type="email" wire:model="versand.antwort_an" placeholder="leer = E-Mail der Person, die absendet" />
+                </x-fa::field>
+                <x-fa::field label="Kopie an (BCC)" for="versand-kopie" optional class="sm:col-span-2">
+                    <x-fa::input id="versand-kopie" wire:model="versand.kopie_an" placeholder="einkauf@betrieb.de, kueche@betrieb.de" />
+                </x-fa::field>
+                <x-fa::field label="Signatur" for="versand-signatur" optional class="sm:col-span-2">
+                    <x-fa::textarea id="versand-signatur" wire:model="versand.signatur" placeholder="Mit freundlichen Grüßen" />
+                </x-fa::field>
             </div>
-            <button type="button" wire:click="lagerAnlegen" class="{{ $btnPrimary }}">+ Lager anlegen</button>
-        </div>
+            <p class="mt-2 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">Die Bestell-E-Mail steht beim Lieferanten. Fehlt sie, lässt sich die Bestellung nicht absenden.</p>
 
-        <div class="overflow-x-auto border border-black/5 rounded-lg">
-            <table class="min-w-full text-xs">
-                <thead class="bg-black/[0.03] text-[11px] uppercase tracking-wide text-gray-500">
-                    <tr>
-                        <th class="px-3 py-2 text-left">Lager</th>
-                        <th class="px-3 py-2 text-left">Code</th>
-                        <th class="px-3 py-2 text-left">Typ</th>
-                        <th class="px-3 py-2 text-left">Notiz</th>
-                        <th class="px-3 py-2 text-center">Aktiv</th>
-                        <th class="px-3 py-2 text-right">Bestände</th>
-                        <th class="px-3 py-2 text-right">Aktionen</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @forelse($lagerorte as $lager)
-                        <tr class="border-t border-black/5" wire:key="lagerort-{{ $lager->id }}">
-                            <td class="px-3 py-2 min-w-48">
-                                <input type="text" wire:model="lagerEdit.{{ $lager->id }}.name" class="{{ $input }} !py-1 !text-xs" />
-                                @if($lager->is_default)
-                                    <span class="inline-flex mt-1 px-2 py-0.5 rounded-full bg-emerald-500/10 text-[10px] text-emerald-700">Standard</span>
-                                @endif
-                            </td>
-                            <td class="px-3 py-2 min-w-28">
-                                <input type="text" wire:model="lagerEdit.{{ $lager->id }}.code" class="{{ $input }} !py-1 !text-xs" />
-                            </td>
-                            <td class="px-3 py-2 min-w-36">
-                                <select wire:model="lagerEdit.{{ $lager->id }}.type" class="{{ $input }} !py-1 !text-xs">
-                                    @foreach($lagerTypen as $key => $labelText)
-                                        <option value="{{ $key }}">{{ $labelText }}</option>
-                                    @endforeach
-                                </select>
-                            </td>
-                            <td class="px-3 py-2 min-w-56">
-                                <input type="text" wire:model="lagerEdit.{{ $lager->id }}.note" class="{{ $input }} !py-1 !text-xs" />
-                            </td>
-                            <td class="px-3 py-2 text-center">
-                                <input type="checkbox" wire:model="lagerEdit.{{ $lager->id }}.is_active" class="rounded border-gray-300" />
-                            </td>
-                            <td class="px-3 py-2 text-right text-gray-500">{{ $lager->stocks_count }}</td>
-                            <td class="px-3 py-2 text-right whitespace-nowrap space-x-1">
-                                <button type="button" wire:click="lagerSpeichern({{ $lager->id }})" class="{{ $btnGhostXs }}">Speichern</button>
-                                @unless($lager->is_default)
-                                    <button type="button" wire:click="lagerStandardSetzen({{ $lager->id }})" class="{{ $btnGhostXs }}">Standard</button>
-                                @endunless
-                                <button type="button" wire:click="lagerEntfernen({{ $lager->id }})" class="{{ $btnGhostXs }} text-red-500" onclick="return confirm('Lagerort entfernen oder deaktivieren?')">Entfernen</button>
-                            </td>
-                        </tr>
-                    @empty
-                        <tr>
-                            <td colspan="7" class="px-3 py-4 text-xs text-gray-500">Noch keine Lagerorte angelegt. Beim ersten Wareneingang würde automatisch ein Hauptlager entstehen.</td>
-                        </tr>
-                    @endforelse
-                </tbody>
-            </table>
-        </div>
-    </div>
-
-    {{-- M1-06: Stamm-Lieferanten-Matrix (Lieferant × Warengruppe) --}}
-    <div class="{{ $card }} p-5 space-y-1" data-stamm-matrix>
-        <div class="mb-3">
-            <h3 class="font-medium tracking-tight text-gray-900">Stamm-Lieferanten-Matrix</h3>
-            <p class="text-[11px] text-gray-500 mt-0.5">Je Warengruppe (+ global) — gewinnt bei Strategie „Stamm-Lieferant zuerst" (GL-03/V-27). Eine Warengruppe nutzt ihre eigenen Stämme UND die globalen. Geerbte Einträge des Eltern-Teams sind fixiert.</p>
-            <p class="text-[11px] text-gray-500 mt-0.5">Änderungen hier und an der Strategie wirken auf neue Wahlen — bestehende Leads bleiben, bis du sie über „Leads neu wählen" übernimmst.</p>
-        </div>
-        @if($fehler)
-            <p class="text-xs text-red-600 pb-2">{{ $fehler }}</p>
+            <div class="mt-5 grid gap-4 lg:grid-cols-2" data-bestellversand-vorlagen>
+                @foreach(['bestellung' => 'Vorlage Bestellung', 'storno' => 'Vorlage Storno'] as $typ => $titel)
+                    <div class="flex flex-col gap-2">
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="text-[length:var(--fa-text-md)] font-medium">{{ $titel }}</span>
+                            <x-fa::button size="sm" variant="ghost" wire:click="vorlageStandardEinsetzen('{{ $typ }}')">Standardtext einsetzen</x-fa::button>
+                        </div>
+                        <x-fa::input wire:model="versand.betreff_{{ $typ }}" placeholder="Betreff — leer = Standard" aria-label="{{ $titel }}: Betreff" />
+                        <x-fa::textarea rows="8" wire:model="versand.text_{{ $typ }}" placeholder="Text — leer = Standard" aria-label="{{ $titel }}: Text" class="font-mono" />
+                    </div>
+                @endforeach
+                <p class="lg:col-span-2 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">
+                    Platzhalter: @foreach(\Platform\FoodAlchemist\Services\OrderMailService::PLATZHALTER as $ph)<code class="font-mono">{{ $ph }}</code>@if(! $loop->last) · @endif @endforeach.
+                    Die Signatur wird angehängt.
+                </p>
+            </div>
         @endif
 
-        @foreach(collect([['', 'Global (alle Warengruppen)']])->concat($warengruppen->map(fn ($wg) => [$wg->code, str_starts_with((string) $wg->name, (string) $wg->code) ? $wg->name : $wg->code . ' ' . $wg->name])) as [$code, $titel])
-            <div wire:key="stamm-zeile-{{ $code ?: 'global' }}" class="flex items-center gap-3 py-2 border-t border-black/5 first:border-t-0">
-                <span class="w-72 shrink-0 text-xs {{ $code === '' ? 'font-medium text-gray-900' : 'text-gray-600' }}">{{ $titel }}</span>
-                <div class="flex-1 min-w-0 flex flex-wrap items-center gap-1.5">
-                    @foreach($matrix->get($code, collect()) as $eintrag)
-                        @php($eigen = \Platform\FoodAlchemist\Support\Curate::canCurate(auth()->user(), $eintrag))
-                        <span wire:key="stamm-{{ $eintrag->id }}" class="inline-flex items-center gap-1 pl-2.5 {{ $eigen ? 'pr-1' : 'pr-2.5' }} py-0.5 rounded-full text-[11px] bg-violet-500/10 text-violet-700"
-                              @unless($eigen) title="Geerbt vom Eltern-Team (D1)" @endunless>
-                            {{ $eintrag->supplier?->name ?? ('#' . $eintrag->supplier_id) }}
-                            @if($eigen)
-                                <button type="button" wire:click="stammEntfernen({{ $eintrag->supplier_id }}, '{{ $code }}')"
-                                        class="w-4 h-4 inline-flex items-center justify-center rounded-full text-violet-400 hover:text-red-500 hover:bg-red-500/10 transition-colors duration-150">@svg('heroicon-o-x-mark', 'w-3 h-3')</button>
-                            @endif
-                        </span>
-                    @endforeach
-                    <select wire:model="stammNeu.{{ $code ?: '' }}" wire:change="stammSetzen('{{ $code }}')"
-                            class="{{ $input }} !w-44 !py-0.5 !text-[11px]">
-                        <option value="">+ Stamm…</option>
-                        @foreach($lieferanten as $l)<option value="{{ $l->id }}">{{ $l->name }}</option>@endforeach
-                    </select>
-                </div>
-            </div>
-        @endforeach
+        <div class="mt-4">
+            <x-fa::button variant="primary" icon="heroicon-m-check" wire:click="bestellversandSpeichern">Bestellversand speichern</x-fa::button>
+        </div>
+    </x-fa::section>
 
-        {{-- Lead-Neuwahl mit Vorschau (2026-10-05) --}}
-        <div class="pt-3 mt-2 border-t border-black/5 space-y-2" data-lead-repick>
-            <button type="button" wire:click="repickVorschau" class="{{ $btnGhost }}">Leads neu wählen …</button>
+    <x-fa::section id="lagerorte" title="Lagerorte" icon="heroicon-o-archive-box" class="scroll-mt-6" data-lagerorte
+        description="Wareneingänge buchen auf das Standardlager. Weitere Lagerorte sind die Grundlage für Umlagerung, Inventur und Produktion.">
+        <div class="flex flex-wrap items-end gap-3">
+            <x-fa::field label="Name" for="lager-neu-name" required class="flex-1 min-w-[12rem]">
+                <x-fa::input id="lager-neu-name" wire:model="lagerNeu.name" placeholder="z. B. Hauptlager" />
+            </x-fa::field>
+            <x-fa::field label="Kürzel" for="lager-neu-code" class="w-32">
+                <x-fa::input id="lager-neu-code" wire:model="lagerNeu.code" placeholder="MAIN" class="font-mono" />
+            </x-fa::field>
+            <x-fa::field label="Art" for="lager-neu-typ" class="w-44">
+                <x-fa::select id="lager-neu-typ" wire:model="lagerNeu.type" :options="$lagerTypen" />
+            </x-fa::field>
+            <x-fa::field label="Notiz" for="lager-neu-notiz" optional class="flex-1 min-w-[12rem]">
+                <x-fa::input id="lager-neu-notiz" wire:model="lagerNeu.note" />
+            </x-fa::field>
+            <x-fa::button icon="heroicon-m-plus" wire:click="lagerAnlegen">Lager anlegen</x-fa::button>
+        </div>
+
+        @if($lagerorte->isEmpty())
+            <x-fa::empty icon="heroicon-o-archive-box" title="Noch keine Lagerorte angelegt" compact>
+                Beim ersten Wareneingang entsteht automatisch ein Hauptlager. Du kannst es auch oben selbst anlegen.
+            </x-fa::empty>
+        @else
+            <div class="overflow-x-auto -mx-4 px-4">
+                <table class="fa-table min-w-[900px]">
+                    <thead><tr>
+                        <th>Lager</th>
+                        <th>Kürzel</th>
+                        <th>Art</th>
+                        <th>Notiz</th>
+                        <th class="text-center">Aktiv</th>
+                        <th class="num">Bestandsposten</th>
+                        <th><span class="sr-only">Aktionen</span></th>
+                    </tr></thead>
+                    <tbody>
+                        @foreach($lagerorte as $lager)
+                            <tr wire:key="lagerort-{{ $lager->id }}">
+                                <td class="min-w-48">
+                                    <div class="flex items-center gap-2">
+                                        <x-fa::input wire:model="lagerEdit.{{ $lager->id }}.name" size="sm" aria-label="Name" />
+                                        @if($lager->is_default)<x-fa::badge tone="ok">Standard</x-fa::badge>@endif
+                                    </div>
+                                </td>
+                                <td class="min-w-28"><x-fa::input wire:model="lagerEdit.{{ $lager->id }}.code" size="sm" aria-label="Kürzel" class="font-mono" /></td>
+                                <td class="min-w-36"><x-fa::select wire:model="lagerEdit.{{ $lager->id }}.type" size="sm" aria-label="Art" :options="$lagerTypen" /></td>
+                                <td class="min-w-56"><x-fa::input wire:model="lagerEdit.{{ $lager->id }}.note" size="sm" aria-label="Notiz" /></td>
+                                <td class="text-center"><input type="checkbox" wire:model="lagerEdit.{{ $lager->id }}.is_active" aria-label="Aktiv" class="w-4 h-4 accent-[var(--fa-accent)]" /></td>
+                                <td class="num text-[var(--fa-ink-2)]">{{ $lager->stocks_count }}</td>
+                                <td class="whitespace-nowrap text-right">
+                                    <div class="inline-flex items-center gap-1">
+                                        <x-fa::button size="sm" wire:click="lagerSpeichern({{ $lager->id }})">Speichern</x-fa::button>
+                                        <div class="relative inline-block" x-data="faMenu()" x-on:keydown.escape="offen = false" x-on:click.outside="offen = false">
+                                            <x-fa::icon-button icon="heroicon-m-ellipsis-horizontal" size="sm" label="Weitere Aktionen für {{ $lager->name }}" x-on:click="toggle($event)" aria-haspopup="menu" x-bind:aria-expanded="offen" />
+                                            <div class="hidden w-56 fa-surface shadow-lg py-1" x-bind:class="{ hidden: ! offen }" x-bind:style="pos" role="menu">
+                                                @unless($lager->is_default)
+                                                    <button type="button" role="menuitem" x-on:click="offen = false" wire:click="lagerStandardSetzen({{ $lager->id }})"
+                                                        class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[length:var(--fa-text-md)] text-[var(--fa-ink)] hover:bg-[var(--fa-hover)]">
+                                                        @svg('heroicon-o-star', 'w-4 h-4 text-[var(--fa-ink-3)]')Als Standardlager setzen
+                                                    </button>
+                                                @endunless
+                                                <button type="button" role="menuitem" x-on:click="offen = false" wire:click="lagerEntfernen({{ $lager->id }})" wire:confirm="Lagerort entfernen? Mit Bestand wird er nur deaktiviert."
+                                                    class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[length:var(--fa-text-md)] text-[var(--fa-crit)] hover:bg-[var(--fa-crit-soft)]">
+                                                    @svg('heroicon-o-trash', 'w-4 h-4')Lagerort entfernen
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        @endif
+    </x-fa::section>
+
+    {{-- M1-06: Stamm-Lieferanten-Matrix (Lieferant × Warengruppe) --}}
+    <x-fa::section title="Stamm-Lieferanten" icon="heroicon-o-truck" data-stamm-matrix
+        description="Je Warengruppe oder für alle. Wirkt bei der Strategie „Stamm-Lieferant zuerst“. Vom übergeordneten Team geerbte Einträge sind fest und hier nicht änderbar. Änderungen wirken auf neue Wahlen; bestehende Leads bleiben, bis du sie über „Leads neu wählen“ übernimmst.">
+        <div class="flex flex-col">
+            @foreach(collect([['', 'Alle Warengruppen']])->concat($warengruppen->map(fn ($wg) => [$wg->code, $wg->name])) as [$code, $titel])
+                <div wire:key="stamm-zeile-{{ $code ?: 'global' }}" class="flex flex-wrap items-center gap-x-3 gap-y-1.5 py-2 border-t border-[var(--fa-line)] first:border-t-0">
+                    <span class="w-64 max-w-full shrink-0 text-[length:var(--fa-text-md)] {{ $code === '' ? 'font-medium text-[var(--fa-ink)]' : 'text-[var(--fa-ink-2)]' }}">
+                        @if($code !== '')<span class="mr-1 tabular-nums text-[var(--fa-ink-3)]">{{ $code }}</span>@endif{{ $titel }}
+                    </span>
+                    <div class="flex-1 min-w-0 flex flex-wrap items-center gap-1.5">
+                        @foreach($matrix->get($code, collect()) as $eintrag)
+                            @php
+                                $eigen = \Platform\FoodAlchemist\Support\Curate::canCurate(auth()->user(), $eintrag);
+                            @endphp
+                            <span wire:key="stamm-{{ $eintrag->id }}" class="inline-flex items-center gap-1 h-[26px] pl-2.5 {{ $eigen ? 'pr-1' : 'pr-2.5' }} rounded-full text-[length:var(--fa-text-sm)] font-medium bg-[var(--fa-accent-soft)] text-[var(--fa-accent)]"
+                                  @unless($eigen) title="Vom übergeordneten Team geerbt" @endunless>
+                                @unless($eigen)@svg('heroicon-m-lock-closed', 'w-3.5 h-3.5 shrink-0')@endunless
+                                {{ $eintrag->supplier?->name ?? 'Lieferant nicht mehr verfügbar' }}
+                                @if($eigen)
+                                    <button type="button" wire:click="stammEntfernen({{ $eintrag->supplier_id }}, '{{ $code }}')"
+                                            aria-label="{{ $eintrag->supplier?->name }} entfernen" title="Entfernen"
+                                            class="w-5 h-5 inline-flex items-center justify-center rounded-full hover:text-[var(--fa-crit)] hover:bg-[var(--fa-crit-soft)] transition-colors duration-150">@svg('heroicon-m-x-mark', 'w-3.5 h-3.5')</button>
+                                @endif
+                            </span>
+                        @endforeach
+                        <x-fa::select wire:model="stammNeu.{{ $code ?: '' }}" wire:change="stammSetzen('{{ $code }}')" size="sm" class="w-52" aria-label="Stamm-Lieferant hinzufügen für {{ $titel }}">
+                            <option value="">Stamm-Lieferant hinzufügen</option>
+                            @foreach($lieferanten as $l)<option value="{{ $l->id }}">{{ $l->name }}</option>@endforeach
+                        </x-fa::select>
+                    </div>
+                </div>
+            @endforeach
+        </div>
+        {{-- Lead-Neuwahl mit Vorschau (PR #164, 2026-10-05) --}}
+        <div class="mt-3 pt-3 border-t border-[var(--fa-line)] flex flex-col gap-3" data-lead-repick>
+            <div>
+                <x-fa::button icon="heroicon-m-arrow-path" wire:click="repickVorschau">Leads neu wählen …</x-fa::button>
+            </div>
             @if($repick !== null)
-                <div class="text-xs text-gray-700 space-y-2" data-lead-repick-vorschau>
+                <div class="flex flex-col gap-2 text-[length:var(--fa-text-md)] text-[var(--fa-ink-2)]" data-lead-repick-vorschau>
                     <p>
-                        {{ $repick['geprueft'] }} eigene GPs geprüft ·
-                        <strong>{{ count($repick['wechsel']) }} würden den Lead wechseln</strong> ·
+                        {{ $repick['geprueft'] }} eigene Grundprodukte geprüft ·
+                        <strong class="text-[var(--fa-ink)]">{{ count($repick['wechsel']) }} würden den Lead wechseln</strong> ·
                         {{ $repick['unveraendert'] }} unverändert ·
                         {{ $repick['manuell_geschuetzt'] }} manuell gesetzt (bleiben) ·
                         {{ $repick['ohne_preis'] }} ohne bepreisten Kandidaten (bleiben)
                     </p>
                     @if($repick['wechsel'] !== [])
-                        <div class="max-h-80 overflow-y-auto border border-black/5 rounded-md">
-                            <table class="w-full text-[11px]">
-                                <thead class="bg-gray-50 text-gray-500 text-left">
-                                    <tr><th class="px-2 py-1"></th><th class="px-2 py-1">GP</th><th class="px-2 py-1">bisher</th><th class="px-2 py-1">neu</th><th class="px-2 py-1 text-right">Rezepte</th></tr>
+                        <div class="max-h-80 overflow-y-auto rounded-[var(--fa-radius-control)] border border-[var(--fa-line)]">
+                            <table class="w-full text-[length:var(--fa-text-sm)]">
+                                <thead class="bg-[var(--fa-ground)] text-left text-[var(--fa-ink-3)]">
+                                    <tr><th class="px-3 py-1.5"></th><th class="px-3 py-1.5 font-medium">Grundprodukt</th><th class="px-3 py-1.5 font-medium">Bisher</th><th class="px-3 py-1.5 font-medium">Neu</th><th class="px-3 py-1.5 font-medium text-right">Rezepte</th></tr>
                                 </thead>
                                 <tbody>
                                     @foreach($repick['wechsel'] as $w)
-                                        <tr wire:key="repick-{{ $w['gp_id'] }}" class="border-t border-black/5">
-                                            <td class="px-2 py-1"><input type="checkbox" wire:model="repickAuswahl" value="{{ $w['gp_id'] }}" /></td>
-                                            <td class="px-2 py-1">{{ $w['gp'] }}</td>
-                                            <td class="px-2 py-1 text-gray-500">{{ ($w['alt_lieferant'] ?? '—') . ($w['alt_vergleichspreis'] !== null ? ' · ' . number_format((float) $w['alt_vergleichspreis'], 2, ',', '.') . ' €' : '') }}</td>
-                                            <td class="px-2 py-1">
+                                        <tr wire:key="repick-{{ $w['gp_id'] }}" class="border-t border-[var(--fa-line)]">
+                                            <td class="px-3 py-1.5"><input type="checkbox" wire:model="repickAuswahl" value="{{ $w['gp_id'] }}" class="accent-[var(--fa-accent)]" /></td>
+                                            <td class="px-3 py-1.5 text-[var(--fa-ink)]">{{ $w['gp'] }}</td>
+                                            <td class="px-3 py-1.5 text-[var(--fa-ink-3)]">{{ ($w['alt_lieferant'] ?? '—') . ($w['alt_vergleichspreis'] !== null ? ' · ' . number_format((float) $w['alt_vergleichspreis'], 2, ',', '.') . ' €' : '') }}</td>
+                                            <td class="px-3 py-1.5">
                                                 {{ $w['neu_lieferant'] . ($w['neu_vergleichspreis'] !== null ? ' · ' . number_format((float) $w['neu_vergleichspreis'], 2, ',', '.') . ' €' : '') }}
                                                 @if($w['neu_ist_stamm'])
-                                                    <span class="text-violet-700">Stamm</span>
+                                                    <x-fa::badge>Stamm</x-fa::badge>
                                                 @endif
                                             </td>
-                                            <td class="px-2 py-1 text-right">{{ $w['rezepte'] }}</td>
+                                            <td class="px-3 py-1.5 text-right tabular-nums">{{ $w['rezepte'] }}</td>
                                         </tr>
                                     @endforeach
                                 </tbody>
                             </table>
                         </div>
-                        <p class="text-[11px] text-gray-500">Der Lead ist global je GP — der Wechsel gilt für alle Teams, die das GP nutzen. Team-Pins und -Sperren bleiben.</p>
+                        <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">Der Lead gilt je Grundprodukt für alle Teams, die es nutzen. Team-Pins und -Sperren bleiben.</p>
                     @endif
                     <div class="flex gap-2">
                         @if($repick['wechsel'] !== [])
-                            <button type="button" wire:click="repickUebernehmen" class="{{ $btnPrimary }}">Ausgewählte übernehmen</button>
+                            <x-fa::button variant="primary" wire:click="repickUebernehmen">Ausgewählte übernehmen</x-fa::button>
                         @endif
-                        <button type="button" wire:click="repickSchliessen" class="{{ $btnGhost }}">Schließen</button>
+                        <x-fa::button variant="ghost" wire:click="repickSchliessen">Schließen</x-fa::button>
                     </div>
                 </div>
             @endif
         </div>
-    </div>
+    </x-fa::section>
 </div>

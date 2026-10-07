@@ -51,15 +51,15 @@ it('Gegenfall: gefüllte Felder erscheinen unter erfuellt, nicht als Lücke', fu
         ->and($reife['erfuellt'])->toContain('dichteklasse');
 });
 
-it('ehrliche Degradation: Pairings ohne Anker sind nicht messbar, keine Lücke', function () {
-    // Das `pairings`-Glied steigt ohne Anker-Grounding aus. Als Lücke gemeldet wäre es ein
-    // Auftrag, den niemand erfüllen kann — also gehört es in `nicht_messbar`.
+it('Spec 60: ohne Aromenprofil meldet die Reife `aromaanker` — ein Pairing-Glied gibt es nicht mehr', function () {
+    // Die Pairing-Chips am Rezept sind archiviert. Was bleibt, ist das Aromenprofil aus den Zutaten.
     $r = $this->makeRecipe($this->rootTeam, 'Fond: Ohne Anker', ['work_time_min' => 10]);
 
     $reife = $this->svc->reife($this->rootTeam, 'recipe', $r->id);
+    $codes = array_merge(array_column($reife['luecken'], 'code'), array_column($reife['nicht_messbar'], 'code'));
 
-    expect(array_column($reife['luecken'], 'code'))->not->toContain('pairings')
-        ->and(array_column($reife['nicht_messbar'], 'code'))->toContain('pairings');
+    expect($codes)->not->toContain('pairings')
+        ->and(array_column($reife['luecken'], 'code'))->toContain('aromaanker');
 });
 
 it('★ read-only: die Messung legt KEINE Standard-Darreichung an', function () {

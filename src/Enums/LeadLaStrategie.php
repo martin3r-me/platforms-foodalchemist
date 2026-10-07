@@ -23,9 +23,9 @@ enum LeadLaStrategie: string
     public function description(): string
     {
         return match ($this) {
-            self::GuenstigsterPreis => 'Lead = niedrigster Vergleichspreis (GL-03-Standardkette).',
-            self::StammLieferant => 'Artikel der Stamm-Lieferanten (je Warengruppe, M1-06) gewinnen; innerhalb derselben Stufe entscheidet der Preis.',
-            self::PrioritaetsKette => 'Feste Lieferanten-Reihenfolge des Teams; innerhalb derselben Stufe entscheidet der Preis.',
+            self::GuenstigsterPreis => 'Der Artikel mit dem niedrigsten Vergleichspreis liefert den Preis.',
+            self::StammLieferant => 'Artikel der Stamm-Lieferanten (je Warengruppe) haben Vorrang. Innerhalb derselben Stufe entscheidet der Preis.',
+            self::PrioritaetsKette => 'Eine feste Reihenfolge der Lieferanten entscheidet. Innerhalb derselben Stufe entscheidet der Preis.',
         };
     }
 }

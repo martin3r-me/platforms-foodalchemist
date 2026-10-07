@@ -52,7 +52,7 @@ it('V-011: eine Lücke, die verschwindet, schließt ihr Signal — auch ohne Fix
         ->and($zeile->payload['auto_geschlossen'])->toBe('Lücke gemessen 0 — automatisch geschlossen')
         ->and($zeile->payload)->toHaveKey('auto_geschlossen_am')
         // Der Befund selbst bleibt lesbar — der Grund steht daneben, nicht darüber.
-        ->and($zeile->title)->toStartWith('1 — ')
+        ->and($zeile->title)->toEndWith(': 1')
         ->and($zeile->payload)->toHaveKey('metrik');
 });
 

@@ -667,29 +667,32 @@ class StepEditor extends Component
      * zeigt am Beispiel, welche Art Vorgabe hier gemeint ist — Handwerk für DIESES Rezept,
      * kein allgemeines Kochwissen.
      *
-     * @return array{kiLabel: string, kiTitel: string, kiPlatzhalter: string}
+     * @return array{kiLabel: string, kiKnopf: string, kiTitel: string, kiPlatzhalter: string}
      */
     private function kiBeschriftung(?FoodAlchemistRecipe $r): array
     {
         if ($this->ebene === FoodAlchemistRecipeStep::EBENE_ANRICHTEN) {
             return [
                 'kiLabel' => 'Anrichten',
+                'kiKnopf' => 'Anrichten vorschlagen',
                 'kiTitel' => 'Anrichte-Schritte für den Pass',
-                'kiPlatzhalter' => 'z. B. Sauce als Spiegel, Fleisch mittig gefächert, Kräuteröl nur drei Punkte — kein Wischer.',
+                'kiPlatzhalter' => 'z. B. Sauce als Spiegel, Fleisch mittig gefächert, Kräuteröl nur drei Punkte, kein Wischer.',
             ];
         }
         if ((bool) ($r?->is_sales_recipe ?? false)) {
             return [
                 'kiLabel' => 'Fertigstellen',
+                'kiKnopf' => 'Fertigstellen vorschlagen',
                 'kiTitel' => 'Fertigstellungs-Schritte am Einsatztag',
-                'kiPlatzhalter' => 'z. B. Filet erst am Pass tranchieren, Sauce separat aufschlagen — nicht vorher montieren.',
+                'kiPlatzhalter' => 'z. B. Filet erst am Pass tranchieren, Sauce separat aufschlagen, nicht vorher montieren.',
             ];
         }
 
         return [
             'kiLabel' => 'Schritte',
+            'kiKnopf' => 'Schritte vorschlagen',
             'kiTitel' => 'Zubereitungs-Schritte aus den Zutaten',
-            'kiPlatzhalter' => 'z. B. Ansatz kalt aufsetzen, nie kochen — nur ziehen lassen. Durch Etamin passieren, nicht durchdrücken.',
+            'kiPlatzhalter' => 'z. B. Ansatz kalt aufsetzen, nie kochen, nur ziehen lassen. Durch Etamin passieren, nicht durchdrücken.',
         ];
     }
 

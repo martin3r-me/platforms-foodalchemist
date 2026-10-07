@@ -46,11 +46,7 @@ beforeEach(function () {
         'team_id' => $this->rootTeam->id, 'recipe_key' => 'rbsuppe', 'name' => 'Rote-Bete-Suppe',
         'status' => 'approved', 'is_sales_recipe' => true,
     ]);
-    DB::table('foodalchemist_recipe_anchor_mappings')->insert([
-        'uuid' => (string) UuidV7::generate(), 'team_id' => $this->rootTeam->id,
-        'recipe_id' => $this->vk->id, 'anchor_id' => $this->erdig, 'role' => 'kern',
-        'created_at' => now(), 'updated_at' => now(),
-    ]);
+    \Platform\FoodAlchemist\Tests\Support\RezeptAnker::gib($this->vk, $this->erdig);   // Spec 60: Anker über das Aromenprofil
 });
 
 it('schlägt ein tragendes Gericht vor + weist die verwertete Menge/GP aus', function () {

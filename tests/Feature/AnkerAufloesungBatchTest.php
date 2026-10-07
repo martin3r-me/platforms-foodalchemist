@@ -50,23 +50,6 @@ beforeEach(function () {
         ]);
     };
 
-    $this->mkRezeptMapping = function (int $recipeId, string $ankerSlug, ?string $conf): void {
-        DB::table('foodalchemist_recipe_anchor_mappings')->insert([
-            'uuid' => (string) UuidV7::generate(), 'team_id' => $this->rootTeam->id,
-            'recipe_id' => $recipeId, 'anchor_id' => $this->ankerId[$ankerSlug], 'role' => 'kern',
-            'source' => 'ai_inferred', 'ai_confidence' => $conf,
-            'created_at' => now(), 'updated_at' => now(),
-        ]);
-    };
-
-    $this->mkProzessAnker = function (int $recipeId, string $ankerSlug): void {
-        DB::table('foodalchemist_recipe_process_anchors')->insert([
-            'uuid' => (string) UuidV7::generate(), 'team_id' => $this->rootTeam->id,
-            'recipe_id' => $recipeId, 'anchor_id' => $this->ankerId[$ankerSlug],
-            'source' => 'ai_inferred', 'created_at' => now(), 'updated_at' => now(),
-        ]);
-    };
-
     $this->mkRezept = fn (string $key, string $name, bool $vk = true) => FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id, 'recipe_key' => $key, 'name' => $name,
         'status' => 'approved', 'is_sales_recipe' => $vk,
@@ -93,13 +76,14 @@ beforeEach(function () {
     ($this->mkGpMapping)($this->gp->id, 'apfel', null);
 
     $this->sub = ($this->mkRezept)('batch-sub', 'Basis: Fond', false);
-    ($this->mkRezeptMapping)($this->sub->id, 'fond', '0.900');
-    ($this->mkProzessAnker)($this->sub->id, 'roestaromen');
+    // Spec 60: Kern des Unterrezepts kommt aus seinem Aromenprofil (GP „Fond: hell" → fond).
+    $gpFond = $this->makeGp($this->rootTeam, 'Fond: hell');
+    ($this->mkGpMapping)($gpFond->id, 'fond', null);
+    $this->makeIngredient($this->sub, 'Fond', $gpFond, '100', 1);
 
     /**
-     * Ein Gericht mit allen vier Auflösungs-Wegen in einer Zeile-Garnitur: GP-Mapping,
-     * Sub-Rezept-Mapping (+ dessen Prozess-Anker), ungemappter `raw_text` und ein
-     * Eigen-Zustands-Anker am Gericht selbst. Nur so misst der Konstanz-Riegel alle vier
+     * Ein Gericht mit den Auflösungs-Wegen in einer Zeile-Garnitur: GP-Mapping, Unterrezept
+     * (Kern aus dem Aromenprofil) und ungemappter `raw_text`. Nur so misst der Konstanz-Riegel alle vier
      * Batch-Karten — ein zutatenloses Fixture wäre grün, ohne die Ebene zu berühren, auf
      * die es ankommt (die Mapping-Lookups JE ZUTAT).
      */
@@ -108,7 +92,6 @@ beforeEach(function () {
         $this->makeIngredient($r, 'Apfel', $this->gp, '100', 1);
         $this->makeIngredient($r, 'Sonstwas ohne GP', null, '50', 2);
         ($this->mkSubZutat)($r, $this->sub, 3);
-        ($this->mkProzessAnker)($r->id, 'roestaromen');
 
         return $r;
     };

@@ -66,7 +66,7 @@ class SignalDetektorService
             + $this->wareneinsatzIstAbweichung($team)
             + $this->vkAnpassungEmpfohlen($team)
             + $this->vertragsfristFaellig($team)
-            + $this->widerspruchWissenGraph($team)
+            + app(\Platform\FoodAlchemist\Services\Pairing\PairingSignale::class)->alle($team)   // Spec 60 · P8
             + $this->naehrwertPlausi($team)
             + $this->dataQuality->emittiereSignale($team);   // Datenqualitäts-Kaskade-Ampel (P1) mit im Scheduler
 
@@ -178,8 +178,8 @@ class SignalDetektorService
                 [
                     'dedup_key' => 'drift:' . $m['source'] . ':' . $m['metric_key'],
                     'description' => $neuauftreten
-                        ? 'War beim letzten Lauf bei 0 und ist wieder aufgetreten — der Befund kommt zurück. Ursache am zugrundeliegenden Signal ansehen.'
-                        : 'Seit dem letzten Lauf um ' . ($pct !== null ? $pct . ' %' : '+' . $delta) . ' gestiegen. Ursache am zugrundeliegenden Signal ansehen.',
+                        ? 'Bei der letzten Prüfung war hier nichts offen, jetzt tritt das Problem wieder auf. Die einzelnen Fälle stehen beim zugehörigen Signal, dort beheben.'
+                        : 'Seit der letzten Prüfung um ' . ($pct !== null ? number_format((float) $pct, 1, ',', '.') . ' %' : $delta . ' Fälle') . ' gestiegen. Die einzelnen Fälle stehen beim zugehörigen Signal, dort beheben.',
                     // Bewusst OHNE 'metrik': kein Fix-Knopf an der Trend-Zeile (s. Docblock).
                     'payload' => [
                         'drift_metric' => $m['metric_key'],
@@ -352,8 +352,9 @@ class SignalDetektorService
 
             $gpName = DB::table('foodalchemist_gps')->where('id', $gpId)->value('name') ?? ('GP ' . $gpId);
             $richtung = $teurer ? '+' : '';
-            $titel = $gpName . ' — Lead-Preis ' . $richtung . number_format($delta, 1, ',', '.') . ' % → '
-                . $nGerichte . ' Gericht(e)' . ($nConcepts ? ', ' . $nConcepts . ' Konzept(e)' : '')
+            $titel = $gpName . ': Preis ' . $richtung . number_format($delta, 1, ',', '.') . ' %, betrifft '
+                . $nGerichte . ($nGerichte === 1 ? ' Gericht' : ' Gerichte')
+                . ($nConcepts ? ' und ' . $nConcepts . ($nConcepts === 1 ? ' Konzept' : ' Konzepte') : '')
                 . ($sumMargeDelta != 0.0 ? ', Marge ' . number_format($sumMargeDelta, 2, ',', '.') . ' €' : '');
 
             $severity = ! $teurer
@@ -369,11 +370,12 @@ class SignalDetektorService
                     'dedup_key' => 'preis-sprung-gp-' . $gpId . '-' . number_format($t['aktuell'], 2, '.', ''),
                     'ref_type' => 'gp',
                     'ref_id' => (int) $gpId,
-                    'description' => 'Der Lead-Lieferantenartikel dieses Grundprodukts hat sich um '
-                        . number_format($delta, 1, ',', '.') . ' % verändert (' . number_format((float) $t['vorher'], 2, ',', '.')
-                        . ' € → ' . number_format((float) $t['aktuell'], 2, ',', '.') . ' €). '
-                        . ($teurer ? 'Marge sinkt' : 'Marge steigt') . ' in den betroffenen Gerichten.'
-                        . ($chance !== null ? ' Günstigere Alternative verfügbar: ' . $chance['label'] . ' (' . $chance['diff_pct'] . ' %).' : ''),
+                    'description' => 'Der Preis des Hauptartikels für dieses Grundprodukt hat sich um '
+                        . number_format($delta, 1, ',', '.') . ' % verändert (von ' . number_format((float) $t['vorher'], 2, ',', '.')
+                        . ' € auf ' . number_format((float) $t['aktuell'], 2, ',', '.') . ' €). '
+                        . ($teurer ? 'Die Marge der betroffenen Gerichte sinkt.' : 'Die Marge der betroffenen Gerichte steigt.')
+                        . ($chance !== null ? ' Günstigere Alternative: ' . $chance['label'] . ' (' . number_format((float) $chance['diff_pct'], 1, ',', '.') . ' %).' : '')
+                        . ($teurer ? ' Hauptartikel wechseln oder Verkaufspreise prüfen.' : ''),
                     'payload' => [
                         'gp_id' => (int) $gpId, 'gp_name' => $gpName,
                         'lead_la_id' => $leadId,
@@ -548,10 +550,10 @@ class SignalDetektorService
             $team,
             SignalTyp::NaehrwertPlausi,
             SignalSeverity::Warnung,
-            $anzahl . ' Rezepte mit unplausiblen Nährwerten (Zucker > KH / gesättigte > Fett)',
+            $anzahl . ($anzahl === 1 ? ' Rezept' : ' Rezepte') . ' mit unplausiblen Nährwerten (mehr Zucker als Kohlenhydrate oder mehr gesättigte Fettsäuren als Fett)',
             [
                 'dedup_key' => 'naehrwert-plausi',
-                'description' => '„davon"-Wert liegt über dem Oberwert — Ursache ist meist ungleiche Nährwert-Abdeckung der Lieferantenartikel je GP (Ø über verschiedene LA-Mengen). Auf Labels/Foodbooks wäre das ein Deklarationsfehler — betroffene GP-Daten prüfen.',
+                'description' => 'Ein „davon“-Wert ist größer als der Gesamtwert. Meist sind nicht für alle Lieferantenartikel eines Grundprodukts Nährwerte hinterlegt. Auf Etiketten und im Foodbook wäre das ein Deklarationsfehler. Nährwerte der betroffenen Grundprodukte prüfen.',
                 'payload' => ['anzahl' => $anzahl, 'beispiele' => $beispiele],
             ]
         );
@@ -580,10 +582,10 @@ class SignalDetektorService
             $team,
             SignalTyp::DatenqualitaetGpLa,
             $anzahl > 100 ? SignalSeverity::Kritisch : SignalSeverity::Warnung,
-            $anzahl . ' Grundprodukte ohne Lead-Lieferantenartikel',
+            $anzahl . ($anzahl === 1 ? ' Grundprodukt' : ' Grundprodukte') . ' ohne Hauptartikel',
             [
                 'dedup_key' => 'datenqualitaet-gp-ohne-la',
-                'description' => 'Diese GPs benötigen einen Lieferantenartikel, haben aber keinen Lead-LA bzw. keine LAs — Kalkulation und Allergen-Aggregation bleiben dadurch unvollständig.',
+                'description' => 'Diese Grundprodukte brauchen einen Lieferantenartikel, haben aber keinen gewählten Hauptartikel oder gar keinen Artikel. Einkaufspreis und Allergene bleiben dadurch unvollständig. Hauptartikel wählen oder Lieferantenartikel zuordnen.',
                 'payload' => ['anzahl' => $anzahl, 'beispiele' => $beispiele],
             ]
         );
@@ -623,10 +625,10 @@ class SignalDetektorService
             $team,
             SignalTyp::VeraltetePreise,
             $anzahl > 200 ? SignalSeverity::Warnung : SignalSeverity::Info,
-            $anzahl . ' Lead-Lieferantenartikel mit veraltetem Preis (> ' . $tageSchwelle . ' Tage)',
+            $anzahl . ' Hauptartikel mit Preis älter als ' . $tageSchwelle . ' Tage',
             [
                 'dedup_key' => 'veraltete-preise',
-                'description' => 'Der jüngste hinterlegte Preis dieser Lead-LAs ist älter als ' . $tageSchwelle . ' Tage (oder fehlt) — die Kalkulation rechnet evtl. mit Alt-Preisen.',
+                'description' => 'Der letzte hinterlegte Preis dieser Hauptartikel ist älter als ' . $tageSchwelle . ' Tage oder fehlt. Die Kalkulation rechnet womöglich mit alten Preisen. Aktuelle Lieferantenpreise einspielen.',
                 'payload' => ['anzahl' => $anzahl, 'schwelle_tage' => $tageSchwelle],
             ]
         );
@@ -700,12 +702,12 @@ class SignalDetektorService
                 $team,
                 SignalTyp::PreisAnomalie,
                 $maxAbw >= 150 ? SignalSeverity::Kritisch : SignalSeverity::Warnung,
-                $items->first()->gp_name . ' — ' . count($ausreisser) . ' Preis-Ausreißer (bis ' . $maxAbw . ' %)',
+                $items->first()->gp_name . ': ' . count($ausreisser) . (count($ausreisser) === 1 ? ' auffälliger Lieferantenpreis' : ' auffällige Lieferantenpreise') . ' (bis ' . $maxAbw . ' % Abweichung)',
                 [
                     'dedup_key' => 'preis-anomalie-gp-' . $gpId,
                     'ref_type' => 'gp',
                     'ref_id' => (int) $gpId,
-                    'description' => 'Lieferantenpreise weichen innerhalb gleicher Einheit stark vom Median ab — prüfen (Tippfehler, Datenfehler, Premium oder echter Ausreißer).',
+                    'description' => 'Einzelne Lieferantenpreise weichen bei gleicher Einheit stark vom mittleren Preis ab. Prüfen, ob es ein Tippfehler, ein Datenfehler, ein Premiumartikel oder ein echter Ausreißer ist.',
                     'payload' => ['ausreisser' => array_slice($ausreisser, 0, 10), 'max_abw_pct' => $maxAbw],
                 ]
             );
@@ -760,13 +762,13 @@ class SignalDetektorService
                 $team,
                 SignalTyp::MargeUnterZiel,
                 $db < 0 ? SignalSeverity::Kritisch : SignalSeverity::Warnung,
-                $r->name . ' — DB ' . number_format((float) $db, 1, ',', '.') . ' % unter Ziel ' . number_format($ziel, 1, ',', '.') . ' %',
+                $r->name . ': Deckungsbeitrag ' . number_format((float) $db, 1, ',', '.') . ' %, Ziel ' . number_format($ziel, 1, ',', '.') . ' %',
                 [
                     'dedup_key' => 'marge-recipe-' . $r->id,
                     'outlet_id' => $outlet?->id,
                     'ref_type' => 'recipe',
                     'ref_id' => $r->id,
-                    'description' => 'Deckungsbeitrag unter der Zielmarge — Verkaufspreis erhöhen oder Wareneinsatz/Vollkosten senken.',
+                    'description' => 'Der Deckungsbeitrag liegt unter der Zielmarge. Verkaufspreis erhöhen oder Wareneinsatz und Kosten senken.',
                     'payload' => ['db_pct' => (float) $db, 'ziel_pct' => $ziel, 'sales_net' => (float) $r->sales_net, 'outlet_id' => $outlet?->id],
                 ]
             );
@@ -840,13 +842,13 @@ class SignalDetektorService
             // > 1,5× Ziel = deutlich zu teuer → kritisch, sonst Warnung
             $we > $ziel * 1.5 ? SignalSeverity::Kritisch : SignalSeverity::Warnung,
             // Betrieb in outlet_id + payload + UI-Lane-Badge, nicht im Titel (Längen-Limit).
-            $r->name . ' — Wareneinsatz ' . number_format((float) $we, 1, ',', '.') . ' % über Ziel ' . number_format($ziel, 1, ',', '.') . ' %',
+            $r->name . ': Wareneinsatz ' . number_format((float) $we, 1, ',', '.') . ' %, Ziel ' . number_format($ziel, 1, ',', '.') . ' %',
             [
                 'dedup_key' => 'we-quote-recipe-' . $r->id,
                 'outlet_id' => $outlet?->id,
                 'ref_type' => 'recipe',
                 'ref_id' => $r->id,
-                'description' => 'Food-Cost über dem Ziel — günstigeren Lead-LA prüfen, Rezeptur/Portion anpassen oder Verkaufspreis erhöhen.',
+                'description' => 'Der Wareneinsatz liegt über dem Ziel. Günstigeren Hauptartikel prüfen, Rezeptur oder Portion anpassen oder Verkaufspreis erhöhen.',
                 'payload' => ['wareneinsatz_pct' => (float) $we, 'ziel_pct' => $ziel, 'sales_net' => $r->sales_net !== null ? (float) $r->sales_net : null, 'outlet_id' => $outlet?->id],
             ]
         );
@@ -903,13 +905,13 @@ class SignalDetektorService
             // Mehr eingekauft als nötig kostet Geld. Weniger ist auffällig, aber meist
             // Lagerabbau oder eine zu hoch angesetzte Rezeptmenge — das ist kein Alarm.
             $mehr ? SignalSeverity::Kritisch : SignalSeverity::Warnung,
-            'Wareneinsatz ' . $periode . ': ' . ($mehr ? '+' : '') . number_format($a['abweichung_pp'], 1, ',', '.')
-                . ' pp gegenüber der Rezeptur (' . number_format($a['abweichung_eur'], 2, ',', '.') . ' €)',
+            'Wareneinsatz ' . $von->format('m/Y') . ': ' . ($mehr ? '+' : '') . number_format($a['abweichung_pp'], 1, ',', '.')
+                . ' Prozentpunkte gegenüber der Rezeptur (' . number_format($a['abweichung_eur'], 2, ',', '.') . ' €)',
             [
                 'dedup_key' => 'we-ist-abweichung:' . $periode,
                 'description' => 'Eingekauft ' . number_format($a['einkauf'], 2, ',', '.') . ' €, laut Rezeptur nötig '
                     . number_format($a['theoretisch'], 2, ',', '.') . ' € bei ' . number_format($a['umsatz'], 2, ',', '.')
-                    . ' € Umsatz. Ohne Inventur ist das eine Perioden-Rechnung — Lageraufbau am Monatsende sieht aus wie Schwund.',
+                    . ' € Umsatz. Ohne Inventur ist das eine Rechnung über den Monat: Ware, die am Monatsende noch auf Lager liegt, sieht aus wie Schwund.',
                 'payload' => $a + ['periode' => $periode, 'schwelle_pp' => $schwelle],
                 'source' => 'detektor',
             ],
@@ -941,15 +943,15 @@ class SignalDetektorService
                 // Große Drift (≥ 15 %) = kritisch: der Kunde zahlt merklich am aktuellen Preis vorbei.
                 // Betrieb in outlet_id + payload + UI-Lane-Badge, nicht im Titel (Längen-Limit).
                 $d['max_delta_pct'] >= 15.0 ? SignalSeverity::Kritisch : SignalSeverity::Warnung,
-                $d['label'] . ' — ' . $anzahl . ' Ausgabe-Preis' . ($anzahl === 1 ? '' : 'e')
-                    . ' gedriftet (max Δ ' . number_format($d['max_delta_pct'], 1, ',', '.') . ' %) — neu veröffentlichen',
+                $d['label'] . ': ' . $anzahl . ($anzahl === 1 ? ' veröffentlichter Preis weicht' : ' veröffentlichte Preise weichen')
+                    . ' von der Kalkulation ab (bis ' . number_format($d['max_delta_pct'], 1, ',', '.') . ' %)',
                 [
                     'dedup_key' => $d['dedup_key'],
                     'outlet_id' => $outlet?->id,
                     'ref_type' => $d['ref_type'],
                     'ref_id' => $d['ref_id'],
                     'description' => 'Die veröffentlichte Ausgabe zeigt Preise, die von der aktuellen Kalkulation abweichen. '
-                        . 'Neu veröffentlichen (Republish) friert den aktuellen Stand ein — kein stiller Kunden-Preissprung.',
+                        . 'Erneut veröffentlichen, um die aktuellen Preise zu übernehmen. Bis dahin sieht der Kunde die alten Preise.',
                     'payload' => [
                         'doc_type' => $d['doc_type'],
                         'doc_id' => $d['doc_id'],
@@ -974,80 +976,6 @@ class SignalDetektorService
      * Dokuments (Laufzeitende − Kündigungsfrist) liegt im Vorlauf-Fenster. Ein Signal
      * je Dokument; Muster wie veraltetePreise, aber datumsgetrieben.
      */
-    /**
-     * R6.11 · S2 — Widerspruchs-Detektor (Wissen ⇄ Anker-Graph). Für jedes `pairing`-
-     * Wissensdokument: die im `## Pairings` gelisteten Partner (KnowledgeContextService)
-     * gegen die Kanten des Doc-Ankers (`pairing_anchor_edges`) — Präsenz/Absenz-Set-Diff.
-     * „Doc behauptet Paarung X, Graph hat keine Kante" → EIN Signal je Doc (R&D-Frage,
-     * Research-Queue), NICHT still aufgelöst. Ein Doc/Partner ohne auflösbaren Anker ist
-     * eine Namens-Lücke, KEIN Widerspruch (übersprungen). Feasibility-Cut (E3): nur
-     * `pairing`-Docs; Domain-Prosa-Semantik-Widersprüche = v2. Reverse-Richtung (Graph
-     * hat Kante, Doc listet nicht) bewusst NICHT als Signal — bei kuratierten Teil-Listen
-     * wäre das Rauschen; hier zählt die belegte Behauptung ohne Graph-Stütze.
-     */
-    public function widerspruchWissenGraph(Team $team, int $maxDocs = 500): int
-    {
-        $pairing = app(PairingService::class);
-        $ctx = app(\Platform\FoodAlchemist\Services\Ai\KnowledgeContextService::class);
-        $n = 0;
-
-        $docs = DB::table('foodalchemist_knowledge_documents')
-            ->where('category', 'pairing')->where('active', 1)->whereNull('deleted_at')
-            ->limit($maxDocs)->get(['id', 'slug', 'title', 'content_md']);
-
-        foreach ($docs as $doc) {
-            $ankerId = $pairing->resolveByName((string) $doc->title) ?? $pairing->resolveByName((string) $doc->slug);
-            if ($ankerId === null) {
-                continue;   // Doc-Anker nicht auflösbar → Namens-Lücke, kein Widerspruch
-            }
-            $partnerNames = $ctx->extractPairingNames((string) ($doc->content_md ?? ''));
-            if ($partnerNames === []) {
-                continue;
-            }
-            $kanten = array_flip(DB::table('foodalchemist_pairing_anchor_edges')
-                ->where('anchor_a_id', $ankerId)->pluck('anchor_b_id')->map(fn ($v) => (int) $v)->all());
-
-            $fehlend = [];   // Doc behauptet Paarung, Graph kennt keine Kante
-            foreach ($partnerNames as $pname) {
-                $pid = $pairing->resolveByName($pname);
-                if ($pid === null || $pid === $ankerId) {
-                    continue;   // unauflösbarer/selbst-Partner = Namens-Lücke, kein Widerspruch
-                }
-                if (! isset($kanten[$pid])) {
-                    $fehlend[$pid] = $pname;
-                }
-            }
-            if ($fehlend === []) {
-                continue;   // kein Widerspruch → kein Signal (es gibt schlicht keinen)
-            }
-
-            $liste = implode(', ', array_slice(array_values($fehlend), 0, 6));
-            $this->signals->erzeuge(
-                $team,
-                SignalTyp::WiderspruchWissenGraph,
-                SignalSeverity::Info,
-                ($doc->title ?: $doc->slug) . ' — ' . count($fehlend) . ' im Wissen belegte Paarung(en) ohne Graph-Kante: ' . $liste,
-                [
-                    'dedup_key' => 'widerspruch-doc-' . $doc->id,
-                    'ref_type' => 'knowledge_document',
-                    'ref_id' => (int) $doc->id,
-                    'description' => 'Wissensdokument (kuratiert, T0) behauptet Paarungen, die der Anker-Graph nicht kennt. '
-                        . 'R&D-Frage: Kante ergänzen (belegt) oder Beleg prüfen — nicht still auflösen.',
-                    'payload' => [
-                        'doc_slug' => $doc->slug,
-                        'anchor_id' => $ankerId,
-                        'fehlende_kanten' => array_map(fn ($id, $name) => ['anchor_id' => (int) $id, 'name' => $name], array_keys($fehlend), array_values($fehlend)),
-                        'doc_tier' => 'T0',       // kuratiertes Doc = belegt
-                        'graph_status' => 'kante_fehlt',
-                    ],
-                ]
-            );
-            $n++;
-        }
-
-        return $n;
-    }
-
     public function vertragsfristFaellig(Team $team, int $lookaheadDays = 30): int
     {
         $n = 0;
@@ -1059,13 +987,13 @@ class SignalDetektorService
                 $team,
                 SignalTyp::VertragsfristFaellig,
                 $ueberfaellig ? SignalSeverity::Kritisch : SignalSeverity::Warnung,
-                $supplierName . ' — Kündigungsfrist ' . ($ueberfaellig ? 'überschritten' : 'läuft ab')
+                $supplierName . ': Kündigungsfrist ' . ($ueberfaellig ? 'überschritten' : 'läuft ab')
                     . ' am ' . $deadline?->format('d.m.Y') . ' (Vertrag bis ' . $d->term_end?->format('d.m.Y') . ')',
                 [
                     'dedup_key' => 'vertragsfrist-doc-' . $d->id,
                     'ref_type' => 'supplier',
                     'ref_id' => (int) $d->supplier_id,
-                    'description' => 'Kündigungs-/Verlängerungsentscheidung ansteht — Vertrag prüfen, ggf. rechtzeitig kündigen oder nachverhandeln.',
+                    'description' => 'Bald muss entschieden werden, ob der Vertrag verlängert oder gekündigt wird. Vertrag prüfen und rechtzeitig kündigen oder nachverhandeln.',
                     'payload' => [
                         'document_id' => (int) $d->id,
                         'kind' => $d->kind,

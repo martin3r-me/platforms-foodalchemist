@@ -113,10 +113,9 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 \Platform\FoodAlchemist\Console\TeamOnboardingCommand::class,
                 \Platform\FoodAlchemist\Console\SignaleDetektorCommand::class,
                 \Platform\FoodAlchemist\Console\SpeiseplanAushangRollierenCommand::class,
-                \Platform\FoodAlchemist\Console\PairingProjectComputedCommand::class,
                 \Platform\FoodAlchemist\Console\InspireImportCommand::class,
-                \Platform\FoodAlchemist\Console\PairingWipeErprobtCommand::class,
-                \Platform\FoodAlchemist\Console\PairingDropLegacyAnchorsCommand::class,
+                \Platform\FoodAlchemist\Console\AnkerWissenCommand::class,
+                \Platform\FoodAlchemist\Console\RezeptProfileCommand::class,
                 \Platform\FoodAlchemist\Console\DataQualityCommand::class,
                 \Platform\FoodAlchemist\Console\LeadLaRepickCommand::class,
                 \Platform\FoodAlchemist\Console\RecomputeCommand::class,
@@ -124,7 +123,6 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 \Platform\FoodAlchemist\Console\GpFormsEstimateCommand::class,
                 \Platform\FoodAlchemist\Console\RecipePackagingUnitsCommand::class,
                 \Platform\FoodAlchemist\Console\VocabUnitsDedupeCommand::class,
-                \Platform\FoodAlchemist\Console\ProcessAnchorGroundCommand::class,
                 \Platform\FoodAlchemist\Console\FavoriteGpsCommand::class,
                 \Platform\FoodAlchemist\Console\BackfillKapitelZieleCommand::class,
                 \Platform\FoodAlchemist\Console\RecipeFindingsCommand::class,
@@ -518,6 +516,10 @@ class FoodAlchemistServiceProvider extends ServiceProvider
          * @return view('foodalchemist::livewire.dashboard')
          */
         $this->loadViewsFrom(__DIR__ . '/../resources/views', 'foodalchemist');
+
+        // fa-pass Welle 0: Bausteinbibliothek <x-fa::…> (resources/views/components/fa).
+        // EINE Quelle für Knöpfe, Felder, Chips, Status, Kennzahlen, Allergene … — Doku: /foodalchemist/_ui
+        \Illuminate\Support\Facades\Blade::anonymousComponentPath(__DIR__ . '/../resources/views/components/fa', 'fa');
         
         /**
          * SCHRITT 6: Livewire Components registrieren
@@ -635,8 +637,6 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     // D2b: Rezept-Assoziationen (Eignung owner; Anker/Pairing team-scoped auf sichtbares
                     // Rezept), Sensorik (KI, owner), Feedback löschen/weiterentwickeln.
                     \Platform\FoodAlchemist\Tools\RecipeEignungPutTool::class,
-                    \Platform\FoodAlchemist\Tools\RecipeAnchorsPutTool::class,
-                    \Platform\FoodAlchemist\Tools\RecipePairingsPutTool::class,
                     \Platform\FoodAlchemist\Tools\RecipeSensorikPostTool::class,
                     \Platform\FoodAlchemist\Tools\RecipeFeedbackDeleteTool::class,
                     \Platform\FoodAlchemist\Tools\RecipeFeedbackDevelopTool::class,
@@ -752,6 +752,10 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\KnowledgeUnbindTool::class,
                     \Platform\FoodAlchemist\Tools\PairingsGetTool::class,
                     \Platform\FoodAlchemist\Tools\PairingsSuggestTool::class,
+                    \Platform\FoodAlchemist\Tools\KombinationGetTool::class,
+                    // Spec 60 · P8: Anker-Wissen ansehen + anker-weise freigeben (Kurator)
+                    \Platform\FoodAlchemist\Tools\AnkerWissenGetTool::class,
+                    \Platform\FoodAlchemist\Tools\AnkerWissenStatusTool::class,
                     // Composer per MCP (read-only): Anker-Menge browsen/bewerten/erden (Phase 3)
                     \Platform\FoodAlchemist\Tools\ComposerAnkerSucheTool::class,
                     \Platform\FoodAlchemist\Tools\ComposerKohaesionTool::class,
@@ -759,7 +763,6 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\SubstitutionSuggestTool::class,
                     \Platform\FoodAlchemist\Tools\DishReverseTool::class,
                     \Platform\FoodAlchemist\Tools\SurplusSuggestTool::class,
-                    \Platform\FoodAlchemist\Tools\KnowledgeHypothesizeTool::class,
                     \Platform\FoodAlchemist\Tools\LabNotesPostTool::class,
                     \Platform\FoodAlchemist\Tools\VkSnapshotsGetTool::class,
                     \Platform\FoodAlchemist\Tools\VkSnapshotsReleaseTool::class,
@@ -804,7 +807,6 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     // 2026-10-05: Lead-Neuwahl nach Strategie + Stamm-Matrix (Spiegel von Settings/Einkauf)
                     \Platform\FoodAlchemist\Tools\LeadLaRepickTool::class,
                     // 05·P5: Prozessanker deterministisch erden (MCP-Lockstep)
-                    \Platform\FoodAlchemist\Tools\ProcessAnchorsGroundTool::class,
                     // 06·H2: Convenience-Highlights kuratieren (MCP-Lockstep)
                     \Platform\FoodAlchemist\Tools\FavoritesGetTool::class,
                     \Platform\FoodAlchemist\Tools\FavoritesPutTool::class,
@@ -1119,6 +1121,10 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\SpeiseplanVorlageTool::class,
                     \Platform\FoodAlchemist\Tools\SpeiseplanVorlageAbgleichTool::class,
                     \Platform\FoodAlchemist\Tools\SpeiseplanPlanIstTool::class,
+                    // Spec 59: Prüf-Chip-Katalog für Plan-Vorgaben (Vorgaben selbst via speiseplaene.GET/PUT).
+                    \Platform\FoodAlchemist\Tools\SpeiseplanChipsGetTool::class,
+                    \Platform\FoodAlchemist\Tools\SpeiseplanChipsPostTool::class,
+                    \Platform\FoodAlchemist\Tools\SpeiseplanChipsPutTool::class,
                     // Speisekarte (Gastro-à-la-carte) — MCP-Lockstep
                     \Platform\FoodAlchemist\Tools\SpeisekartenPostTool::class,
                     \Platform\FoodAlchemist\Tools\SpeisekartenPutTool::class,

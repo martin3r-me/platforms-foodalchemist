@@ -333,12 +333,27 @@ class VkModal extends Component
     // hören per #[On('modal.closed')] darauf, und der Modal-Baustein dokumentiert es als
     // State-Leak-Vertrag. Der Reset bleibt trotzdem beim Öffnen — er ist die Stelle, die auch
     // ohne jedes Event greift.)
+    /**
+     * Spec 60 · P10: das Pairing-Panel (Kombinationslogik + Netz + Vorschläge, auf demo-Daten ~0,5 s)
+     * erst rechnen, wenn der Tab „Sensorik & Pairing" besucht wird — nicht bei jedem Neuzeichnen
+     * des Editors. Muster wie RecipeModal::tabLaden.
+     */
+    public bool $pairingGeladen = false;
+
+    public function tabLaden(string $tab): void
+    {
+        if ($tab === 'sensorik') {
+            $this->pairingGeladen = true;
+        }
+    }
+
     private function formZuruecksetzen(): void
     {
         $this->reset(['recipeId', 'form', 'neuName', 'basisSuche', 'basisId', 'regenForm', 'regenEditId', 'kundeName', 'kundeMarketing', 'fehler', 'rollenVorschlag', 'regenVorschlaege',
             'ueberarbeitenOffen', 'anweisung', 'ueberarbeitung',     // L1a: Revise-Vorschau darf nicht ins nächste Gericht lecken
             'bulkRunId', 'anreicherung',                            // L1b: dito für die Anreicherungs-Lauf-Box
-            'kiLineage']);                                          // KI-Herkunfts-Marker gehören zu GENAU diesem Gericht
+            'kiLineage',                                            // KI-Herkunfts-Marker gehören zu GENAU diesem Gericht
+            'pairingGeladen']);                                     // Spec 60: Pairing je Gericht neu laden
         $this->copilotZuruecksetzen();                              // L6b: Befunde gehören zu GENAU diesem Gericht
     }
 
@@ -1312,7 +1327,7 @@ class VkModal extends Component
                 : [],
             'sensorik' => $rezept !== null ? app(\Platform\FoodAlchemist\Services\SensorikService::class)->fuerRezept($rezept->id) : null,
             'komposition' => $rezept !== null ? app(\Platform\FoodAlchemist\Services\SensorikService::class)->gerichtKomposition($rezept->id) : null,
-            'pairing' => $rezept !== null ? app(\Platform\FoodAlchemist\Services\PairingService::class)->panelRecipe($rezept) : null,
+            'pairing' => $rezept !== null && $this->pairingGeladen ? app(\Platform\FoodAlchemist\Services\PairingService::class)->panelRecipe($rezept) : null,
         ]);
     }
 }

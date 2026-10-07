@@ -16,9 +16,9 @@ enum RecipeStatus: string
     public function label(): string
     {
         return match ($this) {
-            self::Stub => 'Stub',
+            self::Stub => 'Platzhalter',
             self::Draft => 'Entwurf',
-            self::Review => 'Review',
+            self::Review => 'Prüfen',
             self::Approved => 'Freigegeben',
             self::Deprecated => 'Veraltet',
         };

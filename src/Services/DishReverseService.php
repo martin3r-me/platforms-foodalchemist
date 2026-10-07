@@ -106,9 +106,8 @@ class DishReverseService
     /** @param list<int> $anchorIds (by-ref) — Sub-Rezept trägt seinen kern-Anker bei. */
     private function subKomponente(string $phrase, int $recipeId, string $name, float $score, array &$anchorIds): array
     {
-        $kern = DB::table('foodalchemist_recipe_anchor_mappings')
-            ->where('recipe_id', $recipeId)->where('role', 'kern')->whereNull('deleted_at')
-            ->orderByRaw('COALESCE(ai_confidence, 1.0) DESC')->orderBy('id')->value('anchor_id');
+        // Spec 60: Kern = stärkster Anker des Aromenprofils.
+        $kern = app(\Platform\FoodAlchemist\Services\Pairing\RezeptProfil::class)->fuer($recipeId)['anker'][0]['anchor_id'] ?? null;
         $anker = [];
         if ($kern !== null) {
             $anchorIds[] = (int) $kern;
@@ -165,13 +164,11 @@ class DishReverseService
 
         $treffer = [];       // recipe_id => [anchor_id => true]
         $abgedeckt = [];     // anchor_id => true (irgendwo im Bestand)
-        foreach (['foodalchemist_recipe_anchor_mappings', 'foodalchemist_recipe_process_anchors'] as $tabelle) {
-            foreach (DB::table($tabelle)->whereIn('recipe_id', $portfolioIds)
-                ->whereIn('anchor_id', $anchorIds)->whereNull('deleted_at')
-                ->get(['recipe_id', 'anchor_id']) as $r) {
-                $treffer[(int) $r->recipe_id][(int) $r->anchor_id] = true;
-                $abgedeckt[(int) $r->anchor_id] = true;
-            }
+        // Spec 60: Gerichte, deren Aromenprofil die Anker trägt.
+        foreach (DB::table('foodalchemist_recipe_profile_anker')->whereIn('recipe_id', $portfolioIds)
+            ->whereIn('anchor_id', $anchorIds)->get(['recipe_id', 'anchor_id']) as $r) {
+            $treffer[(int) $r->recipe_id][(int) $r->anchor_id] = true;
+            $abgedeckt[(int) $r->anchor_id] = true;
         }
 
         $namen = FoodAlchemistRecipe::visibleToTeam($team)->whereIn('foodalchemist_recipes.id', array_keys($treffer))

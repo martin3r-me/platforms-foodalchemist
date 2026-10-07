@@ -84,11 +84,11 @@ class KnowledgeRoutingService
     public function setArt(string $feature, string $art, string $mode, ?int $maxDocs = null, ?int $maxChars = null): array
     {
         $feature = trim($feature);
-        if ($feature === '') throw new \InvalidArgumentException('feature ist Pflicht.');
+        if ($feature === '') throw new \InvalidArgumentException('Bitte einen Arbeitsschritt angeben.');
         $allowed = ['fachwissen' => ['discovery', 'none'], 'referenz' => ['discovery', 'none'],
             'datenwerk' => ['resolve', 'none']];
         if (! in_array($mode, $allowed[$art] ?? [], true)) {
-            throw new \InvalidArgumentException('Fachwissen/Referenz: discovery oder none. Datenwerk: resolve oder none. Regeln werden im Kanon gepflegt; Abläufe gehören nicht in den Prompt.');
+            throw new \InvalidArgumentException('Fachwissen und Referenzen: „Passendes suchen" (discovery) oder „Bewusst nicht" (none). Datenwerke: „Werte auflösen" (resolve) oder „Bewusst nicht" (none). Regeln werden als verbindliches Wissen hinterlegt, Arbeitsanleitungen gehören nicht in die KI-Erstellung.');
         }
         $maxDocs = $maxDocs !== null && $maxDocs > 0 ? $maxDocs : null;
         $maxChars = $maxChars !== null && $maxChars > 0 ? $maxChars : null;

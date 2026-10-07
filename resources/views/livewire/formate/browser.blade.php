@@ -1,153 +1,180 @@
-{{-- Format-Modul (Phase B): Top-Level-Browser „Formate" (3-Panel wie Concepter) --}}
-@php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
-@php($statusLabel = ['draft' => 'Entwurf', 'active' => 'Aktiv', 'archiviert' => 'Archiv'])
-@php($statusPill = ['draft' => $variantPill['secondary'], 'active' => $variantPill['success'], 'archiviert' => $variantPill['warning']])
-@php($originLabel = ['eigen' => 'Eigen', 'gruppe' => 'Gruppe', 'kunde' => 'Kunde'])
+{{-- Formate-Browser — Marken- und Themen-Container über den Konzepten (z. B. CHEFS.CORNER).
+     fa-pass Welle 2 (2026-10-05): auf Bausteine <x-fa::…> umgestellt. Funktion, wire:-Bindungen und
+     Event-Namen unverändert. Neu: „Neues Format" als Hauptaktion im Seitenkopf, Filter als Filterzeilen
+     (Einsatz-Dimensionen eingeklappt, offen sobald gewählt), Status als Chip mit Menü statt Dropdown je
+     Zeile, Detail-Spalte erst nach Auswahl. --}}
+@php
+    $statusLabel = ['draft' => 'Entwurf', 'active' => 'Aktiv', 'archiviert' => 'Archiviert'];
+    $statusTon = ['draft' => 'neutral', 'active' => 'ok', 'archiviert' => 'neutral'];
+    $statusIcon = ['draft' => 'heroicon-m-pencil', 'active' => 'heroicon-m-check', 'archiviert' => 'heroicon-m-archive-box'];
+    $originLabel = ['eigen' => 'Eigen', 'gruppe' => 'Gruppe', 'kunde' => 'Kunde'];
+
+    // Einsatz-Dimensionen: [Überschrift, Property, Methoden-Feld, Vokabular, Label-Feld, wire:key-Präfix]
+    $facetten = [
+        ['Eventtyp', $eventtypFilter, 'eventtypFilter', $facetteEventtypen, 'name', 'ffev'],
+        ['Servierform', $servierformFilter, 'servierformFilter', $facetteServierformen, 'label', 'ffsf'],
+        ['Einsatzmoment', $momentFilter, 'momentFilter', $facetteMomente, 'name', 'ffem'],
+        ['Saison', $saisonFilter, 'saisonFilter', $facetteSaisons, 'name', 'ffsa'],
+    ];
+    $filterAktiv = $search !== '' || $statusFilter !== '' || $originFilter !== ''
+        || $eventtypFilter !== '' || $servierformFilter !== '' || $momentFilter !== '' || $saisonFilter !== '';
+@endphp
 
 <x-ui-page>
     <x-slot:navbar>
-        <x-ui-page-navbar title="Formate" icon="heroicon-o-rectangle-group" />
+        <x-foodalchemist::shell.page-navbar title="Formate" icon="heroicon-o-rectangle-group" />
     </x-slot:navbar>
-
-    <x-slot name="actionbar">
-        <x-ui-page-actionbar :breadcrumbs="[
-            ['label' => 'Food Alchemist', 'href' => route('foodalchemist.dashboard'), 'icon' => 'cube'],
-            ['label' => 'Formate'],
-        ]" />
-    </x-slot>
 
     <x-slot name="sidebar">
         <x-ui-page-sidebar title="Formate" width="w-80">
-            <div class="p-3 space-y-3">
-                <input type="search" wire:model.live.debounce.300ms="search" placeholder="Format suchen …" class="{{ $input }}" />
-
-                {{-- Primär-Aktion OBEN (Dominique 2026-08-27): „+ Neu" wie bei Gerichten/Basisrezepten über die Filter, nicht darunter. --}}
-                <button type="button" wire:click="neu" class="{{ $btnPrimary }} w-full justify-center">+ Neues Format</button>
-
-                <div class="space-y-0.5 pt-2 border-t border-black/5">
-                    <span class="{{ $label }}">Status</span>
-                    <div class="flex flex-wrap gap-1">
-                        <button type="button" wire:click="waehleStatus('')" class="{{ $pill }} {{ $statusFilter === '' ? $variantPill['primary'] : $variantPill['secondary'] }}">Alle</button>
-                        @foreach($statusLabel as $val => $lbl)
-                            <button type="button" wire:key="fst-{{ $val }}" wire:click="waehleStatus('{{ $val }}')"
-                                    class="{{ $pill }} {{ $statusFilter === $val ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $lbl }}</button>
-                        @endforeach
-                    </div>
+            <div class="p-3 flex flex-col gap-3">
+                <div class="relative">
+                    <label for="format-suche" class="sr-only">Formate durchsuchen</label>
+                    @svg('heroicon-m-magnifying-glass', 'w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--fa-ink-3)] pointer-events-none')
+                    <x-fa::input id="format-suche" type="search" wire:model.live.debounce.300ms="search" placeholder="Name, Gästename oder Claim" class="pl-8" />
                 </div>
 
-                <div class="space-y-0.5 pt-2 border-t border-black/5">
-                    <span class="{{ $label }}">Herkunft</span>
-                    <div class="flex flex-wrap gap-1">
-                        <button type="button" wire:click="waehleOrigin('')" class="{{ $pill }} {{ $originFilter === '' ? $variantPill['primary'] : $variantPill['secondary'] }}">Alle</button>
-                        @foreach($originLabel as $val => $lbl)
-                            <button type="button" wire:key="fori-{{ $val }}" wire:click="waehleOrigin('{{ $val }}')"
-                                    class="{{ $pill }} {{ $originFilter === $val ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $lbl }}</button>
-                        @endforeach
-                    </div>
+                <div class="flex flex-col gap-0.5 pt-2 border-t border-[var(--fa-line)]">
+                    <p class="px-2.5 pb-1 text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-3)]">Status</p>
+                    <x-foodalchemist::filter-row wire:click="waehleStatus('')" :active="$statusFilter === ''">Alle Status</x-foodalchemist::filter-row>
+                    @foreach($statusLabel as $val => $lbl)
+                        <x-foodalchemist::filter-row wire:key="fst-{{ $val }}" wire:click="waehleStatus('{{ $val }}')" :active="$statusFilter === $val">{{ $lbl }}</x-foodalchemist::filter-row>
+                    @endforeach
                 </div>
 
-                {{-- F1: geteilte Concept-Dimensionen als Filter (aus den Einstellungen gepflegt) --}}
-                <div class="space-y-0.5 pt-2 border-t border-black/5">
-                    <span class="{{ $label }}">Eventtyp</span>
-                    <div class="flex flex-wrap gap-1">
-                        <button type="button" wire:click="waehleFacette('eventtypFilter', '')" class="{{ $pill }} {{ $eventtypFilter === '' ? $variantPill['primary'] : $variantPill['secondary'] }}">Alle</button>
-                        @foreach($facetteEventtypen as $et)
-                            <button type="button" wire:key="ffev-{{ $et->id }}" wire:click="waehleFacette('eventtypFilter', '{{ $et->id }}')"
-                                    class="{{ $pill }} {{ $eventtypFilter === (string) $et->id ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $et->name }}</button>
-                        @endforeach
-                    </div>
+                <div class="flex flex-col gap-0.5 pt-2 border-t border-[var(--fa-line)]">
+                    <p class="px-2.5 pb-1 text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-3)]">Herkunft</p>
+                    <x-foodalchemist::filter-row wire:click="waehleOrigin('')" :active="$originFilter === ''">Jede Herkunft</x-foodalchemist::filter-row>
+                    @foreach($originLabel as $val => $lbl)
+                        <x-foodalchemist::filter-row wire:key="fori-{{ $val }}" wire:click="waehleOrigin('{{ $val }}')" :active="$originFilter === $val">
+                            <span class="inline-flex items-center gap-1.5">{{ $lbl }}@if($val === 'kunde')@svg('heroicon-m-lock-closed', 'w-3.5 h-3.5 shrink-0')@endif</span>
+                        </x-foodalchemist::filter-row>
+                    @endforeach
                 </div>
-                <div class="space-y-0.5 pt-2 border-t border-black/5">
-                    <span class="{{ $label }}">Servierform</span>
-                    <div class="flex flex-wrap gap-1">
-                        @foreach($facetteServierformen as $sf)
-                            <button type="button" wire:key="ffsf-{{ $sf->id }}" wire:click="waehleFacette('servierformFilter', '{{ $sf->id }}')"
-                                    class="{{ $pill }} {{ $servierformFilter === (string) $sf->id ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $sf->label }}</button>
-                        @endforeach
-                    </div>
+
+                {{-- F1: geteilte Concept-Dimensionen als Filter (aus den Einstellungen gepflegt). Eingeklappt, offen sobald gewählt. --}}
+                <div class="flex flex-col gap-1 pt-2 border-t border-[var(--fa-line)]">
+                    <p class="px-2.5 text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-3)]">Einsatz</p>
+                    @foreach($facetten as [$titel, $wert, $feld, $vokabular, $labelFeld, $praefix])
+                        @continue($vokabular->isEmpty())
+                        @php
+                            $gewaehlt = $vokabular->firstWhere('id', (int) $wert);
+                        @endphp
+                        <details class="group" @if($wert !== '') open @endif wire:key="ffgrp-{{ $feld }}" wire:ignore.self>
+                            <summary class="flex items-center justify-between gap-2 h-8 px-2.5 rounded-[var(--fa-radius-control)] cursor-pointer select-none text-[length:var(--fa-text-md)] text-[var(--fa-ink-2)] hover:bg-[var(--fa-hover)] hover:text-[var(--fa-ink)]">
+                                <span class="inline-flex items-center gap-1.5 min-w-0">
+                                    @svg('heroicon-m-chevron-right', 'w-4 h-4 shrink-0 transition-transform group-open:rotate-90')
+                                    <span class="truncate {{ $gewaehlt ? 'font-semibold text-[var(--fa-ink)]' : '' }}">{{ $titel }}</span>
+                                </span>
+                                @if($gewaehlt)<x-fa::badge tone="accent" class="max-w-[9rem]"><span class="truncate" title="{{ $gewaehlt->{$labelFeld} }}">{{ $gewaehlt->{$labelFeld} }}</span></x-fa::badge>@endif
+                            </summary>
+                            <x-foodalchemist::filter-ast>
+                                <x-foodalchemist::filter-row level="child" wire:click="waehleFacette('{{ $feld }}', '')" :active="$wert === ''">Alle</x-foodalchemist::filter-row>
+                                @foreach($vokabular as $eintrag)
+                                    <x-foodalchemist::filter-row level="child" wire:key="{{ $praefix }}-{{ $eintrag->id }}"
+                                        wire:click="waehleFacette('{{ $feld }}', '{{ $eintrag->id }}')"
+                                        :active="$wert === (string) $eintrag->id">{{ $eintrag->{$labelFeld} }}</x-foodalchemist::filter-row>
+                                @endforeach
+                            </x-foodalchemist::filter-ast>
+                        </details>
+                    @endforeach
                 </div>
-                <div class="space-y-0.5 pt-2 border-t border-black/5">
-                    <span class="{{ $label }}">Einsatzmoment</span>
-                    <div class="flex flex-wrap gap-1">
-                        @foreach($facetteMomente as $em)
-                            <button type="button" wire:key="ffem-{{ $em->id }}" wire:click="waehleFacette('momentFilter', '{{ $em->id }}')"
-                                    class="{{ $pill }} {{ $momentFilter === (string) $em->id ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $em->name }}</button>
-                        @endforeach
+
+                @if($filterAktiv)
+                    <div class="pt-2 border-t border-[var(--fa-line)]">
+                        <x-fa::button variant="ghost" size="sm" icon="heroicon-m-x-mark" wire:click="filterZuruecksetzen" class="w-full">Filter zurücksetzen</x-fa::button>
                     </div>
-                </div>
-                <div class="space-y-0.5 pt-2 border-t border-black/5">
-                    <span class="{{ $label }}">Saison</span>
-                    <div class="flex flex-wrap gap-1">
-                        @foreach($facetteSaisons as $sa)
-                            <button type="button" wire:key="ffsa-{{ $sa->id }}" wire:click="waehleFacette('saisonFilter', '{{ $sa->id }}')"
-                                    class="{{ $pill }} {{ $saisonFilter === (string) $sa->id ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $sa->name }}</button>
-                        @endforeach
-                    </div>
-                </div>
+                @endif
             </div>
         </x-ui-page-sidebar>
     </x-slot>
 
-    <x-slot name="activity">
-        <x-foodalchemist::detail-sidebar title="Detail" width="w-96" :maxWidth="640" scope="activity_formate" side="right">
-            <livewire:foodalchemist.formate.detail-panel />
-        </x-foodalchemist::detail-sidebar>
-    </x-slot>
+    {{-- Detail-Spalte erst, wenn ein Format gewählt ist (vorher nahm der leere Hinweis Platz der Tabelle weg). --}}
+    @if($selectedId !== null)
+        <x-slot name="activity">
+            <x-foodalchemist::detail-sidebar title="Detail" width="w-96" :maxWidth="640" scope="activity_formate" side="right">
+                <livewire:foodalchemist.formate.detail-panel :selected-id="$selectedId" />
+            </x-foodalchemist::detail-sidebar>
+        </x-slot>
+    @endif
 
-    <x-ui-page-container padding="px-6 pb-6" spacing="space-y-4">
-        <div class="relative overflow-hidden {{ $card }}">
-            <div class="{{ $cardAccent }}"></div>
+    <x-ui-page-container padding="px-6 py-6" spacing="space-y-4">
+        <x-fa::page-header title="Formate" :subtitle="number_format($items->total(), 0, ',', '.') . ($items->total() === 1 ? ' Format' : ' Formate')">
+            <x-slot:actions>
+                <x-fa::button variant="primary" icon="heroicon-m-plus" wire:click="neu">Neues Format</x-fa::button>
+            </x-slot:actions>
+        </x-fa::page-header>
+
+        <div class="fa-surface overflow-hidden">
             <div class="max-h-[70vh] overflow-auto">
-            <table class="{{ $table }}">
-                <thead>
-                    <tr>
-                        <th class="{{ $th }} w-full text-left sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Name</th>
-                        <th class="{{ $th }} text-left sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Konsumentenbez.</th>
-                        <th class="{{ $th }} text-left sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Eventtyp · Servierform</th>
-                        <th class="{{ $th }} text-left sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Herkunft</th>
-                        <th class="{{ $th }} text-left sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Status</th>
-                        <th class="{{ $th }} text-right sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Editionen</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @forelse($items as $it)
-                        <x-foodalchemist::table-row :active="$selectedId === $it->id" wire:key="frow-{{ $it->id }}" wire:click="waehle({{ $it->id }})"
-                            x-data x-on:click="$store.ui?.mSet('activity_formate', 'open', true)">
-                            <td wire:click.stop="bearbeite({{ $it->id }})" class="{{ $td }} font-medium text-gray-900 hover:text-violet-600 cursor-pointer" title="Editor öffnen">
-                                {{ $it->name }}
-                            </td>
-                            <td class="{{ $td }} text-gray-600">{{ $it->consumer_name ?: '—' }}</td>
-                            <td class="{{ $td }} text-gray-600">{{ collect([$it->eventType?->name, $it->servingForm?->label])->filter()->join(' · ') ?: '—' }}</td>
-                            <td class="{{ $td }}">
-                                @if($it->origin === 'kunde')
-                                    <span class="{{ $pill }} {{ $variantPill['warning'] }}" title="Kunden-IP — nicht für andere adaptieren">Kunde 🔒</span>
-                                @elseif($it->origin)
-                                    <span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $originLabel[$it->origin] ?? $it->origin }}</span>
-                                @else
-                                    <span class="text-gray-400">—</span>
-                                @endif
-                            </td>
-                            <td class="{{ $td }} whitespace-nowrap" wire:click.stop @click.stop>
-                                <select wire:key="fstsel-{{ $it->id }}-{{ $it->status }}" wire:change="statusSetzen({{ $it->id }}, $event.target.value)"
-                                        class="{{ $pill }} font-medium {{ $statusPill[$it->status] ?? $variantPill['secondary'] }} border-0 cursor-pointer focus:ring-1 focus:ring-violet-400 pr-6">
-                                    @foreach($statusLabel as $val => $lbl)
-                                        <option value="{{ $val }}" @selected($it->status === $val)>{{ $lbl }}</option>
-                                    @endforeach
-                                </select>
-                            </td>
-                            <td class="{{ $td }} text-right tabular-nums text-gray-600">{{ $it->editions_count }}</td>
-                        </x-foodalchemist::table-row>
-                    @empty
-                        <tr><td colspan="6" class="px-3 py-10 text-center text-sm text-gray-500">Keine Formate. Oben „+ Neues Format".</td></tr>
-                    @endforelse
-                </tbody>
-            </table>
+                <table class="fa-table">
+                    <thead class="sticky top-0 z-20 bg-[var(--fa-surface)]">
+                        <tr>
+                            <th class="w-full">Name</th>
+                            <th>Eventtyp und Servierform</th>
+                            <th>Herkunft</th>
+                            <th class="num">Editionen</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse($items as $it)
+                            <x-foodalchemist::table-row :active="$selectedId === $it->id" wire:key="frow-{{ $it->id }}" wire:click="waehle({{ $it->id }})"
+                                x-data x-on:click="$store.ui?.mSet('activity_formate', 'open', true)">
+                                {{-- Namens-Klick öffnet den Editor, Zeilen-Klick nur das Detail --}}
+                                <td class="min-w-[10rem]">
+                                    <button type="button" wire:click.stop="bearbeite({{ $it->id }})" title="{{ $it->name }} bearbeiten"
+                                            class="text-left font-medium text-[var(--fa-ink)] hover:text-[var(--fa-accent)] hover:underline">{{ $it->name }}</button>
+                                    @if($it->consumer_name && $it->consumer_name !== $it->name)
+                                        <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">Für Gäste: {{ $it->consumer_name }}</p>
+                                    @endif
+                                </td>
+                                <td class="whitespace-nowrap text-[var(--fa-ink-2)]">{{ collect([$it->eventType?->name, $it->servingForm?->label])->filter()->join(' · ') ?: '–' }}</td>
+                                <td class="whitespace-nowrap">
+                                    @if($it->origin === 'kunde')
+                                        <x-fa::badge tone="warn" icon="heroicon-m-lock-closed" title="Kundeneigenes Format, nicht für andere Kunden verwenden">Kunde</x-fa::badge>
+                                    @elseif($it->origin)
+                                        <x-fa::badge>{{ $originLabel[$it->origin] ?? $it->origin }}</x-fa::badge>
+                                    @else
+                                        <span class="text-[var(--fa-ink-3)]">–</span>
+                                    @endif
+                                </td>
+                                <td class="num {{ $it->editions_count === 0 ? 'text-[var(--fa-ink-3)]' : 'text-[var(--fa-ink-2)]' }}">{{ $it->editions_count }}</td>
+                                {{-- Status als Chip, Änderung über ein kleines Menü --}}
+                                <td class="whitespace-nowrap" wire:click.stop @click.stop>
+                                    <div class="relative inline-block" x-data="faMenu()" x-on:keydown.escape="offen = false" x-on:click.outside="offen = false" wire:key="fstsel-{{ $it->id }}-{{ $it->status }}">
+                                        <button type="button" x-on:click="toggle($event)" class="inline-flex items-center gap-0.5" aria-haspopup="menu" x-bind:aria-expanded="offen" aria-label="Status von {{ $it->name }} ändern">
+                                            <x-fa::badge :tone="$statusTon[$it->status] ?? 'neutral'" :icon="$statusIcon[$it->status] ?? null">{{ $statusLabel[$it->status] ?? $it->status }}</x-fa::badge>@svg('heroicon-m-chevron-down', 'w-3.5 h-3.5 text-[var(--fa-ink-3)]')
+                                        </button>
+                                        <div x-bind:class="{ hidden: ! offen }" x-bind:style="pos" role="menu" class="hidden w-40 fa-surface shadow-lg py-1">
+                                            @foreach($statusLabel as $val => $lbl)
+                                                <button type="button" role="menuitem" x-on:click="offen = false" wire:click="statusSetzen({{ $it->id }}, '{{ $val }}')"
+                                                        class="flex w-full items-center justify-between px-3 py-1.5 text-left text-[length:var(--fa-text-md)] hover:bg-[var(--fa-hover)] {{ $it->status === $val ? 'font-semibold text-[var(--fa-accent)]' : 'text-[var(--fa-ink)]' }}">
+                                                    {{ $lbl }}@if($it->status === $val)@svg('heroicon-m-check', 'w-4 h-4')@endif
+                                                </button>
+                                            @endforeach
+                                        </div>
+                                    </div>
+                                </td>
+                            </x-foodalchemist::table-row>
+                        @empty
+                            <tr>
+                                <td colspan="5">
+                                    @if($filterAktiv)
+                                        <x-fa::empty icon="heroicon-o-rectangle-group" title="Kein Format passt zu den Filtern">Filter links zurücksetzen oder die Suche ändern.</x-fa::empty>
+                                    @else
+                                        <x-fa::empty icon="heroicon-o-rectangle-group" title="Noch keine Formate">Ein Format bündelt mehrere Konzepte als Editionen unter einer Marke. Oben rechts „Neues Format“ anlegen.</x-fa::empty>
+                                    @endif
+                                </td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
             </div>
+            <div class="px-4 py-3 border-t border-[var(--fa-line)]">{{ $items->links('foodalchemist::components.fa.pagination') }}</div>
         </div>
-        <div>{{ $items->links() }}</div>
     </x-ui-page-container>
 
     {{-- Voll-Editor-Modal — auf Seitenebene, öffnet via formate-editor.oeffnen --}}
     <livewire:foodalchemist.formate.editor />
-    {{-- Spec 53/F Stufe 2: Sprachbefehl-Mount auf Seitenebene (Modal + optionales schwebendes Element). --}}
 </x-ui-page>

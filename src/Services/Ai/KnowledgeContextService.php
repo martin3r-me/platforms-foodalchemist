@@ -1662,17 +1662,13 @@ class KnowledgeContextService
         // Graph-first (2026-07-13): Partner kommen aus dem Anker-Graphen (PairingService),
         // NICHT mehr aus dem Markdown-Volltext. Der Graph ist das Gehirn (kuratiert + Buch +
         // computed, ~179k Kanten); die md-Prosa liefert nur noch Grounding (groundingBlock).
-        // Stil → Kanten-Typen (neue Taxonomie aroma/kontrast/erprobt).
-        $typen = match ($stil) {
-            'klassisch' => ['erprobt'],
-            'kreativ' => ['erprobt', 'aroma'],
-            'gewagt' => ['aroma', 'kontrast'],
-            default => ['erprobt', 'aroma', 'kontrast'],
-        };
+        // Spec 60: nur Stufe 3 (Inspire best match = echtes Food Pairing) geht in den Prompt —
+        // unabhängig vom Stil. Die früheren Stil→Typ-Listen zeigten auf `erprobt`, das seit dem
+        // Inspire-Umbau nicht mehr existiert (Stil „klassisch" lieferte einen leeren Block).
         $stilHint = match ($stil) {
-            'klassisch' => ' (Stil KLASSISCH — etablierte, erprobte Kombinationen)',
-            'kreativ' => ' (Stil KREATIV — erprobte Basis + Aroma-belegte Twists)',
-            'gewagt' => ' (Stil GEWAGT — Aroma + Kontrast, bewusst mutig, aber NUR belegte aus dieser Liste)',
+            'klassisch' => ' (Stil KLASSISCH — bevorzuge etablierte Kombinationen aus dieser Liste)',
+            'kreativ' => ' (Stil KREATIV — belegte Basis, Twists nur mit Partnern aus dieser Liste)',
+            'gewagt' => ' (Stil GEWAGT — bewusst mutig, aber NUR belegte Partner aus dieser Liste)',
             default => '',
         };
 
@@ -1709,7 +1705,6 @@ class KnowledgeContextService
         sort($matched);
 
         $svc = app(\Platform\FoodAlchemist\Services\PairingService::class);
-        $typSet = array_flip($typen);
         $zeilen = [];
         foreach (array_slice($matched, 0, $maxAnchors) as $stem) {
             // Stem (Doc-Slug, evtl. mit »-«) → Anker-Slug (»_«) für die Graph-Auflösung.
@@ -1719,7 +1714,7 @@ class KnowledgeContextService
             }
             $namen = [];                                             // display_de → Stärke-Symbol (Typ-Prio- + Level-sortiert)
             foreach ($res['partner'] as $p) {
-                if (! isset($typSet[$p->type])) {
+                if ((int) ($p->level ?? 0) < 3) {
                     continue;
                 }
                 // C-b (2026-08-22): Harmonie-Stärke aus axis/level rahmen — ●●● = beste (L3),
@@ -1745,7 +1740,7 @@ class KnowledgeContextService
         }
 
         return new KnowledgeContextBlock("# FLAVOR-PAIRING (gemessene Harmonie aus dem Anker-Graphen{$stilHint}"
-            . " — ●●● = beste, ●● = gute Harmonie (geteilte Aromastoffe); bevorzuge diese fuer"
+            . " — ●●● = echtes Food Pairing (Foodpairing best match, geteilte Aromastoffe); bevorzuge diese fuer"
             . " Komponenten + Garnitur, erfinde KEINE unbelegten Paarungen. Kontrast (bewusstes"
             . " Gegeneinander von Saeure/Fett/Textur) leite aus dem Pairing-Prinzip + Kochwissen"
             . " ab, NICHT aus dieser Harmonie-Liste):\n",
@@ -2214,6 +2209,6 @@ class KnowledgeContextService
     {
         return DB::table('foodalchemist_knowledge_documents')->tap($this->nurSichtbar($team))
             ->where('slug', $slug)->where('active', 1)->whereNull('deleted_at')
-            ->first(['id', 'slug', 'title', 'category', 'art', 'geltung', 'datenwerte', 'version', 'char_count', 'content_md']);
+            ->first(['id', 'slug', 'title', 'category', 'anchor_id', 'art', 'geltung', 'datenwerte', 'version', 'char_count', 'content_md']);
     }
 }

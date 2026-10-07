@@ -1,200 +1,194 @@
 {{--
     Spec 27 Phase 2 — Schritt-für-Schritt-Editor.
-    Nummer + Text + Foto(s) sind EINE Zeile; Reorder per ⠿/▲▼ (server-seitig, damit
+    Nummer + Text + Foto(s) sind EINE Zeile; Reorder per Griff/Pfeile (server-seitig, damit
     Foto-Verknüpfungen sofort möglich sind — sie brauchen echte Schritt-IDs).
 
-    Styling als rohes CSS in einem gescopeten <style>-Block (hell + .fa-editor-panel
-    dunkel): Ui.php wird von Tailwind nicht gescannt, arbitrary Klassen wären im
-    Host-Build nicht kompiliert (s. modal.blade.php / zutaten-kern.blade.php).
+    fa-pass: kein style-Block mehr — nur --fa-*-Tokens und x-fa-Bausteine, damit der Editor hell
+    UND im Werkbank-Modus (data-fa-theme="dark") stimmt. Läuft im Rezept- und im Gericht-Editor.
 --}}
-@php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
+@php
+    $hinweis = 'text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]';
+    $kasten = 'rounded-[var(--fa-radius-control)] bg-[var(--fa-ground)] border border-[var(--fa-line)] px-3 py-2.5 flex flex-col gap-2';
+    $nummer = 'shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-full bg-[var(--fa-accent-soft)] text-[var(--fa-accent)] text-[length:var(--fa-text-sm)] font-semibold tabular-nums';
+    $menuePunkt = 'flex w-full items-center gap-2 px-3 py-2 text-left text-[length:var(--fa-text-md)] text-[var(--fa-ink)] hover:bg-[var(--fa-hover)]';
+    $segAn = 'bg-[var(--fa-surface)] text-[var(--fa-ink)] shadow-sm';
+    $segAus = 'text-[var(--fa-ink-2)] hover:text-[var(--fa-ink)]';
+    $anzahl = fn (int $n, string $eins, string $mehr) => $n . ' ' . ($n === 1 ? $eins : $mehr);
+@endphp
 
-<div data-schritt-editor>
-    <style>
-        [data-schritt-editor] .fa-step-row{ display:flex; align-items:flex-start; gap:.5rem; padding:.4rem .25rem; border-top:1px solid rgba(0,0,0,.05); }
-        [data-schritt-editor] .fa-step-row:first-of-type{ border-top:0; }
-        [data-schritt-editor] .fa-step-nr{ flex:0 0 auto; width:1.5rem; height:1.5rem; display:inline-flex; align-items:center; justify-content:center;
-            border-radius:9999px; background:rgba(139,92,246,.14); color:#6d28d9; font-size:11px; font-weight:600; font-variant-numeric:tabular-nums; }
-        [data-schritt-editor] .fa-step-text{ width:100%; font-size:13px; line-height:1.45; resize:vertical; min-height:2.1rem; }
-        [data-schritt-editor] .fa-step-phase{ width:11rem; font-size:11px; }
-        [data-schritt-editor] .fa-step-thumb{ width:3.5rem; height:2.6rem; object-fit:cover; border-radius:.375rem; border:1px solid rgba(0,0,0,.10); }
-        [data-schritt-editor] .fa-step-pool{ background:rgba(0,0,0,.03); border-radius:.5rem; padding:.5rem .625rem; }
-        [data-schritt-editor] .fa-step-pool-on{ outline:2px solid #7c3aed; outline-offset:1px; }
-        [data-schritt-editor] .fa-step-card{ background:rgba(0,0,0,.03); border-radius:.625rem; padding:.625rem .75rem; }
-        [data-schritt-editor] .fa-step-phasehead{ font-size:10px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:#6d28d9; }
-        [data-schritt-editor] .fa-step-hint{ font-size:11px; color:#6b7280; }
-        [data-schritt-editor] .fa-step-hero-on{ background:#f59e0b; color:#fff; }
-        [data-schritt-editor] .fa-step-hero{ display:flex; gap:.75rem; align-items:flex-start; background:rgba(245,158,11,.10); border-radius:.625rem; padding:.5rem .625rem; margin-bottom:.5rem; }
-        [data-schritt-editor] .fa-step-hero img{ width:9rem; height:6.5rem; object-fit:cover; border-radius:.5rem; border:1px solid rgba(0,0,0,.10); }
-        [data-schritt-editor] .fa-step-hero-label{ font-size:10px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:#b45309; }
-
-        .fa-editor-panel [data-schritt-editor] .fa-step-row{ border-color:rgba(255,255,255,.08); }
-        .fa-editor-panel [data-schritt-editor] .fa-step-nr{ background:rgba(139,92,246,.30); color:#e9d5ff; }
-        .fa-editor-panel [data-schritt-editor] .fa-step-thumb{ border-color:rgba(255,255,255,.15); }
-        .fa-editor-panel [data-schritt-editor] .fa-step-pool,
-        .fa-editor-panel [data-schritt-editor] .fa-step-card{ background:rgba(255,255,255,.06); }
-        .fa-editor-panel [data-schritt-editor] .fa-step-phasehead{ color:#c4b5fd; }
-        .fa-editor-panel [data-schritt-editor] .fa-step-hint{ color:#94a3b8; }
-        .fa-editor-panel [data-schritt-editor] .fa-step-hero{ background:rgba(245,158,11,.16); }
-        .fa-editor-panel [data-schritt-editor] .fa-step-hero img{ border-color:rgba(255,255,255,.15); }
-        .fa-editor-panel [data-schritt-editor] .fa-step-hero-label{ color:#fcd34d; }
-    </style>
-
+<div data-schritt-editor class="flex flex-col gap-3">
     @if($fehler)
-        <div class="mb-2 rounded-lg bg-rose-500/10 border border-rose-500/30 px-3 py-1.5 text-[11px] text-rose-600" data-schritt-fehler>{{ $fehler }}</div>
+        <x-fa::notice tone="crit" data-schritt-fehler>{{ $fehler }}</x-fa::notice>
     @endif
 
     @if($rezept === null)
-        <p class="fa-step-hint">Rezept erst speichern — danach lässt sich die Anleitung aufbauen.</p>
+        <p class="{{ $hinweis }}">Rezept erst speichern, danach lässt sich die Anleitung aufbauen.</p>
     @else
-    <div x-data="{ ansicht: 'bearbeiten', dragId: null }">
+    <div x-data="{ ansicht: 'bearbeiten', dragId: null }" class="flex flex-col gap-3">
 
         {{-- ── Kopfzeile: Ansicht + Aktionen ───────────────────────────── --}}
-        <div class="flex flex-wrap items-center gap-1 mb-2">
-            <button type="button" @click="ansicht = 'bearbeiten'"
-                    :class="ansicht === 'bearbeiten' ? '{{ $variantPill['primary'] }}' : '{{ $variantPill['secondary'] }}'"
-                    class="{{ $pill }}" data-tab-bearbeiten>Bearbeiten</button>
-            <button type="button" @click="ansicht = 'anleitung'"
-                    :class="ansicht === 'anleitung' ? '{{ $variantPill['primary'] }}' : '{{ $variantPill['secondary'] }}'"
-                    class="{{ $pill }}" data-tab-anleitung>Anleitung</button>
-            <span class="fa-step-hint ml-2">{{ $schritte->count() }} Schritte · {{ $pool->count() }} Fotos</span>
+        <div class="flex flex-wrap items-center gap-2">
+            <div class="inline-flex items-center gap-0.5 p-0.5 rounded-[var(--fa-radius-control)] bg-[var(--fa-neutral-soft)]" role="group" aria-label="Ansicht">
+                <button type="button" @click="ansicht = 'bearbeiten'"
+                        :class="ansicht === 'bearbeiten' ? '{{ $segAn }}' : '{{ $segAus }}'"
+                        class="h-7 px-2.5 rounded-[var(--fa-radius-control)] text-[length:var(--fa-text-sm)] font-medium transition-colors" data-tab-bearbeiten>Bearbeiten</button>
+                <button type="button" @click="ansicht = 'anleitung'"
+                        :class="ansicht === 'anleitung' ? '{{ $segAn }}' : '{{ $segAus }}'"
+                        class="h-7 px-2.5 rounded-[var(--fa-radius-control)] text-[length:var(--fa-text-sm)] font-medium transition-colors" data-tab-anleitung>Anleitung ansehen</button>
+            </div>
+            <span class="{{ $hinweis }} tabular-nums">{{ $anzahl($schritte->count(), 'Schritt', 'Schritte') }} · {{ $anzahl($pool->count(), 'Foto', 'Fotos') }}</span>
 
             @if($schreibbar)
-                <span class="ml-auto flex items-center gap-1.5">
+                <span class="ml-auto flex flex-wrap items-center gap-1.5">
                     {{-- Ein Knopf für beide Ebenen: der Prompt folgt der Ebene
                          (StepEditor::promptKey → `recipe.steps` bzw. `vk.plating`), damit
                          Anrichten nicht mit Fertigstellungs-Schritten befüllt wird. --}}
                     <x-foodalchemist::ki-action action="kiSchritte" variant="ai" icon="heroicon-o-sparkles"
-                            :label="$kiLabel" :title="$kiTitel . ' (Vorschlag — nichts wird gespeichert)'"
-                            busy="denkt …" data-ki-schritte />
-                    <button type="button" wire:click="$toggle('briefingOffen')"
-                            class="{{ $btnGhostXs }} @if(trim($kiBriefing) !== '') text-violet-600 @endif"
-                            title="Eigene Vorgabe für diesen KI-Knopf — sprechen oder tippen" data-briefing-toggle>
-                        @svg('heroicon-o-chat-bubble-bottom-center-text', 'w-3.5 h-3.5')
+                            :label="$kiKnopf" :title="$kiTitel . '. Nur ein Vorschlag, gespeichert wird erst beim Übernehmen.'"
+                            busy="Denkt nach …" data-ki-schritte />
+                    <x-fa::button size="sm" :variant="trim($kiBriefing) !== '' ? 'ai' : 'ghost'" icon="heroicon-o-chat-bubble-bottom-center-text" wire:click="$toggle('briefingOffen')"
+                            title="Eigene Vorgabe für den KI-Vorschlag, sprechen oder tippen" data-briefing-toggle>
                         {{-- Kein geklebtes @if: nach einem Wortzeichen erkennt Blade die
                              Direktive nicht (\B), das @endif aber doch → ParseError. --}}
-                        Briefing {{ trim($kiBriefing) !== '' ? '●' : '' }}
-                    </button>
-                    <x-foodalchemist::ki-action action="kiFotos" variant="ai" icon="heroicon-o-photo" label="KI-Fotos"
-                            title="KI-Fotos für alle Schritte ohne Foto erzeugen" busy="malt …" data-ki-fotos />
-                    <button type="button" wire:click="$toggle('importOffen')" class="{{ $btnGhostXs }}"
-                            title="Markdown einfügen und in Schritte parsen" data-import-toggle>Markdown einfügen</button>
-                    @if($schritte->isNotEmpty())
-                        {{-- Spec 27 Phase 4: Postenzettel zum Aufhängen (mit oder ohne Fotos) --}}
-                        <a href="{{ route('foodalchemist.rezepte.anleitung', ['recipe' => $rezept->id]) }}" target="_blank"
-                           class="{{ $btnGhostXs }}" title="Anleitung als Postenzettel drucken" data-anleitung-drucken>Drucken</a>
-                    @endif
+                        <span>Vorgabe</span>
+                        @if(trim($kiBriefing) !== '')<span class="w-1.5 h-1.5 rounded-full bg-[var(--fa-accent)]" aria-label="Vorgabe gesetzt"></span>@endif
+                    </x-fa::button>
+                    <x-foodalchemist::ki-action action="kiFotos" variant="ai" icon="heroicon-o-photo" label="Fotos erzeugen"
+                            title="KI-Fotos für alle Schritte ohne Foto erzeugen" busy="Malt …" data-ki-fotos />
+                    <div class="relative" x-data="faMenu()" x-on:keydown.escape="offen = false" x-on:click.outside="offen = false">
+                        <x-fa::icon-button icon="heroicon-m-ellipsis-horizontal" label="Weitere Aktionen zur Anleitung" size="sm" x-on:click="toggle($event)" aria-haspopup="menu" x-bind:aria-expanded="offen" />
+                        <div x-bind:class="{ hidden: ! offen }" x-bind:style="pos" role="menu" class="hidden w-60 fa-surface shadow-lg py-1">
+                            <button type="button" role="menuitem" wire:click="$toggle('importOffen')" x-on:click="offen = false" class="{{ $menuePunkt }}"
+                                    title="Markdown einfügen und in Schritte umwandeln" data-import-toggle>
+                                @svg('heroicon-o-document-arrow-down', 'w-4 h-4 text-[var(--fa-ink-3)]') Markdown einfügen
+                            </button>
+                            @if($schritte->isNotEmpty())
+                                {{-- Spec 27 Phase 4: Postenzettel zum Aufhängen (mit oder ohne Fotos) --}}
+                                <a href="{{ route('foodalchemist.rezepte.anleitung', ['recipe' => $rezept->id]) }}" target="_blank" role="menuitem"
+                                   x-on:click="offen = false" class="{{ $menuePunkt }}" title="Anleitung als Postenzettel drucken" data-anleitung-drucken>
+                                    @svg('heroicon-o-printer', 'w-4 h-4 text-[var(--fa-ink-3)]') Postenzettel drucken
+                                </a>
+                            @endif
+                        </div>
+                    </div>
                 </span>
             @endif
         </div>
 
-        {{-- ── KI-Briefing: eigene Vorgabe für DIESE Schrittfolge ──────────
+        {{-- ── KI-Vorgabe: eigene Vorgabe für DIESE Schrittfolge ──────────
              Eingabe-Werkzeug, kein Wissensspeicher: nicht persistiert, wirkt nur auf den
              nächsten KI-Klick und wird nach der Übernahme geleert. Leer = die KI entscheidet
              fachlich frei; gefüllt = sie folgt der Vorgabe und sieht den Kontext trotzdem
              vollständig (Zutaten, Komponenten, Regelwerk, Ebenen-Abgrenzung). --}}
         @if($briefingOffen && $schreibbar)
-            <div class="fa-step-pool mb-2" data-ki-briefing>
-                <div class="flex items-center gap-2 mb-1">
-                    <p class="{{ $dt }}">Vorgabe für „{{ $kiLabel }}"</p>
+            <div class="{{ $kasten }}" data-ki-briefing>
+                <div class="flex flex-wrap items-center gap-2">
+                    <p class="text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-2)]">Vorgabe für «{{ $kiKnopf }}»</p>
                     <span class="ml-auto flex items-center gap-1.5">
                         @include('foodalchemist::livewire.recipes.partials.diktat-knopf', [
-                            'audio' => 'briefingAudio', 'marker' => 'briefing', 'label' => 'sprechen',
+                            'audio' => 'briefingAudio', 'marker' => 'briefing', 'label' => 'Sprechen',
                         ])
                         @if(trim($kiBriefing) !== '')
-                            <button type="button" wire:click="$set('kiBriefing', '')" class="{{ $btnGhostXs }}"
-                                    data-briefing-leeren>leeren</button>
+                            <x-fa::button size="sm" variant="ghost" wire:click="$set('kiBriefing', '')" data-briefing-leeren>Vorgabe leeren</x-fa::button>
                         @endif
                     </span>
                 </div>
-                <textarea wire:model.blur="kiBriefing" rows="3" class="{{ $input }} text-[12px]"
+                <textarea wire:model.blur="kiBriefing" rows="3" aria-label="Vorgabe für die KI"
+                          class="fa-control py-2 text-[length:var(--fa-text-md)] leading-relaxed"
                           data-briefing-feld
                           placeholder="{{ $kiPlatzhalter }}"></textarea>
-                <p class="fa-step-hint mt-1">Wirkt nur auf den nächsten ✨-Klick — wird nicht am Rezept gespeichert.</p>
+                <p class="{{ $hinweis }}">Gilt nur für den nächsten KI-Vorschlag und wird nicht am Rezept gespeichert.</p>
             </div>
         @endif
 
         {{-- ── Markdown-Import ─────────────────────────────────────────── --}}
         @if($importOffen && $schreibbar)
-            <div class="fa-step-pool mb-2" data-markdown-import>
-                <p class="{{ $dt }} mb-1">Markdown → Schritte</p>
-                <textarea wire:model="markdownImport" rows="6" class="{{ $input }} font-mono text-[11px]"
+            <div class="{{ $kasten }}" data-markdown-import>
+                <p class="text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-2)]">Markdown in Schritte umwandeln</p>
+                <textarea wire:model="markdownImport" rows="6" aria-label="Markdown"
+                          class="fa-control py-2 font-mono text-[length:var(--fa-text-md)] leading-relaxed"
                           placeholder="## Mise en Place&#10;1. Zwiebeln schneiden.&#10;2. Fond erhitzen.&#10;&#10;## Finish&#10;3. Montieren."></textarea>
-                <div class="flex items-center gap-2 mt-1.5">
-                    <button type="button" wire:click="markdownUebernehmen" wire:confirm="Ersetzt die bestehenden Schritte. Fortfahren?"
-                            class="{{ $btnPrimary }}" data-import-uebernehmen>In Schritte umwandeln</button>
-                    <span class="fa-step-hint"><code>##</code> = Abschnitt · <code>1.</code> / <code>-</code> = Schritt · Text ohne Marker hängt am vorigen Schritt</span>
+                <div class="flex flex-wrap items-center gap-2">
+                    <x-fa::button size="sm" icon="heroicon-m-arrow-path" wire:click="markdownUebernehmen" wire:confirm="Ersetzt die bestehenden Schritte. Fortfahren?"
+                            data-import-uebernehmen>In Schritte umwandeln</x-fa::button>
+                    <span class="{{ $hinweis }}">## wird ein Abschnitt, 1. oder - ein Schritt. Text ohne Zeichen hängt am vorigen Schritt.</span>
                 </div>
             </div>
         @endif
 
         {{-- ── KI-Vorschlag (GL-07: nichts auto-persistiert) ───────────── --}}
         @if($kiVorschlag !== null)
-            <div class="mb-2 rounded-lg bg-violet-500/10 border border-violet-500/30 px-3 py-2 max-h-56 overflow-y-auto" data-ki-vorschlag>
-                <p class="{{ $dt }} mb-1">KI-Vorschlag — {{ count($kiVorschlag['steps']) }} Schritte ({{ round($kiVorschlag['confidence'] * 100) }} %)</p>
-                <ol class="text-[11px] text-violet-700 space-y-0.5 list-decimal list-inside">
+            <div class="rounded-[var(--fa-radius-control)] bg-[var(--fa-accent-soft)] border border-[var(--fa-accent-line)] px-3 py-2.5 flex flex-col gap-2 max-h-64 overflow-y-auto" data-ki-vorschlag>
+                <p class="text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-accent)]">KI-Vorschlag: {{ $anzahl(count($kiVorschlag['steps']), 'Schritt', 'Schritte') }} ({{ round($kiVorschlag['confidence'] * 100) }} % sicher)</p>
+                <ol class="flex flex-col gap-1 text-[length:var(--fa-text-md)] text-[var(--fa-ink)] list-decimal list-inside">
                     @foreach($kiVorschlag['steps'] as $i => $s)
                         <li wire:key="kis-{{ $i }}">
-                            @if($s['phase'])<span class="fa-step-phasehead mr-1">{{ $s['phase'] }}</span>@endif
+                            @if($s['phase'])<span class="mr-1 font-semibold text-[var(--fa-accent)]">{{ $s['phase'] }}</span>@endif
                             {{ $s['text'] }}
                         </li>
                     @endforeach
                 </ol>
-                <div class="flex items-center gap-2 mt-1.5">
-                    <button type="button" wire:click="kiUebernehmen" wire:confirm="Ersetzt die bestehenden Schritte. Fortfahren?"
-                            class="{{ $btnGhostXs }} text-emerald-600" data-ki-uebernehmen>Übernehmen</button>
-                    <button type="button" wire:click="kiVerwerfen" class="{{ $btnGhostXs }}">Verwerfen</button>
+                <div class="flex flex-wrap items-center gap-2">
+                    <x-fa::button size="sm" icon="heroicon-m-check" wire:click="kiUebernehmen" wire:confirm="Ersetzt die bestehenden Schritte. Fortfahren?"
+                            data-ki-uebernehmen>Vorschlag übernehmen</x-fa::button>
+                    <x-fa::button size="sm" variant="ghost" wire:click="kiVerwerfen">Verwerfen</x-fa::button>
                 </div>
             </div>
         @endif
 
         {{-- ── ANSICHT: BEARBEITEN ─────────────────────────────────────── --}}
-        <div x-show="ansicht === 'bearbeiten'" data-schritt-liste>
+        <div x-show="ansicht === 'bearbeiten'" class="flex flex-col" data-schritt-liste>
             @forelse($schritte as $s)
-                <div class="fa-step-row" wire:key="step-{{ $s->id }}"
+                <div class="flex items-start gap-2 py-2.5 border-t border-[var(--fa-line)] first:border-t-0 rounded-[var(--fa-radius-control)]" wire:key="step-{{ $s->id }}"
                      @dragover.prevent
                      @drop.prevent="if (dragId !== null && dragId !== {{ $s->id }}) $wire.verschieben(dragId, {{ $s->id }}); dragId = null"
-                     :class="{ 'fa-step-pool-on': dragId !== null && dragId !== {{ $s->id }} }">
+                     :class="{ 'outline outline-2 outline-offset-1 outline-[var(--fa-accent)]': dragId !== null && dragId !== {{ $s->id }} }">
 
-                    <span class="shrink-0 flex items-center gap-1 pt-0.5">
+                    <span class="shrink-0 flex items-center gap-1 pt-1">
                         @if($schreibbar)
-                            @include('foodalchemist::livewire.settings.partials.reorder-cell', [
-                                'id' => $s->id, 'upMethod' => 'hoch', 'downMethod' => 'runter',
-                                'first' => $loop->first, 'last' => $loop->last,
-                            ])
+                            {{-- Umsortieren: Griff zum Ziehen + Pfeile als zuverlässige Alternative --}}
+                            <span class="inline-flex cursor-grab active:cursor-grabbing text-[var(--fa-ink-3)] hover:text-[var(--fa-ink)] select-none"
+                                  draggable="true"
+                                  @dragstart="dragId = {{ $s->id }}; $event.dataTransfer.effectAllowed = 'move'"
+                                  @dragend="dragId = null"
+                                  title="Ziehen zum Umsortieren">@svg('heroicon-m-bars-3', 'w-4 h-4')</span>
+                            <span class="inline-flex flex-col">
+                                <button type="button" wire:click="hoch({{ $s->id }})" @disabled($loop->first) aria-label="Schritt nach oben"
+                                        class="inline-flex text-[var(--fa-ink-3)] hover:text-[var(--fa-ink)] disabled:opacity-30 disabled:pointer-events-none" title="Nach oben">@svg('heroicon-m-chevron-up', 'w-4 h-4')</button>
+                                <button type="button" wire:click="runter({{ $s->id }})" @disabled($loop->last) aria-label="Schritt nach unten"
+                                        class="inline-flex text-[var(--fa-ink-3)] hover:text-[var(--fa-ink)] disabled:opacity-30 disabled:pointer-events-none" title="Nach unten">@svg('heroicon-m-chevron-down', 'w-4 h-4')</button>
+                            </span>
                         @endif
-                        <span class="fa-step-nr">{{ $s->position }}</span>
+                        <span class="{{ $nummer }}">{{ $s->position }}</span>
                     </span>
 
-                    <div class="flex-1 min-w-0 space-y-1">
+                    <div class="flex-1 min-w-0 flex flex-col gap-1.5">
                         <div class="flex flex-wrap items-center gap-1.5">
-                            <input type="text" class="{{ $input }} fa-step-phase !py-0.5" list="fa-phasen-{{ $rezept->id }}"
-                                   wire:model.blur="phasen.{{ $s->id }}" placeholder="Abschnitt (optional)"
-                                   @disabled(! $schreibbar) data-step-phase />
+                            <x-fa::input size="sm" class="w-44 max-w-full" list="fa-phasen-{{ $rezept->id }}"
+                                   wire:model.blur="phasen.{{ $s->id }}" placeholder="Abschnitt (optional)" aria-label="Abschnitt"
+                                   :disabled="! $schreibbar" data-step-phase />
                             @if($schreibbar)
-                                <button type="button" wire:click="poolOeffnen({{ $s->id }})" class="{{ $btnGhostXs }}"
-                                        title="Foto aus dem Pool wählen oder hochladen" data-step-foto-add>
-                                    ＋ Foto
-                                </button>
-                                <button type="button" wire:click="schrittLoeschen({{ $s->id }})" wire:confirm="Schritt löschen?"
-                                        class="{{ $btnGhostXs }} text-rose-500 ml-auto" data-step-loeschen>Schritt löschen</button>
+                                <x-fa::button size="sm" variant="ghost" icon="heroicon-m-photo" wire:click="poolOeffnen({{ $s->id }})"
+                                        title="Foto aus dem Pool wählen oder hochladen" data-step-foto-add>Foto zuordnen</x-fa::button>
+                                <x-fa::icon-button icon="heroicon-m-trash" label="Schritt löschen" tone="danger" size="sm" class="ml-auto"
+                                        wire:click="schrittLoeschen({{ $s->id }})" wire:confirm="Schritt löschen?" data-step-loeschen />
                             @endif
                         </div>
 
-                        <textarea class="{{ $input }} fa-step-text" rows="2" wire:model.blur="texte.{{ $s->id }}"
-                                  placeholder="Was passiert in diesem Schritt? (Temperatur/Zeit konkret)"
+                        <textarea class="fa-control py-2 text-[length:var(--fa-text-md)] leading-relaxed resize-y min-h-9" rows="2" wire:model.blur="texte.{{ $s->id }}"
+                                  placeholder="Was passiert in diesem Schritt? Temperatur und Zeit konkret." aria-label="Schritt {{ $s->position }}"
                                   @disabled(! $schreibbar) data-step-text></textarea>
 
                         @if($s->photos->isNotEmpty())
-                            <div class="flex flex-wrap gap-1.5">
+                            <div class="flex flex-wrap gap-2">
                                 @foreach($s->photos as $foto)
                                     <span class="relative group" wire:key="sp-{{ $s->id }}-{{ $foto->id }}">
                                         <img src="{{ $foto->url() }}" alt="{{ $foto->caption ?? '' }}" title="{{ $foto->caption ?? '' }}"
-                                             class="fa-step-thumb" loading="lazy" />
+                                             class="w-14 h-10 object-cover rounded-[var(--fa-radius-control)] border border-[var(--fa-line)]" loading="lazy" />
                                         @if($schreibbar)
                                             <button type="button" wire:click="fotoEntkoppeln({{ $s->id }}, {{ $foto->id }})"
-                                                    class="hidden group-hover:flex absolute -top-1.5 -right-1.5 w-4 h-4 items-center justify-center rounded-full bg-slate-700 text-white text-[9px]"
-                                                    title="von diesem Schritt lösen (Foto bleibt im Pool)" data-foto-entkoppeln>✕</button>
+                                                    class="hidden group-hover:flex focus-visible:flex absolute -top-2 -right-2 w-5 h-5 items-center justify-center rounded-full bg-[var(--fa-ink)] text-[var(--fa-surface)]"
+                                                    title="Vom Schritt lösen, das Foto bleibt im Pool" aria-label="Foto vom Schritt lösen" data-foto-entkoppeln>@svg('heroicon-m-x-mark', 'w-3.5 h-3.5')</button>
                                         @endif
                                     </span>
                                 @endforeach
@@ -210,7 +204,9 @@
                     </div>
                 </div>
             @empty
-                <p class="fa-step-hint py-2">Noch keine Schritte. „＋ Schritt" anlegen oder oben Markdown einfügen.</p>
+                <x-fa::empty compact icon="heroicon-o-queue-list" title="Noch keine Schritte">
+                    Ersten Schritt hinzufügen, Markdown einfügen oder die KI Schritte vorschlagen lassen.
+                </x-fa::empty>
             @endforelse
 
             <datalist id="fa-phasen-{{ $rezept->id }}">
@@ -223,10 +219,10 @@
             </datalist>
 
             @if($schreibbar)
-                <div class="flex items-center gap-2 mt-2 pt-2 border-t border-black/5">
-                    <button type="button" wire:click="schrittAnlegen" class="{{ $btnPrimary }}" data-schritt-anlegen>＋ Schritt</button>
+                <div class="flex flex-wrap items-center gap-2 mt-1 pt-3 border-t border-[var(--fa-line)]">
+                    <x-fa::button size="sm" icon="heroicon-m-plus" wire:click="schrittAnlegen" data-schritt-anlegen>Schritt hinzufügen</x-fa::button>
                     @if($aktiverSchritt === null)
-                        <button type="button" wire:click="poolOeffnen(0)" class="{{ $btnGhostXs }}" data-pool-allgemein>Fotos verwalten</button>
+                        <x-fa::button size="sm" variant="ghost" icon="heroicon-m-photo" wire:click="poolOeffnen(0)" data-pool-allgemein>Fotos verwalten</x-fa::button>
                     @endif
                 </div>
             @endif
@@ -239,44 +235,45 @@
             @endif
 
             @if($freieFotoIds !== [] && $aktiverSchritt === null)
-                <p class="fa-step-hint mt-1">{{ count($freieFotoIds) }} Foto(s) hängen an keinem Schritt — sie gelten als allgemeine Rezept-Fotos.</p>
+                <p class="{{ $hinweis }} mt-2">{{ count($freieFotoIds) === 1 ? '1 Foto hängt' : count($freieFotoIds) . ' Fotos hängen' }} an keinem Schritt und {{ count($freieFotoIds) === 1 ? 'gilt' : 'gelten' }} als allgemeine Rezept-Fotos.</p>
             @endif
         </div>
 
         {{-- ── ANSICHT: ANLEITUNG (Karten) ─────────────────────────────── --}}
-        <div x-show="ansicht === 'anleitung'" x-cloak class="space-y-2" data-anleitung>
+        <div x-show="ansicht === 'anleitung'" x-cloak class="flex flex-col gap-2" data-anleitung>
             {{-- Endprodukt zuerst: der Koch will erst sehen, wo er hin will --}}
             @if($endprodukt !== null)
-                <div class="fa-step-hero" data-endprodukt>
-                    <img src="{{ $endprodukt->url() }}" alt="{{ $endprodukt->caption ?? 'Endprodukt' }}" loading="lazy" />
+                <div class="flex flex-wrap items-start gap-3 rounded-[var(--fa-radius-control)] bg-[var(--fa-warn-soft)] px-3 py-2.5" data-endprodukt>
+                    <img src="{{ $endprodukt->url() }}" alt="{{ $endprodukt->caption ?? 'Endprodukt' }}" loading="lazy"
+                         class="w-36 h-26 object-cover rounded-[var(--fa-radius-control)] border border-[var(--fa-line)]" />
                     <div class="min-w-0">
-                        <p class="fa-step-hero-label">So soll es fertig aussehen</p>
+                        <p class="text-[length:var(--fa-text-sm)] font-semibold text-[var(--fa-warn)]">So soll es fertig aussehen</p>
                         @if($endprodukt->caption)
-                            <p class="text-[12px] leading-snug mt-0.5">{{ $endprodukt->caption }}</p>
+                            <p class="mt-0.5 text-[length:var(--fa-text-md)] leading-snug text-[var(--fa-ink)]">{{ $endprodukt->caption }}</p>
                         @endif
                     </div>
                 </div>
             @endif
-            @php($letztePhase = '__init__')
+            @php $letztePhase = '__init__'; @endphp
             @forelse($schritte as $s)
                 @if(($s->phase ?? '') !== $letztePhase)
-                    @php($letztePhase = $s->phase ?? '')
+                    @php $letztePhase = $s->phase ?? ''; @endphp
                     @if($letztePhase !== '')
-                        <p class="fa-step-phasehead pt-1">{{ $letztePhase }}</p>
+                        <p class="pt-2 text-[length:var(--fa-text-md)] font-semibold text-[var(--fa-accent)]">{{ $letztePhase }}</p>
                     @endif
                 @endif
-                <div class="fa-step-card flex items-start gap-2.5" wire:key="card-{{ $s->id }}">
-                    <span class="fa-step-nr mt-px">{{ $s->position }}</span>
+                <div class="flex items-start gap-2.5 rounded-[var(--fa-radius-control)] bg-[var(--fa-ground)] border border-[var(--fa-line)] px-3 py-2.5" wire:key="card-{{ $s->id }}">
+                    <span class="{{ $nummer }} mt-px">{{ $s->position }}</span>
                     <div class="flex-1 min-w-0">
-                        <div class="text-[13px] leading-snug">{!! \Illuminate\Support\Str::inlineMarkdown((string) $s->text) !!}</div>
+                        <div class="text-[length:var(--fa-text-md)] leading-snug text-[var(--fa-ink)]">{!! \Illuminate\Support\Str::inlineMarkdown((string) $s->text) !!}</div>
                         @if($s->photos->isNotEmpty())
-                            <div class="flex flex-wrap gap-2 mt-1.5">
+                            <div class="flex flex-wrap gap-2 mt-2">
                                 @foreach($s->photos as $foto)
                                     <figure class="w-32" wire:key="cardf-{{ $s->id }}-{{ $foto->id }}">
                                         <img src="{{ $foto->url() }}" alt="{{ $foto->caption ?? "Schritt {$s->position}" }}"
-                                             class="w-32 h-24 object-cover rounded-lg border border-black/10" loading="lazy" />
+                                             class="w-32 h-24 object-cover rounded-[var(--fa-radius-control)] border border-[var(--fa-line)]" loading="lazy" />
                                         @if($foto->caption)
-                                            <figcaption class="text-[10px] text-gray-500 mt-0.5 truncate">{{ $foto->caption }}</figcaption>
+                                            <figcaption class="mt-0.5 truncate {{ $hinweis }}">{{ $foto->caption }}</figcaption>
                                         @endif
                                     </figure>
                                 @endforeach
@@ -285,7 +282,7 @@
                     </div>
                 </div>
             @empty
-                <p class="fa-step-hint">Keine Schritte erfasst.</p>
+                <x-fa::empty compact icon="heroicon-o-queue-list" title="Keine Schritte erfasst" />
             @endforelse
         </div>
     </div>

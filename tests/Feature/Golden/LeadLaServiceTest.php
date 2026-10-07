@@ -116,7 +116,7 @@ it('GT-6 (I2): manueller Override validiert GP-Zugehörigkeit; NULL erlaubt', fu
     $eigener = ($this->mkLa)('Anton GmbH');
 
     expect(fn () => $this->svc->setLeadLa($this->rootTeam, $this->gp, $fremderLa->id))
-        ->toThrow(RuntimeException::class, 'nicht mit GP');
+        ->toThrow(RuntimeException::class, 'nicht mit dem Grundprodukt');
 
     $this->svc->setLeadLa($this->rootTeam, $this->gp, $eigener->id);
     expect($this->gp->fresh()->lead_la_supplier_item_id)->toBe($eigener->id);

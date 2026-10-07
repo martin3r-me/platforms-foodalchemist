@@ -36,6 +36,7 @@ class FoodAlchemistSpeiseplan extends Model
         'opening_days' => 'array',
         'is_template' => 'boolean',
         'source_synced_at' => 'datetime',
+        'vorgaben' => 'array',   // Spec 59: [{chip_id, mahlzeit|null, min|null, max|null}]
     ];
 
     /** Spec 57 · Paket 7: die Vorlage, aus der diese Betriebs-Kopie stammt. */

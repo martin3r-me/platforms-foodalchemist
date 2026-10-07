@@ -140,7 +140,7 @@ it('umdisponieren geht auch noch im laufenden Auftrag — die Realität besetzt 
 
 it('ein fremdes Team kann nicht zuteilen (D1)', function () {
     expect(fn () => $this->svc->assignLine($this->childA, ($this->zeile)()->id, ['assignee' => 'X']))
-        ->toThrow(RuntimeException::class, 'D1');
+        ->toThrow(RuntimeException::class, 'anderen Team');
 });
 
 it('ein Posten aus einem fremden Team ist nicht zuweisbar', function () {

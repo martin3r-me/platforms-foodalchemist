@@ -32,7 +32,7 @@ beforeEach(function () {
 
     foreach ([[$this->erdig, $this->nussig, 'erprobt']] as [$a, $b, $typ]) {
         foreach ([[$a, $b], [$b, $a]] as [$x, $y]) {
-            DB::table('foodalchemist_pairing_anchor_edges')->insert([
+            \Platform\FoodAlchemist\Tests\Support\Harmonie::ausFixture([
                 'uuid' => (string) UuidV7::generate(), 'anchor_a_id' => $x, 'anchor_b_id' => $y,
                 'type' => $typ, 'created_at' => now(), 'updated_at' => now(),
             ]);
@@ -59,11 +59,7 @@ beforeEach(function () {
         'status' => 'approved', 'is_sales_recipe' => true,
     ]);
     foreach ([$this->erdig, $this->nussig] as $aid) {
-        DB::table('foodalchemist_recipe_anchor_mappings')->insert([
-            'uuid' => (string) UuidV7::generate(), 'team_id' => $this->rootTeam->id,
-            'recipe_id' => $this->vk->id, 'anchor_id' => $aid, 'role' => 'kern',
-            'created_at' => now(), 'updated_at' => now(),
-        ]);
+        \Platform\FoodAlchemist\Tests\Support\RezeptAnker::gib($this->vk, $aid);   // Spec 60: Anker über das Aromenprofil
     }
 });
 

@@ -211,7 +211,7 @@ it('LA-first rollt die GP-Anlage zurück wenn der Artikel zwischenzeitlich gemap
     $struktur->update(['gp_id' => $anderesGp->id]);
 
     $modal->call('speichern')
-        ->assertSet('fehler', fn ($f) => str_contains((string) $f, 'bereits einem anderen GP'));
+        ->assertSet('fehler', fn ($f) => str_contains((string) $f, 'bereits einem anderen Grundprodukt'));
 
     expect(FoodAlchemistGp::where('name', 'Rote Bete: frisch, sous-vide gegart')->exists())->toBeFalse()
         ->and((int) $struktur->fresh()->gp_id)->toBe($anderesGp->id);

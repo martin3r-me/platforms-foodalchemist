@@ -29,100 +29,87 @@
     'toggle' => null,            {{-- Livewire-Methode für den Schnellschalter aktiv/inaktiv --}}
     'fensterHinweis' => null,    {{-- z. B. abgeleitetes Speiseplan-Fenster als Klartext --}}
 ])
-@php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
-@php($istAktiv = $zustand === 'laeuft' || $zustand === 'geplant' || $zustand === 'abgelaufen')
-{{-- Farbe folgt dem Lauf-Zustand, nicht dem Status: „aktiv, aber abgelaufen" ist kein Erfolg. --}}
-@php($zustandPill = [
-    'laeuft' => $variantPill['success'], 'geplant' => $variantPill['info'],
-    'abgelaufen' => $variantPill['warning'], 'inaktiv' => $variantPill['warning'],
-    'entwurf' => $variantPill['secondary'], 'archiviert' => $variantPill['secondary'],
-])
-@php($zustandLabel = [
-    'laeuft' => 'Läuft', 'geplant' => 'Geplant', 'abgelaufen' => 'Abgelaufen',
-    'inaktiv' => 'Inaktiv', 'entwurf' => 'Entwurf', 'archiviert' => 'Archiviert',
-])
+@php
+    $istAktiv = $zustand === 'laeuft' || $zustand === 'geplant' || $zustand === 'abgelaufen';
+    // Farbe folgt dem Lauf-Zustand, nicht dem Status: „aktiv, aber abgelaufen" ist kein Erfolg.
+    $zustandTon = [
+        'laeuft' => 'ok', 'geplant' => 'info',
+        'abgelaufen' => 'warn', 'inaktiv' => 'warn',
+        'entwurf' => 'neutral', 'archiviert' => 'neutral',
+    ];
+    $zustandLabel = [
+        'laeuft' => 'Läuft', 'geplant' => 'Geplant', 'abgelaufen' => 'Abgelaufen',
+        'inaktiv' => 'Inaktiv', 'entwurf' => 'Entwurf', 'archiviert' => 'Archiviert',
+    ];
+@endphp
 
-<div class="space-y-3" data-ausgabe-status>
+<div class="flex flex-col gap-3" data-ausgabe-status>
 
     {{-- Lauf-Zustand + Schnellschalter --}}
-    <div class="flex items-center justify-between gap-3 flex-wrap">
-        <div class="flex items-center gap-2">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="flex flex-wrap items-center gap-2 min-w-0">
             @if($zustand)
-                <span class="{{ $pill }} {{ $zustandPill[$zustand] ?? $variantPill['secondary'] }}" data-ausgabe-zustand="{{ $zustand }}">
-                    {{ $zustandLabel[$zustand] ?? $zustand }}
-                </span>
+                <x-fa::badge :tone="$zustandTon[$zustand] ?? 'neutral'" data-ausgabe-zustand="{{ $zustand }}">{{ $zustandLabel[$zustand] ?? ucfirst((string) $zustand) }}</x-fa::badge>
             @endif
-            @if($grund)<span class="text-[11px] text-gray-500">{{ $grund }}</span>@endif
+            @if($grund)<span class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">{{ $grund }}</span>@endif
         </div>
 
         @if($toggle)
             {{-- Ein Klick nimmt eine laufende Ausgabe vom Netz und zurück, ohne den Umweg über
-                 das Status-Dropdown und ohne zu archivieren. --}}
-            <button type="button" wire:click="{{ $toggle }}" class="{{ $btnGhostXs }} {{ $istAktiv ? 'text-amber-700' : 'text-emerald-700' }}"
-                    data-ausgabe-toggle>
+                 den Status und ohne zu archivieren. --}}
+            <x-fa::button size="sm" :icon="$istAktiv ? 'heroicon-o-pause-circle' : 'heroicon-o-play-circle'" wire:click="{{ $toggle }}" data-ausgabe-toggle>
                 {{ $istAktiv ? 'Vom Netz nehmen' : 'Aktiv schalten' }}
-            </button>
+            </x-fa::button>
         @endif
     </div>
 
     @if($konflikt)
         {{-- Hinweis, kein Verbot: zwei gleichzeitig laufende Ausgaben können gewollt sein
              (Übergangsphase, Sonderkarte). Die Übersicht führt sie trotzdem als Konflikt. --}}
-        <p class="text-[11px] text-amber-700" data-ausgabe-konflikt>{{ $konflikt }}</p>
+        <x-fa::signal tone="warn" data-ausgabe-konflikt><span>{{ $konflikt }}</span></x-fa::signal>
     @endif
 
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <div>
-            <label class="{{ $label }} block mb-1">Status</label>
-            <select wire:model="{{ $statusModel }}" class="{{ $input }}" data-ausgabe-status-select>
-                @foreach(\Platform\FoodAlchemist\Enums\AusgabeStatus::optionen() as $v => $l)
-                    <option value="{{ $v }}">{{ $l }}</option>
-                @endforeach
-            </select>
+    <div class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,11rem),1fr))] gap-3">
+        <div class="col-span-full">
+            <x-fa::choice :name="$statusModel" :live="false" label="Status" :options="\Platform\FoodAlchemist\Enums\AusgabeStatus::optionen()" data-ausgabe-status-select />
         </div>
 
         @if($vonModel)
-            <div>
-                <label class="{{ $label }} block mb-1">Gültig ab</label>
-                <input type="date" wire:model="{{ $vonModel }}" class="{{ $input }}" />
-            </div>
-            <div>
-                <label class="{{ $label }} block mb-1">Gültig bis</label>
-                <input type="date" wire:model="{{ $bisModel }}" class="{{ $input }}" />
-            </div>
+            <x-fa::field label="Gültig ab">
+                <x-fa::input type="date" wire:model="{{ $vonModel }}" aria-label="Gültig ab" />
+            </x-fa::field>
+            <x-fa::field label="Gültig bis">
+                <x-fa::input type="date" wire:model="{{ $bisModel }}" aria-label="Gültig bis" />
+            </x-fa::field>
         @elseif($fensterHinweis)
-            <div class="md:col-span-2">
-                <label class="{{ $label }} block mb-1">Zeitraum</label>
-                <p class="text-xs text-gray-600 pt-1.5">{{ $fensterHinweis }}</p>
-            </div>
+            <x-fa::field label="Zeitraum">
+                <p class="pt-1.5 text-[length:var(--fa-text-md)] text-[var(--fa-ink-2)]">{{ $fensterHinweis }}</p>
+            </x-fa::field>
         @endif
 
         @if($outletModel)
-            <div>
-                <label class="{{ $label }} block mb-1">Betrieb</label>
+            <x-fa::field label="Betrieb" optional>
                 @if($betriebe === null || $betriebe->isEmpty())
                     {{-- Ohne gepflegte Betriebe ist die Betriebsbrille leer — den Weg dorthin
-                         nennen, statt ein totes Select zu zeigen. --}}
-                    <p class="text-[11px] text-gray-500 pt-1.5">
-                        Noch kein Betrieb angelegt —
+                         nennen, statt ein totes Auswahlfeld zu zeigen. --}}
+                    <p class="pt-1.5 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">
+                        Noch kein Betrieb angelegt.
                         <a href="{{ route('foodalchemist.einstellungen', ['sektion' => 'betriebe']) }}"
-                           class="text-violet-600 hover:underline" wire:navigate>in den Einstellungen pflegen</a>.
+                           class="text-[var(--fa-accent)] hover:underline" wire:navigate>Betriebe in den Einstellungen anlegen</a>
                     </p>
                 @else
-                    <select wire:model="{{ $outletModel }}" class="{{ $input }}" data-ausgabe-outlet>
-                        <option value="">– kein Betrieb –</option>
+                    <x-fa::select wire:model="{{ $outletModel }}" placeholder="Kein Betrieb" aria-label="Betrieb" data-ausgabe-outlet>
                         @foreach($betriebe as $b)
                             <option value="{{ $b->id }}">{{ $b->name }}</option>
                         @endforeach
-                    </select>
+                    </x-fa::select>
                 @endif
-            </div>
+            </x-fa::field>
         @endif
-
     </div>
 
-    <p class="text-[10px] text-gray-500">
+    <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">
         Betrieb und CRM-Kunde sind beide optional. Eine Ausgabe ohne beides erscheint im Controlling
-        unter „ohne Zuordnung" — sie ist nicht verloren, aber in keiner der beiden Brillen.
+        unter „ohne Zuordnung“. Sie ist nicht verloren, aber in keiner der beiden Ansichten.
     </p>
 </div>

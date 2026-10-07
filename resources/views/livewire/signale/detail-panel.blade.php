@@ -1,192 +1,163 @@
-{{-- Spec 21 · Tranche P (S3a) — Signal-Panel: betroffene Objekte (volle Liste, sortierbar)
-     + objekt-zentrische Sicht („was hat dieses Rezept noch?"). Design = Cockpit/section
-     wie Recipes/Verkauf/Produktion (Detail-Panels v3). Read-only. --}}
-{{-- Achtung Blade-Falle: die Kurzform `@php(...)` NICHT vor einem `@php … @endphp`-Block
-     verwenden — Blades Raw-Block-Regex greift ab dem ersten `@php` bis zum ersten
-     `@endphp` und lässt alles dazwischen unkompiliert (Symptom: „unexpected token class").
-     Darum steht hier oben der Block, Kurzformen erst danach. --}}
+{{-- Signal-Detail (Modal) — Spec 21 · Tranche P (S3a). Read-only Sprungliste: was ist los,
+     was ist zu tun, welche Objekte sind betroffen, wie entwickelt sich der Typ, und ob der Typ
+     gedämpft werden soll. Bearbeitet wird im jeweiligen Editor bzw. über „KI erledigen lassen"
+     in der Signal-Zeile.
+
+     fa-pass 2026-10-05: auf Bausteine <x-fa::…> umgestellt. Funktion, wire:-Bindungen,
+     Events und data-Marker unverändert. --}}
+{{-- Achtung Blade-Falle: in dieser Datei NUR Block-Form für PHP. Die Kurzform mit Klammern
+     neben einem Block lässt Blades Roh-Block-Regex alles dazwischen unkompiliert. --}}
 @php
-    extract(\Platform\FoodAlchemist\Support\Ui::maps());
-    $sevMap = [
-        'kritisch' => ['tint' => 'bg-rose-500/10 text-rose-600', 'variant' => 'danger'],
-        'warnung' => ['tint' => 'bg-amber-500/10 text-amber-600', 'variant' => 'warning'],
-        'info' => ['tint' => 'bg-sky-500/10 text-sky-600', 'variant' => 'info'],
-    ];
-    $sv = $sig !== null ? ($sevMap[$sig->severity->value] ?? $sevMap['info']) : $sevMap['info'];
-    // S3b-2 · Punkt 8: Ton der Zustands-Zeile. Steht bewusst HIER oben im einen Block —
-    // ein zweiter Roh-Block weiter unten würde ab der ersten Kurzform greifen und die
-    // halbe View unkompiliert lassen (s. Warnung oben). Und: NIE die Roh-Block-Direktiven
-    // in einem Kommentar hier drin nennen — der Schluss-Tag würde den Block früh beenden.
-    $polTon = match ($policy['state'] ?? 'alarm') {
-        'stumm' => 'bg-black/[0.03] text-gray-500',
-        'akzeptiert' => 'bg-emerald-500/[0.07] text-emerald-700',
-        'frist_abgelaufen' => 'bg-amber-500/[0.09] text-amber-700',
-        default => 'bg-black/[0.03] text-gray-600',
+    $schwereTon = ['kritisch' => 'crit', 'warnung' => 'warn', 'info' => 'info'];
+    $ton = $sig !== null ? ($schwereTon[$sig->severity->value] ?? 'info') : 'info';
+    $istWeg = $plan !== null && $plan['kind'] === 'navigate';
+    $metaZahl = $betroffen ? number_format($betroffen['total'], 0, ',', '.') : null;
+    $verlaufMeta = $policy !== null ? $policy['count'] . ' offen' : null;
+    $bereich = $sig !== null ? \Platform\FoodAlchemist\Livewire\ReviewQueue::bereichLabel($sig->type) : null;
+    $polBadge = match ($policy['state'] ?? 'alarm') {
+        'stumm' => ['Stumm', 'neutral'],
+        'akzeptiert' => ['Akzeptiert', 'ok'],
+        'frist_abgelaufen' => ['Frist abgelaufen', 'warn'],
+        default => ['Meldet ungedämpft', 'neutral'],
     };
+    $delta = $policy['delta'] ?? null;
+    $sparkTon = ($delta ?? 0) > 0 ? 'text-[var(--fa-crit)]' : (($delta ?? 0) < 0 ? 'text-[var(--fa-ok)]' : 'text-[var(--fa-ink-3)]');
+    $kiUrteil = $sig !== null && $sig->type->istKiUrteil();
+    $linkKlasse = 'min-w-0 flex-1 flex items-center gap-2 text-left text-[length:var(--fa-text-md)] text-[var(--fa-accent)] hover:text-[var(--fa-accent-hover)] hover:underline';
+    $artLabel = ['recipe' => null, 'gp' => 'Grundprodukt', 'concept' => 'Konzept', 'foodbook' => 'Foodbook'];
 @endphp
 
-<x-foodalchemist::modal name="signal-detail" title="Signal-Detail" size="max-w-2xl">
-    <div data-signal-panel class="space-y-4">
+<x-foodalchemist::modal name="signal-detail" title="Signal" size="max-w-2xl">
+    <div data-signal-panel class="flex flex-col gap-5">
     @if($sig === null)
-        <div class="text-center text-xs text-gray-500 py-8">Kein Signal gewählt.</div>
+        <x-fa::empty icon="heroicon-o-bell" title="Kein Signal gewählt">In der Liste bei einem Signal „Betroffene ansehen“ wählen.</x-fa::empty>
     @else
-        {{-- Kopf --}}
-        <div>
-            <div class="flex items-start gap-2.5">
-                <span class="shrink-0 grid place-items-center w-9 h-9 rounded-xl {{ $sv['tint'] }}" title="{{ $sig->severity->label() }}">
-                    @svg($sig->type->icon(), 'w-[18px] h-[18px]')
-                </span>
-                <div class="min-w-0 flex-1">
-                    <h3 class="text-[15px] font-semibold tracking-tight text-gray-900 leading-snug">{{ $sig->title }}</h3>
-                    <p class="text-[11px] text-gray-500 mt-1">
-                        {{ $sig->type->label() }} ·
-                        <span class="{{ $pill }} {{ $variantPill[$sv['variant']] }}">{{ $sig->severity->label() }}</span>
-                        @if(! $sig->status->istOffen())
-                            <span class="{{ $pill }} {{ $variantPill[$sig->status->badgeVariant()] }}">{{ $sig->status->label() }}</span>
-                        @endif
-                    </p>
-                </div>
+        {{-- Kopf: Schwere, Titel, Bereich und Art --}}
+        <header class="flex flex-col gap-2">
+            <div class="flex flex-wrap items-center gap-1.5">
+                <x-fa::badge :tone="$ton">{{ $sig->severity->label() }}</x-fa::badge>
+                @if(! $sig->status->istOffen())
+                    <x-fa::badge :tone="$sig->status->value === 'erledigt' ? 'ok' : 'neutral'">{{ $sig->status->label() }}</x-fa::badge>
+                @endif
+                <span class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">{{ $bereich }}</span>
             </div>
-            @if($sig->description)
-                <p class="text-[12px] leading-relaxed text-gray-600 mt-2">{{ $sig->description }}</p>
-            @endif
-            <p class="text-[10px] text-gray-400 mt-1.5">
-                {{ $sig->source }} · erkannt {{ $sig->created_at?->format('d.m.Y H:i') }}
+            <h3 class="text-[length:var(--fa-text-lg)] font-semibold leading-snug text-[var(--fa-ink)]">{{ $sig->title }}</h3>
+            <p class="inline-flex items-center gap-1.5 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]">
+                @svg($sig->type->icon(), 'w-4 h-4 shrink-0 text-[var(--fa-ink-3)]') {{ $sig->type->label() }}
             </p>
-        </div>
+            @if($sig->description)
+                <p class="text-[length:var(--fa-text-md)] leading-relaxed text-[var(--fa-ink-2)] max-w-[70ch]">{{ $sig->description }}</p>
+            @endif
+            <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]" title="Quelle: {{ $sig->source }}">
+                Erkannt am {{ $sig->created_at?->format('d.m.Y') }} um {{ $sig->created_at?->format('H:i') }} Uhr
+            </p>
+        </header>
 
-        {{-- Plan als Erklärtext (der Knopf bleibt in der Signal-Zeile — eine Wahrheit).
-             22·H4b/V-033: drei Lagen, drei Ausgaben — Auto-Fix/KI-Assistenz (violett, Knopf
-             in der Zeile), `navigate` (sachlich, KEIN Knopf: der Mensch geht selbst hin) und
-             „kein Weg" mit ausdrücklicher Begründung. Vorher war Letzteres ein leerer Bereich
-             und damit von „hier hat nur niemand nachgedacht" nicht zu unterscheiden. --}}
-        @php($istWeg = $plan !== null && $plan['kind'] === 'navigate')
+        {{-- Was tun? 22·H4b/V-033: drei Lagen, drei Ausgaben. Auto-Fix/KI-Assistenz (Knopf in der
+             Signal-Zeile), Weg-Satz (der Mensch geht selbst hin) und „kein Weg" mit Begründung. --}}
         @if($plan !== null && $sig->status->istOffen())
-            <div class="rounded-xl border px-3.5 py-2.5 {{ $istWeg ? 'border-sky-500/20 bg-sky-500/[0.04]' : 'border-violet-500/20 bg-violet-500/[0.04]' }}">
-                <div class="flex items-center gap-1.5 mb-1">
-                    @if($istWeg)
-                        @svg('heroicon-o-map-pin', 'w-3.5 h-3.5 text-sky-500')
-                    @else
-                        @svg($plan['kind'] === 'deterministic' ? 'heroicon-o-bolt' : 'heroicon-o-sparkles', 'w-3.5 h-3.5 text-violet-500')
-                    @endif
-                    <span class="text-[11px] font-medium text-gray-700">{{ $plan['flavorLabel'] }}</span>
-                </div>
-                <p class="text-[11px] leading-relaxed text-gray-600">{{ $plan['plan'] }}</p>
-            </div>
+            <x-fa::notice tone="info" :title="$istWeg ? 'So beheben' : $plan['flavorLabel']">
+                {{ $plan['plan'] }}
+                @unless($istWeg)
+                    <span class="block mt-1 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">Starten über „KI erledigen lassen“ in der Liste.</span>
+                @endunless
+            </x-fa::notice>
         @elseif($plan === null && $ohneWeg !== null && $sig->status->istOffen())
-            <div class="rounded-xl border border-black/[0.06] bg-black/[0.02] px-3.5 py-2.5" data-signal-ohne-weg>
-                <div class="flex items-center gap-1.5 mb-1">
-                    @svg('heroicon-o-hand-raised', 'w-3.5 h-3.5 text-gray-400')
-                    <span class="text-[11px] font-medium text-gray-600">Kein Weg im System</span>
+            <div class="flex items-start gap-2.5 px-3.5 py-3 rounded-[var(--fa-radius-surface)] bg-[var(--fa-neutral-soft)]" data-signal-ohne-weg>
+                @svg('heroicon-o-hand-raised', 'w-5 h-5 shrink-0 mt-px text-[var(--fa-ink-3)]')
+                <div class="min-w-0 text-[length:var(--fa-text-md)]">
+                    <p class="font-semibold text-[var(--fa-ink)]">Im System nicht automatisch lösbar</p>
+                    <p class="text-[var(--fa-ink-2)]">{{ $ohneWeg }}</p>
                 </div>
-                <p class="text-[11px] leading-relaxed text-gray-500">{{ $ohneWeg }}</p>
             </div>
         @endif
 
-        {{-- Rückmeldungen der S3b-Aktionen (Dry-Run / Teil-Fix) --}}
+        {{-- Rückmeldungen (Regler gespeichert/entfernt, Fehler) --}}
         @if($meldung)
-            <div class="rounded-lg bg-emerald-500/10 text-emerald-700 text-[11px] px-3 py-2" data-signal-meldung>{{ $meldung }}</div>
+            <x-fa::notice tone="ok" data-signal-meldung>{{ $meldung }}</x-fa::notice>
         @endif
         @if($fehler)
-            <div class="rounded-lg bg-rose-500/10 text-rose-700 text-[11px] px-3 py-2" data-signal-fehler>{{ $fehler }}</div>
+            <x-fa::notice tone="crit" data-signal-fehler>{{ $fehler }}</x-fa::notice>
         @endif
 
-        {{-- ── Punkt 1: betroffene Objekte, volle Liste + Sortierung ──────────
-             Meta-Text vorab in eine Variable: verschachtelte Quotes in einem
-             Komponenten-Attribut lassen den Blade-ComponentTagCompiler auflaufen. --}}
-        @php($metaZahl = $betroffen ? number_format($betroffen['total'], 0, ',', '.') : null)
-        <x-foodalchemist::section title="Betroffene Objekte" icon="heroicon-o-queue-list" :meta="$metaZahl">
+        {{-- ── Betroffene Objekte: volle Liste + Sortierung ── --}}
+        <x-fa::section variant="plain" title="Betroffen" icon="heroicon-o-queue-list" :meta="$metaZahl">
             <x-slot:actions>
-                <div class="inline-flex items-center gap-0.5 p-0.5 rounded-lg bg-black/[0.04]">
-                    @foreach(['name' => 'A–Z', 'name_desc' => 'Z–A', 'art' => 'Art'] as $wert => $lbl)
-                        <button type="button" wire:key="sigsort-{{ $wert }}" wire:click="setSort('{{ $wert }}')"
-                                class="px-2 py-0.5 rounded-md text-[10px] transition-all {{ $sort === $wert ? 'bg-white shadow-sm font-medium text-violet-700' : 'text-gray-500 hover:text-gray-800' }}"
+                <div role="group" aria-label="Sortierung" class="flex p-0.5 gap-0.5 rounded-[var(--fa-radius-control)] bg-[var(--fa-neutral-soft)]">
+                    @foreach(['name' => 'A bis Z', 'name_desc' => 'Z bis A', 'art' => 'Nach Art'] as $wert => $lbl)
+                        <button type="button" wire:key="sigsort-{{ $wert }}" wire:click="setSort('{{ $wert }}')" aria-pressed="{{ $sort === $wert ? 'true' : 'false' }}"
+                                class="h-7 px-2.5 rounded-[5px] text-[length:var(--fa-text-sm)] font-medium transition-colors {{ $sort === $wert ? 'bg-[var(--fa-surface)] text-[var(--fa-ink)] shadow-sm' : 'text-[var(--fa-ink-2)] hover:text-[var(--fa-ink)]' }}"
                                 data-signal-sort="{{ $wert }}">{{ $lbl }}</button>
                     @endforeach
                 </div>
             </x-slot:actions>
 
             @if($betroffen && count($betroffen['items']))
-                <div class="space-y-0.5">
+                <div class="flex flex-col divide-y divide-[var(--fa-line)]">
                     @foreach($betroffen['items'] as $it)
-                        @php($istGewaehlt = $objektKind === $it['kind'] && $objektId === $it['id'])
-                        <div wire:key="sigobj-{{ $it['kind'] }}-{{ $it['id'] }}-{{ $loop->index }}"
-                             class="rounded-lg {{ $istGewaehlt ? 'bg-violet-500/[0.06]' : 'hover:bg-black/[0.03]' }} transition-colors">
-                            <div class="flex items-center gap-1.5 px-1.5 py-1">
+                        @php
+                            $istGewaehlt = $objektKind === $it['kind'] && $objektId === $it['id'];
+                            $art = $it['kind'] === 'recipe' ? ($it['is_sales_recipe'] ? 'Gericht' : 'Basisrezept') : ($artLabel[$it['kind']] ?? null);
+                        @endphp
+                        <div wire:key="sigobj-{{ $it['kind'] }}-{{ $it['id'] }}-{{ $loop->index }}" class="{{ $istGewaehlt ? 'bg-[var(--fa-accent-soft)]' : '' }}">
+                            <div class="flex items-center gap-2 px-1 py-2">
                                 @if($it['kind'] === 'recipe')
-                                    {{-- Tranche B (S5b): bei `rezept_plausi_ki` öffnet das Modal direkt mit den
-                                         abgelegten Befunden — das Signal zählt genau die, und der Fix passiert
-                                         je Befund. Kein Prüf-Call beim Sprung (kein Egress, keine zweite
-                                         Befundlage neben der, auf die das Signal zeigt). --}}
+                                    {{-- Tranche B (S5b): bei KI-Urteil-Typen öffnet das Modal direkt mit den abgelegten
+                                         Befunden. Kein Prüf-Call beim Sprung (kein Egress, keine zweite Befundlage). --}}
                                     <button type="button"
-                                            wire:click="$dispatch('{{ $it['is_sales_recipe'] ? 'vk-modal.oeffnen' : 'recipe-modal.oeffnen' }}', { id: {{ $it['id'] }}, copilot: {{ $sig->type->istKiUrteil() ? 'true' : 'false' }} })"
-                                            class="min-w-0 flex-1 flex items-center gap-1.5 text-left text-[11px] text-sky-600 hover:text-sky-700 hover:underline"
-                                            title="{{ $it['is_sales_recipe'] ? 'Verkaufsgericht' : 'Basisrezept' }} öffnen{{ $sig->type->istKiUrteil() ? ' — mit den Copilot-Befunden' : '' }}">
-                                        @svg('heroicon-o-arrow-top-right-on-square', 'w-3 h-3 shrink-0 opacity-60')
+                                            wire:click="$dispatch('{{ $it['is_sales_recipe'] ? 'vk-modal.oeffnen' : 'recipe-modal.oeffnen' }}', { id: {{ $it['id'] }}, copilot: {{ $kiUrteil ? 'true' : 'false' }} })"
+                                            class="{{ $linkKlasse }}"
+                                            title="{{ $it['is_sales_recipe'] ? 'Verkaufsgericht' : 'Basisrezept' }} öffnen{{ $kiUrteil ? ', mit den Befunden der KI' : '' }}">
                                         <span class="truncate">{{ $it['name'] }}</span>
                                     </button>
                                 @elseif($it['kind'] === 'gp')
-                                    <a href="{{ route('foodalchemist.gps.index', ['gp' => $it['id']]) }}" wire:navigate
-                                       class="min-w-0 flex-1 flex items-center gap-1.5 text-[11px] text-violet-600 hover:text-violet-700 hover:underline" title="Grundprodukt öffnen">
-                                        @svg('heroicon-o-arrow-top-right-on-square', 'w-3 h-3 shrink-0 opacity-60')
+                                    <a href="{{ route('foodalchemist.gps.index', ['gp' => $it['id']]) }}" wire:navigate class="{{ $linkKlasse }}" title="Grundprodukt öffnen">
                                         <span class="truncate">{{ $it['name'] }}</span>
                                     </a>
                                 @elseif($it['kind'] === 'concept')
                                     {{-- Tranche C: der Concepter wählt über ?sel= vor (dasselbe Muster wie ?gp= bei den GPs) --}}
-                                    <a href="{{ route('foodalchemist.concepter.index', ['tab' => 'concepts', 'sel' => $it['id']]) }}" wire:navigate
-                                       class="min-w-0 flex-1 flex items-center gap-1.5 text-[11px] text-emerald-600 hover:text-emerald-700 hover:underline" title="Konzept im Concepter öffnen">
-                                        @svg('heroicon-o-arrow-top-right-on-square', 'w-3 h-3 shrink-0 opacity-60')
+                                    <a href="{{ route('foodalchemist.concepter.index', ['tab' => 'concepts', 'sel' => $it['id']]) }}" wire:navigate class="{{ $linkKlasse }}" title="Konzept im Concepter öffnen">
                                         <span class="truncate">{{ $it['name'] }}</span>
                                     </a>
                                 @elseif($it['kind'] === 'foodbook')
                                     {{-- Tranche D: die Leitstelle wählt über ?fb= vor (Foodbooks\Index::$selectedId) --}}
-                                    <a href="{{ route('foodalchemist.foodbooks.index', ['fb' => $it['id']]) }}" wire:navigate
-                                       class="min-w-0 flex-1 flex items-center gap-1.5 text-[11px] text-amber-600 hover:text-amber-700 hover:underline" title="Foodbook in der Leitstelle öffnen">
-                                        @svg('heroicon-o-arrow-top-right-on-square', 'w-3 h-3 shrink-0 opacity-60')
+                                    <a href="{{ route('foodalchemist.foodbooks.index', ['fb' => $it['id']]) }}" wire:navigate class="{{ $linkKlasse }}" title="Foodbook in der Leitstelle öffnen">
                                         <span class="truncate">{{ $it['name'] }}</span>
                                     </a>
                                 @else
-                                    <span class="min-w-0 flex-1 truncate text-[11px] text-gray-600">{{ $it['name'] }}</span>
+                                    <span class="min-w-0 flex-1 truncate text-[length:var(--fa-text-md)] text-[var(--fa-ink)]" title="{{ $it['name'] }}">{{ $it['name'] }}</span>
                                 @endif
 
-                                {{-- „was noch?" gilt für jedes auflösbare Objekt (Tranche C: auch Konzepte,
-                                     Tranche D: auch Foodbooks — Liste in SignalObjectService::KINDS);
-                                     die Teil-Bulk-Checkbox oben bleibt bewusst bei recipe/gp — nur dafür gibt es
-                                     deterministische Fixer (SignalCockpit::DETERMINISTIC). Kommt ein Konzept-/
-                                     Foodbook-Fixer, ändern sich beide Stellen zusammen (auch fixbareItems()). --}}
+                                @if($art)<span class="shrink-0 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">{{ $art }}</span>@endif
+
+                                {{-- „Was noch?" gilt für jedes auflösbare Objekt (SignalObjectService::KINDS). --}}
                                 @if(in_array($it['kind'], \Platform\FoodAlchemist\Services\SignalObjectService::KINDS, true))
-                                    <button type="button" wire:click="objektWaehlen('{{ $it['kind'] }}', {{ $it['id'] }})"
-                                            class="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] text-gray-400 hover:text-violet-700 hover:bg-violet-500/[0.08] transition-colors {{ $istGewaehlt ? 'text-violet-700 bg-violet-500/[0.08]' : '' }}"
-                                            title="Alle offenen Signale an diesem Objekt"
-                                            data-signal-objekt="{{ $it['kind'] }}-{{ $it['id'] }}">
-                                        @svg('heroicon-o-bell-alert', 'w-3 h-3') was noch?
-                                    </button>
+                                    <x-fa::button variant="ghost" size="sm" icon="heroicon-m-bell-alert" wire:click="objektWaehlen('{{ $it['kind'] }}', {{ $it['id'] }})"
+                                                  aria-expanded="{{ $istGewaehlt ? 'true' : 'false' }}" title="Alle offenen Signale an diesem Objekt"
+                                                  data-signal-objekt="{{ $it['kind'] }}-{{ $it['id'] }}">Weitere Befunde</x-fa::button>
                                 @endif
                             </div>
 
-                            {{-- ── Punkt 2: objekt-zentrische Sicht ───────────────── --}}
+                            {{-- Objekt-zentrische Sicht: alle offenen Signale am selben Objekt --}}
                             @if($istGewaehlt)
-                                <div class="mx-1.5 mb-1.5 rounded-lg border border-violet-500/15 bg-white/60 px-2.5 py-2" data-signal-objekt-sicht>
-                                    <p class="text-[10px] font-medium uppercase tracking-wider text-gray-500 mb-1.5">
-                                        Offene Signale an diesem Objekt
-                                    </p>
+                                <div class="mx-1 mb-2 rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] bg-[var(--fa-surface)] px-3 py-2.5" data-signal-objekt-sicht>
+                                    <p class="text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-2)] mb-1.5">Offene Signale an diesem Objekt</p>
                                     @if(count($objektSignale) <= 1)
-                                        <p class="text-[11px] text-gray-500">Nur dieses Signal — einmal fixen genügt.</p>
+                                        <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">Nur dieses Signal. Einmal beheben genügt.</p>
                                     @else
-                                        <div class="space-y-0.5">
+                                        <div class="flex flex-col gap-0.5">
                                             @foreach($objektSignale as $os)
-                                                @php($osSv = $sevMap[$os['severity']] ?? $sevMap['info'])
                                                 <button type="button" wire:key="objsig-{{ $os['id'] }}" wire:click="signalOeffnen({{ $os['id'] }})"
-                                                        class="w-full flex items-center gap-1.5 text-left rounded-md px-1.5 py-1 transition-colors {{ $os['id'] === $sig->id ? 'bg-black/[0.05]' : 'hover:bg-black/[0.03]' }}">
-                                                    <span class="shrink-0 grid place-items-center w-5 h-5 rounded-md {{ $osSv['tint'] }}">@svg($os['icon'], 'w-3 h-3')</span>
-                                                    <span class="min-w-0 flex-1 truncate text-[11px] {{ $os['id'] === $sig->id ? 'font-medium text-gray-800' : 'text-gray-600' }}">{{ $os['label'] }}</span>
-                                                    @if($os['hat_ki'])<span class="shrink-0 text-[9px] text-violet-500" title="KI-Schritt vorhanden">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5 inline-block align-middle')</span>@endif
-                                                    @if($os['id'] === $sig->id)<span class="shrink-0 text-[9px] text-gray-400">hier</span>@endif
+                                                        class="w-full flex items-center gap-2 text-left rounded-[var(--fa-radius-control)] px-2 py-1.5 transition-colors {{ $os['id'] === $sig->id ? 'bg-[var(--fa-neutral-soft)]' : 'hover:bg-[var(--fa-hover)]' }}">
+                                                    <x-fa::badge :tone="$schwereTon[$os['severity']] ?? 'info'" class="shrink-0" :icon="$os['icon']" title="{{ ucfirst($os['severity']) }}"></x-fa::badge>
+                                                    <span class="min-w-0 flex-1 truncate text-[length:var(--fa-text-md)] {{ $os['id'] === $sig->id ? 'font-medium text-[var(--fa-ink)]' : 'text-[var(--fa-ink-2)]' }}" title="{{ $os['label'] }}">{{ $os['label'] }}</span>
+                                                    @if($os['hat_ki'])<span class="shrink-0 text-[var(--fa-accent)]" title="KI-Schritt vorhanden">@svg('heroicon-m-sparkles', 'w-4 h-4')</span>@endif
+                                                    @if($os['id'] === $sig->id)<span class="shrink-0 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">dieses</span>@endif
                                                 </button>
                                             @endforeach
                                         </div>
-                                        <p class="text-[10px] text-gray-400 mt-1.5">
-                                            {{ count($objektSignale) }} Befunde am selben Objekt — in einem Durchgang beheben statt {{ count($objektSignale) }}× öffnen.
+                                        <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)] mt-1.5">
+                                            {{ count($objektSignale) }} Befunde am selben Objekt. In einem Durchgang beheben statt {{ count($objektSignale) }}-mal öffnen.
                                         </p>
                                     @endif
                                 </div>
@@ -196,117 +167,103 @@
                 </div>
 
                 @if($betroffen['total'] > $betroffen['gezeigt'])
-                    <p class="text-[10px] text-gray-400 mt-2">
-                        Zeigt {{ number_format($betroffen['gezeigt'], 0, ',', '.') }} von
-                        {{ number_format($betroffen['total'], 0, ',', '.') }} (Kappung bei {{ $panelLimit }}) — die übrigen
-                        erscheinen, sobald diese behoben sind.
+                    <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">
+                        Zeigt {{ number_format($betroffen['gezeigt'], 0, ',', '.') }} von {{ number_format($betroffen['total'], 0, ',', '.') }}
+                        (höchstens {{ $panelLimit }}). Die übrigen erscheinen, sobald diese behoben sind.
                     </p>
                 @endif
             @elseif($betroffen)
-                <p class="text-[11px] text-gray-500">
-                    Für diesen Signaltyp gibt es keine Einzelaufstellung — der Befund ist aggregiert
-                    @if($betroffen['total'] > 0)({{ number_format($betroffen['total'], 0, ',', '.') }} Objekte laut Payload)@endif.
+                <p class="text-[length:var(--fa-text-md)] text-[var(--fa-ink-2)]">
+                    Für diese Art gibt es keine Einzelaufstellung, der Befund ist zusammengefasst.
+                    @if($betroffen['total'] > 0) Betroffen sind {{ number_format($betroffen['total'], 0, ',', '.') }} Objekte. @endif
                 </p>
+            @else
+                <x-fa::empty compact icon="heroicon-o-queue-list" title="Keine betroffenen Objekte hinterlegt" />
             @endif
-        </x-foodalchemist::section>
+        </x-fa::section>
 
-        {{-- ── Punkt 4: Trend-Sparkline (E1) ──────────────────────────────────
-             Gelesen wird die Signal-Seite der Reihe (Schlüssel = Signal-Typ), darum
-             stehen hier echte Labels und keine rohen Metrik-Keys (V-010). --}}
-        @php($verlaufMeta = $policy !== null ? $policy['count'].' offen' : null)
-        <x-foodalchemist::section title="Verlauf" icon="heroicon-o-presentation-chart-line" :meta="$verlaufMeta">
+        {{-- ── Verlauf (E1): Signal-Seite der Reihe, Schlüssel = Signal-Typ ── --}}
+        <x-fa::section variant="plain" title="Verlauf dieser Art" icon="heroicon-o-presentation-chart-line" :meta="$verlaufMeta">
             @if($spark !== null)
-                <div class="flex items-center gap-3" data-signal-spark>
-                    <svg viewBox="0 0 {{ $spark['w'] }} {{ $spark['h'] }}" class="w-full h-8 overflow-visible" preserveAspectRatio="none" aria-hidden="true">
+                <div class="flex items-center gap-4" data-signal-spark>
+                    <svg viewBox="0 0 {{ $spark['w'] }} {{ $spark['h'] }}" class="w-full h-10 overflow-visible" preserveAspectRatio="none" aria-hidden="true">
                         <polyline points="{{ $spark['points'] }}" fill="none" stroke="currentColor" stroke-width="1.5"
-                                  vector-effect="non-scaling-stroke"
-                                  class="{{ ($policy['delta'] ?? 0) > 0 ? 'text-rose-500' : (($policy['delta'] ?? 0) < 0 ? 'text-emerald-500' : 'text-gray-400') }}" />
+                                  vector-effect="non-scaling-stroke" class="{{ $sparkTon }}" />
                     </svg>
                     <div class="shrink-0 text-right">
-                        <div class="text-[13px] font-semibold text-gray-800 leading-none">{{ $spark['letzter'] }}</div>
-                        @if(($policy['delta'] ?? null) !== null && $policy['delta'] !== 0)
-                            <div class="text-[10px] {{ $policy['delta'] > 0 ? 'text-rose-600' : 'text-emerald-600' }}">
-                                {{ $policy['delta'] > 0 ? '+' : '' }}{{ $policy['delta'] }}
-                            </div>
+                        <div class="text-[length:var(--fa-text-lg)] font-semibold tabular-nums text-[var(--fa-ink)] leading-none">{{ $spark['letzter'] }}</div>
+                        @if($delta !== null && $delta !== 0)
+                            <div class="text-[length:var(--fa-text-sm)] tabular-nums {{ $delta > 0 ? 'text-[var(--fa-crit)]' : 'text-[var(--fa-ok)]' }}">{{ $delta > 0 ? '+' : '' }}{{ $delta }} seit letzter Prüfung</div>
                         @endif
                     </div>
                 </div>
-                <p class="text-[10px] text-gray-400 mt-1.5">
-                    {{ $spark['punkte'] }} Messpunkte · min {{ $spark['min'] }} / max {{ $spark['max'] }} ·
+                <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)] tabular-nums">
+                    {{ $spark['punkte'] }} Messungen · niedrigster Stand {{ $spark['min'] }}, höchster {{ $spark['max'] }} ·
                     seit {{ \Illuminate\Support\Carbon::parse($spark['von'])->format('d.m.Y H:i') }}
                 </p>
             @else
-                <p class="text-[11px] text-gray-500">
-                    Noch keine Reihe — der Verlauf entsteht ab dem zweiten Detektor-Lauf.
+                <p class="text-[length:var(--fa-text-md)] text-[var(--fa-ink-2)]">
+                    Noch keine Reihe. Der Verlauf entsteht ab der zweiten Prüfung.
                     @if(($policy['count'] ?? 0) > 0)Aktuell {{ $policy['count'] }} offen.@endif
                 </p>
             @endif
-        </x-foodalchemist::section>
+        </x-fa::section>
 
-        {{-- ── Punkt 8: Policy-Regler (E2) ────────────────────────────────────
-             WICHTIG in der Fläche selbst benannt: der Regler gilt für den TYP, nicht
-             für dieses eine Signal. --}}
-        <x-foodalchemist::section title="Rausch-Guard" icon="heroicon-o-adjustments-horizontal">
+        {{-- ── Rausch-Guard (E2): der Regler gilt für den TYP, nicht für dieses eine Signal. ── --}}
+        <x-fa::section variant="plain" title="Meldungen dieser Art dämpfen" icon="heroicon-o-adjustments-horizontal"
+                       description="Gilt für alle Signale der Art, nicht nur für dieses.">
             <x-slot:actions>
-                <button type="button" wire:click="policyFormUmschalten"
-                        class="px-2 py-0.5 rounded-md text-[10px] text-gray-500 hover:text-violet-700 hover:bg-violet-500/[0.08] transition-colors"
-                        data-signal-policy-toggle>{{ $policyForm ? 'schließen' : 'einstellen' }}</button>
+                <x-fa::button variant="ghost" size="sm" :icon="$policyForm ? 'heroicon-m-x-mark' : 'heroicon-m-adjustments-horizontal'" wire:click="policyFormUmschalten"
+                              aria-expanded="{{ $policyForm ? 'true' : 'false' }}" data-signal-policy-toggle>{{ $policyForm ? 'Schließen' : 'Einstellen' }}</x-fa::button>
             </x-slot:actions>
 
             @if($policy !== null)
-                <div class="rounded-lg px-3 py-2 {{ $polTon }}" data-signal-policy-state>
-                    <div class="text-[11px]">{{ $policy['hinweis'] }}</div>
-                    @if($policy['note'])<div class="text-[10px] opacity-80 mt-0.5 italic">{{ $policy['note'] }}</div>@endif
-                    @if($policy['geerbt'])
-                        <div class="text-[10px] opacity-70 mt-0.5">geerbt vom Eltern-Team — Speichern legt eine eigene Zeile an, die sie überstimmt.</div>
-                    @endif
+                <div class="flex items-start gap-2" data-signal-policy-state>
+                    <x-fa::badge :tone="$polBadge[1]" class="shrink-0">{{ $polBadge[0] }}</x-fa::badge>
+                    <div class="min-w-0 text-[length:var(--fa-text-md)] text-[var(--fa-ink-2)]">
+                        <p>{{ $policy['hinweis'] }}</p>
+                        @if($policy['note'])<p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)] italic">{{ $policy['note'] }}</p>@endif
+                        @if($policy['geerbt'])
+                            <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">Vom übergeordneten Team übernommen. Speichern legt eine eigene Einstellung an, die sie überstimmt.</p>
+                        @endif
+                    </div>
                 </div>
             @endif
 
             @if($policyForm)
-                <div class="mt-2 rounded-xl border border-violet-500/20 bg-white/70 px-3 py-2.5 space-y-2" data-signal-policy-form>
-                    <p class="text-[10px] text-gray-500 leading-relaxed">
-                        Gilt für <span class="font-medium">alle</span> Signale vom Typ „{{ $sig->type->label() }}",
-                        nicht nur für dieses. Schwelle und Frist dämpfen nur die Darstellung des Bestands —
-                        ein Zuwachs meldet sich weiter. Nur „stumm" schaltet auch den Drift-Alarm ab.
+                <div class="fa-surface p-4 flex flex-col gap-3" data-signal-policy-form>
+                    <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)] leading-relaxed">
+                        Gilt für <span class="font-semibold">alle</span> Signale der Art „{{ $sig->type->label() }}“.
+                        Schwelle und Frist fassen nur den Bestand zusammen, neue Fälle melden sich weiter.
+                        Nur „Stumm“ schaltet auch die Meldung über Verschlechterungen ab.
                     </p>
-                    <div class="grid grid-cols-2 gap-2">
-                        <label class="block">
-                            <span class="block text-[10px] text-gray-500 mb-0.5">ab Bestand nur Zustands-Zeile</span>
-                            <input type="number" min="0" wire:model="pThreshold" placeholder="—"
-                                   class="w-full px-2 py-1 rounded-md border border-black/10 text-[11px]" data-signal-policy-threshold>
-                        </label>
-                        <label class="block">
-                            <span class="block text-[10px] text-gray-500 mb-0.5">akzeptiert bis</span>
-                            <input type="date" wire:model="pAcceptedUntil"
-                                   class="w-full px-2 py-1 rounded-md border border-black/10 text-[11px]" data-signal-policy-until>
-                        </label>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <x-fa::field label="Zusammenfassen ab" for="sig-pol-schwelle" hint="Ab so vielen offenen Fällen nur eine Zeile zeigen.">
+                            <x-fa::input id="sig-pol-schwelle" type="number" numeric min="0" wire:model="pThreshold" placeholder="leer = nie" data-signal-policy-threshold />
+                        </x-fa::field>
+                        <x-fa::field label="Akzeptiert bis" for="sig-pol-bis" hint="Danach meldet sich die Lage wieder.">
+                            <x-fa::input id="sig-pol-bis" type="date" wire:model="pAcceptedUntil" data-signal-policy-until />
+                        </x-fa::field>
                     </div>
-                    <label class="block">
-                        <span class="block text-[10px] text-gray-500 mb-0.5">Begründung (wird angezeigt)</span>
-                        <input type="text" wire:model="pNote" maxlength="255" placeholder="z. B. Sourcing läuft, Frist mit Einkauf abgestimmt"
-                               class="w-full px-2 py-1 rounded-md border border-black/10 text-[11px]" data-signal-policy-note>
+                    <x-fa::field label="Begründung" for="sig-pol-notiz" hint="Wird bei der Lage angezeigt." optional>
+                        <x-fa::input id="sig-pol-notiz" wire:model="pNote" maxlength="255" placeholder="z. B. Einkauf klärt neue Bezugsquelle bis Monatsende" data-signal-policy-note />
+                    </x-fa::field>
+                    <label class="flex items-center gap-2 text-[length:var(--fa-text-md)] text-[var(--fa-ink)]">
+                        <input type="checkbox" wire:model="pMuted" class="w-4 h-4 rounded border-[var(--fa-line-strong)] text-[var(--fa-accent)] focus:ring-[var(--fa-accent)]" data-signal-policy-muted>
+                        Stumm schalten <span class="text-[var(--fa-ink-3)]">(interessiert nicht, auch keine Meldung über Verschlechterungen)</span>
                     </label>
-                    <label class="flex items-center gap-1.5">
-                        <input type="checkbox" wire:model="pMuted"
-                               class="w-3.5 h-3.5 rounded border-gray-300 text-violet-600 focus:ring-violet-500" data-signal-policy-muted>
-                        <span class="text-[11px] text-gray-600">stumm — interessiert nicht (auch kein Drift-Alarm)</span>
-                    </label>
-                    <div class="flex items-center gap-1.5 pt-0.5">
-                        <button type="button" wire:click="policySpeichern"
-                                class="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium text-white bg-violet-600 hover:bg-violet-700"
-                                data-signal-policy-save>
-                            @svg('heroicon-o-check', 'w-3 h-3') Speichern
-                        </button>
-                        @if($policy !== null && $policy['gesetzt'] && ! $policy['geerbt'])
-                            <button type="button" wire:click="policyEntfernen"
-                                    class="px-2 py-1 rounded-lg text-[10px] text-gray-500 hover:text-rose-700 hover:bg-rose-500/[0.08]"
-                                    data-signal-policy-remove>Regler entfernen</button>
-                        @endif
+                    {{-- Entfernen links, Speichern rechts: Löschen nie direkt neben Speichern. --}}
+                    <div class="flex items-center justify-between gap-2 pt-1">
+                        <div>
+                            @if($policy !== null && $policy['gesetzt'] && ! $policy['geerbt'])
+                                <x-fa::button variant="danger" size="sm" icon="heroicon-m-trash" wire:click="policyEntfernen" data-signal-policy-remove>Einstellung entfernen</x-fa::button>
+                            @endif
+                        </div>
+                        <x-fa::button variant="primary" icon="heroicon-m-check" wire:click="policySpeichern" data-signal-policy-save>Einstellung speichern</x-fa::button>
                     </div>
                 </div>
             @endif
-        </x-foodalchemist::section>
+        </x-fa::section>
     @endif
     </div>
 </x-foodalchemist::modal>

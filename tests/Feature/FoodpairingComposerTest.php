@@ -39,7 +39,7 @@ beforeEach(function () {
     // Harmonie-Kante bidirektional. axis='harmony' + level ist Pflicht fürs Stärke-Symbol (C-b).
     $this->mkHarmonie = function (int $a, int $b, int $level): void {
         foreach ([[$a, $b], [$b, $a]] as [$x, $y]) {
-            DB::table('foodalchemist_pairing_anchor_edges')->insert([
+            \Platform\FoodAlchemist\Tests\Support\Harmonie::ausFixture([
                 'uuid' => (string) UuidV7::generate(), 'anchor_a_id' => $x, 'anchor_b_id' => $y,
                 'type' => 'aroma', 'axis' => 'harmony', 'level' => $level,
                 'weight' => $level === 3 ? 1.0 : 0.9, 'created_at' => now(), 'updated_at' => now(),

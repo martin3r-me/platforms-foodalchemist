@@ -35,7 +35,7 @@ beforeEach(function () {
 
     $mkKante = function (int $a, int $b, string $typ) {
         foreach ([[$a, $b], [$b, $a]] as [$x, $y]) {
-            DB::table('foodalchemist_pairing_anchor_edges')->insert([
+            \Platform\FoodAlchemist\Tests\Support\Harmonie::ausFixture([
                 'uuid' => (string) UuidV7::generate(), 'anchor_a_id' => $x, 'anchor_b_id' => $y,
                 'type' => $typ, 'created_at' => now(), 'updated_at' => now(),
             ]);

@@ -31,7 +31,7 @@ beforeEach(function () {
         return $this->ankerId[$slug] = (int) DB::getPdo()->lastInsertId();
     };
     $this->mkEdge = function (string $a, string $b, int $level, float $weight): void {
-        DB::table('foodalchemist_pairing_anchor_edges')->insert([
+        \Platform\FoodAlchemist\Tests\Support\Harmonie::ausFixture([
             'uuid' => (string) UuidV7::generate(),
             'anchor_a_id' => $this->ankerId[$a], 'anchor_b_id' => $this->ankerId[$b],
             'type' => 'aroma', 'level' => $level, 'weight' => $weight,
@@ -99,7 +99,8 @@ it('composer.KOHAESION: bewertet eine Anker-Menge + erdet sie auf echte GPs', fu
     expect($res->success)->toBeTrue()
         ->and($res->data['kohaesion']['rated_pairs'])->toBe(1)
         ->and($res->data['kohaesion']['score'])->toBeGreaterThan(0)
-        ->and($res->data['bruecken'])->toHaveKey('pairs_total')
+        ->and($res->data)->not->toHaveKey('bruecken')                  // Spec 60: keine Zweitbewertung
+        ->and($res->data['kombination']['kennzahlen']['harmoniert'])->toBe(1)
         ->and($res->data['hinweis'])->toBeNull();
 
     // Erdung: beide Anker tragen je einen GP
@@ -115,7 +116,7 @@ it('composer.KOHAESION: ein einzelner Anker â†’ nur Erdung + Hinweis, keine KohÃ
         ->execute(['anker_ids' => [$this->ankerId['rauch']]], $this->ctx);
 
     expect($res->success)->toBeTrue()
-        ->and($res->data['bruecken'])->toBeNull()
+        ->and($res->data['kombination'])->toBeNull()
         ->and($res->data['hinweis'])->not->toBeNull()
         ->and($res->data['erdung'][0]['gp_count'])->toBeGreaterThan(0);
 });

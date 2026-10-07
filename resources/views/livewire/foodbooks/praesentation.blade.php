@@ -3,7 +3,7 @@
 
 <x-ui-page>
     <x-slot name="navbar">
-        <x-ui-page-navbar title="Präsentation" icon="heroicon-o-sparkles" />
+        <x-foodalchemist::shell.page-navbar title="Präsentation" icon="heroicon-o-sparkles" />
     </x-slot>
 
     <x-slot name="actionbar">

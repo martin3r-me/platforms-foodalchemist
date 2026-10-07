@@ -144,7 +144,7 @@ class Herstellkosten extends Component
         $typ = in_array($this->neuBlock['type'] ?? '', ['pct_mek', 'pct_fek', 'pct_hk', 'eur_pro_portion', 'arbeitszeit'], true)
             ? $this->neuBlock['type'] : 'pct_mek';
         if ($label === '') {
-            $this->fehler = 'Block braucht eine Bezeichnung.';
+            $this->fehler = 'Bitte eine Bezeichnung für den Kostenblock eingeben.';
 
             return;
         }
@@ -185,8 +185,11 @@ class Herstellkosten extends Component
     public function fixHinzu(): void
     {
         if (trim((string) $this->neuFix['label']) === '' || ($this->neuFix['block_key'] ?? '') === '') {
+            $this->fehler = 'Bitte Bezeichnung und Kostenblock für die Fixkosten angeben.';
+
             return;
         }
+        $this->fehler = null;
         app(FixkostenService::class)->create($this->team(), $this->neuFix, $this->scopeOutlet());
         $this->neuFix = ['label' => '', 'amount' => '', 'periode' => 'monatlich', 'block_key' => ''];
         $this->ladeFix();
@@ -253,7 +256,7 @@ class Herstellkosten extends Component
             ],
         ]);
         app(\Platform\FoodAlchemist\Services\PricingCascadeService::class)->recomputeTeam($this->team());
-        $this->meldung = 'Gespeichert — Kalkulation & Cockpits nutzen diese Werte.';
+        $this->meldung = 'Gespeichert. Kalkulation und Cockpits rechnen mit diesen Werten.';
         $this->dispatch('kosten-aktualisiert');   // #379+: Werkstatt-Cockpit live nachziehen
     }
 
@@ -293,8 +296,8 @@ class Herstellkosten extends Component
         $kopiert = app(FixkostenService::class)->uebernimmTeamFixkosten($this->team(), $outlet);
         app(\Platform\FoodAlchemist\Services\PricingCascadeService::class)->recomputeTeam($this->team());
         $this->ladeWerte();
-        $this->meldung = 'Betrieb „' . $outlet->name . '" gespeichert — eigenständige Kalkulation'
-            . ($kopiert > 0 ? " ($kopiert Team-Fixkosten übernommen, jetzt eigenständig editierbar)." : '.');
+        $this->meldung = '„' . $outlet->name . '“ gespeichert als eigenständige Kalkulation'
+            . ($kopiert > 0 ? ", $kopiert Team-Fixkosten übernommen und jetzt eigenständig änderbar." : '.');
         $this->dispatch('kosten-aktualisiert');
     }
 
@@ -309,7 +312,7 @@ class Herstellkosten extends Component
         app(\Platform\FoodAlchemist\Services\PricingCascadeService::class)->recomputeTeam($this->team());
         $this->ladeFix();
         $this->meldung = $n > 0
-            ? $n . ' Team-Fixkosten für „' . $outlet->name . '" übernommen.'
+            ? $n . ' Team-Fixkosten für „' . $outlet->name . '“ übernommen.'
             : 'Betrieb hat bereits eigene Fixkosten.';
         $this->dispatch('kosten-aktualisiert');
     }
@@ -329,7 +332,7 @@ class Herstellkosten extends Component
         app(FixkostenService::class)->loescheAlleFuerOutlet($this->team(), $outlet);
         app(\Platform\FoodAlchemist\Services\PricingCascadeService::class)->recomputeTeam($this->team());
         $this->ladeWerte();
-        $this->meldung = 'Betrieb „' . $outlet->name . '" zurückgesetzt — zeigt wieder die Team-Werte als Startpunkt.';
+        $this->meldung = '„' . $outlet->name . '“ zurückgesetzt. Startpunkt sind wieder die Team-Werte.';
     }
 
     /** Schema aus den editierten Zeilen (Reihenfolge = Index × 10). */

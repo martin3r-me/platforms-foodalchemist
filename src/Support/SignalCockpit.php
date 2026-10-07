@@ -80,8 +80,8 @@ final class SignalCockpit
             . 'persistieren (manuell/KI-kuratierte bleiben unberührt).',
         'lead_la' => 'Lead-Lieferantenartikel je GP neu wählen — aber nur setzen, wo er auf einen gültigen Preis auflöst; '
             . 'danach die nutzenden Rezepte neu rechnen. Echte Beschaffungs-Lücken bleiben offen.',
-        'recipe_anker' => 'Flavor-Kern-Anker je Rezept aus Zutaten-/Rezeptnamen deterministisch auflösen und mappen — '
-            . 'macht das Rezept im Pairing-Graph sichtbar.',
+        'recipe_anker' => 'Aromenprofil je Rezept aus den Zutaten-Ankern bauen — macht das Rezept für die '
+            . 'Kombinationslogik sichtbar. Bleibt es leer, fehlen Anker an den Grundprodukten (GP-Zuordnung).',
         'gp_anker' => 'Flavor-Kern-Anker je GP aus dem GP-Namen auflösen und mappen — macht den GP im Pairing-Graph sichtbar.',
         'recompute' => 'EK-Kette der betroffenen Rezepte neu rechnen. Rezepte, die weiter auf keinen Preis auflösen '
             . '(fehlende Lead-/Preisdaten), bleiben offen.',
@@ -161,6 +161,19 @@ final class SignalCockpit
             . '(Lieferanten → Artikel); die Rezept-Aggregate ziehen beim nächsten Recompute nach.',
         'widerspruch_wissen_graph' => 'R&D-Frage im Wissens-Modul: trägt der Beleg die Paarung, fehlt dem Anker-Graph '
             . 'eine Kante — trägt er sie nicht, ist die Behauptung im Dokument zu streichen. Entschieden wird am Dokument.',
+        // Spec 60 · P8: die vier Pairing-Signale. Werkzeug für das Anker-Wissen ist MCP
+        // (anker_wissen.GET → anker_wissen.STATUS), der Wissens-Browser folgt.
+        'pairing_wissen_pruefen' => 'Das Anker-Wissen ansehen (foodalchemist.anker_wissen.GET) und anker-weise freigeben '
+            . 'oder Einzelnes verwerfen (foodalchemist.anker_wissen.STATUS). Danach tragen die Aussagen „aus Dossier, geprüft"; '
+            . 'das Signal schließt sich, sobald nichts mehr im Entwurf steht.',
+        'pairing_widerspruch_messung' => 'Den Konflikt-Eintrag am Anker prüfen (foodalchemist.anker_wissen.GET, Zeile mit '
+            . 'messung_3_sterne): stört die Kombination trotz gemeinsamer Aromen (Textur, Säure, Bitterkeit) → freigeben; '
+            . 'sonst verwerfen (foodalchemist.anker_wissen.STATUS).',
+        'pairing_konflikt_im_gericht' => 'Im Gericht (Detail → „Passt das zusammen?") den Konflikt ansehen: einen der beiden '
+            . 'Bestandteile tauschen — oder, wenn der Konflikt hier nicht greift, das Anker-Wissen korrigieren.',
+        'pairing_wissensluecke' => 'Das Zutaten-Dossier dieses Ankers auslesen (foodalchemist:anker-wissen import) und '
+            . 'danach freigeben. Bis dahin kennt das System für den Anker nur die gemessene Harmonie — keine Bedarfe, '
+            . 'keinen Kontrast, keine Konflikte.',
         'sortiments_luecke' => 'Beschaffungs-Entscheidung: einen tragenden GP für das gewünschte Aroma anlegen bzw. '
             . 'beim Lieferanten anfragen (Grundprodukte / Lieferanten). Bis dahin bleibt die Kreativ-Idee ungeerdet.',
         // Trendradar: das Signal meldet fertige Konzept-ENTWÜRFE, keinen Mangel. Der Weg ist

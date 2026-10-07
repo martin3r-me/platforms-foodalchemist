@@ -110,7 +110,7 @@ it('reicht den Hinweis des Dienstes durch, statt ihn zu schlucken', function () 
         ->set('kanonPromptKey', 'recipe.generator')
         ->call('kanonAdd')
         ->assertSet('fehler', null)
-        ->assertSet('hinweis', fn ($h) => $h !== null && str_contains($h, 'Deckel'));
+        ->assertSet('hinweis', fn ($h) => $h !== null && str_contains($h, 'vorgesehen sind höchstens'));   // Copy-Umbau 2026-10-05: »Deckel ist« → »vorgesehen sind höchstens«
 });
 
 it('meldet den Changelog-Guard als Fehler, statt ihn wegzuschlucken', function () {
@@ -131,5 +131,5 @@ it('ohne Prompt-Key passiert nichts — und es steht da, warum', function () {
     Livewire::test(Browser::class)
         ->call('select', $id)
         ->call('kanonAdd')
-        ->assertSet('fehler', 'Bitte einen Prompt-Key wählen.');
+        ->assertSet('fehler', 'Bitte einen Arbeitsschritt wählen.');
 });

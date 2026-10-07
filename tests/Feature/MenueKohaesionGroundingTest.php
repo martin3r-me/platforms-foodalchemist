@@ -42,7 +42,7 @@ beforeEach(function () {
         ]);
     };
     $this->mkEdge = function (string $a, string $b, int $level, float $weight): void {
-        DB::table('foodalchemist_pairing_anchor_edges')->insert([
+        \Platform\FoodAlchemist\Tests\Support\Harmonie::ausFixture([
             'uuid' => (string) UuidV7::generate(),
             'anchor_a_id' => $this->ankerId[$a], 'anchor_b_id' => $this->ankerId[$b],
             'type' => 'aroma', 'level' => $level, 'weight' => $weight,

@@ -19,7 +19,7 @@ uses(TestCase::class, SeedsTeamHierarchy::class);
  * Geprüft wird beides: die Rangliste MIT Begründung im Service
  * ({@see ConceptGeneratorService::slotKandidaten}) und die Fläche im Editor.
  * Kern-Aussagen: die Reihenfolge folgt derselben Assembler-Logik wie der
- * Generator (Rolle-Semantik → Aroma-Kanten → Anker-Dichte → Preis-Nähe), die
+ * Generator (Rolle-Semantik → Aroma-Harmonie der Profile → Anker-Dichte → Preis-Nähe), die
  * bereits gesetzten Gerichte des Konzepts sind Kohäsions-BASIS statt Kandidaten,
  * und wo nichts zulässig ist, sagt der Vorschlag es statt zu schweigen.
  */
@@ -97,9 +97,9 @@ it('nimmt gesetzte Gerichte aus der Rangliste und nutzt ihre Anker als Kohäsion
         ->and($ids[0])->toBe($wild->id)
         ->and($res['kandidaten'][0]['faktoren']['kohaesion'])->toBe(1.0)
         ->and($res['kandidaten'][0]['faktoren']['ankerdichte'])->toBe(1)
-        ->and($res['kandidaten'][0]['begruendung'])->toContain('Aroma-Nähe zur gesetzten Folge 1,00')
+        ->and($res['kandidaten'][0]['begruendung'])->toContain('Aroma-Harmonie zur gesetzten Folge 100 %')
         // Ohne Kante zur Basis wird das ehrlich benannt, nicht weggelassen.
-        ->and($res['kandidaten'][1]['begruendung'])->toContain('keine Aroma-Kante zur gesetzten Folge');
+        ->and($res['kandidaten'][1]['begruendung'])->toContain('keine gemessene Aroma-Harmonie zur gesetzten Folge');
 });
 
 it('ohne gesetzte Gerichte spricht die Begründung nicht von einer Menüfolge', function () {
@@ -207,7 +207,7 @@ it('Gerichte gebuchter Pakete zählen zur Kohäsions-Basis', function () {
 
     // Ohne Paket-Auffaltung wäre die Basis leer → Alphabet-Tiebreak (Angus zuerst) und keine Aroma-Zeile.
     expect($kandidaten[0]['id'])->toBe($wild->id)
-        ->and($kandidaten[0]['begruendung'])->toContain('Aroma-Nähe zur gesetzten Folge')
+        ->and($kandidaten[0]['begruendung'])->toContain('Aroma-Harmonie zur gesetzten Folge')
         ->and(array_column($kandidaten, 'id'))->not->toContain($imPaket->id);
 });
 

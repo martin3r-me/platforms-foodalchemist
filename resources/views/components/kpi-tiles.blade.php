@@ -56,43 +56,7 @@
     $toneKlasse = fn (?string $t) => 'kpi-' . (in_array($t, ['accent', 'good', 'warn', 'bad'], true) ? $t : 'neutral');
 @endphp
 
-@once
-    <style>
-        [data-fa-kpis] .kpi-label{ font-size:11px !important; }
-        [data-fa-kpis] > div{ min-width:0; }
-        /* tabular-nums: Ziffern müssen über die Kacheln hinweg auf einer Spalte stehen,
-           sonst „wackelt" der Streifen bei jedem Live-Update (Concepter rechnet mit). */
-        /* Textwerte (Lieferant, GP-Name) können lang sein — abschneiden statt das Raster sprengen.
-           Für Zahlen ohne Wirkung. Volltext steht im title (siehe Feld `title`). */
-        [data-fa-kpis] .kpi-value{ font-size:16px !important; font-weight:600; line-height:1.15; margin-top:2px; font-variant-numeric:tabular-nums; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-        /* Unvollständigkeits-Zeichen am Wert (z. B. „~" wenn eine Position ohne Portionsgewicht
-           in die Summe läuft) — bewusst als eigenes Feld statt rohem HTML im Wert. */
-        [data-fa-kpis] .kpi-hint{ font-weight:400; color:#b45309; margin-left:2px; }
-        .fa-editor-panel [data-fa-kpis] .kpi-hint{ color:#fcd34d; }
-        /* Hell-Theme */
-        [data-fa-kpis] .kpi-neutral{ background:#fff !important; border-color:rgba(0,0,0,.06) !important; }
-        [data-fa-kpis] .kpi-accent { background:rgba(139,92,246,.08) !important; border-color:rgba(139,92,246,.25) !important; }
-        [data-fa-kpis] .kpi-good   { background:rgba(16,185,129,.09) !important; border-color:rgba(16,185,129,.26) !important; }
-        [data-fa-kpis] .kpi-warn   { background:rgba(245,158,11,.11) !important; border-color:rgba(245,158,11,.30) !important; }
-        [data-fa-kpis] .kpi-bad    { background:rgba(244,63,94,.08) !important; border-color:rgba(244,63,94,.26) !important; }
-        [data-fa-kpis] .kpi-neutral .kpi-value{ color:#111827; }
-        [data-fa-kpis] .kpi-accent  .kpi-value{ color:#6d28d9; }
-        [data-fa-kpis] .kpi-good    .kpi-value{ color:#047857; }
-        [data-fa-kpis] .kpi-warn    .kpi-value{ color:#b45309; }
-        [data-fa-kpis] .kpi-bad     .kpi-value{ color:#be123c; }
-        /* Dunkel-Theme (Editor-Grund) — schlägt die generische Kachel-Regel aus modal.blade.php */
-        .fa-editor-panel [data-fa-kpis] .kpi-neutral{ background:rgba(255,255,255,.06) !important; border-color:rgba(255,255,255,.10) !important; }
-        .fa-editor-panel [data-fa-kpis] .kpi-accent { background:rgba(139,92,246,.17) !important; border-color:rgba(167,139,250,.42) !important; }
-        .fa-editor-panel [data-fa-kpis] .kpi-good   { background:rgba(16,185,129,.16) !important; border-color:rgba(16,185,129,.40) !important; }
-        .fa-editor-panel [data-fa-kpis] .kpi-warn   { background:rgba(245,158,11,.16) !important; border-color:rgba(245,158,11,.40) !important; }
-        .fa-editor-panel [data-fa-kpis] .kpi-bad    { background:rgba(244,63,94,.16) !important; border-color:rgba(244,63,94,.40) !important; }
-        .fa-editor-panel [data-fa-kpis] .kpi-neutral .kpi-value{ color:#f1f5f9; }
-        .fa-editor-panel [data-fa-kpis] .kpi-accent  .kpi-value{ color:#c4b5fd; }
-        .fa-editor-panel [data-fa-kpis] .kpi-good    .kpi-value{ color:#6ee7b7; }
-        .fa-editor-panel [data-fa-kpis] .kpi-warn    .kpi-value{ color:#fcd34d; }
-        .fa-editor-panel [data-fa-kpis] .kpi-bad     .kpi-value{ color:#fda4af; }
-    </style>
-@endonce
+{{-- fa-pass: Kachel-Optik liegt in resources/css/foodalchemist-pass.css (Tokens, hell + Werkbank) — kein eigener style-Block mehr. --}}
 
 <div {{ $attributes->merge(['class' => 'grid grid-cols-2 ' . $gridCols . ' gap-2']) }}
      data-fa-kpis @if($marker) data-{{ $marker }} @endif>

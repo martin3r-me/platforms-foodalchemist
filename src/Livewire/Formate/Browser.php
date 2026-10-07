@@ -79,6 +79,19 @@ class Browser extends Component
         $this->resetPage();
     }
 
+    /** Ansicht: alle Filter und die Suche auf einmal leeren (reiner Anzeige-Zustand, keine Daten). */
+    public function filterZuruecksetzen(): void
+    {
+        $this->search = '';
+        $this->statusFilter = '';
+        $this->originFilter = '';
+        $this->servierformFilter = '';
+        $this->eventtypFilter = '';
+        $this->momentFilter = '';
+        $this->saisonFilter = '';
+        $this->resetPage();
+    }
+
     public function updatedSearch(): void
     {
         $this->resetPage();
@@ -145,7 +158,7 @@ class Browser extends Component
                 ->where('is_inactive', false)->orderBy('sort_order')->get(['id', 'name']),
             'facetteSaisons' => \Platform\FoodAlchemist\Models\FoodAlchemistSaison::visibleToTeam($team)
                 ->where('is_inactive', false)->orderBy('sort_order')->get(['id', 'name']),
-        ])->layout('platform::layouts.app');
+        ])->layout(\Platform\FoodAlchemist\Support\FaShell::layout());
     }
 
     private function team()

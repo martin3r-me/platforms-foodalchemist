@@ -1,30 +1,26 @@
-    <div x-show="tab === 'stammdaten'" x-cloak class="pt-4">
-    <x-foodalchemist::modal-section title="Stammdaten">
-        <div class="grid grid-cols-2 gap-3">
-            <div>
-                <label class="{{ $label }}">Name <span class="text-rose-500">*</span></label>
-                <input type="text" wire:model="name" placeholder="z. B. Sommerfest Vormittag" class="{{ $input }}" data-produktion-name />
-            </div>
-            <div>
-                <label class="{{ $label }}">Produktionsdatum</label>
-                <input type="date" wire:model="productionDate" class="{{ $input }}" data-produktion-datum />
-            </div>
+    <div x-show="tab === 'stammdaten'" x-cloak class="pt-4 flex flex-col gap-4">
+    <x-fa::section title="Auftrag" icon="heroicon-o-clipboard-document-list">
+        <div class="grid gap-3 sm:grid-cols-2">
+            <x-fa::field label="Name" for="produktion-name" required>
+                <x-fa::input id="produktion-name" wire:model="name" placeholder="z. B. Sommerfest Vormittag" data-produktion-name />
+            </x-fa::field>
+            <x-fa::field label="Liefertag" for="produktion-datum" required hint="An diesem Tag muss alles fertig sein.">
+                <x-fa::input id="produktion-datum" type="date" wire:model="productionDate" data-produktion-datum />
+            </x-fa::field>
+            <x-fa::field label="Anlass" for="produktion-anlass" optional class="sm:col-span-2">
+                <x-fa::input id="produktion-anlass" wire:model="reference" placeholder="z. B. Sommer-Buffet" data-produktion-anlass />
+            </x-fa::field>
+            <x-fa::field label="Notiz" for="produktion-notiz" optional class="sm:col-span-2">
+                <x-fa::textarea id="produktion-notiz" wire:model="note" rows="3" placeholder="Hinweise für die Küche" />
+            </x-fa::field>
         </div>
-        <div class="mt-3">
-            <label class="{{ $label }}">Anlass</label>
-            <input type="text" wire:model="reference" placeholder="z. B. Sommer-Buffet" class="{{ $input }}" data-produktion-anlass />
-        </div>
-        <div class="mt-3">
-            <label class="{{ $label }}">Notiz</label>
-            <textarea wire:model="note" rows="2" class="{{ $input }}"></textarea>
-        </div>
-        {{-- Küchen-Manager: Überproduktions-/Puffer-% — skaliert Ansätze + Einkauf, Ziele bleiben im Original --}}
-        <div class="mt-3 flex items-end gap-2 pt-3 border-t border-white/10">
-            <div class="w-44">
-                <label class="{{ $label }}">Überproduktion / Puffer %</label>
-                <input type="number" min="0" max="100" step="1" wire:model.live.debounce.400ms="puffer" class="{{ $input }}" data-produktion-puffer />
-            </div>
-            <span class="text-[11px] text-gray-500 pb-2">skaliert Ansätze + Einkauf hoch; die Ziele bleiben im Original. 0 = kein Puffer.</span>
-        </div>
-    </x-foodalchemist::modal-section>
+    </x-fa::section>
+
+    {{-- Küchen-Manager: Überproduktions-/Puffer-% — skaliert Ansätze + Einkauf, Ziele bleiben im Original --}}
+    <x-fa::section title="Puffer" icon="heroicon-o-arrow-trending-up"
+                   description="Erhöht Ansätze und Einkauf um diesen Anteil. Die Ziele bleiben unverändert. 0 bedeutet kein Puffer.">
+        <x-fa::field label="Überproduktion in Prozent" for="produktion-puffer" class="w-48">
+            <x-fa::input id="produktion-puffer" type="number" min="0" max="100" step="1" numeric wire:model.live.debounce.400ms="puffer" data-produktion-puffer />
+        </x-fa::field>
+    </x-fa::section>
     </div>{{-- /Stammdaten-Panel --}}

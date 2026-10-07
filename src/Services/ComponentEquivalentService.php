@@ -42,10 +42,10 @@ class ComponentEquivalentService
             }
         }
         if ($sourceKind === $altKind && $sourceId === $altId) {
-            throw new \RuntimeException('Eine Realisierung kann nicht zu sich selbst äquivalent sein.');
+            throw new \RuntimeException('Ein Baustein kann nicht sein eigener Ersatz sein.');
         }
         if (Equiv::resolve($sourceKind, $sourceId) === null || Equiv::resolve($altKind, $altId) === null) {
-            throw new \RuntimeException('Quelle oder Alternative existiert nicht.');
+            throw new \RuntimeException('Original oder Ersatz existiert nicht.');
         }
 
         return Equiv::updateOrCreate(
@@ -187,7 +187,7 @@ class ComponentEquivalentService
     {
         $zutat = FoodAlchemistRecipeIngredient::findOrFail($recipeIngredientId);
         if (! FoodAlchemistRecipe::visibleToTeam($team)->whereKey($zutat->recipe_id)->exists()) {
-            throw new \RuntimeException('Rezept nicht im Zugriff (D1).');
+            throw new \RuntimeException('Kein Zugriff auf dieses Rezept.');
         }
 
         [$kind, $id] = $zutat->gp_id !== null

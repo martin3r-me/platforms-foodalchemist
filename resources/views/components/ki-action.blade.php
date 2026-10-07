@@ -61,10 +61,10 @@
         // bleibt visuell erhalten statt auf das neutrale ghostXs zu wechseln — die Tönung ist
         // das Signal „diese Aktion ruft die KI", das büßt eine Umfärbung sonst stillos ein.
         'ai' => \Platform\FoodAlchemist\Support\Ui::maps()['btnAi'],
-        'icon' => 'inline-flex items-center text-gray-400 hover:text-gray-200',
-        default => 'text-violet-300 hover:text-violet-200 underline decoration-violet-300/40 underline-offset-2',
+        'icon' => 'inline-flex items-center text-[var(--fa-ink-3)] hover:text-[var(--fa-ink)]',
+        default => 'text-[var(--fa-accent)] hover:text-[var(--fa-accent-hover)] underline decoration-[var(--fa-accent-line)] underline-offset-2',
     };
-    $fehlerKlasse = $hatFehler ? 'text-rose-300 hover:text-rose-200' : '';
+    $fehlerKlasse = $hatFehler ? 'text-[var(--fa-crit)]' : '';
     $hatConfirm = $confirm !== null && $confirm !== '';
     $hartDeaktiviert = $disabled ? 'true' : 'false';
 @endphp
@@ -117,13 +117,13 @@
         </span>
     </template>
     <template x-if="!pending && ok">
-        <span class="inline-flex items-center gap-1 text-emerald-400">
+        <span class="inline-flex items-center gap-1 text-[var(--fa-ok)]">
             @svg('heroicon-o-check', 'w-3.5 h-3.5')
             @if($variant !== 'icon')<span>{{ $flash ?: ($anzeigeLabel !== '' ? $anzeigeLabel . ' — erledigt' : 'Erledigt') }}</span>@endif
         </span>
     </template>
     <template x-if="!pending && !ok && err">
-        <span class="inline-flex items-center gap-1 text-rose-300">
+        <span class="inline-flex items-center gap-1 text-[var(--fa-crit)]">
             @svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5')
             @if($variant !== 'icon')<span x-text="err"></span>@endif
         </span>

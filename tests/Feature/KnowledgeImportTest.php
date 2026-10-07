@@ -8,7 +8,7 @@ uses(TestCase::class, SeedsTeamHierarchy::class);
 
 /**
  * M5-02: knowledge-import — Upsert per slug+hash (idempotent, version+1 bei
- * Änderung), Dubletten-Suffix, Anker-Verdrahtung über quelle_pfad.
+ * Änderung), Dubletten-Suffix.
  */
 beforeEach(function () {
     $this->seedTeamHierarchy();
@@ -63,22 +63,15 @@ it('importiert Klasse A, ist idempotent und zählt version bei Inhalts-Änderung
         ->and($doc->content_md)->toContain('NEUES');
 });
 
-it('verdrahtet Anker über quelle_pfad und löst Slug-Dubletten per Suffix', function () {
-    // Anker, der auf die Salbei-MD zeigt (wie der Slice-Import ihn anlegt)
-    DB::table('foodalchemist_vocab_pairing_anchors')->insert([
-        'uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(),
-        'slug' => 'salbei', 'display_de' => 'Salbei',
-        'source_path' => '07_WISSEN/07.02_Flavor_Pairing/pairings/salbei.md',
-        'created_at' => now(), 'updated_at' => now(),
-    ]);
+it('löst Slug-Dubletten per Suffix', function () {
+    // Die Anker-Verdrahtung über source_path ist mit Spec 60 weg (Anker ← Dossier-Frontmatter).
     // Dublette: zwei Dateien, ein Slug
     file_put_contents("{$this->vault}/07.02_Flavor_Pairing/pairings/schwarzer-knoblauch.md", "# Alt");
     file_put_contents("{$this->vault}/07.02_Flavor_Pairing/pairings/schwarzer_knoblauch.md", "# Neu");
 
     $this->artisan('foodalchemist:knowledge-import', ['--vault' => $this->vault, '--rust-src' => $this->rustSrc])->assertSuccessful();
 
-    expect(DB::table('foodalchemist_vocab_pairing_anchors')->where('slug', 'salbei')->whereNotNull('knowledge_document_id')->exists())->toBeTrue()
-        ->and(DB::table('foodalchemist_knowledge_documents')->where('slug', 'like', 'pairing.schwarzer_knoblauch%')->count())->toBe(2);
+    expect(DB::table('foodalchemist_knowledge_documents')->where('slug', 'like', 'pairing.schwarzer_knoblauch%')->count())->toBe(2);
 });
 
 it('Import-Guard: etabliert imported_hash und überschreibt ein in der App editiertes Doc NICHT (App-wins)', function () {

@@ -180,7 +180,7 @@ class Browser extends Component
     {
         $doc = $this->sichtbaresDoc($id, ['id', 'team_id', 'slug']);
         if ($doc === null || ! TeamScope::mayWrite($doc->team_id, Auth::user()?->currentTeamRelation)) {
-            $this->fehler = 'Fremdes Wissen — Aliasse und Verbindungen pflegt Besitzer bzw. Master-Team.';
+            $this->fehler = 'Dieses Wissen gehört einem anderen Team. Suchbegriffe und Verbindungen pflegt das besitzende Team bzw. das Master-Team.';
 
             return null;
         }
@@ -261,7 +261,7 @@ class Browser extends Component
     {
         $this->fehler = null;
         $team = Auth::user()?->currentTeamRelation;
-        if ($team === null) { $this->fehler = 'Kein Team im Kontext.'; return; }
+        if ($team === null) { $this->fehler = 'Kein Team gewählt.'; return; }
         try {
             $service = app(\Platform\FoodAlchemist\Services\KnowledgeService::class);
             if ($this->creating) {
@@ -284,7 +284,7 @@ class Browser extends Component
             return;
         }
         if (! TeamScope::mayWrite($doc->team_id, Auth::user()?->currentTeamRelation)) {
-            $this->fehler = 'Fremdes Wissen — nur Besitzer bzw. Master-Team kann (de)aktivieren.';
+            $this->fehler = 'Dieses Wissen gehört einem anderen Team. Aktivieren und Deaktivieren kann nur das besitzende Team bzw. das Master-Team.';
 
             return;
         }
@@ -334,7 +334,7 @@ class Browser extends Component
             return;
         }
         if (! TeamScope::mayWrite($doc->team_id, Auth::user()?->currentTeamRelation)) {
-            $this->fehler = 'Fremdes Wissen — nur Besitzer bzw. Master-Team kann löschen.';
+            $this->fehler = 'Dieses Wissen gehört einem anderen Team. Löschen kann nur das besitzende Team bzw. das Master-Team.';
 
             return;
         }
@@ -430,7 +430,7 @@ class Browser extends Component
         }
         $key = trim($this->kanonPromptKey);
         if ($key === '') {
-            $this->fehler = 'Bitte einen Prompt-Key wählen.';
+            $this->fehler = 'Bitte einen Arbeitsschritt wählen.';
 
             return;
         }
@@ -489,7 +489,7 @@ class Browser extends Component
         $this->previewError = null;
         $team = Auth::user()?->currentTeamRelation;
         if ($team === null) {
-            $this->previewError = 'Kein Team im Kontext.';
+            $this->previewError = 'Kein Team gewählt.';
             return;
         }
         try {
@@ -523,7 +523,7 @@ class Browser extends Component
         if ($this->semantic && $suche !== '') {
             $semanticAktiv = app(KnowledgeEmbeddingService::class)->isProviderAvailable();
             if (! $semanticAktiv) {
-                $semanticNote = 'Semantische Suche nicht verfügbar (kein Embedding-Provider) — es wird die Textsuche genutzt.';
+                $semanticNote = 'Die Suche nach Bedeutung ist gerade nicht verfügbar. Es wird nach dem Wortlaut gesucht.';
             }
         }
 
@@ -666,6 +666,6 @@ class Browser extends Component
             // Master, Changelog-Guard) erzwingt `KnowledgeCanonService::set()`; hier steht
             // nur, ob überhaupt ein Team im Kontext ist.
             'darfKanon' => $selected !== null && Auth::user()?->currentTeamRelation !== null,
-        ])->layout('platform::layouts.app');
+        ])->layout(\Platform\FoodAlchemist\Support\FaShell::layout());
     }
 }

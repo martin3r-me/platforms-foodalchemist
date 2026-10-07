@@ -1,136 +1,216 @@
-{{-- Produktion: rechtes Glance-Cockpit --}}
-@php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
+{{-- Produktion: rechte Detail-Spalte eines Auftrags.
+     fa-pass (2026-10-05): Anatomie Detail-Panels (DESIGN.md, Muster concepter/detail-panel).
+     Kopf (Name, Liefertag, Status; Hauptaktion „Auftrag bearbeiten", sonst der nächste Status-Schritt; alles Weitere
+     im Menü, Stornieren als letzter Eintrag) · Meldungen · Kennzahlen mit Fortschritt · offene Punkte · Rezepte
+     · Überblick (Ziele, Materialbedarf, Posten, Warnungen).
+     Alle wire:-Bindungen, Bestätigungen und data-Marker unverändert (Status-Schritte tragen sie jetzt im Menü). --}}
+@php
+    $statusTon = ['secondary' => 'neutral', 'info' => 'info', 'success' => 'ok', 'danger' => 'crit', 'warning' => 'warn', 'primary' => 'accent'];
+    $menge = fn ($wert) => rtrim(rtrim(number_format((float) $wert, 2, ',', '.'), '0'), ',') ?: '0';
+    $leise = 'text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]';
+    $zeileLabel = 'inline-flex items-center gap-1.5 text-[var(--fa-ink-2)]';
+    $statusAktion = ['in_progress' => 'Produktion starten', 'done' => 'Fertig melden', 'cancelled' => 'Auftrag stornieren'];
+    $statusIcon = ['in_progress' => 'heroicon-m-play', 'done' => 'heroicon-m-check', 'cancelled' => 'heroicon-m-x-circle'];
+    $stornoFrage = 'Produktion stornieren? Offene Einkaufsentwürfe werden neu berechnet; bereits ausgelöste Bestellungen bleiben als Klärfall bestehen.';
+@endphp
 
-<div class="p-4 space-y-4 min-h-full bg-[var(--ui-muted-5)]" data-produktion-panel>
+<div class="p-4 flex flex-col gap-5 min-h-full bg-[var(--fa-ground)]" data-produktion-panel>
     @if($detail === null)
-        <div class="text-center text-xs text-gray-500 py-12">
-            <div class="text-2xl mb-2">⌘</div>
-            Produktionsauftrag in der Tabelle anklicken —<br>Details erscheinen hier.
-        </div>
+        <x-fa::empty icon="heroicon-o-cursor-arrow-rays" title="Kein Auftrag gewählt">Produktionsauftrag in der Tabelle anklicken, dann erscheinen hier Mengen, Status, Rezepte und Materialbedarf.</x-fa::empty>
     @else
-        @php($zieleCount = count($detail['targets']))
-        @php($warnCount = count($detail['warnungen']) + count($kapazitaetsWarnungen))
-        @php($postenBelegt = collect($postenSummen)->filter(fn ($p) => $p['station_id'] !== null)->count())
-        @php($status = \Platform\FoodAlchemist\Enums\ProductionOrderStatus::from($detail['status']))
+        @php
+            $zieleCount = count($detail['targets']);
+            $warnCount = count($detail['warnungen']) + count($kapazitaetsWarnungen);
+            $postenBelegt = collect($postenSummen)->filter(fn ($p) => $p['station_id'] !== null)->count();
+            $status = \Platform\FoodAlchemist\Enums\ProductionOrderStatus::from($detail['status']);
+            $datum = \Illuminate\Support\Carbon::parse($detail['production_date']);
+            $nochOffen = $detail['fortschritt']['offen'] + $detail['fortschritt']['in_arbeit'];
 
-        <div class="space-y-1">
-            <div class="flex items-start justify-between gap-2">
-                <div class="min-w-0">
-                    <h3 class="text-base font-semibold tracking-tight text-gray-900 leading-snug truncate">{{ $detail['name'] ?: \Illuminate\Support\Carbon::parse($detail['production_date'])->format('d.m.Y') }}</h3>
-                    <p class="text-[11px] text-gray-500 mt-1">{{ \Illuminate\Support\Carbon::parse($detail['production_date'])->format('d.m.Y') }}@if($detail['reference']) · {{ $detail['reference'] }}@endif</p>
-                </div>
-                <span class="{{ $pill }} font-medium {{ $variantPill[$status->badgeVariant()] ?? $variantPill['secondary'] }} shrink-0">{{ $detail['status_label'] }}</span>
-            </div>
-            <div class="flex flex-wrap items-center gap-1.5">
-                @if($detail['editierbar'])
-                    <button type="button" wire:click="$dispatch('produktion-editor.bearbeiten', { id: {{ $detail['id'] }} })" class="{{ $btnGhostXs }}" data-produktion-bearbeiten>@svg('heroicon-o-pencil-square', 'w-3.5 h-3.5') Bearbeiten</button>
+            // Status-Schritte: Stornieren immer ins Menü (letzter Eintrag). Hauptaktion ist der NÄCHSTE Arbeitsschritt
+            // („Produktion starten", „Fertig melden" — das tut die Küche am Auftrag); „Auftrag bearbeiten" steht dann
+            // als erster Menüeintrag. Gibt es keinen Vorwärts-Schritt mehr, ist Bearbeiten die Hauptaktion (2026-10-05).
+            $schritte = $detail['is_owned'] ? $erlaubteStatus : [];
+            $vorwaerts = array_values(array_filter($schritte, fn ($z) => $z->value !== 'cancelled'));
+            $storno = collect($schritte)->first(fn ($z) => $z->value === 'cancelled');
+            $hauptSchritt = $vorwaerts !== [] ? array_shift($vorwaerts) : null;
+            $bearbeitenImMenue = $detail['editierbar'] && $hauptSchritt !== null;
+            $bestaetigung = fn ($z) => $z->value === 'cancelled'
+                ? $stornoFrage
+                : ($z->value === 'done' && $nochOffen > 0 ? $nochOffen . ' Position(en) sind noch nicht abgehakt. Trotzdem fertig melden?' : null);
+            $onclick = fn ($z) => $bestaetigung($z) !== null ? 'return confirm(' . \Illuminate\Support\Js::from($bestaetigung($z)) . ')' : null;
+            $doneOffen = fn ($z) => $z->value === 'done' && $nochOffen > 0 ? (string) $nochOffen : null;
+
+            $hatMenue = $bearbeitenImMenue || $vorwaerts !== [] || $storno !== null
+                || ($detail['is_owned'] && in_array($detail['status'], ['planned', 'in_progress'], true))
+                || $detail['procurement_released_at']
+                || \Illuminate\Support\Facades\Route::has('foodalchemist.produktion.auftraege.dokument');
+
+            $kpis = [
+                ['kpi' => 'ansaetze', 'label' => 'Ansätze', 'value' => $menge($detail['ansaetze_gesamt']), 'primary' => true],
+                ['kpi' => 'portionen', 'label' => 'Portionen', 'value' => $detail['portionen_gesamt'] ? number_format((int) $detail['portionen_gesamt'], 0, ',', '.') : '–'],
+                ['kpi' => 'zeit', 'label' => 'Arbeitszeit', 'value' => $detail['arbeitszeit_gesamt_min'] ? number_format((int) $detail['arbeitszeit_gesamt_min'], 0, ',', '.') . ' min' : 'fehlt',
+                    'tone' => $detail['arbeitszeit_gesamt_min'] ? null : 'crit'],
+            ];
+        @endphp
+
+        {{-- Kopf --}}
+        <x-fa::detail-kopf :title="$detail['name'] ?: $datum->format('d.m.Y')"
+            :subtitle="'Liefertag ' . $datum->format('d.m.Y') . ($datum->isToday() ? ' (heute)' : '') . ($detail['reference'] ? ' · ' . $detail['reference'] : '')">
+            <x-slot:badges>
+                <x-fa::badge :tone="$statusTon[$status->badgeVariant()] ?? 'neutral'">{{ ucfirst($detail['status_label']) }}</x-fa::badge>
+                @if(! empty($detail['procurement_stale']))
+                    <x-fa::badge tone="warn" icon="heroicon-m-archive-box-arrow-down">Bedarf geändert</x-fa::badge>
+                @elseif(! empty($detail['procurement_released_at']))
+                    <x-fa::badge tone="ok" icon="heroicon-m-archive-box-arrow-down">Bedarf freigegeben</x-fa::badge>
                 @endif
-            </div>
-        </div>
+            </x-slot:badges>
+            @if($detail['editierbar'] || $hauptSchritt !== null)
+                <x-slot:aktion>
+                    @if($hauptSchritt === null)
+                        <x-fa::button size="sm" variant="primary" icon="heroicon-m-pencil-square" wire:click="$dispatch('produktion-editor.bearbeiten', { id: {{ $detail['id'] }} })" data-produktion-bearbeiten>Auftrag bearbeiten</x-fa::button>
+                    @else
+                        <x-fa::button size="sm" variant="primary" :icon="$statusIcon[$hauptSchritt->value] ?? null"
+                            wire:click="setStatus('{{ $hauptSchritt->value }}')" wire:key="pstatus-{{ $hauptSchritt->value }}"
+                            :onclick="$onclick($hauptSchritt)" :data-produktion-done-offen="$doneOffen($hauptSchritt)"
+                            data-produktion-status="{{ $hauptSchritt->value }}">{{ $statusAktion[$hauptSchritt->value] ?? ucfirst($hauptSchritt->label()) }}</x-fa::button>
+                    @endif
+                </x-slot:aktion>
+            @endif
+            @if($hatMenue)
+                <x-slot:menue>
+                    @if($bearbeitenImMenue)
+                        <x-fa::menu-item icon="heroicon-m-pencil-square" wire:click="$dispatch('produktion-editor.bearbeiten', { id: {{ $detail['id'] }} })" data-produktion-bearbeiten>Auftrag bearbeiten</x-fa::menu-item>
+                    @endif
+                    @foreach($vorwaerts as $z)
+                        <x-fa::menu-item :icon="$statusIcon[$z->value] ?? null" wire:click="setStatus('{{ $z->value }}')" wire:key="pstatus-{{ $z->value }}"
+                            :onclick="$onclick($z)" :data-produktion-done-offen="$doneOffen($z)"
+                            data-produktion-status="{{ $z->value }}">{{ $statusAktion[$z->value] ?? ucfirst($z->label()) }}</x-fa::menu-item>
+                    @endforeach
+                    @if($detail['is_owned'] && in_array($detail['status'], ['planned', 'in_progress'], true))
+                        <x-fa::menu-item icon="heroicon-m-check-circle" wire:click="materialbedarfFreigeben" data-materialbedarf-freigeben>{{ $detail['procurement_released_at'] ? 'Bedarf erneut freigeben' : 'Materialbedarf freigeben' }}</x-fa::menu-item>
+                    @endif
+                    @if($detail['procurement_released_at'])
+                        <x-fa::menu-item icon="heroicon-m-shopping-cart" :href="route('foodalchemist.orders.index', ['sicht' => 'bedarfe', 'p' => $detail['id']])">Im Einkauf öffnen</x-fa::menu-item>
+                    @endif
+                    @if(\Illuminate\Support\Facades\Route::has('foodalchemist.produktion.auftraege.dokument'))
+                        <x-fa::menu-item icon="heroicon-m-document-text" :href="route('foodalchemist.produktion.auftraege.dokument', ['order' => $detail['id'], 'profil' => 'produktion'])" target="_blank"
+                            title="Produktionsdokument zusammenstellen" data-produktion-panel-dokument>Dokument öffnen</x-fa::menu-item>
+                    @endif
+                    @if($storno !== null)
+                        <x-fa::menu-item danger :icon="$statusIcon['cancelled']" wire:click="setStatus('cancelled')" wire:key="pstatus-cancelled"
+                            :onclick="$onclick($storno)" data-produktion-status="cancelled">{{ $statusAktion['cancelled'] }}</x-fa::menu-item>
+                    @endif
+                </x-slot:menue>
+            @endif
+        </x-fa::detail-kopf>
 
-        @if($hinweis)<div class="rounded-lg bg-[var(--ui-surface)] border border-emerald-500/20 px-3 py-2 text-[12px] text-emerald-700">✓ {{ $hinweis }}</div>@endif
-        @if($fehler)<div class="rounded-lg bg-[var(--ui-surface)] border border-rose-500/20 px-3 py-2 text-[12px] text-rose-700">{{ $fehler }}</div>@endif
+        @if($hinweis)<x-fa::notice tone="ok">{{ $hinweis }}</x-fa::notice>@endif
+        @if($fehler)<x-fa::notice tone="crit">{{ $fehler }}</x-fa::notice>@endif
 
-        <div class="rounded-lg bg-[var(--ui-surface)] border border-[var(--ui-border)] px-3.5 py-3" data-kpi-karte>
-            <div class="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
-                <span class="text-gray-500">Ansätze <span class="text-gray-900 font-semibold tabular-nums">{{ rtrim(rtrim(number_format($detail['ansaetze_gesamt'], 2, ',', '.'), '0'), ',') }}</span></span>
-                <span class="text-gray-500">Rezepte <span class="text-gray-900 font-semibold tabular-nums">{{ count($detail['zeilen']) }}</span></span>
-                <span class="text-gray-500">Portionen <span class="text-gray-900 font-semibold tabular-nums">{{ $detail['portionen_gesamt'] }}</span></span>
-                <span class="text-gray-500">Zeit <span class="text-gray-900 font-semibold tabular-nums">{{ $detail['arbeitszeit_gesamt_min'] }} min</span></span>
-            </div>
+        {{-- Kennzahlen: Ansätze sind die Hauptzahl, darunter der Fortschritt --}}
+        <div class="flex flex-col gap-3" data-kpi-karte>
+            <x-fa::kpis :items="$kpis" />
 
             @if($detail['status'] !== 'planned' && $detail['fortschritt']['gesamt'] > 0)
-                @php($fs = $detail['fortschritt'])
-                <div class="mt-3" data-panel-fortschritt>
-                    <div class="flex items-baseline justify-between text-[11px] mb-1">
-                        <span class="text-gray-500">Fortschritt</span>
-                        <span class="text-gray-700 tabular-nums">{{ $fs['erledigt'] }}/{{ $fs['gesamt'] }} erledigt</span>
+                @php
+                    $fs = $detail['fortschritt'];
+                    $prozent = max(0, min(100, (float) $fs['prozent']));
+                @endphp
+                <div class="flex flex-col gap-1.5" data-panel-fortschritt>
+                    <div class="flex items-baseline justify-between text-[length:var(--fa-text-sm)]">
+                        <span class="text-[var(--fa-ink-2)]">Fortschritt</span>
+                        <span class="tabular-nums text-[var(--fa-ink)]">{{ $fs['erledigt'] }} von {{ $fs['gesamt'] }} erledigt</span>
                     </div>
-                    <x-foodalchemist::meter :value="$fs['prozent']" :max="100" :tone="$fs['alle_erledigt'] ? 'success' : 'info'" />
+                    <div class="h-1.5 rounded-full bg-[var(--fa-line-strong)] overflow-hidden" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ round($prozent) }}" aria-label="Fortschritt">
+                        <div class="h-full rounded-full {{ $fs['alle_erledigt'] ? 'bg-[var(--fa-ok)]' : 'bg-[var(--fa-accent)]' }}" style="width: {{ round($prozent, 1) }}%"></div>
+                    </div>
                 </div>
             @endif
         </div>
 
-        @if($detail['is_owned'] && count($erlaubteStatus) > 0)
-            @php($statusAktion = ['in_progress' => 'Produktion starten', 'done' => 'Fertig melden', 'cancelled' => 'Stornieren'])
-            <div class="flex flex-wrap gap-1.5">
-                @foreach($erlaubteStatus as $z)
-                    <button type="button" wire:click="setStatus('{{ $z->value }}')"
-                        class="{{ in_array($z->value, ['in_progress', 'done'], true) ? $btnPrimary : $btnGhost }}"
-                        @if($z->value === 'cancelled')
-                            onclick="return confirm('Produktion stornieren? Offene Einkaufsentwürfe werden neu berechnet; bereits ausgelöste Bestellungen bleiben als Klärfall bestehen.')"
-                        @elseif($z->value === 'done' && $detail['fortschritt']['offen'] + $detail['fortschritt']['in_arbeit'] > 0)
-                            onclick="return confirm('{{ $detail['fortschritt']['offen'] + $detail['fortschritt']['in_arbeit'] }} Zeile(n) sind noch nicht abgehakt. Trotzdem fertig melden?')"
-                            data-produktion-done-offen="{{ $detail['fortschritt']['offen'] + $detail['fortschritt']['in_arbeit'] }}"
-                        @endif
-                        data-produktion-status="{{ $z->value }}">{{ $statusAktion[$z->value] ?? $z->label() }}</button>
-                @endforeach
-            </div>
-        @endif
-
-        <div class="rounded-lg bg-[var(--ui-surface)] border border-[var(--ui-border)] divide-y divide-[var(--ui-border)] text-[13px]" data-panel-glance>
-            <div class="flex items-center justify-between gap-2 px-3 py-2">
-                <span class="text-gray-500">@svg('heroicon-o-flag', 'w-3.5 h-3.5 inline-block align-[-2px] mr-1') Ziele</span>
-                <span class="text-gray-900 tabular-nums">{{ $zieleCount }}</span>
-            </div>
-            <div class="flex items-center justify-between gap-2 px-3 py-2">
-                <span class="text-gray-500">@svg('heroicon-o-archive-box-arrow-down', 'w-3.5 h-3.5 inline-block align-[-2px] mr-1') Materialbedarf</span>
-                <span class="flex items-center gap-1.5">
-                    @if(! empty($detail['procurement_stale']))
-                        <span class="{{ $pill }} {{ $variantPill['warning'] }}" data-materialbedarf-status="geaendert">geändert</span>
-                    @elseif(! empty($detail['procurement_released_at']))
-                        <span class="{{ $pill }} {{ $variantPill['success'] }}" data-materialbedarf-status="freigegeben">freigegeben</span>
-                    @else
-                        <span class="{{ $pill }} {{ $variantPill['secondary'] }}" data-materialbedarf-status="entwurf">Entwurf</span>
-                    @endif
-                </span>
-            </div>
-            <div class="flex items-center justify-between gap-2 px-3 py-2">
-                <span class="text-gray-500">@svg('heroicon-o-users', 'w-3.5 h-3.5 inline-block align-[-2px] mr-1') Posten</span>
-                <span class="text-gray-900 tabular-nums">{{ $postenBelegt }} belegt · {{ count($postenSummen) }} Gruppen</span>
-            </div>
-            <div class="flex items-center justify-between gap-2 px-3 py-2">
-                <span class="text-gray-500">@svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5 inline-block align-[-2px] mr-1') Warnungen</span>
-                <span class="{{ $pill }} font-medium {{ $warnCount > 0 ? $variantPill['warning'] : $variantPill['success'] }}">{{ $warnCount }}</span>
-            </div>
-        </div>
-
+        {{-- Offene Punkte: Warnungen, Kapazität, Storno-Einkauf --}}
         @if($warnCount > 0)
-            <div class="space-y-1" data-panel-warnungen>
+            <div class="flex flex-col gap-1" data-panel-warnungen>
                 @foreach(array_slice($detail['warnungen'], 0, 2) as $w)
-                    <x-foodalchemist::alert tone="warning">{{ $w }}</x-foodalchemist::alert>
+                    <x-fa::signal tone="warn">{{ $w }}</x-fa::signal>
                 @endforeach
                 @foreach(array_slice($kapazitaetsWarnungen, 0, 2) as $w)
-                    <x-foodalchemist::alert tone="warning" data-panel-kapazitaet>{{ $w }}</x-foodalchemist::alert>
+                    <x-fa::signal tone="warn" data-panel-kapazitaet>{{ $w }}</x-fa::signal>
                 @endforeach
+                @if($warnCount > 4)<p class="{{ $leise }}">Alle Warnungen im Editor unter Positionen.</p>@endif
             </div>
         @endif
 
         @if(! empty($detail['procurement_cancel_warning']))
-            <div class="space-y-2" data-produktion-storno-einkauf>
-                <x-foodalchemist::alert tone="warning">Produktion storniert, aber mindestens eine Bestellung wurde bereits ausgelöst. Bitte die Lieferanten informieren und die Belege anschließend als storniert bestätigen.</x-foodalchemist::alert>
+            <div class="flex flex-col gap-2" data-produktion-storno-einkauf>
+                <x-fa::notice tone="warn" title="Bestellungen bereits ausgelöst">Produktion storniert, aber mindestens eine Bestellung wurde bereits ausgelöst. Bitte die Lieferanten informieren und die Belege anschließend als storniert bestätigen.</x-fa::notice>
                 <div class="flex flex-wrap gap-1.5">
                     @foreach(collect($detail['verknuepfte_orders'])->whereIn('status', ['sent', 'confirmed']) as $linkedOrder)
                         @if($linkedOrder['cancellation_mailto'])
-                            <a href="{{ $linkedOrder['cancellation_mailto'] }}" class="{{ $btnGhostXs }} text-rose-500">@svg('heroicon-o-envelope', 'w-3.5 h-3.5') {{ $linkedOrder['cancellation_kind'] === 'partial' ? 'Änderung' : 'Storno' }} an {{ $linkedOrder['supplier'] }}</a>
+                            <x-fa::button size="sm" variant="danger" icon="heroicon-o-envelope" :href="$linkedOrder['cancellation_mailto']">{{ $linkedOrder['cancellation_kind'] === 'partial' ? 'Änderung' : 'Storno' }} an {{ $linkedOrder['supplier'] }}</x-fa::button>
                         @else
-                            <span class="{{ $btnGhostXs }} opacity-40 cursor-not-allowed" title="Beim Lieferanten fehlt die Bestell-E-Mail">@svg('heroicon-o-envelope', 'w-3.5 h-3.5') {{ $linkedOrder['supplier'] }}</span>
+                            <span class="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-[var(--fa-radius-control)] text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)] cursor-not-allowed" title="Beim Lieferanten fehlt die Bestell-E-Mail">@svg('heroicon-o-envelope', 'w-3.5 h-3.5') {{ $linkedOrder['supplier'] }}: E-Mail fehlt</span>
                         @endif
                     @endforeach
                 </div>
             </div>
         @endif
 
-        <div class="flex flex-wrap gap-2 pt-2 border-t border-[var(--ui-border)]">
-            @if($detail['is_owned'] && in_array($detail['status'], ['planned', 'in_progress'], true))
-                <button type="button" wire:click="materialbedarfFreigeben" class="{{ $btnGhost }}" data-materialbedarf-freigeben>@svg('heroicon-o-check-circle', 'w-3.5 h-3.5') {{ $detail['procurement_released_at'] ? 'Bedarf erneut freigeben' : 'Materialbedarf freigeben' }}</button>
-            @endif
-            @if($detail['procurement_released_at'])
-                <a href="{{ route('foodalchemist.orders.index', ['sicht' => 'bedarfe', 'p' => $detail['id']]) }}" class="{{ $btnGhost }}">Im Einkauf öffnen</a>
-            @endif
-            @if(\Illuminate\Support\Facades\Route::has('foodalchemist.produktion.auftraege.dokument'))
-                <a href="{{ route('foodalchemist.produktion.auftraege.dokument', ['order' => $detail['id'], 'profil' => 'produktion']) }}" target="_blank" class="{{ $btnGhost }}" title="Produktionsdokument zusammenstellen" data-produktion-panel-dokument>@svg('heroicon-o-document-text', 'w-3.5 h-3.5 inline-block align-middle') Dokument</a>
-            @endif
+        <div class="flex flex-col">
+            {{-- Inhalt: Rezepte des Auftrags --}}
+            <x-fa::section variant="plain" title="Rezepte" icon="heroicon-o-list-bullet" :meta="count($detail['zeilen']) > 0 ? count($detail['zeilen']) : null" data-kpi="rezepte">
+                @if(count($detail['zeilen']) === 0)
+                    <x-fa::empty compact icon="heroicon-o-list-bullet" title="Noch keine Rezepte">Im Editor Rezepte oder Gerichte mit Menge hinzufügen.</x-fa::empty>
+                @else
+                    <ul class="flex flex-col">
+                        @foreach($detail['zeilen'] as $z)
+                            <li class="flex items-start justify-between gap-3 py-1.5 border-b border-[var(--fa-line)] last:border-0" wire:key="produktion-detail-zeile-{{ $z['id'] }}">
+                                <span class="min-w-0">
+                                    <span class="flex flex-wrap items-center gap-1.5 text-[length:var(--fa-text-md)] {{ $z['ist_gestrichen'] ? 'text-[var(--fa-ink-3)] line-through' : 'text-[var(--fa-ink)]' }}">
+                                        <span class="min-w-0 break-words">{{ $z['name'] }}</span>
+                                        @if($z['ist_gestrichen'])<x-fa::badge title="{{ $z['struck_reason'] }}">gestrichen</x-fa::badge>@endif
+                                    </span>
+                                    <span class="block {{ $leise }} tabular-nums">
+                                        {{ $menge($z['ansaetze']) }} {{ (float) $z['ansaetze'] === 1.0 ? 'Ansatz' : 'Ansätze' }}@if($z['portionen']) · {{ number_format((int) $z['portionen'], 0, ',', '.') }} Portionen @endif
+                                        · {{ $z['station'] ?: 'ohne Posten' }}
+                                    </span>
+                                </span>
+                                <x-fa::badge class="shrink-0">{{ ucfirst($z['line_status_label']) }}</x-fa::badge>
+                            </li>
+                        @endforeach
+                    </ul>
+                @endif
+            </x-fa::section>
+
+            {{-- Fachabschnitt: Überblick --}}
+            <x-fa::section variant="plain" title="Überblick" icon="heroicon-o-clipboard-document-list">
+                <dl class="flex flex-col text-[length:var(--fa-text-md)]" data-panel-glance>
+                    <div class="flex items-center justify-between gap-2 py-1.5 border-b border-[var(--fa-line)]">
+                        <dt class="{{ $zeileLabel }}">@svg('heroicon-o-flag', 'w-4 h-4 text-[var(--fa-ink-3)]') Ziele</dt>
+                        <dd class="tabular-nums text-[var(--fa-ink)]">@if($zieleCount > 0){{ $zieleCount }}@else<x-fa::signal tone="warn">Keine</x-fa::signal>@endif</dd>
+                    </div>
+                    <div class="flex items-center justify-between gap-2 py-1.5 border-b border-[var(--fa-line)]">
+                        <dt class="{{ $zeileLabel }}">@svg('heroicon-o-archive-box-arrow-down', 'w-4 h-4 text-[var(--fa-ink-3)]') Materialbedarf</dt>
+                        <dd>
+                            @if(! empty($detail['procurement_stale']))
+                                <x-fa::badge tone="warn" data-materialbedarf-status="geaendert">Geändert</x-fa::badge>
+                            @elseif(! empty($detail['procurement_released_at']))
+                                <x-fa::badge tone="ok" data-materialbedarf-status="freigegeben">Freigegeben</x-fa::badge>
+                            @else
+                                <x-fa::badge data-materialbedarf-status="entwurf">Nicht freigegeben</x-fa::badge>
+                            @endif
+                        </dd>
+                    </div>
+                    <div class="flex items-center justify-between gap-2 py-1.5 border-b border-[var(--fa-line)]">
+                        <dt class="{{ $zeileLabel }}">@svg('heroicon-o-users', 'w-4 h-4 text-[var(--fa-ink-3)]') Posten</dt>
+                        <dd class="tabular-nums text-[var(--fa-ink)]">{{ $postenBelegt }} von {{ count($postenSummen) }} belegt</dd>
+                    </div>
+                    <div class="flex items-center justify-between gap-2 py-1.5">
+                        <dt class="{{ $zeileLabel }}">@svg('heroicon-o-exclamation-triangle', 'w-4 h-4 text-[var(--fa-ink-3)]') Warnungen</dt>
+                        <dd><x-fa::badge :tone="$warnCount > 0 ? 'warn' : 'ok'">{{ $warnCount > 0 ? $warnCount : 'Keine' }}</x-fa::badge></dd>
+                    </div>
+                </dl>
+            </x-fa::section>
         </div>
     @endif
 </div>

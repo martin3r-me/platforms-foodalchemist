@@ -1,9 +1,19 @@
-{{-- #380: Angebote-Browser (am Concepter orientiert) — Anfrage → Angebot, kundengebunden --}}
-@php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
+{{-- #380: Angebote-Übersicht — Anfrage → Angebot, kundengebunden.
+     fa-pass (2026-10-05): auf Bausteine <x-fa::…> umgestellt. Die schmale Filterspalte (Suche + Status)
+     ist entfallen: Suche und Status-Chips stehen direkt über der Tabelle, die Tabelle bekommt die Breite.
+     Häufigste Aufgabe: ein Angebot finden und öffnen → Suche zuerst, Zeilenklick öffnet den Editor.
+     Funktion, wire:-Bindungen und data-Marker unverändert. --}}
+@php
+    // Lebenszyklus-Farbe aus der Badge-Variante des Enums (AngebotStatus::badgeVariant) → Token-Ton.
+    $statusTon = ['secondary' => 'neutral', 'info' => 'info', 'warning' => 'warn', 'primary' => 'accent', 'success' => 'ok', 'danger' => 'crit'];
+    $chip = 'inline-flex items-center h-7 px-3 rounded-full text-[length:var(--fa-text-sm)] font-medium border transition-colors duration-150';
+    $chipAn = 'bg-[var(--fa-accent-soft)] text-[var(--fa-accent)] border-[var(--fa-accent-line)]';
+    $chipAus = 'bg-[var(--fa-surface)] text-[var(--fa-ink-2)] border-[var(--fa-line-strong)] hover:bg-[var(--fa-hover)] hover:text-[var(--fa-ink)]';
+@endphp
 
 <x-ui-page>
     <x-slot:navbar>
-        <x-ui-page-navbar title="Angebote" icon="heroicon-o-document-text" />
+        <x-foodalchemist::shell.page-navbar title="Angebote" icon="heroicon-o-document-text" />
     </x-slot:navbar>
 
     <x-slot name="actionbar">
@@ -13,71 +23,78 @@
         ]" />
     </x-slot>
 
-    <x-slot name="sidebar">
-        <x-ui-page-sidebar title="Angebote" width="w-80">
-            <div class="p-3 space-y-3">
-                <input type="search" wire:model.live.debounce.300ms="search" placeholder="Angebot/Anfrage suchen …" class="{{ $input }}" />
-
-                <div class="space-y-1 pt-2 border-t border-black/5">
-                    <span class="{{ $label }}">Status</span>
-                    <div class="flex flex-wrap gap-1">
-                        <button type="button" wire:click="waehleStatus('')" class="{{ $pill }} {{ $statusFilter === '' ? $variantPill['primary'] : $variantPill['secondary'] }}">Alle</button>
-                        @foreach($statusWerte as $sw)
-                            <button type="button" wire:key="st-{{ $sw['value'] }}" wire:click="waehleStatus('{{ $sw['value'] }}')"
-                                    class="{{ $pill }} {{ $statusFilter === $sw['value'] ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $sw['label'] }}</button>
-                        @endforeach
-                    </div>
-                </div>
-
-                <button type="button" wire:click="neu" class="{{ $btnPrimary }} w-full justify-center">+ Neue Anfrage</button>
-            </div>
-        </x-ui-page-sidebar>
-    </x-slot>
-
-    {{-- Editor (Fullscreen, pro Angebot) statt Detail-Panel — geöffnet per angebot-editor.bearbeiten --}}
+    {{-- Editor (Vollbild, pro Angebot) — geöffnet per angebot-editor.bearbeiten --}}
     <livewire:foodalchemist.angebote.editor />
 
-    <x-ui-page-container padding="px-6 pb-6" spacing="space-y-4">
-        <div class="relative overflow-hidden {{ $card }}">
-            <div class="{{ $cardAccent }}"></div>
-            {{-- Spec 28: eigener Scroll-Kasten, damit der Tabellenkopf kleben kann --}}
-            <div class="max-h-[70vh] overflow-auto">
-            <table class="{{ $table }}">
-                <thead>
-                    <tr>
-                        <th class="{{ $th }} w-full text-left sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Name</th>
-                        <th class="{{ $th }} text-left sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Status</th>
-                        <th class="{{ $th }} text-left sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Anlass</th>
-                        <th class="{{ $th }} text-right sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Pax</th>
-                        <th class="{{ $th }} text-left sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Datum</th>
-                        <th class="{{ $th }} text-right sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Gesamt €</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @forelse($items as $it)
-                        <x-foodalchemist::table-row wire:key="ang-{{ $it->id }}" wire:click="waehle({{ $it->id }})" data-angebot-zeile="{{ $it->id }}">
-                            <td class="{{ $td }} font-medium text-gray-900">{{ $it->name }}</td>
-                            <td class="{{ $td }}">
-                                <span class="{{ $pill }} {{ $variantPill[$it->status->badgeVariant()] ?? $variantPill['secondary'] }}">{{ $it->status->label() }}</span>
-                            </td>
-                            <td class="{{ $td }} text-gray-600">{{ $it->occasion ?: '—' }}</td>
-                            <td class="{{ $td }} text-right tabular-nums text-gray-600">{{ $it->personen ?? '—' }}</td>
-                            <td class="{{ $td }} text-gray-600">{{ $it->event_date ? $it->event_date->format('d.m.Y') : '—' }}</td>
-                            <td class="{{ $td }} text-right tabular-nums">{{ $it->total_price !== null ? number_format((float) $it->total_price, 2, ',', '.') . ' €' : '—' }}</td>
-                        </x-foodalchemist::table-row>
-                    @empty
-                        <tr wire:key="ang-empty"><td colspan="6" class="px-3 py-10 text-center text-sm text-gray-500">Keine Angebote. Oben „+ Neue Anfrage".</td></tr>
-                    @endforelse
-                </tbody>
-            </table>
+    <x-ui-page-container padding="px-6 py-6" spacing="space-y-4">
+        <x-fa::page-header title="Angebote" :subtitle="number_format($items->total(), 0, ',', '.') . ' ' . ($items->total() === 1 ? 'Angebot' : 'Angebote')">
+            <x-slot:actions>
+                <x-fa::button variant="primary" icon="heroicon-m-plus" wire:click="neu" data-angebot-neu>Neue Anfrage anlegen</x-fa::button>
+            </x-slot:actions>
+        </x-fa::page-header>
+
+        <div class="flex flex-wrap items-center gap-3">
+            <div class="relative w-full sm:w-80">
+                <label for="angebot-suche" class="sr-only">Angebote durchsuchen</label>
+                @svg('heroicon-m-magnifying-glass', 'w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--fa-ink-3)] pointer-events-none')
+                <x-fa::input id="angebot-suche" type="search" wire:model.live.debounce.300ms="search" placeholder="Angebot oder Anfrage suchen" class="pl-8" />
+            </div>
+            <div role="group" aria-label="Status" class="flex flex-wrap items-center gap-1.5">
+                <button type="button" wire:click="waehleStatus('')" aria-pressed="{{ $statusFilter === '' ? 'true' : 'false' }}"
+                        class="{{ $chip }} {{ $statusFilter === '' ? $chipAn : $chipAus }}">Alle</button>
+                @foreach($statusWerte as $sw)
+                    <button type="button" wire:key="st-{{ $sw['value'] }}" wire:click="waehleStatus('{{ $sw['value'] }}')"
+                            aria-pressed="{{ $statusFilter === $sw['value'] ? 'true' : 'false' }}"
+                            class="{{ $chip }} {{ $statusFilter === $sw['value'] ? $chipAn : $chipAus }}">{{ $sw['label'] }}</button>
+                @endforeach
             </div>
         </div>
-        <div>{{ $items->links() }}</div>
+
+        <div class="fa-surface overflow-hidden" data-angebot-tabelle>
+            {{-- Spec 28: eigener Scroll-Kasten, damit der Tabellenkopf kleben kann --}}
+            <div class="max-h-[70vh] overflow-auto">
+                <table class="fa-table">
+                    <thead class="sticky top-0 z-20 bg-[var(--fa-surface)]">
+                        <tr>
+                            <th class="w-full">Name</th>
+                            <th>Status</th>
+                            <th>Anlass</th>
+                            <th class="num">Gäste</th>
+                            <th>Datum</th>
+                            <th class="num">Angebotssumme</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse($items as $it)
+                            <x-foodalchemist::table-row :active="$selectedId === $it->id" wire:key="ang-{{ $it->id }}" wire:click="waehle({{ $it->id }})" data-angebot-zeile="{{ $it->id }}">
+                                <td class="min-w-[12rem] font-medium text-[var(--fa-ink)]">{{ $it->name }}</td>
+                                <td class="whitespace-nowrap">
+                                    <x-fa::badge :tone="$statusTon[$it->status->badgeVariant()] ?? 'neutral'" data-status="{{ $it->status->value }}">{{ $it->status->label() }}</x-fa::badge>
+                                </td>
+                                <td class="text-[var(--fa-ink-2)]">{{ $it->occasion ?: '–' }}</td>
+                                <td class="num text-[var(--fa-ink-2)]">{{ $it->personen ?? '–' }}</td>
+                                <td class="whitespace-nowrap tabular-nums text-[var(--fa-ink-2)]">{{ $it->event_date ? $it->event_date->format('d.m.Y') : '–' }}</td>
+                                <td class="num"><x-fa::money :value="$it->total_price" missing="Noch kein Preis" /></td>
+                            </x-foodalchemist::table-row>
+                        @empty
+                            <tr wire:key="ang-empty">
+                                <td colspan="6">
+                                    <x-fa::empty icon="heroicon-o-document-text" title="Keine Angebote gefunden">
+                                        Suche oder Status zurücksetzen oder oben eine neue Anfrage anlegen.
+                                    </x-fa::empty>
+                                </td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+            <div class="px-4 py-3 border-t border-[var(--fa-line)]">{{ $items->links('foodalchemist::components.fa.pagination') }}</div>
+        </div>
     </x-ui-page-container>
 
     {{-- #380: Concepter-Editor wiederverwendet — bearbeitet angebots-lokale Menü-Entwürfe
          (öffnet via concepter-editor.oeffnen aus dem Angebote-Editor). Gleiche
-         Einbettung wie im Concepter-Browser, damit die Slot-Engine identisch läuft. --}}
+         Einbettung wie im Concepter-Browser, damit die Konzept-Bausteine identisch laufen. --}}
     <livewire:foodalchemist.concepter.editor />
     <livewire:foodalchemist.recipes.recipe-modal />
     <livewire:foodalchemist.verkauf.vk-modal />
