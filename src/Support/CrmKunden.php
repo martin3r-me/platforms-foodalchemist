@@ -60,6 +60,19 @@ final class CrmKunden
             ->get();
     }
 
+    /** Eine Firma des eigenen Haupt-Teams per ID — null, wenn unbekannt oder fremd. */
+    public static function firma(?Team $team, int $companyId): ?\Platform\Crm\Models\CrmCompany
+    {
+        if ($team === null || ! self::verfuegbar()) {
+            return null;
+        }
+
+        return \Platform\Crm\Models\CrmCompany::query()
+            ->whereKey($companyId)
+            ->where('team_id', $team->getRootTeam()->id)
+            ->first();
+    }
+
     /** Wirft, wenn Firma/Kontakt nicht zum Haupt-Team gehören. null = Verknüpfung lösen (erlaubt). */
     public static function pruefe(Team $team, ?int $companyId, ?int $contactId): void
     {

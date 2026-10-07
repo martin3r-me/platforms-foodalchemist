@@ -1,6 +1,6 @@
 # 64 · CRM-Anbindung: Kunden und Lieferanten
 
-**Stand 2026-10-06 · Status: §1 gebaut (alle 4 Ausgaben), §2–§4 Entwurf zur Freigabe**
+**Stand 2026-10-07 · Status: §1 gebaut (alle 4 Ausgaben + Kunden-DNA), §1b gebaut, §2–§4 Entwurf zur Freigabe**
 
 > Bezug: [33 · Portfolio-Steuerung](33_Portfolio_Steuerung.md) P2 (Zuordnungsachsen), [63 · Bestellversand](63_Bestellversand_per_Mail.md),
 > [61 · Rollen und Rechte](61_Rollen_und_Rechte.md). Kein Eingriff in CRM oder Core.
@@ -25,6 +25,21 @@ Eingebaut in Foodbook-, Speisekarte-, Angebot-Service (`sucheFirmen`, `sucheKont
 Test `CrmKundenMandantTest` (3 grün) + Zuordnungs-/MCP-/Portfolio-Tests grün.
 
 **Erledigt (2026-10-06, Zusammenführungs-Branch):** auch `SpeiseplanService` umgestellt — alle vier Ausgaben mandantensicher.
+
+**Nachtrag 2026-10-07 · Kunden-DNA:** `Settings\KundeDna::firmaWaehlen` übernahm die Firmen-ID ungeprüft
+(Livewire-Direktaufruf legte den `kunde_dna`-Canvas für eine fremde Firma an), den Namen sogar vom Client.
+Jetzt `CrmKunden::firma()` (Haupt-Team), Name aus der DB. Tests in `SettingsKundeDnaTest`.
+
+## §1b · Kunden-DNA aus dem CRM öffnen (GEBAUT 2026-10-07)
+
+**Entscheidung Dominique (2026-10-07), Variante A:** Die Kunden-DNA bleibt im Food Alchemist — sie ist Ebene
+`kunde_dna` der KI-Kaskade (`CanvasService::cascadeKontext`) mit festen Feldern. Kein Umzug ins generische
+Canvas-Modul (frei editierbare Bausteine würden die Felder brechen, die die KI liest; demo hat das Modul nicht).
+
+- **FA:** Einstellungen → Kunden-DNA nimmt `?firma=<crm_company_id>` und öffnet die Firma direkt
+  (mandantensicher wie oben); Rücklink „Im CRM öffnen“, wenn die CRM-Route existiert.
+- **Host (Plattform food-alchemist.de):** Knopf „Kunden-DNA“ (Status leer/gepflegt) auf der CRM-Firmenseite,
+  per View-Override der Kopfzeile — **keine Änderung am CRM-Modul**.
 
 ## §2 · Lieferant ↔ CRM-Firma (Entwurf)
 
