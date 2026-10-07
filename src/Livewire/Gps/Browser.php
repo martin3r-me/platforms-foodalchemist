@@ -152,8 +152,12 @@ class Browser extends Component
         $this->gpId = null; // Auswahl aufheben — die Zeile existiert nicht mehr
     }
 
+    /** Ankunft per Sprung-Link (?gp= / ?rezept=): Detail-Spalte öffnen, auch wenn sie zuletzt zugeklappt war. */
+    public bool $sprungDetail = false;
+
     public function mount(): void
     {
+        $this->sprungDetail = $this->gpId !== null;
         if ($this->gpId !== null) {
             // Kontext-Erhalt: Auswahl aus der URL übersteht den Reload — Panel direkt befüllen
             $this->dispatch('gp-selected', id: $this->gpId);

@@ -273,8 +273,12 @@ class Browser extends Component
         $this->auswahl = [];
     }
 
+    /** Ankunft per Sprung-Link (?gp= / ?rezept=): Detail-Spalte öffnen, auch wenn sie zuletzt zugeklappt war. */
+    public bool $sprungDetail = false;
+
     public function mount(): void
     {
+        $this->sprungDetail = $this->recipeId !== null;
         if ($this->recipeId !== null) {
             $this->dispatch('recipe-selected', id: $this->recipeId); // Kontext-Erhalt nach Reload
         }

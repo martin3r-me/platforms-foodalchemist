@@ -82,7 +82,7 @@
     {{-- Detail-Spalte erst, wenn ein Gericht gewählt ist — vorher nahm der leere Hinweis Platz der Tabelle weg. --}}
     @if($recipeId !== null)
     <x-slot name="activity">
-        <x-foodalchemist::detail-sidebar title="Detail" width="w-96" :maxWidth="760" scope="activity_verkauf" side="right">
+        <x-foodalchemist::detail-sidebar title="Detail" width="w-96" :maxWidth="760" scope="activity_verkauf" side="right" :aufziehen="$sprungDetail">
             <livewire:foodalchemist.verkauf.detail-panel :recipe-id="$recipeId" />
         </x-foodalchemist::detail-sidebar>
     </x-slot>
