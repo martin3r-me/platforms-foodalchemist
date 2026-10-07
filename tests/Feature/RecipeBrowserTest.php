@@ -87,3 +87,23 @@ it('Punkt 5: DetailPanel embedded = Detail-Sektionen ohne KPI/Zutaten-Doppelung 
     // Eingebettet bleibt auf dem Editor-Rezept, ignoriert Browser-Auswahl.
     $c->dispatch('recipe-selected', id: 999999)->assertSet('recipeId', $this->bbq->id);
 });
+
+it('DetailPanel lädt das Pairing nach: erst Platzhalter, nach pairingLaden Netz + Kombination (2026-10-07)', function () {
+    $this->actingAs($this->makeUser($this->rootTeam, 'Root User'));
+
+    $c = Livewire::test(DetailPanel::class)
+        ->dispatch('recipe-selected', id: $this->bbq->id)
+        ->assertSee('BBQ Texas')
+        ->assertSeeHtml('data-pairing-laedt')
+        ->assertViewHas('pairingBereit', false);
+
+    $c->call('pairingLaden')
+        ->assertViewHas('pairingBereit', true)
+        ->assertDontSeeHtml('data-pairing-laedt');
+
+    // anderes Rezept gewählt → wieder Platzhalter (Pairing gilt je Rezept, nicht je Komponente)
+    $chimi = FoodAlchemistRecipe::where('name', 'Chimichurri')->first();
+    $c->dispatch('recipe-selected', id: $chimi->id)
+        ->assertViewHas('pairingBereit', false)
+        ->assertSeeHtml('data-pairing-laedt');
+});

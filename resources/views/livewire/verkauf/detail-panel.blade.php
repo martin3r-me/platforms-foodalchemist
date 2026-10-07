@@ -245,10 +245,17 @@
                         title="Voller Graph mit verwandten Rezepten und Vorschlägen" data-vk-pairing-netz>Netz öffnen</x-fa::button>
                 </x-slot:actions>
                 {{-- Spec 60: Kombinationslogik statt Kern-Anker-Pflege --}}
-                @if($kombination)
-                    <x-foodalchemist::kombination :daten="$kombination" />
+                @if($pairingBereit)
+                    @if($kombination)
+                        <x-foodalchemist::kombination :daten="$kombination" />
+                    @endif
+                    <x-foodalchemist::pairing-netz :recipe-id="$rezept->id" :netz="$netz" />
+                @elseif($pairingErlaubt)
+                    <div wire:key="pairing-laden-{{ $rezept->id }}" x-init="$wire.pairingLaden()"
+                         class="flex items-center gap-2 py-6 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]" data-pairing-laedt>
+                        @svg('heroicon-o-arrow-path', 'w-4 h-4 animate-spin') Pairing wird geladen …
+                    </div>
                 @endif
-                <x-foodalchemist::pairing-netz :recipe-id="$rezept->id" :netz="$netz" />
             </x-fa::section>
 
             {{-- KI-Analyse — Kohärenz-Urteil und Teller-Heber (gecacht) --}}

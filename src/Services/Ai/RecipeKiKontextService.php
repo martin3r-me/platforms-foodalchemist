@@ -39,7 +39,7 @@ class RecipeKiKontextService
             ->whereNull('error')
             ->orderByDesc('id')
             ->first(['id', 'feature', 'model', 'tier', 'knowledge_used', 'prompt_chars', 'prompt_parts', 'tokens_in', 'tokens_out', 'tokens_cached', 'created_at',
-                ...(\Illuminate\Support\Facades\Schema::hasColumn('foodalchemist_ai_call_log', 'knowledge_channels') ? ['knowledge_channels'] : [])]);
+                ...(self::hatSpalte('knowledge_channels') ? ['knowledge_channels'] : [])]);
         if ($row === null) {
             return null;
         }
@@ -90,9 +90,9 @@ class RecipeKiKontextService
      */
     public function alleCallsFuerRezept(FoodAlchemistRecipe $rezept): array
     {
-        $hatKanaele = \Illuminate\Support\Facades\Schema::hasColumn('foodalchemist_ai_call_log', 'knowledge_channels');
+        $hatKanaele = self::hatSpalte('knowledge_channels');
 
-        $hatLaeufe = \Illuminate\Support\Facades\Schema::hasColumn('foodalchemist_ai_call_log', 'knowledge_run_id');
+        $hatLaeufe = self::hatSpalte('knowledge_run_id');
         $linkedRuns = DB::table('foodalchemist_ai_call_log')
             ->where('team_id', (int) $rezept->team_id)->where('target_table', 'foodalchemist_recipes')
             ->where('target_id', (int) $rezept->id)->whereNotNull('knowledge_run_id')->select('knowledge_run_id');
@@ -186,5 +186,18 @@ class RecipeKiKontextService
             'tokens_in' => (int) ($row->tokens_in ?? 0),
             'tokens_cached' => (int) ($row->tokens_cached ?? 0),
         ];
+    }
+
+    /**
+     * Spalten des Call-Logs gemerkt (1 h) statt Schema::hasColumn je Aufruf — das fragte information_schema
+     * bei JEDEM Öffnen der Detailspalte ab (gemessen ~130 ms, 2026-10-07). Spalten ändern sich nur per Migration.
+     */
+    private static function hatSpalte(string $spalte): bool
+    {
+        static $spalten = null;
+        $spalten ??= \Illuminate\Support\Facades\Cache::remember('fa.schema.ai_call_log.spalten', 3600,
+            fn () => \Illuminate\Support\Facades\Schema::getColumnListing('foodalchemist_ai_call_log'));
+
+        return in_array($spalte, $spalten, true);
     }
 }

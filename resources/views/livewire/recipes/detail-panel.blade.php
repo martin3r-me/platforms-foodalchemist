@@ -309,10 +309,17 @@
                     <x-fa::button size="sm" variant="ghost" icon-right="heroicon-m-arrow-up-right" wire:click="$dispatch('pairing-netz.oeffnen', { recipeId: {{ $rezept->id }} })"
                         title="Ganzes Netz mit verwandten Rezepten und Vorschlägen öffnen" data-pairing-netz-btn>Netz öffnen</x-fa::button>
                 </x-slot:actions>
-                @if($kombination ?? null)
-                    <x-foodalchemist::kombination :daten="$kombination" />
+                @if($pairingBereit)
+                    @if($kombination ?? null)
+                        <x-foodalchemist::kombination :daten="$kombination" />
+                    @endif
+                    <x-foodalchemist::pairing-netz :recipe-id="$rezept->id" :netz="$netz" />
+                @elseif($pairingErlaubt)
+                    <div wire:key="pairing-laden-{{ $rezept->id }}" x-init="$wire.pairingLaden()"
+                         class="flex items-center gap-2 py-6 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]" data-pairing-laedt>
+                        @svg('heroicon-o-arrow-path', 'w-4 h-4 animate-spin') Pairing wird geladen …
+                    </div>
                 @endif
-                <x-foodalchemist::pairing-netz :recipe-id="$rezept->id" :netz="$netz" />
             </x-fa::section>
 
             {{-- #5 (2026-08): manuelle Pairings-Sektion (aroma/kontrast) bleibt AUSGEBLENDET. Das echte
