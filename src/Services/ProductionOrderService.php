@@ -289,9 +289,7 @@ class ProductionOrderService
                 // darreichung-Blob. Bewusst keine vierte JSON-Spalte an dieser Zeile — drei
                 // Blobs mit ueberlappender Semantik sind genau das Drift-Muster, das dieser
                 // Spec an den Regenerations-Ablagen behebt.
-                'darreichung' => $r['behaelter'] !== null
-                    ? (array) ($r['darreichung'] ?? []) + ['behaelter_bedarf' => $r['behaelter']]
-                    : $r['darreichung'],
+                'darreichung' => $this->darreichungBlob($r),
                 'zutaten' => $r['zutaten'],
                 'position' => $i,
             ], $overlay[$r['recipe_id']] ?? []));
@@ -1264,11 +1262,34 @@ class ProductionOrderService
             $wert = $ziel['portions'] ?? $ziel['persons'] ?? null;
             // Basisrezept solo wird in ganzen Ansätzen gemessen, nicht in Portionen.
             $einheit = (bool) $recipe->is_sales_recipe ? 'Port.' : 'Ansätze';
+            // Gewählte Darreichung im Label, damit zwei Formen desselben Gerichts unterscheidbar sind.
+            $form = ! empty($ziel['presentation_id'])
+                ? \Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung::with('servingForm')
+                    ->whereKey((int) $ziel['presentation_id'])->where('recipe_id', $recipe->id)->first()?->servingForm?->label
+                : null;
 
-            return $recipe->name.($wert !== null ? " ({$this->zahl((float) $wert)} {$einheit})" : '');
+            return $recipe->name.($wert !== null ? " ({$this->zahl((float) $wert)} {$einheit}".($form ? ", {$form}" : '').')' : '');
         }
 
         return null;
+    }
+
+    /**
+     * Darreichungs-Blob der Produktionszeile: Ausgabe-Skalare der Hauptform + Behälter-Bedarf +
+     * die produzierten Formen (nur wenn es mehr als die reine Standard-Form ist).
+     */
+    private function darreichungBlob(array $r): ?array
+    {
+        $blob = (array) ($r['darreichung'] ?? []);
+        if (($r['behaelter'] ?? null) !== null) {
+            $blob['behaelter_bedarf'] = $r['behaelter'];
+        }
+        $formen = (array) ($r['formen'] ?? []);
+        if ($formen !== [] && (count($formen) > 1 || ! ($formen[0]['standard'] ?? true))) {
+            $blob['formen'] = $formen;
+        }
+
+        return $blob !== [] ? $blob : ($r['darreichung'] ?? null);
     }
 
     /** Zahl fürs Label ohne überflüssige Nachkommastellen (5.0 ⇒ „5", 5.5 ⇒ „5,5"). */

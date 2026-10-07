@@ -56,6 +56,14 @@
                                     <button type="button" @click="neu.einheit = 'ansaetze'" class="{{ $segment }}" :class="neu.einheit === 'ansaetze' ? '{{ $segmentAn }}' : '{{ $segmentAus }}'">Ansätze</button>
                                     <button type="button" @click="neu.einheit = 'kg'" class="{{ $segment }}" :class="neu.einheit === 'kg' ? '{{ $segmentAn }}' : '{{ $segmentAus }}'">kg</button>
                                 </div>
+                                {{-- Gericht: Darreichung wählen (Menge der Produktion kommt aus deren Grammatur). --}}
+                                <select x-show="zielTyp === 'recipe' && formen.length > 1" x-cloak x-model="neu.form" aria-label="Darreichung"
+                                        class="fa-control fa-select pr-8 h-8 w-auto max-w-full text-[length:var(--fa-text-sm)]" data-produktion-darreichung>
+                                    <template x-for="f in formen" :key="f.id">
+                                        <option :value="f.standard ? '' : String(f.id)" :selected="(f.standard ? '' : String(f.id)) === neu.form" x-text="f.label + (f.gramm ? ' · ' + f.gramm + ' g' : '') + (f.standard ? ' (Standard)' : '')"></option>
+                                    </template>
+                                </select>
+                                <span x-show="zielTyp === 'recipe' && formen.length === 1" x-cloak class="{{ $leise }}" x-text="formen[0] ? formen[0].label + (formen[0].gramm ? ' · ' + formen[0].gramm + ' g' : '') : ''"></span>
                                 <span class="ml-auto inline-flex items-center gap-1">
                                     <x-fa::icon-button icon="heroicon-m-x-mark" label="Auswahl verwerfen" size="sm" x-on:click="verwerfen()" />
                                     <x-fa::button variant="secondary" size="sm" icon="heroicon-m-plus" x-on:click="einfuegen()" data-produktion-ziel-einfuegen>Einfügen</x-fa::button>
@@ -158,7 +166,8 @@
             total: 0,
             browserGeladen: false,
             geparkt: null,
-            neu: { menge: '', einheit: 'ansaetze' },
+            neu: { menge: '', einheit: 'ansaetze', form: '' },
+            formen: [],
 
             async typSetzen(typ) {
                 this.zielTyp = typ;
@@ -204,6 +213,11 @@
                 this.geparkt = ziel;
                 this.neu.menge = this.zielTyp === 'basisrezept' ? '1' : '100';
                 this.neu.einheit = 'ansaetze';
+                this.neu.form = '';
+                this.formen = [];
+                if (this.zielTyp === 'recipe') {
+                    this.$wire.darreichungenFuer(ziel.id).then(f => { if (this.geparkt?.id === ziel.id) this.formen = f; });
+                }
                 this.$nextTick(() => this.$root.querySelector('[data-produktion-menge]')?.focus());
             },
             verwerfen() {
@@ -212,7 +226,7 @@
             },
             einfuegen() {
                 if (this.geparkt === null) return;
-                this.$wire.zielEinfuegen(this.zielTyp, this.geparkt.id, this.neu.menge, this.neu.einheit);
+                this.$wire.zielEinfuegen(this.zielTyp, this.geparkt.id, this.neu.menge, this.neu.einheit, this.neu.form || null);
                 this.geparkt = null;
                 this.neu.menge = '';
                 this.$nextTick(() => this.$root.querySelector('[data-produktion-gericht-suche]')?.focus());

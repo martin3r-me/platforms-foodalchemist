@@ -193,6 +193,9 @@
                         </tbody>
                     </table>
                 @endif
+                @if(! empty($r['formen']) && (count($r['formen']) > 1 || ! ($r['formen'][0]['standard'] ?? true)))
+                    <p class="ausgabe"><strong>Formen:</strong> {{ collect($r['formen'])->map(fn ($f) => $f['portionen'] . ' × ' . $f['label'] . (($f['gramm'] ?? null) !== null ? ' · ' . number_format((float) $f['gramm'], 0, ',', '.') . ' g' : ''))->implode(', ') }}</p>
+                @endif
                 @if($r['darreichung'] ?? null)
                     @php($d = $r['darreichung'])
                     <p class="ausgabe">

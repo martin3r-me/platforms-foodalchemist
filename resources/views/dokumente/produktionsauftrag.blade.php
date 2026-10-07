@@ -276,6 +276,9 @@
 
             {{-- Der Behälter-Bedarf (Array) steht schon in den Kennzahlen; hier nur die Skalare
                  der Darreichung mit Küchen-Bezeichnung statt Feldname. --}}
+            @if(($opt['darreichung'] ?? false) && ! empty($z['darreichung']['formen']))
+                <div class="darreichung"><strong>Formen:</strong> {{ collect($z['darreichung']['formen'])->map(fn ($f) => $f['portionen'] . ' × ' . $f['label'] . (($f['gramm'] ?? null) !== null ? ' · ' . number_format((float) $f['gramm'], 0, ',', '.') . ' g' : ''))->implode(', ') }}</div>
+            @endif
             @if(($opt['darreichung'] ?? false) && $z['darreichung'])
                 @php($darTeile = collect($z['darreichung'])->filter(fn ($v) => is_scalar($v) && $v !== ''))
                 @if($darTeile->isNotEmpty())
