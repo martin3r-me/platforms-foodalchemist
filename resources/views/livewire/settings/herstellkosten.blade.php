@@ -14,7 +14,7 @@
 
 <div class="flex flex-col gap-4" data-settings-herstellkosten>
     {{-- Spec 65: „Bearbeiten" sperrt den Bereich für das Team; mehrere Schreibwege → Bearbeiten/Fertig --}}
-    @php $sperrLesen = in_array($sperr['modus'], ['lesen', 'fremd'], true); @endphp
+    @php $sperrLesen = in_array($sperr['modus'] ?? 'aus', ['lesen', 'fremd'], true); @endphp
     @include('foodalchemist::livewire.settings.partials.sperr-leiste', ['sofort' => true, 'hint' => 'Zuschläge, Fixkosten und Marge wirken erst nach dem Speichern auf Selbstkosten und Verkaufspreise.'])
     @unless($sperrLesen)
     <x-foodalchemist::save-bar :meldung="$meldung"

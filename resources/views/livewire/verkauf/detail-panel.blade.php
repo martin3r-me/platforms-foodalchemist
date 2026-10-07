@@ -102,7 +102,7 @@
         </x-fa::detail-kopf>
 
         {{-- Spec 65: Detailspalte — Änderungen erst nach „Bearbeiten" (gleiche Sperre wie der Editor), „Fertig" gibt frei --}}
-        <fieldset @disabled(in_array($sperr['modus'], ['lesen', 'fremd'], true)) class="contents" data-fa-lesemodus="{{ in_array($sperr['modus'], ['lesen', 'fremd'], true) ? '1' : '0' }}">
+        <fieldset @disabled(in_array($sperr['modus'] ?? 'aus', ['lesen', 'fremd'], true)) class="contents" data-fa-lesemodus="{{ in_array($sperr['modus'] ?? 'aus', ['lesen', 'fremd'], true) ? '1' : '0' }}">
 
         {{-- 2 · Kennzahlen: VK brutto, EK, Wareneinsatz — darunter Balken mit Schwellen 30/35 % und VK-Herleitung --}}
         <div class="flex flex-col gap-3" data-vk-kpis>

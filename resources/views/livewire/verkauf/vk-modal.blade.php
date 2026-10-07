@@ -284,7 +284,7 @@
              'allergene'-Key bleibt stabil, Label «Deklaration» (Allergene · Zusatzstoffe · Nährwerte · Anteile).
              fa-pass: «Darreichungen» ist in «Kalkulation» aufgegangen — Preisklasse, MwSt und VK entstehen
              je Darreichung, getrennte Reiter zwangen zum Hin- und Herspringen. --}}
-        <x-foodalchemist::editor-tabs marker="vk" wire-key="vk-tabs-{{ $rezept->id }}" :init="'aufbau'" visit-action="tabLaden" :gesperrt="in_array($sperr['modus'], ['lesen', 'fremd'], true)"
+        <x-foodalchemist::editor-tabs marker="vk" wire-key="vk-tabs-{{ $rezept->id }}" :init="'aufbau'" visit-action="tabLaden" :gesperrt="in_array($sperr['modus'] ?? 'aus', ['lesen', 'fremd'], true)"
             :tabs="[
                 'aufbau' => 'Aufbau',
                 'kalkulation' => 'Kalkulation',

@@ -27,7 +27,7 @@
     $medien = fn ($fileId, $pfad) => app(\Platform\FoodAlchemist\Services\FoodAlchemistMediaService::class)->url($fileId, $pfad);
     $euro = fn ($wert) => number_format((float) $wert, 2, ',', '.') . ' €';
     // Spec 65: Lesemodus = keine eigene Bearbeitungssperre (lesen/fremd) — Editor-Inhalte und Schreib-Knöpfe aus
-    $gesperrt = isset($sperr) && in_array($sperr['modus'], ['lesen', 'fremd'], true);
+    $gesperrt = isset($sperr) && in_array($sperr['modus'] ?? 'aus', ['lesen', 'fremd'], true);
     $statusTon = fn ($ausgabe) => ['success' => 'ok', 'warning' => 'warn', 'danger' => 'crit', 'info' => 'info', 'primary' => 'accent'][$ausgabe->statusWert()->badgeVariant()] ?? 'neutral';
 @endphp
 

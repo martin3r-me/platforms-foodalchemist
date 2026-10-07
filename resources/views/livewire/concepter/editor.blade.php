@@ -157,7 +157,7 @@
             {{-- Spec 65: Reiter im Server-Modus liefern nur die Leiste — die Panels sperrt im Lesemodus ein fieldset
                  (Reiterleiste bleibt bedienbar). Im Reiter Kalkulation einzeln je Abschnitt, damit „Auftrag hochrechnen"
                  (reine Vorschau, schreibt nichts) auch im Lesemodus bedienbar bleibt. --}}
-            @php $lesemodus = in_array($sperr['modus'], ['lesen', 'fremd'], true); @endphp
+            @php $lesemodus = in_array($sperr['modus'] ?? 'aus', ['lesen', 'fremd'], true); @endphp
             <fieldset @disabled($lesemodus) class="contents" data-fa-lesemodus="{{ $lesemodus ? '1' : '0' }}">
 
             @if($fehler)

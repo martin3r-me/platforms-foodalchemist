@@ -9,7 +9,7 @@
 
 <div class="flex flex-col gap-4" data-settings-vk-taxonomie>
     {{-- Spec 65: „Bearbeiten" sperrt den Bereich für das Team, „Fertig" gibt frei --}}
-    @php $sperrLesen = in_array($sperr['modus'], ['lesen', 'fremd'], true); @endphp
+    @php $sperrLesen = in_array($sperr['modus'] ?? 'aus', ['lesen', 'fremd'], true); @endphp
     @include('foodalchemist::livewire.settings.partials.sperr-leiste', ['sofort' => true])
     <fieldset @disabled($sperrLesen) class="contents" data-fa-lesemodus="{{ $sperrLesen ? '1' : '0' }}">
     @if($meldung !== null)<x-fa::notice tone="ok" data-taxo-meldung>{{ $meldung }}</x-fa::notice>@endif

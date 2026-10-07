@@ -240,7 +240,7 @@
          gemountet werden). Start-Tab: «Aufbau», bei Neuanlage «Stammdaten» (Aufbau ist ohne
          Zutaten leer). Die drei Morph-Fallen (wire:key · x-effect-Reset · ein Scope für Leiste
          und Panels) stecken im Baustein. --}}
-    <x-foodalchemist::editor-tabs marker="rezept" wire-key="rezept-tabs-{{ $recipeId ?? 'neu' }}" visit-action="tabLaden" :gesperrt="in_array($sperr['modus'], ['lesen', 'fremd'], true)"
+    <x-foodalchemist::editor-tabs marker="rezept" wire-key="rezept-tabs-{{ $recipeId ?? 'neu' }}" visit-action="tabLaden" :gesperrt="in_array($sperr['modus'] ?? 'aus', ['lesen', 'fremd'], true)"
         :visited="array_keys($geladeneTabs)"
         :init="$neu ? 'eigenschaften' : 'aufbau'"
         :tabs="[

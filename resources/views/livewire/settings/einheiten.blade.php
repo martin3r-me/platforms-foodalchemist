@@ -10,7 +10,7 @@
 
 <div class="flex flex-col gap-4">
     {{-- Spec 65: „Bearbeiten" sperrt den Bereich für das Team, „Fertig" gibt frei --}}
-    @php $sperrLesen = in_array($sperr['modus'], ['lesen', 'fremd'], true); @endphp
+    @php $sperrLesen = in_array($sperr['modus'] ?? 'aus', ['lesen', 'fremd'], true); @endphp
     @include('foodalchemist::livewire.settings.partials.sperr-leiste', ['sofort' => true])
     @if($fehler)
         <x-fa::notice tone="crit">{{ $fehler }}</x-fa::notice>

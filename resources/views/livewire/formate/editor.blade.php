@@ -68,7 +68,7 @@
 
             {{-- Spec 65: Reiter im Server-Modus liefern nur die Leiste — den Panel-Bereich sperrt im Lesemodus
                  dieses fieldset (Reiterleiste bleibt außerhalb bedienbar). --}}
-            <fieldset @disabled(in_array($sperr['modus'], ['lesen', 'fremd'], true)) class="contents" data-fa-lesemodus="{{ in_array($sperr['modus'], ['lesen', 'fremd'], true) ? '1' : '0' }}">
+            <fieldset @disabled(in_array($sperr['modus'] ?? 'aus', ['lesen', 'fremd'], true)) class="contents" data-fa-lesemodus="{{ in_array($sperr['modus'] ?? 'aus', ['lesen', 'fremd'], true) ? '1' : '0' }}">
 
             @if($fehler)
                 <x-fa::notice tone="crit" title="Nicht gespeichert">{{ $fehler }}</x-fa::notice>

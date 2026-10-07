@@ -39,7 +39,7 @@
     $kwText = 'KW ' . (int) $montagDt->format('W') . ' · ' . ($mahlzeiten[$mahlzeit] ?? '');
     // Spec 65: Lesemodus = keine eigene Bearbeitungssperre. Gesperrt werden nur die Schreib-Bereiche — Navigation
     // (Woche, Mahlzeit, Ansicht), Eintrag-Detail ansehen, Bedarf, Plan/Ist und Druck bleiben bedienbar.
-    $gesperrt = in_array($sperr['modus'], ['lesen', 'fremd'], true);
+    $gesperrt = in_array($sperr['modus'] ?? 'aus', ['lesen', 'fremd'], true);
 @endphp
 
 <x-foodalchemist::modal name="speiseplan-editor" fullscreen dark-canvas title="Speiseplan bearbeiten"

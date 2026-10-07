@@ -83,7 +83,7 @@
                     </x-fa::detail-kopf>
 
                     {{-- Spec 65: Inhalt unter dem Kopf im Lesemodus gesperrt (Gerichte, Preis, Angaben) --}}
-                    <fieldset @disabled(in_array($sperr['modus'], ['lesen', 'fremd'], true)) class="contents" data-fa-lesemodus="{{ in_array($sperr['modus'], ['lesen', 'fremd'], true) ? '1' : '0' }}">
+                    <fieldset @disabled(in_array($sperr['modus'] ?? 'aus', ['lesen', 'fremd'], true)) class="contents" data-fa-lesemodus="{{ in_array($sperr['modus'] ?? 'aus', ['lesen', 'fremd'], true) ? '1' : '0' }}">
 
                     {{-- B-07: Kennzahlen + offene Punkte --}}
                     <div class="flex flex-col gap-3">

@@ -31,7 +31,7 @@
             // als erster Menüeintrag. Gibt es keinen Vorwärts-Schritt mehr, ist Bearbeiten die Hauptaktion (2026-10-05).
             // Spec 65: Status-Schritte und Materialbedarf schreiben sofort — erst nach „Bearbeiten" (gleiche Sperre wie
             // der Editor). Im Lesemodus zeigt der Kopf „Bearbeiten" statt der Schritte, „Auftrag bearbeiten" öffnet den Editor.
-            $sperrLesen = in_array($sperr['modus'], ['lesen', 'fremd'], true);
+            $sperrLesen = in_array($sperr['modus'] ?? 'aus', ['lesen', 'fremd'], true);
             $hatSchreibAktion = $detail['is_owned'] && ($erlaubteStatus !== [] || in_array($detail['status'], ['planned', 'in_progress'], true));
             $schritte = ($detail['is_owned'] && ! $sperrLesen) ? $erlaubteStatus : [];
             $vorwaerts = array_values(array_filter($schritte, fn ($z) => $z->value !== 'cancelled'));

@@ -17,7 +17,7 @@
     {{-- Feedback --}}
     {{-- Spec 65: „Bearbeiten" (am Speichern-Knopf) sperrt den Bereich für das Team; Design wählen, Vorschau und
          Block anklicken bleiben im Lesemodus bedienbar, alles Ändernde liegt in gesperrten <fieldset>s. --}}
-    @php $sperrLesen = in_array($sperr['modus'], ['lesen', 'fremd'], true); @endphp
+    @php $sperrLesen = in_array($sperr['modus'] ?? 'aus', ['lesen', 'fremd'], true); @endphp
     @if($status)
         <x-fa::notice tone="ok" data-fa-designs-status>{{ $status }}</x-fa::notice>
     @endif

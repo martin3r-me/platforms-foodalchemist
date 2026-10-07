@@ -89,7 +89,7 @@
         </x-fa::detail-kopf>
 
         {{-- Spec 65: Detailspalte — Änderungen erst nach „Bearbeiten" (gleiche Sperre wie der Format-Editor), „Fertig" gibt frei --}}
-        <fieldset @disabled(in_array($sperr['modus'], ['lesen', 'fremd'], true)) class="contents" data-fa-lesemodus="{{ in_array($sperr['modus'], ['lesen', 'fremd'], true) ? '1' : '0' }}">
+        <fieldset @disabled(in_array($sperr['modus'] ?? 'aus', ['lesen', 'fremd'], true)) class="contents" data-fa-lesemodus="{{ in_array($sperr['modus'] ?? 'aus', ['lesen', 'fremd'], true) ? '1' : '0' }}">
 
         {{-- Kennzahlen (Format-Ökonomie): Preisspanne ist die Hauptzahl, dazu Ø und Zahl der Editionen --}}
         <div class="flex flex-col gap-3" data-formate-cockpit>

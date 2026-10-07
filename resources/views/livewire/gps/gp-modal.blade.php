@@ -152,7 +152,7 @@
         </div>
     @endif
 
-    <x-foodalchemist::editor-tabs marker="gp" wire-key="gp-tabs-{{ $gp?->id ?? 'neu' }}" :init="$neu ? 'allgemein' : 'price'" :gesperrt="in_array($sperr['modus'], ['lesen', 'fremd'], true)"
+    <x-foodalchemist::editor-tabs marker="gp" wire-key="gp-tabs-{{ $gp?->id ?? 'neu' }}" :init="$neu ? 'allgemein' : 'price'" :gesperrt="in_array($sperr['modus'] ?? 'aus', ['lesen', 'fremd'], true)"
         :tabs="[
             'price' => $neu ? null : 'Lieferantenartikel',
             'allergene' => $neu ? null : 'Allergene und Zusatzstoffe',

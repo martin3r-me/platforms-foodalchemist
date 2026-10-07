@@ -19,7 +19,7 @@
     $darfLoeschen = $ops !== null && $ops['is_owned'] && in_array($ops['status'], ['planned', 'cancelled'], true);
     $hatDokument = $ops !== null && \Illuminate\Support\Facades\Route::has('foodalchemist.produktion.auftraege.dokument');
     // Spec 65: Lesemodus (keine eigene Sperre) — Eingaben/Knöpfe der Reiter sind aus, Löschen erst nach „Bearbeiten".
-    $sperrLesen = in_array($sperr['modus'], ['lesen', 'fremd'], true);
+    $sperrLesen = in_array($sperr['modus'] ?? 'aus', ['lesen', 'fremd'], true);
     $darfLoeschen = $darfLoeschen && ! $sperrLesen;
 @endphp
 

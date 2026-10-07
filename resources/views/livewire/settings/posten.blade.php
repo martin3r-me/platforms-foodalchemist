@@ -4,7 +4,7 @@
      Tabelle, die Besetzung steht als eigene Zeile unter dem Posten. --}}
 <div class="flex flex-col gap-4" data-settings-posten>
     {{-- Spec 65: „Bearbeiten" sperrt den Bereich für das Team, „Fertig" gibt frei --}}
-    @php $sperrLesen = in_array($sperr['modus'], ['lesen', 'fremd'], true); @endphp
+    @php $sperrLesen = in_array($sperr['modus'] ?? 'aus', ['lesen', 'fremd'], true); @endphp
     @include('foodalchemist::livewire.settings.partials.sperr-leiste', ['sofort' => true])
     <fieldset @disabled($sperrLesen) class="contents" data-fa-lesemodus="{{ $sperrLesen ? '1' : '0' }}">
     @if($fehler)<x-fa::notice tone="crit" data-posten-fehler>{{ $fehler }}</x-fa::notice>@endif

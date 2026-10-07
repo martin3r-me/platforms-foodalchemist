@@ -105,7 +105,7 @@
 
             {{-- Alpine-Modus: alle Reiter bleiben im DOM, damit die entangle-Bindings (Allergene,
                  Zusatzstoffe) und ungespeicherte Eingaben beim Umschalten erhalten bleiben. --}}
-            <x-foodalchemist::editor-tabs marker="la" wire-key="la-tabs-{{ $item->id }}" :init="$gpName === null ? 'gp' : 'preise'" :gesperrt="$darfEdit && in_array($sperr['modus'], ['lesen', 'fremd'], true)"
+            <x-foodalchemist::editor-tabs marker="la" wire-key="la-tabs-{{ $item->id }}" :init="$gpName === null ? 'gp' : 'preise'" :gesperrt="$darfEdit && in_array($sperr['modus'] ?? 'aus', ['lesen', 'fremd'], true)"
                 :tabs="[
                     'gp' => 'Grundprodukt',
                     'preise' => 'Preise',

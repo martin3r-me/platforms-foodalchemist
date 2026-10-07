@@ -16,7 +16,7 @@
 
 <div class="flex flex-col gap-6" data-settings-wissenssteuerung>
     {{-- Spec 65: „Bearbeiten" sperrt den Bereich für das Team, „Fertig" gibt frei --}}
-    @php $sperrLesen = in_array($sperr['modus'], ['lesen', 'fremd'], true); @endphp
+    @php $sperrLesen = in_array($sperr['modus'] ?? 'aus', ['lesen', 'fremd'], true); @endphp
     @include('foodalchemist::livewire.settings.partials.sperr-leiste', ['sofort' => true])
     @if($fehler !== null)
         <x-fa::notice tone="crit" data-ws-fehler>{{ $fehler }}</x-fa::notice>

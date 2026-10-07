@@ -29,7 +29,7 @@
 
     $istRunde = $detail === null;
     // Spec 65: Beleg ohne eigene Sperre = Lesemodus (Reiter-Eingaben aus, Status/Storno/Mail erst nach „Bearbeiten").
-    $sperrLesen = ! $istRunde && in_array($sperr['modus'], ['lesen', 'fremd'], true);
+    $sperrLesen = ! $istRunde && in_array($sperr['modus'] ?? 'aus', ['lesen', 'fremd'], true);
     $sendBlockers = $detail['send_blockers'] ?? [];
 
     // Statusschritte: der erste Folgeschritt ist die Hauptaktion, weitere stehen daneben, Storno ins Menü.

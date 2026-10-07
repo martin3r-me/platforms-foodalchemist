@@ -11,7 +11,7 @@
 <div class="flex flex-col gap-4">
     {{-- Die Leiste speichert die Strategie; Lagerorte und Stamm-Lieferanten speichern je Zeile. --}}
     {{-- Spec 65: „Bearbeiten" sperrt den Bereich für das Team; mehrere Abschnitts-Speichern → Bearbeiten/Fertig --}}
-    @php $sperrLesen = in_array($sperr['modus'], ['lesen', 'fremd'], true); @endphp
+    @php $sperrLesen = in_array($sperr['modus'] ?? 'aus', ['lesen', 'fremd'], true); @endphp
     @include('foodalchemist::livewire.settings.partials.sperr-leiste', ['sofort' => true, 'hint' => 'Strategie, Bestellversand, Lagerorte und Stamm-Lieferanten.'])
     @unless($sperrLesen)
     <x-foodalchemist::save-bar :meldung="$meldung" hint="Speichert die Strategie für den kalkulierenden Artikel." />

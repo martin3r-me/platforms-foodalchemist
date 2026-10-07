@@ -40,7 +40,7 @@
         ];
     }
     // Spec 65: Lesemodus = keine eigene Bearbeitungssperre (lesen/fremd) — Editor-Inhalte und Schreib-Knöpfe aus
-    $gesperrt = isset($sperr) && in_array($sperr['modus'], ['lesen', 'fremd'], true);
+    $gesperrt = isset($sperr) && in_array($sperr['modus'] ?? 'aus', ['lesen', 'fremd'], true);
 @endphp
 
 <x-ui-page>

@@ -32,7 +32,7 @@
     $preisModusText = fn (?string $m) => ['auto' => 'Preis aus dem Inhalt', 'manuell' => 'Preis von Hand', 'alternativen' => 'Preis je Auswahl', 'fixed' => 'Festpreis'][$m ?? ''] ?? ucfirst((string) $m);
     $hatKapitel = count($kapitelTree ?? []) > 0;
     // Spec 65: Lesemodus = keine eigene Bearbeitungssperre (lesen/fremd) — Eingaben und Schreib-Knöpfe aus
-    $gesperrt = in_array($sperr['modus'], ['lesen', 'fremd'], true);
+    $gesperrt = in_array($sperr['modus'] ?? 'aus', ['lesen', 'fremd'], true);
 @endphp
 
 <x-foodalchemist::modal name="angebot-editor" fullscreen dark-canvas title="Angebot"

@@ -123,7 +123,7 @@
 
         {{-- Spec 65: Sidebar — Änderungen erst nach „Bearbeiten". Eingebettet im GP-Dialog sperrt dessen
              editor-tabs-fieldset (diese Instanz rendert beim Klick auf „Bearbeiten" im Dialog nicht neu). --}}
-        @php $lesemodus = ! $embedded && in_array($sperr['modus'], ['lesen', 'fremd'], true); @endphp
+        @php $lesemodus = ! $embedded && in_array($sperr['modus'] ?? 'aus', ['lesen', 'fremd'], true); @endphp
         <fieldset @disabled($lesemodus) class="contents" data-fa-lesemodus="{{ $lesemodus ? '1' : '0' }}">
 
         @if($fehler !== null)<x-fa::notice tone="crit" data-la-fehler>{{ $fehler }}</x-fa::notice>@endif

@@ -282,7 +282,7 @@
         @endif
 
         @if($selected)
-            @php $lesemodus = in_array($sperr['modus'], ['lesen', 'fremd'], true); @endphp
+            @php $lesemodus = in_array($sperr['modus'] ?? 'aus', ['lesen', 'fremd'], true); @endphp
             {{-- Concept-Stammdaten --}}
             <x-fa::section title="Stammdaten" icon="heroicon-o-identification" wire:key="hdr-{{ $selected->id }}">
                 {{-- Spec 65: Felder erst nach „Bearbeiten" (Sperre) änderbar; die Bearbeiten-Leiste steht außerhalb --}}
