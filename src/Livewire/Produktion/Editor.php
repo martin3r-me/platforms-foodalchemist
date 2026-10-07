@@ -59,7 +59,7 @@ class Editor extends Component
     protected function sperrFreiExtra(): array
     {
         // zeileAbhaken: Küche hakt im laufenden Auftrag ab, ohne „Bearbeiten“ (Dominique 2026-10-07)
-        return ['oeffnenNeu', 'oeffnenBearbeiten', 'browseZiele', 'beiModalGeschlossen', 'zeileAbhaken'];
+        return ['oeffnenNeu', 'oeffnenBearbeiten', 'browseZiele', 'beiModalGeschlossen', 'zeileAbhaken', 'darreichungenFuer'];
     }
 
     /** Abbrechen: ungespeicherten Stand verwerfen, Auftrag frisch laden. */
@@ -312,7 +312,31 @@ class Editor extends Component
         ];
     }
 
-    public function zielEinfuegen(string $typ, int $id, $menge, ?string $einheit = null): void
+    /**
+     * Darreichungen eines Gerichts für die Einfüge-Zeile (nur lesen). Standard zuerst.
+     *
+     * @return list<array{id: int, label: string, gramm: ?float, standard: bool}>
+     */
+    public function darreichungenFuer(int $recipeId): array
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        $recipe = $team !== null ? FoodAlchemistRecipe::visibleToTeam($team)->verkauf()->find($recipeId) : null;
+        if ($recipe === null) {
+            return [];
+        }
+        $svc = app(\Platform\FoodAlchemist\Services\DarreichungService::class);
+
+        return \Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung::with('servingForm')
+            ->where('recipe_id', $recipe->id)->orderByDesc('is_standard')->orderBy('id')->get()
+            ->map(fn ($d) => [
+                'id' => (int) $d->id,
+                'label' => $d->servingForm?->label ?? '—',
+                'gramm' => ($g = $svc->grammJeEinheit($d, $recipe)) !== null ? round($g * (float) ($d->unit_count ?: 1)) : null,
+                'standard' => (bool) $d->is_standard,
+            ])->values()->all();
+    }
+
+    public function zielEinfuegen(string $typ, int $id, $menge, ?string $einheit = null, $darreichungId = null): void
     {
         $typ = in_array($typ, ['concept', 'recipe', 'basisrezept', 'angebot'], true) ? $typ : 'concept';
         $this->zielTyp = $typ;
@@ -347,6 +371,11 @@ class Editor extends Component
             $ziel = ['recipe_id' => $id, 'amount_kg' => $menge];
         } else {
             $ziel = ['recipe_id' => $id, 'portions' => $menge];
+            // Gericht: gewählte Darreichung (muss zum Gericht gehören; leer = Standard).
+            $darId = (int) ($darreichungId ?? 0);
+            if ($typ === 'recipe' && $darId > 0 && \Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung::whereKey($darId)->where('recipe_id', $id)->where('is_standard', false)->exists()) {
+                $ziel['presentation_id'] = $darId;
+            }
         }
 
         $this->zielAblegen($ziel);   // #2: identitäts-dedupliziert — Re-Add ersetzt, statt zu duplizieren
@@ -479,11 +508,13 @@ class Editor extends Component
     {
         $rid = isset($ziel['recipe_id']) ? (int) $ziel['recipe_id'] : null;
         $cid = isset($ziel['concept_id']) ? (int) $ziel['concept_id'] : null;
-        $sourceRef = $cid !== null ? 'concept:' . $cid : 'recipe:' . $rid;
+        $pid = isset($ziel['presentation_id']) ? (int) $ziel['presentation_id'] : null;
+        // Dasselbe Gericht in zwei Darreichungen sind zwei Ziele (z. B. 80 Teller + 40 Kinder).
+        $sourceRef = $cid !== null ? 'concept:' . $cid : 'recipe:' . $rid . ($pid !== null ? ':f' . $pid : '');
 
         $this->targets = collect($this->targets)
             ->reject(fn ($t) => ! str_contains((string) ($t['source_ref'] ?? ''), ':c')
-                && (($rid !== null && (int) ($t['recipe_id'] ?? 0) === $rid)
+                && (($rid !== null && (int) ($t['recipe_id'] ?? 0) === $rid && (int) ($t['presentation_id'] ?? 0) === (int) $pid)
                     || ($cid !== null && (int) ($t['concept_id'] ?? 0) === $cid)))
             ->values()->all();
 
@@ -505,8 +536,11 @@ class Editor extends Component
             return $anzeige . ' (' . $this->zahl((float) $ziel['amount_kg']) . ' kg)';
         }
         $einheit = $this->zielTyp === 'basisrezept' ? 'Ansätze' : 'Port.';
+        $form = ! empty($ziel['presentation_id'])
+            ? \Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung::with('servingForm')->find((int) $ziel['presentation_id'])?->servingForm?->label
+            : null;
 
-        return $anzeige . ' (' . $this->zahl((float) $ziel['portions']) . ' ' . $einheit . ')';
+        return $anzeige . ' (' . $this->zahl((float) $ziel['portions']) . ' ' . $einheit . ($form ? ', ' . $form : '') . ')';
     }
 
     private function zahl(float $n): string

@@ -357,13 +357,38 @@ Gericht mit zehn Portionen je Ansatz standen EK, EK je Gast und Wareneinsatz-% z
   `key` (`<seite>--<komponente>`).
 
 **Offen.**
-- Die Produktions- und Bedarfsübergabe (`produktionsZiele`) skaliert weiter nach Portionen in
-  Standardgröße. Eine Kinderportion mit 150 g statt 250 g zieht in der Produktion also eine volle
-  Portion. Dafür braucht die Übergabe Portionsäquivalente (Gramm der Form ÷ Gramm der Standardform).
-- Kantinen-Komponenten (Basisrezept einzeln im Speiseplan verkaufen) sind bewusst vertagt.
-  Richtung: der Picker legt per Klick ein dünnes Komponenten-Gericht an
-  (`SalesRecipeService::createFromBasis` + Darreichung) oder nutzt ein vorhandenes. Basisrezepte
-  kommen nicht direkt in den Plan.
+- ~~Produktion skaliert nach Standardportionen~~ → erledigt, siehe Nachtrag „Produktion aus der
+  Darreichung" unten.
+- Kantinen-Komponenten: **entschieden 2026-10-07 (Dominique) — keine neue Ebene.** Basisrezept
+  (wie gekocht wird) und Gericht (wie regeneriert und verkauft wird) bleiben getrennt; eine
+  Beilage wird als Gericht mit dem Basisrezept als Komponente verkauft („Gericht anlegen" am
+  Basisrezept). Auf demo gibt es das bereits 55-mal.
+
+## Nachtrag 2026-10-07 · Produktion aus der Darreichung
+
+**Regel (Dominique):** Produktion, Bedarf und Einkauf rechnen immer mit der Darreichung, die an
+der Quelle gewählt ist (Speiseplan-Eintrag, Konzept-Slot, Paket-Gericht, Foodbook-Block,
+händisches Gericht-Ziel), sonst mit der Standard-Darreichung. Kein Faktor gegen die Standard-Form,
+sondern die Menge direkt aus der Darreichung — dieselbe Rechnung wie der Portions-EK.
+
+**Umsetzung.**
+- `DarreichungService::grammJeEinheit` (eine Regel für Preis und Produktion) und
+  `DarreichungService::produktionsAnteil`: Portionen × Anzahl × Grammatur ÷ Kalkulations-Yield;
+  bei Deltas Gramm je Komponente (weggelassen = 0, Override = echte Gramm, Rest =
+  Standard-Komposition je Einheit). Form ohne eingetragene Grammatur: wie bisher über
+  Stück/Portionszahl (keine stille Änderung).
+- `PlanungsblattService`: Rezept-Ziele tragen `presentation_id`; Konzept-/Paket-Positionen und
+  Foodbook-Blöcke übergeben ihre aufgelöste Darreichung (vorher nur bei Gramm-Mengen).
+  `explodiere` rechnet Deltas je Zutat (Sub-Rezepte, GP-Bedarf, Zutatenzeilen).
+- Speiseplan → Produktion: `presentation_id` je Eintrag; Paket-Einträge nehmen Menge, Einheit und
+  Darreichung je Paket-Gericht (vorher Pax je Gericht, auch für Basisrezepte).
+- Produktionszeile und Blätter zeigen die produzierten Formen („100 × Teller · 250 g, 40 × Kinder ·
+  150 g"); Ausgabe-Skalare (Vehikel/Geschirr) von der meistproduzierten Form.
+- Produktions-Editor: händisches Gericht-Ziel mit Darreichungs-Auswahl; dasselbe Gericht in zwei
+  Formen = zwei Ziele.
+
+**Folge:** Offene Aufträge aus Speiseplänen werden nach dem Deploy einmal als veraltet markiert
+(Ziele tragen jetzt `presentation_id`), freigegebener Einkaufsbedarf muss neu freigegeben werden.
 
 ## Reihenfolge (Vorschlag)
 

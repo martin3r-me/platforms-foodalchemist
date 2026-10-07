@@ -10,6 +10,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistFoodbookBlock;
 use Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
+use Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung;
 
 /**
  * R7.1 — Operative Planungs-Blätter (read-only, rein rechnend; kein Bestand,
@@ -197,10 +198,10 @@ class PlanungsblattService
 
                     continue;
                 }
-                [$batches, $meta] = $this->rezeptTopBatches($recipe, $ziel, $warnungen);
+                [$batches, $meta, $extra] = $this->rezeptTopBatches($recipe, $ziel, $warnungen);
                 $skalierung ??= $meta;
                 $zielLabels[] = "{$recipe->name} ({$meta['wert']} {$meta['modus']})";
-                $tops[] = ['recipe' => $recipe, 'batches' => $batches, 'label' => $recipe->name];
+                $tops[] = ['recipe' => $recipe, 'batches' => $batches, 'label' => $recipe->name] + $extra;
             } else {
                 $warnungen[] = 'Ziel ohne concept_id/recipe_id — übersprungen.';
             }
@@ -279,12 +280,21 @@ class PlanungsblattService
             return null;
         }
         $stueck = ConcepterAggregateService::stueckModus($unit, $gericht);
+        $rezept = $this->ladeRezept((int) $gericht->id);
+        if (! $stueck && $rezept !== null && (bool) $rezept->is_sales_recipe) {
+            // Portionen dieser Position → Menge aus der geltenden Darreichung (gewählt, sonst Standard).
+            $dar ??= $this->darreichungen->standardFuer($rezept);
+
+            return ['recipe' => $rezept, 'label' => $gericht->name]
+                + $this->darreichungsAnteil($rezept, $dar, $pae * $personen, $warnungen);
+        }
+        // Stück-Modus (Menge in Stück gegen yield_pieces) bleibt eine reine Stückrechnung.
         $anzahl = $stueck ? (float) $gericht->yield_pieces : max(1, (int) ($gericht->sales_unit_count ?? 1));
         if ($anzahl <= 0) {
             $anzahl = 1.0;
         }
 
-        return ['recipe' => $this->ladeRezept((int) $gericht->id), 'batches' => ($pae * $personen) / $anzahl, 'label' => $gericht->name];
+        return ['recipe' => $rezept, 'batches' => ($pae * $personen) / $anzahl, 'label' => $gericht->name];
     }
 
     // ── Foodbook-Kapitel als Ziel (P1b) ───────────────────────────────────
@@ -324,7 +334,7 @@ class PlanungsblattService
                     continue;
                 }
                 // Default 1 Portion/Person, sonst Block-Menge+Einheit (positionTop rechnet das VK-Skalierungsmuster).
-                $top = $this->positionTop($dish, $block->quantity, $block->unit, null, $personen, $warnungen);
+                $top = $this->positionTop($dish, $block->quantity, $block->unit, $this->darreichungen->fuerBlock($block), $personen, $warnungen);
                 if ($top !== null) {
                     $tops[] = $top;
                 }
@@ -363,7 +373,12 @@ class PlanungsblattService
 
                     continue;
                 }
-                $ziele[] = ['recipe_id' => (int) $block->sales_recipe_id, 'portions' => $this->recipeRefPortionen($dish, $block, $personen, $warnungen)];
+                $ziele[] = array_filter([
+                    'recipe_id' => (int) $block->sales_recipe_id,
+                    'portions' => $this->recipeRefPortionen($dish, $block, $personen, $warnungen),
+                    // Gewählte Darreichung des Blocks wandert mit ins eingefrorene Ziel (sonst Standard).
+                    'presentation_id' => $block->presentation_id !== null ? (int) $block->presentation_id : null,
+                ], fn ($v) => $v !== null);
             }
         }
 
@@ -514,7 +529,8 @@ class PlanungsblattService
     private function recipeRefPortionen(FoodAlchemistRecipe $dish, FoodAlchemistFoodbookBlock $block, int $personen, array &$warnungen): float
     {
         $q = $block->quantity !== null ? (float) $block->quantity : null;
-        $pae = ConcepterAggregateService::portionsAequivalent($q, $block->unit, $dish);
+        $darG = $this->darreichungen->fuerBlock($block)?->quantity_per_unit_g;
+        $pae = ConcepterAggregateService::portionsAequivalent($q, $block->unit, $dish, $darG !== null ? (float) $darG : null);
         if ($pae === null) {
             $warnungen[] = "Kapitel-Gericht „{$dish->name}“: Gramm-Menge ohne Portionsgewicht — 1 Portion/Person angenommen.";
             $pae = 1.0;
@@ -542,11 +558,11 @@ class PlanungsblattService
         if ($istVk) {
             $portionen = (float) ($ziel['portions'] ?? $ziel['persons'] ?? 0);
             $portionen = $portionen > 0 ? $portionen : 1.0;
-            $anzahl = ($recipe->yield_pieces !== null && (float) $recipe->yield_pieces > 0)
-                ? (float) $recipe->yield_pieces
-                : max(1, (int) ($recipe->sales_unit_count ?? 1));
+            // Menge aus der Darreichung des Ziels (gewählt, sonst Standard) — wie der Portions-EK.
+            $dar = $this->darreichungFuerZiel($recipe, $ziel['presentation_id'] ?? null);
+            $extra = $this->darreichungsAnteil($recipe, $dar, $portionen, $warnungen);
 
-            return [$portionen / $anzahl, ['modus' => 'portionen', 'wert' => $portionen]];
+            return [$extra['batches'], ['modus' => 'portionen', 'wert' => $portionen], $extra];
         }
 
         // Basisrezept mit kg-Ziel (P1): Roh-Batches = kg ÷ Basis-Yield (explodiere rundet auf).
@@ -556,17 +572,48 @@ class PlanungsblattService
             if ($yieldKg <= 0) {
                 $warnungen[] = "Basisrezept „{$recipe->name}“: kg-Ziel ohne Basis-Yield — 1 Ansatz angenommen (Yield pflegen).";
 
-                return [1.0, ['modus' => 'kg', 'wert' => $kg]];
+                return [1.0, ['modus' => 'kg', 'wert' => $kg], []];
             }
 
-            return [$kg / $yieldKg, ['modus' => 'kg', 'wert' => $kg]];
+            return [$kg / $yieldKg, ['modus' => 'kg', 'wert' => $kg], []];
         }
 
         // Basisrezept solo: Ziel = Anzahl Basis-Ansätze (Default 1).
         $ansaetze = (float) ($ziel['portions'] ?? $ziel['persons'] ?? 1);
         $ansaetze = $ansaetze > 0 ? $ansaetze : 1.0;
 
-        return [$ansaetze, ['modus' => 'ansätze', 'wert' => $ansaetze]];
+        return [$ansaetze, ['modus' => 'ansätze', 'wert' => $ansaetze], []];
+    }
+
+    /** Darreichung eines Produktionsziels: explizit gewählt (gehört zum Gericht), sonst Standard. */
+    private function darreichungFuerZiel(FoodAlchemistRecipe $recipe, mixed $presentationId): ?FoodAlchemistRecipeDarreichung
+    {
+        $id = (int) ($presentationId ?? 0);
+        if ($id > 0) {
+            $dar = FoodAlchemistRecipeDarreichung::whereKey($id)->where('recipe_id', $recipe->id)->first();
+            if ($dar !== null) {
+                return $dar;
+            }
+        }
+
+        return $this->darreichungen->standardFuer($recipe);
+    }
+
+    /**
+     * N verkaufte Portionen in einer Darreichung → Top-Anteil für die Explosion. Die Menge kommt
+     * direkt aus der Darreichung (DarreichungService::produktionsAnteil — dieselbe Regel wie der
+     * Portions-EK), nicht aus einem Faktor gegen die Standard-Form.
+     *
+     * @return array{batches: float, je_zutat: ?array<int, float>, portionen: float, darreichung: ?FoodAlchemistRecipeDarreichung}
+     */
+    private function darreichungsAnteil(FoodAlchemistRecipe $recipe, ?FoodAlchemistRecipeDarreichung $dar, float $portionen, array &$warnungen): array
+    {
+        $anteil = app(DarreichungService::class)->produktionsAnteil($recipe, $dar, $portionen, Team::find($recipe->team_id));
+        if ($anteil['warnung'] !== null) {
+            $warnungen[] = $anteil['warnung'];
+        }
+
+        return ['batches' => $anteil['ansaetze'], 'je_zutat' => $anteil['je_zutat'], 'portionen' => $portionen, 'darreichung' => $dar];
     }
 
     // ── Explosion über den Rezeptbaum ─────────────────────────────────────
@@ -596,8 +643,27 @@ class PlanungsblattService
         $warnings = [];
         $fehlenderYield = [];
 
+        /** @var array<int, array<int, float>> $zutatKorrektur Darreichungs-Deltas: Ansätze je Zutat minus Mittel. */
+        $zutatKorrektur = [];
+        /** @var array<int, float> $portionenTop verkaufte Portionen je Gericht (aus den Zielen, nicht zurückgerechnet). */
+        $portionenTop = [];
+        /** @var array<int, array<int|string, array{dar: ?FoodAlchemistRecipeDarreichung, portionen: float}>> $formenTop */
+        $formenTop = [];
         foreach ($tops as $t) {
-            $needBatches[(int) $t['recipe']->id] = ($needBatches[(int) $t['recipe']->id] ?? 0.0) + (float) $t['batches'];
+            $rid = (int) $t['recipe']->id;
+            $needBatches[$rid] = ($needBatches[$rid] ?? 0.0) + (float) $t['batches'];
+            // Darreichung mit Deltas: jede Zutat hat ihre eigene Menge (weggelassen = 0).
+            foreach ((array) ($t['je_zutat'] ?? []) as $ingId => $ansaetze) {
+                $zutatKorrektur[$rid][(int) $ingId] = ($zutatKorrektur[$rid][(int) $ingId] ?? 0.0) + (float) $ansaetze - (float) $t['batches'];
+            }
+            if (array_key_exists('portionen', $t)) {
+                $portionenTop[$rid] = ($portionenTop[$rid] ?? 0.0) + (float) $t['portionen'];
+                $key = $t['darreichung']?->id ?? 'ohne';
+                $formenTop[$rid][$key] = [
+                    'dar' => $t['darreichung'] ?? null,
+                    'portionen' => ($formenTop[$rid][$key]['portionen'] ?? 0.0) + (float) $t['portionen'],
+                ];
+            }
         }
 
         $entdeckt = [];
@@ -670,10 +736,12 @@ class PlanungsblattService
             $zeilen = [];
             $komponentenMasse = [];
             foreach ($recipe->ingredients as $z) {
+                // Ansätze DIESER Zutat: Mittel + Darreichungs-Delta (nur VK-Gerichte mit Deltas).
+                $zBatches = $istVk ? max(0.0, $batches + ($zutatKorrektur[$rid][(int) $z->id] ?? 0.0)) : $batches;
                 $mengeAvg = $z->quantity_max !== null
                     ? ((float) $z->quantity + (float) $z->quantity_max) / 2
                     : (float) $z->quantity;
-                $skalMenge = $mengeAvg * $batches;
+                $skalMenge = $mengeAvg * $zBatches;
                 $qsOderOpt = $z->is_optional || $z->unit?->slug === 'qs';
                 $name = $z->display_name ?: ($z->gp?->name ?? $z->referencedRecipe?->name ?? $z->raw_text);
 
@@ -688,7 +756,7 @@ class PlanungsblattService
                         $komponentenMasse[] = [
                             'recipe' => $sub,
                             'label' => $name,
-                            'menge_kg' => round(($bruttoProBatch * $batches) / 1000, 3),
+                            'menge_kg' => round(($bruttoProBatch * $zBatches) / 1000, 3),
                         ];
                     }
                     // Befund auf Echtdaten (demo, Spec 51): eine Komponente in »stk« ohne
@@ -702,7 +770,7 @@ class PlanungsblattService
                     }
                     if ($basisG > 0) {
                         $needBatches[(int) $z->referenced_recipe_id] = ($needBatches[(int) $z->referenced_recipe_id] ?? 0.0)
-                            + ($bruttoProBatch * $batches) / $basisG;
+                            + ($bruttoProBatch * $zBatches) / $basisG;
                     } else {
                         $fehlenderYield[(int) $z->referenced_recipe_id] = $sub?->name ?? "#{$z->referenced_recipe_id}";
                         $needBatches[(int) $z->referenced_recipe_id] = max($needBatches[(int) $z->referenced_recipe_id] ?? 0.0, 1.0);
@@ -716,7 +784,7 @@ class PlanungsblattService
 
                 if ($z->gp_id !== null && $z->gp !== null) {
                     if (! $qsOderOpt) {
-                        $g = $this->recompute->bruttoMasseG($z) * $batches;
+                        $g = $this->recompute->bruttoMasseG($z) * $zBatches;
                         if ($g > 0) {
                             $gpGram[$z->gp_id]['grams'] = ($gpGram[$z->gp_id]['grams'] ?? 0.0) + $g;
                             $gpModelle[$z->gp_id] = $z->gp;
@@ -747,7 +815,9 @@ class PlanungsblattService
                 'ist_basisrezept' => ! $istVk,
                 'tiefe' => $tiefe[$rid],
                 'ansaetze' => $istVk ? round($batches, 3) : (int) $batches,
-                'portionen' => $istVk ? (int) round($batches * $anzahlProBatch) : null,   // P1: Portionszahl fürs VK-Gericht
+                // Verkaufte Portionen aus den Zielen (je Darreichung), sonst aus den Ansätzen zurückgerechnet.
+                'portionen' => $istVk ? (int) round($portionenTop[$rid] ?? $batches * $anzahlProBatch) : null,
+                'formen' => $istVk ? $this->formenAnzeige($recipe, $formenTop[$rid] ?? []) : [],
                 'benoetigt_ansaetze' => round($roh, 3),      // fraktional — Transparenz „ganze Ansätze vs. Bedarf"
                 'basis_yield_kg' => $basisYieldKg,
                 'produzierte_menge_kg' => $basisYieldKg !== null ? round($basisYieldKg * $batches, 3) : null,
@@ -757,7 +827,8 @@ class PlanungsblattService
                 'standzeit_min' => $recipe->standzeitMin(),   // passive Gar-/Standzeit (Durchlaufzeit, kein Posten)
                 'zubereitung' => $recipe->preparation ?: null,        // Spiegel-Freitext (Fallback für Rezepte ohne Schritte)
                 'schritte' => $this->schritteFuer($recipe),           // Spec 27: die eigentliche Anleitung (Nummer + Text + Fotos)
-                'darreichung' => $istVk ? $this->darreichungsInfo($recipe) : null, // Vehikel/Geschirr der Standard-Form
+                // Vehikel/Geschirr der meistproduzierten Form (ohne Ziel-Formen: Standard-Form).
+                'darreichung' => $istVk ? $this->darreichungsInfo($recipe, $this->hauptForm($formenTop[$rid] ?? [])) : null,
                 'regenerationen' => $this->regenerationenFuer($recipe),   // §3.2: Programm je Komponente (V-19)
                 // Spec 51: Abfuellen an JEDER Zeile (was produziert wird, muss irgendwo hinein);
                 // Regenerieren/Ausgabe nur, wo auch serviert wird — und dort je Komponente.
@@ -1000,9 +1071,9 @@ class PlanungsblattService
         ];
     }
 
-    private function darreichungsInfo(FoodAlchemistRecipe $recipe): ?array
+    private function darreichungsInfo(FoodAlchemistRecipe $recipe, ?FoodAlchemistRecipeDarreichung $dar = null): ?array
     {
-        $dar = $this->darreichungen->standardFuer($recipe);
+        $dar ??= $this->darreichungen->standardFuer($recipe);
         if ($dar === null) {
             return null;
         }
@@ -1022,6 +1093,41 @@ class PlanungsblattService
         ], fn ($v) => $v !== null && $v !== '');
 
         return $info !== [] ? $info : null;
+    }
+
+    /** @param array<int|string, array{dar: ?FoodAlchemistRecipeDarreichung, portionen: float}> $formen */
+    private function hauptForm(array $formen): ?FoodAlchemistRecipeDarreichung
+    {
+        uasort($formen, fn ($a, $b) => $b['portionen'] <=> $a['portionen']);
+
+        return array_values($formen)[0]['dar'] ?? null;
+    }
+
+    /**
+     * Produzierte Formen fürs Blatt: „80 × Teller · 250 g". Leer, wenn nur die Standard-Form ohne
+     * Ziel-Angabe vorkommt (dann bleibt die Zeile wie bisher).
+     *
+     * @param  array<int|string, array{dar: ?FoodAlchemistRecipeDarreichung, portionen: float}>  $formen
+     * @return list<array{label: string, portionen: int, gramm: ?float, standard: bool}>
+     */
+    private function formenAnzeige(FoodAlchemistRecipe $recipe, array $formen): array
+    {
+        $darSvc = app(DarreichungService::class);
+        $out = [];
+        foreach ($formen as $f) {
+            $dar = $f['dar'];
+            // Gerechnete Grammatur (dieselbe Regel wie Preis/Produktion, auch wo an der Form nichts steht).
+            $gramm = $dar !== null ? $darSvc->grammJeEinheit($dar, $recipe) : null;
+            $out[] = [
+                'label' => $dar?->servingForm?->label ?? 'Standard',
+                'portionen' => (int) round($f['portionen']),
+                'gramm' => $gramm !== null ? round($gramm * (float) ($dar?->unit_count ?: 1), 1) : null,
+                'standard' => (bool) ($dar?->is_standard ?? true),
+            ];
+        }
+        usort($out, fn ($a, $b) => $b['portionen'] <=> $a['portionen']);
+
+        return $out;
     }
 
     // ── Rezept-Laden (memoisiert, mit Explosions-Relationen) ──────────────

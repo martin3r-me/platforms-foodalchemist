@@ -306,16 +306,7 @@ class DarreichungService
         if ($deltas->isEmpty()) {
             // Stufe 1: proportional — EK/g des Rezepts × Grammatur × Anzahl
             $ekProG = $recipe->ek_per_kg_eur !== null ? (float) $recipe->ek_per_kg_eur / 1000.0 : null;
-            $grammatur = (float) ($darreichung->quantity_per_unit_g ?? 0);
-            if ($grammatur <= 0 && $darreichung->is_standard) {
-                $legacyGrammatur = (float) ($recipe->sales_quantity_per_unit_g ?? 0);
-                $rezeptEinheiten = max(1, (int) ($recipe->sales_unit_count ?? 0));
-                $grammatur = $legacyGrammatur > 0
-                    ? $legacyGrammatur
-                    : (($recipe->yield_kg !== null && (float) $recipe->yield_kg > 0)
-                        ? (float) $recipe->yield_kg * 1000 / $rezeptEinheiten
-                        : 0.0);
-            }
+            $grammatur = $this->grammJeEinheit($darreichung, $recipe) ?? 0.0;
             $ekPortion = ($ekProG !== null && $grammatur > 0)
                 ? round($ekProG * $grammatur
                     * (float) ($darreichung->unit_count ?: 1), 4)
@@ -412,6 +403,105 @@ class DarreichungService
         foreach ($darreichungen as $d) {
             $this->recomputePreise($d, $recipe);
         }
+    }
+
+    /**
+     * Grammatur EINER Einheit dieser Darreichung (ohne Deltas) — eine Regel für Preis UND
+     * Produktion: eingetragene Grammatur; fehlt sie an der STANDARD-Form, die Rezept-Grammatur,
+     * sonst Ertrag ÷ Portionen (ohne Portionszahl = eine Portion). Andere Formen ohne
+     * Grammatur: null (kein Preis, keine Produktionsmenge).
+     */
+    public function grammJeEinheit(FoodAlchemistRecipeDarreichung $darreichung, FoodAlchemistRecipe $recipe): ?float
+    {
+        $grammatur = (float) ($darreichung->quantity_per_unit_g ?? 0);
+        if ($grammatur > 0) {
+            return $grammatur;
+        }
+        if (! $darreichung->is_standard) {
+            return null;
+        }
+        $legacyGrammatur = (float) ($recipe->sales_quantity_per_unit_g ?? 0);
+        if ($legacyGrammatur > 0) {
+            return $legacyGrammatur;
+        }
+        if ($recipe->yield_kg !== null && (float) $recipe->yield_kg > 0) {
+            return (float) $recipe->yield_kg * 1000 / max(1, (int) ($recipe->sales_unit_count ?? 0));
+        }
+
+        return null;
+    }
+
+    /**
+     * Produktionsmenge für N verkaufte Portionen eines Gerichts in einer Darreichung —
+     * gerechnet wie der Portions-EK der Darreichung (recomputePreise), nur mit Menge statt
+     * Preis: Grammatur × Anzahl je Portion bzw. bei Deltas die Gramm je Komponente
+     * (weggelassen = 0, Override = echte Gramm, Rest = Standard-Komposition je Einheit).
+     *
+     * Ergebnis in Rezept-Ansätzen (Explosion skaliert jede Zutatenzeile damit):
+     *  - `ansaetze`: Mengenäquivalent (Σ Gramm ÷ Ansatz-Masse) für Zeit, Behälter, Anzeige
+     *  - `je_zutat`: nur bei Deltas — Ansätze je recipe_ingredient_id (weicht vom Mittel ab)
+     *
+     * @return array{ansaetze: float, je_zutat: ?array<int, float>, gramm_je_portion: ?float, warnung: ?string}
+     */
+    public function produktionsAnteil(FoodAlchemistRecipe $recipe, ?FoodAlchemistRecipeDarreichung $darreichung, float $portionen, ?Team $team = null): array
+    {
+        $einheiten = $portionen * (float) ($darreichung?->unit_count ?: 1);
+        // Ansatz-Masse wie beim Preis: ek_per_kg bezieht sich auf den Kalkulations-Yield
+        // (COALESCE(yield_kg_manual, yield_kg), RecipeRecomputeService A-3).
+        $yieldKg = $recipe->yield_kg_manual !== null ? (float) $recipe->yield_kg_manual : (float) ($recipe->yield_kg ?? 0);
+        $ansatzG = $yieldKg > 0 ? $yieldKg * 1000 : 0.0;
+
+        if ($darreichung !== null && $darreichung->deltas()->exists()) {
+            $proEinheit = $this->standardProEinheit($recipe, $team);
+            $batchMasse = array_sum(array_map(fn ($z) => $z['masse_g'], $this->recompute->zeilenKostenUndMassen($recipe, $team)));
+            $faktorStd = ($batchMasse > 0 && array_sum(array_column($proEinheit, 'masse_g')) > 0)
+                ? array_sum(array_column($proEinheit, 'masse_g')) / $batchMasse : null;
+            $deltaMap = $darreichung->deltas()->get()->keyBy('recipe_ingredient_id');
+            $jeZutat = [];
+            $summeG = 0.0;
+            foreach ($proEinheit as $ingId => $zeile) {
+                $delta = $deltaMap->get($ingId);
+                $g = $delta?->omitted ? 0.0 : ($delta?->quantity_override_g !== null ? (float) $delta->quantity_override_g : $zeile['masse_g']);
+                $summeG += $g;
+                // Ansätze dieser Zutat = gebrauchte Gramm ÷ Gramm je Ansatz (Standard-Komposition ist bereits je Einheit skaliert).
+                $jeAnsatz = $faktorStd !== null && $faktorStd > 0 ? $zeile['masse_g'] / $faktorStd : 0.0;
+                $jeZutat[(int) $ingId] = $jeAnsatz > 0 ? $einheiten * $g / $jeAnsatz : 0.0;
+            }
+            $basis = $ansatzG > 0 ? $ansatzG : $batchMasse;
+
+            return [
+                'ansaetze' => $basis > 0 ? $einheiten * $summeG / $basis : 0.0,
+                'je_zutat' => $jeZutat,
+                'gramm_je_portion' => round($summeG * (float) ($darreichung->unit_count ?: 1), 1),
+                'warnung' => null,
+            ];
+        }
+
+        $gramm = (float) ($darreichung?->quantity_per_unit_g ?? 0);
+        if ($gramm <= 0 || $ansatzG <= 0) {
+            // Form ohne eingetragene Grammatur (oder Gericht ohne Ertrag): Menge wie bisher über die
+            // Ausbeute des Ansatzes — Stück (yield_pieces) bzw. Portionen (sales_unit_count).
+            $anzahl = ($recipe->yield_pieces !== null && (float) $recipe->yield_pieces > 0)
+                ? (float) $recipe->yield_pieces
+                : max(1, (int) ($recipe->sales_unit_count ?? 1));
+
+            return [
+                'ansaetze' => $einheiten / $anzahl,
+                'je_zutat' => null,
+                'gramm_je_portion' => null,
+                'warnung' => ($darreichung !== null && ! $darreichung->is_standard)
+                    ? "Gericht „{$recipe->name}“: Darreichung „".($darreichung->servingForm?->label ?? '?')."“ ohne Grammatur — Menge wie eine Standard-Portion gerechnet."
+                    : null,
+            ];
+        }
+        $warnung = null;
+
+        return [
+            'ansaetze' => $einheiten * $gramm / $ansatzG,
+            'je_zutat' => null,
+            'gramm_je_portion' => round($gramm * (float) ($darreichung?->unit_count ?: 1), 1),
+            'warnung' => $warnung,
+        ];
     }
 
     /**

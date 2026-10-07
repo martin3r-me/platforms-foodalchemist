@@ -93,6 +93,9 @@
                                 <tr class="{{ $z['ist_gestrichen'] ? 'opacity-60' : '' }}" wire:key="pz-{{ $z['id'] }}" data-produktion-zeile="{{ $z['id'] }}">
                                     <td>
                                         <span class="font-medium text-[var(--fa-ink)] {{ $z['ist_gestrichen'] ? 'line-through' : '' }}">{{ $z['name'] }}</span>
+                                        @if(! empty($z['darreichung']['formen']))
+                                            <span class="block text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)] tabular-nums" data-produktion-formen>{{ collect($z['darreichung']['formen'])->map(fn ($f) => $f['portionen'] . ' × ' . $f['label'] . (($f['gramm'] ?? null) !== null ? ' · ' . number_format((float) $f['gramm'], 0, ',', '.') . ' g' : ''))->implode(', ') }}</span>
+                                        @endif
                                         <span class="inline-flex flex-wrap items-center gap-1 ml-1 align-middle">
                                             @if($z['ist_freie_position'])
                                                 <x-fa::badge tone="accent">Freie Position</x-fa::badge>

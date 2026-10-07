@@ -2047,15 +2047,60 @@ class SpeiseplanService
             if ($e->concept_id !== null) {
                 $targets[] = ['concept_id' => (int) $e->concept_id, 'persons' => $pax, 'source_ref' => $ref];
             } elseif ($e->sales_recipe_id !== null) {
-                $targets[] = ['recipe_id' => (int) $e->sales_recipe_id, 'portions' => $pax, 'source_ref' => $ref];
+                // Darreichung des Eintrags wandert mit — die Produktion rechnet die Menge daraus (sonst Standard).
+                $targets[] = array_filter(['recipe_id' => (int) $e->sales_recipe_id, 'portions' => $pax,
+                    'presentation_id' => $e->presentation_id !== null ? (int) $e->presentation_id : null, 'source_ref' => $ref], fn ($v) => $v !== null);
             } elseif ($e->package_id !== null) {
-                foreach ($this->eintragGerichte($e) as $g) {
-                    $targets[] = ['recipe_id' => (int) $g->id, 'portions' => $pax, 'source_ref' => $ref . ':d' . $g->id];
+                foreach ($this->paketZiele($e, $pax, $ref) as $t) {
+                    $targets[] = $t;
                 }
             }
         }
 
         return $targets;
+    }
+
+    /**
+     * Paket-Eintrag → ein Ziel je Paket-Gericht mit dessen Menge/Einheit und Darreichung
+     * (wie im Konzept): Portionen = Portions-Äquivalent × Pax, Gramm-Position über die
+     * Grammatur der Form. Basisrezept-Position in Gramm → kg-Ziel (sonst unverändert Pax).
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function paketZiele(FoodAlchemistSpeiseplanEintrag $e, int $pax, string $ref): array
+    {
+        $pkg = FoodAlchemistPaket::with(['dishes.dish', 'dishes.unit', 'dishes.presentation'])->find($e->package_id);
+        if ($pkg === null) {
+            return [];
+        }
+        $resolver = app(DarreichungResolver::class);
+        $ziele = [];
+        foreach ($pkg->dishes as $pg) {
+            $dish = $pg->dish;
+            if ($dish === null) {
+                continue;
+            }
+            $q = $pg->quantity !== null ? (float) $pg->quantity : null;
+            $zielRef = $ref . ':d' . $dish->id;
+            if (! $dish->is_sales_recipe) {
+                $gProEinheit = (float) ($pg->unit?->default_in_g ?? 0);
+                $ziele[] = ($q !== null && $gProEinheit > 0 && $pg->unit?->dimension === 'mass')
+                    ? ['recipe_id' => (int) $dish->id, 'amount_kg' => round($q * $gProEinheit * $pax / 1000, 3), 'source_ref' => $zielRef]
+                    : ['recipe_id' => (int) $dish->id, 'portions' => $pax, 'source_ref' => $zielRef];
+
+                continue;
+            }
+            $dar = $resolver->fuerPaketGericht($pg);
+            $pae = ConcepterAggregateService::portionsAequivalent($q, $pg->unit, $dish, $dar?->quantity_per_unit_g !== null ? (float) $dar->quantity_per_unit_g : null) ?? 1.0;
+            $ziele[] = array_filter([
+                'recipe_id' => (int) $dish->id,
+                'portions' => round($pae * $pax, 3),
+                'presentation_id' => $pg->presentation_id !== null ? (int) $pg->presentation_id : null,
+                'source_ref' => $zielRef,
+            ], fn ($v) => $v !== null);
+        }
+
+        return $ziele;
     }
 
     // ── Spec 57 · Paket 4: Bedarf (Zutaten aus Plan × Mengen) ────────────────
