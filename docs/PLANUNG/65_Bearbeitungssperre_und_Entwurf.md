@@ -1,6 +1,6 @@
 # 65 · Bearbeitungssperre und Speichern erst auf Knopfdruck
 
-**Stand 2026-10-07 · Status: Entwurf zur Freigabe (Dominique)**
+**Stand 2026-10-07 · Status: Richtung freigegeben (Dominique), Paket A in Arbeit**
 
 > Bezug: [61 · Rollen und Rechte](61_Rollen_und_Rechte.md) (wer darf bearbeiten), MCP im Lockstep.
 > Kein Eingriff in Core.
@@ -19,7 +19,8 @@
 | Bearbeiten | Ein Editor öffnet **nur zum Lesen**. Erst **„Bearbeiten“** schaltet frei und sperrt den Datensatz für alle anderen. |
 | Speichern | Im Bearbeiten-Modus gilt **alles erst mit „Speichern“**. „Verwerfen“ setzt zurück. Kein Sofort-Speichern mehr. |
 | Ablauf | Die Sperre fällt nach **15 Minuten ohne Aktivität**. Solange man arbeitet, verlängert sie sich. |
-| Gilt für | alle Editoren mit Speichern (Liste unten) |
+| Ein Knopf | **„Bearbeiten“** schaltet frei und sperrt. **„Speichern“** schreibt alles und beendet die Bearbeitung, danach ist der Datensatz wieder frei. Kein „Speichern und weiter bearbeiten“. Daneben gibt es nur **„Abbrechen“** (verwerfen). |
+| Gilt für | **jede Stelle im System, an der gespeichert wird**, Einstellungen eingeschlossen (Liste unten) |
 
 ## Verhalten
 
@@ -30,7 +31,7 @@
 3. **Während des Bearbeitens:**
    - Ein Herzschlag (alle 60 s, nur bei Aktivität) verlängert die Sperre.
    - Kopf des Editors: Status „Du bearbeitest · nicht gespeichert“.
-4. **„Speichern“:** schreibt alle Änderungen in **einer** Transaktion und gibt die Sperre frei, der Editor geht zurück in den Lesemodus. Optional: „Speichern und weiter bearbeiten“ behält die Sperre.
+4. **„Speichern“:** schreibt alle Änderungen in **einer** Transaktion, gibt die Sperre frei und beendet die Bearbeitung. Der Editor geht zurück in den Lesemodus. Wer weiterarbeiten will, klickt erneut „Bearbeiten“.
 5. **„Verwerfen“ / Schließen mit ungespeicherten Änderungen:**
    - Nachfrage „Änderungen verwerfen?“.
    - Danach Sperre frei, nichts geschrieben.
@@ -81,7 +82,7 @@
 | Konzepte / Pakete | `Concepts/Index`, `Pakete/Index` | zu erheben |
 | Formate | `Formate/Editor` | zu erheben |
 | Produktion | `Produktion/Editor` | zu erheben |
-| Einstellungen | `Settings/*` | **später/optional:** selten parallel, meist eine Person je Team |
+| Einstellungen | `Settings/*` (Betriebe, Einkauf, Herstellkosten, Kalkulation, Küche, Präsentations-Designs, Trendradar …) | ja, gleiches Verhalten (Sperre je Einstellungsbereich und Team) |
 
 ## Umsetzung in Paketen
 
@@ -97,11 +98,12 @@ Paket A ist der schnelle Schutz. B bis E sind die gründliche Umstellung „erst
 
 ## Offen
 
-- **O1:** „Speichern und weiter bearbeiten“ als zweiter Knopf, oder bleibt man nach Speichern immer im Bearbeiten-Modus?
-- **O2:** Fotos: Ein Upload braucht eine Datei auf dem Speicher. Entwurf heißt, die Datei liegt vorläufig da und wird bei „Verwerfen“ gelöscht. Ist das so in Ordnung?
-- **O3:** KI-Aktionen im Editor („KI-Assistent“, Anreichern): Ergebnis als Entwurf zeigen und erst mit Speichern übernehmen? Heute schreiben einige direkt.
-- **O4:** Einstellungen mit Sperre, ja oder nein?
+- ~~O1~~ entschieden: Speichern beendet die Bearbeitung, kein zweiter Knopf.
+- **O2** (Vorschlag, gilt bis Widerspruch): Fotos liegen beim Upload vorläufig auf dem Speicher und werden bei „Abbrechen“ gelöscht.
+- **O3** (Vorschlag, gilt bis Widerspruch): KI-Aktionen im Editor gibt es nur im Bearbeiten-Modus. Ihr Ergebnis landet im Entwurf und wird erst mit Speichern geschrieben. Sammel-Läufe außerhalb des Editors (Bulk-Anreicherung) prüfen die Sperre und lassen gesperrte Datensätze aus.
+- ~~O4~~ entschieden: Einstellungen ja.
 
 ## Changelog
 
+- 2026-10-07: Präzisiert nach Dominique: ein Knopf Bearbeiten, Speichern beendet die Bearbeitung, gilt für jede Speicherstelle inkl. Einstellungen.
 - 2026-10-07: Entwurf (Claude) nach Befund Dominique + Entscheidungen Bearbeiten-Knopf / erst mit Speichern / 15 Min.
