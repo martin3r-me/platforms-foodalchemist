@@ -162,7 +162,10 @@
                 @if($rezept->is_template)<x-fa::badge tone="accent" icon="heroicon-m-star">Vorlage</x-fa::badge>@endif
             </x-slot:badges>
             <x-slot:aktion>
-                <x-fa::button size="sm" variant="primary" icon="heroicon-m-pencil-square" wire:click="$dispatch('recipe-modal.oeffnen', { id: {{ $rezept->id }} })" data-rezept-bearbeiten>Im Editor öffnen</x-fa::button>
+                <div class="flex flex-wrap items-center gap-2">
+                    <x-foodalchemist::bearbeiten-leiste :zustand="$sperr" sofort />
+                    <x-fa::button size="sm" variant="ghost" icon="heroicon-m-arrow-top-right-on-square" wire:click="$dispatch('recipe-modal.oeffnen', { id: {{ $rezept->id }} })" data-rezept-bearbeiten>Im Editor öffnen</x-fa::button>
+                </div>
             </x-slot:aktion>
             <x-slot:menue>
                 <x-fa::menu-item icon="heroicon-m-printer" :href="route('foodalchemist.rezepte.dokument', ['id' => $rezept->id, 'profil' => 'produktion'])" target="_blank"
@@ -181,6 +184,9 @@
                     title="{{ $rezept->is_template ? 'Ist Vorlage. Klick nimmt die Markierung zurück' : 'Als Vorlage für neue Rezepte markieren' }}" data-template-btn>{{ $rezept->is_template ? 'Vorlage-Markierung entfernen' : 'Als Vorlage markieren' }}</x-fa::menu-item>
             </x-slot:menue>
         </x-fa::detail-kopf>
+
+        {{-- Spec 65: Detailspalte — Änderungen erst nach „Bearbeiten" (gleiche Sperre wie der Editor), „Fertig" gibt frei --}}
+        <fieldset @disabled(in_array($sperr['modus'], ['lesen', 'fremd'], true)) class="contents" data-fa-lesemodus="{{ in_array($sperr['modus'], ['lesen', 'fremd'], true) ? '1' : '0' }}">
 
         {{-- 2 · Kennzahlen --}}
         <div data-kpi-karte>
@@ -227,9 +233,9 @@
                                     @if($z->gp !== null)
                                         <a href="{{ route('foodalchemist.gps.index', ['gp' => $z->gp_id]) }}" class="text-[var(--fa-accent)] hover:underline" title="Grundprodukt öffnen">{{ $z->gp->name }}</a>
                                     @elseif($z->referencedRecipe !== null)
-                                        <button type="button" wire:click="zeige({{ $z->referenced_recipe_id }})" class="inline-flex items-baseline gap-1 text-left text-[var(--fa-info)] hover:underline" title="Unterrezept anzeigen">
+                                        <a href="#" role="button" wire:click.prevent="zeige({{ $z->referenced_recipe_id }})" class="inline-flex items-baseline gap-1 text-left text-[var(--fa-info)] hover:underline" title="Unterrezept anzeigen">
                                             @svg('heroicon-m-arrow-turn-down-right', 'w-3.5 h-3.5 shrink-0 self-center'){{ $z->referencedRecipe->name }}
-                                        </button>
+                                        </a>{{-- Spec 65: <a> statt <button> — bleibt im gesperrten Lesemodus (fieldset) bedienbar --}}
                                     @else
                                         <span class="text-[var(--fa-ink-2)]">{{ $z->display_name ?? $z->raw_text }}</span>
                                         <x-fa::signal tone="warn" class="ml-1" title="Keinem Grundprodukt oder Rezept zugeordnet">nicht zugeordnet</x-fa::signal>
@@ -306,7 +312,7 @@
             <x-fa::section variant="plain" title="Pairing-Netz" icon="heroicon-o-share"
                 :meta="($kombination ?? null) !== null ? (($kombination['kennzahlen']['harmoniert'] ?? 0) . ' harmonieren · ' . ($kombination['kennzahlen']['spannung'] ?? 0) . ' Spannung') : null" data-kern-anker>
                 <x-slot:actions>
-                    <x-fa::button size="sm" variant="ghost" icon-right="heroicon-m-arrow-up-right" wire:click="$dispatch('pairing-netz.oeffnen', { recipeId: {{ $rezept->id }} })"
+                    <x-fa::button size="sm" variant="ghost" icon-right="heroicon-m-arrow-up-right" href="#" x-on:click.prevent="" wire:click="$dispatch('pairing-netz.oeffnen', { recipeId: {{ $rezept->id }} })"
                         title="Ganzes Netz mit verwandten Rezepten und Vorschlägen öffnen" data-pairing-netz-btn>Netz öffnen</x-fa::button>
                 </x-slot:actions>
                 @if($pairingBereit)
@@ -418,13 +424,13 @@
                 @if($eltern->isNotEmpty())
                     <div class="flex flex-col gap-0.5">
                         @foreach($eltern as $parent)
-                            <button type="button" wire:key="el-{{ $parent->id }}"
-                                    @if($parent->is_sales_recipe) wire:click="$dispatch('vk-modal.oeffnen', { id: {{ $parent->id }} })" @else wire:click="zeige({{ $parent->id }})" @endif
+                            <a href="#" role="button" wire:key="el-{{ $parent->id }}"
+                                    @if($parent->is_sales_recipe) wire:click.prevent="$dispatch('vk-modal.oeffnen', { id: {{ $parent->id }} })" @else wire:click.prevent="zeige({{ $parent->id }})" @endif
                                     class="{{ $listenKnopf }}" title="{{ $parent->is_sales_recipe ? 'Gericht öffnen' : 'Rezept anzeigen' }}" data-eltern-link>
                                 @svg($parent->is_sales_recipe ? 'heroicon-o-banknotes' : 'heroicon-o-arrow-up', 'w-4 h-4 shrink-0 text-[var(--fa-ink-3)]')
                                 <span class="min-w-0 flex-1 truncate">{{ $parent->name }}</span>
                                 <span class="shrink-0 {{ $leise }}">{{ $parent->is_sales_recipe ? 'Gericht' : 'Rezept' }}</span>
-                            </button>
+                            </a>
                         @endforeach
                     </div>
                 @else
@@ -440,5 +446,6 @@
                 </x-fa::section>
             @endif
         </div>
+        </fieldset>
     @endif
 </div>

@@ -31,7 +31,7 @@ trait MitBearbeitungssperre
     public function sperrFreieMethoden(): array
     {
         return array_merge([
-            'bearbeitenStarten', 'bearbeitenAbbrechen', 'sperreHerzschlag', 'sperreLoesen', 'sperreBeiSchliessen',
+            'bearbeitenStarten', 'bearbeitenAbbrechen', 'bearbeitenFertig', 'sperreHerzschlag', 'sperreLoesen', 'sperreBeiSchliessen',
             'oeffnen', 'tabLaden', 'render', 'mount', '$refresh', '__dispatch',
         ], $this->sperrFreiExtra());
     }
@@ -115,6 +115,13 @@ trait MitBearbeitungssperre
     }
 
     protected function nachAbbrechen(): void {}
+
+    /** Detailspalten speichern jede Aktion sofort — „Fertig" beendet nur die Bearbeitung (Sperre frei). */
+    public function bearbeitenFertig(): void
+    {
+        $this->bearbeitenBeenden();
+        $this->sperreFremd = null;
+    }
 
     public function sperreHerzschlag(): void
     {

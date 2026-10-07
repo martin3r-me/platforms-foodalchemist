@@ -21,6 +21,22 @@ use Platform\FoodAlchemist\Support\TeamScope;
 class DetailPanel extends Component
 {
     use TauschtRezept;   // Verwaltungs-Block: tauschen + löschen — identisch im Editor (RecipeModal)
+    use \Platform\FoodAlchemist\Livewire\Concerns\MitBearbeitungssperre;   // Spec 65
+
+    /** Spec 65: gleiche Sperre wie der Basisrezept-Editor (Ziel recipe). */
+    protected function sperrZiel(): ?array
+    {
+        return $this->recipeId !== null ? ['recipe', $this->recipeId] : null;
+    }
+
+    /**
+     * Ohne Sperre: Anzeige/Navigation, Pairing nachladen, Sektionen aufklappen, Kopie anlegen (ändert das Original nicht),
+     * Kosten neu rechnen (abgeleitete Werte, keine Pflege).
+     */
+    protected function sperrFreiExtra(): array
+    {
+        return ['pairingLaden', 'zeige', 'nachSpeichern', 'toggleSektion', 'duplizieren', 'neuBerechnen'];
+    }
 
     public ?int $recipeId = null;
 
@@ -209,6 +225,7 @@ class DetailPanel extends Component
         $equivSvc = app(\Platform\FoodAlchemist\Services\ComponentEquivalentService::class);
 
         return view('foodalchemist::livewire.recipes.detail-panel', [
+            'sperr' => $this->sperrZustand(),   // Spec 65
             'rezept' => $rezept,
             // KI-Kontext der Erstellung (2026-09-06): Call-Log-Zeile des Generators, ans Rezept gehängt.
             'kiKontext' => $rezept !== null ? app(\Platform\FoodAlchemist\Services\Ai\RecipeKiKontextService::class)->fuerRezept($rezept) : null,
