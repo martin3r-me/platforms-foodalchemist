@@ -58,7 +58,15 @@
     </x-slot>
 
     {{-- Editor (Vollbild, Werkbank-Modus, pro Plan) — geöffnet per speiseplan-editor.bearbeiten --}}
-    <livewire:foodalchemist.speiseplan.editor />
+    <livewire:foodalchemist.speiseplan.editor key="speiseplan-index--speiseplan.editor" />
+    {{-- Gericht/Konzept aus dem Eintrag-Detail im Vordergrund öffnen (wie aus dem Gericht-Editor ein
+         Basisrezept) — schließen führt zurück in den Speiseplan, kein neuer Browser-Tab. --}}
+    <livewire:foodalchemist.verkauf.vk-modal key="speiseplan-index--verkauf.vk-modal" />
+    <livewire:foodalchemist.recipes.recipe-modal key="speiseplan-index--recipes.recipe-modal" />
+    <livewire:foodalchemist.recipes.ingredient-editor key="speiseplan-index--recipes.ingredient-editor" />
+    <livewire:foodalchemist.recipes.pairing-netz-modal key="speiseplan-index--recipes.pairing-netz-modal" />
+    <livewire:foodalchemist.gps.gp-modal key="speiseplan-index--gps.gp-modal" />
+    <livewire:foodalchemist.concepter.editor key="speiseplan-index--concepter.editor" />
 
     <x-ui-page-container padding="px-6 py-6" spacing="space-y-4">
         @if(! $plan)

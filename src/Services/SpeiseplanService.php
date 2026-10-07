@@ -12,6 +12,7 @@ use Platform\FoodAlchemist\Services\Concerns\PruefstOutletZuordnung;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistPaket;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
+use Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung;
 use Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplan;
 use Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplanEintrag;
 use Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplanLinie;
@@ -100,6 +101,8 @@ class SpeiseplanService
         'outlet_id', 'crm_company_id', 'crm_contact_id',
         // Spec 57 · Paket 9: Öffnungstage (ISO 1–7), leer = Mo–Fr.
         'opening_days',
+        // 2026-10-07: Schreibstil fürs KI-Wording der Einträge.
+        'writing_style_id',
     ];
 
     /** Spec 57 · Paket 2: pflegbare Felder einer Linie (Whitelist für add/update/dupliziere). */
@@ -219,6 +222,10 @@ class SpeiseplanService
                 $update[$f] = max($min, (int) $update[$f]);
             }
         }
+        if (array_key_exists('writing_style_id', $update)) {
+            $update['writing_style_id'] = \Platform\FoodAlchemist\Support\TeamScope::referenz(
+                \Platform\FoodAlchemist\Models\FoodAlchemistWritingStyle::class, $update['writing_style_id'], $team, 'Schreibstil');
+        }
         if (array_key_exists('budget_wareneinsatz', $update)) {
             $update['budget_wareneinsatz'] = ($update['budget_wareneinsatz'] === '' || $update['budget_wareneinsatz'] === null)
                 ? null : max(0, (float) str_replace(',', '.', (string) $update['budget_wareneinsatz']));
@@ -278,7 +285,7 @@ class SpeiseplanService
                     'week' => $e->week, 'weekday' => $e->weekday, 'meal' => $e->meal, 'position' => $e->position,
                     'entry_date' => $e->entry_date, 'pax' => $e->pax,
                     'line_id' => $e->line_id !== null ? ($lineMap[$e->line_id] ?? null) : null,
-                    'concept_id' => $e->concept_id, 'package_id' => $e->package_id, 'sales_recipe_id' => $e->sales_recipe_id,
+                    'concept_id' => $e->concept_id, 'package_id' => $e->package_id, 'sales_recipe_id' => $e->sales_recipe_id, 'presentation_id' => $e->presentation_id, 'wording' => $e->wording,
                 ]);
             }
 
@@ -463,7 +470,7 @@ class SpeiseplanService
                     $kopie->entries()->create([
                         'team_id' => $kopie->team_id, 'entry_date' => $z['datum'], 'week' => 1, 'weekday' => (int) $e->weekday,
                         'meal' => $e->meal, 'line_id' => $kLinie, 'position' => $e->position,
-                        'concept_id' => $e->concept_id, 'package_id' => $e->package_id, 'sales_recipe_id' => $e->sales_recipe_id,
+                        'concept_id' => $e->concept_id, 'package_id' => $e->package_id, 'sales_recipe_id' => $e->sales_recipe_id, 'presentation_id' => $e->presentation_id, 'wording' => $e->wording,
                         'pax' => $paxBetrieb ?? $e->pax,
                     ]);
                 }
@@ -676,6 +683,7 @@ class SpeiseplanService
         $plan = FoodAlchemistSpeiseplan::visibleToTeam($team)->findOrFail($planId);
         $this->guard($plan, $team);
         $inhalt = $this->pruefeInhalt($team, $in);
+        $inhalt['presentation_id'] = $this->pruefeDarreichung($inhalt['sales_recipe_id'], $in['presentation_id'] ?? null);
         $datum = Carbon::parse($in['entry_date'])->startOfDay();
         $mahlzeit = in_array($in['mahlzeit'] ?? '', array_keys(self::MAHLZEITEN), true) ? $in['mahlzeit'] : 'mittag';
         $linieId = $in['line_id'] ?? null;
@@ -718,6 +726,11 @@ class SpeiseplanService
             }
             if (! $model::visibleToTeam($team)->whereKey($id)->exists()) {
                 throw new \RuntimeException((['concept_id' => 'Konzept', 'package_id' => 'Paket', 'sales_recipe_id' => 'Gericht'][$feld] ?? 'Inhalt') . ' #' . $id . ' ist nicht vorhanden oder nicht sichtbar.');
+            }
+            // Der Picker bietet nur Gerichte an — MCP, Kaskade und Vorlagen dürfen kein Basisrezept
+            // vorbeischieben (kein VK, keine Portion, keine Darreichung).
+            if ($feld === 'sales_recipe_id' && ! FoodAlchemistRecipe::visibleToTeam($team)->verkauf()->whereKey($id)->exists()) {
+                throw new \RuntimeException('Rezept #' . $id . ' ist kein Gericht — in den Speiseplan kommen nur Gerichte.');
             }
 
             return array_merge(array_fill_keys(array_keys($refs), null), [$feld => $id]);
@@ -823,9 +836,128 @@ class SpeiseplanService
     {
         $e = FoodAlchemistSpeiseplanEintrag::visibleToTeam($team)->with('mealPlan')->findOrFail($id);
         $this->guard($e->mealPlan, $team);
-        $e->update($this->pruefeInhalt($team, $inhalt));
+        $neu = $this->pruefeInhalt($team, $inhalt);
+        // Neues Gericht ⇒ die alte Darreichung passt nicht mehr; ohne Angabe gilt wieder der Standard.
+        $neu['presentation_id'] = $this->pruefeDarreichung($neu['sales_recipe_id'], $inhalt['presentation_id'] ?? null);
+        $neu['wording'] = null;   // der Name gehörte zum alten Inhalt
+        $e->update($neu);
 
         return $e->refresh();
+    }
+
+    /**
+     * Darreichung je Eintrag setzen (null = Standard-Darreichung des Gerichts). Nur an
+     * Gericht-Einträgen; die Form muss zum Gericht des Eintrags gehören.
+     */
+    public function setEintragDarreichung(Team $team, int $id, ?int $presentationId): FoodAlchemistSpeiseplanEintrag
+    {
+        $e = FoodAlchemistSpeiseplanEintrag::visibleToTeam($team)->with('mealPlan')->findOrFail($id);
+        $this->guard($e->mealPlan, $team);
+        if ($presentationId !== null && $e->sales_recipe_id === null) {
+            throw new \RuntimeException('Eine Darreichung gibt es nur an Gericht-Einträgen.');
+        }
+        $e->update(['presentation_id' => $this->pruefeDarreichung($e->sales_recipe_id !== null ? (int) $e->sales_recipe_id : null, $presentationId)]);
+
+        return $e->refresh();
+    }
+
+    /** Name dieses Eintrags im Plan setzen (leer = Wording-Kette des Gerichts). */
+    public function setEintragWording(Team $team, int $id, ?string $wording): FoodAlchemistSpeiseplanEintrag
+    {
+        $e = FoodAlchemistSpeiseplanEintrag::visibleToTeam($team)->with('mealPlan')->findOrFail($id);
+        $this->guard($e->mealPlan, $team);
+        $text = trim((string) $wording);
+        $e->update(['wording' => $text !== '' ? mb_substr($text, 0, 500) : null]);
+
+        return $e->refresh();
+    }
+
+    /**
+     * KI-Vorschlag für den Namen eines Eintrags im Schreibstil des Plans (wie
+     * SpeisekarteService::kiWordingVorschlag). Schreibt nichts.
+     *
+     * @return array{text: string, confidence: ?float, call_log_id: ?int}
+     */
+    public function kiWordingVorschlag(Team $team, int $eintragId): array
+    {
+        $e = FoodAlchemistSpeiseplanEintrag::visibleToTeam($team)->with(['mealPlan.writingStyle', 'dish', 'concept', 'package', 'line'])->findOrFail($eintragId);
+        $this->guard($e->mealPlan, $team);
+        $plan = $e->mealPlan;
+        $stil = $plan->writingStyle;
+
+        $proposal = app(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class)->propose(
+            'foodbook.kundentext',
+            array_filter([
+                'ebene' => 'speiseplan_eintrag',
+                'aufgabe' => 'Formuliere einen kurzen, appetitlichen Gast-Namen für dieses Gericht auf dem Speiseplan (Aushang und Buffetschild). '
+                    . 'Hauptkomponente zuerst, Beilagen mit „|" trennen, keine Preise, keine Allergene.',
+                'gericht_roh' => $e->dish?->name ?? $e->inhaltName(),
+                'linie' => $e->line?->name,
+                'plan' => $plan->name,
+                'briefing_ist' => $e->wording,
+                'schreibstil' => $stil?->name,
+                'schreibstil_anweisung' => trim((string) $stil?->sprach_duktus) ?: null,
+                'schreibstil_beispiele' => trim((string) $stil?->beispiele_md) ?: null,
+            ], fn ($v) => $v !== null && $v !== ''),
+            ['target_table' => 'foodalchemist_menu_plan_entries', 'target_id' => (int) $e->id],
+        );
+
+        $text = trim((string) ($proposal->werte['text'] ?? ''));
+        if ($text === '') {
+            throw new \RuntimeException('Die KI hat keinen Text geliefert. Bitte erneut versuchen.');
+        }
+
+        return ['text' => $text, 'confidence' => $proposal->confidence, 'call_log_id' => $proposal->callLogId];
+    }
+
+    /**
+     * Den ganzen Plan im Schreibstil neu betexten: EIN KI-Aufruf je Gericht, der Text geht an alle
+     * Einträge dieses Gerichts (im Zyklus steht dasselbe Gericht oft mehrfach). Concept/Paket bleiben
+     * beim eigenen Namen. Ohne Schreibstil kein Lauf. Fail-soft je Gericht.
+     *
+     * @return array{gerichte: int, eintraege: int, fehler: int}
+     */
+    public function planWordingRegenerieren(Team $team, int $planId): array
+    {
+        $plan = FoodAlchemistSpeiseplan::visibleToTeam($team)->with('entries')->findOrFail($planId);
+        $this->guard($plan, $team);
+        if ($plan->writing_style_id === null) {
+            throw new \RuntimeException('Kein Schreibstil gewählt — nichts zu betexten.');
+        }
+        $res = ['gerichte' => 0, 'eintraege' => 0, 'fehler' => 0];
+        foreach ($plan->entries->whereNotNull('sales_recipe_id')->groupBy('sales_recipe_id') as $eintraege) {
+            try {
+                $text = $this->kiWordingVorschlag($team, (int) $eintraege->first()->id)['text'];
+            } catch (\Platform\FoodAlchemist\Exceptions\KiNichtVerfuegbarException|\Platform\FoodAlchemist\Exceptions\KiDeaktiviertException $ex) {
+                throw $ex;   // KI aus: ganzer Lauf sinnlos
+            } catch (\Throwable) {
+                $res['fehler']++;
+
+                continue;
+            }
+            FoodAlchemistSpeiseplanEintrag::whereIn('id', $eintraege->pluck('id'))->update(['wording' => mb_substr($text, 0, 500)]);
+            $res['gerichte']++;
+            $res['eintraege'] += $eintraege->count();
+        }
+
+        return $res;
+    }
+
+    /** null/0 ⇒ null (Standard). Sonst muss die Darreichung zum Gericht gehören. */
+    private function pruefeDarreichung(?int $salesRecipeId, mixed $presentationId): ?int
+    {
+        $id = (int) ($presentationId ?? 0);
+        if ($id <= 0) {
+            return null;
+        }
+        if ($salesRecipeId === null) {
+            throw new \RuntimeException('Eine Darreichung gibt es nur an Gericht-Einträgen.');
+        }
+        if (! FoodAlchemistRecipeDarreichung::whereKey($id)->where('recipe_id', $salesRecipeId)->exists()) {
+            throw new \RuntimeException('Darreichung #' . $id . ' gehört nicht zum Gericht dieses Eintrags.');
+        }
+
+        return $id;
     }
 
     /**
@@ -858,7 +990,7 @@ class SpeiseplanService
             $plan->entries()->create([
                 'team_id' => $plan->team_id, 'entry_date' => $tag,
                 'week' => 1, 'weekday' => (int) $ziel->isoWeekday(), 'meal' => $e->meal, 'line_id' => $e->line_id,
-                'concept_id' => $e->concept_id, 'package_id' => $e->package_id, 'sales_recipe_id' => $e->sales_recipe_id,
+                'concept_id' => $e->concept_id, 'package_id' => $e->package_id, 'sales_recipe_id' => $e->sales_recipe_id, 'presentation_id' => $e->presentation_id, 'wording' => $e->wording,
                 'pax' => $e->pax,
                 'position' => (int) $plan->entries()->whereDate('entry_date', $tag)->where('meal', $e->meal)->max('position') + 1,
             ]);
@@ -920,7 +1052,7 @@ class SpeiseplanService
                 $plan->entries()->create([
                     'team_id' => $plan->team_id, 'entry_date' => $ziel->format('Y-m-d'),
                     'week' => 1, 'weekday' => (int) $ziel->isoWeekday(), 'meal' => $e->meal, 'line_id' => $e->line_id,
-                    'concept_id' => $e->concept_id, 'package_id' => $e->package_id, 'sales_recipe_id' => $e->sales_recipe_id,
+                    'concept_id' => $e->concept_id, 'package_id' => $e->package_id, 'sales_recipe_id' => $e->sales_recipe_id, 'presentation_id' => $e->presentation_id, 'wording' => $e->wording,
                     'pax' => $mitPax ? $e->pax : null, 'position' => $e->position,
                 ]);
                 $gesetzt[$sig] = true;
@@ -953,7 +1085,12 @@ class SpeiseplanService
                 'concept_id' => $e->concept_id !== null ? (int) $e->concept_id : null,
                 'package_id' => $e->package_id !== null ? (int) $e->package_id : null,
                 'sales_recipe_id' => $e->sales_recipe_id !== null ? (int) $e->sales_recipe_id : null,
+                'presentation_id' => $e->presentation_id !== null ? (int) $e->presentation_id : null,
+                'wording' => $e->wording,
+                'darreichung' => $this->eintragDarreichung($e)?->servingForm?->label,
                 'name' => $this->eintragName($e),
+                // Preis je Person ohne Betrieb (Linienpreis gewinnt beim VK, EK je Portion).
+                ...(fn (array $p) => ['vk' => round($p['vk'], 2), 'ek' => round($p['ek'], 2)])($this->eintragPreis($e)),
                 'pax' => $e->pax !== null ? (int) $e->pax : null,
                 'pax_effektiv' => $this->effektivePax($e, $plan),
             ])->values()->all();
@@ -998,12 +1135,13 @@ class SpeiseplanService
         };
 
         $zeilen = [];
-        $gesamt = ['summe' => 0, 'umsatz' => 0.0, 'ek' => 0.0, 'vorwoche' => 0, 'schnitt4' => 0.0, 'je_tag' => array_fill_keys($tage, 0)];
+        $gesamt = ['summe' => 0, 'umsatz' => 0.0, 'ek' => 0.0, 'ek_we' => 0.0, 'vorwoche' => 0, 'schnitt4' => 0.0, 'je_tag' => array_fill_keys($tage, 0)];
         foreach ($linien as $l) {
             $zellen = [];
             $summe = 0;
             $umsatz = 0.0;
             $ek = 0.0;
+            $ekWe = 0.0;
             foreach ($tage as $ymd) {
                 $p = $zellPax((int) $l->id, $ymd);
                 $zellen[$ymd] = $p;
@@ -1014,6 +1152,7 @@ class SpeiseplanService
                     $pax = $this->effektivePax($e, $plan);
                     $umsatz += $preis['vk'] * $pax;
                     $ek += $preis['ek'] * $pax;
+                    $ekWe += $preis['vk'] > 0 ? $preis['ek'] * $pax : 0.0;   // WE nur über Einträge mit Preis
                 }
             }
             $vorwoche = $wochenSumme((int) $l->id, $mo->copy()->subWeek());
@@ -1026,19 +1165,21 @@ class SpeiseplanService
                 'line_id' => (int) $l->id, 'name' => $l->name, 'color' => $l->color, 'role' => $l->role,
                 'zellen' => $zellen, 'summe' => $summe, 'vorwoche' => $vorwoche, 'schnitt4' => $schnitt4,
                 'umsatz' => round($umsatz, 2),
-                'wes' => $umsatz > 0 ? round($ek / $umsatz * 100, 1) : null,
+                'wes' => $umsatz > 0 ? round($ekWe / $umsatz * 100, 1) : null,
                 'vk_schnitt' => $summe > 0 ? round($umsatz / max(1, $summe), 2) : null,
             ];
             $gesamt['summe'] += $summe;
             $gesamt['umsatz'] += $umsatz;
             $gesamt['ek'] += $ek;
+            $gesamt['ek_we'] += $ekWe;
             $gesamt['vorwoche'] += $vorwoche;
             $gesamt['schnitt4'] += $schnitt4;
         }
         foreach ($zeilen as $i => $z) {
             $zeilen[$i]['anteil'] = $gesamt['summe'] > 0 ? round($z['summe'] / $gesamt['summe'] * 100, 1) : null;
         }
-        $gesamt['wes'] = $gesamt['umsatz'] > 0 ? round($gesamt['ek'] / $gesamt['umsatz'] * 100, 1) : null;
+        $gesamt['wes'] = $gesamt['umsatz'] > 0 ? round($gesamt['ek_we'] / $gesamt['umsatz'] * 100, 1) : null;
+        unset($gesamt['ek_we']);
         $gesamt['umsatz'] = round($gesamt['umsatz'], 2);
         $gesamt['ek'] = round($gesamt['ek'], 2);
 
@@ -1190,14 +1331,38 @@ class SpeiseplanService
             return ['vk' => (float) ($e->package->price_per_person ?? 0), 'ek' => (float) ($e->package->ek_per_person ?? 0)];
         }
         if ($e->sales_recipe_id !== null && $e->dish) {
-            $vk = $outlet !== null
+            $dar = $this->eintragDarreichung($e);
+            $vk = null;
+            if ($dar !== null && $e->presentation_id !== null && (int) $dar->id === (int) $e->presentation_id) {
+                // Explizit gewählte Form: deren VK (im Betrieb gegen dessen Kostenstruktur).
+                $vk = $outlet !== null
+                    ? app(CatalogPricingService::class)->salesNetFor(Team::find($outlet->team_id), $dar, $outlet)
+                    : ($dar->sales_net !== null ? (float) $dar->sales_net : null);
+            }
+            $vk ??= $outlet !== null
                 ? (app(DarreichungResolver::class)->vkNettoMitQuelle($e->dish, $outlet)['vk'] ?? (float) ($e->dish->sales_net ?? 0))
                 : (float) ($e->dish->sales_net ?? 0);
 
-            return ['vk' => $vk, 'ek' => (float) ($e->dish->ek_total_eur ?? 0)];
+            // EK JE PORTION: ek_portion der geltenden Darreichung. `ek_total_eur` ist der Ansatz
+            // (alle Portionen) — bis 2026-10-07 stand er hier ungeteilt und blähte WE-% und EK/Gast auf.
+            // Fallback wie PaketService::recomputePrice: Ansatz / Portionen.
+            // Fallback ohne Darreichung: Ansatz ÷ Portionen, ohne Portionszahl = eine Portion —
+            // dieselbe Konvention wie DarreichungService::recomputePreise (gemessen 2026-10-07:
+            // 950 von 950 Gerichten ohne sales_unit_count, bei 837 ist Portions-EK = Ansatz-EK).
+            $ek = $dar?->ek_portion !== null
+                ? (float) $dar->ek_portion
+                : (float) ($e->dish->ek_total_eur ?? 0) / max(1, (int) ($e->dish->sales_unit_count ?? 1));
+
+            return ['vk' => (float) $vk, 'ek' => $ek];
         }
 
         return ['vk' => 0.0, 'ek' => 0.0];
+    }
+
+    /** Geltende Darreichung eines Gericht-Eintrags (explizit → Standard), null bei Concept/Paket. */
+    public function eintragDarreichung(FoodAlchemistSpeiseplanEintrag $e): ?FoodAlchemistRecipeDarreichung
+    {
+        return app(DarreichungResolver::class)->fuerSpeiseplanEintrag($e);
     }
 
     /**
@@ -1283,7 +1448,7 @@ class SpeiseplanService
 
         $tage = [];
         foreach ($this->wochenTage($plan, $montag) as $tag) {
-            $tage[$tag->format('Y-m-d')] = ['gaeste' => 0, 'portionen' => 0, 'umsatz' => 0.0, 'ek' => 0.0];
+            $tage[$tag->format('Y-m-d')] = ['gaeste' => 0, 'portionen' => 0, 'umsatz' => 0.0, 'ek' => 0.0, 'ek_we' => 0.0, 'ohne_preis' => 0];
         }
         $linienWoche = [];
         $eintraege = [];
@@ -1295,7 +1460,10 @@ class SpeiseplanService
                 foreach ($liste as $e) {
                     $preis = $this->eintragPreis($e, $outlet);
                     $pax = $this->effektivePax($e, $plan);
-                    $wes = $preis['vk'] > 0 ? round($preis['ek'] / $preis['vk'] * 100, 1) : null;
+                    // Wareneinsatz nur, wo ein VK steht: ein Eintrag ohne Preis hätte EK ohne Umsatz
+                    // (Bananenbrot ohne Preis ⇒ 16.100 % am Tag). Sein EK zählt trotzdem in die EK-Summe.
+                    $mitPreis = $preis['vk'] > 0;
+                    $wes = $mitPreis ? round($preis['ek'] / $preis['vk'] * 100, 1) : null;
                     $gerichte = $this->eintragGerichte($e);
                     [$titel, $untertitel] = $this->titelUndWording($e, $gerichte);
                     $naehr = $gerichte->isNotEmpty()
@@ -1318,19 +1486,25 @@ class SpeiseplanService
                         'pax' => $pax,
                         'pax_override' => (int) $e->pax > 0,
                         'kcal' => $naehr['kcal'] ?? null,
-                        'portion_g' => $gerichte->sum(fn ($g) => (float) ($g->sales_quantity_per_unit_g ?? 0)) ?: null,
+                        'portion_g' => $this->portionG($e, $gerichte),
+                        // Nur eine EIGENS gewählte Form wird an der Zelle genannt; Standard bleibt stumm.
+                        // Die Grammatur (portion_g) zeigt die Zelle immer — sie folgt der geltenden Form.
+                        'darreichung' => $e->presentation_id !== null ? $this->eintragDarreichung($e)?->servingForm?->label : null,
                         'komponenten' => $mitKomponenten ? $this->komponenten($e, $gerichte) : [],
                     ];
 
                     if (isset($tage[$ymd])) {
                         $tage[$ymd]['umsatz'] += $preis['vk'] * $pax;
                         $tage[$ymd]['ek'] += $preis['ek'] * $pax;
+                        $tage[$ymd]['ek_we'] += $mitPreis ? $preis['ek'] * $pax : 0.0;
+                        $tage[$ymd]['ohne_preis'] += $mitPreis ? 0 : 1;
                         $tage[$ymd]['portionen'] += $pax;
                         if ($linie?->istHauptgang()) {
                             $tage[$ymd]['gaeste'] += $pax;
                         }
                         $linienWoche[(int) $lineId]['umsatz'] = ($linienWoche[(int) $lineId]['umsatz'] ?? 0) + $preis['vk'] * $pax;
                         $linienWoche[(int) $lineId]['ek'] = ($linienWoche[(int) $lineId]['ek'] ?? 0) + $preis['ek'] * $pax;
+                        $linienWoche[(int) $lineId]['ek_we'] = ($linienWoche[(int) $lineId]['ek_we'] ?? 0) + ($mitPreis ? $preis['ek'] * $pax : 0.0);
                     }
                 }
             }
@@ -1339,27 +1513,29 @@ class SpeiseplanService
         foreach ($tage as $ymd => $t) {
             $tage[$ymd]['umsatz'] = round($t['umsatz'], 2);
             $tage[$ymd]['ek'] = round($t['ek'], 2);
-            $tage[$ymd]['wes'] = $t['umsatz'] > 0 ? round($t['ek'] / $t['umsatz'] * 100, 1) : null;
+            $tage[$ymd]['wes'] = $t['umsatz'] > 0 ? round($t['ek_we'] / $t['umsatz'] * 100, 1) : null;
             $tage[$ymd]['status'] = $this->wesStatus($tage[$ymd]['wes'], ['min' => null, 'max' => $teamZiel]);
             $tage[$ymd]['ek_je_gast'] = $t['gaeste'] > 0 ? round($t['ek'] / $t['gaeste'], 2) : null;
         }
 
         $linien = [];
         foreach ($plan->lines as $l) {
-            $w = $linienWoche[(int) $l->id] ?? ['umsatz' => 0.0, 'ek' => 0.0];
+            $w = ($linienWoche[(int) $l->id] ?? []) + ['umsatz' => 0.0, 'ek' => 0.0, 'ek_we' => 0.0];
             $band = $this->zielband($l, $teamZiel);
-            $wes = $w['umsatz'] > 0 ? round($w['ek'] / $w['umsatz'] * 100, 1) : null;
+            $wes = $w['umsatz'] > 0 ? round($w['ek_we'] / $w['umsatz'] * 100, 1) : null;
             $linien[(int) $l->id] = ['name' => $l->name, 'color' => $l->color, 'band' => $band, 'wes' => $wes, 'status' => $this->wesStatus($wes, $band)];
         }
 
         $wUmsatz = array_sum(array_column($tage, 'umsatz'));
         $wEk = array_sum(array_column($tage, 'ek'));
-        $wWes = $wUmsatz > 0 ? round($wEk / $wUmsatz * 100, 1) : null;
+        $wEkWe = array_sum(array_column($tage, 'ek_we'));
+        $wWes = $wUmsatz > 0 ? round($wEkWe / $wUmsatz * 100, 1) : null;
         $woche = [
             'umsatz' => round($wUmsatz, 2), 'ek' => round($wEk, 2), 'wes' => $wWes,
             'status' => $this->wesStatus($wWes, ['min' => null, 'max' => $teamZiel]),
             'portionen' => (int) array_sum(array_column($tage, 'portionen')),
             'gaeste' => (int) array_sum(array_column($tage, 'gaeste')),
+            'ohne_preis' => (int) array_sum(array_column($tage, 'ohne_preis')),
         ];
 
         return ['eintraege' => $eintraege, 'tage' => $tage, 'linien' => $linien, 'woche' => $woche, 'team_ziel' => $teamZiel, 'gaeste_aus_rollen' => $hatRollen];
@@ -1396,6 +1572,38 @@ class SpeiseplanService
             'avg' => $avg, 'budget' => $budget, 'ueber_tage' => $ueber, 'basis' => $basis,
             'ampel' => $avg > $budget ? 'danger' : ($ueber > 0 ? 'warning' : 'success'),
         ];
+    }
+
+    /**
+     * Portionsgewicht der Zelle — dieselbe Regel wie der Portions-EK in
+     * DarreichungService::recomputePreise, damit Grammatur und Preis zusammenpassen:
+     * Grammatur der geltenden Form × Anzahl; fehlt sie an der STANDARD-Form, Rezept-Grammatur,
+     * sonst Ertrag ÷ Portionen (mind. 1). Ohne Form: Rezept-Grammatur bzw. Ertrag ÷ Portionen (mind. 1).
+     */
+    private function portionG(FoodAlchemistSpeiseplanEintrag $e, Collection $gerichte): ?float
+    {
+        $dar = $this->eintragDarreichung($e);
+        $anzahl = (float) ($dar?->unit_count ?: 1);
+        if ($dar !== null && (float) ($dar->quantity_per_unit_g ?? 0) > 0) {
+            return round((float) $dar->quantity_per_unit_g * $anzahl, 1);
+        }
+        $dish = $e->dish;
+        if ($dish === null) {
+            return $gerichte->sum(fn ($g) => (float) ($g->sales_quantity_per_unit_g ?? 0)) ?: null;
+        }
+        if ((float) ($dish->sales_quantity_per_unit_g ?? 0) > 0) {
+            return round((float) $dish->sales_quantity_per_unit_g * $anzahl, 1);
+        }
+        if ($dish->yield_kg === null || (float) $dish->yield_kg <= 0) {
+            return null;
+        }
+        if ($dar !== null) {
+            // Nur die Standard-Form fällt auf den Ertrag zurück (wie recomputePreise); andere Formen
+            // ohne Grammatur haben auch keinen Portions-EK.
+            return $dar->is_standard ? round((float) $dish->yield_kg * 1000 / max(1, (int) ($dish->sales_unit_count ?? 0)) * $anzahl, 1) : null;
+        }
+        // Ohne Form: dieselbe Konvention wie der EK — Ansatz ÷ Portionen, ohne Portionszahl eine Portion.
+        return round((float) $dish->yield_kg * 1000 / max(1, (int) ($dish->sales_unit_count ?? 0)), 1);
     }
 
     /**
@@ -1508,6 +1716,10 @@ class SpeiseplanService
      */
     public function eintragName(FoodAlchemistSpeiseplanEintrag $e): string
     {
+        // Eigenes Wording des Eintrags (Hand oder KI) vor der Wording-Kette des Gerichts.
+        if (trim((string) $e->wording) !== '') {
+            return trim((string) $e->wording);
+        }
         if ($e->sales_recipe_id !== null) {
             $dish = $e->relationLoaded('dish') ? $e->dish : $e->dish()->first();
             if ($dish !== null) {
@@ -1649,6 +1861,11 @@ class SpeiseplanService
             $codes = $this->eintragCodes($e, $usedAlg, $usedZus);
 
             $zelle = ['name' => $this->eintragName($e), 'codes' => $codes];
+            // Gericht-Foto als Identifier (frische URL erst im Aushang, PresentationService::hydrateImages).
+            $dish = $e->sales_recipe_id !== null ? $e->dish : null;
+            if ($dish !== null && ($dish->image_context_file_id || $dish->image_path)) {
+                $zelle['image'] = ['context_file_id' => $dish->image_context_file_id, 'path' => $dish->image_path];
+            }
             // Preis nur wenn ausdrücklich gewünscht (GV-Aushang ist per Default preislos), betriebs-aware.
             if ($mitPreis) {
                 $zelle['vk'] = round((float) $this->eintragPreis($e, $outlet)['vk'], 2);
@@ -2505,7 +2722,7 @@ class SpeiseplanService
                         'team_id' => $plan->team_id, 'entry_date' => $ziel->format('Y-m-d'),
                         'week' => 1, 'weekday' => (int) $ziel->isoWeekday(), 'meal' => $e->meal,
                         'line_id' => $e->line_id, 'concept_id' => $e->concept_id, 'package_id' => $e->package_id,
-                        'sales_recipe_id' => $e->sales_recipe_id, 'position' => $e->position,
+                        'sales_recipe_id' => $e->sales_recipe_id, 'presentation_id' => $e->presentation_id, 'wording' => $e->wording, 'position' => $e->position,
                         'pax' => $e->pax,
                     ]);
                     $neu++;

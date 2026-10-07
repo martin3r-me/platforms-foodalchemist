@@ -1,5 +1,8 @@
 {{-- Speiseplan-Wochenraster (Menü-Linien × Tage) + Kostformen + DGE-Ø-Nährwerte + LMIV. --}}
-@php $grid = $content['grid'] ?? null; @endphp
+@php
+    $grid = $content['grid'] ?? null;
+    $showFotos = $style['show_dish_photos'] ?? false;   // Gericht-Fotos nur wenn im Design aktiviert
+@endphp
 @if($grid && !empty($grid['lines']))
     <section class="pt-section pt-reveal">
         <div class="pt-wide">
@@ -22,9 +25,10 @@
                                 </th>
                                 @foreach(($grid['tage'] ?? []) as $tag)
                                     @php $cells = $line['cells'][$tag['key'] ?? ''] ?? []; @endphp
-                                    <td>
+                                    {{-- Mit Fotos: Mindestbreite je Tag, damit alle Bilder gleich groß sind (Spalten wachsen sonst mit der Textlänge). --}}
+                                    <td @class(['pt-grid-zelle--foto' => $showFotos])>
                                         @foreach($cells as $cell)
-                                            <div style="margin-bottom:4px;">{{ $cell['label'] ?? '' }}@if(!empty($cell['codes']))<span class="pt-codes">{{ implode(' ', array_map('strval', $cell['codes'])) }}</span>@endif@if(!empty($cell['price']))<span class="pt-price" style="margin-left:.4em;white-space:nowrap;opacity:.85;font-variant-numeric:tabular-nums;">{{ $cell['price'] }}</span>@endif</div>
+                                            <div style="margin-bottom:4px;">@if($showFotos && !empty($cell['image']['url']))<img class="pt-grid-foto pt-zoomable" src="{{ $cell['image']['url'] }}" alt="" loading="lazy">@endif{{ $cell['label'] ?? '' }}@if(!empty($cell['codes']))<span class="pt-codes">{{ implode(' ', array_map('strval', $cell['codes'])) }}</span>@endif@if(!empty($cell['price']))<span class="pt-price" style="margin-left:.4em;white-space:nowrap;opacity:.85;font-variant-numeric:tabular-nums;">{{ $cell['price'] }}</span>@endif</div>
                                         @endforeach
                                     </td>
                                 @endforeach

@@ -1049,6 +1049,7 @@ class PresentationService
                     $cell = [
                         'label' => (string) ($e['name'] ?? ''),
                         'codes' => array_values((array) ($e['codes'] ?? [])),
+                        'image' => $e['image'] ?? null,
                     ];
                     if ($showPrice && isset($e['vk']) && (float) $e['vk'] > 0) {
                         $cell['price'] = number_format((float) $e['vk'], 2, ',', '.') . ' €';
@@ -1080,6 +1081,7 @@ class PresentationService
                         'label' => (string) ($e['name'] ?? ''),
                         'codes' => array_values((array) ($e['codes'] ?? [])),
                         'indent' => 0,
+                        'image' => $e['image'] ?? null,
                     ], $eintraege),
                 ];
             }
@@ -1201,6 +1203,18 @@ class PresentationService
                     $img = $it['image'] ?? null;
                     if (is_array($img) && (($img['context_file_id'] ?? null) || ($img['path'] ?? null))) {
                         $snapshot['content']['sections'][$i]['blocks'][$bi]['items'][$ii]['image']['url'] = $this->media->url($img['context_file_id'] ?? null, $img['path'] ?? null);
+                    }
+                }
+            }
+        }
+
+        // Speiseplan-Wochenraster: Gericht-Fotos je Zelle (Identifier → frische URL).
+        foreach ($snapshot['content']['grid']['lines'] ?? [] as $li => $line) {
+            foreach ($line['cells'] ?? [] as $tag => $cells) {
+                foreach ((array) $cells as $ci => $cell) {
+                    $img = $cell['image'] ?? null;
+                    if (is_array($img) && (($img['context_file_id'] ?? null) || ($img['path'] ?? null))) {
+                        $snapshot['content']['grid']['lines'][$li]['cells'][$tag][$ci]['image']['url'] = $this->media->url($img['context_file_id'] ?? null, $img['path'] ?? null);
                     }
                 }
             }

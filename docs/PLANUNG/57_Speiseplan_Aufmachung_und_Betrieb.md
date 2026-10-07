@@ -303,6 +303,68 @@ mit aufgeräumt.
 
 ---
 
+## Nachtrag 2026-10-07 · Darreichung je Eintrag und EK je Portion
+
+**Anlass.** Ein Gericht-Eintrag konnte keine Form wählen, der VK kam immer aus der
+Standard-Darreichung. Und der EK war `recipes.ek_total_eur`, also der ganze Ansatz. Bei einem
+Gericht mit zehn Portionen je Ansatz standen EK, EK je Gast und Wareneinsatz-% zehnfach zu hoch.
+
+**Umsetzung.**
+- `menu_plan_entries.presentation_id` (nullable, FK auf `recipe_presentations`, `nullOnDelete`).
+  Auflösung über `DarreichungResolver::fuerSpeiseplanEintrag`: die explizite Form, solange sie
+  zum Gericht des Eintrags gehört, sonst die Standard-Darreichung.
+- `inhaltPreis`: VK der gewählten Form (im Betrieb gegen dessen Kostenstruktur), ohne Wahl wie
+  bisher. EK = `ek_portion` der geltenden Form, Fallback Ansatz ÷ `sales_unit_count` (wie
+  `PaketService::recomputePrice`). `portion_g` der Zelle kommt aus der Form.
+- `setEintragDarreichung` prüft, dass die Form zum Gericht gehört. `ersetzeEintrag` setzt die
+  Form zurück. Alle Kopierpfade übernehmen sie: Duplizieren, Vorlage übernehmen und ausrollen,
+  Eintrag kopieren, Woche kopieren.
+- UI: Auswahl „Darreichung" im Eintrag-Detail, nur bei Gerichten mit mehr als einer Form. Die
+  Zelle nennt eine eigens gewählte Form.
+- MCP: `speiseplan_eintraege.POST`/`PUT` nehmen `presentation_id` (PUT: 0 = Standard).
+  `GET` liefert `presentation_id`, `darreichung`, `vk`, `ek` je Person.
+- Guard: `sales_recipe_id` nimmt nur Gerichte (`verkauf()`). Über MCP und Kaskade kam vorher
+  auch ein Basisrezept in den Plan.
+
+**Nachgezogen am selben Tag (nach Sichtung durch Dominique).**
+- Darreichung steht bei jedem Gericht-Eintrag: ab zwei Formen als Auswahl, bei einer als Anzeige,
+  ohne Form als Hinweis. Darunter ein Link „Weitere Darreichung am Gericht anlegen".
+- Die Zelle zeigt immer die Grammatur je Portion (aus der geltenden Form, sonst nach derselben
+  Regel wie der Portions-EK), eine eigens gewählte Form zusätzlich mit Namen.
+- Aushang: Gericht-Fotos im Wochenraster und in der Liste, wenn im Präsentations-Design
+  „Gericht-Fotos zeigen" an ist (feste Bildgröße 176 × 132 px, Mindestbreite je Tag).
+- „Gericht/Konzept/Paket öffnen" im Eintrag-Detail öffnet das Modal im Vordergrund statt eines
+  neuen Browser-Tabs; nach dem Speichern zeichnet der Plan neu.
+- Wareneinsatz nur über Einträge mit Verkaufspreis: Ein Eintrag ohne VK („Preis fehlt") trägt
+  seinen EK weiter in die EK-Summe, aber nicht in den Wareneinsatz von Tag, Linie, Woche und
+  Mengen-Matrix. Anlass: ein Bananenbrot ohne Preis (141 € EK) ergab 16.100 % am Tag und
+  847,7 % in der Woche.
+- Konvention bestätigt (gemessen lokal 2026-10-07): ohne `sales_unit_count` ist ein Gericht
+  EINE Portion — 950 von 950 Gerichten haben keine Portionszahl, bei 837 ist der Portions-EK
+  der Standard-Darreichung gleich dem Ansatz-EK. Eine zwischenzeitliche Regel „ohne
+  Portionszahl kein EK" wurde deshalb verworfen. 23 Gerichte mit über 1,5 kg Ansatz ohne
+  Portionszahl (z. B. Bananenbrot) sind Datenfehler und gehören am Gericht korrigiert.
+- KI-Wording wie Speisekarte: `menu_plans.writing_style_id` und `menu_plan_entries.wording`.
+  Stammdaten → „Wording": Schreibstil und „Plan neu betexten" (ein KI-Aufruf je Gericht, der
+  Text geht an alle Einträge des Gerichts). Im Eintrag-Detail „Name im Plan" mit KI-Vorschlag und
+  „Übernehmen". `eintragName` nimmt das Eintrags-Wording vor der Wording-Kette des Gerichts.
+  Kopierpfade übernehmen es, Ersetzen setzt es zurück. MCP: `speiseplan_eintraege.PUT` `wording`,
+  `speiseplaene.PUT` `writing_style_id`, `GET` liefert `wording`.
+- Bug „Editor springt zu" beim Speichern einer Darreichung (Preisklasse, Grammatur, Anzahl):
+  Die Kind-Komponenten der Seiten (Modals, Detail-Panels) hatten keinen festen `key`. Nach dem
+  Seitenaufruf nummerierte Livewire sie beim ersten Neuzeichnen anders, der Gericht-Editor wurde
+  neu aufgebaut und war damit zu. Jetzt haben alle Kind-Komponenten auf Seitenebene einen festen
+  `key` (`<seite>--<komponente>`).
+
+**Offen.**
+- Die Produktions- und Bedarfsübergabe (`produktionsZiele`) skaliert weiter nach Portionen in
+  Standardgröße. Eine Kinderportion mit 150 g statt 250 g zieht in der Produktion also eine volle
+  Portion. Dafür braucht die Übergabe Portionsäquivalente (Gramm der Form ÷ Gramm der Standardform).
+- Kantinen-Komponenten (Basisrezept einzeln im Speiseplan verkaufen) sind bewusst vertagt.
+  Richtung: der Picker legt per Klick ein dünnes Komponenten-Gericht an
+  (`SalesRecipeService::createFromBasis` + Darreichung) oder nutzt ein vorhandenes. Basisrezepte
+  kommen nicht direkt in den Plan.
+
 ## Reihenfolge (Vorschlag)
 
 | Welle | Pakete | Warum zuerst |

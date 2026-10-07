@@ -298,9 +298,10 @@ class RecipeService
         $recipe->update([
             'name' => $name,
             'origin_source' => array_key_exists('origin_source', $in) ? (($in['origin_source'] ?? '') ?: null) : $recipe->origin_source,
-            // D-6: Gericht-Flag im Editor umschaltbar (Create-Parität mit create():189 — vorher
-            // war die „Gericht"-Checkbox im Stammdaten-Tab inert, der Toggle wurde still verworfen).
-            'is_sales_recipe' => array_key_exists('is_sales_recipe', $in) ? (bool) $in['is_sales_recipe'] : $recipe->is_sales_recipe,
+            // `is_sales_recipe` ist nach der Anlage FEST (2026-10-07, löst D-6 ab): ein Umschalten am
+            // selben Datensatz ließ Sub-Rezept-Verweise auf ein „Gericht" und Speiseplan-/Foodbook-/
+            // Paket-Verweise auf ein Basisrezept zurück. Basis → Verkauf geht nur über ein eigenes
+            // Gericht (SalesRecipeService::createFromBasis). Ein mitgesandter Key wird ignoriert.
             'category_id' => array_key_exists('category_id', $in)
                 ? TeamScope::referenz(FoodAlchemistRecipeCategory::class, $in['category_id'], $team, 'Kategorie')
                 : $recipe->category_id,

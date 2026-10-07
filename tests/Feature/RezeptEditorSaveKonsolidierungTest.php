@@ -34,15 +34,31 @@ beforeEach(function () {
     ];
 });
 
-it('#1a: update() schaltet is_sales_recipe in beide Richtungen (vorher inert)', function () {
-    $r = $this->makeRecipe($this->rootTeam, 'Toggle-Rezept', ['status' => 'draft', 'is_sales_recipe' => false]);
-    expect((bool) $r->is_sales_recipe)->toBeFalse();
+it('2026-10-07: update() ändert den Rezept-Typ NICHT (Basis ↔ Gericht nur über ein eigenes Gericht)', function () {
+    // Löst #1a ab: das Umschalten am selben Datensatz ließ Sub-Rezept-Verweise auf ein „Gericht"
+    // und Speiseplan-/Foodbook-Verweise auf ein Basisrezept zurück. Der Typ steht ab der Anlage fest.
+    $basis = $this->makeRecipe($this->rootTeam, 'Basis-Rezept', ['status' => 'draft', 'is_sales_recipe' => false]);
+    app(RecipeService::class)->update($this->rootTeam, $basis->id, ['name' => $basis->name, 'is_sales_recipe' => true]);
+    expect((bool) $basis->fresh()->is_sales_recipe)->toBeFalse();
 
-    app(RecipeService::class)->update($this->rootTeam, $r->id, ['name' => $r->name, 'is_sales_recipe' => true]);
-    expect((bool) $r->fresh()->is_sales_recipe)->toBeTrue();
+    $gericht = $this->makeRecipe($this->rootTeam, 'Gericht-Rezept', ['status' => 'draft', 'is_sales_recipe' => true]);
+    app(RecipeService::class)->update($this->rootTeam, $gericht->id, ['name' => $gericht->name, 'is_sales_recipe' => false]);
+    expect((bool) $gericht->fresh()->is_sales_recipe)->toBeTrue();
+});
 
-    app(RecipeService::class)->update($this->rootTeam, $r->id, ['name' => $r->name, 'is_sales_recipe' => false]);
-    expect((bool) $r->fresh()->is_sales_recipe)->toBeFalse();
+it('2026-10-07: der Rezept-Editor hat keine Gericht-Checkbox mehr, sondern den Weg „Gericht anlegen"', function () {
+    $basis = $this->makeRecipe($this->rootTeam, 'Kartoffelpüree', ['status' => 'draft', 'is_sales_recipe' => false]);
+
+    Livewire::test(RecipeModal::class)
+        ->call('oeffnen', $basis->id)
+        ->call('tabLaden', 'eigenschaften')
+        ->assertSee('Herkunft oder Quelle')
+        ->assertDontSeeHtml('wire:model="form.is_sales_recipe"')
+        ->assertSeeHtml('data-rezept-als-gericht')
+        ->set('form.is_sales_recipe', true)
+        ->call('speichern');
+
+    expect((bool) $basis->fresh()->is_sales_recipe)->toBeFalse();
 });
 
 it('#1a: update() ohne is_sales_recipe-Key lässt den Bestand unangetastet', function () {

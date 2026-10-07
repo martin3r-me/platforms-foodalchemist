@@ -1208,7 +1208,7 @@
             </x-foodalchemist::detail-sidebar>
         </x-slot>
 
-        <livewire:foodalchemist.produktion.editor />
+        <livewire:foodalchemist.produktion.editor key="produktion-tagesplan--produktion.editor" />
 
         <x-foodalchemist::modal name="tagesplan-editor" fullscreen dark-canvas title="Tagesplanung"
                                 :title-name="$ansicht === 'gericht' ? 'Nach Gerichten' : 'Nach Posten'"

@@ -87,19 +87,19 @@
     @if($recipeId !== null)
     <x-slot name="activity">
         <x-foodalchemist::detail-sidebar title="Detail" width="w-96" :maxWidth="760" scope="activity_recipes" side="right" :aufziehen="$sprungDetail">
-            <livewire:foodalchemist.recipes.detail-panel :recipe-id="$recipeId" />
+            <livewire:foodalchemist.recipes.detail-panel :recipe-id="$recipeId" key="recipes-browser--recipes.detail-panel" />
         </x-foodalchemist::detail-sidebar>
     </x-slot>
     @endif
 
     {{-- Editoren und Dialoge (innerhalb x-ui-page, P-2) --}}
-    <livewire:foodalchemist.recipes.recipe-modal />
-    <livewire:foodalchemist.gps.gp-modal />
-    <livewire:foodalchemist.verkauf.vk-modal />
-    <livewire:foodalchemist.recipes.ingredient-editor />
-    <livewire:foodalchemist.recipes.generator-modal />
-    <livewire:foodalchemist.recipes.template-instantiate-modal />
-    <livewire:foodalchemist.recipes.pairing-netz-modal />
+    <livewire:foodalchemist.recipes.recipe-modal key="recipes-browser--recipes.recipe-modal" />
+    <livewire:foodalchemist.gps.gp-modal key="recipes-browser--gps.gp-modal" />
+    <livewire:foodalchemist.verkauf.vk-modal key="recipes-browser--verkauf.vk-modal" />
+    <livewire:foodalchemist.recipes.ingredient-editor key="recipes-browser--recipes.ingredient-editor" />
+    <livewire:foodalchemist.recipes.generator-modal key="recipes-browser--recipes.generator-modal" />
+    <livewire:foodalchemist.recipes.template-instantiate-modal key="recipes-browser--recipes.template-instantiate-modal" />
+    <livewire:foodalchemist.recipes.pairing-netz-modal key="recipes-browser--recipes.pairing-netz-modal" />
 
     <x-ui-page-container padding="px-6 py-6" spacing="space-y-4">
         <x-fa::page-header title="Basisrezepte" :subtitle="number_format($rezepte->total(), 0, ',', '.') . ' Treffer'">

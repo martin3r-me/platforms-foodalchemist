@@ -288,6 +288,9 @@ class RecipeModal extends Component
                 'batch_max_kg' => ($b = trim(str_replace(',', '.', (string) ($this->form['batch_max_kg'] ?? '')))) !== '' ? (float) $b : null,
                 'batch_max_pieces' => ($bp = trim(str_replace(',', '.', (string) ($this->form['batch_max_pieces'] ?? '')))) !== '' ? (float) $bp : null,
             ];
+            // Der Typ (Basis/Gericht) ist kein Editor-Feld: RecipeService::update ignoriert ihn,
+            // und eine Anlage aus diesem Editor ist immer ein Basisrezept.
+            unset($in['is_sales_recipe']);
             $warNeu = $this->recipeId === null;
             if (! $warNeu) {
                 // Spec 27: `preparation` ist im Edit-Modus nur ein SPIEGEL der Schritte.

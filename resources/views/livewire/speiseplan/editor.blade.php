@@ -751,6 +751,26 @@
                                 :ausgabe="$plan" :crm-verfuegbar="$crmVerfuegbar" :firmen="$firmen" :kontakte="$kontakte" />
                         </x-fa::section>
 
+                        {{-- KI-Wording wie Speisekarte/Foodbook: Schreibstil am Plan, ein KI-Aufruf je Gericht. --}}
+                        <x-fa::section title="Wording" icon="heroicon-o-sparkles" description="Namen der Gerichte auf Aushang und Buffetschild. Ohne eigenen Namen gilt das Wording des Gerichts." data-sp-wording>
+                            <x-fa::field label="Schreibstil" for="sp-schreibstil">
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <x-fa::select id="sp-schreibstil" wire:model.live="form.writing_style_id" wire:change="speichern" class="flex-1 min-w-40">
+                                        <option value="">Kein Schreibstil</option>
+                                        @foreach($schreibstile as $st)
+                                            <option value="{{ $st->id }}">{{ $st->name }}</option>
+                                        @endforeach
+                                    </x-fa::select>
+                                    {{-- Betextet alle Gericht-Einträge im gewählten Stil neu (nur auf Knopfdruck, kostet KI-Leistung). --}}
+                                    <x-foodalchemist::ki-action action="planWordingGenerieren" variant="ai" icon="heroicon-o-sparkles" label="Plan neu betexten"
+                                            :disabled="! ($form['writing_style_id'] ?? null)"
+                                            title="Alle Gerichte des Plans im gewählten Schreibstil neu betexten — ein Name je Gericht"
+                                            busy="Wird betextet …" class="shrink-0" data-sp-wording-generieren />
+                                </div>
+                            </x-fa::field>
+                            @if($wordingHinweis && $detailEintragId === null)<p class="{{ $leise }}" role="status" data-sp-wording-hinweis>{{ $wordingHinweis }}</p>@endif
+                        </x-fa::section>
+
                         <x-fa::section title="Teilnehmer und Budget" icon="heroicon-o-banknotes" description="Standard-Kopfzahl für die Übergabe an die Produktion (je Zelle überschreibbar) und das Wareneinsatz-Ziel je Person für die Budget-Anzeige.">
                             <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
                                 <x-fa::field label="Teilnehmer (Standard)" for="sp-form-pax"><x-fa::input id="sp-form-pax" type="number" min="1" wire:model.live="form.default_pax" wire:change="speichern" numeric data-sp-default-pax /></x-fa::field>
@@ -1053,16 +1073,19 @@
                                 <p class="text-[length:var(--fa-text-base)] font-semibold text-[var(--fa-ink)] break-words">{{ $dk['titel'] ?? $detailEintrag->inhaltName() }}</p>
                                 @if(! empty($dk['untertitel']))<p class="{{ $leise }}">{{ $dk['untertitel'] }}</p>@endif
                                 @php
-                                    $inhaltLink = $detailEintrag->sales_recipe_id !== null
-                                        ? ['Gericht öffnen', route('foodalchemist.verkauf.index', ['rezept' => $detailEintrag->sales_recipe_id])]
+                                    // Im Vordergrund öffnen (Modal über dem Speiseplan), nicht in einem neuen Tab.
+                                    $inhaltOeffnen = $detailEintrag->sales_recipe_id !== null
+                                        ? ['Gericht öffnen', "Livewire.dispatch('vk-modal.oeffnen', { id: " . (int) $detailEintrag->sales_recipe_id . ' })']
                                         : ($detailEintrag->concept_id !== null
-                                            ? ['Konzept öffnen', route('foodalchemist.concepter.index', ['tab' => 'concepts', 'sel' => $detailEintrag->concept_id])]
-                                            : null);
+                                            ? ['Konzept öffnen', "Livewire.dispatch('concepter-editor.oeffnen', { type: 'concepts', id: " . (int) $detailEintrag->concept_id . ' })']
+                                            : ($detailEintrag->package_id !== null
+                                                ? ['Paket öffnen', "Livewire.dispatch('concepter-editor.oeffnen', { type: 'pakete', id: " . (int) $detailEintrag->package_id . ' })']
+                                                : null));
                                 @endphp
-                                @if($inhaltLink)
-                                    <a href="{{ $inhaltLink[1] }}" target="_blank" class="mt-1 inline-flex items-center gap-1 text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-accent)] hover:underline" data-sp-inhalt-link>
-                                        {{ $inhaltLink[0] }} @svg('heroicon-m-arrow-top-right-on-square', 'w-3.5 h-3.5')
-                                    </a>
+                                @if($inhaltOeffnen)
+                                    <button type="button" x-on:click="{{ $inhaltOeffnen[1] }}" class="mt-1 inline-flex items-center gap-1 text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-accent)] hover:underline" data-sp-inhalt-link>
+                                        {{ $inhaltOeffnen[0] }} @svg('heroicon-m-arrow-up-right', 'w-3.5 h-3.5')
+                                    </button>
                                 @endif
                             </div>
                             <x-fa::icon-button icon="heroicon-m-x-mark" size="sm" label="Detail schließen" wire:click="eintragSchliessen" />
@@ -1076,6 +1099,47 @@
                         @endif
 
                         <fieldset @disabled($gesperrt) class="contents" data-fa-lesemodus="{{ $gesperrt ? '1' : '0' }}">{{-- Spec 65: Umbauen nur im Bearbeiten-Modus --}}
+                        {{-- Name im Plan: eigenes Wording des Eintrags (leer = Wording des Gerichts), KI-Vorschlag im Schreibstil des Plans. --}}
+                        <div class="flex flex-col gap-1.5" data-sp-eintrag-wording>
+                            <label for="sp-eintrag-wording" class="{{ $etikett }}">Name im Plan</label>
+                            <div class="flex items-center gap-1.5">
+                                <x-fa::input id="sp-eintrag-wording" wire:model="detailWording" placeholder="Wording des Gerichts verwenden" class="flex-1 min-w-0" />
+                                <x-foodalchemist::ki-action action="eintragWordingKi" variant="ai" icon="heroicon-o-sparkles" label="KI"
+                                        title="Namensvorschlag im Schreibstil des Plans (wird erst mit Übernehmen gespeichert)" busy="…" class="shrink-0" />
+                            </div>
+                            <x-fa::button size="sm" icon="heroicon-m-check" wire:click="eintragWordingSpeichern" class="self-start" data-sp-eintrag-wording-speichern>Übernehmen</x-fa::button>
+                            @if($wordingHinweis)<p class="{{ $leise }}" role="status">{{ $wordingHinweis }}</p>@endif
+                        </div>
+
+                        @if($detailEintrag->sales_recipe_id !== null)
+                            {{-- Darreichung je Eintrag: VK, EK und Portionsgewicht folgen der gewählten Form. --}}
+                            @php $gramm = fn ($f) => $f->quantity_per_unit_g !== null ? ' · ' . number_format((float) $f->quantity_per_unit_g * (float) ($f->unit_count ?: 1), 0, ',', '.') . ' g' : ''; @endphp
+                            <div class="flex flex-col gap-1.5" data-sp-darreichung>
+                                <span class="{{ $etikett }}">Darreichung</span>
+                                @if($detailFormen->count() > 1)
+                                    <select wire:key="sp-form-{{ $detailEintrag->id }}" wire:change="eintragDarreichungSetzen({{ $detailEintrag->id }}, $event.target.value)"
+                                            class="fa-control fa-select pr-8 h-8 w-full" aria-label="Darreichung dieses Eintrags"
+                                            title="Form des Gerichts für diesen Eintrag. Standard folgt der Standard-Darreichung des Gerichts.">
+                                        <option value="" @selected($detailEintrag->presentation_id === null)>Standard ({{ $detailFormen->first()?->servingForm?->label ?? '—' }}{{ $gramm($detailFormen->first()) }})</option>
+                                        @foreach($detailFormen as $f)
+                                            <option value="{{ $f->id }}" @selected((int) $detailEintrag->presentation_id === (int) $f->id)>{{ $f->servingForm?->label ?? '—' }}{{ $gramm($f) }}</option>
+                                        @endforeach
+                                    </select>
+                                @elseif($detailFormen->count() === 1)
+                                    <span class="text-[length:var(--fa-text-md)] text-[var(--fa-ink)]" data-sp-darreichung-einzig>{{ $detailFormen->first()->servingForm?->label ?? '—' }}{{ $gramm($detailFormen->first()) }}</span>
+                                @else
+                                    <x-fa::signal tone="warn">Keine Darreichung am Gericht</x-fa::signal>
+                                @endif
+                                @if($detailFormen->count() < 2)
+                                    {{-- Spec 65: Lese-Weg im gesperrten Bereich als Link-Knopf (ein <button> wäre im disabled-fieldset tot). --}}
+                                    <a href="#" role="button" x-on:click.prevent="Livewire.dispatch('vk-modal.oeffnen', { id: {{ (int) $detailEintrag->sales_recipe_id }} })"
+                                       class="self-start inline-flex items-center gap-1 text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-accent)] hover:underline" data-sp-darreichung-anlegen>
+                                        Weitere Darreichung am Gericht anlegen
+                                    </a>
+                                @endif
+                            </div>
+                        @endif
+
                         <x-fa::button icon="heroicon-m-arrows-right-left" class="w-full" wire:click="eintragErsetzenStarten({{ $detailEintrag->id }})">Eintrag ersetzen</x-fa::button>
 
                         <div class="flex flex-col gap-2 pt-3 border-t border-[var(--fa-line)]" data-sp-verschieben>

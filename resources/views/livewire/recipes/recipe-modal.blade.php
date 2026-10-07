@@ -456,10 +456,16 @@
                 <x-fa::input id="rezept-herkunft" wire:model="form.origin_source" placeholder="z. B. Broich, nach Paul, nach Omas Art" />
             </x-fa::field>
 
-            <label class="sm:col-span-2 inline-flex items-center gap-2 text-[length:var(--fa-text-md)] text-[var(--fa-ink)]">
-                <input type="checkbox" wire:model="form.is_sales_recipe" class="h-4 w-4 rounded border-[var(--fa-line-strong)] accent-[var(--fa-accent)]" />
-                Wird als Gericht verkauft <span class="{{ $hinweis }}">(Verkaufsfelder pflegt der Gericht-Editor)</span>
-            </label>
+            {{-- Der Rezept-Typ ist nach der Anlage fest: ein Basisrezept wird nie selbst zum Gericht
+                 (Sub-Rezept-Verweise, Picker und Speiseplan hängen am Typ). Verkauft wird es über ein
+                 eigenes Gericht, das das Basisrezept als Komponente trägt. --}}
+            @if(!$neu && !($form['is_sales_recipe'] ?? false))
+                <div class="sm:col-span-2 flex flex-wrap items-center gap-3" data-rezept-als-gericht>
+                    <span class="{{ $hinweis }}">Soll das verkauft werden? Dafür ein Gericht anlegen, das dieses Basisrezept als Komponente enthält.</span>
+                    <x-fa::button size="sm" variant="secondary" icon="heroicon-m-plus"
+                        x-on:click="Livewire.dispatch('vk-modal.oeffnen', { ausBasis: {{ (int) $recipeId }} })">Gericht anlegen</x-fa::button>
+                </div>
+            @endif
 
             @if(!$neu)
                 {{-- Spec 43 (Bild-Epic): Gericht-Foto — optional in der Präsentation (Builder-Toggle „Gericht-Fotos") --}}

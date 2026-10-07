@@ -26,7 +26,9 @@ class SpeiseplanEintraegePutTool extends FoodAlchemistTool implements ToolContra
     {
         return 'Ändert einen Speiseplan-Eintrag (nur Entwurf): verschieben mit entry_date (YYYY-MM-DD), line_id '
             . '(0 = ohne Linie), mahlzeit; ersetzen mit GENAU EINEM von concept_id | package_id | sales_recipe_id; '
-            . 'optional pax (0 = Standard). Eintrags-IDs via speiseplan_eintraege.GET.';
+            . 'optional pax (0 = Standard); presentation_id = Darreichung des Gerichts (0 = Standard-Darreichung, '
+            . 'beim Ersetzen ohne Angabe ebenfalls Standard); wording = Name im Plan (leer = Wording des Gerichts). '
+            . 'Eintrags-IDs via speiseplan_eintraege.GET.';
     }
 
     public function getSchema(): array
@@ -42,6 +44,8 @@ class SpeiseplanEintraegePutTool extends FoodAlchemistTool implements ToolContra
                 'package_id' => ['type' => 'integer'],
                 'sales_recipe_id' => ['type' => 'integer'],
                 'pax' => ['type' => 'integer', 'description' => 'Essen (0 = Standard der Linie/des Plans).'],
+                'presentation_id' => ['type' => 'integer', 'description' => 'Darreichung des Gerichts (0 = Standard). Ids via recipe_darreichungen bzw. verkaufsrezepte.GET.'],
+                'wording' => ['type' => 'string', 'description' => 'Name im Plan für Aushang/Buffetschild ("" = Wording des Gerichts).'],
             ],
             'required' => ['eintrag_id'],
         ];
@@ -70,16 +74,21 @@ class SpeiseplanEintraegePutTool extends FoodAlchemistTool implements ToolContra
             return ToolResult::error('Zum Ersetzen GENAU EINES von concept_id, package_id, sales_recipe_id angeben.', 'VALIDATION_ERROR');
         }
         $verschieben = array_key_exists('entry_date', $arguments) || array_key_exists('line_id', $arguments) || array_key_exists('mahlzeit', $arguments);
-        if ($inhalt === [] && ! $verschieben && ! array_key_exists('pax', $arguments)) {
-            return ToolResult::error('Nichts zu ändern — entry_date/line_id/mahlzeit, ein Inhalt oder pax angeben.', 'VALIDATION_ERROR');
+        $form = array_key_exists('presentation_id', $arguments)
+            ? ((int) $arguments['presentation_id'] > 0 ? (int) $arguments['presentation_id'] : null) : false;
+        if ($inhalt === [] && ! $verschieben && ! array_key_exists('pax', $arguments) && $form === false && ! array_key_exists('wording', $arguments)) {
+            return ToolResult::error('Nichts zu ändern — entry_date/line_id/mahlzeit, ein Inhalt, pax, presentation_id oder wording angeben.', 'VALIDATION_ERROR');
         }
 
         $svc = app(SpeiseplanService::class);
         $geaendert = [];
         try {
             if ($inhalt !== []) {
-                $svc->ersetzeEintrag($team, $id, $inhalt);
+                $svc->ersetzeEintrag($team, $id, $inhalt + ($form !== false ? ['presentation_id' => $form] : []));
                 $geaendert[] = 'inhalt';
+            } elseif ($form !== false) {
+                $svc->setEintragDarreichung($team, $id, $form);
+                $geaendert[] = 'darreichung';
             }
             if ($verschieben) {
                 $lineId = array_key_exists('line_id', $arguments) ? ((int) $arguments['line_id'] > 0 ? (int) $arguments['line_id'] : null) : $e->line_id;
@@ -90,6 +99,11 @@ class SpeiseplanEintraegePutTool extends FoodAlchemistTool implements ToolContra
                 $svc->setEintragPax($team, $id, $arguments['pax']);
                 $geaendert[] = 'pax';
             }
+            // Nach dem Ersetzen (das den Namen zurücksetzt), damit ein mitgeschicktes Wording gilt.
+            if (array_key_exists('wording', $arguments)) {
+                $svc->setEintragWording($team, $id, $arguments['wording'] !== null ? (string) $arguments['wording'] : null);
+                $geaendert[] = 'wording';
+            }
         } catch (\RuntimeException | \Carbon\Exceptions\InvalidFormatException $ex) {
             return ToolResult::error($ex->getMessage(), 'VALIDATION_ERROR');
         }
@@ -99,7 +113,7 @@ class SpeiseplanEintraegePutTool extends FoodAlchemistTool implements ToolContra
         return ToolResult::success(['eintrag' => [
             'id' => (int) $neu->id, 'entry_date' => $neu->entry_date?->format('Y-m-d'), 'mahlzeit' => $neu->meal,
             'line_id' => $neu->line_id, 'concept_id' => $neu->concept_id, 'package_id' => $neu->package_id,
-            'sales_recipe_id' => $neu->sales_recipe_id, 'pax' => $neu->pax,
+            'sales_recipe_id' => $neu->sales_recipe_id, 'presentation_id' => $neu->presentation_id, 'wording' => $neu->wording, 'pax' => $neu->pax,
         ], 'geaendert' => $geaendert]);
     }
 
@@ -112,7 +126,7 @@ class SpeiseplanEintraegePutTool extends FoodAlchemistTool implements ToolContra
             'requires_auth' => true, 'requires_team' => true, 'cost_class' => 'local_db',
             'side_effects' => ['updates'],
             'related_tools' => ['foodalchemist.speiseplan_eintraege.GET', 'foodalchemist.speiseplan_eintraege.POST'],
-            'examples' => ['Verschiebe Eintrag 88 auf Dienstag 2026-10-06, Linie 4.', 'Ersetze bei Eintrag 90 das Gericht durch sales_recipe_id 512.'],
+            'examples' => ['Verschiebe Eintrag 88 auf Dienstag 2026-10-06, Linie 4.', 'Ersetze bei Eintrag 90 das Gericht durch sales_recipe_id 512.', 'Setze bei Eintrag 91 die Darreichung presentation_id 33 (Kinderportion).'],
         ];
     }
 }

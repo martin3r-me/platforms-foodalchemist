@@ -64,20 +64,20 @@
          direkt im Panel aus. Ohne gewähltes Grundprodukt zeigt das Panel einen Leerzustand. --}}
     <x-slot name="activity">
         <x-foodalchemist::detail-sidebar title="Detail" width="w-96" :maxWidth="760" scope="activity_gps" side="right" :aufziehen="$sprungDetail">
-            <livewire:foodalchemist.gps.detail-panel :gp-id="$gpId" />
+            <livewire:foodalchemist.gps.detail-panel :gp-id="$gpId" key="gps-browser--gps.detail-panel" />
         </x-foodalchemist::detail-sidebar>
     </x-slot>
 
     {{-- Editoren und Dialoge (innerhalb x-ui-page, P-2) --}}
-    <livewire:foodalchemist.gps.gp-modal />
+    <livewire:foodalchemist.gps.gp-modal key="gps-browser--gps.gp-modal" />
     {{-- D-5: neutrale Platzhalter für Grundrezept-Vorlagen --}}
-    <livewire:foodalchemist.gps.platzhalter-modal />
+    <livewire:foodalchemist.gps.platzhalter-modal key="gps-browser--gps.platzhalter-modal" />
     {{-- R9/M9-05: Verwendungs-Klicks aus dem Panel öffnen die Rezept-Editoren --}}
-    <livewire:foodalchemist.recipes.recipe-modal />
-    <livewire:foodalchemist.recipes.pairing-netz-modal />{{-- „Netz öffnen" aus dem Rezept-/Gericht-Editor --}}
-    <livewire:foodalchemist.verkauf.vk-modal />
+    <livewire:foodalchemist.recipes.recipe-modal key="gps-browser--recipes.recipe-modal" />
+    <livewire:foodalchemist.recipes.pairing-netz-modal key="gps-browser--recipes.pairing-netz-modal" />{{-- „Netz öffnen" aus dem Rezept-/Gericht-Editor --}}
+    <livewire:foodalchemist.verkauf.vk-modal key="gps-browser--verkauf.vk-modal" />
     {{-- Klick auf einen Lieferantenartikel im Panel öffnet dessen Artikel-Dialog --}}
-    <livewire:foodalchemist.suppliers.item-modal />
+    <livewire:foodalchemist.suppliers.item-modal key="gps-browser--suppliers.item-modal" />
 
     <x-ui-page-container padding="px-6 py-6" spacing="space-y-4">
         <x-fa::page-header title="Grundprodukte" :subtitle="$untertitel">

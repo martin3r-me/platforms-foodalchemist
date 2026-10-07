@@ -128,12 +128,22 @@ class VkModal extends Component
      * werden direkt aufgeklappt. Kein Prüf-Call — s. `copilotAusAblage()`.
      */
     #[On('vk-modal.oeffnen')]
-    public function oeffnen(?int $id = null, bool $copilot = false): void
+    public function oeffnen(?int $id = null, bool $copilot = false, ?int $ausBasis = null): void
     {
         $this->formZuruecksetzen();
         $this->recipeId = $id;
         $this->fehler = null;
         $this->behaelterLaden();
+        if ($id === null && $ausBasis !== null) {
+            // Einstieg aus dem Basisrezept-Editor: Anlage-Modus mit vorgewähltem Basisrezept.
+            $team = Auth::user()?->currentTeamRelation;
+            $basis = $team !== null ? FoodAlchemistRecipe::visibleToTeam($team)->basis()->find($ausBasis) : null;
+            if ($basis !== null) {
+                $this->basisId = (int) $basis->id;
+                $this->basisSuche = (string) $basis->name;
+                $this->neuName = (string) $basis->name;
+            }
+        }
         if ($id !== null) {
             $team = Auth::user()?->currentTeamRelation;
             $r = $team !== null ? app(SalesRecipeService::class)->detail($team, $id) : null;

@@ -354,14 +354,14 @@
         </div>
 
         {{-- LA-Editor-Modal (M2-06/07/08) — innerhalb x-ui-page (Template-Regel) --}}
-        <livewire:foodalchemist.suppliers.item-modal />
+        <livewire:foodalchemist.suppliers.item-modal key="suppliers-index--suppliers.item-modal" />
 
         {{-- LA-first: Ziel des Events „gp-modal.oeffnen" aus dem Artikel-Modal. Ohne diese
              Komponente hatte der sichtbare Button keinen Listener und reagierte nicht. --}}
-        <livewire:foodalchemist.gps.gp-modal />
+        <livewire:foodalchemist.gps.gp-modal key="suppliers-index--gps.gp-modal" />
 
         {{-- R9.1/R9.2: Lieferanten-Stammblatt-Modal (Beziehungs-Ebene) --}}
-        <livewire:foodalchemist.suppliers.supplier-detail />
+        <livewire:foodalchemist.suppliers.supplier-detail key="suppliers-index--suppliers.supplier-detail" />
 
         {{-- Neuer Lieferant (gehört dem anlegenden Team — D1) --}}
         <x-foodalchemist::modal name="lieferant-neu" title="Lieferant anlegen" size="max-w-2xl">

@@ -100,12 +100,12 @@
         <x-slot name="activity">
             <x-foodalchemist::detail-sidebar title="Auftrag" width="w-80" :maxWidth="760"
                                              scope="activity_produktion" side="right">
-                <livewire:foodalchemist.produktion.detail-panel :order-id="$orderId" />
+                <livewire:foodalchemist.produktion.detail-panel :order-id="$orderId" key="produktion-browser--produktion.detail-panel" />
             </x-foodalchemist::detail-sidebar>
         </x-slot>
     @endif
 
-    <livewire:foodalchemist.produktion.editor />
+    <livewire:foodalchemist.produktion.editor key="produktion-browser--produktion.editor" />
 
     <x-ui-page-container padding="px-6 py-6" spacing="space-y-4">
         <x-fa::page-header title="Produktion"

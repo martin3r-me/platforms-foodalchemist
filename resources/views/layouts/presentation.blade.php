@@ -213,6 +213,9 @@
         .pt-item .pt-line-label { color: var(--pt-text); font-weight: 400; }
         .pt-item--foto { align-items: center; }
         .pt-item-foto { width: 52px; height: 52px; object-fit: cover; border-radius: 6px; margin-right: 12px; flex: 0 0 auto; }
+        /* Speiseplan-Wochenraster mit Gericht-Fotos: feste Bildgröße, Mindestbreite je Tag (sonst wachsen die Spalten mit der Textlänge). */
+        .pt-grid-zelle--foto { min-width: 192px; }
+        .pt-grid-foto { display: block; width: 176px; max-width: none; height: 132px; object-fit: cover; border-radius: 6px; margin-bottom: 6px; }
         .pt-item.pt-indent-1 { padding-left: 18px; }
         .pt-item.pt-indent-2 { padding-left: 36px; }
         .pt-codes { color: var(--pt-muted); font-size: .62em; font-weight: 600; letter-spacing: .06em; vertical-align: super; margin-left: 4px; }

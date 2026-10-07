@@ -41,6 +41,13 @@
             @if(! empty($k['untertitel']))
                 <span class="block text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)] leading-snug line-clamp-2">{{ $k['untertitel'] }}</span>
             @endif
+            @if(! empty($k['darreichung']) || ($k['portion_g'] ?? null) !== null)
+                <span class="block text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)] leading-snug tabular-nums" data-sp-zelle-form
+                      title="Darreichung und Grammatur je Portion">{{ implode(' · ', array_filter([
+                    $k['darreichung'] ?? null,
+                    ($k['portion_g'] ?? null) !== null ? number_format((float) $k['portion_g'], 0, ',', '.') . ' g' : null,
+                ])) }}</span>
+            @endif
         </button>
         <span class="shrink-0 flex items-center">
             <span class="cursor-move select-none text-[var(--fa-ink-3)] opacity-0 group-hover:opacity-100" aria-hidden="true" title="Ziehen zum Verschieben">@svg('heroicon-m-bars-2', 'w-3.5 h-3.5')</span>
