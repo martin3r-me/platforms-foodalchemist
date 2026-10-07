@@ -26,7 +26,6 @@ class DetailPanel extends Component
         $this->recipeId = $recipeId;
     }
 
-    #[On('vk-recipe-selected')]
     /**
      * Pairing (Kombinationslogik + Netz) wird NACHGELADEN (Dominique 2026-10-07: Detailspalte lädt sehr langsam —
      * gemessen ~2–4 s nur fürs Pairing, bei jedem Klick). Der Platzhalter im Blade ruft pairingLaden() einmal je
@@ -53,6 +52,7 @@ class DetailPanel extends Component
         ]);
     }
 
+    #[On('vk-recipe-selected')]
     public function zeige(int $id): void
     {
         $this->recipeId = $id;
