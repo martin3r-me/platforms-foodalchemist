@@ -164,8 +164,12 @@ class Browser extends Component
         // Edit/Recompute → Tabelle + Counts neu (Kontext bleibt)
     }
 
+    /** Ankunft per Sprung-Link (?gp= / ?rezept=): Detail-Spalte öffnen, auch wenn sie zuletzt zugeklappt war. */
+    public bool $sprungDetail = false;
+
     public function mount(): void
     {
+        $this->sprungDetail = $this->recipeId !== null;
         if ($this->recipeId !== null) {
             $this->dispatch('vk-recipe-selected', id: $this->recipeId);
         }

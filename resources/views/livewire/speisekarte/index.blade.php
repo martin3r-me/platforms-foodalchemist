@@ -595,6 +595,7 @@
          darüber liegen (beide tragen z-[100], der spätere im DOM gewinnt). --}}
     <livewire:foodalchemist.verkauf.vk-modal />
     <livewire:foodalchemist.recipes.recipe-modal />
+    <livewire:foodalchemist.recipes.pairing-netz-modal />{{-- „Netz öffnen" aus dem Rezept-/Gericht-Editor --}}
     <livewire:foodalchemist.concepter.editor />
     </x-ui-page-container>
     {{-- Spec 53/F Stufe 2: Sprachbefehl-Mount auf Seitenebene (Modal + optionales schwebendes Element). --}}

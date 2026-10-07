@@ -63,7 +63,7 @@
     {{-- Detail-Spalte immer vorhanden: nach dem Anlegen im Dialog wählt `gp-selected` das neue Grundprodukt
          direkt im Panel aus. Ohne gewähltes Grundprodukt zeigt das Panel einen Leerzustand. --}}
     <x-slot name="activity">
-        <x-foodalchemist::detail-sidebar title="Detail" width="w-96" :maxWidth="760" scope="activity_gps" side="right">
+        <x-foodalchemist::detail-sidebar title="Detail" width="w-96" :maxWidth="760" scope="activity_gps" side="right" :aufziehen="$sprungDetail">
             <livewire:foodalchemist.gps.detail-panel :gp-id="$gpId" />
         </x-foodalchemist::detail-sidebar>
     </x-slot>
@@ -74,6 +74,7 @@
     <livewire:foodalchemist.gps.platzhalter-modal />
     {{-- R9/M9-05: Verwendungs-Klicks aus dem Panel öffnen die Rezept-Editoren --}}
     <livewire:foodalchemist.recipes.recipe-modal />
+    <livewire:foodalchemist.recipes.pairing-netz-modal />{{-- „Netz öffnen" aus dem Rezept-/Gericht-Editor --}}
     <livewire:foodalchemist.verkauf.vk-modal />
     {{-- Klick auf einen Lieferantenartikel im Panel öffnet dessen Artikel-Dialog --}}
     <livewire:foodalchemist.suppliers.item-modal />

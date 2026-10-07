@@ -22,7 +22,12 @@
             <div class="relative overflow-hidden {{ $card }} mt-3" data-editor-netz>
                 <div class="{{ $cardAccent }}"></div>
                 <div class="px-5 py-4 space-y-2">
-                    <h3 class="font-medium tracking-tight text-gray-900">Pairing-Netz</h3>
+                    <div class="flex items-center justify-between gap-3">
+                        <h3 class="font-medium tracking-tight text-gray-900">Pairing-Netz</h3>
+                        <x-fa::button size="sm" variant="ghost" icon-right="heroicon-m-arrow-up-right"
+                            wire:click="$dispatch('pairing-netz.oeffnen', { recipeId: {{ (int) ($pairing['netz']['meta']['recipe_id'] ?? 0) }} })"
+                            title="Ganzes Netz mit verwandten Rezepten und Vorschlägen öffnen" data-editor-netz-oeffnen>Netz öffnen</x-fa::button>
+                    </div>
                     <p class="text-[11px] text-gray-500">
                         {{ ($pairing['ist_gericht'] ?? false) ? 'Die Basisrezepte des Gerichts und was dazu passt — die Anker liegen im Hintergrund.' : 'Die Kern-Anker des Aromenprofils und ihre ★★★-Partner.' }}
                     </p>

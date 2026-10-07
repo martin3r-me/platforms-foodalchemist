@@ -16,6 +16,7 @@
     'icon' => null,          // optionaler Heroicon-Name fürs Rail
     'minWidth' => 200,       // resize min in px
     'maxWidth' => 640,       // resize max in px
+    'aufziehen' => false,    // Sprung per Link (?gp= / ?rezept=): beim Ankommen öffnen, auch wenn zuletzt zugeklappt
 ])
 
 @php
@@ -41,6 +42,7 @@
             const mq = window.matchMedia('(min-width: 96rem)');
             mq.addEventListener('change', (e) => { this.weit = e.matches; });
             window.addEventListener('resize', () => { this.vw = window.innerWidth; });
+            if (@js((bool) $aufziehen) && ! this.open) this.setOpen(true);
         },
         get schublade() { return this.open && ! this.weit; },
         get breite() { return Math.min(this.width, Math.round(this.vw * (this.weit ? 0.3 : 0.9))); },

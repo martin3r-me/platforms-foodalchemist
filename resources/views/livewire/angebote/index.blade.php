@@ -97,6 +97,7 @@
          Einbettung wie im Concepter-Browser, damit die Konzept-Bausteine identisch laufen. --}}
     <livewire:foodalchemist.concepter.editor />
     <livewire:foodalchemist.recipes.recipe-modal />
+    <livewire:foodalchemist.recipes.pairing-netz-modal />{{-- „Netz öffnen" aus dem Rezept-/Gericht-Editor --}}
     <livewire:foodalchemist.verkauf.vk-modal />
     {{-- Spec 53/F Stufe 2: Sprachbefehl-Mount auf Seitenebene (Modal + optionales schwebendes Element). --}}
 </x-ui-page>
