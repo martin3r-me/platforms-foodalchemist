@@ -61,7 +61,8 @@ class SpeiseplanAnproduktionTool extends FoodAlchemistTool implements ToolContra
         }
 
         try {
-            $montag = \Carbon\Carbon::parse((string) ($arguments['montag'] ?? ''))->startOfDay();
+            // Illuminate-Carbon: der Service typisiert $montag als Illuminate\Support\Carbon.
+            $montag = \Illuminate\Support\Carbon::parse((string) ($arguments['montag'] ?? ''))->startOfDay();
             $res = $svc->wocheAnProduktion($team, $plan, trim((string) ($arguments['mahlzeit'] ?? 'mittag')), $montag, $context->user->id ?? null);
         } catch (\RuntimeException | \Carbon\Exceptions\InvalidFormatException $e) {
             return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR');

@@ -97,3 +97,24 @@ it('Confirm-Gates + SUGGEST + Guards', function () {
     expect(($this->run)('foodalchemist.orders.UPDATE_APPROVAL', ['order_id' => $orderId, 'approval_status' => 'approved'], $this->childKontext)->errorCode)->toBe('ACCESS_DENIED');
     expect(($this->run)('foodalchemist.orders.REMOVE_LINE', ['line_id' => 999999, 'confirm' => true])->errorCode)->toBe('NOT_FOUND');
 });
+
+it('speiseplan.ANPRODUKTION läuft auf dem Erfolgspfad (Tool übergibt Illuminate-Carbon an den Service)', function () {
+    // Regression 2026-10-07: das Tool baute \Carbon\Carbon, der Service typisiert Illuminate\Support\Carbon
+    // → TypeError bei JEDEM Aufruf. Bisher war nur der CONFIRM_REQUIRED-Zweig getestet.
+    $g = \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::create([
+        'team_id' => $this->rootTeam->id, 'recipe_key' => 'anprod-1', 'name' => 'G-Anproduktion', 'status' => 'approved',
+        'is_sales_recipe' => true, 'sales_net' => 3.0, 'ek_total_eur' => 1.0,
+    ]);
+    $plan = app(\Platform\FoodAlchemist\Services\SpeiseplanService::class);
+    $sp = $plan->create($this->rootTeam, ['name' => 'MCP-Anproduktion', 'start_date' => '2026-07-06']);
+    $plan->addEintrag($this->rootTeam, $sp->id, ['entry_date' => '2026-07-06', 'mahlzeit' => 'mittag', 'sales_recipe_id' => $g->id]);
+
+    $res = ($this->run)('foodalchemist.speiseplan.ANPRODUKTION', [
+        'plan_id' => $sp->id, 'mahlzeit' => 'mittag', 'montag' => '2026-07-06', 'confirm' => true,
+    ]);
+
+    expect($res->success)->toBeTrue('anproduktion: ' . ($res->error ?? ''))
+        ->and($res->data['result']['auftraege'])->toBe(1)
+        ->and($res->data['result']['tage'])->toBe(['2026-07-06']);
+    expect(\Platform\FoodAlchemist\Models\FoodAlchemistProductionOrder::where('team_id', $this->rootTeam->id)->count())->toBe(1);
+});
