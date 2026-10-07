@@ -51,7 +51,7 @@
                 <span class="ml-auto text-[var(--fa-ink-3)]">{{ $istGericht ? 'Bestandteile '.($counts['bestandteile'] ?? 0).' · Vorschläge '.($counts['basis'] ?? 0) : 'Basisrezepte '.($counts['basis'] ?? 0) }} · Klick auf ein Rezept öffnet es · Mausrad und Ziehen zoomen und verschieben</span>
             </div>
 
-            <svg viewBox="0 0 1200 980" preserveAspectRatio="xMidYMid meet" class="w-full h-[70vh] rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] bg-[var(--fa-surface)]" data-fa-netz-mount></svg>
+            <svg viewBox="0 0 1200 980" preserveAspectRatio="xMidYMid meet" class="w-full h-[calc(85vh-13rem)] min-h-[280px] rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] bg-[var(--fa-surface)]" data-fa-netz-mount></svg>
 
             {{-- Legende --}}
             <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]" data-netz-legende>

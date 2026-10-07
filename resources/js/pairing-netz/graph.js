@@ -363,7 +363,7 @@ export function pairingNetzGraph(config) {
         .attr('dominant-baseline', (d) => (this._istRadial(d) || d.kind === 'zentrum' ? 'middle' : 'auto'))
         .attr('font-size', (d) => this._fontSize(d))
         .style('paint-order', 'stroke')
-        .style('stroke', 'rgba(2,6,23,.72)') // dunkler Halo für helle Schrift auf schwarzem Grund
+        .style('stroke', 'var(--fa-surface, #0b1120)') // Halo in Grundfarbe: verdeckt Linien unter der Schrift
         .style('stroke-width', (d) => (this.mode === 'preview' ? '2.5px' : '3.5px'))
         .style('fill', (d) => this._labelFill(d))
         .style('font-weight', (d) => (d.kind === 'zentrum' ? '600' : '500'))
@@ -427,7 +427,9 @@ export function pairingNetzGraph(config) {
     },
 
     _fill(d) {
-      if (d.kind === 'zentrum') return 'rgba(79,110,247,.22)';
+      // deckend (nicht durchscheinend): Kreise liegen über den Linien und verdecken sie — sonst laufen
+      // die Kanten sichtbar durchs Zentrum (Befund Dominique 2026-10-07). Ton = Logo-Blau auf dunklem Grund.
+      if (d.kind === 'zentrum') return '#27377e';
       if (d.kind === 'anker') return d.orphan ? '#fde68a' : '#c7d2fe'; // Orphan = warm (passt nicht), sonst Logo-Blau hell
       if (d.kind === 'bestandteil') return d.ohne_profil ? '#e5e7eb' : '#bbf7d0'; // Basisrezept des Gerichts
       if (d.kind === 'basisrezept') return d.typ === 'kontrast' ? TYP_FILL.kontrast : '#86efac';

@@ -1237,7 +1237,7 @@
                                 </button>
                             </div>
                             <svg viewBox="0 0 1200 980" preserveAspectRatio="xMidYMid meet"
-                                 class="w-full rounded-xl" style="height:70vh; background:#0b1120" data-fa-netz-mount></svg>
+                                 class="w-full h-[calc(100dvh-20rem)] min-h-[320px] rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] bg-[var(--fa-surface)]" data-fa-netz-mount></svg>
                             {{-- Legende (Spec 60): Linien zwischen den gewählten Ankern --}}
                             <div class="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-[11px] text-gray-700">
                                 <span class="inline-flex items-center gap-2"><span class="inline-block w-5" style="border-top:3px solid #fcd34d"></span> harmoniert (★★★, gemessen)</span>
