@@ -406,9 +406,16 @@
                     @else
                         {{-- Spec 71: Lieferanten auf-/zuklappen (Alpine, kein Server-Roundtrip; auch im Lesemodus bedienbar → div statt button) --}}
                         <div class="flex flex-wrap items-center justify-between gap-2" data-orders-gruppen-steuerung>
-                            <label class="inline-flex items-center gap-1.5 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]" title="Bedarf aus Rezepten und Grundprodukten minus aktueller Lagerbestand">
-                                <input type="checkbox" wire:model.live="cockpitLagerAbgleich" class="w-4 h-4 rounded accent-[var(--fa-accent)]" data-orders-lager-abgleich /> Lagerbestand abziehen
-                            </label>
+                            @php $mitLager = collect($cockpitPreview['orders_preview'])->flatMap(fn ($g) => $g['positionen'])->filter(fn ($p) => ($p['lager_verfuegbar_g'] ?? 0) > 0)->count() + count($cockpitPreview['aus_lager'] ?? []); @endphp
+                            @if($mitLager > 0)
+                                @if($cockpitLagerAbgleich)
+                                    <x-fa::button size="sm" variant="ghost" icon="heroicon-m-arrow-uturn-left" wire:click="lagerAlleAbziehen(false)" data-orders-lager-abgleich>Lager nicht abziehen</x-fa::button>
+                                @else
+                                    <x-fa::button size="sm" icon="heroicon-m-archive-box" wire:click="lagerAlleAbziehen(true)" data-orders-lager-abgleich>Lagerbestand abziehen ({{ $mitLager }} Artikel im Lager)</x-fa::button>
+                                @endif
+                            @else
+                                <span class="{{ $leise }}">Nichts davon im Lager</span>
+                            @endif
                             <span class="inline-flex gap-3 text-[length:var(--fa-text-sm)]">
                                 <span role="button" tabindex="0" class="text-[var(--fa-accent)] hover:underline cursor-pointer" x-on:click="$dispatch('runde-gruppen', { offen: true })">Alle auf</span>
                                 <span role="button" tabindex="0" class="text-[var(--fa-accent)] hover:underline cursor-pointer" x-on:click="$dispatch('runde-gruppen', { offen: false })">Alle zu</span>
@@ -456,8 +463,17 @@
                                                         Bedarf {{ $p['needed_display'] !== null ? $menge($p['needed_display'], 3) . ' ' . $p['needed_unit'] : 'direkt' }}
                                                         @if($p['source_label']) · {{ $p['source_label'] }}@endif
                                                     </p>
-                                                    @if(($p['lager_g'] ?? 0) > 0)
-                                                        <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ok)] tabular-nums" data-orders-lager-abzug>Im Lager {{ $menge($p['lager_g'] / 1000, 3) }} kg · bestellt für {{ $menge($p['needed_base_g'] / 1000, 3) }} kg</p>
+                                                    @if(($p['lager_verfuegbar_g'] ?? 0) > 0)
+                                                        {{-- Spec 71: Lager je Artikel immer sichtbar, abziehen auf Knopfdruck --}}
+                                                        <p class="flex flex-wrap items-center gap-x-2 text-[length:var(--fa-text-sm)] tabular-nums" data-orders-lager-info>
+                                                            @if(($p['lager_g'] ?? 0) > 0)
+                                                                <span class="text-[var(--fa-ok)]" data-orders-lager-abzug>Im Lager {{ $menge($p['lager_verfuegbar_g'] / 1000, 3) }} kg · {{ $menge($p['lager_g'] / 1000, 3) }} kg abgezogen · bestellt für {{ $menge($p['needed_base_g'] / 1000, 3) }} kg</span>
+                                                                <button type="button" wire:click="lagerPosition('{{ $p['position_key'] }}', false)" class="text-[var(--fa-accent)] hover:underline">nicht abziehen</button>
+                                                            @else
+                                                                <span class="text-[var(--fa-ink-2)]">Im Lager {{ $menge($p['lager_verfuegbar_g'] / 1000, 3) }} kg</span>
+                                                                <button type="button" wire:click="lagerPosition('{{ $p['position_key'] }}', true)" class="text-[var(--fa-accent)] hover:underline" data-orders-lager-pos>vom Bedarf abziehen</button>
+                                                            @endif
+                                                        </p>
                                                     @endif
                                                     @if(!empty($p['reference']))
                                                         <x-fa::badge tone="accent" class="mt-1">{{ $p['reference'] }}</x-fa::badge>
@@ -531,7 +547,10 @@
                         <div class="rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] px-3 py-2" data-orders-aus-lager>
                             <p class="text-[length:var(--fa-text-md)] font-semibold text-[var(--fa-ok)]">Aus dem Lager gedeckt ({{ count($cockpitPreview['aus_lager']) }})</p>
                             @foreach($cockpitPreview['aus_lager'] as $p)
-                                <p class="{{ $leise }}" wire:key="auslager-{{ md5($p['position_key'] ?? $loop->index) }}">{{ $p['designation'] ?: ($p['gp'] ?: 'Position') }} · Bedarf {{ $menge(($p['bedarf_g'] ?? 0) / 1000, 3) }} kg vollständig im Lager</p>
+                                <div class="flex items-center justify-between gap-2" wire:key="auslager-{{ md5($p['position_key'] ?? $loop->index) }}">
+                                    <span class="{{ $leise }}">{{ $p['designation'] ?: ($p['gp'] ?: 'Position') }} · Bedarf {{ $menge(($p['bedarf_g'] ?? 0) / 1000, 3) }} kg, im Lager {{ $menge(($p['lager_verfuegbar_g'] ?? 0) / 1000, 3) }} kg</span>
+                                    <x-fa::button size="sm" variant="ghost" icon="heroicon-m-arrow-uturn-left" wire:click="lagerPosition('{{ $p['position_key'] }}', false)">doch bestellen</x-fa::button>
+                                </div>
                             @endforeach
                         </div>
                     @endif

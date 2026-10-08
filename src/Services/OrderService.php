@@ -1262,7 +1262,10 @@ class OrderService
     {
         $skip = (array) ($overrides['skip'] ?? []);
         $mengen = (array) ($overrides['menge'] ?? []);
-        $lager = ! empty($overrides['lager_abgleich']) ? $this->lagerJeGp($team) : [];
+        $global = ! empty($overrides['lager_abgleich']);
+        $jePos = (array) ($overrides['lager_pos'] ?? []);
+        // Bestand immer lesen: jede Position zeigt, was vom GP im Lager liegt — abgezogen wird nur auf Knopfdruck
+        $lager = $this->lagerJeGp($team);
         $ausLager = [];
         $ausgelassen = [];
         foreach ($gruppen as $gk => $g) {
@@ -1272,7 +1275,12 @@ class OrderService
                 $pos['position_key'] = $pk;
                 $gpId = $pos['gp_id'] ?? null;
                 // 1. Lager — nur gerechneter Bedarf (Rezept/GP), nicht der feste Artikel in Gebinden
-                if ($lager !== [] && ($pos['type'] ?? '') !== 'supplier_item' && $gpId !== null && (float) ($pos['needed_base_g'] ?? 0) > 0 && ($lager[$gpId] ?? 0) > 0) {
+                $lagerBar = ($pos['type'] ?? '') !== 'supplier_item' && $gpId !== null && (float) ($pos['needed_base_g'] ?? 0) > 0 && ($lager[$gpId] ?? 0) > 0;
+                if ($lagerBar) {
+                    $pos['lager_verfuegbar_g'] = round((float) $lager[$gpId], 2);
+                }
+                $abziehen = array_key_exists($pk, $jePos) ? (bool) $jePos[$pk] : $global;
+                if ($lagerBar && $abziehen) {
                     $bedarf = (float) $pos['needed_base_g'];
                     $nimm = min($bedarf, (float) $lager[$gpId]);
                     $lager[$gpId] -= $nimm;

@@ -2564,7 +2564,10 @@ it('Spec 71 UI: Entfernen, Menge ±, Lager-Schalter, Lesemodus nach Speichern + 
         ->call('cockpitRezeptEinfuegen', $this->kuchen->id)
         ->set('cockpitSources.0.qty', 100)
         ->call('cockpitVorschau')
-        ->assertSee('Aus dem Lager gedeckt (1)')->assertSee('Lagerbestand abziehen')->assertSee('Alle zu');
+        ->assertDontSee('Aus dem Lager gedeckt')                        // Standard: nur anzeigen, nicht abziehen
+        ->assertSee('Im Lager 2 kg')->assertSee('Lagerbestand abziehen (1 Artikel im Lager)')->assertSee('Alle zu')
+        ->call('lagerAlleAbziehen', true)
+        ->assertSee('Aus dem Lager gedeckt (1)');
     $mehlKey = collect($ed->get('cockpitPreview')['orders_preview'])->flatMap(fn ($g) => $g['positionen'])->firstWhere('gp_id', $this->mehl->id)['position_key'];
 
     $ed->call('positionMenge', $mehlKey, '12')
@@ -2573,9 +2576,9 @@ it('Spec 71 UI: Entfernen, Menge ±, Lager-Schalter, Lesemodus nach Speichern + 
         ->assertSee('Aus der Runde genommen (1)')
         ->call('positionWiederherstellen', $mehlKey)
         ->assertSet('cockpitPreview', fn ($v) => $v['ausgelassen'] === [])
-        ->set('cockpitLagerAbgleich', false)
+        ->call('lagerAlleAbziehen', false)
         ->assertSet('cockpitPreview', fn ($v) => $v['aus_lager'] === [] && $v['totals']['groups'] === 2)
-        ->set('cockpitLagerAbgleich', true)
+        ->call('lagerAlleAbziehen', true)
         ->call('cockpitSpeichern')
         ->assertSet('rundeGesperrt', true)
         ->assertSee('Bearbeiten')->assertDontSee('Bestellungen speichern');
@@ -2596,4 +2599,26 @@ it('Spec 71 UI: Strategie-Wechsel rechnet die Vorschau sofort neu', function () 
     expect($ed->get('cockpitPreview'))->toBeNull();
     $ed->set('cockpitStrategy', 'guenstigster_preis')
         ->assertSet('cockpitPreview', fn ($v) => is_array($v) && $v['totals']['groups'] === 2);
+});
+
+it('Spec 71: Lager je Artikel sichtbar, abziehen nur auf Knopfdruck — global oder je Position', function () {
+    lagerBestand($this->rootTeam, $this->mehl, 4000);
+    lagerBestand($this->rootTeam, $this->zucker, 300);
+    $quelle = [['type' => 'recipe', 'id' => $this->kuchen->id, 'qty' => 100, 'unit' => 'portions', 'delivery_date' => '2026-08-13']];
+    $pos = fn ($p, $gp) => collect($p['orders_preview'])->flatMap(fn ($g) => $g['positionen'])->firstWhere('gp_id', $gp->id);
+
+    $nur = $this->svc->previewFromSources($this->rootTeam, $quelle);
+    expect($pos($nur, $this->mehl)['lager_verfuegbar_g'])->toEqual(4000)
+        ->and($pos($nur, $this->mehl)['lager_g'] ?? null)->toBeNull()
+        ->and((float) $pos($nur, $this->mehl)['qty_packs'])->toBe(10.0)
+        ->and($pos($nur, $this->butter))->not->toHaveKey('lager_verfuegbar_g');
+
+    $mehlKey = $pos($nur, $this->mehl)['position_key'];
+    $einzeln = $this->svc->previewFromSources($this->rootTeam, $quelle, null, ['lager_pos' => [$mehlKey => true]]);
+    expect((float) $pos($einzeln, $this->mehl)['qty_packs'])->toBe(6.0)
+        ->and($pos($einzeln, $this->zucker)['lager_g'] ?? null)->toBeNull();       // Zucker nicht angetippt
+
+    $globalOhneMehl = $this->svc->previewFromSources($this->rootTeam, $quelle, null, ['lager_abgleich' => true, 'lager_pos' => [$mehlKey => false]]);
+    expect((float) $pos($globalOhneMehl, $this->mehl)['qty_packs'])->toBe(10.0)
+        ->and($pos($globalOhneMehl, $this->zucker)['lager_g'])->toEqual(300);
 });

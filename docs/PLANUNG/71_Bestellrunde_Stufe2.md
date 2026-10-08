@@ -15,14 +15,14 @@ Alles läuft über `OrderService::nachbearbeitePreview`. Das gilt für Vorschau 
 
 | Schlüssel | Wirkung |
 |---|---|
-| `lager_abgleich` (bool) | Bedarf (`needed_base_g`) minus Lagerbestand des GP. Grundlage: alle aktiven Lagerorte, Stk über `piece_default_g`, je GP nur einmal verteilt. Gebinde werden neu gerechnet. Voll gedeckt → `aus_lager`. Nur für Rezept- und GP-Quellen, nicht für feste Artikel. |
+| `lager_abgleich` (bool, Standard aus) · `lager_pos[schluessel]` (bool, schlägt den Gesamtwert) | Bedarf (`needed_base_g`) minus Lagerbestand des GP. Grundlage: alle aktiven Lagerorte, Stk über `piece_default_g`, je GP nur einmal verteilt. Gebinde werden neu gerechnet. Voll gedeckt → `aus_lager`. Nur für Rezept- und GP-Quellen, nicht für feste Artikel. |
 | `skip[positions_schluessel]` | Position → `ausgelassen` (wiederherstellbar). |
 | `menge[positions_schluessel]` | Gebinde von Hand. Behält `qty_packs_berechnet` und setzt `menge_von_hand`. Beim Speichern bekommt die Bestellzeile `is_manual_qty = true`. |
 
 - **Positions-Schlüssel:** `override_key` (Quelle|gp:ID), sonst `la:<source_ref>|<lead_la_id>`. Er wird als `position_key` in jede Position geschrieben.
 - **Leere Lieferanten-Gruppen** fallen weg. Die Summen werden neu gerechnet.
 - **UI (`Orders/Editor`):**
-  - `cockpitSkip`, `cockpitMengen`, `cockpitLagerAbgleich` (Standard an), `rundeGesperrt`.
+  - `cockpitSkip`, `cockpitMengen`, `cockpitLagerAbgleich` (Standard aus), `cockpitLagerPos`; der Bestand je Artikel (`lager_verfuegbar_g`) wird immer angezeigt, abgezogen nur per Knopf (Wunsch Dominique), `rundeGesperrt`.
   - Strategie-Wechsel und Lager-Schalter rechnen die Vorschau sofort neu.
   - Gruppen klappen über Alpine auf und zu, ohne Server. Sie bleiben auch im Lesemodus bedienbar.
 - **Lesemodus:** Nach dem Speichern und beim Öffnen einer Runde gilt `rundeGesperrt = true`. Der Inhalt liegt dann in `<fieldset disabled>`, das Muster stammt aus Spec 65. „Bearbeiten" entsperrt die Runde.

@@ -181,7 +181,10 @@ class Editor extends Component
 
     public array $cockpitMengen = [];
 
-    public bool $cockpitLagerAbgleich = true;
+    public bool $cockpitLagerAbgleich = false;
+
+    /** Spec 71: Lager je Position abziehen (Schlüssel → bool), schlägt den Gesamt-Knopf. */
+    public array $cockpitLagerPos = [];
 
     /** Gespeicherte Runde = Lesemodus (wie ein gespeichertes Rezept); „Bearbeiten" öffnet wieder. */
     public bool $rundeGesperrt = false;
@@ -247,7 +250,8 @@ class Editor extends Component
         $this->rundeGesperrt = false;
         $this->cockpitSkip = [];
         $this->cockpitMengen = [];
-        $this->cockpitLagerAbgleich = true;
+        $this->cockpitLagerAbgleich = false;
+        $this->cockpitLagerPos = [];
         if ($productionId !== null) {
             $this->cockpitProduktionEinfuegen($productionId);
         }
@@ -878,7 +882,7 @@ class Editor extends Component
     /** Artikel-Wahl + Spec 71 (auslassen, Menge, Lager) als ein Override-Paket — Vorschau und Speichern rechnen gleich. */
     private function cockpitAlleOverrides(): array
     {
-        return $this->cockpitOverrides + ['skip' => $this->cockpitSkip, 'menge' => $this->cockpitMengen, 'lager_abgleich' => $this->cockpitLagerAbgleich];
+        return $this->cockpitOverrides + ['skip' => $this->cockpitSkip, 'menge' => $this->cockpitMengen, 'lager_abgleich' => $this->cockpitLagerAbgleich, 'lager_pos' => $this->cockpitLagerPos];
     }
 
     public function positionAuslassen(string $key, OrderService $orders): void
@@ -909,9 +913,19 @@ class Editor extends Component
         $this->cockpitVorschau($orders);
     }
 
-    public function updatedCockpitLagerAbgleich(): void
+    /** Knopf „Alle aus dem Lager abziehen“ / „Lager nicht abziehen“ — setzt Einzelentscheidungen zurück. */
+    public function lagerAlleAbziehen(bool $an, OrderService $orders): void
     {
-        $this->cockpitVorschau(app(OrderService::class));
+        $this->cockpitLagerAbgleich = $an;
+        $this->cockpitLagerPos = [];
+        $this->cockpitVorschau($orders);
+    }
+
+    /** Lager nur für diese Position abziehen bzw. nicht abziehen. */
+    public function lagerPosition(string $key, bool $an, OrderService $orders): void
+    {
+        $this->cockpitLagerPos[$key] = $an;
+        $this->cockpitVorschau($orders);
     }
 
     public function updatedCockpitStrategy(): void
