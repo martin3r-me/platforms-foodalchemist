@@ -800,6 +800,9 @@ Route::get('/produktion/auftraege/{order}/dokument', function (int $order, \Plat
 Route::get('/bestellungen', \Platform\FoodAlchemist\Livewire\Orders\Index::class)
     ->name('foodalchemist.orders.index');
 
+// Spec 68 · Bestellvorlagen (Musterbestellung / Musterproduktion).
+Route::get('/bestellvorlagen', \Platform\FoodAlchemist\Livewire\Bestellvorlagen\Index::class)
+    ->name('foodalchemist.bestellvorlagen.index');
 // Spec 70 · Etiketten: Seite mit Formular + Live-Vorschau; Druck-HTML | ?pdf=1 (DomPDF) | ?vorschau=1 (für den iframe).
 Route::get('/etiketten', \Platform\FoodAlchemist\Livewire\Etiketten\Index::class)
     ->name('foodalchemist.etiketten.index');

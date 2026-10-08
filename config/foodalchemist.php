@@ -327,6 +327,12 @@ return [
                     'icon'  => 'heroicon-o-shopping-cart',
                 ],
                 [
+                    // Spec 68: Bestellvorlagen (gespeicherte Bestellrunde: Grundprodukte, Rezepte, Artikel).
+                    'label' => 'Bestellvorlagen',
+                    'route' => 'foodalchemist.bestellvorlagen.index',
+                    'icon'  => 'heroicon-o-document-duplicate',
+                ],
+                [
                     // Spec 66: Lager (Bestand, Bewegungen, Inventur).
                     'label' => 'Lager',
                     'route' => 'foodalchemist.lager.index',

@@ -261,6 +261,20 @@
             <div class="grid grid-cols-1 xl:grid-cols-[minmax(280px,0.9fr)_minmax(0,1.25fr)] 2xl:grid-cols-[minmax(280px,0.85fr)_minmax(0,1.25fr)_minmax(260px,0.7fr)] gap-4 min-w-0">
                 <div class="flex flex-col gap-4 min-w-0">
                     {{-- Quellenart wählen, dann suchen. Alle Suchfelder bleiben im DOM (Livewire-Bindungen). --}}
+                    {{-- Spec 68: Vorlagen — einfügen (kombinierbar) oder den Arbeitsstand als Vorlage sichern --}}
+                    <x-fa::section title="Vorlage" icon="heroicon-o-document-duplicate" data-orders-vorlage>
+                        <div class="flex flex-wrap items-end gap-2">
+                            <x-fa::select wire:model="vorlageWahl" size="sm" :options="$vorlagen" :placeholder="$vorlagen->isEmpty() ? 'Noch keine Vorlagen' : 'Vorlage wählen'" class="flex-1 min-w-[10rem]" aria-label="Vorlage" data-orders-vorlage-wahl />
+                            <x-fa::button size="sm" icon="heroicon-m-plus" wire:click="cockpitVorlageEinfuegen" :disabled="$vorlagen->isEmpty()" data-orders-vorlage-einfuegen>Einfügen</x-fa::button>
+                        </div>
+                        @if(count($cockpitSources) > 0)
+                            <div class="flex flex-wrap items-end gap-2 pt-1">
+                                <x-fa::input wire:model="vorlageName" size="sm" placeholder="Name, z. B. Montag Molkerei" class="flex-1 min-w-[10rem]" aria-label="Name der neuen Vorlage" />
+                                <x-fa::button size="sm" variant="ghost" icon="heroicon-m-bookmark" wire:click="cockpitAlsVorlage" data-orders-als-vorlage>Als Vorlage speichern</x-fa::button>
+                            </div>
+                        @endif
+                    </x-fa::section>
+
                     <x-fa::section title="Quellen einfügen" icon="heroicon-o-plus-circle">
                         <div x-data="{ quelle: 'artikel' }" class="flex flex-col gap-3">
                             <div role="group" aria-label="Quellenart" class="grid grid-cols-2 sm:grid-cols-4 p-0.5 gap-0.5 rounded-[var(--fa-radius-control)] bg-[var(--fa-neutral-soft)]">
@@ -1141,6 +1155,18 @@
                 </x-fa::section>
             @endif
         </div>
+        {{-- Spec 68: ändert die Bestellung nicht — auch ohne „Bearbeiten“ --}}
+        <x-slot:frei>
+            <div x-show="tab === 'kopf'" x-cloak class="pt-4">
+            {{-- Spec 68: diese Bestellung als Vorlage sichern --}}
+            <x-fa::section title="Als Vorlage speichern" icon="heroicon-o-document-duplicate" description="Positionen mit Grundprodukt werden als Grundprodukt mit Menge übernommen (Artikel wählt beim nächsten Mal die Strategie), alle anderen als fester Artikel." data-orders-bestellung-als-vorlage>
+                <div class="flex flex-wrap items-end gap-2">
+                    <x-fa::input wire:model="vorlageName" size="sm" placeholder="Name der Vorlage" class="w-64" aria-label="Name der Vorlage" />
+                    <x-fa::button size="sm" icon="heroicon-m-bookmark" wire:click="bestellungAlsVorlage">Speichern</x-fa::button>
+                </div>
+            </x-fa::section>
+            </div>
+        </x-slot:frei>
     </x-foodalchemist::editor-tabs>
     @endif
 </x-foodalchemist::modal>
