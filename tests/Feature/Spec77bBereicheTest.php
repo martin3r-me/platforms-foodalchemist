@@ -116,3 +116,54 @@ it('Kontingente: nur Plattform-Admin setzt; Standorte und Benutzer werden geprü
     $this->rechte->setzeKontingente($this->rootTeam, $this->plattformAdmin, ['ki_budget_eur_monat' => null]);
     expect($this->rechte->kiBudgetErschoepft($this->rootTeam))->toBeFalse();
 });
+
+/** Blast-Radius-Test: eine Komponente außerhalb des FA-Moduls (globaler Namespace). */
+class Spec77bFremdeKomponente extends \Livewire\Component
+{
+    public int $n = 0;
+
+    public function ping(): void
+    {
+        $this->n++;
+    }
+
+    public function render(): string
+    {
+        return '<div>fremd {{ $n }}</div>';
+    }
+}
+
+it('Blast-Radius: Nicht-FA-Route, Nicht-FA-Komponente und Requests ohne Team laufen unberührt durch', function () {
+    // Härtefall: ALLE FA-Bereiche des Teams aus
+    foreach (array_keys(FaBereiche::KATALOG) as $b) {
+        $this->rechte->setzeTeamBereich($this->rootTeam, $this->plattformAdmin, $b, false);
+    }
+    Route::middleware('web')->get('/_spec77b/fremd', fn () => 'fremd-ok')->name('fremd.seite');
+    Route::middleware('web')->get('/_spec77b/ohne-name', fn () => 'ohne-name-ok');
+    app('router')->getRoutes()->refreshNameLookups();
+
+    $this->actingAs($this->inhaber);
+    $this->get('/_spec77b/fremd')->assertOk()->assertSee('fremd-ok');
+    $this->get('/_spec77b/ohne-name')->assertOk()->assertSee('ohne-name-ok');
+    $this->get(route('foodalchemist.lager.index'))->assertStatus(403);   // Gegenprobe: FA-Seite gesperrt
+
+    // Nicht-FA-Komponente: Klick läuft; FA-Komponente: Klick wird abgewiesen
+    Livewire::test(Spec77bFremdeKomponente::class)->call('ping')->assertSet('n', 1);
+    Livewire::test(\Platform\FoodAlchemist\Livewire\Lager\Index::class)->call('reiterSetzen', 'bewegungen')
+        ->assertDispatched('fa-saved')->assertNotSet('reiter', 'bewegungen');
+
+    // Ohne Team-Kontext: Middleware und Klick-Haken prüfen nichts (die Seite selbst entscheidet)
+    $ohneTeam = $this->makeUser($this->rootTeam, 'Ohne Team', null);
+    $ohneTeam->forceFill(['current_team_id' => null])->save();
+    $this->actingAs($ohneTeam->refresh());
+    $this->get('/_spec77b/fremd')->assertOk();
+    $req = \Illuminate\Http\Request::create('/lager');
+    $req->setUserResolver(fn () => $ohneTeam);
+    $req->setRouteResolver(fn () => app('router')->getRoutes()->getByName('foodalchemist.lager.index'));
+    expect((new \Platform\FoodAlchemist\Http\Middleware\FaBereichMiddleware())->handle($req, fn () => 'durch'))->toBe('durch');
+    Livewire::test(Spec77bFremdeKomponente::class)->call('ping')->assertSet('n', 1);
+
+    // Ohne Benutzer (Gast) ebenso
+    auth()->logout();
+    $this->get('/_spec77b/fremd')->assertOk();
+});
