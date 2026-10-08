@@ -47,6 +47,10 @@
         "style_block": 1,
         "style_statisch": 4
     },
+    "dokumente/etiketten.blade.php": {
+        "hex_farbe": 8,
+        "style_block": 1
+    },
     "dokumente/foodbook.blade.php": {
         "hex_farbe": 51,
         "style_block": 1,

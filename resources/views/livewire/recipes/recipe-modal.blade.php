@@ -77,6 +77,11 @@
                                x-on:click="offen = false" class="{{ $menuePunkt }}" title="Druck- und PDF-Bericht mit Profilen und Filtern" data-rezept-druck>
                                 @svg('heroicon-o-printer', 'w-4 h-4 text-[var(--fa-ink-3)]') Rezept drucken
                             </a>
+                            {{-- Spec 70: Etikett (Allergene, Zutaten, verbrauchen bis) --}}
+                            <a href="{{ route('foodalchemist.etiketten.index', ['quelle' => 'recipe', 'id' => $recipeId]) }}" target="_blank" role="menuitem"
+                               x-on:click="offen = false" class="{{ $menuePunkt }}" data-rezept-etikett>
+                                @svg('heroicon-o-tag', 'w-4 h-4 text-[var(--fa-ink-3)]') Etikett drucken
+                            </a>
                             {{-- R6: Vorlage-Markierung (Basis für «Aus Vorlage» im Browser) --}}
                             <button type="button" role="menuitem" wire:click="templateToggle" x-on:click="offen = false" class="{{ $menuePunkt }}"
                                     title="Vorlage für neue Rezepte (im Browser: aus Vorlage anlegen)" data-template-toggle>
@@ -584,6 +589,21 @@
         @if($posten->isEmpty())
             <x-fa::signal tone="warn">Noch keine Posten angelegt. Unter Einstellungen, Posten und Kapazität anlegen, dann hier zuweisen.</x-fa::signal>
         @endif
+    </x-fa::section>
+
+    {{-- Spec 70: übliche Lagerart + Haltbarkeit — Vorgabe für Etikett („verbrauchen bis") und Einlagerung --}}
+    <x-fa::section title="Lagerung & Haltbarkeit" icon="heroicon-o-archive-box" description="Vorgabe für Etiketten und die Einlagerung. Beim Etikettendruck lässt sich die Lagerart im Einzelfall umstellen." data-recipe-lagerung>
+        <div class="grid gap-3 md:grid-cols-3">
+            <x-fa::field label="Übliche Lagerart" for="rezept-lagerart">
+                <x-fa::select id="rezept-lagerart" wire:model="form.storage_type" :options="['gekuehlt' => 'Gekühlt (0–7 °C)', 'tiefgekuehlt' => 'Tiefgekühlt (−18 °C)', 'trocken' => 'Trocken']" placeholder="offen" data-recipe-lagerart />
+            </x-fa::field>
+            <x-fa::field label="Haltbar gekühlt (Tage)" for="rezept-haltbar-kuehl">
+                <x-fa::input id="rezept-haltbar-kuehl" type="number" min="0" wire:model="form.shelf_life_chilled_days" numeric placeholder="offen" />
+            </x-fa::field>
+            <x-fa::field label="Haltbar tiefgekühlt (Tage)" for="rezept-haltbar-tk" hint="ab dem Einfrieren">
+                <x-fa::input id="rezept-haltbar-tk" type="number" min="0" wire:model="form.shelf_life_frozen_days" numeric placeholder="offen" />
+            </x-fa::field>
+        </div>
     </x-fa::section>
 
     {{-- EIGNUNG (M9-01k) — Detail-Panel-Kartei via section-Prop --}}

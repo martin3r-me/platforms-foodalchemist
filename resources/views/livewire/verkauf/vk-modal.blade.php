@@ -96,6 +96,10 @@
                            x-on:click="offen = false" class="{{ $menuePunkt }}" title="Druck- und PDF-Bericht mit Profilen und Filtern" data-vk-druck>
                             @svg('heroicon-o-printer', 'w-4 h-4 text-[var(--fa-ink-3)]') Gericht drucken
                         </a>
+                        <a href="{{ route('foodalchemist.etiketten.index', ['quelle' => 'recipe', 'id' => $rezept->id]) }}" target="_blank" role="menuitem"
+                           x-on:click="offen = false" class="{{ $menuePunkt }}" data-vk-etikett>
+                            @svg('heroicon-o-tag', 'w-4 h-4 text-[var(--fa-ink-3)]') Etikett drucken
+                        </a>
                         <div class="my-1 border-t border-[var(--fa-line)]"></div>
                         <button type="button" role="menuitem" wire:click="loeschen" x-on:click="offen = false"
                                 wire:confirm="Gericht wirklich löschen? Nur das Gericht wird entfernt, Basisrezepte und Grundprodukte bleiben bestehen."

@@ -126,6 +126,8 @@ class RecipeModal extends Component
         'default_station_id' => null, 'max_vorlauf_tage' => null, 'setup_time_min' => null,
         'variable_work_time_min' => null, 'variable_work_time_basis' => 'kg',
         'batch_max_kg' => null, 'batch_max_pieces' => null, 'standzeit_min' => null,
+        // Spec 70 — Lagerart + Haltbarkeit (Etikett, Einlagerung)
+        'storage_type' => '', 'shelf_life_chilled_days' => null, 'shelf_life_frozen_days' => null,
     ];
 
     public ?int $recipeId = null;
@@ -199,6 +201,9 @@ class RecipeModal extends Component
                     'work_time_min' => $r->work_time_min,
                     'default_station_id' => $r->default_station_id,
                     'max_vorlauf_tage' => $r->max_vorlauf_tage,
+                    'storage_type' => (string) ($r->storage_type ?? ''),
+                    'shelf_life_chilled_days' => $r->shelf_life_chilled_days,
+                    'shelf_life_frozen_days' => $r->shelf_life_frozen_days,
                     'setup_time_min' => $r->setup_time_min,
                     'variable_work_time_min' => $r->variable_work_time_min,
                     'variable_work_time_basis' => $r->variable_work_time_basis ?: 'kg',
@@ -281,6 +286,9 @@ class RecipeModal extends Component
                 // Stufe 3 — Planer-Felder sanitisieren
                 'default_station_id' => $this->form['default_station_id'] ?: null,
                 'max_vorlauf_tage' => $ganz($this->form['max_vorlauf_tage']),
+                'storage_type' => in_array($this->form['storage_type'] ?? '', ['gekuehlt', 'tiefgekuehlt', 'trocken'], true) ? $this->form['storage_type'] : null,
+                'shelf_life_chilled_days' => $ganz($this->form['shelf_life_chilled_days'] ?? null),
+                'shelf_life_frozen_days' => $ganz($this->form['shelf_life_frozen_days'] ?? null),
                 'setup_time_min' => $ganz($this->form['setup_time_min']),
                 'variable_work_time_min' => ($vw = trim(str_replace(',', '.', (string) ($this->form['variable_work_time_min'] ?? '')))) !== '' ? max(0, (float) $vw) : null,
                 'variable_work_time_basis' => in_array($this->form['variable_work_time_basis'] ?? '', ['kg', 'piece', 'portion'], true) ? $this->form['variable_work_time_basis'] : null,

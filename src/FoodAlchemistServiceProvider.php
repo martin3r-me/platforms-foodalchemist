@@ -1045,6 +1045,10 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     // Spec 67: Lagerbewegungen von Hand
                     \Platform\FoodAlchemist\Tools\InventoryMovementsPostTool::class,
                     \Platform\FoodAlchemist\Tools\InventoryMovementsStornoTool::class,
+                    // Spec 70: Etiketten
+                    \Platform\FoodAlchemist\Tools\LabelsPostTool::class,
+                    \Platform\FoodAlchemist\Tools\LabelTemplatesGetTool::class,
+                    \Platform\FoodAlchemist\Tools\LabelTemplatesPostTool::class,
                     \Platform\FoodAlchemist\Tools\OrdersUpdatePaymentTool::class,
                     \Platform\FoodAlchemist\Tools\OrdersUpdateApprovalTool::class,
                     \Platform\FoodAlchemist\Tools\OrdersConfirmSupplierTool::class,

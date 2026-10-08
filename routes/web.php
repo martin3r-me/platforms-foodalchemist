@@ -803,6 +803,29 @@ Route::get('/bestellungen', \Platform\FoodAlchemist\Livewire\Orders\Index::class
 // Spec 68 · Bestellvorlagen (Musterbestellung / Musterproduktion).
 Route::get('/bestellvorlagen', \Platform\FoodAlchemist\Livewire\Bestellvorlagen\Index::class)
     ->name('foodalchemist.bestellvorlagen.index');
+// Spec 70 · Etiketten: Seite mit Formular + Live-Vorschau; Druck-HTML | ?pdf=1 (DomPDF) | ?vorschau=1 (für den iframe).
+Route::get('/etiketten', \Platform\FoodAlchemist\Livewire\Etiketten\Index::class)
+    ->name('foodalchemist.etiketten.index');
+Route::get('/etiketten/druck', function (\Platform\FoodAlchemist\Services\EtikettService $svc) {
+    $team = \Illuminate\Support\Facades\Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
+    $quelle = (string) request('quelle', 'recipe');
+    abort_unless(in_array($quelle, ['recipe', 'gp', 'stellplatz'], true), 404);
+    try {
+        $data = $svc->druck($team, request('vorlage') !== null && request('vorlage') !== '' ? (int) request('vorlage') : null,
+            $quelle, (int) request('id'), (array) request('e', []), (int) request('anzahl', 1), (int) request('startplatz', 1));
+    } catch (\Illuminate\Database\Eloquent\ModelNotFoundException) {
+        abort(404);
+    }
+    $data += ['istPdf' => false, 'istVorschau' => request()->boolean('vorschau')];
+    if (request()->boolean('pdf')) {
+        abort_unless(class_exists(\Barryvdh\DomPDF\Facade\Pdf::class), 500, 'PDF-Export nicht verfügbar.');
+
+        return \Barryvdh\DomPDF\Facade\Pdf::loadView('foodalchemist::dokumente.etiketten', ['istPdf' => true] + $data)
+            ->download('Etiketten-' . \Illuminate\Support\Str::slug($data['daten']['bezeichnung'] ?: 'etikett') . '.pdf');
+    }
+
+    return view('foodalchemist::dokumente.etiketten', $data);
+})->name('foodalchemist.etiketten.druck');
 
 // Spec 66 · Lager (Stufe 1): Bestand, Bewegungen, Inventuren.
 Route::get('/lager', \Platform\FoodAlchemist\Livewire\Lager\Index::class)

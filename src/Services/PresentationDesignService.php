@@ -319,7 +319,7 @@ class PresentationDesignService
     }
 
     /** Die drei Ausgabeformen, für die ein Design gelten kann. */
-    public const OUTPUT_TYPES = ['foodbook', 'speisekarte', 'speiseplan', 'angebot'];
+    public const OUTPUT_TYPES = ['foodbook', 'speisekarte', 'speiseplan', 'angebot', 'etikett'];   // Spec 70: Etiketten
 
     /** Nur gültige Formen; leer/keine → null (= gilt für alle Formen). */
     private function sanitizeOutputTypes(mixed $raw): ?array

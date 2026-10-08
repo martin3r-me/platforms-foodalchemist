@@ -1,4 +1,4 @@
-# Spec 70 · Etiketten (Entwurf, nicht gebaut)
+# Spec 70 · Etiketten
 
 Stand 2026-10-08 · Dominique: „Etiketten drucken aus den Basisrezepten oder wo es passt, für das Lager."
 Vorgezogener erster Teil von Spec 69 (Eigenproduktion). Das Etikett nützt sofort, auch ohne
@@ -38,3 +38,20 @@ Druckweg: A4-Bogen, Etikettendrucker (welches Modell?) oder beides wählbar in d
 
 ## Reihenfolge
 Nach Spec 67 (Lagerbewegungen) und 68 (Bestellvorlagen). Danach Spec 69 (Chargen) auf dieser Basis.
+
+## Umsetzung (2026-10-08)
+- **Eigene Seite** Produktion → Etiketten (`/etiketten?quelle=recipe|gp|stellplatz&id=…`): Formular + Live-Vorschau,
+  statt eines Druck-Dialogs in vier Fenstern. Einstiege: Rezept und Gericht („…" → Etikett drucken), Grundprodukt
+  (Anbruch-Etikett), Lager → Einrichten (Regal-Etikett je Stellplatz), MCP `labels.POST`.
+- **Einstellungen → Etiketten**: Vorlagen (Format, Typ, Felder + Reihenfolge, Datums-Modus, Allergen-Darstellung,
+  Schrift, Fußtext, Betrieb/Logo, Design, Standard) mit Vorschau am echten Rezept.
+- Logo: Betrieb, sonst **Food-Alchemist-Wortmarke** (Standard laut Dominique).
+- Bezeichnung: Rezept → Teil nach „Kategorie:" (Regelwerk Basisrezepte §1), Gerichte ohne „[HG] ", GP → vor dem Doppelpunkt.
+- Zutatenliste nach LMIV: absteigend nach Gewicht (`grammJeZeile`), Basisrezept-Komponenten mit Zutaten in Klammern
+  (eine Ebene), Allergen-Zutaten fett.
+- Haltbarkeit am Rezept: `shelf_life_chilled_days` / `shelf_life_frozen_days`, pflegbar auf der Etiketten-Seite.
+- DomPDF: Padding zählt zur Höhe (box-sizing ignoriert) → Innenhöhe explizit; Rolle/Dymo ohne Tabelle; Seitenumbruch
+  nur zwischen Seiten (`:last-child` fehlt).
+- Formate: A4 24 (70×37), A4 40 (52,5×29,7), Rolle 62×40 (Brother), Dymo 54×25.
+- MCP: `labels.POST`, `label_templates.GET/POST`.
+- Offen → Spec 69: Charge auf dem Etikett, Druck direkt aus der Produktion.

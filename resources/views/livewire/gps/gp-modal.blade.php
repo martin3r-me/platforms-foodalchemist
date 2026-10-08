@@ -65,6 +65,9 @@
                     <a role="menuitem" href="{{ route('foodalchemist.gps.dokument', ['id' => $gp->id, 'profil' => 'kalkulation', 'pdf' => 1]) }}" x-on:click="offen = false" class="{{ $menuePunkt }}" data-gp-pdf>
                         @svg('heroicon-o-arrow-down-tray', 'w-4 h-4 text-[var(--fa-ink-3)]') Blatt als PDF laden
                     </a>
+                    <a role="menuitem" href="{{ route('foodalchemist.etiketten.index', ['quelle' => 'gp', 'id' => $gp->id]) }}" target="_blank" x-on:click="offen = false" class="{{ $menuePunkt }}" data-gp-etikett>
+                        @svg('heroicon-o-tag', 'w-4 h-4 text-[var(--fa-ink-3)]') Anbruch-Etikett drucken
+                    </a>
                 </div>
             </div>
         @endif
