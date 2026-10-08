@@ -44,7 +44,11 @@ it('mit gewähltem Betrieb folgt der Basissatz dem Betriebs-Override', function 
 
 it('fremder Betrieb wird ignoriert → Team-Basissatz', function () {
     $fremd = FoodAlchemistOutlet::create(['team_id' => $this->childB->id, 'name' => 'Fremd']);
+    // Testaufbau für ein FREMDES Team als Systemschritt (ohne Benutzer) — seit Spec 77a prüft der Service die Admin-Rolle
+    $wer = auth()->user();
+    auth()->logout();
     app(OutletSettingsService::class)->update($this->childB, $fremd, ['target_food_cost_pct' => 20]);
+    $this->actingAs($wer);
 
     $c = Livewire::test(Aufschlagsklassen::class)->set('outletId', $fremd->id);
     expect((float) $c->viewData('base')['factor'])->toBe(4.0)

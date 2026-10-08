@@ -28,7 +28,7 @@ beforeEach(function () {
     // Der Befehl loggt einen Team-Nutzer ein (D1-Gate) und liest ihn über die Mitglieder-
     // Tabelle. makeUser setzt nur current_team_id — die Mitgliedschaft muss dazu.
     $nutzer = $this->makeUser($this->rootTeam, 'Root User');
-    $this->rootTeam->users()->attach($nutzer->id, ['role' => 'owner']);
+    $this->rootTeam->users()->syncWithoutDetaching([$nutzer->id => ['role' => 'owner']]);   // makeUser legt Mitgliedschaft schon an (Spec 77a)
     $this->svc = app(RecipeService::class);
     $this->g = FoodAlchemistVocabEinheit::firstOrCreate(['team_id' => $this->rootTeam->id, 'slug' => 'g'],
         ['display_de' => 'Gramm', 'dimension' => 'mass', 'default_in_g' => 1]);
