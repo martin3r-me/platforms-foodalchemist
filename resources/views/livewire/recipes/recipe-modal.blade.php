@@ -150,6 +150,20 @@
         <x-fa::notice tone="crit" data-modal-fehler>{{ $fehler }}</x-fa::notice>
     @endif
 
+    {{-- Spec 77d: Rezept des Oberteams = hier nur lesend; anpassen über eine eigene Kopie. Kopie meldet geändertes Original. --}}
+    @if($herkunft !== null)
+        @if($herkunft['fremd'])
+            <x-fa::notice tone="info" data-rezept-fremd>
+                Dieses Rezept gehört {{ $herkunft['besitzer'] ?? 'einem anderen Team' }} und ist hier nur lesbar. Zum Anpassen eine eigene Kopie anlegen.
+                <x-slot:actions>
+                    <x-fa::button size="sm" icon="heroicon-m-document-duplicate" wire:click="eigeneKopieAnlegen" data-rezept-eigene-kopie>Eigene Kopie</x-fa::button>
+                </x-slot:actions>
+            </x-fa::notice>
+        @elseif($herkunft['original_geaendert'])
+            <x-fa::notice tone="warn" data-rezept-original-geaendert>Das Original dieser Kopie wurde seit dem Kopieren geändert.</x-fa::notice>
+        @endif
+    @endif
+
     {{-- Älterer Anreicherungslauf (falls noch offen); der Knopf nutzt inzwischen den Einzel-Lauf darunter. --}}
     @if($bulkRun !== null)
         <div @if($bulkRun->status === 'running') wire:poll.2s @endif data-anreichern-status>
