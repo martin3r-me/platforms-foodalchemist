@@ -9,6 +9,8 @@
     $logo = is_file($logoPfad) ? 'data:image/png;base64,' . base64_encode((string) file_get_contents($logoPfad)) : null;
     $zahl = fn ($v) => $v === null ? '' : (rtrim(rtrim(number_format((float) $v, 3, ',', '.'), '0'), ',') ?: '0');
     $gebucht = $inventur->istGebucht();
+    $zeilen ??= $inventur->lines;
+    $mitGebinde = $zeilen->contains(fn ($l) => $l->hatGebinde());
 @endphp
 <!DOCTYPE html>
 <html lang="de">
@@ -48,29 +50,52 @@
     @endunless
     @if($logo)<img src="{{ $logo }}" alt="" style="height: 0.8cm; float: right;">@endif
     <div class="kicker">Inventur · {{ $gebucht ? 'gebucht' : 'Zählliste' }}</div>
-    <h1>{{ $inventur->location?->name ?? 'Lager' }} · Stichtag {{ $inventur->count_date->format('d.m.Y') }}</h1>
+    <h1>{{ $inventur->location?->name ?? 'Lager' }}@if(! empty($platzName)) · {{ $platzName }}@endif · Stichtag {{ $inventur->count_date->format('d.m.Y') }}</h1>
     <div class="rule"></div>
-    <p class="muted">{{ $summen['positionen'] }} Positionen · Mengen in kg, l oder Stück · erstellt {{ $erstelltAm }}@if($inventur->note) · {{ $inventur->note }}@endif</p>
+    <p class="muted">{{ $zeilen->count() }} Positionen · Gebinde zählen oder Menge in kg, l bzw. Stück · erstellt {{ $erstelltAm }}@if($inventur->note) · {{ $inventur->note }}@endif</p>
 
     <table>
         <thead>
             <tr>
                 <th style="width: 5%">#</th>
                 <th>Grundprodukt</th>
-                <th style="width: 9%">Einheit</th>
-                <th class="r" style="width: 14%">Soll</th>
-                <th class="r" style="width: 18%">Gezählt</th>
-                <th style="width: 22%">Notiz</th>
+                <th style="width: 7%">Maß</th>
+                <th class="r" style="width: 10%">Soll</th>
+                @if($mitGebinde)
+                    <th class="r" style="width: 11%">Karton</th>
+                    <th class="r" style="width: 11%">Einzeln</th>
+                    <th class="r" style="width: 11%">lose</th>
+                @else
+                    <th class="r" style="width: 18%">Gezählt</th>
+                @endif
+                <th style="width: 16%">Notiz</th>
             </tr>
         </thead>
         <tbody>
-            @foreach($inventur->lines as $i => $l)
+            @php $letzterPlatz = false; $spalten = $mitGebinde ? 8 : 6; @endphp
+            @foreach($zeilen as $i => $l)
+                @if($l->storage_bin_id !== $letzterPlatz)
+                    @php $letzterPlatz = $l->storage_bin_id; @endphp
+                    <tr><td colspan="{{ $spalten }}" style="background: {{ $c['soft'] }}; font-weight: bold;">{{ $l->bin?->name ?? 'Ohne Stellplatz' }}</td></tr>
+                @endif
                 <tr>
                     <td class="muted">{{ $i + 1 }}</td>
-                    <td>{{ $l->gp?->name ?? $l->supplierItem?->designation ?? '—' }}</td>
+                    <td>{{ $l->gp?->name ?? $l->supplierItem?->designation ?? '—' }}
+                        @if($l->hatGebinde())<br><span class="muted" style="font-size: 8.5px;">@if($l->pack_units)1 {{ $l->pack_label }} = {{ $zahl($l->pack_units) }} {{ $l->unit_label }} · @endif 1 {{ $l->unit_label }} = {{ $zahl($svc->anzeigeMenge((float) $l->unit_base, $l->base_unit)) }} {{ $svc->anzeigeEinheit($l->base_unit) }}</span>@endif
+                    </td>
                     <td>{{ $svc->anzeigeEinheit($l->base_unit) }}</td>
                     <td class="r muted">{{ $zahl($svc->anzeigeMenge((float) $l->qty_expected, $l->base_unit)) }}</td>
-                    <td class="r feld">{{ $zahl($svc->anzeigeMenge($l->qty_counted !== null ? (float) $l->qty_counted : null, $l->base_unit)) }}</td>
+                    @if($mitGebinde)
+                        @if($l->hatGebinde())
+                            <td class="r feld">@if($l->pack_units){{ $zahl($l->counted_packs) }}@else<span class="muted">—</span>@endif</td>
+                            <td class="r feld">{{ $zahl($l->counted_units) }}</td>
+                        @else
+                            <td class="r"><span class="muted">—</span></td><td class="r"><span class="muted">—</span></td>
+                        @endif
+                        <td class="r feld">{{ $l->hatGebinde() && ($l->counted_packs !== null || $l->counted_units !== null) ? $zahl($l->counted_loose) : $zahl($svc->anzeigeMenge($l->qty_counted !== null ? (float) $l->qty_counted : null, $l->base_unit)) }}</td>
+                    @else
+                        <td class="r feld">{{ $zahl($svc->anzeigeMenge($l->qty_counted !== null ? (float) $l->qty_counted : null, $l->base_unit)) }}</td>
+                    @endif
                     <td></td>
                 </tr>
             @endforeach

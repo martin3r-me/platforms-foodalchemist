@@ -21,7 +21,9 @@ class InventoryGetTool extends FoodAlchemistTool implements ToolContract, ToolMe
         return 'Liest das Lager des Teams (periodisch: Bestand entsteht aus Wareneingang + Inventur). '
             . 'Liefert den Bestand je Grundprodukt und Lagerort mit Menge (kg/l/Stk) und Wert zum aktuellen EK. '
             . 'Optional: bewegungen=true (letzte Zu-/Abgänge, Filter quelle=wareneingang|inventur|…) und '
-            . 'stichtag=YYYY-MM-DD (Bestandswert aus der jüngsten gebuchten Inventur je Lagerort).';
+            . 'stichtag=YYYY-MM-DD (Bestandswert aus der jüngsten gebuchten Inventur je Lagerort). Filter: stellplatz (bin_id | "ohne"), '
+            . 'zustand (frisch|TK|trocken|konserviert), warengruppe (Code 01–15), lieferant (supplier_id), ohne_preis, '
+            . 'ladenhueter (seit 90 Tagen keine Bewegung).';
     }
 
     public function getSchema(): array
@@ -31,6 +33,12 @@ class InventoryGetTool extends FoodAlchemistTool implements ToolContract, ToolMe
             'properties' => [
                 'location_id' => ['type' => 'integer', 'description' => 'Nur dieser Lagerort.'],
                 'suche' => ['type' => 'string', 'description' => 'Namensfilter (Teilstring).'],
+                'stellplatz' => ['type' => 'string'],
+                'zustand' => ['type' => 'string'],
+                'warengruppe' => ['type' => 'string'],
+                'lieferant' => ['type' => 'integer'],
+                'ohne_preis' => ['type' => 'boolean'],
+                'ladenhueter' => ['type' => 'boolean'],
                 'bewegungen' => ['type' => 'boolean', 'description' => 'Letzte Lagerbewegungen mitliefern.'],
                 'quelle' => ['type' => 'string', 'description' => 'Filter für Bewegungen nach Quelle.'],
                 'stichtag' => ['type' => 'string', 'description' => 'Bestandswert zu diesem Datum (YYYY-MM-DD).'],
@@ -46,7 +54,10 @@ class InventoryGetTool extends FoodAlchemistTool implements ToolContract, ToolMe
             return ToolResult::error('Kein Team im Kontext.', 'NO_TEAM');
         }
         $svc = app(InventurService::class);
-        $rows = $svc->bestand($team, isset($arguments['location_id']) ? (int) $arguments['location_id'] : null, trim((string) ($arguments['suche'] ?? '')));
+        $rows = $svc->filterBestand(
+            $svc->bestand($team, isset($arguments['location_id']) ? (int) $arguments['location_id'] : null),
+            array_intersect_key($arguments, array_flip(['suche', 'stellplatz', 'zustand', 'warengruppe', 'lieferant', 'ohne_preis', 'ladenhueter'])),
+        );
         $limit = max(1, min(1000, (int) ($arguments['limit'] ?? 200)));
         $out = [
             'bestand' => array_slice($rows, 0, $limit),
