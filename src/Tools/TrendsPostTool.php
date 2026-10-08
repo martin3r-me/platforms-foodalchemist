@@ -24,7 +24,7 @@ class TrendsPostTool extends FoodAlchemistTool implements ToolContract, ToolMeta
         return 'Legt einen Trend im Trendradar an (Status „gesichtet", braucht Kuratieren). Einzelne Beobachtungen ohne '
             .'Einordnung gehören als Fundstück in die Pinnwand (foodalchemist.fundstuecke.POST). Einordnung nach Sarah Spork optional: typ (trend = Tiefe, '
             .'Bedürfnis, Dauer | hype = Oberfläche, medial, kurzlebig), ebene (mode < konsum < mega < meta), kategorie '
-            .'(food|getraenke|deko|event). beleg = erste Quelle (quelle, titel, url, notiz, fundort, beobachtet_am, anteil), '
+            .'(food|getraenke|deko|format), sparten (event_bankett|betriebsgastronomie|care|bildung|restaurant_hotel|delivery; leer = alle). beleg = erste Quelle (quelle, titel, url, notiz, fundort, beobachtet_am, anteil), '
             .'datei = Screenshot/Foto/PDF als base64 oder url. Gibt es den Namen schon, kommt ein Fehler mit der ID — dann '
             .'foodalchemist.trend_belege.POST nutzen. Vokabular: foodalchemist.trends.GET mit vokabular=true.';
     }
@@ -44,6 +44,7 @@ class TrendsPostTool extends FoodAlchemistTool implements ToolContract, ToolMeta
                 'status' => ['type' => 'string', 'enum' => array_keys(V::STATUS), 'description' => 'Standard gesichtet; auf_radar nur mit Einordnung und bestätigender Quelle.'],
                 'suchbegriffe' => ['type' => 'array', 'items' => ['type' => 'string'], 'description' => 'Google-Trends-Begriffe (max. 3 werden gemessen).'],
                 'hashtags' => ['type' => 'array', 'items' => ['type' => 'string']],
+                'sparten' => ['type' => 'array', 'items' => ['type' => 'string', 'enum' => array_keys(V::SPARTEN)], 'description' => 'Für wen relevant (Mehrfachauswahl); leer = alle Sparten.'],
                 'historische_einordnung' => ['type' => 'string'],
                 'gartner_phase' => ['type' => 'string', 'enum' => array_keys(V::GARTNER_PHASEN)],
                 'einordnung_quelle' => ['type' => 'string', 'enum' => ['manuell', 'ki'], 'description' => 'ki, wenn ein Modell eingeordnet hat.'],

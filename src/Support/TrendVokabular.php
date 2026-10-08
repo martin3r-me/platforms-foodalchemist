@@ -14,7 +14,18 @@ final class TrendVokabular
     /** Trendhierarchie nach Imbeck (Kap. 2.2), innen → außen. */
     public const EBENEN = ['mode' => 'Mode', 'konsum' => 'Konsum-/Branchentrend', 'mega' => 'Megatrend', 'meta' => 'Metatrend'];
 
-    public const KATEGORIEN = ['food' => 'Food', 'getraenke' => 'Getränke', 'deko' => 'Deko', 'event' => 'Veranstaltungskonzepte'];
+    /** Kategorie = WAS ist der Trend (eine Auswahl, trägt die Radar-Sektoren). „format" hieß bis 08.10. „event". */
+    public const KATEGORIEN = ['food' => 'Food', 'getraenke' => 'Getränke', 'deko' => 'Ambiente & Deko', 'format' => 'Service & Format'];
+
+    /** Sparten = FÜR WEN ist der Trend relevant (Mehrfachauswahl, Filter). Leer = alle Sparten. Dominique 2026-10-08. */
+    public const SPARTEN = [
+        'event_bankett' => 'Event & Bankett',
+        'betriebsgastronomie' => 'Betriebsgastronomie',
+        'care' => 'Care & Gesundheit',
+        'bildung' => 'Bildung (Kita, Schule, Mensa)',
+        'restaurant_hotel' => 'Restaurant & Hotel',
+        'delivery' => 'Delivery & To-go',
+    ];
 
     /** Imbecks vier Food-Cluster (Kap. 4.1). */
     public const FOOD_CLUSTER = [

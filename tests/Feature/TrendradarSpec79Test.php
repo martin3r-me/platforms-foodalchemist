@@ -407,15 +407,17 @@ it('UI: Lesen sieht keinen Einordnen-Knopf; Kuratieren ordnet ein und setzt aufs
     expect($t->refresh()->food_cluster)->toBe('genuss_gesundheit');
 });
 
-it('Startbestand: Sarahs 28 Trends, Social-only bleibt geprüft, zweiter Lauf legt nichts doppelt an', function () {
+it('Startbestand: Sarahs 27 Trends (ohne 4-Tage-Woche), Social-only bleibt geprüft, zweiter Lauf legt nichts doppelt an', function () {
     $this->artisan('foodalchemist:trends-startbestand', ['--team' => $this->rootTeam->id])->assertExitCode(0);
-    expect(FoodAlchemistTrend::where('team_id', $this->rootTeam->id)->count())->toBe(28)
+    expect(FoodAlchemistTrend::where('team_id', $this->rootTeam->id)->count())->toBe(27)
+        ->and(FoodAlchemistTrend::where('name', 'Kurkuma-Tonic')->exists())->toBeTrue()
+        ->and(FoodAlchemistTrend::where('kategorie', 'format')->count())->toBe(4)
         ->and(FoodAlchemistTrend::where('slug', 'bubble-tea')->value('status'))->toBe('geprueft')
         ->and(FoodAlchemistTrend::where('slug', 'vegane-ernaehrung')->value('status'))->toBe('auf_radar')
         ->and(FoodAlchemistTrend::where('slug', 'vegane-ernaehrung')->value('befragung_bestaetigt'))->toBeTrue();
 
     $this->artisan('foodalchemist:trends-startbestand', ['--team' => $this->rootTeam->id])->assertExitCode(0);
-    expect(FoodAlchemistTrend::where('team_id', $this->rootTeam->id)->count())->toBe(28);
+    expect(FoodAlchemistTrend::where('team_id', $this->rootTeam->id)->count())->toBe(27);
 });
 
 // ── Planung aus dem Trendradar ────────────────────────────────────────────
@@ -526,4 +528,31 @@ it('Rückbau-Migration: alte Trend-Dossiers inaktiv, trend-Routing gelöscht, Cl
         ->and(\Illuminate\Support\Facades\Schema::hasTable('foodalchemist_trend_meta'))->toBeFalse()
         ->and(\Illuminate\Support\Facades\Schema::hasTable('foodalchemist_trend_taxonomy'))->toBeFalse()
         ->and(app(\Platform\Core\Tools\ToolRegistry::class)->has('foodalchemist.trendradar.IMPORT'))->toBeFalse();
+});
+
+it('Sparten (Nachtrag 08.10.): Mehrfachauswahl, geprüft; Filter zeigt passende + spartenlose Trends; UI + MCP', function () {
+    $kita = $this->svc->anlegen($this->rootTeam, ['name' => 'Kita-Snack', 'kategorie' => 'food', 'sparten' => ['bildung']]);
+    $event = $this->svc->anlegen($this->rootTeam, ['name' => 'Live-Cooking-Station', 'kategorie' => 'format', 'sparten' => ['event_bankett', 'restaurant_hotel']]);
+    $alle = $this->svc->anlegen($this->rootTeam, ['name' => 'Vegane Ernährung', 'kategorie' => 'food']);
+    expect(fn () => $this->svc->anlegen($this->rootTeam, ['name' => 'X', 'sparten' => ['raumfahrt']]))->toThrow(\RuntimeException::class, 'Sparte')
+        ->and(fn () => $this->svc->anlegen($this->rootTeam, ['name' => 'Y', 'kategorie' => 'event']))->toThrow(\RuntimeException::class, 'Kategorie');
+
+    $namen = fn (array $f) => $this->svc->liste($this->rootTeam, $f)->pluck('name')->sort()->values()->all();
+    expect($namen(['sparte' => ['bildung']]))->toBe(['Kita-Snack', 'Vegane Ernährung'])
+        ->and($namen(['sparte' => ['restaurant_hotel', 'bildung']]))->toBe(['Kita-Snack', 'Live-Cooking-Station', 'Vegane Ernährung'])
+        ->and($namen([]))->toHaveCount(3);
+
+    $this->svc->aendern($this->rootTeam, $kita->id, ['sparten' => []]);
+    expect($kita->refresh()->sparten)->toBeNull();
+    expect($this->svc->alsArray($event->refresh())['sparten_labels'])->toBe(['Event & Bankett', 'Restaurant & Hotel'])
+        ->and(\Platform\FoodAlchemist\Services\TrendService::SEKTOREN)->toHaveKey('format');
+
+    // Oberfläche: Filter „Sparte" + Feld im Einordnen; Badge an der Liste; Speichern übernimmt Sparten
+    $lw = \Livewire\Livewire::test(TrendradarIndex::class)->set('ansicht', 'liste')
+        ->assertSeeHtml('data-trend-sparten-filter')
+        ->set('sparten', ['bildung'])->assertSee('Vegane Ernährung')->assertDontSee('Live-Cooking-Station')
+        ->set('sparten', [])->assertSeeHtml('data-trend-sparte="event_bankett"');
+    $lw->call('select', $alle->id)->call('einordnenStarten')->assertSeeHtml('data-trend-sparten-edit')
+        ->set('einordnung.sparten', ['care', 'bildung'])->call('einordnungSpeichern')->assertSet('fehler', null);
+    expect($alle->refresh()->sparten)->toBe(['care', 'bildung']);
 });

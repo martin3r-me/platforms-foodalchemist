@@ -37,6 +37,7 @@
                 </div>
 
                 <x-fa::choice name="kategorien" label="Kategorie" idPrefix="tr" :multiple="true" :options="V::KATEGORIEN" />
+                <x-fa::choice name="sparten" label="Sparte" idPrefix="tr" :multiple="true" :options="V::SPARTEN" data-trend-sparten-filter />
                 <x-fa::choice name="typen" label="Trend oder Hype" idPrefix="tr" :multiple="true" :options="V::TYPEN" />
                 <x-fa::choice name="ebenen" label="Trendhierarchie" idPrefix="tr" :multiple="true" :options="V::EBENEN" />
 
@@ -52,7 +53,7 @@
                     <p class="font-medium text-[var(--fa-ink-2)]">Inspiration → Hype → Trend</p>
                     <p>Was du siehst (Instagram, Restaurant, Messe), legst du als Fundstück in die Pinnwand. Häufen sich Fundstücke zu einem Thema, wird daraus ein Hype oder Trend und kommt mit Belegen aufs Radar.</p>
                     <p class="pt-1 font-medium text-[var(--fa-ink-2)]">So liest man das Radar</p>
-                    <p>Innen kurzlebig (Mode), außen langfristig (Metatrend). Links Food, rechts Getränke, Deko und Veranstaltungen.</p>
+                    <p>Innen kurzlebig (Mode), außen langfristig (Metatrend). Links Food, rechts Getränke, Ambiente & Deko sowie Service & Format. Die Sparte (für wen) filtert links, Trends ohne Sparte gelten für alle.</p>
                     <p>Gefüllter Punkt = Trend, gestrichelter Kreis = Hype, Goldring = von der Mitarbeiterbefragung bestätigt. Je blasser, desto unsicherer die Belege.</p>
                 </div>
             </div>
@@ -102,13 +103,13 @@
                         <circle cx="{{ $cx }}" cy="{{ $cy }}" r="{{ $ringe[$eb][1] * $maxR + 6 }}" class="tr-ring" />
                         <text x="{{ $cx + 6 }}" y="{{ $cy - ($ringe[$eb][1] * $maxR + 6) + 13 }}" class="tr-label">{{ V::EBENEN[$eb] }} · {{ $zaehler['je_ebene'][$eb] ?? 0 }}</text>
                     @endforeach
-                    {{-- Achse Food | Non-Food, Sektoren rechts (Getränke · Deko · Veranstaltungen) --}}
+                    {{-- Achse Food | Non-Food, Sektoren rechts (Getränke · Ambiente & Deko · Service & Format) --}}
                     <line x1="{{ $cx }}" y1="{{ $cy - $maxR * 1.04 }}" x2="{{ $cx }}" y2="{{ $cy + $maxR * 1.04 }}" class="tr-axis" />
                     @foreach([-29, 29] as $grad)
                         @php [$x2, $y2] = $punkt($grad, $maxR * 1.02); @endphp
                         <line x1="{{ $cx }}" y1="{{ $cy }}" x2="{{ $x2 }}" y2="{{ $y2 }}" class="tr-sector" />
                     @endforeach
-                    @foreach([[-59, 'Getränke'], [0, 'Deko'], [59, 'Veranstaltungen']] as [$grad, $txt])
+                    @foreach([[-59, 'Getränke'], [0, 'Ambiente'], [59, 'Service & Format']] as [$grad, $txt])
                         @php [$lx, $ly] = $punkt($grad, $maxR * 1.07); @endphp
                         <text x="{{ $lx }}" y="{{ $ly }}" class="tr-label" text-anchor="{{ $grad === 0 ? 'start' : 'start' }}">{{ $txt }}</text>
                     @endforeach
@@ -264,6 +265,7 @@
                                                 @if($t->typ)<x-fa::badge :tone="$t->typ === 'hype' ? 'warn' : 'accent'">{{ V::TYPEN[$t->typ] }}</x-fa::badge>@endif
                                                 @if($t->ebene)<x-fa::badge>{{ V::EBENEN[$t->ebene] }}</x-fa::badge>@endif
                                                 @if($t->kategorie)<x-fa::badge>{{ V::KATEGORIEN[$t->kategorie] }}</x-fa::badge>@endif
+                                                @foreach($t->sparten ?? [] as $sp)<x-fa::badge tone="info" data-trend-sparte="{{ $sp }}">{{ V::SPARTEN[$sp] ?? $sp }}</x-fa::badge>@endforeach
                                             </span>
                                         @else
                                             <span class="text-[var(--fa-ink-3)]">noch nicht eingeordnet</span>
@@ -345,11 +347,12 @@
                                 <x-fa::field label="Kategorie" for="te-kat"><x-fa::select id="te-kat" wire:model.live="einordnung.kategorie" placeholder="–" :options="V::KATEGORIEN" /></x-fa::field>
                                 @if(($einordnung['kategorie'] ?? '') === 'food')
                                     <x-fa::field label="Food-Cluster" for="te-cluster" optional><x-fa::select id="te-cluster" wire:model="einordnung.food_cluster" placeholder="–" :options="V::FOOD_CLUSTER" /></x-fa::field>
-                                @elseif(($einordnung['kategorie'] ?? '') === 'event')
+                                @elseif(($einordnung['kategorie'] ?? '') === 'format')
                                     <x-fa::field label="Sicht" for="te-sicht" optional><x-fa::select id="te-sicht" wire:model="einordnung.sicht" placeholder="–" :options="V::SICHTEN" /></x-fa::field>
                                 @else
                                     <div></div>
                                 @endif
+                                <x-fa::choice name="einordnung.sparten" label="Sparten (für wen; leer = alle)" idPrefix="te" :multiple="true" :live="false" :options="V::SPARTEN" class="col-span-2" data-trend-sparten-edit />
                                 <x-fa::field label="Konfidenz von Hand" for="te-konf" optional hint="Leer = aus den Belegen berechnet."><x-fa::select id="te-konf" wire:model="einordnung.konfidenz_manuell" placeholder="aus Belegen" :options="V::KONFIDENZ" /></x-fa::field>
                                 <x-fa::field label="Gartner-Phase" for="te-gartner" optional hint="Nur bei Technik-Trends."><x-fa::select id="te-gartner" wire:model="einordnung.gartner_phase" placeholder="–" :options="V::GARTNER_PHASEN" /></x-fa::field>
                                 <x-fa::field label="Google-Trends-Suchbegriffe" for="te-such" optional hint="Kommagetrennt, höchstens 3 werden gemessen." class="col-span-2"><x-fa::input id="te-such" wire:model="einordnung.suchbegriffe" placeholder="z. B. dubai schokolade" /></x-fa::field>

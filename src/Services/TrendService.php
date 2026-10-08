@@ -46,6 +46,16 @@ class TrendService
                 $q->whereIn($feld, $werte);
             }
         }
+        // Sparten: Trend gilt für eine der gewählten Sparten ODER für alle (keine Sparte gesetzt)
+        $sparten = array_values(array_filter((array) ($filter['sparte'] ?? []), fn ($w) => $w !== '' && $w !== null));
+        if ($sparten !== []) {
+            $q->where(function ($w) use ($sparten) {
+                $w->whereNull('sparten')->orWhereJsonLength('sparten', 0);
+                foreach ($sparten as $sp) {
+                    $w->orWhereJsonContains('sparten', $sp);
+                }
+            });
+        }
         if (! empty($filter['nur_befragung'])) {
             $q->where('befragung_bestaetigt', true);
         }
@@ -71,6 +81,7 @@ class TrendService
             'typ' => $t->typ, 'typ_label' => V::label(V::TYPEN, $t->typ),
             'ebene' => $t->ebene, 'ebene_label' => V::label(V::EBENEN, $t->ebene),
             'kategorie' => $t->kategorie, 'kategorie_label' => V::label(V::KATEGORIEN, $t->kategorie),
+            'sparten' => $t->sparten ?? [], 'sparten_labels' => array_values(array_map(fn ($s) => V::label(V::SPARTEN, $s), $t->sparten ?? [])),
             'food_cluster' => $t->food_cluster,
             'sicht' => $t->sicht,
             'status' => $t->status, 'status_label' => V::label(V::STATUS, $t->status),
@@ -139,6 +150,7 @@ class TrendService
                 'definition' => $this->text($daten['definition'] ?? null),
                 'suchbegriffe' => $this->liste_($daten['suchbegriffe'] ?? null),
                 'hashtags' => $this->liste_($daten['hashtags'] ?? null, true),
+                'sparten' => $this->sparten($daten['sparten'] ?? null),
                 'historische_einordnung' => $this->text($daten['historische_einordnung'] ?? null),
                 'status' => 'gesichtet',
                 'einordnung_quelle' => $this->hatEinordnung($felder) ? (string) ($daten['einordnung_quelle'] ?? 'manuell') : null,
@@ -191,6 +203,9 @@ class TrendService
             if (array_key_exists($feld, $daten)) {
                 $update[$feld] = $this->liste_($daten[$feld], $hash);
             }
+        }
+        if (array_key_exists('sparten', $daten)) {
+            $update['sparten'] = $this->sparten($daten['sparten']);
         }
         if (array_key_exists('konfidenz_manuell', $daten)) {
             $wert = $daten['konfidenz_manuell'];
@@ -519,7 +534,7 @@ class TrendService
     public const RINGE = ['mode' => [0.12, 0.32], 'konsum' => [0.35, 0.57], 'mega' => [0.60, 0.82], 'meta' => [0.85, 0.97]];
 
     /** Winkelbereich je Kategorie in Grad (0° = rechts, gegen den Uhrzeigersinn). */
-    public const SEKTOREN = ['food' => [92, 268], 'getraenke' => [-88, -30], 'deko' => [-28, 28], 'event' => [30, 88]];
+    public const SEKTOREN = ['food' => [92, 268], 'getraenke' => [-88, -30], 'deko' => [-28, 28], 'format' => [30, 88]];
 
     private function hash01(string $s): float
     {
@@ -619,6 +634,18 @@ class TrendService
         }
 
         return $out;
+    }
+
+    /** Sparten prüfen (Liste oder Komma-Text); leer → null = für alle Sparten. @return list<string>|null */
+    private function sparten(mixed $wert): ?array
+    {
+        $liste = is_array($wert) ? $wert : array_map('trim', explode(',', (string) $wert));
+        $liste = array_values(array_unique(array_filter(array_map('strval', $liste), fn ($s) => $s !== '')));
+        foreach ($liste as $s) {
+            $this->enum($s, V::SPARTEN, 'Sparte');
+        }
+
+        return $liste === [] ? null : $liste;
     }
 
     private function hatEinordnung(array $felder): bool
