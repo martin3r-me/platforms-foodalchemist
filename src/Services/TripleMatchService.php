@@ -193,11 +193,17 @@ class TripleMatchService
 
         $out = [];
         foreach ($rows->groupBy('order_line_id') as $olId => $grp) {
-            $menge = (float) $grp->sum(fn ($r) => (float) $r->qty_packs);
-            $wert = (float) $grp->sum(fn ($r) => (float) $r->qty_packs * (float) $r->pack_price);
+            // Nur Positionen mit Menge bzw. Preis zählen — eine reine Preis- oder Mengenangabe (Editor) bleibt sonst null.
+            $mitMenge = $grp->filter(fn ($r) => $r->qty_packs !== null);
+            $mitPreis = $grp->filter(fn ($r) => $r->pack_price !== null);
+            $menge = (float) $mitMenge->sum(fn ($r) => (float) $r->qty_packs);
+            $gewichtet = $grp->filter(fn ($r) => $r->qty_packs !== null && $r->pack_price !== null);
+            $basis = (float) $gewichtet->sum(fn ($r) => (float) $r->qty_packs);
             $out[(int) $olId] = [
-                'menge' => round($menge, 2),
-                'preis' => $menge > 0 ? round($wert / $menge, 4) : ($grp->first()->pack_price !== null ? round((float) $grp->first()->pack_price, 4) : null),
+                'menge' => $mitMenge->isNotEmpty() ? round($menge, 2) : null,
+                'preis' => $mitPreis->isEmpty() ? null : (abs($basis) > 0.0001
+                    ? round((float) $gewichtet->sum(fn ($r) => (float) $r->qty_packs * (float) $r->pack_price) / $basis, 4)
+                    : round((float) $mitPreis->last()->pack_price, 4)),
                 'nummern' => $grp->pluck('invoice.invoice_number')->filter()->unique()->values()->all(),
             ];
         }

@@ -225,6 +225,11 @@ vollständiges Lager zu führen:
   Bestellung. Bezahlt setzt den Zahlungsstatus der Bestellungen. Reiter *Abgleich* — bestellt · geliefert · berechnet je
   Bestellzeile, schwerste und teuerste Fälle zuerst, Reklamation direkt aus dem Befund. MCP:
   `supplier_invoices.GET/POST/PUT/APPROVE/PAY/STORNO`, `triple_match.GET/PUT`.
+- **Eine Datenquelle (Spec 75c):** Wareneingang und Rechnungsprüfung im Bestell-Editor (und die alten MCP-Wege)
+  legen intern einen Editor-Lieferschein bzw. eine Editor-Rechnung an; die Bestellzeile ist immer die Summe ihrer
+  Belege. Editor-Rechnungen eines Mitglieds sind „in Prüfung" und werden im Wareneingang freigegeben. Die Freigabe-Box
+  der Bestellung ist eine Übergabe: Mitglied fragt an, Freigeben gibt frei (Entwurf: und sendet) oder lehnt ab. Alte
+  Bestellungen übernimmt `foodalchemist:wareneingang-altbestand --apply` als Altbestand-Belege.
 - **Zugriffsrechte (Spec 61, Basis):** Die Rolle kommt aus den Team-Einstellungen der Plattform: Inhaber/Admin = alles,
   Mitglied = Lieferscheine buchen und Rechnungen erfassen, Betrachter = lesen. Rechnungen freigeben und als bezahlt markieren
   dürfen Inhaber/Admins und Mitglieder mit dem Häkchen „darf Rechnungen freigeben" (Einstellungen → Zugriffsrechte).

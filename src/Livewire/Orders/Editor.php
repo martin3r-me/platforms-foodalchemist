@@ -478,6 +478,41 @@ class Editor extends Component
         ], Auth::id()), 'Freigabe gespeichert.');
     }
 
+    /** Spec 75c: Freigabe-Box als Übergabe — Kuratieren fragt an, Freigeben gibt frei (und sendet) oder lehnt ab. */
+    public function freigabeAnfragen(OrderService $orders): void
+    {
+        if ($this->orderId === null) {
+            return;
+        }
+        $this->fuehreAus(fn ($team) => $orders->updateApproval($team, $this->orderId, [
+            'approval_status' => 'requested', 'approval_note' => $this->formApprovalNote,
+        ], Auth::id()), 'Freigabe angefragt.');
+    }
+
+    public function freigebenUndSenden(OrderService $orders): void
+    {
+        if ($this->orderId === null) {
+            return;
+        }
+        $this->fuehreAus(function ($team) use ($orders) {
+            $orders->updateApproval($team, $this->orderId, ['approval_status' => 'approved', 'approval_note' => $this->formApprovalNote], Auth::id());
+            $order = \Platform\FoodAlchemist\Models\FoodAlchemistOrder::findOrFail($this->orderId);
+            if ($order->status === OrderStatus::Draft) {
+                $orders->setStatus($team, $this->orderId, OrderStatus::Sent);
+            }
+        }, 'Freigegeben.');
+    }
+
+    public function freigabeAblehnen(OrderService $orders): void
+    {
+        if ($this->orderId === null) {
+            return;
+        }
+        $this->fuehreAus(fn ($team) => $orders->updateApproval($team, $this->orderId, [
+            'approval_status' => 'rejected', 'approval_note' => $this->formApprovalNote,
+        ], Auth::id()), 'Freigabe abgelehnt.');
+    }
+
     public function updateLineQty(int $lineId, $qty, OrderService $orders): void
     {
         $this->fuehreAus(fn ($team) => $orders->updateLine($team, $lineId, ['qty_packs' => $qty]), 'Menge angepasst.');
@@ -521,7 +556,8 @@ class Editor extends Component
 
     public function updateInvoiceLine(int $lineId, $qty, $price, ?string $note, OrderService $orders): void
     {
-        $this->fuehreAus(fn ($team) => $orders->updateInvoiceLine($team, $lineId, $qty, $price, $note), 'Rechnungszeile geprüft.');
+        $this->fuehreAus(fn ($team) => $orders->updateInvoiceLine($team, $lineId, $qty, $price, $note), $this->darfFreigeben()
+            ? 'Rechnungszeile geprüft.' : 'Rechnungszeile erfasst — freigegeben wird sie unter Wareneingang → Rechnungen.');
     }
 
     public function updateInvoiceNote(int $lineId, ?string $note, OrderService $orders): void
@@ -564,7 +600,8 @@ class Editor extends Component
         if ($this->orderId === null) {
             return;
         }
-        $this->fuehreAus(fn ($team) => $orders->completeInvoiceFromReceipt($team, $this->orderId), 'Rechnung aus Wareneingang übernommen.');
+        $this->fuehreAus(fn ($team) => $orders->completeInvoiceFromReceipt($team, $this->orderId), $this->darfFreigeben()
+            ? 'Rechnung aus Wareneingang übernommen.' : 'Rechnung erfasst — freigegeben wird sie unter Wareneingang → Rechnungen.');
     }
 
     public function removeLine(int $lineId, OrderService $orders): void
@@ -1182,6 +1219,14 @@ class Editor extends Component
         }
     }
 
+    /** Spec 75c: Rechnungsprüfung im Editor ist sofort freigegeben nur mit Recht „Freigeben". */
+    private function darfFreigeben(): bool
+    {
+        $team = Auth::user()?->currentTeamRelation;
+
+        return $team !== null && app(\Platform\FoodAlchemist\Services\FaRechte::class)->darf(Auth::user(), $team, \Platform\FoodAlchemist\Enums\FaRolle::Freigeben);
+    }
+
     public function render(OrderService $orders)
     {
         $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
@@ -1327,6 +1372,7 @@ class Editor extends Component
             : [];
 
         return view('foodalchemist::livewire.orders.editor', [
+            'darfFreigeben' => $this->darfFreigeben(),   // Spec 75c: Freigabe-Box
             'rundenDerBestellung' => $rundenDerBestellung,
             'sperr' => $this->sperrZustand(),   // Spec 65
             'vorlagen' => \Platform\FoodAlchemist\Models\FoodAlchemistOrderTemplate::where('team_id', $team->id)->orderBy('name')->pluck('name', 'id'),

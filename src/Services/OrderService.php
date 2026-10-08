@@ -1957,6 +1957,13 @@ class OrderService
             if ($approvalStatus !== '' && ! in_array($approvalStatus, ['requested', 'approved', 'rejected'], true)) {
                 throw new \RuntimeException('Unbekannter Freigabestatus. Erlaubt: requested, approved, rejected.');
             }
+            // Spec 75c / 61: freigeben und ablehnen nur mit Recht „Freigeben", anfragen ab Kuratieren.
+            // Ohne Benutzer (System, Bestellrunde) keine Prüfung.
+            if ($userId !== null) {
+                in_array($approvalStatus, ['approved', 'rejected'], true)
+                    ? app(FaRechte::class)->pruefeId($userId, $team, \Platform\FoodAlchemist\Enums\FaRolle::Freigeben, 'Bestellung freigeben oder ablehnen')
+                    : app(FaRechte::class)->pruefeId($userId, $team, \Platform\FoodAlchemist\Enums\FaRolle::Kuratieren, 'Freigabe anfragen');
+            }
             $order->approval_status = $approvalStatus !== '' ? $approvalStatus : null;
             if ($approvalStatus === 'requested') {
                 $order->approval_requested_at ??= now();
@@ -2780,7 +2787,20 @@ class OrderService
      * Bucht die tatsächlich gelieferte Gebinde-Menge einer Bestellzeile. Der Lagerzugang
      * wird idempotent als Delta gegen die bisherige Wareneingangsbuchung gespiegelt.
      */
+    /**
+     * Spec 75c: Wareneingang je Zeile setzen (Bestell-Editor, MCP). Läuft über einen Editor-Lieferschein
+     * (`WareneingangService::kurzwegMenge`), damit die Bestellzeile immer die Summe ihrer Lieferscheine ist.
+     */
     public function updateReceiptLine(Team $team, int $lineId, int|float|string|null $receivedQtyPacks, ?string $note = null): FoodAlchemistOrderLine
+    {
+        return app(WareneingangService::class)->kurzwegMenge($team, $lineId, $receivedQtyPacks, $note);
+    }
+
+    /**
+     * Spec 75c: Ableitung Beleg → Bestellzeile. NUR für WareneingangService (Lieferscheine buchen/stornieren,
+     * Kurzweg). Schreibt `received_qty_packs` und zieht Kontingent, Lager (idempotent je Zeile) und Journal nach.
+     */
+    public function schreibeWareneingangAbleitung(Team $team, int $lineId, int|float|string|null $receivedQtyPacks, ?string $note = null): FoodAlchemistOrderLine
     {
         $line = FoodAlchemistOrderLine::with('order')->findOrFail($lineId);
         $this->guardReceiptLine($team, $line);
@@ -2815,25 +2835,13 @@ class OrderService
         }
     }
 
-    /** Setzt alle Wareneingangs-Mengen einer Bestellung auf die bestellte Menge. */
+    /** Setzt alle Wareneingangs-Mengen einer Bestellung auf die bestellte Menge (Spec 75c: über den Editor-Lieferschein). */
     public function completeReceipt(Team $team, int $orderId): FoodAlchemistOrder
     {
-        $order = $this->ownedOrder($team, $orderId)->load('lines');
-        $status = $order->status instanceof OrderStatus ? $order->status : OrderStatus::from((string) $order->status);
-        if (! in_array($status, [OrderStatus::Sent, OrderStatus::Confirmed], true)) {
-            throw new \RuntimeException('Wareneingang ist nur für gesendete oder bestätigte Bestellungen möglich.');
-        }
+        $this->ownedOrder($team, $orderId);
+        app(WareneingangService::class)->kurzwegAllesWieBestellt($team, $orderId);
 
-        foreach ($order->lines as $line) {
-            $line->received_qty_packs = (float) $line->qty_packs;
-            $line->received_at = now();
-            $line->save();
-            $this->syncQuotaConsumption($line->refresh(), (float) $line->received_qty_packs);
-            $this->inventory->syncReceiptLine($line->refresh());
-        }
-        $this->journalNachziehen($order);
-
-        return $order->refresh();
+        return FoodAlchemistOrder::findOrFail($orderId);
     }
 
     /**
@@ -2907,6 +2915,13 @@ class OrderService
      */
     public function updateInvoiceLine(Team $team, int $lineId, int|float|string|null $qtyPacks, int|float|string|null $packPrice, ?string $note = null): FoodAlchemistOrderLine
     {
+        // Spec 75c: über eine Editor-Rechnung — die Prüfwerte an der Zeile sind die Summe der freigegebenen Rechnungen.
+        return app(LieferantenRechnungService::class)->kurzwegRechnung($team, $lineId, $qtyPacks, $packPrice, $note);
+    }
+
+    /** Spec 75c: Ableitung Rechnung → Bestellzeile. NUR für LieferantenRechnungService. */
+    public function schreibeRechnungsAbleitung(Team $team, int $lineId, int|float|string|null $qtyPacks, int|float|string|null $packPrice, ?string $note = null): FoodAlchemistOrderLine
+    {
         $line = FoodAlchemistOrderLine::with('order')->findOrFail($lineId);
         $this->guardInvoiceLine($team, $line);
 
@@ -2924,24 +2939,13 @@ class OrderService
         return $line->refresh();
     }
 
-    /** Übernimmt die Rechnung aus Wareneingang; falls kein WE gebucht ist, aus der Bestellung. */
+    /** Übernimmt die Rechnung aus Wareneingang; falls kein WE gebucht ist, aus der Bestellung (Spec 75c: Editor-Rechnung). */
     public function completeInvoiceFromReceipt(Team $team, int $orderId): FoodAlchemistOrder
     {
-        $order = $this->ownedOrder($team, $orderId)->load('lines');
-        $status = $order->status instanceof OrderStatus ? $order->status : OrderStatus::from((string) $order->status);
-        if (! in_array($status, [OrderStatus::Sent, OrderStatus::Confirmed, OrderStatus::Delivered], true)) {
-            throw new \RuntimeException('Rechnungsprüfung ist erst nach dem Absenden möglich.');
-        }
+        $this->ownedOrder($team, $orderId);
+        app(LieferantenRechnungService::class)->kurzwegRechnungAusWareneingang($team, $orderId);
 
-        foreach ($order->lines as $line) {
-            $line->invoice_qty_packs = $line->received_qty_packs !== null ? (float) $line->received_qty_packs : (float) $line->qty_packs;
-            $line->invoice_pack_price = $line->pack_price !== null ? (float) $line->pack_price : null;
-            $line->invoice_checked_at = now();
-            $line->save();
-        }
-        $this->journalNachziehen($order);
-
-        return $order->refresh();
+        return FoodAlchemistOrder::findOrFail($orderId);
     }
 
     public function updateInvoiceNote(Team $team, int $lineId, ?string $note = null): FoodAlchemistOrderLine
@@ -3100,11 +3104,13 @@ class OrderService
     /** Alle noch offenen Wareneingangs-Mengen mit der bestellten Menge vorbelegen. */
     private function fillReceiptFromOrder(FoodAlchemistOrder $order): void
     {
+        // Spec 75c: noch offene Zeilen über den Editor-Lieferschein vorbelegen (gleicher Lagerweg, idempotent).
+        $team = Team::find($order->team_id);
         foreach ($order->lines()->get() as $line) {
-            if ($line->received_qty_packs === null) {
-                $line->received_qty_packs = (float) $line->qty_packs;
-                $line->received_at = now();
-                $line->save();
+            if ($line->received_qty_packs === null && $team !== null) {
+                app(WareneingangService::class)->kurzwegMenge($team, (int) $line->id, (float) $line->qty_packs, null);
+
+                continue;
             }
             $this->syncQuotaConsumption($line->refresh(), (float) $line->received_qty_packs);
             $this->inventory->syncReceiptLine($line->refresh());

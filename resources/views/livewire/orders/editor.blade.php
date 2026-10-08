@@ -1290,27 +1290,34 @@
                 </x-fa::section>
             @endif
 
-            <x-fa::section title="Freigabe" icon="heroicon-o-shield-check">
-                @if($detail['is_owned'])
+            {{-- Spec 75c: Freigabe als Übergabe — Kuratieren fragt an, Freigeben gibt frei (Entwurf: und sendet) oder lehnt ab. --}}
+            @php($frStatus = $detail['approval']['status'] ?? ($detail['approval_status'] ?? null))
+            <x-fa::section title="Freigabe" icon="heroicon-o-shield-check" data-freigabe-box>
+                @if($detail['is_owned'] && in_array($detail['status'], ['draft', 'sent', 'confirmed'], true))
                     <x-slot:actions>
-                        <x-fa::button size="sm" wire:click="saveApproval">Freigabe speichern</x-fa::button>
+                        @if($frStatus !== 'requested' && $frStatus !== 'approved')
+                            <x-fa::button size="sm" wire:click="freigabeAnfragen" data-freigabe-anfragen>Freigabe anfragen</x-fa::button>
+                        @endif
+                        @if($darfFreigeben)
+                            @if($frStatus !== 'approved')
+                                <x-fa::button size="sm" variant="primary" wire:click="freigebenUndSenden" data-freigabe-freigeben
+                                    :wire:confirm="$detail['status'] === 'draft' ? 'Bestellung freigeben und an den Lieferanten senden?' : null">{{ $detail['status'] === 'draft' ? 'Freigeben & senden' : 'Freigeben' }}</x-fa::button>
+                            @endif
+                            @if($frStatus !== 'rejected')
+                                <x-fa::button size="sm" variant="ghost" wire:click="freigabeAblehnen" data-freigabe-ablehnen>Ablehnen</x-fa::button>
+                            @endif
+                        @endif
                     </x-slot:actions>
                 @endif
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <x-fa::field label="Status" for="orders-freigabe-status">
-                        @if($detail['is_owned'])
-                            <x-fa::select id="orders-freigabe-status" wire:model="formApprovalStatus">
-                                <option value="">keine Freigabe</option>
-                                <option value="requested">angefragt</option>
-                                <option value="approved">freigegeben</option>
-                                <option value="rejected">abgelehnt</option>
-                            </x-fa::select>
-                        @else
-                            <p class="text-[length:var(--fa-text-md)] text-[var(--fa-ink)]">{{ $detail['approval']['label'] ?? '–' }}</p>
-                        @endif
+                    <x-fa::field label="Status">
+                        <p class="text-[length:var(--fa-text-md)] text-[var(--fa-ink)]" data-freigabe-status="{{ $frStatus ?? 'keine' }}">{{ $detail['approval']['label'] ?? '–' }}</p>
                     </x-fa::field>
                     <x-fa::field label="Zeitpunkt">
                         <p class="text-[length:var(--fa-text-md)] text-[var(--fa-ink)] tabular-nums">{{ ($detail['approval']['approved_at'] ?? null) ?: (($detail['approval']['requested_at'] ?? null) ?: '–') }}</p>
+                    </x-fa::field>
+                    <x-fa::field label="Wer gibt frei">
+                        <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]">{{ $darfFreigeben ? 'Du darfst freigeben.' : 'Inhaber, Admins und Mitglieder mit Freigabe-Häkchen.' }}</p>
                     </x-fa::field>
                     <x-fa::field label="Freigabenotiz" for="orders-freigabe-notiz" class="md:col-span-3">
                         @if($detail['is_owned'])
