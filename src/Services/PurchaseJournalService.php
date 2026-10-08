@@ -37,14 +37,23 @@ class PurchaseJournalService
 
         $n = 0;
         foreach ($order->lines as $line) {
-            if ((float) $line->qty_packs <= 0) {
-                continue;   // Leerzeile — kein Ist-Einkauf
+            // Ist-Einkauf = berechnete Menge (Rechnung) → gelieferte Menge (Wareneingang) → bestellte
+            // Menge; Preis aus der Rechnung, sonst Bestellpreis (Spec 66 §1). Vorher immer „bestellt".
+            $packs = (float) ($line->invoice_qty_packs ?? $line->received_qty_packs ?? $line->qty_packs);
+            if ($packs <= 0) {
+                // Leerzeile / nichts geliefert — kein Ist-Einkauf; eine früher gespiegelte Zeile fällt raus.
+                FoodAlchemistPurchaseTransaction::where('team_id', $order->team_id)
+                    ->where('source_hash', sha1("order:{$order->id}:line:{$line->id}"))->delete();
+
+                continue;
             }
+            $packPrice = $line->invoice_pack_price ?? $line->pack_price;
             $packQty = $line->pack_qty !== null ? (float) $line->pack_qty : null;
-            $qty = $packQty !== null && $packQty > 0 ? (float) $line->qty_packs * $packQty : (float) $line->qty_packs;
-            $unitPrice = $packQty !== null && $packQty > 0 && $line->pack_price !== null
-                ? round((float) $line->pack_price / $packQty, 4)
-                : ($line->pack_price !== null ? (float) $line->pack_price : null);
+            $qty = $packQty !== null && $packQty > 0 ? $packs * $packQty : $packs;
+            $unitPrice = $packQty !== null && $packQty > 0 && $packPrice !== null
+                ? round((float) $packPrice / $packQty, 4)
+                : ($packPrice !== null ? (float) $packPrice : null);
+            $lineTotal = $packPrice !== null ? round($packs * (float) $packPrice, 2) : (float) $line->line_total;
 
             $ref = "order:{$order->id}:line:{$line->id}";
             FoodAlchemistPurchaseTransaction::updateOrCreate(
@@ -57,7 +66,7 @@ class PurchaseJournalService
                     'unit_code' => $line->unit_code,
                     'qty' => $qty,
                     'unit_price' => $unitPrice,
-                    'line_total' => (float) $line->line_total,
+                    'line_total' => $lineTotal,
                     'purchased_at' => $datum,
                     'commodity_group' => $line->gp_id !== null ? ($wgMap[$line->gp_id] ?? null) : null,
                     'source' => 'fa_order',
@@ -69,6 +78,13 @@ class PurchaseJournalService
         }
 
         return $n;
+    }
+
+    /** Steht diese Bestellung schon im Journal? (Dann ziehen Wareneingang/Rechnung es nach.) */
+    public function istGespiegelt(FoodAlchemistOrder $order): bool
+    {
+        return FoodAlchemistPurchaseTransaction::where('team_id', $order->team_id)
+            ->where('source', 'fa_order')->where('source_ref', 'like', "order:{$order->id}:line:%")->exists();
     }
 
     /** Alle FA-Order-Transaktionen einer Bestellschiene entfernen (Storno/Rücknahme). */

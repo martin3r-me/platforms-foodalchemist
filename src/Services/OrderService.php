@@ -2484,8 +2484,21 @@ class OrderService
         $line->save();
         $this->syncQuotaConsumption($line->refresh(), $line->received_qty_packs !== null ? (float) $line->received_qty_packs : null);
         $this->inventory->syncReceiptLine($line->refresh());
+        $this->journalNachziehen($line->order);
 
         return $line->refresh();
+    }
+
+    /** Spec 66 §1: Steht die Bestellung schon im Einkaufsjournal, Ist-Menge/-Preis nachziehen. */
+    private function journalNachziehen(?FoodAlchemistOrder $order): void
+    {
+        if ($order === null) {
+            return;
+        }
+        $journal = app(PurchaseJournalService::class);
+        if ($journal->istGespiegelt($order)) {
+            $journal->spiegelOrder($order->fresh('lines'));
+        }
     }
 
     /** Setzt alle Wareneingangs-Mengen einer Bestellung auf die bestellte Menge. */
@@ -2504,6 +2517,7 @@ class OrderService
             $this->syncQuotaConsumption($line->refresh(), (float) $line->received_qty_packs);
             $this->inventory->syncReceiptLine($line->refresh());
         }
+        $this->journalNachziehen($order);
 
         return $order->refresh();
     }
@@ -2591,6 +2605,7 @@ class OrderService
             $line->invoice_note = trim($note) !== '' ? trim($note) : null;
         }
         $line->save();
+        $this->journalNachziehen($line->order);
 
         return $line->refresh();
     }
@@ -2610,6 +2625,7 @@ class OrderService
             $line->invoice_checked_at = now();
             $line->save();
         }
+        $this->journalNachziehen($order);
 
         return $order->refresh();
     }

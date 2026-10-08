@@ -29,6 +29,9 @@ class InventoryService
             }
 
             [$targetQty, $baseUnit] = $this->receivedBaseQuantity($freshLine);
+            if ($baseUnit === '') {
+                return null;   // unbekannte Gebinde-Einheit: lieber nicht buchen als raten (Spec 66 §1)
+            }
             $movement = FoodAlchemistInventoryMovement::where('source_hash', $this->receiptSourceHash($freshLine))
                 ->lockForUpdate()
                 ->first();
@@ -79,6 +82,9 @@ class InventoryService
     public function lineStockSummary(Team $team, FoodAlchemistOrderLine $line): ?array
     {
         [$unit] = $this->baseUnitForLine($line);
+        if ($unit === '') {
+            return null;
+        }
         $query = FoodAlchemistInventoryStock::where('team_id', (int) $team->id)
             ->where('base_unit', $unit)
             ->where(fn ($q) => $q->whereNull('inventory_location_id')
@@ -119,12 +125,8 @@ class InventoryService
             return [0.0, $baseUnit];
         }
 
-        $orderedPacks = (float) $line->qty_packs;
-        $neededBase = (float) $line->needed_base_g;
-        if ($orderedPacks > 0.0 && $neededBase > 0.0) {
-            return [round($neededBase * ($packs / $orderedPacks), 4), $baseUnit];
-        }
-
+        // Zugang = gelieferte Gebinde × Gebinde-Inhalt (Spec 66 §1). Vorher: anteiliger BEDARF —
+        // 3 × 5 kg geliefert bei 7,3 kg Bedarf ergab 7,3 kg Bestand, die Überkauf-Menge fehlte.
         return [round($packs * $packBaseQty, 4), $baseUnit];
     }
 
@@ -140,7 +142,8 @@ class InventoryService
             'l' => ['ml', $packQty * 1000.0],
             'ml' => ['ml', $packQty],
             'stk', 'stück', 'stueck' => ['Stk', $packQty],
-            default => ['g', $packQty * 1000.0],
+            // Unbekannte Einheit: keine Basiseinheit (vorher stillschweigend „1 kg je Gebinde").
+            default => ['', 0.0],
         };
     }
 
@@ -208,16 +211,29 @@ class InventoryService
         return sha1('fa_order_receipt:' . (int) $line->order_id . ':line:' . (int) $line->id);
     }
 
+    /**
+     * Bedarf der Zeile in der Basiseinheit des Bestands. `needed_base_g` ist immer Gramm; ohne
+     * Bedarf (Handzeile) gilt die bestellte Menge in Gebinde-Inhalt (vorher in kg/l statt g/ml →
+     * „0 g Fehlmenge", Ursache der Quarantäne #795).
+     */
     private function lineNeedInBaseUnit(FoodAlchemistOrderLine $line, string $unit): float
     {
-        if (in_array($unit, ['g', 'ml'], true) && (float) $line->needed_base_g > 0.0) {
-            return round((float) $line->needed_base_g, 4);
+        $neededG = (float) $line->needed_base_g;
+        if (in_array($unit, ['g', 'ml'], true) && $neededG > 0.0) {
+            return round($neededG, 4);
         }
+        if ($unit === 'Stk' && $neededG > 0.0) {
+            $stueckG = (float) ($line->gp?->piece_default_g ?? 0);
+            if ($stueckG > 0.0) {
+                return round($neededG / $stueckG, 4);
+            }
+        }
+        [, $packBaseQty] = $this->baseUnitForLine($line);
 
-        return round((float) $line->qty_packs * max(0.0, (float) $line->pack_qty), 4);
+        return round((float) $line->qty_packs * $packBaseQty, 4);
     }
 
-    private function displayQuantity(float $qty, string $unit): string
+    public function displayQuantity(float $qty, string $unit): string
     {
         if ($unit === 'g' && abs($qty) >= 1000.0) {
             return rtrim(rtrim(number_format($qty / 1000.0, 3, ',', '.'), '0'), ',') . ' kg';
