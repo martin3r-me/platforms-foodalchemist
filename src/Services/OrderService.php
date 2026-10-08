@@ -192,6 +192,7 @@ class OrderService
         $unresolved = [];
         $warnings = [];
         $sourceCount = 0;
+        $rezeptLager = $this->rezeptLagerTopf($team, $overrides);
 
         foreach (array_values($sources) as $idx => $source) {
             $sourceCount++;
@@ -207,7 +208,7 @@ class OrderService
                 } elseif ($type === 'gp') {
                     $this->previewGp($team, $gruppen, $unresolved, $source, $date, $reference, $label, $sourceRef, $strategie, $overrides);
                 } elseif ($type === 'recipe') {
-                    $this->previewZiel($team, $gruppen, $unresolved, $warnings, $this->zielAusRecipeSource($source), $date, $reference, $label, $sourceRef, $strategie, $overrides);
+                    $this->previewZiel($team, $gruppen, $unresolved, $warnings, $this->zielAusRecipeSource($source), $date, $reference, $label, $sourceRef, $strategie, $overrides, $rezeptLager);
                 } elseif ($type === 'production') {
                     $production = FoodAlchemistProductionOrder::visibleToTeam($team)->find((int) ($source['id'] ?? 0));
                     if ($production === null) {
@@ -230,7 +231,8 @@ class OrderService
                             $label,
                             $targetRef,
                             $strategie,
-                            $overrides
+                            $overrides,
+                            $rezeptLager
                         );
                     }
                 } else {
@@ -251,6 +253,7 @@ class OrderService
             'aus_lager' => $ausLager,
             'ausgelassen' => $ausgelassen,
             'lager_abgleich' => ! empty($overrides['lager_abgleich']),
+            'rezept_lager' => $this->rezeptLagerAnzeige($rezeptLager),
             'unresolved' => array_values($unresolved),
             'warnings' => array_values(array_unique($warnings)),
             'totals' => [
@@ -1032,9 +1035,9 @@ class OrderService
         }
     }
 
-    private function previewZiel(Team $team, array &$gruppen, array &$unresolved, array &$warnings, array $ziel, ?string $date, string $reference, string $label, string $sourceRef, ?LeadLaStrategie $strategie, array $overrides = []): void
+    private function previewZiel(Team $team, array &$gruppen, array &$unresolved, array &$warnings, array $ziel, ?string $date, string $reference, string $label, string $sourceRef, ?LeadLaStrategie $strategie, array $overrides = [], ?array &$rezeptLager = null): void
     {
-        $vorschlag = $this->planung->bestellvorschlag($team, $ziel, $strategie);
+        $vorschlag = $this->planung->bestellvorschlag($team, $ziel, $strategie, $rezeptLager);
         $warnings = array_merge($warnings, $vorschlag['warnungen'] ?? []);
 
         foreach ($vorschlag['lieferanten'] ?? [] as $grp) {
@@ -1345,6 +1348,44 @@ class OrderService
                 default => 0.0,
             };
             $out[(int) $r->gp_id] = ($out[(int) $r->gp_id] ?? 0) + $g;
+        }
+
+        return $out;
+    }
+
+    /**
+     * Spec 72: Eigenproduktion im Lager als Topf für die Auflösung. Abgezogen wird wie beim GP nur per Knopf:
+     * `lager_rezept[recipe_id]` (je Rezept) schlägt `lager_abgleich` (alle).
+     *
+     * @return array<int, array{menge: float, base: string, abziehen: bool, bedarf: float, genutzt: float, start: float}>
+     */
+    private function rezeptLagerTopf(Team $team, array $overrides): array
+    {
+        $global = ! empty($overrides['lager_abgleich']);
+        $jeRezept = (array) ($overrides['lager_rezept'] ?? []);
+        $topf = [];
+        foreach (app(EigenproduktionService::class)->lagerJeRezept($team, null) as $rid => $l) {
+            $topf[(int) $rid] = ['menge' => (float) $l['menge'], 'start' => (float) $l['menge'], 'base' => (string) $l['base'],
+                'abziehen' => array_key_exists($rid, $jeRezept) ? (bool) $jeRezept[$rid] : $global, 'bedarf' => 0.0, 'genutzt' => 0.0];
+        }
+
+        return $topf;
+    }
+
+    /** Nur Rezepte, die in dieser Runde gebraucht werden. @return list<array> */
+    private function rezeptLagerAnzeige(array $topf): array
+    {
+        $ep = app(EigenproduktionService::class);
+        $namen = FoodAlchemistRecipe::whereIn('id', array_keys(array_filter($topf, fn ($t) => ($t['bedarf'] ?? 0) > 0)) ?: [0])->pluck('name', 'id');
+        $out = [];
+        foreach ($topf as $rid => $t) {
+            if (($t['bedarf'] ?? 0) <= 0) {
+                continue;
+            }
+            $out[] = ['recipe_id' => (int) $rid, 'name' => (string) ($namen[$rid] ?? "Rezept #{$rid}"), 'base' => $t['base'],
+                'einheit' => $ep->anzeigeEinheit($t['base']), 'abziehen' => (bool) $t['abziehen'],
+                'im_lager' => $ep->anzeigeMenge($t['start'], $t['base']), 'bedarf' => $ep->anzeigeMenge($t['bedarf'], $t['base']),
+                'abgezogen' => $ep->anzeigeMenge($t['genutzt'], $t['base'])];
         }
 
         return $out;

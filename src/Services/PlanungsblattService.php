@@ -86,11 +86,11 @@ class PlanungsblattService
      *
      * @param  array{concept_id?:int, recipe_id?:int, persons?:int|float, portions?:int|float}  $ziel
      */
-    public function bestellvorschlag(Team $team, array $ziel, ?LeadLaStrategie $strategieOverride = null): array
+    public function bestellvorschlag(Team $team, array $ziel, ?LeadLaStrategie $strategieOverride = null, ?array &$rezeptLager = null): array
     {
         $this->recipeCache = [];
         $tops = $this->topsAus($team, [$ziel]);
-        $ex = $this->explodiere($team, $tops['tops']);
+        $ex = $this->explodiere($team, $tops['tops'], $rezeptLager);
 
         return [
             'skalierung' => $tops['skalierung'],
@@ -627,7 +627,13 @@ class PlanungsblattService
      * @param  list<array{recipe:FoodAlchemistRecipe,batches:float,label:string}>  $tops
      * @return array{production:list<array>, gp:array<int,array>, warnings:list<string>}
      */
-    private function explodiere(Team $team, array $tops): array
+    /**
+     * Spec 72: optionaler Lager-Topf für Eigenproduktion (`recipe_id => [menge, base, abziehen, bedarf, genutzt]`,
+     * per Referenz — über mehrere Quellen einer Bestellrunde nur EINMAL verteilt). Liegt ein Rezept im Lager und
+     * ist `abziehen` an, wird sein Bedarf VOR der Auflösung gekürzt: weniger Ansätze, damit weniger Zutaten und
+     * Sub-Rezepte. `bedarf`/`genutzt` werden immer mitgeschrieben (Anzeige „im Lager"), auch ohne Abzug.
+     */
+    private function explodiere(Team $team, array $tops, ?array &$rezeptLager = null): array
     {
         if ($tops === []) {
             return ['production' => [], 'gp' => [], 'warnings' => ['Keine skalierbaren Positionen — nichts zu rechnen.']];
@@ -730,6 +736,12 @@ class PlanungsblattService
                 continue;
             }
             $istVk = (bool) $recipe->is_sales_recipe;
+            if ($rezeptLager !== null && isset($rezeptLager[$rid])) {
+                $roh = $this->rezeptLagerAnrechnen($rezeptLager[$rid], $recipe, $roh);
+                if ($roh <= 1e-6) {
+                    continue;   // ganz aus dem Lager: kein Ansatz, keine Zutaten
+                }
+            }
             // VK-Gericht linear; Basisrezept auf ganze Ansätze aufrunden (Kern-Entscheid).
             $batches = $istVk ? $roh : (float) max(1, (int) ceil($roh - 1e-9));
 
@@ -865,6 +877,35 @@ class PlanungsblattService
         uasort($gp, fn ($a, $b) => strcmp((string) $a['name'], (string) $b['name']));
 
         return ['production' => $produktion, 'gp' => $gp, 'warnings' => $warnings];
+    }
+
+    /**
+     * Spec 72: Lagerbestand eines Rezepts gegen den Bedarf in Ansätzen rechnen. Ein Ansatz entspricht
+     * Yield (g) bzw. Stück- oder Portionsertrag. Ohne Ertrag kein Abzug (nicht raten).
+     *
+     * @param  array{menge: float, base: string, abziehen?: bool, bedarf?: float, genutzt?: float}  $topf
+     */
+    private function rezeptLagerAnrechnen(array &$topf, FoodAlchemistRecipe $recipe, float $roh): float
+    {
+        $jeAnsatz = match ((string) $topf['base']) {
+            'g' => (float) ($recipe->yield_kg ?? 0) * 1000,
+            'Stk' => (float) ($recipe->yield_pieces ?? 0),
+            'Port' => ($recipe->yield_pieces !== null && (float) $recipe->yield_pieces > 0)
+                ? (float) $recipe->yield_pieces : (float) max(1, (int) ($recipe->sales_unit_count ?? 1)),
+            default => 0.0,
+        };
+        if ($jeAnsatz <= 0) {
+            return $roh;
+        }
+        $topf['bedarf'] = ($topf['bedarf'] ?? 0.0) + $roh * $jeAnsatz;
+        if (empty($topf['abziehen']) || (float) $topf['menge'] <= 0) {
+            return $roh;
+        }
+        $nimm = min($roh * $jeAnsatz, (float) $topf['menge']);
+        $topf['menge'] = (float) $topf['menge'] - $nimm;
+        $topf['genutzt'] = ($topf['genutzt'] ?? 0.0) + $nimm;
+
+        return max(0.0, $roh - $nimm / $jeAnsatz);
     }
 
     // ── GP-Bedarf → Lieferanten-Gruppierung (Lead-LA) ─────────────────────

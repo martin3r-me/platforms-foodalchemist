@@ -406,7 +406,7 @@
                     @else
                         {{-- Spec 71: Lieferanten auf-/zuklappen (Alpine, kein Server-Roundtrip; auch im Lesemodus bedienbar → div statt button) --}}
                         <div class="flex flex-wrap items-center justify-between gap-2" data-orders-gruppen-steuerung>
-                            @php $mitLager = collect($cockpitPreview['orders_preview'])->flatMap(fn ($g) => $g['positionen'])->filter(fn ($p) => ($p['lager_verfuegbar_g'] ?? 0) > 0)->count() + count($cockpitPreview['aus_lager'] ?? []); @endphp
+                            @php $mitLager = collect($cockpitPreview['orders_preview'])->flatMap(fn ($g) => $g['positionen'])->filter(fn ($p) => ($p['lager_verfuegbar_g'] ?? 0) > 0)->count() + count($cockpitPreview['aus_lager'] ?? []) + count($cockpitPreview['rezept_lager'] ?? []); @endphp
                             @if($mitLager > 0)
                                 @if($cockpitLagerAbgleich)
                                     <x-fa::button size="sm" variant="ghost" icon="heroicon-m-arrow-uturn-left" wire:click="lagerAlleAbziehen(false)" data-orders-lager-abgleich>Lager nicht abziehen</x-fa::button>
@@ -542,6 +542,25 @@
                             @endforeach
                         </div>
                     @endif
+                        {{-- Spec 72: Eigenproduktion im Lager (eingefroren/gekühlt) — kürzt den Rezeptbedarf vor der Auflösung --}}
+                        @if($cockpitPreview !== null && ! empty($cockpitPreview['rezept_lager']))
+                            <div class="rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] px-3 py-2 flex flex-col gap-1.5" data-orders-rezept-lager>
+                                <p class="text-[length:var(--fa-text-md)] font-semibold text-[var(--fa-ink)]">Eigenproduktion im Lager</p>
+                                @foreach($cockpitPreview['rezept_lager'] as $rl)
+                                    <div class="flex flex-wrap items-center justify-between gap-2" wire:key="rezeptlager-{{ $rl['recipe_id'] }}">
+                                        <span class="text-[length:var(--fa-text-sm)] tabular-nums {{ $rl['abziehen'] ? 'text-[var(--fa-ok)]' : 'text-[var(--fa-ink-2)]' }}">
+                                            {{ $rl['name'] }} · im Lager {{ $menge($rl['im_lager'], 3) }} {{ $rl['einheit'] }} · Bedarf {{ $menge($rl['bedarf'], 3) }} {{ $rl['einheit'] }}
+                                            @if($rl['abziehen']) · {{ $menge($rl['abgezogen'], 3) }} {{ $rl['einheit'] }} abgezogen @endif
+                                        </span>
+                                        @if($rl['abziehen'])
+                                            <button type="button" wire:click="lagerRezept({{ $rl['recipe_id'] }}, false)" class="text-[length:var(--fa-text-sm)] text-[var(--fa-accent)] hover:underline">nicht abziehen</button>
+                                        @else
+                                            <button type="button" wire:click="lagerRezept({{ $rl['recipe_id'] }}, true)" class="text-[length:var(--fa-text-sm)] text-[var(--fa-accent)] hover:underline" data-orders-rezept-lager-an>vom Bedarf abziehen</button>
+                                        @endif
+                                    </div>
+                                @endforeach
+                            </div>
+                        @endif
                     {{-- Spec 71: aus dem Lager gedeckt / von Hand ausgelassen --}}
                     @if($cockpitPreview !== null && ! empty($cockpitPreview['aus_lager']))
                         <div class="rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] px-3 py-2" data-orders-aus-lager>
@@ -628,7 +647,13 @@
                                             </div>
                                         @endif
                                         @if(!empty($z['inventory']))
-                                            <div class="mt-1"><x-fa::signal tone="info" icon="heroicon-m-archive-box">Lager: {{ $z['inventory']['display'] }} verfügbar, Restbedarf {{ $z['inventory']['shortage_display'] }}</x-fa::signal></div>
+                                            <div class="mt-1 flex flex-wrap items-center gap-2">
+                                                <x-fa::signal tone="info" icon="heroicon-m-archive-box">Lager: {{ $z['inventory']['display'] }} verfügbar, Restbedarf {{ $z['inventory']['shortage_display'] }}</x-fa::signal>
+                                                {{-- Spec 72: wie in der Bestellrunde — Lager auf Knopfdruck abziehen --}}
+                                                @if(($detail['editierbar'] ?? false) && ($z['inventory']['packs_fuer_rest'] ?? null) !== null && $z['inventory']['packs_fuer_rest'] < (float) $z['qty_packs'])
+                                                    <button type="button" wire:click="updateLineQty({{ $z['id'] }}, {{ $z['inventory']['packs_fuer_rest'] }})" class="text-[length:var(--fa-text-sm)] text-[var(--fa-accent)] hover:underline" data-orders-zeile-lager-abziehen>auf {{ $menge($z['inventory']['packs_fuer_rest']) }} {{ $z['packaging_unit'] ?: 'Geb.' }} kürzen</button>
+                                                @endif
+                                            </div>
                                         @endif
                                         @if(!empty($z['herkunft']))
                                             <div class="flex flex-wrap gap-1 mt-1">
