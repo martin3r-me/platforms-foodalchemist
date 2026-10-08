@@ -150,8 +150,9 @@ class EigenproduktionService
             throw new \RuntimeException('Nur ' . rtrim(rtrim(number_format($this->anzeigeMenge($verfuegbar, $base), 3, ',', '.'), '0'), ',') . ' ' . $this->anzeigeEinheit($base) . ' im Lager.');
         }
         $notiz = isset($in['notiz']) && trim((string) $in['notiz']) !== '' ? trim((string) $in['notiz']) : null;
+        $poId = ! empty($in['production_order_id']) ? (int) $in['production_order_id'] : null;   // Spec 72: Verbrauch aus Produktion
 
-        return DB::transaction(function () use ($team, $chargen, $rest, $grund, $notiz, $userId) {
+        return DB::transaction(function () use ($team, $chargen, $rest, $grund, $notiz, $userId, $poId) {
             $out = [];
             foreach ($chargen as $b) {
                 if ($rest <= 0.0001) {
@@ -167,7 +168,7 @@ class EigenproduktionService
                     ?? $this->stock($team, (int) $b->inventory_location_id, (int) $b->recipe_id, (string) $b->base_unit);
                 $stock->update(['qty_base' => round((float) $stock->qty_base - $nimm, 4)]);
                 $this->bewegung($team, $stock, $b, 'out', $grund === 'verbrauch' ? 'entnahme' : 'abgang', $grund === 'verbrauch' ? null : $grund,
-                    $nimm, trim('Charge ' . $b->charge . ($notiz ? ' · ' . $notiz : '')), $userId);
+                    $nimm, trim('Charge ' . $b->charge . ($notiz ? ' · ' . $notiz : '')), $userId, $poId);
                 $out[] = ['charge' => (string) $b->charge, 'menge_basis' => round($nimm, 4)];
                 $rest -= $nimm;
             }
@@ -193,10 +194,11 @@ class EigenproduktionService
     }
 
     /** Bestand je Rezept (Summe offener Chargen) — für Produktion „im Lager". @return array<int, array{menge:float, base:string, chargen:int, aeltestes_bis:?string}> */
-    public function lagerJeRezept(Team $team, array $recipeIds): array
+    public function lagerJeRezept(Team $team, ?array $recipeIds): array
     {
         $out = [];
-        foreach ($this->offeneChargen($team)->whereIn('recipe_id', $recipeIds)->groupBy('recipe_id') as $rid => $bs) {
+        $chargen = $this->offeneChargen($team);
+        foreach (($recipeIds === null ? $chargen : $chargen->whereIn('recipe_id', $recipeIds))->groupBy('recipe_id') as $rid => $bs) {
             $out[(int) $rid] = ['menge' => (float) $bs->sum(fn ($b) => (float) $b->qty_rest), 'base' => (string) $bs->first()->base_unit,
                 'chargen' => $bs->count(), 'aeltestes_bis' => $bs->first()->best_before?->toDateString()];
         }
@@ -269,7 +271,7 @@ class EigenproduktionService
                 'gp_id' => null, 'supplier_item_id' => null, 'qty_base' => 0, 'base_unit' => $base]);
     }
 
-    private function bewegung(Team $team, FoodAlchemistInventoryStock $stock, FoodAlchemistInventoryBatch $b, string $dir, string $source, ?string $grund, float $qty, string $note, ?int $userId): void
+    private function bewegung(Team $team, FoodAlchemistInventoryStock $stock, FoodAlchemistInventoryBatch $b, string $dir, string $source, ?string $grund, float $qty, string $note, ?int $userId, ?int $productionOrderId = null): void
     {
         $preis = $b->price_per_base !== null ? (float) $b->price_per_base : null;
         FoodAlchemistInventoryMovement::create([
@@ -277,6 +279,7 @@ class EigenproduktionService
             'recipe_id' => $b->recipe_id, 'batch_id' => $b->id, 'direction' => $dir, 'qty_base' => round($qty, 4), 'base_unit' => $b->base_unit,
             'source' => $source, 'reason' => $grund, 'price_per_base' => $preis, 'value_eur' => $preis !== null ? round($qty * $preis, 2) : null,
             'booked_by' => $userId, 'moved_at' => now(), 'note' => $note, 'source_hash' => sha1('fa_eigen:' . Str::uuid()),
+            'production_order_id' => $productionOrderId,
         ]);
     }
 

@@ -187,6 +187,11 @@ vollständiges Lager zu führen:
   im Controlling). Ablaufwarnung, Etikett je Charge, Inventur zählt Rezeptbestände mit und gleicht
   die Chargen ab. Aus der Produktion: „Im Lager: …“ je Zeile und „Rest ins Lager / einfrieren →“.
   MCP: `inventory_batches.GET`, `eigenproduktion.POST`, `eigenproduktion.ENTNAHME`.
+- **Lager im Fluss (Spec 72):** Eigenproduktion im Lager kürzt in der Bestellrunde den Rezeptbedarf
+  vor der Auflösung (per Knopf je Rezept oder für alle). Ein fertig gemeldeter Produktionsauftrag
+  bucht den Verbrauch exakt aus dem Lager (Grundprodukte und nicht selbst produzierte Komponenten
+  aus Eigenproduktion, nie unter 0, Fehlmengen werden gemeldet). In der Einzelbestellung kürzt
+  „auf N Gebinde kürzen" eine Zeile auf den Restbedarf. Inventuren öffnen im Editor.
 - **Bestellvorlagen (Spec 68):** Einkauf → Bestellvorlagen. Eine Vorlage ist eine gespeicherte
   Bestellrunde: Grundprodukte mit Menge (Artikel wählt beim Bestellen die Lead-Strategie), Rezepte
   und Gerichte mit Portionen/Ansätzen („Musterproduktion", Bedarf aus der Rezeptur) und feste Artikel

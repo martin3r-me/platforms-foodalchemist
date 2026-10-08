@@ -3,6 +3,7 @@
 namespace Platform\FoodAlchemist\Livewire\Lager;
 
 use Illuminate\Support\Facades\Auth;
+use Livewire\Attributes\On;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 use Platform\Core\Models\Team;
@@ -85,6 +86,9 @@ class Index extends Component
     {
         $this->neuDatum = now()->toDateString();
         $this->reiter = in_array($this->reiter, self::REITER, true) ? $this->reiter : 'bestand';
+        if ($this->reiter === 'inventur' && $this->inventurId !== null) {
+            $this->dispatch('modal.open', name: 'lager-inventur');
+        }
         // Spec 69: aus der Produktion „ins Lager" — Rezept, Menge und Zeile vorbelegen
         if ($this->reiter === 'eigenproduktion' && request()->filled('einlagern_rezept')) {
             $this->einlagern = ['menge' => (string) request('einlagern_menge', ''), 'production_order_line_id' => request()->integer('einlagern_zeile') ?: null];
@@ -128,6 +132,7 @@ class Index extends Component
         $this->inventurId = (int) $count->id;
         $this->filter = self::FILTER_LEER;
         $this->hinweis = 'Inventur angelegt — Zählliste ist vorbelegt und nach Laufweg sortiert.';
+        $this->dispatch('modal.open', name: 'lager-inventur');
     }
 
     public function inventurOeffnen(int $id): void
@@ -138,12 +143,22 @@ class Index extends Component
         $this->nichtGezaehltNull = false;
         $this->fehler = null;
         $this->hinweis = null;
+        $this->dispatch('modal.open', name: 'lager-inventur');
     }
 
     public function inventurSchliessen(): void
     {
         $this->inventurId = null;
         $this->filter = self::FILTER_LEER;
+    }
+
+    /** Inventur-Editor geschlossen (✕, Escape, Hintergrund) → zurück zur Liste. */
+    #[On('modal.closed')]
+    public function beiModalGeschlossen(?string $name = null): void
+    {
+        if ($name === 'lager-inventur') {
+            $this->inventurSchliessen();
+        }
     }
 
     /** Gezählte Menge in kg / l / Stk (leer = nicht gezählt). */
@@ -203,6 +218,7 @@ class Index extends Component
         try {
             $svc->loeschen($this->team(), $this->inventurId);
             $this->inventurId = null;
+            $this->dispatch('modal.close', name: 'lager-inventur');
             $this->hinweis = 'Inventur verworfen.';
         } catch (\Throwable $e) {
             $this->fehler = $e->getMessage();

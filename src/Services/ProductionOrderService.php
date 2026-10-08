@@ -806,6 +806,11 @@ class ProductionOrderService
             $order->status = $ziel;
             $order->save();
 
+            // Spec 72: fertig gemeldet → Verbrauch exakt aus dem Lager buchen (GP + Eigenproduktion)
+            $lagerVerbrauch = $ziel === ProductionOrderStatus::Done
+                ? app(ProduktionsVerbrauchService::class)->ausbuchen($team, $order, Auth::id())
+                : null;
+
             if ($ziel === ProductionOrderStatus::Cancelled) {
                 $procurementCancellation = app(OrderService::class)->withdrawProductionDemand($team, (int) $order->id);
             }
@@ -819,6 +824,9 @@ class ProductionOrderService
                     'finish_open_lines' => $offene ?? null,
                     'finish_blocked_lines' => $blockiert ?? null,
                     'procurement_cancellation' => $procurementCancellation,
+                    'lager_verbrauch' => $lagerVerbrauch !== null ? [
+                        'gebucht' => count($lagerVerbrauch['gebucht']), 'fehlt' => $lagerVerbrauch['fehlt'],
+                    ] : null,
                 ], fn ($v) => $v !== null && $v !== []),
             ]);
 

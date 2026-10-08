@@ -186,6 +186,9 @@ class Editor extends Component
     /** Spec 71: Lager je Position abziehen (Schlüssel → bool), schlägt den Gesamt-Knopf. */
     public array $cockpitLagerPos = [];
 
+    /** Spec 72: Eigenproduktion je Rezept abziehen (recipe_id → bool). */
+    public array $cockpitLagerRezept = [];
+
     /** Gespeicherte Runde = Lesemodus (wie ein gespeichertes Rezept); „Bearbeiten" öffnet wieder. */
     public bool $rundeGesperrt = false;
 
@@ -252,6 +255,7 @@ class Editor extends Component
         $this->cockpitMengen = [];
         $this->cockpitLagerAbgleich = false;
         $this->cockpitLagerPos = [];
+        $this->cockpitLagerRezept = [];
         if ($productionId !== null) {
             $this->cockpitProduktionEinfuegen($productionId);
         }
@@ -882,7 +886,7 @@ class Editor extends Component
     /** Artikel-Wahl + Spec 71 (auslassen, Menge, Lager) als ein Override-Paket — Vorschau und Speichern rechnen gleich. */
     private function cockpitAlleOverrides(): array
     {
-        return $this->cockpitOverrides + ['skip' => $this->cockpitSkip, 'menge' => $this->cockpitMengen, 'lager_abgleich' => $this->cockpitLagerAbgleich, 'lager_pos' => $this->cockpitLagerPos];
+        return $this->cockpitOverrides + ['skip' => $this->cockpitSkip, 'menge' => $this->cockpitMengen, 'lager_abgleich' => $this->cockpitLagerAbgleich, 'lager_pos' => $this->cockpitLagerPos, 'lager_rezept' => $this->cockpitLagerRezept];
     }
 
     public function positionAuslassen(string $key, OrderService $orders): void
@@ -918,6 +922,14 @@ class Editor extends Component
     {
         $this->cockpitLagerAbgleich = $an;
         $this->cockpitLagerPos = [];
+        $this->cockpitLagerRezept = [];
+        $this->cockpitVorschau($orders);
+    }
+
+    /** Spec 72: Eigenproduktion (z. B. eingefrorenes Gulasch) dieses Rezepts vom Bedarf abziehen oder nicht. */
+    public function lagerRezept(int $recipeId, bool $an, OrderService $orders): void
+    {
+        $this->cockpitLagerRezept[$recipeId] = $an;
         $this->cockpitVorschau($orders);
     }
 

@@ -70,8 +70,8 @@
         {{-- ── Bewegungen ──────────────────────────────────────────────── --}}
         @if($reiter === 'bewegungen')
             @php
-                $quellen = ['' => 'Alle Quellen', 'wareneingang' => 'Wareneingang', 'inventur' => 'Inventur', 'zugang' => 'Zugang (von Hand)', 'abgang' => 'Abgang (von Hand)', 'umlagerung' => 'Umlagerung', 'storno' => 'Storno'];
-                $quelleText = $quelleText + ['zugang' => 'Zugang', 'abgang' => 'Abgang', 'umlagerung' => 'Umlagerung', 'storno' => 'Storno'];
+                $quellen = ['' => 'Alle Quellen', 'wareneingang' => 'Wareneingang', 'inventur' => 'Inventur', 'zugang' => 'Zugang (von Hand)', 'abgang' => 'Abgang (von Hand)', 'umlagerung' => 'Umlagerung', 'storno' => 'Storno', 'produktion' => 'Produktion', 'entnahme' => 'Entnahme (Eigenproduktion)'];
+                $quelleText = $quelleText + ['zugang' => 'Zugang', 'abgang' => 'Abgang', 'umlagerung' => 'Umlagerung', 'storno' => 'Storno', 'produktion' => 'Produktion', 'entnahme' => 'Entnahme (Eigenproduktion)'];
                 $alleGruende = $gruende['zugang'] + $gruende['abgang'];
             @endphp
             {{-- Spec 67: Hand-Buchung --}}
@@ -186,7 +186,7 @@
 
         {{-- ── Inventuren ──────────────────────────────────────────────── --}}
         @if($reiter === 'inventur')
-            @if($inventur === null)
+            {{-- Vorne nur die Liste (Inventur Juni, September …); Zählen, Ergänzen, Buchen im Editor (Wunsch Dominique 2026-10-08) --}}
                 <x-fa::section title="Neue Inventur" icon="heroicon-o-clipboard-document-check" description="Die Zählliste wird mit allem vorbelegt, was am Lagerort Bestand hat oder in den letzten 90 Tagen eingekauft wurde." data-lager-inventur-neu>
                     <div class="flex flex-wrap items-end gap-2">
                         <x-fa::field label="Lagerort" for="inv-ort"><x-fa::select id="inv-ort" wire:model="neuLagerortId" :options="$orte->pluck('name', 'id')" class="w-48" /></x-fa::field>
@@ -216,12 +216,15 @@
                         </table>
                     @endif
                 </x-fa::section>
-            @else
+            <x-foodalchemist::modal name="lager-inventur" fullscreen dark-canvas title="Inventur" :title-name="$inventur !== null ? $inventur->count_date->format('d.m.Y') . ' · ' . ($inventur->location?->name ?? '—') : null">
+                @if($inventur !== null)
+                <div class="flex flex-col gap-4" data-lager-inventur-editor>
+                @if($fehler)<x-fa::notice tone="crit">{{ $fehler }}</x-fa::notice>@endif
+                @if($hinweis)<x-fa::notice tone="info">{{ $hinweis }}</x-fa::notice>@endif
                 @php $gebucht = $inventur->istGebucht(); @endphp
-                <x-fa::section :title="'Inventur ' . $inventur->count_date->format('d.m.Y') . ' · ' . ($inventur->location?->name ?? '—')" icon="heroicon-o-clipboard-document-check" data-lager-inventur="{{ $inventur->id }}">
+                <x-fa::section title="Zählliste" icon="heroicon-o-clipboard-document-check" data-lager-inventur="{{ $inventur->id }}">
                     <x-slot:actions>
                         <div class="flex flex-wrap items-center gap-2">
-                            <x-fa::button size="sm" variant="ghost" icon="heroicon-m-arrow-left" wire:click="inventurSchliessen">Zurück</x-fa::button>
                             <x-fa::button size="sm" icon="heroicon-m-printer" href="{{ route('foodalchemist.lager.zaehlliste', $inventur->id) }}" target="_blank">Zählliste drucken</x-fa::button>
                             @unless($gebucht)
                                 <x-fa::button size="sm" variant="danger" icon="heroicon-m-trash" wire:click="loeschen" wire:confirm="Offene Inventur verwerfen?">Verwerfen</x-fa::button>
@@ -335,7 +338,9 @@
                         </div>
                     @endunless
                 </x-fa::section>
-            @endif
+                </div>
+                @endif
+            </x-foodalchemist::modal>
         @endif
 
         {{-- ── Eigenproduktion (Spec 69) ─────────────────────────────────── --}}

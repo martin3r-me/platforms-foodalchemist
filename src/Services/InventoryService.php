@@ -119,6 +119,8 @@ class InventoryService
             'display' => $this->displayQuantity($qty, $unit),
             'shortage_base' => $shortage,
             'shortage_display' => $this->displayQuantity($shortage, $unit),
+            // Spec 72: Gebinde, die nach Abzug des Lagers noch nötig sind (für „auf Restbedarf kürzen")
+            'packs_fuer_rest' => ($jeGebinde = $this->baseUnitForLine($line)[1]) > 0 ? (float) ceil($shortage / $jeGebinde - 1e-9) : null,
         ];
     }
 
