@@ -370,6 +370,7 @@
                                                 <span class="{{ $leise }}">{{ $p->zuordnungen_count }} GP</span>
                                             </div>
                                         </div>
+                                        <x-fa::icon-button size="sm" icon="heroicon-m-tag" label="Regal-Etikett drucken" :href="route('foodalchemist.etiketten.index', ['quelle' => 'stellplatz', 'id' => $p->id])" target="_blank" />
                                         <x-fa::icon-button size="sm" tone="danger" icon="heroicon-m-trash" label="Stellplatz löschen" wire:click="platzLoeschen({{ $p->id }})" wire:confirm="Stellplatz löschen? Die zugeordneten Grundprodukte verlieren ihren Stammplatz." />
                                     </li>
                                 @endforeach

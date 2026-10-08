@@ -305,6 +305,12 @@ return [
                     'route' => 'foodalchemist.produktion.wandmonitor',
                     'icon'  => 'heroicon-o-tv',
                 ],
+                [
+                    // Spec 70: Etiketten für Eigenproduktion, Anbruch und Stellplätze.
+                    'label' => 'Etiketten',
+                    'route' => 'foodalchemist.etiketten.index',
+                    'icon'  => 'heroicon-o-tag',
+                ],
             ],
         ],
         [

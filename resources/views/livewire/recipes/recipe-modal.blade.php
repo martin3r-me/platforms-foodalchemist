@@ -77,6 +77,11 @@
                                x-on:click="offen = false" class="{{ $menuePunkt }}" title="Druck- und PDF-Bericht mit Profilen und Filtern" data-rezept-druck>
                                 @svg('heroicon-o-printer', 'w-4 h-4 text-[var(--fa-ink-3)]') Rezept drucken
                             </a>
+                            {{-- Spec 70: Etikett (Allergene, Zutaten, verbrauchen bis) --}}
+                            <a href="{{ route('foodalchemist.etiketten.index', ['quelle' => 'recipe', 'id' => $recipeId]) }}" target="_blank" role="menuitem"
+                               x-on:click="offen = false" class="{{ $menuePunkt }}" data-rezept-etikett>
+                                @svg('heroicon-o-tag', 'w-4 h-4 text-[var(--fa-ink-3)]') Etikett drucken
+                            </a>
                             {{-- R6: Vorlage-Markierung (Basis für «Aus Vorlage» im Browser) --}}
                             <button type="button" role="menuitem" wire:click="templateToggle" x-on:click="offen = false" class="{{ $menuePunkt }}"
                                     title="Vorlage für neue Rezepte (im Browser: aus Vorlage anlegen)" data-template-toggle>

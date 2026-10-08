@@ -95,6 +95,7 @@ class Index extends Component
         'betriebe' => ['label' => 'Betriebe & Standorte', 'hint' => 'Standorte und Ausgabestellen, Vorlage und Logo je Betrieb'],
         // Spec 59: zentraler Chip-Katalog für Speiseplan-Vorgaben („mind. 2× vegan je Woche“) —
         // die Vorgaben selbst stehen je Plan im Speiseplan-Editor (Reiter Stammdaten).
+        'etiketten' => ['label' => 'Etiketten', 'hint' => 'Etikett-Vorlagen: Format, Felder, Datum vorbelegt oder zum Handschreiben, Logo und Design'],
         'speiseplan-chips' => ['label' => 'Speiseplan-Chips', 'hint' => 'Prüf-Chips für Speiseplan-Vorgaben: Ernährungsform oder Hauptgruppe, Standardwerte mindestens und höchstens'],
     ];
 
@@ -110,7 +111,7 @@ class Index extends Component
         'betrieb' => ['label' => 'Betrieb & Küche', 'sektionen' => ['betriebe', 'posten', 'rollen', 'kueche']],
         'kalkulation' => ['label' => 'Einkauf & Kalkulation', 'sektionen' => ['einkauf', 'kalkulation', 'herstellkosten', 'aufschlagsklassen']],
         'ki' => ['label' => 'KI & Wissen', 'sektionen' => ['ki', 'food-dna', 'kunde-dna', 'brief-vorlagen', 'trendradar', 'wissenskategorien', 'wissenssteuerung']],
-        'ausgabe' => ['label' => 'Ausgabe', 'sektionen' => ['schreibstile', 'praesentations-designs', 'speiseplan-chips']],
+        'ausgabe' => ['label' => 'Ausgabe', 'sektionen' => ['schreibstile', 'praesentations-designs', 'speiseplan-chips', 'etiketten']],
     ];
 
     public function mount(string $sektion = 'einheiten'): void
