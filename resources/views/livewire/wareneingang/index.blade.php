@@ -108,7 +108,7 @@
                                                 <td class="text-right tabular-nums">{{ $zahl($z['bestellt']) }}</td>
                                                 <td class="text-right tabular-nums">{{ $zahl($z['bisher']) }}</td>
                                                 <td class="text-right tabular-nums">{{ $zahl($z['offen']) }}</td>
-                                                <td class="text-right"><x-fa::input size="sm" numeric class="w-20" wire:model.blur="zeilen.{{ $id }}.qty" aria-label="geliefert" data-we-menge="{{ $id }}" /></td>
+                                                <td class="text-right"><x-fa::input size="sm" numeric class="w-20" wire:model.live.blur="zeilen.{{ $id }}.qty" aria-label="geliefert" data-we-menge="{{ $id }}" /></td>
                                                 <td>
                                                     <x-fa::select size="sm" wire:model.live="zeilen.{{ $id }}.grund" placeholder="–" aria-label="Abweichungsgrund">
                                                         @foreach($gruende as $gk => $gl)<option value="{{ $gk }}">{{ $gl }}</option>@endforeach
