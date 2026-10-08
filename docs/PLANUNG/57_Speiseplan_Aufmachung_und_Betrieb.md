@@ -390,6 +390,18 @@ sondern die Menge direkt aus der Darreichung — dieselbe Rechnung wie der Porti
 **Folge:** Offene Aufträge aus Speiseplänen werden nach dem Deploy einmal als veraltet markiert
 (Ziele tragen jetzt `presentation_id`), freigegebener Einkaufsbedarf muss neu freigegeben werden.
 
+## Nachtrag 2026-10-08 · Paket-Gerichte: Darreichung wählbar, Positionen bleiben erhalten
+
+- Paket-Editor (Concepter → Pakete → Aufbau): Darreichung je Posten wählbar (ab zwei Formen),
+  Preis/EK/Gewicht je Person und Produktion folgen der Form. `PaketService::setGerichtDarreichung`
+  mit Guard „Form gehört zum Gericht".
+- `PaketService::syncGerichte` erhält bestehende Positionen (Menge, Einheit, Darreichung,
+  Geschirr) statt alle Zeilen zu löschen; ein Feld wird nur überschrieben, wenn das Item es
+  mitbringt. Vorher gingen beim Hinzufügen/Entfernen Form und Geschirr verloren, in der
+  Paket-Übersicht sogar Menge und Einheit. `duplicate` übernimmt Form und Geschirr.
+- MCP `paket_gerichte.SET`: `presentation_id` je Item (0 = Standard, weglassen = unverändert);
+  Payload liefert `presentation_id` + `darreichung`.
+
 ## Reihenfolge (Vorschlag)
 
 | Welle | Pakete | Warum zuerst |
