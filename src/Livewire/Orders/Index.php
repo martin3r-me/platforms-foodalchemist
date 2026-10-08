@@ -100,10 +100,15 @@ class Index extends Component
         }
     }
 
-    /** Zeilen-Klick → Bestellung in der rechten Detailspalte auswählen. */
+    /**
+     * Zeilen-Klick → Bestellung im Editor öffnen (Spec 73, Dominique: „ich kann keine Bestellung öffnen" —
+     * die Auswahl landete nur in der oft eingeklappten Detailspalte). Gehört sie zu einer Runde, bietet der
+     * Editor „Ganze Runde öffnen" an. Die Detailspalte zeigt weiter die Auswahl.
+     */
     public function oeffnen(int $id): void
     {
         $this->selectedOrderId = $id;
+        $this->dispatch('orders-editor.bearbeiten', id: $id)->to(Editor::class);
     }
 
     /** Zeitraum-Preset togglen und das von/bis-Fenster daraus setzen. */
@@ -179,6 +184,30 @@ class Index extends Component
         }
 
         $this->dispatch('orders-editor.round', id: $this->selectedRoundId)->to(Editor::class);
+    }
+
+    /** Spec 73: Runde löschen (nur ohne versendete Bestellung). */
+    public function rundeLoeschen(OrderService $orders): void
+    {
+        if ($this->selectedRoundId === null) {
+            return;
+        }
+        try {
+            $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
+            $r = $orders->deleteRound($team, $this->selectedRoundId);
+            $this->selectedRoundId = null;
+            $this->hinweis = 'Bestellrunde gelöscht' . (count($r['geloescht']) > 0 ? ' — ' . count($r['geloescht']) . ' Entwurf/Entwürfe entfernt.' : '.');
+            $this->fehler = null;
+        } catch (\Throwable $e) {
+            $this->fehler = $e->getMessage();
+        }
+    }
+
+    #[\Livewire\Attributes\On('orders-runde-geloescht')]
+    public function rundeWurdeGeloescht(int $geloescht = 0): void
+    {
+        $this->selectedRoundId = null;
+        $this->hinweis = 'Bestellrunde gelöscht' . ($geloescht > 0 ? ' — ' . $geloescht . ' Entwurf/Entwürfe entfernt.' : '.');
     }
 
     public function rundeVersenden(OrderService $orders): void

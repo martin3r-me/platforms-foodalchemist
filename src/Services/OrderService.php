@@ -209,6 +209,19 @@ class OrderService
                     $this->previewGp($team, $gruppen, $unresolved, $source, $date, $reference, $label, $sourceRef, $strategie, $overrides);
                 } elseif ($type === 'recipe') {
                     $this->previewZiel($team, $gruppen, $unresolved, $warnings, $this->zielAusRecipeSource($source), $date, $reference, $label, $sourceRef, $strategie, $overrides, $rezeptLager);
+                } elseif ($type === 'concept' || $type === 'paket') {
+                    // Spec 73: Konzept / Paket × Personen — Auflösung wie in der Produktion
+                    $this->previewZiel($team, $gruppen, $unresolved, $warnings, $this->zielAusMengenQuelle($source), $date, $reference, $label, $sourceRef, $strategie, $overrides, $rezeptLager);
+                } elseif ($type === 'nachfuellen') {
+                    // Spec 74: Lagerartikel unter Mindestbestand → auf Sollbestand auffüllen
+                    foreach (app(LagerartikelService::class)->unterMindest($team) as $la) {
+                        $qty = in_array($la['base'], ['g', 'ml'], true) ? $la['nachfuellen_basis'] / 1000 : $la['nachfuellen_basis'];
+                        if ($qty <= 0) {
+                            continue;
+                        }
+                        $this->previewGp($team, $gruppen, $unresolved, ['type' => 'gp', 'id' => $la['gp_id'], 'qty' => round($qty, 3), 'unit' => $la['base'] === 'Stk' ? 'stk' : 'kg'],
+                            $date, $reference !== '' ? $reference : 'Lagerartikel nachfüllen', 'Nachfüllen: ' . $la['name'], 'nachfuellen:gp:' . $la['gp_id'], $strategie, $overrides);
+                    }
                 } elseif ($type === 'production') {
                     $production = FoodAlchemistProductionOrder::visibleToTeam($team)->find((int) ($source['id'] ?? 0));
                     if ($production === null) {
@@ -243,7 +256,7 @@ class OrderService
             }
         }
 
-        [$gruppen, $ausLager, $ausgelassen] = $this->nachbearbeitePreview($team, $gruppen, $overrides);
+        [$gruppen, $ausLager, $ausgelassen, $vorrat] = $this->nachbearbeitePreview($team, $gruppen, $overrides);
         $ordersPreview = $this->finalisierePreviewGruppen($gruppen);
         $totalNet = round(array_sum(array_map(fn ($g) => (float) ($g['total_net'] ?? 0), $ordersPreview)), 2);
 
@@ -254,6 +267,9 @@ class OrderService
             'ausgelassen' => $ausgelassen,
             'lager_abgleich' => ! empty($overrides['lager_abgleich']),
             'rezept_lager' => $this->rezeptLagerAnzeige($rezeptLager),
+            'vorrat' => $vorrat,                                                        // Spec 74: Lagerartikel aus dem Rezeptbedarf
+            'nachfuellen_moeglich' => count(app(LagerartikelService::class)->unterMindest($team)),
+            'nachfuellen_aktiv' => collect($sources)->contains(fn ($q) => ($q['type'] ?? '') === 'nachfuellen'),
             'unresolved' => array_values($unresolved),
             'warnings' => array_values(array_unique($warnings)),
             'totals' => [
@@ -322,7 +338,7 @@ class OrderService
             $this->stampStrategyOnOrders($team, $touched, $strategie);
             $this->deleteEmptyReplannedDrafts($team, $cleared);
 
-            $roundDetail = $this->persistRound($team, $touched, $strategie, $userId, $round);
+            $roundDetail = $this->persistRound($team, $touched, $strategie, $userId, $round + $this->rundenStand($team, $sources, $overrides, $preview, $replacementSources));
 
             return [
                 'orders' => array_values(array_unique(array_map('intval', $touched))),
@@ -361,8 +377,8 @@ class OrderService
                 $this->recomputeOrder($draft->refresh());
                 $this->kopfAusQuelle($team, (int) $draft->id, $reference);
                 $touched[] = (int) $draft->id;
-            } elseif ($type === 'recipe') {
-                $res = $this->addNeedFromTarget($team, $this->zielAusRecipeSource($source), $sourceRef, $userId, $strategie, $date);
+            } elseif (in_array($type, ['recipe', 'concept', 'paket'], true)) {
+                $res = $this->addNeedFromTarget($team, $type === 'recipe' ? $this->zielAusRecipeSource($source) : $this->zielAusMengenQuelle($source), $sourceRef, $userId, $strategie, $date);
                 foreach ($res['orders'] as $id) {
                     $this->kopfAusQuelle($team, (int) $id, $reference);
                 }
@@ -386,7 +402,7 @@ class OrderService
         }
         $this->stampStrategyOnOrders($team, $touched, $strategie);
         $this->deleteEmptyReplannedDrafts($team, $cleared);
-        $roundDetail = $this->persistRound($team, $touched, $strategie, $userId, $round);
+        $roundDetail = $this->persistRound($team, $touched, $strategie, $userId, $round + $this->rundenStand($team, $sources, $overrides, $preview, $replacementSources));
 
         return [
             'orders' => array_values(array_unique(array_map('intval', $touched))),
@@ -395,6 +411,90 @@ class OrderService
             'preview' => $preview,
             'round' => $roundDetail,
         ];
+    }
+
+    /**
+     * Spec 73: was die Runde über sich speichert — Quellen + Einstellungen (vollständig wieder öffnen),
+     * Source-Refs (sauber löschen) und was sie aus dem Lager angerechnet hat (Reservierung).
+     */
+    private function rundenStand(Team $team, array $sources, array $overrides, array $preview, array $replacementSources): array
+    {
+        $gp = [];
+        foreach (collect($preview['orders_preview'] ?? [])->flatMap(fn ($g) => $g['positionen'] ?? [])->concat($preview['aus_lager'] ?? []) as $pos) {
+            if (($pos['gp_id'] ?? null) !== null && (float) ($pos['lager_g'] ?? 0) > 0) {
+                $gp[(int) $pos['gp_id']] = round(($gp[(int) $pos['gp_id']] ?? 0) + (float) $pos['lager_g'], 2);
+            }
+        }
+        $rezept = [];
+        foreach ($preview['rezept_lager'] ?? [] as $r) {
+            if ((float) ($r['abgezogen_basis'] ?? 0) > 0) {
+                $rezept[(int) $r['recipe_id']] = (float) $r['abgezogen_basis'];
+            }
+        }
+
+        return ['_stand' => [
+            'sources' => array_values($sources),
+            'overrides' => array_diff_key($overrides, ['round_id' => 1]),
+            'source_refs' => array_values(array_unique(array_merge($this->previewSourceRefs($preview), $this->replacementSourceRefs($team, $replacementSources, $preview)))),
+            'lager_reserviert' => $gp === [] && $rezept === [] ? null : ['gp' => $gp, 'rezept' => $rezept],
+        ]];
+    }
+
+    /**
+     * Spec 73: Lager, das andere gespeicherte Runden schon angerechnet haben (bis zu ihrem Liefertag).
+     *
+     * @return array{gp: array<int, float>, rezept: array<int, float>, runden: array<int, list<string>>}
+     */
+    public function lagerReserviert(Team $team, ?int $ohneRundeId = null): array
+    {
+        $out = ['gp' => [], 'rezept' => [], 'runden' => []];
+        $runden = FoodAlchemistOrderRound::where('team_id', $team->id)->whereNotNull('lager_reserviert')
+            ->when($ohneRundeId !== null, fn ($q) => $q->whereKeyNot($ohneRundeId))
+            ->where(fn ($q) => $q->whereDate('desired_delivery_date', '>=', now()->toDateString())
+                ->orWhere(fn ($w) => $w->whereNull('desired_delivery_date')->where('created_at', '>=', now()->subDays(14))))
+            ->get(['id', 'label', 'lager_reserviert']);
+        foreach ($runden as $r) {
+            foreach (['gp', 'rezept'] as $art) {
+                foreach ((array) ($r->lager_reserviert[$art] ?? []) as $id => $menge) {
+                    $out[$art][(int) $id] = ($out[$art][(int) $id] ?? 0) + (float) $menge;
+                    $out['runden'][$art . ':' . (int) $id][] = (string) $r->label;
+                }
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Spec 73: Bestellrunde löschen. Nur solange keine ihrer Bestellungen versendet ist. Ihre Beiträge
+     * verschwinden aus den Entwürfen; Entwürfe, die nur zu dieser Runde gehören, werden ganz gelöscht.
+     *
+     * @return array{geloescht: list<int>, aktualisiert: list<int>}
+     */
+    public function deleteRound(Team $team, int $roundId): array
+    {
+        $round = FoodAlchemistOrderRound::where('team_id', $team->id)->with('orders.rounds:id')->findOrFail($roundId);
+        $versendet = $round->orders->filter(fn (FoodAlchemistOrder $o) => ($o->status instanceof OrderStatus ? $o->status : OrderStatus::from((string) $o->status)) !== OrderStatus::Draft);
+        if ($versendet->isNotEmpty()) {
+            throw new \RuntimeException($versendet->count() . ' Bestellung(en) dieser Runde sind schon versendet — erst dort stornieren, dann die Runde löschen.');
+        }
+
+        return DB::transaction(function () use ($team, $round) {
+            $aktualisiert = $this->clearSourceRefsFromDrafts($team, (array) ($round->source_refs ?? []));
+            $geloescht = [];
+            foreach ($round->orders as $o) {
+                if ($o->rounds->count() <= 1) {     // gehört nur zu dieser Runde → ganz weg
+                    $o->lines()->delete();
+                    $o->delete();
+                    $geloescht[] = (int) $o->id;
+                }
+            }
+            $this->deleteEmptyReplannedDrafts($team, $aktualisiert);
+            $round->orders()->detach();
+            $round->delete();
+
+            return ['geloescht' => $geloescht, 'aktualisiert' => array_values(array_diff(array_map('intval', $aktualisiert), $geloescht))];
+        });
     }
 
     /** @return list<array> */
@@ -437,6 +537,9 @@ class OrderService
                 'sourcing_strategy' => $strategy?->value,
                 'note' => trim((string) ($metadata['note'] ?? '')) ?: $round->note,
             ]);
+            if (isset($metadata['_stand'])) {
+                $round->fill($metadata['_stand']);
+            }
             $round->save();
 
             $ownedIds = FoodAlchemistOrder::query()
@@ -699,6 +802,9 @@ class OrderService
             'note' => $round->note,
             'created_at' => $round->created_at?->toIso8601String(),
             'production_ids' => $productionIds,
+            'sources' => (array) ($round->sources ?? []),       // Spec 73: Runde öffnet vollständig wieder
+            'overrides' => (array) ($round->overrides ?? []),
+            'lager_reserviert' => $round->lager_reserviert,
             'orders' => $orders->map(fn (FoodAlchemistOrder $order) => [
                 'id' => (int) $order->id,
                 'supplier' => $order->supplier?->name ?? '—',
@@ -1195,6 +1301,16 @@ class OrderService
         };
     }
 
+    /** Spec 73: Konzept/Paket-Quelle → Ziel (Personen). */
+    private function zielAusMengenQuelle(array $source): array
+    {
+        $personen = max(1, (int) round($this->sourceQty($source)));
+
+        return ($source['type'] ?? '') === 'paket'
+            ? ['paket_id' => (int) ($source['id'] ?? 0), 'persons' => $personen]
+            : ['concept_id' => (int) ($source['id'] ?? 0), 'persons' => $personen];
+    }
+
     private function zielAusRecipeSource(array $source): array
     {
         $recipe = FoodAlchemistRecipe::find((int) ($source['id'] ?? 0));
@@ -1224,6 +1340,9 @@ class OrderService
             'gp' => (string) (FoodAlchemistGp::visibleToTeam($team)->find($id)?->name ?? ('Grundprodukt #'.$id)),
             'recipe' => (string) (FoodAlchemistRecipe::visibleToTeam($team)->find($id)?->name ?? ('Rezept #'.$id)),
             'production' => (string) (FoodAlchemistProductionOrder::visibleToTeam($team)->find($id)?->name ?? ('Produktion #'.$id)),
+            'concept' => (string) (\Platform\FoodAlchemist\Models\FoodAlchemistConcept::visibleToTeam($team)->find($id)?->name ?? ('Konzept #'.$id)),
+            'paket' => (string) (\Platform\FoodAlchemist\Models\FoodAlchemistPaket::visibleToTeam($team)->find($id)?->name ?? ('Paket #'.$id)),
+            'nachfuellen' => 'Lagerartikel nachfüllen',
             default => 'Quelle',
         };
     }
@@ -1267,20 +1386,37 @@ class OrderService
         $mengen = (array) ($overrides['menge'] ?? []);
         $global = ! empty($overrides['lager_abgleich']);
         $jePos = (array) ($overrides['lager_pos'] ?? []);
-        // Bestand immer lesen: jede Position zeigt, was vom GP im Lager liegt — abgezogen wird nur auf Knopfdruck
-        $lager = $this->lagerJeGp($team);
+        // Bestand immer lesen: jede Position zeigt, was vom GP im Lager liegt — abgezogen wird nur auf Knopfdruck.
+        // Spec 73: abzüglich dessen, was andere gespeicherte Runden schon angerechnet haben.
+        $reserviert = $this->lagerReserviert($team, isset($overrides['round_id']) ? (int) $overrides['round_id'] : null);
+        $lager = $this->lagerJeGp($team, $reserviert['gp']);
         $ausLager = [];
         $ausgelassen = [];
+        $vorrat = [];
+        $lagerartikel = app(LagerartikelService::class)->ids($team);
+        $vorratBestellen = (array) ($overrides['vorrat_bestellen'] ?? []);
         foreach ($gruppen as $gk => $g) {
             $neu = [];
             foreach ($g['positionen'] as $pos) {
                 $pk = $this->positionsSchluessel($pos);
                 $pos['position_key'] = $pk;
                 $gpId = $pos['gp_id'] ?? null;
+                $nachfuellen = str_starts_with((string) ($pos['source_ref'] ?? ''), 'nachfuellen:');
+                $pos['nachfuellen'] = $nachfuellen;
+                // 0. Spec 74: Lagerartikel (Gewürze, Öle …) kommen aus dem Vorrat, nicht aus dem Rezeptbedarf
+                if (! $nachfuellen && $gpId !== null && isset($lagerartikel[(int) $gpId]) && ($pos['type'] ?? '') !== 'supplier_item' && empty($vorratBestellen[$pk])) {
+                    $vorrat[] = $pos + ['supplier' => $g['supplier']];
+
+                    continue;
+                }
                 // 1. Lager — nur gerechneter Bedarf (Rezept/GP), nicht der feste Artikel in Gebinden
-                $lagerBar = ($pos['type'] ?? '') !== 'supplier_item' && $gpId !== null && (float) ($pos['needed_base_g'] ?? 0) > 0 && ($lager[$gpId] ?? 0) > 0;
+                $lagerBar = ! $nachfuellen && ($pos['type'] ?? '') !== 'supplier_item' && $gpId !== null && (float) ($pos['needed_base_g'] ?? 0) > 0 && ($lager[$gpId] ?? 0) > 0;
                 if ($lagerBar) {
                     $pos['lager_verfuegbar_g'] = round((float) $lager[$gpId], 2);
+                }
+                if ($gpId !== null && ($reserviert['gp'][$gpId] ?? 0) > 0) {
+                    $pos['lager_reserviert_g'] = round((float) $reserviert['gp'][$gpId], 2);
+                    $pos['lager_reserviert_fuer'] = array_values(array_unique($reserviert['runden']['gp:' . $gpId] ?? []));
                 }
                 $abziehen = array_key_exists($pk, $jePos) ? (bool) $jePos[$pk] : $global;
                 if ($lagerBar && $abziehen) {
@@ -1327,11 +1463,11 @@ class OrderService
             $gruppen[$gk]['total_net'] = round(array_sum(array_map(fn ($p) => (float) ($p['line_total'] ?? 0), $neu)), 2);
         }
 
-        return [$gruppen, $ausLager, $ausgelassen];
+        return [$gruppen, $ausLager, $ausgelassen, $vorrat];
     }
 
     /** Spec 71: verfügbarer Lagerbestand je GP in g (Stk über Stückgewicht), alle aktiven Lagerorte des Teams. @return array<int, float> */
-    private function lagerJeGp(Team $team): array
+    private function lagerJeGp(Team $team, array $reserviert = []): array
     {
         $rows = \Platform\FoodAlchemist\Models\FoodAlchemistInventoryStock::query()
             ->where('foodalchemist_inventory_stocks.team_id', $team->id)->whereNotNull('foodalchemist_inventory_stocks.gp_id')->where('qty_base', '>', 0)
@@ -1349,6 +1485,11 @@ class OrderService
             };
             $out[(int) $r->gp_id] = ($out[(int) $r->gp_id] ?? 0) + $g;
         }
+        foreach ($reserviert as $gpId => $g) {     // Spec 73: von anderen Runden schon angerechnet
+            if (isset($out[$gpId])) {
+                $out[$gpId] = max(0.0, $out[$gpId] - (float) $g);
+            }
+        }
 
         return $out;
     }
@@ -1363,9 +1504,11 @@ class OrderService
     {
         $global = ! empty($overrides['lager_abgleich']);
         $jeRezept = (array) ($overrides['lager_rezept'] ?? []);
+        $reserviert = $this->lagerReserviert($team, isset($overrides['round_id']) ? (int) $overrides['round_id'] : null)['rezept'];
         $topf = [];
         foreach (app(EigenproduktionService::class)->lagerJeRezept($team, null) as $rid => $l) {
-            $topf[(int) $rid] = ['menge' => (float) $l['menge'], 'start' => (float) $l['menge'], 'base' => (string) $l['base'],
+            $frei = max(0.0, (float) $l['menge'] - (float) ($reserviert[(int) $rid] ?? 0));
+            $topf[(int) $rid] = ['menge' => $frei, 'start' => $frei, 'base' => (string) $l['base'],
                 'abziehen' => array_key_exists($rid, $jeRezept) ? (bool) $jeRezept[$rid] : $global, 'bedarf' => 0.0, 'genutzt' => 0.0];
         }
 
@@ -1385,7 +1528,7 @@ class OrderService
             $out[] = ['recipe_id' => (int) $rid, 'name' => (string) ($namen[$rid] ?? "Rezept #{$rid}"), 'base' => $t['base'],
                 'einheit' => $ep->anzeigeEinheit($t['base']), 'abziehen' => (bool) $t['abziehen'],
                 'im_lager' => $ep->anzeigeMenge($t['start'], $t['base']), 'bedarf' => $ep->anzeigeMenge($t['bedarf'], $t['base']),
-                'abgezogen' => $ep->anzeigeMenge($t['genutzt'], $t['base'])];
+                'abgezogen' => $ep->anzeigeMenge($t['genutzt'], $t['base']), 'abgezogen_basis' => round((float) $t['genutzt'], 4)];
         }
 
         return $out;
