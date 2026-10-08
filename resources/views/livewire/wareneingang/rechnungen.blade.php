@@ -100,10 +100,11 @@
         @else
             <div class="overflow-x-auto">
                 <table class="fa-table fa-table--compact min-w-[760px]">
-                    <thead><tr><th>Datum</th><th>Nummer</th><th>Lieferant</th><th class="text-right">Summe</th><th>fällig</th><th>Status</th><th><span class="sr-only">Aktionen</span></th></tr></thead>
+                    <thead><tr>@if($standortSpalte)<th>Standort</th>@endif<th>Datum</th><th>Nummer</th><th>Lieferant</th><th class="text-right">Summe</th><th>fällig</th><th>Status</th><th><span class="sr-only">Aktionen</span></th></tr></thead>
                     <tbody>
                         @foreach($liste as $r)
                             <tr wire:key="re-l-{{ $r['id'] }}" class="cursor-pointer" wire:click="umschalten({{ $r['id'] }})" data-re-rechnung="{{ $r['id'] }}">
+                                @if($standortSpalte)<td data-standort>{{ $r['standort'] ?? '—' }}</td>@endif
                                 <td>{{ $datum($r['invoice_date']) }}</td>
                                 <td class="font-medium">{{ $r['invoice_number'] ?? 'ohne Nr.' }}@if($r['source'] === 'editor') <x-fa::badge>aus Bestell-Editor</x-fa::badge>@elseif($r['source'] === 'altbestand') <x-fa::badge>Altbestand</x-fa::badge>@endif @if($r['anhang']) @svg('heroicon-o-paper-clip', 'inline w-3.5 h-3.5 text-[var(--fa-ink-3)]')@endif</td>
                                 <td>{{ $r['lieferant'] }}</td>
@@ -114,14 +115,17 @@
                                     @if($r['strittig'])<x-fa::badge tone="crit">strittig</x-fa::badge>@endif
                                 </td>
                                 <td class="text-right whitespace-nowrap" onclick="event.stopPropagation()">
-                                    @if($r['status'] === 'erfasst' && $darfErfassen)
+                                    @if((int) ($r['team_id'] ?? $teamId) !== $teamId)
+                                        <span class="{{ $leise }}">nur lesend</span>
+                                    @elseif($r['status'] === 'erfasst' && $darfErfassen)
                                         <x-fa::button size="sm" wire:click="bearbeiten({{ $r['id'] }})">Bearbeiten</x-fa::button>
                                     @endif
                                 </td>
                             </tr>
                             @if($detail !== null && $detail['id'] === $r['id'])
+                                @php $detailEigen = (int) ($detail['team_id'] ?? $teamId) === $teamId; $dE = $darfErfassen && $detailEigen; $dF = $darfFreigeben && $detailEigen; @endphp
                                 <tr wire:key="re-d-{{ $r['id'] }}" data-re-detail="{{ $r['id'] }}">
-                                    <td colspan="7" class="bg-[var(--fa-ground)]">
+                                    <td colspan="{{ $standortSpalte ? 8 : 7 }}" class="bg-[var(--fa-ground)]">
                                         <div class="flex flex-col gap-3 py-2">
                                             <div class="flex flex-wrap items-center gap-3 {{ $leise }}">
                                                 <span>Summe Positionen <strong class="text-[var(--fa-ink)]">{{ number_format($detail['summe_positionen'], 2, ',', '.') }} €</strong>@if($detail['total_net'] !== null) · laut Beleg {{ number_format($detail['total_net'], 2, ',', '.') }} €@endif</span>
@@ -151,7 +155,7 @@
                                                                 @endif
                                                             </td>
                                                             <td>
-                                                                @if($z['abweichung'] && $detail['status'] === 'erfasst' && $darfErfassen)
+                                                                @if($z['abweichung'] && $detail['status'] === 'erfasst' && $dE)
                                                                     <div class="flex items-center gap-1">
                                                                         <x-fa::input size="sm" class="w-48" wire:model="begruendung.{{ $z['id'] }}" placeholder="z. B. Preiserhöhung lt. Mail" aria-label="Begründung" />
                                                                         <x-fa::button size="sm" wire:click="begruenden({{ $z['id'] }})">OK</x-fa::button>
@@ -166,22 +170,22 @@
                                             </table>
                                             <div class="flex flex-wrap items-center gap-2">
                                                 @if($detail['status'] === 'erfasst')
-                                                    @if($darfFreigeben)
+                                                    @if($dF)
                                                         <x-fa::button variant="primary" size="sm" icon="heroicon-o-check-badge" wire:click="freigeben({{ $detail['id'] }})" :disabled="! $detail['freigebbar']" data-re-freigeben>Freigeben</x-fa::button>
                                                     @else
                                                         <span class="{{ $leise }}">Freigeben dürfen Inhaber, Admins und Mitglieder mit Freigabe-Häkchen.</span>
                                                     @endif
                                                     @unless($detail['freigebbar'])<span class="{{ $leise }}">{{ $detail['unbegruendet'] > 0 ? $detail['unbegruendet'] . ' Abweichung(en) begründen oder reklamieren (Reiter Abgleich).' : 'Summe der Positionen stimmt nicht mit dem Beleg.' }}</span>@endunless
                                                 @endif
-                                                @if($detail['status'] === 'freigegeben' && $darfFreigeben)
+                                                @if($detail['status'] === 'freigegeben' && $dF)
                                                     <x-fa::button size="sm" icon="heroicon-o-banknotes" wire:click="bezahlt({{ $detail['id'] }})" data-re-bezahlt>Als bezahlt markieren</x-fa::button>
                                                 @endif
-                                                @if(in_array($detail['status'], ['erfasst', 'freigegeben'], true) && $darfErfassen)
+                                                @if(in_array($detail['status'], ['erfasst', 'freigegeben'], true) && $dE)
                                                     <x-fa::button size="sm" variant="ghost" wire:click="strittig({{ $detail['id'] }}, {{ $detail['strittig'] ? 'false' : 'true' }})">{{ $detail['strittig'] ? 'nicht mehr strittig' : 'als strittig markieren' }}</x-fa::button>
                                                 @endif
-                                                @if($detail['status'] === 'erfasst' && $darfErfassen)
+                                                @if($detail['status'] === 'erfasst' && $dE)
                                                     <x-fa::button size="sm" variant="ghost" wire:click="stornieren({{ $detail['id'] }})" wire:confirm="Rechnung löschen?">Löschen</x-fa::button>
-                                                @elseif($detail['status'] === 'freigegeben' && $darfFreigeben)
+                                                @elseif($detail['status'] === 'freigegeben' && $dF)
                                                     <x-fa::button size="sm" variant="ghost" wire:click="stornieren({{ $detail['id'] }})" wire:confirm="Freigegebene Rechnung stornieren? Die Prüfwerte an den Bestellungen werden zurückgerechnet.">Stornieren</x-fa::button>
                                                 @endif
                                             </div>

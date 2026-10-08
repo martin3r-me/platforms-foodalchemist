@@ -48,6 +48,9 @@ class ActiveOutletBar extends Component
             : FoodAlchemistOutlet::where('team_id', $team->id)->where('is_inactive', false)
                 ->orderBy('sort_order')->orderBy('name')->get(['id', 'name']);
 
-        return view('foodalchemist::livewire.active-outlet-bar', ['betriebe' => $betriebe]);
+        // Spec 77c: Unter-Team mit festem Betrieb — nur Anzeige
+        $fest = $team !== null ? app(\Platform\FoodAlchemist\Services\StandortService::class)->zugeordneterBetrieb($team) : null;
+
+        return view('foodalchemist::livewire.active-outlet-bar', ['betriebe' => $betriebe, 'fest' => $fest]);
     }
 }

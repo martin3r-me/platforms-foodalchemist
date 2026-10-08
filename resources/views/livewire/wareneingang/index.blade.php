@@ -171,11 +171,12 @@
                 @else
                     <div class="overflow-x-auto">
                         <table class="fa-table fa-table--compact min-w-[720px]">
-                            <thead><tr><th>Liefertag</th><th>Lieferant</th><th>Bestellung</th><th class="text-right">Positionen offen</th><th class="text-right">Netto</th><th>Status</th><th><span class="sr-only">Aktionen</span></th></tr></thead>
+                            <thead><tr>@if($standortSpalte)<th>Standort</th>@endif<th>Liefertag</th><th>Lieferant</th><th>Bestellung</th><th class="text-right">Positionen offen</th><th class="text-right">Netto</th><th>Status</th><th><span class="sr-only">Aktionen</span></th></tr></thead>
                             <tbody>
                                 @foreach($erwartet as $tag => $rows)
                                     @foreach($rows as $r)
                                         <tr wire:key="we-e-{{ $r['order_id'] }}" data-we-erwartet-zeile="{{ $r['order_id'] }}">
+                                            @if($standortSpalte)<td data-standort>{{ $r['standort'] ?? '—' }}</td>@endif
                                             <td class="{{ $r['ueberfaellig'] ? 'text-[var(--fa-warn)] font-medium' : '' }}">
                                                 {{ $datum($r['liefertag']) }}
                                                 @if($r['heute'])<x-fa::badge tone="accent">heute</x-fa::badge>@endif
@@ -190,7 +191,7 @@
                                                 @if($r['teilweise_geliefert'])<x-fa::badge tone="warn">teilweise geliefert</x-fa::badge>@endif
                                             </td>
                                             <td class="text-right whitespace-nowrap">
-                                                @if($darf)
+                                                @if($darf && ($r['eigen'] ?? true))
                                                     <x-fa::button size="sm" variant="primary" wire:click="erfassen({{ $r['supplier_id'] }})">Lieferschein erfassen</x-fa::button>
                                                     @if($r['teilweise_geliefert'])
                                                         <x-fa::button size="sm" wire:click="nachlieferung({{ $r['order_id'] }})" wire:confirm="Bestellung {{ $r['nummer'] }} abschließen und die Fehlmenge als Nachlieferung anlegen?">Rest als Nachlieferung</x-fa::button>
@@ -229,10 +230,11 @@
                 @else
                     <div class="overflow-x-auto">
                         <table class="fa-table fa-table--compact min-w-[760px]">
-                            <thead><tr><th>Geliefert</th><th>Nummer</th><th>Lieferant</th><th class="text-right">Positionen</th><th class="text-right">Abweichungen</th><th class="text-right">Wert</th><th>Status</th><th><span class="sr-only">Aktionen</span></th></tr></thead>
+                            <thead><tr>@if($standortSpalte)<th>Standort</th>@endif<th>Geliefert</th><th>Nummer</th><th>Lieferant</th><th class="text-right">Positionen</th><th class="text-right">Abweichungen</th><th class="text-right">Wert</th><th>Status</th><th><span class="sr-only">Aktionen</span></th></tr></thead>
                             <tbody>
                                 @foreach($liste as $n)
                                     <tr wire:key="we-l-{{ $n['id'] }}" class="cursor-pointer" wire:click="umschalten({{ $n['id'] }})" data-we-lieferschein="{{ $n['id'] }}">
+                                        @if($standortSpalte)<td data-standort>{{ $n['standort'] ?? '—' }}</td>@endif
                                         <td>{{ $datum($n['delivered_on']) }}</td>
                                         <td class="font-medium">{{ $n['delivery_note_number'] ?? 'ohne Nr.' }}@if($n['source'] === 'editor') <x-fa::badge>aus Bestell-Editor</x-fa::badge>@elseif($n['source'] === 'altbestand') <x-fa::badge>Altbestand</x-fa::badge>@endif @if($n['anhang']) @svg('heroicon-o-paper-clip', 'inline w-3.5 h-3.5 text-[var(--fa-ink-3)]')@endif</td>
                                         <td>{{ $n['lieferant'] }}</td>
@@ -241,7 +243,10 @@
                                         <td class="text-right"><x-fa::money :value="$n['wert_net']" /></td>
                                         <td><x-fa::badge :tone="$statusTon[$n['status']] ?? 'neutral'">{{ $n['status_label'] }}</x-fa::badge></td>
                                         <td class="text-right whitespace-nowrap" onclick="event.stopPropagation()">
-                                            @if($darf && $n['status'] === 'entwurf')
+                                            @php $eigenerBeleg = (int) ($n['team_id'] ?? $teamId) === $teamId; @endphp
+                                            @if(! $eigenerBeleg)
+                                                <span class="{{ $leise }}">nur lesend</span>
+                                            @elseif($darf && $n['status'] === 'entwurf')
                                                 <x-fa::button size="sm" wire:click="bearbeiten({{ $n['id'] }})">Bearbeiten</x-fa::button>
                                                 <x-fa::button size="sm" variant="ghost" wire:click="loeschen({{ $n['id'] }})" wire:confirm="Entwurf löschen?">Löschen</x-fa::button>
                                             @elseif($darf && $n['status'] === 'gebucht')
@@ -251,7 +256,7 @@
                                     </tr>
                                     @if($detail !== null && $detail['id'] === $n['id'])
                                         <tr wire:key="we-d-{{ $n['id'] }}" data-we-detail="{{ $n['id'] }}">
-                                            <td colspan="8" class="bg-[var(--fa-ground)]">
+                                            <td colspan="{{ $standortSpalte ? 9 : 8 }}" class="bg-[var(--fa-ground)]">
                                                 <div class="flex flex-col gap-2 py-2">
                                                     <div class="flex flex-wrap items-center gap-3 {{ $leise }}">
                                                         @if($detail['bestellungen'] !== [])<span>Bestellungen: {{ collect($detail['bestellungen'])->map(fn ($b) => $b['nummer'] . ' (' . $b['status_label'] . ')')->implode(', ') }}</span>@endif
@@ -259,7 +264,7 @@
                                                         @if($detail['note'])<span>{{ $detail['note'] }}</span>@endif
                                                         @if($detail['anhang_url'])
                                                             <a href="{{ $detail['anhang_url'] }}" target="_blank" rel="noopener" class="underline" data-we-beleg>Beleg öffnen ({{ $detail['anhang'] }})</a>
-                                                            @if($darf)<button type="button" class="underline" wire:click="anhangEntfernen({{ $n['id'] }})" wire:confirm="Beleg entfernen?">entfernen</button>@endif
+                                                            @if($darf && $eigenerBeleg)<button type="button" class="underline" wire:click="anhangEntfernen({{ $n['id'] }})" wire:confirm="Beleg entfernen?">entfernen</button>@endif
                                                         @endif
                                                     </div>
                                                     <table class="fa-table fa-table--compact">

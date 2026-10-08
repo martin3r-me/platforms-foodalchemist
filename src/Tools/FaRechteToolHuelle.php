@@ -25,7 +25,7 @@ class FaRechteToolHuelle implements ToolContract, ToolMetadataContract
      * Schreibende Tools, die trotzdem jede Rolle nutzen darf: sie ändern nur die eigene Ansicht
      * des Benutzers (z. B. Betriebs-Brille), keine Team-Daten.
      */
-    public const FUER_JEDE_ROLLE = ['foodalchemist.outlets.SET_ACTIVE'];
+    public const FUER_JEDE_ROLLE = ['foodalchemist.outlets.SET_ACTIVE', 'foodalchemist.standorte.SET_BRILLE'];
 
     public function __construct(private readonly ToolContract $tool) {}
 

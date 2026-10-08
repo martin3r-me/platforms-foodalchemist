@@ -181,7 +181,9 @@ class Rechnungen extends Component
         if ($this->offenId !== null) {
             try {
                 $detail = $svc->detail($team, $this->offenId);
-                $detail['anhang_url'] = $detail['anhang'] !== null ? $svc->anhangUrl($team, $this->offenId) : null;
+                // Spec 77c: Rechnung eines Standorts (Team-Brille) nur lesend — Anhang-Link läuft über das besitzende Team
+                $eigen = (int) ($detail['team_id'] ?? $team->id) === (int) $team->id;
+                $detail['anhang_url'] = $detail['anhang'] !== null && $eigen ? $svc->anhangUrl($team, $this->offenId) : null;
                 foreach ($detail['zeilen'] as $z) {
                     $this->begruendung[$z['id']] ??= (string) $z['begruendung'];
                 }
@@ -201,6 +203,8 @@ class Rechnungen extends Component
             'summe' => $summe,
             'darfErfassen' => $rechte->darf(Auth::user(), $team, FaRolle::Kuratieren),
             'darfFreigeben' => $rechte->darf(Auth::user(), $team, FaRolle::Freigeben),
+            'teamId' => (int) $team->id,
+            'standortSpalte' => app(\Platform\FoodAlchemist\Services\StandortService::class)->zeigtStandorte($team),
         ]);
     }
 

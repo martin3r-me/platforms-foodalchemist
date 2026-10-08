@@ -2294,7 +2294,8 @@ class OrderService
         $von = ($filters['von'] ?? null) ?: null;
         $bis = ($filters['bis'] ?? null) ?: null;
 
-        $q = FoodAlchemistOrder::visibleToTeam($team)
+        // Spec 77c: Team-Brille — im Oberteam ggf. Unter-Teams (Standorte) statt Kette aufwärts
+        $q = app(StandortService::class)->leseBereichOderSichtbar(FoodAlchemistOrder::query(), $team)
             ->with([
                 'supplier:id,name,min_order_value,free_shipping_threshold,delivery_days,order_cutoff_time,order_lead_days',
                 'lines:id,order_id,supplier_item_id,gp_id,article_number,designation,packaging_unit,qty_packs,pack_price,received_qty_packs,quota_consumed_packs,source_contributions,note,received_note,invoice_note,claim_note',
@@ -2320,7 +2321,8 @@ class OrderService
     /** Detail-Aggregat für UI/MCP inkl. MOQ-Ampel. */
     public function detail(Team $team, int $orderId): array
     {
-        $order = FoodAlchemistOrder::visibleToTeam($team)
+        // Spec 77c: Oberteam darf Belege seiner Standorte lesend öffnen (is_owned/editierbar bleiben false)
+        $order = app(StandortService::class)->lesbarMitUnterTeams(FoodAlchemistOrder::query(), $team)
             ->with(['supplier', 'lines.gp:id,piece_default_g', 'lines.supplierItem'])
             ->findOrFail($orderId);
         $status = $order->status instanceof OrderStatus ? $order->status : OrderStatus::from((string) $order->status);

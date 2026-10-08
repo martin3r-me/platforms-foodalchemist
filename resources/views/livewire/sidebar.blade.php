@@ -24,6 +24,7 @@
 
     {{-- Ebene 2 (D2): aktiver Betrieb — die Preis-Dimension der ganzen FA (nur ausgeklappt). --}}
     <div x-show="!collapsed" class="px-2">
+        @livewire('foodalchemist.team-brille-bar')
         @livewire('foodalchemist.active-outlet-bar')
     </div>
 

@@ -842,7 +842,8 @@ class ProductionOrderService
     /** @return Collection<int, FoodAlchemistProductionOrder> */
     public function listForTeam(Team $team, ?string $status = null): Collection
     {
-        return FoodAlchemistProductionOrder::visibleToTeam($team)
+        // Spec 77c: Team-Brille (bei „eigen" unverändert visibleToTeam)
+        return app(StandortService::class)->leseBereichOderSichtbar(FoodAlchemistProductionOrder::query(), $team)
             ->when($status !== null, fn ($q) => $q->where('status', $status))
             ->orderByRaw("CASE status WHEN 'planned' THEN 0 ELSE 1 END")
             ->orderBy('production_date')
@@ -890,7 +891,7 @@ class ProductionOrderService
     {
         $suche = trim((string) ($filters['suche'] ?? ''));
 
-        return FoodAlchemistProductionOrder::visibleToTeam($team)
+        return app(StandortService::class)->leseBereichOderSichtbar(FoodAlchemistProductionOrder::query(), $team)
             ->when(($filters['status'] ?? '') !== '', fn ($q) => $q->where('status', $filters['status']))
             // whereDate: `production_date` persistiert mit Zeitanteil — ein reiner
             // Datumsvergleich würde den letzten Tag des Fensters verschlucken.
@@ -904,7 +905,7 @@ class ProductionOrderService
     /** Detail-Aggregat für UI/MCP. */
     public function detail(Team $team, int $orderId): array
     {
-        $order = FoodAlchemistProductionOrder::visibleToTeam($team)->with(['lines.recipe:id,name', 'lines.station:id,name'])->findOrFail($orderId);
+        $order = app(StandortService::class)->lesbarMitUnterTeams(FoodAlchemistProductionOrder::query(), $team)->with(['lines.recipe:id,name', 'lines.station:id,name'])->findOrFail($orderId);
         $status = $order->status instanceof ProductionOrderStatus ? $order->status : ProductionOrderStatus::from((string) $order->status);
 
         // P4: verknüpfte Bestellschienen (kompakt fürs UI/MCP) + Stale-Marker.

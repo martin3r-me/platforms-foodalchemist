@@ -57,7 +57,7 @@
     $mitBestelldatum = $sicht === 'bestellungen';
     $mitLiefertag = $sicht !== 'liefertage';
     $mitLieferant = $sicht !== 'lieferanten';
-    $spaltenZahl = 6 + ($mitAuswahl ? 1 : 0) + ($mitBestelldatum ? 1 : 0) + ($mitLiefertag ? 1 : 0) + ($mitLieferant ? 1 : 0);
+    $spaltenZahl = 6 + ($standortSpalte ? 1 : 0) + ($mitAuswahl ? 1 : 0) + ($mitBestelldatum ? 1 : 0) + ($mitLiefertag ? 1 : 0) + ($mitLieferant ? 1 : 0);
 @endphp
 
 <x-ui-page>
@@ -393,6 +393,7 @@
                                         <input type="checkbox" wire:click="versandfaehigeAuswahlUmschalten" class="{{ $checkbox }}" @checked($kpis['ready'] > 0 && count($selectedOrderIds) === $kpis['ready']) @disabled($kpis['ready'] === 0) aria-label="Alle versandfähigen Bestellungen auswählen" />
                                     </th>
                                 @endif
+                                @if($standortSpalte)<th>Standort</th>@endif
                                 <th>Beleg</th>
                                 @if($mitBestelldatum)<th>Bestelldatum</th>@endif
                                 @if($mitLiefertag)<th>Liefertag</th>@endif
@@ -430,6 +431,7 @@
                                                     <input type="checkbox" wire:model.live="selectedOrderIds" value="{{ $o['id'] }}" class="{{ $checkbox }}" @disabled($o['status'] !== \Platform\FoodAlchemist\Enums\OrderStatus::Draft) aria-label="ord-{{ $o['id'] }} auswählen" />
                                                 </td>
                                             @endif
+                                            @if($standortSpalte)<td class="whitespace-nowrap" data-standort>{{ $standortNamen[$o['team_id'] ?? 0] ?? '—' }}</td>@endif
                                             <td class="whitespace-nowrap">
                                                 <div class="font-medium text-[var(--fa-ink)]">{{ $o['order_label'] }}</div>
                                                 @if($o['supplier_order_number'])<div class="{{ $leise }}" title="Auftragsbestätigung des Lieferanten">Bestätigung {{ $o['supplier_order_number'] }}</div>@endif

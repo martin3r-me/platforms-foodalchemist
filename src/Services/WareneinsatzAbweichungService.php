@@ -64,7 +64,7 @@ class WareneinsatzAbweichungService
         // tragen team_id/deleted_at ebenfalls — unqualifiziert wirft SQLite „ambiguous column".
         $t = 'foodalchemist_sales_facts';
         $basis = fn () => DB::table($t)
-            ->where($t . '.team_id', $team->id)->whereNull($t . '.deleted_at')
+            ->whereIn($t . '.team_id', app(StandortService::class)->leseTeamIds($team))->whereNull($t . '.deleted_at')   // Spec 77c: Team-Brille
             ->when($von !== null, fn ($q) => $q->whereDate($t . '.sold_at', '>=', $von))
             ->when($bis !== null, fn ($q) => $q->whereDate($t . '.sold_at', '<=', $bis));
 

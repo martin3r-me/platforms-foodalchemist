@@ -39,9 +39,15 @@ class Abweichung extends Component
     public function render(WareneinsatzAbweichungService $svc)
     {
         $team = Auth::user()?->currentTeamRelation;
+        $von = $this->von ?: null;
+        $bis = $this->bis ?: null;
 
         return view('foodalchemist::livewire.controlling.panels.abweichung', [
-            'a' => $team !== null ? $svc->analyse($team, $this->von ?: null, $this->bis ?: null) : null,
+            'a' => $team !== null ? $svc->analyse($team, $von, $bis) : null,
+            // Spec 77c: Team-Brille „alle" → Summe oben, je Standort nebeneinander (eigene Preise + Einstellungen)
+            'jeStandort' => $team !== null
+                ? app(\Platform\FoodAlchemist\Services\StandortService::class)->jeStandort($team, fn ($t) => $svc->analyse($t, $von, $bis))
+                : [],
         ]);
     }
 }

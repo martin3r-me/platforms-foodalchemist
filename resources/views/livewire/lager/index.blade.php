@@ -54,10 +54,11 @@
                 @else
                     <div class="overflow-x-auto">
                         <table class="fa-table fa-table--compact min-w-[640px]">
-                            <thead><tr><th>Grundprodukt</th><th>Lieferant</th><th>Lagerort</th><th>Stellplatz</th><th class="text-right">Menge</th><th class="text-right">EK je kg/l/Stk</th><th class="text-right">Wert</th><th>Letzte Bewegung</th></tr></thead>
+                            <thead><tr>@if($standortSpalte)<th>Standort</th>@endif<th>Grundprodukt</th><th>Lieferant</th><th>Lagerort</th><th>Stellplatz</th><th class="text-right">Menge</th><th class="text-right">EK je kg/l/Stk</th><th class="text-right">Wert</th><th>Letzte Bewegung</th></tr></thead>
                             <tbody>
                                 @foreach($bestand as $r)
                                     <tr wire:key="b-{{ $r['stock_id'] }}">
+                                        @if($standortSpalte)<td data-standort>{{ $r['standort'] }}</td>@endif
                                         <td class="font-medium">{{ $r['name'] }}</td>
                                         <td>{{ $r['lieferant'] ?? '–' }}</td>
                                         <td>{{ $r['lagerort'] }}</td>
@@ -221,10 +222,11 @@
                 @else
                     <div class="overflow-x-auto">
                         <table class="fa-table fa-table--compact min-w-[760px]">
-                            <thead><tr><th>Datum</th><th>Grundprodukt</th><th>Lagerort</th><th>Quelle</th><th>Grund</th><th class="text-right">Menge</th><th class="text-right">Wert</th><th>Notiz</th><th></th></tr></thead>
+                            <thead><tr>@if($standortSpalte)<th>Standort</th>@endif<th>Datum</th><th>Grundprodukt</th><th>Lagerort</th><th>Quelle</th><th>Grund</th><th class="text-right">Menge</th><th class="text-right">Wert</th><th>Notiz</th><th></th></tr></thead>
                             <tbody>
                                 @foreach($bewegungen as $m)
                                     <tr wire:key="m-{{ $m->id }}" class="{{ isset($storniert[$m->id]) ? 'opacity-50' : '' }}">
+                                        @if($standortSpalte)<td data-standort>{{ $standortNamen[$m->team_id] ?? '—' }}</td>@endif
                                         <td class="tabular-nums">{{ $m->moved_at?->format('d.m.Y') ?? '–' }}</td>
                                         <td class="font-medium">{{ $m->gp?->name ?? $m->supplierItem?->designation ?? $m->recipe?->name ?? '—' }}</td>
                                         <td>{{ $m->location?->name ?? '—' }}</td>
@@ -234,7 +236,7 @@
                                         <td class="text-right tabular-nums">@if($m->value_eur !== null)<x-fa::money :value="$m->value_eur" />@endif</td>
                                         <td class="{{ $leise }}">{{ $m->note }}{{ isset($storniert[$m->id]) ? " · storniert" : "" }}</td>
                                         <td class="text-right">
-                                            @if($m->istHandbuchung() && ! isset($storniert[$m->id]) && ($m->direction === 'out' || $m->source !== 'umlagerung'))
+                                            @if((int) $m->team_id === $teamId && $m->istHandbuchung() && ! isset($storniert[$m->id]) && ($m->direction === 'out' || $m->source !== 'umlagerung'))
                                                 <x-fa::button size="sm" variant="ghost" wire:click="stornieren({{ $m->id }})" wire:confirm="Buchung stornieren? Es wird eine Gegenbuchung angelegt." data-lager-storno="{{ $m->id }}">Storno</x-fa::button>
                                             @endif
                                         </td>
@@ -263,16 +265,17 @@
                         <x-fa::empty compact icon="heroicon-o-clipboard-document-list" title="Noch keine Inventur" />
                     @else
                         <table class="fa-table fa-table--compact">
-                            <thead><tr><th>Stichtag</th><th>Lagerort</th><th class="text-right">Positionen</th><th>Status</th><th class="text-right">Wert</th><th></th></tr></thead>
+                            <thead><tr>@if($standortSpalte)<th>Standort</th>@endif<th>Stichtag</th><th>Lagerort</th><th class="text-right">Positionen</th><th>Status</th><th class="text-right">Wert</th><th></th></tr></thead>
                             <tbody>
                                 @foreach($inventuren as $c)
                                     <tr wire:key="c-{{ $c->id }}">
+                                        @if($standortSpalte)<td data-standort>{{ $standortNamen[$c->team_id] ?? '—' }}</td>@endif
                                         <td class="tabular-nums font-medium">{{ $c->count_date->format('d.m.Y') }}</td>
                                         <td>{{ $c->location?->name ?? '—' }}</td>
                                         <td class="text-right tabular-nums">{{ $c->lines_count }}</td>
                                         <td>@if($c->istGebucht())<x-fa::badge tone="ok">gebucht</x-fa::badge>@else<x-fa::badge tone="warn">offen</x-fa::badge>@endif</td>
                                         <td class="text-right">@if($c->istGebucht())<x-fa::money :value="$c->value_total" />@else<span class="{{ $leise }}">–</span>@endif</td>
-                                        <td class="text-right"><x-fa::button size="sm" wire:click="inventurOeffnen({{ $c->id }})">{{ $c->istGebucht() ? 'Ansehen' : 'Zählen' }}</x-fa::button></td>
+                                        <td class="text-right"><x-fa::button size="sm" wire:click="inventurOeffnen({{ $c->id }})">{{ $c->istGebucht() || (int) $c->team_id !== $teamId ? 'Ansehen' : 'Zählen' }}</x-fa::button></td>
                                     </tr>
                                 @endforeach
                             </tbody>
@@ -284,7 +287,7 @@
                 <div class="flex flex-col gap-4" data-lager-inventur-editor>
                 @if($fehler)<x-fa::notice tone="crit">{{ $fehler }}</x-fa::notice>@endif
                 @if($hinweis)<x-fa::notice tone="info">{{ $hinweis }}</x-fa::notice>@endif
-                @php $gebucht = $inventur->istGebucht(); @endphp
+                @php $gebucht = $inventur->istGebucht() || (int) $inventur->team_id !== $teamId; /* Spec 77c: Inventur eines Standorts nur lesend */ @endphp
                 <x-fa::section title="Zählliste" icon="heroicon-o-clipboard-document-check" data-lager-inventur="{{ $inventur->id }}">
                     <x-slot:actions>
                         <div class="flex flex-wrap items-center gap-2">
@@ -302,7 +305,9 @@
                         ['label' => 'Wert gezählt', 'value' => number_format($summen['wert'], 2, ',', '.') . ' €', 'primary' => true],
                         ['label' => 'Differenz zum Soll', 'value' => number_format($summen['differenz_wert'], 2, ',', '.') . ' €', 'tone' => $summen['differenz_wert'] < 0 ? 'crit' : null],
                     ]" />
-                    @if($gebucht)
+                    @if($gebucht && ! $inventur->istGebucht())
+                        <p class="{{ $leise }}" data-lager-inventur-fremd>Inventur des Standorts {{ $standortNamen[$inventur->team_id] ?? '—' }} — hier nur lesend, gezählt wird im Standort.</p>
+                    @elseif($gebucht)
                         <p class="{{ $leise }}">Gebucht am {{ $inventur->booked_at?->format('d.m.Y H:i') }} — Bestandswert {{ number_format((float) $inventur->value_total, 2, ',', '.') }} €.@if($inventur->uncounted_zeroed) Nicht gezählte Positionen wurden als 0 gebucht.@endif</p>
                     @else
                         <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
