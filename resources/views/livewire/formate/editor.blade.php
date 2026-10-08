@@ -66,6 +66,20 @@
                 'notizen' => 'Notizen',
             ]" />
 
+            {{-- Spec 77d: fremdes Format nur lesend → eigene Kopie; Kopie mit geändertem Original --}}
+            @if(($herkunft ?? null) !== null)
+                @if($herkunft['fremd'])
+                    <x-fa::notice tone="info" data-eigene-kopie-hinweis>
+                        Dieses Format gehört {{ $herkunft['besitzer'] ?? 'einem anderen Team' }} und ist hier nur lesbar. Zum Anpassen eine eigene Kopie anlegen.
+                        <x-slot:actions>
+                            <x-fa::button size="sm" icon="heroicon-m-document-duplicate" wire:click="eigeneKopieAnlegen" data-eigene-kopie>Eigene Kopie</x-fa::button>
+                        </x-slot:actions>
+                    </x-fa::notice>
+                @elseif($herkunft['original_geaendert'])
+                    <x-fa::notice tone="warn" data-original-geaendert>Das Original dieser Kopie wurde seit dem Kopieren geändert.</x-fa::notice>
+                @endif
+            @endif
+
             {{-- Spec 65: Reiter im Server-Modus liefern nur die Leiste — den Panel-Bereich sperrt im Lesemodus
                  dieses fieldset (Reiterleiste bleibt außerhalb bedienbar). --}}
             <fieldset @disabled(in_array($sperr['modus'] ?? 'aus', ['lesen', 'fremd'], true)) class="contents" data-fa-lesemodus="{{ in_array($sperr['modus'] ?? 'aus', ['lesen', 'fremd'], true) ? '1' : '0' }}">

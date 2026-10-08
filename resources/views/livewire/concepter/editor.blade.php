@@ -154,6 +154,20 @@
                 'notes' => 'Notizen',
             ]" />
 
+            {{-- Spec 77d: fremdes Konzept nur lesend → eigene Kopie; Kopie mit geändertem Original --}}
+            @if(($herkunft ?? null) !== null)
+                @if($herkunft['fremd'])
+                    <x-fa::notice tone="info" data-eigene-kopie-hinweis>
+                        Dieses Konzept gehört {{ $herkunft['besitzer'] ?? 'einem anderen Team' }} und ist hier nur lesbar. Zum Anpassen eine eigene Kopie anlegen.
+                        <x-slot:actions>
+                            <x-fa::button size="sm" icon="heroicon-m-document-duplicate" wire:click="eigeneKopieAnlegen" data-eigene-kopie>Eigene Kopie</x-fa::button>
+                        </x-slot:actions>
+                    </x-fa::notice>
+                @elseif($herkunft['original_geaendert'])
+                    <x-fa::notice tone="warn" data-original-geaendert>Das Original dieser Kopie wurde seit dem Kopieren geändert.</x-fa::notice>
+                @endif
+            @endif
+
             {{-- Spec 65: Reiter im Server-Modus liefern nur die Leiste — die Panels sperrt im Lesemodus ein fieldset
                  (Reiterleiste bleibt bedienbar). Im Reiter Kalkulation einzeln je Abschnitt, damit „Auftrag hochrechnen"
                  (reine Vorschau, schreibt nichts) auch im Lesemodus bedienbar bleibt. --}}

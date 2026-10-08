@@ -39,7 +39,8 @@ class Editor extends Component
      */
     protected function sperrFreiExtra(): array
     {
-        return ['setTab', 'setPickerTab', 'pickerFilter', 'einfuegenZiel', 'slotWordingBearbeiten', 'slotWordingAbbrechen', 'beimSchliessen'];
+        return ['setTab', 'setPickerTab', 'pickerFilter', 'einfuegenZiel', 'slotWordingBearbeiten', 'slotWordingAbbrechen', 'beimSchliessen',
+            'eigeneKopieAnlegen'];   // Spec 77d: schreibt ins eigene Team, nicht in dieses Format
     }
 
     /** Abbrechen: ungespeicherten Formularstand verwerfen, Format frisch laden (Reiter bleibt). */
@@ -97,6 +98,21 @@ class Editor extends Component
     public $bildUpload = null;
 
     public ?string $fehler = null;
+
+    /** Spec 77d: geerbtes/freigegebenes Format als eigene Kopie ins Team holen und die Kopie öffnen. */
+    public function eigeneKopieAnlegen(): void
+    {
+        if ($this->id === null) {
+            return;
+        }
+        try {
+            $kopie = app(\Platform\FoodAlchemist\Services\InhaltsFreigabeService::class)->kopieAnlegen($this->team(), 'format', (int) $this->id, \Illuminate\Support\Facades\Auth::user());
+            $this->oeffnen((int) $kopie->id);
+            $this->dispatch('fa-saved', message: 'Eigene Kopie angelegt.');
+        } catch (\RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+        }
+    }
 
     #[On('formate-editor.oeffnen')]
     public function oeffnen(?int $id): void
@@ -623,6 +639,12 @@ class Editor extends Component
 
         return view('foodalchemist::livewire.formate.editor', [
             'sperr' => $this->sperrZustand(),   // Spec 65
+            // Spec 77d: Konzept/Format eines anderen Teams = hier nur lesend → eigene Kopie; Kopie meldet geändertes Original
+            'herkunft' => $format !== null ? [
+                'fremd' => $format->team_id !== null && ! $format->isOwnedBy($team),
+                'besitzer' => $format->team_id !== null ? \Platform\Core\Models\Team::find($format->team_id)?->name : null,
+                'original_geaendert' => (bool) app(\Platform\FoodAlchemist\Services\InhaltsFreigabeService::class)->originalGeaendert($format),
+            ] : null,
             'format' => $format,
             'aufbauSlots' => $slots,
             'kandidaten' => $kandidaten,

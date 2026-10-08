@@ -74,7 +74,7 @@ class Editor extends Component
             'beiModalGeschlossen', 'setTab', 'geschirrPicker', 'kohaesionPruefen', 'zutatenToggle', 'gerichtPicker', 'fillToggle',
             'pickTypWaehle', 'pickHgWaehle', 'pickKlasseWaehle', 'pickGeschmackWaehle', 'pickDiaetWaehle', 'coverageFuellen',
             'vorschlagFuerSlot', 'vorschlagVerwerfen', 'zielSetzen', 'toggleAuswahl', 'zielpreisToggle', 'zielpreisBerechnen',
-            'paketOeffnen', 'zurueckZumConcept', 'alsVorlage', '$set',
+            'paketOeffnen', 'zurueckZumConcept', 'alsVorlage', '$set', 'eigeneKopieAnlegen',   // Spec 77d: schreibt ins eigene Team
             'canvasLaden', 'canvasTemplateData', 'canvasSchreibstile', 'frameLaden', 'framePlanningVokabular', 'frameRegelLabel', 'phasenListe',
         ];
     }
@@ -299,6 +299,21 @@ class Editor extends Component
     public ?int $rueckSprungConceptId = null;
 
     public ?string $fehler = null;
+
+    /** Spec 77d: geerbtes/freigegebenes Konzept als eigene Kopie ins Team holen und die Kopie öffnen. */
+    public function eigeneKopieAnlegen(): void
+    {
+        if ($this->id === null) {
+            return;
+        }
+        try {
+            $kopie = app(\Platform\FoodAlchemist\Services\InhaltsFreigabeService::class)->kopieAnlegen($this->team(), 'concept', (int) $this->id, \Illuminate\Support\Facades\Auth::user());
+            $this->oeffnen('concepts', (int) $kopie->id);
+            $this->dispatch('fa-saved', message: 'Eigene Kopie angelegt.');
+        } catch (\RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+        }
+    }
 
     #[On('concepter-editor.oeffnen')]
     public function oeffnen(string $type, ?int $id, ?string $startTab = null): void
@@ -1525,6 +1540,12 @@ class Editor extends Component
 
         return view('foodalchemist::livewire.concepter.editor', [
             'sperr' => $this->sperrZustand(),   // Spec 65
+            // Spec 77d: Konzept/Format eines anderen Teams = hier nur lesend → eigene Kopie; Kopie meldet geändertes Original
+            'herkunft' => ($this->type === 'concepts' ? $concept : null) !== null ? [
+                'fremd' => ($this->type === 'concepts' ? $concept : null)->team_id !== null && ! ($this->type === 'concepts' ? $concept : null)->isOwnedBy($team),
+                'besitzer' => ($this->type === 'concepts' ? $concept : null)->team_id !== null ? \Platform\Core\Models\Team::find(($this->type === 'concepts' ? $concept : null)->team_id)?->name : null,
+                'original_geaendert' => (bool) app(\Platform\FoodAlchemist\Services\InhaltsFreigabeService::class)->originalGeaendert(($this->type === 'concepts' ? $concept : null)),
+            ] : null,
             'conceptImageUrl' => ($concept !== null && ($concept->image_context_file_id || $concept->image_path))
                 ? app(\Platform\FoodAlchemist\Services\FoodAlchemistMediaService::class)->url($concept->image_context_file_id, $concept->image_path)
                 : null,
