@@ -800,6 +800,10 @@ Route::get('/produktion/auftraege/{order}/dokument', function (int $order, \Plat
 Route::get('/bestellungen', \Platform\FoodAlchemist\Livewire\Orders\Index::class)
     ->name('foodalchemist.orders.index');
 
+// Spec 75a · Wareneingang: Lieferscheine erfassen und buchen (Triple Match folgt in 75b).
+Route::get('/wareneingang', \Platform\FoodAlchemist\Livewire\Wareneingang\Index::class)
+    ->name('foodalchemist.wareneingang.index');
+
 // Spec 68 · Bestellvorlagen (Musterbestellung / Musterproduktion).
 Route::get('/bestellvorlagen', \Platform\FoodAlchemist\Livewire\Bestellvorlagen\Index::class)
     ->name('foodalchemist.bestellvorlagen.index');

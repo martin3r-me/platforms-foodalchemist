@@ -426,6 +426,7 @@ abstract class FoodAlchemistTool
             'suppliers' => ['route' => 'foodalchemist.suppliers.index', 'label' => 'Lieferanten'],
             'geschirr' => ['route' => 'foodalchemist.geschirr.index', 'label' => 'Geschirr'],
             'orders' => ['route' => 'foodalchemist.orders.index', 'label' => 'Bestellwesen'],
+            'wareneingang' => ['route' => 'foodalchemist.wareneingang.index', 'label' => 'Wareneingang'],
             'bestellvorlagen' => ['route' => 'foodalchemist.bestellvorlagen.index', 'label' => 'Bestellvorlagen'],
             'einkauf' => ['route' => 'foodalchemist.einkauf.index', 'label' => 'Einkauf'],
             'lager' => ['route' => 'foodalchemist.lager.index', 'label' => 'Lager & Inventur'],

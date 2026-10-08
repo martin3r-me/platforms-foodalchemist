@@ -208,6 +208,27 @@ vollständiges Lager zu führen:
   in Gebinden. Bestellen von zwei Seiten: in der Bestellrunde „Vorlage einfügen" (kombinierbar) oder
   in der Vorlage „In Bestellrunde öffnen" bzw. „Direkt anlegen". Speichern aus der Bestellrunde
   (Arbeitsstand) und aus jeder Bestellung (Reiter Kopf).
+- **Wareneingang über Lieferscheine (Spec 75a):** Einkauf → Wareneingang. Reiter *Erwartet* (gesendete und
+  bestätigte Bestellungen nach Liefertag, heute/überfällig) und *Lieferscheine*. Ein Lieferschein gehört einem
+  Lieferanten und belegt alle offenen Positionen über alle seine offenen Bestellungen vor (n:m); je Position
+  gelieferte Gebinde, Abweichungsgrund und Notiz, dazu Ware ohne Bestellung (Lagerzugang von Hand) und ein Beleg-Foto
+  oder PDF. Buchen schreibt die Menge als Zuwachs auf den Wareneingang der Bestellzeile (Lager, Kontingent und Journal
+  ziehen über den gewohnten Weg nach) und schließt vollständig gelieferte Bestellungen ab; Positionen ohne
+  Lieferschein zählen beim Abschluss als 0. „Rest als Nachlieferung" schließt ab und legt die Fehlmenge als Entwurf
+  an. Storno nimmt alles zurück, solange keine Bestellung abgeschlossen ist. MCP: `delivery_notes.GET/POST/PUT/BOOK/STORNO/BACKORDER`.
+- **Rechnungen und Triple Match (Spec 75b):** Reiter *Rechnungen* — Rechnung je Lieferant erfassen, aus gebuchten,
+  noch nicht abgerechneten Lieferscheinen vorbelegt (Sammelrechnung), Preis aus der Bestellung, Nebenkosten (Fracht, Pfand,
+  Zuschlag, Rabatt), Summe laut Beleg als Kontrolle, Beleg-Foto/PDF. Befund je Position gegen Lieferung und Bestellpreis
+  (Toleranz ±0,5 % oder ±0,05 € je Gebinde, das Großzügigere gilt; je Team einstellbar). Freigeben nur mit Rolle
+  *Freigeben* und erst, wenn die Summen stimmen und jede Abweichung begründet ist; dann stehen Menge und gewichteter Preis
+  als Rechnungsprüfung an den Bestellzeilen (Einkaufsjournal/Controlling sehen den Ist-Preis), Rechnungskopf an der
+  Bestellung. Bezahlt setzt den Zahlungsstatus der Bestellungen. Reiter *Abgleich* — bestellt · geliefert · berechnet je
+  Bestellzeile, schwerste und teuerste Fälle zuerst, Reklamation direkt aus dem Befund. MCP:
+  `supplier_invoices.GET/POST/PUT/APPROVE/PAY/STORNO`, `triple_match.GET/PUT`.
+- **Zugriffsrechte (Spec 61, Basis):** Die Rolle kommt aus den Team-Einstellungen der Plattform: Inhaber/Admin = alles,
+  Mitglied = Lieferscheine buchen und Rechnungen erfassen, Betrachter = lesen. Rechnungen freigeben und als bezahlt markieren
+  dürfen Inhaber/Admins und Mitglieder mit dem Häkchen „darf Rechnungen freigeben" (Einstellungen → Zugriffsrechte).
+  KI-Benutzer nie freigeben. Geprüft im Service (`FaRechte`), also für Oberfläche und MCP gleich. MCP: `team_roles.GET/PUT`.
 - **Einkauf je Grundprodukt:** Im Grundprodukt (Reiter *Einkauf*) stehen Menge und € je Monat der
   letzten 12 Monate, die Lieferanten mit Ø-Preis und letztem Kauf sowie der aktuelle Lagerbestand.
 - **Nachlieferung light:** Unterlieferte Wareneingangszeilen können als neuer
