@@ -120,6 +120,14 @@ it('Freigegebenes ist lesend; eigene Kopie merkt sich das Original und meldet Ä
         ->toThrow(\Illuminate\Database\Eloquent\ModelNotFoundException::class);
     $this->inhalte->sammlungHinzu($this->rootTeam, $sid, 'format', [$this->format->id], $this->koch);
     $fmt = $this->inhalte->kopieAnlegen($this->childA, 'format', $this->format->id, $this->kindKoch);
+
+    // Rezept-Editor: Hinweis + Knopf „Eigene Kopie" am geerbten Rezept, Kopie wird geöffnet
+    $this->actingAs($this->kindKoch);
+    $m = Livewire::test(\Platform\FoodAlchemist\Livewire\Recipes\RecipeModal::class)->call('oeffnen', $this->basis->id)
+        ->assertSeeHtml('data-rezept-eigene-kopie')->call('eigeneKopieAnlegen')->assertSet('fehler', null);
+    $neu = FoodAlchemistRecipe::where('team_id', $this->childA->id)->where('kopie_von_id', $this->basis->id)->first();
+    expect($neu)->not->toBeNull();
+    $m->assertSet('recipeId', $neu->id)->assertDontSeeHtml('data-rezept-eigene-kopie');
     expect(FoodAlchemistFormatSlot::where('format_id', $fmt->id)->pluck('concept_id')->all())->toBe([$this->konzept->id]);
 });
 

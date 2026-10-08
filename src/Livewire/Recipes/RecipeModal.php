@@ -142,11 +142,6 @@ class RecipeModal extends Component
     /** @var array<string, bool> Legacy-Client-State aus kurzzeitigem Lazy-Tab-Render; bleibt als No-op, bis alte Livewire-Snapshots verschwunden sind. */
     public array $geladeneTabs = ['aufbau' => true];
 
-    /**
-     * $copilot = Sprung aus dem Signal-Cockpit (Spec 21 · S5b): die abgelegten Befunde
-     * werden direkt aufgeklappt. Kein Prüf-Call — s. `copilotAusAblage()`.
-     */
-    #[On('recipe-modal.oeffnen')]
     /** Spec 77d: geerbtes/freigegebenes Rezept als eigene Kopie ins Team holen und die Kopie öffnen. */
     public function eigeneKopieAnlegen(): void
     {
@@ -163,6 +158,11 @@ class RecipeModal extends Component
         }
     }
 
+    /**
+     * $copilot = Sprung aus dem Signal-Cockpit (Spec 21 · S5b): die abgelegten Befunde
+     * werden direkt aufgeklappt. Kein Prüf-Call — s. `copilotAusAblage()`.
+     */
+    #[On('recipe-modal.oeffnen')]
     public function oeffnen(?int $id = null, bool $copilot = false): void
     {
         // Wie beim stabilen Gerichte-Editor: alter Zustand wird erst beim nächsten Öffnen
