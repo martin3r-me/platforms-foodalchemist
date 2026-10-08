@@ -1,6 +1,6 @@
 # 61 · Rollen und Rechte im Food Alchemist
 
-**Stand 2026-10-06 · Status: Entwurf, Entscheidungen F1/F5 + Kuratieren + Hierarchie eingearbeitet · Umsetzung in fa-pass**
+**Stand 2026-10-06 · Status: in §3–§6 abgelöst durch [77 · Teams, Bereiche, Standorte und Rechte](77_Teams_Bereiche_Standorte_Rechte.md) (2026-10-08) — Rolle kommt aus der Plattform-Rolle, keine eigene FA-Rollentabelle. §12 und §13 gelten weiter und sind in Spec 77 eingebaut.**
 
 > Bezug: [25 · Business-Case-Funktionsmatrix](25_Business_Case_Funktionsmatrix.md), AD-06 „Nutzerrolle/Berechtigung“
 > (Status *teilweise*, Abnahme: „Rollenmatrix für Lesen, Kuratieren, Freigeben, Admin“). Produktionsrollen:
