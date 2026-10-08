@@ -47,6 +47,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->scoped(\Platform\FoodAlchemist\Services\Knowledge\KnowledgeRunContext::class);
+        // Spec 77c: Team-Namen der Standort-Spalte je Request merken
+        $this->app->scoped(\Platform\FoodAlchemist\Services\StandortService::class);
         /**
          * Config laden
          * 
@@ -1071,6 +1073,9 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     // Spec 77b: Bereiche, Einschränkungen, Kontingente
                     \Platform\FoodAlchemist\Tools\TeamBereicheGetTool::class,
                     \Platform\FoodAlchemist\Tools\TeamBereichePutTool::class,
+                    \Platform\FoodAlchemist\Tools\StandorteGetTool::class,
+                    \Platform\FoodAlchemist\Tools\StandortePutTool::class,
+                    \Platform\FoodAlchemist\Tools\StandorteSetBrilleTool::class,
                     // Spec 75b: Lieferanten-Rechnungen + Triple Match
                     \Platform\FoodAlchemist\Tools\SupplierInvoicesGetTool::class,
                     \Platform\FoodAlchemist\Tools\SupplierInvoicesPostTool::class,

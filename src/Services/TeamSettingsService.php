@@ -163,11 +163,16 @@ class TeamSettingsService
      */
     private function outletRow(Team $team, ?FoodAlchemistOutlet $outlet): ?FoodAlchemistOutletSetting
     {
-        if ($outlet === null || (int) $outlet->team_id !== (int) $team->id) {
+        if ($outlet === null) {
+            return null;
+        }
+        // Spec 77c: auch der dem Unter-Team zugeordnete Betrieb des Oberteams — dessen Profil gilt (Zeile am Besitzer-Team)
+        if ((int) $outlet->team_id !== (int) $team->id
+            && ! in_array((int) $outlet->team_id, app(\Platform\FoodAlchemist\Services\FaRechte::class)->teamKette($team), true)) {
             return null;
         }
 
-        return FoodAlchemistOutletSetting::firstOrNew(['outlet_id' => $outlet->id, 'team_id' => $team->id]);
+        return FoodAlchemistOutletSetting::firstOrNew(['outlet_id' => $outlet->id, 'team_id' => (int) $outlet->team_id]);
     }
 
     /**

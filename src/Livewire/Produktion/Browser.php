@@ -53,6 +53,7 @@ class Browser extends Component
      * eine Ansicht eine Spalte auslässt (Muster: Verkauf\Browser).
      */
     public const SPALTEN = [
+        'standort' => ['Standort', ''],   // Spec 77c: nur bei Team-Brille „alle" (siehe spalten())
         'ziele' => ['Ziele', ''],
         'ansaetze' => ['Ansätze', 'text-right'],
         'portionen' => ['Portionen', 'text-right'],
@@ -169,6 +170,10 @@ class Browser extends Component
     public function spalten(): array
     {
         $menge = (self::ANSICHTEN[$this->ansicht] ?? self::ANSICHTEN['standard'])[1];
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team !== null && app(\Platform\FoodAlchemist\Services\StandortService::class)->zeigtStandorte($team)) {
+            $menge[] = 'standort';
+        }
 
         return array_values(array_filter(array_keys(self::SPALTEN), fn ($k) => in_array($k, $menge, true)));
     }
@@ -203,6 +208,7 @@ class Browser extends Component
             'gesamtCount' => $svc->browserGesamt($team, $filters),
             'spalten' => $this->spalten(),
             'spaltenKatalog' => self::SPALTEN,
+            'standortNamen' => app(\Platform\FoodAlchemist\Services\StandortService::class)->teamNamen([(int) $team->id, ...app(\Platform\FoodAlchemist\Services\StandortService::class)->unterTeamIds($team)]),
             'ansichten' => self::ANSICHTEN,
             'zeitraeume' => self::ZEITRAEUME,
             'kpiOffen' => $svc->statusCounts($team, [])[ProductionOrderStatus::Planned->value] ?? 0,

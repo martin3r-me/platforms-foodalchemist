@@ -129,5 +129,29 @@
                 @endif
             </p>
         @endif
+
+        @if($jeStandort !== [])
+            <x-fa::section title="Je Standort" icon="heroicon-o-building-office-2" data-ctrl-abw-standorte
+                description="Oben die Summe aller Standorte, hier jeder Standort mit seinen eigenen Einkaufspreisen und Zielwerten.">
+                <div class="overflow-x-auto">
+                    <table class="fa-table fa-table--compact">
+                        <thead><tr><th>Standort</th><th class="text-right">Umsatz</th><th class="text-right">Einkauf</th><th class="text-right">Wareneinsatz Ist</th><th class="text-right">Ziel</th><th class="text-right">Abweichung</th></tr></thead>
+                        <tbody>
+                            @foreach($jeStandort as $s)
+                                @php $w = $s['wert']; @endphp
+                                <tr wire:key="abw-st-{{ $s['team_id'] }}" data-ctrl-abw-standort="{{ $s['team_id'] }}">
+                                    <td class="font-medium">{{ $s['standort'] }}</td>
+                                    <td class="text-right tabular-nums">{{ $eur($w['umsatz']) ?? '–' }}</td>
+                                    <td class="text-right tabular-nums">{{ $eur($w['einkauf']) ?? '–' }}</td>
+                                    <td class="text-right tabular-nums">{{ $pct($w['ist_pct']) ?? 'nicht belastbar' }}</td>
+                                    <td class="text-right tabular-nums">{{ $pct($w['ziel_pct']) }}</td>
+                                    <td class="text-right tabular-nums">{{ $eur($w['abweichung_eur']) ?? '–' }}</td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            </x-fa::section>
+        @endif
     @endif
 </div>

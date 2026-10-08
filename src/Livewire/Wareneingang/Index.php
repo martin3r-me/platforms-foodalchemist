@@ -236,7 +236,8 @@ class Index extends Component
         if ($this->reiter === 'lieferscheine' && $this->offenId !== null) {
             try {
                 $detail = $svc->detail($team, $this->offenId);
-                $detail['anhang_url'] = $detail['anhang'] !== null ? $svc->anhangUrl($team, $this->offenId) : null;
+                // Spec 77c: Lieferschein eines Standorts nur lesend — Anhang-Link läuft über das besitzende Team
+                $detail['anhang_url'] = $detail['anhang'] !== null && (int) ($detail['team_id'] ?? $team->id) === (int) $team->id ? $svc->anhangUrl($team, $this->offenId) : null;
             } catch (\Illuminate\Database\Eloquent\ModelNotFoundException) {
                 $this->offenId = null;
             }
@@ -261,6 +262,9 @@ class Index extends Component
             'statusLabels' => FoodAlchemistDeliveryNote::STATUS_LABELS,
             'gruppen' => collect($this->zeilen)->groupBy('order_id'),
             'darf' => $rechte->darf(Auth::user(), $team, FaRolle::Kuratieren),
+            // Spec 77c: Team-Brille „alle" → Standort-Spalte; Belege der Standorte nur lesend
+            'teamId' => (int) $team->id,
+            'standortSpalte' => app(\Platform\FoodAlchemist\Services\StandortService::class)->zeigtStandorte($team),
             'meineRolle' => $rechte->rolle(Auth::user(), $team),
             'kpis' => [
                 ['label' => 'Heute erwartet', 'value' => $heute, 'primary' => true, 'kpi' => 'heute'],

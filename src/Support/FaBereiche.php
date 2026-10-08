@@ -60,7 +60,7 @@ final class FaBereiche
      */
     public const TOOL_PRAEFIXE = [
         // bereichsfrei: Ansicht/Navigation, Läufe, Rechte-Pflege, Betriebs-Brille umschalten (nur Ansicht)
-        ['ui', null], ['runs', null], ['team_roles', null], ['team_bereiche', null],
+        ['ui', null], ['runs', null], ['team_roles', null], ['team_bereiche', null], ['standorte', null],
         // Controlling (Auswertungen; Spec 32 hat die Einkaufs-Auswertungen hierher verlegt)
         ['einkauf_', 'controlling'], ['sales_', 'controlling'], ['benchmark', 'controlling'], ['menu_engineering', 'controlling'],
         ['simulation', 'controlling'], ['coverage', 'controlling'],

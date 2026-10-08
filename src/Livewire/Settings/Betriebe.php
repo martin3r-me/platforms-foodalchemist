@@ -82,6 +82,22 @@ class Betriebe extends Component
         $this->neuName = '';
     }
 
+    /** Spec 77c: Betrieb eines Standorts (Unter-Team) festlegen — leer = Standard (erbt komplett). */
+    public function standortBetriebSetzen(int $unterTeamId, mixed $outletId): void
+    {
+        $this->fehler = null;
+        $team = $this->team();
+        if ($team === null) {
+            return;
+        }
+        try {
+            app(\Platform\FoodAlchemist\Services\StandortService::class)
+                ->betriebZuordnen($team, $unterTeamId, $outletId === '' || $outletId === null ? null : (int) $outletId, Auth::user());
+        } catch (\RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+        }
+    }
+
     public function edit(int $id): void
     {
         $o = $this->eigenes($id);
@@ -229,6 +245,7 @@ class Betriebe extends Component
             'nutzung' => $nutzung,
             'vorlagenOptionen' => $vorlagenOptionen,
             'logoUrls' => $logoUrls,
+            'standorte' => $team === null ? [] : app(\Platform\FoodAlchemist\Services\StandortService::class)->unterTeams($team),
         ]);
     }
 }
