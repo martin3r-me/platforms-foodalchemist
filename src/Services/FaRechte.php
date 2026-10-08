@@ -152,9 +152,31 @@ class FaRechte
     /** Haupt-Team (Wurzel der Kette) — dort hängen Buchung und Kontingente. */
     public function hauptTeam(Team $team): Team
     {
-        $kette = $this->teamKette($team);
+        return $this->kundenHauptTeam($team);
+    }
 
-        return Team::find(end($kette)) ?? $team;
+    /**
+     * Kundengrenze: oberstes Team der Kette — aber nie über ein konfiguriertes Master-Team
+     * (`foodalchemist.master_team_id`) hinaus. Hängt ein Kunde unter dem Master, endet die Kette am Team direkt
+     * darunter; der Master selbst ist sein eigenes Haupt-Team. Ohne Master = oberstes Team (wie bisher).
+     * Gemeinsame Grenze für Kontingente, Bereiche, Standorte (Spec 77) und Inspirationen (Spec 79).
+     */
+    public function kundenHauptTeam(Team $team): Team
+    {
+        $kette = $this->teamKette($team);
+        $master = config('foodalchemist.master_team_id');
+        $pos = $master !== null && $master !== '' ? array_search((int) $master, $kette, true) : false;
+        $id = $pos === false ? end($kette) : ($pos === 0 ? $kette[0] : $kette[$pos - 1]);
+
+        return (int) $id === (int) $team->id ? $team : (Team::find($id) ?? $team);
+    }
+
+    /** Liegt das Team (oder ein Vorfahr) jenseits der Kundengrenze, also ist es das Master-Team selbst? */
+    public function istMasterTeam(Team $team): bool
+    {
+        $master = config('foodalchemist.master_team_id');
+
+        return $master !== null && $master !== '' && (int) $master === (int) $team->id;
     }
 
     /** Ist der Bereich für das Team freigeschaltet? Abgeschaltet im Team ODER einem Eltern-Team = aus. Keine Zeile = an. */

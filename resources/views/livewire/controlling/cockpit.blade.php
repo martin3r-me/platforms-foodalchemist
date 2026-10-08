@@ -210,6 +210,12 @@
                 </x-foodalchemist::modal-section>
             @endif
 
+            @if($tab === 'standorte')
+                <x-foodalchemist::modal-section title="Standorte & Freigaben" icon="heroicon-o-building-office-2">
+                    <livewire:foodalchemist.controlling.panels.standort-inhalte key="controlling-cockpit--controlling.panels.standort-inhalte" />
+                </x-foodalchemist::modal-section>
+            @endif
+
             @if($tab === 'kennzahlen')
                 <x-foodalchemist::modal-section title="Kalkulations-Kennzahlen" icon="heroicon-o-calculator">
                     <livewire:foodalchemist.controlling.panels.kennzahlen key="controlling-cockpit--controlling.panels.kennzahlen" />

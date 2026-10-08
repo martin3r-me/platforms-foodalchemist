@@ -1,4 +1,4 @@
-{{-- Spec 77d · Inhalte für Standorte: je Unter-Team „übernimmt alles vom Oberteam" oder nur Freigegebenes
+{{-- Spec 77d · Controlling → Standorte & Freigaben: je Unter-Team „übernimmt alles vom Oberteam" oder nur Freigegebenes
      (Sammlungen + fertige Ausgaben). Freigegebenes ist im Standort lesend; anpassen = eigene Kopie dort. --}}
 @php($leise = 'text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]')
 <div class="flex flex-col gap-4" data-settings-standort-inhalte>
@@ -55,7 +55,7 @@
     </x-fa::section>
 
     <x-fa::section title="Sammlungen" icon="heroicon-o-rectangle-stack" :meta="count($sammlungen) > 0 ? count($sammlungen) . ' angelegt' : null"
-        description="Benannte Listen aus Gerichten, Basisrezepten, Konzepten und Formaten — ohne Layout, nur zum Freigeben. Ein Rezept darf in mehreren Sammlungen stehen.">
+        description="Benannte Listen aus Gerichten, Basisrezepten, Konzepten, Paketen und Formaten — ohne Layout, nur zum Freigeben. Ein Rezept darf in mehreren Sammlungen stehen.">
         <div class="flex flex-wrap items-end gap-2">
             <x-fa::field label="Neue Sammlung" for="sammlung-neu" class="w-72 max-w-full">
                 <x-fa::input id="sammlung-neu" wire:model="neueSammlung" wire:keydown.enter="sammlungAnlegen" placeholder="z. B. Grundsortiment Mittag" data-sammlung-neu />
@@ -83,17 +83,44 @@
                         </ul>
                     @endif
                     @if($sammlungOffen === $s['id'])
-                        <x-fa::input wire:model.live.debounce.300ms="suche" placeholder="Rezept, Konzept oder Format suchen" class="w-80 max-w-full" data-sammlung-suche />
-                        @if($treffer !== [])
-                            <ul class="flex flex-col gap-1">
-                                @foreach($treffer as $t)
-                                    <li class="flex items-center justify-between gap-2" wire:key="tr-{{ $t['typ'] }}-{{ $t['id'] }}">
-                                        <span>{{ $t['name'] }} <span class="{{ $leise }}">{{ $typLabels[$t['typ']] }}</span></span>
-                                        <x-fa::button size="sm" icon="heroicon-m-plus" wire:click="sammlungHinzu({{ $s['id'] }}, '{{ $t['typ'] }}', {{ $t['id'] }})">Hinzufügen</x-fa::button>
-                                    </li>
+                        {{-- Picker: Ebene → filtern → anhaken → hinzufügen --}}
+                        <div class="flex flex-col gap-2 rounded-[var(--fa-radius-control)] bg-[var(--fa-ground)] p-3" data-sammlung-picker>
+                            <div class="flex flex-wrap gap-1" role="tablist" aria-label="Ebene">
+                                @foreach($ebenen as $key => $label)
+                                    <x-fa::button size="sm" :variant="$ebene === $key ? 'primary' : 'ghost'" wire:click="$set('ebene', '{{ $key }}')" data-picker-ebene="{{ $key }}">{{ $label }}</x-fa::button>
                                 @endforeach
-                            </ul>
-                        @endif
+                            </div>
+                            <div class="flex flex-wrap items-end gap-2" data-picker-filter>
+                                <x-fa::input wire:model.live.debounce.300ms="suche" placeholder="{{ $ebenen[$ebene] }} suchen" class="w-64 max-w-full" data-sammlung-suche />
+                                @if($kategorieOptionen !== [])
+                                    <x-fa::select size="sm" class="w-48" wire:model.live="filterKategorie" :options="$kategorieOptionen" placeholder="Alle Kategorien" aria-label="Kategorie" data-picker-kategorie />
+                                @endif
+                                @if($statusOptionen !== [])
+                                    <x-fa::select size="sm" class="w-40" wire:model.live="filterStatus" :options="$statusOptionen" placeholder="Jeder Status" aria-label="Status" data-picker-status />
+                                @endif
+                                <label class="inline-flex items-center gap-1.5 text-[length:var(--fa-text-sm)]">
+                                    <input type="checkbox" class="w-4 h-4 rounded accent-[var(--fa-accent)]" wire:model.live="nurNeue" data-picker-nur-neue /> nur noch nicht enthaltene
+                                </label>
+                            </div>
+                            @if($treffer === [])
+                                <p class="{{ $leise }}">Keine {{ $ebenen[$ebene] }} gefunden.</p>
+                            @else
+                                <ul class="flex flex-col gap-1 max-h-80 overflow-y-auto">
+                                    @foreach($treffer as $t)
+                                        <li class="flex items-center gap-2" wire:key="tr-{{ $ebene }}-{{ $t['id'] }}">
+                                            <input type="checkbox" class="w-4 h-4 rounded accent-[var(--fa-accent)]" wire:model.live="pickerAuswahl.{{ $t['id'] }}"
+                                                @disabled($t['drin']) aria-label="{{ $t['name'] }} auswählen" data-picker-eintrag="{{ $t['id'] }}" />
+                                            <span class="{{ $t['drin'] ? $leise : '' }}">{{ $t['name'] }}@if($t['drin']) · schon in der Sammlung @endif</span>
+                                        </li>
+                                    @endforeach
+                                </ul>
+                                <div class="flex items-center gap-2">
+                                    <x-fa::button size="sm" variant="ghost" wire:click="alleAnhaken({{ json_encode(array_values(array_map(fn ($t) => $t['id'], array_filter($treffer, fn ($t) => ! $t['drin'])))) }})" data-picker-alle>Alle anhaken</x-fa::button>
+                                    <x-fa::button size="sm" variant="primary" icon="heroicon-m-plus" wire:click="auswahlHinzu" data-picker-hinzu>{{ count(array_filter($pickerAuswahl)) }} hinzufügen</x-fa::button>
+                                    <span class="{{ $leise }}">Höchstens 60 Einträge je Ansicht — mit dem Filter eingrenzen.</span>
+                                </div>
+                            @endif
+                        </div>
                     @endif
                 </div>
             @endforeach

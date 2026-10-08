@@ -28,7 +28,7 @@ class InhaltsFreigabeService
 {
     public const AUSGABE_TYPEN = ['sammlung' => 'Sammlung', 'foodbook' => 'Foodbook', 'speiseplan' => 'Speiseplan', 'speisekarte' => 'Speisekarte'];
 
-    public const SAMMLUNG_TYPEN = ['recipe' => 'Rezept', 'concept' => 'Konzept', 'format' => 'Format'];
+    public const SAMMLUNG_TYPEN = ['recipe' => 'Rezept', 'concept' => 'Konzept', 'paket' => 'Paket', 'format' => 'Format'];
 
     private const AUSGABE_TABELLEN = ['foodbook' => 'foodalchemist_foodbooks', 'speiseplan' => 'foodalchemist_menu_plans', 'speisekarte' => 'foodalchemist_menu_cards'];
 
@@ -259,6 +259,9 @@ class InhaltsFreigabeService
     public function kopieAnlegen(Team $team, string $typ, int $id, ?User $actor): \Illuminate\Database\Eloquent\Model
     {
         $this->rechte->pruefe($actor, $team, FaRolle::Kuratieren, 'eigene Kopie anlegen');
+        if (! in_array($typ, ['recipe', 'concept', 'format'], true)) {
+            throw new \RuntimeException('Eine eigene Kopie gibt es für Rezepte, Konzepte und Formate.');
+        }
         $original = $this->modelFuer($typ)::visibleToTeam($team)->findOrFail($id);
         if ($original->isOwnedBy($team)) {
             throw new \RuntimeException('Das gehört schon diesem Team — eine eigene Kopie ist nicht nötig.');
@@ -400,7 +403,8 @@ class InhaltsFreigabeService
             'recipe' => new FoodAlchemistRecipe(),
             'concept' => new FoodAlchemistConcept(),
             'format' => new FoodAlchemistFormat(),
-            default => throw new \RuntimeException('In eine Sammlung kommen Rezepte, Konzepte und Formate.'),
+            'paket' => new \Platform\FoodAlchemist\Models\FoodAlchemistPaket(),
+            default => throw new \RuntimeException('In eine Sammlung kommen Rezepte, Konzepte, Pakete und Formate.'),
         };
     }
 

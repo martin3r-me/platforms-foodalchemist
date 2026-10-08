@@ -160,10 +160,11 @@ Reihenfolge-Vorschlag: 77a zuerst (Sicherheit, klein), dann 77c (Kernbaustein St
 - **Hülle:** Format → Konzepte → Pakete/Gerichte (+ eingebettete Konzepte) → Basisrezepte (alle Ebenen); Foodbook über Kapitel und Blöcke, Speiseplan über Einträge, Speisekarte über Sektionen und Positionen. Neu gerechnet bei Freigabe/Haken/Sammlung sofort, bei Änderung eines Slots, Blocks, Eintrags, einer Position oder Zutat über `InhaltsFreigabeHuelleJob` (eindeutig in der Warteschlange, nur wenn es überhaupt Freigaben gibt).
 - **Rechte:** Haken + Freigaben nur FA-Admin des Oberteams; freigegeben werden nur **eigene** Ausgaben an **eigene** Unter-Teams (Kunden-IP-Regel); Sammlungen pflegen ab Kuratieren.
 - **Eigene Kopie:** `kopieAnlegen` (Rezept, Konzept, Format inkl. Gerüst) ab Kuratieren, merkt Original + Stand; `originalGeaendert` meldet Änderungen. Im Rezept-Editor: Hinweis „gehört … nur lesbar" mit Knopf „Eigene Kopie", an der Kopie Hinweis bei geändertem Original.
-- **Pflege:** Einstellungen → Betrieb & Küche → **Inhalte für Standorte** (Haken je Standort, Freigaben, Sammlungen befüllen per Suche). MCP `standort_inhalte.GET/PUT`, `sammlungen.PUT` (auch mehrere IDs auf einmal), `inhalte.KOPIE`.
+- **Pflege:** Editor im **Controlling → Reiter „Standorte & Freigaben"** (Nachtrag 08.10., vorher Einstellungen): Haken je Standort, Freigaben, Sammlungen mit **Picker** — Ebenen Gerichte · Basisrezepte · Konzepte · Pakete · Formate, Filter Suche · Kategorie · Status · „nur noch nicht enthaltene", Mehrfachauswahl + „Alle anhaken"; Pakete sind Sammlungs-Typ. MCP `standort_inhalte.GET/PUT`, `sammlungen.PUT` (auch mehrere IDs auf einmal), `inhalte.KOPIE`.
 - **Befüllen:** Mehrfachauswahl im Rezept-Browser („Zu Sammlung hinzufügen"), Suche in den Einstellungen (Rezepte, Konzepte, Formate), MCP mit mehreren IDs.
 - **Offen (Folgearbeit):** dieselbe Mehrfachauswahl in Concepter-/Format-Browser und „Eigene Kopie" im Konzept-/Format-Editor (heute per MCP).
-- Tests: `Spec77dInhalteTest` (5).
+- **Kundengrenze (Nachtrag):** `FaRechte::kundenHauptTeam` endet am Team direkt unter `foodalchemist.master_team_id`; `hauptTeam` (Kontingente) nutzt sie, das Master-Team hat keine Standorte (`unterTeamIds` leer). Gleiche Grenze nutzt Spec 79 (Inspirationen).
+- Tests: `Spec77dInhalteTest` (7), `Spec77dLeistungTest` (2).
 
 ## Bewusst nicht
 
