@@ -247,3 +247,12 @@ it('Hotfix: Produktionsauftrag mit Altbestand-Ziel ohne source_ref öffnet (stab
     \Livewire\Livewire::test(\Platform\FoodAlchemist\Livewire\Produktion\Editor::class)->call('oeffnenBearbeiten', $order->id)
         ->assertSee('Suppe (4 kg)')->assertSee('Etiketten drucken');
 });
+
+it('Spec 76b: Vorlage „Standard für den Wandmonitor" — eigene Küchen-Vorlage, sonst Standard', function () {
+    expect($this->svc->kuechenVorlage($this->rootTeam)->id)->toBe($this->svc->vorlage($this->rootTeam, null)->id);
+    $k = $this->svc->speichern($this->rootTeam, null, ['name' => 'Küche Rolle', 'format' => 'a4_24', 'is_kitchen_default' => true]);
+    expect($this->svc->kuechenVorlage($this->rootTeam)->id)->toBe($k->id);
+    $k2 = $this->svc->speichern($this->rootTeam, null, ['name' => 'Küche 2', 'is_kitchen_default' => true]);
+    expect($k->refresh()->is_kitchen_default)->toBeFalse()->and($this->svc->kuechenVorlage($this->rootTeam)->id)->toBe($k2->id);
+    Livewire::test(EtikettenSettings::class)->call('waehlen', $k2->id)->assertSet('form.is_kitchen_default', true)->assertSee('Standard für den Wandmonitor');
+});

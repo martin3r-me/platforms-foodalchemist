@@ -364,7 +364,8 @@ it('öffnet im Wandmonitor ein Gericht als Arbeitsblock mit tatsächlichen Rezep
         ->assertSeeHtml('data-tagesplan-wall-subrezepte')
         ->assertSeeHtml('data-tagesplan-wall-subrezept')
         ->assertSee('Dressing-Ansatz')
-        ->assertSeeHtml('data-tagesplan-wall-etikett')->assertSee('Etikett drucken');   // Spec 76: Etikett aus der Küche
+        ->assertSeeHtml('data-tagesplan-wall-etikett')->assertSee('Etiketten drucken')   // Spec 76: Etikett aus der Küche
+        ->assertDontSeeHtml('target="_blank" class="mt-2 flex h-12');                     // Spec 76b: kein neuer Tab
 });
 
 it('zeigt im Wandmonitor Allergen-, Diät- und Datenqualitätswarnungen', function () {

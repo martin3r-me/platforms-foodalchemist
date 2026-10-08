@@ -46,7 +46,7 @@ class Etiketten extends Component
     public function duplizieren(EtikettService $svc): void
     {
         $this->aktion(function () use ($svc) {
-            $v = $svc->speichern($this->team(), null, ['name' => $this->form['name'] . ' (Kopie)', 'is_default' => false] + array_diff_key($this->form, ['name' => 1, 'is_default' => 1]));
+            $v = $svc->speichern($this->team(), null, ['name' => $this->form['name'] . ' (Kopie)', 'is_default' => false, 'is_kitchen_default' => false] + array_diff_key($this->form, ['name' => 1, 'is_default' => 1, 'is_kitchen_default' => 1]));
             $this->laden($svc, $v->id);
         });
     }
@@ -113,7 +113,7 @@ class Etiketten extends Component
             'name' => $v->name, 'typ' => $v->typ, 'format' => $v->format, 'outlet_id' => $v->outlet_id !== null ? (string) $v->outlet_id : '',
             'presentation_design' => (string) ($v->presentation_design ?? ''), 'felder' => $svc->normalisiereFelder((string) $v->typ, $v->felder),
             'allergen_darstellung' => $v->allergen_darstellung, 'schriftgroesse' => $v->schriftgroesse,
-            'datum_gross' => (bool) $v->datum_gross, 'zeige_logo' => (bool) $v->zeige_logo, 'fusstext' => (string) ($v->fusstext ?? ''), 'is_default' => (bool) $v->is_default,
+            'datum_gross' => (bool) $v->datum_gross, 'zeige_logo' => (bool) $v->zeige_logo, 'fusstext' => (string) ($v->fusstext ?? ''), 'is_default' => (bool) $v->is_default, 'is_kitchen_default' => (bool) $v->is_kitchen_default,
         ];
         $this->fehler = null;
     }

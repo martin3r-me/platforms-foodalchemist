@@ -36,3 +36,11 @@ Stand 2026-10-08 · Wünsche Dominique nach Spec 69/70:
 - **Je Zeile:** „Etikett" an jeder Basisrezept-Zeile → Etiketten-Seite vorbelegt (`?e[...]`).
 - **Druckansicht** kann jetzt eine Liste verschiedener Etiketten ausgeben (`liste`), für Bogen und Rolle.
 - **Nochmal drucken (Gruppe):** Route `etiketten/gruppe/{gruppe}`.
+
+## 5. Nachtrag 76b · Etiketten in der Küche (Wandmonitor)
+- **Anleitung einer Basisrezept-Zeile:** Block „Etiketten" mit Anzahl (−/+, Vorschlag = Ansätze) und Menge je Etikett.
+  - Die Menge wird automatisch als Gesamtmenge ÷ Anzahl gerechnet und lässt sich überschreiben.
+  - „Etiketten drucken" lädt die Druckansicht unsichtbar im Monitor (iframe) und öffnet den Druckdialog. **Kein neuer Tab**, der Monitor bleibt offen.
+- **Kürzel:** Am Wandmonitor ist niemand persönlich angemeldet, deshalb steht der **Posten** der Zeile als Kürzel.
+- **Eigene Vorlage für den Wandmonitor:** In den Etiketten-Einstellungen gibt es „Standard für den Wandmonitor (Küche)" (`is_kitchen_default`, Migration `2026_10_09_200200`). Ohne diese Einstellung druckt die Küche mit der Standard-Vorlage.
+- „Hergestellt" bleibt leer, wenn die Vorlage Datumsfelder auf „leer (Handschrift)" setzt. „Verbrauchen bis" bleibt leer, wenn am Rezept keine Haltbarkeit steht.

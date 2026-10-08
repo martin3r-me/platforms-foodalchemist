@@ -81,6 +81,12 @@ class EtikettService
         return FoodAlchemistLabelTemplate::where('team_id', $team->id)->findOrFail($id);
     }
 
+    /** Spec 76b: Vorlage für den Wandmonitor (Küche) — eigene, sonst die Standard-Vorlage. */
+    public function kuechenVorlage(Team $team): FoodAlchemistLabelTemplate
+    {
+        return FoodAlchemistLabelTemplate::where('team_id', $team->id)->where('is_kitchen_default', true)->first() ?? $this->vorlage($team, null);
+    }
+
     /** @param array<string, mixed> $daten */
     public function speichern(Team $team, ?int $id, array $daten): FoodAlchemistLabelTemplate
     {
@@ -120,10 +126,14 @@ class EtikettService
             'zeige_logo' => (bool) ($daten['zeige_logo'] ?? $v->zeige_logo ?? true),
             'fusstext' => array_key_exists('fusstext', $daten) ? (trim((string) $daten['fusstext']) !== '' ? mb_substr(trim((string) $daten['fusstext']), 0, 200) : null) : $v->fusstext,
             'is_default' => (bool) ($daten['is_default'] ?? $v->is_default ?? false),
+            'is_kitchen_default' => (bool) ($daten['is_kitchen_default'] ?? $v->is_kitchen_default ?? false),   // Spec 76b
         ]);
         $v->save();
         if ($v->is_default) {
             FoodAlchemistLabelTemplate::where('team_id', $team->id)->where('id', '!=', $v->id)->update(['is_default' => false]);
+        }
+        if ($v->is_kitchen_default) {
+            FoodAlchemistLabelTemplate::where('team_id', $team->id)->where('id', '!=', $v->id)->update(['is_kitchen_default' => false]);
         }
 
         return $v->refresh();
