@@ -278,6 +278,19 @@ class FoodAlchemistServiceProvider extends ServiceProvider
         // Spec 65 · Bearbeitungssperre: serverseitige Durchsetzung für alle Editoren mit MitBearbeitungssperre.
         // Jede Methode außerhalb von sperrFreieMethoden() läuft nur, wenn die aufrufende Person die Sperre hält
         // (Klick auf „Bearbeiten"); sonst Abweisung mit Hinweis statt stillem Schreiben.
+        // Spec 77b · Bereich der Komponente: gesperrter Bereich = keine Aktion (Seitenaufruf sperrt die Middleware).
+        \Livewire\on('call', function ($component, $method, $params, $context, $returnEarly) {
+            $bereich = \Platform\FoodAlchemist\Support\FaBereiche::fuerKomponente($component);
+            $user = \Illuminate\Support\Facades\Auth::user();
+            if ($bereich !== null && $user instanceof \Platform\Core\Models\User && ($team = $user->currentTeamRelation) !== null
+                && ! app(\Platform\FoodAlchemist\Services\FaRechte::class)->darfBereich($user, $team, $bereich)) {
+                $component->dispatch('fa-saved', message: 'Dieser Bereich ist für dich bzw. dein Team nicht freigeschaltet.', type: 'error');
+                $returnEarly(null);
+            }
+        });
+        // Spec 77b · Seiten je Bereich (Route → Bereich), für alle Web-Routen; Nicht-FA-Routen laufen durch.
+        $this->app['router']->pushMiddlewareToGroup('web', \Platform\FoodAlchemist\Http\Middleware\FaBereichMiddleware::class);
+
         \Livewire\on('call', function ($component, $method, $params, $context, $returnEarly) {
             if (! method_exists($component, 'sperreErlaubt') || $component->sperreErlaubt((string) $method)) {
                 return;
@@ -1055,6 +1068,9 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\DeliveryNotesBackorderTool::class,
                     \Platform\FoodAlchemist\Tools\TeamRolesGetTool::class,
                     \Platform\FoodAlchemist\Tools\TeamRolesPutTool::class,
+                    // Spec 77b: Bereiche, Einschränkungen, Kontingente
+                    \Platform\FoodAlchemist\Tools\TeamBereicheGetTool::class,
+                    \Platform\FoodAlchemist\Tools\TeamBereichePutTool::class,
                     // Spec 75b: Lieferanten-Rechnungen + Triple Match
                     \Platform\FoodAlchemist\Tools\SupplierInvoicesGetTool::class,
                     \Platform\FoodAlchemist\Tools\SupplierInvoicesPostTool::class,

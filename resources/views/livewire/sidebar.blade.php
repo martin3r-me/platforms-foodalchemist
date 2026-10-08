@@ -3,7 +3,10 @@
     (EINE Quelle; M2-13-Abnahme-Fund: die Template-Version war hartkodiert,
     Lieferanten/Einstellungen fehlten deshalb in der Navigation).
 --}}
-@php($gruppen = config('foodalchemist.sidebar', []))
+@php
+    // Spec 77b: nur Einträge, deren Bereich für Team und User freigeschaltet ist
+    $gruppen = \Platform\FoodAlchemist\Support\FaBereiche::sichtbareNavigation(config('foodalchemist.sidebar', []), auth()->user());
+@endphp
 
 <div>
     {{-- Globaler „Gespeichert"-Toast — einmal hier gemountet (Sidebar liegt via
