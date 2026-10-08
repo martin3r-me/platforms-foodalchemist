@@ -2502,3 +2502,98 @@ it('Spec 66: Einkaufsjournal zählt gelieferte bzw. berechnete Menge statt beste
     $this->svc->updateInvoiceLine($this->rootTeam, $line->id, 7, 2.5, null);
     expect((float) $tx()->qty)->toBe(7.0)->and((float) $tx()->line_total)->toBe(17.5);
 });
+
+/**
+ * Spec 71 · Bestellrunde Stufe 2: Lager-Abgleich, Position auslassen, Gebinde von Hand, Lesemodus nach dem Speichern.
+ */
+function lagerBestand($team, $gp, float $gramm): void
+{
+    $ort = \Platform\FoodAlchemist\Models\FoodAlchemistInventoryLocation::firstOrCreate(
+        ['team_id' => $team->id, 'name' => 'Trockenlager'],
+        ['type' => 'warehouse', 'is_default' => true, 'is_active' => true]
+    );
+    FoodAlchemistInventoryStock::create(['team_id' => $team->id, 'inventory_location_id' => $ort->id, 'gp_id' => $gp->id, 'qty_base' => $gramm, 'base_unit' => 'g']);
+}
+
+it('Spec 71: Lager-Abgleich zieht Bestand vom Bedarf ab, voll gedeckt fällt aus der Runde', function () {
+    lagerBestand($this->rootTeam, $this->mehl, 4000);     // Mehl 10 kg Bedarf → 6 kg bestellen
+    lagerBestand($this->rootTeam, $this->butter, 2000);   // Butter 0,75 kg Bedarf → ganz aus dem Lager
+    $quelle = [['type' => 'recipe', 'id' => $this->kuchen->id, 'qty' => 100, 'unit' => 'portions', 'delivery_date' => '2026-08-13']];
+
+    $ohne = $this->svc->previewFromSources($this->rootTeam, $quelle);
+    expect($ohne['totals']['total_net'])->toBe(33.0)->and($ohne['aus_lager'])->toBe([]);
+
+    $mit = $this->svc->previewFromSources($this->rootTeam, $quelle, null, ['lager_abgleich' => true]);
+    $mehl = collect($mit['orders_preview'])->flatMap(fn ($g) => $g['positionen'])->firstWhere('gp_id', $this->mehl->id);
+    expect($mit['lager_abgleich'])->toBeTrue()
+        ->and($mehl['bedarf_g'])->toEqual(10000)->and($mehl['lager_g'])->toEqual(4000)
+        ->and((float) $mehl['qty_packs'])->toBe(6.0)
+        ->and($mit['totals']['groups'])->toBe(1)                          // Hanos-Gruppe leer → weg
+        ->and(collect($mit['aus_lager'])->pluck('gp_id')->all())->toBe([$this->butter->id])
+        ->and($mit['totals']['total_net'])->toBe(13.0);                  // 6 × 2 € + 1 × 1 €
+
+    $this->svc->generateDraftsFromSources($this->rootTeam, $quelle, null, null, ['lager_abgleich' => true]);
+    expect(FoodAlchemistOrder::count())->toBe(1)
+        ->and((float) FoodAlchemistOrderLine::where('supplier_item_id', $this->laOf['Mehl']->id)->value('qty_packs'))->toBe(6.0);
+});
+
+it('Spec 71: Position auslassen + Gebinde von Hand — in Vorschau und gespeicherter Bestellung', function () {
+    $quelle = [['type' => 'recipe', 'id' => $this->kuchen->id, 'qty' => 100, 'unit' => 'portions', 'delivery_date' => '2026-08-13']];
+    $pos = collect($this->svc->previewFromSources($this->rootTeam, $quelle)['orders_preview'])->flatMap(fn ($g) => $g['positionen']);
+    $schl = fn ($gp) => $this->svc->positionsSchluessel($pos->firstWhere('gp_id', $gp->id));
+
+    $ov = ['skip' => [$schl($this->mehl) => true], 'menge' => [$schl($this->zucker) => '3']];
+    $p = $this->svc->previewFromSources($this->rootTeam, $quelle, null, $ov);
+    $zucker = collect($p['orders_preview'])->flatMap(fn ($g) => $g['positionen'])->firstWhere('gp_id', $this->zucker->id);
+    expect(collect($p['ausgelassen'])->pluck('gp_id')->all())->toBe([$this->mehl->id])
+        ->and((float) $zucker['qty_packs'])->toBe(3.0)->and($zucker['qty_packs_berechnet'])->toBe(1.0)->and($zucker['menge_von_hand'])->toBeTrue()
+        ->and($p['totals']['total_net'])->toBe(15.0);                    // Zucker 3 × 1 € + Butter 12 €
+
+    $this->svc->generateDraftsFromSources($this->rootTeam, $quelle, null, null, $ov);
+    $zeile = FoodAlchemistOrderLine::where('supplier_item_id', $this->laOf['Zucker']->id)->first();
+    expect(FoodAlchemistOrderLine::where('supplier_item_id', $this->laOf['Mehl']->id)->exists())->toBeFalse()
+        ->and((bool) $zeile->is_manual_qty)->toBeTrue()->and((float) $zeile->qty_packs)->toBe(3.0);
+});
+
+it('Spec 71 UI: Entfernen, Menge ±, Lager-Schalter, Lesemodus nach Speichern + Bearbeiten', function () {
+    $this->actingAs($this->makeUser($this->rootTeam));
+    lagerBestand($this->rootTeam, $this->butter, 2000);
+
+    $ed = Livewire::test(OrdersEditor::class)
+        ->call('oeffnenNeu', '2026-08-13')
+        ->call('cockpitRezeptEinfuegen', $this->kuchen->id)
+        ->set('cockpitSources.0.qty', 100)
+        ->call('cockpitVorschau')
+        ->assertSee('Aus dem Lager gedeckt (1)')->assertSee('Lagerbestand abziehen')->assertSee('Alle zu');
+    $mehlKey = collect($ed->get('cockpitPreview')['orders_preview'])->flatMap(fn ($g) => $g['positionen'])->firstWhere('gp_id', $this->mehl->id)['position_key'];
+
+    $ed->call('positionMenge', $mehlKey, '12')
+        ->assertSee('Von Hand (10 gerechnet)')
+        ->call('positionAuslassen', $mehlKey)
+        ->assertSee('Aus der Runde genommen (1)')
+        ->call('positionWiederherstellen', $mehlKey)
+        ->assertSet('cockpitPreview', fn ($v) => $v['ausgelassen'] === [])
+        ->set('cockpitLagerAbgleich', false)
+        ->assertSet('cockpitPreview', fn ($v) => $v['aus_lager'] === [] && $v['totals']['groups'] === 2)
+        ->set('cockpitLagerAbgleich', true)
+        ->call('cockpitSpeichern')
+        ->assertSet('rundeGesperrt', true)
+        ->assertSee('Bearbeiten')->assertDontSee('Bestellungen speichern');
+
+    expect((float) FoodAlchemistOrderLine::where('supplier_item_id', $this->laOf['Mehl']->id)->value('qty_packs'))->toBe(12.0)
+        ->and(FoodAlchemistOrder::count())->toBe(1);
+
+    $ed->call('cockpitSpeichern')->assertSet('rundeGesperrt', true);    // gesperrt: kein zweiter Lauf
+    $ed->call('rundeBearbeiten')->assertSet('rundeGesperrt', false)->assertSee('Bestellungen speichern');
+});
+
+it('Spec 71 UI: Strategie-Wechsel rechnet die Vorschau sofort neu', function () {
+    $this->actingAs($this->makeUser($this->rootTeam));
+    $ed = Livewire::test(OrdersEditor::class)
+        ->call('oeffnenNeu', '2026-08-13')
+        ->call('cockpitRezeptEinfuegen', $this->kuchen->id)
+        ->set('cockpitSources.0.qty', 100);
+    expect($ed->get('cockpitPreview'))->toBeNull();
+    $ed->set('cockpitStrategy', 'guenstigster_preis')
+        ->assertSet('cockpitPreview', fn ($v) => is_array($v) && $v['totals']['groups'] === 2);
+});

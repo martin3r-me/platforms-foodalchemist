@@ -116,7 +116,9 @@
             @if($fehler)<x-fa::signal tone="crit" data-orders-fehler>{{ $fehler }}</x-fa::signal>@endif
 
             <div class="ml-auto flex flex-wrap items-center justify-end gap-2">
-                @if($istRunde)
+                @if($istRunde && $rundeGesperrt)
+                    <x-fa::button variant="primary" icon="heroicon-m-pencil-square" wire:click="rundeBearbeiten" data-orders-runde-bearbeiten>Bearbeiten</x-fa::button>
+                @elseif($istRunde)
                     <x-fa::button icon="heroicon-m-arrow-path" wire:click="cockpitVorschau" data-orders-cockpit-preview>Vorschau berechnen</x-fa::button>
                     <x-fa::button variant="primary" icon="heroicon-m-check" wire:click="cockpitSpeichern" :disabled="count($cockpitSources) === 0" data-orders-cockpit-save>Bestellungen speichern</x-fa::button>
                 @else
@@ -230,6 +232,11 @@
     @if($istRunde)
         {{-- ═══ BESTELLRUNDE: Rahmen · Quellen · Vorschau · Klärliste ═══ --}}
         <div class="flex flex-col gap-4">
+            @if($rundeGesperrt)
+                {{-- Spec 65-Muster wie im Rezept: gespeichert = Lesemodus, „Bearbeiten" öffnet wieder --}}
+                <x-fa::notice tone="info" data-orders-runde-gesperrt>Gespeichert — die Runde ist im Lesemodus. Zum Ändern „Bearbeiten“. Die einzelnen Bestellungen findest du in der Liste.</x-fa::notice>
+            @endif
+            <fieldset @disabled($rundeGesperrt) class="contents" data-fa-lesemodus="{{ $rundeGesperrt ? '1' : '0' }}">
             <x-fa::section :title="$roundDetail ? $roundDetail['label'] : 'Neue Bestellrunde'" icon="heroicon-o-calendar-days"
                 description="Liefertag und Strategie gelten für alle Quellen, sofern eine Quelle nichts anderes vorgibt.">
                 <div class="grid grid-cols-1 lg:grid-cols-4 gap-3">
@@ -397,13 +404,27 @@
                     @elseif(empty($cockpitPreview['orders_preview']))
                         <x-fa::empty compact icon="heroicon-o-truck" title="Keine bestellbare Position">Die Quellen ergeben keinen Artikel mit Lieferant. Klärliste prüfen.</x-fa::empty>
                     @else
+                        {{-- Spec 71: Lieferanten auf-/zuklappen (Alpine, kein Server-Roundtrip; auch im Lesemodus bedienbar → div statt button) --}}
+                        <div class="flex flex-wrap items-center justify-between gap-2" data-orders-gruppen-steuerung>
+                            <label class="inline-flex items-center gap-1.5 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]" title="Bedarf aus Rezepten und Grundprodukten minus aktueller Lagerbestand">
+                                <input type="checkbox" wire:model.live="cockpitLagerAbgleich" class="w-4 h-4 rounded accent-[var(--fa-accent)]" data-orders-lager-abgleich /> Lagerbestand abziehen
+                            </label>
+                            <span class="inline-flex gap-3 text-[length:var(--fa-text-sm)]">
+                                <span role="button" tabindex="0" class="text-[var(--fa-accent)] hover:underline cursor-pointer" x-on:click="$dispatch('runde-gruppen', { offen: true })">Alle auf</span>
+                                <span role="button" tabindex="0" class="text-[var(--fa-accent)] hover:underline cursor-pointer" x-on:click="$dispatch('runde-gruppen', { offen: false })">Alle zu</span>
+                            </span>
+                        </div>
                         <div class="flex flex-col gap-3">
                             @foreach($cockpitPreview['orders_preview'] as $g)
-                                <div class="rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] overflow-hidden" wire:key="cockpit-preview-{{ $g['supplier_id'] }}-{{ $g['delivery_date'] ?? 'none' }}">
-                                    <div class="flex flex-wrap items-center justify-between gap-2 px-3 py-2 bg-[var(--fa-ground)]">
-                                        <div class="min-w-0">
-                                            <p class="text-[length:var(--fa-text-md)] font-semibold text-[var(--fa-ink)]">{{ $g['supplier'] }}</p>
-                                            <p class="{{ $leise }} tabular-nums">Liefertag {{ $datum($g['delivery_date']) ?? 'offen' }}</p>
+                                <div x-data="{ offen: true }" x-on:runde-gruppen.window="offen = $event.detail.offen" class="rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] overflow-hidden" wire:key="cockpit-preview-{{ $g['supplier_id'] }}-{{ $g['delivery_date'] ?? 'none' }}">
+                                    <div class="flex flex-wrap items-center justify-between gap-2 px-3 py-2 bg-[var(--fa-ground)] cursor-pointer" role="button" tabindex="0" x-on:click="offen = ! offen" x-bind:aria-expanded="offen" data-orders-gruppe-kopf>
+                                        <div class="min-w-0 flex items-center gap-2">
+                                            <span x-show="offen">@svg('heroicon-m-chevron-down', 'w-4 h-4 text-[var(--fa-ink-3)]')</span>
+                                            <span x-show="! offen" x-cloak>@svg('heroicon-m-chevron-right', 'w-4 h-4 text-[var(--fa-ink-3)]')</span>
+                                            <div class="min-w-0">
+                                                <p class="text-[length:var(--fa-text-md)] font-semibold text-[var(--fa-ink)]">{{ $g['supplier'] }}</p>
+                                                <p class="{{ $leise }} tabular-nums">Liefertag {{ $datum($g['delivery_date']) ?? 'offen' }} · {{ count($g['positionen']) }} {{ count($g['positionen']) === 1 ? 'Position' : 'Positionen' }}</p>
+                                            </div>
                                         </div>
                                         <div class="flex flex-col items-end gap-0.5">
                                             <x-fa::money :value="$g['total_net']" class="text-[length:var(--fa-text-md)] font-semibold text-[var(--fa-ink)]" />
@@ -414,6 +435,7 @@
                                             @endif
                                         </div>
                                     </div>
+                                    <div x-show="offen">
                                     @if(!empty($g['warnings']))
                                         <div class="flex flex-wrap gap-1 px-3 py-1.5 border-t border-[var(--fa-line)] bg-[var(--fa-warn-soft)]">
                                             @foreach($g['warnings'] as $w)
@@ -434,6 +456,9 @@
                                                         Bedarf {{ $p['needed_display'] !== null ? $menge($p['needed_display'], 3) . ' ' . $p['needed_unit'] : 'direkt' }}
                                                         @if($p['source_label']) · {{ $p['source_label'] }}@endif
                                                     </p>
+                                                    @if(($p['lager_g'] ?? 0) > 0)
+                                                        <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ok)] tabular-nums" data-orders-lager-abzug>Im Lager {{ $menge($p['lager_g'] / 1000, 3) }} kg · bestellt für {{ $menge($p['needed_base_g'] / 1000, 3) }} kg</p>
+                                                    @endif
                                                     @if(!empty($p['reference']))
                                                         <x-fa::badge tone="accent" class="mt-1">{{ $p['reference'] }}</x-fa::badge>
                                                     @endif
@@ -476,13 +501,47 @@
                                                         @endif
                                                     @endif
                                                 </div>
-                                                <div class="flex flex-col items-end gap-0.5 whitespace-nowrap">
-                                                    <span class="text-[length:var(--fa-text-md)] text-[var(--fa-ink)] tabular-nums">{{ $menge($p['qty_packs']) }} {{ $p['packaging_unit'] }}</span>
+                                                <div class="flex flex-col items-end gap-0.5 whitespace-nowrap" data-orders-position="{{ $p['position_key'] ?? '' }}">
+                                                    {{-- Spec 71: Gebinde von Hand (−/+ oder Eingabe), Position entfernen --}}
+                                                    @php $pk = (string) ($p['position_key'] ?? ''); $q = (float) ($p['qty_packs'] ?? 0); @endphp
+                                                    <span class="inline-flex items-center gap-1">
+                                                        <x-fa::icon-button size="sm" icon="heroicon-m-minus" label="Ein Gebinde weniger" wire:click="positionMenge('{{ $pk }}', {{ max(0, $q - 1) }})" />
+                                                        <input type="text" inputmode="decimal" value="{{ $menge($q) }}" wire:change="positionMenge('{{ $pk }}', $event.target.value)" class="fa-control h-7 w-14 text-right tabular-nums text-[length:var(--fa-text-sm)]" aria-label="Gebinde" data-orders-menge />
+                                                        <x-fa::icon-button size="sm" icon="heroicon-m-plus" label="Ein Gebinde mehr" wire:click="positionMenge('{{ $pk }}', {{ $q + 1 }})" />
+                                                        <span class="text-[length:var(--fa-text-md)] text-[var(--fa-ink)]">{{ $p['packaging_unit'] }}</span>
+                                                        <x-fa::icon-button size="sm" tone="danger" icon="heroicon-m-x-mark" label="Position aus der Runde nehmen" wire:click="positionAuslassen('{{ $pk }}')" data-orders-auslassen />
+                                                    </span>
+                                                    @if(! empty($p['menge_von_hand']))
+                                                        <button type="button" wire:click="positionMenge('{{ $pk }}', '')" class="inline-flex items-center gap-1 h-[22px] px-2 rounded-full bg-[var(--fa-warn-soft)] text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-warn)] hover:underline" data-orders-menge-zurueck>
+                                                            @svg('heroicon-m-arrow-uturn-left', 'w-3.5 h-3.5') Von Hand ({{ $menge($p['qty_packs_berechnet'] ?? 0) }} gerechnet)
+                                                        </button>
+                                                    @endif
                                                     <x-fa::money :value="$p['bestellbar'] ? $p['line_total'] : null" missing="Gebindepreis fehlt" class="{{ $leise }}" />
                                                 </div>
                                             </div>
                                         @endforeach
                                     </div>
+                                    </div>{{-- /x-show offen --}}
+                                </div>
+                            @endforeach
+                        </div>
+                    @endif
+                    {{-- Spec 71: aus dem Lager gedeckt / von Hand ausgelassen --}}
+                    @if($cockpitPreview !== null && ! empty($cockpitPreview['aus_lager']))
+                        <div class="rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] px-3 py-2" data-orders-aus-lager>
+                            <p class="text-[length:var(--fa-text-md)] font-semibold text-[var(--fa-ok)]">Aus dem Lager gedeckt ({{ count($cockpitPreview['aus_lager']) }})</p>
+                            @foreach($cockpitPreview['aus_lager'] as $p)
+                                <p class="{{ $leise }}" wire:key="auslager-{{ md5($p['position_key'] ?? $loop->index) }}">{{ $p['designation'] ?: ($p['gp'] ?: 'Position') }} · Bedarf {{ $menge(($p['bedarf_g'] ?? 0) / 1000, 3) }} kg vollständig im Lager</p>
+                            @endforeach
+                        </div>
+                    @endif
+                    @if($cockpitPreview !== null && ! empty($cockpitPreview['ausgelassen']))
+                        <div class="rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] px-3 py-2" data-orders-ausgelassen>
+                            <p class="text-[length:var(--fa-text-md)] font-semibold text-[var(--fa-ink-2)]">Aus der Runde genommen ({{ count($cockpitPreview['ausgelassen']) }})</p>
+                            @foreach($cockpitPreview['ausgelassen'] as $p)
+                                <div class="flex items-center justify-between gap-2" wire:key="ausgelassen-{{ md5($p['position_key'] ?? $loop->index) }}">
+                                    <span class="{{ $leise }}">{{ $p['designation'] ?: ($p['gp'] ?: 'Position') }} · {{ $p['supplier'] ?? '' }}</span>
+                                    <x-fa::button size="sm" variant="ghost" icon="heroicon-m-arrow-uturn-left" wire:click="positionWiederherstellen('{{ $p['position_key'] }}')">Wiederherstellen</x-fa::button>
                                 </div>
                             @endforeach
                         </div>
@@ -514,6 +573,7 @@
                     @endif
                 </x-fa::section>
             </div>
+            </fieldset>
         </div>
     @else
     <x-foodalchemist::editor-tabs marker="orders" wire-key="orders-tabs-{{ $detail['id'] }}-{{ $detail['status'] }}" :init="$startTab" :tabs="$reiter" :gesperrt="$sperrLesen">
