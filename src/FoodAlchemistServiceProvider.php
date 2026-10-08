@@ -1045,6 +1045,15 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     // Spec 67: Lagerbewegungen von Hand
                     \Platform\FoodAlchemist\Tools\InventoryMovementsPostTool::class,
                     \Platform\FoodAlchemist\Tools\InventoryMovementsStornoTool::class,
+                    // Spec 75a: Wareneingang über Lieferscheine · Spec 61: FA-Rollen
+                    \Platform\FoodAlchemist\Tools\DeliveryNotesGetTool::class,
+                    \Platform\FoodAlchemist\Tools\DeliveryNotesPostTool::class,
+                    \Platform\FoodAlchemist\Tools\DeliveryNotesPutTool::class,
+                    \Platform\FoodAlchemist\Tools\DeliveryNotesBookTool::class,
+                    \Platform\FoodAlchemist\Tools\DeliveryNotesStornoTool::class,
+                    \Platform\FoodAlchemist\Tools\DeliveryNotesBackorderTool::class,
+                    \Platform\FoodAlchemist\Tools\TeamRolesGetTool::class,
+                    \Platform\FoodAlchemist\Tools\TeamRolesPutTool::class,
                     // Spec 70: Etiketten
                     \Platform\FoodAlchemist\Tools\LabelsPostTool::class,
                     \Platform\FoodAlchemist\Tools\LabelTemplatesGetTool::class,

@@ -85,6 +85,8 @@ class Index extends Component
         'posten' => ['label' => 'Posten & Kapazität', 'hint' => 'Arbeitsplätze der Küche, verplanbare Minuten je Tag, Besetzung'],
         // Stufe 3 P3.1: Rollen als Kostenträger (Küchenchef/Koch/Hilfskoch) — Satz je Rolle.
         // Rolle ≠ Mensch: keine Namen/Schichten. Posten-Besetzung leitet Kapazität + Kosten ab.
+        // Spec 61: FA-Rollen der Mitglieder (Lesen / Kuratieren / Freigeben / FA-Admin) — Rechte, nicht Kosten.
+        'zugriffsrechte' => ['label' => 'Zugriffsrechte', 'hint' => 'Wer im Team lesen, bearbeiten, freigeben oder verwalten darf'],
         'rollen' => ['label' => 'Rollen & Stundensätze', 'hint' => 'Küchenrollen mit Stundensatz für Kapazität und Produktionskosten'],
 
         // — Ausgabe & Betrieb —
@@ -108,7 +110,7 @@ class Index extends Component
      */
     public const GRUPPEN = [
         'katalog' => ['label' => 'Katalog & Kategorien', 'sektionen' => ['einheiten', 'warengruppen', 'taxonomie', 'vk-taxonomie', 'behaelter', 'concepter-dimensionen']],
-        'betrieb' => ['label' => 'Betrieb & Küche', 'sektionen' => ['betriebe', 'posten', 'rollen', 'kueche']],
+        'betrieb' => ['label' => 'Betrieb & Küche', 'sektionen' => ['betriebe', 'posten', 'rollen', 'zugriffsrechte', 'kueche']],
         'kalkulation' => ['label' => 'Einkauf & Kalkulation', 'sektionen' => ['einkauf', 'kalkulation', 'herstellkosten', 'aufschlagsklassen']],
         'ki' => ['label' => 'KI & Wissen', 'sektionen' => ['ki', 'food-dna', 'kunde-dna', 'brief-vorlagen', 'trendradar', 'wissenskategorien', 'wissenssteuerung']],
         'ausgabe' => ['label' => 'Ausgabe', 'sektionen' => ['schreibstile', 'praesentations-designs', 'speiseplan-chips', 'etiketten']],

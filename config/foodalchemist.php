@@ -327,6 +327,12 @@ return [
                     'icon'  => 'heroicon-o-shopping-cart',
                 ],
                 [
+                    // Spec 75a: Wareneingang — Lieferscheine erfassen und buchen, je Lieferant über mehrere Bestellungen.
+                    'label' => 'Wareneingang',
+                    'route' => 'foodalchemist.wareneingang.index',
+                    'icon'  => 'heroicon-o-truck',
+                ],
+                [
                     // Spec 68: Bestellvorlagen (gespeicherte Bestellrunde: Grundprodukte, Rezepte, Artikel).
                     'label' => 'Bestellvorlagen',
                     'route' => 'foodalchemist.bestellvorlagen.index',
