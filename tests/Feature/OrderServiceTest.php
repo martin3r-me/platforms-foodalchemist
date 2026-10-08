@@ -697,6 +697,7 @@ it('S3: dokument() + mailtoData() + Bestell-Dokument-Blade rendert', function ()
     $chefs = FoodAlchemistOrder::whereHas('supplier', fn ($q) => $q->where('name', 'Chefs'))->first();
     $mehlLine = $chefs->lines()->where('gp_id', $this->mehl->id)->first();
     $user = $this->makeUser($this->rootTeam);
+    \Illuminate\Support\Facades\DB::table('team_user')->insert(['team_id' => $this->rootTeam->id, 'user_id' => $user->id, 'role' => 'owner']);   // Spec 75c: Rechte aus der Team-Rolle
     $this->svc->updateApproval($this->rootTeam, $chefs->id, [
         'approval_status' => 'approved',
         'approval_note' => 'Budget ok',
@@ -758,6 +759,7 @@ it('S3: dokument() + mailtoData() + Bestell-Dokument-Blade rendert', function ()
 
 it('WaWi: Freigabe-light warnt bei Anfrage und blockiert bewusst abgelehnte Bestellungen', function () {
     $user = $this->makeUser($this->rootTeam);
+    \Illuminate\Support\Facades\DB::table('team_user')->insert(['team_id' => $this->rootTeam->id, 'user_id' => $user->id, 'role' => 'owner']);   // Spec 75c: Rechte aus der Team-Rolle
     $this->actingAs($user);
 
     $line = $this->svc->addManualLine($this->rootTeam, $this->laOf['Mehl']->id, 2);
@@ -1320,6 +1322,7 @@ it('S3: orders.UPDATE_LINE MCP — manuelle Menge + Zeile entfernen', function (
 
 it('WaWi: orders.UPDATE_LINE MCP pflegt Wareneingang und Rechnungsprüfung nach dem Absenden', function () {
     $user = $this->makeUser($this->rootTeam);
+    \Illuminate\Support\Facades\DB::table('team_user')->insert(['team_id' => $this->rootTeam->id, 'user_id' => $user->id, 'role' => 'owner']);   // Spec 75c: Rechte aus der Team-Rolle
     $this->actingAs($user);
     $registry = app(ToolRegistry::class);
     $kontext = new ToolContext($user, $this->rootTeam);
@@ -1370,7 +1373,9 @@ it('WaWi: orders.UPDATE_LINE MCP pflegt Wareneingang und Rechnungsprüfung nach 
 });
 
 it('S3: Dokument-Route liefert HTML + CSV-Download', function () {
-    $this->actingAs($this->makeUser($this->rootTeam));
+    $user = $this->makeUser($this->rootTeam);
+    \Illuminate\Support\Facades\DB::table('team_user')->insert(['team_id' => $this->rootTeam->id, 'user_id' => $user->id, 'role' => 'owner']);   // Spec 75c: Rechte aus der Team-Rolle
+    $this->actingAs($user);
     $this->svc->addNeedFromTarget($this->rootTeam, $this->ziel, 'recipe:kuchen@100');
     $chefs = FoodAlchemistOrder::whereHas('supplier', fn ($q) => $q->where('name', 'Chefs'))->first();
     FoodAlchemistSupplier::whereKey($chefs->supplier_id)->update(['payment_term_days' => 7]);
@@ -1537,6 +1542,7 @@ it('E1: MCP orders.UPDATE registriert + End-to-End (Kopf im Draft) + Guard nach 
 
 it('WaWi: MCP orders.UPDATE pflegt AB, bestätigten Liefertag und Rechnungskopf', function () {
     $user = $this->makeUser($this->rootTeam);
+    \Illuminate\Support\Facades\DB::table('team_user')->insert(['team_id' => $this->rootTeam->id, 'user_id' => $user->id, 'role' => 'owner']);   // Spec 75c: Rechte aus der Team-Rolle
     $this->actingAs($user);
     $registry = app(ToolRegistry::class);
     $kontext = new ToolContext($user, $this->rootTeam);
@@ -1589,6 +1595,7 @@ it('WaWi: MCP orders.UPDATE pflegt AB, bestätigten Liefertag und Rechnungskopf'
 it('WaWi: MCP orders.UPDATE uebernimmt Wareneingang und Rechnung als Massenaktion', function () {
     Carbon::setTestNow(Carbon::parse('2026-08-01 09:00'));   // fixe 09-01/09-03-Liefertage nicht rel. zu heute verfallen lassen — Bestellschluss-Guard
     $user = $this->makeUser($this->rootTeam);
+    \Illuminate\Support\Facades\DB::table('team_user')->insert(['team_id' => $this->rootTeam->id, 'user_id' => $user->id, 'role' => 'owner']);   // Spec 75c: Rechte aus der Team-Rolle
     $this->actingAs($user);
     $registry = app(ToolRegistry::class);
     $kontext = new ToolContext($user, $this->rootTeam);

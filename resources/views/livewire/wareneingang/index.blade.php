@@ -234,7 +234,7 @@
                                 @foreach($liste as $n)
                                     <tr wire:key="we-l-{{ $n['id'] }}" class="cursor-pointer" wire:click="umschalten({{ $n['id'] }})" data-we-lieferschein="{{ $n['id'] }}">
                                         <td>{{ $datum($n['delivered_on']) }}</td>
-                                        <td class="font-medium">{{ $n['delivery_note_number'] ?? 'ohne Nr.' }}@if($n['anhang']) @svg('heroicon-o-paper-clip', 'inline w-3.5 h-3.5 text-[var(--fa-ink-3)]')@endif</td>
+                                        <td class="font-medium">{{ $n['delivery_note_number'] ?? 'ohne Nr.' }}@if($n['source'] === 'editor') <x-fa::badge>aus Bestell-Editor</x-fa::badge>@elseif($n['source'] === 'altbestand') <x-fa::badge>Altbestand</x-fa::badge>@endif @if($n['anhang']) @svg('heroicon-o-paper-clip', 'inline w-3.5 h-3.5 text-[var(--fa-ink-3)]')@endif</td>
                                         <td>{{ $n['lieferant'] }}</td>
                                         <td class="text-right tabular-nums">{{ $n['positionen'] }}@if($n['ohne_bestellung'] > 0)<span class="{{ $leise }}"> ({{ $n['ohne_bestellung'] }} ohne Best.)</span>@endif</td>
                                         <td class="text-right">@if($n['abweichungen'] > 0)<x-fa::badge tone="warn">{{ $n['abweichungen'] }}</x-fa::badge>@else<span class="{{ $leise }}">–</span>@endif</td>

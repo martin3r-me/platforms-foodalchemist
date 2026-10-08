@@ -47,11 +47,13 @@ class OrdersReceiptTool extends FoodAlchemistTool implements ToolContract, ToolM
         }
 
         try {
-            app(OrderService::class)->updateReceiptLine(
+            // Spec 75c: über den Editor-Lieferschein, Rechte des aufrufenden Benutzers
+            app(\Platform\FoodAlchemist\Services\WareneingangService::class)->kurzwegMenge(
                 $team,
                 $lineId,
                 array_key_exists('received_qty_packs', $arguments) ? $arguments['received_qty_packs'] : null,
-                isset($arguments['note']) ? (string) $arguments['note'] : null
+                isset($arguments['note']) ? (string) $arguments['note'] : null,
+                $context->user
             );
         } catch (\RuntimeException $e) {
             return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR');
