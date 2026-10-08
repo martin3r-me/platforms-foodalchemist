@@ -101,7 +101,7 @@ class Index extends Component
         $team = $this->team();
         $vorlagen = $svc->vorlagen($team);
         $vorlage = $vorlagen->firstWhere('id', (int) $this->vorlageId) ?? $vorlagen->first();
-        $format = EtikettService::FORMATE[$vorlage->format] ?? EtikettService::FORMATE['a4_24'];
+        $format = $svc->wirksamesFormat($vorlage);   // Spec 78: Drucker-Format
         $daten = null;
         $url = null;
         $pdfUrl = null;

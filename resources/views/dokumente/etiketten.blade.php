@@ -53,6 +53,8 @@
     .actions a { display: inline-block; color: #fff; text-decoration: none; border: 1px solid rgba(182,192,210,.28); border-radius: 999px; padding: 5px 10px; margin: 2px; font-size: 11px; font-family: Arial, sans-serif; }
     .seite { background: #ffffff; margin: {{ $pdf ? '0' : '16px auto' }}; width: {{ $f['bogen'] ? '210mm' : $f['b'] . 'mm' }}; {{ $pdf ? '' : 'box-shadow: 0 1px 4px rgba(0,0,0,.15);' }} }
     .umbruch { page-break-after: always; }
+    /* Spec 78: Feinkorrektur der Ränder je Drucker (Versatz in mm) */
+    .versatz { position: relative; left: {{ (float) ($f['versatz_x'] ?? 0) }}mm; top: {{ (float) ($f['versatz_y'] ?? 0) }}mm; }
     table.raster { border-collapse: collapse; table-layout: fixed; width: {{ $f['bogen'] ? $f['spalten'] * $f['b'] : $f['b'] }}mm; }
     table.raster td { width: {{ $f['b'] }}mm; height: {{ $f['h'] - 0.4 }}mm; padding: 0; vertical-align: top; overflow: hidden; {{ $pdf ? '' : 'outline: 1px dashed #d8dce3;' }} }
     /* DomPDF ignoriert box-sizing: Padding zählt zur Höhe → Innenhöhe = Etikett − 2 × Padding − Reserve */
@@ -80,6 +82,7 @@
 @endunless
 @for($s = 0; $s < $seiten; $s++)
     <div class="seite {{ $s < $seiten - 1 ? 'umbruch' : '' }}">
+        <div class="versatz">
         @if($f['bogen'])
             <table class="raster">
                 @for($r = 0; $r < $f['zeilen']; $r++)
@@ -101,6 +104,7 @@
             @php $d = $liste[$s]; $istStellplatz = $d['quelle'] === 'stellplatz'; @endphp
             @include('foodalchemist::dokumente.partials.etikett-inhalt')
         @endif
+        </div>
     </div>
 @endfor
 </body>

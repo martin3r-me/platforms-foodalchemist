@@ -256,3 +256,36 @@ it('Spec 76b: Vorlage „Standard für den Wandmonitor" — eigene Küchen-Vorla
     expect($k->refresh()->is_kitchen_default)->toBeFalse()->and($this->svc->kuechenVorlage($this->rootTeam)->id)->toBe($k2->id);
     Livewire::test(EtikettenSettings::class)->call('waehlen', $k2->id)->assertSet('form.is_kitchen_default', true)->assertSee('Standard für den Wandmonitor');
 });
+
+it('Spec 78: Druckerprofile — Modell belegt Format vor, Standard je Arbeitsplatz, Vorlage übernimmt Format + Ränder', function () {
+    $d = app(\Platform\FoodAlchemist\Services\DruckerService::class);
+    $zebra = $d->speichern($this->rootTeam, null, ['name' => 'Küche Pass', 'modell' => 'zebra_zd', 'arbeitsplatz' => 'kueche', 'is_default' => true, 'versatz_x_mm' => '1,5']);
+    expect($zebra->format)->toBe('eigen')->and($zebra->breite_mm)->toBe(101.6)->and($zebra->versatz_x_mm)->toBe(1.5);
+    $brother = $d->speichern($this->rootTeam, null, ['name' => 'Küche 2', 'modell' => 'brother_ql', 'arbeitsplatz' => 'kueche', 'is_default' => true]);
+    expect($zebra->refresh()->is_default)->toBeFalse()->and($brother->format)->toBe('rolle_62');
+    expect(fn () => $d->speichern($this->rootTeam, null, ['name' => 'X', 'modell' => 'eigen', 'format' => 'eigen']))->toThrow(\RuntimeException::class, 'Breite und Höhe');
+
+    $v = $this->svc->speichern($this->rootTeam, null, ['name' => 'Zebra-Vorlage', 'printer_id' => $zebra->id]);
+    $f = $this->svc->wirksamesFormat($v);
+    expect($f['b'])->toBe(101.6)->and($f['bogen'])->toBeFalse()->and($f['versatz_x'])->toBe(1.5);
+    $html = $this->get($this->svc->druckUrl('recipe', $this->suppe->id, $v->id) . '&vorschau=1')->assertOk()->getContent();
+    expect($html)->toContain('101.6mm')->toContain('left: 1.5mm');
+
+    $d->loeschen($this->rootTeam, $zebra->id);
+    expect($v->refresh()->printer_id)->toBeNull();
+});
+
+it('Spec 78: Einstellungen — Drucker anlegen, Vorlage wählt Drucker; MCP printers.GET + label_templates.POST drucker_id', function () {
+    $lw = Livewire::test(EtikettenSettings::class)
+        ->call('druckerNeu')->assertSet('drucker.format', 'rolle_62')->set('drucker.name', 'Lager Dymo')->set('drucker.modell', 'dymo_lw')->assertSet('drucker.format', 'dymo_54')
+        ->set('drucker.arbeitsplatz', 'lager')->call('druckerSpeichern')->assertSet('fehler', null)->assertSee('Lager Dymo');
+    $id = \Platform\FoodAlchemist\Models\FoodAlchemistPrinter::where('name', 'Lager Dymo')->value('id');
+    $lw->set('form.printer_id', (string) $id)->call('speichern')->assertSet('fehler', null);
+
+    $reg = app(ToolRegistry::class);
+    $ctx = new ToolContext($this->user, $this->rootTeam);
+    $g = $reg->get('foodalchemist.printers.GET')->execute([], $ctx);
+    expect($g->data['drucker'][0]['name'])->toBe('Lager Dymo')->and($g->data['modelle'])->toHaveKey('brother_ql');
+    $p = $reg->get('foodalchemist.label_templates.POST')->execute(['name' => 'Per MCP', 'drucker_id' => $id, 'standard_wandmonitor' => true], $ctx);
+    expect($p->success)->toBeTrue()->and(FoodAlchemistLabelTemplate::where('name', 'Per MCP')->first())->printer_id->toBe($id)->is_kitchen_default->toBeTrue();
+});
