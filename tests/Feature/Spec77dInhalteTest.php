@@ -201,3 +201,23 @@ it('Kundengrenze: unter einem Master-Team endet Haupt-Team, Kontingent und Stand
     config(['foodalchemist.master_team_id' => null]);
     expect($rechte->kundenHauptTeam($enkel)->id)->toBe($this->rootTeam->id);   // ohne Master wie bisher
 });
+
+it('Konzept- und Format-Editor: fremdes nur lesend mit Knopf „Eigene Kopie", Kopie wird geöffnet', function () {
+    $this->actingAs($this->kindKoch);   // Standort übernimmt alles (Standard) → sieht Konzept + Format des Oberteams
+
+    $k = Livewire::test(\Platform\FoodAlchemist\Livewire\Concepter\Editor::class)->call('oeffnen', 'concepts', $this->konzept->id)
+        ->assertSeeHtml('data-eigene-kopie')->call('eigeneKopieAnlegen')->assertSet('fehler', null);
+    $kKopie = \Platform\FoodAlchemist\Models\FoodAlchemistConcept::where('team_id', $this->childA->id)->where('kopie_von_id', $this->konzept->id)->first();
+    expect($kKopie)->not->toBeNull()->and($kKopie->name)->toBe('Mittagstisch');
+    $k->assertSet('id', $kKopie->id)->assertDontSeeHtml('data-eigene-kopie');
+
+    $f = Livewire::test(\Platform\FoodAlchemist\Livewire\Formate\Editor::class)->call('oeffnen', $this->format->id)
+        ->assertSeeHtml('data-eigene-kopie')->call('eigeneKopieAnlegen')->assertSet('fehler', null);
+    $fKopie = FoodAlchemistFormat::where('team_id', $this->childA->id)->where('kopie_von_id', $this->format->id)->first();
+    expect($fKopie)->not->toBeNull();
+    $f->assertSet('id', $fKopie->id)->assertDontSeeHtml('data-eigene-kopie');
+
+    // Oberteam sieht am eigenen Konzept keinen Kopie-Knopf
+    $this->actingAs($this->inhaber);
+    Livewire::test(\Platform\FoodAlchemist\Livewire\Concepter\Editor::class)->call('oeffnen', 'concepts', $this->konzept->id)->assertDontSeeHtml('data-eigene-kopie');
+});
