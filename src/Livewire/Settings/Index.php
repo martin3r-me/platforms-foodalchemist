@@ -95,8 +95,6 @@ class Index extends Component
         // Spec 33 P2: Die Tabelle gab es seit Spec 19, die Pflege nie — deshalb war sie leer
         // und `outlet_id` an der Speisekarte hatte nicht einmal ein Eingabefeld.
         'betriebe' => ['label' => 'Betriebe & Standorte', 'hint' => 'Standorte und Ausgabestellen, Vorlage und Logo je Betrieb'],
-        // Spec 77d: was jeder Standort (Unter-Team) vom Oberteam sieht — alles oder nur Freigegebenes
-        'standort-inhalte' => ['label' => 'Inhalte für Standorte', 'hint' => 'Übernimmt alles vom Oberteam oder nur freigegebene Sammlungen und Ausgaben'],
         // Spec 59: zentraler Chip-Katalog für Speiseplan-Vorgaben („mind. 2× vegan je Woche“) —
         // die Vorgaben selbst stehen je Plan im Speiseplan-Editor (Reiter Stammdaten).
         'etiketten' => ['label' => 'Etiketten', 'hint' => 'Etikett-Vorlagen: Format, Felder, Datum vorbelegt oder zum Handschreiben, Logo und Design'],
@@ -112,7 +110,7 @@ class Index extends Component
      */
     public const GRUPPEN = [
         'katalog' => ['label' => 'Katalog & Kategorien', 'sektionen' => ['einheiten', 'warengruppen', 'taxonomie', 'vk-taxonomie', 'behaelter', 'concepter-dimensionen']],
-        'betrieb' => ['label' => 'Betrieb & Küche', 'sektionen' => ['betriebe', 'standort-inhalte', 'posten', 'rollen', 'zugriffsrechte', 'kueche']],
+        'betrieb' => ['label' => 'Betrieb & Küche', 'sektionen' => ['betriebe', 'posten', 'rollen', 'zugriffsrechte', 'kueche']],
         'kalkulation' => ['label' => 'Einkauf & Kalkulation', 'sektionen' => ['einkauf', 'kalkulation', 'herstellkosten', 'aufschlagsklassen']],
         'ki' => ['label' => 'KI & Wissen', 'sektionen' => ['ki', 'food-dna', 'kunde-dna', 'brief-vorlagen', 'trendradar', 'wissenskategorien', 'wissenssteuerung']],
         'ausgabe' => ['label' => 'Ausgabe', 'sektionen' => ['schreibstile', 'praesentations-designs', 'speiseplan-chips', 'etiketten']],

@@ -26,6 +26,11 @@ class StandortService
     /** @return list<int> alle Unter-Teams (Nachfahren) ohne das Team selbst */
     public function unterTeamIds(Team $team): array
     {
+        // Kundengrenze: das Master-Team hat keine Standorte — Kunden darunter sind eigene Haupt-Teams
+        if ($this->rechte->istMasterTeam($team)) {
+            return [];
+        }
+
         return array_values(array_filter(RecomputeTeamRecipesJob::teamUndNachfahren((int) $team->id), fn ($id) => $id !== (int) $team->id));
     }
 

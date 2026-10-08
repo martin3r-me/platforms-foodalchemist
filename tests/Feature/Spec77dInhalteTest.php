@@ -5,7 +5,7 @@ use Livewire\Livewire;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Tools\ToolRegistry;
 use Platform\FoodAlchemist\Exceptions\FaRechtFehltException;
-use Platform\FoodAlchemist\Livewire\Settings\StandortInhalte;
+use Platform\FoodAlchemist\Livewire\Controlling\Panels\StandortInhalte;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistFormat;
 use Platform\FoodAlchemist\Models\FoodAlchemistFormatSlot;
@@ -159,4 +159,45 @@ it('Oberfläche und MCP: Einstellungen schalten und geben frei; Tools prüfen di
 
     $k = $this->reg->get('foodalchemist.inhalte.KOPIE')->execute(['typ' => 'recipe', 'id' => $this->andere->id], new ToolContext($this->kindKoch, $this->childA));
     expect($k->success)->toBeTrue()->and($k->data['kopie_von_id'])->toBe($this->andere->id);
+});
+
+it('Picker: Ebenen Gerichte, Basisrezepte, Konzepte, Pakete, Formate — anhaken und gesammelt hinzufügen', function () {
+    $this->actingAs($this->inhaber);
+    $paket = \Platform\FoodAlchemist\Models\FoodAlchemistPaket::create(['team_id' => $this->rootTeam->id, 'name' => 'Fingerfood-Paket']);
+    $sid = $this->inhalte->sammlungAnlegen($this->rootTeam, 'Grundsortiment', null, $this->inhaber);
+
+    $lw = Livewire::test(StandortInhalte::class)->call('sammlungOeffnen', $sid)
+        ->assertSeeHtml('data-sammlung-picker')
+        ->assertSeeHtml('data-picker-eintrag="'.$this->gericht->id.'"')->assertDontSeeHtml('data-picker-eintrag="'.$this->basis->id.'"');   // Gerichte ≠ Basisrezepte
+    $lw->set('ebene', 'basis')->assertSeeHtml('data-picker-eintrag="'.$this->basis->id.'"')->assertDontSeeHtml('data-picker-eintrag="'.$this->gericht->id.'"');
+    $lw->set('ebene', 'gericht')->set('pickerAuswahl', [$this->gericht->id => true, $this->andere->id => true])->call('auswahlHinzu')->assertSet('fehler', null);
+    $lw->set('ebene', 'paket')->assertSeeHtml('data-picker-eintrag="'.$paket->id.'"')->set('pickerAuswahl', [$paket->id => true])->call('auswahlHinzu')->assertSet('fehler', null);
+    $lw->set('ebene', 'format')->set('pickerAuswahl', [$this->format->id => true])->call('auswahlHinzu');
+
+    $objekte = collect($this->inhalte->sammlungen($this->rootTeam)[0]['objekte'])->map(fn ($o) => $o['typ'].':'.$o['id'])->sort()->values()->all();
+    expect($objekte)->toBe(collect(['recipe:'.$this->gericht->id, 'recipe:'.$this->andere->id, 'paket:'.$paket->id, 'format:'.$this->format->id])->sort()->values()->all());
+    // schon Enthaltenes ist markiert und nicht erneut anhakbar
+    $lw->set('ebene', 'gericht')->assertSee('schon in der Sammlung');
+    // Filter: nur noch nicht enthaltene blendet Enthaltenes aus; Status filtert
+    $lw->set('nurNeue', true)->assertDontSeeHtml('data-picker-eintrag="'.$this->gericht->id.'"');
+    $this->makeRecipe($this->rootTeam, 'Entwurf-Gericht', ['is_sales_recipe' => true, 'status' => 'draft']);
+    $lw->set('nurNeue', false)->set('filterStatus', 'draft')->assertSee('Entwurf-Gericht')->assertDontSeeHtml('data-picker-eintrag="'.$this->gericht->id.'"');
+    // im Controlling-Editor als Reiter
+    Livewire::test(\Platform\FoodAlchemist\Livewire\Controlling\Cockpit::class)->call('setTab', 'standorte')->assertSeeHtml('data-settings-standort-inhalte');
+});
+
+it('Kundengrenze: unter einem Master-Team endet Haupt-Team, Kontingent und Standorte beim Kunden', function () {
+    // Kette: Root (= Master) → childA (Kunde) ; childB (Kunde)
+    config(['foodalchemist.master_team_id' => $this->rootTeam->id]);
+    $rechte = app(\Platform\FoodAlchemist\Services\FaRechte::class);
+    $enkel = \Platform\Core\Models\Team::create(['name' => 'Standort A1', 'user_id' => 1, 'personal_team' => false, 'parent_team_id' => $this->childA->id]);
+
+    expect($rechte->kundenHauptTeam($enkel)->id)->toBe($this->childA->id)
+        ->and($rechte->kundenHauptTeam($this->childB)->id)->toBe($this->childB->id)
+        ->and($rechte->kundenHauptTeam($this->rootTeam)->id)->toBe($this->rootTeam->id);
+    expect(app(\Platform\FoodAlchemist\Services\StandortService::class)->unterTeamIds($this->rootTeam))->toBe([])   // Master hat keine Standorte
+        ->and(app(\Platform\FoodAlchemist\Services\StandortService::class)->unterTeamIds($this->childA))->toBe([(int) $enkel->id]);
+
+    config(['foodalchemist.master_team_id' => null]);
+    expect($rechte->kundenHauptTeam($enkel)->id)->toBe($this->rootTeam->id);   // ohne Master wie bisher
 });
