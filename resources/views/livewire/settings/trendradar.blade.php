@@ -1,5 +1,4 @@
-{{-- Einstellungen → Trendradar: Automatisierung + Signal (pro Team) + manueller Import/Cluster.
-     Häufigste Aufgabe: die tägliche Automatisierung an- oder abschalten. --}}
+{{-- Einstellungen → Trendradar: Google Trends über DataForSEO (Spec 79) + Konzept-Automatisierung (pro Team). --}}
 @php
     $haken = 'mt-0.5 w-4 h-4 shrink-0 rounded accent-[var(--fa-accent)]';
 @endphp
@@ -11,10 +10,9 @@
 
     {{-- Bestand --}}
     <x-fa::kpis :items="[
-        ['label' => 'Trend-Dossiers', 'value' => number_format($trendDocs, 0, ',', '.')],
-        ['label' => 'Eingeordnet', 'value' => number_format($geclustert, 0, ',', '.')],
-        ['label' => 'Noch nicht eingeordnet', 'value' => number_format($ungeclustert, 0, ',', '.'), 'tone' => $ungeclustert > 0 ? 'warn' : null],
-        ['label' => 'Klassen zur Freigabe', 'value' => number_format($tentativeKlassen, 0, ',', '.'), 'tone' => $tentativeKlassen > 0 ? 'warn' : null],
+        ['label' => 'Trends', 'value' => number_format($anzahlTrends, 0, ',', '.')],
+        ['label' => 'Auf dem Radar', 'value' => number_format($aufRadar, 0, ',', '.')],
+        ['label' => 'Google Trends diesen Monat', 'value' => number_format($verbraucht, 2, ',', '.') . ' $'],
     ]" />
 
     {{-- Rückmeldung von Speichern UND Einlesen: steht oben, weil sie zu beiden Abschnitten gehört. --}}
@@ -34,6 +32,34 @@
     @endif
 
     <fieldset @disabled($sperrLesen) class="contents" data-fa-lesemodus="{{ $sperrLesen ? '1' : '0' }}">
+    {{-- Spec 79: Google Trends über DataForSEO --}}
+    <x-fa::section title="Google Trends (DataForSEO)" icon="heroicon-o-chart-bar"
+                   description="Misst für jeden Trend, wie sich das Suchinteresse in Deutschland über 12 Monate entwickelt. Jede Abfrage kostet etwa {{ number_format($kostenJeAbfrage, 3, ',', '.') }} $ je Suchbegriff. Die Messung bestätigt einen Trend nie allein, sie zeigt Richtung und Hype-Spitzen.">
+        <div class="flex flex-col gap-4 max-w-[60ch]" data-trendradar-dataforseo>
+            @unless($anbindung)
+                <x-fa::notice tone="warn">Die DataForSEO-Anbindung (Integrations-Modul) ist auf dieser Plattform nicht installiert.</x-fa::notice>
+            @endunless
+            <label class="flex items-start gap-2.5 cursor-pointer">
+                <input type="checkbox" wire:model="dfsAktiv" class="{{ $haken }}" />
+                <span>
+                    <span class="block text-[length:var(--fa-text-md)] font-medium text-[var(--fa-ink)]">Wöchentlich messen</span>
+                    <span class="block text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">Dienstags um {{ $messZeit }} Uhr alle offenen Trends. Ohne Haken nur per Knopf „Jetzt messen“ im Trend.</span>
+                </span>
+            </label>
+            <x-fa::field label="Monatsbudget in $" for="dfs-budget" hint="Ist es erreicht, stoppt jede weitere Abfrage bis zum Monatswechsel.">
+                <x-fa::input id="dfs-budget" type="number" min="0" max="500" step="0.5" wire:model="dfsBudget" numeric class="max-w-[8rem]" />
+            </x-fa::field>
+            <x-fa::field label="Verbindung (ID)" for="dfs-verbindung" optional hint="Leer = die DataForSEO-Verbindung eines Teammitglieds oder eine fürs Team freigegebene.">
+                <x-fa::input id="dfs-verbindung" type="number" min="0" wire:model="dfsVerbindung" numeric class="max-w-[8rem]" />
+            </x-fa::field>
+        </div>
+        @unless($sperrLesen)
+            <div class="flex justify-end pt-3 border-t border-[var(--fa-line)]">
+                <x-fa::button variant="primary" icon="heroicon-m-check" wire:click="speichern">Einstellungen speichern</x-fa::button>
+            </div>
+        @endunless
+    </x-fa::section>
+
     {{-- Automatisierung --}}
     <x-fa::section title="Tägliche Konzept-Automatisierung" icon="heroicon-o-clock"
                    description="Holt jeden Morgen um {{ $zeit }} Uhr die stärksten Trends und legt daraus Konzept-Entwürfe im Concepter an.">
@@ -66,15 +92,5 @@
         @endunless
     </x-fa::section>
 
-    {{-- Manueller Anstoß --}}
-    <x-fa::section title="Trends jetzt einlesen" icon="heroicon-o-arrow-path"
-                   description="Holt neue Trend-Dossiers aus der Wissensbasis und ordnet sie per KI in Kategorien und Klassen ein. Läuft im Hintergrund. Neue Klassen erscheinen als vorläufig im Trendradar und warten dort auf deine Freigabe.">
-        <div class="flex justify-end">
-            <x-fa::button variant="ai" icon="heroicon-m-sparkles" wire:click="jetztImportieren"
-                          wire:confirm="Trends jetzt einlesen und einordnen? Dafür wird die KI für jeden neuen Trend aufgerufen.">
-                Trends einlesen und einordnen
-            </x-fa::button>
-        </div>
-    </x-fa::section>
     </fieldset>
 </div>

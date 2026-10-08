@@ -25,17 +25,18 @@ use Platform\FoodAlchemist\Services\TeamSettingsService;
 class TeamSettingsPutTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
 {
     /** Boolean-Schalter. */
-    private const BOOL_KEYS = ['ai_active', 'show_fallback_chain', 'trend_auto_enabled', 'trend_signal_enabled', 'voice_agent_dauerhaft_aktiv', 'voice_agent_panel_planung', 'voice_tts_vorlesen'];
+    private const BOOL_KEYS = ['ai_active', 'show_fallback_chain', 'trend_auto_enabled', 'trend_signal_enabled', 'trend_dataforseo_enabled', 'voice_agent_dauerhaft_aktiv', 'voice_agent_panel_planung', 'voice_tts_vorlesen'];
 
     /** Numerische Skalare (float, ≥ 0). */
     private const NUM_KEYS = [
         'target_food_cost_pct', 'stundensatz_eur', 'margin_pct', 'hk2_surcharge_pct', 'labor_overhead_pct',
         'price_alarm_threshold_pct', 'season_margin_band_min_pct', 'season_margin_band_max_pct',
         'max_vk_delta_pct', 'min_margin_pct', 'default_batch_max_kg', 'default_batch_max_pieces',
+        'trend_dataforseo_budget_usd',
     ];
 
     /** Ganzzahlige Skalare (≥ 0). */
-    private const INT_KEYS = ['trend_auto_limit'];
+    private const INT_KEYS = ['trend_auto_limit', 'trend_dataforseo_connection_id'];
 
     /** Enum-Felder → erlaubte Werte. */
     private const ENUM_KEYS = [
@@ -92,6 +93,9 @@ class TeamSettingsPutTool extends FoodAlchemistTool implements ToolContract, Too
                         'trend_auto_enabled' => ['type' => 'boolean', 'description' => 'Trendradar-Konzept-Automatik an/aus.'],
                         'trend_auto_limit' => ['type' => 'integer', 'description' => 'Anzahl Top-Trends je Automatik-Lauf.'],
                         'trend_signal_enabled' => ['type' => 'boolean', 'description' => 'Trend-Vorschlag als Signal in die Inbox.'],
+                        'trend_dataforseo_enabled' => ['type' => 'boolean', 'description' => 'Spec 79: wöchentliche Google-Trends-Messung über DataForSEO an/aus (kostet je Abfrage).'],
+                        'trend_dataforseo_budget_usd' => ['type' => 'number', 'description' => 'Spec 79: Monatsbudget Google Trends in USD (Standard 5).'],
+                        'trend_dataforseo_connection_id' => ['type' => 'integer', 'description' => 'Spec 79: DataForSEO-Verbindung (Integrationen); 0 = automatisch die des Teams.'],
                         'voice_agent_dauerhaft_aktiv' => ['type' => 'boolean', 'description' => 'VERALTET (Spec 55) — das schwebende Element auf jeder Seite gibt es nicht mehr, dieser Schlüssel wird nirgends mehr gelesen. Für die Panel-Sichtbarkeit in der Planung: voice_agent_panel_planung.'],
                         'voice_agent_panel_planung' => ['type' => 'boolean', 'description' => 'Agenten-Panel in der Planungs-Leitstelle sichtbar (Default AN, wenn nie gesetzt).'],
                         'purchase_journal_trigger' => ['type' => 'string', 'description' => 'Einkaufsjournal-Buchung ab Status: sent|delivered.'],

@@ -137,6 +137,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 \Platform\FoodAlchemist\Console\StepsBackfillCommand::class,
                 \Platform\FoodAlchemist\Console\TrendClusterCommand::class,
                 \Platform\FoodAlchemist\Console\TrendKonzepteCommand::class,
+                \Platform\FoodAlchemist\Console\TrendsMessenCommand::class,      // Spec 79
+                \Platform\FoodAlchemist\Console\TrendsStartbestandCommand::class, // Spec 79
                 \Platform\FoodAlchemist\Console\AnchorsTranslateCsvCommand::class,
                 \Platform\FoodAlchemist\Console\PaketeToConceptsCommand::class,
                 \Platform\FoodAlchemist\Console\FormatEditionsToSlotsCommand::class,
@@ -260,6 +262,16 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     ->runInBackground()
                     ->description('FoodAlchemist: Trendradar → tägliche Konzeptvorschläge aus Top-Trends');
             }
+
+            // Spec 79: wöchentliche Google-Trends-Messung — nur Teams mit trend_dataforseo_enabled, Budget-Stopp je Team.
+            if (config('foodalchemist.scheduler.trends_messen_enabled', true)) {
+                $schedule->command(\Platform\FoodAlchemist\Console\TrendsMessenCommand::class)
+                    ->weeklyOn(2, config('foodalchemist.scheduler.trends_messen_zeit', '06:10'))
+                    ->withoutOverlapping()
+                    ->onOneServer()
+                    ->runInBackground()
+                    ->description('FoodAlchemist: Trendradar → Google Trends je Trend messen (DataForSEO)');
+            }
         });
     }
 
@@ -310,6 +322,9 @@ class FoodAlchemistServiceProvider extends ServiceProvider
             $component->sperreAbgewiesen((string) $method);
             $returnEarly(null);
         });
+
+        // Spec 79: Google Trends für den Trendradar — produktiv über DataForSEO (Integrations-Modul)
+        $this->app->bind(\Platform\FoodAlchemist\Services\Trends\GoogleTrendsQuelle::class, \Platform\FoodAlchemist\Services\Trends\DataForSeoGoogleTrends::class);
 
         // M7-10 / D8: STT-Fassade — Binding-Tausch genügt für einen späteren Core-Contract
         // STT-Treiber: 'auto' nimmt den Dienst, für den ein Zugang existiert. Der
@@ -783,6 +798,17 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\CanvasEntryRemoveTool::class,
                     \Platform\FoodAlchemist\Tools\SalesFactsMapTool::class,
                     \Platform\FoodAlchemist\Tools\TrendradarImportTool::class,
+                    // Spec 79 · Trendradar nach Sarah Spork
+                    \Platform\FoodAlchemist\Tools\TrendsGetTool::class,
+                    \Platform\FoodAlchemist\Tools\TrendsPostTool::class,
+                    \Platform\FoodAlchemist\Tools\TrendsPutTool::class,
+                    \Platform\FoodAlchemist\Tools\TrendsDeleteTool::class,
+                    \Platform\FoodAlchemist\Tools\TrendBelegePostTool::class,
+                    \Platform\FoodAlchemist\Tools\TrendBelegeDeleteTool::class,
+                    \Platform\FoodAlchemist\Tools\TrendsMessenTool::class,
+                    \Platform\FoodAlchemist\Tools\FundstueckeGetTool::class,
+                    \Platform\FoodAlchemist\Tools\FundstueckePostTool::class,
+                    \Platform\FoodAlchemist\Tools\FundstueckePutTool::class,
                     \Platform\FoodAlchemist\Tools\PresentationDesignsDuplicateTool::class,
                     \Platform\FoodAlchemist\Tools\PresentationDesignsGenerateCssTool::class,
                     // `knowledge.BIND` ist GELÖSCHT (Spec 52 · F2/F3): Bindungen wirken nicht mehr.

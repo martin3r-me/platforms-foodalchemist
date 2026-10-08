@@ -277,7 +277,7 @@ niemanden, der sie abfragt — „läuft heute" war keine beantwortbare Frage.
 | PA-04 | Gericht rückwärts analysieren | Inspiration aus Zielgericht | gebaut | Grounding und keine erfundenen Zutaten (`F+R`) | C |
 | PA-05 | Überschuss zu Gericht | Resteverwertung unterstützen | teilweise | echter Bestandscontract statt Mock (`R`) | D/E |
 | PA-06 | Hypothesen-/Widerspruchsmodus | R&D und Differenzierung | gebaut | nachvollziehbare Evidenz und Lab-Note (`F+B`) | D |
-| TR-01 | Trend erfassen | zentralen Impuls pflegen | teilweise | Quelle, Zeitraum, Rechte und Lifecycle (`F+B`) | C/D |
+| TR-01 | Trend erfassen | zentralen Impuls pflegen | teilweise (Spec 79: Erfassung, Belege, Rechte, Status) | Quelle, Zeitraum, Rechte und Lifecycle (`F+B`) | C/D |
 | TR-02 | Trend in Konzept übersetzen | Differenzierer praktisch nutzen | teilweise | klickbarer End-to-End-Prototyp (`B`) | C |
 | TR-03 | Trend betrieblich kontextualisieren | Vorschlag passt zu Kunde und Sektor | offen | Sektor, Preisniveau, Stil und Convenience im Vergleich (`R`) | D |
 | TR-04 | Trend vorab bepreisen/beschaffbar machen | kein unbepreister Vorschlag | offen | GP-/LA-/Preis-Vorlauf und Sperre (`R`) | B/D |

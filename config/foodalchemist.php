@@ -387,6 +387,18 @@ return [
      */
     /*
     |--------------------------------------------------------------------------
+    | Trendradar (Spec 79) — externe Quellen
+    |--------------------------------------------------------------------------
+    | Google Trends über DataForSEO: Live-Explore kostet je Suchbegriff ~0,009 $.
+    | Das Budget ist der Default je Team und Monat; in den Einstellungen änderbar.
+    */
+    'trends' => [
+        'dataforseo_kosten_je_abfrage' => (float) env('FOODALCHEMIST_TRENDS_DATAFORSEO_KOSTEN', 0.009),
+        'dataforseo_budget_usd' => (float) env('FOODALCHEMIST_TRENDS_DATAFORSEO_BUDGET', 5.0),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Geplante Läufe
     |--------------------------------------------------------------------------
     |
@@ -412,6 +424,10 @@ return [
         'trend_konzepte_enabled' => env('FOODALCHEMIST_TREND_KONZEPTE', true),
         'trend_konzepte_zeit' => env('FOODALCHEMIST_TREND_KONZEPTE_ZEIT', '08:00'),
         'trend_konzepte_limit' => (int) env('FOODALCHEMIST_TREND_KONZEPTE_LIMIT', 3),
+        // Spec 79: wöchentliche Google-Trends-Messung (DataForSEO). Läuft nur für Teams mit
+        // trend_dataforseo_enabled und stoppt am Monatsbudget des Teams.
+        'trends_messen_enabled' => env('FOODALCHEMIST_TRENDS_MESSEN', true),
+        'trends_messen_zeit' => env('FOODALCHEMIST_TRENDS_MESSEN_ZEIT', '06:10'),
         // Spec 52/Paket 3: Team, dessen Kanon-Sicherung wöchentlich geprüft wird.
         // **0 schaltet den Lauf ab.** Der Kanon ist team-gebunden und es gibt keinen sinnvollen
         // Default über Installationen hinweg — eine frische Instanz ohne Team 6 soll deshalb
