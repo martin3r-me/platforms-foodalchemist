@@ -84,8 +84,9 @@
                         </x-fa::section>
 
                         @if($quelle === 'recipe')
-                            <x-fa::section title="Haltbarkeit am Rezept" icon="heroicon-o-clock" description="Vorschlag für „verbrauchen bis“ — gilt für alle künftigen Etiketten dieses Rezepts." data-etikett-haltbarkeit>
+                            <x-fa::section title="Lagerung & Haltbarkeit am Rezept" icon="heroicon-o-clock" description="Übliche Lagerart und Vorschlag für „verbrauchen bis“ — gilt für alle künftigen Etiketten dieses Rezepts." data-etikett-haltbarkeit>
                                 <div class="flex flex-wrap items-end gap-2">
+                                    <x-fa::field label="Übliche Lagerart" for="et-la"><x-fa::select id="et-la" wire:model="lagerart" size="sm" :options="\Platform\FoodAlchemist\Services\EtikettService::LAGERUNG" placeholder="offen" /></x-fa::field>
                                     <x-fa::field label="Gekühlt (Tage)" for="et-hg"><x-fa::input id="et-hg" wire:model="haltbarGekuehlt" inputmode="numeric" class="w-20" /></x-fa::field>
                                     <x-fa::field label="Tiefgekühlt (Tage)" for="et-ht"><x-fa::input id="et-ht" wire:model="haltbarTk" inputmode="numeric" class="w-20" /></x-fa::field>
                                     <x-fa::button size="sm" wire:click="haltbarkeitSpeichern">Speichern</x-fa::button>

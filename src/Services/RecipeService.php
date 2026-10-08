@@ -253,6 +253,9 @@ class RecipeService
             'variable_work_time_basis' => $in['variable_work_time_basis'] ?? null,
             'standzeit_min' => $in['standzeit_min'] ?? null,
             'max_vorlauf_tage' => $in['max_vorlauf_tage'] ?? null,
+            'storage_type' => $this->lagerart($in['storage_type'] ?? null),
+            'shelf_life_chilled_days' => $in['shelf_life_chilled_days'] ?? null,
+            'shelf_life_frozen_days' => $in['shelf_life_frozen_days'] ?? null,
             'batch_max_kg' => $in['batch_max_kg'] ?? null,
             'batch_max_pieces' => $in['batch_max_pieces'] ?? null,
             'default_station_id' => TeamScope::referenz(\Platform\FoodAlchemist\Models\FoodAlchemistProductionStation::class, $in['default_station_id'] ?? null, $team, 'Posten'),
@@ -316,6 +319,9 @@ class RecipeService
                 ? $in['variable_work_time_basis'] : $recipe->variable_work_time_basis,
             'standzeit_min' => array_key_exists('standzeit_min', $in) ? $in['standzeit_min'] : $recipe->standzeit_min,
             'max_vorlauf_tage' => array_key_exists('max_vorlauf_tage', $in) ? $in['max_vorlauf_tage'] : $recipe->max_vorlauf_tage,
+            'storage_type' => array_key_exists('storage_type', $in) ? $this->lagerart($in['storage_type']) : $recipe->storage_type,
+            'shelf_life_chilled_days' => array_key_exists('shelf_life_chilled_days', $in) ? $in['shelf_life_chilled_days'] : $recipe->shelf_life_chilled_days,
+            'shelf_life_frozen_days' => array_key_exists('shelf_life_frozen_days', $in) ? $in['shelf_life_frozen_days'] : $recipe->shelf_life_frozen_days,
             'batch_max_kg' => array_key_exists('batch_max_kg', $in) ? $in['batch_max_kg'] : $recipe->batch_max_kg,
             'batch_max_pieces' => array_key_exists('batch_max_pieces', $in) ? $in['batch_max_pieces'] : $recipe->batch_max_pieces,
             'default_station_id' => array_key_exists('default_station_id', $in)
@@ -1260,5 +1266,11 @@ class RecipeService
             ->when(($filters['geschmack'] ?? '') !== '', fn (Builder $q) => $q->where('taste_direction', $filters['geschmack']))
             ->when(($filters['fertigung'] ?? '') !== '', fn (Builder $q) => $q->where('production_depth', $filters['fertigung']))
             ->when($filters['nur_templates'] ?? false, fn (Builder $q) => $q->where('is_template', true));  // R6: Template-Filter
+    }
+
+    /** Spec 70: übliche Lagerart (gekuehlt | tiefgekuehlt | trocken), sonst null. */
+    private function lagerart(mixed $wert): ?string
+    {
+        return in_array($wert, ['gekuehlt', 'tiefgekuehlt', 'trocken'], true) ? (string) $wert : null;
     }
 }

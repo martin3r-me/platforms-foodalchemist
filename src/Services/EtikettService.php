@@ -199,7 +199,7 @@ class EtikettService
             $d['zutaten'] = $this->zutatenliste($team, $r);
             $d['haltbar_gekuehlt'] = $r->shelf_life_chilled_days;
             $d['haltbar_tk'] = $r->shelf_life_frozen_days;
-            $d['lagerung'] = 'gekuehlt';
+            $d['lagerung'] = $r->storage_type ?: 'gekuehlt';   // übliche Lagerart des Rezepts
         } elseif ($quelle === 'gp') {
             $gp = FoodAlchemistGp::visibleToTeam($team)->with('leadLa')->findOrFail($id);
             $agg = app(GpAggregateService::class);
@@ -346,7 +346,7 @@ class EtikettService
     }
 
     /** Haltbarkeits-Vorschlag am Rezept setzen (nur eigene Rezepte des Teams). */
-    public function haltbarkeitSetzen(Team $team, int $recipeId, mixed $gekuehlt, mixed $tk): FoodAlchemistRecipe
+    public function haltbarkeitSetzen(Team $team, int $recipeId, mixed $gekuehlt, mixed $tk, ?string $lagerart = null): FoodAlchemistRecipe
     {
         $r = FoodAlchemistRecipe::where('team_id', $team->id)->find($recipeId);
         if ($r === null) {
@@ -363,7 +363,10 @@ class EtikettService
 
             return (int) $v;
         };
-        $r->forceFill(['shelf_life_chilled_days' => $tage($gekuehlt, 'Haltbarkeit gekühlt'), 'shelf_life_frozen_days' => $tage($tk, 'Haltbarkeit TK')])->save();
+        $r->forceFill([
+            'shelf_life_chilled_days' => $tage($gekuehlt, 'Haltbarkeit gekühlt'), 'shelf_life_frozen_days' => $tage($tk, 'Haltbarkeit TK'),
+            'storage_type' => in_array($lagerart, array_keys(self::LAGERUNG), true) ? $lagerart : $r->storage_type,
+        ])->save();
 
         return $r;
     }

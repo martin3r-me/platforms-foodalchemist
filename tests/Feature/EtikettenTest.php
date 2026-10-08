@@ -136,3 +136,22 @@ it('MCP: labels.POST liefert Links + Inhalt, label_templates.GET/POST', function
     expect(collect($g->data['vorlagen'])->pluck('name')->all())->toContain('TK Dymo')
         ->and($g->data['formate'])->toHaveKey('rolle_62');
 });
+
+it('Übliche Lagerart am Rezept: Speichern über RecipeService/MCP, Etikett übernimmt sie (TK → Einfrierdatum + TK-Haltbarkeit)', function () {
+    app(\Platform\FoodAlchemist\Services\RecipeService::class)->update($this->rootTeam, $this->suppe->id, ['storage_type' => 'tiefgekuehlt', 'shelf_life_frozen_days' => 60]);
+    $r = $this->suppe->refresh();
+    expect($r->storage_type)->toBe('tiefgekuehlt')->and($r->shelf_life_frozen_days)->toBe(60);
+
+    $d = $this->svc->daten($this->rootTeam, 'recipe', $this->suppe->id);
+    expect($d['lagerung'])->toBe('tiefgekuehlt')
+        ->and($d['datum']['eingefroren_am']->toDateString())->toBe(now()->toDateString())
+        ->and($d['datum']['verbrauchen_bis']->toDateString())->toBe(now()->addDays(60)->toDateString());
+    // Im Einzelfall gekühlt statt TK
+    expect($this->svc->daten($this->rootTeam, 'recipe', $this->suppe->id, ['lagerung' => 'gekuehlt'])['datum']['verbrauchen_bis']->toDateString())
+        ->toBe(now()->addDays(3)->toDateString());
+
+    $reg = app(ToolRegistry::class);
+    $this->suppe->forceFill(['status' => 'draft'])->save();   // freigegebene Rezepte sind für die KI gesperrt (kiEditGesperrt)
+    $put = $reg->get('foodalchemist.recipes.PUT')->execute(['recipe_id' => $this->suppe->id, 'storage_type' => 'trocken'], new ToolContext($this->user, $this->rootTeam));
+    expect($put->success)->toBeTrue()->and($this->suppe->refresh()->storage_type)->toBe('trocken');
+});

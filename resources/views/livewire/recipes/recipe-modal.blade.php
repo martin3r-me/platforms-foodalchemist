@@ -591,6 +591,21 @@
         @endif
     </x-fa::section>
 
+    {{-- Spec 70: übliche Lagerart + Haltbarkeit — Vorgabe für Etikett („verbrauchen bis") und Einlagerung --}}
+    <x-fa::section title="Lagerung & Haltbarkeit" icon="heroicon-o-archive-box" description="Vorgabe für Etiketten und die Einlagerung. Beim Etikettendruck lässt sich die Lagerart im Einzelfall umstellen." data-recipe-lagerung>
+        <div class="grid gap-3 md:grid-cols-3">
+            <x-fa::field label="Übliche Lagerart" for="rezept-lagerart">
+                <x-fa::select id="rezept-lagerart" wire:model="form.storage_type" :options="['gekuehlt' => 'Gekühlt (0–7 °C)', 'tiefgekuehlt' => 'Tiefgekühlt (−18 °C)', 'trocken' => 'Trocken']" placeholder="offen" data-recipe-lagerart />
+            </x-fa::field>
+            <x-fa::field label="Haltbar gekühlt (Tage)" for="rezept-haltbar-kuehl">
+                <x-fa::input id="rezept-haltbar-kuehl" type="number" min="0" wire:model="form.shelf_life_chilled_days" numeric placeholder="offen" />
+            </x-fa::field>
+            <x-fa::field label="Haltbar tiefgekühlt (Tage)" for="rezept-haltbar-tk" hint="ab dem Einfrieren">
+                <x-fa::input id="rezept-haltbar-tk" type="number" min="0" wire:model="form.shelf_life_frozen_days" numeric placeholder="offen" />
+            </x-fa::field>
+        </div>
+    </x-fa::section>
+
     {{-- EIGNUNG (M9-01k) — Detail-Panel-Kartei via section-Prop --}}
     <x-fa::section title="Eignung" icon="heroicon-o-check-badge" description="Für welches Niveau und welchen Sektor das Rezept passt.">
         @if($recipeId !== null)

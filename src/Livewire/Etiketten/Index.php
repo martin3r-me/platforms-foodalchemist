@@ -39,6 +39,8 @@ class Index extends Component
 
     public string $haltbarTk = '';
 
+    public string $lagerart = '';
+
     public string $suche = '';
 
     public string $suchArt = 'recipe';
@@ -69,7 +71,7 @@ class Index extends Component
         }
         $this->fehler = null;
         try {
-            $svc->haltbarkeitSetzen($this->team(), $this->bezugId, $this->haltbarGekuehlt, $this->haltbarTk);
+            $svc->haltbarkeitSetzen($this->team(), $this->bezugId, $this->haltbarGekuehlt, $this->haltbarTk, $this->lagerart ?: null);
             $this->hinweis = 'Haltbarkeit am Rezept gespeichert — gilt ab jetzt als Vorschlag für „verbrauchen bis".';
         } catch (\RuntimeException $ex) {
             $this->fehler = $ex->getMessage();
@@ -117,10 +119,12 @@ class Index extends Component
     {
         $this->haltbarGekuehlt = '';
         $this->haltbarTk = '';
+        $this->lagerart = '';
         if ($this->quelle === 'recipe' && $this->bezugId !== null) {
-            $r = FoodAlchemistRecipe::visibleToTeam($this->team())->find($this->bezugId, ['id', 'shelf_life_chilled_days', 'shelf_life_frozen_days']);
+            $r = FoodAlchemistRecipe::visibleToTeam($this->team())->find($this->bezugId, ['id', 'shelf_life_chilled_days', 'shelf_life_frozen_days', 'storage_type']);
             $this->haltbarGekuehlt = (string) ($r?->shelf_life_chilled_days ?? '');
             $this->haltbarTk = (string) ($r?->shelf_life_frozen_days ?? '');
+            $this->lagerart = (string) ($r?->storage_type ?? '');
         }
     }
 

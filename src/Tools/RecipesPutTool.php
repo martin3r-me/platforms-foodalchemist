@@ -48,6 +48,9 @@ class RecipesPutTool extends FoodAlchemistTool implements ToolContract, ToolMeta
                 'batch_max_kg' => ['type' => 'number', 'description' => 'Topf-Deckel: max kg je Koch-Vorgang'],
                 'batch_max_pieces' => ['type' => 'number', 'description' => 'Topf-Deckel: max Stück je Koch-Vorgang'],
                 'max_vorlauf_tage' => ['type' => 'integer', 'description' => 'Vorproduzierbarkeit in Tagen (0 = nur am Produktionstag)'],
+                'storage_type' => ['type' => ['string', 'null'], 'enum' => ['gekuehlt', 'tiefgekuehlt', 'trocken', null], 'description' => 'Übliche Lagerart (Vorgabe für Etikett und Einlagerung)'],
+                'shelf_life_chilled_days' => ['type' => ['integer', 'null'], 'description' => 'Haltbarkeit gekühlt in Tagen'],
+                'shelf_life_frozen_days' => ['type' => ['integer', 'null'], 'description' => 'Haltbarkeit tiefgekühlt in Tagen (ab Einfrieren)'],
                 'default_station_id' => ['type' => ['integer', 'null'], 'description' => 'Default-Posten fürs Planer-Routing. IDs aus production_stations.GET; null hebt die Zuordnung auf.'],
                 'yield_kg_manual' => ['type' => 'number'],
                 'category_id' => ['type' => 'integer'],
@@ -87,6 +90,7 @@ class RecipesPutTool extends FoodAlchemistTool implements ToolContract, ToolMeta
             'name', 'description', 'preparation', 'taste_direction',
             'work_time_min', 'setup_time_min', 'standzeit_min', 'batch_max_kg', 'batch_max_pieces',
             'max_vorlauf_tage', 'default_station_id', 'yield_kg_manual', 'category_id',
+            'storage_type', 'shelf_life_chilled_days', 'shelf_life_frozen_days',
         ]));
         if (($arguments['status'] ?? null) === 'review') {
             $in['status'] = 'review';
