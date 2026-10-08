@@ -180,6 +180,13 @@ vollständiges Lager zu führen:
   Lagerort, ohne „Bearbeiten“ pflegbar. Der Wareneingang bucht in den Lagerort mit Stellplatz und
   sortiert beim ersten Eingang automatisch ein; neue bzw. klassifizierte Grundprodukte bekommen den
   Vorschlags-Stellplatz automatisch (Handzuordnungen bleiben).
+- **Eigenproduktion im Lager (Spec 69):** Reiter *Eigenproduktion* — Basisrezepte (g) und Gerichte
+  (Portionen) als Chargen einlagern: Chargennummer `C<JJMMTT>-<nn>`, Lagerart aus dem Rezept
+  (gekühlt / tiefgekühlt), „verbrauchen bis“ aus der Haltbarkeit am Rezept, Wert zum Rezept-EK.
+  Entnahme nach FIFO (älteste Haltbarkeit zuerst) als Verbrauch oder Abgang mit Grund (Verderb zählt
+  im Controlling). Ablaufwarnung, Etikett je Charge, Inventur zählt Rezeptbestände mit und gleicht
+  die Chargen ab. Aus der Produktion: „Im Lager: …“ je Zeile und „Rest ins Lager / einfrieren →“.
+  MCP: `inventory_batches.GET`, `eigenproduktion.POST`, `eigenproduktion.ENTNAHME`.
 - **Bestellvorlagen (Spec 68):** Einkauf → Bestellvorlagen. Eine Vorlage ist eine gespeicherte
   Bestellrunde: Grundprodukte mit Menge (Artikel wählt beim Bestellen die Lead-Strategie), Rezepte
   und Gerichte mit Portionen/Ansätzen („Musterproduktion", Bedarf aus der Rezeptur) und feste Artikel

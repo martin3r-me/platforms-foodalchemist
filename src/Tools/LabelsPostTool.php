@@ -30,7 +30,7 @@ class LabelsPostTool extends FoodAlchemistTool implements ToolContract, ToolMeta
         return [
             'type' => 'object',
             'properties' => [
-                'quelle' => ['type' => 'string', 'enum' => ['recipe', 'gp', 'stellplatz']],
+                'quelle' => ['type' => 'string', 'enum' => ['recipe', 'gp', 'stellplatz', 'charge'], 'description' => 'charge = Etikett einer eingelagerten Charge (Eigenproduktion) mit deren Daten'],
                 'id' => ['type' => 'integer'],
                 'vorlage_id' => ['type' => 'integer'],
                 'anzahl' => ['type' => 'integer'],

@@ -21,7 +21,7 @@
         <x-fa::page-header title="Lager" subtitle="Bestand aus Wareneingang und Inventur. Der Verbrauch ergibt sich aus Anfangsbestand + Einkauf − Endbestand." />
 
         <div class="inline-flex items-center gap-0.5 p-0.5 rounded-[var(--fa-radius-control)] bg-[var(--fa-ground)] self-start" role="tablist" data-lager-reiter>
-            @foreach(['bestand' => 'Bestand', 'bewegungen' => 'Bewegungen', 'inventur' => 'Inventuren', 'einrichten' => 'Einrichten'] as $k => $l)
+            @foreach(['bestand' => 'Bestand', 'bewegungen' => 'Bewegungen', 'eigenproduktion' => 'Eigenproduktion', 'inventur' => 'Inventuren', 'einrichten' => 'Einrichten'] as $k => $l)
                 <button type="button" wire:click="reiterSetzen('{{ $k }}')" class="{{ $segment }} {{ $reiter === $k ? $segmentAn : $segmentAus }}" role="tab" aria-selected="{{ $reiter === $k ? 'true' : 'false' }}">{{ $l }}</button>
             @endforeach
         </div>
@@ -163,7 +163,7 @@
                                 @foreach($bewegungen as $m)
                                     <tr wire:key="m-{{ $m->id }}" class="{{ isset($storniert[$m->id]) ? 'opacity-50' : '' }}">
                                         <td class="tabular-nums">{{ $m->moved_at?->format('d.m.Y') ?? '–' }}</td>
-                                        <td class="font-medium">{{ $m->gp?->name ?? $m->supplierItem?->designation ?? '—' }}</td>
+                                        <td class="font-medium">{{ $m->gp?->name ?? $m->supplierItem?->designation ?? $m->recipe?->name ?? '—' }}</td>
                                         <td>{{ $m->location?->name ?? '—' }}</td>
                                         <td>{{ $quelleText[$m->source] ?? $m->source }}@if($m->order?->supplier) <span class="{{ $leise }}">· {{ $m->order->supplier->name }}</span>@endif</td>
                                         <td>{{ $m->reason ? ($alleGruende[$m->reason] ?? $m->reason) : '' }}</td>
@@ -280,7 +280,7 @@
                                     @endif
                                     <tr wire:key="l-{{ $l->id }}">
                                         <td>
-                                            <div class="font-medium">{{ $l->gp?->name ?? $l->supplierItem?->designation ?? '—' }}</div>
+                                            <div class="font-medium">{{ $l->gp?->name ?? $l->supplierItem?->designation ?? $l->recipe?->name ?? '—' }}</div>
                                             @if($l->hatGebinde())
                                                 <div class="{{ $leise }}">@if($l->pack_units)1 {{ $l->pack_label }} = {{ $zahl($l->pack_units) }} {{ $l->unit_label }} · @endif 1 {{ $l->unit_label }} = {{ $zahl($einheitInhalt) }} {{ $einheit }}</div>
                                             @endif
@@ -336,6 +336,79 @@
                     @endunless
                 </x-fa::section>
             @endif
+        @endif
+
+        {{-- ── Eigenproduktion (Spec 69) ─────────────────────────────────── --}}
+        @if($reiter === 'eigenproduktion')
+            <x-fa::section title="Einlagern" icon="heroicon-o-arrow-down-tray" description="Selbst Hergestelltes als Charge einlagern. „Verbrauchen bis“ kommt aus Lagerart und Haltbarkeit am Rezept." data-lager-einlagern>
+                @if(! empty($einlagern['recipe_id']))
+                    <div class="flex items-center gap-2">
+                        <span class="font-medium">{{ $einlagern['name'] }}</span>
+                        <x-fa::button size="sm" variant="ghost" wire:click="$set('einlagern', [])">ändern</x-fa::button>
+                    </div>
+                    <div class="grid gap-3 md:grid-cols-3">
+                        <x-fa::field :label="'Menge (' . $einlagern['einheit'] . ')'" for="ep-menge"><x-fa::input id="ep-menge" wire:model="einlagern.menge" inputmode="decimal" class="w-28 text-right" data-lager-einlagern-menge /></x-fa::field>
+                        <x-fa::field label="Lagerort" for="ep-ort"><x-fa::select id="ep-ort" wire:model="einlagern.location_id" :options="$orte->pluck('name', 'id')" placeholder="Standardlager" /></x-fa::field>
+                        <x-fa::field label="Lagerart" for="ep-art"><x-fa::select id="ep-art" wire:model.live="einlagern.lagerart" :options="\Platform\FoodAlchemist\Services\EigenproduktionService::LAGERARTEN" /></x-fa::field>
+                        <x-fa::field label="Hergestellt am" for="ep-prod"><x-fa::input id="ep-prod" type="date" wire:model="einlagern.produziert_am" /></x-fa::field>
+                        @if(($einlagern['lagerart'] ?? '') === 'tiefgekuehlt')
+                            <x-fa::field label="Eingefroren am" for="ep-tk" hint="leer = Herstelldatum"><x-fa::input id="ep-tk" type="date" wire:model="einlagern.eingefroren_am" /></x-fa::field>
+                        @endif
+                        <x-fa::field label="Verbrauchen bis" for="ep-bis" hint="leer = aus der Haltbarkeit"><x-fa::input id="ep-bis" type="date" wire:model="einlagern.verbrauchen_bis" /></x-fa::field>
+                    </div>
+                    <x-fa::field label="Notiz" for="ep-notiz"><x-fa::input id="ep-notiz" wire:model="einlagern.notiz" placeholder="optional" /></x-fa::field>
+                    <div class="flex justify-end"><x-fa::button variant="primary" icon="heroicon-m-check" wire:click="einlagernSpeichern" data-lager-einlagern-speichern>Einlagern</x-fa::button></div>
+                @else
+                    <x-fa::input type="search" size="sm" wire:model.live.debounce.300ms="einlagernSuche" placeholder="Basisrezept oder Gericht suchen …" class="w-80" aria-label="Rezept suchen" data-lager-einlagern-suche />
+                    @foreach($einlagernTreffer as $r)
+                        <button type="button" wire:key="ept-{{ $r->id }}" wire:click="einlagernRezept({{ $r->id }})" class="self-start text-left text-[length:var(--fa-text-md)] text-[var(--fa-accent)] hover:underline">{{ $r->name }}<span class="{{ $leise }}"> · {{ $r->is_sales_recipe ? 'Gericht' : 'Basisrezept' }}</span></button>
+                    @endforeach
+                    @if(! empty($einlagern['letzte_charge']))
+                        <a href="{{ route('foodalchemist.etiketten.index', ['quelle' => 'charge', 'id' => $einlagern['letzte_charge']]) }}" target="_blank" class="self-start inline-flex items-center gap-1 text-[length:var(--fa-text-md)] text-[var(--fa-accent)] hover:underline" data-lager-etikett-charge>@svg('heroicon-m-tag', 'w-4 h-4') Etiketten für die neue Charge drucken</a>
+                    @endif
+                @endif
+            </x-fa::section>
+
+            <x-fa::section title="Chargen im Lager" icon="heroicon-o-archive-box" :meta="$chargen->count()" data-lager-chargen>
+                <div class="flex flex-wrap items-center gap-3">
+                    <x-fa::select wire:model.live="lagerortId" size="sm" placeholder="Alle Lagerorte" :options="$orte->pluck('name', 'id')" class="w-48" aria-label="Lagerort" />
+                    <label class="inline-flex items-center gap-1.5 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]"><input type="checkbox" wire:model.live="nurAblaufend" class="w-4 h-4 rounded accent-[var(--fa-accent)]" /> Nur bald ablaufend (≤ 3 Tage)</label>
+                    @if($ablaufendAnzahl > 0)<x-fa::badge tone="warn">{{ $ablaufendAnzahl }} bald ablaufend</x-fa::badge>@endif
+                </div>
+                @if($chargen->isEmpty())
+                    <x-fa::empty compact icon="heroicon-o-archive-box" title="Keine offenen Chargen" />
+                @else
+                    <div class="overflow-x-auto">
+                        <table class="fa-table fa-table--compact min-w-[760px]">
+                            <thead><tr><th>Charge</th><th>Rezept</th><th>Lagerort</th><th>Lagerart</th><th class="text-right">Rest</th><th>Hergestellt</th><th>Verbrauchen bis</th><th>Entnehmen</th><th></th></tr></thead>
+                            <tbody>
+                                @foreach($chargen as $b)
+                                    @php $tage = $b->tageBisAblauf(); @endphp
+                                    <tr wire:key="ch-{{ $b->id }}">
+                                        <td class="tabular-nums font-medium">{{ $b->charge }}</td>
+                                        <td>{{ $b->recipe?->name ?? '—' }}</td>
+                                        <td>{{ $b->location?->name ?? '—' }}</td>
+                                        <td>{{ \Platform\FoodAlchemist\Services\EigenproduktionService::LAGERARTEN[$b->storage_type] ?? $b->storage_type }}</td>
+                                        <td class="text-right tabular-nums">{{ $zahl($eigen->anzeigeMenge((float) $b->qty_rest, $b->base_unit)) }} {{ $eigen->anzeigeEinheit($b->base_unit) }}</td>
+                                        <td class="tabular-nums">{{ $b->produced_at?->format('d.m.Y') }}</td>
+                                        <td class="tabular-nums {{ $tage !== null && $tage < 0 ? 'text-[var(--fa-crit)] font-semibold' : ($tage !== null && $tage <= 3 ? 'text-[var(--fa-warn)] font-semibold' : '') }}">{{ $b->best_before?->format('d.m.Y') ?? '–' }}{{ $tage !== null && $tage < 0 ? ' · abgelaufen' : '' }}</td>
+                                        <td>
+                                            <span class="inline-flex items-center gap-1">
+                                                <input type="text" inputmode="decimal" wire:model="entnahme.{{ $b->id }}.menge" class="fa-control h-7 w-16 text-right tabular-nums text-[length:var(--fa-text-sm)]" aria-label="Menge in {{ $eigen->anzeigeEinheit($b->base_unit) }}" />
+                                                <select wire:model="entnahme.{{ $b->id }}.grund" class="fa-control fa-select h-7 pr-8 text-[length:var(--fa-text-sm)]" aria-label="Grund">
+                                                    @foreach(\Platform\FoodAlchemist\Services\EigenproduktionService::ENTNAHME_GRUENDE as $gk => $gl)<option value="{{ $gk }}">{{ $gl }}</option>@endforeach
+                                                </select>
+                                                <x-fa::button size="sm" wire:click="entnehmen({{ $b->id }})" data-lager-entnehmen="{{ $b->id }}">Entnehmen</x-fa::button>
+                                            </span>
+                                        </td>
+                                        <td class="text-right"><x-fa::icon-button size="sm" icon="heroicon-m-tag" label="Etikett dieser Charge" :href="route('foodalchemist.etiketten.index', ['quelle' => 'charge', 'id' => $b->id])" target="_blank" /></td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                @endif
+            </x-fa::section>
         @endif
 
         {{-- ── Einrichten (Spec 66b) ───────────────────────────────────── --}}

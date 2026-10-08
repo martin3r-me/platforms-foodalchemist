@@ -173,6 +173,22 @@ class EtikettService
      */
     public function daten(Team $team, string $quelle, int $id, array $eingabe = [], ?FoodAlchemistLabelTemplate $vorlage = null): array
     {
+        // Spec 69: Etikett einer Charge = Rezept-Etikett mit den Daten der Charge (Eingaben haben Vorrang)
+        if ($quelle === 'charge') {
+            $b = \Platform\FoodAlchemist\Models\FoodAlchemistInventoryBatch::where('team_id', $team->id)->findOrFail($id);
+            $eigen = app(EigenproduktionService::class);
+            foreach ([
+                'charge' => (string) $b->charge, 'hergestellt_am' => $b->produced_at?->toDateString(), 'eingefroren_am' => $b->frozen_at?->toDateString(),
+                'verbrauchen_bis' => $b->best_before?->toDateString(), 'lagerung' => $b->storage_type,
+                'menge' => rtrim(rtrim(number_format($eigen->anzeigeMenge((float) $b->qty_initial, (string) $b->base_unit), 3, ',', '.'), '0'), ',') . ' ' . $eigen->anzeigeEinheit((string) $b->base_unit),
+            ] as $k => $wert) {
+                if ($wert !== null && (! isset($eingabe[$k]) || trim((string) $eingabe[$k]) === '')) {
+                    $eingabe[$k] = $wert;
+                }
+            }
+            $quelle = 'recipe';
+            $id = (int) $b->recipe_id;
+        }
         $kat = app(ConcepterAggregateService::class)->kennzeichnungKatalog();
         $heute = now()->startOfDay();
         $d = ['quelle' => $quelle, 'bezeichnung' => '', 'zusatz' => null, 'zutaten' => [], 'allergene' => [], 'spuren' => [], 'zusatzstoffe' => [],

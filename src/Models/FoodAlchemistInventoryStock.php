@@ -37,6 +37,12 @@ class FoodAlchemistInventoryStock extends Model
         return $this->belongsTo(FoodAlchemistInventoryLocation::class, 'inventory_location_id');
     }
 
+    /** Spec 69: Eigenproduktion — Bestand eines Rezepts (Basisrezept in g/Stk, Gericht in Portionen). */
+    public function recipe(): BelongsTo
+    {
+        return $this->belongsTo(FoodAlchemistRecipe::class, 'recipe_id');
+    }
+
     public function supplierItem(): BelongsTo
     {
         return $this->belongsTo(FoodAlchemistSupplierItem::class, 'supplier_item_id');

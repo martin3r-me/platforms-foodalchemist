@@ -48,6 +48,11 @@ class FoodAlchemistInventoryMovement extends Model
         return $this->belongsTo(FoodAlchemistInventoryLocation::class, 'inventory_location_id');
     }
 
+    public function recipe(): BelongsTo
+    {
+        return $this->belongsTo(FoodAlchemistRecipe::class, 'recipe_id');
+    }
+
     public function gp(): BelongsTo
     {
         return $this->belongsTo(FoodAlchemistGp::class, 'gp_id');

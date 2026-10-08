@@ -4,7 +4,7 @@
     $segment = 'h-7 px-2.5 rounded-[var(--fa-radius-control)] text-[length:var(--fa-text-sm)] font-medium transition-colors duration-150';
     $auto = fn ($c) => $c?->format('d.m.Y');
     $hatFeld = fn (string $k) => in_array($k, $felder, true);
-    $quelleText = ['recipe' => 'Rezept', 'gp' => 'Grundprodukt', 'stellplatz' => 'Stellplatz'];
+    $quelleText = ['recipe' => 'Rezept', 'gp' => 'Grundprodukt', 'stellplatz' => 'Stellplatz', 'charge' => 'Charge (Eigenproduktion)'];
 @endphp
 
 <x-ui-page>

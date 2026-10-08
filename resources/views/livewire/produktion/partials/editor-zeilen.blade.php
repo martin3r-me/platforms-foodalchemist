@@ -93,6 +93,17 @@
                                 <tr class="{{ $z['ist_gestrichen'] ? 'opacity-60' : '' }}" wire:key="pz-{{ $z['id'] }}" data-produktion-zeile="{{ $z['id'] }}">
                                     <td>
                                         <span class="font-medium text-[var(--fa-ink)] {{ $z['ist_gestrichen'] ? 'line-through' : '' }}">{{ $z['name'] }}</span>
+                                        {{-- Spec 69: Eigenproduktion im Lager → vor dem Kochen nachsehen; fertige Zeile einlagern --}}
+                                        @php $imLager = $z['recipe_id'] !== null ? (($lagerJeRezept ?? [])[$z['recipe_id']] ?? null) : null; @endphp
+                                        @if($imLager)
+                                            <a href="{{ route('foodalchemist.lager.index', ['reiter' => 'eigenproduktion']) }}" class="block text-[length:var(--fa-text-sm)] text-[var(--fa-warn)] hover:underline" data-produktion-im-lager>
+                                                Im Lager: {{ rtrim(rtrim(number_format($imLager['base'] === 'g' ? $imLager['menge'] / 1000 : $imLager['menge'], 3, ',', '.'), '0'), ',') }} {{ ['g' => 'kg', 'Port' => 'Portionen', 'Stk' => 'Stück'][$imLager['base']] ?? $imLager['base'] }} ({{ $imLager['chargen'] }} {{ $imLager['chargen'] === 1 ? 'Charge' : 'Chargen' }}{{ $imLager['aeltestes_bis'] ? ', älteste bis ' . \Illuminate\Support\Carbon::parse($imLager['aeltestes_bis'])->format('d.m.') : '' }})
+                                            </a>
+                                        @endif
+                                        @if(($z['line_status'] ?? null) === 'done' && $z['recipe_id'] !== null && \Illuminate\Support\Facades\Route::has('foodalchemist.lager.index'))
+                                            <a href="{{ route('foodalchemist.lager.index', ['reiter' => 'eigenproduktion', 'einlagern_rezept' => $z['recipe_id'], 'einlagern_menge' => $z['ist_basisrezept'] ? ($z['produzierte_menge_kg'] ?? '') : ($z['portionen'] ?? ''), 'einlagern_zeile' => $z['id']]) }}"
+                                               class="block text-[length:var(--fa-text-sm)] text-[var(--fa-accent)] hover:underline" data-produktion-einlagern>Rest ins Lager / einfrieren →</a>
+                                        @endif
                                         @if(! empty($z['darreichung']['formen']))
                                             <span class="block text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)] tabular-nums" data-produktion-formen>{{ collect($z['darreichung']['formen'])->map(fn ($f) => $f['portionen'] . ' × ' . $f['label'] . (($f['gramm'] ?? null) !== null ? ' · ' . number_format((float) $f['gramm'], 0, ',', '.') . ' g' : ''))->implode(', ') }}</span>
                                         @endif
