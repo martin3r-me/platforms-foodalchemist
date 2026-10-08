@@ -31,4 +31,23 @@ Ein Browser kann nicht ohne Dialog auf einen Drucker im Küchennetz drucken. Daf
 3. Etikett als PDF in exakter Größe (DomPDF) pro Modell testen, ZPL nur falls nötig.
 4. Danach: Drucker-Profil bekommt „Verbindung: Browser-Dialog | QZ Tray | PrintNode (Drucker-ID)". „Etikett drucken" am Wandmonitor druckt dann ohne Dialog.
 
-Quellen: qz.io (QZ Tray), printnode.com/docs (PrintNode), Herstellerangaben Brother QL-820NWB / Zebra ZD421.
+### Entscheid 2026-10-08 (Dominique): Direktdruck vom **Küchen-PC** → QZ Tray
+Gedruckt wird vom festen Küchen-PC am Wandmonitor, nicht von Tablet/Handy/Server. PrintNode bleibt Option für später, falls zentral oder per KI gedruckt werden soll.
+
+**Wichtig — Signierung:** QZ Tray druckt nur dann ohne „Erlauben?"-Rückfrage, wenn jeder Druckauftrag signiert ist. Dafür braucht es ein Zertifikat:
+- **(a) Gekauftes Zertifikat** (QZ Premium Support, 1–5 Jahre gültig). Am Küchen-PC ist nichts weiter zu tun.
+- **(b) Eigenes Zertifikat** mit `override.crt` auf jedem Küchen-PC. Kostenlos, aber ein Einrichtungsschritt je Rechner.
+→ **Offene Entscheidung (Dominique):** (a) oder (b). Kosten von (a) vorher prüfen.
+
+**Bauplan Stufe 2:**
+1. **Drucker-Profil** bekommt „Verbindung": Browser-Dialog (heute) | QZ Tray. Dazu kommt der Druckername, wie er am Küchen-PC heißt.
+2. **Server:**
+   - Endpunkt „Zertifikat" (öffentlich).
+   - Endpunkt „Signieren": signiert den QZ-Auftrag mit dem privaten Schlüssel (SHA-512) aus `.env`, nur für angemeldete Nutzer.
+3. **Wandmonitor:**
+   - Ist der Küchendrucker auf QZ Tray gestellt, verbindet sich der Monitor mit QZ Tray (lokaler WebSocket) und schickt das Etikett als PDF in exakter Größe (DomPDF, `?pdf=1`) an den genannten Drucker, ohne Dialog.
+   - Ist QZ Tray nicht erreichbar, kommt automatisch der Browser-Druckdialog wie heute.
+4. **Einrichtungsanleitung** je Küchen-PC: QZ Tray installieren, ggf. `override.crt` einspielen, Drucker im Profil eintragen, Testdruck.
+5. **Gerätetest** mit dem Modell, das wir anbieten wollen (Brother QL-820NWB oder Zebra ZD421): Maße, Ränder, Druckqualität des PDF.
+
+Quellen: qz.io (QZ Tray, Signierung: qz.io/docs/signing), printnode.com/docs (PrintNode), Herstellerangaben Brother QL-820NWB / Zebra ZD421.
