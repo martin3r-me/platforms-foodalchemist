@@ -17,7 +17,7 @@ uses(TestCase::class, SeedsTeamHierarchy::class);
 beforeEach(function () {
     $this->seedTeamHierarchy();
     $nutzer = $this->makeUser($this->rootTeam, 'Root User');
-    $this->rootTeam->users()->attach($nutzer->id, ['role' => 'owner']);
+    $this->rootTeam->users()->syncWithoutDetaching([$nutzer->id => ['role' => 'owner']]);   // makeUser legt Mitgliedschaft schon an (Spec 77a)
     $this->svc = app(RecipeService::class);
     FoodAlchemistVocabEinheit::firstOrCreate(['team_id' => $this->rootTeam->id, 'slug' => 'g'],
         ['display_de' => 'Gramm', 'dimension' => 'mass', 'default_in_g' => 1]);

@@ -21,7 +21,60 @@ use Platform\FoodAlchemist\Livewire\Concerns\MitBearbeitungssperre;
  */
 trait MitEinstellungsSperre
 {
-    use MitBearbeitungssperre;
+    use MitBearbeitungssperre {
+        sperreErlaubt as protected sperreErlaubtOhneRolle;
+        sperreAbgewiesen as protected sperreAbgewiesenOhneRolle;
+        sperrZustand as protected sperrZustandOhneRolle;
+    }
+
+    /**
+     * Spec 77a (F3): Einstellungen ändern nur Inhaber/Admin (FA-Admin). Mitglieder und Betrachter sehen
+     * die Sektion lesend — auch wenn die Bearbeitungssperre abgeschaltet ist. Gilt für jede Schreibaktion,
+     * die über den globalen call-Haken oder `schreibenAbgewiesen()` läuft.
+     */
+    protected function darfEinstellungen(): bool
+    {
+        $user = Auth::user();
+        $team = $user?->currentTeamRelation;
+
+        return $user === null || $team === null
+            || app(\Platform\FoodAlchemist\Services\FaRechte::class)->darf($user, $team, \Platform\FoodAlchemist\Enums\FaRolle::Admin);
+    }
+
+    /** Lesende Methoden, die auch ohne Admin-Recht laufen (Anzeigen, Reiter, Herzschlag). */
+    protected function nurLesendErlaubt(): array
+    {
+        return array_merge(['render', 'mount', '$refresh', '__dispatch', 'tabLaden', 'oeffnen', 'sperreHerzschlag',
+            'sperreBeiSchliessen', 'bearbeitenAbbrechen'], $this->sperrFreiExtra());
+    }
+
+    public function sperreErlaubt(string $methode): bool
+    {
+        if (! $this->darfEinstellungen() && ! in_array($methode, $this->nurLesendErlaubt(), true)) {
+            return false;
+        }
+
+        return $this->sperreErlaubtOhneRolle($methode);
+    }
+
+    public function sperreAbgewiesen(string $methode): void
+    {
+        if (! $this->darfEinstellungen()) {
+            $this->dispatch('fa-saved', message: 'Einstellungen ändern dürfen nur Inhaber und Admins des Teams.', type: 'error');
+
+            return;
+        }
+        $this->sperreAbgewiesenOhneRolle($methode);
+    }
+
+    public function sperrZustand(): array
+    {
+        if (! $this->darfEinstellungen()) {
+            return ['modus' => 'lesen', 'fremd' => null, 'admin' => false, 'rolle_fehlt' => true];
+        }
+
+        return $this->sperrZustandOhneRolle();
+    }
 
     /** Bereichs-Schlüssel, z.B. 'kalkulation' → Ziel 'settings.kalkulation'. */
     abstract protected function sperrBereich(): string;

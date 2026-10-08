@@ -225,6 +225,9 @@ class PlanningSessionService
 
     public function setStatus(Team $team, int $id, string $status): FoodAlchemistPlanningSession
     {
+        // Spec 77a: ab Kuratieren (Mitglied); ohne angemeldeten Benutzer (System) keine Prüfung
+        app(\Platform\FoodAlchemist\Services\FaRechte::class)->pruefeAngemeldet($team, \Platform\FoodAlchemist\Enums\FaRolle::Kuratieren, 'Planungs-Status setzen');
+
         if (! in_array($status, FoodAlchemistPlanningSession::STATUSES, true)) {
             throw new RuntimeException("Ungültiger Status «{$status}».");
         }

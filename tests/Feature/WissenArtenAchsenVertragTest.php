@@ -222,6 +222,8 @@ it('Spec 52/H2: jede Geltungs-Achse ist an der MCP-Fläche annehmbar — sonst l
 
 it('Spec 52/H2: eine Achse, die das Schema kennt, überlebt auch den Parameter-Filter', function () {
     $tool = app(ToolRegistry::class)->get('foodalchemist.recipes.GENERATE');
+    // Spec 77a: Registry liefert die Rechte-Hülle — die private Methode sitzt am eigentlichen Tool
+    $tool = $tool instanceof \Platform\FoodAlchemist\Tools\FaRechteToolHuelle ? $tool->innen() : $tool;
 
     // Der Filter ist privat — geprüft wird sein Ergebnis: der Aufbau, den der Generator
     // bekommt. Ohne Durchreichung stünde hier kein `gang`, und der Resolver bliebe blind.

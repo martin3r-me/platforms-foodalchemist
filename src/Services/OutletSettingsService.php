@@ -25,6 +25,9 @@ class OutletSettingsService
     /** Nur das Besitzer-Team des Betriebs darf Overrides schreiben. */
     public function update(Team $team, FoodAlchemistOutlet $outlet, array $attributes): FoodAlchemistOutletSetting
     {
+        // Spec 77a (F3): Einstellungen nur FA-Admin (Inhaber/Admin); ohne angemeldeten Benutzer keine Prüfung
+        app(\Platform\FoodAlchemist\Services\FaRechte::class)->pruefeAngemeldet($team, \Platform\FoodAlchemist\Enums\FaRolle::Admin, 'Betriebs-Einstellungen ändern');
+
         if (! $outlet->isOwnedBy($team)) {
             throw new \RuntimeException('Fremder Betrieb — Override-Pflege nur durchs Besitzer-Team.');
         }
@@ -40,6 +43,9 @@ class OutletSettingsService
      */
     public function setRoleRate(Team $team, FoodAlchemistOutlet $outlet, int $roleId, ?float $rate): FoodAlchemistOutletSetting
     {
+        // Spec 77a (F3): Einstellungen nur FA-Admin (Inhaber/Admin); ohne angemeldeten Benutzer keine Prüfung
+        app(\Platform\FoodAlchemist\Services\FaRechte::class)->pruefeAngemeldet($team, \Platform\FoodAlchemist\Enums\FaRolle::Admin, 'Betriebs-Stundensätze ändern');
+
         if (! $outlet->isOwnedBy($team)) {
             throw new \RuntimeException('Fremder Betrieb — Override-Pflege nur durchs Besitzer-Team.');
         }

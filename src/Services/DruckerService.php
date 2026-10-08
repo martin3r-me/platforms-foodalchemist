@@ -32,6 +32,9 @@ class DruckerService
     /** @param array<string, mixed> $d */
     public function speichern(Team $team, ?int $id, array $d): FoodAlchemistPrinter
     {
+        // Spec 77a (F3): Einstellungen nur FA-Admin (Inhaber/Admin); ohne angemeldeten Benutzer keine Prüfung
+        app(\Platform\FoodAlchemist\Services\FaRechte::class)->pruefeAngemeldet($team, \Platform\FoodAlchemist\Enums\FaRolle::Admin, 'Drucker einrichten');
+
         $p = $id !== null ? FoodAlchemistPrinter::where('team_id', $team->id)->findOrFail($id) : new FoodAlchemistPrinter(['team_id' => $team->id]);
         $name = trim((string) ($d['name'] ?? $p->name ?? ''));
         if ($name === '') {
@@ -79,6 +82,9 @@ class DruckerService
 
     public function loeschen(Team $team, int $id): void
     {
+        // Spec 77a (F3): Einstellungen nur FA-Admin (Inhaber/Admin); ohne angemeldeten Benutzer keine Prüfung
+        app(\Platform\FoodAlchemist\Services\FaRechte::class)->pruefeAngemeldet($team, \Platform\FoodAlchemist\Enums\FaRolle::Admin, 'Drucker löschen');
+
         $p = FoodAlchemistPrinter::where('team_id', $team->id)->findOrFail($id);
         \Platform\FoodAlchemist\Models\FoodAlchemistLabelTemplate::where('team_id', $team->id)->where('printer_id', $p->id)->update(['printer_id' => null]);
         $p->delete();

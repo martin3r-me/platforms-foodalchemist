@@ -213,11 +213,12 @@ trait MitBearbeitungssperre
         return (bool) config('foodalchemist.bearbeitungssperre', true);
     }
 
+    /** Spec 77a: ein Admin-Begriff — FaRechte (Team + Eltern-Kette + Plattform-Admin) statt nur aktuelles Team. */
     private function istTeamAdmin($user): bool
     {
-        $teamId = $user->current_team_id ?? null;
+        $team = $user?->currentTeamRelation;
 
-        return $teamId !== null && DB::table('team_user')->where('team_id', $teamId)->where('user_id', $user->id)
-            ->whereIn('role', ['owner', 'admin'])->exists();
+        return $team !== null && $user instanceof \Platform\Core\Models\User
+            && app(\Platform\FoodAlchemist\Services\FaRechte::class)->darf($user, $team, \Platform\FoodAlchemist\Enums\FaRolle::Admin);
     }
 }

@@ -332,6 +332,9 @@ class TeamSettingsService
 
     public function update(Team $team, array $attributes): FoodAlchemistTeamSetting
     {
+        // Spec 77a (F3): Einstellungen nur FA-Admin (Inhaber/Admin); ohne angemeldeten Benutzer keine Prüfung
+        app(\Platform\FoodAlchemist\Services\FaRechte::class)->pruefeAngemeldet($team, \Platform\FoodAlchemist\Enums\FaRolle::Admin, 'Einstellungen ändern');
+
         $settings = $this->for($team);
         $settings->fill($attributes)->save();
 

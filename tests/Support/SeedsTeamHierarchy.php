@@ -147,14 +147,24 @@ trait SeedsTeamHierarchy
     }
 
     /** User mit current_team_id im gegebenen Team (für UI-/Curate-Gating-Tests, M1-08). */
-    protected function makeUser(Team $team, string $name = 'Tester'): \Platform\Core\Models\User
+    /**
+     * Spec 77a: Rechte kommen aus der Team-Rolle (`team_user`). Der Test-Benutzer ist deshalb
+     * standardmäßig Inhaber seines Teams (wie ein Ein-Personen-Betrieb). Niedrigere Rollen:
+     * 'admin' | 'member' | 'viewer'; null = kein Mitglied (nur für Tests, die genau das prüfen).
+     */
+    protected function makeUser(Team $team, string $name = 'Tester', ?string $rolle = 'owner'): \Platform\Core\Models\User
     {
-        return \Platform\Core\Models\User::forceCreate([
+        $user = \Platform\Core\Models\User::forceCreate([
             'name' => $name,
             'email' => strtolower(str_replace(' ', '.', $name)) . '+' . $team->id . '@test.local',
             'password' => bcrypt('secret'),
             'current_team_id' => $team->id,
         ]);
+        if ($rolle !== null) {
+            \Illuminate\Support\Facades\DB::table('team_user')->insert(['team_id' => $team->id, 'user_id' => $user->id, 'role' => $rolle]);
+        }
+
+        return $user;
     }
 
     protected function makeGp(Team $owner, string $name): FoodAlchemistGp

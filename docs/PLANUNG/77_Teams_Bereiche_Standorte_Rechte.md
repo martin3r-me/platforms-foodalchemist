@@ -119,6 +119,18 @@ Unverändert Spec 61 §12, ergänzt um Sammlung und Schnellstart:
 
 Reihenfolge-Vorschlag: 77a zuerst (Sicherheit, klein), dann 77c (Kernbaustein Standorte) und 77d, 77b zuletzt (Abrechnungs-/Paketfrage).
 
+## Umsetzung 77a (2026-10-08)
+
+- **Prüfstelle:** `FaRechte::pruefeAngemeldet(team, stufe, wofür)` prüft den angemeldeten Benutzer (Web; MCP setzt Core per `auth()->setUser`). Ohne Benutzer (Queue, Kommando) keine Prüfung.
+- **Status-Setter ab Kuratieren:** `OrderService::setStatus` (damit auch Runde/ausgewählte senden und stornieren), Rezept (zusätzlich **nur eigene Rezepte** — geerbte/Master-Rezepte nicht), GP (im Besitzer-Team), Konzept, Format, Angebot, Skizze, Planung, Produktionsauftrag, Lieferant. `updatePayment` bezahlt/strittig ab **Freigeben**.
+- **Einstellungen nur FA-Admin (F3):** Settings-Trait `MitEinstellungsSperre` weist jede Schreibaktion von Nicht-Admins ab (auch bei abgeschalteter Bearbeitungssperre) und zeigt „Nur lesen"; zusätzlich in `TeamSettingsService::update`, `OutletSettingsService`, Etikett-Vorlagen und Druckern (betrifft auch `TeamSettingsPutTool` und Controlling-Kennzahlen-Schwellen). **Operativ bleiben ab Kuratieren:** Lagerartikel/Mindestbestand, Bestellvorlagen, Stellplätze.
+- **MCP-Grundprüfung:** jedes FA-Tool wird beim Registrieren in `FaRechteToolHuelle` gelegt — `read_only = false` braucht Kuratieren. Ausnahme `outlets.SET_ACTIVE` (nur Ansicht). KI-Vorschlags-Tools ohne Speichern (`presentation_designs.GENERATE_CSS`, `planung_leitplanken.EXTRACT`) bleiben für Betrachter gesperrt (verbrauchen KI-Budget).
+- **Leitstellen-Agenten** (KI-Benutzer) melden sich per Bot-Token an und sind über die Team-Einstellungen Mitglied → Kuratieren → dürfen schreiben, nie freigeben. Ein KI-Benutzer **ohne** Team-Mitgliedschaft ist gesperrt (gewollt).
+- **Ein Admin-Begriff:** `MitBearbeitungssperre::istTeamAdmin` liest `FaRechte`.
+- **Test-Helfer:** `makeUser($team, $name, $rolle = 'owner')` legt die Mitgliedschaft mit an (null = kein Mitglied).
+- **Betriebshinweis Wandmonitor:** Das Küchenkonto am Wandmonitor/Tagesplan braucht **mindestens Mitglied** (Kuratieren) — als Betrachter gehen Abhaken und Fertigmelden nicht.
+- **Für 77b vorgemerkt:** Bestellrunde `generateDraftsFromSources`, `deleteRound`, Lagerartikel-Nachfüllung und die übrigen Schreibwege der Oberfläche (z. B. Bestell-Entwurf bearbeiten) ab Kuratieren — konsistent mit `sendRound`.
+
 ## Bewusst nicht
 
 - **Team-Preis je Artikel** (gleicher Artikel, standortabhängige Konditionen) — selten; Einzelfall: eigener Artikel im Unter-Team + Team-Pin. Ansatzpunkt, falls je nötig: zentrale Preisermittlung (`activePriceSubquery`).

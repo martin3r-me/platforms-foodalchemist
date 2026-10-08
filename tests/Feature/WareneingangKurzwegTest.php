@@ -75,8 +75,7 @@ it('„Geliefert" zweimal und „alles übernehmen" zweimal buchen das Lager nic
 });
 
 it('Rechte am alten Weg: Betrachter darf nicht buchen, Mitglied schon — auch per MCP', function () {
-    $leser = $this->makeUser($this->rootTeam, 'Leser');
-    DB::table('team_user')->insert(['team_id' => $this->rootTeam->id, 'user_id' => $leser->id, 'role' => 'viewer']);
+    $leser = $this->makeUser($this->rootTeam, 'Leser', 'viewer');
     $this->actingAs($leser);
     expect(fn () => $this->orders->updateReceiptLine($this->rootTeam, $this->mehlLine->id, 5))->toThrow(FaRechtFehltException::class);
 

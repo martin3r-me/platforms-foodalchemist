@@ -1917,6 +1917,10 @@ class OrderService
 
         if (array_key_exists('payment_status', $input)) {
             $paymentStatus = trim((string) ($input['payment_status'] ?? ''));
+            if (in_array($paymentStatus, ['paid', 'disputed'], true)) {
+                // Spec 77a: bezahlt/strittig ab Freigeben — wie „Rechnung bezahlt" im Rechnungs-Service
+                app(\Platform\FoodAlchemist\Services\FaRechte::class)->pruefeAngemeldet($team, \Platform\FoodAlchemist\Enums\FaRolle::Freigeben, 'Zahlungsstatus bezahlt oder strittig setzen');
+            }
             if ($paymentStatus !== '' && ! in_array($paymentStatus, ['open', 'paid', 'disputed'], true)) {
                 throw new \RuntimeException('Unbekannter Zahlungsstatus. Erlaubt: open, paid, disputed.');
             }
@@ -2218,6 +2222,9 @@ class OrderService
 
     public function setStatus(Team $team, int $orderId, OrderStatus $ziel): FoodAlchemistOrder
     {
+        // Spec 77a: ab Kuratieren (Mitglied); ohne angemeldeten Benutzer (System) keine Prüfung
+        app(\Platform\FoodAlchemist\Services\FaRechte::class)->pruefeAngemeldet($team, \Platform\FoodAlchemist\Enums\FaRolle::Kuratieren, 'Bestellstatus setzen (senden, bestätigen, geliefert, stornieren)');
+
         $order = $this->ownedOrder($team, $orderId);
         $aktuell = $order->status instanceof OrderStatus ? $order->status : OrderStatus::from((string) $order->status);
         if ($aktuell === $ziel) {

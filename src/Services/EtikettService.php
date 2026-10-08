@@ -101,6 +101,9 @@ class EtikettService
     /** @param array<string, mixed> $daten */
     public function speichern(Team $team, ?int $id, array $daten): FoodAlchemistLabelTemplate
     {
+        // Spec 77a (F3): Einstellungen nur FA-Admin (Inhaber/Admin); ohne angemeldeten Benutzer keine Prüfung
+        app(\Platform\FoodAlchemist\Services\FaRechte::class)->pruefeAngemeldet($team, \Platform\FoodAlchemist\Enums\FaRolle::Admin, 'Etikett-Vorlagen ändern');
+
         $v = $id !== null ? FoodAlchemistLabelTemplate::where('team_id', $team->id)->findOrFail($id) : new FoodAlchemistLabelTemplate(['team_id' => $team->id]);
         $typ = (string) ($daten['typ'] ?? $v->typ ?? 'intern');
         if (! in_array($typ, ['intern', 'verkauf'], true)) {
@@ -156,6 +159,9 @@ class EtikettService
 
     public function loeschen(Team $team, int $id): void
     {
+        // Spec 77a (F3): Einstellungen nur FA-Admin (Inhaber/Admin); ohne angemeldeten Benutzer keine Prüfung
+        app(\Platform\FoodAlchemist\Services\FaRechte::class)->pruefeAngemeldet($team, \Platform\FoodAlchemist\Enums\FaRolle::Admin, 'Etikett-Vorlagen löschen');
+
         FoodAlchemistLabelTemplate::where('team_id', $team->id)->findOrFail($id)->delete();
     }
 

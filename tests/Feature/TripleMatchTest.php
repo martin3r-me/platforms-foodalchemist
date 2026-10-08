@@ -98,8 +98,7 @@ it('Rechte: Kuratieren erfasst, aber nur Freigeben gibt frei; Storno setzt die P
     $inv = $this->re->speichern($this->rootTeam, ['supplier_id' => $this->chefs->id, 'invoice_number' => 'RE-902'], $this->koch->id);
     expect(fn () => $this->re->freigeben($this->rootTeam, $inv->id, $this->koch->id))->toThrow(FaRechtFehltException::class, 'Freigeben');
 
-    $buero = $this->makeUser($this->rootTeam, 'Buero');
-    DB::table('team_user')->insert(['team_id' => $this->rootTeam->id, 'user_id' => $buero->id, 'role' => 'member']);
+    $buero = $this->makeUser($this->rootTeam, 'Buero', 'member');
     $this->rechte->setzeFreigabe($this->rootTeam, $this->inhaber, $buero->id, true);
     $this->re->freigeben($this->rootTeam, $inv->id, $buero->id);
     expect((float) $this->zuckerLine->refresh()->invoice_qty_packs)->toBe(2.0);

@@ -37,7 +37,7 @@ beforeEach(function () {
     // render() liest currentTeamRelation; der Nachzieh-Befehl zusätzlich die Mitglieder-
     // Tabelle (D1-Gate) — makeUser setzt nur current_team_id, die Mitgliedschaft muss dazu.
     $nutzer = $this->makeUser($this->rootTeam, 'Root User');
-    $this->rootTeam->users()->attach($nutzer->id, ['role' => 'owner']);
+    $this->rootTeam->users()->syncWithoutDetaching([$nutzer->id => ['role' => 'owner']]);   // makeUser legt Mitgliedschaft schon an (Spec 77a)
     $this->actingAs($nutzer);
     $this->svc = app(RecipeService::class);
     $this->g = FoodAlchemistVocabEinheit::firstOrCreate(

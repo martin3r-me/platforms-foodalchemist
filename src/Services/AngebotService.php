@@ -105,6 +105,9 @@ class AngebotService
 
     public function setStatus(Team $team, int $id, string $status): FoodAlchemistAngebot
     {
+        // Spec 77a: ab Kuratieren (Mitglied); ohne angemeldeten Benutzer (System) keine Prüfung
+        app(\Platform\FoodAlchemist\Services\FaRechte::class)->pruefeAngemeldet($team, \Platform\FoodAlchemist\Enums\FaRolle::Kuratieren, 'Angebots-Status setzen');
+
         if (AngebotStatus::tryFrom($status) === null) {
             throw new \RuntimeException('Unbekannter Status.');
         }

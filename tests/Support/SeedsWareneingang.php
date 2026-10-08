@@ -31,11 +31,9 @@ trait SeedsWareneingang
         $this->svc = app(WareneingangService::class);
         $this->rechte = app(FaRechte::class);
 
-        $this->inhaber = $this->makeUser($this->rootTeam, 'Inhaber');
-        DB::table('team_user')->insert(['team_id' => $t, 'user_id' => $this->inhaber->id, 'role' => 'owner']);
+        $this->inhaber = $this->makeUser($this->rootTeam, 'Inhaber', 'owner');
         // Mitglied = Kuratieren, der Normalfall „Küche bucht Lieferschein"
-        $this->koch = $this->makeUser($this->rootTeam, 'Koch');
-        DB::table('team_user')->insert(['team_id' => $t, 'user_id' => $this->koch->id, 'role' => 'member']);
+        $this->koch = $this->makeUser($this->rootTeam, 'Koch', 'member');
 
         $this->la = [];
         $mk = function (string $name, string $lieferant, float $preis) use ($t) {

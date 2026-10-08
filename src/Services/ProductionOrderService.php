@@ -771,6 +771,9 @@ class ProductionOrderService
 
     public function setStatus(Team $team, int $orderId, ProductionOrderStatus $ziel, array $options = []): FoodAlchemistProductionOrder
     {
+        // Spec 77a: ab Kuratieren (Mitglied); ohne angemeldeten Benutzer (System) keine Prüfung
+        app(\Platform\FoodAlchemist\Services\FaRechte::class)->pruefeAngemeldet($team, \Platform\FoodAlchemist\Enums\FaRolle::Kuratieren, 'Produktionsauftrag-Status setzen');
+
         return DB::transaction(function () use ($team, $orderId, $ziel, $options) {
             $order = $this->ownedOrder($team, $orderId);
             $procurementCancellation = null;
