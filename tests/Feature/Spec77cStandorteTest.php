@@ -121,6 +121,12 @@ it('Oberfläche: Standort-Spalte nur bei Brille „alle"; Betrieb je Standort in
     Livewire::test(LagerIndex::class)->assertDontSeeHtml('data-standort');
     $this->standorte->setzeBrille($this->rootTeam, 'alle');
     Livewire::test(LagerIndex::class)->assertSeeHtml('data-standort')->assertSee('Kind A');
+    // Wareneingang, Rechnungen, Bestellungen, Produktion rendern mit Standort-Spalte (Blade-Fallen @php)
+    $this->orders->setStatus($this->childA, $this->bestellungA->id, \Platform\FoodAlchemist\Enums\OrderStatus::Sent);
+    Livewire::test(\Platform\FoodAlchemist\Livewire\Wareneingang\Index::class)->assertSeeHtml('data-standort')->assertSee('Kind A');
+    Livewire::test(\Platform\FoodAlchemist\Livewire\Wareneingang\Rechnungen::class)->assertOk();
+    Livewire::test(\Platform\FoodAlchemist\Livewire\Orders\Index::class)->assertSeeHtml('data-standort');
+    Livewire::test(\Platform\FoodAlchemist\Livewire\Produktion\Browser::class)->assertOk();
 
     Livewire::test(Betriebe::class)
         ->assertSeeHtml('data-standort-betrieb="'.$this->childA->id.'"')

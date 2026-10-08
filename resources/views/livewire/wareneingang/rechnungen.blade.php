@@ -123,7 +123,9 @@
                                 </td>
                             </tr>
                             @if($detail !== null && $detail['id'] === $r['id'])
-                                @php $detailEigen = (int) ($detail['team_id'] ?? $teamId) === $teamId; $dE = $darfErfassen && $detailEigen; $dF = $darfFreigeben && $detailEigen; @endphp
+                                @php($detailEigen = (int) ($detail['team_id'] ?? $teamId) === $teamId)
+                                @php($dE = $darfErfassen && $detailEigen)
+                                @php($dF = $darfFreigeben && $detailEigen)
                                 <tr wire:key="re-d-{{ $r['id'] }}" data-re-detail="{{ $r['id'] }}">
                                     <td colspan="{{ $standortSpalte ? 8 : 7 }}" class="bg-[var(--fa-ground)]">
                                         <div class="flex flex-col gap-3 py-2">

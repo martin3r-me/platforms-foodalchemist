@@ -243,7 +243,7 @@
                                         <td class="text-right"><x-fa::money :value="$n['wert_net']" /></td>
                                         <td><x-fa::badge :tone="$statusTon[$n['status']] ?? 'neutral'">{{ $n['status_label'] }}</x-fa::badge></td>
                                         <td class="text-right whitespace-nowrap" onclick="event.stopPropagation()">
-                                            @php $eigenerBeleg = (int) ($n['team_id'] ?? $teamId) === $teamId; @endphp
+                                            @php($eigenerBeleg = (int) ($n['team_id'] ?? $teamId) === $teamId)
                                             @if(! $eigenerBeleg)
                                                 <span class="{{ $leise }}">nur lesend</span>
                                             @elseif($darf && $n['status'] === 'entwurf')
