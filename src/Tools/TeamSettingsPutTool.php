@@ -25,7 +25,7 @@ use Platform\FoodAlchemist\Services\TeamSettingsService;
 class TeamSettingsPutTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
 {
     /** Boolean-Schalter. */
-    private const BOOL_KEYS = ['ai_active', 'show_fallback_chain', 'trend_auto_enabled', 'trend_signal_enabled', 'trend_dataforseo_enabled', 'voice_agent_dauerhaft_aktiv', 'voice_agent_panel_planung', 'voice_tts_vorlesen'];
+    private const BOOL_KEYS = ['ai_active', 'show_fallback_chain', 'trend_dataforseo_enabled', 'voice_agent_dauerhaft_aktiv', 'voice_agent_panel_planung', 'voice_tts_vorlesen'];
 
     /** Numerische Skalare (float, ≥ 0). */
     private const NUM_KEYS = [
@@ -36,7 +36,7 @@ class TeamSettingsPutTool extends FoodAlchemistTool implements ToolContract, Too
     ];
 
     /** Ganzzahlige Skalare (≥ 0). */
-    private const INT_KEYS = ['trend_auto_limit', 'trend_dataforseo_connection_id'];
+    private const INT_KEYS = ['trend_dataforseo_connection_id'];
 
     /** Enum-Felder → erlaubte Werte. */
     private const ENUM_KEYS = [
@@ -57,7 +57,7 @@ class TeamSettingsPutTool extends FoodAlchemistTool implements ToolContract, Too
     public function getDescription(): string
     {
         return 'Schreibt Team-Einstellungen (nur eigene Team-Zeile): Ki-Kill-Switch, Küchen-Typ, '
-            . 'Ziel-Wareneinsatz-%, Stundensatz/Marge/Zuschläge, Topf-Deckel-Defaults, Trendradar-Automatik, '
+            . 'Ziel-Wareneinsatz-%, Stundensatz/Marge/Zuschläge, Topf-Deckel-Defaults, Trendradar (Google Trends/DataForSEO), '
             . 'Einkaufsjournal-Trigger, Garverlust-/Putzverlust-Defaults, Standard-Preisklasse (team-scoped geprüft), '
             . 'Sprachbefehl-Agenten-Modus + dauerhaft-aktiv-Schalter + Vorlesen/Stimme. '
             . 'Nur die im Schema gelisteten Keys sind erlaubt; unbekannte Keys werden abgewiesen. '
@@ -90,9 +90,6 @@ class TeamSettingsPutTool extends FoodAlchemistTool implements ToolContract, Too
                         'default_batch_max_pieces' => ['type' => 'number', 'description' => 'Standard-Topf-Deckel je Koch-Vorgang (Stück).'],
                         'default_markup_class_id' => ['type' => 'integer', 'description' => 'ID der Standard-Aufschlagsklasse (team-scoped geprüft).'],
                         'show_fallback_chain' => ['type' => 'boolean', 'description' => 'Ausweich-Kette (Lead-LA) anzeigen.'],
-                        'trend_auto_enabled' => ['type' => 'boolean', 'description' => 'Trendradar-Konzept-Automatik an/aus.'],
-                        'trend_auto_limit' => ['type' => 'integer', 'description' => 'Anzahl Top-Trends je Automatik-Lauf.'],
-                        'trend_signal_enabled' => ['type' => 'boolean', 'description' => 'Trend-Vorschlag als Signal in die Inbox.'],
                         'trend_dataforseo_enabled' => ['type' => 'boolean', 'description' => 'Spec 79: wöchentliche Google-Trends-Messung über DataForSEO an/aus (kostet je Abfrage).'],
                         'trend_dataforseo_budget_usd' => ['type' => 'number', 'description' => 'Spec 79: Monatsbudget Google Trends in USD (Standard 5).'],
                         'trend_dataforseo_connection_id' => ['type' => 'integer', 'description' => 'Spec 79: DataForSEO-Verbindung (Integrationen); 0 = automatisch die des Teams.'],

@@ -316,7 +316,7 @@ class Browser extends Component
      * ein Soft-Delete ließe die Zeilen liegen und verfehlte genau das. Kein Undo.
      *
      * Was mitgeht:
-     *  - Aliase, Bindungen und trend_meta hängen per FK `cascadeOnDelete` am Dokument → die
+     *  - Aliase und Bindungen hängen per FK `cascadeOnDelete` am Dokument → die
      *    DB räumt sie mit. Neu hinzukommende Kind-Tabellen fallen automatisch mit, solange sie
      *    denselben FK deklarieren (kein zu pflegender Hand-Delete-Katalog).
      *  - Der Semantik-Index (Core `core_embeddings`) hat KEINEN FK → wird über die Core-API

@@ -128,19 +128,13 @@ class GenerateConceptJob implements ShouldQueue
             // ohne LLM/Slots bleibt es beim Konzept — der Run geht dann direkt auf review.
             if ($this->cascadeStepId !== null && in_array($this->creativeMode, ['voll_kreativ', 'hybrid'], true)) {
                 try {
-                    // Ursprungs-Trend der Planung (falls vorhanden) fließt in die Erfindungs-Divergenz.
-                    $trendDocId = null;
-                    if ($this->planningSessionId !== null) {
-                        $sess = app(\Platform\FoodAlchemist\Services\PlanningSessionService::class)->get($team, $this->planningSessionId);
-                        $trendDocId = $sess?->source_knowledge_document_id !== null ? (int) $sess->source_knowledge_document_id : null;
-                    }
+                    // Die Planung (mit ihrem Trendradar-Ursprung, Spec 79) fließt über planning_session_id in die Divergenz.
                     $step = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep::find($this->cascadeStepId);
                     if ((bool) ($step?->run?->staged ?? false)) {
                         // Gestuft (Gate pro Ebene): NICHT jetzt fächern — die Freigabe des Concept-Steps
                         // startet den Gericht-Fan-out ({@see FanoutConceptJob}). Args am Step ablegen.
                         $step?->update(['deferred' => ['fanout' => [
                             'mode' => $this->creativeMode,
-                            'trend_doc_id' => $trendDocId,
                             'planning_session_id' => $this->planningSessionId,
                         ]]]);
                     } else {
@@ -148,7 +142,7 @@ class GenerateConceptJob implements ShouldQueue
                         // die Phase muss darum hier gesetzt werden, nicht erst im (hier nicht durchlaufenen) Worker.
                         $this->fortschritt('Skizzen werden erfunden …');
                         app(\Platform\FoodAlchemist\Services\PlanningCascadeService::class)
-                            ->fanoutConceptInvention($team, $this->cascadeStepId, (int) $concept->id, $this->creativeMode, $trendDocId, $this->planningSessionId);
+                            ->fanoutConceptInvention($team, $this->cascadeStepId, (int) $concept->id, $this->creativeMode, $this->planningSessionId);
                     }
                 } catch (\Throwable) {
                     // Fan-out-Fehler darf das erzeugte Konzept nicht kippen.

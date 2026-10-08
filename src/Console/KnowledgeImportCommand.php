@@ -45,8 +45,7 @@ class KnowledgeImportCommand extends Command
         // #469-Erweiterung: operatives Prosa-Wissen. Weiterbildung/Literatur/Marktstudien bewusst NICHT (Referenz-Material).
         $stats['regelwerk'] = $this->importOrdner("{$vault}/07.01_Lebensmittel_und_Gastronomie/Regelwerke", 'regelwerk', $dryRun, slugPrefix: 'regelwerk.', force: $force);
         $stats['niveau'] = $this->importOrdner("{$vault}/07.01_Lebensmittel_und_Gastronomie/Niveau_System", 'niveau', $dryRun, slugPrefix: 'niveau.', force: $force);
-        // Trends nur food-basiert — Tech/Automatisierung bewusst NICHT (Dominique 2026-07-11).
-        $stats['trend'] = $this->importOrdner("{$vault}/07.03_Trend_Scouting", 'trend', $dryRun, slugPrefix: 'trend.', recursive: true, excludeDirs: ['Food_Tech_&_Automatisierung'], force: $force);
+        // Trends kommen seit Spec 79 nicht mehr aus dem Vault (07.03_Trend_Scouting), sondern aus dem Trendradar-Modul.
         // #505: MCP-Orchestrierungs-Workflows (fa.*) — searchbar, NICHT always-geroutet (kein seedRoutings-Eintrag).
         $stats['workflow'] = $this->importOrdner("{$vault}/07.01_Lebensmittel_und_Gastronomie/Workflows", 'workflow', $dryRun, slugPrefix: 'workflow.', force: $force);
         // Spec 08 P6: Concepting-Handwerk (Dramaturgie/Gang-Aufbau/Anlass-Fit) für die Planungs-Ebene.

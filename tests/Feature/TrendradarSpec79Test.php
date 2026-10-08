@@ -491,3 +491,39 @@ it('Trendradar → Planung: „In Planung öffnen" legt die Session an und sprin
         ->and($res->data['source_trend_refs'])->toBe(['trend_ids' => [$trend->id], 'fundstueck_ids' => [$fund->id]])
         ->and($res->data['brief'])->toContain('Inspiration: Labneh-Bowl');
 });
+
+// ── Rückbau Alt-Pfad (Vault-Dossiers + Clustering) ─────────────────────────
+
+it('Concept-Erfindung bekommt den Ursprung aus der Trendradar-Kombination der Planung', function () {
+    $trend = $this->svc->anlegen($this->rootTeam, ['name' => 'Fermentation', 'typ' => 'trend', 'ebene' => 'konsum', 'kategorie' => 'food']);
+    $fund = $this->svc->fundstueckAblegen($this->rootTeam, ['titel' => 'Koji-Butter']);
+    $session = app(\Platform\FoodAlchemist\Services\PlanningSessionService::class)->ausTrendradar($this->rootTeam, [$trend->id], [$fund->id]);
+    $frei = app(\Platform\FoodAlchemist\Services\PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Frei']);
+
+    $m = new ReflectionMethod(\Platform\FoodAlchemist\Services\IdeenService::class, 'ursprungsTrendBlock');
+    $block = $m->invoke(app(\Platform\FoodAlchemist\Services\IdeenService::class), $this->rootTeam, (int) $session->id);
+    expect($block)->toStartWith('# URSPRUNG AUS DEM TRENDRADAR')
+        ->and($block)->toContain('Trend (Konsum-/Branchentrend, Food): Fermentation')
+        ->and($block)->toContain('Inspiration: Koji-Butter')
+        ->and($m->invoke(app(\Platform\FoodAlchemist\Services\IdeenService::class), $this->rootTeam, (int) $frei->id))->toBeNull();
+});
+
+it('Rückbau-Migration: alte Trend-Dossiers inaktiv, trend-Routing gelöscht, Cluster-Tabellen weg', function () {
+    $docId = \Illuminate\Support\Facades\DB::table('foodalchemist_knowledge_documents')->insertGetId([
+        'uuid' => (string) \Illuminate\Support\Str::uuid(), 'team_id' => null, 'slug' => 'trend.alt', 'title' => 'Alter Trend',
+        'category' => 'trend', 'content_md' => 'x', 'char_count' => 1, 'content_hash' => hash('sha256', 'x'), 'version' => 1,
+        'active' => 1, 'created_at' => now(), 'updated_at' => now(),
+    ]);
+    \Illuminate\Support\Facades\DB::table('foodalchemist_knowledge_routings')->insertOrIgnore([
+        'feature' => 'foodbook.plan', 'category' => 'trend', 'mode' => 'discovery', 'max_docs' => 5, 'created_at' => now(), 'updated_at' => now(),
+    ]);
+
+    $migration = require __DIR__.'/../../database/migrations/2026_10_10_100200_retire_legacy_trend_knowledge.php';
+    $migration->up();
+
+    expect((int) \Illuminate\Support\Facades\DB::table('foodalchemist_knowledge_documents')->where('id', $docId)->value('active'))->toBe(0)
+        ->and(\Illuminate\Support\Facades\DB::table('foodalchemist_knowledge_routings')->where('category', 'trend')->count())->toBe(0)
+        ->and(\Illuminate\Support\Facades\Schema::hasTable('foodalchemist_trend_meta'))->toBeFalse()
+        ->and(\Illuminate\Support\Facades\Schema::hasTable('foodalchemist_trend_taxonomy'))->toBeFalse()
+        ->and(app(\Platform\Core\Tools\ToolRegistry::class)->has('foodalchemist.trendradar.IMPORT'))->toBeFalse();
+});

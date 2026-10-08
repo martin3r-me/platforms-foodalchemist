@@ -135,8 +135,6 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 \Platform\FoodAlchemist\Console\AllergenLaVorrangCommand::class,
                 \Platform\FoodAlchemist\Console\SeedRebateTiersCommand::class,
                 \Platform\FoodAlchemist\Console\StepsBackfillCommand::class,
-                \Platform\FoodAlchemist\Console\TrendClusterCommand::class,
-                \Platform\FoodAlchemist\Console\TrendKonzepteCommand::class,
                 \Platform\FoodAlchemist\Console\TrendsMessenCommand::class,      // Spec 79
                 \Platform\FoodAlchemist\Console\TrendsStartbestandCommand::class, // Spec 79
                 \Platform\FoodAlchemist\Console\AnchorsTranslateCsvCommand::class,
@@ -251,17 +249,6 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 ->onOneServer()
                 ->runInBackground()
                 ->description('FoodAlchemist: Speiseplan-Aushänge auf die laufende Woche neu einfrieren');
-
-            // Trendradar-Automatisierung: NUR wenn explizit eingeschaltet (Default aus) —
-            // der Lauf ruft das Modell pro Trend/Team und gibt sonst ungefragt Provider-Geld aus.
-            if (config('foodalchemist.scheduler.trend_konzepte_enabled', false)) {
-                $schedule->command(\Platform\FoodAlchemist\Console\TrendKonzepteCommand::class)
-                    ->dailyAt(config('foodalchemist.scheduler.trend_konzepte_zeit', '08:00'))
-                    ->withoutOverlapping()
-                    ->onOneServer()
-                    ->runInBackground()
-                    ->description('FoodAlchemist: Trendradar → tägliche Konzeptvorschläge aus Top-Trends');
-            }
 
             // Spec 79: wöchentliche Google-Trends-Messung — nur Teams mit trend_dataforseo_enabled, Budget-Stopp je Team.
             if (config('foodalchemist.scheduler.trends_messen_enabled', true)) {
@@ -791,13 +778,12 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\KnowledgeImportTool::class,
                     \Platform\FoodAlchemist\Tools\KnowledgeEmbedStatusTool::class,
                     // D12: Wissen-Löschen/Alias (3 neue Service-Methoden) + Canvas-Einträge + Controlling
-                    // + Trendradar + Präsentations-Designs. match_proposals.RESOLVE = bereits match_proposals.PUT.
+                    // + Präsentations-Designs. match_proposals.RESOLVE = bereits match_proposals.PUT.
                     \Platform\FoodAlchemist\Tools\KnowledgeDeleteTool::class,
                     \Platform\FoodAlchemist\Tools\KnowledgeAliasTool::class,
                     \Platform\FoodAlchemist\Tools\CanvasEntryAddTool::class,
                     \Platform\FoodAlchemist\Tools\CanvasEntryRemoveTool::class,
                     \Platform\FoodAlchemist\Tools\SalesFactsMapTool::class,
-                    \Platform\FoodAlchemist\Tools\TrendradarImportTool::class,
                     // Spec 79 · Trendradar nach Sarah Spork
                     \Platform\FoodAlchemist\Tools\TrendsGetTool::class,
                     \Platform\FoodAlchemist\Tools\TrendsPostTool::class,

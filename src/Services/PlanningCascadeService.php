@@ -311,15 +311,10 @@ class PlanningCascadeService
         // GenerateConceptJob. Ohne Erfindung bleibt es beim geprüften Konzept (Slots wie geplant).
         $erfindet = in_array($creativeMode, ['voll_kreativ', 'hybrid'], true);
         if ($erfindet) {
-            // Ursprungs-Trend der Planung (falls vorhanden) fließt in die spätere Erfindungs-Divergenz.
-            $trendDocId = null;
-            if ($planningSessionId !== null) {
-                $sess = app(PlanningSessionService::class)->get($team, $planningSessionId);
-                $trendDocId = $sess?->source_knowledge_document_id !== null ? (int) $sess->source_knowledge_document_id : null;
-            }
+            // Die Planung (und damit ihr Trendradar-Ursprung, Spec 79) fließt über planning_session_id in die
+            // spätere Erfindungs-Divergenz ({@see IdeenService::kiDivergenzConcept}).
             $step->update(['deferred' => ['fanout' => [
                 'mode' => $creativeMode,
-                'trend_doc_id' => $trendDocId,
                 'planning_session_id' => $planningSessionId,
             ]]]);
         }
@@ -1292,7 +1287,7 @@ class PlanningCascadeService
      * Graceful: ohne LLM (Sandbox/Kill-Switch) wirft die Divergenz → 0 Ideen, 0 Kind-Steps; der Run geht
      * mit dem Konzept allein auf review. Wirft NIE (der Concept-Job fängt zusätzlich ab).
      */
-    public function fanoutConceptInvention(Team $team, int $conceptStepId, int $conceptId, string $mode, ?int $trendDocId = null, ?int $planningSessionId = null, array $seen = []): void
+    public function fanoutConceptInvention(Team $team, int $conceptStepId, int $conceptId, string $mode, ?int $planningSessionId = null, array $seen = []): void
     {
         $conceptStep = FoodAlchemistCascadeRunStep::find($conceptStepId);
         if ($conceptStep === null) {
@@ -1336,7 +1331,7 @@ class PlanningCascadeService
             $ideenFehler = null;
             try {
                 // Wissen+Trend fließen in die Divergenz (voller Stack + generischer Trend + Ursprungs-Trend der Planung).
-                $div = app(IdeenService::class)->kiDivergenzConcept($team, $conceptId, $leere->count(), null, $trendDocId);
+                $div = app(IdeenService::class)->kiDivergenzConcept($team, $conceptId, $leere->count(), null, $planningSessionId);
                 $ideen = is_array($div['angelegt'] ?? null) ? $div['angelegt'] : [];
             } catch (\Platform\FoodAlchemist\Services\Ai\KnowledgeBudgetExceeded $e) {
                 $ideen = [];
@@ -1408,7 +1403,7 @@ class PlanningCascadeService
             ->whereNotNull('embedded_concept_id')
             ->pluck('embedded_concept_id')->unique()->values();
         foreach ($paketIds as $paketId) {
-            $this->fanoutConceptInvention($team, $conceptStepId, (int) $paketId, $mode, $trendDocId, $planningSessionId, $seen);
+            $this->fanoutConceptInvention($team, $conceptStepId, (int) $paketId, $mode, $planningSessionId, $seen);
         }
     }
 
@@ -1486,7 +1481,7 @@ class PlanningCascadeService
                 'materialized_ref' => ['concept_slot_id' => $slotId, 'recipe_id' => (int) $recipe->id],
                 'source_meta' => array_merge($idee->source_meta ?? [], ['erdung' => 'ki_generiert', 'original_titel' => (string) $idee->title]),
             ]);
-            // Trend-Herkunft aufs erfundene Rezept durchreichen (source_knowledge_document_id + created_via=plan_go).
+            // Lineage aufs erfundene Rezept (created_via=plan_go); die Trendradar-Herkunft steht an der Session.
             if ($planningSessionId !== null) {
                 $sess = app(PlanningSessionService::class)->get($team, $planningSessionId);
                 if ($sess !== null) {

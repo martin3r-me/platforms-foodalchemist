@@ -16,7 +16,7 @@ use Platform\FoodAlchemist\Services\PlanningCascadeService;
 /**
  * Gestufte Kaskade: startet den Gericht-Fan-out eines Concepts NACH dessen Freigabe.
  *
- * Der Concept-Step trägt die aufgeschobenen Fan-out-Args in `deferred.fanout` (mode/trend_doc_id/
+ * Der Concept-Step trägt die aufgeschobenen Fan-out-Args in `deferred.fanout` (mode/
  * planning_session_id). Die LLM-Divergenz ({@see PlanningCascadeService::fanoutConceptInvention})
  * läuft hier im Worker (nicht im Web-Request der Freigabe). Danach Run-Status neu bestimmen.
  */
@@ -59,7 +59,6 @@ class FanoutConceptJob implements ShouldQueue
 
         $d = is_array($step->deferred['fanout'] ?? null) ? $step->deferred['fanout'] : [];
         $mode = (string) ($d['mode'] ?? 'voll_kreativ');
-        $trendDocId = isset($d['trend_doc_id']) ? (int) $d['trend_doc_id'] : null;
         $planningSessionId = isset($d['planning_session_id']) ? (int) $d['planning_session_id'] : null;
 
         // Spec 53 / Paket C-Nachtrag: Phase sichtbar machen, solange der Fan-out läuft — der Step
@@ -67,7 +66,7 @@ class FanoutConceptJob implements ShouldQueue
         // hier keinerlei Aktivität zwischen Freigabe und den ersten sichtbaren Kind-Steps.
         $cascade->setzePhase((int) $step->id, 'Skizzen werden erfunden …');
         try {
-            $cascade->fanoutConceptInvention($team, (int) $step->id, (int) $step->ref_id, $mode, $trendDocId, $planningSessionId);
+            $cascade->fanoutConceptInvention($team, (int) $step->id, (int) $step->ref_id, $mode, $planningSessionId);
         } finally {
             $step->update(['deferred' => null]);
             // Phase IMMER loeschen, bevor recomputeRunStatus() den Run ggf. auf done setzt — sonst

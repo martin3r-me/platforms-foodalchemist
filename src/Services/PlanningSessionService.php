@@ -2,14 +2,10 @@
 
 namespace Platform\FoodAlchemist\Services;
 
-use Illuminate\Support\Facades\DB;
 use Platform\Core\Models\Team;
-use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistDishIdea;
 use Platform\FoodAlchemist\Models\FoodAlchemistPlanningSession;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
-use Platform\FoodAlchemist\Services\Ai\KnowledgeContextService;
-use Platform\FoodAlchemist\Support\TeamScope;
 use RuntimeException;
 
 /**
@@ -44,7 +40,6 @@ class PlanningSessionService
             'title' => $title,
             'brief' => $this->clean($in['brief'] ?? null),
             'analysis' => $this->clean($in['analysis'] ?? null),
-            'source_knowledge_document_id' => isset($in['source_knowledge_document_id']) ? (int) $in['source_knowledge_document_id'] : null,
             'source_trend_refs' => $in['source_trend_refs'] ?? null,
             'creative_mode' => in_array($mode, FoodAlchemistPlanningSession::CREATIVE_MODES, true) ? $mode : 'voll_kreativ',
             'status' => 'divergenz',
@@ -57,7 +52,7 @@ class PlanningSessionService
 
     /**
      * Spec 79 · Planung aus dem Trendradar: Session aus einer KOMBINATION von Trends, Hypes und Fundstücken
-     * (Inspiration). Der Brief entsteht deterministisch (keine KI) im selben Muster wie {@see ausTrend},
+     * (Inspiration). Der Brief entsteht deterministisch (keine KI) im festen Zeilenmuster,
      * damit {@see briefFuerScope} den Lead je Ebene schärft; die Belege wandern in die Analyse.
      *
      * @param  list<int>  $trendIds
@@ -155,71 +150,6 @@ class PlanningSessionService
     }
 
     /**
-     * Session aus einem Trend eröffnen — der Trend-Kontext wandert mit: Titel, ein Start-Brief,
-     * und der Trend-Inhalt als Analyse-Text (der User liest/plant daran). Setzt die Herkunft
-     * (`source_knowledge_document_id`), die beim „Go" an die Artefakte durchgereicht wird.
-     */
-    public function ausTrend(Team $team, int $knowledgeDocumentId): FoodAlchemistPlanningSession
-    {
-        $doc = TeamScope::applyVisible(
-            DB::table('foodalchemist_knowledge_documents')
-                ->where('category', 'trend')->where('active', 1)->whereNull('deleted_at'),
-            'team_id', $team
-        )->where('id', $knowledgeDocumentId)->first(['id', 'title', 'content_md']);
-
-        if ($doc === null) {
-            throw new RuntimeException('Trend nicht gefunden oder nicht sichtbar.');
-        }
-
-        $fm = app(KnowledgeContextService::class)->frontmatterOf((string) $doc->content_md);
-        $body = $this->bodyAuszug((string) $doc->content_md, 1200);
-        $quellen = is_array($fm['quellen'] ?? null) ? implode("\n", array_map(fn ($q) => '- ' . $q, $fm['quellen'])) : '';
-
-        $analyse = trim($body . ($quellen !== '' ? "\n\nQuellen:\n" . $quellen : ''));
-
-        // Strukturiertes Trend-Signal (Kategorie/Klasse) — denormalisiert je Doc in trend_meta.
-        // #71: NUR reviewte (`approved`) Cluster-Zuordnung fließt in den Brief. Eine `tentative`
-        // (Auto-Cluster, noch nicht Review-freigegeben) wird ignoriert → `briefAusTrend` fällt auf
-        // den neutralen Platzhalter zurück, statt auf einer unbestätigten Einordnung zu briefen.
-        $meta = DB::table('foodalchemist_trend_meta')
-            ->where('knowledge_document_id', (int) $doc->id)
-            ->where('status', 'approved')
-            ->first(['category', 'trend_class']);
-
-        return $this->create($team, [
-            'title' => (string) $doc->title,
-            'brief' => $this->briefAusTrend($team, (string) $doc->title, (string) $doc->content_md, $meta),
-            'analysis' => $analyse,
-            'source_knowledge_document_id' => (int) $doc->id,
-            'created_via' => 'trend',
-        ]);
-    }
-
-    /**
-     * Substantiver Start-Brief aus dem strukturierten Trend-Signal — deterministisch, KEINE Erfindung.
-     * Statt des generischen Einzeilers fließen (a) die Einordnung (Kategorie › Klasse aus
-     * {@see foodalchemist_trend_meta}) und (b) die Kernaussage (erster Prosa-Absatz des Trend-Bodys)
-     * in den Brief, damit das Trendradar-Signal die Generierung wirklich erreicht. Fehlt beides
-     * (kein geclustertes Meta + leerer Body), bleibt der Brief byte-identisch zum alten Platzhalter.
-     */
-    private function briefAusTrend(Team $team, string $title, string $md, ?object $meta): string
-    {
-        $zeilen = ['Aus diesem Food-Trend ein ' . self::TREND_NOMEN_AGNOSTISCH . " entwickeln: {$title}."];
-
-        $einordnung = $this->trendEinordnung($team, $meta);
-        if ($einordnung !== '') {
-            $zeilen[] = 'Einordnung: ' . $einordnung . '.';
-        }
-
-        $kern = $this->bodyLead($md, 320);
-        if ($kern !== '') {
-            $zeilen[] = 'Kernaussage: ' . $kern;
-        }
-
-        return implode("\n", $zeilen);
-    }
-
-    /**
      * Ebenen-spezifische Fassung eines (scope-agnostisch gebauten) Trend-Briefs: ersetzt im Lead
      * »ein Konzept/Gericht/Basisrezept entwickeln« das Nomen durch das der Ziel-Ebene
      * (rezept→Basisrezept, gericht→Gericht, concept→Konzept). Nur der Lead wird berührt —
@@ -244,66 +174,6 @@ class PlanningSessionService
         }
 
         return substr_replace($brief, 'ein ' . $nomen . ' entwickeln', $pos, strlen($agnostisch));
-    }
-
-    /**
-     * Einordnung »Kategorie › Klasse« aus dem geclusterten Trend-Meta. Das Kategorie-Label kommt aus
-     * der Taxonomie ({@see foodalchemist_trend_taxonomy}) — einzige Wahrheit, kein hartcodierter Katalog;
-     * die Klasse trägt in `trend_class` bereits das lesbare Label (TrendClusterCommand). Leer, wenn nichts
-     * zugeordnet ist.
-     */
-    private function trendEinordnung(Team $team, ?object $meta): string
-    {
-        if ($meta === null) {
-            return '';
-        }
-
-        $kategorie = $this->kategorieLabel($team, trim((string) ($meta->category ?? '')));
-        $klasse = trim((string) ($meta->trend_class ?? ''));
-
-        if ($kategorie !== '' && $klasse !== '') {
-            return $kategorie . ' › ' . $klasse;
-        }
-
-        return $kategorie !== '' ? $kategorie : $klasse;
-    }
-
-    /** Kategorie-Slug → lesbares Label aus der Taxonomie-Kategoriezeile (global). Fallback: der Slug selbst. */
-    private function kategorieLabel(Team $team, string $slug): string
-    {
-        if ($slug === '') {
-            return '';
-        }
-        $label = DB::table('foodalchemist_trend_taxonomy')
-            ->whereNull('deleted_at')->where('active', 1)
-            ->where('category', $slug)->whereNull('trend_class')
-            ->where(fn ($q) => $q->whereNull('team_id')->orWhere('team_id', $team->id))
-            ->orderByRaw('team_id IS NULL')   // team-eigene Zeile vor der globalen
-            ->value('description');
-
-        return trim((string) ($label ?? '')) !== '' ? trim((string) $label) : $slug;
-    }
-
-    /** Erster Prosa-Absatz des Bodys (ohne Frontmatter/Überschriften/Listen-Marker), auf ~$max Zeichen. */
-    private function bodyLead(string $md, int $max): string
-    {
-        $body = trim($this->strippeFrontmatter($md));
-        foreach (preg_split('/\R{2,}/u', $body) ?: [] as $absatz) {
-            $absatz = trim((string) $absatz);
-            if ($absatz === '' || str_starts_with($absatz, '#')) {
-                continue;                          // Leerblock / Überschrift überspringen
-            }
-            // führenden Listen-/Zitat-Marker glätten, interne Zeilenumbrüche zu einem Satz ziehen
-            $absatz = trim((string) preg_replace('/^\s*[>*\-+]\s+/u', '', $absatz));
-            $absatz = trim((string) preg_replace('/\s+/u', ' ', $absatz));
-            if ($absatz === '') {
-                continue;
-            }
-
-            return mb_strlen($absatz) > $max ? rtrim(mb_substr($absatz, 0, $max)) . '…' : $absatz;
-        }
-
-        return '';
     }
 
     public function update(Team $team, int $id, array $in): FoodAlchemistPlanningSession
@@ -438,13 +308,8 @@ class PlanningSessionService
      */
     public function verknuepfeArtefakt(FoodAlchemistPlanningSession $session, string $art, int $artefaktId, ?int $ideaId = null): void
     {
-        $trendId = $session->source_knowledge_document_id;
-
         if ($art === 'recipe') {
-            FoodAlchemistRecipe::whereKey($artefaktId)->update([
-                'source_knowledge_document_id' => $trendId,
-                'created_via' => 'plan_go',
-            ]);
+            FoodAlchemistRecipe::whereKey($artefaktId)->update(['created_via' => 'plan_go']);
             if ($ideaId !== null) {
                 FoodAlchemistDishIdea::whereKey($ideaId)->update([
                     'generated_recipe_id' => $artefaktId,
@@ -455,10 +320,7 @@ class PlanningSessionService
                 ]);
             }
         } elseif ($art === 'concept') {
-            // Concept trägt created_via schon aus generiereAusBrief (…_plan_go) — nur die Herkunft-FK.
-            FoodAlchemistConcept::whereKey($artefaktId)->update([
-                'source_knowledge_document_id' => $trendId,
-            ]);
+            // Concept trägt created_via schon aus generiereAusBrief (…_plan_go); die Herkunft steht an der Session.
             if ($ideaId !== null) {
                 FoodAlchemistDishIdea::whereKey($ideaId)->update([
                     'materialized_concept_id' => $artefaktId,
@@ -528,18 +390,6 @@ class PlanningSessionService
         }
 
         return $session;
-    }
-
-    /** Body ohne YAML-Frontmatter, auf ~$max Zeichen gekürzt (für den Analyse-Prefill). */
-    private function bodyAuszug(string $md, int $max): string
-    {
-        return mb_substr(trim($this->strippeFrontmatter($md)), 0, $max);
-    }
-
-    /** YAML-Frontmatter (inkl. BOM) vom Markdown-Kopf abtrennen. */
-    private function strippeFrontmatter(string $md): string
-    {
-        return preg_replace('/\A\x{FEFF}?\s*---\R.*?\R---\R?/su', '', $md) ?? $md;
     }
 
     private function clean(mixed $wert): ?string

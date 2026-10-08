@@ -1453,8 +1453,8 @@ it('materialisiereConceptGericht: Generierungs-Fehler → Step failed, Idee fehl
         ->and($slot->refresh()->sales_recipe_id)->toBeNull();   // nichts verdrahtet
 });
 
-it('Wissen/Trend: erfundenes Rezept erbt die Trend-Herkunft der Planung (Lineage durchgereicht)', function () {
-    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Trend-Plan', 'brief' => 'x', 'source_knowledge_document_id' => 4242]);
+it('Lineage: erfundenes Rezept bekommt created_via=plan_go, die Trendradar-Herkunft bleibt an der Session', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Trend-Plan', 'brief' => 'x', 'source_trend_refs' => ['trend_ids' => [5], 'fundstueck_ids' => []]]);
     $concept = $this->makeConcept($this->rootTeam, 'Buffet', ['status' => 'draft']);
     $slot = $this->makeConceptSlot($concept, ['position' => 1]);
     $recipe = $this->makeRecipe($this->rootTeam, 'Erfunden', ['status' => 'draft', 'is_sales_recipe' => true]);
@@ -1467,7 +1467,7 @@ it('Wissen/Trend: erfundenes Rezept erbt die Trend-Herkunft der Planung (Lineage
 
     app(PlanningCascadeService::class)->materialisiereConceptGericht($this->rootTeam, (int) $idee->id, (int) $step->id, (int) $session->id);
 
-    expect((int) $recipe->refresh()->source_knowledge_document_id)->toBe(4242)   // Trend-Herkunft geerbt
+    expect($recipe->refresh()->source_knowledge_document_id)->toBeNull()   // Altspalte wird nicht mehr befüllt (Spec 79)
         ->and($recipe->refresh()->created_via)->toBe('plan_go');
 });
 
@@ -1974,7 +1974,7 @@ it('staged Freigabe (concept): dispatcht FanoutConceptJob + Run läuft wieder', 
     $step = FoodAlchemistCascadeRunStep::create([
         'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'concept', 'status' => 'done',
         'ref_type' => 'concept', 'ref_id' => $concept->id,
-        'deferred' => ['fanout' => ['mode' => 'voll_kreativ', 'trend_doc_id' => null, 'planning_session_id' => null]],
+        'deferred' => ['fanout' => ['mode' => 'voll_kreativ', 'planning_session_id' => null]],
     ]);
 
     app(PlanningCascadeService::class)->gibStepFrei($this->rootTeam, (int) $step->id);

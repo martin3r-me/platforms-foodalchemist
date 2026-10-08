@@ -11,8 +11,8 @@ use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
 
 /**
  * @ai.description Planungs-/Kreativ-Session (Doppel-Diamant, Spec 08): der Container VOR dem
- * Grounding. Hält Trend-Herkunft (`source_knowledge_document_id`, loser Zeiger auf ein
- * knowledge_documents category='trend'), freien Brief + Analyse, und trägt die Skizzen der
+ * Grounding. Hält die Herkunft aus dem Trendradar (`source_trend_refs`, Spec 79; die Altspalte
+ * `source_knowledge_document_id` wird nicht mehr befüllt), freien Brief + Analyse, und trägt die Skizzen der
  * Divergenz-Phase (bestehende `FoodAlchemistDishIdea`-Ebene als dritter Owner).
  *
  * **Invariante:** Die Session erdet NICHTS. Erst das „Go" erzeugt Basisrezept/Gericht/Concept

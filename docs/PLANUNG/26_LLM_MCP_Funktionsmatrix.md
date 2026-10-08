@@ -161,7 +161,7 @@ Capability. Sie beantwortet:
 | `signal.serving_form_suggest` | Darreichung vorschlagen | QL-02–03, RE-15 | dynamisch genutzt |
 | `signal.recipe_category_suggest` | Rezeptkategorie vorschlagen | QL-02–03, RE-03 | dynamisch genutzt |
 | `signal.recipe_naming_suggest` | Rezeptnamen vorschlagen | QL-02–03, RE-11 | dynamisch genutzt |
-| `trend.cluster_label` | gesichtete Trends in zweistufige Taxonomie einordnen/labeln | TR-01 | direkt genutzt (`TrendClusterCommand`) |
+| ~~`trend.cluster_label`~~ | ~~gesichtete Trends in zweistufige Taxonomie einordnen/labeln~~ | TR-01 | **entfernt** (Spec 79, 2026-10-08: Trendradar ohne KI-Clustering) |
 | `chat.message` | allgemeine Chatnachricht | kein freigegebener Business Case | keine direkte `src/`-Referenz gefunden |
 | `demo.echo` | Provider-/JSON-Smoke | Betrieb/Test | technische Referenz vorhanden; kein Produktfeature |
 
@@ -615,7 +615,6 @@ foodalchemist.knowledge.ALIAS
 foodalchemist.canvas.ENTRY_ADD
 foodalchemist.canvas.ENTRY_REMOVE
 foodalchemist.sales_facts.MAP
-foodalchemist.trendradar.IMPORT
 foodalchemist.presentation_designs.DUPLICATE
 foodalchemist.presentation_designs.GENERATE_CSS
 # D13: Vokabular/Taxonomie SAFE-additiv (POST/PUT/TOGGLE/REORDER, KEIN Delete; global/kanonisch read-only)
