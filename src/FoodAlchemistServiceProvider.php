@@ -1021,6 +1021,13 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     // D11: Bestell-Belegfacetten (Rechnung/Zahlung/Freigabe/Lieferantenbest./Wareneingang/
                     // Reklamation) + Zeilen-Ops + Versand (outward) + Produktionsplaner + Anproduktion.
                     \Platform\FoodAlchemist\Tools\OrdersUpdateInvoiceTool::class,
+                    // Spec 66: Lager + Inventur (Stufe 1) + Einkauf je Grundprodukt
+                    \Platform\FoodAlchemist\Tools\InventoryGetTool::class,
+                    \Platform\FoodAlchemist\Tools\InventoryCountsGetTool::class,
+                    \Platform\FoodAlchemist\Tools\InventoryCountsPostTool::class,
+                    \Platform\FoodAlchemist\Tools\InventoryCountsPutTool::class,
+                    \Platform\FoodAlchemist\Tools\InventoryCountsBookTool::class,
+                    \Platform\FoodAlchemist\Tools\GpEinkaufGetTool::class,
                     \Platform\FoodAlchemist\Tools\OrdersUpdatePaymentTool::class,
                     \Platform\FoodAlchemist\Tools\OrdersUpdateApprovalTool::class,
                     \Platform\FoodAlchemist\Tools\OrdersConfirmSupplierTool::class,

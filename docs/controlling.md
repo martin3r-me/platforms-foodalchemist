@@ -75,9 +75,11 @@ Quelle — hier wird nur markiert.
 
 ### Wareneinsatz
 Oben **Ist gegen Rezeptur**: was wurde eingekauft, was hätten die Rezepte für den verkauften
-Absatz gebraucht, und wie weit liegt das auseinander. Ohne Inventur ist das eine
-Perioden-Rechnung — wer am Monatsende das Lager füllt, sieht Schwund, der keiner ist. Deshalb ist
-der Vormonat vorbelegt, und bei zu vielen offenen Verkaufszuordnungen verweigert die Fläche die
+Absatz gebraucht, und wie weit liegt das auseinander. Liegt am Anfang **und** am Ende des
+Zeitraums eine gebuchte Inventur vor (alle aktiven Lagerorte, höchstens 7 Tage vor dem Rand),
+rechnet die Fläche mit dem **Verbrauch** = Anfangsbestand + Einkauf − Endbestand (Spec 66 §5).
+Sonst bleibt es eine Perioden-Rechnung über den Einkauf — wer am Monatsende das Lager füllt,
+sieht Schwund, der keiner ist. Deshalb ist der Vormonat vorbelegt, und bei zu vielen offenen Verkaufszuordnungen verweigert die Fläche die
 Aussage, statt eine plausible Zahl zu erfinden.
 
 Darunter **Ist gegen optimalen Bezug**: was der gleiche Einkauf beim jeweils günstigsten
@@ -146,6 +148,7 @@ Zuschlagsschema bleibt in den [Einstellungen](einstellungen).
 
 ---
 
-> **Was dieses Modul nicht kann:** kein Lager, keine Inventur, kein Wareneingang. Die
-> Abweichung zwischen Einkauf und Rezeptur ist deshalb eine Rechnung über einen Zeitraum,
-> kein gemessener Schwund. Je länger der Zeitraum, desto belastbarer.
+> **Was dieses Modul nicht kann:** Lager und Inventur führt das Einkaufsmodul (Seite Lager).
+> Ohne Inventuren an beiden Periodenrändern ist die Abweichung zwischen Einkauf und Rezeptur
+> eine Rechnung über einen Zeitraum, kein gemessener Schwund. Je länger der Zeitraum, desto
+> belastbarer.

@@ -58,8 +58,14 @@
                 <dd class="text-[length:var(--fa-text-lg)] font-semibold leading-snug tabular-nums text-[var(--fa-ink)]">@if($werte['umsatz'] === null)<span class="text-[length:var(--fa-text-md)] font-medium text-[var(--fa-ink-3)]">nicht belastbar</span>@else{{ $werte['umsatz'] }}@endif</dd>
             </div>
             <div class="fa-kpi">
-                <dt class="text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-2)] truncate">Einkauf</dt>
-                <dd class="text-[length:var(--fa-text-lg)] font-semibold leading-snug tabular-nums text-[var(--fa-ink)]">@if($werte['einkauf'] === null)<span class="text-[length:var(--fa-text-md)] font-medium text-[var(--fa-ink-3)]">nicht belastbar</span>@else{{ $werte['einkauf'] }}@endif</dd>
+                <dt class="text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-2)] truncate">{{ $a['mit_bestand'] ? 'Verbrauch' : 'Einkauf' }}</dt>
+                @if($a['mit_bestand'])
+                    {{-- Spec 66 §5: Inventur an beiden Rändern → Verbrauch statt Einkauf --}}
+                    <dd class="text-[length:var(--fa-text-lg)] font-semibold leading-snug tabular-nums text-[var(--fa-ink)]" data-ctrl-abw-verbrauch>{{ $eur($a['verbrauch']) }}</dd>
+                    <dd class="text-[length:var(--fa-text-sm)] tabular-nums text-[var(--fa-ink-3)]">AB {{ $eur($a['bestand_anfang']) }} + Einkauf {{ $werte['einkauf'] }} − EB {{ $eur($a['bestand_ende']) }}</dd>
+                @else
+                    <dd class="text-[length:var(--fa-text-lg)] font-semibold leading-snug tabular-nums text-[var(--fa-ink)]">@if($werte['einkauf'] === null)<span class="text-[length:var(--fa-text-md)] font-medium text-[var(--fa-ink-3)]">nicht belastbar</span>@else{{ $werte['einkauf'] }}@endif</dd>
+                @endif
             </div>
             <div class="fa-kpi">
                 <dt class="text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-2)] truncate">Laut Rezeptur</dt>
@@ -87,14 +93,26 @@
             <x-fa::notice tone="warn" data-ctrl-abw-hinweis>{{ $a['hinweis'] }}</x-fa::notice>
         @elseif($a['abweichung_eur'] !== null)
             <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)] max-w-[75ch]">
-                @if($a['abweichung_eur'] > 0)
-                    Es wurde mehr eingekauft, als die Rezepturen für den verkauften Absatz hergeben.
-                    Übliche Ursachen sind Verschnitt, Verderb, Überproduktion oder Lageraufbau.
+                @if($a['mit_bestand'])
+                    @if($a['abweichung_eur'] > 0)
+                        Es wurde mehr verbraucht, als die Rezepturen für den verkauften Absatz hergeben.
+                        Übliche Ursachen sind Verschnitt, Verderb, Überproduktion oder zu knapp kalkulierte Rezeptmengen.
+                    @else
+                        Es wurde weniger verbraucht als rechnerisch nötig, meist durch zu hoch angesetzte Rezeptmengen.
+                    @endif
+                    Verbrauch aus den Inventuren vom {{ \Illuminate\Support\Carbon::parse($a['inventur_anfang'])->format('d.m.Y') }}
+                    und {{ \Illuminate\Support\Carbon::parse($a['inventur_ende'])->format('d.m.Y') }}, Lagerauf- und -abbau sind herausgerechnet.
                 @else
-                    Es wurde weniger eingekauft als rechnerisch nötig, meist durch Lagerabbau oder eine
-                    zu hoch angesetzte Rezeptmenge.
+                    @if($a['abweichung_eur'] > 0)
+                        Es wurde mehr eingekauft, als die Rezepturen für den verkauften Absatz hergeben.
+                        Übliche Ursachen sind Verschnitt, Verderb, Überproduktion oder Lageraufbau.
+                    @else
+                        Es wurde weniger eingekauft als rechnerisch nötig, meist durch Lagerabbau oder eine
+                        zu hoch angesetzte Rezeptmenge.
+                    @endif
+                    Ohne Inventur am Anfang und Ende des Zeitraums bleibt das eine Rechnung über den Einkauf.
+                    Mit gebuchten Inventuren (Lager) rechnet die Analyse mit dem echten Verbrauch.
                 @endif
-                Ohne Inventur bleibt das eine Rechnung über den Zeitraum; über lange Zeiträume ist der Wert belastbarer.
             </p>
         @endif
     @endif

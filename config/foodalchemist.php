@@ -320,6 +320,12 @@ return [
                     'route' => 'foodalchemist.orders.index',
                     'icon'  => 'heroicon-o-shopping-cart',
                 ],
+                [
+                    // Spec 66: Lager (Bestand, Bewegungen, Inventur).
+                    'label' => 'Lager',
+                    'route' => 'foodalchemist.lager.index',
+                    'icon'  => 'heroicon-o-archive-box',
+                ],
             ],
         ],
         [

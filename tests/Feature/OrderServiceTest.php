@@ -1235,11 +1235,8 @@ it('WaWi: Kontingentverbrauch folgt Wareneingang idempotent und korrigierbar', f
 });
 
 it('WaWi: Lagerbestand folgt Wareneingang idempotent und korrigierbar', function () {
-    // QUARANTÄNE (#795): deckt einen echten latenten Einkauf-Bug auf — addManualLine populiert weder
-    // needed_base_g noch pack_qty, daher rechnet InventoryService::lineNeedInBaseUnit den Bedarf
-    // manueller Zeilen NICHT in Basiseinheit → shortage_display liefert '0 g' statt '1 kg'. War bisher
-    // vom (zeitfragilen) Bestellschluss-Error verdeckt. NICHT grün-klopfen — Einkauf-Domäne fixt den Bedarf.
-    $this->markTestSkipped('Einkauf-Bug: Bedarf/Fehlmenge manueller Zeilen (lineNeedInBaseUnit) — s. Office #795');
+    // #795 behoben (Spec 66 §1): lineNeedInBaseUnit rechnete den Bedarf von Handzeilen in kg statt g
+    // (qty_packs × pack_qty ohne ×1000) → Fehlmenge '0 g' statt '1 kg'.
     \Illuminate\Support\Carbon::setTestNow('2026-08-01 09:00');   // fixe 08-13-Liefertage nicht rel. zu heute verfallen lassen
     $line = $this->svc->addManualLine($this->rootTeam, $this->laOf['Mehl']->id, 10, null, null, '2026-08-13');
     $order = $line->order()->with(['supplier', 'lines'])->first();
@@ -2463,4 +2460,45 @@ describe('E3 · Preisstrategie-Switch + Neu quellen', function () {
         expect($hanosOrder->lines()->where('gp_id', $this->oel->id)->count())->toBe(1)
             ->and($chefsOrder->refresh()->lines()->where('gp_id', $this->oel->id)->count())->toBe(0);
     });
+});
+
+it('Spec 66: Wareneingang bucht Gebinde-Inhalt, nicht den anteiligen Bedarf', function () {
+    \Illuminate\Support\Carbon::setTestNow('2026-08-01 09:00');
+    $line = $this->svc->addManualLine($this->rootTeam, $this->laOf['Mehl']->id, 3, null, null, '2026-08-13');
+    // Bedarf 1,5 kg, bestellt 3 Gebinde à 1 kg (Überkauf) — geliefert werden alle 3.
+    $line->update(['needed_base_g' => 1500]);
+    $this->svc->setStatus($this->rootTeam, $line->order_id, OrderStatus::Sent);
+    $this->svc->updateReceiptLine($this->rootTeam, $line->id, 3, null);
+
+    $stock = FoodAlchemistInventoryStock::where('team_id', $this->rootTeam->id)->where('gp_id', $this->mehl->id)->first();
+    expect((float) $stock->qty_base)->toBe(3000.0);   // vorher 1500 g (Bedarf)
+});
+
+it('Spec 66: Gebinde mit unbekannter Einheit wird nicht gebucht (statt 1 kg je Gebinde zu raten)', function () {
+    \Illuminate\Support\Carbon::setTestNow('2026-08-01 09:00');
+    $line = $this->svc->addManualLine($this->rootTeam, $this->laOf['Mehl']->id, 2, null, null, '2026-08-13');
+    $this->svc->setStatus($this->rootTeam, $line->order_id, OrderStatus::Sent);
+    $line->refresh()->update(['unit_code' => 'Bund']);   // nach dem Absende-Snapshot (der setzt die Artikel-Einheit)
+    $this->svc->updateReceiptLine($this->rootTeam, $line->id, 2, null);
+
+    expect(FoodAlchemistInventoryMovement::where('order_line_id', $line->id)->count())->toBe(0);
+});
+
+it('Spec 66: Einkaufsjournal zählt gelieferte bzw. berechnete Menge statt bestellter', function () {
+    \Illuminate\Support\Carbon::setTestNow('2026-08-01 09:00');
+    $line = $this->svc->addManualLine($this->rootTeam, $this->laOf['Mehl']->id, 10, null, null, '2026-08-13');
+    $this->svc->setStatus($this->rootTeam, $line->order_id, OrderStatus::Sent);
+    $tx = fn () => \Platform\FoodAlchemist\Models\FoodAlchemistPurchaseTransaction::where('team_id', $this->rootTeam->id)
+        ->where('source_ref', "order:{$line->order_id}:line:{$line->id}")->first();
+    if ($tx() === null) {
+        // Journal-Auslöser steht im Team auf „delivered" — dann erst bei Lieferung gespiegelt.
+        app(\Platform\FoodAlchemist\Services\PurchaseJournalService::class)->spiegelOrder($line->order->fresh('lines'));
+    }
+    expect((float) $tx()->qty)->toBe(10.0);
+
+    $this->svc->updateReceiptLine($this->rootTeam, $line->id, 8, 'Teillieferung');
+    expect((float) $tx()->qty)->toBe(8.0);
+
+    $this->svc->updateInvoiceLine($this->rootTeam, $line->id, 7, 2.5, null);
+    expect((float) $tx()->qty)->toBe(7.0)->and((float) $tx()->line_total)->toBe(17.5);
 });

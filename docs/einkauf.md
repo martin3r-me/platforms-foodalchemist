@@ -146,6 +146,15 @@ vollständiges Lager zu führen:
 - **Lagerorte:** In den Einkaufs-Einstellungen können Lagerorte angelegt, deaktiviert und als
   Standardlager markiert werden. Wareneingänge buchen auf das Standardlager; Anzeigen summieren
   aktive Lagerorte.
+- **Lager und Inventur (Spec 66, Stufe 1):** Seite *Einkauf → Lager* mit drei Reitern:
+  *Bestand* (je Grundprodukt und Lagerort, bewertet zum aktuellen EK), *Bewegungen* (Zugänge aus
+  Wareneingang, Korrekturen aus Inventur) und *Inventur*. Eine Inventur wird je Lagerort und
+  Stichtag angelegt; die Zählliste ist mit Bestand und den Einkäufen der letzten 90 Tage
+  vorbelegt, Soll-Menge und Bewertung werden dabei eingefroren. Gezählt wird in kg, l oder Stück,
+  die Zählliste lässt sich drucken oder als PDF ziehen. Buchen setzt den Bestand auf die gezählte
+  Menge und schreibt die Differenz als Bewegung; danach ist die Inventur gesperrt.
+- **Einkauf je Grundprodukt:** Im Grundprodukt (Reiter *Einkauf*) stehen Menge und € je Monat der
+  letzten 12 Monate, die Lieferanten mit Ø-Preis und letztem Kauf sowie der aktuelle Lagerbestand.
 - **Nachlieferung light:** Unterlieferte Wareneingangszeilen können als neuer
   Nachlieferungs-Entwurf beim gleichen Lieferanten angelegt werden. Die Fehlmenge wird als
   manuelle Bestellposition übernommen.
@@ -167,7 +176,7 @@ vollständiges Lager zu führen:
   berechnete Mengen/Preise je Position.
 
 V2 bleibt bewusst getrennt: kompletter Reklamationsworkflow, Beleg-/PDF-Erkennung,
-Inventur, Lagerorte, Reservierungen, Ersatzlieferungsbuchung, OP-Liste/Kreditorenbuchhaltung und mehrstufiger Genehmigungsworkflow brauchen eigene Buchungsdaten über diese
+Reservierungen, Ersatzlieferungsbuchung, OP-Liste/Kreditorenbuchhaltung und mehrstufiger Genehmigungsworkflow brauchen eigene Buchungsdaten über diese
 Bestellzeilen-Erfassung hinaus.
 
 ### Featureliste aktueller Stand
@@ -210,6 +219,8 @@ Bestellzeilen-Erfassung hinaus.
 - Kontingentverbrauch aus Wareneingang, inklusive Korrektur ohne Doppelbuchung.
 - Lagerzugang aus Wareneingang mit Bewegungsjournal und aktuellem Bestand je Artikel.
 - Lagerorte in `Einstellungen → Einkauf` inklusive Standardlager.
+- Inventur je Lagerort und Stichtag mit Zählliste (Druck/PDF), Buchung und Bestandswert (Spec 66).
+- Einkaufsjournal zieht berechnete bzw. gelieferte Menge statt der bestellten (Spec 66 §1).
 - Nachlieferungs-Draft aus unterlieferten Wareneingangszeilen.
 - Rechnungsprüfung pro Zeile mit berechneter Menge, Preis und Differenz.
 - Massenaktionen übernehmen Wareneingang aus Bestellung und Rechnung aus Wareneingang.
@@ -221,7 +232,7 @@ Bestellzeilen-Erfassung hinaus.
 
 **Bewusst noch nicht v1**
 
-- Inventur, Lagerorte, Mindestbestände, Reservierungen und Verbrauchsbuchungen aus Produktion.
+- Mindestbestände, Reservierungen, Umlagerung und Verbrauchsbuchungen aus Produktion (Spec 66 Stufe 2).
 - Vollständige Kontrakt-/Rahmenvertragsbuchhaltung mit automatischem Abrufverbrauch.
 - Mehrstufige Nachlieferungs-/Backorder-Verfolgung mit Lieferavis und Rest-offen-Status.
 - Voller Reklamationsworkflow mit Ersatzlieferung, Gutschriftbeleg und Kreditorenbuchung.
@@ -256,6 +267,6 @@ hinterlegte Bestelladresse.
 
 ---
 
-> **Lager light.** Das Modul führt jetzt Wareneingangs-Bestände mit Bewegungsjournal. Es ist
-> noch keine vollständige Lagerwirtschaft mit Inventur, Mindestbestand, Chargen, MHD,
-> Lagerorten oder Produktionsverbrauch.
+> **Lager, Stufe 1.** Das Modul führt Bestände aus Wareneingang und Inventur mit
+> Bewegungsjournal (periodisches Lager). Noch nicht dabei: Mindestbestand, Chargen, MHD,
+> Umlagerung und Verbrauchsbuchungen aus der Produktion.

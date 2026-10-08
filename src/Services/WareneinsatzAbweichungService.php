@@ -38,9 +38,16 @@ class WareneinsatzAbweichungService
      */
     public const MIN_ABDECKUNG_PCT = 80.0;
 
+    /**
+     * Spec 66 §5: so weit darf eine Inventur vom Periodenrand entfernt liegen, damit sie als
+     * Anfangs- bzw. Endbestand zählt. Weiter weg wäre der Verbrauch wieder eine Mischrechnung.
+     */
+    public const INVENTUR_TOLERANZ_TAGE = 7;
+
     public function __construct(
         private PurchaseJournalService $journal,
         private TeamSettingsService $settings,
+        private InventurService $inventur,
     ) {
     }
 
@@ -65,8 +72,15 @@ class WareneinsatzAbweichungService
         $einkauf = $this->journal->spend($team, null, $von, $bis);
         $ziel = $this->settings->zielWareneinsatzPct($team);
 
+        // Spec 66 §5: mit Inventur am Anfang UND Ende der Periode wird aus der Perioden- eine
+        // Verbrauchsrechnung: Verbrauch = Anfangsbestand + Einkauf − Endbestand. Ohne beide
+        // Inventuren bleibt es beim Einkauf (bisheriges Verhalten, Grenze steht im Hinweis).
+        $bestand = $this->bestandsKlammer($team, $von, $bis);
+        $verbrauch = $bestand !== null ? round($bestand['anfang'] + $einkauf - $bestand['ende'], 2) : null;
+        $kosten = $verbrauch ?? $einkauf;
+
         $abdeckung = $umsatz > 0 ? round($umsatzZugeordnet / $umsatz * 100, 1) : null;
-        $istPct = $umsatz > 0 ? round($einkauf / $umsatz * 100, 1) : null;
+        $istPct = $umsatz > 0 ? round($kosten / $umsatz * 100, 1) : null;
 
         // Theoretischer Wareneinsatz: verkaufte Menge × EK je Portion an der Standard-Darreichung.
         // Dieselbe EK-Zahl wie in der Matrix und in der W%-Ampel — sonst stünden hier zwei
@@ -86,7 +100,7 @@ class WareneinsatzAbweichungService
 
         $hinweis = match (true) {
             $umsatz <= 0 => 'Kein Verkaufs-Ist im Zeitraum — ohne Umsatz gibt es keine Ist-Quote.',
-            $einkauf <= 0 => 'Kein Einkaufsjournal im Zeitraum — die Kostenseite fehlt.',
+            $einkauf <= 0 && $verbrauch === null => 'Kein Einkaufsjournal im Zeitraum — die Kostenseite fehlt.',
             $abdeckung !== null && $abdeckung < self::MIN_ABDECKUNG_PCT => 'Nur '
                 . number_format($abdeckung, 1, ',', '.')
                 . ' % des Umsatzes hängen an einem Gericht — der theoretische Wareneinsatz ist damit '
@@ -102,16 +116,63 @@ class WareneinsatzAbweichungService
             'umsatz_zugeordnet' => round($umsatzZugeordnet, 2),
             'abdeckung_pct' => $abdeckung,
             'einkauf' => round($einkauf, 2),
+            'bestand_anfang' => $bestand['anfang'] ?? null,
+            'bestand_ende' => $bestand['ende'] ?? null,
+            'inventur_anfang' => $bestand['datum_anfang'] ?? null,
+            'inventur_ende' => $bestand['datum_ende'] ?? null,
+            'verbrauch' => $verbrauch,
+            'mit_bestand' => $bestand !== null,
             'ist_pct' => $istPct,
             'ziel_pct' => $ziel,
             'ist_delta_pp' => $istPct !== null ? round($istPct - $ziel, 1) : null,
             'theoretisch' => $theoretisch,
             // Positiv = es wurde MEHR eingekauft als die Rezepturen hergeben.
-            'abweichung_eur' => $belastbar ? round($einkauf - $theoretisch, 2) : null,
+            'abweichung_eur' => $belastbar ? round($kosten - $theoretisch, 2) : null,
             'abweichung_pp' => $belastbar && $umsatz > 0
-                ? round(($einkauf - $theoretisch) / $umsatz * 100, 1) : null,
+                ? round(($kosten - $theoretisch) / $umsatz * 100, 1) : null,
             'belastbar' => $belastbar,
             'hinweis' => $hinweis,
+        ];
+    }
+
+    /**
+     * Anfangs- und Endbestand aus gebuchten Inventuren: Anfang = Inventur zum Vortag von $von,
+     * Ende = Inventur zu $bis — jeweils für ALLE aktiven Lagerorte und nicht weiter als
+     * INVENTUR_TOLERANZ_TAGE vor dem Rand. Fehlt etwas: null (dann rechnet die Analyse mit Einkauf).
+     *
+     * @return array{anfang: float, ende: float, datum_anfang: string, datum_ende: string}|null
+     */
+    private function bestandsKlammer(Team $team, ?string $von, ?string $bis): ?array
+    {
+        if ($von === null || $bis === null) {
+            return null;
+        }
+        $vortag = \Illuminate\Support\Carbon::parse($von)->subDay();
+        $ende = \Illuminate\Support\Carbon::parse($bis);
+        $ab = $this->inventur->bestandswert($team, $vortag->toDateString());
+        $eb = $this->inventur->bestandswert($team, $ende->toDateString());
+        $nah = function (array $bw, \Illuminate\Support\Carbon $rand): bool {
+            foreach ($bw['inventuren'] as $i) {
+                if (\Illuminate\Support\Carbon::parse($i['datum'])->lt($rand->copy()->subDays(self::INVENTUR_TOLERANZ_TAGE))) {
+                    return false;
+                }
+            }
+
+            return $bw['vollstaendig'];
+        };
+        if (! $nah($ab, $vortag) || ! $nah($eb, $ende)) {
+            return null;
+        }
+        $abIds = array_column($ab['inventuren'], 'id');
+        if ($abIds === array_column($eb['inventuren'], 'id')) {
+            return null;   // dieselbe Inventur an beiden Rändern — keine Klammer
+        }
+
+        return [
+            'anfang' => $ab['wert'],
+            'ende' => $eb['wert'],
+            'datum_anfang' => max(array_column($ab['inventuren'], 'datum')),
+            'datum_ende' => max(array_column($eb['inventuren'], 'datum')),
         ];
     }
 }

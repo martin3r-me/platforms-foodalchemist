@@ -498,6 +498,7 @@ class DetailPanel extends Component
         $brauchtZusatz = $vollmodus || $this->section === 'zusatzstoffe';     // zusatzstoffe
         $brauchtNaehr = $vollmodus || $this->section === 'naehrwerte';        // naehrwerte
         $brauchtErsatz = $vollmodus || $this->section === 'ersatz';           // ersatz, ersatzKandidaten
+        $brauchtEinkauf = $vollmodus || $this->section === 'einkauf';         // einkauf, bestandJetzt (Spec 66 §4)
         $kette = ($gp !== null && $brauchtLas) ? $leads->rangliste($gp, $team) : null;
         $effektiverLeadId = ($gp !== null && $brauchtLas) ? $leads->effektiverLead($gp, $team)?->id : null;
         // R9.2 (E5): Lead-Steuerungs-Sicht (gesetzter vs. effektiver Lead, Vorschlag, Override-Begründung, Ausweichquellen).
@@ -537,6 +538,16 @@ class DetailPanel extends Component
                     ->where('is_platzhalter', false)
                     ->orderBy('name')->limit(8)->get(['id', 'name', 'status'])
                 : collect(),
+            // Spec 66 §4: was wurde von diesem GP eingekauft (Monate, Lieferanten) + was liegt am Lager
+            'einkauf' => ($gp !== null && $team !== null && $brauchtEinkauf)
+                ? app(\Platform\FoodAlchemist\Services\PurchaseJournalService::class)->gpEinkauf($team, $gp->id)
+                : null,
+            'bestandJetzt' => ($gp !== null && $team !== null && $brauchtEinkauf)
+                ? \Platform\FoodAlchemist\Models\FoodAlchemistInventoryStock::where('team_id', $team->id)->where('gp_id', $gp->id)
+                    ->selectRaw('base_unit, SUM(qty_base) AS menge')->groupBy('base_unit')->pluck('menge', 'base_unit')
+                    ->map(fn ($m, $u) => ['menge' => app(\Platform\FoodAlchemist\Services\InventurService::class)->anzeigeMenge((float) $m, (string) $u), 'einheit' => app(\Platform\FoodAlchemist\Services\InventurService::class)->anzeigeEinheit((string) $u)])
+                    ->values()->all()
+                : [],
             // M9-05 (GP-Blickwinkel): in welchen Rezepten eingesetzt — klickbar
             'verwendungen' => ($gp !== null && $brauchtLas)
                 ? \Illuminate\Support\Facades\DB::table('foodalchemist_recipe_ingredients AS ri')
