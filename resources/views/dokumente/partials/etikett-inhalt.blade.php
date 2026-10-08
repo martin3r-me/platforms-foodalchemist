@@ -59,5 +59,9 @@
             @endswitch
         @endforeach
     @endif
+    {{-- Spec 69: eine echte Charge steht immer drauf (Rückverfolgbarkeit), auch wenn die Vorlage das Feld nicht führt --}}
+    @if(! $istStellplatz && ($d['charge'] ?? null) !== null && ! collect($felder)->contains('key', 'charge'))
+        <div class="z"><span class="k">Charge:</span> {{ $d['charge'] }}</div>
+    @endif
     @if($v->fusstext)<div class="fuss">{{ $v->fusstext }}</div>@endif
 </div>

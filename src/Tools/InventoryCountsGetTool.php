@@ -59,7 +59,7 @@ class InventoryCountsGetTool extends FoodAlchemistTool implements ToolContract, 
                 ->sortBy(fn ($l) => [$l->bin?->sort_order ?? PHP_INT_MAX, $l->position])->values()->map(fn ($l) => [
                 'line_id' => $l->id,
                 'gp_id' => $l->gp_id,
-                'name' => $l->gp?->name ?? $l->supplierItem?->designation,
+                'name' => $l->gp?->name ?? $l->supplierItem?->designation ?? $l->recipe?->name,
                 'einheit' => $svc->anzeigeEinheit((string) $l->base_unit),
                 'soll' => $svc->anzeigeMenge((float) $l->qty_expected, (string) $l->base_unit),
                 'gezaehlt' => $svc->anzeigeMenge($l->qty_counted !== null ? (float) $l->qty_counted : null, (string) $l->base_unit),

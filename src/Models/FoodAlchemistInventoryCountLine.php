@@ -49,6 +49,11 @@ class FoodAlchemistInventoryCountLine extends Model
         return $this->belongsTo(FoodAlchemistInventoryCount::class, 'inventory_count_id');
     }
 
+    public function recipe(): BelongsTo
+    {
+        return $this->belongsTo(FoodAlchemistRecipe::class, 'recipe_id');
+    }
+
     public function gp(): BelongsTo
     {
         return $this->belongsTo(FoodAlchemistGp::class, 'gp_id');

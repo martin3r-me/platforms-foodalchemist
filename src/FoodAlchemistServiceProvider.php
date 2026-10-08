@@ -1049,6 +1049,10 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\LabelsPostTool::class,
                     \Platform\FoodAlchemist\Tools\LabelTemplatesGetTool::class,
                     \Platform\FoodAlchemist\Tools\LabelTemplatesPostTool::class,
+                    // Spec 69: Eigenproduktion im Lager (Chargen)
+                    \Platform\FoodAlchemist\Tools\InventoryBatchesGetTool::class,
+                    \Platform\FoodAlchemist\Tools\EigenproduktionPostTool::class,
+                    \Platform\FoodAlchemist\Tools\EigenproduktionEntnahmeTool::class,
                     \Platform\FoodAlchemist\Tools\OrdersUpdatePaymentTool::class,
                     \Platform\FoodAlchemist\Tools\OrdersUpdateApprovalTool::class,
                     \Platform\FoodAlchemist\Tools\OrdersConfirmSupplierTool::class,

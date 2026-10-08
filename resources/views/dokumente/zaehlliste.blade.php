@@ -84,7 +84,7 @@
                 @endif
                 <tr>
                     <td class="muted">{{ $i + 1 }}</td>
-                    <td>{{ $l->gp?->name ?? $l->supplierItem?->designation ?? '—' }}
+                    <td>{{ $l->gp?->name ?? $l->supplierItem?->designation ?? $l->recipe?->name ?? '—' }}
                         @if($l->hatGebinde())<br><span class="muted gebinde">@if($l->pack_units)1 {{ $l->pack_label }} = {{ $zahl($l->pack_units) }} {{ $l->unit_label }} · @endif 1 {{ $l->unit_label }} = {{ $zahl($svc->anzeigeMenge((float) $l->unit_base, $l->base_unit)) }} {{ $svc->anzeigeEinheit($l->base_unit) }}</span>@endif
                     </td>
                     <td>{{ $svc->anzeigeEinheit($l->base_unit) }}</td>

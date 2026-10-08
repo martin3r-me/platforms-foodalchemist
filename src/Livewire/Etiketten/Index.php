@@ -57,7 +57,7 @@ class Index extends Component
 
     public function waehlen(string $quelle, int $id): void
     {
-        $this->quelle = in_array($quelle, ['recipe', 'gp', 'stellplatz'], true) ? $quelle : 'recipe';
+        $this->quelle = in_array($quelle, ['recipe', 'gp', 'stellplatz', 'charge'], true) ? $quelle : 'recipe';
         $this->bezugId = $id;
         $this->suche = '';
         $this->e = array_map(fn () => '', $this->e);

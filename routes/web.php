@@ -809,7 +809,7 @@ Route::get('/etiketten', \Platform\FoodAlchemist\Livewire\Etiketten\Index::class
 Route::get('/etiketten/druck', function (\Platform\FoodAlchemist\Services\EtikettService $svc) {
     $team = \Illuminate\Support\Facades\Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
     $quelle = (string) request('quelle', 'recipe');
-    abort_unless(in_array($quelle, ['recipe', 'gp', 'stellplatz'], true), 404);
+    abort_unless(in_array($quelle, ['recipe', 'gp', 'stellplatz', 'charge'], true), 404);
     try {
         $data = $svc->druck($team, request('vorlage') !== null && request('vorlage') !== '' ? (int) request('vorlage') : null,
             $quelle, (int) request('id'), (array) request('e', []), (int) request('anzahl', 1), (int) request('startplatz', 1));

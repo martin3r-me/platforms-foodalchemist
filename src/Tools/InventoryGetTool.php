@@ -68,7 +68,7 @@ class InventoryGetTool extends FoodAlchemistTool implements ToolContract, ToolMe
         ];
         if (! empty($arguments['bewegungen'])) {
             $out['bewegungen'] = $svc->bewegungen($team, $arguments['quelle'] ?? null, 100)->map(fn ($m) => [
-                'id' => $m->id, 'gp_id' => $m->gp_id, 'name' => $m->gp?->name, 'richtung' => $m->direction,
+                'id' => $m->id, 'gp_id' => $m->gp_id, 'recipe_id' => $m->recipe_id, 'name' => $m->gp?->name ?? $m->recipe?->name ?? $m->supplierItem?->designation, 'richtung' => $m->direction,
                 'menge' => $svc->anzeigeMenge((float) $m->qty_base, (string) $m->base_unit),
                 'einheit' => $svc->anzeigeEinheit((string) $m->base_unit),
                 'quelle' => $m->source, 'datum' => $m->moved_at?->toDateTimeString(),

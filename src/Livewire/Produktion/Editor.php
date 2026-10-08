@@ -832,6 +832,10 @@ class Editor extends Component
 
         return view('foodalchemist::livewire.produktion.editor', [
             'sperr' => $this->sperrZustand(),   // Spec 65
+            // Spec 69: was von diesen Rezepten schon als Eigenproduktion im Lager liegt
+            'lagerJeRezept' => $team !== null && isset($ops['zeilen'])
+                ? app(\Platform\FoodAlchemist\Services\EigenproduktionService::class)->lagerJeRezept($team, array_values(array_filter(array_column($ops['zeilen'], 'recipe_id'))))
+                : [],
             'postenListe' => $postenListe,
             'postenSummen' => $postenSummen,
             'kapazitaetsWarnungen' => $kapazitaetsWarnungen,

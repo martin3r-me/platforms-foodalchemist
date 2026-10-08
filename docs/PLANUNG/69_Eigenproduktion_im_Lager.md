@@ -1,4 +1,4 @@
-# Spec 69 · Eigenproduktion im Lager (Entwurf, nicht gebaut)
+# Spec 69 · Eigenproduktion im Lager
 
 Stand 2026-10-08 · Anlass Dominique: „Man hat eine Suppe gekocht und eingefroren, das muss auch
 erfasst werden. Es geht nicht nur um Grundprodukte, sondern auch um Basisrezepte." Erst Plan, dann
@@ -62,7 +62,27 @@ weil FA die Allergene schon kennt.
 `inventory.GET` mit Rezept-Beständen und Chargen; `inventory_batches.GET`;
 `inventory_movements.POST` mit `recipe_id`; Etikett als Dokument-Link.
 
-## Offene Entscheidungen für Dominique
+## Umsetzung (2026-10-08)
+- **Entscheide:** Basisrezepte (g) **und** Gerichte (Portionen). Chargen nur für Eigenproduktion.
+  Etikett über Spec 70 (A4-Bogen und Rolle). Die Produktion **zeigt** den Lagerbestand an und
+  bietet „Rest ins Lager“ an. Automatisches Kürzen des Bedarfs bleibt ein eigener Schritt.
+- **Daten:** `inventory_batches` (charge eindeutig je Team, produced_at, frozen_at, best_before,
+  storage_type, qty_initial/qty_rest, base_unit g|Stk|Port, price_per_base,
+  production_order_line_id, closed_at). `recipe_id` an stocks/movements/count_lines, `batch_id`
+  an movements.
+- **Service** `EigenproduktionService`: einlagern, entnehmen (FIFO nach best_before; Verbrauch →
+  source `entnahme`, sonst `abgang` mit Grund), offeneChargen, ablaufend, lagerJeRezept,
+  inventurAbgleich.
+- **Inventur:** Rezeptbestände werden mitgezählt. Beim Buchen werden die Chargen abgeglichen
+  (Minus von der ältesten Charge, Plus auf die jüngste).
+- **UI:** Lager → Reiter *Eigenproduktion* (Einlagern, Chargen, Entnehmen, nur ablaufende).
+  Produktion → „Im Lager“ + „Rest ins Lager / einfrieren“. Etiketten → Quelle `charge`.
+- **MCP:** `inventory_batches.GET`, `eigenproduktion.POST`, `eigenproduktion.ENTNAHME`.
+
+## Offen
+- Rezept-Lagerbestand kürzt den Bedarf in Produktion und Bestellrunde (Spec 71) noch nicht automatisch.
+
+## Ursprüngliche offene Entscheidungen
 1. Nur **Basisrezepte** (kg/l) oder auch **Gerichte in Portionen** (z. B. 40 Portionen Lasagne TK)?
 2. **Chargen auch für Zukaufware?** Eher nein für Stufe 1, nur für Eigenproduktion.
 3. **Etikettenformat:** A4-Bogen (z. B. 24 Etiketten) oder Etikettendrucker (z. B. 62 mm Rolle)?

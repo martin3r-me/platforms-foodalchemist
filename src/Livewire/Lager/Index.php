@@ -22,7 +22,7 @@ use Platform\FoodAlchemist\Services\LagerEinrichtungService;
  */
 class Index extends Component
 {
-    private const REITER = ['bestand', 'bewegungen', 'inventur', 'einrichten'];
+    private const REITER = ['bestand', 'bewegungen', 'inventur', 'einrichten', 'eigenproduktion'];
 
     private const FILTER_LEER = ['suche' => '', 'stellplatz' => '', 'zustand' => '', 'warengruppe' => '', 'lieferant' => '', 'status' => '', 'ohne_preis' => false, 'ladenhueter' => false];
 
@@ -41,6 +41,15 @@ class Index extends Component
     public string $grundFilter = '';
 
     public bool $buchungOffen = false;
+
+    /** Spec 69: Eigenproduktion einlagern / entnehmen. */
+    public array $einlagern = [];
+
+    public string $einlagernSuche = '';
+
+    public bool $nurAblaufend = false;
+
+    public array $entnahme = [];
 
     public array $buchung = [];
 
@@ -76,6 +85,11 @@ class Index extends Component
     {
         $this->neuDatum = now()->toDateString();
         $this->reiter = in_array($this->reiter, self::REITER, true) ? $this->reiter : 'bestand';
+        // Spec 69: aus der Produktion „ins Lager" — Rezept, Menge und Zeile vorbelegen
+        if ($this->reiter === 'eigenproduktion' && request()->filled('einlagern_rezept')) {
+            $this->einlagern = ['menge' => (string) request('einlagern_menge', ''), 'production_order_line_id' => request()->integer('einlagern_zeile') ?: null];
+            $this->einlagernRezept(request()->integer('einlagern_rezept'));
+        }
     }
 
     public function reiterSetzen(string $reiter): void
@@ -264,6 +278,48 @@ class Index extends Component
         });
     }
 
+    // ── Eigenproduktion (Spec 69) ───────────────────────────────────────────
+
+    public function einlagernRezept(int $recipeId): void
+    {
+        $r = \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::visibleToTeam($this->team())->find($recipeId);
+        if ($r === null) {
+            return;
+        }
+        $eigen = app(\Platform\FoodAlchemist\Services\EigenproduktionService::class);
+        $this->einlagern = [
+            'recipe_id' => $r->id, 'name' => $r->name, 'einheit' => $eigen->anzeigeEinheit($eigen->einheit($r)),
+            'menge' => $this->einlagern['menge'] ?? '', 'location_id' => $this->einlagern['location_id'] ?? ($this->lagerortId ?: ''),
+            'lagerart' => $r->storage_type ?: 'gekuehlt', 'produziert_am' => now()->toDateString(), 'eingefroren_am' => '', 'verbrauchen_bis' => '', 'notiz' => '',
+            'production_order_line_id' => $this->einlagern['production_order_line_id'] ?? null,
+        ];
+        $this->einlagernSuche = '';
+    }
+
+    public function einlagernSpeichern(\Platform\FoodAlchemist\Services\EigenproduktionService $svc): void
+    {
+        if (empty($this->einlagern['recipe_id'])) {
+            $this->fehler = 'Bitte ein Rezept wählen.';
+
+            return;
+        }
+        $this->aktion(function () use ($svc) {
+            $b = $svc->einlagern($this->team(), $this->einlagern, Auth::id());
+            $this->hinweis = 'Eingelagert: Charge ' . $b->charge . ($b->best_before ? ' · verbrauchen bis ' . $b->best_before->format('d.m.Y') : '') . '.';
+            $this->einlagern = ['letzte_charge' => $b->id];
+        });
+    }
+
+    public function entnehmen(int $batchId, \Platform\FoodAlchemist\Services\EigenproduktionService $svc): void
+    {
+        $e = $this->entnahme[$batchId] ?? [];
+        $this->aktion(function () use ($svc, $batchId, $e) {
+            $r = $svc->entnehmen($this->team(), ['batch_id' => $batchId, 'menge' => $e['menge'] ?? '', 'grund' => $e['grund'] ?? 'verbrauch'], Auth::id());
+            $this->hinweis = 'Entnommen aus Charge ' . $r[0]['charge'] . '.';
+            unset($this->entnahme[$batchId]);
+        });
+    }
+
     // ── Einrichten (Spec 66b) ───────────────────────────────────────────────
 
     public function platzAnlegen(LagerEinrichtungService $svc): void
@@ -393,6 +449,16 @@ class Index extends Component
                     ->whereNotIn('status', ['merged', 'rejected'])->orderBy('name')->limit(10)->get(['id', 'name'])
                 : collect(),
             'gruende' => LagerBewegungService::GRUENDE,
+            'chargen' => $this->reiter === 'eigenproduktion'
+                ? app(\Platform\FoodAlchemist\Services\EigenproduktionService::class)->offeneChargen($team, null, $ortId)
+                    ->when($this->nurAblaufend, fn ($c) => $c->filter(fn ($b) => $b->best_before !== null && $b->tageBisAblauf() <= 3)->values())
+                : collect(),
+            'ablaufendAnzahl' => app(\Platform\FoodAlchemist\Services\EigenproduktionService::class)->ablaufend($team)->count(),
+            'einlagernTreffer' => $this->reiter === 'eigenproduktion' && mb_strlen(trim($this->einlagernSuche)) >= 2
+                ? \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::visibleToTeam($team)->where('name', 'like', '%' . trim($this->einlagernSuche) . '%')
+                    ->orderBy('name')->limit(10)->get(['id', 'name', 'is_sales_recipe'])
+                : collect(),
+            'eigen' => app(\Platform\FoodAlchemist\Services\EigenproduktionService::class),
             'inventuren' => $this->reiter === 'inventur' ? $svc->liste($team) : collect(),
             'inventur' => $inventur,
             'zeilen' => $zeilen,

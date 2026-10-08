@@ -48,7 +48,7 @@ class InventurService
     public function detail(Team $team, int $countId): FoodAlchemistInventoryCount
     {
         return FoodAlchemistInventoryCount::where('team_id', $team->id)
-            ->with(['location', 'lines.gp:id,name,piece_default_g,condition,commodity_group_code', 'lines.supplierItem:id,designation,article_number', 'lines.bin:id,name,sort_order,zone'])
+            ->with(['location', 'lines.gp:id,name,piece_default_g,condition,commodity_group_code', 'lines.supplierItem:id,designation,article_number', 'lines.bin:id,name,sort_order,zone', 'lines.recipe:id,name'])
             ->findOrFail($countId);
     }
 
@@ -67,9 +67,10 @@ class InventurService
             $positionen = [];
             // 1. Alles, was am Lagerort Bestand führt (auch 0 — es war schon einmal da).
             foreach (FoodAlchemistInventoryStock::where('team_id', $team->id)->where('inventory_location_id', $location->id)->get() as $s) {
-                $key = $this->schluessel($s->gp_id, $s->supplier_item_id, $s->base_unit);
-                $positionen[$key] = ['gp_id' => $s->gp_id, 'supplier_item_id' => $s->gp_id === null ? $s->supplier_item_id : null,
-                    'base_unit' => $s->base_unit, 'qty_expected' => (float) $s->qty_base];
+                // Spec 69: Eigenproduktion (Rezept-Bestand) zählt mit
+                $key = $s->recipe_id !== null ? 'rz:' . $s->recipe_id . ':' . $s->base_unit : $this->schluessel($s->gp_id, $s->supplier_item_id, $s->base_unit);
+                $positionen[$key] = ['gp_id' => $s->gp_id, 'supplier_item_id' => $s->gp_id === null && $s->recipe_id === null ? $s->supplier_item_id : null,
+                    'recipe_id' => $s->recipe_id, 'base_unit' => $s->base_unit, 'qty_expected' => (float) $s->qty_base];
             }
             // 2. Grundprodukte, die zuletzt eingekauft, aber noch nicht im Bestand sind (nur am Standardlager).
             if ($location->is_default) {
@@ -194,14 +195,16 @@ class InventurService
                 }
                 $stock = FoodAlchemistInventoryStock::where('team_id', $team->id)
                     ->where('inventory_location_id', $count->inventory_location_id)->where('base_unit', $line->base_unit)
-                    ->when($line->gp_id !== null,
-                        fn ($q) => $q->where('gp_id', $line->gp_id)->whereNull('supplier_item_id'),
-                        fn ($q) => $q->whereNull('gp_id')->where('supplier_item_id', $line->supplier_item_id))
+                    ->when($line->recipe_id !== null,
+                        fn ($q) => $q->where('recipe_id', $line->recipe_id),
+                        fn ($q) => $q->when($line->gp_id !== null,
+                            fn ($q2) => $q2->where('gp_id', $line->gp_id)->whereNull('supplier_item_id'),
+                            fn ($q2) => $q2->whereNull('gp_id')->whereNull('recipe_id')->where('supplier_item_id', $line->supplier_item_id)))
                     ->lockForUpdate()->first()
                     ?? FoodAlchemistInventoryStock::create([
                         'team_id' => $team->id, 'inventory_location_id' => $count->inventory_location_id,
-                        'gp_id' => $line->gp_id, 'supplier_item_id' => $line->gp_id === null ? $line->supplier_item_id : null,
-                        'qty_base' => 0, 'base_unit' => $line->base_unit,
+                        'gp_id' => $line->gp_id, 'supplier_item_id' => $line->gp_id === null && $line->recipe_id === null ? $line->supplier_item_id : null,
+                        'recipe_id' => $line->recipe_id, 'qty_base' => 0, 'base_unit' => $line->base_unit,
                     ]);
                 $differenz = round((float) $line->qty_counted - (float) $stock->qty_base, 4);
                 if (abs($differenz) >= 0.0001) {
@@ -209,13 +212,15 @@ class InventurService
                         ['source_hash' => sha1('fa_inventur:' . $count->id . ':line:' . $line->id)],
                         [
                             'team_id' => $team->id, 'stock_id' => $stock->id, 'inventory_location_id' => $count->inventory_location_id,
-                            'gp_id' => $line->gp_id, 'supplier_item_id' => $line->supplier_item_id,
+                            'gp_id' => $line->gp_id, 'supplier_item_id' => $line->supplier_item_id, 'recipe_id' => $line->recipe_id,
                             'direction' => $differenz > 0 ? 'in' : 'out', 'qty_base' => abs($differenz), 'base_unit' => $line->base_unit,
                             'source' => 'inventur', 'moved_at' => $gebuchtAm,
                             'note' => 'Inventur ' . Carbon::parse($count->count_date)->format('d.m.Y'),
                         ],
                     );
                     $stock->update(['qty_base' => round((float) $line->qty_counted, 4)]);
+                    // Spec 69: Chargen der Eigenproduktion mitziehen
+                    app(EigenproduktionService::class)->inventurAbgleich($team, $stock, $differenz, $gebuchtAm);
                 }
                 $wert += (float) ($line->wert() ?? 0);
             }
@@ -268,7 +273,7 @@ class InventurService
     public function bestand(Team $team, ?int $locationId = null, string $suche = ''): array
     {
         $stocks = FoodAlchemistInventoryStock::where('team_id', $team->id)
-            ->with(['gp:id,name,piece_default_g,lead_la_supplier_item_id,condition,commodity_group_code', 'gp.leadLa:id,supplier_id', 'gp.leadLa.supplier:id,name', 'location:id,name', 'supplierItem:id,designation,qty,supplier_id', 'supplierItem.supplier:id,name'])
+            ->with(['recipe', 'recipe.standardPresentation', 'gp:id,name,piece_default_g,lead_la_supplier_item_id,condition,commodity_group_code', 'gp.leadLa:id,supplier_id', 'gp.leadLa.supplier:id,name', 'location:id,name', 'supplierItem:id,designation,qty,supplier_id', 'supplierItem.supplier:id,name'])
             ->when($locationId !== null, fn ($q) => $q->where('inventory_location_id', $locationId))
             ->where('qty_base', '<>', 0)->get();
         $zuletzt = FoodAlchemistInventoryMovement::where('team_id', $team->id)
@@ -279,11 +284,13 @@ class InventurService
             ->get()->keyBy(fn ($z) => $z->inventory_location_id . ':' . $z->gp_id);
         $rows = [];
         foreach ($stocks as $s) {
-            $name = $s->gp?->name ?? $s->supplierItem?->designation ?? '—';
+            $name = $s->gp?->name ?? $s->supplierItem?->designation ?? $s->recipe?->name ?? '—';
             if ($suche !== '' && ! str_contains(mb_strtolower($name), mb_strtolower($suche))) {
                 continue;
             }
-            $preis = $this->preisJeBasis($team, $s->gp, $s->gp === null ? $s->supplier_item_id : null, $s->base_unit);
+            $preis = $s->recipe !== null
+                ? app(EigenproduktionService::class)->preisJeBasis($s->recipe)
+                : $this->preisJeBasis($team, $s->gp, $s->gp === null ? $s->supplier_item_id : null, $s->base_unit);
             $menge = (float) $s->qty_base;
             $rows[] = [
                 'stock_id' => (int) $s->id, 'gp_id' => $s->gp_id !== null ? (int) $s->gp_id : null, 'name' => $name,
@@ -310,7 +317,7 @@ class InventurService
     public function bewegungen(Team $team, ?string $quelle = null, int $limit = 200, ?string $grund = null)
     {
         return FoodAlchemistInventoryMovement::where('team_id', $team->id)
-            ->with(['gp:id,name', 'supplierItem:id,designation', 'location:id,name', 'order:id,supplier_id', 'order.supplier:id,name'])
+            ->with(['gp:id,name', 'supplierItem:id,designation', 'recipe:id,name', 'location:id,name', 'order:id,supplier_id', 'order.supplier:id,name'])
             ->when($quelle !== null && $quelle !== '', fn ($q) => $q->where('source', $quelle))
             ->when($grund !== null && $grund !== '', fn ($q) => $q->where('reason', $grund))
             ->where('qty_base', '<>', 0)
@@ -343,7 +350,7 @@ class InventurService
         $schwelle = max(0.0, (float) ($f['differenz_pct'] ?? 10));
 
         return $lines->filter(function ($l) use ($f, $schwelle) {
-            $name = (string) ($l->gp?->name ?? $l->supplierItem?->designation ?? '');
+            $name = (string) ($l->gp?->name ?? $l->supplierItem?->designation ?? $l->recipe?->name ?? '');
             if (! $this->passt($f, $name, $l->storage_bin_id, $l->gp?->condition, $l->gp?->commodity_group_code, null)) {
                 return false;
             }
@@ -391,7 +398,7 @@ class InventurService
 
     public function anzeigeEinheit(string $baseUnit): string
     {
-        return ['g' => 'kg', 'ml' => 'l'][$baseUnit] ?? $baseUnit;
+        return ['g' => 'kg', 'ml' => 'l', 'Port' => 'Port.'][$baseUnit] ?? $baseUnit;
     }
 
     // ── intern ──────────────────────────────────────────────────────────────
@@ -424,21 +431,24 @@ class InventurService
     {
         $gps = FoodAlchemistGp::with('leadLa')->whereIn('id', array_filter(array_column($positionen, 'gp_id')))->get()->keyBy('id');
         $items = FoodAlchemistSupplierItem::whereIn('id', array_filter(array_column($positionen, 'supplier_item_id')))->get()->keyBy('id');
+        $rezepte = \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::with('standardPresentation')->whereIn('id', array_filter(array_map(fn ($p) => $p['recipe_id'] ?? null, $positionen)))->get()->keyBy('id');
         $start = (int) $count->lines()->max('position');
         // Spec 66b: Laufweg — erst nach Stellplatz (Reihenfolge), dann alphabetisch; ohne Stellplatz zuletzt
         $stamm = $this->einrichtung->stammplaetze($team, (int) $count->inventory_location_id);
         $reihenfolge = \Platform\FoodAlchemist\Models\FoodAlchemistStorageBin::whereIn('id', array_values($stamm) ?: [0])->pluck('sort_order', 'id');
         $rang = fn ($p) => $p['gp_id'] !== null && isset($stamm[$p['gp_id']]) ? (int) ($reihenfolge[$stamm[$p['gp_id']]] ?? PHP_INT_MAX - 1) : PHP_INT_MAX;
-        $name = fn ($p) => (string) ($p['gp_id'] !== null ? $gps->get($p['gp_id'])?->name : $items->get($p['supplier_item_id'])?->designation);
+        $name = fn ($p) => (string) ($p['gp_id'] !== null ? $gps->get($p['gp_id'])?->name
+            : (! empty($p['recipe_id']) ? $rezepte->get($p['recipe_id'])?->name : $items->get($p['supplier_item_id'])?->designation));
         usort($positionen, fn ($a, $b) => [$rang($a), $name($a)] <=> [$rang($b), $name($b)]);
         foreach ($positionen as $i => $p) {
             $gp = $p['gp_id'] !== null ? $gps->get($p['gp_id']) : null;
-            $gebinde = $this->einrichtung->gebinde($gp !== null ? $gp->leadLa : $items->get($p['supplier_item_id']), $p['base_unit']);
+            $rezept = ! empty($p['recipe_id']) ? $rezepte->get($p['recipe_id']) : null;
+            $gebinde = $rezept !== null ? null : $this->einrichtung->gebinde($gp !== null ? $gp->leadLa : $items->get($p['supplier_item_id']), $p['base_unit']);
             FoodAlchemistInventoryCountLine::create([
                 'team_id' => $team->id, 'inventory_count_id' => $count->id,
-                'gp_id' => $p['gp_id'], 'supplier_item_id' => $p['supplier_item_id'], 'base_unit' => $p['base_unit'],
+                'gp_id' => $p['gp_id'], 'supplier_item_id' => $p['supplier_item_id'], 'recipe_id' => $rezept?->id, 'base_unit' => $p['base_unit'],
                 'qty_expected' => round((float) $p['qty_expected'], 4),
-                'price_per_base' => $this->preisJeBasis($team, $gp, $p['supplier_item_id'], $p['base_unit']),
+                'price_per_base' => $rezept !== null ? app(EigenproduktionService::class)->preisJeBasis($rezept) : $this->preisJeBasis($team, $gp, $p['supplier_item_id'], $p['base_unit']),
                 'position' => $start + $i + 1,
                 'storage_bin_id' => $p['gp_id'] !== null ? ($stamm[$p['gp_id']] ?? null) : null,
             ] + ($gebinde ?? []));
