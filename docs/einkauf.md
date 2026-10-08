@@ -192,6 +192,16 @@ vollständiges Lager zu führen:
   bucht den Verbrauch exakt aus dem Lager (Grundprodukte und nicht selbst produzierte Komponenten
   aus Eigenproduktion, nie unter 0, Fehlmengen werden gemeldet). In der Einzelbestellung kürzt
   „auf N Gebinde kürzen" eine Zeile auf den Restbedarf. Inventuren öffnen im Editor.
+- **Runden + Vorlagen (Spec 73):** Bestellrunde löschen, solange nichts versendet ist. Runden speichern
+  ihre Quellen und öffnen vollständig wieder; alte Runden zeigen ihre Bestellungen zum Einzelöffnen.
+  Lager, das eine gespeicherte Runde angerechnet hat, ist bis zu ihrem Liefertag reserviert. Konzepte und
+  Pakete × Personen als Quelle (Runde und Vorlage). Vorlagen vorne als Liste nach Kategorien, Bearbeiten
+  im Editor mit Speichern. Ein Klick auf eine Bestellung öffnet sie im Editor, „Ganze Runde öffnen" führt
+  in die Runde.
+- **Lagerartikel (Spec 74):** Grundvorrat wie Gewürze und Öle geht nicht über den Rezeptbedarf in die
+  Bestellung. Er wird unter Mindestbestand auf den Sollbestand nachgefüllt (Knopf in der Bestellrunde).
+  Pflege im Lager-Reiter „Lagerartikel", am Grundprodukt oder per Massenmarkierung; Hinweis im Lager,
+  sobald etwas unter Minimum ist.
 - **Bestellvorlagen (Spec 68):** Einkauf → Bestellvorlagen. Eine Vorlage ist eine gespeicherte
   Bestellrunde: Grundprodukte mit Menge (Artikel wählt beim Bestellen die Lead-Strategie), Rezepte
   und Gerichte mit Portionen/Ansätzen („Musterproduktion", Bedarf aus der Rezeptur) und feste Artikel

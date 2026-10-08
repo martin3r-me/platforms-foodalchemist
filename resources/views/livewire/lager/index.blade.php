@@ -21,13 +21,21 @@
         <x-fa::page-header title="Lager" subtitle="Bestand aus Wareneingang und Inventur. Der Verbrauch ergibt sich aus Anfangsbestand + Einkauf − Endbestand." />
 
         <div class="inline-flex items-center gap-0.5 p-0.5 rounded-[var(--fa-radius-control)] bg-[var(--fa-ground)] self-start" role="tablist" data-lager-reiter>
-            @foreach(['bestand' => 'Bestand', 'bewegungen' => 'Bewegungen', 'eigenproduktion' => 'Eigenproduktion', 'inventur' => 'Inventuren', 'einrichten' => 'Einrichten'] as $k => $l)
+            @foreach(['bestand' => 'Bestand', 'bewegungen' => 'Bewegungen', 'eigenproduktion' => 'Eigenproduktion', 'lagerartikel' => 'Lagerartikel', 'inventur' => 'Inventuren', 'einrichten' => 'Einrichten'] as $k => $l)
                 <button type="button" wire:click="reiterSetzen('{{ $k }}')" class="{{ $segment }} {{ $reiter === $k ? $segmentAn : $segmentAus }}" role="tab" aria-selected="{{ $reiter === $k ? 'true' : 'false' }}">{{ $l }}</button>
             @endforeach
         </div>
 
         @if($fehler)<x-fa::notice tone="crit" data-lager-fehler>{{ $fehler }}</x-fa::notice>@endif
         @if($hinweis)<x-fa::notice tone="info">{{ $hinweis }}</x-fa::notice>@endif
+
+        {{-- Spec 74: Signal — Lagerartikel kurz vor leer --}}
+        @if($unterMindest !== [] && $reiter !== 'lagerartikel')
+            <x-fa::notice tone="warn" data-lager-unter-mindest>
+                {{ count($unterMindest) }} Lagerartikel unter Mindestbestand: {{ collect($unterMindest)->take(5)->pluck('name')->implode(', ') }}{{ count($unterMindest) > 5 ? ' …' : '' }}.
+                <button type="button" wire:click="reiterSetzen('lagerartikel')" class="underline">Ansehen</button> · Nachfüllen in der Bestellrunde unter „Lagerartikel aus dem Vorrat".
+            </x-fa::notice>
+        @endif
 
         @if($orte->isEmpty())
             <x-fa::notice tone="info">Noch kein Lagerort angelegt. Der erste Wareneingang legt automatisch ein „Hauptlager" an; weitere Lagerorte (Kühlhaus, TK, Trocken) unter Einstellungen → Einkauf.</x-fa::notice>
@@ -64,6 +72,61 @@
                         </table>
                     </div>
                 @endif
+            </x-fa::section>
+        @endif
+
+        {{-- ── Lagerartikel (Spec 74) ──────────────────────────────────── --}}
+        @if($reiter === 'lagerartikel')
+            <x-fa::section title="Lagerartikel" icon="heroicon-o-archive-box-arrow-down" description="Grundvorrat wie Gewürze, Öle, Salz: geht nicht mit jedem Rezept in die Bestellung, sondern wird nachgefüllt, sobald der Bestand unter den Mindestbestand fällt — auf den Sollbestand (ohne Soll: das Doppelte des Mindestbestands)." data-lager-lagerartikel>
+                @if($lagerartikel === [])
+                    <x-fa::empty compact icon="heroicon-o-archive-box" title="Noch keine Lagerartikel">Unten ein Grundprodukt ergänzen oder unter „Einrichten" mehrere markieren.</x-fa::empty>
+                @else
+                    <div class="overflow-x-auto">
+                        <table class="fa-table fa-table--compact min-w-[640px]">
+                            <thead><tr><th>Grundprodukt</th><th class="text-right">Bestand</th><th class="text-right">Mindestbestand</th><th class="text-right">Sollbestand</th><th>Status</th><th></th></tr></thead>
+                            <tbody>
+                                @foreach($lagerartikel as $la)
+                                    <tr wire:key="la-{{ $la['gp_id'] }}" data-lagerartikel="{{ $la['gp_id'] }}">
+                                        <td class="font-medium">{{ $la['name'] }}</td>
+                                        <td class="text-right tabular-nums">{{ $zahl($la['bestand']) }} {{ $la['einheit'] }}</td>
+                                        <td class="text-right"><span class="inline-flex items-center gap-1"><input type="text" inputmode="decimal" wire:model="vorrat.{{ $la['gp_id'] }}.min" class="{{ $feld }} w-20" aria-label="Mindestbestand" /><span class="{{ $leise }} w-6 text-left">{{ $la['einheit'] }}</span></span></td>
+                                        <td class="text-right"><span class="inline-flex items-center gap-1"><input type="text" inputmode="decimal" wire:model="vorrat.{{ $la['gp_id'] }}.soll" class="{{ $feld }} w-20" aria-label="Sollbestand" /><span class="{{ $leise }} w-6 text-left">{{ $la['einheit'] }}</span></span></td>
+                                        <td>
+                                            @switch($la['status'])
+                                                @case('leer')<x-fa::badge tone="crit">leer</x-fa::badge>@break
+                                                @case('unter_min')<x-fa::badge tone="warn">unter Minimum</x-fa::badge>@break
+                                                @case('ohne_min')<x-fa::badge tone="neutral">ohne Minimum</x-fa::badge>@break
+                                                @default<x-fa::badge tone="ok">ok</x-fa::badge>
+                                            @endswitch
+                                        </td>
+                                        <td class="text-right whitespace-nowrap">
+                                            <x-fa::button size="sm" wire:click="lagerartikelSpeichern({{ $la['gp_id'] }})">Speichern</x-fa::button>
+                                            <x-fa::icon-button size="sm" tone="danger" icon="heroicon-o-x-mark" label="Kein Lagerartikel mehr" wire:click="lagerartikelEntfernen({{ $la['gp_id'] }})" />
+                                        </td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                @endif
+                @if($warengruppenVorschlag !== [])
+                    {{-- Spec 74: Vorschlag nach Warengruppe — typische Vorrats-Gruppen (Gewürze, Öle, Essig …) zuerst --}}
+                    <div class="flex flex-col gap-1.5 pt-2" data-lager-wg-vorschlag>
+                        <p class="text-[length:var(--fa-text-md)] font-semibold text-[var(--fa-ink)]">Vorschlag nach Warengruppe</p>
+                        <p class="{{ $leise }}">Grundprodukte, die dieser Betrieb nutzt (Bestand oder im letzten Jahr bestellt) und die noch kein Lagerartikel sind.</p>
+                        <div class="flex flex-wrap gap-2">
+                            @foreach(array_slice($warengruppenVorschlag, 0, 12) as $wg)
+                                <x-fa::button size="sm" :variant="$wg['typisch'] ? 'primary' : 'ghost'" wire:click="warengruppeAlsLagerartikel('{{ $wg['code'] }}')" wire:confirm="{{ $wg['anzahl'] }} Grundprodukt(e) aus „{{ $wg['name'] }}“ als Lagerartikel markieren?" wire:key="wg-{{ $wg['code'] }}">{{ $wg['name'] }} ({{ $wg['anzahl'] }})</x-fa::button>
+                            @endforeach
+                        </div>
+                    </div>
+                @endif
+                <div class="flex flex-col gap-1.5 pt-2">
+                    <x-fa::input type="search" size="sm" wire:model.live.debounce.300ms="vorratSuche" placeholder="Grundprodukt als Lagerartikel ergänzen …" class="w-80" aria-label="Lagerartikel ergänzen" />
+                    @foreach($vorratKandidaten as $gp)
+                        <button type="button" wire:key="vk-{{ $gp->id }}" wire:click="lagerartikelHinzu({{ $gp->id }})" class="self-start inline-flex items-center gap-1 text-[length:var(--fa-text-md)] text-[var(--fa-accent)] hover:underline">@svg('heroicon-m-plus', 'w-3.5 h-3.5') {{ $gp->name }}</button>
+                    @endforeach
+                </div>
             </x-fa::section>
         @endif
 
@@ -479,6 +542,7 @@
                                 @foreach($plaetze as $p)<option value="{{ $p->id }}">→ {{ $p->name }}</option>@endforeach
                             </x-fa::select>
                             <x-fa::button size="sm" variant="primary" wire:click="auswahlZuordnen" :disabled="$auswahl === []">Markierte zuordnen</x-fa::button>
+                            <x-fa::button size="sm" icon="heroicon-m-archive-box" wire:click="auswahlAlsLagerartikel" :disabled="$auswahl === []" data-lager-als-lagerartikel>Als Lagerartikel markieren</x-fa::button>
                         </div>
                         @if($einrichten === [])
                             <x-fa::empty compact icon="heroicon-o-squares-plus" title="Keine Grundprodukte">{{ $einrichtenGesamt > 0 ? 'Kein Grundprodukt passt zu den Filtern.' : 'Hier erscheint, was an diesem Lagerort Bestand hat oder zuletzt eingekauft wurde.' }}</x-fa::empty>

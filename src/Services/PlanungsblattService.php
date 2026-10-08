@@ -191,6 +191,28 @@ class PlanungsblattService
                 foreach ($this->konzeptTops($concept, $personen, $warnungen) as $t) {
                     $tops[] = $t;
                 }
+            } elseif (! empty($ziel['paket_id'])) {
+                // Spec 73: Paket × Personen (Bestellrunde / Bestellvorlage) — Gerichte wie im Konzept-Slot
+                $paket = \Platform\FoodAlchemist\Models\FoodAlchemistPaket::visibleToTeam($team)
+                    ->with(['dishes' => fn ($q) => $q->orderBy('position'), 'dishes.unit:id,slug,dimension,default_in_g',
+                        'dishes.dish:id,name,is_sales_recipe,sales_unit_count,sales_quantity_per_unit_g,yield_kg,yield_pieces'])
+                    ->find((int) $ziel['paket_id']);
+                if ($paket === null) {
+                    $warnungen[] = "Paket #{$ziel['paket_id']} nicht sichtbar/vorhanden — übersprungen.";
+
+                    continue;
+                }
+                $personen = max(1, (int) ($ziel['persons'] ?? 0));
+                $skalierung ??= ['modus' => 'personen', 'wert' => $personen];
+                $zielLabels[] = "{$paket->name} ({$personen} P.)";
+                foreach ($paket->dishes as $pg) {
+                    if ($pg->dish) {
+                        $t = $this->positionTop($pg->dish, $pg->quantity, $pg->unit, $this->darreichungen->fuerPaketGericht($pg), $personen, $warnungen);
+                        if ($t !== null) {
+                            $tops[] = $t;
+                        }
+                    }
+                }
             } elseif (! empty($ziel['recipe_id'])) {
                 $recipe = FoodAlchemistRecipe::visibleToTeam($team)->find((int) $ziel['recipe_id']);
                 if ($recipe === null) {
@@ -789,7 +811,9 @@ class PlanungsblattService
                     }
                     $zeilen[] = ['typ' => 'sub', 'name' => $name, 'menge' => round($skalMenge, 3),
                         'einheit' => $z->unit?->slug, 'role' => $z->role, 'note' => $z->note,
-                        'ref_recipe_id' => (int) $z->referenced_recipe_id, 'optional' => $qsOderOpt];
+                        'ref_recipe_id' => (int) $z->referenced_recipe_id, 'optional' => $qsOderOpt,
+                        // Spec 74: Brutto-Gramm inkl. Darreichungs-Delta — Grundlage fürs Ausbuchen (ProduktionsVerbrauchService)
+                        'menge_g' => $qsOderOpt ? 0.0 : round($bruttoProBatch * $zBatches, 2)];
 
                     continue;
                 }
@@ -804,7 +828,8 @@ class PlanungsblattService
                     }
                     $zeilen[] = ['typ' => 'gp', 'name' => $name, 'menge' => round($skalMenge, 3),
                         'einheit' => $z->unit?->slug, 'role' => $z->role, 'note' => $z->note,
-                        'gp_id' => (int) $z->gp_id, 'optional' => $qsOderOpt];
+                        'gp_id' => (int) $z->gp_id, 'optional' => $qsOderOpt,
+                        'menge_g' => $qsOderOpt ? 0.0 : round($this->recompute->bruttoMasseG($z) * $zBatches, 2)];   // Spec 74, s. o.
 
                     continue;
                 }

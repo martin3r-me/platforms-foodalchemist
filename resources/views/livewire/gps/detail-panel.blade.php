@@ -635,6 +635,23 @@
                     </ul>
                 @endif
             @endif
+            {{-- Spec 74: Lagerartikel (Grundvorrat) — nicht über den Rezeptbedarf bestellen, sondern nachfüllen --}}
+            @if($lagerartikelInfo !== null)
+                <div class="mt-3 flex flex-col gap-1.5" data-gp-lagerartikel>
+                    <label class="inline-flex items-center gap-1.5 text-[length:var(--fa-text-md)] text-[var(--fa-ink)]">
+                        <input type="checkbox" wire:model.live="lagerartikelForm.ist" class="w-4 h-4 rounded accent-[var(--fa-accent)]" /> Lagerartikel (Grundvorrat, z. B. Gewürze, Öle)
+                    </label>
+                    @if($lagerartikelForm['ist'])
+                        <div class="flex flex-wrap items-end gap-2">
+                            <x-fa::field label="Mindestbestand" for="gpla-min"><span class="inline-flex items-center gap-1"><x-fa::input id="gpla-min" size="sm" wire:model="lagerartikelForm.min" inputmode="decimal" class="w-20" /><span class="{{ $leise }}">{{ $lagerartikelInfo['einheit'] }}</span></span></x-fa::field>
+                            <x-fa::field label="Auffüllen auf" for="gpla-soll"><span class="inline-flex items-center gap-1"><x-fa::input id="gpla-soll" size="sm" wire:model="lagerartikelForm.soll" inputmode="decimal" class="w-20" /><span class="{{ $leise }}">{{ $lagerartikelInfo['einheit'] }}</span></span></x-fa::field>
+                        </div>
+                    @endif
+                    <div><x-fa::button size="sm" wire:click="lagerartikelSetzen" data-gp-lagerartikel-speichern>Speichern</x-fa::button></div>
+                    @if($lagerartikelFehler)<p class="text-[length:var(--fa-text-sm)] text-[var(--fa-crit)]">{{ $lagerartikelFehler }}</p>@endif
+                    <p class="{{ $leise }}">Lagerartikel gehen nicht mit jedem Rezept in die Bestellung. Unter dem Mindestbestand schlägt die Bestellrunde vor, auf den Sollbestand nachzufüllen.</p>
+                </div>
+            @endif
             @if(\Illuminate\Support\Facades\Route::has('foodalchemist.lager.index'))
                 <a href="{{ route('foodalchemist.lager.index', ['reiter' => 'einrichten']) }}" wire:navigate class="{{ $leise }} hover:underline mt-2 inline-block">Lager einrichten →</a>
             @endif

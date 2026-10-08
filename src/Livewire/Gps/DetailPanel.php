@@ -36,7 +36,7 @@ class DetailPanel extends Component
     protected function sperrFreiExtra(): array
     {
         // Spec 67: Stammplatz ist Betriebs-, nicht GP-Stammdatum — ohne „Bearbeiten“ setzbar.
-        return ['zeige', 'ankerNetzUmschalten', 'ersatzKiVerwerfen', 'laVorschlaegeVerwerfen', 'kiVerwerfen', 'stammplatzSetzen'];
+        return ['zeige', 'ankerNetzUmschalten', 'ersatzKiVerwerfen', 'laVorschlaegeVerwerfen', 'kiVerwerfen', 'stammplatzSetzen', 'lagerartikelSetzen'];
     }
 
     public ?int $gpId = null;
@@ -475,6 +475,26 @@ class DetailPanel extends Component
         ];
     }
 
+    /** Spec 74: Lagerartikel (Grundvorrat) mit Mindest-/Sollbestand — Betriebsdatum, ohne „Bearbeiten“ pflegbar. */
+    public array $lagerartikelForm = ['ist' => false, 'min' => '', 'soll' => ''];
+
+    public ?string $lagerartikelFehler = null;
+
+    public function lagerartikelSetzen(): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null || $this->gpId === null) {
+            return;
+        }
+        $this->lagerartikelFehler = null;
+        try {
+            app(\Platform\FoodAlchemist\Services\LagerartikelService::class)->setzen($team, $this->gpId, (bool) $this->lagerartikelForm['ist'], $this->lagerartikelForm['min'], $this->lagerartikelForm['soll']);
+            $this->dispatch('fa-saved', message: 'Lagerartikel gespeichert.', type: 'success');
+        } catch (\RuntimeException $e) {
+            $this->lagerartikelFehler = $e->getMessage();
+        }
+    }
+
     /** Spec 67: Stammplatz dieses Grundprodukts in einem Lagerort setzen ('' = entfernen). */
     public function stammplatzSetzen(int $locationId, $binId): void
     {
@@ -567,6 +587,7 @@ class DetailPanel extends Component
                 : [],
             // Spec 67: das Grundprodukt „trägt sein Lager": Bestand + Stammplatz je Lagerort, letzte Bewegungen
             'lagerOrte' => ($gp !== null && $team !== null && $brauchtLager) ? $this->lagerOrte($team, $gp) : [],
+            'lagerartikelInfo' => ($gp !== null && $team !== null && $brauchtLager) ? $this->lagerartikelLaden($team, $gp) : null,
             'lagerBewegungen' => ($gp !== null && $team !== null && $brauchtLager)
                 ? \Platform\FoodAlchemist\Models\FoodAlchemistInventoryMovement::where('team_id', $team->id)->where('gp_id', $gp->id)
                     ->with('location:id,name')->where('qty_base', '<>', 0)->orderByDesc('moved_at')->orderByDesc('id')->limit(10)->get()
@@ -591,6 +612,20 @@ class DetailPanel extends Component
                     ->where('id', '!=', $gp->id)
                 : collect(),
         ]);
+    }
+
+    /** Spec 74: Formular einmal je GP vorbelegen, Anzeige-Einheit liefern. */
+    private function lagerartikelLaden($team, FoodAlchemistGp $gp): array
+    {
+        $la = \Platform\FoodAlchemist\Models\FoodAlchemistGpLagerartikel::where('team_id', $team->id)->where('gp_id', $gp->id)->first();
+        $inv = app(\Platform\FoodAlchemist\Services\InventurService::class);
+        $base = $la?->base_unit ?? ($inv->basisEinheit((string) ($gp->leadLa?->unit_code ?? 'kg')) ?: 'g');
+        if (($this->lagerartikelForm['gp'] ?? null) !== $gp->id) {
+            $fmt = fn ($v) => $v !== null ? str_replace('.', ',', (string) $inv->anzeigeMenge((float) $v, $base)) : '';
+            $this->lagerartikelForm = ['gp' => $gp->id, 'ist' => $la !== null, 'min' => $fmt($la?->mindestbestand), 'soll' => $fmt($la?->sollbestand)];
+        }
+
+        return ['einheit' => $inv->anzeigeEinheit($base)];
     }
 
     private function lagerOrte($team, FoodAlchemistGp $gp): array

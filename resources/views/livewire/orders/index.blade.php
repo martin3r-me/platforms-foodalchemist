@@ -347,6 +347,7 @@
                                 @endif
                                 <div class="mt-3 grid grid-cols-2 gap-2">
                                     <x-fa::button wire:click="rundeBearbeiten" :disabled="!$selectedRound['editable']" data-orders-round-edit>Runde bearbeiten</x-fa::button>
+                                    <x-fa::button variant="danger" icon="heroicon-m-trash" wire:click="rundeLoeschen" :disabled="!$selectedRound['editable']" wire:confirm="Bestellrunde löschen? Ihre Entwürfe bzw. ihre Beiträge in gemeinsamen Entwürfen werden entfernt." data-orders-round-delete>Löschen</x-fa::button>
                                     <x-fa::button variant="primary" icon="heroicon-m-paper-airplane" wire:click="rundeVersenden" :disabled="!$selectedRound['sendable']">Runde versenden</x-fa::button>
                                 </div>
                                 @if(!$selectedRound['editable'])

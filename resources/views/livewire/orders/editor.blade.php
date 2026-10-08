@@ -22,8 +22,8 @@
     $knopfBasis = 'fa-btn inline-flex items-center justify-center gap-1.5 whitespace-nowrap font-medium rounded-[var(--fa-radius-control)] transition-colors duration-150 disabled:opacity-50 disabled:pointer-events-none h-9 px-3.5 text-[length:var(--fa-text-md)]';
     $knopfPrimaer = $knopfBasis . ' bg-[var(--fa-accent)] text-[var(--fa-on-accent)] hover:bg-[var(--fa-accent-hover)]';
     $knopfSekundaer = $knopfBasis . ' bg-[var(--fa-surface)] text-[var(--fa-ink)] border border-[var(--fa-line-strong)] hover:bg-[var(--fa-hover)]';
-    $quellenTyp = ['supplier_item' => 'Artikel', 'gp' => 'Grundprodukt', 'recipe' => 'Rezept', 'production' => 'Produktion'];
-    $quellenTon = ['production' => 'accent', 'recipe' => 'info'];
+    $quellenTyp = ['supplier_item' => 'Artikel', 'gp' => 'Grundprodukt', 'recipe' => 'Rezept', 'production' => 'Produktion', 'concept' => 'Konzept', 'paket' => 'Paket', 'nachfuellen' => 'Lagerartikel'];
+    $quellenTon = ['production' => 'accent', 'recipe' => 'info', 'concept' => 'info', 'paket' => 'info', 'nachfuellen' => 'warn'];
     $herkunftTon = ['produktion' => 'accent', 'concept' => 'info'];
     $strategieLabel = fn ($wert) => $wert ? (\Platform\FoodAlchemist\Enums\LeadLaStrategie::tryFrom($wert)?->label() ?? $wert) : 'Team-Standard';
 
@@ -116,11 +116,14 @@
             @if($fehler)<x-fa::signal tone="crit" data-orders-fehler>{{ $fehler }}</x-fa::signal>@endif
 
             <div class="ml-auto flex flex-wrap items-center justify-end gap-2">
+                @if($istRunde && $roundId !== null)
+                    <x-fa::button variant="danger" icon="heroicon-m-trash" wire:click="rundeLoeschen" wire:confirm="Bestellrunde löschen? Ihre Entwürfe bzw. ihre Beiträge in gemeinsamen Entwürfen werden entfernt. Geht nur, solange nichts versendet ist." data-orders-runde-loeschen>Runde löschen</x-fa::button>
+                @endif
                 @if($istRunde && $rundeGesperrt)
                     <x-fa::button variant="primary" icon="heroicon-m-pencil-square" wire:click="rundeBearbeiten" data-orders-runde-bearbeiten>Bearbeiten</x-fa::button>
                 @elseif($istRunde)
                     <x-fa::button icon="heroicon-m-arrow-path" wire:click="cockpitVorschau" data-orders-cockpit-preview>Vorschau berechnen</x-fa::button>
-                    <x-fa::button variant="primary" icon="heroicon-m-check" wire:click="cockpitSpeichern" :disabled="count($cockpitSources) === 0" data-orders-cockpit-save>Bestellungen speichern</x-fa::button>
+                    <x-fa::button variant="primary" icon="heroicon-m-check" wire:click="cockpitSpeichern" wire:loading.attr="disabled" wire:target="cockpitSpeichern" :disabled="count($cockpitSources) === 0" data-orders-cockpit-save>Bestellungen speichern</x-fa::button>
                 @else
                     {{-- Spec 65: Beleg-Aktionen schreiben sofort — „Bearbeiten" sperrt die Schiene, „Fertig" gibt frei --}}
                     <x-foodalchemist::bearbeiten-leiste :zustand="$sperr" sofort />
@@ -203,6 +206,24 @@
         @endif
     </x-slot:kpiHeader>
 
+    {{-- Spec 73: Bestellung gehört zu einer Bestellrunde → dort weiterarbeiten oder hier einzeln --}}
+    @if(! $istRunde && ! empty($rundenDerBestellung))
+        <div class="mb-4" data-orders-teil-der-runde>
+            <x-fa::notice tone="info">
+                @if(count($rundenDerBestellung) === 1)
+                    @php $rd = $rundenDerBestellung[0]; @endphp
+                    Teil der Bestellrunde „{{ $rd['label'] }}“ ({{ $rd['anzahl'] }} {{ $rd['anzahl'] === 1 ? 'Bestellung' : 'Bestellungen' }}). Hier änderst du nur diese Bestellung; Quellen, Lager und Mengen der ganzen Runde in der Runde.
+                    <button type="button" wire:click="oeffnenRunde({{ $rd['id'] }})" class="ml-1 font-medium underline" data-orders-runde-oeffnen>Ganze Runde öffnen</button>
+                @else
+                    Teil von {{ count($rundenDerBestellung) }} Bestellrunden (gemeinsamer Entwurf je Lieferant und Liefertag). Hier änderst du nur diese Bestellung. Runde öffnen:
+                    @foreach($rundenDerBestellung as $rd)
+                        <button type="button" wire:click="oeffnenRunde({{ $rd['id'] }})" class="ml-1 font-medium underline" data-orders-runde-oeffnen>„{{ $rd['label'] }}“ · angelegt {{ $rd['angelegt'] }} ({{ $rd['anzahl'] }})</button>@if(! $loop->last),@endif
+                    @endforeach
+                @endif
+            </x-fa::notice>
+        </div>
+    @endif
+
     {{-- Spec 63: Mail-Protokoll der Bestellung (nur bei Versandart „Direkt per E-Mail") --}}
     @if(! $istRunde && $mailProtokoll->isNotEmpty())
         <div class="mb-4 flex flex-col gap-1.5" data-order-mail-protokoll>
@@ -234,7 +255,23 @@
         <div class="flex flex-col gap-4">
             @if($rundeGesperrt)
                 {{-- Spec 65-Muster wie im Rezept: gespeichert = Lesemodus, „Bearbeiten" öffnet wieder --}}
-                <x-fa::notice tone="info" data-orders-runde-gesperrt>Gespeichert — die Runde ist im Lesemodus. Zum Ändern „Bearbeiten“. Die einzelnen Bestellungen findest du in der Liste.</x-fa::notice>
+                <x-fa::notice tone="info" data-orders-runde-gesperrt>Gespeichert — die Runde ist im Lesemodus. Zum Ändern „Bearbeiten“. Einzelne Bestellungen unten öffnen.</x-fa::notice>
+            @endif
+            {{-- Spec 73: die Bestellungen der Runde — einzeln öffnen (auch im Lesemodus) --}}
+            @if($roundDetail && ! empty($roundDetail['orders']))
+                <x-fa::section title="Bestellungen dieser Runde" icon="heroicon-o-truck" :meta="count($roundDetail['orders'])" data-orders-runde-bestellungen>
+                    @if(empty($roundDetail['sources']) && empty($roundDetail['production_ids']))
+                        <p class="{{ $leise }}">Diese Runde wurde vor dem 08.10.2026 gespeichert und kennt ihre Quellen nicht. Ihre Bestellungen lassen sich einzeln bearbeiten; neue Runden öffnen vollständig mit Quellen.</p>
+                    @endif
+                    <div class="flex flex-col divide-y divide-[var(--fa-line)]">
+                        @foreach($roundDetail['orders'] as $ro)
+                            <div class="flex flex-wrap items-center justify-between gap-2 py-1.5" wire:key="runde-bestellung-{{ $ro['id'] }}">
+                                <span class="text-[length:var(--fa-text-md)] text-[var(--fa-ink)]">{{ $ro['supplier'] }} <span class="{{ $leise }}">· {{ $ro['status_label'] }} · {{ $ro['positions'] }} Pos.@if($ro['desired_delivery_date']) · {{ \Illuminate\Support\Carbon::parse($ro['desired_delivery_date'])->format('d.m.Y') }}@endif</span></span>
+                                <span class="inline-flex items-center gap-2"><x-fa::money :value="$ro['total_net']" /><x-fa::button size="sm" wire:click="oeffnenBearbeiten({{ $ro['id'] }})" data-orders-runde-bestellung-oeffnen>Öffnen</x-fa::button></span>
+                            </div>
+                        @endforeach
+                    </div>
+                </x-fa::section>
             @endif
             <fieldset @disabled($rundeGesperrt) class="contents" data-fa-lesemodus="{{ $rundeGesperrt ? '1' : '0' }}">
             <x-fa::section :title="$roundDetail ? $roundDetail['label'] : 'Neue Bestellrunde'" icon="heroicon-o-calendar-days"
@@ -269,23 +306,11 @@
                 <div class="flex flex-col gap-4 min-w-0">
                     {{-- Quellenart wählen, dann suchen. Alle Suchfelder bleiben im DOM (Livewire-Bindungen). --}}
                     {{-- Spec 68: Vorlagen — einfügen (kombinierbar) oder den Arbeitsstand als Vorlage sichern --}}
-                    <x-fa::section title="Vorlage" icon="heroicon-o-document-duplicate" data-orders-vorlage>
-                        <div class="flex flex-wrap items-end gap-2">
-                            <x-fa::select wire:model="vorlageWahl" size="sm" :options="$vorlagen" :placeholder="$vorlagen->isEmpty() ? 'Noch keine Vorlagen' : 'Vorlage wählen'" class="flex-1 min-w-[10rem]" aria-label="Vorlage" data-orders-vorlage-wahl />
-                            <x-fa::button size="sm" icon="heroicon-m-plus" wire:click="cockpitVorlageEinfuegen" :disabled="$vorlagen->isEmpty()" data-orders-vorlage-einfuegen>Einfügen</x-fa::button>
-                        </div>
-                        @if(count($cockpitSources) > 0)
-                            <div class="flex flex-wrap items-end gap-2 pt-1">
-                                <x-fa::input wire:model="vorlageName" size="sm" placeholder="Name, z. B. Montag Molkerei" class="flex-1 min-w-[10rem]" aria-label="Name der neuen Vorlage" />
-                                <x-fa::button size="sm" variant="ghost" icon="heroicon-m-bookmark" wire:click="cockpitAlsVorlage" data-orders-als-vorlage>Als Vorlage speichern</x-fa::button>
-                            </div>
-                        @endif
-                    </x-fa::section>
 
                     <x-fa::section title="Quellen einfügen" icon="heroicon-o-plus-circle">
                         <div x-data="{ quelle: 'artikel' }" class="flex flex-col gap-3">
-                            <div role="group" aria-label="Quellenart" class="grid grid-cols-2 sm:grid-cols-4 p-0.5 gap-0.5 rounded-[var(--fa-radius-control)] bg-[var(--fa-neutral-soft)]">
-                                @foreach(['artikel' => 'Artikel', 'gp' => 'Grundprodukt', 'rezept' => 'Rezept', 'produktion' => 'Produktion'] as $qk => $ql)
+                            <div role="group" aria-label="Quellenart" class="grid grid-cols-3 sm:grid-cols-6 p-0.5 gap-0.5 rounded-[var(--fa-radius-control)] bg-[var(--fa-neutral-soft)]">
+                                @foreach(['artikel' => 'Artikel', 'gp' => 'Grundprodukt', 'rezept' => 'Rezept', 'konzept' => 'Konzept / Paket', 'vorlage' => 'Vorlage', 'produktion' => 'Produktion'] as $qk => $ql)
                                     <button type="button" x-on:click="quelle = '{{ $qk }}'" x-bind:aria-pressed="quelle === '{{ $qk }}'"
                                         x-bind:class="quelle === '{{ $qk }}' ? 'bg-[var(--fa-surface)] text-[var(--fa-ink)] shadow-sm' : 'text-[var(--fa-ink-2)] hover:text-[var(--fa-ink)]'"
                                         class="h-7 px-2 rounded-[5px] text-[length:var(--fa-text-sm)] font-medium transition-colors truncate">{{ $ql }}</button>
@@ -339,6 +364,37 @@
                                 @endif
                             </div>
 
+                            {{-- Spec 73: Konzept / Paket × Personen --}}
+                            <div x-show="quelle === 'konzept'" x-cloak>
+                                <x-fa::field label="Konzept oder Paket" for="orders-cockpit-konzept">
+                                    <x-fa::input id="orders-cockpit-konzept" type="search" wire:model.live.debounce.300ms="konzeptSuche" placeholder="Konzept oder Paket suchen" data-orders-konzept-suche />
+                                </x-fa::field>
+                                @if($konzeptTreffer->isNotEmpty())
+                                    <div class="{{ $trefferListe }}">
+                                        @foreach($konzeptTreffer as $k)
+                                            <button type="button" wire:click="cockpitKonzeptEinfuegen('{{ $k['typ'] }}', {{ $k['id'] }})" wire:key="cockpit-konzept-{{ $k['typ'] }}-{{ $k['id'] }}" class="flex w-full items-center justify-between gap-2 px-3 py-2 text-left hover:bg-[var(--fa-hover)]">
+                                                <span class="min-w-0 truncate text-[length:var(--fa-text-md)] text-[var(--fa-ink)]">{{ $k['name'] }}</span>
+                                                <x-fa::badge tone="info" class="shrink-0">{{ $k['typ'] === 'paket' ? 'Paket' : 'Konzept' }}</x-fa::badge>
+                                            </button>
+                                        @endforeach
+                                    </div>
+                                @endif
+                            </div>
+
+                            {{-- Spec 73: Vorlage einfügen (kombinierbar) + Arbeitsstand als Vorlage sichern --}}
+                            <div x-show="quelle === 'vorlage'" x-cloak class="flex flex-col gap-2" data-orders-vorlage>
+                                <div class="flex flex-wrap items-end gap-2">
+                                    <x-fa::select wire:model="vorlageWahl" size="sm" :options="$vorlagen" :placeholder="$vorlagen->isEmpty() ? 'Noch keine Vorlagen' : 'Vorlage wählen'" class="flex-1 min-w-[10rem]" aria-label="Vorlage" data-orders-vorlage-wahl />
+                                    <x-fa::button size="sm" icon="heroicon-m-plus" wire:click="cockpitVorlageEinfuegen" :disabled="$vorlagen->isEmpty()" data-orders-vorlage-einfuegen>Einfügen</x-fa::button>
+                                </div>
+                                @if(count($cockpitSources) > 0)
+                                    <div class="flex flex-wrap items-end gap-2">
+                                        <x-fa::input wire:model="vorlageName" size="sm" placeholder="Name, z. B. Montag Molkerei" class="flex-1 min-w-[10rem]" aria-label="Name der neuen Vorlage" />
+                                        <x-fa::button size="sm" variant="ghost" icon="heroicon-m-bookmark" wire:click="cockpitAlsVorlage" data-orders-als-vorlage>Als Vorlage speichern</x-fa::button>
+                                    </div>
+                                @endif
+                            </div>
+
                             <div x-show="quelle === 'produktion'" x-cloak>
                                 <x-fa::field label="Freigegebene Produktion" for="orders-cockpit-produktion">
                                     <x-fa::input id="orders-cockpit-produktion" type="search" wire:model.live.debounce.300ms="produktionSuche" placeholder="Produktionsauftrag suchen" data-orders-produktion-suche />
@@ -379,8 +435,10 @@
                                                 <option value="kg">kg</option>
                                                 <option value="g">g</option>
                                                 <option value="stk">Stk</option>
-                                            @elseif($s['type'] === 'production')
-                                                <option value="auftrag">Auftrag</option>
+                                            @elseif($s['type'] === 'production' || $s['type'] === 'nachfuellen')
+                                                <option value="auftrag">{{ $s['type'] === 'nachfuellen' ? 'alle unter Minimum' : 'Auftrag' }}</option>
+                                            @elseif($s['type'] === 'concept' || $s['type'] === 'paket')
+                                                <option value="persons">Personen</option>
                                             @else
                                                 <option value="portions">Portionen</option>
                                                 <option value="ansaetze">Ansätze</option>
@@ -463,6 +521,9 @@
                                                         Bedarf {{ $p['needed_display'] !== null ? $menge($p['needed_display'], 3) . ' ' . $p['needed_unit'] : 'direkt' }}
                                                         @if($p['source_label']) · {{ $p['source_label'] }}@endif
                                                     </p>
+                                                    @if(($p['lager_reserviert_g'] ?? 0) > 0)
+                                                        <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)] tabular-nums" data-orders-lager-reserviert>{{ $menge($p['lager_reserviert_g'] / 1000, 3) }} kg im Lager schon reserviert für {{ implode(', ', $p['lager_reserviert_fuer'] ?? []) }}</p>
+                                                    @endif
                                                     @if(($p['lager_verfuegbar_g'] ?? 0) > 0)
                                                         {{-- Spec 71: Lager je Artikel immer sichtbar, abziehen auf Knopfdruck --}}
                                                         <p class="flex flex-wrap items-center gap-x-2 text-[length:var(--fa-text-sm)] tabular-nums" data-orders-lager-info>
@@ -561,6 +622,23 @@
                                 @endforeach
                             </div>
                         @endif
+                    {{-- Spec 74: Lagerartikel — kommen aus dem Vorrat, nachgefüllt wird über den Mindestbestand --}}
+                    @if($cockpitPreview !== null && (! empty($cockpitPreview['vorrat']) || ($cockpitPreview['nachfuellen_moeglich'] ?? 0) > 0))
+                        <div class="rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] px-3 py-2 flex flex-col gap-1.5" data-orders-vorrat>
+                            <div class="flex flex-wrap items-center justify-between gap-2">
+                                <p class="text-[length:var(--fa-text-md)] font-semibold text-[var(--fa-ink)]">Lagerartikel aus dem Vorrat ({{ count($cockpitPreview['vorrat'] ?? []) }})</p>
+                                @if(($cockpitPreview['nachfuellen_moeglich'] ?? 0) > 0 && empty($cockpitPreview['nachfuellen_aktiv']))
+                                    <x-fa::button size="sm" icon="heroicon-m-arrow-path" wire:click="cockpitNachfuellenEinfuegen" data-orders-nachfuellen>{{ $cockpitPreview['nachfuellen_moeglich'] }} unter Mindestbestand nachfüllen</x-fa::button>
+                                @endif
+                            </div>
+                            @foreach($cockpitPreview['vorrat'] ?? [] as $p)
+                                <div class="flex items-center justify-between gap-2" wire:key="vorrat-{{ md5($p['position_key'] ?? $loop->index) }}">
+                                    <span class="{{ $leise }}">{{ $p['gp'] ?: ($p['designation'] ?: 'Position') }} · Bedarf {{ $p['needed_display'] !== null ? $menge($p['needed_display'], 3) . ' ' . $p['needed_unit'] : '–' }}</span>
+                                    <button type="button" wire:click="vorratBestellen('{{ $p['position_key'] }}', true)" class="text-[length:var(--fa-text-sm)] text-[var(--fa-accent)] hover:underline">trotzdem bestellen</button>
+                                </div>
+                            @endforeach
+                        </div>
+                    @endif
                     {{-- Spec 71: aus dem Lager gedeckt / von Hand ausgelassen --}}
                     @if($cockpitPreview !== null && ! empty($cockpitPreview['aus_lager']))
                         <div class="rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] px-3 py-2" data-orders-aus-lager>
@@ -1129,19 +1207,19 @@
             @endif
 
             @if($detail['editierbar'])
-                <x-fa::section title="Liefertag und Anlass" icon="heroicon-o-calendar-days">
+                <x-fa::section title="Liefertag und Anlass" icon="heroicon-o-calendar-days" description="Änderungen werden sofort gespeichert.">
                     <x-slot:actions>
                         <x-fa::button size="sm" wire:click="saveHeader" data-orders-kopf-speichern>Bestellkopf speichern</x-fa::button>
                     </x-slot:actions>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
                         <x-fa::field label="Liefertag" for="orders-kopf-liefertag">
-                            <x-fa::input id="orders-kopf-liefertag" type="date" wire:model="formDeliveryDate" />
+                            <x-fa::input id="orders-kopf-liefertag" type="date" wire:model="formDeliveryDate" wire:change="saveHeader" data-orders-kopf-liefertag />
                         </x-fa::field>
                         <x-fa::field label="Anlass" for="orders-kopf-anlass" class="md:col-span-2">
-                            <x-fa::input id="orders-kopf-anlass" wire:model="formReference" placeholder="z. B. Sommerfest" />
+                            <x-fa::input id="orders-kopf-anlass" wire:model="formReference" wire:change="saveHeader" placeholder="z. B. Sommerfest" />
                         </x-fa::field>
                         <x-fa::field label="Notiz" for="orders-kopf-notiz" class="md:col-span-3">
-                            <x-fa::textarea id="orders-kopf-notiz" wire:model="formNote" rows="2" placeholder="Interne Notiz" />
+                            <x-fa::textarea id="orders-kopf-notiz" wire:model="formNote" wire:change="saveHeader" rows="2" placeholder="Interne Notiz" />
                         </x-fa::field>
                     </div>
                 </x-fa::section>
