@@ -107,6 +107,10 @@
         "hex_farbe": 14,
         "style_block": 1
     },
+    "dokumente/zaehlliste.blade.php": {
+        "hex_farbe": 7,
+        "style_block": 1
+    },
     "layouts/presentation.blade.php": {
         "hex_farbe": 7,
         "important": 6,
