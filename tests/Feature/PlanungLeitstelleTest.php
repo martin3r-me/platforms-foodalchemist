@@ -1313,16 +1313,16 @@ it('titelVorschlagen: Service liefert null (KI weg/leer) → fail-soft fehler, k
 
 /**
  * Etappe 4, Teil 1 — Trend-Anbindung: eine aus einem Trend eröffnete Session
- * (source_knowledge_document_id gesetzt) muss ihren Brief/Titel ins Go-Briefing je Tab
+ * (Spec 79: source_trend_refs gesetzt) muss ihren Brief/Titel ins Go-Briefing je Tab
  * vorbefüllen, sonst erreicht das Trendradar-Signal die Generierung nie (Blank-Briefing-Bug).
  */
 it('Trend-Anbindung: Trend-Session-Open befüllt alle Tab-Briefings + Titel (ebenen-spezifischer Lead, Teil 2)', function () {
-    // source_knowledge_document_id ist ein loser Zeiger — der Wert muss nicht auf ein echtes
-    // Trend-Doc zeigen, damit der Prefill (rein sessionbasiert) greift.
+    // source_trend_refs ist ein loser Zeiger — die IDs müssen nicht auf echte Trends zeigen,
+    // damit der Prefill (rein sessionbasiert) greift.
     $session = app(PlanningSessionService::class)->create($this->rootTeam, [
         'title' => 'Fermentierte Chili-Pasten',
         'brief' => 'Aus diesem Food-Trend ein Konzept/Gericht/Basisrezept entwickeln: Fermentierte Chili-Pasten.',
-        'source_knowledge_document_id' => 4242,
+        'source_trend_refs' => ['trend_ids' => [1], 'fundstueck_ids' => []],
         'created_via' => 'trend',
     ]);
 
@@ -1344,7 +1344,7 @@ it('Trend-Anbindung: Einordnung/Kernaussage bleiben scope-neutral, nur der Lead 
     $session = app(PlanningSessionService::class)->create($this->rootTeam, [
         'title' => 'Postbiotic Drinks',
         'brief' => $brief,
-        'source_knowledge_document_id' => 7,
+        'source_trend_refs' => ['trend_ids' => [1], 'fundstueck_ids' => []],
         'created_via' => 'trend',
     ]);
 
@@ -1374,7 +1374,7 @@ it('Trend-Anbindung: ein bereits getipptes Tab-Briefing wird NICHT überschriebe
     $session = app(PlanningSessionService::class)->create($this->rootTeam, [
         'title' => 'Trend-Titel',
         'brief' => 'Trend-Brief.',
-        'source_knowledge_document_id' => 4242,
+        'source_trend_refs' => ['trend_ids' => [1], 'fundstueck_ids' => []],
         'created_via' => 'trend',
     ]);
 
@@ -1391,7 +1391,7 @@ it('Trend-Anbindung: eine Nicht-Trend-Session lässt die Tab-Briefings leer', fu
     $session = app(PlanningSessionService::class)->create($this->rootTeam, [
         'title' => 'Freie Planung',
         'brief' => 'Session-Brief ohne Trend-Herkunft.',
-        // kein source_knowledge_document_id → kein Prefill
+        // keine source_trend_refs → kein Prefill
     ]);
 
     Livewire::test(PlanungIndex::class)

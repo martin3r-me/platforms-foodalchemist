@@ -371,7 +371,7 @@ class IdeenService
      *
      * @return array{angelegt: list<FoodAlchemistDishIdea>, roh: int, confidence: ?float, call_log_id: ?int, grenze: int, verlangt: int, gedeckelt: int}
      */
-    public function kiDivergenzConcept(Team $team, int $conceptId, int $anzahl = 5, ?string $slotRolle = null, ?int $trendDocId = null): array
+    public function kiDivergenzConcept(Team $team, int $conceptId, int $anzahl = 5, ?string $slotRolle = null, ?int $planningSessionId = null): array
     {
         // Verhalten identisch, aber der VERLANGTE Wert bleibt erhalten — sonst kann der Aufrufer
         // nicht melden, was weggefallen ist (genau das hielt diesen Deckel stumm).
@@ -415,7 +415,7 @@ class IdeenService
             '_max_chars' => 5000,
             '_exclude_slugs' => $plan['files_used'] ?? [],
         ]);
-        $ursprung = $trendDocId !== null ? $this->ursprungsTrendBlock($team, $trendDocId) : null;
+        $ursprung = $planningSessionId !== null ? $this->ursprungsTrendBlock($team, $planningSessionId) : null;
         $block = implode("\n\n", array_filter([$plan['block'] ?? '', $trend['block'] ?? '', $ursprung], fn ($b) => is_string($b) && $b !== ''));
         // B1 (2026-09-02) hat die beiden contextFor-Deckel (14.000 + 5.000) gegen die damals gemessenen
         // 39.056 Zeichen reduziert — aber nie gegen DIESE Ceiling abgeglichen: propose() prüft den
@@ -766,25 +766,26 @@ class IdeenService
     }
 
     /**
-     * Der KONKRETE Ursprungs-Trend einer Planung (per knowledge_documents.id) als Kontext-Block —
-     * additiv zum generischen thematischen Trend-Discovery. Ohne den würde der Ausgangs-Trend, aus dem
-     * die Planung gestartet wurde, evtl. gar nicht in der Divergenz landen. Frontmatter gestrippt, gekürzt.
+     * Spec 79 · Ursprung der Planung aus dem Trendradar: die kombinierten Trends, Hypes und Fundstücke
+     * (`planning_sessions.source_trend_refs`) als eigener Block — additiv zum Konzept-Wissen, damit die
+     * Erfindungs-Divergenz die Impulse kennt, aus denen die Planung gestartet wurde. Gleicher, deterministischer
+     * Text wie das Briefing ({@see PlanningSessionService::trendKombination}). Ohne Herkunft oder nicht mehr
+     * sichtbar: null (Invariante 6 — fehlende Quelle = leerer Kontext, nie Fehler).
      */
-    private function ursprungsTrendBlock(Team $team, int $docId): ?string
+    private function ursprungsTrendBlock(Team $team, int $planningSessionId): ?string
     {
-        $doc = DB::table('foodalchemist_knowledge_documents')
-            ->where('id', $docId)->where('category', 'trend')->whereNull('deleted_at')
-            ->first(['title', 'content_md']);
-        if ($doc === null) {
+        $session = app(PlanningSessionService::class)->get($team, $planningSessionId);
+        $refs = is_array($session?->source_trend_refs) ? $session->source_trend_refs : [];
+        if (($refs['trend_ids'] ?? []) === [] && ($refs['fundstueck_ids'] ?? []) === []) {
             return null;
         }
-        $body = preg_replace('/\A\x{FEFF}?\s*---\R.*?\R---\R?/su', '', (string) ($doc->content_md ?? '')) ?? '';
-        $body = trim($body);
-        if ($body === '') {
+        try {
+            $k = app(PlanningSessionService::class)->trendKombination($team, $refs['trend_ids'] ?? [], $refs['fundstueck_ids'] ?? []);
+        } catch (\RuntimeException) {
             return null;
         }
 
-        return "# URSPRUNGS-TREND (Ausgangspunkt dieser Planung)\n## {$doc->title}\n\n" . mb_substr($body, 0, 1500);
+        return "# URSPRUNG AUS DEM TRENDRADAR (Ausgangspunkt dieser Planung)\n" . mb_substr($k['brief'], 0, 1500);
     }
 
     private function preis(mixed $wert): ?float

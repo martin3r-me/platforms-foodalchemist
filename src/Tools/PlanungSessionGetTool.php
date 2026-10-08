@@ -24,7 +24,7 @@ class PlanungSessionGetTool extends FoodAlchemistTool implements ToolContract, T
     {
         return 'Listet Planungs-/Kreativ-Sessions (Doppel-Diamant) — ohne id alle team-sichtbaren, '
             . 'mit id eine einzelne. Felder: title, status (divergenz|konvergenz|erledigt), creative_mode, '
-            . 'source_knowledge_document_id (Trend-Herkunft), brief, analysis, generation_params (gesetzte '
+            . 'source_trend_refs (Herkunft aus dem Trendradar), brief, analysis, generation_params (gesetzte '
             . 'Richtungs-Regler/Leitplanken). Read-only.';
     }
 
@@ -67,7 +67,7 @@ class PlanungSessionGetTool extends FoodAlchemistTool implements ToolContract, T
             'title' => (string) $s->title,
             'status' => (string) $s->status,
             'creative_mode' => (string) $s->creative_mode,
-            'source_knowledge_document_id' => $s->source_knowledge_document_id !== null ? (int) $s->source_knowledge_document_id : null,
+            'source_trend_refs' => $s->source_trend_refs,
             'brief' => $s->brief,
             'analysis' => $s->analysis,
             'generation_params' => $s->generation_params,

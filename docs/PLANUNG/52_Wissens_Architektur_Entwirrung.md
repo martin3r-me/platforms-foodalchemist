@@ -255,8 +255,8 @@ Disaster Recovery / neuen Kunden) hat **36 Tupel — live stehen 73.** Abgleich:
 | `foodbook.plan` × `cross_cutting` | `always` | `discovery 5×8000` |
 | `concept.plan` × `cross_cutting` | `always` | `discovery 5×8000` |
 | `recipe.eigenschaften` × `produktion_kapazitat` | `always 3×7000` | `discovery 3×6000` |
-| `foodbook.plan` × **`trend`** | `discovery 5×1500` | **fehlt** |
-| `concept.brief_geruest` × **`trend`** | `discovery 5×1500` | **fehlt** |
+| ~~`foodbook.plan` × `trend`~~ | ~~`discovery 5×1500`~~ | entfernt (Spec 79, 2026-10-08) |
+| ~~`concept.brief_geruest` × `trend`~~ | ~~`discovery 5×1500`~~ | entfernt (Spec 79, 2026-10-08) |
 | ~37 Live-Zeilen (`ai_plan_dishes`, `format.grundgeruest`, `foodbook.grundgeruest`, …) | **fehlen** | vorhanden |
 
 `insertOrIgnore` + „NICHT überschreiben, nur melden" ist richtig gebaut — aber die Liste ist

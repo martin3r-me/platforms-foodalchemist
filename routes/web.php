@@ -118,7 +118,7 @@ Route::get('/food-dna', \Platform\FoodAlchemist\Livewire\FoodDna\Index::class)
 Route::get('/wissen', \Platform\FoodAlchemist\Livewire\Knowledge\Browser::class)
     ->name('foodalchemist.knowledge.index');
 
-// Trendradar (#FA-Trendradar): kuratierte Sicht auf die geclusterten Trend-Wissens-Docs.
+// Trendradar (Spec 79): Inspiration · Hype · Trend nach Sarah Spork — Radar, Liste, Pinnwand.
 Route::get('/trendradar', \Platform\FoodAlchemist\Livewire\Trendradar\Index::class)
     ->name('foodalchemist.trendradar.index');
 

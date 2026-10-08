@@ -56,7 +56,6 @@ class KnowledgeExportCommand extends Command
         'pairing' => ['07.02_Flavor_Pairing/pairings', 'pairing.'],
         'regelwerk' => ['07.01_Lebensmittel_und_Gastronomie/Regelwerke', 'regelwerk.'],
         'niveau' => ['07.01_Lebensmittel_und_Gastronomie/Niveau_System', 'niveau.'],
-        'trend' => ['07.03_Trend_Scouting', 'trend.'],
         'workflow' => ['07.01_Lebensmittel_und_Gastronomie/Workflows', 'workflow.'],
         'concept' => ['07.01_Lebensmittel_und_Gastronomie/Concepting', 'concept.'],
     ];

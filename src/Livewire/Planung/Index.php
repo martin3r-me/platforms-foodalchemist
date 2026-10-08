@@ -1405,12 +1405,10 @@ class Index extends Component
             'creative_mode' => (string) $session->creative_mode,
         ];
 
-        // Trendradar-Anbindung (Etappe 4, Teil 1): eine aus einem Trend eröffnete Session
-        // (`source_knowledge_document_id`, Carry-in via `?open=1`) trägt Brief/Titel bisher nur in
-        // die Analyse (`form`) — das eigentliche Go-Briefing je Tab (`eingabe[scope]`) blieb LEER,
-        // der Trend erreichte die Generierung also nie. Hier wird der Trend-Brief ins Tab-Briefing
-        // vorbefüllt, sodass der Nutzer mit einem gefüllten Briefing startet statt Blank Page.
-        if ($session->source_knowledge_document_id !== null || ! empty($session->source_trend_refs)) {
+        // Trendradar-Anbindung (Spec 79): eine aus dem Trendradar eröffnete Session (`source_trend_refs`,
+        // Carry-in via `?open=1`) füllt ihren Brief ins Tab-Briefing je Ebene vor (nur leere Felder) —
+        // der Nutzer startet mit einem gefüllten Briefing statt Blank Page.
+        if (! empty($session->source_trend_refs)) {
             $this->seedBriefingAusTrendSession($session);
         }
         // Spec 79: Auswahl im Trendradar-Reiter aus der Herkunft wiederherstellen
@@ -3955,14 +3953,15 @@ class Index extends Component
     {
         $team = $this->team();
 
-        // Sessions team-sichtbar + Trend-Kategorie/Klasse (loser Join über die Herkunft).
+        // Sessions team-sichtbar. Gruppe: „Aus dem Trendradar" (Spec 79, Herkunft source_trend_refs) oder frei.
         $sessions = TeamScope::applyVisible(
-            DB::table('foodalchemist_planning_sessions as s')
-                ->leftJoin('foodalchemist_trend_meta as m', 'm.knowledge_document_id', '=', 's.source_knowledge_document_id')
-                ->whereNull('s.deleted_at'),
+            DB::table('foodalchemist_planning_sessions as s')->whereNull('s.deleted_at'),
             's.team_id', $team
         )->orderByDesc('s.updated_at')
-            ->get(['s.id', 's.title', 's.analysis', 's.status', 's.source_knowledge_document_id', 's.updated_at', 'm.category', 'm.trend_class']);
+            ->get(['s.id', 's.title', 's.analysis', 's.status', 's.source_trend_refs', 's.updated_at'])
+            ->each(function ($s) {
+                $s->category = $s->source_trend_refs !== null ? 'Aus dem Trendradar' : null;
+            });
 
         // Finale Etappe (Hauptseite): Kaskaden-Status je Session (Badge + Stufen-Fortschritt) — ein
         // Query-Pass über die VOLLE Liste (vor dem Filter, damit der Status-Filter greifen kann).

@@ -512,3 +512,17 @@ button { transition: transform 120ms ease-out, background-color 120ms ease, box-
 fieldset[data-fa-lesemodus="1"] :is(input, select, textarea, button) { cursor: not-allowed; }
 fieldset[data-fa-lesemodus="1"] :is(.fa-btn, button[class*="bg-"]) { opacity: .55; }
 fieldset[data-fa-lesemodus="1"] :is(input, select, textarea) { opacity: .85; }
+
+/* Spec 79 · Trendradar (Radar wie Sarah Sporks Click Dummy 3): Food links, Non-Food rechts, Befragung als Goldring. */
+[data-trend-radar] { --tr-food: var(--fa-warn); --tr-nonfood: var(--fa-ok); --tr-gold: var(--fa-gold-2); }
+[data-trend-radar] .tr-ring { fill: none; stroke: var(--fa-line-strong); stroke-width: 1; }
+[data-trend-radar] .tr-ring-band { fill: var(--fa-neutral-soft); opacity: .45; }
+[data-trend-radar] .tr-axis { stroke: var(--fa-line-strong); stroke-width: 1.2; }
+[data-trend-radar] .tr-sector { stroke: var(--fa-line); stroke-width: 1; stroke-dasharray: 4 4; }
+[data-trend-radar] .tr-label { font-size: 11px; fill: var(--fa-ink-3); paint-order: stroke; stroke: var(--fa-surface); stroke-width: 3px; }
+[data-trend-radar] .tr-half { font-size: 12px; font-weight: 600; letter-spacing: .08em; fill: var(--fa-ink-2); }
+[data-trend-radar] .tr-punkt { cursor: pointer; }
+[data-trend-radar] .tr-punkt:hover .tr-visual, [data-trend-radar] .tr-punkt:focus .tr-visual { stroke-width: 3; }
+[data-trend-radar] .tr-punkt .tr-name { font-size: 11px; fill: var(--fa-ink); paint-order: stroke; stroke: var(--fa-surface); stroke-width: 3px; opacity: 0; pointer-events: none; }
+[data-trend-radar] .tr-punkt:hover .tr-name, [data-trend-radar] .tr-punkt:focus .tr-name, [data-trend-radar] .tr-punkt.is-active .tr-name { opacity: 1; }
+[data-trend-radar] .tr-punkt.is-active .tr-visual { stroke-width: 3.5; }

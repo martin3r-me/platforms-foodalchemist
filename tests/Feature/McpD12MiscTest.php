@@ -4,7 +4,6 @@ use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Tools\ToolRegistry;
-use Platform\FoodAlchemist\Jobs\TrendRefreshJob;
 use Platform\FoodAlchemist\Models\FoodAlchemistCanvasEntry;
 use Platform\FoodAlchemist\Services\CanvasService;
 use Platform\FoodAlchemist\Services\KnowledgeService;
@@ -15,7 +14,7 @@ uses(TestCase::class, SeedsTeamHierarchy::class);
 
 /**
  * MCP-Steuerbarkeit · D12: knowledge.DELETE/ALIAS (3 neue Service-Methoden) + canvas.ENTRY_ADD/REMOVE
- * + sales_facts.MAP + trendradar.IMPORT + presentation_designs.DUPLICATE/GENERATE_CSS.
+ * + sales_facts.MAP + presentation_designs.DUPLICATE/GENERATE_CSS.
  */
 beforeEach(function () {
     $this->seedTeamHierarchy();
@@ -27,10 +26,10 @@ beforeEach(function () {
     $this->run = fn (string $n, array $a, ?ToolContext $k = null) => $this->registry->get($n)->execute($a, $k ?? $this->kontext);
 });
 
-it('Registry-Smoke: alle 8 D12-Tools registriert mit type=object', function () {
+it('Registry-Smoke: alle 7 D12-Tools registriert mit type=object', function () {
     $namen = [
         'knowledge.DELETE', 'knowledge.ALIAS', 'canvas.ENTRY_ADD', 'canvas.ENTRY_REMOVE',
-        'sales_facts.MAP', 'trendradar.IMPORT', 'presentation_designs.DUPLICATE', 'presentation_designs.GENERATE_CSS',
+        'sales_facts.MAP', 'presentation_designs.DUPLICATE', 'presentation_designs.GENERATE_CSS',
     ];
     foreach ($namen as $n) {
         $tool = $this->registry->get("foodalchemist.{$n}");
@@ -76,12 +75,8 @@ it('sales_facts.MAP: unbekannter Fakt → NOT_FOUND', function () {
     expect(($this->run)('foodalchemist.sales_facts.MAP', ['fact_id' => 999999, 'recipe_id' => 1])->errorCode)->toBe('NOT_FOUND');
 });
 
-it('trendradar.IMPORT: confirm-gate + dispatch', function () {
-    Bus::fake();
-    expect(($this->run)('foodalchemist.trendradar.IMPORT', [])->errorCode)->toBe('CONFIRM_REQUIRED');
-    $imp = ($this->run)('foodalchemist.trendradar.IMPORT', ['confirm' => true]);
-    expect($imp->success)->toBeTrue('imp: ' . ($imp->error ?? ''));
-    Bus::assertDispatched(TrendRefreshJob::class);
+it('trendradar.IMPORT ist mit Spec 79 entfernt (Trends nicht mehr aus dem Vault)', function () {
+    expect(app(\Platform\Core\Tools\ToolRegistry::class)->has('foodalchemist.trendradar.IMPORT'))->toBeFalse();
 });
 
 it('presentation_designs.DUPLICATE (Builtin) + GENERATE_CSS-Validierung', function () {

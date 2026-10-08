@@ -86,7 +86,7 @@ it('FanoutConceptJob (gestufter Fan-out nach Freigabe) setzt die Phase waehrend 
     $step = FoodAlchemistCascadeRunStep::create([
         'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'concept', 'status' => 'freigegeben',
         'ref_type' => 'concept', 'ref_id' => $concept->id,
-        'deferred' => ['fanout' => ['mode' => 'voll_kreativ', 'trend_doc_id' => null, 'planning_session_id' => null]],
+        'deferred' => ['fanout' => ['mode' => 'voll_kreativ', 'planning_session_id' => null]],
     ]);
 
     $phaseWaehrend = null;

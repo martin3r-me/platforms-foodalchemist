@@ -157,7 +157,7 @@ class Wissenskategorien extends Component
      *  - Docs FREMDER Teams werden nie angefasst. Bleiben dadurch welche an der Kategorie
      *    hängen, wird die Kategorie-Zeile bewusst NICHT entfernt (mit Hinweis).
      *
-     * Was mitgeht: Aliase/Bindungen/trend_meta cascaden per FK am Doc; der Semantik-Index
+     * Was mitgeht: Aliase/Bindungen cascaden per FK am Doc; der Semantik-Index
      * (core_embeddings, kein FK) wird pro Doc explizit über die Core-API entfernt (best-effort).
      */
     public function delete(int $id): void

@@ -115,6 +115,7 @@ enum SignalTyp: string
     // Trendradar: die tägliche 08:00-Automatisierung hat aus Top-Trends Konzeptvorschläge
     // erzeugt. Kein Datenmangel, sondern eine proaktive Anregung — Klasse „Info", landet in
     // derselben Inbox, damit der Vorschlag den User erreicht, auch wenn er nicht im Modul ist.
+    // Altbestand: kam aus der 08:00-Trend-Automatik (mit Spec 79 entfernt). Bleibt, damit vorhandene Signale lesbar sind.
     case TrendKonzeptVorschlag = 'trend_konzept_vorschlag';
     // Schicht 3 · Slice 4c-2: Konformitäts-Critic (§-genau gegen die Regelwerke). GP/LA-Konformität
     // als System-Signal (aus foodalchemist_conformance_findings, status=offen). Rezept/VK-Konformität

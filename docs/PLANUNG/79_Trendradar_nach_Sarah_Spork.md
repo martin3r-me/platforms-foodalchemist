@@ -86,8 +86,9 @@ nur wenn leer) und wechselt dorthin — weiter wie immer mit Leitplanken und Go 
 Vom Trendradar aus: „In Planung öffnen“ am Trend (Detail-Menü) und am Fundstück (Pinnwand). MCP:
 `planung_session.POST` mit `trend_ids` / `fundstueck_ids`.
 
-Offen: Herkunft an die Artefakte (`verknuepfeArtefakt`) und ein Ursprungs-Block im Concept-Prompt
-(`ursprungsTrendBlock`) — heute trägt das Briefing den Inhalt.
+Ursprung in der Concept-Erfindung: `IdeenService::ursprungsTrendBlock` baut aus `source_trend_refs` der Planung
+denselben Kombinations-Text als Block „URSPRUNG AUS DEM TRENDRADAR“ (über `planning_session_id` durch die Kaskade).
+Artefakte tragen `created_via=plan_go`; die Trend-Herkunft steht an der Session.
 
 ## Google Trends über DataForSEO
 
@@ -102,10 +103,17 @@ Team (Standard 5 $), wöchentlicher Lauf Di 06:10 nur bei `trend_dataforseo_enab
 (`database/data/trends_startbestand_sarah_spork.json`) mit Belegen. Bubble Tea und Tumeric-Tonic bleiben „geprüft"
 (nur Google/Instagram). Sarahs eigene Konfidenzwerte werden nicht übernommen — die Regel rechnet aus den Belegen.
 
+## Rückbau Alt-Pfad (2026-10-08)
+
+Entfernt: `TrendRadarService`, `TrendClusterCommand`, `TrendKonzepteCommand` (08:00-Automatik + Settings-Schalter
+`trend_auto_*`/`trend_signal_enabled`), `TrendRefreshJob`, MCP `trendradar.IMPORT`, Prompt `trend.cluster_label`,
+Vault-Import/-Export `07.03_Trend_Scouting`, `KnowledgeContextService::trendBlock` + Routing `trend`, `ausTrend` (+ Brief-
+Helfer), Ursprung über `source_knowledge_document_id`. Migration `2026_10_10_100200_retire_legacy_trend_knowledge`:
+Routing-Zeilen `trend` gelöscht, Dossiers `category=trend` deaktiviert (nicht gelöscht), `trend_meta`/`trend_taxonomy`
+gedroppt. Bleiben im Schema (nicht mehr befüllt): `source_knowledge_document_id` (Sessions/Rezepte/Konzepte),
+`trend_auto_*`-Spalten; Signaltyp `trend_konzept_vorschlag` bleibt lesbar für Altbestand.
+
 ## Offen (Folgeschritte)
 
-- Alt-Pfad zurückbauen: `TrendRadarService`, `TrendClusterCommand`, `TrendRefreshJob`, `trendradar.IMPORT`,
-  `trend_meta`/`trend_taxonomy`; 08:00-Konzepte, `KnowledgeContextService::trendBlock` und „In Planung öffnen" auf
-  `foodalchemist_trends` umhängen.
 - KI-Einordnungs-Vorschlag beim Erfassen (Core-LLM-Contract), nur einsortieren.
 - Instagram-Hashtag-Beobachtung (Meta-Freigabe fehlt), Marktforschungs-PDF-Upload mit Extraktion, Kaufverhalten aus FA-Daten.

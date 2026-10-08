@@ -84,20 +84,6 @@
         </div>
 
         @if($ansicht === 'radar')
-            <style>
-                [data-trend-radar] { --tr-food:#B4692A; --tr-nonfood:#1E6E6B; --tr-gold:#A9822D; }
-                [data-trend-radar] .tr-ring { fill:none; stroke:var(--fa-line-strong); stroke-width:1; }
-                [data-trend-radar] .tr-ring-band { fill:var(--fa-neutral-soft); opacity:.45; }
-                [data-trend-radar] .tr-axis { stroke:var(--fa-line-strong); stroke-width:1.2; }
-                [data-trend-radar] .tr-sector { stroke:var(--fa-line); stroke-width:1; stroke-dasharray:4 4; }
-                [data-trend-radar] .tr-label { font-size:11px; fill:var(--fa-ink-3); paint-order:stroke; stroke:var(--fa-surface); stroke-width:3px; }
-                [data-trend-radar] .tr-half { font-size:12px; font-weight:600; letter-spacing:.08em; fill:var(--fa-ink-2); }
-                [data-trend-radar] .tr-punkt { cursor:pointer; }
-                [data-trend-radar] .tr-punkt:hover .tr-visual, [data-trend-radar] .tr-punkt:focus .tr-visual { stroke-width:3; }
-                [data-trend-radar] .tr-punkt .tr-name { font-size:11px; fill:var(--fa-ink); paint-order:stroke; stroke:var(--fa-surface); stroke-width:3px; opacity:0; pointer-events:none; }
-                [data-trend-radar] .tr-punkt:hover .tr-name, [data-trend-radar] .tr-punkt:focus .tr-name, [data-trend-radar] .tr-punkt.is-active .tr-name { opacity:1; }
-                [data-trend-radar] .tr-punkt.is-active .tr-visual { stroke-width:3.5; }
-            </style>
             <div class="fa-surface p-4" data-trend-radar>
                 @if($radar->isEmpty())
                     <x-fa::empty icon="heroicon-o-signal" title="Noch nichts auf dem Radar">
@@ -159,10 +145,10 @@
                 </svg>
                 {{-- Legende --}}
                 <div class="mt-3 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 {{ $leise }}">
-                    <span class="inline-flex items-center gap-1.5"><svg width="14" height="14"><circle cx="7" cy="7" r="5.5" fill="#B4692A" /></svg> Food</span>
-                    <span class="inline-flex items-center gap-1.5"><svg width="14" height="14"><circle cx="7" cy="7" r="5.5" fill="#1E6E6B" /></svg> Non-Food</span>
+                    <span class="inline-flex items-center gap-1.5"><svg width="14" height="14"><circle cx="7" cy="7" r="5.5" fill="var(--fa-warn)" /></svg> Food</span>
+                    <span class="inline-flex items-center gap-1.5"><svg width="14" height="14"><circle cx="7" cy="7" r="5.5" fill="var(--fa-ok)" /></svg> Non-Food</span>
                     <span class="inline-flex items-center gap-1.5"><svg width="14" height="14"><circle cx="7" cy="7" r="5" fill="var(--fa-surface)" stroke="var(--fa-ink-2)" stroke-width="1.6" stroke-dasharray="2.5,2" /></svg> Hype</span>
-                    <span class="inline-flex items-center gap-1.5"><svg width="16" height="16"><circle cx="8" cy="8" r="6.5" fill="none" stroke="#A9822D" stroke-width="2" /><circle cx="8" cy="8" r="3.5" fill="var(--fa-ink-3)" /></svg> Befragung bestätigt</span>
+                    <span class="inline-flex items-center gap-1.5"><svg width="16" height="16"><circle cx="8" cy="8" r="6.5" fill="none" stroke="var(--fa-gold-2)" stroke-width="2" /><circle cx="8" cy="8" r="3.5" fill="var(--fa-ink-3)" /></svg> Befragung bestätigt</span>
                     <span>Blass = niedrige Konfidenz</span>
                 </div>
             </div>

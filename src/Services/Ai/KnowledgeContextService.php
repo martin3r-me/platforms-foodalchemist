@@ -231,21 +231,11 @@ class KnowledgeContextService
             $snap('concept', $before);
         }
 
-        // ── 0b. TREND-WISSEN (Trendradar) — discovery, thematisch zur Beschreibung ──
-        // Steht bei den rahmenden Blöcken: aktuelle Trends sagen, WAS gerade relevant
-        // ist (Anlass/Inspiration), bevor die Zutaten-Ebene darunter greift.
-        if (($r = $routing->get('trend:discovery')) !== null) {
-            $before = count($filesUsed);
-            $trend = $this->trendBlock($team,
-                (int) ($r->max_docs ?: 5),
-                $description,
-                $filesUsed
-            );
-            if ($trend !== null) {
-                $parts[] = $trend;
-            }
-            $snap('trend', $before);
-        }
+        // ── 0b. TREND-WISSEN: ENTFERNT (Spec 79, 2026-10-08) ──────────────────────────
+        // Trends waren Wissens-Dossiers (category=trend) aus dem Vault. Seit Spec 79 leben sie im
+        // Trendradar-Modul (foodalchemist_trends) und kommen über die Planung (Reiter „Trendradar")
+        // als Briefing in die Generierung. Die Kategorie `trend` bleibt in $spezial, damit eine
+        // übrig gebliebene Routing-Zeile nicht in die generische Discovery fällt.
 
         // ── 0c. REGELWERK: ENTFERNT (Spec 52 · F4, 2026-09-08) ────────────────────────
         //
@@ -1373,60 +1363,6 @@ class KnowledgeContextService
         'gp.conformance_revise' => '%regelwerk-gp%',
     ];
 
-    /**
-     * TREND-WISSEN (Trendradar, `foodbook.plan` / `concept.brief_geruest`): discovery
-     * über die geclusterten Trend-Docs. Auswahl = Relevanz (aus trend_meta) + Token-Overlap
-     * der Beschreibung gegen Titel/Slug/Klasse/Kategorie, damit nur thematisch passende
-     * Trends ins Prompt-Budget kommen. Deckel aus der Routing-Zeile. Ohne Bestand: null
-     * (Invariante 6 — fehlende Quelle = leerer Kontext, nie Fehler).
-     *
-     * @param  list<string>  $filesUsed  by-ref-Audit
-     */
-    private function trendBlock(?Team $team, int $maxDocs, string $description, array &$filesUsed): ?KnowledgeContextBlock
-    {
-        $maxDocs = max(1, $maxDocs);
-        $tokens = $this->tokenize($description);
-        $weight = ['high' => 3, 'medium' => 2, 'low' => 1];
-
-        $rows = DB::table('foodalchemist_knowledge_documents as d')->tap($this->nurFuerPrompt($team, 'd.team_id', 'd.art'))
-            ->leftJoin('foodalchemist_trend_meta as m', 'm.knowledge_document_id', '=', 'd.id')
-            ->where('d.category', 'trend')->where('d.active', 1)->whereNull('d.deleted_at')
-            ->get(['d.id', 'd.slug', 'd.title', 'd.version', 'm.relevance', 'm.trend_class', 'm.category']);
-        if ($rows->isEmpty()) {
-            return null;
-        }
-
-        $scored = [];
-        foreach ($rows as $r) {
-            $matchTokens = $this->tokenize("{$r->title} {$r->slug} {$r->trend_class} {$r->category}");
-            $overlap = $tokens === [] ? 0 : count(array_intersect($tokens, $matchTokens));
-            $scored[] = [$r, ($weight[$r->relevance] ?? 1) + $overlap * 2];
-        }
-        usort($scored, fn ($x, $y) => $y[1] <=> $x[1]);
-        $top = array_slice($scored, 0, $maxDocs);
-
-        $ids = array_map(fn ($p) => $p[0]->id, $top);
-        $docs = DB::table('foodalchemist_knowledge_documents')->tap($this->nurFuerPrompt($team))->whereIn('id', $ids)
-            ->get(['id', 'slug', 'content_md', 'version'])->keyBy('id');
-
-        $blocks = [];
-        foreach ($top as [$r]) {
-            $doc = $docs->get($r->id);
-            if ($doc === null) {
-                continue;
-            }
-            $blocks[] = ['file' => "{$doc->slug}@v{$doc->version}", 'text' => "## TREND: {$doc->slug}\n\n" . (string) $doc->content_md, 'score' => self::DETERMINISTISCHER_SCORE];
-            $filesUsed[] = "{$doc->slug}@v{$doc->version}";
-        }
-        if ($blocks === []) {
-            return null;
-        }
-
-        return new KnowledgeContextBlock("# TREND-WISSEN (aktuelle Food-Trends aus dem Trendradar)\n\n"
-            . "Diese Signale sagen, WAS gerade relevant ist — nutze sie als Anlass/Inspiration. "
-            . "Erfinde nichts hinzu, was die Trends nicht hergeben.\n\n",
-            $blocks);
-    }
 
     /** Die 7 Always-Load-Dokumente in Ist-Reihenfolge (fehlende werden still übersprungen). */
     private function crossCuttingDocs(?Team $team, string $feature): array

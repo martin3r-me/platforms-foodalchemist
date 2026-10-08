@@ -396,7 +396,7 @@
                         $aktPruefen = collect($aktStufen)->filter(fn ($st) => ($st['zustand'] ?? null) === 'prüfen');
                     @endphp
                     <x-fa::detail-kopf :title="$anzeigeTitel($active)"
-                        :subtitle="$active->source_knowledge_document_id ? 'Herkunft: Trendradar, Eintrag ' . $active->source_knowledge_document_id : 'Herkunft: Freier Brief'">
+                        :subtitle="! empty($active->source_trend_refs) ? 'Herkunft: Trendradar (' . (count($active->source_trend_refs['trend_ids'] ?? []) + count($active->source_trend_refs['fundstueck_ids'] ?? [])) . ' Impulse)' : 'Herkunft: Freier Brief'">
                         @if(filled($active->title) && trim((string) $active->title) !== $anzeigeTitel($active))
                             <p class="mt-0.5 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)] break-words">Planung: {{ $active->title }}</p>
                         @endif

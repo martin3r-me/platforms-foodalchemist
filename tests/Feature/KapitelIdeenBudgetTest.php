@@ -35,31 +35,22 @@ beforeEach(function () {
 
 afterEach(fn () => KnowledgeBudget::vergiss());
 
-/** Globales Trend-Dokument mit einem body >1500 Zeichen — ursprungsTrendBlock() kappt selbst schon
- *  auf 1500, trägt also ca. 1550-1600 Zeichen bei (Header + Titel + Body-Kappung). */
-function seedGrossesTrendDoc(): int
+/** Planung aus dem Trendradar mit 8 Trends à langer Definition — der Ursprungsblock (Spec 79) trägt
+ *  damit allein ~1.500 Zeichen bei (ursprungsTrendBlock kappt selbst auf 1.500). */
+function seedGrosseTrendPlanung(\Platform\Core\Models\Team $team): int
 {
-    $body = "# Ein grosser Trend\n\n" . str_repeat('Fermentation ist ein starker Food-Trend. ', 60);
-    $md = "---\nrelevanz: hoch\n---\n" . $body;
+    $svc = app(\Platform\FoodAlchemist\Services\TrendService::class);
+    $ids = [];
+    foreach (range(1, 8) as $i) {
+        $ids[] = $svc->anlegen($team, ['name' => "Grosser Trend {$i}", 'typ' => 'trend', 'ebene' => 'mega', 'kategorie' => 'food',
+            'definition' => str_repeat('Fermentation ist ein starker Food-Trend. ', 8)])->id;
+    }
 
-    return DB::table('foodalchemist_knowledge_documents')->insertGetId([
-        'uuid' => (string) Str::uuid(),
-        'team_id' => null,
-        'slug' => 'trend.kapitel-ideen-budget-test-' . Str::random(8),
-        'title' => 'Grosser Trend',
-        'category' => 'trend',
-        'content_md' => $md,
-        'char_count' => mb_strlen($md),
-        'content_hash' => hash('sha256', $md),
-        'version' => 1,
-        'active' => 1,
-        'created_at' => now(),
-        'updated_at' => now(),
-    ]);
+    return (int) app(\Platform\FoodAlchemist\Services\PlanningSessionService::class)->ausTrendradar($team, $ids)->id;
 }
 
 it('(a) kiDivergenzConcept kappt den Wissensblock hart aufs Prompt-Key-Budget — kein KnowledgeBudgetExceeded mehr', function () {
-    $trendDocId = seedGrossesTrendDoc();
+    $sessionId = seedGrosseTrendPlanung($this->rootTeam);
     $concept = $this->makeConcept($this->rootTeam, 'Budget-Test-Konzept', ['status' => 'draft']);
 
     // Absichtlich winzig — kleiner als der alleinige Ursprungs-Trend-Beitrag (~1550 Zeichen). Vor dem
@@ -68,7 +59,7 @@ it('(a) kiDivergenzConcept kappt den Wissensblock hart aufs Prompt-Key-Budget �
     config(['foodalchemist.ai.knowledge_budget' => ['foodbook.kapitel_ideen' => 400]]);
     config(['foodalchemist.ai.provider' => 'fake']);
 
-    expect(fn () => app(IdeenService::class)->kiDivergenzConcept($this->rootTeam, (int) $concept->id, 1, null, $trendDocId))
+    expect(fn () => app(IdeenService::class)->kiDivergenzConcept($this->rootTeam, (int) $concept->id, 1, null, $sessionId))
         ->not->toThrow(KnowledgeBudgetExceeded::class);
 });
 
