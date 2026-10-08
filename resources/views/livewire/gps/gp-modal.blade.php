@@ -161,6 +161,7 @@
             'kalkulation' => $neu ? null : 'Kalkulation',
             'sensorik' => $neu ? null : 'Aroma',
             'ersatz' => $neu ? null : 'Ersatz',
+            'einkauf' => $neu ? null : 'Einkauf',
             'verwaltung' => $neu ? null : 'Verwaltung',
         ]">
 
@@ -546,6 +547,13 @@
             <div x-show="tab === 'ersatz'" x-cloak class="pt-4">
                 <x-fa::section>
                     <livewire:foodalchemist.gps.detail-panel :gp-id="$gpId" :embedded="true" section="ersatz" :key="'gpd-ersatz-'.$gpId" />
+                </x-fa::section>
+            </div>
+
+            {{-- ── Reiter: EINKAUF (Spec 66 §4) ─────────────────────────────────── --}}
+            <div x-show="tab === 'einkauf'" x-cloak class="pt-4">
+                <x-fa::section>
+                    <livewire:foodalchemist.gps.detail-panel :gp-id="$gpId" :embedded="true" section="einkauf" :key="'gpd-einkauf-'.$gpId" />
                 </x-fa::section>
             </div>
 

@@ -427,6 +427,7 @@ abstract class FoodAlchemistTool
             'geschirr' => ['route' => 'foodalchemist.geschirr.index', 'label' => 'Geschirr'],
             'orders' => ['route' => 'foodalchemist.orders.index', 'label' => 'Bestellwesen'],
             'einkauf' => ['route' => 'foodalchemist.einkauf.index', 'label' => 'Einkauf'],
+            'lager' => ['route' => 'foodalchemist.lager.index', 'label' => 'Lager & Inventur'],
             'produktion' => ['route' => 'foodalchemist.produktion.index', 'label' => 'Produktion'],
             'planung' => ['route' => 'foodalchemist.planung.index', 'label' => 'Planung (Leitstelle)'],
             'controlling' => ['route' => 'foodalchemist.controlling.index', 'label' => 'Controlling'],

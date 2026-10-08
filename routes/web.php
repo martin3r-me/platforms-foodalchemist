@@ -800,6 +800,25 @@ Route::get('/produktion/auftraege/{order}/dokument', function (int $order, \Plat
 Route::get('/bestellungen', \Platform\FoodAlchemist\Livewire\Orders\Index::class)
     ->name('foodalchemist.orders.index');
 
+// Spec 66 · Lager (Stufe 1): Bestand, Bewegungen, Inventuren.
+Route::get('/lager', \Platform\FoodAlchemist\Livewire\Lager\Index::class)
+    ->name('foodalchemist.lager.index');
+
+// Spec 66 · Zählliste einer Inventur: Druck-HTML | ?pdf=1 (DomPDF).
+Route::get('/lager/inventur/{count}/zaehlliste', function (int $count, \Platform\FoodAlchemist\Services\InventurService $svc) {
+    $team = \Illuminate\Support\Facades\Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
+    $inventur = $svc->detail($team, $count);
+    $data = ['inventur' => $inventur, 'summen' => $svc->summen($inventur), 'svc' => $svc, 'istPdf' => false, 'erstelltAm' => now()->format('d.m.Y H:i')];
+    if (request()->boolean('pdf')) {
+        abort_unless(class_exists(\Barryvdh\DomPDF\Facade\Pdf::class), 500, 'PDF-Export nicht verfügbar.');
+
+        return \Barryvdh\DomPDF\Facade\Pdf::loadView('foodalchemist::dokumente.zaehlliste', ['istPdf' => true] + $data)
+            ->download('Zaehlliste-' . $inventur->count_date->format('Ymd') . '.pdf');
+    }
+
+    return view('foodalchemist::dokumente.zaehlliste', $data);
+})->name('foodalchemist.lager.zaehlliste');
+
 // Gebündeltes Versandprotokoll für eine bewusst ausgewählte Belegmenge.
 Route::get('/bestellungen/versandprotokoll', function (\Platform\FoodAlchemist\Services\OrderService $svc) {
     $team = \Illuminate\Support\Facades\Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');

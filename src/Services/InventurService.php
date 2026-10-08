@@ -213,6 +213,51 @@ class InventurService
         return ['wert' => round($wert, 2), 'vollstaendig' => $orte->isNotEmpty() && count($treffer) === $orte->count(), 'inventuren' => $treffer];
     }
 
+    /**
+     * Bestand je Grundprodukt/Artikel und Lagerort, bewertet mit dem aktuellen EK.
+     *
+     * @return list<array{stock_id:int, gp_id:?int, name:string, lagerort:string, base_unit:string, menge:float, anzeige:string, preis:?float, wert:?float, zuletzt:?string}>
+     */
+    public function bestand(Team $team, ?int $locationId = null, string $suche = ''): array
+    {
+        $stocks = FoodAlchemistInventoryStock::where('team_id', $team->id)
+            ->with(['gp:id,name,piece_default_g,lead_la_supplier_item_id', 'location:id,name', 'supplierItem:id,designation,qty'])
+            ->when($locationId !== null, fn ($q) => $q->where('inventory_location_id', $locationId))
+            ->where('qty_base', '<>', 0)->get();
+        $zuletzt = FoodAlchemistInventoryMovement::where('team_id', $team->id)
+            ->whereIn('stock_id', $stocks->pluck('id')->all() ?: [0])
+            ->selectRaw('stock_id, MAX(moved_at) as zuletzt')->groupBy('stock_id')->pluck('zuletzt', 'stock_id');
+        $rows = [];
+        foreach ($stocks as $s) {
+            $name = $s->gp?->name ?? $s->supplierItem?->designation ?? '—';
+            if ($suche !== '' && ! str_contains(mb_strtolower($name), mb_strtolower($suche))) {
+                continue;
+            }
+            $preis = $this->preisJeBasis($team, $s->gp, $s->gp === null ? $s->supplier_item_id : null, $s->base_unit);
+            $menge = (float) $s->qty_base;
+            $rows[] = [
+                'stock_id' => (int) $s->id, 'gp_id' => $s->gp_id !== null ? (int) $s->gp_id : null, 'name' => $name,
+                'lagerort' => (string) ($s->location?->name ?? '—'), 'base_unit' => $s->base_unit, 'menge' => $menge,
+                'anzeige' => $this->inventory->displayQuantity($menge, $s->base_unit),
+                'preis' => $preis, 'wert' => $preis !== null ? round($menge * $preis, 2) : null,
+                'zuletzt' => isset($zuletzt[$s->id]) ? Carbon::parse($zuletzt[$s->id])->format('d.m.Y') : null,
+            ];
+        }
+        usort($rows, fn ($a, $b) => strcmp($a['name'], $b['name']));
+
+        return $rows;
+    }
+
+    /** Jüngste Lagerbewegungen (Wareneingang, Inventur …). @return \Illuminate\Support\Collection */
+    public function bewegungen(Team $team, ?string $quelle = null, int $limit = 200)
+    {
+        return FoodAlchemistInventoryMovement::where('team_id', $team->id)
+            ->with(['gp:id,name', 'supplierItem:id,designation', 'location:id,name', 'order:id,supplier_id', 'order.supplier:id,name'])
+            ->when($quelle !== null && $quelle !== '', fn ($q) => $q->where('source', $quelle))
+            ->where('qty_base', '<>', 0)
+            ->orderByDesc('moved_at')->orderByDesc('id')->limit($limit)->get();
+    }
+
     /** Summen einer Inventur für Kopf/Druck. */
     public function summen(FoodAlchemistInventoryCount $count): array
     {

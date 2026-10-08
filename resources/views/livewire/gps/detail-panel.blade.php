@@ -589,6 +589,67 @@
         </x-fa::section>
         @endif
 
+        {{-- EINKAUF (Spec 66 §4): was wurde eingekauft, wann, bei wem — und was liegt am Lager --}}
+        @if(($section === null || $section === 'einkauf') && $einkauf !== null)
+        @php
+            $eMax = max(array_map(fn ($m) => $section === 'einkauf' ? $m['menge'] : $m['eur'], $einkauf['monate']) ?: [0]) ?: 1;
+            $eEinheit = $einkauf['einheit'] ?? '';
+            $mengeTxt = fn ($v) => rtrim(rtrim(number_format((float) $v, 2, ',', '.'), '0'), ',') ?: '0';
+        @endphp
+        <x-fa::section variant="plain" title="Einkauf (12 Monate)" icon="heroicon-o-shopping-cart" data-sektion="einkauf">
+            @if($einkauf['positionen'] === 0)
+                <p class="{{ $leise }}" data-einkauf-leer>In den letzten 12 Monaten nicht eingekauft.@if($bestandJetzt !== []) Am Lager: @foreach($bestandJetzt as $b){{ $mengeTxt($b['menge']) }} {{ $b['einheit'] }}@if(! $loop->last), @endif @endforeach.@endif</p>
+            @else
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3" data-einkauf-kpis>
+                    @foreach([
+                        ['Menge', $mengeTxt($einkauf['summe_menge']) . ' ' . $eEinheit],
+                        ['Ausgaben', $zahl($einkauf['summe_eur']) . ' €'],
+                        ['Ø Preis', $einkauf['summe_menge'] > 0 ? $zahl($einkauf['summe_eur'] / $einkauf['summe_menge']) . ' €/' . $eEinheit : '—'],
+                        ['Am Lager', $bestandJetzt === [] ? '—' : collect($bestandJetzt)->map(fn ($b) => $mengeTxt($b['menge']) . ' ' . $b['einheit'])->implode(', ')],
+                    ] as [$lbl, $wert])
+                        <div class="rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] px-2.5 py-1.5">
+                            <div class="{{ $leise }}">{{ $lbl }}</div>
+                            <div class="text-[length:var(--fa-text-md)] font-medium tabular-nums text-[var(--fa-ink)]">{{ $wert }}</div>
+                        </div>
+                    @endforeach
+                </div>
+
+                {{-- Monatsbalken: Menge in der Hauptansicht, € im Seitenpanel (dort keine Einheit nötig) --}}
+                <div class="flex items-end gap-1 h-28" data-einkauf-monate>
+                    @foreach($einkauf['monate'] as $m)
+                        @php $v = $section === 'einkauf' ? $m['menge'] : $m['eur']; @endphp
+                        <div class="flex-1 min-w-0 flex flex-col items-center justify-end h-full" wire:key="ek-m-{{ $m['monat'] }}"
+                             title="{{ $m['label'] }}: {{ $mengeTxt($m['menge']) }} {{ $eEinheit }} · {{ $zahl($m['eur']) }} €">
+                            <div class="w-full rounded-t-[3px] {{ $v > 0 ? 'bg-[var(--fa-accent)]' : 'bg-[var(--fa-line)]' }}" style="height: {{ $v > 0 ? max(4, round($v / $eMax * 100)) : 2 }}%"></div>
+                            <div class="mt-1 text-[10px] leading-none text-[var(--fa-ink-3)] truncate w-full text-center">{{ $m['label'] }}</div>
+                        </div>
+                    @endforeach
+                </div>
+                @if($einkauf['gemischte_einheiten'])
+                    <p class="{{ $leise }} mt-1">Gemischte Einheiten im Einkauf — Mengen zeigen nur {{ $eEinheit }}, € enthält alles.</p>
+                @endif
+
+                <table class="fa-table fa-table--compact mt-3" data-einkauf-lieferanten>
+                    <thead><tr><th>Lieferant</th><th class="text-right">Menge</th><th class="text-right">€</th><th class="text-right">Ø €/{{ $eEinheit }}</th><th class="text-right">Zuletzt</th></tr></thead>
+                    <tbody>
+                        @foreach($einkauf['lieferanten'] as $l)
+                            <tr wire:key="ek-l-{{ md5($l['lieferant']) }}">
+                                <td>{{ $l['lieferant'] }}</td>
+                                <td class="text-right tabular-nums">{{ $mengeTxt($l['menge']) }} {{ $eEinheit }}</td>
+                                <td class="text-right tabular-nums">{{ $zahl($l['eur']) }}</td>
+                                <td class="text-right tabular-nums">{{ $l['preis_je_einheit'] !== null ? $zahl($l['preis_je_einheit']) : '—' }}</td>
+                                <td class="text-right tabular-nums">{{ $l['zuletzt'] ? \Illuminate\Support\Carbon::parse($l['zuletzt'])->format('d.m.Y') : '—' }}</td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            @endif
+            @if(\Illuminate\Support\Facades\Route::has('foodalchemist.lager.index'))
+                <a href="{{ route('foodalchemist.lager.index', ['reiter' => 'bestand']) }}" wire:navigate class="{{ $leise }} hover:underline mt-2 inline-block">Zum Lager →</a>
+            @endif
+        </x-fa::section>
+        @endif
+
         {{-- Verwendung --}}
         {{-- VERWENDET IN REZEPTEN --}}
         @if($section === null || $section === 'las')

@@ -120,6 +120,99 @@ class PurchaseJournalService
             ->map(fn ($v) => (float) $v)->all();
     }
 
+    /**
+     * Spec 66 §4 · Einkauf eines Grundprodukts über die Zeit: Menge + € je Monat (lückenlos über
+     * $monate), je Lieferant, Summe. Mengen in kg / l / Stk (g/ml umgerechnet); gemischte Einheiten
+     * werden je Einheit geführt, die Monatsreihe zeigt die häufigste. Team-strikt.
+     *
+     * @return array{einheit: ?string, summe_menge: float, summe_eur: float, monate: list<array>, lieferanten: list<array>, letzter_kauf: ?string, positionen: int}
+     */
+    public function gpEinkauf(Team $team, int $gpId, int $monate = 12): array
+    {
+        $monate = max(1, min(36, $monate));
+        $von = now()->startOfMonth()->subMonths($monate - 1);
+        $zeilen = FoodAlchemistPurchaseTransaction::query()
+            ->where('team_id', $team->id)->where('gp_id', $gpId)
+            ->whereDate('purchased_at', '>=', $von->toDateString())
+            ->with('supplier:id,name')
+            ->get(['id', 'supplier_id', 'supplier_name_raw', 'unit_code', 'qty', 'line_total', 'purchased_at']);
+
+        $norm = function ($z): array {
+            $u = (string) $z->unit_code;
+            $q = (float) $z->qty;
+
+            return match (mb_strtolower($u)) {
+                'g' => ['kg', $q / 1000],
+                'ml' => ['l', $q / 1000],
+                'kg' => ['kg', $q],
+                'l', 'lt' => ['l', $q],
+                'stk', 'st', 'stück' => ['Stk', $q],
+                default => [$u !== '' ? $u : '?', $q],
+            };
+        };
+        $einheitZaehler = [];
+        foreach ($zeilen as $z) {
+            $e = $norm($z)[0];
+            $einheitZaehler[$e] = ($einheitZaehler[$e] ?? 0) + 1;
+        }
+        arsort($einheitZaehler);
+        $einheit = array_key_first($einheitZaehler);
+
+        $reihe = [];
+        for ($i = 0; $i < $monate; $i++) {
+            $m = $von->copy()->addMonths($i);
+            $reihe[$m->format('Y-m')] = ['monat' => $m->format('Y-m'), 'label' => $m->locale('de')->isoFormat('MMM YY'), 'menge' => 0.0, 'eur' => 0.0];
+        }
+        $lief = [];
+        $summeMenge = 0.0;
+        $summeEur = 0.0;
+        foreach ($zeilen as $z) {
+            [$e, $q] = $norm($z);
+            $eur = (float) $z->line_total;
+            $key = $z->purchased_at?->format('Y-m');
+            if ($key !== null && isset($reihe[$key])) {
+                $reihe[$key]['eur'] += $eur;
+                if ($e === $einheit) {
+                    $reihe[$key]['menge'] += $q;
+                }
+            }
+            if ($e === $einheit) {
+                $summeMenge += $q;
+            }
+            $summeEur += $eur;
+            $name = $z->supplier?->name ?? ($z->supplier_name_raw ?: 'ohne Lieferant');
+            $lief[$name] ??= ['lieferant' => $name, 'menge' => 0.0, 'eur' => 0.0, 'einheit' => $einheit, 'zuletzt' => null, 'positionen' => 0];
+            $lief[$name]['eur'] += $eur;
+            $lief[$name]['positionen']++;
+            if ($e === $einheit) {
+                $lief[$name]['menge'] += $q;
+            }
+            $d = $z->purchased_at?->toDateString();
+            if ($d !== null && ($lief[$name]['zuletzt'] === null || $d > $lief[$name]['zuletzt'])) {
+                $lief[$name]['zuletzt'] = $d;
+            }
+        }
+        $lief = array_values($lief);
+        usort($lief, fn ($a, $b) => $b['eur'] <=> $a['eur']);
+        foreach ($lief as &$l) {
+            $l['menge'] = round($l['menge'], 3);
+            $l['eur'] = round($l['eur'], 2);
+            $l['preis_je_einheit'] = $l['menge'] > 0 ? round($l['eur'] / $l['menge'], 2) : null;
+        }
+        unset($l);
+
+        return [
+            'einheit' => $einheit,
+            'summe_menge' => round($summeMenge, 3),
+            'summe_eur' => round($summeEur, 2),
+            'monate' => array_values(array_map(fn ($r) => ['menge' => round($r['menge'], 3), 'eur' => round($r['eur'], 2)] + $r, $reihe)),
+            'lieferanten' => $lief,
+            'letzter_kauf' => $zeilen->max(fn ($z) => $z->purchased_at?->toDateString()),
+            'positionen' => $zeilen->count(),
+            'gemischte_einheiten' => count($einheitZaehler) > 1,
+        ];
+    }
+
     private function basisQuery(Team $team, ?string $von, ?string $bis)
     {
         return FoodAlchemistPurchaseTransaction::query()

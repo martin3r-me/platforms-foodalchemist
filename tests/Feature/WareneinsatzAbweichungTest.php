@@ -147,3 +147,28 @@ it('bleibt knopflos — die Ursache klärt die Küche, nicht das System', functi
     expect(\Platform\FoodAlchemist\Support\SignalCockpit::planFor($sig))->toBeNull()
         ->and(\Platform\FoodAlchemist\Support\SignalCockpit::ohneWegGrund($sig))->toContain('Messung');
 });
+
+it('Spec 66 §5: mit Inventur an beiden Rändern rechnet die Analyse mit dem Verbrauch', function () {
+    ($this->verkauf)(100, 1200.00, $this->gericht->id);
+    ($this->einkauf)(520.00);
+    $ort = \Platform\FoodAlchemist\Models\FoodAlchemistInventoryLocation::create(['team_id' => $this->rootTeam->id, 'name' => 'Hauptlager', 'type' => 'warehouse', 'is_default' => true, 'is_active' => true]);
+    $inv = fn (string $tag, float $wert) => \Platform\FoodAlchemist\Models\FoodAlchemistInventoryCount::create(['team_id' => $this->rootTeam->id, 'inventory_location_id' => $ort->id, 'count_date' => $tag, 'status' => 'gebucht', 'value_total' => $wert]);
+
+    // Nur Endinventur → noch Einkaufsrechnung
+    $inv('2026-07-31', 150.0);
+    expect($this->svc->analyse($this->rootTeam, '2026-07-01', '2026-07-31')['mit_bestand'])->toBeFalse();
+
+    // Anfangsinventur zu weit weg (> 7 Tage vor dem Vortag) → weiter Einkaufsrechnung
+    $alt = $inv('2026-06-10', 100.0);
+    expect($this->svc->analyse($this->rootTeam, '2026-07-01', '2026-07-31')['mit_bestand'])->toBeFalse();
+
+    // AB 100 + Einkauf 520 − EB 150 = Verbrauch 470 → Abweichung 70 statt 120
+    $alt->update(['count_date' => '2026-06-30']);
+    $a = $this->svc->analyse($this->rootTeam, '2026-07-01', '2026-07-31');
+    expect($a['mit_bestand'])->toBeTrue()
+        ->and($a['verbrauch'])->toBe(470.0)
+        ->and($a['einkauf'])->toBe(520.0)
+        ->and($a['ist_pct'])->toBe(39.2)
+        ->and($a['abweichung_eur'])->toBe(70.0)
+        ->and($a['inventur_anfang'])->toBe('2026-06-30');
+});

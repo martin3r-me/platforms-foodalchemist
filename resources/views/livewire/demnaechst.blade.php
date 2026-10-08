@@ -14,7 +14,8 @@
     // Produktions-Tagesplan. Damit die Seite nichts als „geplant" ausgibt, was es schon gibt,
     // gelten diese hier als verfügbar bzw. teilweise verfügbar.
     $schonDa = ['Kalkulation (HK2)' => 'Kalkulation', 'Controlling' => 'Controlling'];
-    $teilweise = ['Produktionsplanung' => 'Der Tagesplan unter Produktion ist schon nutzbar.'];
+    $teilweise = ['Produktionsplanung' => 'Der Tagesplan unter Produktion ist schon nutzbar.',
+        'Lager' => 'Bestand, Bewegungen und Inventur unter Einkauf → Lager sind schon nutzbar.'];
     $istFertig = fn (array $d): bool => str_contains((string) $d['status'], 'Fertig') || isset($schonDa[$d['name']]);
     // Interne Kürzel (V-25, M11+ …) gehören nicht in den sichtbaren Text.
     $sauber = fn (string $text): string => trim((string) preg_replace_callback(
