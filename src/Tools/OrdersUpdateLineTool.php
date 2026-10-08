@@ -89,11 +89,13 @@ class OrdersUpdateLineTool extends FoodAlchemistTool implements ToolContract, To
             }
 
             if (array_key_exists('received_qty_packs', $arguments)) {
-                $line = $svc->updateReceiptLine(
+                // Spec 75c: über den Editor-Lieferschein, Rechte des aufrufenden Benutzers
+                $line = app(\Platform\FoodAlchemist\Services\WareneingangService::class)->kurzwegMenge(
                     $team,
                     $lineId,
                     $arguments['received_qty_packs'],
-                    array_key_exists('received_note', $arguments) ? (string) $arguments['received_note'] : null
+                    array_key_exists('received_note', $arguments) ? (string) $arguments['received_note'] : null,
+                    $context->user
                 );
             } elseif (array_key_exists('received_note', $arguments)) {
                 $line = $svc->updateReceiptNote($team, $lineId, (string) $arguments['received_note']);
@@ -101,12 +103,14 @@ class OrdersUpdateLineTool extends FoodAlchemistTool implements ToolContract, To
 
             if (array_key_exists('invoice_qty_packs', $arguments) || array_key_exists('invoice_pack_price', $arguments)) {
                 $current = FoodAlchemistOrderLine::findOrFail($lineId);
-                $line = $svc->updateInvoiceLine(
+                // Spec 75c: über die Editor-Rechnung, Rechte des aufrufenden Benutzers
+                $line = app(\Platform\FoodAlchemist\Services\LieferantenRechnungService::class)->kurzwegRechnung(
                     $team,
                     $lineId,
                     array_key_exists('invoice_qty_packs', $arguments) ? $arguments['invoice_qty_packs'] : $current->invoice_qty_packs,
                     array_key_exists('invoice_pack_price', $arguments) ? $arguments['invoice_pack_price'] : $current->invoice_pack_price,
-                    array_key_exists('invoice_note', $arguments) ? (string) $arguments['invoice_note'] : null
+                    array_key_exists('invoice_note', $arguments) ? (string) $arguments['invoice_note'] : null,
+                    $context->user
                 );
             } elseif (array_key_exists('invoice_note', $arguments)) {
                 $line = $svc->updateInvoiceNote($team, $lineId, (string) $arguments['invoice_note']);

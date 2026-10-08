@@ -247,3 +247,17 @@ Freigabe-Box im Bestell-Editor: entschieden, siehe Architektur-Entscheidung unte
 - **Core nur lesen:** keine Änderung in core/organization. Spec 65 (`MitBearbeitungssperre::istTeamAdmin`) liest dieselbe Core-Rolle — beide Wege kommen für Inhaber/Admin zum selben Ergebnis.
 - **Modulweit gedacht** (Spec 61 §5), durchgesetzt vorerst nur im Wareneingang; weitere Bereiche hängen sich an `FaRechte` an, wenn sie umgestellt werden. Spec 61 §4 (eigene FA-Rollentabelle) ist damit überholt.
 - **Freigabe-Box im Bestell-Editor (75c):** wird zur echten Übergabe — Kuratieren „Freigabe anfragen", Freigeben „Freigeben & senden" / „Ablehnen" (Entscheidung Dominique).
+
+## Umsetzung 75c (2026-10-08)
+
+**Eine Datenquelle — zentral in `OrderService`, nicht je Aufrufer** (so laufen Editor, MCP und `setStatus(geliefert)` automatisch mit):
+- `updateReceiptLine` / `completeReceipt` / `fillReceiptFromOrder` (bei „geliefert") → `WareneingangService::kurzwegMenge` bzw. `kurzwegAllesWieBestellt`: Editor-Lieferschein je Bestellung (`source = editor`, gebucht, ohne Nummer). Dessen Position hält die Korrektur „gewünscht − Summe der anderen gebuchten Lieferscheine"; die Zeile bleibt die Summe ihrer Lieferscheine. Der frühere Rumpf heißt jetzt `schreibeWareneingangAbleitung` und wird nur noch vom Wareneingang gerufen — Lager weiter genau ein Weg (`InventoryService`, idempotent je Bestellzeile).
+- `updateInvoiceLine` / `completeInvoiceFromReceipt` → `LieferantenRechnungService::kurzwegRechnung` bzw. `kurzwegRechnungAusWareneingang`: Editor-Rechnung je Bestellung. Mit Recht Freigeben (oder ohne Benutzer = System) sofort freigegeben, als Mitglied „in Prüfung" → Freigabe im Wareneingang. Früherer Rumpf = `schreibeRechnungsAbleitung`.
+- MCP `orders.UPDATE_LINE`, `orders.RECEIPT`, `orders.UPDATE` (complete_receipt/complete_invoice) geben den Tool-Benutzer weiter → Rechte greifen auch per MCP.
+- Orders/Index hat keine eigenen WE/RE-Massenaktionen (liegen im Editor und in `orders.UPDATE`) — dort keine Änderung.
+
+**Freigabe-Box als Übergabe:** `updateApproval` verlangt für freigeben/ablehnen das Recht Freigeben, für anfragen Kuratieren (ohne Benutzer: System, keine Prüfung). Editor: „Freigabe anfragen" · „Freigeben & senden" (Entwurf) bzw. „Freigeben" · „Ablehnen". **Senden selbst bleibt ab Kuratieren** (abgestimmter Vorschlag, Bestätigung Dominique offen).
+
+**Bestand:** `php artisan foodalchemist:wareneingang-altbestand [--team=] [--apply]` legt je Bestellung Altbestand-Lieferschein/-Rechnung (`source = altbestand`) für den noch nicht belegten Teil an. Nur Belege, keine Lager-/Journal-Buchung, idempotent. Rechnung „bezahlt", wenn die Bestellung bezahlt ist.
+
+Migration `2026_10_09_100300` (Spalte `source` an Lieferschein und Rechnung). Tests: `WareneingangKurzwegTest` (6); `OrderServiceTest`: sechs Test-Benutzer sind jetzt Inhaber ihres Teams (vorher Nicht-Mitglieder — mit Rechten aus der Team-Rolle wären sie Lesen).

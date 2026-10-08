@@ -4,8 +4,10 @@ namespace Platform\FoodAlchemist\Services;
 
 use Carbon\Carbon;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Platform\Core\Models\Team;
+use Platform\Core\Models\User;
 use Platform\Core\Services\ContextFileService;
 use Platform\FoodAlchemist\Enums\FaRolle;
 use Platform\FoodAlchemist\Enums\OrderStatus;
@@ -259,7 +261,7 @@ class WareneingangService
                 if ($l->order_line_id !== null) {
                     $ol = $l->orderLine->refresh();
                     $neu = round((float) ($ol->received_qty_packs ?? 0) + (float) $l->qty_packs, 2);
-                    $this->orders->updateReceiptLine($team, (int) $ol->id, $neu, $this->wareneingangsNotiz($note, $l));
+                    $this->orders->schreibeWareneingangAbleitung($team, (int) $ol->id, $neu, $this->wareneingangsNotiz($note, $l));
                     $orderIds[(int) $ol->order_id] = true;
 
                     continue;
@@ -311,7 +313,7 @@ class WareneingangService
                     $rest = round(max(0, (float) ($ol->received_qty_packs ?? 0) - (float) $l->qty_packs), 2);
                     $weitere = FoodAlchemistDeliveryNoteLine::where('order_line_id', $ol->id)->where('id', '!=', $l->id)
                         ->whereHas('deliveryNote', fn ($q) => $q->where('status', FoodAlchemistDeliveryNote::STATUS_GEBUCHT))->exists();
-                    $this->orders->updateReceiptLine($team, (int) $ol->id, $rest <= 0.0 && ! $weitere ? null : $rest);
+                    $this->orders->schreibeWareneingangAbleitung($team, (int) $ol->id, $rest <= 0.0 && ! $weitere ? null : $rest);
                 } elseif ($l->inventory_movement_id !== null) {
                     $this->lager->stornieren($team, (int) $l->inventory_movement_id, $userId);
                 }
@@ -372,7 +374,88 @@ class WareneingangService
     private function nichtErfassteAufNull(Team $team, int $orderId): void
     {
         FoodAlchemistOrderLine::where('order_id', $orderId)->whereNull('received_qty_packs')->pluck('id')
-            ->each(fn ($lineId) => $this->orders->updateReceiptLine($team, (int) $lineId, 0, 'nicht geliefert'));
+            ->each(fn ($lineId) => $this->kurzwegMenge($team, (int) $lineId, 0, 'nicht geliefert'));
+    }
+
+    // ── Kurzweg (Spec 75c): Bestell-Editor und alte MCP-Wege ───────────────
+
+    /**
+     * Wareneingang einer Bestellzeile auf eine absolute Menge setzen — wie früher im Editor, aber über
+     * einen Editor-Lieferschein je Bestellung (`source = editor`). Dessen Position hält die Korrektur
+     * „gewünscht minus Summe der anderen gebuchten Lieferscheine"; damit bleibt die Bestellzeile die
+     * Summe ihrer Lieferscheine und Lager/Kontingent/Journal laufen über den einen Ableitungsweg.
+     * `null` nimmt die Editor-Erfassung zurück. Mit angemeldetem Benutzer ab Kuratieren.
+     */
+    public function kurzwegMenge(Team $team, int $lineId, int|float|string|null $menge, ?string $note = null, ?User $user = null): FoodAlchemistOrderLine
+    {
+        $user ??= Auth::user();
+        if ($user !== null) {
+            $this->rechte->pruefe($user, $team, FaRolle::Kuratieren, 'Wareneingang buchen');
+        }
+        $ol = FoodAlchemistOrderLine::with('order')->findOrFail($lineId);
+        if ($ol->order === null || (int) $ol->order->team_id !== (int) $team->id) {
+            throw new \RuntimeException('Diese Bestellzeile gehört einem anderen Team und lässt sich hier nicht bearbeiten.');
+        }
+        if (! in_array($ol->order->status, self::OFFENE_STATUS, true)) {
+            throw new \RuntimeException('Wareneingang ist nur für gesendete oder bestätigte Bestellungen möglich.');
+        }
+        $ziel = $menge === '' || $menge === null ? null : max(0, (float) str_replace(',', '.', (string) $menge));
+
+        return DB::transaction(function () use ($team, $ol, $ziel, $note, $user) {
+            $ls = $this->kurzwegLieferschein($team, $ol->order, $user?->id);
+            $kurz = $ls->lines()->where('order_line_id', $ol->id)->first();
+            $andere = (float) FoodAlchemistDeliveryNoteLine::where('order_line_id', $ol->id)
+                ->when($kurz !== null, fn ($q) => $q->where('id', '!=', $kurz->id))
+                ->whereHas('deliveryNote', fn ($q) => $q->where('status', FoodAlchemistDeliveryNote::STATUS_GEBUCHT))
+                ->sum('qty_packs');
+
+            if ($ziel === null) {
+                $kurz?->delete();
+                $neu = $andere > 0.0001 || FoodAlchemistDeliveryNoteLine::where('order_line_id', $ol->id)
+                    ->whereHas('deliveryNote', fn ($q) => $q->where('status', FoodAlchemistDeliveryNote::STATUS_GEBUCHT))->exists() ? round($andere, 2) : null;
+            } else {
+                $korrektur = round($ziel - $andere, 2);
+                $daten = ['qty_packs' => $korrektur, 'expected_qty_packs' => $korrektur, 'designation' => $ol->designation,
+                    'supplier_item_id' => $ol->supplier_item_id, 'gp_id' => $ol->gp_id, 'pack_price_snapshot' => $ol->pack_price,
+                    'note' => $note !== null && trim($note) !== '' ? mb_substr(trim($note), 0, 255) : $kurz?->note];
+                $kurz !== null ? $kurz->update($daten) : $ls->lines()->create($daten + ['team_id' => $team->id, 'order_line_id' => $ol->id,
+                    'position' => (int) $ls->lines()->max('position') + 1]);
+                $neu = $ziel;
+            }
+            if ($ls->lines()->count() === 0) {
+                $ls->delete();
+            }
+
+            return $this->orders->schreibeWareneingangAbleitung($team, (int) $ol->id, $neu, $note);
+        });
+    }
+
+    /** „Alles wie bestellt" aus dem Editor bzw. `orders.UPDATE complete_receipt`. */
+    public function kurzwegAllesWieBestellt(Team $team, int $orderId, ?User $user = null): void
+    {
+        $order = FoodAlchemistOrder::where('team_id', $team->id)->findOrFail($orderId);
+        if (! in_array($order->status, self::OFFENE_STATUS, true)) {
+            throw new \RuntimeException('Wareneingang ist nur für gesendete oder bestätigte Bestellungen möglich.');
+        }
+        DB::transaction(function () use ($team, $order, $user) {
+            foreach ($order->lines()->get() as $l) {
+                $this->kurzwegMenge($team, (int) $l->id, (float) $l->qty_packs, null, $user);
+            }
+        });
+    }
+
+    /** Editor-Lieferschein der Bestellung (gebucht, ohne Nummer); wird bei Bedarf angelegt. */
+    private function kurzwegLieferschein(Team $team, FoodAlchemistOrder $order, ?int $userId): FoodAlchemistDeliveryNote
+    {
+        $ls = FoodAlchemistDeliveryNote::where('team_id', $team->id)->where('source', 'editor')
+            ->where('status', FoodAlchemistDeliveryNote::STATUS_GEBUCHT)
+            ->where('note', 'Erfasst im Bestell-Editor · ord-'.(int) $order->id)->first();
+
+        return $ls ?? FoodAlchemistDeliveryNote::create([
+            'team_id' => $team->id, 'supplier_id' => $order->supplier_id, 'delivery_note_number' => null,
+            'delivered_on' => now()->toDateString(), 'status' => FoodAlchemistDeliveryNote::STATUS_GEBUCHT, 'source' => 'editor',
+            'note' => 'Erfasst im Bestell-Editor · ord-'.(int) $order->id, 'booked_at' => now(), 'booked_by' => $userId, 'created_by' => $userId,
+        ]);
     }
 
     // ── Beleg-Anhang (Foto / PDF) ──────────────────────────────────────────
@@ -574,6 +657,7 @@ class WareneingangService
             'delivered_on' => $n->delivered_on?->toDateString(),
             'status' => $n->status,
             'status_label' => FoodAlchemistDeliveryNote::STATUS_LABELS[$n->status] ?? $n->status,
+            'source' => (string) ($n->source ?? 'beleg'),
             'inventory_location_id' => $n->inventory_location_id !== null ? (int) $n->inventory_location_id : null,
             'note' => $n->note,
             'positionen' => $zeilen->count(),

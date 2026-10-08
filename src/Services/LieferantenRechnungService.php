@@ -4,12 +4,15 @@ namespace Platform\FoodAlchemist\Services;
 
 use Carbon\Carbon;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Platform\Core\Models\Team;
+use Platform\Core\Models\User;
 use Platform\Core\Services\ContextFileService;
 use Platform\FoodAlchemist\Enums\FaRolle;
 use Platform\FoodAlchemist\Models\FoodAlchemistDeliveryNote;
 use Platform\FoodAlchemist\Models\FoodAlchemistDeliveryNoteLine;
+use Platform\FoodAlchemist\Models\FoodAlchemistOrder;
 use Platform\FoodAlchemist\Models\FoodAlchemistOrderLine;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplier;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplierInvoice;
@@ -320,6 +323,95 @@ class LieferantenRechnungService
         ]);
     }
 
+    // ── Kurzweg (Spec 75c): Rechnungsprüfung im Bestell-Editor und alte MCP-Wege ──
+
+    /**
+     * Rechnungsprüfung einer Bestellzeile wie früher im Editor (berechnete Menge, Preis) — aber über eine
+     * Editor-Rechnung je Bestellung (`source = editor`). Mit Recht „Freigeben" (oder ohne Benutzer =
+     * System) ist sie sofort freigegeben und die Prüfwerte stehen an der Zeile; ein Mitglied legt sie
+     * „in Prüfung" an — freigegeben wird dann im Wareneingang. Die Position hält die Korrektur gegen
+     * andere Rechnungen, die Zeile bleibt die Summe aller freigegebenen Rechnungen.
+     */
+    public function kurzwegRechnung(Team $team, int $lineId, int|float|string|null $menge, int|float|string|null $preis, ?string $note = null, ?User $user = null): FoodAlchemistOrderLine
+    {
+        $user ??= Auth::user();
+        if ($user !== null) {
+            $this->rechte->pruefe($user, $team, FaRolle::Kuratieren, 'Rechnung prüfen');
+        }
+        $ol = FoodAlchemistOrderLine::with('order')->findOrFail($lineId);
+        if ($ol->order === null || (int) $ol->order->team_id !== (int) $team->id) {
+            throw new \RuntimeException('Diese Bestellzeile gehört einem anderen Team und lässt sich hier nicht bearbeiten.');
+        }
+        if (! in_array($ol->order->status, [\Platform\FoodAlchemist\Enums\OrderStatus::Sent, \Platform\FoodAlchemist\Enums\OrderStatus::Confirmed, \Platform\FoodAlchemist\Enums\OrderStatus::Delivered], true)) {
+            throw new \RuntimeException('Rechnungsprüfung ist erst nach dem Absenden möglich.');
+        }
+        $m = $this->zahl($menge);
+        $p = $this->zahl($preis);
+        $m = $m !== null ? max(0, $m) : null;
+        $p = $p !== null ? max(0, $p) : null;
+        $sofort = $user === null || $this->rechte->darf($user, $team, FaRolle::Freigeben);
+
+        DB::transaction(function () use ($team, $ol, $m, $p, $note, $user, $sofort) {
+            $inv = $this->kurzwegBeleg($team, $ol->order, $user?->id, $sofort);
+            $kurz = $inv->lines()->where('order_line_id', $ol->id)->where('art', 'ware')->first();
+            $andere = $this->match->rechnungJeZeile($team, [(int) $ol->id],
+                [FoodAlchemistSupplierInvoice::STATUS_FREIGEGEBEN, FoodAlchemistSupplierInvoice::STATUS_BEZAHLT], (int) $inv->id)[$ol->id]['menge'] ?? 0.0;
+            if ($m === null && $p === null) {
+                $kurz?->delete();
+            } else {
+                $korrektur = $m !== null ? round($m - (float) $andere, 2) : null;
+                $daten = ['qty_packs' => $korrektur, 'pack_price' => $p, 'line_net' => $korrektur !== null && $p !== null ? round($korrektur * $p, 2) : null,
+                    'designation' => $ol->designation, 'supplier_item_id' => $ol->supplier_item_id,
+                    'note' => $note !== null && trim($note) !== '' ? mb_substr(trim($note), 0, 255) : $kurz?->note];
+                $kurz !== null ? $kurz->update($daten) : $inv->lines()->create($daten + ['team_id' => $team->id, 'order_line_id' => $ol->id,
+                    'art' => 'ware', 'position' => (int) $inv->lines()->max('position') + 1]);
+            }
+            $inv->refresh()->load('lines');
+            if ($inv->status === FoodAlchemistSupplierInvoice::STATUS_FREIGEGEBEN) {
+                $this->aufBestellungenSchreiben($team, $inv, [(int) $ol->id]);
+                if ($note !== null) {
+                    $this->orders->updateInvoiceNote($team, (int) $ol->id, $note);   // Notiz wie früher an der Zeile
+                }
+            }
+            if ($inv->lines()->count() === 0) {
+                $inv->delete();
+            }
+        });
+
+        return $ol->refresh();
+    }
+
+    /** „Rechnung aus Wareneingang übernehmen" (Editor, `orders.UPDATE complete_invoice`). */
+    public function kurzwegRechnungAusWareneingang(Team $team, int $orderId, ?User $user = null): void
+    {
+        $order = FoodAlchemistOrder::where('team_id', $team->id)->findOrFail($orderId);
+        DB::transaction(function () use ($team, $order, $user) {
+            foreach ($order->lines()->get() as $l) {
+                $this->kurzwegRechnung($team, (int) $l->id, $l->received_qty_packs !== null ? (float) $l->received_qty_packs : (float) $l->qty_packs,
+                    $l->pack_price !== null ? (float) $l->pack_price : null, null, $user);
+            }
+        });
+    }
+
+    /** Editor-Rechnung der Bestellung (eine offene je Bestellung); Rechnungskopf aus der Bestellung. */
+    private function kurzwegBeleg(Team $team, FoodAlchemistOrder $order, ?int $userId, bool $sofort): FoodAlchemistSupplierInvoice
+    {
+        $inv = FoodAlchemistSupplierInvoice::where('team_id', $team->id)->where('source', 'editor')
+            ->whereIn('status', [FoodAlchemistSupplierInvoice::STATUS_ERFASST, FoodAlchemistSupplierInvoice::STATUS_FREIGEGEBEN])
+            ->where('note', 'Erfasst im Bestell-Editor · ord-'.(int) $order->id)->first();
+        if ($inv !== null) {
+            return $inv;
+        }
+        $datum = $order->invoice_date ?? now();
+
+        return FoodAlchemistSupplierInvoice::create([
+            'team_id' => $team->id, 'supplier_id' => $order->supplier_id, 'invoice_number' => $order->invoice_number,
+            'invoice_date' => $datum->toDateString(), 'source' => 'editor', 'note' => 'Erfasst im Bestell-Editor · ord-'.(int) $order->id,
+            'status' => $sofort ? FoodAlchemistSupplierInvoice::STATUS_FREIGEGEBEN : FoodAlchemistSupplierInvoice::STATUS_ERFASST,
+            'approved_at' => $sofort ? now() : null, 'approved_by' => $sofort ? $userId : null, 'created_by' => $userId,
+        ]);
+    }
+
     public function anhangSpeichern(Team $team, int $id, UploadedFile $file, ?int $userId = null): FoodAlchemistSupplierInvoice
     {
         $this->rechte->pruefeId($userId, $team, FaRolle::Kuratieren, 'Beleg anhängen');
@@ -361,19 +453,20 @@ class LieferantenRechnungService
      * Prüfwerte je betroffener Bestellzeile = Summe aller freigegebenen/bezahlten Rechnungen
      * (Menge, gewichteter Preis); keine mehr → Prüfung zurücksetzen. Rechnungskopf an der Bestellung.
      */
-    private function aufBestellungenSchreiben(Team $team, FoodAlchemistSupplierInvoice $inv): void
+    /** @param  list<int>  $zusaetzlich  Bestellzeilen, die neu zu rechnen sind, auch wenn sie nicht (mehr) auf der Rechnung stehen */
+    private function aufBestellungenSchreiben(Team $team, FoodAlchemistSupplierInvoice $inv, array $zusaetzlich = []): void
     {
-        $olIds = $inv->lines->pluck('order_line_id')->filter()->unique()->values()->all();
+        $olIds = $inv->lines->pluck('order_line_id')->filter()->merge($zusaetzlich)->unique()->values()->all();
         $gelten = [FoodAlchemistSupplierInvoice::STATUS_FREIGEGEBEN, FoodAlchemistSupplierInvoice::STATUS_BEZAHLT];
         $summe = $this->match->rechnungJeZeile($team, $olIds, $gelten);
         $orderIds = [];
         foreach ($olIds as $olId) {
             $s = $summe[$olId] ?? null;
-            $this->orders->updateInvoiceLine($team, (int) $olId, $s['menge'] ?? null, $s['preis'] ?? null,
-                $s !== null ? 'RE '.implode(', ', $s['nummern']) : '');
+            $this->orders->schreibeRechnungsAbleitung($team, (int) $olId, $s['menge'] ?? null, $s['preis'] ?? null,
+                $s === null ? '' : ($s['nummern'] !== [] ? 'RE '.implode(', ', $s['nummern']) : null));
             $orderIds[(int) FoodAlchemistOrderLine::whereKey($olId)->value('order_id')] = true;
         }
-        if ($inv->status === FoodAlchemistSupplierInvoice::STATUS_FREIGEGEBEN) {
+        if ($inv->status === FoodAlchemistSupplierInvoice::STATUS_FREIGEGEBEN && $inv->invoice_number !== null) {
             foreach (array_keys($orderIds) as $orderId) {
                 $this->orders->updateInvoiceHeader($team, $orderId, ['invoice_number' => $inv->invoice_number, 'invoice_date' => $inv->invoice_date?->toDateString()]);
             }
@@ -457,6 +550,7 @@ class LieferantenRechnungService
             'summe_positionen' => $summe,
             'status' => $i->status,
             'status_label' => FoodAlchemistSupplierInvoice::STATUS_LABELS[$i->status] ?? $i->status,
+            'source' => (string) ($i->source ?? 'beleg'),
             'strittig' => (bool) $i->is_disputed,
             'paid_at' => $i->paid_at?->toDateString(),
             'note' => $i->note,

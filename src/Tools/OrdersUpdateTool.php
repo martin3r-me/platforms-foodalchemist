@@ -113,11 +113,14 @@ class OrdersUpdateTool extends FoodAlchemistTool implements ToolContract, ToolMe
             if ($approval !== []) {
                 $order = $svc->updateApproval($team, (int) $arguments['order_id'], $approval, (int) $context->user->getAuthIdentifier());
             }
+            // Spec 75c: über Editor-Lieferschein bzw. -Rechnung, Rechte des aufrufenden Benutzers
             if ($completeReceipt) {
-                $order = $svc->completeReceipt($team, (int) $arguments['order_id']);
+                app(\Platform\FoodAlchemist\Services\WareneingangService::class)->kurzwegAllesWieBestellt($team, (int) $arguments['order_id'], $context->user);
+                $order = \Platform\FoodAlchemist\Models\FoodAlchemistOrder::find((int) $arguments['order_id']);
             }
             if ($completeInvoice) {
-                $order = $svc->completeInvoiceFromReceipt($team, (int) $arguments['order_id']);
+                app(\Platform\FoodAlchemist\Services\LieferantenRechnungService::class)->kurzwegRechnungAusWareneingang($team, (int) $arguments['order_id'], $context->user);
+                $order = \Platform\FoodAlchemist\Models\FoodAlchemistOrder::find((int) $arguments['order_id']);
             }
             if ($createBackorder) {
                 $backorder = $svc->createBackorderFromReceipt(

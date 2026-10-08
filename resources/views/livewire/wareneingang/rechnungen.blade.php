@@ -105,7 +105,7 @@
                         @foreach($liste as $r)
                             <tr wire:key="re-l-{{ $r['id'] }}" class="cursor-pointer" wire:click="umschalten({{ $r['id'] }})" data-re-rechnung="{{ $r['id'] }}">
                                 <td>{{ $datum($r['invoice_date']) }}</td>
-                                <td class="font-medium">{{ $r['invoice_number'] ?? 'ohne Nr.' }}@if($r['anhang']) @svg('heroicon-o-paper-clip', 'inline w-3.5 h-3.5 text-[var(--fa-ink-3)]')@endif</td>
+                                <td class="font-medium">{{ $r['invoice_number'] ?? 'ohne Nr.' }}@if($r['source'] === 'editor') <x-fa::badge>aus Bestell-Editor</x-fa::badge>@elseif($r['source'] === 'altbestand') <x-fa::badge>Altbestand</x-fa::badge>@endif @if($r['anhang']) @svg('heroicon-o-paper-clip', 'inline w-3.5 h-3.5 text-[var(--fa-ink-3)]')@endif</td>
                                 <td>{{ $r['lieferant'] }}</td>
                                 <td class="text-right"><x-fa::money :value="$r['summe_positionen']" /></td>
                                 <td class="{{ $r['ueberfaellig'] ? 'text-[var(--fa-warn)] font-medium' : '' }}">{{ $datum($r['due_date']) }}</td>
