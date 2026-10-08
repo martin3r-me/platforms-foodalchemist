@@ -5,24 +5,23 @@ namespace Platform\FoodAlchemist\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Platform\ActivityLog\Traits\LogsActivity;
-use Platform\FoodAlchemist\Enums\FaRolle;
 use Platform\FoodAlchemist\Models\Concerns\BelongsToTeamHierarchy;
 use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
 
 /**
- * @ai.description Spec 61 — FA-Rolle eines Mitglieds in einem Team. Kein Eintrag = Lesen;
- * Inhaber/Admins sind immer FA-Admin (berechnet in FaRechte, nicht hier gespeichert).
+ * @ai.description Spec 61/75 — FA-Zusatzrecht eines Mitglieds: „darf Rechnungen freigeben".
+ * Die Rolle selbst (Inhaber/Admin/Mitglied/Betrachter) kommt aus den Team-Einstellungen der Plattform.
  */
-class FoodAlchemistTeamMemberRole extends Model
+class FoodAlchemistTeamMemberFlag extends Model
 {
     use HasUuidV7, LogsActivity, BelongsToTeamHierarchy, SoftDeletes;
 
-    protected $table = 'foodalchemist_team_member_roles';
+    protected $table = 'foodalchemist_team_member_flags';
 
     protected $guarded = ['id'];
 
     protected $casts = [
         'uuid' => 'string',
-        'rolle' => FaRolle::class,
+        'can_approve_invoices' => 'boolean',
     ];
 }

@@ -72,7 +72,7 @@ class Index extends Component
 
     public function reiterSetzen(string $reiter): void
     {
-        $this->reiter = in_array($reiter, ['erwartet', 'lieferscheine'], true) ? $reiter : 'erwartet';
+        $this->reiter = in_array($reiter, ['erwartet', 'lieferscheine', 'rechnungen', 'abgleich'], true) ? $reiter : 'erwartet';
     }
 
     public function neu(): void

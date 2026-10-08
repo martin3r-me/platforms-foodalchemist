@@ -19,24 +19,24 @@
     </x-slot>
 
     <x-ui-page-container padding="px-6 py-6" spacing="space-y-4">
-        <x-fa::page-header title="Wareneingang" subtitle="Lieferscheine erfassen und buchen. Ein Lieferschein darf mehrere Bestellungen desselben Lieferanten bedienen; Ware ohne Bestellung geht direkt ins Lager." />
+        <x-fa::page-header title="Wareneingang" subtitle="Triple Match: Bestellung, Lieferschein und Rechnung. Lieferscheine buchen die Ware ins Lager, Rechnungen werden gegen Lieferung und Bestellpreis geprüft und freigegeben." />
 
-        <x-fa::kpis :items="$kpis" data-we-kpis />
+        @if(in_array($reiter, ['erwartet', 'lieferscheine'], true))<x-fa::kpis :items="$kpis" data-we-kpis />@endif
 
         <div class="flex flex-wrap items-center gap-3">
             <div class="inline-flex items-center gap-0.5 p-0.5 rounded-[var(--fa-radius-control)] bg-[var(--fa-ground)]" role="tablist" data-we-reiter>
-                @foreach(['erwartet' => 'Erwartet', 'lieferscheine' => 'Lieferscheine'] as $k => $l)
+                @foreach(['erwartet' => 'Erwartet', 'lieferscheine' => 'Lieferscheine', 'rechnungen' => 'Rechnungen', 'abgleich' => 'Abgleich'] as $k => $l)
                     <button type="button" wire:click="reiterSetzen('{{ $k }}')" class="{{ $segment }} {{ $reiter === $k ? $segmentAn : $segmentAus }}" role="tab" aria-selected="{{ $reiter === $k ? 'true' : 'false' }}">{{ $l }}</button>
                 @endforeach
             </div>
             <span class="flex-1"></span>
-            @if($darf && ! $formOffen)
+            @if($darf && ! $formOffen && in_array($reiter, ['erwartet', 'lieferscheine'], true))
                 <x-fa::button variant="primary" icon="heroicon-o-plus" wire:click="neu" data-we-neu>Lieferschein erfassen</x-fa::button>
             @endif
         </div>
 
         @unless($darf)
-            <x-fa::notice tone="info" data-we-leserecht>Du hast die Rolle „{{ $meineRolle->label() }}“: Lieferscheine ansehen ja, erfassen und buchen nein. Das Recht „Kuratieren“ vergibt ein Team-Admin unter Einstellungen → Zugriffsrechte.</x-fa::notice>
+            <x-fa::notice tone="info" data-we-leserecht>Du hast die Rolle „{{ $meineRolle->label() }}“: Lieferscheine ansehen ja, erfassen und buchen nein. Schreiben dürfen Mitglieder, Admins und Inhaber — die Rolle pflegt ein Team-Admin in den Team-Einstellungen.</x-fa::notice>
         @endunless
         @if($fehler)<x-fa::notice tone="crit" data-we-fehler>{{ $fehler }}</x-fa::notice>@endif
         @if($hinweis)<x-fa::notice tone="ok" data-we-hinweis>{{ $hinweis }}</x-fa::notice>@endif
@@ -291,6 +291,13 @@
                     </div>
                 @endif
             </x-fa::section>
+        @endif
+        {{-- ── Spec 75b: Rechnungen + Abgleich (eigene Komponenten, mit key) ── --}}
+        @if($reiter === 'rechnungen')
+            @livewire('foodalchemist.wareneingang.rechnungen', key('we-rechnungen'))
+        @endif
+        @if($reiter === 'abgleich')
+            @livewire('foodalchemist.wareneingang.abgleich', key('we-abgleich'))
         @endif
     </x-ui-page-container>
 </x-ui-page>

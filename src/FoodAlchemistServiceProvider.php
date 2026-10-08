@@ -1054,6 +1054,15 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\DeliveryNotesBackorderTool::class,
                     \Platform\FoodAlchemist\Tools\TeamRolesGetTool::class,
                     \Platform\FoodAlchemist\Tools\TeamRolesPutTool::class,
+                    // Spec 75b: Lieferanten-Rechnungen + Triple Match
+                    \Platform\FoodAlchemist\Tools\SupplierInvoicesGetTool::class,
+                    \Platform\FoodAlchemist\Tools\SupplierInvoicesPostTool::class,
+                    \Platform\FoodAlchemist\Tools\SupplierInvoicesPutTool::class,
+                    \Platform\FoodAlchemist\Tools\SupplierInvoicesApproveTool::class,
+                    \Platform\FoodAlchemist\Tools\SupplierInvoicesPayTool::class,
+                    \Platform\FoodAlchemist\Tools\SupplierInvoicesStornoTool::class,
+                    \Platform\FoodAlchemist\Tools\TripleMatchGetTool::class,
+                    \Platform\FoodAlchemist\Tools\TripleMatchPutTool::class,
                     // Spec 70: Etiketten
                     \Platform\FoodAlchemist\Tools\LabelsPostTool::class,
                     \Platform\FoodAlchemist\Tools\LabelTemplatesGetTool::class,

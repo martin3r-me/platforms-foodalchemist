@@ -7,44 +7,48 @@ use Platform\Core\Models\Team;
 use Platform\Core\Models\User;
 use Platform\FoodAlchemist\Enums\FaRolle;
 use Platform\FoodAlchemist\Exceptions\FaRechtFehltException;
-use Platform\FoodAlchemist\Models\FoodAlchemistTeamMemberRole;
+use Platform\FoodAlchemist\Models\FoodAlchemistTeamMemberFlag;
 
 /**
  * Spec 61 §5 · Eine Stelle für alle Rechte-Fragen im Food Alchemist.
  *
- * Geprüft wird in der Service-Schicht, nicht in der Oberfläche — damit gilt dieselbe Regel für
- * Livewire, MCP und Jobs. Ermittlung der Rolle (höchste gewinnt):
- *  1. Plattform-Admin (E-Mail in `platform-shell.admins`, falls die Host-App das liefert) → FA-Admin
- *  2. Inhaber/Admin (`team_user.role`) im Team oder einem Eltern-Team → FA-Admin
- *  3. gespeicherte FA-Rolle im Team oder einem Eltern-Team (vererbt sich nach unten, nie seitwärts)
- *  4. sonst Lesen
- * KI-Benutzer (`users.type = ai_user`) bekommen höchstens Kuratieren — die KI kann nie mehr als
- * ein Mensch freigeben (Spec 61 §5.3).
+ * Die Rolle kommt aus den Team-Einstellungen der Plattform (`team_user.role`, Core `StandardRole`) —
+ * Entscheidung Dominique 2026-10-08: dort werden Bearbeiten/Lesen ohnehin gepflegt, das FA führt
+ * keine zweite Rollenliste. Abbildung (höchste Rolle über Team + Eltern-Teams gewinnt, Rollen
+ * vererben sich nach unten, nie seitwärts):
+ *   Plattform-Admin (`platform-shell.admins`) · owner · admin → FA-Admin
+ *   member  → Kuratieren (+ Freigeben, wenn das FA-Häkchen „darf Rechnungen freigeben" gesetzt ist)
+ *   viewer  → Lesen
+ *   kein Mitglied → Lesen
+ * KI-Benutzer (`users.type = ai_user`) bekommen höchstens Kuratieren — freigeben bleibt beim Menschen.
  *
- * Stand 2026-10-08: durchgesetzt im Wareneingang (Spec 75). Die übrigen Bereiche der
- * Rechte-Matrix (Spec 61 §3) hängen sich hier an, sobald sie umgestellt werden.
+ * Geprüft wird in der Service-Schicht, nicht in der Oberfläche — dieselbe Regel für Livewire, MCP
+ * und Jobs. Core wird nur gelesen, nie geschrieben (Spec 65 `istTeamAdmin` liest dieselbe Rolle).
+ * Stand 2026-10-08 durchgesetzt im Wareneingang (Spec 75).
  */
 class FaRechte
 {
+    public const PLATTFORM_ROLLEN = ['owner' => 'Inhaber', 'admin' => 'Admin', 'member' => 'Mitglied', 'viewer' => 'Betrachter'];
+
+    private const RANG = ['viewer' => 1, 'member' => 2, 'admin' => 3, 'owner' => 4];
+
     public function rolle(?User $user, Team $team): FaRolle
     {
         if ($user === null) {
             return FaRolle::Lesen;
         }
-        if ($this->istPlattformAdmin($user)) {
+        if (! $user->isAiUser() && $this->istPlattformAdmin($user)) {
             return FaRolle::Admin;
         }
         $kette = $this->teamKette($team);
-        if (! $user->isAiUser() && DB::table('team_user')->whereIn('team_id', $kette)->where('user_id', $user->id)
-            ->whereIn('role', ['owner', 'admin'])->exists()) {
-            return FaRolle::Admin;
-        }
-
-        $rolle = FoodAlchemistTeamMemberRole::whereIn('team_id', $kette)->where('user_id', $user->id)->get()
-            ->reduce(fn (FaRolle $max, $r) => FaRolle::max($max, $r->rolle), FaRolle::Lesen);
-
-        if ($user->isAiUser()) {
-            return $rolle->mindestens(FaRolle::Kuratieren) ? FaRolle::Kuratieren : $rolle;
+        $plattform = $this->plattformRolle($user, $kette);
+        $rolle = match ($plattform) {
+            'owner', 'admin' => FaRolle::Admin,
+            'member' => $this->darfFreigebenHaken($user, $kette) ? FaRolle::Freigeben : FaRolle::Kuratieren,
+            default => FaRolle::Lesen,
+        };
+        if ($user->isAiUser() && $rolle->rang() > FaRolle::Kuratieren->rang()) {
+            return FaRolle::Kuratieren;
         }
 
         return $rolle;
@@ -74,69 +78,74 @@ class FaRechte
     }
 
     /**
-     * Mitglieder des Teams mit wirksamer FA-Rolle und woher sie kommt.
+     * Mitglieder des Teams: Plattform-Rolle, daraus abgeleitete FA-Rolle, Freigabe-Häkchen.
      *
-     * @return list<array{user_id:int, name:string, email:string, team_rolle:?string, rolle:string, rolle_label:string, eigene_rolle:?string, quelle:string, aenderbar:bool, ki:bool}>
+     * @return list<array{user_id:int, name:string, email:string, plattform_rolle:?string, plattform_rolle_label:string, rolle:string, rolle_label:string, darf_freigeben:bool, haken_moeglich:bool, ki:bool}>
      */
     public function mitglieder(Team $team): array
     {
         $kette = $this->teamKette($team);
-        $eigene = FoodAlchemistTeamMemberRole::where('team_id', $team->id)->get()->keyBy('user_id');
         $users = User::query()->join('team_user', 'team_user.user_id', '=', 'users.id')
-            ->where('team_user.team_id', $team->id)
-            ->select('users.*', 'team_user.role as team_rolle')
-            ->orderBy('users.name')->get();
+            ->where('team_user.team_id', $team->id)->select('users.*')->orderBy('users.name')->get();
 
-        return $users->map(function (User $u) use ($team, $kette, $eigene) {
-            $wirksam = $this->rolle($u, $team);
-            $teamAdmin = ! $u->isAiUser() && DB::table('team_user')->whereIn('team_id', $kette)->where('user_id', $u->id)
-                ->whereIn('role', ['owner', 'admin'])->exists();
-            $quelle = match (true) {
-                $this->istPlattformAdmin($u) => 'plattform',
-                $teamAdmin => 'team_admin',
-                $eigene->has($u->id) => 'eigen',
-                $wirksam !== FaRolle::Lesen => 'geerbt',
-                default => 'standard',
-            };
+        return $users->map(function (User $u) use ($team, $kette) {
+            $plattform = $this->plattformRolle($u, $kette);
+            $rolle = $this->rolle($u, $team);
 
             return [
                 'user_id' => (int) $u->id,
                 'name' => (string) $u->name,
                 'email' => (string) $u->email,
-                'team_rolle' => $u->team_rolle,
-                'rolle' => $wirksam->value,
-                'rolle_label' => $wirksam->label(),
-                'eigene_rolle' => $eigene->get($u->id)?->rolle?->value,
-                'quelle' => $quelle,
-                'aenderbar' => ! in_array($quelle, ['plattform', 'team_admin'], true),
+                'plattform_rolle' => $plattform,
+                'plattform_rolle_label' => self::PLATTFORM_ROLLEN[$plattform] ?? '—',
+                'rolle' => $rolle->value,
+                'rolle_label' => $rolle->label(),
+                'darf_freigeben' => $rolle->mindestens(FaRolle::Freigeben),
+                // Häkchen hat nur bei Mitgliedern Wirkung: Admins dürfen immer, Betrachter und KI nie.
+                'haken_moeglich' => $plattform === 'member' && ! $u->isAiUser(),
                 'ki' => $u->isAiUser(),
             ];
         })->values()->all();
     }
 
-    /**
-     * FA-Rolle eines Mitglieds setzen. Nur FA-Admins; Inhaber/Admins sind immer FA-Admin und
-     * lassen sich hier nicht herabstufen; KI-Benutzer höchstens Kuratieren.
-     */
-    public function setzeRolle(Team $team, ?User $actor, int $userId, FaRolle $rolle): FoodAlchemistTeamMemberRole
+    /** „Darf Rechnungen freigeben" für ein Mitglied setzen — nur FA-Admin. */
+    public function setzeFreigabe(Team $team, ?User $actor, int $userId, bool $darf): void
     {
-        $this->pruefe($actor, $team, FaRolle::Admin, 'Rollen vergeben');
+        $this->pruefe($actor, $team, FaRolle::Admin, 'Freigaberecht vergeben');
         $ziel = User::find($userId);
         if ($ziel === null || ! DB::table('team_user')->where('team_id', $team->id)->where('user_id', $userId)->exists()) {
             throw new \RuntimeException('Diese Person ist kein Mitglied des Teams.');
         }
-        if ($this->istPlattformAdmin($ziel) || (! $ziel->isAiUser() && DB::table('team_user')->whereIn('team_id', $this->teamKette($team))
-            ->where('user_id', $userId)->whereIn('role', ['owner', 'admin'])->exists())) {
-            throw new \RuntimeException('Inhaber und Admins des Teams sind immer FA-Admin. Ändern geht nur über die Team-Rolle in der Verwaltung.');
+        if ($darf && $ziel->isAiUser()) {
+            throw new \RuntimeException('Ein KI-Benutzer darf keine Rechnungen freigeben — freigeben bleibt beim Menschen.');
         }
-        if ($ziel->isAiUser() && $rolle->rang() > FaRolle::Kuratieren->rang()) {
-            throw new \RuntimeException('Ein KI-Benutzer bekommt höchstens die Rolle „Kuratieren“ — freigeben bleibt beim Menschen.');
+        $plattform = $this->plattformRolle($ziel, $this->teamKette($team));
+        if ($darf && $plattform !== 'member') {
+            throw new \RuntimeException(in_array($plattform, ['owner', 'admin'], true)
+                ? 'Inhaber und Admins dürfen ohnehin freigeben.'
+                : 'Betrachter dürfen nur lesen. Erst in den Team-Einstellungen zum Mitglied machen.');
+        }
+        FoodAlchemistTeamMemberFlag::updateOrCreate(['team_id' => $team->id, 'user_id' => $userId],
+            ['can_approve_invoices' => $darf, 'set_by' => $actor?->id]);
+    }
+
+    /** Höchste Plattform-Rolle des Users im Team oder einem Eltern-Team. */
+    private function plattformRolle(User $user, array $kette): ?string
+    {
+        $rollen = DB::table('team_user')->whereIn('team_id', $kette)->where('user_id', $user->id)->pluck('role')->all();
+        $best = null;
+        foreach ($rollen as $r) {
+            if (isset(self::RANG[$r]) && ($best === null || self::RANG[$r] > self::RANG[$best])) {
+                $best = $r;
+            }
         }
 
-        return FoodAlchemistTeamMemberRole::updateOrCreate(
-            ['team_id' => $team->id, 'user_id' => $userId],
-            ['rolle' => $rolle, 'set_by' => $actor?->id],
-        );
+        return $best;
+    }
+
+    private function darfFreigebenHaken(User $user, array $kette): bool
+    {
+        return FoodAlchemistTeamMemberFlag::whereIn('team_id', $kette)->where('user_id', $user->id)->where('can_approve_invoices', true)->exists();
     }
 
     /** @return list<int> eigenes Team zuerst, dann alle Eltern bis zur Wurzel */

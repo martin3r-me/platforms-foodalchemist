@@ -15,6 +15,8 @@ class FaRechtFehltException extends \RuntimeException
     {
         parent::__construct('Für „'.$wofuer.'“ brauchst du mindestens die Rolle „'.$benoetigt->label().'“.'
             .($vorhanden !== null ? ' Deine Rolle: „'.$vorhanden->label().'“.' : '')
-            .' Die Rolle vergibt ein Team-Admin unter Einstellungen → Zugriffsrechte.');
+            .($benoetigt === FaRolle::Freigeben
+                ? ' Freigeben dürfen Inhaber, Admins und Mitglieder mit Häkchen unter Einstellungen → Zugriffsrechte.'
+                : ' Die Rolle pflegt ein Team-Admin in den Team-Einstellungen der Plattform.'));
     }
 }

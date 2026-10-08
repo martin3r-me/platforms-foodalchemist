@@ -24,9 +24,10 @@ use Platform\FoodAlchemist\Services\FaRechte;
 use Platform\FoodAlchemist\Services\OrderService;
 use Platform\FoodAlchemist\Services\WareneingangService;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
+use Platform\FoodAlchemist\Tests\Support\SeedsWareneingang;
 use Platform\FoodAlchemist\Tests\TestCase;
 
-uses(TestCase::class, SeedsTeamHierarchy::class);
+uses(TestCase::class, SeedsTeamHierarchy::class, SeedsWareneingang::class);
 
 /**
  * Spec 75a · Wareneingang über Lieferscheine + Spec 61 Rechte-Basis.
@@ -34,52 +35,7 @@ uses(TestCase::class, SeedsTeamHierarchy::class);
  * Chefs-Bestellungen an zwei Liefertagen → ein Lieferschein darf beide bedienen (n:m).
  */
 beforeEach(function () {
-    $this->seedTeamHierarchy();
-    $t = $this->rootTeam->id;
-    $this->orders = app(OrderService::class);
-    $this->svc = app(WareneingangService::class);
-    $this->rechte = app(FaRechte::class);
-
-    $this->inhaber = $this->makeUser($this->rootTeam, 'Inhaber');
-    DB::table('team_user')->insert(['team_id' => $t, 'user_id' => $this->inhaber->id, 'role' => 'owner']);
-    // Kuratieren-Benutzer = der Normalfall „Küche bucht Lieferschein"
-    $this->koch = $this->makeUser($this->rootTeam, 'Koch');
-    DB::table('team_user')->insert(['team_id' => $t, 'user_id' => $this->koch->id, 'role' => 'member']);
-    $this->rechte->setzeRolle($this->rootTeam, $this->inhaber, $this->koch->id, FaRolle::Kuratieren);
-
-    $this->la = [];
-    $mk = function (string $name, string $lieferant, float $preis) use ($t) {
-        $sup = FoodAlchemistSupplier::firstOrCreate(['team_id' => $t, 'name' => $lieferant]);
-        $gp = $this->makeGp($this->rootTeam, $name);
-        $la = FoodAlchemistSupplierItem::create(['team_id' => $t, 'supplier_id' => $sup->id, 'designation' => $name.' 1kg',
-            'article_number' => 'A-'.$name, 'qty' => 1.0, 'unit_code' => 'kg', 'packaging_unit' => 'Sack']);
-        FoodAlchemistSupplierItemStructure::create(['team_id' => $t, 'supplier_item_id' => $la->id, 'gp_id' => $gp->id]);
-        FoodAlchemistPrice::create(['team_id' => $t, 'supplier_item_id' => $la->id, 'price' => $preis, 'status' => '0']);
-        $gp->update(['lead_la_supplier_item_id' => $la->id]);
-        $this->la[$name] = $la;
-        $this->gp[$name] = $gp->refresh();
-
-        return $sup;
-    };
-    $this->chefs = $mk('Mehl', 'Chefs', 2.0);
-    $mk('Zucker', 'Chefs', 1.0);
-    $this->hanos = $mk('Butter', 'Hanos', 12.0);
-    $this->lager = FoodAlchemistInventoryLocation::create(['team_id' => $t, 'name' => 'Hauptlager', 'type' => 'warehouse', 'is_default' => true, 'is_active' => true]);
-
-    $tag1 = now()->addDays(3)->toDateString();
-    $tag2 = now()->addDays(4)->toDateString();
-    $this->mehlLine = $this->orders->addManualLine($this->rootTeam, $this->la['Mehl']->id, 10, null, null, $tag1);
-    $this->zuckerLine = $this->orders->addManualLine($this->rootTeam, $this->la['Zucker']->id, 2, null, null, $tag1);
-    $this->mehl2Line = $this->orders->addManualLine($this->rootTeam, $this->la['Mehl']->id, 5, null, null, $tag2);
-    $this->butterLine = $this->orders->addManualLine($this->rootTeam, $this->la['Butter']->id, 3, null, null, $tag1);
-    foreach (FoodAlchemistOrder::all() as $o) {
-        $this->orders->setStatus($this->rootTeam, $o->id, OrderStatus::Sent);
-    }
-    $this->order1 = $this->mehlLine->order()->first();
-    $this->order2 = $this->mehl2Line->order()->first();
-    $this->positionen = fn (array $vorschlag, array $mengen) => array_map(fn ($r) => ['order_line_id' => $r['order_line_id'],
-        'qty_packs' => $mengen[$r['order_line_id']] ?? $r['qty_packs']], $vorschlag);
-    $this->bestand = fn (string $gp) => (float) FoodAlchemistInventoryStock::where('gp_id', $this->gp[$gp]->id)->sum('qty_base');
+    $this->seedWareneingang();
 });
 
 it('Vorbelegen: alle offenen Positionen des Lieferanten über beide Bestellungen, fremde Lieferanten nicht', function () {
@@ -191,11 +147,15 @@ it('Abschließen ohne Lieferscheinposition bucht 0 statt der Bestellmenge; Nachl
         ->and($res['total_qty_packs'])->toBe(5.0);   // 3 Sack Mehl + 2 Sack Zucker
 });
 
-it('Rechte: Lesen darf nichts buchen, Kuratieren schon; Inhaber ist FA-Admin; KI höchstens Kuratieren', function () {
+it('Rechte aus der Plattform-Rolle: Betrachter liest, Mitglied bucht, Admin im Unter-Team, KI nie Freigeben', function () {
     $leser = $this->makeUser($this->rootTeam, 'Leser');
-    DB::table('team_user')->insert(['team_id' => $this->rootTeam->id, 'user_id' => $leser->id, 'role' => 'member']);
+    DB::table('team_user')->insert(['team_id' => $this->rootTeam->id, 'user_id' => $leser->id, 'role' => 'viewer']);
+    $fremd = $this->makeUser($this->rootTeam, 'Fremd');   // gar kein Mitglied
 
     expect($this->rechte->rolle($leser, $this->rootTeam))->toBe(FaRolle::Lesen)
+        ->and($this->rechte->rolle($fremd, $this->rootTeam))->toBe(FaRolle::Lesen)
+        ->and($this->rechte->rolle($this->koch, $this->rootTeam))->toBe(FaRolle::Kuratieren)
+        ->and($this->rechte->rolle($this->inhaber, $this->rootTeam))->toBe(FaRolle::Admin)
         ->and(fn () => $this->svc->speichern($this->rootTeam, ['supplier_id' => $this->chefs->id], $leser->id))
         ->toThrow(FaRechtFehltException::class, 'Kuratieren');
     expect(fn () => $this->svc->speichern($this->rootTeam, ['supplier_id' => $this->chefs->id], null))
@@ -205,17 +165,17 @@ it('Rechte: Lesen darf nichts buchen, Kuratieren schon; Inhaber ist FA-Admin; KI
     expect($this->rechte->rolle($this->koch, $this->childA))->toBe(FaRolle::Kuratieren)
         ->and($this->rechte->rolle($this->inhaber, $this->childA))->toBe(FaRolle::Admin);
 
-    // Nur FA-Admin vergibt Rollen; Inhaber lässt sich nicht herabstufen
-    expect(fn () => $this->rechte->setzeRolle($this->rootTeam, $this->koch, $leser->id, FaRolle::Freigeben))
-        ->toThrow(FaRechtFehltException::class);
-    expect(fn () => $this->rechte->setzeRolle($this->rootTeam, $this->inhaber, $this->inhaber->id, FaRolle::Lesen))
-        ->toThrow(\RuntimeException::class, 'immer FA-Admin');
+    // Freigabe-Häkchen: nur FA-Admin setzt es, nur für Mitglieder
+    expect(fn () => $this->rechte->setzeFreigabe($this->rootTeam, $this->koch, $this->koch->id, true))->toThrow(FaRechtFehltException::class);
+    expect(fn () => $this->rechte->setzeFreigabe($this->rootTeam, $this->inhaber, $leser->id, true))->toThrow(\RuntimeException::class, 'Betrachter');
+    $this->rechte->setzeFreigabe($this->rootTeam, $this->inhaber, $this->koch->id, true);
+    expect($this->rechte->rolle($this->koch, $this->rootTeam))->toBe(FaRolle::Freigeben);
 
     $ki = $this->makeUser($this->rootTeam, 'KI');
     $ki->forceFill(['type' => 'ai_user'])->save();
-    DB::table('team_user')->insert(['team_id' => $this->rootTeam->id, 'user_id' => $ki->id, 'role' => 'member']);
-    expect(fn () => $this->rechte->setzeRolle($this->rootTeam, $this->inhaber, $ki->id, FaRolle::Freigeben))
-        ->toThrow(\RuntimeException::class, 'höchstens');
+    DB::table('team_user')->insert(['team_id' => $this->rootTeam->id, 'user_id' => $ki->id, 'role' => 'admin']);
+    expect($this->rechte->rolle($ki, $this->rootTeam))->toBe(FaRolle::Kuratieren)
+        ->and(fn () => $this->rechte->setzeFreigabe($this->rootTeam, $this->inhaber, $ki->id, true))->toThrow(\RuntimeException::class, 'KI');
 });
 
 it('MCP im Lockstep: delivery_notes + team_roles registriert, Ende-zu-Ende mit FORBIDDEN für Lesen', function () {
@@ -236,14 +196,15 @@ it('MCP im Lockstep: delivery_notes + team_roles registriert, Ende-zu-Ende mit F
         ->and($this->order1->refresh()->status)->toBe(OrderStatus::Delivered);
 
     $leser = $this->makeUser($this->rootTeam, 'Leser MCP');
-    DB::table('team_user')->insert(['team_id' => $this->rootTeam->id, 'user_id' => $leser->id, 'role' => 'member']);
+    DB::table('team_user')->insert(['team_id' => $this->rootTeam->id, 'user_id' => $leser->id, 'role' => 'viewer']);
     $verboten = $reg->get('foodalchemist.delivery_notes.POST')->execute(['supplier_id' => $this->chefs->id], new ToolContext($leser, $this->rootTeam));
     expect($verboten->success)->toBeFalse()->and($verboten->errorCode)->toBe('FORBIDDEN');
 
-    $rollen = $reg->get('foodalchemist.team_roles.PUT')->execute(['user_id' => $leser->id, 'rolle' => 'kuratieren'], new ToolContext($this->inhaber, $this->rootTeam));
-    expect($rollen->success)->toBeTrue()->and($rollen->data['rolle'])->toBe('kuratieren');
+    $rollen = $reg->get('foodalchemist.team_roles.PUT')->execute(['user_id' => $this->koch->id, 'darf_freigeben' => true], new ToolContext($this->inhaber, $this->rootTeam));
+    expect($rollen->success)->toBeTrue()->and($rollen->data['rolle'])->toBe('freigeben');
+    expect($reg->get('foodalchemist.team_roles.PUT')->execute(['user_id' => $leser->id, 'darf_freigeben' => true], $ctx)->errorCode)->toBe('FORBIDDEN');
     $liste = $reg->get('foodalchemist.team_roles.GET')->execute([], $ctx);
-    expect(collect($liste->data['mitglieder'])->firstWhere('user_id', $this->inhaber->id)['quelle'])->toBe('team_admin');
+    expect(collect($liste->data['mitglieder'])->firstWhere('user_id', $this->inhaber->id)['plattform_rolle'])->toBe('owner');
 });
 
 it('UI: Seite erfasst einen Lieferschein mit Vorbelegung, Beleg-Foto und bucht ihn', function () {
@@ -277,7 +238,7 @@ it('UI: Seite erfasst einen Lieferschein mit Vorbelegung, Beleg-Foto und bucht i
 
 it('UI: Lesen sieht die Seite, aber keine Schreib-Knöpfe; Zugriffsrechte nur für FA-Admin änderbar', function () {
     $leser = $this->makeUser($this->rootTeam, 'Leser UI');
-    DB::table('team_user')->insert(['team_id' => $this->rootTeam->id, 'user_id' => $leser->id, 'role' => 'member']);
+    DB::table('team_user')->insert(['team_id' => $this->rootTeam->id, 'user_id' => $leser->id, 'role' => 'viewer']);
     $this->actingAs($leser);
 
     Livewire::test(WareneingangIndex::class)
@@ -287,11 +248,12 @@ it('UI: Lesen sieht die Seite, aber keine Schreib-Knöpfe; Zugriffsrechte nur f�
         ->call('buchen')
         ->assertSet('fehler', fn ($f) => str_contains((string) $f, 'Kuratieren'));
 
-    Livewire::test(Zugriffsrechte::class)->assertDontSeeHtml('data-recht-select')
-        ->call('rolleSetzen', $leser->id, 'admin')->assertSet('fehler', fn ($f) => str_contains((string) $f, 'FA-Admin'));
+    Livewire::test(Zugriffsrechte::class)->assertDontSeeHtml('data-recht-haken')->assertSee('Betrachter')
+        ->call('freigabeSetzen', $this->koch->id, true)->assertSet('fehler', fn ($f) => str_contains((string) $f, 'FA-Admin'));
 
     $this->actingAs($this->inhaber);
-    Livewire::test(Zugriffsrechte::class)->assertSeeHtml('data-recht-select="'.$leser->id.'"')
-        ->call('rolleSetzen', $leser->id, 'freigeben')->assertSet('fehler', null);
-    expect($this->rechte->rolle($leser, $this->rootTeam))->toBe(FaRolle::Freigeben);
+    Livewire::test(Zugriffsrechte::class)->assertSeeHtml('data-recht-haken="'.$this->koch->id.'"')
+        ->assertDontSeeHtml('data-recht-haken="'.$leser->id.'"')
+        ->call('freigabeSetzen', $this->koch->id, true)->assertSet('fehler', null);
+    expect($this->rechte->rolle($this->koch, $this->rootTeam))->toBe(FaRolle::Freigeben);
 });

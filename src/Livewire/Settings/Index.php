@@ -85,8 +85,8 @@ class Index extends Component
         'posten' => ['label' => 'Posten & Kapazität', 'hint' => 'Arbeitsplätze der Küche, verplanbare Minuten je Tag, Besetzung'],
         // Stufe 3 P3.1: Rollen als Kostenträger (Küchenchef/Koch/Hilfskoch) — Satz je Rolle.
         // Rolle ≠ Mensch: keine Namen/Schichten. Posten-Besetzung leitet Kapazität + Kosten ab.
-        // Spec 61: FA-Rollen der Mitglieder (Lesen / Kuratieren / Freigeben / FA-Admin) — Rechte, nicht Kosten.
-        'zugriffsrechte' => ['label' => 'Zugriffsrechte', 'hint' => 'Wer im Team lesen, bearbeiten, freigeben oder verwalten darf'],
+        // Spec 61/75: was die Plattform-Rollen im FA dürfen + Häkchen „darf Rechnungen freigeben" — Rechte, nicht Kosten.
+        'zugriffsrechte' => ['label' => 'Zugriffsrechte', 'hint' => 'Was Mitglieder und Betrachter dürfen, wer Rechnungen freigibt'],
         'rollen' => ['label' => 'Rollen & Stundensätze', 'hint' => 'Küchenrollen mit Stundensatz für Kapazität und Produktionskosten'],
 
         // — Ausgabe & Betrieb —

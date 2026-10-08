@@ -3,7 +3,7 @@
 Stand 2026-10-08 · Branch `feat/wareneingang-triple-match`
 
 > **Tracking:** Office Dev-Package 23, Features-Board.
-> **Status:** **75a gebaut** (Lieferscheine + Spec-61-Rechte-Basis, PR offen) · 75b (Rechnungen, Abgleich, Freigabe) offen · 75c (Editor-Kurzwege, Freigabe-Box, Bestand) nach Merge `feat/einkauf-runde2`.
+> **Status:** **75a + 75b gebaut** (Lieferscheine, Rechnungen, Abgleich, Spec-61-Rechte-Basis; PR offen) · 75c (Editor-Kurzwege, Freigabe-Box, Bestand, ) offen.
 > Bezug: [61 · Rollen und Rechte](61_Rollen_und_Rechte.md) (Basis hier gebaut), [66/67 · Lager](66_Lager_und_Inventur_Stufe1.md), [71 · Bestellrunde Stufe 2](71_Bestellrunde_Stufe2.md).
 
 ## Anlass
@@ -213,18 +213,37 @@ Offen:
   (Pflicht in Kühlkette) — jetzt oder eigene Spec?~~
 - ~~**F5 Beleg-Foto:** Lieferschein/Rechnung als Foto/PDF anhängen in 75a (ohne Erkennung)?~~ **Entschieden: ja, in 75a** (Core `ContextFileService`, JPG/PNG/HEIC/PDF ≤ 15 MB).
 - ~~**F6 Wer bucht:** Küche erfasst Lieferschein, Büro prüft Rechnung — braucht es dafür Rollen
-  (Spec 61) oder reicht v1 ohne Rechte-Trennung?~~ **Entschieden: gleich mit Rollen** — Spec-61-Basis (`FaRolle`, `FaRechte`, Tabelle `foodalchemist_team_member_roles`, Einstellungen → Zugriffsrechte, MCP `team_roles.GET/PUT`) wird in 75a mitgebaut. Lieferschein erfassen/buchen/stornieren = Kuratieren, Rechnung freigeben (75b) = Freigeben.
+  (Spec 61) oder reicht v1 ohne Rechte-Trennung?~~ **Entschieden: gleich mit Rollen** — Spec-61-Basis wird in 75a mitgebaut — Rollen aus den Plattform-Team-Einstellungen, siehe Architektur-Entscheidung. Lieferschein erfassen/buchen/stornieren = Kuratieren, Rechnung freigeben (75b) = Freigeben.
 - ~~**F7 Direkt-Eingabe im Bestell-Editor:** behalten als Kurzweg (legt intern Belege an) oder
   ganz in die neue Seite verlegen?~~
 
 ## Umsetzung 75a (2026-10-08)
 
-- Tabellen `foodalchemist_delivery_notes` + `_lines` (Migration `2026_10_09_100000`), `foodalchemist_team_member_roles` (`2026_10_09_100100`).
+- Tabellen `foodalchemist_delivery_notes` + `_lines` (Migration `2026_10_09_100000`), `foodalchemist_team_member_flags` (`2026_10_09_100100`, Freigabe-Häkchen).
 - `WareneingangService`: `erwarteteLieferungen`, `vorbelegen`, `speichern`, `buchen`, `stornieren`, `loeschen`, `nachlieferung`, Beleg-Anhang über Core `ContextFileService`.
   Buchen = Zuwachs über `OrderService::updateReceiptLine` (Lager/Kontingent/Journal unverändert). Abschließen setzt nicht erfasste Positionen auf 0, bevor `setStatus(Delivered)` sie mit der Bestellmenge vorbelegen würde.
-- `FaRolle`, `FaRechte` (`rolle`, `darf`, `pruefe`, `mitglieder`, `setzeRolle`), `FaRechtFehltException`. Standard ohne Eintrag = Lesen (Spec 61); **F2 aus Spec 61 (Bestand migrieren) weiter offen.**
+- `FaRolle` (abgeleitete Stufe), `FaRechte` (`rolle`, `darf`, `pruefe`, `mitglieder`, `setzeFreigabe`), `FaRechtFehltException` — siehe Architektur-Entscheidung.
 - UI: Einkauf → Wareneingang (`Wareneingang\Index`, Reiter Erwartet / Lieferscheine), Einstellungen → Zugriffsrechte.
-- MCP: `delivery_notes.GET/POST/PUT/BOOK/STORNO/BACKORDER`, `team_roles.GET/PUT` (FORBIDDEN bei fehlender Rolle).
+- MCP: `delivery_notes.GET/POST/PUT/BOOK/STORNO/BACKORDER`, `team_roles.GET/PUT` (Häkchen; FORBIDDEN bei fehlender Rolle).
 - Tests: `tests/Feature/WareneingangTest.php` (11).
 
-**Offene Entscheidung (Dominique):** Freigabe-Box im Bestell-Editor — Vorschlag: wird mit Rollen zur echten Übergabe (Kuratieren „Freigabe anfragen", Freigeben „Freigeben & senden"), statt reiner Info. Umsetzung in 75c.
+Freigabe-Box im Bestell-Editor: entschieden, siehe Architektur-Entscheidung unten.
+
+## Umsetzung 75b (2026-10-08)
+
+- Tabellen `foodalchemist_supplier_invoices` + `_lines`, Team-Einstellungen `tm_toleranz_preis_pct`, `tm_toleranz_preis_eur` (Migration `2026_10_09_100200`, eigene kurze Indexnamen, auf MySQL hoch und runter geprüft).
+- `TripleMatchService` (eine Rechenstelle): Befund je Bestellzeile in zwei Teilen — Lieferung (`ok|zu_wenig|zu_viel|offen`) und Rechnung (`ok|menge|preis|nicht_geliefert|nicht_berechnet|offen`); Unterlieferung mit passender Rechnung = ok. Toleranz ±pct % oder ±€/Gebinde, das Großzügigere gilt.
+- `LieferantenRechnungService`: vorbelegen aus nicht abgerechneten Lieferschein-Positionen, speichern, begründen, freigeben (Summe = Beleg + jede Abweichung begründet), bezahlt, strittig, stornieren (Prüfwerte neu aus den verbleibenden Rechnungen), reklamieren (über `OrderService::updateClaimLine`).
+- Freigabe schreibt Menge + gewichteten Preis per `OrderService::updateInvoiceLine` und den Kopf per `updateInvoiceHeader`; bezahlt per `updatePayment`.
+- UI: Reiter *Rechnungen* und *Abgleich* (eigene Komponenten `Wareneingang\Rechnungen`, `Wareneingang\Abgleich`); Toleranz im Abgleich (FA-Admin).
+- MCP: `supplier_invoices.GET/POST/PUT/APPROVE/PAY/STORNO`, `triple_match.GET` (read_only) + `triple_match.PUT` (Toleranz).
+- Tests: `tests/Feature/TripleMatchTest.php` (7), Fixture geteilt in `tests/Support/SeedsWareneingang.php`.
+
+## Architektur-Entscheidung Rechte (mit Dominique abgestimmt 2026-10-08)
+
+- **Rollen kommen aus den Team-Einstellungen der Plattform** (`team_user.role`, Core `StandardRole`: owner/admin/member/viewer) — dort werden Bearbeiten/Lesen ohnehin gepflegt; das FA führt **keine zweite Rollenliste**. Ein früherer Zwischenstand mit eigener FA-Rollentabelle und Team-Standard ist vor dem ersten Deploy wieder entfernt worden.
+- **Abbildung in `FaRechte`** (eine Prüfstelle, Service-Schicht, gilt für UI und MCP): Plattform-Admin/owner/admin → FA-Admin · member → Kuratieren · member + Häkchen „darf Rechnungen freigeben" → Freigeben · viewer/kein Mitglied → Lesen. Höchste Rolle über Team + Eltern-Teams gewinnt. KI-Benutzer höchstens Kuratieren.
+- **Einziges FA-Zusatzrecht:** Häkchen „darf Rechnungen freigeben" (Tabelle `foodalchemist_team_member_flags`, Einstellungen → Zugriffsrechte, MCP `team_roles.PUT`), damit das Büro freigeben kann, ohne Admin zu werden (Entscheidung Dominique). Admins dürfen immer.
+- **Core nur lesen:** keine Änderung in core/organization. Spec 65 (`MitBearbeitungssperre::istTeamAdmin`) liest dieselbe Core-Rolle — beide Wege kommen für Inhaber/Admin zum selben Ergebnis.
+- **Modulweit gedacht** (Spec 61 §5), durchgesetzt vorerst nur im Wareneingang; weitere Bereiche hängen sich an `FaRechte` an, wenn sie umgestellt werden. Spec 61 §4 (eigene FA-Rollentabelle) ist damit überholt.
+- **Freigabe-Box im Bestell-Editor (75c):** wird zur echten Übergabe — Kuratieren „Freigabe anfragen", Freigeben „Freigeben & senden" / „Ablehnen" (Entscheidung Dominique).

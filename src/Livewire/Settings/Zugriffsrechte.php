@@ -9,9 +9,10 @@ use Platform\FoodAlchemist\Enums\FaRolle;
 use Platform\FoodAlchemist\Services\FaRechte;
 
 /**
- * Spec 61 · Einstellungen → Zugriffsrechte: FA-Rolle je Mitglied. Nur FA-Admins ändern; alle sehen,
- * wer was darf. Inhaber/Admins des Teams sind immer FA-Admin (Team-Rolle in der Verwaltung).
- * Die Prüfung sitzt in `FaRechte::setzeRolle` — die Oberfläche blendet nur aus.
+ * Spec 61/75 · Einstellungen → Zugriffsrechte. Zeigt, was jede Plattform-Rolle im Food Alchemist darf
+ * (Rollen pflegt der Team-Admin in den Team-Einstellungen der Plattform), und pflegt das eine
+ * FA-Zusatzrecht: „darf Rechnungen freigeben" für Mitglieder. Ändern nur als FA-Admin; die Prüfung
+ * sitzt in `FaRechte::setzeFreigabe`, die Oberfläche blendet nur aus.
  */
 class Zugriffsrechte extends Component
 {
@@ -19,14 +20,13 @@ class Zugriffsrechte extends Component
 
     public ?string $meldung = null;
 
-    public function rolleSetzen(int $userId, string $rolle, FaRechte $rechte): void
+    public function freigabeSetzen(int $userId, bool $darf, FaRechte $rechte): void
     {
         $this->fehler = null;
         $this->meldung = null;
         try {
-            $ziel = FaRolle::tryFrom($rolle) ?? throw new \RuntimeException('Unbekannte Rolle.');
-            $rechte->setzeRolle($this->team(), Auth::user(), $userId, $ziel);
-            $this->meldung = 'Rolle gespeichert.';
+            $rechte->setzeFreigabe($this->team(), Auth::user(), $userId, $darf);
+            $this->meldung = $darf ? 'Darf jetzt Rechnungen freigeben.' : 'Freigaberecht entzogen.';
         } catch (\RuntimeException $e) {
             $this->fehler = $e->getMessage();
         }
