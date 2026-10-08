@@ -58,6 +58,8 @@ class Editor extends Component
             'oeffnenBearbeiten', 'oeffnenNeu', 'oeffnenProduktion', 'oeffnenRunde', 'oeffnenProduktionen',
             'alternativenUmschalten', 'neuQuellenVorschau', 'neuQuellenAbbrechen', 'cockpitAlternativenUmschalten',
             'beiModalGeschlossen',
+            // Spec 68: Vorlage öffnen / Bestellung als Vorlage speichern ändert die Bestellung nicht
+            'oeffnenVorlage', 'bestellungAlsVorlage',
         ];
     }
 
@@ -119,6 +121,11 @@ class Editor extends Component
     public string $formApprovalNote = '';
 
     public ?string $hinweis = null;
+
+    /** Spec 68: Vorlage in die Bestellrunde einfügen / Runde oder Bestellung als Vorlage speichern. */
+    public $vorlageWahl = '';
+
+    public string $vorlageName = '';
 
     public ?string $fehler = null;
 
@@ -231,6 +238,14 @@ class Editor extends Component
             $this->cockpitProduktionEinfuegen($productionId);
         }
         $this->dispatch('modal.open', name: 'orders-editor');
+    }
+
+    /** Spec 68: Bestellrunde öffnen, mit einer Vorlage vorbefüllt (aus Einkauf → Bestellvorlagen). */
+    #[On('orders-editor.vorlage')]
+    public function oeffnenVorlage(int $templateId, ?string $deliveryDate = null): void
+    {
+        $this->oeffnenNeu($deliveryDate);
+        $this->cockpitVorlageEinfuegen($templateId);
     }
 
     #[On('orders-editor.production')]
@@ -739,6 +754,78 @@ class Editor extends Component
         $this->cockpitAlternativenSchliessen();
     }
 
+    /** Spec 68: Positionen einer Vorlage an den Arbeitsstand anhängen (mehrere Vorlagen kombinierbar). */
+    public function cockpitVorlageEinfuegen($templateId = null): void
+    {
+        $templateId = (int) ($templateId ?: $this->vorlageWahl);
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null || $templateId <= 0) {
+            return;
+        }
+        $svc = app(\Platform\FoodAlchemist\Services\OrderTemplateService::class);
+        try {
+            $v = $svc->detail($team, $templateId);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException) {
+            $this->fehler = 'Vorlage nicht gefunden.';
+
+            return;
+        }
+        foreach ($v->lines as $l) {
+            $q = $l->alsQuelle();
+            if ($q['id'] <= 0 || $q['qty'] <= 0) {
+                continue;
+            }
+            $this->cockpitSources[] = $q + [
+                'uid' => $this->neueCockpitUid(),
+                'label' => $l->bezeichnung(),
+                'delivery_date' => $this->formDeliveryDate ?: null,
+                'reference' => $this->formReference ?: ('Vorlage ' . $v->name),
+            ];
+        }
+        $this->vorlageWahl = '';
+        $this->cockpitPreview = null;
+        $this->cockpitOverrides = [];
+        $this->hinweis = 'Vorlage „' . $v->name . '" eingefügt (' . $v->lines->count() . ' Positionen).';
+    }
+
+    /** Spec 68: aktueller Arbeitsstand der Bestellrunde → neue Vorlage. */
+    public function cockpitAlsVorlage(): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null) {
+            return;
+        }
+        try {
+            $v = app(\Platform\FoodAlchemist\Services\OrderTemplateService::class)->ausQuellen($team, $this->vorlageName, $this->cockpitSources, Auth::id());
+        } catch (\RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+
+            return;
+        }
+        $this->vorlageName = '';
+        $this->fehler = null;
+        $this->hinweis = 'Als Vorlage „' . $v->name . '" gespeichert.';
+    }
+
+    /** Spec 68: bestehende Bestellung → neue Vorlage (GP-Zeilen als Grundprodukt, sonst fester Artikel). */
+    public function bestellungAlsVorlage(): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null || $this->orderId === null) {
+            return;
+        }
+        try {
+            $v = app(\Platform\FoodAlchemist\Services\OrderTemplateService::class)->ausBestellung($team, $this->orderId, $this->vorlageName, Auth::id());
+        } catch (\RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+
+            return;
+        }
+        $this->vorlageName = '';
+        $this->fehler = null;
+        $this->hinweis = 'Als Vorlage „' . $v->name . '" gespeichert.';
+    }
+
     private function neueCockpitUid(): string
     {
         $this->cockpitSeq++;
@@ -1042,6 +1129,7 @@ class Editor extends Component
 
         return view('foodalchemist::livewire.orders.editor', [
             'sperr' => $this->sperrZustand(),   // Spec 65
+            'vorlagen' => \Platform\FoodAlchemist\Models\FoodAlchemistOrderTemplate::where('team_id', $team->id)->orderBy('name')->pluck('name', 'id'),
             'detail' => $detail,
             'erlaubteStatus' => $erlaubteStatus,
             'mailto' => $mailto,

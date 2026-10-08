@@ -159,6 +159,12 @@ vollständiges Lager zu führen:
   Stellplatz druckbar. Wo der Lead-Artikel ein Gebinde kennt, wird in Karton + Einheit + lose gezählt.
   Bestand und Zählliste lassen sich nach Stellplatz, Zustand, Warengruppe, Lieferant, Status,
   „ohne Preis" und Ladenhütern filtern. Beim Buchen optional „nicht gezählt = 0".
+- **Bestellvorlagen (Spec 68):** Einkauf → Bestellvorlagen. Eine Vorlage ist eine gespeicherte
+  Bestellrunde: Grundprodukte mit Menge (Artikel wählt beim Bestellen die Lead-Strategie), Rezepte
+  und Gerichte mit Portionen/Ansätzen („Musterproduktion", Bedarf aus der Rezeptur) und feste Artikel
+  in Gebinden. Bestellen von zwei Seiten: in der Bestellrunde „Vorlage einfügen" (kombinierbar) oder
+  in der Vorlage „In Bestellrunde öffnen" bzw. „Direkt anlegen". Speichern aus der Bestellrunde
+  (Arbeitsstand) und aus jeder Bestellung (Reiter Kopf).
 - **Einkauf je Grundprodukt:** Im Grundprodukt (Reiter *Einkauf*) stehen Menge und € je Monat der
   letzten 12 Monate, die Lieferanten mit Ø-Preis und letztem Kauf sowie der aktuelle Lagerbestand.
 - **Nachlieferung light:** Unterlieferte Wareneingangszeilen können als neuer
