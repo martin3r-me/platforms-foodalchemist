@@ -26,9 +26,10 @@ Technisch ist ein Fundstück ein Beleg mit `fundstueck = true`; `trend_id = NULL
 |---|---|---|
 | Typ | trend · hype | Kap. 2.1 (Tiefe/Bedürfnis/Dauer vs. Oberfläche/medial/kurzlebig) |
 | Ebene | mode · konsum · mega · meta | Kap. 2.2, Trendhierarchie nach Imbeck |
-| Kategorie | food · getraenke · deko · event | Kap. 4–5 |
+| Kategorie (was) | food · getraenke · deko („Ambiente & Deko“) · format („Service & Format“, bis 08.10. „event“) | Kap. 4–5 |
+| Sparten (für wen) | event_bankett · betriebsgastronomie · care · bildung · restaurant_hotel · delivery — Mehrfachauswahl, leer = alle | Nachtrag Dominique 08.10. (Sarah ist Event-Sicht) |
 | Food-Cluster | 4 Imbeck-Cluster | Kap. 4.1 |
-| Sicht | veranstalter · teilnehmer · beide | Kap. 5.3 |
+| Sicht | veranstalter · teilnehmer · beide (nur bei Kategorie format) | Kap. 5.3 |
 | Gartner-Phase | 5 Phasen | Kap. 2.2 (nur Technik) |
 | Status | gesichtet → geprüft → auf dem Radar → in Umsetzung · archiviert · verworfen | Briefing Dominique |
 
@@ -97,10 +98,14 @@ Artefakte tragen `created_via=plan_go`; die Trend-Herkunft steht an der Session.
 Team (Standard 5 $), wöchentlicher Lauf Di 06:10 nur bei `trend_dataforseo_enabled`. Ergebnis: Kurve, Richtung
 (±10 Punkte letztes gegen erstes Viertel), „Spitze ohne Sockel" als Hype-Indiz, Beleg „Google Trends" (weich).
 
+## Nachtrag 08.10. · Zwei Achsen
+
+Sarahs Arbeit ist aus Event-Sicht geschrieben; die BHG-Teams arbeiten in verschiedenen Sparten. Deshalb: **Kategorie = was** (eine Auswahl, trägt die Radar-Sektoren; „event" → „format", weil Service- und Veranstaltungsformate nicht nur Events betreffen) und **Sparten = für wen** (Mehrfachauswahl, Filter links; ein Trend ohne Sparte gilt für alle). Migration `2026_10_10_100300` (Spalte `sparten`, event→format). Trends spielt Dominique später per MCP ein (`trends.POST` mit `sparten`, `suchbegriffe` für die Messung).
+
 ## Startbestand
 
-`php artisan foodalchemist:trends-startbestand --team=<ID>` übernimmt Sarahs 28 Trends
-(`database/data/trends_startbestand_sarah_spork.json`) mit Belegen. Bubble Tea und Tumeric-Tonic bleiben „geprüft"
+`php artisan foodalchemist:trends-startbestand --team=<ID>` übernimmt Sarahs 27 Trends (4-Tage-Woche entfernt, 08.10.)
+(`database/data/trends_startbestand_sarah_spork.json`) mit Belegen. Bubble Tea und Kurkuma-Tonic bleiben „geprüft"
 (nur Google/Instagram). Sarahs eigene Konfidenzwerte werden nicht übernommen — die Regel rechnet aus den Belegen.
 
 ## Rückbau Alt-Pfad (2026-10-08)
