@@ -621,7 +621,7 @@
                         <div class="flex-1 min-w-0 flex flex-col items-center justify-end h-full" wire:key="ek-m-{{ $m['monat'] }}"
                              title="{{ $m['label'] }}: {{ $mengeTxt($m['menge']) }} {{ $eEinheit }} · {{ $zahl($m['eur']) }} €">
                             <div class="w-full rounded-t {{ $v > 0 ? 'bg-[var(--fa-accent)]' : 'bg-[var(--fa-line)]' }}" style="height: {{ $v > 0 ? max(4, round($v / $eMax * 100)) : 2 }}%"></div>
-                            <div class="mt-1 text-[10px] leading-none text-[var(--fa-ink-3)] truncate w-full text-center">{{ $m['label'] }}</div>
+                            <div class="mt-1 text-[length:var(--fa-text-sm)] leading-none text-[var(--fa-ink-3)] truncate w-full text-center">{{ $m['label'] }}</div>
                         </div>
                     @endforeach
                 </div>

@@ -110,6 +110,15 @@ it('Trait-Vertrag: ALLE Models tragen LogsActivity + BelongsToTeamHierarchy + Ha
             // kein uuid/deleted_at, kein Audit — bewusst ohne die vier Standard-Traits (wie ProductionEvent).
             continue;
         }
+        if (class_basename($klasse) === 'FoodAlchemistStorageBinItem') {
+            // Spec 66b: reiner Zuordnungs-ZEIGER Grundprodukt → Stellplatz je (Team, Lagerort), wie
+            // ActiveOutlet. unique(team_id, inventory_location_id, gp_id) + updateOrCreate — eine
+            // trashed Zeile wäre für updateOrCreate unsichtbar und kollidierte am Unique (dieselbe Falle).
+            // Kein eigener Lebenszyklus (lebt/stirbt mit Stellplatz bzw. Umsortieren), keine externe ID,
+            // kein kuratierter Datensatz; team-strikt über where team_id, nicht vererbt. Audit-Wert
+            // trägt der Stellplatz selbst (FoodAlchemistStorageBin hat alle vier).
+            continue;
+        }
         if (class_basename($klasse) === 'FoodAlchemistActiveOutlet') {
             // Kein Katalog-Datensatz, sondern der persistierte ZEIGER der Betriebs-„Brille" je
             // (User, Team) — durabler Zwilling der HTTP-Session (ActiveOutletContext:14-17).
