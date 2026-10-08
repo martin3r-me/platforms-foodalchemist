@@ -241,11 +241,16 @@ class OrderService
             }
         }
 
+        [$gruppen, $ausLager, $ausgelassen] = $this->nachbearbeitePreview($team, $gruppen, $overrides);
         $ordersPreview = $this->finalisierePreviewGruppen($gruppen);
         $totalNet = round(array_sum(array_map(fn ($g) => (float) ($g['total_net'] ?? 0), $ordersPreview)), 2);
 
         return [
             'orders_preview' => $ordersPreview,
+            // Spec 71: aus dem Lager gedeckt bzw. von Hand ausgelassen (zum Wiederherstellen)
+            'aus_lager' => $ausLager,
+            'ausgelassen' => $ausgelassen,
+            'lager_abgleich' => ! empty($overrides['lager_abgleich']),
             'unresolved' => array_values($unresolved),
             'warnings' => array_values(array_unique($warnings)),
             'totals' => [
@@ -297,6 +302,11 @@ class OrderService
                             'gp_id' => (int) $pos['gp_id'],
                             'menge_g' => (float) $pos['needed_base_g'],
                         ], (string) ($pos['source_ref'] ?? 'preview:'.($pos['override_key'] ?? Str::uuid())));
+                        // Spec 71: Gebinde von Hand gesetzt → Zeile hält die Menge fest (recomputeLine respektiert is_manual_qty)
+                        if (! empty($pos['menge_von_hand'])) {
+                            FoodAlchemistOrderLine::where('order_id', $draft->id)->where('supplier_item_id', (int) $pos['lead_la_id'])
+                                ->update(['is_manual_qty' => true, 'qty_packs' => (float) $pos['qty_packs']]);
+                        }
                     }
                     if (($pos['reference'] ?? '') !== '') {
                         $this->kopfAusQuelle($team, (int) $draft->id, (string) $pos['reference']);
@@ -1231,6 +1241,126 @@ class OrderService
         ]);
 
         return Str::slug((string) ($source['type'] ?? 'source'), '_').':'.(string) ($source['id'] ?? $idx).'@'.substr(sha1($basis), 0, 10);
+    }
+
+    /** Spec 71: stabiler Schlüssel einer Vorschau-Position (für Auslassen / Menge von Hand). */
+    public function positionsSchluessel(array $pos): string
+    {
+        return (string) ($pos['override_key'] ?? ('la:' . ($pos['source_ref'] ?? '') . '|' . ($pos['lead_la_id'] ?? '')));
+    }
+
+    /**
+     * Spec 71 · Vorschau nachbearbeiten (vor dem Gruppen-Abschluss, gilt für Vorschau UND Speichern):
+     *  1. Lager-Abgleich (`overrides.lager_abgleich`): Bedarf aus Rezepten/Grundprodukten minus Lagerbestand
+     *     des Grundprodukts (alle aktiven Lagerorte, je GP nur einmal verteilt); voll gedeckt → „aus Lager".
+     *  2. Auslassen (`overrides.skip[schluessel]`) → Liste „ausgelassen", wiederherstellbar.
+     *  3. Menge von Hand (`overrides.menge[schluessel]` = Gebinde) überschreibt die gerechneten Gebinde.
+     *
+     * @return array{0: array, 1: list<array>, 2: list<array>}
+     */
+    private function nachbearbeitePreview(Team $team, array $gruppen, array $overrides): array
+    {
+        $skip = (array) ($overrides['skip'] ?? []);
+        $mengen = (array) ($overrides['menge'] ?? []);
+        $global = ! empty($overrides['lager_abgleich']);
+        $jePos = (array) ($overrides['lager_pos'] ?? []);
+        // Bestand immer lesen: jede Position zeigt, was vom GP im Lager liegt — abgezogen wird nur auf Knopfdruck
+        $lager = $this->lagerJeGp($team);
+        $ausLager = [];
+        $ausgelassen = [];
+        foreach ($gruppen as $gk => $g) {
+            $neu = [];
+            foreach ($g['positionen'] as $pos) {
+                $pk = $this->positionsSchluessel($pos);
+                $pos['position_key'] = $pk;
+                $gpId = $pos['gp_id'] ?? null;
+                // 1. Lager — nur gerechneter Bedarf (Rezept/GP), nicht der feste Artikel in Gebinden
+                $lagerBar = ($pos['type'] ?? '') !== 'supplier_item' && $gpId !== null && (float) ($pos['needed_base_g'] ?? 0) > 0 && ($lager[$gpId] ?? 0) > 0;
+                if ($lagerBar) {
+                    $pos['lager_verfuegbar_g'] = round((float) $lager[$gpId], 2);
+                }
+                $abziehen = array_key_exists($pk, $jePos) ? (bool) $jePos[$pk] : $global;
+                if ($lagerBar && $abziehen) {
+                    $bedarf = (float) $pos['needed_base_g'];
+                    $nimm = min($bedarf, (float) $lager[$gpId]);
+                    $lager[$gpId] -= $nimm;
+                    $pos['bedarf_g'] = round($bedarf, 2);
+                    $pos['lager_g'] = round($nimm, 2);
+                    $pos['needed_base_g'] = round($bedarf - $nimm, 2);
+                    if ($pos['needed_base_g'] <= 0.5) {
+                        $ausLager[] = $pos + ['supplier' => $g['supplier']];
+
+                        continue;
+                    }
+                    $lead = $this->leadObjekt($team, (int) ($pos['lead_la_id'] ?? 0));
+                    if ($lead !== null) {
+                        $gpModel = FoodAlchemistGp::find($gpId, ['id', 'piece_default_g']);
+                        $geb = $this->gebinde->berechne($lead, (float) $pos['needed_base_g'], $gpModel?->piece_default_g !== null ? (float) $gpModel->piece_default_g : null);
+                        $pos['qty_packs'] = (float) ($geb['qty_packs'] ?? $pos['qty_packs']);
+                        $pos['line_total'] = (float) ($geb['line_total'] ?? $pos['line_total']);
+                    }
+                }
+                // 2. Auslassen
+                if (! empty($skip[$pk])) {
+                    $ausgelassen[] = $pos + ['supplier' => $g['supplier']];
+
+                    continue;
+                }
+                // 3. Menge von Hand (Gebinde)
+                if (isset($mengen[$pk]) && is_numeric($mengen[$pk]) && (float) $mengen[$pk] >= 0) {
+                    $pos['qty_packs_berechnet'] = (float) ($pos['qty_packs'] ?? 0);
+                    $pos['qty_packs'] = round((float) $mengen[$pk], 3);
+                    $pos['line_total'] = ($pos['pack_price'] ?? null) !== null ? round($pos['qty_packs'] * (float) $pos['pack_price'], 2) : (float) ($pos['line_total'] ?? 0);
+                    $pos['menge_von_hand'] = true;
+                }
+                $neu[] = $pos;
+            }
+            if ($neu === []) {
+                unset($gruppen[$gk]);
+
+                continue;
+            }
+            $gruppen[$gk]['positionen'] = $neu;
+            $gruppen[$gk]['total_net'] = round(array_sum(array_map(fn ($p) => (float) ($p['line_total'] ?? 0), $neu)), 2);
+        }
+
+        return [$gruppen, $ausLager, $ausgelassen];
+    }
+
+    /** Spec 71: verfügbarer Lagerbestand je GP in g (Stk über Stückgewicht), alle aktiven Lagerorte des Teams. @return array<int, float> */
+    private function lagerJeGp(Team $team): array
+    {
+        $rows = \Platform\FoodAlchemist\Models\FoodAlchemistInventoryStock::query()
+            ->where('foodalchemist_inventory_stocks.team_id', $team->id)->whereNotNull('foodalchemist_inventory_stocks.gp_id')->where('qty_base', '>', 0)
+            ->join('foodalchemist_inventory_locations as l', 'l.id', '=', 'foodalchemist_inventory_stocks.inventory_location_id')
+            ->where('l.is_active', true)->whereNull('l.deleted_at')
+            ->selectRaw('foodalchemist_inventory_stocks.gp_id, foodalchemist_inventory_stocks.base_unit, SUM(qty_base) as menge')
+            ->groupBy('foodalchemist_inventory_stocks.gp_id', 'foodalchemist_inventory_stocks.base_unit')->get();
+        $stueck = FoodAlchemistGp::whereIn('id', $rows->where('base_unit', 'Stk')->pluck('gp_id')->all() ?: [0])->pluck('piece_default_g', 'id');
+        $out = [];
+        foreach ($rows as $r) {
+            $g = match ($r->base_unit) {
+                'g', 'ml' => (float) $r->menge,
+                'Stk' => isset($stueck[$r->gp_id]) && (float) $stueck[$r->gp_id] > 0 ? (float) $r->menge * (float) $stueck[$r->gp_id] : 0.0,
+                default => 0.0,
+            };
+            $out[(int) $r->gp_id] = ($out[(int) $r->gp_id] ?? 0) + $g;
+        }
+
+        return $out;
+    }
+
+    /** Lieferantenartikel als Gebinde-Kontext (wie overrideLead, ohne GP-Prüfung). */
+    private function leadObjekt(Team $team, int $laId): ?object
+    {
+        $la = $laId > 0 ? FoodAlchemistSupplierItem::visibleToTeam($team)->find($laId) : null;
+        if ($la === null) {
+            return null;
+        }
+
+        return (object) ['id' => (int) $la->id, 'qty' => $la->qty !== null ? (float) $la->qty : null, 'unit_code' => $la->unit_code,
+            'packaging_unit' => $la->packaging_unit, 'article_number' => $la->article_number, 'designation' => $la->designation,
+            'aktiver_preis' => $this->preise->activeFor((int) $la->id)?->price];
     }
 
     private function overrideKey(string $sourceRef, ?int $gpId): ?string
