@@ -1104,7 +1104,29 @@ class Tagesplan extends Component
             'sicherheit' => $treffer->sicherheit ?? ['allergene' => [], 'diaet' => [], 'warnungen' => [], 'konfidenz' => 'unknown'],
             'arbeitsschritte' => $this->arbeitsschritte($treffer->schritte ?? ($line?->steps_snapshot ?? []), $treffer->zubereitung ?? $line?->zubereitung),
             'step_erledigt' => collect($this->anleitungStepStatus[(int) $treffer->id] ?? [])->map(fn ($i) => (int) $i)->unique()->values()->all(),
+            'etikett' => $this->wallEtikett($line),   // Spec 76: Etikett direkt aus der Küche
         ];
+    }
+
+    /**
+     * Spec 76 · Küche: Etikett für eine Basisrezept-Zeile ohne Formular — je Ansatz ein Etikett mit der Menge eines
+     * Ansatzes, hergestellt = Produktionstag, Lagerart = Standard des Rezepts. Null, wenn kein Basisrezept.
+     *
+     * @return array{url:string, anzahl:int}|null
+     */
+    private function wallEtikett(?FoodAlchemistProductionOrderLine $line): ?array
+    {
+        if ($line === null || ! $line->is_basisrezept || $line->recipe_id === null || ! \Illuminate\Support\Facades\Route::has('foodalchemist.etiketten.druck')) {
+            return null;
+        }
+        $anzahl = max(1, (int) ceil((float) $line->ansaetze_effektiv - 1e-9));
+        $datum = \Platform\FoodAlchemist\Models\FoodAlchemistProductionOrder::whereKey($line->production_order_id)->value('production_date');
+        $eingabe = array_filter([
+            'hergestellt_am' => $datum !== null ? Carbon::parse($datum)->toDateString() : null,
+            'menge' => $line->basis_yield_kg !== null ? rtrim(rtrim(number_format((float) $line->basis_yield_kg, 3, ',', ''), '0'), ',') . ' kg' : null,
+        ]);
+
+        return ['url' => app(\Platform\FoodAlchemist\Services\EtikettService::class)->druckUrl('recipe', (int) $line->recipe_id, null, $eingabe, $anzahl), 'anzahl' => $anzahl];
     }
 
     /** @var array<string,ContextFile> Memo path→ContextFile (N+1-Vermeidung im Wandmonitor-Poll). */

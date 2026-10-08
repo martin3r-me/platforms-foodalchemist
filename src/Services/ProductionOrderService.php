@@ -942,7 +942,7 @@ class ProductionOrderService
             'status' => $status->value,
             'status_label' => $status->label(),
             'reference' => $order->reference,
-            'targets' => $order->targets ?? [],
+            'targets' => self::mitQuellRefs($order->targets ?? []),   // Altbestand ohne source_ref (z. B. Skript-Anlage) robust
             'note' => $order->note,
             'buffer_pct' => (float) ($order->buffer_pct ?? 0),
             'is_owned' => $order->isOwnedBy($team),
@@ -1240,7 +1240,24 @@ class ProductionOrderService
             $ziel = Arr::except($t, ['source_ref', 'label']);
 
             return array_merge($t, ['label' => $t['label'] ?? $this->labelFor($team, $ziel)]);
-        }, $targets);
+        }, self::mitQuellRefs($targets));
+    }
+
+    /**
+     * Jedes Ziel braucht eine `source_ref` (Bearbeiten/Entfernen, Bedarfs-Übergabe). Ziele ohne — Altbestand oder
+     * Direkt-Anlage per Skript/MCP — bekommen eine stabile aus Inhalt + Position (gleiche Eingabe → gleiche Ref).
+     */
+    public static function mitQuellRefs(array $targets): array
+    {
+        return array_values(array_map(function ($t, $i) {
+            if (! is_array($t) || (isset($t['source_ref']) && (string) $t['source_ref'] !== '')) {
+                return $t;
+            }
+            $kern = Arr::except($t, ['source_ref', 'label']);
+            ksort($kern);
+
+            return $t + ['source_ref' => 'ziel:' . substr(sha1(json_encode($kern) . '#' . $i), 0, 12)];
+        }, $targets, array_keys($targets)));
     }
 
     private function labelFor(Team $team, array $ziel): ?string
