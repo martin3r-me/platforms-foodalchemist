@@ -800,6 +800,10 @@ Route::get('/produktion/auftraege/{order}/dokument', function (int $order, \Plat
 Route::get('/bestellungen', \Platform\FoodAlchemist\Livewire\Orders\Index::class)
     ->name('foodalchemist.orders.index');
 
+// Spec 68 · Bestellvorlagen (Musterbestellung / Musterproduktion).
+Route::get('/bestellvorlagen', \Platform\FoodAlchemist\Livewire\Bestellvorlagen\Index::class)
+    ->name('foodalchemist.bestellvorlagen.index');
+
 // Spec 66 · Lager (Stufe 1): Bestand, Bewegungen, Inventuren.
 Route::get('/lager', \Platform\FoodAlchemist\Livewire\Lager\Index::class)
     ->name('foodalchemist.lager.index');
