@@ -57,6 +57,18 @@ Eine Ampel zeigt, ob die Mindestbestellmenge erreicht ist.
   Source-Beiträge aus offenen Drafts entfernt, damit kein Doppelbedarf entsteht.
 - **KPIs:** Übersicht und Modal zeigen Quellen, Schienen, Positionen, Netto, Lieferanten,
   Klärpunkte und Strategie.
+- **Lager je Artikel (Spec 71):** Jede Position zeigt den Bestand des Grundprodukts in allen
+  aktiven Lagerorten („Im Lager 4 kg"). Abgezogen wird nur auf Knopfdruck: je Position „vom Bedarf
+  abziehen" oder für alle „Lagerbestand abziehen". Ganz gedeckte Positionen wandern in „Aus dem
+  Lager gedeckt" (mit „doch bestellen"). Feste Artikel (Gebinde) bleiben unberührt.
+- **Position entfernen + Gebinde von Hand (Spec 71):** Je Position ✕ (Liste „Aus der Runde
+  genommen" mit Wiederherstellen) und Gebinde −/+ oder Eingabe. Von Hand gesetzte Mengen zeigen
+  die gerechnete Menge und lassen sich zurücksetzen. Beim Speichern wird die Bestellzeile als
+  Handmenge festgehalten.
+- **Lieferanten klappbar:** Jede Lieferant+Liefertag-Gruppe auf-/zuklappbar, dazu „Alle auf / Alle zu".
+- **Lesemodus nach dem Speichern:** Wie ein gespeichertes Rezept ist die Runde danach gesperrt
+  (Knopf „Bearbeiten"). Eine geöffnete Runde startet ebenfalls gesperrt. Die Strategie-Auswahl
+  rechnet die Vorschau sofort neu.
 
 ### Übersicht: drei Sichten
 

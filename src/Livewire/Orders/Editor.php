@@ -59,7 +59,7 @@ class Editor extends Component
             'alternativenUmschalten', 'neuQuellenVorschau', 'neuQuellenAbbrechen', 'cockpitAlternativenUmschalten',
             'beiModalGeschlossen',
             // Spec 68: Vorlage öffnen / Bestellung als Vorlage speichern ändert die Bestellung nicht
-            'oeffnenVorlage', 'bestellungAlsVorlage',
+            'oeffnenVorlage', 'bestellungAlsVorlage', 'rundeBearbeiten',
         ];
     }
 
@@ -176,6 +176,19 @@ class Editor extends Component
     /** override_key => lead_la_id für einzelne Cockpit-Zutaten vor dem Speichern. */
     public array $cockpitOverrides = [];
 
+    /** Spec 71: Positionen auslassen / Gebinde von Hand / Lagerbestand vom Bedarf abziehen. */
+    public array $cockpitSkip = [];
+
+    public array $cockpitMengen = [];
+
+    public bool $cockpitLagerAbgleich = false;
+
+    /** Spec 71: Lager je Position abziehen (Schlüssel → bool), schlägt den Gesamt-Knopf. */
+    public array $cockpitLagerPos = [];
+
+    /** Gespeicherte Runde = Lesemodus (wie ein gespeichertes Rezept); „Bearbeiten" öffnet wieder. */
+    public bool $rundeGesperrt = false;
+
     /** Zeile, deren Ausweichquellen-Dropdown offen ist (nur eine gleichzeitig). */
     public ?int $altLineId = null;
 
@@ -234,6 +247,11 @@ class Editor extends Component
         $this->formApprovalNote = '';
         $this->formStrategy = (string) ($strategy ?? '');
         $this->cockpitStrategy = (string) ($strategy ?? '');
+        $this->rundeGesperrt = false;
+        $this->cockpitSkip = [];
+        $this->cockpitMengen = [];
+        $this->cockpitLagerAbgleich = false;
+        $this->cockpitLagerPos = [];
         if ($productionId !== null) {
             $this->cockpitProduktionEinfuegen($productionId);
         }
@@ -295,6 +313,7 @@ class Editor extends Component
             } else {
                 $this->hinweis = 'Die Runde enthält keine rekonstruierbare Produktionsquelle. Lieferantenbelege können weiterhin einzeln bearbeitet werden.';
             }
+            $this->rundeGesperrt = true;   // bestehende Runde öffnet im Lesemodus
         } catch (\Throwable $e) {
             $this->fehler = $e->getMessage();
         }
@@ -840,7 +859,7 @@ class Editor extends Component
         $this->cockpitAlternativenSchliessen();
         try {
             $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
-            $this->cockpitPreview = $orders->previewFromSources($team, $this->cockpitSources, $this->cockpitStrategieAusForm(), $this->cockpitOverrides);
+            $this->cockpitPreview = $orders->previewFromSources($team, $this->cockpitSources, $this->cockpitStrategieAusForm(), $this->cockpitAlleOverrides());
         } catch (\Throwable $e) {
             $this->fehler = $e->getMessage();
         }
@@ -860,8 +879,74 @@ class Editor extends Component
         $this->hinweis = 'Automatische Quelle wiederhergestellt.';
     }
 
+    /** Artikel-Wahl + Spec 71 (auslassen, Menge, Lager) als ein Override-Paket — Vorschau und Speichern rechnen gleich. */
+    private function cockpitAlleOverrides(): array
+    {
+        return $this->cockpitOverrides + ['skip' => $this->cockpitSkip, 'menge' => $this->cockpitMengen, 'lager_abgleich' => $this->cockpitLagerAbgleich, 'lager_pos' => $this->cockpitLagerPos];
+    }
+
+    public function positionAuslassen(string $key, OrderService $orders): void
+    {
+        $this->cockpitSkip[$key] = true;
+        $this->cockpitVorschau($orders);
+    }
+
+    public function positionWiederherstellen(string $key, OrderService $orders): void
+    {
+        unset($this->cockpitSkip[$key]);
+        $this->cockpitVorschau($orders);
+    }
+
+    /** Gebinde von Hand setzen (+/− oder Eingabe); leer = Automatik. */
+    public function positionMenge(string $key, $menge, OrderService $orders): void
+    {
+        $roh = trim(str_replace(',', '.', (string) ($menge ?? '')));
+        if ($roh === '') {
+            unset($this->cockpitMengen[$key]);
+        } elseif (is_numeric($roh) && (float) $roh >= 0) {
+            $this->cockpitMengen[$key] = round((float) $roh, 3);
+        } else {
+            $this->fehler = 'Menge braucht eine Zahl ≥ 0.';
+
+            return;
+        }
+        $this->cockpitVorschau($orders);
+    }
+
+    /** Knopf „Alle aus dem Lager abziehen“ / „Lager nicht abziehen“ — setzt Einzelentscheidungen zurück. */
+    public function lagerAlleAbziehen(bool $an, OrderService $orders): void
+    {
+        $this->cockpitLagerAbgleich = $an;
+        $this->cockpitLagerPos = [];
+        $this->cockpitVorschau($orders);
+    }
+
+    /** Lager nur für diese Position abziehen bzw. nicht abziehen. */
+    public function lagerPosition(string $key, bool $an, OrderService $orders): void
+    {
+        $this->cockpitLagerPos[$key] = $an;
+        $this->cockpitVorschau($orders);
+    }
+
+    public function updatedCockpitStrategy(): void
+    {
+        // Strategie gewechselt → Vorschau sofort neu (sonst wirkt der Wechsel erst nach „Vorschau berechnen")
+        if ($this->cockpitSources !== []) {
+            $this->cockpitVorschau(app(OrderService::class));
+        }
+    }
+
+    public function rundeBearbeiten(): void
+    {
+        $this->rundeGesperrt = false;
+        $this->hinweis = null;
+    }
+
     public function cockpitSpeichern(OrderService $orders): void
     {
+        if ($this->rundeGesperrt) {
+            return;
+        }
         $this->hinweis = null;
         $this->fehler = null;
         try {
@@ -871,7 +956,7 @@ class Editor extends Component
                 $this->cockpitSources,
                 $this->cockpitStrategieAusForm(),
                 Auth::id(),
-                $this->cockpitOverrides,
+                $this->cockpitAlleOverrides(),
                 [
                     'id' => $this->roundId,
                     'label' => $this->formReference ?: null,
@@ -884,6 +969,7 @@ class Editor extends Component
             $this->roundId = isset($res['round']['id']) ? (int) $res['round']['id'] : $this->roundId;
             $this->hinweis = count($res['orders'] ?? []).' Bestellschiene(n) gespeichert'
                 .(count($res['unresolved'] ?? []) > 0 ? ' · '.count($res['unresolved']).' Klärpunkt(e)' : '').'.';
+            $this->rundeGesperrt = true;   // gespeichert → Lesemodus
             $this->dispatch('orders-geaendert');
             $this->dispatch('modal.open', name: 'orders-editor');
         } catch (\Throwable $e) {
