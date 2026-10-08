@@ -35,7 +35,8 @@ class DetailPanel extends Component
      */
     protected function sperrFreiExtra(): array
     {
-        return ['zeige', 'ankerNetzUmschalten', 'ersatzKiVerwerfen', 'laVorschlaegeVerwerfen', 'kiVerwerfen'];
+        // Spec 67: Stammplatz ist Betriebs-, nicht GP-Stammdatum — ohne „Bearbeiten“ setzbar.
+        return ['zeige', 'ankerNetzUmschalten', 'ersatzKiVerwerfen', 'laVorschlaegeVerwerfen', 'kiVerwerfen', 'stammplatzSetzen'];
     }
 
     public ?int $gpId = null;
@@ -474,6 +475,21 @@ class DetailPanel extends Component
         ];
     }
 
+    /** Spec 67: Stammplatz dieses Grundprodukts in einem Lagerort setzen ('' = entfernen). */
+    public function stammplatzSetzen(int $locationId, $binId): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null || $this->gpId === null) {
+            return;
+        }
+        try {
+            app(\Platform\FoodAlchemist\Services\LagerEinrichtungService::class)
+                ->zuordnen($team, $locationId, [$this->gpId], $binId !== '' && $binId !== null ? (int) $binId : null);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException) {
+            // fremder Lagerort/Stellplatz — still ignorieren, die Anzeige zeigt den echten Stand
+        }
+    }
+
     public function render(GpAggregateService $aggregate, LeadLaService $leads)
     {
         $team = Auth::user()?->currentTeamRelation;
@@ -499,6 +515,7 @@ class DetailPanel extends Component
         $brauchtNaehr = $vollmodus || $this->section === 'naehrwerte';        // naehrwerte
         $brauchtErsatz = $vollmodus || $this->section === 'ersatz';           // ersatz, ersatzKandidaten
         $brauchtEinkauf = $vollmodus || $this->section === 'einkauf';         // einkauf, bestandJetzt (Spec 66 §4)
+        $brauchtLager = $this->section === 'lager';                           // lagerOrte, lagerBewegungen (Spec 67)
         $kette = ($gp !== null && $brauchtLas) ? $leads->rangliste($gp, $team) : null;
         $effektiverLeadId = ($gp !== null && $brauchtLas) ? $leads->effektiverLead($gp, $team)?->id : null;
         // R9.2 (E5): Lead-Steuerungs-Sicht (gesetzter vs. effektiver Lead, Vorschlag, Override-Begründung, Ausweichquellen).
@@ -548,6 +565,12 @@ class DetailPanel extends Component
                     ->map(fn ($m, $u) => ['menge' => app(\Platform\FoodAlchemist\Services\InventurService::class)->anzeigeMenge((float) $m, (string) $u), 'einheit' => app(\Platform\FoodAlchemist\Services\InventurService::class)->anzeigeEinheit((string) $u)])
                     ->values()->all()
                 : [],
+            // Spec 67: das Grundprodukt „trägt sein Lager": Bestand + Stammplatz je Lagerort, letzte Bewegungen
+            'lagerOrte' => ($gp !== null && $team !== null && $brauchtLager) ? $this->lagerOrte($team, $gp) : [],
+            'lagerBewegungen' => ($gp !== null && $team !== null && $brauchtLager)
+                ? \Platform\FoodAlchemist\Models\FoodAlchemistInventoryMovement::where('team_id', $team->id)->where('gp_id', $gp->id)
+                    ->with('location:id,name')->where('qty_base', '<>', 0)->orderByDesc('moved_at')->orderByDesc('id')->limit(10)->get()
+                : collect(),
             // M9-05 (GP-Blickwinkel): in welchen Rezepten eingesetzt — klickbar
             'verwendungen' => ($gp !== null && $brauchtLas)
                 ? \Illuminate\Support\Facades\DB::table('foodalchemist_recipe_ingredients AS ri')
@@ -568,5 +591,10 @@ class DetailPanel extends Component
                     ->where('id', '!=', $gp->id)
                 : collect(),
         ]);
+    }
+
+    private function lagerOrte($team, FoodAlchemistGp $gp): array
+    {
+        return app(\Platform\FoodAlchemist\Services\LagerEinrichtungService::class)->gpLager($team, $gp);
     }
 }

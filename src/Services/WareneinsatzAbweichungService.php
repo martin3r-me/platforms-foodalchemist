@@ -48,6 +48,7 @@ class WareneinsatzAbweichungService
         private PurchaseJournalService $journal,
         private TeamSettingsService $settings,
         private InventurService $inventur,
+        private LagerBewegungService $bewegungen,
     ) {
     }
 
@@ -122,6 +123,8 @@ class WareneinsatzAbweichungService
             'inventur_ende' => $bestand['datum_ende'] ?? null,
             'verbrauch' => $verbrauch,
             'mit_bestand' => $bestand !== null,
+            // Spec 67: Hand-Abgänge mit Grund — benannter Teil der Abweichung
+            'abgaenge' => $this->bewegungen->abgaengeWert($team, $von, $bis),
             'ist_pct' => $istPct,
             'ziel_pct' => $ziel,
             'ist_delta_pp' => $istPct !== null ? round($istPct - $ziel, 1) : null,

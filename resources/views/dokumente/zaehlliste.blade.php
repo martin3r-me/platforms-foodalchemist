@@ -36,6 +36,10 @@
         .r { text-align: right; }
         .feld { height: 18px; }
         .sig { margin-top: 18px; width: 100%; }
+        .logo { height: 0.8cm; float: right; }
+        .platz td { background: {{ $c['soft'] }}; font-weight: bold; }
+        .gebinde { font-size: 8.5px; }
+        .w5 { width: 5%; } .w7 { width: 7%; } .w10 { width: 10%; } .w11 { width: 11%; } .w16 { width: 16%; } .w18 { width: 18%; }
         .sig td { border: none; border-top: 1px solid {{ $c['ink3'] }}; padding-top: 3px; width: 33%; color: {{ $c['ink3'] }}; font-size: 9px; }
         @media print { .actions { display: none; } body { background: #fff; } .doc { padding: 0; } }
     </style>
@@ -48,7 +52,7 @@
             <a href="{{ request()->fullUrlWithQuery(['pdf' => 1]) }}">PDF herunterladen</a>
         </div>
     @endunless
-    @if($logo)<img src="{{ $logo }}" alt="" style="height: 0.8cm; float: right;">@endif
+    @if($logo)<img src="{{ $logo }}" alt="" class="logo">@endif
     <div class="kicker">Inventur · {{ $gebucht ? 'gebucht' : 'Zählliste' }}</div>
     <h1>{{ $inventur->location?->name ?? 'Lager' }}@if(! empty($platzName)) · {{ $platzName }}@endif · Stichtag {{ $inventur->count_date->format('d.m.Y') }}</h1>
     <div class="rule"></div>
@@ -57,18 +61,18 @@
     <table>
         <thead>
             <tr>
-                <th style="width: 5%">#</th>
+                <th class="w5">#</th>
                 <th>Grundprodukt</th>
-                <th style="width: 7%">Maß</th>
-                <th class="r" style="width: 10%">Soll</th>
+                <th class="w7">Maß</th>
+                <th class="r w10">Soll</th>
                 @if($mitGebinde)
-                    <th class="r" style="width: 11%">Karton</th>
-                    <th class="r" style="width: 11%">Einzeln</th>
-                    <th class="r" style="width: 11%">lose</th>
+                    <th class="r w11">Karton</th>
+                    <th class="r w11">Einzeln</th>
+                    <th class="r w11">lose</th>
                 @else
-                    <th class="r" style="width: 18%">Gezählt</th>
+                    <th class="r w18">Gezählt</th>
                 @endif
-                <th style="width: 16%">Notiz</th>
+                <th class="w16">Notiz</th>
             </tr>
         </thead>
         <tbody>
@@ -76,12 +80,12 @@
             @foreach($zeilen as $i => $l)
                 @if($l->storage_bin_id !== $letzterPlatz)
                     @php $letzterPlatz = $l->storage_bin_id; @endphp
-                    <tr><td colspan="{{ $spalten }}" style="background: {{ $c['soft'] }}; font-weight: bold;">{{ $l->bin?->name ?? 'Ohne Stellplatz' }}</td></tr>
+                    <tr class="platz"><td colspan="{{ $spalten }}">{{ $l->bin?->name ?? 'Ohne Stellplatz' }}</td></tr>
                 @endif
                 <tr>
                     <td class="muted">{{ $i + 1 }}</td>
                     <td>{{ $l->gp?->name ?? $l->supplierItem?->designation ?? '—' }}
-                        @if($l->hatGebinde())<br><span class="muted" style="font-size: 8.5px;">@if($l->pack_units)1 {{ $l->pack_label }} = {{ $zahl($l->pack_units) }} {{ $l->unit_label }} · @endif 1 {{ $l->unit_label }} = {{ $zahl($svc->anzeigeMenge((float) $l->unit_base, $l->base_unit)) }} {{ $svc->anzeigeEinheit($l->base_unit) }}</span>@endif
+                        @if($l->hatGebinde())<br><span class="muted gebinde">@if($l->pack_units)1 {{ $l->pack_label }} = {{ $zahl($l->pack_units) }} {{ $l->unit_label }} · @endif 1 {{ $l->unit_label }} = {{ $zahl($svc->anzeigeMenge((float) $l->unit_base, $l->base_unit)) }} {{ $svc->anzeigeEinheit($l->base_unit) }}</span>@endif
                     </td>
                     <td>{{ $svc->anzeigeEinheit($l->base_unit) }}</td>
                     <td class="r muted">{{ $zahl($svc->anzeigeMenge((float) $l->qty_expected, $l->base_unit)) }}</td>

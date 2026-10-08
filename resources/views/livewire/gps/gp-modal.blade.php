@@ -162,6 +162,7 @@
             'sensorik' => $neu ? null : 'Aroma',
             'ersatz' => $neu ? null : 'Ersatz',
             'einkauf' => $neu ? null : 'Einkauf',
+            'lager' => $neu ? null : 'Lager',
             'verwaltung' => $neu ? null : 'Verwaltung',
         ]">
 
@@ -582,5 +583,15 @@
                 </x-fa::section>
             </div>
         @endif
+        {{-- Spec 67: Stellplatz ist Betriebsdatum — auch ohne „Bearbeiten“ pflegbar --}}
+        <x-slot:frei>
+            @if($gpId)
+            <div x-show="tab === 'lager'" x-cloak class="pt-4">
+                <x-fa::section>
+                    <livewire:foodalchemist.gps.detail-panel :gp-id="$gpId" :embedded="true" section="lager" :key="'gpd-lager-'.$gpId" />
+                </x-fa::section>
+            </div>
+            @endif
+        </x-slot:frei>
     </x-foodalchemist::editor-tabs>
 </x-foodalchemist::modal>

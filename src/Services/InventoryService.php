@@ -38,7 +38,11 @@ class InventoryService
             $oldQty = $movement !== null ? (float) $movement->qty_base : 0.0;
             $delta = round($targetQty - $oldQty, 4);
 
-            $stock = $this->stockForLine($freshLine, $baseUnit, true);
+            // Spec 67: Ziel-Lagerort = Lagerort des Stammplatzes; eine Korrektur bleibt am Ort der Erstbuchung.
+            $ortId = $movement?->inventory_location_id !== null
+                ? (int) $movement->inventory_location_id
+                : $this->zielLagerort((int) $freshLine->order->team_id, $freshLine->gp_id !== null ? (int) $freshLine->gp_id : null);
+            $stock = $this->stockForLine($freshLine, $baseUnit, true, $ortId);
             if ($stock === null) {
                 return null;
             }
@@ -72,6 +76,9 @@ class InventoryService
             } else {
                 $movement->fill($payload);
                 $movement->save();
+            }
+            if ($movement === null && $freshLine->gp_id !== null && $stock->inventory_location_id !== null) {
+                $this->stammplatzVorschlagen((int) $freshLine->order->team_id, (int) $stock->inventory_location_id, (int) $freshLine->gp_id);
             }
 
             return $stock->refresh();
@@ -147,7 +154,7 @@ class InventoryService
         };
     }
 
-    private function stockForLine(FoodAlchemistOrderLine $line, string $baseUnit, bool $create): ?FoodAlchemistInventoryStock
+    private function stockForLine(FoodAlchemistOrderLine $line, string $baseUnit, bool $create, ?int $locationId = null): ?FoodAlchemistInventoryStock
     {
         $line->loadMissing('order');
         if ($line->order === null || ($line->gp_id === null && $line->supplier_item_id === null)) {
@@ -156,7 +163,10 @@ class InventoryService
 
         $query = FoodAlchemistInventoryStock::where('team_id', (int) $line->order->team_id)
             ->where('base_unit', $baseUnit);
-        $location = $this->defaultLocationForTeam((int) $line->order->team_id, $create);
+        $location = $locationId !== null
+            ? FoodAlchemistInventoryLocation::where('team_id', (int) $line->order->team_id)->find($locationId)
+            : null;
+        $location ??= $this->defaultLocationForTeam((int) $line->order->team_id, $create);
         if ($location !== null) {
             $query->where('inventory_location_id', (int) $location->id);
         } else {
@@ -182,6 +192,41 @@ class InventoryService
             'qty_base' => 0,
             'base_unit' => $baseUnit,
         ]);
+    }
+
+    /**
+     * Spec 67: Wohin bucht der Wareneingang? Hat das Grundprodukt einen Stammplatz, in dessen Lagerort —
+     * am Standardlager bevorzugt, sonst im ersten aktiven Lagerort mit Stammplatz. Ohne Stammplatz: null
+     * (= Standardlager).
+     */
+    private function zielLagerort(int $teamId, ?int $gpId): ?int
+    {
+        if ($gpId === null) {
+            return null;
+        }
+        $orte = \Platform\FoodAlchemist\Models\FoodAlchemistStorageBinItem::where('foodalchemist_storage_bin_items.team_id', $teamId)
+            ->where('gp_id', $gpId)
+            ->join('foodalchemist_inventory_locations as l', 'l.id', '=', 'foodalchemist_storage_bin_items.inventory_location_id')
+            ->where('l.is_active', true)->whereNull('l.deleted_at')
+            ->orderByDesc('l.is_default')->orderBy('l.id')
+            ->pluck('l.id');
+
+        return $orte->isNotEmpty() ? (int) $orte->first() : null;
+    }
+
+    /** Spec 67: Erster Wareneingang ohne Stammplatz → Vorschlag aus Zustand + Warengruppe übernehmen. */
+    private function stammplatzVorschlagen(int $teamId, int $locationId, int $gpId): void
+    {
+        $einrichtung = app(LagerEinrichtungService::class);
+        $team = \Platform\Core\Models\Team::find($teamId);
+        if ($team === null || isset($einrichtung->stammplaetze($team, $locationId)[$gpId])) {
+            return;
+        }
+        $gp = \Platform\FoodAlchemist\Models\FoodAlchemistGp::find($gpId, ['id', 'condition', 'commodity_group_code']);
+        $binId = $gp !== null ? $einrichtung->vorschlagFuer($team, $locationId, $gp) : null;
+        if ($binId !== null) {
+            $einrichtung->zuordnen($team, $locationId, [$gpId], $binId, 'vorschlag');
+        }
     }
 
     private function defaultLocationForTeam(int $teamId, bool $create): ?FoodAlchemistInventoryLocation

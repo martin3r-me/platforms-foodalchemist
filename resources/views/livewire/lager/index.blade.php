@@ -46,11 +46,12 @@
                 @else
                     <div class="overflow-x-auto">
                         <table class="fa-table fa-table--compact min-w-[640px]">
-                            <thead><tr><th>Grundprodukt</th><th>Lagerort</th><th>Stellplatz</th><th class="text-right">Menge</th><th class="text-right">EK je kg/l/Stk</th><th class="text-right">Wert</th><th>Letzte Bewegung</th></tr></thead>
+                            <thead><tr><th>Grundprodukt</th><th>Lieferant</th><th>Lagerort</th><th>Stellplatz</th><th class="text-right">Menge</th><th class="text-right">EK je kg/l/Stk</th><th class="text-right">Wert</th><th>Letzte Bewegung</th></tr></thead>
                             <tbody>
                                 @foreach($bestand as $r)
                                     <tr wire:key="b-{{ $r['stock_id'] }}">
                                         <td class="font-medium">{{ $r['name'] }}</td>
+                                        <td>{{ $r['lieferant'] ?? '–' }}</td>
                                         <td>{{ $r['lagerort'] }}</td>
                                         <td>{{ $r['stellplatz'] ?? '' }}@if($r['stellplatz'] === null)<span class="{{ $leise }}">–</span>@endif</td>
                                         <td class="text-right tabular-nums {{ $r['menge'] < 0 ? 'text-[var(--fa-crit)]' : '' }}">{{ $r['anzeige'] }}</td>
@@ -68,23 +69,112 @@
 
         {{-- ── Bewegungen ──────────────────────────────────────────────── --}}
         @if($reiter === 'bewegungen')
+            @php
+                $quellen = ['' => 'Alle Quellen', 'wareneingang' => 'Wareneingang', 'inventur' => 'Inventur', 'zugang' => 'Zugang (von Hand)', 'abgang' => 'Abgang (von Hand)', 'umlagerung' => 'Umlagerung', 'storno' => 'Storno'];
+                $quelleText = $quelleText + ['zugang' => 'Zugang', 'abgang' => 'Abgang', 'umlagerung' => 'Umlagerung', 'storno' => 'Storno'];
+                $alleGruende = $gruende['zugang'] + $gruende['abgang'];
+            @endphp
+            {{-- Spec 67: Hand-Buchung --}}
+            @if($buchungOffen)
+                <x-fa::section :title="['zugang' => 'Zugang buchen', 'abgang' => 'Abgang buchen', 'umlagerung' => 'Umlagern'][$buchung['art']] ?? 'Bewegung buchen'" icon="heroicon-o-pencil-square" data-lager-buchung>
+                    <x-slot:actions>
+                        <x-fa::button size="sm" variant="ghost" icon="heroicon-m-x-mark" wire:click="buchungSchliessen">Abbrechen</x-fa::button>
+                    </x-slot:actions>
+                    <x-fa::choice name="buchung.art" :options="['zugang' => 'Zugang', 'abgang' => 'Abgang', 'umlagerung' => 'Umlagerung']" />
+                    <div class="grid gap-3 md:grid-cols-2">
+                        <x-fa::field label="Grundprodukt" for="b-gp">
+                            @if($buchung['gp_id'])
+                                <div class="flex items-center gap-2">
+                                    <span class="font-medium">{{ $buchung['gp_name'] }}</span>
+                                    <x-fa::button size="sm" variant="ghost" wire:click="$set('buchung.gp_id', null)">ändern</x-fa::button>
+                                </div>
+                            @else
+                                <x-fa::input id="b-gp" type="search" wire:model.live.debounce.300ms="buchungGpSuche" placeholder="Grundprodukt suchen …" data-lager-buchung-gp />
+                                @foreach($buchungKandidaten as $gp)
+                                    <button type="button" wire:key="bk-{{ $gp->id }}" wire:click="buchungGpWaehlen({{ $gp->id }})" class="block text-left text-[length:var(--fa-text-md)] text-[var(--fa-accent)] hover:underline">{{ $gp->name }}</button>
+                                @endforeach
+                            @endif
+                        </x-fa::field>
+                        <div class="flex flex-wrap items-end gap-2">
+                            <x-fa::field :label="$buchung['art'] === 'umlagerung' ? 'Von Lagerort' : 'Lagerort'" for="b-ort">
+                                <x-fa::select id="b-ort" wire:model.live="buchung.location_id" :options="$orte->pluck('name', 'id')" placeholder="wählen" class="w-48" />
+                            </x-fa::field>
+                            @if($buchung['art'] === 'umlagerung')
+                                <x-fa::field label="Nach Lagerort" for="b-ziel">
+                                    <x-fa::select id="b-ziel" wire:model="buchung.ziel_location_id" :options="$orte->pluck('name', 'id')" placeholder="wählen" class="w-48" />
+                                </x-fa::field>
+                            @endif
+                            <x-fa::field label="Datum" for="b-datum"><x-fa::input id="b-datum" type="date" wire:model="buchung.datum" /></x-fa::field>
+                        </div>
+                        <x-fa::field label="Menge" for="b-menge">
+                            @php $bg = $buchungGebinde['gebinde'] ?? null; $be = $buchungGebinde['einheit'] ?? 'kg'; @endphp
+                            <div class="flex flex-wrap items-center gap-1.5">
+                                @if($bg)
+                                    @if($bg['pack_units'])
+                                        <x-fa::input wire:model="buchung.kartons" inputmode="decimal" class="w-16 text-right" aria-label="{{ $bg['pack_label'] }}" /> <span class="{{ $leise }}">{{ $bg['pack_label'] }}</span>
+                                    @endif
+                                    <x-fa::input wire:model="buchung.einheiten" inputmode="decimal" class="w-16 text-right" aria-label="{{ $bg['unit_label'] }}" /> <span class="{{ $leise }}">{{ $bg['unit_label'] }}</span>
+                                    <x-fa::input wire:model="buchung.lose" inputmode="decimal" class="w-20 text-right" aria-label="lose in {{ $be }}" /> <span class="{{ $leise }}">{{ $be }} lose</span>
+                                @else
+                                    <x-fa::input id="b-menge" wire:model="buchung.menge" inputmode="decimal" class="w-24 text-right" data-lager-buchung-menge /> <span class="{{ $leise }}">{{ $be }}</span>
+                                @endif
+                            </div>
+                            @if($bg)<p class="{{ $leise }}">@if($bg['pack_units'])1 {{ $bg['pack_label'] }} = {{ $zahl($bg['pack_units']) }} {{ $bg['unit_label'] }} · @endif 1 {{ $bg['unit_label'] }} = {{ $zahl($svc->anzeigeMenge($bg['unit_base'], $buchungGebinde['base_unit'])) }} {{ $be }}</p>@endif
+                        </x-fa::field>
+                        @if($buchung['art'] !== 'umlagerung')
+                            <x-fa::field label="Grund" for="b-grund">
+                                <x-fa::select id="b-grund" wire:model="buchung.grund" :options="$gruende[$buchung['art']] ?? []" placeholder="Grund wählen" class="w-56" data-lager-buchung-grund />
+                            </x-fa::field>
+                        @endif
+                        @if($buchung['art'] === 'zugang')
+                            <x-fa::field label="Preis je {{ $be }} (optional)" for="b-preis" hint="Leer = aktueller Einkaufspreis">
+                                <x-fa::input id="b-preis" wire:model="buchung.preis" inputmode="decimal" class="w-28 text-right" />
+                            </x-fa::field>
+                        @endif
+                        <x-fa::field label="Notiz" for="b-notiz"><x-fa::input id="b-notiz" wire:model="buchung.notiz" placeholder="optional" /></x-fa::field>
+                    </div>
+                    <div class="flex justify-end">
+                        <x-fa::button variant="primary" icon="heroicon-m-check" wire:click="bewegungBuchen" data-lager-buchung-speichern>Buchen</x-fa::button>
+                    </div>
+                </x-fa::section>
+            @endif
+
             <x-fa::section title="Bewegungen" icon="heroicon-o-arrows-right-left" description="Die letzten 200 Zu- und Abgänge." data-lager-bewegungen>
-                <x-fa::select wire:model.live="quelle" size="sm" :options="$quellen" class="w-48 self-start" aria-label="Quelle" />
+                <x-slot:actions>
+                    @unless($buchungOffen)
+                        <div class="flex flex-wrap gap-2">
+                            <x-fa::button size="sm" icon="heroicon-m-arrow-down-tray" wire:click="buchungOeffnen('zugang')" data-lager-zugang>Zugang</x-fa::button>
+                            <x-fa::button size="sm" icon="heroicon-m-arrow-up-tray" wire:click="buchungOeffnen('abgang')" data-lager-abgang>Abgang</x-fa::button>
+                            <x-fa::button size="sm" icon="heroicon-m-arrows-right-left" wire:click="buchungOeffnen('umlagerung')">Umlagern</x-fa::button>
+                        </div>
+                    @endunless
+                </x-slot:actions>
+                <div class="flex flex-wrap items-center gap-2">
+                    <x-fa::select wire:model.live="quelle" size="sm" :options="$quellen" class="w-48" aria-label="Quelle" />
+                    <x-fa::select wire:model.live="grundFilter" size="sm" :options="$alleGruende" placeholder="Jeder Grund" class="w-48" aria-label="Grund" />
+                </div>
                 @if($bewegungen->isEmpty())
                     <x-fa::empty compact icon="heroicon-o-arrows-right-left" title="Keine Bewegungen" />
                 @else
                     <div class="overflow-x-auto">
-                        <table class="fa-table fa-table--compact min-w-[640px]">
-                            <thead><tr><th>Datum</th><th>Grundprodukt</th><th>Lagerort</th><th>Quelle</th><th class="text-right">Menge</th><th>Notiz</th></tr></thead>
+                        <table class="fa-table fa-table--compact min-w-[760px]">
+                            <thead><tr><th>Datum</th><th>Grundprodukt</th><th>Lagerort</th><th>Quelle</th><th>Grund</th><th class="text-right">Menge</th><th class="text-right">Wert</th><th>Notiz</th><th></th></tr></thead>
                             <tbody>
                                 @foreach($bewegungen as $m)
-                                    <tr wire:key="m-{{ $m->id }}">
+                                    <tr wire:key="m-{{ $m->id }}" class="{{ isset($storniert[$m->id]) ? 'opacity-50' : '' }}">
                                         <td class="tabular-nums">{{ $m->moved_at?->format('d.m.Y') ?? '–' }}</td>
                                         <td class="font-medium">{{ $m->gp?->name ?? $m->supplierItem?->designation ?? '—' }}</td>
                                         <td>{{ $m->location?->name ?? '—' }}</td>
                                         <td>{{ $quelleText[$m->source] ?? $m->source }}@if($m->order?->supplier) <span class="{{ $leise }}">· {{ $m->order->supplier->name }}</span>@endif</td>
-                                        <td class="text-right tabular-nums {{ $m->direction === 'out' ? 'text-[var(--fa-crit)]' : 'text-[var(--fa-ok)]' }}">{{ $m->direction === 'out' ? '−' : '+' }}{{ $svc->anzeigeMenge((float) $m->qty_base, $m->base_unit) !== null ? rtrim(rtrim(number_format($svc->anzeigeMenge((float) $m->qty_base, $m->base_unit), 3, ',', '.'), '0'), ',') : '' }} {{ $svc->anzeigeEinheit($m->base_unit) }}</td>
-                                        <td class="{{ $leise }}">{{ $m->note }}</td>
+                                        <td>{{ $m->reason ? ($alleGruende[$m->reason] ?? $m->reason) : '' }}</td>
+                                        <td class="text-right tabular-nums {{ $m->direction === 'out' ? 'text-[var(--fa-crit)]' : 'text-[var(--fa-ok)]' }}">{{ $m->direction === 'out' ? '−' : '+' }}{{ $zahl($svc->anzeigeMenge((float) $m->qty_base, $m->base_unit)) }} {{ $svc->anzeigeEinheit($m->base_unit) }}</td>
+                                        <td class="text-right tabular-nums">@if($m->value_eur !== null)<x-fa::money :value="$m->value_eur" />@endif</td>
+                                        <td class="{{ $leise }}">{{ $m->note }}{{ isset($storniert[$m->id]) ? " · storniert" : "" }}</td>
+                                        <td class="text-right">
+                                            @if($m->istHandbuchung() && ! isset($storniert[$m->id]) && ($m->direction === 'out' || $m->source !== 'umlagerung'))
+                                                <x-fa::button size="sm" variant="ghost" wire:click="stornieren({{ $m->id }})" wire:confirm="Buchung stornieren? Es wird eine Gegenbuchung angelegt." data-lager-storno="{{ $m->id }}">Storno</x-fa::button>
+                                            @endif
+                                        </td>
                                     </tr>
                                 @endforeach
                             </tbody>
