@@ -23,7 +23,7 @@ use Platform\FoodAlchemist\Services\LagerEinrichtungService;
  */
 class Index extends Component
 {
-    private const REITER = ['bestand', 'bewegungen', 'inventur', 'einrichten', 'eigenproduktion'];
+    private const REITER = ['bestand', 'bewegungen', 'inventur', 'einrichten', 'eigenproduktion', 'lagerartikel'];
 
     private const FILTER_LEER = ['suche' => '', 'stellplatz' => '', 'zustand' => '', 'warengruppe' => '', 'lieferant' => '', 'status' => '', 'ohne_preis' => false, 'ladenhueter' => false];
 
@@ -77,6 +77,11 @@ class Index extends Component
     public array $auswahl = [];
 
     public $zielPlatzId = '';
+
+    /** Spec 74: Lagerartikel — Eingabe Mindest/Soll je GP (kg/l/Stk), neues GP per Suche. */
+    public array $vorrat = [];
+
+    public string $vorratSuche = '';
 
     public ?string $fehler = null;
 
@@ -223,6 +228,50 @@ class Index extends Component
         } catch (\Throwable $e) {
             $this->fehler = $e->getMessage();
         }
+    }
+
+    // ── Lagerartikel (Spec 74) ──────────────────────────────────────────────
+
+    public function lagerartikelSpeichern(int $gpId, \Platform\FoodAlchemist\Services\LagerartikelService $svc): void
+    {
+        $this->fehler = null;
+        try {
+            $svc->setzen($this->team(), $gpId, true, $this->vorrat[$gpId]['min'] ?? null, $this->vorrat[$gpId]['soll'] ?? null);
+            $this->hinweis = 'Lagerartikel gespeichert.';
+        } catch (\Throwable $e) {
+            $this->fehler = $e->getMessage();
+        }
+    }
+
+    public function lagerartikelHinzu(int $gpId, \Platform\FoodAlchemist\Services\LagerartikelService $svc): void
+    {
+        try {
+            $svc->setzen($this->team(), $gpId, true);
+            $this->vorratSuche = '';
+        } catch (\Throwable $e) {
+            $this->fehler = $e->getMessage();
+        }
+    }
+
+    public function lagerartikelEntfernen(int $gpId, \Platform\FoodAlchemist\Services\LagerartikelService $svc): void
+    {
+        $svc->setzen($this->team(), $gpId, false);
+        unset($this->vorrat[$gpId]);
+    }
+
+    /** Spec 74: alle genutzten Grundprodukte einer Warengruppe als Lagerartikel markieren. */
+    public function warengruppeAlsLagerartikel(string $code, \Platform\FoodAlchemist\Services\LagerartikelService $svc): void
+    {
+        $n = $svc->warengruppeMarkieren($this->team(), $code);
+        $this->hinweis = $n . ' Grundprodukt(e) als Lagerartikel markiert — jetzt Mindest- und Sollbestand pflegen.';
+    }
+
+    /** Einrichten: markierte Grundprodukte als Lagerartikel (Gewürze, Öle …). */
+    public function auswahlAlsLagerartikel(\Platform\FoodAlchemist\Services\LagerartikelService $svc): void
+    {
+        $n = $svc->markieren($this->team(), array_map('intval', $this->auswahl));
+        $this->auswahl = [];
+        $this->hinweis = $n . ' Grundprodukt(e) als Lagerartikel markiert — Mindest- und Sollbestand im Reiter „Lagerartikel" pflegen.';
     }
 
     // ── Bewegungen von Hand (Spec 67) ───────────────────────────────────────
@@ -448,7 +497,20 @@ class Index extends Component
 
         $lieferantIds = array_filter(array_unique(array_column($bestandAlle, 'lieferant_id')));
 
+        // Spec 74: Lagerartikel + Signal „unter Mindestbestand"
+        $laSvc = app(\Platform\FoodAlchemist\Services\LagerartikelService::class);
+        $lagerartikel = $this->reiter === 'lagerartikel' ? $laSvc->liste($team) : [];
+        foreach ($lagerartikel as $la) {
+            $this->vorrat[$la['gp_id']] ??= ['min' => $la['min'] !== null ? str_replace('.', ',', (string) $la['min']) : '', 'soll' => $la['soll'] !== null ? str_replace('.', ',', (string) $la['soll']) : ''];
+        }
+
         return view('foodalchemist::livewire.lager.index', [
+            'lagerartikel' => $lagerartikel,
+            'warengruppenVorschlag' => $this->reiter === 'lagerartikel' ? $laSvc->warengruppenVorschlag($team) : [],
+            'unterMindest' => $laSvc->unterMindest($team),
+            'vorratKandidaten' => $this->reiter === 'lagerartikel' && mb_strlen(trim($this->vorratSuche)) >= 2
+                ? FoodAlchemistGp::visibleToTeam($team)->where('name', 'like', '%' . trim($this->vorratSuche) . '%')->whereNotIn('status', ['merged', 'rejected'])->orderBy('name')->limit(10)->get(['id', 'name'])
+                : collect(),
             'orte' => $orte,
             'bestand' => $bestand,
             'bestandGesamt' => count($bestandAlle),

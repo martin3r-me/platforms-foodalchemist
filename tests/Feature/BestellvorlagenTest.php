@@ -139,8 +139,12 @@ it('MCP: order_templates POST (Positionen) → GET mit Vorschau → PUT → APPL
 });
 
 it('Oberfläche: Vorlagen-Seite anlegen, Positionen per Suche, Vorschau; Bestellrunde: Vorlage einfügen + Arbeitsstand als Vorlage', function () {
-    $lw = Livewire::test(VorlagenIndex::class)
+    $idx = Livewire::test(VorlagenIndex::class)
         ->set('neuName', 'Montag Molkerei')->call('anlegen')->assertSet('fehler', null)
+        ->assertDispatched('vorlage-editor.oeffnen');
+    // Spec 73: die Vorlage selbst wird im Editor bearbeitet
+    $lw = Livewire::test(\Platform\FoodAlchemist\Livewire\Bestellvorlagen\Editor::class)
+        ->call('oeffnenVorlage', $idx->get('vorlageId'), true)
         ->set('suchArt', 'gp')->set('suche', 'Butt')->assertSee('Butter')
         ->call('positionHinzu', $this->butter->id)
         ->set('suchArt', 'recipe')->set('suche', 'Kuch')->call('positionHinzu', $this->kuchen->id)

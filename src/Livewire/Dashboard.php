@@ -63,6 +63,9 @@ class Dashboard extends Component
             'allergen_low' => (clone $rezept())->whereIn('allergens_confidence', ['low', 'unknown'])->count(),
             'ungemappt' => (clone $rezept())->where('n_ingredients_unmapped', '>', 0)->count(),
             'vk_ohne_klasse' => (clone $rezept())->where('is_sales_recipe', true)->whereNull('dish_class_id')->count(),
+            // Spec 74: Lagerartikel kurz vor leer
+            'unter_mindest' => Schema::hasTable('foodalchemist_gp_lagerartikel')
+                ? count(app(\Platform\FoodAlchemist\Services\LagerartikelService::class)->unterMindest($team)) : 0,
         ];
 
         $ki = ['calls' => 0, 'accepted' => 0];
@@ -142,6 +145,10 @@ class Dashboard extends Component
             ['key' => 'vk-ohne-klasse', 'icon' => 'heroicon-o-tag', 'titel' => 'Gerichte ohne Speisen-Klasse',
                 'text' => 'Die Speisen-Klasse fehlt. Im Gericht über „Klassifizieren“ setzen.',
                 'zahl' => $workflow['vk_ohne_klasse'] ?? 0, 'ton' => 'warn', 'url' => route('foodalchemist.verkauf.index')],
+            ['key' => 'lager-mindest', 'icon' => 'heroicon-o-archive-box-arrow-down', 'titel' => 'Lagerartikel unter Mindestbestand',
+                'text' => 'Gewürze, Öle & Co. kurz vor leer — in der Bestellrunde „nachfüllen".',
+                'zahl' => $workflow['unter_mindest'] ?? 0, 'ton' => 'warn',
+                'url' => \Illuminate\Support\Facades\Route::has('foodalchemist.lager.index') ? route('foodalchemist.lager.index', ['reiter' => 'lagerartikel']) : $review],
             ['key' => 'signale-warnung', 'icon' => 'heroicon-o-exclamation-triangle', 'titel' => 'Weitere Signale',
                 'text' => 'Warnungen und Hinweise aus den Prüfläufen.',
                 'zahl' => ($signale['warnung'] ?? 0) + ($signale['info'] ?? 0), 'ton' => 'info', 'url' => $review . '?tab=signale'],

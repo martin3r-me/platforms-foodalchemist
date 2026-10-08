@@ -142,6 +142,12 @@ class Editor extends Component
     /** Produktion-Suche fürs neue Bestellcockpit. */
     public string $produktionSuche = '';
 
+    /** Spec 73: Konzept/Paket als Quelle. */
+    public string $konzeptSuche = '';
+
+    /** Spec 74: Lagerartikel trotzdem aus dem Rezeptbedarf bestellen (Positions-Schlüssel → true). */
+    public array $cockpitVorratBestellen = [];
+
     public ?int $bedarfRecipeId = null;
 
     public string $bedarfRecipeName = '';
@@ -256,6 +262,7 @@ class Editor extends Component
         $this->cockpitLagerAbgleich = false;
         $this->cockpitLagerPos = [];
         $this->cockpitLagerRezept = [];
+        $this->cockpitVorratBestellen = [];
         if ($productionId !== null) {
             $this->cockpitProduktionEinfuegen($productionId);
         }
@@ -309,13 +316,26 @@ class Editor extends Component
             $this->formNote = (string) ($round['note'] ?? '');
             $this->roundProductionIds = array_values(array_unique(array_map('intval', $round['production_ids'] ?? [])));
 
-            foreach ($this->roundProductionIds as $productionId) {
-                $this->cockpitProduktionEinfuegen($productionId);
+            if (! empty($round['sources'])) {
+                // Spec 73: gespeicherter Stand — Quellen, Auslassen, Handmengen, Lager-Knöpfe, Artikelwechsel
+                $this->cockpitSources = array_values(array_map(fn ($q) => ['uid' => $this->neueCockpitUid()] + $q, $round['sources']));
+                $ov = (array) ($round['overrides'] ?? []);
+                $this->cockpitSkip = (array) ($ov['skip'] ?? []);
+                $this->cockpitMengen = (array) ($ov['menge'] ?? []);
+                $this->cockpitLagerAbgleich = ! empty($ov['lager_abgleich']);
+                $this->cockpitLagerPos = (array) ($ov['lager_pos'] ?? []);
+                $this->cockpitLagerRezept = (array) ($ov['lager_rezept'] ?? []);
+                $this->cockpitVorratBestellen = (array) ($ov['vorrat_bestellen'] ?? []);
+                $this->cockpitOverrides = array_diff_key($ov, array_flip(['skip', 'menge', 'lager_abgleich', 'lager_pos', 'lager_rezept', 'round_id', 'vorrat_bestellen']));
+            } else {
+                foreach ($this->roundProductionIds as $productionId) {
+                    $this->cockpitProduktionEinfuegen($productionId);
+                }
             }
             if ($this->cockpitSources !== []) {
                 $this->cockpitVorschau($orders);
             } else {
-                $this->hinweis = 'Die Runde enthält keine rekonstruierbare Produktionsquelle. Lieferantenbelege können weiterhin einzeln bearbeitet werden.';
+                $this->hinweis = null;   // Altbestand ohne gespeicherte Quellen: Bestellungen der Runde einzeln öffnen (Liste im Editor)
             }
             $this->rundeGesperrt = true;   // bestehende Runde öffnet im Lesemodus
         } catch (\Throwable $e) {
@@ -695,6 +715,49 @@ class Editor extends Component
         }
     }
 
+    /** Spec 73: Konzept oder Paket × Personen als Quelle. */
+    public function cockpitKonzeptEinfuegen(string $typ, int $id): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        $typ = $typ === 'paket' ? 'paket' : 'concept';
+        $m = $typ === 'paket' ? \Platform\FoodAlchemist\Models\FoodAlchemistPaket::class : \Platform\FoodAlchemist\Models\FoodAlchemistConcept::class;
+        $obj = $team ? $m::visibleToTeam($team)->find($id) : null;
+        if ($obj === null) {
+            return;
+        }
+        $this->cockpitSources[] = [
+            'uid' => $this->neueCockpitUid(), 'type' => $typ, 'id' => (int) $obj->id, 'label' => (string) $obj->name,
+            'qty' => 50, 'unit' => 'persons', 'delivery_date' => $this->formDeliveryDate ?: null, 'reference' => $this->formReference ?: null,
+        ];
+        $this->konzeptSuche = '';
+        $this->cockpitPreview = null;
+        $this->cockpitAlternativenSchliessen();
+    }
+
+    /** Spec 74: Lagerartikel unter Mindestbestand nachfüllen (eine Quelle für alle). */
+    public function cockpitNachfuellenEinfuegen(OrderService $orders): void
+    {
+        if (collect($this->cockpitSources)->contains(fn ($q) => ($q['type'] ?? '') === 'nachfuellen')) {
+            return;
+        }
+        $this->cockpitSources[] = [
+            'uid' => $this->neueCockpitUid(), 'type' => 'nachfuellen', 'id' => 0, 'label' => 'Lagerartikel unter Mindestbestand',
+            'qty' => 1, 'unit' => 'auftrag', 'delivery_date' => $this->formDeliveryDate ?: null, 'reference' => $this->formReference ?: null,
+        ];
+        $this->cockpitVorschau($orders);
+    }
+
+    /** Spec 74: Lagerartikel aus dem Rezeptbedarf doch bestellen bzw. zurück in den Vorrat. */
+    public function vorratBestellen(string $key, bool $an, OrderService $orders): void
+    {
+        if ($an) {
+            $this->cockpitVorratBestellen[$key] = true;
+        } else {
+            unset($this->cockpitVorratBestellen[$key]);
+        }
+        $this->cockpitVorschau($orders);
+    }
+
     public function cockpitGpEinfuegen(int $gpId): void
     {
         $team = Auth::user()?->currentTeamRelation;
@@ -886,7 +949,7 @@ class Editor extends Component
     /** Artikel-Wahl + Spec 71 (auslassen, Menge, Lager) als ein Override-Paket — Vorschau und Speichern rechnen gleich. */
     private function cockpitAlleOverrides(): array
     {
-        return $this->cockpitOverrides + ['skip' => $this->cockpitSkip, 'menge' => $this->cockpitMengen, 'lager_abgleich' => $this->cockpitLagerAbgleich, 'lager_pos' => $this->cockpitLagerPos, 'lager_rezept' => $this->cockpitLagerRezept];
+        return $this->cockpitOverrides + ['skip' => $this->cockpitSkip, 'menge' => $this->cockpitMengen, 'lager_abgleich' => $this->cockpitLagerAbgleich, 'lager_pos' => $this->cockpitLagerPos, 'lager_rezept' => $this->cockpitLagerRezept, 'round_id' => $this->roundId, 'vorrat_bestellen' => $this->cockpitVorratBestellen];
     }
 
     public function positionAuslassen(string $key, OrderService $orders): void
@@ -945,6 +1008,26 @@ class Editor extends Component
         // Strategie gewechselt → Vorschau sofort neu (sonst wirkt der Wechsel erst nach „Vorschau berechnen")
         if ($this->cockpitSources !== []) {
             $this->cockpitVorschau(app(OrderService::class));
+        }
+    }
+
+    /** Spec 73: Runde löschen (nur solange nichts versendet ist). */
+    public function rundeLoeschen(OrderService $orders): void
+    {
+        if ($this->roundId === null) {
+            return;
+        }
+        try {
+            $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
+            $r = $orders->deleteRound($team, $this->roundId);
+            $this->dispatch('orders-geaendert');
+            $this->dispatch('modal.close', name: 'orders-editor');
+            $this->dispatch('orders-runde-geloescht', geloescht: count($r['geloescht']));
+            $this->roundId = null;
+            $this->cockpitSources = [];
+            $this->cockpitPreview = null;
+        } catch (\Throwable $e) {
+            $this->fehler = $e->getMessage();
         }
     }
 
@@ -1186,6 +1269,16 @@ class Editor extends Component
                 ->values();
         }
 
+        // Spec 73: Konzepte + Pakete
+        $konzeptTreffer = collect();
+        $kq = trim($this->konzeptSuche);
+        if (mb_strlen($kq) >= 2) {
+            $konzeptTreffer = \Platform\FoodAlchemist\Models\FoodAlchemistConcept::visibleToTeam($team)->where('name', 'like', '%' . $kq . '%')->orderBy('name')->limit(8)->get(['id', 'name'])
+                ->map(fn ($c) => ['typ' => 'concept', 'id' => (int) $c->id, 'name' => (string) $c->name])
+                ->concat(\Platform\FoodAlchemist\Models\FoodAlchemistPaket::visibleToTeam($team)->where('name', 'like', '%' . $kq . '%')->orderBy('name')->limit(8)->get(['id', 'name'])
+                    ->map(fn ($p) => ['typ' => 'paket', 'id' => (int) $p->id, 'name' => (string) $p->name]))->values();
+        }
+
         $produktionTreffer = collect();
         $pq = trim($this->produktionSuche);
         $selectedProductions = collect($this->cockpitSources)
@@ -1225,7 +1318,16 @@ class Editor extends Component
             }
         }
 
+        // Spec 73: zu welchen Runden gehört die offene Einzelbestellung?
+        $rundenDerBestellung = $detail !== null
+            ? \Platform\FoodAlchemist\Models\FoodAlchemistOrderRound::where('team_id', $team->id)
+                ->whereHas('orders', fn ($q) => $q->whereKey($this->orderId))->withCount('orders')->get(['id', 'label', 'created_at'])
+                ->map(fn ($r) => ['id' => (int) $r->id, 'label' => $r->label ?: 'Bestellrunde ' . $r->created_at?->format('d.m.Y'), 'anzahl' => (int) $r->orders_count,
+                    'angelegt' => $r->created_at?->format('d.m. H:i') ?? '—'])->all()
+            : [];
+
         return view('foodalchemist::livewire.orders.editor', [
+            'rundenDerBestellung' => $rundenDerBestellung,
             'sperr' => $this->sperrZustand(),   // Spec 65
             'vorlagen' => \Platform\FoodAlchemist\Models\FoodAlchemistOrderTemplate::where('team_id', $team->id)->orderBy('name')->pluck('name', 'id'),
             'detail' => $detail,
@@ -1242,6 +1344,7 @@ class Editor extends Component
             'bedarfTreffer' => $bedarfTreffer,
             'gpTreffer' => $gpTreffer,
             'produktionTreffer' => $produktionTreffer,
+            'konzeptTreffer' => $konzeptTreffer,
             'strategieOptionen' => LeadLaStrategie::cases(),
         ]);
     }

@@ -32,21 +32,28 @@ class OrderTemplateService
     public function liste(Team $team): Collection
     {
         return FoodAlchemistOrderTemplate::where('team_id', $team->id)
-            ->withCount('lines')->orderBy('name')->get();
+            ->withCount('lines')->orderByRaw('kategorie IS NULL')->orderBy('kategorie')->orderBy('name')->get();
     }
 
     public function detail(Team $team, int $id): FoodAlchemistOrderTemplate
     {
         return FoodAlchemistOrderTemplate::where('team_id', $team->id)
-            ->with(['lines.gp:id,name', 'lines.recipe:id,name,is_sales_recipe', 'lines.supplierItem:id,designation,supplier_id', 'lines.supplierItem.supplier:id,name'])
+            ->with(['lines.gp:id,name', 'lines.recipe:id,name,is_sales_recipe', 'lines.supplierItem:id,designation,supplier_id', 'lines.supplierItem.supplier:id,name', 'lines.concept:id,name', 'lines.paket:id,name'])
             ->findOrFail($id);
     }
 
-    /** @param array{name:string, note?:?string, weekday?:?int} $daten */
+    /** Kategorien dieses Betriebs (für Gruppierung + Auswahl). @return list<string> */
+    public function kategorien(Team $team): array
+    {
+        return FoodAlchemistOrderTemplate::where('team_id', $team->id)->whereNotNull('kategorie')->distinct()->orderBy('kategorie')->pluck('kategorie')->all();
+    }
+
+    /** @param array{name:string, note?:?string, weekday?:?int, kategorie?:?string} $daten */
     public function anlegen(Team $team, array $daten, ?int $userId = null): FoodAlchemistOrderTemplate
     {
         return FoodAlchemistOrderTemplate::create([
             'team_id' => $team->id, 'name' => $this->name($daten['name'] ?? ''), 'note' => $this->text($daten['note'] ?? null),
+            'kategorie' => $this->kategorie($daten['kategorie'] ?? null),
             'weekday' => $this->wochentag($daten['weekday'] ?? null), 'created_by' => $userId,
         ]);
     }
@@ -64,6 +71,9 @@ class OrderTemplateService
         }
         if (array_key_exists('weekday', $daten)) {
             $upd['weekday'] = $this->wochentag($daten['weekday']);
+        }
+        if (array_key_exists('kategorie', $daten)) {
+            $upd['kategorie'] = $this->kategorie($daten['kategorie']);
         }
         $v->update($upd);
 
@@ -86,16 +96,18 @@ class OrderTemplateService
     {
         $v = FoodAlchemistOrderTemplate::where('team_id', $team->id)->findOrFail($id);
         if (! in_array($typ, FoodAlchemistOrderTemplateLine::TYPEN, true)) {
-            throw new \RuntimeException('Typ muss gp, recipe oder supplier_item sein.');
+            throw new \RuntimeException('Typ muss gp, recipe, supplier_item, concept oder paket sein.');
         }
-        $spalte = ['gp' => 'gp_id', 'recipe' => 'recipe_id', 'supplier_item' => 'supplier_item_id'][$typ];
+        $spalte = FoodAlchemistOrderTemplateLine::SPALTE[$typ];
         $sichtbar = match ($typ) {
             'gp' => FoodAlchemistGp::visibleToTeam($team)->whereKey($bezugId)->exists(),
             'recipe' => FoodAlchemistRecipe::visibleToTeam($team)->whereKey($bezugId)->exists(),
+            'concept' => \Platform\FoodAlchemist\Models\FoodAlchemistConcept::visibleToTeam($team)->whereKey($bezugId)->exists(),
+            'paket' => \Platform\FoodAlchemist\Models\FoodAlchemistPaket::visibleToTeam($team)->whereKey($bezugId)->exists(),
             default => FoodAlchemistSupplierItem::visibleToTeam($team)->whereKey($bezugId)->exists(),
         };
         if (! $sichtbar) {
-            throw new \RuntimeException(['gp' => 'Grundprodukt', 'recipe' => 'Rezept', 'supplier_item' => 'Lieferantenartikel'][$typ] . ' nicht gefunden.');
+            throw new \RuntimeException(['gp' => 'Grundprodukt', 'recipe' => 'Rezept', 'supplier_item' => 'Lieferantenartikel', 'concept' => 'Konzept', 'paket' => 'Paket'][$typ] . ' nicht gefunden.');
         }
         $einheit = $this->einheit($typ, $einheit, $bezugId);
         $line = FoodAlchemistOrderTemplateLine::firstOrNew(['order_template_id' => $v->id, 'type' => $typ, $spalte => $bezugId]);
@@ -194,7 +206,7 @@ class OrderTemplateService
     {
         $quellen = array_values(array_filter($quellen, fn ($q) => in_array($q['type'] ?? '', FoodAlchemistOrderTemplateLine::TYPEN, true)));
         if ($quellen === []) {
-            throw new \RuntimeException('Keine übernehmbaren Positionen (Grundprodukt, Rezept oder Artikel).');
+            throw new \RuntimeException('Keine übernehmbaren Positionen (Grundprodukt, Rezept, Konzept, Paket oder Artikel).');
         }
 
         return DB::transaction(function () use ($team, $name, $quellen, $userId) {
@@ -270,6 +282,13 @@ class OrderTemplateService
         }
 
         return $einheit;
+    }
+
+    private function kategorie(mixed $k): ?string
+    {
+        $k = trim((string) ($k ?? ''));
+
+        return $k !== '' ? mb_substr($k, 0, 80) : null;
     }
 
     private function menge(mixed $menge): float

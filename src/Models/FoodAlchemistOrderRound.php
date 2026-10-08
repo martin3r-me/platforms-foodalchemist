@@ -20,6 +20,10 @@ class FoodAlchemistOrderRound extends Model
     protected $casts = [
         'uuid' => 'string',
         'desired_delivery_date' => 'date',
+        'sources' => 'array',
+        'overrides' => 'array',
+        'source_refs' => 'array',
+        'lager_reserviert' => 'array',
     ];
 
     public function orders(): BelongsToMany

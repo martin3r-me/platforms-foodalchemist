@@ -89,6 +89,27 @@ class ProduktionsVerbrauchService
             if ($r === null || $ansaetze <= 0) {
                 continue;
             }
+            // Spec 74: Schnappschuss mit Gramm je Zutat (inkl. Darreichungs-Deltas) gewinnt; Handkorrektur der
+            // Ansätze skaliert ihn. Ältere Schnappschüsse ohne menge_g → Rezept × Ansätze (wie bisher).
+            $snap = collect((array) ($zeile->zutaten ?? []))->filter(fn ($z) => is_array($z) && array_key_exists('menge_g', $z));
+            if ($snap->isNotEmpty() && (float) $zeile->ansaetze > 0) {
+                $faktor = $ansaetze / (float) $zeile->ansaetze;
+                foreach ($snap as $z) {
+                    $g = (float) $z['menge_g'] * $faktor;
+                    if ($g <= 0) {
+                        continue;
+                    }
+                    if (($z['typ'] ?? '') === 'sub' && ! empty($z['ref_recipe_id'])) {
+                        if (! in_array((int) $z['ref_recipe_id'], $produziert, true)) {
+                            $rezept[(int) $z['ref_recipe_id']] = ($rezept[(int) $z['ref_recipe_id']] ?? 0) + $g;
+                        }
+                    } elseif (($z['typ'] ?? '') === 'gp' && ! empty($z['gp_id'])) {
+                        $gp[(int) $z['gp_id']] = ($gp[(int) $z['gp_id']] ?? 0) + $g;
+                    }
+                }
+
+                continue;
+            }
             foreach ($r->ingredients as $z) {
                 if ($z->is_optional || $z->unit?->slug === 'qs') {
                     continue;
