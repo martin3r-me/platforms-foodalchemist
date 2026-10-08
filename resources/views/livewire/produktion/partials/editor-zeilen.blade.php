@@ -100,6 +100,11 @@
                                                 Im Lager: {{ rtrim(rtrim(number_format($imLager['base'] === 'g' ? $imLager['menge'] / 1000 : $imLager['menge'], 3, ',', '.'), '0'), ',') }} {{ ['g' => 'kg', 'Port' => 'Portionen', 'Stk' => 'Stück'][$imLager['base']] ?? $imLager['base'] }} ({{ $imLager['chargen'] }} {{ $imLager['chargen'] === 1 ? 'Charge' : 'Chargen' }}{{ $imLager['aeltestes_bis'] ? ', älteste bis ' . \Illuminate\Support\Carbon::parse($imLager['aeltestes_bis'])->format('d.m.') : '' }})
                                             </a>
                                         @endif
+                                        {{-- Spec 76: Einzel-Etikett je Basisrezept-Zeile (Nachdruck, Nachproduktion, Rest in den TK) --}}
+                                        @if($z['ist_basisrezept'] && $z['recipe_id'] !== null && ! $z['ist_gestrichen'] && \Illuminate\Support\Facades\Route::has('foodalchemist.etiketten.index'))
+                                            <a href="{{ route('foodalchemist.etiketten.index', ['quelle' => 'recipe', 'id' => $z['recipe_id'], 'e' => array_filter(['hergestellt_am' => isset($ops['production_date']) ? \Illuminate\Support\Carbon::parse($ops['production_date'])->toDateString() : null, 'menge' => $z['produzierte_menge_kg'] !== null ? rtrim(rtrim(number_format($z['produzierte_menge_kg'], 3, ',', ''), '0'), ',') . ' kg' : null])]) }}" target="_blank"
+                                               class="inline-flex items-center gap-1 text-[length:var(--fa-text-sm)] text-[var(--fa-accent)] hover:underline" data-produktion-etikett>@svg('heroicon-m-tag', 'w-3.5 h-3.5') Etikett</a>
+                                        @endif
                                         @if(($z['line_status'] ?? null) === 'done' && $z['recipe_id'] !== null && \Illuminate\Support\Facades\Route::has('foodalchemist.lager.index'))
                                             <a href="{{ route('foodalchemist.lager.index', ['reiter' => 'eigenproduktion', 'einlagern_rezept' => $z['recipe_id'], 'einlagern_menge' => $z['ist_basisrezept'] ? ($z['produzierte_menge_kg'] ?? '') : ($z['portionen'] ?? ''), 'einlagern_zeile' => $z['id']]) }}"
                                                class="block text-[length:var(--fa-text-sm)] text-[var(--fa-accent)] hover:underline" data-produktion-einlagern>Rest ins Lager / einfrieren →</a>

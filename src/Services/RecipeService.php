@@ -256,6 +256,8 @@ class RecipeService
             'storage_type' => $this->lagerart($in['storage_type'] ?? null),
             'shelf_life_chilled_days' => $in['shelf_life_chilled_days'] ?? null,
             'shelf_life_frozen_days' => $in['shelf_life_frozen_days'] ?? null,
+            'shelf_life_dry_days' => $in['shelf_life_dry_days'] ?? null,
+            'storage_types' => array_key_exists('storage_types', $in) ? $this->lagerarten($in['storage_types']) : null,
             'batch_max_kg' => $in['batch_max_kg'] ?? null,
             'batch_max_pieces' => $in['batch_max_pieces'] ?? null,
             'default_station_id' => TeamScope::referenz(\Platform\FoodAlchemist\Models\FoodAlchemistProductionStation::class, $in['default_station_id'] ?? null, $team, 'Posten'),
@@ -322,6 +324,8 @@ class RecipeService
             'storage_type' => array_key_exists('storage_type', $in) ? $this->lagerart($in['storage_type']) : $recipe->storage_type,
             'shelf_life_chilled_days' => array_key_exists('shelf_life_chilled_days', $in) ? $in['shelf_life_chilled_days'] : $recipe->shelf_life_chilled_days,
             'shelf_life_frozen_days' => array_key_exists('shelf_life_frozen_days', $in) ? $in['shelf_life_frozen_days'] : $recipe->shelf_life_frozen_days,
+            'shelf_life_dry_days' => array_key_exists('shelf_life_dry_days', $in) ? $in['shelf_life_dry_days'] : $recipe->shelf_life_dry_days,
+            'storage_types' => array_key_exists('storage_types', $in) ? $this->lagerarten($in['storage_types']) : $recipe->storage_types,
             'batch_max_kg' => array_key_exists('batch_max_kg', $in) ? $in['batch_max_kg'] : $recipe->batch_max_kg,
             'batch_max_pieces' => array_key_exists('batch_max_pieces', $in) ? $in['batch_max_pieces'] : $recipe->batch_max_pieces,
             'default_station_id' => array_key_exists('default_station_id', $in)
@@ -1272,5 +1276,13 @@ class RecipeService
     private function lagerart(mixed $wert): ?string
     {
         return in_array($wert, ['gekuehlt', 'tiefgekuehlt', 'trocken'], true) ? (string) $wert : null;
+    }
+
+    /** Spec 76: mögliche Lagerarten (Mehrfachauswahl), Reihenfolge fest; leer = null (abgeleitet). */
+    private function lagerarten(mixed $wert): ?array
+    {
+        $arten = array_values(array_intersect(\Platform\FoodAlchemist\Models\FoodAlchemistRecipe::LAGERARTEN, (array) ($wert ?? [])));
+
+        return $arten !== [] ? $arten : null;
     }
 }

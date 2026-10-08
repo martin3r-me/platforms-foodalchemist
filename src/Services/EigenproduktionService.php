@@ -89,7 +89,7 @@ class EigenproduktionService
             throw new \RuntimeException('Die Menge muss größer als 0 sein.');
         }
         $qty = $base === 'g' ? $menge * 1000 : $menge;
-        $lagerart = (string) ($in['lagerart'] ?? '') ?: ($r->storage_type ?: 'gekuehlt');
+        $lagerart = (string) ($in['lagerart'] ?? '') ?: $r->standardLagerart();   // Spec 76
         if (! array_key_exists($lagerart, self::LAGERARTEN)) {
             throw new \RuntimeException('Lagerart muss gekuehlt, tiefgekuehlt oder trocken sein.');
         }
@@ -248,11 +248,12 @@ class EigenproduktionService
 
     public function haltbarBis(FoodAlchemistRecipe $r, string $lagerart, Carbon $produziert, ?Carbon $eingefroren): ?Carbon
     {
-        if ($lagerart === 'tiefgekuehlt') {
-            return $r->shelf_life_frozen_days !== null ? ($eingefroren ?? $produziert)->copy()->addDays((int) $r->shelf_life_frozen_days) : null;
+        $tage = $r->haltbarTage($lagerart);   // Spec 76: je Lagerart (inkl. trocken)
+        if ($tage === null) {
+            return null;
         }
 
-        return $r->shelf_life_chilled_days !== null ? $produziert->copy()->addDays((int) $r->shelf_life_chilled_days) : null;
+        return ($lagerart === 'tiefgekuehlt' ? ($eingefroren ?? $produziert) : $produziert)->copy()->addDays($tage);
     }
 
     private function naechsteCharge(Team $team, Carbon $tag): string

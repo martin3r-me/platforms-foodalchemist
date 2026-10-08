@@ -16,7 +16,9 @@
     $muted = '#5f5850';
     $datum = fn ($c) => $c?->format('d.m.Y');
     $linie = '<span class="linie">&nbsp;</span>';
-    $allergenText = function () use ($d, $v) {
+    // Spec 76: Sammeldruck — `liste` = jedes Etikett in Reihenfolge; Einzeldruck = gleiche Daten × Anzahl
+    $liste = $liste ?? array_fill(0, max(1, (int) $anzahl), $daten);
+    $allergenText = function () use (&$d, $v) {
         if ($d['allergene'] === [] && $d['spuren'] === []) {
             return $d['allergene_unbekannt'] ? null : 'keine';
         }
@@ -28,9 +30,11 @@
 
         return implode(', ', array_map($fmt, $d['allergene']));
     };
-    $spurenText = fn () => $d['spuren'] === [] ? null : implode(', ', array_map(fn ($a) => $v->allergen_darstellung === 'kuerzel' ? $a['code'] : $a['label'], $d['spuren']));
+    $spurenText = function () use (&$d, $v) {
+        return $d['spuren'] === [] ? null : implode(', ', array_map(fn ($a) => $v->allergen_darstellung === 'kuerzel' ? $a['code'] : $a['label'], $d['spuren']));
+    };
     $istStellplatz = $d['quelle'] === 'stellplatz';
-    $gesamt = $anzahl;
+    $gesamt = count($liste);
     $proSeite = $f['bogen'] ? $f['spalten'] * $f['zeilen'] : 1;
     $leer = $f['bogen'] ? $startplatz - 1 : 0;
     $zellen = $leer + $gesamt;
@@ -84,6 +88,7 @@
                             @php $index = $s * $proSeite + $r * $f['spalten'] + $c; $belegt = $index >= $leer && $index < $zellen; @endphp
                             <td>
                                 @if($belegt)
+                                    @php $d = $liste[$index - $leer]; $istStellplatz = $d['quelle'] === 'stellplatz'; @endphp
                                     @include('foodalchemist::dokumente.partials.etikett-inhalt')
                                 @endif
                             </td>
@@ -93,6 +98,7 @@
             </table>
         @else
             {{-- Rolle/Dymo: ein Etikett je Seite, ohne Tabelle (DomPDF schiebt zu hohe Tabellenzeilen auf Folgeseiten) --}}
+            @php $d = $liste[$s]; $istStellplatz = $d['quelle'] === 'stellplatz'; @endphp
             @include('foodalchemist::dokumente.partials.etikett-inhalt')
         @endif
     </div>

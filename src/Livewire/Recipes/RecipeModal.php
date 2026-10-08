@@ -127,7 +127,7 @@ class RecipeModal extends Component
         'variable_work_time_min' => null, 'variable_work_time_basis' => 'kg',
         'batch_max_kg' => null, 'batch_max_pieces' => null, 'standzeit_min' => null,
         // Spec 70 — Lagerart + Haltbarkeit (Etikett, Einlagerung)
-        'storage_type' => '', 'shelf_life_chilled_days' => null, 'shelf_life_frozen_days' => null,
+        'storage_type' => '', 'shelf_life_chilled_days' => null, 'shelf_life_frozen_days' => null, 'shelf_life_dry_days' => null, 'storage_types' => [],
     ];
 
     public ?int $recipeId = null;
@@ -204,6 +204,8 @@ class RecipeModal extends Component
                     'storage_type' => (string) ($r->storage_type ?? ''),
                     'shelf_life_chilled_days' => $r->shelf_life_chilled_days,
                     'shelf_life_frozen_days' => $r->shelf_life_frozen_days,
+                    'shelf_life_dry_days' => $r->shelf_life_dry_days,
+                    'storage_types' => $r->lagerarten(),   // Spec 76: Mehrfachauswahl (abgeleitet, wenn noch leer)
                     'setup_time_min' => $r->setup_time_min,
                     'variable_work_time_min' => $r->variable_work_time_min,
                     'variable_work_time_basis' => $r->variable_work_time_basis ?: 'kg',
@@ -286,7 +288,12 @@ class RecipeModal extends Component
                 // Stufe 3 — Planer-Felder sanitisieren
                 'default_station_id' => $this->form['default_station_id'] ?: null,
                 'max_vorlauf_tage' => $ganz($this->form['max_vorlauf_tage']),
-                'storage_type' => in_array($this->form['storage_type'] ?? '', ['gekuehlt', 'tiefgekuehlt', 'trocken'], true) ? $this->form['storage_type'] : null,
+                // Spec 76: Standard muss eine der möglichen Lagerarten sein (sonst die erste)
+                'storage_types' => array_values(array_intersect(['gekuehlt', 'tiefgekuehlt', 'trocken'], (array) ($this->form['storage_types'] ?? []))),
+                'storage_type' => in_array($this->form['storage_type'] ?? '', (array) ($this->form['storage_types'] ?? []), true)
+                    ? $this->form['storage_type']
+                    : (array_values(array_intersect(['gekuehlt', 'tiefgekuehlt', 'trocken'], (array) ($this->form['storage_types'] ?? [])))[0] ?? null),
+                'shelf_life_dry_days' => $ganz($this->form['shelf_life_dry_days'] ?? null),
                 'shelf_life_chilled_days' => $ganz($this->form['shelf_life_chilled_days'] ?? null),
                 'shelf_life_frozen_days' => $ganz($this->form['shelf_life_frozen_days'] ?? null),
                 'setup_time_min' => $ganz($this->form['setup_time_min']),

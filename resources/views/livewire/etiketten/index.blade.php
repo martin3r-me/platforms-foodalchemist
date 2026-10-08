@@ -65,9 +65,24 @@
                             <x-fa::field label="Bezeichnung" for="et-bez"><x-fa::input id="et-bez" wire:model.live.debounce.500ms="e.bezeichnung" :placeholder="$daten['bezeichnung']" /></x-fa::field>
                             @if($hatFeld('zusatz'))<x-fa::field label="Zusatzzeile" for="et-zus"><x-fa::input id="et-zus" wire:model.live.debounce.500ms="e.zusatz" /></x-fa::field>@endif
                             @if($quelle === 'recipe' || $hatFeld('lagerung'))
-                                <x-fa::field label="Lagerung" for="et-lag">
-                                    <x-fa::select id="et-lag" wire:model.live="e.lagerung" size="sm" :options="\Platform\FoodAlchemist\Services\EtikettService::LAGERUNG" :placeholder="'automatisch (' . (\Platform\FoodAlchemist\Services\EtikettService::LAGERUNG[$daten['lagerung']] ?? '–') . ')'" />
+                                {{-- Spec 76: nur die Lagerarten, die das Rezept erlaubt; „verbrauchen bis“ rechnet sich daraus --}}
+                                @php
+                                    $kurz = ['gekuehlt' => 'Gekühlt', 'tiefgekuehlt' => 'TK', 'trocken' => 'Trocken'];
+                                    $arten = $quelle === 'recipe' && ! empty($daten['lagerarten']) ? $daten['lagerarten'] : array_keys(\Platform\FoodAlchemist\Services\EtikettService::LAGERUNG);
+                                    $aktiv = $e['lagerung'] !== '' ? $e['lagerung'] : $daten['lagerung'];
+                                @endphp
+                                <x-fa::field label="Lagerung">
+                                    <div class="inline-flex items-center gap-0.5 p-0.5 rounded-[var(--fa-radius-control)] bg-[var(--fa-ground)] self-start" role="group" aria-label="Lagerung" data-etikett-lagerung>
+                                        @foreach($arten as $art)
+                                            <button type="button" wire:click="$set('e.lagerung', '{{ $art }}')" class="{{ $segment }} {{ $aktiv === $art ? 'bg-[var(--fa-surface)] text-[var(--fa-ink)] shadow-sm' : 'text-[var(--fa-ink-2)] hover:text-[var(--fa-ink)]' }}" data-etikett-lagerart="{{ $art }}">
+                                                {{ $kurz[$art] ?? $art }} @if($quelle === 'recipe' && ($daten['haltbar'][$art] ?? null) !== null) <span class="{{ $leise }}">· {{ $daten['haltbar'][$art] }} T.</span>@endif
+                                            </button>
+                                        @endforeach
+                                    </div>
                                 </x-fa::field>
+                                @if($quelle === 'recipe')
+                                    <p class="{{ $leise }}">Lagerarten und Haltbarkeit pflegst du am Rezept (Stammdaten → Lagerung & Haltbarkeit). <a href="{{ \Platform\FoodAlchemist\Support\Sprungziel::rezept($bezugId) }}" class="text-[var(--fa-accent)] hover:underline" data-etikett-zum-rezept>Zum Rezept →</a></p>
+                                @endif
                             @endif
                             <div class="grid grid-cols-2 gap-2">
                                 @foreach(['hergestellt_am' => 'Hergestellt', 'eingefroren_am' => 'Eingefroren', 'geoeffnet_am' => 'Geöffnet', 'verbrauchen_bis' => 'Verbrauchen bis'] as $k => $t)
@@ -78,21 +93,20 @@
                                     @endif
                                 @endforeach
                             </div>
-                            @foreach(['menge' => 'Menge (z. B. 2 l, 10 Portionen)', 'kuerzel' => 'Kürzel', 'charge' => 'Charge'] as $k => $t)
+                            {{-- Spec 76: Menge = Zahl + Einheit (kein Freitext); leer = Schreiblinie --}}
+                            @if($hatFeld('menge'))
+                                <x-fa::field label="Menge" for="et-menge" hint="leer = Schreiblinie">
+                                    <span class="inline-flex items-center gap-1.5" data-etikett-menge>
+                                        <x-fa::input id="et-menge" wire:model.live.debounce.500ms="mengeZahl" inputmode="decimal" numeric class="w-24" aria-label="Menge" />
+                                        <x-fa::select wire:model.live="mengeEinheit" size="sm" :options="['kg' => 'kg', 'g' => 'g', 'l' => 'l', 'ml' => 'ml', 'Portionen' => 'Portionen', 'Stück' => 'Stück']" class="w-32" aria-label="Einheit" />
+                                    </span>
+                                </x-fa::field>
+                            @endif
+                            @foreach(['kuerzel' => 'Kürzel', 'charge' => 'Charge'] as $k => $t)
                                 @if($hatFeld($k))<x-fa::field :label="$t" :for="'et-' . $k"><x-fa::input :id="'et-' . $k" wire:model.live.debounce.500ms="e.{{ $k }}" placeholder="leer = Schreiblinie" /></x-fa::field>@endif
                             @endforeach
                         </x-fa::section>
 
-                        @if($quelle === 'recipe')
-                            <x-fa::section title="Lagerung & Haltbarkeit am Rezept" icon="heroicon-o-clock" description="Übliche Lagerart und Vorschlag für „verbrauchen bis“ — gilt für alle künftigen Etiketten dieses Rezepts." data-etikett-haltbarkeit>
-                                <div class="flex flex-wrap items-end gap-2">
-                                    <x-fa::field label="Übliche Lagerart" for="et-la"><x-fa::select id="et-la" wire:model="lagerart" size="sm" :options="\Platform\FoodAlchemist\Services\EtikettService::LAGERUNG" placeholder="offen" /></x-fa::field>
-                                    <x-fa::field label="Gekühlt (Tage)" for="et-hg"><x-fa::input id="et-hg" wire:model="haltbarGekuehlt" inputmode="numeric" class="w-20" /></x-fa::field>
-                                    <x-fa::field label="Tiefgekühlt (Tage)" for="et-ht"><x-fa::input id="et-ht" wire:model="haltbarTk" inputmode="numeric" class="w-20" /></x-fa::field>
-                                    <x-fa::button size="sm" wire:click="haltbarkeitSpeichern">Speichern</x-fa::button>
-                                </div>
-                            </x-fa::section>
-                        @endif
                     @endif
                 @endif
             </div>
@@ -115,5 +129,28 @@
                 @endif
             </x-fa::section>
         </div>
+        {{-- Spec 76: Druckprotokoll — wer hat wann was gedruckt; „nochmal drucken" mit denselben Angaben --}}
+        <x-fa::section title="Zuletzt gedruckt" icon="heroicon-o-clock" description="Druckprotokoll für Rückverfolgung. Sammeldrucke aus der Produktion stehen als eine Zeile." data-etikett-verlauf>
+            @if($verlauf === [])
+                <p class="{{ $leise }}">Noch nichts gedruckt.</p>
+            @else
+                <div class="overflow-x-auto">
+                    <table class="fa-table fa-table--compact">
+                        <thead><tr><th>Wann</th><th>Wer</th><th>Etikett</th><th class="text-right">Anzahl</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach($verlauf as $vz)
+                                <tr wire:key="druck-{{ $vz['id'] }}">
+                                    <td class="tabular-nums whitespace-nowrap">{{ $vz['wann'] }}</td>
+                                    <td>{{ $vz['wer'] ?? '–' }}</td>
+                                    <td><div class="font-medium">{{ $vz['titel'] }}</div>@if($vz['details'] !== '')<div class="{{ $leise }}">{{ $vz['details'] }}</div>@endif</td>
+                                    <td class="text-right tabular-nums">{{ $vz['anzahl'] }}</td>
+                                    <td class="text-right"><x-fa::button size="sm" variant="ghost" icon="heroicon-m-printer" :href="$vz['url']" target="_blank">Nochmal drucken</x-fa::button></td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            @endif
+        </x-fa::section>
     </x-ui-page-container>
 </x-ui-page>

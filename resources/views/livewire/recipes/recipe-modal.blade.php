@@ -591,19 +591,27 @@
         @endif
     </x-fa::section>
 
-    {{-- Spec 70: übliche Lagerart + Haltbarkeit — Vorgabe für Etikett („verbrauchen bis") und Einlagerung --}}
-    <x-fa::section title="Lagerung & Haltbarkeit" icon="heroicon-o-archive-box" description="Vorgabe für Etiketten und die Einlagerung. Beim Etikettendruck lässt sich die Lagerart im Einzelfall umstellen." data-recipe-lagerung>
-        <div class="grid gap-3 md:grid-cols-3">
-            <x-fa::field label="Übliche Lagerart" for="rezept-lagerart">
-                <x-fa::select id="rezept-lagerart" wire:model="form.storage_type" :options="['gekuehlt' => 'Gekühlt (0–7 °C)', 'tiefgekuehlt' => 'Tiefgekühlt (−18 °C)', 'trocken' => 'Trocken']" placeholder="offen" data-recipe-lagerart />
-            </x-fa::field>
-            <x-fa::field label="Haltbar gekühlt (Tage)" for="rezept-haltbar-kuehl">
-                <x-fa::input id="rezept-haltbar-kuehl" type="number" min="0" wire:model="form.shelf_life_chilled_days" numeric placeholder="offen" />
-            </x-fa::field>
-            <x-fa::field label="Haltbar tiefgekühlt (Tage)" for="rezept-haltbar-tk" hint="ab dem Einfrieren">
-                <x-fa::input id="rezept-haltbar-tk" type="number" min="0" wire:model="form.shelf_life_frozen_days" numeric placeholder="offen" />
-            </x-fa::field>
-        </div>
+    {{-- Spec 76: Lagerarten als Mehrfachauswahl + Haltbarkeit je Lagerart; Standard = Vorwahl für Etikett und Einlagerung --}}
+    <x-fa::section title="Lagerung & Haltbarkeit" icon="heroicon-o-archive-box" description="Wie dieses Rezept gelagert werden kann. Beim Etikett und beim Einlagern wählst du nur noch aus diesen Lagerarten — „verbrauchen bis“ rechnet sich aus der Haltbarkeit." data-recipe-lagerung>
+        <table class="fa-table fa-table--compact">
+            <thead><tr><th>Lagerart</th><th>möglich</th><th>haltbar (Tage)</th><th>Standard</th></tr></thead>
+            <tbody>
+                @foreach(['gekuehlt' => ['Gekühlt (0–7 °C)', 'shelf_life_chilled_days', null], 'tiefgekuehlt' => ['Tiefgekühlt (−18 °C)', 'shelf_life_frozen_days', 'ab dem Einfrieren'], 'trocken' => ['Trocken / kühl', 'shelf_life_dry_days', null]] as $art => [$titel, $feld, $hint])
+                    @php $an = in_array($art, (array) ($form['storage_types'] ?? []), true); @endphp
+                    <tr wire:key="lagerart-{{ $art }}" data-recipe-lagerart="{{ $art }}">
+                        <td class="font-medium">{{ $titel }}</td>
+                        <td><input type="checkbox" value="{{ $art }}" wire:model.live="form.storage_types" class="w-4 h-4 rounded accent-[var(--fa-accent)]" aria-label="{{ $titel }} möglich" /></td>
+                        <td>
+                            <span class="inline-flex items-center gap-1.5">
+                                <x-fa::input type="number" min="0" size="sm" wire:model="form.{{ $feld }}" numeric placeholder="offen" class="w-24" :disabled="! $an" aria-label="Haltbarkeit {{ $titel }}" />
+                                @if($hint)<span class="{{ $hinweis }}">{{ $hint }}</span>@endif
+                            </span>
+                        </td>
+                        <td><input type="radio" value="{{ $art }}" wire:model.live="form.storage_type" @disabled(! $an) class="w-4 h-4 accent-[var(--fa-accent)]" aria-label="{{ $titel }} als Standard" /></td>
+                    </tr>
+                @endforeach
+            </tbody>
+        </table>
     </x-fa::section>
 
     {{-- EIGNUNG (M9-01k) — Detail-Panel-Kartei via section-Prop --}}

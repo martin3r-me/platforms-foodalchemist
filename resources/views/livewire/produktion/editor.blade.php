@@ -24,6 +24,7 @@
 @endphp
 
 {{-- Spec 29-Rollout: Produktion-Editor auf Editor-Page-Muster (fullscreen · dark · editor-tabs · KPI). --}}
+<div>
 <x-foodalchemist::modal name="produktion-editor" fullscreen dark-canvas
     :title="$orderId === null ? 'Neuer Produktionsauftrag' : 'Produktionsauftrag'"
     :title-name="$orderId === null ? null : ($name ?: null)">
@@ -37,6 +38,10 @@
     <x-slot:actions>
         @if($fehler)<x-fa::signal tone="crit" class="min-w-0" data-produktion-fehler>{{ $fehler }}</x-fa::signal>@endif
         <div class="ml-auto flex flex-wrap items-center gap-2">
+            {{-- Spec 76: Etiketten für alle Basisrezepte des Auftrags (Sammeldruck); je Zeile gibt es zusätzlich ein Einzel-Etikett --}}
+            @if($etikettenVorschlag !== [])
+                <x-fa::button icon="heroicon-m-tag" x-on:click="$dispatch('modal.open', { name: 'produktion-etiketten' })" data-produktion-etiketten>Etiketten</x-fa::button>
+            @endif
             @if($hatDokument || $darfLoeschen)
                 {{-- Weitere Aktionen: Produktionsschein · Löschen (ganz unten, rot — nie neben Speichern) --}}
                 <div class="relative" x-data="faMenu()" x-on:keydown.escape="offen = false" x-on:click.outside="offen = false">
@@ -98,3 +103,28 @@
     @include('foodalchemist::livewire.produktion.partials.editor-einkauf')
     </x-foodalchemist::editor-tabs>
 </x-foodalchemist::modal>
+@if($etikettenVorschlag !== [])
+<x-foodalchemist::modal name="produktion-etiketten" title="Etiketten für diesen Auftrag" size="max-w-3xl">
+    <form method="GET" action="{{ route('foodalchemist.etiketten.produktion', ['order' => $ops['id']]) }}" target="_blank" class="flex flex-col gap-3" data-produktion-etiketten-form>
+        <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">Alle Basisrezepte des Auftrags, je Ansatz ein Etikett mit der Menge eines Ansatzes. Hergestellt am = Produktionstag, Lagerart = Standard des Rezepts. Haken raus oder Anzahl ändern, dann drucken.</p>
+        <table class="fa-table fa-table--compact">
+            <thead><tr><th></th><th>Basisrezept</th><th class="text-right">Anzahl</th><th>Menge je Etikett</th></tr></thead>
+            <tbody>
+                @foreach($etikettenVorschlag as $ev)
+                    <tr wire:key="pe-{{ $ev['line_id'] }}">
+                        <td><input type="checkbox" name="zeilen[{{ $ev['line_id'] }}][an]" value="1" checked class="w-4 h-4 rounded accent-[var(--fa-accent)]" aria-label="{{ $ev['name'] }} drucken" /></td>
+                        <td class="font-medium">{{ $ev['name'] }}</td>
+                        <td class="text-right"><input type="number" min="1" max="200" name="zeilen[{{ $ev['line_id'] }}][anzahl]" value="{{ $ev['vorschlag']['anzahl'] }}" class="fa-control h-7 w-16 text-right tabular-nums text-[length:var(--fa-text-sm)]" aria-label="Anzahl" /></td>
+                        <td><input type="text" name="zeilen[{{ $ev['line_id'] }}][menge]" value="{{ $ev['vorschlag']['menge'] }}" placeholder="leer = Schreiblinie" class="fa-control h-7 w-32 text-[length:var(--fa-text-sm)]" aria-label="Menge je Etikett" /></td>
+                    </tr>
+                @endforeach
+            </tbody>
+        </table>
+        <div class="flex flex-wrap items-end gap-2">
+            <x-fa::field label="Vorlage" for="pe-vorlage"><x-fa::select id="pe-vorlage" name="vorlage" size="sm" :options="$etikettVorlagen" /></x-fa::field>
+            <x-fa::button type="submit" variant="primary" icon="heroicon-m-printer">Etiketten drucken</x-fa::button>
+        </div>
+    </form>
+</x-foodalchemist::modal>
+@endif
+</div>

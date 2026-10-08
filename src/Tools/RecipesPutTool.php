@@ -51,6 +51,8 @@ class RecipesPutTool extends FoodAlchemistTool implements ToolContract, ToolMeta
                 'storage_type' => ['type' => ['string', 'null'], 'enum' => ['gekuehlt', 'tiefgekuehlt', 'trocken', null], 'description' => 'Übliche Lagerart (Vorgabe für Etikett und Einlagerung)'],
                 'shelf_life_chilled_days' => ['type' => ['integer', 'null'], 'description' => 'Haltbarkeit gekühlt in Tagen'],
                 'shelf_life_frozen_days' => ['type' => ['integer', 'null'], 'description' => 'Haltbarkeit tiefgekühlt in Tagen (ab Einfrieren)'],
+                'shelf_life_dry_days' => ['type' => ['integer', 'null'], 'description' => 'Haltbarkeit trocken/kühl in Tagen'],
+                'storage_types' => ['type' => ['array', 'null'], 'items' => ['type' => 'string', 'enum' => ['gekuehlt', 'tiefgekuehlt', 'trocken']], 'description' => 'Mögliche Lagerarten (Mehrfachauswahl); storage_type ist die Standard-Lagerart daraus. Das Etikett wählt nur aus diesen.'],
                 'default_station_id' => ['type' => ['integer', 'null'], 'description' => 'Default-Posten fürs Planer-Routing. IDs aus production_stations.GET; null hebt die Zuordnung auf.'],
                 'yield_kg_manual' => ['type' => 'number'],
                 'category_id' => ['type' => 'integer'],
@@ -90,7 +92,7 @@ class RecipesPutTool extends FoodAlchemistTool implements ToolContract, ToolMeta
             'name', 'description', 'preparation', 'taste_direction',
             'work_time_min', 'setup_time_min', 'standzeit_min', 'batch_max_kg', 'batch_max_pieces',
             'max_vorlauf_tage', 'default_station_id', 'yield_kg_manual', 'category_id',
-            'storage_type', 'shelf_life_chilled_days', 'shelf_life_frozen_days',
+            'storage_type', 'shelf_life_chilled_days', 'shelf_life_frozen_days', 'shelf_life_dry_days', 'storage_types',
         ]));
         if (($arguments['status'] ?? null) === 'review') {
             $in['status'] = 'review';
