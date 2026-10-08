@@ -81,6 +81,17 @@ class EtikettService
         return FoodAlchemistLabelTemplate::where('team_id', $team->id)->findOrFail($id);
     }
 
+    /** Spec 78: Format der Vorlage — vom Drucker (inkl. Ränder-Korrektur), sonst aus der Vorlage. */
+    public function wirksamesFormat(FoodAlchemistLabelTemplate $v): array
+    {
+        $drucker = $v->printer_id !== null ? \Platform\FoodAlchemist\Models\FoodAlchemistPrinter::where('team_id', $v->team_id)->find($v->printer_id) : null;
+        if ($drucker !== null) {
+            return app(DruckerService::class)->format($drucker);
+        }
+
+        return (self::FORMATE[$v->format] ?? self::FORMATE['a4_24']) + ['versatz_x' => 0.0, 'versatz_y' => 0.0];
+    }
+
     /** Spec 76b: Vorlage für den Wandmonitor (Küche) — eigene, sonst die Standard-Vorlage. */
     public function kuechenVorlage(Team $team): FoodAlchemistLabelTemplate
     {
@@ -127,6 +138,10 @@ class EtikettService
             'fusstext' => array_key_exists('fusstext', $daten) ? (trim((string) $daten['fusstext']) !== '' ? mb_substr(trim((string) $daten['fusstext']), 0, 200) : null) : $v->fusstext,
             'is_default' => (bool) ($daten['is_default'] ?? $v->is_default ?? false),
             'is_kitchen_default' => (bool) ($daten['is_kitchen_default'] ?? $v->is_kitchen_default ?? false),   // Spec 76b
+            // Spec 78: Drucker (Format + Ränder kommen dann vom Drucker)
+            'printer_id' => array_key_exists('printer_id', $daten)
+                ? (($daten['printer_id'] ?? '') !== '' ? (int) \Platform\FoodAlchemist\Models\FoodAlchemistPrinter::where('team_id', $team->id)->findOrFail((int) $daten['printer_id'])->id : null)
+                : $v->printer_id,
         ]);
         $v->save();
         if ($v->is_default) {
@@ -340,7 +355,7 @@ class EtikettService
     public function druck(Team $team, ?int $vorlageId, string $quelle, int $id, array $eingabe = [], int $anzahl = 1, int $startplatz = 1): array
     {
         $v = $this->vorlage($team, $vorlageId);
-        $format = self::FORMATE[$v->format] ?? self::FORMATE['a4_24'];
+        $format = $this->wirksamesFormat($v);
         $platz = $format['bogen'] ? $format['spalten'] * $format['zeilen'] : 1;
 
         return $this->druckListe($team, $vorlageId, [['quelle' => $quelle, 'id' => $id, 'eingabe' => $eingabe, 'anzahl' => $anzahl]], $startplatz);
@@ -355,7 +370,7 @@ class EtikettService
     public function druckListe(Team $team, ?int $vorlageId, array $positionen, int $startplatz = 1): array
     {
         $v = $this->vorlage($team, $vorlageId);
-        $format = self::FORMATE[$v->format] ?? self::FORMATE['a4_24'];
+        $format = $this->wirksamesFormat($v);
         $platz = $format['bogen'] ? $format['spalten'] * $format['zeilen'] : 1;
         $liste = [];
         foreach ($positionen as $p) {

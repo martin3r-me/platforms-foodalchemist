@@ -32,12 +32,58 @@
                 </ul>
             </x-fa::section>
 
+            {{-- Spec 78: Druckerprofile — Format + Ränder je Gerät, Standard je Arbeitsplatz --}}
+            <x-fa::section title="Drucker" icon="heroicon-o-printer" :meta="$druckerListe->count()" description="Gedruckt wird über den Druckdialog des Browsers: Ränder „keine“, Maßstab 100 %." data-etiketten-drucker-liste>
+                <x-slot:actions><x-fa::button size="sm" icon="heroicon-m-plus" wire:click="druckerNeu">Drucker</x-fa::button></x-slot:actions>
+                @forelse($druckerListe as $p)
+                    <button type="button" wire:click="druckerWaehlen({{ $p->id }})" wire:key="dr-{{ $p->id }}" class="w-full text-left px-2 py-1.5 rounded-[var(--fa-radius-control)] hover:bg-[var(--fa-hover)] {{ $druckerId === $p->id ? 'bg-[var(--fa-ground)]' : '' }}">
+                        <div class="font-medium text-[var(--fa-ink)]">{{ $p->name }}{{ $p->is_default ? ' · Standard' : '' }}</div>
+                        <div class="{{ $leise }}">{{ $modelle[$p->modell] ?? $p->modell }}{{ $p->arbeitsplatz ? ' · ' . ($arbeitsplaetze[$p->arbeitsplatz] ?? $p->arbeitsplatz) : '' }}</div>
+                    </button>
+                @empty
+                    <p class="{{ $leise }}">Noch kein Drucker. Ohne Drucker wählt jede Vorlage ihr Format selbst.</p>
+                @endforelse
+                @if($druckerId !== null)
+                    <div class="flex flex-col gap-2 border-t border-[var(--fa-line)] pt-2" data-etiketten-drucker-form>
+                        <x-fa::field label="Name" for="dr-name"><x-fa::input id="dr-name" wire:model="drucker.name" placeholder="z. B. Küche Pass" /></x-fa::field>
+                        <x-fa::field label="Modell" for="dr-modell"><x-fa::select id="dr-modell" wire:model.live="drucker.modell" :options="$modelle" /></x-fa::field>
+                        @if(($drucker['format'] ?? '') === 'eigen' || ($drucker['modell'] ?? '') === 'eigen')
+                            <div class="grid grid-cols-2 gap-2">
+                                <x-fa::field label="Breite (mm)" for="dr-b"><x-fa::input id="dr-b" wire:model="drucker.breite_mm" inputmode="decimal" /></x-fa::field>
+                                <x-fa::field label="Höhe (mm)" for="dr-h"><x-fa::input id="dr-h" wire:model="drucker.hoehe_mm" inputmode="decimal" /></x-fa::field>
+                            </div>
+                        @else
+                            <x-fa::field label="Format" for="dr-format"><x-fa::select id="dr-format" wire:model="drucker.format" :options="$formate + ['eigen' => 'Eigenes Maß']" /></x-fa::field>
+                        @endif
+                        <div class="grid grid-cols-2 gap-2">
+                            <x-fa::field label="Versatz links/rechts (mm)" for="dr-x"><x-fa::input id="dr-x" wire:model="drucker.versatz_x_mm" inputmode="decimal" /></x-fa::field>
+                            <x-fa::field label="Versatz oben/unten (mm)" for="dr-y"><x-fa::input id="dr-y" wire:model="drucker.versatz_y_mm" inputmode="decimal" /></x-fa::field>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <x-fa::field label="Arbeitsplatz" for="dr-ap"><x-fa::select id="dr-ap" wire:model="drucker.arbeitsplatz" :options="$arbeitsplaetze" placeholder="–" /></x-fa::field>
+                            <x-fa::field label="Betrieb" for="dr-betrieb"><x-fa::select id="dr-betrieb" wire:model="drucker.outlet_id" :options="$betriebe" placeholder="alle" /></x-fa::field>
+                        </div>
+                        <label class="inline-flex items-center gap-2 text-[length:var(--fa-text-md)]"><input type="checkbox" wire:model="drucker.is_default" class="{{ $haken }}" /> Standard für diesen Arbeitsplatz</label>
+                        <div class="flex gap-2">
+                            <x-fa::button size="sm" variant="primary" wire:click="druckerSpeichern" data-etiketten-drucker-speichern>Speichern</x-fa::button>
+                            @if($druckerId)<x-fa::button size="sm" variant="danger" wire:click="druckerLoeschen" wire:confirm="Drucker löschen? Vorlagen mit diesem Drucker nutzen dann wieder ihr eigenes Format.">Löschen</x-fa::button>@endif
+                            <x-fa::button size="sm" variant="ghost" wire:click="$set('druckerId', null)">Abbrechen</x-fa::button>
+                        </div>
+                    </div>
+                @endif
+            </x-fa::section>
+
             <x-fa::section title="Gestaltung" icon="heroicon-o-swatch" data-etiketten-form>
                 <x-fa::field label="Name" for="ef-name"><x-fa::input id="ef-name" wire:model="form.name" /></x-fa::field>
                 <x-fa::field label="Typ" for="ef-typ" hint="Verkauf erzwingt die LMIV-Pflichtangaben (Zutaten, Menge, Hersteller).">
                     <x-fa::select id="ef-typ" wire:model.live="form.typ" :options="['intern' => 'Intern (Lager, Küche)', 'verkauf' => 'Verkauf (vorverpackt, To-Go)']" />
                 </x-fa::field>
-                <x-fa::field label="Format" for="ef-format"><x-fa::select id="ef-format" wire:model="form.format" :options="$formate" /></x-fa::field>
+                <x-fa::field label="Drucker" for="ef-drucker" hint="Mit Drucker kommen Format und Ränder vom Drucker.">
+                    <x-fa::select id="ef-drucker" wire:model.live="form.printer_id" :options="$druckerListe->pluck('name', 'id')" placeholder="– ohne Drucker (Format wählen) –" data-etiketten-drucker />
+                </x-fa::field>
+                @if(($form['printer_id'] ?? '') === '')
+                    <x-fa::field label="Format" for="ef-format"><x-fa::select id="ef-format" wire:model="form.format" :options="$formate" /></x-fa::field>
+                @endif
                 <x-fa::field label="Betrieb (Logo, Hersteller)" for="ef-betrieb" hint="Ohne Betrieb bzw. ohne Betriebslogo: Food-Alchemist-Logo.">
                     <x-fa::select id="ef-betrieb" wire:model="form.outlet_id" :options="$betriebe" placeholder="– kein Betrieb –" />
                 </x-fa::field>

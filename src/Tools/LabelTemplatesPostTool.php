@@ -34,6 +34,7 @@ class LabelTemplatesPostTool extends FoodAlchemistTool implements ToolContract, 
                 'felder' => ['type' => 'array', 'items' => ['type' => 'object']],
                 'allergen_darstellung' => ['type' => 'string'], 'schriftgroesse' => ['type' => 'string'],
                 'datum_gross' => ['type' => 'boolean'], 'logo' => ['type' => 'boolean'], 'fusstext' => ['type' => ['string', 'null']], 'standard' => ['type' => 'boolean'],
+                'standard_wandmonitor' => ['type' => 'boolean'], 'drucker_id' => ['type' => ['integer', 'null'], 'description' => 'Spec 78: Drucker — Format und Ränder kommen dann vom Drucker'],
             ],
         ];
     }
@@ -46,7 +47,7 @@ class LabelTemplatesPostTool extends FoodAlchemistTool implements ToolContract, 
         }
         $map = ['name' => 'name', 'format' => 'format', 'typ' => 'typ', 'betrieb_id' => 'outlet_id', 'design' => 'presentation_design', 'felder' => 'felder',
             'allergen_darstellung' => 'allergen_darstellung', 'schriftgroesse' => 'schriftgroesse', 'datum_gross' => 'datum_gross', 'logo' => 'zeige_logo',
-            'fusstext' => 'fusstext', 'standard' => 'is_default'];
+            'fusstext' => 'fusstext', 'standard' => 'is_default', 'standard_wandmonitor' => 'is_kitchen_default', 'drucker_id' => 'printer_id'];
         $daten = [];
         foreach ($map as $in => $feld) {
             if (array_key_exists($in, $arguments)) {
