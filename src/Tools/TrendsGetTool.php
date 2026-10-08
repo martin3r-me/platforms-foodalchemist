@@ -20,7 +20,7 @@ class TrendsGetTool extends FoodAlchemistTool implements ToolContract, ToolMetad
     public function getDescription(): string
     {
         return 'Liest den Trendradar (Modell nach Sarah Spork). Ohne id: Liste, filterbar nach typ (trend|hype), ebene '
-            .'(mode|konsum|mega|meta), kategorie (food|getraenke|deko|event), status, suche, nur_befragung, nur_radar. '
+            .'(mode|konsum|mega|meta), kategorie (food|getraenke|deko|format), sparte (Filter, Trends ohne Sparte gelten für alle), status, suche, nur_befragung, nur_radar. '
             .'Mit id: ein Trend mit Belegen (Quelle, Link, Datei), Konfidenz-Begründung, Radar-Hindernis und Google-Trends-Messungen. '
             .'Zusätzlich das Vokabular (vokabular=true), damit Werte nicht geraten werden.';
     }
@@ -37,6 +37,7 @@ class TrendsGetTool extends FoodAlchemistTool implements ToolContract, ToolMetad
                 'typ' => $liste(V::TYPEN),
                 'ebene' => $liste(V::EBENEN),
                 'kategorie' => $liste(V::KATEGORIEN),
+                'sparte' => $liste(V::SPARTEN) + ['description' => 'Für wen relevant; Trends ohne Sparte (= alle) sind immer dabei.'],
                 'status' => $liste(V::STATUS),
                 'nur_befragung' => ['type' => 'boolean'],
                 'nur_radar' => ['type' => 'boolean'],
@@ -62,7 +63,7 @@ class TrendsGetTool extends FoodAlchemistTool implements ToolContract, ToolMetad
         $trends = $svc->liste($team, $arguments);
         $out = ['anzahl' => $trends->count(), 'trends' => $trends->map(fn ($t) => $svc->alsArray($t))->values()->all()];
         if (! empty($arguments['vokabular'])) {
-            $out['vokabular'] = ['typ' => V::TYPEN, 'ebene' => V::EBENEN, 'kategorie' => V::KATEGORIEN, 'food_cluster' => V::FOOD_CLUSTER,
+            $out['vokabular'] = ['typ' => V::TYPEN, 'ebene' => V::EBENEN, 'kategorie' => V::KATEGORIEN, 'sparten' => V::SPARTEN, 'food_cluster' => V::FOOD_CLUSTER,
                 'sicht' => V::SICHTEN, 'status' => V::STATUS, 'quelle' => V::QUELLEN, 'gartner_phase' => V::GARTNER_PHASEN,
                 'konfidenz_regel' => 'hoch = Marktforschung/Kaufverhalten/Befragung + weitere Quelle; mittel = eine davon allein, Literatur oder zwei sonstige Quellen; niedrig = sonst. Instagram/Social Media/Google Trends bestätigen nie allein.'];
         }

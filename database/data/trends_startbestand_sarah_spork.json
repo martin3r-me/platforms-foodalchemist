@@ -236,7 +236,7 @@
  },
  {
   "slug": "tumeric-tonic",
-  "name": "Tumeric-Tonic",
+  "name": "Kurkuma-Tonic",
   "kategorie": "getraenke",
   "typ": "hype",
   "ebene": "mode",
@@ -387,7 +387,7 @@
  {
   "slug": "eventisierung",
   "name": "Eventisierung",
-  "kategorie": "event",
+  "kategorie": "format",
   "typ": "hype",
   "ebene": "mode",
   "quellen": [
@@ -403,7 +403,7 @@
  {
   "slug": "ar-vr",
   "name": "Augmented / Virtual Reality bei Events",
-  "kategorie": "event",
+  "kategorie": "format",
   "typ": "trend",
   "ebene": "konsum",
   "quellen": [
@@ -420,7 +420,7 @@
  {
   "slug": "online-ticketing",
   "name": "Online-Ticketing & digitale Teilnehmerverwaltung",
-  "kategorie": "event",
+  "kategorie": "format",
   "typ": "trend",
   "ebene": "mega",
   "quellen": [
@@ -438,7 +438,7 @@
  {
   "slug": "livestreaming",
   "name": "Live-Streaming & Aftermovies",
-  "kategorie": "event",
+  "kategorie": "format",
   "typ": "trend",
   "ebene": "konsum",
   "quellen": [
@@ -449,23 +449,6 @@
   "befragung": false,
   "ref": "Kap. 5.3",
   "definition": "Mediale Inszenierung (u. a. Tomorrowland) erzeugt FOMO und steigert den wahrgenommenen Event-Erfolg.",
-  "historisch": null,
-  "gartner": null
- },
- {
-  "slug": "viertagewoche",
-  "name": "4-Tage-Woche (New Work)",
-  "kategorie": "event",
-  "typ": "trend",
-  "ebene": "mega",
-  "quellen": [
-   "literatur",
-   "umfrage"
-  ],
-  "konfidenz": "hoch",
-  "befragung": true,
-  "ref": "Kap. 2.2, 6.1",
-  "definition": "New Work als übergeordneter Megatrend mit Ausstrahlung auf Veranstaltungsformate und Personalplanung.",
   "historisch": null,
   "gartner": null
  }

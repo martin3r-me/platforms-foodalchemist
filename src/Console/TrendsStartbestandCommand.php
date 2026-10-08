@@ -8,7 +8,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistTrend;
 use Platform\FoodAlchemist\Services\TrendService;
 
 /**
- * Spec 79 · Startbestand: die 28 Trends aus Sarah Sporks Projektarbeit (BHG Trend Radar 2026,
+ * Spec 79 · Startbestand: die 27 Trends aus Sarah Sporks Projektarbeit (BHG Trend Radar 2026,
  * Click Dummy 3) in ein Team übernehmen — mit ihrer Einordnung und je Quelle einem Beleg.
  * Idempotent über den Slug: vorhandene Trends bleiben unberührt.
  *
@@ -21,7 +21,7 @@ class TrendsStartbestandCommand extends Command
         {--team= : Ziel-Team (ID), Pflicht}
         {--dry-run : nur zeigen, was angelegt würde}';
 
-    protected $description = 'Trendradar → Startbestand aus Sarah Sporks Projektarbeit (28 Trends) übernehmen';
+    protected $description = 'Trendradar → Startbestand aus Sarah Sporks Projektarbeit (27 Trends) übernehmen';
 
     /** Quellen-Schlüssel aus dem Click Dummy → Trendradar-Vokabular. */
     private const QUELLEN = [

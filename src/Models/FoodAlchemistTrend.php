@@ -11,8 +11,9 @@ use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
 
 /**
  * @ai.description Trend im Trendradar (Spec 79, Modell nach Sarah Spork): Trend oder Hype, Ebene der
- * Trendhierarchie (Mode → Konsum-/Branchentrend → Megatrend → Metatrend), Kategorie (Food, Getränke, Deko,
- * Veranstaltungskonzepte), Status von gesichtet bis in Umsetzung. Die Konfidenz ergibt sich aus den Belegen.
+ * Trendhierarchie (Mode → Konsum-/Branchentrend → Megatrend → Metatrend), Kategorie = was (Food, Getränke,
+ * Ambiente & Deko, Service & Format), Sparten = für wen (Event & Bankett, Betriebsgastronomie, Care, Bildung,
+ * Restaurant & Hotel, Delivery; leer = alle), Status von gesichtet bis in Umsetzung. Konfidenz aus den Belegen.
  */
 class FoodAlchemistTrend extends Model
 {
@@ -28,6 +29,7 @@ class FoodAlchemistTrend extends Model
         'befragung_anteil' => 'float',
         'suchbegriffe' => 'array',
         'hashtags' => 'array',
+        'sparten' => 'array',
         'geprueft_at' => 'datetime',
     ];
 

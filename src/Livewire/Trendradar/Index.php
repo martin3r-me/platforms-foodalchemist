@@ -36,6 +36,10 @@ class Index extends Component
     #[Url(as: 'kat')]
     public array $kategorien = [];
 
+    /** @var list<string> Spec 79 Nachtrag: Sparte (für wen) */
+    #[Url(as: 'sparte')]
+    public array $sparten = [];
+
     /** @var list<string> */
     #[Url(as: 'typ')]
     public array $typen = [];
@@ -119,7 +123,7 @@ class Index extends Component
 
     public function resetFilter(): void
     {
-        $this->reset(['suche', 'kategorien', 'typen', 'ebenen', 'nurBefragung', 'statusFilter']);
+        $this->reset(['suche', 'kategorien', 'sparten', 'typen', 'ebenen', 'nurBefragung', 'statusFilter']);
     }
 
     // ── Fundstücke (Inspiration) ───────────────────────────────────────────
@@ -254,6 +258,7 @@ class Index extends Component
             'gartner_phase' => (string) $t->gartner_phase, 'konfidenz_manuell' => (string) $t->konfidenz_manuell,
             'historische_einordnung' => (string) $t->historische_einordnung,
             'suchbegriffe' => implode(', ', $t->suchbegriffe ?? []), 'hashtags' => implode(', ', $t->hashtags ?? []),
+            'sparten' => array_values($t->sparten ?? []),
         ];
         $this->einordnenOffen = true;
         $this->fehler = null;
@@ -334,7 +339,7 @@ class Index extends Component
     {
         $team = $this->team();
         $alle = $svc->liste($team);
-        $filter = ['suche' => $this->suche, 'kategorie' => $this->kategorien, 'typ' => $this->typen, 'ebene' => $this->ebenen,
+        $filter = ['suche' => $this->suche, 'kategorie' => $this->kategorien, 'sparte' => $this->sparten, 'typ' => $this->typen, 'ebene' => $this->ebenen,
             'nur_befragung' => $this->nurBefragung];
         $gefiltert = $svc->liste($team, $filter + ['status' => $this->statusFilter !== '' ? [$this->statusFilter] : []]);
 
@@ -374,7 +379,7 @@ class Index extends Component
                 ->filter(fn ($t) => $rechte->darf($user, $t, FaRolle::Admin))->pluck('id')->map(fn ($id) => (int) $id)->all(),
             'offeneFundstuecke' => \Platform\FoodAlchemist\Models\FoodAlchemistTrendBeleg::whereIn('team_id', $svc->fundstueckFamilie($team))->where('fundstueck', true)->whereNull('trend_id')->count(),
             'trendOptionen' => $alle->where('team_id', $team->id)->whereNotIn('status', ['verworfen', 'archiviert'])->pluck('name', 'id')->all(),
-            'filterAktiv' => $this->suche !== '' || $this->kategorien !== [] || $this->typen !== [] || $this->ebenen !== [] || $this->nurBefragung || $this->statusFilter !== '',
+            'filterAktiv' => $this->suche !== '' || $this->kategorien !== [] || $this->sparten !== [] || $this->typen !== [] || $this->ebenen !== [] || $this->nurBefragung || $this->statusFilter !== '',
         ])->layout(\Platform\FoodAlchemist\Support\FaShell::layout());
     }
 

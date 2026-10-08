@@ -42,6 +42,7 @@ class TrendsPutTool extends FoodAlchemistTool implements ToolContract, ToolMetad
                 'konfidenz_manuell' => ['type' => 'string', 'enum' => array_merge(array_keys(V::KONFIDENZ), [''])],
                 'suchbegriffe' => ['type' => 'array', 'items' => ['type' => 'string']],
                 'hashtags' => ['type' => 'array', 'items' => ['type' => 'string']],
+                'sparten' => ['type' => 'array', 'items' => ['type' => 'string', 'enum' => array_keys(V::SPARTEN)], 'description' => 'Für wen relevant (Mehrfachauswahl); leer = alle Sparten.'],
                 'historische_einordnung' => ['type' => 'string'],
                 'gartner_phase' => ['type' => 'string', 'enum' => array_merge(array_keys(V::GARTNER_PHASEN), [''])],
                 'einordnung_quelle' => ['type' => 'string', 'enum' => ['manuell', 'ki']],
