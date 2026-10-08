@@ -808,7 +808,12 @@ Route::get('/lager', \Platform\FoodAlchemist\Livewire\Lager\Index::class)
 Route::get('/lager/inventur/{count}/zaehlliste', function (int $count, \Platform\FoodAlchemist\Services\InventurService $svc) {
     $team = \Illuminate\Support\Facades\Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
     $inventur = $svc->detail($team, $count);
-    $data = ['inventur' => $inventur, 'summen' => $svc->summen($inventur), 'svc' => $svc, 'istPdf' => false, 'erstelltAm' => now()->format('d.m.Y H:i')];
+    // Spec 66b: nach Laufweg sortiert, optional nur ein Stellplatz (?stellplatz=ID | ohne)
+    $platz = (string) request('stellplatz', '');
+    $zeilen = $svc->filterZeilen($inventur->lines, ['stellplatz' => $platz])
+        ->sortBy(fn ($l) => [$l->bin?->sort_order ?? PHP_INT_MAX, $l->position])->values();
+    $data = ['inventur' => $inventur, 'zeilen' => $zeilen, 'platzName' => $platz === '' ? null : ($platz === 'ohne' ? 'Ohne Stellplatz' : $zeilen->first()?->bin?->name),
+        'summen' => $svc->summen($inventur), 'svc' => $svc, 'istPdf' => false, 'erstelltAm' => now()->format('d.m.Y H:i')];
     if (request()->boolean('pdf')) {
         abort_unless(class_exists(\Barryvdh\DomPDF\Facade\Pdf::class), 500, 'PDF-Export nicht verfügbar.');
 

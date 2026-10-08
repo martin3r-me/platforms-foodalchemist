@@ -25,6 +25,7 @@ class FoodAlchemistInventoryCount extends Model
 
     protected $casts = [
         'uuid' => 'string',
+        'uncounted_zeroed' => 'boolean',
         'count_date' => 'date',
         'value_total' => 'decimal:2',
         'booked_at' => 'datetime',

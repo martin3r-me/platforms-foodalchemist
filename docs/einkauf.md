@@ -153,6 +153,12 @@ vollständiges Lager zu führen:
   vorbelegt, Soll-Menge und Bewertung werden dabei eingefroren. Gezählt wird in kg, l oder Stück,
   die Zählliste lässt sich drucken oder als PDF ziehen. Buchen setzt den Bestand auf die gezählte
   Menge und schreibt die Differenz als Bewegung; danach ist die Inventur gesperrt.
+- **Lager einrichten (Spec 66b):** Reiter *Einrichten* — Stellplätze je Lagerort mit Zone und
+  Laufweg-Reihenfolge, Stammplatz je Grundprodukt (einzeln, markiert gesammelt oder „Automatisch
+  einsortieren" aus Zustand und Warengruppe). Die Zählliste ist danach nach Laufweg gruppiert und je
+  Stellplatz druckbar. Wo der Lead-Artikel ein Gebinde kennt, wird in Karton + Einheit + lose gezählt.
+  Bestand und Zählliste lassen sich nach Stellplatz, Zustand, Warengruppe, Lieferant, Status,
+  „ohne Preis" und Ladenhütern filtern. Beim Buchen optional „nicht gezählt = 0".
 - **Einkauf je Grundprodukt:** Im Grundprodukt (Reiter *Einkauf*) stehen Menge und € je Monat der
   letzten 12 Monate, die Lieferanten mit Ø-Preis und letztem Kauf sowie der aktuelle Lagerbestand.
 - **Nachlieferung light:** Unterlieferte Wareneingangszeilen können als neuer

@@ -8,21 +8,31 @@ use Livewire\Component;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Models\FoodAlchemistInventoryLocation;
+use Platform\FoodAlchemist\Models\FoodAlchemistLookupWarengruppe;
+use Platform\FoodAlchemist\Models\FoodAlchemistStorageBin;
+use Platform\FoodAlchemist\Models\FoodAlchemistSupplier;
 use Platform\FoodAlchemist\Services\InventurService;
+use Platform\FoodAlchemist\Services\LagerEinrichtungService;
 
 /**
- * Spec 66 · Lager (Stufe 1): Bestand, Bewegungen, Inventuren. Periodisches Lager — der Bestand
- * entsteht aus Wareneingang und Inventur; Entnahmen aus der Produktion sind Stufe 2.
+ * Spec 66 · Lager: Bestand, Bewegungen, Inventuren — Spec 66b: Einrichten (Stellplätze, Stammplätze,
+ * Vorschlag aus Zustand/Warengruppe), smarte Filter, Zählen in Karton/Einheit/lose.
+ * Periodisches Lager — der Bestand entsteht aus Wareneingang und Inventur.
  */
 class Index extends Component
 {
+    private const REITER = ['bestand', 'bewegungen', 'inventur', 'einrichten'];
+
+    private const FILTER_LEER = ['suche' => '', 'stellplatz' => '', 'zustand' => '', 'warengruppe' => '', 'lieferant' => '', 'status' => '', 'ohne_preis' => false, 'ladenhueter' => false];
+
     #[Url(as: 'reiter')]
-    public string $reiter = 'bestand';          // bestand | bewegungen | inventur
+    public string $reiter = 'bestand';          // bestand | bewegungen | inventur | einrichten
 
     #[Url(as: 'ort')]
     public $lagerortId = null;
 
-    public string $suche = '';
+    /** Spec 66b: gemeinsame Filterleiste für Bestand, Zählliste und Einrichten. */
+    public array $filter = self::FILTER_LEER;
 
     public string $quelle = '';
 
@@ -35,6 +45,19 @@ class Index extends Component
 
     public string $positionSuche = '';
 
+    /** Buchen: nicht gezählte Positionen als 0 buchen. */
+    public bool $nichtGezaehltNull = false;
+
+    // Einrichten
+    public string $neuPlatzName = '';
+
+    public string $neuPlatzZone = '';
+
+    /** @var list<int|string> markierte Grundprodukte für die Massen-Zuordnung */
+    public array $auswahl = [];
+
+    public $zielPlatzId = '';
+
     public ?string $fehler = null;
 
     public ?string $hinweis = null;
@@ -42,14 +65,30 @@ class Index extends Component
     public function mount(): void
     {
         $this->neuDatum = now()->toDateString();
-        $this->reiter = in_array($this->reiter, ['bestand', 'bewegungen', 'inventur'], true) ? $this->reiter : 'bestand';
+        $this->reiter = in_array($this->reiter, self::REITER, true) ? $this->reiter : 'bestand';
     }
 
     public function reiterSetzen(string $reiter): void
     {
-        $this->reiter = in_array($reiter, ['bestand', 'bewegungen', 'inventur'], true) ? $reiter : 'bestand';
+        $this->reiter = in_array($reiter, self::REITER, true) ? $reiter : 'bestand';
         $this->fehler = null;
+        $this->hinweis = null;
+        $this->filter = self::FILTER_LEER;
+        $this->auswahl = [];
     }
+
+    public function filterZuruecksetzen(): void
+    {
+        $this->filter = self::FILTER_LEER;
+    }
+
+    public function updatedLagerortId(): void
+    {
+        $this->filter['stellplatz'] = '';
+        $this->auswahl = [];
+    }
+
+    // ── Inventur ────────────────────────────────────────────────────────────
 
     public function inventurAnlegen(InventurService $svc): void
     {
@@ -63,13 +102,16 @@ class Index extends Component
         }
         $this->reiter = 'inventur';
         $this->inventurId = (int) $count->id;
-        $this->hinweis = 'Inventur angelegt — Zählliste ist vorbelegt.';
+        $this->filter = self::FILTER_LEER;
+        $this->hinweis = 'Inventur angelegt — Zählliste ist vorbelegt und nach Laufweg sortiert.';
     }
 
     public function inventurOeffnen(int $id): void
     {
         $this->inventurId = $id;
         $this->positionSuche = '';
+        $this->filter = self::FILTER_LEER;
+        $this->nichtGezaehltNull = false;
         $this->fehler = null;
         $this->hinweis = null;
     }
@@ -77,6 +119,7 @@ class Index extends Component
     public function inventurSchliessen(): void
     {
         $this->inventurId = null;
+        $this->filter = self::FILTER_LEER;
     }
 
     /** Gezählte Menge in kg / l / Stk (leer = nicht gezählt). */
@@ -84,6 +127,17 @@ class Index extends Component
     {
         try {
             $svc->zaehlen($this->team(), $lineId, $menge);
+            $this->fehler = null;
+        } catch (\Throwable $e) {
+            $this->fehler = $e->getMessage();
+        }
+    }
+
+    /** Spec 66b: Kartons + Einheiten + lose (kg/l/Stk). */
+    public function zaehlenGebinde(int $lineId, $kartons, $einheiten, $lose, InventurService $svc): void
+    {
+        try {
+            $svc->zaehlenGebinde($this->team(), $lineId, $kartons, $einheiten, $lose);
             $this->fehler = null;
         } catch (\Throwable $e) {
             $this->fehler = $e->getMessage();
@@ -109,7 +163,7 @@ class Index extends Component
             return;
         }
         try {
-            $c = $svc->buchen($this->team(), $this->inventurId, Auth::id());
+            $c = $svc->buchen($this->team(), $this->inventurId, Auth::id(), $this->nichtGezaehltNull);
             $this->hinweis = 'Inventur gebucht — Bestandswert ' . number_format((float) $c->value_total, 2, ',', '.') . ' €.';
             $this->fehler = null;
         } catch (\Throwable $e) {
@@ -131,22 +185,103 @@ class Index extends Component
         }
     }
 
-    public function render(InventurService $svc)
+    // ── Einrichten (Spec 66b) ───────────────────────────────────────────────
+
+    public function platzAnlegen(LagerEinrichtungService $svc): void
+    {
+        $this->aktion(function () use ($svc) {
+            $svc->stellplatzAnlegen($this->team(), $this->ortPflicht(), $this->neuPlatzName, $this->neuPlatzZone ?: null);
+            $this->neuPlatzName = '';
+        });
+    }
+
+    public function platzUmbenennen(int $binId, string $name, LagerEinrichtungService $svc): void
+    {
+        $this->aktion(fn () => $svc->stellplatzAendern($this->team(), $binId, ['name' => $name]));
+    }
+
+    public function platzZone(int $binId, string $zone, LagerEinrichtungService $svc): void
+    {
+        $this->aktion(fn () => $svc->stellplatzAendern($this->team(), $binId, ['zone' => $zone ?: null]));
+    }
+
+    public function platzVerschieben(int $binId, int $richtung, LagerEinrichtungService $svc): void
+    {
+        $this->aktion(fn () => $svc->stellplatzVerschieben($this->team(), $binId, $richtung));
+    }
+
+    public function platzLoeschen(int $binId, LagerEinrichtungService $svc): void
+    {
+        $this->aktion(fn () => $svc->stellplatzLoeschen($this->team(), $binId));
+    }
+
+    /** Stammplatz eines einzelnen Grundprodukts setzen ('' = entfernen). */
+    public function stammplatz(int $gpId, $binId, LagerEinrichtungService $svc): void
+    {
+        $this->aktion(fn () => $svc->zuordnen($this->team(), $this->ortPflicht(), [$gpId], $binId !== '' && $binId !== null ? (int) $binId : null));
+    }
+
+    /** Markierte Grundprodukte gesammelt einem Stellplatz zuordnen. */
+    public function auswahlZuordnen(LagerEinrichtungService $svc): void
+    {
+        if ($this->auswahl === []) {
+            $this->fehler = 'Bitte zuerst Grundprodukte markieren.';
+
+            return;
+        }
+        $this->aktion(function () use ($svc) {
+            $n = $svc->zuordnen($this->team(), $this->ortPflicht(), array_map('intval', $this->auswahl), $this->zielPlatzId !== '' ? (int) $this->zielPlatzId : null);
+            $this->hinweis = $n . ' Grundprodukt(e) ' . ($this->zielPlatzId !== '' ? 'zugeordnet.' : 'vom Stellplatz gelöst.');
+            $this->auswahl = [];
+        });
+    }
+
+    /** Alle sichtbaren (gefilterten) Grundprodukte markieren. */
+    public function alleMarkieren(LagerEinrichtungService $svc): void
+    {
+        $this->auswahl = array_column($this->einrichtenZeilen($svc), 'gp_id');
+    }
+
+    public function vorschlagUebernehmen(LagerEinrichtungService $svc): void
+    {
+        $this->aktion(function () use ($svc) {
+            $n = $svc->vorschlagUebernehmen($this->team(), $this->ortPflicht());
+            $this->hinweis = $n > 0
+                ? $n . ' Grundprodukt(e) nach Zustand und Warengruppe einsortiert. Bitte kurz prüfen.'
+                : 'Nichts vorzuschlagen — entweder ist alles einsortiert oder es fehlen Stellplätze mit passender Zone.';
+        });
+    }
+
+    // ── Render ──────────────────────────────────────────────────────────────
+
+    public function render(InventurService $svc, LagerEinrichtungService $einrichtung)
     {
         $team = $this->team();
         $orte = FoodAlchemistInventoryLocation::where('team_id', $team->id)->where('is_active', true)
             ->orderByDesc('is_default')->orderBy('name')->get();
         $ortId = $this->lagerortId !== null && $this->lagerortId !== '' ? (int) $this->lagerortId : null;
         $this->neuLagerortId ??= $orte->first()?->id;
+        if ($this->reiter === 'einrichten' && $ortId === null && $orte->isNotEmpty()) {
+            $this->lagerortId = $orte->first()->id;
+            $ortId = (int) $this->lagerortId;
+        }
 
-        $bestand = $this->reiter === 'bestand' ? $svc->bestand($team, $ortId, trim($this->suche)) : [];
+        $bestandAlle = $this->reiter === 'bestand' ? $svc->bestand($team, $ortId) : [];
+        $bestand = $svc->filterBestand($bestandAlle, $this->filter);
+
         $inventur = null;
         $summen = null;
+        $zeilen = collect();
         $kandidaten = collect();
+        $platzOrtId = $ortId;
         if ($this->reiter === 'inventur' && $this->inventurId !== null) {
             try {
                 $inventur = $svc->detail($team, $this->inventurId);
                 $summen = $svc->summen($inventur);
+                $platzOrtId = (int) $inventur->inventory_location_id;
+                // Laufweg: Stellplatz-Reihenfolge, dann Position; ohne Stellplatz zuletzt
+                $zeilen = $svc->filterZeilen($inventur->lines, $this->filter)
+                    ->sortBy(fn ($l) => [$l->bin?->sort_order ?? PHP_INT_MAX, $l->position])->values();
                 if (! $inventur->istGebucht() && mb_strlen(trim($this->positionSuche)) >= 2) {
                     $kandidaten = FoodAlchemistGp::visibleToTeam($team)
                         ->where('name', 'like', '%' . trim($this->positionSuche) . '%')->orderBy('name')->limit(12)->get(['id', 'name']);
@@ -156,18 +291,70 @@ class Index extends Component
             }
         }
 
+        $plaetze = $platzOrtId !== null
+            ? $einrichtung->stellplaetze($team, $platzOrtId)
+            : FoodAlchemistStorageBin::where('team_id', $team->id)->with('location:id,name')->orderBy('inventory_location_id')->orderBy('sort_order')->get();
+
+        $lieferantIds = array_filter(array_unique(array_column($bestandAlle, 'lieferant_id')));
+
         return view('foodalchemist::livewire.lager.index', [
             'orte' => $orte,
             'bestand' => $bestand,
+            'bestandGesamt' => count($bestandAlle),
             'bestandWert' => round(array_sum(array_map(fn ($r) => (float) ($r['wert'] ?? 0), $bestand)), 2),
             'ohnePreis' => count(array_filter($bestand, fn ($r) => $r['wert'] === null)),
             'bewegungen' => $this->reiter === 'bewegungen' ? $svc->bewegungen($team, $this->quelle ?: null) : collect(),
             'inventuren' => $this->reiter === 'inventur' ? $svc->liste($team) : collect(),
             'inventur' => $inventur,
+            'zeilen' => $zeilen,
             'summen' => $summen,
             'kandidaten' => $kandidaten,
+            'plaetze' => $plaetze,
+            'einrichten' => $this->reiter === 'einrichten' && $ortId !== null ? $this->einrichtenZeilen($einrichtung) : [],
+            'einrichtenGesamt' => $this->reiter === 'einrichten' && $ortId !== null ? count($einrichtung->artikel($team, $ortId)) : 0,
+            'warengruppen' => FoodAlchemistLookupWarengruppe::query()->orderBy('code')->get()->unique('code')
+                ->mapWithKeys(fn ($w) => [$w->code => $w->code . ' ' . $w->name])->all(),
+            'lieferanten' => $lieferantIds === [] ? [] : FoodAlchemistSupplier::whereIn('id', $lieferantIds)->orderBy('name')->pluck('name', 'id')->all(),
+            'zonen' => FoodAlchemistStorageBin::ZONEN,
             'svc' => $svc,
         ])->layout(\Platform\FoodAlchemist\Support\FaShell::layout());
+    }
+
+    /** Einrichten-Liste des gewählten Lagerorts, gefiltert. */
+    private function einrichtenZeilen(LagerEinrichtungService $svc): array
+    {
+        $ortId = $this->lagerortId !== null && $this->lagerortId !== '' ? (int) $this->lagerortId : null;
+        if ($ortId === null) {
+            return [];
+        }
+        $f = $this->filter;
+        $suche = mb_strtolower(trim((string) $f['suche']));
+
+        return array_values(array_filter($svc->artikel($this->team(), $ortId), fn ($r) => ($suche === '' || str_contains(mb_strtolower($r['name']), $suche))
+            && ($f['stellplatz'] === '' || ($f['stellplatz'] === 'ohne' ? $r['bin_id'] === null : (int) $f['stellplatz'] === $r['bin_id']))
+            && ($f['zustand'] === '' || mb_strtolower((string) $r['zustand']) === mb_strtolower($f['zustand']))
+            && ($f['warengruppe'] === '' || (string) $r['warengruppe'] === (string) $f['warengruppe'])));
+    }
+
+    private function aktion(callable $tu): void
+    {
+        $this->fehler = null;
+        try {
+            $tu();
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException) {
+            $this->fehler = 'Nicht gefunden — bitte Seite neu laden.';
+        } catch (\RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+        }
+    }
+
+    private function ortPflicht(): int
+    {
+        if ($this->lagerortId === null || $this->lagerortId === '') {
+            throw new \RuntimeException('Bitte einen Lagerort wählen.');
+        }
+
+        return (int) $this->lagerortId;
     }
 
     private function team(): Team

@@ -20,14 +20,18 @@ class InventoryCountsBookTool extends FoodAlchemistTool implements ToolContract,
     {
         return 'Bucht eine offene Inventur: für jede GEZÄHLTE Zeile wird der Lagerbestand auf die gezählte Menge gesetzt, '
             . 'die Differenz als Lagerbewegung (Quelle inventur) gebucht und der Bestandswert festgeschrieben. '
-            . 'Nicht gezählte Zeilen bleiben unberührt. Danach ist die Inventur gesperrt — nicht umkehrbar.';
+            . 'Nicht gezählte Zeilen bleiben unberührt — außer mit nicht_gezaehlt_null=true, dann zählen sie als 0. '
+            . 'Danach ist die Inventur gesperrt — nicht umkehrbar.';
     }
 
     public function getSchema(): array
     {
         return [
             'type' => 'object',
-            'properties' => ['count_id' => ['type' => 'integer', 'description' => 'Inventur-Id.']],
+            'properties' => [
+                'count_id' => ['type' => 'integer', 'description' => 'Inventur-Id.'],
+                'nicht_gezaehlt_null' => ['type' => 'boolean', 'description' => 'Nicht gezählte Positionen als 0 buchen.'],
+            ],
             'required' => ['count_id'],
         ];
     }
@@ -39,7 +43,7 @@ class InventoryCountsBookTool extends FoodAlchemistTool implements ToolContract,
             return ToolResult::error('Kein Team im Kontext.', 'NO_TEAM');
         }
         try {
-            $c = app(InventurService::class)->buchen($team, (int) ($arguments['count_id'] ?? 0), $context->user?->id);
+            $c = app(InventurService::class)->buchen($team, (int) ($arguments['count_id'] ?? 0), $context->user?->id, ! empty($arguments['nicht_gezaehlt_null']));
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException) {
             return ToolResult::error('Inventur nicht gefunden.', 'NOT_FOUND');
         } catch (\RuntimeException $e) {

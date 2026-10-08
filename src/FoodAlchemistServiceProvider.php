@@ -1028,6 +1028,12 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\InventoryCountsPutTool::class,
                     \Platform\FoodAlchemist\Tools\InventoryCountsBookTool::class,
                     \Platform\FoodAlchemist\Tools\GpEinkaufGetTool::class,
+                    // Spec 66b: Lager einrichten (Stellplätze, Stammplätze)
+                    \Platform\FoodAlchemist\Tools\StorageBinsGetTool::class,
+                    \Platform\FoodAlchemist\Tools\StorageBinsPostTool::class,
+                    \Platform\FoodAlchemist\Tools\StorageBinsPutTool::class,
+                    \Platform\FoodAlchemist\Tools\StorageBinsDeleteTool::class,
+                    \Platform\FoodAlchemist\Tools\StorageBinsAssignTool::class,
                     \Platform\FoodAlchemist\Tools\OrdersUpdatePaymentTool::class,
                     \Platform\FoodAlchemist\Tools\OrdersUpdateApprovalTool::class,
                     \Platform\FoodAlchemist\Tools\OrdersConfirmSupplierTool::class,
