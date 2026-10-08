@@ -57,6 +57,15 @@ class FaRechteToolHuelle implements ToolContract, ToolMetadataContract
     public function execute(array $arguments, ToolContext $context): ToolResult
     {
         $user = $context->user;
+        // Spec 77b: Bereich des Tools (Team gebucht ∧ User nicht eingeschränkt) — gilt auch für lesende Tools
+        $bereich = \Platform\FoodAlchemist\Support\FaBereiche::fuerTool($this->getName());
+        if ($user instanceof User && $bereich !== null) {
+            $bTeam = $context->team instanceof Team ? $context->team : ($user->currentTeamRelation ?? null);
+            if ($bTeam instanceof Team && ! app(FaRechte::class)->darfBereich($user, $bTeam, $bereich)) {
+                return ToolResult::error('Der Bereich „'.(\Platform\FoodAlchemist\Support\FaBereiche::KATALOG[$bereich] ?? $bereich)
+                    .'“ ist für dich bzw. dein Team nicht freigeschaltet.', 'FORBIDDEN');
+            }
+        }
         if ($user instanceof User && ! ($this->getMetadata()['read_only'] ?? false) && ! in_array($this->getName(), self::FUER_JEDE_ROLLE, true)) {
             $team = $context->team instanceof Team ? $context->team : ($user->currentTeamRelation ?? null);
             if ($team instanceof Team && ! app(FaRechte::class)->darf($user, $team, FaRolle::Kuratieren)) {

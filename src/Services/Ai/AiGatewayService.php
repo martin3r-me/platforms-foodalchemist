@@ -60,6 +60,10 @@ class AiGatewayService
         if ($team !== null && ! app(\Platform\FoodAlchemist\Services\TeamSettingsService::class)->kiAktiv($team)) {
             throw new \Platform\FoodAlchemist\Exceptions\KiDeaktiviertException();
         }
+        // Spec 77b: KI-Budget (€ je Monat) des Haupt-Teams
+        if ($team !== null && app(\Platform\FoodAlchemist\Services\FaRechte::class)->kiBudgetErschoepft($team)) {
+            throw new \Platform\FoodAlchemist\Exceptions\KiBudgetErschoepftException();
+        }
 
         /*
          * Welcher Kanon gilt? Standard: der Prompt-Key selbst.
@@ -579,6 +583,10 @@ class AiGatewayService
         $team = Auth::user()?->currentTeamRelation;
         if ($team !== null && ! app(\Platform\FoodAlchemist\Services\TeamSettingsService::class)->kiAktiv($team)) {
             throw new \Platform\FoodAlchemist\Exceptions\KiDeaktiviertException();
+        }
+        // Spec 77b: KI-Budget (€ je Monat) des Haupt-Teams
+        if ($team !== null && app(\Platform\FoodAlchemist\Services\FaRechte::class)->kiBudgetErschoepft($team)) {
+            throw new \Platform\FoodAlchemist\Exceptions\KiBudgetErschoepftException();
         }
         $registry = app(\Platform\Core\Tools\ToolRegistry::class);
         $katalog = collect($toolNames)

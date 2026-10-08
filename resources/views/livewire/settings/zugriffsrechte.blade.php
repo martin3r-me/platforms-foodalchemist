@@ -13,13 +13,43 @@
         </dl>
     </x-fa::section>
 
+    {{-- Spec 77b: gebuchte Bereiche (Plattform-Admin schaltet), Kontingente --}}
+    <x-fa::section title="Freigeschaltete Bereiche" description="Was dieses Team gebucht hat. Freischalten ist Sache des Plattform-Admins; ein Unter-Team hat höchstens, was sein Haupt-Team hat." data-rechte-bereiche>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
+            @foreach($katalog as $b => $label)
+                <label class="inline-flex items-center gap-2 text-[length:var(--fa-text-sm)]" wire:key="tb-{{ $b }}">
+                    <input type="checkbox" @checked($teamBereiche[$b] ?? true) @disabled(! $istPlattformAdmin)
+                        wire:change="teamBereichSetzen('{{ $b }}', $event.target.checked)" data-team-bereich="{{ $b }}">
+                    <span class="{{ ($teamBereiche[$b] ?? true) ? '' : 'line-through text-[var(--fa-ink-3)]' }}">{{ $label }}</span>
+                </label>
+            @endforeach
+        </div>
+    </x-fa::section>
+
+    <x-fa::section title="Kontingente" description="Gilt für das Haupt-Team mit allen Unter-Teams. Leer = unbegrenzt. Pflege durch den Plattform-Admin." data-rechte-kontingente>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+            @foreach(['max_standorte' => ['Standorte (Unter-Teams)', $nutzung['standorte']], 'max_user' => ['Benutzer', $nutzung['user']], 'ki_budget_eur_monat' => ['KI-Budget € je Monat', number_format($nutzung['ki_eur_monat'], 2, ',', '.').' €']] as $f => [$label, $ist])
+                <x-fa::field :label="$label" :for="'k-'.$f" :hint="'genutzt: '.$ist">
+                    @if($istPlattformAdmin && $istHauptTeam)
+                        <x-fa::input :id="'k-'.$f" size="sm" numeric wire:model="kontingentForm.{{ $f }}" placeholder="unbegrenzt" />
+                    @else
+                        <p class="tabular-nums">{{ $kontingente[$f] === null ? 'unbegrenzt' : str_replace('.', ',', (string) $kontingente[$f]) }}</p>
+                    @endif
+                </x-fa::field>
+            @endforeach
+        </div>
+        @if($istPlattformAdmin && $istHauptTeam)
+            <div><x-fa::button size="sm" wire:click="kontingenteSpeichern" data-kontingente-speichern>Kontingente speichern</x-fa::button></div>
+        @endif
+    </x-fa::section>
+
     <x-fa::section title="Mitglieder" :meta="count($mitglieder)" description="Rechnungen freigeben dürfen Inhaber und Admins immer. Für Mitglieder setzt du hier das Häkchen — z. B. für das Büro, ohne es zum Admin zu machen.">
         @unless($istAdmin)
             <x-fa::notice tone="info">Deine Rolle: „{{ $meineRolle->label() }}“. Das Freigaberecht vergeben nur Inhaber und Admins.</x-fa::notice>
         @endunless
         <div class="overflow-x-auto -mx-4">
             <table class="fa-table">
-                <thead><tr><th>Name</th><th>E-Mail</th><th>Rolle (Plattform)</th><th>im Food Alchemist</th><th>darf Rechnungen freigeben</th></tr></thead>
+                <thead><tr><th>Name</th><th>E-Mail</th><th>Rolle (Plattform)</th><th>im Food Alchemist</th><th>darf Rechnungen freigeben</th><th>Bereiche</th></tr></thead>
                 <tbody>
                     @foreach($mitglieder as $m)
                         <tr wire:key="recht-{{ $m['user_id'] }}" data-recht-mitglied="{{ $m['user_id'] }}">
@@ -35,7 +65,31 @@
                                     <span class="{{ $leise }}">{{ $m['darf_freigeben'] ? 'ja' : 'nein' }}</span>
                                 @endif
                             </td>
+                            <td>
+                                @if($istAdmin && in_array($m['plattform_rolle'], ['member', 'viewer'], true))
+                                    <x-fa::button size="sm" variant="ghost" wire:click="bereicheUmschalten({{ $m['user_id'] }})" data-recht-bereiche-knopf="{{ $m['user_id'] }}">einschränken</x-fa::button>
+                                @else
+                                    <span class="{{ $leise }}">alle gebuchten</span>
+                                @endif
+                            </td>
                         </tr>
+                        @if($bereicheFuer === $m['user_id'])
+                            <tr wire:key="recht-b-{{ $m['user_id'] }}" data-recht-bereiche="{{ $m['user_id'] }}">
+                                <td colspan="6" class="bg-[var(--fa-ground)]">
+                                    <p class="{{ $leise }} pb-2">Häkchen weg = {{ $m['name'] }} sieht diesen Bereich nicht. Nur gebuchte Bereiche sind wählbar.</p>
+                                    <div class="grid grid-cols-1 md:grid-cols-3 gap-2 pb-2">
+                                        @foreach($katalog as $b => $label)
+                                            @continue(! ($teamBereiche[$b] ?? true))
+                                            <label class="inline-flex items-center gap-2 text-[length:var(--fa-text-sm)]">
+                                                <input type="checkbox" @checked(! in_array($b, $userSperren, true))
+                                                    wire:change="userBereichSetzen({{ $m['user_id'] }}, '{{ $b }}', $event.target.checked)" data-user-bereich="{{ $b }}">
+                                                {{ $label }}
+                                            </label>
+                                        @endforeach
+                                    </div>
+                                </td>
+                            </tr>
+                        @endif
                     @endforeach
                 </tbody>
             </table>

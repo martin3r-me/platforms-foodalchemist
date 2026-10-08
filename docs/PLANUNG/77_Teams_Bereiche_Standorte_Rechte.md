@@ -131,6 +131,15 @@ Reihenfolge-Vorschlag: 77a zuerst (Sicherheit, klein), dann 77c (Kernbaustein St
 - **Betriebshinweis Wandmonitor:** Das Küchenkonto am Wandmonitor/Tagesplan braucht **mindestens Mitglied** (Kuratieren) — als Betrachter gehen Abhaken und Fertigmelden nicht.
 - **Für 77b vorgemerkt:** Bestellrunde `generateDraftsFromSources`, `deleteRound`, Lagerartikel-Nachfüllung und die übrigen Schreibwege der Oberfläche (z. B. Bestell-Entwurf bearbeiten) ab Kuratieren — konsistent mit `sendRound`.
 
+## Umsetzung 77b (2026-10-08)
+
+- **Katalog** `Support\FaBereiche`: 15 Bereiche; Zuordnung Route (Gruppe) / MCP-Tool (Ressourcen-Präfix) / Livewire (Namespace) → Bereich, Ausnahmen ausdrücklich frei (öffentliche Präsentations-Links, Plattform-Assets, Sprachbefehl, Designsystem, `outlets.SET_ACTIVE/GET`, `ui`, `runs`, Rechte-Pflege). **Wächter-Test:** jedes registrierte FA-Tool und jede FA-Route muss zugeordnet sein.
+- **Tabellen** (Migration `2026_10_09_100400`): `team_bereiche` (keine Zeile = an; Bestand verliert nichts), `user_bereich_sperren`, `team_kontingente` (am Haupt-Team).
+- **`FaRechte`:** `bereichAktiv` (aus im Team oder einem Eltern-Team = aus), `darfBereich` (Plattform-Admin immer), `setzeTeamBereich`/`setzeKontingente` nur Plattform-Admin, `setzeUserSperre` FA-Admin (Inhaber/Admin nicht einschränkbar), `kontingentNutzung`, `pruefeKontingent`, `kiBudgetErschoepft` (€ aus `AiCostCalculator`, laufender Monat, Haupt-Team + Unter-Teams).
+- **Durchsetzung:** Seiten per Middleware (403), Klicks per Livewire-`call`-Haken (Komponenten-Namespace), MCP in `FaRechteToolHuelle` (auch lesende Tools), Navigation gefiltert, KI-Gateway wirft `KiBudgetErschoepftException` (erbt vom Kill-Switch → bestehende Degradierung greift).
+- **Pflege:** FA-Einstellungen → Zugriffsrechte (Bereiche lesend bzw. Plattform-Admin schaltet, Kontingente mit Nutzung, je Mitglied „einschränken"); Plattform `/verwaltung` Reiter Freigaben (Bereiche + Kontingente) und Kontingent-Prüfung beim Anlegen von Unter-Teams/Benutzern. MCP `team_bereiche.GET/PUT`.
+- Tests: `Spec77bBereicheTest` (5).
+
 ## Bewusst nicht
 
 - **Team-Preis je Artikel** (gleicher Artikel, standortabhängige Konditionen) — selten; Einzelfall: eigener Artikel im Unter-Team + Team-Pin. Ansatzpunkt, falls je nötig: zentrale Preisermittlung (`activePriceSubquery`).

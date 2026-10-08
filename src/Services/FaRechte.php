@@ -7,7 +7,11 @@ use Platform\Core\Models\Team;
 use Platform\Core\Models\User;
 use Platform\FoodAlchemist\Enums\FaRolle;
 use Platform\FoodAlchemist\Exceptions\FaRechtFehltException;
+use Platform\FoodAlchemist\Models\FoodAlchemistTeamBereich;
+use Platform\FoodAlchemist\Models\FoodAlchemistTeamKontingent;
 use Platform\FoodAlchemist\Models\FoodAlchemistTeamMemberFlag;
+use Platform\FoodAlchemist\Models\FoodAlchemistUserBereichSperre;
+use Platform\FoodAlchemist\Support\FaBereiche;
 
 /**
  * Spec 61 §5 · Eine Stelle für alle Rechte-Fragen im Food Alchemist.
@@ -143,6 +147,174 @@ class FaRechte
             ['can_approve_invoices' => $darf, 'set_by' => $actor?->id]);
     }
 
+    // ── Spec 77b · Bereiche und Kontingente ────────────────────────────────
+
+    /** Haupt-Team (Wurzel der Kette) — dort hängen Buchung und Kontingente. */
+    public function hauptTeam(Team $team): Team
+    {
+        $kette = $this->teamKette($team);
+
+        return Team::find(end($kette)) ?? $team;
+    }
+
+    /** Ist der Bereich für das Team freigeschaltet? Abgeschaltet im Team ODER einem Eltern-Team = aus. Keine Zeile = an. */
+    public function bereichAktiv(Team $team, string $bereich): bool
+    {
+        return ! FoodAlchemistTeamBereich::whereIn('team_id', $this->teamKette($team))
+            ->where('bereich', $bereich)->where('aktiv', false)->exists();
+    }
+
+    /** Darf der User den Bereich im Team nutzen? Team gebucht ∧ User nicht eingeschränkt. Plattform-Admin immer. */
+    public function darfBereich(?User $user, Team $team, ?string $bereich): bool
+    {
+        if ($bereich === null) {
+            return true;
+        }
+        if ($user !== null && ! $user->isAiUser() && $this->istPlattformAdmin($user)) {
+            return true;
+        }
+        if (! $this->bereichAktiv($team, $bereich)) {
+            return false;
+        }
+
+        return $user === null || ! FoodAlchemistUserBereichSperre::whereIn('team_id', $this->teamKette($team))
+            ->where('user_id', $user->id)->where('bereich', $bereich)->exists();
+    }
+
+    /** @return array<string,bool> Bereich => an/aus für das Team (Buchung, ohne User-Sicht) */
+    public function teamBereiche(Team $team): array
+    {
+        $aus = FoodAlchemistTeamBereich::whereIn('team_id', $this->teamKette($team))->where('aktiv', false)->pluck('bereich')->all();
+
+        return array_map(fn ($b) => ! in_array($b, $aus, true), array_combine(array_keys(FaBereiche::KATALOG), array_keys(FaBereiche::KATALOG)));
+    }
+
+    /** @return list<string> abgeschaltete Bereiche eines Users im Team (eigene Einschränkungen) */
+    public function userSperren(Team $team, int $userId): array
+    {
+        return FoodAlchemistUserBereichSperre::where('team_id', $team->id)->where('user_id', $userId)->pluck('bereich')->all();
+    }
+
+    /** Bereich für ein Team an/aus — nur Plattform-Admin (Freischalten = Abrechnung, Spec 77 F2). */
+    public function setzeTeamBereich(Team $team, ?User $actor, string $bereich, bool $aktiv): void
+    {
+        if ($actor === null || ! $this->istPlattformAdmin($actor)) {
+            throw new FaRechtFehltException(FaRolle::Admin, $actor !== null ? $this->rolle($actor, $team) : null, 'Bereiche freischalten (nur Plattform-Admin)');
+        }
+        if (! FaBereiche::istBereich($bereich)) {
+            throw new \RuntimeException('Unbekannter Bereich: '.$bereich.'.');
+        }
+        FoodAlchemistTeamBereich::updateOrCreate(['team_id' => $team->id, 'bereich' => $bereich], ['aktiv' => $aktiv, 'set_by' => $actor->id]);
+    }
+
+    /** Bereich für einen User im Team ein-/ausschränken — FA-Admin des Teams. Nur einschränken, nie über das Team hinaus. */
+    public function setzeUserSperre(Team $team, ?User $actor, int $userId, string $bereich, bool $gesperrt): void
+    {
+        $this->pruefe($actor, $team, FaRolle::Admin, 'Bereiche für Mitglieder einschränken');
+        if (! FaBereiche::istBereich($bereich)) {
+            throw new \RuntimeException('Unbekannter Bereich: '.$bereich.'.');
+        }
+        $ziel = User::find($userId);
+        if ($ziel === null || ! DB::table('team_user')->where('team_id', $team->id)->where('user_id', $userId)->exists()) {
+            throw new \RuntimeException('Diese Person ist kein Mitglied des Teams.');
+        }
+        if ($gesperrt && in_array($this->plattformRolle($ziel, $this->teamKette($team)), ['owner', 'admin'], true)) {
+            throw new \RuntimeException('Inhaber und Admins lassen sich nicht einschränken — erst die Rolle in den Team-Einstellungen ändern.');
+        }
+        if ($gesperrt) {
+            FoodAlchemistUserBereichSperre::withTrashed()->updateOrCreate(['team_id' => $team->id, 'user_id' => $userId, 'bereich' => $bereich],
+                ['set_by' => $actor?->id, 'deleted_at' => null]);
+        } else {
+            FoodAlchemistUserBereichSperre::where('team_id', $team->id)->where('user_id', $userId)->where('bereich', $bereich)->forceDelete();
+        }
+    }
+
+    /** @return array{max_standorte:?int, max_user:?int, ki_budget_eur_monat:?float} Kontingente des Haupt-Teams */
+    public function kontingente(Team $team): array
+    {
+        $k = FoodAlchemistTeamKontingent::where('team_id', $this->hauptTeam($team)->id)->first();
+
+        return [
+            'max_standorte' => $k?->max_standorte,
+            'max_user' => $k?->max_user,
+            'ki_budget_eur_monat' => $k?->ki_budget_eur_monat !== null ? (float) $k->ki_budget_eur_monat : null,
+        ];
+    }
+
+    /** Kontingente am Haupt-Team setzen — nur Plattform-Admin. null = unbegrenzt. */
+    public function setzeKontingente(Team $team, ?User $actor, array $werte): void
+    {
+        if ($actor === null || ! $this->istPlattformAdmin($actor)) {
+            throw new FaRechtFehltException(FaRolle::Admin, $actor !== null ? $this->rolle($actor, $team) : null, 'Kontingente setzen (nur Plattform-Admin)');
+        }
+        $daten = [];
+        foreach (['max_standorte', 'max_user', 'ki_budget_eur_monat'] as $f) {
+            if (array_key_exists($f, $werte)) {
+                $v = $werte[$f];
+                $v = $v === '' || $v === null ? null : (is_string($v) ? str_replace(',', '.', $v) : $v);
+                if ($v !== null && (! is_numeric($v) || (float) $v < 0)) {
+                    throw new \RuntimeException("Kontingent {$f} muss eine Zahl ≥ 0 sein.");
+                }
+                $daten[$f] = $v === null ? null : ($f === 'ki_budget_eur_monat' ? round((float) $v, 2) : (int) $v);
+            }
+        }
+        FoodAlchemistTeamKontingent::updateOrCreate(['team_id' => $this->hauptTeam($team)->id], $daten + ['set_by' => $actor->id]);
+    }
+
+    /** Nutzung je Kontingent (für Anzeige und Prüfung). @return array{standorte:int, user:int, ki_eur_monat:float} */
+    public function kontingentNutzung(Team $team): array
+    {
+        $haupt = $this->hauptTeam($team);
+        $alle = \Platform\FoodAlchemist\Jobs\RecomputeTeamRecipesJob::teamUndNachfahren((int) $haupt->id);
+
+        return [
+            'standorte' => count($alle) - 1,
+            'user' => (int) DB::table('team_user')->whereIn('team_id', $alle)->distinct()->count('user_id'),
+            'ki_eur_monat' => $this->kiKostenMonat($alle),
+        ];
+    }
+
+    /**
+     * Wirft, wenn ein Kontingent mit dem nächsten Schritt überschritten würde. `$art`: standorte | user.
+     * Für die Plattform-Verwaltung (Team anlegen, Mitglied aufnehmen) — klare Meldung statt stillem Abschneiden.
+     */
+    public function pruefeKontingent(Team $team, string $art): void
+    {
+        $k = $this->kontingente($team);
+        $n = $this->kontingentNutzung($team);
+        $grenze = $art === 'standorte' ? $k['max_standorte'] : $k['max_user'];
+        $ist = $art === 'standorte' ? $n['standorte'] : $n['user'];
+        if ($grenze !== null && $ist >= $grenze) {
+            throw new \RuntimeException($art === 'standorte'
+                ? "Kontingent erreicht: {$grenze} Standorte (Unter-Teams) gebucht."
+                : "Kontingent erreicht: {$grenze} Benutzer gebucht.");
+        }
+    }
+
+    /** KI-Budget des Haupt-Teams für den laufenden Monat erschöpft? (Euro, Spec 77 F1) */
+    public function kiBudgetErschoepft(Team $team): bool
+    {
+        $budget = $this->kontingente($team)['ki_budget_eur_monat'];
+        if ($budget === null) {
+            return false;
+        }
+
+        return $this->kontingentNutzung($team)['ki_eur_monat'] >= $budget;
+    }
+
+    /** @param list<int> $teamIds */
+    private function kiKostenMonat(array $teamIds): float
+    {
+        $cached = \Illuminate\Support\Facades\Schema::hasColumn('foodalchemist_ai_call_log', 'tokens_cached') ? 'SUM(COALESCE(tokens_cached,0))' : '0';
+        $zeilen = DB::table('foodalchemist_ai_call_log')->whereIn('team_id', $teamIds)
+            ->where('created_at', '>=', now()->startOfMonth())
+            ->selectRaw('feature, tier, model, COUNT(*) AS calls, SUM(COALESCE(tokens_in,0)) AS t_in, '.$cached.' AS t_cached, SUM(COALESCE(tokens_out,0)) AS t_out')
+            ->groupBy('feature', 'tier', 'model')->get();
+        $rechner = app(\Platform\FoodAlchemist\Services\Ai\AiCostCalculator::class);
+
+        return round((float) $zeilen->sum(fn ($z) => (float) ($rechner->displayCost($rechner->costUsd($z)) ?? 0)), 2);
+    }
+
     /** Höchste Plattform-Rolle des Users im Team oder einem Eltern-Team. */
     private function plattformRolle(User $user, array $kette): ?string
     {
@@ -163,7 +335,7 @@ class FaRechte
     }
 
     /** @return list<int> eigenes Team zuerst, dann alle Eltern bis zur Wurzel */
-    private function teamKette(Team $team): array
+    public function teamKette(Team $team): array
     {
         $ids = [(int) $team->id];
         $parentId = $team->parent_team_id;
@@ -176,7 +348,7 @@ class FaRechte
         return $ids;
     }
 
-    private function istPlattformAdmin(User $user): bool
+    public function istPlattformAdmin(User $user): bool
     {
         $admins = (array) config('platform-shell.admins', []);
 
