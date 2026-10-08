@@ -12,6 +12,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistLookupWarengruppe;
 use Platform\FoodAlchemist\Models\FoodAlchemistStorageBin;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplier;
 use Platform\FoodAlchemist\Services\InventurService;
+use Platform\FoodAlchemist\Services\LagerBewegungService;
 use Platform\FoodAlchemist\Services\LagerEinrichtungService;
 
 /**
@@ -35,6 +36,15 @@ class Index extends Component
     public array $filter = self::FILTER_LEER;
 
     public string $quelle = '';
+
+    /** Spec 67: Filter Grund + Hand-Buchung. */
+    public string $grundFilter = '';
+
+    public bool $buchungOffen = false;
+
+    public array $buchung = [];
+
+    public string $buchungGpSuche = '';
 
     #[Url(as: 'inventur')]
     public ?int $inventurId = null;
@@ -185,6 +195,75 @@ class Index extends Component
         }
     }
 
+    // ── Bewegungen von Hand (Spec 67) ───────────────────────────────────────
+
+    public function buchungOeffnen(string $art = 'abgang'): void
+    {
+        $this->buchung = [
+            'art' => in_array($art, ['zugang', 'abgang', 'umlagerung'], true) ? $art : 'abgang',
+            'gp_id' => null, 'gp_name' => '', 'location_id' => $this->lagerortId ?: ($this->neuLagerortId ?? ''), 'ziel_location_id' => '',
+            'menge' => '', 'kartons' => '', 'einheiten' => '', 'lose' => '', 'grund' => '', 'notiz' => '', 'datum' => now()->toDateString(), 'preis' => '',
+        ];
+        $this->buchungGpSuche = '';
+        $this->buchungOffen = true;
+        $this->fehler = null;
+    }
+
+    public function buchungSchliessen(): void
+    {
+        $this->buchungOffen = false;
+    }
+
+    public function updatedBuchung($wert, $schluessel): void
+    {
+        if ($schluessel === 'art') {
+            $this->buchung['grund'] = '';
+        }
+    }
+
+    public function buchungGpWaehlen(int $gpId): void
+    {
+        $gp = FoodAlchemistGp::visibleToTeam($this->team())->find($gpId, ['id', 'name']);
+        if ($gp !== null) {
+            $this->buchung['gp_id'] = $gp->id;
+            $this->buchung['gp_name'] = $gp->name;
+            $this->buchungGpSuche = '';
+        }
+    }
+
+    public function bewegungBuchen(LagerBewegungService $svc): void
+    {
+        $this->fehler = null;
+        if (empty($this->buchung['gp_id'])) {
+            $this->fehler = 'Bitte ein Grundprodukt wählen.';
+
+            return;
+        }
+        try {
+            $ms = $svc->buchen($this->team(), $this->buchung, Auth::id());
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException) {
+            $this->fehler = 'Bitte Lagerort (und Ziel) wählen.';
+
+            return;
+        } catch (\RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+
+            return;
+        }
+        $art = ['zugang' => 'Zugang', 'abgang' => 'Abgang', 'umlagerung' => 'Umlagerung'][$this->buchung['art']] ?? 'Bewegung';
+        $wert = $ms[0]->value_eur !== null ? ' · ' . number_format((float) $ms[0]->value_eur, 2, ',', '.') . ' €' : '';
+        $this->hinweis = $art . ' gebucht: ' . $this->buchung['gp_name'] . $wert . '.';
+        $this->buchungOffen = false;
+    }
+
+    public function stornieren(int $movementId, LagerBewegungService $svc): void
+    {
+        $this->aktion(function () use ($movementId, $svc) {
+            $svc->stornieren($this->team(), $movementId, Auth::id());
+            $this->hinweis = 'Buchung storniert — Gegenbuchung angelegt.';
+        });
+    }
+
     // ── Einrichten (Spec 66b) ───────────────────────────────────────────────
 
     public function platzAnlegen(LagerEinrichtungService $svc): void
@@ -303,7 +382,17 @@ class Index extends Component
             'bestandGesamt' => count($bestandAlle),
             'bestandWert' => round(array_sum(array_map(fn ($r) => (float) ($r['wert'] ?? 0), $bestand)), 2),
             'ohnePreis' => count(array_filter($bestand, fn ($r) => $r['wert'] === null)),
-            'bewegungen' => $this->reiter === 'bewegungen' ? $svc->bewegungen($team, $this->quelle ?: null) : collect(),
+            'bewegungen' => $this->reiter === 'bewegungen' ? $svc->bewegungen($team, $this->quelle ?: null, 200, $this->grundFilter ?: null) : collect(),
+            'storniert' => $this->reiter === 'bewegungen'
+                ? \Platform\FoodAlchemist\Models\FoodAlchemistInventoryMovement::where('team_id', $team->id)->whereNotNull('storno_of_id')->pluck('storno_of_id')->flip()->all()
+                : [],
+            'buchungGebinde' => $this->buchungOffen && ! empty($this->buchung['gp_id']) && ! empty($this->buchung['location_id'])
+                ? $this->gebindeSicher($team, (int) $this->buchung['gp_id'], (int) $this->buchung['location_id']) : null,
+            'buchungKandidaten' => $this->buchungOffen && mb_strlen(trim($this->buchungGpSuche)) >= 2
+                ? FoodAlchemistGp::visibleToTeam($team)->where('name', 'like', '%' . trim($this->buchungGpSuche) . '%')
+                    ->whereNotIn('status', ['merged', 'rejected'])->orderBy('name')->limit(10)->get(['id', 'name'])
+                : collect(),
+            'gruende' => LagerBewegungService::GRUENDE,
             'inventuren' => $this->reiter === 'inventur' ? $svc->liste($team) : collect(),
             'inventur' => $inventur,
             'zeilen' => $zeilen,
@@ -334,6 +423,15 @@ class Index extends Component
             && ($f['stellplatz'] === '' || ($f['stellplatz'] === 'ohne' ? $r['bin_id'] === null : (int) $f['stellplatz'] === $r['bin_id']))
             && ($f['zustand'] === '' || mb_strtolower((string) $r['zustand']) === mb_strtolower($f['zustand']))
             && ($f['warengruppe'] === '' || (string) $r['warengruppe'] === (string) $f['warengruppe'])));
+    }
+
+    private function gebindeSicher(Team $team, int $gpId, int $ortId): ?array
+    {
+        try {
+            return app(LagerBewegungService::class)->gebindeFuer($team, $gpId, $ortId);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException) {
+            return null;
+        }
     }
 
     private function aktion(callable $tu): void

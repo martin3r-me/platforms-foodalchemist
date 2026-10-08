@@ -26,7 +26,17 @@ class FoodAlchemistInventoryMovement extends Model
         'qty_base' => 'decimal:4',
         'qty_packs' => 'decimal:2',
         'moved_at' => 'datetime',
+        'price_per_base' => 'decimal:6',
+        'value_eur' => 'decimal:2',
     ];
+
+    /** Spec 67 A: Hand-Buchungen (stornierbar hier, nicht an einer Quelle wie Wareneingang/Inventur). */
+    public const HAND_QUELLEN = ['zugang', 'abgang', 'umlagerung'];
+
+    public function istHandbuchung(): bool
+    {
+        return in_array($this->source, self::HAND_QUELLEN, true);
+    }
 
     public function stock(): BelongsTo
     {

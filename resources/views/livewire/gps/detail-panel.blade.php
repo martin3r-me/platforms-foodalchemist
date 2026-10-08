@@ -589,6 +589,58 @@
         </x-fa::section>
         @endif
 
+        {{-- LAGER (Spec 67): das Grundprodukt trägt sein Lager — Bestand + Stammplatz je Lagerort --}}
+        @if($section === 'lager')
+        <x-fa::section variant="plain" title="Lager" icon="heroicon-o-archive-box" data-sektion="lager">
+            @if($lagerOrte === [])
+                <p class="{{ $leise }}">Noch kein Lagerort angelegt (Einstellungen → Einkauf).</p>
+            @else
+                <p class="{{ $leise }}">Der Stellplatz gilt für diesen Betrieb. Der Wareneingang bucht in den Lagerort mit Stellplatz; ohne Stellplatz ins Standardlager und schlägt beim ersten Eingang einen Platz vor.</p>
+                <table class="fa-table fa-table--compact mt-2" data-gp-lager>
+                    <thead><tr><th>Lagerort</th><th class="text-right">Bestand</th><th>Stellplatz</th></tr></thead>
+                    <tbody>
+                        @foreach($lagerOrte as $o)
+                            @php $vorschlag = $o['bin_id'] === null && $o['vorschlag'] !== null ? $o['stellplaetze']->firstWhere('id', $o['vorschlag']) : null; @endphp
+                            <tr wire:key="gpl-{{ $o['id'] }}">
+                                <td class="font-medium">{{ $o['name'] }}@if($o['standard']) <span class="{{ $leise }}">· Standard</span>@endif</td>
+                                <td class="text-right tabular-nums">{{ $o['bestand'] ?? '–' }}</td>
+                                <td>
+                                    @if($o['stellplaetze']->isEmpty())
+                                        <span class="{{ $leise }}">keine Stellplätze</span>
+                                    @else
+                                        <span class="inline-flex items-center gap-2">
+                                            <select wire:change="stammplatzSetzen({{ $o['id'] }}, $event.target.value)" class="fa-control fa-select h-7 pr-8 text-[length:var(--fa-text-sm)] w-48" aria-label="Stellplatz in {{ $o['name'] }}" data-gp-stammplatz="{{ $o['id'] }}">
+                                                <option value="">– kein Stellplatz –</option>
+                                                @foreach($o['stellplaetze'] as $p)<option value="{{ $p->id }}" @selected($o['bin_id'] === $p->id)>{{ $p->name }}</option>@endforeach
+                                            </select>
+                                            @if($vorschlag)<button type="button" wire:click="stammplatzSetzen({{ $o['id'] }}, {{ $vorschlag->id }})" class="text-[length:var(--fa-text-sm)] text-[var(--fa-accent)] hover:underline">Vorschlag: {{ $vorschlag->name }}</button>@endif
+                                        </span>
+                                    @endif
+                                </td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+                @if($lagerBewegungen->isNotEmpty())
+                    <div class="{{ $titelKlein }} mt-3">Letzte Bewegungen</div>
+                    <ul class="flex flex-col">
+                        @foreach($lagerBewegungen as $m)
+                            <li wire:key="gplm-{{ $m->id }}" class="flex items-center gap-2 py-0.5 text-[length:var(--fa-text-sm)]">
+                                <span class="tabular-nums text-[var(--fa-ink-3)] w-20">{{ $m->moved_at?->format('d.m.Y') }}</span>
+                                <span class="w-28">{{ ['wareneingang' => 'Wareneingang', 'inventur' => 'Inventur', 'zugang' => 'Zugang', 'abgang' => 'Abgang', 'umlagerung' => 'Umlagerung', 'storno' => 'Storno'][$m->source] ?? $m->source }}</span>
+                                <span class="tabular-nums {{ $m->direction === 'out' ? 'text-[var(--fa-crit)]' : 'text-[var(--fa-ok)]' }}">{{ $m->direction === 'out' ? '−' : '+' }}{{ rtrim(rtrim(number_format((float) app(\Platform\FoodAlchemist\Services\InventurService::class)->anzeigeMenge((float) $m->qty_base, $m->base_unit), 3, ',', '.'), '0'), ',') }} {{ app(\Platform\FoodAlchemist\Services\InventurService::class)->anzeigeEinheit($m->base_unit) }}</span>
+                                <span class="text-[var(--fa-ink-3)] truncate">{{ $m->location?->name }}@if($m->reason) · {{ $m->reason }}@endif</span>
+                            </li>
+                        @endforeach
+                    </ul>
+                @endif
+            @endif
+            @if(\Illuminate\Support\Facades\Route::has('foodalchemist.lager.index'))
+                <a href="{{ route('foodalchemist.lager.index', ['reiter' => 'einrichten']) }}" wire:navigate class="{{ $leise }} hover:underline mt-2 inline-block">Lager einrichten →</a>
+            @endif
+        </x-fa::section>
+        @endif
+
         {{-- EINKAUF (Spec 66 §4): was wurde eingekauft, wann, bei wem — und was liegt am Lager --}}
         @if(($section === null || $section === 'einkauf') && $einkauf !== null)
         @php

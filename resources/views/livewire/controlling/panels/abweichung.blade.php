@@ -89,6 +89,20 @@
             </div>
         </dl>
 
+        @php $ab = $a['abgaenge'] ?? null; $benannt = $ab !== null ? $ab['schwund'] + $ab['personal'] + $ab['probe'] : 0; @endphp
+        @if($ab !== null && $benannt > 0)
+            {{-- Spec 67: gebuchte Abgänge mit Grund — der benannte Teil der Abweichung --}}
+            <div class="flex flex-wrap items-baseline gap-x-4 gap-y-1 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]" data-ctrl-abw-abgaenge>
+                <span class="font-medium">Gebuchte Abgänge im Zeitraum:</span>
+                @if($ab['schwund'] > 0)<span>Verderb, Bruch, Schwund <strong class="tabular-nums">{{ $eur($ab['schwund']) }}</strong></span>@endif
+                @if($ab['personal'] > 0)<span>Personalessen <strong class="tabular-nums">{{ $eur($ab['personal']) }}</strong></span>@endif
+                @if($ab['probe'] > 0)<span>Probe, Verkostung <strong class="tabular-nums">{{ $eur($ab['probe']) }}</strong></span>@endif
+                @if($a['abweichung_eur'] !== null && $a['abweichung_eur'] > 0)
+                    <span class="text-[var(--fa-ink-3)]">= {{ number_format(min(100, $benannt / $a['abweichung_eur'] * 100), 0, ',', '.') }} % der Abweichung erklärt</span>
+                @endif
+            </div>
+        @endif
+
         @if($a['hinweis'])
             <x-fa::notice tone="warn" data-ctrl-abw-hinweis>{{ $a['hinweis'] }}</x-fa::notice>
         @elseif($a['abweichung_eur'] !== null)

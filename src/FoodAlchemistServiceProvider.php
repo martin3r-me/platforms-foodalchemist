@@ -342,6 +342,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
         // Migrationen durch sind). Ungefährlich: die Observer feuern nur auf Model-
         // Events (nie während Migrationen), und queueGp/deleteGp no-oppen ohne Provider.
         \Platform\FoodAlchemist\Models\FoodAlchemistGp::observe(\Platform\FoodAlchemist\Observers\GpEmbeddingObserver::class);
+        // Spec 67: neuer/klassifizierter GP → Stellplatz-Vorschlag im Standardlager des Teams
+        \Platform\FoodAlchemist\Models\FoodAlchemistGp::observe(\Platform\FoodAlchemist\Observers\GpLagerObserver::class);
         \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::observe(\Platform\FoodAlchemist\Observers\RecipeEmbeddingObserver::class);
 
         // Spec 15 §5a/§5b: die kleinen Geschwister-Pools (Lieferant/Konzept/Foodbook/Lab-Note).
@@ -1034,6 +1036,9 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\StorageBinsPutTool::class,
                     \Platform\FoodAlchemist\Tools\StorageBinsDeleteTool::class,
                     \Platform\FoodAlchemist\Tools\StorageBinsAssignTool::class,
+                    // Spec 67: Lagerbewegungen von Hand
+                    \Platform\FoodAlchemist\Tools\InventoryMovementsPostTool::class,
+                    \Platform\FoodAlchemist\Tools\InventoryMovementsStornoTool::class,
                     \Platform\FoodAlchemist\Tools\OrdersUpdatePaymentTool::class,
                     \Platform\FoodAlchemist\Tools\OrdersUpdateApprovalTool::class,
                     \Platform\FoodAlchemist\Tools\OrdersConfirmSupplierTool::class,

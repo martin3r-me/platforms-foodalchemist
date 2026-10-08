@@ -20,7 +20,8 @@ class StorageBinsGetTool extends FoodAlchemistTool implements ToolContract, Tool
     {
         return 'Liest die Stellplätze eines Lagerorts (id, name, zone kuehl|tk|trocken|getraenke|sonstig, Laufweg-Reihenfolge, '
             . 'Anzahl Grundprodukte). Mit artikel=true zusätzlich die Grundprodukte des Lagerorts mit Stammplatz (bin_id), '
-            . 'Zustand, Warengruppe und dem Vorschlag aus Zustand+Warengruppe (bin_vorschlag).';
+            . 'Zustand, Warengruppe und dem Vorschlag aus Zustand+Warengruppe (bin_vorschlag). Mit gp_id (ohne location_id): '
+            . 'das Lager EINES Grundprodukts — je Lagerort Bestand, Stammplatz und Vorschlag („Wo liegt die Sahne?").';
     }
 
     public function getSchema(): array
@@ -29,10 +30,10 @@ class StorageBinsGetTool extends FoodAlchemistTool implements ToolContract, Tool
             'type' => 'object',
             'properties' => [
                 'location_id' => ['type' => 'integer', 'description' => 'Lagerort-Id.'],
+                'gp_id' => ['type' => 'integer', 'description' => 'Grundprodukt: dessen Lager über alle Lagerorte.'],
                 'artikel' => ['type' => 'boolean', 'description' => 'Grundprodukte mit Stammplatz/Vorschlag mitliefern.'],
                 'nur_ohne_stellplatz' => ['type' => 'boolean', 'description' => 'Nur Grundprodukte ohne Stammplatz.'],
             ],
-            'required' => ['location_id'],
         ];
     }
 
@@ -43,6 +44,20 @@ class StorageBinsGetTool extends FoodAlchemistTool implements ToolContract, Tool
             return ToolResult::error('Kein Team im Kontext.', 'NO_TEAM');
         }
         $svc = app(LagerEinrichtungService::class);
+        if (! empty($arguments['gp_id']) && empty($arguments['location_id'])) {
+            $gp = \Platform\FoodAlchemist\Models\FoodAlchemistGp::visibleToTeam($team)->find((int) $arguments['gp_id']);
+            if ($gp === null) {
+                return ToolResult::error('Grundprodukt nicht gefunden.', 'NOT_FOUND');
+            }
+
+            return ToolResult::success(['gp_id' => $gp->id, 'name' => $gp->name, 'lagerorte' => array_map(fn ($o) => [
+                'location_id' => $o['id'], 'lagerort' => $o['name'], 'standard' => $o['standard'], 'bestand' => $o['bestand_basis'],
+                'bin_id' => $o['bin_id'], 'stellplatz' => $o['stellplatz'], 'vorschlag_bin_id' => $o['vorschlag'], 'vorschlag' => $o['vorschlag_name'],
+            ], $svc->gpLager($team, $gp))]);
+        }
+        if (empty($arguments['location_id'])) {
+            return ToolResult::error('location_id oder gp_id angeben.', 'VALIDATION_ERROR');
+        }
         $ort = (int) ($arguments['location_id'] ?? 0);
         try {
             $out = ['location_id' => $ort, 'stellplaetze' => $svc->stellplaetze($team, $ort)->map(fn ($b) => [

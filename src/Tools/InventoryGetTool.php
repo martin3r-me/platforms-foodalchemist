@@ -33,6 +33,7 @@ class InventoryGetTool extends FoodAlchemistTool implements ToolContract, ToolMe
             'properties' => [
                 'location_id' => ['type' => 'integer', 'description' => 'Nur dieser Lagerort.'],
                 'suche' => ['type' => 'string', 'description' => 'Namensfilter (Teilstring).'],
+                'gp_id' => ['type' => 'integer', 'description' => 'Nur dieses Grundprodukt.'],
                 'stellplatz' => ['type' => 'string'],
                 'zustand' => ['type' => 'string'],
                 'warengruppe' => ['type' => 'string'],
@@ -54,10 +55,10 @@ class InventoryGetTool extends FoodAlchemistTool implements ToolContract, ToolMe
             return ToolResult::error('Kein Team im Kontext.', 'NO_TEAM');
         }
         $svc = app(InventurService::class);
-        $rows = $svc->filterBestand(
+        $rows = array_values(array_filter($svc->filterBestand(
             $svc->bestand($team, isset($arguments['location_id']) ? (int) $arguments['location_id'] : null),
             array_intersect_key($arguments, array_flip(['suche', 'stellplatz', 'zustand', 'warengruppe', 'lieferant', 'ohne_preis', 'ladenhueter'])),
-        );
+        ), fn ($r) => empty($arguments['gp_id']) || $r['gp_id'] === (int) $arguments['gp_id']));
         $limit = max(1, min(1000, (int) ($arguments['limit'] ?? 200)));
         $out = [
             'bestand' => array_slice($rows, 0, $limit),
@@ -71,6 +72,8 @@ class InventoryGetTool extends FoodAlchemistTool implements ToolContract, ToolMe
                 'menge' => $svc->anzeigeMenge((float) $m->qty_base, (string) $m->base_unit),
                 'einheit' => $svc->anzeigeEinheit((string) $m->base_unit),
                 'quelle' => $m->source, 'datum' => $m->moved_at?->toDateTimeString(),
+                'grund' => $m->reason, 'wert_eur' => $m->value_eur !== null ? (float) $m->value_eur : null,
+                'lagerort' => $m->location?->name, 'storno_von' => $m->storno_of_id,
             ])->values()->all();
         }
         if (! empty($arguments['stichtag'])) {
