@@ -708,6 +708,15 @@
                                 </button>
                                 <p class="mt-1.5 text-sm text-[var(--fa-ink-3)] tabular-nums" data-tagesplan-wall-step-fortschritt>{{ $wallErledigteSteps->count() }} von {{ count($wallStepKeys) }} Schritten erledigt</p>
                             @endif
+                            {{-- Spec 76: Etikett direkt aus der Küche — vorbelegt, ohne Formular --}}
+                            @if(! empty($anleitung['etikett']))
+                                <a href="{{ $anleitung['etikett']['url'] }}" target="_blank"
+                                   class="mt-2 flex h-12 w-full items-center justify-between rounded-xl border border-[var(--fa-line-strong)] bg-[var(--fa-surface)] px-4 text-left text-base font-semibold text-[var(--fa-ink)] transition-colors hover:bg-[var(--fa-hover)]"
+                                   data-tagesplan-wall-etikett>
+                                    <span>Etikett drucken ({{ $anleitung['etikett']['anzahl'] }}×)</span>
+                                    @svg('heroicon-o-tag', 'w-6 h-6')
+                                </a>
+                            @endif
                         </section>
 
                         @if(!empty($anleitung['sub_rezepte']))
@@ -869,6 +878,7 @@
                             </div>
                         </section>
 
+                        <div class="h-20 shrink-0" aria-hidden="true"></div>{{-- Auslauf: letzter Knopf (Feedback speichern) bleibt über dem Rand erreichbar, auch im Vollbild --}}
                     </aside>
 
                     <section class="{{ $wKarte }} p-3 md:p-4" data-tagesplan-wall-media>

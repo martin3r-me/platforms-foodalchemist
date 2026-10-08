@@ -42,7 +42,7 @@
             @if($etikettenVorschlag !== [])
                 <x-fa::button icon="heroicon-m-tag" x-on:click="$dispatch('modal.open', { name: 'produktion-etiketten' })" data-produktion-etiketten>Etiketten</x-fa::button>
             @endif
-            @if($hatDokument || $darfLoeschen)
+            @if($hatDokument || $darfLoeschen || $etikettenVorschlag !== [])
                 {{-- Weitere Aktionen: Produktionsschein · Löschen (ganz unten, rot — nie neben Speichern) --}}
                 <div class="relative" x-data="faMenu()" x-on:keydown.escape="offen = false" x-on:click.outside="offen = false">
                     <x-fa::icon-button icon="heroicon-m-ellipsis-horizontal" label="Weitere Aktionen" x-on:click="toggle($event)" aria-haspopup="menu" x-bind:aria-expanded="offen" />
@@ -52,6 +52,12 @@
                                class="{{ $menuePunkt }}" title="Produktionsschein mit Einkauf, zum Drucken oder als PDF">
                                 @svg('heroicon-o-printer', 'w-4 h-4 text-[var(--fa-ink-3)]') Produktionsschein drucken
                             </a>
+                        @endif
+                        {{-- Spec 76: Etiketten auch im Menü auffindbar (Sammeldruck aller Basisrezepte) --}}
+                        @if($etikettenVorschlag !== [])
+                            <button type="button" role="menuitem" x-on:click="offen = false; $dispatch('modal.open', { name: 'produktion-etiketten' })" class="{{ $menuePunkt }} w-full text-left" data-produktion-etiketten-menue>
+                                @svg('heroicon-o-tag', 'w-4 h-4 text-[var(--fa-ink-3)]') Etiketten drucken
+                            </button>
                         @endif
                         {{-- Spec 30 E7: Löschen nur geplant/storniert — ein laufender Auftrag wird storniert,
                              ein fertiger ist Protokoll. --}}

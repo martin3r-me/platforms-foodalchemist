@@ -236,3 +236,14 @@ it('Spec 76: Sammeldruck aus der Produktion — Basisrezepte je Ansatz, Auswahl,
     \Livewire\Livewire::test(\Platform\FoodAlchemist\Livewire\Produktion\Editor::class)->call('oeffnenBearbeiten', $order->id)
         ->assertSee('Etiketten für diesen Auftrag')->assertSee('data-produktion-etikett', false);
 });
+
+it('Hotfix: Produktionsauftrag mit Altbestand-Ziel ohne source_ref öffnet (stabile Ref), Menü hat „Etiketten drucken"', function () {
+    $order = \Platform\FoodAlchemist\Models\FoodAlchemistProductionOrder::create(['team_id' => $this->rootTeam->id, 'name' => 'Altbestand', 'production_date' => '2026-09-05', 'status' => 'planned',
+        'targets' => [['label' => 'Suppe (4 kg)', 'amount_kg' => 4, 'recipe_id' => $this->suppe->id]]]);
+    $d1 = app(\Platform\FoodAlchemist\Services\ProductionOrderService::class)->detail($this->rootTeam, $order->id);
+    $d2 = app(\Platform\FoodAlchemist\Services\ProductionOrderService::class)->detail($this->rootTeam, $order->id);
+    expect($d1['targets'][0]['source_ref'])->toStartWith('ziel:')->toBe($d2['targets'][0]['source_ref']);
+    app(\Platform\FoodAlchemist\Services\ProductionOrderService::class)->recomputeOrder($this->rootTeam, $order->refresh());
+    \Livewire\Livewire::test(\Platform\FoodAlchemist\Livewire\Produktion\Editor::class)->call('oeffnenBearbeiten', $order->id)
+        ->assertSee('Suppe (4 kg)')->assertSee('Etiketten drucken');
+});
