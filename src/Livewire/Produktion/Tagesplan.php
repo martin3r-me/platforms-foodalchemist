@@ -1119,14 +1119,28 @@ class Tagesplan extends Component
         if ($line === null || ! $line->is_basisrezept || $line->recipe_id === null || ! \Illuminate\Support\Facades\Route::has('foodalchemist.etiketten.druck')) {
             return null;
         }
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null) {
+            return null;
+        }
+        $svc = app(\Platform\FoodAlchemist\Services\EtikettService::class);
+        $vorlage = $svc->kuechenVorlage($team);   // Spec 76b: eigene Vorlage für den Wandmonitor
         $anzahl = max(1, (int) ceil((float) $line->ansaetze_effektiv - 1e-9));
         $datum = \Platform\FoodAlchemist\Models\FoodAlchemistProductionOrder::whereKey($line->production_order_id)->value('production_date');
-        $eingabe = array_filter([
+        $basis = array_filter([
             'hergestellt_am' => $datum !== null ? Carbon::parse($datum)->toDateString() : null,
-            'menge' => $line->basis_yield_kg !== null ? rtrim(rtrim(number_format((float) $line->basis_yield_kg, 3, ',', ''), '0'), ',') . ' kg' : null,
+            // Am Wandmonitor ist niemand persönlich angemeldet → der Posten steht als Kürzel
+            'kuerzel' => $line->station_id !== null ? \Platform\FoodAlchemist\Models\FoodAlchemistProductionStation::whereKey($line->station_id)->value('name') : null,
         ]);
+        $jeAnsatz = $line->basis_yield_kg !== null ? (float) $line->basis_yield_kg : null;
+        $gesamt = $line->produzierte_menge_kg !== null ? (float) $line->produzierte_menge_kg : ($jeAnsatz !== null ? $jeAnsatz * (float) $line->ansaetze_effektiv : null);
 
-        return ['url' => app(\Platform\FoodAlchemist\Services\EtikettService::class)->druckUrl('recipe', (int) $line->recipe_id, null, $eingabe, $anzahl), 'anzahl' => $anzahl];
+        // Basis-URL ohne Anzahl/Menge — die Küche wählt beides am Monitor (JS hängt anzahl + e[menge] an)
+        return [
+            'anzahl' => $anzahl,
+            'gesamt_kg' => $gesamt !== null ? round($gesamt, 3) : null,
+            'url' => $svc->druckUrl('recipe', (int) $line->recipe_id, (int) $vorlage->id, $basis, 1),
+        ];
     }
 
     /** @var array<string,ContextFile> Memo path→ContextFile (N+1-Vermeidung im Wandmonitor-Poll). */

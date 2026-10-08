@@ -28,6 +28,7 @@ class FoodAlchemistLabelTemplate extends Model
         'datum_gross' => 'boolean',
         'zeige_logo' => 'boolean',
         'is_default' => 'boolean',
+        'is_kitchen_default' => 'boolean',
     ];
 
     public function outlet(): BelongsTo

@@ -24,7 +24,7 @@
                     @foreach($vorlagen as $v)
                         <li wire:key="lv-{{ $v->id }}">
                             <button type="button" wire:click="waehlen({{ $v->id }})" class="w-full text-left py-2 px-2 rounded-[var(--fa-radius-control)] hover:bg-[var(--fa-hover)] {{ $vorlageId === $v->id ? 'bg-[var(--fa-ground)]' : '' }}">
-                                <div class="font-medium text-[var(--fa-ink)]">{{ $v->name }}{{ $v->is_default ? ' · Standard' : '' }}</div>
+                                <div class="font-medium text-[var(--fa-ink)]">{{ $v->name }}{{ $v->is_default ? ' · Standard' : '' }}{{ $v->is_kitchen_default ? ' · Wandmonitor' : '' }}</div>
                                 <div class="{{ $leise }}">{{ $formate[$v->format] ?? $v->format }} · {{ $v->typ === 'verkauf' ? 'Verkauf' : 'intern' }}</div>
                             </button>
                         </li>
@@ -53,6 +53,7 @@
                     <label class="inline-flex items-center gap-2"><input type="checkbox" wire:model="form.datum_gross" class="{{ $haken }}" /> „Verbrauchen bis" groß und umrahmt</label>
                     <label class="inline-flex items-center gap-2"><input type="checkbox" wire:model="form.zeige_logo" class="{{ $haken }}" /> Logo drucken</label>
                     <label class="inline-flex items-center gap-2"><input type="checkbox" wire:model="form.is_default" class="{{ $haken }}" /> Standard-Vorlage</label>
+                    <label class="inline-flex items-center gap-2" data-etikett-kueche-standard><input type="checkbox" wire:model="form.is_kitchen_default" class="{{ $haken }}" /> Standard für den Wandmonitor (Küche)</label>
                 </div>
             </x-fa::section>
         </div>

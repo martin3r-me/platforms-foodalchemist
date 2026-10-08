@@ -708,14 +708,31 @@
                                 </button>
                                 <p class="mt-1.5 text-sm text-[var(--fa-ink-3)] tabular-nums" data-tagesplan-wall-step-fortschritt>{{ $wallErledigteSteps->count() }} von {{ count($wallStepKeys) }} Schritten erledigt</p>
                             @endif
-                            {{-- Spec 76: Etikett direkt aus der Küche — vorbelegt, ohne Formular --}}
+                            {{-- Spec 76b: Etikett direkt aus der Küche — Anzahl + Menge wählt die Küche; Druckdialog im Monitor (kein neuer Tab) --}}
                             @if(! empty($anleitung['etikett']))
-                                <a href="{{ $anleitung['etikett']['url'] }}" target="_blank"
-                                   class="mt-2 flex h-12 w-full items-center justify-between rounded-xl border border-[var(--fa-line-strong)] bg-[var(--fa-surface)] px-4 text-left text-base font-semibold text-[var(--fa-ink)] transition-colors hover:bg-[var(--fa-hover)]"
-                                   data-tagesplan-wall-etikett>
-                                    <span>Etikett drucken ({{ $anleitung['etikett']['anzahl'] }}×)</span>
-                                    @svg('heroicon-o-tag', 'w-6 h-6')
-                                </a>
+                                @php $et = $anleitung['etikett']; @endphp
+                                <div class="mt-2 rounded-xl border border-[var(--fa-line-strong)] bg-[var(--fa-surface)] p-2.5" data-tagesplan-wall-etikett
+                                     x-data="{ anzahl: {{ (int) $et['anzahl'] }}, gesamt: {{ $et['gesamt_kg'] !== null ? (float) $et['gesamt_kg'] : 'null' }}, menge: '', hand: false, druckt: false,
+                                        init() { this.rechne() },
+                                        rechne() { if (! this.hand) { this.menge = this.gesamt ? (Math.round(this.gesamt / this.anzahl * 1000) / 1000).toString().replace('.', ',') : '' } },
+                                        plus(d) { this.anzahl = Math.max(1, Math.min(200, this.anzahl + d)); this.rechne() },
+                                        drucke() { this.druckt = true; let url = @js($et['url']); url = url.replace(/([?&])anzahl=\d+/, '$1anzahl=' + this.anzahl); if (this.menge.trim() !== '') { url += '&' + encodeURIComponent('e[menge]') + '=' + encodeURIComponent(this.menge.trim() + ' kg') }
+                                            const f = document.createElement('iframe'); f.style.position = 'fixed'; f.style.width = '0'; f.style.height = '0'; f.style.border = '0'; f.src = url;
+                                            f.onload = () => { try { f.contentWindow.focus(); f.contentWindow.print() } catch (e) { window.location.assign(url) } this.druckt = false; setTimeout(() => f.remove(), 60000) }; document.body.appendChild(f) } }">
+                                    <p class="text-sm font-semibold text-[var(--fa-ink-2)]">Etiketten</p>
+                                    <div class="mt-1.5 flex items-center gap-2">
+                                        <button type="button" x-on:click="plus(-1)" class="h-12 w-12 rounded-xl border border-[var(--fa-line-strong)] text-xl font-semibold hover:bg-[var(--fa-hover)]" aria-label="Ein Etikett weniger">−</button>
+                                        <span class="w-12 text-center text-xl font-semibold tabular-nums" x-text="anzahl" data-tagesplan-wall-etikett-anzahl></span>
+                                        <button type="button" x-on:click="plus(1)" class="h-12 w-12 rounded-xl border border-[var(--fa-line-strong)] text-xl font-semibold hover:bg-[var(--fa-hover)]" aria-label="Ein Etikett mehr">+</button>
+                                        <label class="ml-auto inline-flex items-center gap-1.5 text-sm text-[var(--fa-ink-3)]">je
+                                            <input type="text" inputmode="decimal" x-model="menge" x-on:input="hand = true" class="fa-control h-12 w-20 text-right text-base tabular-nums" aria-label="Menge je Etikett in kg" data-tagesplan-wall-etikett-menge /> kg</label>
+                                    </div>
+                                    <button type="button" x-on:click="drucke()" x-bind:disabled="druckt"
+                                            class="mt-2 flex h-12 w-full items-center justify-between rounded-xl bg-[var(--fa-accent)] px-4 text-left text-base font-semibold text-[var(--fa-on-accent)] transition-colors hover:bg-[var(--fa-accent-hover)]" data-tagesplan-wall-etikett-drucken>
+                                        <span x-text="druckt ? 'Druck wird vorbereitet …' : 'Etiketten drucken'">Etiketten drucken</span>
+                                        @svg('heroicon-o-printer', 'w-6 h-6')
+                                    </button>
+                                </div>
                             @endif
                         </section>
 
