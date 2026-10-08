@@ -41,13 +41,15 @@ class InventurService
     /** @return \Illuminate\Support\Collection<int, FoodAlchemistInventoryCount> */
     public function liste(Team $team)
     {
-        return FoodAlchemistInventoryCount::where('team_id', $team->id)->with('location')
+        // Spec 77c: Team-Brille — Oberteam liest auf Wunsch die Inventuren seiner Standorte (nur lesend)
+        return app(StandortService::class)->leseBereich(FoodAlchemistInventoryCount::query(), $team)->with('location')
             ->withCount('lines')->orderByDesc('count_date')->orderByDesc('id')->get();
     }
 
     public function detail(Team $team, int $countId): FoodAlchemistInventoryCount
     {
-        return FoodAlchemistInventoryCount::where('team_id', $team->id)
+        // Spec 77c: lesend auch Inventuren der eigenen Standorte (Unter-Teams); Schreiben über offen() bleibt team-strikt
+        return FoodAlchemistInventoryCount::whereIn('team_id', [(int) $team->id, ...app(StandortService::class)->unterTeamIds($team)])
             ->with(['location', 'lines.gp:id,name,piece_default_g,condition,commodity_group_code', 'lines.supplierItem:id,designation,article_number', 'lines.bin:id,name,sort_order,zone', 'lines.recipe:id,name'])
             ->findOrFail($countId);
     }
@@ -248,11 +250,12 @@ class InventurService
      */
     public function bestandswert(Team $team, string $stichtag): array
     {
-        $orte = FoodAlchemistInventoryLocation::where('team_id', $team->id)->where('is_active', true)->get();
+        // Spec 77c: Team-Brille — konsolidiert über die Lagerorte aller gelesenen Standorte
+        $orte = FoodAlchemistInventoryLocation::whereIn('team_id', app(StandortService::class)->leseTeamIds($team))->where('is_active', true)->get();
         $treffer = [];
         $wert = 0.0;
         foreach ($orte as $ort) {
-            $c = FoodAlchemistInventoryCount::where('team_id', $team->id)->where('inventory_location_id', $ort->id)
+            $c = FoodAlchemistInventoryCount::where('team_id', $ort->team_id)->where('inventory_location_id', $ort->id)
                 ->where('status', 'gebucht')->whereDate('count_date', '<=', $stichtag)
                 ->orderByDesc('count_date')->orderByDesc('id')->first();
             if ($c === null) {
@@ -272,25 +275,30 @@ class InventurService
      */
     public function bestand(Team $team, ?int $locationId = null, string $suche = ''): array
     {
-        $stocks = FoodAlchemistInventoryStock::where('team_id', $team->id)
+        $standorte = app(StandortService::class);
+        $teamIds = $standorte->leseTeamIds($team);
+        $stocks = FoodAlchemistInventoryStock::whereIn('team_id', $teamIds)
             ->with(['recipe', 'recipe.standardPresentation', 'gp:id,name,piece_default_g,lead_la_supplier_item_id,condition,commodity_group_code', 'gp.leadLa:id,supplier_id', 'gp.leadLa.supplier:id,name', 'location:id,name', 'supplierItem:id,designation,qty,supplier_id', 'supplierItem.supplier:id,name'])
             ->when($locationId !== null, fn ($q) => $q->where('inventory_location_id', $locationId))
             ->where('qty_base', '<>', 0)->get();
-        $zuletzt = FoodAlchemistInventoryMovement::where('team_id', $team->id)
+        $zuletzt = FoodAlchemistInventoryMovement::whereIn('team_id', $teamIds)
             ->whereIn('stock_id', $stocks->pluck('id')->all() ?: [0])
             ->selectRaw('stock_id, MAX(moved_at) as zuletzt')->groupBy('stock_id')->pluck('zuletzt', 'stock_id');
         // Spec 66b: Stammplatz je (Lagerort, GP) für Anzeige + Filter
-        $stamm = \Platform\FoodAlchemist\Models\FoodAlchemistStorageBinItem::where('team_id', $team->id)->with('bin:id,name,sort_order')
+        $stamm = \Platform\FoodAlchemist\Models\FoodAlchemistStorageBinItem::whereIn('team_id', $teamIds)->with('bin:id,name,sort_order')
             ->get()->keyBy(fn ($z) => $z->inventory_location_id . ':' . $z->gp_id);
+        // Preis und Standort je besitzendem Team (Unter-Teams haben eigene Einkaufspreise)
+        $teams = count($teamIds) > 1 ? Team::whereIn('id', $teamIds)->get()->keyBy('id') : collect([(int) $team->id => $team]);
         $rows = [];
         foreach ($stocks as $s) {
+            $besitzer = $teams->get((int) $s->team_id) ?? $team;
             $name = $s->gp?->name ?? $s->supplierItem?->designation ?? $s->recipe?->name ?? '—';
             if ($suche !== '' && ! str_contains(mb_strtolower($name), mb_strtolower($suche))) {
                 continue;
             }
             $preis = $s->recipe !== null
                 ? app(EigenproduktionService::class)->preisJeBasis($s->recipe)
-                : $this->preisJeBasis($team, $s->gp, $s->gp === null ? $s->supplier_item_id : null, $s->base_unit);
+                : $this->preisJeBasis($besitzer, $s->gp, $s->gp === null ? $s->supplier_item_id : null, $s->base_unit);
             $menge = (float) $s->qty_base;
             $rows[] = [
                 'stock_id' => (int) $s->id, 'gp_id' => $s->gp_id !== null ? (int) $s->gp_id : null, 'name' => $name,
@@ -300,6 +308,7 @@ class InventurService
                 'zuletzt' => isset($zuletzt[$s->id]) ? Carbon::parse($zuletzt[$s->id])->format('d.m.Y') : null,
                 'zuletzt_iso' => isset($zuletzt[$s->id]) ? Carbon::parse($zuletzt[$s->id])->toDateString() : null,
                 'location_id' => (int) $s->inventory_location_id,
+                'team_id' => (int) $s->team_id, 'standort' => (string) $besitzer->name, 'eigen' => (int) $s->team_id === (int) $team->id,
                 'bin_id' => $stamm->get($s->inventory_location_id . ':' . $s->gp_id)?->storage_bin_id,
                 'stellplatz' => $stamm->get($s->inventory_location_id . ':' . $s->gp_id)?->bin?->name,
                 'zustand' => $s->gp?->condition ?: null,
@@ -316,7 +325,7 @@ class InventurService
     /** Jüngste Lagerbewegungen (Wareneingang, Inventur …). @return \Illuminate\Support\Collection */
     public function bewegungen(Team $team, ?string $quelle = null, int $limit = 200, ?string $grund = null)
     {
-        return FoodAlchemistInventoryMovement::where('team_id', $team->id)
+        return app(StandortService::class)->leseBereich(FoodAlchemistInventoryMovement::query(), $team)
             ->with(['gp:id,name', 'supplierItem:id,designation', 'recipe:id,name', 'location:id,name', 'order:id,supplier_id', 'order.supplier:id,name'])
             ->when($quelle !== null && $quelle !== '', fn ($q) => $q->where('source', $quelle))
             ->when($grund !== null && $grund !== '', fn ($q) => $q->where('reason', $grund))

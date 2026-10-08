@@ -47,6 +47,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->scoped(\Platform\FoodAlchemist\Services\Knowledge\KnowledgeRunContext::class);
+        // Spec 77c: Team-Namen der Standort-Spalte je Request merken
+        $this->app->scoped(\Platform\FoodAlchemist\Services\StandortService::class);
         /**
          * Config laden
          * 
@@ -288,6 +290,16 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 $returnEarly(null);
             }
         });
+        // Spec 77d · Inhalt einer freigegebenen Ausgabe geändert → Hüllen der Standorte neu rechnen (nur wenn es Freigaben gibt)
+        foreach ([
+            \Platform\FoodAlchemist\Models\FoodAlchemistFormatSlot::class, \Platform\FoodAlchemist\Models\FoodAlchemistConceptSlot::class,
+            \Platform\FoodAlchemist\Models\FoodAlchemistPaketGericht::class, \Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient::class,
+            \Platform\FoodAlchemist\Models\FoodAlchemistFoodbookBlock::class, \Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel::class,
+            \Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplanEintrag::class, \Platform\FoodAlchemist\Models\FoodAlchemistSpeisekartePosition::class,
+        ] as $inhaltsModel) {
+            $inhaltsModel::saved(fn () => app(\Platform\FoodAlchemist\Services\InhaltsFreigabeService::class)->vormerken());
+            $inhaltsModel::deleted(fn () => app(\Platform\FoodAlchemist\Services\InhaltsFreigabeService::class)->vormerken());
+        }
         // Spec 77b · Seiten je Bereich (Route → Bereich), für alle Web-Routen; Nicht-FA-Routen laufen durch.
         $this->app['router']->pushMiddlewareToGroup('web', \Platform\FoodAlchemist\Http\Middleware\FaBereichMiddleware::class);
 
@@ -1071,6 +1083,13 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     // Spec 77b: Bereiche, Einschränkungen, Kontingente
                     \Platform\FoodAlchemist\Tools\TeamBereicheGetTool::class,
                     \Platform\FoodAlchemist\Tools\TeamBereichePutTool::class,
+                    \Platform\FoodAlchemist\Tools\StandorteGetTool::class,
+                    \Platform\FoodAlchemist\Tools\StandortePutTool::class,
+                    \Platform\FoodAlchemist\Tools\StandorteSetBrilleTool::class,
+                    \Platform\FoodAlchemist\Tools\StandortInhalteGetTool::class,
+                    \Platform\FoodAlchemist\Tools\StandortInhaltePutTool::class,
+                    \Platform\FoodAlchemist\Tools\SammlungenPutTool::class,
+                    \Platform\FoodAlchemist\Tools\InhalteKopieTool::class,
                     // Spec 75b: Lieferanten-Rechnungen + Triple Match
                     \Platform\FoodAlchemist\Tools\SupplierInvoicesGetTool::class,
                     \Platform\FoodAlchemist\Tools\SupplierInvoicesPostTool::class,

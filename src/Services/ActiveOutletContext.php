@@ -5,6 +5,7 @@ namespace Platform\FoodAlchemist\Services;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistActiveOutlet;
 use Platform\FoodAlchemist\Models\FoodAlchemistOutlet;
+use Platform\FoodAlchemist\Services\StandortService;
 
 /**
  * Ebene 2: ambienter „aktiver Betrieb" (je User/Team), gegen den die Preis-Flächen auflösen,
@@ -27,6 +28,11 @@ class ActiveOutletContext
     /** Der aktuell gewählte Betrieb des Teams oder null (= Team-Baseline). */
     public function current(Team $team, ?int $userId = null): ?FoodAlchemistOutlet
     {
+        // Spec 77c: Unter-Team mit zugeordnetem Betrieb des Oberteams = fest, keine Wahl
+        if (($fest = app(StandortService::class)->zugeordneterBetrieb($team)) !== null) {
+            return $fest;
+        }
+
         $uid = $userId ?? auth()->id();
         $skey = self::KEY . '.' . $team->id;
 
@@ -48,6 +54,11 @@ class ActiveOutletContext
     /** Setzt den aktiven Betrieb (null = zurück auf Team-Baseline). Validiert Besitz + aktiv. Schreibt Session + durabel. */
     public function set(Team $team, ?int $outletId, ?int $userId = null): ?FoodAlchemistOutlet
     {
+        // Spec 77c: im Unter-Team mit festem Betrieb gibt es nichts auszusuchen
+        if (($fest = app(StandortService::class)->zugeordneterBetrieb($team)) !== null) {
+            return $fest;
+        }
+
         $uid = $userId ?? auth()->id();
         $skey = self::KEY . '.' . $team->id;
 

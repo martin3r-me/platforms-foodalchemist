@@ -140,6 +140,31 @@ Reihenfolge-Vorschlag: 77a zuerst (Sicherheit, klein), dann 77c (Kernbaustein St
 - **Pflege:** FA-Einstellungen → Zugriffsrechte (Bereiche lesend bzw. Plattform-Admin schaltet, Kontingente mit Nutzung, je Mitglied „einschränken"); Plattform `/verwaltung` Reiter Freigaben (Bereiche + Kontingente) und Kontingent-Prüfung beim Anlegen von Unter-Teams/Benutzern. MCP `team_bereiche.GET/PUT`.
 - Tests: `Spec77bBereicheTest` (5).
 
+## Umsetzung 77c (2026-10-08)
+
+- **Tabellen** (Migration `2026_10_09_100500`): `team_betriebe` (Unter-Team → Betrieb des Oberteams, eine Zeile je Unter-Team; keine Zeile = Standard, erbt komplett), `team_brillen` (Team-Brille je Benutzer und Team, überlebt die Session).
+- **`StandortService`** ist die eine Stelle: `unterTeamIds`/`unterTeams`, `zugeordneterBetrieb`, `betriebZuordnen` (FA-Admin des Oberteams, nur eigene Unter-Teams, nur aktive Betriebe), `brille`/`setzeBrille` (eigen | alle | team), `leseTeamIds`, Lese-Scopes `leseBereich` (Listen/Auswertungen), `leseBereichOderSichtbar` (Listen, die heute `visibleToTeam` lesen — bei „eigen" unverändert), `lesbarMitUnterTeams` (Detail lesend), `jeStandort` (Controlling nebeneinander). Ohne angemeldeten Benutzer (Queue, Signale, Kommandos) gilt immer „eigen".
+- **Bewusst nicht über `visibleToTeam`:** daran hängen Referenz- und Schreibprüfungen von 130 Models. Lesen nach unten läuft nur über die eigenen Lese-Scopes; Schreiben prüft weiter den Besitz (`isOwnedBy`, `eigene()`, `offen()`) — Belege eines Standorts sind im Oberteam **nur lesend** (Oberfläche: „nur lesend", keine Aktionen).
+- **Betriebs-Brille:** `ActiveOutletContext::current/set` liefert im Unter-Team den zugeordneten Betrieb fest; die Leiste zeigt ihn ohne Auswahl. `TeamSettingsService::outletRow` akzeptiert Betriebe der Team-Kette (Einstellungszeile im Besitzer-Team des Betriebs).
+- **Team-Brille angewendet in:** Bestellungen (Liste + Detail), Wareneingang (erwartet, Lieferscheine, Detail), Rechnungen (Liste, Detail), Triple-Match, Lager (Bestand mit Preis des besitzenden Teams, Bewegungen, Inventuren; fremde Inventur nur lesend), Produktion (Liste, Browser, Detail), Einkaufsjournal (`spend`, `spendProLieferant`, `gpEinkauf`), Wareneinsatz-Abweichung (Umsatz, Abgänge, Bestandswert).
+- **Standort-Spalte** bei Brille „alle": Bestellungen, Wareneingang, Rechnungen, Lager (Bestand, Bewegungen, Inventuren), Produktion-Browser.
+- **Controlling konsolidiert:** Brille „alle" = Summe; Abweichungs-Panel zeigt zusätzlich „Je Standort" mit dessen eigenen Einkaufspreisen und Zielwerten.
+- **Pflege:** Einstellungen → Betriebe, Abschnitt „Standorte" (Betrieb je Unter-Team). Leiste Team-Brille in Navbar und Sidebar. MCP `standorte.GET`, `standorte.PUT` (Admin), `standorte.SET_BRILLE` (jede Rolle, nur Ansicht).
+- Tests: `Spec77cStandorteTest` (6).
+
+## Umsetzung 77d (2026-10-08)
+
+- **Tabellen** (Migration `2026_10_09_100600`): `team_inhalte` (Schnellstart-Haken je Unter-Team, keine Zeile = übernimmt alles → Bestand verliert nichts), `sammlungen` + `sammlung_objekte` (Rezepte = Gerichte und Basisrezepte, Konzepte, Formate), `ausgabe_freigaben` (Sammlung, Foodbook, Speiseplan, Speisekarte → Unter-Team), `freigabe_objekte` (gespeicherte Hülle je Empfänger). Spalten `kopie_von_id` + `kopie_stand_at` an Rezepten, Konzepten, Formaten.
+- **Eine Regel an zwei Stellen:** `Support\InhaltsFreigabe` hängt in `BelongsToTeamHierarchy::scopeVisibleToTeam` und `TeamScope::applyVisible`. Für Inhalts-Typen (Rezept, Konzept, Format, Paket, Foodbook, Speiseplan, Speisekarte) sieht ein Unter-Team ohne Haken von seinen Vorfahren nur die Hülle; eigene Inhalte, globaler Bestand und Teams unterhalb der eingeschränkten Stufe bleiben sichtbar. Damit greift es auch in `TeamScope::referenz()` — nicht Freigegebenes lässt sich nicht referenzieren.
+- **Bewusst nicht eingeschränkt:** Grundprodukte, Lieferantenartikel, Vokabular — Stammdaten bleiben voll geerbt, sonst könnte ein Standort keine eigenen Rezepturen bauen (Abweichung von Spec 61 §12 Nr. 2, dort standen GP/LA in der Hülle).
+- **Hülle:** Format → Konzepte → Pakete/Gerichte (+ eingebettete Konzepte) → Basisrezepte (alle Ebenen); Foodbook über Kapitel und Blöcke, Speiseplan über Einträge, Speisekarte über Sektionen und Positionen. Neu gerechnet bei Freigabe/Haken/Sammlung sofort, bei Änderung eines Slots, Blocks, Eintrags, einer Position oder Zutat über `InhaltsFreigabeHuelleJob` (eindeutig in der Warteschlange, nur wenn es überhaupt Freigaben gibt).
+- **Rechte:** Haken + Freigaben nur FA-Admin des Oberteams; freigegeben werden nur **eigene** Ausgaben an **eigene** Unter-Teams (Kunden-IP-Regel); Sammlungen pflegen ab Kuratieren.
+- **Eigene Kopie:** `kopieAnlegen` (Rezept, Konzept, Format inkl. Gerüst) ab Kuratieren, merkt Original + Stand; `originalGeaendert` meldet Änderungen. Im Rezept-Editor: Hinweis „gehört … nur lesbar" mit Knopf „Eigene Kopie", an der Kopie Hinweis bei geändertem Original.
+- **Pflege:** Einstellungen → Betrieb & Küche → **Inhalte für Standorte** (Haken je Standort, Freigaben, Sammlungen befüllen per Suche). MCP `standort_inhalte.GET/PUT`, `sammlungen.PUT` (auch mehrere IDs auf einmal), `inhalte.KOPIE`.
+- **Befüllen:** Mehrfachauswahl im Rezept-Browser („Zu Sammlung hinzufügen"), Suche in den Einstellungen (Rezepte, Konzepte, Formate), MCP mit mehreren IDs.
+- **Offen (Folgearbeit):** dieselbe Mehrfachauswahl in Concepter-/Format-Browser und „Eigene Kopie" im Konzept-/Format-Editor (heute per MCP).
+- Tests: `Spec77dInhalteTest` (5).
+
 ## Bewusst nicht
 
 - **Team-Preis je Artikel** (gleicher Artikel, standortabhängige Konditionen) — selten; Einzelfall: eigener Artikel im Unter-Team + Team-Pin. Ansatzpunkt, falls je nötig: zentrale Preisermittlung (`activePriceSubquery`).

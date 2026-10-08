@@ -57,10 +57,12 @@ class WareneingangService
     public function erwarteteLieferungen(Team $team, ?string $bis = null): array
     {
         $heute = now()->startOfDay();
-        $orders = FoodAlchemistOrder::where('team_id', $team->id)
+        $standorte = app(StandortService::class);
+        $orders = $standorte->leseBereich(FoodAlchemistOrder::query(), $team)
             ->whereIn('status', array_map(fn ($s) => $s->value, self::OFFENE_STATUS))
             ->with(['supplier', 'lines'])
             ->get();
+        $namen = $standorte->teamNamen($orders->pluck('team_id')->unique()->map(fn ($v) => (int) $v)->all());
 
         $rows = [];
         foreach ($orders as $order) {
@@ -84,6 +86,8 @@ class WareneingangService
                 'offene_positionen' => $offen,
                 'teilweise_geliefert' => $order->lines->contains(fn ($l) => $l->received_qty_packs !== null),
                 'total_net' => round((float) $order->total_net, 2),
+                'standort' => $namen[(int) $order->team_id] ?? null,
+                'eigen' => (int) $order->team_id === (int) $team->id,
             ];
         }
         usort($rows, fn ($a, $b) => [$a['liefertag'] ?? '9999', $a['lieferant']] <=> [$b['liefertag'] ?? '9999', $b['lieferant']]);
@@ -120,7 +124,7 @@ class WareneingangService
     /** @return list<array<string,mixed>> */
     public function liste(Team $team, array $filter = []): array
     {
-        $q = FoodAlchemistDeliveryNote::where('team_id', $team->id)->with(['supplier', 'lines.orderLine'])
+        $q = app(StandortService::class)->leseBereich(FoodAlchemistDeliveryNote::query(), $team)->with(['supplier', 'lines.orderLine'])
             ->orderByDesc('delivered_on')->orderByDesc('id');
         if (! empty($filter['supplier_id'])) {
             $q->where('supplier_id', (int) $filter['supplier_id']);
@@ -150,7 +154,10 @@ class WareneingangService
     /** @return array<string,mixed> */
     public function detail(Team $team, int $id): array
     {
-        $note = $this->eigener($team, $id)->load(['supplier', 'lines.orderLine.order', 'lines.gp']);
+        // Spec 77c: lesend auch Lieferscheine der Standorte (Team-Brille); Schreiben bleibt bei eigener()
+        $note = app(StandortService::class)->leseBereich(FoodAlchemistDeliveryNote::query(), $team)->whereKey($id)->first()
+            ?? $this->eigener($team, $id);
+        $note->load(['supplier', 'lines.orderLine.order', 'lines.gp']);
 
         return $this->kopf($note) + [
             'zeilen' => $note->lines->map(fn (FoodAlchemistDeliveryNoteLine $l) => $this->zeile($l))->all(),
@@ -658,6 +665,8 @@ class WareneingangService
             'status' => $n->status,
             'status_label' => FoodAlchemistDeliveryNote::STATUS_LABELS[$n->status] ?? $n->status,
             'source' => (string) ($n->source ?? 'beleg'),
+            'team_id' => (int) $n->team_id,
+            'standort' => app(StandortService::class)->teamNamen([(int) $n->team_id])[(int) $n->team_id] ?? null,
             'inventory_location_id' => $n->inventory_location_id !== null ? (int) $n->inventory_location_id : null,
             'note' => $n->note,
             'positionen' => $zeilen->count(),

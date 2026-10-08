@@ -126,9 +126,10 @@ class LagerBewegungService
     public function abgaengeWert(Team $team, ?string $von, ?string $bis): array
     {
         // Stornierte Abgänge zählen nie mit — egal, wann storniert wurde (ein Irrtum im Juli bleibt im Juli korrigiert).
-        $ab = FoodAlchemistInventoryMovement::where('team_id', $team->id)
+        $teamIds = app(StandortService::class)->leseTeamIds($team);   // Spec 77c: Team-Brille
+        $ab = FoodAlchemistInventoryMovement::whereIn('team_id', $teamIds)
             ->where('source', 'abgang')->where('direction', 'out')->whereNotNull('reason')
-            ->whereNotIn('id', FoodAlchemistInventoryMovement::where('team_id', $team->id)->whereNotNull('storno_of_id')->select('storno_of_id'))
+            ->whereNotIn('id', FoodAlchemistInventoryMovement::whereIn('team_id', $teamIds)->whereNotNull('storno_of_id')->select('storno_of_id'))
             ->when($von !== null, fn ($x) => $x->whereDate('moved_at', '>=', $von))
             ->when($bis !== null, fn ($x) => $x->whereDate('moved_at', '<=', $bis))
             ->selectRaw('reason, SUM(value_eur) AS wert')->groupBy('reason')->pluck('wert', 'reason');

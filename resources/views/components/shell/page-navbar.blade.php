@@ -18,6 +18,7 @@
             {{ $slot }}
         </div>
         <div class="flex items-center gap-4 shrink-0">
+            @livewire('foodalchemist.team-brille-bar')
             @livewire('foodalchemist.active-outlet-bar')
         </div>
     </header>

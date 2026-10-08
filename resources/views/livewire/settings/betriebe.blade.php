@@ -151,5 +151,32 @@
             </p>
         @endif
     </x-fa::section>
+
+    {{-- Spec 77c: jeder Standort ist ein Unter-Team; es fährt genau einen Betrieb des Oberteams, fest.
+         „Standard" = keine eigene Zuordnung, der Standort erbt alles. --}}
+    @if($standorte !== [])
+        <x-fa::section title="Standorte" :meta="count($standorte) . ' Unter-Teams'" data-settings-standorte
+            description="Jeder Standort ist ein eigenes Unter-Team mit eigenen Einkaufspreisen, Bestellungen und Lager. Hier legst du fest, welchen Betrieb er fährt — im Standort ist die Betriebs-Brille dann fest eingestellt.">
+            <table class="fa-table fa-table--compact">
+                <thead><tr><th>Standort</th><th>Betrieb</th></tr></thead>
+                <tbody>
+                    @foreach($standorte as $st)
+                        <tr wire:key="st-{{ $st['id'] }}">
+                            <td class="font-medium">{{ $st['name'] }}</td>
+                            <td>
+                                <x-fa::select class="w-64 max-w-full" aria-label="Betrieb von {{ $st['name'] }}" data-standort-betrieb="{{ $st['id'] }}"
+                                    wire:change="standortBetriebSetzen({{ $st['id'] }}, $event.target.value)">
+                                    <option value="" @selected($st['betrieb_id'] === null)>Standard (erbt alles)</option>
+                                    @foreach($betriebe->where('is_inactive', false) as $b)
+                                        <option value="{{ $b->id }}" @selected($st['betrieb_id'] === (int) $b->id)>{{ $b->name }}</option>
+                                    @endforeach
+                                </x-fa::select>
+                            </td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </x-fa::section>
+    @endif
     </fieldset>
 </div>

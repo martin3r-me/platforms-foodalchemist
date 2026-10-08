@@ -201,7 +201,9 @@
                                 </td>
 
                                 @foreach($spalten as $sp)
-                                    @if($sp === 'ziele')
+                                    @if($sp === 'standort')
+                                        <td class="whitespace-nowrap" data-standort>{{ $standortNamen[(int) $a->team_id] ?? '—' }}</td>
+                                    @elseif($sp === 'ziele')
                                         <td class="min-w-[10rem] text-[var(--fa-ink-2)]">
                                             @if($ziele->isEmpty())
                                                 <x-fa::signal tone="warn">Keine Ziele</x-fa::signal>

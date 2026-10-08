@@ -171,6 +171,12 @@
                 @foreach(['draft' => 'Entwurf', 'review' => 'Prüfen', 'approved' => 'Freigeben'] as $wert => $lbl)
                     <x-fa::button size="sm" wire:click="bulkStatus('{{ $wert }}')" data-bulk-status-btn="{{ $wert }}">{{ $lbl }}</x-fa::button>
                 @endforeach
+                {{-- Spec 77d: Auswahl in eine Sammlung (Freigabe an Standorte) --}}
+                @php($sammlungenFuerAuswahl = collect(app(\Platform\FoodAlchemist\Services\InhaltsFreigabeService::class)->sammlungen(\Illuminate\Support\Facades\Auth::user()->currentTeamRelation))->pluck('name', 'id'))
+                @if($sammlungenFuerAuswahl->isNotEmpty())
+                    <x-fa::select size="sm" class="w-48" wire:model="sammlungZiel" :options="$sammlungenFuerAuswahl" placeholder="Sammlung wählen" aria-label="Sammlung" data-bulk-sammlung />
+                    <x-fa::button size="sm" wire:click="zuSammlung" data-bulk-zu-sammlung>Zu Sammlung hinzufügen</x-fa::button>
+                @endif
                 <span class="ml-auto"></span>
                 <x-foodalchemist::ki-action action="bulkAnreichern" variant="ai" icon="heroicon-o-sparkles" label="Mit KI anreichern"
                         title="Beschreibung, Kategorie und Geschmack als Vorschläge zur Prüfung (nie automatisch übernommen)"

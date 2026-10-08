@@ -35,6 +35,15 @@ trait BelongsToTeamHierarchy
         // Sichtbar = globaler Seed (team_id NULL) ODER eigenes Team + Master-Kette (Ancestry bis
         // BHG.DIGITAL). Editierbar bleibt allein das eigene Team (isOwnedBy) — Master/Seed sind
         // für Kind-Teams read-only. In Klammer gruppiert, damit nachfolgende where() nicht am OR hängen.
+        // Spec 77d: Inhalts-Typen (Rezept, Konzept, Format, Paket, Ausgaben) eines Unter-Teams ohne
+        // „übernimmt alles" sehen von oben nur ihre Freigabe-Hülle — Stammdaten bleiben voll geerbt.
+        if (($typ = \Platform\FoodAlchemist\Support\InhaltsFreigabe::typFuerModel(static::class)) !== null) {
+            $tabelle = $query->getModel()->getTable();
+
+            return $query->where(fn (Builder $q) => \Platform\FoodAlchemist\Support\InhaltsFreigabe::anwenden(
+                $q, $col, $tabelle . '.id', $typ, $team, self::teamAncestryIds($team)));
+        }
+
         return $query->where(function (Builder $q) use ($col, $team) {
             $q->whereNull($col)->orWhereIn($col, self::teamAncestryIds($team));
         });

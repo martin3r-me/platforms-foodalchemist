@@ -469,6 +469,7 @@ class Index extends Component
                 return [
                     'id' => (int) $o->id,
                     'order_label' => 'ord-'.(int) $o->id,
+                    'team_id' => (int) $o->team_id,   // Spec 77c: Standort-Spalte bei Team-Brille „alle"
                     'bestelldatum' => $o->created_at?->toDateString(),
                     'supplier_order_number' => $o->supplier_order_number,
                     'invoice_number' => $o->invoice_number,
@@ -539,6 +540,9 @@ class Index extends Component
             ->values();
 
         return view('foodalchemist::livewire.orders.index', [
+            // Spec 77c: Team-Brille „alle" → Standort-Spalte
+            'standortSpalte' => app(\Platform\FoodAlchemist\Services\StandortService::class)->zeigtStandorte($team),
+            'standortNamen' => app(\Platform\FoodAlchemist\Services\StandortService::class)->teamNamen([(int) $team->id, ...app(\Platform\FoodAlchemist\Services\StandortService::class)->unterTeamIds($team)]),
             'liste' => $liste,
             'gruppen' => $gruppen,
             'liefertagGruppen' => $liefertagGruppen,
