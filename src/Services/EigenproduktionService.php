@@ -133,8 +133,12 @@ class EigenproduktionService
             $einzel = FoodAlchemistInventoryBatch::where('team_id', $team->id)->findOrFail((int) $in['batch_id']);
             $chargen = collect([$einzel]);
         } else {
-            $r = FoodAlchemistRecipe::visibleToTeam($team)->findOrFail((int) ($in['recipe_id'] ?? 0));
-            $chargen = $this->offeneChargen($team, (int) $r->id, ! empty($in['location_id']) ? (int) $in['location_id'] : null);
+            // Spec 77d: eigene Chargen bleiben entnehmbar, auch wenn das Rezept (nicht mehr freigegeben) unsichtbar ist —
+            // die Sichtbarkeit wird nur geprüft, wenn es keine eigene offene Charge gibt (ehrliche Fehlermeldung).
+            $chargen = $this->offeneChargen($team, (int) ($in['recipe_id'] ?? 0), ! empty($in['location_id']) ? (int) $in['location_id'] : null);
+            if ($chargen->isEmpty()) {
+                FoodAlchemistRecipe::visibleToTeam($team)->findOrFail((int) ($in['recipe_id'] ?? 0));
+            }
         }
         if ($chargen->isEmpty() || ! $chargen->first()->istOffen()) {
             throw new \RuntimeException('Keine offene Charge im Lager.');

@@ -36,6 +36,13 @@ final class TeamScope
     {
         $ids = self::ancestryIds($team);
 
+        // Spec 77d: Inhalts-Tabellen — dieselbe Hüllen-Regel wie scopeVisibleToTeam
+        $tabelle = str_contains($teamIdColumn, '.') ? strstr($teamIdColumn, '.', true)
+            : (($query instanceof \Illuminate\Database\Eloquent\Builder ? $query->getQuery() : $query)->from ?? '');
+        if ($team !== null && is_string($tabelle) && ($typ = InhaltsFreigabe::typFuerTabelle($tabelle)) !== null) {
+            return $query->where(fn ($q) => InhaltsFreigabe::anwenden($q, $teamIdColumn, $tabelle . '.id', $typ, $team, $ids));
+        }
+
         return $query->where(function ($q) use ($teamIdColumn, $ids) {
             $q->whereNull($teamIdColumn);
             if ($ids !== []) {

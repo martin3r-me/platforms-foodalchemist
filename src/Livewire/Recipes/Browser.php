@@ -273,6 +273,25 @@ class Browser extends Component
         $this->auswahl = [];
     }
 
+    /** Spec 77d: Ziel-Sammlung für „zu Sammlung hinzufügen" (Freigabe an Standorte). */
+    public string $sammlungZiel = '';
+
+    public function zuSammlung(): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        $ids = array_map('intval', array_keys(array_filter($this->auswahl)));
+        if ($team === null || $ids === [] || $this->sammlungZiel === '') {
+            return;
+        }
+        try {
+            $n = app(\Platform\FoodAlchemist\Services\InhaltsFreigabeService::class)->sammlungHinzu($team, (int) $this->sammlungZiel, 'recipe', $ids, Auth::user());
+            $this->dispatch('fa-saved', message: $n . ' Rezept(e) zur Sammlung hinzugefügt.');
+            $this->auswahl = [];
+        } catch (\RuntimeException $e) {
+            $this->dispatch('fa-saved', message: $e->getMessage(), type: 'error');
+        }
+    }
+
     /** Ankunft per Sprung-Link (?gp= / ?rezept=): Detail-Spalte öffnen, auch wenn sie zuletzt zugeklappt war. */
     public bool $sprungDetail = false;
 

@@ -70,6 +70,7 @@ class RecipeModal extends Component
     protected function sperrFreiExtra(): array
     {
         return [
+            'eigeneKopieAnlegen',   // Spec 77d: schreibt ins eigene Team, nicht in dieses Rezept
             'pruefeProduktfotoErgebnis', 'beiZutatenPersistiert', 'beiModalGeschlossen', 'regenerationLaden',
             'ueberarbeitungVerwerfen', 'matchVorschau', 'copilotPruefen', 'copilotAusAblage', 'copilotVerwerfen',
         ];
@@ -140,6 +141,22 @@ class RecipeModal extends Component
 
     /** @var array<string, bool> Legacy-Client-State aus kurzzeitigem Lazy-Tab-Render; bleibt als No-op, bis alte Livewire-Snapshots verschwunden sind. */
     public array $geladeneTabs = ['aufbau' => true];
+
+    /** Spec 77d: geerbtes/freigegebenes Rezept als eigene Kopie ins Team holen und die Kopie öffnen. */
+    public function eigeneKopieAnlegen(): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null || $this->recipeId === null) {
+            return;
+        }
+        try {
+            $kopie = app(\Platform\FoodAlchemist\Services\InhaltsFreigabeService::class)->kopieAnlegen($team, 'recipe', $this->recipeId, Auth::user());
+            $this->oeffnen((int) $kopie->id);
+            $this->dispatch('fa-saved', message: 'Eigene Kopie angelegt.');
+        } catch (\RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+        }
+    }
 
     /**
      * $copilot = Sprung aus dem Signal-Cockpit (Spec 21 · S5b): die abgelegten Befunde
@@ -1324,6 +1341,11 @@ class RecipeModal extends Component
 
         return view('foodalchemist::livewire.recipes.recipe-modal', [
             'sperr' => $this->sperrZustand(),   // Spec 65
+            'herkunft' => $r !== null && $team !== null ? [
+                'fremd' => $r->team_id !== null && ! $r->isOwnedBy($team),
+                'besitzer' => $r->team_id !== null ? \Platform\Core\Models\Team::find($r->team_id)?->name : null,
+                'original_geaendert' => (bool) app(\Platform\FoodAlchemist\Services\InhaltsFreigabeService::class)->originalGeaendert($r),
+            ] : null,
             'behaelterListe' => $vokabular('foodalchemist_vocab_containers'),
             'geraeteListe' => $vokabular('foodalchemist_vocab_regeneration_devices'),
             'neu' => $this->recipeId === null,
