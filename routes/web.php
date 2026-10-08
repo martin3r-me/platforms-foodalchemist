@@ -810,16 +810,8 @@ Route::get('/bestellvorlagen', \Platform\FoodAlchemist\Livewire\Bestellvorlagen\
 // Spec 70 · Etiketten: Seite mit Formular + Live-Vorschau; Druck-HTML | ?pdf=1 (DomPDF) | ?vorschau=1 (für den iframe).
 Route::get('/etiketten', \Platform\FoodAlchemist\Livewire\Etiketten\Index::class)
     ->name('foodalchemist.etiketten.index');
-Route::get('/etiketten/druck', function (\Platform\FoodAlchemist\Services\EtikettService $svc) {
-    $team = \Illuminate\Support\Facades\Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
-    $quelle = (string) request('quelle', 'recipe');
-    abort_unless(in_array($quelle, ['recipe', 'gp', 'stellplatz', 'charge'], true), 404);
-    try {
-        $data = $svc->druck($team, request('vorlage') !== null && request('vorlage') !== '' ? (int) request('vorlage') : null,
-            $quelle, (int) request('id'), (array) request('e', []), (int) request('anzahl', 1), (int) request('startplatz', 1));
-    } catch (\Illuminate\Database\Eloquent\ModelNotFoundException) {
-        abort(404);
-    }
+// Spec 76: gemeinsame Ausgabe (HTML | ?pdf=1) für Einzel- und Sammeldruck
+$faEtikettAusgabe = function (array $data) {
     $data += ['istPdf' => false, 'istVorschau' => request()->boolean('vorschau')];
     if (request()->boolean('pdf')) {
         abort_unless(class_exists(\Barryvdh\DomPDF\Facade\Pdf::class), 500, 'PDF-Export nicht verfügbar.');
@@ -829,7 +821,52 @@ Route::get('/etiketten/druck', function (\Platform\FoodAlchemist\Services\Etiket
     }
 
     return view('foodalchemist::dokumente.etiketten', $data);
+};
+Route::get('/etiketten/druck', function (\Platform\FoodAlchemist\Services\EtikettService $svc) use ($faEtikettAusgabe) {
+    $team = \Illuminate\Support\Facades\Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
+    $quelle = (string) request('quelle', 'recipe');
+    abort_unless(in_array($quelle, ['recipe', 'gp', 'stellplatz', 'charge'], true), 404);
+    $vorlage = request('vorlage') !== null && request('vorlage') !== '' ? (int) request('vorlage') : null;
+    try {
+        $data = $svc->druck($team, $vorlage, $quelle, (int) request('id'), (array) request('e', []), (int) request('anzahl', 1), (int) request('startplatz', 1));
+    } catch (\Illuminate\Database\Eloquent\ModelNotFoundException) {
+        abort(404);
+    }
+    if (! request()->boolean('vorschau')) {   // Spec 76: Druckprotokoll (Vorschau-iframe zählt nicht)
+        $svc->protokollieren($team, \Illuminate\Support\Facades\Auth::id(), [['quelle' => $quelle, 'id' => (int) request('id'), 'eingabe' => (array) request('e', []), 'anzahl' => (int) request('anzahl', 1)]], $vorlage);
+    }
+
+    return $faEtikettAusgabe($data);
 })->name('foodalchemist.etiketten.druck');
+// Spec 76: Sammeldruck aus der Produktion (zeilen[line_id][an|anzahl|menge]; ohne Auswahl = Vorschlag)
+Route::get('/etiketten/produktion/{order}', function (int $order, \Platform\FoodAlchemist\Services\EtikettService $svc) use ($faEtikettAusgabe) {
+    $team = \Illuminate\Support\Facades\Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
+    try {
+        $pos = $svc->produktionPositionen($team, $order, request()->has('zeilen') ? (array) request('zeilen') : null);
+        abort_if($pos === [], 422, 'Keine Basisrezepte ausgewählt.');
+        $vorlage = request('vorlage') !== null && request('vorlage') !== '' ? (int) request('vorlage') : null;
+        $data = $svc->druckListe($team, $vorlage, $pos, (int) request('startplatz', 1));
+    } catch (\Illuminate\Database\Eloquent\ModelNotFoundException) {
+        abort(404);
+    }
+    if (! request()->boolean('pdf')) {
+        $svc->protokollieren($team, \Illuminate\Support\Facades\Auth::id(), $pos, $vorlage, true, $order);
+    }
+
+    return $faEtikettAusgabe($data);
+})->name('foodalchemist.etiketten.produktion');
+// Spec 76: Sammeldruck aus dem Protokoll nochmal drucken
+Route::get('/etiketten/gruppe/{gruppe}', function (string $gruppe, \Platform\FoodAlchemist\Services\EtikettService $svc) use ($faEtikettAusgabe) {
+    $team = \Illuminate\Support\Facades\Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
+    $pos = $svc->gruppenPositionen($team, $gruppe);
+    abort_if($pos === [], 404);
+    $data = $svc->druckListe($team, $pos[0]['vorlage'] ?? null, $pos, (int) request('startplatz', 1));
+    if (! request()->boolean('pdf') && ! request()->boolean('vorschau')) {
+        $svc->protokollieren($team, \Illuminate\Support\Facades\Auth::id(), $pos, $pos[0]['vorlage'] ?? null, true, $pos[0]['production_order_id'] ?? null);
+    }
+
+    return $faEtikettAusgabe($data);
+})->name('foodalchemist.etiketten.gruppe');
 
 // Spec 66 · Lager (Stufe 1): Bestand, Bewegungen, Inventuren.
 Route::get('/lager', \Platform\FoodAlchemist\Livewire\Lager\Index::class)

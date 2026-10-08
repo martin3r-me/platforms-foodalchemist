@@ -417,7 +417,7 @@
                     <div class="grid gap-3 md:grid-cols-3">
                         <x-fa::field :label="'Menge (' . $einlagern['einheit'] . ')'" for="ep-menge"><x-fa::input id="ep-menge" wire:model="einlagern.menge" inputmode="decimal" class="w-28 text-right" data-lager-einlagern-menge /></x-fa::field>
                         <x-fa::field label="Lagerort" for="ep-ort"><x-fa::select id="ep-ort" wire:model="einlagern.location_id" :options="$orte->pluck('name', 'id')" placeholder="Standardlager" /></x-fa::field>
-                        <x-fa::field label="Lagerart" for="ep-art"><x-fa::select id="ep-art" wire:model.live="einlagern.lagerart" :options="\Platform\FoodAlchemist\Services\EigenproduktionService::LAGERARTEN" /></x-fa::field>
+                        <x-fa::field label="Lagerart" for="ep-art"><x-fa::select id="ep-art" wire:model.live="einlagern.lagerart" :options="! empty($einlagern['lagerarten']) ? array_intersect_key(\Platform\FoodAlchemist\Services\EigenproduktionService::LAGERARTEN, array_flip($einlagern['lagerarten'])) : \Platform\FoodAlchemist\Services\EigenproduktionService::LAGERARTEN" /></x-fa::field>
                         <x-fa::field label="Hergestellt am" for="ep-prod"><x-fa::input id="ep-prod" type="date" wire:model="einlagern.produziert_am" /></x-fa::field>
                         @if(($einlagern['lagerart'] ?? '') === 'tiefgekuehlt')
                             <x-fa::field label="Eingefroren am" for="ep-tk" hint="leer = Herstelldatum"><x-fa::input id="ep-tk" type="date" wire:model="einlagern.eingefroren_am" /></x-fa::field>

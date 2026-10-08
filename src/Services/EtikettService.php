@@ -192,7 +192,7 @@ class EtikettService
         $kat = app(ConcepterAggregateService::class)->kennzeichnungKatalog();
         $heute = now()->startOfDay();
         $d = ['quelle' => $quelle, 'bezeichnung' => '', 'zusatz' => null, 'zutaten' => [], 'allergene' => [], 'spuren' => [], 'zusatzstoffe' => [],
-            'allergene_unbekannt' => false, 'inhalt' => [], 'haltbar_gekuehlt' => null, 'haltbar_tk' => null, 'lagerung' => null];
+            'allergene_unbekannt' => false, 'inhalt' => [], 'haltbar_gekuehlt' => null, 'haltbar_tk' => null, 'lagerung' => null, 'lagerarten' => [], 'haltbar' => []];
 
         if ($quelle === 'recipe') {
             $r = FoodAlchemistRecipe::visibleToTeam($team)->with('ingredients.gp', 'ingredients.referencedRecipe')->findOrFail($id);
@@ -215,7 +215,10 @@ class EtikettService
             $d['zutaten'] = $this->zutatenliste($team, $r);
             $d['haltbar_gekuehlt'] = $r->shelf_life_chilled_days;
             $d['haltbar_tk'] = $r->shelf_life_frozen_days;
-            $d['lagerung'] = $r->storage_type ?: 'gekuehlt';   // übliche Lagerart des Rezepts
+            // Spec 76: Lagerarten kommen aus dem Rezept (Mehrfachauswahl); das Etikett wählt nur noch aus ihnen
+            $d['lagerarten'] = $r->lagerarten() ?: array_keys(self::LAGERUNG);
+            $d['haltbar'] = collect(array_keys(self::LAGERUNG))->mapWithKeys(fn ($a) => [$a => $r->haltbarTage($a)])->all();
+            $d['lagerung'] = $r->standardLagerart();
         } elseif ($quelle === 'gp') {
             $gp = FoodAlchemistGp::visibleToTeam($team)->with('leadLa')->findOrFail($id);
             $agg = app(GpAggregateService::class);
@@ -267,9 +270,8 @@ class EtikettService
         $geoeffnet = $datum('geoeffnet_am') ?? ($quelle === 'gp' ? $heute : null);
         $bis = $datum('verbrauchen_bis');
         if ($bis === null && $quelle === 'recipe') {
-            $bis = $d['lagerung'] === 'tiefgekuehlt'
-                ? ($d['haltbar_tk'] !== null ? ($eingefroren ?? $heute)->copy()->addDays((int) $d['haltbar_tk']) : null)
-                : ($d['haltbar_gekuehlt'] !== null ? ($hergestellt ?? $heute)->copy()->addDays((int) $d['haltbar_gekuehlt']) : null);
+            $tage = $d['haltbar'][$d['lagerung']] ?? null;   // Spec 76: Haltbarkeit der gewählten Lagerart
+            $bis = $tage !== null ? ($d['lagerung'] === 'tiefgekuehlt' ? ($eingefroren ?? $heute) : ($hergestellt ?? $heute))->copy()->addDays((int) $tage) : null;
         }
         $d['datum'] = ['hergestellt_am' => $hergestellt, 'eingefroren_am' => $eingefroren, 'geoeffnet_am' => $geoeffnet, 'verbrauchen_bis' => $bis];
 
@@ -331,15 +333,154 @@ class EtikettService
         $format = self::FORMATE[$v->format] ?? self::FORMATE['a4_24'];
         $platz = $format['bogen'] ? $format['spalten'] * $format['zeilen'] : 1;
 
+        return $this->druckListe($team, $vorlageId, [['quelle' => $quelle, 'id' => $id, 'eingabe' => $eingabe, 'anzahl' => $anzahl]], $startplatz);
+    }
+
+    /**
+     * Spec 76: mehrere Etiketten in einem Druck (Sammeldruck, z. B. alle Basisrezepte eines Produktionsauftrags).
+     * `liste` = jedes einzelne Etikett in Reihenfolge (Position × Anzahl); `daten` = erstes (Titel, Kompatibilität).
+     *
+     * @param  list<array{quelle:string, id:int, eingabe?:array, anzahl?:int}>  $positionen
+     */
+    public function druckListe(Team $team, ?int $vorlageId, array $positionen, int $startplatz = 1): array
+    {
+        $v = $this->vorlage($team, $vorlageId);
+        $format = self::FORMATE[$v->format] ?? self::FORMATE['a4_24'];
+        $platz = $format['bogen'] ? $format['spalten'] * $format['zeilen'] : 1;
+        $liste = [];
+        foreach ($positionen as $p) {
+            $d = $this->daten($team, (string) $p['quelle'], (int) $p['id'], (array) ($p['eingabe'] ?? []), $v);
+            foreach (range(1, max(1, min(500, (int) ($p['anzahl'] ?? 1)))) as $_) {
+                $liste[] = $d;
+            }
+            if (count($liste) >= 1000) {
+                break;
+            }
+        }
+        if ($liste === []) {
+            throw new \RuntimeException('Keine Etiketten ausgewählt.');
+        }
+
         return [
             'vorlage' => $v,
             'format' => $format,
             'felder' => array_values(array_filter($this->normalisiereFelder((string) $v->typ, $v->felder), fn ($f) => $f['an'])),
-            'daten' => $this->daten($team, $quelle, $id, $eingabe, $v),
-            'anzahl' => max(1, min(500, $anzahl)),
+            'daten' => $liste[0],
+            'liste' => $liste,
+            'anzahl' => count($liste),
             'startplatz' => $format['bogen'] ? max(1, min($platz, $startplatz)) : 1,
             'optik' => $this->optik($team, $v),
         ];
+    }
+
+    // ── Druckprotokoll (Spec 76) ────────────────────────────────────────────
+
+    /**
+     * Druck festhalten. Einzeldruck: gleiche Person + gleiche Angaben innerhalb 2 Minuten zählt nicht doppelt (Neuladen).
+     *
+     * @param  list<array{quelle:string, id:int, eingabe?:array, anzahl?:int}>  $positionen
+     * @return string|null Gruppe (nur Sammeldruck)
+     */
+    public function protokollieren(Team $team, ?int $userId, array $positionen, ?int $vorlageId, bool $sammel = false, ?int $productionOrderId = null): ?string
+    {
+        $v = $this->vorlage($team, $vorlageId);
+        $gruppe = $sammel ? (string) \Illuminate\Support\Str::uuid() : null;
+        foreach ($positionen as $p) {
+            $eingabe = array_filter((array) ($p['eingabe'] ?? []), fn ($x) => $x !== null && $x !== '');
+            $anzahl = max(1, min(500, (int) ($p['anzahl'] ?? 1)));
+            if (! $sammel && \Platform\FoodAlchemist\Models\FoodAlchemistLabelPrint::where('team_id', $team->id)->where('user_id', $userId)
+                ->where('quelle', $p['quelle'])->where('bezug_id', (int) $p['id'])->whereNull('gruppe')->where('anzahl', $anzahl)
+                ->where('created_at', '>=', now()->subMinutes(2))->get(['eingabe'])->contains(fn ($r) => (array) $r->eingabe == $eingabe)) {
+                continue;
+            }
+            $d = $this->daten($team, (string) $p['quelle'], (int) $p['id'], $eingabe, $v);
+            \Platform\FoodAlchemist\Models\FoodAlchemistLabelPrint::create([
+                'team_id' => $team->id, 'user_id' => $userId, 'gruppe' => $gruppe, 'quelle' => (string) $p['quelle'], 'bezug_id' => (int) $p['id'],
+                'label_template_id' => $v->id, 'anzahl' => $anzahl, 'eingabe' => $eingabe ?: null,
+                'bezeichnung' => mb_substr((string) $d['bezeichnung'], 0, 160), 'lagerung' => $d['lagerung'] ?? null,
+                'verbrauchen_bis' => $d['datum']['verbrauchen_bis'] ?? null, 'charge' => $d['charge'] ?? null, 'production_order_id' => $productionOrderId,
+            ]);
+        }
+
+        return $gruppe;
+    }
+
+    /** Positionen eines Sammeldrucks (für „nochmal drucken"). @return list<array> */
+    public function gruppenPositionen(Team $team, string $gruppe): array
+    {
+        return \Platform\FoodAlchemist\Models\FoodAlchemistLabelPrint::where('team_id', $team->id)->where('gruppe', $gruppe)->orderBy('id')->get()
+            ->map(fn ($r) => ['quelle' => $r->quelle, 'id' => (int) $r->bezug_id, 'eingabe' => (array) ($r->eingabe ?? []), 'anzahl' => (int) $r->anzahl,
+                'vorlage' => $r->label_template_id, 'production_order_id' => $r->production_order_id])->all();
+    }
+
+    /**
+     * Verlauf: Einzeldrucke + Sammeldrucke (eine Zeile je Gruppe), neueste zuerst.
+     *
+     * @return list<array{id:int, wann:string, wer:?string, titel:string, details:string, anzahl:int, url:string}>
+     */
+    public function verlauf(Team $team, int $limit = 30): array
+    {
+        $zeilen = \Platform\FoodAlchemist\Models\FoodAlchemistLabelPrint::where('team_id', $team->id)->with('user:id,name')
+            ->latest('id')->limit($limit * 6)->get();
+        $out = [];
+        $gesehen = [];
+        $lag = self::LAGERUNG;
+        foreach ($zeilen as $r) {
+            if ($r->gruppe !== null) {
+                if (isset($gesehen[$r->gruppe])) {
+                    continue;
+                }
+                $gesehen[$r->gruppe] = true;
+                $teile = $zeilen->where('gruppe', $r->gruppe);
+                $out[] = ['id' => (int) $r->id, 'wann' => $r->created_at?->format('d.m. H:i') ?? '', 'wer' => $r->user?->name,
+                    'titel' => 'Sammeldruck: ' . $teile->count() . ' Rezept(e)', 'details' => $teile->pluck('bezeichnung')->take(4)->implode(', ') . ($teile->count() > 4 ? ' …' : ''),
+                    'anzahl' => (int) $teile->sum('anzahl'), 'url' => route('foodalchemist.etiketten.gruppe', ['gruppe' => $r->gruppe])];
+            } else {
+                $out[] = ['id' => (int) $r->id, 'wann' => $r->created_at?->format('d.m. H:i') ?? '', 'wer' => $r->user?->name,
+                    'titel' => (string) $r->bezeichnung,
+                    'details' => trim(implode(' · ', array_filter([$r->lagerung ? ($lag[$r->lagerung] ?? $r->lagerung) : null,
+                        $r->verbrauchen_bis ? 'bis ' . $r->verbrauchen_bis->format('d.m.Y') : null, $r->charge ? 'Charge ' . $r->charge : null]))),
+                    'anzahl' => (int) $r->anzahl,
+                    'url' => $this->druckUrl($r->quelle, (int) $r->bezug_id, $r->label_template_id, (array) ($r->eingabe ?? []), (int) $r->anzahl)];
+            }
+            if (count($out) >= $limit) {
+                break;
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Spec 76: Sammeldruck aus einem Produktionsauftrag — Basisrezept-Zeilen (nicht gestrichen). Standard: je Ansatz
+     * ein Etikett mit der Menge eines Ansatzes, hergestellt = Produktionstag. $auswahl[line_id] = [an, anzahl, menge].
+     *
+     * @return list<array{quelle:string, id:int, eingabe:array, anzahl:int, line_id:int, name:string}>
+     */
+    public function produktionPositionen(Team $team, int $orderId, ?array $auswahl = null): array
+    {
+        $order = \Platform\FoodAlchemist\Models\FoodAlchemistProductionOrder::visibleToTeam($team)->with('lines')->findOrFail($orderId);
+        $out = [];
+        foreach ($order->lines->sortBy('position') as $l) {
+            if (! $l->is_basisrezept || $l->is_struck || $l->recipe_id === null) {
+                continue;
+            }
+            $ans = max(0.0, (float) $l->ansaetze_effektiv);
+            $jeAnsatz = $l->basis_yield_kg !== null ? (float) $l->basis_yield_kg : null;
+            $vorschlag = ['an' => true, 'anzahl' => max(1, (int) ceil($ans - 1e-9)), 'menge' => $jeAnsatz !== null ? rtrim(rtrim(number_format($jeAnsatz, 3, ',', ''), '0'), ',') . ' kg' : ''];
+            $w = $auswahl !== null ? ($auswahl[$l->id] ?? ['an' => false]) : $vorschlag;
+            if (empty($w['an'])) {
+                continue;
+            }
+            $eingabe = ['hergestellt_am' => $order->production_date?->toDateString()];
+            if (trim((string) ($w['menge'] ?? '')) !== '') {
+                $eingabe['menge'] = trim((string) $w['menge']);
+            }
+            $out[] = ['quelle' => 'recipe', 'id' => (int) $l->recipe_id, 'eingabe' => array_filter($eingabe), 'anzahl' => max(1, min(200, (int) ($w['anzahl'] ?? $vorschlag['anzahl']))),
+                'line_id' => (int) $l->id, 'name' => $l->anzeigeName(), 'vorschlag' => $vorschlag];
+        }
+
+        return $out;
     }
 
     /** Gestaltung: Akzentfarbe + Schrift aus dem Design, Logo vom Betrieb. Druck auf weißem Papier. */

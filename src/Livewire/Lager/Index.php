@@ -355,7 +355,7 @@ class Index extends Component
         $this->einlagern = [
             'recipe_id' => $r->id, 'name' => $r->name, 'einheit' => $eigen->anzeigeEinheit($eigen->einheit($r)),
             'menge' => $this->einlagern['menge'] ?? '', 'location_id' => $this->einlagern['location_id'] ?? ($this->lagerortId ?: ''),
-            'lagerart' => $r->storage_type ?: 'gekuehlt', 'produziert_am' => now()->toDateString(), 'eingefroren_am' => '', 'verbrauchen_bis' => '', 'notiz' => '',
+            'lagerart' => $r->standardLagerart(), 'lagerarten' => $r->lagerarten(), 'produziert_am' => now()->toDateString(), 'eingefroren_am' => '', 'verbrauchen_bis' => '', 'notiz' => '',
             'production_order_line_id' => $this->einlagern['production_order_line_id'] ?? null,
         ];
         $this->einlagernSuche = '';

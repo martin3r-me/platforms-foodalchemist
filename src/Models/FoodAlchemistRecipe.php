@@ -33,6 +33,7 @@ class FoodAlchemistRecipe extends Model
         'uuid' => 'string',
         'status' => RecipeStatus::class,
         'is_sales_recipe' => 'boolean',
+        'storage_types' => 'array',          // Spec 76: mögliche Lagerarten (Mehrfachauswahl)
         'is_template' => 'boolean',
         'is_split_result' => 'boolean',
         'is_user_stub' => 'boolean',
@@ -382,5 +383,46 @@ class FoodAlchemistRecipe extends Model
     public function feedbacks(): HasMany
     {
         return $this->hasMany(FoodAlchemistRecipeFeedback::class, 'recipe_id')->latest();
+    }
+
+    // ── Spec 76: Lagerarten (Mehrfachauswahl) ─────────────────────────────────
+
+    public const LAGERARTEN = ['gekuehlt', 'tiefgekuehlt', 'trocken'];
+
+    /** Mögliche Lagerarten. Ohne Angabe abgeleitet aus Standard-Lagerart + vorhandenen Haltbarkeiten. @return list<string> */
+    public function lagerarten(): array
+    {
+        $explizit = array_values(array_intersect(self::LAGERARTEN, (array) ($this->storage_types ?? [])));
+        if ($explizit !== []) {
+            return $explizit;
+        }
+
+        return array_values(array_filter(self::LAGERARTEN, fn ($a) => $this->storage_type === $a
+            || ($a === 'gekuehlt' && $this->shelf_life_chilled_days !== null)
+            || ($a === 'tiefgekuehlt' && $this->shelf_life_frozen_days !== null)
+            || ($a === 'trocken' && $this->shelf_life_dry_days !== null)));
+    }
+
+    /** Standard-Lagerart: storage_type, sofern möglich; sonst die erste mögliche; sonst gekühlt. */
+    public function standardLagerart(): string
+    {
+        $arten = $this->lagerarten();
+        if ($this->storage_type !== null && ($arten === [] || in_array($this->storage_type, $arten, true))) {
+            return (string) $this->storage_type;
+        }
+
+        return $arten[0] ?? 'gekuehlt';
+    }
+
+    /** Haltbarkeit in Tagen je Lagerart (TK: ab Einfrieren). */
+    public function haltbarTage(string $lagerart): ?int
+    {
+        $v = match ($lagerart) {
+            'tiefgekuehlt' => $this->shelf_life_frozen_days,
+            'trocken' => $this->shelf_life_dry_days,
+            default => $this->shelf_life_chilled_days,
+        };
+
+        return $v !== null ? (int) $v : null;
     }
 }

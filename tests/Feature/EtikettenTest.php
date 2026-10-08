@@ -104,14 +104,18 @@ it('Druckansicht: A4-Bogen mit Startplatz, Handschreib-Linie, PDF; Stellplatz-Et
     $this->get($this->svc->druckUrl('stellplatz', $bin->id))->assertNotFound();
 });
 
-it('Seite: Rezept wählen, Haltbarkeit am Rezept speichern, Druck-Link; Einstellungen: Vorlage speichern', function () {
-    Livewire::test(EtikettenIndex::class)
+it('Seite: Rezept wählen, Lagerart aus dem Rezept, Menge als Zahl + Einheit; Einstellungen: Vorlage speichern', function () {
+    // Spec 76: Haltbarkeit wird am Rezept gepflegt, das Etikett wählt nur noch aus den Lagerarten des Rezepts
+    $this->suppe->update(['storage_types' => ['gekuehlt', 'tiefgekuehlt'], 'shelf_life_frozen_days' => 90]);
+    $lw = Livewire::test(EtikettenIndex::class)
         ->set('suchArt', 'recipe')->set('suche', 'Kürbis')->assertSee('Suppe: Kürbissuppe')
         ->call('waehlen', 'recipe', $this->suppe->id)
-        ->assertSet('haltbarGekuehlt', '3')
-        ->assertSee('Etikett-Vorschau')
-        ->set('haltbarGekuehlt', '4')->call('haltbarkeitSpeichern')->assertSet('fehler', null);
-    expect($this->suppe->refresh()->shelf_life_chilled_days)->toBe(4);
+        ->assertSee('Etikett-Vorschau')->assertSee('Zum Rezept')->assertDontSee('Lagerung & Haltbarkeit am Rezept')
+        ->assertSet('mengeEinheit', 'kg')
+        ->set('mengeZahl', '2,5')->assertSet('e.menge', '2,5 kg')
+        ->set('mengeEinheit', 'l')->assertSet('e.menge', '2,5 l')
+        ->call('$set', 'e.lagerung', 'tiefgekuehlt');
+    expect($lw->html())->toContain('data-etikett-lagerart="tiefgekuehlt"')->not->toContain('data-etikett-lagerart="trocken"');
 
     $lw = Livewire::test(EtikettenSettings::class)
         ->set('form.name', 'Kühlhaus')->set('form.format', 'a4_40')->call('speichern')->assertSet('fehler', null);
@@ -154,4 +158,81 @@ it('Übliche Lagerart am Rezept: Speichern über RecipeService/MCP, Etikett übe
     $this->suppe->forceFill(['status' => 'draft'])->save();   // freigegebene Rezepte sind für die KI gesperrt (kiEditGesperrt)
     $put = $reg->get('foodalchemist.recipes.PUT')->execute(['recipe_id' => $this->suppe->id, 'storage_type' => 'trocken'], new ToolContext($this->user, $this->rootTeam));
     expect($put->success)->toBeTrue()->and($this->suppe->refresh()->storage_type)->toBe('trocken');
+});
+
+it('Spec 76: Lagerarten am Rezept — Mehrfachauswahl, Standard, Haltbarkeit je Lagerart, Etikett + Einlagern', function () {
+    $r = $this->suppe;
+    // Ableitung ohne explizite Auswahl: Standard + Lagerarten mit Haltbarkeit
+    $r->update(['storage_types' => null, 'storage_type' => null, 'shelf_life_chilled_days' => 3, 'shelf_life_frozen_days' => null]);
+    expect($r->refresh()->lagerarten())->toBe(['gekuehlt'])->and($r->standardLagerart())->toBe('gekuehlt');
+
+    $r->update(['storage_types' => ['tiefgekuehlt', 'trocken'], 'storage_type' => 'tiefgekuehlt', 'shelf_life_frozen_days' => 60, 'shelf_life_dry_days' => 10]);
+    $r->refresh();
+    expect($r->lagerarten())->toBe(['tiefgekuehlt', 'trocken'])->and($r->standardLagerart())->toBe('tiefgekuehlt')->and($r->haltbarTage('trocken'))->toBe(10);
+
+    $d = $this->svc->daten($this->rootTeam, 'recipe', $r->id, ['hergestellt_am' => '2026-10-01', 'eingefroren_am' => '2026-10-02']);
+    expect($d['lagerung'])->toBe('tiefgekuehlt')->and($d['lagerarten'])->toBe(['tiefgekuehlt', 'trocken'])
+        ->and($d['datum']['verbrauchen_bis']->toDateString())->toBe('2026-12-01');                 // 02.10. + 60 Tage
+    $t = $this->svc->daten($this->rootTeam, 'recipe', $r->id, ['lagerung' => 'trocken', 'hergestellt_am' => '2026-10-01']);
+    expect($t['datum']['verbrauchen_bis']->toDateString())->toBe('2026-10-11');                    // trocken: 01.10. + 10
+
+    $b = app(\Platform\FoodAlchemist\Services\EigenproduktionService::class)->einlagern($this->rootTeam, ['recipe_id' => $r->id, 'menge' => 1, 'produziert_am' => '2026-10-01', 'lagerart' => 'trocken']);
+    expect($b->best_before->toDateString())->toBe('2026-10-11');
+});
+
+it('Spec 76: Rezept-Editor speichert Lagerarten (Mehrfachauswahl) und Standard; MCP recipes.PUT', function () {
+    $r = $this->suppe;
+    $r->update(['status' => 'draft']);
+    Livewire::test(\Platform\FoodAlchemist\Livewire\Recipes\RecipeModal::class)
+        ->call('oeffnen', $r->id)
+        ->set('form.storage_types', ['gekuehlt', 'tiefgekuehlt'])->set('form.storage_type', 'trocken')   // Standard nicht erlaubt → erste
+        ->set('form.shelf_life_frozen_days', 90)
+        ->call('speichern');
+    $r->refresh();
+    expect($r->storage_types)->toBe(['gekuehlt', 'tiefgekuehlt'])->and($r->storage_type)->toBe('gekuehlt')->and((int) $r->shelf_life_frozen_days)->toBe(90);
+
+    $res = app(ToolRegistry::class)->get('foodalchemist.recipes.PUT')->execute(['recipe_id' => $r->id, 'storage_types' => ['trocken'], 'shelf_life_dry_days' => 30, 'storage_type' => 'trocken'], new ToolContext($this->user, $this->rootTeam));
+    expect($res->success)->toBeTrue()->and($r->refresh()->lagerarten())->toBe(['trocken'])->and((int) $r->shelf_life_dry_days)->toBe(30);
+});
+
+it('Spec 76: Druckprotokoll — Einzeldruck wird festgehalten (Vorschau nicht, Neuladen nicht doppelt), nochmal drucken', function () {
+    $url = $this->svc->druckUrl('recipe', $this->suppe->id, null, ['menge' => '2 kg'], 3);
+    $this->get($url . '&vorschau=1')->assertOk();
+    expect(\Platform\FoodAlchemist\Models\FoodAlchemistLabelPrint::count())->toBe(0);
+    $this->get($url)->assertOk();
+    $this->get($url)->assertOk();                                               // Neuladen
+    $p = \Platform\FoodAlchemist\Models\FoodAlchemistLabelPrint::sole();
+    expect($p->bezeichnung)->toBe('Kürbissuppe')->and($p->anzahl)->toBe(3)->and($p->eingabe)->toBe(['menge' => '2 kg']);
+    $v = $this->svc->verlauf($this->rootTeam);
+    expect($v[0]['titel'])->toBe('Kürbissuppe')->and($v[0]['url'])->toContain('anzahl=3');
+    Livewire::test(EtikettenIndex::class)->assertSee('Zuletzt gedruckt')->assertSee('Nochmal drucken');
+});
+
+it('Spec 76: Sammeldruck aus der Produktion — Basisrezepte je Ansatz, Auswahl, Protokoll als Gruppe, nochmal drucken', function () {
+    $prod = app(\Platform\FoodAlchemist\Services\ProductionOrderService::class);
+    $order = $prod->saveNew($this->rootTeam, '2026-10-20', 'Bankett', [['recipe_id' => $this->suppe->id, 'amount_kg' => 4, 'source_ref' => 'r:s']]);
+    $pos = $this->svc->produktionPositionen($this->rootTeam, $order->id);
+    $suppe = collect($pos)->firstWhere('id', $this->suppe->id);
+    $zeile = $order->lines()->where('recipe_id', $this->suppe->id)->first();
+    $mengeJe = rtrim(rtrim(number_format((float) $zeile->basis_yield_kg, 3, ',', ''), '0'), ',') . ' kg';
+    expect($suppe['anzahl'])->toBe((int) ceil((float) $zeile->ansaetze_effektiv - 1e-9))         // je Ansatz ein Etikett
+        ->and($suppe['eingabe'])->toMatchArray(['hergestellt_am' => '2026-10-20', 'menge' => $mengeJe]);
+
+    $html = $this->get(route('foodalchemist.etiketten.produktion', ['order' => $order->id]))->assertOk()->getContent();
+    expect(substr_count($html, 'Kürbissuppe'))->toBeGreaterThanOrEqual(2);
+    $gruppe = \Platform\FoodAlchemist\Models\FoodAlchemistLabelPrint::whereNotNull('gruppe')->value('gruppe');
+    expect($gruppe)->not->toBeNull()->and(\Platform\FoodAlchemist\Models\FoodAlchemistLabelPrint::where('gruppe', $gruppe)->value('production_order_id'))->toBe($order->id);
+
+    // Auswahl: Suppe abgewählt → nur der Rest
+    $lineId = $suppe['line_id'];
+    // wie das Formular: Häkchen nur bei ausgewählten Zeilen, Anzahl/Menge immer
+    $zeilen = collect($pos)->mapWithKeys(fn ($p) => [$p['line_id'] => ['anzahl' => 1, 'menge' => ''] + ($p['line_id'] === $lineId ? [] : ['an' => 1])])->all();
+    $ohne = $this->get(route('foodalchemist.etiketten.produktion', ['order' => $order->id, 'zeilen' => $zeilen]));
+    count($pos) > 1 ? $ohne->assertOk()->assertDontSee('Kürbissuppe') : $ohne->assertStatus(422);
+
+    expect($this->svc->verlauf($this->rootTeam)[0]['titel'])->toContain('Sammeldruck');
+    $this->get(route('foodalchemist.etiketten.gruppe', ['gruppe' => $gruppe]))->assertOk()->assertSee('Kürbissuppe');
+
+    \Livewire\Livewire::test(\Platform\FoodAlchemist\Livewire\Produktion\Editor::class)->call('oeffnenBearbeiten', $order->id)
+        ->assertSee('Etiketten für diesen Auftrag')->assertSee('data-produktion-etikett', false);
 });

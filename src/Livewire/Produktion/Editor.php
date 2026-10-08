@@ -846,6 +846,11 @@ class Editor extends Component
             'kapitelBaum' => $kapitelBaum,
             'variantGroups' => $variantGroups,
             'ops' => $ops,
+            // Spec 76: Sammeldruck — Basisrezepte des Auftrags mit Vorschlag (je Ansatz ein Etikett)
+            'etikettenVorschlag' => $ops !== null && ($ops['id'] ?? null) !== null && \Illuminate\Support\Facades\Route::has('foodalchemist.etiketten.produktion')
+                ? app(\Platform\FoodAlchemist\Services\EtikettService::class)->produktionPositionen(Auth::user()->currentTeamRelation, (int) $ops['id'])
+                : [],
+            'etikettVorlagen' => Auth::user()?->currentTeamRelation ? app(\Platform\FoodAlchemist\Services\EtikettService::class)->vorlagen(Auth::user()->currentTeamRelation)->pluck('name', 'id') : collect(),
             'erlaubteStatus' => $erlaubteStatus,
             'verknuepfteOrders' => $verknuepfteOrders,
             'zielUebergaben' => $zielUebergaben,
