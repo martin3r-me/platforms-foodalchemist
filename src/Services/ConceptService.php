@@ -144,6 +144,9 @@ class ConceptService
     /** Concept-Status setzen (draft|active|archiviert) — Inline-Pflege aus dem Browser. */
     public function setStatus(Team $team, int $id, string $status): void
     {
+        // Spec 77a: ab Kuratieren (Mitglied); ohne angemeldeten Benutzer (System) keine Prüfung
+        app(\Platform\FoodAlchemist\Services\FaRechte::class)->pruefeAngemeldet($team, \Platform\FoodAlchemist\Enums\FaRolle::Kuratieren, 'Konzept-Status setzen');
+
         if (! in_array($status, ['draft', 'active', 'archiviert'], true)) {
             throw new \RuntimeException("Unbekannter Konzept-Status „{$status}“.");
         }

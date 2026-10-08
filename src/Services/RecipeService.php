@@ -489,7 +489,12 @@ class RecipeService
 
     public function setStatus(Team $team, int $id, string $status): FoodAlchemistRecipe
     {
+        // Spec 77a: ab Kuratieren und nur für eigene Rezepte — sichtbar (geerbt/Master) heißt nicht änderbar.
+        app(\Platform\FoodAlchemist\Services\FaRechte::class)->pruefeAngemeldet($team, \Platform\FoodAlchemist\Enums\FaRolle::Kuratieren, 'Rezept-Status setzen');
         $recipe = FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($id);
+        if (! $recipe->isOwnedBy($team)) {
+            throw new \RuntimeException('Dieses Rezept gehört einem anderen Team (geerbt oder Master) — Status hier nicht änderbar. Für Änderungen eine eigene Kopie anlegen.');
+        }
         if (\Platform\FoodAlchemist\Enums\RecipeStatus::tryFrom($status) === null) {
             throw new \RuntimeException("Unbekannter Status [{$status}].");
         }

@@ -145,6 +145,9 @@ class SupplierService
     /** R9.1 (E1): Beziehungs-Status setzen (aktiv/zweitquelle/gesperrt), nur Besitzer-Team. */
     public function setStatus(Team $team, int $id, SupplierStatus|string $status): FoodAlchemistSupplier
     {
+        // Spec 77a: ab Kuratieren (Mitglied); ohne angemeldeten Benutzer (System) keine Prüfung
+        app(\Platform\FoodAlchemist\Services\FaRechte::class)->pruefeAngemeldet($team, \Platform\FoodAlchemist\Enums\FaRolle::Kuratieren, 'Lieferanten-Status setzen');
+
         $supplier = $this->ownedOrFail($team, $id);
         $wert = $status instanceof SupplierStatus ? $status : (SupplierStatus::tryFrom($status)
             ?? throw new \RuntimeException("Unbekannter Status [{$status}]. Erlaubt: aktiv, zweitquelle, gesperrt."));

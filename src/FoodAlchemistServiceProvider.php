@@ -1248,7 +1248,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     try {
                         $tool = new $toolClass();
                         if (! $registry->has($tool->getName())) {
-                            $registry->register($tool);
+                            // Spec 77a: jedes FA-Tool in die Rechte-Hülle (schreibend ab Kuratieren)
+                            $registry->register(new \Platform\FoodAlchemist\Tools\FaRechteToolHuelle($tool));
                         }
                     } catch (\Throwable) {
                         // Tool-Registrierung darf den Boot nie reißen

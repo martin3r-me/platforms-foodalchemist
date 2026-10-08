@@ -148,9 +148,8 @@ it('Abschließen ohne Lieferscheinposition bucht 0 statt der Bestellmenge; Nachl
 });
 
 it('Rechte aus der Plattform-Rolle: Betrachter liest, Mitglied bucht, Admin im Unter-Team, KI nie Freigeben', function () {
-    $leser = $this->makeUser($this->rootTeam, 'Leser');
-    DB::table('team_user')->insert(['team_id' => $this->rootTeam->id, 'user_id' => $leser->id, 'role' => 'viewer']);
-    $fremd = $this->makeUser($this->rootTeam, 'Fremd');   // gar kein Mitglied
+    $leser = $this->makeUser($this->rootTeam, 'Leser', 'viewer');
+    $fremd = $this->makeUser($this->rootTeam, 'Fremd', null);   // gar kein Mitglied
 
     expect($this->rechte->rolle($leser, $this->rootTeam))->toBe(FaRolle::Lesen)
         ->and($this->rechte->rolle($fremd, $this->rootTeam))->toBe(FaRolle::Lesen)
@@ -171,9 +170,8 @@ it('Rechte aus der Plattform-Rolle: Betrachter liest, Mitglied bucht, Admin im U
     $this->rechte->setzeFreigabe($this->rootTeam, $this->inhaber, $this->koch->id, true);
     expect($this->rechte->rolle($this->koch, $this->rootTeam))->toBe(FaRolle::Freigeben);
 
-    $ki = $this->makeUser($this->rootTeam, 'KI');
+    $ki = $this->makeUser($this->rootTeam, 'KI', 'admin');
     $ki->forceFill(['type' => 'ai_user'])->save();
-    DB::table('team_user')->insert(['team_id' => $this->rootTeam->id, 'user_id' => $ki->id, 'role' => 'admin']);
     expect($this->rechte->rolle($ki, $this->rootTeam))->toBe(FaRolle::Kuratieren)
         ->and(fn () => $this->rechte->setzeFreigabe($this->rootTeam, $this->inhaber, $ki->id, true))->toThrow(\RuntimeException::class, 'KI');
 });
@@ -195,8 +193,7 @@ it('MCP im Lockstep: delivery_notes + team_roles registriert, Ende-zu-Ende mit F
         ->and($post->data['lieferschein']['status'])->toBe('gebucht')
         ->and($this->order1->refresh()->status)->toBe(OrderStatus::Delivered);
 
-    $leser = $this->makeUser($this->rootTeam, 'Leser MCP');
-    DB::table('team_user')->insert(['team_id' => $this->rootTeam->id, 'user_id' => $leser->id, 'role' => 'viewer']);
+    $leser = $this->makeUser($this->rootTeam, 'Leser MCP', 'viewer');
     $verboten = $reg->get('foodalchemist.delivery_notes.POST')->execute(['supplier_id' => $this->chefs->id], new ToolContext($leser, $this->rootTeam));
     expect($verboten->success)->toBeFalse()->and($verboten->errorCode)->toBe('FORBIDDEN');
 
@@ -237,8 +234,7 @@ it('UI: Seite erfasst einen Lieferschein mit Vorbelegung, Beleg-Foto und bucht i
 });
 
 it('UI: Lesen sieht die Seite, aber keine Schreib-Knöpfe; Zugriffsrechte nur für FA-Admin änderbar', function () {
-    $leser = $this->makeUser($this->rootTeam, 'Leser UI');
-    DB::table('team_user')->insert(['team_id' => $this->rootTeam->id, 'user_id' => $leser->id, 'role' => 'viewer']);
+    $leser = $this->makeUser($this->rootTeam, 'Leser UI', 'viewer');
     $this->actingAs($leser);
 
     Livewire::test(WareneingangIndex::class)

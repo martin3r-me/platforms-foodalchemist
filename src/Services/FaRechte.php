@@ -71,6 +71,20 @@ class FaRechte
         }
     }
 
+    /**
+     * Spec 77a: Prüfung für Services ohne User-Parameter — prüft den angemeldeten Benutzer (Web und MCP:
+     * Core setzt dort `auth()->setUser`). Ohne angemeldeten Benutzer (Queue, Kommando, System) keine Prüfung.
+     *
+     * @throws FaRechtFehltException
+     */
+    public function pruefeAngemeldet(Team $team, FaRolle $mindestens, string $wofuer): void
+    {
+        $user = \Illuminate\Support\Facades\Auth::user();
+        if ($user instanceof User) {
+            $this->pruefe($user, $team, $mindestens, $wofuer);
+        }
+    }
+
     /** Wie `pruefe`, mit User-ID (Services bekommen meist nur `?int $userId`). */
     public function pruefeId(?int $userId, Team $team, FaRolle $mindestens, string $wofuer): void
     {

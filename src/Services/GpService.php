@@ -207,6 +207,10 @@ class GpService
      */
     public function setStatus(FoodAlchemistGp $gp, GpStatus $status): FoodAlchemistGp
     {
+        // Spec 77a: ab Kuratieren im Besitzer-Team des Grundprodukts (ohne angemeldeten Benutzer keine Prüfung)
+        if (($besitzer = \Platform\Core\Models\Team::find($gp->team_id)) !== null) {
+            app(\Platform\FoodAlchemist\Services\FaRechte::class)->pruefeAngemeldet($besitzer, \Platform\FoodAlchemist\Enums\FaRolle::Kuratieren, 'Grundprodukt-Status setzen');
+        }
         if ($status === GpStatus::Merged) {
             throw new \RuntimeException('Status „Zusammengeführt" wird nur durch das Merge-Werkzeug gesetzt.');
         }

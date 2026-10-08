@@ -184,6 +184,9 @@ class IdeenService
      */
     public function setStatus(Team $team, int $id, string $status): FoodAlchemistDishIdea
     {
+        // Spec 77a: ab Kuratieren (Mitglied); ohne angemeldeten Benutzer (System) keine Prüfung
+        app(\Platform\FoodAlchemist\Services\FaRechte::class)->pruefeAngemeldet($team, \Platform\FoodAlchemist\Enums\FaRolle::Kuratieren, 'Skizzen-Status setzen');
+
         if (! in_array($status, ['entwurf', 'verworfen'], true)) {
             throw new \RuntimeException("Status «{$status}» ist über die Skizzen-Ebene nicht setzbar (nur entwurf|verworfen).");
         }

@@ -20,8 +20,6 @@ uses(TestCase::class, SeedsTeamHierarchy::class);
 beforeEach(function () {
     $this->seedTeamHierarchy();
     $this->user = $this->makeUser($this->rootTeam);
-    // Spec 75c: Rechte kommen aus der Team-Rolle — der Test-Benutzer ist Inhaber seines Teams (vorher Nicht-Mitglied = Lesen).
-    \Illuminate\Support\Facades\DB::table('team_user')->insert(['team_id' => $this->rootTeam->id, 'user_id' => $this->user->id, 'role' => 'owner']);
     $this->actingAs($this->user);
     $this->registry = app(ToolRegistry::class);
     $this->kontext = new ToolContext($this->user, $this->rootTeam);
