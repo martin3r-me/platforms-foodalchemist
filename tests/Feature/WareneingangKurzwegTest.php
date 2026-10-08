@@ -150,3 +150,34 @@ it('Bestand übernehmen: Altbestand-Belege für alte Zeilenwerte, idempotent, oh
         ->and(FoodAlchemistInventoryMovement::count())->toBe($bewegungen)
         ->and((float) $this->mehlLine->refresh()->received_qty_packs)->toBe(9.0);
 });
+
+it('Team-Hierarchie: Inhaber und Mitglied des Haupt-Teams buchen im Betriebs-Team (Kind), ohne dort Mitglied zu sein', function () {
+    // Bestellung des Kind-Teams (Betrieb); Inhaber/Koch sind nur im Root-Team Mitglied
+    $kindLine = $this->orders->addManualLine($this->childA, $this->la['Mehl']->id, 4, null, null, now()->addDays(5)->toDateString());
+    $this->orders->setStatus($this->childA, (int) $kindLine->order_id, OrderStatus::Sent);
+    expect(DB::table('team_user')->where('team_id', $this->childA->id)->exists())->toBeFalse();
+
+    $this->actingAs($this->inhaber);
+    $this->orders->updateReceiptLine($this->childA, $kindLine->id, 3);
+    expect((float) $kindLine->refresh()->received_qty_packs)->toBe(3.0);
+
+    // Mitglied des Haupt-Teams = Kuratieren auch im Kind-Team: echter Lieferschein im Betrieb
+    $ls = $this->svc->speichern($this->childA, ['supplier_id' => $this->chefs->id, 'delivery_note_number' => 'KIND-1',
+        'lines' => [['order_line_id' => $kindLine->id, 'qty_packs' => 1]]], $this->koch->id);
+    $this->svc->buchen($this->childA, $ls->id, $this->koch->id);
+    expect((float) $kindLine->refresh()->received_qty_packs)->toBe(4.0)
+        ->and($kindLine->order()->first()->status)->toBe(OrderStatus::Delivered);
+});
+
+it('Ohne angemeldeten Benutzer (Queue, Kommando) prüft der Kurzweg nicht — geliefert setzen scheitert nicht an „Lesen"', function () {
+    auth()->logout();
+    expect(auth()->user())->toBeNull();
+
+    $this->orders->setStatus($this->rootTeam, $this->order1->id, OrderStatus::Delivered);
+    $this->orders->updateInvoiceLine($this->rootTeam, $this->zuckerLine->id, 2, 1, null);
+
+    expect($this->order1->refresh()->status)->toBe(OrderStatus::Delivered)
+        ->and((float) $this->mehlLine->refresh()->received_qty_packs)->toBe(10.0)
+        ->and((float) $this->zuckerLine->refresh()->invoice_qty_packs)->toBe(2.0)   // ohne Benutzer = System → sofort freigegeben
+        ->and(($this->bestand)('Mehl'))->toBe(10000.0);
+});
