@@ -55,7 +55,7 @@
 | 6 | Signale | `/zu-pruefen` | offen | 35 Typ-Chips als Wand · Meta-Signale („Qualität verschlechtert sich") vor echten Befunden · Kritisch nicht oben · Reiter Signale/Vorschläge/Pflege unklar · Seitenbalken |
 | 6 | Controlling | `/controlling` | offen | |
 | 6 | Wissen | `/wissen` | offen | |
-| 6 | Trendradar | `/trendradar` | offen | |
+| 6 | Trendradar | `/trendradar` | neu (Spec 79) | Radar nach Sarah Spork, Erfassen, Belege |
 | 6 | Food DNA | `/food-dna` | offen | liegt fachlich in Einstellungen |
 | 6 | Einstellungen | `/einstellungen/{sektion}` | offen | viele Unterseiten |
 | 6 | Bestellungen / Produktion | `/bestellungen`, `/produktion` | offen | |

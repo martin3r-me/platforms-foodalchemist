@@ -289,6 +289,28 @@ class TeamSettingsService
         return $v > 0 ? $v : (int) config('foodalchemist.scheduler.trend_konzepte_limit', 3);
     }
 
+    /** Spec 79: wöchentliche Google-Trends-Messung über DataForSEO (Default AUS — kostet je Abfrage). */
+    public function trendDataForSeoAktiv(Team $team): bool
+    {
+        return (bool) ($this->for($team)->trend_dataforseo_enabled ?? false);
+    }
+
+    /** Spec 79: Monatsbudget Google Trends in USD; ungesetzt ⇒ Config-Default (5 $). */
+    public function trendDataForSeoBudget(Team $team): float
+    {
+        $v = $this->for($team)->trend_dataforseo_budget_usd;
+
+        return $v !== null ? max(0.0, (float) $v) : (float) config('foodalchemist.trends.dataforseo_budget_usd', 5.0);
+    }
+
+    /** Spec 79: gewählte DataForSEO-Verbindung; null ⇒ automatisch die des Teams. */
+    public function trendDataForSeoConnectionId(Team $team): ?int
+    {
+        $v = (int) ($this->for($team)->trend_dataforseo_connection_id ?? 0);
+
+        return $v > 0 ? $v : null;
+    }
+
     /** Trendradar: den Vorschlag als Signal in die Inbox legen (Default AN). */
     public function trendSignalAktiv(Team $team): bool
     {

@@ -25,8 +25,9 @@ class PlanungSessionPostTool extends FoodAlchemistTool implements ToolContract, 
 
     public function getDescription(): string
     {
-        return 'Legt eine Planungs-Session an — aus einem Trend (source_knowledge_document_id, Kontext '
-            . 'wird übernommen) ODER aus freiem Brief (title + optional brief). Status=divergenz. '
+        return 'Legt eine Planungs-Session an — aus dem Trendradar (trend_ids und/oder fundstueck_ids: Trends, Hypes '
+            . 'und Fundstücke werden zu EINEM Briefing kombiniert, max. 8; Vorrang), aus einem Trend-Dossier '
+            . '(source_knowledge_document_id, Altbestand) ODER aus freiem Brief (title + optional brief). Status=divergenz. '
             . 'Erzeugt KEINE Rezepte/Konzepte (das macht das „Go" in der UI).';
     }
 
@@ -38,6 +39,8 @@ class PlanungSessionPostTool extends FoodAlchemistTool implements ToolContract, 
                 'title' => ['type' => 'string', 'description' => 'Titel (Pflicht, außer bei source_knowledge_document_id)'],
                 'brief' => ['type' => 'string', 'description' => 'Optionaler Start-Brief für die Erzeugung'],
                 'source_knowledge_document_id' => ['type' => 'integer', 'description' => 'Trend-Doc-ID (category=trend) — Kontext wird übernommen'],
+                'trend_ids' => ['type' => 'array', 'items' => ['type' => 'integer'], 'description' => 'Spec 79: Trends/Hypes aus foodalchemist.trends.GET'],
+                'fundstueck_ids' => ['type' => 'array', 'items' => ['type' => 'integer'], 'description' => 'Spec 79: Fundstücke aus foodalchemist.fundstuecke.GET'],
                 'creative_mode' => ['type' => 'string', 'enum' => ['voll_kreativ', 'hybrid', 'datenbank'], 'default' => 'voll_kreativ'],
                 'generation_params' => [
                     'type' => 'object',
@@ -63,7 +66,12 @@ class PlanungSessionPostTool extends FoodAlchemistTool implements ToolContract, 
         $svc = app(PlanningSessionService::class);
 
         try {
-            if (isset($arguments['source_knowledge_document_id'])) {
+            if (! empty($arguments['trend_ids']) || ! empty($arguments['fundstueck_ids'])) {
+                $session = $svc->ausTrendradar($team, (array) ($arguments['trend_ids'] ?? []), (array) ($arguments['fundstueck_ids'] ?? []), 'mcp_trendradar');
+                if (isset($arguments['brief']) && trim((string) $arguments['brief']) !== '') {
+                    $session = $svc->update($team, $session->id, ['brief' => $arguments['brief']]);
+                }
+            } elseif (isset($arguments['source_knowledge_document_id'])) {
                 $session = $svc->ausTrend($team, (int) $arguments['source_knowledge_document_id']);
                 if (isset($arguments['brief']) && trim((string) $arguments['brief']) !== '') {
                     $session = $svc->update($team, $session->id, ['brief' => $arguments['brief']]);
@@ -89,6 +97,8 @@ class PlanungSessionPostTool extends FoodAlchemistTool implements ToolContract, 
             'status' => (string) $session->status,
             'creative_mode' => (string) $session->creative_mode,
             'generation_params' => $session->generation_params,
+            'brief' => (string) $session->brief,
+            'source_trend_refs' => $session->source_trend_refs,
         ]);
     }
 

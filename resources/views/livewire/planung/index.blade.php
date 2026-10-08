@@ -76,7 +76,7 @@
     // Editor-Reiter: Erstellen · Ausgaben · Fortschritt. Optik wie x-foodalchemist::editor-tabs; der Baustein selbst
     // passt hier nicht (der Reiter-Zustand `tab` lebt am Modal, tab-init + modal.open-Detail, die Panels liegen im Body).
     $reiterGruppen = [
-        ['basisrezept' => 'Basisrezept', 'gericht' => 'Gericht', 'concept' => 'Concept', 'format' => 'Format', 'composer' => 'Composer', 'import' => 'Import'],
+        ['basisrezept' => 'Basisrezept', 'gericht' => 'Gericht', 'concept' => 'Concept', 'format' => 'Format', 'composer' => 'Composer', 'trendradar' => 'Trendradar', 'import' => 'Import'],
         ['foodbook' => 'Foodbook', 'speisekarte' => 'Speisekarte', 'speiseplan' => 'Speiseplan', 'angebot' => 'Angebot'],
         ['worker' => 'Fortschritt'],
     ];
@@ -201,6 +201,7 @@
                             <p class="{{ $menueGruppe }}">Übernehmen und kombinieren</p>
                             <button type="button" role="menuitem" wire:click="schnellImport" x-on:click="offen = false" class="{{ $menuePunkt }}" data-frei-import>@svg('heroicon-o-document-arrow-down', 'w-4 h-4 shrink-0 text-[var(--fa-ink-3)]') Rezept importieren</button>
                             <button type="button" role="menuitem" wire:click="schnellComposer" x-on:click="offen = false" class="{{ $menuePunkt }}" data-frei-composer>@svg('heroicon-o-sparkles', 'w-4 h-4 shrink-0 text-[var(--fa-ink-3)]') Aus Zutaten kombinieren (Composer)</button>
+                            <button type="button" role="menuitem" wire:click="schnellTrendradar" x-on:click="offen = false" class="{{ $menuePunkt }}" data-frei-trendradar>@svg('heroicon-o-signal', 'w-4 h-4 shrink-0 text-[var(--fa-ink-3)]') Aus dem Trendradar (Trend, Hype, Inspiration)</button>
                             <div class="my-1 border-t border-[var(--fa-line)]" role="separator"></div>
                             <p class="{{ $menueGruppe }}">Ganze Ausgabe aus einem Brief</p>
                             <button type="button" role="menuitem" x-on:click="fbOpen = true; skOpen = false; spOpen = false; offOpen = false; fmtOpen = false; offen = false" class="{{ $menuePunkt }}" data-frei-foodbook>@svg('heroicon-o-book-open', 'w-4 h-4 shrink-0 text-[var(--fa-ink-3)]') Foodbook</button>
@@ -1080,6 +1081,81 @@
                  (Zutaten = verbindliche Leit-Aromen). Klick auf einen Kandidaten nimmt ihn auf.
                  Spaltenaufteilung bleibt 5fr/7fr (Auswahl links, Netz rechts). fa-pass: nur die linke Spalte
                  auf Tokens/Bausteine umgestellt; das Netz samt Legende rechts ist unverändert (eigene Welle). --}}
+            {{-- Spec 79 · TRENDRADAR: Trends, Hypes und Fundstücke kombinieren → ein Briefing → normaler Kaskadenweg. --}}
+            <div wire:key="planung-tab-trendradar" x-show="tab==='trendradar'" class="max-w-7xl mx-auto" data-tab-trendradar>
+                @php
+                    $trV = \Platform\FoodAlchemist\Support\TrendVokabular::class;
+                    $trGewaehlt = count($trendWahl['trends'] ?? []) + count($trendWahl['fundstuecke'] ?? []);
+                    $trZeile = 'flex items-start gap-2.5 px-2.5 py-2 rounded-[var(--fa-radius-control)] hover:bg-[var(--fa-hover)] cursor-pointer';
+                @endphp
+                <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] gap-4 items-start">
+                    <div class="space-y-4 min-w-0">
+                        <x-foodalchemist::modal-section icon="heroicon-o-signal" title="Impulse aus dem Trendradar wählen">
+                            <x-slot:actions>
+                                <x-fa::badge :tone="$trGewaehlt > 0 ? 'accent' : 'neutral'">{{ $trGewaehlt }} von {{ \Platform\FoodAlchemist\Services\PlanningSessionService::TRENDRADAR_MAX }}</x-fa::badge>
+                            </x-slot:actions>
+                            <div class="flex flex-col gap-3">
+                                <p class="{{ $hinweisText }} max-w-2xl">Einen oder mehrere Impulse wählen, zum Beispiel einen Trend mit einem Hype und zwei Fundstücken. Daraus entsteht ein Briefing für Basisrezept, Gericht oder Concept.</p>
+                                <x-fa::input type="search" wire:model.live.debounce.300ms="trendSuche" placeholder="Trends und Fundstücke durchsuchen" aria-label="Trendradar durchsuchen" />
+                                <p class="text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-2)]">Trends und Hypes</p>
+                                <div class="flex flex-col max-h-[40vh] overflow-y-auto -mx-1 px-1" data-trend-kandidaten>
+                                    @forelse($trendKandidaten as $t)
+                                        <label class="{{ $trZeile }}" wire:key="ptk-{{ $t->id }}">
+                                            <input type="checkbox" value="{{ $t->id }}" wire:model.live="trendWahl.trends" class="mt-1 accent-[var(--fa-accent)]" data-trend-wahl="{{ $t->id }}" />
+                                            <span class="min-w-0 flex-1">
+                                                <span class="flex flex-wrap items-center gap-1.5">
+                                                    <span class="font-medium text-[var(--fa-ink)]">{{ $t->name }}</span>
+                                                    @if($t->typ)<x-fa::badge :tone="$t->typ === 'hype' ? 'warn' : 'accent'">{{ $trV::TYPEN[$t->typ] }}</x-fa::badge>@endif
+                                                    @if($t->ebene)<x-fa::badge>{{ $trV::EBENEN[$t->ebene] }}</x-fa::badge>@endif
+                                                    @unless(in_array($t->status, ['auf_radar', 'in_umsetzung'], true))<x-fa::badge>{{ $trV::STATUS[$t->status] }}</x-fa::badge>@endunless
+                                                </span>
+                                                @if($t->definition)<span class="block {{ $hinweisText }} line-clamp-1">{{ $t->definition }}</span>@endif
+                                            </span>
+                                        </label>
+                                    @empty
+                                        <p class="{{ $hinweisText }}">Keine Trends gefunden.</p>
+                                    @endforelse
+                                </div>
+                                <p class="pt-2 text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-2)]">Inspiration (Fundstücke)</p>
+                                <div class="grid gap-2 grid-cols-[repeat(auto-fill,minmax(min(100%,12rem),1fr))] max-h-[40vh] overflow-y-auto" data-fund-kandidaten>
+                                    @forelse($fundKandidaten as $eintrag)
+                                        @php $f = $eintrag['b']; @endphp
+                                        <label class="fa-surface p-2 flex gap-2 cursor-pointer min-w-0" wire:key="pfk-{{ $f->id }}">
+                                            <input type="checkbox" value="{{ $f->id }}" wire:model.live="trendWahl.fundstuecke" class="mt-1 accent-[var(--fa-accent)]" data-fund-wahl="{{ $f->id }}" />
+                                            @if($eintrag['url'])<img src="{{ $eintrag['url'] }}" alt="" class="w-12 h-12 object-cover rounded-[var(--fa-radius-control)] shrink-0" loading="lazy" />@endif
+                                            <span class="min-w-0">
+                                                <span class="block text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink)] line-clamp-2">{{ $f->titel ?: ($f->url ?: 'Fundstück') }}</span>
+                                                <span class="block {{ $hinweisText }}">{{ $trV::QUELLEN[$f->quelle] ?? $f->quelle }}@if($f->trend) · {{ $f->trend->name }}@endif</span>
+                                            </span>
+                                        </label>
+                                    @empty
+                                        <p class="{{ $hinweisText }}">Die Inspirations-Pinnwand ist leer.</p>
+                                    @endforelse
+                                </div>
+                            </div>
+                        </x-foodalchemist::modal-section>
+                    </div>
+                    <div class="space-y-4 min-w-0 lg:sticky lg:top-0">
+                        <x-foodalchemist::modal-section icon="heroicon-o-document-text" title="Briefing aus der Auswahl">
+                            <div class="flex flex-col gap-3">
+                                @if($trendMeldung)<x-fa::signal tone="crit" data-trend-meldung>{{ $trendMeldung }}</x-fa::signal>@endif
+                                @if($trendVorschau)
+                                    <div class="whitespace-pre-line text-[length:var(--fa-text-md)] leading-relaxed text-[var(--fa-ink)] fa-surface p-3" data-trend-vorschau>{{ $trendVorschau }}</div>
+                                    <p class="{{ $hinweisText }}">Übernehmen schreibt das Briefing in den gewählten Reiter. Dort Leitplanken setzen und wie gewohnt starten.</p>
+                                    <div class="flex flex-wrap gap-2">
+                                        <x-fa::button variant="primary" icon="heroicon-m-arrow-right" wire:click="trendradarUebernehmen('gericht')" data-trend-uebernehmen="gericht">Als Gericht</x-fa::button>
+                                        <x-fa::button variant="secondary" icon="heroicon-m-arrow-right" wire:click="trendradarUebernehmen('concept')" data-trend-uebernehmen="concept">Als Concept</x-fa::button>
+                                        <x-fa::button variant="secondary" icon="heroicon-m-arrow-right" wire:click="trendradarUebernehmen('rezept')" data-trend-uebernehmen="rezept">Als Basisrezept</x-fa::button>
+                                    </div>
+                                @else
+                                    <p class="{{ $hinweisText }}">Links Impulse wählen. Hier erscheint das Briefing, das daraus entsteht.</p>
+                                @endif
+                            </div>
+                        </x-foodalchemist::modal-section>
+                    </div>
+                </div>
+            </div>
+
             <div wire:key="planung-tab-composer" x-show="tab==='composer'" class="max-w-7xl mx-auto">
                 <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] gap-4 items-start">
                 {{-- LINKE SPALTE: Auswahl + Zusammenhalt --}}

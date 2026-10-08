@@ -3,199 +3,427 @@
 namespace Platform\FoodAlchemist\Livewire\Trendradar;
 
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 use Livewire\Attributes\Url;
 use Livewire\Component;
-use Platform\FoodAlchemist\Services\Ai\KnowledgeContextService;
-use Platform\FoodAlchemist\Services\Ai\KnowledgeEmbeddingService;
-use Platform\FoodAlchemist\Services\PlanningSessionService;
-use Platform\FoodAlchemist\Services\TrendRadarService;
-use Platform\FoodAlchemist\Support\TeamScope;
+use Livewire\WithFileUploads;
+use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Enums\FaRolle;
+use Platform\FoodAlchemist\Models\FoodAlchemistTrend;
+use Platform\FoodAlchemist\Services\FaRechte;
+use Platform\FoodAlchemist\Services\TeamSettingsService;
+use Platform\FoodAlchemist\Services\TrendService;
+use Platform\FoodAlchemist\Services\TrendSignalService;
+use Platform\FoodAlchemist\Support\TrendVokabular as V;
 
 /**
- * Trendradar (Feature #FA-Trendradar): kuratierte Sicht auf die geclusterten
- * Trend-Wissens-Docs (knowledge_documents category='trend' ⋈ trend_meta).
- *
- * READ-ONLY — der Radar erfasst keine Trends (das ist das Office-Projekt), er
- * konsumiert die importierten + geclusterten. Navigation über den Kategorie→Klasse-
- * Baum, Dashboard „Top-Trends", Facetten (Reifegrad/Relevanz/Hype), Semantiksuche.
- * Datenzugriff wie im Knowledge-Browser über rohe DB::table + TeamScope.
+ * Trendradar (Spec 79) nach Sarah Spork — Inspiration → Hype → Trend: Radar (Ringe = Trendhierarchie,
+ * Sektoren = Kategorie, Hype gestrichelt, Gold-Ring = von der Mitarbeiterbefragung bestätigt), Liste mit
+ * Prüf-Queue, Inspirations-Pinnwand (Fundstücke des Teams), Detail mit Belegen. Fundstücke ablegen darf jedes
+ * Teammitglied; Trends anlegen, zuordnen, einordnen und Status setzen braucht Kuratieren.
+ * Geschrieben wird ausschließlich über {@see TrendService}.
  */
 class Index extends Component
 {
+    use WithFileUploads;
+
+    #[Url(as: 'ansicht')]
+    public string $ansicht = 'radar';
+
     #[Url(as: 'q')]
-    public string $search = '';
+    public string $suche = '';
 
+    /** @var list<string> */
     #[Url(as: 'kat')]
-    public string $category = '';
+    public array $kategorien = [];
 
-    #[Url(as: 'klasse')]
-    public string $trendClass = '';
+    /** @var list<string> */
+    #[Url(as: 'typ')]
+    public array $typen = [];
 
-    #[Url(as: 'reife')]
-    public string $maturity = '';
+    /** @var list<string> */
+    #[Url(as: 'ebene')]
+    public array $ebenen = [];
 
-    #[Url(as: 'rel')]
-    public string $relevance = '';
+    #[Url(as: 'befragung')]
+    public bool $nurBefragung = false;
 
-    #[Url(as: 'hype')]
-    public bool $onlyHype = false;
+    #[Url(as: 'status')]
+    public string $statusFilter = '';
 
-    #[Url(as: 'sem')]
-    public bool $semantic = false;
+    #[Url(as: 'trend')]
+    public ?int $selectedId = null;
 
-    #[Url(as: 'doc')]
-    public ?string $selectedSlug = null;
+    /** Pinnwand: offen | zugeordnet | alle */
+    #[Url(as: 'pinnwand')]
+    public string $pinnAnsicht = 'offen';
 
-    /** UI-Labels (deutsch) über den englischen Schema-Werten. */
-    public const MATURITY_LABELS = [
-        'niche' => 'Nische', 'emerging' => 'Im Kommen', 'mainstream' => 'Mainstream', 'declining' => 'Abklingend',
-    ];
+    #[Url(as: 'schlagwort')]
+    public string $pinnSchlagwort = '';
 
-    public const RELEVANCE_LABELS = ['high' => 'Hoch', 'medium' => 'Mittel', 'low' => 'Niedrig'];
+    /** Fundstück-Dialog */
+    public array $fund = [];
 
-    public function select(string $slug): void
+    public $fundDatei = null;
+
+    /** Pinnwand: gewählter Ziel-Trend je Fundstück */
+    public array $zuordnung = [];
+
+    /** „Trend daraus machen": diese Fundstücke gehen beim Anlegen mit */
+    public array $ausFundstuecken = [];
+
+    /** Erfassen-Dialog */
+    public array $neu = [];
+
+    public $neuDatei = null;
+
+    /** Beleg am gewählten Trend */
+    public array $beleg = [];
+
+    public $belegDatei = null;
+
+    /** Einordnung des gewählten Trends */
+    public array $einordnung = [];
+
+    public bool $einordnenOffen = false;
+
+    public ?string $fehler = null;
+
+    public ?string $meldung = null;
+
+    public function mount(): void
     {
-        $this->selectedSlug = $slug;
+        $this->neuLeeren();
+        $this->belegLeeren();
+        $this->fundLeeren();
+    }
+
+    public function select(int $id): void
+    {
+        $this->selectedId = $id;
+        $this->einordnenOffen = false;
+        $this->fehler = null;
+        $this->meldung = null;
+        $this->belegLeeren();
     }
 
     public function deselect(): void
     {
-        $this->selectedSlug = null;
+        $this->selectedId = null;
+        $this->einordnenOffen = false;
     }
 
-    /** Trend-Carry-in: aus dem gewählten Trend eine Planungs-Session eröffnen (Kontext wandert mit). */
-    public function inPlanungOeffnen(PlanningSessionService $svc)
+    public function ansichtSetzen(string $ansicht): void
     {
-        if ($this->selectedSlug === null) {
-            return null;
-        }
-        $team = Auth::user()?->currentTeamRelation;
-        if ($team === null) {
-            return null;
-        }
-        $docId = TeamScope::applyVisible(
-            DB::table('foodalchemist_knowledge_documents')
-                ->where('category', 'trend')->where('active', 1)->whereNull('deleted_at'),
-            'team_id', $team
-        )->where('slug', $this->selectedSlug)->value('id');
-        if ($docId === null) {
-            return null;
-        }
-        $session = $svc->ausTrend($team, (int) $docId);
-
-        // open=1 öffnet den Black-Editor direkt (nicht nur die Vorschau selektieren).
-        return redirect()->route('foodalchemist.planung.index', ['session' => $session->id, 'open' => 1]);
-    }
-
-    /** Klick im Taxonomie-Baum → Kategorie/Klasse-Filter setzen. */
-    public function filterAuf(string $category, ?string $trendClass = null): void
-    {
-        $this->category = $category;
-        $this->trendClass = $trendClass ?? '';
-        $this->selectedSlug = null;
+        $this->ansicht = in_array($ansicht, ['radar', 'liste', 'inspiration'], true) ? $ansicht : 'radar';
     }
 
     public function resetFilter(): void
     {
-        $this->reset(['search', 'category', 'trendClass', 'maturity', 'relevance', 'onlyHype', 'semantic']);
+        $this->reset(['suche', 'kategorien', 'typen', 'ebenen', 'nurBefragung', 'statusFilter']);
     }
 
-    public function render(TrendRadarService $radar, KnowledgeContextService $knowledge)
+    // ── Fundstücke (Inspiration) ───────────────────────────────────────────
+
+    public function fundstueckOeffnen(): void
     {
-        $suche = trim($this->search);
+        $this->fundLeeren();
+        $this->fehler = null;
+        $this->dispatch('modal.open', name: 'fundstueck-ablegen');
+    }
 
-        // Semantik-Recall (wie Knowledge-Browser): Embedding-IDs, sonst SQL-LIKE.
-        $semanticNote = null;
-        $semanticIds = null;
-        $semanticAktiv = false;
-        if ($this->semantic && $suche !== '') {
-            $svc = app(KnowledgeEmbeddingService::class);
-            if ($svc->isProviderAvailable()) {
-                $semanticAktiv = true;
-                $semanticIds = $svc->searchDocIds($suche, 60);
-                if ($semanticIds === []) {
-                    $semanticNote = 'Keine Treffer nach Bedeutung. Möglicherweise sind die Trends noch nicht für diese Suche aufbereitet.';
-                }
-            } else {
-                $semanticNote = 'Die Suche nach Bedeutung ist gerade nicht verfügbar. Es wird nach dem Wortlaut gesucht.';
+    public function fundstueckAblegen(TrendService $svc): void
+    {
+        if ($this->fundDatei !== null) {
+            $this->validate(['fundDatei' => 'file|max:'.V::DATEI_MAX_KB]);
+        }
+        $this->aktion(function () use ($svc) {
+            $b = $svc->fundstueckAblegen($this->team(), $this->fund, $this->fundDatei, Auth::id());
+            $this->fundLeeren();
+            $this->dispatch('modal.close', name: 'fundstueck-ablegen');
+            $this->ansicht = 'inspiration';
+            $this->pinnAnsicht = 'offen';
+            $this->meldung = '„'.($b->titel ?: 'Fundstück').'“ liegt in der Pinnwand.';
+        });
+    }
+
+    public function fundstueckZuordnen(int $belegId, TrendService $svc): void
+    {
+        $trendId = (int) ($this->zuordnung[$belegId] ?? 0);
+        if ($trendId <= 0) {
+            $this->fehler = 'Bitte zuerst einen Trend wählen.';
+
+            return;
+        }
+        $this->aktion(function () use ($svc, $belegId, $trendId) {
+            $svc->fundstueckZuordnen($this->team(), $belegId, $trendId, Auth::id());
+            unset($this->zuordnung[$belegId]);
+            $this->meldung = 'Fundstück dem Trend zugeordnet.';
+        });
+    }
+
+    public function fundstueckLoesen(int $belegId, TrendService $svc): void
+    {
+        $this->aktion(fn () => $svc->fundstueckLoesen($this->team(), $belegId, Auth::id()));
+    }
+
+    /** „Trend daraus machen": Dialog mit dem Titel des Fundstücks vorbelegt, das Fundstück geht beim Anlegen mit. */
+    public function trendAusFundstueck(int $belegId): void
+    {
+        $b = \Platform\FoodAlchemist\Models\FoodAlchemistTrendBeleg::where('team_id', $this->team()->id)->where('fundstueck', true)->find($belegId);
+        if ($b === null) {
+            return;
+        }
+        $this->neuLeeren();
+        $this->neu['name'] = (string) $b->titel;
+        $this->neu['definition'] = (string) $b->notiz;
+        $this->ausFundstuecken = [$b->id];
+        $this->fehler = null;
+        $this->dispatch('modal.open', name: 'trend-erfassen');
+    }
+
+    // ── Trend anlegen (Kuratieren) ─────────────────────────────────────────
+
+    public function erfassenOeffnen(): void
+    {
+        $this->neuLeeren();
+        $this->fehler = null;
+        $this->dispatch('modal.open', name: 'trend-erfassen');
+    }
+
+    public function erfassen(TrendService $svc): void
+    {
+        $this->fehler = null;
+        if ($this->neuDatei !== null) {
+            $this->validate(['neuDatei' => 'file|max:'.V::DATEI_MAX_KB]);
+        }
+        $this->aktion(function () use ($svc) {
+            $n = $this->neu;
+            $trend = $svc->anlegen($this->team(), [
+                'name' => $n['name'] ?? '',
+                'definition' => $n['definition'] ?? null,
+                'typ' => $n['typ'] ?: null,
+                'ebene' => $n['ebene'] ?: null,
+                'kategorie' => $n['kategorie'] ?: null,
+                'fundstueck_ids' => $this->ausFundstuecken,
+                'beleg' => $this->ausFundstuecken !== [] ? null : [
+                    'quelle' => $n['quelle'] ?: 'beobachtung',
+                    'url' => $n['url'] ?? null,
+                    'notiz' => $n['notiz'] ?? null,
+                    'fundort' => $n['fundort'] ?? null,
+                ],
+            ], Auth::id(), $this->ausFundstuecken !== [] ? null : $this->neuDatei);
+            $this->neuLeeren();
+            $this->dispatch('modal.close', name: 'trend-erfassen');
+            $this->selectedId = $trend->id;
+            $this->meldung = "Trend „{$trend->name}“ angelegt (gesichtet).";
+        });
+    }
+
+    // ── Detail-Aktionen ────────────────────────────────────────────────────
+
+    public function belegHinzufuegen(TrendService $svc): void
+    {
+        if ($this->selectedId === null) {
+            return;
+        }
+        if ($this->belegDatei !== null) {
+            $this->validate(['belegDatei' => 'file|max:'.V::DATEI_MAX_KB]);
+        }
+        $this->aktion(function () use ($svc) {
+            $svc->belegAnhaengen($this->team(), $this->selectedId, $this->beleg, $this->belegDatei, Auth::id());
+            $this->belegLeeren();
+            $this->meldung = 'Beleg angehängt.';
+        });
+    }
+
+    public function belegEntfernen(int $belegId, TrendService $svc): void
+    {
+        $this->aktion(fn () => $svc->belegEntfernen($this->team(), $belegId, Auth::id()));
+    }
+
+    public function einordnenStarten(): void
+    {
+        $t = $this->gewaehlt();
+        if ($t === null) {
+            return;
+        }
+        $this->einordnung = [
+            'name' => $t->name, 'definition' => (string) $t->definition,
+            'typ' => (string) $t->typ, 'ebene' => (string) $t->ebene, 'kategorie' => (string) $t->kategorie,
+            'food_cluster' => (string) $t->food_cluster, 'sicht' => (string) $t->sicht,
+            'gartner_phase' => (string) $t->gartner_phase, 'konfidenz_manuell' => (string) $t->konfidenz_manuell,
+            'historische_einordnung' => (string) $t->historische_einordnung,
+            'suchbegriffe' => implode(', ', $t->suchbegriffe ?? []), 'hashtags' => implode(', ', $t->hashtags ?? []),
+        ];
+        $this->einordnenOffen = true;
+        $this->fehler = null;
+    }
+
+    public function einordnungSpeichern(TrendService $svc): void
+    {
+        if ($this->selectedId === null) {
+            return;
+        }
+        $this->aktion(function () use ($svc) {
+            $e = $this->einordnung;
+            if (($e['kategorie'] ?? '') !== 'food') {
+                $e['food_cluster'] = '';
             }
+            $svc->aendern($this->team(), $this->selectedId, $e, Auth::id());
+            $this->einordnenOffen = false;
+            $this->meldung = 'Einordnung gespeichert.';
+        });
+    }
+
+    public function statusSetzen(string $status, TrendService $svc): void
+    {
+        if ($this->selectedId === null) {
+            return;
+        }
+        $this->aktion(function () use ($svc, $status) {
+            $t = $svc->statusSetzen($this->team(), $this->selectedId, $status, Auth::id());
+            $this->meldung = 'Status: '.V::STATUS[$t->status].'.';
+        });
+    }
+
+    public function loeschen(TrendService $svc): void
+    {
+        if ($this->selectedId === null) {
+            return;
+        }
+        $this->aktion(function () use ($svc) {
+            $svc->loeschen($this->team(), $this->selectedId, Auth::id());
+            $this->selectedId = null;
+            $this->meldung = 'Trend gelöscht.';
+        });
+    }
+
+    public function messen(TrendSignalService $signale): void
+    {
+        if ($this->selectedId === null) {
+            return;
+        }
+        $this->aktion(function () use ($signale) {
+            $ergebnis = $signale->messen($this->team(), $this->selectedId, Auth::user());
+            $this->meldung = 'Google Trends gemessen ('.$ergebnis->count().' Suchbegriff'.($ergebnis->count() === 1 ? '' : 'e').').';
+        });
+    }
+
+    /**
+     * Spec 79 · in die Planung springen: Session aus diesem Trend/Hype oder Fundstück anlegen und die Leitstelle
+     * mit vorbefülltem Briefing öffnen. Weitere Impulse kombiniert man dort im Reiter „Trendradar".
+     */
+    public function inPlanungOeffnen(?int $trendId = null, ?int $fundstueckId = null)
+    {
+        $trendId ??= $fundstueckId === null ? $this->selectedId : null;
+        try {
+            $session = app(\Platform\FoodAlchemist\Services\PlanningSessionService::class)->ausTrendradar(
+                $this->team(), $trendId !== null ? [$trendId] : [], $fundstueckId !== null ? [$fundstueckId] : []);
+        } catch (\RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+
+            return null;
         }
 
-        $query = $radar->sichtbareTrends()
-            ->when($this->category !== '', fn ($q) => $q->where('m.category', $this->category))
-            ->when($this->trendClass !== '', fn ($q) => $q->where('m.trend_class', $this->trendClass))
-            ->when($this->maturity !== '', fn ($q) => $q->where('m.maturity', $this->maturity))
-            ->when($this->relevance !== '', fn ($q) => $q->where('m.relevance', $this->relevance))
-            ->when($this->onlyHype, fn ($q) => $q->where('m.is_hype', 1));
+        return redirect()->route('foodalchemist.planung.index', ['session' => $session->id, 'open' => 1]);
+    }
 
-        if ($semanticAktiv) {
-            $query->whereIn('d.id', $semanticIds ?: [-1]);
-        } elseif ($suche !== '') {
-            $s = '%' . $suche . '%';
-            $query->where(fn ($w) => $w->where('d.title', 'like', $s)
-                ->orWhere('d.slug', 'like', $s)->orWhere('d.content_md', 'like', $s));
-        }
+    // ── Render ─────────────────────────────────────────────────────────────
 
-        $rows = $query->get([
-            'd.id', 'd.slug', 'd.title', 'd.updated_at',
-            'm.category', 'm.trend_class', 'm.cluster_id', 'm.maturity',
-            'm.is_hype', 'm.relevance', 'm.status', 'm.confidence',
-        ]);
+    public function render(TrendService $svc, FaRechte $rechte, TrendSignalService $signale, TeamSettingsService $settings)
+    {
+        $team = $this->team();
+        $alle = $svc->liste($team);
+        $filter = ['suche' => $this->suche, 'kategorie' => $this->kategorien, 'typ' => $this->typen, 'ebene' => $this->ebenen,
+            'nur_befragung' => $this->nurBefragung];
+        $gefiltert = $svc->liste($team, $filter + ['status' => $this->statusFilter !== '' ? [$this->statusFilter] : []]);
 
-        // Rangfolge in PHP: Relevanz × Cluster-Größe (deterministisch, DB-agnostisch).
-        $clusterSizes = $radar->clusterSizes();
-        $gewicht = ['high' => 3, 'medium' => 2, 'low' => 1];
-        $docs = $rows->map(function ($r) use ($clusterSizes, $gewicht) {
-            $r->cluster_size = $r->cluster_id !== null ? ($clusterSizes[$r->cluster_id] ?? 1) : 1;
-            $r->score = ($gewicht[$r->relevance] ?? 1) * 10 + $r->cluster_size;
+        $radar = $gefiltert->filter(fn ($t) => in_array($t->status, V::RADAR_STATUS, true) && $t->ebene && $t->kategorie && $t->typ)
+            ->map(fn (FoodAlchemistTrend $t) => ['trend' => $t] + $svc->radarPosition($t))->values();
+        $aufRadar = $alle->filter(fn ($t) => in_array($t->status, V::RADAR_STATUS, true));
 
-            return $r;
-        })->sortByDesc(fn ($r) => [$r->score, (string) $r->updated_at])->values();
-
-        // Detail (team-sichtbar, per slug).
-        $selected = null;
-        $selectedHtml = null;
-        $selectedMeta = [];
-        if ($this->selectedSlug !== null) {
-            $selected = TeamScope::applyVisible(
-                DB::table('foodalchemist_knowledge_documents as d')
-                    ->leftJoin('foodalchemist_trend_meta as m', 'm.knowledge_document_id', '=', 'd.id')
-                    ->where('d.slug', $this->selectedSlug)->where('d.category', 'trend')->whereNull('d.deleted_at'),
-                'd.team_id', Auth::user()?->currentTeamRelation
-            )->first([
-                'd.slug', 'd.title', 'd.content_md', 'd.version',
-                'm.category', 'm.trend_class', 'm.maturity', 'm.is_hype', 'm.relevance', 'm.status',
-            ]);
-            if ($selected !== null) {
-                $selectedMeta = $knowledge->frontmatterOf((string) $selected->content_md);
-                $selectedHtml = $this->renderMarkdown((string) $selected->content_md);
-            }
-        }
+        $gewaehlt = $this->gewaehlt();
+        $user = Auth::user();
 
         return view('foodalchemist::livewire.trendradar.index', [
-            'topTrends' => $radar->topTrends(6),
-            'tree' => $radar->taxonomieBaum(),
-            'docs' => $docs,
-            'selected' => $selected,
-            'selectedHtml' => $selectedHtml,
-            'selectedMeta' => $selectedMeta,
-            'selectedQuellen' => is_array($selectedMeta['quellen'] ?? null) ? $selectedMeta['quellen'] : [],
-            'semanticNote' => $semanticNote,
-            'semanticAktiv' => $semanticAktiv,
+            'trends' => $gefiltert,
+            'radar' => $radar,
+            'zaehler' => [
+                'radar' => $aufRadar->count(),
+                'hypes' => $aufRadar->where('typ', 'hype')->count(),
+                'befragung' => $aufRadar->where('befragung_bestaetigt', true)->count(),
+                'zu_pruefen' => $alle->where('status', 'gesichtet')->count(),
+                'je_ebene' => $aufRadar->countBy('ebene')->all(),
+            ],
+            'gewaehlt' => $gewaehlt,
+            'bewertung' => $gewaehlt ? $svc->bewertung($gewaehlt) : null,
+            'hindernis' => $gewaehlt ? $svc->radarHindernis($gewaehlt) : null,
+            'belege' => $gewaehlt ? $gewaehlt->belege()->get()->map(fn ($b) => ['b' => $b, 'url' => $svc->dateiUrl($b)]) : collect(),
+            'messungen' => $gewaehlt ? $gewaehlt->signale()->limit(3)->get() : collect(),
+            'eigen' => $gewaehlt !== null && (int) $gewaehlt->team_id === (int) $team->id,
+            'darfKuratieren' => $rechte->darf($user, $team, FaRolle::Kuratieren),
+            'messenMoeglich' => $signale->anbindungVorhanden(),
+            'budget' => $settings->trendDataForSeoBudget($team),
+            'verbraucht' => $signale->verbrauchDiesenMonat($team),
+            'fundstuecke' => $this->ansicht === 'inspiration' ? $svc->fundstuecke($team, $this->pinnAnsicht, $this->suche, $this->pinnSchlagwort ?: null)
+                ->map(fn ($b) => ['b' => $b, 'url' => $svc->dateiUrl($b)]) : collect(),
+            'haeufungen' => $svc->haeufungen($team),
+            'teamNamen' => \Platform\Core\Models\Team::whereIn('id', $svc->fundstueckFamilie($team))->pluck('name', 'id')->all(),
+            // Moderation: Teams der Familie, in denen der Benutzer FA-Admin ist (darf dort Fundstücke löschen)
+            'adminTeams' => \Platform\Core\Models\Team::whereIn('id', $svc->fundstueckFamilie($team))->get()
+                ->filter(fn ($t) => $rechte->darf($user, $t, FaRolle::Admin))->pluck('id')->map(fn ($id) => (int) $id)->all(),
+            'offeneFundstuecke' => \Platform\FoodAlchemist\Models\FoodAlchemistTrendBeleg::whereIn('team_id', $svc->fundstueckFamilie($team))->where('fundstueck', true)->whereNull('trend_id')->count(),
+            'trendOptionen' => $alle->where('team_id', $team->id)->whereNotIn('status', ['verworfen', 'archiviert'])->pluck('name', 'id')->all(),
+            'filterAktiv' => $this->suche !== '' || $this->kategorien !== [] || $this->typen !== [] || $this->ebenen !== [] || $this->nurBefragung || $this->statusFilter !== '',
         ])->layout(\Platform\FoodAlchemist\Support\FaShell::layout());
     }
 
-    /** Markdown der Trend-Datei ohne YAML-Frontmatter, safe gerendert (wie Knowledge-Browser). */
-    private function renderMarkdown(string $md): string
-    {
-        $body = preg_replace('/\A\x{FEFF}?\s*---\R.*?\R---\R?/su', '', $md) ?? $md;
-        $body = trim($body);
+    // ── intern ─────────────────────────────────────────────────────────────
 
-        return $body === '' ? '' : Str::markdown($body, [
-            'html_input' => 'strip',
-            'allow_unsafe_links' => false,
-        ]);
+    private function gewaehlt(): ?FoodAlchemistTrend
+    {
+        if ($this->selectedId === null) {
+            return null;
+        }
+
+        return FoodAlchemistTrend::visibleToTeam($this->team())->withCount('belege')->find($this->selectedId);
+    }
+
+    private function aktion(callable $fn): void
+    {
+        $this->fehler = null;
+        $this->meldung = null;
+        try {
+            $fn();
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException) {
+            $this->fehler = 'Nicht gefunden oder gehört einem anderen Team.';
+        } catch (\RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+        }
+    }
+
+    private function team(): Team
+    {
+        return Auth::user()?->currentTeamRelation ?? abort(403);
+    }
+
+    private function neuLeeren(): void
+    {
+        $this->neu = ['name' => '', 'definition' => '', 'typ' => '', 'ebene' => '', 'kategorie' => '',
+            'quelle' => 'beobachtung', 'url' => '', 'notiz' => '', 'fundort' => ''];
+        $this->neuDatei = null;
+        $this->ausFundstuecken = [];
+    }
+
+    private function fundLeeren(): void
+    {
+        $this->fund = ['titel' => '', 'quelle' => 'instagram', 'url' => '', 'notiz' => '', 'fundort' => '', 'schlagworte' => ''];
+        $this->fundDatei = null;
+    }
+
+    private function belegLeeren(): void
+    {
+        $this->beleg = ['quelle' => 'beobachtung', 'titel' => '', 'url' => '', 'notiz' => '', 'fundort' => '', 'beobachtet_am' => '', 'anteil' => ''];
+        $this->belegDatei = null;
     }
 }

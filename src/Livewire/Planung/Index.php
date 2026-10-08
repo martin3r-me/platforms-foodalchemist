@@ -89,6 +89,13 @@ class Index extends Component
     /** Composer-Tab: gewählte Anker (Einträge {id, slug, label}), Cap = INNER_ANKER_MAX (12). */
     public array $composerAnker = [];
 
+    /** Spec 79 · Reiter „Trendradar": gewählte Impulse (Trends/Hypes und Fundstücke), kombiniert zu einem Briefing. */
+    public array $trendWahl = ['trends' => [], 'fundstuecke' => []];
+
+    public string $trendSuche = '';
+
+    public ?string $trendMeldung = null;
+
     /** Composer-Suchfeld (live). */
     public string $composerTerm = '';
 
@@ -643,6 +650,50 @@ class Index extends Component
         $session = $svc->create($team, ['title' => 'Rezept-Import', 'created_via' => 'cockpit_import']);
         $this->fehler = null;
         $this->oeffne($session->id, 'import');
+    }
+
+    /** Spec 79 · Board-Einstieg „Aus dem Trendradar": leere Session + Editor auf dem Trendradar-Reiter. */
+    public function schnellTrendradar(PlanningSessionService $svc): void
+    {
+        $team = $this->team();
+        if ($team === null) {
+            $this->fehler = 'Kein Team zugeordnet — Erstellung nicht möglich.';
+
+            return;
+        }
+        $session = $svc->create($team, ['title' => 'Aus dem Trendradar', 'created_via' => 'cockpit_trendradar']);
+        $this->trendWahl = ['trends' => [], 'fundstuecke' => []];
+        $this->fehler = null;
+        $this->oeffne($session->id, 'trendradar');
+    }
+
+    /**
+     * Spec 79 · gewählte Impulse als Briefing in einen Erstellen-Tab übernehmen: Session-Brief/Analyse/Herkunft
+     * setzen, das Briefing der Ziel-Ebene ÜBERSCHREIBEN (ausdrücklicher Klick), die anderen Ebenen nur füllen,
+     * wenn leer. Danach Wechsel auf den Tab — gestartet wird wie immer per Go (nichts läuft still).
+     */
+    public function trendradarUebernehmen(string $scope, PlanningSessionService $svc): void
+    {
+        $team = $this->team();
+        if ($team === null || $this->sessionId === null || ! in_array($scope, self::SCOPES, true)) {
+            return;
+        }
+        $this->trendMeldung = null;
+        try {
+            $session = $svc->trendradarUebernehmen($team, $this->sessionId,
+                array_map('intval', $this->trendWahl['trends'] ?? []), array_map('intval', $this->trendWahl['fundstuecke'] ?? []));
+        } catch (\RuntimeException $e) {
+            $this->trendMeldung = $e->getMessage();
+
+            return;
+        }
+        $this->form['title'] = (string) $session->title;
+        $this->form['brief'] = (string) $session->brief;
+        $this->form['analysis'] = (string) $session->analysis;
+        $this->eingabe[$scope]['brief'] = PlanningSessionService::briefFuerScope((string) $session->brief, $scope);
+        $this->eingabe[$scope]['titel'] = (string) $session->title;
+        $this->seedBriefingAusTrendSession($session);
+        $this->dispatch('modal.open', name: 'planung-editor', tab: $scope === 'rezept' ? 'basisrezept' : $scope);
     }
 
     /** Board-Einstieg: leere Session anlegen + Editor direkt auf dem Composer-Tab öffnen (Foodpairing). */
@@ -1359,9 +1410,16 @@ class Index extends Component
         // die Analyse (`form`) — das eigentliche Go-Briefing je Tab (`eingabe[scope]`) blieb LEER,
         // der Trend erreichte die Generierung also nie. Hier wird der Trend-Brief ins Tab-Briefing
         // vorbefüllt, sodass der Nutzer mit einem gefüllten Briefing startet statt Blank Page.
-        if ($session->source_knowledge_document_id !== null) {
+        if ($session->source_knowledge_document_id !== null || ! empty($session->source_trend_refs)) {
             $this->seedBriefingAusTrendSession($session);
         }
+        // Spec 79: Auswahl im Trendradar-Reiter aus der Herkunft wiederherstellen
+        $refs = is_array($session->source_trend_refs) ? $session->source_trend_refs : [];
+        $this->trendWahl = [
+            'trends' => array_map('strval', $refs['trend_ids'] ?? []),
+            'fundstuecke' => array_map('strval', $refs['fundstueck_ids'] ?? []),
+        ];
+        $this->trendMeldung = null;
 
         // #53 Persistenz: einen vorbereiteten KI-Kopf-Plan (plan_concept_id) über den Reload retten —
         // aber nur, wenn das Draft-Concept noch existiert + team-eigen ist (sonst still auf null; ein
@@ -4288,7 +4346,32 @@ class Index extends Component
             );
         }
 
+        // Spec 79 · Kandidaten für den Trendradar-Reiter (nur wenn eine Session offen ist)
+        $trendKandidaten = collect();
+        $fundKandidaten = collect();
+        $trendVorschau = null;
+        if ($team !== null && $this->sessionId !== null) {
+            $tsvc = app(\Platform\FoodAlchemist\Services\TrendService::class);
+            $trendKandidaten = $tsvc->liste($team, ['suche' => $this->trendSuche, 'status' => ['auf_radar', 'in_umsetzung', 'geprueft', 'gesichtet']])
+                ->sortBy(fn ($t) => [in_array($t->status, ['auf_radar', 'in_umsetzung'], true) ? 0 : 1, $t->name])->values();
+            $fundKandidaten = $tsvc->fundstuecke($team, 'alle', $this->trendSuche)->take(60)
+                ->map(fn ($b) => ['b' => $b, 'url' => str_starts_with((string) $b->datei_mime, 'image/') ? $tsvc->dateiUrl($b) : null]);
+            $gewaehlt = count($this->trendWahl['trends'] ?? []) + count($this->trendWahl['fundstuecke'] ?? []);
+            if ($gewaehlt > 0) {
+                try {
+                    $trendVorschau = app(PlanningSessionService::class)->trendKombination($team,
+                        array_map('intval', $this->trendWahl['trends'] ?? []), array_map('intval', $this->trendWahl['fundstuecke'] ?? []))['brief'];
+                } catch (\RuntimeException $e) {
+                    $trendVorschau = null;
+                    $this->trendMeldung = $e->getMessage();
+                }
+            }
+        }
+
         return view('foodalchemist::livewire.planung.index', [
+            'trendKandidaten' => $trendKandidaten,
+            'fundKandidaten' => $fundKandidaten,
+            'trendVorschau' => $trendVorschau,
             // Spec 55: Agenten-Panel — sichtbar, wenn das Team es nicht abgeschaltet hat
             // (Default AN). Eigener Schlüssel, siehe TeamSettingsService::voiceAgentPanelPlanung().
             'agentPanelSichtbar' => $team !== null && app(TeamSettingsService::class)->voiceAgentPanelPlanung($team),

@@ -1,0 +1,472 @@
+[
+ {
+  "slug": "bubbletea",
+  "name": "Bubble Tea",
+  "kategorie": "food",
+  "typ": "hype",
+  "ebene": "mode",
+  "quellen": [
+   "google",
+   "instagram"
+  ],
+  "konfidenz": "hoch",
+  "befragung": false,
+  "ref": "Kap. 2.2",
+  "definition": "Kurzlebige Mode-Ausprägung des Superfood-Trends; medial getrieben, ohne eigenes strukturelles Fundament.",
+  "historisch": "Letztes Glied der Beispielkette Metatrend Komplexität → Megatrend Gesundheit → Superfood → Bubble-Tea (Imbeck, 2016).",
+  "gartner": null
+ },
+ {
+  "slug": "superfood",
+  "name": "Superfood (Matcha, Goji, Mate)",
+  "kategorie": "food",
+  "typ": "trend",
+  "ebene": "konsum",
+  "quellen": [
+   "literatur",
+   "marktforschung",
+   "umfrage"
+  ],
+  "konfidenz": "hoch",
+  "befragung": true,
+  "ref": "Kap. 2.2, 5.1",
+  "definition": "Konsum-/Branchentrend rund um funktionale, nährstoffreiche Zutaten als sichtbare Ausprägung des Megatrends Gesundheit.",
+  "historisch": null,
+  "gartner": null
+ },
+ {
+  "slug": "dubai-schoko",
+  "name": "Dubai-Schokolade",
+  "kategorie": "food",
+  "typ": "hype",
+  "ebene": "mode",
+  "quellen": [
+   "instagram",
+   "google",
+   "umfrage"
+  ],
+  "konfidenz": "mittel",
+  "befragung": true,
+  "ref": "Kap. 7.4",
+  "definition": "Viral verbreitetes Produkt ohne belastbares gesellschaftliches Bedürfnis dahinter – typische Hype-Ausprägung im innersten Ring.",
+  "historisch": null,
+  "gartner": null
+ },
+ {
+  "slug": "pizza-sandwich",
+  "name": "Neapolitanisches Pizza-Sandwich",
+  "kategorie": "food",
+  "typ": "hype",
+  "ebene": "mode",
+  "quellen": [
+   "instagram",
+   "umfrage"
+  ],
+  "konfidenz": "mittel",
+  "befragung": true,
+  "ref": "Kap. 7.4",
+  "definition": "Social-Media-getriebenes Food-Format ohne erkennbare zeitliche Beständigkeit.",
+  "historisch": null,
+  "gartner": null
+ },
+ {
+  "slug": "vegan",
+  "name": "Vegane Ernährung",
+  "kategorie": "food",
+  "typ": "trend",
+  "ebene": "mega",
+  "quellen": [
+   "literatur",
+   "marktforschung",
+   "umfrage"
+  ],
+  "konfidenz": "hoch",
+  "befragung": true,
+  "ref": "Kap. 7.4",
+  "definition": "Langfristig verankerter Megatrend mit gesellschaftlichem Wertewandel als Fundament; im äußeren Ring verortet.",
+  "historisch": null,
+  "gartner": null
+ },
+ {
+  "slug": "flexitarier",
+  "name": "Flexitarismus",
+  "kategorie": "food",
+  "typ": "trend",
+  "ebene": "konsum",
+  "quellen": [
+   "literatur"
+  ],
+  "konfidenz": "hoch",
+  "befragung": false,
+  "ref": "Kap. 4.1",
+  "definition": "Graduelle Reduktion des Fleischkonsums als Konsumtrend im Cluster Gesund und Individuell.",
+  "historisch": null,
+  "gartner": null
+ },
+ {
+  "slug": "freeform",
+  "name": "Free-Form-Produkte",
+  "kategorie": "food",
+  "typ": "trend",
+  "ebene": "konsum",
+  "quellen": [
+   "literatur"
+  ],
+  "konfidenz": "hoch",
+  "befragung": false,
+  "ref": "Kap. 4.1",
+  "definition": "Produkte ohne Gluten, Laktose oder Zucker – Ausdifferenzierung des Angebots entlang individueller Ernährungsbedürfnisse.",
+  "historisch": null,
+  "gartner": null
+ },
+ {
+  "slug": "halal-koscher",
+  "name": "Halal- / koscherzertifizierte Produkte",
+  "kategorie": "food",
+  "typ": "trend",
+  "ebene": "konsum",
+  "quellen": [
+   "literatur"
+  ],
+  "konfidenz": "mittel",
+  "befragung": false,
+  "ref": "Kap. 4.1",
+  "definition": "Religionskonforme Zertifizierung als weitere Ausprägung der Individualisierung des Lebensmittelangebots.",
+  "historisch": null,
+  "gartner": null
+ },
+ {
+  "slug": "newsnacking",
+  "name": "New Snacking",
+  "kategorie": "food",
+  "typ": "trend",
+  "ebene": "konsum",
+  "quellen": [
+   "literatur"
+  ],
+  "konfidenz": "hoch",
+  "befragung": false,
+  "ref": "Kap. 4.1",
+  "definition": "Etablierung gesünderer Zwischenmahlzeiten anstelle klassischer Süßwaren – Cluster Genuss und Gesundheit kein Widerspruch.",
+  "historisch": null,
+  "gartner": null
+ },
+ {
+  "slug": "savory-yoghurt",
+  "name": "Savory Yoghurt",
+  "kategorie": "food",
+  "typ": "hype",
+  "ebene": "mode",
+  "quellen": [
+   "literatur",
+   "google"
+  ],
+  "konfidenz": "mittel",
+  "befragung": false,
+  "ref": "Kap. 4.1",
+  "definition": "Herzhaft statt süß gewürzter Joghurt als konkrete, kurzlebige Ausprägung von New Flavoring.",
+  "historisch": null,
+  "gartner": null
+ },
+ {
+  "slug": "soylent",
+  "name": "Funktionale Nahrungsmittel (Soylent-Typ)",
+  "kategorie": "food",
+  "typ": "trend",
+  "ebene": "konsum",
+  "quellen": [
+   "literatur"
+  ],
+  "konfidenz": "mittel",
+  "befragung": false,
+  "ref": "Kap. 4.1",
+  "definition": "Reduktion des Essens auf reine Funktionalität statt sinnlichen Genuss – Nährstoffzufuhr im Vordergrund.",
+  "historisch": null,
+  "gartner": null
+ },
+ {
+  "slug": "invitro",
+  "name": "In-vitro-Fleisch",
+  "kategorie": "food",
+  "typ": "trend",
+  "ebene": "mega",
+  "quellen": [
+   "literatur"
+  ],
+  "konfidenz": "mittel",
+  "befragung": false,
+  "ref": "Kap. 4.1",
+  "definition": "Laborgezüchtetes Fleisch als Ausprägung des Megatrends Neo-Ökologie / Feel Good Consuming.",
+  "historisch": null,
+  "gartner": null
+ },
+ {
+  "slug": "insektenprotein",
+  "name": "Algen- / Insektenprotein",
+  "kategorie": "food",
+  "typ": "trend",
+  "ebene": "mega",
+  "quellen": [
+   "literatur"
+  ],
+  "konfidenz": "mittel",
+  "befragung": false,
+  "ref": "Kap. 4.1",
+  "definition": "Alternative Proteinquellen als Ausdruck der Neo-Ökologie-Bewegung im Food-Bereich.",
+  "historisch": null,
+  "gartner": null
+ },
+ {
+  "slug": "gesundheit-megatrend",
+  "name": "Gesundheit als übergeordneter Megatrend",
+  "kategorie": "food",
+  "typ": "trend",
+  "ebene": "mega",
+  "quellen": [
+   "literatur",
+   "marktforschung",
+   "umfrage"
+  ],
+  "konfidenz": "hoch",
+  "befragung": true,
+  "ref": "Kap. 2.2, 4.1",
+  "definition": "Vom Zukunftsinstitut benannter Megatrend, der sich gleichzeitig in mehreren Food-Clustern niederschlägt.",
+  "historisch": null,
+  "gartner": null
+ },
+ {
+  "slug": "tumeric-tonic",
+  "name": "Tumeric-Tonic",
+  "kategorie": "getraenke",
+  "typ": "hype",
+  "ebene": "mode",
+  "quellen": [
+   "instagram",
+   "google"
+  ],
+  "konfidenz": "mittel",
+  "befragung": false,
+  "ref": "Kap. 5.1",
+  "definition": "Kurkuma-Limonade, zuerst in der New Yorker Subkultur beobachtet – frühes Diffusionssignal im Sinne von Rogers.",
+  "historisch": null,
+  "gartner": null
+ },
+ {
+  "slug": "alkoholfrei",
+  "name": "Alkoholfreie Weine & Sekte",
+  "kategorie": "getraenke",
+  "typ": "trend",
+  "ebene": "konsum",
+  "quellen": [
+   "literatur",
+   "marktforschung",
+   "umfrage"
+  ],
+  "konfidenz": "hoch",
+  "befragung": true,
+  "ref": "Kap. 5.1",
+  "definition": "Wachsendes Angebot als Ausdruck des Gesundheits- und Nachhaltigkeitsbewusstseins im Getränkemarkt.",
+  "historisch": null,
+  "gartner": null
+ },
+ {
+  "slug": "kabinettwein",
+  "name": "Kabinett-Wein-Revival",
+  "kategorie": "getraenke",
+  "typ": "hype",
+  "ebene": "mode",
+  "quellen": [
+   "literatur"
+  ],
+  "konfidenz": "mittel",
+  "befragung": false,
+  "ref": "Kap. 5.1",
+  "definition": "Rückbesinnung auf traditionellen, wenig verarbeiteten Wein als Gegenbewegung zu modernen Ausbaustilen.",
+  "historisch": null,
+  "gartner": null
+ },
+ {
+  "slug": "mischgetraenke",
+  "name": "Mischgetränke (Spritz, Hugo, Sangria)",
+  "kategorie": "getraenke",
+  "typ": "trend",
+  "ebene": "konsum",
+  "quellen": [
+   "literatur",
+   "marktforschung",
+   "umfrage"
+  ],
+  "konfidenz": "hoch",
+  "befragung": true,
+  "ref": "Kap. 5.1",
+  "definition": "Vom einst unschicklichen Genussmittel zum gesellschaftlich akzeptierten Trendgetränk der Eventgastronomie.",
+  "historisch": null,
+  "gartner": null
+ },
+ {
+  "slug": "pflanzenmilch",
+  "name": "Pflanzliche Milchalternativen",
+  "kategorie": "getraenke",
+  "typ": "trend",
+  "ebene": "konsum",
+  "quellen": [
+   "literatur",
+   "google"
+  ],
+  "konfidenz": "hoch",
+  "befragung": false,
+  "ref": "Kap. 5.1",
+  "definition": "Mandelmilch, Kokoswasser u. a. als Ausdruck von „Grün, pflanzlich und das Gewissen trinkt mit“.",
+  "historisch": null,
+  "gartner": null
+ },
+ {
+  "slug": "coral-coast",
+  "name": "Coral Coast (FDF-Trendthema)",
+  "kategorie": "deko",
+  "typ": "hype",
+  "ebene": "mode",
+  "quellen": [
+   "branchenquelle"
+  ],
+  "konfidenz": "niedrig",
+  "befragung": false,
+  "ref": "Kap. 5.2",
+  "definition": "Floristik-Trendthema 2025 des Fachverbands Deutscher Floristen; beruht auf Expertenerfahrung statt systematischer Trendforschung.",
+  "historisch": null,
+  "gartner": null
+ },
+ {
+  "slug": "amar-amor",
+  "name": "Amar Amor (FDF-Trendthema)",
+  "kategorie": "deko",
+  "typ": "hype",
+  "ebene": "mode",
+  "quellen": [
+   "branchenquelle"
+  ],
+  "konfidenz": "niedrig",
+  "befragung": false,
+  "ref": "Kap. 5.2",
+  "definition": "Eines von vier floralen FDF-Trendthemen 2025 – bewusst mit geringerem Konfidenzniveau gekennzeichnet.",
+  "historisch": null,
+  "gartner": null
+ },
+ {
+  "slug": "skulpturale-deko",
+  "name": "Skulpturale florale Arrangements",
+  "kategorie": "deko",
+  "typ": "trend",
+  "ebene": "konsum",
+  "quellen": [
+   "branchenquelle"
+  ],
+  "konfidenz": "niedrig",
+  "befragung": false,
+  "ref": "Kap. 5.2",
+  "definition": "Organische, geschwungene Linien in Kombination mit unkonventionellen Materialien (Event- & Hochzeitsdeko 2025/26).",
+  "historisch": null,
+  "gartner": null
+ },
+ {
+  "slug": "pastell-natur",
+  "name": "Sanfte Pastelltöne & Naturmaterialien",
+  "kategorie": "deko",
+  "typ": "trend",
+  "ebene": "mega",
+  "quellen": [
+   "branchenquelle"
+  ],
+  "konfidenz": "niedrig",
+  "befragung": false,
+  "ref": "Kap. 5.2",
+  "definition": "Reaktion auf gesellschaftliche Verunsicherung – Wunsch nach Balance und Natürlichkeit als Ausdruck von Neo-Ökologie.",
+  "historisch": null,
+  "gartner": null
+ },
+ {
+  "slug": "eventisierung",
+  "name": "Eventisierung",
+  "kategorie": "event",
+  "typ": "hype",
+  "ebene": "mode",
+  "quellen": [
+   "literatur"
+  ],
+  "konfidenz": "mittel",
+  "befragung": false,
+  "ref": "Kap. 5.3",
+  "definition": "Dauerhafter Wechsel instabiler Moden statt fester Institutionen in der Veranstaltungsbranche (Sutantyo, 2018).",
+  "historisch": null,
+  "gartner": null
+ },
+ {
+  "slug": "ar-vr",
+  "name": "Augmented / Virtual Reality bei Events",
+  "kategorie": "event",
+  "typ": "trend",
+  "ebene": "konsum",
+  "quellen": [
+   "literatur",
+   "marktforschung"
+  ],
+  "konfidenz": "mittel",
+  "befragung": false,
+  "ref": "Kap. 5.3",
+  "definition": "Erst 13% der Teilnehmenden nutzen AR/VR aktiv – Technologie mit deutlichem Entwicklungspotenzial.",
+  "historisch": null,
+  "gartner": "Slope of Enlightenment"
+ },
+ {
+  "slug": "online-ticketing",
+  "name": "Online-Ticketing & digitale Teilnehmerverwaltung",
+  "kategorie": "event",
+  "typ": "trend",
+  "ebene": "mega",
+  "quellen": [
+   "literatur",
+   "marktforschung",
+   "umfrage"
+  ],
+  "konfidenz": "hoch",
+  "befragung": true,
+  "ref": "Kap. 5.3",
+  "definition": "92% Nutzung auf Teilnehmerseite – bereits etablierter, breit akzeptierter Digitalisierungstrend.",
+  "historisch": null,
+  "gartner": "Plateau of Productivity"
+ },
+ {
+  "slug": "livestreaming",
+  "name": "Live-Streaming & Aftermovies",
+  "kategorie": "event",
+  "typ": "trend",
+  "ebene": "konsum",
+  "quellen": [
+   "literatur",
+   "instagram"
+  ],
+  "konfidenz": "mittel",
+  "befragung": false,
+  "ref": "Kap. 5.3",
+  "definition": "Mediale Inszenierung (u. a. Tomorrowland) erzeugt FOMO und steigert den wahrgenommenen Event-Erfolg.",
+  "historisch": null,
+  "gartner": null
+ },
+ {
+  "slug": "viertagewoche",
+  "name": "4-Tage-Woche (New Work)",
+  "kategorie": "event",
+  "typ": "trend",
+  "ebene": "mega",
+  "quellen": [
+   "literatur",
+   "umfrage"
+  ],
+  "konfidenz": "hoch",
+  "befragung": true,
+  "ref": "Kap. 2.2, 6.1",
+  "definition": "New Work als übergeordneter Megatrend mit Ausstrahlung auf Veranstaltungsformate und Personalplanung.",
+  "historisch": null,
+  "gartner": null
+ }
+]

@@ -45,10 +45,113 @@ class PlanningSessionService
             'brief' => $this->clean($in['brief'] ?? null),
             'analysis' => $this->clean($in['analysis'] ?? null),
             'source_knowledge_document_id' => isset($in['source_knowledge_document_id']) ? (int) $in['source_knowledge_document_id'] : null,
+            'source_trend_refs' => $in['source_trend_refs'] ?? null,
             'creative_mode' => in_array($mode, FoodAlchemistPlanningSession::CREATIVE_MODES, true) ? $mode : 'voll_kreativ',
             'status' => 'divergenz',
             'created_via' => (string) ($in['created_via'] ?? 'ui'),
         ]);
+    }
+
+    /** Höchstzahl kombinierter Impulse (Trends, Hypes, Fundstücke) je Planung. */
+    public const TRENDRADAR_MAX = 8;
+
+    /**
+     * Spec 79 · Planung aus dem Trendradar: Session aus einer KOMBINATION von Trends, Hypes und Fundstücken
+     * (Inspiration). Der Brief entsteht deterministisch (keine KI) im selben Muster wie {@see ausTrend},
+     * damit {@see briefFuerScope} den Lead je Ebene schärft; die Belege wandern in die Analyse.
+     *
+     * @param  list<int>  $trendIds
+     * @param  list<int>  $fundstueckIds
+     */
+    public function ausTrendradar(Team $team, array $trendIds, array $fundstueckIds = [], string $createdVia = 'trendradar'): FoodAlchemistPlanningSession
+    {
+        $k = $this->trendKombination($team, $trendIds, $fundstueckIds);
+
+        return $this->create($team, [
+            'title' => $k['title'],
+            'brief' => $k['brief'],
+            'analysis' => $k['analysis'],
+            'source_trend_refs' => $k['refs'],
+            'created_via' => $createdVia,
+        ]);
+    }
+
+    /** Kombination in eine bestehende Session übernehmen (Planungs-Reiter „Trendradar"). */
+    public function trendradarUebernehmen(Team $team, int $sessionId, array $trendIds, array $fundstueckIds = []): FoodAlchemistPlanningSession
+    {
+        $session = $this->ownedSession($team, $sessionId);   // nur das Besitzer-Team schreibt (D1)
+        $k = $this->trendKombination($team, $trendIds, $fundstueckIds);
+        $session->update([
+            'title' => $k['title'],
+            'brief' => $k['brief'],
+            'analysis' => $k['analysis'],
+            'source_trend_refs' => $k['refs'],
+        ]);
+
+        return $session->refresh();
+    }
+
+    /**
+     * Titel, Brief, Analyse und Herkunft aus gewählten Trends/Hypes und Fundstücken. Nur Sichtbares
+     * (eigenes Team + Elternkette); Unbekanntes wird abgewiesen statt still übergangen.
+     *
+     * @return array{title:string, brief:string, analysis:string, refs:array{trend_ids:list<int>, fundstueck_ids:list<int>}}
+     */
+    public function trendKombination(Team $team, array $trendIds, array $fundstueckIds = []): array
+    {
+        $trendIds = array_values(array_unique(array_map('intval', $trendIds)));
+        $fundstueckIds = array_values(array_unique(array_map('intval', $fundstueckIds)));
+        $anzahl = count($trendIds) + count($fundstueckIds);
+        if ($anzahl === 0) {
+            throw new RuntimeException('Bitte mindestens einen Trend, Hype oder ein Fundstück wählen.');
+        }
+        if ($anzahl > self::TRENDRADAR_MAX) {
+            throw new RuntimeException('Höchstens '.self::TRENDRADAR_MAX.' Impulse auf einmal kombinieren.');
+        }
+        $trends = \Platform\FoodAlchemist\Models\FoodAlchemistTrend::visibleToTeam($team)->whereIn('id', $trendIds)->with('belege')->get()->keyBy('id');
+        // Fundstücke: Lesesicht der ganzen Teamfamilie (Standorte sehen sich gegenseitig), wie die Pinnwand
+        $funde = \Platform\FoodAlchemist\Models\FoodAlchemistTrendBeleg::whereIn('team_id', app(TrendService::class)->fundstueckFamilie($team))
+            ->where('fundstueck', true)->whereIn('id', $fundstueckIds)->get()->keyBy('id');
+        if ($trends->count() !== count($trendIds) || $funde->count() !== count($fundstueckIds)) {
+            throw new RuntimeException('Mindestens ein gewählter Trend oder ein Fundstück ist nicht (mehr) sichtbar.');
+        }
+        $V = \Platform\FoodAlchemist\Support\TrendVokabular::class;
+        $kurz = fn (?string $t, int $n) => $t === null || trim($t) === '' ? '' : (mb_strlen(trim($t)) > $n ? rtrim(mb_substr(trim($t), 0, $n - 1)).'…' : trim($t));
+
+        $namen = [];
+        $zeilen = ['Aus diesen Impulsen aus dem Trendradar ein '.self::TREND_NOMEN_AGNOSTISCH.' entwickeln.'];
+        $analyse = [];
+        foreach ($trendIds as $id) {
+            $t = $trends[$id];
+            $namen[] = $t->name;
+            $art = $t->typ === 'hype' ? 'Hype' : 'Trend';
+            $einordnung = array_filter([$t->ebene ? $V::EBENEN[$t->ebene] : null, $t->kategorie ? $V::KATEGORIEN[$t->kategorie] : null]);
+            $zeilen[] = $art.($einordnung ? ' ('.implode(', ', $einordnung).')' : '').': '.$t->name
+                .(($d = $kurz($t->definition, 260)) !== '' ? ' — '.$d : '');
+            $belege = $t->belege->take(6)->map(fn ($b) => '  - '.($b->titel ?: ($V::QUELLEN[$b->quelle] ?? $b->quelle)).($b->url ? ' ('.$b->url.')' : ''))->implode("\n");
+            $analyse[] = $art.': '.$t->name.' · Konfidenz '.$V::KONFIDENZ[$t->wirksameKonfidenz()].($belege !== '' ? "\n".$belege : '');
+        }
+        foreach ($fundstueckIds as $id) {
+            $f = $funde[$id];
+            $name = $f->titel ?: 'Fundstück vom '.$f->beobachtet_am?->format('d.m.Y');
+            $namen[] = $name;
+            $zeilen[] = 'Inspiration: '.$name
+                .(($n = $kurz($f->notiz, 200)) !== '' ? ' — '.$n : '')
+                .($f->fundort ? ' (gesehen: '.$f->fundort.')' : '');
+            $analyse[] = 'Inspiration: '.$name.($f->url ? ' ('.$f->url.')' : '').($f->datei_name ? ' · Datei: '.$f->datei_name : '');
+        }
+        if ($anzahl > 1) {
+            $zeilen[] = 'Die Impulse verbinden, nicht nebeneinanderstellen.';
+        }
+        $title = $kurz(implode(' + ', $namen), 150);
+
+        return [
+            'title' => $title !== '' ? $title : 'Aus dem Trendradar',
+            'brief' => implode("\n", $zeilen),
+            // Erste Zeile = Anzeigename der Planung (Leitstelle zeigt den Anfang der Analyse), danach die Belege
+            'analysis' => ($title !== '' ? $title : 'Aus dem Trendradar')."\n\nAus dem Trendradar:\n".implode("\n", $analyse),
+            'refs' => ['trend_ids' => $trendIds, 'fundstueck_ids' => $fundstueckIds],
+        ];
     }
 
     /**
