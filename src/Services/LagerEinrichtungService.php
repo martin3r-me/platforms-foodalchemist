@@ -198,6 +198,44 @@ class LagerEinrichtungService
         return $n;
     }
 
+    /**
+     * Spec 67: Das Lager eines Grundprodukts aus Sicht eines Betriebs — je aktivem Lagerort Bestand,
+     * Stellplätze, Stammplatz und Vorschlag. Für GP-Reiter „Lager" und MCP.
+     *
+     * @return list<array{id:int, name:string, standard:bool, bestand:?string, bestand_basis:list<array{menge:float, einheit:string}>, stellplaetze:Collection, bin_id:?int, stellplatz:?string, vorschlag:?int, vorschlag_name:?string}>
+     */
+    public function gpLager(Team $team, FoodAlchemistGp $gp): array
+    {
+        $inventur = app(InventurService::class);
+        $bestaende = FoodAlchemistInventoryStock::where('team_id', $team->id)->where('gp_id', $gp->id)
+            ->whereNull('supplier_item_id')->get()->groupBy('inventory_location_id');
+        $out = [];
+        foreach (FoodAlchemistInventoryLocation::where('team_id', $team->id)->where('is_active', true)
+            ->orderByDesc('is_default')->orderBy('name')->get() as $ort) {
+            $b = $bestaende->get($ort->id, collect());
+            $plaetze = $this->stellplaetze($team, (int) $ort->id);
+            $binId = $this->stammplaetze($team, (int) $ort->id)[$gp->id] ?? null;
+            $vorschlag = $this->vorschlagFuer($team, (int) $ort->id, $gp);
+            $mengen = $b->map(fn ($s) => ['menge' => (float) $inventur->anzeigeMenge((float) $s->qty_base, (string) $s->base_unit), 'einheit' => $inventur->anzeigeEinheit((string) $s->base_unit)])->values()->all();
+            $out[] = [
+                'id' => (int) $ort->id, 'name' => (string) $ort->name, 'standard' => (bool) $ort->is_default,
+                'bestand' => $mengen === [] ? null : implode(', ', array_map(fn ($m) => rtrim(rtrim(number_format($m['menge'], 3, ',', '.'), '0'), ',') . ' ' . $m['einheit'], $mengen)),
+                'bestand_basis' => $mengen,
+                'stellplaetze' => $plaetze,
+                'bin_id' => $binId, 'stellplatz' => $binId !== null ? $plaetze->firstWhere('id', $binId)?->name : null,
+                'vorschlag' => $vorschlag, 'vorschlag_name' => $vorschlag !== null ? $plaetze->firstWhere('id', $vorschlag)?->name : null,
+            ];
+        }
+
+        return $out;
+    }
+
+    /** Vorgeschlagener Stellplatz (erster aktiver der Zone im Laufweg) für ein Grundprodukt am Lagerort. */
+    public function vorschlagFuer(Team $team, int $locationId, FoodAlchemistGp $gp): ?int
+    {
+        return $this->binFuerZone($this->stellplaetze($team, $locationId), $this->zoneFuer($gp))?->id;
+    }
+
     /** Zone aus Zustand + Warengruppe. null = keine Aussage möglich. */
     public function zoneFuer(FoodAlchemistGp $gp): ?string
     {

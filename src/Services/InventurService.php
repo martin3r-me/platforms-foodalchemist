@@ -268,7 +268,7 @@ class InventurService
     public function bestand(Team $team, ?int $locationId = null, string $suche = ''): array
     {
         $stocks = FoodAlchemistInventoryStock::where('team_id', $team->id)
-            ->with(['gp:id,name,piece_default_g,lead_la_supplier_item_id,condition,commodity_group_code', 'gp.leadLa:id,supplier_id', 'location:id,name', 'supplierItem:id,designation,qty,supplier_id'])
+            ->with(['gp:id,name,piece_default_g,lead_la_supplier_item_id,condition,commodity_group_code', 'gp.leadLa:id,supplier_id', 'gp.leadLa.supplier:id,name', 'location:id,name', 'supplierItem:id,designation,qty,supplier_id', 'supplierItem.supplier:id,name'])
             ->when($locationId !== null, fn ($q) => $q->where('inventory_location_id', $locationId))
             ->where('qty_base', '<>', 0)->get();
         $zuletzt = FoodAlchemistInventoryMovement::where('team_id', $team->id)
@@ -298,6 +298,7 @@ class InventurService
                 'zustand' => $s->gp?->condition ?: null,
                 'warengruppe' => $s->gp?->commodity_group_code ?: null,
                 'lieferant_id' => $s->gp?->leadLa?->supplier_id ?? $s->supplierItem?->supplier_id,
+                'lieferant' => $s->gp?->leadLa?->supplier?->name ?? $s->supplierItem?->supplier?->name,
             ];
         }
         usort($rows, fn ($a, $b) => strcmp($a['name'], $b['name']));
@@ -306,11 +307,12 @@ class InventurService
     }
 
     /** Jüngste Lagerbewegungen (Wareneingang, Inventur …). @return \Illuminate\Support\Collection */
-    public function bewegungen(Team $team, ?string $quelle = null, int $limit = 200)
+    public function bewegungen(Team $team, ?string $quelle = null, int $limit = 200, ?string $grund = null)
     {
         return FoodAlchemistInventoryMovement::where('team_id', $team->id)
             ->with(['gp:id,name', 'supplierItem:id,designation', 'location:id,name', 'order:id,supplier_id', 'order.supplier:id,name'])
             ->when($quelle !== null && $quelle !== '', fn ($q) => $q->where('source', $quelle))
+            ->when($grund !== null && $grund !== '', fn ($q) => $q->where('reason', $grund))
             ->where('qty_base', '<>', 0)
             ->orderByDesc('moved_at')->orderByDesc('id')->limit($limit)->get();
     }
@@ -444,7 +446,7 @@ class InventurService
     }
 
     /** Bewertung: aktueller EK je Basiseinheit (GP: Lead/Durchschnitt; Artikel: aktiver Preis ÷ Inhalt). */
-    private function preisJeBasis(Team $team, ?FoodAlchemistGp $gp, ?int $supplierItemId, string $baseUnit): ?float
+    public function preisJeBasis(Team $team, ?FoodAlchemistGp $gp, ?int $supplierItemId, string $baseUnit): ?float
     {
         if ($gp !== null) {
             $preis = $baseUnit === 'Stk' ? $this->recompute->preisProStueckPublic($gp, $team) : $this->recompute->preisProGrammPublic($gp, $team);
@@ -464,7 +466,7 @@ class InventurService
         return round($baseUnit === 'Stk' ? $jeEinheit : $jeEinheit / 1000, 6);
     }
 
-    private function basisEinheit(string $unitCode): string
+    public function basisEinheit(string $unitCode): string
     {
         return match (strtolower(trim($unitCode))) {
             'kg', 'g' => 'g',

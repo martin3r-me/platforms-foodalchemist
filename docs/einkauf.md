@@ -159,6 +159,15 @@ vollständiges Lager zu führen:
   Stellplatz druckbar. Wo der Lead-Artikel ein Gebinde kennt, wird in Karton + Einheit + lose gezählt.
   Bestand und Zählliste lassen sich nach Stellplatz, Zustand, Warengruppe, Lieferant, Status,
   „ohne Preis" und Ladenhütern filtern. Beim Buchen optional „nicht gezählt = 0".
+- **Lagerbewegungen von Hand (Spec 67):** Reiter *Bewegungen* → Zugang (ohne Bestellung, Rücknahme,
+  Marktkauf, Korrektur), Abgang mit Grund (Verderb, Bruch, Schwund, Personalessen, Probe, Korrektur)
+  und Umlagerung zwischen Lagerorten; Menge in kg/l/Stk oder Karton + Einheit + lose. Wert zum
+  aktuellen EK (bei Zugang optional von Hand) eingefroren; Storno als Gegenbuchung. Das Controlling
+  weist die gebuchten Abgänge als erklärten Teil der Wareneinsatz-Abweichung aus.
+- **Lager am Grundprodukt (Spec 67):** Reiter *Lager* im Grundprodukt — Bestand und Stellplatz je
+  Lagerort, ohne „Bearbeiten“ pflegbar. Der Wareneingang bucht in den Lagerort mit Stellplatz und
+  sortiert beim ersten Eingang automatisch ein; neue bzw. klassifizierte Grundprodukte bekommen den
+  Vorschlags-Stellplatz automatisch (Handzuordnungen bleiben).
 - **Einkauf je Grundprodukt:** Im Grundprodukt (Reiter *Einkauf*) stehen Menge und € je Monat der
   letzten 12 Monate, die Lieferanten mit Ø-Preis und letztem Kauf sowie der aktuelle Lagerbestand.
 - **Nachlieferung light:** Unterlieferte Wareneingangszeilen können als neuer
