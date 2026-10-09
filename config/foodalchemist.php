@@ -817,6 +817,19 @@ return [
         'konzentrat_anteil_max' => (float) env('FOODALCHEMIST_KONZENTRAT_ANTEIL_MAX', 0.20),
     ],
 
+    /*
+     * Kaskade: ein neues Unterrezept im Gericht läuft automatisch durch die Basisrezept-Planung
+     * (Komponenten-Plan, Bestand-Prüfung je Komponente, Suchbegriffe) — ohne Bestätigung, Freigabe
+     * erst am Ende (Dominique 09.10.: „Ein Basisrezept steht für sich“, „Ja, automatisch“).
+     * kind_max_komponenten: Gericht-Komponenten sind schmaler als ein Wurzel-Basisrezept, und
+     * 6 Kinder × 6 Enkel füllt MAX_STEPS = 50. Wird im Code auf 1 … MAX_KOMPONENTEN geklemmt.
+     * Bewusst nur Config, keine zweite Quelle in der DB.
+     */
+    'kaskade' => [
+        'kind_plan' => (bool) env('FOODALCHEMIST_KIND_PLAN', true),
+        'kind_max_komponenten' => (int) env('FOODALCHEMIST_KIND_MAX_KOMPONENTEN', 4),
+    ],
+
     // Spec 52/E: Kandidaten werden vor der kontextspezifischen Endauswahl fusioniert.
     'knowledge_search' => [
         'candidate_limit' => 100,

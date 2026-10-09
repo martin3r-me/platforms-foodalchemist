@@ -49,9 +49,18 @@ class GenerateRecipePlanJob implements ShouldQueue
         }
         $cascade->setzePhase($this->stepId, 'Komponenten werden geplant …');
         try {
-            $komponenten = $plan->plane($team, $this->brief, $this->params);
+            $istKind = $step->parent_step_id !== null;
+            $komponenten = $plan->plane($team, $this->brief, $this->params,
+                $istKind ? (int) config('foodalchemist.kaskade.kind_max_komponenten', 4) : null);
             $cascade->setzePhase($this->stepId, null);
             if ($cascade->istAbgebrochen((int) $step->cascade_run_id)) {
+                return;
+            }
+            if ($istKind) {
+                // Kind-Basisrezept: kein Mensch-Gate, direkt nach dem Plan bauen (Dominique 09.10.).
+                app(\Platform\FoodAlchemist\Services\RecipeDependencyWorkflowService::class)
+                    ->baueKindNachPlan($team, $step->fresh(), $this->userId, $this->brief, $this->params, $komponenten);
+
                 return;
             }
             if (count($komponenten) <= 1) {

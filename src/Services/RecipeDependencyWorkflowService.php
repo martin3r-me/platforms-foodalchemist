@@ -40,7 +40,13 @@ class RecipeDependencyWorkflowService
     public function prepare(Team $team, int $stepId, string $description, array $parameter, bool $vkModus): array
     {
         $context = app(RecipeGenerationContextService::class)->build($team, $description, $parameter, $vkModus);
-        FoodAlchemistCascadeRunStep::whereKey($stepId)->update(['context_snapshot' => $context['snapshot']]);
+        // Der Komponenten-Plan (plan/komponenten) gehört dem Step, nicht dem Bau: vorher schrieb der Bau den
+        // Snapshot komplett neu und löschte ihn (demo Lauf 86, Step 556) — kindVorgaben fand danach keine
+        // Suchbegriffe mehr, „neu erzeugen“ keinen bestätigten Plan.
+        $alt = FoodAlchemistCascadeRunStep::whereKey($stepId)->value('context_snapshot');
+        $alt = is_string($alt) ? (json_decode($alt, true) ?: []) : (is_array($alt) ? $alt : []);
+        $plan = array_intersect_key($alt, array_flip(['plan', 'komponenten']));
+        FoodAlchemistCascadeRunStep::whereKey($stepId)->update(['context_snapshot' => [...$context['snapshot'], ...$plan]]);
 
         return $context;
     }
@@ -212,18 +218,80 @@ class RecipeDependencyWorkflowService
             if ($child->status !== 'geplant') {
                 continue;   // schon unterwegs (running/queued) oder terminal — kein zweiter Job
             }
-            $runId = (string) Str::uuid();
-            $child->update(['status' => 'running', 'generator_run_id' => $runId]);
-            Cache::put(GenerateRecipeJob::cacheKey($runId), ['status' => 'pending'], now()->addMinutes(60));
-            // In der planChildren-Schleife: bis MAX_STEPS = 50 Sub-Rezepte je Lauf. Eigene
-            // Schlange, damit sie parallel zu den Gerichten laufen statt dahinter.
-            GenerateRecipeJob::dispatch($runId, $team->id, $userId, $text, [
-                ...$childParameter,
-                ...$this->kindVorgaben($step, $ingredientId, $text),
-                'cascade_step_id' => $child->id,
-                'auto_dependencies' => true,
-            ], false, $kindVollAnreichern)->onQueue(Warteschlange::rezepte());
+            $this->starteKind($team, $child, $userId, $text,
+                [...$childParameter, ...$this->kindVorgaben($step, $ingredientId, $text)], $kindVollAnreichern);
         }
+    }
+
+    /**
+     * Der EINE Start eines Kind-Basisrezepts — Stufen-Freigabe, „jetzt erzeugen“ und „neu erzeugen“ laufen hier
+     * durch (Architekturtest: keine weitere Dispatch-Stelle für Kind-Steps).
+     *
+     * Ein Kind steht für sich und wird wie ein allein gestartetes Basisrezept geplant (Komponenten-Plan, Bestand je
+     * Komponente, Suchbegriffe) — automatisch, ohne Mensch-Gate (Dominique 09.10.). Auf der untersten Ebene
+     * (MAX_DEPTH) kein Plan: seine Komponenten könnten nie mehr gebaut werden.
+     *
+     * @param  array<string, mixed>  $params  schon durch kindParameter + kindVorgaben
+     */
+    public function starteKind(Team $team, FoodAlchemistCascadeRunStep $child, int $userId, string $text, array $params, bool $vollAnreichern): void
+    {
+        if ((bool) config('foodalchemist.kaskade.kind_plan', true) && (int) $child->depth < self::MAX_DEPTH) {
+            $child->update(['status' => 'running', 'error' => null, 'generator_run_id' => null]);
+            app(PlanningCascadeService::class)->setzePhase((int) $child->id, 'Komponenten werden geplant …');
+            \Platform\FoodAlchemist\Jobs\GenerateRecipePlanJob::dispatch($team->id, $userId, (int) $child->id, $text,
+                [...$params, '_voll_anreichern' => $vollAnreichern])->onQueue(Warteschlange::rezepte());
+
+            return;
+        }
+        $this->baueKind($team, $child, $userId, $text, $params, $vollAnreichern);
+    }
+
+    /**
+     * Nach dem Komponenten-Plan des Kinds bauen — ohne Gate. Das Kind geht nie auf `geplant` (heißt bei Kind-Steps
+     * „wartet auf Stufen-Freigabe“; die nächste Freigabe dispatchte es sonst ein zweites Mal).
+     *
+     * @param  array<string, mixed>  $params
+     * @param  list<array<string, mixed>>  $komponenten
+     */
+    public function baueKindNachPlan(Team $team, FoodAlchemistCascadeRunStep $child, int $userId, string $text, array $params, array $komponenten): void
+    {
+        $vollAnreichern = (bool) ($params['_voll_anreichern'] ?? false);
+        unset($params['_voll_anreichern']);
+        if (count($komponenten) > 1) {
+            $params['plan_komponenten'] = array_values($komponenten);
+        }
+        // Suchbegriffe ohne Extra-Call: der Plan liefert sie je Komponente schon.
+        if (RecipeGenerationContextService::suchbegriffeAus($params) === []) {
+            $begriffe = [];
+            foreach ($komponenten as $k) {
+                foreach ((array) ($k['suchbegriffe'] ?? []) as $t) {
+                    $begriffe[mb_strtolower(trim((string) $t))] = trim((string) $t);
+                }
+            }
+            unset($begriffe['']);
+            if ($begriffe !== []) {
+                $params['suchbegriffe'] = array_values($begriffe);
+            }
+        }
+        if ($komponenten !== []) {
+            $snap = is_array($child->fresh()?->context_snapshot) ? $child->fresh()->context_snapshot : [];
+            $child->update(['context_snapshot' => [...$snap, 'plan' => true, 'komponenten' => array_values($komponenten)]]);
+        }
+        $this->baueKind($team, $child, $userId, $text, $params, $vollAnreichern);
+    }
+
+    /** @param  array<string, mixed>  $params */
+    private function baueKind(Team $team, FoodAlchemistCascadeRunStep $child, int $userId, string $text, array $params, bool $vollAnreichern): void
+    {
+        $runId = (string) Str::uuid();
+        $child->update(['status' => 'running', 'error' => null, 'generator_run_id' => $runId]);
+        Cache::put(GenerateRecipeJob::cacheKey($runId), ['status' => 'pending'], now()->addMinutes(60));
+        // Bis MAX_STEPS = 50 Sub-Rezepte je Lauf. Eigene Schlange, damit sie parallel zu den Gerichten laufen.
+        GenerateRecipeJob::dispatch($runId, $team->id, $userId, $text, [
+            ...$params,
+            'cascade_step_id' => $child->id,
+            'auto_dependencies' => true,
+        ], false, $vollAnreichern)->onQueue(Warteschlange::rezepte());
     }
 
     /**
@@ -282,17 +350,28 @@ class RecipeDependencyWorkflowService
         if ($parent !== null && $dep !== null) {
             $params = [...$params, ...$this->kindVorgaben($parent, (int) $dep->ingredient_id, $text)];
         }
-
-        $runId = (string) Str::uuid();
-        $child->update(['status' => 'running', 'generator_run_id' => $runId]);
-        Cache::put(GenerateRecipeJob::cacheKey($runId), ['status' => 'pending'], now()->addMinutes(60));
-        GenerateRecipeJob::dispatch($runId, $team->id, $userId, $text, [
-            ...$params,
-            'cascade_step_id' => $child->id,
-            'auto_dependencies' => true,
-        ], false, $kindVollAnreichern);
+        $this->starteKind($team, $child, $userId, $text, $params, $kindVollAnreichern);
 
         return true;
+    }
+
+    /**
+     * „Neu erzeugen“ an einem Kind-Step: dieselben Vorgaben wie beim ersten Start (kindParameter + kindVorgaben +
+     * Plan) — vorher lief das über den Wurzel-Pfad mit den vollen Lauf-Params (Aroma des Gerichts kam zurück).
+     */
+    public function starteKindNeu(Team $team, FoodAlchemistCascadeRunStep $child, string $text): void
+    {
+        $parent = $child->parent_step_id !== null ? FoodAlchemistCascadeRunStep::find($child->parent_step_id) : null;
+        $d = is_array($parent?->deferred['children'] ?? null) ? $parent->deferred['children'] : [];
+        $params = is_array($d['params'] ?? null) ? $d['params'] : (is_array($child->run?->params) ? $child->run->params : []);
+        $userId = (int) (\Illuminate\Support\Facades\Auth::id() ?? ($d['user_id'] ?? 0));
+        $vollAnreichern = (bool) ($params['_voll_anreichern'] ?? false);
+        $params = self::kindParameter($params);
+        $dep = FoodAlchemistCascadeRecipeDependency::where('child_step_id', $child->id)->first(['ingredient_id']);
+        if ($parent !== null && $dep !== null) {
+            $params = [...$params, ...$this->kindVorgaben($parent, (int) $dep->ingredient_id, (string) $child->label)];
+        }
+        $this->starteKind($team, $child, $userId, $text, $params, $vollAnreichern);
     }
 
     /**
