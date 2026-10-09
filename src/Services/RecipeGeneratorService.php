@@ -368,7 +368,9 @@ class RecipeGeneratorService
                     $zeile['match_confidence'] = round($treffer['score'], 3);
                     $statistik['bestand_gp']++;
                 } elseif (! $verdrahtet && $verdrahtbar && $treffer['target'] === 'sub_recipe'
-                    && $this->validiereProposedSub($team, (int) $recipe->id, $treffer['recipe_id'] ?? null, $text, $diaetHart, $statistik['bestand_abgelehnt']) !== null) {
+                    // Matcher-Treffer (inkl. kuratierter §4-Aliase wie Rinderbrühe → Heller Kalbsfond): Freigabe + Diät
+                    // prüfen, aber keine Namens-/Typ-Prüfung — die Zuordnung hat der Matcher bzw. der Mensch schon entschieden.
+                    && $this->validiereProposedSub($team, (int) $recipe->id, $treffer['recipe_id'] ?? null, '', $diaetHart, $statistik['bestand_abgelehnt'], $text) !== null) {
                     $zeile['referenced_recipe_id'] = $treffer['recipe_id'];
                     $zeile['match_method'] = 'recipe_ref';
                     $statistik['bestand_sub']++;
@@ -983,7 +985,7 @@ class RecipeGeneratorService
      * @param  list<string>  $diaetHart  Spec 80 B3: harte Diät des Laufs
      * @param  list<array{text: string, recipe_id: int, name: string, grund: string}>|null  $abgelehnt  Protokoll abgelehnter Bestandstreffer
      */
-    private function validiereProposedSub(Team $team, int $parentRecipeId, mixed $id, string $text = '', array $diaetHart = [], ?array &$abgelehnt = null): ?int
+    private function validiereProposedSub(Team $team, int $parentRecipeId, mixed $id, string $text = '', array $diaetHart = [], ?array &$abgelehnt = null, ?string $nurDiaetFuer = null): ?int
     {
         $id = is_numeric($id) ? (int) $id : 0;
         if ($id <= 0 || $id === $parentRecipeId) {
@@ -1011,7 +1013,7 @@ class RecipeGeneratorService
         // Spec 80 B3: Funktionsprüfung (Typ, Bestandteile, Diät). Ohne Zeilentext (reiner Bestandszug ohne
         // Beschreibung) bleibt es beim bisherigen Verhalten.
         $grund = \Platform\FoodAlchemist\Support\BestandsPassung::grund(
-            $text, (string) $kandidat->name,
+            $nurDiaetFuer !== null ? '' : $text, (string) $kandidat->name,
             $kandidat->spec_is_vegan !== null ? (bool) $kandidat->spec_is_vegan : null,
             $kandidat->spec_is_vegetarian !== null ? (bool) $kandidat->spec_is_vegetarian : null,
             $diaetHart,

@@ -84,8 +84,11 @@ it('Funktionsprüfung lässt echte Treffer durch', function () {
 });
 
 it('ohne Vokabular greifen nur Bestandteil- und Diät-Prüfung', function () {
-    expect(BestandsPassung::grund('Petersilienmatte', 'Garnitur: Kräutermatte Petersilie (Vegan)'))->toBeNull()
-        ->and(BestandsPassung::grund('Rote-Bete-Püree', 'Püree: Kartoffel-Rote-Bete'))->toContain('kartoffel');
+    // Die Bestandteil-Prüfung allein erkennt die Kräutermatte schon (Hauptbestandteil fehlt in der Zeile).
+    expect(BestandsPassung::grund('Petersilienmatte', 'Garnitur: Kräutermatte Petersilie (Vegan)'))->toContain('kraeutermatte')
+        ->and(BestandsPassung::grund('Rote-Bete-Püree', 'Püree: Kartoffel-Rote-Bete'))->toContain('kartoffel')
+        ->and(BestandsPassung::grund('Pesto, frisch', 'Pesto: Basilikum'))->toBeNull()
+        ->and(BestandsPassung::grund('', 'Fond: Gemüse-Speck', null, false, ['vegetarisch']))->toContain('vegetarisch');
 });
 
 it('Übernahme per Namen findet nur freigegebene Basisrezepte (Entscheid 2026-10-09)', function () {

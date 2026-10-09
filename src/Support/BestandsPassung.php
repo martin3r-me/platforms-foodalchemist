@@ -28,8 +28,12 @@ final class BestandsPassung
     {
         $zeile = trim($zeile);
         $kandidatName = trim($kandidatName);
-        if ($zeile === '' || $kandidatName === '') {
-            return null;   // nichts zu vergleichen (z. B. Bestandszug ohne Zeilentext) → wie bisher
+        if ($kandidatName === '') {
+            return null;
+        }
+        if ($zeile === '') {
+            // Ohne Zeilentext (Matcher-/Alias-Treffer, Bestandszug ohne Beschreibung) zählt nur die Diät.
+            return self::diaetGrund($vegan, $vegetarisch, $diaetHart);
         }
 
         return self::typGrund($zeile, $kandidatName)
@@ -64,8 +68,32 @@ final class BestandsPassung
         $zeileFlach = self::flach($zeile);
         $kandFlach = self::flach($kandidat);
 
-        // (a) Hauptbestandteil des Kandidaten (erstes Wort der Bezeichnung) muss in der Zeile stehen.
-        if (RezeptTypVokabular::praefix($kandidat) !== null) {
+        // Inhaltswörter der Zeile (ohne Typ, Fugen und Beschreibung) — die Zeile nennt damit, WAS sie will.
+        $zeileTyp = RezeptTypVokabular::typImText($zeile);
+        $typFlach = $zeileTyp !== null ? str_replace(' ', '', RezeptTypVokabular::norm($zeileTyp)) : null;
+        // Auch das Präfix des Kandidaten ist ein Typ-Wort (falls das Vokabular fehlt): „Pesto, frisch" ↔ „Pesto: …".
+        $kandPraefix = ($p = RezeptTypVokabular::praefix($kandidat)) !== null ? str_replace(' ', '', RezeptTypVokabular::norm($p)) : null;
+        $inhalt = [];
+        foreach ($engine->tokenize(RezeptTypVokabular::bezeichnung($zeile)) as $wort) {
+            if ($kandPraefix !== null && ($wort === $kandPraefix || str_ends_with($wort, $kandPraefix))) {
+                $wort = mb_substr($wort, 0, mb_strlen($wort) - mb_strlen($kandPraefix));
+                if ($wort === '') {
+                    continue;
+                }
+            }
+            if ($typFlach !== null && str_ends_with($wort, $typFlach)) {
+                $wort = mb_substr($wort, 0, mb_strlen($wort) - mb_strlen($typFlach));   // „kalbsfond" → „kalbs"
+            }
+            $wort = preg_replace('/(s|n|en)$/u', '', $wort) ?? $wort;                   // Fugen-s/-n
+            if (mb_strlen($wort) >= 4 && ! self::istBeschreibung($wort)
+                && ($typFlach === null || $wort !== mb_substr($typFlach, 0, mb_strlen($wort)))) {
+                $inhalt[] = $wort;
+            }
+        }
+
+        // (a) Nennt die Zeile eine eigene Hauptzutat, muss der Hauptbestandteil des Kandidaten darin stehen
+        // („Rote-Bete-Püree" ≠ „Püree: Kartoffel-Rote-Bete"). Eine generische Zeile („Pesto, frisch") prüft (a) nicht.
+        if ($inhalt !== [] && RezeptTypVokabular::praefix($kandidat) !== null) {
             $teile = $engine->tokenize(RezeptTypVokabular::bezeichnung($kandidat));
             $haupt = $teile[0] ?? null;
             if ($haupt !== null && mb_strlen($haupt) >= 3) {
@@ -77,16 +105,7 @@ final class BestandsPassung
         }
 
         // (b) Was die Zeile zusätzlich nennt (Variante), muss im Kandidaten stehen.
-        $zeileTyp = RezeptTypVokabular::typImText($zeile);
-        $typFlach = $zeileTyp !== null ? str_replace(' ', '', RezeptTypVokabular::norm($zeileTyp)) : null;
-        foreach ($engine->tokenize(RezeptTypVokabular::bezeichnung($zeile)) as $wort) {
-            if ($typFlach !== null && str_ends_with($wort, $typFlach)) {
-                $wort = mb_substr($wort, 0, mb_strlen($wort) - mb_strlen($typFlach));   // „kalbsfond" → „kalbs"
-            }
-            $wort = preg_replace('/(s|n|en)$/u', '', $wort) ?? $wort;                   // Fugen-s/-n
-            if (mb_strlen($wort) < 4 || self::istBeschreibung($wort)) {
-                continue;
-            }
+        foreach ($inhalt as $wort) {
             if (! str_contains($kandFlach, $engine->stemGerman($wort))) {
                 return "„{$wort}“ aus der Zeile fehlt im Bestandsrezept (andere Variante)";
             }
