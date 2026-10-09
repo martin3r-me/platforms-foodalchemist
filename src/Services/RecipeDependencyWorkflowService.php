@@ -233,13 +233,16 @@ class RecipeDependencyWorkflowService
      *
      * @param  array<string, mixed>  $params  schon durch kindParameter + kindVorgaben
      */
-    public function starteKind(Team $team, FoodAlchemistCascadeRunStep $child, int $userId, string $text, array $params, bool $vollAnreichern): void
+    public function starteKind(Team $team, FoodAlchemistCascadeRunStep $child, int $userId, string $text, array $params, bool $vollAnreichern, ?string $auftrag = null): void
     {
         // Den ursprünglichen Auftrag festhalten: markStepDone zieht das Label später auf den Artefaktnamen
         // („Jus: Thymian, kräftig“) — „neu erzeugen“ braucht den Auftrag, nicht den letzten Namen (Review Hans).
-        $snap = is_array($child->context_snapshot) ? $child->context_snapshot : [];
+        // Frisch lesen (ein vorher geladenes Modell kennt kind_brief nicht) und nie den Kommentar eines Versuchs
+        // als Auftrag festschreiben — sonst wüchse er bei jedem neuen Versuch an (Review Hans).
+        $snap = $child->fresh()?->context_snapshot;
+        $snap = is_array($snap) ? $snap : [];
         if (! isset($snap['kind_brief'])) {
-            $child->update(['context_snapshot' => [...$snap, 'kind_brief' => $text]]);
+            $child->update(['context_snapshot' => [...$snap, 'kind_brief' => $auftrag ?? $text]]);
         }
         // Unter „nur Bestand“ dürfte eine neue Komponente ohnehin kein Kind werden (planChildren) — kein Plan-Call.
         $planen = (bool) config('foodalchemist.kaskade.kind_plan', true) && (int) $child->depth < self::MAX_DEPTH
@@ -400,7 +403,7 @@ class RecipeDependencyWorkflowService
     public function starteKindNeu(Team $team, FoodAlchemistCascadeRunStep $child, ?string $kommentar = null): void
     {
         // Der ursprüngliche Auftrag, nicht das Label: das trägt nach dem Bau den Artefaktnamen.
-        $auftrag = (string) (($child->context_snapshot ?? [])['kind_brief'] ?? $child->label ?? '');
+        $auftrag = (string) (($child->fresh()?->context_snapshot ?? [])['kind_brief'] ?? $child->label ?? '');
         $kommentar = trim((string) $kommentar);
         $text = $kommentar !== '' ? rtrim($auftrag) . "\n\nGezielte Anpassung (Nutzer-Feedback zu dieser Position): " . $kommentar : $auftrag;
         $parent = $child->parent_step_id !== null ? FoodAlchemistCascadeRunStep::find($child->parent_step_id) : null;
@@ -413,7 +416,7 @@ class RecipeDependencyWorkflowService
         if ($parent !== null && $dep !== null) {
             $params = [...$params, ...$this->kindVorgaben($parent, (int) $dep->ingredient_id, $auftrag)];
         }
-        $this->starteKind($team, $child, $userId, $text, $params, $vollAnreichern);
+        $this->starteKind($team, $child, $userId, $text, $params, $vollAnreichern, $auftrag);
     }
 
     /**

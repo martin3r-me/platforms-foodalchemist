@@ -203,6 +203,13 @@ it('„neu erzeugen“ am Kind läuft über denselben Start — ohne Gericht-Aro
         ->and($neu->params)->not->toHaveKey('aroma')
         ->and($neu->params['ziel_menge'] ?? null)->toBe(120.0)
         ->and($neu->params['suchbegriffe'] ?? null)->toBe(['Thymian']);   // Komponente über den Auftrag gefunden
+
+    // Zweiter Versuch: der Kommentar des ersten wächst nicht in den Auftrag hinein.
+    $this->kind->refresh()->update(['status' => 'failed', 'phase' => null]);
+    app(PlanningCascadeService::class)->regeneriereStep($this->rootTeam, (int) $this->kind->id, 'weniger Salz');
+    $dritter = Queue::pushed(GenerateRecipePlanJob::class)->filter(fn ($j) => $j->stepId === (int) $this->kind->id)->last();
+    expect($dritter->brief)->toContain('weniger Salz')->not->toContain('mehr Röstaromen')
+        ->and($this->kind->fresh()->context_snapshot['kind_brief'])->toBe('Jus: Thymian');
 });
 
 it('ein Baustein aus dem Bestand: binden statt Dublette bauen', function () {
