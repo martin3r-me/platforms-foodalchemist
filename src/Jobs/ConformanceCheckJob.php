@@ -72,6 +72,13 @@ class ConformanceCheckJob implements ShouldQueue
 
         Auth::login($user);   // Team-Kontext für AiGatewayService (Kill-Switch / Food-DNA / Call-Log)
 
+        // Spec 80 C1: ist der Step inzwischen weitergewandert (neu generiert → anderes Rezept) oder das
+        // Rezept gelöscht, still aufhören — sonst prüft der Job ein totes Rezept und räumt am Ende die
+        // Phase des NEUEN Versuchs ab.
+        if (! $this->nochAktuell()) {
+            return;
+        }
+
         if ($this->cascadeStepId !== null) {
             app(\Platform\FoodAlchemist\Services\PlanningCascadeService::class)
                 ->setzePhase($this->cascadeStepId, \Platform\FoodAlchemist\Services\PlanningCascadeService::PHASE_KONFORMITAET);
@@ -82,12 +89,38 @@ class ConformanceCheckJob implements ShouldQueue
             $conformance->pruefeUndHeile($team, $this->artifactTyp, $this->artifactId);
         } catch (\Throwable $e) {
             // Best-effort — eine gescheiterte Prüfung ist nie ein Grund, das fertige Artefakt zu kippen.
+            // Spec 80 C6: aber protokolliert, sonst ist eine ausgefallene Prüfung unsichtbar.
+            \Illuminate\Support\Facades\Log::warning('[Konformität] Prüfung fehlgeschlagen', [
+                'artifact' => $this->artifactTyp . '#' . $this->artifactId, 'step' => $this->cascadeStepId, 'error' => $e->getMessage(),
+            ]);
         } finally {
-            if ($this->cascadeStepId !== null) {
+            if ($this->cascadeStepId !== null && $this->nochAktuell()) {
                 $svc = app(\Platform\FoodAlchemist\Services\PlanningCascadeService::class);
                 $svc->setzePhase($this->cascadeStepId, null);
                 $this->markKonformitaetsDauer((int) round((hrtime(true) - $start) / 1_000_000));
             }
+        }
+    }
+
+    /**
+     * Spec 80 C1: gehört der Step noch zu DIESEM Rezept, und lebt das Rezept noch? Ohne Kaskaden-Step
+     * zählt nur das Rezept. Fail-open bei Lesefehlern (Prüfung ist Beiwerk, nie blockierend).
+     */
+    private function nochAktuell(): bool
+    {
+        try {
+            if (in_array($this->artifactTyp, ['recipe', 'basisrezept', 'vk', 'gericht'], true)
+                && ! \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::query()->whereKey($this->artifactId)->exists()) {
+                return false;
+            }
+            if ($this->cascadeStepId === null) {
+                return true;
+            }
+            $step = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep::find($this->cascadeStepId);
+
+            return $step !== null && ($step->ref_id === null || (int) $step->ref_id === $this->artifactId);
+        } catch (\Throwable) {
+            return true;
         }
     }
 

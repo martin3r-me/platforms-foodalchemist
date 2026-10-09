@@ -75,6 +75,12 @@ class BriefingLeitplankenService
         $roh = is_array($vorschlag->werte['leitplanken'] ?? null) ? $vorschlag->werte['leitplanken'] : [];
         $verworfen = [];
         $leitplanken = $this->sessions->filterGenerationParams($roh, $verworfen) ?? [];
+        // Spec 80 C4: „keine Diät" ist eine Aussage, kein fehlender Wert. Die KI liefert dann `diaet_hart: []`;
+        // der Filter wirft leere Listen weg, und ein vorher gesetztes „vegetarisch" blieb stehen (demo #138).
+        // Für die Regler zählt das ausdrückliche Leer — persistiert wird es nicht (setGenerationParams filtert).
+        if (array_key_exists('diaet_hart', $roh) && $roh['diaet_hart'] === []) {
+            $leitplanken['diaet_hart'] = [];
+        }
         $scopeFremd = [];
         $leitplanken = self::aufScopeZuschneiden($leitplanken, $scope, $scopeFremd);
 

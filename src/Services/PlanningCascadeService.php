@@ -2046,6 +2046,15 @@ class PlanningCascadeService
         if ($run === null) {
             return;
         }
+        // Spec 80 C5: ein abgebrochener Lauf bleibt abgebrochen. Späte Rückmeldungen (ein Provider-Call
+        // lässt sich nicht hart stoppen) dürfen ihn nicht auf „Zu prüfen" zurückholen.
+        if (is_array($run->params) && isset($run->params[self::ABBRUCH_KEY])) {
+            if ($run->status !== 'failed') {
+                $run->update(['status' => 'failed']);
+            }
+
+            return;
+        }
         $steps = $run->steps()->get(['status', 'deferred']);
         $anreicherungLaeuft = $steps->contains(static function ($step): bool {
             $status = is_array($step->deferred) ? ($step->deferred['enrich']['status'] ?? null) : null;
@@ -2450,6 +2459,19 @@ class PlanningCascadeService
         // während der erste Versuch noch rechnet, darf keinen zweiten GenerateRecipeJob einreihen.
         if ($step->status === 'running') {
             throw new \Platform\FoodAlchemist\Exceptions\PlanungAktionLaeuftBereitsException('Läuft bereits. Bitte warten, bis der aktuelle Versuch fertig ist.');
+        }
+        // Spec 80 C1: auch die NACHPHASE zählt als „läuft". Der Step steht schon auf `done`, während
+        // Regelwerk-Prüfung, Selbstheilung oder Anreicherung noch am Entwurf arbeiten. Ein Neu-Generieren
+        // in diesem Fenster löschte den Entwurf unter der laufenden Prüfung weg (demo Lauf #79: 40 s
+        // Prüfung auf dem gelöschten Rezept, danach löschte sie die Phase des neuen Versuchs).
+        $enrich = is_array($step->deferred) ? ($step->deferred['enrich']['status'] ?? null) : null;
+        if ($step->phase !== null || in_array($enrich, ['queued', 'running'], true)) {
+            throw new \Platform\FoodAlchemist\Exceptions\PlanungAktionLaeuftBereitsException('Prüfung oder Anreicherung läuft noch. Bitte warten, bis sie fertig ist.');
+        }
+        // Spec 80 C2: nur Entwürfe (done) und gescheiterte Schritte. Ein übernommenes Bestandsrezept
+        // (skipped) oder ein freigegebenes Rezept darf dieser Pfad nie löschen.
+        if (! in_array($step->status, ['done', 'failed'], true)) {
+            return;
         }
         // L4: Regenerieren eines KIND-Basisrezepts — die Eltern-Zutat zeigt noch auf den gleich
         // gelöschten Draft. VOR dem Löschen die Bindung lösen (referenced_recipe_id NULL, unmatched),

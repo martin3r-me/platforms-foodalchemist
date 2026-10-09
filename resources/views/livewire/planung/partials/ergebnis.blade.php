@@ -15,7 +15,7 @@
     $laufFailedGenerierbar = $lauf->steps->where('status', 'failed')->whereIn('kind', ['rezept', 'gericht', 'concept'])->count();
     $offeneEntwuerfe = $lauf->steps->where('status', 'done')->count();
     $stufen = $this->stufenAusSteps($lauf->steps);
-    $zustandTon = ['läuft' => ['info', 'Läuft'], 'prüfen' => ['warn', 'Zu prüfen'], 'geplant' => ['neutral', 'Geplant'], 'erledigt' => ['ok', 'Erledigt']];
+    $zustandTon = ['läuft' => ['info', 'Läuft'], 'prüfen' => ['warn', 'Zu prüfen'], 'geplant' => ['neutral', 'Geplant'], 'erledigt' => ['ok', 'Erledigt'], 'fehlgeschlagen' => ['crit', 'Fehlgeschlagen']];
     $stufeIcon = ['concept' => 'heroicon-o-squares-2x2', 'gericht' => 'heroicon-o-cake', 'rezept' => 'heroicon-o-beaker'];
     $stepArgs = fn ($s, $indent) => ['st' => $s, 'stepLabel' => $stepLabel, 'stepColor' => $stepColor, 'refRoute' => $refRoute, 'indent' => $indent, 'kalkulation' => $kalkulation ?? [], 'bildCalls' => $bildCalls ?? [], 'bilderAngefordert' => $bilderAngefordert ?? false, 'fotoCounts' => $fotoCounts ?? [], 'fotoPickerStep' => $fotoPickerStep ?? null, 'fotoPickerKandidaten' => $fotoPickerKandidaten ?? [], 'konformitaet' => $konformitaet ?? [], 'gpKonformitaet' => $gpKonformitaet ?? []];
     // Anreicherungs-Bilanz über die freigegebenen Rezept-/Gericht-Steps (deferred.enrich) — damit der

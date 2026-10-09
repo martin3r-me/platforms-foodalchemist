@@ -99,8 +99,22 @@ class RecipeReviseService
             $roh = str_replace(',', '.', (string) ($z['quantity'] ?? ''));
             $quantity = is_numeric($roh) ? (float) $roh : null;
             $zeile = $this->bestandsZeile($orig);
-            $zeile['raw_text'] = (string) ($z['text'] ?? $orig?->raw_text ?? '');
-            $zeile['display_name'] = (string) ($z['text'] ?? $orig?->display_name ?? '');
+            // Spec 80 C3: eine Verweiszeile trägt den Namen des Unterrezepts. Ein neuer Text bei gleichem
+            // Verweis liefe auseinander (demo: Text „Gel: Kräutermatte …", Verweis weiter auf #2069).
+            if ($orig?->referenced_recipe_id === null) {
+                $neuerText = trim((string) ($z['text'] ?? ''));
+                $zeile['raw_text'] = (string) ($z['text'] ?? $orig?->raw_text ?? '');
+                $zeile['display_name'] = (string) ($z['text'] ?? $orig?->display_name ?? '');
+                // Spec 80 C3: hat die KI die Zutat UMBENANNT („Schalotten: frisch, ganz" statt „… Würfel 5 mm"),
+                // gilt die alte Grundprodukt-Zuordnung nicht mehr. Vorher blieb die gp_id stehen, nur der Text
+                // änderte sich — die Heilung heilte nichts und die Nachprüfung fand denselben Befund wieder
+                // (demo: Text „Schalotten: frisch, ganz" an GP 7996 „Würfel 5 mm"). Ohne gp_id ordnet
+                // syncIngredients die Zeile über den Resolver neu zu (#508).
+                if ($orig !== null && $orig->gp_id !== null && $neuerText !== ''
+                    && mb_strtolower($neuerText) !== mb_strtolower(trim((string) ($orig->gp?->name ?? $orig->display_name ?? $orig->raw_text ?? '')))) {
+                    $zeile['gp_id'] = null;
+                }
+            }
             $zeile['quantity'] = $quantity ?? (float) ($orig?->quantity ?? 1);
             $zeile['unit_vocab_id'] = $einheiten[$z['einheit_slug'] ?? ''] ?? $orig?->unit_vocab_id ?? $einheiten['g'] ?? null;
             $zeilen[] = $zeile;

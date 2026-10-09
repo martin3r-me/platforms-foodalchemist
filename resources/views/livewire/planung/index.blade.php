@@ -69,7 +69,7 @@
         $lbl = ($ausgabeZielLabel[$ot] ?? \Illuminate\Support\Str::ucfirst($ot)) . ($name !== '' ? ' · ' . $name : '');
         return $chip($lbl, 'accent');
     };
-    $zustandTon = ['läuft' => 'info', 'prüfen' => 'warn', 'geplant' => 'neutral', 'erledigt' => 'ok'];
+    $zustandTon = ['läuft' => 'info', 'prüfen' => 'warn', 'geplant' => 'neutral', 'erledigt' => 'ok', 'fehlgeschlagen' => 'crit'];
     $menuePunkt = 'flex w-full items-center gap-2 px-3 py-2 text-left text-[length:var(--fa-text-md)] text-[var(--fa-ink)] hover:bg-[var(--fa-hover)]';
     $menueGruppe = 'px-3 pt-2 pb-1 text-[length:var(--fa-text-sm)] font-semibold text-[var(--fa-ink-3)]';
     $verwerfenFrage = 'Diese Planung verwerfen? Laufende Erstellungen dieser Planung werden ebenfalls gestoppt. Sie wird archiviert, nicht endgültig gelöscht.';

@@ -72,7 +72,11 @@ class ConformanceService
             try {
                 $adapter->revise($team, $id, $this->heilDirektive($vorher['befunde']), $vorher['befunde']);
             } catch (\Throwable $e) {
-                // best-effort: schlägt die Runde fehl, bleibt es beim Erst-Befund (nur Hinweis)
+                // best-effort: schlägt die Runde fehl, bleibt es beim Erst-Befund (nur Hinweis).
+                // Spec 80 C6: protokollieren — eine still gescheiterte Heilung sah aus wie „nichts zu heilen".
+                \Illuminate\Support\Facades\Log::warning('[Konformität] Selbstheilung fehlgeschlagen', [
+                    'artifact' => $typ . '#' . $id, 'error' => $e->getMessage(),
+                ]);
             }
             $aktuell = $this->pruefeAdapter($team, $adapter, $id);
         }
