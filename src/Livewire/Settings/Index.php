@@ -78,6 +78,8 @@ class Index extends Component
         // die Routings seit `docs/wissen.md` nur einen „Ausblick"-Eintrag. Wer hier kuratierte,
         // pflegte damit ausschliesslich den Fallback.
         'wissenssteuerung' => ['label' => 'Wissens-Steuerung', 'hint' => 'Welches Wissen bei welchem KI-Schritt ankommt'],
+        // Spec 81: Regeln als Daten — mechanische Regelwerk-Regeln, die der Code durchsetzt (statt der KI-Prüfung).
+        'regeln' => ['label' => 'Regeln', 'hint' => 'Regelwerk-Regeln, die der Code beim Anlegen, Prüfen und Matching durchsetzt: Vokabular, Verbote, Zuordnungen, Schwellen'],
 
         // — Produktion & Kapazität —
         // Spec 30 E3: Arbeitsplätze mit optionaler Tageskapazität — bewusst getrennt vom
@@ -112,7 +114,7 @@ class Index extends Component
         'katalog' => ['label' => 'Katalog & Kategorien', 'sektionen' => ['einheiten', 'warengruppen', 'taxonomie', 'vk-taxonomie', 'behaelter', 'concepter-dimensionen']],
         'betrieb' => ['label' => 'Betrieb & Küche', 'sektionen' => ['betriebe', 'posten', 'rollen', 'zugriffsrechte', 'kueche']],
         'kalkulation' => ['label' => 'Einkauf & Kalkulation', 'sektionen' => ['einkauf', 'kalkulation', 'herstellkosten', 'aufschlagsklassen']],
-        'ki' => ['label' => 'KI & Wissen', 'sektionen' => ['ki', 'food-dna', 'kunde-dna', 'brief-vorlagen', 'trendradar', 'wissenskategorien', 'wissenssteuerung']],
+        'ki' => ['label' => 'KI & Wissen', 'sektionen' => ['ki', 'food-dna', 'kunde-dna', 'brief-vorlagen', 'trendradar', 'wissenskategorien', 'wissenssteuerung', 'regeln']],
         'ausgabe' => ['label' => 'Ausgabe', 'sektionen' => ['schreibstile', 'praesentations-designs', 'speiseplan-chips', 'etiketten']],
     ];
 

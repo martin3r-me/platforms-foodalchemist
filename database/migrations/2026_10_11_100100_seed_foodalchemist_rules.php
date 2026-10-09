@@ -163,7 +163,7 @@ return new class extends Migration
                     ['begriff' => 'zwiebel', 'aliase' => ['zwiebeln'], 'ziel_typ' => 'gp', 'ziel_name' => 'Zwiebeln: frisch, ganz', 'kontext' => $roh],
                     ['begriff' => 'karotte', 'aliase' => ['karotten', 'möhre', 'möhren', 'mohrrübe', 'mohrrüben'], 'ziel_typ' => 'gp',
                         'ziel_name' => 'Karotten: frisch, ganz', 'kontext' => $roh],
-                    ['begriff' => 'pfeffer weiss', 'ziel_typ' => 'gp', 'ziel_name' => 'Pfeffer weiss: trocken, gemahlen', 'praefix' => true, 'enthaelt' => true],
+                    ['begriff' => 'pfeffer weiss*', 'ziel_typ' => 'gp', 'ziel_name' => 'Pfeffer weiss: trocken, gemahlen', 'enthaelt' => true],
                     ['begriff' => 'pfeffer', 'ziel_typ' => 'gp', 'ziel_name' => 'Pfeffer schwarz: trocken, gemahlen',
                         'erlaubt' => ['schwarz', 'schwarzer', 'ganz', 'gemahlen']],
                 ]],
@@ -171,7 +171,7 @@ return new class extends Migration
                     ['text' => 'pfeffer schwarzer gemahlen', 'erwartet' => 'Pfeffer schwarz: trocken, gemahlen'],
                     ['text' => 'weisser pfeffer', 'erwartet' => 'Pfeffer weiss: trocken, gemahlen'],
                     ['text' => 'eigelb', 'kontext' => ['prefer_raw' => 'ja'], 'erwartet' => $eier]],
-                    'falsch' => ['meersalz', 'tomate', 'pfeffer rosa']],
+                    'falsch' => ['meersalz', 'tomate', 'pfeffer rosa', 'weisse pfefferkoerner']],
                 'notiz' => '1:1 aus MatchHeuristics::defaultGpAlias (Stand 10.10.). `prefer_raw` = From Scratch. Basis-Gemüse nur From Scratch; Sellerie bewusst nicht (Knollen/Stauden).',
             ],
         ];

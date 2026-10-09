@@ -11,7 +11,8 @@ use Platform\FoodAlchemist\Services\Regeln\RegelText;
  *
  * `vergleich: tokens` (Regel-Ebene) vergleicht Wortmengen statt ganzer Texte, Reihenfolge egal. Je Eintrag dann:
  * `erlaubt: []` (Zusatzwörter, die stören dürfen — „Pfeffer schwarz gemahlen"), `enthaelt: true` (beliebige
- * Zusatzwörter), `praefix: true` (ein Wort des Begriffs trifft auch längere Wörter — „weiss" trifft „weisser").
+ * Zusatzwörter). Ein Begriffs-Wort mit `*` am Ende trifft auch längere Wörter („pfeffer weiss*" trifft
+ * „weisser pfeffer", aber „pfeffer" nicht „pfefferkoerner").
  */
 final class Zuordnung implements RegelArt
 {
@@ -80,8 +81,7 @@ final class Zuordnung implements RegelArt
     {
         $soll = array_values(array_filter(explode(' ', RegelText::norm($begriff))));
         $ist = array_values(array_unique(array_filter(explode(' ', $normText))));
-        $praefix = (bool) ($eintrag['praefix'] ?? false);
-        $trifft = static fn (string $s, string $i) => $i === $s || ($praefix && str_starts_with($i, $s));
+        $trifft = static fn (string $s, string $i) => str_ends_with($s, '*') ? str_starts_with($i, rtrim($s, '*')) : $i === $s;
         foreach ($soll as $s) {
             if (! array_filter($ist, static fn ($i) => $trifft($s, $i))) {
                 return false;
