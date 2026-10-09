@@ -160,6 +160,36 @@ class RecipeDependencyWorkflowService
     }
 
     /**
+     * Parameter beim Abstieg vom Eltern- zum Kind-Rezept — EINE Stelle für beide Abstiege (Stufen-Freigabe
+     * und „jetzt erzeugen“ je Zeile; vorher zwei Listen, die auseinanderlaufen konnten).
+     *
+     * Grundsatz (Dominique 09.10.): ein Basisrezept steht für sich — sein Name trägt, was hineingehört
+     * („Jus: Thymian“ bekommt Thymian, weil es im Namen steht). Vererbt werden nur harte Bedingungen, die
+     * für das ganze Gericht gelten müssen (Diät, Allergen-Ausschluss) und Produktionsachsen (Convenience,
+     * Bestand, Level, Sektor, Frische, Bio). Alles Teller- und Geschmacksbezogene bleibt beim Gericht:
+     * - VK-Achsen, Titel, Pax, Tellergewicht (L5/L6), Ansatz/Suchbegriffe/Plan der Wurzel (Spec 80 B6).
+     * - Aroma, Aroma-Küche, Saison: Live-Test demo 09.10. (Lauf 86) — „herbstlich-würzig mit Ingwer, Kürbis und
+     *   Pilz-Umami“ lief in JEDES Unterrezept und dessen GP-Erdung: Jus mit 1,2 kg Kürbis und 1 kg Pilzen,
+     *   Kürbiskern-Crunch mit Pilzmischung.
+     * Positivliste statt Streichliste: eine neue Gericht-Achse wandert so nicht still ins Kind.
+     *
+     * @param  array<string, mixed>  $p
+     * @return array<string, mixed>
+     */
+    public static function kindParameter(array $p): array
+    {
+        return array_intersect_key($p, array_flip(self::KIND_ERBT));
+    }
+
+    /** Was ein Kind-Basisrezept vom Gericht erbt — harte Bedingungen, Produktionsachsen, Lauf-Steuerung. */
+    private const KIND_ERBT = [
+        'diaet_hart', 'allergen_nogo',
+        'convenience', 'frische', 'frische_erlaubt', 'bio', 'bio_pref', 'bio_praeferenz', 'bestand', 'level', 'niveau', 'sektor',
+        'ki_bilder', 'complete_coverage', 'use_favorites_list', 'favorites_convenience_only',
+        'planning_session_id', 'cascade_step_id', 'auto_dependencies',
+    ];
+
+    /**
      * Schaltet die geplanten Sub-Rezepte EINES Steps scharf: {@see planChildren} legt/findet die
      * Kind-Steps, dieser Dispatch-Kern startet je noch nicht laufendem Kind einen
      * {@see GenerateRecipeJob} (`geplant` → `running`). Ein im Lauf geteiltes Sub-Rezept wird nur
@@ -168,25 +198,10 @@ class RecipeDependencyWorkflowService
     private function dispatchChildren(Team $team, FoodAlchemistCascadeRunStep $step, int $userId, FoodAlchemistRecipe $recipe, array $offene, array $parameter): void
     {
         $kindVollAnreichern = (bool) ($parameter['_voll_anreichern'] ?? false);
-        $childParameter = $parameter;
-        unset($childParameter['_voll_anreichern'], $childParameter['_defer_children']);
-        // VK-Achsen beim Abstieg strippen: ein Basisrezept-Kind läuft gegen recipe.generator (vkModus=false),
-        // dessen Prompt Ziel-VK/Anlass/Serviceform gar nicht kennt — sie würden nur Rauschen im JSON-Kontext.
-        unset($childParameter['ziel_vk_eur'], $childParameter['occasion'], $childParameter['serviceform']);
-        unset($childParameter['titel_vorgabe']);   // L5: der Titel gilt nur fuers Gericht, nicht fuer seine Sub-Rezepte
-        unset($childParameter['pax'], $childParameter['ziel_portion_g']);   // L6: teller-bezogen, nicht fuer Sub-Rezepte
-        // Spec 80 B6: Ansatz, Suchbegriffe und Plan gehören der Wurzel — das Kind bekommt eigene (kindVorgaben).
-        unset($childParameter['ziel_menge'], $childParameter['ziel_einheit'], $childParameter['suchbegriffe'],
-            $childParameter['plan_komponenten'], $childParameter['plan_first']);
-        $parentKnowledge = is_array($step->context_snapshot)
-            ? ($step->context_snapshot['knowledge_files'] ?? [])
-            : [];
-        if (is_array($parentKnowledge) && $parentKnowledge !== []) {
-            // Einmal am ganzen Gericht breit genug ermitteln; Kinder ranken nur noch innerhalb
-            // dieses Wissensplans (+ eigenes Regelwerk/Niveau). So lädt nicht jedes Basisrezept
-            // erneut beliebige Dossiers aus der gesamten Wissensbasis.
-            $childParameter['_knowledge_scope'] = array_values($parentKnowledge);
-        }
+        $childParameter = self::kindParameter($parameter);
+        // Kein `_knowledge_scope` mehr (Dominique 09.10.): jedes Basisrezept sucht sein Wissen selbst — vorher
+        // rankte das Kind nur innerhalb der Dossiers, die das GERICHT gefunden hatte; ein „Jus: Ginger Beer“
+        // bekam Jus-Technik nur, wenn das Gericht sie zufällig mitgezogen hatte.
 
         foreach ($this->planChildren($team, $step, $recipe, $offene, $parameter) as [$child, $ingredientId, $text]) {
             if ($child->status === 'done' && $child->ref_id !== null) {
@@ -262,21 +277,10 @@ class RecipeDependencyWorkflowService
         $params = is_array($d['params'] ?? null) ? $d['params'] : (is_array($child->run?->params) ? $child->run->params : []);
         $userId = (int) ($d['user_id'] ?? \Illuminate\Support\Facades\Auth::id() ?? 0);
         $kindVollAnreichern = (bool) ($params['_voll_anreichern'] ?? false);
-        unset($params['_voll_anreichern'], $params['_defer_children']);
-        // VK-Achsen beim Abstieg strippen (wie dispatchChildren) — das Basisrezept-Kind kennt sie nicht.
-        unset($params['ziel_vk_eur'], $params['occasion'], $params['serviceform']);
-        unset($params['titel_vorgabe']);
-        unset($params['pax'], $params['ziel_portion_g']);
-        unset($params['ziel_menge'], $params['ziel_einheit'], $params['suchbegriffe'], $params['plan_komponenten'], $params['plan_first']);
+        $params = self::kindParameter($params);
         $dep = FoodAlchemistCascadeRecipeDependency::where('child_step_id', $child->id)->first(['ingredient_id']);
         if ($parent !== null && $dep !== null) {
             $params = [...$params, ...$this->kindVorgaben($parent, (int) $dep->ingredient_id, $text)];
-        }
-        $parentKnowledge = is_array($parent?->context_snapshot)
-            ? ($parent->context_snapshot['knowledge_files'] ?? [])
-            : [];
-        if (is_array($parentKnowledge) && $parentKnowledge !== []) {
-            $params['_knowledge_scope'] = array_values($parentKnowledge);
         }
 
         $runId = (string) Str::uuid();
