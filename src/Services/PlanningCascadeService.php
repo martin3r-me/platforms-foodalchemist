@@ -1595,7 +1595,8 @@ class PlanningCascadeService
         }
 
         // Gestuft (Gate pro Ebene): das Gericht schiebt seine Basisrezepte auf bis zu seiner Freigabe.
-        $staged = (bool) (FoodAlchemistCascadeRunStep::find($stepId)?->run?->staged ?? false);
+        $run = FoodAlchemistCascadeRunStep::find($stepId)?->run;
+        $staged = (bool) ($run?->staged ?? false);
         try {
             // Fan-out erbt die Leitplanken der Session (Regler am Planung-Go); Steuer-Keys gewinnen.
             $params = array_merge($this->sessionGenerationParams($team, $planningSessionId), [
@@ -1603,6 +1604,12 @@ class PlanningCascadeService
                 '_defer_children' => $staged,
                 'cascade_step_id' => $stepId,
             ]);
+            // Die Suchbegriffe des Laufs (Chips der Session, #227) liegen nur in den Lauf-Params — vorher erreichten
+            // sie den Gericht-Bau nie (demo Lauf 86, Step 556: 18 Suchbegriffe gesetzt, Snapshot `suchbegriffe = []`).
+            $laufSuchbegriffe = RecipeGenerationContextService::suchbegriffeAus(is_array($run?->params) ? $run->params : []);
+            if ($laufSuchbegriffe !== [] && RecipeGenerationContextService::suchbegriffeAus($params) === []) {
+                $params['suchbegriffe'] = $laufSuchbegriffe;
+            }
             // Et.6 (Roadmap Z.205): Zielpreis-Korridor Concept → Gericht — je erfundenem Gericht einen
             // Ziel-VK aus dem Concept-Frame ableiten (aus dem Fan-out des Concepts, nicht aus dem Rezept-Regler).
             // Ein bereits gesetzter ziel_vk_eur (explizite Rezept-Leitplanke) gewinnt und wird nicht überschrieben.
