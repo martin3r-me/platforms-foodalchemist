@@ -52,6 +52,33 @@ trait FortschrittAnsicht
         $this->fortschrittKlassisch = ! $this->fortschrittKlassisch;
     }
 
+    /** Spec 80 D7: Eingaben der Plan-Karte je Step: [stepId => ['name' => …, 'menge' => …, 'mengen' => [idx => …]]]. */
+    public array $planEingabe = [];
+
+    /** Spec 80 D7: Plan-Karte — Aktion auf eine Komponente des Plans (entfernen · menge · bestand_ablehnen · hinzufuegen). */
+    public function planAendern(int $stepId, string $aktion, ?int $index = null): void
+    {
+        $cascade = app(\Platform\FoodAlchemist\Services\PlanningCascadeService::class);
+        $team = $this->team();
+        if ($team === null) {
+            return;
+        }
+        $e = (array) ($this->planEingabe[$stepId] ?? []);
+        try {
+            $cascade->aenderePlan($team, $stepId, $aktion, [
+                'index' => $index,
+                'menge' => $aktion === 'menge' ? ($e['mengen'][$index] ?? '') : ($e['menge'] ?? ''),
+                'name' => $e['name'] ?? '',
+            ]);
+            if ($aktion === 'hinzufuegen') {
+                $this->planEingabe[$stepId] = ['name' => '', 'menge' => ''];
+            }
+            $this->fehler = null;
+        } catch (\RuntimeException $ex) {
+            $this->fehler = $ex->getMessage();
+        }
+    }
+
     /** Cluster-Fuß: Gericht + seine Basisrezepte anreichern und freigeben (Spec 80 H3, nur dieser Cluster). */
     public function clusterFreigeben(int $kopfId, \Platform\FoodAlchemist\Services\PlanningCascadeService $cascade): void
     {
