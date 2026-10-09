@@ -50,8 +50,11 @@ it('Leit-Aroma: Harmonie nur 3★, Bedarf mit Lieferant, Konflikt zum Vermeiden'
         ->and($p)->not->toHaveKey('komponenten');
 });
 
-it('nur exakte Leit-Wörter, kein Wortteil-Raten', function () {
-    expect(($this->plan)(['kürbiskernöl', 'salbeibutter']))->toBeNull()
+it('kein Wortteil-Raten: nur exakt, Synonym oder Zerlegung an einem bekannten Wortkopf (Spec 80 A5)', function () {
+    // „Salbeibutter" = Salbei + Kopf „butter" → Leit-Aroma Salbei (gewollt seit Spec 80 Paket 2).
+    expect(array_column(($this->plan)(['salbeibutter'])['leit_aromen'], 'aroma'))->toBe(['Salbei'])
+        // „Kürbiskernöl" zerlegt zu „kürbiskern" + „öl" — kein Anker, also kein Kürbis durch Teilwort.
+        ->and(($this->plan)(['kürbiskernöl']))->toBeNull()
         ->and(($this->plan)(['xyz']))->toBeNull();
 });
 

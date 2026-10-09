@@ -89,8 +89,13 @@ class RecipeConformanceAdapter implements ConformanceAdapter
         }
 
         $bioImRezept = preg_match('/\bbio\b/iu', (string) $r->name . ' ' . (string) $r->description) === 1;
+        // Die Detail-Sicht lädt GPs nur mit wenigen Spalten (ohne Zustand/Verarbeitung/Form/Bio). Ohne diese Felder
+        // schwiegen §2 und §10 still — darum die Prüf-Felder hier gezielt nachladen.
+        $gpFelder = \Platform\FoodAlchemist\Models\FoodAlchemistGp::query()
+            ->whereKey($r->ingredients->pluck('gp_id')->filter()->unique()->values()->all())
+            ->get(['id', 'name', 'condition', 'processing', 'form', 'bio'])->keyBy('id');
         foreach ($r->ingredients as $z) {
-            $gp = $z->gp;
+            $gp = $gpFelder->get((int) $z->gp_id);
             if ($gp === null) {
                 continue;
             }
