@@ -123,3 +123,14 @@ it('Generator: vorgeschlagenes Unterrezept muss freigegeben sein und funktional 
         ->and($abgelehnt[0]['recipe_id'])->toBe($gelblatt->id)
         ->and($abgelehnt[0]['grund'])->toContain('Garnitur');
 });
+
+it('Live-Test demo 09.10.: der Matcher entscheidet nie für Entwürfe oder einen fremden Typ', function () {
+    $this->makeRecipe($this->rootTeam, 'Wurzel-Püree: Petersilienwurzel', ['status' => 'review']);
+    $gel = $this->makeRecipe($this->rootTeam, 'Gel: Petersilie');   // freigegeben, aber andere Typ-Gruppe
+    $matcher = app(\Platform\FoodAlchemist\Services\IngredientMatchService::class);
+
+    expect($matcher->matchIngredient($this->rootTeam, 'Püree: Petersilienwurzel')['target'] ?? null)->not->toBe('sub_recipe')
+        ->and($matcher->matchIngredient($this->rootTeam, 'Matte: Petersilie')['recipe_id'] ?? null)->not->toBe($gel->id)
+        ->and(collect($matcher->candidatesFor($this->rootTeam, 'Püree: Petersilienwurzel', null, 5))->pluck('name')->implode(' '))
+        ->toContain('Wurzel-Püree: Petersilienwurzel');   // Vorschlagsliste zeigt Entwürfe weiter
+});
