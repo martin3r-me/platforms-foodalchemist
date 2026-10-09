@@ -311,6 +311,11 @@ class RecipeConformanceAdapter implements ConformanceAdapter
             $kontext['diaetform'] = $r->dishClass?->diet_form;
             $kontext['portion_g'] = $r->sales_quantity_per_unit_g;
             $kontext['verkaufseinheiten'] = $r->sales_unit_count;
+            // Die Diätklasse setzt die Anreicherung bei der Freigabe (SpeisenKlassenService) — direkt nach dem Bau ist
+            // sie oft noch leer. Das ist kein Regelverstoß (demo 3754: §2.2 hart gemeldet, nie heilbar).
+            if ($r->dish_class_id === null) {
+                $kontext['noch_offen_bis_freigabe'] = 'Speisen-Klasse / Diätform wird bei der Freigabe gesetzt — fehlt sie jetzt, NICHT melden.';
+            }
         } else {
             $kontext['ansatz_kg'] = $r->yield_kg_manual ?? $r->yield_kg;
             $kontext['ansatz_stueck'] = $r->yield_pieces;

@@ -64,6 +64,38 @@ class RecipeGeneratorService
             });
     }
 
+    /**
+     * Speisen-Klasse aus dem KI-Vorschlag. Demo 09.10.: alle 10 Gerichte der letzten 30 Tage ohne Klasse (und damit
+     * ohne Hauptgruppe), während Preisklasse und Portion aus demselben Vorschlag ankamen — die interne Nummer ist für
+     * die KI fehleranfällig. Darum tolerant: Nummer (auch als Text), „HG / Fleisch“ wie in der Liste, Code oder Label.
+     * Bleibt sie unauflösbar, wird der gelieferte Wert geloggt (sonst unsichtbar, der Call-Log kürzt die Antwort).
+     */
+    private function klasseAusVorschlag(mixed $wert): ?\Platform\FoodAlchemist\Models\FoodAlchemistDishClass
+    {
+        if ($wert === null || $wert === '' || is_array($wert)) {
+            return null;
+        }
+        $klassen = \Platform\FoodAlchemist\Models\FoodAlchemistDishClass::query();
+        if (is_numeric($wert)) {
+            if (($k = (clone $klassen)->find((int) $wert)) !== null) {
+                return $k;
+            }
+        } else {
+            $text = trim((string) $wert);
+            [$hgCode, $label] = str_contains($text, '/') ? array_map('trim', explode('/', $text, 2)) : [null, $text];
+            $k = (clone $klassen)
+                ->when($hgCode !== null, fn ($q) => $q->whereHas('mainGroup', fn ($g) => $g->where('code', $hgCode)))
+                ->where(fn ($q) => $q->whereRaw('LOWER(label) = ?', [mb_strtolower($label)])->orWhereRaw('LOWER(code) = ?', [mb_strtolower($label)]))
+                ->first();
+            if ($k !== null) {
+                return $k;
+            }
+        }
+        \Illuminate\Support\Facades\Log::info('VK-Generator: Speisen-Klasse aus dem Vorschlag nicht auflösbar', ['wert' => $wert]);
+
+        return null;
+    }
+
     private function generiereImLauf(Team $team, string $description, array $parameter = [], ?array $kiRezeptOverride = null, bool $vkModus = false, ?string $createdVia = null, ?array $preparedContext = null, ?callable $onProgress = null): array
     {
         // P0.2: feine Fortschritts-Stufen — die UI zeigt live, WO der Lauf steht; ein
@@ -226,12 +258,18 @@ class RecipeGeneratorService
             // Modell A (Regelwerk_Verkaufsgerichte v1.1): Klasse = Diätform; die Hauptgruppe
             // ist die Kategorie und trägt den Aufschlag-Default (nicht mehr die Klasse).
             if ($vkModus) {
-                $klasse = isset($kiRezept['dish_class_id'])
-                    ? \Platform\FoodAlchemist\Models\FoodAlchemistDishClass::find((int) $kiRezept['dish_class_id'])
-                    : null;
+                $klasse = $this->klasseAusVorschlag($kiRezept['dish_class_id'] ?? null);
                 $hg = isset($kiRezept['dish_main_group_id'])
                     ? \Platform\FoodAlchemist\Models\FoodAlchemistDishMainGroup::find((int) $kiRezept['dish_main_group_id'])
                     : null;
+                // Die Hauptgruppe fragt der Auftrag nicht ab — sie war bei jedem generierten Gericht leer (demo 3754,
+                // 3786: „[HG] Rinderfilet …“ ohne Hauptgruppe; der Prüfer meldete §2.0 hart). Ohne KI ableitbar: aus der
+                // gewählten Klasse, sonst aus dem Kürzel im Namen (Regel vk.1.1.hg). Nur aktive Gruppen.
+                $hg ??= $klasse?->mainGroup;
+                if ($hg === null && preg_match('/^\[([^\]]+)\]/u', (string) ($kiRezept['name'] ?? $recipe->name), $m) === 1) {
+                    $hg = \Platform\FoodAlchemist\Models\FoodAlchemistDishMainGroup::visibleToTeam($team)
+                        ->where('code', trim($m[1]))->where('is_inactive', false)->first();
+                }
                 $ak = isset($kiRezept['aufschlagsklasse_code'])
                     ? \Platform\FoodAlchemist\Models\FoodAlchemistMarkupClass::where('code', $kiRezept['aufschlagsklasse_code'])->first()
                     : null;
