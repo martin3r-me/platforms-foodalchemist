@@ -158,3 +158,116 @@ it('C5: die Selbstheil-Runde erbt den Kanon ihres Erzeugers — der verletzte §
     $teile = json_decode((string) $revise->prompt_parts, true) ?: [];
     expect($teile['kanon'] ?? 0)->toBeGreaterThan(0);
 });
+
+// ── Review 09.10.: nur heilen, was revise ändern kann ──────────────────────────────────────
+
+$luecke = fn (array $o = []) => array_merge([
+    'paragraph' => '§4', 'schweregrad' => 'hart', 'feld' => 'zutat:Püree: Petersilienwurzel',
+    'begruendung' => 'Kein Unterrezept verknüpft, im Bestand fehlt ein freigegebenes Basisrezept.',
+    'vorschlag' => '', 'konfidenz' => 0.8,
+], $o);
+
+$aufrufe = fn (string $feature) => DB::table('foodalchemist_ai_call_log')->where('feature', $feature)->count();
+
+it('Heilung: nur offene Basisrezept-Lücken → kein Revise, keine zweite Prüfung, Befund bleibt Hinweis', function () use ($luecke, $aufrufe) {
+    \Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient::create(['team_id' => $this->rootTeam->id,
+        'recipe_id' => $this->rezept->id, 'raw_text' => 'Püree: Petersilienwurzel', 'quantity' => '7000',
+        'unit_vocab_id' => $this->unitG($this->rootTeam)->id, 'position' => 1]);
+    ConformanceHealStub::bind([[$luecke()], [$luecke()]]);
+
+    $erg = app(ConformanceService::class)->pruefeUndHeile($this->rootTeam, 'basisrezept', $this->rezept->id);
+
+    expect($erg['heilung_uebersprungen'])->toBe('nichts_heilbar')
+        ->and($aufrufe('recipe.ueberarbeiten'))->toBe(0)
+        ->and($aufrufe('conformance.check'))->toBe(1)
+        ->and($erg['ablage']['neu'])->toBe(1);
+});
+
+it('Heilung: gemischt → Revise läuft, aber nur mit dem heilbaren Befund', function () use ($befund, $luecke, $aufrufe) {
+    \Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient::create(['team_id' => $this->rootTeam->id,
+        'recipe_id' => $this->rezept->id, 'raw_text' => 'Püree: Petersilienwurzel', 'quantity' => '7000',
+        'unit_vocab_id' => $this->unitG($this->rootTeam)->id, 'position' => 1]);
+    $heilbar = app(\Platform\FoodAlchemist\Services\Conformance\RecipeConformanceAdapter::class)
+        ->heilbar($this->rootTeam, $this->rezept->id, [$befund(), $luecke()]);
+    ConformanceHealStub::bind([[$befund(), $luecke()], [$luecke()]]);
+
+    $erg = app(ConformanceService::class)->pruefeUndHeile($this->rootTeam, 'basisrezept', $this->rezept->id);
+
+    expect(array_column($heilbar, 'feld'))->toBe(['name'])
+        ->and($erg['heilung_uebersprungen'])->toBeNull()
+        ->and($aufrufe('recipe.ueberarbeiten'))->toBe(1);
+});
+
+it('heilbar: an der Lücken-Zeile bleibt ein Name-/Präfix-Befund heilbar, Verweiszeile und manuelle Beschreibung nicht', function () use ($luecke) {
+    $g = $this->unitG($this->rootTeam)->id;
+    \Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient::create(['team_id' => $this->rootTeam->id,
+        'recipe_id' => $this->rezept->id, 'raw_text' => 'Matte: Petersilie', 'quantity' => '100', 'unit_vocab_id' => $g, 'position' => 1]);
+    $sub = FoodAlchemistRecipe::create(['team_id' => $this->rootTeam->id, 'recipe_key' => 'bx-sub', 'name' => 'Jus: Kalb', 'status' => 'approved']);
+    \Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient::create(['team_id' => $this->rootTeam->id,
+        'recipe_id' => $this->rezept->id, 'referenced_recipe_id' => $sub->id, 'raw_text' => 'Jus: Kalb', 'quantity' => '200', 'unit_vocab_id' => $g, 'position' => 2]);
+    $this->rezept->update(['description_source' => 'manual']);
+
+    $praefix = $luecke(['feld' => 'zutat:Matte: Petersilie', 'begruendung' => 'Typ-Präfix „Matte" nicht im Vokabular, Basisrezept fehlt.']);
+    $verknuepfung = $luecke(['feld' => 'zutat:Matte: Petersilie']);
+    $amVerweis = $luecke(['feld' => 'zutat:Jus: Kalb', 'begruendung' => 'Jus enthält Butter, Gericht ist vegan.']);
+    $beschreibung = $luecke(['paragraph' => '§8.3', 'feld' => 'description', 'begruendung' => 'Zu viele Sätze.']);
+
+    $heilbar = app(\Platform\FoodAlchemist\Services\Conformance\RecipeConformanceAdapter::class)
+        ->heilbar($this->rootTeam, $this->rezept->id, [$praefix, $verknuepfung, $amVerweis, $beschreibung]);
+
+    expect($heilbar)->toBe([$praefix]);
+});
+
+it('Heilung: derselbe Befund am unveränderten Rezept wird nicht ein drittes Mal geheilt', function () use ($befund, $aufrufe) {
+    $svc = app(ConformanceService::class);
+    $svc->speichere($this->rootTeam, 'recipe', $this->rezept->id, [$befund()]);
+    $svc->speichere($this->rootTeam, 'recipe', $this->rezept->id, [$befund()]);   // seen_count 2 = eine Heilung überlebt
+    FoodAlchemistRecipe::whereKey($this->rezept->id)->update(['updated_at' => now()->subMinute()]);
+    ConformanceHealStub::bind([[$befund()], [$befund()]]);
+
+    $erg = $svc->pruefeUndHeile($this->rootTeam, 'basisrezept', $this->rezept->id);
+
+    expect($erg['heilung_uebersprungen'])->toBe('kein_fortschritt')
+        ->and($aufrufe('recipe.ueberarbeiten'))->toBe(0);
+});
+
+it('Heilung: nach einer Änderung am Rezept wird wieder geheilt', function () use ($befund, $aufrufe) {
+    $svc = app(ConformanceService::class);
+    $svc->speichere($this->rootTeam, 'recipe', $this->rezept->id, [$befund()]);
+    $svc->speichere($this->rootTeam, 'recipe', $this->rezept->id, [$befund()]);
+    FoodAlchemistConformanceFinding::where('artifact_id', $this->rezept->id)->update(['last_seen_at' => now()->subMinute()]);
+    ConformanceHealStub::bind([[$befund()], []]);
+
+    $erg = $svc->pruefeUndHeile($this->rootTeam, 'basisrezept', $this->rezept->id);
+
+    expect($erg['heilung_uebersprungen'])->toBeNull()
+        ->and($aufrufe('recipe.ueberarbeiten'))->toBe(1);
+});
+
+it('Heilung: nur weiche Befunde → kein Revise, keine zweite Prüfung, Hinweis bleibt (Entscheidung 09.10.)', function () use ($befund, $aufrufe) {
+    $weich = $befund(['schweregrad' => 'weich']);
+    ConformanceHealStub::bind([[$weich], [$weich]]);
+
+    $erg = app(ConformanceService::class)->pruefeUndHeile($this->rootTeam, 'basisrezept', $this->rezept->id);
+
+    expect($erg['heilung_uebersprungen'])->toBe('nur_weich')
+        ->and($aufrufe('recipe.ueberarbeiten'))->toBe(0)
+        ->and($aufrufe('conformance.check'))->toBe(1)
+        ->and($erg['ablage']['neu'])->toBe(1);
+});
+
+it('Heilung: hart + weich → die Direktive trägt nur den harten Befund', function () use ($befund, $aufrufe) {
+    $weich = $befund(['paragraph' => '§8.3', 'feld' => 'description', 'begruendung' => 'Satzzahl knapp', 'schweregrad' => 'weich']);
+    ConformanceHealStub::bind([[$befund(), $weich], [$weich]]);
+    $direktive = null;
+    $adapter = Mockery::mock(\Platform\FoodAlchemist\Services\Conformance\RecipeConformanceAdapter::class)->makePartial();
+    $adapter->shouldReceive('revise')->once()->andReturnUsing(function ($t, $id, $d, $b) use (&$direktive) {
+        $direktive = $b;
+    });
+    app()->instance(\Platform\FoodAlchemist\Services\Conformance\RecipeConformanceAdapter::class, $adapter);
+
+    $erg = app(ConformanceService::class)->pruefeUndHeile($this->rootTeam, 'basisrezept', $this->rezept->id);
+
+    expect($erg['heilung_uebersprungen'])->toBeNull()
+        ->and(array_column($direktive, 'schweregrad'))->toBe(['hart']);
+});

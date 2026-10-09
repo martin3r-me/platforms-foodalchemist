@@ -58,6 +58,16 @@ interface ConformanceAdapter
     public function revise(Team $team, int $id, string $direktive, array $befunde = []): void;
 
     /**
+     * Die Befunde, die {@see self::revise} überhaupt ändern KANN. Nur sie gehen in die Heil-Direktive; ist
+     * die Liste leer, entfallen Revise und zweite Prüfung (Review 09.10.: ~30k Tokens je Runde, auch wenn
+     * nur offene Basisrezept-Lücken gemeldet waren — die heilt kein Umschreiben, es kann sie nur verletzen).
+     *
+     * @param  array<int, array<string, mixed>>  $befunde  Form: {@see \Platform\FoodAlchemist\Services\ConformanceService::normalisiere}
+     * @return array<int, array<string, mixed>>
+     */
+    public function heilbar(Team $team, int $id, array $befunde): array;
+
+    /**
      * DETERMINISTISCHE Befunde — was ohne KI prüfbar ist, wird ohne KI geprüft.
      *
      * Anlass (2026-09-07): das Rezept „Crème-Suppe: Tomate-Speck" trug 1.600 g
