@@ -207,6 +207,12 @@ class MatchHeuristics
      */
     public function istBasisrezeptZeile(string $name): bool
     {
+        // Zukauf-Basisrezept (Entscheidung Dominique 10.10.): „Crunch: Röstzwiebeln (Zukauf)" zeigt IMMER aufs Zukauf-
+        // Basisrezept, auch mit Einkaufsform („…, trocken (Zukauf)"). Zusatz = ZukaufBasisrezeptService::ZUSATZ
+        // (Literal, bis der Zukauf-PR in main ist).
+        if (mb_stripos($name, '(zukauf)') !== false) {
+            return true;
+        }
         $praefix = \Platform\FoodAlchemist\Support\RezeptTypVokabular::praefix($name);
         $typ = $praefix !== null && \Platform\FoodAlchemist\Support\RezeptTypVokabular::finde($praefix) !== null;
         if (! $typ && ! $this->hatSubZubereitungsPraefix($name)) {
