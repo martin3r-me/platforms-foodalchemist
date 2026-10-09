@@ -86,7 +86,7 @@ it('baut den Regelwerk-Block aus dem Kanon — eine Alt-Bindung daneben ändert 
         ->and($parts['dropped'])->toBe(0)
         // Die Zerlegung geht weiter exakt auf — sonst ist die Sonde als Budget-Grundlage wertlos.
         ->and((int) $log->prompt_chars)->toBe(
-            $parts['huelle'] + $parts['kanon'] + $parts['bound'] + $parts['task'] + 2 + $parts['retrieval'] + 11 + $parts['kontext']
+            $parts['huelle'] + $parts['kanon'] + ($parts['regeln'] ?? 0) + $parts['bound'] + $parts['task'] + 2 + $parts['retrieval'] + 11 + $parts['kontext']
         );
 
     // Herkunft im Audit: Kanon-Slugs mit Version, das Binding-Dossier nicht.
@@ -96,7 +96,7 @@ it('baut den Regelwerk-Block aus dem Kanon — eine Alt-Bindung daneben ändert 
     // Position: EIN Regelwerk-Block als system-Message direkt vor dem User-Content, in ord-Reihenfolge,
     // und das alte Ganzdossier steht nirgends im Prompt.
     $systems = array_values(array_filter($this->messages, fn ($m) => $m['role'] === 'system'));
-    $block = end($systems)['content'];
+    $block = collect($systems)->first(fn ($m) => str_starts_with($m['content'], '# VERBINDLICHES REGELWERK'))['content'] ?? '';   // Spec 81 F5: dahinter folgt der Regel-Block
     expect($block)->toStartWith('# VERBINDLICHES REGELWERK')
         ->and(mb_strpos($block, '## KANON: k2-p1'))->toBeLessThan((int) mb_strpos($block, '## KANON: k2-p10'))
         ->and(collect($this->messages)->last()['role'])->toBe('user')
@@ -148,7 +148,7 @@ it('pflicht kommt immer ganz, wenn_platz nur im Budget und nie angeschnitten', f
     $log = ($this->log)();
     $parts = json_decode((string) $log->prompt_parts, true);
     $systems = array_values(array_filter($this->messages, fn ($m) => $m['role'] === 'system'));
-    $block = (string) (end($systems)['content'] ?? '');
+    $block = (string) (collect($systems)->first(fn ($m) => str_starts_with($m['content'], '# VERBINDLICHES REGELWERK'))['content'] ?? '');
 
     expect($block)->toContain('## KANON: k2-pflicht')->toContain('## KANON: k2-platz-ok')
         ->not->toContain('k2-platz-zu-gross')->not->toContain('k2-platz-schon-da')
