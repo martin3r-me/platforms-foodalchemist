@@ -974,7 +974,9 @@ return [
          */
         'planung.leitplanken' => [
             'tier' => 'B',
-            'max_tokens' => 1200,
+            // 2500 statt 1200 (Live-Test demo 09.10.): seit Spec 80 liefert der Prompt auch die Suchbegriffe —
+            // ein Gericht-Briefing füllte 1200 Tokens, die Antwort brach ab und war kein gültiges JSON (3×).
+            'max_tokens' => 2500,
             'temperature' => 0.0,
             'task' => 'Du bist Planungs-Assistent in einem Catering-Betrieb. Aus einem freien Briefing '
                 . 'destillierst du die LEITPLANKEN — den Regler-Satz, mit dem anschliessend Gerichte '
