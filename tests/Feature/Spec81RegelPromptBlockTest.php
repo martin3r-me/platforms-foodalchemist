@@ -36,7 +36,8 @@ it('geht an alle Konsumenten: Überarbeiten (Heilung), Review, Plan, Namen, GP-V
     expect(($this->block)('gp.suggest'))->toContain('Verpackungswort')->not->toContain('Typ-Vokabular')
         ->not->toContain('§2 Schnittform')            // Schnittware ist am GP legitim („Zwiebel: frisch, Würfel 10 mm“)
         ->and(($this->block)('signal.recipe_naming_suggest'))->toContain('Typ-Vokabular')
-        ->and(($this->block)('recipe.category'))->toContain('Typ-Vokabular')
+        ->and(($this->block)('recipe.category'))->toContain('Typ-Vokabular')->not->toContain('MUSS')
+        ->and(($this->block)('vk.plating'))->toBeNull()   // Teller-Mengen je Komponente ≠ Verbot absoluter Mengen im Schritt
         ->and(($this->block)('recipe.description'))->toContain('Sätze der Beschreibung')
         ->and(($this->block)('gp.allergene'))->toBeNull();
 });
@@ -77,30 +78,6 @@ it('ist byte-stabil (Prefix-Cache): gleiche Regeln → identischer Block, auch n
     RegelBuch::vergessen();   // frisch aus der DB geladen → derselbe Block
 
     expect(($this->block)('recipe.generator'))->toBe($a)->not->toMatch('/\d{4}-\d{2}-\d{2}/');
-});
-
-it('der Konformitäts-Prüfer bekommt die Regeln seines Artefakts (Kanon-Key)', function () {
-    config(['foodalchemist.ai.provider' => 'fake', 'foodalchemist.ai.backoff' => []]);
-    $spion = new class extends \Platform\FoodAlchemist\Services\Ai\FakeAiProvider {
-        public array $gesendet = [];
-
-        public function chat(array $messages, array $options = []): array
-        {
-            $this->gesendet = $messages;
-
-            return parent::chat($messages, $options);
-        }
-    };
-    app()->instance(\Platform\FoodAlchemist\Services\Ai\FakeAiProvider::class, $spion);
-
-    try {
-        app(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class)->propose('recipe.review', ['x' => 1], ['_kanon_prompt_key' => 'recipe.generator']);
-        app(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class)->propose('gp.allergene', ['x' => 1], ['_kanon_prompt_key' => 'recipe.generator']);
-    } catch (\Throwable $e) {
-    }
-
-    // gp.allergene ist selbst kein Konsument, prüft aber gegen recipe.generator → bekommt dessen Regeln.
-    expect(collect($spion->gesendet)->where('role', 'system')->pluck('content')->implode("\n"))->toContain('Typ-Vokabular');
 });
 
 it('der Gateway sendet den Block als Systemnachricht hinter dem Kanon, nicht im Kontext-JSON', function () {

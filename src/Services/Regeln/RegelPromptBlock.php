@@ -45,9 +45,8 @@ final class RegelPromptBlock
         'recipe.titel_vorschlag' => ['ziele' => ['rezept.name'], 'typ' => true],
         'recipe.steps' => ['ziele' => ['rezept.schritt'], 'typ' => false],
         'recipe.description' => ['ziele' => ['rezept.beschreibung'], 'typ' => false],
-        'recipe.category' => ['ziele' => [], 'typ' => true],
+        'recipe.category' => ['ziele' => [], 'typ' => 'liste'],   // wählt eine Kategorie, benennt nichts
         'signal.recipe_naming_suggest' => ['ziele' => ['rezept.name', 'rezept.name.grammatur', ...self::ZIELE_VK], 'typ' => true],
-        'vk.plating' => ['ziele' => ['rezept.schritt'], 'typ' => false],
         'vk.generator' => ['ziele' => [...self::ZIELE_REZEPT, ...self::ZIELE_VK], 'typ' => true],
         'vk.ueberarbeiten' => ['ziele' => [...self::ZIELE_REZEPT, ...self::ZIELE_VK], 'typ' => true],
         'vk.review' => ['ziele' => [...self::ZIELE_REZEPT, ...self::ZIELE_VK], 'typ' => true],
@@ -89,7 +88,7 @@ final class RegelPromptBlock
             return null;
         }
         $teile = [];
-        if ($k['typ'] && ($vok = $this->typVokabular()) !== '') {
+        if ($k['typ'] && ($vok = $this->typVokabular($k['typ'] === 'liste')) !== '') {
             $teile[] = $vok;
         }
         $regeln = array_values(array_filter(array_map(
@@ -107,7 +106,7 @@ final class RegelPromptBlock
             . implode("\n\n", $teile);
     }
 
-    private function typVokabular(): string
+    private function typVokabular(bool $nurListe = false): string
     {
         $typ = RegelBuch::falls('basisrezept.1.2.typ');
         if ($typ === null) {
@@ -126,6 +125,10 @@ final class RegelPromptBlock
         $zeilen = [];
         foreach ($gruppen as $g => $werte) {
             $zeilen[] = '- ' . $g . ': ' . implode(', ', array_unique($werte));
+        }
+
+        if ($nurListe) {
+            return "Typ-Vokabular der Basisrezepte (Gruppe: Typen):\n" . implode("\n", $zeilen);
         }
 
         return "Typ-Vokabular für Basisrezept-Namen („Typ: Hauptzutat …“). Der Teil vor dem Doppelpunkt — auch in jeder "
@@ -156,7 +159,8 @@ final class RegelPromptBlock
             'pflichtangabe' => $kopf . ': Pflicht — ' . (trim((string) ($p['hinweis'] ?? '')) ?: $r->titel) . $bed,
             'schwelle' => $kopf . ': ' . (($p['vergleich'] ?? '') === 'zwischen'
                 ? ($p['min'] ?? '') . '–' . ($p['max'] ?? '') : ($p['vergleich'] ?? '') . ' ' . ($p['wert'] ?? '')) . ' ' . ($p['einheit'] ?? ''),
-            'ersetzung' => $kopf . ': ' . implode('; ', array_map(static fn ($x) => ($x['von'] ?? '') . ' → ' . ($x['nach'] ?? ''), array_slice((array) ($p['paare'] ?? []), 0, 20))),
+            'ersetzung' => $kopf . ': ' . implode('; ', array_map(static fn ($x) => ($x['von'] ?? '') . ' → ' . ($x['nach'] ?? ''), (array) ($p['paare'] ?? [])))
+                . (($aus = $liste((array) ($p['ausnahmen'] ?? []))) !== '' ? '. Nicht ersetzen: ' . $aus . '.' : ''),
             default => null,
         };
     }

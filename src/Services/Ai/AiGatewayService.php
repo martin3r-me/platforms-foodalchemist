@@ -322,7 +322,9 @@ class AiGatewayService
             $regelPromptBlock = app(\Platform\FoodAlchemist\Services\Regeln\RegelPromptBlock::class);
             $regelBlock = $regelPromptBlock->fuerPromptKey($promptKey)
                 ?? ($kanonKey !== $promptKey ? $regelPromptBlock->fuerPromptKey($kanonKey) : null);
-            if ($regelBlock !== null && mb_strlen($regelBlock) > 8000) {
+            static $gewarnt = [];
+            if ($regelBlock !== null && mb_strlen($regelBlock) > 8000 && ! isset($gewarnt[$promptKey])) {
+                $gewarnt[$promptKey] = true;   // einmal je Prozess und Prompt-Key, nicht bei jedem Call
                 \Illuminate\Support\Facades\Log::warning("Regel-Block für {$promptKey} ist " . mb_strlen($regelBlock) . ' Zeichen groß (kein Wissensbudget-Deckel).');
             }
         } catch (\Throwable $e) {
