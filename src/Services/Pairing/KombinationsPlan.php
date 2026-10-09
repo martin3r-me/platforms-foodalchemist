@@ -43,7 +43,8 @@ final class KombinationsPlan
     {
         $anker = [];
         foreach ($leitWoerter as $wort) {
-            $id = $this->pairing->ankerIdExakt($wort);
+            // Spec 80 A5: exakt → kuratiertes Synonym → zerlegtes Kompositum (jeweils exakt, kein Teilwort-Raten).
+            $id = $this->pairing->ankerAufgeloest($wort)['id'] ?? null;
             if ($id !== null && ! in_array($id, $anker, true)) {
                 $anker[] = $id;
             }

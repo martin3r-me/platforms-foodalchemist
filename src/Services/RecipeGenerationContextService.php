@@ -356,7 +356,7 @@ class RecipeGenerationContextService
         if ($suchbegriffe !== []) {
             $pairing = app(PairingService::class);
             foreach ($suchbegriffe as $t) {
-                if ($pairing->ankerIdExakt($t) === null) {
+                if ($pairing->ankerAufgeloest($t) === null) {
                     $ohne[] = $t;
                 }
             }

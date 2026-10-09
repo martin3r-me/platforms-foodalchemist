@@ -2427,6 +2427,49 @@ class PairingService
     }
 
     /**
+     * Spec 80 A5: Anker für einen Suchbegriff — exakt, sonst über kuratierte Synonyme, sonst über ein
+     * zerlegtes Kompositum. Jeder Schritt endet in {@see ankerIdExakt}; es gibt KEINEN Teilwort-Treffer
+     * (Spec 60). Die Synonyme pflegt der Mensch (`terminology_aliases`, MCP `terminology.POST`), z. B.
+     * „petersilie ⇄ glatte petersilie" — der Code erfindet keine Zuordnung. Die Zerlegung trennt nur einen
+     * bekannten Kopf ab („Petersilienpüree" → „petersilie" + „püree", siehe
+     * {@see TerminologyService::decompoundPhrasesFor}); der Rest muss für sich exakt ein Anker sein.
+     *
+     * @return array{id: int, via: string}|null  via: exakt | synonym | zerlegt
+     */
+    public function ankerAufgeloest(?string $begriff): ?array
+    {
+        $begriff = trim((string) $begriff);
+        if ($begriff === '') {
+            return null;
+        }
+        if (($id = $this->ankerIdExakt($begriff)) !== null) {
+            return ['id' => $id, 'via' => 'exakt'];
+        }
+        $term = app(TerminologyService::class);
+        foreach ($term->aliasPhrasesFor($begriff) as $phrase) {
+            if (($id = $this->ankerIdExakt($phrase)) !== null) {
+                return ['id' => $id, 'via' => 'synonym'];
+            }
+        }
+        foreach ($term->decompoundPhrasesFor($begriff) as $phrase) {
+            $modifier = trim((string) preg_replace('/\s+\S+$/u', '', $phrase));
+            if ($modifier === '' || $modifier === $phrase) {
+                continue;
+            }
+            if (($id = $this->ankerIdExakt($modifier)) !== null) {
+                return ['id' => $id, 'via' => 'zerlegt'];
+            }
+            foreach ($term->aliasPhrasesFor($modifier) as $alias) {
+                if (($id = $this->ankerIdExakt($alias)) !== null) {
+                    return ['id' => $id, 'via' => 'zerlegt'];
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * MCP-Discovery (Phase K): Pairing-Partner für einen Zutat-NAMEN oder
      * Anker-Slug. Auflösung ist HYBRID (analog gps.SEARCH): exakter/
      * normalisierter Slug → lexikalischer Anker-Index (resolveByName) →
