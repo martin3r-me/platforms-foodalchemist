@@ -369,6 +369,11 @@ Einstufung: **Code ≈ 80 %** (davon ~120 beim Anlegen automatisch korrigierbar)
   Offen: Regelwerk-Präfix im Label (Basisrezept-§2 vs. VK-§2 laufen beide unter `recipe`).
 - Veraltete offene Befunde: eine Nachprüfung nur der Code-Regeln (ohne KI) setzt sie auf „verschwunden" — offen.
 - §1.2-Dossier nennt noch `lookup_recipe_typ` als SSOT; laut Spec 41 führt das Wissensmodul — Dossier anpassen.
+- **GP-Felder schlecht gepflegt (demo 09.10.):** von 6.950 freigegebenen GPs haben Zustand 6.803 und Hauptzutat 6.930,
+  aber Verarbeitung nur 210 und Form 3 — „Würfel 5 mm", „gehackt" stehen nur im Namen. `GpKorrektur` liest die Felder
+  zuerst und fällt auf den Namen zurück. **Datenpflege-Schritt (offen, nur mit OK Dominique auf demo):** Artisan-Befehl,
+  der Verarbeitung/Form deterministisch aus dem Namen nach §6-Schema in die Felder übernimmt — zuerst Probelauf mit
+  Liste, dann Anwendung; danach gilt das Feld als Wahrheit.
 - Typ-Vokabular kennt **„Matte"** nicht (und „Garnitur"): Entscheidung Dominique, wo die Blattgrün-Matte hingehört
   (Vorschlag: `Matte` unter „Aromen & Öle").
 
