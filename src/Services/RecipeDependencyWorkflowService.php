@@ -251,7 +251,7 @@ class RecipeDependencyWorkflowService
             $child->update(['status' => 'running', 'error' => null, 'generator_run_id' => null]);
             app(PlanningCascadeService::class)->setzePhase((int) $child->id, 'Komponenten werden geplant …');
             \Platform\FoodAlchemist\Jobs\GenerateRecipePlanJob::dispatch($team->id, $userId, (int) $child->id, $text,
-                [...$params, '_voll_anreichern' => $vollAnreichern])->onQueue(Warteschlange::rezepte());
+                [...$params, '_voll_anreichern' => $vollAnreichern, '_kind' => true])->onQueue(Warteschlange::rezepte());
 
             return;
         }
@@ -268,7 +268,7 @@ class RecipeDependencyWorkflowService
     public function baueKindNachPlan(Team $team, FoodAlchemistCascadeRunStep $child, int $userId, string $text, array $params, array $komponenten): void
     {
         $vollAnreichern = (bool) ($params['_voll_anreichern'] ?? false);
-        unset($params['_voll_anreichern']);
+        unset($params['_voll_anreichern'], $params['_kind']);
         // Ein Baustein, den es freigegeben im Bestand gibt (bestandFuer: nur approved, Typ, Diät — findet auch per
         // Matcher, was planChildren per Namens-Token-Set übersah): binden statt eine Dublette bauen (Review Berater).
         $einziger = count($komponenten) === 1 ? $komponenten[0] : null;

@@ -21,7 +21,7 @@ final class KomponentenPlanDurch
     {
         foreach (Queue::pushed(GenerateRecipePlanJob::class) as $job) {
             $step = FoodAlchemistCascadeRunStep::find($job->stepId);
-            if ($step?->parent_step_id !== null) {
+            if (! empty($job->params['_kind']) || $step?->parent_step_id !== null) {
                 // Kind-Basisrezept: plant automatisch und baut ohne Gate — hier als „ein Baustein“ durchgewinkt.
                 if ($step->status === 'running' && $step->generator_run_id === null) {
                     app(RecipeDependencyWorkflowService::class)->baueKindNachPlan(Team::findOrFail($job->teamId), $step, $job->userId, $job->brief, $job->params, []);

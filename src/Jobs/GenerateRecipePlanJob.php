@@ -49,7 +49,8 @@ class GenerateRecipePlanJob implements ShouldQueue
         }
         $cascade->setzePhase($this->stepId, 'Komponenten werden geplant …');
         try {
-            $istKind = $step->parent_step_id !== null;
+            // Kind = über starteKind gekommen (eindeutig), nicht nur „hat einen Eltern-Step“.
+            $istKind = ! empty($this->params['_kind']) || $step->parent_step_id !== null;
             $komponenten = $plan->plane($team, $this->brief, $this->params,
                 $istKind ? (int) config('foodalchemist.kaskade.kind_max_komponenten', 4) : null);
             $cascade->setzePhase($this->stepId, null);

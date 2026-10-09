@@ -62,6 +62,9 @@ it('Kaskaden-Kinder laufen auf der Rezepte-Schlange — parallel zu den Gerichte
         ['auto_dependencies' => true, '_voll_anreichern' => true],
     );
 
+    // Kind plant zuerst — auch der Plan-Job läuft auf der Rezepte-Schlange.
+    Queue::assertPushed(\Platform\FoodAlchemist\Jobs\GenerateRecipePlanJob::class, fn ($job) => $job->queue === 'fa-rezepte');
+    \Platform\FoodAlchemist\Tests\Support\KomponentenPlanDurch::bauen();   // Kind plant zuerst (automatisch) — hier als ein Baustein durchgewinkt
     Queue::assertPushed(GenerateRecipeJob::class, fn ($job) => $job->queue === 'fa-rezepte');
 });
 

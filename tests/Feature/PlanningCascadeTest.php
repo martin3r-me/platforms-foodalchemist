@@ -343,6 +343,7 @@ it('teilt identische fehlende Basisrezepte im Lauf und bindet das Ergebnis an al
         ]], ['auto_dependencies' => true, '_voll_anreichern' => true]);
     }
 
+    \Platform\FoodAlchemist\Tests\Support\KomponentenPlanDurch::bauen();   // Kind plant zuerst (automatisch) — hier als ein Baustein durchgewinkt
     $children = FoodAlchemistCascadeRunStep::where('cascade_run_id', $run->id)->where('depth', 1)->get();
     expect($children)->toHaveCount(1)
         ->and(\Platform\FoodAlchemist\Models\FoodAlchemistCascadeRecipeDependency::count())->toBe(2);
@@ -2139,6 +2140,7 @@ it('Freigabe des Gerichts schaltet die geplanten Basisrezepte scharf — derselb
     $step->update(['status' => 'done', 'ref_type' => 'recipe', 'ref_id' => $gericht->id]);
 
     app(PlanningCascadeService::class)->gibStepFrei($this->rootTeam, (int) $step->id);
+    \Platform\FoodAlchemist\Tests\Support\KomponentenPlanDurch::bauen();   // Kind plant zuerst (automatisch) — hier als ein Baustein durchgewinkt
 
     $kinder = FoodAlchemistCascadeRunStep::where('parent_step_id', $step->id)->get();
     expect($kinder)->toHaveCount(1)                                        // kein zweiter Step
@@ -2240,6 +2242,7 @@ it('erzeugeGeplantenStep: schaltet EIN geplantes Sub-Rezept einzeln scharf (gepl
     expect($geplant->status)->toBe('geplant');
 
     app(PlanningCascadeService::class)->erzeugeGeplantenStep($this->rootTeam, (int) $geplant->id);
+    \Platform\FoodAlchemist\Tests\Support\KomponentenPlanDurch::bauen();   // Kind plant zuerst (automatisch) — hier als ein Baustein durchgewinkt
 
     expect($geplant->refresh()->status)->toBe('running')
         ->and($geplant->generator_run_id)->not->toBeNull();
@@ -2474,6 +2477,7 @@ it('L1 komplett_neu: Reuse-Gate übersprungen — trotz Bestand wird neu geplant
         ['auto_dependencies' => true, 'bestand' => 'komplett_neu'],
     );
 
+    \Platform\FoodAlchemist\Tests\Support\KomponentenPlanDurch::bauen();   // Kind plant zuerst (automatisch) — hier als ein Baustein durchgewinkt
     // Neu erzeugt (Job) statt Bestand gebunden.
     Queue::assertPushed(GenerateRecipeJob::class, 1);
     $kinder = FoodAlchemistCascadeRunStep::where('cascade_run_id', $run->id)->where('depth', 1)->get();
