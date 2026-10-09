@@ -111,7 +111,8 @@
                     @endforeach
                     @foreach([[-59, 'Getränke'], [0, 'Ambiente'], [59, 'Service & Format']] as [$grad, $txt])
                         @php [$lx, $ly] = $punkt($grad, $maxR * 1.07); @endphp
-                        <text x="{{ $lx }}" y="{{ $ly }}" class="tr-label" text-anchor="{{ $grad === 0 ? 'start' : 'start' }}">{{ $txt }}</text>
+                        {{-- rechts mittig: rechtsbündig an den Rand, sonst läuft „Ambiente" aus der viewBox --}}
+                        <text x="{{ $grad === 0 ? 636 : $lx }}" y="{{ $grad === 0 ? $ly - 8 : $ly }}" class="tr-label" text-anchor="{{ $grad === 0 ? 'end' : 'start' }}">{{ $txt }}</text>
                     @endforeach
                     <text x="{{ $cx - $maxR }}" y="{{ $cy + $maxR * 1.13 }}" class="tr-half" fill="var(--tr-food)">FOOD</text>
                     <text x="{{ $cx + $maxR }}" y="{{ $cy + $maxR * 1.13 }}" class="tr-half" text-anchor="end">NON-FOOD</text>

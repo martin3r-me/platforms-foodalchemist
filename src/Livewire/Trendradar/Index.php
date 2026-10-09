@@ -378,8 +378,9 @@ class Index extends Component
             'nur_befragung' => $this->nurBefragung];
         $gefiltert = $svc->liste($team, $filter + ['status' => $this->statusFilter !== '' ? [$this->statusFilter] : []]);
 
-        $radar = $gefiltert->filter(fn ($t) => in_array($t->status, V::RADAR_STATUS, true) && $t->ebene && $t->kategorie && $t->typ)
-            ->map(fn (FoodAlchemistTrend $t) => ['trend' => $t] + $svc->radarPosition($t))->values();
+        $radarTrends = $gefiltert->filter(fn ($t) => in_array($t->status, V::RADAR_STATUS, true) && $t->ebene && $t->kategorie && $t->typ)->values();
+        $positionen = $svc->radarPositionen($radarTrends);   // ohne Überlappung je Kategorie × Ebene
+        $radar = $radarTrends->map(fn (FoodAlchemistTrend $t) => ['trend' => $t] + $positionen[(int) $t->id])->values();
         $aufRadar = $alle->filter(fn ($t) => in_array($t->status, V::RADAR_STATUS, true));
 
         $gewaehlt = $this->gewaehlt();

@@ -666,3 +666,33 @@ it('MCP: Quelle per inspiration_id zur bestehenden Inspiration, zusammenfuehren_
     expect($plan->success)->toBeTrue()->and($plan->data['brief'])->toContain('Inspiration: Kristallbrot')
         ->and($plan->data['source_trend_refs'])->toBe(['trend_ids' => [], 'inspiration_ids' => [$eins->data['inspiration_id']]]);
 });
+
+it('Radar (09.10.): Trends derselben Kategorie und Ebene überlappen nicht, Positionen sind stabil', function () {
+    $namen = ['In-vitro-Fleisch', 'Algen- / Insektenprotein', 'Vegane Ernährung', 'Gesundheit als Megatrend', 'Pilzprotein', 'Präzisionsfermentation'];
+    $trends = collect($namen)->map(fn ($n) => $this->svc->anlegen($this->rootTeam, ['name' => $n, 'typ' => 'trend', 'ebene' => 'mega', 'kategorie' => 'food']));
+    // dazu eine kleine Zelle (Deko × Mode) mit 4 Trends im engen 56°-Sektor
+    $deko = collect(['Coral Coast', 'Amar Amor', 'Trend Drei', 'Trend Vier'])->map(fn ($n) => $this->svc->anlegen($this->rootTeam, ['name' => $n, 'typ' => 'hype', 'ebene' => 'mode', 'kategorie' => 'deko']));
+    $alle = $trends->concat($deko);
+
+    $pos = $this->svc->radarPositionen($alle);
+    expect($pos)->toHaveCount(10);
+    $punkte = array_values($pos);
+    $min = INF;
+    for ($i = 0; $i < count($punkte); $i++) {
+        for ($j = $i + 1; $j < count($punkte); $j++) {
+            $min = min($min, hypot($punkte[$i]['x'] - $punkte[$j]['x'], $punkte[$i]['y'] - $punkte[$j]['y']));
+        }
+    }
+    expect($min)->toBeGreaterThan(14.0);                                  // Punkt-Durchmesser ≈ 14
+    $umgekehrt = $this->svc->radarPositionen($alle->reverse());
+    ksort($umgekehrt);
+    ksort($pos);
+    expect($umgekehrt)->toBe($pos);   // stabil, unabhängig von der Reihenfolge
+    // Food liegt links der Achse, Deko rechts
+    foreach ($trends as $t) {
+        expect($pos[$t->id]['x'])->toBeLessThan(320);
+    }
+    foreach ($deko as $t) {
+        expect($pos[$t->id]['x'])->toBeGreaterThan(320);
+    }
+});
