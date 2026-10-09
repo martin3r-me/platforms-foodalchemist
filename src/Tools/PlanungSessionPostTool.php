@@ -10,7 +10,7 @@ use Platform\FoodAlchemist\Services\PlanningSessionService;
 
 /**
  * Planungs-/Kreativ-Session anlegen (Doppel-Diamant, Spec 08). Entweder aus dem Trendradar
- * (Spec 79: `trend_ids`/`fundstueck_ids` → ein kombiniertes Briefing) oder aus
+ * (Spec 79: `trend_ids`/`inspiration_ids` → ein kombiniertes Briefing) oder aus
  * einem freien Brief (`title` + optional `brief`). Status immer `divergenz`, team-scoped.
  *
  * Die Session erzeugt NICHTS — Skizzen sammeln + „Go" (human-only, UI) materialisiert Rezept/
@@ -25,8 +25,8 @@ class PlanungSessionPostTool extends FoodAlchemistTool implements ToolContract, 
 
     public function getDescription(): string
     {
-        return 'Legt eine Planungs-Session an — aus dem Trendradar (trend_ids und/oder fundstueck_ids: Trends, Hypes '
-            . 'und Fundstücke werden zu EINEM Briefing kombiniert, max. 8) ODER aus freiem Brief (title + optional brief). '
+        return 'Legt eine Planungs-Session an — aus dem Trendradar (trend_ids und/oder inspiration_ids: Trends, Hypes '
+            . 'und Inspirationen werden zu EINEM Briefing kombiniert, max. 8) ODER aus freiem Brief (title + optional brief). '
             . 'Status=divergenz. '
             . 'Erzeugt KEINE Rezepte/Konzepte (das macht das „Go" in der UI).';
     }
@@ -36,9 +36,10 @@ class PlanungSessionPostTool extends FoodAlchemistTool implements ToolContract, 
         return [
             'type' => 'object',
             'properties' => [
-                'title' => ['type' => 'string', 'description' => 'Titel (Pflicht, außer bei trend_ids/fundstueck_ids)'],
+                'title' => ['type' => 'string', 'description' => 'Titel (Pflicht, außer bei trend_ids/inspiration_ids)'],
                 'brief' => ['type' => 'string', 'description' => 'Optionaler Start-Brief für die Erzeugung'],
                 'trend_ids' => ['type' => 'array', 'items' => ['type' => 'integer'], 'description' => 'Spec 79: Trends/Hypes aus foodalchemist.trends.GET'],
+                'inspiration_ids' => ['type' => 'array', 'items' => ['type' => 'integer'], 'description' => 'Spec 79: Inspirationen aus foodalchemist.fundstuecke.GET'],
                 'fundstueck_ids' => ['type' => 'array', 'items' => ['type' => 'integer'], 'description' => 'Spec 79: Fundstücke aus foodalchemist.fundstuecke.GET'],
                 'creative_mode' => ['type' => 'string', 'enum' => ['voll_kreativ', 'hybrid', 'datenbank'], 'default' => 'voll_kreativ'],
                 'generation_params' => [
@@ -65,8 +66,9 @@ class PlanungSessionPostTool extends FoodAlchemistTool implements ToolContract, 
         $svc = app(PlanningSessionService::class);
 
         try {
-            if (! empty($arguments['trend_ids']) || ! empty($arguments['fundstueck_ids'])) {
-                $session = $svc->ausTrendradar($team, (array) ($arguments['trend_ids'] ?? []), (array) ($arguments['fundstueck_ids'] ?? []), 'mcp_trendradar');
+            if (! empty($arguments['trend_ids']) || ! empty($arguments['inspiration_ids']) || ! empty($arguments['fundstueck_ids'])) {
+                $inspirationen = app(\Platform\FoodAlchemist\Services\TrendService::class)->inspirationIdsAus($team, $arguments);
+                $session = $svc->ausTrendradar($team, (array) ($arguments['trend_ids'] ?? []), $inspirationen, 'mcp_trendradar');
                 if (isset($arguments['brief']) && trim((string) $arguments['brief']) !== '') {
                     $session = $svc->update($team, $session->id, ['brief' => $arguments['brief']]);
                 }

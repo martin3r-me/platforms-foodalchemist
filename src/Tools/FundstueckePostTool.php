@@ -21,10 +21,10 @@ class FundstueckePostTool extends FoodAlchemistTool implements ToolContract, Too
 
     public function getDescription(): string
     {
-        return 'Legt ein Fundstück in die Inspirations-Pinnwand des Trendradars: etwas Gesehenes (Instagram-Post, Foto im '
-            .'Restaurant, Link), noch KEIN Trend. titel, quelle (Standard instagram), url, notiz, fundort, beobachtet_am, '
-            .'schlagworte (bündeln Fundstücke zu Häufungen), datei (Screenshot/Foto/PDF als base64 oder url). Optional trend_id, '
-            .'wenn klar ist, zu welchem Trend es gehört. Einen Trend daraus macht foodalchemist.fundstuecke.PUT (trend_anlegen).';
+        return 'Legt eine Quelle in die Inspirations-Pinnwand des Trendradars: etwas Gesehenes (Instagram-Post, Video, Foto im '
+            .'Restaurant, Artikel), noch KEIN Trend. Gibt es das Thema schon als Inspiration, inspiration_id mitgeben — dann landet die '
+            .'Quelle auf derselben Karte statt einer neuen. Felder: titel, quelle (Standard instagram), url, notiz, fundort, '
+            .'beobachtet_am, schlagworte, datei (Screenshot/Foto/PDF als base64 oder url), optional trend_id.';
     }
 
     public function getSchema(): array
@@ -38,6 +38,7 @@ class FundstueckePostTool extends FoodAlchemistTool implements ToolContract, Too
                 'fundort' => ['type' => 'string', 'description' => 'Account, Lokal, Messe …'],
                 'beobachtet_am' => ['type' => 'string', 'description' => 'YYYY-MM-DD, Standard heute'],
                 'schlagworte' => ['type' => 'array', 'items' => ['type' => 'string']],
+                'inspiration_id' => ['type' => 'integer', 'description' => 'Bestehende Inspiration (eigenes Team), zu der diese Quelle gehört. Ohne: neue Inspiration. Vorher mit fundstuecke.GET suche/schlagwort prüfen, ob es das Thema schon gibt.'],
                 'trend_id' => ['type' => 'integer'],
                 'datei' => self::dateiSchema(),
             ],
@@ -62,8 +63,9 @@ class FundstueckePostTool extends FoodAlchemistTool implements ToolContract, Too
             $this->dateiAufraeumen();
         }
 
-        return ToolResult::success(['fundstueck_id' => $b->id, 'titel' => $b->titel, 'datei' => $b->datei_name,
-            'trend_id' => $b->trend_id, 'haeufungen' => $svc->haeufungen($team)]);
+        return ToolResult::success(['fundstueck_id' => $b->id, 'inspiration_id' => $b->inspiration_id,
+            'inspiration' => $b->inspiration?->titel, 'quellen' => $b->inspiration?->quellen()->count(),
+            'titel' => $b->titel, 'datei' => $b->datei_name, 'trend_id' => $b->trend_id, 'haeufungen' => $svc->haeufungen($team)]);
     }
 
     public function getMetadata(): array

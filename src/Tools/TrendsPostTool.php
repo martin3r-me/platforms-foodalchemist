@@ -57,6 +57,7 @@ class TrendsPostTool extends FoodAlchemistTool implements ToolContract, ToolMeta
                 ]],
                 'datei' => self::dateiSchema(),
                 'fundstueck_ids' => ['type' => 'array', 'items' => ['type' => 'integer'], 'description' => 'Fundstücke aus der Pinnwand, die als Belege an den neuen Trend gehen.'],
+                'inspiration_ids' => ['type' => 'array', 'items' => ['type' => 'integer'], 'description' => 'Inspirationen der Pinnwand; alle ihre Quellen werden Belege des neuen Trends.'],
             ],
             'required' => ['name'],
         ];

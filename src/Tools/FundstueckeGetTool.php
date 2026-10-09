@@ -19,9 +19,10 @@ class FundstueckeGetTool extends FoodAlchemistTool implements ToolContract, Tool
 
     public function getDescription(): string
     {
-        return 'Liest die Inspirations-Pinnwand des Trendradars: Fundstücke (Instagram-Post, Foto, Link — Beobachtungen, '
-            .'noch kein Trend). ansicht offen (Standard, keinem Trend zugeordnet) | zugeordnet | alle, suche, schlagwort. '
-            .'Liefert zusätzlich Häufungen offener Fundstücke je Schlagwort (ab 2) — Kandidaten für einen Hype oder Trend.';
+        return 'Liest die Inspirations-Pinnwand des Trendradars: Inspirationen = je ein Thema (z. B. „Kristallbrot“) mit seinen '
+            .'Quellen (Instagram-Post, Video, Artikel, Foto — Beobachtungen, noch kein Trend). ansicht offen (Standard, keinem Trend '
+            .'zugeordnet) | zugeordnet | alle, suche, schlagwort. Liefert zusätzlich Häufungen offener Inspirationen je Schlagwort '
+            .'(ab 2) — Kandidaten zum Zusammenführen (fundstuecke.PUT zusammenfuehren_in) oder für einen Hype/Trend.';
     }
 
     public function getSchema(): array
@@ -40,15 +41,18 @@ class FundstueckeGetTool extends FoodAlchemistTool implements ToolContract, Tool
             return ToolResult::error('Kein Team im Kontext.', 'NO_TEAM');
         }
         $svc = app(TrendService::class);
-        $liste = $svc->fundstuecke($team, (string) ($arguments['ansicht'] ?? 'offen'), (string) ($arguments['suche'] ?? ''), $arguments['schlagwort'] ?? null);
+        $liste = $svc->inspirationen($team, (string) ($arguments['ansicht'] ?? 'offen'), (string) ($arguments['suche'] ?? ''), $arguments['schlagwort'] ?? null);
 
         return ToolResult::success([
             'anzahl' => $liste->count(),
-            'fundstuecke' => $liste->map(fn (FoodAlchemistTrendBeleg $b) => [
-                'id' => $b->id, 'titel' => $b->titel, 'quelle' => $b->quelle, 'url' => $b->url, 'notiz' => $b->notiz,
-                'fundort' => $b->fundort, 'beobachtet_am' => $b->beobachtet_am?->toDateString(), 'schlagworte' => $b->schlagworte ?? [],
-                'datei' => $b->datei_name, 'datei_url' => $svc->dateiUrl($b),
-                'trend' => $b->trend ? ['id' => $b->trend->id, 'name' => $b->trend->name] : null,
+            'inspirationen' => $liste->map(fn ($i) => [
+                'id' => $i->id, 'titel' => $i->titel, 'schlagworte' => $i->schlagworte ?? [], 'team_id' => $i->team_id,
+                'trend' => $i->trend ? ['id' => $i->trend->id, 'name' => $i->trend->name] : null,
+                'quellen' => $i->quellen->map(fn (FoodAlchemistTrendBeleg $b) => [
+                    'id' => $b->id, 'titel' => $b->titel, 'quelle' => $b->quelle, 'url' => $b->url, 'notiz' => $b->notiz,
+                    'fundort' => $b->fundort, 'beobachtet_am' => $b->beobachtet_am?->toDateString(),
+                    'datei' => $b->datei_name, 'datei_url' => $svc->dateiUrl($b),
+                ])->values()->all(),
             ])->values()->all(),
             'haeufungen' => $svc->haeufungen($team),
         ]);

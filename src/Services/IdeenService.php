@@ -776,11 +776,11 @@ class IdeenService
     {
         $session = app(PlanningSessionService::class)->get($team, $planningSessionId);
         $refs = is_array($session?->source_trend_refs) ? $session->source_trend_refs : [];
-        if (($refs['trend_ids'] ?? []) === [] && ($refs['fundstueck_ids'] ?? []) === []) {
+        if (($refs['trend_ids'] ?? []) === [] && ($refs['inspiration_ids'] ?? []) === [] && ($refs['fundstueck_ids'] ?? []) === []) {
             return null;
         }
         try {
-            $k = app(PlanningSessionService::class)->trendKombination($team, $refs['trend_ids'] ?? [], $refs['fundstueck_ids'] ?? []);
+            $k = app(PlanningSessionService::class)->trendKombination($team, $refs['trend_ids'] ?? [], $refs['inspiration_ids'] ?? [], $refs['fundstueck_ids'] ?? []);
         } catch (\RuntimeException) {
             return null;
         }

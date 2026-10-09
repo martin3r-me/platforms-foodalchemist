@@ -8,7 +8,7 @@ use Platform\Core\Contracts\ToolMetadataContract;
 use Platform\Core\Contracts\ToolResult;
 use Platform\FoodAlchemist\Services\TrendService;
 
-/** Spec 79 · Fundstück einem Trend zuordnen, aus Fundstücken einen Trend machen oder die Zuordnung lösen. */
+/** Spec 79 · Inspirationen kuratieren: einem Trend zuordnen, einen Trend daraus machen, lösen oder zusammenführen. */
 class FundstueckePutTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
 {
     public function getName(): string
@@ -18,9 +18,11 @@ class FundstueckePutTool extends FoodAlchemistTool implements ToolContract, Tool
 
     public function getDescription(): string
     {
-        return 'Kuratiert Fundstücke der Inspirations-Pinnwand. Genau eine Aktion: trend_id (dem Trend zuordnen, wird Beleg), '
-            .'trend_anlegen {name, definition, typ, ebene, kategorie, …} (neuen Trend aus diesen Fundstücken machen, Status '
-            .'gesichtet) oder loesen=true (zurück in die Pinnwand). fundstueck_ids = ein oder mehrere Fundstücke.';
+        return 'Kuratiert Inspirationen der Pinnwand (je ein Thema mit seinen Quellen). inspiration_ids = eine oder mehrere '
+            .'Inspirationen (fundstueck_ids = einzelne Quellen, nehmen ihre Inspiration mit). Genau eine Aktion: trend_id (dem '
+            .'Trend zuordnen, alle Quellen werden Belege), trend_anlegen {name, definition, typ, ebene, kategorie, …} (neuen Trend '
+            .'daraus machen, Status gesichtet), loesen=true (zurück in die Pinnwand) oder zusammenfuehren_in = Ziel-Inspiration '
+            .'(alle Quellen wandern dorthin, die anderen Karten verschwinden).';
     }
 
     public function getSchema(): array
@@ -28,12 +30,13 @@ class FundstueckePutTool extends FoodAlchemistTool implements ToolContract, Tool
         return [
             'type' => 'object',
             'properties' => [
-                'fundstueck_ids' => ['type' => 'array', 'items' => ['type' => 'integer']],
+                'inspiration_ids' => ['type' => 'array', 'items' => ['type' => 'integer']],
+                'fundstueck_ids' => ['type' => 'array', 'items' => ['type' => 'integer'], 'description' => 'Einzelne Quellen; zählt als deren Inspiration.'],
                 'trend_id' => ['type' => 'integer'],
                 'trend_anlegen' => ['type' => 'object', 'description' => 'Felder wie foodalchemist.trends.POST (name Pflicht).'],
                 'loesen' => ['type' => 'boolean'],
+                'zusammenfuehren_in' => ['type' => 'integer', 'description' => 'Ziel-Inspiration für das Zusammenführen.'],
             ],
-            'required' => ['fundstueck_ids'],
         ];
     }
 
@@ -43,26 +46,33 @@ class FundstueckePutTool extends FoodAlchemistTool implements ToolContract, Tool
         if ($team === null) {
             return ToolResult::error('Kein Team im Kontext.', 'NO_TEAM');
         }
-        $ids = array_values(array_map('intval', (array) ($arguments['fundstueck_ids'] ?? [])));
-        $aktionen = (int) ! empty($arguments['trend_id']) + (int) ! empty($arguments['trend_anlegen']) + (int) ! empty($arguments['loesen']);
-        if ($ids === [] || $aktionen !== 1) {
-            return ToolResult::error('fundstueck_ids und genau eine Aktion (trend_id, trend_anlegen oder loesen) angeben.', 'VALIDATION_ERROR');
-        }
         $svc = app(TrendService::class);
+        $ids = $svc->inspirationIdsAus($team, $arguments);
+        $aktionen = (int) ! empty($arguments['trend_id']) + (int) ! empty($arguments['trend_anlegen'])
+            + (int) ! empty($arguments['loesen']) + (int) ! empty($arguments['zusammenfuehren_in']);
+        if ($ids === [] || $aktionen !== 1) {
+            return ToolResult::error('inspiration_ids (oder fundstueck_ids) und genau eine Aktion (trend_id, trend_anlegen, loesen oder zusammenfuehren_in) angeben.', 'VALIDATION_ERROR');
+        }
         $uid = $context->user?->id;
         try {
             if (! empty($arguments['trend_anlegen'])) {
-                $trend = $svc->anlegen($team, (array) $arguments['trend_anlegen'] + ['fundstueck_ids' => $ids], $uid);
+                $trend = $svc->anlegen($team, (array) $arguments['trend_anlegen'] + ['inspiration_ids' => $ids], $uid);
 
                 return ToolResult::success($svc->alsArray($svc->detail($team, $trend->id), true));
             }
+            if (! empty($arguments['zusammenfuehren_in'])) {
+                $ziel = $svc->inspirationenZusammenfuehren($team, (int) $arguments['zusammenfuehren_in'], $ids, $uid);
+
+                return ToolResult::success(['inspiration_id' => $ziel->id, 'titel' => $ziel->titel,
+                    'quellen' => $ziel->quellen()->count(), 'schlagworte' => $ziel->schlagworte ?? []]);
+            }
             foreach ($ids as $id) {
                 ! empty($arguments['loesen'])
-                    ? $svc->fundstueckLoesen($team, $id, $uid)
-                    : $svc->fundstueckZuordnen($team, $id, (int) $arguments['trend_id'], $uid);
+                    ? $svc->inspirationLoesen($team, $id, $uid)
+                    : $svc->inspirationZuordnen($team, $id, (int) $arguments['trend_id'], $uid);
             }
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException) {
-            return ToolResult::error('Fundstück oder Trend nicht gefunden (oder gehört einem anderen Team).', 'NOT_FOUND');
+            return ToolResult::error('Inspiration oder Trend nicht gefunden (oder gehört einem anderen Team).', 'NOT_FOUND');
         } catch (\RuntimeException $e) {
             return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR');
         }
@@ -78,9 +88,9 @@ class FundstueckePutTool extends FoodAlchemistTool implements ToolContract, Tool
         return [
             'category' => 'action', 'tags' => ['foodalchemist', 'trendradar', 'inspiration', 'fundstueck', 'write'],
             'read_only' => false, 'idempotent' => false, 'risk_level' => 'write',
-            'requires_auth' => true, 'requires_team' => true, 'cost_class' => 'local_db', 'side_effects' => ['updates', 'creates'],
+            'requires_auth' => true, 'requires_team' => true, 'cost_class' => 'local_db', 'side_effects' => ['updates', 'creates', 'deletes'],
             'related_tools' => ['foodalchemist.fundstuecke.GET', 'foodalchemist.trends.GET'],
-            'examples' => ['Häng Fundstück 12 und 15 an den Trend Dubai-Schokolade.', 'Mach aus den drei Loaded-Potato-Fundstücken einen Hype.'],
+            'examples' => ['Führ die drei Kristallbrot-Inspirationen zusammen.', 'Mach aus Inspiration 4 einen Hype „Kristallbrot“.'],
         ];
     }
 }

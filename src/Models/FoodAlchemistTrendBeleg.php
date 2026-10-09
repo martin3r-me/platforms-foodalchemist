@@ -27,4 +27,9 @@ class FoodAlchemistTrendBeleg extends Model
     {
         return $this->belongsTo(FoodAlchemistTrend::class, 'trend_id');
     }
+
+    public function inspiration(): BelongsTo
+    {
+        return $this->belongsTo(FoodAlchemistTrendInspiration::class, 'inspiration_id');
+    }
 }

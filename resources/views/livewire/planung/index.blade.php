@@ -396,7 +396,7 @@
                         $aktPruefen = collect($aktStufen)->filter(fn ($st) => ($st['zustand'] ?? null) === 'prüfen');
                     @endphp
                     <x-fa::detail-kopf :title="$anzeigeTitel($active)"
-                        :subtitle="! empty($active->source_trend_refs) ? 'Herkunft: Trendradar (' . (count($active->source_trend_refs['trend_ids'] ?? []) + count($active->source_trend_refs['fundstueck_ids'] ?? [])) . ' Impulse)' : 'Herkunft: Freier Brief'">
+                        :subtitle="! empty($active->source_trend_refs) ? 'Herkunft: Trendradar (' . (count($active->source_trend_refs['trend_ids'] ?? []) + count($active->source_trend_refs['inspiration_ids'] ?? []) + count($active->source_trend_refs['fundstueck_ids'] ?? [])) . ' Impulse)' : 'Herkunft: Freier Brief'">
                         @if(filled($active->title) && trim((string) $active->title) !== $anzeigeTitel($active))
                             <p class="mt-0.5 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)] break-words">Planung: {{ $active->title }}</p>
                         @endif
@@ -1085,7 +1085,7 @@
             <div wire:key="planung-tab-trendradar" x-show="tab==='trendradar'" class="max-w-7xl mx-auto" data-tab-trendradar>
                 @php
                     $trV = \Platform\FoodAlchemist\Support\TrendVokabular::class;
-                    $trGewaehlt = count($trendWahl['trends'] ?? []) + count($trendWahl['fundstuecke'] ?? []);
+                    $trGewaehlt = count($trendWahl['trends'] ?? []) + count($trendWahl['inspirationen'] ?? []);
                     $trZeile = 'flex items-start gap-2.5 px-2.5 py-2 rounded-[var(--fa-radius-control)] hover:bg-[var(--fa-hover)] cursor-pointer';
                 @endphp
                 <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] gap-4 items-start">
@@ -1116,16 +1116,16 @@
                                         <p class="{{ $hinweisText }}">Keine Trends gefunden.</p>
                                     @endforelse
                                 </div>
-                                <p class="pt-2 text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-2)]">Inspiration (Fundstücke)</p>
+                                <p class="pt-2 text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-2)]">Inspirationen</p>
                                 <div class="grid gap-2 grid-cols-[repeat(auto-fill,minmax(min(100%,12rem),1fr))] max-h-[40vh] overflow-y-auto" data-fund-kandidaten>
                                     @forelse($fundKandidaten as $eintrag)
-                                        @php $f = $eintrag['b']; @endphp
-                                        <label class="fa-surface p-2 flex gap-2 cursor-pointer min-w-0" wire:key="pfk-{{ $f->id }}">
-                                            <input type="checkbox" value="{{ $f->id }}" wire:model.live="trendWahl.fundstuecke" class="mt-1 accent-[var(--fa-accent)]" data-fund-wahl="{{ $f->id }}" />
+                                        @php $insp = $eintrag['i']; @endphp
+                                        <label class="fa-surface p-2 flex gap-2 cursor-pointer min-w-0" wire:key="pik-{{ $insp->id }}">
+                                            <input type="checkbox" value="{{ $insp->id }}" wire:model.live="trendWahl.inspirationen" class="mt-1 accent-[var(--fa-accent)]" data-inspiration-wahl="{{ $insp->id }}" />
                                             @if($eintrag['url'])<img src="{{ $eintrag['url'] }}" alt="" class="w-12 h-12 object-cover rounded-[var(--fa-radius-control)] shrink-0" loading="lazy" />@endif
                                             <span class="min-w-0">
-                                                <span class="block text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink)] line-clamp-2">{{ $f->titel ?: ($f->url ?: 'Fundstück') }}</span>
-                                                <span class="block {{ $hinweisText }}">{{ $trV::QUELLEN[$f->quelle] ?? $f->quelle }}@if($f->trend) · {{ $f->trend->name }}@endif</span>
+                                                <span class="block text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink)] line-clamp-2">{{ $insp->titel }}</span>
+                                                <span class="block {{ $hinweisText }}">{{ $insp->quellen->count() }} {{ $insp->quellen->count() === 1 ? 'Quelle' : 'Quellen' }}@if($insp->trend) · {{ $insp->trend->name }}@endif</span>
                                             </span>
                                         </label>
                                     @empty

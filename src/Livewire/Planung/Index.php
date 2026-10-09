@@ -90,7 +90,7 @@ class Index extends Component
     public array $composerAnker = [];
 
     /** Spec 79 · Reiter „Trendradar": gewählte Impulse (Trends/Hypes und Fundstücke), kombiniert zu einem Briefing. */
-    public array $trendWahl = ['trends' => [], 'fundstuecke' => []];
+    public array $trendWahl = ['trends' => [], 'inspirationen' => []];
 
     public string $trendSuche = '';
 
@@ -662,7 +662,7 @@ class Index extends Component
             return;
         }
         $session = $svc->create($team, ['title' => 'Aus dem Trendradar', 'created_via' => 'cockpit_trendradar']);
-        $this->trendWahl = ['trends' => [], 'fundstuecke' => []];
+        $this->trendWahl = ['trends' => [], 'inspirationen' => []];
         $this->fehler = null;
         $this->oeffne($session->id, 'trendradar');
     }
@@ -681,7 +681,7 @@ class Index extends Component
         $this->trendMeldung = null;
         try {
             $session = $svc->trendradarUebernehmen($team, $this->sessionId,
-                array_map('intval', $this->trendWahl['trends'] ?? []), array_map('intval', $this->trendWahl['fundstuecke'] ?? []));
+                array_map('intval', $this->trendWahl['trends'] ?? []), array_map('intval', $this->trendWahl['inspirationen'] ?? []));
         } catch (\RuntimeException $e) {
             $this->trendMeldung = $e->getMessage();
 
@@ -1415,7 +1415,9 @@ class Index extends Component
         $refs = is_array($session->source_trend_refs) ? $session->source_trend_refs : [];
         $this->trendWahl = [
             'trends' => array_map('strval', $refs['trend_ids'] ?? []),
-            'fundstuecke' => array_map('strval', $refs['fundstueck_ids'] ?? []),
+            // Inspirationen; ältere Planungen mit einzelnen Fundstücken nehmen deren Inspiration
+            'inspirationen' => $this->team() !== null
+                ? array_map('strval', app(PlanningSessionService::class)->refsInspirationen($this->team(), $refs)) : [],
         ];
         $this->trendMeldung = null;
 
@@ -4353,13 +4355,13 @@ class Index extends Component
             $tsvc = app(\Platform\FoodAlchemist\Services\TrendService::class);
             $trendKandidaten = $tsvc->liste($team, ['suche' => $this->trendSuche, 'status' => ['auf_radar', 'in_umsetzung', 'geprueft', 'gesichtet']])
                 ->sortBy(fn ($t) => [in_array($t->status, ['auf_radar', 'in_umsetzung'], true) ? 0 : 1, $t->name])->values();
-            $fundKandidaten = $tsvc->fundstuecke($team, 'alle', $this->trendSuche)->take(60)
-                ->map(fn ($b) => ['b' => $b, 'url' => str_starts_with((string) $b->datei_mime, 'image/') ? $tsvc->dateiUrl($b) : null]);
-            $gewaehlt = count($this->trendWahl['trends'] ?? []) + count($this->trendWahl['fundstuecke'] ?? []);
+            $fundKandidaten = $tsvc->inspirationen($team, 'alle', $this->trendSuche)->take(60)
+                ->map(fn ($i) => ['i' => $i, 'url' => ($bild = $tsvc->titelbild($i)) ? $tsvc->dateiUrl($bild) : null]);
+            $gewaehlt = count($this->trendWahl['trends'] ?? []) + count($this->trendWahl['inspirationen'] ?? []);
             if ($gewaehlt > 0) {
                 try {
                     $trendVorschau = app(PlanningSessionService::class)->trendKombination($team,
-                        array_map('intval', $this->trendWahl['trends'] ?? []), array_map('intval', $this->trendWahl['fundstuecke'] ?? []))['brief'];
+                        array_map('intval', $this->trendWahl['trends'] ?? []), array_map('intval', $this->trendWahl['inspirationen'] ?? []))['brief'];
                 } catch (\RuntimeException $e) {
                     $trendVorschau = null;
                     $this->trendMeldung = $e->getMessage();

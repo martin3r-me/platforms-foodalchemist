@@ -11,6 +11,7 @@ use Platform\Core\Services\ContextFileService;
 use Platform\FoodAlchemist\Enums\FaRolle;
 use Platform\FoodAlchemist\Models\FoodAlchemistTrend;
 use Platform\FoodAlchemist\Models\FoodAlchemistTrendBeleg;
+use Platform\FoodAlchemist\Models\FoodAlchemistTrendInspiration;
 use Platform\FoodAlchemist\Support\TrendVokabular as V;
 
 /**
@@ -123,9 +124,10 @@ class TrendService
 
     /**
      * Trend anlegen (Kuratieren). Ohne Status landet er als „gesichtet". Ein erster Beleg kann mitkommen;
-     * `fundstueck_ids` hängen vorhandene Fundstücke aus der Pinnwand direkt an („Trend daraus machen").
+     * `inspiration_ids` hängen Inspirationen der Pinnwand samt aller Quellen an („Trend daraus machen");
+     * `fundstueck_ids` (einzelne Quellen, Altbestand) nehmen ihre ganze Inspiration mit.
      *
-     * @param  array<string,mixed>  $daten  name, definition, typ, ebene, kategorie, food_cluster, sicht, suchbegriffe, hashtags, beleg{…}, fundstueck_ids[]
+     * @param  array<string,mixed>  $daten  name, definition, typ, ebene, kategorie, food_cluster, sicht, suchbegriffe, hashtags, beleg{…}, inspiration_ids[], fundstueck_ids[]
      */
     public function anlegen(Team $team, array $daten, ?int $userId = null, ?UploadedFile $datei = null): FoodAlchemistTrend
     {
@@ -161,8 +163,8 @@ class TrendService
             if (is_array($beleg) && ($this->belegHatInhalt($beleg) || $datei !== null)) {
                 $this->belegSchreiben($team, $trend, $beleg, $datei, $userId);
             }
-            foreach ((array) ($daten['fundstueck_ids'] ?? []) as $fid) {
-                $this->eigenesFundstueck($team, (int) $fid)->update(['trend_id' => $trend->id]);
+            foreach ($this->inspirationIdsAus($team, $daten) as $iid) {
+                $this->inspirationAnTrend($this->eigeneInspiration($team, $iid), $trend->id);
             }
 
             return $this->neuBewerten($trend);
@@ -249,6 +251,9 @@ class TrendService
         $this->pruefe($userId, $team, FaRolle::Kuratieren, 'Trend löschen');
         $trend = $this->eigener($team, $id);
         DB::transaction(function () use ($team, $trend) {
+            // Inspirationen samt Quellen bleiben auf der Pinnwand, nur die Zuordnung fällt weg
+            FoodAlchemistTrendInspiration::where('trend_id', $trend->id)->update(['trend_id' => null]);
+            FoodAlchemistTrendBeleg::where('trend_id', $trend->id)->where('fundstueck', true)->update(['trend_id' => null]);
             foreach ($trend->belege()->get() as $beleg) {
                 $this->dateiEntfernen($team, $beleg);
                 $beleg->delete();
@@ -284,6 +289,7 @@ class TrendService
             $this->pruefe($userId, $uploadTeam, FaRolle::Admin, 'Fundstück eines Standorts löschen');
             $this->dateiEntfernen($uploadTeam, $beleg);
             $beleg->delete();
+            $this->leereInspirationEntfernen($beleg->inspiration_id);
 
             return;
         }
@@ -295,6 +301,7 @@ class TrendService
         $trend = $beleg->trend;
         $this->dateiEntfernen($team, $beleg);
         $beleg->delete();
+        $this->leereInspirationEntfernen($beleg->inspiration_id);
         if ($trend !== null) {
             $this->neuBewerten($trend->refresh());
         }
@@ -314,13 +321,14 @@ class TrendService
         }
     }
 
-    // ── Fundstücke (Inspiration, Team-Pinnwand) ────────────────────────────
+    // ── Inspirationen (Team-Pinnwand: ein Thema, viele Quellen) ────────────
 
     /**
-     * Fundstück ablegen: eine Beobachtung ohne Einordnung — darf jedes Teammitglied. Braucht einen Titel,
-     * einen Link oder eine Datei. Mit `trend_id` hängt es gleich an einem Trend.
+     * Quelle ablegen (Instagram-Post, Video, Artikel, Foto) — darf jedes Teammitglied. Ohne `inspiration_id` entsteht
+     * eine neue Inspiration (Titel = Titel der Quelle), mit `inspiration_id` kommt die Quelle zu einer bestehenden
+     * Inspiration des eigenen Teams. Braucht einen Titel, einen Link oder eine Datei.
      *
-     * @param  array<string,mixed>  $daten  titel, quelle (Standard instagram), url, notiz, fundort, beobachtet_am, schlagworte, trend_id
+     * @param  array<string,mixed>  $daten  titel, quelle (Standard instagram), url, notiz, fundort, beobachtet_am, schlagworte, inspiration_id, trend_id
      */
     public function fundstueckAblegen(Team $team, array $daten, ?UploadedFile $datei = null, ?int $userId = null): FoodAlchemistTrendBeleg
     {
@@ -330,22 +338,48 @@ class TrendService
         }
         $daten['quelle'] = $daten['quelle'] ?? 'instagram';
         $daten['fundstueck'] = true;
-        if (! empty($daten['trend_id'])) {
-            return $this->belegAnhaengen($team, (int) $daten['trend_id'], $daten, $datei, $userId);
-        }
 
-        return DB::transaction(fn () => $this->belegSchreiben($team, null, $daten, $datei, $userId));
+        return DB::transaction(function () use ($team, $daten, $datei, $userId) {
+            if (! empty($daten['inspiration_id'])) {
+                $insp = $this->eigeneInspiration($team, (int) $daten['inspiration_id']);
+                $neueWorte = $this->liste_($daten['schlagworte'] ?? null, true) ?? [];
+                if ($neueWorte !== []) {
+                    $insp->update(['schlagworte' => $this->worteVereinen($insp->schlagworte ?? [], $neueWorte)]);
+                }
+            } else {
+                $insp = FoodAlchemistTrendInspiration::create([
+                    'team_id' => $team->id,
+                    'titel' => $this->inspirationsTitel($daten),
+                    'schlagworte' => $this->liste_($daten['schlagworte'] ?? null, true),
+                    'created_by' => $userId,
+                ]);
+            }
+            $daten['inspiration_id'] = $insp->id;
+            $trend = null;
+            $trendId = ! empty($daten['trend_id']) ? (int) $daten['trend_id'] : $insp->trend_id;
+            if ($trendId !== null) {
+                $trend = $this->eigener($team, $trendId);
+                $insp->trend_id === null && $insp->update(['trend_id' => $trend->id]);
+            }
+            $beleg = $this->belegSchreiben($team, $trend, $daten, $datei, $userId);
+            if ($trend !== null) {
+                $this->neuBewerten($trend->refresh());
+            }
+
+            return $beleg;
+        });
     }
 
     /**
-     * Pinnwand: Fundstücke der ganzen Teamfamilie (Oberteam + alle Standorte), neueste zuerst.
+     * Pinnwand: Inspirationen der ganzen Teamfamilie (Oberteam + alle Standorte) mit ihren Quellen, neueste zuerst.
      *
      * @param  string  $ansicht  offen (noch keinem Trend zugeordnet) | zugeordnet | alle
-     * @return Collection<int, FoodAlchemistTrendBeleg>
+     * @return Collection<int, FoodAlchemistTrendInspiration>
      */
-    public function fundstuecke(Team $team, string $ansicht = 'offen', string $suche = '', ?string $schlagwort = null): Collection
+    public function inspirationen(Team $team, string $ansicht = 'offen', string $suche = '', ?string $schlagwort = null): Collection
     {
-        $q = FoodAlchemistTrendBeleg::whereIn('team_id', $this->fundstueckFamilie($team))->with('trend:id,name,status,typ')->where('fundstueck', true);
+        $q = FoodAlchemistTrendInspiration::whereIn('team_id', $this->fundstueckFamilie($team))
+            ->with(['quellen', 'trend:id,name,status,typ']);
         if ($ansicht === 'offen') {
             $q->whereNull('trend_id');
         } elseif ($ansicht === 'zugeordnet') {
@@ -353,26 +387,37 @@ class TrendService
         }
         $suche = trim($suche);
         if ($suche !== '') {
-            $q->where(fn ($w) => $w->where('titel', 'like', '%'.$suche.'%')->orWhere('notiz', 'like', '%'.$suche.'%')->orWhere('fundort', 'like', '%'.$suche.'%'));
+            $q->where(fn ($w) => $w->where('titel', 'like', '%'.$suche.'%')
+                ->orWhereHas('quellen', fn ($b) => $b->where('titel', 'like', '%'.$suche.'%')->orWhere('notiz', 'like', '%'.$suche.'%')->orWhere('fundort', 'like', '%'.$suche.'%')));
         }
-        $liste = $q->orderByDesc('beobachtet_am')->orderByDesc('id')->limit(300)->get();
+        $liste = $q->orderByDesc('updated_at')->orderByDesc('id')->limit(200)->get();
         if ($schlagwort !== null && $schlagwort !== '') {
-            $liste = $liste->filter(fn ($b) => in_array(mb_strtolower($schlagwort), array_map('mb_strtolower', $b->schlagworte ?? []), true))->values();
+            $liste = $liste->filter(fn ($i) => in_array(mb_strtolower($schlagwort), array_map('mb_strtolower', $i->schlagworte ?? []), true))->values();
         }
 
         return $liste;
     }
 
     /**
-     * Häufungen offener Fundstücke je Schlagwort (ab 2) — der Hinweis „hier entsteht vielleicht ein Hype oder Trend".
+     * Einzelne Quellen (Fundstück-Belege) der Pinnwand — für MCP/Altbestand; die Pinnwand zeigt Inspirationen.
+     *
+     * @return Collection<int, FoodAlchemistTrendBeleg>
+     */
+    public function fundstuecke(Team $team, string $ansicht = 'offen', string $suche = '', ?string $schlagwort = null): Collection
+    {
+        return $this->inspirationen($team, $ansicht, $suche, $schlagwort)->flatMap(fn ($i) => $i->quellen)->values();
+    }
+
+    /**
+     * Häufungen offener Inspirationen je Schlagwort (ab 2): Kandidaten zum Zusammenführen oder für einen Hype/Trend.
      *
      * @return array<string,int>
      */
     public function haeufungen(Team $team): array
     {
         $zaehler = [];
-        foreach ($this->fundstuecke($team, 'offen') as $b) {
-            foreach ($b->schlagworte ?? [] as $w) {
+        foreach ($this->inspirationen($team, 'offen') as $i) {
+            foreach ($i->schlagworte ?? [] as $w) {
                 $k = mb_strtolower($w);
                 $zaehler[$k] = ($zaehler[$k] ?? 0) + 1;
             }
@@ -384,11 +429,102 @@ class TrendService
     }
 
     /**
+     * Inspirationen zusammenführen: alle Quellen wandern in die Ziel-Inspiration, Schlagworte werden vereint, die
+     * übrigen Inspirationen verschwinden. Nur Inspirationen des eigenen Teams, braucht Kuratieren.
+     *
+     * @param  list<int>  $quellIds
+     */
+    public function inspirationenZusammenfuehren(Team $team, int $zielId, array $quellIds, ?int $userId = null): FoodAlchemistTrendInspiration
+    {
+        $this->pruefe($userId, $team, FaRolle::Kuratieren, 'Inspirationen zusammenführen');
+        $ziel = $this->eigeneInspiration($team, $zielId);
+        $quellIds = array_values(array_diff(array_unique(array_map('intval', $quellIds)), [$ziel->id]));
+        if ($quellIds === []) {
+            throw new \RuntimeException('Bitte mindestens eine weitere Inspiration zum Zusammenführen wählen.');
+        }
+        DB::transaction(function () use ($team, $ziel, $quellIds) {
+            $worte = $ziel->schlagworte ?? [];
+            foreach ($quellIds as $qid) {
+                $quelle = $this->eigeneInspiration($team, $qid);
+                $worte = $this->worteVereinen($worte, $quelle->schlagworte ?? []);
+                FoodAlchemistTrendBeleg::where('inspiration_id', $quelle->id)->update([
+                    'inspiration_id' => $ziel->id, 'trend_id' => $ziel->trend_id,
+                ]);
+                $quelle->delete();
+            }
+            $ziel->update(['schlagworte' => $worte === [] ? null : $worte]);
+        });
+        if ($ziel->trend_id !== null && ($t = FoodAlchemistTrend::find($ziel->trend_id)) !== null) {
+            $this->neuBewerten($t);
+        }
+
+        return $ziel->refresh();
+    }
+
+    /** Inspiration einem Trend zuordnen — alle Quellen werden Belege und zählen in dessen Konfidenz. */
+    public function inspirationZuordnen(Team $team, int $inspirationId, int $trendId, ?int $userId = null): FoodAlchemistTrendInspiration
+    {
+        $this->pruefe($userId, $team, FaRolle::Kuratieren, 'Inspiration zuordnen');
+        $insp = $this->eigeneInspiration($team, $inspirationId);
+        $alt = $insp->trend_id;
+        $trend = $this->eigener($team, $trendId);
+        $this->inspirationAnTrend($insp, $trend->id);
+        $this->neuBewerten($trend->refresh());
+        if ($alt !== null && $alt !== $trend->id && ($vorher = FoodAlchemistTrend::find($alt)) !== null) {
+            $this->neuBewerten($vorher);
+        }
+
+        return $insp->refresh();
+    }
+
+    /** Zuordnung lösen — die Inspiration liegt wieder offen auf der Pinnwand. */
+    public function inspirationLoesen(Team $team, int $inspirationId, ?int $userId = null): FoodAlchemistTrendInspiration
+    {
+        $this->pruefe($userId, $team, FaRolle::Kuratieren, 'Inspiration lösen');
+        $insp = $this->eigeneInspiration($team, $inspirationId);
+        $trend = $insp->trend;
+        $this->inspirationAnTrend($insp, null);
+        if ($trend !== null) {
+            $this->neuBewerten($trend->refresh());
+        }
+
+        return $insp->refresh();
+    }
+
+    /**
+     * Inspiration samt Quellen löschen: im eigenen Team mit Kuratieren; Moderation durch den FA-Admin des
+     * Oberteams für Inspirationen seiner Standorte (wie bei einzelnen Fundstücken).
+     */
+    public function inspirationLoeschen(Team $team, int $inspirationId, ?int $userId = null): void
+    {
+        $insp = FoodAlchemistTrendInspiration::whereIn('team_id', $this->fundstueckFamilie($team))->findOrFail($inspirationId);
+        $besitzer = Team::findOrFail($insp->team_id);
+        $this->pruefe($userId, $besitzer, (int) $insp->team_id === (int) $team->id ? FaRolle::Kuratieren : FaRolle::Admin, 'Inspiration löschen');
+        $trend = $insp->trend;
+        DB::transaction(function () use ($besitzer, $insp) {
+            foreach ($insp->quellen()->get() as $beleg) {
+                $this->dateiEntfernen($besitzer, $beleg);
+                $beleg->delete();
+            }
+            $insp->delete();
+        });
+        if ($trend !== null) {
+            $this->neuBewerten($trend->refresh());
+        }
+    }
+
+    /** Titelbild einer Inspiration: die erste Quelle mit Bilddatei. */
+    public function titelbild(FoodAlchemistTrendInspiration $insp): ?FoodAlchemistTrendBeleg
+    {
+        return $insp->quellen->first(fn ($b) => $b->context_file_id !== null && str_starts_with((string) $b->datei_mime, 'image/'));
+    }
+
+    /**
      * Lesesicht der Inspirations-Pinnwand (Dominique 2026-10-08): Standorte laden auch hoch, und die ganze
      * Teamfamilie sieht sich gegenseitig — Hauptteam des Kunden ({@see FaRechte::kundenHauptTeam}, endet unter dem
      * Master-Team) plus alle Nachfahren, also auch
      * Geschwister-Standorte. Bewusst NICHT über visibleToTeam/TeamScope (die gelten nur nach oben und tragen
-     * 130 Models). Schreiben bleibt beim hochladenden Team (eigenesFundstueck).
+     * 130 Models). Schreiben bleibt beim besitzenden Team (eigeneInspiration).
      *
      * @return list<int>
      */
@@ -398,36 +534,6 @@ class TrendService
         $wurzel = (int) $this->rechte->kundenHauptTeam($team)->id;
 
         return \Platform\FoodAlchemist\Jobs\RecomputeTeamRecipesJob::teamUndNachfahren($wurzel);
-    }
-
-    /** Fundstück einem Trend zuordnen — es wird Beleg und zählt in dessen Konfidenz. */
-    public function fundstueckZuordnen(Team $team, int $belegId, int $trendId, ?int $userId = null): FoodAlchemistTrendBeleg
-    {
-        $this->pruefe($userId, $team, FaRolle::Kuratieren, 'Fundstück zuordnen');
-        $beleg = $this->eigenesFundstueck($team, $belegId, false);
-        $alt = $beleg->trend_id;
-        $trend = $this->eigener($team, $trendId);
-        $beleg->update(['trend_id' => $trend->id]);
-        $this->neuBewerten($trend->refresh());
-        if ($alt !== null && $alt !== $trend->id && ($vorher = FoodAlchemistTrend::find($alt)) !== null) {
-            $this->neuBewerten($vorher);
-        }
-
-        return $beleg->refresh();
-    }
-
-    /** Zuordnung lösen — das Fundstück liegt wieder offen in der Pinnwand. */
-    public function fundstueckLoesen(Team $team, int $belegId, ?int $userId = null): FoodAlchemistTrendBeleg
-    {
-        $this->pruefe($userId, $team, FaRolle::Kuratieren, 'Fundstück lösen');
-        $beleg = $this->eigenesFundstueck($team, $belegId, false);
-        $trend = $beleg->trend;
-        $beleg->update(['trend_id' => null]);
-        if ($trend !== null) {
-            $this->neuBewerten($trend->refresh());
-        }
-
-        return $beleg->refresh();
     }
 
     // ── Bewertung (Kap. 3.3) ───────────────────────────────────────────────
@@ -578,6 +684,7 @@ class TrendService
             'anteil' => $anteil,
             'signal_id' => $d['signal_id'] ?? null,
             'fundstueck' => (bool) ($d['fundstueck'] ?? false),
+            'inspiration_id' => isset($d['inspiration_id']) ? (int) $d['inspiration_id'] : null,
             'created_by' => $userId,
         ]);
         if ($datei !== null) {
@@ -677,15 +784,61 @@ class TrendService
         return isset($d['anteil']) && $d['anteil'] !== '';
     }
 
-    /** Fundstück des eigenen Teams; $nurOffen = noch keinem Trend zugeordnet. */
-    private function eigenesFundstueck(Team $team, int $id, bool $nurOffen = true): FoodAlchemistTrendBeleg
+    /** Inspiration des eigenen Teams (Schreiben nur im besitzenden Team). */
+    private function eigeneInspiration(Team $team, int $id): FoodAlchemistTrendInspiration
     {
-        $q = FoodAlchemistTrendBeleg::where('team_id', $team->id)->where('fundstueck', true);
-        if ($nurOffen) {
-            $q->whereNull('trend_id');
+        return FoodAlchemistTrendInspiration::where('team_id', $team->id)->findOrFail($id);
+    }
+
+    /** Inspiration und alle ihre Quellen an einen Trend hängen (oder mit null lösen). */
+    private function inspirationAnTrend(FoodAlchemistTrendInspiration $insp, ?int $trendId): void
+    {
+        $insp->update(['trend_id' => $trendId]);
+        FoodAlchemistTrendBeleg::where('inspiration_id', $insp->id)->update(['trend_id' => $trendId]);
+    }
+
+    /** Inspirations-IDs aus `inspiration_ids` und (Altbestand) `fundstueck_ids` — eine Quelle nimmt ihre Inspiration mit. */
+    public function inspirationIdsAus(Team $team, array $daten): array
+    {
+        $ids = array_map('intval', (array) ($daten['inspiration_ids'] ?? []));
+        $fundIds = array_map('intval', (array) ($daten['fundstueck_ids'] ?? []));
+        if ($fundIds !== []) {
+            $ids = array_merge($ids, FoodAlchemistTrendBeleg::whereIn('team_id', $this->fundstueckFamilie($team))
+                ->where('fundstueck', true)->whereIn('id', $fundIds)->whereNotNull('inspiration_id')
+                ->pluck('inspiration_id')->map(fn ($v) => (int) $v)->all());
         }
 
-        return $q->findOrFail($id);
+        return array_values(array_unique($ids));
+    }
+
+    private function leereInspirationEntfernen(?int $inspirationId): void
+    {
+        if ($inspirationId !== null && ! FoodAlchemistTrendBeleg::where('inspiration_id', $inspirationId)->exists()) {
+            FoodAlchemistTrendInspiration::whereKey($inspirationId)->delete();
+        }
+    }
+
+    private function inspirationsTitel(array $daten): string
+    {
+        $titel = trim((string) ($daten['titel'] ?? ''));
+        if ($titel === '' && ! empty($daten['url'])) {
+            $titel = (string) (parse_url((string) $daten['url'], PHP_URL_HOST) ?: $daten['url']);
+        }
+
+        return mb_substr($titel !== '' ? $titel : 'Fundstück vom '.now()->format('d.m.Y'), 0, 255);
+    }
+
+    /** @return list<string> */
+    private function worteVereinen(array $a, array $b): array
+    {
+        $out = $a;
+        foreach ($b as $w) {
+            if (! in_array(mb_strtolower($w), array_map('mb_strtolower', $out), true)) {
+                $out[] = $w;
+            }
+        }
+
+        return array_slice($out, 0, 15);
     }
 
     private function eigener(Team $team, int $id): FoodAlchemistTrend

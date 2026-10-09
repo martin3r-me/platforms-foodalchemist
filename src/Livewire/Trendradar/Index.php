@@ -69,11 +69,14 @@ class Index extends Component
 
     public $fundDatei = null;
 
-    /** Pinnwand: gewählter Ziel-Trend je Fundstück */
+    /** Pinnwand: gewählter Ziel-Trend je Inspiration */
     public array $zuordnung = [];
 
-    /** „Trend daraus machen": diese Fundstücke gehen beim Anlegen mit */
-    public array $ausFundstuecken = [];
+    /** Pinnwand: zum Zusammenführen markierte Inspirationen */
+    public array $mergeWahl = [];
+
+    /** „Trend daraus machen": diese Inspirationen gehen beim Anlegen mit */
+    public array $ausInspirationen = [];
 
     /** Erfassen-Dialog */
     public array $neu = [];
@@ -128,9 +131,11 @@ class Index extends Component
 
     // ── Fundstücke (Inspiration) ───────────────────────────────────────────
 
-    public function fundstueckOeffnen(): void
+    /** Dialog „Fundstück ablegen“ — optional direkt als weitere Quelle einer bestehenden Inspiration. */
+    public function fundstueckOeffnen(?int $inspirationId = null): void
     {
         $this->fundLeeren();
+        $this->fund['inspiration_id'] = $inspirationId !== null ? (string) $inspirationId : '';
         $this->fehler = null;
         $this->dispatch('modal.open', name: 'fundstueck-ablegen');
     }
@@ -141,46 +146,76 @@ class Index extends Component
             $this->validate(['fundDatei' => 'file|max:'.V::DATEI_MAX_KB]);
         }
         $this->aktion(function () use ($svc) {
-            $b = $svc->fundstueckAblegen($this->team(), $this->fund, $this->fundDatei, Auth::id());
+            $daten = $this->fund;
+            if (($daten['inspiration_id'] ?? '') === '') {
+                unset($daten['inspiration_id']);
+            }
+            $b = $svc->fundstueckAblegen($this->team(), $daten, $this->fundDatei, Auth::id());
+            $neu = empty($daten['inspiration_id']);
             $this->fundLeeren();
             $this->dispatch('modal.close', name: 'fundstueck-ablegen');
             $this->ansicht = 'inspiration';
-            $this->pinnAnsicht = 'offen';
-            $this->meldung = '„'.($b->titel ?: 'Fundstück').'“ liegt in der Pinnwand.';
+            $this->meldung = $neu ? '„'.($b->inspiration?->titel ?: 'Inspiration').'“ liegt in der Pinnwand.'
+                : 'Quelle zu „'.($b->inspiration?->titel ?: 'Inspiration').'“ hinzugefügt.';
         });
     }
 
-    public function fundstueckZuordnen(int $belegId, TrendService $svc): void
+    public function inspirationZuordnen(int $inspirationId, TrendService $svc): void
     {
-        $trendId = (int) ($this->zuordnung[$belegId] ?? 0);
+        $trendId = (int) ($this->zuordnung[$inspirationId] ?? 0);
         if ($trendId <= 0) {
             $this->fehler = 'Bitte zuerst einen Trend wählen.';
 
             return;
         }
-        $this->aktion(function () use ($svc, $belegId, $trendId) {
-            $svc->fundstueckZuordnen($this->team(), $belegId, $trendId, Auth::id());
-            unset($this->zuordnung[$belegId]);
-            $this->meldung = 'Fundstück dem Trend zugeordnet.';
+        $this->aktion(function () use ($svc, $inspirationId, $trendId) {
+            $svc->inspirationZuordnen($this->team(), $inspirationId, $trendId, Auth::id());
+            unset($this->zuordnung[$inspirationId]);
+            $this->meldung = 'Inspiration dem Trend zugeordnet, alle Quellen sind jetzt Belege.';
         });
     }
 
-    public function fundstueckLoesen(int $belegId, TrendService $svc): void
+    public function inspirationLoesen(int $inspirationId, TrendService $svc): void
     {
-        $this->aktion(fn () => $svc->fundstueckLoesen($this->team(), $belegId, Auth::id()));
+        $this->aktion(fn () => $svc->inspirationLoesen($this->team(), $inspirationId, Auth::id()));
     }
 
-    /** „Trend daraus machen": Dialog mit dem Titel des Fundstücks vorbelegt, das Fundstück geht beim Anlegen mit. */
-    public function trendAusFundstueck(int $belegId): void
+    public function inspirationLoeschen(int $inspirationId, TrendService $svc): void
     {
-        $b = \Platform\FoodAlchemist\Models\FoodAlchemistTrendBeleg::where('team_id', $this->team()->id)->where('fundstueck', true)->find($belegId);
-        if ($b === null) {
+        $this->aktion(function () use ($svc, $inspirationId) {
+            $svc->inspirationLoeschen($this->team(), $inspirationId, Auth::id());
+            $this->meldung = 'Inspiration gelöscht.';
+        });
+    }
+
+    /** Markierte Inspirationen zusammenführen — Ziel ist die älteste, alle Quellen wandern dorthin. */
+    public function zusammenfuehren(TrendService $svc): void
+    {
+        $ids = array_values(array_unique(array_map('intval', $this->mergeWahl)));
+        if (count($ids) < 2) {
+            $this->fehler = 'Bitte mindestens zwei Inspirationen markieren.';
+
+            return;
+        }
+        sort($ids);
+        $this->aktion(function () use ($svc, $ids) {
+            $ziel = $svc->inspirationenZusammenfuehren($this->team(), $ids[0], array_slice($ids, 1), Auth::id());
+            $this->mergeWahl = [];
+            $this->meldung = 'Zusammengeführt zu „'.$ziel->titel.'“.';
+        });
+    }
+
+    /** „Trend daraus machen": Dialog mit dem Titel der Inspiration vorbelegt, alle Quellen gehen beim Anlegen mit. */
+    public function trendAusInspiration(int $inspirationId): void
+    {
+        $i = \Platform\FoodAlchemist\Models\FoodAlchemistTrendInspiration::where('team_id', $this->team()->id)->with('quellen')->find($inspirationId);
+        if ($i === null) {
             return;
         }
         $this->neuLeeren();
-        $this->neu['name'] = (string) $b->titel;
-        $this->neu['definition'] = (string) $b->notiz;
-        $this->ausFundstuecken = [$b->id];
+        $this->neu['name'] = (string) $i->titel;
+        $this->neu['definition'] = (string) ($i->quellen->pluck('notiz')->filter()->first() ?? '');
+        $this->ausInspirationen = [$i->id];
         $this->fehler = null;
         $this->dispatch('modal.open', name: 'trend-erfassen');
     }
@@ -208,14 +243,14 @@ class Index extends Component
                 'typ' => $n['typ'] ?: null,
                 'ebene' => $n['ebene'] ?: null,
                 'kategorie' => $n['kategorie'] ?: null,
-                'fundstueck_ids' => $this->ausFundstuecken,
-                'beleg' => $this->ausFundstuecken !== [] ? null : [
+                'inspiration_ids' => $this->ausInspirationen,
+                'beleg' => $this->ausInspirationen !== [] ? null : [
                     'quelle' => $n['quelle'] ?: 'beobachtung',
                     'url' => $n['url'] ?? null,
                     'notiz' => $n['notiz'] ?? null,
                     'fundort' => $n['fundort'] ?? null,
                 ],
-            ], Auth::id(), $this->ausFundstuecken !== [] ? null : $this->neuDatei);
+            ], Auth::id(), $this->ausInspirationen !== [] ? null : $this->neuDatei);
             $this->neuLeeren();
             $this->dispatch('modal.close', name: 'trend-erfassen');
             $this->selectedId = $trend->id;
@@ -315,15 +350,15 @@ class Index extends Component
     }
 
     /**
-     * Spec 79 · in die Planung springen: Session aus diesem Trend/Hype oder Fundstück anlegen und die Leitstelle
+     * Spec 79 · in die Planung springen: Session aus diesem Trend/Hype oder dieser Inspiration anlegen und die Leitstelle
      * mit vorbefülltem Briefing öffnen. Weitere Impulse kombiniert man dort im Reiter „Trendradar".
      */
-    public function inPlanungOeffnen(?int $trendId = null, ?int $fundstueckId = null)
+    public function inPlanungOeffnen(?int $trendId = null, ?int $inspirationId = null)
     {
-        $trendId ??= $fundstueckId === null ? $this->selectedId : null;
+        $trendId ??= $inspirationId === null ? $this->selectedId : null;
         try {
             $session = app(\Platform\FoodAlchemist\Services\PlanningSessionService::class)->ausTrendradar(
-                $this->team(), $trendId !== null ? [$trendId] : [], $fundstueckId !== null ? [$fundstueckId] : []);
+                $this->team(), $trendId !== null ? [$trendId] : [], $inspirationId !== null ? [$inspirationId] : []);
         } catch (\RuntimeException $e) {
             $this->fehler = $e->getMessage();
 
@@ -370,14 +405,18 @@ class Index extends Component
             'messenMoeglich' => $signale->anbindungVorhanden(),
             'budget' => $settings->trendDataForSeoBudget($team),
             'verbraucht' => $signale->verbrauchDiesenMonat($team),
-            'fundstuecke' => $this->ansicht === 'inspiration' ? $svc->fundstuecke($team, $this->pinnAnsicht, $this->suche, $this->pinnSchlagwort ?: null)
-                ->map(fn ($b) => ['b' => $b, 'url' => $svc->dateiUrl($b)]) : collect(),
+            'inspirationen' => $this->ansicht === 'inspiration' ? $svc->inspirationen($team, $this->pinnAnsicht, $this->suche, $this->pinnSchlagwort ?: null)
+                ->map(fn ($i) => ['i' => $i, 'bild' => ($t = $svc->titelbild($i)) ? $svc->dateiUrl($t) : null,
+                    'quellen' => $i->quellen->map(fn ($b) => ['b' => $b, 'url' => $svc->dateiUrl($b)])]) : collect(),
+            // Ablegen-Dialog: offene Inspirationen des eigenen Teams als Ziel für eine weitere Quelle
+            'eigeneInspirationen' => \Platform\FoodAlchemist\Models\FoodAlchemistTrendInspiration::where('team_id', $team->id)
+                ->whereNull('trend_id')->orderByDesc('updated_at')->limit(100)->pluck('titel', 'id')->all(),
             'haeufungen' => $svc->haeufungen($team),
             'teamNamen' => \Platform\Core\Models\Team::whereIn('id', $svc->fundstueckFamilie($team))->pluck('name', 'id')->all(),
             // Moderation: Teams der Familie, in denen der Benutzer FA-Admin ist (darf dort Fundstücke löschen)
             'adminTeams' => \Platform\Core\Models\Team::whereIn('id', $svc->fundstueckFamilie($team))->get()
                 ->filter(fn ($t) => $rechte->darf($user, $t, FaRolle::Admin))->pluck('id')->map(fn ($id) => (int) $id)->all(),
-            'offeneFundstuecke' => \Platform\FoodAlchemist\Models\FoodAlchemistTrendBeleg::whereIn('team_id', $svc->fundstueckFamilie($team))->where('fundstueck', true)->whereNull('trend_id')->count(),
+            'offeneFundstuecke' => \Platform\FoodAlchemist\Models\FoodAlchemistTrendInspiration::whereIn('team_id', $svc->fundstueckFamilie($team))->whereNull('trend_id')->count(),
             'trendOptionen' => $alle->where('team_id', $team->id)->whereNotIn('status', ['verworfen', 'archiviert'])->pluck('name', 'id')->all(),
             'filterAktiv' => $this->suche !== '' || $this->kategorien !== [] || $this->sparten !== [] || $this->typen !== [] || $this->ebenen !== [] || $this->nurBefragung || $this->statusFilter !== '',
         ])->layout(\Platform\FoodAlchemist\Support\FaShell::layout());
@@ -417,12 +456,12 @@ class Index extends Component
         $this->neu = ['name' => '', 'definition' => '', 'typ' => '', 'ebene' => '', 'kategorie' => '',
             'quelle' => 'beobachtung', 'url' => '', 'notiz' => '', 'fundort' => ''];
         $this->neuDatei = null;
-        $this->ausFundstuecken = [];
+        $this->ausInspirationen = [];
     }
 
     private function fundLeeren(): void
     {
-        $this->fund = ['titel' => '', 'quelle' => 'instagram', 'url' => '', 'notiz' => '', 'fundort' => '', 'schlagworte' => ''];
+        $this->fund = ['titel' => '', 'quelle' => 'instagram', 'url' => '', 'notiz' => '', 'fundort' => '', 'schlagworte' => '', 'inspiration_id' => ''];
         $this->fundDatei = null;
     }
 

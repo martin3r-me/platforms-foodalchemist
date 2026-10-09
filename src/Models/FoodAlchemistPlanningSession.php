@@ -124,7 +124,7 @@ class FoodAlchemistPlanningSession extends Model
     protected $casts = [
         'uuid' => 'string',
         'generation_params' => 'array',
-        'source_trend_refs' => 'array',   // Spec 79: {trend_ids:[…], fundstueck_ids:[…]}
+        'source_trend_refs' => 'array',   // Spec 79: {trend_ids:[…], inspiration_ids:[…]} (Altbestand: fundstueck_ids)
     ];
 
     /** Skizzen dieser Session (dritter Owner der bestehenden Kreativ-Ebene). */

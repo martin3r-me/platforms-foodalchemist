@@ -58,9 +58,9 @@ class PlanningSessionService
      * @param  list<int>  $trendIds
      * @param  list<int>  $fundstueckIds
      */
-    public function ausTrendradar(Team $team, array $trendIds, array $fundstueckIds = [], string $createdVia = 'trendradar'): FoodAlchemistPlanningSession
+    public function ausTrendradar(Team $team, array $trendIds, array $inspirationIds = [], string $createdVia = 'trendradar'): FoodAlchemistPlanningSession
     {
-        $k = $this->trendKombination($team, $trendIds, $fundstueckIds);
+        $k = $this->trendKombination($team, $trendIds, $inspirationIds);
 
         return $this->create($team, [
             'title' => $k['title'],
@@ -72,10 +72,10 @@ class PlanningSessionService
     }
 
     /** Kombination in eine bestehende Session übernehmen (Planungs-Reiter „Trendradar"). */
-    public function trendradarUebernehmen(Team $team, int $sessionId, array $trendIds, array $fundstueckIds = []): FoodAlchemistPlanningSession
+    public function trendradarUebernehmen(Team $team, int $sessionId, array $trendIds, array $inspirationIds = []): FoodAlchemistPlanningSession
     {
         $session = $this->ownedSession($team, $sessionId);   // nur das Besitzer-Team schreibt (D1)
-        $k = $this->trendKombination($team, $trendIds, $fundstueckIds);
+        $k = $this->trendKombination($team, $trendIds, $inspirationIds);
         $session->update([
             'title' => $k['title'],
             'brief' => $k['brief'],
@@ -87,28 +87,30 @@ class PlanningSessionService
     }
 
     /**
-     * Titel, Brief, Analyse und Herkunft aus gewählten Trends/Hypes und Fundstücken. Nur Sichtbares
-     * (eigenes Team + Elternkette); Unbekanntes wird abgewiesen statt still übergangen.
+     * Titel, Brief, Analyse und Herkunft aus gewählten Trends/Hypes und Inspirationen (Pinnwand-Themen mit ihren
+     * Quellen). `fundstueck_ids` (einzelne Quellen, Altbestand) nehmen ihre Inspiration mit. Nur Sichtbares;
+     * Unbekanntes wird abgewiesen statt still übergangen.
      *
-     * @return array{title:string, brief:string, analysis:string, refs:array{trend_ids:list<int>, fundstueck_ids:list<int>}}
+     * @return array{title:string, brief:string, analysis:string, refs:array{trend_ids:list<int>, inspiration_ids:list<int>}}
      */
-    public function trendKombination(Team $team, array $trendIds, array $fundstueckIds = []): array
+    public function trendKombination(Team $team, array $trendIds, array $inspirationIds = [], array $fundstueckIds = []): array
     {
+        $trendSvc = app(TrendService::class);
         $trendIds = array_values(array_unique(array_map('intval', $trendIds)));
-        $fundstueckIds = array_values(array_unique(array_map('intval', $fundstueckIds)));
-        $anzahl = count($trendIds) + count($fundstueckIds);
+        $inspirationIds = $trendSvc->inspirationIdsAus($team, ['inspiration_ids' => $inspirationIds, 'fundstueck_ids' => $fundstueckIds]);
+        $anzahl = count($trendIds) + count($inspirationIds);
         if ($anzahl === 0) {
-            throw new RuntimeException('Bitte mindestens einen Trend, Hype oder ein Fundstück wählen.');
+            throw new RuntimeException('Bitte mindestens einen Trend, Hype oder eine Inspiration wählen.');
         }
         if ($anzahl > self::TRENDRADAR_MAX) {
             throw new RuntimeException('Höchstens '.self::TRENDRADAR_MAX.' Impulse auf einmal kombinieren.');
         }
         $trends = \Platform\FoodAlchemist\Models\FoodAlchemistTrend::visibleToTeam($team)->whereIn('id', $trendIds)->with('belege')->get()->keyBy('id');
-        // Fundstücke: Lesesicht der ganzen Teamfamilie (Standorte sehen sich gegenseitig), wie die Pinnwand
-        $funde = \Platform\FoodAlchemist\Models\FoodAlchemistTrendBeleg::whereIn('team_id', app(TrendService::class)->fundstueckFamilie($team))
-            ->where('fundstueck', true)->whereIn('id', $fundstueckIds)->get()->keyBy('id');
-        if ($trends->count() !== count($trendIds) || $funde->count() !== count($fundstueckIds)) {
-            throw new RuntimeException('Mindestens ein gewählter Trend oder ein Fundstück ist nicht (mehr) sichtbar.');
+        // Inspirationen: Lesesicht der ganzen Teamfamilie (Standorte sehen sich gegenseitig), wie die Pinnwand
+        $insps = \Platform\FoodAlchemist\Models\FoodAlchemistTrendInspiration::whereIn('team_id', $trendSvc->fundstueckFamilie($team))
+            ->whereIn('id', $inspirationIds)->with('quellen')->get()->keyBy('id');
+        if ($trends->count() !== count($trendIds) || $insps->count() !== count($inspirationIds)) {
+            throw new RuntimeException('Mindestens ein gewählter Trend oder eine Inspiration ist nicht (mehr) sichtbar.');
         }
         $V = \Platform\FoodAlchemist\Support\TrendVokabular::class;
         $kurz = fn (?string $t, int $n) => $t === null || trim($t) === '' ? '' : (mb_strlen(trim($t)) > $n ? rtrim(mb_substr(trim($t), 0, $n - 1)).'…' : trim($t));
@@ -126,14 +128,16 @@ class PlanningSessionService
             $belege = $t->belege->take(6)->map(fn ($b) => '  - '.($b->titel ?: ($V::QUELLEN[$b->quelle] ?? $b->quelle)).($b->url ? ' ('.$b->url.')' : ''))->implode("\n");
             $analyse[] = $art.': '.$t->name.' · Konfidenz '.$V::KONFIDENZ[$t->wirksameKonfidenz()].($belege !== '' ? "\n".$belege : '');
         }
-        foreach ($fundstueckIds as $id) {
-            $f = $funde[$id];
-            $name = $f->titel ?: 'Fundstück vom '.$f->beobachtet_am?->format('d.m.Y');
-            $namen[] = $name;
-            $zeilen[] = 'Inspiration: '.$name
-                .(($n = $kurz($f->notiz, 200)) !== '' ? ' — '.$n : '')
-                .($f->fundort ? ' (gesehen: '.$f->fundort.')' : '');
-            $analyse[] = 'Inspiration: '.$name.($f->url ? ' ('.$f->url.')' : '').($f->datei_name ? ' · Datei: '.$f->datei_name : '');
+        foreach ($inspirationIds as $id) {
+            $i = $insps[$id];
+            $namen[] = $i->titel;
+            $notiz = $i->quellen->pluck('notiz')->filter()->first();
+            $orte = $i->quellen->pluck('fundort')->filter()->unique()->take(3)->implode(', ');
+            $zeilen[] = 'Inspiration: '.$i->titel
+                .(($n = $kurz($notiz, 200)) !== '' ? ' — '.$n : '')
+                .($orte !== '' ? ' (gesehen: '.$orte.')' : '');
+            $quellen = $i->quellen->take(6)->map(fn ($b) => '  - '.($b->titel ?: ($V::QUELLEN[$b->quelle] ?? $b->quelle)).($b->url ? ' ('.$b->url.')' : '').($b->datei_name ? ' · Datei: '.$b->datei_name : ''))->implode("\n");
+            $analyse[] = 'Inspiration: '.$i->titel.' · '.$i->quellen->count().' Quelle(n)'.($quellen !== '' ? "\n".$quellen : '');
         }
         if ($anzahl > 1) {
             $zeilen[] = 'Die Impulse verbinden, nicht nebeneinanderstellen.';
@@ -145,8 +149,20 @@ class PlanningSessionService
             'brief' => implode("\n", $zeilen),
             // Erste Zeile = Anzeigename der Planung (Leitstelle zeigt den Anfang der Analyse), danach die Belege
             'analysis' => ($title !== '' ? $title : 'Aus dem Trendradar')."\n\nAus dem Trendradar:\n".implode("\n", $analyse),
-            'refs' => ['trend_ids' => $trendIds, 'fundstueck_ids' => $fundstueckIds],
+            'refs' => ['trend_ids' => $trendIds, 'inspiration_ids' => $inspirationIds],
         ];
+    }
+
+    /**
+     * Inspirations-IDs einer Session-Herkunft (`source_trend_refs`), Altbestand `fundstueck_ids` eingerechnet.
+     *
+     * @return list<int>
+     */
+    public function refsInspirationen(Team $team, ?array $refs): array
+    {
+        return app(TrendService::class)->inspirationIdsAus($team, [
+            'inspiration_ids' => $refs['inspiration_ids'] ?? [], 'fundstueck_ids' => $refs['fundstueck_ids'] ?? [],
+        ]);
     }
 
     /**
