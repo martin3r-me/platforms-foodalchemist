@@ -166,6 +166,13 @@ class GenerationContextService
                 'treffer' => $treffer,
             ];
         }
+        // Spec 80 B4 (Entscheid Dominique 2026-10-09): nur freigegebene Basisrezepte sind Bestand —
+        // der Matcher und der semantische Pass liefern auch Entwürfe, die hier herausfallen.
+        if ($rezepte !== []) {
+            $freigegeben = array_flip(FoodAlchemistRecipe::query()->whereIn('id', array_keys($rezepte))
+                ->where('status', 'approved')->pluck('id')->map(fn ($i) => (int) $i)->all());
+            $rezepte = array_filter($rezepte, static fn ($r) => isset($freigegeben[(int) $r['id']]));
+        }
         if ($rezepte !== []) {
             $out['rezept_kandidaten'] = [
                 'hinweis' => $strikt

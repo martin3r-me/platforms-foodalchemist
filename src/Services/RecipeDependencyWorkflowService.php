@@ -443,6 +443,15 @@ class RecipeDependencyWorkflowService
                 $reuse = app(\Platform\FoodAlchemist\Services\RecipeService::class)
                     ->findByTokenSetMitReife($team, $text);
                 $bestehend = $reuse['recipe'] ?? null;
+                // Spec 80 B3: auch der Namens-Treffer muss zur Diät passen (Gemüsefond mit Speck ≠ vegetarisch).
+                if ($bestehend !== null && \Platform\FoodAlchemist\Support\BestandsPassung::grund(
+                    $text, (string) $bestehend->name,
+                    $bestehend->spec_is_vegan !== null ? (bool) $bestehend->spec_is_vegan : null,
+                    $bestehend->spec_is_vegetarian !== null ? (bool) $bestehend->spec_is_vegetarian : null,
+                    array_values(array_filter((array) ($parameter['diaet_hart'] ?? []), 'is_string')),
+                ) !== null) {
+                    $bestehend = null;
+                }
                 if ($bestehend !== null && (int) $bestehend->id !== (int) $recipe->id) {
                     $this->bindIngredient($team, (int) $ingredient->id, (int) $bestehend->id);
                     FoodAlchemistCascadeRunStep::firstOrCreate([
