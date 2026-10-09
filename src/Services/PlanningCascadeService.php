@@ -164,6 +164,12 @@ class PlanningCascadeService
         if ($proposalFirst) {
             $params['proposal_first'] = true;
         }
+        // Spec 80 B1: Basisrezept-Go plant zuerst die Komponenten (Gate wie beim Gerichtsvorschlag).
+        // Persistiert, damit regeneriereStep den Entscheid kennt.
+        $planFirst = $scope === 'rezept' && $staged && $session !== null && (bool) ($optionen['plan_first'] ?? false);
+        if ($planFirst) {
+            $params['plan_first'] = true;
+        }
 
         // Geplanter Pfad (Etappe 2b, „KI-Kopf"): der Concept-Step referenziert ein SCHON geprüftes
         // Draft-Concept ({@see ConceptGeneratorService::planAusBrief}) statt eines neu zu generierenden.
@@ -211,6 +217,8 @@ class PlanningCascadeService
             } else {
                 $this->dispatchConceptStep($team, $step, $brief, $session?->id, $creativeMode, $params);
             }
+        } elseif ($planFirst) {
+            \Platform\FoodAlchemist\Jobs\GenerateRecipePlanJob::dispatch($team->id, (int) (Auth::id() ?? 0), (int) $step->id, $brief, $params);
         } elseif ($proposalFirst) {
             // Direkter Gericht-Go: zuerst nur ein kompakter Bauplan. Noch kein Rezeptdatensatz,
             // keine Dependencies und keine Anreicherung; der geplante Step ist das Freigabe-Gate.
@@ -2549,10 +2557,43 @@ class PlanningCascadeService
             $attachOwnerType = ($step->chapter_id !== null && $run?->source_owner_type === 'foodbook') ? 'foodbook' : null;
             $attachContainerId = $attachOwnerType !== null ? (int) $step->chapter_id : null;
             $this->dispatchConceptStep($team, $step, $brief, $sessionId, (string) ($run?->creative_mode ?? 'voll_kreativ'), $params, $attachOwnerType, $attachContainerId);
+        } elseif ($step->kind === 'rezept' && $step->parent_step_id === null && (bool) ($params['plan_first'] ?? false)
+            && empty(($step->context_snapshot ?? [])['plan'])) {
+            // Spec 80 B1: scheiterte schon der Plan, wird neu geplant, nicht ohne Plan gebaut.
+            \Platform\FoodAlchemist\Jobs\GenerateRecipePlanJob::dispatch($team->id, (int) (Auth::id() ?? 0), (int) $step->id, $brief, $params);
         } else {
+            // Spec 80 B5: ein bestätigter Plan gilt auch für den neuen Versuch.
+            $planKomponenten = ($step->context_snapshot ?? [])['komponenten'] ?? null;
+            if ($step->kind === 'rezept' && ! empty(($step->context_snapshot ?? [])['plan']) && is_array($planKomponenten)) {
+                $params['plan_komponenten'] = $planKomponenten;
+            }
             $this->dispatchRezeptStep($team, $step, $brief, $params, $step->kind === 'gericht', false, $sessionId, $staged);
         }
         $this->recomputeRunStatus((int) $step->cascade_run_id);
+    }
+
+    /**
+     * Spec 80 B1: nach bestätigtem (oder entfallenem) Komponenten-Plan das Basisrezept bauen. Leere Liste =
+     * ein Baustein, Bau wie bisher.
+     *
+     * @param  list<array<string, mixed>>  $komponenten
+     */
+    public function starteRezeptNachPlan(Team $team, int $stepId, array $komponenten): void
+    {
+        $step = FoodAlchemistCascadeRunStep::where('team_id', $team->id)->find($stepId);
+        $run = $step?->run;
+        if ($step === null || $run === null || $this->istAbgebrochen((int) $run->id)) {
+            return;
+        }
+        $params = is_array($run->params) ? $run->params : [];
+        if ($komponenten !== []) {
+            $params['plan_komponenten'] = array_values($komponenten);
+        }
+        $step->update(['status' => 'running', 'error' => null]);
+        $run->update(['status' => 'running']);
+        $this->dispatchRezeptStep($team, $step, (string) $run->brief, $params, false, false,
+            $run->planning_session_id !== null ? (int) $run->planning_session_id : null, (bool) $run->staged);
+        $this->recomputeRunStatus((int) $run->id);
     }
 
     /**
@@ -2608,6 +2649,13 @@ class PlanningCascadeService
     public function erzeugeGeplantenStep(Team $team, int $stepId): void
     {
         $step = $this->ownedStep($team, $stepId);
+        // Spec 80 B1: bestätigter Komponenten-Plan eines Basisrezepts → bauen.
+        if ($step->kind === 'rezept' && $step->parent_step_id === null && $step->status === 'geplant'
+            && ! empty(($step->context_snapshot ?? [])['plan'])) {
+            $this->starteRezeptNachPlan($team, $stepId, (array) (($step->context_snapshot ?? [])['komponenten'] ?? []));
+
+            return;
+        }
         $ideeId = (int) (($step->context_snapshot ?? [])['dish_idea_id'] ?? 0);
         if ($step->kind === 'gericht' && $step->status === 'geplant' && $ideeId > 0) {
             if ($this->istAbgebrochen((int) $step->cascade_run_id)) {

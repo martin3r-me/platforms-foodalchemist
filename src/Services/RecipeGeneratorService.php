@@ -160,6 +160,13 @@ class RecipeGeneratorService
             // der Peak-Speicher waehrend Matching/Sync sinkt (OOM-Gegenmassnahme).
             unset($preparedContext, $kontext, $wissen, $inventar, $vorschlag);
         }
+        // Spec 80 B5: bestätigter Komponenten-Plan → seine Komponenten SIND die Bausteine des Rezepts. Bestand
+        // als Verweis (sub_rezept_id), Lücken als Unterrezept (sub_rezept: true → Kind-Step). Fest eingemischt,
+        // damit der Plan nicht davon abhängt, ob die KI ihn wörtlich übernimmt.
+        if (is_array($kiRezept) && ! empty($parameter['plan_komponenten']) && is_array($parameter['plan_komponenten'])) {
+            $kiRezept['zutaten'] = RecipeKomponentenPlanService::einmischen(
+                is_array($kiRezept['zutaten'] ?? null) ? $kiRezept['zutaten'] : [], $parameter['plan_komponenten']);
+        }
         if (empty($kiRezept['name']) || empty($kiRezept['zutaten']) || ! is_array($kiRezept['zutaten'])) {
             throw new \RuntimeException('KI lieferte kein verwertbares Rezept (name + zutaten nötig) — Roh-Antwort prüfen.');
         }

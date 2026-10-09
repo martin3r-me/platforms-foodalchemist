@@ -39,6 +39,8 @@
     $kannAnsehen = $st->ref_id && in_array($st->status, ['done', 'freigegeben', 'skipped'], true);
     $kannFeedback = in_array($st->status, ['done', 'failed'], true) && in_array($st->kind, ['rezept', 'gericht', 'concept'], true);
     $istIdee = $st->status === 'geplant' && $st->kind === 'gericht' && ! empty($snap['dish_idea_id']);
+    // Spec 80 B1: Komponenten-Plan eines Basisrezepts (Gate vor dem Bau).
+    $istPlan = $st->status === 'geplant' && $st->kind === 'rezept' && ! empty($snap['plan']);
     $kannKonf = $st->ref_type === 'recipe' && $st->ref_id && in_array($st->status, ['done', 'freigegeben', 'skipped'], true);
     $kannRueckmeldung = $st->ref_id && in_array($st->kind, ['rezept', 'gericht'], true) && in_array($st->status, ['done', 'freigegeben'], true);
     $kiAnzahl = ($kannFeedback ? 2 : 0) + ($kannKonf ? 1 : 0);
@@ -234,6 +236,10 @@
                         <x-foodalchemist::ki-action action="erzeugeGeplant({{ $st->id }})" variant="primary" icon="heroicon-o-bolt"
                             label="Vorschlag annehmen" title="Vorschlag annehmen und das Gericht zur Prüfung erzeugen" busy="Wird erzeugt …" flash="Erzeugung eingereiht"
                             />
+                    @elseif($istPlan)
+                        <x-foodalchemist::ki-action action="erzeugeGeplant({{ $st->id }})" variant="primary" icon="heroicon-o-check"
+                            label="Plan annehmen" title="Plan annehmen: Bestand übernehmen, neue Komponenten als Unterrezepte bauen" busy="Wird gebaut …" flash="Bau eingereiht"
+                            />
                     @else
                         <x-foodalchemist::ki-action action="erzeugeGeplant({{ $st->id }})" variant="primary" icon="heroicon-o-bolt"
                             label="Jetzt erzeugen" title="Jetzt erzeugen, ohne auf die Freigabe der Stufe darüber zu warten" busy="Wird erzeugt …" flash="Erzeugung eingereiht"
@@ -257,6 +263,34 @@
                     label="{{ $st->status === 'geplant' ? 'Vorschlag überarbeiten' : 'Mit Rückmeldung neu erzeugen' }}"
                     busy="Wird eingereiht …" flash="Eingereiht" />
             </div>
+        </div>
+    @endif
+
+    @if($istPlan)
+        {{-- Spec 80 B1: Komponenten-Plan. Je Komponente: Menge im Ansatz, Funktion, Quelle (Bestand oder neu)
+             und abgelehnte Bestandskandidaten mit Grund — damit nachvollziehbar ist, warum etwas neu gebaut wird. --}}
+        <div class="flex flex-col gap-1.5 rounded-[var(--fa-radius-control)] bg-[var(--fa-ground)] p-2.5" data-rezept-plan="{{ $st->id }}">
+            <p class="{{ $textKlein }} font-medium text-[var(--fa-ink-2)]">Geplante Komponenten</p>
+            <ul class="flex flex-col gap-1.5">
+                @foreach((array) ($snap['komponenten'] ?? []) as $komponente)
+                    <li class="flex flex-col gap-0.5 {{ $textKlein }} text-[var(--fa-ink-2)]">
+                        <span>
+                            @if(!empty($komponente['menge']))<span class="tabular-nums">{{ rtrim(rtrim(number_format((float) $komponente['menge'], 1, ',', '.'), '0'), ',') }} {{ $komponente['einheit'] ?? 'g' }}</span> · @endif
+                            <span class="font-medium text-[var(--fa-ink)]">{{ $komponente['bestand']['name'] ?? $komponente['name'] ?? 'Komponente' }}</span>
+                            @if(!empty($komponente['funktion'])) · {{ $lesbar($komponente['funktion']) }}@endif
+                            @if(!empty($komponente['bestand']))
+                                <x-fa::badge tone="ok">aus Bestand #{{ $komponente['bestand']['recipe_id'] }}</x-fa::badge>
+                            @else
+                                <x-fa::badge tone="info">neu als Unterrezept</x-fa::badge>
+                            @endif
+                        </span>
+                        @foreach((array) ($komponente['abgelehnt'] ?? []) as $ab)
+                            <span class="text-[var(--fa-ink-3)]">nicht übernommen: {{ $ab['name'] ?? '' }} — {{ $ab['grund'] ?? '' }}</span>
+                        @endforeach
+                    </li>
+                @endforeach
+            </ul>
+            <p class="{{ $textKlein }} text-[var(--fa-ink-3)]">Noch nichts angelegt. „Plan annehmen“ übernimmt den Bestand und baut die neuen Komponenten als Unterrezepte.</p>
         </div>
     @endif
 

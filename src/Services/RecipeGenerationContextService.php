@@ -156,6 +156,22 @@ class RecipeGenerationContextService
             'description' => $description,
             'parameter' => $this->promptParameter($parameter),
         ];
+        // Spec 80 B5: bestätigter Komponenten-Plan → Zusammenstellung statt Ein-Baustein-Regel.
+        if (! empty($parameter['plan_komponenten']) && is_array($parameter['plan_komponenten'])) {
+            $prompt['zusammenstellung'] = [
+                'hinweis' => 'Dieses Basisrezept ist eine ZUSAMMENSTELLUNG aus den bestätigten Komponenten unten. '
+                    . 'Führe jede Komponente als eigene Zutatenzeile mit der genannten Menge (Bestand mit sub_rezept_id, '
+                    . 'neue mit sub_rezept: true) — nicht in Rohware zerlegen. Ergänze nur, was die Zusammenstellung '
+                    . 'zusätzlich braucht (z. B. Butter, Salz), und beschreibe die Zubereitung des Zusammenführens.',
+                'komponenten' => array_values(array_map(static fn ($k) => array_filter([
+                    'name' => $k['bestand']['name'] ?? $k['name'] ?? null,
+                    'menge' => $k['menge'] ?? null, 'einheit' => $k['einheit'] ?? null,
+                    'funktion' => $k['funktion'] ?? null,
+                    'sub_rezept_id' => $k['bestand']['recipe_id'] ?? null,
+                    'neu' => empty($k['bestand']),
+                ], static fn ($v) => $v !== null), $parameter['plan_komponenten'])),
+            ];
+        }
         if (($typ = $this->settings->kuechenTyp($team)) !== null) {
             // Soft-Default-Schicht: das Mandanten-Profil ist eine Tendenz, explizite Richtungs-Parameter
             // (Hooks/Regler) haben VORRANG — der Hinweis steht im Block (DoD KuechenProfilTest).
