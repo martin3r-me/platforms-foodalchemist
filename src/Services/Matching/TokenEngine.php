@@ -285,6 +285,33 @@ class TokenEngine
         return false;
     }
 
+    /**
+     * Ein REINES Zustands-/Zuschnitt-Wort („frisch", „frische", „tiefgekühlt", „gewürfelt", „Scheiben") — anders als
+     * {@see self::isQualifierToken}, das per Wortanfang/Teilstring auch Komposita trifft („Frischkäse", „Babyspinat",
+     * „Currypulver", „Rinderbeinscheiben"). Wo ein Wort entscheidet, ob ein Treffer ein PRODUKT teilt (matchScore,
+     * Grundwort-Prüfung beim Mint), zählt nur dieses: ein Kompositum ist ein Produkt.
+     */
+    public function istReinesMerkmal(string $t): bool
+    {
+        if ($t === 'tk' || ! $this->isQualifierToken($t)) {
+            return $t === 'tk';
+        }
+        $endungen = '(e|en|er|es|em|n|s|t|et|te|ten|ter|tes|lt|elt|uehlt|ühlt|uehlte|ühlte|oren|orene|iert|ierte|ierten|net|nete|neten|lte|lten)?';
+        foreach (self::QUALIFIER_PREFIXE as $p) {
+            if (preg_match('/^' . preg_quote($p, '/') . $endungen . '$/u', $t) === 1) {
+                return true;
+            }
+        }
+        foreach ([...self::verarbeitetMarker(), ...self::schnittformen()] as $m) {
+            $m = mb_strtolower((string) $m);
+            if ($m !== '' && preg_match('/^(ge)?' . preg_quote($m, '/') . $endungen . '$/u', $t) === 1) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /** rs:289–301 — generischer Slug-Exact darf den spezifischeren Query nicht kapern (4.4q). */
     public function nameOutspecifiesSlug(array $queryTokens, string $qn): bool
     {
@@ -339,7 +366,7 @@ class TokenEngine
             foreach ($candidateTokens as $c) {
                 if ($this->tokenMatches($q, $c)) {
                     $i++;
-                    $inhalt = $inhalt || ! $this->isQualifierToken($q);
+                    $inhalt = $inhalt || ! $this->istReinesMerkmal($q);
 
                     continue 2;
                 }
