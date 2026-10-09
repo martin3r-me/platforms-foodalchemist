@@ -625,6 +625,44 @@ class TrendService
      *
      * @return array{x:float, y:float}
      */
+    /**
+     * Positionen für alle Radar-Trends ohne Überlappung (Dominique 09.10.: zwei Food-Megatrends lagen
+     * übereinander). Je Zelle (Kategorie × Ebene) gleichmäßig über den Sektor verteilt; Lage im Sektor
+     * und Abstand von der Mitte bleiben stabil am Namen (Hash), damit das Radar beim Neuladen nicht springt.
+     *
+     * @param  iterable<FoodAlchemistTrend>  $trends
+     * @return array<int, array{x: float, y: float}> Trend-ID → Position
+     */
+    public function radarPositionen(iterable $trends, float $cx = 320, float $cy = 320, float $maxR = 268): array
+    {
+        $zellen = [];
+        foreach ($trends as $t) {
+            $zellen[($t->kategorie ?? 'food').'|'.($t->ebene ?? 'mode')][] = $t;
+        }
+        $out = [];
+        foreach ($zellen as $schluessel => $liste) {
+            usort($liste, fn ($a, $b) => strcmp((string) $a->slug, (string) $b->slug));
+            [$kat, $eb] = explode('|', $schluessel);
+            [$von, $bis] = self::SEKTOREN[$kat] ?? self::SEKTOREN['food'];
+            [$innen, $aussen] = self::RINGE[$eb] ?? self::RINGE['mode'];
+            $rand = ($bis - $von) * 0.06;               // nicht direkt auf die Sektorlinie
+            $span = ($bis - $von) - 2 * $rand;
+            $n = count($liste);
+            $versatz = $this->hash01($schluessel);       // stabile Drehung je Zelle
+            foreach ($liste as $i => $t) {
+                $anteil = fmod($versatz + $i / $n, 1.0);
+                $winkel = $von + $rand + $anteil * $span;
+                // abwechselnd innen/außen im Ring, damit dichte Zellen auch radial Luft haben
+                $tiefe = $n === 1 ? $this->hash01($t->slug.'b') : ($i % 2 === 0 ? 0.3 : 0.7);
+                $r = ($innen + $tiefe * ($aussen - $innen)) * $maxR;
+                $rad = deg2rad($winkel);
+                $out[(int) $t->id] = ['x' => round($cx + $r * cos($rad), 1), 'y' => round($cy - $r * sin($rad), 1)];
+            }
+        }
+
+        return $out;
+    }
+
     public function radarPosition(FoodAlchemistTrend $trend, float $cx = 320, float $cy = 320, float $maxR = 268): array
     {
         [$von, $bis] = self::SEKTOREN[$trend->kategorie] ?? self::SEKTOREN['food'];
