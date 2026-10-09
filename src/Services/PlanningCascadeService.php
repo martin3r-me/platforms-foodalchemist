@@ -2581,6 +2581,62 @@ class PlanningCascadeService
     }
 
     /**
+     * Spec 80 D7: Plan-Karte — den Komponenten-Plan eines noch offenen Basisrezept-Steps ändern, bevor gebaut
+     * wird. Aktionen: entfernen · menge · bestand_ablehnen · hinzufuegen. Nur team-eigen, nur Status `geplant`.
+     *
+     * @param  array<string, mixed>  $daten
+     */
+    public function aenderePlan(Team $team, int $stepId, string $aktion, array $daten = []): void
+    {
+        $step = $this->ownedStep($team, $stepId);
+        $snap = is_array($step->context_snapshot) ? $step->context_snapshot : [];
+        if ($step->status !== 'geplant' || empty($snap['plan'])) {
+            throw new RuntimeException('Der Plan kann nur vor dem Bau geändert werden.');
+        }
+        $k = array_values((array) ($snap['komponenten'] ?? []));
+        $i = (int) ($daten['index'] ?? -1);
+        switch ($aktion) {
+            case 'entfernen':
+                if (isset($k[$i])) {
+                    array_splice($k, $i, 1);
+                }
+                break;
+            case 'menge':
+                $menge = str_replace(',', '.', trim((string) ($daten['menge'] ?? '')));
+                if (isset($k[$i]) && is_numeric($menge) && (float) $menge > 0) {
+                    $k[$i]['menge'] = (float) $menge;
+                }
+                break;
+            case 'bestand_ablehnen':
+                if (isset($k[$i]) && ! empty($k[$i]['bestand'])) {
+                    $k[$i]['abgelehnt'] = [...(array) ($k[$i]['abgelehnt'] ?? []),
+                        ['recipe_id' => (int) $k[$i]['bestand']['recipe_id'], 'name' => (string) $k[$i]['bestand']['name'], 'grund' => 'vom Menschen abgelehnt']];
+                    $k[$i]['bestand'] = null;
+                    $k[$i]['neu'] = true;
+                }
+                break;
+            case 'hinzufuegen':
+                $name = trim((string) ($daten['name'] ?? ''));
+                if ($name === '' || count($k) >= RecipeKomponentenPlanService::MAX_KOMPONENTEN + 2) {
+                    break;
+                }
+                $menge = str_replace(',', '.', trim((string) ($daten['menge'] ?? '')));
+                $abgelehnt = [];
+                $params = is_array($step->run?->params) ? $step->run->params : [];
+                $bestand = ($params['bestand'] ?? 'hybrid') !== 'komplett_neu'
+                    ? app(RecipeKomponentenPlanService::class)->bestandFuer($team, $name,
+                        array_values(array_filter((array) ($params['diaet_hart'] ?? []), 'is_string')), $abgelehnt)
+                    : null;
+                $k[] = ['name' => $name, 'funktion' => null, 'menge' => is_numeric($menge) ? (float) $menge : null,
+                    'einheit' => 'g', 'suchbegriffe' => [], 'bestand' => $bestand, 'abgelehnt' => $abgelehnt, 'neu' => $bestand === null];
+                break;
+            default:
+                throw new RuntimeException("Unbekannte Plan-Aktion [{$aktion}].");
+        }
+        $step->update(['context_snapshot' => [...$snap, 'komponenten' => $k]]);
+    }
+
+    /**
      * Spec 80 B1: nach bestätigtem (oder entfallenem) Komponenten-Plan das Basisrezept bauen. Leere Liste =
      * ein Baustein, Bau wie bisher.
      *

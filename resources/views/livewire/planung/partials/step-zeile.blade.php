@@ -271,25 +271,41 @@
              und abgelehnte Bestandskandidaten mit Grund — damit nachvollziehbar ist, warum etwas neu gebaut wird. --}}
         <div class="flex flex-col gap-1.5 rounded-[var(--fa-radius-control)] bg-[var(--fa-ground)] p-2.5" data-rezept-plan="{{ $st->id }}">
             <p class="{{ $textKlein }} font-medium text-[var(--fa-ink-2)]">Geplante Komponenten</p>
-            <ul class="flex flex-col gap-1.5">
-                @foreach((array) ($snap['komponenten'] ?? []) as $komponente)
-                    <li class="flex flex-col gap-0.5 {{ $textKlein }} text-[var(--fa-ink-2)]">
-                        <span>
-                            @if(!empty($komponente['menge']))<span class="tabular-nums">{{ rtrim(rtrim(number_format((float) $komponente['menge'], 1, ',', '.'), '0'), ',') }} {{ $komponente['einheit'] ?? 'g' }}</span> · @endif
+            {{-- Spec 80 D7: Plan-Karte — Menge ändern, Bestand ablehnen, entfernen, ergänzen (vor dem Bau). --}}
+            <ul class="flex flex-col gap-2">
+                @foreach((array) ($snap['komponenten'] ?? []) as $ki => $komponente)
+                    <li class="flex flex-col gap-1 {{ $textKlein }} text-[var(--fa-ink-2)]" wire:key="plan-{{ $st->id }}-{{ $ki }}-{{ md5(json_encode($komponente)) }}" data-plan-komponente="{{ $ki }}">
+                        <div class="flex flex-wrap items-center gap-1.5">
+                            <input type="text" inputmode="decimal" aria-label="Menge {{ $komponente['name'] ?? '' }}"
+                                wire:model="planEingabe.{{ $st->id }}.mengen.{{ $ki }}" wire:keydown.enter="planAendern({{ $st->id }}, 'menge', {{ $ki }})"
+                                wire:blur="planAendern({{ $st->id }}, 'menge', {{ $ki }})"
+                                placeholder="{{ isset($komponente['menge']) ? rtrim(rtrim(number_format((float) $komponente['menge'], 1, ',', ''), '0'), ',') : 'Menge' }}"
+                                class="w-20 rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] bg-[var(--fa-surface)] px-2 py-0.5 text-right tabular-nums text-[var(--fa-ink)]" />
+                            <span class="text-[var(--fa-ink-3)]">{{ $komponente['einheit'] ?? 'g' }}</span>
                             <span class="font-medium text-[var(--fa-ink)]">{{ $komponente['bestand']['name'] ?? $komponente['name'] ?? 'Komponente' }}</span>
                             @if(!empty($komponente['funktion'])) · {{ $lesbar($komponente['funktion']) }}@endif
                             @if(!empty($komponente['bestand']))
                                 <x-fa::badge tone="ok">aus Bestand #{{ $komponente['bestand']['recipe_id'] }}</x-fa::badge>
+                                <button type="button" wire:click="planAendern({{ $st->id }}, 'bestand_ablehnen', {{ $ki }})" class="text-[var(--fa-ink-3)] underline-offset-2 hover:underline">Bestand ablehnen</button>
                             @else
                                 <x-fa::badge tone="info">neu als Unterrezept</x-fa::badge>
                             @endif
-                        </span>
+                            <button type="button" wire:click="planAendern({{ $st->id }}, 'entfernen', {{ $ki }})" class="ml-auto text-[var(--fa-ink-3)] hover:text-[var(--fa-crit)]" aria-label="{{ $komponente['name'] ?? 'Komponente' }} entfernen">Entfernen</button>
+                        </div>
                         @foreach((array) ($komponente['abgelehnt'] ?? []) as $ab)
-                            <span class="text-[var(--fa-ink-3)]">nicht übernommen: {{ $ab['name'] ?? '' }} — {{ $ab['grund'] ?? '' }}</span>
+                            <span class="pl-1 text-[var(--fa-ink-3)]">nicht übernommen: {{ $ab['name'] ?? '' }} — {{ $ab['grund'] ?? '' }}</span>
                         @endforeach
                     </li>
                 @endforeach
             </ul>
+            <div class="flex flex-wrap items-center gap-1.5" data-plan-ergaenzen>
+                <input type="text" wire:model="planEingabe.{{ $st->id }}.name" placeholder="Komponente ergänzen, z. B. Matte: Petersilie" aria-label="Neue Komponente"
+                    wire:keydown.enter="planAendern({{ $st->id }}, 'hinzufuegen')"
+                    class="min-w-0 flex-1 rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] bg-[var(--fa-surface)] px-2 py-1 {{ $textKlein }} text-[var(--fa-ink)]" />
+                <input type="text" inputmode="decimal" wire:model="planEingabe.{{ $st->id }}.menge" placeholder="Menge g" aria-label="Menge der neuen Komponente"
+                    class="w-24 rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] bg-[var(--fa-surface)] px-2 py-1 text-right {{ $textKlein }} text-[var(--fa-ink)]" />
+                <x-fa::button size="sm" variant="secondary" icon="heroicon-o-plus" wire:click="planAendern({{ $st->id }}, 'hinzufuegen')">Ergänzen</x-fa::button>
+            </div>
             <p class="{{ $textKlein }} text-[var(--fa-ink-3)]">Noch nichts angelegt. „Plan annehmen“ übernimmt den Bestand und baut die neuen Komponenten als Unterrezepte.</p>
         </div>
     @endif
