@@ -1,6 +1,6 @@
 # Spec 81 · Regeln als Daten
 
-Stand 2026-10-09 · Branch `docs/spec81-regeln-als-daten` · Entscheid Dominique 09.10.: **Variante B**; Teil A an Claude delegiert
+Stand 2026-10-09 · Branch `docs/spec81-regeln-als-daten` · Entscheid Dominique 09.10.: **Variante B**; Teil A an Claude delegiert; Dossiers bereinigen statt spiegeln; Umlaute
 Vorläufer: Spec 80 Teil G (Richtig anlegen statt nachprüfen), Spec 41 A3 (Regelwerke im Wissensmodul), Spec 52 F4
 
 ## Warum
@@ -36,7 +36,7 @@ Mechanische Regeln liegen in einer **eigenen Regel-Tabelle** mit **Pflegeseite i
 
 | Inhalt | Wahrheit | Darstellung |
 |---|---|---|
-| Mechanische Regel (Liste, Muster, Schwelle, Zuordnung) | **Regel-Tabelle** | Im Dossier als automatisch erzeugter Abschnitt |
+| Mechanische Regel (Liste, Muster, Schwelle, Zuordnung) | **Regel-Tabelle** | Pflegeseite „Regeln“; im Dossier **nur ein Verweis** (Entscheid 09.10.: nicht doppelt) |
 | Begründung, Urteil, Technik, Beispiele-Prosa | **Wissensmodul** (unverändert) | Dossier |
 
 Schreiben dürfen nur FA-Admins, globale Regeln nur das Master-Team (Zielmodell „global + Admin").
@@ -145,6 +145,7 @@ der Teil, der **nicht mehr an die KI gehen muss**.
 | `team_id` | null = global | v1 nur global (Master-Team schreibt) |
 | `regelwerk` | `gp \| basisrezept \| la \| vk` | |
 | `paragraph` | string, z. B. `§2`, `§8.12` | Herkunft, Filter, Befund-Zuordnung |
+| `dossier_slug` | string, nullable | Dossier, aus dem die Regel stammt; steuert das Bereinigen (Teil E) |
 | `titel` | string | Anzeige |
 | `art` | enum aus Teil B | wählt die Motor-Klasse |
 | `ziel` | string, z. B. `gp.name`, `gp.zustand`, `rezept.name`, `rezeptzeile`, `la.match` | wo die Regel greift |
@@ -163,16 +164,12 @@ Je Speichern eine Kopie (`rule_id`, `version`, `params`, `wirkung`, `aktiv`, `us
 Zurückrollen = alte Version wieder speichern. (Das Wissensmodul hat keine Versionstabelle; hier brauchen wir
 sie, weil eine Regel sofort auf jede Anlage wirkt.)
 
-### C3 `foodalchemist_rule_paragraphs`
+### C3 Paragraf-Zuordnung
 
-Je Paragraf eines Regelwerks: `regelwerk`, `paragraph`, `dossier_slug`, `durchsetzung` = `code \| ki \| beides`.
-
-- `code`: alle Inhalte des Paragrafen sind Regeln → das Dossier geht **nicht** in den Konformitäts-Prompt.
-- `ki`: reiner Text → geht in den Prompt wie bisher.
-- `beides`: Regeln **und** Urteil (z. B. §8: Pflichtangabe flaggt der Code, Plausibilität beurteilt die KI)
-  → Dossier geht in den Prompt, aber ohne den erzeugten Regel-Abschnitt (Teil E).
-
-Gepflegt auf derselben Einstellungsseite. Ersetzt die hart codierte §-Liste in `vom_code_geprueft`.
+Jede Regel trägt `regelwerk` + `paragraph` + `dossier_slug` (das Dossier, aus dem sie stammt). Daraus ergibt
+sich ohne eigene Tabelle:
+- welche Paragrafen der Code durchsetzt (für den Satz `vom_code_geprueft` und die Statistik),
+- welches Dossier nach der Aktivierung bereinigt werden muss (Teil E).
 
 ### C4 Befunde mit Herkunft
 
@@ -217,35 +214,39 @@ bleibt Code, sonst wird die Regel-Tabelle zur zweiten Programmiersprache.
 
 ---
 
-## Teil E · Dossier zeigt die Regeln, schreibt sie aber nicht
+## Teil E · Dossiers bereinigen: Regel raus, Text bleibt
 
-Je Paragraf mit Regeln bekommt das Dossier einen **erzeugten Abschnitt** zwischen Markern:
+**Entscheid Dominique 09.10.:** Was als Regel in der Tabelle steht, wird **aus dem Dossier entfernt**. Keine
+Kopie, kein erzeugter Abschnitt. Das Dossier behält nur, was die KI braucht: Begründung, Urteil, Technik,
+Grenzfälle. An der Stelle der Liste steht **ein Satz**:
 
 ```markdown
-<!-- fa-regeln:start §9 -->
-**Regeln (aus den Einstellungen, Stand 2026-10-12, nicht hier bearbeiten)**
-| Regel | Art | Wirkung | Werte |
-| Zustand | Vokabular | blockieren | frisch · TK (Alias: tiefgekühlt) · trocken · konserviert |
-<!-- fa-regeln:end §9 -->
+Die Werte pflegt Food Alchemist unter Einstellungen › Regeln (§9 Zustand, Verarbeitung, Form).
 ```
 
-- Erzeugt beim Speichern einer Regel (eigene Dossier-Version, `created_via = regeln`).
-- **Schutz vor Überschreiben:** `knowledge-import` und Wissens-Browser lassen den Bereich zwischen den Markern
-  unverändert bzw. setzen ihn neu. Wer ihn im Browser ändert, bekommt einen Hinweis mit Link zur Regel.
-- Der Vault-Spiegel bekommt denselben Abschnitt beim nächsten Export (Einbahn wie bisher).
-- **Für den Prompt** wird der Bereich bei `durchsetzung = beides` herausgeschnitten, bei `code` fällt das ganze
-  Dossier weg (Teil C3).
+**Reihenfolge je Paragraf** (nie Wissen verlieren):
+1. Regel ist in der Tabelle, **aktiv**, Beispiele grün, Probelauf auf demo gesehen.
+2. Vault-Spiegel des Dossiers gesichert (Einbahn-Export wie bisher).
+3. Dossier neue Version: Liste raus, Verweis-Satz rein, Text bleibt. Über `knowledge-import`/MCP mit
+   `created_via = regeln`, nie per Hand-PUT auf große Dossiers.
+4. Bleibt im Dossier **nichts** außer dem Verweis, wird es deaktiviert statt geleert (Aktivieren/Deaktivieren
+   bleibt Kuration, darum als Vorschlag in der Liste „bereit zum Bereinigen").
 
-Damit liest ein Mensch im Dossier weiter das ganze Regelwerk; nur wo eine Liste steht, kommt sie aus den
-Einstellungen.
+**Wo Menschen die Regeln lesen:** auf der Pflegeseite, gefiltert nach Regelwerk und Paragraf. Für das Vault
+gibt es beim Export zusätzlich `Regeln_Stand_<Datum>.md`. Das ist eine Sicherung zum Nachlesen, keine zweite
+Wahrheit, und sie wird nie zurückimportiert.
+
+**Folge für den Prompt:** Was nicht mehr im Dossier steht, geht auch nicht mehr an die KI. Ein Ausschneide-
+Mechanismus im Prompt (Marker, `durchsetzung`-Schalter) entfällt.
 
 ---
 
 ## Teil F · Prompt schrumpft
 
-1. `ConformanceService::ladeRegelwerke()` (GP/LA) und der Kanon-Pfad (Basisrezept/VK) lassen Dossiers mit
-   `durchsetzung = code` weg und schneiden bei `beides` den Regel-Abschnitt heraus.
-2. Der Satz `vom_code_geprueft` wird aus C3 erzeugt, nicht mehr hart codiert.
+1. Die Regelwerk-Dossiers sind nach Teil E schlanker; `ConformanceService::ladeRegelwerke()` (GP/LA) und
+   der Kanon-Pfad (Basisrezept/VK) laden sie unverändert, sie sind nur kürzer. Deaktivierte Dossiers fallen weg.
+2. Der Satz `vom_code_geprueft` wird aus den aktiven Regeln erzeugt (Paragrafen je Artefakt), nicht mehr hart
+   codiert. Damit weiß die KI, dass sie diese Paragrafen nicht prüfen muss.
 3. Der Nachfilter (KI-Befund mit gleichem Paragraf/Feld wie ein Code-Befund fliegt raus) bleibt als Netz.
 4. **Messung gegen Teil 0**, dieselben drei Aufrufe. Der frei gewordene Platz geht ins Wissensbudget
    (Spec „Wissensbudget einstellbar"), nicht ins Nichts. Ob mehr Wissen die Prüfung besser macht, zeigt der
@@ -261,7 +262,7 @@ Einstellungen › KI & Wissen › **Regeln** (`Settings\Regeln`, Eintrag in `Set
 - Gruppiert nach Regelwerk, darin nach Paragraf (echte Gliederung, keine Pseudo-Gruppen).
 - Spalten: Paragraf · Titel · Art · Ziel · Wirkung · aktiv · Treffer im Bestand (aus dem letzten Probelauf).
 - Filter links: Regelwerk, Art, Wirkung, aktiv/inaktiv.
-- Je Paragraf eine Zeile „Durchsetzung: Code / KI / beides" (C3), direkt umstellbar.
+- Je Paragraf ein Hinweis, ob das Dossier noch bereinigt werden muss („bereit zum Bereinigen", Teil E).
 
 **Editor** (Seitenpanel, Formular je Art, kein JSON-Feld für Menschen)
 - `vokabular`: Werteliste mit Aliasen und Gruppe, Zeilen ziehbar.
@@ -291,6 +292,59 @@ eigene Aktion mit Bestätigung.
 
 ---
 
+## Teil H · Schreibweise mit Umlaut
+
+**Entscheid Dominique 09.10.:** Namen werden mit **ä, ö, ü, ß** geschrieben, nicht mit ae, oe, ue, ss.
+
+**Bestand** (lokale Plattform-DB, 09.10.): **3.815 von 7.948 Grundprodukten** enthalten ae/oe/ue, **keines**
+einen echten Umlaut. Rezeptnamen sind schon fast durchgehend mit Umlaut (105 mit ae/oe/ue). Häufigste Wörter:
+`stueck` (647), `fluessig` (470), `wuerfel` (216), `broetchen`, `moehren`, `gruen`, `kaese`, `geschaelt` …
+
+**Stumpfes Ersetzen ist falsch.** Gleiche Buchstabenfolge, kein Umlaut: `sauer` (Sauerbraten, Sauerkraut,
+Sauerkirsche), `Bauernsalat`, `Landfrauenkuchen`, `Caesar`, `Baguette`, `Merguez`, `Quenelle`, `Bœuf`,
+`Kroepoek`, `Aloe`, `Paella`, `neue`, `Feuer`.
+
+**Regel** (`ersetzung`, Ziel `gp.name`, `rezept.name`, Wirkung *korrigieren*):
+1. Kandidat ist jedes ae/oe/ue/ss **innerhalb** eines Wortes, **nicht** direkt nach einem Vokal oder `q`
+   (fängt `sauer`, `Bauer`, `Frauen`, `neue`, `Feuer`, `Quenelle`).
+2. Umgewandelt wird nur, wenn die Umlaut-Form **belegt** ist: Sie steht in einer Wortliste, die aus Wörtern
+   mit echtem Umlaut im eigenen Bestand gebaut wird (Rezeptnamen, Inspire-Anker, Wissens-Dossiers, LA-Namen
+   der Lieferanten), plus kuratierten Ergänzungen.
+3. **Ausnahmen** als eigene Liste in der Regel (Fremdwörter: `Caesar`, `Baguette`, `Merguez`, `Bœuf`,
+   `Kroepoek`, `Aloe`, `Paella` …). Erweiterbar auf der Pflegeseite.
+4. Nicht belegt und keine Ausnahme ⇒ **nicht** umwandeln, auf die Prüfliste.
+5. `ss` → `ß` nur, wenn belegt (`Fluss`/`Fuß`, `Masse`/`Maße` sind beide richtig). Im Zweifel bleibt `ss`.
+
+**Matching bleibt unberührt:** Der Vergleich ist ohnehin umlaut-tolerant (Teil A), ein Name mit ä findet
+denselben GP wie der mit ae. Geändert wird nur die Anzeige-Schreibweise.
+
+**Bestandsumbau (Paket 9)** über „Auf Bestand anwenden" (Paket 8):
+- Probelauf zeigt *vorher → nachher* für alle 3.815 Namen, getrennt nach *sicher* (belegt) und *Prüfliste*.
+- Übernommen wird nur *sicher*; die Prüfliste entscheidet ein Mensch, die Entscheidung erweitert die Wortliste
+  oder die Ausnahmen.
+- **Nebenwirkungen**, die der Umbau mitnimmt:
+  - Embeddings der umbenannten GPs neu rechnen (Qdrant), **außerhalb der Nutzungszeit** (demo-Erfahrung: 502).
+  - `gp_key`/Slugs bleiben ASCII und unverändert, damit Verweise nicht brechen.
+  - Vault-Spiegel und Necta-Export bekommen die neue Schreibweise beim nächsten Lauf.
+- Neue Namen (Anlage, Umbenennen, Generator) werden ab Paket 3 schon richtig geschrieben, der Bestand folgt
+  in Paket 9.
+
+---
+
+## Teil I · Weitere Dossiers
+
+Außer den drei Regelwerken gibt es Dossiers mit Listen und Tabellen, die Regeln oder Nachschlage-Daten sind
+(z. B. Zutaten-Defaults im Regelwerk-Ordner, Anti-Marker, Mengen-Defaults, Garpunkt-Tabellen). Die
+Bestandsaufnahme dazu läuft (09.10.); ihr Ergebnis wird hier eingetragen. Unterschieden wird:
+
+- **Regel** (eine der sechs Arten, der Code setzt sie durch) → Tabelle, Dossier bereinigen wie Teil E.
+- **Nachschlage-Daten** (der Code schlägt nach, setzt aber nichts durch, z. B. Kerntemperaturen) → eigene
+  Datentabelle, nur wenn eine Funktion sie wirklich nutzt. Ohne Nutzer bleibt es Text; eine Tabelle ohne
+  Leser wäre ein Etikett ohne Landebahn.
+- **Text** → bleibt im Dossier.
+
+---
+
 ## Pakete
 
 | # | Paket | Inhalt | Abhängig |
@@ -300,10 +354,12 @@ eigene Aktion mit Bestätigung.
 | 2 | Fundament | Tabellen C1–C4, Motor mit den sechs Arten, Tests je Art, noch **keine** Einsatzstelle | – |
 | 3 | Seeds + erste Einsatzstellen | Migration mit den Regeln aus A1–A4 (zuerst §1.2, §2, §9, §10, BR §5); `GpKorrektur`, `RezeptTypVokabular`, `BestandsPassung`, `TokenEngine::CUT_FORM_MARKERS`, `MatchHeuristics::defaultGpAlias` lesen aus dem Motor; doppelte Wahrheiten weg | 1, 2 |
 | 4 | Pflegeseite | Teil G ohne „Auf Bestand anwenden"; MCP `rules.*` | 2 |
-| 5 | Dossier-Abschnitt | Teil E inkl. Import-Schutz | 2, 4 |
+| 5 | Dossiers bereinigen | Teil E: je aktivierter Regel Liste aus dem Dossier, Verweis-Satz, leere Dossiers deaktivieren (Vorschlag); Vault-Export `Regeln_Stand` | 3, 4 |
 | 6 | Prompt schrumpft | Teil F, Messung gegen Paket 0 | 3, 5 |
 | 7 | Breite | GP-/LA-`deterministischeBefunde`, `GpNamingService`, `DataQualityService`, BR §1.5a/§1.6/§1.10/§14, GP §7/§8/§12 | 3 |
 | 8 | Bestand anwenden | Aktion „Auf Bestand anwenden" mit Bericht | 4, 7 |
+| 9 | Umlaute | Teil H: Regel für neue Namen (mit Paket 3), Bestandsumbau mit Prüfliste und Neu-Einbettung | 3, 8 |
+| 10 | Weitere Dossiers | Kandidaten außerhalb der drei Regelwerke (Teil I) als Regeln bzw. Nachschlage-Daten | 3, 5 |
 
 Ein PR je Paket, gestapelt wie Spec 80.
 
@@ -312,7 +368,7 @@ Ein PR je Paket, gestapelt wie Spec 80.
 1. Teil-0-Tabelle und Teil-F-Tabelle für dieselben drei Aufrufe liegen nebeneinander; die Regelwerk-Tokens im
    Konformitäts-Prompt sind um den mechanischen Anteil gesunken.
 2. Eine Regel in den Einstellungen ändern (z. B. Zustand „gefriergetrocknet" ergänzen) wirkt ohne Deploy auf
-   die nächste GP-Anlage, steht im Dossier-Abschnitt und erscheint im Probelauf vorher mit Treffern.
+   die nächste GP-Anlage und erscheint im Probelauf vorher mit Treffern. Im Dossier steht die Liste nicht mehr.
 3. Ein Test sucht im Code nach den alten Konstanten (`ZUSTAND_VOCAB`, `CUT_FORM_MARKERS`, `defaultGpAlias`-Namen,
    `VERPACKUNGSWOERTER`, `GENERIK_MARKER`) und schlägt an, wenn eine zurückkommt.
 4. Befunde tragen `quelle`; auf demo ist sichtbar, wie viel der Code und wie viel die KI findet.
@@ -325,8 +381,11 @@ Ein PR je Paket, gestapelt wie Spec 80.
   Regeln starten inaktiv, Probelauf zeigt die Zahl, Bestand nur über Paket 8.
 - **Regel-Tabelle als zweite Programmiersprache.** Gegenmittel: nur sechs Arten, keine Bedingungslogik über
   die festen Felder hinaus; was mehr braucht, bleibt Code oder KI.
-- **Zwei Orte für ein Regelwerk.** Gegenmittel: Teil E (Dossier zeigt die Regel, Marker-Schutz), und der
-  Wissens-Browser verlinkt auf die Regel statt eigene Bearbeitung zu erlauben.
+- **Zwei Orte für ein Regelwerk.** Gegenmittel: Teil E (Liste nur in der Tabelle, im Dossier nur der Verweis).
+  Risiko bleibt beim Vault-Import: ein alter Vault-Stand mit Liste darf das bereinigte Dossier nicht
+  zurückschreiben. `knowledge-import` vergleicht darum `imported_hash` und bricht bei Dossiers mit
+  `created_via = regeln` ab, statt zu überschreiben.
+- **Bereinigen vor dem Aktivieren verliert Wissen.** Gegenmittel: feste Reihenfolge in Teil E.
 - **Team-eigene Regeln** (z. B. eigene Warengruppen, GP §3 seit v3.4.1 team-änderbar) sind in v1 nicht drin;
   `team_id` ist vorbereitet.
 - **Prompt-Caching** (Core stellt Zeit/Persona vor jeden Prompt) ist ein getrennter Hebel und liegt bei Martin;
