@@ -189,7 +189,10 @@ trait ManagesPlanningFrame
         return [
             'diet_forms' => FoodAlchemistPlanningFrameRule::DIET_FORMS,
             'allergens' => FoodAlchemistGp::ALLERGEN_FIELDS,
-            'slot_types' => FoodAlchemistPlanningFrameSlot::SLOT_TYPES,
+            // Spec 80 F: Struktur-Elemente nur in Rahmen, deren Ausgabe sie trägt.
+            'slot_types' => in_array($this->frameOwnerType ?? null, FoodAlchemistPlanningFrameSlot::STRUKTUR_OWNER, true)
+                ? FoodAlchemistPlanningFrameSlot::SLOT_TYPES
+                : array_values(array_diff(FoodAlchemistPlanningFrameSlot::SLOT_TYPES, FoodAlchemistPlanningFrameSlot::STRUKTUR_TYPEN)),
             'seasons' => FoodAlchemistSaison::visibleToTeam($this->frameTeam())
                 ->where('is_inactive', false)->orderBy('name')->get(['id', 'name']),
             'rule_types' => [

@@ -227,6 +227,12 @@ class GenerateConceptJob implements ShouldQueue
             // referenzieren — attachContainerId ist die format_id (Container = Format selbst, wie beim Angebot).
             app(\Platform\FoodAlchemist\Services\FormatService::class)
                 ->slotConceptEinfuegen($team, $this->attachContainerId, $conceptId);
+            // Spec 80 F2: Konzepte kommen asynchron — danach Format in Rahmen-Reihenfolge (inkl. Struktur) ordnen.
+            $runId = $this->cascadeStepId !== null
+                ? \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep::whereKey($this->cascadeStepId)->value('cascade_run_id') : null;
+            if ($runId !== null) {
+                app(\Platform\FoodAlchemist\Services\PlanningCascadeService::class)->ordneFormatNachRahmen($team, (int) $runId);
+            }
         }
     }
 

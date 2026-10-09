@@ -322,6 +322,14 @@ entstehen dabei nicht und müssen heute von Hand nachgetragen werden. Verdacht (
 Stelle** als ruhige, nicht klickbare Zeilen: Titel fett, Titel mit Preis mit Preis rechts, Freitext kursiv
 einzeilig gekürzt, Leerzeile als schmaler Abstand. So entspricht die Reihenfolge im Fortschritt der Ausgabe.
 
+**F6 · Umgesetzt (Paket 8, Entscheid Dominique 09.10.: Anfang des folgenden Abschnitts).** Rahmen-Slot-Typen
+`titel`, `titel_preis`, `freitext`, `leerzeile` (nur Foodbook/Speisekarte/Format-Rahmen). `legeStrukturAn` legt sie
+vor dem Concept-Fan-out an: Foodbook → Kapitel-Block am Kapitelanfang (`header_frei`, `header_frei_preis` mit
+Preis-Anker, `text`, `spacer`), Speisekarte → Position am Rubrikanfang, Format → Struktur-Slot; nach dem letzten
+Abschnitt → Ende des letzten. `strukturAusGeruest` und Coverage überspringen sie. Format-Reihenfolge hält
+`ordneFormatNachRahmen` nach jedem Konzept-Einhängen. Fortschritt-Baum zeigt sie an ihrer Stelle.
+Offen: Angebot (Pivot-Konzepte + eigene Blöcke — Reihenfolge-Modell klären).
+
 **F5 · Tests.** Speisekarten-Vollkaskade mit Rahmen „Titel · Gang · Freitext · Leerzeile · Gang" → Positionen in genau
 dieser Reihenfolge; dasselbe für Foodbook-Kapitel und Format; Fan-out füllt keine Struktur-Slots; Titel mit Preis
 zeigt den Concept-Preis; vorhandene Struktur im Ziel bleibt an ihrer Stelle; Druck/PDF der Speisekarte zeigt die

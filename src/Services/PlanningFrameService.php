@@ -137,6 +137,11 @@ class PlanningFrameService
         if ($slotType !== null && ! in_array($slotType, FoodAlchemistPlanningFrameSlot::SLOT_TYPES, true)) {
             throw new RuntimeException('Ungültiger slot_type — erlaubt: ' . implode('|', FoodAlchemistPlanningFrameSlot::SLOT_TYPES) . '.');
         }
+        // Spec 80 F: Struktur-Elemente nur dort, wo die Ausgabe sie trägt.
+        if (in_array($slotType, FoodAlchemistPlanningFrameSlot::STRUKTUR_TYPEN, true)
+            && ! in_array($frame->owner_type ?? null, FoodAlchemistPlanningFrameSlot::STRUKTUR_OWNER, true)) {
+            throw new RuntimeException('Titel, Freitext und Leerzeile gibt es nur im Rahmen von Foodbook, Speisekarte und Format.');
+        }
         $pos = (int) ($frame->slots()->max('position') ?? -1) + 1;
 
         return $frame->slots()->create([
@@ -169,6 +174,10 @@ class PlanningFrameService
         }
         if (($daten['slot_type'] ?? null) !== null && ! in_array($daten['slot_type'], FoodAlchemistPlanningFrameSlot::SLOT_TYPES, true)) {
             throw new RuntimeException('Ungültiger slot_type — erlaubt: ' . implode('|', FoodAlchemistPlanningFrameSlot::SLOT_TYPES) . '.');
+        }
+        if (in_array($daten['slot_type'] ?? null, FoodAlchemistPlanningFrameSlot::STRUKTUR_TYPEN, true)
+            && ! in_array($slot->frame?->owner_type, FoodAlchemistPlanningFrameSlot::STRUKTUR_OWNER, true)) {
+            throw new RuntimeException('Titel, Freitext und Leerzeile gibt es nur im Rahmen von Foodbook, Speisekarte und Format.');
         }
         $slot->update($daten);
 

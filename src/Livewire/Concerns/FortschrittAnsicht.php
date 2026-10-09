@@ -207,6 +207,26 @@ trait FortschrittAnsicht
             unset($knoten);
         }
 
+        // Spec 80 F4: Struktur-Elemente des Rahmens an ihrer Stelle zeigen (ruhig, nicht klickbar) und die
+        // Abschnitte in Rahmen-Reihenfolge ordnen — so entspricht der Baum der Ausgabe.
+        if (in_array($lauf->source_owner_type, \Platform\FoodAlchemist\Models\FoodAlchemistPlanningFrameSlot::STRUKTUR_OWNER, true)) {
+            $frame = app(\Platform\FoodAlchemist\Services\PlanningFrameService::class)->find((string) $lauf->source_owner_type, (int) $lauf->source_owner_id);
+            if ($frame !== null) {
+                $rang = [];
+                $strukturArt = ['titel' => 'Titel', 'titel_preis' => 'Titel mit Preis', 'freitext' => 'Freitext', 'leerzeile' => 'Leerzeile'];
+                foreach ($frame->slots()->orderBy('position')->get() as $pos => $fs) {
+                    $rang['slot:' . $fs->id] = $pos;
+                    if ($fs->istStruktur()) {
+                        $baum['kinder']['struktur:' . $fs->id] = ['key' => 'struktur:' . $fs->id, 'art' => $strukturArt[$fs->slot_type],
+                            'label' => $fs->slot_type === 'leerzeile' ? '—' : (string) $fs->label, 'struktur' => true,
+                            'heads' => [], 'offen' => 0, 'fehler' => 0, 'kinder' => []];
+                        $rang['struktur:' . $fs->id] = $pos;
+                    }
+                }
+                uksort($baum['kinder'], fn ($a, $b) => ($rang[$a] ?? PHP_INT_MAX) <=> ($rang[$b] ?? PHP_INT_MAX));
+            }
+        }
+
         // Knoten-Auswahl + Filter auf die Cluster anwenden.
         $knotenHeads = [];
         $sammle = function (array $kn) use (&$sammle, &$knotenHeads): void {

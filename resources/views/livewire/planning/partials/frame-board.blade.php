@@ -6,7 +6,7 @@
     $vokabular = $this->framePlanningVokabular();
     $regelChip = 'inline-flex items-center gap-1 h-7 pl-2.5 pr-1 rounded-full bg-[var(--fa-neutral-soft)] text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]';
     $regelWeg = 'inline-flex items-center justify-center w-5 h-5 rounded-full text-[var(--fa-crit)] hover:bg-[var(--fa-crit-soft)]';
-    $slotTypLabel = fn (string $t) => ucfirst(str_replace('_', ' ', $t));
+    $slotTypLabel = fn (string $t) => ['titel' => 'Titel', 'titel_preis' => 'Titel mit Preis', 'freitext' => 'Freitext', 'leerzeile' => 'Leerzeile'][$t] ?? ucfirst(str_replace('_', ' ', $t));
 @endphp
 
 <div class="flex flex-col gap-3" data-planning-frame-board="{{ $frameOwnerType }}">

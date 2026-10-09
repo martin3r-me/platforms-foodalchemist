@@ -594,6 +594,9 @@ class FoodbookService
         $uebersprungen = 0;
         $protokoll = [];
         foreach ($frame->slots()->orderBy('position')->get() as $slot) {
+            if ($slot->istStruktur()) {
+                continue;   // Spec 80 F: Struktur wird kein Kapitel, sondern Block im folgenden Kapitel (Kaskade)
+            }
             if ($slot->chapter_id !== null && in_array((int) $slot->chapter_id, $vorhandene, true)) {
                 $uebersprungen++;
                 $protokoll[] = ['slot' => $slot->label, 'status' => 'vorhanden', 'chapter_id' => (int) $slot->chapter_id];
