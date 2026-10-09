@@ -316,3 +316,21 @@ it('E0 kiDivergenzSession kappt Cross-Team-Zugriff (Tenancy)', function () {
         ->toThrow(RuntimeException::class, 'nur durchs Besitzer-Team');
     expect(FoodAlchemistDishIdea::count())->toBe(0);
 });
+
+it('Live-Test demo 09.10.: Gericht-Bauplan bricht nicht ab, wenn das Wissen über dem Budget liegt', function () {
+    $session = app(\Platform\FoodAlchemist\Services\PlanningSessionService::class)
+        ->create($this->rootTeam, ['title' => 'Herbst-Hauptgang', 'brief' => 'Rinderfilet, Kürbis']);
+    bindDivergenzStub([['titel' => 'Rinderfilet | Kürbis | Jus']]);
+    $budget = \Platform\FoodAlchemist\Services\Ai\KnowledgeBudget::forKey('foodbook.kapitel_ideen');
+    $kctx = Mockery::mock(\Platform\FoodAlchemist\Services\Ai\KnowledgeContextService::class)->makePartial();
+    $kctx->shouldReceive('contextFor')->andReturnUsing(fn ($team, $feature, $text, $a = null, $b = [], $opt = []) => [
+        'block' => str_repeat('Wissen ', (int) (($budget + 9000) / 7)),   // demo: 33.085 Zeichen bei 24.000 Budget
+        'files_used' => ['x'], 'max' => $opt['_max_chars'] ?? null,
+    ]);
+    app()->instance(\Platform\FoodAlchemist\Services\Ai\KnowledgeContextService::class, $kctx);
+
+    $res = $this->svc->kiDivergenzSession($this->rootTeam, (int) $session->id, 'Hauptgang Herbst', 1, 'hybrid');
+
+    expect($res)->not->toBeEmpty();
+    $kctx->shouldHaveReceived('contextFor')->withArgs(fn ($t, $f, $txt, $a = null, $b = [], $opt = []) => $f === 'foodbook.plan' && ($opt['_max_chars'] ?? null) === $budget);
+});

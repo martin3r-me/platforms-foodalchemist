@@ -544,7 +544,15 @@ class IdeenService
             throw new \RuntimeException('KI-Divergenz braucht einen Analyse-Text als Ausgangslage.');
         }
 
-        $wissen = app(KnowledgeContextService::class)->contextFor($team, 'foodbook.plan', $seed);
+        // Live-Test demo 09.10. (Lauf 85): ohne Deckel lieferte foodbook.plan 33.085 Zeichen; propose() wertet den
+        // mitgegebenen Block als Pflicht und brach jeden Gericht-Bauplan ab (Budget foodbook.kapitel_ideen 24.000).
+        // Wie kiDivergenzConcept (Lauf 72): das Prompt-Key-Budget ist die Decke — hier schon bei der AUSWAHL,
+        // damit ganze Dossiers gewählt statt mitten im Text abgeschnitten werden; die harte Kappung bleibt als Netz.
+        $budget = KnowledgeBudget::forKey('foodbook.kapitel_ideen');
+        $wissen = app(KnowledgeContextService::class)->contextFor($team, 'foodbook.plan', $seed, null, [], ['_max_chars' => $budget]);
+        if (mb_strlen((string) ($wissen['block'] ?? '')) > $budget) {
+            $wissen['block'] = mb_substr((string) $wissen['block'], 0, $budget);
+        }
 
         $kontext = array_filter([
             'kapitel' => (string) ($session->title ?: 'Planung'),   // produkt-blindes Prompt-Feld — hier trägt es die Session
