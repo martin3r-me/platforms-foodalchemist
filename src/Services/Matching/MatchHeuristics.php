@@ -208,9 +208,10 @@ class MatchHeuristics
     public function istBasisrezeptZeile(string $name): bool
     {
         $praefix = \Platform\FoodAlchemist\Support\RezeptTypVokabular::praefix($name);
-        // Zukauf-Basisrezept (Entscheidung Dominique 10.10.): „Zukauf: <Ware>" im Gericht zeigt IMMER auf das Zukauf-
-        // Basisrezept — auch mit Einkaufsform („Zukauf: Tomaten, konserviert"); die Ware selbst steht im Zukauf-Rezept.
-        if ($praefix !== null && mb_strtolower($praefix) === 'zukauf') {
+        // Direktware-Basisrezept (Entscheidung Dominique 10.10., zuerst „Zukauf" genannt — bleibt als Alias): die Zeile
+        // „Direktware: <Ware>" im Gericht zeigt IMMER auf das Direktware-Basisrezept, auch mit Einkaufsform
+        // („Direktware: Tomaten, konserviert"); die Ware selbst steht im Direktware-Rezept.
+        if ($praefix !== null && in_array(mb_strtolower($praefix), ['direktware', 'zukauf'], true)) {
             return true;
         }
         $typ = $praefix !== null && \Platform\FoodAlchemist\Support\RezeptTypVokabular::finde($praefix) !== null;
