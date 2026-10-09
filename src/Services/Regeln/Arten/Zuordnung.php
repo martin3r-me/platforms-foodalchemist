@@ -8,6 +8,10 @@ use Platform\FoodAlchemist\Services\Regeln\RegelText;
 /**
  * Begriff → festes Ziel. params: `eintraege: [{begriff, aliase?: [], ziel_typ: gp|rezept|wert, ziel_id?, ziel_name,
  * kontext?: {feld: [werte]}}]`. Ein Eintrag mit passendem Kontext schlägt einen ohne Kontext (Olivenöl kalt/heiß).
+ *
+ * `vergleich: tokens` (Regel-Ebene) vergleicht Wortmengen statt ganzer Texte, Reihenfolge egal. Je Eintrag dann:
+ * `erlaubt: []` (Zusatzwörter, die stören dürfen — „Pfeffer schwarz gemahlen"), `enthaelt: true` (beliebige
+ * Zusatzwörter), `praefix: true` (ein Wort des Begriffs trifft auch längere Wörter — „weiss" trifft „weisser").
  */
 final class Zuordnung implements RegelArt
 {
@@ -43,12 +47,13 @@ final class Zuordnung implements RegelArt
         if ($n === '') {
             return null;
         }
+        $tokens = ($regel->params['vergleich'] ?? 'text') === 'tokens';
         $ohneKontext = null;
         foreach ((array) ($regel->params['eintraege'] ?? []) as $e) {
             $namen = [(string) ($e['begriff'] ?? ''), ...array_map('strval', (array) ($e['aliase'] ?? []))];
             $passt = false;
             foreach ($namen as $name) {
-                if ($name !== '' && RegelText::norm($name) === $n) {
+                if ($name !== '' && ($tokens ? $this->tokensPassen($name, $n, $e) : RegelText::norm($name) === $n)) {
                     $passt = true;
                     break;
                 }
@@ -68,6 +73,31 @@ final class Zuordnung implements RegelArt
         }
 
         return $ohneKontext;
+    }
+
+    /** Wortmengen-Vergleich: jedes Begriffs-Wort steckt im Text; Text-Wörter außerhalb nur, wenn erlaubt. */
+    private function tokensPassen(string $begriff, string $normText, array $eintrag): bool
+    {
+        $soll = array_values(array_filter(explode(' ', RegelText::norm($begriff))));
+        $ist = array_values(array_unique(array_filter(explode(' ', $normText))));
+        $praefix = (bool) ($eintrag['praefix'] ?? false);
+        $trifft = static fn (string $s, string $i) => $i === $s || ($praefix && str_starts_with($i, $s));
+        foreach ($soll as $s) {
+            if (! array_filter($ist, static fn ($i) => $trifft($s, $i))) {
+                return false;
+            }
+        }
+        if ((bool) ($eintrag['enthaelt'] ?? false)) {
+            return true;
+        }
+        $erlaubt = array_map(static fn ($w) => RegelText::norm((string) $w), (array) ($eintrag['erlaubt'] ?? []));
+        foreach ($ist as $i) {
+            if (! array_filter($soll, static fn ($s) => $trifft($s, $i)) && ! in_array($i, $erlaubt, true)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     public function pruefe(FoodAlchemistRule $regel, string $text, array $kontext = []): array

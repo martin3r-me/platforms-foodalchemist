@@ -24,26 +24,15 @@ class GpNamingService
     /** §9 / DB-CHECK — kanonisches Zustand-Vokabular (A7: EIN Validator-Set). */
     public const ZUSTAND_VOCAB = ['frisch', 'TK', 'trocken', 'konserviert'];
 
-    /** §7.1 / I2 — Verpackungswörter (Wort-Boundary-Match). */
-    public const VERPACKUNGSWOERTER = [
-        'Kiste', 'Karton', 'Beutel', 'Pkt', 'Btl', 'Geb', 'Tasse', 'Dose', 'Glas',
-        'Stange', 'Atmospack', 'Vac', 'Bund', 'Gebinde',
-    ];
-
-    /**
-     * §10-Bremse: Platzhalter-Marker, die kein Produktname sind.
+    /*
+     * §7.1 Verpackungswörter und §10 Platzhalter-Marker („generisch") sind seit Spec 81 Regeln als Daten
+     * (`gp.7.1.gebinde`, `gp.10.generik`, Einstellungen › Regeln). validateGpName() fragt ALLE aktiven Regeln mit
+     * Ziel `gp.name` ab — neue Regeln greifen ohne Code-Änderung. Anlass §10 (2026-09-03): »Apfel (generisch)«
+     * konkurrierte im Matcher punktgleich mit »Apfel Royal Gala«; Dominique: »generisch darf gar nicht benannt
+     * werden« — darum ein harter Fehler beim Namen, nicht erst ein Befund im Critic.
      *
-     * Anlass 2026-09-03: das GP »Apfel (generisch): frisch« existierte und konkurrierte im
-     * Matcher PUNKTGLEICH mit »Apfel Royal Gala: Ganz« (beide Score 1.001) — Regelwerk §10
-     * verlangt aber ausdrücklich »Generisches > Spezifisches vermeiden«. Dominique dazu:
-     * »generisch darf gar nicht benannt werden, das ist absolut ein Fehler gewesen.«
-     * Deshalb ein harter Fehler beim NAMEN, nicht nur eine Beanstandung im Critic — der
-     * beanstandet erst, wenn der falsche Name schon in Rezepten steckt.
-     *
-     * Bewusst KURZ: nur echte Platzhalter-Marker. »Diverses«, »Sonstige« o. Ä. wären eine
-     * eigene fachliche Entscheidung und stehen hier nicht.
+     * Das Zustands-Vokabular bleibt hier Code: die Datenbank erzwingt es per CHECK, eine Regel könnte es nie ändern.
      */
-    public const GENERIK_MARKER = ['generisch', 'generic'];
 
     public function __construct(private TokenEngine $engine)
     {
@@ -174,18 +163,20 @@ class GpNamingService
         if (trim($name) === '') {
             $errors[] = 'Name ist leer.';
         }
-        foreach (self::VERPACKUNGSWOERTER as $wort) {
-            if (preg_match('/(?<![\p{L}\p{N}])' . preg_quote($wort, '/') . '(?![\p{L}\p{N}])/iu', $name)) {
-                $errors[] = "§7.1: Verpackungswort »{$wort}« gehört nie in den GP-Namen.";
-            }
-        }
-        foreach (self::GENERIK_MARKER as $wort) {
-            if (preg_match('/(?<![\p{L}\p{N}])' . preg_quote($wort, '/') . '(?![\p{L}\p{N}])/iu', $name)) {
-                $errors[] = "§10: »{$wort}« ist kein Produktname — Spezifisches vor Generischem. "
-                    . 'Die konkrete Sorte oder Variante benennen (»Apfel Royal Gala« statt »Apfel (generisch)«).';
-            }
-        }
         $condition = $this->normalisiereZustand($in['condition'] ?? null);
+        // Spec 81: alle aktiven Regeln für den GP-Namen. blockieren/korrigieren = Hard-Error, warnen = Hinweis.
+        $motor = app(\Platform\FoodAlchemist\Services\Regeln\RegelMotor::class);
+        $kontext = ['zustand' => $condition, 'warengruppe' => $in['warengruppe'] ?? null, 'form' => $in['form'] ?? null];
+        foreach (\Platform\FoodAlchemist\Services\Regeln\RegelBuch::fuerZiel('gp.name') as $regel) {
+            foreach ($motor->pruefe($regel, $name, $kontext) as $b) {
+                $text = trim(($b['paragraph'] ?? '') . ': ' . $b['begruendung'], ': ');
+                if ($b['schweregrad'] === 'hart') {
+                    $errors[] = $text;
+                } else {
+                    $warnings[] = $text;
+                }
+            }
+        }
         if ($condition !== null && ! in_array($condition, self::ZUSTAND_VOCAB, true)) {
             $errors[] = "§9: Zustand »{$condition}« ist nicht im Pflicht-Vokabular (" . implode('/', self::ZUSTAND_VOCAB) . ').';
         }

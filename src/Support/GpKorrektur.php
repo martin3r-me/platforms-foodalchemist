@@ -12,7 +12,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistGp;
  * Licht — die Heilung konnte sie bis Paket 5 nicht einmal korrigieren.
  *
  *  · §10 Bio: GP ist Bio, der Lauf verlangt kein Bio → konventionelles Gegenstück gleichen Namens.
- *  · §2 Rohform: frisches GP mit Verarbeitungs-Suffix aus dem §2-Dossier („Wuerfel 5 mm", „gehackt") →
+ *  · §2 Rohform: frisches GP mit Verarbeitungs-Suffix aus den §2-Regeln („Wuerfel 5 mm", „gehackt") →
  *    Gegenstück ohne Suffix, die Verarbeitung wandert in die Zeilen-Notiz. Nur Zustand `frisch`: was trocken,
  *    TK oder konserviert zugekauft wird, ist industriell verarbeitet (F2.1 Convenience) — so bleibt auch
  *    „Pfeffer schwarz: trocken, gemahlen" (§5 F2.3) unangetastet. Kein Tausch bei `voll_convenience`.
@@ -22,8 +22,6 @@ use Platform\FoodAlchemist\Models\FoodAlchemistGp;
  */
 final class GpKorrektur
 {
-    public const PARAGRAPH_SLUG_LIKE = '%2-verarbeitungs-reduktion%';
-
     private const SPALTEN = ['id', 'name', 'main_ingredient_slug', 'condition', 'processing', 'form', 'bio', 'team_id'];
 
     /**
@@ -64,10 +62,22 @@ final class GpKorrektur
         return $gruende === [] ? null : ['gp_id' => (int) $gp->id, 'notiz' => $notiz, 'gruende' => $gruende];
     }
 
-    /** Verarbeitungs-Suffixe aus dem §2-Dossier (leer, wenn das Dossier fehlt). @return list<string> */
+    /**
+     * Verarbeitungs-Suffixe aus den §2-Regeln (Spec 81, Einstellungen › Regeln): Schnittformen + weitere Küchen-
+     * Verarbeitung. Schreibweise wie in der Regel (für Notiz und Meldung); verglichen wird tolerant.
+     *
+     * @return list<string>
+     */
     public static function verarbeitungsSuffixe(): array
     {
-        return RegelwerkLeser::backtickListe(RegelwerkLeser::inhalt(self::PARAGRAPH_SLUG_LIKE), 'Verarbeitungs-Suffixe');
+        $out = [];
+        foreach (['basisrezept.2.schnittform', 'basisrezept.2.verarbeitung_weitere'] as $schluessel) {
+            foreach ((array) (\Platform\FoodAlchemist\Services\Regeln\RegelBuch::per($schluessel)?->params['tokens'] ?? []) as $t) {
+                $out[] = (string) $t;
+            }
+        }
+
+        return array_values(array_unique($out));
     }
 
     /**
@@ -94,8 +104,16 @@ final class GpKorrektur
 
     public static function istBio(FoodAlchemistGp $gp): bool
     {
-        return mb_strtolower((string) $gp->bio) === 'bio'
-            || preg_match('/(^|[\s,])bio([\s,]|$)/u', mb_strtolower(self::attribute($gp))) === 1;
+        if (mb_strtolower((string) $gp->bio) === 'bio') {
+            return true;
+        }
+        foreach (\Platform\FoodAlchemist\Services\Regeln\RegelBuch::liste('basisrezept.10.bio') as $wort) {
+            if (\Platform\FoodAlchemist\Services\Regeln\RegelText::hatWort(self::attribute($gp), $wort)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static function istFrisch(FoodAlchemistGp $gp): bool

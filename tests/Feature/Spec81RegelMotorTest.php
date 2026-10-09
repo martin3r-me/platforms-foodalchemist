@@ -129,7 +129,7 @@ it('Regelbuch: nur aktive globale Regeln, Memo wird beim Speichern geleert', fun
 
     $svc->setzeAktiv($r->id, true);
     expect(RegelBuch::per('gp.2.schnittform')?->id)->toBe($r->id)
-        ->and(RegelBuch::fuerZiel('gp.name'))->toHaveCount(1);
+        ->and(collect(RegelBuch::fuerZiel('gp.name'))->pluck('schluessel')->all())->toContain('gp.2.schnittform');
 });
 
 it('Globale Regeln schreibt nur das Master-Team', function () {

@@ -4,57 +4,35 @@ namespace Platform\FoodAlchemist\Support;
 
 /**
  * Kontrolliertes Typ-Vokabular der Basisrezepte (Regelwerk Basisrezepte §1.2) — der Teil vor dem Doppelpunkt
- * („Püree: Petersilienwurzel"). Quelle ist das Wissens-Dossier `…--1-2-typ-vokabular-kontrolliert` im
- * FA-Wissensmodul (SSOT, Spec 41 A3); hier wird es nur GELESEN und seine Tabelle geparst — keine Liste im
- * Code, damit eine Änderung im Wissensmodul sofort wirkt.
+ * („Püree: Petersilienwurzel"). Seit Spec 81 eine Regel als Daten (`basisrezept.1.2.typ`, Einstellungen ›
+ * Regeln); vorher wurde die Markdown-Tabelle des Dossiers geparst. Hier nur Lese-Helfer.
  *
  * Spec 80: deterministische Grundlage für die Funktionsprüfung im Bestand (Teil B3) und die Vorprüfung beim
- * Anlegen (Teil G1). Fehlt das Dossier (lokale Sandbox ohne Wissen), ist das Vokabular leer und alle
- * Prüfungen, die darauf aufbauen, greifen nicht (fail-open = Verhalten wie vorher).
+ * Anlegen (Teil G1). Fehlt die Regel, ist das Vokabular leer, und das Regelbuch meldet es im Log.
  */
 final class RezeptTypVokabular
 {
-    public const DOSSIER_SLUG_LIKE = '%1-2-typ-vokabular-kontrolliert%';
-
+    public const REGEL = 'basisrezept.1.2.typ';
 
     /** @return array<string, list<string>> Hauptgruppe => erlaubte Typen */
     public static function tabelle(): array
     {
-        return self::parse(RegelwerkLeser::inhalt(self::DOSSIER_SLUG_LIKE));
-    }
-
-    /** Memo leeren (Tests, nach einem Wissens-Import). */
-    public static function vergessen(): void
-    {
-        RegelwerkLeser::vergessen();
-    }
-
-    /**
-     * Markdown-Tabelle `| Hauptgruppe | `Typ`, `Typ` … |` → Hauptgruppe => Typen. Zeilen ohne Typ in
-     * Backticks (Kopf, Trenner, „Sonstiges — kein fester Typ") fallen weg.
-     *
-     * @return array<string, list<string>>
-     */
-    public static function parse(string $md): array
-    {
         $out = [];
-        foreach (preg_split('/\R/u', $md) ?: [] as $zeile) {
-            if (! str_starts_with(trim($zeile), '|')) {
-                continue;
-            }
-            $zellen = array_map('trim', explode('|', trim($zeile, " |\t")));
-            if (count($zellen) < 2) {
-                continue;
-            }
-            preg_match_all('/`([^`]+)`/u', $zellen[1], $m);
-            $typen = array_values(array_unique(array_map('trim', $m[1] ?? [])));
-            $gruppe = trim(preg_replace('/\([^)]*\)|[`*]/u', '', $zellen[0]) ?? '');
-            if ($typen !== [] && $gruppe !== '') {
-                $out[$gruppe] = $typen;
+        foreach ((array) (\Platform\FoodAlchemist\Services\Regeln\RegelBuch::per(self::REGEL)?->params['werte'] ?? []) as $w) {
+            $gruppe = trim((string) ($w['gruppe'] ?? ''));
+            $wert = trim((string) ($w['wert'] ?? ''));
+            if ($gruppe !== '' && $wert !== '') {
+                $out[$gruppe][] = $wert;
             }
         }
 
         return $out;
+    }
+
+    /** Memo leeren (Tests, nach dem Speichern einer Regel). */
+    public static function vergessen(): void
+    {
+        \Platform\FoodAlchemist\Services\Regeln\RegelBuch::vergessen();
     }
 
     /** @return list<string> alle erlaubten Typen, einmal */
