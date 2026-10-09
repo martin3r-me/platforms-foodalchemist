@@ -89,6 +89,43 @@
 
             {{-- Befund sichtbar: gesetzt / verworfen / ignoriert / offen. Ein stiller Vorschlag
                  wäre die schlechtere Hälfte: der Mensch muss sehen, was die KI NICHT wusste. --}}
+            {{-- Spec 80 A3: Suchbegriffe — aus dem Briefing abgeleitet (Leitplanken-Knopf oder automatisch beim
+                 Go), hier korrigierbar. Wissen, Bestand und Pairing suchen damit statt mit dem Rohtext. --}}
+            @php
+                $sbListe = (array) ($eingabe[$scope]['suchbegriffe'] ?? []);
+                $sbGruppen = ['zutaten' => 'Zutaten', 'komponenten' => 'Komponenten', 'techniken' => 'Techniken', 'aromen' => 'Aromen', 'eigene' => 'Eigene'];
+            @endphp
+            <div class="flex flex-col gap-2" data-planung-suchbegriffe="{{ $scope }}">
+                <div class="flex items-baseline gap-2">
+                    <span class="text-[length:var(--fa-text-md)] font-medium text-[var(--fa-ink)]">Suchbegriffe</span>
+                    <span class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">Damit werden Wissen, Bestand und Pairing gesucht.</span>
+                </div>
+                @if($sbListe === [])
+                    <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">Noch keine. „Leitplanken aus Briefing ableiten" schlägt welche vor, sonst entstehen sie beim Start.</p>
+                @else
+                    <div class="flex flex-col gap-1.5">
+                        @foreach($sbGruppen as $gKey => $gLabel)
+                            @php $inGruppe = collect($sbListe)->filter(fn ($b) => ($b['g'] ?? 'eigene') === $gKey); @endphp
+                            @if($inGruppe->isNotEmpty())
+                                <div class="flex flex-wrap items-center gap-1.5">
+                                    <span class="w-24 shrink-0 text-[length:var(--fa-text-sm)] uppercase tracking-wide text-[var(--fa-ink-3)]">{{ $gLabel }}</span>
+                                    @foreach($inGruppe as $i => $b)
+                                        <span wire:key="sb-{{ $scope }}-{{ $i }}-{{ md5($b['t']) }}" class="inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[length:var(--fa-text-sm)] {{ ($b['q'] ?? 'ki') === 'mensch' ? 'border-[var(--fa-accent-line)] bg-[var(--fa-accent-soft)] text-[var(--fa-accent)]' : 'border-[var(--fa-line)] bg-[var(--fa-ground)] text-[var(--fa-ink-2)]' }}" title="{{ ($b['q'] ?? 'ki') === 'mensch' ? 'Von dir ergänzt' : 'Von der KI abgeleitet' }}">
+                                            {{ $b['t'] }}
+                                            <button type="button" wire:click="suchbegriffEntfernen('{{ $scope }}', {{ $i }})" class="leading-none text-[var(--fa-ink-3)] hover:text-[var(--fa-crit)]" aria-label="{{ $b['t'] }} entfernen">×</button>
+                                        </span>
+                                    @endforeach
+                                </div>
+                            @endif
+                        @endforeach
+                    </div>
+                @endif
+                <div class="flex max-w-md items-center gap-2">
+                    <x-fa::input id="planung-suchbegriff-{{ $scope }}" wire:model="eingabe.{{ $scope }}.suchbegriff_neu" wire:keydown.enter.prevent="suchbegriffHinzufuegen('{{ $scope }}')" placeholder="Begriff ergänzen, z. B. Petersilienwurzel" />
+                    <x-fa::button type="button" variant="secondary" size="sm" wire:click="suchbegriffHinzufuegen('{{ $scope }}')">Hinzufügen</x-fa::button>
+                </div>
+            </div>
+
             @if($befund !== null)
                 <div class="flex flex-col gap-2 rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] bg-[var(--fa-ground)] px-3 py-2.5 text-[length:var(--fa-text-md)]" data-planung-leitplanken-befund>
                     <p class="text-[length:var(--fa-text-sm)] font-semibold text-[var(--fa-ink-2)]">Leitplanken aus dem Briefing</p>

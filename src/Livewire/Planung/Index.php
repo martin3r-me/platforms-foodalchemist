@@ -538,7 +538,8 @@ class Index extends Component
     {
         // Per-Tab-State initialisieren — jeder Scope eigene Eingabe + eigener Leitplanken-Satz.
         foreach (self::SCOPES as $s) {
-            $this->eingabe[$s] = ['titel' => '', 'brief' => '', 'creative_mode' => 'voll_kreativ'];
+            $this->eingabe[$s] = ['titel' => '', 'brief' => '', 'creative_mode' => 'voll_kreativ',
+                'suchbegriffe' => [], 'suchbegriff_neu' => ''];
             $this->regler[$s] = self::REGLER_DEFAULT;
         }
         if (request()->boolean('open') && $this->sessionId !== null && $this->aktiveSession() !== null) {
@@ -1406,6 +1407,13 @@ class Index extends Component
             'creative_mode' => (string) $session->creative_mode,
         ];
 
+        // Spec 80: gespeicherte Suchbegriffe je Tab zurückholen (nur Tabs, die welche haben).
+        foreach ((is_array($session->suchbegriffe) ? $session->suchbegriffe : []) as $sc => $liste) {
+            if (isset($this->eingabe[$sc]) && is_array($liste)) {
+                $this->eingabe[$sc]['suchbegriffe'] = array_values(array_filter($liste, static fn ($b) => is_array($b) && isset($b['t'])));
+            }
+        }
+
         // Trendradar-Anbindung (Spec 79): eine aus dem Trendradar eröffnete Session (`source_trend_refs`,
         // Carry-in via `?open=1`) füllt ihren Brief ins Tab-Briefing je Ebene vor (nur leere Felder) —
         // der Nutzer startet mit einem gefüllten Briefing statt Blank Page.
@@ -2023,6 +2031,75 @@ class Index extends Component
      * DIESES Tabs, damit der Mensch die Pills vor dem Go sieht. Persistiert wird am Go
      * (Start-Tab-Regel) — die Entscheidung bleibt menschlich.
      */
+    /**
+     * Spec 80 A3: neue KI-Begriffe + die vom Menschen gesetzten. KI-Chips des Vorlaufs fallen weg,
+     * Mensch-Chips bleiben (auch wenn die KI denselben Begriff liefert — dann zählt er als Mensch).
+     *
+     * @param  list<array{t: string, g: string, q: string}>  $bisher
+     * @param  list<array{t: string, g: string, q: string}>  $neuKi
+     * @return list<array{t: string, g: string, q: string}>
+     */
+    private static function suchbegriffeZusammenfuehren(array $bisher, array $neuKi): array
+    {
+        $mensch = array_values(array_filter($bisher, static fn ($b) => is_array($b) && ($b['q'] ?? '') === 'mensch'));
+        $belegt = array_flip(array_map(static fn ($b) => mb_strtolower((string) $b['t']), $mensch));
+        foreach ($neuKi as $b) {
+            if (is_array($b) && isset($b['t']) && ! isset($belegt[mb_strtolower((string) $b['t'])])) {
+                $mensch[] = ['t' => (string) $b['t'], 'g' => (string) ($b['g'] ?? 'eigene'), 'q' => 'ki'];
+                $belegt[mb_strtolower((string) $b['t'])] = true;
+            }
+        }
+
+        return $mensch;
+    }
+
+    /** Spec 80 A3: Chip entfernen (Index in der Liste des Tabs). */
+    public function suchbegriffEntfernen(string $scope, int $index): void
+    {
+        if (! isset($this->eingabe[$scope]['suchbegriffe'][$index])) {
+            return;
+        }
+        $liste = $this->eingabe[$scope]['suchbegriffe'];
+        unset($liste[$index]);
+        $this->eingabe[$scope]['suchbegriffe'] = array_values($liste);
+    }
+
+    /** Spec 80 A3: eigenen Begriff ergänzen (Gruppe „eigene", Quelle Mensch). Komma trennt mehrere. */
+    public function suchbegriffHinzufuegen(string $scope): void
+    {
+        if (! in_array($scope, self::SCOPES, true)) {
+            return;
+        }
+        $roh = (string) ($this->eingabe[$scope]['suchbegriff_neu'] ?? '');
+        $liste = (array) ($this->eingabe[$scope]['suchbegriffe'] ?? []);
+        $belegt = array_flip(array_map(static fn ($b) => mb_strtolower((string) ($b['t'] ?? '')), $liste));
+        foreach (preg_split('/[,;]/u', $roh) ?: [] as $teil) {
+            $t = trim($teil);
+            if (mb_strlen($t) < 2 || mb_strlen($t) > 60 || isset($belegt[mb_strtolower($t)])) {
+                continue;
+            }
+            $liste[] = ['t' => $t, 'g' => 'eigene', 'q' => 'mensch'];
+            $belegt[mb_strtolower($t)] = true;
+        }
+        $this->eingabe[$scope]['suchbegriffe'] = array_values($liste);
+        $this->eingabe[$scope]['suchbegriff_neu'] = '';
+    }
+
+    /**
+     * Spec 80 A4: die Begriffe als Such-Liste für den Lauf — Gruppen-Priorität (Zutaten zuerst), dann
+     * Eingabe-Reihenfolge. Nur die Wörter; Gruppe/Quelle bleiben an der Sitzung.
+     *
+     * @return list<string>
+     */
+    private function suchbegriffeFuerLauf(string $scope): array
+    {
+        $liste = (array) ($this->eingabe[$scope]['suchbegriffe'] ?? []);
+        $prio = array_flip(FoodAlchemistPlanningSession::SUCHBEGRIFF_GRUPPEN);
+        usort($liste, static fn ($a, $b) => ($prio[$a['g'] ?? 'eigene'] ?? 9) <=> ($prio[$b['g'] ?? 'eigene'] ?? 9));
+
+        return array_values(array_unique(array_filter(array_map(static fn ($b) => trim((string) ($b['t'] ?? '')), $liste))));
+    }
+
     public function leitplankenAusBriefing(string $scope, BriefingLeitplankenService $svc): void
     {
         if (! in_array($scope, self::SCOPES, true) || ! isset($this->regler[$scope])) {
@@ -2081,6 +2158,12 @@ class Index extends Component
                 : (is_array($wert) ? (string) (reset($wert) ?: '') : $wert);
             $gesetzt[] = (string) $feld;
         }
+
+        // Spec 80 A3: KI-Suchbegriffe ersetzen die bisherigen KI-Chips; was der Mensch ergänzt hat, bleibt.
+        $this->eingabe[$scope]['suchbegriffe'] = self::suchbegriffeZusammenfuehren(
+            (array) ($this->eingabe[$scope]['suchbegriffe'] ?? []),
+            (array) ($r['suchbegriffe'] ?? []),
+        );
 
         $this->leitplankenBefund = [
             'scope' => $scope,
@@ -2767,6 +2850,27 @@ class Index extends Component
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::warning('[Planung] setGenerationParams übersprungen (Fan-out-Vererbung aus) — evtl. Migration fehlt', ['error' => $e->getMessage()]);
         }
+        // Spec 80 A4: ohne Suchbegriffe (Leitplanken nie abgeleitet) einmal nachziehen — derselbe Aufruf,
+        // nur die Begriffe werden übernommen, die Regler bleiben unangetastet. Fail-soft: ohne Begriffe
+        // sucht der Generator wie bisher mit dem Briefing.
+        if (in_array($scope, ['rezept', 'gericht'], true) && empty($this->eingabe[$scope]['suchbegriffe'])
+            && trim((string) ($this->eingabe[$scope]['brief'] ?? '')) !== '') {
+            try {
+                $abgeleitet = app(BriefingLeitplankenService::class)
+                    ->ausBriefing($team, (string) $this->eingabe[$scope]['brief'], null, $scope);
+                $this->eingabe[$scope]['suchbegriffe'] = (array) ($abgeleitet['suchbegriffe'] ?? []);
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('[Planung] Suchbegriffe beim Go nicht ableitbar', ['error' => $e->getMessage()]);
+            }
+        }
+        $suchbegriffe = $this->suchbegriffeFuerLauf($scope);
+        try {
+            $alle = is_array($session->suchbegriffe) ? $session->suchbegriffe : [];
+            $alle[$scope] = array_values((array) ($this->eingabe[$scope]['suchbegriffe'] ?? []));
+            $session->update(['suchbegriffe' => $alle]);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('[Planung] Suchbegriffe nicht gespeichert — evtl. Migration fehlt', ['error' => $e->getMessage()]);
+        }
         // L5: Titel als Namens-Anker — getippten Titel getrennt vom Brief in die Lauf-Params geben
         // (NICHT in die persistierten Session-Params, sonst erbte JEDES Fan-out-Kind den Gericht-Titel
         // als Namen). Nur der Depth-1-Job sieht `titel_vorgabe`; der Generator nimmt ihn als Namen.
@@ -2788,6 +2892,11 @@ class Index extends Component
         }
         if ($seed !== [] && $scope !== 'concept') {
             $laufParams['seed_anker'] = array_values($seed);
+        }
+        // Spec 80: Suchbegriffe NUR Depth-1 (wie titel_vorgabe) — Kind-Rezepte bekommen später die
+        // Begriffe ihrer Komponente (Teil B), nicht die der Wurzel.
+        if ($suchbegriffe !== [] && $scope !== 'concept') {
+            $laufParams['suchbegriffe'] = $suchbegriffe;
         }
         if ($seedAusPin) {
             $this->composerSeedPin = [];

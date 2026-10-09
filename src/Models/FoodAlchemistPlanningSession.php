@@ -130,7 +130,11 @@ class FoodAlchemistPlanningSession extends Model
         'uuid' => 'string',
         'generation_params' => 'array',
         'source_trend_refs' => 'array',   // Spec 79: {trend_ids:[…], inspiration_ids:[…]} (Altbestand: fundstueck_ids)
+        'suchbegriffe' => 'array',        // Spec 80: {rezept|gericht|concept: [{t, g, q}]}
     ];
+
+    /** Spec 80: Gruppen der Suchbegriffe (Reihenfolge = Anzeige- und Such-Priorität). */
+    public const SUCHBEGRIFF_GRUPPEN = ['zutaten', 'komponenten', 'techniken', 'aromen', 'eigene'];
 
     /** Skizzen dieser Session (dritter Owner der bestehenden Kreativ-Ebene). */
     public function ideas(): HasMany
