@@ -26,6 +26,11 @@ class LaConformanceAdapter implements ConformanceAdapter
         return false;
     }
 
+    public function heilbar(Team $team, int $id, array $befunde): array
+    {
+        return $befunde;
+    }
+
     /**
      * Keine deterministischen Regeln in v1 — der §-Pass für diesen Artefakt-Typ ist rein
      * KI-getragen. Bewusst leer statt „irgendetwas": ein erfundener Check wäre schlimmer

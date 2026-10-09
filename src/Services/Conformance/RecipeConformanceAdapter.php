@@ -31,6 +31,75 @@ class RecipeConformanceAdapter implements ConformanceAdapter
     }
 
     /**
+     * Was die Selbstheilung NICHT ändern kann, geht nicht in die Direktive:
+     *  · Befunde an einer Verweiszeile (Unterrezept) — C3 lässt die Zeile unangetastet, geheilt wird im Unterrezept.
+     *  · eine offene Basisrezept-Lücke („Püree: Petersilienwurzel" ohne Bestand), wenn der Befund die fehlende
+     *    Verknüpfung meint. Die füllt nur freigegebener Bestand oder ein Mensch; ein Umschreiben kann sie nur
+     *    verletzen (Präfix weg → Rohware). Meint der Befund an derselben Zeile etwas anderes (Typ-Präfix, Menge),
+     *    bleibt er heilbar.
+     *  · Beschreibung/Zubereitung, die von Hand gepflegt sind — revise schreibt sie nie (siehe unten).
+     * Im Zweifel heilbar: ein Feld, das keiner Zeile zuzuordnen ist, bleibt drin.
+     */
+    public function heilbar(Team $team, int $id, array $befunde): array
+    {
+        $r = app(RecipeService::class)->detailAnySicht($team, $id);
+        if ($r === null) {
+            return $befunde;
+        }
+        $heuristik = app(\Platform\FoodAlchemist\Services\Matching\MatchHeuristics::class);
+        $verweise = [];
+        $luecken = [];
+        foreach ($r->ingredients as $z) {
+            foreach (array_filter([$z->display_name, $z->raw_text, $z->referencedRecipe?->name, $z->gp?->name]) as $text) {
+                if ($z->referenced_recipe_id !== null) {
+                    $verweise[self::zeilenSchluessel((string) $text)] = true;
+                } elseif ($z->gp_id === null && $heuristik->istBasisrezeptZeile((string) $text)) {
+                    $luecken[self::zeilenSchluessel((string) $text)] = true;
+                }
+            }
+        }
+
+        return array_values(array_filter($befunde, function (array $b) use ($r, $verweise, $luecken) {
+            $feld = trim((string) ($b['feld'] ?? ''));
+            if (preg_match('/^zutat\s*:\s*(.+)$/iu', $feld, $m) === 1) {
+                $k = self::zeilenSchluessel($m[1]);
+                if (isset($verweise[$k])) {
+                    return false;
+                }
+                if (isset($luecken[$k]) && self::meintVerknuepfung((string) ($b['begruendung'] ?? ''))) {
+                    return false;
+                }
+            }
+            if ($r->description_source === 'manual' && mb_strtolower($feld) === 'description') {
+                return false;
+            }
+            if ($r->preparation_source === 'manual' && preg_match('/^(schritt|preparation|zubereitung)/iu', $feld) === 1) {
+                return false;
+            }
+
+            return true;
+        }));
+    }
+
+    private static function zeilenSchluessel(string $text): string
+    {
+        $t = (string) preg_replace('/\([^)]*\)/u', '', $text);
+
+        return trim((string) preg_replace('/\s+/u', ' ', mb_strtolower($t)));
+    }
+
+    /** Begründung handelt von fehlender Verknüpfung/Bestand — nicht von Name, Typ oder Menge der Zeile. */
+    private static function meintVerknuepfung(string $begruendung): bool
+    {
+        $b = mb_strtolower($begruendung);
+        if (preg_match('/präfix|vokabular|schreibweise|benenn|bezeichn|menge|einheit|gramm|anteil|diät|vegan|vegetar|allergen/u', $b) === 1) {
+            return false;
+        }
+
+        return preg_match('/verknüpf|verlink|verweis|unterrezept|sub-?rezept|basisrezept|bestand|lücke|nicht (gemappt|zugeordnet|geerdet|verbunden)|ungemappt|ohne (gp|grundprodukt|zuordnung)|kein(e|en)? (gp|grundprodukt|zuordnung)/u', $b) === 1;
+    }
+
+    /**
      * KONZENTRATIONS-MARKER: Zutaten-Formen, deren Masse durch Wasserentzug oder Einkochen
      * bereits reduziert ist. Sie sind Würz- und Aromakomponenten, nie die Hauptmasse eines
      * Gerichts — 1 kg Trockentomate entspricht grob 8–14 kg Frischware.
@@ -382,7 +451,7 @@ class RecipeConformanceAdapter implements ConformanceAdapter
          */
         $kanonKey = $r->is_sales_recipe ? 'vk.generator' : 'recipe.generator';
         $anlass = trim($direktive.' '.collect($befunde)
-            ->map(fn ($b) => trim((string) ($b['paragraph'] ?? '').' '.(string) ($b['reason'] ?? '')))
+            ->map(fn ($b) => trim((string) ($b['paragraph'] ?? '').' '.(string) ($b['begruendung'] ?? $b['reason'] ?? '')))
             ->filter()->implode(' '));
         $wissen = app(\Platform\FoodAlchemist\Services\Ai\KnowledgeContextService::class)->contextFor(
             $team, $promptKey, $anlass !== '' ? $anlass : (string) $r->name,

@@ -68,9 +68,25 @@ class ConformanceService
         // Selbstheil-Runde nur, wenn der Adapter sie beherrscht (Rezept/VK). GP/LA haben
         // v1 keinen Freitext-Revise → kein sinnloser zweiter Prüf-Call; Verstöße gehen
         // direkt als Hinweis in die Ablage.
+        // Review 09.10.: nur Befunde, die revise ÄNDERN kann, und nicht dieselben ein zweites Mal am
+        // unveränderten Artefakt. Sonst kostete die Runde ~30k Tokens für nichts (offene Basisrezept-Lücken)
+        // oder verletzte eine Regel beim Versuch.
+        $heilbar = $vorher['befunde'] !== [] && $adapter->unterstuetztHeilung()
+            ? $adapter->heilbar($team, $id, $vorher['befunde']) : [];
+        $uebersprungen = null;
         if ($vorher['befunde'] !== [] && $adapter->unterstuetztHeilung()) {
+            $uebersprungen = $heilbar === [] ? 'nichts_heilbar'
+                : ($this->ohneFortschritt($team, $adapter->artifactType(), $id, $heilbar) ? 'kein_fortschritt' : null);
+            if ($uebersprungen !== null) {
+                \Illuminate\Support\Facades\Log::info('[Konformität] Heilung übersprungen', [
+                    'artifact' => $typ . '#' . $id, 'grund' => $uebersprungen,
+                    'befunde' => count($vorher['befunde']), 'heilbar' => count($heilbar),
+                ]);
+            }
+        }
+        if ($uebersprungen === null && $heilbar !== []) {
             try {
-                $adapter->revise($team, $id, $this->heilDirektive($vorher['befunde']), $vorher['befunde']);
+                $adapter->revise($team, $id, $this->heilDirektive($heilbar), $heilbar);
             } catch (\Throwable $e) {
                 // best-effort: schlägt die Runde fehl, bleibt es beim Erst-Befund (nur Hinweis).
                 // Spec 80 C6: protokollieren — eine still gescheiterte Heilung sah aus wie „nichts zu heilen".
@@ -86,7 +102,36 @@ class ConformanceService
         return $aktuell + [
             'geheilt' => max(0, count($vorher['befunde']) - count($aktuell['befunde'])),
             'ablage' => $ablage,
+            'heilung_uebersprungen' => $uebersprungen,
         ];
+    }
+
+    /**
+     * Kein Fortschritt zu erwarten: jeder heilbare Befund ist schon offen, hat mindestens zwei Prüfungen
+     * überlebt (also eine Heilung), und das Artefakt wurde seitdem nicht geändert. Nur Rezepte (der Typ,
+     * der heilt); im Zweifel false = heilen.
+     *
+     * @param  array<int, array<string, mixed>>  $heilbar
+     */
+    private function ohneFortschritt(Team $team, string $artifactType, int $id, array $heilbar): bool
+    {
+        if ($artifactType !== 'recipe') {
+            return false;
+        }
+        $fps = array_map(fn (array $b) => $this->fingerprint($artifactType, $id, $b), $heilbar);
+        $bekannt = DB::table('foodalchemist_conformance_findings')
+            ->where('team_id', $team->id)->where('artifact_type', $artifactType)->where('artifact_id', $id)
+            ->whereIn('fingerprint', $fps)->where('status', 'offen')->where('seen_count', '>=', 2)->whereNull('deleted_at');
+        if ((clone $bekannt)->count() !== count(array_unique($fps))) {
+            return false;
+        }
+        $zuletztGeprueft = (clone $bekannt)->min('last_seen_at');   // Rohwert (Y-m-d H:i:s), vergleichbar wie updated_at
+        $geaendert = max(
+            (string) DB::table('foodalchemist_recipes')->where('id', $id)->value('updated_at'),
+            (string) DB::table('foodalchemist_recipe_ingredients')->where('recipe_id', $id)->max('updated_at'),
+        );
+
+        return $zuletztGeprueft !== null && $geaendert !== '' && $geaendert <= (string) $zuletztGeprueft;
     }
 
     /**

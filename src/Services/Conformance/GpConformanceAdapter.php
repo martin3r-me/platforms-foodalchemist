@@ -28,6 +28,11 @@ class GpConformanceAdapter implements ConformanceAdapter
         return true;   // LA-First-Re-Derive (Slice 5) — heilt tentative GPs aus dem Quell-LA
     }
 
+    public function heilbar(Team $team, int $id, array $befunde): array
+    {
+        return $befunde;
+    }
+
     /**
      * Spec 81: alle aktiven Regeln mit Ziel `gp.name` (Gebinde, Platzhalter, §8-Pflichtangaben, §12 …) prüft der
      * Code bei jeder Prüfung selbst — dieselben Regeln wie beim Anlegen (GpNamingService::validateGpName).
