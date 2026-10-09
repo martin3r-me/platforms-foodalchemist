@@ -333,15 +333,104 @@ denselben GP wie der mit ae. Geändert wird nur die Anzeige-Schreibweise.
 
 ## Teil I · Weitere Dossiers
 
-Außer den drei Regelwerken gibt es Dossiers mit Listen und Tabellen, die Regeln oder Nachschlage-Daten sind
-(z. B. Zutaten-Defaults im Regelwerk-Ordner, Anti-Marker, Mengen-Defaults, Garpunkt-Tabellen). Die
-Bestandsaufnahme dazu läuft (09.10.); ihr Ergebnis wird hier eingetragen. Unterschieden wird:
+Bestandsaufnahme 09.10. über den Export vom 05.10. (rund 14.000 Dossiers). Ganz gelesen wurden die
+Nebendossiers im Regelwerk-Ordner, außerdem `workflow`, `betrieb_warenwirtschaft`, `produktion_kapazitat`,
+`niveau`, `segment`, `format` und `ernaehrung`. `cross_cutting` wurde komplett per Muster ausgewertet, rund 70
+davon ganz gelesen. Aus `domain`, `kueche` und `zutat` kamen Stichproben, dazu Zählungen. Die Bücher-Ordner
+(`referenz_rezepte`, `signatur_kuechen`, `weltkueche`) sind Text.
 
-- **Regel** (eine der sechs Arten, der Code setzt sie durch) → Tabelle, Dossier bereinigen wie Teil E.
-- **Nachschlage-Daten** (der Code schlägt nach, setzt aber nichts durch, z. B. Kerntemperaturen) → eigene
-  Datentabelle, nur wenn eine Funktion sie wirklich nutzt. Ohne Nutzer bleibt es Text; eine Tabelle ohne
-  Leser wäre ein Etikett ohne Landebahn.
-- **Text** → bleibt im Dossier.
+Unterschieden wird:
+- **Regel:** eine der sechs Arten, der Code setzt sie durch. Sie kommt in die Tabelle, das Dossier wird
+  bereinigt wie in Teil E.
+- **Nachschlage-Daten** (`art = datenwerk`): Der Code schlägt nach, setzt aber nichts durch. Dafür gibt es
+  eine eigene Datentabelle, aber **nur**, wenn eine Funktion sie liest. Ohne Leser bleibt es Text.
+- **Text:** bleibt im Dossier.
+
+Das Etikett `art = datenwerk` gibt es schon bei 39 Dossiers, ist aber teils falsch vergeben. Reine Tabellen
+stehen als `fachwissen` (`anti_marker`, Verlust-Tabellen, Kerntemperaturen, Behälter, Zeitkennwerte). Umgekehrt
+tragen Dossiers ohne Tabelle das Etikett `datenwerk` (`saisonkalender--hauptsaison-*`). Das wird beim
+Bereinigen gleich mitkorrigiert.
+
+### I1 · Kandidaten nach Nutzen
+
+| # | Was | Quellen heute | Art | Wirkt auf |
+|---|---|---|---|---|
+| 1 | **Eine Alias- und Verwechslungs-Tabelle** | GP §14, `synonyme--*` (11), `anti_marker--*` (6), 47 domain-Verwechslungs-Dossiers, DLG-Namen; dazu die Tabellen `terminology_aliases` und `terminology_anti_markers` | ersetzung + verbot | Matching, Rezeptzeile → GP |
+| 2 | **Default-GP-Zuordnung als eine Regel** | BR §5, `zutaten_default_logik--3/--5`, `salz--wuerzsalz-default`, Dijon-Senf aus `rezept_archetypen` (fehlt in BR §5) | zuordnung | Matcher, Generator |
+| 3 | **HACCP-Schwellen zentral** | `hygiene_haccp--hausstandards`, Sicherheits-Abschnitte in kueche (rund 700 Dateien mit wiederholtem Standardsatz), `warenwirtschaft_lager` | schwelle | Produktion, Etikett, Lager |
+| 4 | **Naming der Verkaufsgerichte** | `regelwerk_verkaufsgerichte--1/--2`: 11 HG-Kürzel, Verbotsliste (Marker-Codes, Grammangaben, Diät-Tags, „mit/auf/an“), 3–5 Bausteine, Trenner | vokabular + verbot + schwelle | VK-Name anlegen und prüfen |
+| 5 | **Matcher-Parameter** | `matching_logik--*`: Stemming-Lookup, Score-Schwellen, Halbfabrikat-Marker; `agentic_decision_matrix--1`: zweite Markerliste | ersetzung + schwelle + vokabular | Matching (die Logik bleibt Code) |
+| 6 | **Ausschlusslisten der Kostformen** | `ernaehrung.kostformen--*`: vegan, vegetarisch, halal, koscher, glutenfrei, purinarm, FODMAP | verbot | Auslobung, `dish_class` |
+| 7 | Verlust und Ausbeute | BR §6.5, `rezeptur_berechnungen--*`, `bruehen_fonds--mengen-reduktion` | datenwerk | Yield, Kalkulation |
+| 8 | Mengen pro Person, Stückgewichte | `mengen_defaults--*`, 24 domain-Mengen-Dossiers, BR §6.3, `eier--mengen-defaults` | datenwerk | Darreichung, Mengen |
+| 9 | Behälter (Dichte, Füllgrad, GN-Volumen) und Zeitkennwerte | `behalter-fullmengen--*`, `produktions-zeitkennwerte--*` | datenwerk | Behälter-Bemessung, Personalzeit |
+| 10 | Keine absoluten Mengen im Schritt-Text | VK §3.8 | verbot | Zubereitungstext (die Bestandsprüfung wird damit automatisch) |
+
+Ebenfalls Kandidaten, mit niedrigerem Nutzen:
+- Concept-Gerüst: Container nie atomar, Carving-Pflicht ab 50 Pax, Gang-Zahlen
+- Beschreibungssprache: verbotene Floskeln, höchstens 4 Zutaten
+- Vokabulare für Anlass, Serviceform und Sektor
+- IDDSI-Konsistenzstufen
+- DGE-Häufigkeiten im Speiseplan
+- LMIV-Fußnoten-Schema
+
+**Nur Verweis statt Regel**, weil der Code es schon erzwingt: Concept-`slot_type` sowie die Geltungs-Achsen des
+Wissensmoduls (werden beim Schreiben geprüft).
+
+**Bleibt Text, obwohl `art = regel`:**
+- `bildstil.*`
+- `signatur_kuechen_template--*`
+- die `--ki-regeln`-Dossiers (Garmethoden, Pickle/Ferment, Prozessstufen)
+- `agentic_decision_matrix--2/--4`
+- `regelwerk-foodbook-grundgerust`
+
+**Zutaten-Dossiers** (rund 12.000): Daraus werden nur die festen Platz- und Aspekt-Namen eine Vokabular-Regel.
+Ausbeute- und Dosier-Richtwerte sind KI-Entwurf (`evidenz: ki_entwurf`). Sie dürfen höchstens als
+ungeprüfter Vorschlag nachgeschlagen werden, **nie automatisch** in eine Kalkulation.
+
+### I2 · Widersprüche, die vor der Übernahme entschieden werden
+
+Ein Teil lässt sich **nach derselben Logik wie Teil A** entscheiden (Begriffe, Zuständigkeit):
+
+| # | Widerspruch | Entscheidung |
+|---|---|---|
+| I2.1 | Synonyme stehen doppelt in GP §14 und `synonyme--gemuese`. Verwechslungen wie Kümmel/Kreuzkümmel und Piment/Pimentón stehen dreifach (domain, `anti_marker`, `synonyme`) | **Eine** Tabelle, Kandidat 1; alle Dossiers verweisen |
+| I2.2 | Olivenöl: `zutaten_default_logik--5` sagt pauschal „nativ extra“, BR §5 unterscheidet kalt/heiß | **BR §5 gilt** (Teil A4, neuerer und genauerer Stand) |
+| I2.3 | Zwei Zubereitungs-Markerlisten im Matcher (Halbfabrikat-Marker und `is_sub_rezept_kandidat`) | Zusammenführen zu **einer** Vokabular-Regel |
+| I2.4 | Drei Match-Skalen ohne Geltungsbereich: `matching_logik` (0,85/0,70/0,50), LA §5 (≥ 95, Abstand ≥ 15), LA §3 (0,80/0,95) | Keine Vereinheitlichung. Jede Schwelle bekommt ein `ziel` (Rezeptzeile → GP gegenüber LA → GP), sonst greift eine Zahl an der falschen Stelle |
+| I2.5 | Wissensbudget: Das Dossier `workflow.wissensmodul_einstellungen` nennt 48.000/49.000, `_system/budgets` steht auf 100.000 | Die Einstellung ist die Wahrheit, das Dossier verweist nur |
+| I2.6 | `knowledge.POST`: ein Dossier sagt „legt aktiv an“, ein anderes „inaktiver Entwurf“ | Gegen den Code prüfen und das falsche Dossier korrigieren |
+
+Der andere Teil sind **fachliche Zahlen**. Hier wird nichts nach Gefühl entschieden. Je Wert wird die Quelle
+geprüft (LMHV/DIN 10508 für Temperaturen, DGE-Qualitätsstandard, Herstellerangaben), und Dominique gibt frei:
+
+- Sahne-Default 30 % oder 35 % (BR §5 gegen `anti_marker--backzutaten`)
+- Würzsalz jodiert oder unjodiert (`salz_brining_curing--salz-sorten` gegen BR §5)
+- Ei 55/15 g gegen 58/20 g (`eier--mengen-defaults` gegen BR §6.3)
+- Brunoise 1 mm gegen 2 mm
+- Gemüse-Garverlust 10–25 % gegen 8–15 % bzw. 20–30 %
+- Gelatine 4–6 Blatt/l gegen etwa 10 Blatt/l
+- Kühlschwelle < 4 / ≤ 5 / ≤ 7 °C in kueche
+- „> 75 °C“ als CCP gegen die Sous-vide-Ausnahmen
+- Sashimi −20 °C 24 h gegen 24–72 h
+- Demi-Glace 80 % gegen 90 % Reduktion
+- Salz je EL 18 g gegen 4–5 g
+- Wein beim Bankett 400 ml gegen 250–375 ml
+- GN 1/1-65: 8,8 l gegen 9,0 l
+- DGE Fleisch „etwa 8 in 20 Verpflegungstagen“ gegen „höchstens 1 pro Woche“
+
+**Fachlich fraglich**, aus der Stichprobe: Garnelenpaste steht unter Fisch statt Krebstiere (Allergen!),
+„Zucca“ ist als Zucchini geführt, „knackig“ steht auf der Verbotsliste und zugleich im Textur-Wortschatz
+desselben Dossiers.
+
+### I3 · Umfang
+
+Aus Dossiers fallen grob heraus:
+- **Ohne `zutat`:** rund 185.000 Zeichen Regeln und 330.000 Zeichen Nachschlage-Daten.
+- **Mit den Richtwerten aus `zutat`:** rund 1 Mio. Zeichen, bei rund 35 Mio. Zeichen Gesamtbestand.
+
+Der Hebel liegt also **nicht in der Masse**, sondern darin, dass heute mehrfach gepflegte Werte (Kandidaten 1–3,
+7, 8) zu **einer** Quelle werden. Damit verschwindet auch die Zahlenstreuung aus I2.
 
 ---
 
@@ -359,7 +448,8 @@ Bestandsaufnahme dazu läuft (09.10.); ihr Ergebnis wird hier eingetragen. Unter
 | 7 | Breite | GP-/LA-`deterministischeBefunde`, `GpNamingService`, `DataQualityService`, BR §1.5a/§1.6/§1.10/§14, GP §7/§8/§12 | 3 |
 | 8 | Bestand anwenden | Aktion „Auf Bestand anwenden" mit Bericht | 4, 7 |
 | 9 | Umlaute | Teil H: Regel für neue Namen (mit Paket 3), Bestandsumbau mit Prüfliste und Neu-Einbettung | 3, 8 |
-| 10 | Weitere Dossiers | Kandidaten außerhalb der drei Regelwerke (Teil I) als Regeln bzw. Nachschlage-Daten | 3, 5 |
+| 10 | Weitere Dossiers, Regeln | Teil I1 Kandidaten 1–6 und 10 (Alias/Verwechslung, Default-GP, HACCP, VK-Naming, Matcher-Parameter, Kostformen, Schritt-Text); vorher I2 | 3, 5 |
+| 11 | Nachschlage-Daten | Teil I1 Kandidaten 7–9, je nur mit einer lesenden Funktion; `art`-Etiketten korrigieren | 10 |
 
 Ein PR je Paket, gestapelt wie Spec 80.
 
