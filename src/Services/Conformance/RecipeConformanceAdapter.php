@@ -58,6 +58,78 @@ class RecipeConformanceAdapter implements ConformanceAdapter
 
     public function deterministischeBefunde(Team $team, int $id): array
     {
+        return [...$this->konzentratBefunde($team, $id), ...$this->regelwerkBefunde($team, $id)];
+    }
+
+    /**
+     * Spec 80 G1 — was das Regelwerk eindeutig entscheidet, prüft der Code bei JEDER Prüfung (kostet nichts,
+     * hält auch alte Befunde aktuell): §1.2 Typ-Präfix außerhalb des Vokabulars, §2 frisches GP in
+     * Schnittform, §10 Bio-GP ohne Bio-Anspruch im Rezept, §8.3 Beschreibung unter drei Sätzen. Vokabular
+     * und Suffixe kommen aus den Wissens-Dossiers; fehlen sie, schweigt die jeweilige Regel.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function regelwerkBefunde(Team $team, int $id): array
+    {
+        $r = app(RecipeService::class)->detailAnySicht($team, $id);
+        if ($r === null || $r->is_sales_recipe) {
+            return [];
+        }
+        $befunde = [];
+
+        $praefix = \Platform\FoodAlchemist\Support\RezeptTypVokabular::praefix((string) $r->name);
+        if ($praefix !== null && \Platform\FoodAlchemist\Support\RezeptTypVokabular::istGeladen()
+            && \Platform\FoodAlchemist\Support\RezeptTypVokabular::finde($praefix) === null) {
+            $befunde[] = [
+                'paragraph' => '§1.2', 'schweregrad' => 'hart', 'feld' => 'name',
+                'begruendung' => "Typ-Präfix »{$praefix}« steht nicht im kontrollierten Typ-Vokabular (§1.2).",
+                'vorschlag' => 'Einen Typ aus dem Vokabular der passenden Hauptgruppe wählen (z. B. Püree, Fond, Beilage).',
+                'konfidenz' => 1.0,
+            ];
+        }
+
+        $bioImRezept = preg_match('/\bbio\b/iu', (string) $r->name . ' ' . (string) $r->description) === 1;
+        foreach ($r->ingredients as $z) {
+            $gp = $z->gp;
+            if ($gp === null) {
+                continue;
+            }
+            if (mb_strtolower((string) $gp->condition) === 'frisch'
+                && ($suffix = \Platform\FoodAlchemist\Support\GpKorrektur::verarbeitungIn($gp)) !== null) {
+                $befunde[] = [
+                    'paragraph' => '§2', 'schweregrad' => 'hart', 'feld' => 'zutat:' . $gp->name,
+                    'begruendung' => "Frische Zutat in Schnittform »{$suffix}« — Verarbeitung in der Küche gehört nicht ins Grundprodukt (§2).",
+                    'vorschlag' => 'Auf die rohe Grundform umstellen, »' . $suffix . '« in die Zeilen-Notiz.',
+                    'konfidenz' => 1.0,
+                ];
+            }
+            if (! $bioImRezept && \Platform\FoodAlchemist\Support\GpKorrektur::istBio($gp)) {
+                $befunde[] = [
+                    'paragraph' => '§10', 'schweregrad' => 'hart', 'feld' => 'zutat:' . $gp->name,
+                    'begruendung' => 'Bio-Grundprodukt ohne Bio-Anspruch im Rezept — Standard vor Bio (§10).',
+                    'vorschlag' => 'Konventionelle Variante desselben Grundprodukts wählen.',
+                    'konfidenz' => 1.0,
+                ];
+            }
+        }
+
+        $beschreibung = trim((string) $r->description);
+        $saetze = $beschreibung === '' ? 0 : count(array_filter(preg_split('/(?<=[.!?])\s+/u', $beschreibung) ?: [], fn ($t) => trim($t) !== ''));
+        if ($beschreibung !== '' && $saetze < 3) {
+            $befunde[] = [
+                'paragraph' => '§8.3', 'schweregrad' => 'weich', 'feld' => 'description',
+                'begruendung' => "Beschreibung hat {$saetze} Satz/Sätze, verlangt sind 3–5 (§8.3).",
+                'vorschlag' => 'Beschreibung auf 3–5 sachliche Sätze ergänzen.',
+                'konfidenz' => 1.0,
+            ];
+        }
+
+        return $befunde;
+    }
+
+    /** @return list<array<string, mixed>> */
+    private function konzentratBefunde(Team $team, int $id): array
+    {
         $r = app(RecipeService::class)->detailAnySicht($team, $id);
         if ($r === null) {
             return [];
@@ -176,6 +248,10 @@ class RecipeConformanceAdapter implements ConformanceAdapter
         } else {
             $kontext['ansatz_kg'] = $r->yield_kg_manual ?? $r->yield_kg;
             $kontext['ansatz_stueck'] = $r->yield_pieces;
+            // Spec 80 G2: diese Punkte prüft der Code bei jeder Prüfung selbst (regelwerkBefunde) —
+            // die KI soll sie nicht noch einmal melden (spart Ausgabe, keine Dubletten mit anderem §-Label).
+            $kontext['vom_code_geprueft'] = '§1.2 Typ-Präfix im Vokabular · §2 Schnittform frischer Zutaten · '
+                . '§10 Bio ohne Bio-Anspruch · §8.3 Satzzahl der Beschreibung — diese Punkte NICHT melden.';
         }
 
         // Basisrezept → Basisrezepte-Regelwerk (§-Dossiers). VK → zusätzlich das

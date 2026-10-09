@@ -2,8 +2,6 @@
 
 namespace Platform\FoodAlchemist\Support;
 
-use Illuminate\Support\Facades\DB;
-
 /**
  * Kontrolliertes Typ-Vokabular der Basisrezepte (Regelwerk Basisrezepte §1.2) — der Teil vor dem Doppelpunkt
  * („Püree: Petersilienwurzel"). Quelle ist das Wissens-Dossier `…--1-2-typ-vokabular-kontrolliert` im
@@ -18,36 +16,17 @@ final class RezeptTypVokabular
 {
     public const DOSSIER_SLUG_LIKE = '%1-2-typ-vokabular-kontrolliert%';
 
-    /** Container-Schlüssel des Memos — je Request/Job (bzw. je Test) frisch, nie prozessweit veraltet. */
-    private const MEMO = 'foodalchemist.rezept_typ_vokabular';
 
     /** @return array<string, list<string>> Hauptgruppe => erlaubte Typen */
     public static function tabelle(): array
     {
-        // Langlebige Queue-Worker teilen den Container über viele Jobs — nach 10 Minuten neu lesen,
-        // damit eine Änderung im Wissensmodul ohne Worker-Neustart ankommt.
-        if (app()->bound(self::MEMO) && (app(self::MEMO)['bis'] ?? 0) > time()) {
-            return app(self::MEMO)['tabelle'];
-        }
-        try {
-            $md = DB::table('foodalchemist_knowledge_documents')
-                ->where('slug', 'like', self::DOSSIER_SLUG_LIKE)
-                ->where('active', 1)->whereNull('deleted_at')
-                ->orderByDesc('version')->value('content_md');
-        } catch (\Throwable) {
-            $md = null;
-        }
-
-        $tabelle = self::parse((string) ($md ?? ''));
-        app()->instance(self::MEMO, ['tabelle' => $tabelle, 'bis' => time() + 600]);
-
-        return $tabelle;
+        return self::parse(RegelwerkLeser::inhalt(self::DOSSIER_SLUG_LIKE));
     }
 
     /** Memo leeren (Tests, nach einem Wissens-Import). */
     public static function vergessen(): void
     {
-        app()->forgetInstance(self::MEMO);
+        RegelwerkLeser::vergessen();
     }
 
     /**

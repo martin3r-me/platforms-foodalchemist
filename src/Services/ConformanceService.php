@@ -167,7 +167,16 @@ class ConformanceService
         // werden also bei jedem Lauf neu gemeldet und ueberleben damit den Sweep in speichere().
         // Fail-soft: ein Fehler in einer Regel darf den KI-Pass nicht kippen.
         try {
-            $befunde = [...$befunde, ...$this->normalisiere($adapter->deterministischeBefunde($team, $id))];
+            $code = $this->normalisiere($adapter->deterministischeBefunde($team, $id));
+            // Spec 80 G2: meldet die KI denselben Punkt (gleicher §-Stamm + gleiches Feld) noch einmal,
+            // zählt der Code-Befund — sonst entstehen Dubletten mit abweichendem Label („§11 F11.1" / „§11a").
+            $belegt = [];
+            foreach ($code as $b) {
+                $belegt[self::paragraphStamm($b['paragraph']) . '|' . mb_strtolower($b['feld'])] = true;
+            }
+            $befunde = array_values(array_filter($befunde,
+                fn ($b) => ! isset($belegt[self::paragraphStamm($b['paragraph']) . '|' . mb_strtolower($b['feld'])])));
+            $befunde = [...$befunde, ...$code];
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::warning('[Konformitaet] deterministische Regeln fehlgeschlagen', [
                 'typ' => $adapter->artifactType(), 'id' => $id, 'error' => $e->getMessage(),
@@ -246,6 +255,17 @@ class ConformanceService
      * @param  array<int, mixed>  $roh
      * @return array<int, array<string, mixed>>
      */
+    /** „§11 F11.1" / „§11a/F11.1" / „Regelwerk … §11.1" → „11"; „§1.2" → „1.2". Leer, wenn kein § erkennbar. */
+    public static function paragraphStamm(string $paragraph): string
+    {
+        if (preg_match('/§\s*(\d+)(?:\.(\d+))?/u', $paragraph, $m) !== 1) {
+            return '';
+        }
+        // §1.x ist ein Abschnitt mit eigenständigen Unterregeln (Typ, Bezeichnung, Klammer) — dort zählt
+        // die Unternummer; sonst der Paragraph selbst.
+        return $m[1] === '1' && isset($m[2]) ? '1.' . $m[2] : $m[1];
+    }
+
     private function normalisiere(array $roh): array
     {
         $out = [];
