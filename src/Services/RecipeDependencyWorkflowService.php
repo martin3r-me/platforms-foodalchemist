@@ -673,7 +673,11 @@ class RecipeDependencyWorkflowService
 
                 continue;
             }
-            $dedupe = hash('sha256', mb_strtolower($text) . '|' . json_encode([
+            // Wortmenge statt Wortlaut: „Reduktion: Ginger Beer-Ingwer“ und „… Ginger Beer Ingwer“ sind dasselbe
+            // Unterrezept (demo Lauf 87: zwei gleiche Enkel gebaut).
+            $tokens = app(\Platform\FoodAlchemist\Services\Matching\TokenEngine::class)->tokenize($text);
+            sort($tokens);
+            $dedupe = hash('sha256', implode(' ', $tokens) . '|' . json_encode([
                 $parameter['convenience'] ?? null, $parameter['frische'] ?? null,
                 // Bio + Niveau: kanonisch heißen die Keys `bio`/`level` — der alte `niveau`-Read war immer
                 // null (Dead-Read), sodass zwei Läufe, die sich NUR im Niveau unterschieden, denselben
