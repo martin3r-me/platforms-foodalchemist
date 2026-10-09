@@ -1036,10 +1036,17 @@ class RecipeService
                 if ($gpId === null && $subId === null && ($z['auto_ground'] ?? true)) {
                     $groundName = trim((string) ($z['display_name'] ?? '')) ?: trim((string) ($z['raw_text'] ?? ''));
                     if ($groundName !== '') {
+                        // Live-Test demo 09.10. (Lauf 83): eine Basisrezept-Zeile („Püree: Petersilienwurzel",
+                        // „Matte: Petersilie" — Typ aus dem Vokabular oder Zubereitungs-Präfix) blieb beim Bau zu Recht
+                        // offen; die Heilung legte sie hier auf rohe Grundprodukte (7 kg Wurzel statt Püree). Wie der
+                        // Generator (strongSub): so eine Zeile wird nur ein Unterrezept oder bleibt eine Lücke.
+                        $praefix = \Platform\FoodAlchemist\Support\RezeptTypVokabular::praefix($groundName);
+                        $nurSub = ($praefix !== null && \Platform\FoodAlchemist\Support\RezeptTypVokabular::finde($praefix) !== null)
+                            || app(\Platform\FoodAlchemist\Services\Matching\MatchHeuristics::class)->hatSubZubereitungsPraefix($groundName);
                         $treffer = app(IngredientMatchService::class)->matchIngredient(
                             $team, $groundName, $z['hauptzutat_slug'] ?? ($z['slug'] ?? null),
                         );
-                        if ($treffer['target'] === 'gp') {
+                        if ($treffer['target'] === 'gp' && ! $nurSub) {
                             $gpId = (int) $treffer['gp_id'];
                             $groundedMethod = 'gp_v2_fk';
                             $groundedConfidence = round((float) $treffer['score'], 3);
@@ -1057,7 +1064,7 @@ class RecipeService
                         // (geteilte Doktrin, schließt die Revise-Lücke: E3 matchte nur, mintete
                         // nicht). Mint ist tentative + LA-verknüpft; keine LA → bleibt unmatched
                         // (Hard-Stop / Sourcing-Wunsch beim Aufrufer). Provenienz wie im Generator.
-                        if ($gpId === null && $subId === null) {
+                        if ($gpId === null && $subId === null && ! $nurSub) {
                             $mint = app(LaFirstGpService::class)->mintFromLa(
                                 $team, $groundName, $z['hauptzutat_slug'] ?? ($z['slug'] ?? null),
                             );
