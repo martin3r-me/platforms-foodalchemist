@@ -203,6 +203,36 @@ it('Fan-out erbt die Regler: materialisiereConceptGericht reicht generation_para
         ->and((int) ($erhaltene['cascade_step_id'] ?? 0))->toBe((int) $step->id);   // Steuer-Key bleibt
 });
 
+it('Gericht-Bau trägt die Suchbegriffe des Laufs (Session-Chips), eigene Suchbegriffe gewinnen', function () {
+    // demo Lauf 86, Step 556: 18 Suchbegriffe am Start gesetzt, der Gericht-Bau bekam keine (Snapshot `suchbegriffe = []`).
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Herbst', 'brief' => 'x']);
+    $idea = FoodAlchemistDishIdea::create([
+        'team_id' => $this->rootTeam->id, 'title' => 'Rinderfilet', 'generation_status' => 'queued', 'status' => 'offen',
+        'source_meta' => ['target_concept_slot_id' => 0],
+    ]);
+    $recipe = $this->makeRecipe($this->rootTeam, 'Rinderfilet', ['status' => 'draft']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'running',
+        'params' => ['suchbegriffe' => ['Rinderfilet', 'Kürbis', 'Jus'], 'proposal_first' => true]]);
+    $step = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'running']);
+    $this->mock(RecipeDependencyWorkflowService::class, function ($m) {
+        $m->shouldReceive('prepare')->andReturn([]);
+        $m->shouldReceive('afterGenerated')->andReturnNull();
+    });
+    $erhaltene = [];
+    $this->mock(RecipeGeneratorService::class, function ($m) use (&$erhaltene, $recipe) {
+        $m->shouldReceive('generiere')->andReturnUsing(function (...$args) use (&$erhaltene, $recipe) {
+            $erhaltene = $args[2] ?? [];
+
+            return ['recipe' => $recipe, 'offene' => []];
+        });
+    });
+
+    app(PlanningCascadeService::class)->materialisiereConceptGericht($this->rootTeam, (int) $idea->id, (int) $step->id, (int) $session->id);
+
+    expect($erhaltene['suchbegriffe'] ?? null)->toBe(['Rinderfilet', 'Kürbis', 'Jus'])
+        ->and($erhaltene)->not->toHaveKey('proposal_first');   // nur die Suchbegriffe, keine Steuer-Keys des Laufs
+});
+
 it('Freie 1-Klick-Erstellung: schnellErstellen legt eine cockpit_frei-Session an (de-trend) + öffnet den Editor', function () {
     Livewire::test(PlanungIndex::class)
         ->call('schnellErstellen', 'gericht')
