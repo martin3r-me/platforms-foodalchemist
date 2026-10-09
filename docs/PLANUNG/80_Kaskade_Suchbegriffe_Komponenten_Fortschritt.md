@@ -408,6 +408,12 @@ Voll-Kaskaden-Pfade, MCP-Start) reichern weiterhin **vor** der Prüfung an.
    erneut angereichert.
 5. **Kosten sichtbar:** Kopf zeigt nach dem Lauf die verbrauchten Tokens je Stufe (aus `ai_call_log`).
 
+**H3a · Umgesetzt (Paket 10):** gestufte Läufe — Freigabe setzt das Rezept auf `review` + Marker
+`freigabe_nach_anreicherung`, `EnrichRecipeJob` hebt nach Erfolg auf `approved`; Sammelknopf
+`gibNeueFrei` (überspringt offene harte Befunde) ersetzt „Alle freigeben" im Ergebnis-Kopf.
+**Bewusste Grenze:** nicht gestufte Läufe (Automatik ohne Freigabe-Tor) bleiben beim Alt-Verhalten — sie hätten
+sonst kein Ereignis, das die Anreicherung auslöst. Kostenanzeige (H3.5) kommt mit Paket 6 in den Fortschritt-Kopf.
+
 **H4 · Zustände** (ergänzt D6): `wird_angereichert` = animierter Punkt + Phase; `freigegeben` = grün erst nach
 erfolgreicher Anreicherung.
 
