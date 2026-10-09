@@ -275,6 +275,13 @@ fokussierbar, Enter öffnet.
 `fortschrittCluster(?knoten)`, `fortschrittRezept(stepId)`. Alte `ergebnis`/`step-zeile` bleiben bis zur Abnahme
 hinter einem Schalter, danach entfernen.
 
+**D9a · Umgesetzt (Paket 6):** Trait `Livewire\Concerns\FortschrittAnsicht` (Baum aus `slot_id`/`chapter_id`/
+Concept-Vorfahren, Cluster = Gericht bzw. Wurzel-Basisrezept mit Nachfahren, Filter, Rezeptansicht aus Rezept +
+Lauf-Snapshot), Partials `fortschritt`, `fortschritt/knoten`, `fortschritt/rezept`. Rechts steht die bewährte
+Ergebniskarte (alle Aktionen) plus Rezeptansicht. **Noch umschaltbar** („Neue Ansicht"), weil ~150 Markup-Prüfungen
+die Liste mit allen Karten erwarten — nach Abnahme am echten Lauf Standard umstellen und Tests nachziehen.
+Offen: Format-Ebene im Foodbook-Baum (heute Kapitel → Slot → Konzept), Kostenanzeige je Stufe (H3.5).
+
 **D10 · Tests.** Render-Test je Lauf-Art (Baum-Ebenen korrekt), Filter + Baum kombiniert, Fehler-Meldung nur im
 betroffenen Zweig, Rezeptansicht zeigt Verweiszeilen als Links und „Woher das kommt", Freigabe je Cluster gibt
 Gericht + Basisrezepte frei. Browserprüfung im Host (food-alchemist.de) und demo-Layout, schmal und breit.
