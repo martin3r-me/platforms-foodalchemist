@@ -180,6 +180,55 @@ class LaCandidateFinder
     }
 
     /**
+     * Darf ein AUTOMATISCHER Mint diesen LA für den Text nehmen? Nur, wenn ein Produktwort von Text (oder einem
+     * kuratierten Alias) und LA dasselbe Grundwort trägt — das eine endet auf das andere („Filet" ⊂ „Rinderfilet",
+     * „Zwiebeln" = „Zwiebel"). Lauf 87 (demo, 3798): „Rinderbeinscheiben: frisch" → LA/GP „Rinderknochen" — nur der
+     * Wortanfang „Rind" und die Embedding-Nähe stimmten; Fleisch ist kein Knochen. Die Kandidatenliste für Menschen
+     * ({@see self::find}) bleibt unverändert. Ohne Produktwort im Text (nur Zustandswörter) bleibt alles wie bisher.
+     */
+    public function grundwortPasst(string $text, string $designation): bool
+    {
+        $produkt = trim((string) (preg_split('/[:,(]/u', $text, 2)[0] ?? $text));
+        $varianten = [$this->produktWoerter($produkt !== '' ? $produkt : $text)];
+        foreach ($this->terminology->aliasPhrasesFor($text) as $alias) {
+            $varianten[] = $this->produktWoerter((string) $alias);
+        }
+        if ($varianten[0] === []) {
+            return true;
+        }
+        $la = $this->produktWoerter($designation);
+        foreach ($varianten as $woerter) {
+            foreach ($woerter as $q) {
+                foreach ($la as $c) {
+                    if (str_ends_with($q, $c) || str_ends_with($c, $q)) {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /** @return list<string> gestemmte Produktwörter (ohne Zustand/Schnitt/Füllwörter) */
+    private function produktWoerter(string $s): array
+    {
+        $out = [];
+        foreach ($this->engine->tokenize($s) as $t) {
+            // istReinesMerkmal statt isQualifierToken: „Rinderbeinscheiben" ist ein Produkt, kein Zuschnitt.
+            if (mb_strlen($t) < 4 || $this->engine->istReinesMerkmal($t) || in_array($t, ['dose', 'dosen'], true)) {
+                continue;
+            }
+            $stamm = $this->engine->stemGerman($t);
+            if (mb_strlen($stamm) >= 3) {
+                $out[] = $stamm;
+            }
+        }
+
+        return array_values(array_unique($out));
+    }
+
+    /**
      * Lexikalischer Kandidaten-Pool: searchGlobal je Such-Phrase (Query + Alias/Decompound),
      * Union über die item-id (searchGlobal AND-tokenisiert → je Phrase ein eigener Query).
      * Scope via whereIn-Filter aus der S1-baseQuery-Ergänzung.
