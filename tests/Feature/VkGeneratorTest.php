@@ -24,7 +24,7 @@ beforeEach(function () {
     $this->gen = app(RecipeGeneratorService::class);
 
     FoodAlchemistVocabEinheit::create(['team_id' => $this->rootTeam->id, 'slug' => 'g', 'display_de' => 'Gramm', 'dimension' => 'mass', 'default_in_g' => 1]);
-    $hg = FoodAlchemistDishMainGroup::create(['code' => 'HG', 'label' => 'Hauptgang']);
+    $hg = $this->hg = FoodAlchemistDishMainGroup::create(['code' => 'HG', 'label' => 'Hauptgang']);
     $this->class = FoodAlchemistDishClass::create(['dish_main_group_id' => $hg->id, 'code' => 'HG_FLEISCH', 'label' => 'Fleisch', 'diet_form' => 'fleisch']);
     $this->alc = FoodAlchemistMarkupClass::create(['code' => 'ALC', 'label' => 'A la Carte', 'raw_markup_pct' => 420, 'vat_rate' => 19, 'formula_type' => 'aufschlag']);
 
@@ -56,6 +56,35 @@ it('vkModus: VK angelegt, Basisrezept-Komponente resolved, Klasse/AK aus Vorschl
     // VK-Sicht ja, Basis-Sicht nein (Scope-Härte)
     expect(app(\Platform\FoodAlchemist\Services\SalesRecipeService::class)->detail($this->rootTeam, $r->id))->not->toBeNull()
         ->and(app(\Platform\FoodAlchemist\Services\RecipeService::class)->detail($this->rootTeam, $r->id))->toBeNull();
+});
+
+it('vkModus: Hauptgruppe ohne KI — aus der Klasse, sonst aus dem Kürzel im Namen', function () {
+    // demo 3754/3786: der Auftrag fragt die Hauptgruppe nicht ab, sie blieb leer (§2.0 hart gemeldet).
+    $mitKlasse = $this->gen->generiere($this->rootTeam, 'Test', [], [
+        'name' => 'Filet | Jus', 'zutaten' => [['text' => 'Rotwein-Jus', 'quantity' => 80, 'unit' => 'g']],
+        'dish_class_id' => $this->class->id,
+    ], vkModus: true)['recipe'];
+    $ausName = $this->gen->generiere($this->rootTeam, 'Test', [], [
+        'name' => '[HG] Rinderfilet | Jus', 'zutaten' => [['text' => 'Rotwein-Jus', 'quantity' => 80, 'unit' => 'g']],
+    ], vkModus: true)['recipe'];
+    $unbekannt = $this->gen->generiere($this->rootTeam, 'Test', [], [
+        'name' => '[XYZ] Rinderfilet | Jus', 'zutaten' => [['text' => 'Rotwein-Jus', 'quantity' => 80, 'unit' => 'g']],
+    ], vkModus: true)['recipe'];
+
+    expect((int) $mitKlasse->dish_main_group_id)->toBe((int) $this->hg->id)
+        ->and((int) $ausName->dish_main_group_id)->toBe((int) $this->hg->id)
+        ->and($ausName->dish_class_id)->toBeNull()                 // Klasse rät der Code nicht
+        ->and($unbekannt->dish_main_group_id)->toBeNull();
+});
+
+it('vkModus: Klasse auch als Listen-Text oder Code erkannt', function () {
+    foreach (['HG / Fleisch', 'HG_FLEISCH', (string) $this->class->id] as $wert) {
+        $r = $this->gen->generiere($this->rootTeam, 'Test', [], [
+            'name' => 'Filet | Jus', 'zutaten' => [['text' => 'Rotwein-Jus', 'quantity' => 80, 'unit' => 'g']],
+            'dish_class_id' => $wert,
+        ], vkModus: true)['recipe'];
+        expect((int) $r->dish_class_id)->toBe((int) $this->class->id, "Wert {$wert}");
+    }
 });
 
 it('vkModus: ungültige Klasse/AK fallen still raus — VK trotzdem angelegt (Editor pflegt nach)', function () {
