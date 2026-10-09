@@ -353,7 +353,10 @@ class RecipeGeneratorService
                 // aber nur validiert (visibleToTeam + §-Status + kein Platzhalter / Zyklus-Guard) und
                 // OHNE die L2-Zerlegungs-/Frische-Entscheidung zu übersteuern (Reihenfolge NACH
                 // $gpBlockiert/$istBasisrezept). Halluzinierte/fremde id ⇒ null ⇒ Fuzzy-Fallback.
-                $proposedSubId = $this->validiereProposedSub($team, (int) $recipe->id, $z['sub_rezept_id'] ?? null, $text, $diaetHart, $statistik['bestand_abgelehnt']);
+                // Spec 80 B4: ein Unterrezept, das der Import eben selbst angelegt hat, ist kein Bestandszug —
+                // es ist noch Entwurf und wird trotzdem verknüpft (nur Sichtbarkeit + Zyklus-Guard).
+                $eigenesSub = $createdVia === 'import' && ! empty($z['sub_rezept_eigen']);
+                $proposedSubId = $this->validiereProposedSub($team, (int) $recipe->id, $z['sub_rezept_id'] ?? null, $text, $diaetHart, $statistik['bestand_abgelehnt'], vertraut: $eigenesSub);
                 $proposedGpId = $proposedSubId === null ? $this->validiereProposedGp($team, $z['gp_id'] ?? null, $text) : null;
                 $verdrahtet = false;
                 if ($proposedSubId !== null && ($istBasisrezept || ! $gpBlockiert)) {
@@ -1022,7 +1025,7 @@ class RecipeGeneratorService
      * @param  list<string>  $diaetHart  Spec 80 B3: harte Diät des Laufs
      * @param  list<array{text: string, recipe_id: int, name: string, grund: string}>|null  $abgelehnt  Protokoll abgelehnter Bestandstreffer
      */
-    private function validiereProposedSub(Team $team, int $parentRecipeId, mixed $id, string $text = '', array $diaetHart = [], ?array &$abgelehnt = null, ?string $nurDiaetFuer = null): ?int
+    private function validiereProposedSub(Team $team, int $parentRecipeId, mixed $id, string $text = '', array $diaetHart = [], ?array &$abgelehnt = null, ?string $nurDiaetFuer = null, bool $vertraut = false): ?int
     {
         $id = is_numeric($id) ? (int) $id : 0;
         if ($id <= 0 || $id === $parentRecipeId) {
@@ -1042,10 +1045,13 @@ class RecipeGeneratorService
         // Spec 80 B4 (Entscheid Dominique 2026-10-09): Bestand = NUR freigegebene Basisrezepte. Vorher
         // zählten stub/draft/review mit — 86 % der Bestandsverweise auf demo zeigten auf Entwürfe.
         $kandidat = FoodAlchemistRecipe::query()->visibleToTeam($team)->basis()
-            ->where('status', 'approved')
+            ->when(! $vertraut, fn ($q) => $q->where('status', 'approved'))
             ->whereKey($id)->first(['id', 'name', 'spec_is_vegan', 'spec_is_vegetarian']);
         if ($kandidat === null) {
             return null;
+        }
+        if ($vertraut) {
+            $text = '';   // eigener Import-Baustein: keine Funktionsprüfung, nur Diät
         }
         // Spec 80 B3: Funktionsprüfung (Typ, Bestandteile, Diät). Ohne Zeilentext (reiner Bestandszug ohne
         // Beschreibung) bleibt es beim bisherigen Verhalten.

@@ -162,6 +162,8 @@ it('regeneriereStep behält den Kapitel-Attach (kein stiller Datenverlust)', fun
     $run = FoodAlchemistCascadeRun::where('source_owner_type', 'foodbook')->where('source_owner_id', $fb->id)->latest('id')->firstOrFail();
     $step = FoodAlchemistCascadeRunStep::where('cascade_run_id', $run->id)->where('kind', 'concept')->whereNotNull('chapter_id')->firstOrFail();
     $kap = (int) $step->chapter_id;
+    // Spec 80 C1: neu erzeugt wird nur ein fertiger oder gescheiterter Schritt, nie ein eingereihter.
+    $step->update(['status' => 'failed']);
 
     Queue::fake();
     app(PlanningCascadeService::class)->regeneriereStep($this->rootTeam, (int) $step->id);
