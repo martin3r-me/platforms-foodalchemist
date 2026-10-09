@@ -183,3 +183,18 @@ it('Live-Test demo 09.10.: nicht freigegebener Bestand erscheint als abgelehnt m
     expect($treffer)->toBeNull()
         ->and(collect($abgelehnt)->firstWhere('recipe_id', $entwurf->id)['grund'] ?? null)->toContain('noch nicht freigegeben');
 });
+
+it('Live-Test demo 09.10.: eine offene Basisrezept-Zeile fällt beim Re-Grounding nie auf ein rohes Grundprodukt', function () {
+    $this->makeGp($this->rootTeam, 'Petersilienwurzel: frisch');
+    $r = $this->makeRecipe($this->rootTeam, 'Püree: Petersilienwurzel (grün)', ['status' => 'draft']);
+    $g = $this->unitG($this->rootTeam)->id;
+
+    app(\Platform\FoodAlchemist\Services\RecipeService::class)->syncIngredients($this->rootTeam, $r->id, [
+        ['raw_text' => 'Püree: Petersilienwurzel', 'quantity' => 7000, 'unit_vocab_id' => $g],
+        ['raw_text' => 'Petersilienwurzel', 'quantity' => 100, 'unit_vocab_id' => $g],
+    ]);
+
+    $zeilen = $r->fresh()->ingredients()->orderBy('position')->get();
+    expect($zeilen[0]->gp_id)->toBeNull()->and($zeilen[0]->referenced_recipe_id)->toBeNull()   // Lücke statt roher Wurzel
+        ->and($zeilen[1]->gp_id)->not->toBeNull();                                                  // normale Zeile wie bisher
+});
