@@ -1039,7 +1039,7 @@
 
             {{-- FORTSCHRITT (Alpine-Tab `worker`): alle Läufe zusammen, Status + Baum + Freigabe.
                  Anzeige, kein Erstell-Knopf, darum keine klebende Leiste. --}}
-            {{-- Spec 80 D1: die neue Ansicht (Baum · Cluster · Rezept) nutzt die volle Breite; die Liste bleibt schmal. --}}
+            {{-- Spec 80 D1: Baum · Cluster · Rezept nutzt die volle Breite. --}}
             <div wire:key="planung-tab-worker" x-show="tab==='worker'" class="flex flex-col gap-4 w-full">
                 {{-- Spec 53 / Paket C: $pollAktiv wird JEDES Render frisch aus DB-Wahrheit abgeleitet
                      (Lauf-Status + Step-Phasen), kein gespeichertes Flag. --}}
@@ -1068,12 +1068,9 @@
                 @endif
 
                 {{-- Ergebnis: Status + Baum + Freigabe (Gate 2) --}}
-                @if($lauf && ! $fortschrittKlassisch)
-                    {{-- Spec 80 Teil D: Baum · Cluster · Rezept. Die klassische Liste bleibt per Umschalter erreichbar. --}}
+                @if($lauf)
+                    {{-- Spec 80 Teil D: Baum · Cluster · Rezept. --}}
                     @include('foodalchemist::livewire.planung.partials.fortschritt')
-                @elseif($lauf)
-                    <div class="flex justify-end"><x-fa::button size="sm" variant="secondary" icon="heroicon-o-view-columns" wire:click="fortschrittAnsichtUmschalten" data-fortschritt-neue-ansicht>Neue Ansicht: Baum · Gericht · Rezept</x-fa::button></div>
-                    @include('foodalchemist::livewire.planung.partials.ergebnis')
                 @else
                     <x-foodalchemist::modal-section icon="heroicon-o-queue-list" title="Fortschritt">
                         <x-fa::empty icon="heroicon-o-queue-list" title="Noch nichts gestartet">Starte in „Basisrezept", „Gericht" oder „Concept" eine Erstellung. Der Fortschritt erscheint dann hier.</x-fa::empty>

@@ -38,11 +38,9 @@ beforeEach(function () {
         'quantity' => '120', 'unit_vocab_id' => $this->unitG($this->rootTeam)->id, 'position' => 1]);
 });
 
-it('ist umschaltbar und zeigt Baum, Cluster mit Basisrezepten und Stufenleiste', function () {
+it('zeigt als einzige Ansicht Baum, Cluster mit Basisrezepten und Stufenleiste', function () {
     Livewire::test(PlanungIndex::class)
         ->call('oeffne', $this->session->id)
-        ->assertSeeHtml('data-fortschritt-neue-ansicht')
-        ->call('fortschrittAnsichtUmschalten')
         ->assertSeeHtml('data-fortschritt-neu')
         ->assertSeeHtml('data-fortschritt-knoten="slot:' . $this->hauptgang->id . '"')
         ->assertSee('Hauptgerichte')
@@ -55,7 +53,6 @@ it('ist umschaltbar und zeigt Baum, Cluster mit Basisrezepten und Stufenleiste',
 it('rechts: Rezeptansicht mit Zutaten und „Woher das kommt"', function () {
     Livewire::test(PlanungIndex::class)
         ->call('oeffne', $this->session->id)
-        ->call('fortschrittAnsichtUmschalten')
         ->call('waehleSchritt', $this->kindJus->id)
         ->assertSeeHtml('data-fortschritt-rezept')
         ->assertSee('Steinpilze getrocknet')
@@ -67,7 +64,6 @@ it('rechts: Rezeptansicht mit Zutaten und „Woher das kommt"', function () {
 it('Filter „Fehler" zeigt nur die gescheiterte Zeile, Knoten-Auswahl setzt den Pfad', function () {
     $c = Livewire::test(PlanungIndex::class)
         ->call('oeffne', $this->session->id)
-        ->call('fortschrittAnsichtUmschalten')
         ->call('setzeFortschrittFilter', 'fehler');
 
     $c->assertSeeHtml('data-fortschritt-zeile="' . $this->kindFehler->id . '"')
@@ -80,7 +76,6 @@ it('Filter „Fehler" zeigt nur die gescheiterte Zeile, Knoten-Auswahl setzt den
 it('Cluster-Fuß reichert nur diesen Cluster an und gibt frei', function () {
     Livewire::test(PlanungIndex::class)
         ->call('oeffne', $this->session->id)
-        ->call('fortschrittAnsichtUmschalten')
         ->call('clusterFreigeben', $this->kopf->id);
 
     expect($this->kopf->refresh()->status)->toBe('freigegeben')

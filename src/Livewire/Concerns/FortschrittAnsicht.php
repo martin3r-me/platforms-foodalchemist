@@ -26,12 +26,6 @@ trait FortschrittAnsicht
     /** alle | pruefen | fehler | bestand */
     public string $fortschrittFilter = 'alle';
 
-    /**
-     * Spec 80 D9: bis zur Abnahme am echten Lauf bleibt die bisherige Liste der Standard; „Neue Ansicht" schaltet
-     * um. Nach der Abnahme Standard umstellen und die Markup-Tests der Liste nachziehen (Folgeschritt).
-     */
-    public bool $fortschrittKlassisch = true;
-
     public function waehleSchritt(int $stepId): void
     {
         $this->fortschrittAuswahl = $stepId;
@@ -45,11 +39,6 @@ trait FortschrittAnsicht
     public function setzeFortschrittFilter(string $filter): void
     {
         $this->fortschrittFilter = in_array($filter, ['alle', 'pruefen', 'fehler', 'bestand'], true) ? $filter : 'alle';
-    }
-
-    public function fortschrittAnsichtUmschalten(): void
-    {
-        $this->fortschrittKlassisch = ! $this->fortschrittKlassisch;
     }
 
     /** Spec 80 D7: Eingaben der Plan-Karte je Step: [stepId => ['name' => …, 'menge' => …, 'mengen' => [idx => …]]]. */

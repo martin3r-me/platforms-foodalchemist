@@ -159,6 +159,7 @@ it('Leitstelle: goKaskade reicht die Regler als params UND persistiert sie als g
     ]);
 
     // Der Depth-1-Job trägt die Regler im parameter (nicht mehr leer).
+    \Platform\FoodAlchemist\Tests\Support\KomponentenPlanDurch::bauen();
     Queue::assertPushed(GenerateRecipeJob::class, fn ($job) => $job->vkModus === false
         && ($job->parameter['level'] ?? null) === 'gehoben'
         && ($job->parameter['convenience'] ?? null) === 'from_scratch'
@@ -573,9 +574,9 @@ it('#4/#1a Cockpit-Baum: Fan-out-Kind eingerückt + „Verwendetes Wissen" aus c
         'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'done',
         'label' => 'Wurzel-Gericht', 'context_snapshot' => ['knowledge_files' => ['pairings/tomate.md', 'domains/suppen.md']],
     ]);
-    FoodAlchemistCascadeRunStep::create([
+    $kind = FoodAlchemistCascadeRunStep::create([
         'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'parent_step_id' => $parent->id,
-        'kind' => 'rezept', 'status' => 'done', 'label' => 'Kind-Basisrezept', 'depth' => 1,   // Fan-out-Kind → eingerückt
+        'kind' => 'rezept', 'status' => 'done', 'label' => 'Kind-Basisrezept', 'depth' => 1,   // Fan-out-Kind → Zeile im Gericht-Cluster
     ]);
 
     Livewire::test(PlanungIndex::class)
@@ -584,7 +585,8 @@ it('#4/#1a Cockpit-Baum: Fan-out-Kind eingerückt + „Verwendetes Wissen" aus c
         ->assertSee('Wurzel-Gericht')
         ->assertSee('Kind-Basisrezept')          // #4 Fan-out-Kind sichtbar
         ->assertSee('Verwendetes Wissen')        // #1a aus context_snapshot
-        ->assertSeeHtml('data-step-unter');       // Einrückungs-Marker des Kindes (Baum mit Führungslinie statt »↳«-Zeichen)
+        ->assertSeeHtml('data-fortschritt-kopf="' . $parent->id . '"')       // Spec 80 D3: Gericht = Cluster-Kopf …
+        ->assertSeeHtml('data-fortschritt-zeile="' . $kind->id . '"');       // … das Basisrezept eine Zeile darunter
 });
 
 it('A: Inline-Zutaten-Review — Toggle mountet den IngredientEditor on-demand für einen Draft', function () {
@@ -2241,6 +2243,7 @@ it('L0.5 Bio dreiwertig: „egal" wird zu bio_pref=neutral (kein −2-Bio-Penalt
         ->assertSet('laeuft', true);
 
     // Der Depth-1-Job trägt die dreiwertige Präferenz — „egal" ⇒ neutral (Adjustment 0), nicht 'conventional'.
+    \Platform\FoodAlchemist\Tests\Support\KomponentenPlanDurch::bauen();
     Queue::assertPushed(GenerateRecipeJob::class, fn ($job) => ($job->parameter['bio_pref'] ?? null) === 'neutral'
         && ($job->parameter['bio'] ?? null) === false);
 });
@@ -2321,6 +2324,7 @@ it('L1.5 reglerParams: Frische-Multiauswahl wird zu frische_erlaubt (Roh-Zustän
         ->call('goKaskade', 'rezept')
         ->assertSet('laeuft', true);
 
+    \Platform\FoodAlchemist\Tests\Support\KomponentenPlanDurch::bauen();
     Queue::assertPushed(GenerateRecipeJob::class, function ($job) {
         $erlaubt = $job->parameter['frische_erlaubt'] ?? null;
         return is_array($erlaubt)
@@ -2340,6 +2344,7 @@ it('L1.5 reglerParams: Frische frisch+... setzt primären Pref auf frisch', func
         ->call('reglerPill', 'rezept', 'frische', 'frisch')
         ->call('goKaskade', 'rezept');
 
+    \Platform\FoodAlchemist\Tests\Support\KomponentenPlanDurch::bauen();
     Queue::assertPushed(GenerateRecipeJob::class, fn ($job) => ($job->parameter['frische'] ?? null) === 'frisch');
 });
 
@@ -2370,6 +2375,7 @@ it('L3 Allergen-No-Go: reglerPill togglet allergen_nogo (Multi) und reicht es in
         ->call('goKaskade', 'rezept')
         ->assertSet('laeuft', true);
 
+    \Platform\FoodAlchemist\Tests\Support\KomponentenPlanDurch::bauen();
     Queue::assertPushed(GenerateRecipeJob::class, function ($job) {
         $nogo = $job->parameter['allergen_nogo'] ?? [];
         return is_array($nogo) && in_array('sesame', $nogo, true) && in_array('milk', $nogo, true);
