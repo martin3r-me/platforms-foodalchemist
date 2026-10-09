@@ -58,7 +58,7 @@ class RecipeConformanceAdapter implements ConformanceAdapter
 
     public function deterministischeBefunde(Team $team, int $id): array
     {
-        return [...$this->konzentratBefunde($team, $id), ...$this->regelwerkBefunde($team, $id)];
+        return [...$this->konzentratBefunde($team, $id), ...$this->regelwerkBefunde($team, $id), ...$this->breiteBefunde($team, $id)];
     }
 
     /**
@@ -135,6 +135,62 @@ class RecipeConformanceAdapter implements ConformanceAdapter
         }
 
         return $befunde;
+    }
+
+    /**
+     * Spec 81 Paket 7 — Regeln als Daten für Verkaufsgerichte (Name §1.1/§1.2, Schritte §3.8) und Kostformen
+     * (vegan/vegetarisch ausgelobt → ausgeschlossene Zutaten). Jede Regel greift nur, wenn sie aktiv ist.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function breiteBefunde(Team $team, int $id): array
+    {
+        $r = app(RecipeService::class)->detailAnySicht($team, $id);
+        if ($r === null) {
+            return [];
+        }
+        $motor = app(\Platform\FoodAlchemist\Services\Regeln\RegelMotor::class);
+        $buch = \Platform\FoodAlchemist\Services\Regeln\RegelBuch::class;
+        $out = [];
+        $melde = static function (array $befunde, string $feld) use (&$out): void {
+            foreach ($befunde as $b) {
+                $out[] = ['paragraph' => (string) $b['paragraph'], 'schweregrad' => $b['schweregrad'], 'feld' => $feld,
+                    'begruendung' => $b['begruendung'], 'vorschlag' => (string) ($b['vorschlag'] ?? ''), 'konfidenz' => 1.0,
+                    'quelle' => 'code', 'rule_id' => $b['rule_id']];
+            }
+        };
+        $name = (string) $r->name;
+
+        if ($r->is_sales_recipe) {
+            if (($hg = $buch::falls('vk.1.1.hg')) !== null) {
+                $code = preg_match('/^\[([^\]]+)\]/u', $name, $m) === 1 ? $m[1] : '';
+                $melde($code === '' ? [['paragraph' => $hg->paragraph, 'schweregrad' => 'hart', 'begruendung' => 'Hauptgruppen-Kürzel in eckigen Klammern fehlt, z. B. „[HG] …" (§1.1).',
+                    'vorschlag' => null, 'rule_id' => $hg->id]] : $motor->pruefe($hg, $code), 'name');
+            }
+            if (($bs = $buch::falls('vk.1.1.bausteine')) !== null) {
+                $rest = trim((string) preg_replace('/^\[[^\]]+\]\s*/u', '', $name));
+                $anzahl = count(array_filter(array_map('trim', explode('|', $rest)), static fn ($t) => $t !== ''));
+                $melde($motor->pruefe($bs, (string) $anzahl), 'name');
+            }
+            foreach ($buch::fuerZiel('vk.name') as $regel) {
+                $melde($motor->pruefe($regel, $name), 'name');
+            }
+            if (($sm = $buch::falls('vk.3.8.schritt_mengen')) !== null) {
+                foreach ([...$r->steps()->get(['position', 'text']), ...$r->platingSteps()->get(['position', 'text'])] as $schritt) {
+                    $melde($motor->pruefe($sm, (string) $schritt->text), 'schritt:' . $schritt->position);
+                }
+            }
+        }
+
+        $kostform = $r->spec_is_vegan ? $buch::falls('ernaehrung.vegan') : ($r->spec_is_vegetarian ? $buch::falls('ernaehrung.vegetarisch') : null);
+        if ($kostform !== null) {
+            foreach ($r->ingredients as $z) {
+                $text = (string) ($z->gp?->name ?? $z->referencedRecipe?->name ?? $z->raw_text);
+                $melde($motor->pruefe($kostform, $text), 'zutat:' . $text);
+            }
+        }
+
+        return $out;
     }
 
     /** @return list<array<string, mixed>> */

@@ -35,8 +35,9 @@ final class Pflichtangabe implements RegelArt
         if (! Bedingung::erfuellt((array) ($p['bedingung'] ?? []), $kontext)) {
             return [];
         }
+        $teil = ($p['modus'] ?? 'wort') === 'teil';
         foreach ((array) ($p['tokens'] ?? []) as $t) {
-            if (RegelText::hatWort($text, (string) $t)) {
+            if ($teil ? RegelText::hatTeil($text, (string) $t) : RegelText::hatWort($text, (string) $t)) {
                 return [];
             }
         }

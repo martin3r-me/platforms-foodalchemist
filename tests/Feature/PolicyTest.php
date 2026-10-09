@@ -104,6 +104,11 @@ it('Trait-Vertrag: ALLE Models tragen LogsActivity + BelongsToTeamHierarchy + Ha
             // kein Soft-Delete. Ein Ereignis wird geschrieben, nie geändert.
             continue;
         }
+        if (class_basename($klasse) === 'FoodAlchemistRuleVersion') {
+            // Spec 81 C2: append-only Fassung einer Regel (wie ProductionEvent). Lebt nur über die Regel
+            // (FoodAlchemistRule trägt alle vier Traits), wird nie geändert, kein eigener Team-Scope.
+            continue;
+        }
         if (class_basename($klasse) === 'FoodAlchemistCascadeRecipeDependency') {
             // Technische Kaskaden-interne Join-Tabelle (parent_step→child_step→ingredient). Team-scoped
             // über team_id + den Eltern-Cascade-Run; kein eigener Lebenszyklus (lebt/stirbt mit dem Run),

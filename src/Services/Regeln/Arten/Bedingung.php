@@ -6,6 +6,8 @@ use Platform\FoodAlchemist\Services\Regeln\RegelText;
 
 /**
  * Bedingung einer Regel: `{feld: [werte]}` — alle Felder müssen passen, je Feld genügt einer der Werte.
+ * Ein Wert mit `*` ist ein Platzhalter: „*mehl" trifft „Weizenmehl", „kartoffel *" trifft „Kartoffel Linda"
+ * (aber nicht „Süßkartoffel" oder „Kartoffelstärke").
  * Fehlt ein Feld im Kontext, gilt die Bedingung als nicht erfüllt (die Regel schweigt statt zu raten).
  */
 final class Bedingung
@@ -21,7 +23,8 @@ final class Bedingung
             $ist = RegelText::norm((string) $ist);
             $treffer = false;
             foreach ((array) $werte as $w) {
-                if (RegelText::norm((string) $w) === $ist) {
+                $soll = RegelText::norm((string) $w);
+                if ($soll === $ist || (str_contains($soll, '*') && fnmatch($soll, $ist))) {
                     $treffer = true;
                     break;
                 }

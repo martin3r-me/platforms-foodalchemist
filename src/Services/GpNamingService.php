@@ -166,7 +166,8 @@ class GpNamingService
         $condition = $this->normalisiereZustand($in['condition'] ?? null);
         // Spec 81: alle aktiven Regeln für den GP-Namen. blockieren/korrigieren = Hard-Error, warnen = Hinweis.
         $motor = app(\Platform\FoodAlchemist\Services\Regeln\RegelMotor::class);
-        $kontext = ['zustand' => $condition, 'warengruppe' => $in['warengruppe'] ?? null, 'form' => $in['form'] ?? null];
+        $kontext = ['zustand' => $condition, 'warengruppe' => $in['warengruppe'] ?? null, 'form' => $in['form'] ?? null,
+            'hauptzutat' => trim((string) ($in['hauptzutat'] ?? strstr($name . ':', ':', true)))];
         foreach (\Platform\FoodAlchemist\Services\Regeln\RegelBuch::fuerZiel('gp.name') as $regel) {
             foreach ($motor->pruefe($regel, $name, $kontext) as $b) {
                 $text = trim(($b['paragraph'] ?? '') . ': ' . $b['begruendung'], ': ');

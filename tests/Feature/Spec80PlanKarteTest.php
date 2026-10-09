@@ -32,8 +32,8 @@ it('ändert Menge, lehnt Bestand ab, entfernt und ergänzt', function () {
         ->and(($this->k)()[0]['neu'])->toBeTrue()
         ->and(($this->k)()[0]['abgelehnt'][0]['grund'])->toBe('vom Menschen abgelehnt');
 
-    $frei = FoodAlchemistRecipe::create(['team_id' => $this->rootTeam->id, 'recipe_key' => 'butter_noisette', 'name' => 'Butter: Noisette', 'status' => 'approved']);
-    $this->svc->aenderePlan($this->rootTeam, $this->step->id, 'hinzufuegen', ['name' => 'Butter: Noisette', 'menge' => '40']);
+    $frei = FoodAlchemistRecipe::create(['team_id' => $this->rootTeam->id, 'recipe_key' => 'buttersauce_noisette', 'name' => 'Buttersauce: Noisette', 'status' => 'approved']);
+    $this->svc->aenderePlan($this->rootTeam, $this->step->id, 'hinzufuegen', ['name' => 'Buttersauce: Noisette', 'menge' => '40']);
     expect(($this->k)())->toHaveCount(3)
         ->and(($this->k)()[2]['bestand']['recipe_id'])->toBe($frei->id);
 

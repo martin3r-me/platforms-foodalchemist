@@ -29,15 +29,29 @@ class GpConformanceAdapter implements ConformanceAdapter
     }
 
     /**
-     * Keine deterministischen Regeln in v1 — der §-Pass für diesen Artefakt-Typ ist rein
-     * KI-getragen. Bewusst leer statt „irgendetwas": ein erfundener Check wäre schlimmer
-     * als keiner. Kandidat für später wäre der GP-Naming-Check
-     * ({@see \Platform\FoodAlchemist\Services\GpNamingService::validateGpName}), der heute
-     * nur an createGp/updateGp und im GP-Editor hängt.
+     * Spec 81: alle aktiven Regeln mit Ziel `gp.name` (Gebinde, Platzhalter, §8-Pflichtangaben, §12 …) prüft der
+     * Code bei jeder Prüfung selbst — dieselben Regeln wie beim Anlegen (GpNamingService::validateGpName).
      */
     public function deterministischeBefunde(Team $team, int $id): array
     {
-        return [];
+        $gp = app(GpService::class)->find($id, $team);
+        if ($gp === null || (bool) $gp->is_platzhalter) {
+            return [];
+        }
+        $name = (string) $gp->name;
+        $kontext = ['zustand' => $gp->condition, 'warengruppe' => $gp->commodity_group_code, 'form' => $gp->form,
+            'hauptzutat' => trim((string) strstr($name . ':', ':', true))];
+        $motor = app(\Platform\FoodAlchemist\Services\Regeln\RegelMotor::class);
+        $out = [];
+        foreach (\Platform\FoodAlchemist\Services\Regeln\RegelBuch::fuerZiel('gp.name') as $regel) {
+            foreach ($motor->pruefe($regel, $name, $kontext) as $b) {
+                $out[] = ['paragraph' => (string) $b['paragraph'], 'schweregrad' => $b['schweregrad'], 'feld' => 'name',
+                    'begruendung' => $b['begruendung'], 'vorschlag' => (string) ($b['vorschlag'] ?? ''), 'konfidenz' => 1.0,
+                    'quelle' => 'code', 'rule_id' => $b['rule_id']];
+            }
+        }
+
+        return $out;
     }
 
     public function pruefauftrag(Team $team, int $id): array

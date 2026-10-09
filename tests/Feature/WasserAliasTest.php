@@ -48,12 +48,12 @@ it('»Leitungswasser« ebenso', function () {
 });
 
 it('der Alias-Name muss ein GP treffen können — sonst ist er stumm wirkungslos', function () {
-    // Der eigentliche Riegel: der im Code hinterlegte Name muss zu einem real existierenden
-    // GP-Namen passen. Genau diese Lücke lief vom 18.08. bis 03.09. unbemerkt.
-    $rc = new ReflectionClass(\Platform\FoodAlchemist\Services\Matching\MatchHeuristics::class);
-    $m = $rc->getMethod('defaultGpAlias');
-    $src = implode('', array_slice(file($m->getFileName()), $m->getStartLine() - 1, $m->getEndLine() - $m->getStartLine() + 1));
+    // Der eigentliche Riegel: der hinterlegte Name muss zu einem real existierenden GP-Namen passen.
+    // Genau diese Lücke lief vom 18.08. bis 03.09. unbemerkt. Seit Spec 81 steht er in der Regel
+    // `basisrezept.5.default_gp` (Einstellungen › Regeln), nicht mehr im Quelltext.
+    $ziele = collect(\Platform\FoodAlchemist\Models\FoodAlchemistRule::where('schluessel', 'basisrezept.5.default_gp')->firstOrFail()->params['eintraege'])
+        ->pluck('ziel_name');
 
-    expect($src)->toContain("'Leitungswasser: frisch'")
-        ->and($src)->not->toContain("'Wasser: Leitung'");
+    expect($ziele)->toContain('Leitungswasser: frisch')
+        ->and($ziele)->not->toContain('Wasser: Leitung');
 });

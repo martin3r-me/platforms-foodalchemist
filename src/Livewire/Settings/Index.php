@@ -118,19 +118,33 @@ class Index extends Component
         'ausgabe' => ['label' => 'Ausgabe', 'sektionen' => ['schreibstile', 'praesentations-designs', 'speiseplan-chips', 'etiketten']],
     ];
 
+    /** Sektionen nur für Plattform-Admins (Spec 81: Regeln wie das globale Wissen — Kunden sehen sie nicht). */
+    public const NUR_PLATTFORM_ADMIN = ['regeln'];
+
     public function mount(string $sektion = 'einheiten'): void
     {
         abort_unless(array_key_exists($sektion, self::SEKTIONEN), 404);
+        abort_if(in_array($sektion, self::NUR_PLATTFORM_ADMIN, true) && ! self::istPlattformAdmin(), 404);
         $this->sektion = $sektion;
+    }
+
+    private static function istPlattformAdmin(): bool
+    {
+        $user = Auth::user();
+
+        return $user !== null && ! $user->isAiUser() && app(\Platform\FoodAlchemist\Services\FaRechte::class)->istPlattformAdmin($user);
     }
 
     public function render()
     {
         $team = Auth::user()?->currentTeamRelation;
 
+        $sektionen = self::istPlattformAdmin() ? self::SEKTIONEN : array_diff_key(self::SEKTIONEN, array_flip(self::NUR_PLATTFORM_ADMIN));
+        $gruppen = array_map(static fn ($g) => ['sektionen' => array_values(array_intersect($g['sektionen'], array_keys($sektionen)))] + $g, self::GRUPPEN);
+
         return view('foodalchemist::livewire.settings.index', [
-            'sektionen' => self::SEKTIONEN,
-            'gruppen' => self::GRUPPEN,
+            'sektionen' => $sektionen,
+            'gruppen' => $gruppen,
             'istKindTeam' => $team !== null && $team->parent_team_id !== null,
         ])->layout(\Platform\FoodAlchemist\Support\FaShell::layout());
     }
