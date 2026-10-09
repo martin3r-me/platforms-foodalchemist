@@ -189,12 +189,51 @@ it('der Bau überschreibt den Plan im Snapshot nicht mehr — kindVorgaben finde
 it('„neu erzeugen“ am Kind läuft über denselben Start — ohne Gericht-Aroma, mit eigenem Plan', function () {
     $alt = FoodAlchemistRecipe::create(['team_id' => $this->rootTeam->id, 'recipe_key' => 'j' . md5(microtime()), 'name' => 'Jus: Thymian', 'status' => 'draft']);
     $this->run->update(['params' => ['aroma' => 'Ingwer, Kürbis', 'pax' => 80]]);
-    $this->kind->update(['status' => 'done', 'ref_type' => 'recipe', 'ref_id' => $alt->id]);
+    $this->eltern->update(['context_snapshot' => ['plan' => true, 'komponenten' => [['name' => 'Jus: Thymian', 'suchbegriffe' => ['Thymian']]]]]);
+    // Erster Start hält den Auftrag fest; markStepDone zieht das Label danach auf den Artefaktnamen (L5).
+    app(PlanningCascadeService::class)->erzeugeGeplantenStep($this->rootTeam, (int) $this->kind->id);
+    $this->kind->refresh()->update(['status' => 'done', 'ref_type' => 'recipe', 'ref_id' => $alt->id, 'label' => 'Jus: Thymian, kräftig', 'phase' => null]);
 
-    app(PlanningCascadeService::class)->regeneriereStep($this->rootTeam, (int) $this->kind->id);
+    app(PlanningCascadeService::class)->regeneriereStep($this->rootTeam, (int) $this->kind->id, 'mehr Röstaromen');
 
-    Queue::assertPushed(GenerateRecipePlanJob::class, fn ($job) => $job->stepId === (int) $this->kind->id
-        && ! array_key_exists('aroma', $job->params) && ($job->params['ziel_menge'] ?? null) === 120.0);
+    $jobs = Queue::pushed(GenerateRecipePlanJob::class)->filter(fn ($j) => $j->stepId === (int) $this->kind->id);
+    $neu = $jobs->last();
+    expect($jobs)->toHaveCount(2)
+        ->and($neu->brief)->toStartWith('Jus: Thymian' . "\n")->toContain('mehr Röstaromen')->not->toContain('kräftig')
+        ->and($neu->params)->not->toHaveKey('aroma')
+        ->and($neu->params['ziel_menge'] ?? null)->toBe(120.0)
+        ->and($neu->params['suchbegriffe'] ?? null)->toBe(['Thymian']);   // Komponente über den Auftrag gefunden
+});
+
+it('ein Baustein aus dem Bestand: binden statt Dublette bauen', function () {
+    $bestand = FoodAlchemistRecipe::create(['team_id' => $this->rootTeam->id, 'recipe_key' => 'jt' . md5(microtime()),
+        'name' => 'Jus: Thymian, hell', 'status' => 'approved']);
+    ($this->stub)(['komponenten' => [['name' => 'Jus: Thymian', 'funktion' => 'basis', 'menge' => 120, 'einheit' => 'g', 'suchbegriffe' => []]]]);
+    app(PlanningCascadeService::class)->erzeugeGeplantenStep($this->rootTeam, (int) $this->kind->id);
+    $komponenten = [['name' => 'Jus: Thymian', 'bestand' => ['recipe_id' => $bestand->id, 'name' => $bestand->name]]];
+
+    app(RecipeDependencyWorkflowService::class)->baueKindNachPlan($this->rootTeam, $this->kind->fresh(), $this->user->id, 'Jus: Thymian', [], $komponenten);
+
+    Queue::assertNotPushed(GenerateRecipeJob::class);
+    expect($this->kind->fresh()->status)->toBe('skipped')
+        ->and((int) $this->kind->fresh()->ref_id)->toBe((int) $bestand->id)
+        ->and((int) $this->zeile->fresh()->referenced_recipe_id)->toBe((int) $bestand->id);
+});
+
+it('unter „nur Bestand“ kein Plan-Call', function () {
+    $this->eltern->update(['deferred' => ['children' => ['params' => ['bestand' => 'nur_bestand'], 'user_id' => $this->user->id]]]);
+
+    app(PlanningCascadeService::class)->erzeugeGeplantenStep($this->rootTeam, (int) $this->kind->id);
+
+    Queue::assertNotPushed(GenerateRecipePlanJob::class);
+});
+
+it('ein neuer Plan ersetzt den alten — auch durch keinen', function () {
+    $this->kind->update(['status' => 'running', 'context_snapshot' => ['plan' => true, 'komponenten' => [['name' => 'alt']]]]);
+
+    app(RecipeDependencyWorkflowService::class)->baueKindNachPlan($this->rootTeam, $this->kind->fresh(), $this->user->id, 'Jus: Thymian', [], []);
+
+    expect($this->kind->fresh()->context_snapshot)->not->toHaveKey('komponenten')->not->toHaveKey('plan');
 });
 
 it('Architektur: Kind-Steps werden nur über starteKind/baueKind gestartet', function () {

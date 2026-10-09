@@ -45,7 +45,7 @@ class RecipeDependencyWorkflowService
         // Suchbegriffe mehr, „neu erzeugen“ keinen bestätigten Plan.
         $alt = FoodAlchemistCascadeRunStep::whereKey($stepId)->value('context_snapshot');
         $alt = is_string($alt) ? (json_decode($alt, true) ?: []) : (is_array($alt) ? $alt : []);
-        $plan = array_intersect_key($alt, array_flip(['plan', 'komponenten']));
+        $plan = array_intersect_key($alt, array_flip(['plan', 'komponenten', 'kind_brief']));
         FoodAlchemistCascadeRunStep::whereKey($stepId)->update(['context_snapshot' => [...$context['snapshot'], ...$plan]]);
 
         return $context;
@@ -235,7 +235,16 @@ class RecipeDependencyWorkflowService
      */
     public function starteKind(Team $team, FoodAlchemistCascadeRunStep $child, int $userId, string $text, array $params, bool $vollAnreichern): void
     {
-        if ((bool) config('foodalchemist.kaskade.kind_plan', true) && (int) $child->depth < self::MAX_DEPTH) {
+        // Den ursprünglichen Auftrag festhalten: markStepDone zieht das Label später auf den Artefaktnamen
+        // („Jus: Thymian, kräftig“) — „neu erzeugen“ braucht den Auftrag, nicht den letzten Namen (Review Hans).
+        $snap = is_array($child->context_snapshot) ? $child->context_snapshot : [];
+        if (! isset($snap['kind_brief'])) {
+            $child->update(['context_snapshot' => [...$snap, 'kind_brief' => $text]]);
+        }
+        // Unter „nur Bestand“ dürfte eine neue Komponente ohnehin kein Kind werden (planChildren) — kein Plan-Call.
+        $planen = (bool) config('foodalchemist.kaskade.kind_plan', true) && (int) $child->depth < self::MAX_DEPTH
+            && ($params['bestand'] ?? null) !== 'nur_bestand';
+        if ($planen) {
             $child->update(['status' => 'running', 'error' => null, 'generator_run_id' => null]);
             app(PlanningCascadeService::class)->setzePhase((int) $child->id, 'Komponenten werden geplant …');
             \Platform\FoodAlchemist\Jobs\GenerateRecipePlanJob::dispatch($team->id, $userId, (int) $child->id, $text,
@@ -257,6 +266,14 @@ class RecipeDependencyWorkflowService
     {
         $vollAnreichern = (bool) ($params['_voll_anreichern'] ?? false);
         unset($params['_voll_anreichern']);
+        // Ein Baustein, den es freigegeben im Bestand gibt (bestandFuer: nur approved, Typ, Diät — findet auch per
+        // Matcher, was planChildren per Namens-Token-Set übersah): binden statt eine Dublette bauen (Review Berater).
+        $einziger = count($komponenten) === 1 ? $komponenten[0] : null;
+        if (is_array($einziger['bestand'] ?? null) && (int) ($einziger['bestand']['recipe_id'] ?? 0) > 0) {
+            $this->uebernimmBestandFuerKind($team, $child, $einziger['bestand']);
+
+            return;
+        }
         if (count($komponenten) > 1) {
             $params['plan_komponenten'] = array_values($komponenten);
         }
@@ -273,11 +290,32 @@ class RecipeDependencyWorkflowService
                 $params['suchbegriffe'] = array_values($begriffe);
             }
         }
+        // Ein neuer Versuch ersetzt den alten Plan immer — auch durch „keinen“, sonst speisten alte Komponenten die Enkel.
+        $snap = is_array($child->fresh()?->context_snapshot) ? $child->fresh()->context_snapshot : [];
+        unset($snap['plan'], $snap['komponenten']);
         if ($komponenten !== []) {
-            $snap = is_array($child->fresh()?->context_snapshot) ? $child->fresh()->context_snapshot : [];
-            $child->update(['context_snapshot' => [...$snap, 'plan' => true, 'komponenten' => array_values($komponenten)]]);
+            $snap = [...$snap, 'plan' => true, 'komponenten' => array_values($komponenten)];
         }
+        $child->update(['context_snapshot' => $snap]);
         $this->baueKind($team, $child, $userId, $text, $params, $vollAnreichern);
+    }
+
+    /** @param  array{recipe_id: int, name?: string}  $bestand */
+    private function uebernimmBestandFuerKind(Team $team, FoodAlchemistCascadeRunStep $child, array $bestand): void
+    {
+        $rezept = FoodAlchemistRecipe::visibleToTeam($team)->find((int) $bestand['recipe_id']);
+        if ($rezept === null) {
+            app(PlanningCascadeService::class)->markStepFailed((int) $child->id, 'Bestands-Basisrezept nicht mehr vorhanden.');
+
+            return;
+        }
+        $this->bindCompletedChild($team, $child, $rezept);
+        $child->update([
+            'status' => 'skipped', 'ref_type' => 'recipe', 'ref_id' => (int) $rezept->id, 'phase' => null, 'error' => null,
+            'deferred' => ['reuse' => ['reif' => true, 'eigen' => (int) $rezept->team_id === (int) $team->id,
+                'luecken' => [], 'status' => (string) ($rezept->status?->value ?? '')]],
+        ]);
+        app(PlanningCascadeService::class)->recomputeRunStatus((int) $child->cascade_run_id);
     }
 
     /** @param  array<string, mixed>  $params */
@@ -359,17 +397,21 @@ class RecipeDependencyWorkflowService
      * „Neu erzeugen“ an einem Kind-Step: dieselben Vorgaben wie beim ersten Start (kindParameter + kindVorgaben +
      * Plan) — vorher lief das über den Wurzel-Pfad mit den vollen Lauf-Params (Aroma des Gerichts kam zurück).
      */
-    public function starteKindNeu(Team $team, FoodAlchemistCascadeRunStep $child, string $text): void
+    public function starteKindNeu(Team $team, FoodAlchemistCascadeRunStep $child, ?string $kommentar = null): void
     {
+        // Der ursprüngliche Auftrag, nicht das Label: das trägt nach dem Bau den Artefaktnamen.
+        $auftrag = (string) (($child->context_snapshot ?? [])['kind_brief'] ?? $child->label ?? '');
+        $kommentar = trim((string) $kommentar);
+        $text = $kommentar !== '' ? rtrim($auftrag) . "\n\nGezielte Anpassung (Nutzer-Feedback zu dieser Position): " . $kommentar : $auftrag;
         $parent = $child->parent_step_id !== null ? FoodAlchemistCascadeRunStep::find($child->parent_step_id) : null;
         $d = is_array($parent?->deferred['children'] ?? null) ? $parent->deferred['children'] : [];
         $params = is_array($d['params'] ?? null) ? $d['params'] : (is_array($child->run?->params) ? $child->run->params : []);
-        $userId = (int) (\Illuminate\Support\Facades\Auth::id() ?? ($d['user_id'] ?? 0));
+        $userId = (int) (($d['user_id'] ?? null) ?: (\Illuminate\Support\Facades\Auth::id() ?? 0));
         $vollAnreichern = (bool) ($params['_voll_anreichern'] ?? false);
         $params = self::kindParameter($params);
         $dep = FoodAlchemistCascadeRecipeDependency::where('child_step_id', $child->id)->first(['ingredient_id']);
         if ($parent !== null && $dep !== null) {
-            $params = [...$params, ...$this->kindVorgaben($parent, (int) $dep->ingredient_id, (string) $child->label)];
+            $params = [...$params, ...$this->kindVorgaben($parent, (int) $dep->ingredient_id, $auftrag)];
         }
         $this->starteKind($team, $child, $userId, $text, $params, $vollAnreichern);
     }

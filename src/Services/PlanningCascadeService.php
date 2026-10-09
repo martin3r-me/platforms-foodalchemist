@@ -2716,7 +2716,7 @@ class PlanningCascadeService
         } elseif ($step->kind === 'rezept' && $step->parent_step_id !== null) {
             // Kind-Basisrezept: wie beim ersten Start (eigene Vorgaben, eigener Plan) — nicht mit den Lauf-Params
             // der Wurzel, sonst kam z. B. das Aroma des Gerichts zurück. Ein Nutzer-Kommentar reist im Brief mit.
-            app(RecipeDependencyWorkflowService::class)->starteKindNeu($team, $step->fresh(), $brief);
+            app(RecipeDependencyWorkflowService::class)->starteKindNeu($team, $step->fresh(), $kommentar);
         } elseif ($step->kind === 'rezept' && $step->parent_step_id === null && (bool) ($params['plan_first'] ?? false)
             && empty(($step->context_snapshot ?? [])['plan'])) {
             // Spec 80 B1: scheiterte schon der Plan, wird neu geplant, nicht ohne Plan gebaut.

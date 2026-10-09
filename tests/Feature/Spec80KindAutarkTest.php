@@ -55,10 +55,11 @@ it('„jetzt erzeugen“ startet das Kind ohne Gericht-Aroma und ohne Wissens-Ei
 
     app(PlanningCascadeService::class)->erzeugeGeplantenStep($this->rootTeam, (int) $kind->id);
 
-    Queue::assertPushed(GenerateRecipeJob::class, function ($job) use ($kind) {
-        $p = $job->parameter;
+    // Das Kind plant zuerst (Spec80KindPlanungTest) — die Parameter reisen im Plan-Job.
+    Queue::assertPushed(\Platform\FoodAlchemist\Jobs\GenerateRecipePlanJob::class, function ($job) use ($kind) {
+        $p = $job->params;
 
-        return (int) ($p['cascade_step_id'] ?? 0) === (int) $kind->id
+        return $job->stepId === (int) $kind->id
             && ! array_key_exists('aroma', $p) && ! array_key_exists('aroma_kueche', $p) && ! array_key_exists('saison', $p)
             && ! array_key_exists('_knowledge_scope', $p)
             && ($p['diaet_hart'] ?? null) === ['vegetarisch'];
