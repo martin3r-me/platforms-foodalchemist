@@ -3042,9 +3042,16 @@ class Index extends Component
             return;
         }
         $n = $cascade->reapeVerwaisteSteps($team, $this->laufId);
+        // Spec 80 C7: EINE Meldung. Vorher stand „arbeitet vermutlich noch" neben „Generierung
+        // fehlgeschlagen", obwohl der Schritt längst gescheitert war.
+        $gescheitert = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep::where('cascade_run_id', $this->laufId)
+            ->where('status', 'failed')->count();
         if ($n > 0) {
             $this->meldung = $n . ' abgebrochene(r) Schritt(e) freigeräumt — jetzt unten neu generieren oder verwerfen.';
             $this->fehler = null;
+        } elseif ($gescheitert > 0) {
+            $this->meldung = null;
+            $this->fehler = $gescheitert . ' Schritt(e) gescheitert. „Gescheiterte Schritte fortsetzen" startet sie neu, oder einzeln neu generieren.';
         } else {
             $this->meldung = 'Kein abgebrochener Schritt gefunden — der Lauf arbeitet vermutlich noch. Kurz warten.';
         }
@@ -3481,8 +3488,11 @@ class Index extends Component
 
                 return $reuse !== null && ! ($reuse['reif'] ?? false);
             })->count();
+            // Spec 80 C7: eine Stufe nur aus gescheiterten Schritten ist nicht „erledigt" (demo Lauf #79
+            // zeigte „Erledigt" neben „0 von 1 fertig").
             $zustand = $running > 0 ? 'läuft'
-                : ($done > 0 ? 'prüfen' : ($geplant > 0 ? 'geplant' : ($unreif > 0 ? 'prüfen' : 'erledigt')));
+                : ($done > 0 ? 'prüfen' : ($geplant > 0 ? 'geplant' : ($unreif > 0 ? 'prüfen'
+                    : ($failed > 0 && $freigegeben + $uebernommen === 0 ? 'fehlgeschlagen' : 'erledigt'))));
             $out[] = [
                 'kind' => $d['kind'], 'label' => $d['label'], 'total' => $total,
                 'running' => $running, 'done' => $done, 'freigegeben' => $freigegeben,

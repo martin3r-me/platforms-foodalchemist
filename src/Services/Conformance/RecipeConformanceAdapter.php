@@ -239,7 +239,9 @@ class RecipeConformanceAdapter implements ConformanceAdapter
             null, [], ['_kanon_prompt_key' => $kanonKey] + \Platform\FoodAlchemist\Services\Knowledge\RezeptAchsen::fuer($r),
         );
         $optionen = \Platform\FoodAlchemist\Services\Ai\KnowledgeContextService::proposeOptionen($wissen)
-            + ['_kanon_prompt_key' => $kanonKey];
+            + ['_kanon_prompt_key' => $kanonKey]
+            // Spec 80 C6: Kosten und Verlauf der Heilung dem Rezept zuordnen (vorher target_id = null, 15/15).
+            + ['target_table' => 'foodalchemist_recipes', 'target_id' => $id];
 
         $vorschlag = app(AiGatewayService::class)->propose($promptKey, [
             'anweisung' => $direktive,
@@ -262,6 +264,14 @@ class RecipeConformanceAdapter implements ConformanceAdapter
         // Zutaten: Voll-Ersatz über den geteilten Revise-Pfad (#508-Grounding hängt dran).
         if (! empty($werte['zutaten']) && is_array($werte['zutaten'])) {
             $zeilen = app(RecipeReviseService::class)->syncZeilen($r, $werte['zutaten']);
+            // Spec 80 C3: Verweiszeilen (Unterrezepte) fasst die Selbstheilung nicht an. Lässt die KI eine
+            // weg, kommt sie unverändert zurück — ein Befund am Unterrezept wird dort geheilt, nicht hier.
+            $behalten = array_flip(array_filter(array_map(static fn ($z) => $z['id'] ?? null, $zeilen)));
+            foreach ($r->ingredients as $orig) {
+                if ($orig->referenced_recipe_id !== null && ! isset($behalten[$orig->id])) {
+                    $zeilen[] = app(RecipeReviseService::class)->bestandsZeile($orig);
+                }
+            }
             if ($zeilen !== []) {
                 app(RecipeService::class)->syncIngredients($team, $id, $zeilen);
             }
