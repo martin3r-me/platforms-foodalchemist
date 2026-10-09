@@ -271,3 +271,44 @@ it('Heilung: hart + weich → die Direktive trägt nur den harten Befund', funct
     expect($erg['heilung_uebersprungen'])->toBeNull()
         ->and(array_column($direktive, 'schweregrad'))->toBe(['hart']);
 });
+
+// ── Lauf 87 (10.10.): §6.5 nicht heilen, Heil-Status am Step ───────────────────────────────
+
+it('Heilung: reiner §6.5-Garverlust-Befund ist nicht heilbar → kein Revise (bis Paket 11)', function () use ($befund, $aufrufe) {
+    $garverlust = $befund(['paragraph' => '§6.5', 'feld' => 'cooking_loss_pct', 'begruendung' => 'Reduktion ohne Einkochverlust']);
+    ConformanceHealStub::bind([[$garverlust], [$garverlust]]);
+
+    $erg = app(ConformanceService::class)->pruefeUndHeile($this->rootTeam, 'basisrezept', $this->rezept->id);
+
+    expect($erg['heilung_uebersprungen'])->toBe('nichts_heilbar')
+        ->and($erg['heilung'])->toBe(['status' => 'nichts_heilbar', 'befunde' => 1, 'hart' => 1, 'heilbar' => 0])
+        ->and($aufrufe('recipe.ueberarbeiten'))->toBe(0);
+});
+
+it('heilbar: §6.5 / F6.5 / Garverlust-Feld raus, §6 und §6.50-fremde Paragraphen bleiben', function () use ($befund) {
+    $a = app(\Platform\FoodAlchemist\Services\Conformance\RecipeConformanceAdapter::class);
+    $f65 = $befund(['paragraph' => '§6 F6.5', 'feld' => 'zutaten']);
+    $feld = $befund(['paragraph' => '', 'feld' => 'garverlust']);
+    $p65a = $befund(['paragraph' => 'Regelwerk Basisrezepte §6.5a', 'feld' => 'yield']);
+    $p6 = $befund(['paragraph' => '§6.1', 'feld' => 'name']);
+
+    expect($a->heilbar($this->rootTeam, $this->rezept->id, [$f65, $feld, $p65a, $p6]))->toBe([$p6]);
+});
+
+it('ConformanceCheckJob: Heil-Status + Rezept am Step, Befunde tragen den Kaskaden-Lauf', function () use ($befund) {
+    $garverlust = $befund(['paragraph' => '§6.5', 'feld' => 'cooking_loss_pct']);
+    ConformanceHealStub::bind([[$garverlust], [$garverlust]]);
+    $run = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'rezept', 'status' => 'running']);
+    $step = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id,
+        'kind' => 'rezept', 'status' => 'done', 'ref_type' => 'recipe', 'ref_id' => $this->rezept->id, 'sort' => 1]);
+
+    (new \Platform\FoodAlchemist\Jobs\ConformanceCheckJob(
+        $this->rootTeam->id, (int) auth()->id(), 'basisrezept', $this->rezept->id, cascadeStepId: $step->id,
+    ))->handle(app(ConformanceService::class));
+
+    $konf = $step->fresh()->deferred['conformance'] ?? [];
+    expect($konf['artifact_id'] ?? null)->toBe($this->rezept->id)
+        ->and($konf['heilung']['status'] ?? null)->toBe('nichts_heilbar')
+        ->and($konf['ms'] ?? null)->toBeInt()
+        ->and(FoodAlchemistConformanceFinding::where('artifact_id', $this->rezept->id)->value('run_id'))->toBe($run->id);
+});
