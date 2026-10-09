@@ -268,7 +268,7 @@ class PlanningCascadeService
         // (starteFolgestufe → EnrichRecipeJob, completeCoverage). Eine Vor-Freigabe-Voll-Anreicherung am
         // noch nicht freigegebenen Draft liefe dieselbe teure Coverage-Kette ein zweites Mal — darum im
         // staged-Modus unterdrücken. Nicht-gestuft (Direkt-Materialisierung) behält das Alt-Verhalten.
-        $vorFreigabeAnreichern = $vollAnreichern && ! $staged;
+        $vorFreigabeAnreichern = $vollAnreichern && ! $staged;   // Spec 80 H: nicht gestufte Läufe haben kein Freigabe-Tor — dort bleibt es bewusst so
         GenerateRecipeJob::dispatch($runId, $team->id, (int) (\Illuminate\Support\Facades\Auth::id() ?? 0), $brief, $jobParams, $vkModus, $vorFreigabeAnreichern);
     }
 
@@ -2136,14 +2136,22 @@ class PlanningCascadeService
         if ($step->status !== 'done') {
             return 'no_op_status_' . $step->status;
         }
+        // Spec 80 H3: im gestuften Lauf IST die Freigabe die Anreicherung — grün (approved) wird das Rezept erst,
+        // wenn sie geklappt hat (EnrichRecipeJob). Bis dahin `review` + Marker. Vorher stand sofort approved,
+        // und eine gescheiterte Anreicherung hinterließ ein „freigegebenes" Halb-Rezept.
+        $nachAnreicherung = (bool) ($step->run?->staged) && $step->ref_type === 'recipe' && $step->ref_id !== null;
         if ($step->ref_id !== null) {
             if ($step->ref_type === 'recipe') {
-                app(RecipeService::class)->setStatus($team, (int) $step->ref_id, 'approved');
+                app(RecipeService::class)->setStatus($team, (int) $step->ref_id, $nachAnreicherung ? 'review' : 'approved');
             } elseif ($step->ref_type === 'concept') {
                 app(ConceptService::class)->setStatus($team, (int) $step->ref_id, 'active');
             }
         }
-        $step->update(['status' => 'freigegeben']);
+        $deferred = is_array($step->deferred) ? $step->deferred : [];
+        if ($nachAnreicherung) {
+            $deferred['freigabe_nach_anreicherung'] = true;
+        }
+        $step->update(['status' => 'freigegeben', 'deferred' => $deferred ?: null]);
 
         // Gestuft (Gate pro Ebene): die Freigabe startet die nächste Stufe UND reichert das Artefakt
         // komplett an (beides als Queue-Job). Bei nicht-gestuften Läufen bleibt es bei der Live-Setzung.
@@ -2937,6 +2945,41 @@ class PlanningCascadeService
         foreach ($run->steps->where('status', 'done') as $s) {
             $this->gibStepFrei($team, (int) $s->id);
         }
+    }
+
+    /**
+     * Spec 80 H3: „Alle neu gebauten anreichern und freigeben" — nur fertige Entwürfe (done) ohne offenen harten
+     * Regelwerk-Befund, optional nur in einer Auswahl (Baum-Zweig). Übernahmen aus dem Bestand sind schon
+     * freigegeben und zählen nicht.
+     *
+     * @param  list<int>|null  $nurSteps
+     * @return array{freigegeben: int, uebersprungen: int}
+     */
+    public function gibNeueFrei(Team $team, int $runId, ?array $nurSteps = null): array
+    {
+        $run = $this->lauf($team, $runId);
+        if ($run === null || ! $run->isOwnedBy($team)) {
+            return ['freigegeben' => 0, 'uebersprungen' => 0];
+        }
+        $kandidaten = $run->steps->where('status', 'done')
+            ->filter(fn ($s) => $nurSteps === null || in_array((int) $s->id, $nurSteps, true));
+        $rezeptIds = $kandidaten->where('ref_type', 'recipe')->pluck('ref_id')->filter()->map(fn ($i) => (int) $i)->all();
+        $hart = $rezeptIds === [] ? [] : array_flip(\Platform\FoodAlchemist\Models\FoodAlchemistConformanceFinding::query()
+            ->where('team_id', $team->id)->where('artifact_type', 'recipe')->whereIn('artifact_id', $rezeptIds)
+            ->where('status', 'offen')->where('schweregrad', 'hart')->pluck('artifact_id')->map(fn ($i) => (int) $i)->all());
+        $frei = 0;
+        $weg = 0;
+        foreach ($kandidaten as $s) {
+            if ($s->ref_type === 'recipe' && isset($hart[(int) $s->ref_id])) {
+                $weg++;
+
+                continue;
+            }
+            $this->gibStepFrei($team, (int) $s->id);
+            $frei++;
+        }
+
+        return ['freigegeben' => $frei, 'uebersprungen' => $weg];
     }
 
     /** Bulk-Verwerfen aller noch offenen (done|failed) Steps eines Laufs. */

@@ -228,8 +228,10 @@
                             </button>
                         </div>
                     </div>
-                    <x-foodalchemist::ki-action action="alleFrei()" target="alleFrei" icon="heroicon-o-check" variant="ghostXs" label="Alle freigeben"
-                        busy="Wird freigegeben …" flash="Alle freigegeben" />
+                    {{-- Spec 80 H3: erst prüfen, dann anreichern — die Freigabe reichert an, grün wird es danach.
+                         Entwürfe mit offenem harten Regelwerk-Befund bleiben stehen. --}}
+                    <x-foodalchemist::ki-action action="alleNeuenAnreichern()" target="alleNeuenAnreichern" icon="heroicon-o-sparkles" variant="ghostXs"
+                        label="Alle neu gebauten anreichern und freigeben" busy="Wird angereichert …" flash="Anreicherung gestartet" data-planung-alle-anreichern />
                 </div>
             </div>
         @endif

@@ -1998,8 +1998,10 @@ it('staged Freigabe (gericht): Anreicherung als Job + ki_bilder/ziel_vk aus den 
 
     app(PlanningCascadeService::class)->gibStepFrei($this->rootTeam, (int) $step->id);
 
+    // Spec 80 H3: im gestuften Lauf wird das Rezept erst nach der Anreicherung grün — bis dahin `review`.
     expect($step->refresh()->status)->toBe('freigegeben')
-        ->and($recipe->refresh()->status->value)->toBe('approved');
+        ->and($recipe->refresh()->status->value)->toBe('review')
+        ->and($step->deferred['freigabe_nach_anreicherung'] ?? null)->toBeTrue();
     Queue::assertPushed(EnrichRecipeJob::class, fn ($job) => (int) $job->recipeId === (int) $recipe->id
         && $job->kiBilder === true && (float) $job->zielVk === 12.5);
 });

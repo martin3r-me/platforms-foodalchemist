@@ -3205,6 +3205,23 @@ class Index extends Component
         $this->refreshLaeuft($cascade);
     }
 
+    /**
+     * Spec 80 H3: alle neu gebauten Entwürfe (ohne offenen harten Regelwerk-Befund) anreichern und freigeben.
+     * Im gestuften Lauf wird jedes Rezept erst nach erfolgreicher Anreicherung grün.
+     */
+    public function alleNeuenAnreichern(PlanningCascadeService $cascade): void
+    {
+        $team = $this->team();
+        if ($team === null || $this->laufId === null) {
+            return;
+        }
+        $r = $cascade->gibNeueFrei($team, $this->laufId);
+        $this->meldung = $r['freigegeben'] . ' Entwurf/Entwürfe werden angereichert und danach freigegeben.'
+            . ($r['uebersprungen'] > 0 ? ' ' . $r['uebersprungen'] . ' mit offenem Regelwerk-Befund bleiben zur Prüfung stehen.' : '');
+        $this->fehler = null;
+        $this->refreshLaeuft($cascade);
+    }
+
     /** Alle offenen Entwürfe des Laufs verwerfen. */
     public function alleVerwerfen(PlanningCascadeService $cascade): void
     {

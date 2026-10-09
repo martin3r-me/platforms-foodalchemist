@@ -131,6 +131,7 @@ class EnrichRecipeJob implements ShouldQueue
                 // ein Glied übersprungen wurde (z. B. `uebersprungen_ohne_grounding`). Genau das
                 // gehört ins Lauf-Protokoll, wo `planung_kaskade.GET` es je Step ausweist.
                 $this->markEnrich('done', null, $this->coverageKurz($ergebnis), $this->dauerMs($start));
+                $this->freigabeAbschliessen();
             } catch (\Throwable $e) {
                 // Rezept bleibt live (fail-soft) — aber der Fehler wird sichtbar (Status + Log), nicht geschluckt.
                 Log::warning('[EnrichRecipeJob] Anreicherung fehlgeschlagen', ['recipe' => $this->recipeId, 'error' => $e->getMessage()]);
@@ -281,6 +282,31 @@ class EnrichRecipeJob implements ShouldQueue
         }
 
         return $kurz === [] ? null : $kurz;
+    }
+
+    /**
+     * Spec 80 H3: die Freigabe im gestuften Lauf wartet auf die Anreicherung (`deferred.freigabe_nach_anreicherung`).
+     * Erst jetzt wird das Rezept grün. Nur ein Rezept, das noch auf `review` steht, wird angehoben — hat der
+     * Mensch inzwischen etwas anderes gesetzt, bleibt es. Fail-soft.
+     */
+    private function freigabeAbschliessen(): void
+    {
+        if ($this->stepId === null) {
+            return;
+        }
+        try {
+            $step = FoodAlchemistCascadeRunStep::find($this->stepId);
+            $deferred = is_array($step?->deferred) ? $step->deferred : [];
+            if ($step === null || empty($deferred['freigabe_nach_anreicherung'])) {
+                return;
+            }
+            \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::query()->whereKey($this->recipeId)
+                ->where('status', 'review')->update(['status' => 'approved']);
+            unset($deferred['freigabe_nach_anreicherung']);
+            $step->update(['deferred' => $deferred ?: null]);
+        } catch (\Throwable $e) {
+            Log::warning('[EnrichRecipeJob] Freigabe nach Anreicherung nicht abgeschlossen', ['recipe' => $this->recipeId, 'error' => $e->getMessage()]);
+        }
     }
 
     private function markEnrich(string $status, ?string $error = null, ?array $coverage = null, ?int $dauerMs = null): void
