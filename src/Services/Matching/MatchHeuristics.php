@@ -299,7 +299,7 @@ class MatchHeuristics
                 || str_contains($t, 'eingelegt') || str_contains($t, 'haltbar')) {
                 return 'preserved';
             }
-            foreach (TokenEngine::PROCESSED_MARKERS as $m) {
+            foreach (TokenEngine::verarbeitetMarker() as $m) {
                 if (str_contains($t, $m)) {
                     return 'preserved';
                 }
@@ -365,7 +365,7 @@ class MatchHeuristics
             if (in_array($t, self::OVERSPEC_FORM_TOKENS, true)) {
                 return true;   // FIX-2: geachtelt/mini/gemischt zählen als Schnitt-/Größen-Überspezifikation
             }
-            foreach (TokenEngine::CUT_FORM_MARKERS as $m) {
+            foreach (TokenEngine::schnittformen() as $m) {
                 if (str_contains($t, $m)) {
                     return true;
                 }
@@ -394,7 +394,7 @@ class MatchHeuristics
             $class = $this->zustandClassResolved($gpName, $zustandCol);
             $isProcessed = false;
             foreach ($tokens as $t) {
-                foreach (TokenEngine::PROCESSED_MARKERS as $m) {
+                foreach (TokenEngine::verarbeitetMarker() as $m) {
                     if (str_contains($t, $m)) {
                         $isProcessed = true;
 
@@ -514,114 +514,21 @@ class MatchHeuristics
         return null;
     }
 
-    /** 4.4s — Regelwerk §5 Default-GPs (1-Token-Guard; prefer_raw schaltet Ei-Produkte). */
+    /**
+     * 4.4s — Regelwerk §5 Default-GPs. Seit Spec 81 eine Regel als Daten (`basisrezept.5.default_gp`, Einstellungen
+     * › Regeln): Wortmengen-Vergleich (Reihenfolge egal), `prefer_raw` (From Scratch) als Kontext — Eigelb/Eiweiß
+     * → Ei, Basis-Gemüse nur From Scratch. Vorher eine if-Kette mit festen Namen hier.
+     */
     public function defaultGpAlias(array $tokens, bool $preferRaw): ?string
     {
-        $has = fn (string $t) => in_array($t, $tokens, true);
-        $hasPre = function (string $p) use ($tokens) {
-            foreach ($tokens as $x) {
-                if (str_starts_with($x, $p)) {
-                    return true;
-                }
-            }
+        $regel = \Platform\FoodAlchemist\Services\Regeln\RegelBuch::per('basisrezept.5.default_gp');
+        if ($regel === null || $tokens === []) {
+            return null;
+        }
+        /** @var \Platform\FoodAlchemist\Services\Regeln\Arten\Zuordnung $zuordnung */
+        $zuordnung = app(\Platform\FoodAlchemist\Services\Regeln\RegelMotor::class)->art('zuordnung');
 
-            return false;
-        };
-        $n = count($tokens);
-
-        if ($has('salz') && $n === 1) {
-            return 'Salz / Kochsalz: trocken, unjodiert, Raffinade';
-        }
-        // D4 2026-08-18: bare »Wasser«/»Leitungswasser« → Leitungswasser-GP statt der nächsten
-        // Flaschen-/Bio-Variante (Live-Bug: »Wasser« matchte »Wasser: still, 0,5 l, Bio«).
-        // NUR n===1 → »Mineralwasser«/»Wasser still«/»Sprudel« bleiben bewusst die gekaufte Ware.
-        //
-        // KORREKTUR 2026-09-03: der Alias zeigte auf »Wasser: Leitung« — diesen Namen gibt es
-        // nicht. Das GP heisst »Leitungswasser: frisch« (id 9359 auf demo), existiert seit
-        // langem, ist approved und über einen Nullpreis-Artikel mit 0,00 €/kg korrekt
-        // modelliert. Der Alias lief also seit dem 18.08. ins Leere (resolveGpByName → null →
-        // Pool-Scan), und »Wasser« landete weiter auf dem Bio-Flaschenwasser: 64 Rezepte
-        // rechnen es so. Es war ein FALSCHER NAME im Code, kein fehlendes Grundprodukt —
-        // die zuvor vermutete Regelwerk-Lücke (§11.2 requires_la-Kopplung) besteht nicht,
-        // weil das GP den normalen Weg über einen Artikel geht.
-        if (($has('wasser') || $has('leitungswasser')) && $n === 1) {
-            return 'Leitungswasser: frisch';
-        }
-        if ($n === 1 && ($has('zucker') || $has('feinzucker') || $has('kristallzucker')
-            || $has('streuzucker') || $has('raffinadezucker') || $has('haushaltszucker') || $has('weisszucker'))) {
-            return 'Zucker Raffinade: trocken, weiss';
-        }
-        if ($has('eigelb') && $n === 1) {
-            return $preferRaw ? 'Eier: frisch, Groesse L, Bodenhaltung' : 'Eigelb: fluessig, pasteurisiert';
-        }
-        if ($has('eiweiss') && $n === 1) {
-            return $preferRaw ? 'Eier: frisch, Groesse L, Bodenhaltung' : 'Huehnereiweiss: fluessig, pasteurisiert';
-        }
-        if (($has('ei') || $has('eier')) && $n === 1) {
-            return 'Eier: frisch, Groesse L, Bodenhaltung';
-        }
-        if (($has('sahne') || $has('schlagsahne')) && $n === 1) {
-            return 'Sahne: konserviert, 30 % Fett';
-        }
-        if ($has('milch') && $n === 1) {
-            return 'Milch: frisch, 3,5 % Fett';
-        }
-        if ($has('mehl') && $n === 1) {
-            return 'Weizenmehl: trocken, Type 405';
-        }
-        if ($has('gelatine') && $n === 1) {
-            return 'Gelatine: trocken, kaltloeslich';
-        }
-        if ($has('weisswein') && $n === 1) {
-            return 'Weisswein: konserviert, zum Kochen';
-        }
-        if ($has('olivenoel') && $n === 1) {
-            return 'Olivenoel: trocken, hochwertig';
-        }
-        if ($has('honig') && $n === 1) {
-            return 'Honig: konserviert, Imker';
-        }
-        if ($has('sojasauce') && $n === 1) {
-            return 'Sojasauce: konserviert, glutenfrei';
-        }
-        if ($has('petersilie') && $n === 1) {
-            return 'Petersilie glatt: frisch, gehackt';
-        }
-        // Spec 41 FIX-1 (RC-1 / Fälle D1–D3): Basis-Gemüse erdet unter From Scratch (preferRaw) auf die
-        // neutrale Grundform »frisch, ganz« statt auf über-spezifische Schnitt-/Größen-Varianten
-        // (»geachtelt« / »mini, gemischt«). NUR preferRaw + n===1 → die Frische-/Convenience-Achse
-        // bleibt sonst frei (konserviert/TK via Variant-Ranking). Inert, solange das Basis-GP fehlt
-        // (resolveGpByName → null → Pool-Scan). Sellerie bewusst NICHT (Knollen-/Stauden-Ambiguität).
-        if ($preferRaw && $n === 1) {
-            if ($has('tomate') || $has('tomaten')) {
-                return 'Tomaten: frisch, ganz';
-            }
-            if ($has('zwiebel') || $has('zwiebeln')) {
-                return 'Zwiebeln: frisch, ganz';
-            }
-            if ($has('karotte') || $has('karotten') || $has('moehre') || $has('moehren')
-                || $has('mohrruebe') || $has('mohrrueben')) {
-                return 'Karotten: frisch, ganz';
-            }
-        }
-        if ($has('pfeffer')) {
-            if ($hasPre('weiss')) {
-                return 'Pfeffer weiss: trocken, gemahlen';
-            }
-            $nurGenerisch = true;
-            foreach ($tokens as $t) {
-                if (! in_array($t, ['pfeffer', 'schwarz', 'schwarzer', 'ganz', 'gemahlen'], true)) {
-                    $nurGenerisch = false;
-
-                    break;
-                }
-            }
-            if ($nurGenerisch) {
-                return 'Pfeffer schwarz: trocken, gemahlen';
-            }
-        }
-
-        return null;
+        return $zuordnung->finde($regel, implode(' ', $tokens), ['prefer_raw' => $preferRaw ? 'ja' : 'nein'])['ziel_name'] ?? null;
     }
 
     /** 4.4p — Recall-Substring-Overlap für die LLM-Shortlist (Komposita überleben). */

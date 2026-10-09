@@ -8,7 +8,6 @@ use Platform\FoodAlchemist\Services\Conformance\RecipeConformanceAdapter;
 use Platform\FoodAlchemist\Services\ConformanceService;
 use Platform\FoodAlchemist\Services\RecipeGeneratorService;
 use Platform\FoodAlchemist\Support\GpKorrektur;
-use Platform\FoodAlchemist\Support\RegelwerkLeser;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
 use Platform\FoodAlchemist\Tests\TestCase;
 use Symfony\Component\Uid\UuidV7;
@@ -21,18 +20,7 @@ uses(TestCase::class, SeedsTeamHierarchy::class);
  */
 beforeEach(function () {
     $this->seedTeamHierarchy();
-    $this->dossier = function (string $slug, string $md): void {
-        DB::table('foodalchemist_knowledge_documents')->insert([
-            'uuid' => (string) UuidV7::generate(), 'slug' => $slug, 'title' => $slug, 'category' => 'regelwerk',
-            'content_md' => $md, 'version' => 1, 'content_hash' => hash('sha256', $md), 'char_count' => strlen($md),
-            'active' => 1, 'created_at' => now(), 'updated_at' => now(),
-        ]);
-        RegelwerkLeser::vergessen();
-    };
-    ($this->dossier)('regelwerk-basisrezepte-2-verarbeitungs-reduktion-brunoise-roh-form', "## §2\n"
-        . "- Verarbeitungs-Suffixe: `brunoise`, `würfel/wuerfel`, `gehackt`, `geschnitten`, `gerieben`, `geröstet`, `gemahlen`, `in scheiben`.\n");
-    ($this->dossier)('regelwerk-basisrezepte-10-12-naming-grundprinzip-typ-vokabular--1-2-typ-vokabular-kontrolliert',
-        "| Hauptgruppe | Erlaubte Typen |\n|---|---|\n| Pürees & Marken | `Püree`, `Mark` |\n| Cremes & Cremaux | `Crème`, `Curd` |\n| Beilagen | `Beilage`, `Polenta` |\n");
+    // Spec 81: Typ-Vokabular und §2-Suffixe kommen aus den Regeln (Seed per Migration), nicht aus Dossiers.
     $this->gp = function (string $name, string $zustand, ?string $bio = null, string $status = 'approved'): FoodAlchemistGp {
         $gp = $this->makeGp($this->rootTeam, $name);
         $gp->update(['condition' => $zustand, 'bio' => $bio, 'status' => $status]);
@@ -41,8 +29,9 @@ beforeEach(function () {
     };
 });
 
-it('liest Listen aus einem Dossier (Schrägstrich = Schreibvarianten)', function () {
-    expect(GpKorrektur::verarbeitungsSuffixe())->toContain('würfel')->toContain('wuerfel')->toContain('in scheiben');
+it('§2-Suffixe kommen aus den Regeln', function () {
+    // Spec 81: die Suffixe kommen aus den §2-Regeln (Seed), nicht mehr aus dem Dossier.
+    expect(GpKorrektur::verarbeitungsSuffixe())->toContain('würfel')->toContain('julienne')->toContain('in scheiben');
 });
 
 it('§2: frisches GP in Schnittform wird zur Rohform, die Verarbeitung wandert in die Notiz', function () {

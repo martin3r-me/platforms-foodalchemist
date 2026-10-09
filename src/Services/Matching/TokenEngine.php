@@ -22,9 +22,17 @@ class TokenEngine
     /** Reihenfolge fix; `innen` MUSS vor `en` stehen (GL-04 §3.1). */
     private const SUFFIXE = ['innen', 'nnen', 'en', 'er', 'e', 'n', 's'];
 
-    public const PROCESSED_MARKERS = ['konzentrat', 'pulver', 'instant', 'portionsstick', 'fertig', 'vorgegart', 'vorgekocht', 'granulat'];
+    /** Spec 81: Marker für verarbeitete Ware — Regel `matching.verarbeitet` (Einstellungen › Regeln). @return list<string> */
+    public static function verarbeitetMarker(): array
+    {
+        return \Platform\FoodAlchemist\Services\Regeln\RegelBuch::liste('matching.verarbeitet');
+    }
 
-    public const CUT_FORM_MARKERS = ['brunoise', 'wuerfel', 'gehackt', 'geschnitten', 'gerieben', 'gestiftelt', 'stifte', 'scheiben', 'streifen', 'julienne'];
+    /** Spec 81: Schnittformen — Regel `basisrezept.2.schnittform` (gemeinsam mit dem §2-Rohform-Tausch). @return list<string> */
+    public static function schnittformen(): array
+    {
+        return \Platform\FoodAlchemist\Services\Regeln\RegelBuch::liste('basisrezept.2.schnittform');
+    }
 
     private const QUALIFIER_PREFIXE = [
         'frisch', 'roh', 'tiefgek', 'gefror', 'konserv', 'getrock', 'trocken', 'eingelegt', 'haltbar',
@@ -249,7 +257,7 @@ class TokenEngine
      */
     public function isCutFormToken(string $t): bool
     {
-        foreach (self::CUT_FORM_MARKERS as $marker) {
+        foreach (self::schnittformen() as $marker) {
             if (str_contains($t, $marker)) {
                 return true;
             }
@@ -268,7 +276,7 @@ class TokenEngine
                 return true;
             }
         }
-        foreach ([...self::PROCESSED_MARKERS, ...self::CUT_FORM_MARKERS] as $marker) {
+        foreach ([...self::verarbeitetMarker(), ...self::schnittformen()] as $marker) {
             if (str_contains($t, $marker)) {
                 return true;
             }

@@ -47,10 +47,8 @@ beforeEach(function () {
     ] + $extra);
 });
 
-it('liest das Typ-Vokabular aus dem Wissens-Dossier (Tabelle geparst, Sonstiges ohne Typ fällt weg)', function () {
-    expect(RezeptTypVokabular::istGeladen())->toBeFalse();   // ohne Dossier: leer, fail-open
-
-    ($this->mkVokabular)();
+it('liest das Typ-Vokabular aus der Regel (Spec 81 Seed, Sonstiges ohne Typ fehlt)', function () {
+    expect(RezeptTypVokabular::istGeladen())->toBeTrue();   // Seed per Migration — kein Dossier nötig
 
     expect(RezeptTypVokabular::tabelle())->toHaveKey('Beilagen')->not->toHaveKey('Sonstiges')
         ->and(RezeptTypVokabular::tabelle()['Beilagen'])->toBe(['Beilage', 'Risotto', 'Polenta', 'Gnocchi', 'Knödel'])
@@ -58,7 +56,7 @@ it('liest das Typ-Vokabular aus dem Wissens-Dossier (Tabelle geparst, Sonstiges 
         ->and(RezeptTypVokabular::typImText('Petersilienpüree'))->toBe('Püree')
         ->and(RezeptTypVokabular::typImText('Cremige Polenta'))->toBe('Polenta')
         ->and(RezeptTypVokabular::typImText('Kalbsfond'))->toBe('Fond')
-        ->and(RezeptTypVokabular::typImText('Petersilienmatte'))->toBeNull();
+        ->and(RezeptTypVokabular::typImText('Petersilienmatte'))->toBe('Matte');   // „Matte" seit 09.10. im Vokabular
 });
 
 it('Funktionsprüfung lehnt die Fehlzuordnungen von demo ab', function () {
@@ -84,6 +82,8 @@ it('Funktionsprüfung lässt echte Treffer durch', function () {
 });
 
 it('ohne Vokabular greifen nur Bestandteil- und Diät-Prüfung', function () {
+    $regel = \Platform\FoodAlchemist\Models\FoodAlchemistRule::where('schluessel', RezeptTypVokabular::REGEL)->firstOrFail();
+    app(\Platform\FoodAlchemist\Services\Regeln\RegelService::class)->setzeAktiv($regel->id, false);   // Regel aus = kein Vokabular
     // Die Bestandteil-Prüfung allein erkennt die Kräutermatte schon (Hauptbestandteil fehlt in der Zeile).
     expect(BestandsPassung::grund('Petersilienmatte', 'Garnitur: Kräutermatte Petersilie (Vegan)'))->toContain('kraeutermatte')
         ->and(BestandsPassung::grund('Rote-Bete-Püree', 'Püree: Kartoffel-Rote-Bete'))->toContain('kartoffel')

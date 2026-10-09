@@ -542,7 +542,7 @@ it('B0: fremde/nicht existierende gp_id wird verworfen — Zeile fällt aufs Tex
 });
 
 it('B0: valide vorgeschlagene sub_rezept_id wird als Basisrezept-Referenz verdrahtet', function () {
-    $sub = $this->makeRecipe($this->rootTeam, 'Basis: Rotweinjus');
+    $sub = $this->makeRecipe($this->rootTeam, 'Jus: Rotwein');   // Spec 81: Typ-Präfix aus dem Vokabular (Seed)
 
     $resultat = $this->svc->generiere($this->rootTeam, 'Teller mit Jus', [], kiRezeptOverride: [
         'name' => 'Gericht: Jus-Teller',

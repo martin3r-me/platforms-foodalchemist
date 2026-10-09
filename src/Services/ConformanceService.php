@@ -290,6 +290,9 @@ class ConformanceService
                 'begruendung' => $begruendung,
                 'vorschlag' => trim((string) ($b['vorschlag'] ?? '')),
                 'konfidenz' => $this->konfidenz($b['konfidenz'] ?? $b['confidence'] ?? null),
+                // Spec 81 C4: Herkunft — KI-Befunde haben keine; Code-Befunde bringen Regel-ID mit.
+                'quelle' => ($b['quelle'] ?? 'ki') === 'code' ? 'code' : 'ki',
+                'rule_id' => isset($b['rule_id']) && is_numeric($b['rule_id']) ? (int) $b['rule_id'] : null,
             ];
         }
 
@@ -333,6 +336,8 @@ class ConformanceService
                 'reason' => $b['begruendung'],
                 'vorschlag' => ($b['vorschlag'] ?? '') !== '' ? $b['vorschlag'] : null,
                 'confidence' => $b['konfidenz'],
+                'quelle' => $b['quelle'] ?? 'ki',
+                'rule_id' => $b['rule_id'] ?? null,
                 'last_seen_at' => $jetzt,
                 'run_id' => $runId,
             ];

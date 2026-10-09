@@ -8,7 +8,11 @@ use Platform\FoodAlchemist\Services\Matching\TokenEngine;
  * M4-09: GL-04 Voll-Port, DB-freier Teil — 1:1 aus recipe_matching.rs (Tests ab Z. 1491)
  * + stemming.rs (7 Tests). Namen folgen den Rust-Tests (Rückverfolgbarkeit).
  */
+// Spec 81: Marker-Listen und §5-Defaults kommen aus der Regel-Tabelle (Seeds per Migration) — darum mit DB.
+uses(\Platform\FoodAlchemist\Tests\TestCase::class, \Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy::class);
+
 beforeEach(function () {
+    $this->seedTeamHierarchy();
     $this->e = new TokenEngine;
     $this->h = new MatchHeuristics($this->e);
     $this->ts = fn (string $s) => $this->e->tokenize($s);

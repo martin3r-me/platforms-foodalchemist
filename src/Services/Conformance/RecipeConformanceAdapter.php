@@ -64,8 +64,8 @@ class RecipeConformanceAdapter implements ConformanceAdapter
     /**
      * Spec 80 G1 — was das Regelwerk eindeutig entscheidet, prüft der Code bei JEDER Prüfung (kostet nichts,
      * hält auch alte Befunde aktuell): §1.2 Typ-Präfix außerhalb des Vokabulars, §2 frisches GP in
-     * Schnittform, §10 Bio-GP ohne Bio-Anspruch im Rezept, §8.3 Beschreibung unter drei Sätzen. Vokabular
-     * und Suffixe kommen aus den Wissens-Dossiers; fehlen sie, schweigt die jeweilige Regel.
+     * Schnittform, §10 Bio-GP ohne Bio-Anspruch im Rezept, §8.3 Satzzahl der Beschreibung. Listen und Schwellen
+     * kommen seit Spec 81 aus den Regeln (Einstellungen › Regeln); jeder Befund trägt `quelle = code` + Regel-ID.
      *
      * @return list<array<string, mixed>>
      */
@@ -76,6 +76,8 @@ class RecipeConformanceAdapter implements ConformanceAdapter
             return [];
         }
         $befunde = [];
+        $regel = static fn (string $k) => \Platform\FoodAlchemist\Services\Regeln\RegelBuch::falls($k);
+        $herkunft = static fn (string $k) => ['quelle' => 'code', 'rule_id' => $regel($k)?->id];
 
         $praefix = \Platform\FoodAlchemist\Support\RezeptTypVokabular::praefix((string) $r->name);
         if ($praefix !== null && \Platform\FoodAlchemist\Support\RezeptTypVokabular::istGeladen()
@@ -85,7 +87,7 @@ class RecipeConformanceAdapter implements ConformanceAdapter
                 'begruendung' => "Typ-Präfix »{$praefix}« steht nicht im kontrollierten Typ-Vokabular (§1.2).",
                 'vorschlag' => 'Einen Typ aus dem Vokabular der passenden Hauptgruppe wählen (z. B. Püree, Fond, Beilage).',
                 'konfidenz' => 1.0,
-            ];
+            ] + $herkunft('basisrezept.1.2.typ');
         }
 
         $bioImRezept = preg_match('/\bbio\b/iu', (string) $r->name . ' ' . (string) $r->description) === 1;
@@ -106,7 +108,7 @@ class RecipeConformanceAdapter implements ConformanceAdapter
                     'begruendung' => "Frische Zutat in Schnittform »{$suffix}« — Verarbeitung in der Küche gehört nicht ins Grundprodukt (§2).",
                     'vorschlag' => 'Auf die rohe Grundform umstellen, »' . $suffix . '« in die Zeilen-Notiz.',
                     'konfidenz' => 1.0,
-                ];
+                ] + $herkunft('basisrezept.2.schnittform');
             }
             if (! $bioImRezept && \Platform\FoodAlchemist\Support\GpKorrektur::istBio($gp)) {
                 $befunde[] = [
@@ -114,19 +116,22 @@ class RecipeConformanceAdapter implements ConformanceAdapter
                     'begruendung' => 'Bio-Grundprodukt ohne Bio-Anspruch im Rezept — Standard vor Bio (§10).',
                     'vorschlag' => 'Konventionelle Variante desselben Grundprodukts wählen.',
                     'konfidenz' => 1.0,
-                ];
+                ] + $herkunft('basisrezept.10.bio');
             }
         }
 
         $beschreibung = trim((string) $r->description);
         $saetze = $beschreibung === '' ? 0 : count(array_filter(preg_split('/(?<=[.!?])\s+/u', $beschreibung) ?: [], fn ($t) => trim($t) !== ''));
-        if ($beschreibung !== '' && $saetze < 3) {
+        $satzRegel = $regel('basisrezept.8.3.saetze');
+        if ($beschreibung !== '' && $satzRegel !== null
+            && ! app(\Platform\FoodAlchemist\Services\Regeln\RegelMotor::class)->art('schwelle')->erfuellt($satzRegel, (float) $saetze)) {
+            $spanne = ($satzRegel->params['min'] ?? '') . '–' . ($satzRegel->params['max'] ?? '');
             $befunde[] = [
-                'paragraph' => '§8.3', 'schweregrad' => 'weich', 'feld' => 'description',
-                'begruendung' => "Beschreibung hat {$saetze} Satz/Sätze, verlangt sind 3–5 (§8.3).",
-                'vorschlag' => 'Beschreibung auf 3–5 sachliche Sätze ergänzen.',
+                'paragraph' => '§8.3', 'schweregrad' => $satzRegel->wirkung === 'warnen' ? 'weich' : 'hart', 'feld' => 'description',
+                'begruendung' => "Beschreibung hat {$saetze} Satz/Sätze, verlangt sind {$spanne} (§8.3).",
+                'vorschlag' => "Beschreibung auf {$spanne} sachliche Sätze bringen.",
                 'konfidenz' => 1.0,
-            ];
+            ] + $herkunft('basisrezept.8.3.saetze');
         }
 
         return $befunde;
@@ -255,8 +260,16 @@ class RecipeConformanceAdapter implements ConformanceAdapter
             $kontext['ansatz_stueck'] = $r->yield_pieces;
             // Spec 80 G2: diese Punkte prüft der Code bei jeder Prüfung selbst (regelwerkBefunde) —
             // die KI soll sie nicht noch einmal melden (spart Ausgabe, keine Dubletten mit anderem §-Label).
-            $kontext['vom_code_geprueft'] = '§1.2 Typ-Präfix im Vokabular · §2 Schnittform frischer Zutaten · '
-                . '§10 Bio ohne Bio-Anspruch · §8.3 Satzzahl der Beschreibung — diese Punkte NICHT melden.';
+            // Spec 81: aus den aktiven Regeln erzeugt statt hart codiert — was der Code prüft, muss die KI nicht prüfen.
+            $geprueft = [];
+            foreach (\Platform\FoodAlchemist\Services\Regeln\RegelBuch::alle() as $rg) {
+                if ($rg->regelwerk === 'basisrezept' && $rg->art !== 'zuordnung' && $rg->paragraph !== null) {
+                    $geprueft[$rg->paragraph . ' ' . $rg->titel] = true;
+                }
+            }
+            if ($geprueft !== []) {
+                $kontext['vom_code_geprueft'] = implode(' · ', array_keys($geprueft)) . ' — diese Punkte NICHT melden.';
+            }
         }
 
         // Basisrezept → Basisrezepte-Regelwerk (§-Dossiers). VK → zusätzlich das

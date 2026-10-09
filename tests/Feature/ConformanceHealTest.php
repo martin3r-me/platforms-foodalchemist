@@ -44,7 +44,7 @@ beforeEach(function () {
     $this->rezept = FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id,
         'recipe_key' => 'bx-heal',
-        'name' => 'Tomaten Gewürfelt',
+        'name' => 'Tomaten Concassée',
         'status' => 'draft',
         'is_sales_recipe' => false,
     ]);
@@ -55,7 +55,7 @@ $befund = fn (array $o = []) => array_merge([
     'schweregrad' => 'hart',
     'feld' => 'name',
     'begruendung' => 'Plural statt Singular',
-    'vorschlag' => 'Tomate: gewürfelt',
+    'vorschlag' => 'Sauce: Tomate',
     'konfidenz' => 0.9,
 ], $o);
 
@@ -75,7 +75,7 @@ it('Selbstheil-Loop übernimmt den kontrollierten Naming-Vorschlag auch wenn der
 
     app(ConformanceService::class)->pruefeUndHeile($this->rootTeam, 'basisrezept', $this->rezept->id);
 
-    expect($this->rezept->fresh()->name)->toBe('Tomate: gewürfelt');
+    expect($this->rezept->fresh()->name)->toBe('Sauce: Tomate');
 });
 
 it('Selbstheil-Loop: Verstoß bleibt nach Runde → als Hinweis persistiert (kein Block)', function () use ($befund) {
@@ -147,7 +147,7 @@ it('Ablage: wertfreier Fingerprint dedupliziert (seen_count↑), verworfen bleib
  * kein Satz, und bleibt gueltig, wenn jemand die Formulierung aendert.
  */
 it('C5: die Selbstheil-Runde erbt den Kanon ihres Erzeugers — der verletzte § steht im Prompt', function () use ($befund) {
-    ConformanceHealStub::bind([[$befund()], []], ['name' => 'Tomate: gewürfelt']);
+    ConformanceHealStub::bind([[$befund()], []], ['name' => 'Sauce: Tomate']);
 
     app(ConformanceService::class)->pruefeUndHeile($this->rootTeam, 'basisrezept', $this->rezept->id);
 

@@ -7,7 +7,11 @@ use Platform\FoodAlchemist\Services\Matching\TokenEngine;
  * M3-08: GL-04-Teilset (Tokenizer/Stemmer/Score-Kern, §3.1–3.3 + §4.1) — reine
  * Unit-Golden ohne DB. Der Voll-Port (96 Cases, Pools/Aliasse/Tiebreaker) ist M4-09.
  */
+// Spec 81: Marker-Listen und §5-Defaults kommen aus der Regel-Tabelle (Seeds per Migration) — darum mit DB.
+uses(\Platform\FoodAlchemist\Tests\TestCase::class, \Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy::class);
+
 beforeEach(function () {
+    $this->seedTeamHierarchy();
     $this->e = new TokenEngine;
 });
 

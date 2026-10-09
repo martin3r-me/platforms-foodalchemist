@@ -4,7 +4,6 @@ use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 use Platform\FoodAlchemist\Livewire\Gps\GpModal;
 use Platform\FoodAlchemist\Services\GpNamingService;
-use Platform\FoodAlchemist\Support\RegelwerkLeser;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
 use Platform\FoodAlchemist\Tests\TestCase;
 use Symfony\Component\Uid\UuidV7;
@@ -15,13 +14,7 @@ uses(TestCase::class, SeedsTeamHierarchy::class);
 beforeEach(function () {
     $this->seedTeamHierarchy();
     $this->actingAs($this->makeUser($this->rootTeam));
-    $md = "- Verarbeitungs-Suffixe: `brunoise`, `würfel/wuerfel`, `gehackt`, `geschnitten`.\n";
-    DB::table('foodalchemist_knowledge_documents')->insert([
-        'uuid' => (string) UuidV7::generate(), 'slug' => 'regelwerk-basisrezepte-2-verarbeitungs-reduktion-brunoise-roh-form',
-        'title' => '§2', 'category' => 'regelwerk', 'content_md' => $md, 'version' => 1, 'content_hash' => hash('sha256', $md),
-        'char_count' => strlen($md), 'active' => 1, 'created_at' => now(), 'updated_at' => now(),
-    ]);
-    RegelwerkLeser::vergessen();
+    // Spec 81: §2-Suffixe kommen aus den Regeln (Seed per Migration), kein Dossier-Fixture mehr.
 });
 
 it('zerlegt einen Bestandsnamen nach §6 in die Felder (Verarbeitung nur mit §2-Suffix)', function () {
