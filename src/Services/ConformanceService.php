@@ -71,12 +71,18 @@ class ConformanceService
         // Review 09.10.: nur Befunde, die revise ÄNDERN kann, und nicht dieselben ein zweites Mal am
         // unveränderten Artefakt. Sonst kostete die Runde ~30k Tokens für nichts (offene Basisrezept-Lücken)
         // oder verletzte eine Regel beim Versuch.
-        $heilbar = $vorher['befunde'] !== [] && $adapter->unterstuetztHeilung()
-            ? $adapter->heilbar($team, $id, $vorher['befunde']) : [];
+        // Entscheidung Dominique 09.10.: geheilt werden nur HARTE Befunde. Weiche sind Hinweise, kein Umschreib-
+        // Auftrag; harte Regeln gehören in den Code. Gilt für jeden heilenden Adapter (Rezept/VK und GP).
+        $hart = array_values(array_filter($vorher['befunde'], fn (array $b) => ($b['schweregrad'] ?? 'weich') === 'hart'));
+        $heilbar = $hart !== [] && $adapter->unterstuetztHeilung() ? $adapter->heilbar($team, $id, $hart) : [];
         $uebersprungen = null;
         if ($vorher['befunde'] !== [] && $adapter->unterstuetztHeilung()) {
-            $uebersprungen = $heilbar === [] ? 'nichts_heilbar'
-                : ($this->ohneFortschritt($team, $adapter->artifactType(), $id, $heilbar) ? 'kein_fortschritt' : null);
+            $uebersprungen = match (true) {
+                $hart === [] => 'nur_weich',
+                $heilbar === [] => 'nichts_heilbar',
+                $this->ohneFortschritt($team, $adapter->artifactType(), $id, $heilbar) => 'kein_fortschritt',
+                default => null,
+            };
             if ($uebersprungen !== null) {
                 \Illuminate\Support\Facades\Log::info('[Konformität] Heilung übersprungen', [
                     'artifact' => $typ . '#' . $id, 'grund' => $uebersprungen,

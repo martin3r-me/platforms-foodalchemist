@@ -243,3 +243,31 @@ it('Heilung: nach einer Änderung am Rezept wird wieder geheilt', function () us
     expect($erg['heilung_uebersprungen'])->toBeNull()
         ->and($aufrufe('recipe.ueberarbeiten'))->toBe(1);
 });
+
+it('Heilung: nur weiche Befunde → kein Revise, keine zweite Prüfung, Hinweis bleibt (Entscheidung 09.10.)', function () use ($befund, $aufrufe) {
+    $weich = $befund(['schweregrad' => 'weich']);
+    ConformanceHealStub::bind([[$weich], [$weich]]);
+
+    $erg = app(ConformanceService::class)->pruefeUndHeile($this->rootTeam, 'basisrezept', $this->rezept->id);
+
+    expect($erg['heilung_uebersprungen'])->toBe('nur_weich')
+        ->and($aufrufe('recipe.ueberarbeiten'))->toBe(0)
+        ->and($aufrufe('conformance.check'))->toBe(1)
+        ->and($erg['ablage']['neu'])->toBe(1);
+});
+
+it('Heilung: hart + weich → die Direktive trägt nur den harten Befund', function () use ($befund, $aufrufe) {
+    $weich = $befund(['paragraph' => '§8.3', 'feld' => 'description', 'begruendung' => 'Satzzahl knapp', 'schweregrad' => 'weich']);
+    ConformanceHealStub::bind([[$befund(), $weich], [$weich]]);
+    $direktive = null;
+    $adapter = Mockery::mock(\Platform\FoodAlchemist\Services\Conformance\RecipeConformanceAdapter::class)->makePartial();
+    $adapter->shouldReceive('revise')->once()->andReturnUsing(function ($t, $id, $d, $b) use (&$direktive) {
+        $direktive = $b;
+    });
+    app()->instance(\Platform\FoodAlchemist\Services\Conformance\RecipeConformanceAdapter::class, $adapter);
+
+    $erg = app(ConformanceService::class)->pruefeUndHeile($this->rootTeam, 'basisrezept', $this->rezept->id);
+
+    expect($erg['heilung_uebersprungen'])->toBeNull()
+        ->and(array_column($direktive, 'schweregrad'))->toBe(['hart']);
+});
