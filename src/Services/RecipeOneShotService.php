@@ -204,12 +204,22 @@ class RecipeOneShotService
                 return ['status' => 'vollständig', 'minted' => 0, 'ohne_la' => 0, 'kaskade_gefuehrt' => count($kaskadeGefuehrt)];
             }
             $mint = app(\Platform\FoodAlchemist\Services\LaFirstGpService::class);
+            $heuristik = app(\Platform\FoodAlchemist\Services\Matching\MatchHeuristics::class);
             $minted = 0;
             $ohneLa = 0;
+            $basisrezeptLuecken = 0;
             $gpIds = [];
             foreach ($offene as $zut) {
                 $text = trim((string) ($zut->display_name ?: $zut->raw_text));
                 if ($text === '') {
+                    continue;
+                }
+                // Spec 80 B4: eine Basisrezept-Zeile („Püree: Petersilienwurzel") ohne Kaskaden-Dependency (Einzel-
+                // Generierung, Tiefen-/Step-Budget, von Hand offen gelassen) bleibt eine Lücke. Vorher mintete die
+                // Anreicherung — seit Paket 10 also der Freigabeknopf — sie still auf eine Rohware.
+                if ($heuristik->istBasisrezeptZeile($text)) {
+                    $basisrezeptLuecken++;
+
                     continue;
                 }
                 $gp = $mint->mintFromLa($team, $text);
@@ -230,7 +240,8 @@ class RecipeOneShotService
                 $anker = $this->bulk->ankerNachziehen($team, array_values(array_unique($gpIds)));
             }
 
-            return ['status' => $minted > 0 ? 'gemintet' : ($ohneLa > 0 ? 'kein_la' : 'vollständig'), 'minted' => $minted, 'ohne_la' => $ohneLa, 'anker' => $anker];
+            return ['status' => $minted > 0 ? 'gemintet' : ($ohneLa > 0 ? 'kein_la' : ($basisrezeptLuecken > 0 ? 'basisrezept_luecken' : 'vollständig')),
+                'minted' => $minted, 'ohne_la' => $ohneLa, 'basisrezept_luecken' => $basisrezeptLuecken, 'anker' => $anker];
         } catch (\Throwable $e) {
             return ['status' => 'fehler', 'minted' => 0, 'ohne_la' => 0, 'fehler' => mb_strimwidth($e->getMessage(), 0, 200)];
         }

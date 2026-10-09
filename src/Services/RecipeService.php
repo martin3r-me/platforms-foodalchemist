@@ -1040,12 +1040,16 @@ class RecipeService
                         // „Matte: Petersilie" — Typ aus dem Vokabular oder Zubereitungs-Präfix) blieb beim Bau zu Recht
                         // offen; die Heilung legte sie hier auf rohe Grundprodukte (7 kg Wurzel statt Püree). Wie der
                         // Generator (strongSub): so eine Zeile wird nur ein Unterrezept oder bleibt eine Lücke.
-                        $praefix = \Platform\FoodAlchemist\Support\RezeptTypVokabular::praefix($groundName);
-                        $nurSub = ($praefix !== null && \Platform\FoodAlchemist\Support\RezeptTypVokabular::finde($praefix) !== null)
-                            || app(\Platform\FoodAlchemist\Services\Matching\MatchHeuristics::class)->hatSubZubereitungsPraefix($groundName);
+                        $nurSub = app(\Platform\FoodAlchemist\Services\Matching\MatchHeuristics::class)->istBasisrezeptZeile($groundName);
                         $treffer = app(IngredientMatchService::class)->matchIngredient(
                             $team, $groundName, $z['hauptzutat_slug'] ?? ($z['slug'] ?? null),
                         );
+                        // Live-Test demo 09.10. (Lauf 86): ohne Band-Gate verdrahtete die Heilung „bitte prüfen"-Treffer
+                        // („Ginger Beer" → Beeren-Kaviar 0,5; „Pilzmischung: frisch, ganz" → Auberginen 0,667). Wie der
+                        // Generator: automatisch nur Exact/FuzzyHigh, FuzzyLow bleibt offen für den Menschen.
+                        if (! IngredientMatchService::istAutomatischVerdrahtbar($treffer)) {
+                            $treffer = ['target' => 'none'] + $treffer;
+                        }
                         if ($treffer['target'] === 'gp' && ! $nurSub) {
                             $gpId = (int) $treffer['gp_id'];
                             $groundedMethod = 'gp_v2_fk';

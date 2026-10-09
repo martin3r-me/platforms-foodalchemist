@@ -196,6 +196,27 @@ class MatchHeuristics
     }
 
     /**
+     * Spec 80 B4 · eine Zeile, die nur ein Unterrezept werden darf oder eine Lücke bleibt — nie ein rohes GP.
+     * Typ aus dem Vokabular (§1.2, „Püree: Petersilienwurzel", „Matte: Petersilie") oder Zubereitungs-Präfix
+     * („Gel:", „Jus:"). Ausnahme: nennt die Zeile eine Einkaufsform (TK/trocken/konserviert, „Blätterteig: TK"),
+     * ist sie Ware, kein Basisrezept — gleiche Grenze wie `RecipeGeneratorService::validiereProposedSub`.
+     *
+     * EINE Stelle für alle automatischen Schreibpfade (syncIngredients, Mint bei der Anreicherung,
+     * `gps.MATCH`). Live-Test demo 09.10.: die Regel galt im Generator, zweite Pfade legten dieselbe Zeile
+     * trotzdem auf Rohware (Lauf 83: 7 kg Wurzel statt Püree).
+     */
+    public function istBasisrezeptZeile(string $name): bool
+    {
+        $praefix = \Platform\FoodAlchemist\Support\RezeptTypVokabular::praefix($name);
+        $typ = $praefix !== null && \Platform\FoodAlchemist\Support\RezeptTypVokabular::finde($praefix) !== null;
+        if (! $typ && ! $this->hatSubZubereitungsPraefix($name)) {
+            return false;
+        }
+
+        return ! in_array($this->engine->produktForm($name)['zustand'], ['TK', 'trocken', 'konserviert'], true);
+    }
+
+    /**
      * D3 2026-08-18 — §11.2: erkennt ein Nebenprodukt-Derivat und trennt Mutter-Text von Derivat-Form.
      * Compound »Rinderabschnitte« → [mutter_text: »rinder«, form: »Abschnitte«]; Mehr-Token
      * »Kalb Parüren« → [»kalb«, »Parüren«]. null, wenn kein Marker greift oder kein Mutter-Rest bleibt

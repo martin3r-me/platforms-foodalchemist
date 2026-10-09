@@ -43,6 +43,21 @@ class IngredientMatchService
      * @return array{target: string, status: MatchBand, gp_id: ?int, gp_name: ?string,
      *               recipe_id: ?int, recipe_name: ?string, score: float}
      */
+    /**
+     * Darf ein automatischer Pfad (Generator, Heilung/Revise über syncIngredients) diesen Treffer ohne
+     * Menschen verdrahten? Nur Exact/FuzzyHigh — FuzzyLow („bitte prüfen") bleibt offen (Rahmeis-Fall 06.08.,
+     * Lauf 86 09.10.). Der Matcher selbst und die Vorschlagsliste für Menschen bleiben unberührt.
+     *
+     * @param  array{status?: MatchBand|string}  $treffer
+     */
+    public static function istAutomatischVerdrahtbar(array $treffer): bool
+    {
+        $band = $treffer['status'] ?? null;
+        $band = is_string($band) ? MatchBand::tryFrom($band) : $band;
+
+        return $band === MatchBand::Exact || $band === MatchBand::FuzzyHigh;
+    }
+
     public function matchIngredient(
         Team $team,
         string $ingredientName,
@@ -825,8 +840,11 @@ class IngredientMatchService
             return null;
         }
         sort($targetTokens);
+        // Spec 80 B4: der Alias ist eine automatische ENTSCHEIDUNG (kehrt vor poolLauf zurück) — also nur
+        // freigegebene Basisrezepte, wie bestSubrecipeMatch. Vorher verknüpften Heilung/Revise über diesen Zweig
+        // weiter Entwürfe („Heller Kalbsfond"-Stub); der Generator fing es nur dank validiereProposedSub ab.
         $query = FoodAlchemistRecipe::visibleToTeam($team)->basis()
-            ->whereIn('status', ['stub', 'draft', 'review', 'approved']);
+            ->where('status', 'approved');
         // Alias-Gleichheit bleibt tokenbasiert; nur passende Namen statt des gesamten
         // Stamms hydrieren. Kein LIMIT, damit hohe IDs weiterhin erreichbar bleiben.
         $this->likeVorfilter($query, $targetTokens, null, ['name']);
