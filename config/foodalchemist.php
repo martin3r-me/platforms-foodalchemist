@@ -1240,6 +1240,16 @@ return [
                 . 'Dressings, Marinaden, Trockenwaren 0. Nur die mitgegebenen zutat-ids, keine erfundenen: '
                 . 'werte = {verluste: {<zutat_id>: pct}}.',
         ],
+        // Zukauf-Basisrezept (Dominique 10.10.): Kaufware im Gericht — der Code legt Name und Zeile fest, die KI schreibt
+        // nur die Handgriffe. Kleiner Call statt des vollen Generators (~1k statt ~30k Tokens).
+        'recipe.ruestschritt' => [
+            'tier' => 'D',
+            'task' => 'Eine gekaufte Ware wird in einem Gericht eingesetzt (funktion = ihre Rolle dort). Schreibe die 1–3 '
+                . 'Handgriffe, die die Küche damit macht (z. B. auftauen, temperieren, aufbacken, portionieren, abfüllen, '
+                . 'verlesen, vor dem Service bereitstellen) — KEINE Herstellung der Ware, kein Ersatzprodukt. Hilfsstoffe nur, '
+                . 'wenn ein Handgriff sie braucht (z. B. Trennfett, Salz, Butter), als kleine Zugabe mit Menge zum Ansatz. '
+                . 'werte = {schritte: ["<Satz>", …], hilfsstoffe: [{text, menge, einheit}]}.',
+        ],
         'recipe.name_putzen' => [
             'tier' => 'D',
             // Spec 81 (2026-10-09): „§1.2-Vokabular" zeigte auf einen Dossier-Abschnitt, der mit Paket 5 wegfällt —

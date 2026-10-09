@@ -248,8 +248,16 @@ class RecipeDependencyWorkflowService
         // Portionieren bezifferbar sind (Dominique). Ist die Zeile Kaufware (kein Basisrezept-Typ, kein Halbfabrikat),
         // führt das Basisrezept GENAU diese Ware: kein Plan, keine Eigenherstellung. demo Lauf 87: aus „Kürbiskernöl“
         // zum Beträufeln wurde ein neues Aromaöl aus Traubenkernöl und gerösteten Kernen.
-        $heuristik = app(\Platform\FoodAlchemist\Services\Matching\MatchHeuristics::class);
         $auftragText = (string) ($auftrag ?? $text);
+        // Sicherer Treffer auf gekaufte Fertigware → Zukauf-Basisrezept ohne Plan und Generator (Code legt Name und Ware fest).
+        if (($ware = app(ZukaufBasisrezeptService::class)->erkenne($team, $auftragText)) !== null) {
+            $child->update(['status' => 'running', 'error' => null, 'generator_run_id' => null]);
+            \Platform\FoodAlchemist\Jobs\BuildZukaufRecipeJob::dispatch($team->id, $userId, (int) $child->id, $auftragText, $ware, $params)
+                ->onQueue(Warteschlange::rezepte());
+
+            return;
+        }
+        $heuristik = app(\Platform\FoodAlchemist\Services\Matching\MatchHeuristics::class);
         if (! $heuristik->istBasisrezeptZeile($auftragText)
             && ! $heuristik->queryIstHalbfabrikat(app(\Platform\FoodAlchemist\Services\Matching\TokenEngine::class)->tokenize($auftragText))) {
             $params['ruest_ware'] = $auftragText;
