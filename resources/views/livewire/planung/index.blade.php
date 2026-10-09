@@ -1039,7 +1039,8 @@
 
             {{-- FORTSCHRITT (Alpine-Tab `worker`): alle Läufe zusammen, Status + Baum + Freigabe.
                  Anzeige, kein Erstell-Knopf, darum keine klebende Leiste. --}}
-            <div wire:key="planung-tab-worker" x-show="tab==='worker'" class="flex flex-col gap-4 max-w-7xl mx-auto">
+            {{-- Spec 80 D1: die neue Ansicht (Baum · Cluster · Rezept) nutzt die volle Breite; die Liste bleibt schmal. --}}
+            <div wire:key="planung-tab-worker" x-show="tab==='worker'" class="flex flex-col gap-4 mx-auto {{ $fortschrittKlassisch ? 'max-w-7xl' : 'w-full max-w-[120rem]' }}">
                 {{-- Spec 53 / Paket C: $pollAktiv wird JEDES Render frisch aus DB-Wahrheit abgeleitet
                      (Lauf-Status + Step-Phasen), kein gespeichertes Flag. --}}
                 @if($pollAktiv)
