@@ -33,7 +33,8 @@ class PlanungKaskadeStatusGetTool extends FoodAlchemistTool implements ToolContr
             . 'planning_session_id · origin_dish_idea_id), je Ebene ein Status-Aggregat (gesamt/geplant/laufend/'
             . 'entwurf_offen/freigegeben/uebernommen/verworfen/fehlgeschlagen), die Einzel-Schritte '
             . '(ebene/label/status/tiefe/ref + Anreicherungs-/Bild-Status) sowie einen Handlungs-Hinweis. '
-            . 'READ-ONLY — Start und Freigabe der Kaskade sind human-only und laufen NICHT über MCP.';
+            . 'READ-ONLY. Starten: foodalchemist.planung_kaskade.START, freigeben (auch einen Komponenten-Plan annehmen): '
+            . 'foodalchemist.planung_kaskade.FREIGABE (Entscheidung Dominique 2026-08-17).';
     }
 
     public function getSchema(): array

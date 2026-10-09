@@ -38,7 +38,9 @@ class PlanungKaskadeStartPostTool extends FoodAlchemistTool implements ToolContr
             . 'scope = rezept|gericht|concept (Einstiegs-Ebene). Der Lauf hält an den Ebenen-Gates an '
             . '(Freigabe separat). Brief aus der Session (oder brief-Override), Leitplanken aus den '
             . 'generation_params der Session. Nur das Besitzer-Team darf starten (isOwnedBy). Liefert den '
-            . 'Lauf-Status wie planung_kaskade.GET zurück.';
+            . 'Lauf-Status wie planung_kaskade.GET zurück. Wie der Go der Oberfläche: Basisrezept plant zuerst die '
+            . 'Komponenten (Schritt „geplant" → mit planung_kaskade.FREIGABE annehmen), Gericht startet mit dem Bauplan, '
+            . 'Suchbegriffe kommen aus der Session (fehlen sie, werden sie einmal aus dem Briefing abgeleitet).';
     }
 
     public function getSchema(): array
@@ -74,12 +76,37 @@ class PlanungKaskadeStartPostTool extends FoodAlchemistTool implements ToolContr
             return ToolResult::error('Geerbte Session — nur das Besitzer-Team darf die Kaskade starten (D1).', 'INHERITED');
         }
 
+        // Spec 80: derselbe Lauf wie der Go der Oberfläche (Planung\Index) — sonst umginge der MCP-Start genau
+        // das, was Spec 80 eingeführt hat: Komponenten-Plan (Basisrezept), Bauplan zuerst (Gericht), Suchbegriffe.
+        $brief = trim((string) ($arguments['brief'] ?? ''));
+        $laufBrief = $brief !== '' ? $brief : trim((string) $session->brief);
+        $laufParams = is_array($session->generation_params) ? $session->generation_params : [];
+        if (in_array($scope, ['rezept', 'gericht'], true)) {
+            $chips = (array) ((is_array($session->suchbegriffe) ? $session->suchbegriffe : [])[$scope] ?? []);
+            if ($chips === [] && $laufBrief !== '') {
+                // Wie die Oberfläche: ohne Chips einmal aus dem Briefing ableiten und an der Session sichern.
+                try {
+                    $chips = (array) (app(\Platform\FoodAlchemist\Services\BriefingLeitplankenService::class)
+                        ->ausBriefing($team, $laufBrief, null, $scope)['suchbegriffe'] ?? []);
+                    $alle = is_array($session->suchbegriffe) ? $session->suchbegriffe : [];
+                    $alle[$scope] = array_values($chips);
+                    $session->update(['suchbegriffe' => $alle]);
+                } catch (\Throwable $e) {
+                    \Illuminate\Support\Facades\Log::warning('[Planung/MCP] Suchbegriffe nicht ableitbar', ['error' => $e->getMessage()]);
+                }
+            }
+            $suchbegriffe = FoodAlchemistPlanningSession::suchbegriffeFuerLauf($chips);
+            if ($suchbegriffe !== []) {
+                $laufParams['suchbegriffe'] = $suchbegriffe;
+            }
+        }
         $optionen = [
             'created_via' => 'mcp',
-            'params' => is_array($session->generation_params) ? $session->generation_params : [],
+            'params' => $laufParams,
             'voll_anreichern' => false,
+            'proposal_first' => $scope === 'gericht',
+            'plan_first' => $scope === 'rezept',
         ];
-        $brief = trim((string) ($arguments['brief'] ?? ''));
         if ($brief !== '') {
             $optionen['brief'] = $brief;
         }
