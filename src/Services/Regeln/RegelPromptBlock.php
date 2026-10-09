@@ -19,13 +19,17 @@ use Platform\FoodAlchemist\Models\FoodAlchemistRule;
 final class RegelPromptBlock
 {
     private const ZIELE_REZEPT = [
-        'rezept.name', 'rezept.beschreibung', 'rezept.schritt', 'gp.verarbeitung', 'gp.attribut',
+        'rezept.name', 'rezept.name.grammatur', 'rezept.beschreibung', 'rezept.schritt', 'gp.verarbeitung', 'gp.attribut',
         'rezeptzeile.vegan', 'rezeptzeile.vegetarisch',
     ];
 
     private const ZIELE_VK = ['vk.name', 'vk.name.hg', 'vk.name.bausteine'];
 
-    private const ZIELE_GP = ['gp.name', 'gp.verarbeitung', 'gp.attribut'];
+    /**
+     * Am GP selbst gilt nur die Benennung (wie GpConformanceAdapter/GpNamingService). Die Rezeptzeilen-Regeln
+     * (§2 Schnittform, §10 Bio) würden echte Schnittware/Bio-LAs („Zwiebel: frisch, Würfel 10 mm“) verfälschen.
+     */
+    private const ZIELE_GP = ['gp.name'];
 
     /**
      * Welche Prompts welche Regeln bekommen. Typ-Vokabular nur, wo Basisrezept-Namen entstehen.
@@ -40,6 +44,10 @@ final class RegelPromptBlock
         'recipe.name_putzen' => ['ziele' => ['rezept.name'], 'typ' => true],
         'recipe.titel_vorschlag' => ['ziele' => ['rezept.name'], 'typ' => true],
         'recipe.steps' => ['ziele' => ['rezept.schritt'], 'typ' => false],
+        'recipe.description' => ['ziele' => ['rezept.beschreibung'], 'typ' => false],
+        'recipe.category' => ['ziele' => [], 'typ' => true],
+        'signal.recipe_naming_suggest' => ['ziele' => ['rezept.name', 'rezept.name.grammatur', ...self::ZIELE_VK], 'typ' => true],
+        'vk.plating' => ['ziele' => ['rezept.schritt'], 'typ' => false],
         'vk.generator' => ['ziele' => [...self::ZIELE_REZEPT, ...self::ZIELE_VK], 'typ' => true],
         'vk.ueberarbeiten' => ['ziele' => [...self::ZIELE_REZEPT, ...self::ZIELE_VK], 'typ' => true],
         'vk.review' => ['ziele' => [...self::ZIELE_REZEPT, ...self::ZIELE_VK], 'typ' => true],
@@ -54,6 +62,7 @@ final class RegelPromptBlock
     /** Wofür eine Regel gilt — damit „würfel nicht verwenden" nicht den Zubereitungstext trifft. */
     private const GELTUNG = [
         'rezept.name' => 'Rezeptname',
+        'rezept.name.grammatur' => 'Rezept- und Gerichtname',
         'rezept.beschreibung' => 'Beschreibung',
         'rezept.schritt' => 'Zubereitungsschritte',
         'gp.name' => 'Grundprodukt-Name',
@@ -137,12 +146,12 @@ final class RegelPromptBlock
     {
         $p = (array) $r->params;
         $kopf = trim(($r->paragraph ? $r->paragraph . ' ' : '') . $r->titel) . ' [' . (self::GELTUNG[$r->ziel] ?? $r->ziel) . ']';
-        $liste = static fn (array $w) => implode(', ', array_slice(array_values(array_filter(array_map('strval', $w), 'strlen')), 0, 40));
+        // Nie kappen: bei der Vegan-Regel fielen sonst genau die versteckten Teile weg (Milch, Butter, Gelatine).
+        $liste = static fn (array $w) => implode(', ', array_values(array_filter(array_map('strval', $w), 'strlen')));
         $bed = ! empty($p['bedingung']) ? ' (gilt bei ' . $this->bedingung((array) $p['bedingung']) . ')' : '';
 
         return match ($r->art) {
-            'verbot' => $kopf . ': nicht verwenden — ' . $liste([...(array) ($p['tokens'] ?? []), ...(array) ($p['teile'] ?? [])])
-                . (($p['grund'] ?? '') !== '' ? '. ' . $p['grund'] : '') . $bed,
+            'verbot' => $this->verbot($kopf, $p, $r) . $bed,
             'vokabular' => $kopf . ': nur ' . $liste(array_map(static fn ($w) => (string) ($w['wert'] ?? ''), (array) ($p['werte'] ?? []))),
             'pflichtangabe' => $kopf . ': Pflicht — ' . (trim((string) ($p['hinweis'] ?? '')) ?: $r->titel) . $bed,
             'schwelle' => $kopf . ': ' . (($p['vergleich'] ?? '') === 'zwischen'
@@ -150,6 +159,24 @@ final class RegelPromptBlock
             'ersetzung' => $kopf . ': ' . implode('; ', array_map(static fn ($x) => ($x['von'] ?? '') . ' → ' . ($x['nach'] ?? ''), array_slice((array) ($p['paare'] ?? []), 0, 20))),
             default => null,
         };
+    }
+
+    /** @param  array<string, mixed>  $p */
+    private function verbot(string $kopf, array $p, FoodAlchemistRule $r): string
+    {
+        $liste = static fn (array $w) => implode(', ', array_values(array_filter(array_map('strval', $w), 'strlen')));
+        $woerter = $liste([...(array) ($p['tokens'] ?? []), ...(array) ($p['teile'] ?? [])]);
+        $grund = trim((string) ($p['grund'] ?? ''));
+        // Reines Muster-Verbot (Regex): die Muster sagen der KI nichts — Grund und falsche Beispiele schon.
+        $zeile = $kopf . ': ' . ($woerter !== '' ? 'nicht verwenden — ' . $woerter : 'nicht so') . ($grund !== '' ? '. ' . $grund : '');
+        if ($woerter === '' && ($falsch = (array) (($r->beispiele ?? [])['falsch'] ?? [])) !== []) {
+            $zeile .= ' Falsch z. B.: „' . implode('“, „', array_slice(array_map('strval', $falsch), 0, 3)) . '“';
+        }
+        if (($ausnahmen = $liste((array) ($p['ausnahmen'] ?? []))) !== '') {
+            $zeile .= ' Erlaubt trotzdem: ' . $ausnahmen . '.';
+        }
+
+        return $zeile;
     }
 
     private function bedingung(array $b): string

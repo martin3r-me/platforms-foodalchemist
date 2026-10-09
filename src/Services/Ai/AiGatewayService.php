@@ -316,7 +316,15 @@ class AiGatewayService
         // Spec 81 F5: die aktiven Regeln (Regel-Tabelle) direkt hinter dem Kanon — byte-stabil, also im
         // cachebaren Präfix. Ein Regel-Fehler darf keine Generierung zerreißen.
         try {
-            $regelBlock = app(\Platform\FoodAlchemist\Services\Regeln\RegelPromptBlock::class)->fuerPromptKey($promptKey);
+            // Der Konformitäts-Prüfer läuft unter conformance.check, prüft aber gegen das Wissen des Artefakts
+            // ($kanonKey, z. B. recipe.generator) — er braucht dieselben Regeln, sonst meldet er nach Teil E
+            // gültige Typen als Verstoß oder übersieht erfundene.
+            $regelPromptBlock = app(\Platform\FoodAlchemist\Services\Regeln\RegelPromptBlock::class);
+            $regelBlock = $regelPromptBlock->fuerPromptKey($promptKey)
+                ?? ($kanonKey !== $promptKey ? $regelPromptBlock->fuerPromptKey($kanonKey) : null);
+            if ($regelBlock !== null && mb_strlen($regelBlock) > 8000) {
+                \Illuminate\Support\Facades\Log::warning("Regel-Block für {$promptKey} ist " . mb_strlen($regelBlock) . ' Zeichen groß (kein Wissensbudget-Deckel).');
+            }
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::warning("Regel-Block für {$promptKey} nicht baubar: " . $e->getMessage());
             $regelBlock = null;
