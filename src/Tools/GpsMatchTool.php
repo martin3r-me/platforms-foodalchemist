@@ -33,7 +33,9 @@ class GpsMatchTool extends FoodAlchemistTool implements ToolContract, ToolMetada
             . 'ein Bestandstreffer wird also nicht als none gemeldet. '
             . 'Mit mint_if_missing=true wird NUR bei danach noch target=none LA-First ein GP aus passender LA '
             . 'gemintet (tentative, sofort verwendbar); ohne LA bleibt es none. '
-            . 'Kein Treffer und kein Mint → foodalchemist.gp_proposals.POST (Beschaffungs-Wunsch), nie raten.'
+            . 'Kein Treffer und kein Mint → foodalchemist.gp_proposals.POST (Beschaffungs-Wunsch), nie raten. '
+            . 'Basisrezept-Zeilen (Typ-Präfix wie "Püree: …", "Jus: …"; basisrezept_zeile=true) bekommen nie ein GP: '
+            . 'nur ein freigegebenes Unterrezept, sonst bleibt die Zeile eine Lücke (Basisrezept anlegen), kein Mint.'
             . ' Ablauf, Soll-Aspekte und geltende Regelwerke vorher: foodalchemist.ablauf.GET(vorgang="gp_aus_la_anlegen").';
     }
 
@@ -97,6 +99,15 @@ class GpsMatchTool extends FoodAlchemistTool implements ToolContract, ToolMetada
 
         $match = $svc->matchIngredient($team, $zutat, $slug, $mode, $pref, $preferRaw, $bio);
 
+        // Spec 80 B4 (Live-Test demo 09.10.): eine Basisrezept-Zeile („Püree: Petersilienwurzel") wird nur ein
+        // freigegebenes Unterrezept oder bleibt eine Lücke — nie ein rohes GP. Der Generator und syncIngredients
+        // halten das; dieses Tool lieferte dem Agenten bisher trotzdem ein GP (Treffer, Draw oder Mint).
+        $basisrezeptZeile = app(\Platform\FoodAlchemist\Services\Matching\MatchHeuristics::class)->istBasisrezeptZeile($zutat);
+        if ($basisrezeptZeile && ($match['target'] ?? null) === 'gp') {
+            $match = ['target' => 'none', 'status' => \Platform\FoodAlchemist\Enums\MatchBand::NoMatch,
+                'gp_id' => null, 'gp_name' => null, 'recipe_id' => null, 'recipe_name' => null, 'score' => 0.0];
+        }
+
         // Kandidaten EINMAL holen: sie speisen den Draw unten UND die Antwort. Vorher wurden sie
         // erst am Ende geholt — der gezogene Treffer wäre also nicht zwingend derselbe gewesen,
         // den der Aufrufer in `candidates` sieht.
@@ -115,20 +126,26 @@ class GpsMatchTool extends FoodAlchemistTool implements ToolContract, ToolMetada
         $bestand = (string) ($arguments['bestand'] ?? 'hybrid');
         $drawFloor = $svc->drawFloor($bestand);
         if (($match['target'] ?? null) === 'none') {
-            $wantKind = $mode === 'sub_recipe_first' ? 'sub' : 'gp';
+            $wantKind = ($mode === 'sub_recipe_first' || $basisrezeptZeile) ? 'sub' : 'gp';
             foreach ($svc->drawKandidaten($kandidaten, $wantKind, $bestand) as $c) {
                 $gezogen = $wantKind === 'gp'
                     ? \Platform\FoodAlchemist\Models\FoodAlchemistGp::query()->visibleToTeam($team)
                         ->whereIn('status', ['approved', 'tentative'])->where('is_platzhalter', false)
                         ->find($c['id'])
-                    // Status-Set EXAKT wie `validiereProposedSub` — inklusive `stub`. Das ist hier
-                    // die richtige Wahl, auch wenn ein Stub im Reuse-Gate der Kaskade kein
-                    // „Bestand" ist: dort lautet die Frage „ist die Komponente fertig?", hier
-                    // „auf welches Rezept zeigt dieser Zutat-Text?". Wer abweicht, lügt in die
-                    // andere Richtung.
+                    // Prüfung wie `RecipeGeneratorService::validiereProposedSub`: seit Spec 80 B4 nur
+                    // freigegebene Basisrezepte (Bestand = freigegeben) plus Funktionsprüfung
+                    // (`BestandsPassung`: Typ, Bestandteile). Vorher stub/draft/review mit — der Agent
+                    // verknüpfte so Entwürfe, die der Generator ablehnt.
                     : \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::visibleToTeam($team)->basis()
-                        ->whereIn('status', ['stub', 'draft', 'review', 'approved'])->find($c['id']);
+                        ->where('status', 'approved')->find($c['id']);
                 if ($gezogen === null) {
+                    continue;
+                }
+                if ($wantKind === 'sub' && \Platform\FoodAlchemist\Support\BestandsPassung::grund(
+                    $zutat, (string) $gezogen->name,
+                    $gezogen->spec_is_vegan !== null ? (bool) $gezogen->spec_is_vegan : null,
+                    $gezogen->spec_is_vegetarian !== null ? (bool) $gezogen->spec_is_vegetarian : null,
+                ) !== null) {
                     continue;
                 }
                 $match = [
@@ -154,7 +171,7 @@ class GpsMatchTool extends FoodAlchemistTool implements ToolContract, ToolMetada
         // vorbei und legt eine Dublette an.
         $minted = false;
         $wgHint = isset($arguments['commodity_group']) ? trim((string) $arguments['commodity_group']) : null;
-        if (($match['target'] ?? null) === 'none' && ($arguments['mint_if_missing'] ?? false)) {
+        if (($match['target'] ?? null) === 'none' && ($arguments['mint_if_missing'] ?? false) && ! $basisrezeptZeile) {
             $gp = app(LaFirstGpService::class)->mintFromLa($team, $zutat, $slug, $wgHint !== '' ? $wgHint : null);
             if ($gp !== null) {
                 $minted = true;
@@ -176,6 +193,8 @@ class GpsMatchTool extends FoodAlchemistTool implements ToolContract, ToolMetada
         return ToolResult::success([
             'best_match' => $match,
             'minted' => $minted,
+            // true = nur ein freigegebenes Unterrezept oder eine Lücke (Beschaffung: Basisrezept anlegen), nie ein GP.
+            'basisrezept_zeile' => $basisrezeptZeile,
             // Nachvollziehbar machen, WARUM (nicht) gezogen wurde: bei `none` ist die Frage
             // „lag nichts über dem Boden?" sonst nicht beantwortbar.
             'draw' => ['bestand' => $bestand, 'floor' => $drawFloor],

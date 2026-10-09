@@ -4,7 +4,6 @@ namespace Platform\FoodAlchemist\Services;
 
 use Illuminate\Support\Facades\DB;
 use Platform\Core\Models\Team;
-use Platform\FoodAlchemist\Enums\MatchBand;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit;
@@ -303,7 +302,7 @@ class RecipeGeneratorService
                 // Darum: nur Exact/FuzzyHigh wird verdrahtet, FuzzyLow bleibt OFFEN
                 // (Review-Pfad mit Shortlist — der Mensch entscheidet). Der Matcher
                 // selbst (Schwellen, 84 GL-04-Goldens) bleibt unberührt.
-                $verdrahtbar = $treffer['status'] === MatchBand::Exact || $treffer['status'] === MatchBand::FuzzyHigh;
+                $verdrahtbar = IngredientMatchService::istAutomatischVerdrahtbar($treffer);
                 $istGpTreffer = $verdrahtbar && $treffer['target'] === 'gp';
 
                 // ── Zerlegungs-Vorrang (L2, Entscheid 2026-08-17 »Convenience entscheidet«) ────────

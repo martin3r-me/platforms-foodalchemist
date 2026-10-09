@@ -334,16 +334,20 @@ class TokenEngine
         }
 
         $i = 0;                                                 // 3. F1 über gestemmte Intersection
+        $inhalt = false;
         foreach ($queryTokens as $q) {
             foreach ($candidateTokens as $c) {
                 if ($this->tokenMatches($q, $c)) {
                     $i++;
+                    $inhalt = $inhalt || ! $this->isQualifierToken($q);
 
                     continue 2;
                 }
             }
         }
-        if ($i === 0) {
+        // Live-Test demo 09.10. (Lauf 86): „Pilzmischung: frisch, ganz" ↔ „Auberginen: frisch, ganz" = F1 2/3 nur
+        // über Zustandswörter. Ein Treffer braucht mindestens ein gemeinsames PRODUKT-Token.
+        if ($i === 0 || ! $inhalt) {
             return 0.0;
         }
         $cq = $i / count($queryTokens);
