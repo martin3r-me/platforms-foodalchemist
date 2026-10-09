@@ -156,6 +156,16 @@ class RecipeGenerationContextService
             'description' => $description,
             'parameter' => $this->promptParameter($parameter),
         ];
+        // Rüst-Basisrezept für Kaufware (RecipeDependencyWorkflowService::starteKind): die Ware selbst, nicht nachgebaut.
+        $ruestWare = trim((string) ($parameter['ruest_ware'] ?? ''));
+        if ($ruestWare !== '') {
+            $prompt['ruest_basisrezept'] = [
+                'ware' => $ruestWare,
+                'hinweis' => 'Die Zeile im Gericht ist eine KAUFWARE. Dieses Basisrezept führt GENAU diese Ware als Hauptzutat '
+                    . '(Menge = Ansatz) und beschreibt nur, was in der Küche damit passiert: rüsten, auftauen, abbacken, '
+                    . 'garen, portionieren, abfüllen. Keine Eigenherstellung und kein Ersatzprodukt. Name: passender Typ + Ware.',
+            ];
+        }
         // Spec 80 B5: bestätigter Komponenten-Plan → Zusammenstellung statt Ein-Baustein-Regel.
         if (! empty($parameter['plan_komponenten']) && is_array($parameter['plan_komponenten'])) {
             $prompt['zusammenstellung'] = [

@@ -244,9 +244,19 @@ class RecipeDependencyWorkflowService
         if (! isset($snap['kind_brief'])) {
             $child->update(['context_snapshot' => [...$snap, 'kind_brief' => $auftrag ?? $text]]);
         }
+        // Ein Gericht besteht nur aus Basisrezepten — auch Kaufware bekommt eines, damit Rüstzeit, Abbacken und
+        // Portionieren bezifferbar sind (Dominique). Ist die Zeile Kaufware (kein Basisrezept-Typ, kein Halbfabrikat),
+        // führt das Basisrezept GENAU diese Ware: kein Plan, keine Eigenherstellung. demo Lauf 87: aus „Kürbiskernöl“
+        // zum Beträufeln wurde ein neues Aromaöl aus Traubenkernöl und gerösteten Kernen.
+        $heuristik = app(\Platform\FoodAlchemist\Services\Matching\MatchHeuristics::class);
+        $auftragText = (string) ($auftrag ?? $text);
+        if (! $heuristik->istBasisrezeptZeile($auftragText)
+            && ! $heuristik->queryIstHalbfabrikat(app(\Platform\FoodAlchemist\Services\Matching\TokenEngine::class)->tokenize($auftragText))) {
+            $params['ruest_ware'] = $auftragText;
+        }
         // Unter „nur Bestand“ dürfte eine neue Komponente ohnehin kein Kind werden (planChildren) — kein Plan-Call.
         $planen = (bool) config('foodalchemist.kaskade.kind_plan', true) && (int) $child->depth < self::MAX_DEPTH
-            && ($params['bestand'] ?? null) !== 'nur_bestand';
+            && ($params['bestand'] ?? null) !== 'nur_bestand' && ! isset($params['ruest_ware']);
         if ($planen) {
             $child->update(['status' => 'running', 'error' => null, 'generator_run_id' => null]);
             app(PlanningCascadeService::class)->setzePhase((int) $child->id, 'Komponenten werden geplant …');

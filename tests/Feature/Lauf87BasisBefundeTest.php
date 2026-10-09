@@ -66,3 +66,29 @@ it('D: der Prüfer sieht eine Zeile, deren Unterrezept gerade gebaut wird, nicht
         ->and($zutaten->firstWhere('text', 'Fond: Kalb'))->toMatchArray(['ist_sub_rezept' => false])
         ->not->toHaveKey('unterrezept_in_arbeit');
 });
+
+it('G: Kaufware wird ein Rüst-Basisrezept mit genau dieser Ware — kein Plan, keine Eigenherstellung', function () {
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'running']);
+    $eltern = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'done']);
+    $mk = fn (string $label) => FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id,
+        'parent_step_id' => $eltern->id, 'kind' => 'rezept', 'status' => 'geplant', 'label' => $label, 'depth' => 1]);
+    $oel = $mk('Kürbiskernöl');
+    $jus = $mk('Jus: Thymian');
+    $fond = $mk('Geflügelfond');
+    $wf = app(RecipeDependencyWorkflowService::class);
+
+    foreach ([$oel, $jus, $fond] as $s) {
+        $wf->starteKind($this->rootTeam, $s, (int) auth()->id(), (string) $s->label, [], false);
+    }
+
+    Queue::assertPushed(\Platform\FoodAlchemist\Jobs\GenerateRecipeJob::class, fn ($j) => (int) $j->parameter['cascade_step_id'] === (int) $oel->id
+        && ($j->parameter['ruest_ware'] ?? null) === 'Kürbiskernöl');
+    Queue::assertNotPushed(\Platform\FoodAlchemist\Jobs\GenerateRecipePlanJob::class, fn ($j) => $j->stepId === (int) $oel->id);
+    // Basisrezept-Typ und Halbfabrikat bleiben echte Zubereitungen und planen.
+    Queue::assertPushed(\Platform\FoodAlchemist\Jobs\GenerateRecipePlanJob::class, fn ($j) => $j->stepId === (int) $jus->id && ! isset($j->params['ruest_ware']));
+    Queue::assertPushed(\Platform\FoodAlchemist\Jobs\GenerateRecipePlanJob::class, fn ($j) => $j->stepId === (int) $fond->id && ! isset($j->params['ruest_ware']));
+
+    $prompt = app(\Platform\FoodAlchemist\Services\RecipeGenerationContextService::class)->build($this->rootTeam, 'Kürbiskernöl', ['ruest_ware' => 'Kürbiskernöl'], false)['prompt'];
+    expect($prompt['ruest_basisrezept']['ware'])->toBe('Kürbiskernöl')
+        ->and($prompt['ruest_basisrezept']['hinweis'])->toContain('Keine Eigenherstellung');
+});
