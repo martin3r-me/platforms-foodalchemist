@@ -29,8 +29,9 @@ class RecipeKomponentenPlanService
      * @return list<array{name: string, funktion: ?string, menge: ?float, einheit: ?string, suchbegriffe: list<string>,
      *                    bestand: ?array{recipe_id: int, name: string}, abgelehnt: list<array{recipe_id: int, name: string, grund: string}>, neu: bool}>
      */
-    public function plane(Team $team, string $brief, array $params): array
+    public function plane(Team $team, string $brief, array $params, ?int $max = null): array
     {
+        $max = max(1, min($max ?? self::MAX_KOMPONENTEN, self::MAX_KOMPONENTEN));
         $vorschlag = app(AiGatewayService::class)->propose('recipe.komponenten_plan', array_filter([
             'briefing' => $brief,
             'suchbegriffe' => RecipeGenerationContextService::suchbegriffeAus($params) ?: null,
@@ -45,7 +46,7 @@ class RecipeKomponentenPlanService
         $diaet = array_values(array_filter((array) ($params['diaet_hart'] ?? []), 'is_string'));
         $bestandErlaubt = ($params['bestand'] ?? 'hybrid') !== 'komplett_neu';
         $out = [];
-        foreach (array_slice((array) ($vorschlag->werte['komponenten'] ?? []), 0, self::MAX_KOMPONENTEN) as $k) {
+        foreach (array_slice((array) ($vorschlag->werte['komponenten'] ?? []), 0, $max) as $k) {
             if (! is_array($k) || trim((string) ($k['name'] ?? '')) === '') {
                 continue;
             }

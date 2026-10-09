@@ -122,6 +122,7 @@ it('FREIGABE auf einen GEPLANTEN Sub-Rezept-Step (kind=rezept) erzeugt ihn (Gate
         ->and($r->data['aktion'] ?? null)->toBe('geplant_erzeugt')
         ->and($r->data['aktion_hinweis'] ?? null)->toBeNull();
     expect($step->refresh()->status)->toBe('running');
+    \Platform\FoodAlchemist\Tests\Support\KomponentenPlanDurch::bauen();   // Kind plant zuerst (automatisch)
     Queue::assertPushed(\Platform\FoodAlchemist\Jobs\GenerateRecipeJob::class, fn ($job) => (int) ($job->parameter['cascade_step_id'] ?? 0) === (int) $step->id);
 });
 
