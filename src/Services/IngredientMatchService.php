@@ -563,9 +563,20 @@ class IngredientMatchService
         $typHint = $this->heuristik->detectSubTypHint($queryTokens);
 
         $best = null;
-        foreach ($this->subPool($team, $queryTokens, $querySlug) as $sub) {
+        // Spec 80 B4 im Matcher (Live-Test demo 09.10., Lauf 82): die automatische ENTSCHEIDUNG nimmt nur freigegebene
+        // Basisrezepte (Bestand = nur freigegeben) — sonst verknüpften Heilung/Überarbeiten/Review nachträglich
+        // Entwürfe (#374 „Wurzel-Püree“). Die Vorschlagsliste für Menschen (candidatesFor) zeigt Entwürfe weiter.
+        $queryTyp = $this->explizitesTyp((string) $this->currentIngredientName);
+        foreach ($this->subPool($team, $queryTokens, $querySlug, nurFreigegeben: true) as $sub) {
             if ($this->terminology->isAntiMarker($this->currentIngredientName, $sub->name)) {
                 continue;   // S2: Anti-Marker nie als Entscheidung
+            }
+            // Nennt die Zeile einen Typ („Matte: Petersilie“), entscheidet der Matcher nicht für einen anderen Typ
+            // („Gel: Petersilie“) — Funktion vor Namensähnlichkeit (Spec 80 B3).
+            if ($queryTyp !== null && ($kandTyp = $this->explizitesTyp((string) $sub->name)) !== null
+                && array_intersect(\Platform\FoodAlchemist\Support\RezeptTypVokabular::gruppenVon($queryTyp),
+                    \Platform\FoodAlchemist\Support\RezeptTypVokabular::gruppenVon($kandTyp)) === []) {
+                continue;
             }
             $score = $this->scoreMitFloor($queryTokens, $querySlug, $sub->name, null, $sub->name);
 
@@ -728,11 +739,22 @@ class IngredientMatchService
             ->get(['id', 'name', 'main_ingredient_slug', 'main_ingredient_display', 'condition', 'bio', 'team_id']);
     }
 
-    /** Sub-Pool: Basisrezepte (alle Workflow-Stadien inkl. stub), ORDER BY id, LIMIT 200. */
-    private function subPool(Team $team, array $queryTokens, ?string $querySlug)
+    /** Typ aus dem Präfix eines Namens, nur wenn er im Typ-Vokabular steht (sonst null). */
+    private function explizitesTyp(string $name): ?string
+    {
+        $p = \Platform\FoodAlchemist\Support\RezeptTypVokabular::praefix($name);
+
+        return $p === null ? null : \Platform\FoodAlchemist\Support\RezeptTypVokabular::finde($p);
+    }
+
+    /**
+     * Sub-Pool: Basisrezepte, ORDER BY id, LIMIT 200. Für Vorschläge alle Workflow-Stadien inkl. stub; für die
+     * automatische Entscheidung (`nurFreigegeben`) nur freigegebene (Bestand-Regel, Spec 80 B4).
+     */
+    private function subPool(Team $team, array $queryTokens, ?string $querySlug, bool $nurFreigegeben = false)
     {
         $query = FoodAlchemistRecipe::visibleToTeam($team)->basis()
-            ->whereIn('status', ['stub', 'draft', 'review', 'approved']);
+            ->whereIn('status', $nurFreigegeben ? ['approved'] : ['stub', 'draft', 'review', 'approved']);
         $this->likeVorfilter($query, $queryTokens, $querySlug, ['name']);
 
         return $query->orderBy('id')->limit(200)
