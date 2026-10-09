@@ -246,7 +246,9 @@ class RecipeGeneratorService
             // Diese Schlüssel bleiben für die Ergebnisfläche stabil. Bei der
             // Generierung selbst werden keine Stubs/GPs mehr automatisch angelegt;
             // eine spätere menschliche Hard-Stop-Aktion aktualisiert sie lokal.
-            $statistik = ['bestand_gp' => 0, 'bestand_sub' => 0, 'stub_neu' => 0, 'stubs' => [], 'gp_neu_aus_la' => 0, 'offen' => 0];
+            $statistik = ['bestand_gp' => 0, 'bestand_sub' => 0, 'stub_neu' => 0, 'stubs' => [], 'gp_neu_aus_la' => 0, 'offen' => 0, 'bestand_abgelehnt' => []];
+            // Spec 80 B3: harte Diät des Laufs für die Funktionsprüfung der Bestandstreffer.
+            $diaetHart = array_values(array_filter((array) ($parameter['diaet_hart'] ?? []), 'is_string'));
             $offene = [];
             $zeilen = [];
             foreach (array_values($kiRezept['zutaten']) as $i => $z) {
@@ -344,7 +346,7 @@ class RecipeGeneratorService
                 // aber nur validiert (visibleToTeam + §-Status + kein Platzhalter / Zyklus-Guard) und
                 // OHNE die L2-Zerlegungs-/Frische-Entscheidung zu übersteuern (Reihenfolge NACH
                 // $gpBlockiert/$istBasisrezept). Halluzinierte/fremde id ⇒ null ⇒ Fuzzy-Fallback.
-                $proposedSubId = $this->validiereProposedSub($team, (int) $recipe->id, $z['sub_rezept_id'] ?? null, $text);
+                $proposedSubId = $this->validiereProposedSub($team, (int) $recipe->id, $z['sub_rezept_id'] ?? null, $text, $diaetHart, $statistik['bestand_abgelehnt']);
                 $proposedGpId = $proposedSubId === null ? $this->validiereProposedGp($team, $z['gp_id'] ?? null, $text) : null;
                 $verdrahtet = false;
                 if ($proposedSubId !== null && ($istBasisrezept || ! $gpBlockiert)) {
@@ -365,7 +367,10 @@ class RecipeGeneratorService
                     $zeile['match_method'] = 'gemini_proposed';
                     $zeile['match_confidence'] = round($treffer['score'], 3);
                     $statistik['bestand_gp']++;
-                } elseif (! $verdrahtet && $verdrahtbar && $treffer['target'] === 'sub_recipe') {
+                } elseif (! $verdrahtet && $verdrahtbar && $treffer['target'] === 'sub_recipe'
+                    // Matcher-Treffer (inkl. kuratierter §4-Aliase wie Rinderbrühe → Heller Kalbsfond): Freigabe + Diät
+                    // prüfen, aber keine Namens-/Typ-Prüfung — die Zuordnung hat der Matcher bzw. der Mensch schon entschieden.
+                    && $this->validiereProposedSub($team, (int) $recipe->id, $treffer['recipe_id'] ?? null, '', $diaetHart, $statistik['bestand_abgelehnt'], $text) !== null) {
                     $zeile['referenced_recipe_id'] = $treffer['recipe_id'];
                     $zeile['match_method'] = 'recipe_ref';
                     $statistik['bestand_sub']++;
@@ -376,7 +381,7 @@ class RecipeGeneratorService
                     // lexical-only ist bereits durch das Band-Gate der Matcher-Entscheidung gelaufen
                     // (unter Gate = zu schwach → bleibt offen). komplett_neu zieht NIE.
                     $shortlist = $this->matcher->candidatesFor($team, $text, $z['slug'] ?? null, 5);
-                    $gezogen = $this->ziehtAusBestand($team, (int) $recipe->id, $shortlist, $istBasisrezept, (string) ($parameter['bestand'] ?? 'hybrid'));
+                    $gezogen = $this->ziehtAusBestand($team, (int) $recipe->id, $shortlist, $istBasisrezept, (string) ($parameter['bestand'] ?? 'hybrid'), $text, $diaetHart, $statistik['bestand_abgelehnt']);
                     if ($gezogen !== null && $gezogen['target'] === 'gp') {
                         $zeile['gp_id'] = $gezogen['id'];
                         $zeile['match_method'] = 'gemini_proposed';
@@ -976,7 +981,11 @@ class RecipeGeneratorService
      * {@see RecipeService::syncIngredients} später die GANZE Generierung mit einer Exception
      * kippen. Ungültig/zyklisch ⇒ null (Fuzzy-Fallback greift).
      */
-    private function validiereProposedSub(Team $team, int $parentRecipeId, mixed $id, string $text = ''): ?int
+    /**
+     * @param  list<string>  $diaetHart  Spec 80 B3: harte Diät des Laufs
+     * @param  list<array{text: string, recipe_id: int, name: string, grund: string}>|null  $abgelehnt  Protokoll abgelehnter Bestandstreffer
+     */
+    private function validiereProposedSub(Team $team, int $parentRecipeId, mixed $id, string $text = '', array $diaetHart = [], ?array &$abgelehnt = null, ?string $nurDiaetFuer = null): ?int
     {
         $id = is_numeric($id) ? (int) $id : 0;
         if ($id <= 0 || $id === $parentRecipeId) {
@@ -993,10 +1002,27 @@ class RecipeGeneratorService
         if (in_array(app(Matching\TokenEngine::class)->produktForm($text)['zustand'], ['TK', 'trocken', 'konserviert'], true)) {
             return null;
         }
-        $exists = FoodAlchemistRecipe::query()->visibleToTeam($team)->basis()
-            ->whereIn('status', ['stub', 'draft', 'review', 'approved'])
-            ->whereKey($id)->exists();
-        if (! $exists) {
+        // Spec 80 B4 (Entscheid Dominique 2026-10-09): Bestand = NUR freigegebene Basisrezepte. Vorher
+        // zählten stub/draft/review mit — 86 % der Bestandsverweise auf demo zeigten auf Entwürfe.
+        $kandidat = FoodAlchemistRecipe::query()->visibleToTeam($team)->basis()
+            ->where('status', 'approved')
+            ->whereKey($id)->first(['id', 'name', 'spec_is_vegan', 'spec_is_vegetarian']);
+        if ($kandidat === null) {
+            return null;
+        }
+        // Spec 80 B3: Funktionsprüfung (Typ, Bestandteile, Diät). Ohne Zeilentext (reiner Bestandszug ohne
+        // Beschreibung) bleibt es beim bisherigen Verhalten.
+        $grund = \Platform\FoodAlchemist\Support\BestandsPassung::grund(
+            $nurDiaetFuer !== null ? '' : $text, (string) $kandidat->name,
+            $kandidat->spec_is_vegan !== null ? (bool) $kandidat->spec_is_vegan : null,
+            $kandidat->spec_is_vegetarian !== null ? (bool) $kandidat->spec_is_vegetarian : null,
+            $diaetHart,
+        );
+        if ($grund !== null) {
+            if ($abgelehnt !== null) {
+                $abgelehnt[] = ['text' => $text, 'recipe_id' => (int) $kandidat->id, 'name' => (string) $kandidat->name, 'grund' => $grund];
+            }
+
             return null;
         }
 
@@ -1014,7 +1040,7 @@ class RecipeGeneratorService
      * @param  list<array{kind?:string,id?:int,name?:string,score?:float,origin?:string}>  $shortlist
      * @return array{target: string, id: int, score: float}|null
      */
-    private function ziehtAusBestand(Team $team, int $parentRecipeId, array $shortlist, bool $istBasisrezept, string $bestand): ?array
+    private function ziehtAusBestand(Team $team, int $parentRecipeId, array $shortlist, bool $istBasisrezept, string $bestand, string $text = '', array $diaetHart = [], ?array &$abgelehnt = null): ?array
     {
         // Die AUSWAHL (Modus-Boden, origin-Gate, Score-Reihenfolge) liegt seit 2026-09-07 in
         // {@see IngredientMatchService::drawKandidaten} — an EINER Stelle, weil
@@ -1030,7 +1056,7 @@ class RecipeGeneratorService
 
                 continue;
             }
-            if ($this->validiereProposedSub($team, $parentRecipeId, $c['id']) !== null) {
+            if ($this->validiereProposedSub($team, $parentRecipeId, $c['id'], $text, $diaetHart, $abgelehnt) !== null) {
                 return ['target' => 'sub', 'id' => $c['id'], 'score' => $c['score']];
             }
         }
@@ -1063,7 +1089,7 @@ class RecipeGeneratorService
         $recipeIds = array_map(static fn ($h) => (int) $h['entity_id'], $treffer);
         if ($recipeIds !== []) {
             $semNamen = FoodAlchemistRecipe::visibleToTeam($team)->basis()
-                ->whereIn('status', ['draft', 'review', 'approved'])
+                ->where('status', 'approved')   // Spec 80 B4: nur Freigegebenes ist Bestand
                 ->whereIn('id', $recipeIds)
                 ->pluck('name', 'id');
             foreach ($recipeIds as $rid) {          // Score-Reihenfolge der candidates erhalten
@@ -1082,7 +1108,7 @@ class RecipeGeneratorService
         $tokens = app(Matching\TokenEngine::class)->leitTokens($description);
         if ($tokens !== []) {
             $lexNamen = FoodAlchemistRecipe::visibleToTeam($team)->basis()
-                ->whereIn('status', ['draft', 'review', 'approved'])
+                ->where('status', 'approved')   // Spec 80 B4
                 ->where(function ($q) use ($tokens) {
                     foreach ($tokens as $t) {
                         $q->orWhereRaw('LOWER(name) LIKE ?', ['%' . $t . '%']);

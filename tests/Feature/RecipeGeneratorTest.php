@@ -727,7 +727,8 @@ it('Review-Fund: „frisch" verwirft ein vorgeschlagenes Sub-Rezept NICHT (kein 
     // "Pesto, frisch" / "frisch zubereitet" ist genau der gewollte Sub-Rezept-Fall — anders als
     // Dosentomaten/TK/getrocknet beschreibt "frisch" hier keine Rohware-Einkaufsform, die ein
     // Sub-Rezept strukturell nicht ersetzen könnte.
-    $pesto = $this->makeRecipe($this->rootTeam, 'Pesto: Basilikum');
+    // Spec 80 B4: Bestand = nur freigegebene Basisrezepte.
+    $pesto = $this->makeRecipe($this->rootTeam, 'Pesto: Basilikum', ['status' => 'approved']);
 
     $out = $this->svc->generiere($this->rootTeam, 'Nudelgericht', [], kiRezeptOverride: [
         'name' => 'Nudeln mit Pesto',

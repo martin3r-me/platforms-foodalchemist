@@ -616,8 +616,11 @@ class RecipeService
         // Hülle zu binden liefert dem Eltern-Rezept nicht einmal eine Zutat. Die reine
         // Namens-Auflösung ({@see findByTokenSet}) sieht Stubs weiter — sie ist der
         // Dedupe-Eingang der Stub-Anlage und braucht sie.
+        // Spec 80 B4 (Entscheid Dominique 2026-10-09): Bestand = NUR freigegebene Basisrezepte. Vorher
+        // galten auch draft/review als Bestand (nur Stubs fielen raus) — 86 % der Verweise auf demo
+        // zeigten auf Entwürfe. Die reine Namens-Auflösung (findByTokenSet) sieht weiter alle Stadien.
         $kandidaten = $this->tokenSetTreffer($team, $name)
-            ->reject(fn ($r) => $r->status === RecipeStatus::Stub)
+            ->filter(fn ($r) => $r->status === RecipeStatus::Approved)
             ->values()->all();
         if ($kandidaten === []) {
             return null;

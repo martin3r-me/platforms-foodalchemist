@@ -566,7 +566,10 @@ final class Kombinationslogik
         // Nur Basisrezepte, die das Team des Gerichts sehen darf.
         $team = $teamId !== null ? \Platform\Core\Models\Team::find($teamId) : null;
         $ids = ($team !== null ? FoodAlchemistRecipe::visibleToTeam($team) : FoodAlchemistRecipe::query())
-            ->where('is_sales_recipe', false)->pluck('id')->all();
+            ->where('is_sales_recipe', false)
+            // Spec 80 B4: Vorschläge nur aus freigegebenen Basisrezepten (Bestand = approved).
+            ->where('status', 'approved')
+            ->pluck('id')->all();
         $profile = DB::table('foodalchemist_recipe_profile')->whereIn('recipe_id', $ids)->get(['recipe_id', 'abdeckung', 'eigenschaften', 'offene_bedarfe'])->keyBy('recipe_id');
         $anker = DB::table('foodalchemist_recipe_profile_anker')->whereIn('recipe_id', $profile->keys())->get(['recipe_id', 'anchor_id', 'anteil'])->groupBy('recipe_id');
         $meta = DB::table('foodalchemist_recipes')->whereIn('id', $profile->keys())

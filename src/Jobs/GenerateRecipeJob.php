@@ -103,11 +103,18 @@ class GenerateRecipeJob implements ShouldQueue
             // mergen, Key exakt 'timings' mit den fünf RecipeGeneratorService-Phasen-Schlüsseln.
             // Einziger anderer Schreiber von context_snapshot ist prepare() (oben, VOR diesem
             // Aufruf) — kein Race innerhalb desselben Jobs. laufStatus()/Anzeige macht Peter.
-            if ($stepId !== null && is_array($r['statistik']['timings'] ?? null)) {
+            if ($stepId !== null && (is_array($r['statistik']['timings'] ?? null) || ! empty($r['statistik']['bestand_abgelehnt']))) {
                 $step = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep::whereKey($stepId)->first(['id', 'context_snapshot']);
                 if ($step !== null) {
                     $snapshot = is_array($step->context_snapshot) ? $step->context_snapshot : [];
-                    $step->update(['context_snapshot' => [...$snapshot, 'timings' => $r['statistik']['timings']]]);
+                    if (is_array($r['statistik']['timings'] ?? null)) {
+                        $snapshot['timings'] = $r['statistik']['timings'];
+                    }
+                    // Spec 80 B3: abgelehnte Bestandstreffer mit Grund — sichtbar in Plan/Fortschritt („Woher das kommt").
+                    if (! empty($r['statistik']['bestand_abgelehnt'])) {
+                        $snapshot['bestand_abgelehnt'] = array_values($r['statistik']['bestand_abgelehnt']);
+                    }
+                    $step->update(['context_snapshot' => $snapshot]);
                 }
             }
             // Der Provider-Call kann nicht mitten im HTTP-Request abgewürgt werden. Wurde währenddessen
