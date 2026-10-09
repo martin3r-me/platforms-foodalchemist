@@ -174,6 +174,11 @@ class GpModal extends Component
         if ($id !== null && ($gp = $this->gp()) !== null) {
             $this->manuellerName = $gp->name;
             $this->builder = array_merge(self::BUILDER_LEER, [
+                // Spec 80 (Paket 11): die strukturierten Felder auch beim Bearbeiten laden.
+                'hauptzutat' => (string) ($gp->main_ingredient_display ?: strstr((string) $gp->name . ':', ':', true)),
+                'processing' => (string) ($gp->processing ?? ''),
+                'form' => (string) ($gp->form ?? ''),
+                'bio' => mb_strtolower((string) $gp->bio) === 'bio',
                 'condition' => $gp->condition ?? '',
                 'commodity_group_code' => $gp->commodity_group_code ?? '',
                 'sub_category' => $gp->sub_category ?? '',
@@ -958,6 +963,33 @@ class GpModal extends Component
         }
 
         return FoodAlchemistGp::visibleToTeam($team)->find($this->gpId);
+    }
+
+    /** Spec 80 (Paket 11): Name nach §6 aus den Feldern neu bilden (nach einer Feldänderung). */
+    public function nameAusFeldern(GpNamingService $naming): void
+    {
+        $name = trim($naming->renderGpName($this->builder));
+        if ($name !== '') {
+            $this->manuellerName = $name;
+        }
+    }
+
+    /**
+     * Spec 80 (Paket 11): Bestands-GP — Felder einmalig aus dem bisherigen Namen übernehmen (nur leere Felder;
+     * Gepflegtes bleibt). Danach gilt das Feld; der Name lässt sich mit {@see nameAusFeldern} neu bilden.
+     */
+    public function felderAusName(GpNamingService $naming): void
+    {
+        foreach ($naming->felderAusName($this->manuellerName) as $feld => $wert) {
+            if ($feld === 'bio') {
+                $this->builder['bio'] = (bool) ($this->builder['bio'] ?? false) || $wert;
+
+                continue;
+            }
+            if (trim((string) ($this->builder[$feld] ?? '')) === '' && $wert !== '') {
+                $this->builder[$feld] = $wert;
+            }
+        }
     }
 
     private function vorschauName(): string

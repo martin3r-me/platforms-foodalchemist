@@ -248,6 +248,29 @@
                             @endforeach
                         </div>
                     </fieldset>
+                @else
+                    {{-- Spec 80 (Paket 11): die strukturierten Felder auch beim Bearbeiten — vorher nur bei der Anlage,
+                         darum stand „Würfel 5 mm" im Bestand nur im Namen. Zustand steht unter „Einordnung". --}}
+                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3" data-gp-felder-bearbeiten>
+                        <x-fa::field label="Hauptzutat" for="gp-hauptzutat-edit">
+                            <x-fa::input id="gp-hauptzutat-edit" wire:model.live.debounce.300ms="builder.hauptzutat" placeholder="z. B. Schalotten" />
+                        </x-fa::field>
+                        <x-fa::field label="Verarbeitung" for="gp-verarbeitung-edit" optional>
+                            <x-fa::input id="gp-verarbeitung-edit" wire:model.live.debounce.300ms="builder.processing" placeholder="z. B. Würfel 5 mm" />
+                        </x-fa::field>
+                        <x-fa::field label="Form" for="gp-form-edit" optional>
+                            <x-fa::input id="gp-form-edit" wire:model.live.debounce.300ms="builder.form" placeholder="Ganz, Filet, Püree …" />
+                        </x-fa::field>
+                        <x-fa::field label="Pflichtangabe" for="gp-pflicht-edit" optional>
+                            <x-fa::input id="gp-pflicht-edit" wire:model.live.debounce.300ms="builder.pflichtangabe" placeholder="z. B. 3,5 %, Type 405" />
+                        </x-fa::field>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        <x-fa::button size="sm" variant="secondary" icon="heroicon-o-arrow-down-tray" wire:click="felderAusName"
+                            title="Leere Felder aus dem bisherigen Namen übernehmen (einmalig für Bestands-Grundprodukte)">Felder aus dem Namen übernehmen</x-fa::button>
+                        <x-fa::button size="sm" variant="secondary" icon="heroicon-o-arrow-path" wire:click="nameAusFeldern"
+                            title="Namen nach §6 aus den Feldern neu bilden">Name aus Feldern ableiten</x-fa::button>
+                    </div>
                 @endif
 
                 <x-fa::field label="Name" for="gp-name" :hint="$neu ? 'Wird aus den Feldern gebildet. Nur bei Bedarf von Hand überschreiben.' : null">
