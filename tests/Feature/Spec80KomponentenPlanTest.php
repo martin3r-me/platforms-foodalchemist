@@ -89,6 +89,20 @@ it('mischt den Plan in die KI-Zutaten: Bestand als Verweis, Lücke als Unterreze
         ->and($je['Butter: frisch']['quantity'])->toBe(20);
 });
 
+it('erkennt die KI-Zeile auch bei anderer Schreibweise wieder — keine doppelte Plan-Komponente', function () {
+    // demo Lauf 87: „Reduktion: Ginger Beer-Ingwer“ (KI) ↔ „Reduktion: Ginger Beer Ingwer“ (Plan) → zwei Zeilen, zwei Kinder.
+    $zutaten = RecipeKomponentenPlanService::einmischen([
+        ['text' => 'Jus: dunkle Grundjus', 'quantity' => 3000, 'unit' => 'ml'],
+        ['text' => 'Reduktion: Ginger Beer-Ingwer', 'quantity' => 600, 'unit' => 'ml'],
+    ], [
+        ['name' => 'Jus: dunkle Grundjus', 'menge' => 3000, 'einheit' => 'ml', 'bestand' => null],
+        ['name' => 'Reduktion: Ginger Beer Ingwer', 'menge' => 600, 'einheit' => 'ml', 'bestand' => null],
+    ]);
+
+    expect($zutaten)->toHaveCount(2)
+        ->and(collect($zutaten)->where('sub_rezept', true))->toHaveCount(2);
+});
+
 it('Basisrezept-Go startet den Plan statt sofort zu bauen', function () {
     Queue::fake();
     $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Petersilie']);
