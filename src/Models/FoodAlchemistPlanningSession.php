@@ -86,11 +86,16 @@ class FoodAlchemistPlanningSession extends Model
         'serviceform' => ['tellerservice', 'buffet', 'flying', 'stehempfang', 'boxed'],
         // Mehrfachauswahl — jeder Eintrag wird einzeln geprüft.
         'diaet_hart' => ['vegan', 'vegetarisch', 'glutenfrei', 'laktosefrei', 'halal', 'low_carb'],
+        // Basisrezept-Ziel (Ansatz statt Teller) — Spiegel von Planung\Index::MENGE_EINHEITEN.
+        'ziel_einheit' => ['l', 'ml', 'kg', 'g', 'stk', 'portionen'],
     ];
 
     public const ALLOWED_GENERATION_PARAMS = [
         'convenience', 'frische', 'frische_erlaubt', 'bio', 'bio_pref', 'bio_praeferenz', 'bestand', 'level', 'sektor',
         'diaet_hart', 'allergen_nogo', 'aroma', 'aroma_kueche', 'pax', 'ziel_portion_g', 'saison', 'ziel_we_pct',
+        // Basisrezept: Ansatz (Menge + Einheit) statt Pax/Portion. Vorher fehlten beide hier → die
+        // Leitplanken-Ableitung konnte sie nicht setzen und fragte im Basisrezept-Tab nach g/Person.
+        'ziel_menge', 'ziel_einheit',
         'use_favorites_list', 'favorites_convenience_only',
         'occasion', 'serviceform', 'kompositions_stil', 'ziel_vk_eur',
         // KI-Bilder-Toggle (Preisfrage): steuert, ob die Anreicherung Schritt-Fotos + Produktfoto erzeugt.

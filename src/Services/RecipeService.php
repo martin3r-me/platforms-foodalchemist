@@ -1250,7 +1250,10 @@ class RecipeService
 
     private function keyVergeben(Team $team, string $key): bool
     {
-        return FoodAlchemistRecipe::where('team_id', $team->id)->where('recipe_key', $key)->exists();
+        // withTrashed: der Unique-Index (team_id, recipe_key) zählt soft-gelöschte Zeilen mit. Ohne
+        // sie kollidierte jede Neugenerierung nach Selbstheilung/„neu generieren" (Draft soft-deleted,
+        // gleicher Name) mit SQLSTATE 1062 — demo Lauf #79, 2026-10-09.
+        return FoodAlchemistRecipe::withTrashed()->where('team_id', $team->id)->where('recipe_key', $key)->exists();
     }
 
     private function browserQuery(Team $team, array $filters): Builder

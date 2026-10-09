@@ -80,6 +80,20 @@ it('schreibt Lineage beim „Go" (created_via=plan_go, Session→konvergenz; Tre
         ->and($s->refresh()->status)->toBe('konvergenz');
 });
 
+it('benennt eine Schnell-Start-Planung nach dem ersten Ergebnis — eigene Titel bleiben (demo Session #138)', function () {
+    $frei = $this->svc->create($this->rootTeam, ['title' => 'Freies Basisrezept', 'created_via' => 'cockpit_frei']);
+    $eigen = $this->svc->create($this->rootTeam, ['title' => 'Herbstkarte Komponenten']);
+    $erstes = FoodAlchemistRecipe::create(['team_id' => $this->rootTeam->id, 'recipe_key' => 'pp_gruen', 'name' => 'Püree: Petersilienwurzel (grün)', 'status' => 'draft']);
+    $kind = FoodAlchemistRecipe::create(['team_id' => $this->rootTeam->id, 'recipe_key' => 'matte_p', 'name' => 'Matte: Petersilie', 'status' => 'draft']);
+
+    $this->svc->verknuepfeArtefakt($frei, 'recipe', $erstes->id);
+    $this->svc->verknuepfeArtefakt($frei, 'recipe', $kind->id);     // späteres Kind benennt nicht um
+    $this->svc->verknuepfeArtefakt($eigen, 'recipe', $erstes->id);
+
+    expect($frei->refresh()->title)->toBe('Püree: Petersilienwurzel (grün)')
+        ->and($eigen->refresh()->title)->toBe('Herbstkarte Komponenten');
+});
+
 it('Go → alle drei Stufen laufen in-place über den Kaskaden-Motor (kein Handoff-Redirect mehr)', function () {
     // Seit P1a laufen Basisrezept/Gericht/Concept in-place über goKaskade (Details in PlanningCascadeTest);
     // der alte Handoff-Redirect ist weg (Editor = Kommandozentrum, kein Wegspringen).

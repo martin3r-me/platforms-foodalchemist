@@ -119,7 +119,16 @@
             @endif
 
             @if($scope === 'rezept')
-                <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">Basisrezepte haben keinen Kreativ-Modus. Vorhandene Basisrezepte und Grundprodukte werden zuerst geprüft, neu entsteht nur eine echte Lücke.</p>
+                {{-- Basisrezept: kein Kreativ-Modus, aber die Bestand-Achse ist sichtbar + änderbar. Vorher lag
+                     sie verdeckt fest auf »Gemischt«; ein »nur Bestand« aus dem Briefing ging still verloren. --}}
+                <div class="flex flex-col gap-1.5" data-planung-bestand>
+                    <x-fa::choice name="regler.rezept.bestand" :options="['hybrid' => 'Gemischt', 'nur_bestand' => 'Nur Bestand', 'komplett_neu' => 'Komplett neu']" label="Bestand nutzen" id-prefix="planung-rezept-bestand" />
+                    <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)] max-w-2xl">{{ match ($regler['rezept']['bestand'] ?? 'hybrid') {
+                        'nur_bestand' => 'Ausschließlich vorhandene Grundprodukte und Basisrezepte.',
+                        'komplett_neu' => 'Bestand wird nicht berücksichtigt.',
+                        default => 'Vorhandene Basisrezepte und Grundprodukte werden zuerst geprüft, neu entsteht nur eine echte Lücke.',
+                    } }}</p>
+                </div>
             @else
                 <div class="flex flex-col gap-1.5">
                     <x-fa::choice name="eingabe.{{ $scope }}.creative_mode" :options="$modeLabel" label="Kreativ-Modus" :id-prefix="'planung-' . $scope" />

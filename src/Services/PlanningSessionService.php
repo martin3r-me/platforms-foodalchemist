@@ -19,6 +19,13 @@ use RuntimeException;
 class PlanningSessionService
 {
     /**
+     * Platzhalter-Titel der Schnell-Starts (Cockpit). Sie benennen nur den Einstieg; sobald das erste
+     * Artefakt entsteht, übernimmt die Planung dessen Namen (demo Session #138 hieß dauerhaft
+     * „Freies Basisrezept" statt „Püree: Petersilie").
+     */
+    public const PLATZHALTER_TITEL = ['Freies Basisrezept', 'Freies Gericht', 'Freies Concept'];
+
+    /**
      * Scope → Nomen für die ebenen-spezifische Fassung des Trend-Briefs (Etappe 4, Teil 2 Folge-Chunk).
      * Die Scope-Keys spiegeln {@see \Platform\FoodAlchemist\Livewire\Planung\Index::SCOPES}.
      */
@@ -351,6 +358,17 @@ class PlanningSessionService
 
         if ($session->status === 'divergenz') {
             $session->update(['status' => 'konvergenz']);
+        }
+
+        // Schnell-Start-Planung nach dem ersten Ergebnis benennen. Nur Platzhalter werden ersetzt — ein vom
+        // Menschen gesetzter Titel bleibt; spätere Artefakte (Kind-Rezepte) treffen keinen Platzhalter mehr.
+        if (in_array((string) $session->title, self::PLATZHALTER_TITEL, true)) {
+            $name = $art === 'recipe'
+                ? FoodAlchemistRecipe::whereKey($artefaktId)->value('name')
+                : \Platform\FoodAlchemist\Models\FoodAlchemistConcept::whereKey($artefaktId)->value('name');
+            if (is_string($name) && trim($name) !== '') {
+                $session->update(['title' => mb_substr(trim($name), 0, 255)]);
+            }
         }
     }
 
