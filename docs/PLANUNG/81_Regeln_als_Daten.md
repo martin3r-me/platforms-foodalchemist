@@ -1,6 +1,6 @@
 # Spec 81 · Regeln als Daten
 
-Stand 2026-10-09 · Branch `docs/spec81-regeln-als-daten` · Entscheid Dominique 09.10.: **Variante B**
+Stand 2026-10-09 · Branch `docs/spec81-regeln-als-daten` · Entscheid Dominique 09.10.: **Variante B**; Teil A an Claude delegiert
 Vorläufer: Spec 80 Teil G (Richtig anlegen statt nachprüfen), Spec 41 A3 (Regelwerke im Wissensmodul), Spec 52 F4
 
 ## Warum
@@ -65,25 +65,50 @@ Prompt-Caching ab: Wie groß ist der Teil, der bei jedem Aufruf gleich ist?
 
 ---
 
-## Teil A · Klären, bevor migriert wird
+## Teil A · Entschieden, bevor migriert wird
 
 Die Bestandsaufnahme (09.10., alle drei Regelwerke, Vault-Stand gegen Export 05.10.) hat Widersprüche
-gefunden. Ein Regel-Motor setzt jede Liste **streng** durch. Darum muss vorher entschieden sein, welche
-Liste gilt. **Entscheidungen Dominique:**
+gefunden. Ein Regel-Motor setzt jede Liste **streng** durch, darum muss vorher feststehen, welche gilt.
+**Dominique hat die Entscheidung am 09.10. delegiert („nach Logik").** Die Leitlinien dafür:
 
-| # | Widerspruch | Vorschlag |
-|---|---|---|
-| A1 | GP §4 kennt 8 Form-Werte, §9 nur 6 | §9 ist Wahrheit, §4 verweist nur noch |
-| A2 | Die „verbindlichen" Beispiele GP §19, §6.2, §14 verstoßen gegen §9 und §6.1: `gemahlen`, `getrocknet`, `vorgegart`, `fein`, `geputzt`, `kg` im Namen, Plural-Doppelnamen | Je Token entscheiden: in §9 aufnehmen oder Beispiel korrigieren. Die korrigierten Beispiele werden die Testsätze der Regeln (Teil C4) |
-| A3 | `derivat_typ` steht dreimal (GP §11.2, GP §17, BR §11), Allergen-Vererbung dreimal (GP §16, LA §10, BR §7) | Je **eine** Regel, die anderen Stellen verweisen |
-| A4 | BR §5 Default-GPs: der Export (05.10.) ist neuer als der Vault (Olivenöl kalt/heiß, Sojasauce glutenfrei, Gelatine nach Fertigungstiefe, Zucker Raffinade) | Export gilt; Default-GPs werden **die erste Zuordnungs-Regel** und ersetzen die if-Kette |
-| A5 | BR §4 F4.3: der Export ist älter („max. 3 Ebenen"), der Vault hat seit 03.08. nur Selbstreferenz/Zyklus hart | Vault gilt; Dossier auf demo nachziehen |
-| A6 | BR §8.1/§8.2 (Pairing-Anker 3–7, Chemie-Komponenten) ist seit der Pairing-Umstellung 06.10. veraltet | Paragraf neu fassen oder streichen, **nicht** als Regel übernehmen |
-| A7 | LA-Regelwerk beschreibt ein Schema, das es nicht mehr gibt (`wawi_gp_la`, Legacy-Klassen-Präfixe `OBST_`/`GEM_`…); §8 Lead-LA veraltet gegenüber `pick_lead_la` | LA bekommt in Spec 81 nur `match_method`-Vokabular, §5-Schwellen, §13-Convenience-Marker. Neufassung LA-Regelwerk = eigene Aufgabe |
-| A8 | GP §6 „trennt Name, Untergruppe …" widerspricht dem Präfix-Verbot; Slot-Namen „Eigenschaft"/„Zustand/Zuschnitt" vertauscht | Wortlaut klären, bevor das Schema als Regel kodiert wird |
-| A9 | GP §14 Synonym-Tabelle steht im Plural (gegen §6.1) | korrigieren |
+- **Spätere bewusste Entscheidung schlägt älteren Stand**, egal ob Vault oder Export.
+- **Ein Wort, ein Begriff:** Bedeutungsgleiches wird Alias, nicht zweiter Wert.
+- **Ins Vokabular kommt, was ein kaufbares, anderes Produkt bezeichnet** (anderer Preis, anderer Einsatz),
+  nicht jede Beschreibung.
+- **Feldnamen folgen der Datenbank** (`zustand`, `processing`, `form`), damit Regel, Dossier und Code
+  dieselbe Sprache sprechen.
 
-Ohne A1–A4 startet Paket 3 (Migration) nicht. A5–A9 dürfen parallel laufen.
+| # | Widerspruch | Entscheidung | Begründung |
+|---|---|---|---|
+| A1 | GP §4 nennt 8 Form-Werte, §9 nur 6 | **§9 gilt.** §4 verliert die Werte-Tabelle und verweist auf §9 | „Halbiert", „Geviertelt" stehen in §9 bereits unter *Verarbeitung*, sie sind ein Schnitt, keine Geometrie. Damit gibt es eine Liste statt zwei |
+| A2 | Beispiele (§19, §6.2, §14) nutzen Tokens außerhalb §9 und Pluralformen | **Token-weise, nach Bestand** (Zählung siehe unten): aufnehmen `gemahlen`, `vorgegart`, `geröstet`, `getrocknet`, `gesalzen`, `geputzt`, `gefriergetrocknet`; Alias `gekocht`→`gegart`, `entsteint`→`entkernt`, `tiefgekühlt`→`TK`; **nicht** aufnehmen `fein` (nur als Körnung bei Salz/Zucker/Mehl, §8) und `kg` (Gebinde, bleibt §7.1-Verbot). Plural in Beispielen wird auf Singular korrigiert | Die aufgenommenen Wörter trennen echte Produkte (Kreuzkümmel ganz ≠ gemahlen, TK-Rigatoni vorgegart ≠ roh). `fein` ist mehrdeutig („Champignons fein", „Geflügelsalat fein"). `kg` steht fast nur als Gebindegröße („Boiron 1 kg") |
+| A3 | `derivat_typ` dreimal (GP §11.2, GP §17, BR §11), Allergen-Vererbung dreimal (GP §16, LA §10, BR §7) | **Quelle GP §11.2** für `derivat_typ` (eine Vokabular-Regel), **Quelle GP §16** für Allergen-Vererbung; die anderen Stellen verweisen nur | Das GP-Regelwerk definiert das Objekt, die anderen nutzen es. Allergen-Vererbung ist `prozess` (Berechnung im Code), keine Regel-Zeile |
+| A4 | BR §5 Default-GPs: Export (05.10.) neuer als Vault | **Export gilt** (Olivenöl nativ extra kalt / raffiniert heiß, Sojasauce glutenfrei, Gelatine nach Fertigungstiefe, Zucker Raffinade weiß). Wird die erste `zuordnung`-Regel und ersetzt `MatchHeuristics::defaultGpAlias()` | Der Export räumt den Widerspruch zwischen Vault-Tabelle und Matcher-Notiz auf. Die Kontextfälle (kalt/heiß, Fertigungstiefe) trägt das Feld `kontext` der Zuordnung |
+| A5 | BR §4 F4.3: Export noch „max. 3 Ebenen", Vault seit 03.08. nur Selbstreferenz/Zyklus hart | **Vault gilt**; Dossier auf demo per `knowledge-import` nachziehen, dazu F4.4 `BUTTERZUBEREITUNG` | Spätere bewusste Entscheidung; der Code (`pruefeVerknuepfung`) prüft heute schon nur Zyklus und Selbstreferenz |
+| A6 | BR §8.1/§8.2 (Pairing-Anker 3–7, Chemie-Komponenten) | **Neu fassen, nicht als Regel:** Pairing kommt aus Foodpairing Inspire, nur 3 Sterne zählen (Spec 60). Die Zahl 3–7 entfällt | Das alte Anker-System ist seit 06.10. archiviert; eine Zählregel darauf wäre eine Regel ohne Gegenstand |
+| A7 | LA-Regelwerk beschreibt `wawi_gp_la`, Legacy-Präfixe (`OBST_`, `GEM_` …), §8 Lead-LA veraltet | **In Spec 81 nur:** `match_method`-Vokabular (§12), Auto-Match-Schwellen (§5), Convenience-Marker (§13). Die Neufassung des LA-Regelwerks ist eine eigene Aufgabe | Was ein gedropptes Schema beschreibt, darf kein Motor durchsetzen |
+| A8 | GP §6: „trennt Name Untergruppe, Produktname …" widerspricht dem Präfix-Verbot; Slots „Eigenschaft" / „Zustand/Zuschnitt" vertauscht benannt | Satz wird „Doppelpunkt trennt Produktname und Angaben". **Slots heißen wie die Felder:** `Zustand` (frisch/TK/trocken/konserviert), `Verarbeitung`, `Form` | Das Präfix-Verbot ist die neuere Regel; Slot = Feld macht `felderAusName`/`renderGpName` (Spec 80 K) eindeutig |
+| A9 | GP §14 Synonym-Tabelle und §6.2-Beispiele im Plural | **Singular:** Cherrytomate, Möhre, Aubergine, Garnele / Shrimp, Grüne Bohne … | §6.1 Singular ist User-Entscheidung 29.05.; Beispiele müssen die Regel erfüllen, sonst sind sie als Testsatz wertlos |
+
+**Zählung zu A2** (lokale Plattform-Datenbank, 7.948 Grundprodukte, 09.10.; demo kann abweichen, der Probelauf in
+Paket 3 zählt dort nach). Treffer als ganzes Wort im GP-Namen:
+
+| Token | Treffer | Entscheidung | | Token | Treffer | Entscheidung |
+|---|---|---|---|---|---|---|
+| gemahlen | 75 | aufnehmen | | gekocht | 13 | Alias → gegart |
+| fein | 32 | nein (§8-Körnung) | | getrocknet | 11 | aufnehmen |
+| vorgegart | 28 | aufnehmen | | entsteint | 11 | Alias → entkernt |
+| kg | 21 | nein (§7.1-Verbot) | | gesalzen | 10 | aufnehmen |
+| geröstet | 20 | aufnehmen | | geputzt | 8 | aufnehmen |
+| | | | | gefriergetrocknet | 5 | aufnehmen |
+
+**Vergleich ohne Umlaut- und Großschreibungs-Falle:** Der Bestand schreibt überwiegend umschrieben
+(`geschaelt` 82 ×, `geschält` 0 ×). Jede Vokabular- und Verbotsprüfung vergleicht darum normalisiert
+(Kleinschreibung, ä/ae, ö/oe, ü/ue, ß/ss). Die Regel speichert die Schreibweise mit Umlaut, der Vergleich
+ist tolerant.
+
+Die Entscheidungen werden in Paket 1 in die Dossiers auf demo übernommen (Versionssprung GP v3.5, BR v1.11,
+Changelog „Spec 81 A1–A9") und bilden die Seeds in Paket 3.
 
 ---
 
@@ -271,7 +296,7 @@ eigene Aktion mit Bestätigung.
 | # | Paket | Inhalt | Abhängig |
 |---|---|---|---|
 | 0 | Messung | Teil 0, Tabelle im PR, kein Code im Modul außer ggf. Mess-Kommando | – |
-| 1 | Klärung | Teil A: Entscheidungstabelle mit Dominique, Dossiers auf demo korrigieren (per `knowledge-import`/MCP, nicht von Hand überschreiben) | – |
+| 1 | Klärung umsetzen | Teil A in die Dossiers auf demo übernehmen (per `knowledge-import`/MCP, nicht von Hand überschreiben), Vault-Spiegel mitziehen | – |
 | 2 | Fundament | Tabellen C1–C4, Motor mit den sechs Arten, Tests je Art, noch **keine** Einsatzstelle | – |
 | 3 | Seeds + erste Einsatzstellen | Migration mit den Regeln aus A1–A4 (zuerst §1.2, §2, §9, §10, BR §5); `GpKorrektur`, `RezeptTypVokabular`, `BestandsPassung`, `TokenEngine::CUT_FORM_MARKERS`, `MatchHeuristics::defaultGpAlias` lesen aus dem Motor; doppelte Wahrheiten weg | 1, 2 |
 | 4 | Pflegeseite | Teil G ohne „Auf Bestand anwenden"; MCP `rules.*` | 2 |
