@@ -78,6 +78,55 @@ class GpNamingService
     }
 
     /**
+     * Spec 80 (Paket 11): Umkehrung von {@see renderGpName} — die strukturierten Felder aus einem Bestandsnamen
+     * nach §6-Schema `<Hauptzutat>: <Zustand>, <Verarbeitung|Form>[, Portion …][, <Pflichtangabe>][ / (Bio)]`.
+     * Deterministisch, ohne KI: Zustand nur aus dem §9-Vokabular; das erste Attribut danach wird Verarbeitung,
+     * wenn es ein §2-Verarbeitungs-Suffix trägt (Dossier), sonst Form; der Rest Pflichtangabe. Was nicht passt,
+     * bleibt leer — der Mensch korrigiert im Editor.
+     *
+     * @return array{hauptzutat: string, condition: string, processing: string, form: string, portion: string, pflichtangabe: string, bio: bool}
+     */
+    public function felderAusName(string $name): array
+    {
+        $out = ['hauptzutat' => '', 'condition' => '', 'processing' => '', 'form' => '', 'portion' => '', 'pflichtangabe' => '', 'bio' => false];
+        $name = trim($name);
+        if (preg_match('/\(\s*bio\s*\)/iu', $name) === 1) {
+            $out['bio'] = true;
+        }
+        $name = trim((string) preg_replace('/\s*\/\s*\([^)]*\)/u', '', $name));   // „ / (Bio) / (Vegan)"
+        $out['hauptzutat'] = trim((string) strstr($name . ':', ':', true));
+        $rest = str_contains($name, ':') ? trim((string) substr($name, strpos($name, ':') + 1)) : '';
+        $teile = array_values(array_filter(array_map('trim', explode(',', $rest)), fn ($t) => $t !== ''));
+        $suffixe = \Platform\FoodAlchemist\Support\GpKorrektur::verarbeitungsSuffixe();
+        $pflicht = [];
+        foreach ($teile as $teil) {
+            $zustand = $this->normalisiereZustand($teil);
+            if ($out['condition'] === '' && $zustand !== null && in_array($zustand, self::ZUSTAND_VOCAB, true)) {
+                $out['condition'] = $zustand;
+            } elseif (mb_strtolower($teil) === 'bio') {
+                $out['bio'] = true;
+            } elseif (preg_match('/^portion\s+(.+?)\s+pro\s+stueck$/iu', $teil, $m) === 1) {
+                $out['portion'] = $m[1];
+            } elseif ($out['processing'] === '' && $out['form'] === '' && $pflicht === []) {
+                $norm = \Platform\FoodAlchemist\Support\RezeptTypVokabular::norm($teil);
+                $istVerarbeitung = false;
+                foreach ($suffixe as $s) {
+                    if (($sn = \Platform\FoodAlchemist\Support\RezeptTypVokabular::norm($s)) !== '' && str_contains($norm, $sn)) {
+                        $istVerarbeitung = true;
+                        break;
+                    }
+                }
+                $out[$istVerarbeitung ? 'processing' : 'form'] = $teil;
+            } else {
+                $pflicht[] = $teil;
+            }
+        }
+        $out['pflichtangabe'] = implode(', ', $pflicht);
+
+        return $out;
+    }
+
+    /**
      * gp_naming.rs Z. 31 — §6-Schema (Ist-Slots 1:1, A1):
      * `<Hauptzutat>: <condition>, <processing|form>[, Portion <x> pro Stueck][, <pflicht>][ / (Bio)]…`
      */
@@ -259,6 +308,12 @@ class GpNamingService
         $gp->update([
             'name' => $name,
             'condition' => $this->normalisiereZustand($in['condition'] ?? null) ?? $gp->condition,
+            // Spec 80 (Paket 11): Verarbeitung/Form/Hauptzutat auch beim BEARBEITEN pflegen. Vorher schrieb nur die
+            // Anlage sie — im Bestand stand „Würfel 5 mm" deshalb nur im Namen (demo: Verarbeitung bei 210 von 6.950).
+            // Nur wenn das Feld mitkommt (MCP-/Teil-Schreiber ohne Feld lassen den Wert stehen).
+            'processing' => array_key_exists('processing', $in) ? (trim((string) $in['processing']) ?: null) : $gp->processing,
+            'form' => array_key_exists('form', $in) ? (trim((string) $in['form']) ?: null) : $gp->form,
+            'main_ingredient_display' => trim((string) ($in['hauptzutat'] ?? '')) ?: $gp->main_ingredient_display,
             'commodity_group_code' => ($in['commodity_group_code'] ?? '') ?: $gp->commodity_group_code,
             'sub_category' => array_key_exists('sub_category', $in) ? (($in['sub_category'] ?? '') ?: null) : $gp->sub_category,
             'is_derivat' => (bool) ($in['is_derivat'] ?? $gp->is_derivat),

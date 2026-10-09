@@ -417,6 +417,23 @@ im gewählten Zweig; Bestandsübernahmen werden übersprungen.
 
 Paket: **10 · Erst prüfen, dann anreichern (H1–H5)**, Aufwand M, hängt an 6 (Sammelknopf im Fortschritt-Kopf).
 
+## Teil K · Grundprodukt-Felder pflegen (Nachtrag 09.10., Paket 11)
+
+Dominique: Grundprodukte haben die Felder Hauptzutat, Zustand, Verarbeitung, Form, Pflichtangabe — sie müssen
+auch beim Bearbeiten sichtbar sein, damit sie greifen, und der Name muss sich daraus neu ableiten lassen.
+
+- **Befund:** Der Editor zeigte beim Bearbeiten nur den Zustand; `GpNamingService::updateGp` schrieb Verarbeitung
+  und Form gar nicht (nur die Anlage). Darum stehen sie im Bestand fast nur im Namen.
+- **K1 Editor:** Stammdaten zeigen Hauptzutat, Verarbeitung, Form, Pflichtangabe; `updateGp` speichert sie.
+- **K2 Name ⇄ Felder:** „Name aus Feldern ableiten" (§6-Renderer) und „Felder aus dem Namen übernehmen"
+  (`GpNamingService::felderAusName`, deterministisch, Verarbeitung nur mit §2-Suffix, füllt nur leere Felder).
+- **K3 Befüllen:** `foodalchemist:gp-felder-backfill` — Bericht mit Stichprobe, `--apply` schreibt NUR die
+  Verarbeitung (§2-Suffix belegt). Die Form bleibt dem Menschen („Olivenoel: trocken, hochwertig" ist eine
+  Eigenschaft, keine Form). Auf demo nur nach Freigabe.
+- **K4 Matcher (nach K3):** Der Zustand-Feld wirkt schon (`MatchHeuristics::zustandClassResolved`). Verarbeitung/Form
+  liest der Matcher noch nicht — nach dem Befüllen: verlangt die Zeile keine Verarbeitung, wird ein GP mit
+  Verarbeitung abgewertet (heute nur über Namens-Token und nur bei Gleichstand). Offen.
+
 ## Teil E · Offen (Entscheidung nötig)
 
 - **Freigabe-Rückstau:** 249 unentschiedene Entwürfe, 49 von 79 Läufen auf „Zu prüfen". Eigene Liste „offene
@@ -446,6 +463,7 @@ Paket: **10 · Erst prüfen, dann anreichern (H1–H5)**, Aufwand M, hängt an 6
 | 8 | Struktur-Elemente im Rahmen + Fortschritt F1–F5 | M | 6 (F4) |
 | 9 | Richtig anlegen statt nachprüfen G1–G4 | M | — |
 | 10 | Erst prüfen, dann anreichern H1–H5 | M | 6 (Kopf-Knopf), Kern ohne |
+| 11 | Grundprodukt-Felder pflegen K1–K3 (K4 danach) | S–M | — |
 
 Jedes Paket: eigener Branch, volle Suite grün, demo-Deploy, Abnahme an einem echten Lauf.
 
