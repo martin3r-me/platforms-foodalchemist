@@ -160,3 +160,26 @@ it('B6: Unterrezept bekommt als Ansatz die Menge seiner Zeile und die Suchbegrif
 
     expect($vorgaben)->toBe(['ziel_menge' => 100.0, 'ziel_einheit' => 'g', 'suchbegriffe' => ['glatte Petersilie', 'Blattgrün']]);
 });
+
+it('Live-Test demo 09.10.: Komponenten-Namen werden gesäubert (Regelwerk-Verweis raus, Typ nicht doppelt)', function () {
+    $s = \Platform\FoodAlchemist\Services\RecipeKomponentenPlanService::class;
+
+    expect($s::bereinigeName('Püree: Petersilienwurzelpüree nach Basisrezept-Regelwerk §1'))->toBe('Püree: Petersilienwurzel')
+        ->and($s::bereinigeName('Matte: Petersilienmatte nach Basisrezept-Regelwerk §1'))->toBe('Matte: Petersilie')
+        ->and($s::bereinigeName('Püree: Sellerie (gemäß §1.2)'))->toBe('Püree: Sellerie')
+        ->and($s::bereinigeName('Fond: Kalbsfond'))->toBe('Fond: Kalb')
+        ->and($s::bereinigeName('Sauce: Tomatensauce'))->toBe('Sauce: Tomate')
+        ->and($s::bereinigeName('Sauce: Beurre Blanc'))->toBe('Sauce: Beurre Blanc')
+        ->and($s::bereinigeName('Kartoffelpüree'))->toBe('Kartoffelpüree');
+});
+
+it('Live-Test demo 09.10.: nicht freigegebener Bestand erscheint als abgelehnt mit Grund', function () {
+    $entwurf = $this->makeRecipe($this->rootTeam, 'Püree: Petersilienwurzel', ['status' => 'review']);
+    $abgelehnt = [];
+
+    $treffer = app(\Platform\FoodAlchemist\Services\RecipeKomponentenPlanService::class)
+        ->bestandFuer($this->rootTeam, 'Püree: Petersilienwurzel', [], $abgelehnt);
+
+    expect($treffer)->toBeNull()
+        ->and(collect($abgelehnt)->firstWhere('recipe_id', $entwurf->id)['grund'] ?? null)->toContain('noch nicht freigegeben');
+});
