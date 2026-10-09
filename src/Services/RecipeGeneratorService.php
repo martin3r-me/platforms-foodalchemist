@@ -192,7 +192,7 @@ class RecipeGeneratorService
                 // L5: getippter Titel (titel_vorgabe) ist der Namens-Anker — er gewinnt vor dem KI-Namen
                 // (der Mensch hat bewusst benannt). Immer defensiv normalisieren (Umbrüche/Whitespace raus,
                 // Länge gedeckelt), damit kein Brief-Text als Name in die varchar-Spalte rutscht.
-                'name' => $this->normalisiereName((string) ($parameter['titel_vorgabe'] ?? '') ?: (string) $kiRezept['name']),
+                'name' => $this->kanonischerTyp($this->normalisiereName((string) ($parameter['titel_vorgabe'] ?? '') ?: (string) $kiRezept['name']), $vkModus),
                 'is_sales_recipe' => $vkModus,
                 'created_via' => $createdVia,
                 'description' => $kiRezept['description'] ?? null,
@@ -434,6 +434,18 @@ class RecipeGeneratorService
                             // Lücken, kein Erfindungsverdacht). Additive Warnung, keine Sperre.
                             'namens_warnung' => (($z['role'] ?? null) === 'garnitur'),
                         ];
+                    }
+                }
+                // Spec 80 G1: Grundprodukt nach Regelwerk richtigstellen (§2 Rohform statt Schnittform,
+                // §10 kein Bio ohne Vorgabe) — beim Anlegen statt erst in der teuren KI-Prüfung.
+                if (! empty($zeile['gp_id'])) {
+                    $korr = \Platform\FoodAlchemist\Support\GpKorrektur::korrigiere($team, (int) $zeile['gp_id'], $parameter);
+                    if ($korr !== null) {
+                        $zeile['gp_id'] = $korr['gp_id'];
+                        if ($korr['notiz'] !== null) {
+                            $zeile['note'] = trim(((string) ($zeile['note'] ?? '')) . ' ' . $korr['notiz']);
+                        }
+                        $statistik['regelwerk_korrigiert'] = [...($statistik['regelwerk_korrigiert'] ?? []), ...$korr['gruende']];
                     }
                 }
                 $zeilen[] = $zeile;
@@ -935,6 +947,24 @@ class RecipeGeneratorService
      * kollabiert, getrimmt, Länge gedeckelt (die Spalte ist varchar(255); ein KI-Echo des ganzen
      * Briefs darf nicht als Name landen). Leerer/whitespace-only Name fällt auf einen sicheren Default.
      */
+    /**
+     * Spec 80 G1 (§1.2): Typ-Präfix eines Basisrezept-Namens in die Schreibweise des Typ-Vokabulars bringen
+     * („Creme: …" → „Crème: …", „pueree: …" → „Püree: …"). Ein Präfix AUSSERHALB des Vokabulars bleibt
+     * stehen — das meldet die deterministische Prüfung, raten wäre schlimmer. Verkaufsgerichte haben ein
+     * eigenes Schema ([HG] …) und bleiben unberührt.
+     */
+    private function kanonischerTyp(string $name, bool $vkModus): string
+    {
+        if ($vkModus || ($praefix = \Platform\FoodAlchemist\Support\RezeptTypVokabular::praefix($name)) === null) {
+            return $name;
+        }
+        $kanon = \Platform\FoodAlchemist\Support\RezeptTypVokabular::finde($praefix);
+
+        return $kanon !== null && $kanon !== $praefix
+            ? $kanon . substr($name, strpos($name, ':'))
+            : $name;
+    }
+
     private function normalisiereName(string $name): string
     {
         $clean = trim((string) preg_replace('/\s+/u', ' ', str_replace(["\r", "\n", "\t"], ' ', $name)));

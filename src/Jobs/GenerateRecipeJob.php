@@ -103,7 +103,8 @@ class GenerateRecipeJob implements ShouldQueue
             // mergen, Key exakt 'timings' mit den fünf RecipeGeneratorService-Phasen-Schlüsseln.
             // Einziger anderer Schreiber von context_snapshot ist prepare() (oben, VOR diesem
             // Aufruf) — kein Race innerhalb desselben Jobs. laufStatus()/Anzeige macht Peter.
-            if ($stepId !== null && (is_array($r['statistik']['timings'] ?? null) || ! empty($r['statistik']['bestand_abgelehnt']))) {
+            if ($stepId !== null && (is_array($r['statistik']['timings'] ?? null) || ! empty($r['statistik']['bestand_abgelehnt'])
+                || ! empty($r['statistik']['regelwerk_korrigiert']))) {
                 $step = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep::whereKey($stepId)->first(['id', 'context_snapshot']);
                 if ($step !== null) {
                     $snapshot = is_array($step->context_snapshot) ? $step->context_snapshot : [];
@@ -113,6 +114,10 @@ class GenerateRecipeJob implements ShouldQueue
                     // Spec 80 B3: abgelehnte Bestandstreffer mit Grund — sichtbar in Plan/Fortschritt („Woher das kommt").
                     if (! empty($r['statistik']['bestand_abgelehnt'])) {
                         $snapshot['bestand_abgelehnt'] = array_values($r['statistik']['bestand_abgelehnt']);
+                    }
+                    // Spec 80 G1: beim Anlegen automatisch korrigierte Regelwerk-Punkte (§2/§10/§1.2).
+                    if (! empty($r['statistik']['regelwerk_korrigiert'])) {
+                        $snapshot['regelwerk_korrigiert'] = array_values($r['statistik']['regelwerk_korrigiert']);
                     }
                     $step->update(['context_snapshot' => $snapshot]);
                 }

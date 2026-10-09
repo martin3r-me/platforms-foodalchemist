@@ -344,6 +344,34 @@ Prüf-Tokens je Basisrezept halbiert.
 
 Paket: **9 · Richtig anlegen (G1–G4)**, Aufwand M, unabhängig von 1–8, hohe Wirkung auf Qualität und Kosten.
 
+**G5 · Analyse Code vs. KI (09.10., alle Regelwerk-Paragraphen gegen 213 demo-Befunde).**
+Korrektur der Ausgangszahl: fast alle Befunde stammen aus einem Massenlauf 30.08.–03.09.; seit 18.09. kam ein
+einziger hinzu. Viele stehen noch auf „offen", obwohl die Ursache behoben ist (Bio-Wasser) — weil niemand neu prüft.
+Einstufung: **Code ≈ 80 %** (davon ~120 beim Anlegen automatisch korrigierbar), **Hybrid ≈ 15 %**, **KI ≈ 5 %**.
+
+| Bereich | Code beim Anlegen | Bleibt KI/Hybrid |
+|---|---|---|
+| BR §1.2/§1.0/§1.4 Typ-Präfix | Vokabular-Abgleich, Schreibweise kanonisieren ✅ Paket 9 | feinerer Typ wählen |
+| BR §2 Schnittform | Rohform-Tausch frischer GPs, Suffixe aus dem §2-Dossier ✅ Paket 9 | F2.1 Convenience-Grenzfälle |
+| BR §10/§5 Bio | Bio-Tausch ohne Bio-Vorgabe ✅ Paket 9 | — |
+| BR §8.3 Satzzahl | Zählung ✅ Paket 9 (Befund) | Tonfall |
+| BR §11 Saft/Schale als Derivat | Ablauf §11b deterministisch (Marker → Mutter → Derivat) | Derivat neu anlegen |
+| BR §5 Olivenöl/Honig-Defaults | Alias-Tabelle aus dem §5-Dossier lesen statt `MatchHeuristics::defaultGpAlias` (heute widersprüchlich, u. a. Petersilie „gehackt") | Anwendung kalt/heiß |
+| BR §6.5 Einkochverlust | Typ ∈ Reduktion/Fond/Jus … und kein Garverlust → Befund | Werte |
+| BR §1.5 Klammer-Qualifier | Regex, `(vegan)` nur bei `spec_is_vegan` | Mehrwert |
+| VK §1/§2 `[HG]`-Präfix, HG, Diätklasse | Regex + Ableitung aus Präfix/Flags | HG-Wahl ohne Präfix |
+| GP §6/§9/§17 Pflichtfelder | `GpConformanceAdapter::deterministischeBefunde` (heute `[]`); `LaFirstGpService::mintFromLa` legt GPs ohne Zustand/WG an → Hard-Stop | Produktidentität |
+
+**G6 · Systemisch (Paket 5 bzw. offen).**
+- Heilung konnte GP-Befunde nie heilen (gp_id blieb, nur Text änderte sich) — **behoben in Paket 5 (C3)**.
+- Paragraph-Labels der KI uneinheitlich („§11 F11.1" / „§11a" / „§11.1") → Fingerprint spaltet Befunde.
+  **Paket 9:** `ConformanceService::paragraphStamm`, KI-Dubletten zu Code-Befunden werden gefiltert.
+  Offen: Regelwerk-Präfix im Label (Basisrezept-§2 vs. VK-§2 laufen beide unter `recipe`).
+- Veraltete offene Befunde: eine Nachprüfung nur der Code-Regeln (ohne KI) setzt sie auf „verschwunden" — offen.
+- §1.2-Dossier nennt noch `lookup_recipe_typ` als SSOT; laut Spec 41 führt das Wissensmodul — Dossier anpassen.
+- Typ-Vokabular kennt **„Matte"** nicht (und „Garnitur"): Entscheidung Dominique, wo die Blattgrün-Matte hingehört
+  (Vorschlag: `Matte` unter „Aromen & Öle").
+
 ## Teil H · Erst prüfen, dann anreichern (Nachtrag 09.10.)
 
 Dominique: Anreichern vor der Prüfung verbrennt Tokens, wenn das Rezept nicht stimmt. Ablauf soll sein: schlanker
