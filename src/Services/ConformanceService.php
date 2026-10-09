@@ -84,9 +84,10 @@ class ConformanceService
                 default => null,
             };
             if ($uebersprungen !== null) {
-                \Illuminate\Support\Facades\Log::info('[Konformität] Heilung übersprungen', [
-                    'artifact' => $typ . '#' . $id, 'grund' => $uebersprungen,
-                    'befunde' => count($vorher['befunde']), 'heilbar' => count($heilbar),
+                // warning statt info: auf demo kam info nicht im laravel.log an (Lauf 87, kein einziger Eintrag).
+                \Illuminate\Support\Facades\Log::warning('[Konformität] Heilung übersprungen', [
+                    'artifact' => $typ . '#' . $id, 'run' => $runId, 'grund' => $uebersprungen,
+                    'befunde' => count($vorher['befunde']), 'hart' => count($hart), 'heilbar' => count($heilbar),
                 ]);
             }
         }
@@ -109,6 +110,12 @@ class ConformanceService
             'geheilt' => max(0, count($vorher['befunde']) - count($aktuell['befunde'])),
             'ablage' => $ablage,
             'heilung_uebersprungen' => $uebersprungen,
+            // Messbar ohne Log (Lauf 87): was mit der Heilrunde passiert ist, plus die Zahlen dazu.
+            'heilung' => [
+                'status' => $vorher['befunde'] === [] ? 'keine_befunde'
+                    : (! $adapter->unterstuetztHeilung() ? 'nicht_unterstuetzt' : ($uebersprungen ?? 'gelaufen')),
+                'befunde' => count($vorher['befunde']), 'hart' => count($hart), 'heilbar' => count($heilbar),
+            ],
         ];
     }
 

@@ -85,8 +85,10 @@ class ConformanceCheckJob implements ShouldQueue
         }
         // Spec 53 / Paket C: Dauer des Critic-Passes für die Cockpit-/MCP-Anzeige.
         $start = hrtime(true);
+        $ergebnis = null;
         try {
-            $conformance->pruefeUndHeile($team, $this->artifactTyp, $this->artifactId);
+            // Korrelation: Befunde tragen den Kaskaden-Lauf (vorher run_id = null), der Step den Heil-Status.
+            $ergebnis = $conformance->pruefeUndHeile($team, $this->artifactTyp, $this->artifactId, $this->laufId());
         } catch (\Throwable $e) {
             // Best-effort — eine gescheiterte Prüfung ist nie ein Grund, das fertige Artefakt zu kippen.
             // Spec 80 C6: aber protokolliert, sonst ist eine ausgefallene Prüfung unsichtbar.
@@ -97,7 +99,7 @@ class ConformanceCheckJob implements ShouldQueue
             if ($this->cascadeStepId !== null && $this->nochAktuell()) {
                 $svc = app(\Platform\FoodAlchemist\Services\PlanningCascadeService::class);
                 $svc->setzePhase($this->cascadeStepId, null);
-                $this->markKonformitaetsDauer((int) round((hrtime(true) - $start) / 1_000_000));
+                $this->markKonformitaetsDauer((int) round((hrtime(true) - $start) / 1_000_000), $ergebnis['heilung'] ?? null);
             }
         }
     }
@@ -124,8 +126,28 @@ class ConformanceCheckJob implements ShouldQueue
         }
     }
 
-    /** Spec 53 / Paket C: `deferred.conformance.ms` am auslösenden Step — Beiwerk, nie blockierend. */
-    private function markKonformitaetsDauer(int $ms): void
+    private function laufId(): ?int
+    {
+        if ($this->cascadeStepId === null) {
+            return null;
+        }
+        try {
+            $id = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep::whereKey($this->cascadeStepId)->value('cascade_run_id');
+
+            return $id !== null ? (int) $id : null;
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * Spec 53 / Paket C: `deferred.conformance` am auslösenden Step — Dauer, geprüftes Rezept und (Lauf 87) was mit
+     * der Heilrunde passiert ist (`heilung.status`: gelaufen | nur_weich | nichts_heilbar | kein_fortschritt |
+     * keine_befunde). Beiwerk, nie blockierend.
+     *
+     * @param  array<string, mixed>|null  $heilung
+     */
+    private function markKonformitaetsDauer(int $ms, ?array $heilung = null): void
     {
         try {
             $step = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep::find($this->cascadeStepId);
@@ -133,7 +155,9 @@ class ConformanceCheckJob implements ShouldQueue
                 return;
             }
             $deferred = is_array($step->deferred) ? $step->deferred : [];
-            $deferred['conformance'] = ['ms' => $ms, 'at' => now()->toIso8601String()];
+            $deferred['conformance'] = array_filter([
+                'ms' => $ms, 'at' => now()->toIso8601String(), 'artifact_id' => $this->artifactId, 'heilung' => $heilung,
+            ], fn ($v) => $v !== null);
             $step->update(['deferred' => $deferred]);
         } catch (\Throwable) {
             // Tracking ist Beiwerk — nie blockierend.

@@ -38,6 +38,8 @@ class RecipeConformanceAdapter implements ConformanceAdapter
      *    verletzen (Präfix weg → Rohware). Meint der Befund an derselben Zeile etwas anderes (Typ-Präfix, Menge),
      *    bleibt er heilbar.
      *  · Beschreibung/Zubereitung, die von Hand gepflegt sind — revise schreibt sie nie (siehe unten).
+     *  · §6.5 Garverlust/Einkochverlust: revise setzt `cooking_loss_pct` nicht, der Befund überlebt jede Runde
+     *    (demo Lauf 87: 3798/3799/3800 je 3 Calls ≈ 33k Tokens für nichts). Bis Paket 11 (Garverlust-Tabelle).
      * Im Zweifel heilbar: ein Feld, das keiner Zeile zuzuordnen ist, bleibt drin.
      */
     public function heilbar(Team $team, int $id, array $befunde): array
@@ -70,6 +72,9 @@ class RecipeConformanceAdapter implements ConformanceAdapter
                     return false;
                 }
             }
+            if (self::istGarverlust((string) ($b['paragraph'] ?? ''), $feld)) {
+                return false;
+            }
             if ($r->description_source === 'manual' && mb_strtolower($feld) === 'description') {
                 return false;
             }
@@ -79,6 +84,13 @@ class RecipeConformanceAdapter implements ConformanceAdapter
 
             return true;
         }));
+    }
+
+    /** §6.5 / F6.5 (auch „§6.5a", „Regelwerk … §6.5") oder ein Garverlust-Feld. */
+    private static function istGarverlust(string $paragraph, string $feld): bool
+    {
+        return preg_match('/(?:§|\bF)\s*6\.5(?!\d)/u', $paragraph) === 1
+            || preg_match('/cooking_loss|garverlust|einkochverlust/iu', $feld) === 1;
     }
 
     private static function zeilenSchluessel(string $text): string
