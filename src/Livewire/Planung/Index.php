@@ -49,6 +49,7 @@ use Platform\FoodAlchemist\Support\VoiceMime;
 class Index extends Component
 {
     use WithFileUploads;
+    use \Platform\FoodAlchemist\Livewire\Concerns\FortschrittAnsicht;   // Spec 80 Teil D
 
     public ?string $fehler = null;
 

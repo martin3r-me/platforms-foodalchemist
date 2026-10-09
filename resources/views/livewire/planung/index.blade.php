@@ -1067,7 +1067,11 @@
                 @endif
 
                 {{-- Ergebnis: Status + Baum + Freigabe (Gate 2) --}}
-                @if($lauf)
+                @if($lauf && ! $fortschrittKlassisch)
+                    {{-- Spec 80 Teil D: Baum · Cluster · Rezept. Die klassische Liste bleibt per Umschalter erreichbar. --}}
+                    @include('foodalchemist::livewire.planung.partials.fortschritt')
+                @elseif($lauf)
+                    <div class="flex justify-end"><x-fa::button size="sm" variant="secondary" icon="heroicon-o-view-columns" wire:click="fortschrittAnsichtUmschalten" data-fortschritt-neue-ansicht>Neue Ansicht: Baum · Gericht · Rezept</x-fa::button></div>
                     @include('foodalchemist::livewire.planung.partials.ergebnis')
                 @else
                     <x-foodalchemist::modal-section icon="heroicon-o-queue-list" title="Fortschritt">
