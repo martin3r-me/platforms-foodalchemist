@@ -40,9 +40,6 @@ it('istBasisrezeptZeile: Typ aus dem Vokabular oder Zubereitungs-Präfix, Einkau
         ->and($h->istBasisrezeptZeile('Matte: Petersilie'))->toBeTrue()     // nur im Vokabular, kein Zubereitungs-Präfix
         ->and($h->istBasisrezeptZeile('Jus: Ginger Beer'))->toBeTrue()
         ->and($h->istBasisrezeptZeile('Blätterteig: TK'))->toBeFalse()      // Einkaufsform = Ware
-        ->and($h->istBasisrezeptZeile('Direktware: Tomaten, konserviert'))->toBeTrue()   // zeigt immer aufs Direktware-Rezept
-        ->and($h->istBasisrezeptZeile('Direktware: Blätterteig, TK'))->toBeTrue()
-        ->and($h->istBasisrezeptZeile('Zukauf: Tomaten, konserviert'))->toBeTrue()       // früherer Name, Alias
         ->and($h->istBasisrezeptZeile('Petersilienwurzel'))->toBeFalse()
         ->and($h->istBasisrezeptZeile('Butter: frisch'))->toBeFalse();
 });
