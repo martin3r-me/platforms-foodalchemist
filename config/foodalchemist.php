@@ -1062,7 +1062,11 @@ return [
                 . '(z. B. »grünes Petersilienwurzelpüree, mit Petersilienmatte eingefärbt« ⇒ Püree: Petersilienwurzel + '
                 . 'Matte: Petersilie). Rohware (Butter, Salz, Sahne) ist KEINE Komponente — die ergänzt später der Bau. '
                 . 'Ist das Rezept ein einziger Baustein, liefere genau EINE Komponente. '
-                . 'werte = {komponenten: [{name: "<Typ>: <Bezeichnung> nach Basisrezept-Regelwerk §1", '
+                // Spec 81 (2026-10-09): der Name trägt KEINEN Regelwerk-Verweis mehr — die KI hängte „nach
+                // Basisrezept-Regelwerk §1" wörtlich an (demo Lauf 81), bereinigeName() schnitt es wieder ab.
+                // Der Typ kommt aus dem mitgegebenen Typ-Vokabular (Regel basisrezept.1.2.typ), nicht aus einem §-Text.
+                . 'werte = {komponenten: [{name: "<Typ>: <Bezeichnung>" (Typ aus dem mitgegebenen Typ-Vokabular; '
+                . 'KEIN Regelwerk- oder §-Verweis im Namen), '
                 . 'funktion: <eine aus `funktionen`>, menge: <Zahl, Anteil am Ansatz>, einheit: g|kg|ml|l, '
                 . 'suchbegriffe: [<2–4 Wörter, Grundform>]}], begruendung: "<1 Satz>"}. '
                 . 'Die Mengen summieren sich ungefähr auf den `ansatz`, falls angegeben. Höchstens 6 Komponenten. '
@@ -1193,8 +1197,10 @@ return [
         ],
         'recipe.description' => [
             'tier' => 'C',
-            'task' => 'Schreibe die Rezept-Beschreibung im §8-Stil (sachlich-appetitlich, 2-4 Sätze, '
-                . 'Textur + Einsatzkontext, keine Marketing-Floskeln): werte = {description}.',
+            // Spec 81 (2026-10-09): die Satzzahl steht als Regel `basisrezept.8.3.saetze` in der Regel-Tabelle und
+            // kommt über das mitgegebene Regelwerk in den Prompt — hier KEINE zweite Zahl mehr (lief sonst auseinander).
+            'task' => 'Schreibe die Rezept-Beschreibung im §8-Stil (sachlich-appetitlich, Satzzahl laut dem '
+                . 'mitgegebenen Regelwerk, Textur + Einsatzkontext, keine Marketing-Floskeln): werte = {description}.',
         ],
         'recipe.category' => [
             'tier' => 'D',
@@ -1223,15 +1229,17 @@ return [
         ],
         'recipe.name_putzen' => [
             'tier' => 'D',
+            // Spec 81 (2026-10-09): „§1.2-Vokabular" zeigte auf einen Dossier-Abschnitt, der mit Paket 5 wegfällt —
+            // das Vokabular kommt mitgegeben (Regel basisrezept.1.2.typ), der Prompt verweist nur noch darauf.
             'task' => 'Normalisiere den Rezept-Namen auf die §1-Syntax «<Typ>: <Bezeichnung>[, Zusatz]» '
-                . '(Typ aus dem §1.2-Vokabular, Singular, keine Abkürzungen): werte = {name}.',
+                . '(Typ aus dem mitgegebenen Typ-Vokabular, Singular, keine Abkürzungen): werte = {name}.',
         ],
         // Et.4 (Eingabe-Reife): Titel-VORSCHLAG aus dem freien Brief (vor der Generierung), nicht das
         // Putzen eines fertigen Namens. Nüchtern + §1-konform; benennt nur, was der Brief hergibt.
         'recipe.titel_vorschlag' => [
             'tier' => 'B',
             'task' => 'Leite aus dem Brief EINEN nüchternen Basisrezept-Titel in der §1-Syntax '
-                . '«<Typ>: <Bezeichnung>[, Modifikator]» ab (Typ aus dem §1.2-Vokabular, Singular, '
+                . '«<Typ>: <Bezeichnung>[, Modifikator]» ab (Typ aus dem mitgegebenen Typ-Vokabular, Singular, '
                 . 'keine Abkürzungen, keine Marketing-Adjektive). Benenne nur, was der Brief hergibt — '
                 . 'erfinde keine Leitkomponente, die nicht genannt ist: werte = {name}.',
         ],
