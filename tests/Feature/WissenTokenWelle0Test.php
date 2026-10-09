@@ -517,7 +517,7 @@ it('legt das verbindliche Regelwerk als system-Message VOR alles Variable', func
         // für Budget-Entscheidungen wertlos. Separatoren: "\n\n" vor dem Retrieval-Block (2)
         // und "\n\nKontext:\n" vor dem Kontext-JSON (11).
         ->and((int) $log->prompt_chars)->toBe(
-            $parts['huelle'] + $parts['kanon'] + $parts['bound'] + $parts['task']
+            $parts['huelle'] + $parts['kanon'] + ($parts['regeln'] ?? 0) + $parts['bound'] + $parts['task']
             + ($parts['retrieval'] > 0 ? 2 + $parts['retrieval'] : 0)
             + 11 + $parts['kontext']
         );

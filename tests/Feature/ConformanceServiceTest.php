@@ -132,6 +132,20 @@ it('C4: übernimmt denselben Pflichtkanon wie der Generator mit identischem Text
         ->and($GLOBALS['l6_user_prompt'])->not->toContain('SCHICHT3_REGELWERK_MARKER');
 });
 
+it('Spec 81 F5: der Prüfer bekommt den Regel-Block seines Artefakts, hinter dem Kanon', function () {
+    CopilotStub::bind([]);
+
+    app(ConformanceService::class)->pruefe($this->rootTeam, 'basisrezept', $this->rezept->id);
+
+    $system = collect($GLOBALS['l6_messages'])->where('role', 'system')->pluck('content')->values();
+    $kanon = $system->search(fn ($c) => str_starts_with($c, '# VERBINDLICHES REGELWERK'));
+    $regeln = $system->search(fn ($c) => str_starts_with($c, 'VERBINDLICHE REGELN'));
+    expect($kanon)->not->toBeFalse()->and($regeln)->not->toBeFalse()
+        ->and($regeln)->toBeGreaterThan($kanon)
+        ->and($system[$regeln])->toContain('Typ-Vokabular')
+        ->and($GLOBALS['l6_user_prompt'])->not->toContain('VERBINDLICHE REGELN');
+});
+
 it('C4: fällt bei fehlendem Kanon nicht auf passende Slug-Präfixe zurück', function () {
     DB::table('foodalchemist_knowledge_canon')->delete();
     CopilotStub::bind([]);

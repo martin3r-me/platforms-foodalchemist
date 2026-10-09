@@ -152,6 +152,7 @@ class AiGatewayService
         // blind (vgl. Welle 0: ~44 % des Generator-Prompts waren ein rechnerischer Restposten).
         $promptParts = [
             'kanon' => 0,                                            // Welle 2: Kanon-Block (selectKanon), ersetzt bound je Prompt-Key
+            'regeln' => 0,                                           // Spec 81 F5: Regel-Block aus der Regel-Tabelle
             // Exakt der Retrieval-Block, OHNE den angehängten Trenner: der wird beim
             // Zusammenbau ohnehin rtrim't, und eine Sonde, die zwei Zeichen zu viel meldet,
             // macht jede Nachrechnung von prompt_chars unmöglich.
@@ -312,6 +313,28 @@ class AiGatewayService
         if ($kanonBlock !== null) {
             $messages[] = ['role' => 'system', 'content' => $kanonBlock];
         }
+        // Spec 81 F5: die aktiven Regeln (Regel-Tabelle) direkt hinter dem Kanon — byte-stabil, also im
+        // cachebaren Präfix. Ein Regel-Fehler darf keine Generierung zerreißen.
+        try {
+            // Der Konformitäts-Prüfer läuft unter conformance.check, prüft aber gegen das Wissen des Artefakts
+            // ($kanonKey, z. B. recipe.generator) — er braucht dieselben Regeln, sonst meldet er nach Teil E
+            // gültige Typen als Verstoß oder übersieht erfundene.
+            $regelPromptBlock = app(\Platform\FoodAlchemist\Services\Regeln\RegelPromptBlock::class);
+            $regelBlock = $regelPromptBlock->fuerPromptKey($promptKey)
+                ?? ($kanonKey !== $promptKey ? $regelPromptBlock->fuerPromptKey($kanonKey) : null);
+            static $gewarnt = [];
+            if ($regelBlock !== null && mb_strlen($regelBlock) > 8000 && ! isset($gewarnt[$promptKey])) {
+                $gewarnt[$promptKey] = true;   // einmal je Prozess und Prompt-Key, nicht bei jedem Call
+                \Illuminate\Support\Facades\Log::warning("Regel-Block für {$promptKey} ist " . mb_strlen($regelBlock) . ' Zeichen groß (kein Wissensbudget-Deckel).');
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning("Regel-Block für {$promptKey} nicht baubar: " . $e->getMessage());
+            $regelBlock = null;
+        }
+        if ($regelBlock !== null) {
+            $messages[] = ['role' => 'system', 'content' => $regelBlock];
+            $promptParts['regeln'] = mb_strlen($regelBlock);
+        }
 
         $userContent = $prompt['task']
             . ($wissen !== '' ? "\n\n" . rtrim($wissen) : '')
@@ -324,7 +347,7 @@ class AiGatewayService
         $promptParts['huelle'] = array_sum(array_map(
             fn (array $m): int => $m['role'] === 'system' ? mb_strlen((string) $m['content']) : 0,
             $messages,
-        )) - $promptParts['bound'] - $promptParts['kanon'];
+        )) - $promptParts['bound'] - $promptParts['kanon'] - $promptParts['regeln'];
         $promptChars = array_sum(array_map(fn (array $m): int => mb_strlen((string) $m['content']), $messages));
 
         // W0-1: Der Core stellt sonst eine System-Message mit `'Zeit: ' . now()` und einer
