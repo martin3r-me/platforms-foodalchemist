@@ -6,6 +6,7 @@ use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Services\Ai\AiGatewayService;
 use Platform\FoodAlchemist\Support\BestandsPassung;
+use Platform\FoodAlchemist\Support\RezeptTypVokabular;
 
 /**
  * Spec 80 Teil B — Komponenten-Plan für Basisrezepte. Vorher baute der Generator ein Basisrezept immer als
@@ -48,7 +49,7 @@ class RecipeKomponentenPlanService
             if (! is_array($k) || trim((string) ($k['name'] ?? '')) === '') {
                 continue;
             }
-            $name = trim((string) $k['name']);
+            $name = self::bereinigeName((string) $k['name']);
             $menge = is_numeric($k['menge'] ?? null) && (float) $k['menge'] > 0 ? (float) $k['menge'] : null;
             $funktion = in_array($k['funktion'] ?? null, self::FUNKTIONEN, true) ? $k['funktion'] : null;
             $abgelehnt = [];
@@ -66,6 +67,39 @@ class RecipeKomponentenPlanService
         }
 
         return $out;
+    }
+
+    /**
+     * Komponenten-Name säubern (Live-Test demo 09.10., Lauf 81): die KI hängte „nach Basisrezept-Regelwerk §1" an
+     * und doppelte den Typ („Püree: Petersilienwurzelpüree"). Ergebnis: „Püree: Petersilienwurzel" — kanonischer
+     * Typ aus dem Vokabular, Bezeichnung ohne Typ-Wort am Ende, ohne Regelwerk-Verweise.
+     */
+    public static function bereinigeName(string $name): string
+    {
+        $n = trim((string) preg_replace('/\s*\([^)]*(?:§|regelwerk)[^)]*\)/iu', '', $name));
+        $n = trim((string) preg_replace('/[\s,;-]+(?:nach|gemäß|gem\.|laut|gemäss)\s+[^:]*?(?:regelwerk|§)[^:]*$/iu', '', $n));
+        if (($praefix = RezeptTypVokabular::praefix($n)) === null) {
+            return $n;
+        }
+        $typ = RezeptTypVokabular::finde($praefix) ?? $praefix;
+        $bez = trim((string) substr($n, strpos($n, ':') + 1));
+        $typN = RezeptTypVokabular::norm($typ);
+        $bezN = RezeptTypVokabular::norm($bez);
+        if ($typN !== '' && mb_strlen($bezN) > mb_strlen($typN) + 2 && str_ends_with($bezN, $typN) && ! str_contains($bez, ' ')) {
+            // „Petersilienwurzelpüree" → „Petersilienwurzel": Typ-Wort am Ende abschneiden (Länge in der Originalschreibweise).
+            $rest = mb_substr($bez, 0, mb_strlen($bez) - mb_strlen($typ));
+            if (RezeptTypVokabular::norm($rest . $typ) === $bezN && mb_strlen($rest) >= 3) {
+                // Fugenelement weg: „Petersilien|matte" → Petersilie, „Kalbs|fond" → Kalb, „Tomaten|sauce" → Tomate.
+                if (preg_match('/[^s]s$/u', $rest) === 1 && mb_strlen($rest) > 4) {
+                    $rest = mb_substr($rest, 0, -1);
+                } elseif (preg_match('/en$/u', $rest) === 1 && mb_strlen($rest) > 5) {
+                    $rest = mb_substr($rest, 0, -1);
+                }
+                $bez = $rest;
+            }
+        }
+
+        return $typ . ': ' . $bez;
     }
 
     /**
@@ -93,11 +127,19 @@ class RecipeKomponentenPlanService
             return null;
         }
         $kandidaten = FoodAlchemistRecipe::query()->visibleToTeam($team)->basis()
-            ->where('status', 'approved')->whereIn('id', $ids)
-            ->get(['id', 'name', 'spec_is_vegan', 'spec_is_vegetarian'])->keyBy('id');
+            ->whereIn('id', $ids)
+            ->get(['id', 'name', 'status', 'spec_is_vegan', 'spec_is_vegetarian'])->keyBy('id');
         foreach ($ids as $id) {
             $r = $kandidaten->get($id);
             if ($r === null) {
+                continue;
+            }
+            // Bestand = nur freigegeben (Entscheid 09.10.). Nicht freigegebene Treffer sichtbar machen statt still
+            // fallen zu lassen — sonst wirkt „nicht gefunden", obwohl es einen Entwurf gibt.
+            $status = $r->status instanceof \BackedEnum ? $r->status->value : (string) $r->status;
+            if ($status !== 'approved') {
+                $abgelehnt[] = ['recipe_id' => (int) $r->id, 'name' => (string) $r->name, 'grund' => "noch nicht freigegeben (Status {$status})"];
+
                 continue;
             }
             $grund = BestandsPassung::grund($name, (string) $r->name,
