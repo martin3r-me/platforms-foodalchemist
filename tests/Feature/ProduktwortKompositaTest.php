@@ -37,3 +37,21 @@ it('istReinesMerkmal: Zustands-/Schnittwort mit Beugung ja, Kompositum nein', fu
         expect($rein($w))->toBeFalse($w);
     }
 });
+
+it('Shortlist (substringOverlap/candidatesFor): nur Zustandswörter tragen keinen Kandidaten', function () {
+    $h = app(\Platform\FoodAlchemist\Services\Matching\MatchHeuristics::class);
+    $e = app(TokenEngine::class);
+    $q = $e->tokenize('Pilzmischung: frisch, ganz');
+
+    expect($h->substringOverlap($q, 'Auberginen: frisch, ganz'))->toBe(0.0)
+        ->and($h->substringOverlap($q, 'Pilzmischung: frisch, geschnitten'))->toBeGreaterThan(0.5)
+        ->and($h->substringOverlap($e->tokenize('Babyspinat frisch'), 'Babyspinat: frisch'))->toBeGreaterThan(0.5);
+
+    $this->makeGp($this->rootTeam, 'Pilzmischung: frisch, geschnitten');
+    $this->makeGp($this->rootTeam, 'Auberginen: frisch, ganz');
+    $namen = array_column(app(\Platform\FoodAlchemist\Services\IngredientMatchService::class)
+        ->candidatesFor($this->rootTeam, 'Pilzmischung: frisch, ganz', null, 5), 'name');
+
+    expect($namen)->toContain('Pilzmischung: frisch, geschnitten')
+        ->and($namen)->not->toContain('Auberginen: frisch, ganz');
+});

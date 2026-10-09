@@ -208,6 +208,11 @@ class MatchHeuristics
     public function istBasisrezeptZeile(string $name): bool
     {
         $praefix = \Platform\FoodAlchemist\Support\RezeptTypVokabular::praefix($name);
+        // Zukauf-Basisrezept (Entscheidung Dominique 10.10.): „Zukauf: <Ware>" im Gericht zeigt IMMER auf das Zukauf-
+        // Basisrezept — auch mit Einkaufsform („Zukauf: Tomaten, konserviert"); die Ware selbst steht im Zukauf-Rezept.
+        if ($praefix !== null && mb_strtolower($praefix) === 'zukauf') {
+            return true;
+        }
         $typ = $praefix !== null && \Platform\FoodAlchemist\Support\RezeptTypVokabular::finde($praefix) !== null;
         if (! $typ && ! $this->hatSubZubereitungsPraefix($name)) {
             return false;
@@ -561,12 +566,16 @@ class MatchHeuristics
         }
         $candNorm = implode(' ', $this->engine->tokenize($candName));
         $hits = 0;
+        $inhalt = false;
         foreach ($toks as $t) {
             if (str_contains($candNorm, $t)) {
                 $hits++;
+                $inhalt = $inhalt || ! $this->engine->istReinesMerkmal($t);
             }
         }
 
-        return $hits / count($toks);
+        // Wie matchScore (#233/#240): nur gemeinsame Zustandswörter sind kein Treffer — sonst stand „Auberginen:
+        // frisch, ganz" in der Shortlist für „Pilzmischung: frisch, ganz" gleichauf mit der Pilzmischung (0,667).
+        return $inhalt ? $hits / count($toks) : 0.0;
     }
 }
