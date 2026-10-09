@@ -16,6 +16,8 @@ use RuntimeException;
  * Beispiele, Pflicht-Probelauf vor dem Speichern einer aktiven Regel, Versionen mit Zurückrollen.
  *
  * Speichern wirkt nur auf KÜNFTIGE Anlagen und Prüfungen; den Bestand fasst diese Seite nicht an.
+ * Nur für Plattform-Admins (Regeln sind global wie das kuratierte Wissen); die Team-Einstellungssperre bleibt
+ * als Schutz gegen gleichzeitiges Bearbeiten.
  * Felder, die das Formular nicht zeigt (Bedingungen, Kontext, Wortmengen-Optionen), bleiben unverändert.
  */
 class Regeln extends Component
@@ -31,6 +33,12 @@ class Regeln extends Component
     protected function sperrFreiExtra(): array
     {
         return ['oeffne', 'schliesse', 'pruefeProbelauf'];
+    }
+
+    /** Regeln gehören dem Plattform-Administrator (wie das globale Wissen) — alle anderen sehen die Seite nicht. */
+    public function mount(): void
+    {
+        abort_unless(RegelService::darf(Auth::user()), 404);
     }
 
     public string $regelwerk = '';
@@ -55,7 +63,7 @@ class Regeln extends Component
     public ?string $meldung = null;
 
     public const REGELWERKE = ['gp' => 'Grundprodukte', 'basisrezept' => 'Basisrezepte', 'la' => 'Lieferantenartikel',
-        'vk' => 'Verkaufsgerichte', 'matching' => 'Matching'];
+        'vk' => 'Verkaufsgerichte', 'ernaehrung' => 'Ernährung', 'matching' => 'Matching'];
 
     public const ARTEN = ['vokabular' => 'Vokabular', 'ersetzung' => 'Ersetzung', 'pflichtangabe' => 'Pflichtangabe',
         'verbot' => 'Verbot', 'zuordnung' => 'Zuordnung', 'schwelle' => 'Schwelle'];
@@ -118,7 +126,7 @@ class Regeln extends Component
         try {
             $neu = $this->entwurf($alt);
             app(RegelService::class)->speichere($neu->only(['schluessel', 'regelwerk', 'paragraph', 'titel', 'art', 'ziel', 'wirkung', 'params', 'beispiele', 'notiz', 'dossier_slug']),
-                $this->team(), Auth::id());
+                Auth::user());
             $this->oeffne($alt->id);
             $this->meldung = 'Gespeichert. Gilt ab der nächsten Anlage und Prüfung; der Bestand bleibt unverändert.';
         } catch (RegelUngueltig $e) {
@@ -131,7 +139,7 @@ class Regeln extends Component
     public function setzeAktiv(int $id, bool $aktiv): void
     {
         try {
-            app(RegelService::class)->setzeAktiv($id, $aktiv, $this->team(), Auth::id());
+            app(RegelService::class)->setzeAktiv($id, $aktiv, Auth::user());
             if ($this->offenId === $id) {
                 $this->oeffne($id);
             }
@@ -144,7 +152,7 @@ class Regeln extends Component
     public function zurueckAuf(int $version): void
     {
         try {
-            app(RegelService::class)->zurueckAuf((int) $this->offenId, $version, $this->team(), Auth::id());
+            app(RegelService::class)->zurueckAuf((int) $this->offenId, $version, Auth::user());
             $this->oeffne((int) $this->offenId);
             $this->meldung = "Fassung {$version} wiederhergestellt (als neue Version).";
         } catch (RegelUngueltig $e) {

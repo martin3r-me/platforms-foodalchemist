@@ -24,7 +24,7 @@ return new class extends Migration
     {
         $svc = app(RegelService::class);
         foreach ($this->regeln() as $r) {
-            $svc->speichere($r, null, null, true, 'seed');
+            $svc->speichere($r, null, true, 'seed');
         }
         RegelBuch::vergessen();
     }

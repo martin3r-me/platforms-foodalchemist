@@ -1267,6 +1267,10 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\KnowledgeRoutingsGetTool::class,
                     \Platform\FoodAlchemist\Tools\KnowledgeRoutingsPutTool::class,
                     \Platform\FoodAlchemist\Tools\KnowledgeBudgetPutTool::class,
+                    // Spec 81: Regeln als Daten — lesen, Probelauf, speichern (neue Fassung immer AUS, Einschalten = Kuration).
+                    \Platform\FoodAlchemist\Tools\RulesGetTool::class,
+                    \Platform\FoodAlchemist\Tools\RulesPreviewTool::class,
+                    \Platform\FoodAlchemist\Tools\RulesPutTool::class,
                     // Spec 52/A3: die Alt-Struktur war schreibbar (BIND/UNBIND), aber nicht
                     // lesbar — deshalb blieb „Bindung auf inaktives Dossier" still.
                     \Platform\FoodAlchemist\Tools\KnowledgeBindingsGetTool::class,

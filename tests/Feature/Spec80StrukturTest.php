@@ -21,8 +21,9 @@ beforeEach(function () {
     $this->seedTeamHierarchy();
     $this->actingAs($this->makeUser($this->rootTeam));
     $this->frames = app(PlanningFrameService::class);
+    $team = $this->rootTeam;   // vor dem Binden lesen — in der gebundenen Closure ist die Test-Eigenschaft geschützt
     $this->lege = fn (string $typ, int $id, $frame) => Closure::bind(
-        fn () => $this->legeStrukturAn(test()->rootTeam, $typ, $id, $frame), app(PlanningCascadeService::class), PlanningCascadeService::class)();
+        fn () => $this->legeStrukturAn($team, $typ, $id, $frame), app(PlanningCascadeService::class), PlanningCascadeService::class)();
 });
 
 it('Struktur-Typen nur in Rahmen von Foodbook, Speisekarte und Format', function () {

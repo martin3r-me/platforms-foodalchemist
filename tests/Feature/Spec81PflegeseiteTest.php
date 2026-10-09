@@ -12,7 +12,9 @@ uses(TestCase::class, SeedsTeamHierarchy::class);
 /** Spec 81 Teil G — Einstellungen › Regeln: Liste, Editor je Art, Probelauf-Pflicht, Aktivieren, Zuordnung ohne Datenverlust. */
 beforeEach(function () {
     $this->seedTeamHierarchy();
-    $this->actingAs($this->makeUser($this->rootTeam));
+    $admin = $this->makeUser($this->rootTeam);
+    config(['platform-shell.admins' => [strtolower((string) $admin->email)]]);   // Regeln = Plattform-Admin
+    $this->actingAs($admin);
     $this->regel = fn (string $k) => FoodAlchemistRule::where('schluessel', $k)->firstOrFail();
 });
 
@@ -59,6 +61,13 @@ it('ungültige Beispiele blockieren das Speichern', function () {
         ->call('pruefeProbelauf')->call('speichern')
         ->assertSet('fehler', fn ($f) => str_contains((string) $f, 'Beispiel (richtig) stimmt nicht'));
     expect($r->fresh()->version)->toBe(1);
+});
+
+it('Team-Admins und Kunden sehen die Seite nicht', function () {
+    $this->actingAs($this->makeUser($this->rootTeam, 'Team-Admin'));
+
+    Livewire::test(Regeln::class)->assertStatus(404);
+    expect(array_key_exists('regeln', Livewire::test(\Platform\FoodAlchemist\Livewire\Settings\Index::class)->viewData('sektionen')))->toBeFalse();
 });
 
 it('Ausschalten wirkt sofort im Regelbuch', function () {

@@ -121,15 +121,17 @@ class DataQualityService
         'tree_nuts', 'celery', 'mustard', 'sesame', 'sulphites', 'lupin', 'molluscs',
     ];
 
-    /**
-     * Parenthesierte Grammatur-/Maßangabe im Namen — `(65g)`, `(17 g)`, `(80 ml)`, `(5x6cm)`.
-     * Genau die Formen aus Regelwerk_Verkaufsgerichte §1.2; freistehende Zahlen bleiben
-     * bewusst unangetastet (`Sauce 2000er`, `Cuvée 1er` sind keine Grammaturen).
+    /*
+     * Grammatur im Namen (`(65g)`, `(80 ml)`, `(5x6cm)`) und VK-Marker-Codes (`CC:`, `(BOX)` …) sind seit Spec 81
+     * Regeln als Daten: `vk.1.2.grammatur` (Muster) und `vk.1.2.marker` (Wortliste), Einstellungen › Regeln.
+     * Die §1.2a-Ausnahme (Grammatur als Diskriminator zweier Gleichnamiger) bleibt Logik hier.
      */
-    private const GRAMMATUR_MUSTER = '/\(\s*\d+(?:[.,]\d+)?\s*(?:[x×]\s*\d+(?:[.,]\d+)?\s*)?(?:g|kg|mg|ml|cl|l|cm|mm|stk|st)\s*\)/iu';
+    private function grammaturMuster(): ?string
+    {
+        $m = \Platform\FoodAlchemist\Services\Regeln\RegelBuch::per('vk.1.2.grammatur')?->params['muster'][0] ?? null;
 
-    /** Katalog-/Marker-Codes, die laut Regelwerk_Verkaufsgerichte §1.2 ersatzlos aus dem VK-Namen raus. */
-    private const VK_MARKER = ['CC:', 'STF:', 'MS:', '(SG)', '(BOX)', 'ADD ON', '[FC]'];
+        return is_string($m) && $m !== '' ? $m : null;
+    }
 
     /** Trennzeichen, die am Namensanfang/-ende immer ein Rest aus Import/Split sind. */
     private const NAME_TRENNER_RAND = '/(^[\s|,;:\-\x{2013}]|[\s|,;:\-\x{2013}]$)/u';
@@ -1626,7 +1628,7 @@ class DataQualityService
     private function grammaturBasis(array $r): string
     {
         return $r['achse'] . '|' . $this->normalisierterName(
-            preg_replace(self::GRAMMATUR_MUSTER, ' ', $r['name']) ?? $r['name']
+            ($m = $this->grammaturMuster()) !== null ? (preg_replace($m, ' ', $r['name']) ?? $r['name']) : $r['name']
         );
     }
 
@@ -1651,7 +1653,7 @@ class DataQualityService
         if (preg_match(self::NAME_TRENNER_RAND, $name) === 1) {
             $faelle[] = 'trenner_rand';
         }
-        if (preg_match(self::GRAMMATUR_MUSTER, $name) === 1
+        if (($gm = $this->grammaturMuster()) !== null && preg_match($gm, $name) === 1
             && ($basisZaehler[$this->grammaturBasis($r)] ?? 0) < 2) {
             $faelle[] = 'grammatur';
         }
@@ -1660,8 +1662,8 @@ class DataQualityService
             return $faelle;                                 // §1-Präfix/Marker sind VK-Regeln
         }
 
-        foreach (self::VK_MARKER as $marker) {
-            if (mb_stripos($name, $marker) !== false) {
+        foreach ((array) (\Platform\FoodAlchemist\Services\Regeln\RegelBuch::per('vk.1.2.marker')?->params['tokens'] ?? []) as $marker) {
+            if (mb_stripos($name, (string) $marker) !== false) {
                 $faelle[] = 'vk_marker';
                 break;
             }

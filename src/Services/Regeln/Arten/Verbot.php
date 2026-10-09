@@ -7,6 +7,7 @@ use Platform\FoodAlchemist\Services\Regeln\RegelText;
 
 /**
  * Ein Muster ablehnen. params: `tokens: []` (ganze Wörter; mit `modus: teil` auch innerhalb eines Wortes),
+ * `teile: []` (immer auch innerhalb eines Wortes — „milch" in „Vollmilch"; Ausnahmen fangen „Kokosmilch"),
  * `muster: []` (Regex, beim Speichern geprüft), `ausnahmen: []`, `bedingung: {feld: [werte]}`, `grund`.
  */
 final class Verbot implements RegelArt
@@ -14,8 +15,8 @@ final class Verbot implements RegelArt
     public function validiere(array $params): array
     {
         $fehler = Bedingung::validiere($params['bedingung'] ?? null);
-        if (empty($params['tokens']) && empty($params['muster'])) {
-            $fehler[] = 'tokens oder muster nötig';
+        if (empty($params['tokens']) && empty($params['muster']) && empty($params['teile'])) {
+            $fehler[] = 'tokens, teile oder muster nötig';
         }
         foreach ((array) ($params['muster'] ?? []) as $m) {
             if (($f = RegelText::musterFehler((string) $m)) !== null) {
@@ -33,9 +34,19 @@ final class Verbot implements RegelArt
         if (isset($p['bedingung']) && ! Bedingung::erfuellt((array) $p['bedingung'], $kontext)) {
             return null;
         }
-        foreach ((array) ($p['ausnahmen'] ?? []) as $a) {
-            if (RegelText::hatWort($text, (string) $a)) {
+        $ausnahmen = array_map(static fn ($a) => RegelText::norm((string) $a), (array) ($p['ausnahmen'] ?? []));
+        foreach ($ausnahmen as $a) {
+            if (RegelText::hatWort($text, $a)) {
                 return null;
+            }
+        }
+        foreach ((array) ($p['teile'] ?? []) as $t) {
+            // Wortteil, aber nicht innerhalb eines Ausnahme-Wortes („milch" ja, „kokosmilch" nein).
+            foreach (preg_split('/[^\p{L}\p{N}]+/u', RegelText::norm($text)) ?: [] as $wort) {
+                if ($wort !== '' && str_contains($wort, RegelText::norm((string) $t))
+                    && ! array_filter($ausnahmen, static fn ($a) => str_contains($wort, $a))) {
+                    return (string) $t;
+                }
             }
         }
         $teil = ($p['modus'] ?? 'wort') === 'teil';

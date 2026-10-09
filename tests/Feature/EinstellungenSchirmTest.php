@@ -24,8 +24,19 @@ it('führt jede registrierte Sektion in der Navigation', function () {
 
     expect($html)->toContain('data-settings-nav');
     foreach (array_keys(Einstellungen::SEKTIONEN) as $key) {
+        // Spec 81: Plattform-Admin-Sektionen (Regeln) fehlen für alle anderen bewusst.
+        if (in_array($key, Einstellungen::NUR_PLATTFORM_ADMIN, true)) {
+            expect($html)->not->toContain('data-settings-link="' . $key . '"');
+
+            continue;
+        }
         expect($html)->toContain('data-settings-link="' . $key . '"');
     }
+
+    $admin = $this->makeUser($this->rootTeam, 'Plattform Admin');
+    config(['platform-shell.admins' => [strtolower((string) $admin->email)]]);
+    $this->actingAs($admin);
+    expect(Livewire::test(Einstellungen::class)->html())->toContain('data-settings-link="regeln"');
 });
 
 it('trägt das clientseitige Filter-Feld über der Bereiche-Liste', function () {

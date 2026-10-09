@@ -132,7 +132,12 @@ it('Regelbuch: nur aktive globale Regeln, Memo wird beim Speichern geleert', fun
         ->and(collect(RegelBuch::fuerZiel('gp.name'))->pluck('schluessel')->all())->toContain('gp.2.schnittform');
 });
 
-it('Globale Regeln schreibt nur das Master-Team', function () {
-    expect(fn () => app(RegelService::class)->speichere(['schluessel' => 'x', 'regelwerk' => 'gp', 'titel' => 'x', 'art' => 'verbot',
-        'ziel' => 'gp.name', 'params' => ['tokens' => ['x']]], $this->childA))->toThrow(RuntimeException::class, 'Master-Team');
+it('Regeln pflegt nur der Plattform-Administrator (wie das globale Wissen)', function () {
+    $teamAdmin = $this->makeUser($this->rootTeam, 'Team-Admin');
+    $daten = ['schluessel' => 'x', 'regelwerk' => 'gp', 'titel' => 'x', 'art' => 'verbot', 'ziel' => 'gp.name', 'params' => ['tokens' => ['x']]];
+
+    expect(fn () => app(RegelService::class)->speichere($daten, $teamAdmin))->toThrow(RuntimeException::class, 'Plattform-Administrator');
+
+    config(['platform-shell.admins' => [strtolower((string) $teamAdmin->email)]]);
+    expect(app(RegelService::class)->speichere($daten, $teamAdmin)->version)->toBe(1);
 });
