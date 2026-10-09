@@ -75,6 +75,51 @@ it('Basisrezept: reglerParams nimmt Ziel-Menge + Einheit statt Pax (scope=rezept
     expect($call('rezept'))->not->toHaveKey('ziel_menge');
 });
 
+it('Basisrezept: verdeckte Pax/Portion laufen nicht neben der Charge in den Lauf (demo Lauf #79)', function () {
+    $inst = Livewire::test(PlanungIndex::class)->instance();
+    $call = Closure::bind(fn (string $s) => $this->reglerParams($s), $inst, PlanungIndex::class);
+
+    // Pax/Portion haben im Basisrezept-Tab kein Feld — kamen sie per Assistent/Leitplanke in die Regler,
+    // liefen sie vorher unsichtbar mit (100 × 80 g = 8 kg neben ziel_menge 2 kg).
+    $inst->regler['rezept']['pax'] = '100';
+    $inst->regler['rezept']['ziel_portion_g'] = '80';
+    $ohneCharge = $call('rezept');
+    expect($ohneCharge['ziel_menge'])->toBe(8.0)
+        ->and($ohneCharge['ziel_einheit'])->toBe('kg')
+        ->and($ohneCharge)->not->toHaveKey('pax')
+        ->and($ohneCharge)->not->toHaveKey('ziel_portion_g');
+
+    // Explizite Charge gewinnt — Pax/Portion verschwinden trotzdem.
+    $inst->regler['rezept']['ziel_menge'] = '2';
+    $inst->regler['rezept']['ziel_einheit'] = 'kg';
+    $mitCharge = $call('rezept');
+    expect($mitCharge['ziel_menge'])->toBe(2.0)
+        ->and($mitCharge)->not->toHaveKey('pax');
+
+    // Gegenprobe: am Gericht bleiben Pax/Portion die Mengen-Achse.
+    $inst->regler['gericht']['pax'] = '100';
+    $inst->regler['gericht']['ziel_portion_g'] = '80';
+    expect($call('gericht'))->toHaveKey('pax')->toHaveKey('ziel_portion_g');
+});
+
+it('Basisrezept: »nur Bestand« aus dem Regler erreicht den Lauf statt still hybrid (demo Session #138)', function () {
+    $inst = Livewire::test(PlanungIndex::class)->instance();
+    $call = Closure::bind(fn (string $s) => $this->reglerParams($s), $inst, PlanungIndex::class);
+
+    expect($call('rezept')['bestand'])->toBe('hybrid');            // Default unverändert
+
+    $inst->regler['rezept']['bestand'] = 'nur_bestand';
+    expect($call('rezept')['bestand'])->toBe('nur_bestand');
+
+    $inst->regler['rezept']['bestand'] = 'quatsch';                  // fremder Wert → sicherer Default
+    expect($call('rezept')['bestand'])->toBe('hybrid');
+
+    // Gericht: weiter der Kreativ-Modus, nicht der verdeckte Regler.
+    $inst->regler['gericht']['bestand'] = 'nur_bestand';
+    $inst->eingabe['gericht']['creative_mode'] = 'voll_kreativ';
+    expect($call('gericht')['bestand'])->toBe('hybrid');
+});
+
 it('Leitplanken-Hygiene: Concept nutzt nur den Menü-Preis-Korridor (kein Portions-VK, kein Ziel-Portion)', function () {
     $inst = Livewire::test(PlanungIndex::class)->instance();
     $call = Closure::bind(fn (string $s) => $this->reglerParams($s), $inst, PlanungIndex::class);

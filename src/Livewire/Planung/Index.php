@@ -625,6 +625,7 @@ class Index extends Component
 
             return;
         }
+        // Platzhalter (PlanningSessionService::PLATZHALTER_TITEL) — wird beim ersten Ergebnis durch dessen Namen ersetzt.
         $titel = match ($scope) {
             'gericht' => 'Freies Gericht',
             'concept' => 'Freies Concept',
@@ -2041,7 +2042,7 @@ class Index extends Component
         }
 
         try {
-            $r = $svc->ausBriefing($team, $brief);
+            $r = $svc->ausBriefing($team, $brief, null, $scope);
         } catch (\Throwable $e) {
             $this->fehler = 'Leitplanken-Vorschlag fehlgeschlagen: ' . $e->getMessage();
 
@@ -2049,8 +2050,23 @@ class Index extends Component
         }
 
         $gesetzt = [];
-        $ignoriert = [];
+        // Scope-fremde Felder (Basisrezept: pax/Portion/Anlass …) hat der Service schon entfernt —
+        // hier nur melden, damit nichts still verschwindet.
+        $ignoriert = array_values((array) ($r['scope_fremd'] ?? []));
         foreach ($r['leitplanken'] as $feld => $wert) {
+            // Bestand hat außerhalb des Basisrezept-Tabs keinen eigenen Regler — dort steuert der
+            // Kreativ-Modus die Reuse-Achse (reglerParams). »Nur Bestand« aus dem Briefing landet
+            // deshalb im Modus, statt im verdeckten Regler-Wert unterzugehen.
+            if ($feld === 'bestand' && $scope !== 'rezept') {
+                if ($wert === 'nur_bestand') {
+                    $this->eingabe[$scope]['creative_mode'] = 'datenbank';
+                    $gesetzt[] = 'bestand';
+                } else {
+                    $ignoriert[] = 'bestand';
+                }
+
+                continue;
+            }
             if (! array_key_exists($feld, self::REGLER_DEFAULT)) {
                 // Im Sitzungs-Param-Raum gültig, aber dieser Tab hat den Regler nicht
                 // (z. B. Menü-Quoten). Melden statt verschlucken.
@@ -2206,10 +2222,14 @@ class Index extends Component
         // Kreativität bestimmt die IDEE, nicht ob bestehende Basisrezepte ignoriert werden. Auch ein
         // voll kreatives Gericht erdet seine Komponenten deshalb bestand-first; nur echte Lücken werden
         // neu angelegt. Basisrezepte haben keine Kreativmodus-Achse und nutzen denselben Resolver.
-        $p['bestand'] = match ($scope === 'rezept' ? 'hybrid' : (string) ($this->eingabe[$scope]['creative_mode'] ?? 'hybrid')) {
-            'datenbank' => 'nur_bestand',
-            default => 'hybrid',
-        };
+        // Basisrezept: kein Kreativ-Modus → der Regler-Wert (aus Leitplanken/Briefing) gilt. Vorher stand
+        // hier hart 'hybrid' und ein »nur Bestand« aus dem Briefing ging still verloren (demo Session #138).
+        $p['bestand'] = $scope === 'rezept'
+            ? (in_array($r['bestand'] ?? null, FoodAlchemistPlanningSession::ALLOWED_GENERATION_VALUES['bestand'], true) ? $r['bestand'] : 'hybrid')
+            : match ((string) ($this->eingabe[$scope]['creative_mode'] ?? 'hybrid')) {
+                'datenbank' => 'nur_bestand',
+                default => 'hybrid',
+            };
         // Frische (L1.5): Multi-Select Erlaubnis-Liste → harte gps.condition-Erlaubnis + primärer Pref
         // (Tiebreak). [] = egal (Key entfällt, kein Filter). Sonst: erlaubte Roh-Zustände + 'frisch'-Vorzug.
         $frischeSlugs = array_values(array_filter(
@@ -2246,6 +2266,17 @@ class Index extends Component
             && ($r['ziel_einheit'] ?? '') !== '' && isset(self::MENGE_EINHEITEN[$r['ziel_einheit']])) {
             $p['ziel_menge'] = (float) $mengeRaw;
             $p['ziel_einheit'] = (string) $r['ziel_einheit'];
+        }
+        // Basisrezept: Pax/Portion haben in diesem Tab kein Eingabefeld. Kamen sie trotzdem in die Regler
+        // (Assistent, Altsitzung), liefen sie unsichtbar neben dem Ansatz in den Lauf — demo Lauf #79:
+        // 100 Pax × 80 g (8 kg) UND ziel_menge 2 kg. Ohne Ansatz → daraus ableiten; danach entfernen.
+        if ($scope === 'rezept') {
+            if (! isset($p['ziel_menge']) && isset($p['pax'], $p['ziel_portion_g'])) {
+                $gramm = $p['pax'] * $p['ziel_portion_g'];
+                $p['ziel_menge'] = $gramm >= 1000 ? round($gramm / 1000, 3) : (float) $gramm;
+                $p['ziel_einheit'] = $gramm >= 1000 ? 'kg' : 'g';
+            }
+            unset($p['pax'], $p['ziel_portion_g']);
         }
         if (! isset(self::SAISON_OPTIONEN[$p['saison'] ?? '']) || ($p['saison'] ?? '') === '') {
             unset($p['saison']);   // leer/unbekannt = keine Saison-Vorgabe

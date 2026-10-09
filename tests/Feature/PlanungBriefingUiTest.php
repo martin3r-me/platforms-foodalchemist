@@ -90,6 +90,62 @@ it('meldet erfundene Werte als verworfen und fremde Felder als »nicht auf diese
         ->and($c->get('regler.gericht.serviceform'))->toBe('buffet');
 });
 
+it('Basisrezept-Tab: Pax × Portion wird zur Charge, scope-fremde Felder gemeldet, nur_bestand gesetzt (demo #138)', function () {
+    ($this->stub)(['leitplanken' => [
+        'pax' => 100, 'ziel_portion_g' => 80, 'level' => 'haute_cuisine',
+        'serviceform' => 'tellerservice', 'bestand' => 'nur_bestand',
+    ]]);
+
+    $c = Livewire::test(Index::class)
+        ->set('eingabe.rezept.brief', 'Petersilienpüree, 100 pax à 80 g, haute cuisine, nur Bestand')
+        ->call('leitplankenAusBriefing', 'rezept');
+
+    expect($c->get('regler.rezept.ziel_menge'))->toBe(8.0)
+        ->and($c->get('regler.rezept.ziel_einheit'))->toBe('kg')
+        ->and($c->get('regler.rezept.bestand'))->toBe('nur_bestand')
+        ->and($c->get('regler.rezept.pax'))->toBe(Index::REGLER_DEFAULT['pax'])
+        ->and($c->get('regler.rezept.serviceform'))->toBe(Index::REGLER_DEFAULT['serviceform']);
+
+    $b = $c->get('leitplankenBefund');
+    expect($b['ignoriert'])->toContain('pax')->toContain('ziel_portion_g')->toContain('serviceform')
+        ->and($b['gesetzt'])->toContain('ziel_menge')->toContain('bestand');
+});
+
+it('Gericht-Tab: »nur Bestand« aus dem Briefing landet im Kreativ-Modus (sichtbar), nicht im verdeckten Regler', function () {
+    ($this->stub)(['leitplanken' => ['bestand' => 'nur_bestand', 'ziel_menge' => 3, 'ziel_einheit' => 'kg']]);
+
+    $c = Livewire::test(Index::class)
+        ->set('eingabe.gericht.brief', 'nur aus dem Bestand')
+        ->call('leitplankenAusBriefing', 'gericht');
+
+    expect($c->get('eingabe.gericht.creative_mode'))->toBe('datenbank')
+        ->and($c->get('leitplankenBefund')['ignoriert'])->toContain('ziel_menge');
+});
+
+it('der Leitplanken-Prompt erfährt, was im Tab entsteht', function () {
+    $gesehen = new ArrayObject();
+    app()->bind(FakeAiProvider::class, fn () => new class($gesehen) extends FakeAiProvider
+    {
+        public function __construct(private ArrayObject $gesehen)
+        {
+        }
+
+        public function chat(array $messages, array $options = []): array
+        {
+            $this->gesehen[] = json_encode($messages, JSON_UNESCAPED_UNICODE);
+
+            return [
+                'content' => json_encode(['werte' => ['leitplanken' => ['level' => 'gehoben']], 'confidence' => 0.8, 'reasoning' => 'stub']),
+                'usage' => ['input_tokens' => 0, 'output_tokens' => 0], 'model' => 'fake-brief', 'tool_calls' => null,
+            ];
+        }
+    });
+
+    Livewire::test(Index::class)->set('eingabe.rezept.brief', 'Sauce')->call('leitplankenAusBriefing', 'rezept');
+
+    expect(implode("\n", $gesehen->getArrayCopy()))->toContain('BASISREZEPT')->toContain('ziel_menge');
+});
+
 it('offene Punkte werden zur Rückfrage, nicht zur Annahme', function () {
     ($this->stub)(['leitplanken' => ['occasion' => 'lunch'], 'unklar' => ['Wie viele Gäste?', 'Budget pro Person?']]);
 

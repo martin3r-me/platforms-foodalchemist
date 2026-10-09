@@ -42,6 +42,20 @@ it('§1.7: recipe_key = slug(name) mit ae/oe/ue/ss; §1.8: Kategorie-Diskriminat
     expect($drittes->recipe_key)->toBe('sorbet_birne_2');
 });
 
+it('§1.8: soft-gelöschter Draft belegt seinen Key weiter — Neuanlage weicht aus statt 1062 (demo Lauf #79)', function () {
+    // Selbstheilung/„neu generieren" soft-deleten den Draft und legen gleichnamig neu an. Der
+    // Unique-Index (team_id, recipe_key) zählt die gelöschte Zeile mit.
+    $alt = $this->svc->create($this->rootTeam, ['name' => 'Püree: Petersilie']);
+    $alt->delete();
+
+    $neu = $this->svc->create($this->rootTeam, ['name' => 'Püree: Petersilie']);
+
+    expect($alt->recipe_key)->toBe('pueree_petersilie')
+        ->and($neu->recipe_key)->toBe('pueree_petersilie_2')
+        ->and(FoodAlchemistRecipe::withTrashed()->where('team_id', $this->rootTeam->id)
+            ->where('recipe_key', 'pueree_petersilie')->count())->toBe(1);
+});
+
 it('duplicate kopiert Zutaten und rechnet die Kopie durch; delete blockt bei Eltern-Referenz', function () {
     $g = FoodAlchemistVocabEinheit::create(['team_id' => $this->rootTeam->id, 'slug' => 'g', 'display_de' => 'Gramm', 'dimension' => 'mass', 'default_in_g' => 1]);
     $original = $this->svc->create($this->rootTeam, ['name' => 'Fond: Gemüse']);

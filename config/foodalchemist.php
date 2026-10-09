@@ -995,7 +995,10 @@ return [
                 . '(NUR bei harten Ausschlüssen für ALLE Gäste — »ein paar Vegetarier« ist KEIN '
                 . 'diaet_hart, das ist eine Quote und gehört in `unklar`). '
                 . 'Zahlenregler frei: pax (Personen), ziel_vk_eur (Netto-Verkaufspreis je Person), '
-                . 'ziel_portion_g, ziel_we_pct (Ziel-Wareneinsatz in %). '
+                . 'ziel_portion_g, ziel_we_pct (Ziel-Wareneinsatz in %), ziel_menge (Ansatz eines Basisrezepts, Zahl) + '
+                . 'ziel_einheit = l|ml|kg|g|stk|portionen. '
+                . 'Steht im Kontext `erstellt_wird`, gilt dessen Mengen-Achse verbindlich — setze und '
+                . 'erfrage nur Regler, die zu diesem Artefakt passen. '
                 . 'Freitext: aroma (Aroma-Richtung, z. B. "rauchig-mediterran"), saison (z. B. "Sommer"). '
                 . 'Ein Budget »45 Euro pro Person« ist ziel_vk_eur=45, kein ziel_we_pct. '
                 . 'Nenne in `begruendung` knapp, woraus du die wichtigsten Regler geschlossen hast.',
