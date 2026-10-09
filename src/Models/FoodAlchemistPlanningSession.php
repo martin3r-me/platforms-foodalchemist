@@ -136,6 +136,21 @@ class FoodAlchemistPlanningSession extends Model
     /** Spec 80: Gruppen der Suchbegriffe (Reihenfolge = Anzeige- und Such-Priorität). */
     public const SUCHBEGRIFF_GRUPPEN = ['zutaten', 'komponenten', 'techniken', 'aromen', 'eigene'];
 
+    /**
+     * Spec 80: Suchbegriff-Chips → geordnete Begriffsliste für den Lauf (Zutaten zuerst). Eine Stelle für
+     * Oberfläche (Go) und MCP (`planung_kaskade.START`), damit beide denselben Lauf erzeugen.
+     *
+     * @param  list<array{t?: string, g?: string}>  $chips
+     * @return list<string>
+     */
+    public static function suchbegriffeFuerLauf(array $chips): array
+    {
+        $prio = array_flip(self::SUCHBEGRIFF_GRUPPEN);
+        usort($chips, static fn ($a, $b) => ($prio[$a['g'] ?? 'eigene'] ?? 9) <=> ($prio[$b['g'] ?? 'eigene'] ?? 9));
+
+        return array_values(array_unique(array_filter(array_map(static fn ($b) => trim((string) ($b['t'] ?? '')), $chips))));
+    }
+
     /** Skizzen dieser Session (dritter Owner der bestehenden Kreativ-Ebene). */
     public function ideas(): HasMany
     {

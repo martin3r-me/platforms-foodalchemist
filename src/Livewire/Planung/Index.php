@@ -2094,11 +2094,7 @@ class Index extends Component
      */
     private function suchbegriffeFuerLauf(string $scope): array
     {
-        $liste = (array) ($this->eingabe[$scope]['suchbegriffe'] ?? []);
-        $prio = array_flip(FoodAlchemistPlanningSession::SUCHBEGRIFF_GRUPPEN);
-        usort($liste, static fn ($a, $b) => ($prio[$a['g'] ?? 'eigene'] ?? 9) <=> ($prio[$b['g'] ?? 'eigene'] ?? 9));
-
-        return array_values(array_unique(array_filter(array_map(static fn ($b) => trim((string) ($b['t'] ?? '')), $liste))));
+        return FoodAlchemistPlanningSession::suchbegriffeFuerLauf((array) ($this->eingabe[$scope]['suchbegriffe'] ?? []));
     }
 
     public function leitplankenAusBriefing(string $scope, BriefingLeitplankenService $svc): void

@@ -142,3 +142,25 @@ it('FREIGABE auf einen bereits laufenden Step bleibt ein No-op — jetzt SICHTBA
         ->and($r->data['aktion_hinweis'] ?? null)->toContain('running');
     expect($step->refresh()->status)->toBe('running');   // unangetastet
 });
+
+it('Spec 80: START läuft wie der Go der Oberfläche — Basisrezept plant zuerst, Suchbegriffe aus der Session', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Püree', 'brief' => 'Petersilienpüree, grün, mit Petersilienmatte']);
+    $session->update(['suchbegriffe' => ['rezept' => [['t' => 'Petersilienwurzel', 'g' => 'zutaten'], ['t' => 'grün halten', 'g' => 'techniken']]]]);
+
+    $r = $this->registry->get('foodalchemist.planung_kaskade.START')->execute(['session_id' => $session->id, 'scope' => 'rezept'], $this->ctx);
+
+    $lauf = FoodAlchemistCascadeRun::findOrFail($r->data['run_id'] ?? FoodAlchemistCascadeRun::latest('id')->value('id'));
+    expect($r->success)->toBeTrue()
+        ->and($lauf->params['plan_first'] ?? null)->toBeTrue()
+        ->and($lauf->params['suchbegriffe'] ?? null)->toBe(['Petersilienwurzel', 'grün halten']);
+    Queue::assertPushed(\Platform\FoodAlchemist\Jobs\GenerateRecipePlanJob::class);
+});
+
+it('Spec 80: START mit Gericht beginnt mit dem Bauplan (proposal_first)', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Teller', 'brief' => 'Rinderfilet, Kürbis']);
+    $session->update(['suchbegriffe' => ['gericht' => [['t' => 'Rinderfilet', 'g' => 'zutaten']]]]);
+
+    $this->registry->get('foodalchemist.planung_kaskade.START')->execute(['session_id' => $session->id, 'scope' => 'gericht'], $this->ctx);
+
+    expect(FoodAlchemistCascadeRun::latest('id')->first()->params['proposal_first'] ?? null)->toBeTrue();
+});
