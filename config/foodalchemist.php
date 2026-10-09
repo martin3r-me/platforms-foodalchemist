@@ -1050,6 +1050,23 @@ return [
             'task' => 'Bestimme den §9-Zustand (frisch|TK|trocken|konserviert) des Grundprodukts '
                 . 'aus Name und Lieferantenartikeln: werte = {condition}.',
         ],
+        // Spec 80 B1: Komponenten-Plan eines Basisrezepts — WAS sind die Bausteine (vor dem Bau, Mensch bestätigt).
+        'recipe.komponenten_plan' => [
+            'tier' => 'B',
+            'max_tokens' => 1500,
+            'temperature' => 0.2,
+            'task' => 'Du planst ein BASISREZEPT (Halbfabrikat, Ansatz in kg/l — keine Portionen). Zerlege es in seine '
+                . 'eigenständigen KOMPONENTEN, also Bausteine, die eine Küche getrennt herstellt und dann zusammenführt '
+                . '(z. B. »grünes Petersilienwurzelpüree, mit Petersilienmatte eingefärbt« ⇒ Püree: Petersilienwurzel + '
+                . 'Matte: Petersilie). Rohware (Butter, Salz, Sahne) ist KEINE Komponente — die ergänzt später der Bau. '
+                . 'Ist das Rezept ein einziger Baustein, liefere genau EINE Komponente. '
+                . 'werte = {komponenten: [{name: "<Typ>: <Bezeichnung> nach Basisrezept-Regelwerk §1", '
+                . 'funktion: <eine aus `funktionen`>, menge: <Zahl, Anteil am Ansatz>, einheit: g|kg|ml|l, '
+                . 'suchbegriffe: [<2–4 Wörter, Grundform>]}], begruendung: "<1 Satz>"}. '
+                . 'Die Mengen summieren sich ungefähr auf den `ansatz`, falls angegeben. Höchstens 6 Komponenten. '
+                . 'Erfinde keine Bestandsrezepte — ob es eine Komponente schon gibt, prüft der Code.',
+        ],
+
         'recipe.generator' => [
             'tier' => 'B',
             'max_tokens' => 8000,   // volles Rezept-JSON inkl. Zutatenliste — Reasoning-Headroom

@@ -175,6 +175,9 @@ class RecipeDependencyWorkflowService
         unset($childParameter['ziel_vk_eur'], $childParameter['occasion'], $childParameter['serviceform']);
         unset($childParameter['titel_vorgabe']);   // L5: der Titel gilt nur fuers Gericht, nicht fuer seine Sub-Rezepte
         unset($childParameter['pax'], $childParameter['ziel_portion_g']);   // L6: teller-bezogen, nicht fuer Sub-Rezepte
+        // Spec 80 B6: Ansatz, Suchbegriffe und Plan gehören der Wurzel — das Kind bekommt eigene (kindVorgaben).
+        unset($childParameter['ziel_menge'], $childParameter['ziel_einheit'], $childParameter['suchbegriffe'],
+            $childParameter['plan_komponenten'], $childParameter['plan_first']);
         $parentKnowledge = is_array($step->context_snapshot)
             ? ($step->context_snapshot['knowledge_files'] ?? [])
             : [];
@@ -201,10 +204,38 @@ class RecipeDependencyWorkflowService
             // Schlange, damit sie parallel zu den Gerichten laufen statt dahinter.
             GenerateRecipeJob::dispatch($runId, $team->id, $userId, $text, [
                 ...$childParameter,
+                ...$this->kindVorgaben($step, $ingredientId, $text),
                 'cascade_step_id' => $child->id,
                 'auto_dependencies' => true,
             ], false, $kindVollAnreichern)->onQueue(Warteschlange::rezepte());
         }
+    }
+
+    /**
+     * Spec 80 B6: Vorgaben eines Kind-Basisrezepts aus seiner Zeile im Eltern-Rezept. Ansatz = Menge der Zeile
+     * (eine 100-g-Matte wurde vorher auf den 2-kg-Ansatz der Wurzel ausgelegt); Suchbegriffe = die der
+     * passenden Plan-Komponente. Nur Masse-/Volumen-Einheiten werden als Ansatz übernommen.
+     *
+     * @return array<string, mixed>
+     */
+    private function kindVorgaben(FoodAlchemistCascadeRunStep $eltern, int $ingredientId, string $text): array
+    {
+        $out = [];
+        $zeile = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient::query()->with('unit:id,slug')->find($ingredientId);
+        $slug = (string) ($zeile?->unit?->slug ?? '');
+        if ($zeile !== null && (float) $zeile->quantity > 0 && in_array($slug, ['g', 'kg', 'ml', 'l'], true)) {
+            $out['ziel_menge'] = (float) $zeile->quantity;
+            $out['ziel_einheit'] = $slug;
+        }
+        $norm = static fn ($s) => mb_strtolower(trim((string) $s));
+        foreach ((array) (($eltern->context_snapshot ?? [])['komponenten'] ?? []) as $k) {
+            if (is_array($k) && $norm($k['name'] ?? '') === $norm($text) && ! empty($k['suchbegriffe'])) {
+                $out['suchbegriffe'] = array_values((array) $k['suchbegriffe']);
+                break;
+            }
+        }
+
+        return $out;
     }
 
     /**
@@ -236,6 +267,11 @@ class RecipeDependencyWorkflowService
         unset($params['ziel_vk_eur'], $params['occasion'], $params['serviceform']);
         unset($params['titel_vorgabe']);
         unset($params['pax'], $params['ziel_portion_g']);
+        unset($params['ziel_menge'], $params['ziel_einheit'], $params['suchbegriffe'], $params['plan_komponenten'], $params['plan_first']);
+        $dep = FoodAlchemistCascadeRecipeDependency::where('child_step_id', $child->id)->first(['ingredient_id']);
+        if ($parent !== null && $dep !== null) {
+            $params = [...$params, ...$this->kindVorgaben($parent, (int) $dep->ingredient_id, $text)];
+        }
         $parentKnowledge = is_array($parent?->context_snapshot)
             ? ($parent->context_snapshot['knowledge_files'] ?? [])
             : [];

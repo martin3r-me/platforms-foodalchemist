@@ -2908,6 +2908,8 @@ class Index extends Component
             'voll_anreichern' => (bool) ($this->regler[$scope]['voll_anreichern'] ?? true),   // Default AN (s. $reglerDefaults)
             // Gericht: erst textlicher Bauplan (inkl. Komponenten), Rezept-Draft erst nach Blitz/Freigabe.
             'proposal_first' => $scope === 'gericht',
+            // Spec 80 B1: Basisrezept erst als Komponenten-Plan (Mensch bestätigt), dann Bau.
+            'plan_first' => $scope === 'rezept',
         ];
         // GEPLANTER PFAD (Etappe 2b, „Beide Pfade behalten"): wurde vorab ein KI-Kopf-Plan ausgearbeitet
         // und im Conceptor geprüft ($planConceptId), referenziert der Concept-Go dieses Draft-Concept
