@@ -22,9 +22,9 @@ beforeEach(function () {
     $this->seedTeamHierarchy();
     $this->actingAs($this->makeUser($this->rootTeam));
     $this->svc = app(PlanningCascadeService::class);
-    $this->lauf = fn (array $extra = []) => FoodAlchemistCascadeRun::create([
+    $this->lauf = fn (array $extra = []) => FoodAlchemistCascadeRun::create($extra + [
         'team_id' => $this->rootTeam->id, 'scope' => 'rezept', 'status' => 'review',
-    ] + $extra);
+    ]);
     $this->rezept = fn (string $name = 'Püree: Petersilie') => FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id, 'recipe_key' => 'k' . md5($name . microtime()), 'name' => $name, 'status' => 'draft',
     ]);
@@ -65,7 +65,7 @@ it('C5: ein abgebrochener Lauf springt durch späte Rückmeldungen nicht zurück
     $step = FoodAlchemistCascadeRunStep::create([
         'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'rezept', 'status' => 'running',
     ]);
-    $this->svc->brecheLaufAb($this->rootTeam, $run->id);
+    expect($this->svc->brecheLaufAb($this->rootTeam, $run->id))->toBeTrue();
 
     $step->update(['status' => 'done']);          // späte Rückmeldung eines nicht stoppbaren Provider-Calls
     $this->svc->recomputeRunStatus($run->id);

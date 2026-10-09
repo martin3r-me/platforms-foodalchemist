@@ -1,6 +1,7 @@
 {{-- Spec 80 Teil D — Fortschritt als Baum · Gericht-Cluster · Rezept (abgenommen am Mockup 09.10.).
      Links die Gliederung wie in der Ausgabe angelegt, Mitte je Gericht ein Cluster mit seinen Basisrezepten als
-     Zeilen, rechts der gewählte Eintrag: bewährte Ergebniskarte (alle Aktionen) + Rezeptansicht. Erwartet $lauf. --}}
+     Zeilen, rechts der gewählte Eintrag: bewährte Ergebniskarte (alle Aktionen) + Rezeptansicht. Erwartet $lauf.
+     Einzige Fortschritt-Ansicht (die frühere Stufenliste ist entfernt, ihre Lauf-Aktionen stehen im Kopf). --}}
 @php
     $daten = $this->fortschrittDaten($lauf);
     $leiste = $this->fortschrittStufenleiste($lauf->steps);
@@ -41,6 +42,32 @@
     $rezept = $this->fortschrittRezept($auswahl);
     $laufFailedGenerierbar = $lauf->steps->where('status', 'failed')->whereIn('kind', ['rezept', 'gericht', 'concept'])->count();
     $offen = $lauf->steps->where('status', 'done')->count();
+    // Aus der früheren Stufenliste übernommen: Stufen-Freigabe, Gesamtzustand, Anreicherungs-Bilanz.
+    $stufen = $this->stufenAusSteps($lauf->steps);
+    $stufeName = ['concept' => 'Concept', 'gericht' => 'Gerichte', 'rezept' => 'Basisrezepte'];
+    $laufRunning = $lauf->steps->whereIn('status', ['queued', 'running'])->count();
+    $laufDone = $lauf->steps->whereIn('status', ['done', 'freigegeben'])->count();
+    $laufFailed = $lauf->steps->where('status', 'failed')->count();
+    $freigegebenGesamt = $lauf->steps->where('status', 'freigegeben')->count();
+    $geplantGesamt = $lauf->steps->where('status', 'geplant')->where('kind', 'rezept')->count();
+    $anrDone = 0; $anrFehler = 0; $anrOffen = 0;
+    foreach ($lauf->steps as $s) {
+        if ($s->status !== 'freigegeben' || ! in_array($s->kind, ['rezept', 'gericht'], true)) { continue; }
+        $es = is_array($s->deferred['enrich'] ?? null) ? $s->deferred['enrich']['status'] ?? null : null;
+        if ($es === 'done') { $anrDone++; } elseif ($es === 'failed') { $anrFehler++; } elseif (in_array($es, ['queued', 'running'], true)) { $anrOffen++; }
+    }
+    $terminal = $laufRunning === 0 && $offen === 0 && $freigegebenGesamt > 0;
+    $aktuellePhase = $lauf->steps->whereNotNull('phase')->sortByDesc('phase_at')->first()?->phase;
+    $schritte = fn (int $n) => $n === 1 ? '1 Schritt' : $n . ' Schritte';
+    $gesamt = match (true) {
+        $laufRunning > 0 && ($hinweis ?? null) !== null => ['warn', 'heroicon-o-exclamation-triangle', false, 'Die Hintergrund-Erstellung reagiert nicht. ' . $schritte($laufRunning) . ' warten.'],
+        $laufRunning > 0 => ['info', 'heroicon-o-arrow-path', true, $schritte($laufRunning) . ' in Arbeit' . ($laufDone > 0 ? ', ' . $laufDone . ' fertig' : '') . '.' . ($aktuellePhase ? ' ' . $aktuellePhase : '')],
+        $offen > 0 => ['warn', 'heroicon-o-eye', false, ($offen === 1 ? '1 Ergebnis wartet' : $offen . ' Ergebnisse warten') . ' auf deine Prüfung. Ansehen, dann freigeben.'],
+        $terminal => ['ok', 'heroicon-o-check-badge', false, 'Abgeschlossen: ' . $freigegebenGesamt . ' freigegeben' . ($anrOffen > 0 ? ', Anreicherung läuft …' : ($anrDone > 0 ? ' und angereichert.' : '.'))],
+        $laufFailed > 0 => ['crit', 'heroicon-o-x-circle', false, 'Fehlgeschlagen. Die Gründe stehen am jeweiligen Ergebnis.'],
+        default => null,
+    };
+    $tonFlaeche = ['ok' => 'bg-[var(--fa-ok-soft)] text-[var(--fa-ok)]', 'warn' => 'bg-[var(--fa-warn-soft)] text-[var(--fa-warn)]', 'crit' => 'bg-[var(--fa-crit-soft)] text-[var(--fa-crit)]', 'info' => 'bg-[var(--fa-info-soft)] text-[var(--fa-info)]'];
     $hatBaum = ! empty($daten['baum']['kinder']);
     $filterLabel = ['alle' => 'Alle', 'pruefen' => 'Zu prüfen', 'fehler' => 'Fehler', 'bestand' => 'Aus Bestand'];
     $klein = 'text-[length:var(--fa-text-sm)]';
@@ -49,6 +76,22 @@
     <div class="flex flex-col gap-3 min-w-0" data-fortschritt-neu>
         @if($lauf->brief)
             <p class="{{ $klein }} text-[var(--fa-ink-2)] line-clamp-2 break-words"><span class="font-medium text-[var(--fa-ink)]">Auftrag:</span> {{ \Illuminate\Support\Str::limit($lauf->brief, 200) }}</p>
+        @endif
+
+        @if($gesamt)
+            <div class="flex items-start gap-2 rounded-[var(--fa-radius-control)] px-3 py-2 text-[length:var(--fa-text-md)] font-medium {{ $tonFlaeche[$gesamt[0]] }}" role="status" data-fortschritt-gesamt>
+                @svg($gesamt[1], 'w-4 h-4 shrink-0 mt-0.5' . ($gesamt[2] ? ' animate-spin' : ''))
+                <span class="min-w-0 break-words">{{ $gesamt[3] }}</span>
+            </div>
+        @endif
+        @if($terminal && $anrFehler > 0)
+            <x-fa::signal tone="crit">{{ $anrFehler === 1 ? '1 Anreicherung ist' : $anrFehler . ' Anreicherungen sind' }} fehlgeschlagen. Am Ergebnis erneut anstoßen.</x-fa::signal>
+        @endif
+        @if($laufRunning > 0 && $freigegebenGesamt > 0)
+            <p class="{{ $klein }} text-[var(--fa-ink-3)]">Eine Stufe ist freigegeben, die nächste entsteht gerade. Jede Stufe wird für sich freigegeben.</p>
+        @endif
+        @if($geplantGesamt > 0)
+            <p class="{{ $klein }} text-[var(--fa-ink-3)]">{{ $geplantGesamt === 1 ? '1 Basisrezept ist' : $geplantGesamt . ' Basisrezepte sind' }} geplant. Sie entstehen, sobald die Stufe darüber freigegeben ist.</p>
         @endif
 
         {{-- Kopf: Stufenleiste · Filter · Sammelaktionen --}}
@@ -80,7 +123,24 @@
                 <x-foodalchemist::ki-action action="laufWiederAufnehmen()" target="laufWiederAufnehmen" icon="heroicon-o-arrow-path" variant="ghostXs"
                     label="Gescheiterte Schritte fortsetzen ({{ $laufFailedGenerierbar }})" busy="Wird fortgesetzt …" flash="Fortsetzung eingereiht" data-planung-resume-btn />
             @endif
-            <button type="button" wire:click="fortschrittAnsichtUmschalten" class="ml-auto {{ $klein }} text-[var(--fa-ink-3)] underline-offset-2 hover:underline" data-fortschritt-klassisch>Klassische Ansicht</button>
+            @foreach($stufen as $stufe)
+                @if($stufe['zustand'] === 'prüfen')
+                    <x-foodalchemist::ki-action action="gibStufeFrei('{{ $stufe['kind'] }}')" icon="heroicon-o-check-badge" variant="ghostXs" wire:key="stufe-frei-{{ $stufe['kind'] }}"
+                        label="Ganze Stufe freigeben: {{ $stufeName[$stufe['kind']] ?? $stufe['label'] }}" busy="Wird freigegeben …" flash="Stufe freigegeben" data-planung-stufe-frei="{{ $stufe['kind'] }}" />
+                @endif
+            @endforeach
+            @if($offen > 0)
+                <div class="relative ml-auto" x-data="faMenu()" x-on:keydown.escape="offen = false" x-on:click.outside="offen = false">
+                    <x-fa::icon-button icon="heroicon-m-ellipsis-horizontal" label="Weitere Aktionen" size="sm" x-on:click="toggle($event)" aria-haspopup="menu" x-bind:aria-expanded="offen" />
+                    <div x-bind:class="{ hidden: ! offen }" x-bind:style="pos" role="menu" class="hidden w-64 fa-surface shadow-lg py-1">
+                        <button type="button" role="menuitem" wire:click="alleVerwerfen" x-on:click="offen = false"
+                                wire:confirm="Alle offenen Ergebnisse dieses Laufs wirklich verwerfen?"
+                                class="flex w-full items-center gap-2 px-3 py-2 text-left text-[length:var(--fa-text-md)] text-[var(--fa-crit)] hover:bg-[var(--fa-crit-soft)]" data-planung-alle-verwerfen>
+                            @svg('heroicon-o-trash', 'w-4 h-4') Alle offenen verwerfen
+                        </button>
+                    </div>
+                </div>
+            @endif
         </div>
 
         <div class="grid grid-cols-1 gap-4 {{ $hatBaum ? 'xl:grid-cols-[minmax(200px,0.55fr)_minmax(0,1.1fr)_minmax(0,1fr)] lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]' : 'lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]' }}">
@@ -137,6 +197,15 @@
                 @empty
                     <x-fa::empty icon="heroicon-o-funnel" title="Nichts in dieser Auswahl">Anderen Filter oder „Alle Ergebnisse“ wählen.</x-fa::empty>
                 @endforelse
+                @if(collect($stufen)->contains('kind', 'rezept'))
+                    {{-- Fehlendes Basisrezept von Hand ergänzen: der Motor legt den geplanten Schritt an. --}}
+                    <div x-data="{ busy: null }" class="flex flex-wrap items-center gap-2 rounded-[var(--fa-radius-control)] border border-dashed border-[var(--fa-line)] px-3 py-2" data-planung-sub-ergaenzen>
+                        <x-fa::input size="sm" wire:model="neuerSubName" wire:keydown.enter="ergaenzeSubRezept"
+                            placeholder="Fehlendes Basisrezept, z. B. Schweinejus" aria-label="Fehlendes Basisrezept" class="flex-1 min-w-[12rem]" />
+                        <x-foodalchemist::ki-action action="ergaenzeSubRezept()" target="ergaenzeSubRezept" icon="heroicon-o-plus" variant="ghostXs" label="Basisrezept ergänzen"
+                            busy="Wird ergänzt …" flash="Ergänzt" class="shrink-0" />
+                    </div>
+                @endif
             </div>
 
             {{-- Rechts: gewählter Eintrag (D4) --}}

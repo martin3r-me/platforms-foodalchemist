@@ -99,6 +99,9 @@ class CoverageService
         $befunde = [];
         $befunde = array_merge($befunde, $this->pruefePreisKopf($frame, $ist));
         foreach ($frame->slots as $slot) {
+            if ($slot->istStruktur()) {
+                continue;   // Spec 80 F3.4: Titel/Freitext/Leerzeile sind keine offene Position
+            }
             $befunde = array_merge($befunde, $this->pruefeSlot($slot, $ist));
         }
         // Kapitel-Ziele (M3 SOLL, foodbook-only): Menge/Preis am Kapitel-Rollup. Greift ein

@@ -18,7 +18,21 @@ class FoodAlchemistPlanningFrameSlot extends Model
 {
     use HasUuidV7, LogsActivity, SoftDeletes;
 
-    public const SLOT_TYPES = ['gang', 'station', 'kapitel'];
+    /**
+     * Spec 80 Teil F: Struktur-Elemente im Rahmen (Titel, Titel mit Preis, Freitext, Leerzeile) — erzeugen kein
+     * Concept, sondern werden 1:1 in die Ausgabe gelegt (Foodbook/Speisekarte: an den Anfang des folgenden
+     * Abschnitts, Format: an ihre Stelle). Nur in Rahmen von Foodbook, Speisekarte und Format.
+     */
+    public const STRUKTUR_TYPEN = ['titel', 'titel_preis', 'freitext', 'leerzeile'];
+
+    public const STRUKTUR_OWNER = ['foodbook', 'speisekarte', 'format'];
+
+    public const SLOT_TYPES = ['gang', 'station', 'kapitel', 'titel', 'titel_preis', 'freitext', 'leerzeile'];
+
+    public function istStruktur(): bool
+    {
+        return in_array($this->slot_type, self::STRUKTUR_TYPEN, true);
+    }
 
     protected $table = 'foodalchemist_planning_frame_slots';
 

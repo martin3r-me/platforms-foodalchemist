@@ -121,6 +121,7 @@ it('B1: composerGeneriere dispatcht GenerateRecipeJob mit seed_anker — NICHT i
         ->assertSet('laeuft', true)
         ->assertNoRedirect();
 
+    \Platform\FoodAlchemist\Tests\Support\KomponentenPlanDurch::bauen();
     Queue::assertPushed(GenerateRecipeJob::class, fn ($job) => $job->vkModus === false
         && ($job->parameter['seed_anker'] ?? null) === ['tomate']);
 
@@ -147,6 +148,7 @@ it('composerUebernehmen pinnt seed_anker + Brief OHNE zu dispatchen; goKaskade n
 
     // Der reguläre Go im Erstellen-Tab nimmt die gepinnten Anker als seed_anker mit …
     $comp->call('goKaskade', 'rezept');
+    \Platform\FoodAlchemist\Tests\Support\KomponentenPlanDurch::bauen();
     Queue::assertPushed(GenerateRecipeJob::class, fn ($job) => ($job->parameter['seed_anker'] ?? null) === ['tomate']);
 
     // … und der Pin ist danach geleert (kein Re-Seed bei einem späteren, unabhängigen Go).

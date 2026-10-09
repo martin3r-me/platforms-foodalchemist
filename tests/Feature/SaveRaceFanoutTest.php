@@ -75,7 +75,7 @@ it('ein an das falsche Rezept adressierter Save wird auch bei parallelen Editore
     $editorB->assertSet('fehler', fn ($f) => is_string($f) && $f !== '');
 });
 
-it('Cockpit-Fan-out: zwei offene Drafts mounten je eine eigene Editor-Instanz', function () {
+it('Cockpit-Fan-out: jeder gewählte Draft mountet eine eigene Editor-Instanz', function () {
     $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'X', 'brief' => 'y']);
     $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'planning_session_id' => $session->id, 'scope' => 'gericht', 'status' => 'review']);
     $stepA = FoodAlchemistCascadeRunStep::create([
@@ -96,6 +96,22 @@ it('Cockpit-Fan-out: zwei offene Drafts mounten je eine eigene Editor-Instanz', 
         'label' => 'Draft A (reused)', 'ref_id' => $this->rezeptA->id, 'sort' => 3,
     ]);
 
+    // Spec 80 D: der Fortschritt zeigt rechts EINE Ergebniskarte (den gewählten Schritt). Die Invariante
+    // bleibt dieselbe: jeder Schritt bekommt seinen EIGENEN Editor — auch C, das Rezept A mit Schritt A teilt.
+    // Beim Wechsel A → C darf Livewire die Instanz nicht per Morph wiederverwenden (sonst klebt A an C).
+    $editor = function (string $html): array {
+        preg_match_all('/<[a-zA-Z0-9-]+[^>]*wire:name="foodalchemist\.recipes\.ingredient-editor"[^>]*>/', $html, $w);
+        $ids = [];
+        foreach ($w[0] as $wurzel) {
+            if (preg_match('/wire:id="([^"]+)"/', $wurzel, $mid)) {
+                $ids[] = $mid[1];
+            }
+        }
+        preg_match_all('/worker-zutaten-\d+-\d+/', $html, $keys);
+
+        return [$ids, array_values(array_unique($keys[0]))];
+    };
+
     $cockpit = Livewire::test(PlanungIndex::class)
         ->set('sessionId', $session->id)
         ->set('laufId', $run->id)
@@ -104,44 +120,16 @@ it('Cockpit-Fan-out: zwei offene Drafts mounten je eine eigene Editor-Instanz', 
         ->call('toggleZutaten', $stepC->id)
         ->assertSet('zutatenOffen', [$stepA->id, $stepB->id, $stepC->id]);
 
-    $html = $cockpit->html();
-
-    // Editor-Wurzeln einsammeln. `wire:name` trägt JEDE montierte Instanz — auch die, die Livewire
-    // als nackten Platzhalter ausgibt, weil das Eltern-Memo sie schon kennt.
-    preg_match_all(
-        '/<[a-zA-Z0-9-]+[^>]*wire:name="foodalchemist\.recipes\.ingredient-editor"[^>]*>/',
-        $html,
-        $editorWurzeln
-    );
-    $editorIds = [];
-    foreach ($editorWurzeln[0] as $wurzel) {
-        if (preg_match('/wire:id="([^"]+)"/', $wurzel, $mid)) {
-            $editorIds[] = $mid[1];
-        }
+    $instanzen = [];
+    foreach ([[$stepA, $this->rezeptA], [$stepB, $this->rezeptB], [$stepC, $this->rezeptA]] as [$step, $rezept]) {
+        [$ids, $keys] = $editor($cockpit->call('waehleSchritt', $step->id)->html());
+        expect($keys)->toBe(["worker-zutaten-{$step->id}-{$rezept->id}"])
+            ->and($ids)->toHaveCount(1);
+        $instanzen[] = $ids[0];
     }
-    preg_match_all('/worker-zutaten-\d+-\d+/', $html, $editorKeys);
 
-    // Alle drei Stufen sind aufgeklappt (Toggle-Label je offenem Draft).
-    expect(substr_count($html, 'Zutaten schließen'))->toBe(3)
-        // … und JEDER Draft mountet einen EIGENEN, eindeutig gekeyten Editor (Step-ID + Rezept-ID).
-        ->and($html)->toContain("worker-zutaten-{$stepA->id}-{$this->rezeptA->id}")
-        ->and($html)->toContain("worker-zutaten-{$stepB->id}-{$this->rezeptB->id}")
-        // Stufe C teilt das Rezept von A — der Key muss sie TROTZDEM trennen (Step-ID im Key).
-        ->and($html)->toContain("worker-zutaten-{$stepC->id}-{$this->rezeptA->id}")
-        ->and(array_unique($editorKeys[0]))->toHaveCount(3)
-        // KORREKTUR 2026-09-03: hier stand `substr_count($html, 'wire:snapshot')->toBe(2)`.
-        // Diese Zusicherung war UNERFÜLLBAR: einen `wire:snapshot` trägt nur ein Kind, das in
-        // GENAU DIESEM Request erstmals montiert wird; ein dem Eltern-Memo bereits bekanntes Kind
-        // gibt Livewire absichtlich als nackten Platzhalter aus (nur `wire:id` + `wire:name`), und
-        // `update()` legt den Eltern-HTML ohnehin nur in `effects['html']`. Bei GETRENNTEN
-        // toggleZutaten-Requests steht deshalb nie mehr als EIN Snapshot im HTML — der Test
-        // konnte nur rot sein.
-        //
-        // Der Ersatz misst, was gemeint war: drei VERSCHIEDENE Instanz-IDs. Wäre eine Instanz
-        // geteilt (Morph-Kollaps), stünde dieselbe `wire:id` zweimal im Render, weil der
-        // Platzhalter die ID des bekannten Kindes übernimmt. Das ist die Invariante
-        // „getrennte Instanzen, kein Save-Bleed" — unabhängig davon, welcher Request montiert.
-        ->and(array_unique($editorIds))->toHaveCount(3);
+    // Drei Schritte, drei verschiedene Instanzen — C erbt nicht die Instanz von A trotz gleichem Rezept.
+    expect(array_unique($instanzen))->toHaveCount(3);
 });
 
 it('Blade-Vertrag: der Fan-out-Editor-Key ist eindeutig je Step (Step-ID, nicht nur Rezept-ID)', function () {

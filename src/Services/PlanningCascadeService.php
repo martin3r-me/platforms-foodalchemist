@@ -395,6 +395,15 @@ class PlanningCascadeService
         $speisekarteGerichte = $ownerType === 'speisekarte' && ($sessionParams['speisekarte_fuellung'] ?? 'gerichte') !== 'concepte';
 
         $slots = $this->vollkaskadeSlots($team, $ownerType, $ownerId, $frame);
+        // Spec 80 F: Struktur-Elemente des Rahmens direkt in die Ausgabe (nach den Kapiteln, vor den Konzepten).
+        try {
+            $strukturMap = $this->legeStrukturAn($team, $ownerType, $ownerId, $frame);
+            if ($strukturMap !== []) {
+                $run->update(['params' => [...(is_array($run->params) ? $run->params : []), 'struktur_map' => $strukturMap]]);
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('[Kaskade] Struktur-Elemente nicht angelegt', ['run' => $run->id, 'error' => $e->getMessage()]);
+        }
         $idx = 0;
         // Sammler für den Positions-Deckel: EIN Befund für die ganze Karte statt eines Vermerks
         // je Rubrik. `$idx` ist ein durchlaufender Zähler über alle Rubriken — der Deckel greift
@@ -559,9 +568,11 @@ class PlanningCascadeService
     private function vollkaskadeSlots(Team $team, string $ownerType, int $ownerId, $frame): array
     {
         $out = [];
+        // Spec 80 F: Struktur-Elemente erzeugen kein Concept — sie legt legeStrukturAn() direkt in die Ausgabe.
+        $frame->setRelation('slots', $frame->slots()->orderBy('position')->get()->reject(fn ($s) => $s->istStruktur())->values());
         if ($ownerType === 'foodbook') {
             app(FoodbookService::class)->strukturAusGeruest($team, $ownerId);   // Slots → Kapitel (idempotent)
-            $frame->load('slots');
+            $frame->setRelation('slots', $frame->slots()->orderBy('position')->get()->reject(fn ($s) => $s->istStruktur())->values());
             foreach ($frame->slots as $slot) {
                 if ($slot->chapter_id !== null) {
                     $out[] = [$slot, (int) $slot->chapter_id];
@@ -572,7 +583,6 @@ class PlanningCascadeService
         }
         if ($ownerType === 'speisekarte') {
             $svc = app(SpeisekarteService::class);
-            $frame->load('slots');
             foreach ($frame->slots as $slot) {
                 $out[] = [$slot, $svc->rubrikFuerSlot($team, $ownerId, (string) ($slot->label ?: 'Rubrik'))];
             }
@@ -585,7 +595,6 @@ class PlanningCascadeService
             // keinen Zwischen-Container wie Kapitel/Rubrik. Darum ist die containerId überall die Angebots-ID.
             // format läuft identisch: der Container IST das Format, jedes Concept wird als format_slot
             // (type=concept) referenziert ({@see FormatService::slotConceptEinfuegen}) — containerId = format_id.
-            $frame->load('slots');
             foreach ($frame->slots as $slot) {
                 $out[] = [$slot, $ownerId];
             }
@@ -594,6 +603,144 @@ class PlanningCascadeService
         }
 
         return $out;
+    }
+
+    /**
+     * Spec 80 Teil F: Struktur-Elemente des Rahmens (Titel, Titel mit Preis, Freitext, Leerzeile) 1:1 in die
+     * Ausgabe legen — ohne KI, ohne Step. Foodbook/Speisekarte: an den ANFANG des folgenden Abschnitts
+     * (Entscheid Dominique 2026-10-09; ohne folgenden Abschnitt ans Ende des letzten). Format: an ihre Stelle,
+     * die Reihenfolge hält {@see ordneFormatNachRahmen}. Gibt die Zuordnung Rahmen-Slot → Ausgabe-Element zurück.
+     *
+     * @return array<int, int>
+     */
+    private function legeStrukturAn(Team $team, string $ownerType, int $ownerId, $frame): array
+    {
+        $alle = $frame->slots()->orderBy('position')->get()->values();
+        if ($alle->first(fn ($s) => $s->istStruktur()) === null) {
+            return [];
+        }
+        $map = [];
+        $titel = fn ($s) => trim((string) $s->label);
+        if ($ownerType === 'format') {
+            $fmt = app(\Platform\FoodAlchemist\Services\FormatService::class);
+            foreach ($alle as $s) {
+                if (! $s->istStruktur()) {
+                    continue;
+                }
+                $typ = ['titel' => 'header', 'titel_preis' => 'header', 'freitext' => 'text', 'leerzeile' => 'spacer'][$s->slot_type];
+                $neu = $fmt->slotBlockEinfuegen($team, $ownerId, $typ, ['title' => $typ === 'header' ? $titel($s) : null, 'text_content' => $typ === 'text' ? ($s->note ?: $titel($s)) : null]);
+                $map[(int) $s->id] = (int) $neu->id;
+            }
+
+            return $map;
+        }
+        // Foodbook/Speisekarte: Gruppen aufeinanderfolgender Struktur-Elemente → Anfang des folgenden Abschnitts.
+        $gruppe = [];
+        $ziele = [];
+        foreach ($alle as $i => $s) {
+            if ($s->istStruktur()) {
+                $gruppe[] = $s;
+
+                continue;
+            }
+            if ($gruppe !== []) {
+                $ziele[] = [$gruppe, $s, 'anfang'];
+                $gruppe = [];
+            }
+        }
+        if ($gruppe !== []) {
+            $letzter = $alle->reverse()->first(fn ($s) => ! $s->istStruktur());
+            if ($letzter !== null) {
+                $ziele[] = [$gruppe, $letzter, 'ende'];
+            }
+        }
+        foreach ($ziele as [$elemente, $abschnitt, $wo]) {
+            if ($ownerType === 'foodbook') {
+                $kapitelId = (int) ($abschnitt->fresh()->chapter_id ?? 0);
+                if ($kapitelId <= 0) {
+                    continue;
+                }
+                $fb = app(FoodbookService::class);
+                $neue = [];
+                foreach ($elemente as $s) {
+                    $typ = ['titel' => 'header_frei', 'titel_preis' => 'header_frei_preis', 'freitext' => 'text', 'leerzeile' => 'spacer'][$s->slot_type];
+                    $block = $fb->addBlock($team, $kapitelId, array_filter([
+                        'type' => $typ, 'label' => $typ !== 'spacer' ? $titel($s) : null,
+                        'customer_text' => $typ === 'text' ? ($s->note ?: $titel($s)) : null,
+                        'price_value' => $typ === 'header_frei_preis' ? $s->price_anchor : null,
+                        'price_basis' => $typ === 'header_frei_preis' ? 'person' : null,
+                    ], fn ($v) => $v !== null));
+                    $neue[] = $block;
+                    $map[(int) $s->id] = (int) $block->id;
+                }
+                if ($wo === 'anfang') {
+                    $min = (int) \Platform\FoodAlchemist\Models\FoodAlchemistFoodbookBlock::where('chapter_id', $kapitelId)
+                        ->whereNotIn('id', array_map(fn ($b) => $b->id, $neue))->min('position');
+                    foreach ($neue as $k => $b) {
+                        $b->update(['position' => $min - count($neue) + $k]);
+                    }
+                }
+            } elseif ($ownerType === 'speisekarte') {
+                $sk = app(SpeisekarteService::class);
+                $rubrikId = $sk->rubrikFuerSlot($team, $ownerId, (string) ($abschnitt->label ?: 'Rubrik'));
+                $neue = [];
+                foreach ($elemente as $s) {
+                    $typ = ['titel' => 'header', 'titel_preis' => 'header', 'freitext' => 'text', 'leerzeile' => 'spacer'][$s->slot_type];
+                    $pos = $sk->addPosition($team, $rubrikId, array_filter([
+                        'type' => $typ, 'label' => $typ !== 'spacer' ? $titel($s) : null,
+                        'consumer_text' => $typ === 'text' ? ($s->note ?: $titel($s)) : null,
+                        'price_value' => $s->slot_type === 'titel_preis' ? $s->price_anchor : null,
+                    ], fn ($v) => $v !== null));
+                    $neue[] = $pos;
+                    $map[(int) $s->id] = (int) $pos->id;
+                }
+                if ($wo === 'anfang') {
+                    $min = (int) \Platform\FoodAlchemist\Models\FoodAlchemistSpeisekartePosition::where('section_id', $rubrikId)
+                        ->whereNotIn('id', array_map(fn ($p) => $p->id, $neue))->min('position');
+                    foreach ($neue as $k => $p) {
+                        $p->update(['position' => $min - count($neue) + $k]);
+                    }
+                }
+            }
+        }
+
+        return $map;
+    }
+
+    /**
+     * Spec 80 F2: Format-Reihenfolge = Rahmen-Reihenfolge. Konzepte hängen sich asynchron ans Ende; danach ordnet
+     * diese Funktion alle vom Lauf erzeugten Elemente (Struktur + Konzepte) nach der Position ihres Rahmen-Slots.
+     * Elemente, die schon vorher im Format standen, bleiben vorne in ihrer Reihenfolge. Idempotent.
+     */
+    public function ordneFormatNachRahmen(Team $team, int $runId): void
+    {
+        $run = FoodAlchemistCascadeRun::find($runId);
+        if ($run === null || $run->source_owner_type !== 'format') {
+            return;
+        }
+        $formatId = (int) $run->source_owner_id;
+        $frame = app(PlanningFrameService::class)->find('format', $formatId);
+        if ($frame === null) {
+            return;
+        }
+        $map = (array) (($run->params ?? [])['struktur_map'] ?? []);
+        $conceptJeSlot = $run->steps()->where('kind', 'concept')->whereNotNull('slot_id')->whereNotNull('ref_id')->pluck('ref_id', 'slot_id');
+        $formatSlots = \Platform\FoodAlchemist\Models\FoodAlchemistFormatSlot::where('format_id', $formatId)->orderBy('position')->get();
+        $gewuenscht = [];
+        foreach ($frame->slots()->orderBy('position')->get() as $s) {
+            if (isset($map[$s->id])) {
+                $gewuenscht[] = (int) $map[$s->id];
+            } elseif (($cid = $conceptJeSlot->get($s->id)) !== null) {
+                $fs = $formatSlots->first(fn ($f) => $f->type === 'concept' && (int) $f->concept_id === (int) $cid);
+                if ($fs !== null) {
+                    $gewuenscht[] = (int) $fs->id;
+                }
+            }
+        }
+        $rest = $formatSlots->pluck('id')->map(fn ($i) => (int) $i)->reject(fn ($i) => in_array($i, $gewuenscht, true))->values()->all();
+        foreach ([...$rest, ...$gewuenscht] as $pos => $id) {
+            \Platform\FoodAlchemist\Models\FoodAlchemistFormatSlot::whereKey($id)->update(['position' => $pos + 1]);
+        }
     }
 
     /** Kompakter Brief je Slot für die Concept-Erzeugung (Rolle/Label + Ziele + Preis-Anker). */
@@ -1771,6 +1918,7 @@ class PlanningCascadeService
             app(AngebotService::class)->referenziereConcept($team, $containerId, $conceptId);   // E2: containerId = Angebots-ID
         } elseif ($ownerType === 'format') {
             app(\Platform\FoodAlchemist\Services\FormatService::class)->slotConceptEinfuegen($team, $containerId, $conceptId);   // containerId = format_id
+            $this->ordneFormatNachRahmen($team, (int) $step->cascade_run_id);   // Spec 80 F2
         } else {
             return;
         }

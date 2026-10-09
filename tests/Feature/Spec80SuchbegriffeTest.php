@@ -108,6 +108,7 @@ it('Go: Suchbegriffe gehen geordnet in den Lauf und an die Sitzung, nicht in die
         ])
         ->call('goKaskade', 'rezept');
 
+    \Platform\FoodAlchemist\Tests\Support\KomponentenPlanDurch::bauen();
     Queue::assertPushed(GenerateRecipeJob::class, fn ($job) => ($job->parameter['suchbegriffe'] ?? null) === ['Petersilienwurzel', 'grün halten']);
     $session->refresh();
     expect(array_column($session->suchbegriffe['rezept'] ?? [], 't'))->toBe(['grün halten', 'Petersilienwurzel'])
@@ -124,6 +125,7 @@ it('Go ohne Chips leitet die Suchbegriffe einmal nach (Regler bleiben unangetast
         ->set('eingabe.rezept.brief', 'Petersilienpüree, grün')
         ->call('goKaskade', 'rezept');
 
+    \Platform\FoodAlchemist\Tests\Support\KomponentenPlanDurch::bauen();
     Queue::assertPushed(GenerateRecipeJob::class, fn ($job) => ($job->parameter['suchbegriffe'] ?? null) === ['Petersilienwurzel']);
     expect($c->get('regler.rezept.level'))->toBe(PlanungIndex::REGLER_DEFAULT['level']);
 });

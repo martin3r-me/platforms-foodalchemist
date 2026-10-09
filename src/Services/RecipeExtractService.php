@@ -95,9 +95,10 @@ class RecipeExtractService
             if ($idx !== null) {
                 $zutaten[$idx]['sub_rezept_id'] = $subId;
                 $zutaten[$idx]['sub_rezept'] = true;
+                $zutaten[$idx]['sub_rezept_eigen'] = true;
             } else {
                 $zutaten[] = [
-                    'text' => $kName, 'sub_rezept_id' => $subId, 'sub_rezept' => true,
+                    'text' => $kName, 'sub_rezept_id' => $subId, 'sub_rezept' => true, 'sub_rezept_eigen' => true,
                     'quantity' => 1, 'unit' => 'stk',
                 ];
             }
