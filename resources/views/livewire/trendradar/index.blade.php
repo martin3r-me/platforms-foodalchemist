@@ -154,7 +154,7 @@
                 </div>
             </div>
         @elseif($ansicht === 'inspiration')
-            {{-- INSPIRATION: Team-Pinnwand der Fundstücke --}}
+            {{-- INSPIRATION: Team-Pinnwand — eine Karte je Inspiration (Thema), darunter ihre Quellen --}}
             <div class="flex flex-wrap items-center gap-1.5" data-pinnwand-filter>
                 @foreach(['offen' => 'Offen', 'zugeordnet' => 'Einem Trend zugeordnet', 'alle' => 'Alle'] as $wert => $label)
                     <button type="button" wire:click="$set('pinnAnsicht', @js($wert))" wire:key="pa-{{ $wert }}"
@@ -163,10 +163,15 @@
                 @if($pinnSchlagwort !== '')
                     <x-fa::button size="sm" variant="ghost" icon="heroicon-m-x-mark" wire:click="$set('pinnSchlagwort', '')">#{{ $pinnSchlagwort }}</x-fa::button>
                 @endif
+                @if($darfKuratieren && count($mergeWahl) >= 2)
+                    <x-fa::button size="sm" variant="primary" icon="heroicon-m-arrows-pointing-in" wire:click="zusammenfuehren" class="ml-auto" data-inspiration-zusammenfuehren>
+                        {{ count($mergeWahl) }} Inspirationen zusammenführen
+                    </x-fa::button>
+                @endif
             </div>
             @if($haeufungen !== [])
                 <x-fa::notice tone="info" title="Häufungen" data-pinnwand-haeufungen>
-                    Zu diesen Schlagworten liegen mehrere offene Fundstücke — vielleicht entsteht hier ein Hype oder Trend:
+                    Mehrere Inspirationen teilen diese Schlagworte. Gehören sie zum selben Thema, markieren und zusammenführen, sonst ist hier vielleicht ein Hype oder Trend im Entstehen:
                     <span class="mt-1.5 flex flex-wrap gap-1.5">
                         @foreach($haeufungen as $wort => $n)
                             <button type="button" class="fa-chip" wire:click="$set('pinnSchlagwort', @js($wort))" wire:key="hf-{{ md5($wort) }}"><span>#{{ $wort }} · {{ $n }}</span></button>
@@ -174,7 +179,7 @@
                     </span>
                 </x-fa::notice>
             @endif
-            @if($fundstuecke->isEmpty())
+            @if($inspirationen->isEmpty())
                 <div class="fa-surface">
                     <x-fa::empty icon="heroicon-o-light-bulb" title="Die Pinnwand ist leer">
                         Etwas Spannendes gesehen? Mit „Fundstück ablegen“ den Screenshot oder Link hier sammeln.
@@ -182,54 +187,80 @@
                     </x-fa::empty>
                 </div>
             @else
-                <div class="grid gap-3 grid-cols-[repeat(auto-fill,minmax(min(100%,16rem),1fr))]" data-pinnwand>
-                    @foreach($fundstuecke as $eintrag)
-                        @php $f = $eintrag['b']; $bild = $eintrag['url'] && str_starts_with((string) $f->datei_mime, 'image/'); @endphp
-                        <article class="fa-surface overflow-hidden flex flex-col min-w-0" wire:key="fs-{{ $f->id }}" data-fundstueck="{{ $f->id }}">
-                            @if($bild)
-                                <a href="{{ $eintrag['url'] }}" target="_blank" rel="noopener" class="block bg-[var(--fa-neutral-soft)]">
-                                    <img src="{{ $eintrag['url'] }}" alt="{{ $f->titel ?: $f->datei_name }}" class="w-full h-44 object-cover" loading="lazy" />
+                <div class="grid gap-3 grid-cols-[repeat(auto-fill,minmax(min(100%,18rem),1fr))]" data-pinnwand>
+                    @foreach($inspirationen as $eintrag)
+                        @php
+                            $insp = $eintrag['i'];
+                            $eigenesTeam = (int) $insp->team_id === (int) auth()->user()->current_team_id;
+                        @endphp
+                        <article class="fa-surface overflow-hidden flex flex-col min-w-0" wire:key="ins-{{ $insp->id }}" data-inspiration="{{ $insp->id }}">
+                            @if($eintrag['bild'])
+                                <a href="{{ $eintrag['bild'] }}" target="_blank" rel="noopener" class="block bg-[var(--fa-neutral-soft)]">
+                                    <img src="{{ $eintrag['bild'] }}" alt="{{ $insp->titel }}" class="w-full h-44 object-cover" loading="lazy" />
                                 </a>
                             @endif
-                            <div class="p-3 flex flex-col gap-1.5 min-w-0 flex-1">
-                                <div class="flex flex-wrap items-center gap-1.5">
-                                    <x-fa::badge>{{ V::QUELLEN[$f->quelle] ?? $f->quelle }}</x-fa::badge>
-                                    @if($f->beobachtet_am)<span class="{{ $leise }}">{{ $f->beobachtet_am->format('d.m.Y') }}</span>@endif
-                                    @if((int) $f->team_id !== (int) auth()->user()->current_team_id)<x-fa::badge tone="info" data-fundstueck-standort>{{ $teamNamen[$f->team_id] ?? 'Anderer Standort' }}</x-fa::badge>@endif
+                            <div class="p-3 flex flex-col gap-2 min-w-0 flex-1">
+                                <div class="flex items-start gap-2">
+                                    @if($darfKuratieren && $eigenesTeam && $insp->trend_id === null)
+                                        <input type="checkbox" value="{{ $insp->id }}" wire:model.live="mergeWahl" class="mt-1 accent-[var(--fa-accent)]" title="Zum Zusammenführen markieren" data-inspiration-merge="{{ $insp->id }}" />
+                                    @endif
+                                    <p class="flex-1 font-medium text-[var(--fa-ink)] break-words">{{ $insp->titel }}</p>
                                 </div>
-                                @if($f->titel)<p class="font-medium text-[var(--fa-ink)] break-words">{{ $f->titel }}</p>@endif
-                                @if($f->notiz)<p class="{{ $leise }} break-words line-clamp-3">{{ $f->notiz }}</p>@endif
-                                @if($f->fundort)<p class="{{ $leise }}">Gesehen: {{ $f->fundort }}</p>@endif
-                                @if($f->schlagworte)
+                                <div class="flex flex-wrap items-center gap-1.5">
+                                    <x-fa::badge>{{ $insp->quellen->count() }} {{ $insp->quellen->count() === 1 ? 'Quelle' : 'Quellen' }}</x-fa::badge>
+                                    @unless($eigenesTeam)<x-fa::badge tone="info" data-fundstueck-standort>{{ $teamNamen[$insp->team_id] ?? 'Anderer Standort' }}</x-fa::badge>@endunless
+                                </div>
+                                @if($insp->schlagworte)
                                     <span class="flex flex-wrap gap-1">
-                                        @foreach($f->schlagworte as $w)
+                                        @foreach($insp->schlagworte as $w)
                                             <button type="button" class="{{ $leise }} underline" wire:click="$set('pinnSchlagwort', @js(mb_strtolower($w)))">#{{ $w }}</button>
                                         @endforeach
                                     </span>
                                 @endif
-                                <p class="flex flex-wrap gap-3 {{ $leise }}">
-                                    @if($f->url)<a href="{{ $f->url }}" target="_blank" rel="noopener" class="text-[var(--fa-accent)] underline">Link öffnen</a>@endif
-                                    @if($eintrag['url'] && ! $bild)<a href="{{ $eintrag['url'] }}" target="_blank" rel="noopener" class="text-[var(--fa-accent)] underline">{{ $f->datei_name }}</a>@endif
-                                </p>
-                                @if($f->trend)
-                                    <p class="text-[length:var(--fa-text-sm)]">Gehört zu <button type="button" class="text-[var(--fa-accent)] underline" wire:click="select({{ $f->trend->id }})"
-                                        x-data x-on:click="$store.ui?.mSet('activity_trendradar', 'open', true)">{{ $f->trend->name }}</button></p>
+                                {{-- Quellen --}}
+                                <ul class="flex flex-col gap-2 border-t border-[var(--fa-line)] pt-2" data-inspiration-quellen>
+                                    @foreach($eintrag['quellen'] as $q)
+                                        @php $f = $q['b']; @endphp
+                                        <li class="min-w-0" wire:key="iq-{{ $f->id }}">
+                                            <div class="flex flex-wrap items-center gap-1.5">
+                                                <x-fa::badge>{{ V::QUELLEN[$f->quelle] ?? $f->quelle }}</x-fa::badge>
+                                                @if($f->beobachtet_am)<span class="{{ $leise }}">{{ $f->beobachtet_am->format('d.m.Y') }}</span>@endif
+                                            </div>
+                                            @if($f->titel && $f->titel !== $insp->titel)<p class="mt-0.5 text-[length:var(--fa-text-md)] text-[var(--fa-ink)] break-words">{{ $f->titel }}</p>@endif
+                                            @if($f->notiz)<p class="mt-0.5 {{ $leise }} break-words line-clamp-3">{{ $f->notiz }}</p>@endif
+                                            <p class="mt-0.5 flex flex-wrap gap-3 {{ $leise }}">
+                                                @if($f->fundort)<span>Gesehen: {{ $f->fundort }}</span>@endif
+                                                @if($f->url)<a href="{{ $f->url }}" target="_blank" rel="noopener" class="text-[var(--fa-accent)] underline">Link öffnen</a>@endif
+                                                @if($q['url'] && ! str_starts_with((string) $f->datei_mime, 'image/'))<a href="{{ $q['url'] }}" target="_blank" rel="noopener" class="text-[var(--fa-accent)] underline">{{ $f->datei_name }}</a>@endif
+                                                @if(($darfKuratieren && $eigenesTeam) || in_array((int) $f->team_id, $adminTeams, true))
+                                                    <button type="button" class="underline" wire:click="belegEntfernen({{ $f->id }})" wire:confirm="Diese Quelle entfernen?" data-quelle-entfernen>entfernen</button>
+                                                @endif
+                                            </p>
+                                        </li>
+                                    @endforeach
+                                </ul>
+                                @if($eigenesTeam)
+                                    <button type="button" class="self-start {{ $leise }} underline" wire:click="fundstueckOeffnen({{ $insp->id }})" data-quelle-hinzufuegen>+ Quelle hinzufügen</button>
+                                @endif
+                                @if($insp->trend)
+                                    <p class="text-[length:var(--fa-text-sm)]">Gehört zu <button type="button" class="text-[var(--fa-accent)] underline" wire:click="select({{ $insp->trend->id }})"
+                                        x-data x-on:click="$store.ui?.mSet('activity_trendradar', 'open', true)">{{ $insp->trend->name }}</button></p>
                                 @endif
                                 <div class="mt-auto pt-2 flex flex-col gap-2 border-t border-[var(--fa-line)]">
-                                    @if($darfKuratieren && (int) $f->team_id === (int) auth()->user()->current_team_id)
-                                        @if($f->trend_id === null)
+                                    @if($darfKuratieren && $eigenesTeam)
+                                        @if($insp->trend_id === null)
                                             <div class="flex gap-1.5">
-                                                <x-fa::select size="sm" wire:model="zuordnung.{{ $f->id }}" placeholder="An Trend hängen …" :options="$trendOptionen" class="flex-1 min-w-0" />
-                                                <x-fa::button size="sm" variant="secondary" wire:click="fundstueckZuordnen({{ $f->id }})">OK</x-fa::button>
+                                                <x-fa::select size="sm" wire:model="zuordnung.{{ $insp->id }}" placeholder="An Trend hängen …" :options="$trendOptionen" class="flex-1 min-w-0" />
+                                                <x-fa::button size="sm" variant="secondary" wire:click="inspirationZuordnen({{ $insp->id }})">OK</x-fa::button>
                                             </div>
-                                            <x-fa::button size="sm" variant="ghost" icon="heroicon-m-sparkles" wire:click="trendAusFundstueck({{ $f->id }})" data-trend-aus-fundstueck>Trend daraus machen</x-fa::button>
+                                            <x-fa::button size="sm" variant="ghost" icon="heroicon-m-sparkles" wire:click="trendAusInspiration({{ $insp->id }})" data-trend-aus-fundstueck>Trend daraus machen</x-fa::button>
                                         @else
-                                            <x-fa::button size="sm" variant="ghost" icon="heroicon-m-arrow-uturn-left" wire:click="fundstueckLoesen({{ $f->id }})">Zuordnung lösen</x-fa::button>
+                                            <x-fa::button size="sm" variant="ghost" icon="heroicon-m-arrow-uturn-left" wire:click="inspirationLoesen({{ $insp->id }})">Zuordnung lösen</x-fa::button>
                                         @endif
                                     @endif
-                                    <x-fa::button size="sm" variant="ghost" icon="heroicon-m-light-bulb" wire:click="inPlanungOeffnen(null, {{ $f->id }})" data-fundstueck-planung>In Planung öffnen</x-fa::button>
-                                    @if(($darfKuratieren && (int) $f->team_id === (int) auth()->user()->current_team_id) || in_array((int) $f->team_id, $adminTeams, true))
-                                        <button type="button" class="self-start {{ $leise }} underline" wire:click="belegEntfernen({{ $f->id }})" wire:confirm="Fundstück löschen?" data-fundstueck-loeschen>löschen</button>
+                                    <x-fa::button size="sm" variant="ghost" icon="heroicon-m-light-bulb" wire:click="inPlanungOeffnen(null, {{ $insp->id }})" data-fundstueck-planung>In Planung öffnen</x-fa::button>
+                                    @if(($darfKuratieren && $eigenesTeam) || in_array((int) $insp->team_id, $adminTeams, true))
+                                        <button type="button" class="self-start {{ $leise }} underline" wire:click="inspirationLoeschen({{ $insp->id }})" wire:confirm="Inspiration mit allen Quellen löschen?" data-fundstueck-loeschen>Inspiration löschen</button>
                                     @endif
                                 </div>
                             </div>
@@ -505,14 +536,17 @@
                     <input id="fs-datei" type="file" wire:model="fundDatei" accept="image/*,application/pdf" capture="environment" class="block w-full text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]" />
                     <div wire:loading wire:target="fundDatei" class="{{ $leise }}">lädt hoch …</div>
                 </x-fa::field>
-                <x-fa::field label="Titel" for="fs-titel" class="col-span-2"><x-fa::input id="fs-titel" wire:model="fund.titel" placeholder="z. B. Loaded Mash Potatoes mit Pulled Pork" /></x-fa::field>
+                <x-fa::field label="Gehört zu" for="fs-inspiration" hint="Gibt es das Thema schon, die Quelle dort hinzufügen statt eine neue Karte anzulegen." class="col-span-2">
+                    <x-fa::select id="fs-inspiration" wire:model.live="fund.inspiration_id" placeholder="Neue Inspiration" :options="$eigeneInspirationen" data-fundstueck-inspiration />
+                </x-fa::field>
+                <x-fa::field label="{{ ($fund['inspiration_id'] ?? '') !== '' ? 'Titel der Quelle' : 'Titel' }}" for="fs-titel" class="col-span-2"><x-fa::input id="fs-titel" wire:model="fund.titel" placeholder="z. B. Loaded Mash Potatoes mit Pulled Pork" /></x-fa::field>
                 <x-fa::field label="Quelle" for="fs-quelle"><x-fa::select id="fs-quelle" wire:model="fund.quelle" :options="V::QUELLEN" /></x-fa::field>
                 <x-fa::field label="Wo gesehen" for="fs-fundort" optional><x-fa::input id="fs-fundort" wire:model="fund.fundort" placeholder="Account, Lokal, Messe" /></x-fa::field>
                 <x-fa::field label="Link" for="fs-url" optional class="col-span-2"><x-fa::input id="fs-url" wire:model="fund.url" placeholder="https://www.instagram.com/p/…" /></x-fa::field>
                 <x-fa::field label="Notiz" for="fs-notiz" optional class="col-span-2"><x-fa::textarea id="fs-notiz" rows="2" wire:model="fund.notiz" placeholder="Was fällt auf? Für welchen Anlass könnte es passen?" /></x-fa::field>
                 <x-fa::field label="Schlagworte" for="fs-tags" optional hint="Kommagetrennt. Gleiche Schlagworte bündeln Fundstücke zu Häufungen." class="col-span-2"><x-fa::input id="fs-tags" wire:model="fund.schlagworte" placeholder="z. B. kartoffel, comfort food" /></x-fa::field>
             </div>
-            <p class="{{ $leise }}">Ein Fundstück ist noch kein Trend. Es landet in der Pinnwand des Teams; wer kuratiert, macht später daraus einen Hype oder Trend.</p>
+            <p class="{{ $leise }}">Ein Fundstück ist noch kein Trend. Es landet als Inspiration in der Pinnwand des Teams; weitere Quellen zum selben Thema kommen auf dieselbe Karte. Wer kuratiert, macht daraus einen Hype oder Trend.</p>
         </x-foodalchemist::modal-section>
         <x-slot:footer>
             <x-fa::button variant="ghost" @click="$dispatch('modal.close', { name: 'fundstueck-ablegen' })">Abbrechen</x-fa::button>
@@ -520,11 +554,11 @@
         </x-slot:footer>
     </x-foodalchemist::modal>
 
-    {{-- Trend-Dialog (Kuratieren): neu oder aus einem Fundstück --}}
+    {{-- Trend-Dialog (Kuratieren): neu oder aus einer Inspiration --}}
     <x-foodalchemist::modal name="trend-erfassen" title="Trend anlegen" size="max-w-2xl">
         @if($fehler)<x-fa::notice tone="crit">{{ $fehler }}</x-fa::notice>@endif
-        @if($ausFundstuecken !== [])
-            <x-fa::notice tone="info">Das Fundstück wird als erster Beleg an den neuen Trend gehängt.</x-fa::notice>
+        @if($ausInspirationen !== [])
+            <x-fa::notice tone="info">Alle Quellen der Inspiration werden Belege des neuen Trends.</x-fa::notice>
         @endif
         <x-foodalchemist::modal-section title="Trend">
             <div class="grid grid-cols-3 gap-3" data-trend-erfassen-form>
@@ -536,7 +570,7 @@
             </div>
             <p class="{{ $leise }}">Der Trend landet als „gesichtet“ in der Liste. Aufs Radar kommt er, sobald er eingeordnet ist und einen bestätigenden Beleg hat.</p>
         </x-foodalchemist::modal-section>
-        @if($ausFundstuecken === [])
+        @if($ausInspirationen === [])
             <x-foodalchemist::modal-section title="Erster Beleg (optional)">
                 <div class="grid grid-cols-2 gap-3">
                     <x-fa::field label="Quelle" for="tn-quelle"><x-fa::select id="tn-quelle" wire:model="neu.quelle" :options="V::QUELLEN" /></x-fa::field>

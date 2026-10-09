@@ -20,6 +20,18 @@ das durch Sarahs Modell: Trends werden von Menschen gesichtet, mit Belegen abgel
 
 Technisch ist ein Fundstück ein Beleg mit `fundstueck = true`; `trend_id = NULL` heißt offen in der Pinnwand.
 
+### Nachtrag 09.10. · Inspiration = ein Thema, viele Quellen
+
+Dominique: drei Karten zum selben Thema (Kristallbrot: YouTube, Fine Dining Lovers, Crystal Boba) machen keinen Sinn.
+Neue Tabelle `foodalchemist_trend_inspirationen` (titel, schlagworte, trend_id, team_id); jedes Fundstück (Beleg mit
+`fundstueck = true`) ist eine **Quelle** einer Inspiration (`trend_belege.inspiration_id`). Die Pinnwand zeigt eine
+Karte je Inspiration mit allen Quellen; „+ Quelle hinzufügen“ hängt an, beim Ablegen wählt „Gehört zu“ eine bestehende
+Inspiration. Mehrere Inspirationen lassen sich **zusammenführen** (Kuratieren, eigenes Team; Ziel = älteste, Schlagworte
+vereint). Zuordnen/Lösen/Trend daraus machen wirken auf die ganze Inspiration, alle Quellen werden Belege. Leere
+Inspirationen verschwinden automatisch. Häufung = Inspiration mit ≥ 2 Quellen.
+Datenübernahme: jedes bestehende Fundstück wird eine eigene Inspiration; `down()` trennt nur die Gruppierung, Fundstücke
+bleiben. Planung und Ideen-Herkunft referenzieren `inspiration_ids` (alte `fundstueck_ids` werden weiter gelesen).
+
 ## Modell
 
 | Feld | Werte | Herkunft bei Sarah |
@@ -62,7 +74,8 @@ zugeordnet / alle, Häufungen.
 
 ## MCP
 
-`foodalchemist.fundstuecke.GET|POST|PUT` (Pinnwand, Häufungen, Ablegen mit Datei, Zuordnen / Trend daraus machen / Lösen),
+`foodalchemist.fundstuecke.GET|POST|PUT` (Pinnwand als Inspirationen mit Quellen, Ablegen mit Datei + `inspiration_id`,
+Zuordnen / Trend daraus machen / Lösen / `zusammenfuehren_in`, je über `inspiration_ids`),
 `foodalchemist.trends.GET|POST|PUT|DELETE`, `foodalchemist.trend_belege.POST|DELETE` (Datei als base64 oder URL),
 `foodalchemist.trends.MESSEN` (kostenpflichtig, confirm). Befragungsergebnisse aus Office/Hatch (Vorlage
 „Trend-Radar BHG – Interview") kommen per MCP als Beleg `quelle=befragung` mit `anteil`.

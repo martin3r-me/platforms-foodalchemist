@@ -96,7 +96,7 @@ it('Rechte: Lesen legt Fundstücke ab und belegt, Trend anlegen, einordnen und S
     expect(fn () => $this->svc->anlegen($this->rootTeam, ['name' => 'Leser-Trend'], $this->leser->id))->toThrow(FaRechtFehltException::class);
     $f = $this->svc->fundstueckAblegen($this->rootTeam, ['titel' => 'Herzhafte Lollis', 'fundort' => 'Messe'], null, $this->leser->id);
     expect($f->trend_id)->toBeNull()->and($f->fundstueck)->toBeTrue()->and($f->quelle)->toBe('instagram');
-    expect(fn () => $this->svc->fundstueckZuordnen($this->rootTeam, $f->id, 1, $this->leser->id))->toThrow(FaRechtFehltException::class);
+    expect(fn () => $this->svc->inspirationZuordnen($this->rootTeam, (int) $f->inspiration_id, 1, $this->leser->id))->toThrow(FaRechtFehltException::class);
 
     $t = $this->svc->anlegen($this->rootTeam, ['name' => 'Herzhafte Lollis', 'beleg' => ['quelle' => 'beobachtung', 'notiz' => 'Messe']], $this->mitarbeiter->id);
     expect($t->status)->toBe('gesichtet')->and($t->created_by)->toBe($this->mitarbeiter->id);
@@ -147,18 +147,18 @@ it('Inspiration: Fundstücke liegen offen in der Team-Pinnwand, Häufungen je Sc
 
     // Trend daraus machen: beide Kartoffel-Fundstücke gehen mit, Pinnwand „offen" wird leerer
     $t = $this->svc->anlegen($this->rootTeam, ['name' => 'Loaded Mash Potatoes', 'typ' => 'hype', 'ebene' => 'mode', 'kategorie' => 'food',
-        'fundstueck_ids' => [$a->id, $b->id]], $this->mitarbeiter->id);
+        'fundstueck_ids' => [$a->id, $b->id]], $this->mitarbeiter->id);   // Altbestand-Parameter: Quelle nimmt ihre Inspiration mit
     expect($t->belege()->count())->toBe(2)->and($t->konfidenz)->toBe('niedrig')   // zwei Instagram-Funde bestätigen nicht
         ->and($this->svc->fundstuecke($this->rootTeam)->pluck('id')->all())->toBe([$c->id])
         ->and($this->svc->fundstuecke($this->rootTeam, 'zugeordnet')->count())->toBe(2)
         ->and($this->svc->haeufungen($this->rootTeam))->toBe([]);
 
-    // Zuordnen + Lösen; Kind-Team darf fremde Fundstücke nicht kuratieren
-    $this->svc->fundstueckZuordnen($this->rootTeam, $c->id, $t->id);
+    // Zuordnen + Lösen je Inspiration; Kind-Team darf fremde Inspirationen nicht kuratieren
+    $this->svc->inspirationZuordnen($this->rootTeam, (int) $c->inspiration_id, $t->id);
     expect($t->refresh()->belege()->count())->toBe(3);
-    $this->svc->fundstueckLoesen($this->rootTeam, $c->id);
+    $this->svc->inspirationLoesen($this->rootTeam, (int) $c->inspiration_id);
     expect($c->refresh()->trend_id)->toBeNull()
-        ->and(fn () => $this->svc->fundstueckZuordnen($this->childA, $c->id, $t->id))->toThrow(\Illuminate\Database\Eloquent\ModelNotFoundException::class);
+        ->and(fn () => $this->svc->inspirationZuordnen($this->childA, (int) $c->inspiration_id, $t->id))->toThrow(\Illuminate\Database\Eloquent\ModelNotFoundException::class);
 
     // Google-Messungen und Befragungs-Belege sind keine Fundstücke
     $this->svc->belegAnhaengen($this->rootTeam, $t->id, ['quelle' => 'befragung', 'anteil' => 10]);
@@ -175,7 +175,7 @@ it('Inspiration: die ganze Teamfamilie sieht sich gegenseitig (auch Geschwister)
         expect($this->svc->fundstuecke($team)->pluck('id')->all())->toEqualCanonicalizing([$fA->id, $fRoot->id]);
     }
     // Planung kann Fundstücke der Familie kombinieren
-    $s = app(\Platform\FoodAlchemist\Services\PlanningSessionService::class)->ausTrendradar($this->childB, [], [$fA->id]);
+    $s = app(\Platform\FoodAlchemist\Services\PlanningSessionService::class)->ausTrendradar($this->childB, [], [(int) $fA->inspiration_id]);
     expect($s->brief)->toContain('Inspiration: Fund aus Standort A');
 
     // Schreiben: nur das hochladende Team, und dort nur mit Kuratieren
@@ -207,7 +207,7 @@ it('Inspiration: unter einem Master-Team sieht jeder Kunde nur die eigene Famili
     expect($this->svc->fundstuecke($this->childA)->pluck('id')->all())->toBe([$fA->id])
         ->and($this->svc->fundstuecke($standortA)->pluck('id')->all())->toBe([$fA->id])
         ->and($this->svc->fundstuecke($this->childB)->pluck('id')->all())->toBe([$fB->id])
-        ->and(fn () => app(\Platform\FoodAlchemist\Services\PlanningSessionService::class)->ausTrendradar($this->childB, [], [$fA->id]))
+        ->and(fn () => app(\Platform\FoodAlchemist\Services\PlanningSessionService::class)->ausTrendradar($this->childB, [], [(int) $fA->inspiration_id]))
             ->toThrow(\RuntimeException::class, 'nicht (mehr) sichtbar');
 });
 
@@ -287,7 +287,8 @@ it('MCP im Lockstep: Tools registriert, POST mit base64-Screenshot, PUT nennt Ra
         'datei' => ['base64' => $png, 'name' => 'matcha.png']], $ctx);
     expect($fs->success)->toBeTrue()->and($fs->data['datei'])->toBe('matcha.png')->and($fs->data['trend_id'])->toBeNull();
     $pinn = $reg->get('foodalchemist.fundstuecke.GET')->execute([], $ctx);
-    expect($pinn->data['anzahl'])->toBe(1)->and($pinn->data['fundstuecke'][0]['titel'])->toBe('Matcha-Tiramisu');
+    expect($pinn->data['anzahl'])->toBe(1)->and($pinn->data['inspirationen'][0]['titel'])->toBe('Matcha-Tiramisu')
+        ->and($pinn->data['inspirationen'][0]['quellen'][0]['datei'])->toBe('matcha.png');
     expect($reg->get('foodalchemist.fundstuecke.PUT')->execute(['fundstueck_ids' => [$fs->data['fundstueck_id']]], $ctx)->errorCode)->toBe('VALIDATION_ERROR');
     $neu = $reg->get('foodalchemist.fundstuecke.PUT')->execute(['fundstueck_ids' => [$fs->data['fundstueck_id']],
         'trend_anlegen' => ['name' => 'Matcha-Desserts', 'typ' => 'hype', 'ebene' => 'mode', 'kategorie' => 'food']], $ctx);
@@ -374,7 +375,7 @@ it('UI: Radar zeigt eingeordnete Trends, Fundstück mit Screenshot landet in der
     Livewire::test(TrendradarIndex::class)
         ->set('ansicht', 'inspiration')
         ->assertSeeHtml('data-trend-aus-fundstueck')
-        ->call('trendAusFundstueck', $f->id)
+        ->call('trendAusInspiration', (int) $f->inspiration_id)
         ->assertSet('neu.name', 'Loaded Mash Potatoes')
         ->call('erfassen')
         ->assertSet('fehler', null)
@@ -429,9 +430,9 @@ it('Planung: Kombination aus Trend, Hype und Fundstück wird ein Briefing mit He
     $fund = $this->svc->fundstueckAblegen($this->rootTeam, ['titel' => 'Pistazien-Kataifi-Tarte', 'notiz' => 'Bäckerei in Köln', 'fundort' => '@baeckerei']);
     $planung = app(\Platform\FoodAlchemist\Services\PlanningSessionService::class);
 
-    $s = $planung->ausTrendradar($this->rootTeam, [$trend->id, $hype->id], [$fund->id]);
+    $s = $planung->ausTrendradar($this->rootTeam, [$trend->id, $hype->id], [(int) $fund->inspiration_id]);
     expect($s->created_via)->toBe('trendradar')
-        ->and($s->source_trend_refs)->toBe(['trend_ids' => [$trend->id, $hype->id], 'fundstueck_ids' => [$fund->id]])
+        ->and($s->source_trend_refs)->toBe(['trend_ids' => [$trend->id, $hype->id], 'inspiration_ids' => [(int) $fund->inspiration_id]])
         ->and($s->title)->toBe('Vegane Ernährung + Dubai-Schokolade + Pistazien-Kataifi-Tarte')
         ->and($s->brief)->toContain('Aus diesen Impulsen aus dem Trendradar ein Konzept/Gericht/Basisrezept entwickeln.')
         ->and($s->brief)->toContain('Trend (Megatrend, Food): Vegane Ernährung — Langfristiger Wertewandel.')
@@ -455,10 +456,10 @@ it('Planung UI: Reiter Trendradar kombiniert, übernimmt ins Briefing der Ziel-E
         ->call('schnellTrendradar')
         ->assertSeeHtml('data-tab-trendradar')
         ->assertSeeHtml('data-trend-wahl="'.$trend->id.'"')
-        ->assertSeeHtml('data-fund-wahl="'.$fund->id.'"')
+        ->assertSeeHtml('data-inspiration-wahl="'.$fund->inspiration_id.'"')
         ->set('eingabe.concept.brief', 'Schon getippt')
         ->set('trendWahl.trends', [(string) $trend->id])
-        ->set('trendWahl.fundstuecke', [(string) $fund->id])
+        ->set('trendWahl.inspirationen', [(string) $fund->inspiration_id])
         ->assertSeeHtml('data-trend-vorschau')
         ->call('trendradarUebernehmen', 'gericht')
         ->assertSet('trendMeldung', null)
@@ -483,14 +484,14 @@ it('Trendradar → Planung: „In Planung öffnen" legt die Session an und sprin
     Livewire::test(TrendradarIndex::class)->call('select', $trend->id)->call('inPlanungOeffnen', $trend->id)
         ->assertRedirectContains('/planung');
     Livewire::test(TrendradarIndex::class)->set('ansicht', 'inspiration')->assertSeeHtml('data-fundstueck-planung')
-        ->call('inPlanungOeffnen', null, $fund->id)->assertRedirectContains('/planung');
+        ->call('inPlanungOeffnen', null, (int) $fund->inspiration_id)->assertRedirectContains('/planung');
     expect(\Platform\FoodAlchemist\Models\FoodAlchemistPlanningSession::where('created_via', 'trendradar')->pluck('title')->all())
         ->toBe(['Savory Yoghurt', 'Labneh-Bowl']);
 
     $res = app(ToolRegistry::class)->get('foodalchemist.planung_session.POST')->execute(
         ['trend_ids' => [$trend->id], 'fundstueck_ids' => [$fund->id]], new ToolContext($this->inhaber, $this->rootTeam));
     expect($res->success)->toBeTrue()
-        ->and($res->data['source_trend_refs'])->toBe(['trend_ids' => [$trend->id], 'fundstueck_ids' => [$fund->id]])
+        ->and($res->data['source_trend_refs'])->toBe(['trend_ids' => [$trend->id], 'inspiration_ids' => [(int) $fund->inspiration_id]])   // fundstueck_ids → Inspiration
         ->and($res->data['brief'])->toContain('Inspiration: Labneh-Bowl');
 });
 
@@ -499,7 +500,7 @@ it('Trendradar → Planung: „In Planung öffnen" legt die Session an und sprin
 it('Concept-Erfindung bekommt den Ursprung aus der Trendradar-Kombination der Planung', function () {
     $trend = $this->svc->anlegen($this->rootTeam, ['name' => 'Fermentation', 'typ' => 'trend', 'ebene' => 'konsum', 'kategorie' => 'food']);
     $fund = $this->svc->fundstueckAblegen($this->rootTeam, ['titel' => 'Koji-Butter']);
-    $session = app(\Platform\FoodAlchemist\Services\PlanningSessionService::class)->ausTrendradar($this->rootTeam, [$trend->id], [$fund->id]);
+    $session = app(\Platform\FoodAlchemist\Services\PlanningSessionService::class)->ausTrendradar($this->rootTeam, [$trend->id], [(int) $fund->inspiration_id]);
     $frei = app(\Platform\FoodAlchemist\Services\PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Frei']);
 
     $m = new ReflectionMethod(\Platform\FoodAlchemist\Services\IdeenService::class, 'ursprungsTrendBlock');
@@ -555,4 +556,113 @@ it('Sparten (Nachtrag 08.10.): Mehrfachauswahl, geprüft; Filter zeigt passende 
     $lw->call('select', $alle->id)->call('einordnenStarten')->assertSeeHtml('data-trend-sparten-edit')
         ->set('einordnung.sparten', ['care', 'bildung'])->call('einordnungSpeichern')->assertSet('fehler', null);
     expect($alle->refresh()->sparten)->toBe(['care', 'bildung']);
+});
+
+// ── Inspirationen: ein Thema, viele Quellen (Dominique 2026-10-09) ─────────
+
+it('Inspiration: weitere Quellen landen auf derselben Karte, Schlagworte werden vereint, leere Inspiration verschwindet', function () {
+    $video = $this->svc->fundstueckAblegen($this->rootTeam, ['titel' => 'Kristallbrot', 'quelle' => 'social_media', 'url' => 'https://www.youtube.com/watch?v=x', 'schlagworte' => ['kristallbrot']], null, $this->leser->id);
+    $insp = $video->inspiration;
+    $artikel = $this->svc->fundstueckAblegen($this->rootTeam, ['titel' => 'Crystal Clear Bread', 'quelle' => 'presse', 'inspiration_id' => $insp->id, 'schlagworte' => ['textur']], null, $this->leser->id);
+
+    $pinn = $this->svc->inspirationen($this->rootTeam);
+    expect($pinn)->toHaveCount(1)
+        ->and($pinn->first()->quellen)->toHaveCount(2)
+        ->and($pinn->first()->titel)->toBe('Kristallbrot')
+        ->and($insp->refresh()->schlagworte)->toBe(['kristallbrot', 'textur'])
+        ->and($artikel->inspiration_id)->toBe($insp->id);
+
+    // Quelle zu einer fremden Inspiration (anderes Team) geht nicht
+    expect(fn () => $this->svc->fundstueckAblegen($this->childA, ['titel' => 'x', 'inspiration_id' => $insp->id]))
+        ->toThrow(\Illuminate\Database\Eloquent\ModelNotFoundException::class);
+
+    // beide Quellen entfernen → Inspiration verschwindet
+    $this->svc->belegEntfernen($this->rootTeam, $video->id, $this->mitarbeiter->id);
+    expect(\Platform\FoodAlchemist\Models\FoodAlchemistTrendInspiration::find($insp->id))->not->toBeNull();
+    $this->svc->belegEntfernen($this->rootTeam, $artikel->id, $this->mitarbeiter->id);
+    expect(\Platform\FoodAlchemist\Models\FoodAlchemistTrendInspiration::find($insp->id))->toBeNull();
+});
+
+it('Inspiration: Zusammenführen (nur eigenes Team, Kuratieren), Zuordnen macht alle Quellen zu Belegen, Trend-Löschen gibt sie frei', function () {
+    $a = $this->svc->fundstueckAblegen($this->rootTeam, ['titel' => 'Kristallbrot Video', 'schlagworte' => ['kristallbrot']]);
+    $b = $this->svc->fundstueckAblegen($this->rootTeam, ['titel' => 'Kristallbrot Artikel', 'quelle' => 'presse', 'schlagworte' => ['kristallbrot', 'textur']]);
+    $c = $this->svc->fundstueckAblegen($this->rootTeam, ['titel' => 'Crystal Boba', 'schlagworte' => ['textur']]);
+    expect($this->svc->haeufungen($this->rootTeam))->toEqual(['kristallbrot' => 2, 'textur' => 2]);   // Reihenfolge bei Gleichstand egal
+
+    expect(fn () => $this->svc->inspirationenZusammenfuehren($this->rootTeam, (int) $a->inspiration_id, [(int) $b->inspiration_id], $this->leser->id))
+        ->toThrow(FaRechtFehltException::class);
+    $ziel = $this->svc->inspirationenZusammenfuehren($this->rootTeam, (int) $a->inspiration_id, [(int) $b->inspiration_id, (int) $c->inspiration_id], $this->mitarbeiter->id);
+    expect($ziel->quellen()->count())->toBe(3)
+        ->and($ziel->schlagworte)->toBe(['kristallbrot', 'textur'])
+        ->and($this->svc->inspirationen($this->rootTeam))->toHaveCount(1)
+        ->and($this->svc->haeufungen($this->rootTeam))->toBe([]);
+
+    $t = $this->svc->anlegen($this->rootTeam, ['name' => 'Kristallbrot', 'typ' => 'hype', 'ebene' => 'mode', 'kategorie' => 'food']);
+    $this->svc->inspirationZuordnen($this->rootTeam, $ziel->id, $t->id);
+    expect($t->refresh()->belege()->count())->toBe(3)
+        ->and($t->konfidenz)->toBe('niedrig')   // eine Fachpresse + Social-Quellen: noch unbestätigt …
+        ->and($this->svc->radarHindernis($t))->toBeNull()   // … aber die Fachpresse reicht fürs Radar
+        ->and($this->svc->inspirationen($this->rootTeam, 'zugeordnet'))->toHaveCount(1);
+
+    // Trend löschen: Inspiration bleibt mit allen Quellen auf der Pinnwand
+    $this->svc->loeschen($this->rootTeam, $t->id);
+    expect($this->svc->inspirationen($this->rootTeam, 'offen'))->toHaveCount(1)
+        ->and($ziel->refresh()->quellen()->count())->toBe(3)
+        ->and($ziel->trend_id)->toBeNull();
+});
+
+it('Inspiration-Migration: jedes bestehende Fundstück wird eine Inspiration, down() trennt ohne Datenverlust', function () {
+    $id = \Illuminate\Support\Facades\DB::table('foodalchemist_trend_belege')->insertGetId([
+        'team_id' => $this->rootTeam->id, 'quelle' => 'instagram', 'titel' => 'Altes Fundstück', 'fundstueck' => true,
+        'schlagworte' => json_encode(['alt']), 'created_at' => now(), 'updated_at' => now(),
+    ]);
+    $migration = require __DIR__.'/../../database/migrations/2026_10_10_100400_create_foodalchemist_trend_inspirationen.php';
+    $migration->up();
+    $insp = \Platform\FoodAlchemist\Models\FoodAlchemistTrendInspiration::find(\Illuminate\Support\Facades\DB::table('foodalchemist_trend_belege')->where('id', $id)->value('inspiration_id'));
+    expect($insp)->not->toBeNull()->and($insp->titel)->toBe('Altes Fundstück')->and($insp->schlagworte)->toBe(['alt']);
+
+    $migration->down();
+    expect(\Illuminate\Support\Facades\Schema::hasTable('foodalchemist_trend_inspirationen'))->toBeFalse()
+        ->and(\Illuminate\Support\Facades\DB::table('foodalchemist_trend_belege')->where('id', $id)->value('titel'))->toBe('Altes Fundstück');
+    $migration->up();   // für die übrigen Tests wiederherstellen
+});
+
+it('UI Pinnwand: eine Karte je Inspiration mit ihren Quellen, Quelle hinzufügen, markieren und zusammenführen', function () {
+    $a = $this->svc->fundstueckAblegen($this->rootTeam, ['titel' => 'Kristallbrot', 'schlagworte' => ['kristallbrot']]);
+    $b = $this->svc->fundstueckAblegen($this->rootTeam, ['titel' => 'Crystal Clear Bread', 'quelle' => 'presse', 'schlagworte' => ['kristallbrot']]);
+    $this->actingAs($this->mitarbeiter);
+
+    Livewire::test(TrendradarIndex::class)->set('ansicht', 'inspiration')
+        ->assertSeeHtml('data-inspiration="'.$a->inspiration_id.'"')
+        ->assertSeeHtml('data-inspiration="'.$b->inspiration_id.'"')
+        ->call('fundstueckOeffnen', (int) $a->inspiration_id)
+        ->assertSet('fund.inspiration_id', (string) $a->inspiration_id)
+        ->set('fund.titel', 'Galileo-Video')->set('fund.url', 'https://www.youtube.com/watch?v=y')
+        ->call('fundstueckAblegen')
+        ->assertSet('fehler', null)
+        ->set('mergeWahl', [(string) $a->inspiration_id, (string) $b->inspiration_id])
+        ->assertSeeHtml('data-inspiration-zusammenfuehren')
+        ->call('zusammenfuehren')
+        ->assertSet('fehler', null)
+        ->assertSee('Galileo-Video')
+        ->assertDontSeeHtml('data-inspiration="'.$b->inspiration_id.'"');
+    expect(\Platform\FoodAlchemist\Models\FoodAlchemistTrendInspiration::find($a->inspiration_id)->quellen()->count())->toBe(3);
+});
+
+it('MCP: Quelle per inspiration_id zur bestehenden Inspiration, zusammenfuehren_in, Planung mit inspiration_ids', function () {
+    $reg = app(ToolRegistry::class);
+    $ctx = new ToolContext($this->mitarbeiter, $this->rootTeam);
+    $eins = $reg->get('foodalchemist.fundstuecke.POST')->execute(['titel' => 'Kristallbrot', 'schlagworte' => ['kristallbrot']], $ctx);
+    $zwei = $reg->get('foodalchemist.fundstuecke.POST')->execute(['titel' => 'Artikel', 'quelle' => 'presse', 'inspiration_id' => $eins->data['inspiration_id']], $ctx);
+    expect($zwei->success)->toBeTrue()->and($zwei->data['inspiration_id'])->toBe($eins->data['inspiration_id'])->and($zwei->data['quellen'])->toBe(2);
+
+    $drei = $reg->get('foodalchemist.fundstuecke.POST')->execute(['titel' => 'Crystal Boba'], $ctx);
+    $merge = $reg->get('foodalchemist.fundstuecke.PUT')->execute(['inspiration_ids' => [$drei->data['inspiration_id']], 'zusammenfuehren_in' => $eins->data['inspiration_id']], $ctx);
+    expect($merge->success)->toBeTrue()->and($merge->data['quellen'])->toBe(3);
+    $pinn = $reg->get('foodalchemist.fundstuecke.GET')->execute([], $ctx);
+    expect($pinn->data['anzahl'])->toBe(1)->and($pinn->data['inspirationen'][0]['quellen'])->toHaveCount(3);
+
+    $plan = $reg->get('foodalchemist.planung_session.POST')->execute(['inspiration_ids' => [$eins->data['inspiration_id']]], $ctx);
+    expect($plan->success)->toBeTrue()->and($plan->data['brief'])->toContain('Inspiration: Kristallbrot')
+        ->and($plan->data['source_trend_refs'])->toBe(['trend_ids' => [], 'inspiration_ids' => [$eins->data['inspiration_id']]]);
 });
