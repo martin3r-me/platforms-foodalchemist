@@ -283,12 +283,16 @@ Einstellungen › KI & Wissen › **Regeln** (`Settings\Regeln`, Eintrag in `Set
 bewusste Aktion „Auf Bestand anwenden" (nur `korrigieren`-Regeln, mit Bericht, Backup-Hinweis, Rückgängig über
 die Versions-Tabelle der betroffenen Artefakte, wo vorhanden). Kein stiller Massenumbau.
 
-**Rechte:** Lesen alle; Schreiben `FaRechte::darf(Admin)` + `TeamScope::mayWrite(null)` (globale Regeln nur
-Master-Team), Bereichssperre `settings.regeln` über `MitEinstellungsSperre`. Aktivieren einer Regel ist eine
-eigene Aktion mit Bestätigung.
+**Rechte (Entscheid Dominique 09.10.):** Regeln gehören dem **Plattform-Administrator**, dieselbe Ebene wie das
+kuratierte globale Wissen (Zielmodell „global + Admin"). Lesen und Schreiben nur mit
+`FaRechte::istPlattformAdmin` (kein KI-User). Team-Admins und Kunden sehen die Seite nicht, sie fehlt in ihrer
+Navigation. Die Team-Einstellungssperre bleibt als Schutz gegen gleichzeitiges Bearbeiten. Aktivieren einer Regel
+ist eine eigene Aktion mit Bestätigung.
 
-**MCP im Lockstep:** `foodalchemist.rules.GET/PREVIEW/PUT` (PUT legt eine neue Version **inaktiv** an, wie
-`knowledge.POST`; Aktivieren bleibt in der UI). Probelauf auch per MCP, damit Agenten Regeln vorschlagen können.
+**MCP im Lockstep:** `foodalchemist.rules.GET/PREVIEW/PUT`, ebenfalls nur Plattform-Admin. PUT legt eine neue
+Version **ausgeschaltet** an, wie `knowledge.POST`; Einschalten bleibt in der UI. Wer per MCP eine aktive Regel
+ändert, schaltet sie damit aus, bis sie wieder eingeschaltet wird; das Tool sagt das in der Antwort. Probelauf auch
+per MCP, damit Agenten Regeln vorschlagen können.
 
 ---
 
@@ -401,23 +405,36 @@ Ein Teil lässt sich **nach derselben Logik wie Teil A** entscheiden (Begriffe, 
 | I2.5 | Wissensbudget: Das Dossier `workflow.wissensmodul_einstellungen` nennt 48.000/49.000, `_system/budgets` steht auf 100.000 | Die Einstellung ist die Wahrheit, das Dossier verweist nur |
 | I2.6 | `knowledge.POST`: ein Dossier sagt „legt aktiv an“, ein anderes „inaktiver Entwurf“ | Gegen den Code prüfen und das falsche Dossier korrigieren |
 
-Der andere Teil sind **fachliche Zahlen**. Hier wird nichts nach Gefühl entschieden. Je Wert wird die Quelle
-geprüft (LMHV/DIN 10508 für Temperaturen, DGE-Qualitätsstandard, Herstellerangaben), und Dominique gibt frei:
+Der andere Teil sind **fachliche Zahlen**. Recherche 09.10. mit Quellen. Verbindlichkeit: **G** = Gesetz,
+**N** = Norm, Leitlinie oder Fachgesellschaft, **P** = Praxis oder Herstellerangabe. DIN-Werte sind nur über
+Behörden-Merkblätter belegt, nicht am Normtext.
 
-- Sahne-Default 30 % oder 35 % (BR §5 gegen `anti_marker--backzutaten`)
-- Würzsalz jodiert oder unjodiert (`salz_brining_curing--salz-sorten` gegen BR §5)
-- Ei 55/15 g gegen 58/20 g (`eier--mengen-defaults` gegen BR §6.3)
-- Brunoise 1 mm gegen 2 mm
-- Gemüse-Garverlust 10–25 % gegen 8–15 % bzw. 20–30 %
-- Gelatine 4–6 Blatt/l gegen etwa 10 Blatt/l
-- Kühlschwelle < 4 / ≤ 5 / ≤ 7 °C in kueche
-- „> 75 °C“ als CCP gegen die Sous-vide-Ausnahmen
-- Sashimi −20 °C 24 h gegen 24–72 h
-- Demi-Glace 80 % gegen 90 % Reduktion
-- Salz je EL 18 g gegen 4–5 g
-- Wein beim Bankett 400 ml gegen 250–375 ml
-- GN 1/1-65: 8,8 l gegen 9,0 l
-- DGE Fleisch „etwa 8 in 20 Verpflegungstagen“ gegen „höchstens 1 pro Woche“
+| Wert | Empfehlung | Verbindl. | Quelle | Folgerung für die Dossiers |
+|---|---|---|---|---|
+| Kühlen | Fleisch ≤ 7 °C · Geflügel ≤ 4 °C · Innereien ≤ 3 °C · Hackfleisch ≤ 2 °C · frischer Fisch Schmelzeis · allgemein leicht Verderbliches ≤ 7 °C | G (tierisch) / N | VO (EG) 853/2004 Anh. III, Tier-LMHV Anl. 4/5, DIN 10508 | **≤ 7 °C stimmt** als allgemeiner Wert. „< 4 °C" gilt nur für Geflügel, „≤ 5 °C" hat keine deutsche Quelle → korrigieren. Kühlraum = empfindlichstes Produkt |
+| Heißhalten | ≥ 65 °C, höchstens 3 h | N | DIN 10508; DGE-Qualitätsstandard (gesetzliches Minimum laut Behörde 60 °C) | stimmt |
+| Abkühlen | 65 → 10 °C in ≤ 2 h | N | DIN 10508:2022 Tab. 5 (über Merkblatt) | stimmt; vor harter Regel am Normtext prüfen |
+| Kerntemperatur | ≥ 72 °C für ≥ 2 min | N | BfR „Sicher verpflegt" 2024 | **„> 75 °C" hat keine Bundesquelle** → auf 72 °C/2 min korrigieren. Sous-vide = dokumentierte Zeit-Temperatur-Ausnahme (Tabelle nur USDA-FSIS Appendix A gefunden) |
+| Tiefkühlen | ≤ −18 °C | G | TLMV § 2 Abs. 4 | stimmt |
+| Parasiten (roher Fisch) | −20 °C ≥ 24 h oder −35 °C ≥ 15 h | G | VO 853/2004 Anh. III Abschn. VIII Kap. III D (VO 1276/2011) | **„24–72 h" falsch** → korrigieren |
+| Jodsalz | empfohlen, nicht Pflicht | N | BfR; DGE-Standard („Jodsalz wird verwendet") | Würzsalz-Default unjodiert ist zulässig, für DGE-Kunden aber gegen den Standard → Default je Kunde/Standard, nicht global |
+| Schlagsahne | ≥ 30 % Fett | G | MilchErzV Anl. 1 | 30 % ist das Minimum; 32/35 % Handelsqualität. BR §5 „Sahne 30 %" bleibt korrekt |
+| Ei | M 53–63 g, L 63–73 g | G (Klassen) / P (Anteile) | VO (EG) 589/2008 Art. 4 | Dotter ≈ 30 %, Eiklar ≈ 60 % (Faustregel, keine Primärquelle) → als Default, überschreibbar |
+| Brunoise | 1–2 mm | P | Fachglossare | keine verbindliche Quelle → nur Default, das Rezept entscheidet |
+| Blattgelatine | ≈ 1,7 g/Blatt, 6 Blatt je 500 ml | P | Dr. Oetker, Ewald | Herstellerwert, nie hart; Profi-Sorten weichen ab |
+| DGE Kita/Schule | Fleisch/Wurst max. 1× in 5 Verpflegungstagen | N | DGE-Qualitätsstandard Schule 5. Aufl., Kita 6. Aufl. | „1× pro Woche" stimmt, „8× in 20" → korrigieren; nur für DGE-Kunden als Regel |
+| GN 1/1-65 | ≈ 9 l (Hersteller 8,7–9 l) | P | Herstellerangaben; DIN EN 631 regelt nur Maße | kein Normvolumen → Herstellerwert je Behälter |
+| Gemüse-Garverlust | Faktor je Gemüse und Garart, z. B. Karotte gekocht 0,94, Spinat gedämpft 0,76 | N (Wissenschaft) | Bognár 2002, Tab. 17 ff. (auch im BLS) | pauschale Spannen ersetzen durch Faktoren je Gemüse |
+
+**Was das für Paket 11 heißt:**
+- **Harte Regeln** dürfen nur G-Werte und gekennzeichnete N-Werte sein: Tiefkühlen, Parasiten-Frostung,
+  produktspezifische Kühlwerte, Heißhalten, 72 °C/2 min.
+- **DGE-Häufigkeiten und Jodsalz** sind nur für Kunden Regeln, die nach DGE verpflegen. Dafür braucht die Regel
+  eine Bedingung „Standard des Kunden", das kommt später.
+- **P-Werte** (Brunoise, Gelatine, GN-Volumen, Ei-Anteile) sind nur Nachschlage-Defaults, nie Prüfungen.
+- **Garverluste** als Nachschlage-Tabelle nach Bognár.
+
+Freigabe der korrigierten Werte durch Dominique, danach Dossiers korrigieren und Paket 11 bauen.
 
 **Fachlich fraglich**, aus der Stichprobe: Garnelenpaste steht unter Fisch statt Krebstiere (Allergen!),
 „Zucca“ ist als Zucchini geführt, „knackig“ steht auf der Verbotsliste und zugleich im Textur-Wortschatz
