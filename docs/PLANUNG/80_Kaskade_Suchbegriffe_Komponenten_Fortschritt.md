@@ -320,6 +320,70 @@ dieser Reihenfolge; dasselbe für Foodbook-Kapitel und Format; Fan-out füllt ke
 zeigt den Concept-Preis; vorhandene Struktur im Ziel bleibt an ihrer Stelle; Druck/PDF der Speisekarte zeigt die
 Leerzeile (DomPDF-Fallen beachten).
 
+## Teil G · Richtig anlegen statt nachprüfen (Nachtrag 09.10.)
+
+Dominique: „Warum macht er das nicht schon direkt richtig?" Gemessen auf demo (Team 6, 45 Tage): 213 Konformitäts-
+Befunde an 90 Artefakten, 178 an Rezepten, 35 an Grundprodukten. Die Mehrheit entsteht in **deterministischen**
+Schritten nach der KI und wird danach von der teuren KI-Prüfung (≈ 15k Tokens je Lauf, oft zweimal) gefunden.
+
+| Befund | Anzahl | Entsteht in | Abhilfe beim Anlegen |
+|---|---|---|---|
+| §2 Verarbeitung im GP („Schalotten: Würfel 5 mm", „Petersilie: gehackt") | 39 | GP-Zuordnung (`IngredientMatchService`) | Rohform bevorzugen, Verarbeitung in die Zeilen-Notiz; verarbeitete GPs nur bei erlaubter Convenience |
+| §5/§10 Bio ungewollt („Wasser: still, Bio") | ~32 | GP-Zuordnung | Bio-GPs bei `bio_pref = conventional` hart ausschließen, solange eine konventionelle Variante existiert |
+| §1.0/§1.2 Typ-Präfix nicht im Vokabular („Gemüsebeilage", „Brauner Fond") | ~43 | Name aus dem Generator | Präfix gegen das kontrollierte Typ-Vokabular prüfen; bei Abweichung nächstes erlaubtes Präfix setzen oder einmal nachfragen |
+| §6 GP ohne Zustand | 35 (an GPs) | Stammdaten | nicht pro Rezept melden; einmal als GP-Datenqualität in die Pflege-Liste |
+
+**G1 · Deterministische Prüfungen vor der KI-Prüfung.** Ein `RegelwerkVorpruefung`-Schritt direkt nach dem Speichern
+des Entwurfs korrigiert, was eindeutig ist (Präfix, Rohform, Bio), und schreibt es als „automatisch korrigiert" ins
+Protokoll. Erst danach läuft die KI-Prüfung, nur noch für den inhaltlichen Rest.
+**G2 · KI-Prüfung schlanker.** Paragraphen, die G1 deterministisch abdeckt, gehen nicht mehr in den Prüf-Prompt; die
+zweite Prüfung nach der Selbstheilung prüft nur geänderte Felder (siehe C).
+**G3 · GP-Befunde aus dem Rezeptlauf.** Befunde am Grundprodukt landen einmal in der GP-Pflege, nicht bei jedem Rezept.
+**G4 · Messung.** Befunde je Paragraph vor/nach G1 auf demo; Ziel: §1.x, §2, §5/§10 an neuen Rezepten nahe null,
+Prüf-Tokens je Basisrezept halbiert.
+
+Paket: **9 · Richtig anlegen (G1–G4)**, Aufwand M, unabhängig von 1–8, hohe Wirkung auf Qualität und Kosten.
+
+## Teil H · Erst prüfen, dann anreichern (Nachtrag 09.10.)
+
+Dominique: Anreichern vor der Prüfung verbrennt Tokens, wenn das Rezept nicht stimmt. Ablauf soll sein: schlanker
+Entwurf (Zutaten + Zubereitung als Freitext, wie im Mockup) → prüfen/korrigieren → **auf Knopfdruck komplett
+anreichern** → danach ist das Artefakt **freigegeben (grün)**, kein Entwurf mehr. Gilt für Rezept, Gericht, Concept
+und Format.
+
+**H1 · Stand.** Gestufte Läufe (Cockpit-Standard) reichern schon nur bei der Freigabe an
+(`PlanningCascadeService::dispatchRezeptStep`, `$vorFreigabeAnreichern = $vollAnreichern && ! $staged`;
+`gibStepFrei` → `starteFolgestufe` → `EnrichRecipeJob`). Nicht gestufte Läufe (Direkt-Materialisierung, zu prüfen:
+Voll-Kaskaden-Pfade, MCP-Start) reichern weiterhin **vor** der Prüfung an.
+
+**H2 · Lücken.**
+- Kein Sammelknopf: Anreichern geht nur Eintrag für Eintrag über „Freigeben".
+- `gibStepFrei` setzt `approved`/`active` **sofort**, die Anreicherung läuft danach asynchron. Grün erscheint also,
+  bevor das Rezept vollständig ist; scheitert die Anreicherung, bleibt ein „freigegebenes" Halb-Rezept.
+- Nicht gestufte Pfade reichern ungeprüfte Entwürfe an (verbrannte Tokens).
+
+**H3 · Lösung.**
+1. **Schlanker Entwurf überall:** Vor der Freigabe nie Voll-Anreicherung, auch nicht in nicht gestuften Läufen.
+   Der Entwurf trägt Zutaten mit Mengen, Zubereitung als Freitext, EK und Allergene (deterministisch).
+2. **Anreichern = Freigabe in zwei Schritten:** „Anreichern und freigeben" setzt den Step auf `wird_angereichert`
+   (sichtbar mit Phase), der Job reichert an und setzt **erst danach** `approved`/`active` + Step `freigegeben`.
+   Scheitert die Anreicherung: Step zurück auf `done` mit Fehler, Artefakt bleibt Entwurf.
+3. **Sammelknopf** im Fortschritt-Kopf: „Alle neu gebauten anreichern und freigeben (N)" — wirkt auf den gewählten
+   Baum-Zweig (D2) bzw. alles; zählt nur `done`-Steps ohne Fehler und ohne offene harte Konformitäts-Befunde.
+   Je Cluster derselbe Knopf („Gericht + Basisrezepte anreichern und freigeben"). Bestätigung inline mit Anzahl.
+4. **Übernahmen aus dem Bestand** sind schon freigegeben (Spec 80 B4: nur freigegebene im Bestand) und werden nicht
+   erneut angereichert.
+5. **Kosten sichtbar:** Kopf zeigt nach dem Lauf die verbrauchten Tokens je Stufe (aus `ai_call_log`).
+
+**H4 · Zustände** (ergänzt D6): `wird_angereichert` = animierter Punkt + Phase; `freigegeben` = grün erst nach
+erfolgreicher Anreicherung.
+
+**H5 · Tests.** Gestufter und nicht gestufter Lauf reichern vor Freigabe nicht an; „Anreichern und freigeben" setzt
+`approved` erst nach Job-Erfolg; Fehlschlag lässt Entwurf + Fehlermeldung; Sammelknopf erfasst nur passende Steps
+im gewählten Zweig; Bestandsübernahmen werden übersprungen.
+
+Paket: **10 · Erst prüfen, dann anreichern (H1–H5)**, Aufwand M, hängt an 6 (Sammelknopf im Fortschritt-Kopf).
+
 ## Teil E · Offen (Entscheidung nötig)
 
 - **Freigabe-Rückstau:** 249 unentschiedene Entwürfe, 49 von 79 Läufen auf „Zu prüfen". Eigene Liste „offene
@@ -347,6 +411,8 @@ Leerzeile (DomPDF-Fallen beachten).
 | 6 | Fortschritt-Ansicht D1–D6, D8–D10 | L | 0 (parallel zu 1–4) |
 | 7 | Plan-Karte D7 | M | 4, 6 |
 | 8 | Struktur-Elemente im Rahmen + Fortschritt F1–F5 | M | 6 (F4) |
+| 9 | Richtig anlegen statt nachprüfen G1–G4 | M | — |
+| 10 | Erst prüfen, dann anreichern H1–H5 | M | 6 (Kopf-Knopf), Kern ohne |
 
 Jedes Paket: eigener Branch, volle Suite grün, demo-Deploy, Abnahme an einem echten Lauf.
 

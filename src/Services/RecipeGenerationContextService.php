@@ -105,8 +105,12 @@ class RecipeGenerationContextService
         // reichen — die Anker-Auflösung passiert ohnehin erst im Grounding-Block selbst, s. dort).
         // Dieselbe Denylist-Funktion wie `GenerationContextService::leitTokens()` (Paul: "eine
         // Funktion, zwei Aufrufer"), hier direkt am TokenEngine statt am privaten Wrapper.
-        $hauptzutatSlugs = $this->tokens->leitTokens($description);
-        $wissen = $this->knowledge->contextFor($team, $genKey, $description, $parameter['kompositions_stil'] ?? null, $hauptzutatSlugs, $parameter + ['rezept_typ' => $rezeptTyp, '_kanon_prompt_key' => $genKey]);
+        // Spec 80 A4: Suchbegriffe (aus dem Briefing abgeleitet, vom Menschen korrigiert) suchen VOR dem
+        // Rohtext. Vorher sondierten nur die ersten 16 Briefing-Wörter — bei demo Lauf #79 reine Füllwörter.
+        $suchbegriffe = self::suchbegriffeAus($parameter);
+        $suchPraefix = $suchbegriffe === [] ? '' : implode(' ', $suchbegriffe) . ' ';
+        $hauptzutatSlugs = $this->tokens->leitTokens($suchPraefix . $description);
+        $wissen = $this->knowledge->contextFor($team, $genKey, $suchPraefix . $description, $parameter['kompositions_stil'] ?? null, $hauptzutatSlugs, $parameter + ['rezept_typ' => $rezeptTyp, '_kanon_prompt_key' => $genKey]);
         /*
          * Transparenz: die an recipe.generator/vk.generator GEBUNDENEN Dossiers stehen nicht in
          * contextFor()->files_used, sollen aber im „Verwendetes Wissen"-Chip auftauchen.
@@ -181,12 +185,13 @@ class RecipeGenerationContextService
         // Erdungs-Query: Beschreibung + Aroma-Freitext + Küche-Anker (+ Seed-Anker) → der Anker-Graph
         // erdet jetzt auch an der Aroma-Vorgabe (nicht mehr nur an der Beschreibung).
         $seedErdung = $seedAnker === [] ? '' : ' ' . str_replace('_', ' ', implode(' ', $seedAnker));
-        $erdungsText = trim($description . ' ' . $aromaFrei . ' ' . ($kuecheAnker['anker'] ?? '') . $seedErdung);
+        $erdungsText = trim($suchPraefix . $description . ' ' . $aromaFrei . ' ' . ($kuecheAnker['anker'] ?? '') . $seedErdung);
         foreach ($this->generation->forGeneration(
             $team, $erdungsText, $vkModus,
             (bool) ($parameter['use_favorites_list'] ?? false),
             (bool) ($parameter['favorites_convenience_only'] ?? false),
             isset($parameter['bestand']) ? (string) $parameter['bestand'] : null,
+            $suchbegriffe,
         ) as $key => $value) {
             $prompt[$key] = $value;
         }
@@ -304,9 +309,59 @@ class RecipeGenerationContextService
                 // Dossiers `selectKanon()` droppt.
                 'knowledge_dropped' => $wissenVerworfen,
                 'template_ids' => array_column($templateContext, 'id'),
-                'pairing_keys' => array_values(array_filter(array_keys($prompt), fn ($key) => str_contains((string) $key, 'pair'))),
+                // Spec 80 A6: Spec 60 benannte den Block in `kombinationsplan` um — die alte Sonde (nur „pair"
+                // im Namen) war seitdem immer leer und meldete „kein Pairing", auch wenn es ankam.
+                'pairing_keys' => array_values(array_filter(array_keys($prompt), fn ($key) => str_contains((string) $key, 'pair') || $key === 'kombinationsplan')),
+                'suchbegriffe' => $suchbegriffe,
+                'pairing' => $this->pairingProtokoll($prompt, $suchbegriffe),
                 'built_at' => now()->toIso8601String(),
             ],
         ];
+    }
+
+    /**
+     * Spec 80: Suchbegriffe aus dem Parameter-Bündel (Lauf-Params, Depth-1). Fail-soft gegen jede Form.
+     *
+     * @param  array<string, mixed>  $parameter
+     * @return list<string>
+     */
+    public static function suchbegriffeAus(array $parameter): array
+    {
+        $roh = $parameter['suchbegriffe'] ?? [];
+        if (! is_array($roh)) {
+            return [];
+        }
+
+        return array_values(array_unique(array_filter(array_map(
+            static fn ($t) => is_scalar($t) ? trim((string) $t) : '',
+            $roh,
+        ), static fn (string $t): bool => $t !== '')));
+    }
+
+    /**
+     * Spec 80 A6: welche Pairing-Anker der Plan trug und welche Suchbegriffe ohne exakten Anker blieben —
+     * damit ein leerer Plan nicht still wegfällt („kein Anker für …").
+     *
+     * @param  array<string, mixed>  $prompt
+     * @param  list<string>  $suchbegriffe
+     * @return array{anker: list<string>, ohne_anker: list<string>}
+     */
+    private function pairingProtokoll(array $prompt, array $suchbegriffe): array
+    {
+        $anker = array_values(array_filter(array_map(
+            static fn ($l) => is_array($l) ? (string) ($l['aroma'] ?? '') : '',
+            (array) ($prompt['kombinationsplan']['leit_aromen'] ?? []),
+        )));
+        $ohne = [];
+        if ($suchbegriffe !== []) {
+            $pairing = app(PairingService::class);
+            foreach ($suchbegriffe as $t) {
+                if ($pairing->ankerIdExakt($t) === null) {
+                    $ohne[] = $t;
+                }
+            }
+        }
+
+        return ['anker' => $anker, 'ohne_anker' => $ohne];
     }
 }

@@ -58,7 +58,7 @@ class GenerationContextService
      *
      * @return array{gp_kandidaten?: list<array>, rezept_kandidaten?: list<array>, kombinationsplan?: array, favorites?: array}
      */
-    public function forGeneration(Team $team, string $description, bool $vkModus = false, bool $useFavoritesList = false, bool $favoritesConvenienceOnly = false, ?string $bestand = null): array
+    public function forGeneration(Team $team, string $description, bool $vkModus = false, bool $useFavoritesList = false, bool $favoritesConvenienceOnly = false, ?string $bestand = null, array $phrasen = []): array
     {
         // B1 (2026-08-20, Erdungs-Stärke): im strikten Datenbank-Modus (nur_bestand) breiter erden —
         // mehr Kandidaten je Token + größerer semantischer Topf, damit ein loses Brief-Leitwort
@@ -177,7 +177,9 @@ class GenerationContextService
         // Spec 60 · P7b: Kombinationsplan statt loser Partnerliste — dieselbe Logik, die das fertige
         // Rezept prüft. Anker nur exakt (kein Wortteil-Raten), Harmonie nur 3★, dazu Bedarfe mit
         // Lieferanten, Konflikte und (Gericht) Basisrezepte aus dem Bestand.
-        $plan = app(Pairing\KombinationsPlan::class)->fuer($team, $tokens, $vkModus);
+        // Spec 80 A4: ganze Suchbegriffe zuerst („glatte Petersilie" trifft den Anker exakt, die
+        // Einzelwörter nicht), danach die Leit-Tokens wie bisher.
+        $plan = app(Pairing\KombinationsPlan::class)->fuer($team, array_values(array_unique([...$phrasen, ...$tokens])), $vkModus);
         if ($plan !== null) {
             $out['kombinationsplan'] = $plan;
         }

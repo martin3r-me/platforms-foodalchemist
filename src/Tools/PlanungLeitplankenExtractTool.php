@@ -46,6 +46,9 @@ class PlanungLeitplankenExtractTool extends FoodAlchemistTool implements ToolCon
             . 'ohne session_id kommt ein reiner Vorschlag zurück. Werte werden gegen die geschlossenen '
             . 'Vokabulare geprüft: Erfundenes wird VERWORFEN und in `verworfen` gemeldet, nicht übernommen. '
             . 'Was das Briefing offen lässt, kommt als Rückfrage in `unklar` — es wird nicht geraten. '
+            . 'Zusätzlich kommen SUCHBEGRIFFE zurück (`suchbegriffe`: Zutaten, Komponenten, Techniken, Aromen) — '
+            . 'damit suchen Wissen, Bestand und Pairing. Mit `scope` (rezept|gericht|concept) gelten die '
+            . 'Mengen-Achsen des Tabs: Basisrezept = Ansatz (ziel_menge/ziel_einheit), nie Portionen. '
             . 'Genau der Einstieg für ein gesprochenes oder getipptes Briefing.';
     }
 
@@ -61,6 +64,11 @@ class PlanungLeitplankenExtractTool extends FoodAlchemistTool implements ToolCon
                 'session_id' => [
                     'type' => 'integer',
                     'description' => 'Planungssitzung, in die die Regler geschrieben werden (weglassen = nur Vorschlag)',
+                ],
+                'scope' => [
+                    'type' => 'string',
+                    'enum' => ['rezept', 'gericht', 'concept'],
+                    'description' => 'Was entsteht: rezept (Basisrezept, Ansatz statt Portion) | gericht | concept. Weglassen = scope-neutral.',
                 ],
             ],
             'required' => ['briefing'],
@@ -91,7 +99,8 @@ class PlanungLeitplankenExtractTool extends FoodAlchemistTool implements ToolCon
         }
 
         try {
-            $r = app(BriefingLeitplankenService::class)->ausBriefing($team, $briefing, $sessionId);
+            $scope = in_array($arguments['scope'] ?? null, ['rezept', 'gericht', 'concept'], true) ? (string) $arguments['scope'] : null;
+            $r = app(BriefingLeitplankenService::class)->ausBriefing($team, $briefing, $sessionId, $scope);
         } catch (\Platform\FoodAlchemist\Exceptions\KiDeaktiviertException $e) {
             return ToolResult::error('KI ist für dieses Team deaktiviert.', 'KI_DEAKTIVIERT');
         } catch (\RuntimeException $e) {

@@ -66,9 +66,10 @@ class BriefingLeitplankenService
         ], [
             'target_table' => 'foodalchemist_planning_sessions',
             'target_id' => $sessionId,
-            // Ohne Regler ist die Antwort wertlos → Gateway re-rollt statt Leeres zu liefern.
-            'structural_retry' => fn (array $p) => is_array($p['werte']['leitplanken'] ?? null)
-                && $p['werte']['leitplanken'] !== [],
+            // Ohne Regler UND ohne Suchbegriffe ist die Antwort wertlos → Gateway re-rollt statt Leeres zu
+            // liefern. Ein Briefing ohne Regler-Signal kann trotzdem gute Suchbegriffe tragen (Spec 80).
+            'structural_retry' => fn (array $p) => (is_array($p['werte']['leitplanken'] ?? null) && $p['werte']['leitplanken'] !== [])
+                || (is_array($p['werte']['suchbegriffe'] ?? null) && $p['werte']['suchbegriffe'] !== []),
         ]);
 
         $roh = is_array($vorschlag->werte['leitplanken'] ?? null) ? $vorschlag->werte['leitplanken'] : [];
@@ -100,7 +101,48 @@ class BriefingLeitplankenService
             'confidence' => $vorschlag->confidence,
             'call_log_id' => $vorschlag->callLogId,
             'scope_fremd' => $scopeFremd,
+            'suchbegriffe' => self::suchbegriffeNormalisieren($vorschlag->werte['suchbegriffe'] ?? null),
         ];
+    }
+
+    /** Je Gruppe höchstens so viele Begriffe — mehr verwässert die Suche. */
+    private const SUCHBEGRIFFE_JE_GRUPPE = 8;
+
+    /**
+     * Spec 80 A1/A2: KI-Antwort `{zutaten:[…], komponenten:[…], techniken:[…], aromen:[…]}` → flache Liste
+     * `[{t, g, q:'ki'}]`. Fail-soft gegen jede Form: unbekannte Gruppen fallen weg, Zahlen/Mengen
+     * („80g", „2 kg") und Ein-/Zwei-Zeichen-Reste fliegen raus, Dubletten (ohne Groß/klein) einmal.
+     *
+     * @return list<array{t: string, g: string, q: string}>
+     */
+    public static function suchbegriffeNormalisieren(mixed $roh): array
+    {
+        if (! is_array($roh)) {
+            return [];
+        }
+        $out = [];
+        $gesehen = [];
+        foreach (FoodAlchemistPlanningSession::SUCHBEGRIFF_GRUPPEN as $gruppe) {
+            $n = 0;
+            foreach ((array) ($roh[$gruppe] ?? []) as $begriff) {
+                if (! is_scalar($begriff)) {
+                    continue;
+                }
+                $t = trim(preg_replace('/\s+/u', ' ', (string) $begriff) ?? '');
+                $schluessel = mb_strtolower($t);
+                if (mb_strlen($t) < 3 || mb_strlen($t) > 60 || isset($gesehen[$schluessel])
+                    || preg_match('/^\d+([.,]\d+)?\s*(g|kg|ml|l|stk|pax|%)?$/iu', $t) === 1) {
+                    continue;
+                }
+                $gesehen[$schluessel] = true;
+                $out[] = ['t' => $t, 'g' => $gruppe, 'q' => 'ki'];
+                if (++$n >= self::SUCHBEGRIFFE_JE_GRUPPE) {
+                    break;
+                }
+            }
+        }
+
+        return $out;
     }
 
     /** Prompt-Hinweis je Tab: was entsteht und welche Mengen-Achse gilt. */

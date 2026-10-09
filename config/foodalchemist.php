@@ -974,11 +974,20 @@ return [
          */
         'planung.leitplanken' => [
             'tier' => 'B',
-            'max_tokens' => 900,
+            'max_tokens' => 1200,
             'temperature' => 0.0,
             'task' => 'Du bist Planungs-Assistent in einem Catering-Betrieb. Aus einem freien Briefing '
                 . 'destillierst du die LEITPLANKEN — den Regler-Satz, mit dem anschliessend Gerichte '
-                . 'erzeugt werden: werte = {leitplanken:{…}, unklar:[…], begruendung:"<1-2 Sätze>"}. '
+                . 'erzeugt werden — und die SUCHBEGRIFFE: werte = {leitplanken:{…}, '
+                . 'suchbegriffe:{zutaten:[…], komponenten:[…], techniken:[…], aromen:[…]}, unklar:[…], '
+                . 'begruendung:"<1-2 Sätze>"}. '
+                . 'SUCHBEGRIFFE sind die Wörter, mit denen Wissen, Bestandsrezepte und Food-Pairing gesucht werden: '
+                . 'zutaten = Lebensmittel in Grundform und Einzahl, auch die naheliegende Basis, die das Briefing nur '
+                . 'andeutet (»grünes Petersilienpüree« ⇒ Petersilienwurzel, glatte Petersilie); komponenten = '
+                . 'Bausteine/Zubereitungsarten (Püree, Matte, Jus, Crunch); techniken = Verfahren (passieren, '
+                . 'grün halten, schmoren); aromen = Geschmacksrichtungen. Zusammengesetzte Wörter zerlegen '
+                . '(Petersilienpüree ⇒ Petersilie + Püree). Keine Mengen, Personenzahlen, Füllwörter, Diät- oder '
+                . 'Service-Angaben. Je Gruppe höchstens 6 Begriffe, leere Gruppe = []. '
                 . 'Setze einen Regler NUR, wenn das Briefing ihn nennt oder ihn eindeutig impliziert '
                 . '(»Sommerfest im Garten, Fingerfood« ⇒ serviceform=flying). Was offen bleibt, gehört '
                 . 'in `unklar` als kurze Rückfrage — RATE NICHT und erfinde keine Werte: ein falscher '
