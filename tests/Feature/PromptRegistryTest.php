@@ -17,7 +17,7 @@ const REGISTRY_SOLL = [
     'gp.anker' => 'B', 'gp.role' => 'B', 'gp.la_suggest' => 'B', 'gp.term_la_rank' => 'B',
     // Rezept-Welt
     'recipe.generator' => 'B', 'recipe.komponenten_plan' => 'B', 'recipe.description' => 'C', 'recipe.category' => 'D',
-    'recipe.posten' => 'B', 'recipe.garverlust' => 'C', 'recipe.name_putzen' => 'D', 'recipe.titel_vorschlag' => 'B', 'recipe.sektor' => 'B',
+    'recipe.posten' => 'B', 'recipe.garverlust' => 'C', 'recipe.name_putzen' => 'D', 'recipe.ruestschritt' => 'D', 'recipe.titel_vorschlag' => 'B', 'recipe.sektor' => 'B',
     'recipe.level' => 'B', 'recipe.production_depth' => 'B',
     'recipe.eigenschaften' => 'B', 'recipe.geschmack' => 'B',
     'recipe.steps' => 'A',                                            // Spec 27: strukturierte Schritte (Master), preparation ist nur ihr Spiegel
