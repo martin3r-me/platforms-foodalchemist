@@ -46,14 +46,15 @@ class LaFirstGpService
      *                                     Pfad sucht gestemmt „gefluegel", benennt „Geflügel" — Lauf 89)
      * @return FoodAlchemistGp|null  gemintetes/wiederverwendetes GP oder null (keine LA / §6-Verstoß / Fehler)
      */
-    public function mintFromLa(Team $team, string $text, ?string $slug = null, ?string $wgHint = null, bool $allowDerivat = true, ?string $anzeigeName = null): ?FoodAlchemistGp
+    public function mintFromLa(Team $team, string $text, ?string $slug = null, ?string $wgHint = null, bool $allowDerivat = true, ?string $anzeigeName = null, bool $nurRohware = false): ?FoodAlchemistGp
     {
         try {
             // Spec 16·S3: WG-Lead-gescopter, Terminologie-gerankter Kandidat statt naivem
             // searchGlobal->items()[0]. Ohne WG-Hint + Einzeltreffer verhaltensgleich.
             // Lauf 87/88: nur ein LA mit passendem Grundwort (Beinscheibe ≠ Knochen, Lauch ≠ Lauchzwiebel) — der beste
             // solche aus der Shortlist, nicht nur Platz 1. Keiner → wie ohne LA weiter (Derivat-Pfad oder Lücke).
-            $la = app(LaCandidateFinder::class)->bestMitGrundwort($team, $text, $wgHint);
+            $finder = app(LaCandidateFinder::class);
+            $la = $nurRohware ? $finder->bestRohwareMutter($team, $text, $wgHint) : $finder->bestMitGrundwort($team, $text, $wgHint);
             if ($la === null) {
                 // D3 §11.2: Nebenprodukt (Knochen/Abschnitte/Karkasse/Schale/…) hat keinen LA →
                 // als Derivat der Mutter anlegen statt still unbepreist. Nur einmal (kein Rekurs).
@@ -145,10 +146,12 @@ class LaFirstGpService
         // die Mutter trifft UND der Mutter-Name im §6.1-Singular landet.
         $engine = app(\Platform\FoodAlchemist\Services\Matching\TokenEngine::class);
         $mutterQuery = trim(implode(' ', array_map([$engine, 'stemGerman'], preg_split('/\s+/', $d['mutter_text']) ?: [])));
+        // Mutter nur aus ROHWARE (Lauf 89): sonst erbt das Derivat LIVE die Allergene einer Grillwurst — eine offene
+        // Zeile ist besser. Ohne Rohware-LA → Lücke (keine erfundene Mutter).
         $mutter = $this->mintFromLa($team, $mutterQuery !== '' ? $mutterQuery : $d['mutter_text'], null, $wgHint, false,
-            self::mutterAnzeige($text, $mutterQuery !== '' ? $mutterQuery : $d['mutter_text']));
+            self::mutterAnzeige($text, $mutterQuery !== '' ? $mutterQuery : $d['mutter_text']), nurRohware: true);
         if ($mutter === null) {
-            return null;   // auch Mutter ohne LA → Sourcing-Lücke (keine erfundene Mutter)
+            return null;
         }
         $mutterBasis = trim((string) (preg_split('/[:,]/u', (string) $mutter->name)[0] ?? $mutter->name));
         if ($mutterBasis === '') {
