@@ -152,6 +152,17 @@ final class ZukaufBasisrezeptService
         return ['gp_id' => (int) $gp->id, 'gp_name' => (string) $gp->name];
     }
 
+    /**
+     * „<Typ>: <Ware> (Zukauf)“ — Typ nicht doppelt (§1.2, wie {@see RecipeKomponentenPlanService::bereinigeName}):
+     * „Kürbiskernöl“ mit Typ Öl → „Öl: Kürbiskern (Zukauf)“, nicht „Öl: Kürbiskernöl (Zukauf)“ (Review Berater).
+     *
+     * @param  array{typ: string, bezeichnung: string}  $ware
+     */
+    public static function name(array $ware): string
+    {
+        return RecipeKomponentenPlanService::bereinigeName($ware['typ'] . ': ' . $ware['bezeichnung']) . ' ' . self::ZUSATZ;
+    }
+
     /** @param  array{gp_id: int, gp_name: string, typ: string, bezeichnung: string}  $ware */
     public function baue(Team $team, FoodAlchemistCascadeRunStep $child, string $text, array $ware, array $params): FoodAlchemistRecipe
     {
@@ -173,7 +184,7 @@ final class ZukaufBasisrezeptService
 
         $rezepte = app(RecipeService::class);
         $recipe = $rezepte->create($team, [
-            'name' => $ware['typ'] . ': ' . $ware['bezeichnung'] . ' ' . self::ZUSATZ,
+            'name' => self::name($ware),
             'preparation' => $schritte === [] ? null : implode("\n", array_map(static fn ($s, $i) => ($i + 1) . '. ' . $s, $schritte, array_keys($schritte))),
             'created_via' => 'generator',
         ]);

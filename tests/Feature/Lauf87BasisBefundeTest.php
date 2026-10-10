@@ -108,7 +108,10 @@ it('Zukauf erkennt Fertigware, nicht Rohware — mit Typ aus der Zeile oder aus 
     expect($regel->aktiv)->toBeFalse();                                                // Einschalten ist Kuration
     app(\Platform\FoodAlchemist\Services\Regeln\RegelService::class)->setzeAktiv($regel->id, true);
 
-    expect($z->erkenne($this->rootTeam, 'Kürbiskernöl'))->toMatchArray(['typ' => 'Öl', 'bezeichnung' => 'Kürbiskernöl']);
+    expect($z->erkenne($this->rootTeam, 'Kürbiskernöl'))->toMatchArray(['typ' => 'Öl', 'bezeichnung' => 'Kürbiskernöl'])
+        // Typ nicht doppelt (§1.2, Review Berater): „Öl: Kürbiskern (Zukauf)“, nicht „Öl: Kürbiskernöl (Zukauf)“.
+        ->and(\Platform\FoodAlchemist\Services\ZukaufBasisrezeptService::name($z->erkenne($this->rootTeam, 'Kürbiskernöl')))->toBe('Öl: Kürbiskern (Zukauf)')
+        ->and(\Platform\FoodAlchemist\Services\ZukaufBasisrezeptService::name($z->erkenne($this->rootTeam, 'Crunch: Röstzwiebeln')))->toBe('Crunch: Röstzwiebeln (Zukauf)');
 });
 
 it('Zukauf: Weiche in starteKind — eigener Bau ohne Plan und ohne großen Generator', function () {
@@ -161,7 +164,7 @@ it('Zukauf-Bau: „Typ: Ware (Zukauf)“, die Ware als Zeile, Hilfsstoffe nur al
     $r = \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::findOrFail($kind->ref_id);
     $zeilen = $r->ingredients()->with('gp')->get();
     expect($kind->status)->toBe('done')
-        ->and($r->name)->toBe('Öl: Kürbiskernöl (Zukauf)')
+        ->and($r->name)->toBe('Öl: Kürbiskern (Zukauf)')   // Typ nicht doppelt (§1.2)
         ->and($zeilen->pluck('gp.name')->all())->toContain('Kuerbiskernoel: trocken')->toContain('Salz: trocken')
         ->not->toContain('Traubenkernoel: fluessig')                        // 300 ml auf 400 ml ist kein Hilfsstoff
         ->and((float) $zeilen->firstWhere('gp_id', $oel->id)->quantity)->toBe(400.0)

@@ -172,3 +172,38 @@ it('Gerichtstiefe folgt dem Kind: wird ein Unterrezept teilfertig, zieht der Rec
     expect($gericht->fresh()->production_depth)->toBe('teilfertig')
         ->and($hand->fresh()->production_depth)->toBe('from_scratch');
 });
+
+it('Generator bindet keinen Zukauf-Bestand, wenn der Lauf from scratch verlangt — auf jedem Bindungsweg (demo Lauf 95)', function () {
+    \Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit::firstOrCreate(['team_id' => $this->rootTeam->id, 'slug' => 'ml'],
+        ['display_de' => 'Milliliter', 'dimension' => 'volume', 'default_in_g' => 1]);
+    $this->unitG($this->rootTeam);
+    config(['foodalchemist.ai.provider' => 'fake']);
+    $zukauf = $this->makeRecipe($this->rootTeam, 'Jus: Rind (Zukauf)', ['status' => 'approved']);
+    $zukauf->forceFill(['production_depth' => 'convenience', 'production_depth_source' => 'manuell'])->save();
+    $gen = app(\Platform\FoodAlchemist\Services\RecipeGeneratorService::class);
+    $vorschlag = fn (string $name) => ['name' => $name,
+        'zutaten' => [['text' => 'Jus: Rind', 'quantity' => 800, 'unit' => 'ml', 'sub_rezept_id' => $zukauf->id]]];
+
+    $scratch = $gen->generiere($this->rootTeam, 'Jus: Ginger Beer', ['convenience' => 'from_scratch'], $vorschlag('Jus: Ginger Beer'))['recipe'];
+    $teil = $gen->generiere($this->rootTeam, 'Jus: Ginger Beer hell', ['convenience' => 'teil_convenience'], $vorschlag('Jus: Ginger Beer hell'))['recipe'];
+
+    expect($scratch->ingredients()->pluck('referenced_recipe_id')->filter()->all())->not->toContain($zukauf->id)
+        ->and($teil->ingredients()->pluck('referenced_recipe_id')->all())->toContain($zukauf->id);
+});
+
+it('Der Lauf-Regler gilt nur für seinen Lauf — ein späterer Aufruf ohne Regler bindet den Zukauf wieder (Review Hans)', function () {
+    \Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit::firstOrCreate(['team_id' => $this->rootTeam->id, 'slug' => 'ml'],
+        ['display_de' => 'Milliliter', 'dimension' => 'volume', 'default_in_g' => 1]);
+    $this->unitG($this->rootTeam);
+    config(['foodalchemist.ai.provider' => 'fake']);
+    $zukauf = $this->makeRecipe($this->rootTeam, 'Jus: Rind (Zukauf)', ['status' => 'approved']);
+    $zukauf->forceFill(['production_depth' => 'convenience', 'production_depth_source' => 'manuell'])->save();
+    $gen = app(\Platform\FoodAlchemist\Services\RecipeGeneratorService::class);
+    $vorschlag = fn (string $name) => ['name' => $name,
+        'zutaten' => [['text' => 'Jus: Rind', 'quantity' => 800, 'unit' => 'ml', 'sub_rezept_id' => $zukauf->id]]];
+
+    $gen->generiere($this->rootTeam, 'Jus: Ginger Beer', ['convenience' => 'from_scratch'], $vorschlag('Jus: Ginger Beer'));
+    $ohne = $gen->generiere($this->rootTeam, 'Jus: Import', [], $vorschlag('Jus: Import'))['recipe'];   // z. B. Import: kein Regler
+
+    expect($ohne->ingredients()->pluck('referenced_recipe_id')->all())->toContain($zukauf->id);
+});
