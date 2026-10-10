@@ -546,6 +546,12 @@ class IngredientMatchService
                 || $this->terminology->isAntiMarker($this->currentIngredientName, $gp->name)) {
                 continue;   // S2: Anti-Marker nie als Entscheidung
             }
+            // Lauf 91 (demo): „Grapefruitsaft" → Derivat „Grapefruitsaft: frisch, Zeste" (Kopf-Floor 0,9). Ein §11.2-Derivat
+            // ist nur gemeint, wenn die Zeile seine Form nennt („Grapefruitzeste") — sonst ist es ein anderes Produkt.
+            if ($gp->is_derivat && ($marker = $this->heuristik->nebenproduktDerivat((string) $gp->name)['marker'] ?? null) !== null
+                && ! $this->heuristik->nenntDerivatForm($this->currentIngredientName, $marker)) {
+                continue;
+            }
             $combined = trim($gp->name . ' ' . ($gp->main_ingredient_display ?? ''));
             $score = $this->scoreMitFloor($queryTokens, $querySlug, $combined, $gp->main_ingredient_slug, $gp->name);
 
@@ -751,7 +757,7 @@ class IngredientMatchService
         $this->likeVorfilter($query, $queryTokens, $querySlug, ['name', 'main_ingredient_slug', 'main_ingredient_display']);
 
         return $query->orderBy('id')->limit(300)
-            ->get(['id', 'name', 'main_ingredient_slug', 'main_ingredient_display', 'condition', 'bio', 'team_id']);
+            ->get(['id', 'name', 'main_ingredient_slug', 'main_ingredient_display', 'condition', 'bio', 'team_id', 'is_derivat']);
     }
 
     /** Typ aus dem Präfix eines Namens, nur wenn er im Typ-Vokabular steht (sonst null). */

@@ -211,7 +211,15 @@ class LaCandidateFinder
             $varianten[] = $this->produktWoerter((string) $alias);
         }
         if ($varianten[0] === []) {
-            return true;
+            // Lauf 91 (demo, Jus: Rind): „Öl" (3 Zeichen, also kein Produktwort) ließ JEDEN LA durch — „Lauchoel Groenn"
+            // gewann. Ein kurzes Gattungswort (Öl, Ei) verlangt dasselbe Wort im LA, kein Kompositum („Lauchöl").
+            $kurz = array_values(array_filter($this->engine->tokenize($produkt !== '' ? $produkt : $text),
+                fn ($t) => mb_strlen($t) >= 2 && mb_strlen($t) < 4 && ! $this->engine->istReinesMerkmal($t)));
+            if ($kurz === []) {
+                return true;   // nur Zustandswörter — wie bisher
+            }
+
+            return array_intersect($kurz, $this->engine->tokenize($designation)) !== [];
         }
         $la = $this->produktWoerter($designation);
         foreach ($varianten as $woerter) {
@@ -234,17 +242,7 @@ class LaCandidateFinder
      */
     public function traegtForm(string $designation, string $marker): bool
     {
-        $basis = (string) preg_replace('/(en|e|n)$/u', '', mb_strtolower($marker));
-        if (mb_strlen($basis) < 4) {
-            $basis = mb_strtolower($marker);
-        }
-        foreach ($this->engine->tokenize($designation) as $t) {
-            if (str_contains($t, $basis)) {
-                return true;
-            }
-        }
-
-        return false;
+        return $this->heuristik->nenntDerivatForm($designation, $marker);
     }
 
     /** Produktwort-Enden, die eine ZUBEREITUNG statt Rohware benennen (Grillwurst, Lyoner, Brühe …). */

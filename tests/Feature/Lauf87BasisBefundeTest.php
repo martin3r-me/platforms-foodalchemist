@@ -191,11 +191,13 @@ it('Hausstandard: Jus/Fond/Brühe aus Knochen und Abschnitten — Cut als Hinwei
     $block = app(\Platform\FoodAlchemist\Services\Regeln\RegelPromptBlock::class)->fuerPromptKey('recipe.generator');
     expect($block)->toContain('Jus, Fond, Brühe aus Knochen und Abschnitten')->toContain('nur, wenn der Auftrag es ausdrücklich verlangt');
 
+    // Seit Lauf 91: die Regel gilt für GPs aus WG 04 (Fleisch, Geflügel & Wild) — Zeilen brauchen ihr GP.
+    $wg04 = function (string $name) { $gp = $this->makeGp($this->rootTeam, $name); $gp->update(['commodity_group_code' => '04']); return $gp; };
     $jus = $this->makeRecipe($this->rootTeam, 'Jus: Kalb', ['status' => 'draft']);
-    $this->makeIngredient($jus, 'Kalb-Beinscheiben / Ossobuco: frisch', null, '1800', 1);
-    $this->makeIngredient($jus, 'Kalbsknochen: frisch, roh', null, '6000', 2);
+    $this->makeIngredient($jus, 'Kalb-Beinscheiben / Ossobuco: frisch', $wg04('Kalb-Beinscheiben / Ossobuco: frisch'), '1800', 1);
+    $this->makeIngredient($jus, 'Kalbsknochen: frisch, roh', $wg04('Kalbsknochen: frisch, roh'), '6000', 2);
     $beilage = $this->makeRecipe($this->rootTeam, 'Beilage: Rinderfilet', ['status' => 'draft']);
-    $this->makeIngredient($beilage, 'Rinderfilet: frisch', null, '2000', 1);
+    $this->makeIngredient($beilage, 'Rinderfilet: frisch', $wg04('Rinderfilet: frisch'), '2000', 1);
     $befunde = fn ($r) => collect(app(RecipeConformanceAdapter::class)->deterministischeBefunde($this->rootTeam, (int) $r->id))
         ->where('rule_id', $regel->id)->values();
 
@@ -208,7 +210,7 @@ it('Hausstandard: Jus/Fond/Brühe aus Knochen und Abschnitten — Cut als Hinwei
 it('Hausstandard: der Regel-Block zeigt ganze Beispiele statt Wortstämme (Lauf 89: Beinscheiben trotz Regel)', function () {
     $block = app(\Platform\FoodAlchemist\Services\Regeln\RegelPromptBlock::class)->fuerPromptKey('recipe.generator');
 
-    expect($block)->toContain('Falsch z. B.: „Rinderbeinscheiben: frisch“')
+    expect($block)->toContain('Falsch z. B.:')->toContain('„Rinderbeinscheiben: frisch“')   // Reihenfolge seit Lauf 91 egal
         ->toContain('Richtig z. B.: „Rinderknochen: frisch“')
         ->toContain('Kalb: frisch, Parüren');
 });

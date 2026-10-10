@@ -260,6 +260,22 @@ class MatchHeuristics
         return null;
     }
 
+    /** Nennt der Text die Derivat-Form (§11.2-Marker, z. B. „knochen" in „Kalbsknochen", „zeste" in „Grapefruitzeste")? */
+    public function nenntDerivatForm(string $text, string $marker): bool
+    {
+        $basis = (string) preg_replace('/(en|e|n)$/u', '', mb_strtolower($marker));
+        if (mb_strlen($basis) < 4) {
+            $basis = mb_strtolower($marker);
+        }
+        foreach ($this->engine->tokenize($text) as $t) {
+            if (str_contains($t, $basis)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /** Anzeigeform des Markers im Derivat-Namen — Regelwerk GP §11.2 schreibt „Kalb: frisch, Parüren" (Umlaut, nicht „Paruere"). */
     private static function derivatForm(string $marker): string
     {

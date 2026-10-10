@@ -144,7 +144,7 @@ class RecipeService
         return FoodAlchemistRecipe::visibleToTeam($team)->basis()
             ->with([
                 'kategorie:id,main_group_id,label',
-                'ingredients.gp:id,name,main_ingredient_slug,lead_la_supplier_item_id,piece_default_g', // Zeilen-EK braucht Lead+Stückgewicht (T3)
+                'ingredients.gp:id,name,main_ingredient_slug,lead_la_supplier_item_id,piece_default_g,commodity_group_code', // Zeilen-EK braucht Lead+Stückgewicht (T3)
                 'ingredients.unit:id,slug,display_de,dimension,default_in_g,default_in_ml', // T1-Kaskade braucht die Faktoren
                 'ingredients.referencedRecipe:id,name,ek_per_kg_eur',
                 'equipment',
@@ -165,7 +165,7 @@ class RecipeService
         return FoodAlchemistRecipe::visibleToTeam($team)
             ->with([
                 'kategorie:id,main_group_id,label',
-                'ingredients.gp:id,name,main_ingredient_slug,lead_la_supplier_item_id,piece_default_g',
+                'ingredients.gp:id,name,main_ingredient_slug,lead_la_supplier_item_id,piece_default_g,commodity_group_code',
                 'ingredients.unit:id,slug,display_de,dimension,default_in_g,default_in_ml',
                 // yield_kg/yield_pieces: g/Stück fürs Live-Rechnen im Zutaten-Editor
                 // (Stück-Sub — spiegelt RecipeRecomputeService::grammFaktor)
