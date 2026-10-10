@@ -257,6 +257,13 @@ class RecipeDependencyWorkflowService
 
             return;
         }
+        // Teilfertig: sicher TK-Gemüse als Hauptzeile → kurz bauen, kein Plan, Fertigungstiefe teilfertig (Dominique 10.10.).
+        if (($tk = app(ZukaufBasisrezeptService::class)->erkenneTeilfertig($team, $auftragText)) !== null) {
+            $this->baueKind($team, $child, $userId, $text,
+                [...$params, 'teilfertig_ware' => $tk['gp_name'], 'production_depth_vorgabe' => 'teilfertig'], $vollAnreichern);
+
+            return;
+        }
         $heuristik = app(\Platform\FoodAlchemist\Services\Matching\MatchHeuristics::class);
         if (! $heuristik->istBasisrezeptZeile($auftragText)
             && ! $heuristik->queryIstHalbfabrikat(app(\Platform\FoodAlchemist\Services\Matching\TokenEngine::class)->tokenize($auftragText))) {
@@ -637,6 +644,10 @@ class RecipeDependencyWorkflowService
                     array_values(array_filter((array) ($parameter['diaet_hart'] ?? []), 'is_string')),
                 ) !== null) {
                     $bestehend = null;
+                }
+                if ($bestehend !== null && \Platform\FoodAlchemist\Support\BestandsPassung::fertigungGrund(
+                    $team, $text, $bestehend->production_depth, $parameter['convenience'] ?? null) !== null) {
+                    $bestehend = null;   // Zukauf-Bestand, aber der Lauf verlangt „from scratch“
                 }
                 if ($bestehend !== null && (int) $bestehend->id !== (int) $recipe->id) {
                     $this->bindIngredient($team, (int) $ingredient->id, (int) $bestehend->id);

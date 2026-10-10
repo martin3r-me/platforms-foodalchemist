@@ -59,7 +59,7 @@ class RecipeKomponentenPlanService
             $menge = is_numeric($k['menge'] ?? null) && (float) $k['menge'] > 0 ? (float) $k['menge'] : null;
             $funktion = in_array($k['funktion'] ?? null, self::FUNKTIONEN, true) ? $k['funktion'] : null;
             $abgelehnt = [];
-            $bestand = $bestandErlaubt ? $this->bestandFuer($team, $name, $diaet, $abgelehnt) : null;
+            $bestand = $bestandErlaubt ? $this->bestandFuer($team, $name, $diaet, $abgelehnt, $params['convenience'] ?? null) : null;
             $out[] = [
                 'name' => $name,
                 'funktion' => $funktion,
@@ -117,7 +117,7 @@ class RecipeKomponentenPlanService
      * @param  list<array{recipe_id: int, name: string, grund: string}>  $abgelehnt
      * @return array{recipe_id: int, name: string}|null
      */
-    public function bestandFuer(Team $team, string $name, array $diaet, array &$abgelehnt): ?array
+    public function bestandFuer(Team $team, string $name, array $diaet, array &$abgelehnt, ?string $convenience = null): ?array
     {
         $ids = [];
         if (($gleich = app(RecipeService::class)->findByTokenSetMitReife($team, $name)) !== null) {
@@ -134,7 +134,7 @@ class RecipeKomponentenPlanService
         }
         $kandidaten = FoodAlchemistRecipe::query()->visibleToTeam($team)->basis()
             ->whereIn('id', $ids)
-            ->get(['id', 'name', 'status', 'spec_is_vegan', 'spec_is_vegetarian'])->keyBy('id');
+            ->get(['id', 'name', 'status', 'spec_is_vegan', 'spec_is_vegetarian', 'production_depth'])->keyBy('id');
         foreach ($ids as $id) {
             $r = $kandidaten->get($id);
             if ($r === null) {
@@ -150,7 +150,8 @@ class RecipeKomponentenPlanService
             }
             $grund = BestandsPassung::grund($name, (string) $r->name,
                 $r->spec_is_vegan !== null ? (bool) $r->spec_is_vegan : null,
-                $r->spec_is_vegetarian !== null ? (bool) $r->spec_is_vegetarian : null, $diaet);
+                $r->spec_is_vegetarian !== null ? (bool) $r->spec_is_vegetarian : null, $diaet)
+                ?? BestandsPassung::fertigungGrund($team, $name, $r->production_depth, $convenience);
             if ($grund === null) {
                 return ['recipe_id' => (int) $r->id, 'name' => (string) $r->name];
             }

@@ -156,6 +156,14 @@ class RecipeGenerationContextService
             'description' => $description,
             'parameter' => $this->promptParameter($parameter),
         ];
+        // Teilfertig (RecipeDependencyWorkflowService::starteKind): TK-Ware als Hauptzutat, nur kurz zubereitet.
+        if (trim((string) ($parameter['teilfertig_ware'] ?? '')) !== '') {
+            $prompt['teilfertig'] = [
+                'hauptzutat' => (string) $parameter['teilfertig_ware'],
+                'hinweis' => 'Hauptzutat ist diese TK-Ware — nicht frisch nachbauen. Nur kurz zubereiten (auftauen, würzen, '
+                    . 'glasieren, anschwenken, abschmecken) und passend für das Gericht fertigstellen.',
+            ];
+        }
         // Rüst-Basisrezept für Kaufware (RecipeDependencyWorkflowService::starteKind): die Ware selbst, nicht nachgebaut.
         $ruestWare = trim((string) ($parameter['ruest_ware'] ?? ''));
         if ($ruestWare !== '') {

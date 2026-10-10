@@ -39,6 +39,29 @@ final class ZukaufBasisrezeptService
 
     private const FERTIG_SUB = ['09.6', '01.8'];
 
+    /** Ist die Zeile gekaufte Fertigware (sicherer GP-Treffer auf Fertigware) — unabhängig davon, ob ein Typ ableitbar ist? */
+    public function istFertigware(Team $team, string $text): bool
+    {
+        return $this->fertigwareGp($team, $text) !== null;
+    }
+
+    private function fertigwareGp(Team $team, string $text): ?FoodAlchemistGp
+    {
+        $praefix = RezeptTypVokabular::praefix($text);
+        $typ = $praefix !== null ? RezeptTypVokabular::finde($praefix) : null;
+        $bezeichnung = RezeptTypVokabular::bezeichnung($text);
+        if ($bezeichnung === '' || app(MatchHeuristics::class)->queryIstHalbfabrikat(app(TokenEngine::class)->tokenize($bezeichnung))) {
+            return null;
+        }
+        $t = app(IngredientMatchService::class)->matchIngredient($team, $bezeichnung, null, 'gp_first');
+        if (($t['target'] ?? null) !== 'gp' || ($t['status'] ?? null) !== MatchBand::Exact) {
+            return null;
+        }
+        $gp = FoodAlchemistGp::visibleToTeam($team)->find((int) $t['gp_id']);
+
+        return $gp !== null && $this->istFertigwareGp($gp, $typ === null) ? $gp : null;
+    }
+
     /**
      * @return array{gp_id: int, gp_name: string, typ: string, bezeichnung: string}|null
      */
@@ -56,7 +79,7 @@ final class ZukaufBasisrezeptService
             return null;
         }
         $gp = FoodAlchemistGp::visibleToTeam($team)->find((int) $t['gp_id']);
-        if ($gp === null || ! $this->istFertigware($gp, $typ === null)) {
+        if ($gp === null || ! $this->istFertigwareGp($gp, $typ === null)) {
             return null;
         }
         $typ ??= $this->typAusWarengruppe($gp);
@@ -65,6 +88,31 @@ final class ZukaufBasisrezeptService
         }
 
         return ['gp_id' => (int) $gp->id, 'gp_name' => (string) $gp->name, 'typ' => $typ, 'bezeichnung' => $bezeichnung];
+    }
+
+    /**
+     * Teilfertig (Dominique 10.10.): die Hauptzeile ist sicher TK-Gemüse/-Obst, das in der Küche noch gewürzt, glasiert
+     * oder angeschwenkt wird — gebaut wird kurz und ohne Komponenten-Plan, Fertigungstiefe teilfertig, Name ohne Zusatz.
+     *
+     * @return array{gp_id: int, gp_name: string}|null
+     */
+    public function erkenneTeilfertig(Team $team, string $text): ?array
+    {
+        $bezeichnung = RezeptTypVokabular::bezeichnung($text);
+        if ($bezeichnung === '' || app(MatchHeuristics::class)->queryIstHalbfabrikat(app(TokenEngine::class)->tokenize($bezeichnung))) {
+            return null;
+        }
+        $t = app(IngredientMatchService::class)->matchIngredient($team, $bezeichnung, null, 'gp_first');
+        if (($t['target'] ?? null) !== 'gp' || ($t['status'] ?? null) !== MatchBand::Exact) {
+            return null;
+        }
+        $gp = FoodAlchemistGp::visibleToTeam($team)->find((int) $t['gp_id']);
+        if ($gp === null || mb_strtoupper((string) $gp->condition) !== 'TK'
+            || ! in_array((string) $gp->commodity_group_code, ['01', '02'], true)) {
+            return null;
+        }
+
+        return ['gp_id' => (int) $gp->id, 'gp_name' => (string) $gp->name];
     }
 
     /** @param  array{gp_id: int, gp_name: string, typ: string, bezeichnung: string}  $ware */
@@ -104,11 +152,13 @@ final class ZukaufBasisrezeptService
             }
         }
         $rezepte->syncIngredients($team, (int) $recipe->id, $zeilen);
+        // Kennzeichen im Namen UND im Feld (Dominique 10.10.): Fertigungstiefe convenience, von der Kaskade gesetzt.
+        $recipe->forceFill(['production_depth' => 'convenience', 'production_depth_source' => 'kaskade'])->save();
 
         return $recipe->refresh();
     }
 
-    private function istFertigware(FoodAlchemistGp $gp, bool $ohneTyp): bool
+    private function istFertigwareGp(FoodAlchemistGp $gp, bool $ohneTyp): bool
     {
         $wg = (string) ($gp->commodity_group_code ?? '');
         $sub = (string) ($gp->sub_category ?? '');

@@ -240,18 +240,24 @@ class RecipeGeneratorService
                 'taste_direction' => in_array($kiRezept['taste_direction'] ?? null, \Platform\FoodAlchemist\Services\RecipeService::TASTE_DIRECTIONS, true)
                     ? $kiRezept['taste_direction']
                     : null,
-                'production_depth' => match ($parameter['convenience'] ?? null) {
-                    'from_scratch' => 'from_scratch',
-                    'teil_convenience' => 'teilfertig',
-                    'voll_convenience' => 'convenience',
-                    default => null,
-                },
+                // Eine Vorgabe der Kaskade (TK-Hauptzeile → teilfertig) gewinnt vor dem Lauf-Regler.
+                'production_depth' => in_array($parameter['production_depth_vorgabe'] ?? null, ['from_scratch', 'teilfertig', 'convenience'], true)
+                    ? $parameter['production_depth_vorgabe']
+                    : match ($parameter['convenience'] ?? null) {
+                        'from_scratch' => 'from_scratch',
+                        'teil_convenience' => 'teilfertig',
+                        'voll_convenience' => 'convenience',
+                        default => null,
+                    },
             ]);
             $recipe->update([
                 'preparation' => $kiRezept['preparation'] ?? null,
                 'last_modified_by' => $vkModus ? 'vk_generator' : 'generator',
                 'description_source' => ! empty($kiRezept['description']) ? 'ki' : null,
             ]);
+            if (in_array($parameter['production_depth_vorgabe'] ?? null, ['from_scratch', 'teilfertig', 'convenience'], true)) {
+                $recipe->forceFill(['production_depth_source' => 'kaskade'])->save();   // die KI-Anreicherung überschreibt das nicht
+            }
             // Spec 27: Master sind die Schritte. Der Generator schrieb nur den Text — Schritte entstanden bisher erst
             // nebenbei in der Heilung (recipe.ueberarbeiten). Seit die Heilung seltener läuft (#235), fehlten sie
             // (demo Lauf 87: 4 von 8 Unterrezepten mit Zubereitungstext, aber 0 Schritten). Wie RecipeService::create.
