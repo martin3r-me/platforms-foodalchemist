@@ -65,6 +65,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
         if ($this->app->runningInConsole()) {
             $this->commands([
                 \Platform\FoodAlchemist\Console\WareneingangAltbestandCommand::class,   // Spec 75c
+                \Platform\FoodAlchemist\Console\RegelnKonsumentenCommand::class,   // Spec 81: Schutz vor Paket 5
                 \Platform\FoodAlchemist\Console\GpFelderBackfillCommand::class,   // Spec 80 Paket 11
                 \Platform\FoodAlchemist\Console\BehaelterKatalogCommand::class,
                 \Platform\FoodAlchemist\Console\ImportSliceCommand::class,

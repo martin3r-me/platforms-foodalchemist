@@ -39,14 +39,21 @@ it('PREVIEW zeigt die Wirkung einer Änderung, ohne zu speichern', function () {
         ->and(FoodAlchemistRule::where('schluessel', 'gp.7.1.gebinde')->value('version'))->toBe(1);
 });
 
-it('PUT speichert eine neue Fassung — immer AUS, ungültiges wird abgelehnt', function () {
+it('PUT: aktive Regel ist per MCP gesperrt (Inaktiv-Falle), inaktive bekommt eine neue Fassung — immer AUS', function () {
+    $r = FoodAlchemistRule::where('schluessel', 'gp.7.1.gebinde')->firstOrFail();
+    expect($r->aktiv)->toBeTrue();
+
+    $gesperrt = ($this->tool)('PUT')->execute(['schluessel' => 'gp.7.1.gebinde',
+        'params' => ['tokens' => ['Dose', 'Eimer', 'Kiste'], 'grund' => 'Verpackungswort (§7.1).']], $this->kontext);
+    expect($gesperrt->success)->toBeFalse()
+        ->and($gesperrt->errorCode)->toBe('RULE_ACTIVE')
+        ->and($r->fresh()->version)->toBe(1)->and($r->fresh()->aktiv)->toBeTrue();   // bleibt an und unverändert
+
+    app(\Platform\FoodAlchemist\Services\Regeln\RegelService::class)->setzeAktiv($r->id, false);
     $ok = ($this->tool)('PUT')->execute(['schluessel' => 'gp.7.1.gebinde',
         'params' => ['tokens' => ['Dose', 'Eimer', 'Kiste'], 'grund' => 'Verpackungswort (§7.1).']], $this->kontext);
-    $r = FoodAlchemistRule::where('schluessel', 'gp.7.1.gebinde')->first();
-
     expect($ok->success)->toBeTrue()
-        ->and($r->version)->toBe(2)->and($r->aktiv)->toBeFalse()
-        ->and($ok->data['hinweis'])->toContain('war aktiv');
+        ->and($r->fresh()->version)->toBe(3)->and($r->fresh()->aktiv)->toBeFalse();
 
     $falsch = ($this->tool)('PUT')->execute(['schluessel' => 'gp.7.1.gebinde', 'params' => ['tokens' => []]], $this->kontext);
     expect($falsch->success)->toBeFalse();

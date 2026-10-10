@@ -153,7 +153,7 @@ it('Zukauf-Bau: „Typ: Ware (Zukauf)“, die Ware als Zeile, Hilfsstoffe nur al
 
     (new \Platform\FoodAlchemist\Jobs\BuildZukaufRecipeJob($this->rootTeam->id, (int) auth()->id(), (int) $kind->id, 'Kürbiskernöl',
         ['gp_id' => (int) $oel->id, 'gp_name' => 'Kuerbiskernoel: trocken', 'typ' => 'Öl', 'bezeichnung' => 'Kürbiskernöl'],
-        ['ziel_menge' => 400.0, 'ziel_einheit' => 'ml']))->handle(
+        ['bedarf_menge' => 400.0, 'bedarf_einheit' => 'ml']))->handle(
         app(\Platform\FoodAlchemist\Services\ZukaufBasisrezeptService::class), app(\Platform\FoodAlchemist\Services\PlanningCascadeService::class), app(RecipeDependencyWorkflowService::class));
 
     $kind->refresh();
@@ -168,4 +168,39 @@ it('Zukauf-Bau: „Typ: Ware (Zukauf)“, die Ware als Zeile, Hilfsstoffe nur al
         ->and((int) $zeilen->firstWhere('gp_id', $oel->id)->unit_vocab_id)->toBe((int) $ml->id)
         ->and($r->steps()->count())->toBe(2)
         ->and((int) $zeile->fresh()->referenced_recipe_id)->toBe((int) $r->id);
+});
+
+it('H: Unterrezept bekommt den Bedarf des Gerichts nur als Information — die Charge wählt die KI zum Sektor', function () {
+    $ctx = app(\Platform\FoodAlchemist\Services\RecipeGenerationContextService::class);
+
+    $kind = $ctx->build($this->rootTeam, 'Fond: Kalb', ['bedarf_menge' => 150.0, 'bedarf_einheit' => 'ml', 'sektor' => 'restaurant'], false)['prompt'];
+    expect($kind['bedarf_im_gericht']['menge'])->toBe('150 ml')
+        ->and($kind['bedarf_im_gericht']['hinweis'])->toContain('NICHT der Ansatz')
+        ->and($kind['parameter'] ?? [])->not->toHaveKey('ziel_menge');
+
+    // Ein allein gestartetes Basisrezept behält seinen Ansatz aus der Planung.
+    $wurzel = $ctx->build($this->rootTeam, 'Fond: Kalb', ['ziel_menge' => 10.0, 'ziel_einheit' => 'l', 'bedarf_menge' => 150.0], false)['prompt'];
+    expect($wurzel)->not->toHaveKey('bedarf_im_gericht')
+        ->and($wurzel['parameter']['ziel_menge'] ?? null)->toBe(10.0);
+});
+
+it('Hausstandard: Jus/Fond/Brühe aus Knochen und Abschnitten — Cut als Hinweis, nicht als Fehler; im Regel-Block', function () {
+    $regel = \Platform\FoodAlchemist\Models\FoodAlchemistRule::where('schluessel', 'basisrezept.hausstandard.fond_knochen')->firstOrFail();
+    expect($regel->aktiv)->toBeTrue()->and($regel->wirkung)->toBe('warnen');
+
+    $block = app(\Platform\FoodAlchemist\Services\Regeln\RegelPromptBlock::class)->fuerPromptKey('recipe.generator');
+    expect($block)->toContain('Jus, Fond, Brühe aus Knochen und Abschnitten')->toContain('nur, wenn der Auftrag es ausdrücklich verlangt');
+
+    $jus = $this->makeRecipe($this->rootTeam, 'Jus: Kalb', ['status' => 'draft']);
+    $this->makeIngredient($jus, 'Kalb-Beinscheiben / Ossobuco: frisch', null, '1800', 1);
+    $this->makeIngredient($jus, 'Kalbsknochen: frisch, roh', null, '6000', 2);
+    $beilage = $this->makeRecipe($this->rootTeam, 'Beilage: Rinderfilet', ['status' => 'draft']);
+    $this->makeIngredient($beilage, 'Rinderfilet: frisch', null, '2000', 1);
+    $befunde = fn ($r) => collect(app(RecipeConformanceAdapter::class)->deterministischeBefunde($this->rootTeam, (int) $r->id))
+        ->where('rule_id', $regel->id)->values();
+
+    expect($befunde($jus))->toHaveCount(1)
+        ->and($befunde($jus)[0]['schweregrad'])->toBe('weich')
+        ->and($befunde($jus)[0]['feld'])->toContain('Beinscheiben')
+        ->and($befunde($beilage))->toHaveCount(0);                    // nur Jus/Fond/Brühe
 });

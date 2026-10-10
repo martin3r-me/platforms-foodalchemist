@@ -70,8 +70,11 @@ final class ZukaufBasisrezeptService
     /** @param  array{gp_id: int, gp_name: string, typ: string, bezeichnung: string}  $ware */
     public function baue(Team $team, FoodAlchemistCascadeRunStep $child, string $text, array $ware, array $params): FoodAlchemistRecipe
     {
-        $menge = (float) ($params['ziel_menge'] ?? 0) > 0 ? (float) $params['ziel_menge'] : 1000.0;
-        $einheit = in_array($params['ziel_einheit'] ?? null, ['g', 'kg', 'ml', 'l'], true) ? $params['ziel_einheit'] : 'g';
+        // Ware in der Menge des Bedarfs (Zukauf wird nicht „gekocht“ — es gibt keine Charge zu wählen).
+        $menge = (float) ($params['ziel_menge'] ?? $params['bedarf_menge'] ?? 0);
+        $menge = $menge > 0 ? $menge : 1000.0;
+        $einheit = $params['ziel_einheit'] ?? $params['bedarf_einheit'] ?? 'g';
+        $einheit = in_array($einheit, ['g', 'kg', 'ml', 'l'], true) ? $einheit : 'g';
         $eltern = $child->parent_step_id !== null ? FoodAlchemistCascadeRunStep::find($child->parent_step_id) : null;
 
         $vorschlag = app(AiGatewayService::class)->propose('recipe.ruestschritt', array_filter([

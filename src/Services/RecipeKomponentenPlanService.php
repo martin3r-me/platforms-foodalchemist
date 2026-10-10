@@ -36,6 +36,11 @@ class RecipeKomponentenPlanService
             'briefing' => $brief,
             'suchbegriffe' => RecipeGenerationContextService::suchbegriffeAus($params) ?: null,
             'ansatz' => isset($params['ziel_menge'], $params['ziel_einheit']) ? $params['ziel_menge'] . ' ' . $params['ziel_einheit'] : null,
+            // Unterrezept: Bedarf des Gerichts nur als Information — die Charge wählt der Plan zum Sektor (Dominique 10.10.).
+            'bedarf_im_gericht' => ! isset($params['ziel_menge']) && (float) ($params['bedarf_menge'] ?? 0) > 0
+                ? $params['bedarf_menge'] . ' ' . ($params['bedarf_einheit'] ?? 'g') . ' (nur Bedarf, nicht der Ansatz — Charge passend zum Sektor)'
+                : null,
+            'sektor' => $params['sektor'] ?? null,
             'niveau' => $params['level'] ?? null,
             'convenience' => $params['convenience'] ?? null,
             'funktionen' => self::FUNKTIONEN,

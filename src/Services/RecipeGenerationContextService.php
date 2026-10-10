@@ -166,6 +166,15 @@ class RecipeGenerationContextService
                     . 'garen, portionieren, abfüllen. Keine Eigenherstellung und kein Ersatzprodukt. Name: passender Typ + Ware.',
             ];
         }
+        // Unterrezept im Gericht: Bedarf ist nur Information, die Charge wählt die KI zum Sektor (Dominique 10.10.).
+        if (! isset($parameter['ziel_menge']) && (float) ($parameter['bedarf_menge'] ?? 0) > 0) {
+            $prompt['bedarf_im_gericht'] = [
+                'menge' => $parameter['bedarf_menge'] . ' ' . ($parameter['bedarf_einheit'] ?? 'g'),
+                'hinweis' => 'So viel braucht das Gericht davon. Das ist NICHT der Ansatz: lege eine realistische '
+                    . 'Produktionscharge für diesen Betrieb an (sektor) — mindestens den Bedarf, Mengen und Garverluste '
+                    . 'fachlich stimmig zur Charge, nie eine eingekochte Mini-Charge.',
+            ];
+        }
         // Spec 80 B5: bestätigter Komponenten-Plan → Zusammenstellung statt Ein-Baustein-Regel.
         if (! empty($parameter['plan_komponenten']) && is_array($parameter['plan_komponenten'])) {
             $prompt['zusammenstellung'] = [

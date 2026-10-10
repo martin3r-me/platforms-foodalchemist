@@ -263,6 +263,18 @@ class RecipeConformanceAdapter implements ConformanceAdapter
             }
         }
 
+        // Zeilen-Regeln, die vom Rezept-Typ abhängen (z. B. Hausstandard: Jus/Fond/Brühe aus Knochen und Abschnitten).
+        $praefix = \Platform\FoodAlchemist\Support\RezeptTypVokabular::praefix($name);
+        $typ = $praefix !== null ? \Platform\FoodAlchemist\Support\RezeptTypVokabular::finde($praefix) : null;
+        if ($typ !== null) {
+            foreach ($buch::fuerZiel('rezeptzeile.typ') as $regel) {
+                foreach ($r->ingredients as $z) {
+                    $text = (string) ($z->gp?->name ?? $z->referencedRecipe?->name ?? $z->raw_text);
+                    $melde($motor->pruefe($regel, $text, ['typ' => $typ]), 'zutat:' . $text);
+                }
+            }
+        }
+
         $kostform = $r->spec_is_vegan ? $buch::falls('ernaehrung.vegan') : ($r->spec_is_vegetarian ? $buch::falls('ernaehrung.vegetarisch') : null);
         if ($kostform !== null) {
             foreach ($r->ingredients as $z) {

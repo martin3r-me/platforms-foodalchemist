@@ -78,7 +78,7 @@ it('„jetzt erzeugen“ plant das Kind zuerst — mit Ansatz der Zeile, ohne Ge
         $p = $job->params;
 
         return $job->stepId === (int) $this->kind->id && $job->brief === 'Jus: Thymian'
-            && ($p['ziel_menge'] ?? null) === 120.0 && ($p['ziel_einheit'] ?? null) === 'g'
+            && ($p['bedarf_menge'] ?? null) === 120.0 && ($p['bedarf_einheit'] ?? null) === 'g' && ! isset($p['ziel_menge'])
             && ($p['diaet_hart'] ?? null) === ['vegetarisch']
             && ! array_key_exists('aroma', $p) && ! array_key_exists('pax', $p) && ! array_key_exists('ziel_vk_eur', $p);
     });
@@ -201,7 +201,7 @@ it('„neu erzeugen“ am Kind läuft über denselben Start — ohne Gericht-Aro
     expect($jobs)->toHaveCount(2)
         ->and($neu->brief)->toStartWith('Jus: Thymian' . "\n")->toContain('mehr Röstaromen')->not->toContain('kräftig')
         ->and($neu->params)->not->toHaveKey('aroma')
-        ->and($neu->params['ziel_menge'] ?? null)->toBe(120.0)
+        ->and($neu->params['bedarf_menge'] ?? null)->toBe(120.0)
         ->and($neu->params['suchbegriffe'] ?? null)->toBe(['Thymian']);   // Komponente über den Auftrag gefunden
 
     // Zweiter Versuch: der Kommentar des ersten wächst nicht in den Auftrag hinein.

@@ -25,8 +25,8 @@ class RulesPutTool extends FoodAlchemistTool implements ToolContract, ToolMetada
     public function getDescription(): string
     {
         return 'Legt eine Regel an oder ändert sie (gleicher schluessel = neue Version). Die neue Fassung ist immer AUS; '
-            . 'eingeschaltet wird sie von einem Menschen in Einstellungen › Regeln. Achtung: Wer eine aktive Regel ändert, '
-            . 'schaltet sie damit aus, bis sie wieder eingeschaltet wird. Vorher foodalchemist.rules.PREVIEW nutzen. '
+            . 'eingeschaltet wird sie von einem Menschen in Einstellungen › Regeln. AKTIVE Regeln sind per MCP nicht änderbar '
+            . '(Fehler RULE_ACTIVE) — Wirkung einer Änderung mit foodalchemist.rules.PREVIEW zeigen. '
             . 'Schema je Art: vokabular{werte[{wert,aliase,gruppe}],muster}, ersetzung{paare[{von,nach}],ausnahmen}, '
             . 'pflichtangabe{bedingung{feld:[werte]},tokens|muster,hinweis}, verbot{tokens|teile|muster,ausnahmen,bedingung,grund}, '
             . 'zuordnung{eintraege[{begriff,aliase,ziel_typ,ziel_name,kontext}],vergleich}, schwelle{vergleich,wert|min,max,einheit}.';
@@ -70,6 +70,13 @@ class RulesPutTool extends FoodAlchemistTool implements ToolContract, ToolMetada
                 $daten[$f] = $arguments[$f];
             }
         }
+        // Inaktiv-Falle (Review Hans, Spec 81 vor Paket 5): eine neue Fassung ist immer AUS — wer eine AKTIVE Regel per MCP
+        // änderte, schaltete sie damit still aus. Nach der Dossier-Bereinigung verschwände sie aus Code UND Prompt.
+        // Aktive Regeln ändert ein Mensch in Einstellungen › Regeln; Agenten zeigen die Wirkung per rules.PREVIEW.
+        if ($alt !== null && $alt->aktiv) {
+            return ToolResult::error('Die Regel ist aktiv — per MCP nicht änderbar, sonst wäre sie bis zur Freigabe ausgeschaltet. '
+                . 'Wirkung mit foodalchemist.rules.PREVIEW zeigen; ändern in Einstellungen › Regeln.', 'RULE_ACTIVE');
+        }
         if ($alt !== null && isset($arguments['art']) && $arguments['art'] !== $alt->art) {
             return ToolResult::error('Die Art einer bestehenden Regel ist fest — neue Regel mit eigenem Schlüssel anlegen.', 'VALIDATION_ERROR');
         }
@@ -83,8 +90,7 @@ class RulesPutTool extends FoodAlchemistTool implements ToolContract, ToolMetada
 
         return ToolResult::success([
             'schluessel' => $r->schluessel, 'version' => $r->version, 'aktiv' => false,
-            'hinweis' => ($alt?->aktiv ? 'Die Regel war aktiv und ist jetzt AUS. ' : '')
-                . 'Einschalten in Einstellungen › Regeln, nach Ansicht des Probelaufs.',
+            'hinweis' => 'Einschalten in Einstellungen › Regeln, nach Ansicht des Probelaufs.',
         ]);
     }
 

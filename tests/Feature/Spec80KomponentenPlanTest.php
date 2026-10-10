@@ -172,7 +172,7 @@ it('B6: Unterrezept bekommt als Ansatz die Menge seiner Zeile und die Suchbegrif
     $vorgaben = Closure::bind(fn ($s, $i, $t) => $this->kindVorgaben($s, $i, $t), app(RecipeDependencyWorkflowService::class), RecipeDependencyWorkflowService::class)
         ($step, $zeile->id, 'Matte: Petersilie');
 
-    expect($vorgaben)->toBe(['ziel_menge' => 100.0, 'ziel_einheit' => 'g', 'suchbegriffe' => ['glatte Petersilie', 'Blattgrün']]);
+    expect($vorgaben)->toBe(['bedarf_menge' => 100.0, 'bedarf_einheit' => 'g', 'suchbegriffe' => ['glatte Petersilie', 'Blattgrün']]);
 });
 
 it('Live-Test demo 09.10.: Komponenten-Namen werden gesäubert (Regelwerk-Verweis raus, Typ nicht doppelt)', function () {

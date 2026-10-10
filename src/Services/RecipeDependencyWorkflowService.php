@@ -365,9 +365,13 @@ class RecipeDependencyWorkflowService
         $out = [];
         $zeile = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient::query()->with('unit:id,slug')->find($ingredientId);
         $slug = (string) ($zeile?->unit?->slug ?? '');
+        // Dominique 10.10.: die Charge eines Basisrezepts ist für das Gericht egal — ein Fond kann im 100-kg-Kessel
+        // gekocht sein, das Gericht nimmt 70 g. Die Menge der Gericht-Zeile ist darum nur der BEDARF, nicht der Ansatz;
+        // die KI wählt die Charge passend zum Sektor (demo Lauf 88: „Fond: Kalb“ auf 150 ml gebaut, 92 % Einkochverlust,
+        // EK 56,40 €/kg statt ~19 €).
         if ($zeile !== null && (float) $zeile->quantity > 0 && in_array($slug, ['g', 'kg', 'ml', 'l'], true)) {
-            $out['ziel_menge'] = (float) $zeile->quantity;
-            $out['ziel_einheit'] = $slug;
+            $out['bedarf_menge'] = (float) $zeile->quantity;
+            $out['bedarf_einheit'] = $slug;
         }
         $norm = static fn ($s) => mb_strtolower(trim((string) $s));
         foreach ((array) (($eltern->context_snapshot ?? [])['komponenten'] ?? []) as $k) {
