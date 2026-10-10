@@ -153,7 +153,7 @@ it('Zukauf-Bau: „Typ: Ware (Zukauf)“, die Ware als Zeile, Hilfsstoffe nur al
 
     (new \Platform\FoodAlchemist\Jobs\BuildZukaufRecipeJob($this->rootTeam->id, (int) auth()->id(), (int) $kind->id, 'Kürbiskernöl',
         ['gp_id' => (int) $oel->id, 'gp_name' => 'Kuerbiskernoel: trocken', 'typ' => 'Öl', 'bezeichnung' => 'Kürbiskernöl'],
-        ['ziel_menge' => 400.0, 'ziel_einheit' => 'ml']))->handle(
+        ['bedarf_menge' => 400.0, 'bedarf_einheit' => 'ml']))->handle(
         app(\Platform\FoodAlchemist\Services\ZukaufBasisrezeptService::class), app(\Platform\FoodAlchemist\Services\PlanningCascadeService::class), app(RecipeDependencyWorkflowService::class));
 
     $kind->refresh();
@@ -168,4 +168,18 @@ it('Zukauf-Bau: „Typ: Ware (Zukauf)“, die Ware als Zeile, Hilfsstoffe nur al
         ->and((int) $zeilen->firstWhere('gp_id', $oel->id)->unit_vocab_id)->toBe((int) $ml->id)
         ->and($r->steps()->count())->toBe(2)
         ->and((int) $zeile->fresh()->referenced_recipe_id)->toBe((int) $r->id);
+});
+
+it('H: Unterrezept bekommt den Bedarf des Gerichts nur als Information — die Charge wählt die KI zum Sektor', function () {
+    $ctx = app(\Platform\FoodAlchemist\Services\RecipeGenerationContextService::class);
+
+    $kind = $ctx->build($this->rootTeam, 'Fond: Kalb', ['bedarf_menge' => 150.0, 'bedarf_einheit' => 'ml', 'sektor' => 'restaurant'], false)['prompt'];
+    expect($kind['bedarf_im_gericht']['menge'])->toBe('150 ml')
+        ->and($kind['bedarf_im_gericht']['hinweis'])->toContain('NICHT der Ansatz')
+        ->and($kind['parameter'] ?? [])->not->toHaveKey('ziel_menge');
+
+    // Ein allein gestartetes Basisrezept behält seinen Ansatz aus der Planung.
+    $wurzel = $ctx->build($this->rootTeam, 'Fond: Kalb', ['ziel_menge' => 10.0, 'ziel_einheit' => 'l', 'bedarf_menge' => 150.0], false)['prompt'];
+    expect($wurzel)->not->toHaveKey('bedarf_im_gericht')
+        ->and($wurzel['parameter']['ziel_menge'] ?? null)->toBe(10.0);
 });
