@@ -82,5 +82,24 @@ it('Brot-Angebot (Brotkorb, Brotkonfekt, Brot & Butter): die Brote bleiben Grund
     expect($korb->ingredients()->pluck('gp_id')->filter()->count())->toBe(2)
         ->and($this->z->istBrotAngebot($this->rootTeam, 'Brotkonfekt', []))->toBeTrue()
         ->and($this->z->istBrotAngebot($this->rootTeam, '[HG] Rinderfilet | Kürbis', ['Rinderfilet', 'Kürbis', 'Toast']))->toBeFalse()
+        ->and($this->z->istBrotAngebot($this->rootTeam, 'Brot & Dips', ['Baguette', 'Hummus', 'Aioli', 'Tapenade']))->toBeTrue()
+        ->and($this->z->istBrotAngebot($this->rootTeam, '[VOR] Panzanella', ['Ciabatta', 'Brot', 'Tomate', 'Gurke']))->toBeFalse()
         ->and($this->z->istBrotZeile($this->rootTeam, 'Panko'))->toBeTrue();
+});
+
+it('viel Brot ohne Kennzeichnung: nur ein weicher Hinweis zur menschlichen Entscheidung', function () {
+    ($this->gp)('Ciabatta: frisch', '09', '09.1 Brot & Broetchen');
+    ($this->gp)('Baguette: frisch', '09', '09.1 Brot & Broetchen');
+    $g = $this->makeRecipe($this->rootTeam, '[VOR] Herbstteller', ['status' => 'draft', 'is_sales_recipe' => true]);
+    $this->makeIngredient($g, 'Ciabatta: frisch', null, '60', 1);
+    $this->makeIngredient($g, 'Baguette: frisch', null, '60', 2);
+    $this->makeIngredient($g, 'Kürbis', null, '80', 3);
+    $korb = $this->makeRecipe($this->rootTeam, '[BRO] Brotkorb', ['status' => 'draft', 'is_sales_recipe' => true]);
+    $this->makeIngredient($korb, 'Ciabatta: frisch', null, '60', 1);
+    $hinweis = fn ($r) => collect(app(\Platform\FoodAlchemist\Services\Conformance\RecipeConformanceAdapter::class)
+        ->deterministischeBefunde($this->rootTeam, (int) $r->id))->where('paragraph', 'Brot')->values();
+
+    expect($hinweis($g))->toHaveCount(1)
+        ->and($hinweis($g)[0]['schweregrad'])->toBe('weich')
+        ->and($hinweis($korb))->toHaveCount(0);
 });

@@ -49,7 +49,7 @@ final class ZukaufBasisrezeptService
     {
         $praefix = RezeptTypVokabular::praefix($text);
         $typ = $praefix !== null ? RezeptTypVokabular::finde($praefix) : null;
-        $bezeichnung = RezeptTypVokabular::bezeichnung($text);
+        $bezeichnung = self::warenname($text);
         if ($bezeichnung === '' || app(MatchHeuristics::class)->queryIstHalbfabrikat(app(TokenEngine::class)->tokenize($bezeichnung))) {
             return null;
         }
@@ -69,7 +69,7 @@ final class ZukaufBasisrezeptService
     {
         $praefix = RezeptTypVokabular::praefix($text);
         $typ = $praefix !== null ? RezeptTypVokabular::finde($praefix) : null;
-        $bezeichnung = RezeptTypVokabular::bezeichnung($text);   // ohne Typ und ohne Klammer-Zusatz
+        $bezeichnung = self::warenname($text);   // ohne Typ und ohne Klammer-Zusatz
         if ($bezeichnung === '' || app(MatchHeuristics::class)->queryIstHalbfabrikat(app(TokenEngine::class)->tokenize($bezeichnung))) {
             return null;
         }
@@ -98,7 +98,7 @@ final class ZukaufBasisrezeptService
      */
     public function erkenneTeilfertig(Team $team, string $text): ?array
     {
-        $bezeichnung = RezeptTypVokabular::bezeichnung($text);
+        $bezeichnung = self::warenname($text);
         if ($bezeichnung === '' || app(MatchHeuristics::class)->queryIstHalbfabrikat(app(TokenEngine::class)->tokenize($bezeichnung))) {
             return null;
         }
@@ -162,6 +162,21 @@ final class ZukaufBasisrezeptService
     /** Panko trägt das Toastaroma und wird wie Brot verarbeitet (Dominique 10.10.) — gleich welche Warengruppe. */
     private const BROT_WOERTER = ['toast', 'baguette', 'brot', 'broetchen', 'ciabatta', 'focaccia', 'brioche', 'sauerteig', 'pumpernickel', 'laugen', 'panko'];
 
+    /**
+     * Warenname einer Zeile: der Teil vor dem Doppelpunkt fällt nur weg, wenn er ein Typ aus dem Vokabular ist
+     * („Crunch: Röstzwiebeln“ → „Röstzwiebeln“). In GP-Schreibweise („Ciabatta: frisch“) ist er das Produkt — vorher
+     * blieb davon nur „frisch“ übrig, und die Brot-/Zukauf-Erkennung lief ins Leere. Klammer-Zusätze fallen immer weg.
+     */
+    private static function warenname(string $text): string
+    {
+        $praefix = RezeptTypVokabular::praefix($text);
+        if ($praefix !== null && RezeptTypVokabular::finde($praefix) !== null) {
+            return RezeptTypVokabular::bezeichnung($text);
+        }
+
+        return trim((string) preg_replace('/\([^)]*\)/u', '', $text));
+    }
+
     private static function istBrotGp(FoodAlchemistGp $gp): bool
     {
         if (str_contains(mb_strtolower((string) $gp->name), 'panko')) {
@@ -172,24 +187,17 @@ final class ZukaufBasisrezeptService
     }
 
     /**
-     * Ist das Gericht selbst ein Brot-Angebot (Brotkorb, Brotkonfekt, Brot & Butter)? Dann sind die Brote das Angebot und
-     * bleiben unverarbeitet Grundprodukte. Erkannt am Kürzel „[BRO]“, am Namen oder daran, dass Brot den Hauptteil stellt.
+     * Ist das Gericht selbst ein Brot-Angebot (Brotkorb, Brotkonfekt, Brot & Butter, Brot & Dips, Brotzeit)? Dann sind
+     * die Brote das Angebot und bleiben unverarbeitet Grundprodukte. NUR über die Kennzeichnung — Kürzel „[BRO]“ oder
+     * Name —, keine Mengen-Schwelle: „Brot & Dips“ hat wenig Brot-Zeilen, ein Brotsalat (Panzanella) viele und
+     * verarbeitet es trotzdem (Review Hans).
      *
-     * @param  list<string>  $zeilen
+     * @param  list<string>  $zeilen  bewusst ungenutzt (Signatur für spätere, belegte Kriterien)
      */
-    public function istBrotAngebot(Team $team, string $name, array $zeilen): bool
+    public function istBrotAngebot(Team $team, string $name, array $zeilen = []): bool
     {
-        if (preg_match('/^\[BRO\]/iu', trim($name)) === 1
-            || preg_match('/brotkorb|brotkonfekt|brot\s*(&|und)\s*butter|brotauswahl/iu', $name) === 1) {
-            return true;
-        }
-        $zeilen = array_values(array_filter($zeilen, static fn ($z) => trim($z) !== ''));
-        if ($zeilen === []) {
-            return false;
-        }
-        $brot = count(array_filter($zeilen, fn ($z) => $this->istBrotZeile($team, $z)));
-
-        return $brot * 2 >= count($zeilen);
+        return preg_match('/^\[BRO\]/iu', trim($name)) === 1
+            || preg_match('/brotkorb|brotkonfekt|brotauswahl|brotzeit|brot\s*(&|und)\s*(butter|dips?|aufstrich)/iu', $name) === 1;
     }
 
     /**
@@ -198,7 +206,7 @@ final class ZukaufBasisrezeptService
      */
     public function istBrotZeile(Team $team, string $text): bool
     {
-        $bezeichnung = RezeptTypVokabular::bezeichnung($text);
+        $bezeichnung = self::warenname($text);
         if ($bezeichnung === '') {
             return false;
         }
