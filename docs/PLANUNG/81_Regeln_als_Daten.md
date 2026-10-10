@@ -505,3 +505,21 @@ Ein PR je Paket, gestapelt wie Spec 80.
 - VK-Regelwerk (`DataQualityService` VK §1.2): Ist es ein eigenes Regelwerk in der Tabelle oder Teil von BR?
 - Versionsangaben in CLAUDE.md sind veraltet (GP v3.4.1, BR v1.10 laut Vault) – Vault-Pflege, nicht Teil
   dieser Spec.
+- **Mandanten-Abweichungen (Merkposten Dominique 10.10., nicht jetzt bauen).** Default-GPs und Hausstandards
+  (Rapsöl für „Öl“, Salz unjodiert, Fond aus Knochen/Parüren) sind heute globale Regeln; Mandanten brauchen später
+  eigene Werte.
+  - Auflösung: Zeile explizit > Team-Regel (gleicher `schluessel`, `team_id`) > global. `RegelBuch` liest heute nur
+    globale aktive Regeln.
+  - Pflege: Team-Admin nur für die Arten `zuordnung`/`schwelle` der Bereiche Default-GP und Hausstandard, nie
+    Naming/Matching — sonst zerlegt ein Mandant das Vokabular.
+  - Kunde ≠ Team: Kundenstandards („Bio-Butter für Kunde X“) sind Leitplanken an Projekt/Planungs-Session, keine
+    Team-Regeln.
+  - Vorhanden: `foodalchemist_rules.team_id` mit Unique `(team_id, schluessel)` — eine Team-Regel ist schon heute
+    anlegbar, es fehlt nur die Auflösung im `RegelBuch`. Weitere Bausteine: `foodalchemist_gp_team_overrides`,
+    `gp_la_preferences`. Neue Regeln darum immer über `schluessel` holen, nie über die id.
+- **Tierart-Liste als Regel-Daten** (Hausstandard Fond, `RecipeConformanceAdapter`): heute Konstante nach GP-Regelwerk
+  §3 (WG 04 nach Tierart + Unterarten); gehört als `zuordnung` in die Tabelle.
+- **Garsud als Derivat (Zielbild):** „Fond: Tafelspitz“ hängt als §11.2-Nebenprodukt an „Tafelspitz: gekocht“
+  (anteilige Kosten/Allergene, keine eigene Fleischzeile); Dossier `fonds-saucen--garsaft-marinade-und-garsud-als-sauce`.
+- **Convenience-Erlaubnis am Rezept:** `GpKorrektur` beim Re-Grounding liest heute `production_depth` (Inhalt), nicht
+  die Lauf-Erlaubnis — tauscht in einem voll_convenience-Lauf Schnittware zur Rohform (konservativ, Hausstandard).
