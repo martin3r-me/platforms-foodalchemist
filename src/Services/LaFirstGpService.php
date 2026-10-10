@@ -42,9 +42,11 @@ class LaFirstGpService
      * @param  string|null  $slug    optionaler Hauptzutat-Slug (reserviert für schärferes LA-Matching)
      * @param  string|null  $wgHint  optionaler Warengruppen-Code aus dem Erzeugungs-Kontext (Spec 16·E1):
      *                               verengt die LA-Suche auf die WG-Leads. Fehlt er → Suche über alle Leads.
+     * @param  string|null  $anzeigeName  Name der Hauptzutat für ein NEUES GP, wenn $text nur der Suchtext ist (Derivat-
+     *                                     Pfad sucht gestemmt „gefluegel", benennt „Geflügel" — Lauf 89)
      * @return FoodAlchemistGp|null  gemintetes/wiederverwendetes GP oder null (keine LA / §6-Verstoß / Fehler)
      */
-    public function mintFromLa(Team $team, string $text, ?string $slug = null, ?string $wgHint = null, bool $allowDerivat = true): ?FoodAlchemistGp
+    public function mintFromLa(Team $team, string $text, ?string $slug = null, ?string $wgHint = null, bool $allowDerivat = true, ?string $anzeigeName = null): ?FoodAlchemistGp
     {
         try {
             // Spec 16·S3: WG-Lead-gescopter, Terminologie-gerankter Kandidat statt naivem
@@ -72,7 +74,8 @@ class LaFirstGpService
             }
 
             $naming = app(GpNamingService::class);
-            $hauptzutat = trim($this->hauptzutatAusText($text));
+            // §6: Produktname groß, mit Umlaut — Lauf 89 legte „gefluegel" an (gestemmter Suchtext als Name).
+            $hauptzutat = self::grossAnfang(trim($anzeigeName ?? $this->hauptzutatAusText($text)));
             if ($hauptzutat === '') {
                 return null;
             }
@@ -142,7 +145,8 @@ class LaFirstGpService
         // die Mutter trifft UND der Mutter-Name im §6.1-Singular landet.
         $engine = app(\Platform\FoodAlchemist\Services\Matching\TokenEngine::class);
         $mutterQuery = trim(implode(' ', array_map([$engine, 'stemGerman'], preg_split('/\s+/', $d['mutter_text']) ?: [])));
-        $mutter = $this->mintFromLa($team, $mutterQuery !== '' ? $mutterQuery : $d['mutter_text'], null, $wgHint, false);
+        $mutter = $this->mintFromLa($team, $mutterQuery !== '' ? $mutterQuery : $d['mutter_text'], null, $wgHint, false,
+            self::mutterAnzeige($text, $mutterQuery !== '' ? $mutterQuery : $d['mutter_text']));
         if ($mutter === null) {
             return null;   // auch Mutter ohne LA → Sourcing-Lücke (keine erfundene Mutter)
         }
@@ -167,6 +171,40 @@ class LaFirstGpService
 
             return $g['vorhandenes_gp'] ?? null;
         }
+    }
+
+    private static function grossAnfang(string $s): string
+    {
+        return $s === '' ? '' : mb_strtoupper(mb_substr($s, 0, 1)) . mb_substr($s, 1);
+    }
+
+    /**
+     * Anzeigename der Mutter aus dem ORIGINALTEXT: so viele Zeichen vom Wortanfang, wie dem gestemmten Suchtext
+     * entsprechen („Geflügelabschnitte" + „gefluegel" → „Geflügel", „Rinderparüren" + „rind" → „Rind"). Umlaute zählen
+     * dabei wie ihre Umschrift (ü = ue). Passt der Anfang nicht, null (dann wie bisher).
+     */
+    private static function mutterAnzeige(string $text, string $suchtext): ?string
+    {
+        $wort = trim((string) (preg_split('/[\s:,(]/u', trim($text), 2)[0] ?? ''));
+        $ziel = mb_strtolower(trim($suchtext));
+        if ($wort === '' || $ziel === '' || str_contains($ziel, ' ')) {
+            return null;
+        }
+        $umschrift = ['ä' => 'ae', 'ö' => 'oe', 'ü' => 'ue', 'ß' => 'ss'];
+        $bisher = '';
+        $laenge = mb_strlen($wort);
+        for ($i = 0; $i < $laenge; $i++) {
+            $z = mb_strtolower(mb_substr($wort, $i, 1));
+            $bisher .= $umschrift[$z] ?? $z;
+            if ($bisher === $ziel) {
+                return self::grossAnfang(mb_substr($wort, 0, $i + 1));
+            }
+            if (! str_starts_with($ziel, $bisher)) {
+                return null;
+            }
+        }
+
+        return null;
     }
 
     /** „500 ml brauner Kalbsfond" → Hauptzutat-Name ohne Mengen-Präfix. */
