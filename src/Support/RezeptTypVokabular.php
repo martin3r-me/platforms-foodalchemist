@@ -83,6 +83,22 @@ final class RezeptTypVokabular
         return $p === '' ? null : $p;
     }
 
+    /**
+     * Name ohne TYP — schneidet das Präfix nur ab, wenn es ein Vokabular-Typ ist („Püree: Petersilienwurzel" →
+     * „Petersilienwurzel"), sonst bleibt der Name stehen („Ciabatta: frisch", „Kalbsjus: dunkel" — GP-Schreibweise,
+     * der Teil vor dem Doppelpunkt ist das Produkt). Klammer-Zusatz fällt weg. Für Zutaten/Zeilen statt
+     * {@see self::bezeichnung}, die ALLES vor dem Doppelpunkt abschneidet (Kuratorin 10.10.: „Ciabatta: frisch" → „frisch").
+     */
+    public static function ohneTyp(string $name): string
+    {
+        $p = self::praefix($name);
+        if ($p !== null && self::finde($p) !== null) {
+            return self::bezeichnung($name);
+        }
+
+        return trim((string) preg_replace('/\s*\([^)]*\)/u', '', $name));
+    }
+
     /** Teil nach dem Doppelpunkt ohne Klammer-Zusatz, bzw. der ganze Name, wenn es kein Präfix gibt. */
     public static function bezeichnung(string $name): string
     {
