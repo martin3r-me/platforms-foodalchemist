@@ -54,7 +54,11 @@ class LaFirstGpService
             // Lauf 87/88: nur ein LA mit passendem Grundwort (Beinscheibe ≠ Knochen, Lauch ≠ Lauchzwiebel) — der beste
             // solche aus der Shortlist, nicht nur Platz 1. Keiner → wie ohne LA weiter (Derivat-Pfad oder Lücke).
             $finder = app(LaCandidateFinder::class);
-            $la = $nurRohware ? $finder->bestRohwareMutter($team, $text, $wgHint) : $finder->bestMitGrundwort($team, $text, $wgHint);
+            // Lauf 90 (Regelwerk §11.2): nennt der Text eine Derivat-Form (Parüren, Knochen, Karkasse …), zählt nur ein LA,
+            // der dieselbe Form trägt („Kalbsknochen"); sonst der Derivat-Pfad (Mutter aus Rohware) oder eine Lücke.
+            // Vorher gewann „Rinder-Hamburger-Patties" für „Rind: frisch, Parüren" samt seinem Patty-GP.
+            $derivatForm = (! $nurRohware && $allowDerivat) ? (app(MatchHeuristics::class)->nebenproduktDerivat($text)['marker'] ?? null) : null;
+            $la = $nurRohware ? $finder->bestRohwareMutter($team, $text, $wgHint) : $finder->bestMitGrundwort($team, $text, $wgHint, pflichtForm: $derivatForm);
             if ($la === null) {
                 // D3 §11.2: Nebenprodukt (Knochen/Abschnitte/Karkasse/Schale/…) hat keinen LA →
                 // als Derivat der Mutter anlegen statt still unbepreist. Nur einmal (kein Rekurs).

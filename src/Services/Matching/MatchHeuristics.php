@@ -239,9 +239,10 @@ class MatchHeuristics
         if (count($tokens) > 1) {
             foreach ($tokens as $i => $t) {
                 if (in_array($t, self::NEBENPRODUKT_MARKER, true)) {
-                    $mutter = array_values(array_diff_key($tokens, [$i => true]));
+                    // Lauf 90: „Rind: frisch, Parüren" — Zustandswörter gehören nicht zur Mutter (sonst „Rind frisch").
+                    $mutter = array_values(array_filter(array_diff_key($tokens, [$i => true]), fn ($x) => ! $this->engine->istReinesMerkmal($x)));
                     if ($mutter !== []) {
-                        return ['mutter_text' => implode(' ', $mutter), 'form' => self::derivatForm($t)];
+                        return ['mutter_text' => implode(' ', $mutter), 'form' => self::derivatForm($t), 'marker' => $t];
                     }
                 }
             }
@@ -251,7 +252,7 @@ class MatchHeuristics
             foreach (self::NEBENPRODUKT_MARKER as $m) {
                 $pos = mb_strpos($t, $m);
                 if ($pos !== false && mb_strlen(mb_substr($t, 0, $pos)) >= 3) {
-                    return ['mutter_text' => mb_substr($t, 0, $pos), 'form' => self::derivatForm($m)];
+                    return ['mutter_text' => mb_substr($t, 0, $pos), 'form' => self::derivatForm($m), 'marker' => $m];
                 }
             }
         }
