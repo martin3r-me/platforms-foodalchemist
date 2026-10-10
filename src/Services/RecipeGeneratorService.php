@@ -252,6 +252,12 @@ class RecipeGeneratorService
                 'last_modified_by' => $vkModus ? 'vk_generator' : 'generator',
                 'description_source' => ! empty($kiRezept['description']) ? 'ki' : null,
             ]);
+            // Spec 27: Master sind die Schritte. Der Generator schrieb nur den Text — Schritte entstanden bisher erst
+            // nebenbei in der Heilung (recipe.ueberarbeiten). Seit die Heilung seltener läuft (#235), fehlten sie
+            // (demo Lauf 87: 4 von 8 Unterrezepten mit Zubereitungstext, aber 0 Schritten). Wie RecipeService::create.
+            if (trim((string) ($kiRezept['preparation'] ?? '')) !== '' && ! $recipe->steps()->exists()) {
+                app(RecipeStepService::class)->ausMarkdown($recipe, (string) $kiRezept['preparation']);
+            }
 
             // M6-06: Klasse/HG/AK aus dem Vorschlag — validiert, Lineage ki (GL-07).
             // Modell A (Regelwerk_Verkaufsgerichte v1.1): Klasse = Diätform; die Hauptgruppe

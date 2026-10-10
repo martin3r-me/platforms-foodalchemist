@@ -244,9 +244,27 @@ class RecipeDependencyWorkflowService
         if (! isset($snap['kind_brief'])) {
             $child->update(['context_snapshot' => [...$snap, 'kind_brief' => $auftrag ?? $text]]);
         }
+        // Ein Gericht besteht nur aus Basisrezepten — auch Kaufware bekommt eines, damit Rüstzeit, Abbacken und
+        // Portionieren bezifferbar sind (Dominique). Ist die Zeile Kaufware (kein Basisrezept-Typ, kein Halbfabrikat),
+        // führt das Basisrezept GENAU diese Ware: kein Plan, keine Eigenherstellung. demo Lauf 87: aus „Kürbiskernöl“
+        // zum Beträufeln wurde ein neues Aromaöl aus Traubenkernöl und gerösteten Kernen.
+        $auftragText = (string) ($auftrag ?? $text);
+        // Sicherer Treffer auf gekaufte Fertigware → Zukauf-Basisrezept ohne Plan und Generator (Code legt Name und Ware fest).
+        if (($ware = app(ZukaufBasisrezeptService::class)->erkenne($team, $auftragText)) !== null) {
+            $child->update(['status' => 'running', 'error' => null, 'generator_run_id' => null]);
+            \Platform\FoodAlchemist\Jobs\BuildZukaufRecipeJob::dispatch($team->id, $userId, (int) $child->id, $auftragText, $ware, $params)
+                ->onQueue(Warteschlange::rezepte());
+
+            return;
+        }
+        $heuristik = app(\Platform\FoodAlchemist\Services\Matching\MatchHeuristics::class);
+        if (! $heuristik->istBasisrezeptZeile($auftragText)
+            && ! $heuristik->queryIstHalbfabrikat(app(\Platform\FoodAlchemist\Services\Matching\TokenEngine::class)->tokenize($auftragText))) {
+            $params['ruest_ware'] = $auftragText;
+        }
         // Unter „nur Bestand“ dürfte eine neue Komponente ohnehin kein Kind werden (planChildren) — kein Plan-Call.
         $planen = (bool) config('foodalchemist.kaskade.kind_plan', true) && (int) $child->depth < self::MAX_DEPTH
-            && ($params['bestand'] ?? null) !== 'nur_bestand';
+            && ($params['bestand'] ?? null) !== 'nur_bestand' && ! isset($params['ruest_ware']);
         if ($planen) {
             $child->update(['status' => 'running', 'error' => null, 'generator_run_id' => null]);
             app(PlanningCascadeService::class)->setzePhase((int) $child->id, 'Komponenten werden geplant …');
@@ -673,7 +691,11 @@ class RecipeDependencyWorkflowService
 
                 continue;
             }
-            $dedupe = hash('sha256', mb_strtolower($text) . '|' . json_encode([
+            // Wortmenge statt Wortlaut: „Reduktion: Ginger Beer-Ingwer“ und „… Ginger Beer Ingwer“ sind dasselbe
+            // Unterrezept (demo Lauf 87: zwei gleiche Enkel gebaut).
+            $tokens = app(\Platform\FoodAlchemist\Services\Matching\TokenEngine::class)->tokenize($text);
+            sort($tokens);
+            $dedupe = hash('sha256', implode(' ', $tokens) . '|' . json_encode([
                 $parameter['convenience'] ?? null, $parameter['frische'] ?? null,
                 // Bio + Niveau: kanonisch heißen die Keys `bio`/`level` — der alte `niveau`-Read war immer
                 // null (Dead-Read), sodass zwei Läufe, die sich NUR im Niveau unterschieden, denselben

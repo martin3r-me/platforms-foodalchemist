@@ -166,7 +166,16 @@ class RecipeKomponentenPlanService
      */
     public static function einmischen(array $zutaten, array $plan): array
     {
-        $norm = static fn ($s) => mb_strtolower(trim(preg_replace('/\s+/u', ' ', (string) $s) ?? ''));
+        // Über die Wortmenge vergleichen (wie der Matcher), nicht über den Wortlaut: „Reduktion: Ginger Beer-Ingwer“
+        // (KI) und „Reduktion: Ginger Beer Ingwer“ (Plan) sind dieselbe Zeile. Vorher hängte ein Bindestrich die
+        // Plan-Komponente ein zweites Mal an — demo Lauf 87: zwei gleiche Zeilen im Jus, zwei gleiche Unterrezepte.
+        $engine = app(\Platform\FoodAlchemist\Services\Matching\TokenEngine::class);
+        $norm = static function ($s) use ($engine): string {
+            $t = $engine->tokenize((string) $s);
+            sort($t);
+
+            return implode(' ', $t);
+        };
         foreach ($plan as $k) {
             if (! is_array($k) || trim((string) ($k['name'] ?? '')) === '') {
                 continue;

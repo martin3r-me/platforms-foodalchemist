@@ -370,6 +370,11 @@ class RecipeConformanceAdapter implements ConformanceAdapter
             throw new \RuntimeException('Rezept nicht gefunden oder nicht sichtbar.');
         }
         $vk = (bool) $r->is_sales_recipe;
+        // Zeilen, für die die Kaskade gerade ein Unterrezept baut: noch nicht verknüpft, aber kein offenes Loch
+        // (demo Lauf 87, Jus 3793: §4 F4.1 „nicht als Sub-Rezept markiert“ gemeldet — löste eine Heilrunde aus).
+        $geplant = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRecipeDependency::query()
+            ->whereIn('ingredient_id', $r->ingredients->pluck('id')->all())
+            ->pluck('ingredient_id')->mapWithKeys(fn ($id) => [(int) $id => true])->all();
 
         $kontext = [
             'artefakt_typ' => $vk ? 'Verkaufsgericht (VK)' : 'Basisrezept/Komponente',
@@ -381,8 +386,10 @@ class RecipeConformanceAdapter implements ConformanceAdapter
                 'menge' => (float) $z->quantity,
                 'einheit_slug' => $z->unit?->slug,
                 'geerdet' => $z->gp_id !== null || $z->referenced_recipe_id !== null,
-                'ist_sub_rezept' => $z->referenced_recipe_id !== null,
-            ])->values()->all(),
+                'ist_sub_rezept' => $z->referenced_recipe_id !== null || isset($geplant[(int) $z->id]),
+            ] + (isset($geplant[(int) $z->id]) && $z->referenced_recipe_id === null
+                ? ['unterrezept_in_arbeit' => 'wird in diesem Lauf als eigenes Basisrezept gebaut und danach verknüpft — kein Verstoß']
+                : []))->values()->all(),
         ];
 
         if ($vk) {
