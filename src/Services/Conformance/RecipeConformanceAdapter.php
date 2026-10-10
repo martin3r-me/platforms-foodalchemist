@@ -324,7 +324,8 @@ class RecipeConformanceAdapter implements ConformanceAdapter
                 foreach ($r->ingredients as $z) {
                     $text = (string) ($z->gp?->name ?? $z->referencedRecipe?->name ?? $z->raw_text);
                     // warengruppe: die Hausstandard-Regel gilt nur für Fleisch/Geflügel/Wild-GPs (WG 04); ohne GP schweigt sie.
-                    $melde($motor->pruefe($regel, $text, ['typ' => $typ, 'warengruppe' => (string) ($z->gp?->commodity_group_code ?? '')]), 'zutat:' . $text);
+                    $melde($motor->pruefe($regel, $text, ['typ' => $typ, 'warengruppe' => (string) ($z->gp?->commodity_group_code ?? ''),
+                        'is_derivat' => $z->gp !== null ? ($z->gp->is_derivat ? '1' : '0') : '']), 'zutat:' . $text);
                 }
             }
         }

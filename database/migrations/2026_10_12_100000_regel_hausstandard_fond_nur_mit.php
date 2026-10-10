@@ -24,8 +24,11 @@ return new class extends Migration
         app(RegelService::class)->speichere([...$r->only(['schluessel', 'regelwerk', 'paragraph', 'titel', 'art', 'ziel', 'wirkung',
             'dossier_slug']),
             'params' => [
-                // Kuratorin/Berater: knochen … gräte. Ergänzt (zur Bestätigung Dominique): schwanz (Ochsenschwanz), fuß (Kalbsfuß).
+                // Kuratorin/Berater: knochen … gräte; schwanz (Ochsenschwanz) und fuß (Kalbsfuß) bestätigt von Dominique 10.10.
                 'nur_mit' => ['knochen', 'karkasse', 'abschnitt', 'parüre', 'sehne', 'hals', 'flügel', 'gräte', 'schwanz', 'fuß', 'füße'],
+                // Dominique 10.10.: Nebenprodukt-Derivate (GP §11.2, is_derivat=1) sind immer erlaubt — die Wortliste ist nur
+                // Rückfall für Bestands-GPs ohne Derivat-Kennzeichen. Neue Cuts fängt so die Datenpflege, keine Wortliste.
+                'erlaubt_wenn' => ['is_derivat' => ['1']],
                 'bedingung' => ['typ' => $typen, 'warengruppe' => ['04']],
                 'grund' => 'Hausstandard: Jus, Fond und Brühe aus Knochen und Abschnitten — ein Verkaufs-Cut nur, wenn der Auftrag es ausdrücklich verlangt',
             ],

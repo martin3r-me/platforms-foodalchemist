@@ -12,12 +12,14 @@ use Platform\FoodAlchemist\Services\Regeln\RegelText;
  * `nur_mit: []` dreht die Logik um: verboten ist, was KEINEN dieser Wortteile trägt (Hausstandard Jus/Fond: ein Fleisch-
  * GP nur als Knochen/Karkasse/Abschnitt … — eine Verbotsliste der Verkaufs-Cuts läuft jedem neuen Cut hinterher,
  * demo Lauf 91: „Rinderhueften: frisch, pariert" stand auf keiner Liste).
+ * `erlaubt_wenn: {feld: [werte]}` gibt eine Zeile unabhängig von Wörtern frei (Dominique 10.10.: ein GP mit
+ * is_derivat=1 — Knochen, Parüren, Abschnitte, Karkassen nach Regelwerk GP §11.2 — ist immer erlaubt).
  */
 final class Verbot implements RegelArt
 {
     public function validiere(array $params): array
     {
-        $fehler = Bedingung::validiere($params['bedingung'] ?? null);
+        $fehler = [...Bedingung::validiere($params['bedingung'] ?? null), ...Bedingung::validiere($params['erlaubt_wenn'] ?? null)];
         if (empty($params['tokens']) && empty($params['muster']) && empty($params['teile']) && empty($params['nur_mit'])) {
             $fehler[] = 'tokens, teile, muster oder nur_mit nötig';
         }
@@ -35,6 +37,9 @@ final class Verbot implements RegelArt
     {
         $p = $regel->params;
         if (isset($p['bedingung']) && ! Bedingung::erfuellt((array) $p['bedingung'], $kontext)) {
+            return null;
+        }
+        if (! empty($p['erlaubt_wenn']) && Bedingung::erfuellt((array) $p['erlaubt_wenn'], $kontext)) {
             return null;
         }
         if (! empty($p['nur_mit'])) {
