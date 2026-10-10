@@ -64,5 +64,6 @@ it('istRohwareVon: Teilstück ja, anderes Produkt / Zubereitung / Verarbeitung n
         ->and($f->istRohwareVon('Gefluegel Grillwurst frisch', 'gefluegel'))->toBeFalse()
         ->and($f->istRohwareVon('Gefluegel Lyoner Scheiben', 'gefluegel'))->toBeFalse()
         ->and($f->istRohwareVon('Gefluegelbrust geräuchert', 'gefluegel'))->toBeFalse()
-        ->and($f->istRohwareVon('Rindfleisch konserviert', 'rind'))->toBeFalse();
+        ->and($f->istRohwareVon('Rindfleisch konserviert', 'rind'))->toBeFalse()
+        ->and($f->istRohwareVon('CESAR KLASSIK TERR. GEFLUEGEL+RIND', 'gefluegel'))->toBeFalse();   // demo: Hundefutter hing an „Geflügel"
 });
