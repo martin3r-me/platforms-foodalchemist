@@ -141,25 +141,18 @@ class RecipeKomponentenPlanService
         }
         $kandidaten = FoodAlchemistRecipe::query()->visibleToTeam($team)->basis()
             ->whereIn('id', $ids)
-            ->get(['id', 'name', 'status', 'spec_is_vegan', 'spec_is_vegetarian', 'production_depth'])->keyBy('id');
+            ->get(\Platform\FoodAlchemist\Support\BestandsZulaessigkeit::SPALTEN)->keyBy('id');
         foreach ($ids as $id) {
             $r = $kandidaten->get($id);
             if ($r === null) {
                 continue;
             }
-            // Bestand = nur freigegeben (Entscheid 09.10.). Nicht freigegebene Treffer sichtbar machen statt still
-            // fallen zu lassen — sonst wirkt „nicht gefunden", obwohl es einen Entwurf gibt.
-            $status = $r->status instanceof \BackedEnum ? $r->status->value : (string) $r->status;
-            if ($status !== 'approved') {
-                $abgelehnt[] = ['recipe_id' => (int) $r->id, 'name' => (string) $r->name, 'grund' => "noch nicht freigegeben (Status {$status})"];
-
-                continue;
-            }
-            // Eine gepflegte Haus-Zuordnung ist die fachliche Entscheidung — kein Namensvergleich mehr, nur Diät und Regler.
-            $grund = BestandsPassung::grund((int) $r->id === $hausId ? '' : $name, (string) $r->name,
-                $r->spec_is_vegan !== null ? (bool) $r->spec_is_vegan : null,
-                $r->spec_is_vegetarian !== null ? (bool) $r->spec_is_vegetarian : null, $diaet)
-                ?? BestandsPassung::fertigungGrund($team, $name, $r->production_depth, $convenience);
+            // Eine Entscheidung für alle Bindungswege ({@see \Platform\FoodAlchemist\Support\BestandsZulaessigkeit}): Freigabe,
+            // Fertigung, Passung. Nicht freigegebene Treffer werden sichtbar abgelehnt statt still fallen gelassen. Eine
+            // gepflegte Haus-Zuordnung ist die fachliche Entscheidung — kein Namensvergleich, nur Diät und Regler.
+            $grund = \Platform\FoodAlchemist\Support\BestandsZulaessigkeit::pruefe($team, $name, $r, [
+                'bestandteile' => (int) $r->id !== $hausId, 'diaet_hart' => $diaet, 'regler' => $convenience,
+            ]);
             if ($grund === null) {
                 return ['recipe_id' => (int) $r->id, 'name' => (string) $r->name];
             }
