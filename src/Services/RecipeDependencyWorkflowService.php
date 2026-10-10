@@ -257,6 +257,10 @@ class RecipeDependencyWorkflowService
 
             return;
         }
+        // Brot wird im Gericht nie als Scheibe gereicht, sondern verarbeitet (Dominique 10.10.) — normale Planung mit Auftrag.
+        if (app(ZukaufBasisrezeptService::class)->istBrotZeile($team, $auftragText)) {
+            $params['brot_verarbeiten'] = \Platform\FoodAlchemist\Support\RezeptTypVokabular::bezeichnung($auftragText);
+        }
         // Teilfertig: sicher TK-Gemüse als Hauptzeile → kurz bauen, kein Plan, Fertigungstiefe teilfertig (Dominique 10.10.).
         if (($tk = app(ZukaufBasisrezeptService::class)->erkenneTeilfertig($team, $auftragText)) !== null) {
             $this->baueKind($team, $child, $userId, $text,
@@ -265,7 +269,7 @@ class RecipeDependencyWorkflowService
             return;
         }
         $heuristik = app(\Platform\FoodAlchemist\Services\Matching\MatchHeuristics::class);
-        if (! $heuristik->istBasisrezeptZeile($auftragText)
+        if (! isset($params['brot_verarbeiten']) && ! $heuristik->istBasisrezeptZeile($auftragText)
             && ! $heuristik->queryIstHalbfabrikat(app(\Platform\FoodAlchemist\Services\Matching\TokenEngine::class)->tokenize($auftragText))) {
             $params['ruest_ware'] = $auftragText;
         }

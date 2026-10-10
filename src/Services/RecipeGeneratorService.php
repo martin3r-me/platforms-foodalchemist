@@ -307,6 +307,10 @@ class RecipeGeneratorService
             $diaetHart = array_values(array_filter((array) ($parameter['diaet_hart'] ?? []), 'is_string'));
             $offene = [];
             $zeilen = [];
+            // Brot-Angebot (Brotkorb, Brotkonfekt, Brot & Butter): die Brote SIND das Angebot und bleiben Grundprodukte.
+            // Nur im komponierten Gericht wird Brot zur verarbeiteten Komponente (Dominique 10.10.).
+            $brotAngebot = $vkModus && app(ZukaufBasisrezeptService::class)->istBrotAngebot($team, (string) ($kiRezept['name'] ?? ''),
+                array_map(static fn ($z) => (string) ($z['text'] ?? $z['name'] ?? ''), array_values((array) $kiRezept['zutaten'])));
             foreach (array_values($kiRezept['zutaten']) as $i => $z) {
                 $text = trim((string) ($z['text'] ?? $z['name'] ?? ''));
                 if ($text === '') {
@@ -338,7 +342,9 @@ class RecipeGeneratorService
                 // Agentischer Resolver: BESTAND ZUERST (GL-04 voll, inkl. §4/§5-Aliasse).
                 // VK bleibt Komponenten-/Basisrezept-first, außer klar kaufbaren Einzelartikeln
                 // (Deko, Gewürz, fertig belegte Artikel): dort gewinnt vorhandenes GP, sonst LA→GP.
-                $direktArtikel = $vkModus && $this->heuristik->istDirektArtikelKandidat($text);
+                // Brot im Gericht ist nie ein Direktartikel: es wird zur Komponente verarbeitet (Dominique 10.10.).
+                $brotImGericht = $vkModus && ! $brotAngebot && app(ZukaufBasisrezeptService::class)->istBrotZeile($team, $text);
+                $direktArtikel = $vkModus && ! $brotImGericht && $this->heuristik->istDirektArtikelKandidat($text);
                 $zeilenMode = $direktArtikel ? 'gp_first' : $mode;
                 $treffer = $this->matcher->matchIngredient($team, $text, $z['slug'] ?? null, $zeilenMode, $pref, $preferRaw, $bio);
 
@@ -369,7 +375,7 @@ class RecipeGeneratorService
                 $prefixSub = ! $direktArtikel && $this->heuristik->hatSubZubereitungsPraefix($text);
                 // STARKES Sub (§4 »jus ist die sauce« / LLM-Flag true): IMMER Basisrezept — überstimmt
                 // auch einen GP-Treffer und jede Convenience-Stufe. Marker sind praktisch nie Flachware.
-                $strongSub = ! $direktArtikel && ($nameHalbfabrikat || $prefixSub || ($llmSub === true));
+                $strongSub = ! $direktArtikel && ($nameHalbfabrikat || $prefixSub || ($llmSub === true) || $brotImGericht);
                 // Rolle komponente/beilage/garnitur/aroma_treiber im VK-Gericht (T4) — Convenience-
                 // gesteuert. Dominique-Entscheid (Nebenbefund #102): ein Gericht wird aus
                 // Basisrezepten gebaut — auch Garnitur/Aroma-Treiber ohne Bestandstreffer werden

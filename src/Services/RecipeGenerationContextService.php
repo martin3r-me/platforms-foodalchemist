@@ -156,6 +156,14 @@ class RecipeGenerationContextService
             'description' => $description,
             'parameter' => $this->promptParameter($parameter),
         ];
+        // Brot im Gericht (Dominique 10.10.): nie als Scheibe — verarbeitet, Aroma des gerösteten Brots trägt.
+        if (trim((string) ($parameter['brot_verarbeiten'] ?? '')) !== '') {
+            $prompt['brot_verarbeiten'] = [
+                'brot' => (string) $parameter['brot_verarbeiten'],
+                'hinweis' => 'Brot wird im Gericht nicht als Scheibe gereicht. Verarbeite es zu einer Komponente (z. B. Crunch, '
+                    . 'Kruste, Croûton, Brösel) — das geröstete Brotaroma trägt. Name: passender Typ + Brot, Brot als Hauptzutat.',
+            ];
+        }
         // Teilfertig (RecipeDependencyWorkflowService::starteKind): TK-Ware als Hauptzutat, nur kurz zubereitet.
         if (trim((string) ($parameter['teilfertig_ware'] ?? '')) !== '') {
             $prompt['teilfertig'] = [

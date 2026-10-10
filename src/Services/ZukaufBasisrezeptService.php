@@ -158,8 +158,71 @@ final class ZukaufBasisrezeptService
         return $recipe->refresh();
     }
 
+    /** Brot & Backwaren (WG 09 außer 09.6 Knabbereien) — Dominique 10.10.: „Ich stelle keinen Toast hin, ich mache einen Crunch daraus.“ */
+    /** Panko trägt das Toastaroma und wird wie Brot verarbeitet (Dominique 10.10.) — gleich welche Warengruppe. */
+    private const BROT_WOERTER = ['toast', 'baguette', 'brot', 'broetchen', 'ciabatta', 'focaccia', 'brioche', 'sauerteig', 'pumpernickel', 'laugen', 'panko'];
+
+    private static function istBrotGp(FoodAlchemistGp $gp): bool
+    {
+        if (str_contains(mb_strtolower((string) $gp->name), 'panko')) {
+            return true;
+        }
+
+        return (string) $gp->commodity_group_code === '09' && ! str_starts_with((string) ($gp->sub_category ?? ''), '09.6');
+    }
+
+    /**
+     * Ist das Gericht selbst ein Brot-Angebot (Brotkorb, Brotkonfekt, Brot & Butter)? Dann sind die Brote das Angebot und
+     * bleiben unverarbeitet Grundprodukte. Erkannt am Kürzel „[BRO]“, am Namen oder daran, dass Brot den Hauptteil stellt.
+     *
+     * @param  list<string>  $zeilen
+     */
+    public function istBrotAngebot(Team $team, string $name, array $zeilen): bool
+    {
+        if (preg_match('/^\[BRO\]/iu', trim($name)) === 1
+            || preg_match('/brotkorb|brotkonfekt|brot\s*(&|und)\s*butter|brotauswahl/iu', $name) === 1) {
+            return true;
+        }
+        $zeilen = array_values(array_filter($zeilen, static fn ($z) => trim($z) !== ''));
+        if ($zeilen === []) {
+            return false;
+        }
+        $brot = count(array_filter($zeilen, fn ($z) => $this->istBrotZeile($team, $z)));
+
+        return $brot * 2 >= count($zeilen);
+    }
+
+    /**
+     * Ist die Zeile Brot/Backware? Dann nie Zukauf und nie als Scheibe im Gericht — sie wird zur verarbeiteten
+     * Komponente (Crunch, Kruste, Croûton, Brösel). Erkannt über das GP (WG 09 außer 09.6), sonst über das Brot-Wort.
+     */
+    public function istBrotZeile(Team $team, string $text): bool
+    {
+        $bezeichnung = RezeptTypVokabular::bezeichnung($text);
+        if ($bezeichnung === '') {
+            return false;
+        }
+        $t = app(IngredientMatchService::class)->matchIngredient($team, $bezeichnung, null, 'gp_first');
+        if (($t['target'] ?? null) === 'gp' && IngredientMatchService::istAutomatischVerdrahtbar($t)
+            && ($gp = FoodAlchemistGp::visibleToTeam($team)->find((int) $t['gp_id'])) !== null) {
+            return self::istBrotGp($gp);
+        }
+        foreach (app(TokenEngine::class)->tokenize($bezeichnung) as $wort) {
+            foreach (self::BROT_WOERTER as $b) {
+                if (str_starts_with($wort, $b) || str_ends_with($wort, $b)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
     private function istFertigwareGp(FoodAlchemistGp $gp, bool $ohneTyp): bool
     {
+        if (self::istBrotGp($gp)) {
+            return false;   // Brot wird verarbeitet, nie als Zukauf hingestellt
+        }
         $wg = (string) ($gp->commodity_group_code ?? '');
         $sub = (string) ($gp->sub_category ?? '');
         if (in_array($wg, self::FERTIG_WG, true)) {
