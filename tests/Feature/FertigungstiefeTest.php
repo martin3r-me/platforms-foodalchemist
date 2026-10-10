@@ -84,3 +84,91 @@ it('Teilfertig: der Generator übernimmt die Vorgabe und markiert sie als von de
 
     expect($r->production_depth)->toBe('teilfertig')->and($r->production_depth_source)->toBe('kaskade');
 });
+
+it('Zukauf über die Elternzeile: Plan nennt das Kind anders, die Zeile ist Fertigware → Zukauf-Bau (demo Lauf 92)', function () {
+    tap($this->makeGp($this->rootTeam, 'Gemuesebruehe Achenbach Delikatessen: konzentriert, TK'))
+        ->update(['commodity_group_code' => '13', 'sub_category' => '13.3 Saucen & Fonds', 'condition' => 'TK']);
+    $elternRezept = $this->makeRecipe($this->rootTeam, 'Brühe: Gemüse', ['status' => 'draft']);
+    $zeile = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient::create(['team_id' => $this->rootTeam->id, 'recipe_id' => $elternRezept->id,
+        'unit_vocab_id' => $this->unitG($this->rootTeam)->id, 'position' => 1, 'raw_text' => 'Gemuesebruehe Achenbach Delikatessen: konzentriert, TK', 'quantity' => 300]);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'running']);
+    $eltern = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'rezept', 'status' => 'done']);
+    $kind = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id,
+        'parent_step_id' => $eltern->id, 'kind' => 'rezept', 'status' => 'geplant', 'label' => 'Brühe: Gemüse (HF)', 'depth' => 2]);
+    \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRecipeDependency::create(['team_id' => $this->rootTeam->id,
+        'cascade_run_id' => $run->id, 'parent_step_id' => $eltern->id, 'ingredient_id' => $zeile->id, 'child_step_id' => $kind->id]);
+
+    app(RecipeDependencyWorkflowService::class)->starteKind($this->rootTeam, $kind, (int) auth()->id(), 'Brühe: Gemüse (HF)', [], false);
+
+    Queue::assertPushed(\Platform\FoodAlchemist\Jobs\BuildZukaufRecipeJob::class, fn ($j) => $j->stepId === (int) $kind->id
+        && $j->ware['typ'] === 'Brühe' && $j->ware['bezeichnung'] === 'Gemüse'
+        && $j->ware['gp_name'] === 'Gemuesebruehe Achenbach Delikatessen: konzentriert, TK');
+    Queue::assertNotPushed(GenerateRecipePlanJob::class);
+});
+
+it('Zukauf über die Elternzeile: Rohware in der Zeile bleibt eine Zubereitung', function () {
+    ($this->gp)('Zwiebeln: frisch, ganz', '01');
+    $elternRezept = $this->makeRecipe($this->rootTeam, 'Brühe: Gemüse', ['status' => 'draft']);
+    $zeile = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient::create(['team_id' => $this->rootTeam->id, 'recipe_id' => $elternRezept->id,
+        'unit_vocab_id' => $this->unitG($this->rootTeam)->id, 'position' => 1, 'raw_text' => 'Zwiebeln: frisch, ganz', 'quantity' => 300]);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'running']);
+    $eltern = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'rezept', 'status' => 'done']);
+    $kind = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id,
+        'parent_step_id' => $eltern->id, 'kind' => 'rezept', 'status' => 'geplant', 'label' => 'Beilage: Zwiebeln geschmort', 'depth' => 2]);
+    \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRecipeDependency::create(['team_id' => $this->rootTeam->id,
+        'cascade_run_id' => $run->id, 'parent_step_id' => $eltern->id, 'ingredient_id' => $zeile->id, 'child_step_id' => $kind->id]);
+
+    app(RecipeDependencyWorkflowService::class)->starteKind($this->rootTeam, $kind, (int) auth()->id(), 'Beilage: Zwiebeln geschmort', [], false);
+
+    Queue::assertNotPushed(\Platform\FoodAlchemist\Jobs\BuildZukaufRecipeJob::class);
+});
+
+it('Fertigungstiefe aus dem Inhalt, nicht aus dem Regler: Rohware → from_scratch, TK-Gemüse-Zeile → teilfertig (demo Lauf 92)', function () {
+    \Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit::create(['team_id' => $this->rootTeam->id, 'slug' => 'g', 'display_de' => 'Gramm', 'dimension' => 'mass', 'default_in_g' => 1]);
+    config(['foodalchemist.ai.provider' => 'fake']);
+    ($this->gp)('Karotten: frisch, ganz', '01');
+    ($this->gp)('Erbsen: TK', '01', 'TK');
+    $gen = app(\Platform\FoodAlchemist\Services\RecipeGeneratorService::class);
+    $kaskade = ['convenience' => 'teil_convenience', 'cascade_step_id' => 1];
+
+    $roh = $gen->generiere($this->rootTeam, 'Brühe: Karotte', $kaskade,
+        ['name' => 'Brühe: Karotte', 'zutaten' => [['text' => 'Karotten: frisch, ganz', 'quantity' => 1000, 'unit' => 'g']]])['recipe'];
+    $conv = $gen->generiere($this->rootTeam, 'Beilage: Erbsen', $kaskade,
+        ['name' => 'Beilage: Erbsen', 'zutaten' => [['text' => 'Erbsen: TK', 'quantity' => 1000, 'unit' => 'g']]])['recipe'];
+    $ohneKaskade = $gen->generiere($this->rootTeam, 'Brühe: Karotte hell', ['convenience' => 'voll_convenience'],
+        ['name' => 'Brühe: Karotte hell', 'zutaten' => [['text' => 'Karotten: frisch, ganz', 'quantity' => 800, 'unit' => 'g']]])['recipe'];
+
+    expect($roh->production_depth)->toBe('from_scratch')->and($roh->production_depth_source)->toBe('kaskade')
+        ->and($conv->production_depth)->toBe('teilfertig')
+        ->and($ohneKaskade->production_depth)->toBe('from_scratch')->and($ohneKaskade->production_depth_source)->toBeNull();
+});
+
+it('Fertigungstiefe ableiten lädt nichts am Rezept des Aufrufers um — der GP-Name bleibt (Review Hans)', function () {
+    $g = $this->unitG($this->rootTeam);
+    $gp = $this->makeGp($this->rootTeam, 'Karotten: frisch, ganz');
+    $r = $this->makeRecipe($this->rootTeam, 'Brühe: Karotte', ['status' => 'draft']);
+    $r->ingredients()->create(['team_id' => $this->rootTeam->id, 'position' => 1, 'gp_id' => $gp->id, 'raw_text' => 'Karotten', 'quantity' => 500, 'unit_vocab_id' => $g->id]);
+    $r->load('ingredients.gp');
+
+    \Platform\FoodAlchemist\Support\FertigungstiefeAusInhalt::ableiten($r);
+
+    expect($r->ingredients->first()->gp->name)->toBe('Karotten: frisch, ganz');
+});
+
+it('Gerichtstiefe folgt dem Kind: wird ein Unterrezept teilfertig, zieht der Recompute das Gericht nach — nie bei Hand gesetzt', function () {
+    $g = $this->unitG($this->rootTeam);
+    $kind = $this->makeRecipe($this->rootTeam, 'Jus: Rind', ['status' => 'draft']);
+    $gericht = $this->makeRecipe($this->rootTeam, '[HG] Rinderfilet', ['status' => 'draft']);
+    $gericht->forceFill(['production_depth' => 'from_scratch', 'production_depth_source' => 'kaskade'])->save();
+    $hand = $this->makeRecipe($this->rootTeam, '[HG] Rinderfilet klassisch', ['status' => 'draft']);
+    $hand->forceFill(['production_depth' => 'from_scratch', 'production_depth_source' => 'manuell'])->save();
+    foreach ([$gericht, $hand] as $e) {
+        $e->ingredients()->create(['team_id' => $this->rootTeam->id, 'position' => 1, 'referenced_recipe_id' => $kind->id, 'raw_text' => 'Jus: Rind', 'quantity' => 50, 'unit_vocab_id' => $g->id]);
+    }
+
+    $kind->forceFill(['production_depth' => 'teilfertig', 'production_depth_source' => 'kaskade'])->save();
+    app(\Platform\FoodAlchemist\Services\RecipeRecomputeService::class)->recomputeAndPropagate((int) $kind->id);
+
+    expect($gericht->fresh()->production_depth)->toBe('teilfertig')
+        ->and($hand->fresh()->production_depth)->toBe('from_scratch');
+});

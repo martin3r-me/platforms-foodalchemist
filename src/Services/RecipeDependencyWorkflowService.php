@@ -250,7 +250,8 @@ class RecipeDependencyWorkflowService
         // zum Beträufeln wurde ein neues Aromaöl aus Traubenkernöl und gerösteten Kernen.
         $auftragText = (string) ($auftrag ?? $text);
         // Sicherer Treffer auf gekaufte Fertigware → Zukauf-Basisrezept ohne Plan und Generator (Code legt Name und Ware fest).
-        if (($ware = app(ZukaufBasisrezeptService::class)->erkenne($team, $auftragText)) !== null) {
+        if (($ware = app(ZukaufBasisrezeptService::class)->erkenne($team, $auftragText)
+            ?? $this->zukaufAusElternZeile($team, $child, $auftragText)) !== null) {
             $child->update(['status' => 'running', 'error' => null, 'generator_run_id' => null]);
             \Platform\FoodAlchemist\Jobs\BuildZukaufRecipeJob::dispatch($team->id, $userId, (int) $child->id, $auftragText, $ware, $params)
                 ->onQueue(Warteschlange::rezepte());
@@ -285,6 +286,23 @@ class RecipeDependencyWorkflowService
             return;
         }
         $this->baueKind($team, $child, $userId, $text, $params, $vollAnreichern);
+    }
+
+    /**
+     * Die Zeile im Elternrezept, die dieses Kind führt — ist SIE Fertigware, wird das Kind ein Zukauf-Basisrezept,
+     * auch wenn der Plan es anders benannt hat (demo Lauf 92: „Brühe: Gemüse (HF)“ für ein TK-Konzentrat).
+     *
+     * @return array{gp_id: int, gp_name: string, typ: string, bezeichnung: string}|null
+     */
+    private function zukaufAusElternZeile(Team $team, FoodAlchemistCascadeRunStep $child, string $auftrag): ?array
+    {
+        $dep = FoodAlchemistCascadeRecipeDependency::where('child_step_id', $child->id)->first(['ingredient_id']);
+        $zeile = $dep !== null ? \Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient::find((int) $dep->ingredient_id, ['id', 'raw_text']) : null;
+        if ($zeile === null || trim((string) $zeile->raw_text) === '') {
+            return null;
+        }
+
+        return app(ZukaufBasisrezeptService::class)->erkenneAusZeile($team, (string) $zeile->raw_text, $auftrag);
     }
 
     /**

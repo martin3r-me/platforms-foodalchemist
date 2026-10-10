@@ -77,6 +77,14 @@ class RecipeRecomputeService
             $this->kosten($recipe, $zutaten);
             $this->naehrwerte($recipe, $zutaten);
             $this->specFlags($recipe, $zutaten);
+            // Fertigungstiefe folgt dem Inhalt, solange die Kaskade sie führt — auch wenn ein Kind nach dem Gericht
+            // fertig wird oder eine Heilung Zeilen tauscht (Review Hans: eine Stelle statt Generator + Kind-Abschluss).
+            // Nie bei Hand/KI gesetzt. Nur HOCHstufen (from_scratch → teilfertig): eine Kaskaden-Vorgabe (TK-Hauptzeile)
+            // und der Zukauf-Pfad (convenience, Ware evtl. WG 11) dürfen nicht an einer noch ungebundenen Zeile kippen.
+            if ($recipe->production_depth_source === 'kaskade' && in_array($recipe->production_depth, [null, 'from_scratch'], true)
+                && \Platform\FoodAlchemist\Support\FertigungstiefeAusInhalt::ausZutaten($zutaten) === 'teilfertig') {
+                $recipe->production_depth = 'teilfertig';
+            }
             $recipe->save();
         });
 
