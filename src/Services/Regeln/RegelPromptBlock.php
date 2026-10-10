@@ -189,8 +189,16 @@ final class RegelPromptBlock
         $grund = trim((string) ($p['grund'] ?? ''));
         // Reines Muster-Verbot (Regex): die Muster sagen der KI nichts — Grund und falsche Beispiele schon.
         $zeile = $kopf . ': ' . ($woerter !== '' ? 'nicht verwenden — ' . $woerter : 'nicht so') . ($grund !== '' ? '. ' . $grund : '');
-        if ($woerter === '' && ($falsch = (array) (($r->beispiele ?? [])['falsch'] ?? [])) !== []) {
-            $zeile .= ' Falsch z. B.: „' . implode('“, „', array_slice(array_map('strval', $falsch), 0, 3)) . '“';
+        // Beispiele immer mitgeben: Wortstämme („beinscheib“) sagen der KI wenig, ganze Zutaten schon. demo Lauf 89: trotz
+        // Hausstandard-Regel 2 kg Rinderbeinscheiben in der Jus — die Regel stand nur als Stamm-Liste im Prompt.
+        $bsp = (array) ($r->beispiele ?? []);
+        $texte = static fn (array $l) => array_slice(array_values(array_filter(array_map(
+            static fn ($b) => is_array($b) ? (string) ($b['text'] ?? '') : (string) $b, $l), 'strlen')), 0, 4);
+        if (($falsch = $texte((array) ($bsp['falsch'] ?? []))) !== []) {
+            $zeile .= ' Falsch z. B.: „' . implode('“, „', $falsch) . '“.';
+        }
+        if (($richtig = $texte((array) ($bsp['richtig'] ?? []))) !== []) {
+            $zeile .= ' Richtig z. B.: „' . implode('“, „', $richtig) . '“.';
         }
         if (($ausnahmen = $liste((array) ($p['ausnahmen'] ?? []))) !== '') {
             $zeile .= ' Erlaubt trotzdem: ' . $ausnahmen . '.';
