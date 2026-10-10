@@ -11,18 +11,25 @@ use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
  *
  * - teilfertig: mindestens eine Zeile ist Convenience-Ware (WG 13), TK-Gemüse/-Obst (WG 01/02) oder ein
  *   Unterrezept, das selbst teilfertig/convenience ist (z. B. „Jus: Rind (Zukauf)“).
- * - from_scratch: sonst. Gewürze, Öle, Essige (WG 10/11) und Brot sind Zutaten, keine Vorfertigung.
+ * - from_scratch: sonst. Gewürze, Öle, Essige (WG 10/11) und Brot sind Zutaten, keine Vorfertigung. Bewusst auch
+ *   TK-Fisch und TK-Fleisch: das ist tiefgekühlte ROHWARE, die Küche verarbeitet sie vollständig — anders als
+ *   TK-Gemüse, das blanchiert und geschnitten kommt.
  * - convenience setzt nur der Zukauf-Pfad ({@see \Platform\FoodAlchemist\Services\ZukaufBasisrezeptService::baue}).
  */
 final class FertigungstiefeAusInhalt
 {
+    /** Eigene Abfrage — lädt nichts am Modell des Aufrufers um (Review Hans: load() mit Spaltenliste nahm den gp-Namen). */
     public static function ableiten(FoodAlchemistRecipe $recipe): string
     {
-        $recipe->load([
-            'ingredients.gp:id,commodity_group_code,condition',
-            'ingredients.referencedRecipe:id,production_depth',
-        ]);
-        foreach ($recipe->ingredients as $z) {
+        return self::ausZutaten($recipe->ingredients()
+            ->with(['gp:id,commodity_group_code,condition', 'referencedRecipe:id,production_depth'])
+            ->get());
+    }
+
+    /** @param  iterable<\Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient>  $zutaten  mit gp + referencedRecipe */
+    public static function ausZutaten(iterable $zutaten): string
+    {
+        foreach ($zutaten as $z) {
             $sub = $z->referencedRecipe;
             if ($sub !== null && in_array($sub->production_depth, ['teilfertig', 'convenience'], true)) {
                 return 'teilfertig';

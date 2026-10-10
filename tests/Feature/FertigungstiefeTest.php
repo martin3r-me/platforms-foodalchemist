@@ -142,3 +142,33 @@ it('Fertigungstiefe aus dem Inhalt, nicht aus dem Regler: Rohware → from_scrat
         ->and($conv->production_depth)->toBe('teilfertig')
         ->and($ohneKaskade->production_depth)->toBe('from_scratch')->and($ohneKaskade->production_depth_source)->toBeNull();
 });
+
+it('Fertigungstiefe ableiten lädt nichts am Rezept des Aufrufers um — der GP-Name bleibt (Review Hans)', function () {
+    $g = $this->unitG($this->rootTeam);
+    $gp = $this->makeGp($this->rootTeam, 'Karotten: frisch, ganz');
+    $r = $this->makeRecipe($this->rootTeam, 'Brühe: Karotte', ['status' => 'draft']);
+    $r->ingredients()->create(['team_id' => $this->rootTeam->id, 'position' => 1, 'gp_id' => $gp->id, 'raw_text' => 'Karotten', 'quantity' => 500, 'unit_vocab_id' => $g->id]);
+    $r->load('ingredients.gp');
+
+    \Platform\FoodAlchemist\Support\FertigungstiefeAusInhalt::ableiten($r);
+
+    expect($r->ingredients->first()->gp->name)->toBe('Karotten: frisch, ganz');
+});
+
+it('Gerichtstiefe folgt dem Kind: wird ein Unterrezept teilfertig, zieht der Recompute das Gericht nach — nie bei Hand gesetzt', function () {
+    $g = $this->unitG($this->rootTeam);
+    $kind = $this->makeRecipe($this->rootTeam, 'Jus: Rind', ['status' => 'draft']);
+    $gericht = $this->makeRecipe($this->rootTeam, '[HG] Rinderfilet', ['status' => 'draft']);
+    $gericht->forceFill(['production_depth' => 'from_scratch', 'production_depth_source' => 'kaskade'])->save();
+    $hand = $this->makeRecipe($this->rootTeam, '[HG] Rinderfilet klassisch', ['status' => 'draft']);
+    $hand->forceFill(['production_depth' => 'from_scratch', 'production_depth_source' => 'manuell'])->save();
+    foreach ([$gericht, $hand] as $e) {
+        $e->ingredients()->create(['team_id' => $this->rootTeam->id, 'position' => 1, 'referenced_recipe_id' => $kind->id, 'raw_text' => 'Jus: Rind', 'quantity' => 50, 'unit_vocab_id' => $g->id]);
+    }
+
+    $kind->forceFill(['production_depth' => 'teilfertig', 'production_depth_source' => 'kaskade'])->save();
+    app(\Platform\FoodAlchemist\Services\RecipeRecomputeService::class)->recomputeAndPropagate((int) $kind->id);
+
+    expect($gericht->fresh()->production_depth)->toBe('teilfertig')
+        ->and($hand->fresh()->production_depth)->toBe('from_scratch');
+});
