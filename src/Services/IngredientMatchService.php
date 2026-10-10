@@ -802,6 +802,14 @@ class IngredientMatchService
         if ($tokens === []) {
             $tokens = $queryTokens;
         }
+        // Lauf 88 (demo, 10.10.): „Lauch: frisch, ganz" LIKEte auch „frisch"/„ganz" — das trifft tausende GPs, nach
+        // orderBy(id)->limit(300) kamen die Lauch-GPs (id ≥ 11857) nie in den Pool, die Zeile blieb offen (ebenso
+        // „Pilzmischung: frisch, ganz"). Reine Zustands-/Schnittwörter tragen seit #233/#240 keinen Treffer — also
+        // filtern sie auch nicht vor, solange ein Produktwort übrig bleibt. Gescort wird weiter mit allen Tokens.
+        $produkt = array_values(array_filter($tokens, fn ($t) => ! $this->engine->istReinesMerkmal($t)));
+        if ($produkt !== []) {
+            $tokens = $produkt;
+        }
         // M6-07 (Hebel-1-Rest »umlaut-blindes Reuse-Inventar«): Tokens sind
         // umlaut-expandiert (kuerbis), DB-Namen tragen Umlaute (Kürbis) — je
         // Token zusätzlich die Umlaut-Rückform LIKEn. Rein additiv: erweitert

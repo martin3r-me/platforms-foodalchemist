@@ -180,6 +180,22 @@ class LaCandidateFinder
     }
 
     /**
+     * Für den AUTOMATISCHEN Mint: der beste Kandidat mit passendem Grundwort ({@see self::grundwortPasst}). Lauf 88
+     * (demo): für „Lauch: frisch, ganz" stand „Lauchzwiebeln frisch" vorn (Lauchzwiebel ≠ Lauch, zu Recht abgelehnt) —
+     * mit nur Platz 1 gab es gar keinen Mint, obwohl „Lauch geputzt" auf Platz 3 passte. Unter den passenden zählt die
+     * Relevanz (score), nicht die Einkaufs-Sortierung — sonst gewann „LAUCH SPROSSEN" (0,672, günstiger Lead) gegen
+     * „Lauch geputzt" (0,737). Gleichstand: Reihenfolge von find() (Lead/Preis).
+     */
+    public function bestMitGrundwort(Team $team, string $ingredientName, ?string $wgCode = null, int $k = 5): ?FoodAlchemistSupplierItem
+    {
+        $passend = $this->find($team, $ingredientName, $wgCode, $k)
+            ->filter(fn ($la) => $this->grundwortPasst($ingredientName, (string) $la->designation))
+            ->values();
+
+        return $passend->sortByDesc(fn ($la) => (float) ($la->score ?? 0.0))->first();
+    }
+
+    /**
      * Darf ein AUTOMATISCHER Mint diesen LA für den Text nehmen? Nur, wenn ein Produktwort von Text (oder einem
      * kuratierten Alias) und LA dasselbe Grundwort trägt — das eine endet auf das andere („Filet" ⊂ „Rinderfilet",
      * „Zwiebeln" = „Zwiebel"). Lauf 87 (demo, 3798): „Rinderbeinscheiben: frisch" → LA/GP „Rinderknochen" — nur der

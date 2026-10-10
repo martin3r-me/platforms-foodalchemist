@@ -157,6 +157,7 @@ class TerminologyService
         ['sauerrahm', 'saure sahne'],
         ['blumenkohl', 'karfiol'],                        // karfiol = AT
         ['rote bete', 'rote rübe', 'rande'],
+        ['lauch', 'porree'],                              // Lauf 88: LA heißt oft „Porree"
         ['kohlrübe', 'steckrübe'],
         ['speisequark', 'quark', 'topfen'],               // topfen = AT
         ['schmand', 'saure sahne'],
