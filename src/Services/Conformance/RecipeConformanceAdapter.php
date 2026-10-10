@@ -49,9 +49,20 @@ class RecipeConformanceAdapter implements ConformanceAdapter
             return $befunde;
         }
         $heuristik = app(\Platform\FoodAlchemist\Services\Matching\MatchHeuristics::class);
+        $engine = app(\Platform\FoodAlchemist\Services\Matching\TokenEngine::class);
         $verweise = [];
         $luecken = [];
+        $schnittNurImGp = [];
         foreach ($r->ingredients as $z) {
+            // Lauf 89 (3814): §2-Code-Befund „zutat:Rinderbeinscheiben: frisch, geschnitten" — die Schnittform steht nur im
+            // GP-NAMEN (Stamm), die Zeile heißt „Rinderbeinscheiben: frisch". Das heilt kein Umschreiben des Rezepts.
+            $gpName = (string) ($z->gp?->name ?? '');
+            if ($gpName !== '') {
+                $schnitt = fn (string $s) => array_filter($engine->tokenize($s), fn ($t) => $engine->isCutFormToken($t) && $engine->istReinesMerkmal($t)) !== [];
+                if ($schnitt($gpName) && ! $schnitt(trim(($z->raw_text ?? '') . ' ' . ($z->display_name ?? '') . ' ' . ($z->note ?? '')))) {
+                    $schnittNurImGp[self::zeilenSchluessel($gpName)] = true;
+                }
+            }
             foreach (array_filter([$z->display_name, $z->raw_text, $z->referencedRecipe?->name, $z->gp?->name]) as $text) {
                 if ($z->referenced_recipe_id !== null) {
                     $verweise[self::zeilenSchluessel((string) $text)] = true;
@@ -61,10 +72,13 @@ class RecipeConformanceAdapter implements ConformanceAdapter
             }
         }
 
-        return array_values(array_filter($befunde, function (array $b) use ($r, $verweise, $luecken) {
+        return array_values(array_filter($befunde, function (array $b) use ($r, $verweise, $luecken, $schnittNurImGp) {
             $feld = trim((string) ($b['feld'] ?? ''));
             if (preg_match('/^zutat\s*:\s*(.+)$/iu', $feld, $m) === 1) {
                 $k = self::zeilenSchluessel($m[1]);
+                if (isset($schnittNurImGp[$k]) && preg_match('/§\s*2(?![\d.])/u', (string) ($b['paragraph'] ?? '')) === 1) {
+                    return false;   // gehört in die GP-Pflege, nicht in die Rezept-Heilung
+                }
                 if (isset($verweise[$k])) {
                     return false;
                 }

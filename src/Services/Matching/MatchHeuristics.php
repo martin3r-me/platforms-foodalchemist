@@ -241,7 +241,7 @@ class MatchHeuristics
                 if (in_array($t, self::NEBENPRODUKT_MARKER, true)) {
                     $mutter = array_values(array_diff_key($tokens, [$i => true]));
                     if ($mutter !== []) {
-                        return ['mutter_text' => implode(' ', $mutter), 'form' => mb_convert_case($t, MB_CASE_TITLE, 'UTF-8')];
+                        return ['mutter_text' => implode(' ', $mutter), 'form' => self::derivatForm($t)];
                     }
                 }
             }
@@ -251,12 +251,21 @@ class MatchHeuristics
             foreach (self::NEBENPRODUKT_MARKER as $m) {
                 $pos = mb_strpos($t, $m);
                 if ($pos !== false && mb_strlen(mb_substr($t, 0, $pos)) >= 3) {
-                    return ['mutter_text' => mb_substr($t, 0, $pos), 'form' => mb_convert_case($m, MB_CASE_TITLE, 'UTF-8')];
+                    return ['mutter_text' => mb_substr($t, 0, $pos), 'form' => self::derivatForm($m)];
                 }
             }
         }
 
         return null;
+    }
+
+    /** Anzeigeform des Markers im Derivat-Namen — Regelwerk GP §11.2 schreibt „Kalb: frisch, Parüren" (Umlaut, nicht „Paruere"). */
+    private static function derivatForm(string $marker): string
+    {
+        return match ($marker) {
+            'paruere', 'parueren' => 'Parüren',
+            default => mb_convert_case($marker, MB_CASE_TITLE, 'UTF-8'),
+        };
     }
 
     /** P8 — Button-Heuristik: Label-Hinweis ODER Halbfabrikat ODER Zubereitungs-Marker. */
