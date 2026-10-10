@@ -49,7 +49,7 @@ final class ZukaufBasisrezeptService
     {
         $praefix = RezeptTypVokabular::praefix($text);
         $typ = $praefix !== null ? RezeptTypVokabular::finde($praefix) : null;
-        $bezeichnung = self::warenname($text);
+        $bezeichnung = RezeptTypVokabular::ohneTyp($text);
         if ($bezeichnung === '' || app(MatchHeuristics::class)->queryIstHalbfabrikat(app(TokenEngine::class)->tokenize($bezeichnung))) {
             return null;
         }
@@ -69,7 +69,7 @@ final class ZukaufBasisrezeptService
     {
         $praefix = RezeptTypVokabular::praefix($text);
         $typ = $praefix !== null ? RezeptTypVokabular::finde($praefix) : null;
-        $bezeichnung = self::warenname($text);   // ohne Typ und ohne Klammer-Zusatz
+        $bezeichnung = RezeptTypVokabular::ohneTyp($text);   // ohne Typ und ohne Klammer-Zusatz
         if ($bezeichnung === '' || app(MatchHeuristics::class)->queryIstHalbfabrikat(app(TokenEngine::class)->tokenize($bezeichnung))) {
             return null;
         }
@@ -98,7 +98,7 @@ final class ZukaufBasisrezeptService
      */
     public function erkenneTeilfertig(Team $team, string $text): ?array
     {
-        $bezeichnung = self::warenname($text);
+        $bezeichnung = RezeptTypVokabular::ohneTyp($text);
         if ($bezeichnung === '' || app(MatchHeuristics::class)->queryIstHalbfabrikat(app(TokenEngine::class)->tokenize($bezeichnung))) {
             return null;
         }
@@ -162,21 +162,6 @@ final class ZukaufBasisrezeptService
     /** Panko trägt das Toastaroma und wird wie Brot verarbeitet (Dominique 10.10.) — gleich welche Warengruppe. */
     private const BROT_WOERTER = ['toast', 'baguette', 'brot', 'broetchen', 'ciabatta', 'focaccia', 'brioche', 'sauerteig', 'pumpernickel', 'laugen', 'panko'];
 
-    /**
-     * Warenname einer Zeile: der Teil vor dem Doppelpunkt fällt nur weg, wenn er ein Typ aus dem Vokabular ist
-     * („Crunch: Röstzwiebeln“ → „Röstzwiebeln“). In GP-Schreibweise („Ciabatta: frisch“) ist er das Produkt — vorher
-     * blieb davon nur „frisch“ übrig, und die Brot-/Zukauf-Erkennung lief ins Leere. Klammer-Zusätze fallen immer weg.
-     */
-    private static function warenname(string $text): string
-    {
-        $praefix = RezeptTypVokabular::praefix($text);
-        if ($praefix !== null && RezeptTypVokabular::finde($praefix) !== null) {
-            return RezeptTypVokabular::bezeichnung($text);
-        }
-
-        return trim((string) preg_replace('/\([^)]*\)/u', '', $text));
-    }
-
     private static function istBrotGp(FoodAlchemistGp $gp): bool
     {
         if (str_contains(mb_strtolower((string) $gp->name), 'panko')) {
@@ -206,7 +191,7 @@ final class ZukaufBasisrezeptService
      */
     public function istBrotZeile(Team $team, string $text): bool
     {
-        $bezeichnung = self::warenname($text);
+        $bezeichnung = RezeptTypVokabular::ohneTyp($text);
         if ($bezeichnung === '') {
             return false;
         }
