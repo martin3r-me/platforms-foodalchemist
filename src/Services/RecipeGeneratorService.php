@@ -201,6 +201,9 @@ class RecipeGeneratorService
         if (empty($kiRezept['name']) || empty($kiRezept['zutaten']) || ! is_array($kiRezept['zutaten'])) {
             throw new \RuntimeException('KI lieferte kein verwertbares Rezept (name + zutaten nötig) — Roh-Antwort prüfen.');
         }
+        // demo Lauf 93: die KI lieferte die Zubereitung als Liste von Schritten statt als Text — „Array to string
+        // conversion“ im Schritt-Spiegel, das Gericht scheiterte nach dem KI-Call. Liste → nummerierter Text.
+        $kiRezept['preparation'] = self::zubereitungAlsText($kiRezept['preparation'] ?? null);
 
         // Parameter → GL-04-Hooks (A-1: from_scratch UND teil_convenience drehen den Pool)
         // VK-Modus: Komponenten = Basisrezepte zuerst (D-6 — Zutaten sind GPs UND/ODER Basisrezepte)
@@ -1022,6 +1025,29 @@ class RecipeGeneratorService
      * stehen — das meldet die deterministische Prüfung, raten wäre schlimmer. Verkaufsgerichte haben ein
      * eigenes Schema ([HG] …) und bleiben unberührt.
      */
+    /**
+     * Zubereitung als Text — die KI liefert sie mal als Markdown-String, mal als Liste von Schritten (Strings oder
+     * Objekte mit text/schritt/beschreibung). Eine Liste wird zu „1. …\n2. …“, wie es RecipeStepService::ausMarkdown liest.
+     */
+    public static function zubereitungAlsText(mixed $wert): ?string
+    {
+        if (is_array($wert)) {
+            $schritte = [];
+            foreach ($wert as $s) {
+                $t = is_array($s) ? ($s['text'] ?? $s['schritt'] ?? $s['beschreibung'] ?? $s['anweisung'] ?? null) : $s;
+                $t = is_scalar($t) ? trim((string) $t) : '';
+                if ($t !== '') {
+                    $schritte[] = (count($schritte) + 1) . '. ' . preg_replace('/^\s*\d+[.)]\s*/u', '', $t);
+                }
+            }
+
+            return $schritte === [] ? null : implode("\n", $schritte);
+        }
+        $t = is_scalar($wert) ? trim((string) $wert) : '';
+
+        return $t === '' ? null : $t;
+    }
+
     private function kanonischerTyp(string $name, bool $vkModus): string
     {
         if ($vkModus || ($praefix = \Platform\FoodAlchemist\Support\RezeptTypVokabular::praefix($name)) === null) {
