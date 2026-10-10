@@ -91,6 +91,43 @@ final class ZukaufBasisrezeptService
     }
 
     /**
+     * Zukauf über die ZEILE im Elternrezept, wenn der Kind-Auftrag sie nicht verrät. demo Lauf 92: der Plan nannte das
+     * Kind „Brühe: Gemüse (HF)“, die Zeile im Elternrezept war „Gemuesebruehe Achenbach Delikatessen: konzentriert, TK“
+     * (WG 13, sicherer Treffer) — gebaut wurde ein freies Rezept mit ungebundener Zeile und EK 0. Die Ware kommt aus der
+     * Zeile, Typ und Bezeichnung aus dem Auftrag („Brühe: Gemüse (Zukauf)“). Keine Halbfabrikat-Sperre: ob die Zeile
+     * Fertigware ist, entscheidet hier das sichere GP selbst, nicht ihr Wortlaut („…bruehe“).
+     *
+     * @return array{gp_id: int, gp_name: string, typ: string, bezeichnung: string}|null
+     */
+    public function erkenneAusZeile(Team $team, string $zeile, string $auftrag): ?array
+    {
+        $zeile = trim($zeile);
+        if ($zeile === '' || app(MatchHeuristics::class)->istBasisrezeptZeile($zeile)) {
+            return null;   // eine Basisrezept-Zeile („Brühe: Gemüse“) ist kein Warenname
+        }
+        $t = app(IngredientMatchService::class)->matchIngredient($team, $zeile, null, 'gp_first');
+        if (($t['target'] ?? null) !== 'gp' || ($t['status'] ?? null) !== MatchBand::Exact) {
+            return null;
+        }
+        $gp = FoodAlchemistGp::visibleToTeam($team)->find((int) $t['gp_id']);
+        $praefix = RezeptTypVokabular::praefix($auftrag);
+        $typ = $praefix !== null ? RezeptTypVokabular::finde($praefix) : null;
+        if ($gp === null || ! $this->istFertigwareGp($gp, $typ === null)) {
+            return null;
+        }
+        $typ ??= $this->typAusWarengruppe($gp);
+        if ($typ === null) {
+            return null;
+        }
+        $bezeichnung = RezeptTypVokabular::ohneTyp($auftrag);
+        if ($bezeichnung === '' || RezeptTypVokabular::finde($bezeichnung) !== null) {
+            $bezeichnung = RezeptTypVokabular::ohneTyp((string) $gp->name);
+        }
+
+        return ['gp_id' => (int) $gp->id, 'gp_name' => (string) $gp->name, 'typ' => $typ, 'bezeichnung' => $bezeichnung];
+    }
+
+    /**
      * Teilfertig (Dominique 10.10.): die Hauptzeile ist sicher TK-Gemüse/-Obst, das in der Küche noch gewürzt, glasiert
      * oder angeschwenkt wird — gebaut wird kurz und ohne Komponenten-Plan, Fertigungstiefe teilfertig, Name ohne Zusatz.
      *

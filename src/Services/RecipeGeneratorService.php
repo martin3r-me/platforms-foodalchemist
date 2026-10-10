@@ -240,15 +240,11 @@ class RecipeGeneratorService
                 'taste_direction' => in_array($kiRezept['taste_direction'] ?? null, \Platform\FoodAlchemist\Services\RecipeService::TASTE_DIRECTIONS, true)
                     ? $kiRezept['taste_direction']
                     : null,
-                // Eine Vorgabe der Kaskade (TK-Hauptzeile → teilfertig) gewinnt vor dem Lauf-Regler.
+                // Eine Vorgabe der Kaskade (TK-Hauptzeile → teilfertig) gilt sofort; sonst leitet sie sich nach dem
+                // Zutaten-Sync aus dem Inhalt ab (FertigungstiefeAusInhalt) — der Lauf-Regler ist Erlaubnis, kein Wert.
                 'production_depth' => in_array($parameter['production_depth_vorgabe'] ?? null, ['from_scratch', 'teilfertig', 'convenience'], true)
                     ? $parameter['production_depth_vorgabe']
-                    : match ($parameter['convenience'] ?? null) {
-                        'from_scratch' => 'from_scratch',
-                        'teil_convenience' => 'teilfertig',
-                        'voll_convenience' => 'convenience',
-                        default => null,
-                    },
+                    : null,
             ]);
             $recipe->update([
                 'preparation' => $kiRezept['preparation'] ?? null,
@@ -543,6 +539,14 @@ class RecipeGeneratorService
             }
 
             $recipe = $this->recipes->syncIngredients($team, $recipe->id, $zeilen);   // inkl. Recompute
+            // Fertigungstiefe aus dem Inhalt (Review Berater Lauf 92, Punkt S). In der Kaskade gilt sie als gesetzt
+            // (Quelle kaskade, die KI-Anreicherung überschreibt sie nicht); außerhalb darf das Fertigungs-Glied nachbessern.
+            if (! in_array($parameter['production_depth_vorgabe'] ?? null, ['from_scratch', 'teilfertig', 'convenience'], true)) {
+                $recipe->forceFill([
+                    'production_depth' => \Platform\FoodAlchemist\Support\FertigungstiefeAusInhalt::ableiten($recipe),
+                    'production_depth_source' => isset($parameter['cascade_step_id']) ? 'kaskade' : null,
+                ])->save();
+            }
 
             // #505 / Kohärenz-Gate (2026-08-07): recipeCohesion nach Zutaten-Sync (braucht
             // persistierte Zeilen) — jetzt auch für BASIS, nicht nur VK. Diagnose-Zahl, kein
