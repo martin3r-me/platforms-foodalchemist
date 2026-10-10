@@ -186,10 +186,11 @@ class LaCandidateFinder
      * Relevanz (score), nicht die Einkaufs-Sortierung — sonst gewann „LAUCH SPROSSEN" (0,672, günstiger Lead) gegen
      * „Lauch geputzt" (0,737). Gleichstand: Reihenfolge von find() (Lead/Preis).
      */
-    public function bestMitGrundwort(Team $team, string $ingredientName, ?string $wgCode = null, int $k = 5): ?FoodAlchemistSupplierItem
+    public function bestMitGrundwort(Team $team, string $ingredientName, ?string $wgCode = null, int $k = 5, ?string $pflichtForm = null): ?FoodAlchemistSupplierItem
     {
         $passend = $this->find($team, $ingredientName, $wgCode, $k)
-            ->filter(fn ($la) => $this->grundwortPasst($ingredientName, (string) $la->designation))
+            ->filter(fn ($la) => $this->grundwortPasst($ingredientName, (string) $la->designation)
+                && ($pflichtForm === null || $this->traegtForm((string) $la->designation, $pflichtForm)))
             ->values();
 
         return $passend->sortByDesc(fn ($la) => (float) ($la->score ?? 0.0))->first();
@@ -220,6 +221,26 @@ class LaCandidateFinder
                         return true;
                     }
                 }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Trägt die LA-Bezeichnung die Derivat-Form des Texts (§11.2-Marker, z. B. „knochen" in „Kalbsknochen")? Lauf 90:
+     * „Rind: frisch, Parüren" gewann den LA „Rinder-Hamburger-Patties" (Grundwort Rind passt) — ein LA ohne die Form
+     * ist ein anderes Produkt.
+     */
+    public function traegtForm(string $designation, string $marker): bool
+    {
+        $basis = (string) preg_replace('/(en|e|n)$/u', '', mb_strtolower($marker));
+        if (mb_strlen($basis) < 4) {
+            $basis = mb_strtolower($marker);
+        }
+        foreach ($this->engine->tokenize($designation) as $t) {
+            if (str_contains($t, $basis)) {
+                return true;
             }
         }
 
