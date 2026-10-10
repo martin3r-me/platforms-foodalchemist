@@ -103,7 +103,18 @@ class RecipeGeneratorService
 
     private function generiereImLauf(Team $team, string $description, array $parameter = [], ?array $kiRezeptOverride = null, bool $vkModus = false, ?string $createdVia = null, ?array $preparedContext = null, ?callable $onProgress = null): array
     {
+        // Regler nur für die Dauer DIESES Laufs — danach zurück, sonst sähe ein späterer Aufruf derselben Instanz
+        // (Queue-Worker, Test) den Regler des vorherigen Laufs (Review Hans).
         $this->laufRegler = is_string($parameter['convenience'] ?? null) ? $parameter['convenience'] : null;
+        try {
+            return $this->generiereImLaufKern($team, $description, $parameter, $kiRezeptOverride, $vkModus, $createdVia, $preparedContext, $onProgress);
+        } finally {
+            $this->laufRegler = null;
+        }
+    }
+
+    private function generiereImLaufKern(Team $team, string $description, array $parameter = [], ?array $kiRezeptOverride = null, bool $vkModus = false, ?string $createdVia = null, ?array $preparedContext = null, ?callable $onProgress = null): array
+    {
         // P0.2: feine Fortschritts-Stufen — die UI zeigt live, WO der Lauf steht; ein
         // OOM-/Hänger-Tod bleibt am zuletzt gemeldeten Schritt stehen (Pinpoint der Ursache).
         $melde = static function (string $stufe) use ($onProgress): void {
