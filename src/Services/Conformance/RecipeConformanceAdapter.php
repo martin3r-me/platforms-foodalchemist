@@ -107,6 +107,50 @@ class RecipeConformanceAdapter implements ConformanceAdapter
             || preg_match('/cooking_loss|garverlust|einkochverlust/iu', $feld) === 1;
     }
 
+    /** §1.x-KI-Befund über den Klammerzusatz „(Zukauf)" — Hausentscheidung „Typ: Ware (Zukauf)", kein Verstoß (Lauf 92). */
+    public function istBekannteAusnahme(array $befund): bool
+    {
+        $zusatz = \Platform\FoodAlchemist\Services\ZukaufBasisrezeptService::ZUSATZ;
+        $text = (string) ($befund['feld'] ?? '') . ' ' . (string) ($befund['begruendung'] ?? '') . ' ' . (string) ($befund['vorschlag'] ?? '');
+
+        return str_starts_with(\Platform\FoodAlchemist\Services\ConformanceService::paragraphStamm((string) ($befund['paragraph'] ?? '')), '1')
+            && mb_stripos($text, trim($zusatz, '()')) !== false;
+    }
+
+    /**
+     * Tierarten (Regelwerk GP §3, WG 04 gegliedert nach Tierart: Rind, Kalb, Schwein, Lamm, Geflügel, Wild — ergänzt um
+     * gängige Unterarten im Rezeptnamen). Steht im Namen nur die Tierart („Jus: Rind"), ist kein Cut der Zweck.
+     */
+    private const TIERARTEN = ['rind', 'rinder', 'kalb', 'kalbs', 'schwein', 'schweine', 'lamm', 'gefluegel', 'wild',
+        'huhn', 'huehner', 'haehnchen', 'pute', 'puten', 'ente', 'enten', 'gans', 'reh', 'hirsch', 'ochse', 'ochsen'];
+
+    /**
+     * Steht die Zutat als Hauptzutat im Rezeptnamen, ist sie Zweck, nicht Abfall (Dominique 10.10.: „Fond: Tafelspitz",
+     * „Brühe: Suppenhuhn", „Brühe: Kochfleisch"). Ein Wort der Bezeichnung (nach dem Typ, ohne Tierart) muss in der Zeile
+     * stehen — die Zeile gleich oder spezifischer („Rindertafelspitz" endet auf „Tafelspitz"), nicht umgekehrt
+     * („Huhn: Brust" ist kein Suppenhuhn). „Jus: Kalb" macht keinen Kalbs-Cut zum Zweck.
+     */
+    private static function istZweckZutat(string $rezeptName, string $zeile): bool
+    {
+        $bezeichnung = \Platform\FoodAlchemist\Support\RezeptTypVokabular::ohneTyp($rezeptName);
+        if ($bezeichnung === '' || $bezeichnung === $rezeptName) {
+            return false;   // ohne Typ-Präfix kein Zweck ablesbar
+        }
+        $engine = app(\Platform\FoodAlchemist\Services\Matching\TokenEngine::class);
+        $woerter = fn (string $s) => array_values(array_filter($engine->tokenize($s),
+            fn ($t) => mb_strlen($t) >= 4 && ! $engine->istReinesMerkmal($t)));
+        $zweck = array_values(array_filter($woerter($bezeichnung), fn ($w) => ! in_array($w, self::TIERARTEN, true)));
+        foreach ($zweck as $w) {
+            foreach ($woerter($zeile) as $v) {
+                if ($v === $w || str_ends_with($v, $w) || $engine->stemGerman($v) === $engine->stemGerman($w)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
     private static function zeilenSchluessel(string $text): string
     {
         $t = (string) preg_replace('/\([^)]*\)/u', '', $text);
@@ -313,7 +357,10 @@ class RecipeConformanceAdapter implements ConformanceAdapter
             foreach ($buch::fuerZiel('rezeptzeile.typ') as $regel) {
                 foreach ($r->ingredients as $z) {
                     $text = (string) ($z->gp?->name ?? $z->referencedRecipe?->name ?? $z->raw_text);
-                    $melde($motor->pruefe($regel, $text, ['typ' => $typ]), 'zutat:' . $text);
+                    // warengruppe: die Hausstandard-Regel gilt nur für Fleisch/Geflügel/Wild-GPs (WG 04); ohne GP schweigt sie.
+                    $melde($motor->pruefe($regel, $text, ['typ' => $typ, 'warengruppe' => (string) ($z->gp?->commodity_group_code ?? ''),
+                        'is_derivat' => $z->gp !== null ? ($z->gp->is_derivat ? '1' : '0') : '',
+                        'zweck' => self::istZweckZutat($name, $text) ? '1' : '0']), 'zutat:' . $text);
                 }
             }
         }
@@ -447,6 +494,10 @@ class RecipeConformanceAdapter implements ConformanceAdapter
                 : []))->values()->all(),
         ];
 
+        // Hausentscheidung (Lauf 92): „(Zukauf)" ist der Kennzeichen-Zusatz für Zukauf-Basisrezepte — nicht als §1.5 melden.
+        $kontext['hausentscheidungen'] = 'Der Klammerzusatz „' . \Platform\FoodAlchemist\Services\ZukaufBasisrezeptService::ZUSATZ
+            . '“ kennzeichnet Zukauf-Basisrezepte (Hausstandard „Typ: Ware (Zukauf)“) — kein Verstoß gegen das Klammer-Vokabular.';
+
         if ($vk) {
             // Verkaufs-Facetten sind Prüf-MASSSTAB (passt Name/Klasse zur §-Regel?),
             // gespiegelt aus dem Review-Kontext — kein Schreibziel.
@@ -565,8 +616,12 @@ class RecipeConformanceAdapter implements ConformanceAdapter
             // Spec 80 C3: Verweiszeilen (Unterrezepte) fasst die Selbstheilung nicht an. Lässt die KI eine
             // weg, kommt sie unverändert zurück — ein Befund am Unterrezept wird dort geheilt, nicht hier.
             $behalten = array_flip(array_filter(array_map(static fn ($z) => $z['id'] ?? null, $zeilen)));
+            // Lauf 92: auch Zeilen, die die Kaskade als Unterrezept führt (Dependency → Kind-Step), fasst die Heilung nicht
+            // an — sonst zeigt die Dependency ins Leere und das gebaute Kind bleibt verwaist.
+            $kaskadeGefuehrt = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRecipeDependency::query()
+                ->whereIn('ingredient_id', $r->ingredients->pluck('id')->all())->pluck('ingredient_id')->map(fn ($v) => (int) $v)->flip()->all();
             foreach ($r->ingredients as $orig) {
-                if ($orig->referenced_recipe_id !== null && ! isset($behalten[$orig->id])) {
+                if (($orig->referenced_recipe_id !== null || isset($kaskadeGefuehrt[(int) $orig->id])) && ! isset($behalten[$orig->id])) {
                     $zeilen[] = app(RecipeReviseService::class)->bestandsZeile($orig);
                 }
             }

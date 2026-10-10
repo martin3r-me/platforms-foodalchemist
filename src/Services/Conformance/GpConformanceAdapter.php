@@ -33,6 +33,11 @@ class GpConformanceAdapter implements ConformanceAdapter
         return $befunde;
     }
 
+    public function istBekannteAusnahme(array $befund): bool
+    {
+        return false;
+    }
+
     /**
      * Spec 81: alle aktiven Regeln mit Ziel `gp.name` (Gebinde, Platzhalter, §8-Pflichtangaben, §12 …) prüft der
      * Code bei jeder Prüfung selbst — dieselben Regeln wie beim Anlegen (GpNamingService::validateGpName).

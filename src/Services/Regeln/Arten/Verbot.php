@@ -9,14 +9,23 @@ use Platform\FoodAlchemist\Services\Regeln\RegelText;
  * Ein Muster ablehnen. params: `tokens: []` (ganze Wörter; mit `modus: teil` auch innerhalb eines Wortes),
  * `teile: []` (immer auch innerhalb eines Wortes — „milch" in „Vollmilch"; Ausnahmen fangen „Kokosmilch"),
  * `muster: []` (Regex, beim Speichern geprüft), `ausnahmen: []`, `bedingung: {feld: [werte]}`, `grund`.
+ * `nur_mit: []` dreht die Logik um: verboten ist, was KEINEN dieser Wortteile trägt (Hausstandard Jus/Fond: ein Fleisch-
+ * GP nur als Knochen/Karkasse/Abschnitt … — eine Verbotsliste der Verkaufs-Cuts läuft jedem neuen Cut hinterher,
+ * demo Lauf 91: „Rinderhueften: frisch, pariert" stand auf keiner Liste).
+ * `erlaubt_wenn: {feld: [werte]}` gibt eine Zeile unabhängig von Wörtern frei (Dominique 10.10.: ein GP mit
+ * is_derivat=1 — Knochen, Parüren, Abschnitte, Karkassen nach Regelwerk GP §11.2 — ist immer erlaubt). Als Liste
+ * `[{…}, {…}]` genügt EINE erfüllte Bedingung (Derivat ODER Zweck-Zutat „Fond: Tafelspitz").
  */
 final class Verbot implements RegelArt
 {
     public function validiere(array $params): array
     {
         $fehler = Bedingung::validiere($params['bedingung'] ?? null);
-        if (empty($params['tokens']) && empty($params['muster']) && empty($params['teile'])) {
-            $fehler[] = 'tokens, teile oder muster nötig';
+        foreach (self::alsListe($params['erlaubt_wenn'] ?? null) as $b) {
+            $fehler = [...$fehler, ...Bedingung::validiere($b)];
+        }
+        if (empty($params['tokens']) && empty($params['muster']) && empty($params['teile']) && empty($params['nur_mit'])) {
+            $fehler[] = 'tokens, teile, muster oder nur_mit nötig';
         }
         foreach ((array) ($params['muster'] ?? []) as $m) {
             if (($f = RegelText::musterFehler((string) $m)) !== null) {
@@ -33,6 +42,21 @@ final class Verbot implements RegelArt
         $p = $regel->params;
         if (isset($p['bedingung']) && ! Bedingung::erfuellt((array) $p['bedingung'], $kontext)) {
             return null;
+        }
+        foreach (self::alsListe($p['erlaubt_wenn'] ?? null) as $b) {
+            if (Bedingung::erfuellt((array) $b, $kontext)) {
+                return null;
+            }
+        }
+        if (! empty($p['nur_mit'])) {
+            // Wortteil, damit Komposita zählen („Rinderknochen", „Hühnerflügel").
+            foreach ((array) $p['nur_mit'] as $erlaubt) {
+                if (RegelText::hatTeil($text, (string) $erlaubt)) {
+                    return null;
+                }
+            }
+
+            return trim((string) (preg_split('/[:,(]/u', $text, 2)[0] ?? $text)) ?: $text;
         }
         $ausnahmen = array_map(static fn ($a) => RegelText::norm((string) $a), (array) ($p['ausnahmen'] ?? []));
         foreach ($ausnahmen as $a) {
@@ -62,6 +86,16 @@ final class Verbot implements RegelArt
         }
 
         return null;
+    }
+
+    /** @return list<array<string, mixed>> eine Bedingung `{…}` oder eine Liste `[{…}, {…}]` (ODER) */
+    private static function alsListe(mixed $wert): array
+    {
+        if (empty($wert) || ! is_array($wert)) {
+            return [];
+        }
+
+        return array_is_list($wert) ? array_values(array_filter($wert, 'is_array')) : [$wert];
     }
 
     public function pruefe(FoodAlchemistRule $regel, string $text, array $kontext = []): array

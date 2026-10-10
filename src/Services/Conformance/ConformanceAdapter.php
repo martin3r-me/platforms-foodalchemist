@@ -68,6 +68,15 @@ interface ConformanceAdapter
     public function heilbar(Team $team, int $id, array $befunde): array;
 
     /**
+     * Ein KI-Befund, der einer festen Hausentscheidung widerspricht und darum verworfen wird (Lauf 92: §1.5 meldete
+     * den Klammerzusatz „(Zukauf)", obwohl „Typ: Ware (Zukauf)" Dominiques Namensentscheidung ist). Nur für Befunde
+     * mit quelle=ki; Code-Befunde kommen aus Regeln und werden dort gepflegt.
+     *
+     * @param  array<string, mixed>  $befund  Form: {@see \Platform\FoodAlchemist\Services\ConformanceService::normalisiere}
+     */
+    public function istBekannteAusnahme(array $befund): bool;
+
+    /**
      * DETERMINISTISCHE Befunde — was ohne KI prüfbar ist, wird ohne KI geprüft.
      *
      * Anlass (2026-09-07): das Rezept „Crème-Suppe: Tomate-Speck" trug 1.600 g

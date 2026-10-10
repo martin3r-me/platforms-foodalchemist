@@ -188,7 +188,9 @@ final class RegelPromptBlock
         $woerter = $liste([...(array) ($p['tokens'] ?? []), ...(array) ($p['teile'] ?? [])]);
         $grund = trim((string) ($p['grund'] ?? ''));
         // Reines Muster-Verbot (Regex): die Muster sagen der KI nichts — Grund und falsche Beispiele schon.
-        $zeile = $kopf . ': ' . ($woerter !== '' ? 'nicht verwenden — ' . $woerter : 'nicht so') . ($grund !== '' ? '. ' . $grund : '');
+        $nurMit = $liste((array) ($p['nur_mit'] ?? []));
+        $zeile = $kopf . ': ' . ($nurMit !== '' ? 'nur mit ' . $nurMit
+            : ($woerter !== '' ? 'nicht verwenden — ' . $woerter : 'nicht so')) . ($grund !== '' ? '. ' . $grund : '');
         // Beispiele immer mitgeben: Wortstämme („beinscheib“) sagen der KI wenig, ganze Zutaten schon. demo Lauf 89: trotz
         // Hausstandard-Regel 2 kg Rinderbeinscheiben in der Jus — die Regel stand nur als Stamm-Liste im Prompt.
         $bsp = (array) ($r->beispiele ?? []);

@@ -144,7 +144,7 @@ class RecipeService
         return FoodAlchemistRecipe::visibleToTeam($team)->basis()
             ->with([
                 'kategorie:id,main_group_id,label',
-                'ingredients.gp:id,name,main_ingredient_slug,lead_la_supplier_item_id,piece_default_g', // Zeilen-EK braucht Lead+Stückgewicht (T3)
+                'ingredients.gp:id,name,main_ingredient_slug,lead_la_supplier_item_id,piece_default_g,commodity_group_code,is_derivat', // Zeilen-EK braucht Lead+Stückgewicht (T3)
                 'ingredients.unit:id,slug,display_de,dimension,default_in_g,default_in_ml', // T1-Kaskade braucht die Faktoren
                 'ingredients.referencedRecipe:id,name,ek_per_kg_eur',
                 'equipment',
@@ -165,7 +165,7 @@ class RecipeService
         return FoodAlchemistRecipe::visibleToTeam($team)
             ->with([
                 'kategorie:id,main_group_id,label',
-                'ingredients.gp:id,name,main_ingredient_slug,lead_la_supplier_item_id,piece_default_g',
+                'ingredients.gp:id,name,main_ingredient_slug,lead_la_supplier_item_id,piece_default_g,commodity_group_code,is_derivat',
                 'ingredients.unit:id,slug,display_de,dimension,default_in_g,default_in_ml',
                 // yield_kg/yield_pieces: g/Stück fürs Live-Rechnen im Zutaten-Editor
                 // (Stück-Sub — spiegelt RecipeRecomputeService::grammFaktor)
@@ -1028,6 +1028,19 @@ class RecipeService
         DB::transaction(function () use ($team, $recipe, $zeilen, $preserveMissing) {
             $vorhanden = $recipe->ingredients()->get()->keyBy('id');
             $behalten = [];
+            // Lauf 92 (demo, 3834 „Beilage: Herbsttrompeten"): die Heilung legte die Zeile „Gemüsebrühe", die die Kaskade als
+            // Unterrezept führt (Dependency → Kind „Brühe: Gemüse"), hier auf ein Bio-Brühpulver-GP. Das fertige Kind konnte
+            // sich danach nicht mehr binden (bindIngredient bricht bei gesetztem gp_id ab) und blieb verwaist. Solche Zeilen
+            // erdet nur die Kaskade (wie minteFehlendeGps, L4).
+            // §2/§10-Korrektur wie im Generator (GpKorrektur) auch beim Re-Grounding — Lauf 92: die Heilung legte Zeilen auf
+            // „geachtelt"/„geschnitten 15 mm" statt „frisch, ganz". Fertigungstiefe → convenience (Kuratorin 10.10.):
+            // from_scratch → from_scratch, teilfertig → teil_convenience, convenience → voll_convenience, leer → kein Filter.
+            // Ein Bio-Vorgabefeld hat das Rezept nicht → kein Bio-Zwang.
+            $korrParameter = array_filter(['convenience' => match ($recipe->production_depth) {
+                'from_scratch' => 'from_scratch', 'teilfertig' => 'teil_convenience', 'convenience' => 'voll_convenience', default => null,
+            }]);
+            $kaskadeGefuehrt = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRecipeDependency::query()
+                ->whereIn('ingredient_id', $vorhanden->keys()->all())->pluck('ingredient_id')->map(fn ($v) => (int) $v)->flip()->all();
 
             foreach (array_values($zeilen) as $i => $z) {
                 if ($preserveMissing && isset($z['id']) && (! $vorhanden->has((int) $z['id']) || in_array((int) $z['id'], $behalten, true))) {
@@ -1046,7 +1059,7 @@ class RecipeService
                 // und bei Ablehnung stillschweigend verworfen (kein Throw fürs Auto-Grounding).
                 $groundedMethod = null;
                 $groundedConfidence = null;
-                if ($gpId === null && $subId === null && ($z['auto_ground'] ?? true)) {
+                if ($gpId === null && $subId === null && ($z['auto_ground'] ?? true) && ! isset($kaskadeGefuehrt[(int) ($z['id'] ?? 0)])) {
                     $groundName = trim((string) ($z['display_name'] ?? '')) ?: trim((string) ($z['raw_text'] ?? ''));
                     if ($groundName !== '') {
                         // Live-Test demo 09.10. (Lauf 83): eine Basisrezept-Zeile („Püree: Petersilienwurzel",
@@ -1067,6 +1080,13 @@ class RecipeService
                             $gpId = (int) $treffer['gp_id'];
                             $groundedMethod = 'gp_v2_fk';
                             $groundedConfidence = round((float) $treffer['score'], 3);
+                            $korr = \Platform\FoodAlchemist\Support\GpKorrektur::korrigiere($team, $gpId, $korrParameter);
+                            if ($korr !== null) {
+                                $gpId = (int) $korr['gp_id'];
+                                if (trim((string) ($z['note'] ?? '')) === '' && ($korr['notiz'] ?? null) !== null) {
+                                    $z['note'] = $korr['notiz'];   // Verarbeitung wandert in die Zeile (§2)
+                                }
+                            }
                         } elseif ($treffer['target'] === 'sub_recipe') {
                             $cand = (int) $treffer['recipe_id'];
                             if ($cand !== $recipe->id
