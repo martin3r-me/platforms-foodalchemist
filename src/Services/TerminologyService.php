@@ -158,6 +158,9 @@ class TerminologyService
         ['blumenkohl', 'karfiol'],                        // karfiol = AT
         ['rote bete', 'rote rübe', 'rande'],
         ['lauch', 'porree'],                              // Lauf 88: LA heißt oft „Porree"
+        // Hausstandard Dominique (Jus/Fond/Brühe aus Knochen UND Abschnitten): Tier-Parüren → allgemeines Parüren-GP.
+        // Bewusst NICHT „…abschnitte" — die laufen als §11.2-Nebenprodukt-Derivat ihrer Mutter.
+        ['parüren', 'fleischabschnitte', 'kalbsparüren', 'rinderparüren', 'schweineparüren', 'lammparüren', 'geflügelparüren', 'wildparüren'],
         ['kohlrübe', 'steckrübe'],
         ['speisequark', 'quark', 'topfen'],               // topfen = AT
         ['schmand', 'saure sahne'],
