@@ -635,6 +635,16 @@ class RecipeDependencyWorkflowService
                 // Das ist der eigentliche Fix gegen „datenbank → sehr viele neue Rezepte".
                 $reuse = app(\Platform\FoodAlchemist\Services\RecipeService::class)
                     ->findByTokenSetMitReife($team, $text);
+                // Haus-Zuordnung (Regel basisrezept.bestand.haus_zuordnung), wenn der Name nichts trifft: nur freigegeben.
+                if ($reuse === null) {
+                    $haus = app(RecipeKomponentenPlanService::class)->hausZuordnung($team, $text, [
+                        'sektor' => $parameter['sektor'] ?? null, 'niveau' => $parameter['level'] ?? null,
+                        'convenience' => $parameter['convenience'] ?? null]);
+                    $hausStatus = $haus?->status instanceof \BackedEnum ? $haus->status->value : (string) $haus?->status;
+                    if ($haus !== null && $hausStatus === 'approved') {
+                        $reuse = ['recipe' => $haus, 'reif' => true, 'eigen' => (int) $haus->team_id === (int) $team->id, 'luecken' => []];
+                    }
+                }
                 $bestehend = $reuse['recipe'] ?? null;
                 // Spec 80 B3: auch der Namens-Treffer muss zur Diät passen (Gemüsefond mit Speck ≠ vegetarisch).
                 if ($bestehend !== null && \Platform\FoodAlchemist\Support\BestandsPassung::grund(

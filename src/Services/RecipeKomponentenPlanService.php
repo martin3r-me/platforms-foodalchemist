@@ -59,7 +59,8 @@ class RecipeKomponentenPlanService
             $menge = is_numeric($k['menge'] ?? null) && (float) $k['menge'] > 0 ? (float) $k['menge'] : null;
             $funktion = in_array($k['funktion'] ?? null, self::FUNKTIONEN, true) ? $k['funktion'] : null;
             $abgelehnt = [];
-            $bestand = $bestandErlaubt ? $this->bestandFuer($team, $name, $diaet, $abgelehnt, $params['convenience'] ?? null) : null;
+            $bestand = $bestandErlaubt ? $this->bestandFuer($team, $name, $diaet, $abgelehnt, $params['convenience'] ?? null,
+                ['sektor' => $params['sektor'] ?? null, 'niveau' => $params['level'] ?? null]) : null;
             $out[] = [
                 'name' => $name,
                 'funktion' => $funktion,
@@ -117,9 +118,15 @@ class RecipeKomponentenPlanService
      * @param  list<array{recipe_id: int, name: string, grund: string}>  $abgelehnt
      * @return array{recipe_id: int, name: string}|null
      */
-    public function bestandFuer(Team $team, string $name, array $diaet, array &$abgelehnt, ?string $convenience = null): ?array
+    public function bestandFuer(Team $team, string $name, array $diaet, array &$abgelehnt, ?string $convenience = null, array $kontext = []): ?array
     {
         $ids = [];
+        $hausId = null;
+        // Haus-Zuordnung zuerst (Regel basisrezept.bestand.haus_zuordnung): „Jus: Rind“ → „Jus: Standard“ — der
+        // Namensvergleich verbindet das nie. Freigabe-, Typ-, Diät- und Regler-Prüfung gelten unten weiter.
+        if (($haus = $this->hausZuordnung($team, $name, [...$kontext, 'convenience' => $convenience])) !== null) {
+            $ids[] = $hausId = (int) $haus->id;
+        }
         if (($gleich = app(RecipeService::class)->findByTokenSetMitReife($team, $name)) !== null) {
             $ids[] = (int) $gleich['recipe']->id;
         }
@@ -148,7 +155,8 @@ class RecipeKomponentenPlanService
 
                 continue;
             }
-            $grund = BestandsPassung::grund($name, (string) $r->name,
+            // Eine gepflegte Haus-Zuordnung ist die fachliche Entscheidung — kein Namensvergleich mehr, nur Diät und Regler.
+            $grund = BestandsPassung::grund((int) $r->id === $hausId ? '' : $name, (string) $r->name,
                 $r->spec_is_vegan !== null ? (bool) $r->spec_is_vegan : null,
                 $r->spec_is_vegetarian !== null ? (bool) $r->spec_is_vegetarian : null, $diaet)
                 ?? BestandsPassung::fertigungGrund($team, $name, $r->production_depth, $convenience);
@@ -159,6 +167,30 @@ class RecipeKomponentenPlanService
         }
 
         return null;
+    }
+
+    /**
+     * Haus-Zuordnung: bevorzugtes Bestandsrezept für eine Komponente laut Regel (Begriff/Aliase, optional je Kontext
+     * sektor/niveau/convenience). Liefert das Rezept, unabhängig vom Status — die Prüfung macht der Aufrufer.
+     *
+     * @param  array<string, mixed>  $kontext
+     */
+    public function hausZuordnung(Team $team, string $name, array $kontext = []): ?FoodAlchemistRecipe
+    {
+        $regel = \Platform\FoodAlchemist\Services\Regeln\RegelBuch::falls('basisrezept.bestand.haus_zuordnung');
+        if ($regel === null) {
+            return null;
+        }
+        $kontext = array_filter($kontext, static fn ($v) => is_scalar($v) && (string) $v !== '');
+        $treffer = app(\Platform\FoodAlchemist\Services\Regeln\Arten\Zuordnung::class)->finde($regel, $name, $kontext);
+        if ($treffer === null || $treffer['ziel_typ'] !== 'rezept') {
+            return null;
+        }
+        $q = FoodAlchemistRecipe::query()->visibleToTeam($team)->basis();
+
+        return $treffer['ziel_id'] !== null
+            ? $q->find($treffer['ziel_id'])
+            : $q->where('name', $treffer['ziel_name'])->orderBy('id')->first();
     }
 
     /**
