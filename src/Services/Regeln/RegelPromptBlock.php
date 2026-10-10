@@ -74,6 +74,21 @@ final class RegelPromptBlock
         'vk.name.bausteine' => 'Bausteine des Gerichtnamens',
     ];
 
+    /**
+     * Prompts, die ein Regelwerk-Dossier im Kanon lesen, den Regel-Block aber bewusst NICHT bekommen — mit Grund.
+     * Der Wächter {@see RegelKonsumentenPruefung} meldet jeden anderen Kanon-Leser einer aktiven Regel.
+     */
+    private const BEWUSST_OHNE = [
+        'vk.plating' => 'Aufgabe verlangt Teller-Mengen je Komponente; Regel vk.3.8 (keine absoluten Mengen im Schritt) widerspricht — der Code prüft platingSteps selbst.',
+        'vk.wording' => 'Dominique 10.10.: die §1.2-Verbote gelten nicht für den Marketing-Namen.',
+    ];
+
+    /** @return array<string, string> Prompt-Key => Grund */
+    public static function bewusstOhne(): array
+    {
+        return self::BEWUSST_OHNE;
+    }
+
     /** @return list<string> Prompt-Keys, die einen Regel-Block bekommen (für Messung und Tests). */
     public static function konsumenten(): array
     {
