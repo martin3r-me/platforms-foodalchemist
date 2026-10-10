@@ -204,3 +204,11 @@ it('Hausstandard: Jus/Fond/Brühe aus Knochen und Abschnitten — Cut als Hinwei
         ->and($befunde($jus)[0]['feld'])->toContain('Beinscheiben')
         ->and($befunde($beilage))->toHaveCount(0);                    // nur Jus/Fond/Brühe
 });
+
+it('Hausstandard: der Regel-Block zeigt ganze Beispiele statt Wortstämme (Lauf 89: Beinscheiben trotz Regel)', function () {
+    $block = app(\Platform\FoodAlchemist\Services\Regeln\RegelPromptBlock::class)->fuerPromptKey('recipe.generator');
+
+    expect($block)->toContain('Falsch z. B.: „Rinderbeinscheiben: frisch“')
+        ->toContain('Richtig z. B.: „Rinderknochen: frisch“')
+        ->toContain('Kalb: frisch, Parüren');
+});
