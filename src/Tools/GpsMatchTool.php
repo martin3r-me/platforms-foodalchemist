@@ -36,6 +36,9 @@ class GpsMatchTool extends FoodAlchemistTool implements ToolContract, ToolMetada
             . 'Kein Treffer und kein Mint → foodalchemist.gp_proposals.POST (Beschaffungs-Wunsch), nie raten. '
             . 'Basisrezept-Zeilen (Typ-Präfix wie "Püree: …", "Jus: …"; basisrezept_zeile=true) bekommen nie ein GP: '
             . 'nur ein freigegebenes Unterrezept, sonst bleibt die Zeile eine Lücke (Basisrezept anlegen), kein Mint.'
+            . ' Ein gefundenes, aber nicht bindbares Unterrezept steht mit Grund in `abgelehnt`. Freigabe und Passung prüft das '
+            . 'Tool immer; Fertigung (convenience) und harte Diät (diaet_hart) NUR, wenn diese Argumente gesetzt sind — '
+            . 'dieselben Werte wie in der Session mitgeben.'
             . ' Ablauf, Soll-Aspekte und geltende Regelwerke vorher: foodalchemist.ablauf.GET(vorgang="gp_aus_la_anlegen").';
     }
 
@@ -67,6 +70,12 @@ class GpsMatchTool extends FoodAlchemistTool implements ToolContract, ToolMetada
                     'description' => 'Reuse-Achse wie im Kreativ-Modus — steuert den Boden des Post-Match-Draws: '
                         . 'hybrid = 0,70 (Default), nur_bestand = 0,55 (breiter erden), komplett_neu = zieht NIE. '
                         . 'Denselben Wert setzen wie in der Session, sonst weicht das Tool-Urteil von der Generierung ab.'],
+                'convenience' => ['type' => 'string', 'enum' => ['from_scratch', 'teil_convenience', 'voll_convenience'],
+                    'description' => 'Eigenleistung wie in der Session: from_scratch zieht keinen Zukauf-Bestand als Unterrezept. '
+                        . 'Die Fertigung wird NUR geprüft, wenn dieses Argument gesetzt ist — weglassen = keine Fertigungsprüfung.'],
+                'diaet_hart' => ['type' => 'array', 'items' => ['type' => 'string', 'enum' => ['vegan', 'vegetarisch']],
+                    'description' => 'Harte Diät wie in der Session: ein Unterrezept, das sie verletzt, wird nicht gezogen (Grund in `abgelehnt`). '
+                        . 'Die Diät wird NUR geprüft, wenn dieses Argument gesetzt ist. Freigabe und Passung prüft das Tool immer.'],
             ],
             'required' => ['zutat'],
         ];
@@ -125,6 +134,7 @@ class GpsMatchTool extends FoodAlchemistTool implements ToolContract, ToolMetada
         // also kein Zyklus-Schutz, nur Sichtbarkeit + Status.
         $bestand = (string) ($arguments['bestand'] ?? 'hybrid');
         $drawFloor = $svc->drawFloor($bestand);
+        $abgelehnt = [];
         if (($match['target'] ?? null) === 'none') {
             $wantKind = ($mode === 'sub_recipe_first' || $basisrezeptZeile) ? 'sub' : 'gp';
             foreach ($svc->drawKandidaten($kandidaten, $wantKind, $bestand) as $c) {
@@ -132,21 +142,24 @@ class GpsMatchTool extends FoodAlchemistTool implements ToolContract, ToolMetada
                     ? \Platform\FoodAlchemist\Models\FoodAlchemistGp::query()->visibleToTeam($team)
                         ->whereIn('status', ['approved', 'tentative'])->where('is_platzhalter', false)
                         ->find($c['id'])
-                    // Prüfung wie `RecipeGeneratorService::validiereProposedSub`: seit Spec 80 B4 nur
-                    // freigegebene Basisrezepte (Bestand = freigegeben) plus Funktionsprüfung
-                    // (`BestandsPassung`: Typ, Bestandteile). Vorher stub/draft/review mit — der Agent
-                    // verknüpfte so Entwürfe, die der Generator ablehnt.
-                    : \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::visibleToTeam($team)->basis()
-                        ->where('status', 'approved')->find($c['id']);
+                    // Prüfung wie `RecipeGeneratorService::validiereProposedSub` über dieselbe Funktion
+                    // ({@see \Platform\FoodAlchemist\Support\BestandsZulaessigkeit}): Freigabe, Fertigung, Passung.
+                    // Abgelehnte Kandidaten bindet das Tool nicht, meldet aber den Grund (`abgelehnt`), damit der
+                    // Agent nicht minten oder neu anlegen muss, ohne zu wissen, warum der Bestand nicht passte.
+                    : \Platform\FoodAlchemist\Support\BestandsZulaessigkeit::lade($team, (int) $c['id']);
                 if ($gezogen === null) {
                     continue;
                 }
-                if ($wantKind === 'sub' && \Platform\FoodAlchemist\Support\BestandsPassung::grund(
-                    $zutat, (string) $gezogen->name,
-                    $gezogen->spec_is_vegan !== null ? (bool) $gezogen->spec_is_vegan : null,
-                    $gezogen->spec_is_vegetarian !== null ? (bool) $gezogen->spec_is_vegetarian : null,
-                ) !== null) {
-                    continue;
+                if ($wantKind === 'sub') {
+                    $grund = \Platform\FoodAlchemist\Support\BestandsZulaessigkeit::pruefe($team, $zutat, $gezogen, [
+                        'diaet_hart' => array_values(array_filter((array) ($arguments['diaet_hart'] ?? []), 'is_string')),
+                        'regler' => isset($arguments['convenience']) ? (string) $arguments['convenience'] : null,
+                    ]);
+                    if ($grund !== null) {
+                        $abgelehnt[] = ['recipe_id' => (int) $gezogen->id, 'name' => (string) $gezogen->name, 'grund' => $grund];
+
+                        continue;
+                    }
                 }
                 $match = [
                     'target' => $wantKind === 'gp' ? 'gp' : 'sub_recipe',
@@ -198,6 +211,8 @@ class GpsMatchTool extends FoodAlchemistTool implements ToolContract, ToolMetada
             // Nachvollziehbar machen, WARUM (nicht) gezogen wurde: bei `none` ist die Frage
             // „lag nichts über dem Boden?" sonst nicht beantwortbar.
             'draw' => ['bestand' => $bestand, 'floor' => $drawFloor],
+            // Bestand gefunden, aber nicht gebunden — mit Grund (Freigabe, Fertigung, Passung).
+            'abgelehnt' => $abgelehnt,
             'candidates' => $kandidaten,
         ]);
     }

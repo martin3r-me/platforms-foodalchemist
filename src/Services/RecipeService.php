@@ -1089,7 +1089,18 @@ class RecipeService
                             }
                         } elseif ($treffer['target'] === 'sub_recipe') {
                             $cand = (int) $treffer['recipe_id'];
-                            if ($cand !== $recipe->id
+                            // Dieselbe Bestands-Entscheidung wie Generator und Plan ({@see \Platform\FoodAlchemist\Support\BestandsZulaessigkeit}):
+                            // Matcher-Treffer → keine Bestandteil-Prüfung (wie `nurDiaetFuer` im Generator). Die Heilung kennt
+                            // keinen Lauf und keine harte Diät; den Fertigungs-Regler liefert die Fertigungstiefe des Rezepts
+                            // selbst (wie bei GpKorrektur oben) — ein „from scratch“-Rezept bekommt keinen Zukauf-Bestand.
+                            // Das ist der INHALT des Rezepts, nicht die Lauf-Erlaubnis (offener Punkt „Convenience-Erlaubnis am
+                            // Rezept“, Spec 81). Konservativ (Kuratorin 10.10.): ein teil_convenience-Rezept mit reinem
+                            // Rohware-Inhalt bekommt in der Heilung keinen Zukauf neu.
+                            $kandidat = \Platform\FoodAlchemist\Support\BestandsZulaessigkeit::lade($team, $cand);
+                            if ($cand !== $recipe->id && $kandidat !== null
+                                && \Platform\FoodAlchemist\Support\BestandsZulaessigkeit::pruefe($team, $groundName, $kandidat, [
+                                    'bestandteile' => false, 'regler' => $korrParameter['convenience'] ?? null,
+                                ]) === null
                                 && app(RecipeRecomputeService::class)->pruefeVerknuepfung($recipe->id, $cand)['erlaubt']) {
                                 $subId = $cand;
                                 $groundedMethod = 'recipe_ref';

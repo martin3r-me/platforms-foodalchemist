@@ -1151,40 +1151,24 @@ class RecipeGeneratorService
         if (in_array(app(Matching\TokenEngine::class)->produktForm($text)['zustand'], ['TK', 'trocken', 'konserviert'], true)) {
             return null;
         }
-        // Spec 80 B4 (Entscheid Dominique 2026-10-09): Bestand = NUR freigegebene Basisrezepte. Vorher
-        // zählten stub/draft/review mit — 86 % der Bestandsverweise auf demo zeigten auf Entwürfe.
-        $kandidat = FoodAlchemistRecipe::query()->visibleToTeam($team)->basis()
-            ->when(! $vertraut, fn ($q) => $q->where('status', 'approved'))
-            ->whereKey($id)->first(['id', 'name', 'spec_is_vegan', 'spec_is_vegetarian', 'production_depth']);
-        if ($kandidat === null) {
+        // Spec 80 B4 (Entscheid Dominique 2026-10-09): Bestand = NUR freigegebene Basisrezepte. Ein nicht freigegebener
+        // Treffer fällt hier still weg (wie bisher, kein Ablehnungs-Eintrag); eigene Import-Bausteine (`vertraut`) zählen.
+        $kandidat = \Platform\FoodAlchemist\Support\BestandsZulaessigkeit::lade($team, $id);
+        $status = $kandidat?->status instanceof \BackedEnum ? $kandidat->status->value : (string) $kandidat?->status;
+        if ($kandidat === null || (! $vertraut && $status !== 'approved')) {
             return null;
         }
-        // demo Lauf 95 (Session from_scratch): der Komponenten-Plan lehnte „Jus: Rind (Zukauf)“ ab, der Matcher-Pfad band
-        // ihn danach trotzdem — die Fertigungs-Prüfung saß nur im Plan. Hier gilt sie für JEDEN Bindungsweg
-        // (KI-Vorschlag, Matcher, Post-Match-Draw); auch für eigene Import-Bausteine nicht ausgenommen.
-        $fGrund = \Platform\FoodAlchemist\Support\BestandsPassung::fertigungGrund(
-            $team, $text !== '' ? $text : (string) $nurDiaetFuer, $kandidat->production_depth, $this->laufRegler);
-        if ($fGrund !== null) {
-            if ($abgelehnt !== null) {
-                $abgelehnt[] = ['text' => $text !== '' ? $text : (string) $nurDiaetFuer, 'recipe_id' => (int) $kandidat->id, 'name' => (string) $kandidat->name, 'grund' => $fGrund];
-            }
-
-            return null;
-        }
-        if ($vertraut) {
-            $text = '';   // eigener Import-Baustein: keine Funktionsprüfung, nur Diät
-        }
-        // Spec 80 B3: Funktionsprüfung (Typ, Bestandteile, Diät). Ohne Zeilentext (reiner Bestandszug ohne
-        // Beschreibung) bleibt es beim bisherigen Verhalten.
-        $grund = \Platform\FoodAlchemist\Support\BestandsPassung::grund(
-            $nurDiaetFuer !== null ? '' : $text, (string) $kandidat->name,
-            $kandidat->spec_is_vegan !== null ? (bool) $kandidat->spec_is_vegan : null,
-            $kandidat->spec_is_vegetarian !== null ? (bool) $kandidat->spec_is_vegetarian : null,
-            $diaetHart,
-        );
+        // Eine Entscheidung für jeden Bindungsweg (KI-Vorschlag, Matcher, Post-Match-Draw) — dieselbe wie im Plan, in
+        // planChildren, beim Re-Grounding und in gps.MATCH ({@see \Platform\FoodAlchemist\Support\BestandsZulaessigkeit}).
+        // Matcher-Treffer (`nurDiaetFuer`) und eigene Import-Bausteine prüfen nur die Diät, keine Bestandteile.
+        $zeile = $text !== '' ? $text : (string) $nurDiaetFuer;
+        $grund = \Platform\FoodAlchemist\Support\BestandsZulaessigkeit::pruefe($team, $zeile, $kandidat, [
+            'vertraut' => $vertraut, 'bestandteile' => ! $vertraut && $nurDiaetFuer === null,
+            'diaet_hart' => $diaetHart, 'regler' => $this->laufRegler,
+        ]);
         if ($grund !== null) {
             if ($abgelehnt !== null) {
-                $abgelehnt[] = ['text' => $text, 'recipe_id' => (int) $kandidat->id, 'name' => (string) $kandidat->name, 'grund' => $grund];
+                $abgelehnt[] = ['text' => $zeile, 'recipe_id' => (int) $kandidat->id, 'name' => (string) $kandidat->name, 'grund' => $grund];
             }
 
             return null;

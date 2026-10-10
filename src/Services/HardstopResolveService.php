@@ -49,7 +49,7 @@ class HardstopResolveService
      * Bestands-Treffer aus der Shortlist binden („Meintest du?").
      *
      * @param  string  $kind  gp|sub
-     * @return array{ok: bool, meldung: string, kind?: string, name?: string}
+     * @return array{ok: bool, meldung: string, kind?: string, name?: string, hinweis?: ?string}
      */
     public function verknuepfe(Team $team, int $recipeId, int $position, string $kind, int $zielId): array
     {
@@ -71,10 +71,19 @@ class HardstopResolveService
             if (! $pruefung['erlaubt']) {
                 return ['ok' => false, 'meldung' => "Verknüpfung abgelehnt: {$pruefung['grund']}."];
             }
+            // Der Mensch entscheidet — keine Sperre. Dieselbe Bestands-Prüfung wie im automatischen Bau
+            // ({@see \Platform\FoodAlchemist\Support\BestandsZulaessigkeit}) liefert nur einen Hinweis, warum die
+            // Automatik diesen Bestand nicht gebunden hätte (z. B. noch nicht freigegeben, Typ passt nicht).
+            $kandidat = \Platform\FoodAlchemist\Support\BestandsZulaessigkeit::lade($team, (int) $ziel->id);
+            $hinweis = $kandidat !== null ? \Platform\FoodAlchemist\Support\BestandsZulaessigkeit::pruefe(
+                $team, (string) ($zeile->display_name ?: $zeile->raw_text), $kandidat, [
+                    'regler' => match ($recipe->production_depth) { 'from_scratch' => 'from_scratch', default => null },
+                ]) : null;
             $this->binde($zeile, null, (int) $ziel->id, MatchMethod::OverrideSubrecipe);
 
-            return ['ok' => true, 'kind' => 'sub', 'name' => $ziel->name,
-                'meldung' => '«' . $ziel->name . '» als Komponente verknüpft.'];
+            return ['ok' => true, 'kind' => 'sub', 'name' => $ziel->name, 'hinweis' => $hinweis,
+                'meldung' => '«' . $ziel->name . '» als Komponente verknüpft.'
+                    . ($hinweis !== null ? " Hinweis: {$hinweis}." : '')];
         }
 
         $gp = FoodAlchemistGp::visibleToTeam($team)->where('is_platzhalter', false)->find($zielId);

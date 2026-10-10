@@ -662,34 +662,35 @@ class RecipeDependencyWorkflowService
             // ── Reuse-Gate (L1, Reuse-Achse aus dem Kreativ-Modus) ────────────────────────────────
             $bestand = (string) ($parameter['bestand'] ?? 'hybrid');
             if ($bestand !== 'komplett_neu') {
-                // Bestand zuerst: existiert die Komponente als Basisrezept (Token-Set-Namensgleichheit)?
-                // Treffer → Eltern-Zutat binden + Reuse-Sichtzeile (skipped), KEIN neuer Erzeugungs-Lauf.
-                // Das ist der eigentliche Fix gegen „datenbank → sehr viele neue Rezepte".
-                $reuse = app(\Platform\FoodAlchemist\Services\RecipeService::class)
-                    ->findByTokenSetMitReife($team, $text);
-                // Haus-Zuordnung (Regel basisrezept.bestand.haus_zuordnung), wenn der Name nichts trifft: nur freigegeben.
-                if ($reuse === null) {
-                    $haus = app(RecipeKomponentenPlanService::class)->hausZuordnung($team, $text, [
-                        'sektor' => $parameter['sektor'] ?? null, 'niveau' => $parameter['level'] ?? null,
-                        'convenience' => $parameter['convenience'] ?? null]);
-                    $hausStatus = $haus?->status instanceof \BackedEnum ? $haus->status->value : (string) $haus?->status;
-                    if ($haus !== null && $hausStatus === 'approved') {
-                        $reuse = ['recipe' => $haus, 'reif' => true, 'eigen' => (int) $haus->team_id === (int) $team->id, 'luecken' => []];
+                // Bestand zuerst: Haus-Zuordnung (Regel basisrezept.bestand.haus_zuordnung) vor Namensgleichheit (Token-Set) —
+                // wie im Komponenten-Plan. Treffer → Eltern-Zutat binden + Reuse-Sichtzeile (skipped), KEIN neuer
+                // Erzeugungs-Lauf (Fix gegen „datenbank → sehr viele neue Rezepte").
+                // Eine Entscheidung für alle Bindungswege ({@see \Platform\FoodAlchemist\Support\BestandsZulaessigkeit}). Vorher
+                // lief hier die volle Bestandteil-Prüfung auch gegen den Haus-Treffer — „Jus: Rind“ → „Jus: Standard“ fiel durch,
+                // die Haus-Zuordnung war in der Kaskade wirkungslos.
+                $kandidaten = [];
+                $haus = app(RecipeKomponentenPlanService::class)->hausZuordnung($team, $text, [
+                    'sektor' => $parameter['sektor'] ?? null, 'niveau' => $parameter['level'] ?? null,
+                    'convenience' => $parameter['convenience'] ?? null]);
+                if ($haus !== null) {
+                    $kandidaten[] = [['recipe' => $haus, 'reif' => true, 'eigen' => (int) $haus->team_id === (int) $team->id, 'luecken' => []], false];
+                }
+                if (($gleich = app(\Platform\FoodAlchemist\Services\RecipeService::class)->findByTokenSetMitReife($team, $text)) !== null) {
+                    $kandidaten[] = [$gleich, true];
+                }
+                $reuse = null;
+                $bestehend = null;
+                foreach ($kandidaten as [$treffer, $mitBestandteilen]) {
+                    $k = \Platform\FoodAlchemist\Support\BestandsZulaessigkeit::lade($team, (int) $treffer['recipe']->id);
+                    if ($k !== null && \Platform\FoodAlchemist\Support\BestandsZulaessigkeit::pruefe($team, $text, $k, [
+                        'bestandteile' => $mitBestandteilen,
+                        'diaet_hart' => array_values(array_filter((array) ($parameter['diaet_hart'] ?? []), 'is_string')),
+                        'regler' => $parameter['convenience'] ?? null,
+                    ]) === null) {
+                        $reuse = $treffer;
+                        $bestehend = $treffer['recipe'];
+                        break;
                     }
-                }
-                $bestehend = $reuse['recipe'] ?? null;
-                // Spec 80 B3: auch der Namens-Treffer muss zur Diät passen (Gemüsefond mit Speck ≠ vegetarisch).
-                if ($bestehend !== null && \Platform\FoodAlchemist\Support\BestandsPassung::grund(
-                    $text, (string) $bestehend->name,
-                    $bestehend->spec_is_vegan !== null ? (bool) $bestehend->spec_is_vegan : null,
-                    $bestehend->spec_is_vegetarian !== null ? (bool) $bestehend->spec_is_vegetarian : null,
-                    array_values(array_filter((array) ($parameter['diaet_hart'] ?? []), 'is_string')),
-                ) !== null) {
-                    $bestehend = null;
-                }
-                if ($bestehend !== null && \Platform\FoodAlchemist\Support\BestandsPassung::fertigungGrund(
-                    $team, $text, $bestehend->production_depth, $parameter['convenience'] ?? null) !== null) {
-                    $bestehend = null;   // Zukauf-Bestand, aber der Lauf verlangt „from scratch“
                 }
                 if ($bestehend !== null && (int) $bestehend->id !== (int) $recipe->id) {
                     $this->bindIngredient($team, (int) $ingredient->id, (int) $bestehend->id);
