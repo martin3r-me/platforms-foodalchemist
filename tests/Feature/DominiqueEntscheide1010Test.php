@@ -66,3 +66,22 @@ it('Re-Grounding korrigiert §2 wie der Generator: teilfertig → Rohform + Noti
     expect($teil->gp_id)->toBe($ganz->id)->and($teil->note)->toBe('geachtelt');
     expect($lauf('convenience')->gp_id)->toBe($geachtelt->id);
 });
+
+it('Hausstandard: steht der Cut als Hauptzutat im Namen, ist er Zweck — „Fond: Tafelspitz" warnt nicht, „Jus: Rind" schon', function () {
+    $regel = FoodAlchemistRule::where('schluessel', 'basisrezept.hausstandard.fond_knochen')->firstOrFail();
+    $befunde = fn ($r) => collect(app(RecipeConformanceAdapter::class)->deterministischeBefunde($this->rootTeam, (int) $r->id))
+        ->where('rule_id', $regel->id)->pluck('feld')->all();
+    $tafelspitz = ($this->gp)('Rindertafelspitz: frisch, pariert', ['commodity_group_code' => '04']);   // demo-Name
+    $suppenhuhn = ($this->gp)('Huhn: Suppenhuhn', ['commodity_group_code' => '04']);
+
+    $fond = $this->makeRecipe($this->rootTeam, 'Fond: Tafelspitz', ['status' => 'draft']);
+    $this->makeIngredient($fond, 'Rindertafelspitz: frisch, pariert', $tafelspitz, '2000', 1);
+    $jus = $this->makeRecipe($this->rootTeam, 'Jus: Rind', ['status' => 'draft']);
+    $this->makeIngredient($jus, 'Rindertafelspitz: frisch, pariert', $tafelspitz, '2000', 1);
+    $bruehe = $this->makeRecipe($this->rootTeam, 'Brühe: Suppenhuhn', ['status' => 'draft']);
+    $this->makeIngredient($bruehe, 'Huhn: Suppenhuhn', $suppenhuhn, '1500', 1);
+
+    expect($befunde($fond))->toBe([])
+        ->and($befunde($jus))->toBe(['zutat:Rindertafelspitz: frisch, pariert'])
+        ->and($befunde($bruehe))->toBe([]);
+});

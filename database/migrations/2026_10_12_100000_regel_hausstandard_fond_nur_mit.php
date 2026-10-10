@@ -28,7 +28,8 @@ return new class extends Migration
                 'nur_mit' => ['knochen', 'karkasse', 'abschnitt', 'parüre', 'sehne', 'hals', 'flügel', 'gräte', 'schwanz', 'fuß', 'füße'],
                 // Dominique 10.10.: Nebenprodukt-Derivate (GP §11.2, is_derivat=1) sind immer erlaubt — die Wortliste ist nur
                 // Rückfall für Bestands-GPs ohne Derivat-Kennzeichen. Neue Cuts fängt so die Datenpflege, keine Wortliste.
-                'erlaubt_wenn' => ['is_derivat' => ['1']],
+                // ODER: Zweck-Zutat — der Cut steht als Hauptzutat im Rezeptnamen („Fond: Tafelspitz", Dominique 10.10.).
+                'erlaubt_wenn' => [['is_derivat' => ['1']], ['zweck' => ['1']]],
                 'bedingung' => ['typ' => $typen, 'warengruppe' => ['04']],
                 'grund' => 'Hausstandard: Jus, Fond und Brühe aus Knochen und Abschnitten — ein Verkaufs-Cut nur, wenn der Auftrag es ausdrücklich verlangt',
             ],

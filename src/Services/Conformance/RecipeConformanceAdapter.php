@@ -117,6 +117,40 @@ class RecipeConformanceAdapter implements ConformanceAdapter
             && mb_stripos($text, trim($zusatz, '()')) !== false;
     }
 
+    /**
+     * Tierarten (Regelwerk GP §3, WG 04 gegliedert nach Tierart: Rind, Kalb, Schwein, Lamm, Geflügel, Wild — ergänzt um
+     * gängige Unterarten im Rezeptnamen). Steht im Namen nur die Tierart („Jus: Rind"), ist kein Cut der Zweck.
+     */
+    private const TIERARTEN = ['rind', 'rinder', 'kalb', 'kalbs', 'schwein', 'schweine', 'lamm', 'gefluegel', 'wild',
+        'huhn', 'huehner', 'haehnchen', 'pute', 'puten', 'ente', 'enten', 'gans', 'reh', 'hirsch', 'ochse', 'ochsen'];
+
+    /**
+     * Steht die Zutat als Hauptzutat im Rezeptnamen, ist sie Zweck, nicht Abfall (Dominique 10.10.: „Fond: Tafelspitz",
+     * „Brühe: Suppenhuhn", „Brühe: Kochfleisch"). Ein Wort der Bezeichnung (nach dem Typ, ohne Tierart) muss in der Zeile
+     * stehen — die Zeile gleich oder spezifischer („Rindertafelspitz" endet auf „Tafelspitz"), nicht umgekehrt
+     * („Huhn: Brust" ist kein Suppenhuhn). „Jus: Kalb" macht keinen Kalbs-Cut zum Zweck.
+     */
+    private static function istZweckZutat(string $rezeptName, string $zeile): bool
+    {
+        $bezeichnung = \Platform\FoodAlchemist\Support\RezeptTypVokabular::ohneTyp($rezeptName);
+        if ($bezeichnung === '' || $bezeichnung === $rezeptName) {
+            return false;   // ohne Typ-Präfix kein Zweck ablesbar
+        }
+        $engine = app(\Platform\FoodAlchemist\Services\Matching\TokenEngine::class);
+        $woerter = fn (string $s) => array_values(array_filter($engine->tokenize($s),
+            fn ($t) => mb_strlen($t) >= 4 && ! $engine->istReinesMerkmal($t)));
+        $zweck = array_values(array_filter($woerter($bezeichnung), fn ($w) => ! in_array($w, self::TIERARTEN, true)));
+        foreach ($zweck as $w) {
+            foreach ($woerter($zeile) as $v) {
+                if ($v === $w || str_ends_with($v, $w) || $engine->stemGerman($v) === $engine->stemGerman($w)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
     private static function zeilenSchluessel(string $text): string
     {
         $t = (string) preg_replace('/\([^)]*\)/u', '', $text);
@@ -325,7 +359,8 @@ class RecipeConformanceAdapter implements ConformanceAdapter
                     $text = (string) ($z->gp?->name ?? $z->referencedRecipe?->name ?? $z->raw_text);
                     // warengruppe: die Hausstandard-Regel gilt nur für Fleisch/Geflügel/Wild-GPs (WG 04); ohne GP schweigt sie.
                     $melde($motor->pruefe($regel, $text, ['typ' => $typ, 'warengruppe' => (string) ($z->gp?->commodity_group_code ?? ''),
-                        'is_derivat' => $z->gp !== null ? ($z->gp->is_derivat ? '1' : '0') : '']), 'zutat:' . $text);
+                        'is_derivat' => $z->gp !== null ? ($z->gp->is_derivat ? '1' : '0') : '',
+                        'zweck' => self::istZweckZutat($name, $text) ? '1' : '0']), 'zutat:' . $text);
                 }
             }
         }

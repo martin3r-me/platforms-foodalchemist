@@ -13,13 +13,17 @@ use Platform\FoodAlchemist\Services\Regeln\RegelText;
  * GP nur als Knochen/Karkasse/Abschnitt … — eine Verbotsliste der Verkaufs-Cuts läuft jedem neuen Cut hinterher,
  * demo Lauf 91: „Rinderhueften: frisch, pariert" stand auf keiner Liste).
  * `erlaubt_wenn: {feld: [werte]}` gibt eine Zeile unabhängig von Wörtern frei (Dominique 10.10.: ein GP mit
- * is_derivat=1 — Knochen, Parüren, Abschnitte, Karkassen nach Regelwerk GP §11.2 — ist immer erlaubt).
+ * is_derivat=1 — Knochen, Parüren, Abschnitte, Karkassen nach Regelwerk GP §11.2 — ist immer erlaubt). Als Liste
+ * `[{…}, {…}]` genügt EINE erfüllte Bedingung (Derivat ODER Zweck-Zutat „Fond: Tafelspitz").
  */
 final class Verbot implements RegelArt
 {
     public function validiere(array $params): array
     {
-        $fehler = [...Bedingung::validiere($params['bedingung'] ?? null), ...Bedingung::validiere($params['erlaubt_wenn'] ?? null)];
+        $fehler = Bedingung::validiere($params['bedingung'] ?? null);
+        foreach (self::alsListe($params['erlaubt_wenn'] ?? null) as $b) {
+            $fehler = [...$fehler, ...Bedingung::validiere($b)];
+        }
         if (empty($params['tokens']) && empty($params['muster']) && empty($params['teile']) && empty($params['nur_mit'])) {
             $fehler[] = 'tokens, teile, muster oder nur_mit nötig';
         }
@@ -39,8 +43,10 @@ final class Verbot implements RegelArt
         if (isset($p['bedingung']) && ! Bedingung::erfuellt((array) $p['bedingung'], $kontext)) {
             return null;
         }
-        if (! empty($p['erlaubt_wenn']) && Bedingung::erfuellt((array) $p['erlaubt_wenn'], $kontext)) {
-            return null;
+        foreach (self::alsListe($p['erlaubt_wenn'] ?? null) as $b) {
+            if (Bedingung::erfuellt((array) $b, $kontext)) {
+                return null;
+            }
         }
         if (! empty($p['nur_mit'])) {
             // Wortteil, damit Komposita zählen („Rinderknochen", „Hühnerflügel").
@@ -80,6 +86,16 @@ final class Verbot implements RegelArt
         }
 
         return null;
+    }
+
+    /** @return list<array<string, mixed>> eine Bedingung `{…}` oder eine Liste `[{…}, {…}]` (ODER) */
+    private static function alsListe(mixed $wert): array
+    {
+        if (empty($wert) || ! is_array($wert)) {
+            return [];
+        }
+
+        return array_is_list($wert) ? array_values(array_filter($wert, 'is_array')) : [$wert];
     }
 
     public function pruefe(FoodAlchemistRule $regel, string $text, array $kontext = []): array
