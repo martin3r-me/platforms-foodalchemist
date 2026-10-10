@@ -226,6 +226,74 @@ class LaCandidateFinder
         return false;
     }
 
+    /** Produktwort-Enden, die eine ZUBEREITUNG statt Rohware benennen (Grillwurst, Lyoner, Brühe …). */
+    private const ZUBEREITET_ENDEN = [
+        'wurst', 'wuerst', 'lyoner', 'burger', 'spiess', 'salat', 'brueh', 'supp', 'sauc', 'soss', 'fond', 'jus',
+        'pueree', 'schinken', 'aufschnitt', 'nugget', 'cevapcici', 'frikadell', 'terrin', 'paste', 'pastet',
+    ];
+
+    /** Verarbeitungs-Wörter, die Rohware ausschließen (gegart, geräuchert, paniert …). */
+    private const VERARBEITET_ANFAENGE = [
+        'gegart', 'gekocht', 'verzehrfertig', 'geraeuchert', 'geräuchert', 'mariniert', 'paniert', 'gebraten', 'angebraten',
+        'gegrillt', 'gepoekelt', 'gepökelt', 'vorgegart', 'vorgekocht',
+    ];
+
+    /**
+     * Mutter eines §11.2-Derivats: der beste Kandidat, der ROHWARE dieser Mutter ist (Entscheidung Dominique/Kuratorin
+     * 10.10., Lauf 89). Auf demo gab es für „Geflügel" nur Grillwurst/Lyoner/Burger — die Mutter wurde daraus gemintet,
+     * und das Derivat hätte deren Allergene LIVE geerbt. Keine Rohware → null (das Derivat bleibt eine Lücke).
+     */
+    public function bestRohwareMutter(Team $team, string $mutter, ?string $wgCode = null, int $k = 5): ?FoodAlchemistSupplierItem
+    {
+        return $this->find($team, $mutter, $wgCode, $k)
+            ->filter(fn ($la) => $this->grundwortPasst($mutter, (string) $la->designation)
+                && $this->istRohwareVon((string) $la->designation, $mutter))
+            ->values()
+            ->sortByDesc(fn ($la) => (float) ($la->score ?? 0.0))
+            ->first();
+    }
+
+    /**
+     * Rohware der Mutter: Zustand frisch/TK (oder keiner), kein Verarbeitungs-Wort, und jedes Produktwort ist die
+     * Mutter selbst bzw. ein Teil davon („Rinderhüfte" zu „Rind") — kein anderes Produkt („Grillwurst") und keine
+     * Zubereitung („Rinderbrühe").
+     */
+    public function istRohwareVon(string $designation, string $mutter): bool
+    {
+        if (in_array($this->engine->produktForm($designation)['zustand'], ['trocken', 'konserviert'], true)) {
+            return false;
+        }
+        foreach ($this->engine->tokenize($designation) as $t) {
+            foreach (self::VERARBEITET_ANFAENGE as $v) {
+                if (str_starts_with($t, $v)) {
+                    return false;
+                }
+            }
+        }
+        $m = $this->produktWoerter($mutter);
+        if ($m === []) {
+            return false;
+        }
+        foreach ($this->produktWoerter($designation) as $w) {
+            foreach (self::ZUBEREITET_ENDEN as $ende) {
+                if (str_ends_with($w, $ende) && ! in_array($w, $m, true)) {
+                    return false;
+                }
+            }
+            $verwandt = false;
+            foreach ($m as $mw) {
+                if (str_starts_with($w, $mw) || str_ends_with($w, $mw) || str_starts_with($mw, $w)) {
+                    $verwandt = true;
+                }
+            }
+            if (! $verwandt) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     /** @return list<string> gestemmte Produktwörter (ohne Zustand/Schnitt/Füllwörter) */
     private function produktWoerter(string $s): array
     {
