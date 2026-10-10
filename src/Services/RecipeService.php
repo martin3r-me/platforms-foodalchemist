@@ -561,7 +561,7 @@ class RecipeService
      *
      * @return \Illuminate\Support\Collection<int, FoodAlchemistRecipe>
      */
-    private function tokenSetTreffer(Team $team, string $name): \Illuminate\Support\Collection
+    private function tokenSetTreffer(Team $team, string $name, bool $mitVariante = false): \Illuminate\Support\Collection
     {
         $name = trim($name);
         if ($name === '') {
@@ -573,16 +573,29 @@ class RecipeService
         if ($zielTokens === []) {
             return collect();
         }
-        $out = collect();
+        // Klammer-Zusätze („(Zukauf)“, „(hell)“) sind nach BR §1.5 Unterscheidungsmerkmale, kein Bestandteil: für die
+        // BESTAND-Suche zählt ohne exakten Treffer der Name ohne Zusatz („Jus: Rind“ ↔ „Jus: Rind (Zukauf)“), exakt
+        // gewinnt. Nicht für den Dubletten-Schutz beim Anlegen — „Jus: Rind“ selbst kochen bleibt ein eigenes Rezept.
+        $ohneZusatz = static function (string $n) use ($engine): array {
+            $t = $engine->tokenize(trim((string) preg_replace('/\([^)]*\)/u', ' ', $n)));
+            sort($t);
+
+            return $t;
+        };
+        $zielOhne = $ohneZusatz($name);
+        $exakt = collect();
+        $variante = collect();
         foreach (FoodAlchemistRecipe::visibleToTeam($team)->basis()->orderBy('id')->cursor() as $r) {
             $tokens = $engine->tokenize((string) $r->name);
             sort($tokens);
             if ($tokens === $zielTokens) {
-                $out->push($r);
+                $exakt->push($r);
+            } elseif ($mitVariante && $zielOhne !== [] && $ohneZusatz((string) $r->name) === $zielOhne) {
+                $variante->push($r);
             }
         }
 
-        return $out;
+        return $exakt->isNotEmpty() ? $exakt : $variante;
     }
 
     /**
@@ -619,7 +632,7 @@ class RecipeService
         // Spec 80 B4 (Entscheid Dominique 2026-10-09): Bestand = NUR freigegebene Basisrezepte. Vorher
         // galten auch draft/review als Bestand (nur Stubs fielen raus) — 86 % der Verweise auf demo
         // zeigten auf Entwürfe. Die reine Namens-Auflösung (findByTokenSet) sieht weiter alle Stadien.
-        $kandidaten = $this->tokenSetTreffer($team, $name)
+        $kandidaten = $this->tokenSetTreffer($team, $name, mitVariante: true)
             ->filter(fn ($r) => $r->status === RecipeStatus::Approved)
             ->values()->all();
         if ($kandidaten === []) {
