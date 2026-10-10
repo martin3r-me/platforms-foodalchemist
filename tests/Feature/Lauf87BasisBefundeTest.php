@@ -212,3 +212,14 @@ it('Hausstandard: der Regel-Block zeigt ganze Beispiele statt Wortstämme (Lauf 
         ->toContain('Richtig z. B.: „Rinderknochen: frisch“')
         ->toContain('Kalb: frisch, Parüren');
 });
+
+it('Bestand: „Jus: Rind“ findet den freigegebenen „Jus: Rind (Zukauf)“ — exakter Name gewinnt, Anlegen bleibt unberührt', function () {
+    $svc = app(\Platform\FoodAlchemist\Services\RecipeService::class);
+    $zukauf = $this->makeRecipe($this->rootTeam, 'Jus: Rind (Zukauf)', ['status' => 'approved']);
+
+    expect($svc->findByTokenSetMitReife($this->rootTeam, 'Jus: Rind')['recipe']->id ?? null)->toBe($zukauf->id)
+        ->and($svc->findByTokenSet($this->rootTeam, 'Jus: Rind'))->toBeNull();          // Dubletten-Schutz: kein Umleiten
+
+    $exakt = $this->makeRecipe($this->rootTeam, 'Jus: Rind', ['status' => 'approved']);
+    expect($svc->findByTokenSetMitReife($this->rootTeam, 'Jus: Rind')['recipe']->id ?? null)->toBe($exakt->id);
+});

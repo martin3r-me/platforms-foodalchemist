@@ -257,8 +257,19 @@ class RecipeDependencyWorkflowService
 
             return;
         }
+        // Brot wird im Gericht nie als Scheibe gereicht, sondern verarbeitet (Dominique 10.10.) — normale Planung mit Auftrag.
+        if (app(ZukaufBasisrezeptService::class)->istBrotZeile($team, $auftragText)) {
+            $params['brot_verarbeiten'] = \Platform\FoodAlchemist\Support\RezeptTypVokabular::bezeichnung($auftragText);
+        }
+        // Teilfertig: sicher TK-Gemüse als Hauptzeile → kurz bauen, kein Plan, Fertigungstiefe teilfertig (Dominique 10.10.).
+        if (($tk = app(ZukaufBasisrezeptService::class)->erkenneTeilfertig($team, $auftragText)) !== null) {
+            $this->baueKind($team, $child, $userId, $text,
+                [...$params, 'teilfertig_ware' => $tk['gp_name'], 'production_depth_vorgabe' => 'teilfertig'], $vollAnreichern);
+
+            return;
+        }
         $heuristik = app(\Platform\FoodAlchemist\Services\Matching\MatchHeuristics::class);
-        if (! $heuristik->istBasisrezeptZeile($auftragText)
+        if (! isset($params['brot_verarbeiten']) && ! $heuristik->istBasisrezeptZeile($auftragText)
             && ! $heuristik->queryIstHalbfabrikat(app(\Platform\FoodAlchemist\Services\Matching\TokenEngine::class)->tokenize($auftragText))) {
             $params['ruest_ware'] = $auftragText;
         }
@@ -628,6 +639,16 @@ class RecipeDependencyWorkflowService
                 // Das ist der eigentliche Fix gegen „datenbank → sehr viele neue Rezepte".
                 $reuse = app(\Platform\FoodAlchemist\Services\RecipeService::class)
                     ->findByTokenSetMitReife($team, $text);
+                // Haus-Zuordnung (Regel basisrezept.bestand.haus_zuordnung), wenn der Name nichts trifft: nur freigegeben.
+                if ($reuse === null) {
+                    $haus = app(RecipeKomponentenPlanService::class)->hausZuordnung($team, $text, [
+                        'sektor' => $parameter['sektor'] ?? null, 'niveau' => $parameter['level'] ?? null,
+                        'convenience' => $parameter['convenience'] ?? null]);
+                    $hausStatus = $haus?->status instanceof \BackedEnum ? $haus->status->value : (string) $haus?->status;
+                    if ($haus !== null && $hausStatus === 'approved') {
+                        $reuse = ['recipe' => $haus, 'reif' => true, 'eigen' => (int) $haus->team_id === (int) $team->id, 'luecken' => []];
+                    }
+                }
                 $bestehend = $reuse['recipe'] ?? null;
                 // Spec 80 B3: auch der Namens-Treffer muss zur Diät passen (Gemüsefond mit Speck ≠ vegetarisch).
                 if ($bestehend !== null && \Platform\FoodAlchemist\Support\BestandsPassung::grund(
@@ -637,6 +658,10 @@ class RecipeDependencyWorkflowService
                     array_values(array_filter((array) ($parameter['diaet_hart'] ?? []), 'is_string')),
                 ) !== null) {
                     $bestehend = null;
+                }
+                if ($bestehend !== null && \Platform\FoodAlchemist\Support\BestandsPassung::fertigungGrund(
+                    $team, $text, $bestehend->production_depth, $parameter['convenience'] ?? null) !== null) {
+                    $bestehend = null;   // Zukauf-Bestand, aber der Lauf verlangt „from scratch“
                 }
                 if ($bestehend !== null && (int) $bestehend->id !== (int) $recipe->id) {
                     $this->bindIngredient($team, (int) $ingredient->id, (int) $bestehend->id);

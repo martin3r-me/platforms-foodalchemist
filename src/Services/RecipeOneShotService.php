@@ -317,6 +317,11 @@ class RecipeOneShotService
     /** @return array{status: string, production_depth?: ?string, fehler?: string} */
     private function fertigungsGlied(FoodAlchemistRecipe $recipe): array
     {
+        // Von der Kaskade oder von Hand gesetzt (Zukauf → convenience, TK-Hauptzeile → teilfertig): die KI überschreibt
+        // das nicht — sonst widerspräche das Feld nach der Freigabe dem Namen „(Zukauf)“ (Dominique 10.10.).
+        if (in_array($recipe->production_depth_source, ['kaskade', 'manuell'], true) && $recipe->production_depth !== null) {
+            return ['status' => 'gesetzt', 'production_depth' => $recipe->production_depth];
+        }
         try {
             $vorschlag = app(Ai\AiGatewayService::class)->propose('recipe.production_depth', [
                 'name' => $recipe->name,
@@ -332,7 +337,7 @@ class RecipeOneShotService
                 return ['status' => 'leer', 'production_depth' => $recipe->production_depth];
             }
 
-            $recipe->forceFill(['production_depth' => $wert])->save();
+            $recipe->forceFill(['production_depth' => $wert, 'production_depth_source' => 'ki'])->save();
 
             return ['status' => 'aktualisiert', 'production_depth' => $wert];
         } catch (\Throwable $e) {

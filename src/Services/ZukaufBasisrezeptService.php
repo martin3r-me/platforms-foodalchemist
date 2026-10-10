@@ -39,6 +39,29 @@ final class ZukaufBasisrezeptService
 
     private const FERTIG_SUB = ['09.6', '01.8'];
 
+    /** Ist die Zeile gekaufte Fertigware (sicherer GP-Treffer auf Fertigware) — unabhängig davon, ob ein Typ ableitbar ist? */
+    public function istFertigware(Team $team, string $text): bool
+    {
+        return $this->fertigwareGp($team, $text) !== null;
+    }
+
+    private function fertigwareGp(Team $team, string $text): ?FoodAlchemistGp
+    {
+        $praefix = RezeptTypVokabular::praefix($text);
+        $typ = $praefix !== null ? RezeptTypVokabular::finde($praefix) : null;
+        $bezeichnung = self::warenname($text);
+        if ($bezeichnung === '' || app(MatchHeuristics::class)->queryIstHalbfabrikat(app(TokenEngine::class)->tokenize($bezeichnung))) {
+            return null;
+        }
+        $t = app(IngredientMatchService::class)->matchIngredient($team, $bezeichnung, null, 'gp_first');
+        if (($t['target'] ?? null) !== 'gp' || ($t['status'] ?? null) !== MatchBand::Exact) {
+            return null;
+        }
+        $gp = FoodAlchemistGp::visibleToTeam($team)->find((int) $t['gp_id']);
+
+        return $gp !== null && $this->istFertigwareGp($gp, $typ === null) ? $gp : null;
+    }
+
     /**
      * @return array{gp_id: int, gp_name: string, typ: string, bezeichnung: string}|null
      */
@@ -46,7 +69,7 @@ final class ZukaufBasisrezeptService
     {
         $praefix = RezeptTypVokabular::praefix($text);
         $typ = $praefix !== null ? RezeptTypVokabular::finde($praefix) : null;
-        $bezeichnung = RezeptTypVokabular::bezeichnung($text);   // ohne Typ und ohne Klammer-Zusatz
+        $bezeichnung = self::warenname($text);   // ohne Typ und ohne Klammer-Zusatz
         if ($bezeichnung === '' || app(MatchHeuristics::class)->queryIstHalbfabrikat(app(TokenEngine::class)->tokenize($bezeichnung))) {
             return null;
         }
@@ -56,7 +79,7 @@ final class ZukaufBasisrezeptService
             return null;
         }
         $gp = FoodAlchemistGp::visibleToTeam($team)->find((int) $t['gp_id']);
-        if ($gp === null || ! $this->istFertigware($gp, $typ === null)) {
+        if ($gp === null || ! $this->istFertigwareGp($gp, $typ === null)) {
             return null;
         }
         $typ ??= $this->typAusWarengruppe($gp);
@@ -65,6 +88,31 @@ final class ZukaufBasisrezeptService
         }
 
         return ['gp_id' => (int) $gp->id, 'gp_name' => (string) $gp->name, 'typ' => $typ, 'bezeichnung' => $bezeichnung];
+    }
+
+    /**
+     * Teilfertig (Dominique 10.10.): die Hauptzeile ist sicher TK-Gemüse/-Obst, das in der Küche noch gewürzt, glasiert
+     * oder angeschwenkt wird — gebaut wird kurz und ohne Komponenten-Plan, Fertigungstiefe teilfertig, Name ohne Zusatz.
+     *
+     * @return array{gp_id: int, gp_name: string}|null
+     */
+    public function erkenneTeilfertig(Team $team, string $text): ?array
+    {
+        $bezeichnung = self::warenname($text);
+        if ($bezeichnung === '' || app(MatchHeuristics::class)->queryIstHalbfabrikat(app(TokenEngine::class)->tokenize($bezeichnung))) {
+            return null;
+        }
+        $t = app(IngredientMatchService::class)->matchIngredient($team, $bezeichnung, null, 'gp_first');
+        if (($t['target'] ?? null) !== 'gp' || ($t['status'] ?? null) !== MatchBand::Exact) {
+            return null;
+        }
+        $gp = FoodAlchemistGp::visibleToTeam($team)->find((int) $t['gp_id']);
+        if ($gp === null || mb_strtoupper((string) $gp->condition) !== 'TK'
+            || ! in_array((string) $gp->commodity_group_code, ['01', '02'], true)) {
+            return null;
+        }
+
+        return ['gp_id' => (int) $gp->id, 'gp_name' => (string) $gp->name];
     }
 
     /** @param  array{gp_id: int, gp_name: string, typ: string, bezeichnung: string}  $ware */
@@ -104,12 +152,85 @@ final class ZukaufBasisrezeptService
             }
         }
         $rezepte->syncIngredients($team, (int) $recipe->id, $zeilen);
+        // Kennzeichen im Namen UND im Feld (Dominique 10.10.): Fertigungstiefe convenience, von der Kaskade gesetzt.
+        $recipe->forceFill(['production_depth' => 'convenience', 'production_depth_source' => 'kaskade'])->save();
 
         return $recipe->refresh();
     }
 
-    private function istFertigware(FoodAlchemistGp $gp, bool $ohneTyp): bool
+    /** Brot & Backwaren (WG 09 außer 09.6 Knabbereien) — Dominique 10.10.: „Ich stelle keinen Toast hin, ich mache einen Crunch daraus.“ */
+    /** Panko trägt das Toastaroma und wird wie Brot verarbeitet (Dominique 10.10.) — gleich welche Warengruppe. */
+    private const BROT_WOERTER = ['toast', 'baguette', 'brot', 'broetchen', 'ciabatta', 'focaccia', 'brioche', 'sauerteig', 'pumpernickel', 'laugen', 'panko'];
+
+    /**
+     * Warenname einer Zeile: der Teil vor dem Doppelpunkt fällt nur weg, wenn er ein Typ aus dem Vokabular ist
+     * („Crunch: Röstzwiebeln“ → „Röstzwiebeln“). In GP-Schreibweise („Ciabatta: frisch“) ist er das Produkt — vorher
+     * blieb davon nur „frisch“ übrig, und die Brot-/Zukauf-Erkennung lief ins Leere. Klammer-Zusätze fallen immer weg.
+     */
+    private static function warenname(string $text): string
     {
+        $praefix = RezeptTypVokabular::praefix($text);
+        if ($praefix !== null && RezeptTypVokabular::finde($praefix) !== null) {
+            return RezeptTypVokabular::bezeichnung($text);
+        }
+
+        return trim((string) preg_replace('/\([^)]*\)/u', '', $text));
+    }
+
+    private static function istBrotGp(FoodAlchemistGp $gp): bool
+    {
+        if (str_contains(mb_strtolower((string) $gp->name), 'panko')) {
+            return true;
+        }
+
+        return (string) $gp->commodity_group_code === '09' && ! str_starts_with((string) ($gp->sub_category ?? ''), '09.6');
+    }
+
+    /**
+     * Ist das Gericht selbst ein Brot-Angebot (Brotkorb, Brotkonfekt, Brot & Butter, Brot & Dips, Brotzeit)? Dann sind
+     * die Brote das Angebot und bleiben unverarbeitet Grundprodukte. NUR über die Kennzeichnung — Kürzel „[BRO]“ oder
+     * Name —, keine Mengen-Schwelle: „Brot & Dips“ hat wenig Brot-Zeilen, ein Brotsalat (Panzanella) viele und
+     * verarbeitet es trotzdem (Review Hans).
+     *
+     * @param  list<string>  $zeilen  bewusst ungenutzt (Signatur für spätere, belegte Kriterien)
+     */
+    public function istBrotAngebot(Team $team, string $name, array $zeilen = []): bool
+    {
+        return preg_match('/^\[BRO\]/iu', trim($name)) === 1
+            || preg_match('/brotkorb|brotkonfekt|brotauswahl|brotzeit|brot\s*(&|und)\s*(butter|dips?|aufstrich)/iu', $name) === 1;
+    }
+
+    /**
+     * Ist die Zeile Brot/Backware? Dann nie Zukauf und nie als Scheibe im Gericht — sie wird zur verarbeiteten
+     * Komponente (Crunch, Kruste, Croûton, Brösel). Erkannt über das GP (WG 09 außer 09.6), sonst über das Brot-Wort.
+     */
+    public function istBrotZeile(Team $team, string $text): bool
+    {
+        $bezeichnung = self::warenname($text);
+        if ($bezeichnung === '') {
+            return false;
+        }
+        $t = app(IngredientMatchService::class)->matchIngredient($team, $bezeichnung, null, 'gp_first');
+        if (($t['target'] ?? null) === 'gp' && IngredientMatchService::istAutomatischVerdrahtbar($t)
+            && ($gp = FoodAlchemistGp::visibleToTeam($team)->find((int) $t['gp_id'])) !== null) {
+            return self::istBrotGp($gp);
+        }
+        foreach (app(TokenEngine::class)->tokenize($bezeichnung) as $wort) {
+            foreach (self::BROT_WOERTER as $b) {
+                if (str_starts_with($wort, $b) || str_ends_with($wort, $b)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private function istFertigwareGp(FoodAlchemistGp $gp, bool $ohneTyp): bool
+    {
+        if (self::istBrotGp($gp)) {
+            return false;   // Brot wird verarbeitet, nie als Zukauf hingestellt
+        }
         $wg = (string) ($gp->commodity_group_code ?? '');
         $sub = (string) ($gp->sub_category ?? '');
         if (in_array($wg, self::FERTIG_WG, true)) {

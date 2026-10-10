@@ -41,6 +41,23 @@ final class BestandsPassung
             ?? self::diaetGrund($vegan, $vegetarisch, $diaetHart);
     }
 
+    /**
+     * Fertigungstiefe gegen den Convenience-Regler des Laufs (Dominique 10.10.): verlangt der Lauf „from scratch“, wird
+     * ein Zukauf-Bestand (production_depth = convenience) abgelehnt — außer die Zeile ist selbst Kaufware (Kernöl,
+     * Röstzwiebeln): die stellt die Küche ohnehin nicht her. Teilfertig bleibt erlaubt.
+     */
+    public static function fertigungGrund(\Platform\Core\Models\Team $team, string $zeile, ?string $tiefe, ?string $regler): ?string
+    {
+        if ($tiefe !== 'convenience' || $regler !== 'from_scratch') {
+            return null;
+        }
+        if (app(\Platform\FoodAlchemist\Services\ZukaufBasisrezeptService::class)->istFertigware($team, $zeile)) {
+            return null;
+        }
+
+        return 'Zukauf, der Lauf verlangt „from scratch“';
+    }
+
     private static function typGrund(string $zeile, string $kandidat): ?string
     {
         if (! RezeptTypVokabular::istGeladen()) {

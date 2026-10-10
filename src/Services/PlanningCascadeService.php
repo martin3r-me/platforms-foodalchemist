@@ -2784,7 +2784,7 @@ class PlanningCascadeService
                 $params = is_array($step->run?->params) ? $step->run->params : [];
                 $bestand = ($params['bestand'] ?? 'hybrid') !== 'komplett_neu'
                     ? app(RecipeKomponentenPlanService::class)->bestandFuer($team, $name,
-                        array_values(array_filter((array) ($params['diaet_hart'] ?? []), 'is_string')), $abgelehnt)
+                        array_values(array_filter((array) ($params['diaet_hart'] ?? []), 'is_string')), $abgelehnt, $params['convenience'] ?? null)
                     : null;
                 $k[] = ['name' => $name, 'funktion' => null, 'menge' => is_numeric($menge) ? (float) $menge : null,
                     'einheit' => 'g', 'suchbegriffe' => [], 'bestand' => $bestand, 'abgelehnt' => $abgelehnt, 'neu' => $bestand === null];

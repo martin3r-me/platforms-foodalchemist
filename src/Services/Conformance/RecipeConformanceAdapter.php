@@ -277,6 +277,35 @@ class RecipeConformanceAdapter implements ConformanceAdapter
             }
         }
 
+        // Brot ohne Kennzeichnung (Dominique 10.10.: „kommt immer auf den Kontext an“): viel Brot im Gericht, aber kein
+        // Brot-Angebot gekennzeichnet → nur ein Hinweis zur menschlichen Entscheidung, kein automatischer Umbau.
+        if ($r->is_sales_recipe) {
+            $zukauf = app(\Platform\FoodAlchemist\Services\ZukaufBasisrezeptService::class);
+            $texte = $r->ingredients->map(fn ($z) => (string) ($z->gp?->name ?? $z->referencedRecipe?->name ?? $z->raw_text))->all();
+            $brot = count(array_filter($texte, fn ($t) => $zukauf->istBrotZeile($team, $t)));
+            if ($texte !== [] && $brot * 2 >= count($texte) && ! $zukauf->istBrotAngebot($team, $name)) {
+                $out[] = ['paragraph' => 'Brot', 'schweregrad' => 'weich', 'feld' => 'name',
+                    'begruendung' => 'Viel Brot im Gericht, aber kein Brot-Angebot gekennzeichnet ([BRO], Brotkorb, Brot & Dips …). '
+                        . 'Ist es ein Brot-Angebot, kennzeichnen; sonst wird das Brot zur verarbeiteten Komponente.',
+                    'vorschlag' => '', 'konfidenz' => 1.0, 'quelle' => 'code', 'rule_id' => null];
+            }
+        }
+
+        // Kennzeichen „(Zukauf)“ im Namen und Fertigungstiefe convenience gehören zusammen (Dominique 10.10.: Konvention
+        // im Namen UND im Feld). Widerspruch = Hinweis aus dem Code, nicht von der KI.
+        if (! $r->is_sales_recipe) {
+            $mitZusatz = mb_stripos($name, \Platform\FoodAlchemist\Services\ZukaufBasisrezeptService::ZUSATZ) !== false;
+            $istZukauf = $r->production_depth === 'convenience';
+            if ($mitZusatz !== $istZukauf) {
+                $out[] = ['paragraph' => '§1.5', 'schweregrad' => 'weich', 'feld' => $mitZusatz ? 'production_depth' : 'name',
+                    'begruendung' => $mitZusatz
+                        ? 'Name trägt „(Zukauf)“, die Fertigungstiefe ist aber nicht „convenience“.'
+                        : 'Fertigungstiefe „convenience“ (Zukauf), aber „(Zukauf)“ fehlt im Namen.',
+                    'vorschlag' => $mitZusatz ? 'convenience' : rtrim($name) . ' ' . \Platform\FoodAlchemist\Services\ZukaufBasisrezeptService::ZUSATZ,
+                    'konfidenz' => 1.0, 'quelle' => 'code', 'rule_id' => null];
+            }
+        }
+
         // Zeilen-Regeln, die vom Rezept-Typ abhängen (z. B. Hausstandard: Jus/Fond/Brühe aus Knochen und Abschnitten).
         $praefix = \Platform\FoodAlchemist\Support\RezeptTypVokabular::praefix($name);
         $typ = $praefix !== null ? \Platform\FoodAlchemist\Support\RezeptTypVokabular::finde($praefix) : null;
