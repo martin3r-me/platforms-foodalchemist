@@ -33,7 +33,8 @@ beforeEach(function () {
             app(\Platform\FoodAlchemist\Services\SupplierItemService::class),
             app(\Platform\FoodAlchemist\Services\LeadLaStrategieResolver::class),
         ])->makePartial();
-        $mock->shouldReceive('best')->andReturn($la);
+        $la->setAttribute('score', 0.8);
+        $mock->shouldReceive('find')->andReturn(collect([$la]));   // Mint wählt über bestMitGrundwort → find
         app()->instance(LaCandidateFinder::class, $mock);
     };
 });

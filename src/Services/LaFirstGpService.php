@@ -49,13 +49,9 @@ class LaFirstGpService
         try {
             // Spec 16·S3: WG-Lead-gescopter, Terminologie-gerankter Kandidat statt naivem
             // searchGlobal->items()[0]. Ohne WG-Hint + Einzeltreffer verhaltensgleich.
-            $finder = app(LaCandidateFinder::class);
-            $la = $finder->best($team, $text, $wgHint);
-            // Lauf 87: ein LA mit anderem Grundwort (Beinscheibe → Knochen) ist KEIN passender LA — wie ohne LA weiter
-            // (Derivat-Pfad oder Lücke), statt ein falsches Produkt zu verknüpfen.
-            if ($la !== null && ! $finder->grundwortPasst($text, (string) $la->designation)) {
-                $la = null;
-            }
+            // Lauf 87/88: nur ein LA mit passendem Grundwort (Beinscheibe ≠ Knochen, Lauch ≠ Lauchzwiebel) — der beste
+            // solche aus der Shortlist, nicht nur Platz 1. Keiner → wie ohne LA weiter (Derivat-Pfad oder Lücke).
+            $la = app(LaCandidateFinder::class)->bestMitGrundwort($team, $text, $wgHint);
             if ($la === null) {
                 // D3 §11.2: Nebenprodukt (Knochen/Abschnitte/Karkasse/Schale/…) hat keinen LA →
                 // als Derivat der Mutter anlegen statt still unbepreist. Nur einmal (kein Rekurs).
