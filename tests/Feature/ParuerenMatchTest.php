@@ -26,11 +26,11 @@ it('Parüren und Fleischabschnitte treffen das Schrägstrich-GP sicher', functio
     }
 });
 
-it('Tier-Parüren (Kalbs-, Rinder-, Schweine-, Lamm-, Geflügelparüren) treffen das allgemeine Parüren-GP', function () {
-    foreach (['Kalbsparüren', 'Rinderparüren', 'Schweineparüren', 'Lammparüren', 'Geflügelparüren'] as $q) {
+it('Tier-Parüren bleiben §11.2-Derivate ihrer Mutter — kein Alias auf das allgemeine Parüren-GP', function () {
+    // Regelwerk GP §11.2: „Kalbsparüren" = derivat_typ paruere, Name „Kalb: frisch, Parüren", Allergene LIVE von der Mutter.
+    foreach (['Kalbsparüren', 'Rinderparüren', 'Lammparüren'] as $q) {
         $m = ($this->m)($q);
-        expect($m['gp_id'])->toBe($this->gp->id, $q)
-            ->and(IngredientMatchService::istAutomatischVerdrahtbar($m))->toBeTrue($q);
+        expect(IngredientMatchService::istAutomatischVerdrahtbar($m) && $m['gp_id'] === $this->gp->id)->toBeFalse($q);
     }
 });
 
