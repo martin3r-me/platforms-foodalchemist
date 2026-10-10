@@ -968,6 +968,16 @@ return [
     ],
 
     /**
+     * Gericht = GENAU EINE Portion (Dominique 2026-10-10). Weicht der Ertrag nach der Generierung um mehr als
+     * `toleranz` (relativ) von der Ziel-Portion ab, skaliert der Generator alle Zeilen auf eine Portion
+     * (RecipeGeneratorService::aufEinePortion). 25 % = Vorschlag der Kuratorin, damit normale Abweichungen
+     * (Garverlust, Teller-Gestaltung) nicht jedes Gericht anfassen; Chargen-Antworten (×pax) liegen um Faktoren daneben.
+     */
+    'gericht_portion' => [
+        'toleranz' => (float) env('FOODALCHEMIST_GERICHT_PORTION_TOLERANZ', 0.25),
+    ],
+
+    /**
      * TASK_PROMPT-Registry — Skeleton (M0-14).
      * Der volle Umzug der 42 Prompts aus 06_KI_SPEZIFIKATION kommt mit M7-04
      * (inkl. Tier-Zuordnung A–D, V-01). Format je Key:
@@ -1288,7 +1298,7 @@ return [
                 // je Teller, saison = Erntefenster, ziel_we_pct = angestrebter Wareneinsatz-Anteil (wähle
                 // Qualitäten/Grammaturen entsprechend; GIB KEINEN PREIS AUS).
                 . 'unter Beachtung der Richtungs-Parameter (convenience, frische, bio, niveau, sektor, '
-                . 'diaet_hart, allergen_nogo, aroma, anlass, serviceform, kompositions_stil, pax, ziel_portion_g, saison, ziel_we_pct): werte = '
+                . 'diaet_hart, allergen_nogo, aroma, anlass, serviceform, kompositions_stil, ziel_portion_g, saison, ziel_we_pct): werte = '
                 . '{name (Pipe-Syntax §1 «<HG-Code>: Hauptkomponente | Komponente | …», max 5 Felder, '
                 . 'keine Marketing-Adjektive), description (§8-Stil), taste_direction (grobe Menue-Richtung, NUR EIN Wort: suess|herzhaft|neutral — das Aroma-Profil gehoert in description), '
                 // 2026-09-04: hier stand „preparation (= PLATING & SERVICE …)". Das kollidierte:
@@ -1302,6 +1312,9 @@ return [
                 . 'Regenerations-Programm und NICHT der Teller-Aufbau; ' . $mengenVerbot . '), '
                 // Spec 37: role/fit-Parität zum Basis-Prompt — dieselbe Zutaten-Selbstbegründung
                 // (senkt plausibel klingende Fremdkörper VOR dem Kritiker-Pass, sobald das VK-Gate scharf wird).
+                // Dominique 10.10.: ein Gericht ist IMMER genau eine Portion; der Code skaliert Abweichungen nach.
+                . 'Die Zutatenmengen (quantity) gelten fuer GENAU EINE Portion (parameter.ziel_portion_g bzw. '
+                . 'portion_g) — EIN Teller, nicht die Produktion; rechne NICHT auf eine Gaestezahl hoch. '
                 . 'zutaten: [{text, quantity, unit (g|ml|kg|l|el|tl|stk), slug, note, '
                 // Ausbeute (2026-09-06): Garverlust je Zutat wie im Basis-Prompt — auch am Teller
                 // schwindet die Rohware (Steak 25 %, gebratenes Gemüse 20 %), sonst steht der

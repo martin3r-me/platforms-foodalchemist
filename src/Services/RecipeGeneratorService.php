@@ -542,6 +542,12 @@ class RecipeGeneratorService
             }
 
             $recipe = $this->recipes->syncIngredients($team, $recipe->id, $zeilen);   // inkl. Recompute
+            if ($vkModus) {
+                // Dominique 10.10.: ein Gericht ist GENAU EINE Portion — Code-Regel statt KI-Vertrauen (demo Lauf 94:
+                // 28 kg / 12 kg Filet für 80 Pax). Die Produktion multipliziert mit pax.
+                $statistik['portion'] = $this->aufEinePortion($recipe, $parameter);
+                $recipe = $recipe->fresh() ?? $recipe;
+            }
             // Fertigungstiefe aus dem Inhalt (Review Berater Lauf 92, Punkt S). In der Kaskade gilt sie als gesetzt
             // (Quelle kaskade, die KI-Anreicherung überschreibt sie nicht); außerhalb darf das Fertigungs-Glied nachbessern.
             if (! in_array($parameter['production_depth_vorgabe'] ?? null, ['from_scratch', 'teilfertig', 'convenience'], true)) {
@@ -1387,6 +1393,41 @@ class RecipeGeneratorService
         $pct = round((float) $raw, 2);
 
         return $pct >= 0.0 && $pct <= 100.0 ? $pct : null;
+    }
+
+    /**
+     * Bringt ein Gericht auf GENAU EINE Portion: Ziel = parameter.ziel_portion_g, sonst die Portion aus dem Vorschlag
+     * (sales_quantity_per_unit_g). Liegt der Ertrag (COALESCE(yield_kg_manual, yield_kg)) mehr als die Toleranz daneben,
+     * werden alle Zeilen mit Portion/Ertrag skaliert und neu gerechnet. Danach Portion = Ziel, Verkaufseinheiten = 1.
+     *
+     * @param  array<string, mixed>  $parameter
+     * @return array{ziel_g: float, ertrag_vorher_g: float, faktor: float, skaliert: bool}|null
+     */
+    private function aufEinePortion(FoodAlchemistRecipe $recipe, array $parameter): ?array
+    {
+        $r = $recipe->fresh() ?? $recipe;
+        $ziel = $this->portionG($parameter['ziel_portion_g'] ?? null)
+            ?? ($r->sales_quantity_per_unit_g !== null ? (float) $r->sales_quantity_per_unit_g : null);
+        $ertragKg = $r->yield_kg_manual !== null ? (float) $r->yield_kg_manual : ($r->yield_kg !== null ? (float) $r->yield_kg : null);
+        if ($ziel === null || $ziel <= 0 || $ertragKg === null || $ertragKg <= 0) {
+            return null;   // ohne Ziel oder Ertrag nichts zu normieren (benannte Lücke bleibt)
+        }
+        $ertragG = $ertragKg * 1000;
+        $faktor = $ziel / $ertragG;
+        $toleranz = (float) config('foodalchemist.gericht_portion.toleranz', 0.25);
+        $skaliert = abs($ertragG - $ziel) / $ziel > $toleranz;
+        if ($skaliert) {
+            foreach ($r->ingredients()->get() as $z) {
+                $z->forceFill([
+                    'quantity' => round((float) $z->quantity * $faktor, 4),
+                    'quantity_max' => $z->quantity_max !== null ? round((float) $z->quantity_max * $faktor, 4) : null,
+                ])->save();
+            }
+            app(RecipeRecomputeService::class)->recomputeAndPropagate((int) $r->id);
+        }
+        $r->forceFill(['sales_quantity_per_unit_g' => $ziel, 'sales_unit_count' => 1])->save();
+
+        return ['ziel_g' => $ziel, 'ertrag_vorher_g' => round($ertragG, 1), 'faktor' => round($faktor, 4), 'skaliert' => $skaliert];
     }
 
     private function portionG(mixed $raw): ?float

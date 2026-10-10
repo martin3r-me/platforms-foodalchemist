@@ -52,9 +52,15 @@ class RecipeGenerationContextService
      * @param  array<string,mixed>  $parameter
      * @return array<string,mixed>
      */
-    private function promptParameter(array $parameter): array
+    private function promptParameter(array $parameter, bool $vkModus = false): array
     {
         $p = array_intersect_key($parameter, array_flip(self::PROMPT_KEYS));
+        // Dominique 10.10.: ein Gericht ist GENAU EINE Portion — pax ist nur das Mengengerüst der Produktion und geht
+        // nicht an die KI, sonst rechnet sie hoch (demo Lauf 94: 28 kg / 12 kg Filet für 80 Pax). Die Produktion
+        // bekommt pax weiter aus der Session.
+        if ($vkModus) {
+            unset($p['pax']);
+        }
         if (array_key_exists('level', $p)) {
             $p['niveau'] = $p['level'];
             unset($p['level']);
@@ -154,7 +160,7 @@ class RecipeGenerationContextService
                 ? 'GERICHT (essfertig angerichteter Verkaufsteller — Komposition erlaubt)'
                 : 'BASISREZEPT (wiederverwendbarer Baustein / EINE Komponente — kein angerichteter Teller)',
             'description' => $description,
-            'parameter' => $this->promptParameter($parameter),
+            'parameter' => $this->promptParameter($parameter, $vkModus),
         ];
         // Brot im Gericht (Dominique 10.10.): nie als Scheibe — verarbeitet, Aroma des gerösteten Brots trägt.
         if (trim((string) ($parameter['brot_verarbeiten'] ?? '')) !== '') {

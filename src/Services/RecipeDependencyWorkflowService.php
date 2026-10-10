@@ -401,6 +401,16 @@ class RecipeDependencyWorkflowService
         if ($zeile !== null && (float) $zeile->quantity > 0 && in_array($slug, ['g', 'kg', 'ml', 'l'], true)) {
             $out['bedarf_menge'] = (float) $zeile->quantity;
             $out['bedarf_einheit'] = $slug;
+            // Dominique 10.10.: ein GERICHT ist genau eine Portion — der Bedarf seines Kindes ist darum Zeile × pax (die
+            // Produktionsmenge). Nur unter einem Gericht: die Zeile eines Basisrezepts ist schon ein Ansatz (× pax wäre die
+            // 80-fache Charge). pax nur als Bedarf, NICHT in KIND_ERBT. Ohne pax bleibt es wie bisher.
+            $pax = (int) (($eltern->run?->params ?? [])['pax'] ?? 0);
+            $istGericht = $eltern->ref_type === 'recipe' && $eltern->ref_id !== null
+                && (bool) \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::query()->whereKey($eltern->ref_id)->value('is_sales_recipe');
+            if ($pax > 1 && $istGericht) {
+                $out['bedarf_menge'] = round((float) $zeile->quantity * $pax, 2);
+                $out['bedarf_pax'] = $pax;
+            }
         }
         $norm = static fn ($s) => mb_strtolower(trim((string) $s));
         foreach ((array) (($eltern->context_snapshot ?? [])['komponenten'] ?? []) as $k) {
