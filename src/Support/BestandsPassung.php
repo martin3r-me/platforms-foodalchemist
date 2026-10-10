@@ -74,7 +74,8 @@ final class BestandsPassung
         // Auch das Präfix des Kandidaten ist ein Typ-Wort (falls das Vokabular fehlt): „Pesto, frisch" ↔ „Pesto: …".
         $kandPraefix = ($p = RezeptTypVokabular::praefix($kandidat)) !== null ? str_replace(' ', '', RezeptTypVokabular::norm($p)) : null;
         $inhalt = [];
-        foreach ($engine->tokenize(RezeptTypVokabular::bezeichnung($zeile)) as $wort) {
+        // Die ZEILE kann GP-Schreibweise haben („Kalbsjus: dunkel") — nur einen Vokabular-Typ abschneiden (Kuratorin 10.10.).
+        foreach ($engine->tokenize(RezeptTypVokabular::ohneTyp($zeile)) as $wort) {
             if ($kandPraefix !== null && ($wort === $kandPraefix || str_ends_with($wort, $kandPraefix))) {
                 $wort = mb_substr($wort, 0, mb_strlen($wort) - mb_strlen($kandPraefix));
                 if ($wort === '') {
@@ -94,7 +95,7 @@ final class BestandsPassung
         // (a) Nennt die Zeile eine eigene Hauptzutat, muss der Hauptbestandteil des Kandidaten darin stehen
         // („Rote-Bete-Püree" ≠ „Püree: Kartoffel-Rote-Bete"). Eine generische Zeile („Pesto, frisch") prüft (a) nicht.
         if ($inhalt !== [] && RezeptTypVokabular::praefix($kandidat) !== null) {
-            $teile = $engine->tokenize(RezeptTypVokabular::bezeichnung($kandidat));
+            $teile = $engine->tokenize(RezeptTypVokabular::bezeichnung($kandidat));   // Kandidat = Basisrezept-Name „Typ: …"
             $haupt = $teile[0] ?? null;
             if ($haupt !== null && mb_strlen($haupt) >= 3) {
                 $stamm = $engine->stemGerman($haupt);
