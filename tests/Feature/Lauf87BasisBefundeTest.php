@@ -183,3 +183,24 @@ it('H: Unterrezept bekommt den Bedarf des Gerichts nur als Information — die C
     expect($wurzel)->not->toHaveKey('bedarf_im_gericht')
         ->and($wurzel['parameter']['ziel_menge'] ?? null)->toBe(10.0);
 });
+
+it('Hausstandard: Jus/Fond/Brühe aus Knochen und Abschnitten — Cut als Hinweis, nicht als Fehler; im Regel-Block', function () {
+    $regel = \Platform\FoodAlchemist\Models\FoodAlchemistRule::where('schluessel', 'basisrezept.hausstandard.fond_knochen')->firstOrFail();
+    expect($regel->aktiv)->toBeTrue()->and($regel->wirkung)->toBe('warnen');
+
+    $block = app(\Platform\FoodAlchemist\Services\Regeln\RegelPromptBlock::class)->fuerPromptKey('recipe.generator');
+    expect($block)->toContain('Jus, Fond, Brühe aus Knochen und Abschnitten')->toContain('nur, wenn der Auftrag es ausdrücklich verlangt');
+
+    $jus = $this->makeRecipe($this->rootTeam, 'Jus: Kalb', ['status' => 'draft']);
+    $this->makeIngredient($jus, 'Kalb-Beinscheiben / Ossobuco: frisch', null, '1800', 1);
+    $this->makeIngredient($jus, 'Kalbsknochen: frisch, roh', null, '6000', 2);
+    $beilage = $this->makeRecipe($this->rootTeam, 'Beilage: Rinderfilet', ['status' => 'draft']);
+    $this->makeIngredient($beilage, 'Rinderfilet: frisch', null, '2000', 1);
+    $befunde = fn ($r) => collect(app(RecipeConformanceAdapter::class)->deterministischeBefunde($this->rootTeam, (int) $r->id))
+        ->where('rule_id', $regel->id)->values();
+
+    expect($befunde($jus))->toHaveCount(1)
+        ->and($befunde($jus)[0]['schweregrad'])->toBe('weich')
+        ->and($befunde($jus)[0]['feld'])->toContain('Beinscheiben')
+        ->and($befunde($beilage))->toHaveCount(0);                    // nur Jus/Fond/Brühe
+});

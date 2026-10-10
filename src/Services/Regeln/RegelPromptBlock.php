@@ -20,7 +20,7 @@ final class RegelPromptBlock
 {
     private const ZIELE_REZEPT = [
         'rezept.name', 'rezept.name.grammatur', 'rezept.beschreibung', 'rezept.schritt', 'gp.verarbeitung', 'gp.attribut',
-        'rezeptzeile.vegan', 'rezeptzeile.vegetarisch',
+        'rezeptzeile.vegan', 'rezeptzeile.vegetarisch', 'rezeptzeile.typ',
     ];
 
     private const ZIELE_VK = ['vk.name', 'vk.name.hg', 'vk.name.bausteine'];
@@ -40,7 +40,7 @@ final class RegelPromptBlock
         'recipe.generator' => ['ziele' => self::ZIELE_REZEPT, 'typ' => true],
         'recipe.ueberarbeiten' => ['ziele' => self::ZIELE_REZEPT, 'typ' => true],
         'recipe.review' => ['ziele' => self::ZIELE_REZEPT, 'typ' => true],
-        'recipe.komponenten_plan' => ['ziele' => ['rezept.name'], 'typ' => true],
+        'recipe.komponenten_plan' => ['ziele' => ['rezept.name', 'rezeptzeile.typ'], 'typ' => true],
         'recipe.name_putzen' => ['ziele' => ['rezept.name'], 'typ' => true],
         'recipe.titel_vorschlag' => ['ziele' => ['rezept.name'], 'typ' => true],
         'recipe.steps' => ['ziele' => ['rezept.schritt'], 'typ' => false],
@@ -69,6 +69,7 @@ final class RegelPromptBlock
         'gp.attribut' => 'Zutatenzeilen (Grundprodukt-Wahl)',
         'rezeptzeile.vegan' => 'Zutatenzeilen, wenn das Rezept vegan ist',
         'rezeptzeile.vegetarisch' => 'Zutatenzeilen, wenn das Rezept vegetarisch ist',
+        'rezeptzeile.typ' => 'Zutatenzeilen je nach Rezept-Typ',
         'vk.name' => 'Gerichtname',
         'vk.name.hg' => 'Hauptgruppen-Kürzel des Gerichtnamens',
         'vk.name.bausteine' => 'Bausteine des Gerichtnamens',
