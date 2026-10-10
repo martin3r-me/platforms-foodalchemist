@@ -541,7 +541,13 @@ class IngredientMatchService
         $best = null;
         $bestZustand = null;
         $bestBio = null;
+        // Lauf 92: „Petersilienstiele" → „Petersilienwurzeln: frisch" — nennt die Zeile eine Derivat-Form (Stiele, Schale,
+        // Knochen …), muss das GP sie tragen; sonst ist es ein anderes Produkt (wie der Mint seit #251).
+        $queryForm = $this->heuristik->nebenproduktDerivat($this->currentIngredientName)['marker'] ?? null;
         foreach ($this->gpPool($team, $queryTokens, $querySlug) as $gp) {
+            if ($queryForm !== null && ! $this->heuristik->nenntDerivatForm((string) $gp->name, $queryForm)) {
+                continue;
+            }
             if (! $this->acceptsProductForm($this->currentIngredientName, $gp->name, $gp->condition)
                 || $this->terminology->isAntiMarker($this->currentIngredientName, $gp->name)) {
                 continue;   // S2: Anti-Marker nie als Entscheidung

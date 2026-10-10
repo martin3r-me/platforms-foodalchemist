@@ -219,6 +219,8 @@ class ConformanceService
 
         $roh = $vorschlag->werte['befunde'] ?? [];
         $befunde = is_array($roh) ? $this->normalisiere($roh) : [];
+        // Hausentscheidungen, die der KI-Prüfer nicht kennt (Lauf 92: „(Zukauf)" als §1.5-Verstoß), verwirft der Adapter.
+        $befunde = array_values(array_filter($befunde, fn (array $b) => ! $adapter->istBekannteAusnahme($b)));
 
         // Deterministische Befunde DAZU (2026-09-07): was exakt entscheidbar ist, darf nicht von
         // einem Sampling abhaengen. Sie laufen durch dieselbe Normalisierung und dieselbe Ablage,

@@ -1028,6 +1028,12 @@ class RecipeService
         DB::transaction(function () use ($team, $recipe, $zeilen, $preserveMissing) {
             $vorhanden = $recipe->ingredients()->get()->keyBy('id');
             $behalten = [];
+            // Lauf 92 (demo, 3834 „Beilage: Herbsttrompeten"): die Heilung legte die Zeile „Gemüsebrühe", die die Kaskade als
+            // Unterrezept führt (Dependency → Kind „Brühe: Gemüse"), hier auf ein Bio-Brühpulver-GP. Das fertige Kind konnte
+            // sich danach nicht mehr binden (bindIngredient bricht bei gesetztem gp_id ab) und blieb verwaist. Solche Zeilen
+            // erdet nur die Kaskade (wie minteFehlendeGps, L4).
+            $kaskadeGefuehrt = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRecipeDependency::query()
+                ->whereIn('ingredient_id', $vorhanden->keys()->all())->pluck('ingredient_id')->map(fn ($v) => (int) $v)->flip()->all();
 
             foreach (array_values($zeilen) as $i => $z) {
                 if ($preserveMissing && isset($z['id']) && (! $vorhanden->has((int) $z['id']) || in_array((int) $z['id'], $behalten, true))) {
@@ -1046,7 +1052,7 @@ class RecipeService
                 // und bei Ablehnung stillschweigend verworfen (kein Throw fürs Auto-Grounding).
                 $groundedMethod = null;
                 $groundedConfidence = null;
-                if ($gpId === null && $subId === null && ($z['auto_ground'] ?? true)) {
+                if ($gpId === null && $subId === null && ($z['auto_ground'] ?? true) && ! isset($kaskadeGefuehrt[(int) ($z['id'] ?? 0)])) {
                     $groundName = trim((string) ($z['display_name'] ?? '')) ?: trim((string) ($z['raw_text'] ?? ''));
                     if ($groundName !== '') {
                         // Live-Test demo 09.10. (Lauf 83): eine Basisrezept-Zeile („Püree: Petersilienwurzel",

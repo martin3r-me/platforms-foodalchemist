@@ -107,6 +107,16 @@ class RecipeConformanceAdapter implements ConformanceAdapter
             || preg_match('/cooking_loss|garverlust|einkochverlust/iu', $feld) === 1;
     }
 
+    /** §1.x-KI-Befund über den Klammerzusatz „(Zukauf)" — Hausentscheidung „Typ: Ware (Zukauf)", kein Verstoß (Lauf 92). */
+    public function istBekannteAusnahme(array $befund): bool
+    {
+        $zusatz = \Platform\FoodAlchemist\Services\ZukaufBasisrezeptService::ZUSATZ;
+        $text = (string) ($befund['feld'] ?? '') . ' ' . (string) ($befund['begruendung'] ?? '') . ' ' . (string) ($befund['vorschlag'] ?? '');
+
+        return str_starts_with(\Platform\FoodAlchemist\Services\ConformanceService::paragraphStamm((string) ($befund['paragraph'] ?? '')), '1')
+            && mb_stripos($text, trim($zusatz, '()')) !== false;
+    }
+
     private static function zeilenSchluessel(string $text): string
     {
         $t = (string) preg_replace('/\([^)]*\)/u', '', $text);
@@ -448,6 +458,10 @@ class RecipeConformanceAdapter implements ConformanceAdapter
                 : []))->values()->all(),
         ];
 
+        // Hausentscheidung (Lauf 92): „(Zukauf)" ist der Kennzeichen-Zusatz für Zukauf-Basisrezepte — nicht als §1.5 melden.
+        $kontext['hausentscheidungen'] = 'Der Klammerzusatz „' . \Platform\FoodAlchemist\Services\ZukaufBasisrezeptService::ZUSATZ
+            . '“ kennzeichnet Zukauf-Basisrezepte (Hausstandard „Typ: Ware (Zukauf)“) — kein Verstoß gegen das Klammer-Vokabular.';
+
         if ($vk) {
             // Verkaufs-Facetten sind Prüf-MASSSTAB (passt Name/Klasse zur §-Regel?),
             // gespiegelt aus dem Review-Kontext — kein Schreibziel.
@@ -566,8 +580,12 @@ class RecipeConformanceAdapter implements ConformanceAdapter
             // Spec 80 C3: Verweiszeilen (Unterrezepte) fasst die Selbstheilung nicht an. Lässt die KI eine
             // weg, kommt sie unverändert zurück — ein Befund am Unterrezept wird dort geheilt, nicht hier.
             $behalten = array_flip(array_filter(array_map(static fn ($z) => $z['id'] ?? null, $zeilen)));
+            // Lauf 92: auch Zeilen, die die Kaskade als Unterrezept führt (Dependency → Kind-Step), fasst die Heilung nicht
+            // an — sonst zeigt die Dependency ins Leere und das gebaute Kind bleibt verwaist.
+            $kaskadeGefuehrt = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRecipeDependency::query()
+                ->whereIn('ingredient_id', $r->ingredients->pluck('id')->all())->pluck('ingredient_id')->map(fn ($v) => (int) $v)->flip()->all();
             foreach ($r->ingredients as $orig) {
-                if ($orig->referenced_recipe_id !== null && ! isset($behalten[$orig->id])) {
+                if (($orig->referenced_recipe_id !== null || isset($kaskadeGefuehrt[(int) $orig->id])) && ! isset($behalten[$orig->id])) {
                     $zeilen[] = app(RecipeReviseService::class)->bestandsZeile($orig);
                 }
             }

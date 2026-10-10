@@ -31,6 +31,11 @@ class LaConformanceAdapter implements ConformanceAdapter
         return $befunde;
     }
 
+    public function istBekannteAusnahme(array $befund): bool
+    {
+        return false;
+    }
+
     /**
      * Keine deterministischen Regeln in v1 — der §-Pass für diesen Artefakt-Typ ist rein
      * KI-getragen. Bewusst leer statt „irgendetwas": ein erfundener Check wäre schlimmer
