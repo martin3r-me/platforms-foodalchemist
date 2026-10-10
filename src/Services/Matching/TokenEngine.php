@@ -400,6 +400,27 @@ class TokenEngine
     public function headMatchesQuery(string $kandidatName, array $queryTokens): bool
     {
         $kopf = preg_split('/[:,(]/u', $kandidatName, 2)[0];
+        // „Fleischabschnitte / Parueren", „Porree / Lauch": der Schrägstrich trennt gleichwertige Namen — jeder zählt
+        // für sich als Kopf (demo 10.10.: „Parüren" kam nur auf 0,5, weil der Kopf als Ganzes verglichen wurde).
+        if (str_contains($kopf, '/')) {
+            if ($this->kopfGleichQuery(str_replace('/', ' ', $kopf), $queryTokens)) {
+                return true;   // wie bisher: alle Namen zusammen
+            }
+            foreach (preg_split('#\s*/\s*#u', $kopf) ?: [] as $alternative) {
+                if (trim($alternative) !== '' && $this->kopfGleichQuery($alternative, $queryTokens)) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        return $this->kopfGleichQuery($kopf, $queryTokens);
+    }
+
+    /** @param array<string> $queryTokens */
+    private function kopfGleichQuery(string $kopf, array $queryTokens): bool
+    {
         $h = $this->tokenize($kopf);
         if ($h === [] || count($h) !== count($queryTokens)) {
             return false;                                       // MENGEN-GLEICHHEIT, keine Teilmenge
