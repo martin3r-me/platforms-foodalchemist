@@ -32,6 +32,12 @@ use Platform\FoodAlchemist\Services\Matching\MatchHeuristics;
  */
 class RecipeGeneratorService
 {
+    /**
+     * Convenience-Regler des laufenden Generator-Aufrufs — für die Fertigungs-Prüfung jedes Bestands-Verweises
+     * ({@see self::validiereProposedSub}), egal über welchen Pfad die Zeile gebunden wird.
+     */
+    private ?string $laufRegler = null;
+
     public function __construct(
         private AiGatewayService $ki,
         private IngredientMatchService $matcher,
@@ -97,6 +103,7 @@ class RecipeGeneratorService
 
     private function generiereImLauf(Team $team, string $description, array $parameter = [], ?array $kiRezeptOverride = null, bool $vkModus = false, ?string $createdVia = null, ?array $preparedContext = null, ?callable $onProgress = null): array
     {
+        $this->laufRegler = is_string($parameter['convenience'] ?? null) ? $parameter['convenience'] : null;
         // P0.2: feine Fortschritts-Stufen — die UI zeigt live, WO der Lauf steht; ein
         // OOM-/Hänger-Tod bleibt am zuletzt gemeldeten Schritt stehen (Pinpoint der Ursache).
         $melde = static function (string $stufe) use ($onProgress): void {
@@ -1137,8 +1144,20 @@ class RecipeGeneratorService
         // zählten stub/draft/review mit — 86 % der Bestandsverweise auf demo zeigten auf Entwürfe.
         $kandidat = FoodAlchemistRecipe::query()->visibleToTeam($team)->basis()
             ->when(! $vertraut, fn ($q) => $q->where('status', 'approved'))
-            ->whereKey($id)->first(['id', 'name', 'spec_is_vegan', 'spec_is_vegetarian']);
+            ->whereKey($id)->first(['id', 'name', 'spec_is_vegan', 'spec_is_vegetarian', 'production_depth']);
         if ($kandidat === null) {
+            return null;
+        }
+        // demo Lauf 95 (Session from_scratch): der Komponenten-Plan lehnte „Jus: Rind (Zukauf)“ ab, der Matcher-Pfad band
+        // ihn danach trotzdem — die Fertigungs-Prüfung saß nur im Plan. Hier gilt sie für JEDEN Bindungsweg
+        // (KI-Vorschlag, Matcher, Post-Match-Draw); auch für eigene Import-Bausteine nicht ausgenommen.
+        $fGrund = \Platform\FoodAlchemist\Support\BestandsPassung::fertigungGrund(
+            $team, $text !== '' ? $text : (string) $nurDiaetFuer, $kandidat->production_depth, $this->laufRegler);
+        if ($fGrund !== null) {
+            if ($abgelehnt !== null) {
+                $abgelehnt[] = ['text' => $text !== '' ? $text : (string) $nurDiaetFuer, 'recipe_id' => (int) $kandidat->id, 'name' => (string) $kandidat->name, 'grund' => $fGrund];
+            }
+
             return null;
         }
         if ($vertraut) {
