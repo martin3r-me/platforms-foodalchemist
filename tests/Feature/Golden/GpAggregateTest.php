@@ -131,6 +131,19 @@ it('GL-01 §4.5: GP ohne LA mit gepflegten Allergenen ⇒ NONE', function () {
     expect($this->svc->allergenKonfidenz($this->gp)['confidence'])->toBe('none');
 });
 
+it('GL-01 §4.5: Allergen-Zeilen vorhanden, aber alle Werte NULL/unbekannt ⇒ NONE, nicht HIGH', function () {
+    // Katalog-Import legt die Zeile an, deklariert aber nichts — 258 solcher GPs auf demo (10.10.2026)
+    ($this->mkLa)(['allergen_milk' => null]);
+    ($this->mkLa)(['allergen_soy' => 'unbekannt']);
+
+    expect($this->svc->allergenKonfidenz($this->gp))
+        ->toBe(['confidence' => 'none', 'needs_review' => false, 'konflikt_felder' => [], 'n_las_mit_daten' => 0]);
+
+    // sobald ein konkreter Wert dazukommt, zählt das Profil wieder
+    ($this->mkLa)(['allergen_milk' => 'nicht_enthalten']);
+    expect($this->svc->allergenKonfidenz($this->gp)['confidence'])->toBe('high');
+});
+
 // ── GL-09 — Zusatzstoffe (GP-Teil) ──────────────────────────────────────
 
 it('GL-09: MAX über Roh-Domäne {0,1,3} — 3=ja gewinnt, {0,1}⇒1, keine Daten ⇒ NULL', function () {
