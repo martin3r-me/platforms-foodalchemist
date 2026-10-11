@@ -126,6 +126,8 @@ class IngredientEditor extends Component
         }
 
         try {
+            // Eine im Editor GEÄNDERTE Teller-Rolle ist Handarbeit (unveränderte behalten ihre Quelle, s. syncIngredients).
+            $zeilen = array_map(static fn ($z) => is_array($z) ? [...$z, 'role_source' => 'manuell'] : $z, $zeilen);
             app(RecipeService::class)->syncIngredients($team, $this->recipeId, $zeilen);
             if (! $this->eingebettet) {
                 $this->dispatch('modal.close', name: 'zutaten-editor');

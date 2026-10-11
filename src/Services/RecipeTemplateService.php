@@ -194,7 +194,7 @@ class RecipeTemplateService
                     ...$ri->only(['position', 'gp_id', 'referenced_recipe_id', 'raw_text', 'display_name',
                         'quantity', 'quantity_max', 'unit_vocab_id', 'trimming_loss_pct', 'cooking_loss_pct',
                         'is_optional', 'klammer_note', 'note', 'match_method', 'match_confidence',
-                        'role', 'is_value_relevant', 'calc_mode']),
+                        'role', 'role_source', 'is_value_relevant', 'calc_mode']),
                     'team_id' => $team->id,
                 ];
 

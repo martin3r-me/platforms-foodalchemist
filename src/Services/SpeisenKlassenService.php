@@ -95,19 +95,22 @@ class SpeisenKlassenService
      *
      * @return array{rollen: array<int, string>, verworfen: array<int, string>, confidence: float, reasoning: ?string, call_log_id: ?int}
      */
-    public function verteileRollen(Team $team, int $recipeId): array
+    public function verteileRollen(Team $team, int $recipeId, bool $neuZuordnen = false): array
     {
         $r = app(RecipeService::class)->detailAnySicht($team, $recipeId)
             ?? throw new \RuntimeException('Rezept nicht sichtbar.');
 
+        // Neu zuordnen (Kommando --alle, Dominique 11.10.): Rollen aus migration/ki NICHT als Echo zeigen — sonst bestätigt die KI
+        // eher den Altwert (Probelauf 2: „Olivenöl [beilage]“) statt neu zu entscheiden. Manuelle bleiben als Kontext sichtbar.
+        $echo = fn ($z) => $z->role !== null && ! ($neuZuordnen && in_array($z->role_source, ['migration', 'ki'], true)) ? $z->role : null;
         $zeilen = $r->ingredients->mapWithKeys(fn ($z) => [
-            $z->id => ($z->referencedRecipe?->name ?? $z->gp?->name ?? $z->display_name) . ($z->role !== null ? " [{$z->role}]" : ''),
+            $z->id => ($z->referencedRecipe?->name ?? $z->gp?->name ?? $z->display_name) . ($echo($z) !== null ? " [{$echo($z)}]" : ''),
         ])->all();
 
         $vorschlag = $this->ki->propose('vk.rollen', [
             'gericht' => $r->name,
             'zutaten' => $zeilen,
-            'rollen' => $r->ingredients->mapWithKeys(fn ($z) => [$z->id => $z->role])->filter()->all(),  // Kontext-Echo
+            'rollen' => $r->ingredients->mapWithKeys(fn ($z) => [$z->id => $echo($z)])->filter()->all(),  // Kontext-Echo
             'vokabular' => \Platform\FoodAlchemist\Support\TellerRolle::werte(),
             // demo Probelauf 11.10.: der Kanon (Regelwerk §12) nannte noch V-21 — die KI lieferte komponente/aroma_treiber.
             // Die Regel gericht.teller_rolle ist maßgeblich; Altwerte aus älteren Texten sind ausdrücklich ungültig.
@@ -156,7 +159,7 @@ class SpeisenKlassenService
                 }
                 $n += DB::table('foodalchemist_recipe_ingredients')
                     ->where('id', (int) $zeileId)->where('recipe_id', $r->id)->whereNull('deleted_at')
-                    ->update(['role' => $role, 'updated_at' => now()]);
+                    ->update(['role' => $role, 'role_source' => 'ki', 'updated_at' => now()]);
             }
 
             return $n;

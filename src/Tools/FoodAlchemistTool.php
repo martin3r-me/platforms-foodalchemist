@@ -67,6 +67,7 @@ abstract class FoodAlchemistTool
                 'is_optional' => (bool) ($z['is_optional'] ?? false),
                 'note' => $z['note'] ?? null,
                 'role' => $z['role'] ?? null,
+                'role_source' => 'ki',   // MCP = Agenten-Weg; greift nur, wenn sich die Rolle ändert (s. syncIngredients)
             ];
             foreach (['quantity_max', 'trimming_loss_pct', 'cooking_loss_pct', 'is_optional', 'note', 'role'] as $field) {
                 if (! array_key_exists($field, $z)) {
