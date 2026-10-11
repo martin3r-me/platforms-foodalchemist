@@ -176,7 +176,7 @@ final class RegelPromptBlock
 
         return match ($r->art) {
             'verbot' => $this->verbot($kopf, $p, $r) . $bed,
-            'vokabular' => $kopf . ': nur ' . $liste(array_map(static fn ($w) => (string) ($w['wert'] ?? ''), (array) ($p['werte'] ?? []))),
+            'vokabular' => $this->vokabular($kopf, (array) ($p['werte'] ?? []), $liste),
             'pflichtangabe' => $kopf . ': Pflicht — ' . (trim((string) ($p['hinweis'] ?? '')) ?: $r->titel) . $bed,
             'schwelle' => $kopf . ': ' . (($p['vergleich'] ?? '') === 'zwischen'
                 ? ($p['min'] ?? '') . '–' . ($p['max'] ?? '') : ($p['vergleich'] ?? '') . ' ' . ($p['wert'] ?? '')) . ' ' . ($p['einheit'] ?? ''),
@@ -184,6 +184,31 @@ final class RegelPromptBlock
                 . (($aus = $liste((array) ($p['ausnahmen'] ?? []))) !== '' ? '. Nicht ersetzen: ' . $aus . '.' : ''),
             default => null,
         };
+    }
+
+    /**
+     * Vokabular: mit gepflegter Bedeutung je Wert eine Zeile „wert — beschreibung“ (Teller-Rollen, Probelauf 3 auf demo: die
+     * Abgrenzung protein/hauptkomponente stand nur weit entfernt im Dossier, die KI vergab dreimal protein). Ohne Bedeutungen
+     * bleibt es bei der kompakten Liste.
+     *
+     * @param  list<array<string, mixed>>  $werte
+     */
+    private function vokabular(string $kopf, array $werte, \Closure $liste): string
+    {
+        $mitBeschreibung = array_filter($werte, static fn ($w) => is_array($w) && trim((string) ($w['beschreibung'] ?? '')) !== '');
+        if ($mitBeschreibung === []) {
+            return $kopf . ': nur ' . $liste(array_map(static fn ($w) => (string) ($w['wert'] ?? ''), $werte));
+        }
+        $zeilen = [];
+        foreach ($werte as $w) {
+            $wert = is_array($w) ? trim((string) ($w['wert'] ?? '')) : '';
+            if ($wert !== '') {
+                $b = trim((string) ($w['beschreibung'] ?? ''));
+                $zeilen[] = '  · ' . $wert . ($b !== '' ? ' — ' . $b : '');
+            }
+        }
+
+        return $kopf . ": nur diese Werte (in dieser Reihenfolge):\n" . implode("\n", $zeilen);
     }
 
     /** @param  array<string, mixed>  $p */

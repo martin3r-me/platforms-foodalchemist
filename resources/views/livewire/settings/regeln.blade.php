@@ -6,7 +6,7 @@
     $artTon = ['vokabular' => 'info', 'ersetzung' => 'accent', 'pflichtangabe' => 'warn', 'verbot' => 'crit', 'zuordnung' => 'ok', 'schwelle' => 'neutral'];
     $wirkungKurz = ['korrigieren' => 'korrigiert', 'blockieren' => 'blockiert', 'warnen' => 'warnt'];
     $sperrLesen = in_array($sperr['modus'] ?? 'aus', ['lesen', 'fremd'], true);
-    $spalten = ['wert' => 'Wert', 'label' => 'Anzeigename', 'aliase' => 'Andere Schreibweisen (Komma)', 'gruppe' => 'Gruppe', 'von' => 'Von', 'nach' => 'Nach',
+    $spalten = ['wert' => 'Wert', 'label' => 'Anzeigename', 'beschreibung' => 'Bedeutung (steht im Prompt)', 'aliase' => 'Andere Schreibweisen (Komma)', 'gruppe' => 'Gruppe', 'von' => 'Von', 'nach' => 'Nach',
         'begriff' => 'Begriff', 'ziel_name' => 'Ziel (Grundprodukt / Rezept)'];
 @endphp
 
@@ -102,7 +102,7 @@
 
                     {{-- Formular je Art --}}
                     @if(in_array($form['art'] ?? '', ['vokabular', 'ersetzung', 'zuordnung'], true))
-                        @php $keys = array_keys(($form['zeilen'] ?? [])[0] ?? match($form['art']) { 'vokabular' => ['wert' => 1, 'label' => 1, 'aliase' => 1, 'gruppe' => 1], 'ersetzung' => ['von' => 1, 'nach' => 1], default => ['begriff' => 1, 'aliase' => 1, 'ziel_name' => 1] }); @endphp
+                        @php $keys = array_keys(($form['zeilen'] ?? [])[0] ?? match($form['art']) { 'vokabular' => ['wert' => 1, 'label' => 1, 'beschreibung' => 1, 'aliase' => 1, 'gruppe' => 1], 'ersetzung' => ['von' => 1, 'nach' => 1], default => ['begriff' => 1, 'aliase' => 1, 'ziel_name' => 1] }); @endphp
                         <div class="flex flex-col gap-1.5">
                             <p class="{{ $klein }} font-medium text-[var(--fa-ink-2)]">{{ ['vokabular' => 'Erlaubte Werte', 'ersetzung' => 'Ersetzungen', 'zuordnung' => 'Zuordnungen'][$form['art']] }} ({{ count($form['zeilen'] ?? []) }})</p>
                             <div class="max-h-[28rem] overflow-auto rounded-[var(--fa-radius-control)] border border-[var(--fa-line)]">

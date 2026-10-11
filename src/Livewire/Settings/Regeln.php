@@ -204,7 +204,7 @@ class Regeln extends Component
     private function leereZeile(): array
     {
         return match ($this->form['art'] ?? '') {
-            'vokabular' => ['wert' => '', 'label' => '', 'aliase' => '', 'gruppe' => ''],
+            'vokabular' => ['wert' => '', 'label' => '', 'beschreibung' => '', 'aliase' => '', 'gruppe' => ''],
             'ersetzung' => ['von' => '', 'nach' => ''],
             'zuordnung' => ['begriff' => '', 'aliase' => '', 'ziel_name' => ''],
             default => [],
@@ -225,8 +225,9 @@ class Regeln extends Component
 
         return array_merge($form, match ($r->art) {
             // label = Anzeigename (Teller-Rollen, Dominique 11.10.: „Säure“ statt „Saeure“, ohne Code-Änderung).
+            // beschreibung = Bedeutung je Wert, steht im Prompt direkt neben dem Wert (Teller-Rollen, Probelauf 3: „Protein-Sog“).
             'vokabular' => ['zeilen' => array_map(static fn ($w) => ['wert' => (string) ($w['wert'] ?? ''), 'label' => (string) ($w['label'] ?? ''),
-                'aliase' => $komma($w['aliase'] ?? []), 'gruppe' => (string) ($w['gruppe'] ?? '')], (array) ($p['werte'] ?? [])), 'muster' => $liste($p['muster'] ?? [])],
+                'beschreibung' => (string) ($w['beschreibung'] ?? ''), 'aliase' => $komma($w['aliase'] ?? []), 'gruppe' => (string) ($w['gruppe'] ?? '')], (array) ($p['werte'] ?? [])), 'muster' => $liste($p['muster'] ?? [])],
             'ersetzung' => ['zeilen' => array_map(static fn ($x) => ['von' => (string) $x['von'], 'nach' => (string) $x['nach']], (array) ($p['paare'] ?? [])),
                 'ausnahmen' => $komma($p['ausnahmen'] ?? [])],
             'verbot', 'pflichtangabe' => ['tokens' => $liste($p['tokens'] ?? []), 'muster' => $liste($p['muster'] ?? []),
@@ -251,7 +252,7 @@ class Regeln extends Component
         switch ($alt->art) {
             case 'vokabular':
                 $p['werte'] = array_map(static fn ($z) => array_filter(['wert' => trim((string) $z['wert']), 'label' => trim((string) ($z['label'] ?? '')),
-                    'aliase' => $komma((string) ($z['aliase'] ?? '')), 'gruppe' => trim((string) ($z['gruppe'] ?? ''))],
+                    'beschreibung' => trim((string) ($z['beschreibung'] ?? '')), 'aliase' => $komma((string) ($z['aliase'] ?? '')), 'gruppe' => trim((string) ($z['gruppe'] ?? ''))],
                     static fn ($v) => $v !== '' && $v !== []), $zeilenFeld);
                 $p['muster'] = $zeilen((string) ($f['muster'] ?? ''));
                 break;
