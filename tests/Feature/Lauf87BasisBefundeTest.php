@@ -187,12 +187,12 @@ it('H: Unterrezept bekommt den Bedarf des Gerichts nur als Information — die C
         ->and($wurzel['parameter']['ziel_menge'] ?? null)->toBe(10.0);
 });
 
-it('Hausstandard: Jus/Fond/Brühe aus Knochen und Abschnitten — Cut als Hinweis, nicht als Fehler; im Regel-Block', function () {
+it('Hausstandard: Jus/Fond/Brühe aus Knochen und Abschnitten — Cut als harter Befund (Dominique 11.10.); im Regel-Block', function () {
     $regel = \Platform\FoodAlchemist\Models\FoodAlchemistRule::where('schluessel', 'basisrezept.hausstandard.fond_knochen')->firstOrFail();
-    expect($regel->aktiv)->toBeTrue()->and($regel->wirkung)->toBe('warnen');
+    expect($regel->aktiv)->toBeTrue()->and($regel->wirkung)->toBe('blockieren');   // bis 11.10. warnen
 
     $block = app(\Platform\FoodAlchemist\Services\Regeln\RegelPromptBlock::class)->fuerPromptKey('recipe.generator');
-    expect($block)->toContain('Jus, Fond, Brühe aus Knochen und Abschnitten')->toContain('nur, wenn der Auftrag es ausdrücklich verlangt');
+    expect($block)->toContain('Jus, Fond, Brühe aus Knochen und Abschnitten')->toContain('einen Verkaufs-Cut (Beinscheibe, Hüfte, Filet …) dagegen tauschen');
 
     // Seit Lauf 91: die Regel gilt für GPs aus WG 04 (Fleisch, Geflügel & Wild) — Zeilen brauchen ihr GP.
     $wg04 = function (string $name) { $gp = $this->makeGp($this->rootTeam, $name); $gp->update(['commodity_group_code' => '04']); return $gp; };
@@ -205,7 +205,7 @@ it('Hausstandard: Jus/Fond/Brühe aus Knochen und Abschnitten — Cut als Hinwei
         ->where('rule_id', $regel->id)->values();
 
     expect($befunde($jus))->toHaveCount(1)
-        ->and($befunde($jus)[0]['schweregrad'])->toBe('weich')
+        ->and($befunde($jus)[0]['schweregrad'])->toBe('hart')
         ->and($befunde($jus)[0]['feld'])->toContain('Beinscheiben')
         ->and($befunde($beilage))->toHaveCount(0);                    // nur Jus/Fond/Brühe
 });

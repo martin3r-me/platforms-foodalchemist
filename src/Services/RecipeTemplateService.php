@@ -143,7 +143,7 @@ class RecipeTemplateService
      * konkrete GPs/Sub-Rezepte getauscht, danach echtes Recompute. Dedup auf Name.
      *
      * @param  array<int, array{gp_id?: ?int, referenced_recipe_id?: ?int}>  $bindings  keyed by template ingredient_id
-     * @return array{id:int, created:bool, gebunden:int, slots:int}
+     * @return array{id:int, created:bool, gebunden:int, slots:int, hinweise?: list<array{ingredient_id:int, recipe_id:int, name:string, hinweis:string}>}
      */
     public function instantiate(Team $team, int $templateId, string $name, array $bindings): array
     {
@@ -187,6 +187,7 @@ class RecipeTemplateService
                 ->filter(fn ($ri) => $ri->gp && $ri->gp->is_platzhalter)
                 ->pluck('id')->map(fn ($id) => (int) $id)->all();
             $gebunden = 0;
+            $hinweise = [];
 
             foreach ($template->ingredients as $ri) {
                 $felder = [
@@ -199,6 +200,11 @@ class RecipeTemplateService
 
                 $binding = in_array((int) $ri->id, $slotIds, true) ? ($bindings[(int) $ri->id] ?? null) : null;
                 if ($binding !== null && ($swap = $this->resolveBinding($team, $binding, (int) $instanz->id)) !== null) {
+                    if (($hinweis = $swap['_hinweis'] ?? null) !== null) {
+                        $hinweise[] = ['ingredient_id' => (int) $ri->id, 'recipe_id' => (int) $swap['referenced_recipe_id'],
+                            'name' => (string) $swap['display_name'], 'hinweis' => $hinweis];
+                    }
+                    unset($swap['_hinweis']);
                     $felder = [...$felder, ...$swap];
                     $gebunden++;
                 }
@@ -208,7 +214,7 @@ class RecipeTemplateService
 
             app(RecipeRecomputeService::class)->recomputePipeline($instanz->id);
 
-            return ['id' => (int) $instanz->id, 'created' => true, 'gebunden' => $gebunden, 'slots' => count($slotIds)];
+            return ['id' => (int) $instanz->id, 'created' => true, 'gebunden' => $gebunden, 'slots' => count($slotIds), 'hinweise' => $hinweise];
         });
     }
 
@@ -231,8 +237,16 @@ class RecipeTemplateService
             if ($sub === null) {
                 return null;
             }
+            // Ausdrückliche Wahl (Mensch oder Agent) — keine Sperre, nur ein Hinweis wie bei HardstopResolve: dieselbe
+            // Bestands-Prüfung wie im automatischen Bau ({@see \Platform\FoodAlchemist\Support\BestandsZulaessigkeit}),
+            // ohne Bestandteil-Vergleich (der Platzhalter ist kein Zeilentext). Fertigung nur bei „from scratch“-Instanz.
+            $kandidat = \Platform\FoodAlchemist\Support\BestandsZulaessigkeit::lade($team, (int) $sub->id);
+            $instanzTiefe = FoodAlchemistRecipe::query()->whereKey($instanzId)->value('production_depth');
 
             return [
+                '_hinweis' => $kandidat !== null ? \Platform\FoodAlchemist\Support\BestandsZulaessigkeit::pruefe($team, (string) $sub->name, $kandidat, [
+                    'bestandteile' => false, 'regler' => $instanzTiefe === 'from_scratch' ? 'from_scratch' : null,
+                ]) : null,
                 'gp_id' => null,
                 'referenced_recipe_id' => (int) $sub->id,
                 'raw_text' => $sub->name,

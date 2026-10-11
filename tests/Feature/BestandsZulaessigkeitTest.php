@@ -162,8 +162,6 @@ it('Architektur: jeder Bindungsweg aus dem Bestand ruft BestandsZulaessigkeit::p
         'Services/RecipeReviewService.php',
         // Analyse „Gericht zerlegen“: erkennt Komponenten, verdrahtet nichts.
         'Services/DishReverseService.php',
-        // Vorschlag im Instanziieren-Dialog; die Bindung wählt Mensch/Agent ausdrücklich (OverrideSubrecipe).
-        'Services/RecipeTemplateService.php',
         // Prüft Fertigware, bindet nicht.
         'Services/ZukaufBasisrezeptService.php',
     ];
