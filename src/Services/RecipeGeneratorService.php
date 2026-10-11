@@ -357,6 +357,12 @@ class RecipeGeneratorService
                     'auto_ground' => false,
                 ];
 
+                // Eine KI-Rolle außerhalb des Teller-Vokabulars (z. B. V-21 „komponente“ aus einem älteren Regelwerk-Text) wird
+                // nicht still leer — sichtbar in der Statistik (demo Probelauf 11.10.).
+                if ($vkModus && trim((string) ($z['role'] ?? '')) !== '' && $zeile['role'] === null) {
+                    $statistik['rolle_ungueltig'][] = ['zeile' => $text, 'wert' => (string) $z['role']];
+                }
+
                 // Agentischer Resolver: BESTAND ZUERST (GL-04 voll, inkl. §4/§5-Aliasse).
                 // VK bleibt Komponenten-/Basisrezept-first, außer klar kaufbaren Einzelartikeln
                 // (Deko, Gewürz, fertig belegte Artikel): dort gewinnt vorhandenes GP, sonst LA→GP.

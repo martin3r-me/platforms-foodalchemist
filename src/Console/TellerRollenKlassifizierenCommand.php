@@ -63,13 +63,19 @@ class TellerRollenKlassifizierenCommand extends Command
         $bar->start();
         $geschrieben = 0;
         $fehler = 0;
+        $ungueltig = [];   // Wert => Anzahl — nie still verwerfen (demo Probelauf 11.10.: KI lieferte V-21)
         $letzte = null;
         foreach ($ids as $id) {
             try {
                 $leer = DB::table('foodalchemist_recipe_ingredients')->where('recipe_id', $id)->whereNull('deleted_at')
                     ->whereNull('role')->pluck('id')->map(fn ($v) => (int) $v)->flip();
-                $vorschlag = $klassen->verteileRollen($team, (int) $id)['rollen'];
-                $nurLeer = array_filter($vorschlag, fn ($rolle, $zeile) => $leer->has((int) $zeile), ARRAY_FILTER_USE_BOTH);
+                $antwort = $klassen->verteileRollen($team, (int) $id);
+                foreach ($antwort['verworfen'] ?? [] as $zeile => $wert) {
+                    if ($leer->has((int) $zeile)) {
+                        $ungueltig[$wert] = ($ungueltig[$wert] ?? 0) + 1;
+                    }
+                }
+                $nurLeer = array_filter($antwort['rollen'], fn ($rolle, $zeile) => $leer->has((int) $zeile), ARRAY_FILTER_USE_BOTH);
                 $geschrieben += $nurLeer === [] ? 0 : $klassen->acceptRollen($team, (int) $id, $nurLeer);
             } catch (\Throwable $e) {
                 $fehler++;
@@ -86,8 +92,14 @@ class TellerRollenKlassifizierenCommand extends Command
         $this->newLine();
         $this->info("{$geschrieben} Zeilen klassifiziert, {$fehler} Fehler. Letztes Rezept: {$letzte}"
             . ($letzte !== null ? ' — fortsetzen mit --ab-id=' . ($letzte + 1) : ''));
+        if ($ungueltig !== []) {
+            arsort($ungueltig);
+            $this->error(array_sum($ungueltig) . ' Zeilen mit ungültiger Rolle von der KI (nicht geschrieben, bleiben leer): '
+                . implode(', ', array_map(fn ($w, $n) => "{$n}× " . ($w === '' ? '(leer)' : $w), array_keys($ungueltig), $ungueltig))
+                . '. Vor dem Weiterlaufen prüfen: liefert ein Kanon-/Regelwerk-Text noch das alte Vokabular?');
+        }
 
-        return $fehler > 0 ? self::FAILURE : self::SUCCESS;
+        return $fehler > 0 || $ungueltig !== [] ? self::FAILURE : self::SUCCESS;
     }
 
     /** Gerichte des Teams mit mindestens einer Zeile ohne Teller-Rolle. */

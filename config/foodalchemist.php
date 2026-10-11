@@ -1339,7 +1339,7 @@ return [
                 . 'Rohzutaten aufzulösen; false bei einer Rohzutat/Ware), '
                 // Dominique 11.10.: Teller-Rolle aus der Liste teller_rollen im Kontext (Regel gericht.teller_rolle).
                 . 'role (genau EINE aus teller_rollen im Kontext: protein = Hauptkomponente, basis = Tellerbasis wie Pueree, '
-                . 'sauce, beilage, crunch, saeure, aroma = Oel-/Wuerz-Akzent, garnitur), '
+                . 'sauce, beilage, crunch, saeure, aroma = Oel-/Wuerz-Akzent, garnitur; aroma_treiber/komponente sind ungueltig), '
                 . 'fit (EIN kurzer Halbsatz: warum gehört diese Zutat FACHLICH in DIESES Gericht)}] '
                 // Spec 41 B2 (§12): Komponenten-Reihenfolge = AUFBAU-/PLATING-Reihenfolge über `role`,
                 // NICHT nach Menge/Anteil (Fall E1). Sauce/Basis am Boden, Garnitur/Finish zuletzt.
@@ -1415,7 +1415,8 @@ return [
             // Teller-Vokabular (Dominique 11.10.) kommt als `vokabular` aus der Regel gericht.teller_rolle.
             'task' => 'Verteile die Teller-Rollen uebers GANZE Gericht (Vokabular: die Liste vokabular im Kontext — '
                 . 'jede Zutat genau eine Rolle, Gesamt-Gericht-Sicht statt Einzelbetrachtung; protein = Hauptkomponente, '
-                . 'basis = Tellerbasis wie Pueree, aroma = Oel-/Wuerz-Akzent): werte = {rollen: {<zutat_id>: role}}.',
+                . 'basis = Tellerbasis wie Pueree, aroma = Oel-/Wuerz-Akzent; die alten Werte aroma_treiber und komponente sind '
+                . 'UNGUELTIG, auch wenn ein Regelwerk-Text sie noch nennt): werte = {rollen: {<zutat_id>: role}}.',
         ],
         // ── M7-04: Anhang-A-Inventar komplett (06_KI) ────────────────────
         // Bewusst NICHT portiert: #2 TEMPLATE_FILL + #38 AGENTIC_RESOLVER

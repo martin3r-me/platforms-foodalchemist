@@ -99,7 +99,7 @@ class SpeisenKlassenService
      * ai_verteile_rollen (Gesamt-Gericht-Sicht, V-21): Vorschlag je Zutat-Zeile,
      * validiert gegen ROLLEN + die Zeilen des Rezepts.
      *
-     * @return array{rollen: array<int, string>, confidence: float, reasoning: ?string, call_log_id: ?int}
+     * @return array{rollen: array<int, string>, verworfen: array<int, string>, confidence: float, reasoning: ?string, call_log_id: ?int}
      */
     public function verteileRollen(Team $team, int $recipeId): array
     {
@@ -115,18 +115,29 @@ class SpeisenKlassenService
             'zutaten' => $zeilen,
             'rollen' => $r->ingredients->mapWithKeys(fn ($z) => [$z->id => $z->role])->filter()->all(),  // Kontext-Echo
             'vokabular' => \Platform\FoodAlchemist\Support\TellerRolle::werte(),
+            // demo Probelauf 11.10.: der Kanon (Regelwerk §12) nannte noch V-21 — die KI lieferte komponente/aroma_treiber.
+            // Die Regel gericht.teller_rolle ist maßgeblich; Altwerte aus älteren Texten sind ausdrücklich ungültig.
+            'vokabular_hinweis' => 'Nur Werte aus vokabular. V-21-Werte (aroma_treiber, komponente) aus aelteren Regelwerk-Texten sind '
+                . 'UNGUELTIG: Hauptkomponente = protein, Sauce/Jus/Fond als Untergrund = sauce, Pueree als Tellerbasis = basis.',
         ], ['target_table' => 'foodalchemist_recipes', 'target_id' => $r->id]);   // B-1: Call-Log ↔ Rezept
 
         $gueltig = [];
+        $verworfen = [];
         $ids = array_map('intval', array_keys($zeilen));
         foreach ((array) ($vorschlag->werte['rollen'] ?? []) as $zeileId => $role) {
-            if (in_array((int) $zeileId, $ids, true) && ($k = \Platform\FoodAlchemist\Support\TellerRolle::kanonisch($role)) !== null) {
+            if (! in_array((int) $zeileId, $ids, true)) {
+                continue;
+            }
+            if (($k = \Platform\FoodAlchemist\Support\TellerRolle::kanonisch($role)) !== null) {
                 $gueltig[(int) $zeileId] = $k;
+            } else {
+                $verworfen[(int) $zeileId] = is_scalar($role) ? (string) $role : '';   // nicht still: der Aufrufer meldet es
             }
         }
 
         return [
             'rollen' => $gueltig,
+            'verworfen' => $verworfen,                                  // Zeile => gelieferter Wert außerhalb des Vokabulars
             'confidence' => max(0.0, min(1.0, $vorschlag->confidence)),
             'reasoning' => $vorschlag->reasoning,
             'call_log_id' => $vorschlag->callLogId,                     // B-1: Accept-Stempel im Bulk-Pfad
