@@ -77,16 +77,16 @@ it('Override-First: manuell gepflegte Klasse blockt den Accept typisiert', funct
 });
 
 it('verteileRollen: Echo-Vorschlag validiert gegen Vokabular + Zeilen; Accept schreibt zeilenweise', function () {
-    DB::table('foodalchemist_recipe_ingredients')->where('id', $this->zeileId)->update(['role' => 'komponente']);  // Kontext-Echo
+    DB::table('foodalchemist_recipe_ingredients')->where('id', $this->zeileId)->update(['role' => 'protein']);  // Kontext-Echo
 
     $vorschlag = $this->svc->verteileRollen($this->rootTeam, $this->vk->id);
-    expect($vorschlag['rollen'])->toBe([$this->zeileId => 'komponente']);
+    expect($vorschlag['rollen'])->toBe([$this->zeileId => 'protein']);
 
     DB::table('foodalchemist_recipe_ingredients')->where('id', $this->zeileId)->update(['role' => null]);
-    $n = $this->svc->acceptRollen($this->rootTeam, $this->vk->id, [$this->zeileId => 'aroma_treiber', 999999 => 'beilage', $this->zeileId + 1000 => 'quatsch']);
+    $n = $this->svc->acceptRollen($this->rootTeam, $this->vk->id, [$this->zeileId => 'sauce', 999999 => 'beilage', $this->zeileId + 1000 => 'quatsch']);
 
     expect($n)->toBe(1)                                               // fremde/ungültige Zeilen fallen raus
-        ->and(DB::table('foodalchemist_recipe_ingredients')->where('id', $this->zeileId)->value('role'))->toBe('aroma_treiber');
+        ->and(DB::table('foodalchemist_recipe_ingredients')->where('id', $this->zeileId)->value('role'))->toBe('sauce');
 });
 
 it('Panel-E2E: Klassifizieren → Übernehmen über die Komponente (DoD Fake-Roundtrip + Accept)', function () {

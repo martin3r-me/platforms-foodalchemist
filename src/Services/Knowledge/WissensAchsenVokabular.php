@@ -5,7 +5,6 @@ namespace Platform\FoodAlchemist\Services\Knowledge;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Platform\FoodAlchemist\Models\FoodAlchemistPlanningSession;
-use Platform\FoodAlchemist\Services\SpeisenKlassenService;
 
 /**
  * Spec 52 — welche WERTE eine Geltungs-Achse tragen darf.
@@ -59,7 +58,7 @@ final class WissensAchsenVokabular
         $werte = match ($achse) {
             'gang' => self::ausTabelle('foodalchemist_dish_main_groups'),
             'warengruppe' => self::ausTabelle('foodalchemist_lookup_commodity_groups'),
-            'komponentenrolle' => self::alsPaare(SpeisenKlassenService::ROLLEN),
+            'komponentenrolle' => self::alsPaare(\Platform\FoodAlchemist\Support\TellerRolle::werte()),   // Teller-Rollen (Dominique 11.10.)
             'niveau' => self::alsPaare(FoodAlchemistPlanningSession::ALLOWED_GENERATION_VALUES['level'] ?? []),
             'occasion' => self::alsPaare(FoodAlchemistPlanningSession::ALLOWED_GENERATION_VALUES['occasion'] ?? []),
             'sektor' => self::alsPaare(self::SEKTOREN),

@@ -57,6 +57,9 @@ class RecipesPutTool extends FoodAlchemistTool implements ToolContract, ToolMeta
                 'yield_kg_manual' => ['type' => 'number'],
                 'category_id' => ['type' => 'integer'],
                 'status' => ['type' => 'string', 'enum' => ['review'], 'description' => 'Nur draft→review erlaubt'],
+                'rollen' => ['type' => 'array', 'items' => ['type' => 'string'], 'description' => 'Mögliche Teller-Rollen des Basisrezepts '
+                    . '(Vokabular Regel gericht.teller_rolle), wichtigste zuerst. Ersetzt die Liste; Quelle manuell — KI und Kaskade '
+                    . 'überschreiben sie danach nicht mehr. Ungültige Werte fallen weg.'],
             ],
             'required' => ['recipe_id'],
         ];
@@ -99,7 +102,12 @@ class RecipesPutTool extends FoodAlchemistTool implements ToolContract, ToolMeta
         }
 
         try {
-            $recipe = app(RecipeService::class)->update($team, $recipe->id, $in);
+            if ($in !== []) {
+                $recipe = app(RecipeService::class)->update($team, $recipe->id, $in);
+            }
+            if (array_key_exists('rollen', $arguments)) {
+                app(\Platform\FoodAlchemist\Services\RecipeRollenService::class)->setze((int) $recipe->id, (array) $arguments['rollen'], 'manuell');
+            }
         } catch (\RuntimeException $e) {
             return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR');
         }
@@ -108,6 +116,7 @@ class RecipesPutTool extends FoodAlchemistTool implements ToolContract, ToolMeta
             'recipe' => [
                 'id' => $recipe->id, 'name' => $recipe->name, 'status' => $this->statusWert($recipe),
                 'version' => $recipe->version, 'yield_kg' => $recipe->yield_kg,
+                'rollen' => app(\Platform\FoodAlchemist\Services\RecipeRollenService::class)->rollen((int) $recipe->id),
             ],
         ], $team, (int) $recipe->id, (bool) $recipe->is_sales_recipe));
     }

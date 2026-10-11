@@ -43,7 +43,7 @@ beforeEach(function () {
     DB::table('foodalchemist_recipe_ingredients')->insert([
         'uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(), 'team_id' => $this->rootTeam->id,
         'recipe_id' => $this->vk->id, 'gp_id' => $gp->id, 'raw_text' => 'Brioche', 'display_name' => 'Brioche',
-        'quantity' => 40, 'unit_vocab_id' => $this->g->id, 'position' => 1, 'role' => 'komponente',
+        'quantity' => 40, 'unit_vocab_id' => $this->g->id, 'position' => 1, 'role' => 'protein',
         'created_at' => now(), 'updated_at' => now(),
     ]);
     $this->zeileId = (int) DB::getPdo()->lastInsertId();
@@ -78,7 +78,7 @@ it('L1a: Revise-Roundtrip am Gericht — Menge geändert, neue Komponente gegrou
     expect($zeilen)->toHaveCount(2)
         ->and((int) $zeilen[0]->id)->toBe($this->zeileId)              // bestehende Zeile bleibt dieselbe
         ->and((float) $zeilen[0]->quantity)->toBe(55.0)
-        ->and($zeilen[0]->role)->toBe('komponente')                    // Rolle ist Facette → unangetastet
+        ->and($zeilen[0]->role)->toBe('protein')                    // Rolle ist Facette → unangetastet
         ->and((int) $zeilen[1]->gp_id)->toBe((int) $gpTofu->id)        // #508-Grounding der neuen Zeile
         ->and($zeilen[1]->match_method?->value ?? $zeilen[1]->match_method)->toBe('gp_v2_fk');
 

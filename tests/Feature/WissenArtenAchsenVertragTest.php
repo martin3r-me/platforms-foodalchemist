@@ -57,11 +57,11 @@ it('prüft Geltung vor Top-K und verwendet keine passende Suche aus falschem Kon
 });
 
 it('löst Datenwerke ohne Suchwort auf und übermittelt Wert Einheit Bezug und Version statt Prosa', function () {
-    ($this->doc)('portion', 'datenwerk', ['geltung' => ['gang' => ['hauptgang'], 'komponentenrolle' => ['komponente']],
+    ($this->doc)('portion', 'datenwerk', ['geltung' => ['gang' => ['hauptgang'], 'komponentenrolle' => ['protein']],
         'datenwerte' => [($this->value)()], 'content_md' => 'Diese Prosa darf nicht verwendet werden.']);
     app(KnowledgeRoutingService::class)->setArt('test.data', 'datenwerk', 'resolve');
     $context = app(KnowledgeContextService::class)->contextFor($this->rootTeam, 'test.data', 'Keine Textübereinstimmung', null, [],
-        ['gang' => 'hauptgang', 'komponentenrolle' => 'komponente']);
+        ['gang' => 'hauptgang', 'komponentenrolle' => 'protein']);
     expect($context['datenwerk']['ergebnisse'][0]['status'])->toBe('aufgeloest')
         ->and($context['block'])->toContain('verzehrfertig pro portion', 'Testquelle', 'portion@v1')
         ->not->toContain('Diese Prosa')

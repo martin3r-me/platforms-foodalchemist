@@ -47,7 +47,7 @@ beforeEach(function () {
     ]);
     $this->vkZutatA = $this->makeIngredient($this->vk, 'Rinderrücken', $this->makeGp($this->rootTeam, 'Rinderruecken-b1'), '180', 1);
     $this->vkZutatB = $this->makeIngredient($this->vk, 'Jus', $this->makeGp($this->rootTeam, 'Jus-b1'), '50', 2);
-    $this->vkZutatB->update(['role' => 'komponente']);                                        // schon entschieden
+    $this->vkZutatB->update(['role' => 'protein']);                                        // schon entschieden
 
     // Fake antwortet je Aufgabe — Marker sind die STRUKTURELLEN Kontext-Keys der Prompts, nicht Prompt-Wörter.
     $geraetId = $this->geraetId;
@@ -67,7 +67,7 @@ beforeEach(function () {
                 // Garverlust: die Schalotte hat schon 10 → der Fake „vergisst" sie nicht, der Service muss sie schützen.
                 str_contains($user, '"verluste"') => ['verluste' => [$this->ids['jus'] => 50, $this->ids['schalotte'] => 99]],
                 // Rollen: die Jus hat schon `komponente` → der Fake versucht sie umzuschreiben.
-                str_contains($user, '"vokabular"') => ['rollen' => [$this->ids['ruecken'] => 'aroma_treiber', $this->ids['vkjus'] => 'garnitur']],
+                str_contains($user, '"vokabular"') => ['rollen' => [$this->ids['ruecken'] => 'sauce', $this->ids['vkjus'] => 'garnitur']],
                 str_contains($user, '"vehikel"') => ['servier_vehikel_id' => $this->vehikelId],   // Registry-Schema vk.servier_vehikel
                 str_contains($user, '"taste_direction"') => ['taste_direction' => 'herzhaft'],
                 default => ['description' => 'Kräftige Jus.'],
@@ -103,7 +103,7 @@ it('B-1: am Gericht sind Rollen, Servier-Vehikel und Geschmack Lücken — ohne 
     $offen = $this->svc->luecken($this->vk, BulkEnrichService::SCHRITTE_VK);
     expect($offen)->toContain('rollen')->toContain('servier_vehikel')->toContain('geschmack');
 
-    $this->vkZutatA->update(['role' => 'komponente']);
+    $this->vkZutatA->update(['role' => 'protein']);
     expect($this->svc->luecken($this->vk->fresh(), BulkEnrichService::SCHRITTE_VK))->not->toContain('rollen');
 });
 
@@ -220,8 +220,8 @@ it('B-1: Rollen landen nur in Zeilen ohne Rolle — die manuelle Rolle der Jus �
     $prop = DB::table('foodalchemist_bulk_proposals')->where('run_id', $runId)->where('field', 'rollen')->first();
     expect($prop->status)->toBe('offen')
         ->and($this->svc->uebernehmen($this->rootTeam, $prop->id))->toBeTrue()
-        ->and(DB::table('foodalchemist_recipe_ingredients')->find($this->vkZutatA->id)->role)->toBe('aroma_treiber')
-        ->and(DB::table('foodalchemist_recipe_ingredients')->find($this->vkZutatB->id)->role)->toBe('komponente');
+        ->and(DB::table('foodalchemist_recipe_ingredients')->find($this->vkZutatA->id)->role)->toBe('sauce')
+        ->and(DB::table('foodalchemist_recipe_ingredients')->find($this->vkZutatB->id)->role)->toBe('protein');
 });
 
 it('B-1: Servier-Vehikel kommt mit Lineage ki ans Gericht und in die Standard-Darreichung; Geschmack setzt das Enum', function () {

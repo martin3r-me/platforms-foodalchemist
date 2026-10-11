@@ -243,7 +243,7 @@ it('T4: im Gericht (vkModus) wird komponente/beilage IMMER Basisrezept, Rohware 
         'name' => 'Teller: Rolle-hart',
         'zutaten' => [
             ['text' => 'Kartoffelterrine', 'quantity' => 120, 'unit' => 'g', 'role' => 'beilage', 'sub_rezept' => false], // kein Marker + KI-flach → trotzdem Sub (Rolle)
-            ['text' => 'Aprikosenragout', 'quantity' => 60, 'unit' => 'g', 'role' => 'komponente'],                       // kein Marker/Flag → Sub (Rolle)
+            ['text' => 'Aprikosenragout', 'quantity' => 60, 'unit' => 'g', 'role' => 'protein'],                       // kein Marker/Flag → Sub (Rolle)
             ['text' => 'Fleur de Sel', 'quantity' => 2, 'unit' => 'g', 'role' => 'garnitur'],                             // Rohware (direktArtikel) → LA
         ],
     ], vkModus: true);
@@ -293,7 +293,7 @@ it('L2 from_scratch: komponente mit GP-Treffer wird TROTZDEM zerlegt (GP geblock
     ], kiRezeptOverride: [
         'name' => 'Gericht: Püree-Teller',
         'zutaten' => [
-            ['text' => 'Rotkohl', 'slug' => 'rotkohl', 'quantity' => 200, 'unit' => 'g', 'role' => 'komponente'],
+            ['text' => 'Rotkohl', 'slug' => 'rotkohl', 'quantity' => 200, 'unit' => 'g', 'role' => 'protein'],
         ],
     ], vkModus: true);
 
@@ -311,7 +311,7 @@ it('L2 voll_convenience: komponente mit GP-Treffer bleibt FLACH (GP gewinnt, Fer
     ], kiRezeptOverride: [
         'name' => 'Gericht: Püree-Teller VC',
         'zutaten' => [
-            ['text' => 'Rotkohl', 'slug' => 'rotkohl', 'quantity' => 200, 'unit' => 'g', 'role' => 'komponente'],
+            ['text' => 'Rotkohl', 'slug' => 'rotkohl', 'quantity' => 200, 'unit' => 'g', 'role' => 'protein'],
         ],
     ], vkModus: true);
 
@@ -328,7 +328,7 @@ it('L2 egal (kein convenience-Key): komponente mit GP-Treffer bleibt FLACH (Best
     ], kiRezeptOverride: [
         'name' => 'Gericht: Püree-Teller egal',
         'zutaten' => [
-            ['text' => 'Rotkohl', 'slug' => 'rotkohl', 'quantity' => 200, 'unit' => 'g', 'role' => 'komponente'],
+            ['text' => 'Rotkohl', 'slug' => 'rotkohl', 'quantity' => 200, 'unit' => 'g', 'role' => 'protein'],
         ],
     ], vkModus: true);
 
@@ -546,7 +546,7 @@ it('B0: valide vorgeschlagene sub_rezept_id wird als Basisrezept-Referenz verdra
 
     $resultat = $this->svc->generiere($this->rootTeam, 'Teller mit Jus', [], kiRezeptOverride: [
         'name' => 'Gericht: Jus-Teller',
-        'zutaten' => [['text' => 'Rotweinjus', 'sub_rezept_id' => $sub->id, 'quantity' => 60, 'unit' => 'ml', 'role' => 'aroma_treiber']],
+        'zutaten' => [['text' => 'Rotweinjus', 'sub_rezept_id' => $sub->id, 'quantity' => 60, 'unit' => 'ml', 'role' => 'sauce']],
     ], vkModus: true);
 
     $zeile = $resultat['recipe']->ingredients()->first();
@@ -846,7 +846,7 @@ it('#102-Nebenbefund: offene Aroma-Treiber-Zeile ohne Bestandstreffer wird zum B
     $out = $this->svc->generiere($this->rootTeam, 'Teller', [], kiRezeptOverride: [
         'name' => 'Teller: Aroma-Test',
         'zutaten' => [[
-            'text' => 'Steinpilzreduktion', 'role' => 'aroma_treiber', 'quantity' => 20, 'unit' => 'g',
+            'text' => 'Steinpilzreduktion', 'role' => 'sauce', 'quantity' => 20, 'unit' => 'g',
         ]],
     ], vkModus: true);
 

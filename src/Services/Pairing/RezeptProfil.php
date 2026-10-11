@@ -170,7 +170,8 @@ final class RezeptProfil
         $hash = [];
         foreach ($zeilen as $z) {
             $g = (float) $gramm[$z->id];
-            $rolle = PairingService::ROLLEN_GEWICHT[$z->role ?? ''] ?? 1.0;
+            // Spec 58 (Dominique 06.10., übertragen auf die Teller-Rollen 11.10.): Gewicht aus der Regel pairing.rollen_gewicht.
+            $rolle = \Platform\FoodAlchemist\Support\TellerRolle::gewicht($z->role);
             $masse += $g;
             if ($z->referenced_recipe_id !== null) {
                 $sub = $this->fuer((int) $z->referenced_recipe_id, $tiefe + 1, $besucht);

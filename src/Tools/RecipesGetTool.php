@@ -67,6 +67,8 @@ class RecipesGetTool extends FoodAlchemistTool implements ToolContract, ToolMeta
             'batch_max_pieces' => $r->batch_max_pieces,
             'default_station_id' => $r->default_station_id,
             'max_vorlauf_tage' => $r->max_vorlauf_tage,
+            // Mögliche Teller-Rollen des Basisrezepts (Dominique 11.10.), Hauptrolle zuerst, mit Quelle.
+            'rollen' => $r->rollen()->get(['rolle', 'source'])->map(fn ($x) => ['rolle' => $x->rolle, 'source' => $x->source])->all(),
             'zutaten' => $r->ingredients->map(fn ($z) => [
                 'id' => $z->id,
                 'cooking_loss_pct' => $z->cooking_loss_pct,
@@ -74,7 +76,7 @@ class RecipesGetTool extends FoodAlchemistTool implements ToolContract, ToolMeta
                 'trimming_loss_pct' => $z->trimming_loss_pct,
                 'quantity_max' => $z->quantity_max,
                 'is_optional' => (bool) $z->is_optional,
-                'note' => $z->note, 'role' => $z->role, 'funktion' => $z->funktion,
+                'note' => $z->note, 'role' => $z->role,
                 'referenced_recipe_id' => $z->referenced_recipe_id,
                 'quantity' => $z->quantity, 'unit' => $z->unit?->slug,
                 'name' => $z->referencedRecipe?->name ?? $z->gp?->name ?? $z->display_name,

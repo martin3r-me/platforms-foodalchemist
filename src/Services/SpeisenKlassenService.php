@@ -16,8 +16,12 @@ use Platform\FoodAlchemist\Services\Ai\AiGatewayService;
  */
 class SpeisenKlassenService
 {
-    /** V-21-Rollen-Vokabular (Schema-Kommentar recipe_ingredients.role). */
-    public const ROLLEN = ['aroma_treiber', 'komponente', 'beilage', 'garnitur'];
+    /**
+     * Teller-Rollen (Dominique 11.10.) — nur RÜCKFALL, wenn die Regel `gericht.teller_rolle` fehlt; maßgeblich ist
+     * {@see \Platform\FoodAlchemist\Support\TellerRolle::werte}. Reihenfolge = Anrichte-Reihenfolge. Altwerte V-21
+     * (aroma_treiber|komponente|beilage|garnitur) stehen in recipe_ingredients.role_v21.
+     */
+    public const ROLLEN = ['basis', 'protein', 'beilage', 'sauce', 'crunch', 'saeure', 'aroma', 'garnitur'];
 
     public function __construct(private AiGatewayService $ki)
     {
@@ -110,14 +114,14 @@ class SpeisenKlassenService
             'gericht' => $r->name,
             'zutaten' => $zeilen,
             'rollen' => $r->ingredients->mapWithKeys(fn ($z) => [$z->id => $z->role])->filter()->all(),  // Kontext-Echo
-            'vokabular' => self::ROLLEN,
+            'vokabular' => \Platform\FoodAlchemist\Support\TellerRolle::werte(),
         ], ['target_table' => 'foodalchemist_recipes', 'target_id' => $r->id]);   // B-1: Call-Log ↔ Rezept
 
         $gueltig = [];
         $ids = array_map('intval', array_keys($zeilen));
         foreach ((array) ($vorschlag->werte['rollen'] ?? []) as $zeileId => $role) {
-            if (in_array((int) $zeileId, $ids, true) && in_array($role, self::ROLLEN, true)) {
-                $gueltig[(int) $zeileId] = $role;
+            if (in_array((int) $zeileId, $ids, true) && ($k = \Platform\FoodAlchemist\Support\TellerRolle::kanonisch($role)) !== null) {
+                $gueltig[(int) $zeileId] = $k;
             }
         }
 
@@ -142,7 +146,7 @@ class SpeisenKlassenService
         return DB::transaction(function () use ($r, $rollen) {
             $n = 0;
             foreach ($rollen as $zeileId => $role) {
-                if (! in_array($role, self::ROLLEN, true)) {
+                if (($role = \Platform\FoodAlchemist\Support\TellerRolle::kanonisch($role)) === null) {
                     continue;
                 }
                 $n += DB::table('foodalchemist_recipe_ingredients')

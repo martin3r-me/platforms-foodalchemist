@@ -54,9 +54,6 @@ class RecipeIngredientsPutTool extends FoodAlchemistTool implements ToolContract
                             'is_optional' => ['type' => 'boolean'],
                             'note' => ['type' => 'string'],
                             'role' => ['type' => 'string'],
-                            'funktion' => ['type' => ['string', 'null'], 'description' => 'Wofür die Zeile da ist — ein Wert aus dem Vokabular '
-                                . 'der Regel rezeptzeile.funktion (basis, farbe, bindung, wuerze, textur, aroma, saeure, fett, garnitur). '
-                                . 'Ungültige Werte werden zu null. Weggelassen bleibt der bisherige Wert.'],
                         ],
                         'required' => ['name', 'quantity', 'unit'],
                     ],
