@@ -99,6 +99,7 @@ class RecipeReviseService
             $roh = str_replace(',', '.', (string) ($z['quantity'] ?? ''));
             $quantity = is_numeric($roh) ? (float) $roh : null;
             $zeile = $this->bestandsZeile($orig);
+            $getauscht = false;
             // Spec 80 C3: eine Verweiszeile trägt den Namen des Unterrezepts. Ein neuer Text bei gleichem
             // Verweis liefe auseinander (demo: Text „Gel: Kräutermatte …", Verweis weiter auf #2069).
             if ($orig?->referenced_recipe_id === null) {
@@ -113,10 +114,16 @@ class RecipeReviseService
                 if ($orig !== null && $orig->gp_id !== null && $neuerText !== ''
                     && mb_strtolower($neuerText) !== mb_strtolower(trim((string) ($orig->gp?->name ?? $orig->display_name ?? $orig->raw_text ?? '')))) {
                     $zeile['gp_id'] = null;
+                    $getauscht = true;
                 }
             }
-            // Funktion: ein gültiger KI-Wert ergänzt bzw. ersetzt, sonst bleibt die bisherige (Dominique 11.10.).
-            $zeile['funktion'] = \Platform\FoodAlchemist\Support\ZeilenFunktion::kanonisch($z['funktion'] ?? null) ?? $orig?->funktion;
+            // Funktion (Dominique 11.10., Kuratorin: im CODE durchgesetzt, nicht nur im Prompt): eine vorhandene Funktion
+            // bleibt, auch wenn die KI einen anderen Wert liefert. Die KI ergänzt nur — neue Zeile, Zeile ohne Funktion oder
+            // getauschte Zutat (dann gilt ihr gültiger Wert, sonst der alte).
+            $kiFunktion = \Platform\FoodAlchemist\Support\ZeilenFunktion::kanonisch($z['funktion'] ?? null);
+            $zeile['funktion'] = ($orig !== null && $orig->funktion !== null && ! $getauscht)
+                ? $orig->funktion
+                : ($kiFunktion ?? $orig?->funktion);
             $zeile['quantity'] = $quantity ?? (float) ($orig?->quantity ?? 1);
             $zeile['unit_vocab_id'] = $einheiten[$z['einheit_slug'] ?? ''] ?? $orig?->unit_vocab_id ?? $einheiten['g'] ?? null;
             $zeilen[] = $zeile;

@@ -86,6 +86,22 @@ it('Überarbeiten: die KI ergänzt eine fehlende Funktion, eine vorhandene bleib
     expect(array_column($zeilen, 'funktion'))->toBe(['basis', 'fett']);
 });
 
+it('Überarbeiten: KI liefert abweichende Funktion für eine bestehende Zeile → die alte bleibt; bei getauschter Zutat gilt der KI-Wert', function () {
+    $r = $this->makeRecipe($this->rootTeam, 'Püree: Sellerie', ['status' => 'draft']);
+    $a = $this->makeIngredient($r, 'Knollensellerie', ($this->gp)('Knollensellerie: frisch'), '500', 1);
+    $b = $this->makeIngredient($r, 'Schalotten', ($this->gp)('Schalotten: frisch, ganz'), '50', 2);
+    $a->update(['funktion' => 'basis']);
+    $b->update(['funktion' => 'aroma']);
+
+    $zeilen = app(RecipeReviseService::class)->syncZeilen($r->fresh(['ingredients.gp']), [
+        ['id' => $a->id, 'text' => 'Knollensellerie: frisch', 'quantity' => 500, 'einheit_slug' => 'g', 'funktion' => 'textur'],
+        ['id' => $b->id, 'text' => 'Lauch: frisch', 'quantity' => 50, 'einheit_slug' => 'g', 'funktion' => 'basis'],
+        ['text' => 'Butter', 'quantity' => 30, 'einheit_slug' => 'g', 'funktion' => 'fett'],
+    ]);
+
+    expect(array_column($zeilen, 'funktion'))->toBe(['basis', 'basis', 'fett']);
+});
+
 it('Nutzungs-Historie: am Bestandstreffer, in abgelehnt und im KI-Kontext der Generator-Zeile', function () {
     $jus = $this->makeRecipe($this->rootTeam, 'Jus: Rind');
     $entwurf = $this->makeRecipe($this->rootTeam, 'Jus: Kalb', ['status' => 'draft']);
