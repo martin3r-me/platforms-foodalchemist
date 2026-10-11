@@ -374,3 +374,13 @@ it('Eine Quelle: ist die Regel aus, gibt es keine Teller-Rollen — kein Rückfa
 
     expect(TellerRolle::werte())->toBe([])->and(TellerRolle::kanonisch('protein'))->toBeNull();
 });
+
+it('Anzeigenamen kommen aus der Regel (werte[].label); ein neuer Wert ohne Label erscheint mit großem Anfangsbuchstaben', function () {
+    $regel = FoodAlchemistRule::where('schluessel', TellerRolle::SCHLUESSEL)->firstOrFail();
+    $params = $regel->params;
+    $params['werte'][] = ['wert' => 'kraeuter_akzent'];
+    app(\Platform\FoodAlchemist\Services\Regeln\RegelService::class)->speichere([...$regel->only(['schluessel', 'regelwerk', 'paragraph',
+        'titel', 'art', 'ziel', 'wirkung', 'beispiele', 'dossier_slug']), 'params' => $params], null, null, 'test');
+
+    expect(TellerRolle::labels())->toMatchArray(['saeure' => 'Säure', 'basis' => 'Basis', 'kraeuter_akzent' => 'Kraeuter akzent']);
+});

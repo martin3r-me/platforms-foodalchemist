@@ -17,16 +17,20 @@ final class TellerRolle
 
     public const GEWICHT_SCHLUESSEL = 'pairing.rollen_gewicht';
 
-    /** Anzeige-Namen; ein neuer Wert aus der Pflege ohne Eintrag erscheint mit großem Anfangsbuchstaben. */
-    private const LABELS = ['basis' => 'Basis', 'protein' => 'Protein', 'beilage' => 'Beilage', 'sauce' => 'Sauce',
-        'crunch' => 'Crunch', 'saeure' => 'Säure', 'aroma' => 'Aroma', 'garnitur' => 'Garnitur'];
-
-    /** @return array<string, string> Rolle => Anzeige-Name, in Anrichte-Reihenfolge */
+    /**
+     * @return array<string, string> Rolle => Anzeigename in Anrichte-Reihenfolge — aus der Regel (`werte[].label`, pflegbar),
+     *         sonst der Wert mit großem Anfangsbuchstaben. Keine zweite Liste im Code (Spec 81 E).
+     */
     public static function labels(): array
     {
+        $regel = RegelBuch::falls(self::SCHLUESSEL);
         $out = [];
-        foreach (self::werte() as $w) {
-            $out[$w] = self::LABELS[$w] ?? ucfirst(str_replace('_', ' ', $w));
+        foreach ((array) ($regel?->params['werte'] ?? []) as $w) {
+            $wert = is_array($w) ? trim((string) ($w['wert'] ?? '')) : '';
+            if ($wert !== '') {
+                $label = trim((string) ($w['label'] ?? ''));
+                $out[$wert] = $label !== '' ? $label : ucfirst(str_replace('_', ' ', $wert));
+            }
         }
 
         return $out;
