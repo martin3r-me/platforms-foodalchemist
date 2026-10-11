@@ -274,9 +274,21 @@ it('Heilung: hart + weich → die Direktive trägt nur den harten Befund', funct
 
 // ── Lauf 87 (10.10.): §6.5 nicht heilen, Heil-Status am Step ───────────────────────────────
 
-it('Heilung: reiner §6.5-Garverlust-Befund ist nicht heilbar → kein Revise (bis Paket 11)', function () use ($befund, $aufrufe) {
+it('Heilung: §6.5-Garverlust aus der KI wird verworfen (der Code prüft das Feld) → kein Befund, kein Revise', function () use ($befund, $aufrufe) {
+    // Seit 11.10.: die Prüf-KI sah cooking_loss_pct nie und meldete §6.5 bei jedem Rezept (demo 3880: 16/17 Zeilen mit Verlust).
     $garverlust = $befund(['paragraph' => '§6.5', 'feld' => 'cooking_loss_pct', 'begruendung' => 'Reduktion ohne Einkochverlust']);
     ConformanceHealStub::bind([[$garverlust], [$garverlust]]);
+
+    app(ConformanceService::class)->pruefeUndHeile($this->rootTeam, 'basisrezept', $this->rezept->id);
+
+    expect(FoodAlchemistConformanceFinding::where('artifact_id', $this->rezept->id)->where('paragraph', '§6.5')->count())->toBe(0)
+        ->and($aufrufe('recipe.ueberarbeiten'))->toBe(0);
+});
+
+it('Heilung: ein harter, nicht heilbarer Befund (Hand-Beschreibung) → nichts_heilbar, kein Revise', function () use ($befund, $aufrufe) {
+    $this->rezept->update(['description_source' => 'manual']);
+    $hand = $befund(['paragraph' => '§8', 'feld' => 'description', 'begruendung' => 'Beschreibung zu werblich']);
+    ConformanceHealStub::bind([[$hand], [$hand]]);
 
     $erg = app(ConformanceService::class)->pruefeUndHeile($this->rootTeam, 'basisrezept', $this->rezept->id);
 
@@ -296,8 +308,9 @@ it('heilbar: §6.5 / F6.5 / Garverlust-Feld raus, §6 und §6.50-fremde Paragrap
 });
 
 it('ConformanceCheckJob: Heil-Status + Rezept am Step, Befunde tragen den Kaskaden-Lauf', function () use ($befund) {
-    $garverlust = $befund(['paragraph' => '§6.5', 'feld' => 'cooking_loss_pct']);
-    ConformanceHealStub::bind([[$garverlust], [$garverlust]]);
+    $this->rezept->update(['description_source' => 'manual']);
+    $hand = $befund(['paragraph' => '§8', 'feld' => 'description']);
+    ConformanceHealStub::bind([[$hand], [$hand]]);
     $run = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'rezept', 'status' => 'running']);
     $step = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id,
         'kind' => 'rezept', 'status' => 'done', 'ref_type' => 'recipe', 'ref_id' => $this->rezept->id, 'sort' => 1]);
