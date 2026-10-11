@@ -54,6 +54,9 @@ class RecipeIngredientsPutTool extends FoodAlchemistTool implements ToolContract
                             'is_optional' => ['type' => 'boolean'],
                             'note' => ['type' => 'string'],
                             'role' => ['type' => 'string'],
+                            'role_source' => ['type' => 'string', 'enum' => ['manuell'], 'description' => 'Optional: manuell nur bei '
+                                . 'ausdrücklicher menschlicher Vorgabe („Dominique sagt: das ist Sauce“). Ohne Angabe gilt die Rolle als KI-gesetzt '
+                                . '(ki) und darf von einer späteren Neu-Zuordnung überschrieben werden; manuell schützt sie davor.'],
                         ],
                         'required' => ['name', 'quantity', 'unit'],
                     ],
@@ -107,6 +110,7 @@ class RecipeIngredientsPutTool extends FoodAlchemistTool implements ToolContract
             'zutaten.*.quantity' => 'required|numeric|gt:0',
             'zutaten.*.unit' => 'required|string',
             'zutaten.*.cooking_loss_pct' => 'nullable|numeric|between:0,100',
+            'zutaten.*.role_source' => 'nullable|in:manuell',
             'garverluste' => 'sometimes|array|min:1',
             'garverluste.*.ingredient_id' => 'required_with:garverluste|integer|min:1|distinct',
             'garverluste.*.cooking_loss_pct' => 'present|nullable|numeric|between:0,100',

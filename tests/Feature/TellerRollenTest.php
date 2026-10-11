@@ -482,3 +482,35 @@ it('Kommando --alle: ordnet leere, migration- und ki-Rollen neu zu; manuelle und
         // Echo: die manuelle Rolle bleibt als Kontext sichtbar, die zu überschreibenden (migration/ki) nicht
         ->and($text)->toContain('[sauce]')->and($text)->not->toContain('[beilage]')->and($text)->not->toContain('[garnitur]');
 });
+
+it('role_source: belegte Rückfüllung — vk.rollen-Call nach der Umstellung → ki, ohne Beleg bleibt unbekannt', function () {
+    $umstellung = FoodAlchemistRule::where('schluessel', TellerRolle::SCHLUESSEL)->value('created_at');
+    $mitCall = $this->makeRecipe($this->rootTeam, '[HG] Probe', ['status' => 'draft', 'is_sales_recipe' => true]);
+    $ohneCall = $this->makeRecipe($this->rootTeam, '[HG] Ohne', ['status' => 'draft', 'is_sales_recipe' => true]);
+    $a = $this->makeIngredient($mitCall, 'Wiener', null, '100', 1);
+    $b = $this->makeIngredient($ohneCall, 'Senf', null, '10', 1);
+    foreach ([$a, $b] as $z) {
+        DB::table('foodalchemist_recipe_ingredients')->where('id', $z->id)->update(['role' => 'protein', 'role_v21' => 'komponente', 'updated_at' => now()->addMinute()]);
+    }
+    DB::table('foodalchemist_ai_call_log')->insert(['uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(), 'team_id' => $this->rootTeam->id,
+        'feature' => 'vk.rollen', 'target_table' => 'foodalchemist_recipes', 'target_id' => $mitCall->id,
+        'created_at' => \Illuminate\Support\Carbon::parse($umstellung)->addSecond(), 'updated_at' => now()]);
+    Schema::table('foodalchemist_recipe_ingredients', fn ($t) => $t->dropColumn('role_source'));
+
+    (require dirname(__DIR__, 2) . '/database/migrations/2026_10_17_100000_recipe_ingredients_role_source.php')->up();
+
+    expect(DB::table('foodalchemist_recipe_ingredients')->where('id', $a->id)->value('role_source'))->toBe('ki')
+        ->and(DB::table('foodalchemist_recipe_ingredients')->where('id', $b->id)->value('role_source'))->toBeNull();
+});
+
+it('MCP recipe_ingredients.PUT: role_source=manuell auf ausdrückliche Vorgabe; nur manuell erlaubt', function () {
+    $g = $this->makeRecipe($this->rootTeam, '[HG] Filet', ['status' => 'draft', 'is_sales_recipe' => true]);
+    $z = $this->makeIngredient($g, 'Jus', ($this->gp)('Kalbsjus: konserviert'), '60', 1);
+    $put = fn (array $extra) => app(ToolRegistry::class)->get('foodalchemist.recipe_ingredients.PUT')->execute(['recipe_id' => $g->id, 'zutaten' => [
+        ['id' => $z->id, 'name' => 'Jus', 'gp_id' => $z->gp_id, 'quantity' => 60, 'unit' => 'g', ...$extra]]], new ToolContext($this->user, $this->rootTeam));
+
+    expect($put(['role' => 'sauce', 'role_source' => 'manuell'])->success)->toBeTrue()
+        ->and($z->fresh()->role_source)->toBe('manuell')
+        ->and($put(['role' => 'aroma', 'role_source' => 'ki'])->errorCode)->toBe('VALIDATION_ERROR')
+        ->and($z->fresh()->role)->toBe('sauce');
+});
