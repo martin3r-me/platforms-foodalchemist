@@ -361,7 +361,16 @@ class RecipeGeneratorService
                 // (Deko, Gewürz, fertig belegte Artikel): dort gewinnt vorhandenes GP, sonst LA→GP.
                 // Brot im Gericht ist nie ein Direktartikel: es wird zur Komponente verarbeitet (Dominique 10.10.).
                 $brotImGericht = $vkModus && ! $brotAngebot && app(ZukaufBasisrezeptService::class)->istBrotZeile($team, $text);
-                $direktArtikel = $vkModus && ! $brotImGericht && $this->heuristik->istDirektArtikelKandidat($text);
+                // Kleinstmengen (Regel gericht.kleinstmengen, Dominique 11.10.): Butter, Öl, Salz, Pfeffer, Zitrone, Finish-Kräuter
+                // stehen im Gericht direkt als GP — kein Rüst-Basisrezept, auch nicht, wenn die KI „Aroma: Butter" schreibt
+                // (demo Lauf 98: 1-kg-Block für 2 g, ~30k Tokens). Die Typ-Vorsilbe fällt weg; gebunden wird nur ein GP.
+                $kleinstmenge = $vkModus && ! $brotImGericht ? \Platform\FoodAlchemist\Support\Kleinstmenge::erkenne($text) : null;
+                if ($kleinstmenge !== null) {
+                    $text = $kleinstmenge['text'];
+                    $zeile['raw_text'] = $zeile['display_name'] = $text;
+                    $statistik['kleinstmengen'] = [...($statistik['kleinstmengen'] ?? []), $text];   // für die Prüfung auf demo sichtbar
+                }
+                $direktArtikel = $vkModus && ! $brotImGericht && ($kleinstmenge !== null || $this->heuristik->istDirektArtikelKandidat($text));
                 $zeilenMode = $direktArtikel ? 'gp_first' : $mode;
                 $treffer = $this->matcher->matchIngredient($team, $text, $z['slug'] ?? null, $zeilenMode, $pref, $preferRaw, $bio);
 
@@ -428,7 +437,8 @@ class RecipeGeneratorService
                 // Spec 80 B4: ein Unterrezept, das der Import eben selbst angelegt hat, ist kein Bestandszug —
                 // es ist noch Entwurf und wird trotzdem verknüpft (nur Sichtbarkeit + Zyklus-Guard).
                 $eigenesSub = $createdVia === 'import' && ! empty($z['sub_rezept_eigen']);
-                $proposedSubId = $this->validiereProposedSub($team, (int) $recipe->id, $z['sub_rezept_id'] ?? null, $text, $diaetHart, $statistik['bestand_abgelehnt'], vertraut: $eigenesSub);
+                $proposedSubId = $kleinstmenge !== null ? null
+                    : $this->validiereProposedSub($team, (int) $recipe->id, $z['sub_rezept_id'] ?? null, $text, $diaetHart, $statistik['bestand_abgelehnt'], vertraut: $eigenesSub);
                 $proposedGpId = $proposedSubId === null ? $this->validiereProposedGp($team, $z['gp_id'] ?? null, $text) : null;
                 $verdrahtet = false;
                 if ($proposedSubId !== null && ($istBasisrezept || ! $gpBlockiert)) {
@@ -449,7 +459,7 @@ class RecipeGeneratorService
                     $zeile['match_method'] = 'gemini_proposed';
                     $zeile['match_confidence'] = round($treffer['score'], 3);
                     $statistik['bestand_gp']++;
-                } elseif (! $verdrahtet && $verdrahtbar && $treffer['target'] === 'sub_recipe'
+                } elseif (! $verdrahtet && $kleinstmenge === null && $verdrahtbar && $treffer['target'] === 'sub_recipe'
                     // Matcher-Treffer (inkl. kuratierter §4-Aliase wie Rinderbrühe → Heller Kalbsfond): Freigabe + Diät
                     // prüfen, aber keine Namens-/Typ-Prüfung — die Zuordnung hat der Matcher bzw. der Mensch schon entschieden.
                     && $this->validiereProposedSub($team, (int) $recipe->id, $treffer['recipe_id'] ?? null, '', $diaetHart, $statistik['bestand_abgelehnt'], $text) !== null) {

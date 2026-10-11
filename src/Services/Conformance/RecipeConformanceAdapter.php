@@ -365,6 +365,51 @@ class RecipeConformanceAdapter implements ConformanceAdapter
             }
         }
 
+        // Gleicher GP doppelt ohne Rolle (Dominique 11.10., hart): zwei Zeilen mit demselben GP, die sich weder in der Rolle
+        // noch in der Notiz unterscheiden, sind eine Zeile. Mit eigener Rolle oder Notiz („zum Anbraten“ / „zum Montieren“)
+        // sind es zwei Aufgaben derselben Ware — kein Befund.
+        $gruppen = [];
+        foreach ($r->ingredients as $z) {
+            if ($z->gp_id !== null) {
+                $gruppen[(int) $z->gp_id . '|' . mb_strtolower(trim((string) $z->role)) . '|' . mb_strtolower(trim((string) $z->note))][] = $z;
+            }
+        }
+        foreach ($gruppen as $zeilen) {
+            if (count($zeilen) > 1) {
+                $gp = (string) $zeilen[0]->gp?->name;
+                $out[] = ['paragraph' => 'Zeilen', 'schweregrad' => 'hart', 'feld' => 'zutat:' . $gp,
+                    'begruendung' => 'Dasselbe Grundprodukt steht ' . count($zeilen) . '× im Rezept, ohne Rolle oder Notiz, die die Zeilen '
+                        . 'unterscheidet — zu einer Zeile zusammenfassen (Mengen addieren) oder je Zeile die Aufgabe nennen.',
+                    'vorschlag' => '', 'konfidenz' => 1.0, 'quelle' => 'code', 'rule_id' => null];
+            }
+        }
+
+        // Einheit passt nicht zur Form des Grundprodukts (Dominique 11.10., hart): Stück auf gemahlener Ware (Kardamom „8 Stk“
+        // auf „gemahlen“) oder ein Volumen auf ganzer Ware (Zitrone „45 ml“ auf „ganz“) — falscher oder undefinierter EK und
+        // eine falsche Mengenkette in der Produktion. Die Begründung nennt beide Heil-Richtungen (GP-Form ODER Einheit).
+        foreach ($r->ingredients as $z) {
+            $gpName = (string) ($z->gp?->name ?? '');
+            $dim = (string) ($z->unit?->dimension ?? '');
+            if ($gpName === '' || $dim === '') {
+                continue;
+            }
+            $woerter = preg_split('/[^\p{L}]+/u', \Platform\FoodAlchemist\Services\Regeln\RegelText::norm($gpName)) ?: [];
+            $gemahlen = array_filter($woerter, static fn ($w) => $w === 'gemahlen' || str_ends_with($w, 'pulver')) !== [];
+            $ganz = in_array('ganz', $woerter, true);
+            $grund = match (true) {
+                $dim === 'count' && $gemahlen => 'Stückzahl auf gemahlener Ware. Je nachdem, was die Zeile meint: das Grundprodukt '
+                    . 'auf die ganze Form stellen (z. B. Kapseln, ganz) ODER die Menge in g angeben.',
+                $dim === 'volume' && $ganz => 'Volumen auf ganzer Ware. Je nachdem, was die Zeile meint: das Grundprodukt auf die '
+                    . 'flüssige Form stellen (z. B. Saft) ODER die Menge in Stück bzw. g angeben.',
+                default => null,
+            };
+            if ($grund !== null) {
+                $out[] = ['paragraph' => 'Einheit', 'schweregrad' => 'hart', 'feld' => 'zutat:' . $gpName,
+                    'begruendung' => "Einheit „{$z->unit->slug}“ passt nicht zu „{$gpName}“: {$grund}",
+                    'vorschlag' => '', 'konfidenz' => 1.0, 'quelle' => 'code', 'rule_id' => null];
+            }
+        }
+
         $kostform = $r->spec_is_vegan ? $buch::falls('ernaehrung.vegan') : ($r->spec_is_vegetarian ? $buch::falls('ernaehrung.vegetarisch') : null);
         if ($kostform !== null) {
             foreach ($r->ingredients as $z) {

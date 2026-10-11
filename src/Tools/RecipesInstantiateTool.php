@@ -26,7 +26,9 @@ class RecipesInstantiateTool extends FoodAlchemistTool implements ToolContract, 
     public function getDescription(): string
     {
         return 'Instanziiert ein Basisrezept aus einer Vorlage. bindings ordnet Platzhalter-Slots (ingredient_id) '
-            . 'einem gp_id oder referenced_recipe_id zu (sichtbar). Idempotent per Name.';
+            . 'einem gp_id oder referenced_recipe_id zu (sichtbar). Idempotent per Name. '
+            . 'Gebunden wird wie gewählt; ein Unterrezept, das die automatische Bestandsbindung nicht genommen hätte '
+            . '(z. B. noch nicht freigegeben, Zukauf bei „from scratch“), steht mit Grund in `hinweise`.';
     }
 
     public function getSchema(): array
@@ -97,6 +99,8 @@ class RecipesInstantiateTool extends FoodAlchemistTool implements ToolContract, 
             'created' => (bool) ($res['created'] ?? false),
             'gebunden' => (int) ($res['gebunden'] ?? 0),
             'slots' => (int) ($res['slots'] ?? 0),
+            // Gebunden wie gewählt — aber die Automatik hätte diese Unterrezepte nicht genommen (z. B. noch nicht freigegeben).
+            'hinweise' => array_values((array) ($res['hinweise'] ?? [])),
         ]);
     }
 

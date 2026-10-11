@@ -541,6 +541,7 @@ class IngredientMatchService
         $best = null;
         $bestZustand = null;
         $bestBio = null;
+        $bestFreigegeben = false;
         // Lauf 92: „Petersilienstiele" → „Petersilienwurzeln: frisch" — nennt die Zeile eine Derivat-Form (Stiele, Schale,
         // Knochen …), muss das GP sie tragen; sonst ist es ein anderes Produkt (wie der Mint seit #251).
         $queryForm = $this->heuristik->nebenproduktDerivat($this->currentIngredientName)['marker'] ?? null;
@@ -568,12 +569,16 @@ class IngredientMatchService
                 $take = true;
             } elseif (abs($score - $best['score']) <= MatchHeuristics::SCORE_EPS) {
                 // 4.4l/u — Tiebreaker bei (Float-)Gleichstand, Feld-primär
-                $take = $this->heuristik->variantRankResolved($gp->name, $pref, $preferRaw, $bio, $gp->condition, $gp->bio)
-                    > $this->heuristik->variantRankResolved($best['gp_name'], $pref, $preferRaw, $bio, $bestZustand, $bestBio);
+                $rangNeu = $this->heuristik->variantRankResolved($gp->name, $pref, $preferRaw, $bio, $gp->condition, $gp->bio);
+                $rangAlt = $this->heuristik->variantRankResolved($best['gp_name'], $pref, $preferRaw, $bio, $bestZustand, $bestBio);
+                // Letzter Tiebreak (Dominique 11.10.): bei gleicher Punktzahl und gleicher Variante gewinnt das freigegebene
+                // GP vor dem tentative — sonst entschied die ID-Reihenfolge. Nur Gleichstand, die Punktzahl bleibt unberührt.
+                $take = $rangNeu > $rangAlt || ($rangNeu === $rangAlt && self::istFreigegeben($gp) && ! $bestFreigegeben);
             }
             if ($take) {
                 $bestZustand = $gp->condition;
                 $bestBio = $gp->bio;
+                $bestFreigegeben = self::istFreigegeben($gp);
                 $best = [
                     'target' => 'gp', 'status' => MatchBand::fuerScore($score),
                     'gp_id' => $gp->id, 'gp_name' => $gp->name,
@@ -755,6 +760,13 @@ class IngredientMatchService
         };
     }
 
+    private static function istFreigegeben(FoodAlchemistGp $gp): bool
+    {
+        $status = $gp->status instanceof \BackedEnum ? $gp->status->value : (string) $gp->status;
+
+        return $status === 'approved';
+    }
+
     private function gpPool(Team $team, array $queryTokens, ?string $querySlug)
     {
         $query = FoodAlchemistGp::visibleToTeam($team)
@@ -763,7 +775,7 @@ class IngredientMatchService
         $this->likeVorfilter($query, $queryTokens, $querySlug, ['name', 'main_ingredient_slug', 'main_ingredient_display']);
 
         return $query->orderBy('id')->limit(300)
-            ->get(['id', 'name', 'main_ingredient_slug', 'main_ingredient_display', 'condition', 'bio', 'team_id', 'is_derivat']);
+            ->get(['id', 'name', 'main_ingredient_slug', 'main_ingredient_display', 'condition', 'bio', 'team_id', 'is_derivat', 'status']);
     }
 
     /** Typ aus dem Präfix eines Namens, nur wenn er im Typ-Vokabular steht (sonst null). */
