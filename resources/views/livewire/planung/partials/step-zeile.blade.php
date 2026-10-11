@@ -286,6 +286,7 @@
                             @if(!empty($komponente['funktion'])) · {{ $lesbar($komponente['funktion']) }}@endif
                             @if(!empty($komponente['bestand']))
                                 <x-fa::badge tone="ok">aus Bestand #{{ $komponente['bestand']['recipe_id'] }}</x-fa::badge>
+                                @if(!empty($komponente['bestand']['verwendung']))<span class="text-[var(--fa-ink-3)]">{{ $komponente['bestand']['verwendung'] }}</span>@endif
                                 <button type="button" wire:click="planAendern({{ $st->id }}, 'bestand_ablehnen', {{ $ki }})" class="text-[var(--fa-ink-3)] underline-offset-2 hover:underline">Bestand ablehnen</button>
                             @else
                                 <x-fa::badge tone="info">neu als Unterrezept</x-fa::badge>
@@ -293,7 +294,7 @@
                             <button type="button" wire:click="planAendern({{ $st->id }}, 'entfernen', {{ $ki }})" class="ml-auto text-[var(--fa-ink-3)] hover:text-[var(--fa-crit)]" aria-label="{{ $komponente['name'] ?? 'Komponente' }} entfernen">Entfernen</button>
                         </div>
                         @foreach((array) ($komponente['abgelehnt'] ?? []) as $ab)
-                            <span class="pl-1 text-[var(--fa-ink-3)]">nicht übernommen: {{ $ab['name'] ?? '' }} — {{ $ab['grund'] ?? '' }}</span>
+                            <span class="pl-1 text-[var(--fa-ink-3)]">nicht übernommen: {{ $ab['name'] ?? '' }} — {{ $ab['grund'] ?? '' }}@if(!empty($ab['verwendung'])) · sonst {{ $ab['verwendung'] }}@endif</span>
                         @endforeach
                     </li>
                 @endforeach

@@ -43,7 +43,7 @@ class RecipeKomponentenPlanService
             'sektor' => $params['sektor'] ?? null,
             'niveau' => $params['level'] ?? null,
             'convenience' => $params['convenience'] ?? null,
-            'funktionen' => self::FUNKTIONEN,
+            'funktionen' => \Platform\FoodAlchemist\Support\ZeilenFunktion::werte(),
         ], static fn ($v) => $v !== null && $v !== ''), [
             'structural_retry' => fn (array $p) => is_array($p['werte']['komponenten'] ?? null) && $p['werte']['komponenten'] !== [],
         ]);
@@ -57,7 +57,7 @@ class RecipeKomponentenPlanService
             }
             $name = self::bereinigeName((string) $k['name']);
             $menge = is_numeric($k['menge'] ?? null) && (float) $k['menge'] > 0 ? (float) $k['menge'] : null;
-            $funktion = in_array($k['funktion'] ?? null, self::FUNKTIONEN, true) ? $k['funktion'] : null;
+            $funktion = \Platform\FoodAlchemist\Support\ZeilenFunktion::kanonisch($k['funktion'] ?? null);
             $abgelehnt = [];
             $bestand = $bestandErlaubt ? $this->bestandFuer($team, $name, $diaet, $abgelehnt, $params['convenience'] ?? null,
                 ['sektor' => $params['sektor'] ?? null, 'niveau' => $params['level'] ?? null]) : null;
@@ -116,7 +116,7 @@ class RecipeKomponentenPlanService
      *
      * @param  list<string>  $diaet
      * @param  list<array{recipe_id: int, name: string, grund: string}>  $abgelehnt
-     * @return array{recipe_id: int, name: string}|null
+     * @return array{recipe_id: int, name: string, verwendung?: string}|null
      */
     public function bestandFuer(Team $team, string $name, array $diaet, array &$abgelehnt, ?string $convenience = null, array $kontext = []): ?array
     {
@@ -153,13 +153,38 @@ class RecipeKomponentenPlanService
             $grund = \Platform\FoodAlchemist\Support\BestandsZulaessigkeit::pruefe($team, $name, $r, [
                 'bestandteile' => (int) $r->id !== $hausId, 'diaet_hart' => $diaet, 'regler' => $convenience,
             ]);
+            // Nutzungs-Historie (Dominique 11.10., Weg A): wofür der Baustein sonst dient — an der Stelle, an der über den
+            // Bestand entschieden wird, und auf der Plankarte. Nur wenn er verwendet wird (kein leeres Feld).
+            $verwendung = $this->verwendung($team, (int) $r->id);
+            $eintrag = ['recipe_id' => (int) $r->id, 'name' => (string) $r->name] + ($verwendung !== null ? ['verwendung' => $verwendung] : []);
             if ($grund === null) {
-                return ['recipe_id' => (int) $r->id, 'name' => (string) $r->name];
+                return $eintrag;
             }
-            $abgelehnt[] = ['recipe_id' => (int) $r->id, 'name' => (string) $r->name, 'grund' => $grund];
+            $abgelehnt[] = $eintrag + ['grund' => $grund];
         }
 
         return null;
+    }
+
+    /**
+     * Nutzungs-Historie eines Basisrezepts: in wie vielen Gerichten und mit welcher Teller-Rolle es verwendet wird
+     * (aus Zeilen mit `referenced_recipe_id`, nur sichtbare Gerichte). Kurz: „in 12 Gerichten: 9× aroma_treiber,
+     * 3× komponente“. Null, wenn es in keinem Gericht steht.
+     */
+    public function verwendung(Team $team, int $recipeId): ?string
+    {
+        $zeilen = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient::query()
+            ->where('referenced_recipe_id', $recipeId)
+            ->whereIn('recipe_id', FoodAlchemistRecipe::query()->visibleToTeam($team)->where('is_sales_recipe', true)->select('id'))
+            ->get(['recipe_id', 'role']);
+        if ($zeilen->isEmpty()) {
+            return null;
+        }
+        $gerichte = $zeilen->pluck('recipe_id')->unique()->count();
+        $rollen = $zeilen->groupBy(fn ($z) => (string) ($z->role ?: 'ohne Rolle'))->map->count()->sortDesc();
+
+        return 'in ' . $gerichte . ($gerichte === 1 ? ' Gericht: ' : ' Gerichten: ')
+            . $rollen->map(fn ($n, $rolle) => $n . '× ' . $rolle)->implode(', ');
     }
 
     /**
@@ -219,7 +244,9 @@ class RecipeKomponentenPlanService
                 'unit' => $k['einheit'] ?? 'g',
                 'sub_rezept' => true,
                 'sub_rezept_id' => $bestand['recipe_id'] ?? null,
-                'note' => 'Komponente laut Plan' . (! empty($k['funktion']) ? ' (' . $k['funktion'] . ')' : ''),
+                // Die Plan-Funktion ist ein Feld der Zeile (Dominique 11.10.), nicht mehr nur Text in der Notiz.
+                'funktion' => \Platform\FoodAlchemist\Support\ZeilenFunktion::kanonisch($k['funktion'] ?? null),
+                'note' => 'Komponente laut Plan',
             ];
             $treffer = null;
             foreach ($zutaten as $i => $z) {

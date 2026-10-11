@@ -115,6 +115,8 @@ class RecipeReviseService
                     $zeile['gp_id'] = null;
                 }
             }
+            // Funktion: ein gültiger KI-Wert ergänzt bzw. ersetzt, sonst bleibt die bisherige (Dominique 11.10.).
+            $zeile['funktion'] = \Platform\FoodAlchemist\Support\ZeilenFunktion::kanonisch($z['funktion'] ?? null) ?? $orig?->funktion;
             $zeile['quantity'] = $quantity ?? (float) ($orig?->quantity ?? 1);
             $zeile['unit_vocab_id'] = $einheiten[$z['einheit_slug'] ?? ''] ?? $orig?->unit_vocab_id ?? $einheiten['g'] ?? null;
             $zeilen[] = $zeile;
@@ -155,6 +157,7 @@ class RecipeReviseService
             // VK-Kontext: die Rolle ist eine Verkaufs-Facette und wird von einem
             // Zutaten-Revise nie neu gesetzt (nur 🎭 Rollen verteilen schreibt sie).
             'role' => $orig?->role,
+            'funktion' => $orig?->funktion,
         ];
     }
 
@@ -184,7 +187,9 @@ class RecipeReviseService
                 'text' => $z->gp?->name ?? $z->referencedRecipe?->name ?? $z->display_name ?? $z->raw_text,
                 'quantity' => (float) $z->quantity,
                 'einheit_slug' => $z->unit?->slug,
+                'funktion' => $z->funktion,
             ])->values()->all(),
+            'funktionen' => \Platform\FoodAlchemist\Support\ZeilenFunktion::werte(),
         ], KnowledgeContextService::proposeOptionen($wissen));
 
         return ['werte' => (array) $vorschlag->werte, 'confidence' => max(0.0, min(1.0, (float) $vorschlag->confidence))];

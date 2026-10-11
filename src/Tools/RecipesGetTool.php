@@ -74,7 +74,7 @@ class RecipesGetTool extends FoodAlchemistTool implements ToolContract, ToolMeta
                 'trimming_loss_pct' => $z->trimming_loss_pct,
                 'quantity_max' => $z->quantity_max,
                 'is_optional' => (bool) $z->is_optional,
-                'note' => $z->note, 'role' => $z->role,
+                'note' => $z->note, 'role' => $z->role, 'funktion' => $z->funktion,
                 'referenced_recipe_id' => $z->referenced_recipe_id,
                 'quantity' => $z->quantity, 'unit' => $z->unit?->slug,
                 'name' => $z->referencedRecipe?->name ?? $z->gp?->name ?? $z->display_name,

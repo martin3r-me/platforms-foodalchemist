@@ -344,6 +344,9 @@ class RecipeGeneratorService
                     // bisher tote role-Feld (Schicht 1). Whitelist-Guard wie taste_direction —
                     // nur gültige Rollen, sonst null (kein Insert-Crash durch Freitext).
                     'role' => in_array($z['role'] ?? null, SpeisenKlassenService::ROLLEN, true) ? $z['role'] : null,
+                    // Funktion der Zeile (Dominique 11.10.): aus dem Plan (einmischen) oder vom Generator, gegen das
+                    // Regel-Vokabular rezeptzeile.funktion geprüft wie role — ungültig → null. Im Gericht optional.
+                    'funktion' => \Platform\FoodAlchemist\Support\ZeilenFunktion::kanonisch($z['funktion'] ?? null),
                     // Ausbeute-Lücke (2026-09-06): Garverlust je Zutat aus dem Vorschlag → die
                     // Verlust-Kaskade im Recompute (Zutat → GP → Team-WG → 0) greift damit auch
                     // bei Reduktion/Fond/Jus, wo alle Defaults 0 sind und der Einsatz als Yield

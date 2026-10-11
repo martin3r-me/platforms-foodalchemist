@@ -405,7 +405,7 @@ class RecipeService
                     ...$z->only(['position', 'gp_id', 'referenced_recipe_id', 'raw_text', 'display_name',
                         'quantity', 'quantity_max', 'unit_vocab_id', 'trimming_loss_pct', 'cooking_loss_pct',
                         'is_optional', 'klammer_note', 'note', 'match_method', 'match_confidence',
-                        'role', 'is_value_relevant', 'calc_mode']),
+                        'role', 'funktion', 'is_value_relevant', 'calc_mode']),
                     'team_id' => $team->id,
                 ]);
             }
@@ -1156,6 +1156,11 @@ class RecipeService
                     'role' => ($z['role'] ?? '') ?: null,            // V-21
                     'is_value_relevant' => (bool) ($z['is_value_relevant'] ?? false),
                 ];
+                // Funktion der Zeile (Dominique 11.10., Vokabular rezeptzeile.funktion): nur ein ausdrücklich mitgegebener
+                // Wert schreibt — ein Speichern ohne das Feld (Editor, Altpfade) löscht keine Funktion aus Plan/Generator.
+                if (array_key_exists('funktion', $z)) {
+                    $attrs['funktion'] = \Platform\FoodAlchemist\Support\ZeilenFunktion::kanonisch($z['funktion']);
+                }
 
                 // E3: gegroundete Zeilen tragen die Resolver-Provenienz (gp_v2_fk|recipe_ref)
                 // + Konfidenz — auch beim UPDATE einer zuvor 'unmatched' Bestands-Zeile.

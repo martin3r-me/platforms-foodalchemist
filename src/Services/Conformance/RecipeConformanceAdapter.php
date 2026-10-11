@@ -407,20 +407,21 @@ class RecipeConformanceAdapter implements ConformanceAdapter
             }
         }
 
-        // Gleicher GP doppelt ohne Rolle (Dominique 11.10., hart): zwei Zeilen mit demselben GP, die sich weder in der Rolle
-        // noch in der Notiz unterscheiden, sind eine Zeile. Mit eigener Rolle oder Notiz („zum Anbraten“ / „zum Montieren“)
-        // sind es zwei Aufgaben derselben Ware — kein Befund.
+        // Gleicher GP doppelt ohne Rolle (Dominique 11.10., hart): zwei Zeilen mit demselben GP, die sich weder in Rolle,
+        // Funktion noch Notiz unterscheiden, sind eine Zeile. Mit eigener Rolle, Funktion (fett / textur) oder Notiz
+        // („zum Anbraten“ / „zum Montieren“) sind es zwei Aufgaben derselben Ware — kein Befund.
         $gruppen = [];
         foreach ($r->ingredients as $z) {
             if ($z->gp_id !== null) {
-                $gruppen[(int) $z->gp_id . '|' . mb_strtolower(trim((string) $z->role)) . '|' . mb_strtolower(trim((string) $z->note))][] = $z;
+                $gruppen[(int) $z->gp_id . '|' . mb_strtolower(trim((string) $z->role)) . '|' . (string) $z->funktion
+                    . '|' . mb_strtolower(trim((string) $z->note))][] = $z;
             }
         }
         foreach ($gruppen as $zeilen) {
             if (count($zeilen) > 1) {
                 $gp = (string) $zeilen[0]->gp?->name;
                 $out[] = ['paragraph' => 'Zeilen', 'schweregrad' => 'hart', 'feld' => 'zutat:' . $gp,
-                    'begruendung' => 'Dasselbe Grundprodukt steht ' . count($zeilen) . '× im Rezept, ohne Rolle oder Notiz, die die Zeilen '
+                    'begruendung' => 'Dasselbe Grundprodukt steht ' . count($zeilen) . '× im Rezept, ohne Rolle, Funktion oder Notiz, die die Zeilen '
                         . 'unterscheidet — zu einer Zeile zusammenfassen (Mengen addieren) oder je Zeile die Aufgabe nennen.',
                     'vorschlag' => '', 'konfidenz' => 1.0, 'quelle' => 'code', 'rule_id' => null];
             }
@@ -699,8 +700,8 @@ class RecipeConformanceAdapter implements ConformanceAdapter
                 'text' => $z->gp?->name ?? $z->referencedRecipe?->name ?? $z->display_name ?? $z->raw_text,
                 'quantity' => (float) $z->quantity,
                 'einheit_slug' => $z->unit?->slug,
-            ])->values()->all(),
-        ], $optionen);
+            ] + ($r->is_sales_recipe ? [] : ['funktion' => $z->funktion]))->values()->all(),
+        ] + ($r->is_sales_recipe ? [] : ['funktionen' => \Platform\FoodAlchemist\Support\ZeilenFunktion::werte()]), $optionen);
 
         $werte = $vorschlag->werte;
         $conf = max(0.0, min(1.0, $vorschlag->confidence));
