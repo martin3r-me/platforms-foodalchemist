@@ -5,13 +5,11 @@ namespace Platform\FoodAlchemist\Support;
 use Platform\FoodAlchemist\Services\Regeln\Arten\Vokabular;
 use Platform\FoodAlchemist\Services\Regeln\Arten\Zuordnung;
 use Platform\FoodAlchemist\Services\Regeln\RegelBuch;
-use Platform\FoodAlchemist\Services\Regeln\RegelText;
-use Platform\FoodAlchemist\Services\SpeisenKlassenService;
 
 /**
  * Teller-Rolle einer Gerichtszeile (Dominique 11.10.): Vokabular aus der Regel `gericht.teller_rolle` — die Reihenfolge
- * der Werte ist die Anrichte-Reihenfolge. Pairing-Gewichte aus `pairing.rollen_gewicht`. {@see SpeisenKlassenService::ROLLEN}
- * ist Rückfall, wenn die Regel fehlt oder aus ist.
+ * der Werte ist die Anrichte-Reihenfolge. Pairing-Gewichte aus `pairing.rollen_gewicht`. EINE Quelle (Spec 81 E): fehlt
+ * die Regel oder ist sie aus, gibt es keine Rollen (leere Liste, RegelBuch loggt) — keine zweite, fest codierte Liste.
  */
 final class TellerRolle
 {
@@ -19,16 +17,20 @@ final class TellerRolle
 
     public const GEWICHT_SCHLUESSEL = 'pairing.rollen_gewicht';
 
-    /** Anzeige-Namen; ein neuer Wert aus der Pflege ohne Eintrag erscheint mit großem Anfangsbuchstaben. */
-    private const LABELS = ['basis' => 'Basis', 'protein' => 'Protein', 'beilage' => 'Beilage', 'sauce' => 'Sauce',
-        'crunch' => 'Crunch', 'saeure' => 'Säure', 'aroma' => 'Aroma', 'garnitur' => 'Garnitur'];
-
-    /** @return array<string, string> Rolle => Anzeige-Name, in Anrichte-Reihenfolge */
+    /**
+     * @return array<string, string> Rolle => Anzeigename in Anrichte-Reihenfolge — aus der Regel (`werte[].label`, pflegbar),
+     *         sonst der Wert mit großem Anfangsbuchstaben. Keine zweite Liste im Code (Spec 81 E).
+     */
     public static function labels(): array
     {
+        $regel = RegelBuch::falls(self::SCHLUESSEL);
         $out = [];
-        foreach (self::werte() as $w) {
-            $out[$w] = self::LABELS[$w] ?? ucfirst(str_replace('_', ' ', $w));
+        foreach ((array) ($regel?->params['werte'] ?? []) as $w) {
+            $wert = is_array($w) ? trim((string) ($w['wert'] ?? '')) : '';
+            if ($wert !== '') {
+                $label = trim((string) ($w['label'] ?? ''));
+                $out[$wert] = $label !== '' ? $label : ucfirst(str_replace('_', ' ', $wert));
+            }
         }
 
         return $out;
@@ -41,7 +43,7 @@ final class TellerRolle
         $werte = $regel !== null ? array_values(array_filter(array_map(static fn ($w) => is_array($w) ? (string) ($w['wert'] ?? '') : '',
             (array) ($regel->params['werte'] ?? [])), 'strlen')) : [];
 
-        return $werte !== [] ? $werte : SpeisenKlassenService::ROLLEN;
+        return $werte;
     }
 
     /** Kanonische Rolle (auch über Alias „säure“ → saeure) oder null. */
@@ -51,12 +53,8 @@ final class TellerRolle
             return null;
         }
         $regel = RegelBuch::falls(self::SCHLUESSEL);
-        if ($regel !== null) {
-            return app(Vokabular::class)->kanonisch($regel, $wert);
-        }
-        $n = RegelText::norm($wert);
 
-        return in_array($n, SpeisenKlassenService::ROLLEN, true) ? $n : null;
+        return $regel !== null ? app(Vokabular::class)->kanonisch($regel, $wert) : null;
     }
 
     /** Anrichte-Rang (1 = zuerst auf den Teller); unbekannt/leer = 99. */

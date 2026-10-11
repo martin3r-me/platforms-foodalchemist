@@ -37,7 +37,8 @@ final class RegelPromptBlock
      * @var array<string, array{ziele: list<string>, typ: bool}>
      */
     private const KONSUMENTEN = [
-        'recipe.generator' => ['ziele' => self::ZIELE_REZEPT, 'typ' => true],
+        // vk.zeile.rolle (Regel gericht.teller_rolle, Dominique 11.10.): im Basisrezept die möglichen Rollen des Rezepts.
+        'recipe.generator' => ['ziele' => [...self::ZIELE_REZEPT, 'vk.zeile.rolle'], 'typ' => true],
         'recipe.ueberarbeiten' => ['ziele' => self::ZIELE_REZEPT, 'typ' => true],
         'recipe.review' => ['ziele' => self::ZIELE_REZEPT, 'typ' => true],
         'recipe.komponenten_plan' => ['ziele' => ['rezept.name', 'rezeptzeile.typ'], 'typ' => true],
@@ -47,7 +48,10 @@ final class RegelPromptBlock
         'recipe.description' => ['ziele' => ['rezept.beschreibung'], 'typ' => false],
         'recipe.category' => ['ziele' => [], 'typ' => 'liste'],   // wählt eine Kategorie, benennt nichts
         'signal.recipe_naming_suggest' => ['ziele' => ['rezept.name', 'rezept.name.grammatur', ...self::ZIELE_VK], 'typ' => true],
-        'vk.generator' => ['ziele' => [...self::ZIELE_REZEPT, ...self::ZIELE_VK], 'typ' => true],
+        'vk.generator' => ['ziele' => [...self::ZIELE_REZEPT, ...self::ZIELE_VK, 'vk.zeile.rolle'], 'typ' => true],
+        // Spec 81 Teil E (Dominique 11.10.): das Teller-Vokabular kommt aus der Regel, nicht aus dem Kanon-Dossier §12 —
+        // die Doppelung (Regel + Tabelle im Dossier) brach den Probelauf auf demo (KI folgte der alten Tabelle).
+        'vk.rollen' => ['ziele' => ['vk.zeile.rolle'], 'typ' => false],
         'vk.ueberarbeiten' => ['ziele' => [...self::ZIELE_REZEPT, ...self::ZIELE_VK], 'typ' => true],
         'vk.review' => ['ziele' => [...self::ZIELE_REZEPT, ...self::ZIELE_VK], 'typ' => true],
         'vk.titel_vorschlag' => ['ziele' => self::ZIELE_VK, 'typ' => false],
@@ -70,6 +74,7 @@ final class RegelPromptBlock
         'rezeptzeile.vegan' => 'Zutatenzeilen, wenn das Rezept vegan ist',
         'rezeptzeile.vegetarisch' => 'Zutatenzeilen, wenn das Rezept vegetarisch ist',
         'rezeptzeile.typ' => 'Zutatenzeilen je nach Rezept-Typ',
+        'vk.zeile.rolle' => 'Teller-Rolle einer Gerichtszeile bzw. mögliche Rollen eines Basisrezepts — die Reihenfolge der Werte ist die Anrichte-Reihenfolge',
         'vk.name' => 'Gerichtname',
         'vk.name.hg' => 'Hauptgruppen-Kürzel des Gerichtnamens',
         'vk.name.bausteine' => 'Bausteine des Gerichtnamens',

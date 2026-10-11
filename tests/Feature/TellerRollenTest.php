@@ -251,8 +251,136 @@ it('Generator-Kontext und Prompts: Teller-Rollen statt Funktion, Nutzungs-Histor
     expect($ctx['prompt']['teller_rollen'] ?? [])->toBe(TellerRolle::werte())
         ->and($ctx['prompt'])->not->toHaveKey('funktionen')
         ->and($ctx['prompt']['zusammenstellung']['komponenten'][0]['verwendung'] ?? null)->toBe('in 3 Gerichten: 3× sauce')
-        ->and($task('recipe.generator'))->toContain('rollen (1-3 Werte aus teller_rollen')->not->toContain('funktion (')->not->toContain('role (')
+        ->and($task('recipe.generator'))->toContain('rollen (1-3 Teller-Rollen laut Regel-Block')->not->toContain('funktion (')->not->toContain('role (')
         ->and($task('recipe.ueberarbeiten'))->not->toContain('funktion')
-        ->and($task('vk.generator'))->toContain('role (genau EINE aus teller_rollen')->not->toContain('aroma_treiber')
+        ->and($task('vk.generator'))->toContain('role (genau EINE Teller-Rolle laut Regel-Block')->toContain('aroma_treiber/komponente sind ungueltig')
+        ->and($task('vk.rollen'))->toContain('komponente sind UNGUELTIG')
+        // Spec 81 E: keine zweite, hart codierte Liste in den Prompt-Texten — die Werte kommen aus der Regel.
+        ->and($task('vk.generator') . $task('vk.rollen') . $task('recipe.generator'))->not->toContain('protein')->not->toContain('crunch')
         ->and(config('foodalchemist.prompts', []))->not->toHaveKey('gp.role');
+});
+
+/**
+ * demo Probelauf 11.10. (Calls 2832–2834): die KI lieferte V-21 (komponente/aroma_treiber), weil der Kanon von vk.rollen
+ * (Regelwerk §12) das alte Vokabular noch vorschrieb. Geprüft wird darum, was die KI WIRKLICH bekommt — durch den echten
+ * Gateway-Weg —, und dass ein Altwert gemeldet statt still verworfen wird.
+ */
+it('vk.rollen: die KI bekommt das Teller-Vokabular samt Hinweis; ein V-21-Wert wird gemeldet, nicht still leer', function () {
+    $gericht = $this->makeRecipe($this->rootTeam, '[HG] Rinderfilet', ['status' => 'draft', 'is_sales_recipe' => true]);
+    $filet = $this->makeIngredient($gericht, 'Rinderfilet', null, '150', 1);
+    $jus = $this->makeIngredient($gericht, 'Jus: Rind', null, '60', 2);
+    $gesendet = new ArrayObject;
+    app()->bind(\Platform\FoodAlchemist\Services\Ai\FakeAiProvider::class, fn () => new class($gesendet, $filet->id, $jus->id) extends \Platform\FoodAlchemist\Services\Ai\FakeAiProvider
+    {
+        public function __construct(private ArrayObject $gesendet, private int $a, private int $b)
+        {
+        }
+
+        public function chat(array $messages, array $options = []): array
+        {
+            $this->gesendet->append(implode("\n", array_map(fn ($m) => (string) $m['content'], $messages)));
+            $werte = ['rollen' => [$this->a => 'komponente', $this->b => 'sauce']];
+
+            return ['content' => json_encode(['werte' => $werte, 'confidence' => 0.8, 'reasoning' => 'stub'], JSON_UNESCAPED_UNICODE),
+                'usage' => ['input_tokens' => 0, 'output_tokens' => 0], 'model' => 'fake', 'tool_calls' => null];
+        }
+    });
+
+    $erg = app(SpeisenKlassenService::class)->verteileRollen($this->rootTeam, $gericht->id);
+    $text = (string) ($gesendet[0] ?? '');
+
+    expect($text)->toContain('"vokabular":["basis","protein","beilage","sauce","crunch","saeure","aroma","garnitur"]')
+        ->and($text)->toContain('vokabular_hinweis')
+        ->and($text)->toContain('UNGUELTIG')
+        ->and($erg['rollen'])->toBe([$jus->id => 'sauce'])
+        ->and($erg['verworfen'])->toBe([$filet->id => 'komponente']);
+});
+
+it('Kommando klassifizieren: ungültige KI-Rollen werden gezählt und gemeldet (Exit ≠ 0)', function () {
+    $g = $this->makeRecipe($this->rootTeam, '[HG] Filet', ['status' => 'draft', 'is_sales_recipe' => true]);
+    $a = $this->makeIngredient($g, 'Rinderfilet', null, '150', 1);
+    $b = $this->makeIngredient($g, 'Kresse', null, '2', 2);
+    $mock = Mockery::mock(SpeisenKlassenService::class)->makePartial();
+    $mock->shouldReceive('verteileRollen')->andReturn(['rollen' => [$b->id => 'garnitur'], 'verworfen' => [$a->id => 'komponente'],
+        'confidence' => 0.9, 'reasoning' => null, 'call_log_id' => null]);
+    app()->instance(SpeisenKlassenService::class, $mock);
+
+    $this->artisan('foodalchemist:teller-rollen-klassifizieren', ['--team' => $this->rootTeam->id, '--apply' => true])
+        ->expectsOutputToContain('1 Zeilen mit ungültiger Rolle von der KI')
+        ->assertFailed();
+    expect($a->fresh()->role)->toBeNull()->and($b->fresh()->role)->toBe('garnitur');
+});
+
+it('Generator Gericht: eine KI-Rolle außerhalb des Vokabulars steht in der Statistik', function () {
+    $res = app(RecipeGeneratorService::class)->generiere($this->rootTeam, 'Test', [], [
+        'name' => '[HG] Rinderfilet', 'zutaten' => [['text' => 'Rinderfilet: frisch', 'quantity' => 150, 'unit' => 'g', 'role' => 'komponente']],
+    ], vkModus: true);
+
+    expect($res['statistik']['rolle_ungueltig'] ?? [])->toBe([['zeile' => 'Rinderfilet: frisch', 'wert' => 'komponente']]);
+});
+
+/**
+ * Spec 81 Teil E (Dominique 11.10.): das Teller-Vokabular kommt NUR aus der Regel in den Prompt — nicht mehr aus der
+ * Tabelle im Kanon-Dossier §12. Ein neuer Wert in der Regel erreicht die KI ohne Dossier-Änderung.
+ */
+it('Regel-Block: ein neuer Wert in gericht.teller_rolle steht im gesendeten Prompt von vk.rollen — ohne Dossier', function () {
+    $regel = FoodAlchemistRule::where('schluessel', TellerRolle::SCHLUESSEL)->firstOrFail();
+    $params = $regel->params;
+    $params['werte'][] = ['wert' => 'testrolle'];
+    app(\Platform\FoodAlchemist\Services\Regeln\RegelService::class)->speichere([...$regel->only(['schluessel', 'regelwerk', 'paragraph',
+        'titel', 'art', 'ziel', 'wirkung', 'beispiele', 'dossier_slug']), 'params' => $params], null, null, 'test');
+    $gericht = $this->makeRecipe($this->rootTeam, '[HG] Rinderfilet', ['status' => 'draft', 'is_sales_recipe' => true]);
+    $this->makeIngredient($gericht, 'Rinderfilet', null, '150', 1);
+    $gesendet = new ArrayObject;
+    app()->bind(\Platform\FoodAlchemist\Services\Ai\FakeAiProvider::class, fn () => new class($gesendet) extends \Platform\FoodAlchemist\Services\Ai\FakeAiProvider
+    {
+        public function __construct(private ArrayObject $gesendet)
+        {
+        }
+
+        public function chat(array $messages, array $options = []): array
+        {
+            $this->gesendet->append($messages);
+
+            return ['content' => json_encode(['werte' => ['rollen' => []], 'confidence' => 0.8, 'reasoning' => 'stub']),
+                'usage' => ['input_tokens' => 0, 'output_tokens' => 0], 'model' => 'fake', 'tool_calls' => null];
+        }
+    });
+
+    app(SpeisenKlassenService::class)->verteileRollen($this->rootTeam, $gericht->id);
+    $regelBlock = collect($gesendet[0] ?? [])->first(fn ($m) => $m['role'] === 'system' && str_contains((string) $m['content'], 'VERBINDLICHE REGELN'));
+
+    expect($regelBlock)->not->toBeNull()
+        ->and($regelBlock['content'])->toContain('basis, protein, beilage, sauce, crunch, saeure, aroma, garnitur, testrolle')
+        ->and($regelBlock['content'])->toContain('Anrichte-Reihenfolge');
+});
+
+it('Konsumenten-Wächter: §12 als Kanon an vk.rollen ist kein Befund — die Regel kommt über den Regel-Block', function () {
+    $slug = FoodAlchemistRule::where('schluessel', TellerRolle::SCHLUESSEL)->value('dossier_slug');
+    DB::table('foodalchemist_knowledge_documents')->insert(['uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(),
+        'team_id' => $this->rootTeam->id, 'slug' => $slug, 'title' => '§12', 'category' => 'regelwerk', 'content_md' => 'Teller-Rollen …',
+        'version' => 1, 'content_hash' => str_repeat('c', 64), 'char_count' => 14, 'active' => 1, 'created_at' => now(), 'updated_at' => now()]);
+    app(\Platform\FoodAlchemist\Services\Knowledge\KnowledgeCanonService::class)->set($this->rootTeam,
+        ['scope' => 'prompt_key', 'scope_key' => 'vk.rollen', 'slug' => $slug, 'mode' => 'pflicht']);
+
+    expect($slug)->toBe('regelwerk-basisrezepte-12-zutaten-komponenten-reihenfolge')
+        ->and(collect(app(\Platform\FoodAlchemist\Services\Regeln\RegelKonsumentenPruefung::class)->befunde())->where('schluessel', TellerRolle::SCHLUESSEL))
+        ->toHaveCount(0);
+});
+
+it('Eine Quelle: ist die Regel aus, gibt es keine Teller-Rollen — kein Rückfall auf eine fest codierte Liste', function () {
+    FoodAlchemistRule::where('schluessel', TellerRolle::SCHLUESSEL)->update(['aktiv' => false]);
+    RegelBuch::vergessen();
+
+    expect(TellerRolle::werte())->toBe([])->and(TellerRolle::kanonisch('protein'))->toBeNull();
+});
+
+it('Anzeigenamen kommen aus der Regel (werte[].label); ein neuer Wert ohne Label erscheint mit großem Anfangsbuchstaben', function () {
+    $regel = FoodAlchemistRule::where('schluessel', TellerRolle::SCHLUESSEL)->firstOrFail();
+    $params = $regel->params;
+    $params['werte'][] = ['wert' => 'kraeuter_akzent'];
+    app(\Platform\FoodAlchemist\Services\Regeln\RegelService::class)->speichere([...$regel->only(['schluessel', 'regelwerk', 'paragraph',
+        'titel', 'art', 'ziel', 'wirkung', 'beispiele', 'dossier_slug']), 'params' => $params], null, null, 'test');
+
+    expect(TellerRolle::labels())->toMatchArray(['saeure' => 'Säure', 'basis' => 'Basis', 'kraeuter_akzent' => 'Kraeuter akzent']);
 });

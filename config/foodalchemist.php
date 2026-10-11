@@ -1122,7 +1122,7 @@ return [
                 . 'Parameter (convenience, frische, bio, niveau, sektor, diaet_hart, allergen_nogo, aroma, ziel_portion_g, saison): werte = '
                 . '{name (§1-Syntax <Typ>: <Bezeichnung>), description (§8-Stil), taste_direction (grobe Menue-Richtung, NUR EIN Wort: suess|herzhaft|neutral — das Aroma-Profil gehoert in description), '
                 // Dominique 11.10.: das Basisrezept trägt seine möglichen Teller-Rollen (Vokabular teller_rollen im Kontext).
-                . 'rollen (1-3 Werte aus teller_rollen im Kontext: wofuer dieses Basisrezept auf einem Teller dient, wichtigste zuerst), '
+                . 'rollen (1-3 Teller-Rollen laut Regel-Block bzw. teller_rollen im Kontext: wofuer dieses Basisrezept auf einem Teller dient, wichtigste zuerst), '
                 // Der Generator schreibt Schritte MIT der Zutatenliste in einem Zug — genau hier
                 // entstand die Drift: er nennt die Mengen seines eigenen Ansatzes im Text, und der
                 // Text bleibt stehen, wenn der Ansatz später skaliert wird.
@@ -1337,14 +1337,13 @@ return [
                 . 'zu »Knusprige Komponenten«, ein Chutney zu »Konservierung herzhaft«, ein Jus/Fond zu »Fonds & '
                 . 'Reduktionen«, ein Püree zu »Pürees« —, das als EIGENES Basisrezept anzulegen ist statt es in '
                 . 'Rohzutaten aufzulösen; false bei einer Rohzutat/Ware), '
-                // Dominique 11.10.: Teller-Rolle aus der Liste teller_rollen im Kontext (Regel gericht.teller_rolle).
-                . 'role (genau EINE aus teller_rollen im Kontext: protein = Hauptkomponente, basis = Tellerbasis wie Pueree, '
-                . 'sauce, beilage, crunch, saeure, aroma = Oel-/Wuerz-Akzent, garnitur), '
+                // Dominique 11.10. / Spec 81 E: die Werte kommen NUR aus der Regel gericht.teller_rolle (Regel-Block + teller_rollen).
+                . 'role (genau EINE Teller-Rolle laut Regel-Block bzw. teller_rollen im Kontext; aroma_treiber/komponente sind ungueltig), '
                 . 'fit (EIN kurzer Halbsatz: warum gehört diese Zutat FACHLICH in DIESES Gericht)}] '
                 // Spec 41 B2 (§12): Komponenten-Reihenfolge = AUFBAU-/PLATING-Reihenfolge über `role`,
                 // NICHT nach Menge/Anteil (Fall E1). Sauce/Basis am Boden, Garnitur/Finish zuletzt.
                 . 'Ordne die zutaten-Liste in AUFBAU-/PLATING-Reihenfolge nach role '
-                . '(Reihenfolge der Liste teller_rollen: basis → protein → beilage → sauce → crunch → saeure → aroma → garnitur), '
+                . '(die Reihenfolge der Teller-Rollen im Regel-Block ist die Anrichte-Reihenfolge), '
                 . 'NICHT nach Menge/Anteil. '
                 // Fit-Guard (2026-08-06): "vorhandene zuerst" war Reuse-Druck ohne Passt-Prüfung —
                 // das Inventar ist ein Angebot, die fachliche Passung entscheidet.
@@ -1413,9 +1412,9 @@ return [
         'vk.rollen' => [
             'tier' => 'B',
             // Teller-Vokabular (Dominique 11.10.) kommt als `vokabular` aus der Regel gericht.teller_rolle.
-            'task' => 'Verteile die Teller-Rollen uebers GANZE Gericht (Vokabular: die Liste vokabular im Kontext — '
-                . 'jede Zutat genau eine Rolle, Gesamt-Gericht-Sicht statt Einzelbetrachtung; protein = Hauptkomponente, '
-                . 'basis = Tellerbasis wie Pueree, aroma = Oel-/Wuerz-Akzent): werte = {rollen: {<zutat_id>: role}}.',
+            'task' => 'Verteile die Teller-Rollen uebers GANZE Gericht (Werte NUR laut Regel-Block bzw. vokabular im Kontext — '
+                . 'jede Zutat genau eine Rolle, Gesamt-Gericht-Sicht statt Einzelbetrachtung; die alten Werte aroma_treiber und '
+                . 'komponente sind UNGUELTIG, auch wenn ein Text sie noch nennt): werte = {rollen: {<zutat_id>: role}}.',
         ],
         // ── M7-04: Anhang-A-Inventar komplett (06_KI) ────────────────────
         // Bewusst NICHT portiert: #2 TEMPLATE_FILL + #38 AGENTIC_RESOLVER

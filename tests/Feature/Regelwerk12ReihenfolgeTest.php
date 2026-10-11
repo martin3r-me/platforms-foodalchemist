@@ -1,9 +1,16 @@
 <?php
 
 use Platform\FoodAlchemist\Services\RecipeGeneratorService;
+use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
 use Platform\FoodAlchemist\Tests\TestCase;
 
-uses(TestCase::class);
+uses(TestCase::class, SeedsTeamHierarchy::class);
+
+// Die Rangfolge kommt seit 11.10. aus der Regel gericht.teller_rolle (eine Quelle, kein Rückfall im Code) — darum mit
+// migrierter DB statt als reine Funktion; ohne Regel gäbe es zu Recht keine Anrichte-Reihenfolge.
+beforeEach(function () {
+    $this->seedTeamHierarchy();
+});
 
 /**
  * §12.2 (Regelwerk Basisrezepte) — `role` ist der Sortier-Anker der Komponenten-Reihenfolge
@@ -14,8 +21,7 @@ uses(TestCase::class);
  * `position` war schlicht die Emissions-Reihenfolge des Modells ($i + 1 in syncIngredients).
  * §12.4 nennt genau das als Anti-Pattern („role erfasst, aber ungenutzt").
  *
- * Reflection wie in DedupGuardTest — die Sortierung ist eine reine Funktion und soll ohne
- * Provider/DB prüfbar bleiben.
+ * Reflection wie in DedupGuardTest; die Rangfolge liest die Sortierung aus der Regel (DB nötig).
  *
  * @param  list<array<string, mixed>>  $zeilen
  * @return array{0: list<array<string, mixed>>, 1: int}

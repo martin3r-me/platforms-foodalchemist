@@ -77,3 +77,16 @@ it('Ausschalten wirkt sofort im Regelbuch', function () {
 
     expect(RegelBuch::falls('gp.10.generik'))->toBeNull();
 });
+
+it('Vokabular: der Anzeigename (label) steht im Editor und überlebt das Speichern (Teller-Rollen, 11.10.)', function () {
+    $r = ($this->regel)('gericht.teller_rolle');
+    $saeure = collect($r->params['werte'])->search(fn ($w) => $w['wert'] === 'saeure');
+
+    Livewire::test(Regeln::class)->call('oeffne', $r->id)
+        ->assertSet("form.zeilen.{$saeure}.label", 'Säure')
+        ->set('form.zeilen.0.label', 'Tellerbasis')
+        ->call('pruefeProbelauf')->call('speichern')->assertSet('fehler', null);
+    RegelBuch::vergessen();
+
+    expect(\Platform\FoodAlchemist\Support\TellerRolle::labels())->toMatchArray(['basis' => 'Tellerbasis', 'saeure' => 'Säure']);
+});
