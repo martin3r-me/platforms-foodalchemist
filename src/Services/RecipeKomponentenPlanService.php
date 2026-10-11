@@ -168,8 +168,8 @@ class RecipeKomponentenPlanService
 
     /**
      * Nutzungs-Historie eines Basisrezepts: in wie vielen Gerichten und mit welcher Teller-Rolle es verwendet wird
-     * (aus Zeilen mit `referenced_recipe_id`, nur sichtbare Gerichte). Kurz: „in 12 Gerichten: 9× aroma_treiber,
-     * 3× komponente“. Null, wenn es in keinem Gericht steht.
+     * (aus Zeilen mit `referenced_recipe_id`, nur sichtbare Gerichte). Kurz: „in 12 Gerichten: 9× sauce,
+     * 3× beilage“. Null, wenn es in keinem Gericht steht.
      */
     public function verwendung(Team $team, int $recipeId): ?string
     {
@@ -244,9 +244,8 @@ class RecipeKomponentenPlanService
                 'unit' => $k['einheit'] ?? 'g',
                 'sub_rezept' => true,
                 'sub_rezept_id' => $bestand['recipe_id'] ?? null,
-                // Die Plan-Funktion ist ein Feld der Zeile (Dominique 11.10.), nicht mehr nur Text in der Notiz.
-                'funktion' => \Platform\FoodAlchemist\Support\ZeilenFunktion::kanonisch($k['funktion'] ?? null),
-                'note' => 'Komponente laut Plan',
+                // Basisrezept-Zeilen tragen keine Funktion (Dominique 11.10.) — die Plan-Funktion bleibt Information in der Notiz.
+                'note' => 'Komponente laut Plan' . (! empty($k['funktion']) ? ' (' . $k['funktion'] . ')' : ''),
             ];
             $treffer = null;
             foreach ($zutaten as $i => $z) {

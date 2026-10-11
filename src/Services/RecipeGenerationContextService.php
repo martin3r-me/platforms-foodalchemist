@@ -197,11 +197,9 @@ class RecipeGenerationContextService
                     . 'fachlich stimmig zur Charge, nie eine eingekochte Mini-Charge.',
             ];
         }
-        // Funktion je Zutatenzeile (Dominique 11.10.): Vokabular aus der Regel rezeptzeile.funktion. Nur am Basisrezept
-        // gefragt — im Gericht trägt die Teller-Rolle (role), die Funktion bleibt dort optional.
-        if (! $vkModus) {
-            $prompt['funktionen'] = \Platform\FoodAlchemist\Support\ZeilenFunktion::werte();
-        }
+        // Teller-Rollen (Dominique 11.10., Regel gericht.teller_rolle): im Gericht die Rolle je Zeile, im Basisrezept die
+        // möglichen Rollen des ganzen Rezepts. Basisrezept-Zeilen tragen weder Rolle noch Funktion.
+        $prompt['teller_rollen'] = \Platform\FoodAlchemist\Support\TellerRolle::werte();
         // Spec 80 B5: bestätigter Komponenten-Plan → Zusammenstellung statt Ein-Baustein-Regel.
         if (! empty($parameter['plan_komponenten']) && is_array($parameter['plan_komponenten'])) {
             $prompt['zusammenstellung'] = [
@@ -214,7 +212,7 @@ class RecipeGenerationContextService
                     'menge' => $k['menge'] ?? null, 'einheit' => $k['einheit'] ?? null,
                     'funktion' => $k['funktion'] ?? null,
                     'sub_rezept_id' => $k['bestand']['recipe_id'] ?? null,
-                    // Weg A (Dominique 11.10.): wofür der übernommene Baustein sonst dient („in 12 Gerichten: 9× aroma_treiber“).
+                    // Weg A (Dominique 11.10.): wofür der übernommene Baustein sonst dient („in 12 Gerichten: 9× sauce“).
                     'verwendung' => $k['bestand']['verwendung'] ?? null,
                     'neu' => empty($k['bestand']),
                 ], static fn ($v) => $v !== null), $parameter['plan_komponenten'])),

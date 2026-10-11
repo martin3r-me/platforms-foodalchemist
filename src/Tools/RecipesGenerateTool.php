@@ -62,7 +62,7 @@ class RecipesGenerateTool extends FoodAlchemistTool implements ToolContract, Too
      */
     private const ACHSEN_BEISPIELE = [
         'gang' => 'vorspeise | zwischengang | hauptgang | dessert | amuse_bouche (aus den Speisen-Hauptgruppen)',
-        'komponentenrolle' => 'aroma_treiber | komponente | beilage | garnitur (Vokabular aus SpeisenKlassenService::ROLLEN)',
+        'komponentenrolle' => 'Teller-Rolle: basis | protein | beilage | sauce | crunch | saeure | aroma | garnitur (Regel gericht.teller_rolle)',
         'portionskontext' => 'menue | einzelgericht',
         'saison' => 'fruehling | sommer | herbst | winter',
         'warengruppe' => 'aus der GP-Taxonomie (foodalchemist_lookup_commodity_groups), z. B. Gemuese, Obst, Fleisch, Fisch, Getreide',

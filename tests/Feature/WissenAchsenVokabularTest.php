@@ -53,23 +53,24 @@ it('★ eine STILLGELEGTE Hauptgruppe ist nicht mehr taggbar', function () {
 });
 
 it('weist einen erfundenen Achsenwert ab, statt ihn still anzunehmen', function () {
-    expect(fn () => WissensGeltung::normalisieren(['komponentenrolle' => ['protein']]))
+    // Seit 11.10. Teller-Rollen: der V-21-Auffangwert „komponente“ ist kein gültiger Wert mehr.
+    expect(fn () => WissensGeltung::normalisieren(['komponentenrolle' => ['komponente']]))
         ->toThrow(RuntimeException::class, 'Unbekannter Wert');
 });
 
 it('nennt in der Fehlermeldung die erlaubten Werte — sonst raet der naechste wieder', function () {
     try {
-        WissensGeltung::normalisieren(['komponentenrolle' => ['protein']]);
+        WissensGeltung::normalisieren(['komponentenrolle' => ['komponente']]);
         $this->fail('haette werfen muessen');
     } catch (RuntimeException $e) {
-        expect($e->getMessage())->toContain('komponente')->toContain('beilage');
+        expect($e->getMessage())->toContain('protein')->toContain('beilage');
     }
 });
 
 it('nimmt die gepflegten Rollen an', function (string $rolle) {
     expect(WissensGeltung::normalisieren(['komponentenrolle' => [$rolle]]))
         ->toBe(['komponentenrolle' => [$rolle]]);
-})->with(['aroma_treiber', 'komponente', 'beilage', 'garnitur']);
+})->with(['basis', 'protein', 'beilage', 'sauce', 'crunch', 'saeure', 'aroma', 'garnitur']);
 
 it('★ schraenkt NICHT ein, wenn die Quelle leer ist — eine frische Umgebung darf nicht blockieren', function () {
     DB::table('foodalchemist_dish_main_groups')->delete();
@@ -152,6 +153,8 @@ it('★ nach der Migration sind ALLE Werte gueltiges Vokabular — sonst scheite
     ]);
 
     (require __DIR__.'/../../database/migrations/2026_09_11_100000_achsenwerte_auf_vokabular.php')->up();
+    // 11.10.: die Umstellung auf Teller-Rollen räumt den V-21-Wert „komponente“ wieder ab (nicht eindeutig abbildbar).
+    (require __DIR__.'/../../database/migrations/2026_10_15_100100_teller_rolle_umstellung.php')->up();
 
     $g = json_decode(DB::table('foodalchemist_knowledge_documents')->where('id', $id)->value('geltung'), true);
     // Der eigentliche Beweis: die migrierte Geltung laeuft durch die neue Pruefung.

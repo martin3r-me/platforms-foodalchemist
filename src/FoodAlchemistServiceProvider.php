@@ -126,6 +126,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 \Platform\FoodAlchemist\Console\RecomputeCommand::class,
                 \Platform\FoodAlchemist\Console\GpAllergenBackfillCommand::class,
                 \Platform\FoodAlchemist\Console\GpFormsEstimateCommand::class,
+                \Platform\FoodAlchemist\Console\TellerRollenKlassifizierenCommand::class,
+                \Platform\FoodAlchemist\Console\BasisrezeptRollenVorschlagenCommand::class,
                 \Platform\FoodAlchemist\Console\RecipePackagingUnitsCommand::class,
                 \Platform\FoodAlchemist\Console\VocabUnitsDedupeCommand::class,
                 \Platform\FoodAlchemist\Console\FavoriteGpsCommand::class,

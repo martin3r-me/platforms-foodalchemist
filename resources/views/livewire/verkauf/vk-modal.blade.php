@@ -22,7 +22,7 @@
     $feld = 'fa-control h-9 text-[length:var(--fa-text-md)]';
     $feldKlein = 'fa-control h-7 text-[length:var(--fa-text-sm)]';
     $knopfKi = 'inline-flex items-center gap-1.5 h-7 px-2.5 whitespace-nowrap rounded-[var(--fa-radius-control)] text-[length:var(--fa-text-sm)] font-medium bg-[var(--fa-accent-soft)] text-[var(--fa-accent)] border border-[var(--fa-accent-line)] hover:bg-[var(--fa-accent-soft-hover)] transition-colors duration-150';
-    $rollenText = ['aroma_treiber' => 'Aromaträger', 'komponente' => 'Komponente', 'beilage' => 'Beilage', 'garnitur' => 'Garnitur'];
+    $rollenText = \Platform\FoodAlchemist\Support\TellerRolle::labels();
     $diaetText = ['fleisch' => 'Fleisch', 'fisch' => 'Fisch', 'vegi' => 'vegetarisch', 'vegetarisch' => 'vegetarisch', 'vegan' => 'vegan', 'neutral' => 'neutral', 'omnivor' => 'omnivor', 'allergie' => 'Allergie'];
     $zweckText = ['abfuellen' => 'Abfüllen', 'regenerieren' => 'Regenerieren', 'ausgabe' => 'Ausgabe', 'transport' => 'Transport'];
     $herkunftText = [

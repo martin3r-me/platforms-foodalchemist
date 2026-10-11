@@ -18,7 +18,7 @@
     $kleinLabel = 'text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-2)]';
     $leise = 'text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]';
     $listenKnopf = 'flex w-full items-center gap-2 px-2 py-1.5 rounded-[var(--fa-radius-control)] text-left text-[length:var(--fa-text-md)] text-[var(--fa-ink)] hover:bg-[var(--fa-hover)]';
-    $rollenText = ['aroma_treiber' => 'Aromaträger', 'komponente' => 'Komponente', 'beilage' => 'Beilage', 'garnitur' => 'Garnitur'];
+    $rollenText = \Platform\FoodAlchemist\Support\TellerRolle::labels();
     $geld = fn ($wert) => number_format((float) $wert, 2, ',', '.') . ' €';
 
     $kennzahlen = [];

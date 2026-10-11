@@ -194,7 +194,7 @@ class RecipeTemplateService
                     ...$ri->only(['position', 'gp_id', 'referenced_recipe_id', 'raw_text', 'display_name',
                         'quantity', 'quantity_max', 'unit_vocab_id', 'trimming_loss_pct', 'cooking_loss_pct',
                         'is_optional', 'klammer_note', 'note', 'match_method', 'match_confidence',
-                        'role', 'funktion', 'is_value_relevant', 'calc_mode']),
+                        'role', 'is_value_relevant', 'calc_mode']),
                     'team_id' => $team->id,
                 ];
 
@@ -206,10 +206,6 @@ class RecipeTemplateService
                     }
                     unset($swap['_hinweis']);
                     $felder = [...$felder, ...$swap];
-                    // Funktion: aus der Bindung, wenn angegeben (geprüft gegen rezeptzeile.funktion), sonst die der Vorlage.
-                    if (array_key_exists('funktion', $binding)) {
-                        $felder['funktion'] = \Platform\FoodAlchemist\Support\ZeilenFunktion::kanonisch($binding['funktion']);
-                    }
                     $gebunden++;
                 }
 

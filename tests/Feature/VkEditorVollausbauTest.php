@@ -76,11 +76,11 @@ it('Rollen-Spalte rendert NUR im VK-Kontext; Rollen-Wert geht durch den Sync (V-
     Livewire::test(IngredientEditor::class, ['recipeId' => $this->vk->id, 'eingebettet' => true])
         ->call('speichern', [[
             'id' => $this->zeileId, 'gp_id' => DB::table('foodalchemist_recipe_ingredients')->where('id', $this->zeileId)->value('gp_id'),
-            'raw_text' => 'Wiener', 'quantity' => '50', 'unit_vocab_id' => $this->g->id, 'role' => 'komponente',
+            'raw_text' => 'Wiener', 'quantity' => '50', 'unit_vocab_id' => $this->g->id, 'role' => 'protein',
         ]])
         ->assertSet('fehler', null);
     expect(DB::table('foodalchemist_recipe_ingredients')->where('recipe_id', $this->vk->id)->whereNull('deleted_at')->value('role'))
-        ->toBe('komponente');
+        ->toBe('protein');
 });
 
 // 2026-09-04: `data-vk-plating-text` (das Markdown-Textarea) ist ersetzt — das Anrichten

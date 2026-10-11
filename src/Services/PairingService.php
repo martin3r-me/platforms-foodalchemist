@@ -470,12 +470,6 @@ class PairingService
     }
 
     /**
-     * Spec 58: Gewicht einer Zutat nach Rolle (Dominique 2026-10-06). Aromaträger prägen das
-     * Gericht, Garnitur setzt Akzente — ohne Rolle zählt eine Zutat wie eine Komponente.
-     */
-    public const ROLLEN_GEWICHT = ['aroma_treiber' => 1.5, 'komponente' => 1.0, 'beilage' => 0.6, 'garnitur' => 0.4];
-
-    /**
      * Spec 60 · P5: Kern-Anker je Grundprodukt (beste Zuordnung, wie die Anker-Auflösung).
      *
      * @param  array<int, int|string>  $gpIds

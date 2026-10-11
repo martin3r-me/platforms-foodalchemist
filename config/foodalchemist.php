@@ -1121,6 +1121,8 @@ return [
                 // diese Portionsgröße; parameter.saison lenkt die Zutatenwahl auf das Erntefenster.
                 . 'Parameter (convenience, frische, bio, niveau, sektor, diaet_hart, allergen_nogo, aroma, ziel_portion_g, saison): werte = '
                 . '{name (§1-Syntax <Typ>: <Bezeichnung>), description (§8-Stil), taste_direction (grobe Menue-Richtung, NUR EIN Wort: suess|herzhaft|neutral — das Aroma-Profil gehoert in description), '
+                // Dominique 11.10.: das Basisrezept trägt seine möglichen Teller-Rollen (Vokabular teller_rollen im Kontext).
+                . 'rollen (1-3 Werte aus teller_rollen im Kontext: wofuer dieses Basisrezept auf einem Teller dient, wichtigste zuerst), '
                 // Der Generator schreibt Schritte MIT der Zutatenliste in einem Zug — genau hier
                 // entstand die Drift: er nennt die Mengen seines eigenen Ansatzes im Text, und der
                 // Text bleibt stehen, wenn der Ansatz später skaliert wird.
@@ -1159,13 +1161,8 @@ return [
                 . 'zu »Knusprige Komponenten«, ein Chutney zu »Konservierung herzhaft«, ein Jus/Fond zu »Fonds & '
                 . 'Reduktionen«, ein Püree zu »Pürees« —, das als EIGENES Basisrezept anzulegen ist statt es in '
                 . 'Rohzutaten aufzulösen; false bei einer Rohzutat/Ware), '
-                // Kohärenz-Gate (2026-08-07): role füllt das V-21-Rollenfeld (Schicht 1) im
-                // selben Call; fit ZWINGT zur Selbst-Begründung — eine Zutat, die sich nicht in
-                // einem Halbsatz fachlich rechtfertigen lässt, gehört nicht ins Gericht (senkt
-                // die Rate plausibel klingender Fremdkörper VOR dem Kritiker-Pass).
-                . 'role (V-21: aroma_treiber|komponente|beilage|garnitur), '
-                // Dominique 11.10.: wofür die Zeile im Basisrezept da ist — Vokabular aus `funktionen` im Kontext.
-                . 'funktion (genau EINE aus der Liste funktionen im Kontext: wofür diese Zeile im Rezept da ist), '
+                // Dominique 11.10.: Basisrezept-Zeilen tragen weder Rolle noch Funktion — fit ZWINGT zur Selbst-Begründung
+                // (eine Zutat, die sich nicht in einem Halbsatz fachlich rechtfertigen lässt, gehört nicht hinein).
                 . 'fit (EIN kurzer Halbsatz: warum gehört diese Zutat FACHLICH in DIESES Gericht)}]}. '
                 // Spec 41 B2 (§12 Regelwerk Basisrezepte): die Zutaten-Reihenfolge ist die KOCH-
                 // Reihenfolge, NICHT die Menge. Das war der reproduzierbare Fehler (Anteil-%-Sort, Fall D4).
@@ -1340,12 +1337,14 @@ return [
                 . 'zu »Knusprige Komponenten«, ein Chutney zu »Konservierung herzhaft«, ein Jus/Fond zu »Fonds & '
                 . 'Reduktionen«, ein Püree zu »Pürees« —, das als EIGENES Basisrezept anzulegen ist statt es in '
                 . 'Rohzutaten aufzulösen; false bei einer Rohzutat/Ware), '
-                . 'role (V-21: aroma_treiber|komponente|beilage|garnitur), '
+                // Dominique 11.10.: Teller-Rolle aus der Liste teller_rollen im Kontext (Regel gericht.teller_rolle).
+                . 'role (genau EINE aus teller_rollen im Kontext: protein = Hauptkomponente, basis = Tellerbasis wie Pueree, '
+                . 'sauce, beilage, crunch, saeure, aroma = Oel-/Wuerz-Akzent, garnitur), '
                 . 'fit (EIN kurzer Halbsatz: warum gehört diese Zutat FACHLICH in DIESES Gericht)}] '
                 // Spec 41 B2 (§12): Komponenten-Reihenfolge = AUFBAU-/PLATING-Reihenfolge über `role`,
                 // NICHT nach Menge/Anteil (Fall E1). Sauce/Basis am Boden, Garnitur/Finish zuletzt.
                 . 'Ordne die zutaten-Liste in AUFBAU-/PLATING-Reihenfolge nach role '
-                . '(aroma_treiber/Basis-Sauce → komponente/Hauptkomponente → beilage → garnitur → Finishing), '
+                . '(Reihenfolge der Liste teller_rollen: basis → protein → beilage → sauce → crunch → saeure → aroma → garnitur), '
                 . 'NICHT nach Menge/Anteil. '
                 // Fit-Guard (2026-08-06): "vorhandene zuerst" war Reuse-Druck ohne Passt-Prüfung —
                 // das Inventar ist ein Angebot, die fachliche Passung entscheidet.
@@ -1413,9 +1412,10 @@ return [
         ],
         'vk.rollen' => [
             'tier' => 'B',
-            'task' => 'Verteile die Komponenten-Rollen uebers GANZE Gericht (V-21-Vokabular: '
-                . 'aroma_treiber | komponente | beilage | garnitur — jede Zutat genau eine Rolle, '
-                . 'Gesamt-Gericht-Sicht statt Einzelbetrachtung): werte = {rollen: {<zutat_id>: role}}.',
+            // Teller-Vokabular (Dominique 11.10.) kommt als `vokabular` aus der Regel gericht.teller_rolle.
+            'task' => 'Verteile die Teller-Rollen uebers GANZE Gericht (Vokabular: die Liste vokabular im Kontext — '
+                . 'jede Zutat genau eine Rolle, Gesamt-Gericht-Sicht statt Einzelbetrachtung; protein = Hauptkomponente, '
+                . 'basis = Tellerbasis wie Pueree, aroma = Oel-/Wuerz-Akzent): werte = {rollen: {<zutat_id>: role}}.',
         ],
         // ── M7-04: Anhang-A-Inventar komplett (06_KI) ────────────────────
         // Bewusst NICHT portiert: #2 TEMPLATE_FILL + #38 AGENTIC_RESOLVER
@@ -1479,11 +1479,6 @@ return [
             'tier' => 'B',
             'task' => 'Bestimme den Kern-Anker (Aroma-Identitaet) des Grundprodukts aus dem '
                 . 'mitgegebenen Anker-Vokabular; kein Aroma-Traeger => neutral: werte = {anchor_slug}.',
-        ],
-        'gp.role' => [
-            'tier' => 'B',                                            // Inline-Prompt im Ist — gehoben
-            'task' => 'Bestimme die kulinarische Rolle des Grundprodukts '
-                . '(aroma_treiber|komponente|beilage|garnitur): werte = {role}.',
         ],
         'gp.la_suggest' => [
             'tier' => 'B',
@@ -1656,9 +1651,7 @@ return [
             'max_tokens' => 8000,                                     // Gesamt-Rezept zurück (description+preparation+zutaten) — Reasoning-Headroom
             'task' => 'Ueberarbeite das Rezept exakt nach der freien Anweisung (anweisung) — '
                 . 'aendere NUR Angefragtes, behalte ids bestehender Zutaten, neue Zutaten ohne id: '
-                . 'werte = {name, description, preparation, zutaten: [{id, text, quantity, einheit_slug, funktion}], aenderungs_notiz}. '
-                // Dominique 11.10.: alte Rezepte bekommen die Zeilen-Funktion beim Überarbeiten (kein Backfill).
-                . 'funktion: genau EINE aus funktionen im Kontext — eine vorhandene behalten, eine fehlende ergänzen.',
+                . 'werte = {name, description, preparation, zutaten: [{id, text, quantity, einheit_slug}], aenderungs_notiz}.',
         ],
         'recipe.extract' => [
             'tier' => 'C',                                            // Tier C: unset ⇒ Plattform-Default-Modell (Text ok); Vision (Bild) erst nach Core-Fix

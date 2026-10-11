@@ -92,7 +92,19 @@ class FoodAlchemistRecipe extends Model
         return $q->where('is_sales_recipe', true);
     }
 
+    /** Basisrezepte, die diese Teller-Rolle tragen können (Dominique 11.10.). */
+    public function scopeMitRolle(Builder $q, string $rolle): Builder
+    {
+        return $q->whereIn('id', FoodAlchemistRecipeRolle::query()->where('rolle', $rolle)->select('recipe_id'));
+    }
+
     // ── Relationen ───────────────────────────────────────────────────────
+
+    /** Mögliche Teller-Rollen eines Basisrezepts, Hauptrolle zuerst. */
+    public function rollen(): HasMany
+    {
+        return $this->hasMany(FoodAlchemistRecipeRolle::class, 'recipe_id')->orderBy('position');
+    }
 
     public function ingredients(): HasMany
     {

@@ -412,6 +412,11 @@ class RecipeDependencyWorkflowService
                 $out['bedarf_pax'] = $pax;
             }
         }
+        // Rollen-Umbau (Dominique 11.10.): das Kind wurde für eine Teller-Rolle im Gericht geplant — sie wird seine
+        // Hauptrolle (Quelle kaskade). Nur aus einer Gericht-Zeile; Basisrezept-Zeilen tragen keine Rolle.
+        if (($rolle = \Platform\FoodAlchemist\Support\TellerRolle::kanonisch($zeile?->role)) !== null) {
+            $out['kind_rolle'] = $rolle;
+        }
         $norm = static fn ($s) => mb_strtolower(trim((string) $s));
         foreach ((array) (($eltern->context_snapshot ?? [])['komponenten'] ?? []) as $k) {
             if (is_array($k) && $norm($k['name'] ?? '') === $norm($text) && ! empty($k['suchbegriffe'])) {
@@ -699,6 +704,15 @@ class RecipeDependencyWorkflowService
                 }
                 if ($bestehend !== null && (int) $bestehend->id !== (int) $recipe->id) {
                     $this->bindIngredient($team, (int) $ingredient->id, (int) $bestehend->id);
+                    // Rollen-Umbau (Dominique 11.10.): trägt der Baustein die im Gericht geplante Teller-Rolle nicht, wird
+                    // das sichtbar — keine Sperre. Ohne gepflegte Rollen kein Hinweis (sie kommen erst mit dem Vorschlag).
+                    $rolleHinweis = null;
+                    if (($geplanteRolle = \Platform\FoodAlchemist\Support\TellerRolle::kanonisch($ingredient->role)) !== null) {
+                        $rollenDesBausteins = app(RecipeRollenService::class)->rollen((int) $bestehend->id);
+                        if ($rollenDesBausteins !== [] && ! in_array($geplanteRolle, $rollenDesBausteins, true)) {
+                            $rolleHinweis = ['geplant' => $geplanteRolle, 'rollen_des_bausteins' => $rollenDesBausteins];
+                        }
+                    }
                     FoodAlchemistCascadeRunStep::firstOrCreate([
                         'cascade_run_id' => $step->cascade_run_id,
                         'dedupe_key' => 'reuse:' . (int) $bestehend->id,
@@ -715,7 +729,7 @@ class RecipeDependencyWorkflowService
                         // Der Reifegrad reist MIT: „übernommen" heißt nur dann „fertig", wenn
                         // es das auch ist. Ohne diesen Marker meldete der Lauf „abgeschlossen"
                         // über einem draft mit 0 Schritten (Lauf 65, Step 460).
-                        'deferred' => ['reuse' => $this->reuseMarker($reuse)],
+                        'deferred' => ['reuse' => $this->reuseMarker($reuse)] + ($rolleHinweis !== null ? ['rolle_hinweis' => $rolleHinweis] : []),
                     ]);
 
                     continue;

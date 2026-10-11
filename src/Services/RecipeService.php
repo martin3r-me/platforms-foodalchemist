@@ -405,7 +405,7 @@ class RecipeService
                     ...$z->only(['position', 'gp_id', 'referenced_recipe_id', 'raw_text', 'display_name',
                         'quantity', 'quantity_max', 'unit_vocab_id', 'trimming_loss_pct', 'cooking_loss_pct',
                         'is_optional', 'klammer_note', 'note', 'match_method', 'match_confidence',
-                        'role', 'funktion', 'is_value_relevant', 'calc_mode']),
+                        'role', 'is_value_relevant', 'calc_mode']),
                     'team_id' => $team->id,
                 ]);
             }
@@ -1153,14 +1153,10 @@ class RecipeService
                     'trimming_loss_pct' => ($z['trimming_loss_pct'] ?? '') !== '' && ($z['trimming_loss_pct'] ?? null) !== null ? (float) str_replace(',', '.', (string) $z['trimming_loss_pct']) : null,
                     'is_optional' => (bool) ($z['is_optional'] ?? false),
                     'note' => ($z['note'] ?? '') ?: null,
-                    'role' => ($z['role'] ?? '') ?: null,            // V-21
+                    // Teller-Rolle nur im Gericht, gegen das Vokabular geprüft (Dominique 11.10.); Basisrezept-Zeilen: keine.
+                    'role' => $recipe->is_sales_recipe ? \Platform\FoodAlchemist\Support\TellerRolle::kanonisch($z['role'] ?? null) : null,
                     'is_value_relevant' => (bool) ($z['is_value_relevant'] ?? false),
                 ];
-                // Funktion der Zeile (Dominique 11.10., Vokabular rezeptzeile.funktion): nur ein ausdrücklich mitgegebener
-                // Wert schreibt — ein Speichern ohne das Feld (Editor, Altpfade) löscht keine Funktion aus Plan/Generator.
-                if (array_key_exists('funktion', $z)) {
-                    $attrs['funktion'] = \Platform\FoodAlchemist\Support\ZeilenFunktion::kanonisch($z['funktion']);
-                }
 
                 // E3: gegroundete Zeilen tragen die Resolver-Provenienz (gp_v2_fk|recipe_ref)
                 // + Konfidenz — auch beim UPDATE einer zuvor 'unmatched' Bestands-Zeile.
@@ -1340,7 +1336,9 @@ class RecipeService
             ->when(($filters['status'] ?? '') !== '', fn (Builder $q) => $q->where('status', $filters['status']))
             ->when(($filters['geschmack'] ?? '') !== '', fn (Builder $q) => $q->where('taste_direction', $filters['geschmack']))
             ->when(($filters['fertigung'] ?? '') !== '', fn (Builder $q) => $q->where('production_depth', $filters['fertigung']))
-            ->when($filters['nur_templates'] ?? false, fn (Builder $q) => $q->where('is_template', true));  // R6: Template-Filter
+            ->when($filters['nur_templates'] ?? false, fn (Builder $q) => $q->where('is_template', true))  // R6: Template-Filter
+            // Rollen-Umbau (Dominique 11.10.): Basisrezepte, die diese Teller-Rolle tragen können.
+            ->when(($filters['rolle'] ?? '') !== '', fn (Builder $q) => $q->mitRolle((string) $filters['rolle']));
     }
 
     /** Spec 70: übliche Lagerart (gekuehlt | tiefgekuehlt | trocken), sonst null. */

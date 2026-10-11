@@ -230,7 +230,7 @@ it('L6b: das Gericht prüft über denselben Weg (VK-Zweig, Komponenten-Wort in d
     $zeileId = DB::table('foodalchemist_recipe_ingredients')->insertGetId([
         'uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(), 'team_id' => $this->rootTeam->id,
         'recipe_id' => $vk->id, 'gp_id' => $gp->id, 'raw_text' => 'Püree', 'display_name' => 'Püree',
-        'quantity' => 150, 'unit_vocab_id' => $this->g->id, 'position' => 1, 'role' => 'komponente',
+        'quantity' => 150, 'unit_vocab_id' => $this->g->id, 'position' => 1, 'role' => 'protein',
         'created_at' => now(), 'updated_at' => now(),
     ]);
 
@@ -248,7 +248,7 @@ it('L6b: das Gericht prüft über denselben Weg (VK-Zweig, Komponenten-Wort in d
 
     $zeile = DB::table('foodalchemist_recipe_ingredients')->find($zeileId);
     expect((float) $zeile->quantity)->toBe(200.0)
-        ->and($zeile->role)->toBe('komponente');                        // Facette der Zeile überlebt (V-027-Umweg)
+        ->and($zeile->role)->toBe('protein');                        // Facette der Zeile überlebt (V-027-Umweg)
 });
 
 /**

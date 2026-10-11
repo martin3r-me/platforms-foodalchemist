@@ -343,10 +343,8 @@ class RecipeGeneratorService
                     // Kohärenz-Gate (2026-08-07): die V-21-Rolle aus dem Vorschlag füllt das
                     // bisher tote role-Feld (Schicht 1). Whitelist-Guard wie taste_direction —
                     // nur gültige Rollen, sonst null (kein Insert-Crash durch Freitext).
-                    'role' => in_array($z['role'] ?? null, SpeisenKlassenService::ROLLEN, true) ? $z['role'] : null,
-                    // Funktion der Zeile (Dominique 11.10.): aus dem Plan (einmischen) oder vom Generator, gegen das
-                    // Regel-Vokabular rezeptzeile.funktion geprüft wie role — ungültig → null. Im Gericht optional.
-                    'funktion' => \Platform\FoodAlchemist\Support\ZeilenFunktion::kanonisch($z['funktion'] ?? null),
+                    // Teller-Rolle nur im Gericht (Dominique 11.10., Vokabular gericht.teller_rolle); Basisrezept-Zeilen: keine.
+                    'role' => $vkModus ? \Platform\FoodAlchemist\Support\TellerRolle::kanonisch($z['role'] ?? null) : null,
                     // Ausbeute-Lücke (2026-09-06): Garverlust je Zutat aus dem Vorschlag → die
                     // Verlust-Kaskade im Recompute (Zutat → GP → Team-WG → 0) greift damit auch
                     // bei Reduktion/Fond/Jus, wo alle Defaults 0 sind und der Einsatz als Yield
@@ -405,13 +403,14 @@ class RecipeGeneratorService
                 // STARKES Sub (§4 »jus ist die sauce« / LLM-Flag true): IMMER Basisrezept — überstimmt
                 // auch einen GP-Treffer und jede Convenience-Stufe. Marker sind praktisch nie Flachware.
                 $strongSub = ! $direktArtikel && ($nameHalbfabrikat || $prefixSub || ($llmSub === true) || $brotImGericht);
-                // Rolle komponente/beilage/garnitur/aroma_treiber im VK-Gericht (T4) — Convenience-
+                // Teller-Rolle im VK-Gericht (T4, Vokabular gericht.teller_rolle) — Convenience-
                 // gesteuert. Dominique-Entscheid (Nebenbefund #102): ein Gericht wird aus
                 // Basisrezepten gebaut — auch Garnitur/Aroma-Treiber ohne Bestandstreffer werden
                 // zum Basisrezept (Rüstzeit etc. gehört dort erfasst), nicht zur LA-Wahl. Ein
                 // GP-Treffer gewinnt weiterhin unabhängig von der Rolle (siehe $rolleWillSub unten).
                 $rolleKomponente = $vkModus && ! $direktArtikel
-                    && in_array($z['role'] ?? null, ['komponente', 'beilage', 'garnitur', 'aroma_treiber'], true);
+                    // Jede Teller-Rolle wird zum Basisrezept (Dominique 11.10.) — außer Kleinstmengen (Direkt-Artikel, oben).
+                    && \Platform\FoodAlchemist\Support\TellerRolle::kanonisch($z['role'] ?? null) !== null;
                 $istConvenienceGp = $istGpTreffer && $this->istConvenienceGp((int) ($treffer['gp_id'] ?? 0));
                 $rolleWillSub = $rolleKomponente && match ($convenience) {
                     'from_scratch'     => true,                 // hart: selbst bauen (auch über GP-Treffer)
@@ -554,6 +553,24 @@ class RecipeGeneratorService
             // NUR auf dem Generierungs-Pfad: im Editor ordnet der Mensch bewusst um, dort
             // darf nichts nachsortieren.
             if ($vkModus) {
+                // Rollen-Umbau (Dominique 11.10.): ein eingesetztes Basisrezept bringt seine Rolle mit — leere Teller-Rolle
+                // der Zeile = Hauptrolle des Basisrezepts. Passt eine gesetzte Rolle nicht zu den Rollen des Bausteins:
+                // sichtbarer Hinweis, keine Sperre.
+                $subRollen = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeRolle::query()
+                    ->whereIn('recipe_id', array_values(array_filter(array_map(static fn ($z) => $z['referenced_recipe_id'] ?? null, $zeilen))))
+                    ->orderBy('position')->get(['recipe_id', 'rolle'])->groupBy('recipe_id');
+                foreach ($zeilen as $zi => $zz) {
+                    $rollenDesSubs = ($subRollen->get((int) ($zz['referenced_recipe_id'] ?? 0)) ?? collect())->pluck('rolle')->all();
+                    if ($rollenDesSubs === []) {
+                        continue;
+                    }
+                    if (empty($zz['role'])) {
+                        $zeilen[$zi]['role'] = $rollenDesSubs[0];
+                    } elseif (! in_array($zz['role'], $rollenDesSubs, true)) {
+                        $statistik['rolle_hinweise'][] = ['zeile' => (string) ($zz['display_name'] ?? ''), 'rolle' => $zz['role'],
+                            'rollen_des_bausteins' => $rollenDesSubs];
+                    }
+                }
                 [$zeilen, $verschoben, $altZuNeu] = $this->sortiereNachRolle($zeilen);
                 if ($verschoben > 0) {
                     // Sichtbar machen statt still korrigieren — so wird messbar, wie oft das
@@ -573,6 +590,12 @@ class RecipeGeneratorService
             }
 
             $recipe = $this->recipes->syncIngredients($team, $recipe->id, $zeilen);   // inkl. Recompute
+            if (! $vkModus) {
+                // Mögliche Teller-Rollen des Basisrezepts (Dominique 11.10.): Vorschlag der KI (Quelle ki); im Kaskaden-Kind
+                // steht die Rolle, für die es im Gericht geplant wurde, vorn (Quelle kaskade).
+                $statistik['rollen'] = app(RecipeRollenService::class)->setze((int) $recipe->id, (array) ($kiRezept['rollen'] ?? []), 'ki',
+                    isset($parameter['kind_rolle']) ? (string) $parameter['kind_rolle'] : null, 'kaskade');
+            }
             if ($vkModus) {
                 // Dominique 10.10.: ein Gericht ist GENAU EINE Portion — Code-Regel statt KI-Vertrauen (demo Lauf 94:
                 // 28 kg / 12 kg Filet für 80 Pax). Die Produktion multipliziert mit pax.
@@ -689,7 +712,6 @@ class RecipeGeneratorService
      * Bodenebene (Sauce/Jus/Basis) → Hauptkomponente → Beilage → Garnitur.
      * Ohne Rolle ⇒ Rang 99 (hinten), ohne die Binnenordnung des Modells zu zerstören.
      */
-    private const ROLLEN_RANG = ['aroma_treiber' => 1, 'komponente' => 2, 'beilage' => 3, 'garnitur' => 4];
 
     /**
      * Stabil nach §12.2-Rang sortieren; meldet zurück, wie viele Zeilen sich bewegt haben.
@@ -708,7 +730,8 @@ class RecipeGeneratorService
         $mitRang = [];
         foreach (array_values($zeilen) as $i => $z) {
             $mitRang[] = [
-                'rang' => self::ROLLEN_RANG[(string) ($z['role'] ?? '')] ?? 99,
+                // Anrichte-Reihenfolge = Reihenfolge des Teller-Vokabulars (Dominique 11.10.).
+                'rang' => \Platform\FoodAlchemist\Support\TellerRolle::rang(isset($z['role']) ? (string) $z['role'] : null),
                 'i' => $i,
                 'zeile' => $z,
             ];

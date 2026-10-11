@@ -24,7 +24,7 @@ class RecipesListTool extends FoodAlchemistTool implements ToolContract, ToolMet
     public function getDescription(): string
     {
         return 'Listet die Basisrezepte des Teams vollständig und seitenweise auf (ohne Suchbegriff, '
-            . 'ohne 50er-Cap). Optional status-gefiltert; page/per_page-Paging (last_page zum Weiterblättern). '
+            . 'ohne 50er-Cap). Optional status- und rollen-gefiltert (rolle); page/per_page-Paging (last_page zum Weiterblättern). '
             . 'Liefert je Rezept id, name, status, yield_kg, ek_total_eur. Detail via foodalchemist.recipes.GET, gezielte Suche via foodalchemist.recipes.SEARCH.';
     }
 
@@ -34,6 +34,8 @@ class RecipesListTool extends FoodAlchemistTool implements ToolContract, ToolMet
             'type' => 'object',
             'properties' => [
                 'status' => ['type' => 'string', 'description' => 'Optionaler Status-Filter (z. B. draft, review, approved). Leer = alle.'],
+                'rolle' => ['type' => 'string', 'description' => 'Optional: nur Basisrezepte, die diese Teller-Rolle tragen können '
+                    . '(Vokabular Regel gericht.teller_rolle: basis, protein, beilage, sauce, crunch, saeure, aroma, garnitur).'],
                 'page' => ['type' => 'integer', 'minimum' => 1, 'default' => 1, 'description' => 'Seitennummer (last_page aus der Vorantwort).'],
                 'per_page' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 200, 'default' => 100, 'description' => 'Seitengröße (max. 200).'],
             ],
@@ -51,7 +53,8 @@ class RecipesListTool extends FoodAlchemistTool implements ToolContract, ToolMet
         $perPage = min(200, max(1, (int) ($arguments['per_page'] ?? 100)));
         Paginator::currentPageResolver(fn () => $page);
         $treffer = app(RecipeService::class)->paginateBrowser(
-            ['search' => '', 'status' => (string) ($arguments['status'] ?? '')], $team, $perPage,
+            ['search' => '', 'status' => (string) ($arguments['status'] ?? ''),
+                'rolle' => (string) (\Platform\FoodAlchemist\Support\TellerRolle::kanonisch($arguments['rolle'] ?? null) ?? '')], $team, $perPage,
         );
 
         return ToolResult::success([
@@ -62,6 +65,7 @@ class RecipesListTool extends FoodAlchemistTool implements ToolContract, ToolMet
             'recipes' => collect($treffer->items())->map(fn ($r) => [
                 'id' => $r->id, 'name' => $r->name, 'status' => $r->status->value,
                 'yield_kg' => $r->yield_kg, 'ek_total_eur' => $r->ek_total_eur,
+                'rollen' => app(\Platform\FoodAlchemist\Services\RecipeRollenService::class)->rollen((int) $r->id),
             ])->all(),
         ]);
     }

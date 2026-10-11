@@ -9,7 +9,7 @@
 @php($typFarben = $typFarben ?? \Platform\FoodAlchemist\Services\TeamSettingsService::TYP_FARBEN_DEFAULTS)
 {{-- Phase 5: Typ-Farben (Team-Einstellung) als Laufzeit-Stil — Text = Farbe, Grund = Farbe + 1a (10 %). --}}
 @php($typStyle = fn (string $t) => isset($typFarben[$t]) ? 'color:' . $typFarben[$t] . ';background-color:' . $typFarben[$t] . '1a' : '')
-@php($rollenText = ['aroma_treiber' => 'Aromaträger', 'komponente' => 'Komponente', 'beilage' => 'Beilage', 'garnitur' => 'Garnitur'])
+@php($rollenText = \Platform\FoodAlchemist\Support\TellerRolle::labels())
 @php($ib = 'inline-flex items-center justify-center shrink-0 w-7 h-7 rounded-[var(--fa-radius-control)] text-[var(--fa-ink-3)] hover:text-[var(--fa-ink)] hover:bg-[var(--fa-hover)] transition-colors duration-150 disabled:opacity-30 disabled:pointer-events-none')
 @php($feld = 'fa-control h-8 text-[length:var(--fa-text-md)]')
 @php($spalten = $vkKontext ? 11 : 10)
@@ -216,8 +216,8 @@
                         <td>
                             <select x-model="zeile.role" aria-label="Rolle" class="{{ $feld }} fa-select w-36 pr-7" data-role-select>
                                 <option value="">Ohne Rolle</option>
-                                @foreach(\Platform\FoodAlchemist\Services\SpeisenKlassenService::ROLLEN as $role)
-                                    <option value="{{ $role }}">{{ $rollenText[$role] ?? ucfirst(str_replace('_', ' ', $role)) }}</option>
+                                @foreach($rollenText as $role => $rollenName)
+                                    <option value="{{ $role }}">{{ $rollenName }}</option>
                                 @endforeach
                             </select>
                         </td>
