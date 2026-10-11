@@ -85,6 +85,7 @@ class GpAggregateService
 
         $konflikt = [];   // enthalten ↔ nicht_enthalten ohne spuren-Mittelweg ⇒ LOW + Review
         $differenz = false; // konkrete Werte unterscheiden sich auf gleicher Stufe ⇒ MED
+        $konkret = false;   // mindestens ein konkreter Wert in irgendeinem Feld — sonst ist das Profil leer (⇒ NONE)
         foreach (FoodAlchemistGp::ALLERGEN_FIELDS as $feld) {
             $raenge = $profile
                 ->map(fn ($la) => AllergenValue::tryFrom((string) $la->getAttribute("allergen_{$feld}")))
@@ -92,6 +93,9 @@ class GpAggregateService
                 ->map(fn (AllergenValue $v) => $v->rank())
                 ->unique()->values();
 
+            if ($raenge->isNotEmpty()) {
+                $konkret = true;
+            }
             if ($raenge->count() <= 1) {
                 continue;
             }
@@ -104,6 +108,13 @@ class GpAggregateService
 
         if ($konflikt !== []) {
             return ['confidence' => 'low', 'needs_review' => true, 'konflikt_felder' => $konflikt, 'n_las_mit_daten' => $profile->count()];
+        }
+
+        // Allergen-Zeilen vorhanden, aber alle 14 Werte NULL/unbekannt: das ist kein Profil, sondern eine
+        // leere Hülle (Katalog-Import ohne Deklaration). HIGH wäre hier eine Scheinsicherheit — gemessen
+        // 258 GPs auf demo (10.10.2026). Wie „keine LA-Zeile“ ⇒ NONE.
+        if (! $konkret) {
+            return ['confidence' => 'none', 'needs_review' => false, 'konflikt_felder' => [], 'n_las_mit_daten' => 0];
         }
 
         return ['confidence' => $differenz ? 'medium' : 'high', 'needs_review' => false, 'konflikt_felder' => [], 'n_las_mit_daten' => $profile->count()];
