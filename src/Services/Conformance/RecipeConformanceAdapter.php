@@ -384,8 +384,9 @@ class RecipeConformanceAdapter implements ConformanceAdapter
             }
         }
 
-        // Einheit passt nicht zur Form des Grundprodukts (Dominique 11.10.): Stück auf gemahlener Ware (Kardamom „1 Stk“ auf
-        // „gemahlen“) oder ein Volumen auf ganzer Ware (Zitrone „30 ml“ auf „ganz“ — gemeint ist der Saft).
+        // Einheit passt nicht zur Form des Grundprodukts (Dominique 11.10., hart): Stück auf gemahlener Ware (Kardamom „8 Stk“
+        // auf „gemahlen“) oder ein Volumen auf ganzer Ware (Zitrone „45 ml“ auf „ganz“) — falscher oder undefinierter EK und
+        // eine falsche Mengenkette in der Produktion. Die Begründung nennt beide Heil-Richtungen (GP-Form ODER Einheit).
         foreach ($r->ingredients as $z) {
             $gpName = (string) ($z->gp?->name ?? '');
             $dim = (string) ($z->unit?->dimension ?? '');
@@ -396,13 +397,14 @@ class RecipeConformanceAdapter implements ConformanceAdapter
             $gemahlen = array_filter($woerter, static fn ($w) => $w === 'gemahlen' || str_ends_with($w, 'pulver')) !== [];
             $ganz = in_array('ganz', $woerter, true);
             $grund = match (true) {
-                $dim === 'count' && $gemahlen => 'Stückzahl auf gemahlener Ware — Menge in Gramm angeben oder die ganze Form wählen.',
-                $dim === 'volume' && $ganz => 'Volumen auf ganzer Ware — gemeint ist vermutlich Saft oder Flüssigkeit: das passende '
-                    . 'Grundprodukt wählen (z. B. Saft) oder die Menge in Stück/Gramm angeben.',
+                $dim === 'count' && $gemahlen => 'Stückzahl auf gemahlener Ware. Je nachdem, was die Zeile meint: das Grundprodukt '
+                    . 'auf die ganze Form stellen (z. B. Kapseln, ganz) ODER die Menge in g angeben.',
+                $dim === 'volume' && $ganz => 'Volumen auf ganzer Ware. Je nachdem, was die Zeile meint: das Grundprodukt auf die '
+                    . 'flüssige Form stellen (z. B. Saft) ODER die Menge in Stück bzw. g angeben.',
                 default => null,
             };
             if ($grund !== null) {
-                $out[] = ['paragraph' => 'Einheit', 'schweregrad' => 'weich', 'feld' => 'zutat:' . $gpName,
+                $out[] = ['paragraph' => 'Einheit', 'schweregrad' => 'hart', 'feld' => 'zutat:' . $gpName,
                     'begruendung' => "Einheit „{$z->unit->slug}“ passt nicht zu „{$gpName}“: {$grund}",
                     'vorschlag' => '', 'konfidenz' => 1.0, 'quelle' => 'code', 'rule_id' => null];
             }

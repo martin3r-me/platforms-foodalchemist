@@ -10,7 +10,8 @@ use Platform\FoodAlchemist\Services\Regeln\RegelService;
  * besteht aus Basisrezepten"). Anlass demo Lauf 98: „Aroma: Butter" (3871) als eigenes Basisrezept mit 1-kg-Block für
  * 2 g, rund 30k Tokens. Die Liste ist Regel-Daten (Einstellungen › Regeln), keine Konstante; Vergleich über Wortmengen
  * nach Abzug von Merkmalen („Pfeffer schwarz, frisch gemahlen" → Pfeffer), ein Halbfabrikat („Zitronenbutter",
- * „Kräuteröl") trifft nicht. Die Kräuter-Einträge sind ein Startbestand zur Pflege.
+ * „Kräuteröl") trifft nicht. Rahmen Dominique „Finish-Kräuter"; die konkrete Kräuter-Auswahl ist von der Kuratorin
+ * (11.10.) und auf der Pflegeseite kürzbar. Limette bewusst nicht (genannt war nur Zitrone).
  */
 return new class extends Migration
 {
@@ -48,7 +49,8 @@ return new class extends Migration
                 ],
                 'falsch' => [['text' => 'Zitronenbutter'], ['text' => 'Kräuteröl'], ['text' => 'Butter braun'], ['text' => 'Pfefferkörner']],
             ],
-            'notiz' => 'Dominique 2026-10-11 (Lauf 98). Kräuter = Startbestand Finish-Kräuter, pflegbar.',
+            'notiz' => 'Dominique 2026-10-11 (Lauf 98): Butter, Öl, Salz, Pfeffer, Zitrone (Saft/Zeste), Finish-Kräuter. '
+                . 'Kräuter-Auswahl Kuratorin 11.10., Rahmen Dominique „Finish-Kräuter“. Limette nicht genannt → nicht aufgenommen.',
         ], null, true, 'migration');
     }
 

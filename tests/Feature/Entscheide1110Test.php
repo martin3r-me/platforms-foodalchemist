@@ -150,7 +150,11 @@ it('Befund: Stück auf gemahlener Ware und Volumen auf ganzer Ware; passende Ein
 
     $b = ($this->befunde)($r)->where('paragraph', 'Einheit')->values();
     expect($b->pluck('feld')->all())->toBe(['zutat:Kardamom: trocken, gemahlen', 'zutat:Zitrone: frisch, ganz'])
-        ->and($b->pluck('schweregrad')->unique()->all())->toBe(['weich']);
+        ->and($b->pluck('schweregrad')->unique()->all())->toBe(['hart'])
+        ->and($b[0]['begruendung'])->toContain('ganze Form')->toContain('in g angeben')
+        ->and($b[1]['begruendung'])->toContain('Saft')
+        // hart heißt: geht in die Selbstheilung
+        ->and(app(RecipeConformanceAdapter::class)->heilbar($this->rootTeam, (int) $r->id, $b->all()))->toHaveCount(2);
 });
 
 // ── recipes.INSTANTIATE ────────────────────────────────────────────────────────────────────────
