@@ -1164,6 +1164,8 @@ return [
                 // einem Halbsatz fachlich rechtfertigen lässt, gehört nicht ins Gericht (senkt
                 // die Rate plausibel klingender Fremdkörper VOR dem Kritiker-Pass).
                 . 'role (V-21: aroma_treiber|komponente|beilage|garnitur), '
+                // Dominique 11.10.: wofür die Zeile im Basisrezept da ist — Vokabular aus `funktionen` im Kontext.
+                . 'funktion (genau EINE aus der Liste funktionen im Kontext: wofür diese Zeile im Rezept da ist), '
                 . 'fit (EIN kurzer Halbsatz: warum gehört diese Zutat FACHLICH in DIESES Gericht)}]}. '
                 // Spec 41 B2 (§12 Regelwerk Basisrezepte): die Zutaten-Reihenfolge ist die KOCH-
                 // Reihenfolge, NICHT die Menge. Das war der reproduzierbare Fehler (Anteil-%-Sort, Fall D4).
@@ -1654,7 +1656,9 @@ return [
             'max_tokens' => 8000,                                     // Gesamt-Rezept zurück (description+preparation+zutaten) — Reasoning-Headroom
             'task' => 'Ueberarbeite das Rezept exakt nach der freien Anweisung (anweisung) — '
                 . 'aendere NUR Angefragtes, behalte ids bestehender Zutaten, neue Zutaten ohne id: '
-                . 'werte = {name, description, preparation, zutaten: [{id, text, quantity, einheit_slug}], aenderungs_notiz}.',
+                . 'werte = {name, description, preparation, zutaten: [{id, text, quantity, einheit_slug, funktion}], aenderungs_notiz}. '
+                // Dominique 11.10.: alte Rezepte bekommen die Zeilen-Funktion beim Überarbeiten (kein Backfill).
+                . 'funktion: genau EINE aus funktionen im Kontext — eine vorhandene behalten, eine fehlende ergänzen.',
         ],
         'recipe.extract' => [
             'tier' => 'C',                                            // Tier C: unset ⇒ Plattform-Default-Modell (Text ok); Vision (Bild) erst nach Core-Fix

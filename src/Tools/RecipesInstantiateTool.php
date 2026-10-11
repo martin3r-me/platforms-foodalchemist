@@ -47,6 +47,8 @@ class RecipesInstantiateTool extends FoodAlchemistTool implements ToolContract, 
                             'ingredient_id' => ['type' => 'integer', 'description' => 'Zutat-Slot-Id der Vorlage (Platzhalter).'],
                             'gp_id' => ['type' => 'integer', 'description' => 'Ziel-GP (alternativ zu referenced_recipe_id).'],
                             'referenced_recipe_id' => ['type' => 'integer', 'description' => 'Ziel-Sub-Rezept.'],
+                            'funktion' => ['type' => ['string', 'null'], 'description' => 'Optional: Funktion der Zeile (Vokabular rezeptzeile.funktion); '
+                                . 'ohne Angabe gilt die Funktion der Vorlagen-Zeile.'],
                         ],
                         'required' => ['ingredient_id'],
                     ],
@@ -85,6 +87,9 @@ class RecipesInstantiateTool extends FoodAlchemistTool implements ToolContract, 
                 $map[$slot] = ['referenced_recipe_id' => (int) $b['referenced_recipe_id']];
             } elseif (isset($b['gp_id'])) {
                 $map[$slot] = ['gp_id' => (int) $b['gp_id']];
+            }
+            if (isset($map[$slot]) && array_key_exists('funktion', $b)) {
+                $map[$slot]['funktion'] = $b['funktion'];
             }
         }
 

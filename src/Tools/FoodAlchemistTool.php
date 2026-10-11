@@ -67,8 +67,9 @@ abstract class FoodAlchemistTool
                 'is_optional' => (bool) ($z['is_optional'] ?? false),
                 'note' => $z['note'] ?? null,
                 'role' => $z['role'] ?? null,
+                'funktion' => $z['funktion'] ?? null,   // Vokabular rezeptzeile.funktion, geprüft in syncIngredients
             ];
-            foreach (['quantity_max', 'trimming_loss_pct', 'cooking_loss_pct', 'is_optional', 'note', 'role'] as $field) {
+            foreach (['quantity_max', 'trimming_loss_pct', 'cooking_loss_pct', 'is_optional', 'note', 'role', 'funktion'] as $field) {
                 if (! array_key_exists($field, $z)) {
                     unset($out[$i][$field]);
                     if ($field === 'cooking_loss_pct') {

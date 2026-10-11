@@ -53,7 +53,7 @@
             @if($w['abgelehnt'] !== [])
                 <dt class="text-[var(--fa-ink-3)]">Bestand</dt>
                 <dd class="flex flex-col gap-0.5 text-[var(--fa-ink-2)]">
-                    @foreach($w['abgelehnt'] as $a)<span>nicht übernommen: {{ $a['name'] ?? '' }} — {{ $a['grund'] ?? '' }}</span>@endforeach
+                    @foreach($w['abgelehnt'] as $a)<span>nicht übernommen: {{ $a['name'] ?? '' }} — {{ $a['grund'] ?? '' }}@if(!empty($a['verwendung'])) · sonst {{ $a['verwendung'] }}@endif</span>@endforeach
                 </dd>
             @endif
             @if($w['korrigiert'] !== [])
