@@ -81,10 +81,11 @@ it('Ausschalten wirkt sofort im Regelbuch', function () {
 it('Vokabular: der Anzeigename (label) steht im Editor und überlebt das Speichern (Teller-Rollen, 11.10.)', function () {
     $r = ($this->regel)('gericht.teller_rolle');
     $saeure = collect($r->params['werte'])->search(fn ($w) => $w['wert'] === 'saeure');
+    $basis = collect($r->params['werte'])->search(fn ($w) => $w['wert'] === 'basis');
 
     Livewire::test(Regeln::class)->call('oeffne', $r->id)
         ->assertSet("form.zeilen.{$saeure}.label", 'Säure')
-        ->set('form.zeilen.0.label', 'Tellerbasis')
+        ->set("form.zeilen.{$basis}.label", 'Tellerbasis')
         ->call('pruefeProbelauf')->call('speichern')->assertSet('fehler', null);
     RegelBuch::vergessen();
 

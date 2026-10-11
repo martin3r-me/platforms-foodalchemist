@@ -405,7 +405,7 @@ class RecipeService
                     ...$z->only(['position', 'gp_id', 'referenced_recipe_id', 'raw_text', 'display_name',
                         'quantity', 'quantity_max', 'unit_vocab_id', 'trimming_loss_pct', 'cooking_loss_pct',
                         'is_optional', 'klammer_note', 'note', 'match_method', 'match_confidence',
-                        'role', 'is_value_relevant', 'calc_mode']),
+                        'role', 'role_source', 'is_value_relevant', 'calc_mode']),
                     'team_id' => $team->id,
                 ]);
             }
@@ -1166,6 +1166,18 @@ class RecipeService
                 }
 
                 $id = ($z['id'] ?? null) !== null && $vorhanden->has((int) $z['id']) ? (int) $z['id'] : null;
+                // Herkunft der Teller-Rolle (Dominique 11.10.): bleibt die Rolle gleich, bleibt ihre Quelle; ändert sie sich,
+                // gilt die mitgegebene Quelle (Editor: manuell, Generator: ki/kaskade), ohne Angabe ist sie unbekannt (null) —
+                // nie ein erfundenes „manuell“. --alle im Klassifizier-Kommando überschreibt nur migration/ki.
+                $alteRolle = $id !== null ? $vorhanden[$id]->role : null;
+                if ($attrs['role'] === null) {
+                    $attrs['role_source'] = null;
+                } elseif ($id !== null && $attrs['role'] === $alteRolle) {
+                    $attrs['role_source'] = $vorhanden[$id]->role_source;
+                } else {
+                    $quelle = $z['role_source'] ?? null;
+                    $attrs['role_source'] = in_array($quelle, ['ki', 'kaskade', 'migration', 'manuell'], true) ? $quelle : null;
+                }
                 if ($id !== null) {
                     if ($preserveMissing) {
                         // Unveränderte Rückgabe aus GET ist keine neue KI-Entscheidung.
@@ -1178,6 +1190,9 @@ class RecipeService
                         foreach (['quantity_max', 'trimming_loss_pct', 'cooking_loss_pct', 'cooking_loss_source', 'is_optional', 'note', 'role', 'is_value_relevant'] as $field) {
                             if (! array_key_exists($field, $z)) {
                                 unset($attrs[$field]);
+                                if ($field === 'role') {
+                                    unset($attrs['role_source']);
+                                }
                             }
                         }
                     }

@@ -10,6 +10,10 @@ use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Services\SpeisenKlassenService;
 
 /**
+ * `--alle` (Dominique 11.10., nach Probelauf 2): auch Rollen aus der Umstellung bzw. von der KI neu zuordnen (aus V-21
+ * übernommene beilage/garnitur waren teils falsch, z. B. Olivenöl = beilage). Manuell gesetzte Rollen und Rollen ohne
+ * bekannte Quelle bleiben unangetastet (role_source).
+ *
  * Rollen-Umbau (Dominique 11.10.): Gerichtszeilen ohne Teller-Rolle neu klassifizieren — nach der Umstellung von V-21
  * (komponente/aroma_treiber nicht eindeutig abbildbar → leer, Altwert in role_v21). Je Gericht EIN KI-Call `vk.rollen`
  * (Gesamt-Gericht-Sicht), geschrieben wird NUR in leere Zeilen (Override-First). Resumefähig: ein Gericht ohne leere
@@ -23,6 +27,7 @@ class TellerRollenKlassifizierenCommand extends Command
     protected $signature = 'foodalchemist:teller-rollen-klassifizieren
         {--team= : Team-ID (Pflicht)}
         {--apply : schreiben; ohne = nur Scope + Kosten-Schätzung}
+        {--alle : auch schon gesetzte Rollen neu zuordnen (Quelle migration/ki) — manuelle und unbekannte bleiben}
         {--limit=0 : höchstens so viele Gerichte (0 = alle)}
         {--ab-id=0 : erst ab dieser Rezept-ID (Fortsetzen nach Abbruch)}
         {--sleep=0 : Sekunden Pause zwischen den KI-Calls}';
@@ -45,11 +50,14 @@ class TellerRollenKlassifizierenCommand extends Command
         }
         Auth::login($nutzer);
 
-        $scope = self::scope($team, (int) $this->option('ab-id'));
+        $alle = (bool) $this->option('alle');
+        $scope = self::scope($team, (int) $this->option('ab-id'), $alle);
         $gerichte = (clone $scope)->count();
-        $zeilen = DB::table('foodalchemist_recipe_ingredients')->whereIn('recipe_id', (clone $scope)->select('id'))
-            ->whereNull('deleted_at')->whereNull('role')->count();
-        $this->info("Scope: {$gerichte} Gerichte mit {$zeilen} Zeilen ohne Teller-Rolle (je Gericht 1 KI-Call).");
+        $zeilen = self::zielZeilen($alle)->whereIn('recipe_id', (clone $scope)->select('id'))->count();
+        $geschuetzt = DB::table('foodalchemist_recipe_ingredients')->whereIn('recipe_id', (clone $scope)->select('id'))->whereNull('deleted_at')
+            ->whereNotNull('role')->where(fn ($q) => $q->whereNull('role_source')->orWhereNotIn('role_source', self::UEBERSCHREIBBAR))->count();
+        $this->info("Scope: {$gerichte} Gerichte, {$zeilen} Zeilen " . ($alle ? 'werden neu zugeordnet (leer oder Quelle migration/ki)' : 'ohne Teller-Rolle')
+            . " (je Gericht 1 KI-Call). {$geschuetzt} Zeilen bleiben geschützt (manuell oder Quelle unbekannt).");
         $this->schaetzung($gerichte);
         if (! $this->option('apply')) {
             $this->line('DRY-RUN — nichts geschrieben. Ausführen mit --apply (Probe: --apply --limit=5).');
@@ -67,9 +75,8 @@ class TellerRollenKlassifizierenCommand extends Command
         $letzte = null;
         foreach ($ids as $id) {
             try {
-                $leer = DB::table('foodalchemist_recipe_ingredients')->where('recipe_id', $id)->whereNull('deleted_at')
-                    ->whereNull('role')->pluck('id')->map(fn ($v) => (int) $v)->flip();
-                $antwort = $klassen->verteileRollen($team, (int) $id);
+                $leer = self::zielZeilen($alle)->where('recipe_id', $id)->pluck('id')->map(fn ($v) => (int) $v)->flip();
+                $antwort = $klassen->verteileRollen($team, (int) $id, $alle);
                 foreach ($antwort['verworfen'] ?? [] as $zeile => $wert) {
                     if ($leer->has((int) $zeile)) {
                         $ungueltig[$wert] = ($ungueltig[$wert] ?? 0) + 1;
@@ -102,12 +109,22 @@ class TellerRollenKlassifizierenCommand extends Command
         return $fehler > 0 || $ungueltig !== [] ? self::FAILURE : self::SUCCESS;
     }
 
-    /** Gerichte des Teams mit mindestens einer Zeile ohne Teller-Rolle. */
-    public static function scope(Team $team, int $abId = 0)
+    /** Quellen, die `--alle` überschreiben darf. Manuell und unbekannt (null bei gesetzter Rolle) nie. */
+    public const UEBERSCHREIBBAR = ['migration', 'ki'];
+
+    /** Zeilen, die das Kommando schreiben darf: leer — mit `--alle` auch Rollen aus migration/ki. */
+    public static function zielZeilen(bool $alle)
+    {
+        return DB::table('foodalchemist_recipe_ingredients')->whereNull('deleted_at')
+            ->where(fn ($q) => $q->whereNull('role')->when($alle, fn ($w) => $w->orWhereIn('role_source', self::UEBERSCHREIBBAR)));
+    }
+
+    /** Gerichte des Teams mit mindestens einer Zeile, die das Kommando schreiben darf. */
+    public static function scope(Team $team, int $abId = 0, bool $alle = false)
     {
         return FoodAlchemistRecipe::query()->where('team_id', $team->id)->where('is_sales_recipe', true)
             ->when($abId > 0, fn ($q) => $q->where('id', '>=', $abId))
-            ->whereIn('id', DB::table('foodalchemist_recipe_ingredients')->whereNull('deleted_at')->whereNull('role')->select('recipe_id'));
+            ->whereIn('id', self::zielZeilen($alle)->select('recipe_id'));
     }
 
     /** Kosten aus gemessenen vk.rollen-Calls; ohne genug Messwerte bewusst keine Zahl. */

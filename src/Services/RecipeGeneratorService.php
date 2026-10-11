@@ -345,6 +345,7 @@ class RecipeGeneratorService
                     // nur gültige Rollen, sonst null (kein Insert-Crash durch Freitext).
                     // Teller-Rolle nur im Gericht (Dominique 11.10., Vokabular gericht.teller_rolle); Basisrezept-Zeilen: keine.
                     'role' => $vkModus ? \Platform\FoodAlchemist\Support\TellerRolle::kanonisch($z['role'] ?? null) : null,
+                    'role_source' => 'ki',
                     // Ausbeute-Lücke (2026-09-06): Garverlust je Zutat aus dem Vorschlag → die
                     // Verlust-Kaskade im Recompute (Zutat → GP → Team-WG → 0) greift damit auch
                     // bei Reduktion/Fond/Jus, wo alle Defaults 0 sind und der Einsatz als Yield
@@ -572,6 +573,7 @@ class RecipeGeneratorService
                     }
                     if (empty($zz['role'])) {
                         $zeilen[$zi]['role'] = $rollenDesSubs[0];
+                        $zeilen[$zi]['role_source'] = 'kaskade';   // geerbt vom eingesetzten Basisrezept
                     } elseif (! in_array($zz['role'], $rollenDesSubs, true)) {
                         $statistik['rolle_hinweise'][] = ['zeile' => (string) ($zz['display_name'] ?? ''), 'rolle' => $zz['role'],
                             'rollen_des_bausteins' => $rollenDesSubs];

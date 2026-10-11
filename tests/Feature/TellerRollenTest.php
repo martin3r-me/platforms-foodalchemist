@@ -48,7 +48,7 @@ it('Teller-Vokabular aus der Regel: Alias, Anrichte-Rang, Pairing-Gewicht; V-21-
         ->and(TellerRolle::kanonisch('knusprig'))->toBe('crunch')            // Alias nur in der Regel
         ->and(TellerRolle::kanonisch('komponente'))->toBeNull()
         ->and(TellerRolle::kanonisch('aroma_treiber'))->toBeNull()
-        ->and(TellerRolle::rang('basis'))->toBe(1)->and(TellerRolle::rang('garnitur'))->toBe(8)->and(TellerRolle::rang(null))->toBe(99)
+        ->and(TellerRolle::rang('traeger'))->toBe(1)->and(TellerRolle::rang('basis'))->toBe(2)->and(TellerRolle::rang('garnitur'))->toBe(12)->and(TellerRolle::rang(null))->toBe(99)
         ->and(TellerRolle::gewicht('sauce'))->toBe(1.5)->and(TellerRolle::gewicht('crunch'))->toBe(0.4)->and(TellerRolle::gewicht(null))->toBe(1.0)
         ->and(FoodAlchemistRule::where('schluessel', 'rezeptzeile.funktion')->value('aktiv'))->toBeFalsy();
 });
@@ -289,7 +289,7 @@ it('vk.rollen: die KI bekommt das Teller-Vokabular samt Hinweis; ein V-21-Wert w
     $erg = app(SpeisenKlassenService::class)->verteileRollen($this->rootTeam, $gericht->id);
     $text = (string) ($gesendet[0] ?? '');
 
-    expect($text)->toContain('"vokabular":["basis","protein","beilage","sauce","crunch","saeure","aroma","garnitur"]')
+    expect($text)->toContain('"vokabular":["traeger","basis","protein","hauptkomponente","beilage","frucht","sauce","crunch","eis","saeure","aroma","garnitur"]')
         ->and($text)->toContain('vokabular_hinweis')
         ->and($text)->toContain('UNGUELTIG')
         ->and($erg['rollen'])->toBe([$jus->id => 'sauce'])
@@ -351,7 +351,7 @@ it('Regel-Block: ein neuer Wert in gericht.teller_rolle steht im gesendeten Prom
     $regelBlock = collect($gesendet[0] ?? [])->first(fn ($m) => $m['role'] === 'system' && str_contains((string) $m['content'], 'VERBINDLICHE REGELN'));
 
     expect($regelBlock)->not->toBeNull()
-        ->and($regelBlock['content'])->toContain('basis, protein, beilage, sauce, crunch, saeure, aroma, garnitur, testrolle')
+        ->and($regelBlock['content'])->toContain('traeger, basis, protein, hauptkomponente, beilage, frucht, sauce, crunch, eis, saeure, aroma, garnitur, testrolle')
         ->and($regelBlock['content'])->toContain('Anrichte-Reihenfolge');
 });
 
@@ -383,4 +383,134 @@ it('Anzeigenamen kommen aus der Regel (werte[].label); ein neuer Wert ohne Label
         'titel', 'art', 'ziel', 'wirkung', 'beispiele', 'dossier_slug']), 'params' => $params], null, null, 'test');
 
     expect(TellerRolle::labels())->toMatchArray(['saeure' => 'Säure', 'basis' => 'Basis', 'kraeuter_akzent' => 'Kraeuter akzent']);
+});
+
+// ── Erweiterung nach Probelauf 2 (Dominique 11.10.) ──────────────────────────────────────────────
+
+it('Neue Rollen hauptkomponente/eis/frucht/traeger in der Anrichte-Reihenfolge, mit Label; Pairing-Gewicht bewusst 1,0', function () {
+    expect(TellerRolle::werte())->toBe(['traeger', 'basis', 'protein', 'hauptkomponente', 'beilage', 'frucht', 'sauce', 'crunch', 'eis',
+        'saeure', 'aroma', 'garnitur'])
+        ->and(TellerRolle::labels())->toMatchArray(['traeger' => 'Träger', 'hauptkomponente' => 'Hauptkomponente', 'frucht' => 'Frucht', 'eis' => 'Eis'])
+        ->and(TellerRolle::gewicht('eis'))->toBe(1.0)->and(TellerRolle::gewicht('hauptkomponente'))->toBe(1.0)
+        ->and(TellerRolle::gewicht('sauce'))->toBe(1.5);
+});
+
+it('Neue Rollen werden im Gericht zum Basisrezept (außer Kleinstmengen)', function () {
+    $res = app(RecipeGeneratorService::class)->generiere($this->rootTeam, 'Test', [], [
+        'name' => '[DES] Parfait', 'zutaten' => [
+            ['text' => 'Parfait: Haselnuss', 'quantity' => 80, 'unit' => 'g', 'role' => 'hauptkomponente'],
+            ['text' => 'Sorbet: Himbeere', 'quantity' => 40, 'unit' => 'g', 'role' => 'eis'],
+        ]], vkModus: true);
+
+    expect(collect($res['offene'])->pluck('primaer')->unique()->values()->all())->toBe(['basisrezept_anlegen']);
+});
+
+it('role_source: Rückfüllung — Rolle wie im V-21-Archiv = migration, sonst unbekannt (kein erfundenes Etikett)', function () {
+    $g = $this->makeRecipe($this->rootTeam, '[HG] Filet', ['status' => 'draft', 'is_sales_recipe' => true]);
+    $a = $this->makeIngredient($g, 'Kartoffeln', null, '150', 1);
+    $b = $this->makeIngredient($g, 'Jus', null, '60', 2);
+    DB::table('foodalchemist_recipe_ingredients')->where('id', $a->id)->update(['role' => 'beilage', 'role_v21' => 'beilage']);
+    DB::table('foodalchemist_recipe_ingredients')->where('id', $b->id)->update(['role' => 'sauce', 'role_v21' => 'aroma_treiber']);
+    Schema::table('foodalchemist_recipe_ingredients', fn ($t) => $t->dropColumn('role_source'));
+
+    (require dirname(__DIR__, 2) . '/database/migrations/2026_10_17_100000_recipe_ingredients_role_source.php')->up();
+
+    expect(DB::table('foodalchemist_recipe_ingredients')->where('id', $a->id)->value('role_source'))->toBe('migration')
+        ->and(DB::table('foodalchemist_recipe_ingredients')->where('id', $b->id)->value('role_source'))->toBeNull();
+});
+
+it('role_source je Schreibweg: Generator ki, geerbt kaskade, Editor-Änderung manuell, unverändert behält, MCP ki', function () {
+    $jus = $this->makeRecipe($this->rootTeam, 'Jus: Rind');
+    app(RecipeRollenService::class)->setze($jus->id, ['sauce'], 'vorschlag');
+    $r = app(RecipeGeneratorService::class)->generiere($this->rootTeam, 'Test', [], ['name' => '[HG] Filet', 'zutaten' => [
+        ['text' => 'Püree: Sellerie', 'quantity' => 120, 'unit' => 'g', 'role' => 'basis'],
+        ['text' => 'Jus: Rind', 'quantity' => 60, 'unit' => 'g', 'sub_rezept_id' => $jus->id],
+    ]], vkModus: true)['recipe'];
+    $z = fn () => $r->ingredients()->orderBy('position')->get()->keyBy('display_name');
+    expect($z()['Püree: Sellerie']->role_source)->toBe('ki')->and($z()['Jus: Rind']->role_source)->toBe('kaskade');
+
+    $zeilen = fn (array $rollen) => $z()->values()->map(fn ($x) => ['id' => $x->id, 'gp_id' => $x->gp_id, 'referenced_recipe_id' => $x->referenced_recipe_id,
+        'display_name' => $x->display_name, 'raw_text' => $x->raw_text, 'quantity' => (string) $x->quantity, 'unit_vocab_id' => $x->unit_vocab_id,
+        'role' => $rollen[$x->display_name] ?? $x->role])->all();
+    Livewire\Livewire::test(\Platform\FoodAlchemist\Livewire\Recipes\IngredientEditor::class, ['recipeId' => $r->id])
+        ->call('speichern', $zeilen(['Püree: Sellerie' => 'beilage']));
+    expect($z()['Püree: Sellerie']->role_source)->toBe('manuell')->and($z()['Jus: Rind']->role_source)->toBe('kaskade');
+
+    app(ToolRegistry::class)->get('foodalchemist.recipe_ingredients.PUT')->execute(['recipe_id' => $r->id, 'zutaten' => array_map(
+        fn ($x) => ['id' => $x['id'], 'name' => $x['display_name'], 'quantity' => (float) $x['quantity'], 'unit' => 'g',
+            ...($x['referenced_recipe_id'] ? ['referenced_recipe_id' => $x['referenced_recipe_id']] : []), 'role' => $x['display_name'] === 'Jus: Rind' ? 'aroma' : $x['role']],
+        $zeilen([]))], new ToolContext($this->user, $this->rootTeam));
+    expect($z()['Jus: Rind']->role_source)->toBe('ki')->and($z()['Püree: Sellerie']->role_source)->toBe('manuell');
+});
+
+it('Kommando --alle: ordnet leere, migration- und ki-Rollen neu zu; manuelle und unbekannte bleiben; ohne Echo der Altwerte', function () {
+    $g = $this->makeRecipe($this->rootTeam, '[HG] Filet', ['status' => 'draft', 'is_sales_recipe' => true]);
+    $zeile = fn (string $t, ?string $rolle, ?string $quelle, int $pos) => tap($this->makeIngredient($g, $t, null, '10', $pos))
+        ->update(['role' => $rolle, 'role_source' => $quelle]);
+    $leer = $zeile('Rinderfilet', null, null, 1);
+    $mig = $zeile('Olivenöl', 'beilage', 'migration', 2);
+    $ki = $zeile('Kresse', 'garnitur', 'ki', 3);
+    $hand = $zeile('Jus', 'sauce', 'manuell', 4);
+    $unbekannt = $zeile('Senf', 'saeure', null, 5);
+    $gesendet = new ArrayObject;
+    app()->bind(\Platform\FoodAlchemist\Services\Ai\FakeAiProvider::class, fn () => new class($gesendet, [$leer->id, $mig->id, $ki->id, $hand->id, $unbekannt->id]) extends \Platform\FoodAlchemist\Services\Ai\FakeAiProvider
+    {
+        public function __construct(private ArrayObject $gesendet, private array $ids)
+        {
+        }
+
+        public function chat(array $messages, array $options = []): array
+        {
+            $this->gesendet->append(implode("\n", array_map(fn ($m) => (string) $m['content'], $messages)));
+            $werte = ['rollen' => array_combine($this->ids, ['protein', 'aroma', 'garnitur', 'aroma', 'aroma'])];
+
+            return ['content' => json_encode(['werte' => $werte, 'confidence' => 0.8, 'reasoning' => 'stub']),
+                'usage' => ['input_tokens' => 0, 'output_tokens' => 0], 'model' => 'fake', 'tool_calls' => null];
+        }
+    });
+
+    $this->artisan('foodalchemist:teller-rollen-klassifizieren', ['--team' => $this->rootTeam->id, '--alle' => true])
+        // eine Ausgabezeile — expectsOutputToContain verbraucht die getroffene Zeile, darum ein Ausschnitt über beide Zahlen
+        ->expectsOutputToContain('3 Zeilen werden neu zugeordnet (leer oder Quelle migration/ki) (je Gericht 1 KI-Call). 2 Zeilen bleiben geschützt')
+        ->assertSuccessful();
+    $this->artisan('foodalchemist:teller-rollen-klassifizieren', ['--team' => $this->rootTeam->id, '--alle' => true, '--apply' => true])->assertSuccessful();
+    $text = (string) ($gesendet[0] ?? '');
+
+    expect([$leer->fresh()->role, $mig->fresh()->role, $ki->fresh()->role, $hand->fresh()->role, $unbekannt->fresh()->role])
+        ->toBe(['protein', 'aroma', 'garnitur', 'sauce', 'saeure'])
+        ->and($mig->fresh()->role_source)->toBe('ki')
+        // Echo: die manuelle Rolle bleibt als Kontext sichtbar, die zu überschreibenden (migration/ki) nicht
+        ->and($text)->toContain('[sauce]')->and($text)->not->toContain('[beilage]')->and($text)->not->toContain('[garnitur]');
+});
+
+it('role_source: belegte Rückfüllung — vk.rollen-Call nach der Umstellung → ki, ohne Beleg bleibt unbekannt', function () {
+    $umstellung = FoodAlchemistRule::where('schluessel', TellerRolle::SCHLUESSEL)->value('created_at');
+    $mitCall = $this->makeRecipe($this->rootTeam, '[HG] Probe', ['status' => 'draft', 'is_sales_recipe' => true]);
+    $ohneCall = $this->makeRecipe($this->rootTeam, '[HG] Ohne', ['status' => 'draft', 'is_sales_recipe' => true]);
+    $a = $this->makeIngredient($mitCall, 'Wiener', null, '100', 1);
+    $b = $this->makeIngredient($ohneCall, 'Senf', null, '10', 1);
+    foreach ([$a, $b] as $z) {
+        DB::table('foodalchemist_recipe_ingredients')->where('id', $z->id)->update(['role' => 'protein', 'role_v21' => 'komponente', 'updated_at' => now()->addMinute()]);
+    }
+    DB::table('foodalchemist_ai_call_log')->insert(['uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(), 'team_id' => $this->rootTeam->id,
+        'feature' => 'vk.rollen', 'target_table' => 'foodalchemist_recipes', 'target_id' => $mitCall->id,
+        'created_at' => \Illuminate\Support\Carbon::parse($umstellung)->addSecond(), 'updated_at' => now()]);
+    Schema::table('foodalchemist_recipe_ingredients', fn ($t) => $t->dropColumn('role_source'));
+
+    (require dirname(__DIR__, 2) . '/database/migrations/2026_10_17_100000_recipe_ingredients_role_source.php')->up();
+
+    expect(DB::table('foodalchemist_recipe_ingredients')->where('id', $a->id)->value('role_source'))->toBe('ki')
+        ->and(DB::table('foodalchemist_recipe_ingredients')->where('id', $b->id)->value('role_source'))->toBeNull();
+});
+
+it('MCP recipe_ingredients.PUT: role_source=manuell auf ausdrückliche Vorgabe; nur manuell erlaubt', function () {
+    $g = $this->makeRecipe($this->rootTeam, '[HG] Filet', ['status' => 'draft', 'is_sales_recipe' => true]);
+    $z = $this->makeIngredient($g, 'Jus', ($this->gp)('Kalbsjus: konserviert'), '60', 1);
+    $put = fn (array $extra) => app(ToolRegistry::class)->get('foodalchemist.recipe_ingredients.PUT')->execute(['recipe_id' => $g->id, 'zutaten' => [
+        ['id' => $z->id, 'name' => 'Jus', 'gp_id' => $z->gp_id, 'quantity' => 60, 'unit' => 'g', ...$extra]]], new ToolContext($this->user, $this->rootTeam));
+
+    expect($put(['role' => 'sauce', 'role_source' => 'manuell'])->success)->toBeTrue()
+        ->and($z->fresh()->role_source)->toBe('manuell')
+        ->and($put(['role' => 'aroma', 'role_source' => 'ki'])->errorCode)->toBe('VALIDATION_ERROR')
+        ->and($z->fresh()->role)->toBe('sauce');
 });
