@@ -39,7 +39,8 @@ class RecipeConformanceAdapter implements ConformanceAdapter
      *    bleibt er heilbar.
      *  · Beschreibung/Zubereitung, die von Hand gepflegt sind — revise schreibt sie nie (siehe unten).
      *  · §6.5 Garverlust/Einkochverlust: revise setzt `cooking_loss_pct` nicht, der Befund überlebt jede Runde
-     *    (demo Lauf 87: 3798/3799/3800 je 3 Calls ≈ 33k Tokens für nichts). Bis Paket 11 (Garverlust-Tabelle).
+     *    (demo Lauf 87: 3798/3799/3800 je 3 Calls ≈ 33k Tokens für nichts). Der Code-Befund (garverlustBefunde) bleibt
+     *    darum stehen, bis ein Mensch oder die Generierung den Verlust setzt — kein Heilversuch.
      * Im Zweifel heilbar: ein Feld, das keiner Zeile zuzuordnen ist, bleibt drin.
      */
     public function heilbar(Team $team, int $id, array $befunde): array
@@ -100,6 +101,40 @@ class RecipeConformanceAdapter implements ConformanceAdapter
         }));
     }
 
+    /** Typen, die einkochen (Regelwerk Basisrezepte §6.5). */
+    private const EINKOCH_TYPEN = ['Jus', 'Fond', 'Reduktion', 'Brühe', 'Sirup', 'Konfitüre'];
+
+    /**
+     * §6.5 im Code statt im KI-Urteil (Kuratorin 11.10.). Gemessen auf demo (Jus/Fond/Reduktion/Brühe/Sirup seit 3800):
+     * ohne Verlust sind fast nur Zeilen, die zu Recht keinen haben — Salz, Pfeffer, Zucker, Butter zum Montieren,
+     * Konzentrat, Unterrezept-Zeilen. Darum: eine FLÜSSIGKEITS-Zeile (Volumen-Einheit, kein Unterrezept — dessen
+     * Verlust steht in seiner eigenen Ausbeute) ohne Verlust ist hart, mit Zeilenangabe; und ein Rezept, in dem KEINE
+     * Zeile einen Verlust trägt. Zukauf/teilfertig kocht nicht ein (Brühe aus Konzentrat verdünnt nur).
+     *
+     * @return list<array<string, mixed>>
+     */
+    private static function garverlustBefunde(\Platform\FoodAlchemist\Models\FoodAlchemistRecipe $r, string $typ): array
+    {
+        if ($r->is_sales_recipe || ! in_array($typ, self::EINKOCH_TYPEN, true)
+            || in_array($r->production_depth, ['convenience', 'teilfertig'], true) || $r->ingredients->isEmpty()) {
+            return [];
+        }
+        $befund = static fn (string $feld, string $grund) => ['paragraph' => '§6.5', 'schweregrad' => 'hart', 'feld' => $feld,
+            'begruendung' => $grund, 'vorschlag' => '', 'konfidenz' => 1.0, 'quelle' => 'code', 'rule_id' => null];
+        if ($r->ingredients->every(fn ($z) => $z->cooking_loss_pct === null)) {
+            return [$befund('zutaten', "{$typ} kocht ein, aber keine Zeile trägt einen Garverlust (§6.5) — Ausbeute stimmt nicht.")];
+        }
+        $out = [];
+        foreach ($r->ingredients as $z) {
+            if ($z->cooking_loss_pct === null && $z->referenced_recipe_id === null && $z->unit?->dimension === 'volume') {
+                $text = (string) ($z->gp?->name ?? $z->display_name ?? $z->raw_text);
+                $out[] = $befund('zutat:' . $text, "Flüssigkeit „{$text}“ im {$typ} ohne Garverlust (§6.5) — Einkochverlust angeben.");
+            }
+        }
+
+        return $out;
+    }
+
     /** §6.5 / F6.5 (auch „§6.5a", „Regelwerk … §6.5") oder ein Garverlust-Feld. */
     private static function istGarverlust(string $paragraph, string $feld): bool
     {
@@ -107,9 +142,16 @@ class RecipeConformanceAdapter implements ConformanceAdapter
             || preg_match('/cooking_loss|garverlust|einkochverlust/iu', $feld) === 1;
     }
 
-    /** §1.x-KI-Befund über den Klammerzusatz „(Zukauf)" — Hausentscheidung „Typ: Ware (Zukauf)", kein Verstoß (Lauf 92). */
+    /**
+     * §1.x-KI-Befund über den Klammerzusatz „(Zukauf)" — Hausentscheidung „Typ: Ware (Zukauf)", kein Verstoß (Lauf 92).
+     * §6.5 Garverlust/Einkochverlust aus der KI: das ist ein Fakt im Feld `cooking_loss_pct`, den der Code prüft
+     * ({@see self::garverlustBefunde}) — das KI-Urteil dazu war ein Dauer-Fehlalarm (sie sah das Feld nicht).
+     */
     public function istBekannteAusnahme(array $befund): bool
     {
+        if (self::istGarverlust((string) ($befund['paragraph'] ?? ''), (string) ($befund['feld'] ?? ''))) {
+            return true;
+        }
         $zusatz = \Platform\FoodAlchemist\Services\ZukaufBasisrezeptService::ZUSATZ;
         $text = (string) ($befund['feld'] ?? '') . ' ' . (string) ($befund['begruendung'] ?? '') . ' ' . (string) ($befund['vorschlag'] ?? '');
 
@@ -410,6 +452,10 @@ class RecipeConformanceAdapter implements ConformanceAdapter
             }
         }
 
+        if ($typ !== null) {
+            array_push($out, ...self::garverlustBefunde($r, $typ));
+        }
+
         $kostform = $r->spec_is_vegan ? $buch::falls('ernaehrung.vegan') : ($r->spec_is_vegetarian ? $buch::falls('ernaehrung.vegetarisch') : null);
         if ($kostform !== null) {
             foreach ($r->ingredients as $z) {
@@ -534,6 +580,10 @@ class RecipeConformanceAdapter implements ConformanceAdapter
                 'einheit_slug' => $z->unit?->slug,
                 'geerdet' => $z->gp_id !== null || $z->referenced_recipe_id !== null,
                 'ist_sub_rezept' => $z->referenced_recipe_id !== null || isset($geplant[(int) $z->id]),
+                // §6.5: ohne diese zwei Felder meldete die Prüf-KI „Einkochverlust fehlt“ bei JEDEM Rezept (demo 3880: 16 von
+                // 17 Zeilen mit Verlust). Geprüft wird §6.5 im Code (deterministischeBefunde); die Felder sind Kontext.
+                'garverlust_pct' => $z->cooking_loss_pct !== null ? (float) $z->cooking_loss_pct : null,
+                'garverlust_quelle' => $z->cooking_loss_source,
             ] + (isset($geplant[(int) $z->id]) && $z->referenced_recipe_id === null
                 ? ['unterrezept_in_arbeit' => 'wird in diesem Lauf als eigenes Basisrezept gebaut und danach verknüpft — kein Verstoß']
                 : []))->values()->all(),
