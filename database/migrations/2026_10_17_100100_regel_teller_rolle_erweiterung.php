@@ -39,6 +39,15 @@ return new class extends Migration
                 }
                 $params = (array) $r->params;
                 $params['werte'] = [...$werte, ...array_values($bisher)];   // gepflegte Zusatzwerte bleiben, hinten
+                // Ein neuer Wert darf nicht mehr als Alias bei einem anderen stehen (die erste Fassung führte „hauptkomponente“
+                // als Alias von protein — die Normalisierung mappte den richtigen KI-Wert zurück, demo 11.10.).
+                $neueWerte = array_map(static fn ($w) => \Platform\FoodAlchemist\Services\Regeln\RegelText::norm((string) $w['wert']), $params['werte']);
+                foreach ($params['werte'] as $i => $w) {
+                    if (! empty($w['aliase'])) {
+                        $params['werte'][$i]['aliase'] = array_values(array_filter((array) $w['aliase'], static fn ($a) =>
+                            ! in_array(\Platform\FoodAlchemist\Services\Regeln\RegelText::norm((string) $a), $neueWerte, true)));
+                    }
+                }
                 $svc->speichere([...$r->only(['schluessel', 'regelwerk', 'paragraph', 'titel', 'art', 'ziel', 'wirkung', 'beispiele',
                     'dossier_slug']), 'params' => $params,
                     'notiz' => trim(((string) $r->notiz) . ' 11.10. (Probelauf 2): + hauptkomponente (Hauptelement ohne Protein: Mousse, '
