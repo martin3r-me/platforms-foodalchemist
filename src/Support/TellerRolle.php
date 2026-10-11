@@ -5,13 +5,11 @@ namespace Platform\FoodAlchemist\Support;
 use Platform\FoodAlchemist\Services\Regeln\Arten\Vokabular;
 use Platform\FoodAlchemist\Services\Regeln\Arten\Zuordnung;
 use Platform\FoodAlchemist\Services\Regeln\RegelBuch;
-use Platform\FoodAlchemist\Services\Regeln\RegelText;
-use Platform\FoodAlchemist\Services\SpeisenKlassenService;
 
 /**
  * Teller-Rolle einer Gerichtszeile (Dominique 11.10.): Vokabular aus der Regel `gericht.teller_rolle` — die Reihenfolge
- * der Werte ist die Anrichte-Reihenfolge. Pairing-Gewichte aus `pairing.rollen_gewicht`. {@see SpeisenKlassenService::ROLLEN}
- * ist Rückfall, wenn die Regel fehlt oder aus ist.
+ * der Werte ist die Anrichte-Reihenfolge. Pairing-Gewichte aus `pairing.rollen_gewicht`. EINE Quelle (Spec 81 E): fehlt
+ * die Regel oder ist sie aus, gibt es keine Rollen (leere Liste, RegelBuch loggt) — keine zweite, fest codierte Liste.
  */
 final class TellerRolle
 {
@@ -41,7 +39,7 @@ final class TellerRolle
         $werte = $regel !== null ? array_values(array_filter(array_map(static fn ($w) => is_array($w) ? (string) ($w['wert'] ?? '') : '',
             (array) ($regel->params['werte'] ?? [])), 'strlen')) : [];
 
-        return $werte !== [] ? $werte : SpeisenKlassenService::ROLLEN;
+        return $werte;
     }
 
     /** Kanonische Rolle (auch über Alias „säure“ → saeure) oder null. */
@@ -51,12 +49,8 @@ final class TellerRolle
             return null;
         }
         $regel = RegelBuch::falls(self::SCHLUESSEL);
-        if ($regel !== null) {
-            return app(Vokabular::class)->kanonisch($regel, $wert);
-        }
-        $n = RegelText::norm($wert);
 
-        return in_array($n, SpeisenKlassenService::ROLLEN, true) ? $n : null;
+        return $regel !== null ? app(Vokabular::class)->kanonisch($regel, $wert) : null;
     }
 
     /** Anrichte-Rang (1 = zuerst auf den Teller); unbekannt/leer = 99. */

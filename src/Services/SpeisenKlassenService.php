@@ -16,12 +16,6 @@ use Platform\FoodAlchemist\Services\Ai\AiGatewayService;
  */
 class SpeisenKlassenService
 {
-    /**
-     * Teller-Rollen (Dominique 11.10.) — nur RÜCKFALL, wenn die Regel `gericht.teller_rolle` fehlt; maßgeblich ist
-     * {@see \Platform\FoodAlchemist\Support\TellerRolle::werte}. Reihenfolge = Anrichte-Reihenfolge. Altwerte V-21
-     * (aroma_treiber|komponente|beilage|garnitur) stehen in recipe_ingredients.role_v21.
-     */
-    public const ROLLEN = ['basis', 'protein', 'beilage', 'sauce', 'crunch', 'saeure', 'aroma', 'garnitur'];
 
     public function __construct(private AiGatewayService $ki)
     {
@@ -117,8 +111,8 @@ class SpeisenKlassenService
             'vokabular' => \Platform\FoodAlchemist\Support\TellerRolle::werte(),
             // demo Probelauf 11.10.: der Kanon (Regelwerk §12) nannte noch V-21 — die KI lieferte komponente/aroma_treiber.
             // Die Regel gericht.teller_rolle ist maßgeblich; Altwerte aus älteren Texten sind ausdrücklich ungültig.
-            'vokabular_hinweis' => 'Nur Werte aus vokabular. V-21-Werte (aroma_treiber, komponente) aus aelteren Regelwerk-Texten sind '
-                . 'UNGUELTIG: Hauptkomponente = protein, Sauce/Jus/Fond als Untergrund = sauce, Pueree als Tellerbasis = basis.',
+            'vokabular_hinweis' => 'Nur Werte aus vokabular (= Regel gericht.teller_rolle). Die alten Werte aroma_treiber und komponente '
+                . 'sind UNGUELTIG, auch wenn ein Text sie noch nennt.',
         ], ['target_table' => 'foodalchemist_recipes', 'target_id' => $r->id]);   // B-1: Call-Log ↔ Rezept
 
         $gueltig = [];
