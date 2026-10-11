@@ -18,6 +18,25 @@ final class TellerRolle
     public const GEWICHT_SCHLUESSEL = 'pairing.rollen_gewicht';
 
     /**
+     * @return list<array{wert: string, label: string, beschreibung: string}> die Rollen samt Anzeigename und Bedeutung, in
+     *         Anrichte-Reihenfolge — für den KI-Kontext (Wert und Bedeutung nebeneinander).
+     */
+    public static function eintraege(): array
+    {
+        $regel = RegelBuch::falls(self::SCHLUESSEL);
+        $labels = self::labels();
+        $out = [];
+        foreach ((array) ($regel?->params['werte'] ?? []) as $w) {
+            $wert = is_array($w) ? trim((string) ($w['wert'] ?? '')) : '';
+            if ($wert !== '') {
+                $out[] = ['wert' => $wert, 'label' => $labels[$wert] ?? $wert, 'beschreibung' => trim((string) ($w['beschreibung'] ?? ''))];
+            }
+        }
+
+        return $out;
+    }
+
+    /**
      * @return array<string, string> Rolle => Anzeigename in Anrichte-Reihenfolge — aus der Regel (`werte[].label`, pflegbar),
      *         sonst der Wert mit großem Anfangsbuchstaben. Keine zweite Liste im Code (Spec 81 E).
      */

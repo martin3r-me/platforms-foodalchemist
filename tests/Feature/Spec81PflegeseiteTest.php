@@ -91,3 +91,16 @@ it('Vokabular: der Anzeigename (label) steht im Editor und überlebt das Speiche
 
     expect(\Platform\FoodAlchemist\Support\TellerRolle::labels())->toMatchArray(['basis' => 'Tellerbasis', 'saeure' => 'Säure']);
 });
+
+it('Vokabular: die Bedeutung (beschreibung) steht im Editor und überlebt das Speichern', function () {
+    $r = ($this->regel)('gericht.teller_rolle');
+    $protein = collect($r->params['werte'])->search(fn ($w) => $w['wert'] === 'protein');
+
+    Livewire::test(Regeln::class)->call('oeffne', $r->id)
+        ->assertSet("form.zeilen.{$protein}.beschreibung", fn ($b) => str_starts_with((string) $b, 'Hauptelement aus Fleisch'))
+        ->set("form.zeilen.{$protein}.beschreibung", 'Fleisch, Fisch, Ei — sonst nicht.')
+        ->call('pruefeProbelauf')->call('speichern')->assertSet('fehler', null);
+
+    expect(collect(($this->regel)('gericht.teller_rolle')->params['werte'])->firstWhere('wert', 'protein')['beschreibung'])
+        ->toBe('Fleisch, Fisch, Ei — sonst nicht.');
+});

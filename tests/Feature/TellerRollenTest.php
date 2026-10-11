@@ -289,7 +289,8 @@ it('vk.rollen: die KI bekommt das Teller-Vokabular samt Hinweis; ein V-21-Wert w
     $erg = app(SpeisenKlassenService::class)->verteileRollen($this->rootTeam, $gericht->id);
     $text = (string) ($gesendet[0] ?? '');
 
-    expect($text)->toContain('"vokabular":["traeger","basis","protein","hauptkomponente","beilage","frucht","sauce","crunch","eis","saeure","aroma","garnitur"]')
+    // seit Probelauf 3: vokabular als {wert, label, beschreibung} — Wert und Bedeutung nebeneinander
+    expect($text)->toContain('"vokabular":[{"wert":"traeger"')->and($text)->toContain('"wert":"garnitur"')
         ->and($text)->toContain('vokabular_hinweis')
         ->and($text)->toContain('UNGUELTIG')
         ->and($erg['rollen'])->toBe([$jus->id => 'sauce'])
@@ -351,7 +352,7 @@ it('Regel-Block: ein neuer Wert in gericht.teller_rolle steht im gesendeten Prom
     $regelBlock = collect($gesendet[0] ?? [])->first(fn ($m) => $m['role'] === 'system' && str_contains((string) $m['content'], 'VERBINDLICHE REGELN'));
 
     expect($regelBlock)->not->toBeNull()
-        ->and($regelBlock['content'])->toContain('traeger, basis, protein, hauptkomponente, beilage, frucht, sauce, crunch, eis, saeure, aroma, garnitur, testrolle')
+        ->and($regelBlock['content'])->toContain('· traeger — ')->and($regelBlock['content'])->toContain('· testrolle')
         ->and($regelBlock['content'])->toContain('Anrichte-Reihenfolge');
 });
 
@@ -513,4 +514,46 @@ it('MCP recipe_ingredients.PUT: role_source=manuell auf ausdrückliche Vorgabe; 
         ->and($z->fresh()->role_source)->toBe('manuell')
         ->and($put(['role' => 'aroma', 'role_source' => 'ki'])->errorCode)->toBe('VALIDATION_ERROR')
         ->and($z->fresh()->role)->toBe('sauce');
+});
+
+/**
+ * Probelauf 3 (demo, Call 2847): trotz Dossier §12 v10 vergab die KI Kokos-Milchreis, Ochsenherztomate und alle Häppchen
+ * einer Fingerfood-Platte als protein. Die Abgrenzung muss im Prompt DIREKT neben dem Wert stehen.
+ */
+it('vk.rollen: die Bedeutung steht im gesendeten Prompt neben dem Wert — im Regel-Block und im Kontext', function () {
+    $gericht = $this->makeRecipe($this->rootTeam, '[DES] Kokos-Milchreis', ['status' => 'draft', 'is_sales_recipe' => true]);
+    $this->makeIngredient($gericht, 'Milchreis: Kokos', null, '150', 1);
+    $gesendet = new ArrayObject;
+    app()->bind(\Platform\FoodAlchemist\Services\Ai\FakeAiProvider::class, fn () => new class($gesendet) extends \Platform\FoodAlchemist\Services\Ai\FakeAiProvider
+    {
+        public function __construct(private ArrayObject $gesendet)
+        {
+        }
+
+        public function chat(array $messages, array $options = []): array
+        {
+            $this->gesendet->append($messages);
+
+            return ['content' => json_encode(['werte' => ['rollen' => []], 'confidence' => 0.8, 'reasoning' => 'stub']),
+                'usage' => ['input_tokens' => 0, 'output_tokens' => 0], 'model' => 'fake', 'tool_calls' => null];
+        }
+    });
+
+    app(SpeisenKlassenService::class)->verteileRollen($this->rootTeam, $gericht->id);
+    $nachrichten = collect($gesendet[0] ?? []);
+    $regelBlock = (string) ($nachrichten->first(fn ($m) => str_contains((string) $m['content'], 'VERBINDLICHE REGELN'))['content'] ?? '');
+    $alles = $nachrichten->map(fn ($m) => (string) $m['content'])->implode("\n");
+
+    expect($regelBlock)->toContain('· protein — Hauptelement aus Fleisch, Fisch, Meeresfrüchten, Ei, Käse (z. B. Burrata), Tofu, Tempeh, Seitan — sonst NICHT.')
+        ->and($regelBlock)->toContain('· hauptkomponente — Jedes andere Hauptelement: Gemüse (Ochsenherztomate), Pasta, Milchreis')
+        ->and($regelBlock)->toContain('jedes eigenständige Häppchen eine Hauptkomponente')
+        ->and($alles)->toMatch('/"wert":"protein","label":"Protein","beschreibung":"Hauptelement aus Fleisch/u');
+});
+
+it('Typ-Vokabular ohne Bedeutungen bleibt im Regel-Block bei der kompakten Liste', function () {
+    $block = (string) app(\Platform\FoodAlchemist\Services\Regeln\RegelPromptBlock::class)->fuerPromptKey('vk.rollen');
+
+    expect($block)->toContain('nur diese Werte (in dieser Reihenfolge):')
+        ->and((string) app(\Platform\FoodAlchemist\Services\Regeln\RegelPromptBlock::class)->fuerPromptKey('recipe.name_putzen'))
+        ->not->toContain('nur diese Werte (in dieser Reihenfolge):');
 });

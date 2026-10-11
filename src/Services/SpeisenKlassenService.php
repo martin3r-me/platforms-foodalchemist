@@ -111,7 +111,8 @@ class SpeisenKlassenService
             'gericht' => $r->name,
             'zutaten' => $zeilen,
             'rollen' => $r->ingredients->mapWithKeys(fn ($z) => [$z->id => $echo($z)])->filter()->all(),  // Kontext-Echo
-            'vokabular' => \Platform\FoodAlchemist\Support\TellerRolle::werte(),
+            // Wert, Anzeigename und Bedeutung nebeneinander (Probelauf 3: ohne Bedeutung zog die KI alles zu protein).
+            'vokabular' => \Platform\FoodAlchemist\Support\TellerRolle::eintraege(),
             // demo Probelauf 11.10.: der Kanon (Regelwerk §12) nannte noch V-21 — die KI lieferte komponente/aroma_treiber.
             // Die Regel gericht.teller_rolle ist maßgeblich; Altwerte aus älteren Texten sind ausdrücklich ungültig.
             'vokabular_hinweis' => 'Nur Werte aus vokabular (= Regel gericht.teller_rolle). Die alten Werte aroma_treiber und komponente '
