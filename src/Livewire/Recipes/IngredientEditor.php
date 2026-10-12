@@ -51,7 +51,7 @@ class IngredientEditor extends Component
     /** Lesen/Suchen im Katalog darf auch ohne Sperre laufen (schreibt nichts). */
     protected function sperrFreiExtra(): array
     {
-        return ['beiModalClosed', 'garverlustVorschlag', 'gpArtikel', 'ersatzFuer', 'sucheZiel', 'browseKatalog', 'zielDaten', 'ekFuerZiel'];
+        return ['beiModalClosed', 'garverlustVorschlag', 'gpArtikel', 'rezeptVorschau', 'ersatzFuer', 'sucheZiel', 'browseKatalog', 'zielDaten', 'ekFuerZiel'];
     }
 
     public ?int $recipeId = null;
@@ -215,6 +215,48 @@ class IngredientEditor extends Component
                 ];
             })
             ->sortByDesc('lead')->values()->all();
+    }
+
+    /**
+     * Rezept-Peek (Dominique 2026-10-12): das Buch-Symbol an einer Unterrezept-Zeile zeigt eine
+     * Schnellvorschau wie der Würfel beim Grundprodukt — Zutaten, Ertrag, EK, Status — ohne den
+     * Editor zu verlassen. Vorher sprang es in den vollen Editor und ersetzte das offene Rezept.
+     * Lesend, ohne Sperre (sperrFreiExtra).
+     *
+     * @return array<string, mixed>
+     */
+    #[Renderless]
+    public function rezeptVorschau(?int $recipeId): array
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        $r = $team !== null && $recipeId !== null
+            ? FoodAlchemistRecipe::visibleToTeam($team)
+                ->with(['ingredients' => fn ($q) => $q->whereNull('deleted_at')->orderBy('position'),
+                    'ingredients.gp:id,name', 'ingredients.referencedRecipe:id,name', 'ingredients.unit:id,slug'])
+                ->find($recipeId)
+            : null;
+        if ($r === null) {
+            return [];
+        }
+        $geld = fn ($v) => $v !== null ? number_format((float) $v, 2, ',', '.').' €' : null;
+        $menge = fn ($v) => $v !== null ? rtrim(rtrim(number_format((float) $v, 2, ',', '.'), '0'), ',') : null;
+
+        return [
+            'id' => (int) $r->id,
+            'name' => $r->name,
+            'status' => $r->status instanceof \BackedEnum ? $r->status->value : (string) $r->status,
+            'yield' => $r->yield_kg !== null ? $menge($r->yield_kg).' kg' : null,
+            'ek_total' => $geld($r->ek_total_eur),
+            'ek_per_kg' => $r->ek_per_kg_eur !== null ? $geld($r->ek_per_kg_eur).'/kg' : null,
+            'work_time_min' => $r->work_time_min,
+            'n_zutaten' => $r->ingredients->count(),
+            'zutaten' => $r->ingredients->map(fn ($z) => [
+                'name' => $z->referencedRecipe?->name ?? $z->gp?->name ?? $z->display_name ?? $z->raw_text,
+                'ist_rezept' => $z->referenced_recipe_id !== null,
+                'menge' => $z->quantity !== null ? trim($menge($z->quantity).' '.($z->unit?->slug ?? '')) : null,
+                'verknuepft' => $z->gp_id !== null || $z->referenced_recipe_id !== null,
+            ])->values()->all(),
+        ];
     }
 
     /**

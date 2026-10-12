@@ -526,3 +526,27 @@ fieldset[data-fa-lesemodus="1"] :is(input, select, textarea) { opacity: .85; }
 [data-trend-radar] .tr-punkt .tr-name { font-size: 11px; fill: var(--fa-ink); paint-order: stroke; stroke: var(--fa-surface); stroke-width: 3px; opacity: 0; pointer-events: none; }
 [data-trend-radar] .tr-punkt:hover .tr-name, [data-trend-radar] .tr-punkt:focus .tr-name, [data-trend-radar] .tr-punkt.is-active .tr-name { opacity: 1; }
 [data-trend-radar] .tr-punkt.is-active .tr-visual { stroke-width: 3.5; }
+
+/* Zutaten-Editor · Spaltenlayout (Dominique 2026-10-12): links Grundprodukte, Mitte Suche + Tabelle, rechts
+   Basisrezepte. Die dritte Spalte hängt an der Breite des EDITORS (Container-Query), nicht am Viewport —
+   vorher Tailwind-Variante `wide:` (Viewport ≥ 1.800 px): die kannte der Host-Build auf demo nicht
+   (kein --breakpoint-wide dort), und das Host-`grid-cols-1` schlug jede Modul-Variante (Sublayer).
+   Eigene Klassen statt Utilities, damit kein Host-CSS dazwischenfunkt.
+   Schwelle 92 rem (1.472 px): Tabelle ≥ 979 px (Basisrezept) + 2 × 14 rem Seitenspalten + Abstände. */
+.fa-zutaten-editor { container-type: inline-size; }
+.fa-zutaten-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: .75rem; align-items: start; }
+.fa-zutaten-layout > .fa-zutaten-mitte { min-width: 0; }
+@media (min-width: 64rem) {
+  .fa-zutaten-layout { grid-template-columns: minmax(17rem, 22rem) minmax(0, 1fr); }
+  .fa-zutaten-layout > aside { grid-column: 1; grid-row: 1; position: sticky; top: 0; }
+  .fa-zutaten-layout > .fa-zutaten-mitte { grid-column: 2; grid-row: 1; }
+}
+@container (min-width: 92rem) {
+  .fa-zutaten-layout { grid-template-columns: minmax(14rem, 16rem) minmax(0, 1fr) minmax(14rem, 16rem); }
+  .fa-zutaten-layout > aside[data-einfuegen="rez"] { grid-column: 3; }
+  .fa-zutaten-layout .fa-zutaten-umschalter { display: none; }
+}
+/* Schmaler als die Schwelle: nur die gewählte Einfüge-Spalte (Umschalter), die andere ist passiv */
+@container not (min-width: 92rem) {
+  .fa-zutaten-layout > aside.fa-zutaten-passiv { display: none; }
+}
