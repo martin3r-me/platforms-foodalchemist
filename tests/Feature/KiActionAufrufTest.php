@@ -50,3 +50,17 @@ it('ki-action: der $wire-Aufruf hängt an einem Promise, damit synchrone Fehler 
     // und zeigt seine Meldung, statt 45 s später als „Keine Antwort" zu erscheinen.
     expect($html)->toContain('Promise.resolve().then(() => $wire.kiSchritte())');
 });
+
+/**
+ * Hotfix 2026-10-12 (Dominique, Screenshot GP-Modal): nach #273 stand im Klick-Handler ein JS-Kommentar mit einem
+ * geraden Anführungszeichen („Keine Antwort"). Der Handler liegt IN dem HTML-Attribut @click — das " beendete es,
+ * der Rest des JavaScripts erschien als Text auf der Seite, jeder KI-Knopf war tot. Die Tests oben prüften den
+ * Aufruf-String, nicht ob er im Attribut ankommt.
+ */
+it('der ganze Klick-Handler bleibt im @click-Attribut — kein gerades Anführungszeichen bricht es auf', function () {
+    $html = Blade::render('<x-foodalchemist::ki-action action="allesAnreichern" label="Alles anreichern" />');
+
+    expect(preg_match('/@click="([^"]*)"/', $html, $m))->toBe(1)
+        ->and($m[1])->toContain('$wire.allesAnreichern()')
+        ->and($m[1])->toContain('.catch((e) =>');                // Ende des Handlers liegt noch im Attribut
+});
