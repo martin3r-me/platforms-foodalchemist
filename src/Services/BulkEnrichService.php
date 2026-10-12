@@ -421,6 +421,33 @@ class BulkEnrichService
      *
      * @return array{value: mixed, confidence: ?float, reasoning: ?string, call_log_id: ?int}
      */
+    /**
+     * KI-Knopf „Regeneration vorschlagen" im Basisrezept-Editor (Dominique 2026-10-12): derselbe
+     * Vorschlag wie der Bulk-Schritt, aber nur als Rückgabe — der Editor füllt sein Formular, gespeichert
+     * wird mit dem globalen Speichern (GL-07: Übernahme ist eine Entscheidung des Menschen).
+     *
+     * @return array{value: ?array, confidence: float, reasoning: ?string, call_log_id: ?int}
+     */
+    public function regenerationVorschlag(Team $team, FoodAlchemistRecipe $r): array
+    {
+        if ($r->is_sales_recipe) {
+            throw new \RuntimeException('Regeneration gilt für Basisrezepte — am Gericht regeneriert jede Komponente für sich.');
+        }
+
+        return $this->proposeRegeneration($team, $r);
+    }
+
+    /**
+     * KI-Knopf „Anker vorschlagen" im GP-Editor (Dominique 2026-10-12): Kern-Anker aus dem Vokabular
+     * (B-7-Vorauswahl), nur Rückgabe — der Editor setzt ihn mit ehrlicher Provenienz (ai_inferred).
+     *
+     * @return array{value: ?array{anchor_slug: string}, confidence: float, reasoning: ?string, call_log_id: ?int}
+     */
+    public function gpAnkerVorschlag(Team $team, FoodAlchemistGp $gp): array
+    {
+        return $this->proposeGpFeld($team, $gp, 'anker');
+    }
+
     private function proposeRegeneration(Team $team, FoodAlchemistRecipe $r): array
     {
         $geraete = $this->geraeteKatalog($team);

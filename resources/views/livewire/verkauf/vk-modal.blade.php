@@ -650,6 +650,12 @@
             </x-fa::section>
 
             <x-fa::section title="Einordnung" icon="heroicon-o-tag">
+                <x-slot:actions>
+                    {{-- Dominique 2026-10-12: Klasse + Hauptgruppe (SpeisenKlassenService), Geschmack, Fertigungstiefe — nur leere Felder --}}
+                    <x-fa::button size="sm" variant="ai" icon="heroicon-o-sparkles" wire:click="ki('einordnung')" wire:loading.attr="disabled" wire:target="ki('einordnung')"
+                        title="Speisen-Klasse, Hauptgruppe, Geschmack und Fertigungstiefe vorschlagen — gesetzte Felder bleiben" data-ki-einordnung>Einordnung vorschlagen</x-fa::button>
+                </x-slot:actions>
+                @if($kiMeldung !== null)<x-fa::notice tone="ok" data-vk-ki-meldung>{{ $kiMeldung }}</x-fa::notice>@endif
                 <div class="grid gap-4 sm:grid-cols-2" data-vk-klassifikation>
                     {{-- Modell A (MVP-049): Hauptgruppe ist ein normales Formularfeld am Gericht, keine
                          Kaskaden-Steuerung — deshalb `form.dish_main_group_id` und kein `.live`. --}}
@@ -843,6 +849,13 @@
                  aus der produzierten Menge, keine Eingabe. --}}
             <x-fa::section title="Behälter je Zweck" icon="heroicon-o-archive-box"
                 description="Leer heißt: es gilt der Behälter der jeweiligen Komponente. Ein Eintrag hier weicht für dieses Gericht bewusst ab. Die Anzahl rechnet die Produktion aus der Menge.">
+                <x-slot:actions>
+                    {{-- Dominique 2026-10-12: Behälter je Zweck aus dem Katalog + Füllmengen-Dossier, nie die Anzahl --}}
+                    <x-foodalchemist::ki-action action="kiBehaelter" variant="ai" icon="heroicon-o-sparkles" label="Behälter vorschlagen"
+                        title="Behälter je Zweck, Skalierung und Referenzmenge aus Katalog und Füllmengen-Dossier — nur leere Felder, Speichern übernimmt"
+                        data-vk-behaelter-ki busy="Wird vorgeschlagen …" flash="Vorgeschlagen" />
+                </x-slot:actions>
+                @if($kiMeldung !== null)<x-fa::notice tone="ok" data-vk-ki-meldung-behaelter>{{ $kiMeldung }}</x-fa::notice>@endif
                 <div class="grid grid-cols-1 xl:grid-cols-2 gap-x-6 gap-y-3" data-vk-container>
                     @foreach(\Platform\FoodAlchemist\Models\FoodAlchemistVocabContainer::ZWECKE as $zweck)
                         @php $lagen = ($behaelterForm[$zweck]['skalierung'] ?? '') === 'lagenware'; @endphp

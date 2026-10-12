@@ -551,6 +551,7 @@ class VkModal extends Component
 
         try {
             match ($aktion) {
+                'einordnung' => $this->uebernehmeEinordnung($team, $gateway, $kontext),
                 'wording' => $this->uebernehmeText('sales_wording_standard', $gateway->propose('vk.wording', $kontext)),
                 'plating' => $this->uebernehmePlating($gateway->propose('vk.plating', $kontext + ['portion_g' => $this->form['sales_quantity_per_unit_g'] ?? null])),
                 'eigenschaften' => $this->uebernehmeEigenschaften($gateway, $kontext),
@@ -621,6 +622,106 @@ class VkModal extends Component
         // zeigte er weiter „0 Schritte", obwohl die Zeilen geschrieben waren.
         $this->dispatch('schritte-aktualisiert', recipeId: (int) $rezept->id, ebene: $ebene);
         $this->dispatch('recipe-gespeichert');
+    }
+
+    /**
+     * KI-Knopf „Einordnung vorschlagen" (Dominique 2026-10-12): Speisen-Klasse + Hauptgruppe über den
+     * SpeisenKlassenService (eine Wahrheit mit recipe_klasse.POST), Geschmacksrichtung und Fertigungstiefe
+     * über ihre Prompts. Alles landet im Formular, Speichern übernimmt. Gefüllte Felder bleiben stehen
+     * (Override-First) — leer heißt hier „nicht gesetzt" bzw. „unbestimmt".
+     */
+    private function uebernehmeEinordnung(\Platform\Core\Models\Team $team, \Platform\FoodAlchemist\Services\Ai\AiGatewayService $ki, array $kontext): void
+    {
+        $gesetzt = [];
+        if ($this->recipeId !== null && (empty($this->form['dish_class_id']) || empty($this->form['dish_main_group_id']))) {
+            $k = app(\Platform\FoodAlchemist\Services\SpeisenKlassenService::class)->classify($team, $this->recipeId);
+            if (empty($this->form['dish_class_id']) && $k['klasse_id'] !== null) {
+                $this->form['dish_class_id'] = (string) $k['klasse_id'];
+                $gesetzt[] = 'Klasse '.$k['klasse_name'];
+            }
+            if (empty($this->form['dish_main_group_id']) && ($k['hauptgruppe_id'] ?? null) !== null) {
+                $this->form['dish_main_group_id'] = (string) $k['hauptgruppe_id'];
+                $gesetzt[] = 'Hauptgruppe '.$k['hauptgruppe_name'];
+            }
+        }
+        if (empty($this->form['taste_direction'])) {
+            $g = $ki->propose('recipe.geschmack', $kontext);
+            if (in_array($g->werte['taste_direction'] ?? null, \Platform\FoodAlchemist\Services\RecipeService::TASTE_DIRECTIONS, true)) {
+                $this->form['taste_direction'] = $g->werte['taste_direction'];
+                $gesetzt[] = 'Geschmack '.$g->werte['taste_direction'];
+            }
+        }
+        if (empty($this->form['production_depth'])) {
+            $f = $ki->propose('recipe.production_depth', ['name' => $kontext['name'], 'production_depth' => null, 'zutaten' => $kontext['komponenten']]);
+            if (in_array($f->werte['production_depth'] ?? null, ['from_scratch', 'teilfertig', 'convenience'], true)) {
+                $this->form['production_depth'] = $f->werte['production_depth'];
+                $gesetzt[] = 'Fertigungstiefe '.$f->werte['production_depth'];
+            }
+        }
+        $this->kiMeldung = $gesetzt === []
+            ? 'Einordnung: KI lieferte nichts Neues oder alle Felder sind schon gesetzt.'
+            : 'Einordnung vorgeschlagen: '.implode(' · ', $gesetzt).'. Speichern übernimmt.';
+    }
+
+    /** Rückmeldung der Einordnungs-/Behälter-KI im Reiter (kein Fehler). */
+    public ?string $kiMeldung = null;
+
+    /**
+     * KI-Knopf „Behälter vorschlagen" (Dominique 2026-10-12): wie `RecipeModal::kiDichteklasse`, aber für
+     * das Gericht — Behälter je Zweck, Skalierung und Referenzmenge aus dem Füllmengen-Dossier, nur
+     * leere Felder (Override-First), gespeichert wird mit Speichern. Die ANZAHL bleibt Rechnung.
+     */
+    public function kiBehaelter(\Platform\FoodAlchemist\Services\Ai\AiGatewayService $gateway, \Platform\FoodAlchemist\Services\Ai\KnowledgeContextService $wissen): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        $r = $team !== null && $this->recipeId !== null ? FoodAlchemistRecipe::visibleToTeam($team)->with('ingredients.gp:id,name')->find($this->recipeId) : null;
+        if ($r === null) {
+            return;
+        }
+        $this->fehler = null;
+        $katalog = TeamScope::applyVisible(DB::table('foodalchemist_vocab_containers')->whereNull('deleted_at')->where('is_inactive', false), 'team_id', $team)
+            ->orderBy('sort_order')->get()->keyBy(fn ($b) => (int) $b->id);
+        $wissenBlock = $wissen->contextFor($team, 'recipe.dichteklasse', trim($r->name.' Behälter Füllmenge Füllgrad Dichte'),
+            null, [], \Platform\FoodAlchemist\Services\Knowledge\RezeptAchsen::fuer($r));
+        try {
+            $v = $gateway->propose('recipe.dichteklasse', [
+                'name' => $r->name,
+                'kategorie' => $r->category?->label,
+                'zutaten' => $r->ingredients->take(15)->map(fn ($z) => $z->display_name ?: ($z->gp?->name ?? $z->raw_text))->filter()->values()->all(),
+                'ausbeute_kg' => $r->yield_kg !== null ? round((float) $r->yield_kg, 2) : null,
+                'behaelter' => $katalog->map(fn ($b) => [
+                    'id' => (int) $b->id, 'name' => $b->name, 'familie' => $b->familie,
+                    'liter' => $b->volumen_l !== null ? (float) $b->volumen_l : null,
+                    'tiefe_mm' => $b->tiefe_mm !== null ? (int) $b->tiefe_mm : null,
+                    'freigegeben_fuer' => $b->eignung !== null ? json_decode((string) $b->eignung, true) : null,
+                ])->values()->all(),
+            ], \Platform\FoodAlchemist\Services\Ai\KnowledgeContextService::proposeOptionen($wissenBlock));
+        } catch (\RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+
+            return;
+        }
+        $gesetzt = [];
+        $skalierung = $v->werte['skalierung'] ?? null;
+        $behaelter = is_array($v->werte['behaelter_je_zweck'] ?? null) ? $v->werte['behaelter_je_zweck'] : [];
+        $mengen = is_array($v->werte['referenz_menge_kg_je_zweck'] ?? null) ? $v->werte['referenz_menge_kg_je_zweck'] : [];
+        foreach (FoodAlchemistVocabContainer::ZWECKE as $zweck) {
+            $id = $behaelter[$zweck] ?? null;
+            if (($this->behaelterForm[$zweck]['container_vocab_id'] ?? '') === '' && is_numeric($id) && $katalog->has((int) $id)) {
+                $this->behaelterForm[$zweck]['container_vocab_id'] = (string) (int) $id;
+                $gesetzt[] = ucfirst($zweck).': '.$katalog[(int) $id]->name;
+            }
+            if (($this->behaelterForm[$zweck]['skalierung'] ?? '') === '' && in_array($skalierung, ['tiefer_fuellbar', 'hoehe_gebunden', 'lagenware'], true)) {
+                $this->behaelterForm[$zweck]['skalierung'] = $skalierung;
+            }
+            $m = $mengen[$zweck] ?? null;
+            if (($this->behaelterForm[$zweck]['referenz_menge_kg'] ?? '') === '' && is_numeric($m) && (float) $m > 0) {
+                $this->behaelterForm[$zweck]['referenz_menge_kg'] = rtrim(rtrim(number_format((float) $m, 3, ',', ''), '0'), ',');
+            }
+        }
+        $this->kiMeldung = $gesetzt === []
+            ? 'Behälter: KI lieferte keinen verwertbaren Vorschlag oder alles ist schon gepflegt.'
+            : 'Behälter vorgeschlagen: '.implode(' · ', $gesetzt).'. Speichern übernimmt.';
     }
 
     private function uebernehmeEigenschaften(\Platform\FoodAlchemist\Services\Ai\AiGatewayService $ki, array $kontext): void

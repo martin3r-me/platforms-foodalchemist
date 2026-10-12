@@ -467,6 +467,12 @@
             <div x-show="tab === 'kalkulation'" x-cloak class="pt-4 flex flex-col gap-4">
                 <x-fa::section title="Verluste und Stückgewicht" icon="heroicon-o-calculator"
                     description="Gilt, wenn eine Rezept-Zutat keinen eigenen Wert hat. Leer lassen übernimmt die Vorgabe der Warengruppe.">
+                    <x-slot:actions>
+                        {{-- Dominique 2026-10-12: füllt nur leere Felder, Speichern übernimmt --}}
+                        <x-foodalchemist::ki-action action="verlusteKiSchaetzen" variant="ai" icon="heroicon-o-sparkles" label="Verluste schätzen"
+                            title="Gar-/Putzverlust und Stückgewicht als küchenübliche Vorgabe — nur leere Felder, Speichern übernimmt"
+                            data-gp-verluste-ki busy="Wird geschätzt …" flash="Geschätzt" />
+                    </x-slot:actions>
                     <div class="grid grid-cols-1 sm:grid-cols-3 gap-3" data-gp-defaults>
                         <x-fa::field label="Garverlust in %" for="gp-garverlust">
                             <x-fa::input id="gp-garverlust" numeric inputmode="decimal" wire:model="defaults.cooking_loss_default_pct" placeholder="–" data-gp-garverlust />
@@ -533,6 +539,12 @@
                      ist nur lesend und aktualisiert sich, sobald hier ein Anker steht. --}}
                 @if($gpId !== null)
                     <x-fa::section title="Aroma-Anker" icon="heroicon-o-sparkles" :meta="$gpAnker->count() ?: null">
+                        <x-slot:actions>
+                            {{-- Dominique 2026-10-12: Kern-Anker per KI aus dem Vokabular, Provenienz ai_inferred --}}
+                            <x-foodalchemist::ki-action action="ankerKiVorschlagen" variant="ai" icon="heroicon-o-sparkles" label="Anker vorschlagen"
+                                title="Bestimmt den Haupt-Anker aus dem Anker-Vokabular und verknüpft ihn (als KI-Vorschlag markiert)"
+                                data-gp-anker-ki busy="Wird bestimmt …" flash="Anker gesetzt" />
+                        </x-slot:actions>
                         <div class="flex flex-wrap gap-1.5" data-gp-anker-liste>
                             @forelse($gpAnker as $a)
                                 <x-fa::badge wire:key="ga-{{ $a->id }}" :tone="$a->role === 'kern' ? 'accent' : 'neutral'" :icon="$a->role === 'kern' ? 'heroicon-s-star' : null"

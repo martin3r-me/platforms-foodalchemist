@@ -425,6 +425,114 @@ class GpModal extends Component
     }
 
     /** ✨ KI schätzt die anwendbaren Formen + Gramm (manuelle bleiben, Override-First). */
+    /**
+     * KI-Knopf „Verluste schätzen" (Dominique 2026-10-12): Gar-/Putzverlust und Stückgewicht als Vorgabe
+     * des Grundprodukts. Füllt nur LEERE Felder des Formulars (Override-First), gespeichert wird mit
+     * dem Speichern-Knopf — der Vorschlag allein schreibt nichts.
+     */
+    public function verlusteKiSchaetzen(AiGatewayService $ki): void
+    {
+        $this->fehler = null;
+        $this->hinweis = null;
+        $team = $this->team();
+        if ($team === null || $this->gpId === null) {
+            return;
+        }
+        $gp = FoodAlchemistGp::visibleToTeam($team)->find($this->gpId);
+        if ($gp === null) {
+            return;
+        }
+        try {
+            $v = $ki->propose('gp.verluste', [
+                'name' => $gp->name,
+                'condition' => $gp->condition,
+                'commodity_group' => $gp->commodity_group?->name,
+                'aktuell' => array_filter($this->defaults, fn ($w) => $w !== '' && $w !== null),
+            ], ['target_table' => 'foodalchemist_gps', 'target_id' => $gp->id]);
+        } catch (\Platform\FoodAlchemist\Exceptions\KiNichtVerfuegbarException) {
+            $this->fehler = 'KI derzeit nicht verfügbar.';
+
+            return;
+        } catch (\Throwable $e) {
+            $this->fehler = $e->getMessage();
+
+            return;
+        }
+        $gesetzt = [];
+        $label = ['cooking_loss_default_pct' => 'Garverlust', 'trimming_loss_default_pct' => 'Putzverlust', 'piece_default_g' => 'Stückgewicht'];
+        foreach ($label as $feld => $name) {
+            $wert = $v->werte[$feld] ?? null;
+            if (! is_numeric($wert) || (float) $wert < 0 || (str_ends_with($feld, '_pct') && (float) $wert > 100)) {
+                continue;
+            }
+            if (($this->defaults[$feld] ?? '') !== '') {
+                continue;                                              // gepflegt = Entscheidung, nicht überschreiben
+            }
+            $this->defaults[$feld] = (string) round((float) $wert, 1);
+            $gesetzt[] = $name;
+        }
+        $this->hinweis = $gesetzt === []
+            ? 'KI lieferte keinen verwertbaren Vorschlag oder alle Felder sind schon gepflegt.'
+            : 'Vorschlag im Formular: '.implode(', ', $gesetzt).'. Speichern übernimmt.';
+    }
+
+    /**
+     * KI-Knopf „Anker vorschlagen" (Dominique 2026-10-12): Kern-Anker aus dem Vokabular, sofort gesetzt
+     * (wie das Verknüpfen von Hand), aber mit ehrlicher Provenienz `ai_inferred` + Konfidenz —
+     * Handarbeit (manual) bleibt geschützt, der Vorschlag ersetzt sie nicht.
+     */
+    public function ankerKiVorschlagen(BulkEnrichService $bulk, \Platform\FoodAlchemist\Services\PairingService $pairing): void
+    {
+        $this->gpAnkerFehler = null;
+        $this->hinweis = null;
+        $team = $this->team();
+        if ($team === null || $this->gpId === null) {
+            return;
+        }
+        $gp = FoodAlchemistGp::visibleToTeam($team)->find($this->gpId);
+        if ($gp === null) {
+            return;
+        }
+        try {
+            $v = $bulk->gpAnkerVorschlag($team, $gp);
+        } catch (\Platform\FoodAlchemist\Exceptions\KiNichtVerfuegbarException) {
+            $this->gpAnkerFehler = 'KI derzeit nicht verfügbar.';
+
+            return;
+        } catch (\Throwable $e) {
+            $this->gpAnkerFehler = $e->getMessage();
+
+            return;
+        }
+        $slug = $v['value']['anchor_slug'] ?? null;
+        if ($slug === null) {
+            $this->gpAnkerFehler = 'KI fand keinen passenden Anker im Vokabular.';
+
+            return;
+        }
+        if ($slug === 'neutral') {
+            $this->hinweis = 'KI: kein Aroma-Träger (neutral) — kein Anker gesetzt.';
+
+            return;
+        }
+        $ankerId = \Illuminate\Support\Facades\DB::table('foodalchemist_vocab_pairing_anchors')
+            ->where('slug', $slug)->whereNull('deleted_at')->value('id');
+        if ($ankerId === null) {
+            $this->gpAnkerFehler = "Anker „{$slug}\" ist nicht im Vokabular.";
+
+            return;
+        }
+        try {
+            $pairing->setGpAnkerInference($team, $gp->id, (int) $ankerId, (float) ($v['confidence'] ?? 0.5),
+                'GP-Editor: KI-Vorschlag aus dem Anker-Vokabular'.(($v['reasoning'] ?? '') !== '' ? ' — '.$v['reasoning'] : ''));
+        } catch (\RuntimeException $e) {
+            $this->gpAnkerFehler = $e->getMessage();
+
+            return;
+        }
+        $this->hinweis = "Anker „{$slug}\" per KI gesetzt (Konfidenz ".round((float) ($v['confidence'] ?? 0) * 100).' %).';
+    }
+
     public function formenKiSchaetzen(\Platform\FoodAlchemist\Services\GpFormService $forms): void
     {
         $this->fehler = null;

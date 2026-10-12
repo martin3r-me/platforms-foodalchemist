@@ -1406,8 +1406,12 @@ return [
                 . 'NIE „Wo/wann wird es eingesetzt?" — der Einsatzkontext (Apéro, Snack, Buffet) '
                 . 'ist eine Darreichungs-/Konzept-Facette, KEINE Speisen-Klasse. Wähle nur aus der '
                 . 'mitgegebenen (bereits auf aktive Hauptgruppen gefilterten) Taxonomie. '
-                . 'Kein sicherer Treffer => dish_class_id = null (NICHT raten): '
-                . 'werte = {dish_class_id, klasse_name}.',
+                . 'Kein sicherer Treffer => dish_class_id = null (NICHT raten). '
+                // KI-Knopf „Einordnung vorschlagen" (2026-10-12): zweite Achse = Gang/Einsatz.
+                . 'ZWEITE ACHSE: ordne das Gericht ausserdem EINER Speisen-Hauptgruppe aus `hauptgruppen` zu '
+                . '(Gang/Bauart: Vorspeise, Hauptgang, Dessert, Suppe …); kein sicherer Treffer => '
+                . 'dish_main_group_id = null: '
+                . 'werte = {dish_class_id, klasse_name, dish_main_group_id}.',
         ],
         'vk.rollen' => [
             'tier' => 'B',
@@ -1440,6 +1444,19 @@ return [
             'tier' => 'B',
             'task' => 'Schaetze das Stueck-Durchschnittsgewicht des Grundprodukts in Gramm '
                 . '(kuechenuebliche Handelsware): werte = {piece_default_g}.',
+        ],
+        // KI-Knopf „Verluste schätzen" im GP-Editor (Dominique 2026-10-12): Vorgaben je Grundprodukt,
+        // die greifen, wenn eine Rezept-Zutat keinen eigenen Wert hat. Kuechenuebliche Richtwerte,
+        // keine Rechnung; unsicher ⇒ null. Stueckgewicht nur fuer zaehlbare Ware (Ei, Zwiebel, Filet).
+        'gp.verluste' => [
+            'tier' => 'B',
+            'task' => 'Schaetze fuer das Grundprodukt die kuechenueblichen VORGABEN: cooking_loss_default_pct '
+                . '(Garverlust in %, Gewichtsverlust beim Garen der ueblichen Zubereitung; roh verzehrte oder '
+                . 'bereits gegarte Ware ⇒ 0), trimming_loss_default_pct (Putz-/Parierverlust in % beim '
+                . 'Vorbereiten: Schale, Strunk, Haut, Knochen, Sehnen; kuechenfertige Ware ⇒ 0) und '
+                . 'piece_default_g (Durchschnittsgewicht EINES Stuecks in Gramm, nur bei zaehlbarer Ware, '
+                . 'sonst null). Zustand und Zuschnitt (frisch/TK/konserviert, ganz/Filet/Wuerfel) beachten. '
+                . 'Unsicher ⇒ null, nie raten: werte = {cooking_loss_default_pct, trimming_loss_default_pct, piece_default_g}.',
         ],
         'gp.zaehl_einheiten' => [
             'tier' => 'B',

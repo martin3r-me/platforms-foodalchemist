@@ -1120,6 +1120,47 @@ class RecipeModal extends Component
      * Der Vorschlag landet im Formular, nicht in der Datenbank: gespeichert wird erst mit dem
      * Knopf darunter (GL-07 — die Übernahme ist eine Entscheidung des Menschen).
      */
+    /**
+     * KI-Knopf „Regeneration vorschlagen" (Dominique 2026-10-12): derselbe Vorschlag wie der Bulk-Schritt
+     * (recipe.regeneration), landet im Formular — gespeichert wird mit dem globalen Speichern (GL-07).
+     * „kalt" ist eine Entscheidung (Gerät leer), kein Leer-Ergebnis.
+     */
+    public function kiRegeneration(\Platform\FoodAlchemist\Services\BulkEnrichService $bulk): void
+    {
+        $r = $this->rezept();
+        $team = Auth::user()?->currentTeamRelation;
+        if ($r === null || $team === null) {
+            return;
+        }
+        try {
+            $v = $bulk->regenerationVorschlag($team, $r);
+        } catch (\RuntimeException $e) {
+            $this->regenMeldung = $e->getMessage();
+
+            return;
+        }
+        $wert = $v['value'];
+        if ($wert === null) {
+            $this->regenMeldung = 'KI lieferte keinen verwertbaren Vorschlag (weder „kalt" noch ein gültiges Gerät) — nichts übernommen.';
+
+            return;
+        }
+        $kalt = ($wert['kalt'] ?? false) === true;
+        $this->regenForm = [
+            'id' => $this->regenForm['id'] ?? null,
+            'device_vocab_id' => $kalt ? '' : (string) ($wert['device_vocab_id'] ?? ''),
+            'temp_c' => $kalt ? '' : (string) ($wert['temp_c'] ?? ''),
+            'duration_min' => $kalt ? '' : (string) ($wert['duration_min'] ?? ''),
+            'core_temp_c' => $kalt ? '' : (string) ($wert['core_temp_c'] ?? ''),
+            'note' => (string) ($wert['note'] ?? ''),
+        ];
+        $geraet = ! $kalt ? \Illuminate\Support\Facades\DB::table('foodalchemist_vocab_regeneration_devices')->where('id', (int) ($wert['device_vocab_id'] ?? 0))->value('name') : null;
+        $this->regenMeldung = 'Vorschlag übernommen: '.($kalt ? 'kalt servieren' : ($geraet ?? 'Gerät')
+            .(($wert['temp_c'] ?? null) !== null ? " · {$wert['temp_c']} °C" : '')
+            .(($wert['duration_min'] ?? null) !== null ? " · {$wert['duration_min']} min" : ''))
+            .' (Konfidenz '.round((float) ($v['confidence'] ?? 0) * 100).' %). Noch nicht gespeichert.';
+    }
+
     public function kiDichteklasse(AiGatewayService $gateway, KnowledgeContextService $wissen): void
     {
         $r = $this->rezept();

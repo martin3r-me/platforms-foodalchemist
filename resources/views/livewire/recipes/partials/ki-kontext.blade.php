@@ -31,10 +31,20 @@
 @if(!empty($kiHistorie))
     <x-fa::section variant="plain" title="KI-Aufrufe" icon="heroicon-o-clock" :meta="(string) count($kiHistorie)" data-sektion="ki-historie"
         description="Welche Quellen die KI tatsächlich gelesen hat, aus dem Aufrufprotokoll. Gespeichert ist der Stand des Regelwerks; Suchwissen und Einstellungen sind kein vollständiger historischer Stand.">
-        <div class="flex flex-col gap-2">
+        {{-- Dominique 2026-10-12: die Liste ist zugeklappt, bis man sie braucht (sechs und mehr Aufrufe füllten die
+             Spalte); jeder Aufruf klappt einzeln auf. Pfeile zeigen das — `display:flex` auf <summary> nimmt dem
+             Browser die eigene Markierung, darum ein eigener Chevron, der sich bei [open] dreht. --}}
+        <details class="group/liste" data-ki-historie-liste>
+            <summary class="cursor-pointer inline-flex items-center gap-1.5 text-[length:var(--fa-text-md)] text-[var(--fa-accent)] hover:text-[var(--fa-accent-hover)]">
+                @svg('heroicon-m-chevron-right', 'w-4 h-4 transition-transform group-open/liste:rotate-90')
+                <span class="group-open/liste:hidden">{{ count($kiHistorie) }} {{ count($kiHistorie) === 1 ? 'Aufruf' : 'Aufrufe' }} anzeigen</span>
+                <span class="hidden group-open/liste:inline">Aufrufe zuklappen</span>
+            </summary>
+        <div class="mt-2 flex flex-col gap-2">
             @foreach($kiHistorie as $call)
-                <details class="rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] bg-[var(--fa-surface)] px-3 py-2" data-ki-call="{{ $call['call_log_id'] }}" wire:key="ki-call-{{ $call['call_log_id'] }}">
+                <details class="group/call rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] bg-[var(--fa-surface)] px-3 py-2" data-ki-call="{{ $call['call_log_id'] }}" wire:key="ki-call-{{ $call['call_log_id'] }}">
                     <summary class="cursor-pointer flex flex-wrap items-center gap-2 text-[length:var(--fa-text-md)] text-[var(--fa-ink)]">
+                        @svg('heroicon-m-chevron-right', 'w-4 h-4 shrink-0 text-[var(--fa-ink-3)] transition-transform group-open/call:rotate-90')
                         <span class="font-medium">{{ $kmFunktion($call['feature']) }}</span>
                         <span class="{{ $leise }} tabular-nums">{{ $call['erstellt_am'] }}</span>
                         @if($call['fehler'])<x-fa::badge tone="crit">Fehler</x-fa::badge>@endif
@@ -63,5 +73,6 @@
                 </details>
             @endforeach
         </div>
+        </details>
     </x-fa::section>
 @endif
