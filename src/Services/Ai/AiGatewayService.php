@@ -339,16 +339,28 @@ class AiGatewayService
         $userContent = $prompt['task']
             . ($wissen !== '' ? "\n\n" . rtrim($wissen) : '')
             . "\n\nKontext:\n" . $kontextJson;
-        $messages[] = ['role' => 'user', 'content' => $userContent];
+        // Bild-Weg (Dominique 2026-10-12, Foto-/Scan-Import): `bilder` = Liste von Anhängen
+        // [{typ: image, url: data-URL, detail?}, {typ: pdf, name, data: data-URL}]. Sie gehen als
+        // Teile DERSELBEN Nutzer-Nachricht mit (Text-Teil + Bild-Teile); der Core normalisiert
+        // text/image_url auf das Responses-Format und reicht input_file durch
+        // (OpenAiService::normalizeContentPartsForResponses). Der Text-Weg bleibt unverändert.
+        $bilder = is_array($options['bilder'] ?? null) ? array_values(array_filter($options['bilder'], 'is_array')) : [];
+        unset($options['bilder']);
+        if ($bilder !== []) {
+            $this->pruefeBildWeg();
+            $messages[] = ['role' => 'user', 'content' => [['type' => 'text', 'text' => $userContent], ...self::bildTeile($bilder)]];
+        } else {
+            $messages[] = ['role' => 'user', 'content' => $userContent];
+        }
 
         // W0-0: Hülle = die system-Messages OHNE den Regelwerk-Block. Der wird seit W3-1
         // ebenfalls als system-Message gesendet, ist aber als `bound` separat ausgewiesen —
         // sonst zählte die Sonde ihn doppelt und `prompt_chars` ginge nicht mehr auf.
         $promptParts['huelle'] = array_sum(array_map(
-            fn (array $m): int => $m['role'] === 'system' ? mb_strlen((string) $m['content']) : 0,
+            fn (array $m): int => $m['role'] === 'system' ? mb_strlen(self::inhaltText($m)) : 0,
             $messages,
         )) - $promptParts['bound'] - $promptParts['kanon'] - $promptParts['regeln'];
-        $promptChars = array_sum(array_map(fn (array $m): int => mb_strlen((string) $m['content']), $messages));
+        $promptChars = array_sum(array_map(fn (array $m): int => mb_strlen(self::inhaltText($m)), $messages));
 
         // W0-1: Der Core stellt sonst eine System-Message mit `'Zeit: ' . now()` und einer
         // Tool-Übersicht VOR den Prompt (OpenAiService::buildMessagesWithContext, gated über
@@ -437,7 +449,7 @@ class AiGatewayService
         $audit['layers_used'] = $layersUsed;
         $audit['prompt_chars'] = $promptChars;
         $audit['prompt_parts'] = $promptParts;
-        $audit['prompt_volltext'] = implode("\n", array_map(fn (array $m): string => (string) $m['content'], $messages));
+        $audit['prompt_volltext'] = implode("\n", array_map(fn (array $m): string => self::inhaltText($m), $messages));
         $callLogId = $this->schreibeCallLog($promptKey, $tier, $userContent, $antwort, $parsed, $fehler, $elapsedMs, $audit);
 
         if ($fehler !== null) {
@@ -905,6 +917,76 @@ class AiGatewayService
      * Fallback-Modell (ai.fallback_model) mit frischer Treppe — nur wenn
      * nicht schon darauf gestartet. model trägt immer das tatsächliche Modell.
      */
+    /**
+     * Text einer Nachricht — bei Bild-Nachrichten (content = Teile) nur die Text-Teile, Anhänge zählen
+     * mit ihrem Etikett, nicht mit ihren Bytes (Datei-Daten würden Audit und Messsonden sprengen).
+     */
+    public static function inhaltText(array $m): string
+    {
+        $c = $m['content'] ?? '';
+        if (is_string($c)) {
+            return $c;
+        }
+        $aus = [];
+        foreach ((array) $c as $teil) {
+            if (! is_array($teil)) {
+                continue;
+            }
+            $aus[] = match ($teil['type'] ?? '') {
+                'text' => (string) ($teil['text'] ?? ''),
+                'image_url' => '[Bild]',
+                'input_file' => '[Datei '.($teil['filename'] ?? '').']',
+                default => '['.($teil['type'] ?? 'Teil').']',
+            };
+        }
+
+        return implode("\n", $aus);
+    }
+
+    /**
+     * Bild-/Datei-Anhänge → Nachrichten-Teile (Chat-Completions-Form, der Core normalisiert sie).
+     *
+     * @param  list<array{typ?: string, url?: string, detail?: string, name?: string, data?: string}>  $bilder
+     * @return list<array<string, mixed>>
+     */
+    public static function bildTeile(array $bilder): array
+    {
+        $teile = [];
+        foreach ($bilder as $b) {
+            $typ = (string) ($b['typ'] ?? 'image');
+            if ($typ === 'pdf') {
+                if (($b['data'] ?? '') === '') {
+                    throw new \InvalidArgumentException('PDF-Anhang ohne Daten.');
+                }
+                // Responses-Format direkt: OpenAI liest PDFs (Text + Seitenbilder) als input_file.
+                $teile[] = ['type' => 'input_file', 'filename' => (string) ($b['name'] ?? 'scan.pdf'), 'file_data' => (string) $b['data']];
+
+                continue;
+            }
+            if (($b['url'] ?? '') === '') {
+                throw new \InvalidArgumentException('Bild-Anhang ohne url.');
+            }
+            $teile[] = ['type' => 'image_url', 'image_url' => ['url' => (string) $b['url'], 'detail' => (string) ($b['detail'] ?? 'high')]];
+        }
+
+        return $teile;
+    }
+
+    /**
+     * Bilder gehen nur über den OpenAI-Weg der Plattform (Responses API mit input_image/input_file).
+     * Der Anthropic-Weg im Core macht aus allem Text — ein Bild ginge dort still verloren. Darum ein
+     * klarer Fehler statt eines leeren Ergebnisses (Befund 2026-10-09, Core-Fix #925 vorausgesetzt).
+     */
+    private function pruefeBildWeg(): void
+    {
+        $provider = $this->provider();
+        if ($provider instanceof FakeAiProvider || str_contains(strtolower($provider::class), 'openai')) {
+            return;
+        }
+        throw new RuntimeException('Bilder und Scans kann nur der OpenAI-Weg der Plattform lesen; aktiver Provider: '
+            .class_basename($provider::class).'. Text einfügen oder den Plattform-Provider auf OpenAI stellen.');
+    }
+
     private function chatMitBackoff(array $messages, array $options): array
     {
         $treppe = config('foodalchemist.ai.backoff', [1, 3, 10]);

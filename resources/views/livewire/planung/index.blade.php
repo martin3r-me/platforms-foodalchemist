@@ -785,9 +785,9 @@
                 </div>
             </div>
 
-            {{-- IMPORT: bestehende Rezeptur (Text, Web-Kopie, Text-PDF) TREU übernehmen und mit Grundprodukten
-                 verknüpft anlegen. Getrennt vom Generator (der veredelt): hier 1:1 übernehmen. Foto/Bild NICHT hier
-                 (Vision noch nicht in der Plattform-LLM). Schritt 2 hat eine klebende Anlegen-Leiste (eine Zeile). --}}
+            {{-- IMPORT: bestehende Rezeptur (Text, Web-Kopie, PDF, Foto, Scan) TREU übernehmen und mit Grundprodukten
+                 verknüpft anlegen. Getrennt vom Generator (der veredelt): hier 1:1 übernehmen. Foto und Scan gehen seit
+                 2026-10-12 als Bild an die KI (OpenAI-Weg, Core-Fix #925). Schritt 2 hat eine klebende Anlegen-Leiste. --}}
             <div wire:key="planung-tab-import" x-show="tab==='import'" class="flex flex-col gap-4 max-w-7xl mx-auto">
                 @if($importStep === 'eingabe')
                     <x-foodalchemist::modal-section icon="heroicon-o-arrow-down-tray" title="Rezept importieren">
@@ -796,9 +796,10 @@
                         </x-slot:actions>
                         <div class="flex flex-col gap-4">
                             <p class="{{ $hinweisText }} max-w-2xl">
-                                Bestehendes Rezept einfügen oder als Text-PDF hochladen. Es wird wörtlich übernommen, nichts
-                                wird erfunden, und die Zutaten werden mit den Grundprodukten verknüpft. Verschachtelte Rezepte
-                                (Gericht mit Sauce oder Püree) werden als verknüpfte Unterrezepte angelegt.
+                                Bestehendes Rezept einfügen oder als PDF, Scan oder Foto hochladen (Rezeptkarte, Kochbuchseite,
+                                Step-by-Step-Seite). Es wird wörtlich übernommen, nichts wird erfunden, und die Zutaten werden mit
+                                den Grundprodukten verknüpft. Verschachtelte Rezepte (Gericht mit Sauce oder Püree) werden als
+                                verknüpfte Unterrezepte angelegt. Aus Bildern gelesene Mengen bitte in der Vorschau prüfen.
                             </p>
                             <x-fa::field label="Anlegen als" hint="Nach dem Lesen wird ein Vorschlag gesetzt, deine Wahl hat Vorrang.">
                                 <x-fa::choice name="importTyp" :live="false" id-prefix="import-eingabe" :options="['basisrezept' => 'Basisrezept', 'gericht' => 'Gericht für den Verkauf']" />
@@ -807,9 +808,9 @@
                                 <x-fa::textarea wire:model="importText" rows="10"
                                     placeholder="Rezepttext hier einfügen, mit Zutaten und Zubereitung. Abschnitte wie »Für die Sauce: …« werden als Komponenten erkannt." />
                             </x-fa::field>
-                            <x-fa::field label="Oder Text-PDF hochladen" error="importPdf">
+                            <x-fa::field label="Oder PDF / Foto hochladen" hint="PDF (Text oder Scan), JPG, PNG, WebP — bis 20 MB. Ein Text im Feld oben ergänzt das Bild." error="importPdf">
                                 <div class="flex flex-wrap items-center gap-3">
-                                    <input type="file" wire:model="importPdf" accept="application/pdf"
+                                    <input type="file" wire:model="importPdf" accept="application/pdf,image/jpeg,image/png,image/webp,image/gif"
                                            class="text-[length:var(--fa-text-md)] text-[var(--fa-ink-2)] file:mr-3 file:h-8 file:px-3 file:rounded-[var(--fa-radius-control)] file:border file:border-[var(--fa-line-strong)] file:bg-[var(--fa-surface)] file:text-[var(--fa-ink)] file:font-medium" />
                                     <span wire:loading wire:target="importPdf" class="{{ $hinweisText }}">wird geladen …</span>
                                 </div>
@@ -830,6 +831,9 @@
                     <x-foodalchemist::modal-section icon="heroicon-o-eye" title="Vorschau prüfen">
                         <x-slot:actions>
                             <x-fa::badge>Schritt 2 von 3</x-fa::badge>
+                            @if(in_array($importQuelle, ['bild', 'scan'], true))
+                                <x-fa::badge tone="warn" data-import-quelle="{{ $importQuelle }}">aus {{ $importQuelle === 'scan' ? 'Scan' : 'Foto' }} gelesen — Mengen prüfen</x-fa::badge>
+                            @endif
                             @if(count($importVorschau['zutaten'] ?? []) > 0)
                                 <x-fa::badge tone="accent">{{ count($importVorschau['zutaten']) }} Zutaten</x-fa::badge>
                             @endif
