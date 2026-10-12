@@ -87,3 +87,31 @@ it('Livewire: „Neue Hauptgruppe" legt an und wählt sie direkt aus', function 
 
     expect(FoodAlchemistRecipeMainGroup::where('label', 'Frühstück')->where('team_id', $this->rootTeam->id)->exists())->toBeTrue();
 });
+
+/**
+ * Dominique 2026-10-12: Warengruppen, Speisen-/Rezept-Hauptgruppen und Konzept-Kategorien ließen sich nicht umbenennen.
+ * Der Stift stand in einem Komponenten-Attribut (`<x-fa::icon-button wire:click="…(@js($name))">`) — dort übersetzt Blade
+ * `@js` NICHT, im Browser stand der rohe Text, der Ausdruck war ungültig, der Klick verpuffte still. Wächter: in keinem
+ * Komponenten-Tag des Moduls darf `@js(` stehen.
+ */
+it('kein @js(...) in Blade-Komponenten-Attributen — dort wird es nicht übersetzt', function () {
+    $treffer = [];
+    foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator(dirname(__DIR__, 2).'/resources/views')) as $datei) {
+        if (! str_ends_with($datei->getFilename(), '.blade.php')) {
+            continue;
+        }
+        $s = file_get_contents($datei->getPathname());
+        preg_match_all('/<x-[a-z0-9:.\-]+/', $s, $m, PREG_OFFSET_CAPTURE);
+        foreach ($m[0] as [$tag, $start]) {
+            $i = $start + strlen($tag);
+            do {                                                  // Tag-Ende: erstes '>', das nicht zu '->' / '=>' gehört
+                $j = strpos($s, '>', $i);
+                $i = $j + 1;
+            } while ($j !== false && in_array($s[$j - 1], ['-', '='], true));
+            if ($j !== false && str_contains(substr($s, $start, $j - $start), '@js(')) {
+                $treffer[] = basename($datei->getPathname()).':'.(substr_count(substr($s, 0, $start), "\n") + 1);
+            }
+        }
+    }
+    expect($treffer)->toBe([]);
+});

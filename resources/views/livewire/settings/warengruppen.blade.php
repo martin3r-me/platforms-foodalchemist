@@ -6,7 +6,7 @@
      steht im Menü „Weitere Aktionen" (rot, abgesetzt). --}}
 @php
     $gewaehlt = $warengruppen->firstWhere('code', $subWg);
-    $zeileBasis = 'group flex items-center gap-1 min-h-9 pr-1 rounded-[var(--fa-radius-control)] transition-colors';
+    $zeileBasis = 'group relative flex items-center gap-1 min-h-9 pr-1 rounded-[var(--fa-radius-control)] transition-colors';
 @endphp
 
 <div class="flex flex-col gap-4">
@@ -19,7 +19,7 @@
 
     <div class="flex flex-wrap gap-4 items-start">
         {{-- Warengruppen links --}}
-        <x-fa::section title="Warengruppen" :meta="$warengruppen->count()" class="w-80 max-w-full shrink-0" data-warengruppen-liste x-data="{ dragId: null }">
+        <x-fa::section title="Warengruppen" :meta="$warengruppen->count()" class="w-96 max-w-full shrink-0" data-warengruppen-liste x-data="{ dragId: null }">
             <div class="flex gap-1.5" data-wg-neu>
                 <label for="wg-neu" class="sr-only">Eigene Warengruppe anlegen</label>
                 <x-fa::input id="wg-neu" size="sm" wire:model="neuWg" wire:keydown.enter="wgNeu" placeholder="Eigene Warengruppe" class="flex-1 min-w-0" />
@@ -44,13 +44,16 @@
                             <a href="#" role="button" wire:click.prevent="waehleWg('{{ $wg->code }}')" @if($aktiv) aria-current="true" @endif
                                     class="flex-1 min-w-0 flex items-center gap-1.5 text-left px-1.5 py-1.5 text-[length:var(--fa-text-md)] {{ $aktiv ? 'font-medium' : '' }}">
                                 <span class="shrink-0 text-[length:var(--fa-text-sm)] tabular-nums text-[var(--fa-ink-3)]">{{ $wg->code }}</span>
-                                <span class="min-w-0 truncate" title="{{ $wg->name }}">{{ $wg->name }}</span>
+                                {{-- Name trägt den Code oft schon („01 Gemuese & Blattsalat") — doppelt nur Rauschen. --}}
+                                @php($wgAnzeige = str_starts_with((string) $wg->name, $wg->code.' ') ? substr((string) $wg->name, strlen($wg->code) + 1) : $wg->name)
+                                <span class="min-w-0 break-words leading-snug" title="{{ $wg->name }}">{{ $wgAnzeige }}</span>
                                 @if($istParagraf3)<x-fa::badge class="shrink-0" title="Standard-Warengruppe aus dem Regelwerk, frei änderbar">Standard</x-fa::badge>@endif
                             </a>
                             <span class="shrink-0 text-[length:var(--fa-text-sm)] tabular-nums text-[var(--fa-ink-3)]" title="Grundprodukte">{{ number_format($wg->gp_count, 0, ',', '.') }}</span>
                             @if($darfEdit)
-                                <span class="shrink-0 flex opacity-0 group-hover:opacity-100 focus-within:opacity-100">
-                                    <x-fa::icon-button size="sm" icon="heroicon-o-pencil" label="Warengruppe umbenennen" wire:click="startEditName({{ $wg->id }}, @js($wg->name))" />
+                                {{-- Dominique 2026-10-12: Aktionen legen sich beim Darüberfahren ÜBER die Zeile statt unsichtbar Platz zu reservieren — vorher blieben vom Namen nur wenige Zeichen („01 G…"). --}}
+                                <span class="absolute right-1 top-1/2 -translate-y-1/2 flex rounded-[var(--fa-radius-control)] bg-[var(--fa-surface)] shadow-sm opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto focus-within:opacity-100 focus-within:pointer-events-auto">
+                                    <x-fa::icon-button size="sm" icon="heroicon-o-pencil" label="Warengruppe umbenennen" wire:click="startEditName({{ $wg->id }}, {{ \Illuminate\Support\Js::from($wg->name) }})" />
                                     @if($wg->gp_count > 0)
                                         <x-fa::icon-button size="sm" icon="heroicon-o-trash" label="Wird von Grundprodukten genutzt, erst umhängen" disabled class="opacity-40 cursor-not-allowed" />
                                     @else

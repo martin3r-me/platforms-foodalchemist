@@ -3,7 +3,7 @@
      Häufigste Aufgabe = Speisen-Hauptgruppen anlegen, benennen und ordnen. Der Zähler links zählt Gerichte.
      Die vier Diätformen gelten für alle Hauptgruppen; gewählt wird sie am Gericht. --}}
 @php
-    $zeileBasis = 'group flex items-center gap-1 min-h-9 pr-1 rounded-[var(--fa-radius-control)] transition-colors';
+    $zeileBasis = 'group relative flex items-center gap-1 min-h-9 pr-1 rounded-[var(--fa-radius-control)] transition-colors';
     $merkmale = fn ($k) => collect(['vegan' => $k->is_vegan, 'vegetarisch' => $k->is_vegi, 'halal' => $k->is_halal, 'koscher' => $k->is_koscher])->filter()->keys();
 @endphp
 
@@ -17,7 +17,7 @@
 
     <div class="flex flex-wrap gap-4 items-start">
         {{-- Speisen-Hauptgruppen links --}}
-        <x-fa::section title="Speisen-Hauptgruppen" :meta="$hauptgruppen->count()" class="w-80 max-w-full shrink-0" data-taxo-hgs x-data="{ dragId: null }">
+        <x-fa::section title="Speisen-Hauptgruppen" :meta="$hauptgruppen->count()" class="w-96 max-w-full shrink-0" data-taxo-hgs x-data="{ dragId: null }">
             <div class="flex flex-col gap-0.5 -mx-1">
                 @foreach($hauptgruppen as $hg)
                     @php($darfEditHg = \Platform\FoodAlchemist\Support\Curate::canCurate(auth()->user(), $hg))
@@ -35,13 +35,14 @@
                             <a href="#" role="button" wire:click.prevent="waehleHg({{ $hg->id }})" @if($aktiv) aria-current="true" @endif
                                     class="flex-1 min-w-0 flex items-center gap-1.5 text-left px-1.5 py-1.5 text-[length:var(--fa-text-md)] {{ $aktiv ? 'font-medium' : '' }}">
                                 <span class="shrink-0 text-[length:var(--fa-text-sm)] tabular-nums text-[var(--fa-ink-3)]">{{ $hg->code }}</span>
-                                <span class="min-w-0 truncate" title="{{ $hg->label }}">{{ $hg->label }}</span>
+                                <span class="min-w-0 break-words leading-snug" title="{{ $hg->label }}">{{ $hg->label }}</span>
                                 @if($hg->is_inactive)<x-fa::badge class="shrink-0">inaktiv</x-fa::badge>@endif
                             </a>
                             <span class="shrink-0 text-[length:var(--fa-text-sm)] tabular-nums text-[var(--fa-ink-3)]" title="Gerichte in dieser Hauptgruppe">{{ number_format($nKl, 0, ',', '.') }}</span>
                             @if($darfEditHg)
-                                <span class="shrink-0 flex opacity-0 group-hover:opacity-100 focus-within:opacity-100">
-                                    <x-fa::icon-button size="sm" icon="heroicon-o-pencil" label="Hauptgruppe umbenennen" wire:click="startHgEdit({{ $hg->id }}, @js($hg->label))" />
+                                {{-- Dominique 2026-10-12: Aktionen legen sich beim Darüberfahren ÜBER die Zeile statt unsichtbar Platz zu reservieren — vorher blieben vom Namen nur wenige Zeichen („01 G…"). --}}
+                                <span class="absolute right-1 top-1/2 -translate-y-1/2 flex rounded-[var(--fa-radius-control)] bg-[var(--fa-surface)] shadow-sm opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto focus-within:opacity-100 focus-within:pointer-events-auto">
+                                    <x-fa::icon-button size="sm" icon="heroicon-o-pencil" label="Hauptgruppe umbenennen" wire:click="startHgEdit({{ $hg->id }}, {{ \Illuminate\Support\Js::from($hg->label) }})" />
                                     @if($nKl > 0)
                                         <x-fa::icon-button size="sm" icon="heroicon-o-trash" label="Gerichte hängen daran, erst umhängen" disabled class="opacity-40 cursor-not-allowed" />
                                     @else
@@ -107,7 +108,7 @@
                                         <td class="whitespace-nowrap">
                                             @if($darfEditK)
                                                 <div class="flex items-center justify-end gap-1">
-                                                    <x-fa::button size="sm" variant="ghost" icon="heroicon-o-pencil" wire:click="startKlasseEdit({{ $k->id }}, @js($k->label))">Umbenennen</x-fa::button>
+                                                    <x-fa::button size="sm" variant="ghost" icon="heroicon-o-pencil" wire:click="startKlasseEdit({{ $k->id }}, {{ \Illuminate\Support\Js::from($k->label) }})">Umbenennen</x-fa::button>
                                                     <div class="relative" x-data="faMenu()" x-on:keydown.escape="offen = false" x-on:click.outside="offen = false">
                                                         <x-fa::icon-button size="sm" icon="heroicon-m-ellipsis-horizontal" label="Weitere Aktionen für {{ $k->label }}"
                                                             x-on:click="toggle($event)" aria-haspopup="menu" x-bind:aria-expanded="offen" />

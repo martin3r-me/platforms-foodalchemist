@@ -4,7 +4,7 @@
      Löschen im Menü „Weitere Aktionen" (rot), gesperrt solange Rezepte daran hängen. --}}
 @php
     $gewaehlt = $hauptgruppen->firstWhere('id', $hauptgruppeId);
-    $zeileBasis = 'group flex items-center gap-1 min-h-9 pr-1 rounded-[var(--fa-radius-control)] transition-colors';
+    $zeileBasis = 'group relative flex items-center gap-1 min-h-9 pr-1 rounded-[var(--fa-radius-control)] transition-colors';
 @endphp
 
 <div class="flex flex-col gap-4">
@@ -16,7 +16,7 @@
 
     <div class="flex flex-wrap gap-4 items-start">
         {{-- Hauptgruppen --}}
-        <x-fa::section title="Hauptgruppen" :meta="$hauptgruppen->count()" class="w-72 max-w-full shrink-0" data-taxonomie-hg x-data="{ dragId: null }">
+        <x-fa::section title="Hauptgruppen" :meta="$hauptgruppen->count()" class="w-96 max-w-full shrink-0" data-taxonomie-hg x-data="{ dragId: null }">
             <div class="flex flex-col gap-0.5 -mx-1">
                 @foreach($hauptgruppen as $hg)
                     @php($darfEditHg = \Platform\FoodAlchemist\Support\Curate::canCurate(auth()->user(), $hg))
@@ -31,11 +31,12 @@
                         @else
                             <span class="shrink-0 pl-0.5">@include('foodalchemist::livewire.settings.partials.reorder-cell', ['id' => $hg->id, 'upMethod' => 'hgHoch', 'downMethod' => 'hgRunter', 'first' => $loop->first, 'last' => $loop->last])</span>
                             <a href="#" role="button" wire:click.prevent="waehleHg({{ $hg->id }})" @if($aktiv) aria-current="true" @endif
-                                    class="flex-1 min-w-0 truncate text-left px-1.5 py-1.5 text-[length:var(--fa-text-md)] {{ $aktiv ? 'font-medium' : '' }}" title="{{ $hg->label }}">{{ $hg->label }}</a>
+                                    class="flex-1 min-w-0 break-words leading-snug text-left px-1.5 py-1.5 text-[length:var(--fa-text-md)] {{ $aktiv ? 'font-medium' : '' }}" title="{{ $hg->label }}">{{ $hg->label }}</a>
                             <span class="shrink-0 text-[length:var(--fa-text-sm)] tabular-nums text-[var(--fa-ink-3)]" title="Kategorien">{{ $hg->kategorie_count }}</span>
                             @if($darfEditHg)
-                                <span class="shrink-0 flex opacity-0 group-hover:opacity-100 focus-within:opacity-100">
-                                    <x-fa::icon-button size="sm" icon="heroicon-o-pencil" label="Hauptgruppe umbenennen" wire:click="startHgEdit({{ $hg->id }}, @js($hg->label))" />
+                                {{-- Dominique 2026-10-12: Aktionen legen sich beim Darüberfahren ÜBER die Zeile statt unsichtbar Platz zu reservieren — vorher blieben vom Namen nur wenige Zeichen („01 G…"). --}}
+                                <span class="absolute right-1 top-1/2 -translate-y-1/2 flex rounded-[var(--fa-radius-control)] bg-[var(--fa-surface)] shadow-sm opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto focus-within:opacity-100 focus-within:pointer-events-auto">
+                                    <x-fa::icon-button size="sm" icon="heroicon-o-pencil" label="Hauptgruppe umbenennen" wire:click="startHgEdit({{ $hg->id }}, {{ \Illuminate\Support\Js::from($hg->label) }})" />
                                     @if($hg->kategorie_count > 0)
                                         <x-fa::icon-button size="sm" icon="heroicon-o-trash" label="Hat Kategorien, erst dort entfernen" disabled class="opacity-40 cursor-not-allowed" />
                                     @else

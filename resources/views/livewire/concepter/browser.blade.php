@@ -70,7 +70,7 @@
                         <p class="px-2.5 pb-1 text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-3)]">Klasse</p>
                         <x-foodalchemist::filter-row wire:click="waehleKlasse('')" :active="$klasse === ''">Alle Klassen</x-foodalchemist::filter-row>
                         @foreach($klassen as $k)
-                            <x-foodalchemist::filter-row wire:key="kl-{{ $loop->index }}" wire:click="waehleKlasse(@js($k))" :active="$klasse === $k">{{ $k }}</x-foodalchemist::filter-row>
+                            <x-foodalchemist::filter-row wire:key="kl-{{ $loop->index }}" wire:click="waehleKlasse({{ \Illuminate\Support\Js::from($k) }})" :active="$klasse === $k">{{ $k }}</x-foodalchemist::filter-row>
                         @endforeach
                     </div>
                 @endif
@@ -80,7 +80,7 @@
                         <p class="px-2.5 pb-1 text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-3)]">Rolle</p>
                         <x-foodalchemist::filter-row wire:click="waehleRolle('')" :active="$rolleFilter === ''">Alle Rollen</x-foodalchemist::filter-row>
                         @foreach($rollen as $r)
-                            <x-foodalchemist::filter-row wire:key="ro-{{ $loop->index }}" wire:click="waehleRolle(@js($r))" :active="$rolleFilter === $r">{{ $r }}</x-foodalchemist::filter-row>
+                            <x-foodalchemist::filter-row wire:key="ro-{{ $loop->index }}" wire:click="waehleRolle({{ \Illuminate\Support\Js::from($r) }})" :active="$rolleFilter === $r">{{ $r }}</x-foodalchemist::filter-row>
                         @endforeach
                     </div>
                 @endif
