@@ -166,7 +166,7 @@ class RecipeOneShotService
         $ergebnis['kohaerenz_urteil'] = $this->kohaerenzGlied($team, $recipe->fresh() ?? $recipe);
         $ergebnis['wirtschaftlichkeit'] = $this->wirtschaftlichkeitsGlied($team, $recipe->fresh() ?? $recipe, $zielVk);
         if ($completeCoverage) {
-            $ergebnis['coverage'] = $this->coverageGlieder($team, $recipe->fresh() ?? $recipe, $shouldStop);
+            $ergebnis['coverage'] = $this->coverageGlieder($team, $recipe->fresh() ?? $recipe, $shouldStop, $refresh);
         }
 
         return $ergebnis;
@@ -289,12 +289,12 @@ class RecipeOneShotService
      *
      * @return array<string, array{status: string, fehler?: string}>
      */
-    private function coverageGlieder(Team $team, FoodAlchemistRecipe $recipe, ?callable $shouldStop = null): array
+    private function coverageGlieder(Team $team, FoodAlchemistRecipe $recipe, ?callable $shouldStop = null, bool $refresh = false): array
     {
         $out = [];
         $glieder = [
             'fertigung' => fn () => $this->fertigungsGlied($recipe),
-            'eigenschaften' => fn () => $this->eigenschaftenGlied($recipe->fresh() ?? $recipe),
+            'eigenschaften' => fn () => $this->eigenschaftenGlied($recipe->fresh() ?? $recipe, $refresh),
             'equipment' => fn () => $this->equipmentGlied($team, $recipe->fresh() ?? $recipe),
             'posten' => fn () => $this->postenGlied($team, $recipe->fresh() ?? $recipe),
             'steps' => fn () => $this->stepGlied($recipe->fresh() ?? $recipe),
@@ -346,7 +346,7 @@ class RecipeOneShotService
     }
 
     /** @return array{status:string,work_time_min?:?int,setup_time_min?:?int,variable_work_time_min?:?float,variable_work_time_basis?:?string,standzeit_min?:?int,max_vorlauf_tage?:?int,temperature?:?string,function?:?string,fehler?:string} */
-    private function eigenschaftenGlied(FoodAlchemistRecipe $recipe): array
+    private function eigenschaftenGlied(FoodAlchemistRecipe $recipe, bool $refresh = false): array
     {
         try {
             $vorschlag = app(Ai\AiGatewayService::class)->propose('recipe.eigenschaften', [
@@ -426,8 +426,21 @@ class RecipeOneShotService
                 }
             }
 
+            // Override-First (Weg-B-Befund 7, 2026-10-12): ohne `refresh` füllt das Glied nur LEERE Felder —
+            // gepflegte Zeiten, Chargengrenzen, Temperatur und Funktion bleiben stehen. `refresh` (bewusster
+            // „Alles anreichern"-Klick im Editor) erneuert alles. Die Felder tragen keine Lineage-Spalte,
+            // „gefüllt" ist darum das einzige belastbare Kriterium.
+            if (! $refresh) {
+                foreach (array_keys($update) as $feld) {
+                    $alt = $recipe->{$feld};
+                    if ($alt !== null && $alt !== '') {
+                        unset($update[$feld]);
+                    }
+                }
+            }
+
             if ($update === []) {
-                return ['status' => 'leer'];
+                return ['status' => $refresh ? 'leer' : 'gefuellt_geschuetzt'];
             }
 
             $recipe->forceFill($update)->save();
@@ -627,6 +640,14 @@ class RecipeOneShotService
     private function stepGlied(FoodAlchemistRecipe $recipe): array
     {
         $bestehend = FoodAlchemistRecipeStep::where('recipe_id', $recipe->id)->count();
+
+        // GL-07 / Weg-B-Befund 7 (2026-10-12): handgepflegte Schritte (preparation_source = manual) sind ein
+        // Override. Der Coverage-Pass lief trotzdem im Modus „voll überschreiben" und ersetzte sie — entgegen der
+        // Tool-Zusage „gefüllte Felder werden nie angetastet". KI-Schritte aus einem früheren Lauf werden
+        // weiterhin nachgezogen (bewusste Aktualisierung nach Zutatenänderung, s. Test „Coverage-Pass …").
+        if ($bestehend > 0 && $recipe->preparation_source === 'manual') {
+            return ['status' => 'manual_geschuetzt', 'n_steps' => $bestehend];
+        }
 
         try {
             $wissen = $this->stepWissen($recipe);
@@ -875,8 +896,14 @@ class RecipeOneShotService
         try {
             $recipe = $recipe->fresh() ?? $recipe;                // Klasse/HG kommen aus dem Pass davor
 
-            // ── Schreiben 1: Aufschlagsklasse aus der Kaskade festschreiben ──
-            $ak = $this->markupKaskade($recipe)['id'];
+            // ── Schreiben 1: Aufschlagsklasse festschreiben ──
+            // Weg-B-Befund 5 (2026-10-12): war die Klasse nur an der Standard-Darreichung gepflegt
+            // (recipe_darreichung.PUT, ohne Rückspiegelung), stand die Rezept-Spalte leer, die Kaskade
+            // nahm ihren Default und `syncStandardDarreichung` schrieb ihn über die gepflegte Klasse
+            // (BAN → ALC, Auto-VK 45,90 → 23,90 €). Override-First: die Darreichung gewinnt, die Kaskade
+            // füllt nur, wenn auch dort nichts steht.
+            $gepflegt = $recipe->standardPresentation()->first()?->markup_class_id;
+            $ak = $gepflegt !== null ? (int) $gepflegt : $this->markupKaskade($recipe)['id'];
             if ($recipe->markup_class_id === null && $ak !== null) {
                 $this->sales->updateVk($team, $recipe->id, ['markup_class_id' => $ak]);
                 // `updateVk` stempelt `last_modified_by='vk_editor'` — das ist die

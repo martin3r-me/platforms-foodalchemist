@@ -161,6 +161,27 @@ it('L8a: gepflegte Portion und gesetzte AK werden nicht überschrieben (GL-07)',
         ->and($w['sales_net'])->toBe(16.8);
 });
 
+/**
+ * Weg-B-Befund 5 (Gericht 3920, 2026-10-12): die AK stand nur an der Standard-Darreichung (recipe_darreichung.PUT),
+ * die Rezept-Spalte war leer → die Kaskade nahm ALC und `syncStandardDarreichung` überschrieb BAN (Auto-VK 45,90 → 23,90 €).
+ */
+it('L8a: eine nur an der Darreichung gepflegte AK gewinnt gegen den Kaskaden-Default und wird ans Rezept gespiegelt', function () {
+    $ban = FoodAlchemistMarkupClass::create([
+        'code' => 'BAN', 'label' => 'Bankett', 'class_factor_pct' => 120,
+        'vat_profile_key' => 'regulaer', 'raw_markup_pct' => 200, 'vat_rate' => 19, 'formula_type' => 'aufschlag',
+    ]);
+    $r = ($this->gericht)(['markup_class_id' => null]);
+    $standard = app(DarreichungService::class)->ensureStandard($this->rootTeam, $r->id, 'test');
+    app(DarreichungService::class)->aktualisieren($this->rootTeam, $standard->id, ['markup_class_id' => $ban->id]);
+    expect($r->fresh()->markup_class_id)->toBeNull();                      // Ausgangslage wie auf demo
+
+    $w = $this->svc->anreichern($this->rootTeam, $r->fresh())['wirtschaftlichkeit'];
+
+    expect($w['aufschlagsklasse'])->toBe('BAN')
+        ->and($standard->fresh()->markup_class_id)->toBe($ban->id)          // nicht auf ALC gedreht
+        ->and($r->fresh()->markup_class_id)->toBe($ban->id);               // Rezept-Spalte nachgezogen
+});
+
 it('L8a: teil-unbepreiste Zutaten machen den VK vorläufig', function () {
     $r = ($this->gericht)(['ek_n_ingredients_priced' => 1]);       // 1 von 3 bepreist
 

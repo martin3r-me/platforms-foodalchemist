@@ -43,7 +43,9 @@ class RecipesEnrichTool extends FoodAlchemistTool implements ToolContract, ToolM
             . 'Nährwerte, Allergene und Zusatzstoffe kommen NICHT aus der KI, sondern aus den Lieferantenartikeln. '
             . 'Sub-Rezepte laufen mit. Läuft ASYNCHRON über den Worker — die Antwort liefert cascade_run_id und step_id, '
             . 'den Fortschritt zeigt foodalchemist.planung_kaskade.GET, das Ergebnis foodalchemist.recipes.REIFE. '
-            . 'Bereits gefüllte Felder werden nie angetastet (Override-First). Kostet Provider-Calls je fehlendem Feld.';
+            . 'Override-First: handgepflegte Felder (Quelle manual — Beschreibung, Schritte, Sensorik, Rollen) werden nie angetastet; '
+            . 'gefüllte Zeiten/Chargen/Temperatur/Funktion bleiben stehen; KI-erzeugte Schritte und Sensorik eines früheren Laufs '
+            . 'zieht der Coverage-Pass nach. Kostet Provider-Calls je fehlendem Feld.';
     }
 
     public function getSchema(): array
