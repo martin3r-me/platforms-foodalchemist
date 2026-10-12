@@ -103,7 +103,9 @@
             if (typeof busy !== 'undefined') { busy = false }
         }, 45000)
         // Promise.resolve().then(): ein synchroner Fehler im Ausdruck (falsche Methode, kaputtes
-        // Argument) landet im .catch unten mit echter Meldung statt 45 s später als „Keine Antwort".
+        // Argument) landet im .catch unten mit echter Meldung statt 45 s später als Keine-Antwort-Meldung.
+        // ACHTUNG: dieser Block steht IN dem HTML-Attribut @click — hier nie ein gerades Anführungszeichen schreiben,
+        // es beendet das Attribut, der Rest erscheint als Text auf der Seite und der Knopf ist tot (2026-10-12).
         Promise.resolve().then(() => $wire.{{ $wireAufruf }})
             .then(() => {
                 clearTimeout(kiTimeout)
