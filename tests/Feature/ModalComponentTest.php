@@ -92,3 +92,23 @@ it('ohne zFest (Default) bleibt alles beim Alten — z-[100] + Zähler-Teilnahme
         ->and($html)->toContain('window.__foodAlchemistModalZ')
         ->and($html)->toContain('el.style.zIndex');
 });
+
+/**
+ * Dominique 2026-10-12: Basisrezept → Grundprodukt → in die Artikelsuche getippt → das Basisrezept lag wieder
+ * vorne. bringToFront setzt die Ebene als Inline-Stil; der Livewire-Morph des oberen Modals warf ihn weg (103 → 100,
+ * das Rezept-Modal blieb bei 102). Im Browser gemessen; hier wird der Vertrag gepinnt, der das verhindert:
+ * Livewire fasst die Attribute des Wurzel-Elements nicht an, der Name kommt aus der sichtbaren Überschrift.
+ */
+it('Wurzel-Element ist wire:ignore.self — die Ebene aus bringToFront überlebt den Livewire-Morph', function () {
+    $html = Blade::render('<x-foodalchemist::modal name="gp-modal" title="Grundprodukt bearbeiten" title-name="Knollensellerie: frisch">X</x-foodalchemist::modal>');
+
+    // Im Wurzel-Tag: zwischen <div x-data= und data-modal="gp-modal" (das x-data-Attribut enthält selbst '>').
+    $start = strpos($html, '<div x-data=');
+    $ende = strpos($html, 'data-modal="gp-modal"');
+    $wurzel = substr($html, (int) $start, (int) $ende - (int) $start);
+    expect($start)->not->toBeFalse()
+        ->and($wurzel)->toContain('wire:ignore.self')
+        ->and($html)->toContain('aria-labelledby="modal-titel-gp-modal"')
+        ->and($html)->toContain('id="modal-titel-gp-modal"')
+        ->and($html)->not->toMatch('/role="dialog"[^>]*aria-label=/');   // kein eingefrorener Name am Wurzel-Element
+});
