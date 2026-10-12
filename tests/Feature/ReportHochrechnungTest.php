@@ -122,15 +122,40 @@ it('rechnet das Gericht über N × Darreichung hoch — Standard vorgewählt, um
         ->and((float) $umgeschaltet['recipe']['yield_kg'])->toBe(50.0);
 });
 
-it('erfindet kein Portionsgewicht, wenn die Darreichung keins hat', function () {
-    $this->rezept->update(['is_sales_recipe' => true]);
-    $sf = FoodAlchemistServierform::firstOrCreate(['code' => 'unbestimmt', 'team_id' => $this->rootTeam->id],
-        ['label' => 'Unbestimmt']);
+/**
+ * Weg-B-Befund (2026-10-12, Gericht 3920): Editor und Produktion zeigten 476 g (Ertrag ÷ Anzahl,
+ * `grammJeEinheit`), der Report las die rohe Spalte und meldete „kein Portionsgewicht". Der Report
+ * spiegelt jetzt dieselbe Kaskade: Standard ohne gepflegte Grammatur = Ertrag je Einheit.
+ */
+it('Standard-Darreichung ohne gepflegte Grammatur: Report nimmt Ertrag je Einheit wie der Editor', function () {
+    $this->rezept->update(['is_sales_recipe' => true]);          // Ansatz 2 kg, sales_unit_count leer = EINE Einheit
+    $sf = FoodAlchemistServierform::firstOrCreate(['code' => 'teller', 'team_id' => $this->rootTeam->id],
+        ['label' => 'Teller']);
     FoodAlchemistRecipeDarreichung::create(['team_id' => $this->rootTeam->id, 'recipe_id' => $this->rezept->id,
         'serving_form_id' => $sf->id, 'is_standard' => true, 'quantity_per_unit_g' => null]);
 
     $hoch = $this->report->rezeptDaten($this->rootTeam, $this->rezept->id,
-        $this->report->optionen(['ziel_menge' => '50'], 'recipe'));
+        $this->report->optionen(['ziel_menge' => '5'], 'recipe'));
+
+    expect($hoch['hochrechnung']['aktiv'])->toBeTrue()
+        ->and((float) $hoch['hochrechnung']['darreichung']['gramm'])->toBe(2000.0)   // Ertrag ÷ 1
+        ->and((float) $hoch['hochrechnung']['faktor'])->toBe(5.0)                    // 5 × 2 kg = 10 kg
+        ->and((float) $hoch['recipe']['yield_kg'])->toBe(10.0);
+});
+
+it('erfindet kein Portionsgewicht für eine Nicht-Standard-Darreichung ohne Grammatur', function () {
+    $this->rezept->update(['is_sales_recipe' => true]);
+    $teller = FoodAlchemistServierform::firstOrCreate(['code' => 'teller', 'team_id' => $this->rootTeam->id],
+        ['label' => 'Teller']);
+    $platte = FoodAlchemistServierform::firstOrCreate(['code' => 'platte', 'team_id' => $this->rootTeam->id],
+        ['label' => 'Servierplatte']);
+    FoodAlchemistRecipeDarreichung::create(['team_id' => $this->rootTeam->id, 'recipe_id' => $this->rezept->id,
+        'serving_form_id' => $teller->id, 'is_standard' => true, 'quantity_per_unit_g' => 200]);
+    $ohne = FoodAlchemistRecipeDarreichung::create(['team_id' => $this->rootTeam->id, 'recipe_id' => $this->rezept->id,
+        'serving_form_id' => $platte->id, 'is_standard' => false, 'quantity_per_unit_g' => null]);
+
+    $hoch = $this->report->rezeptDaten($this->rootTeam, $this->rezept->id,
+        $this->report->optionen(['ziel_menge' => '50', 'darreichung' => (string) $ohne->id], 'recipe'));
 
     expect($hoch['hochrechnung']['aktiv'])->toBeFalse()
         ->and($hoch['hochrechnung']['hinweis'])->toContain('Portionsgewicht')

@@ -12,6 +12,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistGeschirrSupplier;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplier;
+use Platform\FoodAlchemist\Services\DarreichungService;
 
 /**
  * Zentrale Datenaufbereitung für druckbare/PDF-fähige Reports.
@@ -132,7 +133,11 @@ class ReportExportService
                 ->map(fn ($d) => [
                     'id' => (int) $d->id,
                     'label' => $d->servingForm?->label ?? 'Darreichung #'.$d->id,
-                    'gramm' => $d->quantity_per_unit_g !== null ? (float) $d->quantity_per_unit_g : null,
+                    // Weg-B (2026-10-12): dieselbe Grammatur wie Editor und Produktion — ohne gepflegte
+                    // Grammatur fällt die Standard-Darreichung auf Ertrag ÷ Anzahl zurück (grammJeEinheit).
+                    // Vorher las der Report die rohe Spalte und meldete „kein Portionsgewicht",
+                    // während der Editor für dieselbe Darreichung 476 g zeigte.
+                    'gramm' => app(DarreichungService::class)->grammJeEinheit($d, $recipe),
                     'is_standard' => (bool) $d->is_standard,
                 ])->values()->all()
             : [];

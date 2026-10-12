@@ -161,11 +161,9 @@ class RecipeGeneratorService
                 // deren 21 von 57 Klassen gingen weiter in jeden VK-Prompt, die KI konnte also
                 // eine stillgelegte Klasse wählen. Das ist primär ein Korrektheits-Fix; der
                 // Token-Gewinn ist mit ~37 % einer kleinen Liste nebensächlich.
-                $kontext['speisen_klassen'] = \Platform\FoodAlchemist\Models\FoodAlchemistDishClass::query()
-                    ->join('foodalchemist_dish_main_groups AS hg', 'hg.id', '=', 'foodalchemist_dish_classes.dish_main_group_id')
-                    ->where('hg.is_inactive', false)
-                    ->selectRaw("foodalchemist_dish_classes.id AS id, CONCAT(hg.code, ' / ', foodalchemist_dish_classes.label) AS label")
-                    ->orderBy('foodalchemist_dish_classes.id')->pluck('label', 'id')->all();
+                // Weg-B-Befund 1 (2026-10-12): dieselbe Liste wie recipe_klasse.POST — der frühere
+                // INNER JOIN verwarf die vier flachen Diät-Klassen ohne Hauptgruppe (Modell A).
+                $kontext['speisen_klassen'] = \Platform\FoodAlchemist\Services\SpeisenKlassenService::taxonomie($team);
                 $kontext['aufschlagsklassen'] = \Platform\FoodAlchemist\Models\FoodAlchemistMarkupClass::where('is_inactive', false)
                     ->orderBy('code')->pluck('label', 'code')->all();
             }

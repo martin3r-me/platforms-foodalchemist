@@ -30,11 +30,28 @@ it('Registry-Smoke: alle Modul-Tools registriert (Naming <modul>.resource.VERB)'
         'foodalchemist.recipes.SEARCH', 'foodalchemist.recipes.GET',
         'foodalchemist.verkaufsrezepte.SEARCH', 'foodalchemist.artikel.SEARCH',
         'foodalchemist.foodbook.GET',
-        'foodalchemist.recipe_klasse.POST',
+        'foodalchemist.recipe_klasse.POST', 'foodalchemist.dish_classes.GET',
     ] as $name) {
         expect($this->registry->get($name))->not->toBeNull($name);
         expect($this->registry->get($name)->getSchema()['type'] ?? null)->toBe('object', $name);
     }
+});
+
+it('dish_classes.GET: Klassen (auch ohne Hauptgruppe) und aktive Hauptgruppen mit Ids — Weg-B-Befund 1', function () {
+    $flach = \Platform\FoodAlchemist\Models\FoodAlchemistDishClass::create(['dish_main_group_id' => null, 'code' => 'FISCH', 'label' => 'Fisch', 'diet_form' => 'fisch']);
+    $hg = $this->makeMainGroup($this->rootTeam, 'HG');
+    $tot = $this->makeMainGroup($this->rootTeam, 'ALC', inactive: true);
+    $inaktiv = \Platform\FoodAlchemist\Models\FoodAlchemistDishClass::create(['dish_main_group_id' => $tot->id, 'code' => 'ALC_X', 'label' => 'Bier', 'diet_form' => 'neutral']);
+
+    $res = $this->registry->get('foodalchemist.dish_classes.GET')->execute([], $this->kontext);
+    expect($res->success)->toBeTrue($res->error ?? '');
+
+    $klassen = collect($res->data['klassen']);
+    expect($klassen->firstWhere('id', $flach->id))->toMatchArray(['code' => 'FISCH', 'diet_form' => 'fisch', 'dish_main_group' => null])
+        ->and($klassen->firstWhere('id', $inaktiv->id))->toBeNull()
+        ->and(collect($res->data['hauptgruppen'])->pluck('id')->all())->toContain($hg->id)
+        ->and(collect($res->data['hauptgruppen'])->pluck('id')->all())->not->toContain($tot->id)
+        ->and($this->registry->get('foodalchemist.dish_classes.GET')->getMetadata()['read_only'])->toBeTrue();
 });
 
 it('Lese-Tools: recipes.SEARCH/GET team-scoped, VK-Rezepte bleiben draußen (Scope-Härte)', function () {
