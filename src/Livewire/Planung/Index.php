@@ -125,8 +125,10 @@ class Index extends Component
     // ── Import-Tab (Rezept-Import: Rohtext/Text-PDF → TREU extrahieren → GEERDET anlegen) ──
     /** Freitext-/Web-Copy-Eingabe. */
     public string $importText = '';
-    /** Optionaler Text-PDF-Upload (WithFileUploads). */
+    /** Optionaler Upload: Text-PDF, Scan-PDF oder Foto (WithFileUploads). */
     public $importPdf = null;
+    /** Woher der Extrakt kam: text | pdf | scan | bild — Vorschau warnt bei scan/bild (Mengen prüfen). */
+    public string $importQuelle = 'text';
     /** Ziel-Typ (aus dem Extrakt vorgeschlagen, per Toggle überschreibbar). */
     public string $importTyp = 'basisrezept';
     /** Schritt: eingabe → vorschau → fertig. */
@@ -3915,18 +3917,29 @@ class Index extends Component
             return;
         }
         try {
+            // Foto/Scan (Dominique 2026-10-12): JPG/PNG/WebP gehen als Bild an die KI, PDFs zuerst als Text,
+            // bei Scans als Datei — s. RecipeExtractService::ausBild/ausPdf. Text-Weg unverändert.
             if ($this->importPdf !== null) {
-                $this->validate(['importPdf' => 'file|mimes:pdf|max:20480']);
-                $rohText = $svc->pdfText($this->importPdf->getRealPath());
+                $this->validate(['importPdf' => 'file|mimes:pdf,jpg,jpeg,png,webp,gif|max:20480']);
+                $mime = (string) $this->importPdf->getMimeType();
+                if (str_starts_with($mime, 'image/')) {
+                    $this->importQuelle = 'bild';
+                    $extrakt = $svc->ausBild($team, $this->importPdf->getRealPath(), $mime, trim($this->importText) ?: null);
+                } else {
+                    $ergebnis = $svc->ausPdf($team, $this->importPdf->getRealPath(), (string) $this->importPdf->getClientOriginalName());
+                    $this->importQuelle = $ergebnis['quelle'];
+                    $extrakt = $ergebnis['extrakt'];
+                }
             } else {
                 $rohText = trim($this->importText);
-            }
-            if ($rohText === '') {
-                $this->importMeldung = 'Bitte Text einfügen oder ein Text-PDF hochladen.';
+                if ($rohText === '') {
+                    $this->importMeldung = 'Bitte Text einfügen oder ein PDF bzw. Foto hochladen.';
 
-                return;
+                    return;
+                }
+                $this->importQuelle = 'text';
+                $extrakt = $svc->extrahiere($team, $rohText);
             }
-            $extrakt = $svc->extrahiere($team, $rohText);
         } catch (\Platform\FoodAlchemist\Exceptions\KiDeaktiviertException) {
             $this->importMeldung = 'KI ist für dieses Team deaktiviert — die Extraktion braucht sie.';
 
@@ -4026,7 +4039,7 @@ class Index extends Component
 
     public function importReset(): void
     {
-        $this->reset(['importText', 'importPdf', 'importVorschau', 'importErgebnis', 'importMeldung']);
+        $this->reset(['importText', 'importPdf', 'importVorschau', 'importErgebnis', 'importMeldung', 'importQuelle']);
         $this->importStep = 'eingabe';
         $this->importTyp = 'basisrezept';
     }

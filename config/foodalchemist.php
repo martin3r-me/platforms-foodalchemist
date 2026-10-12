@@ -1653,7 +1653,7 @@ return [
                 . 'werte = {name, description, preparation, zutaten: [{id, text, quantity, einheit_slug}], aenderungs_notiz}.',
         ],
         'recipe.extract' => [
-            'tier' => 'C',                                            // Tier C: unset ⇒ Plattform-Default-Modell (Text ok); Vision (Bild) erst nach Core-Fix
+            'tier' => 'C',                                            // Tier C: unset ⇒ Plattform-Default-Modell (Text + Vision; Foto/Scan seit Core-Fix #925 über den OpenAI-Weg)
             'max_tokens' => 8000,                                     // ganzes (evtl. verschachteltes) Rezept-JSON — Reasoning-Headroom
             // Rezept-IMPORT (2026-08-22): TREUE Extraktion aus roh_text — NICHTS anreichern/erfinden
             // (GL-13 Inv. 7, Wissenskontext bewusst leer). Die Erdung (GP-Bindung) macht der Persistenz-
@@ -1670,7 +1670,9 @@ return [
                 . '»Für das Püree: …«), gib sie als `komponenten` aus (je ein Sub-Rezept), NICHT flach '
                 . 'aufgelöst; eine nur namentlich genannte Komponente ohne eigene Zutaten markierst du in '
                 . 'der Zutatenzeile mit `sub_rezept: true`. Übernimm Mengen/Einheiten wörtlich (unbekannt '
-                . '⇒ weglassen, NICHT schätzen). werte = {typ (gericht|basisrezept), name, '
+                . '⇒ weglassen, NICHT schätzen). Liegt ein Foto oder Scan bei (quelle = bild), steht der Rezepttext '
+                . 'DORT: lies ihn wörtlich ab, auch Step-by-Step-Schritte und Bildunterschriften; Unleserliches '
+                . 'weglassen. werte = {typ (gericht|basisrezept), name, '
                 . 'zutaten: [{text, quantity, unit, sub_rezept (bool, default false)}], preparation, '
                 . 'komponenten: [{name, zutaten: [{text, quantity, unit}], preparation}] (leer, wenn keine)}.',
         ],

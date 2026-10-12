@@ -139,6 +139,90 @@ it('#6: Import mit leerem Namen (Quelle ohne Titel) → Nachfassen statt namenlo
     expect(FoodAlchemistRecipe::where('team_id', $this->rootTeam->id)->where('created_via', 'import')->count())->toBe(0);
 });
 
+/**
+ * Foto-/Scan-Import (Dominique 2026-10-12): Bilder gehen als Teile DERSELBEN Nutzer-Nachricht an die KI
+ * (Core normalisiert, Fix #925). Geprüft über den Fake-Provider: er zählt die Anhänge ins Echo.
+ */
+it('Gateway: Bild-Anhänge werden Teile der Nutzer-Nachricht, der Text-Weg bleibt unverändert', function () {
+    config(['foodalchemist.ai.provider' => 'fake']);
+    $gw = app(AiGatewayService::class);
+
+    $ohne = $gw->propose('recipe.extract', ['roh_text' => '50 g Basilikum']);
+    expect($ohne->werte)->not->toHaveKey('_anhaenge');
+
+    $mit = $gw->propose('recipe.extract', ['roh_text' => '(siehe Anhang)', 'quelle' => 'bild'], ['bilder' => [
+        ['typ' => 'image', 'url' => 'data:image/png;base64,iVBORw0KGgo='],
+        ['typ' => 'pdf', 'name' => 'scan.pdf', 'data' => 'data:application/pdf;base64,JVBERi0='],
+    ]]);
+    expect($mit->werte['_anhaenge'])->toBe(2)
+        ->and($mit->werte['quelle'])->toBe('bild');
+
+    // Nachrichten-Teile in der Chat-Completions-Form, die der Core kennt
+    $teile = AiGatewayService::bildTeile([['typ' => 'image', 'url' => 'data:image/jpeg;base64,/9j/'], ['typ' => 'pdf', 'name' => 'k.pdf', 'data' => 'data:application/pdf;base64,JVBERi0=']]);
+    expect($teile[0])->toBe(['type' => 'image_url', 'image_url' => ['url' => 'data:image/jpeg;base64,/9j/', 'detail' => 'high']])
+        ->and($teile[1])->toBe(['type' => 'input_file', 'filename' => 'k.pdf', 'file_data' => 'data:application/pdf;base64,JVBERi0='])
+        ->and(AiGatewayService::inhaltText(['role' => 'user', 'content' => [['type' => 'text', 'text' => 'Hallo'], $teile[0]]]))->toBe("Hallo\n[Bild]");
+});
+
+it('Gateway: Bilder nur über den OpenAI-Weg — ein anderer Provider wird klar abgewiesen', function () {
+    config(['foodalchemist.ai.provider' => 'core']);
+    // Provider-Stub, der weder OpenAI noch der Fake ist (so sähe der Anthropic-Weg aus): Bild muss abgewiesen werden.
+    app()->bind(\Platform\Core\Contracts\LLMProviderContract::class, fn () => new class implements \Platform\Core\Contracts\LLMProviderContract
+    {
+        public function getName(): string { return 'anthropic-stub'; }
+        public function chat(array $messages, array $options = []): array { return ['content' => '{"werte":{},"confidence":0.5,"reasoning":"x"}', 'usage' => [], 'model' => 'stub', 'tool_calls' => null]; }
+        public function streamChat(array $messages, callable $onDelta, array $options = []): void {}
+        public function getAvailableModels(): array { return ['stub']; }
+        public function getDefaultModel(): string { return 'stub'; }
+        public function isAvailable(): bool { return true; }
+    });
+    expect(fn () => app(AiGatewayService::class)->propose('recipe.extract', ['roh_text' => 'x'], ['bilder' => [['typ' => 'image', 'url' => 'data:image/png;base64,AA==']]]))
+        ->toThrow(\RuntimeException::class, 'OpenAI');
+});
+
+it('Import-Tab: Foto-Upload geht als Bild an die KI, die Vorschau warnt „aus Foto gelesen"', function () {
+    config(['foodalchemist.ai.provider' => 'core']);
+    $this->mock(AiGatewayService::class, fn ($m) => $m->shouldReceive('propose')->once()
+        ->withArgs(fn (string $key, array $ctx, array $opt) => $key === 'recipe.extract'
+            && ($ctx['quelle'] ?? null) === 'bild'
+            && str_starts_with((string) ($opt['bilder'][0]['url'] ?? ''), 'data:image/jpeg;base64,'))
+        ->andReturn(new AiProposal(['typ' => 'basisrezept', 'name' => 'Pesto vom Foto',
+            'zutaten' => [['text' => 'Basilikum', 'quantity' => 50, 'unit' => 'g']], 'preparation' => 'Mixen.', 'komponenten' => []], 0.8, 'Mock', [], 'extract-bild')));
+
+    // Die Tab-Region rendert nur mit aktiver Session (@if($active)) — wie im Layout-Fix-Test oben.
+    $session = app(\Platform\FoodAlchemist\Services\PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Foto-Import', 'brief' => 'x']);
+    Livewire::test(PlanungIndex::class)
+        ->set('sessionId', $session->id)
+        ->set('importPdf', \Illuminate\Http\UploadedFile::fake()->image('rezeptkarte.jpg', 800, 600))
+        ->call('importExtrahieren')
+        ->assertSet('importStep', 'vorschau')
+        ->assertSet('importQuelle', 'bild')
+        ->assertSeeHtml('data-import-quelle="bild"')
+        ->assertSee('aus Foto gelesen');
+});
+
+it('Import-Tab: Scan-PDF ohne Text geht als Datei an die KI (Text-PDF weiter günstig als Text)', function () {
+    config(['foodalchemist.ai.provider' => 'core']);
+    $this->mock(AiGatewayService::class, fn ($m) => $m->shouldReceive('propose')->once()
+        ->withArgs(fn (string $key, array $ctx, array $opt) => ($opt['bilder'][0]['typ'] ?? null) === 'pdf'
+            && str_starts_with((string) ($opt['bilder'][0]['data'] ?? ''), 'data:application/pdf;base64,'))
+        ->andReturn(new AiProposal(['typ' => 'basisrezept', 'name' => 'Jus vom Scan',
+            'zutaten' => [['text' => 'Knochen', 'quantity' => 1, 'unit' => 'kg']], 'preparation' => 'Rösten.', 'komponenten' => []], 0.8, 'Mock', [], 'extract-scan')));
+
+    // Minimales PDF ohne Textoperatoren = Scan aus Sicht des Parsers
+    $scan = "%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n"
+        ."3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 200]>>endobj\nxref\n0 4\n0000000000 65535 f \n0000000009 00000 n \n0000000052 00000 n \n0000000101 00000 n \ntrailer<</Size 4/Root 1 0 R>>\nstartxref\n160\n%%EOF\n";
+
+    $session = app(\Platform\FoodAlchemist\Services\PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Scan-Import', 'brief' => 'x']);
+    Livewire::test(PlanungIndex::class)
+        ->set('sessionId', $session->id)
+        ->set('importPdf', \Illuminate\Http\UploadedFile::fake()->createWithContent('kochbuch-scan.pdf', $scan))
+        ->call('importExtrahieren')
+        ->assertSet('importStep', 'vorschau')
+        ->assertSet('importQuelle', 'scan')
+        ->assertSee('aus Scan gelesen');
+});
+
 it('Import-Tab (Livewire): extrahieren → Vorschau, anlegen → Draft + Worker-Übergabe', function () {
     Queue::fake();   // #6/Import: importAnlegen übergibt jetzt an den Worker (EnrichRecipeJob), nicht synchron.
     ($this->mockExtract)([

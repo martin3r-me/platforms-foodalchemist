@@ -20,12 +20,35 @@ class FakeAiProvider implements LLMProviderContract
 
     public function chat(array $messages, array $options = []): array
     {
-        $user = collect($messages)->where('role', 'user')->last()['content'] ?? '';
+        $letzte = collect($messages)->where('role', 'user')->last()['content'] ?? '';
+        // Bild-Nachrichten (2026-10-12): content = Teile [{type: text}, {type: image_url}, {type: input_file}].
+        // Der Fake liest den Text-Teil und zählt die Anhänge ins Echo — so prüfen Tests, dass Bilder
+        // als Teile derselben Nutzer-Nachricht ankommen (genau dort stürzte der Core vor #925 ab).
+        $anhaenge = 0;
+        if (is_array($letzte)) {
+            $texte = [];
+            foreach ($letzte as $teil) {
+                if (! is_array($teil)) {
+                    continue;
+                }
+                if (($teil['type'] ?? '') === 'text') {
+                    $texte[] = (string) ($teil['text'] ?? '');
+                } else {
+                    $anhaenge++;
+                }
+            }
+            $user = implode("\n", $texte);
+        } else {
+            $user = (string) $letzte;
+        }
 
         // Kontext-Echo: der Gateway hängt den Kontext als JSON-Block hinter "Kontext:" an
         $werte = [];
         if (preg_match('/Kontext:\s*(\{.*\})/s', $user, $m)) {
             $werte = json_decode($m[1], true) ?? [];
+        }
+        if ($anhaenge > 0) {
+            $werte['_anhaenge'] = $anhaenge;
         }
 
         return [

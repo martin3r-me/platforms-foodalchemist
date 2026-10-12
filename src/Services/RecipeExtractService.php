@@ -20,9 +20,12 @@ use Platform\FoodAlchemist\Services\Ai\AiGatewayService;
  *     Verschachtelte Komponenten werden REKURSIV zuerst als Sub-Basisrezepte angelegt (geerdet)
  *     und im Parent per sub_rezept_id verknüpft (§4 Sub-Rezept-Hierarchie, max. 3 Ebenen).
  *
- * Bild/Vision (Foto → Rezept) ist auf den Core-Transport angewiesen und hier bewusst NICHT
- * enthalten (Text-only). Der Foto-Weg läuft über den MCP-Assistenten (eigene Vision) →
- * recipes.EXTRACT mit dem abgelesenen Text.
+ * Foto und Scan (2026-10-12, Dominique): {@see ausBild} schickt ein Foto (Rezeptkarte, Kochbuchseite,
+ * Step-by-Step-Seite) als Bild-Teil derselben KI-Nachricht, {@see ausPdf} versucht zuerst den Text
+ * (günstig) und gibt bei einem Scan das PDF selbst mit. Beides läuft über den OpenAI-Weg der
+ * Plattform (AiGatewayService::bildTeile); vorher brach der Core bei Bild-Nachrichten ab (Fix #925).
+ * Der Extraktions-Auftrag bleibt derselbe: wörtlich übernehmen, nichts erfinden — die Prüf-Vorschau
+ * bleibt Pflicht, aus Bildern gelesene Mengen sind zu prüfen.
  */
 class RecipeExtractService
 {
@@ -40,19 +43,65 @@ class RecipeExtractService
      *
      * @return array{typ?: string, name?: string, zutaten?: array, preparation?: string, komponenten?: array}
      */
-    public function extrahiere(Team $team, string $rohText): array
+    public function extrahiere(Team $team, string $rohText, array $bilder = []): array
     {
         $rohText = trim($rohText);
-        if ($rohText === '') {
+        if ($rohText === '' && $bilder === []) {
             throw new \RuntimeException('Kein Text zum Extrahieren übergeben.');
         }
-        $vorschlag = $this->ai->propose('recipe.extract', ['roh_text' => $rohText]);
+        $kontext = ['roh_text' => $rohText !== '' ? $rohText : '(siehe Anhang)'];
+        if ($bilder !== []) {
+            $kontext['quelle'] = 'bild';
+            $kontext['hinweis'] = 'Der Rezepttext steht im angehängten Foto/Scan. Lies ihn wörtlich ab (auch Step-by-Step-Schritte '
+                .'und Bildunterschriften). Schlecht lesbare Mengen oder Wörter weglassen, nie raten.';
+        }
+        $vorschlag = $this->ai->propose('recipe.extract', $kontext, $bilder !== [] ? ['bilder' => $bilder] : []);
         $werte = is_array($vorschlag->werte ?? null) ? $vorschlag->werte : [];
         if (empty($werte['name']) && empty($werte['zutaten']) && empty($werte['komponenten'])) {
-            throw new \RuntimeException('Aus dem Text ließ sich kein Rezept ableiten (kein Name/keine Zutaten erkannt).');
+            throw new \RuntimeException($bilder !== []
+                ? 'Aus dem Bild ließ sich kein Rezept ablesen (kein Name/keine Zutaten erkannt) — schärfer fotografieren oder Text einfügen.'
+                : 'Aus dem Text ließ sich kein Rezept ableiten (kein Name/keine Zutaten erkannt).');
         }
 
         return $werte;
+    }
+
+    /** Erlaubte Foto-Typen für den Import (Handyfoto einer Rezeptkarte / Kochbuchseite). */
+    public const BILD_MIMES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+
+    /** Foto → Rezept: das Bild geht als data-URL in derselben Nachricht mit. */
+    public function ausBild(Team $team, string $pfad, string $mime, ?string $zusatzText = null): array
+    {
+        if (! in_array($mime, self::BILD_MIMES, true)) {
+            throw new \RuntimeException('Nur Fotos als JPG, PNG, WebP oder GIF — erhalten: '.$mime.'.');
+        }
+
+        return $this->extrahiere($team, (string) $zusatzText, [[
+            'typ' => 'image', 'url' => 'data:'.$mime.';base64,'.base64_encode((string) file_get_contents($pfad)), 'detail' => 'high',
+        ]]);
+    }
+
+    /**
+     * PDF → Rezept: Text-PDF günstig über den Parser; liefert der kaum Text (Scan), geht das PDF
+     * selbst als Datei-Teil an die KI (Seitenbilder). Gibt den gewählten Weg mit zurück.
+     *
+     * @return array{extrakt: array, quelle: 'pdf'|'scan'}
+     */
+    public function ausPdf(Team $team, string $pfad, string $name = 'import.pdf'): array
+    {
+        $text = '';
+        try {
+            $text = trim((new \Smalot\PdfParser\Parser())->parseFile($pfad)->getText());
+        } catch (\Throwable) {
+            $text = '';                                               // kaputter/verschlüsselter Parser-Lauf = wie Scan behandeln
+        }
+        if (mb_strlen($text) >= 20) {
+            return ['extrakt' => $this->extrahiere($team, $text), 'quelle' => 'pdf'];
+        }
+
+        return ['extrakt' => $this->extrahiere($team, '', [[
+            'typ' => 'pdf', 'name' => $name, 'data' => 'data:application/pdf;base64,'.base64_encode((string) file_get_contents($pfad)),
+        ]]), 'quelle' => 'scan'];
     }
 
     /**
@@ -124,14 +173,14 @@ class RecipeExtractService
 
     /**
      * Extrahiert reinen Text aus einem (text-basierten) PDF via smalot/pdfparser. Scan-/Bild-PDFs
-     * liefern (fast) keinen Text → sauberer Hinweis statt Fehlversuch (Vision ist hier nicht enthalten).
+     * liefern (fast) keinen Text → Hinweis; der Import-Tab nimmt dafür {@see ausPdf} (Scan → KI).
      */
     public function pdfText(string $pfad): string
     {
         $text = trim((new \Smalot\PdfParser\Parser())->parseFile($pfad)->getText());
         if (mb_strlen($text) < 20) {
             throw new \RuntimeException('Aus diesem PDF ließ sich kaum Text lesen — vermutlich ein Scan/Bild-PDF. '
-                . 'Bild-PDFs werden aktuell nicht gelesen; kopiere den Text hinein oder gib mir das Bild im Chat.');
+                . 'Im Import-Reiter der Planung werden Scans als Bild gelesen (OpenAI-Weg).');
         }
 
         return $text;
