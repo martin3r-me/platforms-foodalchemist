@@ -22,11 +22,15 @@
 <div wire:key="zutaten-editor-{{ $rezept?->id ?? 0 }}"
      x-data="zutatenEditor(@js($zeilenJson), @js(! $eingebettet), @js($einheiten->keyBy('id')->map(fn ($e) => ['slug' => $e->slug, 'dim' => $e->dimension, 'g' => $e->default_in_g !== null ? (float) $e->default_in_g : ($e->default_in_ml !== null ? (float) $e->default_in_ml : null)])->all()), @js($browserVokabular ?? null))"
      data-zutaten-editor
-     class="flex flex-col gap-3 min-w-0"
+     class="fa-zutaten-editor flex flex-col gap-3 min-w-0"
      @garverluste-vorschlagen.window="garverluste()">
 
     {{-- ── Zutaten einfügen wie im Original (Dominique 2026-10-05): links Grundprodukte, Mitte Suche + Tabelle,
-         rechts Basisrezepte. Ab 1.800 px drei Spalten; auf dem Laptop eine Einfüge-Spalte mit Umschalter + Tabelle; schmal untereinander. ── --}}
+         rechts Basisrezepte. Drei Spalten, sobald der EDITOR selbst ≥ 92 rem (1.472 px) breit ist (Container-Query in
+         foodalchemist-pass.css, Dominique 2026-10-12 — vorher Viewport ≥ 1.800 px, auf dem Laptop darum immer
+         zweispaltig, auf demo nie); darunter eine Einfüge-Spalte mit Umschalter + Tabelle; schmal untereinander.
+         Layout bewusst als Modul-Klassen (.fa-zutaten-*), nicht als Utilities: das Host-`grid-cols-1` schlägt im
+         Plattform-Modus jede Modul-Variante (Sublayer, s. build-css.mjs). ── --}}
         <x-fa::notice tone="warn" x-show="tauschIdx !== null" x-cloak data-tausch-banner>
             Zutat in Zeile <span class="font-semibold tabular-nums" x-text="(tauschIdx ?? 0) + 1"></span> tauschen: Ersatz in der Trefferliste mit Plus wählen. Menge und Einheit bleiben.
             <x-slot:actions>
@@ -34,10 +38,10 @@
             </x-slot:actions>
         </x-fa::notice>
 
-    <div x-data="{ einfuegenAus: 'gp' }" class="grid grid-cols-1 lg:grid-cols-[minmax(17rem,22rem)_minmax(0,1fr)] wide:grid-cols-[minmax(16rem,1fr)_minmax(0,2.6fr)_minmax(16rem,1fr)] gap-3 items-start" data-zutaten-layout>
-        <aside class="fa-surface p-3 flex flex-col gap-3 min-w-0 lg:col-start-1 lg:row-start-1 lg:sticky lg:top-0" :class="einfuegenAus === 'gp' ? '' : 'max-wide:hidden'" aria-label="Grundprodukte einfügen">
-            {{-- Laptop (< 1.800 px): EINE Einfüge-Spalte mit Umschalter; ab 1.800 px stehen beide Spalten nebeneinander --}}
-            <div role="group" aria-label="Einfügen aus" class="flex p-0.5 gap-0.5 rounded-[var(--fa-radius-control)] bg-[var(--fa-neutral-soft)] wide:hidden">
+    <div x-data="{ einfuegenAus: 'gp' }" class="fa-zutaten-layout" data-zutaten-layout>
+        <aside class="fa-surface p-3 flex flex-col gap-3 min-w-0" :class="einfuegenAus === 'gp' ? '' : 'fa-zutaten-passiv'" data-einfuegen="gp" aria-label="Grundprodukte einfügen">
+            {{-- Editor schmaler als 92 rem: EINE Einfüge-Spalte mit Umschalter; breiter stehen beide Spalten nebeneinander --}}
+            <div role="group" aria-label="Einfügen aus" class="fa-zutaten-umschalter flex p-0.5 gap-0.5 rounded-[var(--fa-radius-control)] bg-[var(--fa-neutral-soft)]">
                 <button type="button" @click="einfuegenAus = 'gp'" :aria-pressed="einfuegenAus === 'gp'"
                         class="flex-1 h-8 px-2 rounded-[5px] text-[length:var(--fa-text-sm)] font-medium transition-colors"
                         :class="einfuegenAus === 'gp' ? 'bg-[var(--fa-surface)] text-[var(--fa-ink)] shadow-sm' : 'text-[var(--fa-ink-2)] hover:text-[var(--fa-ink)]'">Grundprodukte <span class="tabular-nums text-[var(--fa-ink-3)]" x-text="gpTotal"></span></button>
@@ -101,7 +105,7 @@
             </div>
         </aside>
 
-        <div class="flex flex-col gap-3 min-w-0 lg:col-start-2 lg:row-start-1">
+        <div class="fa-zutaten-mitte flex flex-col gap-3 min-w-0">
     <div class="sticky top-0 z-10 flex flex-col gap-2 p-3 rounded-[var(--fa-radius-surface)] bg-[var(--fa-surface)] border border-[var(--fa-line)] shadow-sm" data-add-zeile>
         {{-- Suche (ohne geparktes Ziel) --}}
         <div x-show="geparkt === null" class="flex flex-wrap items-center gap-2">
@@ -187,16 +191,19 @@
                     </td>
                     <td class="min-w-[10rem]">
                         <div class="flex items-center gap-1 min-w-0">
-                            {{-- R7: Klick öffnet das Ziel als Fenster über dem Editor (Stand bleibt) --}}
+                            {{-- R7: Klick öffnet das Ziel als Fenster über dem Editor (Stand bleibt).
+                                 Spec 65 / Dominique 2026-10-12: Navigation und Vorschau (Name, Würfel, Buch) sind KEINE Eingaben —
+                                 als <a role="button"> statt <button>, damit das <fieldset disabled> des Lesemodus sie nicht
+                                 mit abschaltet. Reinschauen darf man ohne „Bearbeiten". --}}
                             <template x-if="zeile.gp_id || zeile.referenced_recipe_id">
-                                <button type="button"
-                                        class="min-w-0 text-left leading-snug text-[var(--fa-accent)] hover:text-[var(--fa-accent-hover)] hover:underline"
-                                        x-text="(zeile.ziel_name ?? (zeile.display_name ?? zeile.raw_text) ?? '').replace('↳ ', '')"
-                                        :title="(zeile.gp_id ? 'Grundprodukt öffnen' : 'Basisrezept öffnen') + (herkunftText(zeile) ? ' · ' + herkunftText(zeile) : '')"
-                                        @click="zeile.gp_id
-                                            ? Livewire.dispatch('gp-modal.oeffnen', { id: zeile.gp_id })
-                                            : Livewire.dispatch('recipe-modal.oeffnen', { id: zeile.referenced_recipe_id })"
-                                        data-ziel-link></button>
+                                <a href="#" role="button"
+                                   class="min-w-0 text-left leading-snug text-[var(--fa-accent)] hover:text-[var(--fa-accent-hover)] hover:underline"
+                                   x-text="(zeile.ziel_name ?? (zeile.display_name ?? zeile.raw_text) ?? '').replace('↳ ', '')"
+                                   :title="(zeile.gp_id ? 'Grundprodukt öffnen' : 'Basisrezept öffnen') + (herkunftText(zeile) ? ' · ' + herkunftText(zeile) : '')"
+                                   @click.prevent="zeile.gp_id
+                                       ? Livewire.dispatch('gp-modal.oeffnen', { id: zeile.gp_id })
+                                       : Livewire.dispatch('recipe-modal.oeffnen', { id: zeile.referenced_recipe_id })"
+                                   data-ziel-link></a>
                             </template>
                             <template x-if="!zeile.gp_id && !zeile.referenced_recipe_id">
                                 <span class="min-w-0 flex flex-wrap items-center gap-x-2 gap-y-0.5">
@@ -204,12 +211,14 @@
                                     <x-fa::signal tone="warn" title="Ohne Verknüpfung zählt die Zutat nicht in Preis und Deklaration">nicht verknüpft</x-fa::signal>
                                 </span>
                             </template>
-                            <button type="button" x-show="zeile.gp_id" class="{{ $ib }}" :class="zeile._peek ? 'text-[var(--fa-accent)]' : ''"
-                                    title="Artikel hinter dem Grundprodukt zeigen" aria-label="Artikel zeigen"
-                                    @click="peek(zeile)" data-gp-peek>@svg('heroicon-o-cube', 'w-4 h-4')</button>
-                            {{-- Basisrezept als Fenster öffnen (kein Sprung) --}}
-                            <button type="button" x-show="zeile.referenced_recipe_id" class="{{ $ib }}" title="Basisrezept ansehen" aria-label="Basisrezept ansehen"
-                                    @click="Livewire.dispatch('recipe-modal.oeffnen', { id: zeile.referenced_recipe_id })" data-rez-oeffnen>@svg('heroicon-o-book-open', 'w-4 h-4')</button>
+                            <a href="#" role="button" x-show="zeile.gp_id" class="{{ $ib }}" :class="zeile._peek ? 'text-[var(--fa-accent)]' : ''"
+                               title="Artikel hinter dem Grundprodukt zeigen" aria-label="Artikel zeigen"
+                               @click.prevent="peek(zeile)" data-gp-peek>@svg('heroicon-o-cube', 'w-4 h-4')</a>
+                            {{-- Buch = Schnellvorschau des Unterrezepts (Zutaten, Ertrag, EK) wie der Würfel beim GP — kein Sprung.
+                                 Vorher öffnete es den vollen Editor und ersetzte das offene Rezept (Dominique 2026-10-12). --}}
+                            <a href="#" role="button" x-show="zeile.referenced_recipe_id" class="{{ $ib }}" :class="zeile._peekRez ? 'text-[var(--fa-accent)]' : ''"
+                               title="Basisrezept-Vorschau: Zutaten, Ertrag, EK" aria-label="Basisrezept-Vorschau"
+                               @click.prevent="peekRezept(zeile)" data-rez-peek>@svg('heroicon-o-book-open', 'w-4 h-4')</a>
                         </div>
                     </td>
                     @if($vkKontext)
@@ -303,6 +312,43 @@
                         </div>
                     </td>
                 </tr>
+                {{-- Schnellvorschau des Unterrezepts (Dominique 2026-10-12): Kopfzeile mit Ertrag/EK/Status, darunter die Zutaten --}}
+                <tr x-show="zeile._peekRez" x-cloak>
+                    <td colspan="{{ $spalten }}" class="bg-[var(--fa-ground)]">
+                        <div class="flex flex-col gap-1.5 py-1" data-rez-peek-tabelle>
+                            <p class="flex flex-wrap items-center gap-x-3 gap-y-1 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]">
+                                <span class="inline-flex items-center gap-1.5 font-medium">
+                                    @svg('heroicon-o-book-open', 'w-4 h-4 text-[var(--fa-ink-3)]')
+                                    <span class="font-semibold text-[var(--fa-ink)]" x-text="zeile._peekRez?.name"></span>
+                                </span>
+                                <span class="tabular-nums" x-show="zeile._peekRez?.yield">Ansatz <span class="font-medium text-[var(--fa-ink)]" x-text="zeile._peekRez?.yield"></span></span>
+                                <span class="tabular-nums" x-show="zeile._peekRez?.ek_total">EK <span class="font-medium text-[var(--fa-ink)]" x-text="zeile._peekRez?.ek_total"></span><span x-show="zeile._peekRez?.ek_per_kg" x-text="' · ' + zeile._peekRez?.ek_per_kg"></span></span>
+                                <span class="tabular-nums" x-show="zeile._peekRez?.work_time_min !== null">Arbeitszeit <span class="font-medium text-[var(--fa-ink)]" x-text="(zeile._peekRez?.work_time_min ?? 0) + ' min'"></span></span>
+                                <span x-text="'Status: ' + (zeile._peekRez?.status ?? '–')"></span>
+                                <a href="#" role="button" class="ml-auto text-[var(--fa-accent)] hover:text-[var(--fa-accent-hover)] hover:underline"
+                                   @click.prevent="Livewire.dispatch('recipe-modal.oeffnen', { id: zeile.referenced_recipe_id })" data-rez-oeffnen>Im Editor öffnen</a>
+                            </p>
+                            <div class="overflow-x-auto rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] bg-[var(--fa-surface)]">
+                                <table class="fa-table fa-table--compact">
+                                    <thead><tr><th class="w-px">#</th><th>Zutat</th><th class="text-right">Menge</th><th>Typ</th></tr></thead>
+                                    <tbody>
+                                        <template x-for="(z, j) in (zeile._peekRez?.zutaten ?? [])" :key="j">
+                                            <tr>
+                                                <td class="tabular-nums text-[var(--fa-ink-3)]" x-text="j + 1"></td>
+                                                <td class="min-w-[12rem]" :class="z.verknuepft ? '' : 'text-[var(--fa-ink-3)]'" x-text="z.name"></td>
+                                                <td class="num whitespace-nowrap" x-text="z.menge ?? '–'"></td>
+                                                <td class="text-[var(--fa-ink-2)]" x-text="z.ist_rezept ? 'Basisrezept' : (z.verknuepft ? 'Grundprodukt' : 'nicht verknüpft')"></td>
+                                            </tr>
+                                        </template>
+                                        <tr x-show="(zeile._peekRez?.zutaten ?? []).length === 0">
+                                            <td colspan="4" class="text-[var(--fa-ink-3)]">Keine Zutaten hinterlegt.</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </td>
+                </tr>
                 </tbody>
             </template>
             <tbody x-show="rows.length === 0" x-cloak>
@@ -348,9 +394,9 @@
          über seinen Kopf. So gibt es pro Editor nur EINEN Speichern-Weg. --}}
         </div>
 
-        <aside class="fa-surface p-3 flex flex-col gap-3 min-w-0 lg:col-start-1 lg:row-start-1 wide:col-start-3 lg:sticky lg:top-0" :class="einfuegenAus === 'rez' ? '' : 'max-wide:hidden'" aria-label="Basisrezepte einfügen">
-            {{-- Laptop (< 1.800 px): EINE Einfüge-Spalte mit Umschalter; ab 1.800 px stehen beide Spalten nebeneinander --}}
-            <div role="group" aria-label="Einfügen aus" class="flex p-0.5 gap-0.5 rounded-[var(--fa-radius-control)] bg-[var(--fa-neutral-soft)] wide:hidden">
+        <aside class="fa-surface p-3 flex flex-col gap-3 min-w-0" :class="einfuegenAus === 'rez' ? '' : 'fa-zutaten-passiv'" data-einfuegen="rez" aria-label="Basisrezepte einfügen">
+            {{-- Editor schmaler als 92 rem: EINE Einfüge-Spalte mit Umschalter; breiter stehen beide Spalten nebeneinander --}}
+            <div role="group" aria-label="Einfügen aus" class="fa-zutaten-umschalter flex p-0.5 gap-0.5 rounded-[var(--fa-radius-control)] bg-[var(--fa-neutral-soft)]">
                 <button type="button" @click="einfuegenAus = 'gp'" :aria-pressed="einfuegenAus === 'gp'"
                         class="flex-1 h-8 px-2 rounded-[5px] text-[length:var(--fa-text-sm)] font-medium transition-colors"
                         :class="einfuegenAus === 'gp' ? 'bg-[var(--fa-surface)] text-[var(--fa-ink)] shadow-sm' : 'text-[var(--fa-ink-2)] hover:text-[var(--fa-ink)]'">Grundprodukte <span class="tabular-nums text-[var(--fa-ink-3)]" x-text="gpTotal"></span></button>

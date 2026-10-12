@@ -167,6 +167,14 @@ class RecipeModal extends Component
     {
         // Wie beim stabilen Gerichte-Editor: alter Zustand wird erst beim nächsten Öffnen
         // verworfen. Beim Schließen selbst gibt es dadurch keinen Livewire-Morph des Modals.
+        //
+        // Spec 65 / Befund 2026-10-12: Sprung aus dem Bearbeiten-Modus in ein Unterrezept ersetzt den
+        // Inhalt des Modals. Die HIER geholte Sperre des bisherigen Rezepts blieb dabei stehen (bis zum
+        // Ablauf, 15 Min) — modal.closed kommt erst beim Schließen und meint dann das neue Ziel.
+        if ($this->sperreHierGeholt && $this->recipeId !== null && $this->recipeId !== $id) {
+            $this->bearbeitenBeenden();
+            $this->sperreFremd = null;
+        }
         $this->editorStateEntladen();
         $this->ladeRezept($id);
         if ($copilot && $this->recipeId !== null) {

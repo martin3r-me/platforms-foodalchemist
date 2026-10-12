@@ -83,6 +83,25 @@ it('Basisrezept-Editor: zweite Person sieht „wird bearbeitet" und kann nicht s
         ->and($this->svc->haelt('recipe', $r->id, $this->ben->id))->toBeFalse();
 });
 
+/**
+ * Befund 2026-10-12: Sprung aus dem Bearbeiten-Modus in ein Unterrezept ersetzt den Modal-Inhalt; die
+ * Sperre des bisherigen Rezepts blieb 15 Minuten stehen (modal.closed kommt erst beim Schließen).
+ */
+it('Basisrezept-Editor: Sprung in ein anderes Rezept im Bearbeiten-Modus gibt die alte Sperre frei', function () {
+    $a = $this->makeRecipe($this->rootTeam, 'Ragout: Bolognese');
+    $b = $this->makeRecipe($this->rootTeam, 'Püree: Sellerie');
+    $this->actingAs($this->anna);
+    $svc = app(BearbeitungssperreService::class);
+
+    $modal = Livewire::test(RecipeModal::class)->call('oeffnen', $a->id)->call('bearbeitenStarten');
+    expect($svc->haelt('recipe', $a->id, (int) $this->anna->id))->toBeTrue();
+
+    $modal->call('oeffnen', $b->id)->assertSeeHtml('data-fa-lesemodus="1"');   // neues Ziel öffnet lesend
+    expect($svc->haelt('recipe', $a->id, (int) $this->anna->id))->toBeFalse()
+        ->and($svc->haelt('recipe', $b->id, (int) $this->anna->id))->toBeFalse()
+        ->and($modal->get('sperreHierGeholt'))->toBeFalse();
+});
+
 it('Basisrezept-Editor: Schließen und Abbrechen geben die eigene Sperre frei', function () {
     $r = $this->makeRecipe($this->rootTeam, 'Kalbsfond');
     $this->actingAs($this->anna);

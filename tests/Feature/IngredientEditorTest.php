@@ -150,7 +150,49 @@ it('gpArtikel (GP-Peek): liefert LAs hinter dem GP mit ★-Lead zuerst, VPE, Pre
 
     // Editor-Markup: Drag-Handle + Peek-Hooks im (eingebetteten) Editor vorhanden
     $html = Livewire::test(IngredientEditor::class, ['recipeId' => $this->rezept->id, 'eingebettet' => true])->html();
-    expect($html)->toContain('data-drag-handle')->toContain('data-gp-peek');
+    expect($html)->toContain('data-drag-handle')->toContain('data-gp-peek')->toContain('data-rez-peek');
+});
+
+/**
+ * Spec 65 / Dominique 2026-10-12: Im Lesemodus liegt der Editor in einem <fieldset disabled>; das schaltete
+ * auch Name-Link, Würfel und Buch ab — reinschauen ging erst nach „Bearbeiten". Navigation und Vorschau sind
+ * keine Eingaben und darum <a role="button">, die das Fieldset nicht erfasst.
+ */
+it('Lesemodus: Name, Würfel und Buch sind Links (kein <button>), damit das disabled-Fieldset sie nicht abschaltet', function () {
+    $this->actingAs($this->makeUser($this->rootTeam));
+    $html = Livewire::test(IngredientEditor::class, ['recipeId' => $this->rezept->id, 'eingebettet' => true])->html();
+
+    expect($html)->toMatch('/<a [^>]*data-ziel-link/')
+        ->toMatch('/<a [^>]*data-gp-peek/')
+        ->toMatch('/<a [^>]*data-rez-peek/')
+        ->not->toMatch('/<button[^>]*data-ziel-link/')
+        ->not->toMatch('/<button[^>]*data-gp-peek/')
+        ->not->toContain('data-rez-oeffnen>@svg');   // das Buch springt nicht mehr in den Editor
+});
+
+it('rezeptVorschau (Rezept-Peek): Zutaten, Ansatz, EK und Status des Unterrezepts, lesend', function () {
+    $this->actingAs($this->makeUser($this->rootTeam, 'Root User'));
+    $gp = ($this->mkGpMitPreis)('Zwiebeln: frisch', 1.00);
+    $sub = $this->svc->create($this->rootTeam, ['name' => 'Fond: Gemüse']);
+    $this->svc->syncIngredients($this->rootTeam, $sub->id, [
+        ['id' => null, 'gp_id' => $gp->id, 'display_name' => 'Zwiebeln', 'raw_text' => 'Zwiebeln', 'quantity' => '500', 'unit_vocab_id' => $this->g->id],
+        ['id' => null, 'gp_id' => null, 'display_name' => 'Lorbeer', 'raw_text' => 'Lorbeer', 'quantity' => '2', 'unit_vocab_id' => $this->g->id],
+    ]);
+    $sub->update(['work_time_min' => 12, 'status' => 'review']);
+
+    $peek = Livewire::test(IngredientEditor::class)->instance()->rezeptVorschau($sub->id);
+
+    expect($peek['name'])->toBe('Fond: Gemüse')
+        ->and($peek['status'])->toBe('review')
+        ->and($peek['work_time_min'])->toBe(12)
+        ->and($peek['n_zutaten'])->toBe(2)
+        ->and($peek['yield'])->toBe('0,5 kg')                       // Auto-Sum 502 g → gerundet
+        ->and($peek['ek_total'])->toBe('0,50 €')                    // 500 g × 1,00 €/kg; Lorbeer unverknüpft = 0
+        ->and($peek['zutaten'][0])->toMatchArray(['name' => 'Zwiebeln: frisch', 'menge' => '500 g', 'ist_rezept' => false, 'verknuepft' => true])
+        ->and($peek['zutaten'][1])->toMatchArray(['name' => 'Lorbeer', 'menge' => '2 g', 'verknuepft' => false]);
+
+    // Unsichtbar/fremd → leer, kein Fehler
+    expect(Livewire::test(IngredientEditor::class)->instance()->rezeptVorschau(999999))->toBe([]);
 });
 
 it('Editor zeigt Gewichtsanteil (% vom Gesamt) statt Bäckerprozent — Bäcker lebt im Rechner', function () {

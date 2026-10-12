@@ -255,8 +255,13 @@
                 if (zeile._peek) { zeile._peek = null; return; }
                 zeile._peek = await this.$wire.gpArtikel(zeile.gp_id);
             },
+            async peekRezept(zeile) {  // Dominique 2026-10-12: Buch = Schnellvorschau des Unterrezepts, kein Sprung
+                if (!zeile.referenced_recipe_id) return;
+                if (zeile._peekRez) { zeile._peekRez = null; return; }
+                zeile._peekRez = await this.$wire.rezeptVorschau(zeile.referenced_recipe_id);
+            },
             payload() {
-                return this.rows.map(({ _key, ziel_name, ziel_url, lineage, ek_pro_g, ek_pro_g_min, ek_pro_g_avg, ek_pro_stk, g_pro_stueck, stueck_gewicht, formen_g, ersatz, _garverlust_ki, _peek, _flash, ...rest }) => ({ ...rest, cooking_loss_source: _garverlust_ki ? 'ki' : undefined }));
+                return this.rows.map(({ _key, ziel_name, ziel_url, lineage, ek_pro_g, ek_pro_g_min, ek_pro_g_avg, ek_pro_stk, g_pro_stueck, stueck_gewicht, formen_g, ersatz, _garverlust_ki, _peek, _peekRez, _flash, ...rest }) => ({ ...rest, cooking_loss_source: _garverlust_ki ? 'ki' : undefined }));
             },
             init() {
                 // Window-Event: der Haupt-"Speichern" des Rezept-Modals (UND der Standalone-Modal-Footer)
