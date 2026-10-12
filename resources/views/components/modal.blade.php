@@ -63,10 +63,18 @@
         window.addEventListener('modal.close', e => { if (!e.detail?.name || e.detail.name === '{{ $name }}') closeWithState() });
      "
      x-show="open" x-cloak
+     {{-- 2026-10-12 (Dominique): Basisrezept → Grundprodukt → „Bearbeiten" → in die Artikelsuche getippt, und das
+          Basisrezept lag wieder vorne. bringToFront setzt die Ebene als INLINE-Stil; der erste Livewire-Roundtrip des
+          oberen Modals morpht das Wurzel-Element gegen das Server-HTML (ohne style) und wirft den Stil weg → Ebene 100,
+          das untere Modal (102) deckt es zu. wire:ignore.self: Livewire lässt die Attribute DIESES Elements in Ruhe
+          (Ebene, x-show-Display), der Inhalt wird weiter normal aktualisiert. --}}
+     wire:ignore.self
      @keydown.window.escape="if (open) closeWithState()"
      class="fixed inset-0 {{ $zFest ? 'z-[190]' : 'z-[100]' }} flex items-center justify-center p-4"
      data-modal="{{ $name }}"
-     role="dialog" aria-modal="true" @if($title) aria-label="{{ trim($title . ($titleName !== null ? ': ' . $titleName : '')) }}" @endif>
+     {{-- Barrierefreier Name über die sichtbare Überschrift (Inhalt, wird weiter aktualisiert) statt aria-label am
+          Wurzel-Element — das friert wire:ignore.self ein und nannte nach einem Wechsel noch das alte Grundprodukt. --}}
+     role="dialog" aria-modal="true" @if($title) aria-labelledby="modal-titel-{{ $name }}" @endif>
 
     {{-- 2026-07-31: echter dunkler Editor (nur bei darkCanvas). Gescopet auf .fa-editor-panel,
          damit helle Kontexte (Settings, kleine Modals) unberührt bleiben.
@@ -91,7 +99,7 @@
                     {{-- Name als gerahmter Akzent-Chip — gleiche Schriftgrösse wie der Titel, aber
                          auffälliger (violetter Rahmen). Farben als rohes CSS, damit sie auf hellem
                          UND dunklem Editor-Grund (.fa-editor-panel) sauber sitzen. --}}
-                    <h2 class="text-[length:var(--fa-text-lg)] font-semibold tracking-tight text-[var(--fa-ink)] truncate flex items-center gap-2 min-w-0">
+                    <h2 id="modal-titel-{{ $name }}" class="text-[length:var(--fa-text-lg)] font-semibold tracking-tight text-[var(--fa-ink)] truncate flex items-center gap-2 min-w-0">
                         <span class="shrink-0 text-[var(--fa-ink-2)] font-medium">{{ $title }}</span>
                         <span class="min-w-0 truncate fa-titel-name" data-modal-title-name>{{ $titleName }}</span>
                         @isset($titleExtra)
@@ -101,7 +109,7 @@
                         @endisset
                     </h2>
                 @else
-                    <h2 class="text-[length:var(--fa-text-lg)] font-semibold tracking-tight text-[var(--fa-ink)] truncate flex items-center gap-2 min-w-0">
+                    <h2 id="modal-titel-{{ $name }}" class="text-[length:var(--fa-text-lg)] font-semibold tracking-tight text-[var(--fa-ink)] truncate flex items-center gap-2 min-w-0">
                         <span class="min-w-0 truncate">{{ $title }}</span>
                         @isset($titleExtra)
                             <span class="min-w-0 shrink flex flex-wrap items-center gap-1.5" data-modal-zone="title-extra">
