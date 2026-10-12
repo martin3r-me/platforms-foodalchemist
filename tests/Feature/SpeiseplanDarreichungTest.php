@@ -149,6 +149,31 @@ it('Darreichungen gibt es nur an Gerichten', function () {
         ->and($this->basis->presentations()->count())->toBe(0);
 });
 
+/**
+ * Weg-B (2026-10-12, Gericht 3920): ensureStandard ließ die Grammatur NULL, wenn `sales_unit_count`
+ * leer war — obwohl der Ertrag bekannt war. Wie grammJeEinheit: leerer Zähler = EINE Einheit.
+ */
+it('ensureStandard: Grammatur aus dem Ertrag, auch ohne sales_unit_count', function () {
+    FoodAlchemistServierform::create(['team_id' => $this->rootTeam->id, 'code' => 'unbestimmt', 'label' => 'Unbestimmt']);
+    $ohneZaehler = FoodAlchemistRecipe::create([
+        'team_id' => $this->rootTeam->id, 'recipe_key' => 'senfrostbraten', 'name' => '[HG] Senfrostbraten', 'status' => 'draft',
+        'is_sales_recipe' => true, 'yield_kg' => 0.476, 'sales_unit_count' => null,
+    ]);
+    $mitZaehler = FoodAlchemistRecipe::create([
+        'team_id' => $this->rootTeam->id, 'recipe_key' => 'gulasch', 'name' => '[HG] Gulasch', 'status' => 'draft',
+        'is_sales_recipe' => true, 'yield_kg' => 2.0, 'sales_unit_count' => 8,
+    ]);
+    $ohneErtrag = FoodAlchemistRecipe::create([
+        'team_id' => $this->rootTeam->id, 'recipe_key' => 'leer', 'name' => '[HG] Leer', 'status' => 'draft',
+        'is_sales_recipe' => true, 'yield_kg' => null,
+    ]);
+
+    $svc = app(DarreichungService::class);
+    expect((float) $svc->ensureStandard($this->rootTeam, $ohneZaehler->id)->quantity_per_unit_g)->toBe(476.0)
+        ->and((float) $svc->ensureStandard($this->rootTeam, $mitZaehler->id)->quantity_per_unit_g)->toBe(250.0)
+        ->and($svc->ensureStandard($this->rootTeam, $ohneErtrag->id)->quantity_per_unit_g)->toBeNull();   // nichts erfinden
+});
+
 it('MCP: POST/PUT setzen presentation_id, GET liefert Form und Preis je Portion', function () {
     $ctx = new ToolContext($this->user, $this->rootTeam);
 

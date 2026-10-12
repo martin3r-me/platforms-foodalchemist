@@ -41,6 +41,31 @@ beforeEach(function () {
     $this->zeileId = (int) DB::getPdo()->lastInsertId();
 });
 
+/**
+ * Weg-B-Befund 1 (2026-10-12): Modell A kennt vier flache Diät-Klassen OHNE Hauptgruppe. Der frühere
+ * INNER JOIN auf die Hauptgruppe verwarf sie alle — recipe_klasse.POST antwortete mit
+ * „Die mitgegebene Taxonomie ist leer" und klasse_id null, obwohl die UI die Klassen anbot.
+ */
+it('Taxonomie: flache Klassen ohne Hauptgruppe stehen drin, Klassen inaktiver Hauptgruppen nicht', function () {
+    $flach = FoodAlchemistDishClass::create(['dish_main_group_id' => null, 'code' => 'VEGAN', 'label' => 'Vegan', 'diet_form' => 'vegan']);
+    $tot = FoodAlchemistDishMainGroup::create(['code' => 'ALC', 'label' => 'Alkohol', 'is_inactive' => true]);
+    $inaktiv = FoodAlchemistDishClass::create(['dish_main_group_id' => $tot->id, 'code' => 'ALC_X', 'label' => 'Bier', 'diet_form' => 'neutral']);
+
+    $taxonomie = SpeisenKlassenService::taxonomie($this->rootTeam);
+
+    expect($taxonomie)->toHaveKey($flach->id)
+        ->and($taxonomie[$flach->id])->toBe('Vegan (vegan)')                 // kein „null / "-Präfix
+        ->and($taxonomie)->toHaveKey($this->class->id)
+        ->and($taxonomie[$this->class->id])->toBe('HG / Fleisch (fleisch)')
+        ->and($taxonomie)->not->toHaveKey($inaktiv->id);
+
+    // Roundtrip: die KI darf die flache Klasse wählen (FakeProvider echo't den Kontext).
+    $this->vk->update(['dish_class_id' => $flach->id]);
+    $vorschlag = $this->svc->classify($this->rootTeam, $this->vk->id);
+    expect($vorschlag['klasse_id'])->toBe($flach->id)
+        ->and($vorschlag['klasse_name'])->toBe('Vegan');
+});
+
 it('classify: Fake-Roundtrip liefert validierten Vorschlag; Accept schreibt Klasse + Lineage-Trio', function () {
     $this->vk->update(['dish_class_id' => $this->class->id]);   // Kontext fürs Echo
 

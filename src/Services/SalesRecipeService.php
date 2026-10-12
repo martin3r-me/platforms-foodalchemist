@@ -407,6 +407,14 @@ class SalesRecipeService
                     $lineage('serving_vehicle');
                 }
             }
+            // Weg-B-Befund 1 (2026-10-12): eine über Editor/MCP gesetzte Speisen-Klasse ist ein
+            // Override. Ohne `manual` konnte ein späterer KI-Accept (acceptKlasse) sie still ersetzen.
+            if (array_key_exists('dish_class_id', $update)
+                && (int) $update['dish_class_id'] !== (int) $recipe->dish_class_id) {
+                $update['dish_class_source'] = $update['dish_class_id'] === null ? null : 'manual';
+                $update['dish_class_ai_confidence'] = null;
+                $update['dish_class_ai_reasoning'] = null;
+            }
             $recipeUpdate = array_diff_key($update, array_flip(['price_mode', 'price_override_reason']));
             $recipeUpdate['last_modified_by'] = 'vk_editor';
             $recipe->update($recipeUpdate);

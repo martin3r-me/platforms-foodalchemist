@@ -71,7 +71,10 @@ class KalkulationGetTool extends FoodAlchemistTool implements ToolContract, Tool
         try {
             $ergebnis = match ($keys[0]) {
                 'recipe_id' => ($m = FoodAlchemistRecipe::visibleToTeam($team)->find((int) $arguments['recipe_id']))
-                    ? ['ziel' => ['type' => 'recipe', 'id' => $m->id, 'name' => $m->name], 'outlet_id' => $outlet?->id, 'kalkulation' => $svc->recipeHk($team, $m, $outlet)] : null,
+                    ? ['ziel' => ['type' => 'recipe', 'id' => $m->id, 'name' => $m->name], 'outlet_id' => $outlet?->id, 'kalkulation' => $svc->recipeHk($team, $m, $outlet),
+                        // Weg-B (2026-10-12): FEK = 0 hier ist kein Konfigurationsfehler — die Katalogsicht
+                        // rechnet bewusst ohne Arbeitszeit (Commit af2c8783); Lohn gehört in den Produktionslauf.
+                        'hinweis' => 'Katalogsicht: Lohnkosten (FEK) bewusst 0 — Arbeitszeit wird erst im Produktionslauf bewertet (produktion.*), nicht aus work_time_min je Rezept.'] : null,
                 'concept_id' => ($m = FoodAlchemistConcept::visibleToTeam($team)->find((int) $arguments['concept_id']))
                     ? ['ziel' => ['type' => 'concept', 'id' => $m->id, 'name' => $m->name], 'outlet_id' => $outlet?->id, 'kalkulation' => $svc->conceptHk($team, $m, $outlet)] : null,
                 'package_id' => ($m = FoodAlchemistPaket::visibleToTeam($team)->find((int) $arguments['package_id']))

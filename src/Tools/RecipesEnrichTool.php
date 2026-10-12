@@ -55,7 +55,8 @@ class RecipesEnrichTool extends FoodAlchemistTool implements ToolContract, ToolM
                 'complete_coverage' => ['type' => 'boolean', 'default' => true,
                     'description' => 'Volle Tiefe: zusätzlich Fertigungstiefe, Eigenschaften/Zeiten, Equipment, Posten, '
                         . 'Aroma-Anker, Pairings, Eignung, Step-by-Step und Sensorik. false = nur die Textfelder (deutlich weniger Calls). '
-                        . 'Hinweis: `work_time_min` — ohne das die Kalkulation FEK = 0 rechnet — kommt aus dem Eigenschaften-Glied, also nur mit true.'],
+                        . 'Hinweis: `work_time_min` (Lohnkosten im Produktionslauf; die Katalog-Kalkulation rechnet Lohn bewusst nicht) '
+                        . 'kommt aus dem Eigenschaften-Glied, also nur mit true.'],
                 'ki_bilder' => ['type' => 'boolean', 'default' => false,
                     'description' => 'KI-Fotos miterzeugen. Default AUS und bewusst so: Bilder sind der teuerste Teil und werden auf Bedarf angefordert.'],
             ],

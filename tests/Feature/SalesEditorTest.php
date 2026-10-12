@@ -68,6 +68,31 @@ it('updateVk: nur VK-Feldgruppen (V-12), brutto konsistent, Wording-Edit setzt L
         ->and((float) $auto->sales_gross)->toBe(round((float) $auto->sales_net * 1.07, 2));
 });
 
+/**
+ * Weg-B-Befund 1 (2026-10-12): `verkaufsrezepte.PUT dish_class_id` setzte keine Lineage — ein
+ * späterer KI-Accept konnte die von Hand gesetzte Klasse still ersetzen (Guard nur bei `manual`).
+ */
+it('updateVk dish_class_id: Override-First — Klasse wird manual, KI-Accept wird abgewiesen', function () {
+    $vk = $this->svc->createFromBasis($this->rootTeam, $this->basis->id, 'HG: Dog | BBQ');
+    $klasse = \Platform\FoodAlchemist\Models\FoodAlchemistDishClass::create(['dish_main_group_id' => null, 'code' => 'FLEISCH', 'label' => 'Fleisch', 'diet_form' => 'fleisch']);
+    $andere = \Platform\FoodAlchemist\Models\FoodAlchemistDishClass::create(['dish_main_group_id' => null, 'code' => 'VEGI', 'label' => 'Vegetarisch', 'diet_form' => 'vegi']);
+
+    $nach = $this->svc->updateVk($this->rootTeam, $vk->id, ['dish_class_id' => $klasse->id]);
+    expect($nach->dish_class_id)->toBe($klasse->id)
+        ->and($nach->dish_class_source)->toBe('manual')
+        ->and($nach->dish_class_ai_confidence)->toBeNull();
+
+    expect(fn () => app(\Platform\FoodAlchemist\Services\SpeisenKlassenService::class)
+        ->acceptKlasse($this->rootTeam, $vk->id, $andere->id, 0.9, 'KI meint Vegi'))
+        ->toThrow(\RuntimeException::class, 'manuell');
+
+    // Unverändert mitgeschickt → Lineage bleibt stehen; auf null gesetzt → Lineage weg.
+    $gleich = $this->svc->updateVk($this->rootTeam, $vk->id, ['dish_class_id' => $klasse->id, 'sales_wording_standard' => 'x']);
+    expect($gleich->dish_class_source)->toBe('manual');
+    $leer = $this->svc->updateVk($this->rootTeam, $vk->id, ['dish_class_id' => null]);
+    expect($leer->dish_class_id)->toBeNull()->and($leer->dish_class_source)->toBeNull();
+});
+
 it('V-19: Regen-Zeilen CRUD + Reorder; Liste bleibt sortiert', function () {
     $vk = $this->svc->createFromBasis($this->rootTeam, $this->basis->id, 'FIN: Dog | BBQ');
 

@@ -636,6 +636,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\TerminologyListTool::class,
                     \Platform\FoodAlchemist\Tools\TerminologyPostTool::class,
                     \Platform\FoodAlchemist\Tools\RecipeKlassePostTool::class,
+                    \Platform\FoodAlchemist\Tools\DishClassesGetTool::class,       // Weg-B-Befund 1: Klassen + Hauptgruppen mit Ids
                     \Platform\FoodAlchemist\Tools\UiOpenTool::class,
                     // Phase N: Navigation — Seiten-Katalog + Seiten-Navigation (ui.OPEN erweitert auf 13 Typen)
                     \Platform\FoodAlchemist\Tools\UiRoutesTool::class,

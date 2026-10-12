@@ -91,7 +91,8 @@ class RecipeReifeAdapter implements ReifeAdapter
         // ── 2. Felder ohne Schrittfolge, die je eine Kette tragen ────────────────────
         if ($r->work_time_min === null) {
             $luecken[] = $this->luecke('work_time_min', $istVk ? 'gericht' : 'basisrezept', 'blockiert',
-                'Ohne Arbeitszeit rechnet die Kalkulation FEK und FGK als 0 — die Lohnkosten fehlen still.',
+                'Ohne Arbeitszeit kann der Produktionslauf keine Lohnkosten rechnen (FEK). '
+                    . 'Die Katalog-Kalkulation (kalkulation.GET) zeigt Lohn grundsätzlich nicht — FEK = 0 dort ist kein Fehler.',
                 $istVk ? 'foodalchemist.verkaufsrezepte.PUT' : 'foodalchemist.recipes.PUT');
         } else {
             $erfuellt[] = 'work_time_min';

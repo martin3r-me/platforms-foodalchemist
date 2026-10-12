@@ -102,8 +102,11 @@ class DarreichungService
         $unbestimmt = $this->unbestimmtId($team);
 
         $quantityPerUnitG = $recipe->sales_quantity_per_unit_g;
-        if ($quantityPerUnitG === null && $recipe->yield_kg !== null && (int) $recipe->sales_unit_count > 0) {
-            $quantityPerUnitG = round((float) $recipe->yield_kg * 1000 / (int) $recipe->sales_unit_count, 1);
+        // Weg-B (2026-10-12): wie grammJeEinheit — ohne `sales_unit_count` ist der Ansatz EINE
+        // Verkaufseinheit, die Grammatur also der ganze Ertrag. Vorher blieb sie bei leerem
+        // Zähler NULL, obwohl der Ertrag bekannt war (Gericht 3920: Editor 476 g, Report „kein Gewicht").
+        if ($quantityPerUnitG === null && $recipe->yield_kg !== null && (float) $recipe->yield_kg > 0) {
+            $quantityPerUnitG = round((float) $recipe->yield_kg * 1000 / max(1, (int) ($recipe->sales_unit_count ?? 0)), 1);
         }
 
         return $this->anlegen($team, $recipe->id, $unbestimmt, [

@@ -33,20 +33,7 @@ class SpeisenKlassenService
             ->with(['ingredients' => fn ($q) => $q->whereNull('deleted_at'), 'ingredients.gp:id,name', 'ingredients.referencedRecipe:id,name'])
             ->findOrFail($recipeId);
 
-        // M5: nur AKTIVE Hauptgruppen (E7-Neutralisierung: APE/SNK/ALC/BVK/ALL sind is_inactive).
-        // Label DB-agnostisch in PHP zusammenbauen — SQLites `||` ist auf MySQL logisches OR (Bug).
-        $taxonomie = FoodAlchemistDishClass::query()
-            ->join('foodalchemist_dish_main_groups AS hg', 'hg.id', '=', 'foodalchemist_dish_classes.dish_main_group_id')
-            ->where('hg.is_inactive', false)
-            ->orderBy('foodalchemist_dish_classes.id')
-            ->get([
-                'foodalchemist_dish_classes.id AS id',
-                'hg.code AS hg_code',
-                'foodalchemist_dish_classes.label AS klasse_label',
-                'foodalchemist_dish_classes.diet_form AS diet_form',
-            ])
-            ->mapWithKeys(fn ($row) => [(int) $row->id => "{$row->hg_code} / {$row->klasse_label} ({$row->diet_form})"])
-            ->all();
+        $taxonomie = self::taxonomie($team);
 
         $vorschlag = $this->ki->propose('vk.speisen_klasse', [
             'name' => $r->name,
@@ -66,6 +53,34 @@ class SpeisenKlassenService
             'reasoning' => $vorschlag->reasoning,
             'call_log_id' => $vorschlag->callLogId,                   // M7-01: Accept stempelt (§5 Pflicht 3)
         ];
+    }
+
+    /**
+     * Speisen-Klassen als Prompt-Taxonomie `id => Label`, sichtbar fürs Team.
+     *
+     * Modell A (MVP-049): die Klassen sind vier flache Diätformen OHNE Hauptgruppe
+     * (`dish_main_group_id` NULL). Der frühere INNER JOIN auf die Hauptgruppe hat sie alle
+     * verworfen — die KI bekam eine leere Taxonomie und antwortete regelkonform mit null
+     * (Weg-B-Befund 1, 2026-10-12). Klassen MIT Hauptgruppe (Altbestand) bleiben erlaubt,
+     * aber nur, wenn die Hauptgruppe aktiv ist (M5/E7: APE/SNK/ALC/BVK/ALL sind is_inactive).
+     * Label DB-agnostisch in PHP zusammenbauen — SQLites `||` ist auf MySQL logisches OR.
+     *
+     * @return array<int, string>
+     */
+    public static function taxonomie(Team $team): array
+    {
+        return FoodAlchemistDishClass::visibleToTeam($team)
+            ->leftJoin('foodalchemist_dish_main_groups AS hg', 'hg.id', '=', 'foodalchemist_dish_classes.dish_main_group_id')
+            ->where(fn ($q) => $q->whereNull('foodalchemist_dish_classes.dish_main_group_id')->orWhere('hg.is_inactive', false))
+            ->orderBy('foodalchemist_dish_classes.id')
+            ->get([
+                'foodalchemist_dish_classes.id AS id',
+                'hg.code AS hg_code',
+                'foodalchemist_dish_classes.label AS klasse_label',
+                'foodalchemist_dish_classes.diet_form AS diet_form',
+            ])
+            ->mapWithKeys(fn ($row) => [(int) $row->id => ($row->hg_code !== null ? "{$row->hg_code} / " : '')."{$row->klasse_label} ({$row->diet_form})"])
+            ->all();
     }
 
     /** GL-07-Accept: schreibt Klasse + Lineage-Trio; Override-First; stempelt accepted_at (§5 P3). */
