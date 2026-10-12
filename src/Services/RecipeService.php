@@ -1165,6 +1165,34 @@ class RecipeService
                     $attrs['match_confidence'] = $groundedConfidence;
                 }
 
+                // Weg-B-Befund 5 (2026-10-12): MCP-Clients schicken Zeilen oft OHNE id (Voll-Sync aus Sicht des
+                // Agenten). Vorher wurden ALLE Zeilen neu angelegt und die alten soft-gelöscht — Darreichungs-Deltas
+                // (recipe_ingredient_id), Regenerations-Overrides und Teller-Rollen hingen an den alten Ids und
+                // verwaisten still (Gericht 3920: Portion „weg", Rollen weg). Jetzt trifft eine id-lose Zeile die
+                // bestehende Zeile mit demselben Ziel (Sub-Rezept oder Grundprodukt), bei unverknüpften Zeilen den
+                // gleichen Namen; jede Bestandszeile höchstens einmal. Nur im preserveMissing-Pfad (MCP) — der
+                // Editor schickt immer Ids.
+                if ($preserveMissing && ($z['id'] ?? null) === null) {
+                    $name = mb_strtolower(trim((string) ($attrs['display_name'] ?? $attrs['raw_text'] ?? '')));
+                    $treffer = $vorhanden->first(function ($alt) use ($behalten, $subId, $gpId, $name) {
+                        if (in_array((int) $alt->id, $behalten, true)) {
+                            return false;
+                        }
+                        if ($subId !== null) {
+                            return (int) $alt->referenced_recipe_id === $subId;
+                        }
+                        if ($gpId !== null) {
+                            return (int) $alt->gp_id === $gpId;
+                        }
+
+                        return $alt->gp_id === null && $alt->referenced_recipe_id === null && $name !== ''
+                            && mb_strtolower(trim((string) ($alt->display_name ?? $alt->raw_text ?? ''))) === $name;
+                    });
+                    if ($treffer !== null) {
+                        $z['id'] = (int) $treffer->id;
+                    }
+                }
+
                 $id = ($z['id'] ?? null) !== null && $vorhanden->has((int) $z['id']) ? (int) $z['id'] : null;
                 // Herkunft der Teller-Rolle (Dominique 11.10.): bleibt die Rolle gleich, bleibt ihre Quelle; ändert sie sich,
                 // gilt die mitgegebene Quelle (Editor: manuell, Generator: ki/kaskade), ohne Angabe ist sie unbekannt (null) —

@@ -288,6 +288,75 @@ it('Coverage-Pass synchronisiert bestehende Step-by-step-Anleitung und Sensorik 
  * Editor nicht kommt, ist die richtige Konsequenz NICHT dieser Test, sondern das Gate zu
  * streichen und die Migrations-Doku (»ai | manual«) zu korrigieren — Produkt-Entscheid.
  */
+/**
+ * Weg-B-Befund 7 (2026-10-12): handgepflegte Schritte (preparation_source = manual) wurden vom Coverage-Pass im
+ * Modus „voll überschreiben" ersetzt. Detektor wie beim Sensorik-Wächter: `recipe.steps` ist im strikten Mock
+ * NICHT erwartet — ruft das Glied propose, wirft der Mock → Status 'fehler' ≠ 'manual_geschuetzt' → ROT.
+ */
+it('GL-07: der Coverage-Pass laesst handgepflegte Schritte stehen (Weg B, Befund 7)', function () {
+    $this->mock(AiGatewayService::class, function ($mock) {
+        $mock->shouldReceive('propose')->with('recipe.production_depth', \Mockery::any(), \Mockery::any())
+            ->andReturn(new AiProposal(['production_depth' => 'teilfertig'], 0.7, 'Mock', [], 'fertigung-steps'));
+        $mock->shouldReceive('propose')->with('recipe.eigenschaften', \Mockery::any(), \Mockery::any())
+            ->andReturn(new AiProposal(['work_time_min' => 8, 'temperature' => 'kalt', 'function' => 'Finish'], 0.7, 'Mock', [], 'eigenschaften-steps'));
+        $mock->shouldReceive('propose')->with('recipe.equipment', \Mockery::any(), \Mockery::any())
+            ->andReturn(new AiProposal(['equipment_slugs' => []], 0.7, 'Mock', [], 'equipment-steps'));
+        $mock->shouldReceive('propose')->with('recipe.sensorik', \Mockery::any(), \Mockery::any())
+            ->andReturn(new AiProposal(['geschmack' => array_fill_keys(SensorikService::DIMS, 0.0), 'texturen' => []], 0.7, 'Mock', [], 'sensorik-steps'));
+    });
+    $r = $this->makeRecipe($this->rootTeam, 'Handgeschrieben', [
+        'status' => 'draft', 'description' => 'Bleibt.', 'description_source' => 'ki',
+        'category_id' => $this->kategorie->id, 'category_source' => 'ki', 'taste_direction' => 'herzhaft',
+    ]);
+    $this->makeIngredient($r, 'Fleur de Sel', $this->makeGp($this->rootTeam, 'Fleur de Sel-steps'), '2', 1);
+    app(\Platform\FoodAlchemist\Services\RecipeStepService::class)->sync($r, [['phase' => 'Hand', 'text' => 'Von Hand geschrieben.']]);
+    $r->update(['preparation_source' => 'manual']);
+
+    $erg = app(RecipeOneShotService::class)->anreichern($this->rootTeam, $r->refresh(), completeCoverage: true);
+
+    expect($erg['coverage']['steps']['status'])->toBe('manual_geschuetzt')
+        ->and($erg['coverage']['steps']['n_steps'])->toBe(1)
+        ->and(\Platform\FoodAlchemist\Models\FoodAlchemistRecipeStep::where('recipe_id', $r->id)->pluck('text')->all())->toBe(['Von Hand geschrieben.'])
+        ->and($r->fresh()->preparation_source)->toBe('manual');
+});
+
+/**
+ * Weg-B-Befund 7 (2026-10-12): das Eigenschaften-Glied überschrieb gefüllte Zeiten/Temperatur/Funktion ohne
+ * Override-Prüfung. Ohne `refresh` füllt es nur Lücken; `refresh` (Editor „Alles anreichern") erneuert alles.
+ */
+it('Eigenschaften-Glied: ohne refresh nur Luecken, mit refresh alles (Weg B, Befund 7)', function () {
+    $this->mock(AiGatewayService::class, function ($mock) {
+        $mock->shouldReceive('propose')->with('recipe.production_depth', \Mockery::any(), \Mockery::any())
+            ->andReturn(new AiProposal(['production_depth' => 'teilfertig'], 0.7, 'Mock', [], 'fertigung-eig'));
+        $mock->shouldReceive('propose')->with('recipe.eigenschaften', \Mockery::any(), \Mockery::any())
+            ->andReturn(new AiProposal(['work_time_min' => 12, 'standzeit_min' => 5, 'temperature' => 'kalt', 'function' => 'Finish'], 0.7, 'Mock', [], 'eigenschaften-eig'));
+        $mock->shouldReceive('propose')->with('recipe.equipment', \Mockery::any(), \Mockery::any())
+            ->andReturn(new AiProposal(['equipment_slugs' => []], 0.7, 'Mock', [], 'equipment-eig'));
+        $mock->shouldReceive('propose')->with('recipe.steps', \Mockery::any(), \Mockery::any())
+            ->andReturn(new AiProposal(['steps' => [['phase' => 'Neu', 'text' => 'Schritt.']]], 0.9, 'Mock', [], 'steps-eig'));
+        $mock->shouldReceive('propose')->with('recipe.sensorik', \Mockery::any(), \Mockery::any())
+            ->andReturn(new AiProposal(['geschmack' => array_fill_keys(SensorikService::DIMS, 0.0), 'texturen' => []], 0.7, 'Mock', [], 'sensorik-eig'));
+    });
+    $r = $this->makeRecipe($this->rootTeam, 'Gepflegte Zeiten', [
+        'status' => 'draft', 'description' => 'Bleibt.', 'description_source' => 'ki',
+        'category_id' => $this->kategorie->id, 'category_source' => 'ki', 'taste_direction' => 'herzhaft',
+        'work_time_min' => 30, 'temperature' => 'heiß',                 // gepflegt
+    ]);
+    $this->makeIngredient($r, 'Fleur de Sel', $this->makeGp($this->rootTeam, 'Fleur de Sel-eig'), '2', 1);
+
+    $ohne = app(RecipeOneShotService::class)->anreichern($this->rootTeam, $r->refresh(), completeCoverage: true);
+    expect($ohne['coverage']['eigenschaften']['status'])->toBe('aktualisiert')
+        ->and($r->fresh()->work_time_min)->toBe(30)                   // gepflegt bleibt
+        ->and($r->fresh()->temperature)->toBe('heiß')
+        ->and($r->fresh()->standzeit_min)->toBe(5)                    // Lücke gefüllt
+        ->and($r->fresh()->function)->toBe('Finish');
+
+    $mit = app(RecipeOneShotService::class)->anreichern($this->rootTeam, $r->refresh(), completeCoverage: true, refresh: true);
+    expect($mit['coverage']['eigenschaften']['status'])->toBe('aktualisiert')
+        ->and($r->fresh()->work_time_min)->toBe(12)                   // refresh erneuert
+        ->and($r->fresh()->temperature)->toBe('kalt');
+});
+
 it('GL-07: der automatische Coverage-Pass laesst eine handgepflegte Sensorik stehen', function () {
     $this->mock(AiGatewayService::class, function ($mock) {
         // Alles ausser recipe.sensorik erwartet — die Lücke IST der Detektor.
