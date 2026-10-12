@@ -35,20 +35,32 @@ class SpeisenKlassenService
 
         $taxonomie = self::taxonomie($team);
 
+        // KI-Knopf „Einordnung vorschlagen" (2026-10-12): zweite Achse Hauptgruppe (Gang) mitentscheiden —
+        // nur aktive, team-sichtbare Gruppen, eine ungültige Id ist ein ehrlicher Nicht-Treffer.
+        $hauptgruppen = \Platform\FoodAlchemist\Models\FoodAlchemistDishMainGroup::visibleToTeam($team)
+            ->where('is_inactive', false)->orderBy('sort_order')->orderBy('code')->get()
+            ->mapWithKeys(fn ($hg) => [(int) $hg->id => "{$hg->code} / {$hg->label}"])->all();
+
         $vorschlag = $this->ki->propose('vk.speisen_klasse', [
             'name' => $r->name,
             'dish_class_id' => $r->dish_class_id,            // Kontext (FakeProvider echo't)
+            'dish_main_group_id' => $r->dish_main_group_id,
             'komponenten' => $r->ingredients->map(fn ($z) => $z->referencedRecipe?->name ?? $z->gp?->name ?? $z->display_name)->all(),
             'diaet' => ['vegan' => $r->spec_vegan ?? null, 'vegetarisch' => $r->spec_vegetarisch ?? null],
             'taxonomie' => $taxonomie,
+            'hauptgruppen' => $hauptgruppen,
         ]);
 
         $klasseId = $vorschlag->werte['dish_class_id'] ?? null;
         $klasse = $klasseId !== null ? FoodAlchemistDishClass::find((int) $klasseId) : null;
+        $hgId = $vorschlag->werte['dish_main_group_id'] ?? null;
+        $hgId = is_numeric($hgId) && array_key_exists((int) $hgId, $hauptgruppen) ? (int) $hgId : null;
 
         return [
             'klasse_id' => $klasse?->id,                              // ungültige ID ⇒ ehrlicher Nicht-Treffer
             'klasse_name' => $klasse?->label,
+            'hauptgruppe_id' => $hgId,
+            'hauptgruppe_name' => $hgId !== null ? $hauptgruppen[$hgId] : null,
             'confidence' => max(0.0, min(1.0, $vorschlag->confidence)),
             'reasoning' => $vorschlag->reasoning,
             'call_log_id' => $vorschlag->callLogId,                   // M7-01: Accept stempelt (§5 Pflicht 3)

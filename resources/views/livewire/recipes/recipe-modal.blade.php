@@ -701,6 +701,12 @@
 
         <x-fa::section title="Regeneration" icon="heroicon-o-fire"
             description="So kommt diese Komponente auf Temperatur. Gilt als Vorgabe in jedem Gericht, das sie enthält. Kein Gerät heißt kalt servieren, alles leer heißt keine Angabe und wird als Lücke gemeldet.">
+            <x-slot:actions>
+                {{-- Dominique 2026-10-12: Vorschlag ins Formular, Speichern übernimmt --}}
+                <x-foodalchemist::ki-action action="kiRegeneration" variant="ai" icon="heroicon-o-sparkles" label="Regeneration vorschlagen"
+                    title="Ein Programm für das ganze Basisrezept: Gerät aus dem Vokabular, Temperatur, Dauer, Kerntemperatur — oder kalt servieren"
+                    data-ki-regeneration busy="Wird vorgeschlagen …" flash="Vorgeschlagen" />
+            </x-slot:actions>
             <div class="grid gap-3 grid-cols-2 sm:grid-cols-4" data-regen-selbst>
                 <x-fa::field label="Gerät" for="regen-geraet" class="col-span-2 sm:col-span-1">
                     <x-fa::select id="regen-geraet" wire:model="regenForm.device_vocab_id" placeholder="kalt servieren">
