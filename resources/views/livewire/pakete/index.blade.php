@@ -32,7 +32,7 @@
                     <p class="px-2.5 pb-1 text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-3)]">Rolle</p>
                     <x-foodalchemist::filter-row wire:click="$set('rolleFilter', '')" :active="$rolleFilter === ''">Alle Rollen</x-foodalchemist::filter-row>
                     @foreach($rollen as $role)
-                        <x-foodalchemist::filter-row wire:key="role-{{ $loop->index }}" wire:click="$set('rolleFilter', @js($role))" :active="$rolleFilter === $role">{{ $role }}</x-foodalchemist::filter-row>
+                        <x-foodalchemist::filter-row wire:key="role-{{ $loop->index }}" wire:click="$set('rolleFilter', {{ \Illuminate\Support\Js::from($role) }})" :active="$rolleFilter === $role">{{ $role }}</x-foodalchemist::filter-row>
                     @endforeach
                 </div>
             </div>

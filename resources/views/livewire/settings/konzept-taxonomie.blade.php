@@ -45,7 +45,7 @@
                                         class="flex-1 min-w-0 truncate text-left px-1.5 py-1.5 text-[length:var(--fa-text-md)] {{ $aktiv ? 'font-medium' : '' }}">{{ $kat['name'] }}</a>
                                 <span class="shrink-0 text-[length:var(--fa-text-sm)] tabular-nums text-[var(--fa-ink-3)]" title="Unterkategorien">{{ $kinder }}</span>
                                 <span class="shrink-0 flex opacity-0 group-hover:opacity-100 focus-within:opacity-100">
-                                    <x-fa::icon-button size="sm" icon="heroicon-o-pencil" label="Kategorie umbenennen" wire:click="katEditStart({{ $kat['id'] }}, @js($kat['name']))" />
+                                    <x-fa::icon-button size="sm" icon="heroicon-o-pencil" label="Kategorie umbenennen" wire:click="katEditStart({{ $kat['id'] }}, {{ \Illuminate\Support\Js::from($kat['name']) }})" />
                                     <x-fa::icon-button size="sm" tone="danger" icon="heroicon-o-trash" label="Kategorie löschen" wire:click="katLoeschen({{ $kat['id'] }})"
                                         wire:confirm="Kategorie „{{ $kat['name'] }}“ löschen? Unterkategorien und Konzepte rücken eine Ebene nach oben." />
                                 </span>
@@ -85,7 +85,7 @@
                                             <td class="num text-[var(--fa-ink-2)]">{{ $katCounts[$sub['id']] ?? 0 }}</td>
                                             <td class="whitespace-nowrap">
                                                 <div class="flex items-center justify-end gap-1">
-                                                    <x-fa::button size="sm" variant="ghost" icon="heroicon-o-pencil" wire:click="katEditStart({{ $sub['id'] }}, @js($sub['name']))">Umbenennen</x-fa::button>
+                                                    <x-fa::button size="sm" variant="ghost" icon="heroicon-o-pencil" wire:click="katEditStart({{ $sub['id'] }}, {{ \Illuminate\Support\Js::from($sub['name']) }})">Umbenennen</x-fa::button>
                                                     <div class="relative" x-data="faMenu()" x-on:keydown.escape="offen = false" x-on:click.outside="offen = false">
                                                         <x-fa::icon-button size="sm" icon="heroicon-m-ellipsis-horizontal" label="Weitere Aktionen für {{ $sub['name'] }}"
                                                             x-on:click="toggle($event)" aria-haspopup="menu" x-bind:aria-expanded="offen" />
@@ -135,7 +135,7 @@
                                         class="flex-1 min-w-0 truncate text-left px-1.5 py-1.5 text-[length:var(--fa-text-md)] {{ $aktiv ? 'font-medium' : '' }}">{{ $kl['name'] }}</a>
                                 <span class="shrink-0 text-[length:var(--fa-text-sm)] tabular-nums text-[var(--fa-ink-3)]" title="Unterklassen">{{ $kinder }}</span>
                                 <span class="shrink-0 flex opacity-0 group-hover:opacity-100 focus-within:opacity-100">
-                                    <x-fa::icon-button size="sm" icon="heroicon-o-pencil" label="Klasse umbenennen" wire:click="klasseEditStart({{ $kl['id'] }}, @js($kl['name']))" />
+                                    <x-fa::icon-button size="sm" icon="heroicon-o-pencil" label="Klasse umbenennen" wire:click="klasseEditStart({{ $kl['id'] }}, {{ \Illuminate\Support\Js::from($kl['name']) }})" />
                                     <x-fa::icon-button size="sm" tone="danger" icon="heroicon-o-trash" label="Klasse löschen" wire:click="klasseLoeschen({{ $kl['id'] }})"
                                         wire:confirm="Klasse „{{ $kl['name'] }}“ löschen? Unterklassen rücken eine Ebene nach oben." />
                                 </span>
@@ -175,7 +175,7 @@
                                             <td class="num text-[var(--fa-ink-2)]">{{ $klasseCounts[$sub['name']] ?? 0 }}</td>
                                             <td class="whitespace-nowrap">
                                                 <div class="flex items-center justify-end gap-1">
-                                                    <x-fa::button size="sm" variant="ghost" icon="heroicon-o-pencil" wire:click="klasseEditStart({{ $sub['id'] }}, @js($sub['name']))">Umbenennen</x-fa::button>
+                                                    <x-fa::button size="sm" variant="ghost" icon="heroicon-o-pencil" wire:click="klasseEditStart({{ $sub['id'] }}, {{ \Illuminate\Support\Js::from($sub['name']) }})">Umbenennen</x-fa::button>
                                                     <div class="relative" x-data="faMenu()" x-on:keydown.escape="offen = false" x-on:click.outside="offen = false">
                                                         <x-fa::icon-button size="sm" icon="heroicon-m-ellipsis-horizontal" label="Weitere Aktionen für {{ $sub['name'] }}"
                                                             x-on:click="toggle($event)" aria-haspopup="menu" x-bind:aria-expanded="offen" />

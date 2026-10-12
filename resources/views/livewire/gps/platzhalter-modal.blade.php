@@ -25,7 +25,7 @@
                     @else
                         <span class="flex-1 min-w-0 text-[length:var(--fa-text-md)] text-[var(--fa-ink)]">{{ $ph->name }}</span>
                         <x-fa::badge :tone="$ph->in_zeilen > 0 ? 'info' : 'neutral'" class="shrink-0">{{ $ph->in_zeilen }}× genutzt</x-fa::badge>
-                        <x-fa::icon-button size="sm" icon="heroicon-o-pencil" label="Umbenennen" wire:click="startEdit({{ $ph->id }}, @js($ph->name))" />
+                        <x-fa::icon-button size="sm" icon="heroicon-o-pencil" label="Umbenennen" wire:click="startEdit({{ $ph->id }}, {{ \Illuminate\Support\Js::from($ph->name) }})" />
                         <x-fa::icon-button size="sm" tone="danger" icon="heroicon-o-trash"
                             :label="$ph->in_zeilen > 0 ? 'Wird genutzt, erst aus den Rezepten entfernen' : 'Löschen'"
                             wire:click="loeschen({{ $ph->id }})" wire:confirm="Diesen Platzhalter wirklich löschen?"

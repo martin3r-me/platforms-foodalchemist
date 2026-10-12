@@ -89,7 +89,7 @@
                                         <x-foodalchemist::filter-row wire:click="kategorieWaehlen('{{ $kat['id'] }}')" :active="$categoryFilter === (string) $kat['id']">{{ $kat['name'] }}</x-foodalchemist::filter-row>
                                     </div>
                                     <x-fa::icon-button size="sm" icon="heroicon-m-pencil" label="Kategorie umbenennen"
-                                        wire:click="kategorieEditStart({{ $kat['id'] }}, @js($kat['name']))" class="opacity-0 group-hover/kat:opacity-100 focus:opacity-100" />
+                                        wire:click="kategorieEditStart({{ $kat['id'] }}, {{ \Illuminate\Support\Js::from($kat['name']) }})" class="opacity-0 group-hover/kat:opacity-100 focus:opacity-100" />
                                     <x-fa::icon-button size="sm" icon="heroicon-m-trash" tone="danger" label="Kategorie löschen"
                                         wire:click="kategorieLoeschen({{ $kat['id'] }})" wire:confirm="Kategorie löschen? Unterkategorien und Concepts rücken zur übergeordneten Kategorie."
                                         class="opacity-0 group-hover/kat:opacity-100 focus:opacity-100" />
