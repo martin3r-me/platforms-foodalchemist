@@ -30,7 +30,7 @@ it('Registry-Smoke: alle Modul-Tools registriert (Naming <modul>.resource.VERB)'
         'foodalchemist.recipes.SEARCH', 'foodalchemist.recipes.GET',
         'foodalchemist.verkaufsrezepte.SEARCH', 'foodalchemist.artikel.SEARCH',
         'foodalchemist.foodbook.GET',
-        'foodalchemist.recipe_klasse.POST', 'foodalchemist.dish_classes.GET',
+        'foodalchemist.recipe_klasse.POST', 'foodalchemist.dish_classes.GET', 'foodalchemist.recipe_typen.GET',
     ] as $name) {
         expect($this->registry->get($name))->not->toBeNull($name);
         expect($this->registry->get($name)->getSchema()['type'] ?? null)->toBe('object', $name);
@@ -52,6 +52,20 @@ it('dish_classes.GET: Klassen (auch ohne Hauptgruppe) und aktive Hauptgruppen mi
         ->and(collect($res->data['hauptgruppen'])->pluck('id')->all())->toContain($hg->id)
         ->and(collect($res->data['hauptgruppen'])->pluck('id')->all())->not->toContain($tot->id)
         ->and($this->registry->get('foodalchemist.dish_classes.GET')->getMetadata()['read_only'])->toBeTrue();
+});
+
+it('recipe_typen.GET: Typ-Vokabular aus der Regel basisrezept.1.2.typ, für jedes Teammitglied lesbar — Weg-B-Befund 4', function () {
+    $res = $this->registry->get('foodalchemist.recipe_typen.GET')->execute([], $this->kontext);
+    expect($res->success)->toBeTrue($res->error ?? '')
+        ->and($res->data['regel'])->toBe('basisrezept.1.2.typ')
+        ->and($res->data['schema'])->toBe('Typ: Bezeichnung (Zusatz)')
+        ->and($this->registry->get('foodalchemist.recipe_typen.GET')->getMetadata()['read_only'])->toBeTrue();
+    if ($res->data['geladen']) {                                        // Regel-Seed vorhanden: Inhalt plausibel
+        expect($res->data['typen'])->not->toBeEmpty()
+            ->and($res->data['gruppen'][0])->toHaveKeys(['gruppe', 'typen']);
+    } else {
+        expect($res->data['hinweis'])->toContain('nicht aktiv');
+    }
 });
 
 it('Lese-Tools: recipes.SEARCH/GET team-scoped, VK-Rezepte bleiben draußen (Scope-Härte)', function () {

@@ -110,6 +110,17 @@ class RecipeReifeAdapter implements ReifeAdapter
             }
         }
 
+        // Weg-B-Befund 2 (2026-10-12): Lagerung war in keinem Soll-Aspekt — ein Rezept stand auf grün, obwohl
+        // weder Lagerart noch Haltbarkeit gepflegt waren. Hinweis-Schwere (Etikett/Einlagerung, Spec 70/76),
+        // beide Ebenen, je mit dem passenden Schreib-Tool.
+        if ($r->storage_type === null && $r->lagerarten() === []) {       // lagerarten() leitet auch aus shelf_life_* ab
+            $luecken[] = $this->luecke('lagerung', $istVk ? 'gericht' : 'basisrezept', 'hinweis',
+                'Keine Lagerart gepflegt (storage_type / storage_types: gekuehlt, tiefgekuehlt, trocken) — Etikett und Einlagerung haben keine Vorgabe; Haltbarkeit (shelf_life_*_days) dazu.',
+                $istVk ? 'foodalchemist.verkaufsrezepte.PUT' : 'foodalchemist.recipes.PUT');
+        } else {
+            $erfuellt[] = 'lagerung';
+        }
+
         if (! $istVk) {
             if ($r->default_station_id === null) {
                 $luecken[] = $this->luecke('default_station_id', 'basisrezept', 'wichtig',
@@ -237,6 +248,7 @@ class RecipeReifeAdapter implements ReifeAdapter
         // Beide Ebenen
         foreach (['basisrezept' => $br, 'gericht' => $vk] as $ebene => $tool) {
             $aus[] = $aspekt('work_time_min', 'blockiert', $tool, $ebene);
+            $aus[] = $aspekt('lagerung', 'hinweis', $tool, $ebene);      // Weg-B-Befund 2
             $aus[] = $aspekt('steps', 'hinweis', 'foodalchemist.recipe_steps.PUT', $ebene);
             $aus[] = $aspekt('sensorik', 'hinweis', 'foodalchemist.recipe_sensorik.POST', $ebene);
             $aus[] = $aspekt('aromaanker', 'hinweis', null, $ebene);

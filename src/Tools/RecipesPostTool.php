@@ -135,6 +135,20 @@ class RecipesPostTool extends FoodAlchemistTool implements ToolContract, ToolMet
             return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR');
         }
 
+        // Weg-B-Befund 4 (2026-10-12): der Agent vergab regelkonform den falschen Präfix („Garmethode:" statt
+        // „Fleisch:"), weil er das Typ-Vokabular nicht lesen konnte und niemand ihn warnte. Hier nur ein
+        // HINWEIS, kein Block — der Conformance-Check meldet es später als harten Befund, der Normalizer
+        // des Generators korrigiert es nicht. Nur Basisrezepte tragen einen Typ.
+        $typHinweis = null;
+        if (! $recipe->is_sales_recipe && \Platform\FoodAlchemist\Support\RezeptTypVokabular::istGeladen()) {
+            $praefix = \Platform\FoodAlchemist\Support\RezeptTypVokabular::praefix($recipe->name);
+            if ($praefix === null) {
+                $typHinweis = 'Name ohne Typ-Präfix — Regelwerk §1.2 verlangt „Typ: Bezeichnung" (Vokabular: foodalchemist.recipe_typen.GET).';
+            } elseif (\Platform\FoodAlchemist\Support\RezeptTypVokabular::finde($praefix) === null) {
+                $typHinweis = 'Präfix „'.$praefix.'“ steht nicht im Typ-Vokabular (Regelwerk §1.2) — passenden Typ mit foodalchemist.recipe_typen.GET wählen und per recipes.PUT umbenennen.';
+            }
+        }
+
         return ToolResult::success($this->mitReife([
             'recipe' => [
                 'id' => $recipe->id, 'name' => $recipe->name, 'recipe_key' => $recipe->recipe_key,
@@ -143,7 +157,9 @@ class RecipesPostTool extends FoodAlchemistTool implements ToolContract, ToolMet
                 'n_ingredients_total' => $recipe->n_ingredients_total, 'n_ingredients_unmapped' => $recipe->n_ingredients_unmapped,
                 'standard_presentation_form_id' => $standardForm,
             ],
-            'note' => ((int) ($recipe->n_ingredients_total ?? 0) === 0
+            'typ_hinweis' => $typHinweis,
+            'note' => ($typHinweis !== null ? '⚠ '.$typHinweis.' ' : '')
+                . ((int) ($recipe->n_ingredients_total ?? 0) === 0
                     ? '⚠ 0 Zutaten übernommen — zutaten[] (name/quantity/unit, optional gp_id via foodalchemist.gps.MATCH) mitgeben oder mit foodalchemist.recipe_ingredients.PUT nachladen. '
                     : '')
                 . 'Entwurf (Draft-Quarantäne): fließt erst nach menschlichem Review in Verkauf/Kalkulation.'
