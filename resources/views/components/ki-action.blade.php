@@ -6,7 +6,8 @@
     (`wire:loading.attr="disabled"`).
 
     Props:
-      action    (Pflicht) voller Wire-Ausdruck inkl. Argumenten, z. B. "neuAnreichern(12, true)".
+      action    (Pflicht) Wire-Ausdruck: blanker Methodenname ("kiProduktfoto" → wird als
+                $wire.kiProduktfoto() gerufen) oder mit Argumenten ("neuAnreichern(12, true)").
       target    wire:target-Ausdruck; Default = action (byte-gleich mit dem $wire-Aufruf unten —
                 aus DERSELBEN Variable erzeugt, damit beide nie auseinanderlaufen).
       label     Idle-Text (variant=icon: nur als title/aria-label, nicht sichtbar).
@@ -50,6 +51,11 @@
     // matcht wire:loading den falschen Request, sobald jemand nur eine Stelle anpasst.
     $wireAusdruck = (string) $action;
     $wireZiel = $target !== null && $target !== '' ? (string) $target : $wireAusdruck;
+    // Blanker Methodenname ("kiProduktfoto") → Aufruf mit Klammern. `$wire.kiProduktfoto` ohne
+    // Klammern ist nur die Funktion, kein Promise: `.then` wirft TypeError, es geht KEINE Anfrage
+    // raus und der Knopf endet nach 45 s in „Keine Antwort" (demo, 2026-10-12). wire:target und
+    // data-ki-action bleiben der blanke Name — Livewire matcht den Namen unabhängig von Argumenten.
+    $wireAufruf = str_contains($wireAusdruck, '(') ? $wireAusdruck : $wireAusdruck . '()';
     $hatFehler = $error !== null && trim((string) $error) !== '';
     $anzeigeLabel = $hatFehler ? ($retry ?: ($label ?: 'neu versuchen')) : ($label ?: '');
     $anzeigeTitel = $title ?: ($hatFehler ? $error : $anzeigeLabel);
@@ -96,7 +102,9 @@
             pending = false; err = 'Keine Antwort — Seite prüfen.';
             if (typeof busy !== 'undefined') { busy = false }
         }, 45000)
-        $wire.{{ $wireAusdruck }}
+        // Promise.resolve().then(): ein synchroner Fehler im Ausdruck (falsche Methode, kaputtes
+        // Argument) landet im .catch unten mit echter Meldung statt 45 s später als „Keine Antwort".
+        Promise.resolve().then(() => $wire.{{ $wireAufruf }})
             .then(() => {
                 clearTimeout(kiTimeout)
                 pending = false; ok = true;
