@@ -26,7 +26,10 @@ class VerkaufsrezeptePutTool extends FoodAlchemistTool implements ToolContract, 
     {
         return 'Bearbeitet ein team-eigenes Gericht. felder trägt die VK-Felder (name, sales_wording_standard, '
             . 'dish_class_id, dish_main_group_id, markup_class_id, sales_net, price_mode, description, marketing_text, '
-            . 'plating_text, taste_direction, work_time_min, …); nur erlaubte Keys werden geschrieben, FKs geprüft.';
+            . 'plating_text, taste_direction, work_time_min, dichteklasse [fluessig|dicht|schuettfaehig|locker], '
+            . 'storage_type / storage_types [gekuehlt|tiefgekuehlt|trocken], shelf_life_chilled_days/_frozen_days/_dry_days, …); '
+            . 'nur erlaubte Keys werden geschrieben, FKs und Vokabulare geprüft (unbekannter Wert = VALIDATION_ERROR). '
+            . 'Von Hand gesetzte dish_class_id/dichteklasse gelten als Override (source=manual).';
     }
 
     public function getSchema(): array

@@ -338,6 +338,10 @@ class SalesRecipeService
         // die Komponenten-Basisrezepte. Am Gericht wären sie nur eine stille Fehlerquelle.
         'default_station_id', 'variable_work_time_min',
         'variable_work_time_basis', 'standzeit_min', 'batch_max_kg', 'batch_max_pieces',
+        // Weg-B-Befund 2/3 (2026-10-12): Dichteklasse (Behälterbedarf, Spec 51) und Lagerung (Spec 70/76) waren am
+        // Gericht per MCP nicht setzbar — Reife meldete die Lücke mit `wie: null`.
+        'dichteklasse', 'storage_type', 'storage_types',
+        'shelf_life_chilled_days', 'shelf_life_frozen_days', 'shelf_life_dry_days',
     ];
 
     /**
@@ -414,6 +418,27 @@ class SalesRecipeService
                 $update['dish_class_source'] = $update['dish_class_id'] === null ? null : 'manual';
                 $update['dish_class_ai_confidence'] = null;
                 $update['dish_class_ai_reasoning'] = null;
+            }
+            // Weg-B-Befund 3 (2026-10-12): Dichteklasse am Gericht — nur Vokabular des Behälterrechners, Lineage wie im
+            // Editor (`manual` gewinnt gegen den Bulk-Vorschlag, s. BulkEnrichService::dichteklasse).
+            if (array_key_exists('dichteklasse', $update)) {
+                $klasse = ($update['dichteklasse'] ?? '') === '' ? null : (string) $update['dichteklasse'];
+                if ($klasse !== null && ! array_key_exists($klasse, BehaelterRechner::DICHTE)) {
+                    throw new \RuntimeException('Unbekannte Dichteklasse „'.$klasse.'" — erlaubt: '.implode(', ', array_keys(BehaelterRechner::DICHTE)).'.');
+                }
+                $update['dichteklasse'] = $klasse;
+                if ($klasse !== $recipe->dichteklasse) {
+                    $update['dichteklasse_source'] = $klasse === null ? null : 'manual';
+                    $update['dichteklasse_ai_confidence'] = null;
+                    $update['dichteklasse_ai_reasoning'] = null;
+                }
+            }
+            // Weg-B-Befund 2: Lagerung am Gericht; unbekannte Werte werfen statt still null (RecipeService::lagerart).
+            if (array_key_exists('storage_type', $update)) {
+                $update['storage_type'] = RecipeService::lagerart($update['storage_type']);
+            }
+            if (array_key_exists('storage_types', $update)) {
+                $update['storage_types'] = RecipeService::lagerarten($update['storage_types']);
             }
             $recipeUpdate = array_diff_key($update, array_flip(['price_mode', 'price_override_reason']));
             $recipeUpdate['last_modified_by'] = 'vk_editor';

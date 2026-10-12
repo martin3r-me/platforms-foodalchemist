@@ -253,11 +253,11 @@ class RecipeService
             'variable_work_time_basis' => $in['variable_work_time_basis'] ?? null,
             'standzeit_min' => $in['standzeit_min'] ?? null,
             'max_vorlauf_tage' => $in['max_vorlauf_tage'] ?? null,
-            'storage_type' => $this->lagerart($in['storage_type'] ?? null),
+            'storage_type' => self::lagerart($in['storage_type'] ?? null),
             'shelf_life_chilled_days' => $in['shelf_life_chilled_days'] ?? null,
             'shelf_life_frozen_days' => $in['shelf_life_frozen_days'] ?? null,
             'shelf_life_dry_days' => $in['shelf_life_dry_days'] ?? null,
-            'storage_types' => array_key_exists('storage_types', $in) ? $this->lagerarten($in['storage_types']) : null,
+            'storage_types' => array_key_exists('storage_types', $in) ? self::lagerarten($in['storage_types']) : null,
             'batch_max_kg' => $in['batch_max_kg'] ?? null,
             'batch_max_pieces' => $in['batch_max_pieces'] ?? null,
             'default_station_id' => TeamScope::referenz(\Platform\FoodAlchemist\Models\FoodAlchemistProductionStation::class, $in['default_station_id'] ?? null, $team, 'Posten'),
@@ -321,11 +321,11 @@ class RecipeService
                 ? $in['variable_work_time_basis'] : $recipe->variable_work_time_basis,
             'standzeit_min' => array_key_exists('standzeit_min', $in) ? $in['standzeit_min'] : $recipe->standzeit_min,
             'max_vorlauf_tage' => array_key_exists('max_vorlauf_tage', $in) ? $in['max_vorlauf_tage'] : $recipe->max_vorlauf_tage,
-            'storage_type' => array_key_exists('storage_type', $in) ? $this->lagerart($in['storage_type']) : $recipe->storage_type,
+            'storage_type' => array_key_exists('storage_type', $in) ? self::lagerart($in['storage_type']) : $recipe->storage_type,
             'shelf_life_chilled_days' => array_key_exists('shelf_life_chilled_days', $in) ? $in['shelf_life_chilled_days'] : $recipe->shelf_life_chilled_days,
             'shelf_life_frozen_days' => array_key_exists('shelf_life_frozen_days', $in) ? $in['shelf_life_frozen_days'] : $recipe->shelf_life_frozen_days,
             'shelf_life_dry_days' => array_key_exists('shelf_life_dry_days', $in) ? $in['shelf_life_dry_days'] : $recipe->shelf_life_dry_days,
-            'storage_types' => array_key_exists('storage_types', $in) ? $this->lagerarten($in['storage_types']) : $recipe->storage_types,
+            'storage_types' => array_key_exists('storage_types', $in) ? self::lagerarten($in['storage_types']) : $recipe->storage_types,
             'batch_max_kg' => array_key_exists('batch_max_kg', $in) ? $in['batch_max_kg'] : $recipe->batch_max_kg,
             'batch_max_pieces' => array_key_exists('batch_max_pieces', $in) ? $in['batch_max_pieces'] : $recipe->batch_max_pieces,
             'default_station_id' => array_key_exists('default_station_id', $in)
@@ -1356,16 +1356,34 @@ class RecipeService
             ->when(($filters['rolle'] ?? '') !== '', fn (Builder $q) => $q->mitRolle((string) $filters['rolle']));
     }
 
-    /** Spec 70: übliche Lagerart (gekuehlt | tiefgekuehlt | trocken), sonst null. */
-    private function lagerart(mixed $wert): ?string
+    /**
+     * Spec 70: übliche Lagerart (gekuehlt | tiefgekuehlt | trocken); leer/null = null.
+     * Weg-B-Befund 2 (2026-10-12): ein UNBEKANNTER Wert wurde still zu null — der Agent sah „übernommen"
+     * und das Feld blieb leer. Jetzt wirft er, das Tool meldet VALIDATION_ERROR mit den erlaubten Werten.
+     */
+    public static function lagerart(mixed $wert): ?string
     {
-        return in_array($wert, ['gekuehlt', 'tiefgekuehlt', 'trocken'], true) ? (string) $wert : null;
+        if ($wert === null || $wert === '') {
+            return null;
+        }
+        if (! in_array($wert, \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::LAGERARTEN, true)) {
+            throw new \RuntimeException('Unbekannte Lagerart „'.(is_scalar($wert) ? $wert : gettype($wert)).'" — erlaubt: '
+                .implode(', ', \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::LAGERARTEN).'.');
+        }
+
+        return (string) $wert;
     }
 
-    /** Spec 76: mögliche Lagerarten (Mehrfachauswahl), Reihenfolge fest; leer = null (abgeleitet). */
-    private function lagerarten(mixed $wert): ?array
+    /** Spec 76: mögliche Lagerarten (Mehrfachauswahl), Reihenfolge fest; leer = null (abgeleitet). Unbekannte Werte werfen. */
+    public static function lagerarten(mixed $wert): ?array
     {
-        $arten = array_values(array_intersect(\Platform\FoodAlchemist\Models\FoodAlchemistRecipe::LAGERARTEN, (array) ($wert ?? [])));
+        $eingabe = array_values(array_filter((array) ($wert ?? []), fn ($v) => $v !== null && $v !== ''));
+        $fremd = array_diff($eingabe, \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::LAGERARTEN);
+        if ($fremd !== []) {
+            throw new \RuntimeException('Unbekannte Lagerart „'.implode('", „', array_map('strval', $fremd)).'" — erlaubt: '
+                .implode(', ', \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::LAGERARTEN).'.');
+        }
+        $arten = array_values(array_intersect(\Platform\FoodAlchemist\Models\FoodAlchemistRecipe::LAGERARTEN, $eingabe));
 
         return $arten !== [] ? $arten : null;
     }

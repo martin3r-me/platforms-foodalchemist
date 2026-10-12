@@ -141,6 +141,29 @@ it('am Basisrezept bedeutet dieselbe Zeile »das bin ich«', function () {
         ->and($out['komponenten'])->toBe([]);
 });
 
+/**
+ * Weg-B-Befund 6 (2026-10-12): auf dem Basisrezept „Jus: Altbier" standen Milch und Sahne (frisch) als „kalt
+ * servieren" und Altbier als Lücke — Rohware eines gekochten Rezepts ist keine Komponente auf dem Teller.
+ */
+it('Basisrezept: Grundprodukt-Zeilen sind Rohware und werden nicht bewertet, Unterrezepte schon', function () {
+    $sahne = FoodAlchemistGp::create(['team_id' => $this->rootTeam->id, 'gp_key' => 'g|sahne', 'name' => 'Sahne: frisch', 'condition' => 'frisch']);
+    $bier = FoodAlchemistGp::create(['team_id' => $this->rootTeam->id, 'gp_key' => 'g|altbier', 'name' => 'Altbier: konserviert', 'condition' => 'konserviert']);
+    $fond = ($this->rezept)('Fond: Rind');
+    ($this->regen)($fond, ['temp_c' => 90, 'duration_min' => 20]);
+
+    $jus = ($this->rezept)('Jus: Altbier');
+    ($this->hinein)($jus, null, $sahne);
+    ($this->hinein)($jus, null, $bier);
+    ($this->hinein)($jus, $fond);
+
+    $out = $this->k->fuerRezept($jus);
+
+    expect(collect($out['komponenten'])->pluck('label')->all())->toBe(['Fond: Rind'])   // nur das Unterrezept
+        ->and($out['komponenten'][0]['herkunft'])->toBe(Kaskade::HERKUNFT_GEERBT)
+        ->and($out['luecken'])->toBe(0)
+        ->and($out['verwaist'])->toBe([]);
+});
+
 it('ein frisches Grundprodukt folgt der Regel, ein TK-Produkt meldet eine Lücke', function () {
     $kraut = FoodAlchemistGp::create([
         'team_id' => $this->rootTeam->id, 'gp_key' => 'g|kresse', 'name' => 'Kresse: frisch', 'condition' => 'frisch',

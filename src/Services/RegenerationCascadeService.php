@@ -65,6 +65,14 @@ class RegenerationCascadeService
         $luecken = 0;
 
         foreach ($zutaten as $zutat) {
+            // Weg-B-Befund 6 (2026-10-12): auf einem BASISREZEPT sind Grundprodukt-Zeilen Rohware, die im Rezept
+            // verarbeitet wird — Milch und Sahne im Jus sind nicht „kalt zu servieren", Altbier ist keine Lücke.
+            // Regeneriert wird das Basisrezept als Ganzes (Gesamt-Zeile). Bewertet werden hier nur seine
+            // Unterrezepte (die selbst ein Regenerations-Programm tragen können). Am Gericht bleibt alles wie
+            // bisher: dort sind GP-Zeilen echte Komponenten auf dem Teller (Kresse, Microgreens).
+            if (! $recipe->is_sales_recipe && $zutat->referenced_recipe_id === null) {
+                continue;
+            }
             $zeilen = $this->fuerKomponente($zutat, $overrides->get((string) $zutat->id));
             foreach ($zeilen as $zeile) {
                 if ($zeile['herkunft'] === self::HERKUNFT_FEHLT) {

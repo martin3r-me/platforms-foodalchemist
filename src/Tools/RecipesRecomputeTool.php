@@ -22,15 +22,16 @@ class RecipesRecomputeTool extends FoodAlchemistTool implements ToolContract, To
 
     public function getDescription(): string
     {
-        return 'Berechnet die Aggregation eines team-eigenen Basisrezepts neu (Yield/Allergene/EK) und '
-            . 'propagiert an Eltern-Rezepte. Idempotent.';
+        return 'Berechnet die Aggregation eines team-eigenen Rezepts neu — Basisrezept ODER Gericht — '
+            . '(Yield/Allergene/EK, Darreichungen, Aromenprofil/Aroma-Anker aus den Zutaten) und propagiert an '
+            . 'Eltern-Rezepte. Idempotent. Nach Rezeptänderungen der Weg, das Aromenprofil eines Gerichts zu erneuern.';
     }
 
     public function getSchema(): array
     {
         return [
             'type' => 'object',
-            'properties' => ['id' => ['type' => 'integer', 'description' => 'Basisrezept-Id (team-eigen).']],
+            'properties' => ['id' => ['type' => 'integer', 'description' => 'Rezept-Id (team-eigen; Basisrezept oder Gericht).']],
             'required' => ['id'],
         ];
     }
@@ -43,9 +44,11 @@ class RecipesRecomputeTool extends FoodAlchemistTool implements ToolContract, To
         }
 
         $id = (int) ($arguments['id'] ?? 0);
-        $recipe = FoodAlchemistRecipe::visibleToTeam($team)->where('is_sales_recipe', false)->whereKey($id)->first();
+        // Weg-B-Befund 7 (2026-10-12): Gerichte waren ausgeschlossen — das Aromenprofil eines Gerichts ließ sich
+        // nach einer Rezeptänderung per MCP nicht erneuern (nur als Elternteil eines Basisrezepts, nebenbei).
+        $recipe = FoodAlchemistRecipe::visibleToTeam($team)->whereKey($id)->first();
         if ($recipe === null) {
-            return ToolResult::error('Basisrezept nicht sichtbar/vorhanden.', 'NOT_FOUND');
+            return ToolResult::error('Rezept nicht sichtbar/vorhanden.', 'NOT_FOUND');
         }
         if (! $recipe->isOwnedBy($team)) {
             return ToolResult::error('Geerbtes Rezept — Neuberechnung nur durchs Besitzer-Team.', 'ACCESS_DENIED');

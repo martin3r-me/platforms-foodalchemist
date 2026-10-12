@@ -1984,7 +1984,15 @@ return [
                 . 'angiessen). Unsicher bei einem Zahlenfeld ⇒ null, nie raten. '
                 . 'NENNT beschreibung oder zubereitung ein Geraet bzw. Verfahren ausdruecklich '
                 . '(z. B. »Regeneration im Kombidaempfer«), dann gilt DAS — eine fachlich abweichende '
-                . 'Meinung gehoert in note, nicht in geraet_id: '
+                . 'Meinung gehoert in note, nicht in geraet_id. '
+                // Weg-B-Befund 3 (2026-10-12): Roastbeef bekam »Kruste unter dem Salamander gratinieren« und
+                // Konvektomat 120 °C (= Gartemperatur) als Regeneration — Garen und Fremdkomponenten gehoeren
+                // nicht hinein.
+                . 'ZWEI ABGRENZUNGEN: (1) Regeneration ist das WIEDERERWAERMEN des fertig vorproduzierten Produkts, '
+                . 'nicht sein Garen — Gartemperaturen, Garzeiten und Kerntemperaturen aus der Zubereitung sind KEIN '
+                . 'Regenerations-Programm. (2) Nur DIESES Produkt zaehlt: Schritte, die eine andere Komponente des '
+                . 'spaeteren Gerichts betreffen (Kruste gratinieren, Beilage anrichten, Sauce aufziehen), sind kein '
+                . 'Teil dieser Regeneration, auch wenn die Zubereitung sie erwaehnt: '
                 . 'werte = {kalt, geraet_id, temp_c, duration_min, core_temp_c, note}.',
         ],
         'vk.regeneration' => [
