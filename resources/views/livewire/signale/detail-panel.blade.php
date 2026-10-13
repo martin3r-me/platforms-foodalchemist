@@ -72,6 +72,25 @@
             </div>
         @endif
 
+        {{-- Spec 82 §12 B: Fassungs-Signale — betroffene Angebote mit Sprung zu „Übernehmen“, Allergen-Änderung ausgeschrieben --}}
+        @if(in_array($sig->type->value, ['fassung_neuer_verfuegbar', 'fassung_aktualisiert'], true))
+            @php $fp = (array) $sig->payload; @endphp
+            <x-fa::section variant="plain" title="{{ $sig->type->value === 'fassung_neuer_verfuegbar' ? 'Betroffene Angebote' : 'Änderungen' }}" icon="heroicon-o-arrow-path" data-signal-fassung>
+                @if(! empty($fp['allergene']))
+                    <p class="text-[length:var(--fa-text-md)] font-medium text-[var(--fa-crit)]" data-signal-fassung-allergen>Allergen-/Zusatzstoffänderung: {{ implode('; ', $fp['allergene']) }}</p>
+                @endif
+                @foreach($fp['angebote'] ?? [] as $a)
+                    <div class="flex items-center gap-2 py-1" wire:key="sigfa-{{ $a['angebot_id'] }}">
+                        <span class="min-w-0 flex-1 truncate">{{ $a['name'] }} <span class="text-[var(--fa-ink-3)]">· {{ $a['status'] }} · eingefroren auf #{{ $a['eingefroren_nr'] }}</span></span>
+                        <x-fa::button size="sm" variant="ghost" icon="heroicon-m-arrow-right" :href="route('foodalchemist.angebote.index', ['sel' => $a['angebot_id']])" data-signal-fassung-uebernehmen="{{ $a['angebot_id'] }}">Übernehmen …</x-fa::button>
+                    </div>
+                @endforeach
+                @foreach($fp['fassungen'] ?? [] as $f)
+                    <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]" wire:key="sigff-{{ $f['nr'] }}">Fassung #{{ $f['nr'] }}{{ $f['notiz'] ? ': '.$f['notiz'] : '' }}{{ ! empty($f['allergene']) ? ' — '.implode('; ', $f['allergene']) : '' }}</p>
+                @endforeach
+            </x-fa::section>
+        @endif
+
         {{-- Rückmeldungen (Regler gespeichert/entfernt, Fehler) --}}
         @if($meldung)
             <x-fa::notice tone="ok" data-signal-meldung>{{ $meldung }}</x-fa::notice>

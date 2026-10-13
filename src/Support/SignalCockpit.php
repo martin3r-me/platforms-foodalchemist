@@ -141,6 +141,12 @@ final class SignalCockpit
      * ein zweiter, per Hand gepflegter Pfad würde davon wegdriften.
      */
     private const NAVIGATE = [
+        // Spec 82 §12 B: Ereignis aus der Master-Bibliothek. Kein Datenmangel, deshalb kein Fixer; der Weg ist eine Entscheidung am Angebot.
+        'fassung_aktualisiert' => 'Zur Kenntnis: Neue Angebote und Planungen nutzen die neue Fassung automatisch. Die Änderungsnotiz und eine '
+            . 'etwaige Allergen-Änderung stehen im Signal. Eigene Rezepte und eingefrorene Angebote bleiben bis zur bewussten Übernahme auf ihrer Fassung.',
+        'fassung_neuer_verfuegbar' => 'Das eingefrorene Angebot öffnen (Angebote → Angebot → „Eingefrorener Stand“) und die Fassung mit „Übernehmen …“ '
+            . 'übernehmen. Ändert sich das Allergen- oder Zusatzstoffbild, zeigt der Dialog den Unterschied und die betroffenen Angebote; die Übernahme '
+            . 'bestätigt die Rolle Freigeben. Oder das Signal bewusst verwerfen, wenn der alte Stand gelten soll.',
         // Der einzige Rezept-Befund, dessen Quelle Menschen sind, die es gekocht haben. Ein
         // Auto-Fix waere hier sinnlos — es gibt keine Datenluecke zu schliessen; die Bewertung
         // IST der Befund. Aber es gibt einen konkreten Weg, und der endet nicht im Nichts:
