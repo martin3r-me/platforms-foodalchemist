@@ -78,8 +78,10 @@ class CanvasGetTool extends FoodAlchemistTool implements ToolContract, ToolMetad
 
         return ToolResult::success([
             'title' => $template['title'],
-            'felder' => array_map(fn ($f) => ['key' => $f['key'], 'label' => $f['label'], 'group_name' => $f['group_name'] ?? null, 'type' => $f['type']], $template['felder']),
-            'werte' => $canvas !== null ? $svc->werte($canvas) : [],
+            'felder' => array_map(fn ($f) => ['key' => $f['key'], 'label' => $f['label'], 'group_name' => $f['group_name'] ?? null, 'type' => $f['type'], 'zusatz' => (bool) ($f['zusatz'] ?? false)], $svc->felder($type, $team)),
+            'werte' => $canvas !== null ? $svc->werte($canvas, $team) : [],
+            // Spec 82 §7: welche Skalar-Felder verbindlich sind (Repeatable: je Eintrag `is_binding` in `werte`)
+            'verbindlich' => $canvas !== null ? $svc->verbindlichkeit($canvas) : [],
             'existiert' => $canvas !== null,
         ]);
     }

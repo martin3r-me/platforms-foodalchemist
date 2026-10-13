@@ -34,6 +34,7 @@ class CanvasEntryAddTool extends FoodAlchemistTool implements ToolContract, Tool
                 'owner_id' => ['type' => 'integer', 'description' => 'Entity-Id (bei food_dna weglassen = eigenes Team; bei kunde_dna = CRM-Firma).'],
                 'key' => ['type' => 'string', 'description' => 'Feld-Key (aus canvas.GET-Template).'],
                 'value' => ['type' => 'string', 'description' => 'Eintrags-Wert.'],
+                'verbindlich' => ['type' => 'boolean', 'description' => 'Optional, nur Oberteam + Admin an der Team-DNA (Spec 82 §7): der Eintrag bleibt in allen Unter-Teams und ist dort nicht entfernbar.'],
             ],
             'required' => ['type', 'key', 'value'],
         ];
@@ -76,7 +77,7 @@ class CanvasEntryAddTool extends FoodAlchemistTool implements ToolContract, Tool
             }
         }
         $key = trim((string) ($arguments['key'] ?? ''));
-        $erlaubt = array_column($svc->template($type)['felder'], 'key');
+        $erlaubt = array_column($svc->felder($type, $team), 'key');   // Kern + Zusatzfelder der Team-Kette
         if ($key === '' || ! in_array($key, $erlaubt, true)) {
             return ToolResult::error('Unbekannter Canvas-Key. Gültig: ' . implode(', ', $erlaubt), 'VALIDATION_ERROR');
         }
@@ -85,10 +86,24 @@ class CanvasEntryAddTool extends FoodAlchemistTool implements ToolContract, Tool
             return ToolResult::error('value darf nicht leer sein.', 'VALIDATION_ERROR');
         }
 
-        $canvas = $svc->canvasFor($team, $type, $ownerType, $ownerId);
-        $entry = $svc->addEntry($canvas, $key, $value);
+        $verbindlich = (bool) ($arguments['verbindlich'] ?? false);
+        if ($verbindlich) {
+            if ($type !== 'food_dna') {
+                return ToolResult::error('verbindlich gibt es nur an der Team-DNA (type=food_dna).', 'VALIDATION_ERROR');
+            }
+            try {
+                $svc->pruefeVerbindlichSetzen($team, $context->user);
+            } catch (\Platform\FoodAlchemist\Exceptions\FaRechtFehltException $e) {
+                return ToolResult::error($e->getMessage(), 'FORBIDDEN');
+            } catch (\RuntimeException $e) {
+                return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR');
+            }
+        }
 
-        return ToolResult::success(['type' => $type, 'owner_id' => $ownerId, 'key' => $key, 'entry_id' => (int) $entry->id]);
+        $canvas = $svc->canvasFor($team, $type, $ownerType, $ownerId);
+        $entry = $svc->addEntry($canvas, $key, $value, [], $verbindlich);
+
+        return ToolResult::success(['type' => $type, 'owner_id' => $ownerId, 'key' => $key, 'entry_id' => (int) $entry->id, 'verbindlich' => $verbindlich]);
     }
 
     public function getMetadata(): array

@@ -38,6 +38,7 @@ class CanvasPutTool extends FoodAlchemistTool implements ToolContract, ToolMetad
                 'type' => ['type' => 'string', 'enum' => ['food_dna', 'kunde_dna', 'foodbook', 'concept', 'angebot']],
                 'owner_id' => ['type' => 'integer', 'description' => 'Entity-ID (bei food_dna weglassen = eigenes Team; bei kunde_dna = CRM-Firma)'],
                 'felder' => ['type' => 'object', 'description' => 'Map key→Wert, Keys aus dem Template (canvas.GET)'],
+                'verbindlich' => ['type' => 'object', 'description' => 'Optional, nur Oberteam + Admin (Spec 82 §7): Map key→true|false. true macht das Skalar-Feld für alle Unter-Teams verbindlich (sie überschreiben es nicht), false hebt es auf. Keys müssen in felder stehen oder bereits gefüllt sein.'],
             ],
             'required' => ['type', 'felder'],
         ];
@@ -80,22 +81,46 @@ class CanvasPutTool extends FoodAlchemistTool implements ToolContract, ToolMetad
             }
         }
 
-        $erlaubt = array_column($svc->template($type)['felder'], 'key');
+        $erlaubt = array_column($svc->felder($type, $team), 'key');   // Kern + Zusatzfelder der Team-Kette
         $felder = (array) $arguments['felder'];
         $unbekannt = array_diff(array_keys($felder), $erlaubt);
         if ($unbekannt !== []) {
             return ToolResult::error('Unbekannte Canvas-Keys: ' . implode(', ', $unbekannt) . '. Gültig: ' . implode(', ', $erlaubt), 'VALIDATION_ERROR');
         }
 
+        $verbindlich = (array) ($arguments['verbindlich'] ?? []);
+        if ($verbindlich !== []) {
+            if ($type !== 'food_dna') {
+                return ToolResult::error('verbindlich gibt es nur an der Team-DNA (type=food_dna).', 'VALIDATION_ERROR');
+            }
+            $unbekanntV = array_diff(array_keys($verbindlich), $erlaubt);
+            if ($unbekanntV !== []) {
+                return ToolResult::error('Unbekannte Keys in verbindlich: ' . implode(', ', $unbekanntV), 'VALIDATION_ERROR');
+            }
+            try {
+                $svc->pruefeVerbindlichSetzen($team, $context->user);
+            } catch (\Platform\FoodAlchemist\Exceptions\FaRechtFehltException $e) {
+                return ToolResult::error($e->getMessage(), 'FORBIDDEN');
+            } catch (\RuntimeException $e) {
+                return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR');
+            }
+        }
+
         $canvas = $svc->canvasFor($team, $type, $ownerType, $ownerId);
         foreach ($felder as $key => $wert) {
-            $svc->setSkalar($canvas, (string) $key, ($wert === '' || $wert === null) ? null : (string) $wert);
+            $svc->setSkalar($canvas, (string) $key, ($wert === '' || $wert === null) ? null : (string) $wert,
+                array_key_exists($key, $verbindlich) ? (bool) $verbindlich[$key] : null);
+        }
+        foreach ($verbindlich as $key => $flag) {   // Flag an einem schon gefüllten Feld, das nicht in felder steht
+            if (! array_key_exists($key, $felder)) {
+                $canvas->entries()->where('field_key', $key)->where('position', 0)->update(['is_binding' => (bool) $flag]);
+            }
         }
 
         return ToolResult::success([
             'type' => $type, 'owner_id' => $ownerId,
             'gesetzt' => array_keys($felder),
-            'werte' => $svc->werte($canvas->refresh()),
+            'werte' => $svc->werte($canvas->refresh(), $team),
         ]);
     }
 
