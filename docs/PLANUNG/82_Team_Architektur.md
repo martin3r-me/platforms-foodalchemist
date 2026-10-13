@@ -295,8 +295,10 @@ Beschreibt, was die Küche kann. Das ist keine DNA.
    - **Größter Baustein der Spec, Schätzung 8–12 Arbeitstage** (vorher 4–6). Fassungen und tiefe Kopie waren vorher nicht eingerechnet.
 
 **Abnahme:** Die Kern-Szenarien (§11) werden in einer **Sandbox mit Test-Mandant und globalem Stamm** geprüft, **nicht auf demo**. Dort liegt der Stamm bis zum eigenen Server in Team 6, und Mandanten ohne Eltern-Team sehen ihn nicht (M1/M2).
-8. Modul „Mandanten“ (§9)
+8. Modul „Mandanten“ (§9) mit Plattform-Steuerung, Host-Anteil und Gebühren (§13)
 9. Projekte (§9)
+
+**Vorgezogen aus §13 (vor Schritt 7, weil sonst Gebautes nicht bedienbar ist):** §13 B1 Stamm-Paket buchen, §13 B2 Bereich „Unter-Teams & Freigaben“, §13 B4 Master-Team festlegen.
 
 ## §11 · Prüf-Szenarien
 
@@ -405,6 +407,52 @@ Damit erledigt sich Entscheidung 2 („Offen“): Eine zentrale Veröffentlichun
   5. Allergen-Bestätigung
   6. Abo-Entzug mit tiefer Kopie (D)
 - Erst wenn dieser Fall trägt, werden Modul „Mandanten“ und Projekte gebaut.
+
+## §13 · Plattform-Steuerung, Host-Anteil und Gebühren
+
+Ergänzt 13.10.2026 (Dominique: „die komplette Spec umgesetzt, sodass ich alles steuern kann“; Abstimmung Kurator mit Spec-Autor).
+
+### A · Grenze Host und Modul
+
+**Regel: Der Host bettet ein, das Modul besitzt.**
+- Im **FA-Modul** liegt alles Fachliche: Tabellen, Services, Rechteprüfung (über `FaRechte`, nicht im Host), MCP-Tools und die Livewire-Komponenten selbst.
+- Der **Host** (food-alchemist.de, `/verwaltung` aus Spec 77b) hat nur, was eine Plattform auch ohne FA hätte: Teams und Mitglieder anlegen, Rollen, Modulfreigaben, Login, Hülle. FA-Verwaltung bindet er als dünne Einbettung einer Modul-Komponente ein (z. B. `<livewire:foodalchemist.verwaltung.stamm-paket>`).
+- **Prüffrage je Punkt:** Bräuchte ein anderer Host (z. B. office), der den FA betreibt, das auch? Dann gehört es ins Modul, sonst ist es beim Host-Wechsel weg.
+- food-alchemist.de ist ein lokales Repo ohne Remote: Host-Arbeit läuft als lokale Commits, vom Kurator gegengeprüft.
+
+### B · Steuerpunkte
+
+| # | Steuerpunkt | Wo | Wer | Regel |
+|---|---|---|---|---|
+| B1 | **Stamm-Paket buchen / abbestellen** | Modul-Komponente + MCP, im Host in `/verwaltung` eingebettet | Plattform-Admin | Beim Abbestellen zeigt das System, welche Abos dadurch ungültig werden (Abo setzt Paket voraus, Entscheidung 1 = C). |
+| B2 | **„Unter-Teams & Freigaben“ schaltbar** (§5) | Kein neues UI: weiterer Eintrag im Bereichs-Katalog `FaBereiche` (Spec 77b), `/verwaltung` → Freigaben schaltet ihn | Plattform-Admin | — |
+| B3 | **Mandant anlegen** | Team: Host (`/verwaltung` → Teams, Core), ohne Eltern-Team = neben dem Master. Status „Projekt“ und CRM-Firma: FA-Tabelle, gepflegt im Modul „Mandanten“ | Plattform-Admin bzw. Master | CRM-Firma stammt aus dem CRM des Master-Teams. Kontingente bleiben 77b. |
+| B4 | **Master-Team festlegen** | Plattformweite FA-Einstellung (eigene FA-Tabelle ohne `team_id`), ENV `FOODALCHEMIST_MASTER_TEAM_ID` bleibt Fallback | Plattform-Admin | Ein Wechsel ändert die Sichtbarkeit aller Abos: erlaubt nur ohne Abos, sonst mit Wirkungs-Vorschau und Bestätigung. |
+| B5 | **Gebühren-Preispflege** | Modul-Komponente (Variante B, §13 D), im Host eingebettet | Plattform-Admin | Je Mandant Gebühren-Vorschau aus `team_billable_usages`. |
+| B6 | **Abos verwalten** | **Nur im FA-Modul**, Bereich „Abos“ im Master-Team | Master, Rolle „Freigeben“ | Kuration, keine Plattform-Verwaltung. In `/verwaltung` höchstens lesend als Zahl. |
+
+### C · Was für „alles steuern“ zusätzlich gebaut wird
+1. **Mandanten-Stammblatt** im Modul „Mandanten“ (lesend): gebuchte Bereiche, Stamm-Paket ja/nein, Abos, Unter-Teams, Kontingente, Gebühren-Vorschau, Projekt-Status, CRM-Firma. Ein Blick je Mandant, mit Sprung zu den jeweiligen Schaltern.
+2. **Rechte im Master-Team:** Veröffentlichen (Fassung, §12 B) und Abos vergeben nur mit FA-Rolle „Freigeben“, nicht jedes Master-Mitglied.
+3. **Mandant beenden als Ablauf**, in dieser Reihenfolge mit Vorschau: Abos kündigen (tiefe Kopie, §12 D) → Stamm-Paket abbestellen → Bereiche aus → Datenexport → Team sperren.
+4. **Protokoll** aller Plattform-Admin-Aktionen (Paket, Master, Gebühren, Abos) über das vorhandene activity-log.
+5. **MCP-Tools für jede Steueraktion B1–B6** (Lockstep), damit Steuern auch per Claude geht.
+6. **Platzhalter Necta-Zugang je Mandant** (später Import): nur als Tabelle/Feld vormerken, nicht bauen.
+
+### D · Gebühren (Variante B, entschieden 13.10.)
+- **Preismodell (Platzhalter außer zwei bestätigten Werten):** Basis je Oberteam 79 € inkl. 2 User · **jeder weitere User 19 €** (bestätigt) · **jedes Unter-Team 50 €** (bestätigt) · Stamm-Paket 149 € · Master-Abo alle Sammlungen 199 € · KI: Kontingent inklusive, darüber Selbstkosten plus Aufschlag. Beispiele: autarke Firma 3 User 98 €; TM Foodsolutions (Paket+Abo, 5 User) 484 €; Broich (Paket+Abo, 12 User, 3 Unter-Teams) 767 €.
+- **Bau (Variante B):** FA-eigene Tabelle `foodalchemist_plan_preise` (Baustein, Betrag/Monat, gültig ab/bis, Notiz, geändert_von; append-only) · Pflegeseite (B5) · täglicher Zähl-Command je Kunden-Hauptteam schreibt in die Core-Tabelle `team_billable_usages` (Monatspreis als Tageswerte; je Baustein eigener `billable_model`-Schlüssel `foodalchemist.*`). FA übergibt `billables` **nicht** an `registerModule` (sonst Doppelzählung). Keine Core-Änderung.
+- **Geprüft 13.10.:** `InvoiceService::createInvoiceForTeam` gruppiert nach `billable_model|billable_type|label` und summiert; Tageswerte ergeben je Baustein eine korrekte Monatsposition.
+- **Anzeige:** „Plan und Nutzung“ in den Einstellungen des Oberteams (Inhaber/Admin), Master sieht dieselbe Sicht je Mandant (C1).
+- Unter-Teams zahlen nicht selbst, ihre Gebühr läuft über das Kunden-Hauptteam.
+
+### E · Nicht in Spec 82
+- **Selbstregistrierung** (Signup, E-Mail-Bestätigung, AGB, Zahlung) ist Host/Core und eine eigene spätere Spec. Spec 82 stellt nur sicher, dass ein von Hand angelegtes Oberteam ohne Master, Abo und Paket voll funktioniert (Szenario 1).
+
+### F · Offen (Entscheidung Dominique, nicht technisch)
+- **AVV / Vertragsklausel:** Der Master liest Mandantendaten (kuratiert = lesend, Spec 61 F8). Braucht das eine Klausel bzw. einen Auftragsverarbeitungsvertrag?
+- **Preisschutz:** Gilt eine Preisänderung ab Datum auch für Bestandskunden (AGB, Kündigungsfrist)?
+- **Beträge** für Basis, Stamm-Paket und Abo.
 
 ## Messung 13.10.2026 (demo per SSH lesend + lokale Plattform + Code)
 
