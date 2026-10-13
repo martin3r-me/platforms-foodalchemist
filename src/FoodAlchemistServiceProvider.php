@@ -1123,6 +1123,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\PreislisteLaeufeGetTool::class,
                     \Platform\FoodAlchemist\Tools\PreislisteApplyTool::class,
                     // Spec 82 §13 B1/B4: Plattform-Steuerung (nur Plattform-Admin)
+                    \Platform\FoodAlchemist\Tools\EquipmentStandardPutTool::class,
+                    \Platform\FoodAlchemist\Tools\GpsHomogenitaetGetTool::class,
                     \Platform\FoodAlchemist\Tools\StammPaketGetTool::class,
                     \Platform\FoodAlchemist\Tools\StammPaketPutTool::class,
                     \Platform\FoodAlchemist\Tools\MasterTeamGetTool::class,

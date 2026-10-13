@@ -3,7 +3,7 @@
 namespace Platform\FoodAlchemist\Console;
 
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\DB;
+use Platform\FoodAlchemist\Services\EquipmentStandardService;
 
 /**
  * Spec 82 §6 — Standardausstattung im Equipment-Vokabular setzen (Dominique 13.10.: 15 Einträge).
@@ -14,61 +14,29 @@ use Illuminate\Support\Facades\DB;
  */
 class EquipmentStandardSetzenCommand extends Command
 {
-    /** Standardausstattung: gilt in jeder Küche als vorhanden, solange ein Team sie nicht ausdrücklich als fehlend markiert. */
-    public const STANDARD = [
-        'Topf', 'Kasserolle', 'Pfanne', 'Chinois / Passiersieb', 'Backblech', 'Bräter', 'Spritzbeutel', 'Kuchenform',
-        'Stabmixer', 'Pürierstab', 'Mixer', 'Küchenmaschine / Planetenrührwerk', 'Induktionsplatte', 'Mörser', 'Mandoline / Hobel',
-    ];
+    /** Standardausstattung (die Liste steht im Dienst, hier nur für bestehende Aufrufer). */
+    public const STANDARD = EquipmentStandardService::STANDARD;
 
     protected $signature = 'foodalchemist:equipment-standard-setzen {--dry-run : nur anzeigen, nichts schreiben}';
 
     protected $description = 'Setzt das Flag Standardausstattung am Equipment-Vokabular (15 Einträge), idempotent';
 
-    public function handle(): int
+    public function handle(EquipmentStandardService $service): int
     {
         $dry = (bool) $this->option('dry-run');
-        $zeilen = DB::table('foodalchemist_vocab_kitchen_equipment')->whereNull('deleted_at')->get(['id', 'name', 'is_standard']);
-        $soll = collect(self::STANDARD)->mapWithKeys(fn ($n) => [$this->norm($n) => $n]);
+        $r = $dry ? $service->setzen(true) : $service->schreibenAlsKonsole();
 
-        $setzen = $schon = $zuruecksetzen = [];
-        $gefunden = [];
-        foreach ($zeilen as $z) {
-            $key = $this->norm((string) $z->name);
-            if ($soll->has($key)) {
-                $gefunden[$key] = true;
-                (bool) $z->is_standard ? $schon[] = $z : $setzen[] = $z;
-            } elseif ((bool) $z->is_standard) {
-                $zuruecksetzen[] = $z;
-            }
-        }
-        $fehlt = $soll->reject(fn ($n, $k) => isset($gefunden[$k]))->values();
-
-        if (! $dry) {
-            DB::transaction(function () use ($setzen, $zuruecksetzen) {
-                DB::table('foodalchemist_vocab_kitchen_equipment')->whereIn('id', array_map(fn ($z) => $z->id, $setzen))->update(['is_standard' => true]);
-                DB::table('foodalchemist_vocab_kitchen_equipment')->whereIn('id', array_map(fn ($z) => $z->id, $zuruecksetzen))->update(['is_standard' => false]);
-            });
-        }
-
-        $this->line(($dry ? '[Trockenlauf] ' : '') . 'Standardausstattung (' . count(self::STANDARD) . ' Namen)');
-        $this->line('  neu gesetzt:        ' . $this->liste($setzen));
-        $this->line('  schon gesetzt:      ' . $this->liste($schon));
-        $this->line('  zurückgesetzt:      ' . $this->liste($zuruecksetzen));
-        $this->line('  nicht gefunden:     ' . ($fehlt->isEmpty() ? '–' : $fehlt->implode(', ')));
+        $this->line(($dry ? '[Trockenlauf] ' : '') . 'Standardausstattung (' . $r['namen'] . ' Namen)');
+        $this->line('  neu gesetzt:        ' . $this->liste($r['neu']));
+        $this->line('  schon gesetzt:      ' . $this->liste($r['schon']));
+        $this->line('  zurückgesetzt:      ' . $this->liste($r['zurueck']));
+        $this->line('  nicht gefunden:     ' . ($r['nicht_gefunden'] === [] ? '–' : implode(', ', $r['nicht_gefunden'])));
 
         return self::SUCCESS;
     }
 
     private function liste(array $zeilen): string
     {
-        return $zeilen === [] ? '–' : implode(', ', array_map(fn ($z) => $z->name . " (#{$z->id})", $zeilen));
-    }
-
-    private function norm(string $s): string
-    {
-        $s = mb_strtolower(trim($s));
-        $s = strtr($s, ['ä' => 'ae', 'ö' => 'oe', 'ü' => 'ue', 'ß' => 'ss']);
-
-        return preg_replace('/[^a-z0-9]+/', '', $s) ?? '';
+        return $zeilen === [] ? '–' : implode(', ', array_map(fn ($z) => $z['name'] . " (#{$z['id']})", $zeilen));
     }
 }
