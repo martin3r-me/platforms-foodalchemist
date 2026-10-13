@@ -83,7 +83,7 @@ it('Startwerte: Platzhalter-Preise je Baustein, idempotent, fasst vorhandene nie
 });
 
 it('Append-only: neuer Preis = neue Zeile, die Vorgängerzeile endet am Vortag, der alte Preis bleibt für alte Tage', function () {
-    $this->protokoll->shouldReceive('schreibe')->once()->with('plan_preis_gesetzt', Mockery::on(fn ($d) => $d['baustein'] === 'user' && $d['betrag_monat'] === '21.00' && $d['gueltig_ab'] === '2026-11-01'), $this->admin);
+    $this->protokoll->shouldReceive('schreibe')->once()->with('plan_preis_gesetzt', Mockery::on(fn ($d) => $d['baustein'] === 'user' && $d['betrag_monat'] === '21.00' && $d['gueltig_ab'] === '2026-11-01'), $this->admin, Mockery::type(FoodAlchemistPlanPreis::class));   // Subjekt = die neue Zeile (sonst schreibt das Protokoll nichts)
 
     ($this->preise)()->setze('user', '21', '2026-11-01', 'Preisrunde', $this->admin);
 

@@ -143,7 +143,7 @@ it('Trait-Vertrag: ALLE Models tragen LogsActivity + BelongsToTeamHierarchy + Ha
             //  - kein BelongsToTeamHierarchy: bewusst kein team_id, der Preis gilt für die ganze Plattform;
             //  - kein SoftDeletes: Zeilen werden nie gelöscht, die Historie bleibt (Preis-Snapshot der Tageswerte verweist darauf);
             //  - kein HasUuidV7: adressiert wird über (baustein, gültig ab), nie über eine externe ID;
-            //  - kein LogsActivity: jede Änderung geht ausdrücklich über PlattformProtokoll, die Zeile trägt geaendert_von.
+            //  - LogsActivity: trägt es (Protokoll-Subjekt für PlattformProtokoll, plan_preis_gesetzt), die Zeile trägt zusätzlich geaendert_von.
             continue;
         }
         if (class_basename($klasse) === 'FoodAlchemistMandant') {

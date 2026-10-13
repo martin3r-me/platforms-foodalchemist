@@ -103,7 +103,7 @@ class PlanPreisService
                 'aenderungsnotiz' => $notiz !== null && trim($notiz) !== '' ? trim($notiz) : null, 'geaendert_von' => $admin->id]);
         });
 
-        $this->protokoll->schreibe('plan_preis_gesetzt', ['baustein' => $baustein, 'betrag_monat' => $betrag, 'gueltig_ab' => $ab->toDateString()], $admin);
+        $this->protokoll->schreibe('plan_preis_gesetzt', ['baustein' => $baustein, 'betrag_monat' => $betrag, 'gueltig_ab' => $ab->toDateString()], $admin, $zeile);
 
         return ['id' => (int) $zeile->id, 'baustein' => $baustein, 'betrag_monat' => $betrag, 'gueltig_ab' => $ab->toDateString()];
     }
@@ -116,16 +116,18 @@ class PlanPreisService
     public function startwerteAnlegen(?User $user = null): array
     {
         $angelegt = [];
+        $erste = null;
         foreach (FoodAlchemistPlanPreis::BAUSTEINE as $baustein => $def) {
             if (FoodAlchemistPlanPreis::where('baustein', $baustein)->exists()) {
                 continue;
             }
-            FoodAlchemistPlanPreis::create(['baustein' => $baustein, 'betrag_monat' => $def[2], 'gueltig_ab' => now()->subDay()->toDateString(),   // gestern: ein heutiger Korrekturpreis darf direkt folgen
+            $zeile = FoodAlchemistPlanPreis::create(['baustein' => $baustein, 'betrag_monat' => $def[2], 'gueltig_ab' => now()->subDay()->toDateString(),   // gestern: ein heutiger Korrekturpreis darf direkt folgen
                 'aenderungsnotiz' => 'Startwert (Platzhalter, Spec 82 §13 D)', 'geaendert_von' => $user?->id]);
+            $erste ??= $zeile;
             $angelegt[] = $baustein;
         }
         if ($angelegt !== []) {
-            $this->protokoll->schreibe('plan_preis_startwerte', ['bausteine' => $angelegt], $user);
+            $this->protokoll->schreibe('plan_preis_startwerte', ['bausteine' => $angelegt], $user, $erste);
         }
 
         return $angelegt;

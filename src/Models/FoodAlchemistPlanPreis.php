@@ -3,6 +3,7 @@
 namespace Platform\FoodAlchemist\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Platform\ActivityLog\Traits\LogsActivity;
 
 /**
  * Spec 82 §13 D — Monatspreis eines Gebühren-Bausteins, append-only mit „gültig ab“. Bewusst ohne team_id:
@@ -10,6 +11,8 @@ use Illuminate\Database\Eloquent\Model;
  */
 class FoodAlchemistPlanPreis extends Model
 {
+    use LogsActivity;   // Spec 82 §13 C4: Plattform-Protokoll hängt an diesem Modell (PlattformProtokoll)
+
     /** baustein → [Beschriftung, billable_type, Platzhalter-Startpreis €/Monat] */
     public const BAUSTEINE = [
         'basis' => ['Basis je Mandant (2 User inklusive)', 'flat_fee', '79.00'],
