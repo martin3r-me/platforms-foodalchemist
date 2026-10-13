@@ -465,6 +465,34 @@ Der Master sieht Inhalte **nur bei kuratierten Mandanten**. Bei autarken Mandant
 4. **Pflicht-Test:** Plattform-Admin + autarker Mandant ergibt 0 Rezepte, 0 Preise, 0 Foodbooks über Oberfläche und MCP.
 5. **Bekannte Grenze:** Server- bzw. DB-Zugriff des Betreibers wird nicht technisch gelöst, sondern über Vertrag (AVV, Vertraulichkeit) plus Protokoll.
 
+### H · Wissen: Master-Wissen wirkt, ist aber unsichtbar (Dominique 13.10., bestätigt das Zielmodell vom 06.09.)
+
+- **Master-Wissen** (Regelwerke, Dossiers, Kanon, Routings) liegt global und wird nur vom Master gepflegt. Es wirkt in **jedem** Prompt aller Mandanten, sonst arbeitet der FA nicht gut.
+- **Für Mandanten unsichtbar:** nicht im Wissens-Browser, nicht per MCP (`knowledge.GET/SEARCH/LIST`), nicht in Vorschau-Tools. Der Kontext-Inspektor zeigt höchstens „Plattform-Wissen“ ohne Inhalt. Gilt auch für den Plattform-Admin als Betreiber (§13 G) — nur der Master pflegt.
+- **Eigenes Wissen des Mandanten** (z. B. „unsere Tomaten schneiden wir so“): eigene Team-Dossiers, nur für dieses Team (und seine Unter-Teams) sichtbar, kommen **zusätzlich** in den eigenen Prompt. Sie überschreiben den Kanon des Masters **nicht** (Kanon = nur Master).
+- **Schreibpfad global:** nur Master-Team (B4) bzw. FA-Admin. Ersetzt die heutige Regel „global = für alle eingefroren“ (`TeamScope::owns(null)`), Tests entsprechend.
+- **Sofort-Befund:** `Settings\Wissenskategorien::render()` liest `knowledge_categories` ohne Team-Filter → Kategorie-Namen fremder Teams sichtbar. Wird geschlossen.
+- **Umzug** des heutigen Wissens (Team 6 → global, inkl. Kanon und Embedding-Partition) zusammen mit dem Stamm-Umzug auf dem eigenen Server, nicht auf demo.
+
+### I · Einstellungen: Basis, Paket „Grundeinstellungen“, Team (Dominique 13.10.)
+
+**Grundsatz:** Was der FA zum Laufen braucht, gehört dem Master. Alles, wo ein Team Kategorien, Taxonomie und Arbeitslisten braucht, gehört dem Team bzw. Unter-Team. Der Master baut ein **Paket „Grundeinstellungen“**, das man hinzubuchen kann (**Kopie** beim Buchen, danach gehört es dem Team). Ohne Paket baut jedes Team selbst auf.
+
+| Ebene | Inhalt (Stand Inventur 13.10., Feinschnitt offen) |
+|---|---|
+| **Master / Basis** (global, nur Master pflegt, Mandant nutzt) | Regeln · Wissen (H) · KI-Anbieter/Modelle · Trend-Taxonomie · alles, was Rechnen und Stamm technisch brauchen (siehe Achtung) |
+| **Paket „Grundeinstellungen“** (Kopie ins Oberteam, Unter-Teams erben) | Rezept- und Gerichte-Kategorien · Konzept-Merkmale · Behälter, Regenerationsgeräte, Servier-Vehikel · Preisklassen · Schreibstile · Rollen & Stundensätze · Posten & Kapazität · Speiseplan-Chips · Kalkulations-Vorgaben · Zuschlagsschema/Fixkosten-Beispiele · Trend-Startbestand |
+| **Team / Unter-Team selbst** | Kalkulationsprofile · Zugriffsrechte · Küchen-Profil · Teamprofil · Food DNA · Kunden-DNA · Lagerorte · Etiketten/Drucker · KI ein/aus |
+
+**Achtung (vor dem Bau klären):** **Einheiten, Warengruppen und Koch-Equipment** werden von Stamm-GPs, Regelwerk (§3 Warengruppen) bzw. Teamprofil/Standard-Flag referenziert. Liegen sie als Team-Kopie vor, zeigen Stamm-GPs auf IDs, die das Team nicht hat. Vorschlag: Diese drei bleiben **Basis** (global, Team darf eigene Zeilen ergänzen), der Rest folgt dem Grundsatz.
+
+**Befunde aus der Inventur:**
+- Ein neues Haupt-Team sieht heute nur globale Zeilen; fast alles liegt in Team 6 → neues Team ist faktisch leer.
+- Konzept-Merkmale haben `team_id NOT NULL` und wurden nur per Migration für damals vorhandene Teams angelegt → später angelegte Teams haben leere Listen.
+- Es gibt keinen allgemeinen Seed/Kopier-Mechanismus für Einstellungen; Teil-Seeds nur per Befehl/Knopf (behaelter-katalog, trends-startbestand, Speiseplan-Chips, Fixkosten-Beispiele).
+
+**Offen:** Feinanalyse je Einstellung (Dominique: „nochmal analysieren“), dann Bau: Paket buchen per Kopie über `/verwaltung` (wie B1), MCP im Lockstep.
+
 ### E · Nicht in Spec 82
 - **Selbstregistrierung** (Signup, E-Mail-Bestätigung, AGB, Zahlung) ist Host/Core und eine eigene spätere Spec. Spec 82 stellt nur sicher, dass ein von Hand angelegtes Oberteam ohne Master, Abo und Paket voll funktioniert (Szenario 1).
 
