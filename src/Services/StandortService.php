@@ -68,7 +68,7 @@ class StandortService
     /** Oberteam ordnet einem Unter-Team einen seiner Betriebe zu (null = Standard, erbt komplett). FA-Admin des Oberteams. */
     public function betriebZuordnen(Team $oberteam, int $unterTeamId, ?int $outletId, ?User $actor): void
     {
-        $this->rechte->pruefe($actor, $oberteam, FaRolle::Admin, 'Betrieb einem Standort zuordnen');
+        $this->rechte->pruefe($actor, $oberteam, FaRolle::Admin, 'Kalkulationsprofil einem Standort zuordnen');
         if (! in_array($unterTeamId, $this->unterTeamIds($oberteam), true)) {
             throw new \RuntimeException('Dieses Team ist kein Unter-Team (Standort) dieses Teams.');
         }
@@ -78,7 +78,7 @@ class StandortService
             return;
         }
         if (! FoodAlchemistOutlet::where('team_id', $oberteam->id)->where('is_inactive', false)->whereKey($outletId)->exists()) {
-            throw new \RuntimeException('Betrieb nicht gefunden — zuordnen lassen sich nur aktive Betriebe des Oberteams.');
+            throw new \RuntimeException('Kalkulationsprofil nicht gefunden — zuordnen lassen sich nur aktive Kalkulationsprofile des Oberteams.');
         }
         FoodAlchemistTeamBetrieb::withTrashed()->updateOrCreate(['team_id' => $unterTeamId],
             ['outlet_id' => $outletId, 'set_by' => $actor?->id, 'deleted_at' => null]);

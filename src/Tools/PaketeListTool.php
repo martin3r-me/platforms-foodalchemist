@@ -28,7 +28,7 @@ class PaketeListTool extends FoodAlchemistTool implements ToolContract, ToolMeta
             'properties' => [
                 'role' => ['type' => 'string', 'description' => 'Optionaler Rollen-Filter.'],
                 'per_page' => ['type' => 'integer', 'description' => 'Seitengröße (Default 100).'],
-                'outlet_id' => ['type' => 'integer', 'description' => 'Optional: Betrieb — VK/Person betriebsscharf (price_per_person_outlet). Fehlt = aktive Brille bzw. Team-Baseline. IDs via outlets.GET.'],
+                'outlet_id' => ['type' => 'integer', 'description' => 'Optional: Kalkulationsprofil — VK/Person je Kalkulationsprofil (price_per_person_outlet). Fehlt = aktive Brille bzw. Team-Baseline. IDs via outlets.GET.'],
             ],
         ];
     }
@@ -43,7 +43,7 @@ class PaketeListTool extends FoodAlchemistTool implements ToolContract, ToolMeta
         if (! empty($arguments['outlet_id'])) {
             $outlet = \Platform\FoodAlchemist\Models\FoodAlchemistOutlet::where('team_id', $team->id)->find((int) $arguments['outlet_id']);
             if ($outlet === null) {
-                return ToolResult::error('Betrieb nicht gefunden im Team.', 'NOT_FOUND');
+                return ToolResult::error('Kalkulationsprofil nicht gefunden im Team.', 'NOT_FOUND');
             }
         } else {
             $outlet = app(\Platform\FoodAlchemist\Services\ActiveOutletContext::class)

@@ -21,7 +21,7 @@ class OutletPostTool extends FoodAlchemistTool implements ToolContract, ToolMeta
 
     public function getDescription(): string
     {
-        return 'Legt einen Betrieb/Standort (Outlet) im eigenen Team an (Name eindeutig je Team). '
+        return 'Legt ein Kalkulationsprofil/Standort (Outlet) im eigenen Team an (Name eindeutig je Team). '
             . 'Danach Overrides via outlet_settings.PUT; auflisten via outlets.GET.';
     }
 
@@ -30,7 +30,7 @@ class OutletPostTool extends FoodAlchemistTool implements ToolContract, ToolMeta
         return [
             'type' => 'object',
             'properties' => [
-                'name' => ['type' => 'string', 'description' => 'Name des Betriebs (eindeutig im Team).'],
+                'name' => ['type' => 'string', 'description' => 'Name des Kalkulationsprofils (eindeutig im Team).'],
             ],
             'required' => ['name'],
         ];
@@ -47,7 +47,7 @@ class OutletPostTool extends FoodAlchemistTool implements ToolContract, ToolMeta
             return ToolResult::error('name darf nicht leer sein.', 'VALIDATION_ERROR');
         }
         if (FoodAlchemistOutlet::where('team_id', $team->id)->where('name', $name)->exists()) {
-            return ToolResult::error('Ein Betrieb mit diesem Namen existiert bereits.', 'VALIDATION_ERROR');
+            return ToolResult::error('Ein Kalkulationsprofil mit diesem Namen existiert bereits.', 'VALIDATION_ERROR');
         }
 
         $outlet = FoodAlchemistOutlet::create(['team_id' => $team->id, 'name' => $name]);
@@ -64,7 +64,7 @@ class OutletPostTool extends FoodAlchemistTool implements ToolContract, ToolMeta
             'requires_auth' => true, 'requires_team' => true, 'cost_class' => 'local_db',
             'side_effects' => ['creates'],
             'related_tools' => ['foodalchemist.outlets.GET', 'foodalchemist.outlet_settings.PUT'],
-            'examples' => ['Lege den Betrieb „Kantine Süd" an.'],
+            'examples' => ['Lege das Kalkulationsprofil „Kantine Süd" an.'],
         ];
     }
 }

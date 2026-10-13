@@ -75,7 +75,7 @@
         <x-slot:badges>
             <x-fa::badge :tone="$statusTon[$karte->statusWert()->badgeVariant()] ?? 'neutral'">{{ $karte->statusWert()->label() }}</x-fa::badge>
             <x-fa::badge title="Kartentyp">{{ $typLabel[$karte->karten_typ] ?? $karte->karten_typ }}</x-fa::badge>
-            @if($karte->outlet)<x-fa::badge icon="heroicon-m-building-storefront" title="Betrieb">{{ $karte->outlet->name }}</x-fa::badge>@endif
+            @if($karte->outlet)<x-fa::badge icon="heroicon-m-building-storefront" title="Kalkulationsprofil">{{ $karte->outlet->name }}</x-fa::badge>@endif
         </x-slot:badges>
         <x-slot:aktion>
             <x-fa::button variant="primary" size="sm" icon="heroicon-m-pencil-square"
@@ -142,7 +142,7 @@
                 </div>
                 @if($karte->outlet)
                     <div class="{{ $zeile }}">
-                        <dt class="{{ $schluessel }}">Betrieb</dt>
+                        <dt class="{{ $schluessel }}">Kalkulationsprofil</dt>
                         <dd class="{{ $wert }}">{{ $karte->outlet->name }}</dd>
                     </div>
                 @endif

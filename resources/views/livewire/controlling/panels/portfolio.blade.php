@@ -16,7 +16,7 @@
 
 <div class="flex flex-col gap-4" data-ctrl-portfolio>
     <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)] max-w-[75ch]">
-        Welche Speisekarten, Speisepläne und Angebote an einem Tag laufen, je Betrieb oder je Kunde.
+        Welche Speisekarten, Speisepläne und Angebote an einem Tag laufen, je Kalkulationsprofil oder je Kunde.
         Ein Klick auf eine Ausgabe öffnet sie zum Bearbeiten.
     </p>
 
@@ -25,7 +25,7 @@
         <div class="min-w-0">
             <p class="mb-1.5 text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-2)]">Sicht</p>
             <div class="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Sicht" data-ctrl-brille>
-                @foreach(['betrieb' => 'Je Betrieb', 'kunde' => 'Je Kunde'] as $key => $lbl)
+                @foreach(['betrieb' => 'Je Kalkulationsprofil', 'kunde' => 'Je Kunde'] as $key => $lbl)
                     <button type="button" wire:click="brilleSetzen('{{ $key }}')"
                             role="radio" aria-checked="{{ $brille === $key ? 'true' : 'false' }}"
                             data-ctrl-brille-btn="{{ $key }}"
@@ -58,16 +58,16 @@
         @if($matrix === [])
             <div class="rounded-[var(--fa-radius-surface)] border border-dashed border-[var(--fa-line-strong)]">
                 <x-fa::empty :icon="$brille === 'betrieb' ? 'heroicon-o-building-storefront' : 'heroicon-o-user'"
-                             :title="$brille === 'betrieb' ? 'Noch kein Betrieb angelegt' : 'Noch keiner Ausgabe ein Kunde zugeordnet'">
+                             :title="$brille === 'betrieb' ? 'Noch kein Kalkulationsprofil angelegt' : 'Noch keiner Ausgabe ein Kunde zugeordnet'">
                     @if($brille === 'betrieb')
-                        Die Sicht je Betrieb braucht gepflegte Standorte.
+                        Die Sicht je Kalkulationsprofil braucht gepflegte Standorte.
                     @else
                         Kunden werden an der Ausgabe selbst eingetragen, im jeweiligen Editor.
                     @endif
                     @if($brille === 'betrieb')
                         <x-slot:action>
                             <x-fa::button size="sm" variant="secondary" icon="heroicon-o-plus" :href="route('foodalchemist.einstellungen', ['sektion' => 'betriebe'])" wire:navigate>
-                                Betriebe in den Einstellungen anlegen
+                                Kalkulationsprofile in den Einstellungen anlegen
                             </x-fa::button>
                         </x-slot:action>
                     @endif
@@ -78,7 +78,7 @@
                 <table class="fa-table" data-ctrl-portfolio-matrix>
                     <thead>
                         <tr>
-                            <th>{{ $brille === 'betrieb' ? 'Betrieb' : 'Kunde' }}</th>
+                            <th>{{ $brille === 'betrieb' ? 'Kalkulationsprofil' : 'Kunde' }}</th>
                             @foreach($arten as $art => $meta)
                                 <th>{{ $meta['label'] }}</th>
                             @endforeach
@@ -120,7 +120,7 @@
         {{-- ── Konflikte ──────────────────────────────────────────────────── --}}
         @if(count($konflikte))
             <x-fa::section variant="plain" title="Parallel laufend" icon="heroicon-o-exclamation-triangle" :meta="count($konflikte) . ' ' . (count($konflikte) === 1 ? 'Fall' : 'Fälle')"
-                           description="Zwei Ausgaben derselben Art für denselben Betrieb oder Kunden. Kann gewollt sein, etwa beim Übergang oder für eine Sonderkarte."
+                           description="Zwei Ausgaben derselben Art für dasselbe Kalkulationsprofil oder Kunden. Kann gewollt sein, etwa beim Übergang oder für eine Sonderkarte."
                            data-ctrl-portfolio-konflikte>
                 <ul class="flex flex-col gap-1">
                     @foreach($konflikte as $k)
@@ -136,7 +136,7 @@
         {{-- ── Ohne Zuordnung ─────────────────────────────────────────────── --}}
         @if(count($ohneZuordnung))
             <x-fa::section variant="plain" title="Ohne Zuordnung" icon="heroicon-o-question-mark-circle" :meta="count($ohneZuordnung) . ' ' . (count($ohneZuordnung) === 1 ? 'Ausgabe' : 'Ausgaben')"
-                           description="Weder Betrieb noch Kunde eingetragen. Diese Ausgaben erscheinen in keiner Sicht. Nicht verloren, aber nicht steuerbar: im Editor einen Betrieb oder Kunden setzen."
+                           description="Weder Kalkulationsprofil noch Kunde eingetragen. Diese Ausgaben erscheinen in keiner Sicht. Nicht verloren, aber nicht steuerbar: im Editor ein Kalkulationsprofil oder Kunden setzen."
                            data-ctrl-portfolio-ohne>
                 <div class="overflow-x-auto">
                     <table class="fa-table">
@@ -176,7 +176,7 @@
                             <th>Ausgabe</th>
                             <th>Art</th>
                             <th>Zustand</th>
-                            <th>Betrieb</th>
+                            <th>Kalkulationsprofil</th>
                             <th>Kunde</th>
                             <th>Zeitraum</th>
                         </tr>

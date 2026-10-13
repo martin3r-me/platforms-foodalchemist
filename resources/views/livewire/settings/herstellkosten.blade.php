@@ -31,16 +31,16 @@
             <div class="flex flex-wrap items-end gap-x-4 gap-y-2">
                 <x-fa::field label="Kosten erfassen für" for="hk-betrieb" class="w-80 max-w-full">
                     <x-fa::select id="hk-betrieb" wire:model.live="outletId">
-                        <option value="">Team-Standard (Vorlage für alle Betriebe)</option>
+                        <option value="">Team-Standard (Vorlage für alle Kalkulationsprofile)</option>
                         @foreach($betriebeOptionen as $o)
-                            <option value="{{ $o['id'] }}">Betrieb: {{ $o['name'] }}</option>
+                            <option value="{{ $o['id'] }}">Kalkulationsprofil: {{ $o['name'] }}</option>
                         @endforeach
                     </x-fa::select>
                 </x-fa::field>
                 @if($scopeOutletName && ! $sperrLesen)
                     <x-fa::button variant="danger" size="sm" icon="heroicon-m-arrow-uturn-left" class="ml-auto mb-1"
                         wire:click="aufTeamZuruecksetzen"
-                        wire:confirm="„{{ $scopeOutletName }}“ komplett zurücksetzen? Alle eigenen Werte und Fixkosten dieses Betriebs werden gelöscht, danach gelten wieder die Team-Werte.">
+                        wire:confirm="„{{ $scopeOutletName }}“ komplett zurücksetzen? Alle eigenen Werte und Fixkosten dieses Kalkulationsprofils werden gelöscht, danach gelten wieder die Team-Werte.">
                         Auf Team-Werte zurücksetzen
                     </x-fa::button>
                 @endif
@@ -48,10 +48,10 @@
             @if($scopeOutletName)
                 <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]">
                     Du bearbeitest {{ $scopeOutletName }} als eigenständige Kalkulation. Die Felder sind mit den Team-Werten vorbefüllt.
-                    Passe an, was abweicht. Beim Speichern werden alle Werte als eigene Werte des Betriebs gesichert, die Team-Fixkosten inklusive. Es wird nichts vererbt.
+                    Passe an, was abweicht. Beim Speichern werden alle Werte als eigene Werte des Kalkulationsprofils gesichert, die Team-Fixkosten inklusive. Es wird nichts vererbt.
                 </p>
             @else
-                <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">Der Team-Standard ist die Vorlage für neue Betriebe. Wähle einen Betrieb, um dessen eigene Kalkulation zu pflegen.</p>
+                <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">Der Team-Standard ist die Vorlage für neue Kalkulationsprofile. Wähle ein Kalkulationsprofil, um dessen eigene Kalkulation zu pflegen.</p>
             @endif
         </div>
     @endif
@@ -180,7 +180,7 @@
                     <span class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">%</span>
                 </div>
             </x-fa::field>
-            <x-fa::field :hint="$scopeOutletName ? 'Je Betrieb wählbar. Die Rollen-Sätze selbst gelten teamweit.' : 'Fehlen Posten- oder Rollendaten, gilt sichtbar der Stundensatz des Teams.'">
+            <x-fa::field :hint="$scopeOutletName ? 'Je Kalkulationsprofil wählbar. Die Rollen-Sätze selbst gelten teamweit.' : 'Fehlen Posten- oder Rollendaten, gilt sichtbar der Stundensatz des Teams.'">
                 <x-fa::choice name="laborSource" :live="false" label="Lohn im Auftrag aus"
                     :options="['team_flat' => 'Fester Stundensatz', 'station_roles' => 'Rollen des Postens']" />
             </x-fa::field>
@@ -199,7 +199,7 @@
         {{-- Ebene 2: Fixkosten je Betrieb, eigenständig, KEINE Vererbung (Blöcke ohne eigene Zeile = 0) --}}
         @if($scopeOutletName)
             <x-fa::notice tone="info" title="Fixkosten nur für {{ $scopeOutletName }}">
-                Es zählen nur die Zeilen dieses Betriebs. Blöcke ohne eigene Zeile stehen auf 0, es gibt keinen Rückgriff auf das Team. Startpunkt: Team-Fixkosten übernehmen und dann anpassen.
+                Es zählen nur die Zeilen dieses Kalkulationsprofils. Blöcke ohne eigene Zeile stehen auf 0, es gibt keinen Rückgriff auf das Team. Startpunkt: Team-Fixkosten übernehmen und dann anpassen.
                 @unless($hatEigeneFix)
                     <x-slot:actions>
                         <x-fa::button size="sm" icon="heroicon-m-document-duplicate" wire:click="teamFixkostenUebernehmen">Team-Fixkosten übernehmen</x-fa::button>

@@ -40,7 +40,7 @@ class SpeisekarteReifeAdapter extends ContainerReifeAdapter
         $this->kopfFeld($luecken, $erfuellt, $sk->description, 'description', 'hinweis',
             'Kein Kundentext auf Karten-Ebene.', 'foodalchemist.speisekarten.PUT', $args);
         $this->kopfFeld($luecken, $erfuellt, $sk->outlet_id, 'outlet_id', 'hinweis',
-            'Kein Outlet — die Betriebs-Kalkulation (Overhead) hat keinen Bezug.', 'foodalchemist.speisekarten.PUT', $args);
+            'Kein Kalkulationsprofil — die Kalkulation (Overhead) hat keinen Bezug.', 'foodalchemist.speisekarten.PUT', $args);
 
         // ── 2. Struktur — Rubriken und Positionen ───────────────────────────────────
         $rubriken = $sk->sections;

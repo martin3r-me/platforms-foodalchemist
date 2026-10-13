@@ -22,7 +22,7 @@ class SpeiseplanVorlageAbgleichTool extends FoodAlchemistTool implements ToolCon
 
     public function getDescription(): string
     {
-        return 'Abgleich Betriebs-Kopie ↔ Vorlage. aktion=anzeigen (Standard): abweichende Zellen ab heute mit art '
+        return 'Abgleich Kalkulationsprofil-Kopie ↔ Vorlage. aktion=anzeigen (Standard): abweichende Zellen ab heute mit art '
             . 'vorlage_geaendert | lokal_abweichend und neue Linien der Vorlage. aktion=uebernehmen (confirm=true): '
             . 'ersetzt die Zellen (zellen = Keys aus anzeigen; ohne zellen = alle vorlage_geaendert) durch die Vorlage.';
     }
@@ -32,7 +32,7 @@ class SpeiseplanVorlageAbgleichTool extends FoodAlchemistTool implements ToolCon
         return [
             'type' => 'object',
             'properties' => [
-                'kopie_id' => ['type' => 'integer', 'description' => 'Speiseplan-Id der Betriebs-Kopie.'],
+                'kopie_id' => ['type' => 'integer', 'description' => 'Speiseplan-Id der Kalkulationsprofil-Kopie.'],
                 'aktion' => ['type' => 'string', 'enum' => ['anzeigen', 'uebernehmen'], 'default' => 'anzeigen'],
                 'zellen' => ['type' => 'array', 'items' => ['type' => 'string'], 'description' => 'Zell-Keys aus aktion=anzeigen.'],
                 'confirm' => ['type' => 'boolean', 'description' => 'Pflicht bei aktion=uebernehmen.'],

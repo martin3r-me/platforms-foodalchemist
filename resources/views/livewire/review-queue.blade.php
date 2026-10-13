@@ -80,7 +80,7 @@
     <livewire:foodalchemist.signale.detail-panel key="review-queue--signale.detail-panel" />
 
     <x-ui-page-container padding="px-6 py-6" spacing="space-y-5">
-        <x-fa::page-header title="Signale" :subtitle="$aktiverBetrieb ? 'Betrieb: ' . $aktiverBetrieb : null">
+        <x-fa::page-header title="Signale" :subtitle="$aktiverBetrieb ? 'Kalkulationsprofil: ' . $aktiverBetrieb : null">
             <x-slot:actions>
                 {{-- Lauf-Knöpfe: getrennt, weil die Prüfung gratis ist und die KI-Befunde Provider-Geld
                      kosten. Das Limit steht sichtbar am Knopf (Kostenbremse, V-047). --}}
@@ -295,7 +295,7 @@
                                                 @endif
                                                 {{-- Ebene 2: Betriebs-Lane sichtbar machen. NULL = Team-Core (kein Badge), sonst der Betrieb. --}}
                                                 @if($sig->outlet_id)
-                                                    <x-fa::badge tone="accent" icon="heroicon-m-building-storefront" title="Signal dieses Betriebs">{{ optional($sig->outlet)->name ?? 'Betrieb' }}</x-fa::badge>
+                                                    <x-fa::badge tone="accent" icon="heroicon-m-building-storefront" title="Signal dieses Kalkulationsprofils">{{ optional($sig->outlet)->name ?? 'Kalkulationsprofil' }}</x-fa::badge>
                                                 @endif
                                             </p>
                                             @if($sig->description)

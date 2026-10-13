@@ -127,7 +127,7 @@ class EtikettService
         }
         $outletId = array_key_exists('outlet_id', $daten) ? ($daten['outlet_id'] !== null && $daten['outlet_id'] !== '' ? (int) $daten['outlet_id'] : null) : $v->outlet_id;
         if ($outletId !== null && ! FoodAlchemistOutlet::where('team_id', $team->id)->whereKey($outletId)->exists()) {
-            throw new \RuntimeException('Betrieb nicht gefunden.');
+            throw new \RuntimeException('Kalkulationsprofil nicht gefunden.');
         }
         $typWechsel = $v->exists && $v->typ !== $typ;
         $felder = $this->normalisiereFelder($typ, array_key_exists('felder', $daten) ? (array) $daten['felder'] : ($typWechsel || ! $v->exists ? null : $v->felder));

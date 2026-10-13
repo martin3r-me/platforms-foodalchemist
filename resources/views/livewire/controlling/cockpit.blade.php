@@ -56,7 +56,7 @@
     </x-slot>
 
     <x-ui-page-container padding="px-6 py-6" spacing="space-y-5">
-        <x-fa::page-header title="Controlling" subtitle="Wareneinsatz, Preise, Erlöse und Kennzahlen eines Betriebs an einem Ort.">
+        <x-fa::page-header title="Controlling" subtitle="Wareneinsatz, Preise, Erlöse und Kennzahlen eines Kalkulationsprofils an einem Ort.">
             <x-slot:actions>
                 <x-fa::button variant="primary" icon="heroicon-o-arrows-pointing-out" wire:click="oeffnen" data-ctrl-oeffnen>
                     Werkbank öffnen
@@ -74,8 +74,8 @@
             {{-- Ebene 2: welcher Betrieb treibt die Kostenstruktur-Werte (aktiver Betrieb aus dem Sidebar-Balken). --}}
             @if(!empty($kpi['betrieb_name']))
                 <div data-ctrl-betrieb>
-                    <x-fa::notice tone="info" :title="'Betrieb ' . $kpi['betrieb_name']">
-                        Ziel-Wareneinsatz und Break-even gelten für diesen Betrieb. Ø Wareneinsatz, EK-Abdeckung und Einkauf gelten für das ganze Team.
+                    <x-fa::notice tone="info" :title="'Kalkulationsprofil ' . $kpi['betrieb_name']">
+                        Ziel-Wareneinsatz und Break-even gelten für dieses Kalkulationsprofil. Ø Wareneinsatz, EK-Abdeckung und Einkauf gelten für das ganze Team.
                     </x-fa::notice>
                 </div>
             @endif
@@ -207,12 +207,6 @@
             @if($tab === 'signale')
                 <x-foodalchemist::modal-section title="Geld-Signale" icon="heroicon-o-bell-alert">
                     @include('foodalchemist::livewire.controlling.partials._geld-signale', ['kpi' => $kpi])
-                </x-foodalchemist::modal-section>
-            @endif
-
-            @if($tab === 'standorte')
-                <x-foodalchemist::modal-section title="Standorte & Freigaben" icon="heroicon-o-building-office-2">
-                    <livewire:foodalchemist.controlling.panels.standort-inhalte key="controlling-cockpit--controlling.panels.standort-inhalte" />
                 </x-foodalchemist::modal-section>
             @endif
 

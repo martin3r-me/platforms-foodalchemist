@@ -26,11 +26,11 @@
         Ein Klick öffnet die Signale, dort werden sie erledigt oder verworfen.
     </p>
 
-    {{-- Ebene 2: die Zähler folgen der Betriebsbrille, Betriebs-Lane PLUS die betriebs-unabhängigen
-         (Team-Core). Ohne Betrieb ist es die Team-Core-Sicht. --}}
+    {{-- Ebene 2: die Zähler folgen der Kalkulationsprofil-Brille, Kalkulationsprofil-Lane PLUS die profilunabhängigen
+         (Team-Core). Ohne Kalkulationsprofil ist es die Team-Core-Sicht. --}}
     @if(!empty($kpi['betrieb_name']))
         <x-fa::signal tone="info" icon="heroicon-m-building-storefront">
-            Für Betrieb {{ $kpi['betrieb_name'] }}, dazu alle Befunde, die keinem Betrieb gehören (Artikel, Hygiene, Rezept)
+            Für Kalkulationsprofil {{ $kpi['betrieb_name'] }}, dazu alle Befunde, die keinem Kalkulationsprofil gehören (Artikel, Hygiene, Rezept)
         </x-fa::signal>
     @endif
 

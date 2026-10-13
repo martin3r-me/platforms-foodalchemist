@@ -1,5 +1,5 @@
 {{--
-    Spec 33 · P5 — Betriebs-Status einer Ausgabeform: Status · Gültigkeitsfenster · Zuordnung.
+    Spec 33 · P5 — Kalkulationsprofil-Status einer Ausgabeform: Status · Gültigkeitsfenster · Zuordnung.
 
     Ein Bauteil für alle drei Ausgabeformen (Foodbook, Speisekarte, Speiseplan). Sie halten ihre
     Formularfelder unterschiedlich — mal als `form.*`-Array, mal als flache Livewire-Properties —
@@ -88,17 +88,17 @@
         @endif
 
         @if($outletModel)
-            <x-fa::field label="Betrieb" optional>
+            <x-fa::field label="Kalkulationsprofil" optional>
                 @if($betriebe === null || $betriebe->isEmpty())
-                    {{-- Ohne gepflegte Betriebe ist die Betriebsbrille leer — den Weg dorthin
+                    {{-- Ohne gepflegte Kalkulationsprofile ist die Kalkulationsprofil-Brille leer — den Weg dorthin
                          nennen, statt ein totes Auswahlfeld zu zeigen. --}}
                     <p class="pt-1.5 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">
-                        Noch kein Betrieb angelegt.
+                        Noch kein Kalkulationsprofil angelegt.
                         <a href="{{ route('foodalchemist.einstellungen', ['sektion' => 'betriebe']) }}"
-                           class="text-[var(--fa-accent)] hover:underline" wire:navigate>Betriebe in den Einstellungen anlegen</a>
+                           class="text-[var(--fa-accent)] hover:underline" wire:navigate>Kalkulationsprofile in den Einstellungen anlegen</a>
                     </p>
                 @else
-                    <x-fa::select wire:model="{{ $outletModel }}" placeholder="Kein Betrieb" aria-label="Betrieb" data-ausgabe-outlet>
+                    <x-fa::select wire:model="{{ $outletModel }}" placeholder="Kein Kalkulationsprofil" aria-label="Kalkulationsprofil" data-ausgabe-outlet>
                         @foreach($betriebe as $b)
                             <option value="{{ $b->id }}">{{ $b->name }}</option>
                         @endforeach
@@ -109,7 +109,7 @@
     </div>
 
     <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">
-        Betrieb und CRM-Kunde sind beide optional. Eine Ausgabe ohne beides erscheint im Controlling
+        Kalkulationsprofil und CRM-Kunde sind beide optional. Eine Ausgabe ohne beides erscheint im Controlling
         unter „ohne Zuordnung“. Sie ist nicht verloren, aber in keiner der beiden Ansichten.
     </p>
 </div>

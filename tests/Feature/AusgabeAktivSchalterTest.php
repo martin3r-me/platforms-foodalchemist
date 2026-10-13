@@ -98,7 +98,7 @@ it('bietet keinen toten Betriebs-Auswahlkasten an, wenn keiner gepflegt ist', fu
     $karte = app(SpeisekarteService::class)->create($this->rootTeam, ['name' => 'K']);
 
     Livewire::test(SpeisekarteEditor::class)->call('waehle', $karte->id)
-        ->assertSee('Noch kein Betrieb angelegt')
+        ->assertSee('Noch kein Kalkulationsprofil angelegt')
         ->assertDontSeeHtml('data-ausgabe-outlet');
 
     FoodAlchemistOutlet::create(['team_id' => $this->rootTeam->id, 'name' => 'Kantine Nord']);

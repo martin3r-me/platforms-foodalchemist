@@ -24,7 +24,7 @@
                 <x-fa::select id="ak-betrieb" wire:model.live="outletId">
                     <option value="">Team-Standard</option>
                     @foreach($betriebeOptionen as $o)
-                        <option value="{{ $o['id'] }}">Betrieb: {{ $o['name'] }}</option>
+                        <option value="{{ $o['id'] }}">Kalkulationsprofil: {{ $o['name'] }}</option>
                     @endforeach
                 </x-fa::select>
             </x-fa::field>
@@ -32,7 +32,7 @@
                 @if($scopeOutletName)
                     Basissatz und Gesamtfaktor gelten für {{ $scopeOutletName }}. Klassenfaktoren, Steuer und Rundung gelten teamweit.
                 @else
-                    Betrieb wählen, um den Basissatz aus dessen Fixkosten und Marge zu sehen.
+                    Kalkulationsprofil wählen, um den Basissatz aus dessen Fixkosten und Marge zu sehen.
                 @endif
             </p>
         </div>

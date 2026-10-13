@@ -590,7 +590,7 @@
             @if($lagerOrte === [])
                 <p class="{{ $leise }}">Noch kein Lagerort angelegt (Einstellungen → Einkauf).</p>
             @else
-                <p class="{{ $leise }}">Der Stellplatz gilt für diesen Betrieb. Der Wareneingang bucht in den Lagerort mit Stellplatz; ohne Stellplatz ins Standardlager und schlägt beim ersten Eingang einen Platz vor.</p>
+                <p class="{{ $leise }}">Der Stellplatz gilt für dieses Team. Der Wareneingang bucht in den Lagerort mit Stellplatz; ohne Stellplatz ins Standardlager und schlägt beim ersten Eingang einen Platz vor.</p>
                 <table class="fa-table fa-table--compact mt-2" data-gp-lager>
                     <thead><tr><th>Lagerort</th><th class="text-right">Bestand</th><th>Stellplatz</th></tr></thead>
                     <tbody>

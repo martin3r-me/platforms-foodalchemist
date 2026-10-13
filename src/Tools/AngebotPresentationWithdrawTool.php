@@ -33,7 +33,7 @@ class AngebotPresentationWithdrawTool extends FoodAlchemistTool implements ToolC
             'type' => 'object',
             'properties' => [
                 'angebot_id' => ['type' => 'integer'],
-                'outlet_id' => ['type' => 'integer', 'description' => 'Optional: zieht NUR den Betriebs-Link dieses Betriebs zurück; ohne outlet_id den Standard-Link am Dokument-Kopf.'],
+                'outlet_id' => ['type' => 'integer', 'description' => 'Optional: zieht NUR den Kalkulationsprofil-Link dieses Kalkulationsprofils zurück; ohne outlet_id den Standard-Link am Dokument-Kopf.'],
             ],
             'required' => ['angebot_id'],
         ];

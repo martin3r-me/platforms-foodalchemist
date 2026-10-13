@@ -18,9 +18,9 @@ class StandortePutTool extends WareneingangTool implements ToolContract, ToolMet
 
     public function getDescription(): string
     {
-        return 'Ordnet einem Standort (unter_team_id, ein Unter-Team dieses Teams) einen aktiven Betrieb des Oberteams zu '
-            .'(outlet_id). outlet_id null = Standard, der Standort erbt alles. Im Standort ist die Betriebs-Brille danach fest '
-            .'auf diesen Betrieb eingestellt. Nur Inhaber und Admins des Oberteams.';
+        return 'Ordnet einem Standort (unter_team_id, ein Unter-Team dieses Teams) ein aktives Kalkulationsprofil des Oberteams zu '
+            .'(outlet_id). outlet_id null = Standard, der Standort erbt alles. Im Standort ist die Kalkulationsprofil-Brille danach fest '
+            .'auf dieses Kalkulationsprofil eingestellt. Nur Inhaber und Admins des Oberteams.';
     }
 
     public function getSchema(): array
@@ -43,6 +43,6 @@ class StandortePutTool extends WareneingangTool implements ToolContract, ToolMet
 
     public function getMetadata(): array
     {
-        return $this->metadaten(true, ['standorte', 'betriebe'], ['Ordne dem Standort Köln den Betrieb Kantine Nord zu.'], ['foodalchemist.standorte.GET']);
+        return $this->metadaten(true, ['standorte', 'betriebe'], ['Ordne dem Standort Köln das Kalkulationsprofil Kantine Nord zu.'], ['foodalchemist.standorte.GET']);
     }
 }

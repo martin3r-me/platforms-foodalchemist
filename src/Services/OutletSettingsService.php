@@ -26,10 +26,10 @@ class OutletSettingsService
     public function update(Team $team, FoodAlchemistOutlet $outlet, array $attributes): FoodAlchemistOutletSetting
     {
         // Spec 77a (F3): Einstellungen nur FA-Admin (Inhaber/Admin); ohne angemeldeten Benutzer keine Prüfung
-        app(\Platform\FoodAlchemist\Services\FaRechte::class)->pruefeAngemeldet($team, \Platform\FoodAlchemist\Enums\FaRolle::Admin, 'Betriebs-Einstellungen ändern');
+        app(\Platform\FoodAlchemist\Services\FaRechte::class)->pruefeAngemeldet($team, \Platform\FoodAlchemist\Enums\FaRolle::Admin, 'Kalkulationsprofil-Einstellungen ändern');
 
         if (! $outlet->isOwnedBy($team)) {
-            throw new \RuntimeException('Fremder Betrieb — Override-Pflege nur durchs Besitzer-Team.');
+            throw new \RuntimeException('Fremdes Kalkulationsprofil — Override-Pflege nur durchs Besitzer-Team.');
         }
         $row = $this->for($outlet);
         $row->fill($attributes)->save();
@@ -44,10 +44,10 @@ class OutletSettingsService
     public function setRoleRate(Team $team, FoodAlchemistOutlet $outlet, int $roleId, ?float $rate): FoodAlchemistOutletSetting
     {
         // Spec 77a (F3): Einstellungen nur FA-Admin (Inhaber/Admin); ohne angemeldeten Benutzer keine Prüfung
-        app(\Platform\FoodAlchemist\Services\FaRechte::class)->pruefeAngemeldet($team, \Platform\FoodAlchemist\Enums\FaRolle::Admin, 'Betriebs-Stundensätze ändern');
+        app(\Platform\FoodAlchemist\Services\FaRechte::class)->pruefeAngemeldet($team, \Platform\FoodAlchemist\Enums\FaRolle::Admin, 'Kalkulationsprofil-Stundensätze ändern');
 
         if (! $outlet->isOwnedBy($team)) {
-            throw new \RuntimeException('Fremder Betrieb — Override-Pflege nur durchs Besitzer-Team.');
+            throw new \RuntimeException('Fremdes Kalkulationsprofil — Override-Pflege nur durchs Besitzer-Team.');
         }
         $row = $this->for($outlet);
         // Auf String-Keys normalisieren (JSON-Objekt), damit Merge/Unset stabil ist.

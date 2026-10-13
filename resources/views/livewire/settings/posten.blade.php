@@ -49,7 +49,7 @@
                                 @else
                                     <span class="inline-flex flex-wrap items-center gap-1.5">
                                         {{ $p->name }}
-                                        <x-fa::badge title="Vorlage aus dem Eltern-Team. Die Auslastung rechnet trotzdem je Betrieb.">geerbt</x-fa::badge>
+                                        <x-fa::badge title="Vorlage aus dem Eltern-Team. Die Auslastung rechnet trotzdem je Kalkulationsprofil.">geerbt</x-fa::badge>
                                     </span>
                                 @endif
                             </td>

@@ -32,7 +32,7 @@ class FoodbookPresentationWithdrawTool extends FoodAlchemistTool implements Tool
             'type' => 'object',
             'properties' => [
                 'foodbook_id' => ['type' => 'integer'],
-                'outlet_id' => ['type' => 'integer', 'description' => 'Optional (Slice F): zieht NUR den Betriebs-Link dieses Betriebs zurück; ohne outlet_id den Standard-Link am Dokument-Kopf.'],
+                'outlet_id' => ['type' => 'integer', 'description' => 'Optional (Slice F): zieht NUR den Kalkulationsprofil-Link dieses Kalkulationsprofils zurück; ohne outlet_id den Standard-Link am Dokument-Kopf.'],
             ],
             'required' => ['foodbook_id'],
         ];

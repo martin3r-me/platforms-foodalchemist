@@ -259,7 +259,7 @@ class Editor extends Component
             return;
         }
         if ($this->outletPublishId === null) {
-            $this->presentationFehler = 'Bitte zuerst einen Betrieb wählen.';
+            $this->presentationFehler = 'Bitte zuerst ein Kalkulationsprofil wählen.';
 
             return;
         }
@@ -284,7 +284,7 @@ class Editor extends Component
             $this->outletPublishGueltigBis = null;
             $this->outletPublishDesign = '';
             $this->outletPublishSlug = '';
-            $this->presentationHinweis = 'Betriebs-Link veröffentlicht — eigener Aushang mit der Vorlage und dem Namen dieses Betriebs.';
+            $this->presentationHinweis = 'Kalkulationsprofil-Link veröffentlicht — eigener Aushang mit der Vorlage und dem Namen dieses Kalkulationsprofils.';
         } catch (\Throwable $e) {
             $this->presentationFehler = $e->getMessage();
         }
@@ -300,7 +300,7 @@ class Editor extends Component
         }
         try {
             app(PresentationService::class)->withdrawForOutlet($this->team(), 'speiseplan', $this->planId, $outletId);
-            $this->presentationHinweis = 'Betriebs-Link zurückgezogen.';
+            $this->presentationHinweis = 'Kalkulationsprofil-Link zurückgezogen.';
         } catch (\Throwable $e) {
             $this->presentationFehler = $e->getMessage();
         }
@@ -316,7 +316,7 @@ class Editor extends Component
         }
         try {
             app(PresentationService::class)->republishForOutlet($this->team(), 'speiseplan', $this->planId, $outletId, $this->presentationGueltigBis);
-            $this->presentationHinweis = 'Betriebs-Link wieder freigegeben — gleiche URL, eingefrorener Aushang bleibt.';
+            $this->presentationHinweis = 'Kalkulationsprofil-Link wieder freigegeben — gleiche URL, eingefrorener Aushang bleibt.';
         } catch (\Throwable $e) {
             $this->presentationFehler = $e->getMessage();
         }
@@ -917,7 +917,7 @@ class Editor extends Component
         }
         try {
             $svc->setzeVorlage($this->team(), $this->planId, ! $plan->is_template);
-            $this->vorlageHinweis = ! $plan->is_template ? 'Als Vorlage für Betriebe freigegeben.' : 'Vorlage zurückgenommen — bestehende Kopien bleiben verknüpft.';
+            $this->vorlageHinweis = ! $plan->is_template ? 'Als Vorlage für Kalkulationsprofile freigegeben.' : 'Vorlage zurückgenommen — bestehende Kopien bleiben verknüpft.';
         } catch (\RuntimeException $e) {
             $this->vorlageHinweis = $e->getMessage();
         }
@@ -927,7 +927,7 @@ class Editor extends Component
     {
         $this->vorlageHinweis = null;
         if ($this->planId === null || (int) $this->kopieOutletId <= 0) {
-            $this->vorlageHinweis = 'Bitte einen Betrieb wählen.';
+            $this->vorlageHinweis = 'Bitte ein Kalkulationsprofil wählen.';
 
             return;
         }

@@ -9,7 +9,7 @@ Das Controlling-Zentrum beantwortet eine Frage: **Wie steht der Betrieb wirtscha
 was kann ich daran ändern?** Der zweite Teil ist der wichtigere. Jede Zahl hier steht neben dem
 Hebel, der sie bewegt.
 
-Der Klick in der Seitenleiste öffnet direkt die Werkbank: ein Vollbild mit neun Reitern.
+Der Klick in der Seitenleiste öffnet direkt die Werkbank: ein Vollbild mit neun Reitern. (Der frühere Reiter „Standorte & Freigaben“ liegt seit Spec 82 in den Einstellungen des Oberteams: **Einstellungen → Unter-Teams & Freigaben**.)
 Schließt du sie, bleibt darunter das Lagebild — sechs Kacheln, die zurück in den passenden Reiter
 springen.
 
@@ -42,7 +42,7 @@ solange beides auf einer Fläche lag, hat man weder das eine noch das andere gel
 
 ### Portfolio
 **Wer fährt gerade was.** Eine Matrix über alle drei Ausgabeformen — Foodbook, Speisekarte,
-Speiseplan — mit einem Stichtags-Regler. Zwei Brillen: **Betrieb** (was läuft an welchem
+Speiseplan — mit einem Stichtags-Regler. Zwei Brillen: **Kalkulationsprofil** (was läuft an welchem
 Standort) und **Kunde** (was läuft bei welchem Kunden). Dieselbe Matrix, andere Zeilenachse.
 
 Beobachtet wird hier, geschaltet an der Ausgabe selbst — dieselbe Trennung wie zwischen Einkauf
@@ -53,7 +53,7 @@ Der Wert liegt nicht in der Liste, sondern in dem, was daran nicht stimmt:
 - **leere Zelle** = an diesem Standort läuft gerade nichts
 - **zwei Einträge** = Parallellauf. Ein Hinweis, kein Fehler — eine Übergangsphase oder eine
   Sonderkarte neben der Standardkarte kann gewollt sein.
-- **ohne Zuordnung** = weder Betrieb noch Kunde. Diese Ausgaben tauchen in keiner der beiden
+- **ohne Zuordnung** = weder Kalkulationsprofil noch Kunde. Diese Ausgaben tauchen in keiner der beiden
   Brillen auf und stehen deshalb in einem eigenen Block. Ohne ihn wären sie unsichtbar.
 
 Warum etwas *nicht* läuft, steht dabei — und zwar unterschieden: `Entwurf` (war nie draußen),

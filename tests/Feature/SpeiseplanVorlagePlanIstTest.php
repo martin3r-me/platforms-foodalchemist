@@ -51,7 +51,7 @@ it('Paket 7: Kopie je Betrieb nur aus einer Vorlage, nur für eigene Betriebe, j
     expect(fn () => $this->svc->betriebsKopieAnlegen($this->rootTeam, $this->vorlage->id, $this->nord->id))->toThrow(RuntimeException::class, 'schon eine Kopie');
     $fremderBetrieb = FoodAlchemistOutlet::create(['team_id' => $this->childB->id, 'name' => 'Fremd']);
     expect(fn () => $this->svc->betriebsKopieAnlegen($this->rootTeam, $this->vorlage->id, $fremderBetrieb->id))->toThrow(RuntimeException::class, 'nicht im eigenen Team');
-    expect(fn () => $this->svc->setzeVorlage($this->rootTeam, $kopie->id, true))->toThrow(RuntimeException::class, 'Betriebs-Kopie');
+    expect(fn () => $this->svc->setzeVorlage($this->rootTeam, $kopie->id, true))->toThrow(RuntimeException::class, 'Kalkulationsprofil-Kopie');
     expect(fn () => $this->svc->setzeVorlage($this->childA, $this->vorlage->id, false))->toThrow(RuntimeException::class);
 });
 

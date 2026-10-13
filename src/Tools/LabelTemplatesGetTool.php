@@ -19,7 +19,7 @@ class LabelTemplatesGetTool extends FoodAlchemistTool implements ToolContract, T
     public function getDescription(): string
     {
         return 'Etikett-Vorlagen des Teams: Format, Typ (intern|verkauf), Felder in Reihenfolge mit an/aus, Pflicht und '
-            . 'Datums-Modus (vorbelegt|leer), Gestaltung (Betrieb/Logo, Design, Allergen-Darstellung, Schrift, Fußtext). '
+            . 'Datums-Modus (vorbelegt|leer), Gestaltung (Kalkulationsprofil/Logo, Design, Allergen-Darstellung, Schrift, Fußtext). '
             . 'Dazu Feldkatalog und Formate für label_templates.POST/PUT.';
     }
 

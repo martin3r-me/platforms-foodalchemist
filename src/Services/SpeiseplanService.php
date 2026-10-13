@@ -301,7 +301,7 @@ class SpeiseplanService
         $plan = FoodAlchemistSpeiseplan::visibleToTeam($team)->findOrFail($planId);
         $this->guard($plan, $team);
         if ($istVorlage && $plan->source_plan_id !== null) {
-            throw new \RuntimeException('Dieser Plan ist selbst eine Betriebs-Kopie und kann keine Vorlage sein.');
+            throw new \RuntimeException('Dieser Plan ist selbst eine Kalkulationsprofil-Kopie und kann keine Vorlage sein.');
         }
         $plan->update(['is_template' => $istVorlage]);
 
@@ -322,7 +322,7 @@ class SpeiseplanService
         }
         $outlet = \Platform\FoodAlchemist\Models\FoodAlchemistOutlet::where('team_id', $team->id)->find($outletId);
         if ($outlet === null) {
-            throw new \RuntimeException('Betrieb nicht gefunden oder nicht im eigenen Team.');
+            throw new \RuntimeException('Kalkulationsprofil nicht gefunden oder nicht im eigenen Team.');
         }
         if (FoodAlchemistSpeiseplan::where('source_plan_id', $vorlage->id)->where('outlet_id', $outlet->id)->exists()) {
             throw new \RuntimeException('Für „' . $outlet->name . '“ gibt es schon eine Kopie dieser Vorlage.');
@@ -441,7 +441,7 @@ class SpeiseplanService
         $this->guard($kopie, $team);
         $abgleich = $this->vorlagenAbgleich($team, $kopieId);
         if ($abgleich['vorlage'] === null) {
-            throw new \RuntimeException('Dieser Plan ist keine Betriebs-Kopie einer Vorlage.');
+            throw new \RuntimeException('Dieser Plan ist keine Kalkulationsprofil-Kopie einer Vorlage.');
         }
         $vorlage = FoodAlchemistSpeiseplan::visibleToTeam($team)->with(['lines', 'entries'])->findOrFail($abgleich['vorlage']['id']);
 

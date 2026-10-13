@@ -48,7 +48,7 @@ Die Architektur hat zwei Teile. Der **Kern** gilt für jeden Kunden. Der **Kurat
 | **Oberteam** | Der Mandant (z. B. Broich Catering, TM Food Solutions, Soulkitchen Group). Arbeitet voll, auch ohne Unter-Teams. |
 | **Unter-Team** | Frei benannte Einheit unter dem Oberteam (Standort, Kostenstelle: WCCB, Kita, Gladbach …). Arbeitet autonom. |
 | **Master-Team** | BHG.DIGITAL. Ein Team mit FA-Admin-Rechten, keine eigene Ebene. Nur Kurator-Aufsatz. |
-| **Kalkulationsprofil** | Neuer Name für das heutige Outlet / „Betrieb“. Nur Rechenbrille. |
+| **Kalkulationsprofil** | Neuer Name für das heutige Outlet / „Betrieb“. Nur Rechenbrille. Nur die **Beschriftung** ändert sich (entschieden Dominique 13.10.); Klassen, Tabellen, Routen und MCP-Toolnamen bleiben. |
 | ~~Betrieb~~ | Entfällt als Begriff. |
 | **Kunde** | Immer relativ zum Team: Aus Sicht des Master-Teams ist ein Mandant ein Kunde, aus Sicht des Mandanten ist es ein Eventkunde. Das einzige FA-Objekt mit Endkunde ist das **Angebot**. Ein Foodbook wird für ein **Team** freigeschaltet, nicht für einen Kunden. |
 
@@ -195,7 +195,7 @@ Beschreibt, was die Küche kann. Das ist keine DNA.
   1. Oberteam-Vorgaben (verbindlich)
   2. Team-DNA
   3. Teamprofil
-  4. Endkunde, **sobald die Ausgabe einen trägt** (Angebot immer, Foodbook/Speisekarte, wenn per Spec 64 eine CRM-Firma verknüpft ist)
+  4. Endkunde, **nur beim Angebot** (entschieden Dominique 13.10., Entscheidung 4). Foodbook und Speisekarte bekommen keine Kunden-Ebene.
   5. Foodbook / Concept
 - **Gesamtbudget** statt nur 3.000 Zeichen je Ebene.
 
@@ -204,7 +204,7 @@ Beschreibt, was die Küche kann. Das ist keine DNA.
 - Angebots-Ebene ist tot
 - `kunde_dna` fehlt im MCP
 - DNA-Einstellungen haben keine `MitEinstellungsSperre`
-- Foodbook-Prompts laufen ohne Kunde
+- Foodbook-Prompts laufen ohne Kunde. **Nach Entscheidung 4 gewollt:** Die Kunden-Ebene gilt nur beim Angebot. Der Fix besteht darin, dass die Angebots-Ebene (`food_dna_angebot_id`) und der Angebots-Kunde tatsächlich ankommen. Bereits bestehende Kunden-Übergaben im Foodbook (Spec 42 F3) sind noch nicht zurückgebaut, siehe „Offen“.
 
 ## §8 · Kurator-Aufsatz: Master-Bibliothek und Abo
 
@@ -491,8 +491,9 @@ Der Master sieht Inhalte **nur bei kuratierten Mandanten**. Bei autarken Mandant
 - [x] ~~Entscheidung 1 · Abo ohne Stamm-Paket~~ → **Variante C (Dominique 13.10.):** Ein Abo setzt ein gebuchtes Stamm-Paket voraus, das Paket ist Teil der FA-Gebühren und enthält keine Preise. Preise kommen ausschließlich vom Mandanten, kein Listenpreis-Fallback. Die Master-Bibliothek verwendet nur globale Stamm-GPs.
 - [ ] **Necta-Artikeldaten:** Dürfen die Artikeldaten aus Necta (Artikelnummer, Bezeichnung, Allergene, Nährwerte, EAN) an Mandanten weitergegeben werden? Mit Necta klären.
 - [x] ~~Entscheidung 2 · Allergen-Änderung im Abo~~ → gelöst durch §12 B (Fassungen; eingefrorene Ausgaben bleiben; Allergen-Änderung nur nach Bestätigung). Zusammen mit der Homogenitäts-Regel (§2) entsteht sie nur noch durch eine Änderung der Rezeptur.
-- [ ] **Entscheidung 4 · Endkunde in der Kaskade:** Vorschlag (§7): Die Kunden-Ebene greift, **sobald die Ausgabe einen Kunden trägt** (Angebot immer; Foodbook/Speisekarte, wenn eine CRM-Firma verknüpft ist, Spec 64). Damit bleibt der Vorab-Fix „Foodbook-Prompts ohne Kunde“ gültig.
-- [ ] **Entscheidung 3 · „Outlet“ im Code umbenennen?** Vorschlag: nein, nur die Beschriftung. Der Code hängt in 124 Dateien, auch an Speisekarten, Druckern, Etiketten und Präsentationen.
+- [x] ~~Entscheidung 4 · Endkunde in der Kaskade~~ → **entschieden (Dominique 13.10., zweite Fassung): Die Kunden-Ebene greift, sobald die Ausgabe eine CRM-Firma trägt.** Angebot immer, Foodbook und Speisekarte nur mit verknüpfter Firma, ohne Firma nichts (§7). Die bestehenden Foodbook-Übergaben (Spec 42 F3) bleiben.
+- [ ] **Sektion „Unter-Teams & Freigaben“ zusätzlich in `/verwaltung` schaltbar (§5):** nicht gebaut, braucht die Bereiche-Mechanik aus Spec 77b. Die Sektion erscheint automatisch in jedem Oberteam. Das Dropdown „Unter-Team → Kalkulationsprofil“ bleibt in Einstellungen → Kalkulationsprofile; die Karte unter „Unter-Teams & Freigaben“ zeigt das Profil nur an.
+- [x] ~~Entscheidung 3 · „Outlet“ im Code umbenennen?~~ → **entschieden (Dominique 13.10.): nur die Beschriftung.** Klassen, Tabellen, Routen und MCP-Toolnamen bleiben (§1/§5). Der Code hängt in 124 Dateien, auch an Speisekarten, Druckern, Etiketten und Präsentationen.
 - [x] ~~Allergen-Homogenität im Detail~~ → Spuren zählen nicht mit, fehlende Daten = unbekannt, nicht gesperrt (Dominique 13.10., §2)
 - [x] ~~Schreibrecht des Masters über die Mandantengrenze?~~ → nein, Modul „Mandanten“ nur lesend (§9)
 - [x] ~~Wo wird das Teamprofil gepflegt?~~ → im jeweiligen Team, Master liest (§6)

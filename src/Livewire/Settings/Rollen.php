@@ -105,7 +105,7 @@ class Rollen extends Component
                 return;
             }
             app(OutletSettingsService::class)->setRoleRate($team, $outlet, $id, $this->satz($wert));
-            $this->meldung = 'Betriebs-Satz gespeichert.';
+            $this->meldung = 'Kalkulationsprofil-Satz gespeichert.';
 
             return;
         }

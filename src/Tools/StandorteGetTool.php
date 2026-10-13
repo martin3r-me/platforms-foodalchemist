@@ -19,7 +19,7 @@ class StandorteGetTool extends WareneingangTool implements ToolContract, ToolMet
     public function getDescription(): string
     {
         return 'Liest die Standorte des Teams: jeder Standort ist ein Unter-Team mit eigenen Einkaufspreisen, Bestellungen und Lager '
-            .'und fährt genau einen Betrieb des Oberteams (betrieb_id null = Standard, erbt alles). Dazu die Team-Brille des '
+            .'und fährt genau ein Kalkulationsprofil des Oberteams (betrieb_id null = Standard, erbt alles). Dazu die Team-Brille des '
             .'Benutzers (eigen | alle | team) und welche Team-IDs Listen und Auswertungen damit gerade lesen.';
     }
 
@@ -45,7 +45,7 @@ class StandorteGetTool extends WareneingangTool implements ToolContract, ToolMet
 
     public function getMetadata(): array
     {
-        return $this->metadaten(false, ['standorte', 'betriebe', 'brille'], ['Welche Standorte haben wir und welchen Betrieb fahren sie?'],
+        return $this->metadaten(false, ['standorte', 'betriebe', 'brille'], ['Welche Standorte haben wir und welches Kalkulationsprofil fahren sie?'],
             ['foodalchemist.standorte.PUT', 'foodalchemist.standorte.SET_BRILLE']);
     }
 }

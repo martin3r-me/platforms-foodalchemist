@@ -27,7 +27,7 @@ class KalkulationGetTool extends FoodAlchemistTool implements ToolContract, Tool
     {
         return 'Rechnet die Kalkulation (HK1/HK2, Wareneinsatz, Arbeitszeit, Nebenkosten) nach den '
             . 'Team-Parametern — GENAU EINES angeben: recipe_id, concept_id oder package_id. '
-            . 'Optional outlet_id: rechnet gegen die Kostenstruktur EINES Betriebs (Ebene 2). Read-only.'
+            . 'Optional outlet_id: rechnet gegen die Kostenstruktur EINES Kalkulationsprofils (Ebene 2). Read-only.'
             . ' Ablauf und geltende Regelwerke vorher: foodalchemist.ablauf.GET(vorgang="preis_margen_monitoring").';
     }
 
@@ -39,7 +39,7 @@ class KalkulationGetTool extends FoodAlchemistTool implements ToolContract, Tool
                 'recipe_id' => ['type' => 'integer'],
                 'concept_id' => ['type' => 'integer'],
                 'package_id' => ['type' => 'integer'],
-                'outlet_id' => ['type' => 'integer', 'description' => 'Optional: Betrieb/Standort — HK/VK gegen dessen Kostenstruktur (Marge/Ziel-WE/Stundensatz/Fixkosten). Fehlt = Team-Baseline. IDs via outlets.GET.'],
+                'outlet_id' => ['type' => 'integer', 'description' => 'Optional: Kalkulationsprofil/Standort — HK/VK gegen dessen Kostenstruktur (Marge/Ziel-WE/Stundensatz/Fixkosten). Fehlt = Team-Baseline. IDs via outlets.GET.'],
             ],
         ];
     }
@@ -60,7 +60,7 @@ class KalkulationGetTool extends FoodAlchemistTool implements ToolContract, Tool
         if (! empty($arguments['outlet_id'])) {
             $outlet = FoodAlchemistOutlet::where('team_id', $team->id)->find((int) $arguments['outlet_id']);
             if ($outlet === null) {
-                return ToolResult::error('Betrieb nicht gefunden im Team.', 'NOT_FOUND');
+                return ToolResult::error('Kalkulationsprofil nicht gefunden im Team.', 'NOT_FOUND');
             }
         } else {
             // Ebene 2: kein explizites outlet_id → aktive Betriebs-Brille (outlets.SET_ACTIVE), sonst Team-Baseline.

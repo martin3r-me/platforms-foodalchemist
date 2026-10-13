@@ -205,7 +205,7 @@ class Index extends Component
             return;
         }
         if ($this->outletPublishId === null) {
-            $this->presentationFehler = 'Bitte zuerst einen Betrieb wählen.';
+            $this->presentationFehler = 'Bitte zuerst ein Kalkulationsprofil wählen.';
 
             return;
         }
@@ -230,7 +230,7 @@ class Index extends Component
             $this->outletPublishGueltigBis = null;
             $this->outletPublishDesign = '';
             $this->outletPublishSlug = '';
-            $this->presentationHinweis = 'Betriebs-Link veröffentlicht — eigener Link mit den Preisen, der Vorlage und dem Namen dieses Betriebs.';
+            $this->presentationHinweis = 'Kalkulationsprofil-Link veröffentlicht — eigener Link mit den Preisen, der Vorlage und dem Namen dieses Kalkulationsprofils.';
         } catch (\Throwable $e) {
             $this->presentationFehler = $e->getMessage();
         }
@@ -246,7 +246,7 @@ class Index extends Component
         }
         try {
             app(PresentationService::class)->withdrawForOutlet($this->team(), 'foodbook', $this->selectedId, $outletId);
-            $this->presentationHinweis = 'Betriebs-Link zurückgezogen.';
+            $this->presentationHinweis = 'Kalkulationsprofil-Link zurückgezogen.';
         } catch (\Throwable $e) {
             $this->presentationFehler = $e->getMessage();
         }
@@ -262,7 +262,7 @@ class Index extends Component
         }
         try {
             app(PresentationService::class)->republishForOutlet($this->team(), 'foodbook', $this->selectedId, $outletId, $this->presentationGueltigBis);
-            $this->presentationHinweis = 'Betriebs-Link wieder freigegeben — gleiche URL, eingefrorene Preise bleiben.';
+            $this->presentationHinweis = 'Kalkulationsprofil-Link wieder freigegeben — gleiche URL, eingefrorene Preise bleiben.';
         } catch (\Throwable $e) {
             $this->presentationFehler = $e->getMessage();
         }
