@@ -44,6 +44,31 @@ class Index extends Component
         'unit' => 'Gebinde / Einheit', 'price' => 'Preis netto', 'valid_from' => 'Gültig ab',
     ];
 
+    /** Vorlage herunterladen (CSV): Kopf in kanonischer Reihenfolge + eine Beispielzeile — der eigene Import erkennt sie ohne Nachzuordnung. */
+    public function vorlageCsv()
+    {
+        $csv = app(PreislistenImportService::class)->vorlageCsv();
+
+        return response()->streamDownload(function () use ($csv) {
+            echo $csv;
+        }, 'preisliste_vorlage.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
+    }
+
+    /** Vorlage herunterladen (XLSX, nur mit openspout). */
+    public function vorlageXlsx()
+    {
+        $svc = app(PreislistenImportService::class);
+        if (! $svc->xlsxVerfuegbar()) {
+            $this->fehler = 'Die Excel-Vorlage ist auf diesem Server nicht verfügbar. Bitte die CSV-Vorlage nehmen.';
+
+            return null;
+        }
+        $pfad = tempnam(sys_get_temp_dir(), 'fa-vorlage-');
+        $svc->schreibeVorlageXlsx($pfad);
+
+        return response()->download($pfad, 'preisliste_vorlage.xlsx')->deleteFileAfterSend(true);
+    }
+
     public function updatedDatei(): void
     {
         $this->fehler = $this->meldung = null;
@@ -202,6 +227,8 @@ class Index extends Component
             'lauf' => $lauf,
             'pruefliste' => $lauf !== null ? $svc->pruefliste($lauf)->take(500) : collect(),
             'felder' => self::FELDER,
+            'xlsxVorlage' => $svc->xlsxVerfuegbar(),
+            'vorlageHinweis' => PreislistenImportService::VORLAGE_HINWEIS,
         ])->layout(\Platform\FoodAlchemist\Support\FaShell::layout());
     }
 }

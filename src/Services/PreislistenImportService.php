@@ -255,6 +255,61 @@ class PreislistenImportService
             ->whereNotIn('status', [Zeile::STATUS_TREFFER, Zeile::STATUS_ANGEWENDET, Zeile::STATUS_UNVERAENDERT])->orderBy('row_nr')->get();
     }
 
+    // ---- Vorlage zum Herunterladen ----------------------------------------
+
+    /** Kanonische Spalten der Vorlage (Reihenfolge der Oberfläche); jede Überschrift erkennt der eigene Import über SYNONYME ohne Nachzuordnung. */
+    public const VORLAGE_KOPF = ['Lieferant', 'Artikelnummer', 'EAN', 'Bezeichnung', 'Gebinde / Einheit', 'Preis netto', 'Gültig ab'];
+
+    /** Eine Beispielzeile (bitte durch eigene Zeilen ersetzen). */
+    public const VORLAGE_BEISPIEL = ['Beispiel-Lieferant', 'A-4711', '4000000000017', 'Weizenmehl Type 405, 25 kg Sack', 'Sack 25 kg', '18,90', '01.11.2026'];
+
+    public const VORLAGE_HINWEIS = 'Pflicht je Zeile: Preis (netto) und Artikelnummer ODER EAN. Lieferant, Bezeichnung, Gebinde und „Gültig ab“ sind optional; '
+        .'ohne Lieferant-Spalte wählst du den Lieferanten beim Hochladen. Die Beispielzeile bitte durch deine Artikel ersetzen oder löschen. Preise netto in EUR, Datum als TT.MM.JJJJ.';
+
+    /** @return array{spalten: list<string>, beispielzeile: list<string>, hinweis: string, xlsx_verfuegbar: bool} */
+    public function vorlage(): array
+    {
+        return ['spalten' => self::VORLAGE_KOPF, 'beispielzeile' => self::VORLAGE_BEISPIEL, 'hinweis' => self::VORLAGE_HINWEIS, 'xlsx_verfuegbar' => $this->xlsxVerfuegbar()];
+    }
+
+    /** Vorlage als CSV-Text (Trennzeichen ;, UTF-8 mit BOM für Excel) — dasselbe Format wie die Prüfliste. */
+    public function vorlageCsv(): string
+    {
+        $fp = fopen('php://temp', 'w+');
+        fwrite($fp, "\xEF\xBB\xBF");
+        fputcsv($fp, self::VORLAGE_KOPF, ';');
+        fputcsv($fp, self::VORLAGE_BEISPIEL, ';');
+        rewind($fp);
+        $csv = (string) stream_get_contents($fp);
+        fclose($fp);
+
+        return $csv;
+    }
+
+    /** XLSX nur mit OpenSpout (siehe liesExcel); sonst bleibt nur die CSV-Vorlage. */
+    public function xlsxVerfuegbar(): bool
+    {
+        return class_exists('\OpenSpout\Writer\XLSX\Writer');
+    }
+
+    /** Vorlage als XLSX: Blatt 1 = Kopf + Beispielzeile (das liest der Import), Blatt 2 „Hinweise“. */
+    public function schreibeVorlageXlsx(string $pfad): void
+    {
+        if (! $this->xlsxVerfuegbar()) {
+            throw new \RuntimeException('Die Excel-Vorlage braucht die Bibliothek openspout/openspout (composer update auf dem Server nötig). Bitte die CSV-Vorlage nehmen.');
+        }
+        $writer = new \OpenSpout\Writer\XLSX\Writer();
+        $writer->openToFile($pfad);
+        $writer->getCurrentSheet()->setName('Preisliste');
+        $writer->addRow(\OpenSpout\Common\Entity\Row::fromValues(self::VORLAGE_KOPF));
+        $writer->addRow(\OpenSpout\Common\Entity\Row::fromValues(self::VORLAGE_BEISPIEL));
+        $writer->addNewSheetAndMakeItCurrent();
+        $writer->getCurrentSheet()->setName('Hinweise');
+        $writer->addRow(\OpenSpout\Common\Entity\Row::fromValues(['Hinweise']));
+        $writer->addRow(\OpenSpout\Common\Entity\Row::fromValues([self::VORLAGE_HINWEIS]));
+        $writer->close();
+    }
+
     /** Die Prüfliste als CSV (Trennzeichen ;, UTF-8 mit BOM für Excel). */
     public function exportPruefliste(FoodAlchemistPriceImportRun $run, string $pfad): int
     {
