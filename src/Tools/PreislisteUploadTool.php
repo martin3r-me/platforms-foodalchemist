@@ -29,7 +29,7 @@ class PreislisteUploadTool extends WareneingangTool implements ToolContract, Too
             .'Datei als content_base64 (CSV mit ; , Tab oder | oder Excel .xlsx/.ods, bis 10 MB) plus filename (nur Endung und Anzeigename). '
             .'Lieferant: supplier_id oder eine Lieferant-Spalte in der Datei. mapping {feld: Überschrift|Spaltenindex} überschreibt die Erkennung '
             .'(Felder: supplier, article_number, ean, designation, unit, price, valid_from). Es wird KEIN Preis geschrieben und KEIN Artikel angelegt; '
-            .'Zeilen ohne Treffer stehen in der Prüfliste (preisliste_laeufe.GET). Nur das Haupt-Team des Kunden mit Rolle Kuratieren, sonst FORBIDDEN.';
+            .'Zeilen ohne Treffer stehen in der Prüfliste (preisliste_laeufe.GET); übernommen werden die Treffer erst mit preisliste.APPLY. Nur das Haupt-Team des Kunden mit Rolle Kuratieren, sonst FORBIDDEN.';
     }
 
     public function getSchema(): array
@@ -72,7 +72,7 @@ class PreislisteUploadTool extends WareneingangTool implements ToolContract, Too
             }
 
             return ['lauf_id' => $run->id, 'datei' => $run->filename, 'zaehler' => $run->counts, 'preise_geschrieben' => 0,
-                'hinweis' => 'Nur abgeglichen. Treffer warten auf die Schreib-Schicht, die Prüfliste steht in preisliste_laeufe.GET.'];
+                'hinweis' => 'Nur abgeglichen. Mit preisliste.APPLY (lauf_id) werden die Treffer als Teampreise übernommen, die Prüfliste steht in preisliste_laeufe.GET.'];
         });
     }
 

@@ -118,6 +118,28 @@ class Index extends Component
         $this->laufId = $team !== null && app(PreislistenImportService::class)->lauf($team, $id) !== null ? $id : null;
     }
 
+    /** Treffer eines Laufs als Teampreise übernehmen (Schreib-Schicht). Nur wer importieren darf; Bestätigung kommt aus der Oberfläche (wire:confirm). */
+    public function anwenden(int $id): void
+    {
+        $this->fehler = $this->meldung = null;
+        $team = $this->team();
+        $svc = app(PreislistenImportService::class);
+        $run = $team !== null ? $svc->lauf($team, $id) : null;
+        if ($run === null) {
+            return;
+        }
+        try {
+            $b = $svc->anwenden($team, Auth::user(), $run);
+        } catch (\Platform\FoodAlchemist\Exceptions\FaRechtFehltException|\RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+
+            return;
+        }
+        $this->laufId = $run->id;
+        $this->meldung = sprintf('%d Preise übernommen, %d unverändert, %d noch nicht gültig, %d mit Fehler. %d Rezepte neu berechnet.',
+            $b['angewendet'], $b['unveraendert'], $b['zukuenftig'], $b['fehler'], $b['kette']['neu_berechnet'] ?? 0);
+    }
+
     public function pruefelisteLaden(int $id)
     {
         $team = $this->team();

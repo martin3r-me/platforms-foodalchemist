@@ -26,6 +26,14 @@ class FoodAlchemistPriceImportLine extends Model
 
     public const STATUS_DOPPELT = 'doppelt';
 
+    /** Nach dem Anwenden (Schreib-Schicht): */
+    public const STATUS_ANGEWENDET = 'angewendet';
+
+    public const STATUS_UNVERAENDERT = 'unveraendert';
+
+    /** gültig ab liegt in der Zukunft: wird erst bei einem späteren Anwenden geschrieben */
+    public const STATUS_ZUKUENFTIG = 'zukuenftig';
+
     protected $table = 'foodalchemist_price_import_lines';
 
     protected $guarded = ['id'];
