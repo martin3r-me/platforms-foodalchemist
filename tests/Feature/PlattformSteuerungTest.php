@@ -194,6 +194,16 @@ it('Komponente Stamm-Paket: Plattform-Admin bucht und bestellt mit Vorschau ab, 
     expect(($this->paket)()->status($this->soul)['gebucht'])->toBeFalse();
 });
 
+it('Komponente Stamm-Paket: die Tabelle scrollt waagerecht und die Aktionsspalte bricht nicht um (Knopf „Abbestellen …“ wird nicht abgeschnitten)', function () {
+    ($this->paket)()->buchen($this->soul, $this->admin);
+    $this->actingAs($this->admin);
+
+    $html = Livewire::test(StammPaketKomponente::class)->html();
+
+    expect($html)->toContain('overflow-x-auto')->toContain('data-stamm-paket-tabelle')
+        ->and($html)->toMatch('/<td[^>]*whitespace-nowrap[^>]*data-stamm-paket-aktion[^>]*>.*?data-stamm-paket-abbestellen/s');
+});
+
 it('Komponente Master-Team: Vorschau, Bestätigung und Rechte', function () {
     $this->actingAs($this->inhaber);
     Livewire::test(MasterTeamKomponente::class)->assertSee('nur Plattform-Admins');
