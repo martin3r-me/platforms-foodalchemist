@@ -12,7 +12,7 @@
     </x-slot>
 
     <x-ui-page-container padding="px-6 py-6" spacing="space-y-4">
-        <x-fa::page-header title="Preislisten" subtitle="Lade die Preisliste deines Lieferanten hoch (Excel oder CSV). Jede Zeile wird über Artikelnummer und Lieferant, danach über die EAN, mit den Artikeln abgeglichen. Es wird kein Preis geschrieben und kein Artikel angelegt." />
+        <x-fa::page-header title="Preislisten" subtitle="Lade die Preisliste deines Lieferanten hoch (Excel oder CSV). Jede Zeile wird über Artikelnummer und Lieferant, danach über die EAN, mit den Artikeln abgeglichen. Erst nach dem Abgleich übernimmst du die Treffer als deine Preise. Es wird kein Artikel angelegt und nie ein Listenpreis geändert." />
 
         @if($fehler)<x-fa::notice tone="crit" data-preisliste-fehler>{{ $fehler }}</x-fa::notice>@endif
         @if($meldung)<x-fa::notice tone="ok" data-preisliste-meldung>{{ $meldung }}</x-fa::notice>@endif
@@ -67,7 +67,7 @@
                 <x-fa::empty compact icon="heroicon-o-queue-list" title="Noch keine Läufe">Nach dem ersten Upload steht hier jeder Abgleich mit seinen Zahlen.</x-fa::empty>
             @else
                 <table class="fa-table fa-table--compact">
-                    <thead><tr><th>Datei</th><th>Datum</th><th class="text-right">Zeilen</th><th class="text-right">Treffer</th><th class="text-right">Zu prüfen</th><th></th></tr></thead>
+                    <thead><tr><th>Datei</th><th>Datum</th><th class="text-right">Zeilen</th><th class="text-right">Treffer offen</th><th class="text-right">Übernommen</th><th class="text-right">Zu prüfen</th><th></th></tr></thead>
                     <tbody>
                         @foreach($laeufe as $l)
                             @php $c = $l->counts ?? []; @endphp
@@ -75,8 +75,9 @@
                                 <td class="font-medium">{{ $l->filename }}</td>
                                 <td class="tabular-nums">{{ $l->created_at?->format('d.m.Y H:i') }}</td>
                                 <td class="text-right tabular-nums">{{ $c['zeilen'] ?? 0 }}</td>
-                                <td class="text-right tabular-nums">{{ $c['treffer'] ?? 0 }}</td>
-                                <td class="text-right tabular-nums">{{ ($c['zeilen'] ?? 0) - ($c['treffer'] ?? 0) }}</td>
+                                <td class="text-right tabular-nums">{{ ($c['treffer'] ?? 0) + ($c['zukuenftig'] ?? 0) }}</td>
+                                <td class="text-right tabular-nums">{{ ($c['angewendet'] ?? 0) + ($c['unveraendert'] ?? 0) }}</td>
+                                <td class="text-right tabular-nums">{{ ($c['zeilen'] ?? 0) - ($c['treffer'] ?? 0) - ($c['zukuenftig'] ?? 0) - ($c['angewendet'] ?? 0) - ($c['unveraendert'] ?? 0) }}</td>
                                 <td class="text-right"><x-fa::button size="sm" variant="ghost">Prüfliste</x-fa::button></td>
                             </tr>
                         @endforeach
@@ -88,6 +89,13 @@
         @if($lauf)
             <x-fa::section title="Prüfliste: {{ $lauf->filename }}" icon="heroicon-o-clipboard-document-check" :meta="$pruefliste->count()" data-preisliste-pruefliste>
                 <x-slot:actions>
+                    @php $offen = (($lauf->counts['treffer'] ?? 0) + ($lauf->counts['zukuenftig'] ?? 0)); @endphp
+                    @if($darf && $offen > 0)
+                        <x-fa::button size="sm" variant="primary" icon="heroicon-m-check" wire:click="anwenden({{ $lauf->id }})"
+                            wire:confirm="{{ $offen }} Treffer als deine Preise übernehmen? Bestehende Preise werden nicht überschrieben, der alte Preis bleibt in der Historie." data-preisliste-anwenden>{{ $offen }} Preise übernehmen</x-fa::button>
+                    @elseif($lauf->status === 'applied')
+                        <x-fa::badge tone="ok" icon="heroicon-m-check-circle">Übernommen</x-fa::badge>
+                    @endif
                     <x-fa::button size="sm" variant="ghost" icon="heroicon-o-arrow-down-tray" wire:click="pruefelisteLaden({{ $lauf->id }})" data-preisliste-csv>Als CSV</x-fa::button>
                 </x-slot:actions>
                 @if($pruefliste->isEmpty())

@@ -7,6 +7,8 @@ use Illuminate\Support\Facades\DB;
 use Platform\Core\Models\Team;
 use Platform\Core\Models\User;
 use Platform\FoodAlchemist\Enums\FaRolle;
+use Platform\FoodAlchemist\Exceptions\FaRechtFehltException;
+use Platform\FoodAlchemist\Models\FoodAlchemistPrice;
 use Platform\FoodAlchemist\Models\FoodAlchemistPriceImportLine as Zeile;
 use Platform\FoodAlchemist\Models\FoodAlchemistPriceImportRun;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplier;
@@ -38,17 +40,16 @@ class PreislistenImportService
 
     public const ENDUNGEN_EXCEL = ['xlsx', 'xlsm', 'ods'];
 
-    public function __construct(private readonly FaRechte $rechte) {}
+    public function __construct(private readonly FaRechte $rechte, private readonly PriceService $preise) {}
 
     /**
-     * Darf `$user` für `$team` eine Preisliste importieren? Nur das Kunden-Hauptteam (Unter-Teams schreiben keine
-     * Preise, Spec 82 §3) und mindestens Rolle Kuratieren. Solange Stufe 3a (PriceService::darfTeampreisSchreiben)
-     * nicht auf main ist, gilt diese Regel; danach wird sie an die dortige Methode angeglichen.
+     * Darf `$user` für `$team` eine Preisliste importieren und anwenden? Nur das Kunden-Hauptteam
+     * ({@see PriceService::darfTeampreisSchreiben}: Unter-Teams schreiben keine Preise, Spec 82 §3) und mindestens Rolle Kuratieren.
      */
     public function darfImportieren(Team $team, ?User $user): bool
     {
         return $user !== null
-            && (int) $this->rechte->kundenHauptTeam($team)->id === (int) $team->id
+            && PriceService::darfTeampreisSchreiben($team)                       // Stufe 3a: nur das Kunden-Hauptteam schreibt Preise
             && $this->rechte->darf($user, $team, FaRolle::Kuratieren);
     }
 
@@ -159,11 +160,99 @@ class PreislistenImportService
         });
     }
 
+    /**
+     * Schreib-Schicht (Spec 82 §3 / Schritt 4d, Stufe 3): Treffer eines Laufs als TEAMPREISE schreiben.
+     *
+     * - Schreibt über {@see PriceService::createTeamPrice}: append-only, die Zeile trägt IMMER die team_id des Mandanten, geschlossen wird nur
+     *   der eigene Vorgänger desselben Teams. Eine globale Zeile oder ein Listenpreis des Besitzers wird nie angefasst.
+     * - **Unveränderter Preis = keine neue Zeile** (gleicher Betrag wie der aktuelle Teampreis des Mandanten, Status Standard-EK).
+     * - „gültig ab“: heute oder früher wird geschrieben (der Wert steht in `status_valid_from`); liegt es in der Zukunft, bleibt die Zeile
+     *   `zukuenftig` und wird erst bei einem späteren Anwenden geschrieben (das Preismodell kennt keine Preise „ab Datum“ im Voraus).
+     * - Idempotent: nur Zeilen im Status treffer/zukuenftig werden angefasst; ein zweites Anwenden schreibt nichts doppelt.
+     * - Rechte: nur wer importieren darf ({@see darfImportieren}); der Lauf muss dem Team gehören.
+     * - Danach läuft EINMAL die bekannte Post-Import-Kette (betroffene GPs → Rezepte neu rechnen), wie beim Artikel-Import.
+     *
+     * @return array{angewendet:int, unveraendert:int, zukuenftig:int, fehler:int, kette:array<string,int>, lauf_status:string}
+     */
+    public function anwenden(Team $team, ?User $user, FoodAlchemistPriceImportRun $run): array
+    {
+        if (! $this->darfImportieren($team, $user)) {
+            throw new FaRechtFehltException(FaRolle::Kuratieren, null, 'Preisliste anwenden (nur das Haupt-Team des Kunden)');
+        }
+        if ((int) $run->team_id !== (int) $team->id) {
+            throw new \RuntimeException('Dieser Lauf gehört einem anderen Team.');
+        }
+
+        $heute = Carbon::today();
+        $bilanz = ['angewendet' => 0, 'unveraendert' => 0, 'zukuenftig' => 0, 'fehler' => 0];
+        $bewegt = [];
+
+        Zeile::where('run_id', $run->id)->where('team_id', $team->id)
+            ->whereIn('status', [Zeile::STATUS_TREFFER, Zeile::STATUS_ZUKUENFTIG])->orderBy('id')
+            ->chunkById(500, function ($zeilen) use ($team, $heute, &$bilanz, &$bewegt) {
+                foreach ($zeilen as $z) {
+                    $ergebnis = $this->wendeZeileAn($team, $z, $heute);
+                    $bilanz[$ergebnis]++;
+                    if ($ergebnis === 'angewendet') {
+                        $bewegt[(int) $z->supplier_item_id] = true;
+                    }
+                }
+            });
+
+        $offen = Zeile::where('run_id', $run->id)->whereIn('status', [Zeile::STATUS_TREFFER, Zeile::STATUS_ZUKUENFTIG])->exists();
+        $counts = (array) $run->counts;
+        foreach ([Zeile::STATUS_ANGEWENDET, Zeile::STATUS_UNVERAENDERT, Zeile::STATUS_ZUKUENFTIG, Zeile::STATUS_TREFFER, Zeile::STATUS_FEHLER] as $k) {
+            $counts[$k] = Zeile::where('run_id', $run->id)->where('status', $k)->count();
+        }
+        $run->update(['counts' => $counts, 'status' => $offen ? 'staged' : 'applied']);
+
+        $kette = $bewegt !== [] ? app(FileArticleImportService::class)->postImportKette($team, $bewegt, true) : ['bewegt' => 0, 'gps' => 0, 'rezepte' => 0, 'neu_berechnet' => 0, 'signale' => 0];
+
+        return $bilanz + ['kette' => $kette, 'lauf_status' => (string) $run->status];
+    }
+
+    /** @return 'angewendet'|'unveraendert'|'zukuenftig'|'fehler' */
+    private function wendeZeileAn(Team $team, Zeile $z, Carbon $heute): string
+    {
+        $markiere = fn (string $status, ?string $grund = null) => tap($status, fn () => $z->update(['status' => $status, 'reason' => $grund]));
+
+        $gueltigAb = $z->valid_from?->copy()->startOfDay() ?? $heute;
+        if ($gueltigAb->gt($heute)) {
+            return $markiere(Zeile::STATUS_ZUKUENFTIG, 'Gültig ab ' . $gueltigAb->format('d.m.Y') . ': wird erst ab diesem Tag geschrieben (Preisliste dann erneut anwenden).');
+        }
+        $item = FoodAlchemistSupplierItem::visibleToTeam($team)->find($z->supplier_item_id);
+        if ($item === null) {
+            return $markiere(Zeile::STATUS_FEHLER, 'Artikel ist für dieses Team nicht mehr sichtbar (zum Beispiel Stamm-Paket abbestellt).');
+        }
+        $preis = (float) $z->price;
+        if ($preis <= 0) {
+            return $markiere(Zeile::STATUS_FEHLER, 'Kein gültiger Preis in der Zeile.');
+        }
+
+        // Unverändert? Verglichen wird mit dem aktuellen Teampreis DIESES Teams (nie mit Listen- oder Fremdpreisen).
+        $aktuell = $this->preise->scopeAktiv(FoodAlchemistPrice::query())
+            ->where('foodalchemist_prices.supplier_item_id', $item->id)->where('foodalchemist_prices.team_id', $team->id)
+            ->where(fn ($q) => $q->whereNull('foodalchemist_prices.valid_to')->orWhere('foodalchemist_prices.valid_to', '>=', now()))
+            ->orderByRaw('foodalchemist_prices.valid_to IS NULL DESC')->orderByDesc('foodalchemist_prices.id')->first();
+        if ($aktuell !== null && (string) $aktuell->status === '0' && abs((float) $aktuell->price - $preis) < 0.00005) {
+            return $markiere(Zeile::STATUS_UNVERAENDERT, 'Preis ist schon so hinterlegt, keine neue Zeile.');
+        }
+
+        try {
+            $neu = $this->preise->createTeamPrice($team, $item, $preis, '0');
+            $neu->update(['status_valid_from' => $gueltigAb]);
+        } catch (\RuntimeException $e) {
+            return $markiere(Zeile::STATUS_FEHLER, $e->getMessage());
+        }
+
+        return $markiere(Zeile::STATUS_ANGEWENDET, null);
+    }
+
     /** Die Prüfliste eines Laufs: alles außer Treffer. */
     public function pruefliste(FoodAlchemistPriceImportRun $run): \Illuminate\Support\Collection
     {
         return Zeile::where('run_id', $run->id)->where('team_id', $run->team_id)
-            ->where('status', '!=', Zeile::STATUS_TREFFER)->orderBy('row_nr')->get();
+            ->whereNotIn('status', [Zeile::STATUS_TREFFER, Zeile::STATUS_ANGEWENDET, Zeile::STATUS_UNVERAENDERT])->orderBy('row_nr')->get();
     }
 
     /** Die Prüfliste als CSV (Trennzeichen ;, UTF-8 mit BOM für Excel). */
