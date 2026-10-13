@@ -94,8 +94,8 @@ it('Einfrieren: nur das Gericht mit Abo-Fassung im Baum wird gespeichert (Fassun
         ->and($z->fassungen)->toHaveCount(1)->and($z->fassungen[0]['fassung_id'])->toBe((int) ($this->fassung)(1)->id)
         ->and($z->fassungen[0]['fassung_von_id'])->toBe((int) $this->jus->id)->and($z->fassungen[0]['fassung_nr'])->toBe(1)
         ->and($z->fassungen[0]['allergene'])->toHaveKey('allergen_milk')->and($z->allergene)->toHaveKey('allergen_gluten');
-    // ohne Kostenschicht gibt es keinen belastbaren EK: unvollständig, VK nie 0
-    expect($z->vollstaendig)->toBeFalse()->and($z->grund)->toBe('kostenschicht_fehlt')->and($z->vk)->toBeNull();
+    // echte Kostenschicht: das Gericht hat keinen belastbaren EK → unvollständig, VK nie 0
+    expect($z->vollstaendig)->toBeFalse()->and($z->grund)->toBe('zutaten_ohne_preis')->and($z->vk)->toBeNull();
     expect($this->svc->einfrieren($this->broich, $this->koch, $this->angebot)->id)->toBe($e->id);   // schon eingefroren: bleibt, kein Überschreiben
 });
 
@@ -114,6 +114,15 @@ it('Gerichte aus Concepts (Slot) werden gefunden', function () {
     $e = $this->svc->einfrieren($this->broich, $this->koch, $this->angebot);
 
     expect($e->zeilen->pluck('recipe_id')->all())->toBe([(int) $this->lamm->id]);
+});
+
+it('Echte Kostenschicht: ein Abo-Gericht direkt als Fassung ohne Mandanten-Preis ist unvollständig und nennt die fehlende Zutat, VK null', function () {
+    ($this->block)(($this->fassung)(1));
+
+    $z = $this->svc->einfrieren($this->broich, $this->koch, $this->angebot)->zeilen->first();
+
+    expect($z->vollstaendig)->toBeFalse()->and($z->grund)->toBe('zutaten_ohne_preis')->and($z->vk)->toBeNull()
+        ->and(collect($z->fehlende)->pluck('name')->implode(','))->toContain('Kalbsknochen');
 });
 
 it('EK-Status: unvollständig bleibt unvollständig (Teilsumme, VK null, nie 0), vollständig trägt EK und VK', function () {

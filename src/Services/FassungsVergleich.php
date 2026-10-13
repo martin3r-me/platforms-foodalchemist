@@ -14,13 +14,12 @@ use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
  */
 class FassungsVergleich
 {
-    /** allergen_* und additive_* ohne Zeitstempel und Konfidenz (wie FassungService::allergenBild). @return array<string,mixed> */
+    public function __construct(private readonly FassungService $fassungen) {}
+
+    /** allergen_* und additive_* ohne Zeitstempel und Konfidenz — EINE Definition, die der Fassungs-Veröffentlichung. @return array<string,mixed> */
     public function allergenBild(FoodAlchemistRecipe $r): array
     {
-        return collect($r->getAttributes())
-            ->filter(fn ($v, $k) => (str_starts_with($k, 'allergen_') || str_starts_with($k, 'additive_'))
-                && ! str_ends_with($k, '_at') && ! str_contains($k, 'confidence'))
-            ->sortKeys()->all();
+        return $this->fassungen->allergenBild($r);
     }
 
     /** Die neueste Fassung der Familie, die das Team sieht (Abo-Hülle). */
