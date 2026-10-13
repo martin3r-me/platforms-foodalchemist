@@ -26,11 +26,10 @@ it('Detail-Panel: „KI-Vorschlag" (laVorschlaege) hat data-ki-action + wire:tar
         ->toContain('wire:target="laVorschlaege"');
 });
 
-it('Detail-Panel: „per KI schätzen" (kiAllergene) hat data-ki-action + wire:target', function () {
+it('Detail-Panel: kein KI-Schätzknopf für Allergene — sie kommen aus den Lieferantenartikeln (2026-10-13)', function () {
     $html = Livewire::test(DetailPanel::class, ['gpId' => $this->gp->id])->html();
-
-    expect($html)->toContain('data-ki-action="kiAllergene"')
-        ->toContain('wire:target="kiAllergene"');
+    expect($html)->not->toContain('data-ki-action="kiAllergene"')
+        ->and(method_exists(DetailPanel::class, 'kiAllergene'))->toBeFalse();
 });
 
 it('GP-Modal: „Alles anreichern" hat data-ki-action + wire:target', function () {

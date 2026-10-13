@@ -87,7 +87,7 @@ beforeEach(function () {
 
 it('B-7: `anker` gehört zum Standard-Set der GP-Anreicherung; Allergene/Nährwerte bleiben explizit (kommen vom LA)', function () {
     expect(BulkEnrichService::SCHRITTE_GP)->toBe(['condition', 'tags', 'anker'])
-        ->and(BulkEnrichService::SCHRITTE_GP_EXPLIZIT)->toBe(['allergene', 'naehrwerte'])
+        ->and(BulkEnrichService::SCHRITTE_GP_EXPLIZIT)->toBe(['naehrwerte'])      // Allergene nie per KI (2026-10-13)
         ->and(array_intersect(BulkEnrichService::SCHRITTE_GP, BulkEnrichService::SCHRITTE_GP_EXPLIZIT))->toBe([]);
 });
 

@@ -48,28 +48,9 @@ it('kiNaehrwerte: Vorschlag validiert → Übernehmen schreibt Fallback-Schicht;
         ->and($agg->naehrwerte($gp, mitKiFallback: true)['source'])->toBe('ki');
 });
 
-it('kiAllergene: nur gültige Werte werden Vorschlag, unbekannt fliegt; Übernehmen schreibt den Override (GL-01 Prio 1)', function () {
-    $this->mock(AiGatewayService::class, function ($mock) {
-        $mock->shouldReceive('propose')->andReturn(new AiProposal(
-            ['allergene' => ['gluten' => 'enthalten', 'milk' => 'spuren', 'fish' => 'unbekannt', 'eggs' => 'kaese']], 0.9,
-        ));
-    });
-
-    Livewire::test(DetailPanel::class, ['gpId' => $this->gp->id])
-        ->call('kiAllergene')
-        ->assertSet('fehler', null)
-        ->assertSet('kiVorschlag.werte', ['gluten' => 'enthalten', 'milk' => 'spuren'])
-        ->call('kiUebernehmen');
-
-    $gp = $this->gp->fresh();
-    expect($gp->allergen_gluten)->toBe('enthalten')
-        ->and($gp->allergen_milk)->toBe('spuren')
-        ->and($gp->allergen_fish)->toBeNull()                                 // unbekannt ⇒ KEIN Override (F7.1)
-        ->and((float) $gp->allergens_confidence)->toBe(0.9);
-
-    // Aggregat zeigt Override-Quelle
-    $allergene = app(GpAggregateService::class)->allergene($gp);
-    expect($allergene['gluten']['source'])->toBe('override');
+it('Allergene werden nicht per KI geschätzt — weder Detailspalte noch gps.ENRICH (Dominique 2026-10-13)', function () {
+    expect(method_exists(DetailPanel::class, 'kiAllergene'))->toBeFalse()
+        ->and(\Platform\FoodAlchemist\Services\BulkEnrichService::SCHRITTE_GP_EXPLIZIT)->not->toContain('allergene');
 });
 
 it('FakeProvider-Echo ⇒ ehrlicher Fehler, nichts geschrieben; Kind-Team blockt am Curate-Gate', function () {
@@ -80,7 +61,7 @@ it('FakeProvider-Echo ⇒ ehrlicher Fehler, nichts geschrieben; Kind-Team blockt
 
     $this->actingAs($this->makeUser($this->childA, 'Kind User'));
     Livewire::test(DetailPanel::class, ['gpId' => $this->gp->id])
-        ->call('kiAllergene')
+        ->call('kiNaehrwerte')
         ->assertSet('fehler', fn ($f) => str_contains((string) $f, 'Kurations-Team'));
 });
 

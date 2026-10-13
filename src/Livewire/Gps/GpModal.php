@@ -124,6 +124,9 @@ class GpModal extends Component
     /** Erfolgs-Hinweis (z.B. nach GP-Tausch) — transient, wie $fehler. */
     public ?string $hinweis = null;
 
+    /** Rückmeldung des KI-Knopfs „Einordnung vorschlagen" (2026-10-13), steht im Abschnitt Einordnung. */
+    public ?string $einordnungHinweis = null;
+
     /** #9 (2026-08-28): Naturaleinheit-Formen — Eingabe für „Form hinzufügen". */
     public string $formNeuSlug = 'stk';
 
@@ -146,7 +149,7 @@ class GpModal extends Component
         ?float $equivalentConfidence = null,
     ): void
     {
-        $this->reset('fehler', 'force', 'kiVorschlag', 'kiRohtext', 'laSuche', 'supplierItemId', 'autoSuggestPending', 'manuellerName', 'derivatSuche', 'nameVorschlag', 'bulkRunId', 'equivalentSourceKind', 'equivalentSourceId', 'equivalentReason', 'equivalentConfidence');
+        $this->reset('fehler', 'einordnungHinweis', 'force', 'kiVorschlag', 'kiRohtext', 'laSuche', 'supplierItemId', 'autoSuggestPending', 'manuellerName', 'derivatSuche', 'nameVorschlag', 'bulkRunId', 'equivalentSourceKind', 'equivalentSourceId', 'equivalentReason', 'equivalentConfidence');
         $this->gpId = $id;
         $this->builder = self::BUILDER_LEER;
         $this->tags = array_fill_keys(FoodAlchemistGp::TAG_FIELDS, '');
@@ -223,7 +226,7 @@ class GpModal extends Component
     {
         $this->sperreBeiSchliessen($name);   // Spec 65: eigene Sperre frei — VOR dem Reset (braucht gpId)
         if ($name === 'gp-modal') {
-            $this->reset('gpId', 'builder', 'manuellerName', 'defaults', 'fehler', 'force', 'kiVorschlag', 'kiRohtext', 'laSuche', 'supplierItemId', 'autoSuggestPending', 'equivalentSourceKind', 'equivalentSourceId', 'equivalentReason', 'equivalentConfidence');
+            $this->reset('gpId', 'builder', 'manuellerName', 'defaults', 'fehler', 'einordnungHinweis', 'force', 'kiVorschlag', 'kiRohtext', 'laSuche', 'supplierItemId', 'autoSuggestPending', 'equivalentSourceKind', 'equivalentSourceId', 'equivalentReason', 'equivalentConfidence');
         }
     }
 
@@ -794,6 +797,77 @@ class GpModal extends Component
     }
 
     // ── ✨ Kopf-Button: Naming-Builder aus Roh-Bezeichnung (NEUE GPs) ────
+
+    /**
+     * KI-Knopf „Einordnung vorschlagen" (Dominique 2026-10-13): der bisherige KI-Vorschlag im Abschnitt Einordnung
+     * betraf nur den Zustand. Hier schlägt die KI Warengruppe UND Unterkategorie (streng aus der eigenen Taxonomie)
+     * sowie den Zustand vor — über denselben Prompt wie die Neuanlage (gp.suggest), geerdet am GP-Namen und am
+     * Hauptartikel. Landet im Formular, Speichern übernimmt; die Meldung nennt, was vorher stand.
+     */
+    public function einordnungKiVorschlagen(AiGatewayService $ki): void
+    {
+        $this->fehler = null;
+        $this->einordnungHinweis = null;
+        $team = $this->team();
+        $gp = $team !== null && $this->gpId !== null ? FoodAlchemistGp::visibleToTeam($team)->find($this->gpId) : null;
+        if ($gp === null) {
+            return;
+        }
+        $vocab = app(VocabularyService::class);
+        $warengruppen = $vocab->listWarengruppen($team);
+        $taxonomie = $warengruppen->map(fn ($wg) => [
+            'code' => (string) $wg->code,
+            'name' => (string) $wg->name,
+            'sub_categories' => $vocab->listSubCategories($team, (string) $wg->code)->pluck('sub_category')->values()->all(),
+        ])->values()->all();
+        $kontext = [
+            'label' => (string) $gp->name,
+            'taxonomie' => $taxonomie,
+            'regel' => 'commodity_group_code und sub_category ausschließlich aus taxonomie wählen',
+        ];
+        $lead = $gp->lead_la_supplier_item_id !== null
+            ? \Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem::find($gp->lead_la_supplier_item_id) : null;
+        if ($lead !== null) {
+            $kontext['quell_lieferantenartikel'] = ['bezeichnung' => $lead->designation];
+        }
+        try {
+            $v = $ki->propose('gp.suggest', $kontext, ['target_table' => 'foodalchemist_gps', 'target_id' => $gp->id]);
+        } catch (\Platform\FoodAlchemist\Exceptions\KiNichtVerfuegbarException) {
+            $this->fehler = 'KI derzeit nicht verfügbar.';
+
+            return;
+        } catch (\Throwable $e) {
+            $this->fehler = $e->getMessage();
+
+            return;
+        }
+        $vorher = [$this->builder['commodity_group_code'] ?? '', $this->builder['sub_category'] ?? '', $this->builder['condition'] ?? ''];
+        $gesetzt = [];
+        $code = trim((string) ($v->werte['commodity_group_code'] ?? ''));
+        $wg = $warengruppen->first(fn ($x) => (string) $x->code === $code)
+            ?? $warengruppen->first(fn ($x) => mb_strtolower((string) $x->name) === mb_strtolower($code));
+        if ($wg !== null) {
+            $this->builder['commodity_group_code'] = (string) $wg->code;
+            $sub = trim((string) ($v->werte['sub_category'] ?? ''));
+            $treffer = $vocab->listSubCategories($team, (string) $wg->code)->pluck('sub_category')
+                ->first(fn ($x) => mb_strtolower((string) $x) === mb_strtolower($sub));
+            $this->builder['sub_category'] = $treffer !== null ? (string) $treffer : '';
+            $gesetzt[] = 'Warengruppe '.$wg->codedLabel().($treffer !== null ? ' › '.$treffer : ' (keine passende Unterkategorie)');
+        }
+        $zustand = $v->werte['condition'] ?? null;
+        if (is_string($zustand) && in_array($zustand, ['frisch', 'TK', 'trocken', 'konserviert'], true)) {
+            $this->builder['condition'] = $zustand;
+            $gesetzt[] = 'Zustand '.$zustand;
+        }
+        if ($gesetzt === []) {
+            $this->einordnungHinweis = 'KI fand keine passende Einordnung in deiner Taxonomie.';
+
+            return;
+        }
+        $alt = trim(implode(' › ', array_filter([$vorher[0], $vorher[1]])).($vorher[2] !== '' ? ', '.$vorher[2] : ''), ' ,');
+        $this->einordnungHinweis = 'Vorschlag im Formular: '.implode(' · ', $gesetzt)
+            .($alt !== '' ? ' (bisher: '.$alt.')' : '').'. Speichern übernimmt, Abbrechen verwirft.';
+    }
 
     public function kiVorschlagNaming(AiGatewayService $ki): void
     {

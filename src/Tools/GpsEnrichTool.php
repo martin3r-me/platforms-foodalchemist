@@ -18,7 +18,7 @@ use Platform\FoodAlchemist\Services\GpService;
  */
 class GpsEnrichTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
 {
-    /** Standard-Lauf = BulkEnrichService::SCHRITTE_GP; allergene/naehrwerte nur auf ausdrückliche Wahl (LA-lose GPs). */
+    /** Standard-Lauf = BulkEnrichService::SCHRITTE_GP; naehrwerte nur auf ausdrückliche Wahl (LA-lose GPs). Allergene nie per KI (2026-10-13). */
     private const FELDER = [...BulkEnrichService::SCHRITTE_GP, ...BulkEnrichService::SCHRITTE_GP_EXPLIZIT];
 
     public function getName(): string
@@ -31,9 +31,9 @@ class GpsEnrichTool extends FoodAlchemistTool implements ToolContract, ToolMetad
         return 'Stößt die KI-Anreicherung eines team-eigenen GP an. Standard-Schrittfolge (ohne felder): '
             . 'condition (Zustand §9), tags (Eigenschafts-Tags), anker (Kern-Anker = Aroma-Identität, macht den GP im '
             . 'Pairing-Graph sichtbar; „neutral" = kein Aroma-Träger). Nach dem LA-Match und nach gps.MINT_FROM_LA ist '
-            . 'das der Schritt, der ein neues GP vollständig macht. NICHT im Standard: allergene und naehrwerte — '
-            . 'Allergene, Nährwerte und Zusatzstoffe kommen aus den Lieferantenartikeln, nicht aus der KI; die beiden '
-            . 'Felder nur ausdrücklich wählen, wenn das GP keinen LA hat (KI-Schätzung, Override-Ebene). '
+            . 'das der Schritt, der ein neues GP vollständig macht. Allergene und Zusatzstoffe kommen ausschließlich aus '
+            . 'den Lieferantenartikeln und werden nie per KI geschätzt (kein Feld dafür). NICHT im Standard: naehrwerte — '
+            . 'nur ausdrücklich wählen, wenn das GP keinen LA hat (KI-Schätzung, Override-Ebene). '
             . 'Liefert eine run_id; die Vorschläge werden nach dem Lauf über gp_enrich.RESOLVE übernommen/verworfen '
             . '(nichts wird direkt geschrieben).';
     }
@@ -47,7 +47,7 @@ class GpsEnrichTool extends FoodAlchemistTool implements ToolContract, ToolMetad
                 'felder' => [
                     'type' => 'array',
                     'items' => ['type' => 'string', 'enum' => self::FELDER],
-                    'description' => 'Optional: Teilmenge der Anreicherungs-Felder. Weggelassen = Standard (condition, tags, anker); allergene/naehrwerte nur explizit.',
+                    'description' => 'Optional: Teilmenge der Anreicherungs-Felder. Weggelassen = Standard (condition, tags, anker); naehrwerte nur explizit. Allergene und Zusatzstoffe kommen ausschließlich aus den Lieferantenartikeln.',
                 ],
             ],
             'required' => ['gp_id'],
@@ -98,7 +98,7 @@ class GpsEnrichTool extends FoodAlchemistTool implements ToolContract, ToolMetad
             'requires_auth' => true, 'requires_team' => true, 'cost_class' => 'llm',
             'side_effects' => ['creates'],
             'related_tools' => ['foodalchemist.gp_enrich.RESOLVE', 'foodalchemist.runs.GET'],
-            'examples' => ['Reichere GP 123 an (Zustand + Tags + Kern-Anker).', 'GP 456 ohne LA: felder ["allergene"] — KI-Schätzung, weil kein Lieferantenartikel.'],
+            'examples' => ['Reichere GP 123 an (Zustand + Tags + Kern-Anker).', 'GP 456 ohne LA: felder ["naehrwerte"] — KI-Schätzung, weil kein Lieferantenartikel.'],
         ];
     }
 }

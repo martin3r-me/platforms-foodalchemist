@@ -75,7 +75,8 @@ class BulkEnrichService
     public const SCHRITTE_GP = ['condition', 'tags', 'anker'];
 
     /** Nur auf ausdrückliche Wahl (LA-lose GPs) — nie im „alles anreichern"-Lauf. */
-    public const SCHRITTE_GP_EXPLIZIT = ['allergene', 'naehrwerte'];
+    // 'allergene' entfernt (Dominique 2026-10-13): Allergene und Zusatzstoffe kommen nur aus den Lieferantenartikeln.
+    public const SCHRITTE_GP_EXPLIZIT = ['naehrwerte'];
 
     /**
      * Spec 03 L7: WAS schreibt ein Schritt? Bisher stand diese Zuordnung nur
