@@ -20,5 +20,5 @@ class FoodAlchemistVocabKochequipment extends Model
 
     protected $guarded = ['id'];
 
-    protected $casts = ['is_inactive' => 'boolean'];
+    protected $casts = ['is_inactive' => 'boolean', 'is_standard' => 'boolean'];
 }

@@ -93,6 +93,9 @@ it('Trait-Vertrag: ALLE Models tragen LogsActivity + BelongsToTeamHierarchy + Ha
         // Spec 82 · Schritt 4d: Preislisten-Import eines Mandanten — Vorgang des hochladenden Teams (Lauf) und
         // dessen Zeilen. Ein Kind-Team darf die Preisliste des Oberteams weder sehen noch anwenden.
         'FoodAlchemistPriceImportRun', 'FoodAlchemistPriceImportLine',
+        // Spec 82 · Schritt 5: Teamprofil (Fakten über die Küche) — strikt team-eigen, nicht vererbt. Ein Unter-Team
+        // pflegt sein Profil selbst, das Oberteam liest es nur über die Brille (TeamProfilService::darfLesen).
+        'FoodAlchemistTeamProfile', 'FoodAlchemistTeamProfileEquipment', 'FoodAlchemistTeamProfileArea',
     ];
     $modelDir = dirname((new ReflectionClass(FoodAlchemistRecipe::class))->getFileName());
     $fehlend = [];
@@ -163,7 +166,7 @@ it('Trait-Vertrag: ALLE Models tragen LogsActivity + BelongsToTeamHierarchy + Ha
         $pflichten = in_array(class_basename($klasse), $ohneHierarchie, true)
             ? ['LogsActivity', 'HasUuidV7', 'SoftDeletes']
             : ['LogsActivity', 'BelongsToTeamHierarchy', 'HasUuidV7', 'SoftDeletes'];
-        if (in_array(class_basename($klasse), ['FoodAlchemistPrice', 'FoodAlchemistPriceImportLine'], true)) {
+        if (in_array(class_basename($klasse), ['FoodAlchemistPrice', 'FoodAlchemistPriceImportLine', 'FoodAlchemistTeamProfileEquipment', 'FoodAlchemistTeamProfileArea'], true)) {
             // Bewusst ohne LogsActivity: Massendaten (221k), Audit über Import-Reports (M2-Entscheid im Model);
             // die Import-Zeilen hängen am Lauf (er trägt LogsActivity)
             $pflichten = array_diff($pflichten, ['LogsActivity']);
