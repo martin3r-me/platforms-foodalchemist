@@ -333,7 +333,7 @@
                             </button>
                             <div class="min-w-0 flex-1 cursor-pointer" wire:click="$dispatch('item-modal.oeffnen', { id: {{ $la->id }} })" title="Artikel öffnen, Allergene und Preise dort pflegen" data-la-oeffnen>
                                 <p class="text-[length:var(--fa-text-md)] font-medium leading-snug text-[var(--fa-ink)] hover:text-[var(--fa-accent)] hover:underline">{{ $la->designation }}</p>
-                                <p class="mt-0.5 {{ $leise }}">{{ $la->supplier_name ?? 'Lieferant unbekannt' }}@if($la->qty !== null && $la->unit_code !== null) · <x-fa::menge :value="$la->qty" :unit="$la->unit_code" />@endif @if($la->order_number !== null) · Art.-Nr. {{ $la->order_number }}@endif</p>
+                                <p class="mt-0.5 {{ $leise }}">{{ $la->supplier_name ?? 'Lieferant unbekannt' }}@if($la->qty !== null && $la->unit_code !== null) · <x-fa::menge :value="$la->qty" :unit="$la->unit_code" />@endif @if(filled($la->article_number)) · <span data-la-artnr>Art.-Nr. {{ $la->article_number }}</span>@endif</p>
                                 @if($gp->lead_la_supplier_item_id === $la->id || $la->ist_stamm || $la->is_discontinued || $la->gepinnt || $la->locked)
                                     <div class="mt-1 flex flex-wrap gap-1">
                                         @if($gp->lead_la_supplier_item_id === $la->id)<x-fa::badge tone="accent" title="Lead für alle Teams">Lead global</x-fa::badge>@endif
