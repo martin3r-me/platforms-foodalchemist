@@ -89,7 +89,7 @@ final class FaBereiche
         // Rezepte (inkl. Gerichte, Kalkulation/VK)
         ['recipe', 'rezepte'], ['verkaufsrezepte', 'rezepte'], ['dish', 'rezepte'], ['kalkulation', 'rezepte'], ['vk_snapshots', 'rezepte'],
         ['lab_notes', 'rezepte'], ['reife', 'rezepte'], ['surplus', 'rezepte'], ['quality_run', 'rezepte'], ['anreicherung_vorschlag', 'rezepte'],
-        ['datenwerk', 'rezepte'], ['substitution', 'rezepte'],
+        ['datenwerk', 'rezepte'], ['substitution', 'rezepte'], ['machbarkeit', 'rezepte'],
         // Wissen & Trendradar
         ['knowledge', 'wissen'], ['rules', 'wissen'], ['anker_wissen', 'wissen'], ['trendradar', 'wissen'], ['trends', 'wissen'], ['trend_belege', 'wissen'], ['fundstuecke', 'wissen'], ['pairing', 'wissen'], ['reference', 'wissen'],
         ['regelwerk', 'wissen'], ['terminology', 'wissen'],
@@ -98,7 +98,7 @@ final class FaBereiche
         ['geschirr_', 'stammdaten'], ['favorites', 'stammdaten'], ['match', 'stammdaten'], ['lead_la', 'stammdaten'], ['ingest', 'stammdaten'],
         ['struktur_vokabular', 'stammdaten'], ['component_equivalents', 'stammdaten'],
         // Einstellungen
-        ['settings', 'einstellungen'], ['team_settings', 'einstellungen'], ['vocab_', 'einstellungen'], ['outlet_settings', 'einstellungen'],
+        ['settings', 'einstellungen'], ['team_settings', 'einstellungen'], ['team_profile', 'einstellungen'], ['vocab_', 'einstellungen'], ['outlet_settings', 'einstellungen'],
         ['outlets', 'einstellungen'], ['presentation_designs', 'einstellungen'], ['behaelter_katalog', 'einstellungen'],
     ];
 
