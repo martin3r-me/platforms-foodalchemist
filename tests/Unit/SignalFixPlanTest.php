@@ -2,6 +2,11 @@
 
 use Platform\FoodAlchemist\Models\FoodAlchemistSignal;
 use Platform\FoodAlchemist\Support\SignalCockpit;
+use Platform\FoodAlchemist\Tests\TestCase;
+
+// Modul-TestCase statt purem PHPUnit: das ECHTE platform-activity-log bootet LogsActivity mit config() — ohne App
+// scheitert schon `new FoodAlchemistSignal()` („Target class [config] does not exist"). Kein DB-Zugriff nötig.
+uses(TestCase::class);
 
 /**
  * „KI erledigen lassen" — Plan-Mapping (metrik-fein, pur/kein DB). Sperrt die

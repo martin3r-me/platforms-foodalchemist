@@ -90,7 +90,7 @@ it('rechnet den Catering-Beispielsatz in der Einstellungsseite sofort bis zum Ba
     Livewire::test(Herstellkosten::class)
         ->call('cateringBeispielwerte')
         ->assertSet('fehler', null)
-        ->assertSet('meldung', 'Catering-Beispielwerte berechnet. Bitte anschließend auf den eigenen Betrieb anpassen.');
+        ->assertSet('meldung', 'Catering-Beispielwerte berechnet. Bitte anschließend auf das eigene Kalkulationsprofil anpassen.');   // Begriff seit #298
 
     expect($this->settings->bezugsbasen($team))->toEqual(FixkostenService::CATERING_EXAMPLE_BASES)
         ->and(app(CatalogPricingService::class)->enterpriseBaseRate($team)['source'])->toBe('kostenstruktur');

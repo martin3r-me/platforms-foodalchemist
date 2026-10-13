@@ -94,7 +94,7 @@ it('legt Betriebe an und verhindert doppelte Namen', function () {
     // Unique ist (team_id, name) — ohne Vorprüfung liefe der Nutzer in einen SQL-Fehler.
     Livewire::test(Betriebe::class)
         ->set('neuName', 'Bistro Süd')->call('anlegen')
-        ->assertSet('fehler', 'Es gibt bereits einen Betrieb mit diesem Namen.');
+        ->assertSet('fehler', 'Es gibt bereits ein Kalkulationsprofil mit diesem Namen.');   // Begriff seit #298 (Spec 82 §1)
 
     expect(FoodAlchemistOutlet::where('team_id', $this->rootTeam->id)->count())->toBe(2);
 });
