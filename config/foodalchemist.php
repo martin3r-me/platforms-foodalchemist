@@ -958,6 +958,15 @@ return [
      * Verkaufsgerichte §3 durch: das Regenerations-Programm (Gerät/°C/min/Kerntemperatur)
      * und der Teller-Aufbau werden getrennt geführt und gehören nicht in die Schritte.
      */
+    /**
+     * Spec 82 · Schritt 6 — KI-Marken-Kontext (KontextResolver): EIN Gesamtbudget in Zeichen statt eines Deckels
+     * je Ebene. Verbindliche Vorgaben und die Tonalität des Foodbooks werden nie gekürzt, sonst von unspezifisch
+     * (Team-DNA) nach spezifisch (Concept).
+     */
+    'kontext' => [
+        'budget_zeichen' => (int) env('FOODALCHEMIST_KONTEXT_BUDGET', 12000),
+    ],
+
     'step_kontext' => [
         'gericht' => [
             'ziel' => 'Ablauf der Fertigstellung am Einsatztag fuer ein Verkaufsgericht.',

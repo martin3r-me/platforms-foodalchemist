@@ -115,12 +115,14 @@ it('GOLDEN: ein Unter-Team ohne eigene Ebene bekommt die Team-DNA des Oberteams 
     expect($this->svc->cascadeKontext($this->childB))->toBe(['marken_kontext' => GOLDEN_DNA]);
 });
 
-it('GOLDEN: der Deckel von 3.000 Zeichen je Ebene kürzt mit dem festen Hinweis', function () {
+// ABWEICHUNG vom früheren Golden (Spec 82 Schritt 6, GEWOLLT): Das 3.000er-Limit je Ebene ist durch das
+// Gesamtbudget (12.000 Zeichen, KontextResolver) ersetzt. Eine einzelne lange Ebene wird nicht mehr bei
+// 3.000 abgeschnitten, solange das Gesamtbudget reicht. Das Kürzen selbst testet Spec82KontextResolverTest.
+it('GOLDEN (Abweichung gewollt): eine lange Ebene bleibt unter dem Gesamtbudget ungekürzt', function () {
     $canvas = $this->svc->canvasFor($this->rootTeam, 'food_dna', 'team', $this->rootTeam->id);
     $this->svc->setSkalar($canvas, 'leitbild', str_repeat('A', 3500));
 
     $kontext = $this->svc->cascadeKontext($this->rootTeam)['marken_kontext'];
 
-    expect(mb_strlen($kontext))->toBe(3000 + mb_strlen("\n- […gekürzt für KI-Kontext…]"))
-        ->and($kontext)->toEndWith("\n- […gekürzt für KI-Kontext…]");
+    expect($kontext)->toContain(str_repeat('A', 3500))->and($kontext)->not->toContain('gekürzt für KI-Kontext');
 });
