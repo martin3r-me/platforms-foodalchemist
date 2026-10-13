@@ -164,8 +164,8 @@ class FaRechte
     public function kundenHauptTeam(Team $team): Team
     {
         $kette = $this->teamKette($team);
-        $master = config('foodalchemist.master_team_id');
-        $pos = $master !== null && $master !== '' ? array_search((int) $master, $kette, true) : false;
+        $master = \Platform\FoodAlchemist\Support\MasterTeam::id();   // Spec 82 §13 B4: Einstellung vor ENV
+        $pos = $master !== null ? array_search($master, $kette, true) : false;
         $id = $pos === false ? end($kette) : ($pos === 0 ? $kette[0] : $kette[$pos - 1]);
 
         return (int) $id === (int) $team->id ? $team : (Team::find($id) ?? $team);
@@ -174,9 +174,7 @@ class FaRechte
     /** Liegt das Team (oder ein Vorfahr) jenseits der Kundengrenze, also ist es das Master-Team selbst? */
     public function istMasterTeam(Team $team): bool
     {
-        $master = config('foodalchemist.master_team_id');
-
-        return $master !== null && $master !== '' && (int) $master === (int) $team->id;
+        return \Platform\FoodAlchemist\Support\MasterTeam::istMaster($team);
     }
 
     /** Ist der Bereich für das Team freigeschaltet? Abgeschaltet im Team ODER einem Eltern-Team = aus. Keine Zeile = an. */

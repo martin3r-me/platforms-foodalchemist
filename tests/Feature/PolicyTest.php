@@ -130,6 +130,14 @@ it('Trait-Vertrag: ALLE Models tragen LogsActivity + BelongsToTeamHierarchy + Ha
             // trägt der Stellplatz selbst (FoodAlchemistStorageBin hat alle vier).
             continue;
         }
+        if (class_basename($klasse) === 'FoodAlchemistPlattformEinstellung') {
+            // Spec 82 §13 B4: plattformweite FA-Einstellung (Schlüssel/Wert) — gehört weder einem Team noch einem Datensatz:
+            //  - kein BelongsToTeamHierarchy: es gibt bewusst kein team_id, die Zeile gilt für die ganze Plattform;
+            //  - kein HasUuidV7/SoftDeletes: adressiert wird über den eindeutigen Schlüssel, das Entfernen eines Werts
+            //    (Master-Team zurück auf ENV) ist ein hartes Löschen, nie ein Zwischenzustand;
+            //  - kein LogsActivity: jede Änderung geht ausdrücklich über PlattformProtokoll ins activity-log (mit Vorher/Nachher).
+            continue;
+        }
         if (class_basename($klasse) === 'FoodAlchemistTeamStammOptin') {
             // Spec 82 §12 A3: Schalter „Mandant hat das Stamm-Paket gebucht", eine Zeile je Mandant.
             //  - kein BelongsToTeamHierarchy: die Vererbung an Unter-Teams löst StammPaket::istFreigeschaltet
