@@ -130,18 +130,24 @@ class AboKuendigungService
      * Was eine Kündigung/ein Zurückziehen beim Mandanten bewirkt: aus den wegfallenden Fassungen die genutzten (bekommen
      * eine tiefe Kopie) und die ungenutzten (verschwinden).
      *
+     * Familien-Regel (Kurator 13.10.): Auch ÄLTERE Fassungen derselben Familien zählen, wenn ein lebender Verweis auf sie
+     * zeigt (z. B. eigenes Rezept bleibt bei Allergen-Änderung bewusst auf Fassung 3, Paket 4d). Kopiert wird je
+     * tatsächlich referenzierter Fassung — nie still auf die neueste gehoben, sonst ändert sich das Allergenbild.
+     * Ungenutzte ältere Fassungen „verschwinden" nicht: Sie waren nie in der Hülle.
+     *
      * @param  list<int>  $wegfallend  Fassungs-IDs, die danach nicht mehr in der Hülle stehen
      * @return array{genutzt_ids: list<int>, verschwindet_ids: list<int>, genutzt: list<array{id:int,name:string,wo:list<string>}>, verschwindet: list<array{id:int,name:string}>}
      */
     public function vorschau(Team $mandant, array $wegfallend): array
     {
         $teams = RecomputeTeamRecipesJob::teamUndNachfahren((int) $mandant->id);
-        $nutzung = $wegfallend === [] ? [] : $this->nutzung($wegfallend, $teams);
-        $namen = $wegfallend === [] ? collect() : DB::table('foodalchemist_recipes')->whereIn('id', $wegfallend)->pluck('name', 'id');
-        $genutzt = array_values(array_filter($wegfallend, fn ($id) => isset($nutzung[$id])));
+        $kandidaten = array_values(array_unique(array_merge($wegfallend, $this->aeltereFassungen($wegfallend))));
+        $nutzung = $kandidaten === [] ? [] : $this->nutzung($kandidaten, $teams);
+        $genutzt = array_values(array_filter($kandidaten, fn ($id) => isset($nutzung[$id])));
         // Unter-Fassungen genutzter Rezepte gehen in der tiefen Kopie mit — sie „verschwinden" nicht
-        $mit = array_values(array_diff(array_intersect($this->kette($genutzt), $wegfallend), $genutzt));
+        $mit = array_values(array_diff($this->kette($genutzt), $genutzt));
         $verschwindet = array_values(array_diff($wegfallend, $genutzt, $mit));
+        $namen = $this->anzeigeNamen(array_merge($genutzt, $mit, $verschwindet));   // Zusatz „(Fassung n)“ nur bei mehreren angezeigten Fassungen einer Familie
         sort($genutzt);
         sort($mit);
         sort($verschwindet);
@@ -154,6 +160,39 @@ class AboKuendigungService
             'mitkopiert' => array_map(fn ($id) => ['id' => $id, 'name' => (string) ($namen[$id] ?? '?')], $mit),
             'verschwindet' => array_map(fn ($id) => ['id' => $id, 'name' => (string) ($namen[$id] ?? '?')], $verschwindet),
         ];
+    }
+
+    /**
+     * Ältere (nicht mehr in der Hülle stehende) Fassungen der Familien, deren Fassungen wegfallen.
+     *
+     * @param  list<int>  $wegfallend
+     * @return list<int>
+     */
+    private function aeltereFassungen(array $wegfallend): array
+    {
+        if ($wegfallend === []) {
+            return [];
+        }
+        $familien = DB::table('foodalchemist_recipes')->whereIn('id', $wegfallend)->whereNotNull('fassung_von_id')->pluck('fassung_von_id');
+
+        return DB::table('foodalchemist_recipes')->where('ist_fassung', true)->whereIn('fassung_von_id', $familien)
+            ->whereNotIn('id', $wegfallend)->orderBy('id')->pluck('id')->map(fn ($v) => (int) $v)->all();
+    }
+
+    /**
+     * Name je Fassung; trägt eine Familie mehr als eine der Fassungen, bekommt jede den Zusatz „(Fassung n)", damit die
+     * Kopien beim Mandanten unterscheidbar sind.
+     *
+     * @param  list<int>  $ids
+     * @return array<int,string>
+     */
+    private function anzeigeNamen(array $ids): array
+    {
+        $zeilen = DB::table('foodalchemist_recipes')->whereIn('id', array_unique($ids))->get(['id', 'name', 'fassung_von_id', 'fassung_nr']);
+        $jeFamilie = $zeilen->countBy(fn ($r) => (int) ($r->fassung_von_id ?? -$r->id));
+
+        return $zeilen->mapWithKeys(fn ($r) => [(int) $r->id => (string) $r->name
+            .($jeFamilie[(int) ($r->fassung_von_id ?? -$r->id)] > 1 && $r->fassung_nr !== null ? ' (Fassung '.$r->fassung_nr.')' : '')])->all();
     }
 
     /**
@@ -208,9 +247,10 @@ class AboKuendigungService
         }
         $kette = $this->kette($wurzeln);
 
-        $map = [];
+        $map = [];                            // Memo je Fassung: jede referenzierte Fassung genau EINE Kopie
+        $namen = $this->anzeigeNamen($kette);
         foreach ($kette as $fid) {            // erst alle Köpfe anlegen, dann Zutaten (Verweise zeigen auf die Kopien)
-            $map[$fid] = $this->kopiereKopf(FoodAlchemistRecipe::mitFassungen()->findOrFail($fid), $mandant);
+            $map[$fid] = $this->kopiereKopf(FoodAlchemistRecipe::mitFassungen()->findOrFail($fid), $mandant, $namen[$fid] ?? null);
         }
         foreach ($kette as $fid) {
             $this->kopiereInhalt(FoodAlchemistRecipe::mitFassungen()->findOrFail($fid), $map[$fid], $map, $mandant);
@@ -248,14 +288,14 @@ class AboKuendigungService
         return $kette;
     }
 
-    private function kopiereKopf(FoodAlchemistRecipe $fassung, Team $mandant): int
+    private function kopiereKopf(FoodAlchemistRecipe $fassung, Team $mandant, ?string $name = null): int
     {
         $kopie = $fassung->replicate(['uuid', 'legacy_id', 'recipe_key', 'ist_fassung', 'fassung_von_id', 'fassung_nr', 'inhalt_hash',
             'veroeffentlicht_at', 'veroeffentlicht_von', 'aenderungsnotiz', 'fassung_allergen_geaendert', 'kopie_von_id', 'kopie_stand_at']);
         $kopie->forceFill([
             'team_id' => $mandant->id, 'ist_fassung' => false, 'recipe_key' => $this->freierKey($mandant, (string) $fassung->recipe_key),
             'kopie_von_id' => $fassung->fassung_von_id, 'kopie_stand_at' => now(),   // originalGeaendert() vergleicht gegen die Familie
-        ])->save();
+        ] + ($name !== null ? ['name' => $name] : []))->save();
 
         return (int) $kopie->id;
     }

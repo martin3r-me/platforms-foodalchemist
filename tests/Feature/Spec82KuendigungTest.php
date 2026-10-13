@@ -179,3 +179,55 @@ it('MCP abos.DELETE: Vorschau ohne bestaetigt, Ausführung mit; abos.WITHDRAW nu
 
     expect($reg->get('foodalchemist.abos.WITHDRAW')->execute(['sammlung_id' => $this->sammlung, 'recipe_id' => $this->zweit->id], $ctx)->errorCode)->toBe('VALIDATION_ERROR');
 });
+
+it('Familien-Regel: Rezept auf alter Fassung (Allergen-Sperre) bekommt eine Kopie GENAU dieser Fassung, nie der neuesten', function () {
+    // Master ergänzt Butter (Milch) im Jus → Fassung 2 mit Allergen-Änderung. Paket 4d hält Broichs eigenes Rezept deshalb ECHT auf
+    // Fassung 1 (Allergen-Sperre, nicht von Hand), ein zweites eigenes Rezept nutzt schon Fassung 2. Der Fond ist unverändert →
+    // beide Jus-Fassungen teilen sich Fond-Fassung 1.
+    $butter = FoodAlchemistGp::create(['team_id' => null, 'gp_key' => 'f82|butter', 'name' => 'Butter', 'allergen_milk' => 'enthalten']);
+    $this->makeIngredient($this->jus, 'Butter', $butter, '50');
+    $jusF2 = FoodAlchemistRecipe::mitFassungen()->findOrFail(app(FassungService::class)->veroeffentlichen($this->master, $this->jus->id, 'Mit Butter', $this->kurator)['fassung_id']);
+    expect((int) $jusF2->fassung_nr)->toBe(2)->and((bool) $jusF2->fassung_allergen_geaendert)->toBeTrue()
+        ->and((int) $jusF2->ingredients()->whereNotNull('referenced_recipe_id')->value('referenced_recipe_id'))->toBe($this->fondF->id)
+        ->and((int) $this->eigenZeile->fresh()->referenced_recipe_id)->toBe($this->jusF->id);                // 4d: gehalten wegen Allergen
+    $neu = $this->makeRecipe($this->broich, 'Broich Kalbsbäckchen');
+    $neuZeile = $this->makeIngredient($neu, 'Jus', null, '80');
+    $neuZeile->update(['referenced_recipe_id' => $jusF2->id]);
+    // Angebot auf Fassung 2 umstellen: der alte Bestand (eigenZeile) bleibt auf Fassung 1
+    $this->blockOffen->update(['sales_recipe_id' => $jusF2->id]);
+
+    $vorschau = $this->svc->kuendigen($this->broich, $this->aboBroich->id, $this->broichChef, bestaetigt: false)['vorschau'];
+    expect($vorschau['genutzt_ids'])->toEqualCanonicalizing([$this->jusF->id, $jusF2->id])         // alte Fassung zählt als genutzt
+        ->and(collect($vorschau['genutzt'])->pluck('name')->all())->toEqualCanonicalizing(['Kalbsjus (Fassung 1)', 'Kalbsjus (Fassung 2)'])
+        ->and($vorschau['mitkopiert_ids'])->toBe([$this->fondF->id])
+        ->and($vorschau['verschwindet_ids'])->toBe([$this->zweitF->id]);
+
+    $r = $this->svc->kuendigen($this->broich, $this->aboBroich->id, $this->broichChef, bestaetigt: true);
+    $k1 = FoodAlchemistRecipe::findOrFail($r['kopien'][$this->jusF->id]);
+    $k2 = FoodAlchemistRecipe::findOrFail($r['kopien'][$jusF2->id]);
+    $fondK = $r['kopien'][$this->fondF->id];
+
+    expect(array_keys($r['kopien']))->toEqualCanonicalizing([$this->jusF->id, $jusF2->id, $this->fondF->id])   // Fond genau einmal (Memo)
+        ->and($k1->name)->toBe('Kalbsjus (Fassung 1)')->and($k2->name)->toBe('Kalbsjus (Fassung 2)')
+        ->and($k1->recipe_key)->not->toBe($k2->recipe_key)
+        // Kopie von Fassung 1 hat KEINE Butter/Milch — das Allergenbild des Mandanten ändert sich durch die Kündigung nicht
+        ->and($k1->ingredients()->where('gp_id', $butter->id)->exists())->toBeFalse()
+        ->and($k2->ingredients()->where('gp_id', $butter->id)->exists())->toBeTrue()
+        ->and($k1->fresh()->allergen_milk)->not->toBe('enthalten')->and($k2->fresh()->allergen_milk)->toBe('enthalten')
+        ->and((int) $k1->ingredients()->whereNotNull('referenced_recipe_id')->value('referenced_recipe_id'))->toBe($fondK)
+        ->and((int) $k2->ingredients()->whereNotNull('referenced_recipe_id')->value('referenced_recipe_id'))->toBe($fondK)
+        // jeder lebende Verweis landet auf der Kopie SEINER Fassung
+        ->and((int) $this->eigenZeile->fresh()->referenced_recipe_id)->toBe($k1->id)
+        ->and((int) $neuZeile->fresh()->referenced_recipe_id)->toBe($k2->id)
+        ->and((int) $this->blockOffen->fresh()->sales_recipe_id)->toBe($k2->id)
+        ->and((int) $this->blockHistorie->fresh()->sales_recipe_id)->toBe($this->jusF->id);              // Historie bleibt
+});
+
+it('Familien-Regel: ungenutzte ältere Fassung wird weder kopiert noch als „verschwindet" gemeldet', function () {
+    $this->makeIngredient($this->zweit, 'Kalbsknochen', $this->knochen, '100');
+    $zweitF2 = app(FassungService::class)->veroeffentlichen($this->master, $this->zweit->id, 'Mehr Knochen', $this->kurator)['fassung_id'];
+
+    $v = $this->svc->kuendigen($this->broich, $this->aboBroich->id, $this->broichChef, bestaetigt: false)['vorschau'];
+    expect($v['verschwindet_ids'])->toBe([$zweitF2])->and($v['genutzt_ids'])->not->toContain($this->zweitF->id)
+        ->and($v['verschwindet'][0]['name'])->toBe('Demi-glace');
+});
