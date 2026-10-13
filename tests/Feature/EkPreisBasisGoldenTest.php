@@ -118,16 +118,11 @@ it('friert die EK-Zahlen der vier Kaskaden-Lagen ein (Lead, Durchschnitt, durchg
         ->and($rLead->ek_n_ingredients_priced)->toBe(1);
 
     /**
-     * ⚠️ Eingefrorener Ist-Stand, KEIN gewünschtes Verhalten: beim durchgefallenen
-     * Lead erreicht die Kaskade den Durchschnitt gar nicht. `preisKandidaten` gibt den
-     * Lead-LA auch ohne aktiven Preis heraus, und `(float) null` macht daraus 0,00 €/kg
-     * — ein *gültiger* Preis für `preisProGramm`. Ergebnis: die Zutat gilt als bepreist
-     * (1 von 1), kostet aber 0 €, und `ek_total_eur` fällt auf NULL statt auf 1,50 €.
-     * Als Bug gemeldet (Office Dev, Board 54); hier nur festgehalten, weil ein Money-Path-
-     * Fix nicht in einen unbeaufsichtigten Lauf gehört. Bewegt sich diese Zeile, ist der
-     * Bug entweder behoben (dann gehört sie angepasst) oder still verschoben.
+     * Behoben (Bug Office Dev, Board 54; fix/recompute-lead-ohne-preis): beim durchgefallenen Lead
+     * (Lead-LA ohne aktiven Preis) erreicht die Kaskade jetzt den Durchschnitt. Vorher machte
+     * `(float) null` daraus 0,00 €/kg — die Zutat galt als bepreist und `ek_total_eur` fiel auf NULL.
      */
-    expect($rTaub->ek_total_eur)->toBeNull()
+    expect((float) $rTaub->ek_total_eur)->toBe(1.5)
         ->and($rTaub->ek_n_ingredients_priced)->toBe(1)
         ->and($rTaub->ek_n_ingredients_total)->toBe(1);
 });
@@ -160,10 +155,9 @@ it('nennt die Preisbasis je Kaskaden-Lage — lead, Durchschnitt, und den zweite
         // Der Kern von V-014: dieses Rezept steht auf einem Mittelwert aus 10 und 20 €/kg,
         // und bis hierher sah es aus wie das erste.
         ->and(($this->mkRezept)('B EK Avg', [[$avg, 100]])->ek_price_basis?->value)->toBe('avg')
-        // Der durchgefallene Lead bleibt `lead` — die Basis sagt, WOHER die Zahl kommt,
-        // und sie kommt (als 0,00 €) vom Lead-LA. Dass sie das tut, ist der separat
-        // gemeldete Bug, nicht eine Basis-Frage: die Basis lügt hier nicht.
-        ->and(($this->mkRezept)('B EK Lead taub', [[$leadTaub, 100]])->ek_price_basis?->value)->toBe('lead')
+        // Der durchgefallene Lead (ohne aktiven Preis) fällt auf den Durchschnitt — die Basis sagt
+        // das ehrlich (`avg`), seit der 0-€-Fehler behoben ist (Board 54).
+        ->and(($this->mkRezept)('B EK Lead taub', [[$leadTaub, 100]])->ek_price_basis?->value)->toBe('avg')
         // Zweiter Preis-Pfad (Stk-Kaskade) meldet dieselbe Basis-Sprache
         ->and(($this->mkRezept)('B EK Stk', [[$stk, 100]])->ek_price_basis?->value)->toBe('lead');
 });
