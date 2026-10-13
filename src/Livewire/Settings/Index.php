@@ -57,6 +57,7 @@ class Index extends Component
         // — KI & Kreativ-Steuerung (speist die KI-Generierung) —
         // Test-Anker: der Hint nennt den Sprachbefehl wörtlich (EinstellungenSchirmTest).
         'ki' => ['label' => 'KI', 'hint' => 'Anbieter, Modellstufen, Verbrauch, Notschalter, Sprachbefehl (Agenten-Modus, dauerhaft aktiv, Vorlesen)'],
+        'teamprofil' => ['label' => 'Teamprofil', 'hint' => 'Was die Küche kann: Geräte (vorhanden, fehlt, unbekannt), Flächen, Gäste parallel, Convenience-Grad'],
         'kueche' => ['label' => 'Küchen-Profil', 'hint' => 'Küchentyp als Grundrichtung für Vorschläge, Farben je Positionstyp'],
         // Ebene 1 der DNA-Kette (Umzug 2026-07-21): Team-Food-DNA wohnt bei den Einstellungen, nicht als Top-Level-Nav
         'food-dna' => ['label' => 'Food DNA', 'hint' => 'Leitbild, Stil, Aromatik und No-Gos des eigenen Hauses'],
@@ -112,7 +113,7 @@ class Index extends Component
      */
     public const GRUPPEN = [
         'katalog' => ['label' => 'Katalog & Kategorien', 'sektionen' => ['einheiten', 'warengruppen', 'taxonomie', 'vk-taxonomie', 'behaelter', 'concepter-dimensionen']],
-        'betrieb' => ['label' => 'Betrieb & Küche', 'sektionen' => ['betriebe', 'posten', 'rollen', 'zugriffsrechte', 'kueche']],
+        'betrieb' => ['label' => 'Betrieb & Küche', 'sektionen' => ['betriebe', 'posten', 'rollen', 'zugriffsrechte', 'kueche', 'teamprofil']],
         'kalkulation' => ['label' => 'Einkauf & Kalkulation', 'sektionen' => ['einkauf', 'kalkulation', 'herstellkosten', 'aufschlagsklassen']],
         'ki' => ['label' => 'KI & Wissen', 'sektionen' => ['ki', 'food-dna', 'kunde-dna', 'brief-vorlagen', 'trendradar', 'wissenskategorien', 'wissenssteuerung', 'regeln']],
         'ausgabe' => ['label' => 'Ausgabe', 'sektionen' => ['schreibstile', 'praesentations-designs', 'speiseplan-chips', 'etiketten']],

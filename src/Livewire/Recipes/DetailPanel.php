@@ -230,6 +230,10 @@ class DetailPanel extends Component
         return view('foodalchemist::livewire.recipes.detail-panel', [
             'sperr' => $this->sperrZustand(),   // Spec 65
             'rezept' => $rezept,
+            // Spec 82 §6: Machbarkeits-Check ohne KI gegen das Teamprofil DIESES Teams (warnt nur bei ausdrücklich „fehlt“).
+            'machbarkeit' => $rezept !== null && $team !== null
+                ? app(\Platform\FoodAlchemist\Services\MachbarkeitService::class)->pruefe(new \Platform\FoodAlchemist\Support\MachbarkeitKontext($team, Auth::user()), [$rezept->id])[0]
+                : null,
             // KI-Kontext der Erstellung (2026-09-06): Call-Log-Zeile des Generators, ans Rezept gehängt.
             'kiKontext' => $rezept !== null ? app(\Platform\FoodAlchemist\Services\Ai\RecipeKiKontextService::class)->fuerRezept($rezept) : null,
             'kiHistorie' => $rezept !== null ? app(\Platform\FoodAlchemist\Services\Ai\RecipeKiKontextService::class)->historieFuerRezept($rezept) : [],
