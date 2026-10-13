@@ -133,6 +133,13 @@ Route::get('/einstellungen/{sektion?}', \Platform\FoodAlchemist\Livewire\Setting
     ->name('foodalchemist.einstellungen');
 
 /**
+ * Spec 82 §13 C3 — Download des Mandanten-Exports. Hängt an keinem Bereich und bleibt auch im gesperrten Team erreichbar
+ * (TeamSperre::ROUTEN_AUSNAHME); die Rechteprüfung (nur Inhaber/Admin des Mandanten) macht MandantExportService.
+ */
+Route::get('/mandant-export/{export}', \Platform\FoodAlchemist\Http\Controllers\MandantExportDownloadController::class)
+    ->whereNumber('export')->name('foodalchemist.mandant-export.download');
+
+/**
  * Verkaufsrezepte (M6-03, D-6 §4.1) — VK-Sicht aufs geteilte Rezept-Modell,
  * Auswahl/Filter in der URL (V-17/Kontext-Erhalt).
  */

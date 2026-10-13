@@ -1142,6 +1142,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\MandantenPutTool::class,
                     \Platform\FoodAlchemist\Tools\MandantenBeendenGetTool::class,   // Spec 82 §13 C3: Vorschau „Mandant beenden“
                     \Platform\FoodAlchemist\Tools\MandantenBeendenPostTool::class,  // Spec 82 §13 C3: ausführen, abbrechen, entsperren
+                    \Platform\FoodAlchemist\Tools\MandantExportGetTool::class,       // Spec 82 §13 C3: Datenexport Status + Manifest
+                    \Platform\FoodAlchemist\Tools\MandantExportPostTool::class,      // Spec 82 §13 C3: Datenexport anstoßen
                     \Platform\FoodAlchemist\Tools\StandorteGetTool::class,
                     \Platform\FoodAlchemist\Tools\StandortePutTool::class,
                     \Platform\FoodAlchemist\Tools\StandorteSetBrilleTool::class,

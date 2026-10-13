@@ -5,22 +5,20 @@ namespace Platform\FoodAlchemist\Services;
 use Platform\Core\Models\Team;
 
 /**
- * Spec 82 §13 C3 — Auskunft, ob für einen Mandanten ein Datenexport vorliegt. Der Export selbst kommt in PR 3
- * (ZIP je Mandant, Download nur für Inhaber). Bis dahin gibt es keinen: Der Schritt „Datenexport“ hält den Ablauf an,
- * statt das Team ohne Export zu sperren — der Plattform-Admin lässt ihn nur bewusst weg.
- * Im Test lässt sich die Klasse per Container ersetzen.
+ * Spec 82 §13 C3 — Auskunft, ob für einen Mandanten ein Datenexport vorliegt. Der Ablauf „Mandant beenden“ fragt sie vor dem Sperren:
+ * Ohne vorliegenden Export hält er an. Die Antwort kommt vom {@see MandantExportService}; im Test lässt sich die Klasse per Container ersetzen.
  */
 class ExportAuskunft
 {
-    /** Gibt es die Export-Funktion schon? */
+    /** Gibt es die Export-Funktion? */
     public function verfuegbar(): bool
     {
-        return false;
+        return true;
     }
 
-    /** Liegt für den Mandanten ein aktueller Export vor? */
+    /** Liegt für den Mandanten ein fertiger Export vor, dessen Datei noch da ist? */
     public function vorhanden(Team $mandant): bool
     {
-        return false;
+        return app(MandantExportService::class)->vorhanden($mandant);
     }
 }
