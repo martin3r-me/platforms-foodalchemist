@@ -31,7 +31,14 @@ beforeEach(function () {
         $this->markTestSkipped('Echtes platform-activity-log nicht installiert (Sandbox-Stub ohne logActivity).');
     }
     if (! Schema::hasTable('activity_log_activities')) {
-        $this->artisan('migrate', ['--realpath' => true, '--path' => [base_path('vendor/martin3r/platform-activity-log/database/migrations')]]);
+        $migrationen = base_path('vendor/martin3r/platform-activity-log/database/migrations');
+        if (is_dir($migrationen)) {
+            $this->artisan('migrate', ['--realpath' => true, '--path' => [$migrationen]]);
+        }
+    }
+    // Stub (oder Paket ohne Migrationen): Tabelle fehlt trotz Versuch -> überspringen statt „no such table“ zu werfen.
+    if (! Schema::hasTable('activity_log_activities')) {
+        $this->markTestSkipped('Tabelle activity_log_activities nicht vorhanden (Stub-Paket ohne Migrationen).');
     }
 
     $this->admin = $this->makeUser($this->rootTeam, 'Plattform Admin');
