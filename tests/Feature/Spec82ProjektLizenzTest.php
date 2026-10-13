@@ -158,3 +158,29 @@ it('MCP: UEBERNAHME_GET schreibt nichts, UEBERNAHME_POST übernimmt; Nicht-Admin
     $ok = app(ProjekteUebernahmePostTool::class)->execute($args, new ToolContext($this->admin, $this->master));
     expect($ok->success)->toBeTrue()->and($ok->data['bericht']['unter_teams'])->toHaveCount(2)->and(Team::where('parent_team_id', $this->kunde->id)->count())->toBe(2);
 });
+
+it('Kontingent Standorte (Spec 77b): würde die Übernahme es überschreiten, ist das ein Hindernis, es wird nichts angelegt', function () {
+    app(\Platform\FoodAlchemist\Services\FaRechte::class)->setzeKontingente($this->kunde, $this->admin, ['max_standorte' => 1]);   // Projekt hat 2 Standorte
+
+    $v = $this->uebernahme->vorschau($this->master, $this->admin, $this->projekt->id, $this->kunde);
+    expect($v['kontingent'])->toBe(['max_standorte' => 1, 'genutzt' => 0, 'neu' => 2])
+        ->and($v['hindernisse'])->toHaveCount(1)->and($v['hindernisse'][0])->toContain('Kontingent Standorte')->toContain('überschritten');
+    expect(fn () => $this->uebernahme->uebernehmen($this->master, $this->admin, $this->projekt->id, $this->kunde))->toThrow(\RuntimeException::class, 'Kontingent');
+    expect(Team::where('parent_team_id', $this->kunde->id)->count())->toBe(0)->and(FoodAlchemistMandant::where('team_id', $this->kunde->id)->exists())->toBeFalse()
+        ->and($this->projekt->fresh()->mandant_team_id)->toBeNull();
+});
+
+it('Kontingent: bereits vorhandene Unter-Teams zählen mit; genau passend und unbegrenzt gehen durch', function () {
+    $rechte = app(\Platform\FoodAlchemist\Services\FaRechte::class);
+    Team::create(['name' => 'Altbestand', 'user_id' => $this->admin->id, 'personal_team' => false, 'parent_team_id' => $this->kunde->id]);
+
+    $rechte->setzeKontingente($this->kunde, $this->admin, ['max_standorte' => 2]);   // 1 vorhanden + 2 neue = 3 > 2
+    expect($this->uebernahme->vorschau($this->master, $this->admin, $this->projekt->id, $this->kunde)['hindernisse'][0])->toContain('1 vorhanden');
+
+    $rechte->setzeKontingente($this->kunde, $this->admin, ['max_standorte' => 3]);   // genau passend
+    expect($this->uebernahme->vorschau($this->master, $this->admin, $this->projekt->id, $this->kunde)['hindernisse'])->toBe([]);
+
+    $rechte->setzeKontingente($this->kunde, $this->admin, ['max_standorte' => null]); // unbegrenzt
+    $b = $this->uebernahme->uebernehmen($this->master, $this->admin, $this->projekt->id, $this->kunde);
+    expect($b['unter_teams'])->toHaveCount(2)->and(Team::where('parent_team_id', $this->kunde->id)->count())->toBe(3);
+});
