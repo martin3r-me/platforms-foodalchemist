@@ -68,7 +68,9 @@ trait SeedsTeamHierarchy
             });
         }
 
-        $paths = [
+        $this->artisan('migrate', [
+            '--realpath' => true,
+            '--path' => [
                 $core . '/0001_01_01_000000_create_users_table.php', // Cores Version (current_team_id)
                 $core . '/2026_01_11_160000_add_ai_user_fields_to_users_table.php', // type/team_id (User-Model-Hooks erwarten sie)
                 $core . '/0001_01_01_000005_create_teams_table.php',
@@ -116,16 +118,8 @@ trait SeedsTeamHierarchy
                 $core . '/2026_02_05_000001_create_team_core_ai_models_table.php',
                 $core . '/0001_01_01_000007_create_team_invitations_table.php',
                 $module,
-        ];
-
-        // Echtes platform-activity-log (LogsActivity-Modelle schreiben in activity_log_activities): Migration nur dann,
-        // wenn das Paket da ist. In einer Sandbox mit Stub fehlt die Datei — dann bleibt die Liste unveraendert.
-        $activityLog = base_path('vendor/martin3r/platform-activity-log/database/migrations/2025_07_08_110922_create_activities_table.php');
-        if (is_file($activityLog)) {
-            $paths[] = $activityLog;
-        }
-
-        $this->artisan('migrate', ['--realpath' => true, '--path' => $paths])->run();
+            ],
+        ])->run();
 
         $this->rootTeam = Team::create(['name' => 'Root (Katalog-Besitzer)', 'user_id' => 1, 'personal_team' => false]);
         $this->childA = Team::create(['name' => 'Kind A', 'user_id' => 1, 'personal_team' => false, 'parent_team_id' => $this->rootTeam->id]);
