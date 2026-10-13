@@ -122,7 +122,7 @@ class PreislistenImportService
         $lieferanten = FoodAlchemistSupplier::visibleToTeam($team)->get(['id', 'name'])
             ->groupBy(fn ($s) => $this->norm((string) $s->name));
 
-        return DB::transaction(function () use ($team, $pfad, $datei, $zuordnung, $standard, $lieferanten, $userId, $mapping) {
+        return DB::transaction(function () use ($team, $pfad, $dateiname, $datei, $zuordnung, $standard, $lieferanten, $userId) {
             $run = FoodAlchemistPriceImportRun::create([
                 'team_id' => $team->id,
                 'supplier_id' => $standard?->id,

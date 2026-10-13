@@ -99,6 +99,20 @@ it('Oberfläche: Upload zeigt Vorschau mit erkannter Zuordnung; Abgleichen legt 
     $c->assertSeeHtml('data-preisliste-pruefliste')->assertSeeHtml('data-preisliste-zeile="ohne_treffer"')->assertSee('9999');
 });
 
+it('Der Lauf trägt den Originalnamen der Datei, nie den Temp-Namen; Pfadanteile und Steuerzeichen fallen weg', function () {
+    $svc = app(PreislistenImportService::class);
+    $temp = tempnam(sys_get_temp_dir(), 'UpGMHbenZoptM') . '.csv';
+    file_put_contents($temp, "Artikelnummer;Preis\n1001;5\n");
+
+    $run = $svc->stage($this->team, $temp, [], $this->hanos->id, null, 'csv', 'test_preisliste.csv');
+    expect($run->filename)->toBe('test_preisliste.csv');
+
+    // Oberfläche: stage bekommt den Namen aus getClientOriginalName() (im Test der Hash-Name, im Browser der Originalname).
+    $c = Livewire::test(Index::class)->set('lieferantId', $this->hanos->id)
+        ->set('datei', ($this->csvUpload)("Artikelnummer;Preis\n1001;5\n", 'liste.csv'))->call('abgleichen')->assertSet('fehler', null);
+    expect(DB::table('foodalchemist_price_import_runs')->orderByDesc('id')->value('filename'))->not->toContain('/')->toEndWith('.csv');
+});
+
 it('Oberfläche: manuelle Spaltenzuordnung gewinnt gegen die Erkennung', function () {
     Livewire::test(Index::class)
         ->set('lieferantId', $this->hanos->id)
@@ -157,13 +171,14 @@ it('MCP: preisliste.UPLOAD gleicht ab (ohne Preis zu schreiben), preisliste_laeu
         ->and(FoodAlchemistPrice::count())->toBe($preise);
 
     $get = (new \Platform\FoodAlchemist\Tools\PreislisteLaeufeGetTool)->execute(['run_id' => $up->data['lauf_id']], $ctx);
-    expect($get->data['pruefliste'])->toHaveCount(1)->and($get->data['pruefliste'][0]['status'])->toBe('ohne_treffer');
+    expect($get->data['pruefliste'])->toHaveCount(1)->and($get->data['pruefliste'][0]['status'])->toBe('ohne_treffer')
+        ->and($get->data['lauf']['datei'])->toBe('liste.csv');   // Dateiname aus dem Parameter, nicht der Temp-Name
     expect((new \Platform\FoodAlchemist\Tools\PreislisteLaeufeGetTool)->execute([], $ctx)->data['laeufe'])->toHaveCount(1);
 
     $schlecht = fn (array $a) => (new \Platform\FoodAlchemist\Tools\PreislisteUploadTool)->execute($a + ['supplier_id' => $this->hanos->id], $ctx);
     expect($schlecht(['filename' => 'x.exe', 'content_base64' => $csv])->errorCode)->toBe('VALIDATION_ERROR')
         ->and($schlecht(['filename' => 'x.csv', 'content_base64' => '!!!nicht base64!!!'])->errorCode)->toBe('VALIDATION_ERROR')
-        ->and($schlecht(['filename' => '../../etc/passwd.csv', 'content_base64' => $csv])->success)->toBeTrue();   // Pfadanteile im Namen werden verworfen, nur der Basisname zählt
+        ->and($schlecht(['filename' => '../../etc/passwd.csv', 'content_base64' => $csv])->data['datei'])->toBe('passwd.csv');   // Pfadanteile im Namen werden verworfen, nur der Basisname zählt
 
     $kind = $this->makeUser($this->childA, 'Kind', 'owner');
     $verboten = (new \Platform\FoodAlchemist\Tools\PreislisteUploadTool)->execute(['filename' => 'liste.csv', 'content_base64' => $csv, 'supplier_id' => $this->hanos->id], new \Platform\Core\Contracts\ToolContext($kind, $this->childA));

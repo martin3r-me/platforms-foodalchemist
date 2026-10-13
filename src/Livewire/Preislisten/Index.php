@@ -96,7 +96,7 @@ class Index extends Component
         try {
             $run = app(PreislistenImportService::class)->stage(
                 $team, $this->datei->getRealPath(), $mapping, $this->lieferantId ?: null, $user?->id,
-                $this->endung(), $this->datei->getClientOriginalName(),
+                $this->endung(), $this->anzeigename(),
             );
         } catch (\RuntimeException $e) {
             $this->fehler = $e->getMessage();
@@ -145,6 +145,16 @@ class Index extends Component
         $team = $this->team();
 
         return $team !== null && app(PreislistenImportService::class)->darfImportieren($team, Auth::user());
+    }
+
+    /** Anzeigename für den Lauf: Originalname der Datei, nur Basisname, ohne Steuerzeichen, max. 120 Zeichen (reine Anzeige, nie ein Pfad). */
+    private function anzeigename(): string
+    {
+        $roh = (string) $this->datei?->getClientOriginalName();
+        $name = basename(str_replace('\\', '/', $roh));
+        $name = trim((string) preg_replace('/[\x00-\x1F\x7F]+/u', '', $name));
+
+        return $name === '' ? 'preisliste' : mb_substr($name, 0, 120);
     }
 
     /** Endung der Originaldatei, nur aus der Whitelist. */
