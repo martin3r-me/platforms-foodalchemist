@@ -62,9 +62,9 @@ it('Master-Team und Unter-Teams sind kein Mandant, den man beendet', function ()
     expect(fn () => ($this->svc)()->vorschau($this->childA, $this->admin))->toThrow(\RuntimeException::class, 'Haupt-Team');
 });
 
-it('Abos: entfällt solange es das Abo-Modell nicht gibt; mit Abos steht die Wirkung (tiefe Kopie) und die Zahl da', function () {
+it('Abos: ohne Abo erledigt (seit Durchstich Schritt 1 gibt es das Abo-Modell); mit Abos steht die Wirkung (tiefe Kopie) und die Zahl da', function () {
     $v = ($this->svc)()->vorschau($this->mandant, $this->admin);
-    expect(($this->schritt)($v, 'abos')['zustand'])->toBe('entfaellt')->and(($this->schritt)($v, 'abos')['details']['verfuegbar'])->toBeFalse();
+    expect(($this->schritt)($v, 'abos')['zustand'])->toBe('erledigt')->and(($this->schritt)($v, 'abos')['details']['verfuegbar'])->toBeTrue();
 
     app()->instance(AboAuskunft::class, new class extends AboAuskunft {
         public function verfuegbar(): bool

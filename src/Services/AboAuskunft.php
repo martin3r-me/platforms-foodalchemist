@@ -27,10 +27,10 @@ class AboAuskunft
             ->all();
     }
 
-    /** Gibt es das Abo-Modell schon? Solange nicht (Spec 82 Schritt 7), entfällt „Abos kündigen“ beim Beenden eines Mandanten. */
+    /** Gibt es das Abo-Modell schon (Tabelle migriert, Durchstich Schritt 1)? Sonst entfällt „Abos kündigen“ beim Beenden. */
     public function verfuegbar(): bool
     {
-        return false;
+        return \Illuminate\Support\Facades\Schema::hasTable('foodalchemist_abos');
     }
 
     /**
@@ -51,7 +51,7 @@ class AboAuskunft
      */
     public function abosDesMandanten(Team $mandant): array
     {
-        return [];
+        return $this->abosAmStammPaket($mandant);   // heute dieselbe Menge: alle aktiven Abos des Mandanten
     }
 
     /**

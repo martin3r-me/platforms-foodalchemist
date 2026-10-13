@@ -235,6 +235,8 @@ Beschreibt, was die Küche kann. Das ist keine DNA.
 
 **Entschieden (Dominique 13.10.): Mandanten stehen NEBEN dem Master-Team**, also kein `parent_team_id` zum Master. Ein Mandant sieht vom Master nur, was per Abo freigegeben ist. Kuratierte und autarke Kunden sind technisch gleich, der einzige Unterschied ist, ob Abos existieren.
 
+**Abo und Modus sind unabhängig (Dominique 13.10.):** Ein Abo ist die Richtung **Master → Mandant** (der Mandant liest Master-Inhalte). Der Modus „kuratiert“ (§13 G) ist die Gegenrichtung **Mandant → Master** (der Master liest Mandanten-Inhalte). Ein autarker Mandant kann also ein Abo haben, und ein kuratierter muss keins haben. `AboService` prüft den Modus deshalb nicht.
+
 **Das Abo „schlau“ machen** (Entwurf zur Abstimmung):
 1. **Einheit ist die Sammlung**, nicht das Einzelrezept. Abo heißt: Freigabe einer Sammlung an einen Mandanten. Wiederverwendet werden `sammlungen` und die Freigabe aus 77d.
 2. **Abhängigkeiten kommen automatisch mit:** Ein abonniertes Gericht zieht seine Basisrezepte und Unter-Rezepte mit, wie bei der 77d-Hülle. Der Mandant sieht nie ein Gericht, dessen Bestandteile ihm fehlen.
@@ -479,6 +481,7 @@ Der Master sieht Inhalte **nur bei kuratierten Mandanten**. Bei autarken Mandant
 **Folgen für den Bau:**
 1. Das Mandanten-Stammblatt (C1) zeigt bei autarken Mandanten nur die Verwaltungsspalten. Rückschlüsse quer über Teams (Teamprofile, Machbarkeit) gelten nur für kuratierte Mandanten.
 2. **Modus kuratiert / autark** ist ein FA-Feld je Mandant (gleiche FA-Tabelle wie Projekt-Status, B3). Umschalten nur durch den Plattform-Admin, mit Protokoll (C4).
+   - Der Modus regelt nur, ob der Master Inhalte des Mandanten lesen darf. Er ist **unabhängig vom Abo** (Master → Mandant, §8). Ein Abo ist auch bei „autark“ möglich.
 3. Der Plattform-Admin bekommt **keine Inhalts-Ausnahme** in `FaRechte`. Bestehende Stellen „Plattform-Admin sieht alles“ werden geprüft: für Bereiche (`darfBereich`) ok, für Inhaltslesen nicht.
 4. **Pflicht-Test:** Plattform-Admin + autarker Mandant ergibt 0 Rezepte, 0 Preise, 0 Foodbooks über Oberfläche und MCP.
 5. **Bekannte Grenze:** Server- bzw. DB-Zugriff des Betreibers wird nicht technisch gelöst, sondern über Vertrag (AVV, Vertraulichkeit) plus Protokoll.
