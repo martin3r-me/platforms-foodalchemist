@@ -180,7 +180,7 @@ class Browser extends Component
     private function eigenesDoc(int $id): ?object
     {
         $doc = $this->sichtbaresDoc($id, ['id', 'team_id', 'slug']);
-        if ($doc === null || ! TeamScope::mayWrite($doc->team_id, Auth::user()?->currentTeamRelation)) {
+        if ($doc === null || ! \Platform\FoodAlchemist\Services\Knowledge\WissensSichtbarkeit::mayWrite($doc->team_id, Auth::user()?->currentTeamRelation)) {
             $this->fehler = 'Dieses Wissen gehört einem anderen Team. Suchbegriffe und Verbindungen pflegt das besitzende Team bzw. das Master-Team.';
 
             return null;
@@ -284,7 +284,7 @@ class Browser extends Component
         if ($doc === null) {
             return;
         }
-        if (! TeamScope::mayWrite($doc->team_id, Auth::user()?->currentTeamRelation)) {
+        if (! \Platform\FoodAlchemist\Services\Knowledge\WissensSichtbarkeit::mayWrite($doc->team_id, Auth::user()?->currentTeamRelation)) {
             $this->fehler = 'Dieses Wissen gehört einem anderen Team. Aktivieren und Deaktivieren kann nur das besitzende Team bzw. das Master-Team.';
 
             return;
@@ -334,7 +334,7 @@ class Browser extends Component
         if ($doc === null) {
             return;
         }
-        if (! TeamScope::mayWrite($doc->team_id, Auth::user()?->currentTeamRelation)) {
+        if (! \Platform\FoodAlchemist\Services\Knowledge\WissensSichtbarkeit::mayWrite($doc->team_id, Auth::user()?->currentTeamRelation)) {
             $this->fehler = 'Dieses Wissen gehört einem anderen Team. Löschen kann nur das besitzende Team bzw. das Master-Team.';
 
             return;
@@ -554,7 +554,7 @@ class Browser extends Component
         // Sichtbarkeit des Löschen-Buttons; delete() prüft dasselbe nochmal serverseitig
         // (nie der Client-Sichtbarkeit vertrauen).
         $editable = $selected !== null
-            && TeamScope::mayWrite($selected->team_id, Auth::user()?->currentTeamRelation);
+            && \Platform\FoodAlchemist\Services\Knowledge\WissensSichtbarkeit::mayWrite($selected->team_id, Auth::user()?->currentTeamRelation);
 
         $aliases = $selected
             ? DB::table('foodalchemist_knowledge_aliases')->where('knowledge_document_id', $selected->id)

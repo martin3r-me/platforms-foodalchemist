@@ -287,7 +287,7 @@ class KnowledgeCanonService
         }
 
         $global = (bool) ($data['global'] ?? false);
-        if ($global && ! TeamScope::isMaster($team)) {
+        if ($global && ! \Platform\FoodAlchemist\Services\Knowledge\WissensSichtbarkeit::darfGlobalSchreiben($team)) {
             throw new RuntimeException('Verbindliches Wissen für alle Teams pflegt nur das Master-Team.');
         }
         $teamId = $global ? null : (int) $team->id;
@@ -363,7 +363,7 @@ class KnowledgeCanonService
      */
     public function remove(Team $team, string $scope, string $scopeKey, string $slug, string $role = 'root', bool $global = false): int
     {
-        if ($global && ! TeamScope::isMaster($team)) {
+        if ($global && ! \Platform\FoodAlchemist\Services\Knowledge\WissensSichtbarkeit::darfGlobalSchreiben($team)) {
             throw new RuntimeException('Verbindliches Wissen für alle Teams pflegt nur das Master-Team.');
         }
 

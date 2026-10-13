@@ -71,7 +71,7 @@ class Wissenskategorien extends Component
     private function darfAendern(?int $zeileTeamId): bool
     {
         // Die Regel lebt in TeamScope::mayWrite — hier stand sie kopiert.
-        return TeamScope::mayWrite($zeileTeamId, Auth::user()?->currentTeamRelation);
+        return \Platform\FoodAlchemist\Services\Knowledge\WissensSichtbarkeit::mayWrite($zeileTeamId, Auth::user()?->currentTeamRelation);
     }
 
     public function save(): void
@@ -163,7 +163,7 @@ class Wissenskategorien extends Component
     public function delete(int $id): void
     {
         $team = Auth::user()?->currentTeamRelation;
-        $istMaster = $team !== null && $team->parent_team_id === null;
+        $istMaster = \Platform\FoodAlchemist\Services\Knowledge\WissensSichtbarkeit::darfGlobalSchreiben($team);   // §13 H: nur das Master-Team, nicht jedes elternlose Team
 
         $kat = DB::table('foodalchemist_knowledge_categories')->where('id', $id)
             ->first(['id', 'slug', 'label', 'team_id']);

@@ -26,6 +26,9 @@ uses(TestCase::class, SeedsTeamHierarchy::class);
  */
 beforeEach(function () {
     $this->seedTeamHierarchy();
+    // Spec 82 §13 H: Globales Wissen/Steuerung schreibt nur das Master-Team — der Test-Akteur (rootTeam) ist hier das Master-Team.
+    config(['foodalchemist.master_team_id' => $this->rootTeam->id]);
+    \Platform\FoodAlchemist\Support\MasterTeam::flush();
     $this->dienst = app(KanonSicherungService::class);
     $this->datei = sys_get_temp_dir().'/kanon-test-'.bin2hex(random_bytes(6)).'.json';
 

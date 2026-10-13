@@ -69,7 +69,7 @@ class KnowledgeBudgetPutTool extends FoodAlchemistTool implements ToolContract, 
             ]);
         }
 
-        if (! TeamScope::mayWrite(null, $team)) {
+        if (! \Platform\FoodAlchemist\Services\Knowledge\WissensSichtbarkeit::darfGlobalSchreiben($team)) {
             return ToolResult::error('Das Wissensbudget ist global — nur das Master-Team darf es ändern.', 'FORBIDDEN');
         }
 

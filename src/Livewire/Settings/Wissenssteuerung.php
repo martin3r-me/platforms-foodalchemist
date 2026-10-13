@@ -185,7 +185,7 @@ class Wissenssteuerung extends Component
      */
     private function darfGlobalSchreiben(): bool
     {
-        return TeamScope::mayWrite(null, Auth::user()?->currentTeamRelation);
+        return \Platform\FoodAlchemist\Services\Knowledge\WissensSichtbarkeit::darfGlobalSchreiben(Auth::user()?->currentTeamRelation);
     }
 
     /**
@@ -433,7 +433,9 @@ class Wissenssteuerung extends Component
     public function render()
     {
         $team = Auth::user()?->currentTeamRelation;
-        $bericht = $team !== null
+        // Spec 82 §13 H: Kanon-Zuordnung, Routings und Integritäts-Bericht sind Master-Sicht; Mandanten sehen nur den Hinweis.
+        $masterGesperrt = ! \Platform\FoodAlchemist\Services\Knowledge\WissensSichtbarkeit::darfKanonLesen($team);
+        $bericht = $team !== null && ! $masterGesperrt
             ? app(WissensProfilService::class)->integritaet($team, $this->bereich !== '' ? $this->bereich : null)
             : ['keys' => 0, 'gesteuert' => 0, 'bewusst_leer' => 0, 'ungesteuert' => 0, 'fehlerhaft' => 0, 'blockierend' => 0, 'profile' => []];
 
@@ -451,7 +453,8 @@ class Wissenssteuerung extends Component
             'profile' => $profile,
             'eingestellteBudgets' => KnowledgeBudget::eingestellt(),
             'bereiche' => $bereiche,
-            'routings' => DB::table('foodalchemist_knowledge_routings')
+            'masterGesperrt' => $masterGesperrt,
+            'routings' => $masterGesperrt ? collect() : DB::table('foodalchemist_knowledge_routings')
                 ->orderBy('feature')->orderBy('category')->get(),
             // Spec 82 §13 H: nur globale Kategorien + die eigene Team-Kette, nie die Kategorien fremder Teams (wie Wissens-Kategorien).
             'kategorien' => TeamScope::applyVisible(DB::table('foodalchemist_knowledge_categories')->whereNull('deleted_at')->where('active', 1), 'team_id', $team)
@@ -459,7 +462,7 @@ class Wissenssteuerung extends Component
             // Spec 52/H2: Achsen-Bindungen sind Kanon-Zeilen mit scope='achse'. Hier erst
             // SICHTBAR — bearbeiten laeuft bis zum Kanon-Editor ueber knowledge_canon.PUT,
             // weil es einen Dossier-Waehler braucht. Das steht so auch auf der Seite.
-            'achsen' => $team !== null
+            'achsen' => $team !== null && ! $masterGesperrt
                 ? app(\Platform\FoodAlchemist\Services\Knowledge\KnowledgeCanonService::class)->achsenBindungen($team)
                 : [],
             'achsenConfig' => (array) config('foodalchemist.ai.knowledge_axis_map', []),

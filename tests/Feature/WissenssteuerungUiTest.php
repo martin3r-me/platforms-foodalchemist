@@ -23,6 +23,9 @@ uses(TestCase::class, SeedsTeamHierarchy::class, SeedsKanon::class);
  */
 beforeEach(function () {
     $this->seedTeamHierarchy();
+    // Spec 82 §13 H: Globales Wissen/Steuerung schreibt nur das Master-Team — der Test-Akteur (rootTeam) ist hier das Master-Team.
+    config(['foodalchemist.master_team_id' => $this->rootTeam->id]);
+    \Platform\FoodAlchemist\Support\MasterTeam::flush();
 
     $this->mkRouting = fn (string $feature, string $kategorie, string $mode = 'discovery') => DB::table('foodalchemist_knowledge_routings')->updateOrInsert(
         ['feature' => $feature, 'category' => $kategorie],
