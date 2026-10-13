@@ -11,12 +11,14 @@ Stand: 13.10.2026 · Vorbereitung, **noch kein Bau** · Quelle: Code (Migratione
 | **Paket „Grundeinstellungen“** | Vorlage des Masters | Master pflegt die Vorlage | **Kopie** beim Buchen, danach gehört sie dem Team (Unter-Teams erben) |
 | **Team selbst** | Zeile mit `team_id` des Teams | das Team | jedes Team baut selbst auf |
 
-**Bereits entschieden (nicht mehr abzuhaken):** Behälter, Regenerationsgeräte, Servier-Vehikel, Koch-Equipment = **Basis live** · Regeln, Wissen, KI = **Master**.
+**Bereits entschieden (nicht mehr abzuhaken):** Behälter-Katalog (`vocab_containers`), Regenerationsgeräte (`vocab_regeneration_devices`), Servier-Vehikel (`vocab_serving_vehicles`), Koch-Equipment = **Basis live** · Regeln, Wissen, KI = **Master**.
+
+> **Korrektur 13.10. (nach Gegenprüfung):** Die erste Fassung nannte `recipe_containers`/`recipe_regenerations` als Behälter-/Geräte-Kataloge. Das sind **Verknüpfungstabellen am Rezept**. Die Kataloge sind `vocab_containers`, `vocab_regeneration_devices` und `vocab_serving_vehicles` (alle schon nullable). `serving_forms` sind die **Servierformen** (Darreichung), ein eigener Katalog, `team_id` NOT NULL.
 
 ## Messung auf demo (lesend)
 
 - **Alles liegt in Team 6.** Global (`team_id` NULL) gibt es nur: `rules` (34), `terminology_*` (134 + 11), `brief_templates` (6), `knowledge_categories` (8 von 23). Ein neues Haupt-Team sieht daher fast nichts (Befund aus §13 I bestätigt).
-- **`NOT NULL` verhindert „global" ohne Migration:** `recipe_containers`, `serving_forms`, `kitchen_roles`, `production_stations`, `menu_plan_chips`, `target_groups`, `component_equivalents`, `trends` u. a. Für Basis-live muss `team_id` erst nullable werden.
+- **`NOT NULL` verhindert „global" ohne Migration:** `serving_forms`, `kitchen_roles`, `production_stations`, `menu_plan_chips`, `target_groups`, `component_equivalents`, `trends` u. a. Für Basis-live muss `team_id` erst nullable werden.
 - demo ist **hinter main**: `trend_taxonomy`, `trend_meta`, `team_profiles*`, `canvas_templates`, `taste_axes` existieren dort (noch) nicht; sie sind unten aus den Migrationen in main eingetragen.
 
 ## Die eine Frage, die den Rest bestimmt: Kopie bricht Fremdschlüssel
@@ -29,7 +31,7 @@ Master-Rezepte (Abo) und Stamm-GPs **zeigen auf IDs** dieser Tabellen. Liegt ein
 | `recipe_ingredients.unit_vocab_id`, `gps.preferred_count_unit_id` | Einheiten | Rechnen und Anzeige brechen |
 | `gps.warengruppe` (Regelwerk §3) | Warengruppen | Stamm-GPs mit Warengruppe, die das Team nicht kennt |
 | `recipe_equipment.equipment_id`, Teamprofil (`team_profile_equipment`) | Koch-Equipment | Machbarkeit zeigt ins Leere |
-| `concepts/formats/recipe_presentations.serving_form_id` | Servier-Vehikel | Konzept/Format zeigt auf unsichtbares Vehikel |
+| `concepts/formats/recipe_presentations.serving_form_id`, `recipes.serving_vehicle_vocab_id` | Servierformen, Servier-Vehikel | Konzept/Format/Rezept zeigt auf unsichtbare Zeile |
 
 **Zwei saubere Auswege** (gilt für jede „Paket"-Zeile, die von Master-Inhalt referenziert wird): **(a)** die Tabelle wird **Basis** (global, Team ergänzt) — nichts bricht; **(b)** bleibt Paket, dann braucht das **Abo-Kopieren** eine **Abbildung Master-ID → Team-ID** beim Übernehmen eines Rezepts (zusätzlicher Bauaufwand, Fehlerquelle). Vorschlag unten folgt dem Grundsatz „referenziert von Master-Inhalt ⇒ Basis".
 
@@ -46,9 +48,11 @@ Legende: **Heute** = Zeilen auf demo (Team 6 / global) · `NN` = `team_id` NOT N
 | `vocab_units` (Einheiten) | 51 · Team 6 · null | **B** | ☐ ☐ ☐ | Rechnen und Mengen aller Rezepte; Kopie bräche 9 Verweise | `recipe_ingredients`, `recipes.sales_unit_vocab_id`, `gps.preferred_count_unit_id`, `concept_slots`, `foodbook_blocks`, `offer_blocks`, `recipe_presentations`, `gp_count_unit_defaults` |
 | `gp_count_unit_defaults` | 19 · Team 6 · null | **B** | ☐ ☐ ☐ | Stückgewicht-Standards der Stamm-GPs | `vocab_units` |
 | `vocab_kitchen_equipment` (Koch-Equipment) | 40 · Team 6 · null | **B** (entschieden) | — | Teamprofil/Machbarkeit + `is_standard`-Flag (Master setzt) | `recipe_equipment`, `team_profile_equipment` |
-| `recipe_containers` (Behälter) | 40 · Team 6 · **NN** | **B** (entschieden) | — | **Migration nötig** (`team_id` nullable) | — |
-| `recipe_regenerations` (Regenerationsgeräte) | 41 · Team 6 · null | **B** (entschieden) | — | bereits nullable | — |
-| `serving_forms` (Servier-Vehikel) | 11 · Team 6 · **NN** | **B** (entschieden) | — | **Befund Lisa:** `team_id` NOT NULL → global erst nach Migration; Konzept/Format/Präsentation zeigen darauf | `concepts`, `formats`, `recipe_presentations` |
+| `vocab_containers` (Behälter-Katalog) | 59 · Team 6 · null | **B** (entschieden) | — | bereits nullable → nur Scope + Schreibrecht | `recipe_containers.container_vocab_id`, `recipes.container_warm/cold_vocab_id`, `recipe_presentations` |
+| `vocab_regeneration_devices` (Regenerationsgeräte) | 13 · Team 6 · null | **B** (entschieden) | — | bereits nullable → nur Scope + Schreibrecht | `recipe_regenerations.device_vocab_id` |
+| `vocab_serving_vehicles` (Servier-Vehikel) | 23 · Team 6 · null | **B** (entschieden) | — | bereits nullable → nur Scope + Schreibrecht | `recipes.serving_vehicle_vocab_id`, `recipe_presentations`, `tableware_items.vehicle_vocab_id` |
+| `serving_forms` (Servierformen: Darreichungs-Form) | 11 · Team 6 · **NN** | **B** | ☐ ☐ ☐ | **Befund Lisa:** `team_id` NOT NULL → global erst nach Migration; Konzept/Format/Präsentation zeigen darauf | `concepts.serving_form_id`, `formats.serving_form_id`, `recipe_presentations.serving_form_id` |
+| `recipe_containers`, `recipe_regenerations` (Verknüpfung Rezept ↔ Behälter/Gerät) | 40 · 41 · Team 6 · NN / null | **keine Einstellung** | — | **Verknüpfungstabellen am Rezept** (Zweck-Zuordnung je Rezept), keine Kataloge; sie folgen dem Rezept, nicht der Grundeinstellung | `recipes`, Katalog oben |
 | `recipe_main_groups` + `recipe_categories` (Rezept-Kategorien) | 31 + 189 · Team 6 · null | **B** *(Spec sagt P)* | ☐ ☐ ☐ | **jedes Master-Rezept trägt `category_id`**; Kopie ⇒ Abbildung nötig (siehe oben). Team ergänzt eigene Unterkategorien | `recipes.category_id` |
 | `dish_main_groups` + `dish_classes` (Gerichte-Klassen) | 20 + 61 · Team 6 · null | **B** *(Spec sagt P)* | ☐ ☐ ☐ | `recipes.dish_class_id`; Taxonomie „wie gebaut?" (Skript 269) ist FA-Logik, kein Kunden-Wunsch | `recipes.dish_class_id`, Aufschlagsklasse |
 | `markup_classes` (Aufschlags-/Preisklassen) | 8 · Team 6 · null | **P** | ☐ ☐ ☐ | Zahlen sind **Kundensache** (Marge), aber Rezepte/Gerichte-Klassen zeigen darauf; Vorschlag: Struktur Basis, **Werte** je Team überschreibbar | `recipes`, `dish_classes.default_markup_class_id`, `recipe_presentations`, `team_settings.default_markup_class_id` |
@@ -93,7 +97,7 @@ Legende: **Heute** = Zeilen auf demo (Team 6 / global) · `NN` = `team_id` NOT N
 
 ## Folgen, je nachdem was Du abhakst
 
-1. **Jede Zeile „B" mit `NN`** braucht eine Migration (`team_id` nullable machen) **plus** einen Ablauf, der die Team-6-Zeilen auf global hebt (zusammen mit dem Stamm-Umzug auf dem eigenen Server, nicht auf demo): `recipe_containers`, `serving_forms`, `component_equivalents`, optional `kitchen_roles`.
+1. **Jede Zeile „B" mit `NN`** braucht eine Migration (`team_id` nullable machen) **plus** einen Ablauf, der die Team-6-Zeilen auf global hebt (zusammen mit dem Stamm-Umzug auf dem eigenen Server, nicht auf demo): `serving_forms`, `component_equivalents` (die Kataloge `vocab_containers`, `vocab_regeneration_devices`, `vocab_serving_vehicles` sind schon nullable).
 2. **Jede Zeile „P"** braucht den Kopier-Mechanismus (Buchen per `/verwaltung`, MCP im Lockstep) und — **wenn Master-Rezepte darauf zeigen** (Kategorien, Klassen, Aufschlagsklassen) — die ID-Abbildung beim Abo.
 3. **Jede Zeile „B"** braucht in den Lese-Pfaden `applyVisible` (global + eigene Zeilen); das Muster steht (siehe Wissens-Kategorien), der Master-Schreibpfad ebenso (`WissensSichtbarkeit`-Muster für Vokabular).
 
