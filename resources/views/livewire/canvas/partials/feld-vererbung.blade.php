@@ -15,7 +15,7 @@
             <label class="inline-flex items-center gap-1.5 cursor-pointer" data-canvas-verbindlich-schalter="{{ $f['key'] }}">
                 <input type="checkbox" class="w-4 h-4 rounded accent-[var(--fa-accent)]" @checked(! empty($canvasVerbindlich[$f['key']]))
                        wire:click="verbindlichSchalten('{{ $f['key'] }}')" />
-                Für Unter-Teams verbindlich
+                {{ $canvasType === 'kunde_dna' ? 'Bleibt – unverhandelbar' : 'Für Unter-Teams verbindlich' }}
             </label>
         @endif
     </div>

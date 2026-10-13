@@ -69,8 +69,14 @@
                 </x-fa::section>
             @endif
 
+            @if($phase === 'dna')
+                <livewire:foodalchemist.projekte.kunde-dna-phase :company-id="(int) $p->crm_company_id" :key="'kdna-'.$p->crm_company_id" />
+            @endif
+
             <div data-projekt-board>
-                @if($canvasNurGruppe !== null)
+                @if($phase === 'dna')
+                    {{-- Phase 3 zeigt oben die Kunden-DNA --}}
+                @elseif($canvasNurGruppe !== null)
                     <fieldset @disabled(! $darfSchreiben) class="contents">@include('foodalchemist::livewire.canvas.partials.board')</fieldset>
                 @else
                     <x-fa::empty compact icon="heroicon-o-clock" title="{{ $phasen[$phase] }}">Die Felder dieser Phase folgen in den nächsten Schritten.</x-fa::empty>

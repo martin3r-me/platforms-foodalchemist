@@ -115,12 +115,13 @@ it('Feldgruppen sind Reiter an der Team-DNA, Zusatzfelder bringen ihren Reiter m
         ->assertSee('Nachhaltigkeit');
 });
 
-it('Andere Boards bleiben unverändert: Kunden-DNA ohne Reiter, ohne Vererbungszeile, ohne Verbindlich-Schalter', function () {
+it('Andere Boards bleiben unverändert: Kunden-DNA ohne Reiter und ohne Vererbung; seit §9 nur mit dem Bleibt-Schalter', function () {
     $firma = \Platform\Crm\Models\CrmCompany::create(['team_id' => $this->rootTeam->id, 'name' => 'Hotel Adler', 'is_active' => true]);
 
     Livewire::test(KundeDna::class)->call('firmaWaehlen', (int) $firma->id)
         ->assertSeeHtml('data-canvas-board="kunde_dna"')
-        ->assertDontSeeHtml('data-canvas-reiter')->assertDontSeeHtml('data-canvas-vererbung')->assertDontSeeHtml('data-canvas-verbindlich-schalter');
+        ->assertDontSeeHtml('data-canvas-reiter')->assertDontSee('Geerbt von')->assertDontSee('Verbindlich vom Oberteam')->assertDontSee('Für Unter-Teams verbindlich')
+        ->assertSeeHtml('data-canvas-verbindlich-schalter="kommunikation_ton"')->assertSee('Bleibt – unverhandelbar');   // Spec 82 §9
 });
 
 it('Pflegeseite: Zusatzfeld anlegen, Duplikat/Kern-Key abweisen, ausschalten, entfernen — wirkt im Board', function () {

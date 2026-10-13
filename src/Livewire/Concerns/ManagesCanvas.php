@@ -264,6 +264,10 @@ trait ManagesCanvas
     /** Verbindlich-Schalter nur im Oberteam und an der Team-DNA (Spec 82 §7). */
     public function canvasVerbindlichMoeglich(): bool
     {
+        if ($this->canvasType === 'kunde_dna') {   // Spec 82 §9: „Bleibt – unverhandelbar“ — wer die Kunden-DNA pflegen darf (Kuratieren)
+            return app(\Platform\FoodAlchemist\Services\FaRechte::class)->darf(Auth::user(), $this->canvasTeam(), \Platform\FoodAlchemist\Enums\FaRolle::Kuratieren);
+        }
+
         return $this->canvasType === 'food_dna' && $this->canvasOwnerType === 'team' && $this->canvasTeam()->parent_team_id === null;
     }
 
@@ -299,9 +303,13 @@ trait ManagesCanvas
     {
         $svc = app(CanvasService::class);
         try {
-            $svc->pruefeVerbindlichSetzen($this->canvasTeam(), Auth::user());
-            if ($this->canvasType !== 'food_dna') {
-                throw new \RuntimeException('Verbindlich gibt es nur an der Team-DNA.');
+            if ($this->canvasType === 'kunde_dna') {
+                app(\Platform\FoodAlchemist\Services\FaRechte::class)->pruefe(Auth::user(), $this->canvasTeam(), \Platform\FoodAlchemist\Enums\FaRolle::Kuratieren, 'Kunden-DNA: Bleibt setzen');
+            } else {
+                $svc->pruefeVerbindlichSetzen($this->canvasTeam(), Auth::user());
+                if ($this->canvasType !== 'food_dna') {
+                    throw new \RuntimeException('Verbindlich gibt es nur an der Team-DNA und an der Kunden-DNA.');
+                }
             }
             $hinweis = $fn($svc->canvasFor($this->canvasTeam(), $this->canvasType, $this->canvasOwnerType, $this->canvasOwnerId));
             if ($hinweis !== null) {
