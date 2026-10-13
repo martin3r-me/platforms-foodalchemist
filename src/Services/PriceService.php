@@ -28,27 +28,131 @@ class PriceService
             ->whereIn('status', ['0', '2']);
     }
 
-    /** §3.3: aktiver Preis = NEUESTE aktive Zeile (valid_to DESC, Tiebreak id DESC). */
-    public function activeFor(int $supplierItemId): ?FoodAlchemistPrice
+    /**
+     * Spec 82 §3 Stufe 3a: welche Preiszeilen ein Team sieht und in welcher Rangfolge.
+     *
+     * - MIT Team: eigenes Team → Vorfahren (Kettenreihenfolge) → global (team_id NULL).
+     *   Die Team-Stufe schlägt das Alter: ein älterer Preis des eigenen Teams gewinnt gegen
+     *   einen neueren Listenpreis. Erst innerhalb einer Stufe gilt die Aktiv-Ordnung.
+     * - OHNE Team: nur der Listenpreis = team_id NULL oder team_id = Besitzer-Team des Artikels.
+     *   So rutscht kein Mandantenpreis in globale Werte (globales Rezept, Lead-Wahl, Reports).
+     *   Bis Spec 82 galt immer price.team_id = item.team_id (gemessen 13.10.: 221.592/221.592),
+     *   deshalb ist das ohne Mandantenpreise bitgleich zum alten Verhalten.
+     *
+     * Hängt Bedingung + Rang-Ordnung an; die Aktiv-Ordnung (orderAktiv) kommt danach.
+     */
+    public function preisSichtFuer(Builder $query, ?Team $team): Builder
     {
-        return $this->scopeAktiv(FoodAlchemistPrice::query())
-            ->where('supplier_item_id', $supplierItemId)
-            ->orderByRaw('valid_to IS NULL DESC') // NULL = unbefristet = AKTUELL gültig, rankt VOR datierten (Append-only: alte Zeile wird gestempelt) — engine-agnostisch (07 §7); Realdaten: 108.310/111.543 aktive Zeilen sind NULL
-            ->orderByDesc('valid_to')
-            ->orderByDesc('id')
-            ->first();
+        $col = 'foodalchemist_prices.team_id';
+
+        if ($team === null) {
+            return $this->nurListenpreis($query)
+                ->orderByRaw("{$col} IS NULL ASC"); // Besitzer-Listenpreis vor globalem
+        }
+
+        $kette = self::preisKette($team);                          // Leitplanke b: endet an der Kundengrenze
+        $sichtbar = FoodAlchemistPrice::teamAncestryIds($team);   // Artikel-Sichtbarkeit (Scope-Kette)
+        $besitzer = self::BESITZER_SQL;
+
+        // Erlaubt sind:
+        //  1. global (team_id NULL) — rankt zuletzt;
+        //  2. Teampreise der Kette bis zur Kundengrenze, aber nur DATUMS-AKTIV (Leitplanke a):
+        //     ein abgelaufener Teampreis schlägt keinen Listenpreis;
+        //  3. der Listenpreis des Besitzer-Teams — nur wenn der Betrachter den Artikel sehen darf
+        //     (Besitzer in der Scope-Kette, Leitplanke c), sonst sickerte ein fremder Mandant durch.
+        //     Für den Listenpreis gilt die alte Aktiv-Regel unverändert (auch gestempelte Zeilen).
+        $inKette = implode(',', array_fill(0, count($kette), '?'));
+        $inSicht = implode(',', array_fill(0, count($sichtbar), '?'));
+        $query->where(function (Builder $w) use ($col, $kette, $sichtbar, $besitzer, $inKette, $inSicht) {
+            $w->whereNull($col)
+                ->orWhereRaw("({$col} IN ({$inKette}) AND ({$col} = {$besitzer} OR foodalchemist_prices.valid_to IS NULL OR foodalchemist_prices.valid_to >= ?))",
+                    [...$kette, now()->toDateTimeString()])
+                ->orWhereRaw("({$col} IN ({$inSicht}) AND {$col} = {$besitzer})", $sichtbar);
+        });
+
+        // Rang: Kette in Reihenfolge (eigenes Team zuerst), dann Besitzer-Listenpreis jenseits
+        // der Kette, dann global.
+        $faelle = implode(' ', array_fill(0, count($kette), 'WHEN ? THEN ?'));
+        $bindings = [];
+        foreach ($kette as $rang => $teamId) {
+            array_push($bindings, $teamId, $rang);
+        }
+
+        return $query->orderByRaw(
+            "CASE WHEN {$col} IS NULL THEN ? ELSE (CASE {$col} {$faelle} ELSE ? END) END",
+            [count($kette) + 1, ...$bindings, count($kette)],
+        );
+    }
+
+    /** Korrelierte Besitzer-Spalte des Artikels einer Preiszeile (für Listenpreis-Regeln). */
+    private const BESITZER_SQL = '(SELECT si_lp.team_id FROM foodalchemist_supplier_items si_lp WHERE si_lp.id = foodalchemist_prices.supplier_item_id)';
+
+    /**
+     * Spec 82 3a, Leitplanke b: Preis-Kette = Team-Kette aufwärts, endet am Kunden-Hauptteam
+     * (dieselbe Grenze wie {@see FaRechte::kundenHauptTeam}: das Team direkt unter dem
+     * Master-Team; das Master-Team selbst sieht nur sich). Nie das Master-Team oder darüber.
+     *
+     * @return list<int>
+     */
+    public static function preisKette(Team $team): array
+    {
+        $kette = FoodAlchemistPrice::teamAncestryIds($team);
+        $master = config('foodalchemist.master_team_id');
+        if ($master === null || $master === '') {
+            return $kette;
+        }
+        $pos = array_search((int) $master, $kette, true);
+
+        return match (true) {
+            $pos === false => $kette,
+            $pos === 0 => [$kette[0]],
+            default => array_slice($kette, 0, $pos),
+        };
+    }
+
+    /**
+     * Spec 82 3a: nur Listenpreis-Zeilen (team_id NULL oder = Besitzer-Team des Artikels) —
+     * die Regel „ohne Team" für Stellen, die Preise roh oder als EXISTS lesen und in globale
+     * Zahlen/Reports einfließen (Lead-Ampel, Favoriten, Money-Truth …). $alias = Tabellenname
+     * bzw. Alias der Preis-Tabelle in der Query. Geht für Eloquent- und Query-Builder.
+     *
+     * @template T of Builder|\Illuminate\Database\Query\Builder
+     * @param  T  $query
+     * @return T
+     */
+    public function nurListenpreis(Builder|\Illuminate\Database\Query\Builder $query, string $alias = 'foodalchemist_prices'): Builder|\Illuminate\Database\Query\Builder
+    {
+        $besitzer = "(SELECT si_lp.team_id FROM foodalchemist_supplier_items si_lp WHERE si_lp.id = {$alias}.supplier_item_id)";
+
+        return $query->where(fn ($w) => $w->whereNull("{$alias}.team_id")->orWhereRaw("{$alias}.team_id = {$besitzer}"));
+    }
+
+    /** Aktiv-Ordnung §3.3 innerhalb einer Stufe: unbefristet zuerst, dann valid_to DESC, Tiebreak id DESC. */
+    private function orderAktiv(Builder $query): Builder
+    {
+        return $query
+            ->orderByRaw('foodalchemist_prices.valid_to IS NULL DESC') // NULL = unbefristet = AKTUELL gültig, rankt VOR datierten (Append-only: alte Zeile wird gestempelt) — engine-agnostisch (07 §7); Realdaten: 108.310/111.543 aktive Zeilen sind NULL
+            ->orderByDesc('foodalchemist_prices.valid_to')
+            ->orderByDesc('foodalchemist_prices.id');
+    }
+
+    /** §3.3: aktiver Preis = NEUESTE aktive Zeile der höchsten sichtbaren Team-Stufe (Spec 82 3a, siehe preisSichtFuer). */
+    public function activeFor(int $supplierItemId, ?Team $team = null): ?FoodAlchemistPrice
+    {
+        $q = $this->scopeAktiv(FoodAlchemistPrice::query())
+            ->where('foodalchemist_prices.supplier_item_id', $supplierItemId);
+
+        return $this->orderAktiv($this->preisSichtFuer($q, $team))->first();
     }
 
     /** Subquery für Listen-Spalten (EK je Artikel) — gleiche Regel wie activeFor(). $outerColumn = Spalte der äußeren Query (bei Alias z. B. 'i.id'). */
-    public function activePriceSubquery(string $outerColumn = 'foodalchemist_supplier_items.id'): Builder
+    public function activePriceSubquery(string $outerColumn = 'foodalchemist_supplier_items.id', ?Team $team = null): Builder
     {
-        return $this->scopeAktiv(FoodAlchemistPrice::query())
-            ->select('price')
-            ->whereColumn('foodalchemist_prices.supplier_item_id', $outerColumn)
-            ->orderByRaw('valid_to IS NULL DESC')
-            ->orderByDesc('valid_to')
-            ->orderByDesc('id')
-            ->limit(1);
+        $q = $this->scopeAktiv(FoodAlchemistPrice::query())
+            ->select('foodalchemist_prices.price')
+            ->whereColumn('foodalchemist_prices.supplier_item_id', $outerColumn);
+
+        return $this->orderAktiv($this->preisSichtFuer($q, $team))->limit(1);
     }
 
     /**
@@ -64,24 +168,29 @@ class PriceService
      * @param array<int> $itemIds
      * @return array<int, array{aktuell: float, vorher: float, delta_pct: float, plausibel: bool}>
      */
-    public function preisTrendBulk(array $itemIds): array
+    public function preisTrendBulk(array $itemIds, ?Team $team = null): array
     {
         $itemIds = array_values(array_unique(array_map('intval', $itemIds)));
         if ($itemIds === []) {
             return [];
         }
 
-        $rows = $this->scopeAktiv(FoodAlchemistPrice::query())
-            ->whereIn('supplier_item_id', $itemIds)
-            ->orderBy('supplier_item_id')
-            ->orderByRaw('valid_to IS NULL DESC')
-            ->orderByDesc('valid_to')
-            ->orderByDesc('id')
-            ->get(['supplier_item_id', 'price']);
+        $q = $this->scopeAktiv(FoodAlchemistPrice::query())
+            ->whereIn('foodalchemist_prices.supplier_item_id', $itemIds)
+            ->orderBy('foodalchemist_prices.supplier_item_id');
+        $rows = $this->orderAktiv($this->preisSichtFuer($q, $team))
+            ->get(['foodalchemist_prices.supplier_item_id', 'foodalchemist_prices.price', 'foodalchemist_prices.team_id']);
 
+        // Spec 82 3a: Trend nur innerhalb der Team-Stufe, die den aktuellen Preis stellt —
+        // sonst wäre „Mandantenpreis vs. Listenpreis" ein Scheinsprung.
         $proItem = [];
+        $stufe = [];
         foreach ($rows as $r) {
-            $proItem[(int) $r->supplier_item_id][] = (float) $r->price;
+            $id = (int) $r->supplier_item_id;
+            $stufe[$id] ??= $r->team_id;
+            if ($r->team_id === $stufe[$id]) {
+                $proItem[$id][] = (float) $r->price;
+            }
         }
 
         $out = [];
@@ -100,14 +209,15 @@ class PriceService
         return $out;
     }
 
-    /** Historie eines LA (alle Zeilen, neueste zuerst) inkl. abgeleiteter Kategorie (I2). */
-    public function historyFor(int $supplierItemId): Collection
+    /**
+     * Historie eines LA (alle für das Team sichtbaren Zeilen, Rang-Stufe zuerst, darin neueste
+     * zuerst) inkl. abgeleiteter Kategorie (I2). Ohne Team: nur Listenpreis-Zeilen (Spec 82 3a).
+     */
+    public function historyFor(int $supplierItemId, ?Team $team = null): Collection
     {
-        return FoodAlchemistPrice::query()
-            ->where('supplier_item_id', $supplierItemId)
-            ->orderByRaw('valid_to IS NULL DESC')
-            ->orderByDesc('valid_to')
-            ->orderByDesc('id')
+        $q = FoodAlchemistPrice::query()->where('foodalchemist_prices.supplier_item_id', $supplierItemId);
+
+        return $this->orderAktiv($this->preisSichtFuer($q, $team))
             ->get()
             ->each(fn ($p) => $p->setAttribute(
                 'category',
@@ -118,13 +228,52 @@ class PriceService
     /**
      * M2-08 / P-6: „+ Neuer Preis schließt Vorgänger" — Append-only (GL-11 §3.3 Historie):
      * der bisher aktive Preis bekommt valid_to = jetzt, die neue Zeile ist unbefristet (NULL)
-     * und damit sofort aktiv. Nur Besitzer-Team des LA (D1).
+     * und damit sofort aktiv. Nur Besitzer-Team des LA (D1) — das ist der LISTENPREIS.
+     * Mandantenpreise an fremden/globalen Artikeln: {@see createTeamPrice()}.
      */
     public function createFor(Team $team, FoodAlchemistSupplierItem $item, float $preis, string $status = '0'): FoodAlchemistPrice
     {
         if (! $item->isOwnedBy($team)) {
             throw new \RuntimeException('Geerbter Katalog-Artikel: Preise pflegt nur das Besitzer-Team.');
         }
+
+        return $this->schreibeTeamZeile($team, $item, $preis, $status);
+    }
+
+    /**
+     * Spec 82 §3 Stufe 3a: Preis eines Teams (Mandant) an einem Artikel, den es sieht, aber
+     * nicht besitzen muss (Stamm-/Katalogartikel). Die Zeile trägt IMMER die team_id des
+     * schreibenden Teams — nie eine fremde. Der Listenpreis des Besitzers bleibt unberührt;
+     * geschlossen wird nur der eigene Vorgänger desselben Teams. Ist das Team selbst
+     * Besitzer, ist es der Listenpreis (= createFor). Aufrufer u. a. Preislisten-Import (§3).
+     */
+    public function createTeamPrice(Team $team, FoodAlchemistSupplierItem $item, float $preis, string $status = '0'): FoodAlchemistPrice
+    {
+        if ($item->isOwnedBy($team)) {
+            return $this->createFor($team, $item, $preis, $status);
+        }
+        if (! self::darfTeampreisSchreiben($team)) {
+            throw new \RuntimeException('Unter-Teams erben die Preise ihres Oberteams — eigene Preise je Unter-Team gibt es nicht (Spec 82 §3).');
+        }
+        if (! FoodAlchemistSupplierItem::visibleToTeam($team)->whereKey($item->id)->exists()) {
+            throw new \RuntimeException('Artikel ist für dieses Team nicht sichtbar — kein Preis möglich.');
+        }
+
+        return $this->schreibeTeamZeile($team, $item, $preis, $status);
+    }
+
+    /**
+     * Spec 82 §3 / Leitplanke e: Teampreise schreibt nur das Kunden-Hauptteam (Oberteam bzw.
+     * Mandant ohne Eltern). Unter-Teams erben, sie schreiben keine eigenen Preise.
+     */
+    public static function darfTeampreisSchreiben(Team $team): bool
+    {
+        return count(self::preisKette($team)) === 1;
+    }
+
+    /** Gemeinsamer Schreibweg: Validierung, eigenen Vorgänger schließen, Zeile mit team_id = $team. */
+    private function schreibeTeamZeile(Team $team, FoodAlchemistSupplierItem $item, float $preis, string $status): FoodAlchemistPrice
+    {
         if ($preis < 0) {
             throw new \RuntimeException('Negative Preise sind Service-Zuschläge und lassen sich nicht von Hand anlegen.');
         }
@@ -133,7 +282,10 @@ class PriceService
         }
 
         return DB::transaction(function () use ($team, $item, $preis, $status) {
-            $this->activeFor($item->id)?->update(['valid_to' => now()]); // schließt Vorgänger
+            $vorgaenger = $this->scopeAktiv(FoodAlchemistPrice::query())
+                ->where('foodalchemist_prices.supplier_item_id', $item->id)
+                ->where('foodalchemist_prices.team_id', $team->id);       // nur den EIGENEN Vorgänger schließen
+            $this->orderAktiv($vorgaenger)->first()?->update(['valid_to' => now()]);
 
             return FoodAlchemistPrice::create([
                 'team_id' => $team->id,
@@ -147,25 +299,40 @@ class PriceService
         });
     }
 
-    /** M2-08: Preiszeile löschen — nur Besitzer-Team des LA. */
-    public function deleteFor(Team $team, FoodAlchemistSupplierItem $item, int $priceId): void
+    /**
+     * Darf $team Preiszeilen an $item pflegen? Besitzer immer (Listenpreis), sonst nur, wenn der
+     * Artikel sichtbar ist (Mandantenpreis, Spec 82 3a). Welche ZEILE, entscheidet der Aufrufer:
+     * immer nur die mit team_id = $team (nie fremde Mandanten- oder Listenpreise).
+     */
+    private function pruefePreisPflege(Team $team, FoodAlchemistSupplierItem $item): void
     {
-        if (! $item->isOwnedBy($team)) {
+        if (! $item->isOwnedBy($team) && ! FoodAlchemistSupplierItem::visibleToTeam($team)->whereKey($item->id)->exists()) {
             throw new \RuntimeException('Geerbter Katalog-Artikel: Preise pflegt nur das Besitzer-Team.');
         }
-        FoodAlchemistPrice::where('supplier_item_id', $item->id)->whereKey($priceId)->firstOrFail()->delete();
+    }
+
+    /** M2-08: Preiszeile löschen — nur eine Zeile des eigenen Teams (Spec 82 3a: nie fremde Mandantenpreise). */
+    public function deleteFor(Team $team, FoodAlchemistSupplierItem $item, int $priceId): void
+    {
+        $this->pruefePreisPflege($team, $item);
+        $price = FoodAlchemistPrice::where('supplier_item_id', $item->id)->where('team_id', $team->id)
+            ->whereKey($priceId)->first();
+        if ($price === null) {
+            throw new \RuntimeException('Preis-Eintrag nicht an diesem Artikel gefunden.');
+        }
+        $price->delete();
     }
 
     /**
-     * Preiszeile bearbeiten (MVP: vorher inline in ItemModal::preisUpdate). Nur Besitzer-Team;
-     * Whitelist price/valid_to/note; setzt change_date. RuntimeException wenn nicht am Artikel.
+     * Preiszeile bearbeiten (MVP: vorher inline in ItemModal::preisUpdate). Nur eine Zeile des
+     * eigenen Teams (Spec 82 3a); Whitelist price/valid_to/note; setzt change_date.
+     * RuntimeException wenn nicht am Artikel bzw. nicht vom eigenen Team.
      */
     public function updatePrice(Team $team, FoodAlchemistSupplierItem $item, int $priceId, array $felder): FoodAlchemistPrice
     {
-        if (! $item->isOwnedBy($team)) {
-            throw new \RuntimeException('Geerbter Katalog-Artikel: Preise pflegt nur das Besitzer-Team.');
-        }
-        $price = FoodAlchemistPrice::where('supplier_item_id', $item->id)->whereKey($priceId)->first();
+        $this->pruefePreisPflege($team, $item);
+        $price = FoodAlchemistPrice::where('supplier_item_id', $item->id)->where('team_id', $team->id)
+            ->whereKey($priceId)->first();
         if ($price === null) {
             throw new \RuntimeException('Preis-Eintrag nicht an diesem Artikel gefunden.');
         }
@@ -202,7 +369,7 @@ class PriceService
 
         $spruenge = collect();
         foreach ($mehrfach as $itemId) {
-            $zeilen = $this->historyFor($itemId)->filter(fn ($p) => $p->price !== null && (float) $p->price > 0)->values();
+            $zeilen = $this->historyFor($itemId, $team)->filter(fn ($p) => $p->price !== null && (float) $p->price > 0)->values();
             for ($i = 0; $i < $zeilen->count() - 1; $i++) {
                 $neu = (float) $zeilen[$i]->price;
                 $alt = (float) $zeilen[$i + 1]->price;
@@ -222,7 +389,7 @@ class PriceService
             ->whereNull('i.deleted_at')->whereNull('s.deleted_at')
             ->whereNotNull('i.qty')->where('i.qty', '>', 0)->whereNotNull('i.unit_code')
             ->select(['i.id', 'i.designation', 'i.qty', 'i.unit_code', 'sup.name AS lieferant', 'g.commodity_group_code AS wg'])
-            ->selectSub($this->activePriceSubquery('i.id')->toBase(), 'aktiver_preis')
+            ->selectSub($this->activePriceSubquery('i.id', $team)->toBase(), 'aktiver_preis')
             ->get()
             ->filter(fn ($i) => $i->aktiver_preis !== null && (float) $i->aktiver_preis > 0)
             ->map(function ($i) {

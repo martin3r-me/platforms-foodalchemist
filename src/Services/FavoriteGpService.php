@@ -68,7 +68,8 @@ class FavoriteGpService
                 'lead_supplier_id',
             )
             ->selectSub(
-                DB::table('foodalchemist_prices AS p')
+                // Spec 82 3a: „hat Preis" am globalen Lead = Listenpreis-Zeilen.
+                app(PriceService::class)->nurListenpreis(DB::table('foodalchemist_prices AS p'), 'p')
                     ->whereColumn('p.supplier_item_id', 'g.lead_la_supplier_item_id')->whereNull('p.deleted_at')
                     ->selectRaw('COUNT(*)'),
                 'price_rows',
@@ -149,7 +150,8 @@ class FavoriteGpService
                 'lead_supplier_id',
             )
             ->selectSub(
-                DB::table('foodalchemist_prices AS p')
+                // Spec 82 3a: „hat Preis" am globalen Lead = Listenpreis-Zeilen.
+                app(PriceService::class)->nurListenpreis(DB::table('foodalchemist_prices AS p'), 'p')
                     ->whereColumn('p.supplier_item_id', 'g.lead_la_supplier_item_id')->whereNull('p.deleted_at')
                     ->selectRaw('COUNT(*)'),
                 'price_rows',

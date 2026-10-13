@@ -2031,7 +2031,7 @@ class PairingService
         if ($leadLaId === null) {
             return null;
         }
-        $p = DB::table('foodalchemist_prices')
+        $p = app(PriceService::class)->nurListenpreis(DB::table('foodalchemist_prices'))   // Spec 82 3a
             ->where('supplier_item_id', $leadLaId)->whereNull('valid_to')->whereNull('deleted_at')
             ->orderByDesc('id')->value('price');
 

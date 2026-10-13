@@ -6,10 +6,11 @@ use Platform\Core\Contracts\ToolContract;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolMetadataContract;
 use Platform\Core\Contracts\ToolResult;
+use Platform\FoodAlchemist\Models\FoodAlchemistPrice;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem;
 use Platform\FoodAlchemist\Services\PriceService;
 
-/** MCP-Steuerbarkeit · D4: Preis-Eintrag eines team-eigenen Lieferantenartikels bearbeiten. */
+/** MCP-Steuerbarkeit · D4: eigenen Preis-Eintrag (team_id = Team) eines sichtbaren Lieferantenartikels bearbeiten (Spec 82 3a). */
 class ArtikelPreisePutTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
 {
     public function getName(): string
@@ -19,7 +20,7 @@ class ArtikelPreisePutTool extends FoodAlchemistTool implements ToolContract, To
 
     public function getDescription(): string
     {
-        return 'Bearbeitet einen Preis-Eintrag eines team-eigenen Lieferantenartikels. felder: price (≥0), valid_to, note.';
+        return 'Bearbeitet einen eigenen Preis-Eintrag des Teams an einem sichtbaren Lieferantenartikel (Listenpreis des Besitzers oder Teampreis). Fremde und globale Preise sind gesperrt. felder: price (≥0), valid_to, note.';
     }
 
     public function getSchema(): array
@@ -27,7 +28,7 @@ class ArtikelPreisePutTool extends FoodAlchemistTool implements ToolContract, To
         return [
             'type' => 'object',
             'properties' => [
-                'id' => ['type' => 'integer', 'description' => 'Artikel-Id (team-eigen).'],
+                'id' => ['type' => 'integer', 'description' => 'Artikel-Id (für das Team sichtbar).'],
                 'price_id' => ['type' => 'integer', 'description' => 'Preis-Id.'],
                 'felder' => ['type' => 'object', 'description' => 'price, valid_to, note.'],
             ],
@@ -50,8 +51,11 @@ class ArtikelPreisePutTool extends FoodAlchemistTool implements ToolContract, To
         if ($item === null) {
             return ToolResult::error('Artikel nicht sichtbar/vorhanden.', 'NOT_FOUND');
         }
-        if (! $item->isOwnedBy($team)) {
-            return ToolResult::error('Geerbter Katalog-Artikel — nur fürs Besitzer-Team.', 'ACCESS_DENIED');
+        // Spec 82 3a: Preiszeilen gehören dem Team, das sie geschrieben hat — nie fremde ändern.
+        $fremd = FoodAlchemistPrice::where('supplier_item_id', $item->id)->whereKey((int) ($arguments['price_id'] ?? 0))
+            ->where(fn ($w) => $w->whereNull('team_id')->orWhere('team_id', '!=', $team->id))->exists();
+        if ($fremd) {
+            return ToolResult::error('Preis-Eintrag gehört einem anderen Team (oder ist global) — nur eigene Preise sind änderbar.', 'ACCESS_DENIED');
         }
 
         try {

@@ -193,7 +193,7 @@ class IngredientEditor extends Component
         }
         $preise = app(PriceService::class);
 
-        return app(GpService::class)->lasForGp($gp)
+        return app(GpService::class)->lasForGp($gp, $team)
             ->map(function ($la) use ($gp, $preise) {
                 $preis = $la->price?->price !== null ? (float) $la->price->price : null;
                 $vergleich = $la->item !== null ? $preise->vergleichspreis($la->item, $preis) : null;
@@ -370,7 +370,7 @@ class IngredientEditor extends Component
             ->get(['id', 'name', 'condition', 'lead_la_supplier_item_id', 'piece_default_g', 'team_id']);
         // Performance: 30× preisProGrammPublic wären ~60 Queries je Tipper — stattdessen EINE
         // Bulk-Query (Ø €/g über aktive kg/l-LAs). Der präzise Lead-Wert kommt beim Parken nach.
-        $aktiverPreis = app(PriceService::class)->activePriceSubquery()->toBase();
+        $aktiverPreis = app(PriceService::class)->activePriceSubquery('foodalchemist_supplier_items.id', $team)->toBase(); // Spec 82 3a
         $stueckGJeGp = $gpModels->filter(fn ($gp) => $gp->piece_default_g !== null && (float) $gp->piece_default_g > 0)
             ->mapWithKeys(fn ($gp) => [(int) $gp->id => (float) $gp->piece_default_g]);
         // Preis-Vorschau nur über team-sichtbare LAs (eigenes Team + Master-Kette + globaler Seed) —

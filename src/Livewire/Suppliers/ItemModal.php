@@ -215,7 +215,9 @@ class ItemModal extends Component
 
     public function preisBearbeiten(int $priceId): void
     {
-        $p = \Platform\FoodAlchemist\Models\FoodAlchemistPrice::where('supplier_item_id', $this->itemId)->find($priceId);
+        // Spec 82 3a: bearbeitbar ist nur eine Zeile des eigenen Teams (nie fremde Mandanten-/Listenpreise).
+        $p = \Platform\FoodAlchemist\Models\FoodAlchemistPrice::where('supplier_item_id', $this->itemId)
+            ->where('team_id', $this->team()?->id)->find($priceId);
         if ($p === null) {
             return;
         }
@@ -241,11 +243,17 @@ class ItemModal extends Component
 
             return;
         }
-        app(PriceService::class)->updatePrice($this->team(), $this->item($this->itemId), $this->preisEditId, [
-            'price' => (float) $preis,
-            'valid_to' => $this->preisEdit['valid_to'] !== '' ? $this->preisEdit['valid_to'] . ' 23:59:59' : null,
-            'note' => trim($this->preisEdit['note']) ?: null,
-        ]);
+        try {
+            app(PriceService::class)->updatePrice($this->team(), $this->item($this->itemId), $this->preisEditId, [
+                'price' => (float) $preis,
+                'valid_to' => $this->preisEdit['valid_to'] !== '' ? $this->preisEdit['valid_to'] . ' 23:59:59' : null,
+                'note' => trim($this->preisEdit['note']) ?: null,
+            ]);
+        } catch (RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+
+            return;
+        }
         $this->preisEditId = null;
         $this->fehler = null;
     }
@@ -366,13 +374,14 @@ class ItemModal extends Component
     public function render(PriceService $preise)
     {
         $item = $this->itemId !== null ? $this->item($this->itemId) : null;
-        $aktiv = $item !== null ? $preise->activeFor($item->id) : null;
+        $team = Auth::user()?->currentTeamRelation;                  // Spec 82 3a: Preis-Sicht des Teams
+        $aktiv = $item !== null ? $preise->activeFor($item->id, $team) : null;
 
         return view('foodalchemist::livewire.suppliers.item-modal', [
             'sperr' => $this->sperrZustand(),   // Spec 65
             'item' => $item,
             'darfEdit' => $item !== null && Curate::canCurate(Auth::user(), $item),
-            'historie' => $item !== null ? $preise->historyFor($item->id) : collect(),
+            'historie' => $item !== null ? $preise->historyFor($item->id, $team) : collect(),
             'allergenLabels' => FoodAlchemistItemAllergen::ALLERGENE,
             'naehrwertFelder' => SupplierItemService::NAEHRWERT_FELDER,
             'deklarationLabels' => FoodAlchemistItemDeclaration::STOFFE,

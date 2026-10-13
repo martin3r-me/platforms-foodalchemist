@@ -244,7 +244,8 @@ class SignalDetektorService
         $leadIds = $leads->values()->map(fn ($v) => (int) $v)->unique()->all();
 
         // nur Lead-LAs mit kürzlicher Preisänderung (Vorgänger-Zeile jüngst geschlossen)
-        $recent = DB::table('foodalchemist_prices')
+        // Spec 82 3a: Lead-Signale sind global → nur Listenpreis-Zeilen (Trend unten ebenso ohne Team).
+        $recent = app(PriceService::class)->nurListenpreis(DB::table('foodalchemist_prices'))
             ->whereIn('supplier_item_id', $leadIds)->whereNull('deleted_at')
             ->whereNotNull('valid_to')->where('valid_to', '>=', $cutoff)
             ->distinct()->pluck('supplier_item_id')->map(fn ($v) => (int) $v)->flip();
@@ -605,6 +606,7 @@ class SignalDetektorService
             ->join('foodalchemist_supplier_items as i', 'i.id', '=', 'g.lead_la_supplier_item_id')
             ->leftJoin('foodalchemist_prices as p', function ($j) {
                 $j->on('p.supplier_item_id', '=', 'i.id')->whereNull('p.deleted_at');
+                app(PriceService::class)->nurListenpreis($j, 'p');   // Spec 82 3a: Frische des globalen Lead-Listenpreises
             })
             ->whereNotNull('g.lead_la_supplier_item_id')
             ->whereNull('g.deleted_at')

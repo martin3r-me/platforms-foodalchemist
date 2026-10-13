@@ -476,7 +476,7 @@ class InventurService
             return null;
         }
         $item = FoodAlchemistSupplierItem::find($supplierItemId);
-        $price = $item !== null ? app(PriceService::class)->activeFor($item->id) : null;
+        $price = $item !== null ? app(PriceService::class)->activeFor($item->id, $team) : null; // Spec 82 3a
         if ($item === null || $price === null || (float) $item->qty <= 0) {
             return null;
         }

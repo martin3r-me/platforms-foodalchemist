@@ -1753,7 +1753,8 @@ class DataQualityService
      */
     private function aktivPreisFuerLead(): \Illuminate\Database\Eloquent\Builder
     {
-        return $this->preise->scopeAktiv(FoodAlchemistPrice::query())
+        // Spec 82 3a: Lead-Ampel ist global → nur Listenpreis (kein Mandantenpreis versorgt den Stamm-Lead).
+        return $this->preise->nurListenpreis($this->preise->scopeAktiv(FoodAlchemistPrice::query()))
             ->select(DB::raw(1))
             ->whereColumn('foodalchemist_prices.supplier_item_id', 'foodalchemist_gps.lead_la_supplier_item_id')
             ->where('foodalchemist_prices.price', '>', 0);
@@ -1800,7 +1801,8 @@ class DataQualityService
      */
     private function aktivPreisFuer(string $itemSpalte): \Illuminate\Database\Eloquent\Builder
     {
-        return $this->preise->scopeAktiv(FoodAlchemistPrice::query())
+        // Spec 82 3a: wie aktivPreisFuerLead() nur Listenpreis.
+        return $this->preise->nurListenpreis($this->preise->scopeAktiv(FoodAlchemistPrice::query()))
             ->select(DB::raw(1))
             ->whereColumn('foodalchemist_prices.supplier_item_id', $itemSpalte)
             ->where('foodalchemist_prices.price', '>', 0);

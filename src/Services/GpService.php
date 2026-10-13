@@ -171,15 +171,15 @@ class GpService
      * Aktiver Preis = neueste nicht-blockierte Zeile (valid_to DESC, id DESC) — GL-11-Soll
      * „einheitlich aktiver_preis()" (A-2-Vereinheitlichung); Kategorisierung T1 folgt in D-2.
      */
-    public function lasForGp(FoodAlchemistGp $gp): \Illuminate\Support\Collection
+    public function lasForGp(FoodAlchemistGp $gp, ?Team $team = null): \Illuminate\Support\Collection
     {
         return $gp->structures()
             ->with(['item.supplier'])
             ->get()
-            ->map(function ($structure) {
+            ->map(function ($structure) use ($team) {
                 $item = $structure->item;
                 // M2-04: Aktiv-Preis-Regel zentral im PriceService (GL-11 §3.3 — eine Stelle!)
-                $price = $item !== null ? app(PriceService::class)->activeFor($item->id) : null;
+                $price = $item !== null ? app(PriceService::class)->activeFor($item->id, $team) : null; // Spec 82 3a
 
                 return (object) [
                     'structure' => $structure,
@@ -302,7 +302,7 @@ class GpService
         $q = $this->browserQuery($team, $filters)
             ->leftJoin('foodalchemist_supplier_items AS lead', 'lead.id', '=', 'foodalchemist_gps.lead_la_supplier_item_id')
             ->select('foodalchemist_gps.*', 'lead.qty AS lead_qty', 'lead.unit_code AS lead_unit_code')
-            ->selectSub(app(PriceService::class)->activePriceSubquery('lead.id')->toBase(), 'lead_preis')
+            ->selectSub(app(PriceService::class)->activePriceSubquery('lead.id', $team)->toBase(), 'lead_preis') // Spec 82 3a
             ->with('commodity_group')
             ->orderBy('foodalchemist_gps.name');
 

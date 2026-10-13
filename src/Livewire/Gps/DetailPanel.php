@@ -528,7 +528,7 @@ class DetailPanel extends Component
             'leadSteuerung' => $leadSteuerung,
             'preisBand' => $this->preisBand($kette, $effektiverLeadId),
             'preisTrend' => $kette !== null
-                ? app(\Platform\FoodAlchemist\Services\PriceService::class)->preisTrendBulk($kette->pluck('id')->all())
+                ? app(\Platform\FoodAlchemist\Services\PriceService::class)->preisTrendBulk($kette->pluck('id')->all(), $team)
                 : [],
             // Ersatz-Logik: Äquivalenzen dieses GP + Such-Kandidaten fürs Verknüpfen
             'ersatz' => $gp !== null && $team !== null && $brauchtErsatz

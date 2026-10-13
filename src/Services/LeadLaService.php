@@ -588,7 +588,14 @@ class LeadLaService
 
     // ── intern ───────────────────────────────────────────────────────────
 
-    /** Kandidaten-Menge (I2): alle LAs mit struktur.gp_id == gp, inkl. Preis-Annotation. */
+    /**
+     * Kandidaten-Menge (I2): alle LAs mit struktur.gp_id == gp, inkl. Preis-Annotation.
+     *
+     * Spec 82 Stufe 3a — bewusst OHNE Team: der Lead (foodalchemist_gps.lead_la_supplier_item_id)
+     * ist EIN globales Feld und wird nach dem LISTENPREIS gewählt (PriceService::preisSichtFuer
+     * ohne Team). Mandantenpreise beeinflussen die Lead-Wahl nicht; ein Team weicht über Pins
+     * ab (Spec 77). Ein Lead je Team nach eigenem Preis ist Stufe 3b — kein Fehler.
+     */
     private function kandidaten(FoodAlchemistGp $gp): Collection
     {
         $las = FoodAlchemistSupplierItem::query()
