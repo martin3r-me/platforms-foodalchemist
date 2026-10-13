@@ -59,7 +59,9 @@ class SimulationService
             // Spec 32: „Lieferant X erhöht um 5 %" — die praxisnächste Frage im Einkauf und
             // bis dahin die einzige, die sich NICHT simulieren ließ. Getroffen sind alle GPs,
             // deren Lead-Artikel bei diesem Lieferanten liegt; wer woanders bezieht, ist es nicht.
-            'lieferant' => $q->join('foodalchemist_supplier_items as li', 'li.id', '=', 'foodalchemist_gps.lead_la_supplier_item_id')
+            'lieferant' => \Platform\FoodAlchemist\Support\StammPaket::begrenzen(   // Spec 82 §12 A3: Stamm-Paket-Lead ohne Opt-in zählt nicht
+                $q->join('foodalchemist_supplier_items as li', 'li.id', '=', 'foodalchemist_gps.lead_la_supplier_item_id'),
+                'li', $team, 'foodalchemist_supplier_items')
                 ->where('li.supplier_id', (int) $ref)->whereNull('li.deleted_at')
                 ->pluck('foodalchemist_gps.id')->map(fn ($v) => (int) $v)->all(),
             default => [],

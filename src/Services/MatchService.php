@@ -2,6 +2,7 @@
 
 namespace Platform\FoodAlchemist\Services;
 
+use Platform\FoodAlchemist\Support\TeamScope;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Platform\Core\Models\Team;
@@ -199,8 +200,10 @@ class MatchService
             ->join('foodalchemist_supplier_item_structures AS s', 's.supplier_item_id', '=', 'i.id')
             ->whereNotNull('s.gp_id')
             ->whereNull('i.deleted_at')->whereNull('s.deleted_at')
-            ->select('i.supplier_id', 'i.ean_packaging', 'i.ean_ordering', 'i.article_number', 's.gp_id')
-            ->get();
+            ->select('i.supplier_id', 'i.ean_packaging', 'i.ean_ordering', 'i.article_number', 's.gp_id');
+        // Nur Artikel, die dieses Team sehen darf (global + eigene Kette, Stamm-Paket nur mit Opt-in). Vorher las die Brücke die EAN/Artikelnummern
+        // ALLER Teams — ein fremder Mandant steuerte so Treffer-GPs bei (Spec 82 §12 A3, Mandanten-Trennung).
+        $gemappt = TeamScope::applyVisible($gemappt, 'i.team_id', $team)->get();
 
         $sichtbar = FoodAlchemistGp::visibleToTeam($team)->pluck('id')->flip();
         $eanZuGp = [];
@@ -250,12 +253,12 @@ class MatchService
     {
         $out = collect();
 
-        $kandidatenQuery = function () use ($la) {
-            return DB::table('foodalchemist_supplier_items AS i')
+        $kandidatenQuery = function () use ($la, $team) {
+            return TeamScope::applyVisible(DB::table('foodalchemist_supplier_items AS i')
                 ->join('foodalchemist_supplier_item_structures AS s', 's.supplier_item_id', '=', 'i.id')
                 ->where('i.id', '!=', $la->id)
                 ->whereNotNull('s.gp_id')
-                ->whereNull('i.deleted_at')->whereNull('s.deleted_at');
+                ->whereNull('i.deleted_at')->whereNull('s.deleted_at'), 'i.team_id', $team);   // nur sichtbare Artikel (siehe exactBruecken)
         };
 
         $eans = array_values(array_filter([$la->ean_packaging, $la->ean_ordering]));
