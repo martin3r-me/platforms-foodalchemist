@@ -20,6 +20,9 @@ uses(TestCase::class, SeedsTeamHierarchy::class);
  */
 beforeEach(function () {
     $this->seedTeamHierarchy();
+    // Spec 82 §13 H: gelesen wird global nur als Master — der Test-Akteur (rootTeam bzw. dessen Kind) ist hier das Master-Team.
+    config(['foodalchemist.master_team_id' => $this->rootTeam->id]);
+    \Platform\FoodAlchemist\Support\MasterTeam::flush();
 
     // core_embeddings nachziehen (nicht im selektiven Core-Satz von seedTeamHierarchy).
     $core = base_path('vendor/martin3r/platform-core/database/migrations');

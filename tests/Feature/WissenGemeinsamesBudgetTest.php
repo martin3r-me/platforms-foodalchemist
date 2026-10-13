@@ -15,6 +15,9 @@ uses(TestCase::class, SeedsTeamHierarchy::class);
 
 beforeEach(function () {
     $this->seedTeamHierarchy();
+    // Spec 82 §13 H: gelesen wird global nur als Master — der Test-Akteur (rootTeam bzw. dessen Kind) ist hier das Master-Team.
+    config(['foodalchemist.master_team_id' => $this->rootTeam->id]);
+    \Platform\FoodAlchemist\Support\MasterTeam::flush();
     $this->actingAs($this->makeUser($this->rootTeam));
     config()->set('foodalchemist.semantic_search.enabled', false);
     config()->set('foodalchemist.ai.knowledge_budget', ['recipe.description' => 1500]);

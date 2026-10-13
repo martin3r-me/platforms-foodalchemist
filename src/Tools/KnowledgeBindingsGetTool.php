@@ -7,6 +7,7 @@ use Platform\Core\Contracts\ToolContract;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolMetadataContract;
 use Platform\Core\Contracts\ToolResult;
+use Platform\FoodAlchemist\Services\Knowledge\WissensSichtbarkeit;
 use Platform\FoodAlchemist\Support\TeamScope;
 
 /**
@@ -74,8 +75,9 @@ class KnowledgeBindingsGetTool extends FoodAlchemistTool implements ToolContract
             ->join('foodalchemist_knowledge_documents as d', 'd.id', '=', 'b.knowledge_document_id')
             ->whereNull('b.deleted_at')->whereNull('d.deleted_at')
             ->where('b.binding_type', 'layer');
-        TeamScope::applyVisible($q, 'b.team_id', $team);
-        TeamScope::applyVisible($q, 'd.team_id', $team);
+        // Spec 82 §13 H: Bindungen und Dossiers nach der Lese-Regel (Mandant sieht keine Master-Bindungen/-Dossiers).
+        WissensSichtbarkeit::lesbarOderAlt($q, 'b.team_id', $team, false);
+        WissensSichtbarkeit::lesbarOderAlt($q, 'd.team_id', $team);
 
         if ($targetKey !== '') {
             $q->where('b.target_key', $targetKey);

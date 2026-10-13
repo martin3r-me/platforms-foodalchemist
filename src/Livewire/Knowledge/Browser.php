@@ -9,6 +9,7 @@ use Livewire\Attributes\Url;
 use Livewire\Component;
 use Platform\FoodAlchemist\Services\Ai\KnowledgeEmbeddingService;
 use Platform\FoodAlchemist\Services\Ai\KnowledgeSearchService;
+use Platform\FoodAlchemist\Services\Knowledge\WissensSichtbarkeit;
 use Platform\FoodAlchemist\Support\TeamScope;
 
 /**
@@ -166,7 +167,7 @@ class Browser extends Component
      */
     private function sichtbaresDoc(int $id, array $spalten = ['*']): ?object
     {
-        return TeamScope::applyVisible(
+        return WissensSichtbarkeit::lesbarOderAlt(
             DB::table('foodalchemist_knowledge_documents')->whereNull('deleted_at'),
             'team_id', Auth::user()?->currentTeamRelation
         )->where('id', $id)->first($spalten);
@@ -529,7 +530,7 @@ class Browser extends Component
 
         // MVP-036: Liste team-scopen (global + eigenes Team/Master-Kette) — vorher las sie
         // teamübergreifend, obwohl save()/toggleActive() schon korrekt scopen.
-        $basis = TeamScope::applyVisible(
+        $basis = WissensSichtbarkeit::lesbarOderAlt(
             DB::table('foodalchemist_knowledge_documents')->whereNull('deleted_at'),
             'team_id', Auth::user()?->currentTeamRelation
         )
