@@ -37,6 +37,8 @@ class PlattformProtokoll
         'abo_gekuendigt' => 'Abo gekündigt',                  // Spec 82 §12 D
         'abo_rezept_zurueckgezogen' => 'Abo-Rezept zurückgezogen', // Spec 82 §12 D
         'projekt_lizenz_uebernommen' => 'Projekt: Lizenz erteilt, Übernahme in den Mandanten',   // Spec 82 §9
+        'paket_grundeinstellungen_gebucht' => 'Paket „Grundeinstellungen“ gebucht',   // Spec 82 §13 I
+        'paket_grundeinstellungen_nachgezogen' => 'Paket „Grundeinstellungen“ nachgezogen (neue Vorlagen-Zeilen kopiert)',
         'plan_preis_gesetzt' => 'Gebühren-Preis gesetzt',
         'plan_preis_startwerte' => 'Gebühren-Startpreise angelegt',
     ];
