@@ -788,6 +788,11 @@ class RecipeService
             'produktion_offen' => (int) ($produktion->offen ?? 0),
             'produktion_historie' => (int) ($produktion->historie ?? 0),
             'instanzen' => FoodAlchemistRecipe::where('instantiated_from_recipe_id', $id)->count(),
+            // Spec 82 §8: ein abonniertes Master-Rezept lässt sich nicht löschen, nur zurückziehen (AboKuendigungService)
+            'abos' => \Illuminate\Support\Facades\Schema::hasTable('foodalchemist_abos')
+                ? DB::table('foodalchemist_sammlung_objekte AS o')->join('foodalchemist_abos AS a', 'a.sammlung_id', '=', 'o.sammlung_id')
+                    ->where('o.typ', 'recipe')->where('o.objekt_id', $id)->where('a.status', 'aktiv')->count()
+                : 0,
         ];
 
         // Adressen statt Mengen: welche Eltern-Rezepte blockieren (2026-09-04). Ohne Namen
@@ -808,8 +813,9 @@ class RecipeService
             $ref['ersatz'] > 0 ? "{$ref['ersatz']} Ersatz-Verknüpfung(en)" : null,
             $ref['ausgaben'] > 0 ? "{$ref['ausgaben']} Ausgabe-Position(en) (Foodbook/Speisekarte/Speiseplan/Angebot/Konzept)" : null,
             $ref['produktion_offen'] > 0 ? "{$ref['produktion_offen']} Zeile(n) in offenen Produktionsaufträgen" : null,
+            $ref['abos'] > 0 ? "{$ref['abos']} aktive(s) Abo(s) — nur Zurückziehen möglich" : null,
         ]));
-        $ref['blocker'] = $ref['eltern_zeilen'] + $ref['ersatz'] + $ref['ausgaben'] + $ref['produktion_offen'];
+        $ref['blocker'] = $ref['eltern_zeilen'] + $ref['ersatz'] + $ref['ausgaben'] + $ref['produktion_offen'] + $ref['abos'];
 
         return $ref;
     }

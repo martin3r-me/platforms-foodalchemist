@@ -173,12 +173,13 @@ it('MCP abos.POST/GET im Lockstep; AboAuskunft liefert die Abos für Paket-Abbes
         ->and($auskunft->abosAmMaster(null))->toBe([]);
 });
 
-it('Mandant beenden (§13 C3) mit aktivem Abo: Kündigung bricht laut ab, solange die tiefe Kopie (§12 D) fehlt — nie still „0 gekündigt"', function () {
+it('Mandant beenden (§13 C3) kündigt die Abos des Mandanten wirklich (Schritt 5) — nie still „0 gekündigt"', function () {
     $this->abos->abonnieren($this->master, $this->broich, $this->sammlung, $this->kurator);
     $auskunft = app(AboAuskunft::class);
 
     expect($auskunft->verfuegbar())->toBeTrue()
-        ->and(fn () => $auskunft->kuendigen($this->broich, $this->kurator))->toThrow(RuntimeException::class, 'tiefer Kopie')
+        ->and($auskunft->kuendigen($this->broich, $this->kurator))->toHaveCount(1)
         ->and($auskunft->kuendigen($this->soul, $this->kurator))->toBe([])                     // ohne Abo: nichts zu tun
-        ->and(DB::table('foodalchemist_abos')->where('mandant_team_id', $this->broich->id)->value('status'))->toBe('aktiv');
+        ->and(DB::table('foodalchemist_abos')->where('mandant_team_id', $this->broich->id)->value('status'))->toBe('gekuendigt')
+        ->and(array_intersect(($this->sieht)($this->broich), ($this->masterIds)()))->toBe([]);
 });

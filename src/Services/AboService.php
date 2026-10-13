@@ -133,12 +133,16 @@ class AboService
      *
      * @return array<string, list<int>>
      */
-    public function huelle(int $mandantTeamId): array
+    public function huelle(int $mandantTeamId, ?int $ohneAboId = null, ?array $ohneSammlungsObjekt = null): array
     {
+        // „Was bliebe ohne dieses Abo bzw. ohne dieses Sammlungs-Objekt (['sammlung_id','objekt_id'])?" — Kündigung/Zurückziehen, §12 D
         $familien = DB::table('foodalchemist_sammlung_objekte AS o')
             ->join('foodalchemist_abos AS a', 'a.sammlung_id', '=', 'o.sammlung_id')
             ->join('foodalchemist_sammlungen AS s', 's.id', '=', 'o.sammlung_id')
             ->where('a.mandant_team_id', $mandantTeamId)->where('a.status', FoodAlchemistAbo::AKTIV)
+            ->when($ohneAboId !== null, fn ($q) => $q->where('a.id', '!=', $ohneAboId))
+            ->when($ohneSammlungsObjekt !== null, fn ($q) => $q->whereNot(fn ($w) => $w->where('o.sammlung_id', $ohneSammlungsObjekt['sammlung_id'])
+                ->where('o.objekt_id', $ohneSammlungsObjekt['objekt_id'])))
             ->whereNull('s.deleted_at')->where('o.typ', 'recipe')
             ->distinct()->pluck('o.objekt_id')->map(fn ($v) => (int) $v)->all();
         if ($familien === []) {

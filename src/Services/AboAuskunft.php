@@ -41,15 +41,15 @@ class AboAuskunft
      */
     public function kuendigen(Team $mandant, ?\Platform\Core\Models\User $user): array
     {
-        // Seit Durchstich Schritt 1 gibt es Abos. Die Kündigung mit tiefer Kopie (§12 D) ist Schritt 5 und noch nicht gebaut —
-        // bis dahin NIE still „0 gekündigt" melden, während Abos aktiv bleiben: mit Abos abbrechen, ohne Abos nichts zu tun.
-        $aktiv = $this->abosDesMandanten($mandant);
-        if ($aktiv !== []) {
-            throw new \RuntimeException(sprintf('%d Abo(s) aktiv: Die Kündigung mit tiefer Kopie (Spec 82 §12 D) ist noch nicht gebaut — '
-                . 'dieser Mandant lässt sich erst nach Durchstich Schritt 5 beenden.', count($aktiv)));
+        // Durchstich Schritt 5: echte Kündigung je aktivem Abo — genutzte Rezepte als tiefe Kopie (§12 D), ungenutzte verschwinden.
+        // Systemlauf: die Rechte prüft der Aufrufer (Mandant beenden = Plattform-Admin).
+        $gekuendigt = [];
+        foreach ($this->abosDesMandanten($mandant) as $abo) {
+            app(AboKuendigungService::class)->kuendigen($mandant, $abo['id'], $user, bestaetigt: true, systemLauf: true);
+            $gekuendigt[] = ['id' => $abo['id'], 'sammlung' => $abo['sammlung']];
         }
 
-        return [];
+        return $gekuendigt;
     }
 
     /**
