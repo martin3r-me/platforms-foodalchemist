@@ -3,9 +3,12 @@
 namespace Platform\FoodAlchemist\Services;
 
 use Illuminate\Support\Facades\DB;
+use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistItemAllergen;
 use Platform\FoodAlchemist\Models\FoodAlchemistItemDeclaration;
 use Platform\FoodAlchemist\Support\DeklarationsProfil;
+use Platform\FoodAlchemist\Support\StammPaket;
+use Platform\FoodAlchemist\Support\TeamScope;
 
 /**
  * Spec 82 §2 — Bericht „GPs mit uneinheitlichen Artikeln“.
@@ -22,11 +25,24 @@ class GpHomogenitaetService
      *   gps: list<array{gp_id:int,name:string,artikel:int,unbekannt:int,abweichungen:list<string>}>
      * }
      */
-    public function bericht(int $chunk = 300): array
+    /**
+     * @param  Team|null  $team  null = global (Konsole). Mit Team nur, was dieses Team sieht: Artikel und GPs seiner Team-Kette bzw. global,
+     *                           globale stamm_paket-Zeilen nur mit Opt-in (Spec 82 §12 A3). So zeigt der Bericht per MCP keine fremden Daten.
+     */
+    public function bericht(int $chunk = 300, ?Team $team = null): array
     {
-        $verknuepft = fn () => DB::table('foodalchemist_supplier_item_structures AS s')
-            ->join('foodalchemist_supplier_items AS i', 'i.id', '=', 's.supplier_item_id')
-            ->whereNotNull('s.gp_id')->whereNull('s.deleted_at')->whereNull('i.deleted_at');
+        $verknuepft = function () use ($team) {
+            $q = DB::table('foodalchemist_supplier_item_structures AS s')
+                ->join('foodalchemist_supplier_items AS i', 'i.id', '=', 's.supplier_item_id')
+                ->whereNotNull('s.gp_id')->whereNull('s.deleted_at')->whereNull('i.deleted_at');
+            if ($team !== null) {
+                $q->join('foodalchemist_gps AS g', 'g.id', '=', 's.gp_id')->whereNull('g.deleted_at');
+                $this->sichtbar($q, 'i', $team);
+                $this->sichtbar($q, 'g', $team);
+            }
+
+            return $q;
+        };
 
         $gesamtVerknuepft = $verknuepft()->count();
         $unbekanntGesamt = $this->zaehleUnbekannte($verknuepft());
@@ -97,6 +113,21 @@ class GpHomogenitaetService
             ],
             'gps' => $gps,
         ];
+    }
+
+    /** Sichtbarkeit einer Tabelle (Alias) für ein Team: global oder Team-Kette; globale stamm_paket-Zeilen nur mit Opt-in. */
+    private function sichtbar($q, string $alias, Team $team): void
+    {
+        $kette = TeamScope::ancestryIds($team);
+        $frei = StammPaket::istFreigeschaltet($team);
+        $q->where(function ($w) use ($alias, $kette, $frei) {
+            $w->where(function ($g) use ($alias, $frei) {
+                $g->whereNull("{$alias}.team_id");
+                if (! $frei) {
+                    $g->where("{$alias}.stamm_class", StammPaket::BASIS);
+                }
+            })->orWhereIn("{$alias}.team_id", $kette);
+        });
     }
 
     /** Verknüpfte Artikel ohne verwertbare Allergenangabe (keine Zeile oder alle 14 Felder NULL/unbekannt). */
