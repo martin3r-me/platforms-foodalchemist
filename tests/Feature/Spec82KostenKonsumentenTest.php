@@ -143,3 +143,20 @@ it('KostenCacheService lädt Teil-Spalten nach: ein Gericht nur mit id/sales_net
     $teil = FoodAlchemistRecipe::mitFassungen()->select(['id', 'sales_net', 'ek_total_eur'])->find($this->jus->id);
     expect(app(KostenCacheService::class)->fuer($teil, $this->master)['quelle'])->toBe('rezept');
 });
+
+it('Pflicht (Auflage 4): VK-Vorschlag und Marge — aus einer EK-Teilsumme kein Wareneinsatz/DB, VK-Vorschlag nur vorläufig', function () {
+    $kalk = app(\Platform\FoodAlchemist\Services\KalkulationService::class);
+    $this->jusF->forceFill(['sales_net' => null]);   // Fassung trägt keinen VK des Masters (Leck-Sperre)
+
+    $neu = $kalk->recipeHk($this->neu, $this->jusF);
+    expect($neu['ek_vollstaendig'])->toBeFalse()
+        ->and($neu['vk_vorschlag_vorlaeufig'])->toBeTrue()
+        ->and($neu['wareneinsatz_pct'])->toBeNull()
+        ->and($neu['db_eur'])->toBeNull()
+        ->and($neu['hk1_total'])->toBe(1.0);                 // Teilsumme, ausgewiesen als solche
+
+    $broich = $kalk->recipeHk($this->broich, $this->jusF);
+    expect($broich['ek_vollstaendig'])->toBeTrue()
+        ->and($broich['vk_vorschlag_vorlaeufig'])->toBeFalse()
+        ->and($broich['hk1_total'])->toBe(5.0);
+});

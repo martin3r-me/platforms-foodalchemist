@@ -124,12 +124,16 @@ class KalkulationService
      * @return array{hk1_total: float, hk2_total: float, hk1_pro_portion: float, hk2_pro_portion: float,
      *               zuschlag_pct: float, nebenkosten: float, anzahl_portionen: int, sales_net: ?float,
      *               db_eur: ?float, db_pct: ?float, wareneinsatz_pct: ?float,
-     *               bloecke: list<array>, marge_pct: float, vk_vorschlag: float}
+     *               bloecke: list<array>, marge_pct: float, vk_vorschlag: float, ek_vollstaendig: bool, vk_vorschlag_vorlaeufig: bool}
      */
     public function recipeHk(Team $team, FoodAlchemistRecipe $recipe, ?FoodAlchemistOutlet $outlet = null): array
     {
         $anzahl = max(1, (int) ($recipe->sales_unit_count ?? 1));
-        $hk1Total = (float) ($recipe->ek_total_eur ?? 0);
+        // Spec 82 Stufe 3b: EK aus Sicht des Teams (Besitzer = Rezept-Spalte, sonst Team-Cache; Fassung nie Master-EK).
+        // Auflage 4: eine Teilsumme ist kein Preis → Wareneinsatz/DB entfallen, der VK-Vorschlag ist nur vorläufig.
+        $kosten = app(KostenCacheService::class)->fuer($recipe, $team);
+        $ekVoll = $kosten['vollstaendig'] && $kosten['ek_summe'] !== null;
+        $hk1Total = (float) ($kosten['ek_summe'] ?? 0);
         $nebenTotal = (float) ($recipe->additional_costs_eur ?? 0);
         // Katalogsicht ohne Produktionslauf: keine fingierte Zeit pro Portion.
         $azTotal = 0.0;
@@ -152,12 +156,14 @@ class KalkulationService
             'nebenkosten' => round($nebenTotal, 4),
             'anzahl_portionen' => $anzahl,
             'sales_net' => $vk,
-            'db_eur' => $vk !== null ? round($vk - $hk2Pp, 2) : null,
-            'db_pct' => $vk !== null && $vk > 0 ? round(($vk - $hk2Pp) / $vk * 100, 1) : null,
-            'wareneinsatz_pct' => $vk !== null && $vk > 0 ? round($hk1Pp / $vk * 100, 1) : null,
+            'db_eur' => $ekVoll && $vk !== null ? round($vk - $hk2Pp, 2) : null,
+            'db_pct' => $ekVoll && $vk !== null && $vk > 0 ? round(($vk - $hk2Pp) / $vk * 100, 1) : null,
+            'wareneinsatz_pct' => $ekVoll && $vk !== null && $vk > 0 ? round($hk1Pp / $vk * 100, 1) : null,
             'bloecke' => $r['bloecke'],
             'marge_pct' => $r['marge_pct'],
             'vk_vorschlag' => $r['vk_vorschlag'],
+            'ek_vollstaendig' => $ekVoll,
+            'vk_vorschlag_vorlaeufig' => ! $ekVoll,   // aus einer EK-Teilsumme gerechnet — nie als VK übernehmen
         ];
     }
 

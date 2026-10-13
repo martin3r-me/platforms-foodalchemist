@@ -46,13 +46,15 @@ class KostenCacheService
         if (! $recipe->ist_fassung && (int) $recipe->team_id === (int) $team->id) {
             $n = (int) $recipe->ek_n_ingredients_total;
             $p = (int) $recipe->ek_n_ingredients_priced;
+            // Ohne Zähler (Altstand, nie neu gerechnet) gilt ein vorhandener EK als vollständig; mit Zählern zählt priced == total
+            $voll = $recipe->ek_n_ingredients_total === null ? $recipe->ek_total_eur !== null : ($n > 0 && $p === $n);
 
             return [
                 'quelle' => 'rezept', 'ek_summe' => $recipe->ek_total_eur !== null ? (float) $recipe->ek_total_eur : null,
                 'ek_per_kg' => $recipe->ek_per_kg_eur !== null ? (float) $recipe->ek_per_kg_eur : null,
                 'n_priced' => $p, 'n_total' => $n,
                 'anteil_fehlend_anzahl' => $n > 0 ? round(($n - $p) / $n, 4) : null, 'anteil_fehlend_masse' => null,
-                'vollstaendig' => $n > 0 && $p === $n, 'grund' => ($n > 0 && $p === $n) ? null : 'zutaten_ohne_preis',
+                'vollstaendig' => $voll, 'grund' => $voll ? null : 'zutaten_ohne_preis',
                 'fehlende' => [], 'berechnet_at' => null, 'basis' => $recipe->ek_price_basis?->value,
             ];
         }
