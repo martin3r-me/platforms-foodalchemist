@@ -129,12 +129,32 @@ class Index extends Component
     /** Spec 82 §5: nur im Oberteam (ohne Eltern-Team) — ein Unter-Team hat keine Unter-Teams. */
     public const NUR_OBERTEAM = ['unter-teams'];
 
+    /**
+     * Spec 82 §5/§13 B2: Sektionen, die an einem Bereich der Freischaltung (FaBereiche) hängen. Aus = Sektion
+     * unsichtbar und der Direktlink gesperrt. Plattform-Admins sehen sie wie bei jedem Bereich immer (darfBereich).
+     */
+    public const BEREICH_SEKTIONEN = ['unter-teams' => 'unterteams'];
+
     public function mount(string $sektion = 'einheiten'): void
     {
         abort_unless(array_key_exists($sektion, self::SEKTIONEN), 404);
         abort_if(in_array($sektion, self::NUR_PLATTFORM_ADMIN, true) && ! self::istPlattformAdmin(), 404);
         abort_if(in_array($sektion, self::NUR_OBERTEAM, true) && self::istUnterTeam(), 404);
+        abort_unless(self::bereichErlaubt($sektion), 404);
         $this->sektion = $sektion;
+    }
+
+    /** Hängt die Sektion an einem Bereich, muss er für Team und Benutzer freigeschaltet sein. */
+    public static function bereichErlaubt(string $sektion): bool
+    {
+        $bereich = self::BEREICH_SEKTIONEN[$sektion] ?? null;
+        if ($bereich === null) {
+            return true;
+        }
+        $user = Auth::user();
+        $team = $user?->currentTeamRelation;
+
+        return $team === null || app(\Platform\FoodAlchemist\Services\FaRechte::class)->darfBereich($user, $team, $bereich);
     }
 
     private static function istUnterTeam(): bool
@@ -157,6 +177,7 @@ class Index extends Component
         if (self::istUnterTeam()) {
             $sektionen = array_diff_key($sektionen, array_flip(self::NUR_OBERTEAM));
         }
+        $sektionen = array_filter($sektionen, static fn (string $key) => self::bereichErlaubt($key), ARRAY_FILTER_USE_KEY);
         $gruppen = array_map(static fn ($g) => ['sektionen' => array_values(array_intersect($g['sektionen'], array_keys($sektionen)))] + $g, self::GRUPPEN);
 
         return view('foodalchemist::livewire.settings.index', [

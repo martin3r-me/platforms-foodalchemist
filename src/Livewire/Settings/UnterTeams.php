@@ -14,6 +14,12 @@ use Livewire\Component;
  */
 class UnterTeams extends Component
 {
+    public function mount(): void
+    {
+        // zweite Absicherung neben Settings\Index: die Komponente selbst lädt nur mit freigeschaltetem Bereich
+        abort_unless(Index::bereichErlaubt('unter-teams'), 404);
+    }
+
     public function render()
     {
         return view('foodalchemist::livewire.settings.unter-teams');
