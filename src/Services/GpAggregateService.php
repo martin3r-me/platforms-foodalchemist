@@ -78,6 +78,23 @@ class GpAggregateService
      */
     public function allergenKonfidenz(FoodAlchemistGp $gp): array
     {
+        // Derivat (§11.2): die WERTE kommen LIVE von der Mutter (allergene() Prio 2) — dann muss auch die
+        // Sicherheit die der Mutter sein. Ein Derivat hat keine eigenen LAs; das eigene (leere) Profil gäbe
+        // NONE und deckelte jedes Rezept mit Parüren/Karkassen auf LOW. Eine Ebene (Derivat-von-Derivat verboten).
+        if ($gp->is_derivat && $gp->derivat_von_gp_id !== null) {
+            $mutter = FoodAlchemistGp::find($gp->derivat_von_gp_id);
+
+            return $mutter !== null
+                ? $this->laKonfidenz($mutter)
+                : ['confidence' => 'none', 'needs_review' => false, 'konflikt_felder' => [], 'n_las_mit_daten' => 0];
+        }
+
+        return $this->laKonfidenz($gp);
+    }
+
+    /** Konfidenz aus dem eigenen LA-Profil des GP (ohne Derivat-Auflösung). */
+    private function laKonfidenz(FoodAlchemistGp $gp): array
+    {
         $profile = $this->laProfile($gp->id);
         if ($profile->isEmpty()) {
             return ['confidence' => 'none', 'needs_review' => false, 'konflikt_felder' => [], 'n_las_mit_daten' => 0];
@@ -134,16 +151,8 @@ class GpAggregateService
     {
         $skip = in_array($gp->allergens_source, ['manual', 'ki'], true);
 
-        if ($gp->is_derivat && $gp->derivat_von_gp_id !== null) {
-            $mutter = FoodAlchemistGp::find($gp->derivat_von_gp_id);
-            $konf = $mutter !== null
-                ? $this->allergenKonfidenz($mutter)
-                : ['confidence' => 'none', 'needs_review' => false, 'konflikt_felder' => []];
-            $source = 'derivat';
-        } else {
-            $konf = $this->allergenKonfidenz($gp);
-            $source = 'la_union';
-        }
+        $konf = $this->allergenKonfidenz($gp);                      // löst Derivate selbst zur Mutter auf
+        $source = ($gp->is_derivat && $gp->derivat_von_gp_id !== null) ? 'derivat' : 'la_union';
 
         $written = false;
         if ($apply && ! $skip) {

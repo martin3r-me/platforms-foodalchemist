@@ -297,6 +297,9 @@ class GpNamingService
             throw new \RuntimeException(implode(' ', $pruefung['errors']));
         }
 
+        $warDerivat = (bool) $gp->is_derivat;
+        $istDerivat = (bool) ($in['is_derivat'] ?? $gp->is_derivat);
+
         $gp->update([
             'name' => $name,
             'condition' => $this->normalisiereZustand($in['condition'] ?? null) ?? $gp->condition,
@@ -308,8 +311,12 @@ class GpNamingService
             'main_ingredient_display' => trim((string) ($in['hauptzutat'] ?? '')) ?: $gp->main_ingredient_display,
             'commodity_group_code' => ($in['commodity_group_code'] ?? '') ?: $gp->commodity_group_code,
             'sub_category' => array_key_exists('sub_category', $in) ? (($in['sub_category'] ?? '') ?: null) : $gp->sub_category,
-            'is_derivat' => (bool) ($in['is_derivat'] ?? $gp->is_derivat),
+            'is_derivat' => $istDerivat,
             'derivat_von_gp_id' => array_key_exists('derivat_von_gp_id', $in) ? $in['derivat_von_gp_id'] : $gp->derivat_von_gp_id,
+            // §11.2 wie bei der Anlage: Derivat braucht keinen LA. Nur beim WECHSEL umschalten — sonst blieb ein
+            // nachträglich zum Derivat gemachter GP auf „Preis fehlt“; ein bewusst gesetzter Platzhalter
+            // (requires_la=0 ohne Derivat) bleibt bei normalen Edits unangetastet.
+            'requires_la' => $istDerivat !== $warDerivat ? ! $istDerivat : $gp->requires_la,
         ]);
 
         return $gp->refresh();
