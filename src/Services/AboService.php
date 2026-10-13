@@ -29,6 +29,7 @@ class AboService
     public function __construct(
         private FaRechte $rechte,
         private InhaltsFreigabeService $freigaben,
+        private PlattformProtokoll $protokoll,
     ) {}
 
     public function abonnieren(Team $master, Team $mandant, int $sammlungId, ?User $actor): FoodAlchemistAbo
@@ -64,6 +65,8 @@ class AboService
             return $abo;
         });
         $this->neuBerechnen((int) $mandant->id);
+        $this->protokoll->schreibe('abo_vergeben', ['master_team_id' => $master->id, 'mandant_team_id' => $mandant->id,
+            'sammlung_id' => $sammlungId], $actor, $abo);   // §13 C4: ins echte activity-log, am Abo selbst
 
         return $abo->refresh();
     }

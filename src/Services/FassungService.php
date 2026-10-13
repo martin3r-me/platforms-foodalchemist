@@ -47,6 +47,7 @@ class FassungService
         private FaRechte $rechte,
         private AboService $abos,
         private RecipeRecomputeService $recompute,
+        private PlattformProtokoll $protokoll,
     ) {}
 
     /**
@@ -99,6 +100,11 @@ class FassungService
         });
 
         $this->abos->neuBerechnenAlle();   // Bibliothek der Abonnenten zieht auf die neueste Fassung nach
+        if ($ergebnis['neu'] !== []) {
+            $this->protokoll->schreibe('fassung_veroeffentlicht', ['recipe_id' => $wurzel->id, 'fassung_id' => $ergebnis['fassung_id'],
+                'neu' => $ergebnis['neu'], 'allergen_geaendert' => $ergebnis['allergen_geaendert'], 'notiz' => $notiz],
+                $actor, FoodAlchemistRecipe::find($ergebnis['fassung_id']));
+        }
 
         return $ergebnis;
     }
