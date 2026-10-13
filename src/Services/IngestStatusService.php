@@ -244,6 +244,7 @@ final class IngestStatusService
             ->whereNull('p.deleted_at')->whereNull('i.deleted_at')
             ->where('p.created_at', '>=', $seit);
         TeamScope::applyVisible($q, 'i.team_id', $team);
+        TeamScope::applyVisible($q, 'p.team_id', $team);   // Spec 82 3a: keine Preiszeilen fremder Mandanten
         if ($supplierId !== null) {
             $q->where('i.supplier_id', $supplierId);
         }
@@ -254,7 +255,7 @@ final class IngestStatusService
         $abgeschnitten = count($itemIds) > self::MAX_DELTA_ITEMS;
         $itemIds = array_slice($itemIds, 0, self::MAX_DELTA_ITEMS);
 
-        $trend = $this->preise->preisTrendBulk($itemIds);
+        $trend = $this->preise->preisTrendBulk($itemIds, $team); // Spec 82 3a
         $out = [
             'seit' => $seit->toDateString(),
             'tage' => $tage,

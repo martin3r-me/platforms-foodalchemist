@@ -1058,7 +1058,7 @@ class GpModal extends Component
         // Zwei zusätzliche Reads, nur bei geladenem GP; die Tab-Panels dieses Modals mounten
         // ohnehin schwerere Detail-Panel-Kinder.
         $leadLa = $gp?->leadLa;
-        $leadPreis = $leadLa !== null ? $preise->activeFor($leadLa->id) : null;
+        $leadPreis = $leadLa !== null ? $preise->activeFor($leadLa->id, Auth::user()?->currentTeamRelation) : null; // Spec 82 3a
 
         // Layer: Mutter-GP-Name fürs Derivat-Feld team-gescopet im Component laden
         // (Blade zeigt nur die Variable, statt selbst ::find() ungescopet auszuführen).

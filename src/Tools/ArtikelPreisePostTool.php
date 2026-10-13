@@ -9,7 +9,7 @@ use Platform\Core\Contracts\ToolResult;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem;
 use Platform\FoodAlchemist\Services\PriceService;
 
-/** MCP-Steuerbarkeit · D4: Preis für einen team-eigenen Lieferantenartikel anlegen. */
+/** MCP-Steuerbarkeit · D4: Preis für einen sichtbaren Lieferantenartikel anlegen — Listenpreis (Besitzer) oder Teampreis (Spec 82 3a). */
 class ArtikelPreisePostTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
 {
     public function getName(): string
@@ -19,7 +19,7 @@ class ArtikelPreisePostTool extends FoodAlchemistTool implements ToolContract, T
 
     public function getDescription(): string
     {
-        return 'Legt einen Preis (netto) für einen team-eigenen Lieferantenartikel an. status optional (Preisstatus).';
+        return 'Legt einen Preis (netto) für einen sichtbaren Lieferantenartikel an. Besitzer-Team: Listenpreis. Anderes Team: eigener Teampreis des Oberteams/Mandanten (gilt für dieses Team und seine Unter-Teams, der Listenpreis bleibt; Unter-Teams schreiben keine eigenen Preise). status optional: 0 Standard-EK, 2 Aktion.';
     }
 
     public function getSchema(): array
@@ -27,7 +27,7 @@ class ArtikelPreisePostTool extends FoodAlchemistTool implements ToolContract, T
         return [
             'type' => 'object',
             'properties' => [
-                'id' => ['type' => 'integer', 'description' => 'Artikel-Id (team-eigen).'],
+                'id' => ['type' => 'integer', 'description' => 'Artikel-Id (für das Team sichtbar).'],
                 'preis' => ['type' => 'number', 'description' => 'Preis netto (≥ 0).'],
                 'status' => ['type' => 'string', 'description' => 'Preisstatus (optional).'],
             ],
@@ -49,17 +49,19 @@ class ArtikelPreisePostTool extends FoodAlchemistTool implements ToolContract, T
         if ($item === null) {
             return ToolResult::error('Artikel nicht sichtbar/vorhanden.', 'NOT_FOUND');
         }
-        if (! $item->isOwnedBy($team)) {
-            return ToolResult::error('Geerbter Katalog-Artikel — nur fürs Besitzer-Team.', 'ACCESS_DENIED');
+        if (! $item->isOwnedBy($team) && ! PriceService::darfTeampreisSchreiben($team)) {
+            return ToolResult::error('Unter-Teams erben die Preise ihres Oberteams — eigene Preise je Unter-Team gibt es nicht (Spec 82 §3).', 'ACCESS_DENIED');
         }
 
         try {
-            $p = app(PriceService::class)->createFor($team, $item, (float) $arguments['preis'], (string) ($arguments['status'] ?? '0'));
+            // Spec 82 3a: Besitzer → Listenpreis; sonst Teampreis (team_id = dieses Team, Listenpreis bleibt).
+            $p = app(PriceService::class)->createTeamPrice($team, $item, (float) $arguments['preis'], (string) ($arguments['status'] ?? '0'));
         } catch (\RuntimeException $e) {
             return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR');
         }
 
-        return ToolResult::success(['id' => $id, 'price_id' => (int) $p->id, 'price' => (float) $p->price]);
+        return ToolResult::success(['id' => $id, 'price_id' => (int) $p->id, 'price' => (float) $p->price,
+            'team_id' => (int) $p->team_id, 'art' => $item->isOwnedBy($team) ? 'listenpreis' : 'teampreis']);
     }
 
     public function getMetadata(): array

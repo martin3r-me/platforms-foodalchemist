@@ -1056,7 +1056,7 @@ class OrderService
             'packaging_unit' => $la->packaging_unit,
             'article_number' => $la->article_number,
             'designation' => $la->designation,
-            'aktiver_preis' => $this->preise->activeFor((int) $la->id)?->price,
+            'aktiver_preis' => $this->preise->activeFor((int) $la->id, $team)?->price,
         ];
         $geb = $this->gebinde->berechne($ctx, 0.0, $la->structure?->gp?->piece_default_g !== null ? (float) $la->structure->gp->piece_default_g : null);
         $packPrice = $geb['pack_price'] ?? null;
@@ -1544,7 +1544,7 @@ class OrderService
 
         return (object) ['id' => (int) $la->id, 'qty' => $la->qty !== null ? (float) $la->qty : null, 'unit_code' => $la->unit_code,
             'packaging_unit' => $la->packaging_unit, 'article_number' => $la->article_number, 'designation' => $la->designation,
-            'aktiver_preis' => $this->preise->activeFor((int) $la->id)?->price];
+            'aktiver_preis' => $this->preise->activeFor((int) $la->id, $team)?->price];
     }
 
     private function overrideKey(string $sourceRef, ?int $gpId): ?string
@@ -1574,7 +1574,7 @@ class OrderService
             'packaging_unit' => $la->packaging_unit,
             'article_number' => $la->article_number,
             'designation' => $la->designation,
-            'aktiver_preis' => $this->preise->activeFor((int) $la->id)?->price,
+            'aktiver_preis' => $this->preise->activeFor((int) $la->id, $team)?->price,
         ];
     }
 
@@ -1647,7 +1647,8 @@ class OrderService
         if ($la === null) {
             return [null, null];
         }
-        $price = $this->preise->activeFor((int) $la->id);
+        // Spec 82 3a: Preis des bestellenden Teams (Team → Vorfahren → Listenpreis).
+        $price = $this->preise->activeFor((int) $la->id, $line->team_id ? Team::find($line->team_id) : null);
         $ctx = (object) [
             'qty' => $la->qty !== null ? (float) $la->qty : null,
             'unit_code' => $la->unit_code,

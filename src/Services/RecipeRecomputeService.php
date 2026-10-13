@@ -1142,7 +1142,7 @@ class RecipeRecomputeService
             ->whereIn('s.gp_id', $gpIds)->whereNull('s.deleted_at')
             ->select('foodalchemist_supplier_items.*')
             ->addSelect('s.gp_id AS _preis_gp_id')
-            ->selectSub($this->preise->activePriceSubquery()->toBase(), 'aktiver_preis')
+            ->selectSub($this->preise->activePriceSubquery('foodalchemist_supplier_items.id', $team)->toBase(), 'aktiver_preis') // Spec 82 3a
             ->get()
             ->groupBy(fn ($la) => (int) $la->_preis_gp_id);
 
@@ -1361,6 +1361,11 @@ class RecipeRecomputeService
      *
      * @return array<int, array{gepinnt: bool, locked: bool}>
      */
+    /**
+     * Bekannte Lücke (Spec 82 §3 Z. 122, schließt Stufe 3b): es zählen nur die Pins des
+     * Rezept-Besitzers (recomputeTeam). Pins eines Unter-Teams wirken nicht auf geerbte Rezepte;
+     * ebenso rechnet ek_total_eur EINMAL mit den Preisen des Besitzer-Teams.
+     */
     private function leadPrefs(FoodAlchemistGp $gp): array
     {
         if ($this->recomputeTeam === null) {
@@ -1401,7 +1406,8 @@ class RecipeRecomputeService
             ->join('foodalchemist_supplier_item_structures AS s', 's.supplier_item_id', '=', 'foodalchemist_supplier_items.id')
             ->where('s.gp_id', $gp->id)->whereNull('s.deleted_at')
             ->select('foodalchemist_supplier_items.*')
-            ->selectSub($this->preise->activePriceSubquery()->toBase(), 'aktiver_preis')
+            // Spec 82 3a: Preise des Rechen-Teams (Team → Vorfahren → global); ohne Team nur Listenpreis.
+            ->selectSub($this->preise->activePriceSubquery('foodalchemist_supplier_items.id', $this->recomputeTeam)->toBase(), 'aktiver_preis')
             ->get();
     }
 

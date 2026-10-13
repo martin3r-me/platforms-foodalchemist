@@ -312,7 +312,8 @@ class MoneyTruthReportService
     /** Die EXISTS-Korrelation Preis-Zeile ↔ Lead-LA des GP — an einer Stelle. */
     private function korreliert(\Illuminate\Database\Eloquent\Builder $q): \Illuminate\Database\Eloquent\Builder
     {
-        return $q->select(DB::raw(1))
+        // Spec 82 3a: Report über den globalen Lead → nur Listenpreis-Zeilen.
+        return $this->prices->nurListenpreis($q)->select(DB::raw(1))
             ->whereColumn('foodalchemist_prices.supplier_item_id', 'foodalchemist_gps.lead_la_supplier_item_id');
     }
 

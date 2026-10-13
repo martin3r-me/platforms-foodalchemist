@@ -91,7 +91,7 @@ class SupplierItemService
             ->when(! empty($filters['supplier_ids']), fn ($q) => $q->whereIn('supplier_id', $filters['supplier_ids']))
             ->addSelect([
                 '*',
-                'aktiver_preis' => app(PriceService::class)->activePriceSubquery(),
+                'aktiver_preis' => app(PriceService::class)->activePriceSubquery('foodalchemist_supplier_items.id', $team), // Spec 82 3a
             ]);
     }
 

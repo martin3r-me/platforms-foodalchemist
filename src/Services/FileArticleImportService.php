@@ -605,7 +605,7 @@ class FileArticleImportService
             return ['preis' => ['status' => 'neu', 'neu' => $preis, 'status_code' => $status]];
         }
 
-        $aktiv = $this->preise->activeFor($item->id);
+        $aktiv = $this->preise->activeFor($item->id, $team); // Spec 82 3a: Vergleich gegen den Preis dieses Teams
         $alt = $aktiv?->price !== null ? (float) $aktiv->price : null;
         if ($alt !== null && abs($alt - $preis) < 0.0005 && (string) $aktiv->status === $status) {
             return ['preis' => ['status' => 'unveraendert', 'alt' => $alt, 'neu' => $preis]];
