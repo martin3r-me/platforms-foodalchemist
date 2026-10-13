@@ -56,7 +56,7 @@ class KnowledgeRoutingsPutTool extends FoodAlchemistTool implements ToolContract
         $art = trim((string) ($arguments['art'] ?? ''));
         if ($art !== '') {
             if ($category !== '') return ToolResult::error('Genau art oder category angeben.', 'VALIDATION_ERROR');
-            if (! \Platform\FoodAlchemist\Support\TeamScope::mayWrite(null, $team)) return ToolResult::error('Arten-Routings sind global — nur das Master-Team darf sie ändern.', 'FORBIDDEN');
+            if (! \Platform\FoodAlchemist\Services\Knowledge\WissensSichtbarkeit::darfGlobalSchreiben($team)) return ToolResult::error('Arten-Routings sind global — nur das Master-Team darf sie ändern.', 'FORBIDDEN');
             try {
                 $svc = app(KnowledgeRoutingService::class);
                 if (($arguments['delete'] ?? false) === true) return ToolResult::success(['deleted' => $svc->removeArt($feature, $art)]);
@@ -67,6 +67,10 @@ class KnowledgeRoutingsPutTool extends FoodAlchemistTool implements ToolContract
         }
         if ($feature === '' || $category === '') {
             return ToolResult::error('feature und category sind Pflicht.', 'VALIDATION_ERROR');
+        }
+        // Spec 82 §13 H: Routings haben keine team_id — sie gelten für JEDES Team. Auch die Kategorie-Zeilen (nicht nur die Arten) sind Master-Sache.
+        if (! \Platform\FoodAlchemist\Services\Knowledge\WissensSichtbarkeit::darfGlobalSchreiben($team)) {
+            return ToolResult::error('Routings sind global — nur das Master-Team darf sie ändern.', 'FORBIDDEN');
         }
 
         $svc = app(KnowledgeRoutingService::class);

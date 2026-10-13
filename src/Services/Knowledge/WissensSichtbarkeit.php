@@ -102,6 +102,22 @@ final class WissensSichtbarkeit
         return self::aktiv() ? self::lesbar($query, $teamIdColumn, $team, $ablaufAusnahme) : TeamScope::applyVisible($query, $teamIdColumn, $team);
     }
 
+    /**
+     * Darf dieses Team GLOBALES Wissen (team_id NULL) und die globale Steuerung (Routings, Budget, Kanon-global, Kategorien) SCHREIBEN?
+     * Nur das Master-Team selbst — streng über `MasterTeam::istMaster`, ohne den Rückfall „elternloses Team" von `TeamScope::isMaster`
+     * (auf demo sind alle Teams elternlos). Notbremse aus = alte Regel (`TeamScope::isMaster`).
+     */
+    public static function darfGlobalSchreiben(?Team $team): bool
+    {
+        return self::aktiv() ? MasterTeam::istMaster($team) : TeamScope::isMaster($team);
+    }
+
+    /** Schreibrecht an einer Wissens-Zeile: Besitzer-Team, oder global (team_id NULL) nur der Master. Ersetzt `TeamScope::mayWrite` im Wissensmodul. */
+    public static function mayWrite(mixed $rowTeamId, ?Team $team): bool
+    {
+        return TeamScope::owns($rowTeamId, $team) || ($rowTeamId === null && self::darfGlobalSchreiben($team));
+    }
+
     private static function hatArt(): bool
     {
         static $hat = null;

@@ -247,7 +247,7 @@ class KnowledgeLinkService
         if ($doc === null) {
             throw new RuntimeException("Wissens-Dokument \"{$slug}\" nicht gefunden.");
         }
-        if (! $nurLesen && ! TeamScope::mayWrite($doc->team_id, $team)) {
+        if (! $nurLesen && ! \Platform\FoodAlchemist\Services\Knowledge\WissensSichtbarkeit::mayWrite($doc->team_id, $team)) {
             throw new WissenGesperrtException(
                 "\"{$slug}\" ist globales Master-Wissen — Verbindungen daran setzt das Master-Team."
             );

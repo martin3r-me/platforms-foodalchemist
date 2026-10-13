@@ -61,7 +61,7 @@ class KnowledgeService
             // Entscheid Dominique 2026-09-11: „alles was ich jetzt reingebe ist master".
             // Der Kurator legt GLOBAL an — sein Bestand IST der globale Bestand. Jedes
             // andere Team legt weiter team-eigen an.
-            'team_id' => TeamScope::isMaster($team) ? null : $team->id,
+            'team_id' => \Platform\FoodAlchemist\Services\Knowledge\WissensSichtbarkeit::darfGlobalSchreiben($team) ? null : $team->id,
             'slug' => $slug,
             'title' => $title,
             'category' => $category,
@@ -121,7 +121,7 @@ class KnowledgeService
         if ($doc === null) {
             throw new RuntimeException("Wissens-Dokument \"{$slug}\" nicht gefunden.");
         }
-        if (! TeamScope::mayWrite($doc->team_id, $team)) {
+        if (! \Platform\FoodAlchemist\Services\Knowledge\WissensSichtbarkeit::mayWrite($doc->team_id, $team)) {
             if ($doc->team_id === null) {
                 throw new WissenGesperrtException(
                     "\"{$slug}\" ist globales Master-Wissen — nur das Master-Team hat es {$verb}."
@@ -285,7 +285,7 @@ class KnowledgeService
         }
 
         $bestehend = DB::table('foodalchemist_knowledge_documents')->where('slug', $slug)->whereNull('deleted_at')->first();
-        if ($bestehend !== null && ! TeamScope::mayWrite($bestehend->team_id, $team)) {
+        if ($bestehend !== null && ! \Platform\FoodAlchemist\Services\Knowledge\WissensSichtbarkeit::mayWrite($bestehend->team_id, $team)) {
             return ['index' => $index, 'slug' => $slug, 'status' => 'abgelehnt', 'grund' => 'Slug gehört einem anderen Team bzw. ist globales Master-Wissen.'];
         }
 
@@ -314,7 +314,7 @@ class KnowledgeService
                 $einordnung = \Platform\FoodAlchemist\Services\Knowledge\WissensGeltung::payload($art, [], []);
                 DB::table('foodalchemist_knowledge_documents')->insert([
                     'uuid' => (string) UuidV7::generate(),
-                    'team_id' => TeamScope::isMaster($team) ? null : $team->id,
+                    'team_id' => \Platform\FoodAlchemist\Services\Knowledge\WissensSichtbarkeit::darfGlobalSchreiben($team) ? null : $team->id,
                     'slug' => $slug, 'title' => $title, 'category' => $category, ...$einordnung,
                     'content_md' => $content, 'version' => 1, 'content_hash' => $hash,
                     'anchor_id' => \Platform\FoodAlchemist\Support\DossierAnker::ausInhalt($content),
@@ -383,7 +383,7 @@ class KnowledgeService
             throw new \RuntimeException('Alias nicht gefunden.');
         }
         $doc = DB::table('foodalchemist_knowledge_documents')->where('id', (int) $docId)->first();
-        if ($doc === null || ! TeamScope::mayWrite($doc->team_id, $team)) {
+        if ($doc === null || ! \Platform\FoodAlchemist\Services\Knowledge\WissensSichtbarkeit::mayWrite($doc->team_id, $team)) {
             throw new \RuntimeException('Alias nicht team-eigen.');
         }
         DB::table('foodalchemist_knowledge_aliases')->where('id', $aliasId)->delete();
@@ -645,7 +645,7 @@ class KnowledgeService
     public function setActive(Team $team, string $slug, bool $active): array
     {
         $doc = $this->findSichtbar($team, $slug);
-        if (! TeamScope::mayWrite($doc->team_id, $team)) {
+        if (! \Platform\FoodAlchemist\Services\Knowledge\WissensSichtbarkeit::mayWrite($doc->team_id, $team)) {
             throw new WissenGesperrtException(
                 "\"{$slug}\" ist geerbtes/globales Master-Wissen — nur Besitzer bzw. Master-Team kann es (de)aktivieren."
             );
@@ -713,7 +713,7 @@ class KnowledgeService
 
                     continue;
                 }
-                if (! TeamScope::mayWrite($doc->team_id, $team)) {
+                if (! \Platform\FoodAlchemist\Services\Knowledge\WissensSichtbarkeit::mayWrite($doc->team_id, $team)) {
                     $ergebnisse[] = ['slug' => $slug, 'status' => 'gesperrt', 'grund' => 'geerbtes/globales Master-Wissen — nur Besitzer bzw. Master-Team kann es (de)aktivieren.'];
 
                     continue;

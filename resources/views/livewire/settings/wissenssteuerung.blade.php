@@ -18,6 +18,9 @@
     {{-- Spec 65: „Bearbeiten" sperrt den Bereich für das Team, „Fertig" gibt frei --}}
     @php $sperrLesen = in_array($sperr['modus'] ?? 'aus', ['lesen', 'fremd'], true); @endphp
     @include('foodalchemist::livewire.settings.partials.sperr-leiste', ['sofort' => true])
+    @if($masterGesperrt ?? false)
+        <x-fa::notice tone="warn" data-ws-master-gesperrt>Die Wissens-Steuerung ist Plattform-Wissen und dem Master-Team vorbehalten. Das Wissen wirkt weiter im Generator, ist hier aber nicht einsehbar.</x-fa::notice>
+    @endif
     @if($fehler !== null)
         <x-fa::notice tone="crit" data-ws-fehler>{{ $fehler }}</x-fa::notice>
     @endif
