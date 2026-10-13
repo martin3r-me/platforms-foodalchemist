@@ -225,3 +225,29 @@ it('Im GESPERRTEN Team bleiben Export-Download und Export-Tools erreichbar, alle
     $req->setUserResolver(fn () => $this->chef);
     expect(app(MandantExportDownloadController::class)($req, $e->id, app(MandantExportService::class))->getStatusCode())->toBe(200);
 });
+
+it('Sperr-Merker: Queue-Events und terminating leeren ihn, damit Worker eine Sperre/Entsperrung sofort sehen', function () {
+    FoodAlchemistMandant::updateOrCreate(['team_id' => $this->mandant->id], ['status' => 'beendet', 'modus' => 'autark']);
+    TeamSperre::flush();
+    expect(TeamSperre::istGesperrt($this->mandant))->toBeTrue();   // Merker gefüllt
+
+    $job = Mockery::mock(\Illuminate\Contracts\Queue\Job::class)->shouldIgnoreMissing();
+    $ereignisse = [
+        'JobProcessing' => fn () => event(new \Illuminate\Queue\Events\JobProcessing('sync', $job)),
+        'JobProcessed' => fn () => event(new \Illuminate\Queue\Events\JobProcessed('sync', $job)),
+        'JobFailed' => fn () => event(new \Illuminate\Queue\Events\JobFailed('sync', $job, new \RuntimeException('x'))),
+        'terminating' => fn () => app()->terminate(),
+    ];
+    foreach ($ereignisse as $name => $ausloesen) {
+        // Stand in einem ANDEREN Prozess geändert (direkt in der DB, am Dienst vorbei) → der Merker hier ist veraltet
+        FoodAlchemistMandant::where('team_id', $this->mandant->id)->update(['status' => 'beendet']);
+        TeamSperre::flush();
+        TeamSperre::istGesperrt($this->mandant);
+        FoodAlchemistMandant::where('team_id', $this->mandant->id)->update(['status' => 'aktiv']);
+        expect(TeamSperre::istGesperrt($this->mandant))->toBeTrue("{$name}: vor dem Ereignis noch der alte Stand");
+
+        $ausloesen();
+
+        expect(TeamSperre::istGesperrt($this->mandant))->toBeFalse("{$name}: nach dem Ereignis der neue Stand");
+    }
+});

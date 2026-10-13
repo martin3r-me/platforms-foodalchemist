@@ -458,11 +458,19 @@ class FoodAlchemistServiceProvider extends ServiceProvider
 
         // Spec 82 §12 A3: Der Opt-in-Stand (StammPaket::$cache, static) darf Request-/Job-Grenzen nicht überleben —
         // sonst sehen langlebige Prozesse (queue:work, Octane) einen Opt-in, der anderswo geändert wurde, erst nach Neustart.
+        // Dasselbe gilt für den Sperr-Merker eines beendeten Mandanten (TeamSperre::$cache, Spec 82 §13 C3): Eine Sperre oder
+        // Entsperrung in einem anderen Prozess muss ein Queue-Worker schon beim nächsten Job sehen, nicht erst nach einem Neustart.
         \Illuminate\Support\Facades\Event::listen(
             [\Illuminate\Queue\Events\JobProcessing::class, \Illuminate\Queue\Events\JobProcessed::class, \Illuminate\Queue\Events\JobFailed::class],
-            fn () => \Platform\FoodAlchemist\Support\StammPaket::flush(),
+            function () {
+                \Platform\FoodAlchemist\Support\StammPaket::flush();
+                \Platform\FoodAlchemist\Support\TeamSperre::flush();
+            },
         );
-        $this->app->terminating(fn () => \Platform\FoodAlchemist\Support\StammPaket::flush());
+        $this->app->terminating(function () {
+            \Platform\FoodAlchemist\Support\StammPaket::flush();
+            \Platform\FoodAlchemist\Support\TeamSperre::flush();
+        });
 
         /**
          * SCHRITT 1: Modul-Registrierung prüfen
