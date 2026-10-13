@@ -149,6 +149,7 @@
                                     <li>Unter-Teams: {{ $vorschau['unter_teams'] === [] ? 'keine (kein Kunden-Standort)' : implode(', ', $vorschau['unter_teams']) }}</li>
                                     <li>Kunden-DNA wird Team-DNA: {{ count($vorschau['dna_felder']) }} Felder, davon {{ $vorschau['dna_bleibt'] }} „Bleibt“ (verbindlich)</li>
                                     @if($vorschau['dna_uebersprungen'] !== [])<li>Schon gefüllt, bleibt unberührt: {{ implode(', ', $vorschau['dna_uebersprungen']) }}</li>@endif
+                                    <li data-projekt-lizenz-kontingent>Kontingent Standorte: {{ $vorschau['kontingent']['max_standorte'] === null ? 'unbegrenzt' : $vorschau['kontingent']['genutzt'].' von '.$vorschau['kontingent']['max_standorte'].' belegt, '.$vorschau['kontingent']['neu'].' kämen dazu' }}</li>
                                     <li>Mandant: aktiv, kuratiert, CRM-Firma verknüpft</li>
                                 </ul>
                                 @foreach($vorschau['hindernisse'] as $h)<x-fa::notice tone="crit" class="mt-2" data-projekt-lizenz-hindernis>{{ $h }}</x-fa::notice>@endforeach

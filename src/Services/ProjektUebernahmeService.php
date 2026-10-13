@@ -41,12 +41,13 @@ class ProjektUebernahmeService
         private readonly CanvasService $canvas,
         private readonly MandantenService $mandanten,
         private readonly PlattformProtokoll $protokoll,
+        private readonly FaRechte $rechte,
     ) {}
 
     /**
      * Was die Übernahme täte, ohne etwas zu schreiben.
      *
-     * @return array{oberteam: string, unter_teams: list<string>, dna_felder: list<string>, dna_bleibt: int, dna_uebersprungen: list<string>, hindernisse: list<string>}
+     * @return array{oberteam: string, unter_teams: list<string>, kontingent: array{max_standorte: ?int, genutzt: int, neu: int}, dna_felder: list<string>, dna_bleibt: int, dna_uebersprungen: list<string>, hindernisse: list<string>}
      */
     public function vorschau(Team $master, ?User $user, int $projektId, Team $oberteam): array
     {
@@ -59,9 +60,14 @@ class ProjektUebernahmeService
                 $hindernisse[] = 'Im Oberteam gibt es schon ein Unter-Team „'.$s->name.'“.';
             }
         }
+        // Kontingent „Standorte (Unter-Teams)“ aus Spec 77b: würde die Übernahme es überschreiten, ist das ein Hindernis, nie still anlegen
+        $kontingent = ['max_standorte' => $this->rechte->kontingente($oberteam)['max_standorte'], 'genutzt' => $this->rechte->kontingentNutzung($oberteam)['standorte'], 'neu' => $standorte->count()];
+        if ($kontingent['max_standorte'] !== null && $kontingent['genutzt'] + $kontingent['neu'] > $kontingent['max_standorte']) {
+            $hindernisse[] = 'Kontingent Standorte (Unter-Teams) überschritten: '.$kontingent['max_standorte'].' gebucht, '.$kontingent['genutzt'].' vorhanden, die Übernahme brauchte '.$kontingent['neu'].' weitere.';
+        }
         [$felder, $bleibt, $uebersprungen] = $this->dnaPlan($p, $oberteam);
 
-        return ['oberteam' => (string) $oberteam->name, 'unter_teams' => $standorte->pluck('name')->all(), 'dna_felder' => $felder, 'dna_bleibt' => $bleibt,
+        return ['oberteam' => (string) $oberteam->name, 'unter_teams' => $standorte->pluck('name')->all(), 'kontingent' => $kontingent, 'dna_felder' => $felder, 'dna_bleibt' => $bleibt,
             'dna_uebersprungen' => $uebersprungen, 'hindernisse' => array_values(array_unique($hindernisse))];
     }
 
