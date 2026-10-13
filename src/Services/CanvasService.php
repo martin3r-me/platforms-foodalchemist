@@ -285,57 +285,66 @@ class CanvasService
     }
 
     /**
-     * KI-Kaskade: Team-DNA → Kunde-DNA → Angebot → Foodbook → Concept übereinander für die
-     * Generierung (jede Ebene spezialisiert die darüber). Liefert ['marken_kontext' => block]
-     * oder [] (nichts injizieren). $crmCompanyId = Endkunde (Ebene 2, aus foodbook.crm_company_id).
+     * KI-Kaskade: Team-DNA → Kunde-DNA → Angebot → Foodbook → Concept (+ Tonalität des Foodbooks) für die
+     * Generierung. Liefert ['marken_kontext' => block] oder [] (nichts injizieren). $crmCompanyId = Endkunde.
+     *
+     * Seit Spec 82 Schritt 6 nur noch ein ADAPTER: den Block setzt der {@see KontextResolver} zusammen (Team-DNA
+     * feldweise, verbindliche Vorgaben, Teamprofil, Gesamtbudget). Die Signatur bleibt, damit die bestehenden
+     * Aufrufer (Gateway, Planung, Plan-aus-Brief-Tools) unverändert weiterlaufen; Quellen und Budget-Bilanz liefert
+     * `KontextResolver::fuer()` direkt.
      */
-    /**
-     * W0-8 — Deckel je DNA-Ebene (Team → Kunde → Angebot → Foodbook → Concept).
-     * 3.000 Zeichen fassen einen vollständig gepflegten Canvas; darüber beginnt
-     * Wiederholung, und die unteren, spezifischeren Ebenen sind die wichtigeren.
-     */
-    private const KONTEXT_MAX_CHARS_PRO_EBENE = 3000;
-
     public function cascadeKontext(Team $team, ?int $conceptId = null, ?int $foodbookId = null, ?int $angebotId = null, ?int $crmCompanyId = null): array
     {
-        $bloecke = [];
-        $reihen = [
-            ['food_dna', 'team', $team->id],
-            ['kunde_dna', 'crm_company', $crmCompanyId],
-            ['angebot', 'angebot', $angebotId],
-            ['foodbook', 'foodbook', $foodbookId],
-            ['concept', 'concept', $conceptId],
+        $r = app(KontextResolver::class)->fuer($team, [
+            'concept_id' => $conceptId, 'foodbook_id' => $foodbookId, 'angebot_id' => $angebotId, 'crm_company_id' => $crmCompanyId,
+        ]);
+
+        return $r['marken_kontext'] === null ? [] : ['marken_kontext' => $r['marken_kontext']];
+    }
+
+    /**
+     * Pflegbares ZUSATZ-Feld anlegen (Spec 82 §7, Variante A). Die Tabelle hat einen Unique-Index auf
+     * (team_id, canvas_type, field_key); der greift bei team_id NULL nicht und zählt gelöschte Zeilen mit —
+     * deshalb prüft der Service zusätzlich: Team ist Pflicht, der Key darf kein Kern-Feld sein, ein Duplikat
+     * wird abgewiesen, eine gelöschte Zeile mit gleichem Key wird wiederbelebt statt am Index zu scheitern.
+     *
+     * @param  array{group_name?: ?string, type?: string, sub?: ?array, position?: int}  $opt
+     */
+    public function zusatzfeldAnlegen(Team $team, string $type, string $key, string $label, array $opt = []): FoodAlchemistCanvasTemplate
+    {
+        if (! array_key_exists($type, self::TEMPLATES)) {
+            throw new \RuntimeException("Unbekannter Canvas-Typ: {$type}");
+        }
+        if (preg_match('/^[a-z][a-z0-9_]{1,47}$/', $key) !== 1) {
+            throw new \RuntimeException('Feld-Key: Kleinbuchstaben, Ziffern und Unterstrich, 2 bis 48 Zeichen, beginnt mit einem Buchstaben.');
+        }
+        if (in_array($key, array_column(self::TEMPLATES[$type]['felder'], 'key'), true)) {
+            throw new \RuntimeException("„{$key}“ ist ein Kern-Feld und kann nicht als Zusatzfeld angelegt werden.");
+        }
+        $typ = $opt['type'] ?? 'longtext';
+        if (! in_array($typ, ['text', 'longtext', 'repeatable'], true)) {
+            throw new \RuntimeException('Feld-Typ: text | longtext | repeatable.');
+        }
+        if (trim($label) === '') {
+            throw new \RuntimeException('Ein Zusatzfeld braucht eine Beschriftung.');
+        }
+        $vorhanden = FoodAlchemistCanvasTemplate::withTrashed()
+            ->where('team_id', $team->id)->where('canvas_type', $type)->where('field_key', $key)->first();
+        if ($vorhanden !== null && ! $vorhanden->trashed()) {
+            throw new \RuntimeException("Das Zusatzfeld „{$key}“ gibt es in diesem Team schon.");
+        }
+        $werte = [
+            'label' => trim($label), 'group_name' => $opt['group_name'] ?? null, 'type' => $typ,
+            'sub' => $typ === 'repeatable' ? ($opt['sub'] ?? ['claim' => 'Claim', 'description' => 'Beschreibung']) : null,
+            'position' => (int) ($opt['position'] ?? 0), 'active' => true,
         ];
-        foreach ($reihen as [$type, $ownerType, $ownerId]) {
-            if ($ownerId === null) {
-                continue;
-            }
-            $canvas = $type === 'food_dna' ? $this->findFoodDna($team) : $this->find($type, $ownerType, $ownerId);
-            if ($canvas !== null && ($block = $this->promptKontext($canvas)) !== null) {
-                // W0-8: Die Canvas-Felder sind Freitext (inkl. `repeatable` mit Claim +
-                // Beschreibung je Eintrag) und liefen über alle fünf Kaskaden-Ebenen ganz
-                // OHNE Deckel in jeden kreativen Prompt — der einzige echt unbegrenzte
-                // Kontext-Block im Generator. Pro Ebene gekappt, damit eine ausführlich
-                // gepflegte Team-DNA nicht die spezialisierenden Ebenen unter sich begräbt.
-                $bloecke[] = mb_strlen($block) > self::KONTEXT_MAX_CHARS_PRO_EBENE
-                    ? mb_substr($block, 0, self::KONTEXT_MAX_CHARS_PRO_EBENE) . "\n- […gekürzt für KI-Kontext…]"
-                    : $block;
-            }
+        if ($vorhanden !== null) {
+            $vorhanden->restore();
+            $vorhanden->update($werte);
+
+            return $vorhanden->refresh();
         }
 
-        // Foodbook-Override der Tonalität (Plan: Team-Default → Kunde-Default → FOODBOOK-Override).
-        // Die foodbook.writing_style_id-Spalte (Kreativ-Tab) führt über die Default-Schreibstile der
-        // DNA-Kette — als LETZTER Block angehängt, damit die gewählte Stimme dieses Foodbooks gewinnt.
-        if ($foodbookId !== null) {
-            $fb = FoodAlchemistFoodbook::find($foodbookId);
-            if ($fb !== null && $fb->writing_style_id !== null
-                && ($stil = FoodAlchemistWritingStyle::find((int) $fb->writing_style_id)) !== null) {
-                $duktus = trim((string) $stil->sprach_duktus);
-                $bloecke[] = 'Tonalität dieses Foodbooks (führt — überschreibt die Default-Schreibstile):'
-                    . "\n- Schreibstil: " . $stil->name . ($duktus !== '' ? ' — Sprach-Duktus: ' . $duktus : '');
-            }
-        }
-
-        return $bloecke === [] ? [] : ['marken_kontext' => implode("\n\n", $bloecke)];
+        return FoodAlchemistCanvasTemplate::create(['team_id' => $team->id, 'canvas_type' => $type, 'field_key' => $key] + $werte);
     }
 }
