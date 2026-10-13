@@ -248,8 +248,12 @@ class FassungService
         }
     }
 
-    /** @return array<string, mixed> */
-    private function allergenBild(FoodAlchemistRecipe $r): array
+    /**
+     * Allergen- und Zusatzstoff-Bild einer Rezept-Zeile (Vergleich zweier Fassungen). Öffentlich für FassungsVergleich (Schritt 4).
+     *
+     * @return array<string, mixed>
+     */
+    public function allergenBild(FoodAlchemistRecipe $r): array
     {
         return collect($r->getAttributes())
             ->filter(fn ($v, $k) => (str_starts_with($k, 'allergen_') || str_starts_with($k, 'additive_'))
