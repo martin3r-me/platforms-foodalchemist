@@ -148,6 +148,14 @@ it('Trait-Vertrag: ALLE Models tragen LogsActivity + BelongsToTeamHierarchy + Ha
             //    jede Modus-/Statusänderung geht zusätzlich als Klartext über PlattformProtokoll, die Zeile trägt Wer und Wann.
             continue;
         }
+        if (class_basename($klasse) === 'FoodAlchemistMandantBeendenLauf') {
+            // Spec 82 §13 C3: Fortschritt des Ablaufs „Mandant beenden“, eine Zeile je Lauf je Kunden-Hauptteam.
+            //  - kein BelongsToTeamHierarchy: Plattform-Verwaltung über den Mandanten, kein Inhalt des Teams; gelesen und
+            //    geschrieben nur über MandantBeendenService (Plattform-Admin), nie über den Team-Scope eines Mandanten.
+            //  - kein SoftDeletes/HasUuidV7: adressiert über die Id, Verlauf bleibt (abgebrochen/abgeschlossen statt löschen).
+            //  - LogsActivity: trägt es; die Klartext-Einträge laufen zusätzlich über PlattformProtokoll mit dem Lauf als Subjekt.
+            continue;
+        }
         if (class_basename($klasse) === 'FoodAlchemistTeamStammOptin') {
             // Spec 82 §12 A3: Schalter „Mandant hat das Stamm-Paket gebucht", eine Zeile je Mandant.
             //  - kein BelongsToTeamHierarchy: die Vererbung an Unter-Teams löst StammPaket::istFreigeschaltet

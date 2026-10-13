@@ -444,7 +444,11 @@ Ergänzt 13.10.2026 (Dominique: „die komplette Spec umgesetzt, sodass ich alle
 ### C · Was für „alles steuern“ zusätzlich gebaut wird
 1. **Mandanten-Stammblatt** im Modul „Mandanten“ (lesend): gebuchte Bereiche, Stamm-Paket ja/nein, Abos, Unter-Teams, Kontingente, Gebühren-Vorschau, Projekt-Status, CRM-Firma. Ein Blick je Mandant, mit Sprung zu den jeweiligen Schaltern.
 2. **Rechte im Master-Team:** Veröffentlichen (Fassung, §12 B) und Abos vergeben nur mit FA-Rolle „Freigeben“, nicht jedes Master-Mitglied.
-3. **Mandant beenden als Ablauf**, in dieser Reihenfolge mit Vorschau: Abos kündigen (tiefe Kopie, §12 D) → Stamm-Paket abbestellen → Bereiche aus → Datenexport → Team sperren.
+3. **Mandant beenden als Ablauf**, in dieser Reihenfolge mit Vorschau: Abos kündigen (tiefe Kopie, §12 D) → Stamm-Paket abbestellen → **Datenexport** → Bereiche aus → Team sperren (Kurator 13.10.: Der Export steht vor „Bereiche aus“ und vor dem Sperren; sein Download hängt an keinem Bereich, eigene Route/Tool, nur Inhaber).
+   - **Nur Plattform-Admin.** §13 G: Der Admin löst aus und sieht nur Manifest/Zählung; die Datei ist nur für Inhaber/Admin des Mandanten-Teams herunterladbar, der Master nur bei kuratierten Mandanten.
+   - **Sperren = Vollsperre, rückgängig** (Dominique 13.10.): kein FA-Zugriff außer dem Export-Download; rückgängig heißt Status zurück auf „aktiv“, die Bereiche bleiben aus, bis sie neu gebucht werden.
+   - **Löschen der Daten gehört NICHT zum Ablauf** (Dominique 13.10.): eigener späterer Schritt nach Vertrag/AVV. **Offen.**
+   - **Gebaut (PR 1):** Vorschau + Lauf-Gerüst (`MandantBeendenService`, Tabelle `foodalchemist_mandant_beenden_laeufe`, MCP `mandanten_beenden.GET`); Abos entfallen als Schritt, solange es das Abo-Modell nicht gibt (`AboAuskunft::verfuegbar()`).
 4. **Protokoll** aller Plattform-Admin-Aktionen (Paket, Master, Gebühren, Abos) über das vorhandene activity-log.
 5. **MCP-Tools für jede Steueraktion B1–B6** (Lockstep), damit Steuern auch per Claude geht.
 6. **Platzhalter Necta-Zugang je Mandant** (später Import): nur als Tabelle/Feld vormerken, nicht bauen.
