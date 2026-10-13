@@ -13,6 +13,11 @@ use Platform\FoodAlchemist\Services\FaRechte;
  * (Rollen pflegt der Team-Admin in den Team-Einstellungen der Plattform), und pflegt das eine
  * FA-Zusatzrecht: „darf Rechnungen freigeben" für Mitglieder. Ändern nur als FA-Admin; die Prüfung
  * sitzt in `FaRechte::setzeFreigabe`, die Oberfläche blendet nur aus.
+ *
+ * Spec 82 §13 A: Bereiche und Kontingente werden NUR in der Plattform-Verwaltung (/verwaltung, eingebettet) gepflegt — es gibt eine Stelle
+ * zum Steuern. Diese Seite zeigt sie nur lesend (gebucht, genutzt). Es gibt hier bewusst KEINE Schreib-Methoden dafür: Ein Hand-Aufruf
+ * (`teamBereichSetzen`, `kontingenteSpeichern`) trifft ins Leere. Die Dienste (`FaRechte::setzeTeamBereich`/`setzeKontingente`) bleiben
+ * für Verwaltung und MCP bestehen.
  */
 class Zugriffsrechte extends Component
 {
@@ -35,15 +40,6 @@ class Zugriffsrechte extends Component
     /** Spec 77b: Mitglied, dessen Bereichs-Einschränkungen gerade aufgeklappt sind. */
     public ?int $bereicheFuer = null;
 
-    /** @var array{max_standorte:string, max_user:string, ki_budget_eur_monat:string} */
-    public array $kontingentForm = ['max_standorte' => '', 'max_user' => '', 'ki_budget_eur_monat' => ''];
-
-    public function mount(): void
-    {
-        $k = app(FaRechte::class)->kontingente($this->team());
-        $this->kontingentForm = array_map(fn ($v) => $v === null ? '' : str_replace('.', ',', (string) $v), $k);
-    }
-
     public function bereicheUmschalten(int $userId): void
     {
         $this->bereicheFuer = $this->bereicheFuer === $userId ? null : $userId;
@@ -52,16 +48,6 @@ class Zugriffsrechte extends Component
     public function userBereichSetzen(int $userId, string $bereich, bool $darf, FaRechte $rechte): void
     {
         $this->ausfuehren(fn () => $rechte->setzeUserSperre($this->team(), Auth::user(), $userId, $bereich, ! $darf), 'Gespeichert.');
-    }
-
-    public function teamBereichSetzen(string $bereich, bool $aktiv, FaRechte $rechte): void
-    {
-        $this->ausfuehren(fn () => $rechte->setzeTeamBereich($this->team(), Auth::user(), $bereich, $aktiv), 'Bereich gespeichert.');
-    }
-
-    public function kontingenteSpeichern(FaRechte $rechte): void
-    {
-        $this->ausfuehren(fn () => $rechte->setzeKontingente($this->team(), Auth::user(), $this->kontingentForm), 'Kontingente gespeichert.');
     }
 
     private function ausfuehren(callable $tu, string $ok): void

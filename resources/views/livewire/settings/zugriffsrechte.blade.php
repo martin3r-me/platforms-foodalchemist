@@ -1,5 +1,6 @@
 {{-- Spec 61/75 · Zugriffsrechte: Rollen kommen aus den Team-Einstellungen der Plattform; das FA pflegt
-     nur das Häkchen „darf Rechnungen freigeben" für Mitglieder (nur FA-Admin, Service prüft). --}}
+     nur das Häkchen „darf Rechnungen freigeben" und die Bereichs-Einschränkung je Mitglied (nur FA-Admin, Service prüft).
+     Spec 82 §13 A: Bereiche und Kontingente des Teams stehen hier nur lesend, gepflegt wird in /verwaltung. --}}
 @php($leise = 'text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]')
 <div class="flex flex-col gap-4" data-settings-zugriffsrechte>
     @if($fehler)<x-fa::notice tone="crit" data-rechte-fehler>{{ $fehler }}</x-fa::notice>@endif
@@ -13,34 +14,32 @@
         </dl>
     </x-fa::section>
 
-    {{-- Spec 77b: gebuchte Bereiche (Plattform-Admin schaltet), Kontingente --}}
-    <x-fa::section title="Freigeschaltete Bereiche" description="Was dieses Team gebucht hat. Freischalten ist Sache des Plattform-Admins; ein Unter-Team hat höchstens, was sein Haupt-Team hat." data-rechte-bereiche>
+    {{-- Spec 82 §13 A: Bereiche und Kontingente pflegt NUR die Plattform-Verwaltung (eine Stelle zum Steuern). Hier nur lesend. --}}
+    <x-fa::section title="Gebuchte Bereiche" description="Was dieses Team gebucht hat. Gepflegt in der Plattform-Verwaltung; ein Unter-Team hat höchstens, was sein Haupt-Team hat." data-rechte-bereiche>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
             @foreach($katalog as $b => $label)
-                <label class="inline-flex items-center gap-2 text-[length:var(--fa-text-sm)]" wire:key="tb-{{ $b }}">
-                    <input type="checkbox" @checked($teamBereiche[$b] ?? true) @disabled(! $istPlattformAdmin)
-                        wire:change="teamBereichSetzen('{{ $b }}', $event.target.checked)" data-team-bereich="{{ $b }}">
+                <p class="inline-flex items-center gap-2 text-[length:var(--fa-text-sm)]" wire:key="tb-{{ $b }}" data-team-bereich="{{ $b }}" data-aktiv="{{ ($teamBereiche[$b] ?? true) ? '1' : '0' }}">
+                    <x-fa::badge :tone="($teamBereiche[$b] ?? true) ? 'ok' : 'neutral'">{{ ($teamBereiche[$b] ?? true) ? 'gebucht' : 'aus' }}</x-fa::badge>
                     <span class="{{ ($teamBereiche[$b] ?? true) ? '' : 'line-through text-[var(--fa-ink-3)]' }}">{{ $label }}</span>
-                </label>
+                </p>
             @endforeach
         </div>
+        <p class="pt-3 {{ $leise }}" data-rechte-verwaltungs-hinweis>Gepflegt in der Plattform-Verwaltung.
+            @if($istPlattformAdmin)<a href="{{ url('/verwaltung') }}" class="underline hover:no-underline" data-rechte-verwaltung-link>Zur Plattform-Verwaltung →</a>@endif
+        </p>
     </x-fa::section>
 
-    <x-fa::section title="Kontingente" description="Gilt für das Haupt-Team mit allen Unter-Teams. Leer = unbegrenzt. Pflege durch den Plattform-Admin." data-rechte-kontingente>
+    <x-fa::section title="Kontingente" description="Gilt für das Haupt-Team mit allen Unter-Teams. Leer = unbegrenzt. Gepflegt in der Plattform-Verwaltung." data-rechte-kontingente>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
             @foreach(['max_standorte' => ['Standorte (Unter-Teams)', $nutzung['standorte']], 'max_user' => ['Benutzer', $nutzung['user']], 'ki_budget_eur_monat' => ['KI-Budget € je Monat', number_format($nutzung['ki_eur_monat'], 2, ',', '.').' €']] as $f => [$label, $ist])
-                <x-fa::field :label="$label" :for="'k-'.$f" :hint="'genutzt: '.$ist">
-                    @if($istPlattformAdmin && $istHauptTeam)
-                        <x-fa::input :id="'k-'.$f" size="sm" numeric wire:model="kontingentForm.{{ $f }}" placeholder="unbegrenzt" />
-                    @else
-                        <p class="tabular-nums">{{ $kontingente[$f] === null ? 'unbegrenzt' : str_replace('.', ',', (string) $kontingente[$f]) }}</p>
-                    @endif
-                </x-fa::field>
+                <div data-kontingent="{{ $f }}">
+                    <p class="{{ $leise }}">{{ $label }}</p>
+                    <p class="tabular-nums">gebucht: {{ $kontingente[$f] === null ? 'unbegrenzt' : str_replace('.', ',', (string) $kontingente[$f]) }}</p>
+                    <p class="{{ $leise }} tabular-nums">genutzt: {{ $ist }}</p>
+                </div>
             @endforeach
         </div>
-        @if($istPlattformAdmin && $istHauptTeam)
-            <div><x-fa::button size="sm" wire:click="kontingenteSpeichern" data-kontingente-speichern>Kontingente speichern</x-fa::button></div>
-        @endif
+        @unless($istHauptTeam)<p class="pt-2 {{ $leise }}">Kontingente gelten am Haupt-Team.</p>@endunless
     </x-fa::section>
 
     <x-fa::section title="Mitglieder" :meta="count($mitglieder)" description="Rechnungen freigeben dürfen Inhaber und Admins immer. Für Mitglieder setzt du hier das Häkchen — z. B. für das Büro, ohne es zum Admin zu machen.">
