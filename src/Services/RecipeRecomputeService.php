@@ -46,6 +46,15 @@ class RecipeRecomputeService
     /** Team + WG-Default-Memo des aktuell laufenden Rezepts (Verlust-Kaskade, GL-02). */
     private ?Team $recomputeTeam = null;
 
+    /**
+     * Spec 82 Stufe 3b: Unter-Rezept-Kosten je Team (sub_id => [per_kg, basis]). Gesetzt nur während
+     * kostenFuerTeam — dann gilt NICHT das gespeicherte ek_per_kg des Unter-Rezepts (das wären die Kosten
+     * seines Besitzers), sondern der Wert desselben Teams.
+     *
+     * @var array<int, array{per_kg: ?float, basis: ?EkPriceBasis}>|null
+     */
+    private ?array $subKosten = null;
+
     /** @var array<string, float> */
     private array $garverlustWgCache = [];
 
@@ -694,6 +703,102 @@ class RecipeRecomputeService
             ? round($ekTotal / $yield, 2) : null;
     }
 
+    /**
+     * Spec 82 §12 C / Stufe 3b: Kosten eines Rezepts (Arbeits- ODER Fassungs-Zeile) für ein bestimmtes Team —
+     * Preise und Lead-Pins DIESES Teams (PriceService 3a, leadPrefs), Unter-Rezepte rekursiv mit demselben Team.
+     * Schreibt nichts in das Rezept; Speichern übernimmt KostenCacheService.
+     *
+     * „Unvollständig" (Variante 2, 13.10.): eine Zutat ohne Preis trägt 0 € bei und zählt nicht als bepreist; sie
+     * steht mit Pfad und Masse in `fehlende`. Ein unvollständiges Unter-Rezept macht das Eltern-Rezept unvollständig.
+     *
+     * @param  array<int, array<string,mixed>>  $memo  Ergebnis je Rezept-ID (für geteilte Basisrezepte)
+     * @return array{ek_summe: ?float, ek_per_kg: ?float, n_priced: int, n_total: int, masse_total: float, masse_fehlend: float,
+     *               basis: ?EkPriceBasis, vollstaendig: bool, grund: ?string, fehlende: list<array<string,mixed>>}
+     */
+    public function kostenFuerTeam(int $recipeId, Team $team, array &$memo = [], array $pfad = []): array
+    {
+        if (isset($memo[$recipeId])) {
+            return $memo[$recipeId];
+        }
+        if (isset($pfad[$recipeId])) {
+            throw new \RuntimeException('Zyklus in den Unter-Rezepten — Kosten nicht berechenbar.');
+        }
+        $pfad[$recipeId] = true;
+        $recipe = FoodAlchemistRecipe::mitFassungen()->with(['ingredients.unit', 'ingredients.gp', 'ingredients.referencedRecipe'])
+            ->findOrFail($recipeId);
+        $zutaten = $this->aggregationsZutaten($recipe->ingredients->filter(fn ($z) => $z->match_method !== MatchMethod::Ignored));
+
+        // Kinder zuerst (sie setzen den Zustand des Dienstes selbst), danach den eigenen Zustand setzen
+        foreach ($zutaten as $z) {
+            if ($z->referenced_recipe_id !== null) {
+                $this->kostenFuerTeam((int) $z->referenced_recipe_id, $team, $memo, $pfad);
+            }
+        }
+        $this->recomputeTeam = $team;
+        $this->laCache = [];
+        $this->leadPrefCache = [];
+        $this->garverlustWgCache = [];
+        $this->putzverlustWgCache = [];
+        $this->subKosten = [];
+        foreach ($zutaten as $z) {
+            if ($z->referenced_recipe_id !== null) {
+                $m = $memo[(int) $z->referenced_recipe_id];
+                $this->subKosten[(int) $z->referenced_recipe_id] = ['per_kg' => $m['ek_per_kg'], 'basis' => $m['basis']];
+            }
+        }
+
+        try {
+            $summe = 0.0;
+            $nTotal = 0;
+            $nPriced = 0;
+            $basen = [];
+            $masseTotal = 0.0;
+            $masseFehlend = 0.0;
+            $fehlende = [];
+            $grund = null;
+            foreach ($zutaten as $z) {
+                $nTotal++;
+                [$kosten, $priced, $basis] = $this->zutatKosten($z);
+                $masse = $this->mengeAvg($z) * $this->grammFaktor($z);
+                $masseTotal += $masse;
+                $name = (string) ($z->display_name ?: $z->raw_text ?: ($z->gp?->name ?? $z->referencedRecipe?->name ?? '?'));
+                if ($priced) {
+                    $nPriced++;
+                    $basen[] = $basis ?? EkPriceBasis::Unknown;
+                    $summe += $kosten;
+                }
+                $sub = $z->referenced_recipe_id !== null ? $memo[(int) $z->referenced_recipe_id] : null;
+                if (! $priced && $sub === null) {
+                    $masseFehlend += $masse;
+                    $fehlende[] = ['pfad' => $recipe->name . ' › ' . $name, 'name' => $name, 'gp_id' => $z->gp_id, 'sub_id' => null, 'masse_g' => round($masse, 2)];
+                    $grund ??= 'zutaten_ohne_preis';
+                } elseif ($sub !== null && ! $sub['vollstaendig']) {
+                    // Anteil der fehlenden Masse des Unter-Rezepts auf diese Zeile umlegen
+                    $anteil = $sub['masse_total'] > 0 ? $sub['masse_fehlend'] / $sub['masse_total'] : 1.0;
+                    $masseFehlend += $masse * $anteil;
+                    foreach ($sub['fehlende'] as $f) {
+                        $fehlende[] = [...$f, 'pfad' => $recipe->name . ' › ' . $f['pfad']];
+                    }
+                    $grund = $grund === 'zutaten_ohne_preis' ? $grund : 'unterrezept_unvollstaendig';
+                }
+            }
+            $yield = $recipe->yield_kg_manual !== null ? (float) $recipe->yield_kg_manual : ($recipe->yield_kg !== null ? (float) $recipe->yield_kg : null);
+            $vollstaendig = $fehlende === [] && $nPriced === $nTotal;
+
+            return $memo[$recipeId] = [
+                'ek_summe' => $summe > 0 ? round($summe, 2) : null,
+                'ek_per_kg' => ($summe > 0 && $yield !== null && $yield > 0) ? round($summe / $yield, 2) : null,
+                'n_priced' => $nPriced, 'n_total' => $nTotal,
+                'masse_total' => round($masseTotal, 2), 'masse_fehlend' => round($masseFehlend, 2),
+                'basis' => $basen === [] ? null : EkPriceBasis::aggregiere($basen),
+                'vollstaendig' => $vollstaendig, 'grund' => $vollstaendig ? null : ($grund ?? 'zutaten_ohne_preis'),
+                'fehlende' => $fehlende,
+            ];
+        } finally {
+            $this->subKosten = null;
+        }
+    }
+
     // ── 5. Nährwerte (GL-08 — KEIN F7.1-Guard, Rohmasse-Basis) ──────────
 
     private function naehrwerte(FoodAlchemistRecipe $recipe, Collection $zutaten): void
@@ -905,6 +1010,11 @@ class RecipeRecomputeService
         $bSub = $pSub !== null
             ? ($z->referencedRecipe->ek_price_basis ?? EkPriceBasis::Unknown)
             : null;
+        if ($this->subKosten !== null && $z->referenced_recipe_id !== null) {   // Spec 82 3b: Sub-Kosten desselben Teams
+            $sub = $this->subKosten[(int) $z->referenced_recipe_id] ?? ['per_kg' => null, 'basis' => null];
+            $pSub = $sub['per_kg'] !== null ? $sub['per_kg'] / 1000 : null;
+            $bSub = $pSub !== null ? ($sub['basis'] ?? EkPriceBasis::Unknown) : null;
+        }
 
         if ($z->unit?->dimension === 'count') {                 // T3 Zeile count
             // €/Stk ist der Preis EINES GANZEN Artikel-Stücks — er gilt also nur, wenn die
