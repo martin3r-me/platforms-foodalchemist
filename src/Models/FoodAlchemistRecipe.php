@@ -25,6 +25,18 @@ class FoodAlchemistRecipe extends Model
 {
     use HasUuidV7, LogsActivity, BelongsToTeamHierarchy, SoftDeletes;
 
+    /** Spec 82 §12 B: Fassungs-Zeilen standardmäßig ausblenden (Ausnahmen siehe OhneFassungenScope). */
+    protected static function booted(): void
+    {
+        static::addGlobalScope(new \Platform\FoodAlchemist\Models\Scopes\OhneFassungenScope);
+    }
+
+    /** Ausdrücklich MIT Fassungs-Zeilen lesen (FassungService, Änderungsprotokoll, Recompute). */
+    public static function mitFassungen(): \Illuminate\Database\Eloquent\Builder
+    {
+        return static::withoutGlobalScope(\Platform\FoodAlchemist\Models\Scopes\OhneFassungenScope::class);
+    }
+
     protected $table = 'foodalchemist_recipes';
 
     protected $guarded = ['id'];

@@ -63,7 +63,8 @@ class RecipeRecomputeService
         $this->laCache = [];                                       // Preis-Memo nie über Edits hinweg tragen
         $this->leadPrefCache = [];
         DB::transaction(function () use ($recipeId) {
-            $recipe = FoodAlchemistRecipe::with(['ingredients.unit', 'ingredients.gp', 'ingredients.referencedRecipe'])
+            $recipe = FoodAlchemistRecipe::withoutGlobalScope(\Platform\FoodAlchemist\Models\Scopes\OhneFassungenScope::class)   // Spec 82: auch Fassungen (ohne Kosten)
+                ->with(['ingredients.unit', 'ingredients.gp', 'ingredients.referencedRecipe'])
                 ->findOrFail($recipeId);
             // Verlust-Kaskade (GL-02): Team + WG-Default-Memo je Recompute-Lauf frisch.
             $this->recomputeTeam = Team::find($recipe->team_id);

@@ -75,7 +75,7 @@ class FassungService
             $allergen = [];
             foreach ($baum as $recipe) {
                 $hash = $this->inhaltHash($recipe, $map);
-                $vorher = FoodAlchemistRecipe::where('fassung_von_id', $recipe->id)->where('ist_fassung', true)
+                $vorher = FoodAlchemistRecipe::mitFassungen()->where('fassung_von_id', $recipe->id)->where('ist_fassung', true)
                     ->whereNull('deleted_at')->orderByDesc('fassung_nr')->orderByDesc('id')->first();
                 if ($vorher !== null && $vorher->inhalt_hash === $hash) {
                     $map[$recipe->id] = (int) $vorher->id;
@@ -84,7 +84,7 @@ class FassungService
                     continue;
                 }
                 // Nummer über ALLE Fassungen der Familie, auch soft-gelöschte: UNIQUE(team_id, recipe_key) zählt sie mit
-                $nr = (int) FoodAlchemistRecipe::withTrashed()->where('fassung_von_id', $recipe->id)->where('ist_fassung', true)->max('fassung_nr') + 1;
+                $nr = (int) FoodAlchemistRecipe::mitFassungen()->withTrashed()->where('fassung_von_id', $recipe->id)->where('ist_fassung', true)->max('fassung_nr') + 1;
                 $fassung = $this->kopiere($recipe, $map, $nr, $hash, $notiz, $actor);
                 $this->recompute->recomputePipeline($fassung->id, false);
                 $fassung->refresh();
@@ -103,7 +103,7 @@ class FassungService
         if ($ergebnis['neu'] !== []) {
             $this->protokoll->schreibe('fassung_veroeffentlicht', ['recipe_id' => $wurzel->id, 'fassung_id' => $ergebnis['fassung_id'],
                 'neu' => $ergebnis['neu'], 'allergen_geaendert' => $ergebnis['allergen_geaendert'], 'notiz' => $notiz],
-                $actor, FoodAlchemistRecipe::find($ergebnis['fassung_id']));
+                $actor, FoodAlchemistRecipe::mitFassungen()->find($ergebnis['fassung_id']));
         }
 
         return $ergebnis;

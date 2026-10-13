@@ -45,7 +45,7 @@ class RecipeFassungenGetTool extends WareneingangTool implements ToolContract, T
                 throw new \Illuminate\Database\Eloquent\ModelNotFoundException;
             }
 
-            return ['fassungen' => FoodAlchemistRecipe::where('fassung_von_id', $familie)->where('ist_fassung', true)
+            return ['fassungen' => FoodAlchemistRecipe::mitFassungen()->where('fassung_von_id', $familie)->where('ist_fassung', true)
                 ->orderByDesc('fassung_nr')->get(['id', 'name', 'fassung_nr', 'veroeffentlicht_at', 'aenderungsnotiz', 'fassung_allergen_geaendert'])
                 ->map(fn ($f) => ['id' => (int) $f->id, 'name' => $f->name, 'nr' => (int) $f->fassung_nr,
                     'veroeffentlicht_at' => $f->veroeffentlicht_at, 'notiz' => $f->aenderungsnotiz,

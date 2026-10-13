@@ -53,7 +53,7 @@ beforeEach(function () {
     $this->abos->abonnieren($this->master, $this->broich, $this->sammlung, $this->kurator);
 
     $this->sieht = fn (Team $t) => FoodAlchemistRecipe::visibleToTeam($t)->pluck('foodalchemist_recipes.id')->map(fn ($v) => (int) $v)->all();
-    $this->fassungVon = fn (FoodAlchemistRecipe $r) => FoodAlchemistRecipe::where('fassung_von_id', $r->id)->where('ist_fassung', true)->orderBy('fassung_nr')->get();
+    $this->fassungVon = fn (FoodAlchemistRecipe $r) => FoodAlchemistRecipe::mitFassungen()->where('fassung_von_id', $r->id)->where('ist_fassung', true)->orderBy('fassung_nr')->get();
 });
 
 it('Veröffentlichen friert Rezept + Unter-Rezept ein; Abonnent sieht nur die Fassungen; Master-Bibliothek zeigt keine Fassung', function () {
@@ -87,7 +87,7 @@ it('Leck-Sperre: Fassungen tragen nie ek_*, Zusatzkosten oder VK des Masters —
     $ids = ($this->fassungVon)($this->jus)->pluck('id')->merge(($this->fassungVon)($this->fond)->pluck('id'))->all();
     app(\Platform\FoodAlchemist\Services\RecipeRecomputeService::class)->recomputeMany($ids);
 
-    foreach (FoodAlchemistRecipe::whereIn('id', $ids)->get() as $f) {
+    foreach (FoodAlchemistRecipe::mitFassungen()->whereIn('id', $ids)->get() as $f) {
         expect([$f->ek_total_eur, $f->ek_per_kg_eur, $f->additional_costs_eur, $f->sales_net, $f->sales_gross])->toBe([null, null, null, null, null], $f->name);
     }
     // Arbeitszeilen des Masters behalten ihre Werte
@@ -101,7 +101,7 @@ it('Arbeitsstand ≠ Fassung: Master bearbeitet, Abonnent sieht weiter f1; erst 
 
     $this->rotwein->update(['quantity' => '300']);                       // Arbeitsstand ändern …
     expect(($this->sieht)($this->broich))->toContain($jusF1->id);          // … Abonnent merkt nichts
-    expect((float) FoodAlchemistRecipe::find($jusF1->id)->ingredients()->where('gp_id', $this->wein->id)->value('quantity'))->toBe(200.0);
+    expect((float) FoodAlchemistRecipe::mitFassungen()->find($jusF1->id)->ingredients()->where('gp_id', $this->wein->id)->value('quantity'))->toBe(200.0);
 
     $r = $this->fassungen->veroeffentlichen($this->master, $this->jus->id, 'Mehr Rotwein', $this->kurator);
     $jusF2 = ($this->fassungVon)($this->jus)->last();
@@ -137,7 +137,7 @@ it('Regeln: nur Master mit „Freigeben", Notiz Pflicht, nur globale Stamm-GPs, 
     $this->makeIngredient($this->fond, 'Salz', $eigenGp, '10');
     expect(fn () => $this->fassungen->veroeffentlichen($this->master, $this->jus->id, 'x', $this->kurator))
         ->toThrow(RuntimeException::class, 'Master-eigenes Salz');
-    expect(FoodAlchemistRecipe::where('ist_fassung', true)->count())->toBe(0);   // nichts halb veröffentlicht
+    expect(FoodAlchemistRecipe::mitFassungen()->where('ist_fassung', true)->count())->toBe(0);   // nichts halb veröffentlicht
 
     DB::table('foodalchemist_recipe_ingredients')->where('gp_id', $eigenGp->id)->delete();
     $this->fassungen->veroeffentlichen($this->master, $this->jus->id, 'Erst', $this->kurator);
@@ -154,7 +154,7 @@ it('Eindeutigkeit: Fassungen kollidieren nicht am UNIQUE(team_id, recipe_key) �
     $this->rotwein->update(['quantity' => '250']);
     $this->fassungen->veroeffentlichen($this->master, $this->jus->id, 'f2', $this->kurator);
 
-    $keys = FoodAlchemistRecipe::withTrashed()->where('fassung_von_id', $this->jus->id)->orderBy('id')->pluck('recipe_key')->all();
+    $keys = FoodAlchemistRecipe::mitFassungen()->withTrashed()->where('fassung_von_id', $this->jus->id)->orderBy('id')->pluck('recipe_key')->all();
     expect($keys)->toBe([$this->jus->recipe_key . '@f1', $this->jus->recipe_key . '@f2']);
 });
 

@@ -209,6 +209,10 @@ class PoolEmbeddingService
             ->leftJoin('foodalchemist_recipe_categories as c', 'c.id', '=', 'r.category_id')
             ->whereIn('r.status', self::RECIPE_POOL_STATUS)
             ->whereNull('r.deleted_at');
+        // Spec 82 §12 B: Fassungen (eingefrorene Master-Stände) werden nicht eingebettet — sonst Dubletten im Pool
+        if (\Illuminate\Support\Facades\Schema::hasColumn('foodalchemist_recipes', 'ist_fassung')) {
+            $query->where('r.ist_fassung', false);
+        }
         if ($onlyTeamId !== null) {
             $query->where('r.team_id', $onlyTeamId);
         }
