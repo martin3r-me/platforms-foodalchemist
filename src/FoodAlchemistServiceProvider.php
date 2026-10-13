@@ -64,6 +64,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
          */
         if ($this->app->runningInConsole()) {
             $this->commands([
+                \Platform\FoodAlchemist\Console\EquipmentStandardSetzenCommand::class,   // Spec 82 §6 (Daten per Befehl, nicht per Migration)
                 \Platform\FoodAlchemist\Console\PreislisteImportCommand::class,   // Spec 82 §3 (Abgleich, schreibt keine Preise)
                 \Platform\FoodAlchemist\Console\GpHomogenitaetBerichtCommand::class,   // Spec 82 §2 (nur lesend)
                 \Platform\FoodAlchemist\Console\WareneingangAltbestandCommand::class,   // Spec 75c
