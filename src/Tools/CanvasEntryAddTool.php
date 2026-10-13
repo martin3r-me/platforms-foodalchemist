@@ -30,7 +30,7 @@ class CanvasEntryAddTool extends FoodAlchemistTool implements ToolContract, Tool
         return [
             'type' => 'object',
             'properties' => [
-                'type' => ['type' => 'string', 'enum' => ['food_dna', 'kunde_dna', 'foodbook', 'concept', 'angebot']],
+                'type' => ['type' => 'string', 'enum' => ['food_dna', 'kunde_dna', 'foodbook', 'concept', 'angebot', 'projekt']],
                 'owner_id' => ['type' => 'integer', 'description' => 'Entity-Id (bei food_dna weglassen = eigenes Team; bei kunde_dna = CRM-Firma).'],
                 'key' => ['type' => 'string', 'description' => 'Feld-Key (aus canvas.GET-Template).'],
                 'value' => ['type' => 'string', 'description' => 'Eintrags-Wert.'],
@@ -61,10 +61,14 @@ class CanvasEntryAddTool extends FoodAlchemistTool implements ToolContract, Tool
         if ($type === 'kunde_dna' && \Platform\FoodAlchemist\Support\CrmKunden::firma($team, $ownerId) === null) {
             return ToolResult::error("Firma {$ownerId} nicht sichtbar/vorhanden (Kundenverwaltung des Haupt-Teams).", 'NOT_FOUND');
         }
+        if ($type === 'projekt' && ! \Platform\FoodAlchemist\Support\MasterTeam::istMaster($team)) {
+            return ToolResult::error('Projekte gibt es nur im Master-Team (Agentur-Akte, Spec 82 §9).', 'ACCESS_DENIED');
+        }
         $ownerModel = match ($type) {
             'foodbook' => FoodAlchemistFoodbook::class,
             'concept' => FoodAlchemistConcept::class,
             'angebot' => FoodAlchemistAngebot::class,
+            'projekt' => \Platform\FoodAlchemist\Models\FoodAlchemistProjekt::class,   // Spec 82 §9
             default => null,
         };
         if ($ownerModel !== null) {

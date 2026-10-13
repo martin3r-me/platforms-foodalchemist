@@ -1146,6 +1146,10 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\MasterTeamGetTool::class,
                     \Platform\FoodAlchemist\Tools\MasterTeamPutTool::class,
                     // Spec 82 §9/§13 B3+G: Mandanten (Status, Modus kuratiert|autark, CRM-Firma)
+                    // Spec 82 §9: Projekte (Agentur-Akten, nur Master-Team)
+                    \Platform\FoodAlchemist\Tools\ProjekteGetTool::class,
+                    \Platform\FoodAlchemist\Tools\ProjektePostTool::class,
+                    \Platform\FoodAlchemist\Tools\ProjektePutTool::class,
                     \Platform\FoodAlchemist\Tools\MandantenGetTool::class,
                     \Platform\FoodAlchemist\Tools\MandantenPutTool::class,
                     \Platform\FoodAlchemist\Tools\MandantenBeendenGetTool::class,   // Spec 82 §13 C3: Vorschau „Mandant beenden“

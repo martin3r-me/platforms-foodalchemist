@@ -35,7 +35,65 @@
                     @php
                         $feldId = 'canvas-' . $canvasType . '-' . ($f['key'] ?? $loop->index);
                     @endphp
-                    @if(($f['type'] ?? 'text') === 'repeatable')
+                    @if(($f['type'] ?? 'text') === 'repeatable' && ! empty($f['liste']))
+                        {{-- Spec 82 §9 · Listen-Feld mit Zusatzfeldern (Projekt-Akte: Rollen, Checklisten, Termine …) --}}
+                        @php $eintraege = $canvasListen[$f['key']] ?? []; $subs = (array) ($f['sub'] ?? []); @endphp
+                        <div class="flex flex-col gap-2 min-w-0" data-canvas-liste="{{ $f['key'] }}">
+                            <p class="text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-2)]">{{ $f['label'] }}</p>
+                            <div class="flex flex-col gap-1.5">
+                                @forelse($eintraege as $e)
+                                    <div wire:key="liste-{{ $f['key'] }}-{{ $e['id'] }}" class="flex items-start gap-2 rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] px-3 py-2" data-canvas-liste-eintrag="{{ $e['id'] }}">
+                                        <div class="flex-1 min-w-0 flex flex-col gap-1">
+                                            <p class="text-[length:var(--fa-text-md)] text-[var(--fa-ink)] break-words font-medium">{{ $e['value'] }}</p>
+                                            @foreach($subs as $sk => $sd)
+                                                @php $st = is_array($sd) ? ($sd['type'] ?? 'text') : 'text'; $sl = is_array($sd) ? ($sd['label'] ?? $sk) : $sd; $sv = $e['meta'][$sk] ?? null; @endphp
+                                                @if($st === 'check')
+                                                    <label class="inline-flex items-center gap-1.5 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)] cursor-pointer">
+                                                        <input type="checkbox" class="w-4 h-4 rounded accent-[var(--fa-accent)]" @checked(! empty($sv)) wire:click="listeUmschalten({{ $e['id'] }}, '{{ $sk }}')" data-canvas-liste-check="{{ $sk }}" /> {{ $sl }}
+                                                    </label>
+                                                @elseif($st === 'kontakt')
+                                                    @if($sv)<span class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">CRM-Kontakt verknüpft</span>@endif
+                                                @elseif($sv !== null && $sv !== '')
+                                                    <span class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">{{ $sl }}: {{ $sv }}</span>
+                                                @endif
+                                            @endforeach
+                                        </div>
+                                        <x-fa::icon-button size="sm" tone="danger" icon="heroicon-o-trash" label="{{ $e['value'] }} entfernen" wire:click="listeLoeschen({{ $e['id'] }})" />
+                                    </div>
+                                @empty
+                                    <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">Noch keine Einträge.</p>
+                                @endforelse
+                            </div>
+                            <div class="grid gap-2 items-end grid-cols-[repeat(auto-fit,minmax(min(100%,10rem),1fr))]">
+                                @php $hatKontakt = collect($subs)->contains(fn ($d) => is_array($d) && ($d['type'] ?? '') === 'kontakt'); @endphp
+                                @if($hatKontakt)
+                                    <div class="flex flex-col gap-1.5 min-w-0">
+                                        <x-fa::field label="Kontakt aus dem CRM suchen" for="{{ $feldId }}-kontakt-suche">
+                                            <x-fa::input id="{{ $feldId }}-kontakt-suche" wire:model.live.debounce.300ms="canvasKontaktSuche.{{ $f['key'] }}" placeholder="Name oder E-Mail" data-canvas-kontakt-suche />
+                                        </x-fa::field>
+                                        @foreach($this->canvasKontakte($f['key']) as $k)
+                                            <button type="button" wire:key="kontakt-{{ $f['key'] }}-{{ $k['id'] }}" wire:click="kontaktWaehlen('{{ $f['key'] }}', {{ $k['id'] }})"
+                                                    class="text-left px-2 py-1 rounded hover:bg-[var(--fa-hover)] text-[length:var(--fa-text-md)]" data-canvas-kontakt-treffer="{{ $k['id'] }}">{{ $k['name'] }}</button>
+                                        @endforeach
+                                    </div>
+                                @endif
+                                <x-fa::field :label="$hatKontakt ? 'Person' : 'Eintrag'" for="{{ $feldId }}-neu">
+                                    <x-fa::input id="{{ $feldId }}-neu" wire:model="canvasNeu.{{ $f['key'] }}.value" data-canvas-liste-neu="{{ $f['key'] }}" />
+                                </x-fa::field>
+                                @foreach($subs as $sk => $sd)
+                                    @php $st = is_array($sd) ? ($sd['type'] ?? 'text') : 'text'; $sl = is_array($sd) ? ($sd['label'] ?? $sk) : $sd; @endphp
+                                    @if($st === 'check')
+                                        <label class="inline-flex items-center gap-1.5 text-[length:var(--fa-text-md)] pb-2"><input type="checkbox" class="w-4 h-4 rounded accent-[var(--fa-accent)]" wire:model="canvasNeu.{{ $f['key'] }}.{{ $sk }}" /> {{ $sl }}</label>
+                                    @elseif($st !== 'kontakt')
+                                        <x-fa::field :label="$sl" for="{{ $feldId }}-{{ $sk }}" optional>
+                                            <x-fa::input id="{{ $feldId }}-{{ $sk }}" wire:model="canvasNeu.{{ $f['key'] }}.{{ $sk }}" @if($st === 'zahl') inputmode="numeric" @endif />
+                                        </x-fa::field>
+                                    @endif
+                                @endforeach
+                                <div><x-fa::button icon="heroicon-m-plus" wire:click="listeHinzu('{{ $f['key'] }}')" data-canvas-liste-hinzu="{{ $f['key'] }}">Eintrag hinzufügen</x-fa::button></div>
+                            </div>
+                        </div>
+                    @elseif(($f['type'] ?? 'text') === 'repeatable')
                         {{-- Wiederholbar (Geschmackswelten): Liste + Hinzufügen --}}
                         <div class="flex flex-col gap-2 min-w-0">
                             <p class="text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-2)]">{{ $f['label'] }}</p>

@@ -34,6 +34,21 @@ trait ManagesCanvas
     /** Spec 82 §7 (nur Team-DNA im Oberteam): Skalar-Feld → verbindlich? */
     public array $canvasVerbindlich = [];
 
+    /**
+     * Spec 82 §9 · Listen-Felder (`liste` => true, z. B. Rollen, Checklisten der Projekt-Akte): field_key => Einträge
+     * [id, value, meta, verbindlich]. Die bisherige EINE Liste (canvasWelten) bleibt für die Geschmackswelten unverändert.
+     */
+    public array $canvasListen = [];
+
+    /** Eingabe je Listen-Feld: field_key => ['value' => …, <sub-key> => …]. */
+    public array $canvasNeu = [];
+
+    /** Suchtext je Listen-Feld mit Kontakt-Zusatzfeld (CRM-Kontakte verknüpfen). */
+    public array $canvasKontaktSuche = [];
+
+    /** Zeigt das Board nur diese Feldgruppe (Phase der Projekt-Akte) und ohne Reiter. */
+    public ?string $canvasNurGruppe = null;
+
     protected function canvasInit(string $type, string $ownerType, ?int $ownerId): void
     {
         $this->canvasType = $type;
@@ -51,7 +66,7 @@ trait ManagesCanvas
     private function canvasRepeatableKey(): ?string
     {
         foreach (app(CanvasService::class)->felder($this->canvasType, $this->canvasTeam()) as $f) {
-            if (($f['type'] ?? '') === 'repeatable') {
+            if (($f['type'] ?? '') === 'repeatable' && empty($f['liste'])) {
                 return $f['key'];
             }
         }
@@ -63,6 +78,7 @@ trait ManagesCanvas
     {
         $this->canvasForm = [];
         $this->canvasWelten = [];
+        $this->canvasListen = [];
         $this->canvasVerbindlich = [];
         if ($this->canvasType === '' || $this->canvasOwnerId === null) {
             return;
@@ -72,7 +88,11 @@ trait ManagesCanvas
         $werte = $svc->werte($canvas, $this->canvasTeam());
         $this->canvasVerbindlich = $svc->verbindlichkeit($canvas);
         foreach ($svc->felder($this->canvasType, $this->canvasTeam()) as $f) {
-            if (($f['type'] ?? '') === 'repeatable') {
+            if (($f['type'] ?? '') === 'repeatable' && ! empty($f['liste'])) {
+                $this->canvasListen[$f['key']] = array_map(fn ($it) => [
+                    'id' => $it['id'], 'value' => (string) $it['value'], 'meta' => $it['meta'] ?? [], 'verbindlich' => (bool) ($it['is_binding'] ?? false),
+                ], $werte[$f['key']] ?? []);
+            } elseif (($f['type'] ?? '') === 'repeatable') {
                 $this->canvasWelten = array_map(fn ($it) => [
                     'id' => $it['id'], 'value' => (string) $it['value'], 'verbindlich' => (bool) ($it['is_binding'] ?? false),
                     'claim' => (string) ($it['meta']['claim'] ?? ''), 'description' => (string) ($it['meta']['description'] ?? ''),
@@ -107,6 +127,94 @@ trait ManagesCanvas
         ]);
         $this->canvasNeuWelt = ['value' => '', 'claim' => '', 'description' => ''];
         $this->canvasLaden();
+    }
+
+    /** Das Listen-Feld mit diesem Key (nur Felder mit `liste` => true). @return array<string,mixed>|null */
+    private function canvasListenFeld(string $key): ?array
+    {
+        foreach (app(CanvasService::class)->felder($this->canvasType, $this->canvasTeam()) as $f) {
+            if ($f['key'] === $key && ($f['type'] ?? '') === 'repeatable' && ! empty($f['liste'])) {
+                return $f;
+            }
+        }
+
+        return null;
+    }
+
+    /** Eintrag an ein Listen-Feld hängen: Wert + die Zusatzfelder des Feldes (Text, Zahl, Häkchen, CRM-Kontakt). */
+    public function listeHinzu(string $key): void
+    {
+        $feld = $this->canvasListenFeld($key);
+        $neu = $this->canvasNeu[$key] ?? [];
+        if ($feld === null || trim((string) ($neu['value'] ?? '')) === '') {
+            return;
+        }
+        $meta = [];
+        foreach ((array) ($feld['sub'] ?? []) as $subKey => $def) {
+            $typ = is_array($def) ? ($def['type'] ?? 'text') : 'text';
+            $wert = $neu[$subKey] ?? null;
+            $meta[$subKey] = match ($typ) {
+                'check' => (bool) $wert,
+                'zahl' => is_numeric($wert) ? 0 + $wert : null,
+                'kontakt' => is_numeric($wert) && (int) $wert > 0 ? (int) $wert : null,
+                default => trim((string) $wert) !== '' ? trim((string) $wert) : null,
+            };
+        }
+        $svc = app(CanvasService::class);
+        $canvas = $svc->canvasFor($this->canvasTeam(), $this->canvasType, $this->canvasOwnerType, $this->canvasOwnerId);
+        $svc->addEntry($canvas, $key, (string) $neu['value'], $meta);
+        $this->canvasNeu[$key] = [];
+        $this->canvasKontaktSuche[$key] = '';
+        $this->canvasLaden();
+    }
+
+    /** Häkchen (Zusatzfeld Typ „check“) eines Listen-Eintrags umschalten — nur Einträge des EIGENEN Canvas. */
+    public function listeUmschalten(int $entryId, string $subKey): void
+    {
+        $canvas = app(CanvasService::class)->canvasFor($this->canvasTeam(), $this->canvasType, $this->canvasOwnerType, $this->canvasOwnerId);
+        $eintrag = $canvas->entries()->whereKey($entryId)->first();
+        $feld = $eintrag === null ? null : $this->canvasListenFeld((string) $eintrag->field_key);
+        $def = $feld['sub'][$subKey] ?? null;
+        if ($eintrag === null || ! is_array($def) || ($def['type'] ?? '') !== 'check') {
+            return;
+        }
+        $meta = $eintrag->meta ?? [];
+        $meta[$subKey] = ! ($meta[$subKey] ?? false);
+        $eintrag->update(['meta' => $meta]);
+        $this->canvasLaden();
+    }
+
+    /** Eintrag aus einem Listen-Feld entfernen (nur eigener Canvas). */
+    public function listeLoeschen(int $entryId): void
+    {
+        $this->weltLoeschen($entryId);
+    }
+
+    /** CRM-Kontakte zur Suche eines Listen-Feldes (nur Haupt-Team-Kontakte, Treffer mit Name für die Anzeige). */
+    public function canvasKontakte(string $key): array
+    {
+        $suche = trim((string) ($this->canvasKontaktSuche[$key] ?? ''));
+
+        return $suche === '' ? [] : \Platform\FoodAlchemist\Support\CrmKunden::kontakte($this->canvasTeam(), $suche, 6)
+            ->map(fn ($k) => ['id' => (int) $k->id, 'name' => (string) $k->full_name])->all();
+    }
+
+    /** Kontakt für den nächsten Eintrag wählen: Name wird der Wert, die Id das Zusatzfeld (nur Kontakte des eigenen Haupt-Teams). */
+    public function kontaktWaehlen(string $key, int $kontaktId): void
+    {
+        $team = $this->canvasTeam();
+        try {
+            \Platform\FoodAlchemist\Support\CrmKunden::pruefe($team, null, $kontaktId);
+        } catch (\RuntimeException) {
+            return;
+        }
+        $kontakt = \Platform\Crm\Models\CrmContact::find($kontaktId);
+        if ($kontakt === null) {
+            return;
+        }
+        $this->canvasNeu[$key]['value'] = (string) $kontakt->full_name;
+        $this->canvasNeu[$key]['crm_contact_id'] = $kontaktId;
+        $this->canvasKontaktSuche[$key] = '';
     }
 
     public function weltLoeschen(int $entryId): void
@@ -217,6 +325,9 @@ trait ManagesCanvas
         $svc = app(CanvasService::class);
         $tpl = $svc->template($this->canvasType);
         $tpl['felder'] = $svc->felder($this->canvasType, $this->canvasTeam());
+        if ($this->canvasNurGruppe !== null) {   // Phase der Projekt-Akte: nur diese Gruppe
+            $tpl['felder'] = array_values(array_filter($tpl['felder'], fn ($f) => ($f['group_name'] ?? 'Felder') === $this->canvasNurGruppe));
+        }
         $gruppen = [];
         foreach ($tpl['felder'] as $f) {
             $gruppen[$f['group_name'] ?? 'Felder'][] = $f;

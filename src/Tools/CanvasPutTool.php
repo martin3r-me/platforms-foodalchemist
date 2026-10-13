@@ -35,7 +35,7 @@ class CanvasPutTool extends FoodAlchemistTool implements ToolContract, ToolMetad
         return [
             'type' => 'object',
             'properties' => [
-                'type' => ['type' => 'string', 'enum' => ['food_dna', 'kunde_dna', 'foodbook', 'concept', 'angebot']],
+                'type' => ['type' => 'string', 'enum' => ['food_dna', 'kunde_dna', 'foodbook', 'concept', 'angebot', 'projekt']],
                 'owner_id' => ['type' => 'integer', 'description' => 'Entity-ID (bei food_dna weglassen = eigenes Team; bei kunde_dna = CRM-Firma)'],
                 'felder' => ['type' => 'object', 'description' => 'Map key→Wert, Keys aus dem Template (canvas.GET)'],
                 'verbindlich' => ['type' => 'object', 'description' => 'Optional, nur Oberteam + Admin (Spec 82 §7): Map key→true|false. true macht das Skalar-Feld für alle Unter-Teams verbindlich (sie überschreiben es nicht), false hebt es auf. Keys müssen in felder stehen oder bereits gefüllt sein.'],
@@ -65,10 +65,14 @@ class CanvasPutTool extends FoodAlchemistTool implements ToolContract, ToolMetad
         if ($type === 'kunde_dna' && \Platform\FoodAlchemist\Support\CrmKunden::firma($team, $ownerId) === null) {
             return ToolResult::error("Firma {$ownerId} nicht sichtbar/vorhanden (Kundenverwaltung des Haupt-Teams).", 'NOT_FOUND');
         }
+        if ($type === 'projekt' && ! \Platform\FoodAlchemist\Support\MasterTeam::istMaster($team)) {
+            return ToolResult::error('Projekte gibt es nur im Master-Team (Agentur-Akte, Spec 82 §9).', 'ACCESS_DENIED');
+        }
         $ownerModel = match ($type) {
             'foodbook' => FoodAlchemistFoodbook::class,
             'concept' => FoodAlchemistConcept::class,
             'angebot' => FoodAlchemistAngebot::class,
+            'projekt' => \Platform\FoodAlchemist\Models\FoodAlchemistProjekt::class,   // Spec 82 §9
             default => null,
         };
         if ($ownerModel !== null) {

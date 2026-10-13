@@ -75,6 +75,34 @@ class CanvasService
                 ['key' => 'geschmackswelten', 'label' => 'Geschmackswelten', 'group_name' => 'Geschmackswelten', 'type' => 'repeatable', 'sub' => ['claim' => 'Claim', 'description' => 'Beschreibung']],
             ],
         ],
+        // Spec 82 §9 (Schritt 9): Projekt-Akte im Master-Team. owner_type=projekt, owner_id = Projekt. Die Phasen sind die Gruppen
+        // (Reiter); Listen-Felder (`liste` => true) tragen Einträge mit Zusatzfeldern (`sub`: text | zahl | check | kontakt).
+        // Die Phasen DNA, Paketlogik und Foodbook haben ihre eigenen Oberflächen (Kunden-DNA, Paketlogik, Foodbook) und hier keine Felder.
+        'projekt' => [
+            'title' => 'Projekt-Akte (Agentur)',
+            'kontext_label' => 'Projekt-Akte (Agentur-Arbeit für diesen Kunden)',
+            'felder' => [
+                ['key' => 'zielbild_wortlaut', 'label' => 'Zielbild in Kundenworten (wörtlich, nicht interpretiert)', 'group_name' => 'Zielbild & Umfang', 'type' => 'longtext'],
+                ['key' => 'zielbild_quelle', 'label' => 'Quelle des Zitats (wer, wann)', 'group_name' => 'Zielbild & Umfang', 'type' => 'text'],
+                ['key' => 'umfang_anlaesse', 'label' => 'Anlässe & Flächen', 'group_name' => 'Zielbild & Umfang', 'type' => 'repeatable', 'liste' => true,
+                    'sub' => ['pax' => ['label' => 'Pax', 'type' => 'zahl'], 'flaeche' => ['label' => 'Fläche', 'type' => 'text']]],
+                ['key' => 'umfang_linien', 'label' => 'Linien', 'group_name' => 'Zielbild & Umfang', 'type' => 'repeatable', 'liste' => true,
+                    'sub' => ['notiz' => ['label' => 'Notiz', 'type' => 'text']]],
+                ['key' => 'umfang_bausteine', 'label' => 'Bausteine (Foodbook, Buchungstool, Beratung)', 'group_name' => 'Zielbild & Umfang', 'type' => 'repeatable', 'liste' => true,
+                    'sub' => ['status' => ['label' => 'Stand', 'type' => 'text']]],
+                ['key' => 'rollen', 'label' => 'Rollen im Projekt (Kontakte aus dem CRM)', 'group_name' => 'Zielbild & Umfang', 'type' => 'repeatable', 'liste' => true,
+                    'sub' => ['rolle' => ['label' => 'Rolle im Projekt', 'type' => 'text'], 'crm_contact_id' => ['label' => 'CRM-Kontakt', 'type' => 'kontakt']]],
+                ['key' => 'material', 'label' => 'Material vom Kunden (Checkliste)', 'group_name' => 'Zielbild & Umfang', 'type' => 'repeatable', 'liste' => true,
+                    'sub' => ['erhalten' => ['label' => 'Erhalten', 'type' => 'check'], 'notiz' => ['label' => 'Notiz', 'type' => 'text']]],
+                ['key' => 'termine', 'label' => 'Termine & Protokolle (nur Ergebnisse; geplant wird im Planner)', 'group_name' => 'Zielbild & Umfang', 'type' => 'repeatable', 'liste' => true,
+                    'sub' => ['datum' => ['label' => 'Datum', 'type' => 'text'], 'ergebnis' => ['label' => 'Ergebnis', 'type' => 'text']]],
+                ['key' => 'begehung', 'label' => 'Begehung vor Ort (Checkliste; die Antworten gehören ins Standortprofil)', 'group_name' => 'Standortprofil', 'type' => 'repeatable', 'liste' => true,
+                    'sub' => ['erledigt' => ['label' => 'Erledigt', 'type' => 'check'], 'antwort' => ['label' => 'Antwort', 'type' => 'text']]],
+                ['key' => 'uebergabe', 'label' => 'Übergabe-Checkliste (Rezepturen nach Necta, Buchungsstrecke je Standort, Schulung, Pflege-Rhythmus)', 'group_name' => 'Übergabe & Pflege', 'type' => 'repeatable', 'liste' => true,
+                    'sub' => ['erledigt' => ['label' => 'Erledigt', 'type' => 'check'], 'wer' => ['label' => 'Wer', 'type' => 'text']]],
+                ['key' => 'lessons_learned', 'label' => 'Abschluss: Lessons Learned', 'group_name' => 'Übergabe & Pflege', 'type' => 'longtext'],
+            ],
+        ],
         'angebot' => [
             'title' => 'Angebot — Business Case',
             'kontext_label' => 'Kundenprojekt / Business Case dieses Angebots',

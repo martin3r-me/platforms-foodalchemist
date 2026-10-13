@@ -118,6 +118,12 @@ Route::get('/food-dna', \Platform\FoodAlchemist\Livewire\FoodDna\Index::class)
 Route::get('/wissen', \Platform\FoodAlchemist\Livewire\Knowledge\Browser::class)
     ->name('foodalchemist.knowledge.index');
 
+// Spec 82 §9 · Projekte (Agentur-Akten, nur im Master-Team; Bereich „projekte“).
+Route::get('/projekte', \Platform\FoodAlchemist\Livewire\Projekte\Index::class)
+    ->name('foodalchemist.projekte.index');
+Route::get('/projekte/{projekt}', \Platform\FoodAlchemist\Livewire\Projekte\Detail::class)
+    ->whereNumber('projekt')->name('foodalchemist.projekte.show');
+
 // Trendradar (Spec 79): Inspiration · Hype · Trend nach Sarah Spork — Radar, Liste, Pinnwand.
 Route::get('/trendradar', \Platform\FoodAlchemist\Livewire\Trendradar\Index::class)
     ->name('foodalchemist.trendradar.index');
