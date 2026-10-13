@@ -51,6 +51,8 @@ final class FaBereiche
         'voice' => null, 'ui-katalog' => null, 'demnaechst' => null,
         // öffentlich geteilte Präsentationen (ohne Anmeldung) und Plattform-Assets — nie an einer Freischaltung
         'presentation' => null, 'platform-asset' => null,
+        // Spec 82 §13 C3: Export-Download an keinem Bereich, auch im gesperrten Team erreichbar
+        'mandant-export' => null,
     ];
 
     /**
@@ -63,7 +65,7 @@ final class FaBereiche
         // bereichsfrei: Ansicht/Navigation, Läufe, Rechte-Pflege, Betriebs-Brille umschalten (nur Ansicht)
         ['ui', null], ['runs', null], ['team_roles', null], ['team_bereiche', null], ['standorte', null],
         // Spec 82 §13 B1/B4: Plattform-Steuerung (Stamm-Paket, Master-Team, Mandanten-Verwaltung) — Rechteprüfung im Dienst (nur Plattform-Admin), nicht je Bereich
-        ['stamm_paket', null], ['master_team', null], ['equipment_standard', null], ['mandanten', null],
+        ['stamm_paket', null], ['master_team', null], ['mandant_export', null], ['equipment_standard', null], ['mandanten', null],
         // Spec 77d: Inhalte für Standorte (Editor im Controlling), Sammlungen + eigene Kopie gehören zu den Rezepten
         ['standort_inhalte', 'controlling'], ['sammlungen', 'rezepte'], ['inhalte', 'rezepte'],
         // Controlling (Auswertungen; Spec 32 hat die Einkaufs-Auswertungen hierher verlegt)

@@ -148,6 +148,14 @@ it('Trait-Vertrag: ALLE Models tragen LogsActivity + BelongsToTeamHierarchy + Ha
             //    jede Modus-/Statusänderung geht zusätzlich als Klartext über PlattformProtokoll, die Zeile trägt Wer und Wann.
             continue;
         }
+        if (class_basename($klasse) === 'FoodAlchemistMandantExport') {
+            // Spec 82 §13 C3: Datenexport eines Mandanten (Zustand, Ablage, Größe, Prüfsumme, Manifest), eine Zeile je Export.
+            //  - kein BelongsToTeamHierarchy: Plattform-Verwaltung über den Mandanten, kein Inhalt des Teams; gelesen und geschrieben nur
+            //    über MandantExportService (eigene Rechteprüfung: Plattform-Admin/Inhaber lösen aus, nur Inhaber/Admin laden).
+            //  - kein SoftDeletes/HasUuidV7: adressiert über die Id (Download-Route), Verlauf bleibt.
+            //  - LogsActivity: trägt es (created/updated mit Größe/Prüfsumme/Zustand; der Inhalt steht nur in der Datei).
+            continue;
+        }
         if (class_basename($klasse) === 'FoodAlchemistMandantBeendenLauf') {
             // Spec 82 §13 C3: Fortschritt des Ablaufs „Mandant beenden“, eine Zeile je Lauf je Kunden-Hauptteam.
             //  - kein BelongsToTeamHierarchy: Plattform-Verwaltung über den Mandanten, kein Inhalt des Teams; gelesen und

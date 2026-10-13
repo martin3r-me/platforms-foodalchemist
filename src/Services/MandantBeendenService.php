@@ -244,7 +244,7 @@ class MandantBeendenService
     private function fuehreExportAus(Team $mandant): array
     {
         if (! $this->export->vorhanden($mandant)) {
-            return ['status' => 'wartet', 'details' => ['meldung' => 'Der Datenexport liegt noch nicht vor. Erst den Export erzeugen oder den Schritt „export“ bewusst weglassen — vor dem Sperren.']];
+            return ['status' => 'wartet', 'details' => ['meldung' => 'Der Datenexport liegt noch nicht vor. Erst den Export erzeugen (mandant_export.POST) oder den Schritt „export“ bewusst weglassen — vor dem Sperren.']];
         }
 
         return ['status' => self::ERLEDIGT, 'details' => ['export_vorhanden' => true]];

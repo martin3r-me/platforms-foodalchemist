@@ -963,6 +963,13 @@ return [
      * je Ebene. Verbindliche Vorgaben und die Tonalität des Foodbooks werden nie gekürzt, sonst von unspezifisch
      * (Team-DNA) nach spezifisch (Concept).
      */
+    /**
+     * Spec 82 §13 C3 — Datenexport je Mandant: Ablage der ZIP-Dateien (privates Laufwerk, nie öffentlich).
+     */
+    'mandant_export' => [
+        'disk' => env('FOODALCHEMIST_MANDANT_EXPORT_DISK', 'local'),
+    ],
+
     'kontext' => [
         'budget_zeichen' => (int) env('FOODALCHEMIST_KONTEXT_BUDGET', 12000),
     ],
