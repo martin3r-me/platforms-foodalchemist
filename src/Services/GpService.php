@@ -300,7 +300,11 @@ class GpService
     public function paginateBrowser(array $filters, ?Team $team, int $perPage = 100): LengthAwarePaginator
     {
         $q = $this->browserQuery($team, $filters)
-            ->leftJoin('foodalchemist_supplier_items AS lead', 'lead.id', '=', 'foodalchemist_gps.lead_la_supplier_item_id')
+            ->leftJoin('foodalchemist_supplier_items AS lead', function ($j) use ($team) {
+                $j->on('lead.id', '=', 'foodalchemist_gps.lead_la_supplier_item_id');
+                // Spec 82 §12 A3: ein Lead aus dem Stamm-Paket ohne Opt-in zeigt weder Menge noch Einheit.
+                \Platform\FoodAlchemist\Support\StammPaket::begrenzen($j, 'lead', $team, 'foodalchemist_supplier_items');
+            })
             ->select('foodalchemist_gps.*', 'lead.qty AS lead_qty', 'lead.unit_code AS lead_unit_code')
             ->selectSub(app(PriceService::class)->activePriceSubquery('lead.id', $team)->toBase(), 'lead_preis') // Spec 82 3a
             ->with('commodity_group')

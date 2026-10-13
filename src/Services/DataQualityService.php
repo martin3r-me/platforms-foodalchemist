@@ -2,6 +2,7 @@
 
 namespace Platform\FoodAlchemist\Services;
 
+use Platform\FoodAlchemist\Support\StammPaket;
 use Illuminate\Support\Facades\DB;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Enums\FeedbackQuelle;
@@ -1775,15 +1776,17 @@ class DataQualityService
      *
      * @param  bool  $nurBepreist  zusätzlich: der LA hat einen aktiven Preis (GL-11 T1)
      */
-    private function laDiesesGp(bool $nurBepreist = false): \Closure
+    private function laDiesesGp(bool $nurBepreist = false, ?Team $team = null): \Closure
     {
-        return function ($q) use ($nurBepreist) {
+        return function ($q) use ($nurBepreist, $team) {
             $q->select(DB::raw(1))
                 ->from('foodalchemist_supplier_item_structures as s')
                 ->join('foodalchemist_supplier_items as si', 'si.id', '=', 's.supplier_item_id')
                 ->whereColumn('s.gp_id', 'foodalchemist_gps.id')
                 ->whereNull('s.deleted_at')
                 ->whereNull('si.deleted_at');
+            // Spec 82 §12 A3: ein Stamm-Paket-Artikel ohne Opt-in ist für dieses Team keine LA (sonst „GP hat LA", obwohl nutzbar keiner da ist).
+            StammPaket::begrenzen($q, 'si', $team, 'foodalchemist_supplier_items');
 
             if ($nurBepreist) {
                 $q->whereExists($this->aktivPreisFuer('si.id'));
@@ -1833,10 +1836,10 @@ class DataQualityService
         $q = FoodAlchemistGp::visibleToTeam($team)->where('status', 'approved')->where('requires_la', true);
 
         return match ($lage) {
-            'kein_la' => $q->whereNotExists($this->laDiesesGp()),
-            'kein_preis' => $q->whereExists($this->laDiesesGp())->whereNotExists($this->laDiesesGp(true))
+            'kein_la' => $q->whereNotExists($this->laDiesesGp(false, $team)),
+            'kein_preis' => $q->whereExists($this->laDiesesGp(false, $team))->whereNotExists($this->laDiesesGp(true, $team))
                 ->whereNull('lead_la_supplier_item_id'),
-            'kein_lead' => $q->whereExists($this->laDiesesGp(true))->whereNull('lead_la_supplier_item_id'),
+            'kein_lead' => $q->whereExists($this->laDiesesGp(true, $team))->whereNull('lead_la_supplier_item_id'),
         };
     }
 
