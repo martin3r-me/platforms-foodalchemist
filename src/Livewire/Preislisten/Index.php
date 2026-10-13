@@ -136,8 +136,10 @@ class Index extends Component
             return;
         }
         $this->laufId = $run->id;
-        $this->meldung = sprintf('%d Preise übernommen, %d unverändert, %d noch nicht gültig, %d mit Fehler. %d Rezepte neu berechnet.',
-            $b['angewendet'], $b['unveraendert'], $b['zukuenftig'], $b['fehler'], $b['kette']['neu_berechnet'] ?? 0);
+        $neu = (int) ($b['kette']['neu_berechnet'] ?? 0);
+        $this->meldung = sprintf('%s übernommen, %d unverändert, %d noch nicht gültig, %d mit Fehler. %s neu berechnet.',
+            $b['angewendet'] === 1 ? '1 Preis' : $b['angewendet'] . ' Preise', $b['unveraendert'], $b['zukuenftig'], $b['fehler'],
+            $neu === 1 ? '1 Rezept' : $neu . ' Rezepte');
     }
 
     public function pruefelisteLaden(int $id)

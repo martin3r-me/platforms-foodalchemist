@@ -100,7 +100,9 @@ it('Ohne gültig-ab-Spalte gilt heute; alte .xls und kaputte Excel-Dateien werde
     expect(FoodAlchemistPriceImportLine::where('run_id', $run->id)->first()->valid_from->toDateString())->toBe(now()->toDateString());
 
     expect(fn () => $this->svc->stage($this->team, ($this->csv)('x', 'xls'), [], $this->hanos->id))->toThrow(RuntimeException::class, '.xls');
-    expect(fn () => $this->svc->stage($this->team, ($this->csv)('keine Tabelle', 'xlsx'), [], $this->hanos->id))->toThrow(RuntimeException::class, 'nicht lesen');
+    // Mit OpenSpout: kaputte Datei = „nicht lesen“. Ohne die Bibliothek (Sandbox ohne composer update): die Meldung nennt den Weg, statt hart zu scheitern.
+    $erwartet = class_exists(\OpenSpout\Reader\XLSX\Reader::class) ? 'nicht lesen' : 'openspout/openspout';
+    expect(fn () => $this->svc->stage($this->team, ($this->csv)('keine Tabelle', 'xlsx'), [], $this->hanos->id))->toThrow(RuntimeException::class, $erwartet);
 
     $latin = mb_convert_encoding("Lieferant;Artikelnummer;Preis\nChefs Culinar;2002;1\n", 'Windows-1252', 'UTF-8');
     $run2 = $this->svc->stage($this->team, ($this->csv)($latin), []);
