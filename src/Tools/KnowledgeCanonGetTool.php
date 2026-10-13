@@ -46,6 +46,9 @@ class KnowledgeCanonGetTool extends FoodAlchemistTool implements ToolContract, T
         if ($team === null) {
             return ToolResult::error('Kein Team im Kontext.', 'NO_TEAM');
         }
+        if (($gesperrt = $this->masterWissenGesperrt($team)) !== null) {
+            return $gesperrt;
+        }
         $scope = isset($arguments['scope']) ? trim((string) $arguments['scope']) : null;
         if ($scope !== null && ! in_array($scope, KnowledgeCanonService::SCOPES, true)) {
             return ToolResult::error('scope muss feature oder prompt_key sein.', 'VALIDATION_ERROR');

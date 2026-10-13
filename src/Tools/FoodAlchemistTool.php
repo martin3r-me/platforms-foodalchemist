@@ -22,6 +22,21 @@ abstract class FoodAlchemistTool
     /** Phase A: Nur in diesen Status darf der MCP-Pfad Rezepte mutieren (Draft-Quarantäne). */
     protected const KI_EDITIERBARE_STATUS = ['stub', 'draft'];
 
+    /**
+     * Spec 82 §13 H — Steuer-/Diagnose-Sicht auf Master-Wissen (Kanon-Zuordnung, Routings, Profil, Versorgung, Embedding-Kontrolle):
+     * nur Master-Team und dessen Unter-Teams. Mandanten bekommen ACCESS_DENIED; die Wirkung im Prompt bleibt. Notbremse
+     * `knowledge_master_regel=false` = alte Sicht. Liefert das Fehler-Ergebnis oder null, wenn gelesen werden darf.
+     */
+    protected function masterWissenGesperrt(?Team $team): ?ToolResult
+    {
+        if (! \Platform\FoodAlchemist\Services\Knowledge\WissensSichtbarkeit::aktiv()
+            || \Platform\FoodAlchemist\Services\Knowledge\WissensSichtbarkeit::darfGlobalLesen($team)) {
+            return null;
+        }
+
+        return ToolResult::error('Plattform-Wissen: diese Steuer-Sicht ist dem Master-Team vorbehalten. Die Wirkung im Generator-Prompt bleibt bestehen.', 'ACCESS_DENIED');
+    }
+
     protected function team(ToolContext $context): ?Team
     {
         $team = $context->team;
