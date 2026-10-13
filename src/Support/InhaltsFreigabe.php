@@ -94,6 +94,8 @@ final class InhaltsFreigabe
                 ->whereIn($idSpalte, fn ($s) => $s->select('objekt_id')->from('foodalchemist_freigabe_objekte')
                     ->where('team_id', $f['huelle'])->where('typ', $typ)));
         }
+        // Spec 82 §12 A1: Abo-Zweig (Master → Mandant), eigene Regel, siehe AboSicht
+        AboSicht::anhaengen($q, $idSpalte, $typ, $kette, $f);
     }
 
     public static function typFuerModel(string $klasse): ?string

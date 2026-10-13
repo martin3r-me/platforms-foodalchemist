@@ -310,8 +310,12 @@ class InhaltsFreigabeService
         });
     }
 
-    /** @param list<int> $ids @return array<string, list<int>> */
-    private function abhaengigkeiten(string $typ, array $ids): array
+    /**
+     * Direkte Abhängigkeiten (eine Stufe) — auch Basis der Abo-Hülle (Spec 82, AboService).
+     *
+     * @param list<int> $ids @return array<string, list<int>>
+     */
+    public function abhaengigkeiten(string $typ, array $ids): array
     {
         $out = [];
         $hol = function (string $tabelle, string $fk, array $ziele, ?array $fkIds = null) use ($ids, &$out) {

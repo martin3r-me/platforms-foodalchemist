@@ -32,6 +32,7 @@ final class FaBereiche
         'einstellungen' => 'Einstellungen',
         'unterteams' => 'Unter-Teams & Freigaben',   // Spec 82 §13 B2: schaltbar in /verwaltung → Freigaben
         'projekte' => 'Projekte (Agentur-Akte, nur im Master-Team)',   // Spec 82 §9: Projekt = Agentur-Akte im Master
+        'abos' => 'Abos (Kurator, Master-Team)',     // Spec 82 §8 / §13 B6: Rechte-/Master-Prüfung zusätzlich im AboService
     ];
 
     /**
@@ -77,6 +78,8 @@ final class FaBereiche
         ['ui', null], ['runs', null], ['team_roles', null], ['team_bereiche', null], ['standorte', null],
         // Spec 82 §13 B1/B4: Plattform-Steuerung (Stamm-Paket, Master-Team, Mandanten-Verwaltung) — Rechteprüfung im Dienst (nur Plattform-Admin), nicht je Bereich
         ['stamm_paket', null], ['master_team', null], ['mandant_export', null], ['equipment_standard', null], ['mandanten', null],
+        // Spec 82 §8 / §13 B6: Abos (Bereich „Abos" im Master-Team)
+        ['abos', 'abos'],
         // Spec 77d: Inhalte für Standorte (Editor im Controlling), Sammlungen + eigene Kopie gehören zu den Rezepten
         ['standort_inhalte', 'controlling'], ['sammlungen', 'rezepte'], ['inhalte', 'rezepte'],
         // Controlling (Auswertungen; Spec 32 hat die Einkaufs-Auswertungen hierher verlegt)
