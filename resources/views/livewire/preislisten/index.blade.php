@@ -14,6 +14,19 @@
     <x-ui-page-container padding="px-6 py-6" spacing="space-y-4">
         <x-fa::page-header title="Preislisten" subtitle="Lade die Preisliste deines Lieferanten hoch (Excel oder CSV). Jede Zeile wird über Artikelnummer und Lieferant, danach über die EAN, mit den Artikeln abgeglichen. Erst nach dem Abgleich übernimmst du die Treffer als deine Preise. Es wird kein Artikel angelegt und nie ein Listenpreis geändert." />
 
+        {{-- Vorlage: Spalten in kanonischer Reihenfolge + eine Beispielzeile; der eigene Import erkennt sie ohne Nachzuordnung. Für alle sichtbar (auch lesend). --}}
+        <x-fa::section title="Vorlage herunterladen" icon="heroicon-o-arrow-down-tray" data-preisliste-vorlage>
+            <div class="flex flex-wrap items-center gap-2">
+                <x-fa::button size="sm" variant="ghost" icon="heroicon-o-document-text" wire:click="vorlageCsv" data-preisliste-vorlage-csv>Vorlage (CSV)</x-fa::button>
+                @if($xlsxVorlage)
+                    <x-fa::button size="sm" variant="ghost" icon="heroicon-o-table-cells" wire:click="vorlageXlsx" data-preisliste-vorlage-xlsx>Vorlage (Excel)</x-fa::button>
+                @else
+                    <span class="{{ $leise }}" data-preisliste-vorlage-nur-csv>Die Excel-Vorlage ist auf diesem Server nicht verfügbar, bitte die CSV-Vorlage nehmen.</span>
+                @endif
+            </div>
+            <p class="{{ $leise }} pt-2" data-preisliste-vorlage-hinweis>{{ $vorlageHinweis }}</p>
+        </x-fa::section>
+
         @if($fehler)<x-fa::notice tone="crit" data-preisliste-fehler>{{ $fehler }}</x-fa::notice>@endif
         @if($meldung)<x-fa::notice tone="ok" data-preisliste-meldung>{{ $meldung }}</x-fa::notice>@endif
 
