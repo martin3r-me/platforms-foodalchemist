@@ -17,6 +17,9 @@ uses(TestCase::class, SeedsTeamHierarchy::class);
  */
 beforeEach(function () {
     $this->seedTeamHierarchy();
+    // Spec 82 §13 H: gelesen wird global nur als Master — der Test-Akteur ist hier das Master-Team (legt global an, liest global).
+    config(['foodalchemist.master_team_id' => $this->rootTeam->id]);
+    \Platform\FoodAlchemist\Support\MasterTeam::flush();
     DB::table('foodalchemist_vocab_pairing_anchors')->insert([
         'uuid' => (string) UuidV7::generate(), 'slug' => 'acai_berry', 'display_de' => 'Açai-Beere',
         'created_at' => now(), 'updated_at' => now(),

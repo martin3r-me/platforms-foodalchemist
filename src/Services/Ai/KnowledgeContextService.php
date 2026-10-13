@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Schema;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Services\Knowledge\KnowledgeCanonService;
 use Platform\FoodAlchemist\Services\Knowledge\Wissensart;
+use Platform\FoodAlchemist\Services\Knowledge\WissensSichtbarkeit;
 use Platform\FoodAlchemist\Support\TeamScope;
 
 /**
@@ -22,6 +23,11 @@ use Platform\FoodAlchemist\Support\TeamScope;
  * pairing/discovery = kompakter FLAVOR-PAIRING-Block (nur Partner-NAMEN, kein
  * Prosa-Volltext), pairing/grounding = Doku-Auszüge je Hauptzutat-Slug.
  * Fehlende Quelle = leerer Kontext, nie Fehler (Invariante 6).
+ *
+ * ── ÜBERHOLT durch Spec 82 §13 H (Produktentscheid Dominique 2026-10-13) ──────
+ * Die folgende Invariante galt für das LESEN bis 2026-10-13: Seitdem sehen Mandanten nur ihre eigene Team-Kette; globales Wissen und das
+ * Master-Wissen lesen nur das Master-Team und dessen Unter-Teams ({@see WissensSichtbarkeit}). Der PROMPT-Pfad (Generator) bleibt gemeinsam:
+ * er liest Master-Wissen weiter für alle. Lesen ≠ Prompt — `nurLesbar()` vs. `nurSichtbar()`. Der Abschnitt unten beschreibt den Prompt-Pfad.
  *
  * ── MANDANTEN-INVARIANTE (Produktentscheid Dominique, 2026-09-02) ─────────────
  * DER WISSENS-KORPUS IST GEMEINSAM. Das Retrieval liest ihn ABSICHTLICH ohne
@@ -462,7 +468,7 @@ class KnowledgeContextService
                 );
                 if ($part !== null) $parts[] = $part;
             } elseif ($route->art === 'datenwerk' && $route->mode === 'resolve') {
-                $base = $this->sichtbareDokumente($team);
+                $base = DB::table('foodalchemist_knowledge_documents')->tap($this->nurSichtbar($team));   // Prompt-Pfad: global + Kette wie bisher
                 $datenwerkErgebnis = app(\Platform\FoodAlchemist\Services\Knowledge\DatenwerkResolver::class)->resolve($base, $params);
                 $entries = [];
                 foreach ($datenwerkErgebnis['ergebnisse'] as $result) {
@@ -597,7 +603,7 @@ class KnowledgeContextService
      */
     public function sichtbareDokumente(?Team $team): \Illuminate\Database\Query\Builder
     {
-        return DB::table('foodalchemist_knowledge_documents')->tap($this->nurSichtbar($team));
+        return DB::table('foodalchemist_knowledge_documents')->tap($this->nurLesbar($team));
     }
 
     /**
@@ -626,6 +632,20 @@ class KnowledgeContextService
         $slugs = $rows->map(fn ($doc) => "{$doc->slug}@v{$doc->version}")->values()->all();
 
         return ['text' => $text !== '' ? $text : null, 'files_used' => $slugs];
+    }
+
+    /**
+     * Spec 82 §13 H — Lese-Sichtbarkeit (MCP/Browser/Vorgangs-Anleitung), getrennt vom PROMPT-Pfad `nurSichtbar()`.
+     * Eigene Kette + globales Wissen nur für Master-Team und dessen Unter-Teams, siehe {@see WissensSichtbarkeit}.
+     * Notbremse `foodalchemist.knowledge_master_regel` = false: alte Regel (`nurSichtbar`).
+     */
+    private function nurLesbar(?Team $team, string $spalte = 'team_id'): \Closure
+    {
+        if (! WissensSichtbarkeit::aktiv()) {
+            return $this->nurSichtbar($team, $spalte);
+        }
+
+        return static fn ($q) => WissensSichtbarkeit::lesbar($q, $spalte, $team);
     }
 
     private function nurSichtbar(?Team $team, string $spalte = 'team_id'): \Closure
@@ -1952,7 +1972,8 @@ class KnowledgeContextService
      * Volltext-leichte Suche über den Wissens-Bestand: Token-Treffer in
      * slug/titel + Alias-Treffer (gewichtet).
      *
-     * Kein Team-Filter — bewusst, siehe MANDANTEN-INVARIANTE im Klassen-Docblock.
+     * Team-Sicht seit Spec 82 §13 H: eigene Kette + globales Wissen nur für Master-Team/Unter-Teams (`nurLesbar`, siehe Klassen-Docblock).
+     * (Früher: kein Team-Filter, MANDANTEN-INVARIANTE.)
      * Präzisierung gegenüber der früheren Fassung („der Bestand ist global"): die
      * Zeilen sind NICHT `team_id NULL`, sondern tragen zu 99 % den Kurator (Team 6).
      * Global ist der Bestand durch PRODUKTENTSCHEID, nicht durch die Spalte — wer
@@ -1962,7 +1983,7 @@ class KnowledgeContextService
      */
     public function searchDocuments(?Team $team, string $q, ?string $kategorie = null, int $limit = 10, bool $includeInactive = false): array
     {
-        $base = DB::table('foodalchemist_knowledge_documents')->tap($this->nurSichtbar($team))
+        $base = DB::table('foodalchemist_knowledge_documents')->tap($this->nurLesbar($team))
             ->whereNull('deleted_at')
             ->when(! $includeInactive, fn ($query) => $query->where('active', 1))
             ->when($kategorie !== null, fn ($query) => $query->where('category', $kategorie));
@@ -1988,13 +2009,13 @@ class KnowledgeContextService
         $limit = max(1, min(200, $limit));
         $offset = max(0, $offset);
 
-        $base = DB::table('foodalchemist_knowledge_documents')->tap($this->nurSichtbar($team))
+        $base = DB::table('foodalchemist_knowledge_documents')->tap($this->nurLesbar($team))
             ->whereNull('deleted_at')
             ->when(! $includeInactive, fn ($q) => $q->where('active', 1))
             ->when($kategorie !== null, fn ($q) => $q->where('category', $kategorie));
 
         $total = (clone $base)->count();
-        $categories = DB::table('foodalchemist_knowledge_documents')->tap($this->nurSichtbar($team))
+        $categories = DB::table('foodalchemist_knowledge_documents')->tap($this->nurLesbar($team))
             ->whereNull('deleted_at')
             ->when(! $includeInactive, fn ($q) => $q->where('active', 1))
             ->select('category', DB::raw('COUNT(*) AS c'))->groupBy('category')
@@ -2143,7 +2164,7 @@ class KnowledgeContextService
     /** Einzelnes Wissens-Dokument per Slug (aktiv, nicht gelöscht). */
     public function getDocument(?Team $team, string $slug): ?object
     {
-        return DB::table('foodalchemist_knowledge_documents')->tap($this->nurSichtbar($team))
+        return DB::table('foodalchemist_knowledge_documents')->tap($this->nurLesbar($team))
             ->where('slug', $slug)->where('active', 1)->whereNull('deleted_at')
             ->first(['id', 'slug', 'title', 'category', 'anchor_id', 'art', 'geltung', 'datenwerte', 'version', 'char_count', 'content_md']);
     }

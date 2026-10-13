@@ -778,6 +778,14 @@ return [
     'knowledge_team_scope' => env('FOODALCHEMIST_KNOWLEDGE_TEAM_SCOPE', false),
 
     /*
+     * Spec 82 §13 H — „Master-Wissen unsichtbar": LESEN (MCP knowledge.*, Datenwerk, Vorgangs-Anleitung) zeigt die eigene Team-Kette;
+     * globales Wissen (team_id NULL) nur dem Master-Team und dessen Unter-Teams (`master_team.PUT`). Ohne Master-Team: niemand liest global.
+     * Der PROMPT-Pfad bleibt unberührt (Generator liest Master-Wissen weiter). Notbremse: false = alte Regel (Lesen wie Prompt).
+     * Vor dem Deploy: `master_team.PUT 6` (sonst liest auf demo niemand mehr globales Wissen).
+     */
+    'knowledge_master_regel' => env('FOODALCHEMIST_KNOWLEDGE_MASTER_REGEL', true),
+
+    /*
      * Der EINE Kurator des globalen Wissens (Entscheid Dominique 2026-09-11).
      *
      * Bis hierher galt: `team_id NULL` ist für JEDEN unveränderlich, gepflegt nur per
