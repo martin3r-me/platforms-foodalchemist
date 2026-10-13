@@ -325,6 +325,52 @@ class Editor extends Component
     /** Spec 82 §12 B3: Angebot hat einen aktiven eingefrorenen Stand (nur zur Anzeige und für die Rückweg-Bestätigung). */
     public bool $eingefroren = false;
 
+    /** Schritt 4b: Vorschau „neuere Fassung übernehmen“ (Diff, Zwischenfassungen, betroffene Angebote) und die ausdrückliche Bestätigung. @var array<string,mixed>|null */
+    public ?array $uebernahmeVorschau = null;
+
+    public bool $uebernahmeBestaetigt = false;
+
+    public function uebernahmePruefen(int $zeileId, int $familieId): void
+    {
+        $this->uebernahmeBestaetigt = false;
+        $angebot = $this->selectedId !== null ? app(AngebotService::class)->detail($this->team(), $this->selectedId) : null;
+        if ($angebot === null) {
+            return;
+        }
+        try {
+            $this->uebernahmeVorschau = app(\Platform\FoodAlchemist\Services\AngebotEinfrierService::class)->uebernahmeVorschau($angebot, $zeileId, $familieId);
+        } catch (\RuntimeException $e) {
+            $this->uebernahmeVorschau = null;
+            $this->errorToast($e->getMessage());
+        }
+    }
+
+    public function uebernahmeAbbrechen(): void
+    {
+        $this->uebernahmeVorschau = null;
+        $this->uebernahmeBestaetigt = false;
+    }
+
+    public function uebernahmeAusfuehren(): void
+    {
+        $angebot = $this->selectedId !== null ? app(AngebotService::class)->detail($this->team(), $this->selectedId) : null;
+        $v = $this->uebernahmeVorschau;
+        if ($angebot === null || $v === null) {
+            return;
+        }
+        try {
+            app(\Platform\FoodAlchemist\Services\AngebotEinfrierService::class)
+                ->uebernehmen($this->team(), Auth::user(), $angebot, (int) $v['zeile_id'], (int) $v['familie_id'], $this->uebernahmeBestaetigt);
+        } catch (\Platform\FoodAlchemist\Exceptions\FaRechtFehltException|\RuntimeException $e) {
+            $this->errorToast($e->getMessage());
+
+            return;
+        }
+        $this->uebernahmeAbbrechen();
+        $this->savedToast('Neuere Fassung übernommen');
+        $this->dispatch('angebot-gespeichert');
+    }
+
     /** Rückweg aus dem eingefrorenen Stand: bestätigt (wire:confirm), verwirft den Snapshot. Eigene Methode, damit Livewire nur Positionsargumente ohne Dienst-Parameter dazwischen bekommt. */
     public function statusSetzenVerwerfend(string $status, AngebotService $svc): void
     {
@@ -1667,9 +1713,14 @@ class Editor extends Component
         // Kapitel-Bild + Galerie-URLs (Media-Service).
         $media = app(\Platform\FoodAlchemist\Services\FoodAlchemistMediaService::class);
 
+        $einfrierSvc = app(\Platform\FoodAlchemist\Services\AngebotEinfrierService::class);
+
         return view('foodalchemist::livewire.angebote.editor', [
             'sperr' => $this->sperrZustand(),   // Spec 65
             'angebot' => $angebot,
+            // Spec 82 §12 B3: eingefrorener Stand und „neuere Fassung verfügbar“
+            'einfrierung' => $angebot !== null ? $einfrierSvc->aktive($angebot) : null,
+            'einfrierVeraltet' => $angebot !== null ? $einfrierSvc->veraltet($angebot) : [],
             // Komposition (intern) + Kundensicht + Kalkulation
             'komposition' => $komposition,
             'menue' => $menue,

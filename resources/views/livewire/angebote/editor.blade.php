@@ -142,6 +142,59 @@
     @if($angebot === null)
         <x-fa::empty icon="heroicon-o-document-text" title="Kein Angebot geladen">In der Übersicht ein Angebot wählen.</x-fa::empty>
     @else
+    {{-- Spec 82 §12 B3: eingefrorener Stand der Gerichte mit Abo-Fassung, „neuere Fassung verfügbar“, Übernehmen mit Bestätigung --}}
+    @if($einfrierung)
+        <x-fa::section title="Eingefrorener Stand" icon="heroicon-o-lock-closed" data-angebot-einfrierung
+            description="Eingefroren am {{ $einfrierung->eingefroren_at->format('d.m.Y H:i') }}. Eine neue Master-Fassung ändert dieses Angebot nicht, bis du sie übernimmst.">
+            <ul class="flex flex-col gap-1 text-[length:var(--fa-text-md)]">
+                @foreach($einfrierung->zeilen as $z)
+                    <li wire:key="ef-{{ $z->id }}" class="flex flex-wrap items-center gap-2" data-angebot-einfrier-zeile="{{ $z->id }}">
+                        <span class="font-medium">{{ $z->name }}</span>
+                        <x-fa::badge tone="neutral">Fassung {{ collect($z->fassungen)->map(fn ($f) => '#'.$f['fassung_nr'])->implode(', ') }}</x-fa::badge>
+                        @if($z->vollstaendig)
+                            <x-fa::badge tone="ok">EK {{ number_format((float) $z->ek_summe, 2, ',', '.') }} €</x-fa::badge>
+                        @else
+                            <x-fa::badge tone="warn" title="Nicht alle Zutaten haben einen Preis">EK unvollständig{{ $z->ek_summe !== null ? ' (ab '.number_format((float) $z->ek_summe, 2, ',', '.').' €)' : '' }}</x-fa::badge>
+                        @endif
+                    </li>
+                @endforeach
+            </ul>
+            @foreach($einfrierVeraltet as $v)
+                <div class="mt-2 flex flex-wrap items-center gap-2" wire:key="ev-{{ $v['zeile_id'] }}-{{ $v['familie_id'] }}" data-angebot-fassung-neu="{{ $v['zeile_id'] }}">
+                    <x-fa::badge tone="{{ $v['allergen_geaendert'] ? 'crit' : 'info' }}" icon="heroicon-m-arrow-path">Neuere Fassung verfügbar: {{ $v['gericht'] }}, #{{ $v['eingefroren_nr'] }} → #{{ $v['neue_nr'] }}{{ $v['allergen_geaendert'] ? ' · Allergene geändert' : '' }}</x-fa::badge>
+                    @if(! $gesperrt)<x-fa::button size="sm" variant="ghost" wire:click="uebernahmePruefen({{ $v['zeile_id'] }}, {{ $v['familie_id'] }})" data-angebot-uebernehmen-pruefen>Übernehmen …</x-fa::button>@endif
+                </div>
+            @endforeach
+            @if($uebernahmeVorschau)
+                @php $uv = $uebernahmeVorschau; @endphp
+                <div class="mt-3 rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] p-3 flex flex-col gap-2" data-angebot-uebernahme-vorschau>
+                    <p class="font-medium">{{ $uv['gericht'] }}: Fassung #{{ $uv['von_nr'] }} → #{{ $uv['nach_nr'] }}</p>
+                    @if($uv['aenderungsnotiz'])<p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">Änderungsnotiz: {{ $uv['aenderungsnotiz'] }}</p>@endif
+                    @if($uv['allergen_diff'] !== [])
+                        <ul class="text-[length:var(--fa-text-sm)]" data-angebot-allergen-diff>
+                            @foreach($uv['allergen_diff'] as $feld => $d)<li>{{ str_replace(['allergen_', 'additive_'], ['Allergen ', 'Zusatzstoff '], $feld) }}: {{ $d['von'] ?? '—' }} → {{ $d['nach'] ?? '—' }}</li>@endforeach
+                        </ul>
+                    @elseif($uv['allergen_geaendert'])
+                        <p class="text-[length:var(--fa-text-sm)]">In einer übersprungenen Zwischenfassung wurde das Allergenbild geändert, der Endstand ist gleich.</p>
+                    @endif
+                    @if($uv['betroffene_ausgaben'] !== [])
+                        <div class="text-[length:var(--fa-text-sm)]" data-angebot-betroffene>Betroffene andere Angebote:
+                            @foreach($uv['betroffene_ausgaben'] as $b)<span class="mr-2">{{ $b['name'] ?? '#'.$b['angebot_id'] }} ({{ $b['art'] === 'eingefroren' ? 'eingefroren' : 'live' }})</span>@endforeach
+                        </div>
+                    @endif
+                    @if($uv['braucht_bestaetigung'])
+                        <label class="inline-flex items-center gap-2 text-[length:var(--fa-text-md)]"><input type="checkbox" class="w-4 h-4 rounded accent-[var(--fa-accent)]" wire:model.live="uebernahmeBestaetigt" data-angebot-uebernahme-bestaetigung />
+                            Ich habe die Allergen-Änderung geprüft und übernehme die Fassung (nur Rolle Freigeben).</label>
+                    @endif
+                    <div class="flex gap-2">
+                        <x-fa::button variant="primary" wire:click="uebernahmeAusfuehren" :disabled="$uv['braucht_bestaetigung'] && ! $uebernahmeBestaetigt" data-angebot-uebernehmen>Fassung übernehmen</x-fa::button>
+                        <x-fa::button variant="ghost" wire:click="uebernahmeAbbrechen">Abbrechen</x-fa::button>
+                    </div>
+                </div>
+            @endif
+        </x-fa::section>
+    @endif
+
     @if(session('angebot_produktion'))
         <x-fa::notice tone="info" data-angebot-produktion-hinweis>{{ session('angebot_produktion') }}</x-fa::notice>
     @endif
