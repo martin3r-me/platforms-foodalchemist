@@ -333,6 +333,12 @@ return [
                     'icon'  => 'heroicon-o-truck',
                 ],
                 [
+                    // Spec 82 §3: Preisliste des Kunden hochladen und abgleichen (Excel/CSV).
+                    'label' => 'Preislisten',
+                    'route' => 'foodalchemist.preislisten.index',
+                    'icon'  => 'heroicon-o-currency-euro',
+                ],
+                [
                     // Spec 68: Bestellvorlagen (gespeicherte Bestellrunde: Grundprodukte, Rezepte, Artikel).
                     'label' => 'Bestellvorlagen',
                     'route' => 'foodalchemist.bestellvorlagen.index',

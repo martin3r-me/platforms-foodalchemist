@@ -1116,6 +1116,9 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\TeamProfilGetTool::class,
                     \Platform\FoodAlchemist\Tools\TeamProfilPutTool::class,
                     \Platform\FoodAlchemist\Tools\MachbarkeitCheckTool::class,
+                    // Spec 82 §3: Preislisten-Import (Abgleich + Prüfliste, schreibt keine Preise)
+                    \Platform\FoodAlchemist\Tools\PreislisteUploadTool::class,
+                    \Platform\FoodAlchemist\Tools\PreislisteLaeufeGetTool::class,
                     \Platform\FoodAlchemist\Tools\StandorteGetTool::class,
                     \Platform\FoodAlchemist\Tools\StandortePutTool::class,
                     \Platform\FoodAlchemist\Tools\StandorteSetBrilleTool::class,
