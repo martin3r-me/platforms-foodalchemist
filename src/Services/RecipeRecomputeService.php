@@ -1233,7 +1233,9 @@ class RecipeRecomputeService
     private function preisProGrammMitBasis(FoodAlchemistGp $gp): array
     {
         foreach ($this->preisKandidaten($gp) as $la) {
-            if (in_array($la->unit_code, ['kg', 'l'], true)) {
+            // Lead OHNE aktiven Preis ist eine Lücke, kein 0-€-Preis (wie der Stk-Zwilling unten; Spec 82 Auflage 4).
+            // Vorher wurde (float) NULL = 0.0 als „bepreist" gezählt.
+            if (in_array($la->unit_code, ['kg', 'l'], true) && $la->aktiver_preis !== null) {
                 $pg = $this->preise->preisProGramm($la, (float) $la->aktiver_preis);
                 if ($pg !== null) {
                     return [$pg, EkPriceBasis::Lead];
