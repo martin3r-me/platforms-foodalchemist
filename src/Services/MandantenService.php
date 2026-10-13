@@ -49,6 +49,18 @@ class MandantenService
         return $user;
     }
 
+    /** Wie {@see pruefeVerwaltung}, aber ohne Ausnahme (für Navigation und Sichtbarkeit). */
+    public function darfVerwaltung(?User $user): bool
+    {
+        try {
+            $this->pruefeVerwaltung($user, 'Mandanten');
+
+            return true;
+        } catch (FaRechtFehltException) {
+            return false;
+        }
+    }
+
     /**
      * Alle Mandanten (Kunden-Hauptteams ohne das Master-Team) mit ihren Verwaltungsdaten.
      *
