@@ -69,6 +69,11 @@ class DetailPanel extends Component
 
     public bool $pMuted = false;
 
+    /** Spec 82 §12 B / 4d: Vorschau „Übernehmen am Rezept“ und die ausdrückliche Bestätigung. @var array<string,mixed>|null */
+    public ?array $rezeptUebernahme = null;
+
+    public bool $rezeptBestaetigt = false;
+
     public ?string $meldung = null;
 
     public ?string $fehler = null;
@@ -113,6 +118,43 @@ class DetailPanel extends Component
     public function nachAenderung(): void
     {
         // no-op
+    }
+
+    public function rezeptUebernahmePruefen(int $recipeId, int $familieId): void
+    {
+        $this->rezeptBestaetigt = false;
+        $this->fehler = null;
+        try {
+            $this->rezeptUebernahme = app(\Platform\FoodAlchemist\Services\RezeptFolgeService::class)->uebernahmeVorschau(\Illuminate\Support\Facades\Auth::user()->currentTeamRelation, $recipeId, $familieId);
+        } catch (\RuntimeException $e) {
+            $this->rezeptUebernahme = null;
+            $this->fehler = $e->getMessage();
+        }
+    }
+
+    public function rezeptUebernahmeAbbrechen(): void
+    {
+        $this->rezeptUebernahme = null;
+        $this->rezeptBestaetigt = false;
+    }
+
+    public function rezeptUebernahmeAusfuehren(): void
+    {
+        $v = $this->rezeptUebernahme;
+        if ($v === null) {
+            return;
+        }
+        try {
+            app(\Platform\FoodAlchemist\Services\RezeptFolgeService::class)
+                ->rezeptUebernehmen(\Illuminate\Support\Facades\Auth::user()->currentTeamRelation, \Illuminate\Support\Facades\Auth::user(), (int) $v['recipe_id'], (int) $v['familie_id'], $this->rezeptBestaetigt);
+        } catch (\Platform\FoodAlchemist\Exceptions\FaRechtFehltException|\RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+
+            return;
+        }
+        $this->rezeptUebernahmeAbbrechen();
+        $this->meldung = 'Neuere Fassung am Rezept übernommen.';
+        $this->dispatch('signal-geaendert');
     }
 
     /** Objekt auf-/zuklappen — „was hat dieses Rezept noch?" (Punkt 2). */

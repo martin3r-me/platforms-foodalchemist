@@ -3,6 +3,7 @@
 namespace Platform\FoodAlchemist\Services;
 
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Enums\SignalSeverity;
 use Platform\FoodAlchemist\Enums\SignalStatus;
@@ -56,15 +57,30 @@ class FassungSignalService
                 }
             }
         }
+        // 4d: eigene Rezepte folgen der neuen Fassung (nach dem Commit, Fehler geloggt); danach die Aktions-Signale für die berührten Team × Familie
+        $folge = ['signale' => []];
+        try {
+            $folge = app(RezeptFolgeService::class)->folgen($neueFassungIds);
+        } catch (\Throwable $e) {
+            Log::error('Eigene Rezepte folgen der neuen Abo-Fassung nicht: '.$e->getMessage(), ['exception' => $e]);
+        }
+        $behandelt = [];
+        foreach ($folge['signale'] as $s) {
+            if (($team = Team::find($s['team'])) !== null) {
+                $this->aktion($team, $s['familie']);
+                $behandelt[$s['team'].':'.$s['familie']] = true;
+                $n++;
+            }
+        }
         foreach (array_keys($familien) as $familieId) {
-            $n += $this->aktionFuerAlleTeams($familieId);
+            $n += $this->aktionFuerAlleTeams($familieId, $behandelt);
         }
 
         return $n;
     }
 
     /** Aktions-Signale einer Familie für alle Teams, die ein eingefrorenes Angebot auf dieser Familie haben. */
-    public function aktionFuerAlleTeams(int $familieId): int
+    public function aktionFuerAlleTeams(int $familieId, array $schonBehandelt = []): int
     {
         $teams = [];
         foreach (FoodAlchemistAngebotEinfrierung::whereNull('verworfen_at')->with('zeilen')->get() as $e) {
@@ -74,7 +90,7 @@ class FassungSignalService
         }
         $n = 0;
         foreach (array_keys($teams) as $teamId) {
-            if (($team = Team::find($teamId)) !== null) {
+            if (! isset($schonBehandelt[$teamId.':'.$familieId]) && ($team = Team::find($teamId)) !== null) {
                 $this->aktion($team, $familieId);
                 $n++;
             }
@@ -150,20 +166,32 @@ class FassungSignalService
                 }
             }
         }
-        if ($betroffen === []) {
+        $rezepte = app(RezeptFolgeService::class)->gehalten($team, $familieId);
+        if ($betroffen === [] && $rezepte === []) {
             $this->signale->schliesseGemessen($team, SignalTyp::FassungNeuerVerfuegbar, $key, self::QUELLE, 'Übernommen oder eingefrorenen Stand verworfen — niemand steht mehr auf der älteren Fassung');
 
             return;
         }
-        $allergen = $allergenDiff !== [];
+        foreach ($rezepte as $r) {
+            $vonNr = $vonNr === null ? $r['von_nr'] : min($vonNr, $r['von_nr']);
+            $allergenDiff += $r['allergen_diff'];
+        }
+        $allergen = $allergenDiff !== [] || collect($rezepte)->contains('grund', 'allergen');
         $texte = $this->allergenTexte($allergenDiff);
-        $titel = ($allergen ? 'Allergen-Änderung: ' : 'Neuere Fassung verfügbar: ').$neu->name.' (#'.$vonNr.' → #'.(int) $neu->fassung_nr.')';
-        $liste = collect($betroffen)->map(fn ($b) => $b['name'].' ('.$b['status'].')')->implode(', ');
+        $name = (string) ($neu?->name ?? '');
+        $titel = ($allergen ? 'Allergen-Änderung: ' : 'Neuere Fassung verfügbar: ').$name.' (#'.$vonNr.' → #'.(int) ($neu?->fassung_nr ?? 0).')';
+        $teile = [];
+        if ($betroffen !== []) {
+            $teile[] = 'Eingefrorene Angebote: '.collect($betroffen)->map(fn ($b) => $b['name'].' ('.$b['status'].')')->implode(', ').'.';
+        }
+        if ($rezepte !== []) {
+            $teile[] = 'Eigene Rezepte auf der älteren Fassung (Übernehmen am Rezept): '.collect($rezepte)->map(fn ($r) => $r['name'].' ('.($r['grund'] === 'allergen' ? 'Allergen-Änderung' : 'in eingefrorenem Angebot').')')->implode(', ').'.';
+        }
         $this->signale->erzeuge($team, SignalTyp::FassungNeuerVerfuegbar, $allergen ? SignalSeverity::Kritisch : SignalSeverity::Warnung, $titel, [
-            'dedup_key' => $key, 'source' => self::QUELLE, 'ref_type' => 'angebot', 'ref_id' => $betroffen[0]['angebot_id'],
-            'description' => 'Eingefrorene Angebote: '.$liste.'.'.($allergen ? ' Änderung am Allergenbild: '.implode('; ', $texte).'. Die Übernahme verlangt die Rolle Freigeben.' : ''),
-            'payload' => ['familie_id' => $familieId, 'name' => (string) $neu->name, 'von_nr' => $vonNr, 'nach_nr' => (int) $neu->fassung_nr, 'nach_fassung_id' => (int) $neu->id,
-                'aenderungsnotiz' => $neu->aenderungsnotiz, 'allergen_geaendert' => $allergen, 'allergene' => $texte, 'angebote' => $betroffen],
+            'dedup_key' => $key, 'source' => self::QUELLE, 'ref_type' => $betroffen !== [] ? 'angebot' : 'recipe', 'ref_id' => $betroffen !== [] ? $betroffen[0]['angebot_id'] : $rezepte[0]['recipe_id'],
+            'description' => implode(' ', $teile).($allergen ? ' Änderung am Allergenbild: '.implode('; ', $texte).'. Die Übernahme verlangt die Rolle Freigeben.' : ''),
+            'payload' => ['familie_id' => $familieId, 'name' => $name, 'von_nr' => $vonNr, 'nach_nr' => (int) ($neu?->fassung_nr ?? 0), 'nach_fassung_id' => $neu?->id,
+                'aenderungsnotiz' => $neu?->aenderungsnotiz, 'allergen_geaendert' => $allergen, 'allergene' => $texte, 'angebote' => $betroffen, 'rezepte' => $rezepte],
         ]);
     }
 

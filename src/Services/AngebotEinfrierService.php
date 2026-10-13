@@ -34,6 +34,7 @@ class AngebotEinfrierService
         private readonly EinfrierKosten $kosten,
         private readonly FassungsVergleich $vergleich,
         private readonly PlattformProtokoll $protokoll,
+        private readonly FassungsUmstellung $umstellung,
     ) {}
 
     public function aktive(FoodAlchemistAngebot $angebot): ?FoodAlchemistAngebotEinfrierung
@@ -341,26 +342,11 @@ class AngebotEinfrierService
      */
     private function verweiseUmstellen(FoodAlchemistAngebot $angebot, FoodAlchemistRecipe $gericht, int $alt, int $neu): array
     {
-        $rezepte = [];
         $bloecke = 0;
         $lokal = 0;
         $offen = [];
-        // 1) Zutaten in den eigenen Rezepten des Teams (Gericht und seine Unter-Rezepte), die die alte Fassung als Komponente tragen
-        $besucht = [];
-        $lauf = function (FoodAlchemistRecipe $r, int $tiefe) use (&$lauf, &$besucht, &$rezepte, $alt, $neu, $angebot) {
-            if (isset($besucht[$r->id]) || $tiefe > self::MAX_TIEFE || $r->ist_fassung) {
-                return;
-            }
-            $besucht[$r->id] = true;
-            if ((int) $r->team_id === (int) $angebot->team_id
-                && $r->ingredients()->where('referenced_recipe_id', $alt)->update(['referenced_recipe_id' => $neu]) > 0) {
-                $rezepte[] = (int) $r->id;
-            }
-            foreach (FoodAlchemistRecipe::mitFassungen()->whereIn('id', $r->ingredients()->whereNotNull('referenced_recipe_id')->pluck('referenced_recipe_id'))->get() as $kind) {
-                $lauf($kind, $tiefe + 1);
-            }
-        };
-        $lauf($gericht, 0);
+        // 1) Zutaten in den eigenen Rezepten des Teams (Gericht und seine Unter-Rezepte), die die alte Fassung als Komponente tragen — dieselbe Mechanik wie 4d
+        $rezepte = $this->umstellung->imBaum($gericht, (int) $angebot->team_id, $alt, $neu);
 
         // 2) Ist das Gericht selbst die alte Fassung: Verweise des Angebots umstellen
         if ((int) $gericht->id === $alt) {
