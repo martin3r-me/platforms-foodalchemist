@@ -104,6 +104,10 @@ class Index extends Component
         'betriebe' => ['label' => 'Kalkulationsprofile', 'hint' => 'Rechenbrille je Ausgabestelle (Marge, Zuschläge), Vorlage und Logo; Zuordnung zu den Unter-Teams'],
         // Spec 82 §5: der frühere Controlling-Reiter „Standorte & Freigaben" — Freigaben, Sammlungen, Schnellstart-Haken je Unter-Team.
         'unter-teams' => ['label' => 'Unter-Teams & Freigaben', 'hint' => 'Was die Unter-Teams vom Oberteam sehen: Haken „übernimmt alles", Freigaben, Sammlungen'],
+        // Spec 82 §13 D/C1: was der Mandant im Monat zahlt (Inhaber/Admin des Oberteams; lesend, nur Gebühren und Mengen).
+        'plan-nutzung' => ['label' => 'Plan und Nutzung', 'hint' => 'Was im Monat berechnet wird: Basis, weitere User, Unter-Teams, Stamm-Paket, Abo'],
+        // Spec 82 §9/§13 C1: Mandanten-Stammblatt für Plattform-Admin und Master-Admin (lesend, nur Verwaltungsspalten, nie Inhalte).
+        'mandanten' => ['label' => 'Mandanten', 'hint' => 'Stammblatt je Mandant: Status, Modus, CRM-Firma, Bereiche, Stamm-Paket, Abos, Kontingente, Gebühren'],
         // Spec 59: zentraler Chip-Katalog für Speiseplan-Vorgaben („mind. 2× vegan je Woche“) —
         // die Vorgaben selbst stehen je Plan im Speiseplan-Editor (Reiter Stammdaten).
         'etiketten' => ['label' => 'Etiketten', 'hint' => 'Etikett-Vorlagen: Format, Felder, Datum vorbelegt oder zum Handschreiben, Logo und Design'],
@@ -119,7 +123,7 @@ class Index extends Component
      */
     public const GRUPPEN = [
         'katalog' => ['label' => 'Katalog & Kategorien', 'sektionen' => ['einheiten', 'warengruppen', 'taxonomie', 'vk-taxonomie', 'behaelter', 'concepter-dimensionen']],
-        'betrieb' => ['label' => 'Team & Küche', 'sektionen' => ['unter-teams', 'betriebe', 'posten', 'rollen', 'zugriffsrechte', 'kueche', 'teamprofil']],
+        'betrieb' => ['label' => 'Team & Küche', 'sektionen' => ['unter-teams', 'plan-nutzung', 'mandanten', 'betriebe', 'posten', 'rollen', 'zugriffsrechte', 'kueche', 'teamprofil']],
         'kalkulation' => ['label' => 'Einkauf & Kalkulation', 'sektionen' => ['einkauf', 'kalkulation', 'herstellkosten', 'aufschlagsklassen']],
         'ki' => ['label' => 'KI & Wissen', 'sektionen' => ['ki', 'food-dna', 'dna-felder', 'kunde-dna', 'brief-vorlagen', 'trendradar', 'wissenskategorien', 'wissenssteuerung', 'regeln']],
         'ausgabe' => ['label' => 'Ausgabe', 'sektionen' => ['schreibstile', 'praesentations-designs', 'speiseplan-chips', 'etiketten']],
@@ -128,8 +132,11 @@ class Index extends Component
     /** Sektionen nur für Plattform-Admins (Spec 81: Regeln wie das globale Wissen — Kunden sehen sie nicht). */
     public const NUR_PLATTFORM_ADMIN = ['regeln'];
 
+    /** Spec 82 §9/§13 C1: Sektionen nur für Plattform-Admin und Admin im Master-Team (Verwaltungsdaten aller Mandanten). */
+    public const NUR_VERWALTUNG = ['mandanten'];
+
     /** Spec 82 §5: nur im Oberteam (ohne Eltern-Team) — ein Unter-Team hat keine Unter-Teams. */
-    public const NUR_OBERTEAM = ['unter-teams', 'dna-felder'];
+    public const NUR_OBERTEAM = ['unter-teams', 'dna-felder', 'plan-nutzung', 'mandanten'];
 
     /**
      * Spec 82 §5/§13 B2: Sektionen, die an einem Bereich der Freischaltung (FaBereiche) hängen. Aus = Sektion
@@ -137,12 +144,29 @@ class Index extends Component
      */
     public const BEREICH_SEKTIONEN = ['unter-teams' => 'unterteams'];
 
+    /**
+     * Spec 82 §13 C1/D: Sektionen mit eigener Rechteprüfung. `plan-nutzung`: Inhaber/Admin des Mandanten, Plattform-Admin, Admin im
+     * Master-Team (nie im Master-Team selbst). `mandanten`: nur Plattform-Admin und Admin im Master-Team.
+     */
+    public static function rechteErlaubt(string $sektion): bool
+    {
+        $user = Auth::user();
+        $team = $user?->currentTeamRelation;
+
+        return match ($sektion) {
+            'plan-nutzung' => $team !== null && app(\Platform\FoodAlchemist\Services\PlanNutzungService::class)->darfLesen($user, $team),
+            'mandanten' => app(\Platform\FoodAlchemist\Services\MandantenService::class)->darfVerwaltung($user),
+            default => true,
+        };
+    }
+
     public function mount(string $sektion = 'einheiten'): void
     {
         abort_unless(array_key_exists($sektion, self::SEKTIONEN), 404);
         abort_if(in_array($sektion, self::NUR_PLATTFORM_ADMIN, true) && ! self::istPlattformAdmin(), 404);
         abort_if(in_array($sektion, self::NUR_OBERTEAM, true) && self::istUnterTeam(), 404);
         abort_unless(self::bereichErlaubt($sektion), 404);
+        abort_unless(self::rechteErlaubt($sektion), 404);
         $this->sektion = $sektion;
     }
 
@@ -179,7 +203,7 @@ class Index extends Component
         if (self::istUnterTeam()) {
             $sektionen = array_diff_key($sektionen, array_flip(self::NUR_OBERTEAM));
         }
-        $sektionen = array_filter($sektionen, static fn (string $key) => self::bereichErlaubt($key), ARRAY_FILTER_USE_KEY);
+        $sektionen = array_filter($sektionen, static fn (string $key) => self::bereichErlaubt($key) && self::rechteErlaubt($key), ARRAY_FILTER_USE_KEY);
         $gruppen = array_map(static fn ($g) => ['sektionen' => array_values(array_intersect($g['sektionen'], array_keys($sektionen)))] + $g, self::GRUPPEN);
 
         return view('foodalchemist::livewire.settings.index', [

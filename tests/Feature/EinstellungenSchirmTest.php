@@ -30,13 +30,20 @@ it('führt jede registrierte Sektion in der Navigation', function () {
 
             continue;
         }
+        // Spec 82 §13 C1: das Mandanten-Stammblatt sehen nur Plattform-Admin und Master-Admin.
+        if (in_array($key, Einstellungen::NUR_VERWALTUNG, true)) {
+            expect($html)->not->toContain('data-settings-link="' . $key . '"');
+
+            continue;
+        }
         expect($html)->toContain('data-settings-link="' . $key . '"');
     }
 
     $admin = $this->makeUser($this->rootTeam, 'Plattform Admin');
     config(['platform-shell.admins' => [strtolower((string) $admin->email)]]);
     $this->actingAs($admin);
-    expect(Livewire::test(Einstellungen::class)->html())->toContain('data-settings-link="regeln"');
+    $html = Livewire::test(Einstellungen::class)->html();
+    expect($html)->toContain('data-settings-link="regeln"')->toContain('data-settings-link="mandanten"');
 });
 
 it('trägt das clientseitige Filter-Feld über der Bereiche-Liste', function () {

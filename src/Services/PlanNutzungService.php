@@ -52,6 +52,21 @@ class PlanNutzungService
         }
     }
 
+    /** Darf der User „Plan und Nutzung“ dieses Teams sehen? (ohne Ausnahme, für die Sichtbarkeit der Einstellungs-Sektion) */
+    public function darfLesen(?User $user, Team $team): bool
+    {
+        if (MasterTeam::istMaster($team)) {
+            return false;   // das Master-Team ist kein Mandant und hat keine Gebühren
+        }
+        try {
+            $this->pruefeLesen($user, $this->mandantVon($team));
+
+            return true;
+        } catch (FaRechtFehltException) {
+            return false;
+        }
+    }
+
     /**
      * @return array<string,mixed>
      */
