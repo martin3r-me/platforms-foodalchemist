@@ -23,6 +23,9 @@ const TYP_FARBE = { stern3: '#fcd34d', stern2: '#f59e0b', stern1: '#94a3b8', kon
 const TYP_DASH = { stern3: null, stern2: '5 4', stern1: '2 4', kontrast: '1 4' };
 const TYP_FILL = { stern3: 'rgba(252,211,77,.24)', stern2: 'rgba(245,158,11,.18)', stern1: 'rgba(148,163,184,.14)', kontrast: 'rgba(34,211,238,.15)' };
 const LEVEL_SYM = { 3: '★★★', 2: '★★', 1: '★', 0: '⇄' };
+// Direktes Pairing zwischen Kern-Ankern (Best/Good/Match): eigene Silber-Skala — Gelb bleibt den
+// Vorschlägen am Aussenring, sonst sind Best-Match-Punkte und Vorschläge nicht zu unterscheiden.
+const ANKER_FARBE = { 3: '#f8fafc', 2: '#cbd5e1', 1: '#94a3b8' };
 
 export function pairingNetzGraph(config) {
   return {
@@ -176,7 +179,7 @@ export function pairingNetzGraph(config) {
         .attr('cy', (d) => this._edgeMidpoint(d, cx, cy)[1])
         .attr('r', (d) => tierR[this._edgeTier(d)])
         .attr('fill', (d) => this._edgeColor(d))
-        .attr('stroke', (d) => (this._edgeTier(d) === 'best' ? '#e0e7ff' : '#0b1120'))
+        .attr('stroke', (d) => (this._edgeTier(d) === 'best' && d.kind !== 'anker_anker' ? '#e0e7ff' : '#0b1120'))
         .attr('stroke-width', (d) => (this._edgeTier(d) === 'best' ? (this.mode === 'preview' ? 1.2 : 2.2) : 1))
         .style('opacity', (d) => tierOp[this._edgeTier(d)]);
       this._markSel.append('title').text((d) => this._edgeTitle(d));
@@ -231,6 +234,7 @@ export function pairingNetzGraph(config) {
     _edgeColor(d) {
       if (d.kind === 'konflikt') return '#f43f5e'; // Spec 60: Konflikt aus dem Anker-Wissen
       if (d.kind === 'bridge') return '#a78bfa'; // Brücke (geteilte Partner) = anker-violett
+      if (d.kind === 'anker_anker') return ANKER_FARBE[d.level] || ANKER_FARBE[1];
       if (d.typ) return TYP_FARBE[d.typ] || '#9ca3af';
 
       return '#9ca3af';
