@@ -173,9 +173,35 @@ it('Listenpreis folgt dem Artikel: Preis eines stamm_paket-Artikels ist ohne Opt
     expect($ids())->toContain($preisPaket->id, $teamPreisAufPaket->id);
 });
 
-it('GRENZE (dokumentiert): activeFor(id) liest ohne Scope — der Aufrufer muss den Artikel vorher filtern', function () {
-    $preis = FoodAlchemistPrice::create(['team_id' => null, 'supplier_item_id' => $this->laPaket->id, 'price' => 9.9, 'status' => '0']);
+it('geschlossen (Folge-PR 3a): alle Preis-Lesewege prüfen die Stamm-Sichtbarkeit selbst — ohne Opt-in kein Paket-Preis', function () {
+    $ps = app(\Platform\FoodAlchemist\Services\PriceService::class);
+    $liste = FoodAlchemistPrice::create(['team_id' => null, 'supplier_item_id' => $this->laPaket->id, 'price' => 9.9, 'status' => '0']);
+    $team = FoodAlchemistPrice::create(['team_id' => $this->childB->id, 'supplier_item_id' => $this->laPaket->id, 'price' => 8.8, 'status' => '0']);
+    $basis = FoodAlchemistPrice::create(['team_id' => null, 'supplier_item_id' => $this->laBasis->id, 'price' => 1.5, 'status' => '0']);
+    $subq = fn (int $itemId, $t) => DB::table('foodalchemist_supplier_items')->where('id', $itemId)
+        ->selectSub($ps->activePriceSubquery('foodalchemist_supplier_items.id', $t)->toBase(), 'p')->value('p');
 
-    // Bestand: PriceService::activeFor prüft die Artikelsichtbarkeit nicht (Lisas Stufe 3a macht es team-bewusst).
-    expect(app(\Platform\FoodAlchemist\Services\PriceService::class)->activeFor($this->laPaket->id)?->id)->toBe($preis->id);
+    // ohne Team (globale Werte) und ohne Opt-in: kein Weg liefert einen Paket-Preis — auch nicht den Teampreis
+    foreach ([null, $this->childB] as $t) {
+        expect($ps->activeFor($this->laPaket->id, $t))->toBeNull()
+            ->and($subq($this->laPaket->id, $t))->toBeNull()
+            ->and($ps->historyFor($this->laPaket->id, $t))->toHaveCount(0)
+            ->and($ps->preisTrendBulk([$this->laPaket->id], $t))->toBe([]);
+    }
+    expect($ps->nurListenpreis(DB::table('foodalchemist_prices AS p'), 'p')->where('p.supplier_item_id', $this->laPaket->id)->count())->toBe(0)
+        // basis-Artikel unberührt
+        ->and($ps->activeFor($this->laBasis->id)?->id)->toBe($basis->id)
+        ->and($ps->activeFor($this->laBasis->id, $this->childB)?->id)->toBe($basis->id);
+
+    // mit Opt-in: der Teampreis gewinnt (Team-Stufe), andere Teams ohne Opt-in sehen weiter nichts
+    StammPaket::freischalten($this->childB);
+    expect($ps->activeFor($this->laPaket->id, $this->childB)?->id)->toBe($team->id)
+        ->and((float) $subq($this->laPaket->id, $this->childB))->toBe(8.8)
+        ->and($ps->activeFor($this->laPaket->id, $this->childA))->toBeNull()
+        ->and($ps->activeFor($this->laPaket->id))->toBeNull();   // ohne Team gibt es kein Opt-in
+
+    // konfigurierter Master sieht den Stamm (Annahme wie oben), also auch dessen Listenpreis
+    config(['foodalchemist.master_team_id' => $this->rootTeam->id]);
+    StammPaket::flush();
+    expect($ps->activeFor($this->laPaket->id, $this->rootTeam)?->id)->toBe($liste->id);
 });
