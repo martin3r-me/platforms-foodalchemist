@@ -11,18 +11,20 @@
             @if($mandanten === [])
                 <x-fa::empty compact icon="heroicon-o-archive-box" title="Keine Mandanten">Es gibt noch kein Haupt-Team neben dem Master-Team.</x-fa::empty>
             @else
-                <table class="fa-table fa-table--compact">
+                {{-- schmale Karte im Host: die Tabelle scrollt waagerecht, die Aktionsspalte wird nie abgeschnitten --}}
+                <div class="overflow-x-auto -mx-4">
+                <table class="fa-table fa-table--compact" data-stamm-paket-tabelle>
                     <thead><tr><th>Mandant</th><th>Stamm-Paket</th><th class="text-right">Abos am Paket</th><th></th></tr></thead>
                     <tbody>
                         @foreach($mandanten as $m)
                             <tr wire:key="sp-{{ $m['team_id'] }}" data-stamm-paket-zeile="{{ $m['team_id'] }}">
                                 <td class="font-medium">{{ $m['name'] }}</td>
-                                <td>
+                                <td class="whitespace-nowrap">
                                     @if($m['gebucht'])<x-fa::badge tone="ok">Gebucht @if($m["seit"]) · seit {{ $m["seit"] }} @endif </x-fa::badge>
                                     @else<x-fa::badge tone="neutral">Nicht gebucht</x-fa::badge>@endif
                                 </td>
                                 <td class="text-right tabular-nums">{{ $m['abos'] }}</td>
-                                <td class="text-right">
+                                <td class="text-right whitespace-nowrap" data-stamm-paket-aktion>
                                     @if($m['gebucht'])
                                         <x-fa::button size="sm" variant="ghost" icon="heroicon-o-x-circle" wire:click="vorschau({{ $m['team_id'] }})" data-stamm-paket-abbestellen>Abbestellen …</x-fa::button>
                                     @else
@@ -33,6 +35,7 @@
                         @endforeach
                     </tbody>
                 </table>
+                </div>
             @endif
         </x-fa::section>
 
