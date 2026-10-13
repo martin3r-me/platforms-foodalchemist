@@ -44,9 +44,12 @@ final class TeamScope
         }
 
         // Spec 82 §12 A3: GP/Lieferant/Artikel — globale stamm_paket-Zeilen nur bei Opt-in.
-        if ($team !== null && is_string($tabelle) && StammPaket::betrifft($tabelle)) {
-            return $query->where(function ($q) use ($teamIdColumn, $ids, $tabelle, $team) {
-                $q->where(fn ($g) => StammPaket::globaleZeilen($g, $teamIdColumn, $tabelle . '.stamm_class', $team));
+        // Auch bei Alias (`foodalchemist_supplier_items AS i`, Spalte `i.team_id`): Der Alias wird zur Basistabelle aufgelöst,
+        // die Klassenspalte hängt am Alias (`i.stamm_class`). Vorher blieb die Stamm-Klasse bei Alias-Abfragen ungefiltert.
+        [$basis, $klassePraefix] = self::basisTabelleUndPraefix($query, $teamIdColumn);
+        if ($team !== null && StammPaket::betrifft($basis)) {
+            return $query->where(function ($q) use ($teamIdColumn, $ids, $klassePraefix, $team) {
+                $q->where(fn ($g) => StammPaket::globaleZeilen($g, $teamIdColumn, $klassePraefix . '.stamm_class', $team));
                 if ($ids !== []) {
                     $q->orWhereIn($teamIdColumn, $ids);
                 }
@@ -59,6 +62,47 @@ final class TeamScope
                 $q->orWhereIn($teamIdColumn, $ids);
             }
         });
+    }
+
+    /**
+     * Basistabelle und Spalten-Präfix der Abfrage für die Stamm-Klasse (Spec 82 §12 A3).
+     * Mit Alias-Spalte (`i.team_id`): der Alias wird in `from` bzw. den Joins gesucht (`foodalchemist_supplier_items AS i` → Tabelle
+     * `foodalchemist_supplier_items`, Präfix `i`). Ohne Punkt: die `from`-Tabelle (ein Alias dort wird abgeschnitten, aber als Präfix benutzt).
+     * Unbekannter Präfix: er gilt selbst als Tabellenname (wie bisher).
+     *
+     * @return array{0: string, 1: string} [Basistabelle, Präfix der Klassenspalte]
+     */
+    private static function basisTabelleUndPraefix($query, string $teamIdColumn): array
+    {
+        $q = $query instanceof \Illuminate\Database\Eloquent\Builder ? $query->getQuery() : $query;
+        $quellen = [];
+        if (is_string($q->from ?? null)) {
+            $quellen[] = $q->from;
+        }
+        foreach ((array) ($q->joins ?? []) as $join) {
+            if (is_string($join->table ?? null)) {
+                $quellen[] = $join->table;
+            }
+        }
+        $zerlegt = array_map(static function (string $roh): array {
+            $roh = str_replace(['`', '"'], '', trim($roh));
+
+            return preg_match('/^(\S+)\s+as\s+(\S+)$/i', $roh, $m) ? [$m[1], $m[2]] : [$roh, $roh];   // [Tabelle, Alias oder Tabelle]
+        }, $quellen);
+
+        if (str_contains($teamIdColumn, '.')) {
+            $praefix = strstr($teamIdColumn, '.', true);
+            foreach ($zerlegt as [$tabelle, $alias]) {
+                if (strcasecmp($alias, $praefix) === 0) {
+                    return [$tabelle, $praefix];
+                }
+            }
+
+            return [$praefix, $praefix];
+        }
+        [$tabelle, $alias] = $zerlegt[0] ?? ['', ''];
+
+        return [$tabelle, $alias];
     }
 
     /** Schreibrecht: nur das Besitzer-Team; Master/Seed (team_id NULL) + Fremd-Teams sind read-only. */
