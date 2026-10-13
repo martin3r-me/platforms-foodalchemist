@@ -64,6 +64,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
          */
         if ($this->app->runningInConsole()) {
             $this->commands([
+                \Platform\FoodAlchemist\Console\GpHomogenitaetBerichtCommand::class,   // Spec 82 §2 (nur lesend)
                 \Platform\FoodAlchemist\Console\WareneingangAltbestandCommand::class,   // Spec 75c
                 \Platform\FoodAlchemist\Console\RegelnKonsumentenCommand::class,   // Spec 81: Schutz vor Paket 5
                 \Platform\FoodAlchemist\Console\GpFelderBackfillCommand::class,   // Spec 80 Paket 11
@@ -444,6 +445,14 @@ class FoodAlchemistServiceProvider extends ServiceProvider
             \Illuminate\Queue\Events\JobProcessing::class,
             fn () => $this->app->make(\Platform\FoodAlchemist\Services\WorkerHealthService::class)->heartbeat(),
         );
+
+        // Spec 82 §12 A3: Der Opt-in-Stand (StammPaket::$cache, static) darf Request-/Job-Grenzen nicht überleben —
+        // sonst sehen langlebige Prozesse (queue:work, Octane) einen Opt-in, der anderswo geändert wurde, erst nach Neustart.
+        \Illuminate\Support\Facades\Event::listen(
+            [\Illuminate\Queue\Events\JobProcessing::class, \Illuminate\Queue\Events\JobProcessed::class, \Illuminate\Queue\Events\JobFailed::class],
+            fn () => \Platform\FoodAlchemist\Support\StammPaket::flush(),
+        );
+        $this->app->terminating(fn () => \Platform\FoodAlchemist\Support\StammPaket::flush());
 
         /**
          * SCHRITT 1: Modul-Registrierung prüfen
