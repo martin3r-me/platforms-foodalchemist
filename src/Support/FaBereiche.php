@@ -62,8 +62,8 @@ final class FaBereiche
     public const TOOL_PRAEFIXE = [
         // bereichsfrei: Ansicht/Navigation, Läufe, Rechte-Pflege, Betriebs-Brille umschalten (nur Ansicht)
         ['ui', null], ['runs', null], ['team_roles', null], ['team_bereiche', null], ['standorte', null],
-        // Spec 82 §13 B1/B4: Plattform-Steuerung (Stamm-Paket, Master-Team) — Rechteprüfung im Dienst (nur Plattform-Admin), nicht je Bereich
-        ['stamm_paket', null], ['master_team', null],
+        // Spec 82 §13 B1/B4: Plattform-Steuerung (Stamm-Paket, Master-Team, Mandanten-Verwaltung) — Rechteprüfung im Dienst (nur Plattform-Admin), nicht je Bereich
+        ['stamm_paket', null], ['master_team', null], ['mandanten', null],
         // Spec 77d: Inhalte für Standorte (Editor im Controlling), Sammlungen + eigene Kopie gehören zu den Rezepten
         ['standort_inhalte', 'controlling'], ['sammlungen', 'rezepte'], ['inhalte', 'rezepte'],
         // Controlling (Auswertungen; Spec 32 hat die Einkaufs-Auswertungen hierher verlegt)

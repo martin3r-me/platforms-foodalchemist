@@ -1124,6 +1124,9 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\StammPaketPutTool::class,
                     \Platform\FoodAlchemist\Tools\MasterTeamGetTool::class,
                     \Platform\FoodAlchemist\Tools\MasterTeamPutTool::class,
+                    // Spec 82 §9/§13 B3+G: Mandanten (Status, Modus kuratiert|autark, CRM-Firma)
+                    \Platform\FoodAlchemist\Tools\MandantenGetTool::class,
+                    \Platform\FoodAlchemist\Tools\MandantenPutTool::class,
                     \Platform\FoodAlchemist\Tools\StandorteGetTool::class,
                     \Platform\FoodAlchemist\Tools\StandortePutTool::class,
                     \Platform\FoodAlchemist\Tools\StandorteSetBrilleTool::class,
