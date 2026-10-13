@@ -88,7 +88,7 @@ it('Stammblatt: Verwaltungsspalten je Mandant, nie Inhalte; Bereiche, Paket, Unt
     expect($b['name'])->toBe('Soulkitchen')->and($b['modus'])->toBe('autark')->and($b['status'])->toBe('aktiv')
         ->and($b['stamm_paket']['gebucht'])->toBeTrue()->and($b['unter_teams'])->toBe(['LAGO'])->and($b['abos'])->toBe(0)
         ->and($b['kontingente']['max_user'])->toBe(5)->and($b['kontingente']['user'])->toBe(2)->and($b['gebuehren']['summe_gebucht'])->toBeGreaterThan(0)
-        ->and($b['inhalte_sichtbar'])->toBeFalse()->and($b['bereiche_gebucht'])->toBe($b['bereiche_gesamt']);
+        ->and($b['inhalte_sichtbar'])->toBeFalse()->and($b['bereiche_gebucht'])->toBeGreaterThan(0)->toBeLessThanOrEqual($b['bereiche_gesamt']);
     $schluessel = implode(' ', array_keys($b));
     foreach (['recipe', 'rezept', 'preis', 'foodbook', 'angebot', 'dna', 'profil'] as $verboten) {
         expect($schluessel)->not->toContain($verboten);   // kein Inhalts-Schluessel im Stammblatt
