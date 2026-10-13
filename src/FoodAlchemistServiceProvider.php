@@ -196,12 +196,15 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 ->description('FoodAlchemist: Qualitäts-Lauf (Signale, DQ-Kaskade, Zeitreihen-Snapshot, Drift)');
 
             // Spec 82 §13 D: FA-Gebühren täglich zählen (Tageswerte in team_billable_usages). Idempotent; verpasste Tage mit --von/--bis nachholen.
-            $schedule->command(\Platform\FoodAlchemist\Console\PlanNutzungZaehlenCommand::class)
-                ->dailyAt(config('foodalchemist.scheduler.plan_zaehlen_zeit', '02:10'))
-                ->withoutOverlapping()
-                ->onOneServer()
-                ->runInBackground()
-                ->description('FoodAlchemist: Gebühren je Mandant zählen (Basis, User, Unter-Teams, Stamm-Paket, Abo)');
+            // Nur mit bewusst eingeschalteter Abrechnung (config foodalchemist.gebuehren.zaehlen_aktiv, Default aus): der Lauf schreibt in die Core-Rechnungstabelle.
+            if (config('foodalchemist.gebuehren.zaehlen_aktiv', false)) {
+                $schedule->command(\Platform\FoodAlchemist\Console\PlanNutzungZaehlenCommand::class)
+                    ->dailyAt(config('foodalchemist.scheduler.plan_zaehlen_zeit', '02:10'))
+                    ->withoutOverlapping()
+                    ->onOneServer()
+                    ->runInBackground()
+                    ->description('FoodAlchemist: Gebühren je Mandant zählen (Basis, User, Unter-Teams, Stamm-Paket, Abo)');
+            }
 
             // Wissens-Steuerdaten-Wächter (2026-09-03). Rein LESEND (`--verify`), kein
             // Provider-Call, kein Schreibvorgang an den Steuerdaten — er meldet nur.

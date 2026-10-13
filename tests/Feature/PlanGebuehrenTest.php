@@ -60,6 +60,7 @@ beforeEach(function () {
     $this->soulMember = $this->makeUser($this->soul, 'Soul Mitglied', 'member');
     $this->masterAdmin = $this->makeUser($this->master, 'Master Admin', 'admin');
     app(MasterTeamService::class)->setze($this->master, $this->admin);
+    app(MandantenService::class)->setze($this->soul, ['status' => 'aktiv'], $this->admin);   // fürs Geld zählt nur eine ausdrückliche Zeile
     app(MandantenService::class)->setze($this->rootTeam, ['status' => 'beendet'], $this->admin);   // das Seed-Rootteam rechnet nicht mit: nur Soulkitchen zählt
 
     $this->protokoll = Mockery::mock(PlattformProtokoll::class)->shouldIgnoreMissing();
@@ -172,20 +173,49 @@ it('Zählen: Unter-Teams und weitere User kosten, Paket und Abo erst wenn gebuch
     expect($monat())->toBe(98.0);   // 79 + 19
 });
 
-it('Abrechenbar sind nur aktive Mandanten: Master-Team, Unter-Teams, Projekt und beendet werden nicht gezählt', function () {
+it('Abrechenbar sind nur Mandanten mit AUSDRÜCKLICHER Zeile und Status aktiv: ohne Zeile (z. B. persönliche Teams), Master, Unter-Teams, Projekt und beendet nie', function () {
     $kind = Team::create(['name' => 'LAGO', 'user_id' => 1, 'personal_team' => false, 'parent_team_id' => $this->soul->id]);
+    $persoenlich = Team::create(['name' => "MAX WALTER's Team", 'user_id' => 1, 'personal_team' => true]);   // Haupt-Team ohne Eltern-Team, keine Mandanten-Zeile
     $namen = fn () => ($this->zaehler)()->abrechenbareMandanten()->pluck('name')->all();
 
-    expect($namen())->toContain('Soulkitchen')->not->toContain('BHG.DIGITAL')->not->toContain('LAGO');
+    expect($namen())->toBe(['Soulkitchen']);
+    expect(($this->zaehler)()->zaehle($persoenlich, '2026-10-14')['zeilen'])->not->toBeEmpty();   // die Rechnung selbst ist neutral, die AUSWAHL entscheidet
     app(MandantenService::class)->setze($this->soul, ['status' => 'projekt'], $this->admin);
-    expect($namen())->not->toContain('Soulkitchen');
+    expect($namen())->toBe([]);
     app(MandantenService::class)->setze($this->soul, ['status' => 'beendet'], $this->admin);
-    expect($namen())->not->toContain('Soulkitchen');
+    expect($namen())->toBe([]);
     app(MandantenService::class)->setze($this->soul, ['status' => 'aktiv'], $this->admin);
-    expect($namen())->toContain('Soulkitchen');
+    expect($namen())->toBe(['Soulkitchen'])->not->toContain('LAGO')->not->toContain('BHG.DIGITAL');
+    app(MandantenService::class)->setze($persoenlich, ['status' => 'aktiv'], $this->admin);   // erst die ausdrückliche Zeile macht ein Team abrechenbar
+    expect($namen())->toContain("MAX WALTER's Team");
+});
+
+it('Command: ein Team ohne Mandanten-Zeile wird nicht gezählt, auch nicht über --team', function () {
+    $persoenlich = Team::create(['name' => "CHRISTIAN WOLF's Team", 'user_id' => 1, 'personal_team' => true]);
+    config(['foodalchemist.gebuehren.zaehlen_aktiv' => true]);
+
+    $this->artisan('foodalchemist:plan-nutzung-zaehlen', ['--datum' => '2026-10-14'])->assertSuccessful();
+    $this->artisan('foodalchemist:plan-nutzung-zaehlen', ['--datum' => '2026-10-14', '--team' => $persoenlich->id])->assertSuccessful();
+
+    expect(TeamBillableUsage::where('team_id', $persoenlich->id)->count())->toBe(0)->and(TeamBillableUsage::where('team_id', $this->soul->id)->count())->toBe(1);
+});
+
+it('Schalter foodalchemist.gebuehren.zaehlen_aktiv: Default aus; ohne Schalter schreibt der Befehl nichts (nur --dry-run oder --force) und der Scheduler registriert ihn nicht', function () {
+    expect(config('foodalchemist.gebuehren.zaehlen_aktiv'))->toBeFalse();
+
+    $this->artisan('foodalchemist:plan-nutzung-zaehlen', ['--datum' => '2026-10-14'])->assertFailed();
+    expect(TeamBillableUsage::count())->toBe(0);
+    $this->artisan('foodalchemist:plan-nutzung-zaehlen', ['--datum' => '2026-10-14', '--dry-run' => true])->assertSuccessful();
+    expect(TeamBillableUsage::count())->toBe(0);
+    $this->artisan('foodalchemist:plan-nutzung-zaehlen', ['--datum' => '2026-10-14', '--force' => true])->assertSuccessful();
+    expect(TeamBillableUsage::where('team_id', $this->soul->id)->count())->toBe(1);
+
+    $geplant = fn () => collect(app(\Illuminate\Console\Scheduling\Schedule::class)->events())->contains(fn ($e) => str_contains((string) $e->command, 'foodalchemist:plan-nutzung-zaehlen'));
+    expect($geplant())->toBeFalse();   // ohne Schalter nie eingeplant (Provider liest die Config beim Booten)
 });
 
 it('Command: --dry-run schreibt nichts, der echte Lauf schreibt, --von/--bis holt Tage nach', function () {
+    config(['foodalchemist.gebuehren.zaehlen_aktiv' => true]);
     $this->artisan('foodalchemist:plan-nutzung-zaehlen', ['--datum' => '2026-10-14', '--dry-run' => true, '--team' => $this->soul->id])->assertSuccessful();
     expect(TeamBillableUsage::count())->toBe(0);
 

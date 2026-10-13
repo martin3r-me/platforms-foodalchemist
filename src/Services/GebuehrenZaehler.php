@@ -21,7 +21,7 @@ use Platform\FoodAlchemist\Support\MasterTeam;
  *
  * Rechnerei: Monatspreis × Menge ÷ Tage des Monats, je Tag auf Cent gerundet; der letzte Tag des Monats gleicht die
  * Rundung aus (Summe der exakten Tageswerte minus die schon gebuchten gerundeten). Der exakte Tageswert steht im
- * Preis-Snapshot. Abgerechnet werden nur Mandanten mit Status „aktiv“ (Projekt = vor der Lizenz, beendet = vorbei).
+ * Preis-Snapshot. Abgerechnet werden nur Mandanten mit ausdrücklicher Mandanten-Zeile und Status „aktiv“ (Projekt = vor der Lizenz, beendet = vorbei; ohne Zeile nie).
  * Reine Zählung: liest nie Inhalte (Rezepte, Preise, Foodbooks) eines Mandanten.
  */
 class GebuehrenZaehler
@@ -31,15 +31,18 @@ class GebuehrenZaehler
         private readonly AboAuskunft $abos,
     ) {}
 
-    /** Mandanten, für die gezählt wird: Kunden-Hauptteams ohne das Master-Team mit Status „aktiv“ (ohne Zeile = aktiv). */
+    /**
+     * Mandanten, für die gezählt wird: Kunden-Hauptteams ohne das Master-Team mit einer EXPLIZITEN Mandanten-Zeile und Status „aktiv“.
+     * Fürs Geld gilt „ohne Zeile“ NICHT als aktiv: Auf der Plattform ist jedes persönliche Team ein Haupt-Team ohne Eltern-Team und
+     * würde sonst abgerechnet. Für die Anzeige (Stammblatt) bleibt „ohne Zeile = aktiv + autark“.
+     */
     public function abrechenbareMandanten(): \Illuminate\Support\Collection
     {
         $master = MasterTeam::id();
-        $status = FoodAlchemistMandant::pluck('status', 'team_id');
+        $aktiv = FoodAlchemistMandant::where('status', 'aktiv')->pluck('team_id')->map(fn ($i) => (int) $i)->all();
 
-        return Team::whereNull('parent_team_id')->orderBy('id')->get()
+        return Team::whereNull('parent_team_id')->whereIn('id', $aktiv)->orderBy('id')->get()
             ->reject(fn ($t) => $master !== null && (int) $t->id === $master)
-            ->filter(fn ($t) => ($status[$t->id] ?? FoodAlchemistMandant::STATUS_STANDARD) === 'aktiv')
             ->values();
     }
 

@@ -9,7 +9,7 @@ use Platform\FoodAlchemist\Services\GebuehrenZaehler;
 
 /**
  * Spec 82 §13 D — täglicher Zähl-Lauf der FA-Gebühren je Kunden-Hauptteam; schreibt Tageswerte in team_billable_usages.
- * Idempotent (Tageswert je Team/Baustein/Datum wird überschrieben). Mit --von/--bis lassen sich verpasste Tage nachholen.
+ * Läuft nur bei eingeschalteter Abrechnung (config foodalchemist.gebuehren.zaehlen_aktiv) oder mit --force; --dry-run immer. Idempotent (Tageswert je Team/Baustein/Datum wird überschrieben). Mit --von/--bis lassen sich verpasste Tage nachholen.
  */
 class PlanNutzungZaehlenCommand extends Command
 {
@@ -18,13 +18,19 @@ class PlanNutzungZaehlenCommand extends Command
         {--von= : Nachholen ab (Y-m-d), zusammen mit --bis}
         {--bis= : Nachholen bis (Y-m-d)}
         {--team= : nur diesen Mandanten (Team-ID)}
-        {--dry-run : nur anzeigen, nichts schreiben}';
+        {--dry-run : nur anzeigen, nichts schreiben}
+        {--force : auch ohne eingeschaltete Abrechnung (foodalchemist.gebuehren.zaehlen_aktiv) in team_billable_usages schreiben}';
 
     protected $description = 'Zählt die FA-Gebühren je Kunden-Hauptteam (Basis, User, Unter-Teams, Stamm-Paket, Abo) und schreibt Tageswerte in team_billable_usages';
 
     public function handle(GebuehrenZaehler $zaehler): int
     {
         $dry = (bool) $this->option('dry-run');
+        if (! $dry && ! $this->option('force') && ! config('foodalchemist.gebuehren.zaehlen_aktiv', false)) {
+            $this->error('Die Gebühren-Abrechnung ist nicht eingeschaltet (FOODALCHEMIST_GEBUEHREN_ZAEHLEN=false). Der Lauf schreibt in die Core-Rechnungstabelle team_billable_usages. Mit --dry-run nur rechnen, mit --force bewusst schreiben.');
+
+            return self::FAILURE;
+        }
         $von = Carbon::parse($this->option('von') ?: ($this->option('datum') ?: now()->toDateString()))->startOfDay();
         $bis = Carbon::parse($this->option('bis') ?: ($this->option('datum') ?: $von->toDateString()))->startOfDay();
         if ($bis->lt($von)) {
