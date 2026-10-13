@@ -97,7 +97,17 @@ class KontextResolver
                 continue;
             }
             $canvas = $this->canvas->find($type, $ownerType, (int) $ownerId);
-            if ($canvas !== null && ($text = $this->canvas->promptKontext($canvas)) !== null) {
+            if ($canvas !== null && $type === 'kunde_dna' && $this->canvas->verbindlichkeit($canvas) !== []) {
+                // Spec 82 §9: „Bleibt – unverhandelbar“ an der Kunden-DNA = verbindlich: eigener, ungekürzter Block; der Rest bleibt Kunden-Block
+                [$bleibt, $rest] = $this->kundeGetrennt($canvas);
+                if ($bleibt !== null) {
+                    $bloecke[] = ['ebene' => 'kunde_bleibt', 'label' => 'Kunde: Bleibt', 'geschuetzt' => true, 'rang' => 0,
+                        'text' => "Verbindliche Vorgaben des Kunden (Bleibt, nicht abweichen):\n- ".implode("\n- ", $bleibt)];
+                }
+                if ($rest !== null) {
+                    $bloecke[] = ['ebene' => $ebene, 'label' => $label, 'geschuetzt' => false, 'rang' => $rang, 'text' => $rest];
+                }
+            } elseif ($canvas !== null && ($text = $this->canvas->promptKontext($canvas)) !== null) {
                 $bloecke[] = ['ebene' => $ebene, 'label' => $label, 'geschuetzt' => false, 'rang' => $rang, 'text' => $text];
             }
         }
@@ -139,6 +149,27 @@ class KontextResolver
     public function budget(): int
     {
         return max(1000, (int) config('foodalchemist.kontext.budget_zeichen', self::BUDGET_STANDARD));
+    }
+
+    /**
+     * Kunden-DNA in „Bleibt“ (verbindliche Felder) und Rest teilen, beide im Format des Canvas-Blocks.
+     *
+     * @return array{0: ?list<string>, 1: ?string}
+     */
+    private function kundeGetrennt(\Platform\FoodAlchemist\Models\FoodAlchemistCanvas $canvas): array
+    {
+        $team = $canvas->team_id !== null ? \Platform\Core\Models\Team::find($canvas->team_id) : null;
+        $felder = $this->canvas->felder($canvas->canvas_type, $team);
+        $werte = $this->canvas->werte($canvas, $team);
+        $bindung = $this->canvas->verbindlichkeit($canvas);
+        $bleibtFelder = array_values(array_filter($felder, static fn ($f) => isset($bindung[$f['key']])));
+        $restFelder = array_values(array_filter($felder, static fn ($f) => ! isset($bindung[$f['key']])));
+        $bleibtText = $this->canvas->promptKontextAusWerten($canvas->canvas_type, $bleibtFelder, $werte);
+
+        return [
+            $bleibtText === null ? null : array_slice(explode("\n- ", $bleibtText), 1),
+            $this->canvas->promptKontextAusWerten($canvas->canvas_type, $restFelder, $werte),
+        ];
     }
 
     /** @return list<string> */

@@ -38,7 +38,7 @@ class CanvasPutTool extends FoodAlchemistTool implements ToolContract, ToolMetad
                 'type' => ['type' => 'string', 'enum' => ['food_dna', 'kunde_dna', 'foodbook', 'concept', 'angebot', 'projekt']],
                 'owner_id' => ['type' => 'integer', 'description' => 'Entity-ID (bei food_dna weglassen = eigenes Team; bei kunde_dna = CRM-Firma)'],
                 'felder' => ['type' => 'object', 'description' => 'Map key→Wert, Keys aus dem Template (canvas.GET)'],
-                'verbindlich' => ['type' => 'object', 'description' => 'Optional, nur Oberteam + Admin (Spec 82 §7): Map key→true|false. true macht das Skalar-Feld für alle Unter-Teams verbindlich (sie überschreiben es nicht), false hebt es auf. Keys müssen in felder stehen oder bereits gefüllt sein.'],
+                'verbindlich' => ['type' => 'object', 'description' => 'Optional (Spec 82 §7/§9): Map key→true|false. An food_dna nur Oberteam + Admin: true macht das Skalar-Feld für alle Unter-Teams verbindlich. An kunde_dna ab Kuratieren: true = „Bleibt – unverhandelbar“, fließt ungekürzt in jede KI-Erzeugung für diesen Kunden. false hebt auf. Keys müssen in felder stehen oder bereits gefüllt sein.'],
             ],
             'required' => ['type', 'felder'],
         ];
@@ -94,15 +94,19 @@ class CanvasPutTool extends FoodAlchemistTool implements ToolContract, ToolMetad
 
         $verbindlich = (array) ($arguments['verbindlich'] ?? []);
         if ($verbindlich !== []) {
-            if ($type !== 'food_dna') {
-                return ToolResult::error('verbindlich gibt es nur an der Team-DNA (type=food_dna).', 'VALIDATION_ERROR');
+            if (! in_array($type, ['food_dna', 'kunde_dna'], true)) {
+                return ToolResult::error('verbindlich gibt es nur an der Team-DNA (type=food_dna) und an der Kunden-DNA (type=kunde_dna, „Bleibt“).', 'VALIDATION_ERROR');
             }
             $unbekanntV = array_diff(array_keys($verbindlich), $erlaubt);
             if ($unbekanntV !== []) {
                 return ToolResult::error('Unbekannte Keys in verbindlich: ' . implode(', ', $unbekanntV), 'VALIDATION_ERROR');
             }
             try {
-                $svc->pruefeVerbindlichSetzen($team, $context->user);
+                if ($type === 'kunde_dna') {
+                    app(\Platform\FoodAlchemist\Services\FaRechte::class)->pruefe($context->user, $team, \Platform\FoodAlchemist\Enums\FaRolle::Kuratieren, 'Kunden-DNA: Bleibt setzen');
+                } else {
+                    $svc->pruefeVerbindlichSetzen($team, $context->user);
+                }
             } catch (\Platform\FoodAlchemist\Exceptions\FaRechtFehltException $e) {
                 return ToolResult::error($e->getMessage(), 'FORBIDDEN');
             } catch (\RuntimeException $e) {
