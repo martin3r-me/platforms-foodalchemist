@@ -241,11 +241,15 @@ class Wissenskategorien extends Component
 
     public function render()
     {
-        $rows = DB::table('foodalchemist_knowledge_categories')->whereNull('deleted_at')
-            ->orderBy('sort_order')->orderBy('label')->get();
-        // Nutzungs-Zähler je Kategorie (Docs)
-        $counts = DB::table('foodalchemist_knowledge_documents')->whereNull('deleted_at')
-            ->select('category', DB::raw('COUNT(*) as n'))->groupBy('category')->pluck('n', 'category');
+        // Spec 82 §13 H (Sofort-Fix): nur globale Kategorien + die eigene Team-Kette, nie die Kategorien fremder Teams. Gleiche Regel wie der Wissens-Browser.
+        $team = Auth::user()?->currentTeamRelation;
+        $rows = TeamScope::applyVisible(
+            DB::table('foodalchemist_knowledge_categories')->whereNull('deleted_at'), 'team_id', $team,
+        )->orderBy('sort_order')->orderBy('label')->get();
+        // Nutzungs-Zähler je Kategorie (Docs): nur sichtbare Dokumente, sonst zählt die Zahl fremde Dossiers mit.
+        $counts = TeamScope::applyVisible(
+            DB::table('foodalchemist_knowledge_documents')->whereNull('deleted_at'), 'team_id', $team,
+        )->select('category', DB::raw('COUNT(*) as n'))->groupBy('category')->pluck('n', 'category');
 
         return view('foodalchemist::livewire.settings.wissenskategorien', [
             'sperr' => $this->sperrZustand(),   // Spec 65
