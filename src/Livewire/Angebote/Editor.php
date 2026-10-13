@@ -322,12 +322,27 @@ class Editor extends Component
         $this->kiTextHinweis = null;
     }
 
-    public function statusSetzen(string $status, AngebotService $svc): void
+    /** Spec 82 §12 B3: Angebot hat einen aktiven eingefrorenen Stand (nur zur Anzeige und für die Rückweg-Bestätigung). */
+    public bool $eingefroren = false;
+
+    /** Rückweg aus dem eingefrorenen Stand: bestätigt (wire:confirm), verwirft den Snapshot. Eigene Methode, damit Livewire nur Positionsargumente ohne Dienst-Parameter dazwischen bekommt. */
+    public function statusSetzenVerwerfend(string $status, AngebotService $svc): void
+    {
+        $this->statusSetzen($status, $svc, true);
+    }
+
+    public function statusSetzen(string $status, AngebotService $svc, bool $snapshotVerwerfen = false): void
     {
         if ($this->selectedId === null) {
             return;
         }
-        $svc->setStatus($this->team(), $this->selectedId, $status);
+        try {
+            $svc->setStatus($this->team(), $this->selectedId, $status, $snapshotVerwerfen);
+        } catch (\RuntimeException $e) {
+            $this->errorToast($e->getMessage());   // z. B. Rückweg aus dem eingefrorenen Stand ohne Bestätigung (Spec 82 §12 B3)
+
+            return;
+        }
         $this->ladeForm();
         $this->dispatch('angebot-gespeichert');
     }
@@ -1538,6 +1553,7 @@ class Editor extends Component
     {
         $team = $this->team();
         $angebot = $this->selectedId !== null ? $svc->detail($team, $this->selectedId) : null;
+        $this->eingefroren = $angebot !== null && app(\Platform\FoodAlchemist\Services\AngebotEinfrierService::class)->aktive($angebot) !== null;
         if ($this->selectedId !== null && $angebot === null) {
             $this->selectedId = null;
         }

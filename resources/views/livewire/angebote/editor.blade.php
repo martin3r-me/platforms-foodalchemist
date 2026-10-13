@@ -50,7 +50,9 @@
                         <div x-bind:class="{ hidden: ! offen }" x-bind:style="pos" role="menu" class="hidden w-56 fa-surface shadow-lg py-1">
                             <p class="px-3 pt-1 pb-1.5 {{ $hinweis }}">Jetzt: {{ $angebot->status->label() }}</p>
                             @foreach($angebot->status->uebergaenge() as $next)
-                                <button type="button" role="menuitem" wire:click="statusSetzen('{{ $next->value }}')" x-on:click="offen = false"
+                                @php $verwirftSnapshot = $eingefroren && in_array($next->value, ['anfrage', 'in_arbeit'], true); @endphp
+                                <button type="button" role="menuitem" wire:click="{{ $verwirftSnapshot ? 'statusSetzenVerwerfend' : 'statusSetzen' }}('{{ $next->value }}')" x-on:click="offen = false"
+                                        @if($verwirftSnapshot) wire:confirm="Dieses Angebot ist eingefroren (Stand der Abo-Rezepte). Zurück auf {{ $next->label() }} verwirft den eingefrorenen Stand, danach folgt es wieder der neuesten Fassung. Fortfahren?" @endif
                                         class="{{ $menuePunkt }}" data-angebot-status="{{ $next->value }}">
                                     @svg('heroicon-m-arrow-right', 'w-4 h-4 text-[var(--fa-ink-3)]') Auf {{ $next->label() }} setzen
                                 </button>
