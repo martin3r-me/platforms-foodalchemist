@@ -63,6 +63,8 @@
          Basisrezept) — schließen führt zurück in den Speiseplan, kein neuer Browser-Tab. --}}
     <livewire:foodalchemist.verkauf.vk-modal key="speiseplan-index--verkauf.vk-modal" />
     <livewire:foodalchemist.recipes.recipe-modal key="speiseplan-index--recipes.recipe-modal" />
+    {{-- Editor-Kette (Dominique 2026-10-13): Rezept → Grundprodukt → Lieferantenartikel muss auf jeder Seite mit Rezept-Editor durchklickbar sein; fehlt ein Glied, läuft der Klick still ins Leere. Wächter: EditorKetteTest. --}}
+    <livewire:foodalchemist.suppliers.item-modal key="speiseplan-index--suppliers.item-modal" />
     <livewire:foodalchemist.recipes.ingredient-editor key="speiseplan-index--recipes.ingredient-editor" />
     <livewire:foodalchemist.recipes.pairing-netz-modal key="speiseplan-index--recipes.pairing-netz-modal" />
     <livewire:foodalchemist.gps.gp-modal key="speiseplan-index--gps.gp-modal" />

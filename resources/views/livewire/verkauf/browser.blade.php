@@ -96,6 +96,8 @@
     {{-- R7-Fix: Sprung-Ziele des Zutaten-Editors als Modals (GP + Basisrezept) --}}
     <livewire:foodalchemist.gps.gp-modal key="verkauf-browser--gps.gp-modal" />
     <livewire:foodalchemist.recipes.recipe-modal key="verkauf-browser--recipes.recipe-modal" />
+    {{-- Editor-Kette (Dominique 2026-10-13): Rezept → Grundprodukt → Lieferantenartikel muss auf jeder Seite mit Rezept-Editor durchklickbar sein; fehlt ein Glied, läuft der Klick still ins Leere. Wächter: EditorKetteTest. --}}
+    <livewire:foodalchemist.suppliers.item-modal key="verkauf-browser--suppliers.item-modal" />
 
     <x-ui-page-container padding="px-6 py-6" spacing="space-y-4">
         <x-fa::page-header title="Gerichte" :subtitle="number_format($rezepte->total(), 0, ',', '.') . ' Treffer'">
