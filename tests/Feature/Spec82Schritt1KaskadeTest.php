@@ -115,6 +115,80 @@ it('Vererbung endet an der Kundengrenze: ein Mandant unter dem konfigurierten Ma
     expect($this->svc->cascadeKontext($this->childA)['marken_kontext'] ?? '')->toContain('MASTER-LEITBILD-MARKER');
 });
 
+it('Foodbook mit CRM-Firma: das Kapitel-Wording (concept.wording) übergibt die Firma an die Kaskade', function () {
+    $stil = FoodAlchemistWritingStyle::create([
+        'team_id' => $this->rootTeam->id, 'slug' => 'kapitel-stil', 'name' => 'Kapitel-Stil',
+        'sprach_duktus' => 'Ruhig.', 'is_inactive' => false, 'sort_order' => 0,
+    ]);
+    $fb = $this->makeFoodbook($this->rootTeam, 'Adler-Gala', ['crm_company_id' => 4711]);
+    $kapitel = $this->makeChapter($fb, ['writing_style_id' => $stil->id]);
+    $dish = $this->makeRecipe($this->rootTeam, 'Zander auf Linsen');
+    $concept = $this->makeConcept($this->rootTeam, 'Menü A');
+    $this->makeConceptSlot($concept, ['sales_recipe_id' => $dish->id]);
+    $this->makeFoodbookBlock($kapitel, ['type' => 'concept_ref', 'concept_id' => $concept->id]);
+
+    $optionen = null;
+    $this->mock(AiGatewayService::class, function ($mock) use (&$optionen) {
+        $mock->shouldReceive('propose')->andReturnUsing(function (string $key, array $kontext, array $options = []) use (&$optionen) {
+            if ($key === 'concept.wording') {
+                $optionen = $options;
+            }
+
+            return new AiProposal(werte: ['intro' => 'Intro.'], confidence: 0.5);
+        });
+    });
+
+    app(FoodbookService::class)->kapitelWordingRegenerieren($this->rootTeam, $kapitel->id);
+
+    expect($optionen)->not->toBeNull()
+        ->and($optionen['food_dna_foodbook_id'] ?? null)->toBe((int) $fb->id)
+        ->and($optionen['food_dna_crm_company_id'] ?? null)->toBe(4711);
+});
+
+it('Foodbook mit CRM-Firma: die Kapitel-Ideen (foodbook.kapitel_ideen) übergeben die Firma an die Kaskade', function () {
+    $fb = $this->makeFoodbook($this->rootTeam, 'Adler-Gala', ['crm_company_id' => 4711]);
+    $kapitel = $this->makeChapter($fb);
+    $optionen = null;
+    $this->mock(AiGatewayService::class, function ($mock) use (&$optionen) {
+        $mock->shouldReceive('propose')->andReturnUsing(function (string $key, array $kontext, array $options = []) use (&$optionen) {
+            if ($key === 'foodbook.kapitel_ideen') {
+                $optionen = $options;
+            }
+
+            return new AiProposal(werte: ['ideen' => []], confidence: 0.5);
+        });
+    });
+
+    app(\Platform\FoodAlchemist\Services\IdeenService::class)->kiDivergenz($this->rootTeam, $kapitel->id, 3);
+
+    expect($optionen)->not->toBeNull()
+        ->and($optionen['food_dna_crm_company_id'] ?? null)->toBe(4711);
+});
+
+it('Foodbook ohne CRM-Firma: keine Kunden-Ebene (Option bleibt leer)', function () {
+    $stil = FoodAlchemistWritingStyle::create([
+        'team_id' => $this->rootTeam->id, 'slug' => 'kapitel-stil', 'name' => 'Kapitel-Stil',
+        'sprach_duktus' => 'Ruhig.', 'is_inactive' => false, 'sort_order' => 0,
+    ]);
+    $fb = $this->makeFoodbook($this->rootTeam, 'Ohne Firma');
+    $kapitel = $this->makeChapter($fb, ['writing_style_id' => $stil->id]);
+    $concept = $this->makeConcept($this->rootTeam, 'Menü A');
+    $this->makeConceptSlot($concept, ['sales_recipe_id' => $this->makeRecipe($this->rootTeam, 'Zander')->id]);
+    $this->makeFoodbookBlock($kapitel, ['type' => 'concept_ref', 'concept_id' => $concept->id]);
+    $optionen = null;
+    $this->mock(AiGatewayService::class, function ($mock) use (&$optionen) {
+        $mock->shouldReceive('propose')->andReturnUsing(function (string $key, array $kontext, array $options = []) use (&$optionen) {
+            $optionen = $options;
+
+            return new AiProposal(werte: ['intro' => 'Intro.'], confidence: 0.5);
+        });
+    });
+
+    app(FoodbookService::class)->kapitelWordingRegenerieren($this->rootTeam, $kapitel->id);
+
+    expect($optionen)->not->toBeNull()->and($optionen['food_dna_crm_company_id'] ?? null)->toBeNull();
+});
+
 it('MCP: kunde_dna ist lesbar, setzbar und für Listen-Einträge offen, nur für Firmen des Haupt-Teams', function () {
     $firma = \Platform\Crm\Models\CrmCompany::create(['team_id' => $this->rootTeam->id, 'name' => 'Hotel Adler', 'is_active' => true]);
     $fremdTeam = \Platform\Core\Models\Team::create(['name' => 'Fremder Kunde', 'user_id' => 1, 'personal_team' => false]);

@@ -315,6 +315,8 @@ class IdeenService
             'knowledge' => $wissen['block'],
             'knowledge_used' => $wissen['files_used'],
             'food_dna_foodbook_id' => (int) $fb->id,
+            // Spec 82 §7 (Entscheidung 4): CRM-Firma des Foodbooks, falls verknüpft
+            'food_dna_crm_company_id' => $fb->crm_company_id !== null ? (int) $fb->crm_company_id : null,
         ]);
 
         $rohe = is_array($proposal->werte['ideen'] ?? null) ? $proposal->werte['ideen'] : [];
