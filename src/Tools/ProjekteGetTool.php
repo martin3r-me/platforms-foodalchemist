@@ -47,8 +47,10 @@ class ProjekteGetTool extends WareneingangTool implements ToolContract, ToolMeta
     private function zeile(FoodAlchemistProjekt $p, bool $mitStandorten): array
     {
         $z = ['id' => $p->id, 'name' => $p->name, 'crm_company_id' => $p->crm_company_id, 'phase' => $p->phase, 'status' => $p->status,
-            'ziel' => $p->ziel, 'pilot_standort_id' => $p->pilot_standort_id, 'planner_projekt_id' => $p->planner_projekt_id];
+            'ziel' => $p->ziel, 'pilot_standort_id' => $p->pilot_standort_id, 'planner_projekt_id' => $p->planner_projekt_id,
+            'struktur_freigegeben' => $p->strukturFreigegeben(), 'struktur_freigegeben_von' => $p->struktur_freigegeben_von_name, 'struktur_freigegeben_at' => $p->struktur_freigegeben_at?->toIso8601String()];
         if ($mitStandorten) {
+            $z['gate_fehlt'] = app(ProjektService::class)->gateFehlt($p);
             $z['standorte'] = $p->standorte->map(fn ($s) => ['id' => $s->id, 'name' => $s->name, 'ist_pilot' => (bool) $s->ist_pilot, 'notiz' => $s->notiz])->all();
         }
 

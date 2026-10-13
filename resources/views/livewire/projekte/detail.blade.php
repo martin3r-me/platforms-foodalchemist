@@ -74,14 +74,56 @@
             @endif
 
             <div data-projekt-board>
-                @if($phase === 'dna')
-                    {{-- Phase 3 zeigt oben die Kunden-DNA --}}
+                @if($phase === 'dna' || $phase === 'foodbook')
+                    {{-- Phase 3 zeigt oben die Kunden-DNA, Phase 5 das Foodbook-Fenster --}}
                 @elseif($canvasNurGruppe !== null)
                     <fieldset @disabled(! $darfSchreiben) class="contents">@include('foodalchemist::livewire.canvas.partials.board')</fieldset>
                 @else
                     <x-fa::empty compact icon="heroicon-o-clock" title="{{ $phasen[$phase] }}">Die Felder dieser Phase folgen in den nächsten Schritten.</x-fa::empty>
                 @endif
             </div>
+
+            @if($phase === 'paketlogik')
+                <x-fa::section title="Gate: Struktur + Musterseite freigeben" data-projekt-gate
+                    description="Erst wenn Paketstufen, Anlässe und Musterseite stehen und eine Person des Kunden sie freigibt, entsteht das Foodbook.">
+                    @if($p->strukturFreigegeben())
+                        <div class="flex flex-wrap items-center gap-2">
+                            <x-fa::badge tone="ok" icon="heroicon-m-check-circle" data-projekt-gate-frei>Freigegeben von {{ $p->struktur_freigegeben_von_name }} am {{ $p->struktur_freigegeben_at->format('d.m.Y H:i') }}</x-fa::badge>
+                            @if($darfSchreiben)<x-fa::button size="sm" variant="ghost" wire:click="strukturZuruecknehmen" wire:confirm="Freigabe zurücknehmen? Neue Foodbooks entstehen erst nach neuer Freigabe." data-projekt-gate-zurueck>Zurücknehmen</x-fa::button>@endif
+                        </div>
+                    @else
+                        @if($gateFehlt !== [])
+                            <x-fa::notice tone="warn" data-projekt-gate-fehlt>Es fehlt noch: {{ implode(', ', $gateFehlt) }}.</x-fa::notice>
+                        @endif
+                        @if($darfSchreiben && $gateFehlt === [])
+                            <div class="flex flex-col gap-2 max-w-md">
+                                <x-fa::field label="Wer gibt frei? (CRM-Kontakt suchen)" for="gate-kontakt">
+                                    <x-fa::input id="gate-kontakt" type="search" wire:model.live.debounce.300ms="gateKontaktSuche" placeholder="Name oder E-Mail" data-projekt-gate-suche />
+                                </x-fa::field>
+                                @foreach($gateKontakte as $k)
+                                    <button type="button" wire:key="gk-{{ $k->id }}" wire:click="strukturFreigeben({{ $k->id }})" wire:confirm="Struktur und Musterseite durch {{ $k->full_name }} freigeben?"
+                                            class="text-left px-3 py-2 rounded border border-[var(--fa-line)] hover:bg-[var(--fa-hover)]" data-projekt-gate-kontakt="{{ $k->id }}">{{ $k->full_name }}</button>
+                                @endforeach
+                            </div>
+                        @endif
+                    @endif
+                </x-fa::section>
+            @endif
+
+            @if($phase === 'foodbook')
+                <x-fa::section title="Foodbook" description="Das Foodbook entsteht im Master-Team und wird aus der Akte vorbefüllt. Der Kunde bekommt es über die öffentliche Präsentation." data-projekt-foodbook>
+                    @if(! $p->strukturFreigegeben())
+                        <x-fa::notice tone="warn" data-projekt-foodbook-gate>Gate: Erst in der Phase Paketlogik Struktur und Musterseite freigeben.</x-fa::notice>
+                    @elseif($darfSchreiben)
+                        <div><x-fa::button variant="primary" icon="heroicon-m-plus" wire:click="foodbookAnlegen" data-projekt-foodbook-anlegen>{{ $foodbooks->isEmpty() ? 'Foodbook anlegen' : 'Weiteres Foodbook anlegen' }}</x-fa::button></div>
+                    @endif
+                    @foreach($foodbooks as $fb)
+                        <div wire:key="fb-{{ $fb->id }}" class="py-1" data-projekt-foodbook-zeile="{{ $fb->id }}">
+                            <a href="{{ route('foodalchemist.foodbooks.index', ['fb' => $fb->id]) }}" wire:navigate class="hover:underline font-medium">{{ $fb->label }}</a>
+                        </div>
+                    @endforeach
+                </x-fa::section>
+            @endif
 
             @if($darfSchreiben && $p->phase !== $phase)
                 <div><x-fa::button size="sm" variant="ghost" wire:click="phaseAlsStand" data-projekt-phase-stand>„{{ $phasen[$phase] }}“ als aktuellen Stand setzen</x-fa::button></div>

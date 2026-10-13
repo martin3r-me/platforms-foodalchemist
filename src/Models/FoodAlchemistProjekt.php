@@ -33,7 +33,13 @@ class FoodAlchemistProjekt extends Model
 
     protected $guarded = ['id'];
 
-    protected $casts = ['uuid' => 'string'];
+    protected $casts = ['uuid' => 'string', 'struktur_freigegeben_at' => 'datetime'];
+
+    /** Hartes Gate (Spec 82 §9): Struktur + Musterseite freigegeben? Vorher entsteht kein Foodbook aus der Akte. */
+    public function strukturFreigegeben(): bool
+    {
+        return $this->struktur_freigegeben_at !== null;
+    }
 
     public function standorte(): HasMany
     {

@@ -30,6 +30,9 @@ class Detail extends Component
 
     public string $neuerStandort = '';
 
+    /** Suchtext für die Person der Freigabe (CRM-Kontakt). */
+    public string $gateKontaktSuche = '';
+
     public ?string $fehler = null;
 
     public ?string $meldung = null;
@@ -103,6 +106,36 @@ class Detail extends Component
         $this->aktion(fn (ProjektService $s) => $s->standortLoeschen(CrmKunden::aktuellesTeam(), Auth::user(), $this->projektId, $standortId));
     }
 
+    /** Gate: Struktur + Musterseite freigeben, Person = CRM-Kontakt. */
+    public function strukturFreigeben(int $kontaktId): void
+    {
+        $this->aktion(function (ProjektService $s) use ($kontaktId) {
+            $s->strukturFreigeben(CrmKunden::aktuellesTeam(), Auth::user(), $this->projektId, $kontaktId);
+            $this->gateKontaktSuche = '';
+        }, 'Struktur und Musterseite sind freigegeben.');
+    }
+
+    public function strukturZuruecknehmen(): void
+    {
+        $this->aktion(fn (ProjektService $s) => $s->strukturZuruecknehmen(CrmKunden::aktuellesTeam(), Auth::user(), $this->projektId), 'Freigabe zurückgenommen.');
+    }
+
+    public function foodbookAnlegen()
+    {
+        $this->fehler = $this->meldung = null;
+        try {
+            $fb = app(ProjektService::class)->foodbookAnlegen(CrmKunden::aktuellesTeam(), Auth::user(), $this->projektId);
+        } catch (FaRechtFehltException|\RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+
+            return null;
+        }
+        $this->phase = 'foodbook';
+        $this->meldung = 'Foodbook „'.$fb->label.'“ angelegt und aus der Akte vorbefüllt.';
+
+        return null;
+    }
+
     private function aktion(callable $fn, ?string $erfolg = null): void
     {
         $this->fehler = $this->meldung = null;
@@ -121,9 +154,12 @@ class Detail extends Component
         $p = $this->projekt()->load('standorte');
         $firma = CrmKunden::verfuegbar() ? CrmKunden::firma($team, (int) $p->crm_company_id) : null;
         $rollen = $this->canvasListen['rollen'] ?? [];
+        $svc = app(ProjektService::class);
 
         return view('foodalchemist::livewire.projekte.detail', [
             'p' => $p, 'firma' => $firma, 'phasen' => FoodAlchemistProjekt::PHASEN,
+            'gateFehlt' => $svc->gateFehlt($p), 'foodbooks' => $svc->foodbooks($team, (int) $p->id),
+            'gateKontakte' => $this->phase === 'paketlogik' && ! $p->strukturFreigegeben() ? CrmKunden::kontakte($team, $this->gateKontaktSuche) : collect(),
             'kontakteVerknuepft' => count(array_filter($rollen, fn ($r) => ! empty($r['meta']['crm_contact_id']))), 'kontakteGesamt' => count($rollen),
             'darfSchreiben' => app(FaRechte::class)->darf(Auth::user(), $team, \Platform\FoodAlchemist\Enums\FaRolle::Kuratieren),
         ])->layout(FaShell::layout());

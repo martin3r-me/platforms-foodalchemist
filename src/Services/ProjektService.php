@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\DB;
 use Platform\Core\Models\Team;
 use Platform\Core\Models\User;
 use Platform\FoodAlchemist\Enums\FaRolle;
+use Platform\FoodAlchemist\Models\FoodAlchemistFoodbook;
 use Platform\FoodAlchemist\Models\FoodAlchemistProjekt;
 use Platform\FoodAlchemist\Models\FoodAlchemistProjektStandort;
 use Platform\FoodAlchemist\Support\CrmKunden;
@@ -174,5 +175,110 @@ class ProjektService
             $naechster = FoodAlchemistProjektStandort::where('projekt_id', $p->id)->orderBy('sort_order')->orderBy('id')->first();
             $this->pilotSetzen($team, $user, $p->id, $naechster?->id);
         }
+    }
+
+    // ── Paketlogik, hartes Gate, Foodbook (Spec 82 §9, PR 4) ──────────────────────────────
+
+    /**
+     * Was für das Gate noch fehlt: mindestens eine Paketstufe, ein Anlass und die Musterseite im Projekt-Canvas.
+     *
+     * @return list<string>
+     */
+    public function gateFehlt(FoodAlchemistProjekt $p): array
+    {
+        $canvas = app(CanvasService::class)->find('projekt', 'projekt', (int) $p->id);
+        $eintraege = $canvas?->entries ?? collect();
+        $fehlt = [];
+        if ($eintraege->where('field_key', 'paket_stufen')->filter(fn ($e) => trim((string) $e->value) !== '')->isEmpty()) {
+            $fehlt[] = 'mindestens eine Paketstufe';
+        }
+        if ($eintraege->where('field_key', 'paket_anlaesse')->filter(fn ($e) => trim((string) $e->value) !== '')->isEmpty()) {
+            $fehlt[] = 'mindestens ein Anlass';
+        }
+        if (trim((string) $eintraege->firstWhere('field_key', 'musterseite')?->value) === '') {
+            $fehlt[] = 'die Musterseite';
+        }
+
+        return $fehlt;
+    }
+
+    /** Gate: Struktur + Musterseite freigeben. Die Person ist ein CRM-Kontakt; ohne vollständige Paketlogik gibt es keine Freigabe. */
+    public function strukturFreigeben(Team $team, ?User $user, int $projektId, int $kontaktId): FoodAlchemistProjekt
+    {
+        $this->pruefeSchreiben($team, $user, 'Struktur + Musterseite freigeben');
+        $p = $this->finde($team, $projektId);
+        $fehlt = $this->gateFehlt($p);
+        if ($fehlt !== []) {
+            throw new \RuntimeException('Freigabe nicht möglich, es fehlt noch: '.implode(', ', $fehlt).'.');
+        }
+        CrmKunden::pruefe($team, null, $kontaktId);
+        $kontakt = class_exists(\Platform\Crm\Models\CrmContact::class) ? \Platform\Crm\Models\CrmContact::find($kontaktId) : null;
+        if ($kontakt === null) {
+            throw new \RuntimeException('Der CRM-Kontakt für die Freigabe fehlt.');
+        }
+        $p->update([
+            'struktur_freigegeben_at' => now(), 'struktur_freigegeben_von_contact_id' => $kontakt->id,
+            'struktur_freigegeben_von_name' => (string) ($kontakt->full_name ?? trim(($kontakt->first_name ?? '').' '.($kontakt->last_name ?? ''))), 'updated_by' => $user?->id,
+        ]);
+
+        return $p->refresh();
+    }
+
+    /** „Zurücknehmen“: das Gate ist wieder zu. Bereits angelegte Foodbooks bleiben, neue entstehen erst nach neuer Freigabe. */
+    public function strukturZuruecknehmen(Team $team, ?User $user, int $projektId): FoodAlchemistProjekt
+    {
+        $this->pruefeSchreiben($team, $user, 'Freigabe zurücknehmen');
+        $p = $this->finde($team, $projektId);
+        $p->update(['struktur_freigegeben_at' => null, 'struktur_freigegeben_von_contact_id' => null, 'struktur_freigegeben_von_name' => null, 'updated_by' => $user?->id]);
+
+        return $p->refresh();
+    }
+
+    /** Foodbooks dieser Akte (im Master-Team). */
+    public function foodbooks(Team $team, int $projektId)
+    {
+        $p = $this->finde($team, $projektId);
+
+        return FoodAlchemistFoodbook::where('team_id', $team->id)->where('projekt_id', $p->id)->orderBy('id')->get();
+    }
+
+    /**
+     * Phase 5: Foodbook im Master-Team aus der Akte anlegen und vorbefüllen (Leitidee, Zweck, Pflicht-Konzepte, Spektrum, Umfang).
+     * Das Gate steht am Modell; hier wird es vorab geprüft, damit die Meldung klar ist.
+     */
+    public function foodbookAnlegen(Team $team, ?User $user, int $projektId): FoodAlchemistFoodbook
+    {
+        $this->pruefeSchreiben($team, $user, 'Foodbook aus dem Projekt anlegen');
+        $p = $this->finde($team, $projektId);
+        if (! $p->strukturFreigegeben()) {
+            throw new \RuntimeException('Gate: Struktur + Musterseite sind noch nicht freigegeben.');
+        }
+        $fb = app(FoodbookService::class)->create($team, ['label' => $p->name, 'crm_company_id' => $p->crm_company_id, 'projekt_id' => $p->id]);
+
+        $canvasSvc = app(CanvasService::class);
+        $akte = $canvasSvc->find('projekt', 'projekt', (int) $p->id);
+        $liste = fn (string $key) => ($akte?->entries ?? collect())->where('field_key', $key)->sortBy('position')->pluck('value')->filter()->values();
+        $skalar = fn (string $key) => $akte?->entries->firstWhere('field_key', $key)?->value;
+        $stufen = $liste('paket_stufen');
+        $anlaesse = $liste('paket_anlaesse');
+        $vorbefuellung = [
+            'leitidee' => $skalar('zielbild_wortlaut'),
+            'zweck_anforderungen' => $p->ziel,
+            'pflicht_konzepte' => $stufen->isEmpty() ? null : 'Paketstufen: '.$stufen->implode(', ').($anlaesse->isEmpty() ? '' : ' · Anlässe: '.$anlaesse->implode(', ')),
+            'struktur_kapitel' => $skalar('musterseite') ? 'Musterseite: '.$skalar('musterseite') : null,
+            'spektrum' => $anlaesse->isEmpty() ? null : $anlaesse->implode(', '),
+            'umfang_rahmen' => $liste('umfang_linien')->isEmpty() ? null : $liste('umfang_linien')->implode(', '),
+        ];
+        $canvas = $canvasSvc->canvasFor($team, 'foodbook', 'foodbook', (int) $fb->id);
+        foreach ($vorbefuellung as $key => $wert) {
+            if ($wert !== null && trim((string) $wert) !== '') {
+                $canvasSvc->setSkalar($canvas, $key, (string) $wert);
+            }
+        }
+        if ($p->phase !== 'foodbook') {
+            $p->update(['phase' => 'foodbook', 'updated_by' => $user?->id]);
+        }
+
+        return $fb->refresh();
     }
 }

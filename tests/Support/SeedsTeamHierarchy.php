@@ -82,6 +82,22 @@ trait SeedsTeamHierarchy
             });
         }
 
+        // crm_contacts: Stub wie crm_companies (Spec 82 §9: Person der Freigabe, Rollen). Nur die Spalten, die FA liest.
+        if (! \Illuminate\Support\Facades\Schema::hasTable('crm_contacts')) {
+            \Illuminate\Support\Facades\Schema::create('crm_contacts', function ($table) {
+                $table->id();
+                $table->uuid('uuid')->nullable();
+                $table->string('first_name');
+                $table->string('last_name');
+                $table->string('middle_name')->nullable();
+                $table->string('nickname')->nullable();
+                $table->unsignedBigInteger('team_id')->nullable();
+                $table->boolean('is_active')->default(true);
+                $table->boolean('is_blacklisted')->default(false);
+                $table->timestamps();
+            });
+        }
+
         $this->artisan('migrate', [
             '--realpath' => true,
             '--path' => [
