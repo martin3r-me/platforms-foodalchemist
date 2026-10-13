@@ -1178,6 +1178,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     // Spec 82 §8 / §12 A: Abos (Kurator-Aufsatz, Durchstich Schritt 1)
                     \Platform\FoodAlchemist\Tools\AbosGetTool::class,
                     \Platform\FoodAlchemist\Tools\AbosPostTool::class,
+                    \Platform\FoodAlchemist\Tools\AbosDeleteTool::class,     // Spec 82 §12 D: Kündigung mit tiefer Kopie
+                    \Platform\FoodAlchemist\Tools\AbosWithdrawTool::class,   // Spec 82 §12 D: Zurückziehen
                     // Spec 82 §12 B: Fassungen (Veröffentlichen + Änderungsprotokoll)
                     \Platform\FoodAlchemist\Tools\RecipeFassungenPublishTool::class,
                     \Platform\FoodAlchemist\Tools\RecipeFassungenGetTool::class,
