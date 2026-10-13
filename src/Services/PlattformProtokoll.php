@@ -26,6 +26,8 @@ class PlattformProtokoll
         'master_team_gesetzt' => 'Master-Team festgelegt',
         'mandant_modus_geaendert' => 'Mandanten-Modus geändert',
         'mandant_gepflegt' => 'Mandant gepflegt',
+        'mandant_beenden_gestartet' => 'Mandant beenden: Lauf gestartet',
+        'mandant_beenden_abgebrochen' => 'Mandant beenden: Lauf abgebrochen',
     ];
 
     /**
