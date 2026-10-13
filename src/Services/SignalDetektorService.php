@@ -2,6 +2,7 @@
 
 namespace Platform\FoodAlchemist\Services;
 
+use Platform\FoodAlchemist\Support\StammPaket;
 use Illuminate\Support\Facades\DB;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Enums\SignalSeverity;
@@ -349,7 +350,7 @@ class SignalDetektorService
             $nConcepts = count(array_unique(array_merge($conceptDirekt, $conceptPaket)));
 
             // Chance: günstigster Nicht-Lead-LA je Einheit vs. Lead
-            $chance = $this->guenstigereAlternative($preisSvc, (int) $gpId, $leadId, $schwelle);
+            $chance = $this->guenstigereAlternative($preisSvc, (int) $gpId, $leadId, $schwelle, $team);
 
             $gpName = DB::table('foodalchemist_gps')->where('id', $gpId)->value('name') ?? ('GP ' . $gpId);
             $richtung = $teurer ? '+' : '';
@@ -485,14 +486,15 @@ class SignalDetektorService
      *
      * @return array{item_id:int,label:string,diff_pct:float}|null
      */
-    private function guenstigereAlternative(PriceService $preisSvc, int $gpId, int $leadId, float $schwelle): ?array
+    private function guenstigereAlternative(PriceService $preisSvc, int $gpId, int $leadId, float $schwelle, Team $team): ?array
     {
         $las = DB::table('foodalchemist_supplier_items AS i')
             ->join('foodalchemist_supplier_item_structures AS s', 's.supplier_item_id', '=', 'i.id')
             ->where('s.gp_id', $gpId)->whereNull('s.deleted_at')->whereNull('i.deleted_at')
             ->select('i.id', 'i.designation', 'i.qty', 'i.unit_code')
-            ->selectSub($preisSvc->activePriceSubquery('i.id')->toBase(), 'aktiver_preis')
-            ->get();
+            ->selectSub($preisSvc->activePriceSubquery('i.id')->toBase(), 'aktiver_preis');
+        // Spec 82 §12 A3: Stamm-Paket-Artikel ohne Opt-in sind keine Alternative (Bezeichnung + Preis würden sonst im Signal stehen).
+        $las = StammPaket::begrenzen($las, 'i', $team, 'foodalchemist_supplier_items')->get();
 
         $lead = $las->firstWhere('id', $leadId);
         if ($lead === null || $lead->aktiver_preis === null) {

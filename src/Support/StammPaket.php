@@ -96,15 +96,16 @@ final class StammPaket
 
     /**
      * Reiner Zusatzfilter für Raw-Queries, die an visibleToTeam vorbei lesen: blendet globale
-     * stamm_paket-Zeilen ohne Opt-in aus. Teamgebundene Zeilen bleiben unberührt.
+     * stamm_paket-Zeilen ohne Opt-in aus. Teamgebundene Zeilen bleiben unberührt. Mit Alias: `$basisTabelle` angeben.
      *
      * @template T of \Illuminate\Database\Eloquent\Builder|\Illuminate\Database\Query\Builder
      * @param  T  $query
      * @return T
      */
-    public static function begrenzen($query, string $tabelle, ?Team $team)
+    public static function begrenzen($query, string $tabelle, ?Team $team, ?string $basisTabelle = null)
     {
-        if (! self::betrifft($tabelle) || self::istFreigeschaltet($team)) {
+        // `$tabelle` ist Tabellenname ODER Alias (`i`, `g`); bei Alias nennt `$basisTabelle` die echte Tabelle (sonst greift `betrifft` nie).
+        if (! self::betrifft($basisTabelle ?? $tabelle) || self::istFreigeschaltet($team)) {
             return $query;
         }
 

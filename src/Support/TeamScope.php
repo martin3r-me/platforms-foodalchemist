@@ -37,10 +37,11 @@ final class TeamScope
         $ids = self::ancestryIds($team);
 
         // Spec 77d: Inhalts-Tabellen — dieselbe Hüllen-Regel wie scopeVisibleToTeam
-        $tabelle = str_contains($teamIdColumn, '.') ? strstr($teamIdColumn, '.', true)
-            : (($query instanceof \Illuminate\Database\Eloquent\Builder ? $query->getQuery() : $query)->from ?? '');
-        if ($team !== null && is_string($tabelle) && ($typ = InhaltsFreigabe::typFuerTabelle($tabelle)) !== null) {
-            return $query->where(fn ($q) => InhaltsFreigabe::anwenden($q, $teamIdColumn, $tabelle . '.id', $typ, $team, $ids));
+        // Auch bei Alias (`foodalchemist_recipes AS r`, Spalte `r.team_id`): Basistabelle aus from/join auflösen (wie beim Stamm-Zweig),
+        // die Freigabe-Prüfung hängt am Alias-Präfix (`r.id`). Vorher blieb der Alias-Fall ungefiltert (Tabellenname `r` ist keine Inhalts-Tabelle).
+        [$basisTabelle, $idPraefix] = self::basisTabelleUndPraefix($query, $teamIdColumn);
+        if ($team !== null && ($typ = InhaltsFreigabe::typFuerTabelle($basisTabelle)) !== null) {
+            return $query->where(fn ($q) => InhaltsFreigabe::anwenden($q, $teamIdColumn, $idPraefix . '.id', $typ, $team, $ids));
         }
 
         // Spec 82 §12 A3: GP/Lieferant/Artikel — globale stamm_paket-Zeilen nur bei Opt-in.

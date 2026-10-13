@@ -2,6 +2,7 @@
 
 namespace Platform\FoodAlchemist\Livewire;
 
+use Platform\FoodAlchemist\Support\StammPaket;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\On;
@@ -373,7 +374,8 @@ class ReviewQueue extends Component
             ->join('foodalchemist_supplier_items AS i', 'i.id', '=', 'p.supplier_item_id')
             ->join('foodalchemist_gps AS g', 'g.id', '=', 'p.gp_id')
             ->where('p.team_id', $team->id)
-            ->where('p.status', 'offen')->whereNull('p.deleted_at');
+            ->where('p.status', 'offen')->whereNull('p.deleted_at')
+            ->tap(fn ($q) => StammPaket::begrenzen(StammPaket::begrenzen($q, 'i', $team, 'foodalchemist_supplier_items'), 'g', $team, 'foodalchemist_gps'));   // Spec 82 §12 A3
 
         $bulkOffen = DB::table('foodalchemist_bulk_proposals AS b')
             ->join('foodalchemist_recipes AS r', 'r.id', '=', 'b.recipe_id')
