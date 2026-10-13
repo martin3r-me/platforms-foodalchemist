@@ -38,12 +38,14 @@ class FoodAlchemistRecipeFeedback extends Model
 
     public function recipe(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistRecipe::class, 'recipe_id');
+        return $this->belongsTo(FoodAlchemistRecipe::class, 'recipe_id')
+            ->withoutGlobalScope(\Platform\FoodAlchemist\Models\Scopes\OhneFassungenScope::class);   // Spec 82: Verweis löst auch Fassungen auf
     }
 
     /** „Weiterentwickeln"-Ziel: die aus diesem Feedback erzeugte Draft-Iteration. */
     public function spawnedRecipe(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistRecipe::class, 'spawned_recipe_id');
+        return $this->belongsTo(FoodAlchemistRecipe::class, 'spawned_recipe_id')
+            ->withoutGlobalScope(\Platform\FoodAlchemist\Models\Scopes\OhneFassungenScope::class);   // Spec 82: Verweis löst auch Fassungen auf
     }
 }

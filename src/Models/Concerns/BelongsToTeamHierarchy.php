@@ -40,6 +40,8 @@ trait BelongsToTeamHierarchy
         // „übernimmt alles" sehen von oben nur ihre Freigabe-Hülle — Stammdaten bleiben voll geerbt.
         if (($typ = \Platform\FoodAlchemist\Support\InhaltsFreigabe::typFuerModel(static::class)) !== null) {
             $tabelle = $query->getModel()->getTable();
+            // Spec 82: die Fassungs-Regel trifft InhaltsFreigabe selbst (normale Sicht ohne, Abo-Zweig nur Fassungen)
+            $query->withoutGlobalScope(\Platform\FoodAlchemist\Models\Scopes\OhneFassungenScope::class);
 
             return $query->where(fn (Builder $q) => \Platform\FoodAlchemist\Support\InhaltsFreigabe::anwenden(
                 $q, $col, $tabelle . '.id', $typ, $team, self::teamAncestryIds($team)));

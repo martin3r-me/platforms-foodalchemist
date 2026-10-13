@@ -71,12 +71,14 @@ class FoodAlchemistDishIdea extends Model
     /** Referenziertes Bestand-VK-Gericht (loser Zeiger, kein Cascade). */
     public function salesRecipe(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistRecipe::class, 'sales_recipe_id');
+        return $this->belongsTo(FoodAlchemistRecipe::class, 'sales_recipe_id')
+            ->withoutGlobalScope(\Platform\FoodAlchemist\Models\Scopes\OhneFassungenScope::class);   // Spec 82: Verweis löst auch Fassungen auf
     }
 
     /** Bei Freitext-Go erzeugtes Rezept (loser Zeiger, kein Cascade). */
     public function generatedRecipe(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistRecipe::class, 'generated_recipe_id');
+        return $this->belongsTo(FoodAlchemistRecipe::class, 'generated_recipe_id')
+            ->withoutGlobalScope(\Platform\FoodAlchemist\Models\Scopes\OhneFassungenScope::class);   // Spec 82: Verweis löst auch Fassungen auf
     }
 }

@@ -70,7 +70,8 @@ class FoodAlchemistSpeiseplanEintrag extends Model
 
     public function dish(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistRecipe::class, 'sales_recipe_id');
+        return $this->belongsTo(FoodAlchemistRecipe::class, 'sales_recipe_id')
+            ->withoutGlobalScope(\Platform\FoodAlchemist\Models\Scopes\OhneFassungenScope::class);   // Spec 82: Verweis löst auch Fassungen auf
     }
 
     /** @deprecated #486 deutscher Alias → dish() */

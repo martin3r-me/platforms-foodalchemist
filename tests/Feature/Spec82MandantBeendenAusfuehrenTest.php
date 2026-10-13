@@ -83,7 +83,8 @@ it('Vollständiger Lauf: Stamm-Paket ab, Bereiche aus, Team gesperrt, Lauf abges
         ->and(($this->aktiveBereiche)())->toBe([])
         ->and(FoodAlchemistMandant::where('team_id', $this->mandant->id)->value('status'))->toBe('beendet')
         ->and(TeamSperre::istGesperrt($this->mandant))->toBeTrue()->and(TeamSperre::istGesperrt($this->kind))->toBeTrue();
-    expect($r['lauf']['fortschritt']['abos']['status'])->toBe('entfaellt')->and($r['lauf']['fortschritt']['sperren']['status'])->toBe('erledigt');
+    // seit Durchstich Schritt 1 gibt es Abos; dieser Mandant hat keins → erledigt
+    expect($r['lauf']['fortschritt']['abos']['status'])->toBe('erledigt')->and($r['lauf']['fortschritt']['sperren']['status'])->toBe('erledigt');
     $schritte = array_values(array_filter(array_map(fn ($p) => $p[0] === 'mandant_beenden_schritt' ? $p[1] : null, $this->protokolliert)));
     expect($schritte)->toBe(['abos', 'stamm_paket', 'export', 'bereiche', 'sperren']);
     expect(collect($this->protokolliert)->pluck(0))->toContain('mandant_beenden_gestartet')->toContain('mandant_beenden_abgeschlossen');

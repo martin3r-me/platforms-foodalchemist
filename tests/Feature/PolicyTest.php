@@ -176,6 +176,21 @@ it('Trait-Vertrag: ALLE Models tragen LogsActivity + BelongsToTeamHierarchy + Ha
             //    die Zeile trägt opted_in_at/opted_in_by.
             continue;
         }
+        if (class_basename($klasse) === 'FoodAlchemistAbo') {
+            // Spec 82 §12 A1: Abo = Sammlung des Master-Teams an einen Mandanten. Trägt LogsActivity + HasUuidV7.
+            //  - kein BelongsToTeamHierarchy: die Zeile gehört ZWEI Teams (master_team_id, mandant_team_id), es gibt
+            //    kein team_id. Gelesen wird nur über AboService (Master: seine, Mandant: die seines Kunden-Hauptteams);
+            //    scopeVisibleToTeam würde Eltern-Ketten einORen — eine Sichtbarkeits-AUSWEITUNG.
+            //  - kein SoftDeletes: Ende eines Abos ist ein Status (gekuendigt | zurueckgezogen, mit beendet_at/-_von);
+            //    unique(mandant, sammlung) + Wiederaufnahme per firstOrNew — eine trashed Zeile kollidierte am Unique.
+            $traits = collect(class_uses_recursive($klasse))->keys()->map(fn ($t) => class_basename($t));
+            foreach (['LogsActivity', 'HasUuidV7'] as $pflicht) {
+                if (! $traits->contains($pflicht)) {
+                    $fehlend[] = class_basename($klasse) . " ohne {$pflicht}";
+                }
+            }
+            continue;
+        }
         if (class_basename($klasse) === 'FoodAlchemistActiveOutlet') {
             // Kein Katalog-Datensatz, sondern der persistierte ZEIGER der Betriebs-„Brille" je
             // (User, Team) — durabler Zwilling der HTTP-Session (ActiveOutletContext:14-17).

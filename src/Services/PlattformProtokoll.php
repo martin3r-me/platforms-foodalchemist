@@ -31,6 +31,8 @@ class PlattformProtokoll
         'mandant_beenden_schritt' => 'Mandant beenden: Schritt ausgeführt',
         'mandant_beenden_abgeschlossen' => 'Mandant beenden: Lauf abgeschlossen (Team gesperrt)',
         'mandant_entsperrt' => 'Mandant entsperrt (Status zurück auf aktiv)',
+        'abo_vergeben' => 'Abo vergeben',                    // Spec 82 §12 A1 (Kurator-Aufsatz)
+        'fassung_veroeffentlicht' => 'Fassung veröffentlicht', // Spec 82 §12 B
     ];
 
     /**
