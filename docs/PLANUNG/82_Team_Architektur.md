@@ -184,13 +184,20 @@ Beschreibt, was die Küche kann. Das ist keine DNA.
 
 **DNA:**
 - **Oberteam-DNA = Vorgaben.** Einzelne Felder sind als **verbindlich** markierbar.
-- **Unter-Team-DNA** erbt und überschreibt **feldweise** alles, was nicht verbindlich ist. Heute werden die Ebenen nur aneinandergehängt.
+- **Unter-Team-DNA** erbt und überschreibt **feldweise** alles, was nicht verbindlich ist. (Früher wurden die Ebenen nur aneinandergehängt bzw. „nächster Canvas gewinnt“; seit Schritt 6 gilt die feldweise Regel.)
   - **Skalar-Felder:** ein verbindlicher Wert des obersten Teams gewinnt und sperrt das Feld nach unten, sonst gewinnt der nächstliegende nicht-leere Wert.
   - **Repeatable-Felder** (z. B. Geschmackswelten): Vereinigung über die Ebenen, Oberteam zuerst, gleiche Einträge einmal. Das Unter-Team **darf ergänzen**. Verbindliche Einträge des Oberteams bleiben immer drin und sind im Unter-Team nicht entfernbar (Dominique 13.10.).
   - Gebaut als `DnaResolver` (Schritt 6, Kette endet an der Kundengrenze); verbindlich setzt nur das Oberteam.
 - **Vorlagen als Daten:** Tabelle `canvas_templates` nach dem Muster der Brief-Vorlagen.
   - Kern-Felder bleiben fest (Spec 64 §1b, Variante A), Zusatzfelder sind pflegbar.
   - Feld-Gruppen werden als Reiter dargestellt.
+- **Gebaut (Schritt 6, 13.10.):**
+  - **Schema:** `canvas_entries.is_binding`, Tabelle `foodalchemist_canvas_templates` (Zusatzfelder je `canvas_type`, Oberteam-eigen, Unique auf `team_id` + `canvas_type` + `field_key`); `CanvasService::felder(type, team)` mischt Kern- und Zusatzfelder der Team-Kette; `zusatzfeldAnlegen` prüft Team, Kern-Key, Duplikat und belebt gelöschte Felder wieder.
+  - **`DnaResolver`:** feldweise Vererbung bis zur Kundengrenze (`kundenHauptTeam`), Zyklus und Tiefe gedeckelt; Ergebnis mit Herkunft (`quelle_team_id`, `verbindlich`).
+  - **`KontextResolver`:** setzt den Marken-Kontext in der Reihenfolge unten zusammen, mit Quellenliste und Budget-Bilanz; `CanvasService::cascadeKontext` ist nur noch Adapter (alle Aufrufer unverändert). **Gesamtbudget** `foodalchemist.kontext.budget_zeichen` (12.000); Verbindliches und die Tonalität werden nie gekürzt, sonst von unspezifisch nach spezifisch. **Teamprofil-Block** nur mit ausdrücklichen Fakten („unbekannt“ ist nie „fehlt“). Die einzige gewollte Abweichung zum früheren Kontext: das 3.000er-Limit je Ebene entfällt.
+  - **MCP:** `canvas.PUT/ENTRY_ADD` mit `verbindlich` (nur Oberteam + Admin, nur Team-DNA), `canvas.GET` zeigt es; `foodalchemist.kontext.RESOLVE` (lesend) mit Sichtbarkeit nach §13 G (`KontextSicht`): auch der Plattform-Admin sieht autarke Mandanten nicht.
+  - **Oberfläche:** Verbindlich-Schalter an der Oberteam-DNA, „Geerbt von …“ und gesperrte Felder im Unter-Team, geerbte Listen-Einträge, Feldgruppen als Reiter (Team-DNA), Sektion „DNA-Zusatzfelder“ (nur Oberteam).
+  - **Nicht gebaut / bewusst offen:** Zusatzfelder vom Typ „Liste“ gibt es in der Pflegeseite nicht (nur über MCP/Service); das Board zeigt je Canvas eine Liste. Die Master-Vorlagen für DNA/Teamprofil/Canvas als Kopie an ein Team sind Schritt 8.
 
 **Kaskade:**
 - **Zentraler KontextResolver:** Aufrufer übergeben nur das Objekt (Foodbook, Angebot, Concept). Den Rest löst er selbst auf.
@@ -200,13 +207,13 @@ Beschreibt, was die Küche kann. Das ist keine DNA.
   3. Teamprofil
   4. Endkunde, **sobald die Ausgabe eine CRM-Firma trägt** (entschieden Dominique 13.10., Entscheidung 4): Angebot immer, Foodbook und Speisekarte nur mit verknüpfter CRM-Firma (Spec 64), ohne Firma entfällt die Ebene.
   5. Foodbook / Concept
-- **Gesamtbudget** statt nur 3.000 Zeichen je Ebene.
+- **Gesamtbudget** statt nur 3.000 Zeichen je Ebene (gebaut, 12.000 Zeichen, siehe oben).
 
 **Vorab-Fixes** (eigene Aufgabe, unabhängig, bereits als Karte angelegt):
-- Food-DNA wird nicht vererbt (`find` exakt)
-- Angebots-Ebene ist tot
-- `kunde_dna` fehlt im MCP
-- DNA-Einstellungen haben keine `MitEinstellungsSperre`
+- Food-DNA wird nicht vererbt (`find` exakt) · **erledigt (#298)**
+- Angebots-Ebene ist tot · **erledigt (#298)**
+- `kunde_dna` fehlt im MCP · **erledigt (#298)**
+- DNA-Einstellungen haben keine `MitEinstellungsSperre` · **erledigt (#298)**
 - Foodbook-Prompts laufen ohne Kunde. **Nach Entscheidung 4:** Die Kunden-Ebene greift, sobald die Ausgabe eine CRM-Firma trägt. Die bestehenden Foodbook-Übergaben (Spec 42 F3) bleiben. Zu schließen sind die Stellen, an denen die Firma des Foodbooks nicht ankommt (Kapitel-Wording `concept.wording`, Kapitel-Ideen `foodbook.kapitel_ideen`); die Angebots-Ebene (`food_dna_angebot_id`) ist mit Schritt 1 gebaut.
 
 ## §8 · Kurator-Aufsatz: Master-Bibliothek und Abo
@@ -286,7 +293,7 @@ Beschreibt, was die Küche kann. Das ist keine DNA.
 
 **Daten-Umzug Plattform-Stamm (M2) – erst auf dem eigenen Server** (Dominique 13.10.): Der Stamm (GP, Lieferanten, Artikel; **keine Preise**, siehe §3) wird **nicht auf demo** nach global verschoben. Die BHG-Preise (heute Team 6) werden dabei nicht als globale Zeilen mitgenommen. Er wird beim Aufbau des eigenen Servers sauber als globaler Stamm eingespielt, aus der lokalen GP-/Basisrezept-Pflege (lokale GP-/Basisrezept-Pflege für den neuen Server). Bis dahin gilt auf demo Team 6 als Stamm.
 5. Teamprofil + Machbarkeits-Check (§6)
-6. DNA feldweise + `canvas_templates` + KontextResolver (§7)
+6. DNA feldweise + `canvas_templates` + KontextResolver (§7) · **gebaut** (#300, #303, #307, #311)
 
 **Kurator-Aufsatz:**
 
