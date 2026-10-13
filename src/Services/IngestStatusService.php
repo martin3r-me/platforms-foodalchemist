@@ -245,6 +245,7 @@ final class IngestStatusService
             ->where('p.created_at', '>=', $seit);
         TeamScope::applyVisible($q, 'i.team_id', $team);
         TeamScope::applyVisible($q, 'p.team_id', $team);   // Spec 82 3a: keine Preiszeilen fremder Mandanten
+        $this->preise->stammFilter($q, 'p', $team);   // Spec 82 §12 A3: TeamScope greift bei Alias 'i' nicht
         if ($supplierId !== null) {
             $q->where('i.supplier_id', $supplierId);
         }

@@ -10,6 +10,7 @@ use Platform\FoodAlchemist\Enums\PriceCategory;
 use Platform\FoodAlchemist\Models\FoodAlchemistPrice;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem;
 use Platform\FoodAlchemist\Support\MasterTeam;
+use Platform\FoodAlchemist\Support\StammPaket;
 
 /**
  * M2-04/05 / GL-11: DIE eine Stelle für Preislogik — aktiver Preis (§3.3),
@@ -47,9 +48,11 @@ class PriceService
         $col = 'foodalchemist_prices.team_id';
 
         if ($team === null) {
-            return $this->nurListenpreis($query)
+            return $this->nurListenpreis($query)                 // inkl. stammFilter (ohne Team: kein Opt-in)
                 ->orderByRaw("{$col} IS NULL ASC"); // Besitzer-Listenpreis vor globalem
         }
+
+        $this->stammFilter($query, 'foodalchemist_prices', $team);   // Spec 82 §12 A3: Klasse folgt dem Artikel
 
         $kette = self::preisKette($team);                          // Leitplanke b: endet an der Kundengrenze
         $sichtbar = FoodAlchemistPrice::teamAncestryIds($team);   // Artikel-Sichtbarkeit (Scope-Kette)
@@ -121,11 +124,35 @@ class PriceService
      * @param  T  $query
      * @return T
      */
-    public function nurListenpreis(Builder|\Illuminate\Database\Query\Builder $query, string $alias = 'foodalchemist_prices'): Builder|\Illuminate\Database\Query\Builder
+    public function nurListenpreis(Builder|\Illuminate\Database\Query\Builder $query, string $alias = 'foodalchemist_prices', ?Team $team = null): Builder|\Illuminate\Database\Query\Builder
     {
         $besitzer = "(SELECT si_lp.team_id FROM foodalchemist_supplier_items si_lp WHERE si_lp.id = {$alias}.supplier_item_id)";
+        $this->stammFilter($query, $alias, $team);
 
         return $query->where(fn ($w) => $w->whereNull("{$alias}.team_id")->orWhereRaw("{$alias}.team_id = {$besitzer}"));
+    }
+
+    /**
+     * Spec 82 §12 A3 (Folge-PR zu 3a): Preise hängen am Artikel. Ist der Artikel für das Team
+     * unsichtbar (globaler stamm_paket-Artikel ohne Opt-in), ist es sein Preis auch, ebenso ein
+     * Teampreis an diesem Artikel. Die Regel selbst kommt aus {@see StammPaket::begrenzen} (eine
+     * Quelle). Ohne Team gibt es kein Opt-in, also keine stamm_paket-Preise. Der Stamm trägt laut
+     * Entscheidung 13.10. ohnehin keine Preise, das hier ist die Sicherung.
+     *
+     * Korreliertes EXISTS (PK-Zugriff je Preiszeile) statt whereIn über alle Artikel.
+     * Mit Opt-in bzw. als Master: kein Filter.
+     */
+    public function stammFilter(Builder|\Illuminate\Database\Query\Builder $query, string $alias, ?Team $team): Builder|\Illuminate\Database\Query\Builder
+    {
+        if (StammPaket::istFreigeschaltet($team)) {
+            return $query;
+        }
+
+        return $query->whereExists(function ($sub) use ($alias, $team) {
+            $sub->selectRaw('1')->from('foodalchemist_supplier_items')
+                ->whereColumn('foodalchemist_supplier_items.id', "{$alias}.supplier_item_id");
+            StammPaket::begrenzen($sub, 'foodalchemist_supplier_items', $team);
+        });
     }
 
     /** Aktiv-Ordnung §3.3 innerhalb einer Stufe: unbefristet zuerst, dann valid_to DESC, Tiebreak id DESC. */
