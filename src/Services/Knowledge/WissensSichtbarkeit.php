@@ -52,8 +52,8 @@ final class WissensSichtbarkeit
     /**
      * Lese-Filter für rohe Query-Builder auf `foodalchemist_knowledge_*`.
      *
-     * AUSNAHME `art = ablauf` (Entscheid 13.10.): Ablauf-Dossiers sind Bedienanleitung für die Agenten (`ablauf.GET`), also „Wirkung"
-     * wie der Prompt, kein Fachwissen — global (team_id NULL) und vom Master-Team gepflegte sind für jedes Team lesbar.
+     * AUSNAHME `art = ablauf` + `category = workflow` + Frontmatter `gilt_fuer_vorgang` (Entscheid 13.10.): Bedienanleitung für die Agenten
+     * (`ablauf.GET`), also „Wirkung" wie der Prompt, kein Fachwissen — global (team_id NULL) und vom Master-Team gepflegte sind für jedes Team lesbar.
      *
      * @template T of \Illuminate\Database\Query\Builder|\Illuminate\Database\Eloquent\Builder
      * @param  T  $query
@@ -66,9 +66,11 @@ final class WissensSichtbarkeit
         $master = MasterTeam::id();
         $praefix = str_contains($teamIdColumn, '.') ? strstr($teamIdColumn, '.', true) . '.' : '';
         $artSpalte = $praefix . 'art';
+        $kategorieSpalte = $praefix . 'category';
+        $inhaltSpalte = $praefix . 'content_md';
         $ablauf = $ablaufAusnahme && self::hatArt();   // nur für `knowledge_documents` (Spalte `art`), nicht für Bindungen/Kategorien
 
-        return $query->where(function ($q) use ($teamIdColumn, $ids, $global, $master, $artSpalte, $ablauf) {
+        return $query->where(function ($q) use ($teamIdColumn, $ids, $global, $master, $artSpalte, $kategorieSpalte, $inhaltSpalte, $ablauf) {
             $q->whereRaw('1 = 0');   // neutraler Anfang: jede Zeile unten ist ein OR
             if ($ids !== []) {
                 $q->orWhereIn($teamIdColumn, $ids);
@@ -77,8 +79,13 @@ final class WissensSichtbarkeit
                 $q->orWhereNull($teamIdColumn);
             }
             if ($ablauf) {
-                $q->orWhere(function ($a) use ($teamIdColumn, $master, $artSpalte) {
-                    $a->where($artSpalte, 'ablauf')->where(function ($t) use ($teamIdColumn, $master) {
+                $q->orWhere(function ($a) use ($teamIdColumn, $master, $artSpalte, $kategorieSpalte, $inhaltSpalte) {
+                    // Eigenschaft statt Namensmuster: art=ablauf UND category=workflow UND der Kopf des Dossiers nennt `gilt_fuer_vorgang`
+                    // (die 4–5 internen Wissensmodul-Dokumente tragen art=ablauf/category=workflow, aber keinen Vorgang). Fail closed:
+                    // ohne den Schlüssel im Frontmatter bleibt ein Dossier unlesbar. Saubere Lösung = eigene Spalte/Art (Datenentscheid).
+                    $a->where($artSpalte, 'ablauf')->where($kategorieSpalte, 'workflow')
+                        ->where($inhaltSpalte, 'like', "---%gilt_fuer_vorgang:%")
+                        ->where(function ($t) use ($teamIdColumn, $master) {
                         $t->whereNull($teamIdColumn);
                         if ($master !== null) {
                             $t->orWhere($teamIdColumn, $master);

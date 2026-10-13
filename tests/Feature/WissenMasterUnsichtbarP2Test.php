@@ -29,7 +29,7 @@ beforeEach(function () {
         // Die workflow.*-Dossiers liegen per Migration schon in der DB — updateOrInsert auf den Slug.
         DB::table('foodalchemist_knowledge_documents')->updateOrInsert(['slug' => $slug], [
             'uuid' => (string) UuidV7::generate(), 'team_id' => $teamId, 'title' => 'Titel ' . $slug,
-            'category' => $kategorie, 'art' => $art, 'content_md' => "---\nrequired_tools: [foodalchemist.recipes.POST]\n---\n## Schritt\nText " . $slug,
+            'category' => $kategorie, 'art' => $art, 'content_md' => "---\n" . ($art === 'ablauf' && ! str_starts_with($slug, 'intern.') ? "gilt_fuer_vorgang: basisrezept_anlegen\n" : '') . "required_tools: [foodalchemist.recipes.POST]\n---\n## Schritt\nText " . $slug,
             'version' => 1, 'content_hash' => hash('sha256', $slug), 'char_count' => 40, 'active' => 1, 'deleted_at' => null,
             'created_at' => now(), 'updated_at' => now(),
         ]);
@@ -39,6 +39,7 @@ beforeEach(function () {
     // Ablauf-Dossiers des Vorgangs basisrezept_anlegen (global bzw. Master) + ein Regelwerk + ein Fachdossier
     ($this->doc)(null, 'workflow.basisrezept_regeln', 'workflow', 'ablauf');
     ($this->doc)($this->master->id, 'workflow.basisrezept_erzeugen', 'workflow', 'ablauf');
+    ($this->doc)(null, 'intern.wissensmodul_schreibrechte', 'workflow', 'ablauf');   // art=ablauf, aber kein Vorgang
     $this->regelId = ($this->doc)(null, 'regelwerk.basisrezepte_p2', 'regelwerk');
     ($this->doc)($this->master->id, 'zutat.fachdossier_p2', 'zutat');
 
@@ -58,6 +59,7 @@ it('★ Mandant liest Ablauf-Dossiers (art=ablauf), aber kein Regelwerk und kein
 
     expect($get->execute(['slug' => 'workflow.basisrezept_regeln'], $k)->success)->toBeTrue()
         ->and($get->execute(['slug' => 'workflow.basisrezept_erzeugen'], $k)->success)->toBeTrue()
+        ->and($get->execute(['slug' => 'intern.wissensmodul_schreibrechte'], $k)->success)->toBeFalse()   // art=ablauf ohne Vorgang
         ->and($get->execute(['slug' => 'regelwerk.basisrezepte_p2'], $k)->success)->toBeFalse()
         ->and($get->execute(['slug' => 'zutat.fachdossier_p2'], $k)->success)->toBeFalse();
 });
