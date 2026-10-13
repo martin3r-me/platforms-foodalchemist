@@ -61,6 +61,8 @@ class Index extends Component
         'kueche' => ['label' => 'Küchen-Profil', 'hint' => 'Küchentyp als Grundrichtung für Vorschläge, Farben je Positionstyp'],
         // Ebene 1 der DNA-Kette (Umzug 2026-07-21): Team-Food-DNA wohnt bei den Einstellungen, nicht als Top-Level-Nav
         'food-dna' => ['label' => 'Food DNA', 'hint' => 'Leitbild, Stil, Aromatik und No-Gos des eigenen Hauses'],
+        // Spec 82 §7 (Schritt 6): pflegbare Zusatzfelder der DNA-Canvases, Oberteam-eigen.
+        'dna-felder' => ['label' => 'DNA-Zusatzfelder', 'hint' => 'Eigene Felder an Team-DNA, Kunden-DNA, Angebot, Foodbook und Concept, Feldgruppen als Reiter'],
         // Spec 42 F3: Kunde-DNA (Ebene 2) zog aus dem Foodbook hierher — Marken-DNA gehört zum Kunden, nicht pro Foodbook.
         'kunde-dna' => ['label' => 'Kunden-DNA', 'hint' => 'Marke, Ton und No-Gos je Kunde'],
         'schreibstile' => ['label' => 'Schreibstile', 'hint' => 'Tonfall für Karten- und Foodbook-Texte anlegen und pflegen'],
@@ -119,7 +121,7 @@ class Index extends Component
         'katalog' => ['label' => 'Katalog & Kategorien', 'sektionen' => ['einheiten', 'warengruppen', 'taxonomie', 'vk-taxonomie', 'behaelter', 'concepter-dimensionen']],
         'betrieb' => ['label' => 'Team & Küche', 'sektionen' => ['unter-teams', 'betriebe', 'posten', 'rollen', 'zugriffsrechte', 'kueche', 'teamprofil']],
         'kalkulation' => ['label' => 'Einkauf & Kalkulation', 'sektionen' => ['einkauf', 'kalkulation', 'herstellkosten', 'aufschlagsklassen']],
-        'ki' => ['label' => 'KI & Wissen', 'sektionen' => ['ki', 'food-dna', 'kunde-dna', 'brief-vorlagen', 'trendradar', 'wissenskategorien', 'wissenssteuerung', 'regeln']],
+        'ki' => ['label' => 'KI & Wissen', 'sektionen' => ['ki', 'food-dna', 'dna-felder', 'kunde-dna', 'brief-vorlagen', 'trendradar', 'wissenskategorien', 'wissenssteuerung', 'regeln']],
         'ausgabe' => ['label' => 'Ausgabe', 'sektionen' => ['schreibstile', 'praesentations-designs', 'speiseplan-chips', 'etiketten']],
     ];
 
@@ -127,7 +129,7 @@ class Index extends Component
     public const NUR_PLATTFORM_ADMIN = ['regeln'];
 
     /** Spec 82 §5: nur im Oberteam (ohne Eltern-Team) — ein Unter-Team hat keine Unter-Teams. */
-    public const NUR_OBERTEAM = ['unter-teams'];
+    public const NUR_OBERTEAM = ['unter-teams', 'dna-felder'];
 
     /**
      * Spec 82 §5/§13 B2: Sektionen, die an einem Bereich der Freischaltung (FaBereiche) hängen. Aus = Sektion

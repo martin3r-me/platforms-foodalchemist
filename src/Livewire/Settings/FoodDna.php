@@ -22,6 +22,12 @@ class FoodDna extends Component
         return 'food-dna';
     }
 
+    /** Spec 82 §7: Feldgruppen als Reiter (Identität, Aromatik & Tabus, … plus Zusatzfelder). */
+    public function canvasReiter(): bool
+    {
+        return true;
+    }
+
     public function mount(): void
     {
         $team = Auth::user()?->currentTeamRelation;
