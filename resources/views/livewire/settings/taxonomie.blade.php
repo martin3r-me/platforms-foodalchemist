@@ -35,7 +35,7 @@
                             <span class="shrink-0 text-[length:var(--fa-text-sm)] tabular-nums text-[var(--fa-ink-3)]" title="Kategorien">{{ $hg->kategorie_count }}</span>
                             @if($darfEditHg)
                                 {{-- Dominique 2026-10-12: Aktionen legen sich beim Darüberfahren ÜBER die Zeile statt unsichtbar Platz zu reservieren — vorher blieben vom Namen nur wenige Zeichen („01 G…"). --}}
-                                <span class="absolute right-1 top-1/2 -translate-y-1/2 flex rounded-[var(--fa-radius-control)] bg-[var(--fa-surface)] shadow-sm opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto focus-within:opacity-100 focus-within:pointer-events-auto">
+                                <span class="fa-zeilen-aktionen rounded-[var(--fa-radius-control)] bg-[var(--fa-surface)] shadow-sm">
                                     <x-fa::icon-button size="sm" icon="heroicon-o-pencil" label="Hauptgruppe umbenennen" wire:click="startHgEdit({{ $hg->id }}, {{ \Illuminate\Support\Js::from($hg->label) }})" />
                                     @if($hg->kategorie_count > 0)
                                         <x-fa::icon-button size="sm" icon="heroicon-o-trash" label="Hat Kategorien, erst dort entfernen" disabled class="opacity-40 cursor-not-allowed" />

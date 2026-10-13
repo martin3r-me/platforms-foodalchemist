@@ -171,3 +171,32 @@ it('Gericht: „Behälter vorschlagen" füllt Behälter je Zweck, Skalierung und
 
     expect(DB::table('foodalchemist_recipe_containers')->where('recipe_id', $vk->id)->count())->toBe(0);
 });
+
+/**
+ * Dominique 2026-10-13: „nimmt der da nur den Zustand?" — der KI-Vorschlag der Einordnung betraf nur den Zustand.
+ * Der neue Knopf setzt Warengruppe + Unterkategorie (streng aus der eigenen Taxonomie) und Zustand ins Formular.
+ */
+it('GP: „Einordnung vorschlagen" setzt Warengruppe, Unterkategorie und Zustand aus der Taxonomie — Speichern übernimmt', function () {
+    $wg = \Platform\FoodAlchemist\Models\FoodAlchemistLookupWarengruppe::create(['team_id' => $this->rootTeam->id, 'code' => '15', 'name' => '15 Getraenke', 'sort_order' => 15]);
+    \Platform\FoodAlchemist\Models\FoodAlchemistWarengruppeSubkategorie::create(['team_id' => $this->rootTeam->id, 'commodity_group_code' => '15', 'name' => '15.2 Bier & Cidre', 'position' => 2]);
+    $gp = $this->makeGp($this->rootTeam, 'Altbier: konserviert');
+    ($this->mockKi)(['gp.suggest' => ['commodity_group_code' => '15', 'sub_category' => '15.2 bier & cidre', 'condition' => 'konserviert']]);
+
+    Livewire::test(GpModal::class)->call('oeffnen', $gp->id)
+        ->call('einordnungKiVorschlagen')
+        ->assertSet('builder.commodity_group_code', '15')
+        ->assertSet('builder.sub_category', '15.2 Bier & Cidre')              // Schreibweise aus der Taxonomie
+        ->assertSet('builder.condition', 'konserviert')
+        ->assertSet('einordnungHinweis', fn ($h) => str_contains((string) $h, 'Speichern übernimmt'))
+        ->assertSeeHtml('data-ki-action="einordnungKiVorschlagen"');
+
+    expect($gp->fresh()->commodity_group_code)->not->toBe('15');            // Vorschlag allein schreibt nicht
+});
+
+it('Einstellungen: Zeilen-Aktionen nutzen die ungeschichtete Modul-Klasse, nicht group-hover-Utilities (demo-Ebenen)', function () {
+    foreach (['warengruppen', 'vk-taxonomie', 'taxonomie'] as $view) {
+        $s = file_get_contents(dirname(__DIR__, 2)."/resources/views/livewire/settings/{$view}.blade.php");
+        expect($s)->toContain('fa-zeilen-aktionen')->not->toContain('group-hover:pointer-events-auto');
+    }
+    expect(file_get_contents(dirname(__DIR__, 2).'/resources/dist/foodalchemist.css'))->toMatch('/\.group:hover>\.fa-zeilen-aktionen/');
+});

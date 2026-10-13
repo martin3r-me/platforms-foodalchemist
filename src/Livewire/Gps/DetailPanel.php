@@ -249,35 +249,8 @@ class DetailPanel extends Component
     /** @var ?array{typ: string, werte: array, confidence: float} Vorschau — NICHTS persistiert (GL-07) */
     public ?array $kiVorschlag = null;
 
-    public function kiAllergene(): void
-    {
-        $gp = $this->kuratierbaresGp();
-        if ($gp === null) {
-            return;
-        }
-        try {
-            $v = app(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class)->propose('gp.allergene', [
-                'name' => $gp->name, 'condition' => $gp->condition, 'commodity_group' => $gp->commodity_group?->name,
-            ]);
-        } catch (\RuntimeException $e) {
-            $this->fehler = $e->getMessage();
-
-            return;
-        }
-        $werte = [];
-        foreach (\Platform\FoodAlchemist\Models\FoodAlchemistGp::ALLERGEN_FIELDS as $feld) {
-            $wert = $v->werte['allergene'][$feld] ?? null;
-            if (in_array($wert, ['enthalten', 'spuren', 'nicht_enthalten'], true)) {
-                $werte[$feld] = $wert;                            // 'unbekannt' ⇒ kein Override (F7.1)
-            }
-        }
-        if ($werte === []) {
-            $this->fehler = 'KI lieferte keine verwertbaren Allergen-Werte — echter Provider nötig.';
-
-            return;
-        }
-        $this->kiVorschlag = ['type' => 'allergene', 'werte' => $werte, 'confidence' => max(0.0, min(1.0, $v->confidence))];
-    }
+    // kiAllergene() entfernt (Dominique 2026-10-13): Allergene kommen nur aus den Lieferantenartikeln.
+    // Bestehende KI-Overrides (allergens_source = ki) bleiben sichtbar und lassen sich zurücksetzen.
 
     public function kiNaehrwerte(): void
     {

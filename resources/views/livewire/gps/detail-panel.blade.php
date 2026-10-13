@@ -173,13 +173,8 @@
             $nurKiOverride = $allergene !== null && ($allergenKonfidenz['n_las_mit_daten'] ?? 0) === 0 && ($gp->allergens_source === 'ki' || $gp->allergens_confidence !== null) && collect($allergene)->contains(fn ($a) => $a['source'] === 'override');
         @endphp
         <x-fa::section variant="plain" title="Allergene" icon="heroicon-o-shield-exclamation" data-sektion="allergene">
-            @if($kannKuratieren && ($allergenKonfidenz['n_las_mit_daten'] ?? 0) === 0)
-                <x-slot:actions>
-                    <x-foodalchemist::ki-action action="kiAllergene" variant="ai" icon="heroicon-o-sparkles" label="Mit KI schätzen"
-                        title="Ohne Artikeldaten per KI schätzen. Übernehmen schreibt die Werte von Hand." data-ki-allergene
-                        busy="Wird geschätzt …" flash="Geschätzt" />
-                </x-slot:actions>
-            @endif
+            {{-- Dominique 2026-10-13: kein KI-Schätzknopf für Allergene — sie kommen ausschließlich aus den Lieferantenartikeln
+                 (Kaskade LA → GP → Rezept). Fehlen Artikeldaten, ist das eine Lücke zum Pflegen, keine Schätzaufgabe. --}}
             <div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-[length:var(--fa-text-sm)]">
                 @if($nurKiOverride)
                     <x-fa::badge tone="accent" icon="heroicon-m-sparkles" title="Von der KI geschätzt, keine Artikeldaten{{ $allergKiConf !== null ? ' · ' . round($allergKiConf * 100) . ' %' : '' }}" data-allergene-ki-marker>KI</x-fa::badge>

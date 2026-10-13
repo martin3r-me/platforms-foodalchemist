@@ -52,7 +52,7 @@
 
             @if($kannKuratieren)
                 <x-foodalchemist::ki-action action="allesAnreichern" variant="ai" icon="heroicon-o-sparkles" label="Alles anreichern"
-                    title="Zustand, Eigenschaften, Allergene und Nährwerte in einem Lauf vorschlagen. Übernehmen bleibt deine Entscheidung."
+                    title="Zustand, Merkmale und Aroma-Anker in einem Lauf vorschlagen. Allergene und Nährwerte kommen aus den Lieferantenartikeln. Übernehmen bleibt deine Entscheidung."
                     data-gp-alles-anreichern busy="Läuft …" flash="Vorschläge da" />
             @endif
 
@@ -325,6 +325,15 @@
 
             {{-- Einordnung: Warengruppe · Unterkategorie · Zustand --}}
             <x-fa::section title="Einordnung" icon="heroicon-o-squares-2x2">
+                @if(! $neu && $gp !== null)
+                    <x-slot:actions>
+                        {{-- Dominique 2026-10-13: Warengruppe + Unterkategorie + Zustand per KI, nicht nur der Zustand --}}
+                        <x-foodalchemist::ki-action action="einordnungKiVorschlagen" variant="ai" icon="heroicon-o-sparkles" label="Einordnung vorschlagen"
+                            title="Warengruppe und Unterkategorie aus deiner Taxonomie plus Zustand — landet im Formular, Speichern übernimmt"
+                            data-gp-einordnung-ki busy="Wird eingeordnet …" flash="Vorgeschlagen" />
+                    </x-slot:actions>
+                @endif
+                @if($einordnungHinweis)<x-fa::notice tone="ok" data-gp-einordnung-hinweis>{{ $einordnungHinweis }}</x-fa::notice>@endif
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <x-fa::field label="Warengruppe" for="gp-wg">
                         <x-fa::select id="gp-wg" wire:model.live="builder.commodity_group_code" placeholder="Bitte wählen">
