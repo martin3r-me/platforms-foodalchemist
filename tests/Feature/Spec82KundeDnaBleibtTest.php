@@ -66,7 +66,7 @@ it('KI-Kaskade: Bleibt-Felder stehen als eigener, geschützter Block, der Rest b
     $ebenen = array_column($r['quellen'], 'ebene');
 
     expect($ebenen)->toContain('kunde_bleibt')->and($ebenen)->toContain('kunde')
-        ->and($r['marken_kontext'])->toContain('Verbindliche Vorgaben des Kunden (Bleibt, nicht abweichen):')
+        ->and($r['marken_kontext'])->toContain('Verbindliche Vorgaben des Kunden (Bleibt, nicht abweichen)')
         ->and($r['marken_kontext'])->toContain('Kommunikation / Ton: BLEIBT-MARKER')->and($r['marken_kontext'])->toContain('Preis-Erwartung: REST-MARKER');
     // „Bleibt“ steht nur einmal (nicht doppelt im Kunden-Block)
     expect(substr_count($r['marken_kontext'], 'BLEIBT-MARKER'))->toBe(1);

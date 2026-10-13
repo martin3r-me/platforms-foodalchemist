@@ -34,7 +34,7 @@ class KontextResolveTool extends FoodAlchemistTool implements ToolContract, Tool
     public function getDescription(): string
     {
         return 'Liest den KI-Marken-Kontext, den eine Erzeugung bekommt (Reihenfolge: verbindliche Vorgaben → Team-DNA → Teamprofil → '
-            .'Endkunde → Angebot → Foodbook → Concept → Tonalität), mit Quellenliste und Budget-Bilanz (gekürzt/verworfen). '
+            .'Endkunde → Angebot → Foodbook → Concept → Tonalität; mit projekt_id zusätzlich Standort und Projekt-Akte, Kunden-Bleibt steht dann vorn und hat Vorrang), mit Quellenliste und Budget-Bilanz (gekürzt/verworfen). '
             .'Optional ein Objekt (foodbook|angebot|concept|speisekarte + objekt_id), Ziel-Team (team_id), Gäste und Termin. '
             .'Nur lesend. Fremde oder autarke Mandanten: FORBIDDEN, auch für Plattform-Admins.';
     }
@@ -47,6 +47,8 @@ class KontextResolveTool extends FoodAlchemistTool implements ToolContract, Tool
                 'team_id' => ['type' => 'integer', 'description' => 'Ziel-Team (optional, Standard: eigenes Team). Unter-Team des eigenen Teams oder kuratierter Mandant (Master).'],
                 'objekt_typ' => ['type' => 'string', 'enum' => ['foodbook', 'angebot', 'concept', 'speisekarte']],
                 'objekt_id' => ['type' => 'integer', 'description' => 'Id des Objekts im Ziel-Team (mit objekt_typ).'],
+                'projekt_id' => ['type' => 'integer', 'description' => 'Optional, nur Master-Team (Agentur-Akte, Spec 82 §9): Projekt. Fügt Standort (Pilot oder standort_id), Kunde (Bleibt vorn, Vorrang vor dem Team) und Projekt-Block hinzu.'],
+                'standort_id' => ['type' => 'integer', 'description' => 'Optional mit projekt_id: Kunden-Standort statt Pilot.'],
                 'gaeste' => ['type' => 'integer', 'description' => 'Optional: Gästezahl für die Anlass-Zeile.'],
                 'termin' => ['type' => 'string', 'description' => 'Optional: Termin (YYYY-MM-DD).'],
             ],
@@ -92,7 +94,15 @@ class KontextResolveTool extends FoodAlchemistTool implements ToolContract, Tool
         }
         $ausfuehrung = new MachbarkeitKontext($ziel, $context->user, isset($arguments['gaeste']) ? (int) $arguments['gaeste'] : null, $termin);
         $resolver = app(KontextResolver::class);
-        $r = $objekt !== null ? $resolver->fuerObjekt($ziel, $objekt, $ausfuehrung) : $resolver->fuer($ziel, [], $ausfuehrung);
+        $ids = [];
+        if ($objekt === null && ! empty($arguments['projekt_id'])) {
+            $projekt = \Platform\FoodAlchemist\Models\FoodAlchemistProjekt::where('team_id', $ziel->id)->find((int) $arguments['projekt_id']);
+            if ($projekt === null) {
+                return ToolResult::error('Projekt nicht gefunden (nur im Master-Team).', 'NOT_FOUND');
+            }
+            $ids = ['projekt_id' => (int) $projekt->id, 'crm_company_id' => (int) $projekt->crm_company_id, 'standort_id' => ! empty($arguments['standort_id']) ? (int) $arguments['standort_id'] : null];
+        }
+        $r = $objekt !== null ? $resolver->fuerObjekt($ziel, $objekt, $ausfuehrung) : $resolver->fuer($ziel, $ids, $ausfuehrung);
 
         return ToolResult::success(['team_id' => (int) $ziel->id] + $r);
     }
