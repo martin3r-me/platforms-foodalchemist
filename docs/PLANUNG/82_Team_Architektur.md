@@ -511,24 +511,32 @@ Der Master sieht Inhalte **nur bei kuratierten Mandanten**. Bei autarken Mandant
 - **Sofort-Befund:** `Settings\Wissenskategorien::render()` liest `knowledge_categories` ohne Team-Filter → Kategorie-Namen fremder Teams sichtbar. Wird geschlossen.
 - **Umzug** des heutigen Wissens (Team 6 → global, inkl. Kanon und Embedding-Partition) zusammen mit dem Stamm-Umzug auf dem eigenen Server, nicht auf demo.
 
-### I · Einstellungen: Basis, Paket „Grundeinstellungen“, Team (Dominique 13.10.)
+### I · Einstellungen: Basis, Paket „Grundeinstellungen“, Team (Dominique 13.10., **Grundsatz (a)** entschieden)
 
-**Grundsatz:** Was der FA zum Laufen braucht, gehört dem Master. Alles, wo ein Team Kategorien, Taxonomie und Arbeitslisten braucht, gehört dem Team bzw. Unter-Team. Der Master baut ein **Paket „Grundeinstellungen“**, das man hinzubuchen kann (**Kopie** beim Buchen, danach gehört es dem Team). Ohne Paket baut jedes Team selbst auf.
+**Grundsatz (a):** Was der FA zum Laufen braucht **und worauf Master-Inhalt zeigt** (Master-Rezepte im Abo, Stamm-GPs, Regelwerk, Rechnen), ist **Basis**: global (`team_id` NULL), **alle lesen, nur der Master schreibt, das Team ergänzt eigene Zeilen**. Ein **Paket „Grundeinstellungen“** (Kopie beim Buchen, danach gehört es dem Team) bekommt nur **reine Team-Arbeit**, auf die kein Master-Inhalt zeigt. Alles, was Betrieb und Hardware eines Kunden beschreibt, gehört dem **Team selbst**.
 
-| Ebene | Inhalt (Stand Inventur 13.10., Feinschnitt offen) |
+**Warum Basis statt Paket-Kopie:** Eine Kopie vergibt **neue IDs**. Abo-Rezepte (§8) und Stamm-GPs zeigen aber auf die **Master-IDs** von Kategorien, Klassen, Einheiten, Warengruppen, Servier-Vehikeln, Equipment (`recipes.category_id`, `dish_class_id`, `markup_class_id`, `recipe_ingredients.unit_vocab_id`, `gps.warengruppe`, `recipe_equipment.equipment_id`, `*.serving_form_id`). Als Team-Kopie zeigten sie auf Zeilen, die das Team nicht hat. Weg (a) braucht deshalb **keine ID-Abbildung beim Abo**.
+
+**Die Tabelle je Einstellung** (heute `team_id` / NOT NULL / global möglich, Vorschlag, Begründung, was darauf zeigt): [82a_Grundeinstellungen_Entscheidungstabelle.md](82a_Grundeinstellungen_Entscheidungstabelle.md). Sie ist die **Grundlage für den Bau**; was dort ohne Kreuz steht, ist noch in Durchsicht bei Dominique.
+
+| Ebene | Inhalt (Kurzfassung, Details in der Tabelle) |
 |---|---|
-| **Master / Basis** (global, nur Master pflegt, Mandant nutzt) | Regeln · Wissen (H) · KI-Anbieter/Modelle · Trend-Taxonomie · alles, was Rechnen und Stamm technisch brauchen (siehe Achtung) |
-| **Paket „Grundeinstellungen“** (Kopie ins Oberteam, Unter-Teams erben) | Rezept- und Gerichte-Kategorien · Konzept-Merkmale · Behälter, Regenerationsgeräte, Servier-Vehikel · Preisklassen · Schreibstile · Rollen & Stundensätze · Posten & Kapazität · Speiseplan-Chips · Kalkulations-Vorgaben · Zuschlagsschema/Fixkosten-Beispiele · Trend-Startbestand |
-| **Team / Unter-Team selbst** | Kalkulationsprofile · Zugriffsrechte · Küchen-Profil · Teamprofil · Food DNA · Kunden-DNA · Lagerorte · Etiketten/Drucker · KI ein/aus |
+| **Master / Basis** (global, nur Master pflegt, alle lesen, Team ergänzt eigene Zeilen) | Regeln · Wissen (H) · KI-Anbieter/Modelle · Trend-Taxonomie · **Rezept-Kategorien, Gerichte-Klassen, Preisklassen-Struktur, Einheiten, Warengruppen, Servier-Vehikel, Koch-Equipment, Behälter, Regenerationsgeräte** · Pairing-Anker · Stückgewicht-Standards · Komponenten-Äquivalenz |
+| **Paket „Grundeinstellungen“** (Kopie ins Oberteam, Unter-Teams erben; nur reine Team-Arbeit) | Konzept-Kategorien und Konzept-Merkmale · Schreibstile · Rollen & Stundensätze · Posten & Kapazität · Speiseplan-Chips · Zuschlagsschema/Fixkosten-Beispiele · Planungsrahmen · Trend-Startbestand · Präsentations-Designs · Werte der Preisklassen (Struktur ist Basis) |
+| **Team / Unter-Team selbst** | Kalkulationsprofile · Zugriffsrechte · Küchen-Profil · Teamprofil · Food DNA · Kunden-DNA · Lagerorte · Etiketten/Drucker · Geschirr-Katalog · Stamm-Lieferanten-Matrix · KI ein/aus |
 
-**Achtung (vor dem Bau klären):** **Einheiten, Warengruppen und Koch-Equipment** werden von Stamm-GPs, Regelwerk (§3 Warengruppen) bzw. Teamprofil/Standard-Flag referenziert. Liegen sie als Team-Kopie vor, zeigen Stamm-GPs auf IDs, die das Team nicht hat. Vorschlag: Diese drei bleiben **Basis** (global, Team darf eigene Zeilen ergänzen), der Rest folgt dem Grundsatz.
+**Technische Folgen von (a):**
+1. **Migration `team_id` nullable** für Basis-Kataloge, die heute NOT NULL sind (`serving_forms`, `recipe_containers`, `component_equivalents`, `target_groups` nur falls Basis …); **kein Datenumzug auf demo** — das Heben der Team-6-Zeilen nach global kommt mit dem Stamm-Umzug-Befehl auf dem eigenen Server.
+2. **Scope und Schreibrecht** je Basis-Katalog: Lesen = global + eigene Kette (`applyVisible`), Schreiben global nur Master (wie Wissen, §H), Team schreibt nur eigene Zeilen.
+3. **Paket „Grundeinstellungen“**: buchen per Kopie über `/verwaltung` (wie B1, nur Plattform-Admin, Protokoll, MCP im Lockstep), Kopie ins Oberteam, Unter-Teams erben, **idempotent** (zweites Buchen kopiert nicht doppelt).
 
 **Befunde aus der Inventur:**
-- Ein neues Haupt-Team sieht heute nur globale Zeilen; fast alles liegt in Team 6 → neues Team ist faktisch leer.
-- Konzept-Merkmale haben `team_id NOT NULL` und wurden nur per Migration für damals vorhandene Teams angelegt → später angelegte Teams haben leere Listen.
+- Ein neues Haupt-Team sieht heute nur globale Zeilen; fast alles liegt in Team 6 → neues Team ist faktisch leer (Messung 13.10.: außer `rules`, `terminology_*`, `brief_templates` und 8 von 23 Wissens-Kategorien ist auf demo **nichts** global).
+- Konzept-Merkmale (`target_groups`) haben `team_id NOT NULL` und wurden nur per Migration für damals vorhandene Teams angelegt → später angelegte Teams haben leere Listen (Paket löst das).
+- `serving_forms` (Befund Lisa) und `recipe_containers` sind `team_id NOT NULL` → „Basis live“ braucht die Migration aus Folge 1.
 - Es gibt keinen allgemeinen Seed/Kopier-Mechanismus für Einstellungen; Teil-Seeds nur per Befehl/Knopf (behaelter-katalog, trends-startbestand, Speiseplan-Chips, Fixkosten-Beispiele).
 
-**Offen:** Feinanalyse je Einstellung (Dominique: „nochmal analysieren“), dann Bau: Paket buchen per Kopie über `/verwaltung` (wie B1), MCP im Lockstep.
+**Offen:** Die übrigen Zeilen der Tabelle sieht Dominique noch durch (gebaut wird nach Vorschlag). Zwei Einzelfragen: Struktur der Preisklassen als Basis mit Werten je Team überschreibbar (Vorschlag) oder ganz Paket; Pflege der Trend-Taxonomie nur durch den Master.
 
 ### E · Nicht in Spec 82
 - **Selbstregistrierung** (Signup, E-Mail-Bestätigung, AGB, Zahlung) ist Host/Core und eine eigene spätere Spec. Spec 82 stellt nur sicher, dass ein von Hand angelegtes Oberteam ohne Master, Abo und Paket voll funktioniert (Szenario 1).
