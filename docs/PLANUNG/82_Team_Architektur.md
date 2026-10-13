@@ -252,6 +252,11 @@ Beschreibt, was die Küche kann. Das ist keine DNA.
    - Vor der Kündigung zeigt das System an, was betroffen ist.
 6. **Transparenz beim Mandanten:** Jedes Abo-Rezept trägt den Hinweis „Abo · BHG.DIGITAL · Stand …“ und ist nur lesbar, mit dem Knopf „Eigene Kopie“.
 7. **Preise:** Gerechnet wird immer mit der Kostenschicht des Mandanten (M3).
+8. **VK eines Abo-Gerichts (entschieden 13.10., Dominique):** Der VK wird beim Mandanten **nicht gepflegt, sondern berechnet**.
+   - Die Fassung übergibt die **Standard-Darreichung** (Form, Portion, Anzahl, Behälter, Deltas) **ohne** Master-Preise und **ohne** Master-Preisklasse.
+   - Weitere Darreichungen gehen nur mit, wenn andere abonnierte Inhalte (Paket, Konzept, Menü) sie referenzieren.
+   - VK = EK je Portion aus der Kostenschicht des Mandanten × **sein** Basissatz × **seine** Preisklasse, dieselbe Formel wie der Auto-VK.
+   - Es gibt keine Overlay-Tabelle. Ohne vollständigen EK steht dort „kein VK“, nie 0 €.
 
 **Ergänzungen aus der Review vom 13.10.:**
 - **Zwei Grundeinstellungen, ein Mechanismus. Bewusst so, nicht vereinheitlichen!**
@@ -392,7 +397,8 @@ Damit erledigt sich Entscheidung 2 („Offen“): Eine zentrale Veröffentlichun
    - Preis-Import oder Pin eines Teams → nur Rezepte, die **dieses Team** nutzt, und nur für dieses Team
    - Neue Fassung im Master → alle Abonnenten, aber nur ihre Bibliotheks-Sicht. Eingefrorene Ausgaben bleiben, wie sie sind.
    - Änderung am Stammartikel (Allergene, Nährwerte, Verknüpfung) → alle Teams, die den Artikel nutzen. Preise ändern nur der Mandant selbst.
-3. **Abnahmetest** (Zahlen beispielhaft):
+3. **VK aus dem Kontext (13.10.):** Der VK eines Abo-Gerichts ist Teil desselben Kontexts. Gerechnet wird er so: EK je Portion des Teams (Standard-Darreichung der Fassung) × Basissatz des Teams × Preisklasse des Teams. Ohne vollständigen EK gibt es „kein VK“. Food-Cost-Quote, Wareneinsatz und Deckungsbeitrag entfallen, sobald EK oder VK unvollständig sind (Auflage 4: 0 € ist kein Preis).
+4. **Abnahmetest** (Zahlen beispielhaft):
    - Derselbe Jus kostet bei Broich 4,20 €, bei Soulkitchen 5,10 €.
    - Ändert Broich einen Einkaufspreis, werden Broichs abhängige Gerichte neu berechnet, und Soulkitchens Werte bleiben unverändert.
 

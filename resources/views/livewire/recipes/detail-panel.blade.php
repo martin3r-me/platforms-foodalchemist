@@ -110,22 +110,28 @@
     {{-- ── STANDALONE-Detail rechts im Basisrezepte-Browser (Anatomie Detail-Panels) ── --}}
     @else
         @php
-            $priced = $rezept->ek_n_ingredients_priced;
-            $ptotal = $rezept->ek_n_ingredients_total;
+            // Spec 82 Stufe 3b: Kosten aus Sicht des Teams (Besitzer = Rezept-Spalten, sonst Team-Cache; Fassung nie Master-Kosten)
+            $k = $kosten ?? null;
+            $ekSumme = $k !== null ? $k['ek_summe'] : $rezept->ek_total_eur;
+            $ekKg = $k !== null ? $k['ek_per_kg'] : $rezept->ek_per_kg_eur;
+            $priced = $k !== null ? $k['n_priced'] : $rezept->ek_n_ingredients_priced;
+            $ptotal = $k !== null ? $k['n_total'] : $rezept->ek_n_ingredients_total;
             $vollstaendig = $priced !== null && $ptotal !== null && $ptotal > 0 && $priced >= $ptotal;
+            // Auflage 4: eine Teilsumme ist nie ein Preis — „ab …" statt einer vollständigen Zahl
+            $ab = $vollstaendig ? '' : 'ab ';
             // Kennzahlen (Kosten): EK je kg ist die eine Hauptzahl. Fehlende Werte werden gezeigt, nicht geschätzt.
             $kennzahlen = [
                 [
                     'label' => 'EK je kg',
-                    'value' => $rezept->ek_per_kg_eur !== null ? $zahl($rezept->ek_per_kg_eur) . ' €' : 'Preis fehlt',
-                    'primary' => $rezept->ek_per_kg_eur !== null,
-                    'tone' => $rezept->ek_per_kg_eur === null ? 'crit' : null,
+                    'value' => $ekKg !== null ? $ab . $zahl($ekKg) . ' €' : 'Preis fehlt',
+                    'primary' => $ekKg !== null,
+                    'tone' => $ekKg === null ? 'crit' : null,
                     'kpi' => 'ek-kg',
                 ],
                 [
                     'label' => 'EK je Ansatz',
-                    'value' => $rezept->ek_total_eur !== null ? $zahl($rezept->ek_total_eur) . ' €' : 'fehlt',
-                    'tone' => $rezept->ek_total_eur === null ? 'crit' : null,
+                    'value' => $ekSumme !== null ? $ab . $zahl($ekSumme) . ' €' : 'fehlt',
+                    'tone' => $ekSumme === null ? 'crit' : null,
                     'title' => 'Einkauf für die ganze Rezeptmenge',
                     'kpi' => 'ek-gesamt',
                 ],
@@ -201,7 +207,16 @@
                         <x-fa::signal tone="ok" data-kpi="bepreist">Alle {{ $ptotal }} Zutaten mit Preis</x-fa::signal>
                     @else
                         <x-fa::signal tone="warn" data-kpi="bepreist" title="Zutaten mit Preis">{{ $priced ?? 0 }} von {{ $ptotal }} Zutaten mit Preis, der EK ist nur vorläufig</x-fa::signal>
-                        <p class="{{ $leise }}">Fehlende Preise stehen unten an der Zutat.</p>
+                        @if(($k['quelle'] ?? null) === 'team_cache' && $k['anteil_fehlend_masse'] !== null)
+                            <p class="{{ $leise }}" data-kosten-unvollstaendig>Ohne Preis: {{ $zahl($k['anteil_fehlend_masse'] * 100, 0) }} % der Menge</p>
+                            <ul class="{{ $leise }}" data-kosten-fehlende>
+                                @foreach(array_slice($k['fehlende'], 0, 5) as $f)
+                                    <li>{{ $f['pfad'] }}</li>
+                                @endforeach
+                            </ul>
+                        @else
+                            <p class="{{ $leise }}">Fehlende Preise stehen unten an der Zutat.</p>
+                        @endif
                     @endif
                 @endif
                 @if($nichtZugeordnet > 0)

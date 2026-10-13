@@ -30,6 +30,8 @@ class FassungService
         'uuid', 'legacy_id', 'recipe_key', 'kopie_von_id', 'kopie_stand_at', 'created_at', 'updated_at', 'deleted_at',
         'ek_total_eur', 'ek_per_kg_eur', 'ek_price_basis', 'ek_n_ingredients_priced', 'ek_n_ingredients_total',
         'additional_costs_eur', 'sales_net', 'sales_gross',
+        // Preisklasse/Aufschlag gehören dem Master — beim Mandanten greift NUR sein Kalkulationsfaktor (Dominique 13.10.)
+        'markup_class_id', 'markup_class_legacy_id',
         'ist_fassung', 'fassung_von_id', 'fassung_nr', 'inhalt_hash', 'veroeffentlicht_at', 'veroeffentlicht_von',
         'aenderungsnotiz', 'fassung_allergen_geaendert',
     ];
@@ -172,7 +174,15 @@ class FassungService
         $schritte = FoodAlchemistRecipeStep::where('recipe_id', $recipe->id)->orderBy('ebene')->orderBy('position')
             ->get(['ebene', 'position', 'phase', 'text'])->toArray();
 
-        return hash('sha256', json_encode([$kopf, $zutaten, $schritte], JSON_UNESCAPED_UNICODE));
+        $standard = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung::where('recipe_id', $recipe->id)
+            ->orderByDesc('is_standard')->orderBy('id')->first();
+        $darreichung = $standard === null ? null : [
+            $standard->only(['serving_form_id', 'quantity_per_unit_g', 'unit_vocab_id', 'unit_count', 'container_warm_vocab_id',
+                'container_cold_vocab_id', 'serving_vehicle_vocab_id', 'tableware_item_id']),
+            $standard->deltas()->orderBy('recipe_ingredient_id')->get(['recipe_ingredient_id', 'quantity_override_g', 'omitted'])->toArray(),
+        ];
+
+        return hash('sha256', json_encode([$kopf, $zutaten, $schritte, $darreichung], JSON_UNESCAPED_UNICODE));
     }
 
     /** @param array<int,int> $map */
@@ -185,13 +195,15 @@ class FassungService
             'veroeffentlicht_at' => now(), 'veroeffentlicht_von' => $actor?->id, 'aenderungsnotiz' => $notiz,
         ])->save();
 
+        $zutatMap = [];
         foreach ($recipe->ingredients()->get() as $z) {
             $felder = $z->only(self::ZUTAT_FELDER);
             if ($felder['referenced_recipe_id'] !== null && isset($map[(int) $felder['referenced_recipe_id']])) {
                 $felder['referenced_recipe_id'] = $map[(int) $felder['referenced_recipe_id']];
             }
-            $fassung->ingredients()->create([...$felder, 'team_id' => $recipe->team_id]);
+            $zutatMap[(int) $z->id] = (int) $fassung->ingredients()->create([...$felder, 'team_id' => $recipe->team_id])->id;
         }
+        $this->kopiereStandardDarreichung($recipe, $fassung, $zutatMap);
         foreach (FoodAlchemistRecipeStep::where('recipe_id', $recipe->id)->get() as $s) {
             $s->replicate(['uuid'])->forceFill(['recipe_id' => $fassung->id])->save();
         }
@@ -204,8 +216,44 @@ class FassungService
         return $fassung;
     }
 
-    /** @return array<string, mixed> */
-    private function allergenBild(FoodAlchemistRecipe $r): array
+    /** Darreichungs-Felder, die nie mitgehen: Preise, Preisklasse, Kalkulations-Stand des Masters. */
+    private const DARREICHUNG_NIE = ['uuid', 'legacy_id', 'recipe_id', 'ek_portion', 'markup_class_id', 'sales_net', 'calculated_sales_net',
+        'sales_gross', 'price_calculation_source', 'price_calculation_version', 'price_calculated_at', 'price_override_reason',
+        'price_override_user_id', 'price_override_at', 'price_override_expires_at', 'created_at', 'updated_at', 'deleted_at'];
+
+    /**
+     * Spec 82 §8 / §12 C (Dominique 13.10.): Die Fassung trägt die STANDARD-Darreichung mit — Form, Grammatur, Anzahl,
+     * Behälter, Deltas — aber ohne Master-Preise und ohne Master-Preisklasse (price_mode auto). Der VK des Mandanten wird
+     * daraus berechnet (TeamVkService: sein EK × sein Kalkulationsfaktor), nicht gepflegt. Weitere Darreichungen gehen
+     * nur mit, wenn andere abonnierte Inhalte (Paket, Konzept, Menü) sie referenzieren — im Durchstich werden nur
+     * Rezepte abonniert, also nur die Standard-Darreichung.
+     *
+     * @param  array<int,int>  $zutatMap  Zutat Arbeitszeile → Zutat Fassung (Deltas hängen an der Zutat)
+     */
+    private function kopiereStandardDarreichung(FoodAlchemistRecipe $recipe, FoodAlchemistRecipe $fassung, array $zutatMap): void
+    {
+        $standard = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung::where('recipe_id', $recipe->id)
+            ->orderByDesc('is_standard')->orderBy('id')->first();
+        if ($standard === null) {
+            return;
+        }
+        $kopie = $standard->replicate(self::DARREICHUNG_NIE);
+        $kopie->forceFill(['recipe_id' => $fassung->id, 'is_standard' => true, 'price_mode' => 'auto'])->save();
+        foreach ($standard->deltas()->get() as $d) {
+            if (! isset($zutatMap[(int) $d->recipe_ingredient_id])) {
+                continue;
+            }
+            $d->replicate(['uuid', 'legacy_id'])->forceFill(['presentation_id' => $kopie->id,
+                'recipe_ingredient_id' => $zutatMap[(int) $d->recipe_ingredient_id]])->save();
+        }
+    }
+
+    /**
+     * Allergen- und Zusatzstoff-Bild einer Rezept-Zeile (Vergleich zweier Fassungen). Öffentlich für FassungsVergleich (Schritt 4).
+     *
+     * @return array<string, mixed>
+     */
+    public function allergenBild(FoodAlchemistRecipe $r): array
     {
         return collect($r->getAttributes())
             ->filter(fn ($v, $k) => (str_starts_with($k, 'allergen_') || str_starts_with($k, 'additive_'))

@@ -309,7 +309,7 @@ class PriceService
             throw new \RuntimeException('Status muss 0 (Standard-EK) oder 2 (Aktion) sein.');
         }
 
-        return DB::transaction(function () use ($team, $item, $preis, $status) {
+        $zeile = DB::transaction(function () use ($team, $item, $preis, $status) {
             $vorgaenger = $this->scopeAktiv(FoodAlchemistPrice::query())
                 ->where('foodalchemist_prices.supplier_item_id', $item->id)
                 ->where('foodalchemist_prices.team_id', $team->id);       // nur den EIGENEN Vorgänger schließen
@@ -325,6 +325,15 @@ class PriceService
                 'creation_date' => now(),
             ]);
         });
+        $this->kostenVeraltet($item, $team);
+
+        return $zeile;
+    }
+
+    /** Spec 82 3b: Auslöser-Matrix — Team-Kosten der betroffenen Rezepte als veraltet markieren (lazy neu gerechnet). */
+    private function kostenVeraltet(FoodAlchemistSupplierItem $item, Team $team): void
+    {
+        app(KostenCacheService::class)->nachPreisAenderung($item, $team);   // per app(): KostenCache → Recompute → PriceService
     }
 
     /**
@@ -349,6 +358,7 @@ class PriceService
             throw new \RuntimeException('Preis-Eintrag nicht an diesem Artikel gefunden.');
         }
         $price->delete();
+        $this->kostenVeraltet($item, $team);
     }
 
     /**
@@ -374,6 +384,7 @@ class PriceService
         }
         $clean['change_date'] = now();
         $price->update($clean);
+        $this->kostenVeraltet($item, $team);
 
         return $price->refresh();
     }

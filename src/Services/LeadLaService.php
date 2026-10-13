@@ -284,6 +284,8 @@ class LeadLaService
             throw new \RuntimeException("Lieferantenartikel #{$laId} ist nicht mit dem Grundprodukt „{$gp->name}“ verknüpft.");
         }
         $gp->update(['lead_la_supplier_item_id' => $laId]);
+        // Spec 82 3b: der globale Lead gilt für alle Teams ohne eigenen Pin → Team-Kosten aller Teams veraltet
+        app(KostenCacheService::class)->markiereVeraltet(app(KostenCacheService::class)->rezepteMitGps([(int) $gp->id]), null);
 
         // Jeder Aufruf hier IST ein manueller Override — auch ohne Begründung. Die Zeile ist das
         // Merkmal, an dem repickVorschau() den Lead vor einer Neuwahl schützt.
@@ -390,6 +392,7 @@ class LeadLaService
                 ['locked' => $locked, 'deleted_at' => null],
             );
         $this->raeumeLeerePrefsAuf($team, $gp);
+        app(KostenCacheService::class)->nachPinAenderung((int) $gp->id, $team);   // Spec 82 3b: Auslöser Pin/Lock
     }
 
     /** Team-Pin (V-27): fixiert den effektiven Lead, überlebt Bulk-Neuwahl. NULL = Pin lösen. */
@@ -410,6 +413,7 @@ class LeadLaService
             }
         });
         $this->raeumeLeerePrefsAuf($team, $gp);
+        app(KostenCacheService::class)->nachPinAenderung((int) $gp->id, $team);   // Spec 82 3b: Auslöser Pin
     }
 
     /**
