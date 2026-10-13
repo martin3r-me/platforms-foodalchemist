@@ -187,3 +187,14 @@ it('Bereich „abos": Route, Navigation und Komponente sind verdrahtet', functio
     }
     expect(Route::getRoutes()->getByName('foodalchemist.abos.index')->getActionName())->toContain(AbosIndex::class);
 });
+
+it('Wording: Seite duzt, leere Sammlungen verlinken auf Einstellungen › Unter-Teams & Freigaben', function () {
+    DB::table('foodalchemist_sammlungen')->where('id', $this->sammlung)->update(['deleted_at' => now()]);
+    $this->actingAs($this->masterKoch);                       // ohne „Freigeben": Nur-lesen-Hinweis + leere Listen
+    $html = Livewire::test(AbosIndex::class)
+        ->assertSeeHtml('data-abos-link-sammlungen')
+        ->assertSeeHtml('href="'.route('foodalchemist.einstellungen', ['sektion' => 'unter-teams']).'"')
+        ->assertSee('Du siehst den Stand')->assertSee('Vergib eine Sammlung')
+        ->html();
+    expect($html)->not->toMatch('/\b(Sie sehen|Vergeben Sie|legen Sie|Ihren)\b/u');
+});

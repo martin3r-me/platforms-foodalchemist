@@ -13,7 +13,7 @@
         @if($istMaster)
             <x-fa::page-header title="Abos" subtitle="Sammlungen des Master-Teams an Mandanten vergeben. Mandanten sehen nur veröffentlichte Fassungen, nie den Arbeitsstand und nie Master-Preise." />
         @else
-            <x-fa::page-header title="Meine Abos" subtitle="Rezepte, die {{ $oberteamName }} vom Master abonniert hat. Sie sind schreibgeschützt; Kosten und Verkaufspreise rechnet das System mit Ihren eigenen Preisen." />
+            <x-fa::page-header title="Meine Abos" subtitle="Rezepte, die {{ $oberteamName }} vom Master abonniert hat. Sie sind schreibgeschützt; Kosten und Verkaufspreise rechnet das System mit deinen eigenen Preisen." />
         @endif
 
         @if($fehler)<x-fa::notice tone="crit" data-abos-fehler>{{ $fehler }}</x-fa::notice>@endif
@@ -66,7 +66,7 @@
 
         @if($istMaster)
             @unless($darfSchreiben)
-                <x-fa::notice tone="info" data-abos-nur-lesen>Abos vergeben, kündigen und zurückziehen darf nur die Rolle „Freigeben“. Sie sehen den Stand.</x-fa::notice>
+                <x-fa::notice tone="info" data-abos-nur-lesen>Abos vergeben, kündigen und zurückziehen darf nur die Rolle „Freigeben“. Du siehst den Stand.</x-fa::notice>
             @endunless
 
             @if($darfSchreiben)
@@ -91,7 +91,7 @@
 
             <x-fa::section title="Vergebene Abos" icon="heroicon-o-users" data-abos-liste>
                 @if($abos === [])
-                    <x-fa::empty compact icon="heroicon-o-arrow-path-rounded-square" title="Noch keine Abos">Vergeben Sie eine Sammlung an einen Mandanten.</x-fa::empty>
+                    <x-fa::empty compact icon="heroicon-o-arrow-path-rounded-square" title="Noch keine Abos">Vergib eine Sammlung an einen Mandanten.</x-fa::empty>
                 @else
                     <div class="overflow-x-auto -mx-4">
                     <table class="fa-table fa-table--compact">
@@ -153,7 +153,7 @@
                         @endif
                     </div>
                 @empty
-                    <x-fa::empty compact icon="heroicon-o-rectangle-stack" title="Keine Sammlungen">Sammlungen legen Sie unter „Teams“ an.</x-fa::empty>
+                    <x-fa::empty compact icon="heroicon-o-rectangle-stack" title="Keine Sammlungen">Sammlungen legst du unter <a href="{{ route('foodalchemist.einstellungen', ['sektion' => 'unter-teams']) }}" class="text-[var(--fa-accent)] hover:underline" wire:navigate data-abos-link-sammlungen>Einstellungen › Unter-Teams &amp; Freigaben</a> an.</x-fa::empty>
                 @endforelse
             </x-fa::section>
         @else
