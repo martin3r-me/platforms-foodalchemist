@@ -160,3 +160,52 @@ it('Pflicht (Auflage 4): VK-Vorschlag und Marge — aus einer EK-Teilsumme kein 
         ->and($broich['vk_vorschlag_vorlaeufig'])->toBeFalse()
         ->and($broich['hk1_total'])->toBe(5.0);
 });
+
+it('§8 Punkt 8 / §12 C: VK eines Abo-Gerichts = Team-EK je Portion × Basissatz × Preisklasse DES Mandanten — Master-Klasse und -VK greifen nie', function () {
+    // Master-Darreichung mit eigener Preisklasse (200 %) und eigenem VK
+    // Servierformen sind (noch) team-gebunden (team_id NOT NULL) — Befund: laut §2 gehört Vokabular zur globalen Basis
+    $form = \Platform\FoodAlchemist\Models\FoodAlchemistServierform::create(['team_id' => $this->master->id, 'code' => 'portion', 'label' => 'Portion']);
+    $klasseMaster = \Platform\FoodAlchemist\Models\FoodAlchemistMarkupClass::create(['team_id' => $this->master->id, 'code' => 'PREMIUM', 'label' => 'Premium', 'class_factor_pct' => 200]);
+    $this->actingAs($this->kurator);
+    // Darreichungen gibt es nur an Gerichten: eigenes Master-Gericht aus denselben Stamm-GPs, eigene Sammlung + Abo
+    $gericht = $this->makeRecipe($this->master, 'Kalbsjus am Teller', ['is_sales_recipe' => true]);
+    foreach ($this->jus->ingredients as $z) {
+        $this->makeIngredient($gericht, $z->raw_text, $z->gp, (string) $z->quantity, (int) $z->position);
+    }
+    app(RecipeRecomputeService::class)->recomputePipeline($gericht->id);
+    $d = app(\Platform\FoodAlchemist\Services\DarreichungService::class)->anlegen($this->master, $gericht->id, $form->id, ['quantity_per_unit_g' => 200]);
+    $d->forceFill(['markup_class_id' => $klasseMaster->id, 'sales_net' => 99.0])->save();
+    $gericht->update(['sales_net' => 99.0]);
+    $inhalte = app(InhaltsFreigabeService::class);
+    $sid = $inhalte->sammlungAnlegen($this->master, 'Gerichte', null, $this->kurator);
+    $inhalte->sammlungHinzu($this->master, $sid, 'recipe', [$gericht->id], $this->kurator);
+    app(AboService::class)->abonnieren($this->master, $this->broich, $sid, $this->kurator);
+    app(AboService::class)->abonnieren($this->master, $this->neu, $sid, $this->kurator);
+    $fassungId = app(FassungService::class)->veroeffentlichen($this->master, $gericht->id, 'Mit Darreichung', $this->kurator)['fassung_id'];
+    $fassung = FoodAlchemistRecipe::mitFassungen()->findOrFail($fassungId);
+    $fd = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung::where('recipe_id', $fassungId)->sole();
+
+    // Übergeben: Form + Portion, nichts vom Preis des Masters
+    expect((float) $fd->quantity_per_unit_g)->toBe(200.0)
+        ->and($fd->markup_class_id)->toBeNull()->and($fd->sales_net)->toBeNull()->and($fd->ek_portion)->toBeNull()
+        ->and($fassung->sales_net)->toBeNull()->and($fassung->markup_class_id)->toBeNull();
+
+    // Broich: VK aus SEINEM EK × Basissatz (Default Ziel-WE 30 % ⇒ Faktor 100/30) × neutrale Klasse 100 %
+    $k = app(KostenCacheService::class)->fuer($fassung, $this->broich);
+    $mek = round($k['ek_per_kg'] / 1000 * 200, 4);
+    $vk = app(\Platform\FoodAlchemist\Services\TeamVkService::class)->fuer($fassung, $this->broich);
+    expect($vk['quelle'])->toBe('team_kalkulation')
+        ->and($vk['mek'])->toBe($mek)
+        ->and($vk['vk'])->toBe(round($mek * 100 / 30, 2))
+        ->and($vk['vk'])->not->toBe(99.0);
+
+    // Neukunde ohne Knochenpreis: kein VK (nie 0 €), Angebot weist ihn als fehlend aus, keine Quote
+    expect(app(\Platform\FoodAlchemist\Services\TeamVkService::class)->fuer($fassung, $this->neu)['vk'])->toBeNull();
+    $this->jusF = $fassung;
+    $kap = ($this->angebotMitJus)($this->neu, $this->neuChef);
+    $agg = app(OfferCompositionService::class)->kapitelAggregat($this->neu, $kap);
+    expect($agg['vk_fehlt'])->toBeTrue()->and($agg['food_cost_percent'])->toBeNull();
+
+    // Kalkulation (recipeHk) nimmt denselben Team-VK
+    expect(app(\Platform\FoodAlchemist\Services\KalkulationService::class)->recipeHk($this->broich, $fassung)['sales_net'])->toBe($vk['vk']);
+});

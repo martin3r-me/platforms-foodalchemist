@@ -146,6 +146,9 @@ class KalkulationService
         $standard = $this->resolver->standardFuer($recipe);
         $vk = $standard?->sales_net !== null ? (float) $standard->sales_net
             : ($recipe->sales_net !== null ? (float) $recipe->sales_net : null);
+        if ($recipe->ist_fassung) {   // Spec 82 §12 C: Abo-Fassung — VK = Team-EK × Kalkulationsfaktor DES TEAMS
+            $vk = app(TeamVkService::class)->fuer($recipe, $team, $outlet)['vk'];
+        }
 
         return [
             'hk1_total' => round($hk1Total, 4),
