@@ -11,7 +11,8 @@ use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
 /**
  * @ai.description Canvas-Eintrag: ein semantisches Feld (field_key) eines Canvas.
  * Nicht-wiederholbar = 1 Zeile (position 0); repeatable (Geschmackswelten) = n Zeilen
- * mit position + meta-JSON (Sub-Felder).
+ * mit position + meta-JSON (Sub-Felder). `is_binding` = verbindlich (Spec 82 §7: vom Oberteam gesetzt,
+ * ein Unter-Team überschreibt es nicht).
  */
 class FoodAlchemistCanvasEntry extends Model
 {
@@ -21,7 +22,7 @@ class FoodAlchemistCanvasEntry extends Model
 
     protected $guarded = ['id'];
 
-    protected $casts = ['uuid' => 'string', 'position' => 'integer', 'meta' => 'array'];
+    protected $casts = ['uuid' => 'string', 'position' => 'integer', 'meta' => 'array', 'is_binding' => 'boolean'];
 
     public function canvas(): BelongsTo
     {

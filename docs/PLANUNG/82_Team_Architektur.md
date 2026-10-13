@@ -185,6 +185,9 @@ Beschreibt, was die Küche kann. Das ist keine DNA.
 **DNA:**
 - **Oberteam-DNA = Vorgaben.** Einzelne Felder sind als **verbindlich** markierbar.
 - **Unter-Team-DNA** erbt und überschreibt **feldweise** alles, was nicht verbindlich ist. Heute werden die Ebenen nur aneinandergehängt.
+  - **Skalar-Felder:** ein verbindlicher Wert des obersten Teams gewinnt und sperrt das Feld nach unten, sonst gewinnt der nächstliegende nicht-leere Wert.
+  - **Repeatable-Felder** (z. B. Geschmackswelten): Vereinigung über die Ebenen, Oberteam zuerst, gleiche Einträge einmal. Das Unter-Team **darf ergänzen**. Verbindliche Einträge des Oberteams bleiben immer drin und sind im Unter-Team nicht entfernbar (Dominique 13.10.).
+  - Gebaut als `DnaResolver` (Schritt 6, Kette endet an der Kundengrenze); verbindlich setzt nur das Oberteam.
 - **Vorlagen als Daten:** Tabelle `canvas_templates` nach dem Muster der Brief-Vorlagen.
   - Kern-Felder bleiben fest (Spec 64 §1b, Variante A), Zusatzfelder sind pflegbar.
   - Feld-Gruppen werden als Reiter dargestellt.
