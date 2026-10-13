@@ -61,7 +61,10 @@ class ComponentEquivalentService
 
     public function loese(Team $team, int $id): void
     {
-        Equiv::where('team_id', $team->id)->whereKey($id)->get()->each->delete();
+        // Eigene Zeilen; globale (Basis-Katalog, Spec 82 §13 I) nur der Master.
+        Equiv::visibleToTeam($team)->whereKey($id)->get()
+            ->filter(fn ($e) => \Platform\FoodAlchemist\Support\BasisKatalog::mayWrite($e->team_id, $team))
+            ->each->delete();
     }
 
     /**

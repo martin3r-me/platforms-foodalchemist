@@ -97,7 +97,11 @@ class ConcepterDimensionen extends Component
         if ($zeile === null) {
             return;
         }
-        if (! TeamScope::owns($zeile->team_id, Auth::user()?->currentTeamRelation)) {
+        // Servierformen sind Basis-Katalog (Master pflegt global); die übrigen Vokabulare bleiben Team-Sache (Paket/Team).
+        $darf = $vokabular === 'servierformen'
+            ? \Platform\FoodAlchemist\Support\BasisKatalog::mayWrite($zeile->team_id, Auth::user()?->currentTeamRelation)
+            : TeamScope::owns($zeile->team_id, Auth::user()?->currentTeamRelation);
+        if (! $darf) {
             $this->fehler = 'Geerbter/Master-Eintrag — nur das Besitzer-Team kann ändern.';
 
             return;
@@ -119,7 +123,10 @@ class ConcepterDimensionen extends Component
             return;
         }
         $name = $zeile->label ?? $zeile->name;
-        if (! TeamScope::owns($zeile->team_id, Auth::user()?->currentTeamRelation)) {
+        $darf = $vokabular === 'servierformen'
+            ? \Platform\FoodAlchemist\Support\BasisKatalog::mayWrite($zeile->team_id, Auth::user()?->currentTeamRelation)
+            : TeamScope::owns($zeile->team_id, Auth::user()?->currentTeamRelation);
+        if (! $darf) {
             $this->fehler = "«{$name}» ist geerbt/Master — nur das Besitzer-Team kann löschen.";
 
             return;

@@ -81,4 +81,10 @@ class FoodAlchemistComponentEquivalent extends Model
         }
         return null;
     }
+
+    /** Spec 82 §13 I: Basis-Katalog — global lesen alle, schreiben nur der Master (siehe BelongsToTeamHierarchy::isOwnedBy). */
+    public static function istBasisKatalog(): bool
+    {
+        return true;
+    }
 }

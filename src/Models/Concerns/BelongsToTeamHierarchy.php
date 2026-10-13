@@ -84,7 +84,18 @@ trait BelongsToTeamHierarchy
 
     public function isOwnedBy(Team $team): bool
     {
-        return (int) $this->team_id === (int) $team->id;
+        if ((int) $this->team_id === (int) $team->id) {
+            return true;
+        }
+
+        // Spec 82 §13 I: Basis-Kataloge — globale Zeilen (team_id NULL) pflegt der Master (streng, kein „elternlos"-Rückfall).
+        return $this->team_id === null && static::istBasisKatalog() && \Platform\FoodAlchemist\Support\MasterTeam::istMaster($team);
+    }
+
+    /** Modelle der Basis-Kataloge überschreiben das mit `true` (Master pflegt globale Zeilen); Standard: nein. */
+    public static function istBasisKatalog(): bool
+    {
+        return false;
     }
 
     /**

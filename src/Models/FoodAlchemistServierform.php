@@ -36,4 +36,10 @@ class FoodAlchemistServierform extends Model
     {
         return $this->hasMany(FoodAlchemistRecipeDarreichung::class, 'serving_form_id');
     }
+
+    /** Spec 82 §13 I: Basis-Katalog — global lesen alle, schreiben nur der Master (siehe BelongsToTeamHierarchy::isOwnedBy). */
+    public static function istBasisKatalog(): bool
+    {
+        return true;
+    }
 }

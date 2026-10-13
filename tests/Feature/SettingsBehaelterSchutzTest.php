@@ -238,7 +238,9 @@ it('der Master pflegt globale Katalog-Zeilen, ein Kind-Team nicht', function () 
     $this->artisan('foodalchemist:behaelter-katalog --apply')->assertExitCode(0);
     $id = DB::table('foodalchemist_vocab_containers')->whereNull('team_id')->where('slug', 'gn_11_65mm')->value('id');
 
-    // Master (Team ohne Eltern) darf — sonst bliebe der globale Grundstock ungepflegt.
+    // Master darf — sonst bliebe der globale Grundstock ungepflegt. Spec 82 §13 I: streng über die Master-Einstellung (kein „elternlos"-Rückfall).
+    config(['foodalchemist.master_team_id' => $this->rootTeam->id]);
+    \Platform\FoodAlchemist\Support\MasterTeam::flush();
     $this->actingAs($this->makeUser($this->rootTeam));
     Livewire::test(Behaelter::class)
         ->call('bearbeitenStart', $id)

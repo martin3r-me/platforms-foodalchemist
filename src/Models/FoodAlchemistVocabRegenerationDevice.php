@@ -24,4 +24,10 @@ class FoodAlchemistVocabRegenerationDevice extends Model
     protected $guarded = ['id'];
 
     protected $casts = ['is_inactive' => 'boolean'];
+
+    /** Spec 82 §13 I: Basis-Katalog — global lesen alle, schreiben nur der Master (siehe BelongsToTeamHierarchy::isOwnedBy). */
+    public static function istBasisKatalog(): bool
+    {
+        return true;
+    }
 }
