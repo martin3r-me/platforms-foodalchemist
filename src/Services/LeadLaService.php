@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\DB;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Enums\LeadLaStrategie;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
+use Platform\FoodAlchemist\Support\DeklarationsProfil;
 use Platform\FoodAlchemist\Models\FoodAlchemistGpLaPreference;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItemStructure;
@@ -560,6 +561,8 @@ class LeadLaService
      * bekannte LA-Profile bei EU-14-Allergenen oder LMIV-Zusatzstoffen voneinander
      * abweichen, dürfen sie nicht unter demselben GP aggregiert werden. Unbekannte
      * Werte blockieren nicht; sie sind eine Datenlücke, kein belegter Widerspruch.
+     * Spec 82 §2 (Dominique 13.10.): Beim Allergenvergleich zählt nur „enthalten“, Spuren zählen
+     * nicht mit ({@see DeklarationsProfil}). Greift nur beim NEUEN Verknüpfen; Bestand bleibt unberührt.
      */
     private function guardDeklarationsprofil(Team $team, FoodAlchemistGp $gp, int $neuerLaId): void
     {
@@ -572,21 +575,7 @@ class LeadLaService
             ->select('foodalchemist_supplier_items.*')->get();
 
         foreach ($bestehend as $alt) {
-            $abweichungen = [];
-            foreach (array_keys(FoodAlchemistItemAllergen::ALLERGENE) as $feld) {
-                $a = $alt->allergens?->{"allergen_{$feld}"};
-                $b = $neu->allergens?->{"allergen_{$feld}"};
-                if ($a !== null && $b !== null && $a !== $b) {
-                    $abweichungen[] = 'Allergen „' . FoodAlchemistItemAllergen::ALLERGENE[$feld] . '“';
-                }
-            }
-            foreach (array_keys(FoodAlchemistItemDeclaration::STOFFE) as $feld) {
-                $a = $alt->declarations?->{$feld};
-                $b = $neu->declarations?->{$feld};
-                if (in_array((int) $a, [1, 3], true) && in_array((int) $b, [1, 3], true) && (int) $a !== (int) $b) {
-                    $abweichungen[] = 'Zusatzstoff „' . FoodAlchemistItemDeclaration::STOFFE[$feld] . '“';
-                }
-            }
+            $abweichungen = DeklarationsProfil::abweichungen($alt->allergens, $alt->declarations, $neu->allergens, $neu->declarations);
             if ($abweichungen !== []) {
                 throw new \RuntimeException(
                     'Allergene oder Zusatzstoffe weichen von einem vorhandenen Lieferantenartikel ab ('
