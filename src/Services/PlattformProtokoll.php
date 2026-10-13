@@ -2,27 +2,43 @@
 
 namespace Platform\FoodAlchemist\Services;
 
+use Illuminate\Database\Eloquent\Model;
 use Platform\Core\Models\User;
 
 /**
- * Spec 82 §13 C4 — Protokoll aller Plattform-Admin-Aktionen (Stamm-Paket, Master-Team, später Gebühren, Abos)
- * über das vorhandene activity-log. Ist es nicht installiert (Sandbox-Stub), wird nichts geschrieben und nichts
- * gebrochen; die Zeilen der jeweiligen Tabelle tragen zusätzlich Wer und Wann.
+ * Spec 82 §13 C4 — Protokoll aller Plattform-Admin-Aktionen (Stamm-Paket, Master-Team, Mandanten, später Gebühren, Abos)
+ * über das vorhandene activity-log.
+ *
+ * Das echte Paket `platform-activity-log` kennt KEINE globale Funktion `activity()`. Es liefert das Trait `LogsActivity`
+ * (schreibt created/updated/deleted automatisch und bietet `logActivity()` für eigene Einträge) und das Modell
+ * `ActivityLogActivity`, polymorph am Modell. Deshalb schreibt dieses Protokoll immer an ein **Subjekt-Modell**, das `LogsActivity` trägt
+ * (der Optin, die Einstellung, die Mandanten-Zeile). Ein früherer Stand rief `activity()` und schrieb in Produktion nichts.
+ *
+ * Ohne Subjekt oder mit einem Modell ohne `logActivity()` (Sandbox-Stub) passiert nichts und nichts bricht: Das Protokoll darf
+ * die Steueraktion nie verhindern. Die Zeilen der jeweiligen Tabelle tragen zusätzlich Wer und Wann.
  */
 class PlattformProtokoll
 {
-    /** @param array<string,mixed> $daten */
-    public function schreibe(string $aktion, array $daten, ?User $user): void
+    /** Klartext je Aktion (die Aktion selbst steht zusätzlich in den Metadaten). */
+    private const TEXTE = [
+        'stamm_paket_gebucht' => 'Stamm-Paket gebucht',
+        'stamm_paket_abbestellt' => 'Stamm-Paket abbestellt',
+        'master_team_gesetzt' => 'Master-Team festgelegt',
+        'mandant_modus_geaendert' => 'Mandanten-Modus geändert',
+        'mandant_gepflegt' => 'Mandant gepflegt',
+    ];
+
+    /**
+     * @param  array<string,mixed>  $daten
+     * @param  Model|null  $subjekt  Modell mit LogsActivity, an dem der Eintrag hängt (auch ein eben gelöschtes)
+     */
+    public function schreibe(string $aktion, array $daten, ?User $user, ?Model $subjekt = null): void
     {
-        if (! function_exists('activity')) {
+        if ($subjekt === null || ! method_exists($subjekt, 'logActivity')) {
             return;
         }
         try {
-            $eintrag = activity('foodalchemist.plattform');
-            if ($user !== null) {
-                $eintrag->causedBy($user);
-            }
-            $eintrag->withProperties($daten)->log($aktion);
+            $subjekt->logActivity(self::TEXTE[$aktion] ?? $aktion, $daten + ['aktion' => $aktion, 'akteur_id' => $user?->id]);
         } catch (\Throwable) {
             // Das Protokoll darf die Steueraktion nie verhindern.
         }

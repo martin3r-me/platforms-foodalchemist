@@ -135,7 +135,7 @@ it('Trait-Vertrag: ALLE Models tragen LogsActivity + BelongsToTeamHierarchy + Ha
             //  - kein BelongsToTeamHierarchy: es gibt bewusst kein team_id, die Zeile gilt für die ganze Plattform;
             //  - kein HasUuidV7/SoftDeletes: adressiert wird über den eindeutigen Schlüssel, das Entfernen eines Werts
             //    (Master-Team zurück auf ENV) ist ein hartes Löschen, nie ein Zwischenzustand;
-            //  - kein LogsActivity: jede Änderung geht ausdrücklich über PlattformProtokoll ins activity-log (mit Vorher/Nachher).
+            //  - LogsActivity: trägt es (seit dem Protokoll-Fix): created/updated/deleted automatisch, dazu der Klartext-Eintrag über PlattformProtokoll.
             continue;
         }
         if (class_basename($klasse) === 'FoodAlchemistMandant') {
@@ -144,8 +144,8 @@ it('Trait-Vertrag: ALLE Models tragen LogsActivity + BelongsToTeamHierarchy + Ha
             //    scopeVisibleToTeam würde `team_id IS NULL` + Eltern-Zeilen einORen. Gelesen wird nur über MandantenService
             //    (Plattform-Admin bzw. Master-Admin), nie über den Team-Scope eines Mandanten.
             //  - kein SoftDeletes/HasUuidV7: unique(team_id), adressiert über team_id, nie über eine externe ID.
-            //  - kein LogsActivity: jede Modus-/Statusänderung geht ausdrücklich über PlattformProtokoll (Vorher/Nachher),
-            //    die Zeile trägt zusätzlich Wer und Wann (geaendert_von, modus_geaendert_von/at).
+            //  - LogsActivity: trägt es (seit dem Protokoll-Fix), die Notiz ist über $ignoreAttributes aus dem Protokoll ausgenommen;
+            //    jede Modus-/Statusänderung geht zusätzlich als Klartext über PlattformProtokoll, die Zeile trägt Wer und Wann.
             continue;
         }
         if (class_basename($klasse) === 'FoodAlchemistTeamStammOptin') {
@@ -156,7 +156,8 @@ it('Trait-Vertrag: ALLE Models tragen LogsActivity + BelongsToTeamHierarchy + Ha
             //  - kein SoftDeletes: unique(team_id) — abbestellen löscht hart, eine trashed Zeile würde
             //    freischalten (firstOrCreate) am Unique scheitern lassen.
             //  - kein HasUuidV7: adressiert wird über team_id, nie über eine externe ID.
-            //  - kein LogsActivity: Buchungsstand mit opted_in_at/opted_in_by in der Zeile selbst.
+            //  - LogsActivity: trägt es (seit dem Protokoll-Fix); Buchen/Abbestellen gehen zusätzlich als Klartext über PlattformProtokoll,
+            //    die Zeile trägt opted_in_at/opted_in_by.
             continue;
         }
         if (class_basename($klasse) === 'FoodAlchemistActiveOutlet') {

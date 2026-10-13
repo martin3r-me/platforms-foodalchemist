@@ -3,6 +3,7 @@
 namespace Platform\FoodAlchemist\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Platform\ActivityLog\Traits\LogsActivity;
 
 /**
  * Spec 82 §12 A3: Opt-in eines Mandanten (Oberteam) ins Stamm-Paket.
@@ -10,6 +11,8 @@ use Illuminate\Database\Eloquent\Model;
  */
 class FoodAlchemistTeamStammOptin extends Model
 {
+    use LogsActivity;   // Spec 82 §13 C4: Plattform-Protokoll hängt an diesem Modell (PlattformProtokoll)
+
     protected $table = 'foodalchemist_team_stamm_optins';
 
     protected $guarded = ['id'];

@@ -117,8 +117,8 @@ it('nur Plattform-Admin steuert: Inhaber, Betrachter, kein Benutzer und KI-Benut
 it('B1: Stamm-Paket buchen und abbestellen, wirkt auf die Sichtbarkeit und wird protokolliert', function () {
     $gp = FoodAlchemistGp::create(['team_id' => null, 'gp_key' => 'sp|b1', 'name' => 'Mehl: Paket', 'stamm_class' => 'stamm_paket']);
     $sichtbar = fn () => FoodAlchemistGp::query()->visibleToTeam($this->soul)->whereKey($gp->id)->exists();
-    $this->protokoll->shouldReceive('schreibe')->once()->with('stamm_paket_gebucht', Mockery::on(fn ($d) => $d['team_id'] === $this->soul->id), $this->admin);
-    $this->protokoll->shouldReceive('schreibe')->once()->with('stamm_paket_abbestellt', Mockery::on(fn ($d) => $d['abos_betroffen'] === 0), $this->admin);
+    $this->protokoll->shouldReceive('schreibe')->once()->with('stamm_paket_gebucht', Mockery::on(fn ($d) => $d['team_id'] === $this->soul->id), $this->admin, Mockery::type(\Illuminate\Database\Eloquent\Model::class));
+    $this->protokoll->shouldReceive('schreibe')->once()->with('stamm_paket_abbestellt', Mockery::on(fn ($d) => $d['abos_betroffen'] === 0), $this->admin, Mockery::type(\Illuminate\Database\Eloquent\Model::class));
 
     expect($sichtbar())->toBeFalse();
     expect(($this->paket)()->buchen($this->soul, $this->admin)['gebucht'])->toBeTrue()->and($sichtbar())->toBeTrue();
@@ -151,7 +151,7 @@ it('B1: Abbestell-Vorschau ist heute leer; mit Abos braucht das Abbestellen eine
 // ── B4 ───────────────────────────────────────────────────────────────────────
 
 it('B4: ohne Abos wechselt das Master-Team direkt; mit Abos nur nach Vorschau und Bestätigung; alles wird protokolliert', function () {
-    $this->protokoll->shouldReceive('schreibe')->times(2)->with('master_team_gesetzt', Mockery::type('array'), $this->admin);
+    $this->protokoll->shouldReceive('schreibe')->times(2)->with('master_team_gesetzt', Mockery::type('array'), $this->admin, Mockery::type(\Illuminate\Database\Eloquent\Model::class));
 
     ($this->masterSvc)()->setze($this->master, $this->admin);
     expect(MasterTeam::id())->toBe($this->master->id);

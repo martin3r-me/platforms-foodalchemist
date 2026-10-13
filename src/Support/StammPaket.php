@@ -73,10 +73,12 @@ final class StammPaket
 
     public static function abbestellen(Team $team): bool
     {
-        $n = FoodAlchemistTeamStammOptin::where('team_id', $team->id)->delete();
+        // Einzeln über das Modell löschen: Query-Löschungen feuern keine Eloquent-Ereignisse und blieben im activity-log unsichtbar.
+        $zeilen = FoodAlchemistTeamStammOptin::where('team_id', $team->id)->get();
+        $zeilen->each->delete();
         self::flush();
 
-        return $n > 0;
+        return $zeilen->isNotEmpty();
     }
 
     /**

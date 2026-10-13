@@ -72,9 +72,9 @@ class StammPaketService
         $admin = $this->nurPlattformAdmin($user, 'Stamm-Paket buchen');
         $this->pruefeMandant($mandant);
         $war = $this->status($mandant)['gebucht'];
-        StammPaket::freischalten($mandant, $admin->id);
+        $optin = StammPaket::freischalten($mandant, $admin->id);
         if (! $war) {
-            $this->protokoll->schreibe('stamm_paket_gebucht', ['team_id' => $mandant->id, 'team' => $mandant->name], $admin);
+            $this->protokoll->schreibe('stamm_paket_gebucht', ['team_id' => $mandant->id, 'team' => $mandant->name], $admin, $optin);
         }
 
         return $this->status($mandant);
@@ -88,8 +88,9 @@ class StammPaketService
         if ($vorschau['gebucht'] && $vorschau['bestaetigung_noetig'] && ! $bestaetigt) {
             throw new \RuntimeException(sprintf('Das Abbestellen macht %d Abo(s) ungültig. Bitte die Vorschau prüfen und ausdrücklich bestätigen.', count($vorschau['abos'])));
         }
+        $optin = FoodAlchemistTeamStammOptin::where('team_id', $mandant->id)->first();   // Subjekt des Eintrags: auch die gelöschte Zeile trägt ihn
         if (StammPaket::abbestellen($mandant)) {
-            $this->protokoll->schreibe('stamm_paket_abbestellt', ['team_id' => $mandant->id, 'team' => $mandant->name, 'abos_betroffen' => count($vorschau['abos']), 'bestaetigt' => $bestaetigt], $admin);
+            $this->protokoll->schreibe('stamm_paket_abbestellt', ['team_id' => $mandant->id, 'team' => $mandant->name, 'abos_betroffen' => count($vorschau['abos']), 'bestaetigt' => $bestaetigt], $admin, $optin);
         }
 
         return $this->status($mandant);

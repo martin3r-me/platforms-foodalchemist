@@ -148,13 +148,13 @@ class MandantenService
         });
 
         if (array_key_exists('modus', $geaendert)) {
-            $this->protokoll->schreibe('mandant_modus_geaendert', ['team_id' => $mandant->id, 'team' => $mandant->name, 'von' => $vorher['modus'], 'nach' => $geaendert['modus']], $akteur);
+            $this->protokoll->schreibe('mandant_modus_geaendert', ['team_id' => $mandant->id, 'team' => $mandant->name, 'von' => $vorher['modus'], 'nach' => $geaendert['modus']], $akteur, $zeile);
         }
         $uebrige = array_diff(array_keys($geaendert), ['modus']);
         if ($uebrige !== []) {
             // Nur die Feldnamen und die Verwaltungswerte; die Notiz bleibt als Freitext aus dem Protokoll heraus.
             $this->protokoll->schreibe('mandant_gepflegt', ['team_id' => $mandant->id, 'team' => $mandant->name, 'felder' => array_values($uebrige),
-                'status' => $geaendert['status'] ?? null, 'crm_company_id' => array_key_exists('crm_company_id', $geaendert) ? $geaendert['crm_company_id'] : null], $akteur);
+                'status' => $geaendert['status'] ?? null, 'crm_company_id' => array_key_exists('crm_company_id', $geaendert) ? $geaendert['crm_company_id'] : null], $akteur, $zeile);
         }
 
         return $this->zeige($mandant);
