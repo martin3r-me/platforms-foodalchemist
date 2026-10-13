@@ -180,6 +180,11 @@ class FaRechte
     /** Ist der Bereich für das Team freigeschaltet? Abgeschaltet im Team ODER einem Eltern-Team = aus. Keine Zeile = an. */
     public function bereichAktiv(Team $team, string $bereich): bool
     {
+        // Spec 82 §9: Master-only-Bereiche sind außerhalb des Master-Teams aus
+        if (in_array($bereich, FaBereiche::NUR_MASTER, true) && ! $this->istMasterTeam($team)) {
+            return false;
+        }
+
         return ! FoodAlchemistTeamBereich::whereIn('team_id', $this->teamKette($team))
             ->where('bereich', $bereich)->where('aktiv', false)->exists();
     }
@@ -189,6 +194,10 @@ class FaRechte
     {
         if ($bereich === null) {
             return true;
+        }
+        // Spec 82 §9: Master-only-Bereich — ohne Master-Team zu, auch für Plattform-Admins (kein Durchgriff auf Agentur-Daten)
+        if (in_array($bereich, FaBereiche::NUR_MASTER, true) && ! $this->istMasterTeam($team)) {
+            return false;
         }
         if ($user !== null && ! $user->isAiUser() && $this->istPlattformAdmin($user)) {
             return true;
@@ -206,7 +215,10 @@ class FaRechte
     {
         $aus = FoodAlchemistTeamBereich::whereIn('team_id', $this->teamKette($team))->where('aktiv', false)->pluck('bereich')->all();
 
-        return array_map(fn ($b) => ! in_array($b, $aus, true), array_combine(array_keys(FaBereiche::KATALOG), array_keys(FaBereiche::KATALOG)));
+        $master = $this->istMasterTeam($team);
+
+        return array_map(fn ($b) => ! in_array($b, $aus, true) && ($master || ! in_array($b, FaBereiche::NUR_MASTER, true)),
+            array_combine(array_keys(FaBereiche::KATALOG), array_keys(FaBereiche::KATALOG)));
     }
 
     /** @return list<string> abgeschaltete Bereiche eines Users im Team (eigene Einschränkungen) */
