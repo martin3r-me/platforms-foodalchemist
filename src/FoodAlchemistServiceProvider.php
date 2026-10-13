@@ -1160,6 +1160,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\GpsHomogenitaetGetTool::class,
                     \Platform\FoodAlchemist\Tools\StammPaketGetTool::class,
                     \Platform\FoodAlchemist\Tools\StammPaketPutTool::class,
+                    \Platform\FoodAlchemist\Tools\PaketGrundeinstellungenGetTool::class,
+                    \Platform\FoodAlchemist\Tools\PaketGrundeinstellungenPutTool::class,
                     \Platform\FoodAlchemist\Tools\MasterTeamGetTool::class,
                     \Platform\FoodAlchemist\Tools\MasterTeamPutTool::class,
                     // Spec 82 §9/§13 B3+G: Mandanten (Status, Modus kuratiert|autark, CRM-Firma)

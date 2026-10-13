@@ -172,6 +172,14 @@ it('Trait-Vertrag: ALLE Models tragen LogsActivity + BelongsToTeamHierarchy + Ha
             //  - LogsActivity: trägt es; die Klartext-Einträge laufen zusätzlich über PlattformProtokoll mit dem Lauf als Subjekt.
             continue;
         }
+        if (in_array(class_basename($klasse), ['FoodAlchemistTeamPaket', 'FoodAlchemistPaketKopie'], true)) {
+            // Spec 82 §13 I: Paket „Grundeinstellungen" — Buchungs-Zeile (Team × Paket) und Zuordnung Quelle → Kopie je Mandant.
+            //  - kein BelongsToTeamHierarchy: Plattform-Verwaltung über den Mandanten (nur PaketGrundeinstellungenService, Plattform-Admin),
+            //    nie über den Team-Scope; eine Vererbung an Unter-Teams passiert über die kopierten Zeilen selbst.
+            //  - kein SoftDeletes/HasUuidV7: adressiert über Team + Paket bzw. Quelle; die Zuordnung ist das Gedächtnis der Idempotenz.
+            //  - LogsActivity: nur FoodAlchemistTeamPaket (Subjekt des Plattform-Protokolls); die Zuordnung ist reine Hilfstabelle.
+            continue;
+        }
         if (class_basename($klasse) === 'FoodAlchemistTeamStammOptin') {
             // Spec 82 §12 A3: Schalter „Mandant hat das Stamm-Paket gebucht", eine Zeile je Mandant.
             //  - kein BelongsToTeamHierarchy: die Vererbung an Unter-Teams löst StammPaket::istFreigeschaltet

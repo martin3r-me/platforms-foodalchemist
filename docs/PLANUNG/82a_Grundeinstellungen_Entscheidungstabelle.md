@@ -13,6 +13,8 @@ Stand: 13.10.2026 · Vorbereitung, **noch kein Bau** · Quelle: Code (Migratione
 
 **Bereits entschieden (nicht mehr abzuhaken):** Behälter-Katalog (`vocab_containers`), Regenerationsgeräte (`vocab_regeneration_devices`), Servier-Vehikel (`vocab_serving_vehicles`), Koch-Equipment = **Basis live** · Regeln, Wissen, KI = **Master**.
 
+> **Bau 13.10. (Paket „Grundeinstellungen“): drei Zeilen aus Block B sind KEIN Paket-Inhalt**, weil sie keine Vorlagen sind: `planning_frames` (hängen an Foodbook/Konzept: `owner_type`/`owner_id`), `concept_sector_suitability` (je Konzept) und `fixed_costs` (Beträge sind kundenspezifisch; es gibt keinen Beispiel-Seed). Der Trend-Startbestand ist ein Repo-Seed (Spec 79, `trends-startbestand`), keine Master-Zeilen; das Paket ruft denselben idempotenten Befehl für den Mandanten auf. Rollen kommen ohne Stundensätze (BHG-intern). Paket-Inhalt jetzt: Konzept-Kategorien, Zielgruppen, Schreibstile, Rollen, Posten, Speiseplan-Chips, Präsentations-Designs, Trend-Startbestand.
+
 > **Korrektur 13.10. (nach Gegenprüfung):** Die erste Fassung nannte `recipe_containers`/`recipe_regenerations` als Behälter-/Geräte-Kataloge. Das sind **Verknüpfungstabellen am Rezept**. Die Kataloge sind `vocab_containers`, `vocab_regeneration_devices` und `vocab_serving_vehicles` (alle schon nullable). `serving_forms` sind die **Servierformen** (Darreichung), ein eigener Katalog, `team_id` NOT NULL.
 
 ## Messung auf demo (lesend)
