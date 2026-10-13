@@ -175,8 +175,9 @@ class CanvasService
     public function werte(FoodAlchemistCanvas $canvas, ?Team $team = null): array
     {
         $out = [];
-        // Mit Team: Kern + Zusatzfelder der Team-Kette (felder()), ohne: nur die Kern-Felder wie bisher
-        foreach ($team === null ? $this->template($canvas->canvas_type)['felder'] : $this->felder($canvas->canvas_type, $team) as $f) {
+        // Kern + Zusatzfelder der Team-Kette: das übergebene Team, sonst das Team des Canvas
+        $team ??= $canvas->team_id !== null ? Team::find($canvas->team_id) : null;
+        foreach ($this->felder($canvas->canvas_type, $team) as $f) {
             if (($f['type'] ?? '') === 'repeatable') {
                 $out[$f['key']] = $canvas->entries->where('field_key', $f['key'])->sortBy('position')
                     ->map(fn ($e) => ['id' => $e->id, 'value' => $e->value, 'meta' => $e->meta ?? [], 'is_binding' => (bool) $e->is_binding])->values()->all();
@@ -224,9 +225,10 @@ class CanvasService
         }
     }
 
-    public function saveSkalare(FoodAlchemistCanvas $canvas, array $form): void
+    public function saveSkalare(FoodAlchemistCanvas $canvas, array $form, ?Team $team = null): void
     {
-        foreach ($this->template($canvas->canvas_type)['felder'] as $f) {
+        $team ??= $canvas->team_id !== null ? Team::find($canvas->team_id) : null;
+        foreach ($this->felder($canvas->canvas_type, $team) as $f) {
             if (($f['type'] ?? '') !== 'repeatable' && array_key_exists($f['key'], $form)) {
                 $this->setSkalar($canvas, $f['key'], is_scalar($form[$f['key']]) ? (string) $form[$f['key']] : null);
             }
@@ -254,7 +256,9 @@ class CanvasService
     /** KI-Kontext-Block eines Canvas (gefüllte Felder, gelabelt). NULL wenn leer. */
     public function promptKontext(FoodAlchemistCanvas $canvas): ?string
     {
-        return $this->promptKontextAusWerten($canvas->canvas_type, $this->template($canvas->canvas_type)['felder'], $this->werte($canvas));
+        $team = $canvas->team_id !== null ? Team::find($canvas->team_id) : null;
+
+        return $this->promptKontextAusWerten($canvas->canvas_type, $this->felder($canvas->canvas_type, $team), $this->werte($canvas, $team));
     }
 
     /**
@@ -319,6 +323,21 @@ class CanvasService
         ]);
 
         return $r['marken_kontext'] === null ? [] : ['marken_kontext' => $r['marken_kontext']];
+    }
+
+    /** Zusatzfeld ein-/ausschalten (aus = fließt nirgends ein, Werte bleiben erhalten). Nur das eigene Team. */
+    public function zusatzfeldAktiv(Team $team, int $id, bool $aktiv): FoodAlchemistCanvasTemplate
+    {
+        $feld = FoodAlchemistCanvasTemplate::where('team_id', $team->id)->findOrFail($id);
+        $feld->update(['active' => $aktiv]);
+
+        return $feld;
+    }
+
+    /** Zusatzfeld löschen (weich). Die Werte in den Canvases bleiben liegen, werden aber nicht mehr gelesen. */
+    public function zusatzfeldLoeschen(Team $team, int $id): void
+    {
+        FoodAlchemistCanvasTemplate::where('team_id', $team->id)->findOrFail($id)->delete();
     }
 
     /**
