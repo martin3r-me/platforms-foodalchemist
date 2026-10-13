@@ -32,9 +32,17 @@ class KostenCacheService
 {
     public function __construct(private RecipeRecomputeService $recompute) {}
 
-    /** @return array{quelle:string, ek_summe:?float, ek_per_kg:?float, n_priced:int, n_total:int, anteil_fehlend_anzahl:?float, anteil_fehlend_masse:?float, vollstaendig:bool, grund:?string, fehlende:list<array<string,mixed>>, berechnet_at:?string} */
+    /** @return array{quelle:string, ek_summe:?float, ek_per_kg:?float, n_priced:int, n_total:int, anteil_fehlend_anzahl:?float, anteil_fehlend_masse:?float, vollstaendig:bool, grund:?string, fehlende:list<array<string,mixed>>, berechnet_at:?string, basis:?string} */
     public function fuer(FoodAlchemistRecipe $recipe, Team $team): array
     {
+        // Aufrufer laden oft nur Teil-Spalten (z. B. Angebot: id, sales_net, ek_total_eur) — ohne team_id/ist_fassung
+        // wäre die Besitzer-Entscheidung falsch. Dann einmal vollständig nachladen.
+        foreach (['team_id', 'ist_fassung', 'ek_total_eur', 'ek_per_kg_eur', 'ek_n_ingredients_total', 'ek_n_ingredients_priced', 'ek_price_basis'] as $spalte) {
+            if (! array_key_exists($spalte, $recipe->getAttributes())) {
+                $recipe = FoodAlchemistRecipe::mitFassungen()->findOrFail($recipe->id);
+                break;
+            }
+        }
         if (! $recipe->ist_fassung && (int) $recipe->team_id === (int) $team->id) {
             $n = (int) $recipe->ek_n_ingredients_total;
             $p = (int) $recipe->ek_n_ingredients_priced;
@@ -45,7 +53,7 @@ class KostenCacheService
                 'n_priced' => $p, 'n_total' => $n,
                 'anteil_fehlend_anzahl' => $n > 0 ? round(($n - $p) / $n, 4) : null, 'anteil_fehlend_masse' => null,
                 'vollstaendig' => $n > 0 && $p === $n, 'grund' => ($n > 0 && $p === $n) ? null : 'zutaten_ohne_preis',
-                'fehlende' => [], 'berechnet_at' => null,
+                'fehlende' => [], 'berechnet_at' => null, 'basis' => $recipe->ek_price_basis?->value,
             ];
         }
 
@@ -146,7 +154,7 @@ class KostenCacheService
         return $alle;
     }
 
-    /** @return array{quelle:string, ek_summe:?float, ek_per_kg:?float, n_priced:int, n_total:int, anteil_fehlend_anzahl:?float, anteil_fehlend_masse:?float, vollstaendig:bool, grund:?string, fehlende:list<array<string,mixed>>, berechnet_at:?string} */
+    /** @return array{quelle:string, ek_summe:?float, ek_per_kg:?float, n_priced:int, n_total:int, anteil_fehlend_anzahl:?float, anteil_fehlend_masse:?float, vollstaendig:bool, grund:?string, fehlende:list<array<string,mixed>>, berechnet_at:?string, basis:?string} */
     private function ausZeile(object $z): array
     {
         $n = (int) $z->n_total;
@@ -161,7 +169,7 @@ class KostenCacheService
             'anteil_fehlend_masse' => $masse > 0 ? round(((float) $z->masse_g_fehlend) / $masse, 4) : null,
             'vollstaendig' => (bool) $z->vollstaendig, 'grund' => $z->unvollstaendig_grund,
             'fehlende' => json_decode((string) ($z->fehlende_zutaten ?? '[]'), true) ?: [],
-            'berechnet_at' => $z->berechnet_at,
+            'berechnet_at' => $z->berechnet_at, 'basis' => $z->price_basis,
         ];
     }
 }

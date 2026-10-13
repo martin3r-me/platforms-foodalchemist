@@ -230,6 +230,8 @@ class DetailPanel extends Component
         return view('foodalchemist::livewire.recipes.detail-panel', [
             'sperr' => $this->sperrZustand(),   // Spec 65
             'rezept' => $rezept,
+            // Spec 82 Stufe 3b (E4): Kosten aus Sicht des aktuellen Teams (Besitzer: Rezept-Spalten; sonst Team-Cache)
+            'kosten' => $rezept !== null && $team !== null ? app(\Platform\FoodAlchemist\Services\KostenCacheService::class)->fuer($rezept, $team) : null,
             // Spec 82 §6: Machbarkeits-Check ohne KI gegen das Teamprofil DIESES Teams (warnt nur bei ausdrücklich „fehlt“).
             'machbarkeit' => $rezept !== null && $team !== null
                 ? app(\Platform\FoodAlchemist\Services\MachbarkeitService::class)->pruefe(new \Platform\FoodAlchemist\Support\MachbarkeitKontext($team, Auth::user()), [$rezept->id])[0]

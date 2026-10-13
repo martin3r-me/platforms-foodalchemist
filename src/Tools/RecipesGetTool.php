@@ -46,16 +46,23 @@ class RecipesGetTool extends FoodAlchemistTool implements ToolContract, ToolMeta
             return ToolResult::error('Rezept nicht sichtbar/vorhanden (Basis-Sicht).', 'NOT_FOUND');
         }
 
+        // Spec 82 Stufe 3b (E4): Kosten aus Sicht DIESES Teams — Besitzer: Rezept-Spalten (unverändert), sonst
+        // Team-Kosten-Cache (eigene Preise/Pins). Eine Fassung trägt nie Master-Kosten.
+        $kosten = app(\Platform\FoodAlchemist\Services\KostenCacheService::class)->fuer($r, $team);
         $daten = [
             'id' => $r->id, 'name' => $r->name, 'status' => $r->status->value,
             'description' => $r->description, 'yield_kg' => $r->yield_kg,
-            'ek_total_eur' => $r->ek_total_eur, 'ek_per_kg_eur' => $r->ek_per_kg_eur,
+            'ek_total_eur' => $kosten['ek_summe'], 'ek_per_kg_eur' => $kosten['ek_per_kg'],
+            // vollständig=false: ek_total_eur ist eine TEILSUMME (Zutaten ohne Preis) und nie als Preis zu verwenden
+            'ek_vollstaendig' => $kosten['vollstaendig'], 'ek_quelle' => $kosten['quelle'],
+            'ek_fehlend_anteil_anzahl' => $kosten['anteil_fehlend_anzahl'], 'ek_fehlend_anteil_masse' => $kosten['anteil_fehlend_masse'],
+            'ek_fehlende_zutaten' => array_slice($kosten['fehlende'], 0, 20),
             // V-014: woher der EK kommt — `lead` = gewählte Artikel, `avg` = Lieferanten-
             // Durchschnitt (Schätzung!), `mixed` = teils, `unknown` = nicht nachvollziehbar,
             // NULL = kein EK oder vor Einführung des Feldes gerechnet. Ohne diese Angabe
             // liest jede KI einen gemittelten EK als entschieden.
-            'ek_price_basis' => $r->ek_price_basis?->value,
-            'ek_price_basis_label' => $r->ek_price_basis?->label(),
+            'ek_price_basis' => $kosten['basis'],
+            'ek_price_basis_label' => \Platform\FoodAlchemist\Enums\EkPriceBasis::tryFrom((string) $kosten['basis'])?->label(),
             'allergens_confidence' => $r->allergens_confidence,
             // MCP-Lockstep zum Produktionszeit-Feature: aktive Belegzeit (work/setup) + passive
             // Standzeit (= Durchlaufzeit) + Topf-Deckel je Koch-Vorgang. NULL = nicht gepflegt

@@ -505,14 +505,18 @@ class OfferCompositionService
     /**
      * Preis eines Blocks (spiegelt FoodbookService::blockPreis; ohne Staffel).
      *
-     * @return array{vk_pp: float, ek_pp: float, pauschal: float}
+     * Mit $team (Spec 82 Stufe 3b) kommt der EK eines Gerichts aus Sicht dieses Teams (KostenCacheService: Besitzer
+     * = Rezept-Spalten, Abo-Fassung/geerbt = Team-Cache). `ek_vollstaendig=false` heißt: ek_pp ist eine Teilsumme
+     * (Zutaten ohne Preis) — nie als vollständigen EK anzeigen oder weiterrechnen (Auflage 4).
+     *
+     * @return array{vk_pp: float, ek_pp: float, pauschal: float, ek_vollstaendig: bool}
      */
-    public function blockPreis(FoodAlchemistOfferBlock $block, ?FoodAlchemistOutlet $outlet = null): array
+    public function blockPreis(FoodAlchemistOfferBlock $block, ?FoodAlchemistOutlet $outlet = null, ?Team $team = null): array
     {
         if ($block->type === 'concept_ref' && $block->concept) {
             $cockpit = $this->concepts->preisCockpit($block->concept, $outlet);
 
-            return ['vk_pp' => (float) $cockpit['price_per_person'], 'ek_pp' => (float) $cockpit['ek_per_person'], 'pauschal' => 0.0];
+            return ['vk_pp' => (float) $cockpit['price_per_person'], 'ek_pp' => (float) $cockpit['ek_per_person'], 'pauschal' => 0.0, 'ek_vollstaendig' => true];
         }
         if ($block->type === 'recipe_ref' && $block->dish) {
             $faktor = $block->quantity !== null ? (float) $block->quantity : 1.0;
@@ -520,20 +524,27 @@ class OfferCompositionService
                 ? (app(DarreichungResolver::class)->vkNettoMitQuelle($block->dish, $outlet)['vk'] ?? (float) ($block->dish->sales_net ?? 0))
                 : (float) ($block->dish->sales_net ?? 0);
             $vk = round($baseVk * $faktor, 2);
-            $ek = round((float) ($block->dish->ek_total_eur ?? 0) * $faktor, 2);
+            if ($team !== null) {
+                $k = app(KostenCacheService::class)->fuer($block->dish, $team);
+                $ek = round((float) ($k['ek_summe'] ?? 0) * $faktor, 2);
+                $ekVoll = $k['vollstaendig'] && $k['ek_summe'] !== null;
+            } else {
+                $ek = round((float) ($block->dish->ek_total_eur ?? 0) * $faktor, 2);
+                $ekVoll = $block->dish->ek_total_eur !== null;
+            }
             if ($block->price_basis === 'pauschal') {
-                return ['vk_pp' => 0.0, 'ek_pp' => 0.0, 'pauschal' => $vk];
+                return ['vk_pp' => 0.0, 'ek_pp' => 0.0, 'pauschal' => $vk, 'ek_vollstaendig' => $ekVoll];
             }
 
-            return ['vk_pp' => $vk, 'ek_pp' => $ek, 'pauschal' => 0.0];
+            return ['vk_pp' => $vk, 'ek_pp' => $ek, 'pauschal' => 0.0, 'ek_vollstaendig' => $ekVoll];
         }
         if ($block->type === 'header_preis') {
             return $block->price_basis === 'pauschal'
-                ? ['vk_pp' => 0.0, 'ek_pp' => 0.0, 'pauschal' => (float) ($block->price_value ?? 0)]
-                : ['vk_pp' => (float) ($block->price_value ?? 0), 'ek_pp' => 0.0, 'pauschal' => 0.0];
+                ? ['vk_pp' => 0.0, 'ek_pp' => 0.0, 'pauschal' => (float) ($block->price_value ?? 0), 'ek_vollstaendig' => true]
+                : ['vk_pp' => (float) ($block->price_value ?? 0), 'ek_pp' => 0.0, 'pauschal' => 0.0, 'ek_vollstaendig' => true];
         }
 
-        return ['vk_pp' => 0.0, 'ek_pp' => 0.0, 'pauschal' => 0.0];
+        return ['vk_pp' => 0.0, 'ek_pp' => 0.0, 'pauschal' => 0.0, 'ek_vollstaendig' => true];
     }
 
     /**
@@ -581,11 +592,13 @@ class OfferCompositionService
         $vk = 0.0;
         $ek = 0.0;
         $pauschal = 0.0;
+        $ekVoll = true;
         foreach ($kapitel->blocks as $block) {
-            $p = $this->blockPreis($block, $outlet);
+            $p = $this->blockPreis($block, $outlet, $team);   // Spec 82 3b: EK aus Sicht des Angebots-Teams
             $vk += $p['vk_pp'];
             $ek += $p['ek_pp'];
             $pauschal += $p['pauschal'];
+            $ekVoll = $ekVoll && $p['ek_vollstaendig'];
         }
         if ($mitKindkapiteln) {
             foreach ($kapitel->children as $kind) {
@@ -593,14 +606,17 @@ class OfferCompositionService
                 $vk += (float) ($kindAgg['vk_pro_person'] ?? 0);
                 $ek += $kindAgg['ek_pro_person'];
                 $pauschal += $kindAgg['pauschal'];
+                $ekVoll = $ekVoll && ($kindAgg['ek_vollstaendig'] ?? true);
             }
         }
         if ($kapitel->price_mode === 'manuell' && $kapitel->price_per_person !== null) {
             $vk = (float) $kapitel->price_per_person;
         }
 
+        // Auflage 4: Food-Cost aus einer EK-Teilsumme wäre geschönt → bei unvollständigem EK keine Quote
         return ['vk_pro_person' => round($vk, 2), 'ek_pro_person' => round($ek, 2), 'pauschal' => round($pauschal, 2),
-            'food_cost_percent' => $vk > 0 ? round($ek / $vk * 100, 1) : null, 'preis_range' => null];
+            'food_cost_percent' => ($vk > 0 && $ekVoll) ? round($ek / $vk * 100, 1) : null, 'preis_range' => null,
+            'ek_vollstaendig' => $ekVoll];
     }
 
     // ── Read-Struktur (EINE Quelle für Editor-Menü-Ansicht + Kalkulation + Dokument) ──
@@ -693,7 +709,7 @@ class OfferCompositionService
                     }
                 } else {
                     foreach ($k->blocks as $b) {
-                        $bp = $this->blockPreis($b, $outlet);
+                        $bp = $this->blockPreis($b, $outlet, $team);   // Spec 82 3b
                         $bZeile = [
                             'id' => (int) $b->id,
                             'type' => $b->type,
@@ -710,6 +726,7 @@ class OfferCompositionService
                         ];
                         if ($intern) {
                             $bZeile['ek_pp'] = (float) $bp['ek_pp'];
+                            $bZeile['ek_vollstaendig'] = $bp['ek_vollstaendig'];   // false = Teilsumme, nie als EK zeigen
                         }
                         $row['bloecke'][] = $bZeile;
                     }
@@ -860,6 +877,7 @@ class OfferCompositionService
      */
     public function preisEinheiten(Team $team, FoodAlchemistAngebot $angebot, ?FoodAlchemistOutlet $outlet = null): array
     {
+        $ekExtraVoll = true;   // Spec 82 3b: false = mindestens ein Gericht mit EK-Teilsumme
         $alle = FoodAlchemistOfferChapter::visibleToTeam($team)->where('offer_id', $angebot->id)
             ->with(['blocks' => fn ($q) => $q->where('visible', true),
                 'blocks.concept', 'blocks.dish:id,sales_net,ek_total_eur',
@@ -899,12 +917,13 @@ class OfferCompositionService
                     $concepts->push($b->concept);
                     $units[] = ['concept' => $b->concept, 'pax' => $effPax];
                 } elseif ($b->type === 'recipe_ref' && $b->dish !== null) {
-                    $bp = $this->blockPreis($b, $outlet);
+                    $bp = $this->blockPreis($b, $outlet, $team);   // Spec 82 3b
                     $vkExtra += $bp['vk_pp'];
                     $ekExtra += $bp['ek_pp'];
                     $flat += $bp['pauschal'];
+                    $ekExtraVoll = $ekExtraVoll && $bp['ek_vollstaendig'];
                 } elseif ($b->type === 'header_preis') {
-                    $bp = $this->blockPreis($b, $outlet);
+                    $bp = $this->blockPreis($b, $outlet, $team);
                     $vkExtra += $bp['vk_pp'];
                     $flat += $bp['pauschal'];
                 }
@@ -912,7 +931,8 @@ class OfferCompositionService
         }
 
         return ['concepts' => $concepts->values(), 'units' => $units, 'vk_pp_extra' => round($vkExtra, 2),
-            'ek_pp_extra' => round($ekExtra, 2), 'flat_total' => round($flat, 2), 'alternativen' => $alternativen];
+            'ek_pp_extra' => round($ekExtra, 2), 'flat_total' => round($flat, 2), 'alternativen' => $alternativen,
+            'ek_extra_vollstaendig' => $ekExtraVoll];
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
