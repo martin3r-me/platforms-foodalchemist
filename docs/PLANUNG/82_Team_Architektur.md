@@ -195,7 +195,7 @@ Beschreibt, was die Küche kann. Das ist keine DNA.
   1. Oberteam-Vorgaben (verbindlich)
   2. Team-DNA
   3. Teamprofil
-  4. Endkunde, **nur beim Angebot** (entschieden Dominique 13.10., Entscheidung 4). Foodbook und Speisekarte bekommen keine Kunden-Ebene.
+  4. Endkunde, **sobald die Ausgabe eine CRM-Firma trägt** (entschieden Dominique 13.10., Entscheidung 4): Angebot immer, Foodbook und Speisekarte nur mit verknüpfter CRM-Firma (Spec 64), ohne Firma entfällt die Ebene.
   5. Foodbook / Concept
 - **Gesamtbudget** statt nur 3.000 Zeichen je Ebene.
 
@@ -204,7 +204,7 @@ Beschreibt, was die Küche kann. Das ist keine DNA.
 - Angebots-Ebene ist tot
 - `kunde_dna` fehlt im MCP
 - DNA-Einstellungen haben keine `MitEinstellungsSperre`
-- Foodbook-Prompts laufen ohne Kunde. **Nach Entscheidung 4 gewollt:** Die Kunden-Ebene gilt nur beim Angebot. Der Fix besteht darin, dass die Angebots-Ebene (`food_dna_angebot_id`) und der Angebots-Kunde tatsächlich ankommen. Bereits bestehende Kunden-Übergaben im Foodbook (Spec 42 F3) sind noch nicht zurückgebaut, siehe „Offen“.
+- Foodbook-Prompts laufen ohne Kunde. **Nach Entscheidung 4:** Die Kunden-Ebene greift, sobald die Ausgabe eine CRM-Firma trägt. Die bestehenden Foodbook-Übergaben (Spec 42 F3) bleiben. Zu schließen sind die Stellen, an denen die Firma des Foodbooks nicht ankommt (Kapitel-Wording `concept.wording`, Kapitel-Ideen `foodbook.kapitel_ideen`); die Angebots-Ebene (`food_dna_angebot_id`) ist mit Schritt 1 gebaut.
 
 ## §8 · Kurator-Aufsatz: Master-Bibliothek und Abo
 
