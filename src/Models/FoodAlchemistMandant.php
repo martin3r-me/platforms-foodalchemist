@@ -37,6 +37,9 @@ class FoodAlchemistMandant extends Model
         parent::__construct($attributes);
         // Der Freitext der Notiz bleibt aus dem activity-log heraus (nur Verwaltungswerte), auch bei den automatischen created/updated-Einträgen.
         // Per Konstruktor, weil das Trait `$ignoreAttributes` selbst deklariert und eine zweite Deklaration im Modell ein PHP-Fatal wäre.
-        $this->ignoreAttributes = array_merge($this->ignoreAttributes, ['notiz']);
+        // Nur mit dem echten Paket: Das Sandbox-Stub-Trait kennt die Eigenschaft nicht, und eine Zuweisung würde Eloquent als Spalte `ignoreAttributes` einfügen.
+        if (property_exists($this, 'ignoreAttributes')) {
+            $this->ignoreAttributes = array_merge((array) $this->ignoreAttributes, ['notiz']);
+        }
     }
 }

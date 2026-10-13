@@ -138,6 +138,14 @@ it('Trait-Vertrag: ALLE Models tragen LogsActivity + BelongsToTeamHierarchy + Ha
             //  - LogsActivity: trägt es (seit dem Protokoll-Fix): created/updated/deleted automatisch, dazu der Klartext-Eintrag über PlattformProtokoll.
             continue;
         }
+        if (class_basename($klasse) === 'FoodAlchemistPlanPreis') {
+            // Spec 82 §13 D: Gebühren-Preis je Baustein, append-only mit „gültig ab“ — gehört weder einem Team noch einem Datensatz:
+            //  - kein BelongsToTeamHierarchy: bewusst kein team_id, der Preis gilt für die ganze Plattform;
+            //  - kein SoftDeletes: Zeilen werden nie gelöscht, die Historie bleibt (Preis-Snapshot der Tageswerte verweist darauf);
+            //  - kein HasUuidV7: adressiert wird über (baustein, gültig ab), nie über eine externe ID;
+            //  - LogsActivity: trägt es (Protokoll-Subjekt für PlattformProtokoll, plan_preis_gesetzt), die Zeile trägt zusätzlich geaendert_von.
+            continue;
+        }
         if (class_basename($klasse) === 'FoodAlchemistMandant') {
             // Spec 82 §9/§13 B3 + G: Verwaltungszeile je Mandant (Status, Modus, CRM-Firma), eine Zeile je Kunden-Hauptteam.
             //  - kein BelongsToTeamHierarchy: die Zeile ist Plattform-Verwaltung über den Mandanten, kein Inhalt des Teams;

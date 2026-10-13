@@ -474,6 +474,10 @@ Ergänzt 13.10.2026 (Dominique: „die komplette Spec umgesetzt, sodass ich alle
 - **Geprüft 13.10.:** `InvoiceService::createInvoiceForTeam` gruppiert nach `billable_model|billable_type|label` und summiert; Tageswerte ergeben je Baustein eine korrekte Monatsposition.
 - **Anzeige:** „Plan und Nutzung“ in den Einstellungen des Oberteams (Inhaber/Admin), Master sieht dieselbe Sicht je Mandant (C1).
 - Unter-Teams zahlen nicht selbst, ihre Gebühr läuft über das Kunden-Hauptteam.
+- **Entschieden (Dominique 14.10.): Abgerechnet wird nur Status „aktiv“.** Projekt (vor der Lizenz) und beendet kosten nichts.
+- **Sicherheitsregeln des Zähl-Laufs (Review Kurator 14.10.):**
+  1. **Fürs Geld gilt „ohne Zeile“ nie als aktiv.** Gezählt wird nur, wer eine ausdrückliche Zeile in `foodalchemist_mandanten` mit Status `aktiv` hat. Auf der Plattform ist jedes persönliche Team ein Haupt-Team ohne Eltern-Team und würde sonst abgerechnet. Für die Anzeige (Stammblatt) bleibt „ohne Zeile = aktiv + autark“.
+  2. **Der Zähl-Lauf ist ausgeschaltet, bis Dominique die Abrechnung bewusst einschaltet:** `config foodalchemist.gebuehren.zaehlen_aktiv` (ENV `FOODALCHEMIST_GEBUEHREN_ZAEHLEN`, Default **aus**). Er schreibt in die Core-Tabelle `team_billable_usages`, die der Core in `ModalPricing` anzeigt und im `InvoiceService` abrechnet. Aus = der Scheduler registriert nichts, der Befehl läuft nur mit `--dry-run` oder `--force`.
 
 ### G · Betreiber und Kurator getrennt (Dominique 13.10. abends, entspricht Spec 61 §13 / F8)
 

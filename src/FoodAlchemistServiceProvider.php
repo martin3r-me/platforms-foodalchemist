@@ -64,6 +64,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
          */
         if ($this->app->runningInConsole()) {
             $this->commands([
+                \Platform\FoodAlchemist\Console\PlanNutzungZaehlenCommand::class,   // Spec 82 §13 D (täglich, Tageswerte → team_billable_usages)
+                \Platform\FoodAlchemist\Console\PlanPreiseStartwerteCommand::class,   // Spec 82 §13 D (Platzhalter-Startpreise)
                 \Platform\FoodAlchemist\Console\EquipmentStandardSetzenCommand::class,   // Spec 82 §6 (Daten per Befehl, nicht per Migration)
                 \Platform\FoodAlchemist\Console\PreislisteImportCommand::class,   // Spec 82 §3 (Abgleich, schreibt keine Preise)
                 \Platform\FoodAlchemist\Console\GpHomogenitaetBerichtCommand::class,   // Spec 82 §2 (nur lesend)
@@ -192,6 +194,17 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 ->onOneServer()          // Hausschreibweise des Hosts (routes/console.php)
                 ->runInBackground()
                 ->description('FoodAlchemist: Qualitäts-Lauf (Signale, DQ-Kaskade, Zeitreihen-Snapshot, Drift)');
+
+            // Spec 82 §13 D: FA-Gebühren täglich zählen (Tageswerte in team_billable_usages). Idempotent; verpasste Tage mit --von/--bis nachholen.
+            // Nur mit bewusst eingeschalteter Abrechnung (config foodalchemist.gebuehren.zaehlen_aktiv, Default aus): der Lauf schreibt in die Core-Rechnungstabelle.
+            if (config('foodalchemist.gebuehren.zaehlen_aktiv', false)) {
+                $schedule->command(\Platform\FoodAlchemist\Console\PlanNutzungZaehlenCommand::class)
+                    ->dailyAt(config('foodalchemist.scheduler.plan_zaehlen_zeit', '02:10'))
+                    ->withoutOverlapping()
+                    ->onOneServer()
+                    ->runInBackground()
+                    ->description('FoodAlchemist: Gebühren je Mandant zählen (Basis, User, Unter-Teams, Stamm-Paket, Abo)');
+            }
 
             // Wissens-Steuerdaten-Wächter (2026-09-03). Rein LESEND (`--verify`), kein
             // Provider-Call, kein Schreibvorgang an den Steuerdaten — er meldet nur.
@@ -1164,6 +1177,10 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     // Spec 82 §12 B: Fassungen (Veröffentlichen + Änderungsprotokoll)
                     \Platform\FoodAlchemist\Tools\RecipeFassungenPublishTool::class,
                     \Platform\FoodAlchemist\Tools\RecipeFassungenGetTool::class,
+                    // Spec 82 §13 D: Gebühren (Plan-Preise, Plan und Nutzung)
+                    \Platform\FoodAlchemist\Tools\PlanPreiseGetTool::class,
+                    \Platform\FoodAlchemist\Tools\PlanPreisePostTool::class,
+                    \Platform\FoodAlchemist\Tools\PlanNutzungGetTool::class,
                     \Platform\FoodAlchemist\Tools\StandorteGetTool::class,
                     \Platform\FoodAlchemist\Tools\StandortePutTool::class,
                     \Platform\FoodAlchemist\Tools\StandorteSetBrilleTool::class,

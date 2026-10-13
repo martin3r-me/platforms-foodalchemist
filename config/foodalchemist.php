@@ -416,6 +416,18 @@ return [
         'dataforseo_budget_usd' => (float) env('FOODALCHEMIST_TRENDS_DATAFORSEO_BUDGET', 5.0),
     ],
 
+    'gebuehren' => [
+        // Spec 82 §13 D: Der Zähl-Lauf schreibt in die Core-Tabelle team_billable_usages, die der Core in ModalPricing anzeigt und im
+        // InvoiceService abrechnet. Er läuft erst, wenn die Abrechnung BEWUSST eingeschaltet wird (Dominique). Aus = der Scheduler
+        // registriert nichts, der Befehl läuft nur mit --dry-run oder --force.
+        'zaehlen_aktiv' => (bool) env('FOODALCHEMIST_GEBUEHREN_ZAEHLEN', false),
+    ],
+
+    'plan' => [
+        // Spec 82 §13 D: Wie viele User die Basis je Mandant einschließt; jeder weitere kostet den User-Preis.
+        'basis_inklusive_user' => (int) env('FOODALCHEMIST_PLAN_INKLUSIVE_USER', 2),
+    ],
+
     /*
     |--------------------------------------------------------------------------
     | Geplante Läufe
@@ -432,6 +444,8 @@ return [
     |
     */
     'scheduler' => [
+        // Spec 82 §13 D: täglicher Gebühren-Zähl-Lauf (Tageswerte), früh vor dem Arbeitstag.
+        'plan_zaehlen_zeit' => env('FOODALCHEMIST_PLAN_ZAEHLEN_ZEIT', '02:10'),
         'enabled' => env('FOODALCHEMIST_SCHEDULER', true),
         // Nach dem DB-Snapshot (23:00) und weit vor dem Arbeitstag: der Lauf ist die
         // teuerste lesende Operation des Moduls und soll nicht neben der Nutzung liegen.
