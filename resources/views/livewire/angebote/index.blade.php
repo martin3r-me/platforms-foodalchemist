@@ -97,6 +97,7 @@
          Einbettung wie im Concepter-Browser, damit die Konzept-Bausteine identisch laufen. --}}
     <livewire:foodalchemist.concepter.editor key="angebote-index--concepter.editor" />
     <livewire:foodalchemist.recipes.recipe-modal key="angebote-index--recipes.recipe-modal" />
+    <livewire:foodalchemist.recipes.fassung-modal key="angebote-index--recipes.fassung-modal" />
     {{-- Editor-Kette (Dominique 2026-10-13): Rezept → Grundprodukt → Lieferantenartikel muss auf jeder Seite mit Rezept-Editor durchklickbar sein; fehlt ein Glied, läuft der Klick still ins Leere. Wächter: EditorKetteTest. --}}
     <livewire:foodalchemist.gps.gp-modal key="angebote-index--gps.gp-modal" />
     <livewire:foodalchemist.suppliers.item-modal key="angebote-index--suppliers.item-modal" />

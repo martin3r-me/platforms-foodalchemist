@@ -152,15 +152,26 @@ class FassungService
     /** @param list<FoodAlchemistRecipe> $baum */
     private function pruefeNurStammGps(array $baum): void
     {
-        $ids = array_map(fn ($r) => (int) $r->id, $baum);
-        $eigene = DB::table('foodalchemist_recipe_ingredients AS z')
-            ->join('foodalchemist_gps AS g', 'g.id', '=', 'z.gp_id')
-            ->whereIn('z.recipe_id', $ids)->whereNull('z.deleted_at')->whereNotNull('g.team_id')
-            ->distinct()->orderBy('g.name')->pluck('g.name')->all();
+        $eigene = $this->stammVerstoesse($baum);
         if ($eigene !== []) {
-            throw new \RuntimeException('Master-Rezepte nutzen nur globale Stamm-GPs (Spec 82, Entscheidung 1 = C). Nicht global: '
-                . implode(', ', array_slice($eigene, 0, 10)) . (count($eigene) > 10 ? ' …' : ''));
+            throw new \RuntimeException('Noch nicht veröffentlichbar: Diese GPs gehören dem Master-Team, nicht dem globalen Stamm: '
+                . implode(', ', array_slice($eigene, 0, 10)) . (count($eigene) > 10 ? ' …' : '')
+                . '. Kein Fehler im Rezept — Veröffentlichen ist nach dem Stamm-Umzug möglich (Spec 82, Entscheidung 1 = C).');
         }
+    }
+
+    /**
+     * GP-Namen im Baum, die NICHT global (Stamm) sind — Master-Rezepte dürfen nur Stamm-GPs nutzen (E1).
+     *
+     * @param  list<FoodAlchemistRecipe>  $baum
+     * @return list<string>
+     */
+    private function stammVerstoesse(array $baum): array
+    {
+        return DB::table('foodalchemist_recipe_ingredients AS z')
+            ->join('foodalchemist_gps AS g', 'g.id', '=', 'z.gp_id')
+            ->whereIn('z.recipe_id', array_map(fn ($r) => (int) $r->id, $baum))->whereNull('z.deleted_at')->whereNotNull('g.team_id')
+            ->distinct()->orderBy('g.name')->pluck('g.name')->all();
     }
 
     /** @param array<int,int> $map Arbeitszeile → Fassung (Unter-Rezepte) */
@@ -222,6 +233,53 @@ class FassungService
         }
 
         return $fassung;
+    }
+
+    /**
+     * Lese-Status für die Oberfläche „Veröffentlichen…" (Spec 82 §13 B6) — rechnet NICHTS um und schreibt nichts.
+     * Gleiche Hash-Logik wie veroeffentlichen(): `weicht_ab` ist genau dann wahr, wenn Veröffentlichen eine neue Fassung
+     * erzeugen würde (am Rezept oder an einem Unter-Rezept).
+     *
+     * @return array{letzte: ?array{id:int, nr:int, veroeffentlicht_at:?string, notiz:?string}, weicht_ab: bool,
+     *               neu_im_baum: list<string>, allergen_aenderung: bool, allergen_felder: list<string>, stamm_verstoesse: list<string>}
+     */
+    public function status(FoodAlchemistRecipe $arbeitszeile): array
+    {
+        $baum = $this->baumKinderZuerst($arbeitszeile, (int) $arbeitszeile->team_id);
+        $map = [];
+        $neu = [];
+        foreach ($baum as $r) {
+            $vorher = FoodAlchemistRecipe::mitFassungen()->where('fassung_von_id', $r->id)->where('ist_fassung', true)
+                ->orderByDesc('fassung_nr')->orderByDesc('id')->first();
+            if ($vorher !== null && $vorher->inhalt_hash === $this->inhaltHash($r, $map)) {
+                $map[$r->id] = (int) $vorher->id;
+            } else {
+                $map[$r->id] = -1 * (int) $r->id;   // Platzhalter „wird neu" — ändert den Hash der Eltern wie eine neue Fassung
+                $neu[] = (string) $r->name;
+            }
+        }
+        $letzte = FoodAlchemistRecipe::mitFassungen()->where('fassung_von_id', $arbeitszeile->id)->where('ist_fassung', true)
+            ->orderByDesc('fassung_nr')->orderByDesc('id')->first();
+        $felder = [];
+        if ($letzte !== null) {
+            $a = $this->allergenBild($arbeitszeile);
+            $b = $this->allergenBild($letzte);
+            foreach ($a as $k => $v) {
+                if (($b[$k] ?? null) !== $v) {
+                    $felder[] = $k;
+                }
+            }
+        }
+
+        return [
+            'letzte' => $letzte === null ? null : ['id' => (int) $letzte->id, 'nr' => (int) $letzte->fassung_nr,
+                'veroeffentlicht_at' => $letzte->veroeffentlicht_at ? \Illuminate\Support\Carbon::parse($letzte->veroeffentlicht_at)->format('d.m.Y H:i') : null, 'notiz' => $letzte->aenderungsnotiz],
+            'weicht_ab' => $neu !== [],
+            'neu_im_baum' => $neu,
+            'allergen_aenderung' => $felder !== [],
+            'allergen_felder' => $felder,
+            'stamm_verstoesse' => $this->stammVerstoesse($baum),
+        ];
     }
 
     /** Darreichungs-Felder, die nie mitgehen: Preise, Preisklasse, Kalkulations-Stand des Masters. */

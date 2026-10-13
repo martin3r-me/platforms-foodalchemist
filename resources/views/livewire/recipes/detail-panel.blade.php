@@ -186,6 +186,11 @@
                     @endforeach
                 </div>
                 <x-fa::menu-item icon="heroicon-m-document-duplicate" wire:click="duplizieren" title="Kopie dieses Rezepts anlegen" data-duplizieren-btn>Rezept duplizieren</x-fa::menu-item>
+                {{-- Spec 82 §13 B6: nur Arbeitszeilen des Master-Teams werden als Fassung an Abonnenten veröffentlicht --}}
+                @if(\Platform\FoodAlchemist\Support\MasterTeam::istMaster(auth()->user()?->currentTeamRelation) && (int) $rezept->team_id === \Platform\FoodAlchemist\Support\MasterTeam::id() && ! $rezept->ist_fassung)
+                    <x-fa::menu-item icon="heroicon-m-paper-airplane" x-on:click="$dispatch('fassung-modal.oeffnen', { recipeId: {{ $rezept->id }} })"
+                        title="Stand als neue Fassung an die Abonnenten geben" data-fassung-menue>Veröffentlichen …</x-fa::menu-item>
+                @endif
                 <x-fa::menu-item :icon="$rezept->is_template ? 'heroicon-s-star' : 'heroicon-m-star'" wire:click="templateToggle"
                     title="{{ $rezept->is_template ? 'Ist Vorlage. Klick nimmt die Markierung zurück' : 'Als Vorlage für neue Rezepte markieren' }}" data-template-btn>{{ $rezept->is_template ? 'Vorlage-Markierung entfernen' : 'Als Vorlage markieren' }}</x-fa::menu-item>
             </x-slot:menue>

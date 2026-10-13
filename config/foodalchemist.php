@@ -261,6 +261,12 @@ return [
                     'route' => 'foodalchemist.formate.index',
                     'icon'  => 'heroicon-o-rectangle-group',
                 ],
+                [
+                    // Spec 82 §8 / §13 B6: Abos — im Master-Team Vergabe/Kündigung/Zurückziehen, beim Mandanten „Meine Abos“
+                    'label' => 'Abos',
+                    'route' => 'foodalchemist.abos.index',
+                    'icon'  => 'heroicon-o-arrow-path-rounded-square',
+                ],
             ],
         ],
         [

@@ -1338,6 +1338,7 @@
     {{-- Leitstelle-In-Context: die erzeugten Entwürfe (Basisrezept/Gericht) im Cockpit ansehen,
          statt auf die Listen-Seite zu springen. DOM NACH dem Editor-Modal → z-Stacking (öffnet darüber). --}}
     <livewire:foodalchemist.recipes.recipe-modal key="planung-index--recipes.recipe-modal" />
+    <livewire:foodalchemist.recipes.fassung-modal key="planung-index--recipes.fassung-modal" />
     {{-- Editor-Kette (Dominique 2026-10-13): Rezept → Grundprodukt → Lieferantenartikel muss auf jeder Seite mit Rezept-Editor durchklickbar sein; fehlt ein Glied, läuft der Klick still ins Leere. Wächter: EditorKetteTest. --}}
     <livewire:foodalchemist.gps.gp-modal key="planung-index--gps.gp-modal" />
     <livewire:foodalchemist.suppliers.item-modal key="planung-index--suppliers.item-modal" />

@@ -94,6 +94,7 @@
 
     {{-- Editoren und Dialoge (innerhalb x-ui-page, P-2) --}}
     <livewire:foodalchemist.recipes.recipe-modal key="recipes-browser--recipes.recipe-modal" />
+    <livewire:foodalchemist.recipes.fassung-modal key="recipes-browser--recipes.fassung-modal" />
     <livewire:foodalchemist.gps.gp-modal key="recipes-browser--gps.gp-modal" />
     {{-- Editor-Kette (Dominique 2026-10-13): Rezept → Grundprodukt → Lieferantenartikel muss auf jeder Seite mit Rezept-Editor durchklickbar sein; fehlt ein Glied, läuft der Klick still ins Leere. Wächter: EditorKetteTest. --}}
     <livewire:foodalchemist.suppliers.item-modal key="recipes-browser--suppliers.item-modal" />

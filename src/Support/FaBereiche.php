@@ -32,7 +32,7 @@ final class FaBereiche
         'einstellungen' => 'Einstellungen',
         'unterteams' => 'Unter-Teams & Freigaben',   // Spec 82 §13 B2: schaltbar in /verwaltung → Freigaben
         'projekte' => 'Projekte (Agentur-Akte, nur im Master-Team)',   // Spec 82 §9: Projekt = Agentur-Akte im Master
-        'abos' => 'Abos (Kurator, Master-Team)',     // Spec 82 §8 / §13 B6: Rechte-/Master-Prüfung zusätzlich im AboService
+        'abos' => 'Abos (Master vergibt, Mandant liest)',     // Spec 82 §8 / §13 B6: Rechte-/Master-Prüfung zusätzlich im AboService
     ];
 
     /**
@@ -57,6 +57,7 @@ final class FaBereiche
         'einstellungen' => 'einstellungen', 'food-dna' => 'einstellungen',
         'standortprofil' => 'einstellungen',   // Spec 82 §9: Eigene Standorte + Kunden-Standorte (nur Master)
         'projekte' => 'projekte',   // Spec 82 §9: Projekt-Liste und -Detail (nur im Master-Team)
+        'abos' => 'abos',           // Spec 82 §13 B6: Abo-Seite (Master verwaltet, Mandant liest „Meine Abos“)
         // bereichsfrei: Sprachbefehl, Designsystem (Bau-Werkzeug), „demnächst"-Platzhalter
         'voice' => null, 'ui-katalog' => null, 'demnaechst' => null,
         // öffentlich geteilte Präsentationen (ohne Anmeldung) und Plattform-Assets — nie an einer Freischaltung
@@ -138,7 +139,7 @@ final class FaBereiche
         'Lager' => 'lager',
         'Knowledge' => 'wissen', 'Trendradar' => 'wissen',
         'Settings' => 'einstellungen', 'FoodDna' => 'einstellungen',
-        'Projekte' => 'projekte', 'Standortprofil' => 'einstellungen',
+        'Projekte' => 'projekte', 'Standortprofil' => 'einstellungen', 'Abos' => 'abos',
     ];
 
     public static function istBereich(string $bereich): bool
