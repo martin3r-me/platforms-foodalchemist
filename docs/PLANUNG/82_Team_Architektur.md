@@ -66,13 +66,15 @@ Global (`team_id NULL`), live, für Teams nur lesend, gepflegt nur durch den FA-
 - **Wissen:** Dossiers, Pairing (Inspire-Matrix)
 
 **Stamm-Paket – Opt-in je Mandant:**
+- **Entschieden (Dominique 13.10.):** Das Stamm-Paket ist Teil der FA-Gebühren. Es enthält **Grundprodukte**, **Lieferanten und Artikel** (Artikelnummer, Bezeichnung, Allergene, Nährwerte, EAN) und die **Verknüpfung Artikel → GP**. Es enthält **keine Preise**. Rezepturen kommen über das Abo (§8).
 - **Grundprodukte:** der kuratierte, sichere GP-Stamm, an dem Dominique gerade arbeitet
-- **Necta-Artikel aller Stamm-Lieferanten** mit **kuratierter Verknüpfung Artikel → GP**. Das teure Mapping passiert einmal zentral.
+- **Artikel aller Stamm-Lieferanten** mit **kuratierter Verknüpfung Artikel → GP**. Das teure Mapping passiert einmal zentral.
 - Der **Artikelstamm entsteht in vier Schritten:**
-  1. Das Oberteam wählt seine Lieferanten in der Stamm-Lieferant-Matrix (Lieferant × Warengruppe).
-  2. Es lädt seine Preisliste mit Artikelnummern hoch (Zielbild: aus Necta per Schnittstelle).
+  1. Das Oberteam schaltet seine Lieferanten über das Paket in der Stamm-Lieferant-Matrix frei (Lieferant × Warengruppe).
+  2. Es lädt seine **eigene** Preisliste mit Artikelnummern hoch (CSV/Excel, später aus Necta per Schnittstelle). Preise kommen ausschließlich vom Mandanten.
   3. Der Abgleich läuft über Artikelnummer + Lieferant (Regelwerk LA §3).
   4. Damit steht sofort ein arbeitsfähiger Artikelstamm.
+- **Ungeprüft:** ob die Artikeldaten aus Necta weitergegeben werden dürfen (mit Necta klären).
 - **Ohne Stamm-Paket:** leeres System mit nur der Basis. Der Mandant baut Grundprodukte, Lieferanten und Artikel selbst auf.
 
 **Harte Regel: Ein GP ist allergen- und zusatzstoffgleich** (Dominique 13.10.):
@@ -86,7 +88,7 @@ Global (`team_id NULL`), live, für Teams nur lesend, gepflegt nur durch den FA-
   - `Regelwerk_Lieferantenartikel` §6/§10: Heute wird ALL-MAXIMAL aggregiert, künftig gilt Homogenität als Pflicht.
   - `Regelwerk_Grundprodukte` §16: entsprechend anpassen.
   - Beide werden im FA-Wissensmodul (SSOT) gepflegt.
-- **Zu klären:** Gilt „gleich“ auch für Spuren? Was passiert mit Artikeln ohne vollständige Allergendaten? Vorschlag: Spuren zählen mit; fehlende Daten = nicht verknüpfbar, bis die Daten vollständig sind.
+- **Entschieden (Dominique 13.10.):** Beim Vergleich zählen **Spuren nicht mit**, verglichen wird nur „enthalten“. Fehlende Allergendaten gelten als **unbekannt, nicht als gesperrt**. Die Durchsetzung gilt nur beim **neuen** Verknüpfen; Bestandsverknüpfungen werden nicht automatisch gelöst oder umgehängt. Der Bericht „GPs mit uneinheitlichen Artikeln“ weist zusätzlich aus, wie viele Artikel unbekannt sind. (Ersetzt den früheren Vorschlag „Spuren zählen mit, fehlende Daten = nicht verknüpfbar“.)
 
 **Ersatzprodukte und Ersatzrezepte:**
 - Gebaut ist `ComponentEquivalent`: GP↔GP, GP↔Rezept, Rezept↔Rezept, team-weit, mit Umrechnungsfaktor.
@@ -103,13 +105,14 @@ Global (`team_id NULL`), live, für Teams nur lesend, gepflegt nur durch den FA-
 
 - **Entschieden (Dominique 13.10.): Jeder Mandant hat seine eigenen Preise.**
 - **Umsetzung:**
-  - Preiszeilen mit `team_id` = Oberteam; `NULL` = global/Listenpreis.
-  - Die Preissuche (`activePriceSubquery`) geht in dieser Reihenfolge: Team → Vorfahren → global.
+  - Preiszeilen mit `team_id` = Oberteam. **Es gibt keinen Listenpreis-Fallback aus BHG-Konditionen** (Dominique 13.10.): Ohne eigenen Preis lautet das Ergebnis „kein Preis, Kosten unvollständig“.
+  - Die Preissuche (`activePriceSubquery`) geht in dieser Reihenfolge: Team → Vorfahren (bis zur Kundengrenze). Globale Preiszeilen (`team_id NULL`) gibt es im Zielbild nicht.
+  - **Pflicht beim Stamm-Umzug (M2):** Die BHG-Preise (heute Team 6) werden **nicht** als globale Zeilen mitgenommen.
   - Das revidiert Spec 77 „Bewusst nicht: Team-Preis je Artikel“ für die Mandanten-Ebene.
 - **Preislisten-Import (Excel/CSV)**, gehört fest zum Kern und ist der Weg, wie ein Mandant zu seinen Preisen kommt:
   - **Spalten:** Lieferant, Artikelnummer, Bezeichnung, Gebinde/Einheit, Preis netto, gültig ab. Die Spaltenzuordnung erfolgt beim Hochladen.
   - **Abgleich** über Artikelnummer + Lieferant (Regelwerk LA §3), danach über EAN.
-  - **Treffer** schreiben Preise mit `team_id` = Mandant. Der globale Listenpreis bleibt unberührt.
+  - **Treffer** schreiben Preise mit `team_id` = Mandant (append-only mit `valid_from`). Eine globale Zeile wird nie angefasst.
   - **Ohne Treffer:** Die Zeilen landen in einer Prüfliste. Daraus wird ein eigener Artikel des Mandanten, der an ein Grundprodukt gehängt wird (Stamm-GP oder eigenes GP, siehe §4).
   - **Wiederholbar:** Ein neuer Upload aktualisiert die Preise, die Historie bleibt erhalten (append-only wie `foodalchemist_prices`).
   - Später kommt derselbe Weg automatisch über die Necta-Schnittstelle, sobald sie geklärt ist.
@@ -238,7 +241,7 @@ Beschreibt, was die Küche kann. Das ist keine DNA.
 - **Kündigung tief kopieren:** Wird ein genutztes Gericht zur eigenen Kopie, kommen seine abonnierten Basis- und Unter-Rezepte sowie die Ersatz-Beziehungen mit.
 - **Löschen im Master:** Ein abonniertes Rezept lässt sich nicht löschen, nur **zurückziehen**. Das löst bei den Abonnenten dieselbe Logik wie eine Kündigung aus.
 - **Ersatzprodukte und Ersatzrezepte** (`ComponentEquivalent`) gehören zur Hülle und kommen mit dem Abo mit.
-- Die Regel „Master-Bibliothek nur mit globalen Stamm-GPs“ und die Kopplung von Abo und Stamm-Paket sind noch zu entscheiden, siehe „Offen“.
+- **Entschieden (Dominique 13.10., Entscheidung 1 = Variante C):** Ein Abo setzt ein gebuchtes Stamm-Paket voraus. Das Paket ist Teil der FA-Gebühren. Die Master-Bibliothek verwendet nur globale Stamm-GPs.
 
 **Ein Food Alchemist, nicht zwei:** Master-Team und Mandant nutzen dieselbe Software, dieselbe Datenbank und dasselbe Datenmodell. Der Unterschied liegt nur in **Bereichen und Rechten** (Spec 77):
 - Das Master-Team hat zusätzlich die Bereiche „Mandanten“ und „Abos“ freigeschaltet, dazu die FA-Admin-Rolle (Plattform-Stamm schreiben).
@@ -270,9 +273,9 @@ Beschreibt, was die Küche kann. Das ist keine DNA.
 1. Kaskaden-Fixes (§7, vorab)
 2. Navigation + Begriffe: „Unter-Teams & Freigaben“ in die Einstellungen, Outlet → Kalkulationsprofil (§1, §5)
 3. Preise je Mandant (§3), **Stufe 3a** (Preissuche mit Team). Stufe 3b kommt mit Schritt 7.
-4. **Voraussetzung:** Migrationsstand demo ↔ main abgleichen (M4: Stamm-Lieferant-Tabelle fehlt auf demo). Dann Allergen-Homogenität beim Verknüpfen durchsetzen (§2), globale Zeilen in `basis` und `stamm_paket` einteilen und Opt-in-Regel im Scope (§12 A3), und Stamm-Paket Opt-in + Preislisten-Import (§2), zuerst CSV/Excel, Necta-Schnittstelle sobald geklärt. Code und Tests gegen `team_id NULL`, **ohne demo-Daten zu verschieben**.
+4. **Voraussetzung:** Migrationsstand demo ↔ main abgleichen (M4: erledigt 13.10., demo = main). Dann Allergen-Homogenität beim Verknüpfen durchsetzen (§2), globale Zeilen in `basis` und `stamm_paket` einteilen und Opt-in-Regel im Scope (§12 A3), und Stamm-Paket Opt-in + Preislisten-Import (§2), zuerst CSV/Excel, Necta-Schnittstelle sobald geklärt. Code und Tests gegen `team_id NULL`, **ohne demo-Daten zu verschieben**.
 
-**Daten-Umzug Plattform-Stamm (M2) – erst auf dem eigenen Server** (Dominique 13.10.): Der Stamm (GP, Lieferanten, Artikel, Listenpreise) wird **nicht auf demo** nach global verschoben. Er wird beim Aufbau des eigenen Servers sauber als globaler Stamm eingespielt, aus der lokalen GP-/Basisrezept-Pflege (lokale GP-/Basisrezept-Pflege für den neuen Server). Bis dahin gilt auf demo Team 6 als Stamm.
+**Daten-Umzug Plattform-Stamm (M2) – erst auf dem eigenen Server** (Dominique 13.10.): Der Stamm (GP, Lieferanten, Artikel; **keine Preise**, siehe §3) wird **nicht auf demo** nach global verschoben. Die BHG-Preise (heute Team 6) werden dabei nicht als globale Zeilen mitgenommen. Er wird beim Aufbau des eigenen Servers sauber als globaler Stamm eingespielt, aus der lokalen GP-/Basisrezept-Pflege (lokale GP-/Basisrezept-Pflege für den neuen Server). Bis dahin gilt auf demo Team 6 als Stamm.
 5. Teamprofil + Machbarkeits-Check (§6)
 6. DNA feldweise + `canvas_templates` + KontextResolver (§7)
 
@@ -304,7 +307,7 @@ Bevor die Spec freigegeben wird, muss jedes Szenario ohne Widerspruch durchlaufe
 | 7 | **KI plant ein Rooftop-Buffet für LAGO** | Resolver zieht Soulkitchen-Vorgaben, LAGO-DNA und Teamprofil; der Machbarkeits-Check warnt bei fehlendem Equipment |
 | 8 | **Master tauscht im Abo-Jus eine Zutat, das Allergenbild ändert sich** | Die Änderung wird als Allergen-Änderung markiert; was der Mandant sieht, hängt von Entscheidung 2 ab (siehe „Offen“). Die betroffenen Ausgaben des Mandanten werden aufgelistet. |
 | 9 | **Unter-Team Gladbach pinnt bei Butter einen anderen Artikel, nutzt Broichs Abo-Rezept** | Gladbach sieht Kosten mit seinem Pin, Broich mit seinem (Stufe 3b). Das Allergenbild ist identisch (homogenes GP, §2). |
-| 10 | **Mandant ohne Stamm-Paket abonniert eine Sammlung** | Hängt von Entscheidung 1 ab: Das Stamm-Paket wird mit eingeschaltet, Preise ohne eigenen Eintrag laufen als markierter Listenpreis |
+| 10 | **Mandant ohne Stamm-Paket abonniert eine Sammlung** | Nicht möglich: Ein Abo setzt ein gebuchtes Stamm-Paket voraus (Entscheidung 1, Variante C). Ohne eigenen Preis: „kein Preis, Kosten unvollständig“, kein Listenpreis-Fallback |
 | 11 | **Master will ein abonniertes Rezept löschen** | Löschen gesperrt, nur „zurückziehen“; Mandanten, die es nutzen, bekommen eine tiefe Kopie |
 | 12 | **Lieferant ändert die Rezeptur seines Artikels (neue Allergene)** | Die tägliche Prüfung markiert den Artikel als „passt nicht mehr zum GP“ und legt ihn in eine Prüfliste; er wird nicht still weitergerechnet |
 
@@ -326,7 +329,8 @@ Nach zwei unabhängigen Reviews am 13.10. Die Code-Belege wurden geprüft.
    - `team_id NULL` heißt heute „für alle sichtbar“ (`BelongsToTeamHierarchy` :47). Das reicht nicht für „Basis für alle, Paket nur bei Opt-in“.
    - Neu: Globale Zeilen bekommen eine Klasse (`basis` | `stamm_paket`), und das Opt-in steht in einer Tabelle je Mandant.
    - Der Scope blendet `stamm_paket`-Zeilen nur bei Opt-in ein.
-   - Das betrifft GP, Lieferanten, Artikel und Listenpreise; Vokabular, Regeln und Wissen sind immer `basis`.
+   - Das betrifft GP, Lieferanten und Artikel (Preise gehören nicht ins Paket, siehe §2); Vokabular, Regeln und Wissen sind immer `basis`.
+   - **Gebaut (Schritt 4b):** Spalte `stamm_class` auf GP, Lieferant, Artikel (Default `basis`), Opt-in-Tabelle `foodalchemist_team_stamm_optins`, Scope in `BelongsToTeamHierarchy` und `TeamScope::applyVisible`. **Preiszeilen bekommen keine eigene Spalte:** Das Paket enthält keine Preise (Dominique 13.10.). Solange globale Preiszeilen (Bestand) existieren, folgt ihre Sichtbarkeit dem Artikel über `FoodAlchemistPrice::stammSichtbar` (Abstimmung mit Stufe 3a; eine zweite Spalte wäre eine zweite Wahrheit). Abweichung von der ursprünglichen Fassung dieses Punkts. Das Master-Team (Config) sieht das Paket immer.
 4. **Zwei Grundeinstellungen bewusst getrennt** (siehe §8): im Mandanten „sieht alles“, vom Master „sieht nichts“, mit eigenen Tests.
 5. **Kein Schreiben über die Mandantengrenze** (entschieden, §9). Kommt es je dazu: je Mandant vergeben und protokolliert, nicht nur über einen Navigationsbereich.
 
@@ -357,7 +361,7 @@ Damit erledigt sich Entscheidung 2 („Offen“): Eine zentrale Veröffentlichun
 2. **Auslöser-Matrix** (was löst welche Neuberechnung aus):
    - Preis-Import oder Pin eines Teams → nur Rezepte, die **dieses Team** nutzt, und nur für dieses Team
    - Neue Fassung im Master → alle Abonnenten, aber nur ihre Bibliotheks-Sicht. Eingefrorene Ausgaben bleiben, wie sie sind.
-   - Änderung am Stamm-Listenpreis → alle Teams ohne eigenen Preis für diesen Artikel
+   - Änderung am Stammartikel (Allergene, Nährwerte, Verknüpfung) → alle Teams, die den Artikel nutzen. Preise ändern nur der Mandant selbst.
 3. **Abnahmetest** (Zahlen beispielhaft):
    - Derselbe Jus kostet bei Broich 4,20 €, bei Soulkitchen 5,10 €.
    - Ändert Broich einen Einkaufspreis, werden Broichs abhängige Gerichte neu berechnet, und Soulkitchens Werte bleiben unverändert.
@@ -403,7 +407,7 @@ Damit erledigt sich Entscheidung 2 („Offen“): Eine zentrale Veröffentlichun
 | M1 | Hängen Mandanten per `parent_team_id` unter BHG.DIGITAL? | **Nein.** demo und lokale Plattform: 8 Teams, **alle ohne Eltern-Team**. `FOODALCHEMIST_MASTER_TEAM_ID` ist **nirgends gesetzt** (config = NULL). Keine Unter-Teams, `team_betriebe` leer. | Die Hierarchie-Logik ist gebaut, aber **ungenutzt**. Schritt 7 hat **keine Bestandsdaten, die brechen können** → Risiko deutlich kleiner als angenommen. Wir legen fest, ob Mandanten unter das Master-Team gehängt werden (Kette) oder daneben stehen (dann Abo per Freigabe-Tabelle) – das ist frei wählbar. |
 | M2 | Gibt es heute einen globalen Stamm (`team_id NULL`)? | **Nein.** Auf demo liegt **alles in Team 6** („Demo“): 7.984 GPs, 264.516 Artikel, 221.592 Preise, 120 Lieferanten, 3.748 Rezepte. 0 Zeilen global. | Der Plattform-Stamm muss erst **entstehen**. Er wird **auf dem eigenen Server** als globaler Stamm aufgebaut, nicht per Migration auf demo (Dominique 13.10., siehe §10). Die Rezepte werden die Master-Bibliothek. |
 | M3 | Rechnet ein Rezept mit den Preisen des betrachtenden Teams? | **Nein.** `PriceService::activePriceSubquery` filtert **nicht nach Team** (ein Preis je Artikel). Die Kosten stehen **einmal am Rezept** (`recipes.ek_total_eur`), die Neuberechnung (`RecipeRecomputeService::recomputePipeline(recipeId)`) kennt kein Team. | **Abo und Preise je Mandant brauchen eine Kostenschicht je Team:** Preissuche mit Team (Team → Vorfahren → global) **und** Kosten je Rezept × Team (z. B. Tabelle `recipe_team_costs`), neu gerechnet je abonnierendem Team. Das ist der größte Einzelbaustein → Schritt 3 wird etwa doppelt so groß. |
-| M4 | Stamm-Lieferant-Matrix auf demo? | Tabelle `foodalchemist_stamm_lieferanten` fehlt auf demo (Migration dort nicht gelaufen bzw. andere Version). | Vor Schritt 4 den Migrationsstand demo ↔ main prüfen. |
+| M4 | Stamm-Lieferant-Matrix auf demo? | **Korrigiert 13.10. (Schritt 4a):** Die Tabelle heißt seit dem Englisch-Umbau `foodalchemist_preferred_suppliers` und **existiert auf demo**. Alle 373 Migrationen aus main stehen auf demo, der FA-Pin steht auf main (nur Spec-82-Doku fehlt). Spaltenvergleich GP, Lieferant, Artikel, Preis: identisch. | Kein Migrations-Vorlauf nötig. |
 
 ## Offen (vor Freigabe)
 
@@ -414,14 +418,12 @@ Damit erledigt sich Entscheidung 2 („Offen“): Eine zentrale Veröffentlichun
   - Zielbild: Der Mandant lädt seine Daten in Necta hoch, und sie kommen in sein Team.
   - Recherche vom 13.10.: necta.one (Internorga 17.03.2026) hat eine dokumentierte REST-API. **necta.supply** ist das erste Modul darauf, mit strukturiertem Lieferanten-Datenaustausch. Daneben laufen die FTP-Formate (EDIFACT, Hogast, BMECat, Delegate, HRPRICAT) mit Artikelstamm, Tagespreisen und LMIV.
   - **Ungeprüft:** ob es Konditionen bzw. Preise je Necta-Mandant gibt. Das muss mit Necta geklärt werden.
-- [ ] **Entscheidung 1 · Abo ohne Stamm-Paket.** Vorschlag:
-  - Ein Abo schaltet das Stamm-Paket automatisch mit ein.
-  - Ohne eigenen Preis gilt der markierte Listenpreis.
-  - Als Regel: Die Master-Bibliothek verwendet **nur globale Stamm-GPs**.
+- [x] ~~Entscheidung 1 · Abo ohne Stamm-Paket~~ → **Variante C (Dominique 13.10.):** Ein Abo setzt ein gebuchtes Stamm-Paket voraus, das Paket ist Teil der FA-Gebühren und enthält keine Preise. Preise kommen ausschließlich vom Mandanten, kein Listenpreis-Fallback. Die Master-Bibliothek verwendet nur globale Stamm-GPs.
+- [ ] **Necta-Artikeldaten:** Dürfen die Artikeldaten aus Necta (Artikelnummer, Bezeichnung, Allergene, Nährwerte, EAN) an Mandanten weitergegeben werden? Mit Necta klären.
 - [x] ~~Entscheidung 2 · Allergen-Änderung im Abo~~ → gelöst durch §12 B (Fassungen; eingefrorene Ausgaben bleiben; Allergen-Änderung nur nach Bestätigung). Zusammen mit der Homogenitäts-Regel (§2) entsteht sie nur noch durch eine Änderung der Rezeptur.
 - [ ] **Entscheidung 4 · Endkunde in der Kaskade:** Vorschlag (§7): Die Kunden-Ebene greift, **sobald die Ausgabe einen Kunden trägt** (Angebot immer; Foodbook/Speisekarte, wenn eine CRM-Firma verknüpft ist, Spec 64). Damit bleibt der Vorab-Fix „Foodbook-Prompts ohne Kunde“ gültig.
 - [ ] **Entscheidung 3 · „Outlet“ im Code umbenennen?** Vorschlag: nein, nur die Beschriftung. Der Code hängt in 124 Dateien, auch an Speisekarten, Druckern, Etiketten und Präsentationen.
-- [ ] **Allergen-Homogenität im Detail:** Zählen Spuren mit? Was passiert mit fehlenden Daten? (Vorschlag in §2)
+- [x] ~~Allergen-Homogenität im Detail~~ → Spuren zählen nicht mit, fehlende Daten = unbekannt, nicht gesperrt (Dominique 13.10., §2)
 - [x] ~~Schreibrecht des Masters über die Mandantengrenze?~~ → nein, Modul „Mandanten“ nur lesend (§9)
 - [x] ~~Wo wird das Teamprofil gepflegt?~~ → im jeweiligen Team, Master liest (§6)
 - [x] ~~Eigene Artikel eines Mandanten → GP?~~ → Der Mandant verknüpft selbst (§4)

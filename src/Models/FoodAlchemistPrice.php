@@ -32,6 +32,27 @@ class FoodAlchemistPrice extends Model
         'creation_date' => 'datetime',
     ];
 
+    /**
+     * Spec 82 §12 A3: Die Klasse einer Preiszeile folgt dem Artikel (keine eigene Spalte).
+     * Blendet Preise von globalen stamm_paket-Artikeln aus, wenn das Team kein Opt-in hat.
+     * Preise teamgebundener Artikel und Team-Preise (team_id gesetzt) bleiben unberührt.
+     *
+     * Muss in jedem Lesepfad gesetzt werden, der Preise per Artikel-ID liest (activeFor,
+     * activePriceSubquery, preisTrendBulk, historyFor, rohe SQL-Pfade) — sie prüfen die
+     * Artikelsichtbarkeit nicht selbst.
+     */
+    public function scopeStammSichtbar(\Illuminate\Database\Eloquent\Builder $query, ?\Platform\Core\Models\Team $team): \Illuminate\Database\Eloquent\Builder
+    {
+        if (\Platform\FoodAlchemist\Support\StammPaket::istFreigeschaltet($team)) {
+            return $query;
+        }
+
+        return $query->whereIn($this->getTable() . '.supplier_item_id', function ($sub) use ($team) {
+            $sub->select('id')->from('foodalchemist_supplier_items');
+            \Platform\FoodAlchemist\Support\StammPaket::begrenzen($sub, 'foodalchemist_supplier_items', $team);
+        });
+    }
+
     public function item(): BelongsTo
     {
         return $this->belongsTo(FoodAlchemistSupplierItem::class, 'supplier_item_id');

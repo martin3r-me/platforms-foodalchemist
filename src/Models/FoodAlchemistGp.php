@@ -32,6 +32,9 @@ class FoodAlchemistGp extends Model
         'is_lactose_free', 'is_gluten_free',
     ];
 
+    /** Spec 82 §12 A3: globale Zeilen tragen eine Klasse (basis | stamm_paket). */
+    public const STAMM_KLASSE = true;
+
     protected $table = 'foodalchemist_gps';
 
     /** Breite Stammdaten-Tabelle — Schreibwege laufen über Services (01_ARCHITEKTUR §1). */

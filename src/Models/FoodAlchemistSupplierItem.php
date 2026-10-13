@@ -19,6 +19,9 @@ class FoodAlchemistSupplierItem extends Model
 {
     use HasUuidV7, LogsActivity, BelongsToTeamHierarchy, SoftDeletes;
 
+    /** Spec 82 §12 A3: globale Zeilen tragen eine Klasse (basis | stamm_paket). */
+    public const STAMM_KLASSE = true;
+
     protected $table = 'foodalchemist_supplier_items';
 
     protected $guarded = ['id'];
