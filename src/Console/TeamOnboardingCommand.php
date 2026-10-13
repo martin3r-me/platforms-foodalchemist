@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\DB;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Services\RecipeService;
+use Platform\FoodAlchemist\Services\TeamAnlegenService;
 
 /**
  * M8-05 / D1+D2: Team-Onboarding — Kind-Team anlegen, Modul freischalten
@@ -53,23 +54,8 @@ class TeamOnboardingCommand extends Command
         }
 
         return DB::transaction(function () use ($parent, $name, $userId, $modul, $startIds) {
-            // 1. Kind-Team in der Hierarchie (D1: Kette aufwärts = Katalog sofort sichtbar)
-            $team = Team::create([
-                'name' => $name, 'user_id' => $userId, 'personal_team' => false,
-                'parent_team_id' => $parent->id,
-            ]);
-            DB::table('team_user')->insertOrIgnore([
-                'team_id' => $team->id, 'user_id' => $userId, 'role' => 'admin',
-                'created_at' => now(), 'updated_at' => now(),
-            ]);
-
-            // 2. Modul-Freischaltung (modulables: Team-morph, enabled — Core-Wissensbasis)
-            DB::table('modulables')->insertOrIgnore([
-                'module_id' => $modul->id,
-                'modulable_type' => get_class($team), 'modulable_id' => $team->id,
-                'enabled' => 1, 'team_id' => $team->id,
-                'created_at' => now(), 'updated_at' => now(),
-            ]);
+            // 1 + 2. Kind-Team in der Hierarchie (D1) + Modul-Freischaltung (modulables) — geteilt mit der Lizenz-Übernahme (Spec 82 §9)
+            $team = app(TeamAnlegenService::class)->unterTeam($parent, $name, $userId);
 
             // 3. Optionales Startpaket: D2-SNAPSHOTS (team-eigene Kopien via duplicate)
             $kopien = 0;

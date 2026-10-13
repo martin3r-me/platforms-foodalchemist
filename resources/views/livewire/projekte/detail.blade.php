@@ -125,6 +125,42 @@
                 </x-fa::section>
             @endif
 
+            @if($phase === 'uebergabe')
+                <x-fa::section title="Lizenz erteilt" data-projekt-lizenz
+                    description="Wenn der Kunde die Lizenz hat, wird die Akte in seinen Mandanten kopiert: je Kunden-Standort ein Unter-Team mit dem Profil, die Kunden-DNA wird Team-DNA, „Bleibt“ wird verbindlich. Die Akte und das Foodbook bleiben bei uns.">
+                    @if($mandantTeam)
+                        <x-fa::badge tone="ok" icon="heroicon-m-check-circle" data-projekt-lizenz-fertig>Übernommen in {{ $mandantTeam->name }}</x-fa::badge>
+                    @elseif(! $istPlattformAdmin)
+                        <p class="text-[var(--fa-ink-3)]" data-projekt-lizenz-nur-admin>Die Übernahme führt ein Plattform-Admin aus.</p>
+                    @else
+                        @if($oberteam === null)
+                            <div class="flex flex-col gap-2 max-w-md">
+                                <x-fa::field label="Oberteam des Mandanten suchen (das Team des Kunden auf der Plattform)" for="lz-team">
+                                    <x-fa::input id="lz-team" type="search" wire:model.live.debounce.300ms="oberteamSuche" placeholder="Teamname" data-projekt-lizenz-suche />
+                                </x-fa::field>
+                                @foreach($oberteamTreffer as $t)
+                                    <button type="button" wire:key="ot-{{ $t->id }}" wire:click="oberteamWaehlen({{ $t->id }})" class="text-left px-3 py-2 rounded border border-[var(--fa-line)] hover:bg-[var(--fa-hover)]" data-projekt-lizenz-team="{{ $t->id }}">{{ $t->name }}</button>
+                                @endforeach
+                            </div>
+                        @else
+                            <div class="flex flex-wrap items-center gap-2"><x-fa::badge tone="accent" icon="heroicon-m-building-office-2">{{ $oberteam->name }}</x-fa::badge><x-fa::button size="sm" variant="ghost" wire:click="oberteamLoesen">Anderes Team</x-fa::button></div>
+                            @if($vorschau)
+                                <ul class="mt-2 text-[length:var(--fa-text-sm)] flex flex-col gap-1" data-projekt-lizenz-vorschau>
+                                    <li>Unter-Teams: {{ $vorschau['unter_teams'] === [] ? 'keine (kein Kunden-Standort)' : implode(', ', $vorschau['unter_teams']) }}</li>
+                                    <li>Kunden-DNA wird Team-DNA: {{ count($vorschau['dna_felder']) }} Felder, davon {{ $vorschau['dna_bleibt'] }} „Bleibt“ (verbindlich)</li>
+                                    @if($vorschau['dna_uebersprungen'] !== [])<li>Schon gefüllt, bleibt unberührt: {{ implode(', ', $vorschau['dna_uebersprungen']) }}</li>@endif
+                                    <li>Mandant: aktiv, kuratiert, CRM-Firma verknüpft</li>
+                                </ul>
+                                @foreach($vorschau['hindernisse'] as $h)<x-fa::notice tone="crit" class="mt-2" data-projekt-lizenz-hindernis>{{ $h }}</x-fa::notice>@endforeach
+                                @if($vorschau['hindernisse'] === [])
+                                    <div class="mt-3"><x-fa::button variant="primary" wire:click="lizenzUebernehmen" wire:confirm="Lizenz erteilen und die Akte in den Mandanten übernehmen? Das lässt sich nicht zurücknehmen." data-projekt-lizenz-uebernehmen>Lizenz erteilt: übernehmen</x-fa::button></div>
+                                @endif
+                            @endif
+                        @endif
+                    @endif
+                </x-fa::section>
+            @endif
+
             @if($darfSchreiben && $p->phase !== $phase)
                 <div><x-fa::button size="sm" variant="ghost" wire:click="phaseAlsStand" data-projekt-phase-stand>„{{ $phasen[$phase] }}“ als aktuellen Stand setzen</x-fa::button></div>
             @endif

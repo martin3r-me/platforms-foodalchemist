@@ -4,6 +4,7 @@ namespace Platform\FoodAlchemist\Livewire\Projekte;
 
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
+use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Exceptions\FaRechtFehltException;
 use Platform\FoodAlchemist\Livewire\Concerns\ManagesCanvas;
 use Platform\FoodAlchemist\Models\FoodAlchemistProjekt;
@@ -32,6 +33,14 @@ class Detail extends Component
 
     /** Suchtext für die Person der Freigabe (CRM-Kontakt). */
     public string $gateKontaktSuche = '';
+
+    /** Lizenz-Übernahme: Suchtext und gewähltes Oberteam (nur Plattform-Admin). */
+    public string $oberteamSuche = '';
+
+    public ?int $oberteamId = null;
+
+    /** @var array<string,mixed>|null */
+    public ?array $uebernahmeBericht = null;
 
     public ?string $fehler = null;
 
@@ -136,6 +145,39 @@ class Detail extends Component
         return null;
     }
 
+    public function oberteamWaehlen(int $teamId): void
+    {
+        $this->oberteamId = $teamId;
+        $this->oberteamSuche = '';
+    }
+
+    public function oberteamLoesen(): void
+    {
+        $this->oberteamId = null;
+    }
+
+    /** Lizenz erteilt: Akte in den Mandanten übernehmen (Kopie). */
+    public function lizenzUebernehmen(): void
+    {
+        $this->fehler = $this->meldung = null;
+        $oberteam = $this->oberteamId !== null ? Team::find($this->oberteamId) : null;
+        if ($oberteam === null) {
+            $this->fehler = 'Bitte zuerst das Oberteam des Mandanten wählen.';
+
+            return;
+        }
+        try {
+            $this->uebernahmeBericht = app(\Platform\FoodAlchemist\Services\ProjektUebernahmeService::class)
+                ->uebernehmen(CrmKunden::aktuellesTeam(), Auth::user(), $this->projektId, $oberteam);
+            $this->meldung = 'Lizenz erteilt: Die Akte ist in den Mandanten übernommen.';
+            $this->oberteamId = null;
+            $this->kopfLaden($this->projekt());
+            $this->phase = 'uebergabe';
+        } catch (FaRechtFehltException|\RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+        }
+    }
+
     private function aktion(callable $fn, ?string $erfolg = null): void
     {
         $this->fehler = $this->meldung = null;
@@ -159,6 +201,13 @@ class Detail extends Component
         return view('foodalchemist::livewire.projekte.detail', [
             'p' => $p, 'firma' => $firma, 'phasen' => FoodAlchemistProjekt::PHASEN,
             'ki' => app(\Platform\FoodAlchemist\Services\KontextResolver::class)->fuer($team, ['crm_company_id' => (int) $p->crm_company_id, 'projekt_id' => (int) $p->id]),
+            'istPlattformAdmin' => ($istAdmin = app(FaRechte::class)->istPlattformAdmin(Auth::user())),
+            'oberteamTreffer' => $istAdmin && $this->phase === 'uebergabe' && $p->mandant_team_id === null && $this->oberteamId === null && trim($this->oberteamSuche) !== ''
+                ? Team::whereNull('parent_team_id')->where('name', 'like', '%'.trim($this->oberteamSuche).'%')->where('id', '!=', $team->id)->orderBy('name')->limit(8)->get() : collect(),
+            'oberteam' => $this->oberteamId !== null ? Team::find($this->oberteamId) : null,
+            'mandantTeam' => $p->mandant_team_id !== null ? Team::find($p->mandant_team_id) : null,
+            'vorschau' => $istAdmin && $this->oberteamId !== null && ($ot = Team::find($this->oberteamId)) !== null && $p->mandant_team_id === null
+                ? app(\Platform\FoodAlchemist\Services\ProjektUebernahmeService::class)->vorschau($team, Auth::user(), (int) $p->id, $ot) : null,
             'gateFehlt' => $svc->gateFehlt($p), 'foodbooks' => $svc->foodbooks($team, (int) $p->id),
             'gateKontakte' => $this->phase === 'paketlogik' && ! $p->strukturFreigegeben() ? CrmKunden::kontakte($team, $this->gateKontaktSuche) : collect(),
             'kontakteVerknuepft' => count(array_filter($rollen, fn ($r) => ! empty($r['meta']['crm_contact_id']))), 'kontakteGesamt' => count($rollen),
