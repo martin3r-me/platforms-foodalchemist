@@ -48,8 +48,8 @@ it('Ohne Zeile gilt aktiv + autark; die Übersicht listet nur Mandanten (kein Ma
 });
 
 it('Plattform-Admin pflegt Status, Notiz und Modus; die Zeile entsteht beim ersten Schreiben', function () {
-    $this->protokoll->shouldReceive('schreibe')->once()->with('mandant_modus_geaendert', Mockery::on(fn ($d) => $d['von'] === 'autark' && $d['nach'] === 'kuratiert' && $d['team_id'] === $this->soul->id), $this->admin);
-    $this->protokoll->shouldReceive('schreibe')->once()->with('mandant_gepflegt', Mockery::on(fn ($d) => $d['felder'] === ['status'] && ! array_key_exists('notiz', $d)), $this->admin);
+    $this->protokoll->shouldReceive('schreibe')->once()->with('mandant_modus_geaendert', Mockery::on(fn ($d) => $d['von'] === 'autark' && $d['nach'] === 'kuratiert' && $d['team_id'] === $this->soul->id), $this->admin, Mockery::type(\Illuminate\Database\Eloquent\Model::class));
+    $this->protokoll->shouldReceive('schreibe')->once()->with('mandant_gepflegt', Mockery::on(fn ($d) => $d['felder'] === ['status'] && ! array_key_exists('notiz', $d)), $this->admin, Mockery::type(\Illuminate\Database\Eloquent\Model::class));
 
     $m = ($this->svc)()->setze($this->soul, ['status' => 'projekt', 'modus' => 'kuratiert', 'notiz' => ''], $this->admin);
 

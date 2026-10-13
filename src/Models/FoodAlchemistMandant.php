@@ -3,6 +3,7 @@
 namespace Platform\FoodAlchemist\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Platform\ActivityLog\Traits\LogsActivity;
 
 /**
  * Spec 82 §9/§13 B3 + G — Verwaltungszeile je Mandant (Kunden-Hauptteam). Nur Verwaltungsdaten, nie Inhalte.
@@ -10,6 +11,8 @@ use Illuminate\Database\Eloquent\Model;
  */
 class FoodAlchemistMandant extends Model
 {
+    use LogsActivity;   // Spec 82 §13 C4: Plattform-Protokoll hängt an diesem Modell (PlattformProtokoll)
+
     public const STATUS = ['projekt', 'aktiv', 'beendet'];
 
     public const MODI = ['kuratiert', 'autark'];
@@ -25,4 +28,12 @@ class FoodAlchemistMandant extends Model
     protected $casts = [
         'modus_geaendert_at' => 'datetime',
     ];
+
+    public function __construct(array $attributes = [])
+    {
+        parent::__construct($attributes);
+        // Der Freitext der Notiz bleibt aus dem activity-log heraus (nur Verwaltungswerte), auch bei den automatischen created/updated-Einträgen.
+        // Per Konstruktor, weil das Trait `$ignoreAttributes` selbst deklariert und eine zweite Deklaration im Modell ein PHP-Fatal wäre.
+        $this->ignoreAttributes = array_merge($this->ignoreAttributes, ['notiz']);
+    }
 }

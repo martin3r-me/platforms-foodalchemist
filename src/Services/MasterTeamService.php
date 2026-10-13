@@ -61,19 +61,23 @@ class MasterTeamService
             return $vorschau;   // schon so gesetzt
         }
 
-        DB::transaction(function () use ($neuesTeam, $admin) {
+        $einstellung = DB::transaction(function () use ($neuesTeam, $admin) {
             if ($neuesTeam === null) {
-                FoodAlchemistPlattformEinstellung::where('schluessel', FoodAlchemistPlattformEinstellung::MASTER_TEAM)->delete();
-            } else {
-                FoodAlchemistPlattformEinstellung::updateOrCreate(
-                    ['schluessel' => FoodAlchemistPlattformEinstellung::MASTER_TEAM],
-                    ['wert' => (string) $neuesTeam->id, 'gesetzt_von' => $admin->id],
-                );
+                // Einzeln über das Modell löschen (Query-Löschungen feuern keine Ereignisse); das gelöschte Modell bleibt Subjekt des Eintrags.
+                $zeile = FoodAlchemistPlattformEinstellung::where('schluessel', FoodAlchemistPlattformEinstellung::MASTER_TEAM)->first();
+                $zeile?->delete();
+
+                return $zeile;
             }
+
+            return FoodAlchemistPlattformEinstellung::updateOrCreate(
+                ['schluessel' => FoodAlchemistPlattformEinstellung::MASTER_TEAM],
+                ['wert' => (string) $neuesTeam->id, 'gesetzt_von' => $admin->id],
+            );
         });
         MasterTeam::flush();
         StammPaket::flush();
-        $this->protokoll->schreibe('master_team_gesetzt', ['von' => $vorschau['von'], 'nach' => MasterTeam::id(), 'abos_betroffen' => count($vorschau['abos']), 'bestaetigt' => $bestaetigt], $admin);
+        $this->protokoll->schreibe('master_team_gesetzt', ['von' => $vorschau['von'], 'nach' => MasterTeam::id(), 'abos_betroffen' => count($vorschau['abos']), 'bestaetigt' => $bestaetigt], $admin, $einstellung);
 
         return $vorschau;
     }
