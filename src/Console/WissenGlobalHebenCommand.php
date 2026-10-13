@@ -36,7 +36,7 @@ class WissenGlobalHebenCommand extends Command
 
     public function handle(): int
     {
-        $team = $this->option('team') ?? config('foodalchemist.master_team_id');
+        $team = $this->option('team') ?? \Platform\FoodAlchemist\Support\MasterTeam::id();
         if (! is_numeric($team)) {
             $this->error('Kein Quell-Team: --team=N angeben oder FOODALCHEMIST_MASTER_TEAM_ID setzen.');
 

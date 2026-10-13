@@ -52,8 +52,8 @@ final class StammPaket
         }
 
         $kette = TeamScope::ancestryIds($team);
-        $master = config('foodalchemist.master_team_id');
-        $frei = (is_numeric($master) && in_array((int) $master, $kette, true))
+        $master = MasterTeam::id();
+        $frei = ($master !== null && in_array($master, $kette, true))
             || DB::table((new FoodAlchemistTeamStammOptin)->getTable())->whereIn('team_id', $kette)->exists();
 
         return self::$cache[$id] = $frei;
@@ -112,5 +112,6 @@ final class StammPaket
     public static function flush(): void
     {
         self::$cache = [];
+        MasterTeam::flush();   // hängt an derselben Kette: Master-Wechsel ändert, wer das Paket immer hat
     }
 }

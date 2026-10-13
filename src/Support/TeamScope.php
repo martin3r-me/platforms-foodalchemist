@@ -85,10 +85,10 @@ final class TeamScope
         if ($team === null) {
             return false;
         }
-        $konfiguriert = config('foodalchemist.master_team_id');
+        $konfiguriert = MasterTeam::id();   // Spec 82 §13 B4: plattformweite Einstellung vor ENV
 
-        return is_numeric($konfiguriert)
-            ? (int) $team->id === (int) $konfiguriert
+        return $konfiguriert !== null
+            ? (int) $team->id === $konfiguriert
             : $team->parent_team_id === null;
     }
 
