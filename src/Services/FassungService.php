@@ -108,6 +108,14 @@ class FassungService
                 $actor, FoodAlchemistRecipe::mitFassungen()->find($ergebnis['fassung_id']));
         }
 
+        if ($ergebnis['neu'] !== []) {   // Spec 82 §12 B: Signale „Abo-Rezept aktualisiert“ / „Neuere Fassung verfügbar“ — nie ein Grund, die Veröffentlichung scheitern zu lassen
+            try {
+                app(FassungSignalService::class)->nachVeroeffentlichung($ergebnis['neu']);
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::error('Fassung veröffentlicht, aber die Signal-Erzeugung ist fehlgeschlagen: '.$e->getMessage(), ['exception' => $e, 'recipe_id' => $wurzel->id]);
+            }
+        }
+
         return $ergebnis;
     }
 

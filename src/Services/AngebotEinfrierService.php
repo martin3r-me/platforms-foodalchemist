@@ -71,7 +71,7 @@ class AngebotEinfrierService
             return null;
         }
 
-        return DB::transaction(function () use ($angebot, $zeilen, $user) {
+        $e = DB::transaction(function () use ($angebot, $zeilen, $user) {
             $e = FoodAlchemistAngebotEinfrierung::create([
                 'team_id' => $angebot->team_id, 'angebot_id' => $angebot->id, 'status_beim_einfrieren' => (string) ($angebot->status->value ?? $angebot->status),
                 'eingefroren_at' => now(), 'eingefroren_von' => $user?->id,
@@ -82,6 +82,9 @@ class AngebotEinfrierService
 
             return $e->load('zeilen');
         });
+        $this->signaleNachfuehren($angebot, $e);
+
+        return $e;
     }
 
     /** Snapshot verwerfen (Rückweg auf Entwurf). Er bleibt als Historie, ist aber nicht mehr aktiv. */
@@ -93,6 +96,7 @@ class AngebotEinfrierService
             return false;
         }
         $aktiv->update(['verworfen_at' => now(), 'verworfen_von' => $user?->id]);
+        $this->signaleNachfuehren($angebot, $aktiv);
 
         return true;
     }
@@ -284,6 +288,8 @@ class AngebotEinfrierService
             $this->protokoll->schreibe('angebot_fassung_uebernommen', ['angebot_id' => (int) $angebot->id, 'familie_id' => $familieId,
                 'von' => $vorschau['von_nr'], 'nach' => $vorschau['nach_nr'], 'allergen_geaendert' => $vorschau['allergen_geaendert'], 'bestaetigt' => $vorschau['braucht_bestaetigung']], $user, $u);
 
+            $this->signaleNachfuehren($angebot);
+
             return ['uebernahme_id' => (int) $u->id, 'von_nr' => $vorschau['von_nr'], 'nach_nr' => $vorschau['nach_nr'], 'allergen_geaendert' => $vorschau['allergen_geaendert'],
                 'umgehaengt' => $umgehaengt, 'betroffene_ausgaben' => $vorschau['betroffene_ausgaben']];
         });
@@ -385,5 +391,15 @@ class AngebotEinfrierService
             'vollstaendig' => $k['vollstaendig'], 'grund' => $k['vollstaendig'] ? null : ($k['grund'] ?? 'unvollstaendig'), 'fehlende' => $k['fehlende'],
             'vk' => $k['vollstaendig'] ? $k['vk'] : null, 'allergene' => $this->vergleich->allergenBild($gericht), 'kosten_stand_at' => $k['berechnet_at'],
         ]);
+    }
+
+    /** Aktions-Signale „Neuere Fassung verfügbar“ nach Einfrieren, Verwerfen oder Übernehmen nachführen (anlegen, aktualisieren, schließen). Nie ein Grund zu scheitern. */
+    private function signaleNachfuehren(FoodAlchemistAngebot $angebot, ?FoodAlchemistAngebotEinfrierung $einfrierung = null): void
+    {
+        try {
+            app(FassungSignalService::class)->nachAngebotsAenderung($angebot, $einfrierung);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Angebot geändert, aber das Nachführen der Fassungs-Signale ist fehlgeschlagen: '.$e->getMessage(), ['exception' => $e, 'angebot_id' => $angebot->id]);
+        }
     }
 }

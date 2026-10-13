@@ -136,11 +136,19 @@ enum SignalTyp: string
     // Absichtlich in KEINEM der vier `ist*()`-Bereiche: es ist keine Rezept-, Konzept- oder
     // Foodbook-Qualität, sondern Systemzustand — es gehört in die allgemeine Inbox.
     case SteuerdatenDrift = 'steuerdaten_drift';
+    // Spec 82 §12 B (Abo): der Master hat eine neue Fassung eines abonnierten Rezepts veröffentlicht. Zwei Arten, ein Signal je Rezept und Mandant:
+    // `fassung_aktualisiert` = Info (die Bibliothek nutzt die neue Fassung automatisch), `fassung_neuer_verfuegbar` = Aktion (ein eingefrorenes Angebot
+    // steht noch auf einer älteren Fassung). Allergen-/Zusatzstoffänderung hebt beide auf Kritisch. Präfix `fassung_`, nicht `rezept_`: es ist keine
+    // Rezept-Qualität im Sinn der Ampel, sondern ein Ereignis aus der Master-Bibliothek.
+    case FassungAktualisiert = 'fassung_aktualisiert';
+    case FassungNeuerVerfuegbar = 'fassung_neuer_verfuegbar';
 
     public function label(): string
     {
         return match ($this) {
             self::SteuerdatenDrift => 'Wissenseinstellungen der KI weichen ab',
+            self::FassungAktualisiert => 'Abo-Rezept aktualisiert',
+            self::FassungNeuerVerfuegbar => 'Neuere Fassung für ein eingefrorenes Angebot',
             self::PreisAnomalie => 'Auffälliger Lieferantenpreis',
             self::PreisSprungMargeImpact => 'Preissprung mit Folgen für die Marge',
             self::VeraltetePreise => 'Veraltete Preise',
@@ -197,6 +205,8 @@ enum SignalTyp: string
     {
         return match ($this) {
             self::SteuerdatenDrift => 'heroicon-o-adjustments-horizontal',
+            self::FassungAktualisiert => 'heroicon-o-arrow-path',
+            self::FassungNeuerVerfuegbar => 'heroicon-o-lock-open',
             self::PreisAnomalie => 'heroicon-o-arrow-trending-up',
             self::PreisSprungMargeImpact => 'heroicon-o-bolt',
             self::VeraltetePreise => 'heroicon-o-clock',
