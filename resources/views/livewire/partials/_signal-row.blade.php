@@ -31,7 +31,7 @@
                 <x-fa::badge :tone="$sv['ton']">{{ $sig->severity->label() }}</x-fa::badge>
                 {{-- Ebene 2: Betrieb sichtbar machen — NULL = ganzes Team (kein Etikett), sonst der Betrieb. --}}
                 @if($sig->outlet_id)
-                    <x-fa::badge tone="accent" icon="heroicon-m-building-storefront" title="Signal dieses Betriebs">{{ optional($sig->outlet)->name ?? 'Betrieb' }}</x-fa::badge>
+                    <x-fa::badge tone="accent" icon="heroicon-m-building-storefront" title="Signal dieses Kalkulationsprofils">{{ optional($sig->outlet)->name ?? 'Kalkulationsprofil' }}</x-fa::badge>
                 @endif
             </div>
             <p class="mt-0.5 {{ $leise }}">

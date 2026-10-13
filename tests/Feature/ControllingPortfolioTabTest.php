@@ -139,7 +139,7 @@ it('führt zur Pflege, wenn kein Betrieb angelegt ist', function () {
     FoodAlchemistOutlet::query()->delete();
 
     Livewire::test(Portfolio::class)
-        ->assertSee('Noch kein Betrieb angelegt')
+        ->assertSee('Noch kein Kalkulationsprofil angelegt')
         ->assertSee('in den Einstellungen anlegen');
 });
 

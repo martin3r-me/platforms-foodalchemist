@@ -114,7 +114,7 @@
                     {{-- Spec 74: Vorschlag nach Warengruppe — typische Vorrats-Gruppen (Gewürze, Öle, Essig …) zuerst --}}
                     <div class="flex flex-col gap-1.5 pt-2" data-lager-wg-vorschlag>
                         <p class="text-[length:var(--fa-text-md)] font-semibold text-[var(--fa-ink)]">Vorschlag nach Warengruppe</p>
-                        <p class="{{ $leise }}">Grundprodukte, die dieser Betrieb nutzt (Bestand oder im letzten Jahr bestellt) und die noch kein Lagerartikel sind.</p>
+                        <p class="{{ $leise }}">Grundprodukte, die dieses Team nutzt (Bestand oder im letzten Jahr bestellt) und die noch kein Lagerartikel sind.</p>
                         <div class="flex flex-wrap gap-2">
                             @foreach(array_slice($warengruppenVorschlag, 0, 12) as $wg)
                                 <x-fa::button size="sm" :variant="$wg['typisch'] ? 'primary' : 'ghost'" wire:click="warengruppeAlsLagerartikel('{{ $wg['code'] }}')" wire:confirm="{{ $wg['anzahl'] }} Grundprodukt(e) aus „{{ $wg['name'] }}“ als Lagerartikel markieren?" wire:key="wg-{{ $wg['code'] }}">{{ $wg['name'] }} ({{ $wg['anzahl'] }})</x-fa::button>

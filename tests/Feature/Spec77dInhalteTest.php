@@ -182,8 +182,8 @@ it('Picker: Ebenen Gerichte, Basisrezepte, Konzepte, Pakete, Formate — anhaken
     $lw->set('nurNeue', true)->assertDontSeeHtml('data-picker-eintrag="'.$this->gericht->id.'"');
     $this->makeRecipe($this->rootTeam, 'Entwurf-Gericht', ['is_sales_recipe' => true, 'status' => 'draft']);
     $lw->set('nurNeue', false)->set('filterStatus', 'draft')->assertSee('Entwurf-Gericht')->assertDontSeeHtml('data-picker-eintrag="'.$this->gericht->id.'"');
-    // im Controlling-Editor als Reiter
-    Livewire::test(\Platform\FoodAlchemist\Livewire\Controlling\Cockpit::class)->call('setTab', 'standorte')->assertSeeHtml('data-settings-standort-inhalte');
+    // Spec 82 §5: der Editor wohnt jetzt in den Einstellungen des Oberteams (vorher Controlling-Reiter)
+    Livewire::test(\Platform\FoodAlchemist\Livewire\Settings\UnterTeams::class)->assertSeeHtml('data-settings-standort-inhalte');
 });
 
 it('Kundengrenze: unter einem Master-Team endet Haupt-Team, Kontingent und Standorte beim Kunden', function () {

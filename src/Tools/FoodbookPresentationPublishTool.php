@@ -47,8 +47,8 @@ class FoodbookPresentationPublishTool extends FoodAlchemistTool implements ToolC
                     . '(z.B. "broich-empfang-2027" → /p/foodbook/broich-empfang-2027). Wird kebab-normalisiert, '
                     . 'muss je Ausgabeform eindeutig sein; leerer String setzt zurück auf Token.'],
                 'outlet_id' => ['type' => 'integer', 'description' => 'Optional (Slice F): veröffentlicht einen '
-                    . 'ZUSÄTZLICHEN Link FÜR diesen Betrieb — eingefroren mit dessen Preisen UND dessen Vorlage, '
-                    . 'eigene Freigabe. Ohne outlet_id = der Standard-Link am Dokument-Kopf. Der Betrieb muss dem Team gehören.'],
+                    . 'ZUSÄTZLICHEN Link FÜR dieses Kalkulationsprofil — eingefroren mit dessen Preisen UND dessen Vorlage, '
+                    . 'eigene Freigabe. Ohne outlet_id = der Standard-Link am Dokument-Kopf. Das Kalkulationsprofil muss dem Team gehören.'],
             ],
             'required' => ['foodbook_id', 'expires_at'],
         ];
@@ -74,7 +74,7 @@ class FoodbookPresentationPublishTool extends FoodAlchemistTool implements ToolC
                 ? $svc->publishForOutlet($team, 'foodbook', (int) $arguments['foodbook_id'], (int) $arguments['outlet_id'], $settings)
                 : $svc->publish($team, 'foodbook', (int) $arguments['foodbook_id'], $settings);
         } catch (ModelNotFoundException) {
-            return ToolResult::error('Foodbook oder Betrieb nicht gefunden oder nicht sichtbar.', 'NOT_FOUND');
+            return ToolResult::error('Foodbook oder Kalkulationsprofil nicht gefunden oder nicht sichtbar.', 'NOT_FOUND');
         } catch (\Throwable $e) {
             return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR');
         }

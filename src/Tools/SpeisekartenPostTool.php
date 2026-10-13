@@ -31,7 +31,7 @@ class SpeisekartenPostTool extends FoodAlchemistTool implements ToolContract, To
             'properties' => [
                 'name' => ['type' => 'string'],
                 'karten_typ' => ['type' => 'string', 'enum' => ['alacarte', 'tageskarte', 'saisonkarte', 'getraenkekarte', 'weinkarte'], 'default' => 'alacarte'],
-                'outlet_id' => ['type' => 'integer', 'description' => 'Optionaler Outlet/Betrieb-Anker'],
+                'outlet_id' => ['type' => 'integer', 'description' => 'Optionaler Outlet/Kalkulationsprofil-Anker'],
                 'description' => ['type' => 'string'],
             ],
             'required' => ['name'],

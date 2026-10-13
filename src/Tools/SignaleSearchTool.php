@@ -34,7 +34,7 @@ class SignaleSearchTool extends FoodAlchemistTool implements ToolContract, ToolM
                 // auf 7 von 14 Typen zurückgefallen und hätte mit Spec 21 weiter driftet.
                 'type' => ['type' => 'string', 'enum' => array_column(SignalTyp::cases(), 'value')],
                 'limit' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 50, 'default' => 20],
-                'outlet_id' => ['type' => 'integer', 'description' => 'Ebene 2: auf die Betriebs-Brille eingrenzen — Signale dieses Betriebs PLUS die betriebs-unabhängigen (Team-Core). Fehlt = alle Lanes. Betriebe via outlets.GET.'],
+                'outlet_id' => ['type' => 'integer', 'description' => 'Ebene 2: auf die Kalkulationsprofil-Brille eingrenzen — Signale dieses Kalkulationsprofils PLUS die profilunabhängigen (Team-Core). Fehlt = alle Lanes. Kalkulationsprofile via outlets.GET.'],
             ],
         ];
     }
@@ -51,7 +51,7 @@ class SignaleSearchTool extends FoodAlchemistTool implements ToolContract, ToolM
         if (! empty($arguments['outlet_id'])) {
             $outlet = \Platform\FoodAlchemist\Models\FoodAlchemistOutlet::where('team_id', $team->id)->find((int) $arguments['outlet_id']);
             if ($outlet === null) {
-                return ToolResult::error('Betrieb nicht gefunden im Team.', 'NOT_FOUND');
+                return ToolResult::error('Kalkulationsprofil nicht gefunden im Team.', 'NOT_FOUND');
             }
             $nurLane = true;
         }

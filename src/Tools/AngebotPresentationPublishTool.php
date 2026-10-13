@@ -46,8 +46,8 @@ class AngebotPresentationPublishTool extends FoodAlchemistTool implements ToolCo
                     . '(z. B. "broich-gala-2027" → /p/angebot/broich-gala-2027). Wird kebab-normalisiert, '
                     . 'muss je Ausgabeform eindeutig sein; leerer String setzt zurück auf Token.'],
                 'outlet_id' => ['type' => 'integer', 'description' => 'Optional: veröffentlicht einen ZUSÄTZLICHEN Link '
-                    . 'FÜR diesen Betrieb — eingefroren mit dessen Preisen UND dessen Vorlage, eigene Freigabe. '
-                    . 'Ohne outlet_id = der Standard-Link am Dokument-Kopf. Der Betrieb muss dem Team gehören.'],
+                    . 'FÜR dieses Kalkulationsprofil — eingefroren mit dessen Preisen UND dessen Vorlage, eigene Freigabe. '
+                    . 'Ohne outlet_id = der Standard-Link am Dokument-Kopf. Das Kalkulationsprofil muss dem Team gehören.'],
             ],
             'required' => ['angebot_id', 'expires_at'],
         ];
@@ -72,7 +72,7 @@ class AngebotPresentationPublishTool extends FoodAlchemistTool implements ToolCo
                 ? $svc->publishForOutlet($team, 'angebot', (int) $arguments['angebot_id'], (int) $arguments['outlet_id'], $settings)
                 : $svc->publish($team, 'angebot', (int) $arguments['angebot_id'], $settings);
         } catch (ModelNotFoundException) {
-            return ToolResult::error('Angebot oder Betrieb nicht gefunden oder nicht sichtbar.', 'NOT_FOUND');
+            return ToolResult::error('Angebot oder Kalkulationsprofil nicht gefunden oder nicht sichtbar.', 'NOT_FOUND');
         } catch (\Throwable $e) {
             return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR');
         }

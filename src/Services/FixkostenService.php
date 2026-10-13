@@ -68,7 +68,7 @@ class FixkostenService
     public function uebernimmTeamFixkosten(Team $team, FoodAlchemistOutlet $outlet): int
     {
         if ((int) $outlet->team_id !== (int) $team->id) {
-            throw new \RuntimeException('Fremder Betrieb — Fixkosten-Übernahme nur durchs Besitzer-Team.');
+            throw new \RuntimeException('Fremdes Kalkulationsprofil — Fixkosten-Übernahme nur durchs Besitzer-Team.');
         }
         if ($this->rowsFor($team, $outlet)->isNotEmpty()) {
             return 0;   // hat schon eigene Zeilen — nicht dazumischen

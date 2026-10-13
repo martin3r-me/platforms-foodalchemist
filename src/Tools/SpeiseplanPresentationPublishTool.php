@@ -46,8 +46,8 @@ class SpeiseplanPresentationPublishTool extends FoodAlchemistTool implements Too
                 'slug' => ['type' => 'string', 'description' => 'Optionaler eigener Link-Name statt Zufalls-Token '
                     . '(kebab-normalisiert, je Ausgabeform eindeutig; leerer String = zurück auf Token).'],
                 'outlet_id' => ['type' => 'integer', 'description' => 'Optional (Slice F): veröffentlicht einen '
-                    . 'ZUSÄTZLICHEN Aushang-Link FÜR diesen Betrieb — eigene Vorlage + eigener Name, eigene Freigabe. '
-                    . 'Ohne outlet_id = der Standard-Link am Dokument-Kopf. Der Betrieb muss dem Team gehören.'],
+                    . 'ZUSÄTZLICHEN Aushang-Link FÜR dieses Kalkulationsprofil — eigene Vorlage + eigener Name, eigene Freigabe. '
+                    . 'Ohne outlet_id = der Standard-Link am Dokument-Kopf. Das Kalkulationsprofil muss dem Team gehören.'],
             ],
             'required' => ['speiseplan_id', 'expires_at'],
         ];
@@ -74,7 +74,7 @@ class SpeiseplanPresentationPublishTool extends FoodAlchemistTool implements Too
                 ? $svc->publishForOutlet($team, 'speiseplan', (int) $arguments['speiseplan_id'], (int) $arguments['outlet_id'], $settings)
                 : $svc->publish($team, 'speiseplan', (int) $arguments['speiseplan_id'], $settings);
         } catch (ModelNotFoundException) {
-            return ToolResult::error('Speiseplan oder Betrieb nicht gefunden oder nicht sichtbar.', 'NOT_FOUND');
+            return ToolResult::error('Speiseplan oder Kalkulationsprofil nicht gefunden oder nicht sichtbar.', 'NOT_FOUND');
         } catch (\Throwable $e) {
             return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR');
         }

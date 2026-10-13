@@ -45,6 +45,11 @@
 
     {{-- Canvas-Board erst nach Firmen-Wahl (canvasInit ist dann gelaufen) --}}
     @if($companyId !== null && $crmVerfuegbar)
-        @include('foodalchemist::livewire.canvas.partials.board')
+        {{-- Spec 65: erst „Bearbeiten" (sperrt den Bereich für das Team), dann Felder pflegen, „Fertig" gibt frei --}}
+        @php $sperrLesen = in_array($sperr['modus'] ?? 'aus', ['lesen', 'fremd'], true); @endphp
+        @include('foodalchemist::livewire.settings.partials.sperr-leiste', ['sofort' => true])
+        <fieldset @disabled($sperrLesen) class="contents" data-fa-lesemodus="{{ $sperrLesen ? '1' : '0' }}">
+            @include('foodalchemist::livewire.canvas.partials.board')
+        </fieldset>
     @endif
 </div>

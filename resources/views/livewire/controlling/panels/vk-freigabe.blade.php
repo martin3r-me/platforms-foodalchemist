@@ -79,7 +79,7 @@
         @endif
     </x-fa::section>
 
-    {{-- Erstfall: nie freigegeben. Ohne diese Liste wäre die Fläche in einem Betrieb,
+    {{-- Erstfall: nie freigegeben. Ohne diese Liste wäre die Fläche in einem Kalkulationsprofil,
          der noch nie freigegeben hat, dauerhaft leer, obwohl der ganze Katalog offen ist. --}}
     <x-fa::section variant="plain" title="Noch nie freigegeben" icon="heroicon-o-clock"
                    :meta="count($neu) > 0 ? count($neu) . ' offen' : null"

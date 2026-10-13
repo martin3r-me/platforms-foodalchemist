@@ -267,7 +267,7 @@
                                                             @else
                                                                 <span>{{ collect([$rollen[$zl['role']] ?? null, $zl['plu'] ? 'Kasse ' . $zl['plu'] : null])->filter()->implode(' · ') ?: 'Ohne Rolle' }}</span>
                                                                 @if($lk)
-                                                                    <span class="tabular-nums" title="{{ ($lk['band']['quelle'] ?? '') === 'team' ? 'Kein eigenes Zielband, es gilt das Ziel des Betriebs' : 'Zielband der Linie' }}">
+                                                                    <span class="tabular-nums" title="{{ ($lk['band']['quelle'] ?? '') === 'team' ? 'Kein eigenes Zielband, es gilt das Ziel des Kalkulationsprofils' : 'Zielband der Linie' }}">
                                                                         Ziel {{ $lk['band']['min'] !== null ? number_format((float) $lk['band']['min'], 0) . ' bis ' : 'bis ' }}{{ number_format((float) $lk['band']['max'], 0) }} %
                                                                     </span>
                                                                 @endif
@@ -621,7 +621,7 @@
                     {{-- ═══ Reiter: MENÜ-LINIEN ═══ --}}
                     <div x-show="tab === 'linien'" x-cloak class="pt-4 flex flex-col gap-4" data-sp-tab-linien>
                         <fieldset @disabled($gesperrt) class="contents" data-fa-lesemodus="{{ $gesperrt ? '1' : '0' }}">
-                        <x-fa::section title="Menü-Linien" icon="heroicon-o-queue-list" :meta="$mehrzahl($linien->count(), 'Linie', 'Linien')" description="Jede Linie ist eine Ausgabestelle und eine Zeile im Kalender. Das Zielband ersetzt für die Linie das Ziel des Betriebs: Suppe und Dessert dürfen anders kalkulieren als der Hauptgang. Hauptgang-Linien zählen die Gäste des Tages.">
+                        <x-fa::section title="Menü-Linien" icon="heroicon-o-queue-list" :meta="$mehrzahl($linien->count(), 'Linie', 'Linien')" description="Jede Linie ist eine Ausgabestelle und eine Zeile im Kalender. Das Zielband ersetzt für die Linie das Ziel des Kalkulationsprofils: Suppe und Dessert dürfen anders kalkulieren als der Hauptgang. Hauptgang-Linien zählen die Gäste des Tages.">
                             {{-- Spec 57 · Paket 2: jede Linie ist eine Ausgabestelle (Rolle, Kasse, Preis, Zielband). --}}
                             <div class="overflow-x-auto -mx-4">
                                 <table class="fa-table">
@@ -654,7 +654,7 @@
                                                     @if($linie->target_wes_min_pct !== null || $linie->target_wes_max_pct !== null)
                                                         {{ $linie->target_wes_min_pct !== null ? number_format($linie->target_wes_min_pct, 0) : '0' }} bis {{ $linie->target_wes_max_pct !== null ? number_format($linie->target_wes_max_pct, 0) : 'offen' }} %
                                                     @else
-                                                        <span class="text-[var(--fa-ink-3)]" title="Es gilt das Ziel des Betriebs">Ziel des Betriebs</span>
+                                                        <span class="text-[var(--fa-ink-3)]" title="Es gilt das Ziel des Kalkulationsprofils">Ziel des Kalkulationsprofils</span>
                                                     @endif
                                                 </td>
                                                 <td class="num">{{ $linie->default_pax ?: 'Standard' }}</td>
@@ -700,7 +700,7 @@
                                         <x-fa::field label="Linienpreis netto (€)" for="sp-linie-preiswert"><x-fa::input id="sp-linie-preiswert" inputmode="decimal" wire:model="linieForm.price_value" numeric placeholder="z. B. 6,40" /></x-fa::field>
                                     @endif
                                     <x-fa::field label="Wareneinsatz von (%)" for="sp-linie-wesmin"><x-fa::input id="sp-linie-wesmin" inputmode="decimal" wire:model="linieForm.target_wes_min_pct" numeric placeholder="leer = keine Grenze" /></x-fa::field>
-                                    <x-fa::field label="Wareneinsatz bis (%)" for="sp-linie-wesmax"><x-fa::input id="sp-linie-wesmax" inputmode="decimal" wire:model="linieForm.target_wes_max_pct" numeric placeholder="leer = Ziel des Betriebs" /></x-fa::field>
+                                    <x-fa::field label="Wareneinsatz bis (%)" for="sp-linie-wesmax"><x-fa::input id="sp-linie-wesmax" inputmode="decimal" wire:model="linieForm.target_wes_max_pct" numeric placeholder="leer = Ziel des Kalkulationsprofils" /></x-fa::field>
                                     <x-fa::field label="Essen je Tag" for="sp-linie-pax"><x-fa::input id="sp-linie-pax" type="number" min="0" wire:model="linieForm.default_pax" numeric placeholder="Standard des Plans" /></x-fa::field>
                                     <label class="flex items-center gap-2 h-9 text-[length:var(--fa-text-md)] text-[var(--fa-ink)]"><input type="checkbox" wire:model="linieForm.is_vegetarian" class="{{ $haken }}" /> Nur vegetarisch</label>
                                     <label class="flex items-center gap-2 h-9 text-[length:var(--fa-text-md)] text-[var(--fa-ink)]" title="Dauerangebote (Salatbar …) zählen nicht für die Wiederholungsregel"><input type="checkbox" wire:model="linieForm.is_standing" class="{{ $haken }}" /> Dauerangebot</label>
@@ -782,14 +782,14 @@
                         @include('foodalchemist::livewire.speiseplan.partials.vorgaben')
 
                         {{-- Spec 57 · Paket 7: Vorlage für Betriebe (verknüpfte Kopie je Betrieb, im eigenen Team) --}}
-                        <x-fa::section title="Vorlage für Betriebe" icon="heroicon-o-building-storefront">
+                        <x-fa::section title="Vorlage für Kalkulationsprofile" icon="heroicon-o-building-storefront">
                             @if($vorlageHinweis)<x-fa::notice tone="info" data-sp-vorlage-hinweis>{{ $vorlageHinweis }}</x-fa::notice>@endif
                             @if($sp->source_plan_id !== null)
                                 {{-- Dieser Plan ist die Kopie eines Betriebs --}}
                                 <div class="flex flex-col gap-3" data-sp-kopie-abgleich>
                                     <p class="text-[length:var(--fa-text-md)] text-[var(--fa-ink-2)]">
                                         Kopie der Vorlage „{{ $vorlagenAbgleich['vorlage']['name'] ?? 'unbekannt' }}", zuletzt abgeglichen {{ $sp->source_synced_at?->format('d.m.Y H:i') ?? 'noch nie' }}.
-                                        Preise, Mengen und Öffnungstage pflegt der Betrieb selbst.
+                                        Preise, Mengen und Öffnungstage pflegt das Kalkulationsprofil selbst.
                                     </p>
                                     @if(($vorlagenAbgleich['vorlage'] ?? null) === null)
                                         <x-fa::notice tone="warn">Die Vorlage gibt es nicht mehr. Dieser Plan ist jetzt frei.</x-fa::notice>
@@ -801,7 +801,7 @@
                                         @endif
                                         <div class="overflow-x-auto -mx-4">
                                             <table class="fa-table fa-table--compact">
-                                                <thead><tr><th class="pl-4">Tag</th><th>Linie</th><th>Vorlage</th><th>Betrieb</th><th class="pr-4"><span class="sr-only">Aktion</span></th></tr></thead>
+                                                <thead><tr><th class="pl-4">Tag</th><th>Linie</th><th>Vorlage</th><th>Kalkulationsprofil</th><th class="pr-4"><span class="sr-only">Aktion</span></th></tr></thead>
                                                 <tbody>
                                                     @foreach(array_slice($vorlagenAbgleich['zellen'], 0, 40) as $vz)
                                                         <tr wire:key="vz-{{ $vz['key'] }}">
@@ -828,7 +828,7 @@
                             @else
                                 <label class="flex items-start gap-2 text-[length:var(--fa-text-md)] text-[var(--fa-ink)]" data-sp-vorlage-schalter>
                                     <input type="checkbox" @checked($sp->is_template) wire:click="vorlageUmschalten" class="{{ $haken }} mt-0.5" />
-                                    <span>Als Vorlage freigeben. Betriebe bekommen eine verknüpfte Kopie und übernehmen Änderungen per Abgleich.</span>
+                                    <span>Als Vorlage freigeben. Kalkulationsprofile bekommen eine verknüpfte Kopie und übernehmen Änderungen per Abgleich.</span>
                                 </label>
                                 @if($sp->is_template)
                                     <div class="flex flex-col gap-2" data-sp-betriebskopien>
@@ -842,15 +842,15 @@
                                                 </span>
                                             </div>
                                         @empty
-                                            <p class="{{ $leise }}">Noch keine Kopie für einen Betrieb.</p>
+                                            <p class="{{ $leise }}">Noch keine Kopie für ein Kalkulationsprofil.</p>
                                         @endforelse
                                         @if($betriebe->isNotEmpty())
                                             <div class="flex flex-wrap items-center gap-2">
-                                                <x-fa::select wire:model="kopieOutletId" class="w-64" aria-label="Betrieb für die Kopie" placeholder="Betrieb wählen" :options="$betriebe->pluck('name', 'id')" />
-                                                <x-fa::button icon="heroicon-m-plus" wire:click="betriebsKopieAnlegen" data-sp-kopie-anlegen>Kopie für Betrieb anlegen</x-fa::button>
+                                                <x-fa::select wire:model="kopieOutletId" class="w-64" aria-label="Kalkulationsprofil für die Kopie" placeholder="Kalkulationsprofil wählen" :options="$betriebe->pluck('name', 'id')" />
+                                                <x-fa::button icon="heroicon-m-plus" wire:click="betriebsKopieAnlegen" data-sp-kopie-anlegen>Kopie für Kalkulationsprofil anlegen</x-fa::button>
                                             </div>
                                         @else
-                                            <x-fa::signal tone="warn">Noch keine Betriebe angelegt. Das geht unter Einstellungen › Betriebe.</x-fa::signal>
+                                            <x-fa::signal tone="warn">Noch keine Kalkulationsprofile angelegt. Das geht unter Einstellungen › Kalkulationsprofile.</x-fa::signal>
                                         @endif
                                     </div>
                                 @endif
@@ -965,7 +965,7 @@
                                 <label class="flex items-center gap-2 text-[length:var(--fa-text-md)] text-[var(--fa-ink)]"><input type="checkbox" wire:model="presentationPreisAnzeige" class="{{ $haken }}" data-sp-praes-preis> Preise anzeigen</label>
                                 {{-- Ebene 2 · Republish-Preis-Schutz (nur relevant mit Preisen) --}}
                                 <label class="flex items-center gap-2 text-[length:var(--fa-text-md)] text-[var(--fa-ink)]" title="Aus: beim erneuten Veröffentlichen bleiben die eingefrorenen Preise stehen. An: aktuelle Verkaufspreise übernehmen. Nur mit Preisen relevant; die erste Veröffentlichung ist immer aktuell."><input type="checkbox" wire:model="presentationPreiseAktualisieren" class="{{ $haken }}"> Preise beim erneuten Veröffentlichen aktualisieren</label>
-                                <p class="{{ $leise }}">Der Aushang in der Gemeinschaftsverpflegung ist ohne Preise üblich; die Kennzeichnung der Allergene und Zusatzstoffe ist immer sichtbar. Preise z. B. für Café- oder Bistro-Pläne, sie folgen dem aktiven Betrieb.</p>
+                                <p class="{{ $leise }}">Der Aushang in der Gemeinschaftsverpflegung ist ohne Preise üblich; die Kennzeichnung der Allergene und Zusatzstoffe ist immer sichtbar. Preise z. B. für Café- oder Bistro-Pläne, sie folgen dem aktiven Kalkulationsprofil.</p>
                             </div>
 
                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1005,7 +1005,7 @@
                         </x-fa::section>
 
                         {{-- Slice F: Betriebs-Links — pro Betrieb ein eigener Aushang-Link (eigene Vorlage + Name) --}}
-                        <x-fa::section title="Aushang je Betrieb" icon="heroicon-o-building-storefront" :meta="$mehrzahl(count($betriebsLinks), 'Link', 'Links')" description="Ein zusätzlicher Aushang-Link pro Betrieb, mit der Vorlage und dem Namen dieses Betriebs und eigener Freigabe. Der Standard-Link oben bleibt bestehen.">
+                        <x-fa::section title="Aushang je Kalkulationsprofil" icon="heroicon-o-building-storefront" :meta="$mehrzahl(count($betriebsLinks), 'Link', 'Links')" description="Ein zusätzlicher Aushang-Link pro Kalkulationsprofil, mit der Vorlage und dem Namen dieses Kalkulationsprofils und eigener Freigabe. Der Standard-Link oben bleibt bestehen.">
                             @forelse($betriebsLinks as $bl)
                                 <div class="flex flex-col gap-1.5 rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] p-3" x-data>
                                     <div class="flex flex-wrap items-center gap-2">
@@ -1017,26 +1017,26 @@
                                         <div class="flex-1 min-w-0 rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] bg-[var(--fa-ground)] px-2 py-1.5 font-mono text-[length:var(--fa-text-sm)] break-all select-all text-[var(--fa-ink)]">{{ $bl['url'] }}</div>
                                         <x-fa::button size="sm" icon="heroicon-m-clipboard-document" href="#" x-on:click.prevent="navigator.clipboard.writeText('{{ $bl['url'] }}'); $el.lastChild.textContent = ' Kopiert'">Link kopieren</x-fa::button>
                                         @if($bl['enabled'])
-                                            <x-fa::button variant="danger" size="sm" wire:click="betriebZuruckziehen({{ $bl['outlet_id'] }})" wire:confirm="Diesen Betriebs-Link zurückziehen? Er funktioniert dann nicht mehr.">Link zurückziehen</x-fa::button>
+                                            <x-fa::button variant="danger" size="sm" wire:click="betriebZuruckziehen({{ $bl['outlet_id'] }})" wire:confirm="Diesen Kalkulationsprofil-Link zurückziehen? Er funktioniert dann nicht mehr.">Link zurückziehen</x-fa::button>
                                         @else
                                             <x-fa::button size="sm" wire:click="betriebWiederFreigeben({{ $bl['outlet_id'] }})">Link wieder freigeben</x-fa::button>
                                         @endif
                                     </div>
                                 </div>
                             @empty
-                                <p class="{{ $leise }}">Noch kein Betriebs-Link angelegt.</p>
+                                <p class="{{ $leise }}">Noch kein Kalkulationsprofil-Link angelegt.</p>
                             @endforelse
 
                             @if(count($betriebsOptionen) > 0)
                                 <div class="flex flex-col gap-3 rounded-[var(--fa-radius-control)] border border-dashed border-[var(--fa-line-strong)] p-3">
-                                    <span class="{{ $etikett }}">Weiteren Betrieb hinzufügen</span>
+                                    <span class="{{ $etikett }}">Weiteres Kalkulationsprofil hinzufügen</span>
                                     <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 items-end">
-                                        <x-fa::field label="Betrieb" for="sp-outlet-publish">
-                                            <x-fa::select id="sp-outlet-publish" wire:model="outletPublishId" placeholder="Betrieb wählen" :options="collect($betriebsOptionen)->pluck('name', 'id')" />
+                                        <x-fa::field label="Kalkulationsprofil" for="sp-outlet-publish">
+                                            <x-fa::select id="sp-outlet-publish" wire:model="outletPublishId" placeholder="Kalkulationsprofil wählen" :options="collect($betriebsOptionen)->pluck('name', 'id')" />
                                         </x-fa::field>
                                         <x-fa::field label="Gültig bis" for="sp-outlet-gueltig" optional><x-fa::input id="sp-outlet-gueltig" type="date" wire:model="outletPublishGueltigBis" /></x-fa::field>
                                         <x-fa::field label="Vorlage" for="sp-outlet-design" optional>
-                                            <x-fa::select id="sp-outlet-design" wire:model="outletPublishDesign" placeholder="Wie Betrieb oder Dokument">
+                                            <x-fa::select id="sp-outlet-design" wire:model="outletPublishDesign" placeholder="Wie Kalkulationsprofil oder Dokument">
                                                 @foreach($presentationDesignOptionen as $opt)
                                                     <option value="{{ $opt['value'] }}">{{ $opt['label'] }}</option>
                                                 @endforeach
@@ -1045,12 +1045,12 @@
                                         <x-fa::field label="Name im Link" for="sp-outlet-slug" optional><x-fa::input id="sp-outlet-slug" wire:model="outletPublishSlug" placeholder="z. B. broich-nord-2027" /></x-fa::field>
                                     </div>
                                     <div class="flex flex-wrap items-center justify-between gap-2">
-                                        <p class="{{ $leise }}">Beliebig viele Betriebe möglich, je Betrieb ein eigener Link. Ohne eigenes Datum gilt „Gültig bis" des Standard-Links.</p>
-                                        <x-fa::button icon="heroicon-m-plus" wire:click="betriebVeroeffentlichen">Betrieb hinzufügen</x-fa::button>
+                                        <p class="{{ $leise }}">Beliebig viele Kalkulationsprofile möglich, je Kalkulationsprofil ein eigener Link. Ohne eigenes Datum gilt „Gültig bis" des Standard-Links.</p>
+                                        <x-fa::button icon="heroicon-m-plus" wire:click="betriebVeroeffentlichen">Kalkulationsprofil hinzufügen</x-fa::button>
                                     </div>
                                 </div>
                             @else
-                                <x-fa::signal tone="warn">Noch keine Betriebe angelegt. Das geht unter Einstellungen › Betriebe.</x-fa::signal>
+                                <x-fa::signal tone="warn">Noch keine Kalkulationsprofile angelegt. Das geht unter Einstellungen › Kalkulationsprofile.</x-fa::signal>
                             @endif
                         </x-fa::section>
                         </fieldset>
@@ -1227,7 +1227,7 @@
                                     </div>
                                 </div>
                             @endforeach
-                            <p class="{{ $leise }}">Hell hinterlegt: Zielband (Skala 0 bis 100 %). Ohne eigenes Band gilt das Ziel des Betriebs von {{ number_format($zk['team_ziel'] ?? 0, 0) }} %.</p>
+                            <p class="{{ $leise }}">Hell hinterlegt: Zielband (Skala 0 bis 100 %). Ohne eigenes Band gilt das Ziel des Kalkulationsprofils von {{ number_format($zk['team_ziel'] ?? 0, 0) }} %.</p>
                         </div>
                     @endif
 

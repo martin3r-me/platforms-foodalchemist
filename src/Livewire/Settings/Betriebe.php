@@ -69,7 +69,7 @@ class Betriebe extends Component
 
         // Unique ist (team_id, name) — ohne Vorprüfung liefe der Nutzer in einen SQL-Fehler.
         if (FoodAlchemistOutlet::where('team_id', $team->id)->where('name', $name)->exists()) {
-            $this->fehler = 'Es gibt bereits einen Betrieb mit diesem Namen.';
+            $this->fehler = 'Es gibt bereits ein Kalkulationsprofil mit diesem Namen.';
 
             return;
         }
@@ -165,7 +165,7 @@ class Betriebe extends Component
         $team = $this->team();
         if (FoodAlchemistOutlet::where('team_id', $team->id)->where('name', $name)
             ->where('id', '!=', $o->id)->exists()) {
-            $this->fehler = 'Es gibt bereits einen Betrieb mit diesem Namen.';
+            $this->fehler = 'Es gibt bereits ein Kalkulationsprofil mit diesem Namen.';
 
             return;
         }

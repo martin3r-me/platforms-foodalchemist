@@ -61,7 +61,7 @@
                         </div>
                         <div class="grid grid-cols-2 gap-2">
                             <x-fa::field label="Arbeitsplatz" for="dr-ap"><x-fa::select id="dr-ap" wire:model="drucker.arbeitsplatz" :options="$arbeitsplaetze" placeholder="–" /></x-fa::field>
-                            <x-fa::field label="Betrieb" for="dr-betrieb"><x-fa::select id="dr-betrieb" wire:model="drucker.outlet_id" :options="$betriebe" placeholder="alle" /></x-fa::field>
+                            <x-fa::field label="Kalkulationsprofil" for="dr-betrieb"><x-fa::select id="dr-betrieb" wire:model="drucker.outlet_id" :options="$betriebe" placeholder="alle" /></x-fa::field>
                         </div>
                         <label class="inline-flex items-center gap-2 text-[length:var(--fa-text-md)]"><input type="checkbox" wire:model="drucker.is_default" class="{{ $haken }}" /> Standard für diesen Arbeitsplatz</label>
                         <div class="flex gap-2">
@@ -84,11 +84,11 @@
                 @if(($form['printer_id'] ?? '') === '')
                     <x-fa::field label="Format" for="ef-format"><x-fa::select id="ef-format" wire:model="form.format" :options="$formate" /></x-fa::field>
                 @endif
-                <x-fa::field label="Betrieb (Logo, Hersteller)" for="ef-betrieb" hint="Ohne Betrieb bzw. ohne Betriebslogo: Food-Alchemist-Logo.">
-                    <x-fa::select id="ef-betrieb" wire:model="form.outlet_id" :options="$betriebe" placeholder="– kein Betrieb –" />
+                <x-fa::field label="Kalkulationsprofil (Logo, Hersteller)" for="ef-betrieb" hint="Ohne Kalkulationsprofil bzw. ohne Kalkulationsprofil-Logo: Food-Alchemist-Logo.">
+                    <x-fa::select id="ef-betrieb" wire:model="form.outlet_id" :options="$betriebe" placeholder="– kein Kalkulationsprofil –" />
                 </x-fa::field>
                 <x-fa::field label="Design (Farbe, Schrift)" for="ef-design">
-                    <x-fa::select id="ef-design" wire:model="form.presentation_design" :options="$designs" placeholder="wie Betrieb / Standard" />
+                    <x-fa::select id="ef-design" wire:model="form.presentation_design" :options="$designs" placeholder="wie Kalkulationsprofil / Standard" />
                 </x-fa::field>
                 <div class="grid grid-cols-2 gap-2">
                     <x-fa::field label="Allergene" for="ef-all"><x-fa::select id="ef-all" wire:model="form.allergen_darstellung" :options="['beides' => 'Klartext + Kürzel', 'klartext' => 'Klartext', 'kuerzel' => 'Kürzel']" /></x-fa::field>

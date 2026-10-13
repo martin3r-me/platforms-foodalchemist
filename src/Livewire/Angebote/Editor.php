@@ -901,6 +901,7 @@ class Editor extends Component
         try {
             $v = app(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class)->propose('vk.marketing', $kontext, [
                 // Ebene 2 der DNA-Kette: Endkunde des Angebots (Kunde-DNA fließt in den Marketing-Text)
+                'food_dna_angebot_id' => $this->selectedId,   // Spec 82 §7: Angebots-Ebene der Kaskade
                 'food_dna_crm_company_id' => FoodAlchemistAngebot::whereKey($this->selectedId)->value('crm_company_id'),
                 'target_table' => 'foodalchemist_offer_blocks', 'target_id' => $block->id,
             ]);
@@ -1320,7 +1321,7 @@ class Editor extends Component
             return;
         }
         if ($this->outletPublishId === null) {
-            $this->presentationFehler = 'Bitte zuerst einen Betrieb wählen.';
+            $this->presentationFehler = 'Bitte zuerst ein Kalkulationsprofil wählen.';
 
             return;
         }
@@ -1343,7 +1344,7 @@ class Editor extends Component
             $this->outletPublishGueltigBis = null;
             $this->outletPublishDesign = '';
             $this->outletPublishSlug = '';
-            $this->presentationHinweis = 'Betriebs-Link veröffentlicht — eigener Link mit den Preisen, der Vorlage und dem Namen dieses Betriebs.';
+            $this->presentationHinweis = 'Kalkulationsprofil-Link veröffentlicht — eigener Link mit den Preisen, der Vorlage und dem Namen dieses Kalkulationsprofils.';
         } catch (\Throwable $e) {
             $this->presentationFehler = $e->getMessage();
         }
@@ -1359,7 +1360,7 @@ class Editor extends Component
         }
         try {
             app(PresentationService::class)->withdrawForOutlet($this->team(), PresentationService::TYPE_ANGEBOT, $this->selectedId, $outletId);
-            $this->presentationHinweis = 'Betriebs-Link zurückgezogen.';
+            $this->presentationHinweis = 'Kalkulationsprofil-Link zurückgezogen.';
         } catch (\Throwable $e) {
             $this->presentationFehler = $e->getMessage();
         }
@@ -1375,7 +1376,7 @@ class Editor extends Component
         }
         try {
             app(PresentationService::class)->republishForOutlet($this->team(), PresentationService::TYPE_ANGEBOT, $this->selectedId, $outletId, $this->presentationGueltigBis);
-            $this->presentationHinweis = 'Betriebs-Link wieder freigegeben — gleiche URL, eingefrorene Preise bleiben.';
+            $this->presentationHinweis = 'Kalkulationsprofil-Link wieder freigegeben — gleiche URL, eingefrorene Preise bleiben.';
         } catch (\Throwable $e) {
             $this->presentationFehler = $e->getMessage();
         }

@@ -21,6 +21,19 @@ use Platform\FoodAlchemist\Support\CrmKunden;
 class KundeDna extends Component
 {
     use ManagesCanvas;
+    /** Spec 82 §7 / Spec 65: Bereich settings.kunde-dna je Team — Speichern + Einträge sind Sofort-Aktionen, Leiste Bearbeiten → Fertig. */
+    use Concerns\MitEinstellungsSperre;
+
+    protected function sperrBereich(): string
+    {
+        return 'kunde-dna';
+    }
+
+    /** Kunde wählen/lösen ändert nur die Ansicht, nicht die DNA — bleibt auch im Lesemodus bedienbar. */
+    protected function sperrFreiExtra(): array
+    {
+        return ['firmaWaehlen', 'firmaLoesen'];
+    }
 
     public string $firmaSuche = '';
 
@@ -69,6 +82,7 @@ class KundeDna extends Component
         return view('foodalchemist::livewire.settings.kunde-dna', [
             'crmVerfuegbar' => $crmVerfuegbar,
             'firmen' => $firmen,
+            'sperr' => $this->sperrZustand(),   // Spec 65
         ]);
     }
 }

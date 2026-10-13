@@ -14,6 +14,13 @@ use Platform\FoodAlchemist\Livewire\Concerns\ManagesCanvas;
 class FoodDna extends Component
 {
     use ManagesCanvas;
+    /** Spec 82 §7 / Spec 65: Bereich settings.food-dna je Team — Speichern + Einträge sind Sofort-Aktionen, Leiste Bearbeiten → Fertig. */
+    use Concerns\MitEinstellungsSperre;
+
+    protected function sperrBereich(): string
+    {
+        return 'food-dna';
+    }
 
     public function mount(): void
     {
@@ -25,6 +32,8 @@ class FoodDna extends Component
 
     public function render()
     {
-        return view('foodalchemist::livewire.settings.food-dna');
+        return view('foodalchemist::livewire.settings.food-dna', [
+            'sperr' => $this->sperrZustand(),   // Spec 65
+        ]);
     }
 }

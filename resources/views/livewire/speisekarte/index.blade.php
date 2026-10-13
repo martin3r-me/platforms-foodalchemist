@@ -423,8 +423,8 @@
                         {{-- ── Slice F: eigener Link je Betrieb ── --}}
                         <div class="pt-4 border-t border-[var(--fa-line)] flex flex-col gap-3">
                             <div>
-                                <h4 class="text-[length:var(--fa-text-base)] font-semibold text-[var(--fa-ink)]">Links je Betrieb</h4>
-                                <p class="mt-0.5 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)] max-w-[70ch]">Ein zusätzlicher Kundenlink pro Betrieb, eingefroren mit den Preisen und der Vorlage dieses Betriebs und mit eigener Freigabe. Der Standard-Link oben bleibt bestehen.</p>
+                                <h4 class="text-[length:var(--fa-text-base)] font-semibold text-[var(--fa-ink)]">Links je Kalkulationsprofil</h4>
+                                <p class="mt-0.5 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)] max-w-[70ch]">Ein zusätzlicher Kundenlink pro Kalkulationsprofil, eingefroren mit den Preisen und der Vorlage dieses Kalkulationsprofils und mit eigener Freigabe. Der Standard-Link oben bleibt bestehen.</p>
                             </div>
 
                             @forelse($betriebsLinks as $bl)
@@ -440,23 +440,23 @@
                                             <span x-text="kopiert ? 'Kopiert' : 'Link kopieren'">Link kopieren</span>
                                         </x-fa::button>
                                         @if($bl['enabled'])
-                                            <x-fa::button size="sm" variant="danger" wire:click="betriebZuruckziehen({{ $bl['outlet_id'] }})" wire:confirm="Diesen Betriebs-Link zurückziehen? Er ist dann nicht mehr erreichbar.">Zurückziehen</x-fa::button>
+                                            <x-fa::button size="sm" variant="danger" wire:click="betriebZuruckziehen({{ $bl['outlet_id'] }})" wire:confirm="Diesen Kalkulationsprofil-Link zurückziehen? Er ist dann nicht mehr erreichbar.">Zurückziehen</x-fa::button>
                                         @else
                                             <x-fa::button size="sm" wire:click="betriebWiederFreigeben({{ $bl['outlet_id'] }})">Wieder freigeben</x-fa::button>
                                         @endif
                                     </div>
                                 </div>
                             @empty
-                                <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">Noch kein Link für einen Betrieb angelegt.</p>
+                                <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">Noch kein Link für ein Kalkulationsprofil angelegt.</p>
                             @endforelse
 
                             @if(count($betriebsOptionen) > 0)
                                 <div class="rounded-[var(--fa-radius-control)] border border-dashed border-[var(--fa-line-strong)] p-3 flex flex-col gap-3">
-                                    <p class="text-[length:var(--fa-text-md)] font-medium text-[var(--fa-ink)]">Link für einen weiteren Betrieb</p>
+                                    <p class="text-[length:var(--fa-text-md)] font-medium text-[var(--fa-ink)]">Link für ein weiteres Kalkulationsprofil</p>
                                     <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 items-end">
-                                        <x-fa::field label="Betrieb" for="sk-bl-betrieb">
+                                        <x-fa::field label="Kalkulationsprofil" for="sk-bl-betrieb">
                                             <x-fa::select id="sk-bl-betrieb" wire:model="outletPublishId">
-                                                <option value="">Betrieb wählen</option>
+                                                <option value="">Kalkulationsprofil wählen</option>
                                                 @foreach($betriebsOptionen as $o)
                                                     <option value="{{ $o['id'] }}">{{ $o['name'] }}</option>
                                                 @endforeach
@@ -467,7 +467,7 @@
                                         </x-fa::field>
                                         <x-fa::field label="Vorlage" for="sk-bl-design" optional>
                                             <x-fa::select id="sk-bl-design" wire:model="outletPublishDesign">
-                                                <option value="">Vorlage des Betriebs</option>
+                                                <option value="">Vorlage des Kalkulationsprofils</option>
                                                 @foreach($presentationDesignOptionen as $opt)
                                                     <option value="{{ $opt['value'] }}">{{ $opt['label'] }}</option>
                                                 @endforeach
@@ -478,12 +478,12 @@
                                         </x-fa::field>
                                     </div>
                                     <div class="flex flex-wrap items-center justify-between gap-2">
-                                        <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">Beliebig viele Betriebe möglich. Ohne eigenes Datum gilt das „Gültig bis“ des Standard-Links.</p>
-                                        <x-fa::button size="sm" icon="heroicon-m-plus" wire:click="betriebVeroeffentlichen">Betrieb hinzufügen</x-fa::button>
+                                        <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">Beliebig viele Kalkulationsprofile möglich. Ohne eigenes Datum gilt das „Gültig bis“ des Standard-Links.</p>
+                                        <x-fa::button size="sm" icon="heroicon-m-plus" wire:click="betriebVeroeffentlichen">Kalkulationsprofil hinzufügen</x-fa::button>
                                     </div>
                                 </div>
                             @else
-                                <x-fa::notice tone="warn">Noch keine Betriebe angelegt. Betriebe unter Einstellungen › Betriebe anlegen.</x-fa::notice>
+                                <x-fa::notice tone="warn">Noch keine Kalkulationsprofile angelegt. Kalkulationsprofile unter Einstellungen › Kalkulationsprofile anlegen.</x-fa::notice>
                             @endif
                         </div>
                     </x-fa::section>

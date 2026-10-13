@@ -4,5 +4,10 @@
     <x-fa::notice tone="info" title="Die Identität deines Hauses">
         Leitbild, Stil, Aromatik und No-Gos gelten für jede KI-Erzeugung im Team. Darauf bauen die Kunden-DNA und das einzelne Foodbook auf.
     </x-fa::notice>
-    @include('foodalchemist::livewire.canvas.partials.board')
+    {{-- Spec 65: erst „Bearbeiten" (sperrt den Bereich für das Team), dann Felder pflegen, „Fertig" gibt frei --}}
+    @php $sperrLesen = in_array($sperr['modus'] ?? 'aus', ['lesen', 'fremd'], true); @endphp
+    @include('foodalchemist::livewire.settings.partials.sperr-leiste', ['sofort' => true])
+    <fieldset @disabled($sperrLesen) class="contents" data-fa-lesemodus="{{ $sperrLesen ? '1' : '0' }}">
+        @include('foodalchemist::livewire.canvas.partials.board')
+    </fieldset>
 </div>

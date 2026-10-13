@@ -27,9 +27,9 @@ class PortfolioGetTool extends FoodAlchemistTool implements ToolContract, ToolMe
     public function getDescription(): string
     {
         return 'Portfolio-Steuerung: welche Ausgaben (Foodbook, Speisekarte, Speiseplan) laufen '
-            . 'am Stichtag, je Betrieb und je Kunde. Liefert zusätzlich `konflikte` (zwei laufende '
+            . 'am Stichtag, je Kalkulationsprofil und je Kunde. Liefert zusätzlich `konflikte` (zwei laufende '
             . 'Ausgaben derselben Art in derselben Zuordnung — Hinweis, kein Fehler), `luecken` '
-            . '(Zuordnung ohne laufende Ausgabe) und `ohne_zuordnung` (weder Betrieb noch Kunde — '
+            . '(Zuordnung ohne laufende Ausgabe) und `ohne_zuordnung` (weder Kalkulationsprofil noch Kunde — '
             . 'in keiner Brille sichtbar). „Läuft" heißt Status `aktiv` UND Datum im '
             . 'Gültigkeitsfenster; abgelaufene Fenster laufen nicht, auch bei Status aktiv. Der '
             . 'Abruf ändert nie einen Status.';
@@ -43,7 +43,7 @@ class PortfolioGetTool extends FoodAlchemistTool implements ToolContract, ToolMe
                 'stichtag' => ['type' => 'string', 'description' => 'YYYY-MM-DD, Default heute'],
                 'art' => ['type' => 'string', 'enum' => ['foodbook', 'speisekarte', 'speiseplan'],
                     'description' => 'Nur eine Ausgabeform'],
-                'outlet_id' => ['type' => 'integer', 'description' => 'Nur einen Betrieb'],
+                'outlet_id' => ['type' => 'integer', 'description' => 'Nur ein Kalkulationsprofil'],
                 'nur_laufend' => ['type' => 'boolean', 'description' => 'Default false — sonst kommt auch, was NICHT läuft, mit Grund'],
                 'brille' => ['type' => 'string', 'enum' => ['betrieb', 'kunde'],
                     'description' => 'Achse für die Lücken-Analyse, Default betrieb'],
@@ -110,9 +110,9 @@ class PortfolioGetTool extends FoodAlchemistTool implements ToolContract, ToolMe
             'cost_class' => 'local_db',
             'related_tools' => ['foodalchemist.portfolio_promotion.GET', 'foodalchemist.speisekarten.GET'],
             'examples' => [
-                'Welche Speisekarten laufen heute in welchem Betrieb?',
+                'Welche Speisekarten laufen heute in welchem Kalkulationsprofil?',
                 'Wo läuft im September nichts?',
-                'Gibt es Betriebe mit zwei parallelen Karten?',
+                'Gibt es Kalkulationsprofile mit zwei parallelen Karten?',
             ],
         ];
     }

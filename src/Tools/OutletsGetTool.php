@@ -22,9 +22,9 @@ class OutletsGetTool extends FoodAlchemistTool implements ToolContract, ToolMeta
 
     public function getDescription(): string
     {
-        return 'Listet die Betriebe/Standorte (Outlets) des Teams inkl. ihrer Kalkulations-Overrides '
+        return 'Listet die Kalkulationsprofile/Standorte (Outlets) des Teams inkl. ihrer Kalkulations-Overrides '
             . '(Marge/Ziel-Wareneinsatz/Stundensatz/Zuschläge — fehlend = erbt vom Team). Read-only. '
-            . 'Overrides setzt outlet_settings.PUT; anlegen outlets.POST; VK je Betrieb via kalkulation.GET(outlet_id).';
+            . 'Overrides setzt outlet_settings.PUT; anlegen outlets.POST; VK je Kalkulationsprofil via kalkulation.GET(outlet_id).';
     }
 
     public function getSchema(): array
@@ -32,7 +32,7 @@ class OutletsGetTool extends FoodAlchemistTool implements ToolContract, ToolMeta
         return [
             'type' => 'object',
             'properties' => [
-                'include_inactive' => ['type' => 'boolean', 'description' => 'Auch stillgelegte Betriebe listen (Default false).'],
+                'include_inactive' => ['type' => 'boolean', 'description' => 'Auch stillgelegte Kalkulationsprofile listen (Default false).'],
             ],
         ];
     }
@@ -93,7 +93,7 @@ class OutletsGetTool extends FoodAlchemistTool implements ToolContract, ToolMeta
             'read_only' => true, 'idempotent' => true, 'risk_level' => 'safe',
             'requires_auth' => true, 'requires_team' => true, 'cost_class' => 'local_db',
             'related_tools' => ['foodalchemist.outlets.POST', 'foodalchemist.outlet_settings.PUT', 'foodalchemist.kalkulation.GET'],
-            'examples' => ['Liste die Betriebe dieses Teams mit ihren Kalkulations-Overrides.'],
+            'examples' => ['Liste die Kalkulationsprofile dieses Teams mit ihren Kalkulations-Overrides.'],
         ];
     }
 }

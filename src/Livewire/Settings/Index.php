@@ -97,7 +97,11 @@ class Index extends Component
         'praesentations-designs' => ['label' => 'Präsentations-Designs', 'hint' => 'Aufbau, Farben und Schrift des digitalen Kundenbuchs'],
         // Spec 33 P2: Die Tabelle gab es seit Spec 19, die Pflege nie — deshalb war sie leer
         // und `outlet_id` an der Speisekarte hatte nicht einmal ein Eingabefeld.
-        'betriebe' => ['label' => 'Betriebe & Standorte', 'hint' => 'Standorte und Ausgabestellen, Vorlage und Logo je Betrieb'],
+        // Spec 82 §1: „Betrieb" entfällt als Begriff, „Outlet" heißt in der Beschriftung Kalkulationsprofil.
+        // Schlüssel `betriebe` bleibt (URLs, Sperr-Ziel, Code) — nur die Anzeige ändert sich.
+        'betriebe' => ['label' => 'Kalkulationsprofile', 'hint' => 'Rechenbrille je Ausgabestelle (Marge, Zuschläge), Vorlage und Logo; Zuordnung zu den Unter-Teams'],
+        // Spec 82 §5: der frühere Controlling-Reiter „Standorte & Freigaben" — Freigaben, Sammlungen, Schnellstart-Haken je Unter-Team.
+        'unter-teams' => ['label' => 'Unter-Teams & Freigaben', 'hint' => 'Was die Unter-Teams vom Oberteam sehen: Haken „übernimmt alles", Freigaben, Sammlungen'],
         // Spec 59: zentraler Chip-Katalog für Speiseplan-Vorgaben („mind. 2× vegan je Woche“) —
         // die Vorgaben selbst stehen je Plan im Speiseplan-Editor (Reiter Stammdaten).
         'etiketten' => ['label' => 'Etiketten', 'hint' => 'Etikett-Vorlagen: Format, Felder, Datum vorbelegt oder zum Handschreiben, Logo und Design'],
@@ -113,7 +117,7 @@ class Index extends Component
      */
     public const GRUPPEN = [
         'katalog' => ['label' => 'Katalog & Kategorien', 'sektionen' => ['einheiten', 'warengruppen', 'taxonomie', 'vk-taxonomie', 'behaelter', 'concepter-dimensionen']],
-        'betrieb' => ['label' => 'Betrieb & Küche', 'sektionen' => ['betriebe', 'posten', 'rollen', 'zugriffsrechte', 'kueche', 'teamprofil']],
+        'betrieb' => ['label' => 'Team & Küche', 'sektionen' => ['unter-teams', 'betriebe', 'posten', 'rollen', 'zugriffsrechte', 'kueche', 'teamprofil']],
         'kalkulation' => ['label' => 'Einkauf & Kalkulation', 'sektionen' => ['einkauf', 'kalkulation', 'herstellkosten', 'aufschlagsklassen']],
         'ki' => ['label' => 'KI & Wissen', 'sektionen' => ['ki', 'food-dna', 'kunde-dna', 'brief-vorlagen', 'trendradar', 'wissenskategorien', 'wissenssteuerung', 'regeln']],
         'ausgabe' => ['label' => 'Ausgabe', 'sektionen' => ['schreibstile', 'praesentations-designs', 'speiseplan-chips', 'etiketten']],
@@ -122,11 +126,20 @@ class Index extends Component
     /** Sektionen nur für Plattform-Admins (Spec 81: Regeln wie das globale Wissen — Kunden sehen sie nicht). */
     public const NUR_PLATTFORM_ADMIN = ['regeln'];
 
+    /** Spec 82 §5: nur im Oberteam (ohne Eltern-Team) — ein Unter-Team hat keine Unter-Teams. */
+    public const NUR_OBERTEAM = ['unter-teams'];
+
     public function mount(string $sektion = 'einheiten'): void
     {
         abort_unless(array_key_exists($sektion, self::SEKTIONEN), 404);
         abort_if(in_array($sektion, self::NUR_PLATTFORM_ADMIN, true) && ! self::istPlattformAdmin(), 404);
+        abort_if(in_array($sektion, self::NUR_OBERTEAM, true) && self::istUnterTeam(), 404);
         $this->sektion = $sektion;
+    }
+
+    private static function istUnterTeam(): bool
+    {
+        return Auth::user()?->currentTeamRelation?->parent_team_id !== null;
     }
 
     private static function istPlattformAdmin(): bool
@@ -141,6 +154,9 @@ class Index extends Component
         $team = Auth::user()?->currentTeamRelation;
 
         $sektionen = self::istPlattformAdmin() ? self::SEKTIONEN : array_diff_key(self::SEKTIONEN, array_flip(self::NUR_PLATTFORM_ADMIN));
+        if (self::istUnterTeam()) {
+            $sektionen = array_diff_key($sektionen, array_flip(self::NUR_OBERTEAM));
+        }
         $gruppen = array_map(static fn ($g) => ['sektionen' => array_values(array_intersect($g['sektionen'], array_keys($sektionen)))] + $g, self::GRUPPEN);
 
         return view('foodalchemist::livewire.settings.index', [

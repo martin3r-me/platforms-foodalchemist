@@ -21,7 +21,7 @@ class CanvasEntryAddTool extends FoodAlchemistTool implements ToolContract, Tool
 
     public function getDescription(): string
     {
-        return 'Fügt einen Listen-Eintrag zu einem Canvas-Feld hinzu (type food_dna|foodbook|concept|angebot, '
+        return 'Fügt einen Listen-Eintrag zu einem Canvas-Feld hinzu (type food_dna|kunde_dna|foodbook|concept|angebot, '
             . 'key = Feld-Key aus dem Template via canvas.GET, value). Legt den Canvas bei Bedarf an.';
     }
 
@@ -30,8 +30,8 @@ class CanvasEntryAddTool extends FoodAlchemistTool implements ToolContract, Tool
         return [
             'type' => 'object',
             'properties' => [
-                'type' => ['type' => 'string', 'enum' => ['food_dna', 'foodbook', 'concept', 'angebot']],
-                'owner_id' => ['type' => 'integer', 'description' => 'Entity-Id (bei food_dna weglassen = eigenes Team).'],
+                'type' => ['type' => 'string', 'enum' => ['food_dna', 'kunde_dna', 'foodbook', 'concept', 'angebot']],
+                'owner_id' => ['type' => 'integer', 'description' => 'Entity-Id (bei food_dna weglassen = eigenes Team; bei kunde_dna = CRM-Firma).'],
                 'key' => ['type' => 'string', 'description' => 'Feld-Key (aus canvas.GET-Template).'],
                 'value' => ['type' => 'string', 'description' => 'Eintrags-Wert.'],
             ],
@@ -47,10 +47,18 @@ class CanvasEntryAddTool extends FoodAlchemistTool implements ToolContract, Tool
         }
         $svc = app(CanvasService::class);
         $type = (string) ($arguments['type'] ?? '');
-        $ownerType = $type === 'food_dna' ? 'team' : $type;
+        $ownerType = match ($type) {
+            'food_dna' => 'team',
+            'kunde_dna' => 'crm_company',   // Spec 82 §7: Kunden-DNA (Ebene 2) war im MCP nicht erreichbar
+            default => $type,
+        };
         $ownerId = $type === 'food_dna' ? $team->id : (int) ($arguments['owner_id'] ?? 0);
         if ($ownerId === 0) {
             return ToolResult::error('owner_id ist Pflicht für diesen Canvas-Typ.', 'VALIDATION_ERROR');
+        }
+        // kunde_dna: owner_id = CRM-Firma. Nur Firmen des eigenen Haupt-Teams (wie die Einstellungs-Seite).
+        if ($type === 'kunde_dna' && \Platform\FoodAlchemist\Support\CrmKunden::firma($team, $ownerId) === null) {
+            return ToolResult::error("Firma {$ownerId} nicht sichtbar/vorhanden (Kundenverwaltung des Haupt-Teams).", 'NOT_FOUND');
         }
         $ownerModel = match ($type) {
             'foodbook' => FoodAlchemistFoodbook::class,

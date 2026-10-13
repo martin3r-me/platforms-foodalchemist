@@ -193,7 +193,7 @@ class PortfolioService
                 }
 
                 return 'Läuft parallel zu „' . $andere[0]['name'] . '" '
-                    . ($k['brille'] === 'betrieb' ? 'im Betrieb ' : 'beim Kunden ') . $k['zuordnung'] . '.';
+                    . ($k['brille'] === 'betrieb' ? 'im Kalkulationsprofil ' : 'beim Kunden ') . $k['zuordnung'] . '.';
             }
         }
 

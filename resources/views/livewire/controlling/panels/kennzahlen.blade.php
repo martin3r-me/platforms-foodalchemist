@@ -21,7 +21,7 @@
             </p>
             @if(!empty($betriebName))
                 <div data-ctrl-kennzahlen-betrieb>
-                    <x-fa::badge tone="info" icon="heroicon-m-building-storefront">Werte für Betrieb {{ $betriebName }}</x-fa::badge>
+                    <x-fa::badge tone="info" icon="heroicon-m-building-storefront">Werte für Kalkulationsprofil {{ $betriebName }}</x-fa::badge>
                 </div>
             @endif
         </div>
@@ -34,7 +34,7 @@
          Das volle Zuschlagsschema bleibt in den Einstellungen; zwei Formulare auf
          dieselben Spalten wären ein Pflege-Widerspruch. --}}
     <x-fa::section variant="plain" title="Zielwerte" icon="heroicon-o-flag"
-                   :description="!empty($betriebName) ? 'Gespeichert werden die Zielwerte des Teams. Abweichende Werte je Betrieb stehen in den Einstellungen unter Betriebe.' : 'Gegen diese beiden Werte misst das Controlling Wareneinsatz und Marge.'"
+                   :description="!empty($betriebName) ? 'Gespeichert werden die Zielwerte des Teams. Abweichende Werte je Kalkulationsprofil stehen in den Einstellungen unter Kalkulationsprofile.' : 'Gegen diese beiden Werte misst das Controlling Wareneinsatz und Marge.'"
                    data-ctrl-ziele>
         <div class="flex flex-wrap items-end gap-3">
             <x-fa::field label="Ziel-Wareneinsatz in %" for="ctrl-ziel-we">

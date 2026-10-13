@@ -44,8 +44,8 @@ class SpeisekartePresentationPublishTool extends FoodAlchemistTool implements To
                 'slug' => ['type' => 'string', 'description' => 'Optionaler eigener Link-Name statt Zufalls-Token '
                     . '(kebab-normalisiert, je Ausgabeform eindeutig; leerer String = zurück auf Token).'],
                 'outlet_id' => ['type' => 'integer', 'description' => 'Optional (Slice F): veröffentlicht einen '
-                    . 'ZUSÄTZLICHEN Link FÜR diesen Betrieb — eingefroren mit dessen Preisen UND dessen Vorlage, '
-                    . 'eigene Freigabe. Ohne outlet_id = der Standard-Link am Dokument-Kopf. Der Betrieb muss dem Team gehören.'],
+                    . 'ZUSÄTZLICHEN Link FÜR dieses Kalkulationsprofil — eingefroren mit dessen Preisen UND dessen Vorlage, '
+                    . 'eigene Freigabe. Ohne outlet_id = der Standard-Link am Dokument-Kopf. Das Kalkulationsprofil muss dem Team gehören.'],
             ],
             'required' => ['speisekarte_id', 'expires_at'],
         ];
@@ -71,7 +71,7 @@ class SpeisekartePresentationPublishTool extends FoodAlchemistTool implements To
                 ? $svc->publishForOutlet($team, 'speisekarte', (int) $arguments['speisekarte_id'], (int) $arguments['outlet_id'], $settings)
                 : $svc->publish($team, 'speisekarte', (int) $arguments['speisekarte_id'], $settings);
         } catch (ModelNotFoundException) {
-            return ToolResult::error('Speisekarte oder Betrieb nicht gefunden oder nicht sichtbar.', 'NOT_FOUND');
+            return ToolResult::error('Speisekarte oder Kalkulationsprofil nicht gefunden oder nicht sichtbar.', 'NOT_FOUND');
         } catch (\Throwable $e) {
             return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR');
         }

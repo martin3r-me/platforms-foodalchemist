@@ -1370,6 +1370,8 @@ class FoodbookService
             try {
                 $vorschlag = $gateway->propose('concept.wording', $kontext, [
                     'food_dna_foodbook_id' => $k->foodbook_id,
+                    // Spec 82 §7 (Entscheidung 4): die CRM-Firma des Foodbooks gehört in die Kaskade, wie bei den anderen Foodbook-Prompts
+                    'food_dna_crm_company_id' => $k->foodbook?->crm_company_id !== null ? (int) $k->foodbook->crm_company_id : null,
                     'food_dna_concept_id' => $block->concept->id,
                     'target_table' => 'foodalchemist_foodbook_blocks', 'target_id' => $block->id,
                 ]);

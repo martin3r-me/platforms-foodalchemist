@@ -39,7 +39,7 @@ it('Betrieb zuordnen: nur Admin des Oberteams, nur eigene Unter-Teams und aktive
     expect(fn () => $this->standorte->betriebZuordnen($this->rootTeam, $this->childA->id, $this->nord->id, $this->koch))->toThrow(FaRechtFehltException::class);
     expect(fn () => $this->standorte->betriebZuordnen($this->childA, $this->childB->id, $this->nord->id, $this->inhaber))->toThrow(\RuntimeException::class);
     $fremd = FoodAlchemistOutlet::create(['team_id' => $this->childB->id, 'name' => 'Fremd']);
-    expect(fn () => $this->standorte->betriebZuordnen($this->rootTeam, $this->childA->id, $fremd->id, $this->inhaber))->toThrow(\RuntimeException::class, 'Betrieb nicht gefunden');
+    expect(fn () => $this->standorte->betriebZuordnen($this->rootTeam, $this->childA->id, $fremd->id, $this->inhaber))->toThrow(\RuntimeException::class, 'Kalkulationsprofil nicht gefunden');
 
     $this->standorte->betriebZuordnen($this->rootTeam, $this->childA->id, $this->nord->id, $this->inhaber);
     $ctx = app(ActiveOutletContext::class);

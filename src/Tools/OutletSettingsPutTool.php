@@ -34,11 +34,11 @@ class OutletSettingsPutTool extends FoodAlchemistTool implements ToolContract, T
 
     public function getDescription(): string
     {
-        return 'Schreibt die Kalkulations-Overrides EINES Betriebs (Outlet): Marge, Ziel-Wareneinsatz, '
+        return 'Schreibt die Kalkulations-Overrides EINES Kalkulationsprofils (Outlet): Marge, Ziel-Wareneinsatz, '
             . 'Stundensatz, Material-GK-/Lohnnebenkosten-Zuschlag, Lohnquelle (labor_cost_source), eigenes '
             . 'Zuschlagsschema (calculation_schema) + Bezugsbasen. NULL setzt ein Feld zurück auf „erbt vom Team". '
-            . 'Preisklassen bleiben team-geteilt (nicht setzbar). Nur eigene Betriebe. Idempotent (PUT). '
-            . 'Betrieb-IDs via outlets.GET; VK-Wirkung prüfen via kalkulation.GET(outlet_id).';
+            . 'Preisklassen bleiben team-geteilt (nicht setzbar). Nur eigene Kalkulationsprofile. Idempotent (PUT). '
+            . 'Kalkulationsprofil-IDs via outlets.GET; VK-Wirkung prüfen via kalkulation.GET(outlet_id).';
     }
 
     public function getSchema(): array
@@ -46,7 +46,7 @@ class OutletSettingsPutTool extends FoodAlchemistTool implements ToolContract, T
         return [
             'type' => 'object',
             'properties' => [
-                'outlet_id' => ['type' => 'integer', 'description' => 'ID des Betriebs (outlets.GET / outlets.POST).'],
+                'outlet_id' => ['type' => 'integer', 'description' => 'ID des Kalkulationsprofils (outlets.GET / outlets.POST).'],
                 'settings' => [
                     'type' => 'object',
                     'description' => 'Override-Felder; Wert null setzt zurück auf Team-Erbe. Nur diese Keys erlaubt.',
@@ -59,7 +59,7 @@ class OutletSettingsPutTool extends FoodAlchemistTool implements ToolContract, T
                         'labor_cost_source' => ['type' => ['string', 'null'], 'enum' => ['team_flat', 'station_roles', null], 'description' => 'Lohnquelle: team_flat|station_roles. null = erbt vom Team.'],
                         'calculation_schema' => ['type' => ['array', 'null'], 'description' => 'Ganzes Zuschlagsschema (Blockliste) ersetzt das Team-Schema; null = erbt.'],
                         'calculation_reference_bases' => ['type' => ['object', 'null'], 'description' => 'Monats-Bezugsbasen {mek,fek,hk}; null = erbt vom Team.'],
-                        'outlet_role_rates' => ['type' => ['object', 'null'], 'description' => 'Küchen-Rollen-Sätze je Betrieb als {kitchen_role_id: €/Std}; null oder fehlender Key = erbt den Team-Rollensatz.'],
+                        'outlet_role_rates' => ['type' => ['object', 'null'], 'description' => 'Küchen-Rollen-Sätze je Kalkulationsprofil als {kitchen_role_id: €/Std}; null oder fehlender Key = erbt den Team-Rollensatz.'],
                     ],
                     'additionalProperties' => false,
                 ],
@@ -76,7 +76,7 @@ class OutletSettingsPutTool extends FoodAlchemistTool implements ToolContract, T
         }
         $outlet = FoodAlchemistOutlet::where('team_id', $team->id)->find((int) ($arguments['outlet_id'] ?? 0));
         if ($outlet === null) {
-            return ToolResult::error('Betrieb nicht gefunden im Team.', 'NOT_FOUND');
+            return ToolResult::error('Kalkulationsprofil nicht gefunden im Team.', 'NOT_FOUND');
         }
         $settings = $arguments['settings'] ?? null;
         if (! is_array($settings) || $settings === []) {
@@ -158,7 +158,7 @@ class OutletSettingsPutTool extends FoodAlchemistTool implements ToolContract, T
             'requires_auth' => true, 'requires_team' => true, 'cost_class' => 'local_db',
             'side_effects' => ['updates'],
             'related_tools' => ['foodalchemist.outlets.GET', 'foodalchemist.outlets.POST', 'foodalchemist.kalkulation.GET', 'foodalchemist.team_settings.PUT'],
-            'examples' => ['Setze für Betrieb 3 die Marge auf 45 % und den Ziel-Wareneinsatz auf 22 %.'],
+            'examples' => ['Setze für Kalkulationsprofil 3 die Marge auf 45 % und den Ziel-Wareneinsatz auf 22 %.'],
         ];
     }
 }

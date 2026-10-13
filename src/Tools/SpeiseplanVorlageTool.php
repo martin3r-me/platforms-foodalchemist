@@ -22,8 +22,8 @@ class SpeiseplanVorlageTool extends FoodAlchemistTool implements ToolContract, T
 
     public function getDescription(): string
     {
-        return 'Vorlage für Betriebe (im eigenen Team): aktion=setzen mit ist_vorlage (true/false) gibt einen Plan als '
-            . 'Vorlage frei; aktion=kopie mit outlet_id legt für einen Betrieb eine verknüpfte Kopie an (Entwurf); '
+        return 'Vorlage für Kalkulationsprofile (im eigenen Team): aktion=setzen mit ist_vorlage (true/false) gibt einen Plan als '
+            . 'Vorlage frei; aktion=kopie mit outlet_id legt für ein Kalkulationsprofil eine verknüpfte Kopie an (Entwurf); '
             . 'aktion=liste zeigt die Kopien mit offenen Änderungen. Abgleich über speiseplan_vorlage.ABGLEICH.';
     }
 
@@ -35,7 +35,7 @@ class SpeiseplanVorlageTool extends FoodAlchemistTool implements ToolContract, T
                 'plan_id' => ['type' => 'integer', 'description' => 'Speiseplan-Id (die Vorlage).'],
                 'aktion' => ['type' => 'string', 'enum' => ['setzen', 'kopie', 'liste']],
                 'ist_vorlage' => ['type' => 'boolean', 'description' => 'Nur bei aktion=setzen.'],
-                'outlet_id' => ['type' => 'integer', 'description' => 'Nur bei aktion=kopie: Betrieb des eigenen Teams.'],
+                'outlet_id' => ['type' => 'integer', 'description' => 'Nur bei aktion=kopie: Kalkulationsprofil des eigenen Teams.'],
             ],
             'required' => ['plan_id', 'aktion'],
         ];
@@ -73,7 +73,7 @@ class SpeiseplanVorlageTool extends FoodAlchemistTool implements ToolContract, T
             'requires_auth' => true, 'requires_team' => true, 'cost_class' => 'local_db',
             'side_effects' => ['creates', 'updates'],
             'related_tools' => ['foodalchemist.speiseplan_vorlage.ABGLEICH', 'foodalchemist.speiseplaene.GET'],
-            'examples' => ['Gib Speiseplan 3 als Vorlage frei und lege eine Kopie für Betrieb 7 an.'],
+            'examples' => ['Gib Speiseplan 3 als Vorlage frei und lege eine Kopie für Kalkulationsprofil 7 an.'],
         ];
     }
 }

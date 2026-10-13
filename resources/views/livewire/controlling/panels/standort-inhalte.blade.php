@@ -1,20 +1,23 @@
-{{-- Spec 77d · Controlling → Standorte & Freigaben: je Unter-Team „übernimmt alles vom Oberteam" oder nur Freigegebenes
+{{-- Spec 77d · Einstellungen → Unter-Teams & Freigaben (Spec 82 §5, vorher Controlling): je Unter-Team „übernimmt alles vom Oberteam" oder nur Freigegebenes
      (Sammlungen + fertige Ausgaben). Freigegebenes ist im Standort lesend; anpassen = eigene Kopie dort. --}}
 @php($leise = 'text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]')
 <div class="flex flex-col gap-4" data-settings-standort-inhalte>
     @if($fehler)<x-fa::notice tone="crit" data-inhalte-fehler>{{ $fehler }}</x-fa::notice>@endif
     @if($meldung)<x-fa::notice tone="ok" data-inhalte-meldung>{{ $meldung }}</x-fa::notice>@endif
 
-    <x-fa::section title="Standorte" icon="heroicon-o-building-office-2"
+    <x-fa::section title="Unter-Teams" icon="heroicon-o-building-office-2"
         description="Standard: ein Standort übernimmt alles vom Oberteam, auch Neues. Ohne Haken sieht er nur, was ihm freigegeben ist — samt allem, was daran hängt (Konzepte, Gerichte, Basisrezepte). Grundprodukte und Lieferantenartikel bleiben immer sichtbar. Eigene Rezepturen legt jeder Standort weiter selbst an.">
         @if($standorte === [])
-            <x-fa::empty compact icon="heroicon-o-building-office-2" title="Keine Standorte">Dieses Team hat keine Unter-Teams.</x-fa::empty>
+            <x-fa::empty compact icon="heroicon-o-building-office-2" title="Keine Unter-Teams">Dieses Team hat keine Unter-Teams.</x-fa::empty>
         @else
             <div class="flex flex-col gap-3">
                 @foreach($standorte as $st)
                     <div class="rounded-[var(--fa-radius-card)] border border-[var(--fa-line)] p-3 flex flex-col gap-2" wire:key="sti-{{ $st['id'] }}" data-inhalte-standort="{{ $st['id'] }}">
                         <div class="flex flex-wrap items-center justify-between gap-2">
-                            <span class="font-semibold">{{ $st['name'] }}</span>
+                            <span class="flex flex-wrap items-center gap-2">
+                                <span class="font-semibold">{{ $st['name'] }}</span>
+                                <x-fa::badge data-inhalte-kalkprofil="{{ $st['id'] }}" title="Kalkulationsprofil — Zuordnung unter Einstellungen → Kalkulationsprofile">{{ $st['betrieb'] ? 'Kalkulationsprofil: '.$st['betrieb'] : 'Kalkulationsprofil: Standard' }}</x-fa::badge>
+                            </span>
                             <label class="inline-flex items-center gap-2 text-[length:var(--fa-text-sm)]">
                                 <input type="checkbox" class="w-4 h-4 rounded accent-[var(--fa-accent)]" data-inhalte-erbt="{{ $st['id'] }}"
                                     @checked($st['erbt_alles']) wire:change="erbtAllesSetzen({{ $st['id'] }}, $event.target.checked)" />

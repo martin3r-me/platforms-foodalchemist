@@ -1043,8 +1043,8 @@
                         {{-- Betriebs-Links — pro Betrieb ein eigener Link --}}
                         <div class="flex flex-col gap-3 pt-3 border-t border-[var(--fa-line)]">
                             <div>
-                                <h4 class="text-[length:var(--fa-text-md)] font-semibold text-[var(--fa-ink)]">Links je Betrieb</h4>
-                                <p class="{{ $hinweis }}">Ein zusätzlicher Kundenlink je Betrieb, eingefroren mit den Preisen und der Vorlage dieses Betriebs und mit eigener Freigabe. Der Standardlink oben bleibt bestehen.</p>
+                                <h4 class="text-[length:var(--fa-text-md)] font-semibold text-[var(--fa-ink)]">Links je Kalkulationsprofil</h4>
+                                <p class="{{ $hinweis }}">Ein zusätzlicher Kundenlink je Kalkulationsprofil, eingefroren mit den Preisen und der Vorlage dieses Kalkulationsprofils und mit eigener Freigabe. Der Standardlink oben bleibt bestehen.</p>
                             </div>
 
                             @forelse($betriebsLinks ?? [] as $bl)
@@ -1058,22 +1058,22 @@
                                         <div class="flex-1 min-w-0 rounded-[var(--fa-radius-control)] px-2 py-1 font-mono text-[length:var(--fa-text-sm)] break-all select-all bg-[var(--fa-ground)] border border-[var(--fa-line)] text-[var(--fa-ink)]">{{ $bl['url'] }}</div>
                                         <x-fa::button size="sm" icon="heroicon-m-clipboard-document" href="#" x-on:click.prevent="navigator.clipboard.writeText('{{ $bl['url'] }}'); $el.querySelector('span').textContent='Kopiert'"><span>Kopieren</span></x-fa::button>
                                         @if($bl['enabled'])
-                                            <x-fa::button variant="danger" size="sm" wire:click="betriebZuruckziehen({{ $bl['outlet_id'] }})" wire:confirm="Diesen Betriebslink zurückziehen? Er ist dann nicht mehr erreichbar.">Zurückziehen</x-fa::button>
+                                            <x-fa::button variant="danger" size="sm" wire:click="betriebZuruckziehen({{ $bl['outlet_id'] }})" wire:confirm="Diesen Kalkulationsprofil-Link zurückziehen? Er ist dann nicht mehr erreichbar.">Zurückziehen</x-fa::button>
                                         @else
                                             <x-fa::button size="sm" wire:click="betriebWiederFreigeben({{ $bl['outlet_id'] }})">Wieder freigeben</x-fa::button>
                                         @endif
                                     </div>
                                 </div>
                             @empty
-                                <p class="{{ $hinweis }}">Noch kein Link für einen Betrieb angelegt.</p>
+                                <p class="{{ $hinweis }}">Noch kein Link für ein Kalkulationsprofil angelegt.</p>
                             @endforelse
 
                             @if(count($betriebsOptionen ?? []) > 0)
                                 <div class="rounded-[var(--fa-radius-control)] border border-dashed border-[var(--fa-line-strong)] p-3 flex flex-col gap-2">
-                                    <p class="text-[length:var(--fa-text-md)] font-medium text-[var(--fa-ink)]">Weiteren Betrieb hinzufügen</p>
+                                    <p class="text-[length:var(--fa-text-md)] font-medium text-[var(--fa-ink)]">Weiteres Kalkulationsprofil hinzufügen</p>
                                     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 items-end">
-                                        <x-fa::field label="Betrieb" for="ang-betrieb">
-                                            <x-fa::select id="ang-betrieb" wire:model="outletPublishId" placeholder="Betrieb wählen">
+                                        <x-fa::field label="Kalkulationsprofil" for="ang-betrieb">
+                                            <x-fa::select id="ang-betrieb" wire:model="outletPublishId" placeholder="Kalkulationsprofil wählen">
                                                 @foreach($betriebsOptionen as $o)
                                                     <option value="{{ $o['id'] }}">{{ $o['name'] }}</option>
                                                 @endforeach
@@ -1083,7 +1083,7 @@
                                             <x-fa::input id="ang-betrieb-gueltig" type="date" wire:model="outletPublishGueltigBis" />
                                         </x-fa::field>
                                         <x-fa::field label="Vorlage" for="ang-betrieb-design" optional>
-                                            <x-fa::select id="ang-betrieb-design" wire:model="outletPublishDesign" placeholder="Vorlage des Betriebs oder wie Dokument">
+                                            <x-fa::select id="ang-betrieb-design" wire:model="outletPublishDesign" placeholder="Vorlage des Kalkulationsprofils oder wie Dokument">
                                                 @foreach($presentationDesignOptionen ?? [] as $opt)
                                                     <option value="{{ $opt['value'] }}">{{ $opt['label'] }}</option>
                                                 @endforeach
@@ -1093,11 +1093,11 @@
                                             <x-fa::input id="ang-betrieb-slug" wire:model="outletPublishSlug" placeholder="z. B. broich-nord-2027" />
                                         </x-fa::field>
                                     </div>
-                                    <div><x-fa::button size="sm" icon="heroicon-m-plus" wire:click="betriebVeroeffentlichen">Betrieb hinzufügen</x-fa::button></div>
-                                    <p class="{{ $hinweis }}">Beliebig viele Betriebe möglich, je Betrieb ein eigener Link. Ohne eigenes Datum gilt «Gültig bis» des Standardlinks.</p>
+                                    <div><x-fa::button size="sm" icon="heroicon-m-plus" wire:click="betriebVeroeffentlichen">Kalkulationsprofil hinzufügen</x-fa::button></div>
+                                    <p class="{{ $hinweis }}">Beliebig viele Kalkulationsprofile möglich, je Kalkulationsprofil ein eigener Link. Ohne eigenes Datum gilt «Gültig bis» des Standardlinks.</p>
                                 </div>
                             @else
-                                <x-fa::signal tone="info">Noch keine Betriebe angelegt. Das geht unter Einstellungen, Betriebe.</x-fa::signal>
+                                <x-fa::signal tone="info">Noch keine Kalkulationsprofile angelegt. Das geht unter Einstellungen, Kalkulationsprofile.</x-fa::signal>
                             @endif
                         </div>
                     </x-fa::section>

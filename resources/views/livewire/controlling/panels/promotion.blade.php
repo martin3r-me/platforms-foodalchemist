@@ -46,7 +46,7 @@
                         <tr>
                             <th>Ausgabe</th>
                             <th>Art</th>
-                            <th>Betrieb oder Kunde</th>
+                            <th>Kalkulationsprofil oder Kunde</th>
                             <th class="num">Gerichte</th>
                             <th class="num">Menge</th>
                             <th class="num">Umsatz</th>

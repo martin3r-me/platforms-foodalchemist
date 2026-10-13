@@ -227,7 +227,7 @@ class Herstellkosten extends Component
         $this->alleAutomatisch();
         $this->speichern();
         $this->ladeFix();
-        $this->meldung = 'Catering-Beispielwerte berechnet. Bitte anschließend auf den eigenen Betrieb anpassen.';
+        $this->meldung = 'Catering-Beispielwerte berechnet. Bitte anschließend auf das eigene Kalkulationsprofil anpassen.';
         $this->fehler = null;
     }
 
@@ -324,7 +324,7 @@ class Herstellkosten extends Component
         $this->ladeFix();
         $this->meldung = $n > 0
             ? $n . ' Team-Fixkosten für „' . $outlet->name . '“ übernommen.'
-            : 'Betrieb hat bereits eigene Fixkosten.';
+            : 'Kalkulationsprofil hat bereits eigene Fixkosten.';
         $this->dispatch('kosten-aktualisiert');
     }
 

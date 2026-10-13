@@ -24,7 +24,7 @@
         'fisch' => ['Fi', 'Fisch', 'bg-[var(--fa-info-soft)] text-[var(--fa-info)]'],
         'fleisch' => ['Fl', 'Fleisch (Tierart nicht gepflegt)', 'bg-[var(--fa-neutral-soft)] text-[var(--fa-ink-2)]'],
     ];
-    $bandText = ($band['min'] !== null ? number_format((float) $band['min'], 0) . ' bis ' : 'bis ') . number_format((float) $band['max'], 0) . ' %' . (($band['quelle'] ?? '') === 'team' ? ', Ziel des Betriebs' : '');
+    $bandText = ($band['min'] !== null ? number_format((float) $band['min'], 0) . ' bis ' : 'bis ') . number_format((float) $band['max'], 0) . ' %' . (($band['quelle'] ?? '') === 'team' ? ', Ziel des Kalkulationsprofils' : '');
     $wesText = $wes !== null ? number_format((float) $wes, 0, ',', '.') . ' %' : '–';
     $offen = ($detailId ?? null) === $e->id;
 @endphp

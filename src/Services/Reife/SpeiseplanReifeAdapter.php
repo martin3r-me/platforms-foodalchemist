@@ -44,7 +44,7 @@ class SpeiseplanReifeAdapter extends ContainerReifeAdapter
         $this->kopfFeld($luecken, $erfuellt, $sp->budget_wareneinsatz, 'budget_wareneinsatz', 'hinweis',
             'Kein Wareneinsatz-Budget — die Kosten-Ampel des Plans hat kein Soll.', $put, $putArgs);
         $this->kopfFeld($luecken, $erfuellt, $sp->outlet_id, 'outlet_id', 'hinweis',
-            'Kein Outlet — Betriebs-Kalkulation und Aushang haben keinen Bezug.', $put, $putArgs);
+            'Kein Kalkulationsprofil — Kalkulation und Aushang haben keinen Bezug.', $put, $putArgs);
 
         // ── 2. Struktur — Linien und Einträge ───────────────────────────────────────
         $linien = $sp->lines;

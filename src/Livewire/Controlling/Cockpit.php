@@ -63,8 +63,8 @@ class Cockpit extends Component
         // Spec 33 P7: der Signal-Verlauf hat den Lage-Tab überladen (20+ Zeilen unter zwei
         // Kacheln). Lage ist die Momentaufnahme, Verlauf die Bewegung — zwei Fragen, zwei Tabs.
         'verlauf' => 'Verlauf',
-        // Spec 77d: Editor „Standorte & Freigaben" — Haken je Standort, Sammlungen (Picker), Freigaben
-        'standorte' => 'Standorte & Freigaben',
+        // „Standorte & Freigaben" (Spec 77d) ist mit Spec 82 §5 in die Einstellungen des Oberteams
+        // umgezogen: Einstellungen → Unter-Teams & Freigaben. Alte Links `?tab=standorte` landen in „Lage".
     ];
 
     /**

@@ -1,6 +1,6 @@
 {{-- Stufe 3 P3.1 — Küchen-Rollen mit Kostensatz (Küchenchef / Koch / Hilfskoch …).
      fa-pass 2026-10-05: Bausteine/Tokens. Häufigste Aufgabe = Stundensatz je Rolle pflegen →
-     Tabelle mit Direkteingabe zuerst, Betriebs-Wahl darüber, Anlegen darunter (Anordnung wie bisher).
+     Tabelle mit Direkteingabe zuerst, Kalkulationsprofil-Wahl darüber, Anlegen darunter (Anordnung wie bisher).
      Stilllegen bleibt am Zeilenende, abgesetzt als leiser Knopf (kein Löschen: Besetzungen hängen daran). --}}
 <div class="flex flex-col gap-4" data-settings-rollen>
     {{-- Spec 65: „Bearbeiten" sperrt den Bereich für das Team, „Fertig" gibt frei --}}
@@ -17,9 +17,9 @@
             <div class="flex flex-wrap items-end gap-3 p-3 rounded-[var(--fa-radius-control)] bg-[var(--fa-neutral-soft)]">
                 <x-fa::field label="Stundensätze gelten für" for="rollen-betrieb" class="w-72 max-w-full">
                     <x-fa::select id="rollen-betrieb" wire:model.live="outletId">
-                        <option value="">Ganzes Team (Standard für alle Betriebe)</option>
+                        <option value="">Ganzes Team (Standard für alle Kalkulationsprofile)</option>
                         @foreach($betriebe as $b)
-                            <option value="{{ $b['id'] }}">Betrieb: {{ $b['name'] }}</option>
+                            <option value="{{ $b['id'] }}">Kalkulationsprofil: {{ $b['name'] }}</option>
                         @endforeach
                     </x-fa::select>
                 </x-fa::field>
@@ -27,7 +27,7 @@
                     @if($scopeOutletName)
                         Du legst eigene Sätze für <strong class="text-[var(--fa-ink)]">{{ $scopeOutletName }}</strong> fest. Leer übernimmt den Satz des Teams. Rollen anlegen und stilllegen gilt weiter für das ganze Team.
                     @else
-                        Sätze des Teams. Sie gelten für jeden Betrieb ohne eigenen Satz.
+                        Sätze des Teams. Sie gelten für jedes Kalkulationsprofil ohne eigenen Satz.
                     @endif
                 </p>
             </div>
@@ -68,7 +68,7 @@
                                             value="{{ $ov !== null ? rtrim(rtrim(number_format((float) $ov, 2, '.', ''), '0'), '.') : '' }}"
                                             wire:change="feldSetzen({{ $r->id }}, 'satz', $event.target.value)"
                                             class="w-24 {{ $ov !== null ? 'font-semibold text-[var(--fa-accent)]' : '' }}"
-                                            placeholder="{{ $r->stundensatz_eur ?? 'Team' }}" aria-label="Stundensatz {{ $r->name }} in Euro für diesen Betrieb"
+                                            placeholder="{{ $r->stundensatz_eur ?? 'Team' }}" aria-label="Stundensatz {{ $r->name }} in Euro für dieses Kalkulationsprofil"
                                             title="Leer übernimmt den Satz des Teams ({{ $r->stundensatz_eur !== null ? $r->stundensatz_eur . ' €' : 'allgemeiner Stundensatz' }})" data-rolle-satz-outlet />
                                         <span class="text-[var(--fa-ink-3)]">€/Std</span>
                                     </span>

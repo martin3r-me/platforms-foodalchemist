@@ -1,5 +1,5 @@
 {{-- Kopfzeile einer FA-Seite.
-     Eigenständig (FA ist die Plattform): eigene Kopfzeile mit Titel und Betriebswahl.
+     Eigenständig (FA ist die Plattform): eigene Kopfzeile mit Titel und Kalkulationsprofil-Wahl.
      Plattform-Modus (demo/office, Support\FaShell): die Core-Kopfzeile wie bei allen Modulen
      (Modul-Leiste, Team, Benutzer) — plus das vom Modul ausgelieferte FA-CSS. Der <link> steht im
      Seiteninhalt: er gilt nur, solange eine FA-Seite angezeigt wird (wire:navigate tauscht ihn mit aus). --}}

@@ -842,6 +842,7 @@ class AngebotService
                 'foodbook.kundentext',
                 $this->kundentextKontext($team, $angebot),
                 [
+                    'food_dna_angebot_id' => (int) $angebot->id,   // Spec 82 §7: Angebots-Ebene der Kaskade
                     'food_dna_crm_company_id' => $angebot->crm_company_id !== null ? (int) $angebot->crm_company_id : null,
                     'target_table' => 'foodalchemist_offers',
                     'target_id' => (int) $angebot->id,
@@ -881,6 +882,7 @@ class AngebotService
                 'foodbook.kundentext',
                 $this->kapitelKundentextKontext($team, $angebot, $kapitel),
                 [
+                    'food_dna_angebot_id' => (int) $angebot->id,   // Spec 82 §7: Angebots-Ebene der Kaskade
                     'food_dna_crm_company_id' => $angebot->crm_company_id !== null ? (int) $angebot->crm_company_id : null,
                     'target_table' => 'foodalchemist_offer_chapters',
                     'target_id' => (int) $kapitel->id,

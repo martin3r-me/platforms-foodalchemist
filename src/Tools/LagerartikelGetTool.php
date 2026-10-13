@@ -18,7 +18,7 @@ class LagerartikelGetTool extends FoodAlchemistTool implements ToolContract, Too
 
     public function getDescription(): string
     {
-        return 'Listet die Lagerartikel des Betriebs (Grundvorrat wie Gewürze, Öle): Bestand, Mindest- und Sollbestand '
+        return 'Listet die Lagerartikel des Teams (Grundvorrat wie Gewürze, Öle): Bestand, Mindest- und Sollbestand '
             . '(kg/l/Stk) und Status leer | unter_min | ohne_min | ok. nur_unter_mindest=true liefert nur, was nachgefüllt werden muss. '
             . 'Lagerartikel gehen nicht über den Rezeptbedarf in die Bestellrunde, sondern über „Nachfüllen".';
     }

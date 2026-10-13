@@ -23,10 +23,10 @@ class OutletsSetActiveTool extends FoodAlchemistTool implements ToolContract, To
 
     public function getDescription(): string
     {
-        return 'Setzt die aktive Betriebs-Brille für diese MCP-Session (durabel je User+Team) — wie '
+        return 'Setzt die aktive Kalkulationsprofil-Brille für diese MCP-Session (durabel je User+Team) — wie '
             . 'der linke Sidebar-Dropdown, nur per MCP. Danach rechnen Kalkulation/Präsentation/'
-            . 'Controlling ohne explizites outlet_id automatisch gegen diesen Betrieb. outlet_id '
-            . 'weglassen oder null = zurück auf Team-Baseline. Betriebe listen: outlets.GET.';
+            . 'Controlling ohne explizites outlet_id automatisch gegen dieses Kalkulationsprofil. outlet_id '
+            . 'weglassen oder null = zurück auf Team-Baseline. Kalkulationsprofile listen: outlets.GET.';
     }
 
     public function getSchema(): array
@@ -34,7 +34,7 @@ class OutletsSetActiveTool extends FoodAlchemistTool implements ToolContract, To
         return [
             'type' => 'object',
             'properties' => [
-                'outlet_id' => ['type' => ['integer', 'null'], 'description' => 'Betrieb, dessen Brille aktiv wird; null/weglassen = Team-Baseline. Muss dem Team gehören und aktiv sein.'],
+                'outlet_id' => ['type' => ['integer', 'null'], 'description' => 'Kalkulationsprofil, dessen Brille aktiv wird; null/weglassen = Team-Baseline. Muss dem Team gehören und aktiv sein.'],
             ],
         ];
     }
@@ -53,7 +53,7 @@ class OutletsSetActiveTool extends FoodAlchemistTool implements ToolContract, To
 
         // Ein angefragter Betrieb, der nicht auflöst (fremd/inaktiv), ist ein Fehler — nicht stiller Reset.
         if ($angefragt !== null && $outlet === null) {
-            return ToolResult::error('Betrieb nicht gefunden, nicht im Team oder inaktiv.', 'NOT_FOUND');
+            return ToolResult::error('Kalkulationsprofil nicht gefunden, nicht im Team oder inaktiv.', 'NOT_FOUND');
         }
 
         return ToolResult::success([
@@ -62,7 +62,7 @@ class OutletsSetActiveTool extends FoodAlchemistTool implements ToolContract, To
             'team_baseline' => $outlet === null,
             'hinweis' => $outlet === null
                 ? 'Zurück auf Team-Baseline — Reads rechnen wieder team-weit.'
-                : 'Aktiv: „' . $outlet->name . '". Reads ohne outlet_id rechnen jetzt gegen diesen Betrieb.',
+                : 'Aktiv: „' . $outlet->name . '". Reads ohne outlet_id rechnen jetzt gegen dieses Kalkulationsprofil.',
         ]);
     }
 
@@ -78,7 +78,7 @@ class OutletsSetActiveTool extends FoodAlchemistTool implements ToolContract, To
             'requires_team' => true,
             'cost_class' => 'local_db',
             'related_tools' => ['foodalchemist.outlets.GET', 'foodalchemist.kalkulation.GET'],
-            'examples' => ['Schalte die Betriebs-Brille auf „Testbetrieb Nord".', 'Zurück auf Team-Baseline (kein aktiver Betrieb).'],
+            'examples' => ['Schalte die Kalkulationsprofil-Brille auf „Testbetrieb Nord".', 'Zurück auf Team-Baseline (kein aktives Kalkulationsprofil).'],
         ];
     }
 }

@@ -26,7 +26,7 @@ class PaketeGetTool extends FoodAlchemistTool implements ToolContract, ToolMetad
     {
         return ['type' => 'object', 'properties' => [
             'id' => ['type' => 'integer', 'description' => 'Paket-Id.'],
-            'outlet_id' => ['type' => 'integer', 'description' => 'Optional: Betrieb — VK/Person betriebsscharf (price_per_person_outlet). Fehlt = aktive Brille bzw. Team-Baseline.'],
+            'outlet_id' => ['type' => 'integer', 'description' => 'Optional: Kalkulationsprofil — VK/Person je Kalkulationsprofil (price_per_person_outlet). Fehlt = aktive Brille bzw. Team-Baseline.'],
         ], 'required' => ['id']];
     }
 
@@ -44,7 +44,7 @@ class PaketeGetTool extends FoodAlchemistTool implements ToolContract, ToolMetad
         if (! empty($arguments['outlet_id'])) {
             $outlet = \Platform\FoodAlchemist\Models\FoodAlchemistOutlet::where('team_id', $team->id)->find((int) $arguments['outlet_id']);
             if ($outlet === null) {
-                return ToolResult::error('Betrieb nicht gefunden im Team.', 'NOT_FOUND');
+                return ToolResult::error('Kalkulationsprofil nicht gefunden im Team.', 'NOT_FOUND');
             }
         } else {
             $outlet = app(\Platform\FoodAlchemist\Services\ActiveOutletContext::class)
