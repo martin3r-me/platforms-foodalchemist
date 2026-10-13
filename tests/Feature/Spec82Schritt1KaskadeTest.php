@@ -189,6 +189,25 @@ it('Foodbook ohne CRM-Firma: keine Kunden-Ebene (Option bleibt leer)', function 
     expect($optionen)->not->toBeNull()->and($optionen['food_dna_crm_company_id'] ?? null)->toBeNull();
 });
 
+it('Zyklus in der Team-Kette (A → B → A): die DNA-Suche bricht ab, statt zu hängen', function () {
+    // zirkuläre parent_team_id direkt in der DB — so etwas darf die Plattform nie in eine Endlosschleife ziehen
+    \Illuminate\Support\Facades\DB::table('teams')->where('id', $this->rootTeam->id)->update(['parent_team_id' => $this->childA->id]);
+    \Illuminate\Support\Facades\DB::table('teams')->where('id', $this->childA->id)->update(['parent_team_id' => $this->rootTeam->id]);
+    $team = \Platform\Core\Models\Team::find($this->childA->id);
+
+    $start = microtime(true);
+    $canvas = $this->svc->findFoodDna($team);
+    $kontext = $this->svc->cascadeKontext($team);
+
+    expect($canvas)->toBeNull()
+        ->and($kontext)->toBe([])
+        ->and(microtime(true) - $start)->toBeLessThan(5.0);
+
+    // mit DNA im Team selbst: wird auch im kaputten Zustand gefunden und liefert, ohne zu hängen
+    $this->svc->setSkalar($this->svc->canvasFor($this->childA, 'food_dna', 'team', $this->childA->id), 'leitbild', 'ZYKLUS-MARKER');
+    expect($this->svc->cascadeKontext($team)['marken_kontext'] ?? '')->toContain('ZYKLUS-MARKER');
+});
+
 it('MCP: kunde_dna ist lesbar, setzbar und für Listen-Einträge offen, nur für Firmen des Haupt-Teams', function () {
     $firma = \Platform\Crm\Models\CrmCompany::create(['team_id' => $this->rootTeam->id, 'name' => 'Hotel Adler', 'is_active' => true]);
     $fremdTeam = \Platform\Core\Models\Team::create(['name' => 'Fremder Kunde', 'user_id' => 1, 'personal_team' => false]);
