@@ -138,6 +138,16 @@ it('Trait-Vertrag: ALLE Models tragen LogsActivity + BelongsToTeamHierarchy + Ha
             //  - kein LogsActivity: jede Änderung geht ausdrücklich über PlattformProtokoll ins activity-log (mit Vorher/Nachher).
             continue;
         }
+        if (class_basename($klasse) === 'FoodAlchemistMandant') {
+            // Spec 82 §9/§13 B3 + G: Verwaltungszeile je Mandant (Status, Modus, CRM-Firma), eine Zeile je Kunden-Hauptteam.
+            //  - kein BelongsToTeamHierarchy: die Zeile ist Plattform-Verwaltung über den Mandanten, kein Inhalt des Teams;
+            //    scopeVisibleToTeam würde `team_id IS NULL` + Eltern-Zeilen einORen. Gelesen wird nur über MandantenService
+            //    (Plattform-Admin bzw. Master-Admin), nie über den Team-Scope eines Mandanten.
+            //  - kein SoftDeletes/HasUuidV7: unique(team_id), adressiert über team_id, nie über eine externe ID.
+            //  - kein LogsActivity: jede Modus-/Statusänderung geht ausdrücklich über PlattformProtokoll (Vorher/Nachher),
+            //    die Zeile trägt zusätzlich Wer und Wann (geaendert_von, modus_geaendert_von/at).
+            continue;
+        }
         if (class_basename($klasse) === 'FoodAlchemistTeamStammOptin') {
             // Spec 82 §12 A3: Schalter „Mandant hat das Stamm-Paket gebucht", eine Zeile je Mandant.
             //  - kein BelongsToTeamHierarchy: die Vererbung an Unter-Teams löst StammPaket::istFreigeschaltet
