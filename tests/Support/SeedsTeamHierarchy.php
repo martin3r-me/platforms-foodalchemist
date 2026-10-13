@@ -26,6 +26,20 @@ trait SeedsTeamHierarchy
 
     protected Team $childB;
 
+    /**
+     * Spec 82 (#308): Ist das ECHTE platform-activity-log installiert (Sandbox-Symlink auf platforms-activity-log statt
+     * Stub), schreibt jedes LogsActivity-Model in `activity_log_activities` — dann müssen dessen Migrationen mitlaufen,
+     * sonst scheitert jeder Test mit „no such table". Mit dem Stub (ohne logActivity) bleibt alles wie bisher.
+     *
+     * @return list<string>
+     */
+    private static function echtesActivityLog(): array
+    {
+        $pfad = base_path('vendor/martin3r/platform-activity-log/database/migrations');
+
+        return is_dir($pfad) && method_exists(\Platform\ActivityLog\Traits\LogsActivity::class, 'logActivity') ? [$pfad] : [];
+    }
+
     protected function seedTeamHierarchy(): void
     {
         $core = base_path('vendor/martin3r/platform-core/database/migrations');
@@ -118,6 +132,7 @@ trait SeedsTeamHierarchy
                 $core . '/2026_02_05_000001_create_team_core_ai_models_table.php',
                 $core . '/0001_01_01_000007_create_team_invitations_table.php',
                 $module,
+                ...self::echtesActivityLog(),
             ],
         ])->run();
 
