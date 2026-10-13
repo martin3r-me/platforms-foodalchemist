@@ -7,8 +7,11 @@ use Platform\FoodAlchemist\Models\FoodAlchemistAngebot;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistFoodbook;
 use Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel;
+use Platform\FoodAlchemist\Models\FoodAlchemistProjekt;
+use Platform\FoodAlchemist\Models\FoodAlchemistProjektStandort;
 use Platform\FoodAlchemist\Models\FoodAlchemistWritingStyle;
 use Platform\FoodAlchemist\Support\MachbarkeitKontext;
+use Platform\FoodAlchemist\Support\Profiltraeger;
 
 /**
  * Spec 82 · Schritt 6 (§7, §12 E) — der EINE Ort, an dem der KI-Marken-Kontext zusammengesetzt wird.
@@ -22,6 +25,10 @@ use Platform\FoodAlchemist\Support\MachbarkeitKontext;
  *  3. Teamprofil (nur AUSDRÜCKLICHE Fakten; „unbekannt" ist nie „fehlt")
  *  4. Endkunde — nur wenn die Ausgabe eine CRM-Firma trägt (Angebot immer; Entscheidung 4, Dominique 13.10.)
  *  5. Angebot → Foodbook → Concept (spezifischer = später) und die Tonalität des Foodbooks (nie gekürzt)
+ *
+ * Spec 82 §9 (Agentur-Akte): Kaskade Team → Standort → Kunde → Projekt. Mit `projekt_id` kommen der Standort (Pilot oder `standort_id`)
+ * und der Projekt-Block dazu. „Bleibt“ des Kunden (verbindliche Kunden-DNA) steht GANZ VORN und hat bei Widerspruch VORRANG vor den
+ * verbindlichen Vorgaben des Teams (Entscheidung Dominique 13.10.); der Widerspruch wird nicht still aufgelöst, die KI benennt ihn im Ergebnis.
  *
  * GESAMTBUDGET statt eines Deckels je Ebene (`foodalchemist.kontext.budget_zeichen`, Standard 12.000): Verbindliches
  * und die Tonalität werden nie gekürzt; ist der Rest zu lang, wird von UNSPEZIFISCH nach SPEZIFISCH gekürzt
@@ -50,7 +57,7 @@ class KontextResolver
     /**
      * Ids statt Objekten (die bestehenden Aufrufer): `concept_id`, `foodbook_id`, `angebot_id`, `crm_company_id`.
      *
-     * @param  array{concept_id?: ?int, foodbook_id?: ?int, angebot_id?: ?int, crm_company_id?: ?int}  $ids
+     * @param  array{concept_id?: ?int, foodbook_id?: ?int, angebot_id?: ?int, crm_company_id?: ?int, projekt_id?: ?int, standort_id?: ?int}  $ids
      * @return array{marken_kontext: ?string, quellen: list<array<string, mixed>>, bilanz: array<string, mixed>}
      */
     public function fuer(Team $team, array $ids = [], ?MachbarkeitKontext $kontext = null): array
@@ -58,12 +65,31 @@ class KontextResolver
         $ziel = $kontext?->ziel ?? $team;
         $bloecke = [];   // [ebene, label, text, geschuetzt, rang]
 
+        // Kunde zuerst auflösen: „Bleibt“ steht ganz vorn (Vorrang vor dem Team, Spec 82 §9), der Rest später an Rang 3
+        $kundeBleibt = null;
+        $kundeText = null;
+        $kundeId = $ids['crm_company_id'] ?? null;
+        if ($kundeId !== null) {
+            $kundenCanvas = $this->canvas->find('kunde_dna', 'crm_company', (int) $kundeId);
+            if ($kundenCanvas !== null && $this->canvas->verbindlichkeit($kundenCanvas) !== []) {
+                [$kundeBleibt, $kundeText] = $this->kundeGetrennt($kundenCanvas);
+            } elseif ($kundenCanvas !== null) {
+                $kundeText = $this->canvas->promptKontext($kundenCanvas);
+            }
+        }
+        if ($kundeBleibt !== null) {
+            $bloecke[] = ['ebene' => 'kunde_bleibt', 'label' => 'Kunde: Bleibt', 'geschuetzt' => true, 'rang' => 0,
+                'text' => "Verbindliche Vorgaben des Kunden (Bleibt, nicht abweichen). Für Ausgaben dieses Kunden gehen sie VOR den Vorgaben des Teams:\n- ".implode("\n- ", $kundeBleibt)
+                    ."\n- Widerspricht eine Vorgabe des Teams einer dieser Kunden-Vorgaben, gilt die Kunden-Vorgabe; benenne den Widerspruch im Ergebnis ausdrücklich."];
+        }
+
         // 1 + 2 — Team-DNA feldweise; Verbindliches als eigener, ungekürzter Block
         $dna = $this->dna->foodDna($ziel);
         $verbindlich = $this->verbindlicheZeilen($dna);
         if ($verbindlich !== []) {
             $bloecke[] = ['ebene' => 'vorgaben', 'label' => 'Verbindliche Vorgaben', 'geschuetzt' => true, 'rang' => 0,
-                'text' => "Verbindliche Vorgaben des Oberteams (nicht abweichen):\n- ".implode("\n- ", $verbindlich)];
+                'text' => "Verbindliche Vorgaben des Oberteams (nicht abweichen):\n- ".implode("\n- ", $verbindlich)
+                    .($kundeBleibt !== null ? "\n- Vorbehalt: Bei Widerspruch zu den Kunden-Vorgaben (Bleibt) gelten für diesen Kunden die Kunden-Vorgaben." : '')];
         }
         $felder = [];
         $werte = [];
@@ -85,9 +111,26 @@ class KontextResolver
             $bloecke[] = ['ebene' => 'teamprofil', 'label' => 'Teamprofil', 'geschuetzt' => false, 'rang' => 2, 'text' => $profilText];
         }
 
-        // 4 + 5 — Kunde, Angebot, Foodbook, Concept (jeweils nur mit Id)
+        // 3b — Standort (Agentur-Akte: Kunden-Standort des Projekts, Pilot oder ausdrücklich `standort_id`)
+        $projekt = ($ids['projekt_id'] ?? null) !== null ? FoodAlchemistProjekt::where('team_id', $ziel->id)->find((int) $ids['projekt_id']) : null;
+        $standort = $this->standortFuer($ziel, $projekt, $ids['standort_id'] ?? null);
+        if ($standort !== null) {
+            $standortText = $this->profilBlock(Profiltraeger::standort($ziel, (int) $standort->id), $kontext,
+                'Küchen-Fakten des Kunden-Standorts '.$standort->name.' (Standortprofil, ausdrücklich gepflegt)');
+            if ($standortText !== null) {
+                $bloecke[] = ['ebene' => 'standort', 'label' => 'Standortprofil', 'geschuetzt' => false, 'rang' => 2, 'text' => $standortText];
+            }
+        }
+
+        // 4 — Kunde (Rest ohne „Bleibt“), dann Projekt-Akte, Angebot, Foodbook, Concept (jeweils nur mit Id)
+        if ($kundeText !== null) {
+            $bloecke[] = ['ebene' => 'kunde', 'label' => 'Kunde', 'geschuetzt' => false, 'rang' => 3, 'text' => $kundeText];
+        }
+        $projektText = $projekt !== null ? $this->projektBlock($projekt) : null;
+        if ($projektText !== null) {
+            $bloecke[] = ['ebene' => 'projekt', 'label' => 'Projekt-Akte', 'geschuetzt' => false, 'rang' => 3, 'text' => $projektText];
+        }
         $reihen = [
-            ['kunde_dna', 'crm_company', $ids['crm_company_id'] ?? null, 'kunde', 'Kunde', 3],
             ['angebot', 'angebot', $ids['angebot_id'] ?? null, 'angebot', 'Angebot', 4],
             ['foodbook', 'foodbook', $ids['foodbook_id'] ?? null, 'foodbook', 'Foodbook', 5],
             ['concept', 'concept', $ids['concept_id'] ?? null, 'concept', 'Concept', 6],
@@ -97,17 +140,7 @@ class KontextResolver
                 continue;
             }
             $canvas = $this->canvas->find($type, $ownerType, (int) $ownerId);
-            if ($canvas !== null && $type === 'kunde_dna' && $this->canvas->verbindlichkeit($canvas) !== []) {
-                // Spec 82 §9: „Bleibt – unverhandelbar“ an der Kunden-DNA = verbindlich: eigener, ungekürzter Block; der Rest bleibt Kunden-Block
-                [$bleibt, $rest] = $this->kundeGetrennt($canvas);
-                if ($bleibt !== null) {
-                    $bloecke[] = ['ebene' => 'kunde_bleibt', 'label' => 'Kunde: Bleibt', 'geschuetzt' => true, 'rang' => 0,
-                        'text' => "Verbindliche Vorgaben des Kunden (Bleibt, nicht abweichen):\n- ".implode("\n- ", $bleibt)];
-                }
-                if ($rest !== null) {
-                    $bloecke[] = ['ebene' => $ebene, 'label' => $label, 'geschuetzt' => false, 'rang' => $rang, 'text' => $rest];
-                }
-            } elseif ($canvas !== null && ($text = $this->canvas->promptKontext($canvas)) !== null) {
+            if ($canvas !== null && ($text = $this->canvas->promptKontext($canvas)) !== null) {
                 $bloecke[] = ['ebene' => $ebene, 'label' => $label, 'geschuetzt' => false, 'rang' => $rang, 'text' => $text];
             }
         }
@@ -134,8 +167,8 @@ class KontextResolver
     public function fuerObjekt(Team $team, object $objekt, ?MachbarkeitKontext $kontext = null): array
     {
         $ids = match (true) {
-            $objekt instanceof FoodAlchemistFoodbook => ['foodbook_id' => (int) $objekt->id, 'crm_company_id' => $objekt->crm_company_id],
-            $objekt instanceof FoodAlchemistFoodbookKapitel => ['foodbook_id' => (int) $objekt->foodbook_id, 'crm_company_id' => $objekt->foodbook?->crm_company_id],
+            $objekt instanceof FoodAlchemistFoodbook => ['foodbook_id' => (int) $objekt->id, 'crm_company_id' => $objekt->crm_company_id, 'projekt_id' => $objekt->projekt_id],
+            $objekt instanceof FoodAlchemistFoodbookKapitel => ['foodbook_id' => (int) $objekt->foodbook_id, 'crm_company_id' => $objekt->foodbook?->crm_company_id, 'projekt_id' => $objekt->foodbook?->projekt_id],
             $objekt instanceof FoodAlchemistAngebot => ['angebot_id' => (int) $objekt->id, 'crm_company_id' => $objekt->crm_company_id],
             $objekt instanceof FoodAlchemistConcept => ['concept_id' => (int) $objekt->id],
             isset($objekt->crm_company_id) => ['crm_company_id' => $objekt->crm_company_id],   // Speisekarte & Co.: nur die Kunden-Ebene
@@ -170,6 +203,55 @@ class KontextResolver
             $bleibtText === null ? null : array_slice(explode("\n- ", $bleibtText), 1),
             $this->canvas->promptKontextAusWerten($canvas->canvas_type, $restFelder, $werte),
         ];
+    }
+
+    /** Kunden-Standort für die Kaskade: ausdrücklich `standort_id`, sonst der Pilot-Standort des Projekts. Nur im Team des Projekts. */
+    private function standortFuer(Team $ziel, ?FoodAlchemistProjekt $projekt, ?int $standortId): ?FoodAlchemistProjektStandort
+    {
+        $id = $standortId ?? $projekt?->pilot_standort_id;
+        if ($id === null) {
+            return null;
+        }
+
+        return FoodAlchemistProjektStandort::where('team_id', $ziel->id)
+            ->when($projekt !== null, fn ($q) => $q->where('projekt_id', $projekt->id))->find((int) $id);
+    }
+
+    /**
+     * Projekt-Block (Agentur-Akte): nur, was eine Erzeugung für den Kunden braucht — Zielbild in Kundenworten, Ziel, Anlässe mit Gästezahl,
+     * Paketstufen, Stufe × Anlass und die Musterseite. Rollen, Termine, Material, Begehung und Übergabe sind Agentur-intern und bleiben draußen.
+     */
+    private function projektBlock(FoodAlchemistProjekt $p): ?string
+    {
+        $canvas = $this->canvas->find('projekt', 'projekt', (int) $p->id);
+        $e = $canvas?->entries ?? collect();
+        $liste = fn (string $key) => $e->where('field_key', $key)->sortBy('position')->filter(fn ($x) => trim((string) $x->value) !== '');
+        $meta = fn ($x, string $k) => trim((string) ($x->meta[$k] ?? ''));
+        $zeilen = [];
+        if (($wort = trim((string) $e->firstWhere('field_key', 'zielbild_wortlaut')?->value)) !== '') {
+            $zeilen[] = 'Zielbild in Kundenworten: '.$wort;
+        }
+        if (trim((string) $p->ziel) !== '') {
+            $zeilen[] = 'Ziel: '.trim((string) $p->ziel);
+        }
+        if ($liste('umfang_anlaesse')->isNotEmpty()) {
+            $zeilen[] = 'Anlässe: '.$liste('umfang_anlaesse')->map(fn ($x) => $x->value.($meta($x, 'pax') !== '' ? ' ('.$meta($x, 'pax').' Gäste)' : ''))->implode('; ');
+        }
+        if ($liste('paket_stufen')->isNotEmpty()) {
+            $zeilen[] = 'Paketstufen: '.$liste('paket_stufen')->map(fn ($x) => $x->value
+                .($meta($x, 'beschreibung') !== '' ? ' – '.$meta($x, 'beschreibung') : '').($meta($x, 'preis') !== '' ? ' ('.$meta($x, 'preis').' je Gast)' : ''))->implode('; ');
+        }
+        if ($liste('paket_anlaesse')->isNotEmpty()) {
+            $zeilen[] = 'Anlässe der Paketlogik: '.$liste('paket_anlaesse')->pluck('value')->implode(', ');
+        }
+        if ($liste('paket_matrix')->isNotEmpty()) {
+            $zeilen[] = 'Stufe × Anlass: '.$liste('paket_matrix')->map(fn ($x) => trim($meta($x, 'stufe').' × '.$meta($x, 'anlass'), ' ×').': '.($meta($x, 'inhalt') !== '' ? $meta($x, 'inhalt') : $x->value))->implode('; ');
+        }
+        if (($muster = trim((string) $e->firstWhere('field_key', 'musterseite')?->value)) !== '') {
+            $zeilen[] = 'Musterseite: '.$muster;
+        }
+
+        return $zeilen === [] ? null : "Projekt-Akte (Agentur-Arbeit für diesen Kunden):\n- ".implode("\n- ", $zeilen);
     }
 
     /** @return list<string> */
@@ -216,10 +298,11 @@ class KontextResolver
      * Nur AUSDRÜCKLICHE Fakten. „Unbekannt" wird nie als „fehlt" ausgegeben; höchstens eine Zeile
      * „Profil unvollständig". Ohne ein einziges ausdrückliches Faktum entfällt der Block ganz.
      */
-    private function profilBlock(Team $ziel, ?MachbarkeitKontext $kontext): ?string
+    private function profilBlock(Team|Profiltraeger $ziel, ?MachbarkeitKontext $kontext, string $kopf = 'Küchen-Fakten des Teams (Teamprofil, ausdrücklich gepflegt)'): ?string
     {
+        $t = Profiltraeger::von($ziel);
         try {
-            $p = $this->profil->lies($ziel, $ziel);
+            $p = $this->profil->lies($t->team, $t);
         } catch (\Throwable) {
             return null;   // Erdung ist eine Verbesserung, keine Voraussetzung
         }
@@ -256,7 +339,7 @@ class KontextResolver
             $zeilen[] = "Profil unvollständig ($unbekannt Geräte unbekannt) — daraus nichts als fehlend annehmen";
         }
 
-        return "Küchen-Fakten des Teams (Teamprofil, ausdrücklich gepflegt):\n- ".implode("\n- ", $zeilen);
+        return $kopf.":\n- ".implode("\n- ", $zeilen);
     }
 
     /** Tonalität des Foodbooks: führt und überschreibt die Default-Schreibstile (wie bisher, unverändert im Wortlaut). */

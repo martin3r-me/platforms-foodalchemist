@@ -140,6 +140,23 @@
                 </ul>
                 <p class="mt-2 text-[length:var(--fa-text-xs)] text-[var(--fa-ink-3)]">Firma, Kontakte und Planner bleiben dort, wo sie geführt werden. Hier steht nur der Verweis.</p>
             </x-fa::section>
+            <x-fa::section title="Was die KI daraus liest" data-projekt-ki>
+                <p class="text-[length:var(--fa-text-xs)] text-[var(--fa-ink-3)] mb-2">Reihenfolge: Team → Standort → Kunde → Projekt. „Bleibt“ des Kunden steht vorn und gilt bei Widerspruch vor dem Team.</p>
+                <ul class="text-[length:var(--fa-text-sm)] flex flex-col gap-1">
+                    @forelse($ki['quellen'] as $q)
+                        <li wire:key="ki-{{ $q['ebene'] }}" class="flex items-center gap-2" data-projekt-ki-ebene="{{ $q['ebene'] }}">
+                            <span class="flex-1">{{ $q['label'] }}</span>
+                            @if($q['geschuetzt'])<x-fa::badge tone="accent" icon="heroicon-m-lock-closed">nie gekürzt</x-fa::badge>@endif
+                            <span class="text-[var(--fa-ink-3)]">{{ number_format($q['zeichen'], 0, ',', '.') }} Z.</span>
+                        </li>
+                    @empty
+                        <li class="text-[var(--fa-ink-3)]">Noch nichts, was die KI lesen könnte.</li>
+                    @endforelse
+                </ul>
+                @if(! empty($ki['bilanz']['gekuerzt']) || ! empty($ki['bilanz']['verworfen']))
+                    <x-fa::notice tone="warn" class="mt-2" data-projekt-ki-gekuerzt>Wegen des Budgets gekürzt: {{ implode(', ', array_merge(array_keys($ki['bilanz']['gekuerzt']), array_keys($ki['bilanz']['verworfen']))) }}.</x-fa::notice>
+                @endif
+            </x-fa::section>
         </aside>
     </div>
 </div>

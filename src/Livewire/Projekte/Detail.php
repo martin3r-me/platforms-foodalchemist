@@ -158,6 +158,7 @@ class Detail extends Component
 
         return view('foodalchemist::livewire.projekte.detail', [
             'p' => $p, 'firma' => $firma, 'phasen' => FoodAlchemistProjekt::PHASEN,
+            'ki' => app(\Platform\FoodAlchemist\Services\KontextResolver::class)->fuer($team, ['crm_company_id' => (int) $p->crm_company_id, 'projekt_id' => (int) $p->id]),
             'gateFehlt' => $svc->gateFehlt($p), 'foodbooks' => $svc->foodbooks($team, (int) $p->id),
             'gateKontakte' => $this->phase === 'paketlogik' && ! $p->strukturFreigegeben() ? CrmKunden::kontakte($team, $this->gateKontaktSuche) : collect(),
             'kontakteVerknuepft' => count(array_filter($rollen, fn ($r) => ! empty($r['meta']['crm_contact_id']))), 'kontakteGesamt' => count($rollen),
