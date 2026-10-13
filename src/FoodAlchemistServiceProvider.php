@@ -1063,6 +1063,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\AngeboteEinfrierenPostTool::class,
                     \Platform\FoodAlchemist\Tools\AngeboteUebernehmenGetTool::class,
                     \Platform\FoodAlchemist\Tools\AngeboteUebernehmenPostTool::class,
+                    \Platform\FoodAlchemist\Tools\RecipeFassungUebernehmenGetTool::class,   // Spec 82 §12 B / 4d
+                    \Platform\FoodAlchemist\Tools\RecipeFassungUebernehmenPostTool::class,
                     \Platform\FoodAlchemist\Tools\AngeboteCustomerLinkTool::class,
                     \Platform\FoodAlchemist\Tools\AngeboteRecomputeTool::class,
                     \Platform\FoodAlchemist\Tools\AngebotMenuePostTool::class,

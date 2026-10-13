@@ -33,6 +33,8 @@ class PlattformProtokoll
         'mandant_entsperrt' => 'Mandant entsperrt (Status zurück auf aktiv)',
         'abo_vergeben' => 'Abo vergeben',                    // Spec 82 §12 A1 (Kurator-Aufsatz)
         'fassung_veroeffentlicht' => 'Fassung veröffentlicht', // Spec 82 §12 B
+        'rezept_fassung_gefolgt' => 'Eigene Rezepte folgen der neuen Abo-Fassung',   // Spec 82 §12 B / 4d
+        'rezept_fassung_uebernommen' => 'Rezept: neuere Fassung übernommen',
         'angebot_fassung_uebernommen' => 'Angebot: neuere Fassung übernommen',   // Spec 82 §12 B3
         'abo_gekuendigt' => 'Abo gekündigt',                  // Spec 82 §12 D
         'abo_rezept_zurueckgezogen' => 'Abo-Rezept zurückgezogen', // Spec 82 §12 D

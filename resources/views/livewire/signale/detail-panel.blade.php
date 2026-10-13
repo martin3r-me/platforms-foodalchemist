@@ -85,6 +85,33 @@
                         <x-fa::button size="sm" variant="ghost" icon="heroicon-m-arrow-right" :href="route('foodalchemist.angebote.index', ['sel' => $a['angebot_id']])" data-signal-fassung-uebernehmen="{{ $a['angebot_id'] }}">Übernehmen …</x-fa::button>
                     </div>
                 @endforeach
+                @foreach($fp['rezepte'] ?? [] as $r)
+                    <div class="flex items-center gap-2 py-1" wire:key="sigfr-{{ $r['recipe_id'] }}" data-signal-fassung-rezept="{{ $r['recipe_id'] }}">
+                        <span class="min-w-0 flex-1 truncate">{{ $r['name'] }} <span class="text-[var(--fa-ink-3)]">· Rezept auf Fassung #{{ $r['von_nr'] }} · {{ $r['grund'] === 'allergen' ? 'Allergen-Änderung' : 'in eingefrorenem Angebot' }}</span></span>
+                        <x-fa::button size="sm" variant="ghost" icon="heroicon-m-arrow-right" wire:click="rezeptUebernahmePruefen({{ $r['recipe_id'] }}, {{ $fp['familie_id'] }})" data-signal-rezept-uebernehmen>Übernehmen am Rezept …</x-fa::button>
+                    </div>
+                @endforeach
+                @if($rezeptUebernahme)
+                    @php $ru = $rezeptUebernahme; @endphp
+                    <div class="mt-2 rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] p-3 flex flex-col gap-2" data-signal-rezept-vorschau>
+                        <p class="font-medium">{{ $ru['name'] }}: Fassung #{{ $ru['von_nr'] }} → #{{ $ru['nach_nr'] }}</p>
+                        @if($ru['aenderungsnotiz'])<p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">Änderungsnotiz: {{ $ru['aenderungsnotiz'] }}</p>@endif
+                        @if($ru['allergen_diff'] !== [])
+                            <ul class="text-[length:var(--fa-text-sm)]">@foreach($ru['allergen_diff'] as $feld => $d)<li>{{ str_replace(['allergen_', 'additive_'], ['Allergen ', 'Zusatzstoff '], $feld) }}: {{ $d['von'] ?? '—' }} → {{ $d['nach'] ?? '—' }}</li>@endforeach</ul>
+                        @elseif($ru['allergen_geaendert'])
+                            <p class="text-[length:var(--fa-text-sm)]">In einer übersprungenen Zwischenfassung wurde das Allergenbild geändert, der Endstand ist gleich.</p>
+                        @endif
+                        @if($ru['in_eingefrorenem_angebot'])<p class="text-[length:var(--fa-text-sm)]">Dieses Rezept steckt in einem eingefrorenen Angebot; dessen Stand bleibt unverändert.</p>@endif
+                        @if($ru['braucht_bestaetigung'])
+                            <label class="inline-flex items-center gap-2"><input type="checkbox" class="w-4 h-4 rounded accent-[var(--fa-accent)]" wire:model.live="rezeptBestaetigt" data-signal-rezept-bestaetigung />
+                                Ich habe die Allergen-Änderung geprüft (nur Rolle Freigeben).</label>
+                        @endif
+                        <div class="flex gap-2">
+                            <x-fa::button variant="primary" wire:click="rezeptUebernahmeAusfuehren" :disabled="$ru['braucht_bestaetigung'] && ! $rezeptBestaetigt" data-signal-rezept-ausfuehren>Fassung übernehmen</x-fa::button>
+                            <x-fa::button variant="ghost" wire:click="rezeptUebernahmeAbbrechen">Abbrechen</x-fa::button>
+                        </div>
+                    </div>
+                @endif
                 @foreach($fp['fassungen'] ?? [] as $f)
                     <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]" wire:key="sigff-{{ $f['nr'] }}">Fassung #{{ $f['nr'] }}{{ $f['notiz'] ? ': '.$f['notiz'] : '' }}{{ ! empty($f['allergene']) ? ' — '.implode('; ', $f['allergene']) : '' }}</p>
                 @endforeach
