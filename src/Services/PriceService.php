@@ -9,6 +9,7 @@ use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Enums\PriceCategory;
 use Platform\FoodAlchemist\Models\FoodAlchemistPrice;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem;
+use Platform\FoodAlchemist\Support\MasterTeam;
 
 /**
  * M2-04/05 / GL-11: DIE eine Stelle für Preislogik — aktiver Preis (§3.3),
@@ -97,11 +98,11 @@ class PriceService
     public static function preisKette(Team $team): array
     {
         $kette = FoodAlchemistPrice::teamAncestryIds($team);
-        $master = config('foodalchemist.master_team_id');
-        if ($master === null || $master === '') {
+        $master = MasterTeam::id();   // Spec 82 §13 B4: Einstellung vor ENV, dieselbe Quelle wie FaRechte
+        if ($master === null) {
             return $kette;
         }
-        $pos = array_search((int) $master, $kette, true);
+        $pos = array_search($master, $kette, true);
 
         return match (true) {
             $pos === false => $kette,
