@@ -4,6 +4,7 @@ namespace Platform\FoodAlchemist\Services;
 
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistCanvas;
+use Platform\FoodAlchemist\Models\FoodAlchemistCanvasTemplate;
 use Platform\FoodAlchemist\Models\FoodAlchemistCanvasEntry;
 use Platform\FoodAlchemist\Models\FoodAlchemistFoodbook;
 use Platform\FoodAlchemist\Models\FoodAlchemistWritingStyle;
@@ -93,6 +94,37 @@ class CanvasService
         return self::TEMPLATES[$type] ?? ['title' => $type, 'kontext_label' => $type, 'felder' => []];
     }
 
+    /**
+     * Feld-Definitionen eines Canvas-Typs: Kern-Felder (TEMPLATES) PLUS die pflegbaren Zusatzfelder
+     * (`canvas_templates`) der Team-Kette bis zur Kundengrenze. Ein Kern-Feld wird nie überschrieben, ein
+     * Zusatzfeld mit gleichem Key ignoriert. Zusatzfelder stehen hinter den Kern-Feldern, je Team von oben
+     * (Oberteam) nach unten, danach nach `position`. Ohne Team oder ohne Zeilen = nur die Kern-Felder.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function felder(string $type, ?Team $team = null): array
+    {
+        $felder = $this->template($type)['felder'];
+        if ($team === null || ! \Illuminate\Support\Facades\Schema::hasTable('foodalchemist_canvas_templates')) {
+            return $felder;
+        }
+        $kette = app(\Platform\FoodAlchemist\Services\DnaResolver::class)->teamIds($team);   // oben → eigenes Team
+        $zeilen = FoodAlchemistCanvasTemplate::query()->where('canvas_type', $type)->where('active', true)
+            ->whereIn('team_id', $kette)->get();
+        $belegt = array_column($felder, 'key');
+        foreach ($kette as $teamId) {
+            foreach ($zeilen->where('team_id', $teamId)->sortBy('position') as $z) {
+                if (in_array($z->field_key, $belegt, true)) {
+                    continue;
+                }
+                $felder[] = $z->alsFeld();
+                $belegt[] = $z->field_key;
+            }
+        }
+
+        return $felder;
+    }
+
     /** Existierenden Canvas finden (KEIN Create) — für Lese-/Kontext-Pfad. */
     public function find(string $type, string $ownerType, ?int $ownerId): ?FoodAlchemistCanvas
     {
@@ -156,7 +188,7 @@ class CanvasService
     }
 
     /** Skalare Felder aus einem Formular speichern (leer → Entry löschen). */
-    public function setSkalar(FoodAlchemistCanvas $canvas, string $key, ?string $value): void
+    public function setSkalar(FoodAlchemistCanvas $canvas, string $key, ?string $value, ?bool $verbindlich = null): void
     {
         $value = $value !== null && trim($value) !== '' ? trim($value) : null;
         $entry = $canvas->entries()->where('field_key', $key)->where('position', 0)->first();
@@ -165,10 +197,11 @@ class CanvasService
 
             return;
         }
+        // $verbindlich: null = unverändert (Bestand + alle alten Aufrufer), true/false = setzen (Spec 82 §7)
         if ($entry) {
-            $entry->update(['value' => $value]);
+            $entry->update(['value' => $value] + ($verbindlich === null ? [] : ['is_binding' => $verbindlich]));
         } else {
-            $canvas->entries()->create(['field_key' => $key, 'position' => 0, 'value' => $value]);
+            $canvas->entries()->create(['field_key' => $key, 'position' => 0, 'value' => $value, 'is_binding' => (bool) $verbindlich]);
         }
     }
 
@@ -182,11 +215,11 @@ class CanvasService
     }
 
     // ── Repeatable (Geschmackswelten) ──────────────────────────────────
-    public function addEntry(FoodAlchemistCanvas $canvas, string $key, string $value, array $meta = []): FoodAlchemistCanvasEntry
+    public function addEntry(FoodAlchemistCanvas $canvas, string $key, string $value, array $meta = [], bool $verbindlich = false): FoodAlchemistCanvasEntry
     {
         $pos = (int) ($canvas->entries()->where('field_key', $key)->max('position') ?? -1) + 1;
 
-        return $canvas->entries()->create(['field_key' => $key, 'position' => $pos, 'value' => trim($value), 'meta' => $meta]);
+        return $canvas->entries()->create(['field_key' => $key, 'position' => $pos, 'value' => trim($value), 'meta' => $meta, 'is_binding' => $verbindlich]);
     }
 
     public function updateEntry(int $entryId, string $value, array $meta = []): void
@@ -202,10 +235,22 @@ class CanvasService
     /** KI-Kontext-Block eines Canvas (gefüllte Felder, gelabelt). NULL wenn leer. */
     public function promptKontext(FoodAlchemistCanvas $canvas): ?string
     {
-        $tpl = $this->template($canvas->canvas_type);
-        $werte = $this->werte($canvas);
+        return $this->promptKontextAusWerten($canvas->canvas_type, $this->template($canvas->canvas_type)['felder'], $this->werte($canvas));
+    }
+
+    /**
+     * Der Block-Aufbau, einmal für alle: Feld-Definitionen + Werte (Skalar = string|null, Repeatable = Liste
+     * von ['value','meta']) → „Kontext-Label:\n- Feld: Wert\n- …“. Aufrufer: promptKontext (ein Canvas) und der
+     * DnaResolver (aufgelöste Werte über die Team-Kette). Das Format ist durch den Golden-Test eingefroren.
+     *
+     * @param  list<array<string, mixed>>  $felder
+     * @param  array<string, mixed>  $werte
+     */
+    public function promptKontextAusWerten(string $type, array $felder, array $werte): ?string
+    {
+        $tpl = $this->template($type);
         $zeilen = [];
-        foreach ($tpl['felder'] as $f) {
+        foreach ($felder as $f) {
             $typ = $f['type'] ?? 'text';
             if ($typ === 'repeatable') {
                 $items = $werte[$f['key']] ?? [];
