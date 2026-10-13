@@ -20,6 +20,8 @@ use Platform\FoodAlchemist\Tests\TestCase;
 use Platform\FoodAlchemist\Tools\AngeboteEinfrierenGetTool;
 use Platform\FoodAlchemist\Tools\AngeboteEinfrierenPostTool;
 use Platform\FoodAlchemist\Tools\AngeboteStatusTool;
+use Platform\FoodAlchemist\Tools\AngeboteUebernehmenGetTool;
+use Platform\FoodAlchemist\Tools\AngeboteUebernehmenPostTool;
 
 uses(TestCase::class, SeedsTeamHierarchy::class);
 
@@ -237,4 +239,134 @@ it('MCP: EINFRIEREN_POST friert ein, verwerfen braucht bestaetigt, EINFRIEREN_GE
     expect($status->success)->toBeFalse()->and($status->error)->toContain('eingefroren');
     expect(app(AngeboteStatusTool::class)->execute(['id' => $this->angebot->id, 'status' => 'in_arbeit', 'snapshot_verwerfen' => true], $ctx)->success)->toBeTrue()
         ->and($this->svc->aktive($this->angebot))->toBeNull();
+});
+
+// ── Schritt 4b: Übernehmen mit Allergen-Bestätigung ──────────────────────────────────────────────
+
+it('Übernehmen ohne Allergen-Änderung: Kuratieren genügt, Zutat zeigt auf die neue Fassung, Stand und Historie werden fortgeschrieben', function () {
+    ($this->block)($this->lamm);
+    $e = $this->svc->einfrieren($this->broich, $this->koch, $this->angebot);
+    $this->jus->ingredients()->where('raw_text', 'Kalbsknochen')->update(['quantity' => '2500']);
+    ($this->publiziere)('Mehr Knochen');   // keine Allergen-Folge
+    $v = $this->svc->uebernahmeVorschau($this->angebot, $e->zeilen->first()->id, $this->jus->id);
+    expect($v['braucht_bestaetigung'])->toBeFalse()->and($v['von_nr'])->toBe(1)->and($v['nach_nr'])->toBe(2);
+
+    $b = $this->svc->uebernehmen($this->broich, $this->koch, $this->angebot, $e->zeilen->first()->id, $this->jus->id);
+
+    expect($this->lamm->ingredients()->where('raw_text', 'Kalbsjus')->value('referenced_recipe_id'))->toBe((int) ($this->fassung)(2)->id)
+        ->and($b['umgehaengt']['rezepte'])->toBe([(int) $this->lamm->id])
+        ->and($this->svc->aktive($this->angebot)->zeilen->first()->fassungen[0]['fassung_nr'])->toBe(2)
+        ->and($this->svc->veraltet($this->angebot))->toBe([]);
+    $u = \Platform\FoodAlchemist\Models\FoodAlchemistAngebotUebernahme::sole();
+    expect($u->allergen_bestaetigt)->toBeFalse()->and($u->bestaetigt_von)->toBeNull()->and($u->von_fassung_id)->toBe((int) ($this->fassung)(1)->id)->and($u->nach_fassung_id)->toBe((int) ($this->fassung)(2)->id);
+});
+
+it('Allergen-Änderung: ohne Bestätigung nichts, mit Bestätigung nur ab Rolle Freigeben, Person und Zeitpunkt werden festgehalten, das Gericht rechnet neu', function () {
+    ($this->block)($this->lamm);
+    $e = $this->svc->einfrieren($this->broich, $this->koch, $this->angebot);
+    $zeile = $e->zeilen->first()->id;
+    $this->makeIngredient($this->jus, 'Butter', $this->butter, '100', 2);
+    ($this->publiziere)('Butter zur Bindung');
+    $v = $this->svc->uebernahmeVorschau($this->angebot, $zeile, $this->jus->id);
+    expect($v['braucht_bestaetigung'])->toBeTrue()->and($v['allergen_diff'])->toHaveKey('allergen_milk');
+
+    expect(fn () => $this->svc->uebernehmen($this->broich, $this->koch, $this->angebot, $zeile, $this->jus->id))->toThrow(FaRechtFehltException::class);   // Kuratieren reicht nicht
+    $freigeber = $this->makeUser($this->broich, 'Freigeber', 'admin');
+    $this->actingAs($freigeber);
+    expect(fn () => $this->svc->uebernehmen($this->broich, $freigeber, $this->angebot, $zeile, $this->jus->id))->toThrow(\RuntimeException::class, 'Bestätigung');
+    expect($this->lamm->ingredients()->where('raw_text', 'Kalbsjus')->value('referenced_recipe_id'))->toBe((int) ($this->fassung)(1)->id);   // nichts geändert
+
+    $b = $this->svc->uebernehmen($this->broich, $freigeber, $this->angebot, $zeile, $this->jus->id, true);
+
+    expect($b['allergen_geaendert'])->toBeTrue();
+    $u = \Platform\FoodAlchemist\Models\FoodAlchemistAngebotUebernahme::sole();
+    expect($u->allergen_bestaetigt)->toBeTrue()->and($u->bestaetigt_von)->toBe((int) $freigeber->id)->and($u->bestaetigt_at)->not->toBeNull()
+        ->and($u->diff)->toHaveKey('allergen_milk');
+    $neu = $this->svc->aktive($this->angebot)->zeilen->first();
+    expect($neu->fassungen[0]['fassung_nr'])->toBe(2)->and($neu->fassungen[0]['allergene']['allergen_milk'])->toBe('enthalten')
+        ->and($neu->allergene['allergen_milk'])->toBe('enthalten');   // das Gericht selbst wurde neu gerechnet
+});
+
+it('Gericht ist selbst die Fassung: Verweise der Blöcke und angebots-lokaler Concepts wandern auf die neue Fassung, die Zeile zeigt auf sie', function () {
+    ($this->block)(($this->fassung)(1));
+    $concept = $this->makeConcept($this->broich, 'Lokales Menü', ['offer_id' => $this->angebot->id]);
+    $this->makeConceptSlot($concept, ['sales_recipe_id' => ($this->fassung)(1)->id]);
+    $e = $this->svc->einfrieren($this->broich, $this->koch, $this->angebot);
+    expect($e->zeilen)->toHaveCount(1);
+    $this->jus->ingredients()->where('raw_text', 'Kalbsknochen')->update(['quantity' => '2500']);
+    ($this->publiziere)('Mehr Knochen');
+
+    $b = $this->svc->uebernehmen($this->broich, $this->koch, $this->angebot, $e->zeilen->first()->id, $this->jus->id);
+
+    $f2 = ($this->fassung)(2);
+    expect($b['umgehaengt']['bloecke'])->toBe(1)->and($b['umgehaengt']['concepts_lokal'])->toBe(1)
+        ->and($this->kapitel->blocks()->first()->sales_recipe_id)->toBe((int) $f2->id)
+        ->and($this->svc->aktive($this->angebot)->zeilen->first()->recipe_id)->toBe((int) $f2->id);
+});
+
+it('Betroffene Ausgaben: andere Angebote des Mandanten mit derselben Fassungs-Familie (live/eingefroren), kein Angebot eines fremden Mandanten', function () {
+    ($this->block)($this->lamm);
+    $e = $this->svc->einfrieren($this->broich, $this->koch, $this->angebot);
+    $this->jus->ingredients()->where('raw_text', 'Kalbsknochen')->update(['quantity' => '2500']);
+    ($this->publiziere)('Mehr Knochen');
+
+    $live = $this->angebote->create($this->broich, ['name' => 'Entwurf Gala']);
+    app(OfferCompositionService::class)->addKapitel($this->broich, $live->id, ['title' => 'Menü'])->blocks()->create(['team_id' => $this->broich->id, 'type' => 'recipe_ref', 'sales_recipe_id' => $this->lamm->id, 'position' => 1, 'visible' => true]);
+    $gefroren = $this->angebote->create($this->broich, ['name' => 'Freigegeben Taufe']);
+    app(OfferCompositionService::class)->addKapitel($this->broich, $gefroren->id, ['title' => 'Menü'])->blocks()->create(['team_id' => $this->broich->id, 'type' => 'recipe_ref', 'sales_recipe_id' => $this->lamm->id, 'position' => 1, 'visible' => true]);
+    $this->svc->einfrieren($this->broich, $this->koch, $gefroren);
+    $soulAngebot = $this->angebote->create($this->soul, ['name' => 'Soul Fest']);   // anderer Mandant, darf nie auftauchen
+
+    $v = $this->svc->uebernahmeVorschau($this->angebot, $e->zeilen->first()->id, $this->jus->id);
+
+    expect(collect($v['betroffene_ausgaben'])->pluck('art', 'name')->all())->toBe(['Entwurf Gala' => 'live', 'Freigegeben Taufe' => 'eingefroren'])
+        ->and(collect($v['betroffene_ausgaben'])->pluck('angebot_id')->all())->not->toContain((int) $soulAngebot->id);
+});
+
+it('Übernehmen scheitert sauber: keine neuere Fassung, fremde Zeile, nicht eingefroren', function () {
+    ($this->block)($this->lamm);
+    expect(fn () => $this->svc->uebernahmeVorschau($this->angebot, 1, $this->jus->id))->toThrow(\RuntimeException::class, 'nicht eingefroren');
+    $e = $this->svc->einfrieren($this->broich, $this->koch, $this->angebot);
+    $z = $e->zeilen->first()->id;
+    expect(fn () => $this->svc->uebernahmeVorschau($this->angebot, $z, $this->jus->id))->toThrow(\RuntimeException::class, 'keine neuere');
+    expect(fn () => $this->svc->uebernahmeVorschau($this->angebot, $z + 99, $this->jus->id))->toThrow(\RuntimeException::class, 'gehört nicht');
+    expect(fn () => $this->svc->uebernahmeVorschau($this->angebot, $z, $this->jus->id + 99))->toThrow(\RuntimeException::class, 'steht nicht');
+});
+
+it('MCP: UEBERNEHMEN_GET zeigt die Vorschau, UEBERNEHMEN_POST braucht bei Allergen-Änderung bestaetigt und Rolle Freigeben', function () {
+    ($this->block)($this->lamm);
+    $e = $this->svc->einfrieren($this->broich, $this->koch, $this->angebot);
+    $this->makeIngredient($this->jus, 'Butter', $this->butter, '100', 2);
+    ($this->publiziere)('Butter');
+    $args = ['id' => $this->angebot->id, 'zeile_id' => $e->zeilen->first()->id, 'familie_id' => $this->jus->id];
+
+    $get = app(AngeboteUebernehmenGetTool::class)->execute($args, new ToolContext($this->koch, $this->broich));
+    expect($get->success)->toBeTrue()->and($get->data['vorschau']['braucht_bestaetigung'])->toBeTrue();
+
+    $freigeber = $this->makeUser($this->broich, 'Freigeber', 'admin');
+    $ohne = app(AngeboteUebernehmenPostTool::class)->execute($args, new ToolContext($freigeber, $this->broich));
+    expect($ohne->success)->toBeFalse()->and($ohne->error)->toContain('Bestätigung');
+    $this->actingAs($freigeber);
+    $koch = app(AngeboteUebernehmenPostTool::class)->execute($args + ['bestaetigt' => true], new ToolContext($this->koch, $this->broich));
+    expect($koch->success)->toBeFalse();
+    $ok = app(AngeboteUebernehmenPostTool::class)->execute($args + ['bestaetigt' => true], new ToolContext($freigeber, $this->broich));
+    expect($ok->success)->toBeTrue()->and($ok->data['bericht']['allergen_geaendert'])->toBeTrue();
+});
+
+it('Editor: Eingefroren-Abschnitt, „Neuere Fassung verfügbar“, Vorschau und Übernehmen erst nach der Bestätigung', function () {
+    ($this->block)($this->lamm);
+    $e = $this->svc->einfrieren($this->broich, $this->koch, $this->angebot);
+    $this->makeIngredient($this->jus, 'Butter', $this->butter, '100', 2);
+    ($this->publiziere)('Butter');
+    $freigeber = $this->makeUser($this->broich, 'Freigeber', 'admin');
+    $this->actingAs($freigeber);
+
+    $t = \Livewire\Livewire::test(\Platform\FoodAlchemist\Livewire\Angebote\Editor::class)->call('oeffnen', $this->angebot->id)
+        ->assertSeeHtml('data-angebot-einfrierung')->assertSeeHtml('data-angebot-einfrier-zeile="'.$e->zeilen->first()->id.'"')->assertSeeHtml('data-angebot-fassung-neu')
+        ->call('uebernahmePruefen', $e->zeilen->first()->id, $this->jus->id)->assertSeeHtml('data-angebot-uebernahme-vorschau')
+        ->assertSeeHtml('data-angebot-allergen-diff')->assertSeeHtml('data-angebot-uebernahme-bestaetigung');
+    $t->call('uebernahmeAusfuehren');   // ohne Haken: scheitert, Vorschau bleibt
+    expect($this->svc->aktive($this->angebot)->zeilen->first()->fassungen[0]['fassung_nr'])->toBe(1);
+    $t->set('uebernahmeBestaetigt', true)->call('uebernahmeAusfuehren')->assertSet('uebernahmeVorschau', null);
+    expect($this->svc->aktive($this->angebot)->zeilen->first()->fassungen[0]['fassung_nr'])->toBe(2);
 });

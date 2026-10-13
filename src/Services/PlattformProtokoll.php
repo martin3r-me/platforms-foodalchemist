@@ -33,6 +33,7 @@ class PlattformProtokoll
         'mandant_entsperrt' => 'Mandant entsperrt (Status zurück auf aktiv)',
         'abo_vergeben' => 'Abo vergeben',                    // Spec 82 §12 A1 (Kurator-Aufsatz)
         'fassung_veroeffentlicht' => 'Fassung veröffentlicht', // Spec 82 §12 B
+        'angebot_fassung_uebernommen' => 'Angebot: neuere Fassung übernommen',   // Spec 82 §12 B3
         'projekt_lizenz_uebernommen' => 'Projekt: Lizenz erteilt, Übernahme in den Mandanten',   // Spec 82 §9
         'plan_preis_gesetzt' => 'Gebühren-Preis gesetzt',
         'plan_preis_startwerte' => 'Gebühren-Startpreise angelegt',

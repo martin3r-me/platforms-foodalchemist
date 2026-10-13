@@ -1061,6 +1061,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\AngeboteStatusTool::class,
                     \Platform\FoodAlchemist\Tools\AngeboteEinfrierenGetTool::class,   // Spec 82 §12 B3
                     \Platform\FoodAlchemist\Tools\AngeboteEinfrierenPostTool::class,
+                    \Platform\FoodAlchemist\Tools\AngeboteUebernehmenGetTool::class,
+                    \Platform\FoodAlchemist\Tools\AngeboteUebernehmenPostTool::class,
                     \Platform\FoodAlchemist\Tools\AngeboteCustomerLinkTool::class,
                     \Platform\FoodAlchemist\Tools\AngeboteRecomputeTool::class,
                     \Platform\FoodAlchemist\Tools\AngebotMenuePostTool::class,
