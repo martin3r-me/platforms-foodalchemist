@@ -162,7 +162,7 @@ Beschreibt, was die Küche kann. Das ist keine DNA.
   - Jedes Team pflegt **sein eigenes** Profil in seinen Einstellungen, ob Oberteam oder Unter-Team.
   - Das Oberteam sieht per Brille die Profile aller Unter-Teams. Es bearbeitet sie im jeweiligen Unter-Team, so wie sein Oberhaupt laut Spec 61 in allen Unter-Teams arbeitet.
   - Der Master **liest** die Profile im Modul „Mandanten“, bearbeitet sie nach einem Wechsel ins Team und kann eine **Profil-Vorlage** mitgeben.
-  - Beim Projekt vor der Lizenz pflegt der Master das Profil als Mitglied im Projekt-Oberteam.
+  - Vor der Lizenz gibt es noch kein Team: die **Kunden-Standorte** liegen am Projekt im Master-Team (§9) und werden bei „Lizenz erteilt“ zu Teamprofilen des neuen Oberteams bzw. der Unter-Teams.
 - **Ort:** Tabelle `team_profile` (team_id unique), je Oberteam bzw. Unter-Team.
 - **Inhalt:**
   - Equipment-Bestand im **gleichen Vokabular** wie der Equipment-Bedarf der Rezepte (`VocabKochequipment`)
@@ -273,14 +273,16 @@ Beschreibt, was die Küche kann. Das ist keine DNA.
 - **Abo- und Kopie-Stand** je Master-Rezept.
 - **Vorlagen** (DNA, Teamprofil, Canvas) als Kopie an ein Team geben. Die DNA wird **nicht live** vererbt, weil die BHG-Handschrift nicht die des Mandanten ist.
 
-**Projekte:**
-- Ein Projekt startet, indem das **Oberteam früh angelegt wird**, mit dem Status „Projekt“ vor der Lizenz (Kontingente laut Spec 77b).
-  - Der Status liegt in einer **FA-eigenen Tabelle**, **nicht** in der Core-Tabelle `teams`. Die gehört dem Plattform-Kern und ist keine Fremdmodul-Änderung wert.
-  - Teamprofil, DNA und Projekt-Canvas hängen damit von Anfang an an Teams, nicht an CRM-Firmen.
-  - Eine Übernahme beim Onboarding ist nicht nötig.
-- Die CRM-Firma im CRM des Master-Teams wird einmal mit dem Oberteam verknüpft.
-- Der **Projekt-Canvas** kommt aus einer Vorlage (§7): Phasen als Reiter, Struktur-Gate vor dem Foodbook.
-- Termine und Aufgaben bleiben im Office-Planner, der Canvas verweist nur darauf.
+**Projekte** (entschieden 13.10., Dominique, Variante B — ersetzt „Projekt hängt an Teams“):
+- Ein Projekt ist eine **Agentur-Akte im Master-Team**, verknüpft mit einer **CRM-Firma im CRM des Master-Teams**. Es entsteht **kein Mandant und kein Team**, solange keine Lizenz erteilt ist; der Projektstatus (`aktiv | pausiert | abgeschlossen`) liegt am Projekt selbst. `mandanten.status = projekt` bleibt ein erlaubter Wert, „Projekt anlegen“ schreibt aber keine Mandanten-Zeile.
+- **Gebaut (Schritt 9, PR 1):** Tabellen `foodalchemist_projekte` (Firma, Name, Phase, Status, Ziel, Pilot-Standort, Verweis auf das Planner-Projekt) und `foodalchemist_projekt_standorte` (Kunden-Standorte ohne Team, genau einer ist Pilot); Menüpunkt „Projekte“ (Zusatz „Agentur“) unter Übersicht mit Liste und Detail (Brotkrumen, Projektkopf, Phasen als Reiter, Seitenleiste „Verknüpft“); Bereich `projekte`, **nur im Master-Team** (auch ein Plattform-Admin sieht ihn in anderen Teams nicht); MCP `projekte.GET/POST/PUT`; Canvas-Typ `projekt` (`canvas.GET/PUT/ENTRY_ADD` mit `type=projekt`, `owner_id` = Projekt) mit **Listen-Feldern** (Anlässe, Rollen, Material, Termine …), die mehrere Werte je Zeile tragen (Zahl, Haken, CRM-Kontakt).
+- **Phasen:** 1 Zielbild & Umfang · 2 Standortprofil · 3 DNA & Handschrift · 4 Paketlogik (mit hartem Gate „Struktur + Musterseite freigeben“, Person = CRM-Kontakt + Zeitpunkt, „Zurücknehmen“) · 5 Foodbook (im Master-Team angelegt, vorbefüllt) · 6 Übergabe & Pflege.
+- **Verknüpfen statt kopieren:** CRM-Firma, CRM-Kontakte (Rollen) und Planner-Projekt bleiben, wo sie geführt werden; das Modul speichert nur den Verweis und schreibt weder ins CRM noch in den Planner (Fremdmodule).
+- **DNA und Standortprofil** (folgen in PR 2/3): die Kunden-DNA schreibt die bestehende `kunde_dna` der CRM-Firma („Bleibt – unverhandelbar“ = verbindlich); Kunden-Standortprofile liegen am Projekt und erscheinen unter dem eigenen Menüpunkt „Standortprofil“ (Übersicht) neben den eigenen Standorten.
+- **Lizenz erteilt = Übernahme (PR 6):** Das Oberteam ist das **vorhandene Host-Team**, das Modul legt nur Unter-Teams an (`TeamAnlegenService`). Kunden-Standorte werden zu Teamprofilen, die Kunden-DNA zur Team-DNA (Kopie, nicht live), die Mandanten-Zeile wird aktiv + kuratiert, das Projekt bekommt `mandant_team_id`. Danach trägt das Projekt nur noch die Agentur-Akte.
+- **Projekt-Foodbook (entschieden 13.10., Dominique):** bleibt auch nach der Lizenz im **Master-Team** (Agentur-Arbeit); der Kunde bekommt es über die öffentliche Präsentation. „Foodbook an Mandanten übergeben“ als tiefe Kopie ist ein späterer, eigener Schritt und **offen**.
+- **Rollen** des Projekts sind CRM-Kontakte, die nur verknüpft werden (Vorschlag „neuen Kontakt anlegen“ später).
+- Termine und Aufgaben bleiben im Office-Planner, die Akte verweist nur darauf.
 - Click-Dummy: Artifact „FA Projekte & Standortprofil“ (claude.ai, privat bei Dominique).
 
 ## §10 · Bau-Reihenfolge

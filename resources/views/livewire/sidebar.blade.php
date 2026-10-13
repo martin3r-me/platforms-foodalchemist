@@ -34,6 +34,7 @@
                 <x-ui-sidebar-item :href="route($item['route'])">
                     @svg($item['icon'] ?? 'heroicon-o-cube', 'w-4 h-4 text-[var(--ui-secondary)]')
                     <span class="ml-2 text-xs">{{ $item['label'] }}</span>
+                    @if(! empty($item['zusatz']))<span class="ml-auto text-[10px] uppercase tracking-wide text-[var(--ui-secondary)]">{{ $item['zusatz'] }}</span>@endif
                 </x-ui-sidebar-item>
             @endforeach
         </x-ui-sidebar-list>

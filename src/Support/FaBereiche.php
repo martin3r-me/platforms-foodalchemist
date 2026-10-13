@@ -31,7 +31,14 @@ final class FaBereiche
         'wissen' => 'Wissen & Trendradar',
         'einstellungen' => 'Einstellungen',
         'unterteams' => 'Unter-Teams & Freigaben',   // Spec 82 §13 B2: schaltbar in /verwaltung → Freigaben
+        'projekte' => 'Projekte (Agentur-Akte, nur im Master-Team)',   // Spec 82 §9: Projekt = Agentur-Akte im Master
     ];
+
+    /**
+     * Bereiche, die NUR im Master-Team freigeschaltet sind (Spec 82 §9): Ohne Master-Team ist der Bereich aus, auch für
+     * Plattform-Admins (kein Admin-Durchgriff auf Agentur-Daten). Eine ausdrückliche Zeile `aktiv=false` schaltet ihn im Master ebenfalls aus.
+     */
+    public const NUR_MASTER = ['projekte'];
 
     /** Routen: erstes Segment nach „foodalchemist." => Bereich. `null` = bereichsfrei. */
     public const ROUTEN = [
@@ -47,6 +54,7 @@ final class FaBereiche
         'lager' => 'lager',
         'knowledge' => 'wissen', 'trendradar' => 'wissen',
         'einstellungen' => 'einstellungen', 'food-dna' => 'einstellungen',
+        'projekte' => 'projekte',   // Spec 82 §9: Projekt-Liste und -Detail (nur im Master-Team)
         // bereichsfrei: Sprachbefehl, Designsystem (Bau-Werkzeug), „demnächst"-Platzhalter
         'voice' => null, 'ui-katalog' => null, 'demnaechst' => null,
         // öffentlich geteilte Präsentationen (ohne Anmeldung) und Plattform-Assets — nie an einer Freischaltung
@@ -62,6 +70,8 @@ final class FaBereiche
      * @var list<array{0:string,1:?string}>
      */
     public const TOOL_PRAEFIXE = [
+        // Spec 82 §9: Projekte (Agentur-Akte, nur im Master-Team) — Ressourcen `projekte`, `projekt_standorte`
+        ['projekt', 'projekte'],
         // bereichsfrei: Ansicht/Navigation, Läufe, Rechte-Pflege, Betriebs-Brille umschalten (nur Ansicht)
         ['ui', null], ['runs', null], ['team_roles', null], ['team_bereiche', null], ['standorte', null],
         // Spec 82 §13 B1/B4: Plattform-Steuerung (Stamm-Paket, Master-Team, Mandanten-Verwaltung) — Rechteprüfung im Dienst (nur Plattform-Admin), nicht je Bereich
@@ -124,6 +134,7 @@ final class FaBereiche
         'Lager' => 'lager',
         'Knowledge' => 'wissen', 'Trendradar' => 'wissen',
         'Settings' => 'einstellungen', 'FoodDna' => 'einstellungen',
+        'Projekte' => 'projekte',
     ];
 
     public static function istBereich(string $bereich): bool
@@ -186,6 +197,14 @@ final class FaBereiche
         $team = $user?->currentTeamRelation ?? null;
         if (! $user instanceof \Platform\Core\Models\User || $team === null) {
             return $gruppen;
+        }
+        // Spec 82 §9: Master-only-Bereiche stehen außerhalb des Master-Teams in keiner Navigation, auch nicht für Plattform-Admins
+        if (! \Platform\FoodAlchemist\Support\MasterTeam::istMaster($team)) {
+            $gruppen = array_values(array_filter(array_map(function (array $g) {
+                $g['items'] = array_values(array_filter($g['items'] ?? [], fn (array $item) => ! in_array(self::fuerRoute($item['route'] ?? null), self::NUR_MASTER, true)));
+
+                return $g;
+            }, $gruppen), fn (array $g) => ($g['items'] ?? []) !== []));
         }
         $rechte = app(\Platform\FoodAlchemist\Services\FaRechte::class);
         if (! $user->isAiUser() && $rechte->istPlattformAdmin($user)) {
