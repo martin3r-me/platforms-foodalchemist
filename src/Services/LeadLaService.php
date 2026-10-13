@@ -2,6 +2,7 @@
 
 namespace Platform\FoodAlchemist\Services;
 
+use Platform\FoodAlchemist\Support\StammPaket;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Platform\Core\Models\Team;
@@ -576,7 +577,9 @@ class LeadLaService
             ->join('foodalchemist_supplier_item_structures AS s', 's.supplier_item_id', '=', 'foodalchemist_supplier_items.id')
             ->where('s.gp_id', $gp->id)->whereNull('s.deleted_at')
             ->where('foodalchemist_supplier_items.id', '!=', $neuerLaId)
-            ->select('foodalchemist_supplier_items.*')->get();
+            ->select('foodalchemist_supplier_items.*');
+        // Spec 82 §12 A3: die Fehlermeldung nennt Bezeichnungen — Stamm-Paket-Artikel ohne Opt-in dürfen darin nicht vorkommen.
+        $bestehend = StammPaket::begrenzen($bestehend, 'foodalchemist_supplier_items', $team)->get();
 
         foreach ($bestehend as $alt) {
             $abweichungen = DeklarationsProfil::abweichungen($alt->allergens, $alt->declarations, $neu->allergens, $neu->declarations);

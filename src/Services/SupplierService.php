@@ -2,6 +2,7 @@
 
 namespace Platform\FoodAlchemist\Services;
 
+use Platform\FoodAlchemist\Support\StammPaket;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Platform\Core\Models\Team;
@@ -22,7 +23,8 @@ class SupplierService
      */
     public function listWithCounts(Team $team, bool $includeInactive = false, string $search = ''): Collection
     {
-        $itemCounts = DB::table('foodalchemist_supplier_items')
+        // Spec 82 §12 A3: nur Artikel zählen, die dieses Team sehen darf (Stamm-Paket ohne Opt-in nicht).
+        $itemCounts = StammPaket::begrenzen(DB::table('foodalchemist_supplier_items'), 'foodalchemist_supplier_items', $team)
             ->whereNull('deleted_at')
             ->selectRaw('supplier_id, COUNT(*) AS n')
             ->groupBy('supplier_id')
@@ -32,6 +34,7 @@ class SupplierService
             ->join('foodalchemist_supplier_items AS i', 'i.id', '=', 's.supplier_item_id')
             ->whereNull('s.deleted_at')
             ->whereNotNull('s.gp_id')
+            ->tap(fn ($q) => StammPaket::begrenzen($q, 'i', $team, 'foodalchemist_supplier_items'))
             ->selectRaw('i.supplier_id, COUNT(*) AS n')
             ->groupBy('i.supplier_id')
             ->pluck('n', 'supplier_id');
@@ -280,6 +283,7 @@ class SupplierService
             ->join('foodalchemist_gps AS g', 'g.id', '=', 'ri.gp_id')
             ->join('foodalchemist_supplier_items AS si', 'si.id', '=', 'g.lead_la_supplier_item_id')
             ->whereNull('ri.deleted_at')->whereIn('ri.recipe_id', $recipeIds)
+            ->tap(fn ($q) => StammPaket::begrenzen(StammPaket::begrenzen($q, 'si', $team, 'foodalchemist_supplier_items'), 'g', $team, 'foodalchemist_gps'))
             ->selectRaw('si.supplier_id, COUNT(*) AS n')
             ->groupBy('si.supplier_id')
             ->pluck('n', 'supplier_id')
