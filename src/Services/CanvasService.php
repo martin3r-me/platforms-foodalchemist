@@ -172,19 +172,38 @@ class CanvasService
      * Werte eines Canvas, keyed by field_key. Skalar = string|null; repeatable = Liste
      * von ['id','value','meta'].
      */
-    public function werte(FoodAlchemistCanvas $canvas): array
+    public function werte(FoodAlchemistCanvas $canvas, ?Team $team = null): array
     {
         $out = [];
-        foreach ($this->template($canvas->canvas_type)['felder'] as $f) {
+        // Mit Team: Kern + Zusatzfelder der Team-Kette (felder()), ohne: nur die Kern-Felder wie bisher
+        foreach ($team === null ? $this->template($canvas->canvas_type)['felder'] : $this->felder($canvas->canvas_type, $team) as $f) {
             if (($f['type'] ?? '') === 'repeatable') {
                 $out[$f['key']] = $canvas->entries->where('field_key', $f['key'])->sortBy('position')
-                    ->map(fn ($e) => ['id' => $e->id, 'value' => $e->value, 'meta' => $e->meta ?? []])->values()->all();
+                    ->map(fn ($e) => ['id' => $e->id, 'value' => $e->value, 'meta' => $e->meta ?? [], 'is_binding' => (bool) $e->is_binding])->values()->all();
             } else {
                 $out[$f['key']] = optional($canvas->entries->firstWhere('field_key', $f['key']))->value;
             }
         }
 
         return $out;
+    }
+
+    /** Welche Skalar-Felder des Canvas sind verbindlich? @return array<string, bool> field_key => true */
+    public function verbindlichkeit(FoodAlchemistCanvas $canvas): array
+    {
+        return $canvas->entries->where('is_binding', true)->where('position', 0)->mapWithKeys(fn ($e) => [$e->field_key => true])->all();
+    }
+
+    /**
+     * Spec 82 §7: „verbindlich“ setzt nur das OBERTEAM (kein Eltern-Team) und nur mit Admin-Recht; ein Unter-Team
+     * ergänzt an verbindlichen Feldern nichts. Wirft RuntimeException bzw. FaRechtFehltException.
+     */
+    public function pruefeVerbindlichSetzen(Team $team, ?\Platform\Core\Models\User $user): void
+    {
+        if ($team->parent_team_id !== null) {
+            throw new \RuntimeException('Verbindlich setzt nur das Oberteam; ein Unter-Team kann Vorgaben des Oberteams nicht verbindlich machen.');
+        }
+        app(FaRechte::class)->pruefe($user, $team, \Platform\FoodAlchemist\Enums\FaRolle::Admin, 'Verbindliche DNA-Felder setzen');
     }
 
     /** Skalare Felder aus einem Formular speichern (leer → Entry löschen). */

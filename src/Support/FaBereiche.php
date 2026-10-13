@@ -81,7 +81,7 @@ final class FaBereiche
         ['printers', 'produktion'], ['behaelter_bedarf', 'produktion'],
         // Planung (Leitstelle)
         ['planung', 'planung'], ['planning', 'planung'], ['leitstelle', 'planung'], ['brief_templates', 'planung'], ['phase', 'planung'],
-        ['platzhalter', 'planung'], ['assemblierung', 'planung'], ['kombination', 'planung'], ['canvas', 'planung'], ['ablauf', 'planung'],
+        ['platzhalter', 'planung'], ['assemblierung', 'planung'], ['kombination', 'planung'], ['canvas', 'planung'], ['kontext', 'planung'], ['ablauf', 'planung'],
         // Ausgaben (einzeln)
         ['speisekarte', 'speisekarte'], ['speiseplan', 'speiseplan'], ['speiseplaene', 'speiseplan'],
         ['foodbook', 'foodbook'], ['kapitel_', 'foodbook'],

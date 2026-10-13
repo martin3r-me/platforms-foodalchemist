@@ -1116,6 +1116,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\TeamProfilGetTool::class,
                     \Platform\FoodAlchemist\Tools\TeamProfilPutTool::class,
                     \Platform\FoodAlchemist\Tools\MachbarkeitCheckTool::class,
+                    // Spec 82 §7 Schritt 6: KI-Marken-Kontext lesen (Quellen, Budget-Bilanz; §13 G Sichtbarkeit)
+                    \Platform\FoodAlchemist\Tools\KontextResolveTool::class,
                     // Spec 82 §3: Preislisten-Import (Abgleich + Prüfliste, schreibt keine Preise)
                     \Platform\FoodAlchemist\Tools\PreislisteUploadTool::class,
                     \Platform\FoodAlchemist\Tools\PreislisteLaeufeGetTool::class,
