@@ -42,7 +42,7 @@ final class FaBereiche
         'concepter' => 'concepter', 'concepts' => 'concepter', 'formate' => 'concepter', 'pakete' => 'concepter',
         'foodbooks' => 'foodbook', 'speisekarte' => 'speisekarte', 'speiseplan' => 'speiseplan', 'angebote' => 'angebote',
         'produktion' => 'produktion', 'etiketten' => 'produktion',
-        'orders' => 'einkauf', 'wareneingang' => 'einkauf', 'bestellvorlagen' => 'einkauf',
+        'orders' => 'einkauf', 'wareneingang' => 'einkauf', 'bestellvorlagen' => 'einkauf', 'preislisten' => 'einkauf',
         'lager' => 'lager',
         'knowledge' => 'wissen', 'trendradar' => 'wissen',
         'einstellungen' => 'einstellungen', 'food-dna' => 'einstellungen',
@@ -70,7 +70,7 @@ final class FaBereiche
         ['signal', 'uebersicht'], ['signale', 'uebersicht'],
         // Einkauf
         ['orders', 'einkauf'], ['order_', 'einkauf'], ['delivery_notes', 'einkauf'], ['supplier_invoices', 'einkauf'],
-        ['triple_match', 'einkauf'], ['bestellvorschlag', 'einkauf'], ['einkaufsliste', 'einkauf'],
+        ['triple_match', 'einkauf'], ['preisliste', 'einkauf'], ['bestellvorschlag', 'einkauf'], ['einkaufsliste', 'einkauf'],
         // Lager
         ['inventory', 'lager'], ['storage_bins', 'lager'], ['eigenproduktion', 'lager'], ['lagerartikel', 'lager'],
         // Produktion
@@ -115,7 +115,7 @@ final class FaBereiche
         'Concepter' => 'concepter', 'Concepts' => 'concepter', 'Formate' => 'concepter', 'Pakete' => 'concepter',
         'Foodbooks' => 'foodbook', 'Speisekarte' => 'speisekarte', 'Speiseplan' => 'speiseplan', 'Angebote' => 'angebote',
         'Produktion' => 'produktion', 'Etiketten' => 'produktion',
-        'Orders' => 'einkauf', 'Wareneingang' => 'einkauf', 'Bestellvorlagen' => 'einkauf',
+        'Orders' => 'einkauf', 'Wareneingang' => 'einkauf', 'Bestellvorlagen' => 'einkauf', 'Preislisten' => 'einkauf',
         'Lager' => 'lager',
         'Knowledge' => 'wissen', 'Trendradar' => 'wissen',
         'Settings' => 'einstellungen', 'FoodDna' => 'einstellungen',

@@ -1,0 +1,173 @@
+<?php
+
+namespace Platform\FoodAlchemist\Livewire\Preislisten;
+
+use Illuminate\Support\Facades\Auth;
+use Livewire\Component;
+use Livewire\WithFileUploads;
+use Platform\FoodAlchemist\Models\FoodAlchemistPriceImportLine;
+use Platform\FoodAlchemist\Models\FoodAlchemistSupplier;
+use Platform\FoodAlchemist\Services\PreislistenImportService;
+
+/**
+ * Spec 82 §3 / Schritt 4d, Stufe 2 — Preisliste hochladen (CSV oder Excel), Spalten zuordnen, abgleichen, Prüfliste sehen.
+ *
+ * Aus Kundensicht: Der Mandant lädt SEINE Preisliste hoch. Dieser Schirm gleicht nur ab; geschrieben wird erst
+ * die Schreib-Schicht (Teampreis über den PriceService). Berechtigung: nur das Kunden-Hauptteam mit Rolle Kuratieren
+ * ({@see PreislistenImportService::darfImportieren}) — vor Vorschau UND vor dem Abgleich. Die Datei liegt im Livewire-
+ * Temp-Verzeichnis (vom System erzeugter Name), es gibt nie einen frei wählbaren Pfad.
+ */
+class Index extends Component
+{
+    use WithFileUploads;
+
+    /** @var \Livewire\Features\SupportFileUploads\TemporaryUploadedFile|null */
+    public $datei = null;
+
+    public ?int $lieferantId = null;
+
+    /** Zielfeld => Spaltenindex der Datei (leer = nicht vorhanden). @var array<string, string> */
+    public array $zuordnung = [];
+
+    /** @var array{kopf: list<string>, beispiel: list<list<string>>, zeilen: int}|null */
+    public ?array $vorschau = null;
+
+    public ?int $laufId = null;
+
+    public ?string $fehler = null;
+
+    public ?string $meldung = null;
+
+    /** Zielfelder in Anzeige-Reihenfolge. */
+    public const FELDER = [
+        'supplier' => 'Lieferant', 'article_number' => 'Artikelnummer', 'ean' => 'EAN', 'designation' => 'Bezeichnung',
+        'unit' => 'Gebinde / Einheit', 'price' => 'Preis netto', 'valid_from' => 'Gültig ab',
+    ];
+
+    public function updatedDatei(): void
+    {
+        $this->fehler = $this->meldung = null;
+        $this->vorschau = null;
+        $team = $this->team();
+        if ($team === null || ! $this->darf()) {
+            $this->datei = null;
+            $this->fehler = 'Preislisten importieren darf nur das Haupt-Team des Kunden (Rolle Kuratieren).';
+
+            return;
+        }
+        try {
+            $this->validate(['datei' => 'required|file|max:10240']);
+            $endung = $this->endung();
+            $v = app(PreislistenImportService::class)->vorschau($this->datei->getRealPath(), $endung);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $this->datei = null;
+            $this->fehler = $e->validator->errors()->first('datei');
+
+            return;
+        } catch (\RuntimeException $e) {
+            $this->datei = null;
+            $this->fehler = $e->getMessage();
+
+            return;
+        }
+        $this->vorschau = ['kopf' => $v['kopf'], 'beispiel' => $v['beispiel'], 'zeilen' => $v['zeilen']];
+        $this->zuordnung = [];
+        foreach (self::FELDER as $feld => $_) {
+            $this->zuordnung[$feld] = isset($v['vorschlag'][$feld]) ? (string) $v['vorschlag'][$feld] : '';
+        }
+    }
+
+    public function abgleichen(): void
+    {
+        $this->fehler = $this->meldung = null;
+        $team = $this->team();
+        $user = Auth::user();
+        if ($team === null || ! $this->darf()) {
+            $this->fehler = 'Preislisten importieren darf nur das Haupt-Team des Kunden (Rolle Kuratieren).';
+
+            return;
+        }
+        if ($this->datei === null || $this->vorschau === null) {
+            $this->fehler = 'Bitte zuerst eine Datei wählen.';
+
+            return;
+        }
+        $mapping = array_filter($this->zuordnung, fn ($v) => $v !== '' && $v !== null);
+        try {
+            $run = app(PreislistenImportService::class)->stage(
+                $team, $this->datei->getRealPath(), $mapping, $this->lieferantId ?: null, $user?->id,
+                $this->endung(), $this->datei->getClientOriginalName(),
+            );
+        } catch (\RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+
+            return;
+        }
+        $this->laufId = $run->id;
+        $c = $run->counts ?? [];
+        $this->meldung = sprintf('Abgeglichen: %d Zeilen, %d Treffer, %d zu prüfen. Es wurde noch kein Preis geschrieben.',
+            $c['zeilen'] ?? 0, $c['treffer'] ?? 0, ($c['zeilen'] ?? 0) - ($c['treffer'] ?? 0));
+        $this->datei = null;
+        $this->vorschau = null;
+        $this->zuordnung = [];
+    }
+
+    public function laufWaehlen(int $id): void
+    {
+        $team = $this->team();
+        $this->laufId = $team !== null && app(PreislistenImportService::class)->lauf($team, $id) !== null ? $id : null;
+    }
+
+    public function pruefelisteLaden(int $id)
+    {
+        $team = $this->team();
+        $svc = app(PreislistenImportService::class);
+        $run = $team !== null ? $svc->lauf($team, $id) : null;
+        if ($run === null) {
+            return null;
+        }
+        $tmp = tempnam(sys_get_temp_dir(), 'pruefliste');
+        $svc->exportPruefliste($run, $tmp);
+
+        return response()->streamDownload(function () use ($tmp) {
+            readfile($tmp);
+            @unlink($tmp);
+        }, 'pruefliste-' . $run->id . '.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
+    }
+
+    private function team(): ?\Platform\Core\Models\Team
+    {
+        return Auth::user()?->currentTeamRelation;
+    }
+
+    private function darf(): bool
+    {
+        $team = $this->team();
+
+        return $team !== null && app(PreislistenImportService::class)->darfImportieren($team, Auth::user());
+    }
+
+    /** Endung der Originaldatei, nur aus der Whitelist. */
+    private function endung(): ?string
+    {
+        $e = strtolower((string) $this->datei?->getClientOriginalExtension());
+
+        return in_array($e, [...PreislistenImportService::ENDUNGEN_CSV, ...PreislistenImportService::ENDUNGEN_EXCEL, 'xls'], true) ? $e : null;
+    }
+
+    public function render()
+    {
+        $team = $this->team();
+        $svc = app(PreislistenImportService::class);
+        $lauf = $team !== null && $this->laufId !== null ? $svc->lauf($team, $this->laufId) : null;
+
+        return view('foodalchemist::livewire.preislisten.index', [
+            'darf' => $this->darf(),
+            'laeufe' => $team !== null ? $svc->laeufe($team) : collect(),
+            'lieferanten' => $team !== null ? FoodAlchemistSupplier::visibleToTeam($team)->where('is_inactive', false)->orderBy('name')->get(['id', 'name']) : collect(),
+            'lauf' => $lauf,
+            'pruefliste' => $lauf !== null ? $svc->pruefliste($lauf)->take(500) : collect(),
+            'felder' => self::FELDER,
+        ])->layout(\Platform\FoodAlchemist\Support\FaShell::layout());
+    }
+}

@@ -95,11 +95,12 @@ it('Preis- und Datumsformate; unbrauchbare Zeilen sind Fehler mit Grund, nie ein
         ->and($z[1]->reason)->toContain('0 oder negativ')->and($z[2]->reason)->toContain('keine Zahl')->and($z[3]->reason)->toContain('Datum');
 });
 
-it('Ohne gültig-ab-Spalte gilt heute; Excel wird mit Hinweis abgelehnt; Windows-1252 wird gelesen', function () {
+it('Ohne gültig-ab-Spalte gilt heute; alte .xls und kaputte Excel-Dateien werden mit Hinweis abgelehnt; Windows-1252 wird gelesen', function () {
     $run = $this->svc->stage($this->team, ($this->csv)("Artikelnummer;Preis\n1001;2\n"), [], $this->hanos->id);
     expect(FoodAlchemistPriceImportLine::where('run_id', $run->id)->first()->valid_from->toDateString())->toBe(now()->toDateString());
 
-    expect(fn () => $this->svc->stage($this->team, ($this->csv)('x', 'xlsx'), [], $this->hanos->id))->toThrow(RuntimeException::class, 'CSV');
+    expect(fn () => $this->svc->stage($this->team, ($this->csv)('x', 'xls'), [], $this->hanos->id))->toThrow(RuntimeException::class, '.xls');
+    expect(fn () => $this->svc->stage($this->team, ($this->csv)('keine Tabelle', 'xlsx'), [], $this->hanos->id))->toThrow(RuntimeException::class, 'nicht lesen');
 
     $latin = mb_convert_encoding("Lieferant;Artikelnummer;Preis\nChefs Culinar;2002;1\n", 'Windows-1252', 'UTF-8');
     $run2 = $this->svc->stage($this->team, ($this->csv)($latin), []);
