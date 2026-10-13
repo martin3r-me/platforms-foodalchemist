@@ -90,6 +90,9 @@ it('Trait-Vertrag: ALLE Models tragen LogsActivity + BelongsToTeamHierarchy + Ha
         // Schicht-3-Konformitätsbefund: Urteil EINES Teams über ein Artefakt (wie RecipeFinding) —
         // team_id vorhanden, aber NICHT vererbt (sonst mischte ein „verworfen" des Eltern-Teams in die Kind-Inbox).
         'FoodAlchemistConformanceFinding',
+        // Spec 82 · Schritt 4d: Preislisten-Import eines Mandanten — Vorgang des hochladenden Teams (Lauf) und
+        // dessen Zeilen. Ein Kind-Team darf die Preisliste des Oberteams weder sehen noch anwenden.
+        'FoodAlchemistPriceImportRun', 'FoodAlchemistPriceImportLine',
     ];
     $modelDir = dirname((new ReflectionClass(FoodAlchemistRecipe::class))->getFileName());
     $fehlend = [];
@@ -160,8 +163,9 @@ it('Trait-Vertrag: ALLE Models tragen LogsActivity + BelongsToTeamHierarchy + Ha
         $pflichten = in_array(class_basename($klasse), $ohneHierarchie, true)
             ? ['LogsActivity', 'HasUuidV7', 'SoftDeletes']
             : ['LogsActivity', 'BelongsToTeamHierarchy', 'HasUuidV7', 'SoftDeletes'];
-        if (class_basename($klasse) === 'FoodAlchemistPrice') {
-            // Bewusst ohne LogsActivity: Massendaten (221k), Audit über Import-Reports (M2-Entscheid im Model)
+        if (in_array(class_basename($klasse), ['FoodAlchemistPrice', 'FoodAlchemistPriceImportLine'], true)) {
+            // Bewusst ohne LogsActivity: Massendaten (221k), Audit über Import-Reports (M2-Entscheid im Model);
+            // die Import-Zeilen hängen am Lauf (er trägt LogsActivity)
             $pflichten = array_diff($pflichten, ['LogsActivity']);
         }
         foreach ($pflichten as $pflicht) {
