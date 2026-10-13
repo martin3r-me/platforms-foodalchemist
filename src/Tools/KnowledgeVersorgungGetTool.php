@@ -70,6 +70,9 @@ class KnowledgeVersorgungGetTool extends FoodAlchemistTool implements ToolContra
         if ($team === null) {
             return ToolResult::error('Kein Team im Kontext.', 'NO_TEAM');
         }
+        if (($gesperrt = $this->masterWissenGesperrt($team)) !== null) {
+            return $gesperrt;
+        }
 
         $dienst = app(WissensVersorgungService::class);
         $promptKey = trim((string) ($arguments['prompt_key'] ?? ''));

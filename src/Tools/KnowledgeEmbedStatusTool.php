@@ -48,6 +48,9 @@ class KnowledgeEmbedStatusTool extends FoodAlchemistTool implements ToolContract
         if ($team === null) {
             return ToolResult::error('Kein Team im Kontext.', 'NO_TEAM');
         }
+        if (($gesperrt = $this->masterWissenGesperrt($team)) !== null) {
+            return $gesperrt;
+        }
         $category = is_string($arguments['category'] ?? null) && trim($arguments['category']) !== '' ? trim($arguments['category']) : null;
         $prefix = is_string($arguments['prefix'] ?? null) && trim($arguments['prefix']) !== '' ? trim($arguments['prefix']) : null;
 

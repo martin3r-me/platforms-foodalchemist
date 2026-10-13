@@ -57,6 +57,9 @@ class KnowledgeProfilGetTool extends FoodAlchemistTool implements ToolContract, 
         if ($team === null) {
             return ToolResult::error('Kein Team im Kontext.', 'NO_TEAM');
         }
+        if (($gesperrt = $this->masterWissenGesperrt($team)) !== null) {
+            return $gesperrt;
+        }
 
         $dienst = app(WissensProfilService::class);
         $role = trim((string) ($arguments['role'] ?? 'root')) ?: 'root';

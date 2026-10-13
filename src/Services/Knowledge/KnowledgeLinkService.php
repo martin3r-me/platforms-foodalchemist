@@ -186,7 +186,7 @@ class KnowledgeLinkService
                     ->where('p.active', 1)->whereNull('p.deleted_at')
                     ->selectRaw('1');
             });
-        TeamScope::applyVisible($q, 'd.team_id', $team);
+        \Platform\FoodAlchemist\Services\Knowledge\WissensSichtbarkeit::lesbarOderAlt($q, 'd.team_id', $team);
 
         return $q->orderBy('d.slug')->pluck('d.slug')->map(fn ($s) => (string) $s)->all();
     }
@@ -221,7 +221,7 @@ class KnowledgeLinkService
     {
         $q = DB::table(self::TABLE.' as l')
             ->whereNull('l.deleted_at')->where('l.active', 1);
-        TeamScope::applyVisible($q, 'l.team_id', $team);
+        \Platform\FoodAlchemist\Services\Knowledge\WissensSichtbarkeit::lesbarOderAlt($q, 'l.team_id', $team, false);   // Kanten-Tabelle: keine Ablauf-Ausnahme (keine Spalte `art`)
 
         return $q;
     }
@@ -229,7 +229,7 @@ class KnowledgeLinkService
     private function doc(Team $team, string $slug): ?object
     {
         $q = DB::table(self::DOCS)->whereNull('deleted_at')->where('slug', $slug);
-        TeamScope::applyVisible($q, 'team_id', $team);
+        \Platform\FoodAlchemist\Services\Knowledge\WissensSichtbarkeit::lesbarOderAlt($q, 'team_id', $team);
 
         return $q->first(['id', 'team_id', 'slug', 'active']);
     }
