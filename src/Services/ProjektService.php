@@ -169,6 +169,7 @@ class ProjektService
         $s = FoodAlchemistProjektStandort::where('projekt_id', $p->id)->findOrFail($standortId);
         $warPilot = (int) $p->pilot_standort_id === (int) $s->id;
         $s->delete();
+        app(TeamProfilService::class)->loescheStandortProfil($team, (int) $s->id);   // Standortprofil geht mit dem Standort
         if ($warPilot) {
             $naechster = FoodAlchemistProjektStandort::where('projekt_id', $p->id)->orderBy('sort_order')->orderBy('id')->first();
             $this->pilotSetzen($team, $user, $p->id, $naechster?->id);

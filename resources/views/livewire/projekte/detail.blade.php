@@ -48,13 +48,14 @@
             </div>
 
             @if($phase === 'standort')
-                <x-fa::section title="Kunden-Standorte" description="Standorte des Kunden in diesem Projekt. Das Standortprofil mit Equipment und Machbarkeit folgt im Menüpunkt Standortprofil." data-projekt-standorte>
+                <x-fa::section title="Kunden-Standorte" description="Standorte des Kunden in diesem Projekt. Das Profil mit Geräten, Flächen und Gästen parallel pflegst du im Menüpunkt Standortprofil." data-projekt-standorte>
                     @forelse($p->standorte as $s)
                         <div wire:key="st-{{ $s->id }}" class="flex items-center gap-2 py-1" data-projekt-standort="{{ $s->id }}">
                             <span class="font-medium">{{ $s->name }}</span>
                             @if($s->ist_pilot)<x-fa::badge tone="accent">Pilot</x-fa::badge>
                             @elseif($darfSchreiben)<x-fa::button size="sm" variant="ghost" wire:click="pilotSetzen({{ $s->id }})" data-projekt-pilot-setzen="{{ $s->id }}">Als Pilot</x-fa::button>@endif
-                            @if($darfSchreiben)<x-fa::button size="sm" variant="ghost" wire:click="standortLoeschen({{ $s->id }})" wire:confirm="Standort entfernen?">Entfernen</x-fa::button>@endif
+                            @if($darfSchreiben)<x-fa::button size="sm" variant="ghost" icon="heroicon-o-clipboard-document-list" :href="route('foodalchemist.standortprofil.index', ['standort' => $s->id])" data-projekt-standort-profil="{{ $s->id }}">Profil</x-fa::button>
+                            <x-fa::button size="sm" variant="ghost" wire:click="standortLoeschen({{ $s->id }})" wire:confirm="Standort entfernen?">Entfernen</x-fa::button>@endif
                         </div>
                     @empty
                         <p class="text-[var(--fa-ink-3)]">Noch kein Standort. Der erste wird zum Pilot-Standort.</p>
