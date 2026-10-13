@@ -410,9 +410,24 @@
 
             @if($rezept->equipment->isNotEmpty())
                 <x-fa::section variant="plain" title="Equipment" icon="heroicon-o-wrench-screwdriver" data-equipment>
+                    @php $fehlt = collect($machbarkeit['warnungen'] ?? [])->pluck('equipment_id')->all(); @endphp
                     <div class="flex flex-wrap gap-1.5">
-                        @foreach($rezept->equipment as $geraet)<x-fa::badge>{{ $geraet->name }}</x-fa::badge>@endforeach
+                        @foreach($rezept->equipment as $geraet)
+                            <x-fa::badge :tone="in_array($geraet->id, $fehlt, true) ? 'crit' : 'neutral'"
+                                :title="in_array($geraet->id, $fehlt, true) ? 'Fehlt in eurem Teamprofil' : null">{{ $geraet->name }}</x-fa::badge>
+                        @endforeach
                     </div>
+                    {{-- Spec 82 §6: Warnung nur bei ausdrücklich „fehlt“; bei „unbekannt“ nur ein ruhiger Hinweis. --}}
+                    @if(($machbarkeit['status'] ?? null) === 'warnung')
+                        <x-fa::signal tone="warn" class="mt-2" data-machbarkeit-warnung>
+                            Nicht machbar ohne: {{ collect($machbarkeit['warnungen'])->pluck('equipment')->unique()->implode(', ') }}. Laut Teamprofil fehlt das in eurer Küche.
+                        </x-fa::signal>
+                    @elseif(($machbarkeit['status'] ?? null) === 'hinweis')
+                        <p class="mt-2 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]" data-machbarkeit-hinweis>
+                            Profil unvollständig: {{ collect($machbarkeit['hinweise'])->pluck('equipment')->unique()->implode(', ') }} {{ count($machbarkeit['hinweise']) === 1 ? 'ist' : 'sind' }} im
+                            <a href="{{ route('foodalchemist.einstellungen', ['sektion' => 'teamprofil']) }}" class="underline">Teamprofil</a> noch unbekannt.
+                        </p>
+                    @endif
                 </x-fa::section>
             @endif
 
