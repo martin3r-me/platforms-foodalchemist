@@ -32,6 +32,7 @@ class AngeboteStatusTool extends FoodAlchemistTool implements ToolContract, Tool
             'properties' => [
                 'id' => ['type' => 'integer', 'description' => 'Angebot-Id.'],
                 'status' => ['type' => 'string', 'enum' => ['anfrage', 'in_arbeit', 'angebot', 'versendet', 'angenommen', 'abgelehnt'], 'description' => 'Neuer Status.'],
+                'snapshot_verwerfen' => ['type' => 'boolean', 'description' => 'Spec 82 §12 B3: „angebot“ friert Gerichte mit Abo-Fassung ein. Zurück auf anfrage/in_arbeit verwirft den eingefrorenen Stand und braucht diese Bestätigung.'],
             ],
             'required' => ['id', 'status'],
         ];
@@ -53,7 +54,7 @@ class AngeboteStatusTool extends FoodAlchemistTool implements ToolContract, Tool
         }
 
         try {
-            app(AngebotService::class)->setStatus($team, $id, $status);
+            app(AngebotService::class)->setStatus($team, $id, $status, ! empty($arguments['snapshot_verwerfen']));
         } catch (\RuntimeException | \ValueError $e) {
             return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR');
         }

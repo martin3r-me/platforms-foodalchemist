@@ -385,6 +385,8 @@ Nach zwei unabhängigen Reviews am 13.10. Die Code-Belege wurden geprüft.
 
 Damit erledigt sich Entscheidung 2 („Offen“): Eine zentrale Veröffentlichung verändert nie rückwirkend die Arbeitsgrundlage eines Kunden.
 
+**Gebaut (Durchstich Schritt 4a, Angebot einfrieren; entschieden Dominique/Kurator 13.10.):** Das Angebot friert beim Wechsel auf Status „angebot“ ein (wer direkt auf versendet/angenommen springt, ebenfalls). Statt `sales_recipe_id` umzuhängen (zeigt auf ein eigenes Gericht, bei `concept_ref` gibt es am Block keine Rezept-ID, `nullOnDelete` löschte den Stand still) hält eine **Snapshot-Tabelle** je Gericht mit Abo-Fassung im Baum fest: Fassungs-IDs mit Allergenbild je Fassung, EK mit Status „vollständig/unvollständig“ (Teilsumme, nie 0 € als Preis), VK (NULL ohne vollständigen EK) und das Allergenbild des Gerichts. Eigene Gerichte ohne Fassung bleiben wie heute. Eine neue Master-Fassung ändert den Stand nie; `AngebotEinfrierService::veraltet` zeigt „neuere Fassung verfügbar“ mit **Allergen-Diff über den Endstand** (Fassung gegen Fassung; ein Flag der neuesten Fassung allein würde die Änderung einer übersprungenen Zwischenfassung verpassen) samt Zwischenfassungen. Zurück auf „anfrage/in_arbeit“ verwirft den Stand nach Bestätigung (`snapshot_verwerfen`), danach folgt das Angebot wieder der neuesten Fassung; verworfene Stände bleiben als Historie. MCP `angebote.EINFRIEREN_GET/POST`. Das **Übernehmen** einer neuen Fassung mit Allergen-Bestätigung (nur Rolle Freigeben, mit Person und Zeit) folgt in 4b.
+
 ### C · Berechnungskontext
 
 1. **Eine Kostenberechnung hat einen vollständigen Kontext:**

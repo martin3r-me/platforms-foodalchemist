@@ -103,16 +103,40 @@ class AngebotService
         return $angebot->refresh();
     }
 
-    public function setStatus(Team $team, int $id, string $status): FoodAlchemistAngebot
+    /**
+     * Status setzen. Spec 82 §12 B3: „angebot“ (Freigabe) friert die Gerichte mit Abo-Fassung ein ({@see AngebotEinfrierService}); wer erst
+     * später (versendet/angenommen) eintrifft, wird ebenfalls eingefroren, damit kein freigegebener Stand ungesichert bleibt. Zurück auf
+     * „anfrage“/„in_arbeit“ verwirft den Snapshot und verlangt dafür `$snapshotVerwerfen = true` (Bestätigung); danach folgt das Angebot wieder
+     * der neuesten Fassung.
+     */
+    public function setStatus(Team $team, int $id, string $status, bool $snapshotVerwerfen = false): FoodAlchemistAngebot
     {
         // Spec 77a: ab Kuratieren (Mitglied); ohne angemeldeten Benutzer (System) keine Prüfung
         app(\Platform\FoodAlchemist\Services\FaRechte::class)->pruefeAngemeldet($team, \Platform\FoodAlchemist\Enums\FaRolle::Kuratieren, 'Angebots-Status setzen');
 
-        if (AngebotStatus::tryFrom($status) === null) {
+        $neu = AngebotStatus::tryFrom($status);
+        if ($neu === null) {
             throw new \RuntimeException('Unbekannter Status.');
         }
 
-        return $this->update($team, $id, ['status' => $status]);
+        $einfrieren = app(AngebotEinfrierService::class);
+        $angebot = FoodAlchemistAngebot::visibleToTeam($team)->findOrFail($id);
+        $verwerfen = in_array($neu, [AngebotStatus::Anfrage, AngebotStatus::InArbeit], true) && $einfrieren->aktive($angebot) !== null;
+        if ($verwerfen && ! $snapshotVerwerfen) {
+            throw new \RuntimeException('Dieses Angebot ist eingefroren (Stand der Abo-Rezepte). Zurück auf „'.$neu->label().'“ verwirft den eingefrorenen Stand, danach folgt es wieder der neuesten Fassung. Zum Bestätigen mit snapshot_verwerfen erneut senden.');
+        }
+
+        return \Illuminate\Support\Facades\DB::transaction(function () use ($team, $id, $neu, $status, $einfrieren, $angebot, $verwerfen) {
+            $user = \Illuminate\Support\Facades\Auth::user();
+            $ergebnis = $this->update($team, $id, ['status' => $status]);
+            if ($verwerfen) {
+                $einfrieren->verwerfen($team, $user, $angebot);
+            } elseif (in_array($neu, [AngebotStatus::Angebot, AngebotStatus::Versendet, AngebotStatus::Angenommen], true)) {
+                $einfrieren->einfrieren($team, $user, $angebot->refresh());
+            }
+
+            return $ergebnis;
+        });
     }
 
     /** CRM-Verknüpfung setzen/lösen (MVP: nur Firma/Kontakt verlinken). */
