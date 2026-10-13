@@ -63,6 +63,9 @@
                 @endif
                 <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-[var(--fa-ok)]"></span> Basisrezept</span>
                 <span class="inline-flex items-center gap-1.5"><svg width="22" height="6"><line x1="0" y1="3" x2="22" y2="3" stroke="#fcd34d" stroke-width="2.4"/></svg> ★★★ harmoniert (gemessen)</span>
+                @unless($istGericht)
+                    <span class="inline-flex items-center gap-1.5" data-netz-legende-anker><svg width="22" height="8"><line x1="0" y1="4" x2="22" y2="4" stroke="#f8fafc" stroke-width="2.4"/><circle cx="11" cy="4" r="3.2" fill="#f8fafc" stroke="#0b1120"/></svg> Best-Match zwischen Kern-Ankern</span>
+                @endunless
                 <span class="inline-flex items-center gap-1.5"><svg width="22" height="6"><line x1="0" y1="3" x2="22" y2="3" stroke="#22d3ee" stroke-width="2" stroke-dasharray="1 4"/></svg> Kontrast: deckt einen offenen Bedarf</span>
                 <span class="inline-flex items-center gap-1.5"><svg width="22" height="6"><line x1="0" y1="3" x2="22" y2="3" stroke="#f43f5e" stroke-width="2" stroke-dasharray="5 3"/></svg> Konflikt zwischen Kern-Ankern</span>
             </div>
