@@ -27,6 +27,9 @@ uses(TestCase::class, SeedsTeamHierarchy::class);
  */
 beforeEach(function () {
     $this->seedTeamHierarchy();
+    // Spec 82 §13 H: gelesen wird global nur als Master — der Test-Akteur ist hier das Master-Team (legt global an, liest global).
+    config(['foodalchemist.master_team_id' => $this->rootTeam->id]);
+    \Platform\FoodAlchemist\Support\MasterTeam::flush();
 
     $this->mkDoc = function (string $slug, ?string $art = null, string $kategorie = 'cross_cutting'): int {
         $inhalt = "## {$slug}\nInhalt zum Suchen: Karotte Ingwer Püree.";

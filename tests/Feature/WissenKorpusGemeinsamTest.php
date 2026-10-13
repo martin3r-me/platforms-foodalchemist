@@ -58,6 +58,9 @@ function korpusDoc(?int $teamId, string $slug, string $title, string $kategorie 
 
 beforeEach(function () {
     $this->seedTeamHierarchy();
+    // Spec 82 §13 H: Diese Datei pinnt die ALTE Regel (Schalter aus/an, `knowledge_team_scope`) — sie gilt jetzt nur noch hinter der Notbremse.
+    // Die neue Lese-Regel (Master-Wissen unsichtbar) pinnt WissenMasterUnsichtbarTest.
+    config(['foodalchemist.knowledge_master_regel' => false]);
     $this->svc = app(KnowledgeContextService::class);
 });
 
