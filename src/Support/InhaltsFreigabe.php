@@ -85,17 +85,45 @@ final class InhaltsFreigabe
     public static function anwenden($q, string $teamSpalte, string $idSpalte, string $typ, Team $team, array $kette): void
     {
         $f = self::fuer($team, $kette);
-        $q->whereNull($teamSpalte);
-        if ($f['frei'] !== []) {
-            $q->orWhereIn($teamSpalte, $f['frei']);
-        }
-        if ($f['eingeschraenkt'] !== []) {
-            $q->orWhere(fn ($w) => $w->whereIn($teamSpalte, $f['eingeschraenkt'])
-                ->whereIn($idSpalte, fn ($s) => $s->select('objekt_id')->from('foodalchemist_freigabe_objekte')
-                    ->where('team_id', $f['huelle'])->where('typ', $typ)));
+        $normal = function ($w) use ($teamSpalte, $idSpalte, $typ, $f) {
+            $w->whereNull($teamSpalte);
+            if ($f['frei'] !== []) {
+                $w->orWhereIn($teamSpalte, $f['frei']);
+            }
+            if ($f['eingeschraenkt'] !== []) {
+                $w->orWhere(fn ($e) => $e->whereIn($teamSpalte, $f['eingeschraenkt'])
+                    ->whereIn($idSpalte, fn ($s) => $s->select('objekt_id')->from('foodalchemist_freigabe_objekte')
+                        ->where('team_id', $f['huelle'])->where('typ', $typ)));
+            }
+        };
+        // Spec 82 §12 B: Fassungs-Zeilen (veröffentlichte Master-Stände) gehören in keine normale Sicht — auch nicht in
+        // die Bibliothek des Masters selbst. Sichtbar werden sie ausschließlich über den Abo-Zweig.
+        $fassungSpalte = self::fassungSpalte($typ, $idSpalte);
+        if ($fassungSpalte !== null) {
+            $q->where($normal)->where($fassungSpalte, false);
+        } else {
+            $normal($q);
         }
         // Spec 82 §12 A1: Abo-Zweig (Master → Mandant), eigene Regel, siehe AboSicht
         AboSicht::anhaengen($q, $idSpalte, $typ, $kette, $f);
+    }
+
+    /** Schema-Merker je Prozess (nicht im Team-Flush), siehe flushTeamAncestryCache. */
+    private static ?bool $fassungDa = null;
+
+    /** Spalte `ist_fassung` der Rezept-Tabelle (aus der ID-Spalte abgeleitet), sofern migriert. */
+    private static function fassungSpalte(string $typ, string $idSpalte): ?string
+    {
+        if ($typ !== 'recipe') {
+            return null;
+        }
+        self::$fassungDa ??= Schema::hasColumn('foodalchemist_recipes', 'ist_fassung');
+        if (! self::$fassungDa) {
+            return null;
+        }
+        $tabelle = str_contains($idSpalte, '.') ? strstr($idSpalte, '.', true) : 'foodalchemist_recipes';
+
+        return $tabelle . '.ist_fassung';
     }
 
     public static function typFuerModel(string $klasse): ?string
@@ -113,6 +141,7 @@ final class InhaltsFreigabe
     {
         self::$cache = [];
         self::$tabelleDa = null;
+        // $fassungDa bleibt: ein Schema-Stand ändert sich nicht mit dem Team-Cache (Spec77dLeistungTest: keine Abfrage je Flush)
     }
 
     private static function tabelleDa(): bool

@@ -654,6 +654,17 @@ class RecipeRecomputeService
 
     private function kosten(FoodAlchemistRecipe $recipe, Collection $zutaten): void
     {
+        // Spec 82 Bauplan §3b (Leck-Sperre): eine Fassungs-Zeile trägt NIE Kosten des Masters — sie wären aus
+        // BHG-Konditionen gerechnet. Kosten einer Fassung gibt es nur je Team (Kosten-Cache, Schritt 3).
+        if ($recipe->ist_fassung) {
+            $recipe->ek_total_eur = null;
+            $recipe->ek_per_kg_eur = null;
+            $recipe->ek_n_ingredients_total = null;
+            $recipe->ek_n_ingredients_priced = null;
+            $recipe->ek_price_basis = null;
+
+            return;
+        }
         $ekTotal = 0.0;
         $nKosten = 0;
         $nPriced = 0;
