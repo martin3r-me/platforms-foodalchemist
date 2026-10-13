@@ -172,6 +172,11 @@ Beschreibt, was die Küche kann. Das ist keine DNA.
   - Personal
 - **Eingebunden** werden vorhandene Werte: `kitchen_type`, Posten mit Kapazität und Besetzung, Rollen.
 - **Machbarkeits-Check ohne KI:** Ein Rezept braucht Equipment X, das Team hat X nicht → Warnung.
+- **Entschieden (Dominique 13.10.):**
+  - **Standardausstattung:** Flag `is_standard` am Equipment-Vokabular (Default aus). Standard gilt als vorhanden, solange das Team es nicht ausdrücklich als `nicht_vorhanden` markiert. Warnung nur bei ausdrücklich `nicht_vorhanden`. Welche Einträge Standard sind, bestätigt Dominique.
+  - **Convenience-Grad:** die vorhandenen DNA-Werte `from_scratch | teil_convenience | voll_convenience`, keine freie Skala.
+  - **Profil-Vorlage** in die Mandanten-Vorlage mitkopieren: erst mit dem Modul „Mandanten" (Schritt 8).
+- **Gebaut (Schritt 5, Backend):** Tabellen `team_profiles`, `team_profile_equipment` (Zeile = vorhanden/nicht_vorhanden, keine Zeile = unbekannt, bewusst ohne FK auf das Vokabular), `team_profile_areas`; `TeamProfilService`, `MachbarkeitService` (inkl. Unter-Rezepte, 3 Ebenen), `MachbarkeitKontext`; MCP `team_profile.GET/PUT`, `machbarkeit.CHECK`. Fläche gegen Pax kommt mit dem KontextResolver (Schritt 6).
 - **Prosa** (Besonderheiten, Wege, Engpässe) als Canvas am Team.
 
 ## §7 · DNA und KI-Kaskade (Kern)

@@ -1111,6 +1111,10 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     // Spec 77b: Bereiche, Einschränkungen, Kontingente
                     \Platform\FoodAlchemist\Tools\TeamBereicheGetTool::class,
                     \Platform\FoodAlchemist\Tools\TeamBereichePutTool::class,
+                    // Spec 82 §6: Teamprofil + Machbarkeits-Check
+                    \Platform\FoodAlchemist\Tools\TeamProfilGetTool::class,
+                    \Platform\FoodAlchemist\Tools\TeamProfilPutTool::class,
+                    \Platform\FoodAlchemist\Tools\MachbarkeitCheckTool::class,
                     \Platform\FoodAlchemist\Tools\StandorteGetTool::class,
                     \Platform\FoodAlchemist\Tools\StandortePutTool::class,
                     \Platform\FoodAlchemist\Tools\StandorteSetBrilleTool::class,
