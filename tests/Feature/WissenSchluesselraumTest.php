@@ -28,6 +28,9 @@ uses(TestCase::class, SeedsTeamHierarchy::class);
  */
 beforeEach(function () {
     $this->seedTeamHierarchy();
+    // Spec 82 §13 H: gelesen wird global nur als Master — der Test-Akteur (rootTeam bzw. dessen Kind) ist hier das Master-Team.
+    config(['foodalchemist.master_team_id' => $this->rootTeam->id]);
+    \Platform\FoodAlchemist\Support\MasterTeam::flush();
 
     // ★ Die Slugs tragen hier bewusst Anfrage-Tokens. Die lexikalische Haelfte der Discovery
     // bewertet AUSSCHLIESSLICH Slug-Tokens (+ gepflegte Aliase):

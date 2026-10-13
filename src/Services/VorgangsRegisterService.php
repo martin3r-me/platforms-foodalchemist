@@ -268,6 +268,15 @@ class VorgangsRegisterService
      */
     public function regelwerke(array $v, ?Team $team): array
     {
+        // Spec 82 §13 H: Kanon-Zuordnung und Master-Regelwerke lesen nur Master-Team und Unter-Teams. Mandanten bekommen die Wirkung im
+        // Prompt, aber keine Dokumentliste — ehrlich benannt statt leer erscheinen zu lassen.
+        if (! \Platform\FoodAlchemist\Services\Knowledge\WissensSichtbarkeit::darfKanonLesen($team)) {
+            return [
+                'quelle' => 'nicht_lesbar',
+                'dokumente' => [],
+                'hinweis' => 'Das Regelwerk dieses Vorgangs ist Plattform-Wissen: Es wirkt im Generator-Prompt, ist für dieses Team aber nicht lesbar.',
+            ];
+        }
         if ($team !== null) {
             foreach ($v['prompt_keys'] as $key) {
                 $docs = $this->kanon->documentsFor('prompt_key', $key, $team);

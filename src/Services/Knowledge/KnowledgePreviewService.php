@@ -42,7 +42,22 @@ class KnowledgePreviewService
             $parameters['kompositions_stil'] ?? null, [], $parameters);
         $canon = app(AiGatewayService::class)->knowledgePreview($team, $promptKey, $retrieval, $canonKey);
 
+        // Spec 82 §13 H: Wer Master-Wissen nicht lesen darf, sieht in der Vorschau nur die Mengen („Plattform-Wissen"), nicht Slugs/Datenwerte.
+        $maskiert = WissensSichtbarkeit::aktiv() && ! WissensSichtbarkeit::darfGlobalLesen($team);
+        if ($maskiert) {
+            $lesbar = app(KnowledgeContextService::class)->sichtbareDokumente($team)->pluck('slug')->flip()->all();
+            $nurLesbar = static fn (array $dateien) => array_values(array_filter($dateien,
+                static fn ($f) => isset($lesbar[explode('@', (string) $f)[0]])));
+            $verdeckt = count($retrieval['files_used']) - count($nurLesbar($retrieval['files_used']))
+                + count($canon['kanon_files']) - count($nurLesbar($canon['kanon_files']));
+            $retrieval['files_used'] = $nurLesbar($retrieval['files_used']);
+            $canon['kanon_files'] = $nurLesbar($canon['kanon_files']);
+            $retrieval['herkunft'] = array_filter((array) $retrieval['herkunft'], static fn ($k) => isset($lesbar[explode('@', (string) $k)[0]]), ARRAY_FILTER_USE_KEY);
+            $retrieval['datenwerk'] = null;
+        }
+
         return [
+            'plattform_wissen' => $maskiert ? ['verdeckt' => $verdeckt, 'hinweis' => 'Plattform-Wissen wirkt im Prompt, ist für dieses Team aber nicht lesbar.'] : null,
             'prompt_key' => $promptKey,
             'canon_prompt_key' => $canonKey,
             'rezept_typ' => $parameters['rezept_typ'],

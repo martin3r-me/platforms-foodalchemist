@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Platform\FoodAlchemist\Services\Knowledge;
 
+use Illuminate\Support\Facades\Schema;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Support\MasterTeam;
 use Platform\FoodAlchemist\Support\TeamScope;
@@ -40,29 +41,71 @@ final class WissensSichtbarkeit
     }
 
     /**
+     * Darf dieses Team die Kanon-ZUORDNUNG (welches Dossier in welchem Prompt) und Routing-Konfiguration lesen? Entscheid 13.10.:
+     * Mandanten nicht, die Wirkung bleibt. Notbremse aus = wie früher (ja).
+     */
+    public static function darfKanonLesen(?Team $team): bool
+    {
+        return ! self::aktiv() || self::darfGlobalLesen($team);
+    }
+
+    /**
      * Lese-Filter für rohe Query-Builder auf `foodalchemist_knowledge_*`.
+     *
+     * AUSNAHME `art = ablauf` + `category = workflow` + Frontmatter `gilt_fuer_vorgang` (Entscheid 13.10.): Bedienanleitung für die Agenten
+     * (`ablauf.GET`), also „Wirkung" wie der Prompt, kein Fachwissen — global (team_id NULL) und vom Master-Team gepflegte sind für jedes Team lesbar.
      *
      * @template T of \Illuminate\Database\Query\Builder|\Illuminate\Database\Eloquent\Builder
      * @param  T  $query
      * @return T
      */
-    public static function lesbar($query, string $teamIdColumn, ?Team $team)
+    public static function lesbar($query, string $teamIdColumn, ?Team $team, bool $ablaufAusnahme = true)
     {
         $ids = TeamScope::ancestryIds($team);
         $global = self::darfGlobalLesen($team);
+        $master = MasterTeam::id();
+        $praefix = str_contains($teamIdColumn, '.') ? strstr($teamIdColumn, '.', true) . '.' : '';
+        $artSpalte = $praefix . 'art';
+        $kategorieSpalte = $praefix . 'category';
+        $inhaltSpalte = $praefix . 'content_md';
+        $ablauf = $ablaufAusnahme && self::hatArt();   // nur für `knowledge_documents` (Spalte `art`), nicht für Bindungen/Kategorien
 
-        return $query->where(function ($q) use ($teamIdColumn, $ids, $global) {
-            if ($ids === [] && ! $global) {
-                $q->whereRaw('1 = 0');
-
-                return;
-            }
+        return $query->where(function ($q) use ($teamIdColumn, $ids, $global, $master, $artSpalte, $kategorieSpalte, $inhaltSpalte, $ablauf) {
+            $q->whereRaw('1 = 0');   // neutraler Anfang: jede Zeile unten ist ein OR
             if ($ids !== []) {
-                $q->whereIn($teamIdColumn, $ids);
+                $q->orWhereIn($teamIdColumn, $ids);
             }
             if ($global) {
                 $q->orWhereNull($teamIdColumn);
             }
+            if ($ablauf) {
+                $q->orWhere(function ($a) use ($teamIdColumn, $master, $artSpalte, $kategorieSpalte, $inhaltSpalte) {
+                    // Eigenschaft statt Namensmuster: art=ablauf UND category=workflow UND der Kopf des Dossiers nennt `gilt_fuer_vorgang`
+                    // (die 4–5 internen Wissensmodul-Dokumente tragen art=ablauf/category=workflow, aber keinen Vorgang). Fail closed:
+                    // ohne den Schlüssel im Frontmatter bleibt ein Dossier unlesbar. Saubere Lösung = eigene Spalte/Art (Datenentscheid).
+                    $a->where($artSpalte, 'ablauf')->where($kategorieSpalte, 'workflow')
+                        ->where($inhaltSpalte, 'like', "---%gilt_fuer_vorgang:%")
+                        ->where(function ($t) use ($teamIdColumn, $master) {
+                        $t->whereNull($teamIdColumn);
+                        if ($master !== null) {
+                            $t->orWhere($teamIdColumn, $master);
+                        }
+                    });
+                });
+            }
         });
+    }
+
+    /** Wie {@see lesbar()}, aber mit Notbremse: Regel aus = die alte Team-Sicht (`TeamScope::applyVisible`). */
+    public static function lesbarOderAlt($query, string $teamIdColumn, ?Team $team, bool $ablaufAusnahme = true)
+    {
+        return self::aktiv() ? self::lesbar($query, $teamIdColumn, $team, $ablaufAusnahme) : TeamScope::applyVisible($query, $teamIdColumn, $team);
+    }
+
+    private static function hatArt(): bool
+    {
+        static $hat = null;
+
+        return $hat ??= Schema::hasColumn('foodalchemist_knowledge_documents', 'art');
     }
 }

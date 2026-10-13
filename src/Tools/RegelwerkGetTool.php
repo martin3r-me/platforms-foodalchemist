@@ -81,6 +81,12 @@ class RegelwerkGetTool extends FoodAlchemistTool implements ToolContract, ToolMe
             if (! array_key_exists($promptKey, (array) config('foodalchemist.prompts', []))) {
                 return ToolResult::error('Unbekannter prompt_key «' . $promptKey . '».', 'VALIDATION_ERROR');
             }
+            if (! \Platform\FoodAlchemist\Services\Knowledge\WissensSichtbarkeit::darfKanonLesen($team)) {
+                return ToolResult::success([
+                    'prompt_key' => $promptKey, 'role' => $role, 'quelle' => 'nicht_lesbar', 'dokumente' => [],
+                    'hinweis' => 'Der Kanon dieses Arbeitsschritts ist Plattform-Wissen: Er wirkt im Generator-Prompt, ist für dieses Team aber nicht lesbar.',
+                ]);
+            }
             $docs = $team !== null
                 ? app(KnowledgeCanonService::class)->documentsFor('prompt_key', $promptKey, $team, $role)
                 : collect();
