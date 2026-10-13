@@ -15,6 +15,9 @@ class FoodAlchemistMandant extends Model
 
     public const STATUS = ['projekt', 'aktiv', 'beendet'];
 
+    /** „beendet“ = Vollsperre ({@see \Platform\FoodAlchemist\Support\TeamSperre}). */
+    public const STATUS_BEENDET = 'beendet';
+
     public const MODI = ['kuratiert', 'autark'];
 
     public const STATUS_STANDARD = 'aktiv';

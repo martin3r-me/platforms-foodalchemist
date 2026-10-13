@@ -30,6 +30,17 @@ class AboAuskunft
     }
 
     /**
+     * Alle Abos des Mandanten kündigen (Beenden eines Mandanten, §13 C3): genutzte Rezepte als tiefe Kopie (§12 D), ungenutzte
+     * verschwinden. Solange es das Abo-Modell nicht gibt, gibt es nichts zu kündigen. Mit Spec 82 Schritt 7 wird nur diese Methode gefüllt.
+     *
+     * @return list<array{id:int, sammlung:string}> die gekündigten Abos
+     */
+    public function kuendigen(Team $mandant, ?\Platform\Core\Models\User $user): array
+    {
+        return [];
+    }
+
+    /**
      * Alle Abos des Mandanten (Beenden: werden gekündigt, genutzte Rezepte als tiefe Kopie, §12 D).
      *
      * @return list<array{id:int, sammlung:string, master_team_id:int}>
