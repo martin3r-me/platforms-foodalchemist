@@ -446,6 +446,22 @@ Ergänzt 13.10.2026 (Dominique: „die komplette Spec umgesetzt, sodass ich alle
 - **Anzeige:** „Plan und Nutzung“ in den Einstellungen des Oberteams (Inhaber/Admin), Master sieht dieselbe Sicht je Mandant (C1).
 - Unter-Teams zahlen nicht selbst, ihre Gebühr läuft über das Kunden-Hauptteam.
 
+### G · Betreiber und Kurator getrennt (Dominique 13.10. abends, entspricht Spec 61 §13 / F8)
+
+Der Master sieht Inhalte **nur bei kuratierten Mandanten**. Bei autarken Mandanten sieht er nichts, **auch nicht als Plattform-Admin**.
+
+| Rolle | Darf sehen | Darf nicht |
+|---|---|---|
+| **Betreiber / Plattform-Admin** (Verwaltung) | je Mandant nur Verwaltungsdaten: Teams, Unter-Teams, gebuchte Bereiche, Stamm-Paket, Kontingente, Gebühren, Projekt-Status, Anzahl Abos | Rezepte, Preise, Foodbooks, Angebote, DNA, Teamprofile |
+| **Kurator** (Master-Team, Inhalt) | Inhalte nur bei Mandanten im Modus „kuratiert“ (vertraglich vereinbart), lesend | Schreiben nur als Mitglied nach Team-Wechsel |
+
+**Folgen für den Bau:**
+1. Das Mandanten-Stammblatt (C1) zeigt bei autarken Mandanten nur die Verwaltungsspalten. Rückschlüsse quer über Teams (Teamprofile, Machbarkeit) gelten nur für kuratierte Mandanten.
+2. **Modus kuratiert / autark** ist ein FA-Feld je Mandant (gleiche FA-Tabelle wie Projekt-Status, B3). Umschalten nur durch den Plattform-Admin, mit Protokoll (C4).
+3. Der Plattform-Admin bekommt **keine Inhalts-Ausnahme** in `FaRechte`. Bestehende Stellen „Plattform-Admin sieht alles“ werden geprüft: für Bereiche (`darfBereich`) ok, für Inhaltslesen nicht.
+4. **Pflicht-Test:** Plattform-Admin + autarker Mandant ergibt 0 Rezepte, 0 Preise, 0 Foodbooks über Oberfläche und MCP.
+5. **Bekannte Grenze:** Server- bzw. DB-Zugriff des Betreibers wird nicht technisch gelöst, sondern über Vertrag (AVV, Vertraulichkeit) plus Protokoll.
+
 ### E · Nicht in Spec 82
 - **Selbstregistrierung** (Signup, E-Mail-Bestätigung, AGB, Zahlung) ist Host/Core und eine eigene spätere Spec. Spec 82 stellt nur sicher, dass ein von Hand angelegtes Oberteam ohne Master, Abo und Paket voll funktioniert (Szenario 1).
 
