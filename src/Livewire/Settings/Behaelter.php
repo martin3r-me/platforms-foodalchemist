@@ -204,7 +204,7 @@ class Behaelter extends Component
         // mayWrite statt owns: der Katalog-Grundstock liegt GLOBAL (team_id NULL). Mit owns()
         // koennte ihn niemand pflegen — auch der Master nicht (owns(null) === false), und die
         // 17 GN-Zeilen haetten ihre Masse nie bekommen.
-        if (! TeamScope::mayWrite($zeile->team_id, Auth::user()?->currentTeamRelation)) {
+        if (! \Platform\FoodAlchemist\Support\BasisKatalog::mayWrite($zeile->team_id, Auth::user()?->currentTeamRelation)) {
             $this->fehler = 'Fremder Eintrag — nur das Besitzer-Team (bzw. der Master bei globalen Zeilen) kann ändern.';
 
             return;
@@ -242,7 +242,7 @@ class Behaelter extends Component
             return;
         }
         $zeile = DB::table('foodalchemist_vocab_containers')->where('id', $this->editId)->first(['team_id']);
-        if ($zeile === null || ! TeamScope::mayWrite($zeile->team_id, Auth::user()?->currentTeamRelation)) {
+        if ($zeile === null || ! \Platform\FoodAlchemist\Support\BasisKatalog::mayWrite($zeile->team_id, Auth::user()?->currentTeamRelation)) {
             $this->fehler = 'Fremder Eintrag — nur das Besitzer-Team (bzw. der Master bei globalen Zeilen) kann ändern.';
 
             return;
@@ -276,7 +276,7 @@ class Behaelter extends Component
         if ($zeile === null) {
             return;
         }
-        if (! TeamScope::owns($zeile->team_id, Auth::user()?->currentTeamRelation)) {
+        if (! \Platform\FoodAlchemist\Support\BasisKatalog::mayWrite($zeile->team_id, Auth::user()?->currentTeamRelation)) {
             $this->fehler = 'Geerbter/Master-Eintrag — nur das Besitzer-Team kann ändern.';
 
             return;
@@ -297,7 +297,7 @@ class Behaelter extends Component
         if ($zeile === null) {
             return;
         }
-        if (! TeamScope::owns($zeile->team_id, Auth::user()?->currentTeamRelation)) {
+        if (! \Platform\FoodAlchemist\Support\BasisKatalog::mayWrite($zeile->team_id, Auth::user()?->currentTeamRelation)) {
             $this->fehler = 'Geerbter/Master-Eintrag — nur das Besitzer-Team kann löschen.';
 
             return;

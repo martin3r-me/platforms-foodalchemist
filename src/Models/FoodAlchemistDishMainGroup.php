@@ -30,4 +30,10 @@ class FoodAlchemistDishMainGroup extends Model
     {
         return $this->hasMany(FoodAlchemistDishClass::class, 'dish_main_group_id');
     }
+
+    /** Spec 82 §13 I: Basis-Katalog — global lesen alle, schreiben nur der Master (siehe BelongsToTeamHierarchy::isOwnedBy). */
+    public static function istBasisKatalog(): bool
+    {
+        return true;
+    }
 }

@@ -31,4 +31,10 @@ class FoodAlchemistVocabEinheit extends Model
         'is_inactive' => 'boolean',
         'sort_order' => 'integer',
     ];
+
+    /** Spec 82 §13 I: Basis-Katalog — global lesen alle, schreiben nur der Master (siehe BelongsToTeamHierarchy::isOwnedBy). */
+    public static function istBasisKatalog(): bool
+    {
+        return true;
+    }
 }

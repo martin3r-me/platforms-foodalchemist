@@ -18,4 +18,10 @@ class FoodAlchemistRecipeMainGroup extends Model
     protected $table = 'foodalchemist_recipe_main_groups';
 
     protected $guarded = ['id'];
+
+    /** Spec 82 §13 I: Basis-Katalog — global lesen alle, schreiben nur der Master (siehe BelongsToTeamHierarchy::isOwnedBy). */
+    public static function istBasisKatalog(): bool
+    {
+        return true;
+    }
 }

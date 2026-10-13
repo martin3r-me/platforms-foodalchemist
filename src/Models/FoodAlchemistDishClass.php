@@ -35,4 +35,10 @@ class FoodAlchemistDishClass extends Model
     {
         return $this->belongsTo(FoodAlchemistMarkupClass::class, 'default_markup_class_id');
     }
+
+    /** Spec 82 §13 I: Basis-Katalog — global lesen alle, schreiben nur der Master (siehe BelongsToTeamHierarchy::isOwnedBy). */
+    public static function istBasisKatalog(): bool
+    {
+        return true;
+    }
 }

@@ -26,4 +26,10 @@ class FoodAlchemistMarkupClass extends Model
         'pricing_v2_migrated_at' => 'datetime',
         'is_inactive' => 'boolean',
     ];
+
+    /** Spec 82 §13 I: Basis-Katalog — global lesen alle, schreiben nur der Master (siehe BelongsToTeamHierarchy::isOwnedBy). */
+    public static function istBasisKatalog(): bool
+    {
+        return true;
+    }
 }

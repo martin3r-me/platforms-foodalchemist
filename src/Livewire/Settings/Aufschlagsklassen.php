@@ -56,7 +56,7 @@ class Aufschlagsklassen extends Component
 
             return null;
         }
-        if (! TeamScope::owns($ak->team_id, $team)) {
+        if (! \Platform\FoodAlchemist\Support\BasisKatalog::mayWrite($ak->team_id, $team)) {
             $this->fehler = 'Diese Preisklasse ist geerbt oder eine Vorgabe. Ändern kann sie nur das Team, dem sie gehört.';
 
             return null;

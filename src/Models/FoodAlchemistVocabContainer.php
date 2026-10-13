@@ -66,4 +66,10 @@ class FoodAlchemistVocabContainer extends Model
     {
         return is_array($this->eignung) && in_array($zweck, $this->eignung, true);
     }
+
+    /** Spec 82 §13 I: Basis-Katalog — global lesen alle, schreiben nur der Master (siehe BelongsToTeamHierarchy::isOwnedBy). */
+    public static function istBasisKatalog(): bool
+    {
+        return true;
+    }
 }
