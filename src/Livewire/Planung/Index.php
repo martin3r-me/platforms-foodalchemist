@@ -1148,7 +1148,7 @@ class Index extends Component
             // 2. Gerüst aus dem Brief (owner-neutral). marken_kontext aus dem CRM-Kunden, falls verknüpft.
             $concepts->geruestAusBriefFuerOwner($team, 'offer', $angebot->id, $brief, [
                 'segment' => $settings->segment($team),
-                'marken_kontext' => $canvas->cascadeKontext($team, null, null, null, $angebot->crm_company_id ?? null)['marken_kontext'] ?? null,
+                'marken_kontext' => $canvas->cascadeKontext($team, null, null, (int) $angebot->id, $angebot->crm_company_id ?? null)['marken_kontext'] ?? null,
             ]);
 
             // 3. Review-Session + Voll-Kaskade (1 Concept je Slot → ans Angebot referenziert).

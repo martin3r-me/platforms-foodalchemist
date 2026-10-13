@@ -901,6 +901,7 @@ class Editor extends Component
         try {
             $v = app(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class)->propose('vk.marketing', $kontext, [
                 // Ebene 2 der DNA-Kette: Endkunde des Angebots (Kunde-DNA fließt in den Marketing-Text)
+                'food_dna_angebot_id' => $this->selectedId,   // Spec 82 §7: Angebots-Ebene der Kaskade
                 'food_dna_crm_company_id' => FoodAlchemistAngebot::whereKey($this->selectedId)->value('crm_company_id'),
                 'target_table' => 'foodalchemist_offer_blocks', 'target_id' => $block->id,
             ]);

@@ -826,6 +826,9 @@ class OfferCompositionService
                     'positionen' => $positionen,
                 ], [
                     'food_dna_concept_id' => $block->concept->id,
+                    // Spec 82 §7: Angebots- und Kunden-Ebene der Kaskade (vorher nur Team + Concept)
+                    'food_dna_angebot_id' => (int) $kapitel->offer_id,
+                    'food_dna_crm_company_id' => $kapitel->offer?->crm_company_id !== null ? (int) $kapitel->offer->crm_company_id : null,
                     'target_table' => 'foodalchemist_offer_blocks',
                     'target_id' => $block->id,
                 ]);

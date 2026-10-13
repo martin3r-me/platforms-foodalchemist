@@ -100,6 +100,33 @@ class CanvasService
             ->where('owner_type', $ownerType)->where('owner_id', $ownerId)->first();
     }
 
+    /**
+     * Spec 82 §7 (Vorab-Fix): Food-DNA des Teams MIT Vererbung. Hat das Team selbst keinen Canvas,
+     * gilt der des nächsten Eltern-Teams (Unter-Team → Oberteam). Vorher suchte die Kaskade exakt
+     * `team_id = eigenes Team` — ein Unter-Team ohne eigene DNA bekam gar keine.
+     * Feldweises Überschreiben kommt erst mit Schritt 6; hier gilt: nächster Canvas der Kette gewinnt.
+     *
+     * Nur bis zur Kundengrenze ({@see \Platform\FoodAlchemist\Services\FaRechte::kundenHauptTeam}): ein
+     * Mandant erbt nie die DNA des Master-Teams, auch wenn jemand später ein Eltern-Team setzt.
+     */
+    public function findFoodDna(Team $team): ?FoodAlchemistCanvas
+    {
+        $grenze = (int) app(FaRechte::class)->kundenHauptTeam($team)->id;
+        $current = $team;
+        for ($guard = 0; $current !== null && $guard < 32; $guard++) {   // Zyklen-Schutz
+            $canvas = $this->find('food_dna', 'team', (int) $current->id);
+            if ($canvas !== null) {
+                return $canvas;
+            }
+            if ((int) $current->id === $grenze) {
+                return null;
+            }
+            $current = $current->parent_team_id ? $current->parentTeam : null;
+        }
+
+        return null;
+    }
+
     /** Canvas holen oder anlegen (Edit-Pfad). */
     public function canvasFor(Team $team, string $type, string $ownerType, ?int $ownerId): FoodAlchemistCanvas
     {
@@ -238,7 +265,7 @@ class CanvasService
             if ($ownerId === null) {
                 continue;
             }
-            $canvas = $this->find($type, $ownerType, $ownerId);
+            $canvas = $type === 'food_dna' ? $this->findFoodDna($team) : $this->find($type, $ownerType, $ownerId);
             if ($canvas !== null && ($block = $this->promptKontext($canvas)) !== null) {
                 // W0-8: Die Canvas-Felder sind Freitext (inkl. `repeatable` mit Claim +
                 // Beschreibung je Eintrag) und liefen über alle fünf Kaskaden-Ebenen ganz
