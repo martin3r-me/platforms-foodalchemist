@@ -41,7 +41,10 @@ class FaRechte
         if ($user === null) {
             return FaRolle::Lesen;
         }
-        if (! $user->isAiUser() && $this->istPlattformAdmin($user)) {
+        // Spec 82 §13 G: Plattform-Admin ist Admin nur im Master-Team und in Teams, in denen er ECHTES Mitglied ist. In einem fremden Kunden-Team
+        // (kein team_user) bekommt er keine Inhalts-Rolle: es zählt die echte Mitgliedschaft unten (Lesen). Plattform-Steuerung prüft istPlattformAdmin selbst.
+        if (! $user->isAiUser() && $this->istPlattformAdmin($user) && ! \Platform\FoodAlchemist\Support\InhaltsSperre::istGesperrt($user, $team)
+            && ! \Platform\FoodAlchemist\Support\InhaltsSperre::masterLesendBeiKuratiert($user, $team)) {
             return FaRolle::Admin;
         }
         $kette = $this->teamKette($team);
@@ -378,6 +381,12 @@ class FaRechte
         }
 
         return $ids;
+    }
+
+    /** Echtes team_user-Mitglied des Teams oder eines Eltern-Teams (unabhängig von Plattform-Admin-Rechten). */
+    public function istMitglied(User $user, Team $team): bool
+    {
+        return DB::table('team_user')->whereIn('team_id', $this->teamKette($team))->where('user_id', $user->id)->exists();
     }
 
     public function istPlattformAdmin(User $user): bool

@@ -192,9 +192,4 @@ it('§13 G Pflicht: Plattform-Admin + autarker Mandant = 0 Rezepte, 0 Preise, 0 
     expect($blatt)->not->toContain('Geheimrezept')->not->toContain('Soul Foodbook')->not->toContain('7.77')->not->toContain('Soul Mehl');
 });
 
-it('§13 G Befund: ein Plattform-Admin, der den Team-Kontext des autarken Mandanten bekäme, sieht dessen Inhalte nicht', function () {
-    // Heute NICHT erfüllt, gemessen 14.10.: Kontext (Plattform-Admin, autarker Mandant) ergibt FaRechte::rolle() = Admin, darf(Freigeben) = true
-    // und recipes.LIST liefert das Rezept des Mandanten. Ursache: FaRechte::rolle() macht den Plattform-Admin in JEDEM Team zum Admin (Befund Peter),
-    // und Inhaltslesen hängt nur am Team-Kontext, nicht am Benutzer. Erreichbar ist der Kontext nur, wenn Core ihn zulässt (MCP-Wechsel und
-    // Team-Liste verlangen Mitgliedschaft, aber TeamFlyout::switchTeam setzt current_team_id ohne Prüfung). Vorschlag steht im PR; offen bis zur Entscheidung des Kurators.
-})->todo();
+// Der frühere offene Test „§13 G Befund“ ist mit der Inhaltssperre zum echten Test geworden: tests/Feature/InhaltsSperreTest.php.

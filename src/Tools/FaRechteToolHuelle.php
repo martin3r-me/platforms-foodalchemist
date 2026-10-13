@@ -65,6 +65,14 @@ class FaRechteToolHuelle implements ToolContract, ToolMetadataContract
                 return ToolResult::error(\Platform\FoodAlchemist\Support\TeamSperre::MELDUNG, 'FORBIDDEN');
             }
         }
+        // Spec 82 §13 G: Plattform-Admin ohne echte Mitgliedschaft sieht keine Inhalte eines Kunden-Teams — jedes FA-Tool FORBIDDEN außer der
+        // Plattform-Steuerung (Verwaltungsdaten). Die Tool-Hülle ist die zentrale Stelle für alle FA-Tools (statt je Tool in team()).
+        if ($user instanceof User && ! \Platform\FoodAlchemist\Support\InhaltsSperre::toolErlaubt($this->getName())) {
+            $gTeam = $context->team instanceof Team ? $context->team : ($user->currentTeamRelation ?? null);
+            if ($gTeam instanceof Team && \Platform\FoodAlchemist\Support\InhaltsSperre::istGesperrt($user, $gTeam)) {
+                return ToolResult::error(\Platform\FoodAlchemist\Support\InhaltsSperre::MELDUNG, 'FORBIDDEN');
+            }
+        }
         // Spec 77b: Bereich des Tools (Team gebucht ∧ User nicht eingeschränkt) — gilt auch für lesende Tools
         $bereich = \Platform\FoodAlchemist\Support\FaBereiche::fuerTool($this->getName());
         if ($user instanceof User && $bereich !== null) {
