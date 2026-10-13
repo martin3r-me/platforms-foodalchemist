@@ -4,6 +4,7 @@ namespace Platform\FoodAlchemist\Models\Concerns;
 
 use Illuminate\Database\Eloquent\Builder;
 use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Support\StammPaket;
 use Platform\FoodAlchemist\Support\TeamAncestryRegistry;
 
 /**
@@ -44,8 +45,38 @@ trait BelongsToTeamHierarchy
                 $q, $col, $tabelle . '.id', $typ, $team, self::teamAncestryIds($team)));
         }
 
+        // Spec 82 §12 A3: Modelle mit STAMM_KLASSE trennen globale Zeilen in basis | stamm_paket —
+        // stamm_paket sieht nur, wer das Opt-in hat (oder der Master). Alle anderen: unverändert.
+        if (defined(static::class . '::STAMM_KLASSE')) {
+            $tabelle = $query->getModel()->getTable();
+
+            return $query->where(function (Builder $q) use ($col, $team, $tabelle) {
+                $q->where(fn (Builder $g) => StammPaket::globaleZeilen($g, $col, $tabelle . '.stamm_class', $team))
+                    ->orWhereIn($col, self::teamAncestryIds($team));
+            });
+        }
+
         return $query->where(function (Builder $q) use ($col, $team) {
             $q->whereNull($col)->orWhereIn($col, self::teamAncestryIds($team));
+        });
+    }
+
+    /**
+     * Spec 82 §12 A3: Klasse ist basis | stamm_paket, und stamm_paket gibt es nur bei globalen Zeilen.
+     */
+    public static function bootBelongsToTeamHierarchy(): void
+    {
+        if (! defined(static::class . '::STAMM_KLASSE')) {
+            return;
+        }
+        static::saving(function ($model) {
+            $klasse = $model->stamm_class ?? StammPaket::BASIS;
+            if (! in_array($klasse, StammPaket::KLASSEN, true)) {
+                throw new \InvalidArgumentException("stamm_class '{$klasse}' ungueltig (basis|stamm_paket).");
+            }
+            if ($klasse === StammPaket::PAKET && $model->team_id !== null) {
+                throw new \InvalidArgumentException('stamm_paket gibt es nur bei globalen Zeilen (team_id NULL).');
+            }
         });
     }
 

@@ -124,6 +124,17 @@ it('Trait-Vertrag: ALLE Models tragen LogsActivity + BelongsToTeamHierarchy + Ha
             // trägt der Stellplatz selbst (FoodAlchemistStorageBin hat alle vier).
             continue;
         }
+        if (class_basename($klasse) === 'FoodAlchemistTeamStammOptin') {
+            // Spec 82 §12 A3: Schalter „Mandant hat das Stamm-Paket gebucht", eine Zeile je Mandant.
+            //  - kein BelongsToTeamHierarchy: die Vererbung an Unter-Teams löst StammPaket::istFreigeschaltet
+            //    über die Team-Kette selbst auf; scopeVisibleToTeam würde `team_id IS NULL` + Eltern-Zeilen
+            //    einORen — für einen Buchungsschalter eine Sichtbarkeits-AUSWEITUNG.
+            //  - kein SoftDeletes: unique(team_id) — abbestellen löscht hart, eine trashed Zeile würde
+            //    freischalten (firstOrCreate) am Unique scheitern lassen.
+            //  - kein HasUuidV7: adressiert wird über team_id, nie über eine externe ID.
+            //  - kein LogsActivity: Buchungsstand mit opted_in_at/opted_in_by in der Zeile selbst.
+            continue;
+        }
         if (class_basename($klasse) === 'FoodAlchemistActiveOutlet') {
             // Kein Katalog-Datensatz, sondern der persistierte ZEIGER der Betriebs-„Brille" je
             // (User, Team) — durabler Zwilling der HTTP-Session (ActiveOutletContext:14-17).

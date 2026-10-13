@@ -43,6 +43,16 @@ final class TeamScope
             return $query->where(fn ($q) => InhaltsFreigabe::anwenden($q, $teamIdColumn, $tabelle . '.id', $typ, $team, $ids));
         }
 
+        // Spec 82 §12 A3: GP/Lieferant/Artikel — globale stamm_paket-Zeilen nur bei Opt-in.
+        if ($team !== null && is_string($tabelle) && StammPaket::betrifft($tabelle)) {
+            return $query->where(function ($q) use ($teamIdColumn, $ids, $tabelle, $team) {
+                $q->where(fn ($g) => StammPaket::globaleZeilen($g, $teamIdColumn, $tabelle . '.stamm_class', $team));
+                if ($ids !== []) {
+                    $q->orWhereIn($teamIdColumn, $ids);
+                }
+            });
+        }
+
         return $query->where(function ($q) use ($teamIdColumn, $ids) {
             $q->whereNull($teamIdColumn);
             if ($ids !== []) {

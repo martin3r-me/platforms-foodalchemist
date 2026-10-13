@@ -44,6 +44,7 @@ final class TeamAncestryRegistry
         foreach (array_keys(self::$klassen) as $klasse) {
             $klasse::flushTeamAncestryCache();
         }
+        StammPaket::flush(); // Opt-in-Cache hängt an derselben Team-Kette
     }
 
     /**
