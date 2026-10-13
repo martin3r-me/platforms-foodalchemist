@@ -526,14 +526,14 @@ Der Master sieht Inhalte **nur bei kuratierten Mandanten**. Bei autarken Mandant
 | **Team / Unter-Team selbst** | Kalkulationsprofile · Zugriffsrechte · Küchen-Profil · Teamprofil · Food DNA · Kunden-DNA · Lagerorte · Etiketten/Drucker · Geschirr-Katalog · Stamm-Lieferanten-Matrix · KI ein/aus |
 
 **Technische Folgen von (a):**
-1. **Migration `team_id` nullable** für Basis-Kataloge, die heute NOT NULL sind (`serving_forms`, `recipe_containers`, `component_equivalents`, `target_groups` nur falls Basis …); **kein Datenumzug auf demo** — das Heben der Team-6-Zeilen nach global kommt mit dem Stamm-Umzug-Befehl auf dem eigenen Server.
+1. **Migration `team_id` nullable** für Basis-Kataloge, die heute NOT NULL sind (`serving_forms`, `component_equivalents`; die Kataloge `vocab_containers`, `vocab_regeneration_devices`, `vocab_serving_vehicles` sind schon nullable); **kein Datenumzug auf demo** — das Heben der Team-6-Zeilen nach global kommt mit dem Stamm-Umzug-Befehl auf dem eigenen Server.
 2. **Scope und Schreibrecht** je Basis-Katalog: Lesen = global + eigene Kette (`applyVisible`), Schreiben global nur Master (wie Wissen, §H), Team schreibt nur eigene Zeilen.
 3. **Paket „Grundeinstellungen“**: buchen per Kopie über `/verwaltung` (wie B1, nur Plattform-Admin, Protokoll, MCP im Lockstep), Kopie ins Oberteam, Unter-Teams erben, **idempotent** (zweites Buchen kopiert nicht doppelt).
 
 **Befunde aus der Inventur:**
 - Ein neues Haupt-Team sieht heute nur globale Zeilen; fast alles liegt in Team 6 → neues Team ist faktisch leer (Messung 13.10.: außer `rules`, `terminology_*`, `brief_templates` und 8 von 23 Wissens-Kategorien ist auf demo **nichts** global).
 - Konzept-Merkmale (`target_groups`) haben `team_id NOT NULL` und wurden nur per Migration für damals vorhandene Teams angelegt → später angelegte Teams haben leere Listen (Paket löst das).
-- `serving_forms` (Befund Lisa) und `recipe_containers` sind `team_id NOT NULL` → „Basis live“ braucht die Migration aus Folge 1.
+- `serving_forms` (Befund Lisa) und `component_equivalents` sind `team_id NOT NULL` → „Basis live“ braucht die Migration aus Folge 1. (`recipe_containers`/`recipe_regenerations` sind Verknüpfungen am Rezept, keine Kataloge.)
 - Es gibt keinen allgemeinen Seed/Kopier-Mechanismus für Einstellungen; Teil-Seeds nur per Befehl/Knopf (behaelter-katalog, trends-startbestand, Speiseplan-Chips, Fixkosten-Beispiele).
 
 **Offen:** Die übrigen Zeilen der Tabelle sieht Dominique noch durch (gebaut wird nach Vorschlag). Zwei Einzelfragen: Struktur der Preisklassen als Basis mit Werten je Team überschreibbar (Vorschlag) oder ganz Paket; Pflege der Trend-Taxonomie nur durch den Master.
