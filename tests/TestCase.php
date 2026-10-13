@@ -54,6 +54,7 @@ abstract class TestCase extends BaseTestCase
         // und der Fehlerfall ist nicht „Test rot", sondern „D1-Test grün aus dem falschen
         // Grund" (stale Kette prüft eine Sichtbarkeit, die es zur Laufzeit nicht gibt).
         TeamAncestryRegistry::flushAll();
+        \Platform\FoodAlchemist\Support\TeamSperre::flush();   // Spec 82 §13 C3: Sperr-Merker je Prozess, Team-Ids wiederholen sich je Test
     }
 
     /**

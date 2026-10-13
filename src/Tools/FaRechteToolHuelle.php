@@ -57,6 +57,14 @@ class FaRechteToolHuelle implements ToolContract, ToolMetadataContract
     public function execute(array $arguments, ToolContext $context): ToolResult
     {
         $user = $context->user;
+        // Spec 82 §13 C3: Vollsperre eines beendeten Mandanten — jedes FA-Tool FORBIDDEN außer Export und Plattform-Steuerung,
+        // auch für Plattform-Admins (keine Inhalts-Ausnahme, §13 G)
+        if ($user instanceof User && ! \Platform\FoodAlchemist\Support\TeamSperre::toolErlaubt($this->getName())) {
+            $sTeam = $context->team instanceof Team ? $context->team : ($user->currentTeamRelation ?? null);
+            if ($sTeam instanceof Team && \Platform\FoodAlchemist\Support\TeamSperre::istGesperrt($sTeam)) {
+                return ToolResult::error(\Platform\FoodAlchemist\Support\TeamSperre::MELDUNG, 'FORBIDDEN');
+            }
+        }
         // Spec 77b: Bereich des Tools (Team gebucht ∧ User nicht eingeschränkt) — gilt auch für lesende Tools
         $bereich = \Platform\FoodAlchemist\Support\FaBereiche::fuerTool($this->getName());
         if ($user instanceof User && $bereich !== null) {

@@ -290,6 +290,14 @@ class FoodAlchemistServiceProvider extends ServiceProvider
         \Livewire\on('call', function ($component, $method, $params, $context, $returnEarly) {
             $bereich = \Platform\FoodAlchemist\Support\FaBereiche::fuerKomponente($component);
             $user = \Illuminate\Support\Facades\Auth::user();
+            // Spec 82 §13 C3: Vollsperre eines beendeten Mandanten — keine Aktion, auch nicht für Plattform-Admins
+            if ($user instanceof \Platform\Core\Models\User && ! \Platform\FoodAlchemist\Support\TeamSperre::komponenteErlaubt($component)
+                && \Platform\FoodAlchemist\Support\TeamSperre::istGesperrt($user->currentTeamRelation)) {
+                $component->dispatch('fa-saved', message: \Platform\FoodAlchemist\Support\TeamSperre::MELDUNG, type: 'error');
+                $returnEarly(null);
+
+                return;
+            }
             if ($bereich !== null && $user instanceof \Platform\Core\Models\User && ($team = $user->currentTeamRelation) !== null
                 && ! app(\Platform\FoodAlchemist\Services\FaRechte::class)->darfBereich($user, $team, $bereich)) {
                 $component->dispatch('fa-saved', message: 'Dieser Bereich ist für dich bzw. dein Team nicht freigeschaltet.', type: 'error');
@@ -1133,6 +1141,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\MandantenGetTool::class,
                     \Platform\FoodAlchemist\Tools\MandantenPutTool::class,
                     \Platform\FoodAlchemist\Tools\MandantenBeendenGetTool::class,   // Spec 82 §13 C3: Vorschau „Mandant beenden“
+                    \Platform\FoodAlchemist\Tools\MandantenBeendenPostTool::class,  // Spec 82 §13 C3: ausführen, abbrechen, entsperren
                     \Platform\FoodAlchemist\Tools\StandorteGetTool::class,
                     \Platform\FoodAlchemist\Tools\StandortePutTool::class,
                     \Platform\FoodAlchemist\Tools\StandorteSetBrilleTool::class,

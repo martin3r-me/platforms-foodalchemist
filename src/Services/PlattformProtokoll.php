@@ -28,6 +28,9 @@ class PlattformProtokoll
         'mandant_gepflegt' => 'Mandant gepflegt',
         'mandant_beenden_gestartet' => 'Mandant beenden: Lauf gestartet',
         'mandant_beenden_abgebrochen' => 'Mandant beenden: Lauf abgebrochen',
+        'mandant_beenden_schritt' => 'Mandant beenden: Schritt ausgeführt',
+        'mandant_beenden_abgeschlossen' => 'Mandant beenden: Lauf abgeschlossen (Team gesperrt)',
+        'mandant_entsperrt' => 'Mandant entsperrt (Status zurück auf aktiv)',
     ];
 
     /**

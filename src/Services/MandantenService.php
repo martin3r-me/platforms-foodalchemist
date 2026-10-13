@@ -134,6 +134,7 @@ class MandantenService
             return $this->darstellung($mandant, $zeile);
         }
 
+        \Platform\FoodAlchemist\Support\TeamSperre::flush();   // Status „beendet“ = Vollsperre; der Merker darf nicht veralten
         DB::transaction(function () use ($zeile, $aendert, $geaendert, $akteur, $mandant) {
             $zeile->fill($aendert);
             $zeile->team_id = $mandant->id;

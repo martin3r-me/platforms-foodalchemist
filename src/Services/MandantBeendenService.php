@@ -65,6 +65,8 @@ class MandantBeendenService
         private readonly AboAuskunft $abos,
         private readonly StandortService $standorte,
         private readonly PlattformProtokoll $protokoll,
+        private readonly MandantenService $mandanten,
+        private readonly ExportAuskunft $export,
     ) {
     }
 
@@ -131,6 +133,139 @@ class MandantBeendenService
         $this->protokoll->schreibe('mandant_beenden_gestartet', ['team_id' => $mandant->id, 'team' => $mandant->name, 'schritte' => $gewaehlt], $admin, $lauf);
 
         return $lauf;
+    }
+
+    /**
+     * Den Lauf AUSFÜHREN: Schritt für Schritt in fester Reihenfolge, jeder Schritt idempotent, der Fortschritt steht im Lauf.
+     * Braucht die ausdrückliche Bestätigung nach der Vorschau. Fehler oder ein wartender Schritt (Export fehlt) halten den
+     * Lauf an — er bleibt offen und lässt sich mit demselben Aufruf fortsetzen. Der letzte Schritt sperrt das Team (Vollsperre).
+     *
+     * @param  list<string>|null  $schritte  nur beim Start eines neuen Laufs; ein offener Lauf behält seine Schritte
+     * @return array{lauf: array<string,mixed>, abgeschlossen: bool, angehalten_bei: ?string, grund: ?string}
+     */
+    public function fuehreAus(Team $mandant, ?User $user, bool $bestaetigt, ?array $schritte = null): array
+    {
+        $admin = $this->nurPlattformAdmin($user, 'Mandant beenden');
+        $this->pruefeMandant($mandant);
+        if (! $bestaetigt) {
+            throw new \RuntimeException('Das Beenden braucht die ausdrückliche Bestätigung nach der Vorschau (bestaetigt).');
+        }
+        $lauf = $this->starte($mandant, $admin, $schritte);
+        $fortschritt = $lauf->fortschritt ?? [];
+        $angehalten = null;
+        $grund = null;
+
+        foreach ($lauf->schritte as $schritt) {
+            if (in_array($fortschritt[$schritt]['status'] ?? null, [self::ERLEDIGT, self::ENTFAELLT], true)) {
+                continue;
+            }
+            try {
+                $r = $this->fuehreSchrittAus($schritt, $mandant, $admin);
+            } catch (\Throwable $e) {
+                $fortschritt[$schritt] = ['status' => 'fehler', 'at' => now()->toIso8601String(), 'von' => $admin->id, 'details' => ['meldung' => $e->getMessage()]];
+                $lauf->update(['fortschritt' => $fortschritt]);
+                $angehalten = $schritt;
+                $grund = $e->getMessage();
+
+                break;
+            }
+            $fortschritt[$schritt] = ['status' => $r['status'], 'at' => now()->toIso8601String(), 'von' => $admin->id, 'details' => $r['details'] ?? []];
+            $lauf->update(['fortschritt' => $fortschritt]);
+            if ($r['status'] === 'wartet') {
+                $angehalten = $schritt;
+                $grund = (string) ($r['details']['meldung'] ?? 'Der Schritt wartet.');
+
+                break;
+            }
+            $this->protokoll->schreibe('mandant_beenden_schritt', ['team_id' => $mandant->id, 'team' => $mandant->name, 'schritt' => $schritt, 'status' => $r['status']], $admin, $lauf);
+        }
+
+        $fertig = $angehalten === null;
+        if ($fertig) {
+            $lauf->update(['status' => FoodAlchemistMandantBeendenLauf::STATUS_ABGESCHLOSSEN, 'abgeschlossen_at' => now()]);
+            $this->protokoll->schreibe('mandant_beenden_abgeschlossen', ['team_id' => $mandant->id, 'team' => $mandant->name, 'schritte' => $lauf->schritte], $admin, $lauf);
+        }
+
+        return ['lauf' => $this->laufDarstellung($lauf->refresh()), 'abgeschlossen' => $fertig, 'angehalten_bei' => $angehalten, 'grund' => $grund];
+    }
+
+    /**
+     * Rückgängig: Status „beendet“ zurück auf „aktiv“ — der Zugriff ist wieder offen. Die Bereiche BLEIBEN aus, bis sie neu
+     * gebucht werden (Dominique 13.10.), ein evtl. abbestelltes Stamm-Paket ebenso. Die Daten wurden nie gelöscht.
+     *
+     * @return array<string,mixed> der Mandant (Verwaltungsdaten)
+     */
+    public function entsperren(Team $mandant, ?User $user): array
+    {
+        $admin = $this->nurPlattformAdmin($user, 'Mandant entsperren');
+        $this->pruefeMandant($mandant);
+        $zeile = FoodAlchemistMandant::where('team_id', $mandant->id)->first();
+        if (($zeile->status ?? FoodAlchemistMandant::STATUS_STANDARD) !== FoodAlchemistMandant::STATUS_BEENDET) {
+            throw new \RuntimeException('Der Mandant ist nicht gesperrt (Status „beendet“).');
+        }
+        $r = $this->mandanten->setze($mandant, ['status' => FoodAlchemistMandant::STATUS_STANDARD], $admin);
+        $this->protokoll->schreibe('mandant_entsperrt', ['team_id' => $mandant->id, 'team' => $mandant->name], $admin, FoodAlchemistMandant::where('team_id', $mandant->id)->first());
+
+        return $r;
+    }
+
+    /** @return array{status: string, details?: array<string,mixed>} */
+    private function fuehreSchrittAus(string $schritt, Team $mandant, User $admin): array
+    {
+        return match ($schritt) {
+            'abos' => $this->fuehreAbosAus($mandant, $admin),
+            'stamm_paket' => $this->fuehreStammPaketAus($mandant, $admin),
+            'export' => $this->fuehreExportAus($mandant),
+            'bereiche' => $this->fuehreBereicheAus($mandant, $admin),
+            'sperren' => $this->fuehreSperrenAus($mandant, $admin),
+        };
+    }
+
+    private function fuehreAbosAus(Team $mandant, User $admin): array
+    {
+        if (! $this->abos->verfuegbar()) {
+            return ['status' => self::ENTFAELLT, 'details' => ['meldung' => 'Es gibt noch keine Abos im System.']];
+        }
+
+        return ['status' => self::ERLEDIGT, 'details' => ['gekuendigt' => count($this->abos->kuendigen($mandant, $admin))]];
+    }
+
+    private function fuehreStammPaketAus(Team $mandant, User $admin): array
+    {
+        if (! $this->paket->status($mandant)['gebucht']) {
+            return ['status' => self::ERLEDIGT, 'details' => ['war_gebucht' => false]];
+        }
+        $this->paket->abbestellen($mandant, $admin, true);   // die Abos wurden im Schritt davor gekündigt; bestätigt ist hier der Gesamtlauf
+
+        return ['status' => self::ERLEDIGT, 'details' => ['war_gebucht' => true]];
+    }
+
+    /** Ohne vorliegenden Export hält der Lauf an, statt das Team ohne Daten-Auszug zu sperren. */
+    private function fuehreExportAus(Team $mandant): array
+    {
+        if (! $this->export->vorhanden($mandant)) {
+            return ['status' => 'wartet', 'details' => ['meldung' => 'Der Datenexport liegt noch nicht vor. Erst den Export erzeugen oder den Schritt „export“ bewusst weglassen — vor dem Sperren.']];
+        }
+
+        return ['status' => self::ERLEDIGT, 'details' => ['export_vorhanden' => true]];
+    }
+
+    private function fuehreBereicheAus(Team $mandant, User $admin): array
+    {
+        $aus = [];
+        foreach (array_keys(array_filter($this->rechte->teamBereiche($mandant))) as $bereich) {
+            $this->rechte->setzeTeamBereich($mandant, $admin, $bereich, false);
+            $aus[] = $bereich;
+        }
+
+        return ['status' => self::ERLEDIGT, 'details' => ['ausgeschaltet' => $aus]];
+    }
+
+    private function fuehreSperrenAus(Team $mandant, User $admin): array
+    {
+        $this->mandanten->setze($mandant, ['status' => FoodAlchemistMandant::STATUS_BEENDET], $admin);
+
+        return ['status' => self::ERLEDIGT, 'details' => ['status' => FoodAlchemistMandant::STATUS_BEENDET]];
     }
 
     /** Offenen Lauf abbrechen (Verlauf bleibt). */
