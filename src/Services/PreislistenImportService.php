@@ -43,6 +43,12 @@ class PreislistenImportService
     /**
      * Datei lesen, abgleichen, als Lauf ablegen. Schreibt keine Preise, legt keine Artikel an.
      *
+     * ⚠ SICHERHEIT (Auflage Kurator, Spec 82): `stage()` prüft KEINE Berechtigung und vertraut dem Pfad.
+     *  - Heute ruft nur der Konsolenbefehl es auf. Kommen Oberfläche oder MCP dazu, MUSS davor
+     *    `PriceService::darfTeampreisSchreiben($team)` geprüft werden (nur das Kunden-Hauptteam importiert Preise).
+     *  - `$pfad` darf NIE aus Benutzereingabe stammen: Uploads gehören in einen eigenen, vom System erzeugten
+     *    Temp-Pfad, nie ein frei wählbarer Pfad (sonst liest der Import beliebige Dateien des Servers).
+     *
      * @param  array<string, string|int>  $mapping  Zielfeld => Spaltenüberschrift oder Spaltenindex (leer = automatisch erkennen)
      */
     public function stage(Team $team, string $pfad, array $mapping = [], ?int $supplierId = null, ?int $userId = null): FoodAlchemistPriceImportRun
