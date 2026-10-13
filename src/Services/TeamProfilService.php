@@ -10,7 +10,10 @@ use Platform\FoodAlchemist\Exceptions\FaRechtFehltException;
 use Platform\FoodAlchemist\Models\FoodAlchemistTeamProfile;
 use Platform\FoodAlchemist\Models\FoodAlchemistTeamProfileArea;
 use Platform\FoodAlchemist\Models\FoodAlchemistTeamProfileEquipment;
+use Platform\FoodAlchemist\Models\FoodAlchemistProjektStandort;
 use Platform\FoodAlchemist\Models\FoodAlchemistVocabKochequipment;
+use Platform\FoodAlchemist\Support\MasterTeam;
+use Platform\FoodAlchemist\Support\Profiltraeger;
 
 /**
  * Spec 82 §6 — Teamprofil: was die Küche kann (Fakten, keine DNA).
@@ -37,8 +40,10 @@ class TeamProfilService
     public function __construct(private readonly FaRechte $rechte) {}
 
     /** Darf das Team `$betrachter` das Profil von `$ziel` lesen? Sich selbst oder ein Unter-Team (Brille). */
-    public function darfLesen(Team $betrachter, Team $ziel): bool
+    public function darfLesen(Team $betrachter, Team|Profiltraeger $ziel): bool
     {
+        $ziel = Profiltraeger::von($ziel)->team;
+
         return (int) $betrachter->id === (int) $ziel->id || in_array((int) $betrachter->id, $this->rechte->teamKette($ziel), true);
     }
 
@@ -47,23 +52,25 @@ class TeamProfilService
      *
      * @return array{team_id:int, profil:array<string,mixed>, flaechen:list<array<string,mixed>>, ausstattung:list<array<string,mixed>>}
      */
-    public function lies(Team $betrachter, Team $ziel): array
+    public function lies(Team $betrachter, Team|Profiltraeger $ziel): array
     {
-        if (! $this->darfLesen($betrachter, $ziel)) {
+        $t = $this->traeger($ziel);
+        if (! $this->darfLesen($betrachter, $t)) {
             throw new FaRechtFehltException(FaRolle::Lesen, null, 'Teamprofil eines fremden Teams lesen');
         }
-        $profil = FoodAlchemistTeamProfile::where('team_id', $ziel->id)->first();
+        $profil = FoodAlchemistTeamProfile::where($t->schluessel())->first();
 
         return [
-            'team_id' => (int) $ziel->id,
+            'team_id' => (int) $t->team->id,
+            'standort_id' => $t->standortId,
             'profil' => [
                 'max_pax_parallel' => $profil?->max_pax_parallel,
                 'convenience_grad' => $profil?->convenience_grad,
                 'notes' => $profil?->notes,
             ],
-            'flaechen' => FoodAlchemistTeamProfileArea::where('team_id', $ziel->id)->orderBy('sort_order')->orderBy('id')->get()
+            'flaechen' => FoodAlchemistTeamProfileArea::where($t->schluessel())->orderBy('sort_order')->orderBy('id')->get()
                 ->map(fn ($f) => ['id' => $f->id, 'name' => $f->name, 'max_pax' => $f->max_pax, 'saison_von' => $f->saison_von, 'saison_bis' => $f->saison_bis])->all(),
-            'ausstattung' => $this->ausstattung($ziel)->values()->all(),
+            'ausstattung' => $this->ausstattung($t)->values()->all(),
         ];
     }
 
@@ -73,11 +80,12 @@ class TeamProfilService
      *
      * @return Collection<int, array<string,mixed>>
      */
-    public function ausstattung(Team $team): Collection
+    public function ausstattung(Team|Profiltraeger $ziel): Collection
     {
-        $zeilen = FoodAlchemistTeamProfileEquipment::where('team_id', $team->id)->get()->keyBy('equipment_id');
+        $t = $this->traeger($ziel);
+        $zeilen = FoodAlchemistTeamProfileEquipment::where($t->schluessel())->get()->keyBy('equipment_id');
 
-        return FoodAlchemistVocabKochequipment::visibleToTeam($team)->where('is_inactive', false)
+        return FoodAlchemistVocabKochequipment::visibleToTeam($t->team)->where('is_inactive', false)
             ->orderBy('sort_order')->orderBy('name')->get()
             ->map(function ($e) use ($zeilen) {
                 $zeile = $zeilen->get($e->id);
@@ -93,15 +101,16 @@ class TeamProfilService
     }
 
     /** Wirksamer Zustand je Equipment-ID für den Machbarkeits-Check (mit Standardausstattung). @return array<int, string> */
-    public function wirksameAusstattung(Team $team): array
+    public function wirksameAusstattung(Team|Profiltraeger $ziel): array
     {
-        return $this->ausstattung($team)->mapWithKeys(fn ($a) => [$a['equipment_id'] => $a['wirksam']])->all();
+        return $this->ausstattung($ziel)->mapWithKeys(fn ($a) => [$a['equipment_id'] => $a['wirksam']])->all();
     }
 
     /** Profilfelder setzen (max_pax_parallel, convenience_grad, notes). Fehlende Schlüssel bleiben, null leert. */
-    public function setzeProfil(Team $team, ?User $user, array $felder): FoodAlchemistTeamProfile
+    public function setzeProfil(Team|Profiltraeger $ziel, ?User $user, array $felder): FoodAlchemistTeamProfile
     {
-        $this->rechte->pruefe($user, $team, FaRolle::Kuratieren, 'Teamprofil pflegen');
+        $t = $this->traeger($ziel);
+        $this->rechte->pruefe($user, $t->team, FaRolle::Kuratieren, 'Teamprofil pflegen');
         $werte = [];
         if (array_key_exists('max_pax_parallel', $felder)) {
             $pax = $felder['max_pax_parallel'];
@@ -122,7 +131,7 @@ class TeamProfilService
         }
         $werte['updated_by'] = $user?->id;
 
-        $profil = FoodAlchemistTeamProfile::withTrashed()->firstOrNew(['team_id' => $team->id]);
+        $profil = FoodAlchemistTeamProfile::withTrashed()->firstOrNew($t->schluessel());
         $profil->fill($werte);
         $profil->deleted_at = null;
         $profil->save();
@@ -131,13 +140,14 @@ class TeamProfilService
     }
 
     /** Equipment-Zustand setzen. `$status` null = unbekannt (Zeile wird hart gelöscht). */
-    public function setzeEquipment(Team $team, ?User $user, int $equipmentId, ?string $status, ?int $anzahl = null, ?string $note = null): void
+    public function setzeEquipment(Team|Profiltraeger $ziel, ?User $user, int $equipmentId, ?string $status, ?int $anzahl = null, ?string $note = null): void
     {
-        $this->rechte->pruefe($user, $team, FaRolle::Kuratieren, 'Teamprofil pflegen');
-        if (! FoodAlchemistVocabKochequipment::visibleToTeam($team)->where('is_inactive', false)->whereKey($equipmentId)->exists()) {
+        $t = $this->traeger($ziel);
+        $this->rechte->pruefe($user, $t->team, FaRolle::Kuratieren, 'Teamprofil pflegen');
+        if (! FoodAlchemistVocabKochequipment::visibleToTeam($t->team)->where('is_inactive', false)->whereKey($equipmentId)->exists()) {
             throw new \RuntimeException("Equipment {$equipmentId} ist im Vokabular nicht sichtbar oder inaktiv.");
         }
-        $vorhanden = FoodAlchemistTeamProfileEquipment::withTrashed()->where('team_id', $team->id)->where('equipment_id', $equipmentId);
+        $vorhanden = FoodAlchemistTeamProfileEquipment::withTrashed()->where($t->schluessel())->where('equipment_id', $equipmentId);
 
         if ($status === null || $status === self::STATUS_UNBEKANNT) {
             $vorhanden->get()->each->forceDelete();
@@ -147,16 +157,17 @@ class TeamProfilService
         if (! in_array($status, [self::STATUS_VORHANDEN, self::STATUS_NICHT_VORHANDEN], true)) {
             throw new \RuntimeException('status: vorhanden | nicht_vorhanden | null (= unbekannt).');
         }
-        $zeile = $vorhanden->first() ?? new FoodAlchemistTeamProfileEquipment(['team_id' => $team->id, 'equipment_id' => $equipmentId]);
+        $zeile = $vorhanden->first() ?? new FoodAlchemistTeamProfileEquipment($t->schluessel() + ['equipment_id' => $equipmentId]);
         $zeile->fill(['status' => $status, 'anzahl' => $anzahl, 'note' => $note]);
         $zeile->deleted_at = null;
         $zeile->save();
     }
 
     /** Fläche anlegen (id null) oder ändern. */
-    public function setzeFlaeche(Team $team, ?User $user, ?int $id, string $name, ?int $maxPax = null, ?int $saisonVon = null, ?int $saisonBis = null): FoodAlchemistTeamProfileArea
+    public function setzeFlaeche(Team|Profiltraeger $ziel, ?User $user, ?int $id, string $name, ?int $maxPax = null, ?int $saisonVon = null, ?int $saisonBis = null): FoodAlchemistTeamProfileArea
     {
-        $this->rechte->pruefe($user, $team, FaRolle::Kuratieren, 'Teamprofil pflegen');
+        $t = $this->traeger($ziel);
+        $this->rechte->pruefe($user, $t->team, FaRolle::Kuratieren, 'Teamprofil pflegen');
         if (trim($name) === '') {
             throw new \RuntimeException('Eine Fläche braucht einen Namen.');
         }
@@ -169,17 +180,42 @@ class TeamProfilService
             }
         }
         $flaeche = $id !== null
-            ? FoodAlchemistTeamProfileArea::where('team_id', $team->id)->findOrFail($id)
-            : new FoodAlchemistTeamProfileArea(['team_id' => $team->id]);
+            ? FoodAlchemistTeamProfileArea::where($t->schluessel())->findOrFail($id)
+            : new FoodAlchemistTeamProfileArea($t->schluessel());
         $flaeche->fill(['name' => trim($name), 'max_pax' => $maxPax, 'saison_von' => $saisonVon, 'saison_bis' => $saisonBis]);
         $flaeche->save();
 
         return $flaeche;
     }
 
-    public function loescheFlaeche(Team $team, ?User $user, int $id): void
+    public function loescheFlaeche(Team|Profiltraeger $ziel, ?User $user, int $id): void
     {
-        $this->rechte->pruefe($user, $team, FaRolle::Kuratieren, 'Teamprofil pflegen');
-        FoodAlchemistTeamProfileArea::where('team_id', $team->id)->findOrFail($id)->forceDelete();
+        $t = $this->traeger($ziel);
+        $this->rechte->pruefe($user, $t->team, FaRolle::Kuratieren, 'Teamprofil pflegen');
+        FoodAlchemistTeamProfileArea::where($t->schluessel())->findOrFail($id)->forceDelete();
+    }
+
+    /** Alle Profildaten eines Kunden-Standorts entfernen (beim Löschen des Standorts). Hart, es gibt kein Zurück. */
+    public function loescheStandortProfil(Team $master, int $standortId): void
+    {
+        $schluessel = Profiltraeger::standort($master, $standortId)->schluessel();
+        foreach ([FoodAlchemistTeamProfile::class, FoodAlchemistTeamProfileEquipment::class, FoodAlchemistTeamProfileArea::class] as $modell) {
+            $modell::withTrashed()->where($schluessel)->get()->each->forceDelete();
+        }
+    }
+
+    /**
+     * Team oder Kunden-Standort als Träger prüfen: ein Kunden-Standort gibt es nur im Master-Team und nur, wenn er dort angelegt ist.
+     * Sonst könnte ein Aufrufer mit erfundener standort_id Profilzeilen in ein fremdes Team schreiben.
+     */
+    private function traeger(Team|Profiltraeger $ziel): Profiltraeger
+    {
+        $t = Profiltraeger::von($ziel);
+        if ($t->istStandort() && (! MasterTeam::istMaster($t->team)
+            || ! FoodAlchemistProjektStandort::where('team_id', $t->team->id)->whereKey($t->standortId)->exists())) {
+            throw new \RuntimeException('Kunden-Standort nicht gefunden (nur im Master-Team).');
+        }
+
+        return $t;
     }
 }

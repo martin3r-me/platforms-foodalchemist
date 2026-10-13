@@ -124,6 +124,10 @@ Route::get('/projekte', \Platform\FoodAlchemist\Livewire\Projekte\Index::class)
 Route::get('/projekte/{projekt}', \Platform\FoodAlchemist\Livewire\Projekte\Detail::class)
     ->whereNumber('projekt')->name('foodalchemist.projekte.show');
 
+// Spec 82 §9 · Standortprofil (Eigene Standorte; im Master-Team zusätzlich Kunden-Standorte aus Projekten).
+Route::get('/standortprofil', \Platform\FoodAlchemist\Livewire\Standortprofil\Index::class)
+    ->name('foodalchemist.standortprofil.index');
+
 // Trendradar (Spec 79): Inspiration · Hype · Trend nach Sarah Spork — Radar, Liste, Pinnwand.
 Route::get('/trendradar', \Platform\FoodAlchemist\Livewire\Trendradar\Index::class)
     ->name('foodalchemist.trendradar.index');

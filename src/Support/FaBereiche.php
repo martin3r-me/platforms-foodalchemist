@@ -54,6 +54,7 @@ final class FaBereiche
         'lager' => 'lager',
         'knowledge' => 'wissen', 'trendradar' => 'wissen',
         'einstellungen' => 'einstellungen', 'food-dna' => 'einstellungen',
+        'standortprofil' => 'einstellungen',   // Spec 82 §9: Eigene Standorte + Kunden-Standorte (nur Master)
         'projekte' => 'projekte',   // Spec 82 §9: Projekt-Liste und -Detail (nur im Master-Team)
         // bereichsfrei: Sprachbefehl, Designsystem (Bau-Werkzeug), „demnächst"-Platzhalter
         'voice' => null, 'ui-katalog' => null, 'demnaechst' => null,
@@ -134,7 +135,7 @@ final class FaBereiche
         'Lager' => 'lager',
         'Knowledge' => 'wissen', 'Trendradar' => 'wissen',
         'Settings' => 'einstellungen', 'FoodDna' => 'einstellungen',
-        'Projekte' => 'projekte',
+        'Projekte' => 'projekte', 'Standortprofil' => 'einstellungen',
     ];
 
     public static function istBereich(string $bereich): bool

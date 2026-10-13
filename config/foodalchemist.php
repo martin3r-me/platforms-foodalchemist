@@ -183,6 +183,12 @@ return [
                     'zusatz' => 'Agentur',
                 ],
                 [
+                    // Spec 82 §9: Eigene Standorte (Teamprofil) + im Master-Team Kunden-Standorte aus Projekten
+                    'label' => 'Standortprofil',
+                    'route' => 'foodalchemist.standortprofil.index',
+                    'icon'  => 'heroicon-o-map-pin',
+                ],
+                [
                     // Spec 32: Controlling-Zentrum — Werkbank, an der Befund und Hebel nebeneinander
                     // liegen (Preise · Wareneinsatz · Simulation · Erfolg · Geld-Signale · Kennzahlen).
                     // Der Klick springt direkt in den Voll-Editor; die Seite darunter ist das Lagebild.
