@@ -24,6 +24,11 @@ class FaBereichMiddleware
         if ($user instanceof User && ! TeamSperre::routeErlaubt($routeName) && TeamSperre::istGesperrt($user->currentTeamRelation)) {
             abort(403, TeamSperre::MELDUNG);
         }
+        // Spec 82 §13 G: Plattform-Admin ohne echte Mitgliedschaft sieht keine Inhalte eines Kunden-Teams (Core lässt den Team-Wechsel ohne Prüfung zu)
+        if ($user instanceof User && ! \Platform\FoodAlchemist\Support\InhaltsSperre::routeErlaubt($routeName)
+            && \Platform\FoodAlchemist\Support\InhaltsSperre::istGesperrt($user, $user->currentTeamRelation)) {
+            abort(403, \Platform\FoodAlchemist\Support\InhaltsSperre::MELDUNG);
+        }
         if ($bereich !== null && $user instanceof User && ($team = $user->currentTeamRelation) !== null
             && ! app(FaRechte::class)->darfBereich($user, $team, $bereich)) {
             abort(403, 'Der Bereich „'.(FaBereiche::KATALOG[$bereich] ?? $bereich).'“ ist für dich bzw. dein Team nicht freigeschaltet.');

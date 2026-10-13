@@ -311,6 +311,14 @@ class FoodAlchemistServiceProvider extends ServiceProvider
 
                 return;
             }
+            // Spec 82 §13 G: Plattform-Admin ohne echte Mitgliedschaft — keine Aktion auf Inhalten eines Kunden-Teams
+            if ($user instanceof \Platform\Core\Models\User && ! \Platform\FoodAlchemist\Support\InhaltsSperre::komponenteErlaubt($component)
+                && \Platform\FoodAlchemist\Support\InhaltsSperre::istGesperrt($user, $user->currentTeamRelation)) {
+                $component->dispatch('fa-saved', message: \Platform\FoodAlchemist\Support\InhaltsSperre::MELDUNG, type: 'error');
+                $returnEarly(null);
+
+                return;
+            }
             if ($bereich !== null && $user instanceof \Platform\Core\Models\User && ($team = $user->currentTeamRelation) !== null
                 && ! app(\Platform\FoodAlchemist\Services\FaRechte::class)->darfBereich($user, $team, $bereich)) {
                 $component->dispatch('fa-saved', message: 'Dieser Bereich ist für dich bzw. dein Team nicht freigeschaltet.', type: 'error');
