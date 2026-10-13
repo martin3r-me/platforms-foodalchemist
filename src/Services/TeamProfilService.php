@@ -195,6 +195,38 @@ class TeamProfilService
         FoodAlchemistTeamProfileArea::where($t->schluessel())->findOrFail($id)->forceDelete();
     }
 
+    /**
+     * Lizenz-Übernahme (Spec 82 §9): Profil eines Kunden-Standorts als TEAMPROFIL in ein Team kopieren (Kennzahlen, Ausstattung, Flächen).
+     * Kopie, nicht live. Hat das Zielteam schon Profildaten, bleiben sie unberührt (wirft). Ohne Rechteprüfung: der Aufrufer
+     * (ProjektUebernahmeService) ist Plattform-Admin.
+     *
+     * @return array{kennzahlen: bool, geraete: int, flaechen: int}
+     */
+    public function kopiereStandortProfil(Team $master, int $standortId, Team $ziel): array
+    {
+        $quelle = $this->traeger(Profiltraeger::standort($master, $standortId));
+        $ziel = Profiltraeger::team($ziel);
+        if (FoodAlchemistTeamProfile::withTrashed()->where($ziel->schluessel())->exists()
+            || FoodAlchemistTeamProfileEquipment::withTrashed()->where($ziel->schluessel())->exists()
+            || FoodAlchemistTeamProfileArea::withTrashed()->where($ziel->schluessel())->exists()) {
+            throw new \RuntimeException('Das Zielteam hat schon ein Teamprofil, es wird nicht überschrieben.');
+        }
+        $profil = FoodAlchemistTeamProfile::where($quelle->schluessel())->first();
+        if ($profil !== null) {
+            FoodAlchemistTeamProfile::create($ziel->schluessel() + $profil->only(['max_pax_parallel', 'convenience_grad', 'notes']));
+        }
+        $geraete = FoodAlchemistTeamProfileEquipment::where($quelle->schluessel())->get();
+        foreach ($geraete as $g) {
+            FoodAlchemistTeamProfileEquipment::create($ziel->schluessel() + $g->only(['equipment_id', 'status', 'anzahl', 'note']));
+        }
+        $flaechen = FoodAlchemistTeamProfileArea::where($quelle->schluessel())->get();
+        foreach ($flaechen as $f) {
+            FoodAlchemistTeamProfileArea::create($ziel->schluessel() + $f->only(['name', 'max_pax', 'saison_von', 'saison_bis', 'sort_order']));
+        }
+
+        return ['kennzahlen' => $profil !== null, 'geraete' => $geraete->count(), 'flaechen' => $flaechen->count()];
+    }
+
     /** Alle Profildaten eines Kunden-Standorts entfernen (beim Löschen des Standorts). Hart, es gibt kein Zurück. */
     public function loescheStandortProfil(Team $master, int $standortId): void
     {

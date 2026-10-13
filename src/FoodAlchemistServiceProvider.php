@@ -1150,6 +1150,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\ProjekteGetTool::class,
                     \Platform\FoodAlchemist\Tools\ProjektePostTool::class,
                     \Platform\FoodAlchemist\Tools\ProjektePutTool::class,
+                    \Platform\FoodAlchemist\Tools\ProjekteUebernahmeGetTool::class,
+                    \Platform\FoodAlchemist\Tools\ProjekteUebernahmePostTool::class,
                     \Platform\FoodAlchemist\Tools\MandantenGetTool::class,
                     \Platform\FoodAlchemist\Tools\MandantenPutTool::class,
                     \Platform\FoodAlchemist\Tools\MandantenBeendenGetTool::class,   // Spec 82 §13 C3: Vorschau „Mandant beenden“
