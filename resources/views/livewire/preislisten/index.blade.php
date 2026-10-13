@@ -92,7 +92,7 @@
                     @php $offen = (($lauf->counts['treffer'] ?? 0) + ($lauf->counts['zukuenftig'] ?? 0)); @endphp
                     @if($darf && $offen > 0)
                         <x-fa::button size="sm" variant="primary" icon="heroicon-m-check" wire:click="anwenden({{ $lauf->id }})"
-                            wire:confirm="{{ $offen }} Treffer als deine Preise übernehmen? Bestehende Preise werden nicht überschrieben, der alte Preis bleibt in der Historie." data-preisliste-anwenden>{{ $offen }} Preise übernehmen</x-fa::button>
+                            wire:confirm="{{ $offen === 1 ? '1 Treffer als deinen Preis' : $offen.' Treffer als deine Preise' }} übernehmen? Bestehende Preise werden nicht überschrieben, der alte Preis bleibt in der Historie." data-preisliste-anwenden>{{ $offen === 1 ? '1 Preis' : $offen.' Preise' }} übernehmen</x-fa::button>
                     @elseif($lauf->status === 'applied')
                         <x-fa::badge tone="ok" icon="heroicon-m-check-circle">Übernommen</x-fa::badge>
                     @endif

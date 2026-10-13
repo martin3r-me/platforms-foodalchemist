@@ -137,8 +137,8 @@ it('Prüfliste zeigt nach dem Anwenden nur noch, was wirklich zu prüfen ist; di
 it('Oberfläche: „Preise übernehmen“ schreibt Teampreise und zeigt das Ergebnis; für Unter-Team und Betrachter ohne Knopf', function () {
     $run = ($this->lauf)("Artikelnummer;Preis netto\n1001;12,50\n");
 
-    $c = Livewire::test(Index::class)->call('laufWaehlen', $run->id)->assertSeeHtml('data-preisliste-anwenden')->assertSee('1 Preise übernehmen');
-    $c->call('anwenden', $run->id)->assertSet('fehler', null)->assertSee('1 Preise übernommen');
+    $c = Livewire::test(Index::class)->call('laufWaehlen', $run->id)->assertSeeHtml('data-preisliste-anwenden')->assertSee('1 Preis übernehmen');
+    $c->call('anwenden', $run->id)->assertSet('fehler', null)->assertSee('1 Preis übernommen');
     expect(($this->teamPreise)($this->mehl->id))->toHaveCount(1);
     $c->assertDontSeeHtml('data-preisliste-anwenden')->assertSee('Übernommen');
 
