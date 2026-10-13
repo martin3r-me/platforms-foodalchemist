@@ -453,8 +453,9 @@ class Wissenssteuerung extends Component
             'bereiche' => $bereiche,
             'routings' => DB::table('foodalchemist_knowledge_routings')
                 ->orderBy('feature')->orderBy('category')->get(),
-            'kategorien' => DB::table('foodalchemist_knowledge_categories')
-                ->whereNull('deleted_at')->where('active', 1)->orderBy('slug')->pluck('slug')->all(),
+            // Spec 82 §13 H: nur globale Kategorien + die eigene Team-Kette, nie die Kategorien fremder Teams (wie Wissens-Kategorien).
+            'kategorien' => TeamScope::applyVisible(DB::table('foodalchemist_knowledge_categories')->whereNull('deleted_at')->where('active', 1), 'team_id', $team)
+                ->orderBy('slug')->pluck('slug')->all(),
             // Spec 52/H2: Achsen-Bindungen sind Kanon-Zeilen mit scope='achse'. Hier erst
             // SICHTBAR — bearbeiten laeuft bis zum Kanon-Editor ueber knowledge_canon.PUT,
             // weil es einen Dossier-Waehler braucht. Das steht so auch auf der Seite.
@@ -478,8 +479,8 @@ class Wissenssteuerung extends Component
                 : collect(),
             'alias' => KnowledgeContextService::ROUTING_ALIAS,
             // Anzeige: Kategorie-Kennung → Name (die Kennung bleibt Schlüssel der Steuerung).
-            'kategorieLabels' => DB::table('foodalchemist_knowledge_categories')
-                ->whereNull('deleted_at')->pluck('label', 'slug')->all(),
+            'kategorieLabels' => TeamScope::applyVisible(DB::table('foodalchemist_knowledge_categories')->whereNull('deleted_at'), 'team_id', $team)
+                ->pluck('label', 'slug')->all(),
             // Vorschläge für das Feld „Arbeitsschritt" (Datalist) — Eingabe bleibt frei.
             'schrittVorschlaege' => collect(array_keys((array) config('foodalchemist.prompts', [])))
                 ->merge(array_values(KnowledgeContextService::ROUTING_ALIAS))
