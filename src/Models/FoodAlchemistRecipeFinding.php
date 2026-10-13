@@ -40,7 +40,8 @@ class FoodAlchemistRecipeFinding extends Model
 
     public function recipe(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistRecipe::class, 'recipe_id');
+        return $this->belongsTo(FoodAlchemistRecipe::class, 'recipe_id')
+            ->withoutGlobalScope(\Platform\FoodAlchemist\Models\Scopes\OhneFassungenScope::class);   // Spec 82: Verweis löst auch Fassungen auf
     }
 
     public function ingredient(): BelongsTo

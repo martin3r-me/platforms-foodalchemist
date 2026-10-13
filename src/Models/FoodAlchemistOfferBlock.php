@@ -59,7 +59,8 @@ class FoodAlchemistOfferBlock extends Model
     /** recipe_ref: einzelnes Gericht (VK-Rezept). */
     public function dish(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistRecipe::class, 'sales_recipe_id');
+        return $this->belongsTo(FoodAlchemistRecipe::class, 'sales_recipe_id')
+            ->withoutGlobalScope(\Platform\FoodAlchemist\Models\Scopes\OhneFassungenScope::class);   // Spec 82: Verweis löst auch Fassungen auf
     }
 
     public function unit(): BelongsTo
