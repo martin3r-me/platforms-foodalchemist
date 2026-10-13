@@ -72,6 +72,7 @@
          DetailPanel, das danach selbst `modal.open` feuert). Kein `activity`-Slot: der liess
          auf dieser Seite die Inhaltsfläche auf Höhe 0 kollabieren (2026-08-02). --}}
     <livewire:foodalchemist.recipes.recipe-modal key="review-queue--recipes.recipe-modal" />
+    <livewire:foodalchemist.recipes.fassung-modal key="review-queue--recipes.fassung-modal" />
     {{-- Editor-Kette (Dominique 2026-10-13): Rezept → Grundprodukt → Lieferantenartikel muss auf jeder Seite mit Rezept-Editor durchklickbar sein; fehlt ein Glied, läuft der Klick still ins Leere. Wächter: EditorKetteTest. --}}
     <livewire:foodalchemist.gps.gp-modal key="review-queue--gps.gp-modal" />
     <livewire:foodalchemist.suppliers.item-modal key="review-queue--suppliers.item-modal" />

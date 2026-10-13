@@ -602,6 +602,7 @@
          darüber liegen (beide tragen z-[100], der spätere im DOM gewinnt). --}}
     <livewire:foodalchemist.verkauf.vk-modal key="speisekarte-index--verkauf.vk-modal" />
     <livewire:foodalchemist.recipes.recipe-modal key="speisekarte-index--recipes.recipe-modal" />
+    <livewire:foodalchemist.recipes.fassung-modal key="speisekarte-index--recipes.fassung-modal" />
     {{-- Editor-Kette (Dominique 2026-10-13): Rezept → Grundprodukt → Lieferantenartikel muss auf jeder Seite mit Rezept-Editor durchklickbar sein; fehlt ein Glied, läuft der Klick still ins Leere. Wächter: EditorKetteTest. --}}
     <livewire:foodalchemist.gps.gp-modal key="speisekarte-index--gps.gp-modal" />
     <livewire:foodalchemist.suppliers.item-modal key="speisekarte-index--suppliers.item-modal" />

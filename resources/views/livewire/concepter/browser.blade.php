@@ -255,6 +255,7 @@
     {{-- Phase 6: Typ-Einsehen — Basisrezept/VK-Gericht als Fenster ÜBER dem Concepter-Editor.
          Nach dem Editor platziert → stapelt obenauf (gleiche z-[100]-Konvention). --}}
     <livewire:foodalchemist.recipes.recipe-modal key="concepter-browser--recipes.recipe-modal" />
+    <livewire:foodalchemist.recipes.fassung-modal key="concepter-browser--recipes.fassung-modal" />
     {{-- Editor-Kette (Dominique 2026-10-13): Rezept → Grundprodukt → Lieferantenartikel muss auf jeder Seite mit Rezept-Editor durchklickbar sein; fehlt ein Glied, läuft der Klick still ins Leere. Wächter: EditorKetteTest. --}}
     <livewire:foodalchemist.gps.gp-modal key="concepter-browser--gps.gp-modal" />
     <livewire:foodalchemist.suppliers.item-modal key="concepter-browser--suppliers.item-modal" />

@@ -118,6 +118,10 @@ Route::get('/food-dna', \Platform\FoodAlchemist\Livewire\FoodDna\Index::class)
 Route::get('/wissen', \Platform\FoodAlchemist\Livewire\Knowledge\Browser::class)
     ->name('foodalchemist.knowledge.index');
 
+// Spec 82 §8 / §13 B6 · Abos (Master: Vergabe/Kündigung/Zurückziehen; Mandant: „Meine Abos“; Bereich „abos“).
+Route::get('/abos', \Platform\FoodAlchemist\Livewire\Abos\Index::class)
+    ->name('foodalchemist.abos.index');
+
 // Spec 82 §9 · Projekte (Agentur-Akten, nur im Master-Team; Bereich „projekte“).
 Route::get('/projekte', \Platform\FoodAlchemist\Livewire\Projekte\Index::class)
     ->name('foodalchemist.projekte.index');
