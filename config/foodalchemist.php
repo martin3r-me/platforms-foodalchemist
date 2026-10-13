@@ -416,6 +416,11 @@ return [
         'dataforseo_budget_usd' => (float) env('FOODALCHEMIST_TRENDS_DATAFORSEO_BUDGET', 5.0),
     ],
 
+    'plan' => [
+        // Spec 82 §13 D: Wie viele User die Basis je Mandant einschließt; jeder weitere kostet den User-Preis.
+        'basis_inklusive_user' => (int) env('FOODALCHEMIST_PLAN_INKLUSIVE_USER', 2),
+    ],
+
     /*
     |--------------------------------------------------------------------------
     | Geplante Läufe
@@ -432,6 +437,8 @@ return [
     |
     */
     'scheduler' => [
+        // Spec 82 §13 D: täglicher Gebühren-Zähl-Lauf (Tageswerte), früh vor dem Arbeitstag.
+        'plan_zaehlen_zeit' => env('FOODALCHEMIST_PLAN_ZAEHLEN_ZEIT', '02:10'),
         'enabled' => env('FOODALCHEMIST_SCHEDULER', true),
         // Nach dem DB-Snapshot (23:00) und weit vor dem Arbeitstag: der Lauf ist die
         // teuerste lesende Operation des Moduls und soll nicht neben der Nutzung liegen.
