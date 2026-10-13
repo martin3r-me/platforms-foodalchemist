@@ -39,6 +39,24 @@ class FoodAlchemistFoodbook extends Model
         'preview_snapshot_at' => 'datetime',
     ];
 
+    protected static function booted(): void
+    {
+        // Spec 82 §9: HARTES Gate. Ein Foodbook aus einer Projekt-Akte entsteht nur nach „Struktur + Musterseite freigeben“ —
+        // am Modell, damit auch MCP, Import und jeder künftige Weg das Gate nicht umgehen.
+        static::saving(function (self $fb) {
+            if ($fb->projekt_id === null || ! $fb->isDirty('projekt_id')) {
+                return;
+            }
+            $projekt = FoodAlchemistProjekt::where('team_id', $fb->team_id)->find($fb->projekt_id);
+            if ($projekt === null) {
+                throw new \RuntimeException('Projekt nicht gefunden (nur im Master-Team).');
+            }
+            if (! $projekt->strukturFreigegeben()) {
+                throw new \RuntimeException('Gate: Struktur + Musterseite des Projekts sind noch nicht freigegeben. Erst freigeben, dann das Foodbook anlegen.');
+            }
+        });
+    }
+
     /**
      * ALLE Kapitel (flach, jede Ebene) nach position — NICHT nur Top-Kapitel.
      * Den n-tiefen Baum bauen Service/UI/Coverage aus `parent_id` (Rollup: Kapitel-Scope

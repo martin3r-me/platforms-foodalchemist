@@ -107,6 +107,7 @@ class FoodbookService
             'outlet_id' => $in['outlet_id'] ?? null,
             'crm_company_id' => $in['crm_company_id'] ?? null,
             'crm_contact_id' => $in['crm_contact_id'] ?? null,
+            'projekt_id' => $in['projekt_id'] ?? null,   // Spec 82 §9: nur über ProjektService (Gate am Modell)
             // Spec 33 P1: Fenster schon beim Anlegen — sonst muss man jede Ausgabe zweimal
             // anfassen, und ein Import/MCP-Aufruf verliert die Angabe stillschweigend.
             'gueltig_von' => ($in['gueltig_von'] ?? '') !== '' ? $in['gueltig_von'] : null,
