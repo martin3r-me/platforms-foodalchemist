@@ -46,7 +46,8 @@ class PaketService
             ->when(($filters['class'] ?? '') !== '', fn ($q) => $q->where('class', $filters['class']))
             ->when(($filters['level'] ?? '') !== '', fn ($q) => $q->where('level', $filters['level']))
             ->orderBy('role')->orderBy('name')
-            ->paginate($perPage);
+            ->paginate($perPage)
+            ->through(fn ($p) => app(PaketPreisService::class)->anwenden($p, $team));   // Abo-Fassung: Team-Preis statt leerer Master-Spalten
     }
 
     /** Distinkte, real verwendete Rollen (für Filter) + Vokabular-Vorschläge. */
@@ -73,7 +74,7 @@ class PaketService
 
     public function detail(Team $team, int $id): ?FoodAlchemistPaket
     {
-        return FoodAlchemistPaket::visibleToTeam($team)
+        $paket = FoodAlchemistPaket::visibleToTeam($team)
             ->with(['dishes' => fn ($q) => $q->orderBy('position'),
                 'dishes.dish:id,name,sales_net,sales_gross,ek_total_eur,vat_rate,is_sales_recipe,yield_kg',
                 'dishes.unit:id,slug,display_de',
@@ -81,6 +82,8 @@ class PaketService
                 'dishes.dishwareItem:id,label,rental_price,unit',
                 'dishes.dishwareAltItem:id,label,rental_price,unit'])
             ->find($id);
+
+        return $paket === null ? null : app(PaketPreisService::class)->anwenden($paket, $team);
     }
 
     public function create(Team $team, array $in): FoodAlchemistPaket
@@ -177,6 +180,9 @@ class PaketService
                 ]);
             }
             app(ConcepterAggregateService::class)->cachePaket($neu);
+            if ($orig->ist_fassung) {   // Kopie eines Abo-Pakets: Preis mit den Team-Preisen rechnen (Gerichte zeigen auf Rezept-Fassungen)
+                $this->recomputePrice($neu);
+            }
 
             return $neu->refresh();
         });
@@ -322,6 +328,12 @@ class PaketService
      */
     public function recomputePrice(FoodAlchemistPaket $paket): FoodAlchemistPaket
     {
+        // Spec 82 Abo Pakete PR 3: zeigt ein Gericht auf eine Rezept-Fassung (eigene Kopie eines Abo-Pakets), rechnet das Team
+        // mit seinen Preisen über KostenCacheService/TeamVkService — die gespeicherten Master-Spalten der Fassung sind leer.
+        if (! $paket->ist_fassung && DB::table('foodalchemist_recipes')->where('ist_fassung', true)
+            ->whereIn('id', $paket->dishes()->pluck('sales_recipe_id'))->exists()) {
+            return $this->recomputeAusFassungen($paket);
+        }
         $expired = $paket->price_override_expires_at?->isPast() ?? false;
         $auto = $paket->price_mode === 'auto' || $expired;
         $gerichte = $paket->dishes()->with([
@@ -397,6 +409,41 @@ class PaketService
         return $paket->refresh();
     }
 
+    /** Preis eines Pakets, dessen Gerichte Rezept-Fassungen sind: Team-Kalkulation, unvollständig = kein Preis (nie Teilsumme, nie 0 €). */
+    private function recomputeAusFassungen(FoodAlchemistPaket $paket): FoodAlchemistPaket
+    {
+        $team = \Platform\Core\Models\Team::findOrFail($paket->team_id);
+        $r = app(PaketPreisService::class)->berechne($paket, $team);
+        $expired = $paket->price_override_expires_at?->isPast() ?? false;
+        $auto = $paket->price_mode === 'auto' || $expired;
+
+        $oldCalculated = $paket->calculated_price_per_person !== null ? (float) $paket->calculated_price_per_person : null;
+        $oldEffective = $paket->price_per_person !== null ? (float) $paket->price_per_person : null;
+        $update = [
+            'calculated_price_per_person' => $r['vk_pro_person'],
+            'price_calculation_source' => 'team_kalkulation',
+            'price_calculation_version' => CatalogPricingService::VERSION,
+            'price_calculated_at' => now(),
+            'price_stale' => false,
+            'ek_per_person' => $r['ek_pro_person'],
+            'food_cost_percent' => $r['food_cost_percent'],
+        ];
+        if ($auto) {
+            $update['price_mode'] = 'auto';
+            $update['price_per_person'] = $r['vk_pro_person'];
+            $update += ['price_override_reason' => null, 'price_override_user_id' => null,
+                'price_override_at' => null, 'price_override_expires_at' => null];
+        }
+        $paket->update($update);
+        app(PriceAuditService::class)->record(
+            $paket, 'package', $oldCalculated, $r['vk_pro_person'], $oldEffective,
+            $paket->price_per_person !== null ? (float) $paket->price_per_person : null,
+            'team_kalkulation', ['calculation_version' => CatalogPricingService::VERSION],
+        );
+
+        return $paket->refresh();
+    }
+
     /**
      * Ebene 2: Per-Person-VK des Pakets im Betriebs-Kontext, on-the-fly (KEINE Persistenz).
      * outlet=null ODER manueller Fix-Preis → gespeicherter Effektivpreis (Team-Baseline).
@@ -406,6 +453,13 @@ class PaketService
      */
     public function paketPreisProPerson(FoodAlchemistPaket $paket, ?FoodAlchemistOutlet $outlet): ?float
     {
+        // Abo-Fassung: Team-Kalkulation im Betriebs-Kontext (TeamVkService rechnet den Betrieb mit)
+        if ($paket->ist_fassung) {
+            $team = Team::find($outlet?->team_id);
+
+            return $outlet === null || $team === null ? null
+                : app(PaketPreisService::class)->fuer($paket, $team, $outlet)['vk_pro_person'];
+        }
         $baseline = $paket->price_per_person !== null ? (float) $paket->price_per_person : null;
         // Kein Betrieb oder manuell gesetzter Fix-Preis → der Betrieb verändert ihn nicht.
         if ($outlet === null || $paket->price_mode !== 'auto') {
@@ -537,7 +591,8 @@ class PaketService
             ->when(($filter['class'] ?? '') !== '', fn ($q) => $q->where('class', $filter['class']))
             ->when(($filter['role'] ?? '') !== '', fn ($q) => $q->where('role', $filter['role']))
             ->orderBy('name')->limit($limit)
-            ->get(['id', 'name', 'price_per_person', 'class', 'role']);
+            ->get(['id', 'name', 'price_per_person', 'class', 'role', 'ist_fassung', 'team_id'])
+            ->each(fn ($p) => app(PaketPreisService::class)->anwenden($p, $team));
     }
 
     /**

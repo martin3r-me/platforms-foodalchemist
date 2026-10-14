@@ -59,7 +59,7 @@ class PaketeListTool extends FoodAlchemistTool implements ToolContract, ToolMeta
         return ToolResult::success([
             'total' => $page->total(),
             'active_outlet_id' => $outlet?->id,
-            'pakete' => collect($page->items())->map(fn ($p) => $this->paketPayload($p, false, $outlet))->all(),
+            'pakete' => collect($page->items())->map(fn ($p) => $this->paketPayload($p, false, $outlet, $team))->all(),
         ]);
     }
 

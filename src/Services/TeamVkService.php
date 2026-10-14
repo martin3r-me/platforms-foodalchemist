@@ -5,6 +5,7 @@ namespace Platform\FoodAlchemist\Services;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistOutlet;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
+use Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung;
 
 /**
  * Spec 82 §8 / §12 C (Dominique 13.10.): VK eines Abo-Gerichts beim Mandanten — wird NICHT gepflegt, sondern berechnet:
@@ -20,8 +21,12 @@ use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
  */
 class TeamVkService
 {
-    /** @return array{vk: ?float, quelle: string, grund: ?string, mek: ?float} */
-    public function fuer(FoodAlchemistRecipe $recipe, Team $team, ?FoodAlchemistOutlet $outlet = null): array
+    /**
+     * @param  ?FoodAlchemistRecipeDarreichung  $darreichung  nur für Fassungen: statt der Standard-Form eine bestimmte Darreichung
+     *                                                         der Fassung rechnen (Paket-Gericht mit gewählter Form, Spec 82 Abo Pakete PR 3)
+     * @return array{vk: ?float, quelle: string, grund: ?string, mek: ?float}
+     */
+    public function fuer(FoodAlchemistRecipe $recipe, Team $team, ?FoodAlchemistOutlet $outlet = null, ?FoodAlchemistRecipeDarreichung $darreichung = null): array
     {
         if (! array_key_exists('ist_fassung', $recipe->getAttributes())) {
             $recipe = FoodAlchemistRecipe::mitFassungen()->findOrFail($recipe->id);
@@ -36,8 +41,9 @@ class TeamVkService
         if (! $kosten['vollstaendig'] || $kosten['ek_per_kg'] === null) {
             return ['vk' => null, 'quelle' => 'keine', 'grund' => 'ek_unvollstaendig', 'mek' => null];
         }
-        $standard = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung::where('recipe_id', $recipe->id)
-            ->orderByDesc('is_standard')->orderBy('id')->first();
+        $standard = $darreichung !== null && (int) $darreichung->recipe_id === (int) $recipe->id
+            ? $darreichung
+            : FoodAlchemistRecipeDarreichung::where('recipe_id', $recipe->id)->orderByDesc('is_standard')->orderBy('id')->first();
         if ($standard === null) {
             return ['vk' => null, 'quelle' => 'keine', 'grund' => 'keine_darreichung', 'mek' => null];
         }

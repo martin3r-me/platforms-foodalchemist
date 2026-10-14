@@ -26,6 +26,21 @@ class FoodAlchemistPaket extends Model
 
     protected $table = 'foodalchemist_packages';
 
+    /**
+     * Spec 82 Abo Pakete PR 3: true = Lese-Instanz mit überlagerten Team-Preisen (PaketPreisService::anwenden). Echte Eigenschaft,
+     * kein Attribut. Eine solche Instanz darf nie gespeichert werden — sonst stünde der Mandantenpreis dauerhaft in der Master-Fassung.
+     */
+    public bool $preisOverlay = false;
+
+    protected static function booted(): void
+    {
+        static::saving(function (self $paket) {
+            if ($paket->preisOverlay) {
+                throw new \LogicException('Overlay-Instanz darf nicht gespeichert werden (Team-Preis einer Abo-Fassung, Spec 82).');
+            }
+        });
+    }
+
     protected $guarded = ['id'];
 
     protected $casts = [

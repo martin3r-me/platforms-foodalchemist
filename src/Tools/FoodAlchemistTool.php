@@ -579,7 +579,7 @@ abstract class FoodAlchemistTool
      * Kompakte Paket-Serialisierung (D5d) — geteilt von pakete.GET/LIST/SEARCH. Mit $withDishes werden
      * die Gericht-Positionen (Row-Id, Gericht, Menge/Einheit) mitgegeben.
      */
-    protected function paketPayload(\Platform\FoodAlchemist\Models\FoodAlchemistPaket $p, bool $withDishes = false, ?\Platform\FoodAlchemist\Models\FoodAlchemistOutlet $outlet = null): array
+    protected function paketPayload(\Platform\FoodAlchemist\Models\FoodAlchemistPaket $p, bool $withDishes = false, ?\Platform\FoodAlchemist\Models\FoodAlchemistOutlet $outlet = null, ?\Platform\Core\Models\Team $team = null): array
     {
         $out = [
             'id' => (int) $p->id,
@@ -594,10 +594,25 @@ abstract class FoodAlchemistTool
             'food_cost_percent' => $p->food_cost_percent !== null ? (float) $p->food_cost_percent : null,
             'is_inactive' => (bool) $p->is_inactive,
         ];
+        // Spec 82 Abo Pakete PR 3: eine Abo-Fassung trägt keine Master-Preise — Preis/EK kommen live aus der Team-Kalkulation
+        // (KostenCacheService/TeamVkService); unvollständig = null + Grund, nie 0 €.
+        $team ??= null;
+        $teamPreis = $team !== null && $p->ist_fassung
+            ? app(\Platform\FoodAlchemist\Services\PaketPreisService::class)->fuer($p, $team, $outlet) : null;
+        if ($teamPreis !== null) {
+            $out['price_per_person'] = $teamPreis['vk_pro_person'];
+            $out['ek_per_person'] = $teamPreis['ek_pro_person'];
+            $out['food_cost_percent'] = $teamPreis['food_cost_percent'];
+            $out['price_complete'] = $teamPreis['vollstaendig'];
+            $out['price_reason'] = $teamPreis['grund'];
+            $out['price_missing'] = $teamPreis['fehlende'];
+        }
         // Ebene 2: VK/Person im Betriebs-Kontext (Auto-Paket on-the-fly; Fix-Preis bleibt) — price_per_person = Team-Baseline.
         if ($outlet !== null) {
             $out['outlet_id'] = (int) $outlet->id;
-            $out['price_per_person_outlet'] = app(\Platform\FoodAlchemist\Services\PaketService::class)->paketPreisProPerson($p, $outlet);
+            $out['price_per_person_outlet'] = $teamPreis !== null
+                ? $teamPreis['vk_pro_person']
+                : app(\Platform\FoodAlchemist\Services\PaketService::class)->paketPreisProPerson($p, $outlet);
         }
         if ($withDishes) {
             $out['dishes'] = $p->dishes->map(fn ($g) => [

@@ -51,7 +51,7 @@ class PaketeGetTool extends FoodAlchemistTool implements ToolContract, ToolMetad
                 ->current($team, $context->user?->id !== null ? (int) $context->user->id : null);
         }
 
-        return ToolResult::success(['paket' => $this->paketPayload($paket, true, $outlet)]);
+        return ToolResult::success(['paket' => $this->paketPayload($paket, true, $outlet, $team)]);
     }
 
     public function getMetadata(): array
