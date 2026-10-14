@@ -33,9 +33,10 @@ class InhalteKopieTool extends WareneingangTool implements ToolContract, ToolMet
     public function execute(array $arguments, ToolContext $context): ToolResult
     {
         return $this->ausfuehren($context, function ($team) use ($arguments, $context) {
-            $k = app(InhaltsFreigabeService::class)->kopieAnlegen($team, (string) $arguments['typ'], (int) $arguments['id'], $context->user);
+            $svc = app(InhaltsFreigabeService::class);
+            $k = $svc->kopieAnlegen($team, (string) $arguments['typ'], (int) $arguments['id'], $context->user);
 
-            return ['id' => (int) $k->id, 'name' => (string) $k->name, 'kopie_von_id' => (int) $k->kopie_von_id];
+            return ['id' => (int) $k->id, 'name' => (string) $k->name, 'kopie_von_id' => (int) $k->kopie_von_id, 'hinweise' => $svc->letzteHinweise];
         });
     }
 

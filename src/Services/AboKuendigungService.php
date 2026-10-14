@@ -35,7 +35,7 @@ use Platform\FoodAlchemist\Support\VerweisRegister;
  * folgt mit PR 7. Alles läuft über (Art, ID), nie über die ID allein (Rezept 12 ≠ Paket 12). „Genutzt“ je Art steht im {@see VerweisRegister} (dieselben Filter
  * wie das Folgen, PR 5). Kopie von unten nach oben: erst alle Köpfe, dann die Inhalte (Rezepte samt Darreichungen → Pakete → Konzepte), danach mit den Preisen
  * des Mandanten gerechnet (Rezepte → Paket-Preise → Konzept-Caches). Die Kette wird, wie bei Rezepten heute, vollständig kopiert — auch Teile, die über ein
- * zweites Abo sichtbar blieben (bewusst gleich; „mitkopiert“ nennt sie). Bilder eines Konzepts bleiben beim Master (D5-Folge): die Kopie trägt kein Bild.
+ * zweites Abo sichtbar blieben (bewusst gleich; „mitkopiert“ nennt sie). Titelbild und Galerie eines Konzepts werden in den Speicher des Mandanten mitkopiert (fehlt die Datei: Kopie ohne Bild + Hinweis, nie ein Abbruch).
  */
 class AboKuendigungService
 {
@@ -51,6 +51,9 @@ class AboKuendigungService
 
     private const TABELLE = ['recipe' => 'foodalchemist_recipes', 'paket' => 'foodalchemist_packages', 'concept' => 'foodalchemist_concepts'];
 
+    /** @var list<string> Hinweise des laufenden Ablaufs (z. B. fehlende Bilddatei) — nie ein Abbruch */
+    private array $hinweise = [];
+
     public function __construct(
         private FaRechte $rechte,
         private AboService $abos,
@@ -61,7 +64,7 @@ class AboKuendigungService
      * Abo kündigen. Darf: der Master mit Rolle „Freigeben" oder ein Admin des Mandanten (sein Oberteam). Ohne
      * bestaetigt = nur die Vorschau.
      *
-     * @return array{vorschau: array<string,mixed>, ausgefuehrt: bool, kopien?: array<int,int>, kopien_je_art?: array<string,array<int,int>>, umgehaengt?: int}
+     * @return array{vorschau: array<string,mixed>, ausgefuehrt: bool, kopien?: array<int,int>, kopien_je_art?: array<string,array<int,int>>, umgehaengt?: int, hinweise?: list<string>}
      */
     public function kuendigen(Team $handelnd, int $aboId, ?User $actor, bool $bestaetigt, bool $systemLauf = false): array
     {
@@ -73,15 +76,16 @@ class AboKuendigungService
             throw new \RuntimeException('Dieses Abo ist nicht mehr aktiv.');
         }
         $mandant = Team::findOrFail($abo->mandant_team_id);
+        $this->hinweise = [];
         $vorher = $this->abos->huelle((int) $mandant->id);
         $nachher = $this->abos->huelle((int) $mandant->id, ohneAboId: (int) $abo->id);
-        $vorschau = $this->vorschau($mandant, $this->wegfallend($vorher, $nachher));
+        $vorschau = $this->vorschau($mandant, $this->wegfallend($vorher, $nachher), $nachher, (int) $abo->id);
         if (! $bestaetigt) {
             return ['vorschau' => $vorschau, 'ausgefuehrt' => false];
         }
 
         $ergebnis = DB::transaction(function () use ($abo, $mandant, $vorschau, $actor) {
-            [$kopien, $umgehaengt] = $this->kopierenUndUmhaengen($mandant, $vorschau['genutzt_je_art']);
+            [$kopien, $umgehaengt] = $this->kopierenUndUmhaengen($mandant, $vorschau['genutzt_je_art'], $vorschau['bleibt_je_art']);
             $abo->forceFill(['status' => FoodAlchemistAbo::GEKUENDIGT, 'beendet_at' => now(), 'beendet_von' => $actor?->id])->save();
 
             return [$kopien, $umgehaengt];
@@ -92,7 +96,7 @@ class AboKuendigungService
             'kopiert' => $this->zaehle($ergebnis[0]), 'umgehaengt' => $ergebnis[1], 'verschwindet' => $this->zaehle($vorschau['verschwindet_je_art'])], $actor, $abo);
 
         // `kopien` bleibt die Rezept-Map (Aufrufer MandantBeenden/UI/Tests), `kopien_je_art` trägt alle Arten
-        return ['vorschau' => $vorschau, 'ausgefuehrt' => true, 'kopien' => $ergebnis[0]['recipe'], 'kopien_je_art' => $ergebnis[0], 'umgehaengt' => $ergebnis[1]];
+        return ['vorschau' => $vorschau, 'ausgefuehrt' => true, 'kopien' => $ergebnis[0]['recipe'], 'kopien_je_art' => $ergebnis[0], 'umgehaengt' => $ergebnis[1], 'hinweise' => $this->hinweise];
     }
 
     /**
@@ -115,13 +119,15 @@ class AboKuendigungService
             throw new \RuntimeException('Das Objekt steht nicht in dieser Sammlung.');
         }
 
+        $this->hinweise = [];
         $mandanten = [];
         $mandantIds = DB::table('foodalchemist_abos')->where('sammlung_id', $sammlungId)->where('status', FoodAlchemistAbo::AKTIV)
             ->distinct()->pluck('mandant_team_id')->map(fn ($v) => (int) $v)->all();
         foreach ($mandantIds as $mid) {
             $vorher = $this->abos->huelle($mid);
-            $nachher = $this->abos->huelle($mid, ohneSammlungsObjekt: ['sammlung_id' => $sammlungId, 'objekt_id' => $objektId, 'typ' => $typ]);
-            $mandanten[$mid] = ['mandant_team_id' => $mid, 'vorschau' => $this->vorschau(Team::findOrFail($mid), $this->wegfallend($vorher, $nachher))];
+            $ohne = ['sammlung_id' => $sammlungId, 'objekt_id' => $objektId, 'typ' => $typ];
+            $nachher = $this->abos->huelle($mid, ohneSammlungsObjekt: $ohne);
+            $mandanten[$mid] = ['mandant_team_id' => $mid, 'vorschau' => $this->vorschau(Team::findOrFail($mid), $this->wegfallend($vorher, $nachher), $nachher, null, $ohne)];
         }
         if (! $bestaetigt) {
             return ['mandanten' => array_values($mandanten), 'ausgefuehrt' => false];
@@ -130,7 +136,7 @@ class AboKuendigungService
         $alleKopien = [];
         DB::transaction(function () use ($sammlungId, $objektId, $typ, &$mandanten, &$alleKopien) {
             foreach ($mandanten as $mid => $m) {
-                [$kopien, $umgehaengt] = $this->kopierenUndUmhaengen(Team::findOrFail($mid), $m['vorschau']['genutzt_je_art']);
+                [$kopien, $umgehaengt] = $this->kopierenUndUmhaengen(Team::findOrFail($mid), $m['vorschau']['genutzt_je_art'], $m['vorschau']['bleibt_je_art']);
                 $mandanten[$mid]['kopien'] = $kopien['recipe'];
                 $mandanten[$mid]['kopien_je_art'] = $kopien;
                 $mandanten[$mid]['umgehaengt'] = $umgehaengt;
@@ -145,7 +151,7 @@ class AboKuendigungService
         $this->protokoll->schreibe('abo_objekt_zurueckgezogen', ['sammlung_id' => $sammlungId, 'typ' => $typ, 'objekt_id' => $objektId,
             'mandanten' => array_keys($mandanten)], $actor, $this->modellFuer($typ)::mitFassungen()->find($objektId));
 
-        return ['mandanten' => array_values($mandanten), 'ausgefuehrt' => true];
+        return ['mandanten' => array_values($mandanten), 'ausgefuehrt' => true, 'hinweise' => $this->hinweise];
     }
 
     /** Was beim Wechsel von `$vorher` auf `$nachher` aus der Hülle fällt, je Art. @return array<string, list<int>> */
@@ -186,10 +192,16 @@ class AboKuendigungService
      * Schlüssel: `genutzt_ids`/`mitkopiert_ids`/`verschwindet_ids` bleiben REZEPT-IDs (Aufrufer UI #353, MandantBeenden, Tests); dieselben Mengen über alle
      * Arten stehen in `*_je_art` (Art → IDs); die Einträge `genutzt`/`mitkopiert`/`verschwindet` tragen `typ`.
      *
+     * „Bleibt über anderes Abo“ (Entscheid Dominique 14.10., PR 6b): Was nach der Kündigung über ein anderes aktives Abo sichtbar bleibt, wird NICHT kopiert und
+     * NICHT umgehängt — es bleibt auf der Fassung verknüpft und bekommt weiter Updates. Sichtbarkeit gilt je FAMILIE (die Hülle eines Abos trägt nur die neueste
+     * Fassung; ein Verweis auf eine ältere derselben Familie bleibt, die Aktualisierung regelt das Folgen/„Übernehmen“ aus PR 5). Eigene vierte Liste `bleibt`.
+     *
      * @param  array<string, list<int>>|list<int>  $wegfallend  Fassungs-IDs je Art, die danach nicht mehr in der Hülle stehen (eine reine ID-Liste = Rezepte)
+     * @param  array<string, list<int>>  $nachher  Hülle des Mandanten NACH der Kündigung (leer = nichts bleibt sichtbar, wie vor PR 6b)
+     * @param  ?array{sammlung_id:int, objekt_id:int, typ:string}  $ohneSammlungsObjekt  Kontext der Hülle `$nachher` bei „Zurückziehen“ (für die Auskunft „über welche Sammlung“)
      * @return array<string, mixed>
      */
-    public function vorschau(Team $mandant, array $wegfallend): array
+    public function vorschau(Team $mandant, array $wegfallend, array $nachher = [], ?int $ohneAboId = null, ?array $ohneSammlungsObjekt = null): array
     {
         $wegfallend = $this->jeArt($wegfallend);
         $teams = RecomputeTeamRecipesJob::teamUndNachfahren((int) $mandant->id);
@@ -199,24 +211,36 @@ class AboKuendigungService
             $nutzung[$t] = $kandidaten[$t] === [] ? [] : $this->nutzung($t, $kandidaten[$t], $teams);
             $genutzt[$t] = array_values(array_filter($kandidaten[$t], fn ($id) => isset($nutzung[$t][$id])));
         }
-        // Unter-Fassungen genutzter Objekte gehen in der tiefen Kopie mit — sie „verschwinden“ nicht
-        $kette = $this->kette($genutzt);
-        $mit = $verschwindet = [];
+        // Sichtbarkeit je FAMILIE (Lisa, PR 6b): ein genutztes Objekt, dessen Familie nach der Kündigung über ein anderes Abo in der Hülle steht, bleibt auf seiner
+        // Fassung verknüpft (z. B. die ältere Fassung, auf der eine Allergen-Sperre aus 4d/PR 5 hält) — keine Kopie; das Folgen/„Übernehmen“ regelt die Aktualisierung.
+        $bleibtWurzel = [];
         foreach (self::ARTEN as $t) {
-            $mit[$t] = array_values(array_diff($kette[$t], $genutzt[$t]));
-            $verschwindet[$t] = array_values(array_diff($wegfallend[$t], $genutzt[$t], $mit[$t]));
+            $bleibtWurzel[$t] = $this->sichtbarBleibend($t, $genutzt[$t], $nachher[$t] ?? []);
+            $genutzt[$t] = array_values(array_diff($genutzt[$t], $bleibtWurzel[$t]));
         }
-        $namen = $this->anzeigeNamen(array_map(fn ($t) => array_merge($genutzt[$t], $mit[$t], $verschwindet[$t]), array_combine(self::ARTEN, self::ARTEN)));   // Zusatz „(Fassung n)“ nur bei mehreren angezeigten Fassungen einer Familie
+        // Unter-Fassungen genutzter Objekte gehen in der tiefen Kopie mit — sie „verschwinden“ nicht; was über ein anderes Abo sichtbar bleibt, wird nicht kopiert
+        $kette = $this->kette($genutzt);
+        $mit = $verschwindet = $bleibt = [];
+        foreach (self::ARTEN as $t) {
+            $mitAlle = array_values(array_diff($kette[$t], $genutzt[$t]));
+            $bleibt[$t] = array_values(array_unique(array_merge($this->sichtbarBleibend($t, $mitAlle, $nachher[$t] ?? []), $bleibtWurzel[$t])));
+            $mit[$t] = array_values(array_diff($mitAlle, $bleibt[$t]));
+            $verschwindet[$t] = array_values(array_diff($wegfallend[$t], $genutzt[$t], $mitAlle, $bleibt[$t]));
+        }
+        $via = $this->zuordnungBleibt($mandant, $bleibt, $ohneAboId, $ohneSammlungsObjekt);
+        $namen = $this->anzeigeNamen(array_map(fn ($t) => array_merge($genutzt[$t], $mit[$t], $bleibt[$t], $verschwindet[$t]), array_combine(self::ARTEN, self::ARTEN)));   // Zusatz „(Fassung n)“ nur bei mehreren angezeigten Fassungen einer Familie
         foreach (self::ARTEN as $t) {
             sort($genutzt[$t]);
             sort($mit[$t]);
+            sort($bleibt[$t]);
             sort($verschwindet[$t]);
         }
-        $eintraege = function (array $jeArt, ?array $wo = null) use ($namen) {
+        $eintraege = function (array $jeArt, ?array $wo = null, ?array $viaMap = null) use ($namen) {
             $out = [];
             foreach (self::ARTEN as $t) {
                 foreach ($jeArt[$t] as $id) {
-                    $out[] = ['typ' => $t, 'id' => $id, 'name' => (string) ($namen[$t][$id] ?? '?')] + ($wo === null ? [] : ['wo' => $wo[$t][$id] ?? []]);
+                    $out[] = ['typ' => $t, 'id' => $id, 'name' => (string) ($namen[$t][$id] ?? '?')]
+                        + ($wo === null ? [] : ['wo' => $wo[$t][$id] ?? []]) + ($viaMap === null ? [] : ['via' => $viaMap[$t][$id] ?? []]);
                 }
             }
 
@@ -227,13 +251,74 @@ class AboKuendigungService
             'genutzt_ids' => $genutzt['recipe'],
             'mitkopiert_ids' => $mit['recipe'],
             'verschwindet_ids' => $verschwindet['recipe'],
+            'bleibt_ids' => $bleibt['recipe'],
             'genutzt_je_art' => $genutzt,
             'mitkopiert_je_art' => $mit,
             'verschwindet_je_art' => $verschwindet,
+            'bleibt_je_art' => $bleibt,
             'genutzt' => $eintraege($genutzt, $nutzung),
             'mitkopiert' => $eintraege($mit),
             'verschwindet' => $eintraege($verschwindet),
+            'bleibt' => $eintraege($bleibt, null, $via),
         ];
+    }
+
+    /**
+     * Welche Kettenglieder nach der Kündigung SICHTBAR bleiben — je FAMILIE: die Familie des Glieds steht in der Hülle `$nachher` (auch wenn dort nur die neueste
+     * Fassung steht und das Glied eine ältere ist).
+     *
+     * @param  list<int>  $glieder  Fassungs-IDs der Kette (ohne die Wurzeln)
+     * @param  list<int>  $nachherIds  Hülle nach der Kündigung, diese Art
+     * @return list<int>
+     */
+    private function sichtbarBleibend(string $typ, array $glieder, array $nachherIds): array
+    {
+        if ($glieder === [] || $nachherIds === []) {
+            return [];
+        }
+        $tab = self::TABELLE[$typ];
+        $familien = DB::table($tab)->whereIn('id', $nachherIds)->pluck('fassung_von_id')->map(fn ($v) => (int) $v)->flip();
+
+        return DB::table($tab)->whereIn('id', $glieder)->get(['id', 'fassung_von_id'])
+            ->filter(fn ($r) => $r->fassung_von_id !== null && $familien->has((int) $r->fassung_von_id))
+            ->pluck('id')->map(fn ($v) => (int) $v)->values()->all();
+    }
+
+    /**
+     * Über welche Sammlung(en) bleibt ein Glied sichtbar? Je weiter aktivem Abo die Hülle des einzelnen Abos (huelle … nurAboId), je Familie.
+     *
+     * @param  array<string, list<int>>  $bleibt
+     * @return array<string, array<int, list<string>>>  Art → Fassungs-ID → Sammlungsnamen
+     */
+    private function zuordnungBleibt(Team $mandant, array $bleibt, ?int $ohneAboId, ?array $ohneSammlungsObjekt): array
+    {
+        $out = array_fill_keys(self::ARTEN, []);
+        if ($this->zaehle($bleibt) === 0) {
+            return $out;
+        }
+        $familie = [];
+        foreach (self::ARTEN as $t) {
+            $familie[$t] = $bleibt[$t] === [] ? [] : DB::table(self::TABELLE[$t])->whereIn('id', $bleibt[$t])->pluck('fassung_von_id', 'id')->map(fn ($v) => (int) $v)->all();
+        }
+        $abos = DB::table('foodalchemist_abos AS a')->join('foodalchemist_sammlungen AS s', 's.id', '=', 'a.sammlung_id')
+            ->where('a.mandant_team_id', $mandant->id)->where('a.status', FoodAlchemistAbo::AKTIV)
+            ->when($ohneAboId !== null, fn ($q) => $q->where('a.id', '!=', $ohneAboId))->get(['a.id', 's.name']);
+        foreach ($abos as $abo) {
+            $h = $this->abos->huelle((int) $mandant->id, $ohneAboId, $ohneSammlungsObjekt, (int) $abo->id);
+            foreach (self::ARTEN as $t) {
+                if ($bleibt[$t] === [] || ($h[$t] ?? []) === []) {
+                    continue;
+                }
+                $famInAbo = DB::table(self::TABELLE[$t])->whereIn('id', $h[$t])->pluck('fassung_von_id')->map(fn ($v) => (int) $v)->flip();
+                foreach ($bleibt[$t] as $id) {
+                    if ($famInAbo->has($familie[$t][$id] ?? -1)) {
+                        $out[$t][$id][] = (string) $abo->name;
+                    }
+                }
+            }
+        }
+
+        return array_map(fn ($je) => array_map(fn ($namen) => array_values(array_unique($namen)), $je), $out);
     }
 
     /**
@@ -353,16 +438,21 @@ class AboKuendigungService
      * Tiefe Kopie der genutzten Fassungen samt Unter-Fassungen (jede genau einmal, je Art) und Umhängen der lebenden Verweise.
      *
      * @param  array<string, list<int>>  $wurzeln
+     * @param  array<string, list<int>>  $bleibt  Kettenglieder, die über ein anderes Abo sichtbar bleiben (nicht kopieren)
      * @return array{0: array<string, array<int,int>>, 1: int}  [Art → (Fassungs-ID => Kopie-ID), Zahl umgehängter Verweise]
      */
-    private function kopierenUndUmhaengen(Team $mandant, array $wurzeln): array
+    private function kopierenUndUmhaengen(Team $mandant, array $wurzeln, array $bleibt = []): array
     {
         $wurzeln = $this->jeArt($wurzeln);
+        $bleibt = $this->jeArt($bleibt);
         $map = array_fill_keys(self::ARTEN, []);
         if ($this->zaehle($wurzeln) === 0) {
             return [$map, 0];
         }
         $kette = $this->kette($wurzeln);
+        foreach (self::ARTEN as $t) {
+            $kette[$t] = array_values(array_diff($kette[$t], $bleibt[$t]));   // PR 6b: was über ein anderes Abo sichtbar bleibt, wird nicht kopiert — Verweise bleiben auf der Fassung
+        }
         $namen = $this->anzeigeNamen($kette);
 
         // 1. erst alle Köpfe (Rezepte, Pakete, Konzepte), dann die Inhalte — Verweise zeigen auf die Kopien
@@ -380,7 +470,7 @@ class AboKuendigungService
         foreach ($kette['recipe'] as $fid) {
             $this->kopiereInhalt(FoodAlchemistRecipe::mitFassungen()->findOrFail($fid), $map['recipe'][$fid], $map['recipe'], $mandant, $darMap);
         }
-        $this->kopiereErsatz($kette['recipe'], $map['recipe'], $mandant);
+        $this->kopiereErsatz($kette['recipe'], $map['recipe'], $mandant, $bleibt['recipe']);
         foreach ($kette['paket'] as $fid) {
             $this->kopiereInhaltPaket(FoodAlchemistPaket::mitFassungen()->findOrFail($fid), $map['paket'][$fid], $map, $darMap, $mandant);
         }
@@ -512,13 +602,40 @@ class AboKuendigungService
     {
         $kopie = $fassung->replicate(['uuid', 'legacy_id', 'ist_fassung', 'fassung_von_id', 'fassung_nr', 'inhalt_hash', 'veroeffentlicht_at', 'veroeffentlicht_von',
             'aenderungsnotiz', 'fassung_allergen_geaendert', 'kopie_von_id', 'kopie_stand_at', 'offer_id', 'template_source_id',
-            'image_path', 'image_context_file_id']);   // das Bild liegt beim Master (D5-Folge): die Kopie trägt keins
+            'image_path', 'image_context_file_id']);   // das Bild liegt beim Master: unten in den Speicher des Mandanten kopiert
         $kopie->forceFill([
             'team_id' => $mandant->id, 'ist_fassung' => false, 'price_mode' => 'auto',
             'kopie_von_id' => $fassung->fassung_von_id, 'kopie_stand_at' => now(),
         ] + ($name !== null ? ['name' => $name] : []))->save();
+        $this->kopiereKonzeptBilder($fassung, $kopie, $mandant);
 
         return (int) $kopie->id;
+    }
+
+    /**
+     * Titelbild und Galerie in den Speicher des Mandanten mitkopieren (Entscheid Dominique 14.10.). Fehlt eine Datei, bleibt die Kopie ohne dieses Bild und es
+     * gibt einen Hinweis — nie einen Abbruch der Kündigung.
+     */
+    private function kopiereKonzeptBilder(FoodAlchemistConcept $fassung, FoodAlchemistConcept $kopie, Team $mandant): void
+    {
+        $media = app(FoodAlchemistMediaService::class);
+        if ($fassung->image_context_file_id !== null || trim((string) $fassung->image_path) !== '') {
+            $m = $media->kopiereBild($fassung->image_context_file_id, $fassung->image_path, $mandant, 'foodalchemist.concept', (int) $kopie->id, "foodalchemist/concept/{$kopie->id}");
+            if ($m !== null) {
+                $kopie->forceFill(['image_context_file_id' => $m['context_file_id'], 'image_path' => $m['path']])->save();
+            } else {
+                $this->hinweise[] = 'Konzept „'.$kopie->name.'“: Die Bilddatei fehlt — die Kopie hat kein Titelbild.';
+            }
+        }
+        foreach ($fassung->images()->get() as $bild) {
+            $m = $media->kopiereBild($bild->context_file_id, $bild->path, $mandant, 'foodalchemist.concept', (int) $kopie->id, "foodalchemist/concept/{$kopie->id}/gallery");
+            if ($m === null) {
+                $this->hinweise[] = 'Konzept „'.$kopie->name.'“: Eine Galerie-Bilddatei fehlt — die Kopie hat dieses Bild nicht.';
+
+                continue;
+            }
+            $bild->replicate(['uuid'])->forceFill(['concept_id' => $kopie->id, 'team_id' => $mandant->id, 'context_file_id' => $m['context_file_id'], 'path' => $m['path']])->save();
+        }
     }
 
     /**
@@ -568,15 +685,25 @@ class AboKuendigungService
      * Ersatz-Beziehungen der Kette kommen mit (§12 D2): Kanten des Masters zwischen Rezepten der Kette (über Fassung ODER
      * Familie adressiert) bzw. von einem Kettenrezept zu einem GP. Kanten zu fremden, nicht kopierten Master-Rezepten nicht.
      *
-     * @param  list<int>  $kette
+     * PR 6b (Lisa): Glieder, die über ein anderes Abo sichtbar bleiben (nicht kopiert), bilden die Kante auf SICH SELBST ab (Fassung) — sonst gingen Ersatz-Beziehungen
+     * der Kopie zu weiter verknüpften Fassungen verloren.
+     *
+     * @param  list<int>  $kette  kopierte Kettenglieder
      * @param  array<int,int>  $map
+     * @param  list<int>  $bleibt  nicht kopierte, weiter sichtbare Rezept-Fassungen
      */
-    private function kopiereErsatz(array $kette, array $map, Team $mandant): void
+    private function kopiereErsatz(array $kette, array $map, Team $mandant, array $bleibt = []): void
     {
         $ziel = $map;
         foreach (DB::table('foodalchemist_recipes')->whereIn('id', $kette)->pluck('fassung_von_id', 'id') as $fid => $familie) {
             if ($familie !== null) {
                 $ziel[(int) $familie] = $map[(int) $fid];
+            }
+        }
+        foreach (DB::table('foodalchemist_recipes')->whereIn('id', $bleibt)->pluck('fassung_von_id', 'id') as $fid => $familie) {
+            $ziel[(int) $fid] = (int) $fid;
+            if ($familie !== null && ! isset($ziel[(int) $familie])) {
+                $ziel[(int) $familie] = (int) $fid;
             }
         }
         $ids = array_keys($ziel);
