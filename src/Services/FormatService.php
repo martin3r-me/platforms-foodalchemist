@@ -168,6 +168,7 @@ class FormatService
     {
         $format = FoodAlchemistFormat::visibleToTeam($team)->findOrFail($id);
         $this->guardOwner($format, $team);
+        \Platform\FoodAlchemist\Support\AboSperre::pruefeLoeschen('format', $id, 'Das Format');
         $format->delete();
     }
 

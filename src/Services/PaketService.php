@@ -154,6 +154,7 @@ class PaketService
     {
         $paket = FoodAlchemistPaket::visibleToTeam($team)->findOrFail($id);
         $this->guardOwner($paket, $team);
+        \Platform\FoodAlchemist\Support\AboSperre::pruefeLoeschen('paket', $id, 'Das Paket');
         $paket->delete();
     }
 

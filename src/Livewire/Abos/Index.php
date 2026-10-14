@@ -79,7 +79,7 @@ class Index extends Component
             if ($v['art'] === 'kuendigen') {
                 $r = $svc->kuendigen($team, (int) $v['abo_id'], Auth::user(), $this->bestaetigt);
                 $this->meldung = $r['ausgefuehrt']
-                    ? 'Abo gekündigt. '.count($r['kopien'] ?? []).' Rezept(e) als eigene Kopie übernommen.' : null;
+                    ? 'Abo gekündigt. '.array_sum(array_map('count', $r['kopien_je_art'] ?? [])).' Objekt(e) (Rezepte, Pakete, Konzepte) als eigene Kopie übernommen.' : null;
             } else {
                 $r = $svc->zurueckziehen($team, (int) $v['sammlung_id'], (int) $v['recipe_id'], Auth::user(), $this->bestaetigt);
                 $this->meldung = $r['ausgefuehrt'] ? 'Rezept aus der Sammlung zurückgezogen.' : null;
