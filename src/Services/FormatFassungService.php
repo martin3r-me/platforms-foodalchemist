@@ -85,6 +85,45 @@ class FormatFassungService
     }
 
     /**
+     * Lese-Status für die Oberfläche „Veröffentlichen…“ — rechnet nichts um und schreibt nichts (Spec 82 §13 B6, PR 8). Ein Kunden-Format ist `blockiert` (D8).
+     *
+     * @return array{letzte: ?array{id:int, nr:int, veroeffentlicht_at:?string, notiz:?string}, weicht_ab: bool, blockiert: ?string, hinweise: list<string>, allergen_aenderung: bool, allergen_felder: list<string>}
+     */
+    public function status(FoodAlchemistFormat $format): array
+    {
+        $letzte = FoodAlchemistFormat::mitFassungen()->where('fassung_von_id', $format->id)->where('ist_fassung', true)->whereNull('deleted_at')
+            ->orderByDesc('fassung_nr')->orderByDesc('id')->first();
+        $out = ['letzte' => $letzte === null ? null : ['id' => (int) $letzte->id, 'nr' => (int) $letzte->fassung_nr, 'veroeffentlicht_at' => $letzte->veroeffentlicht_at?->format('d.m.Y H:i'),
+            'notiz' => $letzte->aenderungsnotiz], 'weicht_ab' => true, 'blockiert' => null, 'hinweise' => [], 'allergen_aenderung' => false, 'allergen_felder' => []];
+        if ($format->origin === 'kunde') {
+            $out['blockiert'] = 'Ein Kunden-Format (origin=kunde) ist nie abonnierbar und lässt sich nicht veröffentlichen (Kunden-IP, D8).';
+
+            return $out;
+        }
+        try {
+            $slots = $format->slots()->get();
+            $ziele = $this->zieleSammeln($slots);
+        } catch (\RuntimeException $e) {
+            $out['blockiert'] = $e->getMessage();
+
+            return $out;
+        }
+        $out['weicht_ab'] = $letzte === null || $letzte->inhalt_hash !== $this->inhaltHash($format, $slots, $ziele);
+        if ($letzte !== null) {
+            $v = app(FassungsVergleich::class);
+            $ids = [];
+            foreach ($ziele as $c) {
+                array_push($ids, ...$v->rezeptIdsDerKette('concept', (int) $c->id));
+            }
+            $diff = $v->bilderDiff($v->kettenBild('format', (int) $letzte->id), $v->kettenBildAus(array_values(array_unique($ids))));
+            $out['allergen_aenderung'] = $diff !== [];
+            $out['allergen_felder'] = array_keys($diff);
+        }
+
+        return $out;
+    }
+
+    /**
      * Je Konzept-Slot die jüngste Konzept-Fassung. Fehlt eine, bricht es mit der Liste ab (D2).
      *
      * @param  \Illuminate\Support\Collection<int, FoodAlchemistFormatSlot>  $slots

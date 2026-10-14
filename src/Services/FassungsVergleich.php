@@ -76,8 +76,19 @@ class FassungsVergleich
      */
     public function kettenBild(string $art, int $fassungId): array
     {
+        return $this->kettenBildAus($this->rezeptIdsDerKette($art, $fassungId));
+    }
+
+    /**
+     * Ketten-Bild (höchster Rang je Feld) aus einer Menge Rezept-Fassungen — auch für die Vorschau „was würde das Veröffentlichen ändern?“.
+     *
+     * @param  list<int>  $rezeptIds
+     * @return array<string,mixed>
+     */
+    public function kettenBildAus(array $rezeptIds): array
+    {
         $bild = [];
-        $rezepte = FoodAlchemistRecipe::mitFassungen()->whereIn('id', $this->rezeptIdsDerKette($art, $fassungId))->get();
+        $rezepte = FoodAlchemistRecipe::mitFassungen()->whereIn('id', $rezeptIds)->get();
         foreach ($rezepte as $r) {
             foreach ($this->allergenBild($r) as $feld => $wert) {
                 if (! array_key_exists($feld, $bild) || $this->rang($wert) > $this->rang($bild[$feld])) {

@@ -83,6 +83,11 @@
                     title="Karte für den Kunden, zum Drucken oder als PDF" data-formate-panel-druck>Karte drucken</x-fa::menu-item>
                 <x-fa::menu-item icon="heroicon-m-document-text" :href="route('foodalchemist.formate.report', ['id' => $format->id, 'profil' => 'voll'])" target="_blank"
                     title="Ausführlicher Bericht über alle Editionen mit Rezepten, Preisen und Deklaration" data-formate-panel-report>Bericht öffnen</x-fa::menu-item>
+                {{-- Spec 82 §13 B6: Veröffentlichen — EINE Bedingung (Support\FassungMenue); Kunden-Formate nie (D8) --}}
+                @if(\Platform\FoodAlchemist\Support\FassungMenue::sichtbar(auth()->user()?->currentTeamRelation, $format, 'format'))
+                    <x-fa::menu-item icon="heroicon-m-paper-airplane" x-on:click="$dispatch('fassung-modal.oeffnen', { art: 'format', objektId: {{ $format->id }} })"
+                        title="Stand als neue Fassung an die Abonnenten geben" data-fassung-menue>Veröffentlichen …</x-fa::menu-item>
+                @endif
                 <x-fa::menu-item danger icon="heroicon-m-trash" wire:click="loeschen"
                     wire:confirm="Format wirklich löschen? Die Editionen bleiben als eigenständige Konzepte erhalten.">Format löschen</x-fa::menu-item>
             </x-slot:menue>

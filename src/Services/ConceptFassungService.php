@@ -107,6 +107,44 @@ class ConceptFassungService
     }
 
     /**
+     * Lese-Status für die Oberfläche „Veröffentlichen…“ — rechnet nichts um und schreibt nichts (Spec 82 §13 B6, PR 8).
+     *
+     * @return array{letzte: ?array{id:int, nr:int, veroeffentlicht_at:?string, notiz:?string}, weicht_ab: bool, blockiert: ?string, hinweise: list<string>, allergen_aenderung: bool, allergen_felder: list<string>}
+     */
+    public function status(FoodAlchemistConcept $concept): array
+    {
+        $letzte = FoodAlchemistConcept::mitFassungen()->where('fassung_von_id', $concept->id)->where('ist_fassung', true)->whereNull('deleted_at')
+            ->orderByDesc('fassung_nr')->orderByDesc('id')->first();
+        $out = ['letzte' => $letzte === null ? null : ['id' => (int) $letzte->id, 'nr' => (int) $letzte->fassung_nr, 'veroeffentlicht_at' => $letzte->veroeffentlicht_at?->format('d.m.Y H:i'),
+            'notiz' => $letzte->aenderungsnotiz], 'weicht_ab' => true, 'blockiert' => null, 'hinweise' => [], 'allergen_aenderung' => false, 'allergen_felder' => []];
+        try {
+            $slots = $concept->slots()->get();
+            [$ziele, $hinweise] = $this->zieleSammeln($slots);
+        } catch (\RuntimeException $e) {
+            $out['blockiert'] = $e->getMessage();
+
+            return $out;
+        }
+        $out['hinweise'] = $hinweise;
+        $out['weicht_ab'] = $letzte === null || $letzte->inhalt_hash !== $this->inhaltHash($concept, $slots, $ziele);
+        if ($letzte !== null) {
+            $v = app(FassungsVergleich::class);
+            $ids = array_map(fn ($r) => (int) $r->id, array_values($ziele['recipe']));
+            foreach ($ziele['paket'] as $p) {
+                array_push($ids, ...$v->rezeptIdsDerKette('paket', (int) $p->id));
+            }
+            foreach ($ziele['concept'] as $c) {
+                array_push($ids, ...$v->rezeptIdsDerKette('concept', (int) $c->id));
+            }
+            $diff = $v->bilderDiff($v->kettenBild('concept', (int) $letzte->id), $v->kettenBildAus(array_values(array_unique($ids))));
+            $out['allergen_aenderung'] = $diff !== [];
+            $out['allergen_felder'] = array_keys($diff);
+        }
+
+        return $out;
+    }
+
+    /**
      * Je Slot-Ziel die jüngste Fassung. Fehlt eine, bricht es mit der Liste ab (D2/D11).
      *
      * @param  \Illuminate\Support\Collection<int, FoodAlchemistConceptSlot>  $slots

@@ -13,7 +13,7 @@
         @if($istMaster)
             <x-fa::page-header title="Abos" subtitle="Sammlungen des Master-Teams an Mandanten vergeben. Mandanten sehen nur veröffentlichte Fassungen, nie den Arbeitsstand und nie Master-Preise." />
         @else
-            <x-fa::page-header title="Meine Abos" subtitle="Rezepte, die {{ $oberteamName }} vom Master abonniert hat. Sie sind schreibgeschützt; Kosten und Verkaufspreise rechnet das System mit deinen eigenen Preisen." />
+            <x-fa::page-header title="Meine Abos" subtitle="Rezepte, Pakete, Konzepte und Formate, die {{ $oberteamName }} vom Master abonniert hat. Sie sind schreibgeschützt; Kosten und Verkaufspreise rechnet das System mit deinen eigenen Preisen." />
         @endif
 
         @if($fehler)<x-fa::notice tone="crit" data-abos-fehler>{{ $fehler }}</x-fa::notice>@endif
@@ -121,34 +121,35 @@
                 @endif
             </x-fa::section>
 
-            <x-fa::section title="Sammlungen und Fassungen" icon="heroicon-o-rectangle-stack" description="Mandanten sehen je Rezept die zuletzt veröffentlichte Fassung. Veröffentlichen geht im Rezept über das Menü „Veröffentlichen …“." data-abos-sammlungen>
+            <x-fa::section title="Sammlungen und Fassungen" icon="heroicon-o-rectangle-stack" description="Mandanten sehen je Objekt die zuletzt veröffentlichte Fassung. Veröffentlichen geht im Rezept, Paket, Konzept und Format über das Menü „Veröffentlichen …“." data-abos-sammlungen>
                 @forelse($sammlungen as $s)
                     <div class="flex flex-col gap-1" wire:key="sam-{{ $s['id'] }}" data-abos-sammlung="{{ $s['id'] }}">
                         <div class="flex items-center gap-2">
                             <span class="font-medium">{{ $s['name'] }}</span>
                             <x-fa::badge tone="neutral">{{ $s['abonnenten'] }} Abo(s)</x-fa::badge>
                         </div>
-                        @if($s['rezepte'] === [])
-                            <p class="{{ $leise }}">Keine Rezepte in dieser Sammlung.</p>
+                        @if($s['objekte'] === [])
+                            <p class="{{ $leise }}">Keine Objekte in dieser Sammlung.</p>
                         @else
                             <div class="overflow-x-auto -mx-4">
                             <table class="fa-table fa-table--compact">
-                                <thead><tr><th>Rezept</th><th>Fassung</th><th>Notiz</th><th></th></tr></thead>
+                                <thead><tr><th>Art</th><th>Name</th><th>Fassung</th><th>Notiz</th><th></th></tr></thead>
                                 <tbody>
-                                    @foreach($s['rezepte'] as $r)
-                                        <tr wire:key="sam-{{ $s['id'] }}-r-{{ $r['id'] }}" data-abos-rezept="{{ $r['id'] }}">
-                                            <td>{{ $r['name'] }}</td>
+                                    @foreach($s['objekte'] as $o)
+                                        <tr wire:key="sam-{{ $s['id'] }}-{{ $o['typ'] }}-{{ $o['id'] }}" data-abos-objekt="{{ $o['typ'] }}-{{ $o['id'] }}" @if($o['typ'] === 'recipe') data-abos-rezept="{{ $o['id'] }}" @endif>
+                                            <td><x-fa::badge tone="{{ $o['typ'] === 'recipe' ? 'neutral' : 'info' }}">{{ $o['art'] }}</x-fa::badge></td>
+                                            <td>{{ $o['name'] }}</td>
                                             <td class="whitespace-nowrap">
-                                                @if($r['fassung'])
-                                                    Fassung {{ $r['fassung']->fassung_nr }} · {{ $datum($r['fassung']->veroeffentlicht_at) }}
+                                                @if($o['fassung'])
+                                                    Fassung {{ $o['fassung']->fassung_nr }} · {{ $datum($o['fassung']->veroeffentlicht_at) }}
                                                 @else
                                                     <x-fa::badge tone="warn" data-abos-unveroeffentlicht>Nicht veröffentlicht</x-fa::badge>
                                                 @endif
                                             </td>
-                                            <td class="{{ $leise }}">{{ $r['fassung']?->aenderungsnotiz }}</td>
+                                            <td class="{{ $leise }}">{{ $o['fassung']?->aenderungsnotiz }}</td>
                                             <td class="text-right whitespace-nowrap">
                                                 @if($darfSchreiben)
-                                                    <x-fa::button size="sm" variant="ghost" icon="heroicon-o-arrow-uturn-left" wire:click="zurueckziehenVorschau({{ $s['id'] }}, {{ $r['id'] }})" data-abos-zurueckziehen>Zurückziehen …</x-fa::button>
+                                                    <x-fa::button size="sm" variant="ghost" icon="heroicon-o-arrow-uturn-left" wire:click="zurueckziehenVorschau({{ $s['id'] }}, {{ $o['id'] }}, '{{ $o['typ'] }}')" data-abos-zurueckziehen="{{ $o['typ'] }}-{{ $o['id'] }}">Zurückziehen …</x-fa::button>
                                                 @endif
                                             </td>
                                         </tr>
@@ -169,15 +170,16 @@
 
             @forelse($abos as $a)
                 <x-fa::section title="{{ $a['sammlung'] }}" icon="heroicon-o-arrow-path-rounded-square" description="Abonniert seit {{ $datum($a['seit']) }}" data-abos-mein-abo="{{ $a['id'] }}">
-                    @if(($rezepte[$a['id']] ?? []) === [])
-                        <p class="{{ $leise }}">Noch keine veröffentlichten Rezepte.</p>
+                    @if(($objekte[$a['id']] ?? []) === [])
+                        <p class="{{ $leise }}">Noch nichts veröffentlicht.</p>
                     @else
                         <div class="overflow-x-auto -mx-4">
                         <table class="fa-table fa-table--compact">
-                            <thead><tr><th>Rezept</th><th>Fassung</th><th>Änderung</th></tr></thead>
+                            <thead><tr><th>Art</th><th>Name</th><th>Fassung</th><th>Änderung</th></tr></thead>
                             <tbody>
-                                @foreach($rezepte[$a['id']] as $f)
-                                    <tr wire:key="mein-{{ $a['id'] }}-{{ $f->id }}">
+                                @foreach($objekte[$a['id']] as $f)
+                                    <tr wire:key="mein-{{ $a['id'] }}-{{ $f->typ }}-{{ $f->id }}" data-abos-mein-objekt="{{ $f->typ }}-{{ $f->id }}">
+                                        <td><x-fa::badge tone="{{ $f->typ === 'recipe' ? 'neutral' : 'info' }}">{{ $f->art }}</x-fa::badge></td>
                                         <td>{{ $f->name }}</td>
                                         <td class="whitespace-nowrap">Fassung {{ $f->fassung_nr }} · {{ $datum($f->veroeffentlicht_at) }}</td>
                                         <td>
