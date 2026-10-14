@@ -178,3 +178,44 @@ it('M2: ohne Unterrezept-Zeilen (Zutaten ohne eigene Aufgabe) erscheint keine Ve
 
     expect(($this->wand)()->html())->not->toContain('braucht:');
 });
+
+// ── B3g · Pass als Sammelposten: Komponenten je Gericht mit zulieferndem Posten und Fertig-Stand ──
+
+it('B3g: die Pass-Karte zeigt je Gericht seine Komponenten mit Posten und Fertig-Stand und sagt, worauf der Pass noch wartet', function () {
+    $gericht = ($this->vk)('g-a', '[HG] Rinderbraten | Anrichten');
+    $jus = ($this->basis)('jus', 'Jus Altbier');
+    $pueree = ($this->basis)('pueree', 'Püree Grün');
+    foreach ([[$jus, 1], [$pueree, 2]] as [$kind, $pos]) {
+        \Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient::create([
+            'team_id' => $this->rootTeam->id, 'recipe_id' => $gericht->id, 'referenced_recipe_id' => $kind->id, 'raw_text' => $kind->name,
+            'quantity' => '200', 'unit_vocab_id' => $this->unitG($this->rootTeam)->id, 'position' => $pos,
+        ]);
+    }
+    $auftrag = $this->svc->saveNew($this->rootTeam, '2026-08-20', 'Hochzeit Meyer', [['source_ref' => 'r:g-a', 'recipe_id' => $gericht->id, 'amount_kg' => 1.0]]);
+    $pass = Posten::create(['team_id' => $this->rootTeam->id, 'slug' => 'pass', 'name' => 'Pass']);
+    $saucier = Posten::create(['team_id' => $this->rootTeam->id, 'slug' => 'saucier', 'name' => 'Saucier']);
+    $entremetier = Posten::create(['team_id' => $this->rootTeam->id, 'slug' => 'entremetier', 'name' => 'Entremetier']);
+    $zeile = fn ($r) => Line::where('production_order_id', $auftrag->id)->where('recipe_id', $r->id)->firstOrFail();
+    Line::where('production_order_id', $auftrag->id)->where('recipe_id', $gericht->id)->update(['station_id' => $pass->id]);
+    $zeile($jus)->update(['station_id' => $saucier->id, 'is_basisrezept' => true]);
+    $zeile($pueree)->update(['station_id' => $entremetier->id, 'is_basisrezept' => true]);
+
+    $c = ($this->wand)();
+    $html = $c->html();
+
+    expect($html)->toContain('data-tagesplan-pass-komponenten')->toContain('wartet auf 2 von 2')
+        ->and($html)->toContain('Jus Altbier · Saucier')->toContain('Püree Grün · Entremetier')
+        ->and(substr_count($html, 'data-tagesplan-pass-komponente-stand="offen"'))->toBe(2)
+        ->and($html)->not->toContain('data-tagesplan-wall-allergen');
+
+    // Der Saucier meldet den Jus fertig (am eigenen Posten): der Pass sieht den Stand
+    $c->call('abhaken', $zeile($jus)->id)->assertSet('fehler', null);
+    $nach = $c->html();
+    expect($nach)->toContain('wartet auf 1 von 2')->and(substr_count($nach, 'data-tagesplan-pass-komponente-stand="erledigt"'))->toBe(1)
+        ->and($nach)->toMatch('/data-tagesplan-pass-komponente-stand="erledigt">Jus Altbier · Saucier/')   // der Jus ist der erledigte
+        ->and($nach)->toMatch('/data-tagesplan-pass-komponente-stand="offen">Püree Grün · Entremetier/');
+
+    // Beide da: der Pass hat alles
+    $c->call('abhaken', $zeile($pueree)->id);
+    expect($c->html())->toContain('alle Komponenten da');
+});

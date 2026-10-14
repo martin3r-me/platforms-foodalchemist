@@ -320,6 +320,18 @@
                                                                 <button type="button" wire:click="{{ $i->art === 'gericht' ? 'oeffneGericht(' . \Illuminate\Support\Js::from($i->key) . ')' : 'oeffneAnleitung(' . (int) $i->haken_line_id . ')' }}" class="min-w-0 flex-1 text-left" data-tagesplan-pass-oeffnen>
                                                                     <p class="whitespace-normal break-words text-lg font-semibold leading-snug {{ $i->erledigt ? 'line-through' : '' }}">{{ $i->name }}</p>
                                                                     <p class="text-sm text-[var(--fa-ink-3)] tabular-nums">@if($i->portionen !== null){{ $i->portionen }} Portionen @elseif($i->art === 'zeile'){{ $i->zeile->is_basisrezept ? 'Basisrezept' : 'Rezept' }}@endif</p>
+                                                                    @if($i->art === 'gericht' && ! empty($i->komponenten))
+                                                                        {{-- Spec 83 B3g: Der Pass ist Sammelposten. Je Gericht die Komponenten mit zulieferndem Posten und Fertig-Stand: worauf wartet der Pass noch? --}}
+                                                                        @php
+                                                                            $offeneKomponenten = collect($i->komponenten)->where('erledigt', false)->count();
+                                                                        @endphp
+                                                                        <p class="mt-1 text-sm font-semibold {{ $offeneKomponenten > 0 ? 'text-[var(--fa-warn)]' : 'text-[var(--fa-ok)]' }}" data-tagesplan-pass-wartet>{{ $offeneKomponenten > 0 ? 'wartet auf ' . $offeneKomponenten . ' von ' . count($i->komponenten) : 'alle Komponenten da' }}</p>
+                                                                        <div class="mt-1.5 flex flex-wrap gap-1.5" data-tagesplan-pass-komponenten>
+                                                                            @foreach($i->komponenten as $k)
+                                                                                <span class="{{ $wSicher }} gap-1 {{ $k['erledigt'] ? $tonFlaeche['ok'] : $tonFlaeche['warn'] }}" data-tagesplan-pass-komponente="{{ $k['id'] }}" data-tagesplan-pass-komponente-stand="{{ $k['erledigt'] ? 'erledigt' : 'offen' }}">{{ $k['name'] }} · {{ $k['station'] }} @if($k['erledigt'])@svg('heroicon-m-check', 'w-4 h-4')@else–@endif</span>
+                                                                            @endforeach
+                                                                        </div>
+                                                                    @endif
                                                                     @if($i->art === 'zeile')
                                                                         @include('foodalchemist::livewire.produktion.partials.wall-verknuepfung', ['verknuepfung' => $wallVerknuepfung[(int) $i->haken_line_id] ?? null])
                                                                     @endif

@@ -747,7 +747,7 @@ class Tagesplan extends Component
      * auf ein Unterrezept. Steht dieses Unterrezept im SELBEN Auftrag als eigene Zeile (= eigene Aufgabe), sind beide verknüpft.
      * Dieselbe Quelle nutzt {@see self::wallGerichtArbeitsZeilen} schon, um die Unterrezept-Zeilen ans Gericht zu hängen.
      *
-     * @return array<int, array{braucht: list<array{id:int, name:string, erledigt:bool}>, fuer: list<array{id:int, name:string}>}>
+     * @return array<int, array{braucht: list<array{id:int, name:string, erledigt:bool, station:string}>, fuer: list<array{id:int, name:string}>}>
      */
     private function wallVerknuepfungen(\Illuminate\Support\Collection $zeilen): array
     {
@@ -762,7 +762,9 @@ class Tagesplan extends Component
                     if ((int) $kind->id === (int) $z->id) {
                         continue;
                     }
-                    $karte[(int) $z->id]['braucht'][(int) $kind->id] = ['id' => (int) $kind->id, 'name' => (string) ($kind->rezept_label ?: $kind->name), 'erledigt' => $kind->line_status === 'done'];
+                    $karte[(int) $z->id]['braucht'][(int) $kind->id] = ['id' => (int) $kind->id, 'name' => (string) ($kind->rezept_label ?: $kind->name), 'erledigt' => $kind->line_status === 'done',
+                        // der zuliefernde Posten (B3g: der Pass ist Sammelposten, die Posten der Komponenten arbeiten sich dort zu)
+                        'station' => (string) ($kind->station ?: 'nicht zugeteilt')];
                     $karte[(int) $kind->id]['fuer'][(int) $z->id] = ['id' => (int) $z->id, 'name' => (string) ($z->rezept_label ?: $z->name)];
                 }
             }
@@ -812,6 +814,8 @@ class Tagesplan extends Component
                             'portionen' => $vk?->portionen !== null ? (int) $vk->portionen : null,
                             'haken_line_id' => $vk?->id, 'erledigt' => $vk !== null ? $vk->line_status === 'done' : ($g->gesamt > 0 && $g->erledigt === $g->gesamt),
                             'gesamt' => $g->gesamt, 'fertig_n' => $g->erledigt, 'laeuft' => $vk !== null && $vk->auftrag_status === 'in_progress',
+                            // Spec 83 B3g: die Komponenten des Gerichts (Unterrezept-Zeilen des Auftrags) mit zulieferndem Posten und Fertig-Stand
+                            'komponenten' => $vk !== null ? ($this->wallVerknuepfung[(int) $vk->id]['braucht'] ?? []) : [],
                             'sortierung' => (int) ($vk->position ?? $g->zeilen->min('position') ?? 0),
                         ]);
 
@@ -819,7 +823,7 @@ class Tagesplan extends Component
                     }
                     foreach ($g->zeilen as $z) {
                         $items->push((object) [
-                            'art' => 'zeile', 'key' => $g->key, 'name' => $z->rezept_label ?: $z->name, 'zeile' => $z,
+                            'art' => 'zeile', 'key' => $g->key, 'name' => $z->rezept_label ?: $z->name, 'zeile' => $z, 'komponenten' => [],
                             'portionen' => null, 'haken_line_id' => (int) $z->id, 'erledigt' => $z->line_status === 'done',
                             'gesamt' => 1, 'fertig_n' => $z->line_status === 'done' ? 1 : 0, 'laeuft' => $z->auftrag_status === 'in_progress',
                             'sortierung' => (int) ($z->position ?? 0),
