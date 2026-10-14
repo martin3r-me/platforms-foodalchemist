@@ -316,7 +316,8 @@ class ProductionOrderService
 
     /**
      * Posten für neue Auftragszeilen (EINE Stelle für alle Wege, die Zeilen erzeugen; sie laufen alle über {@see recomputeOrder}).
-     * Routing-Reihenfolge: Zuteilung von Hand (Overlay, gewinnt im Aufrufer über array_merge) > `recipes.default_station_id` > bei Gerichten
+     * Routing-Reihenfolge: Zuteilung von Hand (Overlay, gewinnt im Aufrufer über array_merge) > `recipes.default_station_id` (eigen/sichtbar, sonst die
+     * Paket-Kopie des Master-Postens, Spec 83 B2a) > bei Gerichten
      * (`is_sales_recipe`) die Team-Vorgabe "Posten für Gerichte" ({@see TeamSettingsService::gerichtePostenId}, Pass) > keiner.
      *
      * Alles nur mit Posten, die für das Team des Auftrags sichtbar und aktiv sind (dieselbe Regel wie {@see assignLine}: `visibleToTeam`).
@@ -338,12 +339,18 @@ class ProductionOrderService
         $sichtbar = $kandidaten === [] ? collect() : FoodAlchemistProductionStation::visibleToTeam($besitzer)->where('is_inactive', false)
             ->whereIn('id', $kandidaten)->pluck('id')->map(fn ($i) => (int) $i)->flip();
 
+        // Spec 83 B2a: ein Master-Posten (z. B. am Rezept im Abo) ist für den Mandanten fremd, aber das Paket "Grundeinstellungen" hat ihn kopiert:
+        // paket_kopien kennt Master-Posten → Kopie im Haupt-Team des Mandanten. Nur diese Zuordnung löst auf, nie ein Raten über den Namen.
+        $kopien = $this->postenKopien($besitzer, array_values(array_diff($kandidaten, $sichtbar->keys()->all())));
+
         $posten = [];
         $fremd = [];
         foreach ($rezepte as $r) {
             $eigen = $r->default_station_id !== null ? (int) $r->default_station_id : null;
             if ($eigen !== null && isset($sichtbar[$eigen])) {
                 $posten[(int) $r->id] = $eigen;
+            } elseif ($eigen !== null && isset($kopien[$eigen])) {
+                $posten[(int) $r->id] = $kopien[$eigen];       // Master-Posten → Kopie des Teams (Paket)
             } elseif ($r->is_sales_recipe && $vorgabe !== null) {
                 $posten[(int) $r->id] = $vorgabe;            // Gericht ohne (nutzbaren) Rezept-Posten: Pass
             } elseif ($eigen !== null) {
@@ -352,6 +359,29 @@ class ProductionOrderService
         }
 
         return [$posten, $fremd];
+    }
+
+    /**
+     * Master-Posten → Kopie im Team (Paket "Grundeinstellungen", `paket_kopien`). Die Kopie wird am Haupt-Team des Kunden gebucht; Unter-Teams
+     * erben sie über die Kette. Eine Kopie zählt nur, wenn sie für das Team sichtbar und aktiv ist (Stilllegen/Löschen hebt die Auflösung auf).
+     *
+     * @param  list<int>  $quellIds  Posten-IDs, die für das Team nicht sichtbar sind
+     * @return array<int,int>  quell_id => kopie_id
+     */
+    private function postenKopien(Team $team, array $quellIds): array
+    {
+        if ($quellIds === [] || ! \Illuminate\Support\Facades\Schema::hasTable('foodalchemist_paket_kopien')) {
+            return [];
+        }
+        $teamIds = array_values(array_unique([(int) $team->id, (int) app(\Platform\FoodAlchemist\Services\FaRechte::class)->kundenHauptTeam($team)->id]));
+        $zuordnung = \Illuminate\Support\Facades\DB::table('foodalchemist_paket_kopien')->whereIn('team_id', $teamIds)->where('paket', PaketGrundeinstellungenService::PAKET)
+            ->where('tabelle', 'production_stations')->whereIn('quell_id', $quellIds)->pluck('kopie_id', 'quell_id');
+        if ($zuordnung->isEmpty()) {
+            return [];
+        }
+        $nutzbar = FoodAlchemistProductionStation::visibleToTeam($team)->where('is_inactive', false)->whereIn('id', $zuordnung->values()->all())->pluck('id')->map(fn ($i) => (int) $i)->flip();
+
+        return $zuordnung->filter(fn ($kopie) => isset($nutzbar[(int) $kopie]))->map(fn ($kopie) => (int) $kopie)->mapWithKeys(fn ($kopie, $quell) => [(int) $quell => $kopie])->all();
     }
 
     /** @param  list<string>  $namen @return list<string> */
