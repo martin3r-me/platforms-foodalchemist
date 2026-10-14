@@ -251,7 +251,7 @@
                 {{-- headless: Event-Bus im editor-tabs-Scope (kein sichtbares Element).
                      $root = editor-tabs-Wurzel (trägt die data-fb-tab-Buttons + data-fb-anker-Panels). --}}
                 <div x-effect="$dispatch('fb-cockpit-tab', { tab })"
-                     @fb-goto.window="let d=$event.detail; if(d.tab && $root.querySelector(`[data-fb-tab='${d.tab}']`)) tab=d.tab; $nextTick(()=>{ if(d.anker){ let el=$root.querySelector(`[data-fb-anker='${d.anker}']`); if(el) el.scrollIntoView({behavior:'smooth',block:'start'}); } });"></div>
+                     @fb-goto.window="let d=$event.detail; let setze=()=>{ if(d.tab && $root.querySelector(`[data-fb-tab='${d.tab}']`)) tab=d.tab; }; setze(); $nextTick(setze); setTimeout(setze, 200); $nextTick(()=>{ if(d.anker){ let el=$root.querySelector(`[data-fb-anker='${d.anker}']`); if(el) el.scrollIntoView({behavior:'smooth',block:'start'}); } });"></div>
 
                 {{-- ═══ Reiter: ÜBERBLICK — Kapitelbaum mit Stand, Preis und Wareneinsatz je Kapitel ═══
                      Jedes Kapitel eine Zeile, aufklappbar zu Positionen + Abdeckung. „Kapitel öffnen" → Speisen. --}}
