@@ -170,7 +170,7 @@ class ProductionTimeService
             $warnings = array_merge($warnings, $r['warnungen']);
             unset($r['warnungen']);
             // B3h: beide Blöcke anteilig nach Komponenten auf die beteiligten Posten (Sammel-Pass trägt nichts)
-            $anteile = $this->postenAnteile($recipe);
+            $anteile = $this->postenAnteile($recipe, $team);
             $bloecke = [
                 'regenerieren' => ['minuten' => round($regen, 3)] + $r + ['aufteilung' => $this->verteile($anteile, $regen)],
                 'anrichten' => ['minuten' => round($variable, 3), 'quelle' => $quelle,
@@ -363,28 +363,38 @@ class ProductionTimeService
 
     /**
      * Spec 83 B3g/B3h (Entscheide Dominique 14.10.2026): Der Pass ist ein Sammelposten ohne eigenes Personal. Regenerieren und
-     * Anrichten eines Gerichts belasten die BETEILIGTEN Posten anteilig nach ihren Komponenten. Posten einer
-     * Komponente = Posten ihres Sub-Rezepts (`default_station_id`, dieselbe Quelle wie das Routing der Auftragszeilen).
-     * Komponenten ohne Posten (z. B. GP-Garnitur) gehen an den Posten des Gerichts, wenn der kein Sammelposten ist; sonst als
-     * eigene Position „nicht zugeteilt" (station_id null). Ohne zählbare Komponente trägt der Gerichts-Posten alles (bzw.
-     * „nicht zugeteilt", wenn er Sammelposten ist). Geraten wird nichts.
+     * Anrichten eines Gerichts belasten die BETEILIGTEN Posten anteilig nach ihren Komponenten.
+     *
+     * Posten einer Komponente = Posten ihres Sub-Rezepts (`default_station_id`). Posten des Gerichts = `default_station_id` bzw. die
+     * Team-Vorgabe „Posten für Gerichte" ({@see TeamSettingsService::gerichtePostenId}). Das ist dieselbe Regel wie das Routing der
+     * Auftragszeilen (Spec 83 B2, ProductionOrderService::standardPosten): nur für das Team sichtbare, aktive Posten zählen, ein
+     * fremder Posten (z. B. am Master-Rezept im Abo) wird nicht übernommen. Komponenten ohne nutzbaren Posten gehen an den Posten
+     * des Gerichts, wenn der kein Sammelposten ist; sonst als eigene Position „nicht zugeteilt" (station_id null). Geraten wird nichts.
      *
      * @return list<array{station_id:?int, komponenten:int, anteil:float}>
      */
-    public function postenAnteile(FoodAlchemistRecipe $gericht): array
+    public function postenAnteile(FoodAlchemistRecipe $gericht, Team $team): array
     {
-        $gerichtPosten = $gericht->default_station_id !== null && ! $this->istSammelposten((int) $gericht->default_station_id)
-            ? (int) $gericht->default_station_id : null;
         $zeilen = $this->tellerKomponentenZeilen($gericht);
+        $subPosten = FoodAlchemistRecipe::whereIn('id', array_filter(array_map(fn ($z) => $z->referenced_recipe_id, $zeilen)))
+            ->pluck('default_station_id', 'id');
+        $gerichtRoh = $gericht->default_station_id !== null ? (int) $gericht->default_station_id : null;
+        $vorgabe = $this->settings->gerichtePostenId($team);
+        $kandidaten = array_values(array_unique(array_filter([$gerichtRoh, $vorgabe, ...$subPosten->filter()->map(fn ($v) => (int) $v)->all()])));
+        // nutzbar = sichtbar + aktiv für das Team; Wert = ist Sammelposten (Pass ohne eigenes Personal)
+        $nutzbar = $kandidaten === [] ? collect() : FoodAlchemistProductionStation::visibleToTeam($team)->where('is_inactive', false)
+            ->whereIn('id', $kandidaten)->pluck('ist_sammelposten', 'id')->map(fn ($v) => (bool) $v);
+        $traegt = fn (?int $id) => $id !== null && $nutzbar->has($id) && ! $nutzbar[$id];   // nutzbar und kein Sammelposten
+
+        $gerichtPosten = $gerichtRoh !== null && $nutzbar->has($gerichtRoh) ? $gerichtRoh : $vorgabe;
+        $gerichtPosten = $traegt($gerichtPosten) ? $gerichtPosten : null;
         if ($zeilen === []) {
             return [['station_id' => $gerichtPosten, 'komponenten' => 0, 'anteil' => 1.0]];
         }
-        $subPosten = FoodAlchemistRecipe::whereIn('id', array_filter(array_map(fn ($z) => $z->referenced_recipe_id, $zeilen)))
-            ->pluck('default_station_id', 'id');
         $je = [];
         foreach ($zeilen as $z) {
             $posten = $z->referenced_recipe_id !== null ? ($subPosten[$z->referenced_recipe_id] ?? null) : null;
-            $posten = $posten !== null && ! $this->istSammelposten((int) $posten) ? (int) $posten : $gerichtPosten;
+            $posten = $traegt($posten !== null ? (int) $posten : null) ? (int) $posten : $gerichtPosten;
             $je[$posten ?? 0] = ($je[$posten ?? 0] ?? 0) + 1;
         }
         $n = count($zeilen);
@@ -408,22 +418,5 @@ class ProductionTimeService
         $summe = array_sum(array_column($anteile, 'komponenten')) ?: 1;
 
         return array_map(fn ($a) => $a + ['minuten' => round($minuten * ($a['komponenten'] ?: $summe) / $summe, 3)], $anteile);
-    }
-
-    /** @var array<int,bool> */
-    private array $sammelposten = [];
-
-    private ?bool $hatSammelSpalte = null;
-
-    /** Peters Merkmal `production_stations.ist_sammelposten` (Spec 83 B2); ohne Spalte (vor seiner Migration) = kein Sammelposten. */
-    private function istSammelposten(int $stationId): bool
-    {
-        if (! array_key_exists($stationId, $this->sammelposten)) {
-            $this->hatSammelSpalte ??= \Illuminate\Support\Facades\Schema::hasColumn('foodalchemist_production_stations', 'ist_sammelposten');
-            $this->sammelposten[$stationId] = $this->hatSammelSpalte
-                && (bool) \Illuminate\Support\Facades\DB::table('foodalchemist_production_stations')->where('id', $stationId)->value('ist_sammelposten');
-        }
-
-        return $this->sammelposten[$stationId];
     }
 }

@@ -167,7 +167,7 @@ it('B3i/B3l VK-Modal: je Darreichung Pauschale + Wert mit Einheit der Form, Star
     $d = spec83Formen($this->rootTeam, $this->gericht);
     $this->actingAs($this->makeUser($this->rootTeam, 'Koch Anrichten'));
     $lw = \Livewire\Livewire::test(\Platform\FoodAlchemist\Livewire\Verkauf\VkModal::class)->call('oeffnen', $this->gericht->id);
-    $html = $lw->html();
+    $html = preg_replace('/<!--.*?-->/s', '', $lw->html());   // Livewire-Blockkommentare zwischen den Textteilen
     expect($html)->toContain('data-dar-anrichten="'.$d['teller']->id.'"')->toContain('je Teller (s)')->toContain('35 Startwert')
         ->toContain('je Stück (s)')->toContain('je Platte (min)')->toContain('vor Ort an der Station')
         ->toMatch('/data-dar-anrichten-hochrechnung="'.$d['teller']->id.'">100 Portionen\s*≈ 58 min · Startwert, ungeprüft/u');
@@ -175,17 +175,17 @@ it('B3i/B3l VK-Modal: je Darreichung Pauschale + Wert mit Einheit der Form, Star
     $lw->call('bearbeitenStarten')->set('darForm.'.$d['teller']->id.'.anrichten_wert', '30')->set('darForm.'.$d['teller']->id.'.anrichten_pauschal_min', '5')
         ->call('darreichungSpeichern', $d['teller']->id);
     expect((float) $d['teller']->fresh()->anrichten_wert)->toBe(30.0)->and((float) $d['teller']->fresh()->anrichten_pauschal_min)->toBe(5.0)
-        ->and($lw->html())->toMatch('/data-dar-anrichten-hochrechnung="'.$d['teller']->id.'">100 Portionen\s*≈ 55 min</u');   // 5 + 100 × 30 s
+        ->and(preg_replace('/<!--.*?-->/s', '', $lw->html()))->toMatch('/data-dar-anrichten-hochrechnung="'.$d['teller']->id.'">100 Portionen\s*≈ 55 min</u');   // 5 + 100 × 30 s
 });
 
-it('B3i MCP im Lockstep: recipe_darreichung.PUT setzt die Anrichte-Felder, recipes.GET zeigt Wert und Einheit', function () {
+it('B3i MCP im Lockstep: recipe_darreichung.PUT setzt die Anrichte-Felder, verkaufsrezepte.GET zeigt Wert und Einheit', function () {
     $d = spec83Formen($this->rootTeam, $this->gericht);
     $ctx = new \Platform\Core\Contracts\ToolContext(user: $this->makeUser($this->rootTeam, 'MCP Koch'), team: $this->rootTeam);
     $reg = app(\Platform\Core\Tools\ToolRegistry::class);
     $put = $reg->get('foodalchemist.recipe_darreichung.PUT')->execute(['presentation_id' => $d['buffet']->id, 'attrs' => ['anrichten_wert' => 3, 'anrichten_pauschal_min' => 15]], $ctx);
     expect($put->success)->toBeTrue();
 
-    $get = $reg->get('foodalchemist.recipes.GET')->execute(['id' => $this->gericht->id], $ctx);
+    $get = $reg->get('foodalchemist.verkaufsrezepte.GET')->execute(['id' => $this->gericht->id], $ctx);
     $buffet = collect($get->data['presentations'] ?? [])->firstWhere('presentation_id', $d['buffet']->id);
     expect($buffet)->toMatchArray(['anrichten_wert' => 3.0, 'anrichten_pauschal_min' => 15.0])
         ->and($buffet['anrichten_einheit']['einheit'])->toBe('behaelter');
@@ -278,13 +278,9 @@ it('B3c Kalkulation: Lohn je Block getrennt („davon“-Zeilen), Summe = FEK', 
 
 function spec83Posten($test, $team, $gericht, bool $passIstSammel): array
 {
-    // Peters Spalte (Migration 2026_10_27_100000) gibt es vor seinem Merge noch nicht — nur in DIESER Fixture anlegen
-    if (! \Illuminate\Support\Facades\Schema::hasColumn('foodalchemist_production_stations', 'ist_sammelposten')) {
-        \Illuminate\Support\Facades\Schema::table('foodalchemist_production_stations', fn ($t) => $t->boolean('ist_sammelposten')->default(false));
-    }
-    $mk = fn (string $slug, string $name, bool $sammel = false) => tap(\Platform\FoodAlchemist\Models\FoodAlchemistProductionStation::create(
-        ['team_id' => $team->id, 'slug' => $slug, 'name' => $name]), fn ($s) => \Illuminate\Support\Facades\DB::table('foodalchemist_production_stations')
-        ->where('id', $s->id)->update(['ist_sammelposten' => $sammel]));
+    // Peters Merkmal ist_sammelposten (Spec 83 B2, #360)
+    $mk = fn (string $slug, string $name, bool $sammel = false) => \Platform\FoodAlchemist\Models\FoodAlchemistProductionStation::create(
+        ['team_id' => $team->id, 'slug' => $slug, 'name' => $name, 'ist_sammelposten' => $sammel]);
     $p = ['saucier' => $mk('saucier', 'Saucier'), 'entremetier' => $mk('entremetier', 'Entremetier'), 'pass' => $mk('pass', 'Pass', $passIstSammel)];
     foreach (['Fleisch: Senfrostbraten' => 'saucier', 'Jus: Altbier' => 'saucier', 'Pickle: Perlzwiebel' => 'saucier', 'Chip: Zwiebelring' => 'saucier',
         'Püree: Petersilienwurzel' => 'entremetier', 'Beilage: Blumenkohl, geröstet' => 'entremetier'] as $name => $posten) {
@@ -332,4 +328,20 @@ it('B3h Kalkulation: Posten-Last nur bei den beteiligten Posten, Sammel-Pass tr�
         ->and(round($last[0]['active_person_minutes'], 2))->toBe(8.33)                     // 1/7 von Anrichten 58,33
         ->and(implode(' ', $k['warnings']))->toContain('1 Komponente(n) ohne Posten')
         ->and(round(array_sum($k['fek_teile']), 2))->toBe(round($k['fek'], 2));
+});
+
+it('B3g mit B2-Routing: Gericht ohne eigenen Posten nimmt die Team-Vorgabe „Posten für Gerichte“; fremder Posten zählt nicht', function () {
+    $p = spec83Posten($this, $this->rootTeam, $this->gericht, true);
+    $this->gericht->update(['default_station_id' => null]);
+    app(TeamSettingsService::class)->update($this->rootTeam, ['gerichte_station_id' => $p['entremetier']->id]);
+    // Pickle trägt einen Posten eines FREMDEN Teams → wie ohne Posten (Regel aus ProductionOrderService::standardPosten)
+    $fremd = \Platform\FoodAlchemist\Models\FoodAlchemistProductionStation::create(['team_id' => $this->rootTeam->id + 999, 'slug' => 'fremd', 'name' => 'Fremd']);
+    FoodAlchemistRecipe::where('name', 'Pickle: Perlzwiebel')->update(['default_station_id' => $fremd->id]);
+
+    $a = collect($this->times->calculateForBatches($this->rootTeam, $this->gericht->fresh(), 100)['bloecke']['anrichten']['aufteilung'])
+        ->keyBy(fn ($t) => $t['station_id'] ?? 0);
+
+    // Saucier: Fleisch, Jus, Chip (3) · Entremetier: Püree, Blumenkohl + Pickle (fremd) + Microgreens (GP) über die Team-Vorgabe (4)
+    expect($a[$p['saucier']->id]['komponenten'])->toBe(3)->and($a[$p['entremetier']->id]['komponenten'])->toBe(4)
+        ->and($a->has(0))->toBeFalse()->and($a->has($fremd->id))->toBeFalse();
 });
