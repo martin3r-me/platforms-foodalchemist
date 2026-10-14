@@ -179,7 +179,7 @@ class KalkulationService
      */
     public function conceptHk(Team $team, FoodAlchemistConcept $concept, ?FoodAlchemistOutlet $outlet = null): array
     {
-        $cockpit = $this->concepts->preisCockpit($concept);
+        $cockpit = $this->concepts->preisCockpit($concept, null, $team);
         $hk1 = (float) $cockpit['ek_per_person'];
         $r = $this->berechne($team, $hk1, 0.0, 0.0, $outlet);
         $vk = (float) $cockpit['price_per_person'];

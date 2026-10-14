@@ -122,7 +122,7 @@ class DetailPanel extends Component
             $concept = $concepts->detail($team, $this->selectedId);
             if ($concept !== null) {
                 $istPaket = $concept->kind === 'paket';
-                $cockpit = $concepts->preisCockpit($concept, $team ? app(\Platform\FoodAlchemist\Services\ActiveOutletContext::class)->current($team) : null);
+                $cockpit = $concepts->preisCockpit($concept, $team ? app(\Platform\FoodAlchemist\Services\ActiveOutletContext::class)->current($team) : null, $team);
                 $aggregat = $agg->conceptAggregat($concept);
                 // Menü-Bewertung (Gang-Dramaturgie etc.) nur für echte Concepts, nicht fürs Bündel.
                 $bewertet = $istPaket ? null : $bewertung->bewerten($concept, $cockpit, $aggregat);

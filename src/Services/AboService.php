@@ -149,16 +149,37 @@ class AboService
         };
         $familien = $familienJe('recipe');
         $paketFamilien = $familienJe('paket');
-        if ($familien === [] && $paketFamilien === []) {
+        $konzeptFamilien = $familienJe('concept');
+        if ($familien === [] && $paketFamilien === [] && $konzeptFamilien === []) {
             return [];
         }
 
-        // Pakete (PR 2): je Paket-Familie die jüngste Fassung; ihre Gerichte zeigen auf Rezept-Fassungen und ziehen in die Rezept-Hülle mit
-        $paketFassungen = $this->neuestePaketFassungen($paketFamilien);
+        // Konzepte (PR 4, auch kind=paket): je Familie die jüngste Fassung; ihre Slots zeigen auf Fassungen von Paket, eingebettetem
+        // Paket-Konzept (rekursiv) und Rezept — alle ziehen in die Hülle mit
+        $konzeptFassungen = $this->neuesteFassungenVon('foodalchemist_concepts', $konzeptFamilien);
+        $paketFassungen = $this->neuesteFassungenVon('foodalchemist_packages', $paketFamilien);
+        $rezeptSeeds = [];
+        $offenK = $konzeptFassungen;
+        $gesehenK = [];
+        while ($offenK !== []) {
+            $offenK = array_values(array_diff(array_unique($offenK), $gesehenK));
+            if ($offenK === []) {
+                break;
+            }
+            $gesehenK = array_merge($gesehenK, $offenK);
+            $slots = DB::table('foodalchemist_concept_slots')->whereIn('concept_id', $offenK)->whereNull('deleted_at')
+                ->get(['package_id', 'embedded_concept_id', 'sales_recipe_id']);
+            $paketFassungen = array_merge($paketFassungen, $slots->pluck('package_id')->filter()->map(fn ($v) => (int) $v)->all());
+            $rezeptSeeds = array_merge($rezeptSeeds, $slots->pluck('sales_recipe_id')->filter()->map(fn ($v) => (int) $v)->all());
+            $offenK = $slots->pluck('embedded_concept_id')->filter()->map(fn ($v) => (int) $v)->all();
+        }
+        $konzeptFassungen = $this->nurFassungen('foodalchemist_concepts', $gesehenK);
+        $paketFassungen = $this->nurFassungen('foodalchemist_packages', $paketFassungen);
+        // Pakete: ihre Gerichte zeigen auf Rezept-Fassungen und ziehen in die Rezept-Hülle mit
         $paketRezepte = $paketFassungen === [] ? [] : DB::table('foodalchemist_package_dishes')->whereIn('package_id', $paketFassungen)
             ->whereNull('deleted_at')->pluck('sales_recipe_id')->map(fn ($v) => (int) $v)->all();
 
-        $offen = array_merge($this->neuesteFassungen($familien), $paketRezepte);
+        $offen = array_merge($this->neuesteFassungen($familien), $rezeptSeeds, $paketRezepte);
         $fertig = [];
         while ($offen !== []) {
             $offen = array_values(array_diff(array_unique($offen), $fertig));
@@ -177,29 +198,47 @@ class AboService
             $huelle['recipe'] = $nurFassungen;
         }
         if ($paketFassungen !== []) {
-            sort($paketFassungen);
             $huelle['paket'] = $paketFassungen;
+        }
+        if ($konzeptFassungen !== []) {
+            $huelle['concept'] = $konzeptFassungen;
         }
 
         return $huelle;
     }
 
     /**
-     * Je Paket-Familie (Arbeitszeile) die jüngste nicht gelöschte Fassungs-Zeile.
+     * Je Familie (Arbeitszeile) die jüngste nicht gelöschte Fassungs-Zeile der Tabelle (concepts | packages).
      *
      * @param  list<int>  $familien
      * @return list<int>
      */
-    private function neuestePaketFassungen(array $familien): array
+    private function neuesteFassungenVon(string $tabelle, array $familien): array
     {
         if ($familien === []) {
             return [];
         }
 
-        return DB::table('foodalchemist_packages')->whereIn('fassung_von_id', $familien)
+        return DB::table($tabelle)->whereIn('fassung_von_id', $familien)
             ->where('ist_fassung', true)->whereNull('deleted_at')
             ->groupBy('fassung_von_id')->selectRaw('MAX(id) AS id')
             ->pluck('id')->map(fn ($v) => (int) $v)->all();
+    }
+
+    /**
+     * Alles, was keine Fassung ist, fällt heraus — auch wenn ein Verweis versehentlich auf eine Arbeitszeile zeigt (Leck-Sperre).
+     *
+     * @param  list<int>  $ids
+     * @return list<int>
+     */
+    private function nurFassungen(string $tabelle, array $ids): array
+    {
+        if ($ids === []) {
+            return [];
+        }
+
+        return DB::table($tabelle)->whereIn('id', array_unique($ids))->where('ist_fassung', true)->whereNull('deleted_at')
+            ->orderBy('id')->pluck('id')->map(fn ($v) => (int) $v)->all();
     }
 
     /**

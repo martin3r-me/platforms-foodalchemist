@@ -397,7 +397,7 @@ class Index extends Component
         // Ebene 2: die Betriebsbrille treibt Cockpit UND die Listen-Preise.
         $outlet = $team ? app(\Platform\FoodAlchemist\Services\ActiveOutletContext::class)->current($team) : null;
         $selected = $this->selectedId !== null ? $svc->detail($team, $this->selectedId) : null;
-        $cockpit = $selected !== null ? $svc->preisCockpit($selected, $outlet) : null;
+        $cockpit = $selected !== null ? $svc->preisCockpit($selected, $outlet, $this->team()) : null;
         $concepts = $svc->paginateBrowser([
             'search' => $this->search, 'vorlagen' => $this->showVorlagen,
             'category' => $this->categoryFilter !== '' ? $this->categoryFilter : null,

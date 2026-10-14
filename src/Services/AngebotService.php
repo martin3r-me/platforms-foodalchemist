@@ -400,7 +400,7 @@ class AngebotService
         $menues = [];
         foreach ($this->menueConcepts($angebot) as $c) {
             $positionen = [];
-            foreach ($conceptSvc->preisCockpit($c)['zeilen'] as $z) {
+            foreach ($conceptSvc->preisCockpit($c, null, $team)['zeilen'] as $z) {
                 if (($z['type'] ?? '') === 'leer') {
                     continue;
                 }
