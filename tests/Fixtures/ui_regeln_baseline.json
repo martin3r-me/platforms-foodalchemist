@@ -115,15 +115,15 @@
         "hex_farbe": 7,
         "style_block": 1
     },
+    "layouts/partials/standalone-nav.blade.php": {
+        "hex_farbe": 4,
+        "mini_schrift": 1
+    },
     "layouts/presentation.blade.php": {
         "hex_farbe": 7,
         "important": 6,
         "emoji": 2,
         "style_block": 2
-    },
-    "layouts/standalone.blade.php": {
-        "hex_farbe": 4,
-        "mini_schrift": 1
     },
     "livewire/concepter/partials/pairing-empfehlungen.blade.php": {
         "hex_farbe": 2,
