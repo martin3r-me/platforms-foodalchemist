@@ -104,7 +104,7 @@ final class FaBereiche
         ['foodbook', 'foodbook'], ['kapitel_', 'foodbook'],
         ['angebot', 'angebote'], ['offer', 'angebote'],
         // Concepter & Formate
-        ['concept', 'concepter'], ['composer', 'concepter'], ['format', 'concepter'], ['paket', 'concepter'],
+        ['concept', 'concepter'], ['composer', 'concepter'], ['format', 'concepter'], ['paket', 'concepter'], ['baustein', 'concepter'],
         ['zielgruppen', 'concepter'], ['portfolio', 'concepter'], ['proportion', 'concepter'],
         // Rezepte (inkl. Gerichte, Kalkulation/VK)
         ['recipe', 'rezepte'], ['verkaufsrezepte', 'rezepte'], ['dish', 'rezepte'], ['kalkulation', 'rezepte'], ['vk_snapshots', 'rezepte'],
