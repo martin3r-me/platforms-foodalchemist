@@ -72,17 +72,38 @@ class ConceptFassungService
             return ['fassung_id' => (int) $vorher->id, 'neu' => false, 'fassung_nr' => (int) $vorher->fassung_nr, 'hinweise' => $hinweise];
         }
 
-        $fassung = DB::transaction(function () use ($concept, $slots, $ziele, $hash, $notiz, $actor) {
+        $fassung = DB::transaction(function () use ($concept, $slots, $ziele, $hash, $notiz, $actor, $vorher) {
             $nr = (int) FoodAlchemistConcept::mitFassungen()->withTrashed()->where('fassung_von_id', $concept->id)->where('ist_fassung', true)->max('fassung_nr') + 1;
 
-            return $this->kopiere($concept, $slots, $ziele, $nr, $hash, $notiz, $actor);
+            $neu = $this->kopiere($concept, $slots, $ziele, $nr, $hash, $notiz, $actor);
+            $this->markiereAllergenAenderung($neu, $vorher);
+
+            return $neu;
         });
 
         $this->abos->neuBerechnenAlle();
         $this->protokoll->schreibe('konzept_fassung_veroeffentlicht', ['concept_id' => $concept->id, 'kind' => $concept->kind, 'fassung_id' => $fassung->id,
             'fassung_nr' => (int) $fassung->fassung_nr, 'hinweise' => $hinweise, 'notiz' => $notiz], $actor, $fassung);
 
+        try {   // Signale und Folgen: nie ein Grund, die Veröffentlichung scheitern zu lassen
+            app(FassungSignalService::class)->nachBausteinVeroeffentlichung('concept', [(int) $fassung->id]);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Konzept-Fassung veröffentlicht, aber die Signal-Erzeugung ist fehlgeschlagen: '.$e->getMessage(), ['exception' => $e, 'concept_id' => $concept->id]);
+        }
+
         return ['fassung_id' => (int) $fassung->id, 'neu' => true, 'fassung_nr' => (int) $fassung->fassung_nr, 'hinweise' => $hinweise];
+    }
+
+    /** Allergen-/Zusatzstoff-Erbe über die Kette: Flag an der Fassung, wenn sich das Bild gegenüber der Vorgängerin ändert. */
+    private function markiereAllergenAenderung(FoodAlchemistConcept $fassung, ?FoodAlchemistConcept $vorher): void
+    {
+        if ($vorher === null) {
+            return;
+        }
+        $v = app(FassungsVergleich::class);
+        if ($v->bilderDiff($v->kettenBild('concept', (int) $vorher->id), $v->kettenBild('concept', (int) $fassung->id)) !== []) {
+            $fassung->forceFill(['fassung_allergen_geaendert' => true])->save();
+        }
     }
 
     /**

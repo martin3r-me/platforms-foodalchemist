@@ -25,9 +25,68 @@ class ConceptPreisService
 
     public function __construct(private PaketPreisService $pakete, private TeamVkService $teamVk) {}
 
+    /** @var array<int, bool> Ergebnis von {@see vorwaermen} für die Dauer EINER Liste (danach {@see vergessen}); statisch, weil jeder Aufrufer sich den Dienst frisch aus dem Container holt */
+    private static array $vorgewaermt = [];
+
+    /**
+     * Listen-Pfad: für ALLE Konzepte einer Liste mit EINER Abfrage klären, welche auf dem Fassungs-Pfad liegen (statt einer Abfrage je Konzept in
+     * {@see istFassungsPfad}). Gemessen 14.10.: 5 Konzepte = 5 Abfragen, 50 = 50. Danach {@see vergessen} aufrufen (try/finally).
+     *
+     * @param  iterable<int|FoodAlchemistConcept>  $konzepte
+     */
+    public function vorwaermen(iterable $konzepte): void
+    {
+        $ids = [];
+        foreach ($konzepte as $k) {
+            $ids[] = (int) ($k instanceof FoodAlchemistConcept ? $k->id : $k);
+        }
+        $ids = array_values(array_unique($ids));
+        if ($ids === []) {
+            return;
+        }
+        $treffer = DB::table('foodalchemist_concepts AS c')->whereIn('c.id', $ids)->where(fn ($w) => $w->where('c.ist_fassung', true)
+            ->orWhereExists(fn ($q) => $q->from('foodalchemist_concept_slots AS s')->whereColumn('s.concept_id', 'c.id')->whereNull('s.deleted_at')
+                ->where(fn ($x) => $x
+                    ->whereExists(fn ($y) => $y->from('foodalchemist_recipes AS r')->whereColumn('r.id', 's.sales_recipe_id')->where('r.ist_fassung', true))
+                    ->orWhereExists(fn ($y) => $y->from('foodalchemist_packages AS p')->whereColumn('p.id', 's.package_id')->where('p.ist_fassung', true))
+                    ->orWhereExists(fn ($y) => $y->from('foodalchemist_concepts AS e')->whereColumn('e.id', 's.embedded_concept_id')->where('e.ist_fassung', true)))))
+            ->pluck('c.id')->map(fn ($v) => (int) $v)->flip();
+        foreach ($ids as $id) {
+            self::$vorgewaermt[$id] = $treffer->has($id);
+        }
+    }
+
+    /**
+     * Warm-up, Block, Aufräumen — das Aufräumen steht im finally, ein Fehler im Block lässt keinen Merker im Prozess zurück
+     * (queue:work, Octane). Der Weg für alle Aufrufer außer dem Dienst selbst.
+     *
+     * @template T
+     *
+     * @param  iterable<int|FoodAlchemistConcept>  $konzepte
+     * @param  callable():T  $block
+     * @return T
+     */
+    public function mitVorwaermen(iterable $konzepte, callable $block): mixed
+    {
+        $this->vorwaermen($konzepte);
+        try {
+            return $block();
+        } finally {
+            $this->vergessen();
+        }
+    }
+
+    public function vergessen(): void
+    {
+        self::$vorgewaermt = [];
+    }
+
     /** Konzept-Fassung oder eigenes Konzept mit mindestens einem Slot, der auf eine Fassung (Rezept, Paket, Paket-Konzept) zeigt. */
     public function istFassungsPfad(FoodAlchemistConcept $concept): bool
     {
+        if (isset(self::$vorgewaermt[(int) $concept->id])) {
+            return self::$vorgewaermt[(int) $concept->id];
+        }
         if (array_key_exists('ist_fassung', $concept->getAttributes())) {
             if ($concept->ist_fassung) {
                 return true;

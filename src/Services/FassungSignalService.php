@@ -195,6 +195,108 @@ class FassungSignalService
         ]);
     }
 
+    // ── Spec 82 Abo Konzepte/Pakete/Formate, PR 5: Signale für Konzept- und Paket-Fassungen ──────────────────────────────────────────
+    // Ein Signal je FAMILIE und Team (nie je enthaltenem Rezept): eine Rezeptänderung in einem Konzept mit 12 Gerichten erzeugt eine Meldung, die die
+    // Ursache nennt. Allergen-/Zusatzstoff-Erbe läuft über die ganze Kette (FassungsVergleich::kettenBild) und hebt auf Kritisch.
+
+    /**
+     * Nach dem Veröffentlichen eines Konzepts/Pakets: Info-Signale für die Mandanten mit der neuen Fassung in der Hülle, Folgen der Verweise
+     * ({@see BausteinFolgeService}), danach die Aktions-Signale für die berührten Team × Familie. Fehler hier verhindern nie die Veröffentlichung.
+     *
+     * @param  'concept'|'paket'  $art
+     * @param  list<int>  $neueFassungIds  die NEU angelegten Fassungen (nicht die wiederverwendeten)
+     */
+    public function nachBausteinVeroeffentlichung(string $art, array $neueFassungIds): int
+    {
+        $n = 0;
+        $modell = $art === 'paket' ? \Platform\FoodAlchemist\Models\FoodAlchemistPaket::class : \Platform\FoodAlchemist\Models\FoodAlchemistConcept::class;
+        foreach ($modell::mitFassungen()->whereIn('id', $neueFassungIds)->where('ist_fassung', true)->orderBy('fassung_nr')->get() as $fassung) {
+            foreach (DB::table('foodalchemist_abo_objekte')->where('typ', $art)->where('objekt_id', $fassung->id)->pluck('mandant_team_id') as $teamId) {
+                if (($team = Team::find((int) $teamId)) !== null) {
+                    $this->infoBaustein($team, $art, $fassung);
+                    $n++;
+                }
+            }
+        }
+        $folge = ['signale' => []];
+        try {
+            $folge = app(BausteinFolgeService::class)->folgen($art, $neueFassungIds);
+        } catch (\Throwable $e) {
+            Log::error('Verweise folgen der neuen Abo-Fassung nicht: '.$e->getMessage(), ['exception' => $e]);
+        }
+        foreach ($folge['signale'] as $s) {
+            if (($team = Team::find($s['team'])) !== null) {
+                $this->aktionBaustein($team, $art, $s['familie']);
+                $n++;
+            }
+        }
+
+        return $n;
+    }
+
+    /** Info-Signal „Abo-Konzept/-Paket aktualisiert“, gebündelt je Familie und Mandant. */
+    private function infoBaustein(Team $team, string $art, \Illuminate\Database\Eloquent\Model $fassung): void
+    {
+        $familieId = (int) $fassung->fassung_von_id;
+        $vorher = $fassung::mitFassungen()->where('fassung_von_id', $familieId)->where('ist_fassung', true)
+            ->where('fassung_nr', '<', $fassung->fassung_nr)->orderByDesc('fassung_nr')->first();
+        $diff = $vorher === null ? [] : $this->vergleich->bilderDiff($this->vergleich->kettenBild($art, (int) $vorher->id), $this->vergleich->kettenBild($art, (int) $fassung->id));
+        $allergen = $diff !== [] || (bool) $fassung->fassung_allergen_geaendert;
+        $key = 'fassung-aktualisiert:'.$art.':'.$familieId;
+        $was = $art === 'paket' ? 'Paket' : 'Konzept';
+
+        $offen = FoodAlchemistSignal::where('team_id', $team->id)->where('type', SignalTyp::FassungAktualisiert->value)->where('dedup_key', $key)
+            ->where('status', SignalStatus::Offen->value)->first();
+        $fassungen = collect((array) ($offen?->payload['fassungen'] ?? []))->keyBy('nr');
+        $fassungen[(int) $fassung->fassung_nr] = ['nr' => (int) $fassung->fassung_nr, 'fassung_id' => (int) $fassung->id, 'notiz' => $fassung->aenderungsnotiz,
+            'allergen_geaendert' => $allergen, 'allergene' => $this->allergenTexte($diff)];
+        $fassungen = $fassungen->sortKeys()->values();
+        $allergenGesamt = $fassungen->contains('allergen_geaendert', true);
+
+        $name = (string) $fassung->name;
+        $nr = (int) $fassungen->max('nr');
+        $titel = ($allergenGesamt ? 'Allergen-Änderung im Abo-'.$was.': ' : 'Abo-'.$was.' aktualisiert: ').$name.' (Fassung #'.$nr.')';
+        $zeilen = $fassungen->map(fn ($f) => '#'.$f['nr'].($f['notiz'] ? ': '.$f['notiz'] : '').($f['allergene'] !== [] ? ' — '.implode('; ', $f['allergene']) : ''))->all();
+        $this->signale->erzeuge($team, SignalTyp::FassungAktualisiert, $allergenGesamt ? SignalSeverity::Kritisch : SignalSeverity::Info, $titel, [
+            'dedup_key' => $key, 'source' => self::QUELLE, 'ref_type' => $art === 'paket' ? 'paket' : 'concept', 'ref_id' => (int) $fassung->id,
+            'description' => 'Die Bibliothek nutzt die neue Fassung automatisch. Änderungen: '.implode(' · ', $zeilen),
+            'payload' => ['art' => $art, 'familie_id' => $familieId, 'name' => $name, 'nr' => $nr, 'fassungen' => $fassungen->all(), 'allergen_geaendert' => $allergenGesamt],
+        ]);
+    }
+
+    /** Aktions-Signal „Neuere Fassung verfügbar“ für ein Team und eine Konzept-/Paket-Familie: anlegen, aktualisieren oder schließen. */
+    public function aktionBaustein(Team $team, string $art, int $familieId): void
+    {
+        $key = 'fassung-neu:'.$art.':'.$familieId;
+        $modell = $art === 'paket' ? \Platform\FoodAlchemist\Models\FoodAlchemistPaket::class : \Platform\FoodAlchemist\Models\FoodAlchemistConcept::class;
+        $gehalten = app(BausteinFolgeService::class)->gehalten($team, $art, $familieId);
+        if ($gehalten === []) {
+            $this->signale->schliesseGemessen($team, SignalTyp::FassungNeuerVerfuegbar, $key, self::QUELLE, 'Übernommen oder nichts mehr auf der älteren Fassung.');
+
+            return;
+        }
+        $tab = (new $modell)->getTable();
+        $neu = $modell::visibleToTeam($team)->where($tab.'.ist_fassung', true)->where($tab.'.fassung_von_id', $familieId)->orderByDesc('fassung_nr')->orderByDesc('id')->first();
+        $allergenDiff = [];
+        foreach ($gehalten as $g) {
+            $allergenDiff += $g['allergen_diff'];
+        }
+        $allergen = collect($gehalten)->contains('grund', 'allergen');
+        $texte = $this->allergenTexte($allergenDiff);
+        $vonNr = (int) collect($gehalten)->min('von_nr');
+        $was = $art === 'paket' ? 'Paket' : 'Konzept';
+        $name = (string) ($neu?->name ?? '');
+        $titel = ($allergen ? 'Allergen-Änderung: ' : 'Neuere Fassung verfügbar: ').$name.' (#'.$vonNr.' → #'.(int) ($neu?->fassung_nr ?? 0).')';
+        $liste = collect($gehalten)->map(fn ($g) => $g['wo'].' „'.$g['name'].'“ ('.($g['grund'] === 'allergen' ? 'Allergen-Änderung' : 'eingefroren').')')->implode(', ');
+        $this->signale->erzeuge($team, SignalTyp::FassungNeuerVerfuegbar, $allergen ? SignalSeverity::Kritisch : SignalSeverity::Warnung, $titel, [
+            'dedup_key' => $key, 'source' => self::QUELLE, 'ref_type' => $art === 'paket' ? 'paket' : 'concept', 'ref_id' => (int) ($neu?->id ?? 0),
+            'description' => 'Steht auf der älteren Fassung des '.$was.'s (Übernehmen am Verweis): '.$liste.'.'
+                .($allergen ? ' Änderung am Allergenbild: '.implode('; ', $texte).'. Die Übernahme verlangt die Rolle Freigeben.' : ''),
+            'payload' => ['art' => $art, 'familie_id' => $familieId, 'name' => $name, 'von_nr' => $vonNr, 'nach_nr' => (int) ($neu?->fassung_nr ?? 0), 'nach_fassung_id' => $neu?->id,
+                'aenderungsnotiz' => $neu?->aenderungsnotiz, 'allergen_geaendert' => $allergen, 'allergene' => $texte, 'bausteine' => $gehalten],
+        ]);
+    }
+
     /**
      * @param  array<string, array{von:mixed, nach:mixed}>  $diff
      * @return list<string>
