@@ -43,6 +43,14 @@ beforeEach(function () {
     ]);
 
     $this->plan = fn () => Livewire::test(Tagesplan::class, ['von' => '2026-08-15'])->set('modus', 'editor');
+    // Spec 83 M1: „Nicht zugeteilt“ und der Pass zeigen Auftrags-Karten. Die Tests der klassischen Posten-Spalte legen die Zeilen
+    // deshalb auf einen normalen Posten (Warme Küche).
+    $this->aufWarmeKueche = function () {
+        $p = Posten::firstOrCreate(['team_id' => $this->rootTeam->id, 'slug' => 'wk-klassik'], ['name' => 'Warme Küche']);
+        Line::query()->whereNull('station_id')->update(['station_id' => $p->id]);
+
+        return $p;
+    };
 });
 
 it('legt das Küchenleiter-Dashboard auf die Tagesplanung und verlinkt den Editor separat', function () {
@@ -182,6 +190,7 @@ it('wählt einen Tag ins rechte Detail-Panel und zeigt dessen Speisen', function
 });
 
 it('rendert den Wandmodus ohne zu krachen', function () {
+    ($this->aufWarmeKueche)();
     // Spec 35: Der Wandmonitor ist ein eigenes Küchenmonitor-Layout (nicht mehr die Editor-Ansicht).
     Livewire::test(Tagesplan::class, ['von' => '2026-08-20', 'display' => 'wall'])
         ->set('modus', 'editor')
@@ -217,6 +226,7 @@ it('startet im Wandmodus geplante Aufträge beim Abhaken und setzt die Zeile erl
 
 it('trennt im Wandmonitor zusammengesetzte Gerichts- und Rezeptnamen untereinander', function () {
     $this->fond->update(['name' => '[FIN] Curry-Hummus | Quinoa-Minz-Salat']);
+    ($this->aufWarmeKueche)();
 
     $key = implode('|', [$this->a1->id, '[FIN] Curry-Hummus', '2026-08-20']);
 
@@ -250,6 +260,7 @@ it('gruppiert im Wandmonitor Gericht und Basisrezepte als Küchen-Arbeitsblock',
     Line::where('production_order_id', $auftrag->id)
         ->where('recipe_id', $basis->id)
         ->update(['is_basisrezept' => true]);
+    ($this->aufWarmeKueche)();
 
     Livewire::test(Tagesplan::class, ['von' => '2026-08-20', 'display' => 'wall'])
         ->set('modus', 'editor')
@@ -369,6 +380,7 @@ it('öffnet im Wandmonitor ein Gericht als Arbeitsblock mit tatsächlichen Rezep
 });
 
 it('zeigt im Wandmonitor Allergen-, Diät- und Datenqualitätswarnungen', function () {
+    ($this->aufWarmeKueche)();
     $this->fond->forceFill([
         'allergens_confidence' => 'low',
         'allergen_milk' => 'enthalten',

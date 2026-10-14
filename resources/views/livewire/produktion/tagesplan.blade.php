@@ -273,19 +273,75 @@
                                         ? ($laneGruppen->count() === 1 ? 'Gericht' : 'Gerichte')
                                         : ($laneGruppen->count() === 1 ? 'Arbeitsblock' : 'Arbeitsblöcke');
                                     $laneTon = $stufeTon($b['stufe'] ?? null);
+                                    // Spec 83 M1: Pass (und Nicht zugeteilt) zeigt je Auftrag/Ausgabe eine Karte mit der Gerichteliste
+                                    $istPassLane = $wallIstPass($schluessel, $b['station'] ?? null);
+                                    $passAuftraege = $istPassLane ? $wallPassAuftraege($laneGruppen) : collect();
                                 @endphp
                                 <section class="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-t-4 border-[var(--fa-line)] {{ $tonRand[$laneTon] }} bg-[var(--fa-surface)]" data-tagesplan-lane="{{ $schluessel }}">
                                     <div class="shrink-0 border-b border-[var(--fa-line)] px-4 py-3">
                                         <div class="flex items-start justify-between gap-3">
                                             <div class="min-w-0">
                                                 <h2 class="break-words text-2xl font-bold leading-tight">{{ $b['station'] }}</h2>
-                                                <p class="mt-0.5 text-sm text-[var(--fa-ink-3)] tabular-nums">{{ $laneGruppen->count() }} {{ $laneGruppenLabel }} · {{ $laneZeilenAnzahl }} {{ $laneZeilenAnzahl === 1 ? 'Aufgabe' : 'Aufgaben' }} · {{ $b['geplant_min'] }}@if($b['kapazitaet_min'] !== null) von {{ $b['kapazitaet_min'] }}@endif min</p>
+                                                <p class="mt-0.5 text-sm text-[var(--fa-ink-3)] tabular-nums">@if($istPassLane){{ $passAuftraege->count() }} {{ $passAuftraege->count() === 1 ? 'Auftrag' : 'Aufträge' }} · {{ $passAuftraege->sum('gerichte') }} {{ $passAuftraege->sum('gerichte') === 1 ? 'Gericht' : 'Gerichte' }}@else{{ $laneGruppen->count() }} {{ $laneGruppenLabel }}@endif · {{ $laneZeilenAnzahl }} {{ $laneZeilenAnzahl === 1 ? 'Aufgabe' : 'Aufgaben' }} · {{ $b['geplant_min'] }}@if($b['kapazitaet_min'] !== null) von {{ $b['kapazitaet_min'] }}@endif min</p>
                                             </div>
                                             <span class="{{ $wSicher }} shrink-0 {{ $tonFlaeche[$laneTon] }}">{{ $stufeText($b['stufe'] ?? null) }}</span>
                                         </div>
                                     </div>
                                     <div class="min-h-0 flex-1 overflow-y-auto p-3">
                                         <div class="{{ $einzelLane ? 'grid auto-rows-max grid-cols-[repeat(auto-fill,minmax(min(100%,22rem),1fr))] gap-3' : 'space-y-3' }}" data-tagesplan-wall-lane-jobs>
+                                        @if($istPassLane)
+                                            @foreach($passAuftraege as $pa)
+                                                @php
+                                                    $paFertig = $pa->gesamt > 0 && $pa->erledigt === $pa->gesamt;
+                                                @endphp
+                                                <article class="overflow-hidden rounded-2xl border border-[var(--fa-line)] bg-[var(--fa-ground)] {{ $paFertig ? 'opacity-60' : '' }}" wire:key="pa-{{ $pa->key }}" data-tagesplan-pass-auftrag="{{ $pa->key }}">
+                                                    <header class="flex items-start justify-between gap-3 border-b border-[var(--fa-line)] px-4 py-3">
+                                                        <div class="min-w-0">
+                                                            <p class="{{ $wEyebrow }}">Ausgabe {{ \Illuminate\Support\Carbon::parse($pa->liefertag)->format('d.m.') }}</p>
+                                                            <h3 class="mt-0.5 whitespace-normal break-words text-xl font-bold leading-tight [@media(min-height:56rem)]:text-2xl">{{ $pa->auftrag }}</h3>
+                                                            <p class="mt-1 text-sm text-[var(--fa-ink-3)] tabular-nums">{{ $pa->gerichte }} {{ $pa->gerichte === 1 ? 'Gericht' : 'Gerichte' }}@if($pa->portionen > 0) · {{ $pa->portionen }} Portionen @endif</p>
+                                                        </div>
+                                                        <p class="shrink-0 text-xl font-bold tabular-nums" data-tagesplan-pass-fortschritt>{{ $pa->erledigt }}/{{ $pa->gesamt }}</p>
+                                                    </header>
+                                                    <ul class="divide-y divide-[var(--fa-line)]" data-tagesplan-pass-liste>
+                                                        @foreach($pa->items as $i)
+                                                            @php
+                                                                $hakenText = $i->erledigt ? 'Haken zurücknehmen' : ($i->laeuft ? 'Als erledigt abhaken' : 'Auftrag starten und als erledigt abhaken');
+                                                            @endphp
+                                                            <li class="flex items-start gap-3 px-3 py-2.5 {{ $i->erledigt ? 'opacity-55' : '' }}" wire:key="pi-{{ $pa->key }}-{{ $i->haken_line_id ?? $i->key }}" data-tagesplan-pass-gericht="{{ $i->key }}" data-tagesplan-pass-art="{{ $i->art }}">
+                                                                @if($i->haken_line_id !== null)
+                                                                    <button type="button" wire:click="abhaken({{ $i->haken_line_id }})"
+                                                                            class="grid h-12 w-12 shrink-0 place-items-center rounded-xl border-2 {{ $i->erledigt ? $wHakenFertig : ($i->laeuft ? $wHakenLaeuft : $wHakenOffen) }}"
+                                                                            title="{{ $hakenText }}" aria-label="{{ $hakenText }}"
+                                                                            data-tagesplan-abhaken>@if($i->erledigt)@svg('heroicon-m-check', 'w-7 h-7')@endif</button>
+                                                                @else
+                                                                    <span class="grid h-12 w-12 shrink-0 place-items-center rounded-xl border border-[var(--fa-line-strong)] bg-[var(--fa-surface)] text-base font-bold tabular-nums" aria-label="{{ $i->fertig_n }} von {{ $i->gesamt }} erledigt">{{ $i->fertig_n }}/{{ $i->gesamt }}</span>
+                                                                @endif
+                                                                <button type="button" wire:click="{{ $i->art === 'gericht' ? 'oeffneGericht(' . \Illuminate\Support\Js::from($i->key) . ')' : 'oeffneAnleitung(' . (int) $i->haken_line_id . ')' }}" class="min-w-0 flex-1 text-left" data-tagesplan-pass-oeffnen>
+                                                                    <p class="whitespace-normal break-words text-lg font-semibold leading-snug {{ $i->erledigt ? 'line-through' : '' }}">{{ $i->name }}</p>
+                                                                    <p class="text-sm text-[var(--fa-ink-3)] tabular-nums">@if($i->portionen !== null){{ $i->portionen }} Portionen @elseif($i->art === 'zeile'){{ $i->zeile->is_basisrezept ? 'Basisrezept' : 'Rezept' }}@endif</p>
+                                                                    @if($i->art === 'gericht' && ! empty($i->komponenten))
+                                                                        {{-- Spec 83 B3g: Der Pass ist Sammelposten. Je Gericht die Komponenten mit zulieferndem Posten und Fertig-Stand: worauf wartet der Pass noch? --}}
+                                                                        @php
+                                                                            $offeneKomponenten = collect($i->komponenten)->where('erledigt', false)->count();
+                                                                        @endphp
+                                                                        <p class="mt-1 text-sm font-semibold {{ $offeneKomponenten > 0 ? 'text-[var(--fa-warn)]' : 'text-[var(--fa-ok)]' }}" data-tagesplan-pass-wartet>{{ $offeneKomponenten > 0 ? 'wartet auf ' . $offeneKomponenten . ' von ' . count($i->komponenten) : 'alle Komponenten da' }}</p>
+                                                                        <div class="mt-1.5 flex flex-wrap gap-1.5" data-tagesplan-pass-komponenten>
+                                                                            @foreach($i->komponenten as $k)
+                                                                                <span class="{{ $wSicher }} gap-1 {{ $k['erledigt'] ? $tonFlaeche['ok'] : $tonFlaeche['warn'] }}" data-tagesplan-pass-komponente="{{ $k['id'] }}" data-tagesplan-pass-komponente-stand="{{ $k['erledigt'] ? 'erledigt' : 'offen' }}">{{ $k['name'] }} · {{ $k['station'] }} @if($k['erledigt'])@svg('heroicon-m-check', 'w-4 h-4')@else–@endif</span>
+                                                                            @endforeach
+                                                                        </div>
+                                                                    @endif
+                                                                    @if($i->art === 'zeile')
+                                                                        @include('foodalchemist::livewire.produktion.partials.wall-verknuepfung', ['verknuepfung' => $wallVerknuepfung[(int) $i->haken_line_id] ?? null])
+                                                                    @endif
+                                                                </button>
+                                                            </li>
+                                                        @endforeach
+                                                    </ul>
+                                                </article>
+                                            @endforeach
+                                        @else
                                         @foreach($laneGruppen as $gruppe)
                                             @php
                                                 $gruppeFertig = $gruppe->gesamt > 0 && $gruppe->erledigt === $gruppe->gesamt;
@@ -358,6 +414,7 @@
                                                                 <p class="mt-1.5 text-base text-[var(--fa-ink-2)] tabular-nums">
                                                                     @if($z->gesamt_kg !== null){{ $kg($z->gesamt_kg) }} kg · @endif{{ $z->arbeitszeit_min !== null ? $z->arbeitszeit_min . ' min' : 'keine Zeit hinterlegt' }}
                                                                 </p>
+                                                                @include('foodalchemist::livewire.produktion.partials.wall-verknuepfung', ['verknuepfung' => $wallVerknuepfung[(int) $z->id] ?? null])
                                                                 @if(collect($z->sicherheit['allergene'] ?? [])->isNotEmpty() || collect($z->sicherheit['warnungen'] ?? [])->isNotEmpty() || collect($z->sicherheit['diaet'] ?? [])->isNotEmpty())
                                                                     <div class="mt-2 flex flex-wrap gap-1.5" data-tagesplan-wall-sicherheit>
                                                                         @foreach(collect($z->sicherheit['warnungen'] ?? [])->take(3) as $warnung)
@@ -380,6 +437,7 @@
                                                 @endif
                                             </article>
                                         @endforeach
+                                        @endif
                                         </div>
                                     </div>
                                 </section>
@@ -577,6 +635,7 @@
                                         @if($z->gesamt_kg !== null){{ $kg($z->gesamt_kg) }} kg · @endif{{ $z->arbeitszeit_min !== null ? $z->arbeitszeit_min . ' min' : 'keine Zeit hinterlegt' }}
                                     </p>
                                     <p class="mt-1 text-sm text-[var(--fa-ink-3)]">für {{ $z->auftrag }}</p>
+                                    @include('foodalchemist::livewire.produktion.partials.wall-verknuepfung', ['verknuepfung' => $wallVerknuepfung[(int) $z->id] ?? null])
                                     @if(collect($z->sicherheit['allergene'] ?? [])->isNotEmpty() || collect($z->sicherheit['warnungen'] ?? [])->isNotEmpty() || collect($z->sicherheit['diaet'] ?? [])->isNotEmpty())
                                         <div class="mt-3 flex flex-wrap gap-1.5" data-tagesplan-wall-sicherheit>
                                             @foreach(collect($z->sicherheit['warnungen'] ?? [])->take(3) as $warnung)
