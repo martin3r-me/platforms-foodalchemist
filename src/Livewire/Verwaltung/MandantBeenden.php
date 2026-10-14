@@ -92,7 +92,9 @@ class MandantBeenden extends Component
 
         return view('foodalchemist::livewire.verwaltung.mandant-beenden', [
             'admin' => $admin,
-            'mandanten' => $admin ? app(MandantenService::class)->uebersicht() : [],
+            // Das Master-Team lässt sich nicht beenden (MandantBeendenService::pruefeMandant): in der Liste ohne Knopf, mit Hinweis
+            'mandanten' => $admin ? array_map(fn (array $m) => $m + ['ist_master' => \Platform\FoodAlchemist\Support\MasterTeam::istMaster(Team::find($m['team_id']))],
+                app(MandantenService::class)->uebersicht()) : [],
             'vorschau' => $vorschau,
         ]);
     }

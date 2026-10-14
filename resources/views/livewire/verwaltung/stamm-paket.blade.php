@@ -6,8 +6,8 @@
         @if($fehler)<x-fa::notice tone="crit" data-stamm-paket-fehler>{{ $fehler }}</x-fa::notice>@endif
         @if($meldung)<x-fa::notice tone="ok" data-stamm-paket-meldung>{{ $meldung }}</x-fa::notice>@endif
 
-        <x-fa::section title="Stamm-Paket je Mandant" icon="heroicon-o-archive-box"
-            description="Grundprodukte, Lieferanten, Artikel und ihre Verknüpfung, ohne Preise. Das Paket gehört dem Mandanten (Haupt-Team), Unter-Teams erben es. Das Master-Team hat es immer. Ein Abo setzt ein gebuchtes Paket voraus.">
+        <x-fa::section variant="plain">
+            <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)] max-w-[65ch]">Grundprodukte, Lieferanten, Artikel und ihre Verknüpfung, ohne Preise. Das Paket gehört dem Mandanten (Haupt-Team), Unter-Teams erben es. Das Master-Team hat es immer. Ein Abo setzt ein gebuchtes Paket voraus.</p>
             @if($mandanten === [])
                 <x-fa::empty compact icon="heroicon-o-archive-box" title="Keine Mandanten">Es gibt noch kein Haupt-Team neben dem Master-Team.</x-fa::empty>
             @else
