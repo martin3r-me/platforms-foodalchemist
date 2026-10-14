@@ -205,6 +205,7 @@ class KalkulationService
      */
     public function paketHk(Team $team, FoodAlchemistPaket $paket, ?FoodAlchemistOutlet $outlet = null): array
     {
+        $paket = app(PaketPreisService::class)->anwenden($paket, $team);   // Abo-Fassung: Team-Preis (Spec 82 Abo Pakete PR 3)
         $agg = $this->aggregat->paketAggregat($paket);
         $hk1 = $paket->ek_per_person !== null ? (float) $paket->ek_per_person : (float) $agg['ek_per_person'];
         $r = $this->berechne($team, $hk1, 0.0, 0.0, $outlet);

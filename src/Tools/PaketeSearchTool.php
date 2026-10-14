@@ -50,7 +50,7 @@ class PaketeSearchTool extends FoodAlchemistTool implements ToolContract, ToolMe
         $perPage = (int) ($arguments['per_page'] ?? 100);
         $limit = $perPage > 0 ? $perPage : 100;
         $page = app(PaketService::class)->paginateBrowser($filters, $team, $limit);
-        $out = collect($page->items())->map(fn ($p) => $this->paketPayload($p) + ['via' => 'lexical'])->all();
+        $out = collect($page->items())->map(fn ($p) => $this->paketPayload($p, false, null, $team) + ['via' => 'lexical'])->all();
 
         // Hybrid (Ausbau b): semantischer Pass über den Paket-Pool — ergänzt nur NEUES.
         $sem = $this->semanticPoolIds($team, $q, PoolEmbeddingService::ENTITY_TYPE_PAKET, array_column($out, 'id'), $limit);
@@ -62,7 +62,7 @@ class PaketeSearchTool extends FoodAlchemistTool implements ToolContract, ToolMe
                 if ($p === null || count($out) >= $limit) {
                     continue;
                 }
-                $out[] = $this->paketPayload($p) + ['via' => 'semantic', 'semantic_score' => round($score, 3)];
+                $out[] = $this->paketPayload($p, false, null, $team) + ['via' => 'semantic', 'semantic_score' => round($score, 3)];
             }
         }
 

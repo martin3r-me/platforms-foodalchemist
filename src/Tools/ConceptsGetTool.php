@@ -61,7 +61,7 @@ class ConceptsGetTool extends FoodAlchemistTool implements ToolContract, ToolMet
                 'service_moments' => $c->serviceMoments->pluck('name')->all(),
                 'seasons' => $c->seasons->pluck('name')->all(),
             ],
-            'slots' => $c->slots->map(function ($s) use ($c, $resolver) {
+            'slots' => $c->slots->map(function ($s) use ($c, $resolver, $team) {
                 $s->setRelation('concept', $c);                     // Resolver liest concept->serving_form_id
                 $darreichung = $s->dish ? $resolver->fuerSlot($s) : null;
 
@@ -69,7 +69,7 @@ class ConceptsGetTool extends FoodAlchemistTool implements ToolContract, ToolMet
                     'id' => $s->id, 'position' => $s->position, 'type' => $s->type, 'role' => $s->role,
                     'title' => $s->title, 'wording' => $s->wording, 'is_pflicht' => (bool) $s->is_pflicht,
                     'vk_recipe' => $s->dish ? ['id' => $s->dish->id, 'name' => $s->dish->name, 'sales_net' => $s->dish->sales_net] : null,
-                    'paket' => $s->package ? ['id' => $s->package->id, 'name' => $s->package->name, 'price_per_person' => $s->package->price_per_person] : null,
+                    'paket' => $s->package ? ['id' => $s->package->id, 'name' => $s->package->name, 'price_per_person' => app(\Platform\FoodAlchemist\Services\PaketPreisService::class)->anwenden($s->package, $team)->price_per_person] : null,
                     // aufgelöste Darreichung im Konzept-Kontext (explizit am Slot > Konzept-Servierform > Standard)
                     'resolved_presentation' => $darreichung ? [
                         'presentation_id' => $darreichung->id,
