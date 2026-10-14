@@ -21,7 +21,7 @@ use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
  */
 class FoodAlchemistConcept extends Model
 {
-    use HasUuidV7, LogsActivity, BelongsToTeamHierarchy, SoftDeletes;
+    use HasUuidV7, LogsActivity, BelongsToTeamHierarchy, SoftDeletes, \Platform\FoodAlchemist\Models\Concerns\HatFassungen;
 
     protected $table = 'foodalchemist_concepts';
 
@@ -127,7 +127,8 @@ class FoodAlchemistConcept extends Model
     /** Vorlage, aus der dieses Concept geforkt wurde (Lineage, optional). */
     public function templateSource(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistConcept::class, 'template_source_id');
+        return $this->belongsTo(FoodAlchemistConcept::class, 'template_source_id')
+            ->withoutGlobalScope(\Platform\FoodAlchemist\Models\Scopes\OhneFassungenScope::class);   // Spec 82: Verweis löst auch Fassungen auf
     }
 
     /** @deprecated #486 deutscher Alias → templateSource() */

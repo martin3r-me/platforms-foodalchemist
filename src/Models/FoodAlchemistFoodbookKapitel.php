@@ -76,7 +76,8 @@ class FoodAlchemistFoodbookKapitel extends Model
     // die 2026-08-24 entfernte Mechanik, jetzt über format_slots (nicht die abgelöste editions-Relation).
     public function format(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistFormat::class, 'format_id');
+        return $this->belongsTo(FoodAlchemistFormat::class, 'format_id')
+            ->withoutGlobalScope(\Platform\FoodAlchemist\Models\Scopes\OhneFassungenScope::class);   // Spec 82: Verweis löst auch Fassungen auf
     }
 
     /** Diskriminator: rendert dieses Kapitel seinen Inhalt live aus dem verknüpften Format? */

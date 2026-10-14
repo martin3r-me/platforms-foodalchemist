@@ -60,12 +60,14 @@ class FoodAlchemistOrderTemplateLine extends Model
 
     public function concept(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistConcept::class, 'concept_id');
+        return $this->belongsTo(FoodAlchemistConcept::class, 'concept_id')
+            ->withoutGlobalScope(\Platform\FoodAlchemist\Models\Scopes\OhneFassungenScope::class);   // Spec 82: Verweis löst auch Fassungen auf
     }
 
     public function paket(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistPaket::class, 'paket_id');
+        return $this->belongsTo(FoodAlchemistPaket::class, 'paket_id')
+            ->withoutGlobalScope(\Platform\FoodAlchemist\Models\Scopes\OhneFassungenScope::class);   // Spec 82: Verweis löst auch Fassungen auf
     }
 
     /** Quelle im Format der Bestellrunde (OrderService::previewFromSources). */

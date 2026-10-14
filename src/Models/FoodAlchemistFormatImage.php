@@ -32,7 +32,8 @@ class FoodAlchemistFormatImage extends Model
 
     public function format(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistFormat::class, 'format_id');
+        return $this->belongsTo(FoodAlchemistFormat::class, 'format_id')
+            ->withoutGlobalScope(\Platform\FoodAlchemist\Models\Scopes\OhneFassungenScope::class);   // Spec 82: Verweis löst auch Fassungen auf
     }
 
     public function contextFile(): BelongsTo

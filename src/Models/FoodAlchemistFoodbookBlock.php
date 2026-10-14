@@ -61,7 +61,8 @@ class FoodAlchemistFoodbookBlock extends Model
     /** concept_ref: das referenzierte Concept (live). */
     public function concept(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistConcept::class, 'concept_id');
+        return $this->belongsTo(FoodAlchemistConcept::class, 'concept_id')
+            ->withoutGlobalScope(\Platform\FoodAlchemist\Models\Scopes\OhneFassungenScope::class);   // Spec 82: Verweis löst auch Fassungen auf
     }
 
     /** recipe_ref: einzelnes Gericht (VK-Rezept). */

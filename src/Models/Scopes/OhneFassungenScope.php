@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Schema;
 
 /**
  * Spec 82 §12 B (Bauplan §2, Auflage 3): Fassungs-Zeilen (veröffentlichte, eingefrorene Master-Stände) sind standardmäßig
- * in KEINER Rezept-Abfrage — Listen, Zähler, Suchen, Batch-Commands, MCP. Sonst zählte der Master sie doppelt, und
+ * in KEINER Rezept-, Konzept-, Paket- und Format-Abfrage — Listen, Zähler, Suchen, Batch-Commands, MCP. Sonst zählte der Master sie doppelt, und
  * Massen-Pfade (KI-Klassifizierung, Rollen, Recompute-Läufe) würden eingefrorene Zeilen beschreiben.
  *
  * Bewusst aufgehoben (withoutGlobalScope) nur dort, wo Fassungen gemeint sind:
@@ -21,12 +21,14 @@ use Illuminate\Support\Facades\Schema;
  */
 class OhneFassungenScope implements Scope
 {
-    private static ?bool $spalteDa = null;
+    /** @var array<string, bool> Schema-Merker je Tabelle (ein Scope, mehrere Modelle). */
+    private static array $spalteDa = [];
 
     public function apply(Builder $builder, Model $model): void
     {
-        self::$spalteDa ??= Schema::hasColumn($model->getTable(), 'ist_fassung');
-        if (self::$spalteDa) {
+        $tabelle = $model->getTable();
+        self::$spalteDa[$tabelle] ??= Schema::hasColumn($tabelle, 'ist_fassung');
+        if (self::$spalteDa[$tabelle]) {
             $builder->where($model->getTable() . '.ist_fassung', false);
         }
     }

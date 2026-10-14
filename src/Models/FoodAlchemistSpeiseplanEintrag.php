@@ -54,12 +54,14 @@ class FoodAlchemistSpeiseplanEintrag extends Model
 
     public function concept(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistConcept::class, 'concept_id');
+        return $this->belongsTo(FoodAlchemistConcept::class, 'concept_id')
+            ->withoutGlobalScope(\Platform\FoodAlchemist\Models\Scopes\OhneFassungenScope::class);   // Spec 82: Verweis löst auch Fassungen auf
     }
 
     public function package(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistPaket::class, 'package_id');
+        return $this->belongsTo(FoodAlchemistPaket::class, 'package_id')
+            ->withoutGlobalScope(\Platform\FoodAlchemist\Models\Scopes\OhneFassungenScope::class);   // Spec 82: Verweis löst auch Fassungen auf
     }
 
     /** @deprecated #486 deutscher Alias → package() */
