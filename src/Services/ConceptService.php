@@ -55,12 +55,13 @@ class ConceptService
             ->when(is_numeric($filters['season'] ?? null), fn ($q) => $q
                 ->whereHas('seasons', fn ($w) => $w->where('foodalchemist_seasons.id', (int) $filters['season'])))
             ->orderBy('name')
-            ->paginate($perPage);
+            ->paginate($perPage)
+            ->through(fn ($c) => app(ConceptPreisService::class)->anwenden($c, $team));   // Abo-Fassung: Team-Preis statt leerer Master-Spalten
     }
 
     public function detail(Team $team, int $id): ?FoodAlchemistConcept
     {
-        return FoodAlchemistConcept::visibleToTeam($team)
+        $concept = FoodAlchemistConcept::visibleToTeam($team)
             ->with([
                 'slots' => fn ($q) => $q->orderBy('position'),
                 'slots.package:id,name,role,class,price_per_person,ek_per_person,food_cost_percent,price_mode,price_stale',
@@ -77,6 +78,8 @@ class ConceptService
                 'vorlageQuelle:id,name',
             ])
             ->find($id);
+
+        return $concept === null ? null : app(ConceptPreisService::class)->anwenden($concept, $team);
     }
 
     public function create(Team $team, array $in): FoodAlchemistConcept
@@ -115,7 +118,8 @@ class ConceptService
             ->when(is_numeric($filters['season'] ?? null), fn ($q) => $q
                 ->whereHas('seasons', fn ($w) => $w->where('foodalchemist_seasons.id', (int) $filters['season'])))
             ->orderBy('name')
-            ->paginate($perPage);
+            ->paginate($perPage)
+            ->through(fn ($c) => app(ConceptPreisService::class)->anwenden($c, $team));   // Abo-Fassung: Team-Preis statt leerer Master-Spalten
     }
 
     /** Neues Paket = kind=paket-Concept anlegen. */
@@ -660,7 +664,8 @@ class ConceptService
             ->when(is_numeric($filters['season'] ?? null), fn ($q) => $q
                 ->whereHas('seasons', fn ($w) => $w->where('foodalchemist_seasons.id', (int) $filters['season'])))
             ->orderBy('name')
-            ->get(['id', 'name', 'class', 'serving_form_id', 'event_type_id', 'price_per_person_cache']);
+            ->get(['id', 'name', 'class', 'serving_form_id', 'event_type_id', 'price_per_person_cache', 'ist_fassung', 'team_id'])
+            ->each(fn ($c) => app(ConceptPreisService::class)->anwenden($c, $team));
     }
 
     // ── M10-04: Live-Output-Preis (Σ gespeicherte Paket-Preise) ─────────
@@ -703,8 +708,27 @@ class ConceptService
         return $map;
     }
 
-    public function preisCockpit(FoodAlchemistConcept $concept, ?\Platform\FoodAlchemist\Models\FoodAlchemistOutlet $outlet = null): array
+    public function preisCockpit(FoodAlchemistConcept $concept, ?\Platform\FoodAlchemist\Models\FoodAlchemistOutlet $outlet = null, ?Team $team = null): array
     {
+        // Spec 82 Abo Konzepte PR 4: Konzept-Fassung bzw. eigenes Konzept mit Slots auf Fassungen → Team-Kalkulation
+        // (KostenCacheService/TeamVkService), nie die leeren Master-Spalten. Ohne bestimmbares Team: kein Preis, nicht 0 €.
+        $preis = app(ConceptPreisService::class);
+        if ($preis->istFassungsPfad($concept)) {
+            $fassung = (bool) ($concept->ist_fassung ?? false);
+            // Fassung: betrachtendes Team (Parameter > Overlay-Instanz > Betrieb > angemeldeter Benutzer); eigenes Konzept: sein Besitzer
+            $team = $fassung
+                ? ($team ?? $concept->preisTeam ?? ($outlet !== null ? \Platform\Core\Models\Team::find($outlet->team_id) : null)
+                    ?? \Illuminate\Support\Facades\Auth::user()?->currentTeamRelation)
+                : \Platform\Core\Models\Team::find($concept->team_id);
+            if ($team === null) {
+                return ['zeilen' => [], 'price_per_person' => null, 'summe_pro_person' => null, 'price_mode' => 'auto', 'ek_per_person' => null,
+                    'hat_stale' => false, 'hat_leer' => false, 'hat_ek_luecke' => true, 'vollstaendig' => false, 'grund' => 'kein_team',
+                    'fehlende' => [], 'quelle' => 'team_kalkulation'];
+            }
+
+            return $preis->cockpit($concept, $team, $outlet);
+        }
+
         $concept->loadMissing(['slots' => fn ($q) => $q->orderBy('position'),
             'slots.unit:id,slug,dimension,default_in_g',
             'slots.package:id,name,price_per_person,ek_per_person,price_stale',
@@ -893,11 +917,12 @@ class ConceptService
                 'price_override_at' => null, 'price_override_expires_at' => null] : []),
             'nutrition_cache' => $agg['naehrwerte'],
             'work_time_min_cache' => $agg['work_time_min'],
-            'ek_per_person_cache' => $agg['ek_per_person'],
+            // Fassungs-Pfad: EK aus der Team-Kalkulation (der Aggregat-EK liest die leeren Master-Spalten der Fassung); unvollständig = null
+            'ek_per_person_cache' => ($cockpit['quelle'] ?? null) === 'team_kalkulation' ? $cockpit['ek_per_person'] : $agg['ek_per_person'],
         ]);
         app(PriceAuditService::class)->record(
-            $concept, 'concept', $oldCalculated, (float) $cockpit['summe_pro_person'],
-            $oldEffective, (float) $cockpit['price_per_person'], 'children_sum',
+            $concept, 'concept', $oldCalculated, $cockpit['summe_pro_person'] !== null ? (float) $cockpit['summe_pro_person'] : null,
+            $oldEffective, $cockpit['price_per_person'] !== null ? (float) $cockpit['price_per_person'] : null, 'children_sum',
             ['calculation_version' => CatalogPricingService::VERSION],
         );
     }
@@ -963,7 +988,7 @@ class ConceptService
                     'package_id' => $slot->package_id, 'embedded_concept_id' => $slot->embedded_concept_id,
                     'sales_recipe_id' => $slot->sales_recipe_id,
                     'quantity' => $slot->quantity, 'unit_vocab_id' => $slot->unit_vocab_id,
-                ]);
+                ] + ($orig->ist_fassung ? ['presentation_id' => $slot->presentation_id, 'wording' => $slot->wording] : []));   // Kopie einer Abo-Fassung behält die gewählte Form (der Preis hängt daran)
             }
             // Facetten-Pivots (Einsatzmomente/Saisons/Zielgruppen) mitkopieren
             $neu->serviceMoments()->sync($orig->serviceMoments->pluck('id')->all());

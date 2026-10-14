@@ -117,15 +117,15 @@
         @if($kalkulation)
             @php
                 $stripVk = $concept ? ($cockpit['price_per_person'] ?? 0) : ($paket?->price_per_person !== null ? (float) $paket->price_per_person : null);
-                $stripEk = $concept ? (float) ($cockpit['ek_per_person'] ?? 0) : (float) ($kalkulation['hk1_pro_person'] ?? 0);
-                $stripWpct = ($stripVk !== null && $stripVk > 0) ? $stripEk / $stripVk * 100 : null;
+                $stripEk = $concept ? (($cockpit['ek_per_person'] ?? null) !== null ? (float) $cockpit['ek_per_person'] : null) : (float) ($kalkulation['hk1_pro_person'] ?? 0);   // null = EK unvollständig (Abo-Fassung): kein Preis, nie 0 €
+                $stripWpct = ($stripVk !== null && $stripVk > 0 && $stripEk !== null) ? $stripEk / $stripVk * 100 : null;
                 $stripWeTone = match ($wareneinsatzAmpel ?? 'unbekannt') { 'gruen' => 'good', 'gelb' => 'warn', 'rot' => 'bad', default => null };
                 $vkWert = $stripVk === null ? 'Preis fehlt' : ((float) $stripVk > 0 ? $euro($stripVk) : 'noch kein Preis');
             @endphp
             <x-slot:kpiHeader>
                 <x-foodalchemist::kpi-tiles :cols="4" marker="konzept-kpis" :tiles="array_values(array_filter([
                     ['kpi' => 'vk-person', 'label' => 'VK je Person', 'tone' => ($stripVk !== null && (float) $stripVk > 0) ? 'accent' : 'warn', 'value' => $vkWert],
-                    ['kpi' => 'we-person', 'label' => 'Wareneinsatz je Person', 'value' => $euro($stripEk)],
+                    ['kpi' => 'we-person', 'label' => 'Wareneinsatz je Person', 'value' => $stripEk === null ? 'Preis fehlt' : $euro($stripEk)],
                     ['kpi' => 'we-pct', 'label' => 'Wareneinsatz', 'tone' => $stripWeTone,
                      'title' => $stripWpct !== null ? 'Ziel des Teams: ' . number_format((float) $zielWareneinsatzPct, 1, ',', '.') . ' %' : 'Ohne VK lässt sich der Wareneinsatz nicht berechnen',
                      'value' => $stripWpct !== null ? number_format($stripWpct, 1, ',', '.') . ' %' : 'ohne VK'],

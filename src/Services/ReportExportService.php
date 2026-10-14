@@ -203,7 +203,11 @@ class ReportExportService
 
         $this->behaelterAusConcept($team, $concept, $optionen);
 
-        $slots = $concept->slots->map(function ($slot) use ($optionen) {
+        app(ConceptPreisService::class)->anwenden($concept, $team);   // Abo-Fassung: Team-Preis statt leerer Master-Caches (Spec 82)
+        $slots = $concept->slots->map(function ($slot) use ($optionen, $team) {
+            if ($slot->package !== null) {
+                app(PaketPreisService::class)->anwenden($slot->package, $team);   // Abo-Paket: Team-Preis
+            }
             $gerichte = collect();
             if ($slot->dish !== null) {
                 $gerichte->push([

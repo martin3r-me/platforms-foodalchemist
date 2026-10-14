@@ -200,7 +200,7 @@ class PaketFassungService
      * D9: Die Darreichung der Rezept-Fassung, die der Quell-Darreichung des Arbeitsstands entspricht. Standard → die Standard-
      * Darreichung der Fassung; sonst eine bereits angehängte gleiche Kopie, sonst wird sie angehängt (Deltas über Zutaten-Position).
      */
-    private function fassungsDarreichung(FoodAlchemistRecipe $fassung, FoodAlchemistRecipeDarreichung $quelle): ?FoodAlchemistRecipeDarreichung
+    public function fassungsDarreichung(FoodAlchemistRecipe $fassung, FoodAlchemistRecipeDarreichung $quelle): ?FoodAlchemistRecipeDarreichung
     {
         $vorhandene = FoodAlchemistRecipeDarreichung::where('recipe_id', $fassung->id)->orderByDesc('is_standard')->orderBy('id')->get();
         if ($quelle->is_standard) {

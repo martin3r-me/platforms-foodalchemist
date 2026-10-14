@@ -25,6 +25,24 @@ class FoodAlchemistConcept extends Model
 
     protected $table = 'foodalchemist_concepts';
 
+    /**
+     * Spec 82 Abo Konzepte PR 4: true = Lese-Instanz mit überlagerten Team-Preisen (ConceptPreisService::anwenden). Echte
+     * Eigenschaft, kein Attribut. Eine solche Instanz darf nie gespeichert werden (Leck-Sperre wie am Paket).
+     */
+    public bool $preisOverlay = false;
+
+    /** Team, mit dessen Preisen die Overlay-Instanz gerechnet ist (für spätere preisCockpit-Aufrufe). */
+    public ?\Platform\Core\Models\Team $preisTeam = null;
+
+    protected static function booted(): void
+    {
+        static::saving(function (self $concept) {
+            if ($concept->preisOverlay) {
+                throw new \LogicException('Overlay-Instanz darf nicht gespeichert werden (Team-Preis einer Abo-Fassung, Spec 82).');
+            }
+        });
+    }
+
     protected $guarded = ['id'];
 
     protected $casts = [

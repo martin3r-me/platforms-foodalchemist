@@ -1371,7 +1371,7 @@ class Editor extends Component
             if ($concept !== null) {
                 // Ebene 2 (D3): Concept-Preise, HK-Kalkulation + Pax-Simulation folgen dem aktiven Betrieb.
                 $outlet = $team ? app(\Platform\FoodAlchemist\Services\ActiveOutletContext::class)->current($team) : null;
-                $cockpit = $concepts->preisCockpit($concept, $outlet);
+                $cockpit = $concepts->preisCockpit($concept, $outlet, $team);
                 $sektionSumme = $istAufbau ? $this->sektionsSummen($concept, $cockpit['zeilen']) : [];
                 $aggregat = $agg->conceptAggregat($concept);
                 $deklaration = $istDeklarationTab ? $agg->conceptDeklaration($concept) : null;

@@ -514,7 +514,7 @@ class OfferCompositionService
     public function blockPreis(FoodAlchemistOfferBlock $block, ?FoodAlchemistOutlet $outlet = null, ?Team $team = null): array
     {
         if ($block->type === 'concept_ref' && $block->concept) {
-            $cockpit = $this->concepts->preisCockpit($block->concept, $outlet);
+            $cockpit = $this->concepts->preisCockpit($block->concept, $outlet, $team);
 
             return ['vk_pp' => (float) $cockpit['price_per_person'], 'ek_pp' => (float) $cockpit['ek_per_person'], 'pauschal' => 0.0, 'ek_vollstaendig' => true];
         }
@@ -580,11 +580,22 @@ class OfferCompositionService
             // additiv: alle Concept-Editionen summieren
             $vk = 0.0;
             $ek = 0.0;
+            $unvollstaendig = false;
             foreach ($format->slots as $fs) {
                 if ($fs->type === 'concept' && $fs->concept !== null) {
-                    $vk += (float) ($fs->concept->price_per_person_cache ?? 0);
-                    $ek += (float) ($fs->concept->ek_per_person_cache ?? 0);
+                    // Spec 82: eine Abo-Fassung rechnet mit den Preisen des Teams; unvollständig = kein Preis fürs Kapitel (nie 0 €)
+                    $w = app(ConceptPreisService::class)->preisWerte($fs->concept, $team, $outlet);
+                    if (! $w['vollstaendig']) {
+                        $unvollstaendig = true;
+
+                        continue;
+                    }
+                    $vk += (float) $w['vk'];
+                    $ek += (float) $w['ek'];
                 }
+            }
+            if ($unvollstaendig) {
+                return ['vk_pro_person' => null, 'ek_pro_person' => 0.0, 'pauschal' => 0.0, 'food_cost_percent' => null, 'preis_range' => null];
             }
 
             return ['vk_pro_person' => round($vk, 2), 'ek_pro_person' => round($ek, 2), 'pauschal' => 0.0,

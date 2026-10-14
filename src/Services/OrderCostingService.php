@@ -46,7 +46,7 @@ class OrderCostingService
         // können den realen Bedarf erhöhen, aber niemals unter den bereits je
         // Darreichung ausgewiesenen Katalog-MEK drücken. Der Floor verhindert, dass
         // eine unvollständige Explosion eine scheinbar profitable Empfehlung erzeugt.
-        $catalogCockpit = $this->concepts->preisCockpit($concept, $outlet);
+        $catalogCockpit = $this->concepts->preisCockpit($concept, $outlet, $team);
         $catalogMekPerPerson = (float) ($catalogCockpit['ek_per_person'] ?? 0);
         $catalogMekTotal = $catalogMekPerPerson * $pax;
         $mek = max($explodedMek, $catalogMekTotal);

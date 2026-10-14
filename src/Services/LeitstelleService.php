@@ -193,7 +193,7 @@ class LeitstelleService
                     // (preisCockpit), sonst der Team-Baseline-Cache (= heutiges Verhalten).
                     $paketPreis = $concept === null ? null
                         : ($outlet !== null
-                            ? (float) app(\Platform\FoodAlchemist\Services\ConceptService::class)->preisCockpit($concept, $outlet)['price_per_person']
+                            ? (float) app(\Platform\FoodAlchemist\Services\ConceptService::class)->preisCockpit($concept, $outlet, $team)['price_per_person']
                             : ($concept->price_per_person_cache !== null ? (float) $concept->price_per_person_cache : null));
                     $positionen[] = [
                         'art' => 'paket',
