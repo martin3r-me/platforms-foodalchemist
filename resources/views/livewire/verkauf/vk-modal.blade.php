@@ -727,8 +727,15 @@
                             @foreach($posten as $p)<option value="{{ $p->id }}">{{ $p->name }}</option>@endforeach
                         </x-fa::select>
                     </x-fa::field>
-                    <x-fa::field label="Variable Personenminuten" for="vk-varzeit">
-                        <x-fa::input id="vk-varzeit" inputmode="decimal" wire:model="form.variable_work_time_min" numeric placeholder="0" />
+                    @php
+                        // Spec 83 B3: leer = Anrichten aus den Teller-Komponenten (Startwert, ungeprüft)
+                        $anrichteMin = $anrichteKomponenten * \Platform\FoodAlchemist\Services\ProductionTimeService::ANRICHTEN_SEKUNDEN_JE_KOMPONENTE / 60;
+                        $anrichteText = $anrichteKomponenten > 0 ? number_format($anrichteMin, 2, ',', '') : null;
+                    @endphp
+                    <x-fa::field label="Variable Personenminuten" for="vk-varzeit"
+                        :hint="$anrichteText !== null ? 'Leer = Anrichten aus '.$anrichteKomponenten.' Teller-Komponenten × '.(int) \Platform\FoodAlchemist\Services\ProductionTimeService::ANRICHTEN_SEKUNDEN_JE_KOMPONENTE.' s = '.$anrichteText.' min je Portion (Startwert, ungeprüft). Ein eingetragener Wert gilt stattdessen.' : null">
+                        <x-fa::input id="vk-varzeit" inputmode="decimal" wire:model="form.variable_work_time_min" numeric
+                            :placeholder="$anrichteText !== null ? $anrichteText.' (je Portion, abgeleitet)' : '0'" data-vk-anrichten-abgeleitet="{{ $anrichteText ?? '' }}" />
                     </x-fa::field>
                     <x-fa::field label="Variable Zeit je" for="vk-varbasis">
                         <x-fa::select id="vk-varbasis" wire:model="form.variable_work_time_basis" :options="['kg' => 'kg', 'piece' => 'Stück', 'portion' => 'Portion']" />

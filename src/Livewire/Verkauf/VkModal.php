@@ -1411,6 +1411,8 @@ class VkModal extends Component
             'cockpit' => $rezept !== null ? ($cockpitTmp ?? $verkauf->cockpit($rezept, $team, $outlet)) : null,
             'gProStueck' => $gProStueck,
             'anteile' => $anteile,
+            // Spec 83 B3: abgeleitete Anrichte-Zeit je Portion (gilt, solange keine Zeit pro Menge gepflegt ist)
+            'anrichteKomponenten' => $rezept !== null ? app(\Platform\FoodAlchemist\Services\ProductionTimeService::class)->tellerKomponenten($rezept) : 0,
             'hauptgruppen' => $team !== null ? $verkauf->dishMainGroups($team) : collect(),
             // MVP-049 + MVP-050 (P0): identisch zum Browser (Verkauf/Browser::render) — Klasse ist
             // die Diätform als EIGENE Achse (`dish_main_group_id IS NULL`), unabhängig von der

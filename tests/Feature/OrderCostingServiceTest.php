@@ -107,10 +107,12 @@ it('weist Batchzeit nach physischer Grenze aus — ohne Rüstzeit am Gericht', f
     // und gilt nur am Basisrezept — sonst rechneten Alt-Werte still weiter, die die
     // Oberfläche nicht mehr zeigt. Die 30 Minuten fallen hier also bewusst weg.
     //
-    // 100 Pax = 10 kg: 1 × 60 Vorgang + 10 variabel.
+    // Spec 83 B3 (Entscheid Dominique 14.10.2026): work_time_min am Gericht ist „Pass einrichten“ und zählt EINMAL je
+    // Zeile — nicht mehr je 20-kg-Topf-Deckel (vorher 5.000 Pax: 25 × 60 + 500 = 2.000).
+    // 100 Pax = 10 kg: 60 Pass + 10 variabel.
     expect($small['active_person_minutes'])->toBe(70.0)
-        // 5.000 Pax = 500 kg: 25 × 60 Vorgang + 500 variabel.
-        ->and($large['active_person_minutes'])->toBe(2000.0);
+        // 5.000 Pax = 500 kg: 60 Pass + 500 variabel.
+        ->and($large['active_person_minutes'])->toBe(560.0);
 });
 
 it('weist den Fertigungslohn aus und markiert fehlende Produktionszeiten als unvollständig', function () {
@@ -125,6 +127,13 @@ it('weist den Fertigungslohn aus und markiert fehlende Produktionszeiten als unv
         'work_time_min' => 0,
         'variable_work_time_min' => 0,
     ]);
+    // Spec 83 B3: ohne gepflegte Zeit leitet das Gericht seine Anrichte-Zeit aus den Teller-Komponenten ab
+    // (1 Komponente × 5 s × 100 Portionen = 8,3 min) — das ist eine Zeit, kein „fehlt“.
+    $abgeleitet = $service->costConcept($this->rootTeam, $this->concept->refresh(), 100);
+    expect($abgeleitet['active_person_minutes'])->toBe(8.33)->and($abgeleitet['fek'])->toBeGreaterThan(0);
+
+    // Fehlt wirklich, wenn auch keine Komponente zählt (hier: einzige Zutat optional)
+    $this->recipe->ingredients()->update(['is_optional' => true]);
     $withoutTime = $service->costConcept($this->rootTeam, $this->concept->refresh(), 100);
 
     expect($withoutTime['fek'])->toBe(0.0)
