@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Support\Facades\DB;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Models\Team;
 use Platform\Core\Tools\ToolRegistry;
@@ -195,4 +196,24 @@ it('eigene Kopie eines Abo-Pakets: Preis mit den Team-Preisen des Mandanten, ohn
     $this->actingAs($this->neuChef);
     $kopieN = $inhalte->kopieAnlegen($this->neu, 'paket', $this->paketF->id, $this->neuChef);
     expect($kopieN->price_per_person)->toBeNull()->and($kopieN->ek_per_person)->toBeNull();
+});
+
+it('Leck-Sperre · eine Overlay-Instanz ist nicht dirty und save()/update() wirft, die Fassung in der DB bleibt ohne Preis', function () {
+    $overlay = app(PaketService::class)->detail($this->broich, $this->paketF->id);
+    expect((float) $overlay->price_per_person)->toBeGreaterThan(0.0)
+        ->and($overlay->preisOverlay)->toBeTrue()
+        ->and($overlay->isDirty(['price_per_person', 'ek_per_person', 'food_cost_percent', 'price_mode']))->toBeFalse();
+
+    expect(fn () => $overlay->save())->toThrow(\LogicException::class, 'Overlay-Instanz')
+        ->and(fn () => $overlay->update(['note' => 'x']))->toThrow(\LogicException::class)
+        ->and(fn () => $overlay->touch())->toThrow(\LogicException::class);
+
+    $roh = DB::table('foodalchemist_packages')->where('id', $this->paketF->id)->first();
+    expect($roh->price_per_person)->toBeNull()->and($roh->ek_per_person)->toBeNull()->and($roh->food_cost_percent)->toBeNull();
+
+    // Nicht-Fassungen sind keine Overlay-Instanz (Master speichert wie bisher)
+    $eigen = app(PaketService::class)->detail($this->master, $this->paket->id);
+    expect($eigen->preisOverlay)->toBeFalse();
+    $eigen->update(['note' => 'ok']);
+    expect(FoodAlchemistPaket::find($this->paket->id)->note)->toBe('ok');
 });

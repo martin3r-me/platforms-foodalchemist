@@ -64,6 +64,9 @@ class PaketPreisService
         $paket->setAttribute('ek_per_person', $r['ek_pro_person']);
         $paket->setAttribute('food_cost_percent', $r['food_cost_percent']);
         $paket->setAttribute('price_mode', 'auto');
+        // doppelt abgesichert: nicht dirty (kein Pfad schreibt die Werte versehentlich mit) + Merker, der jedes save() wirft
+        $paket->syncOriginalAttributes(['price_per_person', 'ek_per_person', 'food_cost_percent', 'price_mode']);
+        $paket->preisOverlay = true;
 
         return $paket;
     }
