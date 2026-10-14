@@ -87,6 +87,17 @@ class BehaelterBedarfService
      */
     public function regenerierBehaelter(Team $team, FoodAlchemistRecipe $gericht, float $ansaetze): array
     {
+        return $this->behaelterFuerGericht($team, $gericht, $ansaetze, 'regenerieren');
+    }
+
+    /**
+     * Wie {@see regenerierBehaelter}, für einen Zweck aus {@see jeKomponente} (`regenerieren` | `ausgabe`). Spec 83 B3i: Buffet/Platte
+     * zählt die Ausgabe-Behälter.
+     *
+     * @return array{anzahl:int, komponenten:list<array{label:string, anzahl:?int}>, nicht_berechenbar:list<string>}
+     */
+    public function behaelterFuerGericht(Team $team, FoodAlchemistRecipe $gericht, float $ansaetze, string $zweck): array
+    {
         $recompute = app(RecipeRecomputeService::class);
         $komponenten = [];
         foreach ($gericht->ingredients()->whereNotNull('referenced_recipe_id')->with('referencedRecipe')->get() as $z) {
@@ -100,7 +111,7 @@ class BehaelterBedarfService
         $liste = [];
         $offen = [];
         foreach ($this->jeKomponente($team, $komponenten) as $b) {
-            if (($b['zweck'] ?? null) !== 'regenerieren') {
+            if (($b['zweck'] ?? null) !== $zweck) {
                 continue;
             }
             $n = ($b['berechenbar'] ?? false) ? (int) ($b['varianten'][0]['anzahl'] ?? 0) : null;

@@ -28,6 +28,8 @@ class FoodAlchemistRecipeDarreichung extends Model
         'is_standard' => 'bool',
         'quantity_per_unit_g' => 'float',
         'unit_count' => 'float',
+        'anrichten_wert' => 'float',            // Spec 83 B3i: Einheit hängt an der Servierform
+        'anrichten_pauschal_min' => 'float',    // Spec 83 B3l: Pauschale je Auftragszeile
         'ek_portion' => 'float',
         'sales_net' => 'float',
         'calculated_sales_net' => 'float',

@@ -70,6 +70,11 @@ class DarreichungService
             'price_mode' => $attrs['price_mode'] ?? 'auto',
             'sales_net' => $attrs['sales_net'] ?? null,
             'note' => $attrs['note'] ?? null,
+            // Spec 83 B3i/B3l: NICHT aus der Standard-Form vorbefüllen — die Einheit hängt an der Form (s je Teller ≠ min je Platte)
+            'anrichten_wert' => isset($attrs['anrichten_wert']) && is_numeric(str_replace(',', '.', (string) $attrs['anrichten_wert']))
+                ? (float) str_replace(',', '.', (string) $attrs['anrichten_wert']) : null,
+            'anrichten_pauschal_min' => isset($attrs['anrichten_pauschal_min']) && is_numeric(str_replace(',', '.', (string) $attrs['anrichten_pauschal_min']))
+                ? (float) str_replace(',', '.', (string) $attrs['anrichten_pauschal_min']) : null,
             'created_via' => $createdVia,
         ]);
 
@@ -130,12 +135,15 @@ class DarreichungService
         // nichts an 140 °C. Behaelter und Vehikel bleiben: dort greift die Form legitim ein.
         'serving_vehicle_vocab_id',
         'work_time_surcharge_min', 'offer_text_override', 'note',
+        'anrichten_wert', 'anrichten_pauschal_min',   // Spec 83 B3i/B3l: Anrichte-Zeit je Darreichung (Einheit aus der Form)
         'tableware_item_id', // Default-Geschirr der Form (Concepter-Vorschlag)
     ];
 
     private const DEZIMAL_FELDER = [
         'quantity_per_unit_g' => 'Grammatur',
         'unit_count' => 'Anzahl',
+        'anrichten_wert' => 'Anrichten je Einheit',
+        'anrichten_pauschal_min' => 'Anrichten-Pauschale',
         'sales_net' => 'VK netto',
     ];
 

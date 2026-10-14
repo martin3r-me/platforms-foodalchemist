@@ -70,7 +70,10 @@ class OrderCostingService
             // Basisrezepte auf ganze Ansätze; der fraktionale Bedarf bleibt dort nur
             // als Transparenzwert erhalten.
             $productionBatches = (float) ($line['ansaetze'] ?? $line['benoetigt_ansaetze'] ?? 0);
-            $time = $this->times->calculateForBatches($team, $recipe, $productionBatches, $station);
+            // Spec 83 B3i: am Gericht die bestellten Darreichungen (Planungsblatt-Formen) fürs Anrichten je Form
+            $formen = array_map(fn ($f) => ['darreichung_id' => $f['darreichung_id'] ?? null, 'portionen' => (float) ($f['portionen_roh'] ?? $f['portionen'] ?? 0)],
+                $line['formen'] ?? []);
+            $time = $this->times->calculateForBatches($team, $recipe, $productionBatches, $station, $formen !== [] ? $formen : null);
             // Zeit ist betriebs-unabhängig (gleiches Rezept = gleiche Minuten); nur die Rate folgt dem Betrieb.
             $rate = $this->laborRates->rate($team, $station, $outlet);
             // Am GERICHT ist „kein Posten" der Normalfall, kein Mangel (Entscheid 2026-09-04):

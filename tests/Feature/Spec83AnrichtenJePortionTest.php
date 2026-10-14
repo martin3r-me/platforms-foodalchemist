@@ -96,29 +96,99 @@ it('Gericht ohne Komponenten: keine Anrichte-Zeit, keine Warnung (Bestand bleibt
         ->and($r['active_person_minutes'])->toBe(0.0)->and($r['warnings'])->toBeEmpty();    // B3j: work_time_min am Gericht zählt nicht
 });
 
-it('B3h VK-Modal: „Anrichten je Teller (s)“ — Startwert aus Komponenten, Sekunden ↔ min je Portion, alte kg-Zeit bleibt bis zur Eingabe', function () {
+// ── B3i/B3l: Anrichten je Darreichungsform (Pauschale + Zeit je Einheit × Menge) ─────────────────────────────
+
+function spec83Formen($team, $gericht): array
+{
+    $mk = fn (string $code, string $label) => \Platform\FoodAlchemist\Models\FoodAlchemistServierform::firstOrCreate(['code' => $code], ['team_id' => $team->id, 'label' => $label]);
+    $svc = app(\Platform\FoodAlchemist\Services\DarreichungService::class);
+    $d = [];
+    foreach ([['teller', 'Teller', []], ['flying', 'Flying', ['unit_count' => 3]], ['buffet', 'Buffet', []], ['station', 'Live-Station', []], ['unbestimmt', 'Unbestimmt', []]] as [$code, $label, $attrs]) {
+        $d[$code] = $svc->anlegen($team, $gericht->id, $mk($code, $label)->id, $attrs);
+    }
+
+    return $d;   // teller = Standard (erste Form)
+}
+
+it('B3i: je Form eigene Einheit — Teller s/Portion, Flying s/Stück, Buffet min/Platte (Ausgabe-Behälter), Station 0, unbestimmt wie Teller', function () {
+    $d = spec83Formen($this->rootTeam, $this->gericht);
+    // Ausgabe-Behälter (Spec 51) an Jus + Fleisch: je 1 GN 2/1 bei 100 Portionen
+    $this->artisan('foodalchemist:behaelter-katalog --apply');
+    $gn = (int) \Illuminate\Support\Facades\DB::table('foodalchemist_vocab_containers')->where('slug', 'gn_11_65mm')->value('id');
+    foreach (['Jus: Altbier', 'Fleisch: Senfrostbraten'] as $name) {
+        \Platform\FoodAlchemist\Models\FoodAlchemistRecipeContainer::create(['team_id' => $this->rootTeam->id, 'zweck' => 'ausgabe',
+            'recipe_id' => FoodAlchemistRecipe::where('name', $name)->value('id'), 'container_vocab_id' => $gn, 'referenz_menge_kg' => 3.0]);
+    }
+    $formen = collect($d)->map(fn ($dar) => ['darreichung_id' => $dar->id, 'portionen' => 100.0])->values()->all();
+    $r = $this->times->calculateForBatches($this->rootTeam, $this->gericht->fresh(), 500, null, $formen);
+    $f = collect($r['bloecke']['anrichten']['formen'])->keyBy('form');
+
+    expect($f['teller'])->toMatchArray(['einheit' => 'portion', 'masseinheit' => 's', 'je_einheit' => 35.0, 'quelle' => 'komponenten', 'minuten' => 58.333])
+        ->and($f['flying'])->toMatchArray(['einheit' => 'stueck', 'menge' => 300.0, 'je_einheit' => 5.0, 'quelle' => 'startwert', 'minuten' => 25.0])
+        ->and($f['buffet'])->toMatchArray(['einheit' => 'behaelter', 'masseinheit' => 'min', 'menge' => 2.0, 'je_einheit' => 2.0, 'minuten' => 4.0])
+        ->and($f['station'])->toMatchArray(['einheit' => 'vor_ort', 'minuten' => 0.0, 'pauschal_min' => 0.0])
+        ->and($f['unbestimmt'])->toMatchArray(['einheit' => 'portion', 'minuten' => 58.333])
+        ->and($r['bloecke']['anrichten']['minuten'])->toBe(145.667)                 // 58,333 + 25 + 4 + 0 + 58,333
+        ->and(implode(' ', $r['warnings']))->toContain('Servierform „Unbestimmt“ unbestimmt');
+});
+
+it('B3l: gepflegter Wert und Pauschale je Darreichung — Pauschale einmal je Zeile', function () {
+    $d = spec83Formen($this->rootTeam, $this->gericht);
+    app(\Platform\FoodAlchemist\Services\DarreichungService::class)->aktualisieren($this->rootTeam, $d['teller']->id, ['anrichten_wert' => '60', 'anrichten_pauschal_min' => '10,5']);
+    $r = $this->times->calculateForBatches($this->rootTeam, $this->gericht->fresh(), 100, null, [['darreichung_id' => $d['teller']->id, 'portionen' => 100.0]]);
+
+    expect($r['bloecke']['anrichten']['formen'][0])->toMatchArray(['je_einheit' => 60.0, 'pauschal_min' => 10.5, 'quelle' => 'darreichung', 'minuten' => 110.5])   // 10,5 + 100 × 60 s
+        ->and($r['variable_time_source'])->toBe('darreichung');
+});
+
+it('B3i: ohne bekannte Formen (Produktionsauftrag, Schritt 1) gilt die Standard-Darreichung — mit Warnung, wenn es mehrere gibt', function () {
+    spec83Formen($this->rootTeam, $this->gericht);
+    $r = $this->times->calculateForBatches($this->rootTeam, $this->gericht->fresh(), 100);
+
+    expect($r['bloecke']['anrichten']['formen'])->toHaveCount(1)
+        ->and($r['bloecke']['anrichten']['formen'][0])->toMatchArray(['form' => 'teller', 'portionen' => 100.0, 'minuten' => 58.333])
+        ->and(implode(' ', $r['warnings']))->toContain('bestellte Darreichungen unbekannt');
+});
+
+it('B3i Kalkulation/Planungsblatt: bestellte Darreichungen kommen aus den Zielen (Flying 40 Portionen à 3 Stück)', function () {
+    $d = spec83Formen($this->rootTeam, $this->gericht);
+    $blatt = app(\Platform\FoodAlchemist\Services\PlanungsblattService::class)->produktionsblattFuerZiele($this->rootTeam, [
+        ['recipe_id' => $this->gericht->id, 'portions' => 60, 'presentation_id' => $d['teller']->id],
+        ['recipe_id' => $this->gericht->id, 'portions' => 40, 'presentation_id' => $d['flying']->id],
+    ]);
+    $zeile = collect($blatt['rezepte'])->firstWhere('recipe_id', $this->gericht->id);
+
+    // Teller 60 × 35 s = 35 min + Flying 120 Stück × 5 s = 10 min = 45 min (keine Regenerier-Behälter)
+    expect(collect($zeile['formen'])->pluck('darreichung_id')->filter()->sort()->values()->all())->toBe(collect([$d['teller']->id, $d['flying']->id])->sort()->values()->all())
+        ->and($zeile['arbeitszeit_min'])->toBe(45.0);
+});
+
+it('B3i/B3l VK-Modal: je Darreichung Pauschale + Wert mit Einheit der Form, Startwert-Platzhalter und Hochrechnung für 100', function () {
+    $d = spec83Formen($this->rootTeam, $this->gericht);
     $this->actingAs($this->makeUser($this->rootTeam, 'Koch Anrichten'));
     $lw = \Livewire\Livewire::test(\Platform\FoodAlchemist\Livewire\Verkauf\VkModal::class)->call('oeffnen', $this->gericht->id);
-    expect($lw->html())->toContain('Anrichten je Teller (s)')->toContain('data-vk-anrichten-startwert="35"')
-        ->toContain('35 (Startwert aus 7 Komponenten)');
+    $html = $lw->html();
+    expect($html)->toContain('data-dar-anrichten="'.$d['teller']->id.'"')->toContain('je Teller (s)')->toContain('35 Startwert')
+        ->toContain('je Stück (s)')->toContain('je Platte (min)')->toContain('vor Ort an der Station')
+        ->toMatch('/data-dar-anrichten-hochrechnung="'.$d['teller']->id.'">100 Portionen\s*≈ 58 min · Startwert, ungeprüft/u');
 
-    // Eintragen: 30 s je Teller → 0,5 min je Portion
-    $lw->call('bearbeitenStarten')->set('form.anrichten_s', '30')->call('speichern');
-    $g = $this->gericht->fresh();
-    expect((float) $g->variable_work_time_min)->toBe(0.5)->and($g->variable_work_time_basis)->toBe('portion')
-        ->and($this->times->calculateForBatches($this->rootTeam, $g, 100)['bloecke']['anrichten'])->toMatchArray(['minuten' => 50.0, 'quelle' => 'gepflegt', 'je_teller_s' => 30.0]);
+    $lw->call('bearbeitenStarten')->set('darForm.'.$d['teller']->id.'.anrichten_wert', '30')->set('darForm.'.$d['teller']->id.'.anrichten_pauschal_min', '5')
+        ->call('darreichungSpeichern', $d['teller']->id);
+    expect((float) $d['teller']->fresh()->anrichten_wert)->toBe(30.0)->and((float) $d['teller']->fresh()->anrichten_pauschal_min)->toBe(5.0)
+        ->and($lw->html())->toMatch('/data-dar-anrichten-hochrechnung="'.$d['teller']->id.'">100 Portionen\s*≈ 55 min</u');   // 5 + 100 × 30 s
+});
 
-    // Leeren → wieder Startwert aus Komponenten
-    \Livewire\Livewire::test(\Platform\FoodAlchemist\Livewire\Verkauf\VkModal::class)->call('oeffnen', $g->id)->assertSet('form.anrichten_s', '30')
-        ->call('bearbeitenStarten')->set('form.anrichten_s', '')->call('speichern');
-    expect($this->gericht->fresh()->variable_work_time_min)->toBeNull();
+it('B3i MCP im Lockstep: recipe_darreichung.PUT setzt die Anrichte-Felder, recipes.GET zeigt Wert und Einheit', function () {
+    $d = spec83Formen($this->rootTeam, $this->gericht);
+    $ctx = new \Platform\Core\Contracts\ToolContext(user: $this->makeUser($this->rootTeam, 'MCP Koch'), team: $this->rootTeam);
+    $reg = app(\Platform\Core\Tools\ToolRegistry::class);
+    $put = $reg->get('foodalchemist.recipe_darreichung.PUT')->execute(['presentation_id' => $d['buffet']->id, 'attrs' => ['anrichten_wert' => 3, 'anrichten_pauschal_min' => 15]], $ctx);
+    expect($put->success)->toBeTrue();
 
-    // Alte Zeit je kg (Behelf) bleibt stehen, solange keine Sekunden eingetragen werden — mit Hinweis
-    $this->gericht->update(['variable_work_time_min' => 0.8, 'variable_work_time_basis' => 'kg']);
-    $alt = \Livewire\Livewire::test(\Platform\FoodAlchemist\Livewire\Verkauf\VkModal::class)->call('oeffnen', $this->gericht->id);
-    expect($alt->html())->toContain('Bisher gepflegt: 0,80 min je kg (alt)');
-    $alt->call('bearbeitenStarten')->call('speichern');
-    expect((float) $this->gericht->fresh()->variable_work_time_min)->toBe(0.8)->and($this->gericht->fresh()->variable_work_time_basis)->toBe('kg');
+    $get = $reg->get('foodalchemist.recipes.GET')->execute(['id' => $this->gericht->id], $ctx);
+    $buffet = collect($get->data['presentations'] ?? [])->firstWhere('presentation_id', $d['buffet']->id);
+    expect($buffet)->toMatchArray(['anrichten_wert' => 3.0, 'anrichten_pauschal_min' => 15.0])
+        ->and($buffet['anrichten_einheit']['einheit'])->toBe('behaelter');
 });
 
 it('Planungsblatt: Ansätze und Portionen des Gerichts bleiben unverändert, nur die Arbeitszeit folgt B3', function () {

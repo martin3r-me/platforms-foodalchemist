@@ -556,6 +556,37 @@
                                     @endunless
                                 </td>
                             </tr>
+                            {{-- Spec 83 B3i/B3l: Anrichten dieser Form — Pauschale je Auftragszeile + Zeit je Einheit (Einheit aus der Servierform) --}}
+                            @php
+                                $av = $anrichtenVorschau[$d->id] ?? [];
+                                $avEinheit = \Platform\FoodAlchemist\Services\ProductionTimeService::anrichteEinheit($d->servingForm?->code);
+                                $avMenge = ['portion' => 'Teller', 'stueck' => 'Stück', 'behaelter' => 'Platten'][$avEinheit['einheit']] ?? 'Teller';
+                            @endphp
+                            <tr wire:key="dar-anr-{{ $d->id }}" data-dar-anrichten="{{ $d->id }}">
+                                <td colspan="13" class="pt-0 pb-2">
+                                    <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]">
+                                        <span class="font-medium">Anrichten</span>
+                                        @if($avEinheit['einheit'] === 'vor_ort')
+                                            <span class="{{ $hinweis }}">vor Ort an der Station, kein Küchen-Lohn</span>
+                                        @else
+                                            <label class="inline-flex items-center gap-1">Pauschale (min)
+                                                <input type="text" inputmode="decimal" wire:model.blur="darForm.{{ $d->id }}.anrichten_pauschal_min" wire:change="darreichungSpeichern({{ $d->id }})"
+                                                       placeholder="0" class="{{ $feldKlein }} w-16 text-right tabular-nums" data-dar-anrichten-pauschale />
+                                            </label>
+                                            <label class="inline-flex items-center gap-1">{{ $avEinheit['label'] }}
+                                                <input type="text" inputmode="decimal" wire:model.blur="darForm.{{ $d->id }}.anrichten_wert" wire:change="darreichungSpeichern({{ $d->id }})"
+                                                       placeholder="{{ isset($av['startwert']) && $av['startwert'] !== null ? rtrim(rtrim(number_format((float) $av['startwert'], 1, ',', ''), '0'), ',').' Startwert' : '' }}"
+                                                       class="{{ $feldKlein }} w-28 text-right tabular-nums" data-dar-anrichten-wert />
+                                            </label>
+                                            @if($av !== [])
+                                                <span class="{{ $hinweis }}" data-dar-anrichten-hochrechnung="{{ $d->id }}">100 Portionen
+                                                    @if($avEinheit['einheit'] !== 'portion')({{ rtrim(rtrim(number_format((float) ($av['menge'] ?? 0), 1, ',', '.'), '0'), ',') }} {{ $avMenge }})@endif
+                                                    ≈ {{ number_format((float) $av['minuten_gesamt'], 0, ',', '.') }} min{{ ['darreichung' => '', 'gepflegt' => ' · Altwert am Gericht'][$av['quelle'] ?? ''] ?? ' · Startwert, ungeprüft' }}</span>
+                                            @endif
+                                        @endif
+                                    </div>
+                                </td>
+                            </tr>
                             @if($darDeltaOffen === $d->id)
                                 <tr wire:key="dar-delta-{{ $d->id }}">
                                     <td colspan="13" class="pb-3">
@@ -717,20 +748,18 @@
                             @foreach($posten as $p)<option value="{{ $p->id }}">{{ $p->name }}</option>@endforeach
                         </x-fa::select>
                     </x-fa::field>
-                    @php
-                        // Spec 83 B3h: Anrichten am Gericht = Sekunden für EINEN Teller. Leer = Startwert aus den Teller-Komponenten.
-                        $startwertS = (int) round($anrichteKomponenten * \Platform\FoodAlchemist\Services\ProductionTimeService::ANRICHTEN_SEKUNDEN_JE_KOMPONENTE);
-                        $altBasis = ($form['variable_work_time_basis'] ?? 'portion') !== 'portion' && (float) ($form['variable_work_time_min'] ?? 0) > 0;
-                        $basisText = ['kg' => 'kg', 'piece' => 'Stück'][$form['variable_work_time_basis'] ?? ''] ?? '';
-                    @endphp
-                    <x-fa::field label="Anrichten je Teller (s)" for="vk-anrichten-s"
-                        :hint="$altBasis
-                            ? 'Bisher gepflegt: '.number_format((float) $form['variable_work_time_min'], 2, ',', '').' min je '.$basisText.' (alt). Ein Wert in Sekunden je Teller ersetzt ihn.'
-                            : ($startwertS > 0 ? 'Leer = Startwert aus '.$anrichteKomponenten.' Komponenten ('.$startwertS.' s, ungeprüft). Die Zeit für alle Teller verteilt sich anteilig auf die beteiligten Posten.' : 'Wie lange dauert es, EINEN Teller anzurichten?')">
-                        <x-fa::input id="vk-anrichten-s" inputmode="decimal" wire:model="form.anrichten_s" numeric
-                            :placeholder="$startwertS > 0 ? $startwertS.' (Startwert aus '.$anrichteKomponenten.' Komponenten)' : '0'"
-                            data-vk-anrichten-startwert="{{ $startwertS }}" />
-                    </x-fa::field>
+                    {{-- Spec 83 B3i/B3l: Anrichten wird je DARREICHUNG gepflegt (Tab Darreichungen). Am Gericht bleibt nur ein Altwert sichtbar. --}}
+                    @if((float) ($form['variable_work_time_min'] ?? 0) > 0)
+                        @php $basisText = ['kg' => 'kg', 'piece' => 'Stück', 'portion' => 'Teller'][$form['variable_work_time_basis'] ?? 'portion'] ?? 'Teller'; @endphp
+                        <x-fa::field label="Anrichten am Gericht (Altwert)" for="vk-varzeit-alt" class="sm:col-span-2"
+                            hint="Gilt für Teller-Formen ohne eigenen Wert an der Darreichung. Gepflegt wird Anrichten jetzt je Darreichung.">
+                            <p id="vk-varzeit-alt" class="text-[length:var(--fa-text-md)]" data-vk-anrichten-altwert>
+                                {{ ($form['variable_work_time_basis'] ?? 'portion') === 'portion'
+                                    ? number_format((float) $form['variable_work_time_min'] * 60, 0, ',', '.').' s je Teller'
+                                    : number_format((float) $form['variable_work_time_min'], 2, ',', '').' min je '.$basisText }}
+                            </p>
+                        </x-fa::field>
+                    @endif
                     <x-fa::field label="Batchgrenze kg" for="vk-batch-kg">
                         <x-fa::input id="vk-batch-kg" inputmode="decimal" wire:model="form.batch_max_kg" numeric placeholder="Team-Standard" />
                     </x-fa::field>

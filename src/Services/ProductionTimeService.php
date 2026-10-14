@@ -22,6 +22,41 @@ class ProductionTimeService
      */
     public const REGENERIEREN_SEKUNDEN_JE_BEHAELTER = 30.0;
 
+    /**
+     * Spec 83 B3i/B3k (Entscheide Dominique 14.10.2026): Das Anrichte-Maß hängt an der DARREICHUNGSFORM (serving_forms.code).
+     * portion = Sekunden je Portion (Startwert Komponenten × 5 s) · stueck = Sekunden je Stück · behaelter = Minuten je Platte bzw.
+     * Ausgabe-Behälter (Zahl aus dem Behälter-Bedarf, Zweck „ausgabe“) · vor_ort = Anrichten an der Live-Station, kein Küchen-Lohn.
+     * Unbekannte/unbestimmte Form → wie portion, mit Warnung.
+     */
+    public const ANRICHTEN_FORMEN = [
+        'teller' => 'portion', 'box' => 'portion', 'theke' => 'portion', 'foodtruck' => 'portion',
+        'flying' => 'stueck', 'fingerfood' => 'stueck',
+        'buffet' => 'behaelter', 'pause' => 'behaelter', 'sharing' => 'behaelter',
+        'station' => 'vor_ort',
+    ];
+
+    /** Startwert Flying/Fingerfood: Sekunden je Stück. Quelle: Spec 83 B3k, ungeprüft. */
+    public const ANRICHTEN_SEKUNDEN_JE_STUECK = 5.0;
+
+    /** Startwert Buffet/Pause/Sharing: Minuten je Platte bzw. Ausgabe-Behälter. Quelle: Spec 83 B3k, ungeprüft. */
+    public const ANRICHTEN_MINUTEN_JE_PLATTE = 2.0;
+
+    /** Startwert Pauschale je Auftragszeile und Darreichung (Rüsten am Pass): 0 bis Dominique einen Wert nennt (Spec 83 B3l). */
+    public const ANRICHTEN_PAUSCHALE_MIN = 0.0;
+
+    /** @return array{einheit:string, masseinheit:?string, label:string} Einheit des Anrichte-Werts einer Servierform. */
+    public static function anrichteEinheit(?string $formCode): array
+    {
+        $einheit = self::ANRICHTEN_FORMEN[$formCode ?? ''] ?? 'portion';
+
+        return match ($einheit) {
+            'stueck' => ['einheit' => 'stueck', 'masseinheit' => 's', 'label' => 'je Stück (s)'],
+            'behaelter' => ['einheit' => 'behaelter', 'masseinheit' => 'min', 'label' => 'je Platte (min)'],
+            'vor_ort' => ['einheit' => 'vor_ort', 'masseinheit' => null, 'label' => 'vor Ort (kein Küchen-Lohn)'],
+            default => ['einheit' => 'portion', 'masseinheit' => 's', 'label' => 'je Teller (s)'],
+        };
+    }
+
     public function __construct(private TeamSettingsService $settings) {}
 
     /** @return array<string,mixed> */
@@ -30,6 +65,7 @@ class ProductionTimeService
         FoodAlchemistRecipe $recipe,
         float $rawBatches,
         ?FoodAlchemistProductionStation $station = null,
+        ?array $formen = null,
     ): array {
         $isPieces = $recipe->istStueckErtrag();
         $batches = max(0.0, $rawBatches);
@@ -58,6 +94,7 @@ class ProductionTimeService
             $station,
             $rawBatches,
             $quantities[$variableBasis] ?? null,
+            $formen,
         );
     }
 
@@ -70,6 +107,7 @@ class ProductionTimeService
         ?FoodAlchemistProductionStation $station = null,
         ?float $rawBatches = null,
         ?float $variableQuantityOverride = null,
+        ?array $formen = null,
     ): array {
         $basis = in_array($quantityBasis, ['kg', 'piece', 'portion'], true) ? $quantityBasis : 'kg';
         $isPieces = $basis === 'piece';
@@ -118,7 +156,14 @@ class ProductionTimeService
         // Spec 83 B3c/B3j: am Gericht zwei getrennte Blöcke — Regenerieren und Anrichten (Pass einrichten entfällt).
         $bloecke = null;
         $regen = 0.0;
+        $quelle = $zeitJeMenge['quelle'];
         if ($recipe->is_sales_recipe) {
+            // B3i/B3l: Anrichten je Darreichungsform (Pauschale + Zeit je Einheit × Menge) ersetzt die Rechnung pro Menge
+            $a = $this->anrichten($team, $recipe, $formen, $rawBatches, $zeitJeMenge);
+            $variable = $a['minuten'];
+            $quelle = $a['quelle'];
+            $warnings = array_merge($warnings, $a['warnungen']);
+            unset($a['warnungen'], $a['minuten'], $a['quelle']);
             $r = $this->regenerieren($team, $recipe, $rawBatches);
             $regen = $r['minuten'];
             $passive += $r['geraete_min'];                   // Gerätezeit: passiv, kein Lohn, nur Durchlaufzeit
@@ -128,10 +173,9 @@ class ProductionTimeService
             $anteile = $this->postenAnteile($recipe);
             $bloecke = [
                 'regenerieren' => ['minuten' => round($regen, 3)] + $r + ['aufteilung' => $this->verteile($anteile, $regen)],
-                'anrichten' => ['minuten' => round($variable, 3), 'quelle' => $zeitJeMenge['quelle'],
-                    'komponenten' => $zeitJeMenge['komponenten'], 'je_einheit_min' => round($zeitJeMenge['min'], 4),
-                    'je_teller_s' => $variableBasis === 'portion' ? round($zeitJeMenge['min'] * 60, 1) : null,
-                    'basis' => $variableBasis, 'aufteilung' => $this->verteile($anteile, $variable)],
+                'anrichten' => ['minuten' => round($variable, 3), 'quelle' => $quelle,
+                    'komponenten' => $zeitJeMenge['komponenten'] ?? $this->tellerKomponenten($recipe)] + $a
+                    + ['aufteilung' => $this->verteile($anteile, $variable)],
             ];
         }
         $active = $setup + $batch + $regen + $variable;
@@ -148,7 +192,7 @@ class ProductionTimeService
             'variable_quantity' => round($variableQuantity, 3),
             'variable_quantity_basis' => $variableBasis,
             'variable_time_per_unit' => round($zeitJeMenge['min'], 4),
-            'variable_time_source' => $zeitJeMenge['quelle'],          // gepflegt | komponenten | null
+            'variable_time_source' => $quelle,                         // gepflegt | komponenten | darreichung | startwert | vor_ort | gemischt | null
             'anrichten_komponenten' => $zeitJeMenge['komponenten'],    // nur bei abgeleiteter Anrichte-Zeit
             'active_person_minutes' => round($active, 3),
             'passive_minutes' => round($passive, 3),
@@ -157,6 +201,96 @@ class ProductionTimeService
             'bloecke' => $bloecke,                                      // nur am Gericht, sonst null
             'warnings' => $warnings,
         ];
+    }
+
+    /**
+     * Spec 83 B3i/B3l: Anrichte-Zeit eines Gerichts über seine bestellten Darreichungen. Je Form: Pauschale (einmal je Zeile)
+     * + Zeit je Einheit × Menge; Einheit aus {@see ANRICHTEN_FORMEN}. Wert je Einheit: an der Darreichung gepflegt > am Gericht
+     * gepflegt (`variable_work_time_min`, nur Teller-Formen) > Startwert. Ohne Formen (z. B. Produktionsauftrag, Schritt 1) gilt
+     * die Standard-Darreichung für alle Portionen — mit Warnung, wenn das Gericht mehrere Darreichungen hat.
+     *
+     * @param  list<array{darreichung_id?:?int, dar?:mixed, portionen:float}>|null  $formen
+     * @param  array{min:float, basis:string, quelle:?string, komponenten:?int}  $zeitJeMenge
+     * @return array{minuten:float, quelle:?string, formen:list<array<string,mixed>>, warnungen:list<string>}
+     */
+    public function anrichten(Team $team, FoodAlchemistRecipe $gericht, ?array $formen, ?float $ansaetze, array $zeitJeMenge): array
+    {
+        $ppb = (float) ($gericht->sales_unit_count ?? 0) > 0 ? (float) $gericht->sales_unit_count : 1.0;
+        $warnungen = [];
+        $alle = $gericht->exists ? $gericht->presentations()->with('servingForm')->get() : collect();
+        if ($formen === null) {
+            $standard = $alle->firstWhere('is_standard', true) ?? $alle->first();
+            $formen = [['dar' => $standard, 'portionen' => max(0.0, (float) ($ansaetze ?? 0)) * $ppb]];
+            if ($alle->count() > 1) {
+                $warnungen[] = sprintf('Anrichten „%s“: bestellte Darreichungen unbekannt — gerechnet mit der Standard-Darreichung.', $gericht->name);
+            }
+        }
+        $komponenten = $this->tellerKomponenten($gericht);
+        $summe = 0.0;
+        $raus = [];
+        foreach ($formen as $f) {
+            $dar = $f['dar'] ?? (isset($f['darreichung_id']) && $f['darreichung_id'] !== null ? $alle->firstWhere('id', (int) $f['darreichung_id']) : null);
+            $portionen = max(0.0, (float) ($f['portionen'] ?? 0));
+            if ($portionen <= 0) {
+                continue;
+            }
+            $code = $dar?->servingForm?->code;
+            $einheit = self::anrichteEinheit($code);
+            if ($dar !== null && ($code === null || ! array_key_exists($code, self::ANRICHTEN_FORMEN))) {
+                $warnungen[] = sprintf('Anrichten „%s“: Servierform „%s“ unbestimmt — gerechnet wie Teller.', $gericht->name, $dar->servingForm?->label ?? '?');
+            }
+            $gepflegt = $dar?->anrichten_wert !== null ? (float) $dar->anrichten_wert : null;
+            $pauschale = $einheit['einheit'] === 'vor_ort' ? 0.0 : (float) ($dar?->anrichten_pauschal_min ?? self::ANRICHTEN_PAUSCHALE_MIN);
+            $menge = $portionen;
+            $wert = null;
+            $minuten = 0.0;
+            switch ($einheit['einheit']) {
+                case 'vor_ort':
+                    $quelle = 'vor_ort';
+                    break;
+                case 'stueck':
+                    $menge = $portionen * (float) ($dar?->unit_count ?: 1);
+                    $wert = $gepflegt ?? self::ANRICHTEN_SEKUNDEN_JE_STUECK;
+                    $quelle = $gepflegt !== null ? 'darreichung' : 'startwert';
+                    $minuten = $wert * $menge / 60;
+                    break;
+                case 'behaelter':
+                    $b = app(BehaelterBedarfService::class)->behaelterFuerGericht($team, $gericht, $portionen / $ppb, 'ausgabe');
+                    $menge = (float) $b['anzahl'];
+                    $wert = $gepflegt ?? self::ANRICHTEN_MINUTEN_JE_PLATTE;
+                    $quelle = $gepflegt !== null ? 'darreichung' : 'startwert';
+                    $minuten = $wert * $menge;
+                    if ($b['anzahl'] <= 0) {
+                        $warnungen[] = sprintf('Anrichten „%s“ (%s): keine Ausgabe-Behälter hinterlegt — Platten-Zeit fehlt.', $gericht->name, $dar?->servingForm?->label ?? 'Platte');
+                    }
+                    break;
+                default:   // portion
+                    if ($gepflegt !== null) {
+                        [$wert, $quelle, $minuten] = [$gepflegt, 'darreichung', $gepflegt * $portionen / 60];
+                    } elseif ($zeitJeMenge['quelle'] === 'gepflegt' && $zeitJeMenge['basis'] === 'portion') {
+                        [$wert, $quelle, $minuten] = [$zeitJeMenge['min'] * 60, 'gepflegt', $zeitJeMenge['min'] * $portionen];
+                    } elseif ($zeitJeMenge['quelle'] === 'gepflegt') {
+                        // Altwert am Gericht je kg bzw. Stück (B3 Entscheid 1: Gepflegtes gewinnt) — Menge der Portionen dieser Form
+                        $gramm = $dar !== null ? (float) (app(DarreichungService::class)->grammJeEinheit($dar, $gericht) ?? 0) * (float) ($dar->unit_count ?: 1)
+                            : (float) ($gericht->yield_kg_manual ?? $gericht->yield_kg ?? 0) * 1000 / $ppb;
+                        $basisMenge = $zeitJeMenge['basis'] === 'kg' ? $portionen * $gramm / 1000 : $portionen * (float) ($dar?->unit_count ?: 1);
+                        [$wert, $quelle, $minuten] = [null, 'gepflegt', $zeitJeMenge['min'] * $basisMenge];
+                    } else {
+                        $wert = $komponenten * self::ANRICHTEN_SEKUNDEN_JE_KOMPONENTE;
+                        $quelle = $komponenten > 0 ? 'komponenten' : null;
+                        $minuten = $wert * $portionen / 60;
+                    }
+            }
+            $minuten += $pauschale;
+            $summe += $minuten;
+            $raus[] = ['darreichung_id' => $dar?->id, 'form' => $code, 'einheit' => $einheit['einheit'], 'masseinheit' => $einheit['masseinheit'],
+                'portionen' => round($portionen, 3), 'menge' => round($menge, 3), 'je_einheit' => $wert !== null ? round($wert, 3) : null,
+                'pauschal_min' => round($pauschale, 3), 'quelle' => $quelle, 'minuten' => round($minuten, 3)];
+        }
+        $quellen = array_values(array_unique(array_filter(array_column($raus, 'quelle'))));
+
+        return ['minuten' => $summe, 'quelle' => count($quellen) > 1 ? 'gemischt' : ($quellen[0] ?? null),
+            'formen' => $raus, 'warnungen' => $warnungen];
     }
 
     /**
