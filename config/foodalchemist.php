@@ -1539,6 +1539,30 @@ return [
                 . 'Unsichere Form weglassen (nicht schaetzen/erfinden): '
                 . 'werte = {einheiten: [{unit, gewicht_g}]}.',
         ],
+        // Spec 60 · P4 (2026-10-14): Anker-Wissen flaechig aus den Zutaten-Dossiers lesen (Bedarf/Lieferung je
+        // Achse). Ersetzt den Agenten-Pilot. NUR was im Text steht — der Code prueft Belege und `muss` nach
+        // (AnkerWissenAuslese::bereinige), das Modell ist die Auslese, nicht die Quelle.
+        'anker.wissen_auslese' => [
+            'tier' => 'B',
+            'task' => 'Lies die Zutaten-Dossiers EINES Aroma-Ankers (Feld dossier) und fasse zusammen, was der Anker '
+                . 'von aussen BRAUCHT und was er selbst LIEFERT. NUR was im Text steht — nichts aus eigenem '
+                . 'Kochwissen, nichts ergaenzen; fehlt eine Aussage, bleibt das Feld leer. Achsen EXAKT aus dem Feld '
+                . 'achsen (saeure, suesse, salz, bitter, umami, schaerfe, fett, knusprig, cremig, bissfest, weich, '
+                . 'saftig, traeger, frische, roestaroma, aromatik, kaelte, hitze_kurz); passt eine Aussage auf keine '
+                . 'Achse, laesst du sie weg. '
+                . 'braucht: Abschnitte Kombinationslogik/Braucht und Spalte „braucht daneben“. staerke=muss NUR bei '
+                . 'ausdruecklicher Formulierung (zwingend, Pflicht, immer, nicht optional), sonst soll. beleg = '
+                . 'woertliches Kurzzitat (max. 20 Woerter) aus dem Dossier. Prozess-Anweisungen (spaet salzen, '
+                . 'Punktgarung) sind KEIN Bedarf. '
+                . 'liefert.geschmack: Stufe 0-3 je Achse, nur wo der Text etwas sagt („bringt keine Saeure“ = 0); '
+                . 'liefert.textur: Liste aus knusprig, cremig, bissfest, weich, saftig; beleg = Kurzzitat. '
+                . 'vertraegt: jeder genannte Partner als eigener Eintrag {name, kontext}, Name wie im Text '
+                . '(Singular, ohne Mengen), Sammelbegriffe unaufgeloest. zerstoert: nur, was der Text als schaedlich '
+                . 'nennt {art: zutat|technik|zustand, name, grund}. komponenten: Zeilen des Komponenten-Katalogs '
+                . '{name, technik, liefert: [Achsen]}; „Unerschlossen“-Zeilen weglassen. '
+                . 'werte = {braucht: [{achse, staerke, beleg}], liefert: {geschmack: {achse: stufe}, textur: [..], beleg}, '
+                . 'vertraegt: [{name, kontext}], zerstoert: [{art, name, grund}], komponenten: [{name, technik, liefert}]}.',
+        ],
         // D (2026-09-04): Rezeptzeilen, die in einer VERPACKUNGS-Einheit dosieren („1,5 Paeckchen
         // Vanillinzucker"), auf Masse bringen. Die Gebindegroesse des Lieferantenartikels ist die
         // BESSERE Quelle und wird deterministisch gerechnet — dieser Prompt liefert die zweite,
