@@ -95,6 +95,11 @@
                     title="Druckansicht mit Profilen und Filtern" data-vk-panel-druck>Rezeptblatt drucken</x-fa::menu-item>
                 <x-fa::menu-item icon="heroicon-m-arrow-down-tray" :href="route('foodalchemist.rezepte.dokument', ['id' => $rezept->id, 'profil' => 'produktion', 'pdf' => 1])"
                     title="PDF herunterladen" data-vk-panel-pdf>PDF herunterladen</x-fa::menu-item>
+                {{-- Spec 82 §13 B6: Gericht samt Komponenten als Fassung an die Abonnenten geben (Bedingung an EINER Stelle: FassungMenue) --}}
+                @if(\Platform\FoodAlchemist\Support\FassungMenue::sichtbar(auth()->user()?->currentTeamRelation, $rezept))
+                    <x-fa::menu-item icon="heroicon-m-paper-airplane" x-on:click="$dispatch('fassung-modal.oeffnen', { recipeId: {{ $rezept->id }} })"
+                        title="Stand als neue Fassung an die Abonnenten geben" data-fassung-menue>Veröffentlichen …</x-fa::menu-item>
+                @endif
                 @if($rezept->dishClass !== null)
                     <x-fa::menu-item icon="heroicon-m-sparkles" wire:click="ai_klassifizieren" title="Speisen-Klasse per KI neu vorschlagen" data-vk-klassifizieren>Klasse neu vorschlagen</x-fa::menu-item>
                 @endif

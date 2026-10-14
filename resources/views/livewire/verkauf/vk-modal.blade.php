@@ -100,6 +100,13 @@
                            x-on:click="offen = false" class="{{ $menuePunkt }}" data-vk-etikett>
                             @svg('heroicon-o-tag', 'w-4 h-4 text-[var(--fa-ink-3)]') Etikett drucken
                         </a>
+                        {{-- Spec 82 §13 B6: Gericht samt Komponenten als Fassung an die Abonnenten geben (Bedingung an EINER Stelle: FassungMenue) --}}
+                        @if(\Platform\FoodAlchemist\Support\FassungMenue::sichtbar(auth()->user()?->currentTeamRelation, $rezept))
+                            <button type="button" role="menuitem" x-on:click="offen = false; $dispatch('fassung-modal.oeffnen', { recipeId: {{ (int) $rezept->id }} })" class="{{ $menuePunkt }}"
+                                    title="Stand als neue Fassung an die Abonnenten geben" data-fassung-menue>
+                                @svg('heroicon-o-paper-airplane', 'w-4 h-4 text-[var(--fa-ink-3)]') Veröffentlichen …
+                            </button>
+                        @endif
                         <div class="my-1 border-t border-[var(--fa-line)]"></div>
                         <button type="button" role="menuitem" wire:click="loeschen" x-on:click="offen = false"
                                 wire:confirm="Gericht wirklich löschen? Nur das Gericht wird entfernt, Basisrezepte und Grundprodukte bleiben bestehen."
