@@ -93,7 +93,10 @@
              zwei Reiter gleichzeitig markiert, die blaue Lasche „springt" auf Aufbau. Die Leiste ist
              serverseitig statisch; ein Datensatz-Wechsel ersetzt sie ohnehin über wire:key. --}}
         @if(count($sichtbar) > 1)
-            <div wire:ignore class="{{ $leiste }} -mt-4 pt-4">
+            {{-- wire:key über die SICHTBAREN Reiter (2026-10-14): Ändert sich die Menge der Reiter (Foodbook: „Speisen" erscheint, sobald ein Kapitel
+                 gewählt ist), ersetzt Livewire die ignorierte Leiste; bei gleicher Menge bleibt wire:ignore wirksam und schützt weiter vor dem
+                 Morph des class-Attributs beim ersten Besuch (visitAction, 2026-10-06). --}}
+            <div wire:ignore wire:key="{{ ($wireKey ?: 'editor-tabs') }}-leiste-{{ implode('.', array_keys($sichtbar)) }}" class="{{ $leiste }} -mt-4 pt-4" data-fa-editor-tabs-leiste>
                 @foreach($sichtbar as $tabKey => $tabLabel)
                     <button type="button" @click="tab = @js($tabKey)@if($visitAction); if (! visited.includes(@js($tabKey))) { visited.push(@js($tabKey)); $wire.{{ $visitAction }}(@js($tabKey)); }@endif"
                             :class="tab === @js($tabKey) ? '{{ $an }}' : '{{ $aus }}'"
