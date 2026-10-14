@@ -362,6 +362,7 @@ class ConceptService
     {
         $concept = FoodAlchemistConcept::visibleToTeam($team)->findOrFail($id);
         $this->guardOwner($concept, $team);
+        \Platform\FoodAlchemist\Support\AboSperre::pruefeLoeschen('concept', $id, $concept->kind === 'paket' ? 'Das Paket-Konzept' : 'Das Konzept');
 
         // GT-FB-4 / V-06: referenziertes Concept nicht still löschen — erst aus den Foodbooks nehmen.
         $fbs = $this->verwendetInFoodbooks($team, $id);

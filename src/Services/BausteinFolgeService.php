@@ -13,6 +13,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistAngebotUebernahme;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistPaket;
 use Platform\FoodAlchemist\Support\MasterTeam;
+use Platform\FoodAlchemist\Support\VerweisRegister;
 use Platform\FoodAlchemist\Support\TeamSperre;
 
 /**
@@ -32,24 +33,6 @@ use Platform\FoodAlchemist\Support\TeamSperre;
 class BausteinFolgeService
 {
     public const SYNC_GRENZE = 50;
-
-    /**
-     * Verweis-Register: wo eine Konzept-/Paket-Fassung lebend referenziert wird. `kapitel` = Zwischentabelle bis zum Elternobjekt (Foodbook, Speisekarte,
-     * Angebot), sonst hängt das Elternobjekt direkt an der Zeile. `eigene` = nur nicht-Fassungs-Eltern (Konzept, Format).
-     */
-    private const REFERENZEN = [
-        'konzept_paket' => ['tab' => 'foodalchemist_concept_slots', 'spalte' => 'package_id', 'art' => 'paket', 'eltern' => 'foodalchemist_concepts', 'fk' => 'concept_id', 'name' => 'name', 'wo' => 'Konzept', 'eigene' => true],
-        'konzept_eingebettet' => ['tab' => 'foodalchemist_concept_slots', 'spalte' => 'embedded_concept_id', 'art' => 'concept', 'eltern' => 'foodalchemist_concepts', 'fk' => 'concept_id', 'name' => 'name', 'wo' => 'Konzept', 'eigene' => true],
-        'format' => ['tab' => 'foodalchemist_format_slots', 'spalte' => 'concept_id', 'art' => 'concept', 'eltern' => 'foodalchemist_formats', 'fk' => 'format_id', 'name' => 'name', 'wo' => 'Format', 'eigene' => true],
-        'foodbook' => ['tab' => 'foodalchemist_foodbook_blocks', 'spalte' => 'concept_id', 'art' => 'concept', 'eltern' => 'foodalchemist_foodbooks', 'fk' => 'foodbook_id', 'name' => 'label', 'wo' => 'Foodbook',
-            'kapitel' => ['foodalchemist_foodbook_chapters', 'chapter_id']],
-        'speisekarte' => ['tab' => 'foodalchemist_menu_card_items', 'spalte' => 'concept_id', 'art' => 'concept', 'eltern' => 'foodalchemist_menu_cards', 'fk' => 'menu_card_id', 'name' => 'name', 'wo' => 'Speisekarte',
-            'kapitel' => ['foodalchemist_menu_card_sections', 'section_id']],
-        'angebot' => ['tab' => 'foodalchemist_offer_blocks', 'spalte' => 'concept_id', 'art' => 'concept', 'eltern' => 'foodalchemist_offers', 'fk' => 'offer_id', 'name' => 'name', 'wo' => 'Angebot',
-            'kapitel' => ['foodalchemist_offer_chapters', 'chapter_id'], 'angebot' => true],
-        'speiseplan_konzept' => ['tab' => 'foodalchemist_menu_plan_entries', 'spalte' => 'concept_id', 'art' => 'concept', 'eltern' => 'foodalchemist_menu_plans', 'fk' => 'menu_plan_id', 'name' => 'name', 'wo' => 'Speiseplan'],
-        'speiseplan_paket' => ['tab' => 'foodalchemist_menu_plan_entries', 'spalte' => 'package_id', 'art' => 'paket', 'eltern' => 'foodalchemist_menu_plans', 'fk' => 'menu_plan_id', 'name' => 'name', 'wo' => 'Speiseplan'],
-    ];
 
     public function __construct(
         private readonly FassungsVergleich $vergleich,
@@ -161,24 +144,11 @@ class BausteinFolgeService
         }
         $eingefroren = DB::table('foodalchemist_angebot_einfrierungen')->whereNull('verworfen_at')->pluck('angebot_id')->map(fn ($v) => (int) $v)->flip();
         $alle = collect();
-        foreach (self::REFERENZEN as $quelle => $r) {
+        foreach (VerweisRegister::REFERENZEN as $quelle => $r) {
             if ($r['art'] !== $art) {
                 continue;
             }
-            $q = DB::table($r['tab'].' AS x');
-            if (isset($r['kapitel'])) {
-                [$kapTab, $kapFk] = $r['kapitel'];
-                $q->join($kapTab.' AS k', 'k.id', '=', 'x.'.$kapFk)->join($r['eltern'].' AS p', 'p.id', '=', 'k.'.$r['fk']);
-            } else {
-                $q->join($r['eltern'].' AS p', 'p.id', '=', 'x.'.$r['fk']);
-            }
-            $q->whereIn('x.'.$r['spalte'], $aeltere->keys()->all())->whereNull('x.deleted_at')->whereNull('p.deleted_at')->whereNotNull('x.team_id');
-            if (! empty($r['eigene'])) {
-                $q->where('p.ist_fassung', false);   // Konzept/Format des Mandanten, nie eine Fassung
-            }
-            ! empty($r['angebot'])
-                ? $q->whereNotIn('p.status', ['angenommen', 'abgelehnt'])   // historische Angebote behalten die Fassung
-                : $q->where(fn ($w) => $w->whereNull('p.status')->orWhere('p.status', '!=', 'archiviert'));
+            $q = VerweisRegister::basis($quelle)->whereIn('x.'.$r['spalte'], $aeltere->keys()->all());
             foreach ($q->select('x.id AS row_id', 'x.team_id', 'x.'.$r['spalte'].' AS alt_id', 'p.id AS eltern_id', 'p.'.$r['name'].' AS eltern_name')->get() as $row) {
                 $alle->push((object) ['quelle' => $quelle, 'tab' => $r['tab'], 'spalte' => $r['spalte'], 'row_id' => (int) $row->row_id, 'team_id' => (int) $row->team_id,
                     'alt_id' => (int) $row->alt_id, 'familie_id' => (int) $aeltere[(int) $row->alt_id]->fassung_von_id, 'eltern_id' => (int) $row->eltern_id,
@@ -259,7 +229,7 @@ class BausteinFolgeService
      */
     public function uebernehmen(Team $team, ?User $actor, string $art, string $quelle, int $rowId, bool $bestaetigt): array
     {
-        if (! isset(self::REFERENZEN[$quelle]) || self::REFERENZEN[$quelle]['art'] !== $art) {
+        if (! isset(VerweisRegister::REFERENZEN[$quelle]) || VerweisRegister::REFERENZEN[$quelle]['art'] !== $art) {
             throw new \RuntimeException('Unbekannte Quelle für diese Art.');
         }
         $k = $this->kandidatFuer($team, $art, $quelle, $rowId);
@@ -292,7 +262,7 @@ class BausteinFolgeService
 
     private function kandidatFuer(Team $team, string $art, string $quelle, int $rowId): object
     {
-        $r = self::REFERENZEN[$quelle];
+        $r = VerweisRegister::REFERENZEN[$quelle];
         $alt = DB::table($r['tab'])->where('id', $rowId)->where('team_id', $team->id)->whereNull('deleted_at')->value($r['spalte']);
         $fassung = $alt === null ? null : $this->modell($art)::mitFassungen()->where('ist_fassung', true)->find((int) $alt);
         if ($fassung === null) {

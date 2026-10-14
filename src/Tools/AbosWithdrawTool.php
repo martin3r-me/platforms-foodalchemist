@@ -19,8 +19,8 @@ class AbosWithdrawTool extends WareneingangTool implements ToolContract, ToolMet
 
     public function getDescription(): string
     {
-        return 'Zieht ein Master-Rezept aus einer abonnierten Sammlung zurück (ein abonniertes Rezept lässt sich nicht löschen). Jeder '
-            .'betroffene Mandant läuft denselben Ablauf wie bei einer Kündigung: genutzte Rezepte bekommt er als tiefe Kopie, ungenutzte '
+        return 'Zieht ein Master-Rezept, -Paket oder -Konzept (typ, Standard recipe) aus einer abonnierten Sammlung zurück (ein abonniertes Objekt lässt sich nicht löschen). Jeder '
+            .'betroffene Mandant läuft denselben Ablauf wie bei einer Kündigung: genutzte Objekte bekommt er samt Kette als tiefe Kopie, ungenutzte '
             .'verschwinden. Ohne bestaetigt=true nur die Vorschau je Mandant. Nur Master-Team, Rolle „Freigeben“.';
     }
 
@@ -28,7 +28,8 @@ class AbosWithdrawTool extends WareneingangTool implements ToolContract, ToolMet
     {
         return ['type' => 'object', 'properties' => [
             'sammlung_id' => ['type' => 'integer'],
-            'recipe_id' => ['type' => 'integer', 'description' => 'Arbeitszeile des Master-Rezepts (so steht es in der Sammlung).'],
+            'recipe_id' => ['type' => 'integer', 'description' => 'Arbeitszeile des Master-Objekts (so steht es in der Sammlung); bei typ paket/concept die Paket-/Konzept-ID.'],
+            'typ' => ['type' => 'string', 'enum' => ['recipe', 'paket', 'concept'], 'description' => 'Art des Objekts, Standard recipe. concept schließt Paket-Konzepte (kind=paket) ein.'],
             'bestaetigt' => ['type' => 'boolean'],
         ], 'required' => ['sammlung_id', 'recipe_id']];
     }
@@ -36,7 +37,8 @@ class AbosWithdrawTool extends WareneingangTool implements ToolContract, ToolMet
     public function execute(array $arguments, ToolContext $context): ToolResult
     {
         return $this->ausfuehren($context, fn (Team $team) => app(AboKuendigungService::class)->zurueckziehen($team,
-            (int) ($arguments['sammlung_id'] ?? 0), (int) ($arguments['recipe_id'] ?? 0), $context->user, (bool) ($arguments['bestaetigt'] ?? false)));
+            (int) ($arguments['sammlung_id'] ?? 0), (int) ($arguments['recipe_id'] ?? 0), $context->user, (bool) ($arguments['bestaetigt'] ?? false),
+            in_array(($arguments['typ'] ?? 'recipe'), ['recipe', 'paket', 'concept'], true) ? (string) ($arguments['typ'] ?? 'recipe') : 'recipe'));
     }
 
     public function getMetadata(): array

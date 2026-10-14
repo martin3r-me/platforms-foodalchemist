@@ -22,7 +22,7 @@
         @if($vorschau)
             <x-fa::section title="{{ $vorschau['titel'] }}" icon="heroicon-o-exclamation-triangle" data-abos-vorschau>
                 @forelse($vorschau['mandanten'] as $m)
-                    @php $v = $m['vorschau']; @endphp
+                    @php $v = $m['vorschau']; $artLabel = ['recipe' => 'Rezept', 'paket' => 'Paket', 'concept' => 'Konzept']; @endphp
                     <div class="flex flex-col gap-2 rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] px-3 py-2" data-abos-vorschau-mandant>
                         <div class="font-medium">{{ $m['name'] }}</div>
                         @if($v['genutzt'] === [] && $v['mitkopiert'] === [] && $v['verschwindet'] === [])
@@ -32,20 +32,20 @@
                             <div data-abos-vorschau-genutzt>
                                 <x-fa::badge tone="warn">Genutzt, wird eigene Kopie</x-fa::badge>
                                 <ul class="mt-1 text-[length:var(--fa-text-sm)]">
-                                    @foreach($v['genutzt'] as $r)<li>{{ $r['name'] }} <span class="{{ $leise }}">({{ implode(', ', $r['wo']) }})</span></li>@endforeach
+                                    @foreach($v['genutzt'] as $r)<li>{{ $artLabel[$r['typ'] ?? 'recipe'] ?? 'Rezept' }}: {{ $r['name'] }} <span class="{{ $leise }}">({{ implode(', ', $r['wo']) }})</span></li>@endforeach
                                 </ul>
                             </div>
                         @endif
                         @if($v['mitkopiert'] !== [])
                             <div data-abos-vorschau-mitkopiert>
-                                <x-fa::badge tone="info">Unter-Rezepte, werden mitkopiert</x-fa::badge>
-                                <ul class="mt-1 text-[length:var(--fa-text-sm)]">@foreach($v['mitkopiert'] as $r)<li>{{ $r['name'] }}</li>@endforeach</ul>
+                                <x-fa::badge tone="info">Bestandteile, werden mitkopiert</x-fa::badge>
+                                <ul class="mt-1 text-[length:var(--fa-text-sm)]">@foreach($v['mitkopiert'] as $r)<li>{{ $artLabel[$r['typ'] ?? 'recipe'] ?? 'Rezept' }}: {{ $r['name'] }}</li>@endforeach</ul>
                             </div>
                         @endif
                         @if($v['verschwindet'] !== [])
                             <div data-abos-vorschau-verschwindet>
                                 <x-fa::badge tone="crit">Ungenutzt, verschwindet</x-fa::badge>
-                                <ul class="mt-1 text-[length:var(--fa-text-sm)]">@foreach($v['verschwindet'] as $r)<li>{{ $r['name'] }}</li>@endforeach</ul>
+                                <ul class="mt-1 text-[length:var(--fa-text-sm)]">@foreach($v['verschwindet'] as $r)<li>{{ $artLabel[$r['typ'] ?? 'recipe'] ?? 'Rezept' }}: {{ $r['name'] }}</li>@endforeach</ul>
                             </div>
                         @endif
                     </div>

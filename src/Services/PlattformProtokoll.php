@@ -37,7 +37,8 @@ class PlattformProtokoll
         'rezept_fassung_uebernommen' => 'Rezept: neuere Fassung übernommen',
         'angebot_fassung_uebernommen' => 'Angebot: neuere Fassung übernommen',   // Spec 82 §12 B3
         'abo_gekuendigt' => 'Abo gekündigt',                  // Spec 82 §12 D
-        'abo_rezept_zurueckgezogen' => 'Abo-Rezept zurückgezogen', // Spec 82 §12 D
+        'abo_rezept_zurueckgezogen' => 'Abo-Rezept zurückgezogen', // Spec 82 §12 D (Bestand)
+        'abo_objekt_zurueckgezogen' => 'Abo-Objekt zurückgezogen', // Spec 82 Abo Konzepte/Pakete PR 6: Rezept, Paket oder Konzept
         'projekt_lizenz_uebernommen' => 'Projekt: Lizenz erteilt, Übernahme in den Mandanten',   // Spec 82 §9
         'paket_grundeinstellungen_gebucht' => 'Paket „Grundeinstellungen“ gebucht',   // Spec 82 §13 I
         'paket_grundeinstellungen_nachgezogen' => 'Paket „Grundeinstellungen“ nachgezogen (neue Vorlagen-Zeilen kopiert)',
