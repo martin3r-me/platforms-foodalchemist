@@ -91,16 +91,21 @@ it('M1: der Haken am Gericht erledigt die Gericht-Zeile und zählt im Auftrag ho
     expect($c->html())->toMatch('/data-tagesplan-pass-fortschritt[^>]*>1\/2</');
 });
 
-it('M1: der Posten „Pass“ zeigt Auftrags-Karten, jeder andere Posten die klassischen Gericht-Karten', function () {
+it('M1: der Sammelposten (Pass, ist_sammelposten) zeigt Auftrags-Karten, jeder andere Posten die klassischen Gericht-Karten', function () {
     $a = ($this->vk)('g-a', '[HG] Rinderbraten | Anrichten');
     $auftrag = $this->svc->saveNew($this->rootTeam, '2026-08-20', 'Hochzeit Meyer', [['source_ref' => 'r:g-a', 'recipe_id' => $a->id, 'amount_kg' => 1.0]]);
-    $pass = Posten::create(['team_id' => $this->rootTeam->id, 'slug' => 'pass', 'name' => 'Pass']);
+    $pass = Posten::create(['team_id' => $this->rootTeam->id, 'slug' => 'pass', 'name' => 'Pass', 'ist_sammelposten' => true]);
     $saucier = Posten::create(['team_id' => $this->rootTeam->id, 'slug' => 'saucier', 'name' => 'Saucier']);
 
     Line::where('production_order_id', $auftrag->id)->update(['station_id' => $pass->id]);
     expect(($this->wand)()->html())->toContain('data-tagesplan-pass-auftrag')->not->toContain('data-tagesplan-wall-gericht-gruppe');
 
     Line::where('production_order_id', $auftrag->id)->update(['station_id' => $saucier->id]);
+    expect(($this->wand)()->html())->toContain('data-tagesplan-wall-gericht-gruppe')->not->toContain('data-tagesplan-pass-auftrag');
+
+    // Das Merkmal entscheidet, nicht der Name: ein Posten „Pass“ ohne ist_sammelposten bleibt ein normaler Posten
+    $nurName = Posten::create(['team_id' => $this->rootTeam->id, 'slug' => 'pass-kalt', 'name' => 'Pass kalt']);
+    Line::where('production_order_id', $auftrag->id)->update(['station_id' => $nurName->id]);
     expect(($this->wand)()->html())->toContain('data-tagesplan-wall-gericht-gruppe')->not->toContain('data-tagesplan-pass-auftrag');
 });
 
@@ -192,7 +197,7 @@ it('B3g: die Pass-Karte zeigt je Gericht seine Komponenten mit Posten und Fertig
         ]);
     }
     $auftrag = $this->svc->saveNew($this->rootTeam, '2026-08-20', 'Hochzeit Meyer', [['source_ref' => 'r:g-a', 'recipe_id' => $gericht->id, 'amount_kg' => 1.0]]);
-    $pass = Posten::create(['team_id' => $this->rootTeam->id, 'slug' => 'pass', 'name' => 'Pass']);
+    $pass = Posten::create(['team_id' => $this->rootTeam->id, 'slug' => 'pass', 'name' => 'Pass', 'ist_sammelposten' => true]);
     $saucier = Posten::create(['team_id' => $this->rootTeam->id, 'slug' => 'saucier', 'name' => 'Saucier']);
     $entremetier = Posten::create(['team_id' => $this->rootTeam->id, 'slug' => 'entremetier', 'name' => 'Entremetier']);
     $zeile = fn ($r) => Line::where('production_order_id', $auftrag->id)->where('recipe_id', $r->id)->firstOrFail();

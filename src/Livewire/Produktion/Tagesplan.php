@@ -331,6 +331,9 @@ class Tagesplan extends Component
     /** @var array<int, array{braucht: list<array<string,mixed>>, fuer: list<array<string,mixed>>}> Spec 83 M2, je Render neu (nicht öffentlich, nicht serialisiert) */
     private array $wallVerknuepfung = [];
 
+    /** @var list<int> IDs der Sammelposten (Pass) des Teams, je Render neu */
+    private array $wallSammelposten = [];
+
     public function wallAnsichtSetzen(string $a): void
     {
         $this->wallAnsicht = in_array($a, ['lanes', 'mise'], true) ? $a : 'lanes';
@@ -593,6 +596,8 @@ class Tagesplan extends Component
         $miseEnPlace = $istWall ? $this->miseEnPlace($zeilen) : collect();
         // Spec 83 M2: Verknüpfung Ober-/Unterrezept aus den Auftragsdaten (vor den Gruppen: die Sortierung nutzt sie)
         $this->wallVerknuepfung = $istWall ? $this->wallVerknuepfungen($zeilen) : [];
+        $this->wallSammelposten = ($istWall && $team !== null)
+            ? FoodAlchemistProductionStation::visibleToTeam($team)->where('ist_sammelposten', true)->pluck('id')->map(fn ($id) => (int) $id)->all() : [];
         $wallPostenGruppen = $istWall ? $this->wallPostenGruppen($zeilen) : collect();
         $anleitung = $istWall ? $this->anleitungAufloesen($zeilen) : null;
         $wallGericht = $istWall ? $this->wallGerichtAufloesen($wallPostenGruppen) : null;
@@ -786,11 +791,12 @@ class Tagesplan extends Component
 
     /**
      * Spec 83 M1 — der Pass-Posten (und solange das Routing nicht greift auch „Nicht zugeteilt“) zeigt Aufträge statt Gericht-Karten.
-     * Ein Posten gilt als Pass, wenn sein Name „Pass“ ist oder damit beginnt („Pass“, „Pass 1“, „Pass kalt“). Ein Ort für diese Regel.
+     * Ein Posten gilt als Pass, wenn er das Merkmal `ist_sammelposten` trägt (Spec 83 B3g, Peters Routing #360: Pass ohne eigenes Personal,
+     * die Posten der Komponenten arbeiten sich dort zu). Ein Ort für diese Regel.
      */
     private function wallIstPassLane(string|int $schluessel, ?string $stationName): bool
     {
-        return $schluessel === '_none' || preg_match('/^\s*pass(\b|\s|$)/iu', (string) $stationName) === 1;
+        return $schluessel === '_none' || in_array((int) $schluessel, $this->wallSammelposten, true);
     }
 
     /**
