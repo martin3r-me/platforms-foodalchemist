@@ -731,6 +731,9 @@ class PoolEmbeddingService
         }
 
         $query = DB::table($table)->whereNull('deleted_at');
+        if (\Illuminate\Support\Facades\Schema::hasColumn($table, 'ist_fassung')) {   // Spec 82: rohe Abfrage umgeht den Eloquent-Scope
+            $query->where('ist_fassung', false);
+        }
         if ($gate !== null) {
             $gate($query);
         }
@@ -761,6 +764,9 @@ class PoolEmbeddingService
     private function queueSimple(string $entityType, $model, callable $inPool, callable $textFn): void
     {
         if (! $this->isProviderAvailable()) {
+            return;
+        }
+        if ($model->ist_fassung ?? false) {   // Spec 82: eingefrorene Fassungs-Zeilen (Konzept/Paket/Format) gehören nicht in den Pool
             return;
         }
         if (! $inPool()) {
