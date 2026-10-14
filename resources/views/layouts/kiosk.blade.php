@@ -8,6 +8,15 @@
     <title>{{ config('app.name', 'Platform') }} · Küchenmonitor</title>
 
     <x-ui-styles />
+    {{-- Plattform-Modus (demo, office): das FA-Design (Tokens, x-fa-Bausteine, Modul-Utilities) kommt nur über das ausgelieferte Modul-CSS —
+         genau wie in der page-navbar. Der Wandmonitor rendert keine page-navbar, ohne diesen Link fehlen Farben und die Vollbild-Fenster
+         (wall-gericht, wall-anleitung) liegen durchsichtig über dem Monitor. Eigenständig (Host food-alchemist.de) baut der Host das CSS über @vite. --}}
+    @unless(\Platform\FoodAlchemist\Support\FaShell::eigenstaendig())
+        @php $faCss = \Platform\FoodAlchemist\Support\FaShell::cssUrl(); @endphp
+        @if($faCss)
+            <link rel="stylesheet" href="{{ $faCss }}" data-fa-modul-css>
+        @endif
+    @endunless
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     @livewireStyles
 </head>
