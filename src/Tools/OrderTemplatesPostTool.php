@@ -35,7 +35,7 @@ class OrderTemplatesPostTool extends FoodAlchemistTool implements ToolContract, 
                 'from_order_id' => ['type' => 'integer'],
                 'positionen' => ['type' => 'array', 'items' => ['type' => 'object', 'properties' => [
                     'type' => ['type' => 'string', 'enum' => ['gp', 'recipe', 'supplier_item']],
-                    'id' => ['type' => 'integer'], 'menge' => ['type' => ['number', 'string']], 'einheit' => ['type' => 'string'],
+                    'id' => ['type' => 'integer'], 'menge' => ['description' => 'Zahl oder Text'], 'einheit' => ['type' => 'string'],
                 ], 'required' => ['type', 'id']]],
             ],
             'required' => ['name'],

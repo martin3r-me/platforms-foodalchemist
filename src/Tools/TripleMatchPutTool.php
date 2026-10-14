@@ -25,7 +25,7 @@ class TripleMatchPutTool extends WareneingangTool implements ToolContract, ToolM
     public function getSchema(): array
     {
         return ['type' => 'object', 'properties' => [
-            'toleranz_pct' => ['type' => ['number', 'string', 'null']], 'toleranz_eur' => ['type' => ['number', 'string', 'null']],
+            'toleranz_pct' => ['description' => 'Zahl oder Text oder null (null hebt auf)'], 'toleranz_eur' => ['description' => 'Zahl oder Text oder null (null hebt auf)'],
         ]];
     }
 

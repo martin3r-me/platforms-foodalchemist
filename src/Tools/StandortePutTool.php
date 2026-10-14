@@ -26,7 +26,7 @@ class StandortePutTool extends WareneingangTool implements ToolContract, ToolMet
     public function getSchema(): array
     {
         return ['type' => 'object', 'required' => ['unter_team_id'], 'properties' => [
-            'unter_team_id' => ['type' => 'integer'], 'outlet_id' => ['type' => ['integer', 'null']],
+            'unter_team_id' => ['type' => 'integer'], 'outlet_id' => ['description' => 'Ganzzahl oder null (null hebt auf)'],
         ]];
     }
 

@@ -27,8 +27,8 @@ class ProductionOrdersLineBlockTool extends FoodAlchemistTool implements ToolCon
             'properties' => [
                 'line_id' => ['type' => 'integer'],
                 'reason' => ['type' => 'string'],
-                'note' => ['type' => ['string', 'null']],
-                'expected_updated_at' => ['type' => ['string', 'null']],
+                'note' => ['description' => 'Text oder null (null hebt auf)'],
+                'expected_updated_at' => ['description' => 'Text oder null (null hebt auf)'],
             ],
             'required' => ['line_id', 'reason'],
         ];

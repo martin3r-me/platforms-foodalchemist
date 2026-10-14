@@ -31,7 +31,7 @@ class StorageBinsAssignTool extends FoodAlchemistTool implements ToolContract, T
             'properties' => [
                 'location_id' => ['type' => 'integer', 'description' => 'Lagerort-Id.'],
                 'gp_ids' => ['type' => 'array', 'items' => ['type' => 'integer']],
-                'bin_id' => ['type' => ['integer', 'null'], 'description' => 'Ziel-Stellplatz; null = Stammplatz entfernen.'],
+                'bin_id' => ['description' => 'Ganzzahl oder null — Ziel-Stellplatz; null = Stammplatz entfernen.'],
                 'automatisch' => ['type' => 'boolean', 'description' => 'Vorschlag für alles ohne Stammplatz übernehmen.'],
             ],
             'required' => ['location_id'],

@@ -30,7 +30,7 @@ class ProjektePutTool extends WareneingangTool implements ToolContract, ToolMeta
             'id' => ['type' => 'integer'], 'name' => ['type' => 'string'], 'ziel' => ['type' => 'string'],
             'phase' => ['type' => 'string', 'enum' => array_keys(FoodAlchemistProjekt::PHASEN)],
             'status' => ['type' => 'string', 'enum' => FoodAlchemistProjekt::STATUS],
-            'planner_projekt_id' => ['type' => ['integer', 'null']], 'pilot_standort_id' => ['type' => ['integer', 'null']],
+            'planner_projekt_id' => ['description' => 'Ganzzahl oder null (null hebt auf)'], 'pilot_standort_id' => ['description' => 'Ganzzahl oder null (null hebt auf)'],
             'struktur_freigeben_kontakt_id' => ['type' => 'integer'], 'struktur_zuruecknehmen' => ['type' => 'boolean'], 'foodbook_anlegen' => ['type' => 'boolean'],
             'standort_neu' => ['type' => 'string'], 'standort_entfernen' => ['type' => 'integer'],
         ], 'required' => ['id']];

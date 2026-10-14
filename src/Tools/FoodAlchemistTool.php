@@ -37,6 +37,24 @@ abstract class FoodAlchemistTool
         return ToolResult::error('Plattform-Wissen: diese Steuer-Sicht ist dem Master-Team vorbehalten. Die Wirkung im Generator-Prompt bleibt bestehen.', 'ACCESS_DENIED');
     }
 
+    /**
+     * Spec 83 B1: variable Arbeitszeit (`variable_work_time_min` je kg/Stück/Portion). Ein Aufruf direkt am Tool läuft am Schema-Validator vorbei, deshalb hier
+     * dieselbe Prüfung wie im Schema: Zahl ab 0 (0 = keine variable Zeit), Basis aus {@see FoodAlchemistRecipe::ZEIT_BASEN}.
+     */
+    protected function pruefeVariableZeit(array $arguments): ?ToolResult
+    {
+        if (array_key_exists('variable_work_time_min', $arguments)
+            && (! is_numeric($arguments['variable_work_time_min']) || (float) $arguments['variable_work_time_min'] < 0)) {
+            return ToolResult::error('variable_work_time_min: Zahl ab 0 (Personenminuten je Mengeneinheit, 0 = keine variable Zeit).', 'VALIDATION_ERROR');
+        }
+        if (array_key_exists('variable_work_time_basis', $arguments)
+            && ! in_array($arguments['variable_work_time_basis'], \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::ZEIT_BASEN, true)) {
+            return ToolResult::error('variable_work_time_basis: '.implode(' | ', \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::ZEIT_BASEN).'.', 'VALIDATION_ERROR');
+        }
+
+        return null;
+    }
+
     protected function team(ToolContext $context): ?Team
     {
         $team = $context->team;

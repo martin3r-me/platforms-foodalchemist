@@ -38,9 +38,9 @@ class SignalPolicyPutTool extends FoodAlchemistTool implements ToolContract, Too
             'type' => 'object',
             'properties' => [
                 'type' => ['type' => 'string', 'enum' => array_map(fn (SignalTyp $t) => $t->value, SignalTyp::cases())],
-                'threshold' => ['type' => ['integer', 'null'], 'minimum' => 0, 'description' => 'Ab dieser Anzahl aggregieren; null hebt auf.'],
-                'accepted_until' => ['type' => ['string', 'null'], 'description' => 'Datum JJJJ-MM-TT (inklusive); null hebt auf.'],
-                'note' => ['type' => ['string', 'null'], 'description' => 'Begründung — wird in der Zustands-Zeile angezeigt.'],
+                'threshold' => ['minimum' => 0, 'description' => 'Ganzzahl oder null — Ab dieser Anzahl aggregieren; null hebt auf.'],
+                'accepted_until' => ['description' => 'Text oder null — Datum JJJJ-MM-TT (inklusive); null hebt auf.'],
+                'note' => ['description' => 'Text oder null (null hebt auf) — Begründung — wird in der Zustands-Zeile angezeigt.'],
                 'muted' => ['type' => 'boolean'],
                 'zuruecksetzen' => ['type' => 'boolean', 'default' => false, 'description' => 'Policy des eigenen Teams entfernen.'],
             ],

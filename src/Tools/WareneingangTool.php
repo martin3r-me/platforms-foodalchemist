@@ -55,8 +55,8 @@ abstract class WareneingangTool extends FoodAlchemistTool
                 .'Ohne Bestellung: {gp_id, menge (kg/l/Stk), designation?, note?}. abweichung_grund: fehlt | zu_wenig | zu_viel | '
                 .'ersatzartikel | beschaedigt | qualitaet | sonstiges.',
             'items' => ['type' => 'object', 'properties' => [
-                'order_line_id' => ['type' => 'integer'], 'qty_packs' => ['type' => ['number', 'string']],
-                'gp_id' => ['type' => 'integer'], 'menge' => ['type' => ['number', 'string']],
+                'order_line_id' => ['type' => 'integer'], 'qty_packs' => ['description' => 'Zahl oder Text'],
+                'gp_id' => ['type' => 'integer'], 'menge' => ['description' => 'Zahl oder Text'],
                 'designation' => ['type' => 'string'], 'abweichung_grund' => ['type' => 'string'], 'note' => ['type' => 'string'],
             ]],
         ];

@@ -126,7 +126,7 @@ it('MCP: team_settings.PUT setzt die Vorgabe (nur sichtbare Posten), settings.GE
     expect($leer->success)->toBeTrue()->and(DB::table('foodalchemist_team_settings')->where('team_id', $this->rootTeam->id)->value('gerichte_station_id'))->toBeNull();
 });
 
-it('★ über den ECHTEN Executor-Weg: gerichte_station_id mit einfachem Typ setzen; 0 bzw. null löscht', function () {
+it('★ über den ECHTEN Executor-Weg: gerichte_station_id ohne Union-Typ setzen; 0 bzw. null löscht', function () {
     // Modul-Zugriff ist hier nicht das Thema (die Test-Harness kennt keine Modul-Freigabe je Team): nur diese Prüfung wird freigegeben,
     // Schema-Validierung, Typprüfung und Ausführung laufen über den ECHTEN Core-ToolExecutor.
     app()->instance(\Platform\Core\Services\ToolPermissionService::class, new class extends \Platform\Core\Services\ToolPermissionService {
@@ -148,8 +148,8 @@ it('★ über den ECHTEN Executor-Weg: gerichte_station_id mit einfachem Typ set
     $lauf = fn (mixed $wert) => $executor->execute('foodalchemist.team_settings.PUT', ['settings' => ['gerichte_station_id' => $wert]], $kontext);
     $vorgabe = fn () => DB::table('foodalchemist_team_settings')->where('team_id', $this->rootTeam->id)->value('gerichte_station_id');
 
-    // das Schema führt nur einfache Typen (kein Union-Array) — der Core-Executor stürzt an Union-Typen ab
-    expect($schema['properties']['settings']['properties']['gerichte_station_id']['type'])->toBe('integer');
+    // kein Union-Array im Schema (der Core-Executor stürzt an Union-Typen ab); ohne type, damit null durchkommt (Spec 83 B1)
+    expect($schema['properties']['settings']['properties']['gerichte_station_id']['type'] ?? null)->not->toBeArray();
 
     $ok = $lauf($this->pass->id);
     expect($ok->success)->toBeTrue('setzen: '.($ok->error ?? ''))->and((int) $vorgabe())->toBe((int) $this->pass->id);

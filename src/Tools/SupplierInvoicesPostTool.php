@@ -27,7 +27,7 @@ class SupplierInvoicesPostTool extends WareneingangTool implements ToolContract,
     {
         return ['type' => 'object', 'properties' => [
             'supplier_id' => ['type' => 'integer'], 'invoice_number' => ['type' => 'string'], 'invoice_date' => ['type' => 'string'],
-            'total_net' => ['type' => ['number', 'string']], 'note' => ['type' => 'string'],
+            'total_net' => ['description' => 'Zahl oder Text'], 'note' => ['type' => 'string'],
             'delivery_note_ids' => ['type' => 'array', 'items' => ['type' => 'integer']], 'lines' => ['type' => 'array', 'description' => 'Positionen. Ware: {delivery_note_line_id?, order_line_id?, qty_packs, pack_price, begruendung?}. Nebenkosten: {art: fracht|pfand|zuschlag|rabatt, designation?, line_net}.', 'items' => ['type' => 'object']],
         ], 'required' => ['supplier_id']];
     }

@@ -27,8 +27,8 @@ class ProductionOrdersStartTool extends FoodAlchemistTool implements ToolContrac
             'type' => 'object',
             'properties' => [
                 'order_id' => ['type' => 'integer'],
-                'expected_updated_at' => ['type' => ['string', 'null']],
-                'override_reason' => ['type' => ['string', 'null']],
+                'expected_updated_at' => ['description' => 'Text oder null (null hebt auf)'],
+                'override_reason' => ['description' => 'Text oder null (null hebt auf)'],
             ],
             'required' => ['order_id'],
         ];

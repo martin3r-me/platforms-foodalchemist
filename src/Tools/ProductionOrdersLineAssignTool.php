@@ -42,8 +42,8 @@ class ProductionOrdersLineAssignTool extends FoodAlchemistTool implements ToolCo
             'type' => 'object',
             'properties' => [
                 'line_id' => ['type' => 'integer'],
-                'station_id' => ['type' => ['integer', 'null'], 'description' => 'Posten; null = unverplant'],
-                'assignee' => ['type' => ['string', 'null'], 'description' => 'Verantwortlich (freier Name); "" oder null löscht'],
+                'station_id' => ['description' => 'Ganzzahl oder null — Posten; null = unverplant'],
+                'assignee' => ['description' => 'Text oder null — Verantwortlich (freier Name); "" oder null löscht'],
                 'vorlauf_tage' => ['type' => 'integer', 'description' => '0–14 Tage vor dem Liefertag'],
             ],
             'required' => ['line_id'],

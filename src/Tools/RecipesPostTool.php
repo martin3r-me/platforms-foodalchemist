@@ -45,6 +45,8 @@ class RecipesPostTool extends FoodAlchemistTool implements ToolContract, ToolMet
                 'work_time_min' => ['type' => 'integer', 'description' => 'Aktive Arbeitszeit (min) je Koch-Vorgang'],
                 'setup_time_min' => ['type' => 'integer', 'description' => 'Rüstzeit (min), einmal je Produktionslauf'],
                 'standzeit_min' => ['type' => 'integer', 'description' => 'Passive Gar-/Standzeit (min) je Lauf (Köcheln/Ziehen/Kühlen) — Durchlaufzeit, bindet keinen Posten'],
+                'variable_work_time_min' => ['type' => 'number', 'description' => 'Personenminuten je Mengeneinheit (siehe variable_work_time_basis), zusätzlich zur Arbeitszeit je Koch-Vorgang; wächst mit der Menge (0 = keine)'],
+                'variable_work_time_basis' => ['type' => 'string', 'enum' => \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::ZEIT_BASEN, 'description' => 'Bezug der variablen Zeit: kg | piece (Stück) | portion. Ohne Angabe: kg'],
                 'batch_max_kg' => ['type' => 'number', 'description' => 'Topf-Deckel: max kg je Koch-Vorgang (leer = Posten-/Team-Default)'],
                 'batch_max_pieces' => ['type' => 'number', 'description' => 'Topf-Deckel: max Stück je Koch-Vorgang'],
                 'max_vorlauf_tage' => ['type' => 'integer', 'description' => 'Vorproduzierbarkeit in Tagen (0 = nur am Produktionstag)'],
@@ -97,6 +99,9 @@ class RecipesPostTool extends FoodAlchemistTool implements ToolContract, ToolMet
                 return $z;
             }, $arguments['zutaten']);
         }
+        if (($fehler = $this->pruefeVariableZeit($arguments)) !== null) {
+            return $fehler;
+        }
         $svc = app(RecipeService::class);
 
         try {
@@ -109,6 +114,8 @@ class RecipesPostTool extends FoodAlchemistTool implements ToolContract, ToolMet
                 'work_time_min' => $arguments['work_time_min'] ?? null,
                 'setup_time_min' => $arguments['setup_time_min'] ?? null,
                 'standzeit_min' => $arguments['standzeit_min'] ?? null,
+                'variable_work_time_min' => $arguments['variable_work_time_min'] ?? null,
+                'variable_work_time_basis' => isset($arguments['variable_work_time_min']) ? ($arguments['variable_work_time_basis'] ?? 'kg') : ($arguments['variable_work_time_basis'] ?? null),
                 'batch_max_kg' => $arguments['batch_max_kg'] ?? null,
                 'batch_max_pieces' => $arguments['batch_max_pieces'] ?? null,
                 'max_vorlauf_tage' => $arguments['max_vorlauf_tage'] ?? null,

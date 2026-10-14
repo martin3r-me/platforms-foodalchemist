@@ -35,9 +35,9 @@ class ProductionOrdersSetStatusTool extends FoodAlchemistTool implements ToolCon
             'properties' => [
                 'order_id' => ['type' => 'integer'],
                 'status' => ['type' => 'string', 'enum' => ['in_progress', 'done', 'cancelled']],
-                'expected_updated_at' => ['type' => ['string', 'null'], 'description' => 'optimistische Version als ISO-8601 updated_at'],
-                'override_reason' => ['type' => ['string', 'null'], 'description' => 'Pflicht beim Start trotz Warnungen'],
-                'finish_note' => ['type' => ['string', 'null'], 'description' => 'Pflicht beim Fertigmelden mit offenen/blockierten Zeilen'],
+                'expected_updated_at' => ['description' => 'Text oder null (null hebt auf) — optimistische Version als ISO-8601 updated_at'],
+                'override_reason' => ['description' => 'Text oder null (null hebt auf) — Pflicht beim Start trotz Warnungen'],
+                'finish_note' => ['description' => 'Text oder null (null hebt auf) — Pflicht beim Fertigmelden mit offenen/blockierten Zeilen'],
             ],
             'required' => ['order_id', 'status'],
         ];

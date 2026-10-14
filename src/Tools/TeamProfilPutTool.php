@@ -29,17 +29,17 @@ class TeamProfilPutTool extends WareneingangTool implements ToolContract, ToolMe
     {
         return ['type' => 'object', 'properties' => [
             'profil' => ['type' => 'object', 'properties' => [
-                'max_pax_parallel' => ['type' => ['integer', 'null']],
-                'convenience_grad' => ['type' => ['string', 'null'], 'enum' => ['from_scratch', 'teil_convenience', 'voll_convenience', null]],
-                'notes' => ['type' => ['string', 'null']],
+                'max_pax_parallel' => ['description' => 'Ganzzahl oder null (null hebt auf)'],
+                'convenience_grad' => ['enum' => ['from_scratch', 'teil_convenience', 'voll_convenience', null], 'description' => 'Text oder null (null hebt auf)'],
+                'notes' => ['description' => 'Text oder null (null hebt auf)'],
             ]],
             'equipment' => ['type' => 'array', 'items' => ['type' => 'object', 'properties' => [
-                'equipment_id' => ['type' => 'integer'], 'status' => ['type' => ['string', 'null'], 'enum' => ['vorhanden', 'nicht_vorhanden', null]],
-                'anzahl' => ['type' => ['integer', 'null']], 'note' => ['type' => ['string', 'null']],
+                'equipment_id' => ['type' => 'integer'], 'status' => ['enum' => ['vorhanden', 'nicht_vorhanden', null], 'description' => 'Text oder null (null = unbekannt, entfernt die Angabe)'],
+                'anzahl' => ['description' => 'Ganzzahl oder null (null hebt auf)'], 'note' => ['description' => 'Text oder null (null hebt auf)'],
             ], 'required' => ['equipment_id']]],
             'flaechen' => ['type' => 'array', 'items' => ['type' => 'object', 'properties' => [
-                'id' => ['type' => 'integer'], 'name' => ['type' => 'string'], 'max_pax' => ['type' => ['integer', 'null']],
-                'saison_von' => ['type' => ['integer', 'null']], 'saison_bis' => ['type' => ['integer', 'null']],
+                'id' => ['type' => 'integer'], 'name' => ['type' => 'string'], 'max_pax' => ['description' => 'Ganzzahl oder null (null hebt auf)'],
+                'saison_von' => ['description' => 'Ganzzahl oder null (null hebt auf)'], 'saison_bis' => ['description' => 'Ganzzahl oder null (null hebt auf)'],
             ], 'required' => ['name']]],
             'loesche_flaechen' => ['type' => 'array', 'items' => ['type' => 'integer']],
         ]];

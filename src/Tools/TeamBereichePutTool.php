@@ -30,8 +30,8 @@ class TeamBereichePutTool extends WareneingangTool implements ToolContract, Tool
             'user_id' => ['type' => 'integer'], 'bereich' => ['type' => 'string'],
             'darf' => ['type' => 'boolean'], 'aktiv' => ['type' => 'boolean'],
             'kontingente' => ['type' => 'object', 'properties' => [
-                'max_standorte' => ['type' => ['integer', 'null']], 'max_user' => ['type' => ['integer', 'null']],
-                'ki_budget_eur_monat' => ['type' => ['number', 'string', 'null']],
+                'max_standorte' => ['description' => 'Ganzzahl oder null (null hebt auf)'], 'max_user' => ['description' => 'Ganzzahl oder null (null hebt auf)'],
+                'ki_budget_eur_monat' => ['description' => 'Zahl oder Text oder null (null hebt auf)'],
             ]],
         ]];
     }

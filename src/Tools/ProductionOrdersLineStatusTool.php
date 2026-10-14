@@ -43,9 +43,9 @@ class ProductionOrdersLineStatusTool extends FoodAlchemistTool implements ToolCo
             'properties' => [
                 'line_id' => ['type' => 'integer'],
                 'status' => ['type' => 'string', 'enum' => ['open', 'in_progress', 'done', 'skipped']],
-                'reason' => ['type' => ['string', 'null'], 'description' => 'Pflicht bei skipped'],
-                'note' => ['type' => ['string', 'null']],
-                'expected_updated_at' => ['type' => ['string', 'null'], 'description' => 'optimistische Version als ISO-8601 updated_at'],
+                'reason' => ['description' => 'Text oder null (null hebt auf) — Pflicht bei skipped'],
+                'note' => ['description' => 'Text oder null (null hebt auf)'],
+                'expected_updated_at' => ['description' => 'Text oder null (null hebt auf) — optimistische Version als ISO-8601 updated_at'],
             ],
             'required' => ['line_id', 'status'],
         ];
