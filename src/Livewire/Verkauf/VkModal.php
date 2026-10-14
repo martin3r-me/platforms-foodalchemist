@@ -238,8 +238,38 @@ class VkModal extends Component
                 'price_override_reason' => $d->price_override_reason,
                 'price_override_expires_at' => $d->price_override_expires_at?->format('Y-m-d'),
                 'tableware_item_id' => $d->tableware_item_id,
+                // Spec 83 B3i/B3l: Anrichten je Darreichung (Einheit aus der Form) + Pauschale je Auftragszeile
+                'anrichten_wert' => $d->anrichten_wert,
+                'anrichten_pauschal_min' => $d->anrichten_pauschal_min,
             ];
         }
+    }
+
+    /**
+     * Spec 83 B3i/B3l: je Darreichung die Anrichte-Rechnung für eine Beispielmenge (100 Portionen) — dieselbe Rechnung wie Auftrag
+     * und Kalkulation ({@see \Platform\FoodAlchemist\Services\ProductionTimeService::anrichten}).
+     *
+     * @return array<int, array<string,mixed>>
+     */
+    private function anrichtenVorschau(?\Platform\Core\Models\Team $team, $rezept): array
+    {
+        if ($team === null || ! $rezept instanceof \Platform\FoodAlchemist\Models\FoodAlchemistRecipe) {
+            return [];
+        }
+        $zeit = app(\Platform\FoodAlchemist\Services\ProductionTimeService::class);
+        $zjm = $zeit->zeitJeMenge($rezept, 'kg');
+        $raus = [];
+        foreach ($rezept->presentations()->with('servingForm')->get() as $d) {
+            $a = $zeit->anrichten($team, $rezept, [['dar' => $d, 'portionen' => 100.0]], null, $zjm);
+            $raus[(int) $d->id] = ($a['formen'][0] ?? []) + ['minuten_gesamt' => round($a['minuten'], 1), 'startwert' => match ($a['formen'][0]['einheit'] ?? 'portion') {
+                'stueck' => \Platform\FoodAlchemist\Services\ProductionTimeService::ANRICHTEN_SEKUNDEN_JE_STUECK,
+                'behaelter' => \Platform\FoodAlchemist\Services\ProductionTimeService::ANRICHTEN_MINUTEN_JE_PLATTE,
+                'vor_ort' => null,
+                default => $zeit->tellerKomponenten($rezept) * \Platform\FoodAlchemist\Services\ProductionTimeService::ANRICHTEN_SEKUNDEN_JE_KOMPONENTE,
+            }];
+        }
+
+        return $raus;
     }
 
     private function darServiceCall(\Closure $aktion): void
@@ -1411,6 +1441,9 @@ class VkModal extends Component
             'cockpit' => $rezept !== null ? ($cockpitTmp ?? $verkauf->cockpit($rezept, $team, $outlet)) : null,
             'gProStueck' => $gProStueck,
             'anteile' => $anteile,
+            // Spec 83 B3: Teller-Komponenten (Startwert Anrichten) + B3i/B3l: Hochrechnung je Darreichung für 100 Portionen
+            'anrichteKomponenten' => $rezept !== null ? app(\Platform\FoodAlchemist\Services\ProductionTimeService::class)->tellerKomponenten($rezept) : 0,
+            'anrichtenVorschau' => $this->anrichtenVorschau($team, $rezept),
             'hauptgruppen' => $team !== null ? $verkauf->dishMainGroups($team) : collect(),
             // MVP-049 + MVP-050 (P0): identisch zum Browser (Verkauf/Browser::render) — Klasse ist
             // die Diätform als EIGENE Achse (`dish_main_group_id IS NULL`), unabhängig von der

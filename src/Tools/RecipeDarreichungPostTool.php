@@ -23,7 +23,7 @@ class RecipeDarreichungPostTool extends FoodAlchemistTool implements ToolContrac
     public function getDescription(): string
     {
         return 'Legt eine Darreichungsform an einem team-eigenen Gericht an (serving_form = Slug/Code/Label). '
-            . 'attrs optional: quantity_per_unit_g, unit_count, markup_class_id, price_mode (auto|manuell), sales_net, note.';
+            . 'attrs optional: quantity_per_unit_g, unit_count, markup_class_id, price_mode (auto|manuell), sales_net, note, anrichten_wert (Einheit aus der Servierform, s. recipe_darreichung.PUT), anrichten_pauschal_min.';
     }
 
     public function getSchema(): array

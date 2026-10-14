@@ -333,55 +333,9 @@ class ProductionOrderService
         if ($rezepte->isEmpty()) {
             return [[], []];
         }
-        $besitzer = Team::find($order->team_id) ?? $team;
-        $vorgabe = app(\Platform\FoodAlchemist\Services\TeamSettingsService::class)->gerichtePostenId($besitzer);
-        $kandidaten = $rezepte->pluck('default_station_id')->filter()->map(fn ($i) => (int) $i)->all();
-        $sichtbar = $kandidaten === [] ? collect() : FoodAlchemistProductionStation::visibleToTeam($besitzer)->where('is_inactive', false)
-            ->whereIn('id', $kandidaten)->pluck('id')->map(fn ($i) => (int) $i)->flip();
 
-        // Spec 83 B2a: ein Master-Posten (z. B. am Rezept im Abo) ist für den Mandanten fremd, aber das Paket "Grundeinstellungen" hat ihn kopiert:
-        // paket_kopien kennt Master-Posten → Kopie im Haupt-Team des Mandanten. Nur diese Zuordnung löst auf, nie ein Raten über den Namen.
-        $kopien = $this->postenKopien($besitzer, array_values(array_diff($kandidaten, $sichtbar->keys()->all())));
-
-        $posten = [];
-        $fremd = [];
-        foreach ($rezepte as $r) {
-            $eigen = $r->default_station_id !== null ? (int) $r->default_station_id : null;
-            if ($eigen !== null && isset($sichtbar[$eigen])) {
-                $posten[(int) $r->id] = $eigen;
-            } elseif ($eigen !== null && isset($kopien[$eigen])) {
-                $posten[(int) $r->id] = $kopien[$eigen];       // Master-Posten → Kopie des Teams (Paket)
-            } elseif ($r->is_sales_recipe && $vorgabe !== null) {
-                $posten[(int) $r->id] = $vorgabe;            // Gericht ohne (nutzbaren) Rezept-Posten: Pass
-            } elseif ($eigen !== null) {
-                $fremd[] = (string) $r->name;
-            }
-        }
-
-        return [$posten, $fremd];
-    }
-
-    /**
-     * Master-Posten → Kopie im Team (Paket "Grundeinstellungen", `paket_kopien`). Die Kopie wird am Haupt-Team des Kunden gebucht; Unter-Teams
-     * erben sie über die Kette. Eine Kopie zählt nur, wenn sie für das Team sichtbar und aktiv ist (Stilllegen/Löschen hebt die Auflösung auf).
-     *
-     * @param  list<int>  $quellIds  Posten-IDs, die für das Team nicht sichtbar sind
-     * @return array<int,int>  quell_id => kopie_id
-     */
-    private function postenKopien(Team $team, array $quellIds): array
-    {
-        if ($quellIds === [] || ! \Illuminate\Support\Facades\Schema::hasTable('foodalchemist_paket_kopien')) {
-            return [];
-        }
-        $teamIds = array_values(array_unique([(int) $team->id, (int) app(\Platform\FoodAlchemist\Services\FaRechte::class)->kundenHauptTeam($team)->id]));
-        $zuordnung = \Illuminate\Support\Facades\DB::table('foodalchemist_paket_kopien')->whereIn('team_id', $teamIds)->where('paket', PaketGrundeinstellungenService::PAKET)
-            ->where('tabelle', 'production_stations')->whereIn('quell_id', $quellIds)->pluck('kopie_id', 'quell_id');
-        if ($zuordnung->isEmpty()) {
-            return [];
-        }
-        $nutzbar = FoodAlchemistProductionStation::visibleToTeam($team)->where('is_inactive', false)->whereIn('id', $zuordnung->values()->all())->pluck('id')->map(fn ($i) => (int) $i)->flip();
-
-        return $zuordnung->filter(fn ($kopie) => isset($nutzbar[(int) $kopie]))->map(fn ($kopie) => (int) $kopie)->mapWithKeys(fn ($kopie, $quell) => [(int) $quell => $kopie])->all();
+        // Spec 83: die Regel selbst liegt geteilt in PostenAufloesung (auch für die Verteilung der Gerichts-Blöcke, B3g)
+        return app(\Platform\FoodAlchemist\Support\PostenAufloesung::class)->fuerRezepte(Team::find($order->team_id) ?? $team, $rezepte);
     }
 
     /** @param  list<string>  $namen @return list<string> */

@@ -23,7 +23,7 @@ class RecipeDarreichungPutTool extends FoodAlchemistTool implements ToolContract
     {
         return 'Bearbeitet eine Darreichungsform. attrs: serving_form_id (wechselt die Servierform — '
             . 'der Weg aus dem Review-Zustand "unbestimmt"), quantity_per_unit_g, unit_count, markup_class_id, '
-            . 'price_mode (auto|manuell), sales_net, vat_profile_key, tableware_item_id, note (nur Whitelist wirkt).';
+            . 'price_mode (auto|manuell), sales_net, vat_profile_key, tableware_item_id, note, anrichten_wert (Spec 83: Einheit aus der Servierform — Teller/Box/Theke/Foodtruck s je Portion, Flying/Fingerfood s je Stück, Buffet/Pause/Sharing min je Platte; leer = Startwert), anrichten_pauschal_min (Minuten je Auftragszeile) (nur Whitelist wirkt).';
     }
 
     public function getSchema(): array

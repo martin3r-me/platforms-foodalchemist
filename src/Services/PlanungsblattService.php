@@ -860,7 +860,9 @@ class PlanungsblattService
                 'produzierte_menge_kg' => $basisYieldKg !== null ? round($basisYieldKg * $batches, 3) : null,
                 // Stufe 3 P3.2: nicht-lineare Zeit (Rüst + Marginal je Koch-Batch unter Topf-Deckel).
                 // Posten unbekannt bei der Explosion → nur Rezept-Deckel; Defaults = heutiges Verhalten.
-                'arbeitszeit_min' => $this->productionTimes->calculateForBatches($team, $recipe, $roh)['active_person_minutes'],
+                // Spec 83 B3i: am Gericht rechnet das Anrichten je bestellter Darreichung (formenTop, #175)
+                'arbeitszeit_min' => $this->productionTimes->calculateForBatches($team, $recipe, $roh, null,
+                    $istVk && ($formenTop[$rid] ?? []) !== [] ? array_values($formenTop[$rid]) : null)['active_person_minutes'],
                 'standzeit_min' => $recipe->standzeitMin(),   // passive Gar-/Standzeit (Durchlaufzeit, kein Posten)
                 'zubereitung' => $recipe->preparation ?: null,        // Spiegel-Freitext (Fallback für Rezepte ohne Schritte)
                 'schritte' => $this->schritteFuer($recipe),           // Spec 27: die eigentliche Anleitung (Nummer + Text + Fotos)
@@ -1185,6 +1187,8 @@ class PlanungsblattService
             // Gerechnete Grammatur (dieselbe Regel wie Preis/Produktion, auch wo an der Form nichts steht).
             $gramm = $dar !== null ? $darSvc->grammJeEinheit($dar, $recipe) : null;
             $out[] = [
+                'darreichung_id' => $dar?->id,                       // Spec 83 B3i: Kalkulation rechnet Anrichten je Form
+                'portionen_roh' => (float) $f['portionen'],
                 'label' => $dar?->servingForm?->label ?? 'Standard',
                 'portionen' => (int) round($f['portionen']),
                 'gramm' => $gramm !== null ? round($gramm * (float) ($dar?->unit_count ?: 1), 1) : null,

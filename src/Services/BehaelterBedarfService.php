@@ -77,6 +77,55 @@ class BehaelterBedarfService
     }
 
     /**
+     * Spec 83 B3d: Zahl der Regenerier-Behälter eines GERICHTS für eine Menge — gezählt wie im Produktionsblatt
+     * ({@see jeKomponente}, Zweck `regenerieren`, Basis-Variante). Die Komponenten-Massen entstehen wie in
+     * PlanungsblattService::explodiere: Brutto-Masse der Sub-Rezept-Zeile × Ansätze. Durchgängige Behälter
+     * (`bereits_gezaehlt`) zählen hier MIT: Sie werden fürs Geschirr nicht doppelt gezählt, kommen aber trotzdem
+     * in den Ofen und wieder heraus.
+     *
+     * @return array{anzahl:int, komponenten:list<array{label:string, anzahl:?int}>, nicht_berechenbar:list<string>}
+     */
+    public function regenerierBehaelter(Team $team, FoodAlchemistRecipe $gericht, float $ansaetze): array
+    {
+        return $this->behaelterFuerGericht($team, $gericht, $ansaetze, 'regenerieren');
+    }
+
+    /**
+     * Wie {@see regenerierBehaelter}, für einen Zweck aus {@see jeKomponente} (`regenerieren` | `ausgabe`). Spec 83 B3i: Buffet/Platte
+     * zählt die Ausgabe-Behälter.
+     *
+     * @return array{anzahl:int, komponenten:list<array{label:string, anzahl:?int}>, nicht_berechenbar:list<string>}
+     */
+    public function behaelterFuerGericht(Team $team, FoodAlchemistRecipe $gericht, float $ansaetze, string $zweck): array
+    {
+        $recompute = app(RecipeRecomputeService::class);
+        $komponenten = [];
+        foreach ($gericht->ingredients()->whereNotNull('referenced_recipe_id')->with('referencedRecipe')->get() as $z) {
+            $sub = $z->referencedRecipe;
+            $brutto = $recompute->bruttoMasseG($z);
+            if ($sub !== null && $brutto > 0 && ! $z->is_optional) {
+                $komponenten[] = ['recipe' => $sub, 'label' => (string) ($z->display_name ?: $sub->name), 'menge_kg' => round($brutto * max(0.0, $ansaetze) / 1000, 3)];
+            }
+        }
+        $anzahl = 0;
+        $liste = [];
+        $offen = [];
+        foreach ($this->jeKomponente($team, $komponenten) as $b) {
+            if (($b['zweck'] ?? null) !== $zweck) {
+                continue;
+            }
+            $n = ($b['berechenbar'] ?? false) ? (int) ($b['varianten'][0]['anzahl'] ?? 0) : null;
+            if ($n === null) {
+                $offen[] = (string) ($b['label'] ?? '?');
+            }
+            $anzahl += (int) $n;
+            $liste[] = ['label' => (string) ($b['label'] ?? '?'), 'anzahl' => $n];
+        }
+
+        return ['anzahl' => $anzahl, 'komponenten' => $liste, 'nicht_berechenbar' => $offen];
+    }
+
+    /**
      * Trägt DIESES Rezept seine Ware durchgängig — vom Abfüllen bis in den Ofen?
      *
      * Ragout im GN mit Deckel geht aus dem Kühlhaus direkt in den Konvektomat: ein Behälter, eine

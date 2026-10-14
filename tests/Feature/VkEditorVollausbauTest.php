@@ -283,7 +283,10 @@ it('rendert die abgeleiteten Marken: Fertigstellungszeit, Servierform-Select, Po
 
     $html = Livewire::test(VkModal::class)->call('oeffnen', $this->vk->id)->html();
 
-    expect($html)->toContain('data-vk-fertigstellungszeit')      // Zeitfeld neu beschriftet
+    // Spec 83 B3j: am Gericht zählt keine Fertigstellungszeit mehr (Feld nur noch als Altwert sichtbar);
+    // B3i/B3l: Anrichten wird je Darreichung gepflegt
+    expect($html)->not->toContain('data-vk-fertigstellungszeit-alt')
+        ->and($html)->toContain('data-dar-anrichten-wert')->and($html)->toContain('data-dar-anrichten-pauschale')
         ->and($html)->toContain('data-dar-form')                // Servierform je Zeile wählbar (Review-Ausgang)
         // Das Posten-Feld ist optional benannt: am Pass arbeitet das Team, ein einzelner
         // „Posten des Gerichts" existiert fachlich nicht (Entscheid 2026-09-04).

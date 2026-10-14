@@ -84,7 +84,7 @@
                                 $istSumme = in_array($kostenStufe, ['subtotal', 'total'], true);
                             @endphp
                             <tr class="{{ $istSumme ? 'font-semibold text-[var(--fa-ink)] [&>td]:border-t [&>td]:border-[var(--fa-line-strong)]' : 'text-[var(--fa-ink-2)]' }}">
-                                <td>
+                                <td class="{{ $kostenStufe === 'detail' ? 'pl-4 text-[var(--fa-ink-3)]' : '' }}">
                                     @if($kostenStufe === 'surcharge')<span class="text-[var(--fa-ink-3)]" aria-hidden="true">+&nbsp;</span>@endif{{ $kosten['label'] }}
                                 </td>
                                 <td class="num">{{ $zkEuro((float) ($kosten['amount'] ?? 0) / $simPax) }}</td>
@@ -125,6 +125,7 @@
                                 <th class="num">Arbeitsgänge</th>
                                 <th class="num">Rüsten</th>
                                 <th class="num">je Ansatz</th>
+                                <th class="num" title="Gericht: Regenerier-Behälter bestücken/entnehmen (Spec 83)">Regenerieren</th>
                                 <th class="num">je Menge</th>
                                 <th class="num">Aktiv gesamt</th>
                             </tr>
@@ -137,6 +138,7 @@
                                     <td class="num">{{ (int) ($zeit['operations'] ?? 0) }}</td>
                                     <td class="num">{{ number_format((float) ($zeit['setup_minutes'] ?? 0), 1, ',', '.') }} min</td>
                                     <td class="num">{{ number_format((float) ($zeit['batch_minutes'] ?? 0), 1, ',', '.') }} min</td>
+                                    <td class="num">{{ number_format((float) ($zeit['regenerieren_minutes'] ?? 0), 1, ',', '.') }} min</td>
                                     <td class="num">{{ number_format((float) ($zeit['variable_minutes'] ?? 0), 1, ',', '.') }} min</td>
                                     <td class="num font-medium">{{ number_format((float) ($zeit['active_person_minutes'] ?? 0), 1, ',', '.') }} min</td>
                                 </tr>

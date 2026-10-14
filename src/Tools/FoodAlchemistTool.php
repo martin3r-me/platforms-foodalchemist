@@ -141,6 +141,10 @@ abstract class FoodAlchemistTool
                     'sales_gross' => $d->sales_gross !== null ? (float) $d->sales_gross : null,
                     'price_mode' => $d->price_mode,
                     'wareneinsatz_pct' => ($ek !== null && $vk !== null && $vk > 0) ? round($ek / $vk * 100, 1) : null,
+                    // Spec 83 B3i/B3l: gepflegte Anrichte-Zeit (null = Startwert) und ihre Einheit aus der Form
+                    'anrichten_wert' => $d->anrichten_wert !== null ? (float) $d->anrichten_wert : null,
+                    'anrichten_einheit' => \Platform\FoodAlchemist\Services\ProductionTimeService::anrichteEinheit($d->servingForm?->code),
+                    'anrichten_pauschal_min' => $d->anrichten_pauschal_min !== null ? (float) $d->anrichten_pauschal_min : null,
                 ];
             })->all();
     }
