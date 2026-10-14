@@ -441,8 +441,11 @@ it('die Zeitrechnung ignoriert eine Alt-Ruestzeit am Gericht', function () {
     $amGericht = $svc->calculate($this->rootTeam, $gericht->fresh(), 1.0, 'kg');
     $amBasis = $svc->calculate($this->rootTeam, $basis->fresh(), 1.0, 'kg');
 
+    // Spec 83 B3j (Entscheid Dominique 14.10.2026): auch work_time_min zählt am Gericht nicht mehr — die Spalte bleibt stehen
     expect($amGericht['setup_minutes'])->toBe(0.0)
-        ->and($amGericht['active_person_minutes'])->toBe(10.0)
+        ->and($amGericht['batch_minutes'])->toBe(0.0)
+        ->and($amGericht['active_person_minutes'])->toBe(0.0)
+        ->and((int) $gericht->fresh()->work_time_min)->toBe(10)
         // Am Basisrezept zählt sie unverändert.
         ->and($amBasis['setup_minutes'])->toBe(45.0)
         ->and($amBasis['active_person_minutes'])->toBe(55.0);
