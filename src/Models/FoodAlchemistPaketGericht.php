@@ -29,7 +29,8 @@ class FoodAlchemistPaketGericht extends Model
 
     public function package(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistPaket::class, 'package_id');
+        return $this->belongsTo(FoodAlchemistPaket::class, 'package_id')
+            ->withoutGlobalScope(\Platform\FoodAlchemist\Models\Scopes\OhneFassungenScope::class);   // Spec 82: Verweis löst auch Fassungen auf
     }
 
     /** @deprecated #486 deutscher Alias → package() */

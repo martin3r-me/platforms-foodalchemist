@@ -34,13 +34,15 @@ class FoodAlchemistConceptSlot extends Model
 
     public function concept(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistConcept::class, 'concept_id');
+        return $this->belongsTo(FoodAlchemistConcept::class, 'concept_id')
+            ->withoutGlobalScope(\Platform\FoodAlchemist\Models\Scopes\OhneFassungenScope::class);   // Spec 82: Verweis löst auch Fassungen auf
     }
 
     /** Befüllung A: austauschbares Paket. */
     public function package(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistPaket::class, 'package_id');
+        return $this->belongsTo(FoodAlchemistPaket::class, 'package_id')
+            ->withoutGlobalScope(\Platform\FoodAlchemist\Models\Scopes\OhneFassungenScope::class);   // Spec 82: Verweis löst auch Fassungen auf
     }
 
     /** @deprecated #486 deutscher Alias → package() */
@@ -52,7 +54,8 @@ class FoodAlchemistConceptSlot extends Model
     /** Kaskade (2026-08-24): eingebettetes Paket als kind=paket-Concept (ersetzt schrittweise package_id). */
     public function embeddedConcept(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistConcept::class, 'embedded_concept_id');
+        return $this->belongsTo(FoodAlchemistConcept::class, 'embedded_concept_id')
+            ->withoutGlobalScope(\Platform\FoodAlchemist\Models\Scopes\OhneFassungenScope::class);   // Spec 82: Verweis löst auch Fassungen auf
     }
 
     /** Befüllung B: fest gesetztes Gericht (VK-Rezept). */

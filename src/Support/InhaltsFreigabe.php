@@ -108,20 +108,21 @@ final class InhaltsFreigabe
         AboSicht::anhaengen($q, $idSpalte, $typ, $kette, $f);
     }
 
-    /** Schema-Merker je Prozess (nicht im Team-Flush), siehe flushTeamAncestryCache. */
-    private static ?bool $fassungDa = null;
+    /** Schema-Merker je Tabelle und Prozess (nicht im Team-Flush), siehe flushTeamAncestryCache. */
+    private static array $fassungDa = [];
 
-    /** Spalte `ist_fassung` der Rezept-Tabelle (aus der ID-Spalte abgeleitet), sofern migriert. */
+    /** Spalte `ist_fassung` der Inhalts-Tabelle (aus der ID-Spalte abgeleitet), sofern migriert. Foodbook/Speiseplan/Speisekarte haben keine Fassung. */
     private static function fassungSpalte(string $typ, string $idSpalte): ?string
     {
-        if ($typ !== 'recipe') {
+        $standard = ['recipe' => 'foodalchemist_recipes', 'concept' => 'foodalchemist_concepts', 'paket' => 'foodalchemist_packages', 'format' => 'foodalchemist_formats'][$typ] ?? null;
+        if ($standard === null) {
             return null;
         }
-        self::$fassungDa ??= Schema::hasColumn('foodalchemist_recipes', 'ist_fassung');
-        if (! self::$fassungDa) {
+        $tabelle = str_contains($idSpalte, '.') ? strstr($idSpalte, '.', true) : $standard;
+        self::$fassungDa[$tabelle] ??= Schema::hasColumn($tabelle, 'ist_fassung');
+        if (! self::$fassungDa[$tabelle]) {
             return null;
         }
-        $tabelle = str_contains($idSpalte, '.') ? strstr($idSpalte, '.', true) : 'foodalchemist_recipes';
 
         return $tabelle . '.ist_fassung';
     }

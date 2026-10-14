@@ -40,7 +40,8 @@ class FoodAlchemistDishIdeaGroup extends Model
     /** Owner-Konzept (XOR mit chapter/planningSession). */
     public function concept(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistConcept::class, 'concept_id');
+        return $this->belongsTo(FoodAlchemistConcept::class, 'concept_id')
+            ->withoutGlobalScope(\Platform\FoodAlchemist\Models\Scopes\OhneFassungenScope::class);   // Spec 82: Verweis löst auch Fassungen auf
     }
 
     /** Owner-Planungs-Session (3-Wege-XOR mit chapter/concept, Doppel-Diamant). */
@@ -58,6 +59,7 @@ class FoodAlchemistDishIdeaGroup extends Model
     /** Beim Kapitel-Go erzeugtes Konzept (loser Zeiger, kein Cascade). */
     public function materializedConcept(): BelongsTo
     {
-        return $this->belongsTo(FoodAlchemistConcept::class, 'materialized_concept_id');
+        return $this->belongsTo(FoodAlchemistConcept::class, 'materialized_concept_id')
+            ->withoutGlobalScope(\Platform\FoodAlchemist\Models\Scopes\OhneFassungenScope::class);   // Spec 82: Verweis löst auch Fassungen auf
     }
 }

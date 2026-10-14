@@ -23,7 +23,7 @@ use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
  */
 class FoodAlchemistFormat extends Model
 {
-    use HasUuidV7, LogsActivity, BelongsToTeamHierarchy, SoftDeletes;
+    use HasUuidV7, LogsActivity, BelongsToTeamHierarchy, SoftDeletes, \Platform\FoodAlchemist\Models\Concerns\HatFassungen;
 
     protected $table = 'foodalchemist_formats';
 
