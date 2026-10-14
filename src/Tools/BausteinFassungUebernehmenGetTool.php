@@ -26,7 +26,7 @@ class BausteinFassungUebernehmenGetTool extends FoodAlchemistTool implements Too
     public function getSchema(): array
     {
         return ['type' => 'object', 'properties' => [
-            'art' => ['type' => 'string', 'enum' => ['concept', 'paket']], 'familie_id' => ['type' => 'integer'],
+            'art' => ['type' => 'string', 'enum' => ['concept', 'paket', 'format']], 'familie_id' => ['type' => 'integer'],
         ], 'required' => ['art', 'familie_id']];
     }
 
@@ -37,8 +37,8 @@ class BausteinFassungUebernehmenGetTool extends FoodAlchemistTool implements Too
             return ToolResult::error('Kein Team im Kontext.', 'NO_TEAM');
         }
         $art = (string) ($arguments['art'] ?? '');
-        if (! in_array($art, ['concept', 'paket'], true)) {
-            return ToolResult::error('art muss concept oder paket sein.', 'VALIDATION_ERROR');
+        if (! in_array($art, ['concept', 'paket', 'format'], true)) {
+            return ToolResult::error('art muss concept, paket oder format sein.', 'VALIDATION_ERROR');
         }
 
         return ToolResult::success(['verweise' => app(BausteinFolgeService::class)->gehalten($team, $art, (int) ($arguments['familie_id'] ?? 0))]);

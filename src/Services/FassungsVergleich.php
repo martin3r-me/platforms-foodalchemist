@@ -71,7 +71,7 @@ class FassungsVergleich
      * Allergen- und Zusatzstoff-Bild eines Konzepts oder Pakets (Fassung) über die ganze Kette: je Feld der höchste Rang aller Rezept-Fassungen
      * darunter (ALL-MAXIMAL wie beim Rezept). Ein Konzept/Paket trägt keine eigenen Allergenspalten, das Erbe kommt aus den Rezepten.
      *
-     * @param  'concept'|'paket'  $art
+     * @param  'concept'|'paket'|'format'  $art
      * @return array<string,mixed>
      */
     public function kettenBild(string $art, int $fassungId): array
@@ -115,6 +115,14 @@ class FassungsVergleich
     {
         if ($tiefe > 4) {
             return [];
+        }
+        if ($art === 'format') {   // Format → Konzepte der Slots → deren Kette
+            $ids = [];
+            foreach (DB::table('foodalchemist_format_slots')->where('format_id', $id)->whereNull('deleted_at')->whereNotNull('concept_id')->pluck('concept_id')->unique() as $cid) {
+                array_push($ids, ...$this->rezeptIdsDerKette('concept', (int) $cid, $tiefe + 1));
+            }
+
+            return array_values(array_unique($ids));
         }
         if ($art === 'paket') {
             return DB::table('foodalchemist_package_dishes')->where('package_id', $id)->whereNull('deleted_at')

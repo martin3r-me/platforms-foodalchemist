@@ -1203,6 +1203,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\PaketFassungenGetTool::class,
                     \Platform\FoodAlchemist\Tools\ConceptFassungenPublishTool::class,
                     \Platform\FoodAlchemist\Tools\ConceptFassungenGetTool::class,
+                    \Platform\FoodAlchemist\Tools\FormatFassungenPublishTool::class,
+                    \Platform\FoodAlchemist\Tools\FormatFassungenGetTool::class,
                     \Platform\FoodAlchemist\Tools\BausteinFassungUebernehmenGetTool::class,
                     \Platform\FoodAlchemist\Tools\BausteinFassungUebernehmenPostTool::class,
                     // Spec 82 §13 D: Gebühren (Plan-Preise, Plan und Nutzung)

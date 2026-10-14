@@ -31,8 +31,8 @@ use Platform\FoodAlchemist\Support\VerweisRegister;
  *
  * Fassungs-Zeilen werden nie gelöscht: eingefrorene Stände (Snapshots, archivierte Ausgaben) bleiben auflösbar.
  *
- * Spec 82 Abo Konzepte/Pakete/Formate, PR 6 (Übergabe Lisa): derselbe Ablauf für ALLE Arten des Abos — Rezept, Paket, Konzept (auch kind=paket); das Format
- * folgt mit PR 7. Alles läuft über (Art, ID), nie über die ID allein (Rezept 12 ≠ Paket 12). „Genutzt“ je Art steht im {@see VerweisRegister} (dieselben Filter
+ * Spec 82 Abo Konzepte/Pakete/Formate, PR 6 (Übergabe Lisa) + PR 7: derselbe Ablauf für ALLE Arten des Abos — Rezept, Paket, Konzept (auch kind=paket) und Format
+ * (Kunden-Formate nie, D8; Bilder werden mitkopiert). Alles läuft über (Art, ID), nie über die ID allein (Rezept 12 ≠ Paket 12). „Genutzt“ je Art steht im {@see VerweisRegister} (dieselben Filter
  * wie das Folgen, PR 5). Kopie von unten nach oben: erst alle Köpfe, dann die Inhalte (Rezepte samt Darreichungen → Pakete → Konzepte), danach mit den Preisen
  * des Mandanten gerechnet (Rezepte → Paket-Preise → Konzept-Caches). Die Kette wird, wie bei Rezepten heute, vollständig kopiert — auch Teile, die über ein
  * zweites Abo sichtbar blieben (bewusst gleich; „mitkopiert“ nennt sie). Titelbild und Galerie eines Konzepts werden in den Speicher des Mandanten mitkopiert (fehlt die Datei: Kopie ohne Bild + Hinweis, nie ein Abbruch).
@@ -46,10 +46,10 @@ class AboKuendigungService
         'angebot' => ['foodalchemist_offer_blocks AS x', 'foodalchemist_offer_chapters AS k', 'x.chapter_id', 'k.offer_id', 'foodalchemist_offers AS p'],
     ];
 
-    /** Arten im Abo, in Kopier-Reihenfolge (unten zuerst). Das Format folgt mit PR 7. */
-    private const ARTEN = ['recipe', 'paket', 'concept'];
+    /** Arten im Abo, in Kopier-Reihenfolge (unten zuerst); das Format steht oben (PR 7). */
+    private const ARTEN = ['recipe', 'paket', 'concept', 'format'];
 
-    private const TABELLE = ['recipe' => 'foodalchemist_recipes', 'paket' => 'foodalchemist_packages', 'concept' => 'foodalchemist_concepts'];
+    private const TABELLE = ['recipe' => 'foodalchemist_recipes', 'paket' => 'foodalchemist_packages', 'concept' => 'foodalchemist_concepts', 'format' => 'foodalchemist_formats'];
 
     /** @var list<string> Hinweise des laufenden Ablaufs (z. B. fehlende Bilddatei) — nie ein Abbruch */
     private array $hinweise = [];
@@ -103,7 +103,7 @@ class AboKuendigungService
      * Master zieht ein Objekt (Rezept, Paket, Konzept) aus einer abonnierten Sammlung zurück (§8: Löschen eines abonnierten Objekts ist gesperrt, nur
      * Zurückziehen). Jeder betroffene Mandant läuft denselben Ablauf wie bei einer Kündigung.
      *
-     * @param  'recipe'|'paket'|'concept'  $typ
+     * @param  'recipe'|'paket'|'concept'|'format'  $typ
      * @return array{mandanten: list<array{mandant_team_id:int, vorschau: array<string,mixed>, kopien?: array<int,int>, kopien_je_art?: array<string,array<int,int>>}>, ausgefuehrt: bool}
      */
     public function zurueckziehen(Team $master, int $sammlungId, int $objektId, ?User $actor, bool $bestaetigt, string $typ = 'recipe'): array
@@ -112,7 +112,7 @@ class AboKuendigungService
             throw new \RuntimeException('Zurückziehen gibt es nur im Master-Team.');
         }
         if (! in_array($typ, self::ARTEN, true)) {
-            throw new \RuntimeException('Zurückziehen gibt es für Rezepte, Pakete und Konzepte.');
+            throw new \RuntimeException('Zurückziehen gibt es für Rezepte, Pakete, Konzepte und Formate.');
         }
         $this->rechte->pruefe($actor, $master, FaRolle::Freigeben, 'Abo-Objekt zurückziehen');
         if (! DB::table('foodalchemist_sammlung_objekte')->where('sammlung_id', $sammlungId)->where('typ', $typ)->where('objekt_id', $objektId)->exists()) {
@@ -147,7 +147,7 @@ class AboKuendigungService
             DB::table('foodalchemist_sammlung_objekte')->where('sammlung_id', $sammlungId)->where('typ', $typ)->where('objekt_id', $objektId)->delete();
         });
         $this->abos->neuBerechnenAlle();
-        $this->nachrechnen($alleKopien + ['recipe' => [], 'paket' => [], 'concept' => []]);
+        $this->nachrechnen($alleKopien + ['recipe' => [], 'paket' => [], 'concept' => [], 'format' => []]);
         $this->protokoll->schreibe('abo_objekt_zurueckgezogen', ['sammlung_id' => $sammlungId, 'typ' => $typ, 'objekt_id' => $objektId,
             'mandanten' => array_keys($mandanten)], $actor, $this->modellFuer($typ)::mitFassungen()->find($objektId));
 
@@ -171,12 +171,13 @@ class AboKuendigungService
         return array_sum(array_map('count', $jeArt));
     }
 
-    /** @return class-string<FoodAlchemistRecipe|FoodAlchemistPaket|FoodAlchemistConcept> */
+    /** @return class-string<FoodAlchemistRecipe|FoodAlchemistPaket|FoodAlchemistConcept|\Platform\FoodAlchemist\Models\FoodAlchemistFormat> */
     private function modellFuer(string $typ): string
     {
         return match ($typ) {
             'paket' => FoodAlchemistPaket::class,
             'concept' => FoodAlchemistConcept::class,
+            'format' => \Platform\FoodAlchemist\Models\FoodAlchemistFormat::class,
             default => FoodAlchemistRecipe::class,
         };
     }
@@ -465,8 +466,12 @@ class AboKuendigungService
         foreach ($kette['concept'] as $fid) {
             $map['concept'][$fid] = $this->kopiereKopfKonzept(FoodAlchemistConcept::mitFassungen()->findOrFail($fid), $mandant, $namen['concept'][$fid] ?? null);
         }
-        // 2. Inhalte von unten nach oben: Rezepte (samt Darreichungen) → Pakete → Konzepte
+        foreach ($kette['format'] as $fid) {
+            $map['format'][$fid] = $this->kopiereKopfFormat(\Platform\FoodAlchemist\Models\FoodAlchemistFormat::mitFassungen()->findOrFail($fid), $mandant, $namen['format'][$fid] ?? null);
+        }
+        // 2. Inhalte von unten nach oben: Rezepte (samt Darreichungen) → Pakete → Konzepte → Formate
         $darMap = [];
+        $slotMap = [];   // Konzept-Slot der Fassung → Slot der Kopie (Format-Wording-Overrides hängen daran)
         foreach ($kette['recipe'] as $fid) {
             $this->kopiereInhalt(FoodAlchemistRecipe::mitFassungen()->findOrFail($fid), $map['recipe'][$fid], $map['recipe'], $mandant, $darMap);
         }
@@ -475,7 +480,10 @@ class AboKuendigungService
             $this->kopiereInhaltPaket(FoodAlchemistPaket::mitFassungen()->findOrFail($fid), $map['paket'][$fid], $map, $darMap, $mandant);
         }
         foreach ($kette['concept'] as $fid) {
-            $this->kopiereInhaltKonzept(FoodAlchemistConcept::mitFassungen()->findOrFail($fid), $map['concept'][$fid], $map, $darMap, $mandant);
+            $this->kopiereInhaltKonzept(FoodAlchemistConcept::mitFassungen()->findOrFail($fid), $map['concept'][$fid], $map, $darMap, $mandant, $slotMap);
+        }
+        foreach ($kette['format'] as $fid) {
+            $this->kopiereInhaltFormat(\Platform\FoodAlchemist\Models\FoodAlchemistFormat::mitFassungen()->findOrFail($fid), $map['format'][$fid], $map, $slotMap, $mandant);
         }
 
         // 3. lebende Verweise umhängen (Historie bleibt), je Art mit denselben Filtern wie „genutzt“
@@ -513,6 +521,10 @@ class AboKuendigungService
                 $offen['paket'] = array_merge($offen['paket'], $this->nurFassungen('paket', $slots->pluck('package_id')->filter()->all()));
                 $offen['concept'] = array_merge($offen['concept'], $this->nurFassungen('concept', $slots->pluck('embedded_concept_id')->filter()->all()));
                 $offen['recipe'] = array_merge($offen['recipe'], $this->nurFassungen('recipe', $slots->pluck('sales_recipe_id')->filter()->all()));
+            }
+            if ($neu['format'] !== []) {
+                $offen['concept'] = array_merge($offen['concept'], $this->nurFassungen('concept', DB::table('foodalchemist_format_slots')
+                    ->whereIn('format_id', $neu['format'])->whereNull('deleted_at')->whereNotNull('concept_id')->pluck('concept_id')->all()));
             }
             if ($neu['paket'] !== []) {
                 $offen['recipe'] = array_merge($offen['recipe'], $this->nurFassungen('recipe', DB::table('foodalchemist_package_dishes')
@@ -638,6 +650,54 @@ class AboKuendigungService
         }
     }
 
+    private function kopiereKopfFormat(\Platform\FoodAlchemist\Models\FoodAlchemistFormat $fassung, Team $mandant, ?string $name = null): int
+    {
+        $kopie = $fassung->replicate(['uuid', 'legacy_id', 'ist_fassung', 'fassung_von_id', 'fassung_nr', 'inhalt_hash', 'veroeffentlicht_at', 'veroeffentlicht_von',
+            'aenderungsnotiz', 'fassung_allergen_geaendert', 'kopie_von_id', 'kopie_stand_at']);
+        $kopie->forceFill([
+            'team_id' => $mandant->id, 'ist_fassung' => false,
+            'kopie_von_id' => $fassung->fassung_von_id, 'kopie_stand_at' => now(),   // originalGeaendert() vergleicht gegen die Familie
+        ] + ($name !== null ? ['name' => $name] : []))->save();
+        // Galerie/Hero in den Speicher des Mandanten (Entscheid Dominique 14.10.); fehlt eine Datei: Kopie ohne dieses Bild + Hinweis, nie ein Abbruch
+        $media = app(FoodAlchemistMediaService::class);
+        foreach ($fassung->images()->get() as $bild) {
+            $m = $media->kopiereBild($bild->context_file_id, $bild->path, $mandant, 'foodalchemist_format', (int) $kopie->id, "foodalchemist/formate/{$kopie->id}");
+            if ($m === null) {
+                $this->hinweise[] = 'Format „'.$kopie->name.'“: Eine Bilddatei fehlt — die Kopie hat dieses Bild nicht.';
+
+                continue;
+            }
+            $bild->replicate(['uuid'])->forceFill(['format_id' => $kopie->id, 'team_id' => $mandant->id, 'context_file_id' => $m['context_file_id'], 'path' => $m['path']])->save();
+        }
+
+        return (int) $kopie->id;
+    }
+
+    /**
+     * Slots des Formats (Konzept-Verweis auf die Konzept-KOPIE bzw. die weiter sichtbare Fassung, Wording-Overrides auf die Slots der Konzept-Kopie umgeschlüsselt) und Facetten.
+     *
+     * @param  array<string, array<int,int>>  $map
+     * @param  array<int,int>  $slotMap
+     */
+    private function kopiereInhaltFormat(\Platform\FoodAlchemist\Models\FoodAlchemistFormat $fassung, int $kopieId, array $map, array $slotMap, Team $mandant): void
+    {
+        foreach ($fassung->slots()->get() as $s) {
+            $payload = (array) ($s->payload_json ?? []);
+            if (! empty($payload['wording_overrides'])) {
+                $payload['wording_overrides'] = collect($payload['wording_overrides'])->mapWithKeys(fn ($text, $slotId) => [(string) ($slotMap[(int) $slotId] ?? $slotId) => $text])->all();
+            }
+            $s->replicate(['uuid', 'created_at', 'updated_at', 'deleted_at'])->forceFill([
+                'format_id' => $kopieId, 'team_id' => $mandant->id,
+                'concept_id' => $s->concept_id !== null ? ($map['concept'][(int) $s->concept_id] ?? $s->concept_id) : null,
+                'payload_json' => $payload ?: null,
+            ])->save();
+        }
+        $kopie = \Platform\FoodAlchemist\Models\FoodAlchemistFormat::mitFassungen()->findOrFail($kopieId);
+        $kopie->serviceMoments()->sync($fassung->serviceMoments()->allRelatedIds()->all());
+        $kopie->seasons()->sync($fassung->seasons()->allRelatedIds()->all());
+        $kopie->targetGroups()->sync($fassung->targetGroups()->allRelatedIds()->all());
+    }
+
     /**
      * Paket-Gerichte der Fassung → Zeilen der Kopie: Rezept = Rezept-Kopie, Form = Form der Rezept-Kopie.
      *
@@ -660,17 +720,20 @@ class AboKuendigungService
      *
      * @param  array<string, array<int,int>>  $map
      * @param  array<int,int>  $darMap
+     * @param  array<int,int>  $slotMap  wird gefüllt: Slot der Konzept-Fassung → Slot der Kopie
      */
-    private function kopiereInhaltKonzept(FoodAlchemistConcept $fassung, int $kopieId, array $map, array $darMap, Team $mandant): void
+    private function kopiereInhaltKonzept(FoodAlchemistConcept $fassung, int $kopieId, array $map, array $darMap, Team $mandant, array &$slotMap = []): void
     {
         foreach ($fassung->slots()->get() as $s) {
-            $s->replicate(['uuid', 'created_at', 'updated_at', 'deleted_at'])->forceFill([
+            $neuerSlot = $s->replicate(['uuid', 'created_at', 'updated_at', 'deleted_at']);
+            $neuerSlot->forceFill([
                 'concept_id' => $kopieId, 'team_id' => $mandant->id,
                 'package_id' => $s->package_id !== null ? ($map['paket'][(int) $s->package_id] ?? $s->package_id) : null,
                 'embedded_concept_id' => $s->embedded_concept_id !== null ? ($map['concept'][(int) $s->embedded_concept_id] ?? $s->embedded_concept_id) : null,
                 'sales_recipe_id' => $s->sales_recipe_id !== null ? ($map['recipe'][(int) $s->sales_recipe_id] ?? $s->sales_recipe_id) : null,
                 'presentation_id' => $s->presentation_id !== null ? ($darMap[(int) $s->presentation_id] ?? $s->presentation_id) : null,
             ])->save();
+            $slotMap[(int) $s->id] = (int) $neuerSlot->id;
         }
         $kopie = FoodAlchemistConcept::mitFassungen()->findOrFail($kopieId);
         $kopie->serviceMoments()->sync($fassung->serviceMoments()->allRelatedIds()->all());

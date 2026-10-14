@@ -31,6 +31,11 @@ class FassungSignalService
 {
     private const QUELLE = 'fassung';
 
+    /** Konzept-/Paket-/Format-Fassungen (PR 4/5/7): Modell und Anzeige-Name je Art. */
+    private const BAUSTEIN_MODELL = ['concept' => \Platform\FoodAlchemist\Models\FoodAlchemistConcept::class, 'paket' => \Platform\FoodAlchemist\Models\FoodAlchemistPaket::class, 'format' => \Platform\FoodAlchemist\Models\FoodAlchemistFormat::class];
+
+    private const BAUSTEIN_LABEL = ['concept' => 'Konzept', 'paket' => 'Paket', 'format' => 'Format'];
+
     /** EU-Allergene in der Schreibweise des Hauses. */
     private const ALLERGENE = ['gluten' => 'Gluten', 'crustaceans' => 'Krebstiere', 'eggs' => 'Eier', 'fish' => 'Fisch', 'peanuts' => 'Erdnüsse', 'soy' => 'Soja',
         'milk' => 'Milch', 'tree_nuts' => 'Schalenfrüchte', 'celery' => 'Sellerie', 'mustard' => 'Senf', 'sesame' => 'Sesam', 'sulphites' => 'Sulfite',
@@ -203,13 +208,13 @@ class FassungSignalService
      * Nach dem Veröffentlichen eines Konzepts/Pakets: Info-Signale für die Mandanten mit der neuen Fassung in der Hülle, Folgen der Verweise
      * ({@see BausteinFolgeService}), danach die Aktions-Signale für die berührten Team × Familie. Fehler hier verhindern nie die Veröffentlichung.
      *
-     * @param  'concept'|'paket'  $art
+     * @param  'concept'|'paket'|'format'  $art
      * @param  list<int>  $neueFassungIds  die NEU angelegten Fassungen (nicht die wiederverwendeten)
      */
     public function nachBausteinVeroeffentlichung(string $art, array $neueFassungIds): int
     {
         $n = 0;
-        $modell = $art === 'paket' ? \Platform\FoodAlchemist\Models\FoodAlchemistPaket::class : \Platform\FoodAlchemist\Models\FoodAlchemistConcept::class;
+        $modell = self::BAUSTEIN_MODELL[$art];
         foreach ($modell::mitFassungen()->whereIn('id', $neueFassungIds)->where('ist_fassung', true)->orderBy('fassung_nr')->get() as $fassung) {
             foreach (DB::table('foodalchemist_abo_objekte')->where('typ', $art)->where('objekt_id', $fassung->id)->pluck('mandant_team_id') as $teamId) {
                 if (($team = Team::find((int) $teamId)) !== null) {
@@ -243,7 +248,7 @@ class FassungSignalService
         $diff = $vorher === null ? [] : $this->vergleich->bilderDiff($this->vergleich->kettenBild($art, (int) $vorher->id), $this->vergleich->kettenBild($art, (int) $fassung->id));
         $allergen = $diff !== [] || (bool) $fassung->fassung_allergen_geaendert;
         $key = 'fassung-aktualisiert:'.$art.':'.$familieId;
-        $was = $art === 'paket' ? 'Paket' : 'Konzept';
+        $was = self::BAUSTEIN_LABEL[$art];
 
         $offen = FoodAlchemistSignal::where('team_id', $team->id)->where('type', SignalTyp::FassungAktualisiert->value)->where('dedup_key', $key)
             ->where('status', SignalStatus::Offen->value)->first();
@@ -258,7 +263,7 @@ class FassungSignalService
         $titel = ($allergenGesamt ? 'Allergen-Änderung im Abo-'.$was.': ' : 'Abo-'.$was.' aktualisiert: ').$name.' (Fassung #'.$nr.')';
         $zeilen = $fassungen->map(fn ($f) => '#'.$f['nr'].($f['notiz'] ? ': '.$f['notiz'] : '').($f['allergene'] !== [] ? ' — '.implode('; ', $f['allergene']) : ''))->all();
         $this->signale->erzeuge($team, SignalTyp::FassungAktualisiert, $allergenGesamt ? SignalSeverity::Kritisch : SignalSeverity::Info, $titel, [
-            'dedup_key' => $key, 'source' => self::QUELLE, 'ref_type' => $art === 'paket' ? 'paket' : 'concept', 'ref_id' => (int) $fassung->id,
+            'dedup_key' => $key, 'source' => self::QUELLE, 'ref_type' => $art, 'ref_id' => (int) $fassung->id,
             'description' => 'Die Bibliothek nutzt die neue Fassung automatisch. Änderungen: '.implode(' · ', $zeilen),
             'payload' => ['art' => $art, 'familie_id' => $familieId, 'name' => $name, 'nr' => $nr, 'fassungen' => $fassungen->all(), 'allergen_geaendert' => $allergenGesamt],
         ]);
@@ -268,7 +273,7 @@ class FassungSignalService
     public function aktionBaustein(Team $team, string $art, int $familieId): void
     {
         $key = 'fassung-neu:'.$art.':'.$familieId;
-        $modell = $art === 'paket' ? \Platform\FoodAlchemist\Models\FoodAlchemistPaket::class : \Platform\FoodAlchemist\Models\FoodAlchemistConcept::class;
+        $modell = self::BAUSTEIN_MODELL[$art];
         $gehalten = app(BausteinFolgeService::class)->gehalten($team, $art, $familieId);
         if ($gehalten === []) {
             $this->signale->schliesseGemessen($team, SignalTyp::FassungNeuerVerfuegbar, $key, self::QUELLE, 'Übernommen oder nichts mehr auf der älteren Fassung.');
@@ -284,12 +289,12 @@ class FassungSignalService
         $allergen = collect($gehalten)->contains('grund', 'allergen');
         $texte = $this->allergenTexte($allergenDiff);
         $vonNr = (int) collect($gehalten)->min('von_nr');
-        $was = $art === 'paket' ? 'Paket' : 'Konzept';
+        $was = self::BAUSTEIN_LABEL[$art];
         $name = (string) ($neu?->name ?? '');
         $titel = ($allergen ? 'Allergen-Änderung: ' : 'Neuere Fassung verfügbar: ').$name.' (#'.$vonNr.' → #'.(int) ($neu?->fassung_nr ?? 0).')';
         $liste = collect($gehalten)->map(fn ($g) => $g['wo'].' „'.$g['name'].'“ ('.($g['grund'] === 'allergen' ? 'Allergen-Änderung' : 'eingefroren').')')->implode(', ');
         $this->signale->erzeuge($team, SignalTyp::FassungNeuerVerfuegbar, $allergen ? SignalSeverity::Kritisch : SignalSeverity::Warnung, $titel, [
-            'dedup_key' => $key, 'source' => self::QUELLE, 'ref_type' => $art === 'paket' ? 'paket' : 'concept', 'ref_id' => (int) ($neu?->id ?? 0),
+            'dedup_key' => $key, 'source' => self::QUELLE, 'ref_type' => $art, 'ref_id' => (int) ($neu?->id ?? 0),
             'description' => 'Steht auf der älteren Fassung des '.$was.'s (Übernehmen am Verweis): '.$liste.'.'
                 .($allergen ? ' Änderung am Allergenbild: '.implode('; ', $texte).'. Die Übernahme verlangt die Rolle Freigeben.' : ''),
             'payload' => ['art' => $art, 'familie_id' => $familieId, 'name' => $name, 'von_nr' => $vonNr, 'nach_nr' => (int) ($neu?->fassung_nr ?? 0), 'nach_fassung_id' => $neu?->id,

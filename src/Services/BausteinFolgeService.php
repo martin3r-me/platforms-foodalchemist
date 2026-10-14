@@ -43,7 +43,7 @@ class BausteinFolgeService
     /**
      * Nach dem Veröffentlichen: betroffene Verweise folgen lassen. Ab mehr als {@see SYNC_GRENZE} Verweisen wird je Mandant ein Job eingereiht.
      *
-     * @param  'concept'|'paket'  $art
+     * @param  'concept'|'paket'|'format'  $art
      * @param  list<int>  $neueFassungIds
      * @return array{umgehaengt:int, gehalten:int, signale: list<array{team:int, familie:int}>, eingereiht: list<int>}
      */
@@ -130,7 +130,7 @@ class BausteinFolgeService
     /**
      * Verweise, die auf einer älteren Fassung der Familie stehen. Je Quelle des Registers eine indizierte Abfrage.
      *
-     * @param  'concept'|'paket'  $art
+     * @param  'concept'|'paket'|'format'  $art
      * @param  list<int>  $familien
      * @return Collection<int, object{quelle:string, tab:string, spalte:string, row_id:int, team_id:int, alt_id:int, familie_id:int, eltern_id:int, eltern_name:?string, wo:string, eingefroren:bool, konzept_eltern_id:?int}>
      */
@@ -224,7 +224,7 @@ class BausteinFolgeService
      * Übernehmen EINES gehaltenen Verweises (Eigenes Konzept, Format, Foodbook, Speisekarte, Speiseplan, Angebot). Ohne `$bestaetigt` nur die Vorschau.
      * Allergen-Änderung: Bestätigung Pflicht und Rolle Freigeben; sonst Rolle Kuratieren. Historie + Protokoll.
      *
-     * @param  'concept'|'paket'  $art
+     * @param  'concept'|'paket'|'format'  $art
      * @return array{vorschau?: array, umgehaengt?: bool, nach_fassung_id?: int}
      */
     public function uebernehmen(Team $team, ?User $actor, string $art, string $quelle, int $rowId, bool $bestaetigt): array
@@ -306,9 +306,13 @@ class BausteinFolgeService
         }
     }
 
-    /** @return class-string<FoodAlchemistConcept|FoodAlchemistPaket> */
+    /** @return class-string<FoodAlchemistConcept|FoodAlchemistPaket|\Platform\FoodAlchemist\Models\FoodAlchemistFormat> */
     private function modell(string $art): string
     {
-        return $art === 'paket' ? FoodAlchemistPaket::class : FoodAlchemistConcept::class;
+        return match ($art) {
+            'paket' => FoodAlchemistPaket::class,
+            'format' => \Platform\FoodAlchemist\Models\FoodAlchemistFormat::class,
+            default => FoodAlchemistConcept::class,
+        };
     }
 }

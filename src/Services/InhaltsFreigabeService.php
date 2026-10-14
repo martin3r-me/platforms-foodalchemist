@@ -106,6 +106,13 @@ class InhaltsFreigabeService
         if ($sichtbar === []) {
             throw new \RuntimeException('Nichts gefunden, was dieses Team sehen darf.');
         }
+        if ($typ === 'format' && DB::table('foodalchemist_abos')->where('sammlung_id', $sammlungId)->where('status', 'aktiv')->exists()) {
+            // D8 (Kunden-IP): in eine ABONNIERTE Sammlung kommt nie ein Kunden-Format
+            $kunde = DB::table('foodalchemist_formats')->whereIn('id', $sichtbar)->where('origin', 'kunde')->pluck('name')->all();
+            if ($kunde !== []) {
+                throw new \RuntimeException('Kunden-Formate sind nie abonnierbar (Kunden-IP): '.implode(', ', array_slice($kunde, 0, 5)).'.');
+            }
+        }
         $n = 0;
         foreach ($sichtbar as $id) {
             $n += DB::table('foodalchemist_sammlung_objekte')->insertOrIgnore(['sammlung_id' => $sammlungId, 'typ' => $typ, 'objekt_id' => $id, 'created_at' => now(), 'updated_at' => now()]);
@@ -277,6 +284,18 @@ class InhaltsFreigabeService
         }
         $kopie->forceFill(['kopie_von_id' => $original->id, 'kopie_stand_at' => $original->updated_at ?? now()])->save();
         $this->letzteHinweise = [];
+        if ($typ === 'format') {   // Galerie/Hero in den Speicher des Teams; fehlt die Datei: Kopie ohne dieses Bild + Hinweis
+            $media = app(FoodAlchemistMediaService::class);
+            foreach ($original->images()->get() as $bild) {
+                $m = $media->kopiereBild($bild->context_file_id, $bild->path, $team, 'foodalchemist_format', (int) $kopie->id, "foodalchemist/formate/{$kopie->id}");
+                if ($m === null) {
+                    $this->letzteHinweise[] = 'Eine Bilddatei fehlt — die Kopie hat dieses Bild nicht.';
+
+                    continue;
+                }
+                $bild->replicate(['uuid'])->forceFill(['format_id' => $kopie->id, 'team_id' => $team->id, 'context_file_id' => $m['context_file_id'], 'path' => $m['path']])->save();
+            }
+        }
         if ($typ === 'concept') {   // Titelbild + Galerie in den Speicher des Teams (Entscheid Dominique 14.10.); fehlt die Datei: Kopie ohne Bild + Hinweis
             $this->kopiereKonzeptBilder($original, $kopie, $team);
         }
@@ -327,8 +346,10 @@ class InhaltsFreigabeService
     private function formatKopie(Team $team, FoodAlchemistFormat $original): FoodAlchemistFormat
     {
         return DB::transaction(function () use ($team, $original) {
-            $neu = $original->replicate(['uuid', 'legacy_id', 'kopie_von_id', 'kopie_stand_at']);
-            $neu->forceFill(['team_id' => $team->id, 'status' => 'draft'])->save();
+            // eine Abo-FASSUNG als Original: Fassungs-Felder gehören nicht in die Kopie (normale Arbeitszeile des Teams)
+            $neu = $original->replicate(['uuid', 'legacy_id', 'kopie_von_id', 'kopie_stand_at', 'ist_fassung', 'fassung_von_id', 'fassung_nr', 'inhalt_hash',
+                'veroeffentlicht_at', 'veroeffentlicht_von', 'aenderungsnotiz', 'fassung_allergen_geaendert']);
+            $neu->forceFill(['team_id' => $team->id, 'status' => 'draft', 'ist_fassung' => false])->save();
             foreach (\Platform\FoodAlchemist\Models\FoodAlchemistFormatSlot::where('format_id', $original->id)->get() as $slot) {
                 $k = $slot->replicate(['uuid']);
                 $k->forceFill(['format_id' => $neu->id, 'team_id' => $team->id])->save();

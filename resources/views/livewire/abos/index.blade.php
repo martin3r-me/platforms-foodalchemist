@@ -22,7 +22,7 @@
         @if($vorschau)
             <x-fa::section title="{{ $vorschau['titel'] }}" icon="heroicon-o-exclamation-triangle" data-abos-vorschau>
                 @forelse($vorschau['mandanten'] as $m)
-                    @php $v = $m['vorschau']; $artLabel = ['recipe' => 'Rezept', 'paket' => 'Paket', 'concept' => 'Konzept']; @endphp
+                    @php $v = $m['vorschau']; $artLabel = ['recipe' => 'Rezept', 'paket' => 'Paket', 'concept' => 'Konzept', 'format' => 'Format']; @endphp
                     <div class="flex flex-col gap-2 rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] px-3 py-2" data-abos-vorschau-mandant>
                         <div class="font-medium">{{ $m['name'] }}</div>
                         @if($v['genutzt'] === [] && $v['mitkopiert'] === [] && $v['verschwindet'] === [] && empty($v['bleibt']))

@@ -52,6 +52,13 @@ class AboService
             throw new \RuntimeException('Abonnieren lassen sich nur Sammlungen des Master-Teams.');
         }
 
+        // D8 (Kunden-IP): eine Sammlung mit einem Kunden-Format (origin=kunde) lässt sich nie abonnieren
+        $kundenFormate = DB::table('foodalchemist_sammlung_objekte AS o')->join('foodalchemist_formats AS f', 'f.id', '=', 'o.objekt_id')
+            ->where('o.sammlung_id', $sammlungId)->where('o.typ', 'format')->where('f.origin', 'kunde')->whereNull('f.deleted_at')->pluck('f.name')->all();
+        if ($kundenFormate !== []) {
+            throw new \RuntimeException('Kunden-Formate sind nie abonnierbar (Kunden-IP): '.implode(', ', array_slice($kundenFormate, 0, 5)).'. Bitte aus der Sammlung nehmen.');
+        }
+
         $abo = DB::transaction(function () use ($master, $mandant, $sammlungId, $actor) {
             $abo = FoodAlchemistAbo::firstOrNew(['mandant_team_id' => $mandant->id, 'sammlung_id' => $sammlungId]);
             $abo->forceFill([
@@ -151,7 +158,13 @@ class AboService
         $familien = $familienJe('recipe');
         $paketFamilien = $familienJe('paket');
         $konzeptFamilien = $familienJe('concept');
-        if ($familien === [] && $paketFamilien === [] && $konzeptFamilien === []) {
+        // Formate (PR 7): Kunden-Formate (origin=kunde) sind NIE abonnierbar (D8, Kunden-IP) — auch dann nicht, wenn sie in einer Sammlung stehen
+        $formatFamilien = $familienJe('format');
+        if ($formatFamilien !== []) {
+            $formatFamilien = DB::table('foodalchemist_formats')->whereIn('id', $formatFamilien)->where(fn ($w) => $w->whereNull('origin')->orWhere('origin', '!=', 'kunde'))
+                ->pluck('id')->map(fn ($v) => (int) $v)->all();
+        }
+        if ($familien === [] && $paketFamilien === [] && $konzeptFamilien === [] && $formatFamilien === []) {
             return [];
         }
 
@@ -159,7 +172,13 @@ class AboService
         // Paket-Konzept (rekursiv) und Rezept — alle ziehen in die Hülle mit
         $konzeptFassungen = $this->neuesteFassungenVon('foodalchemist_concepts', $konzeptFamilien);
         $paketFassungen = $this->neuesteFassungenVon('foodalchemist_packages', $paketFamilien);
+        $formatFassungen = $this->nurFassungen('foodalchemist_formats', $this->neuesteFassungenVon('foodalchemist_formats', $formatFamilien));
         $rezeptSeeds = [];
+        // Format-Slots zeigen auf Konzept-Fassungen (und über diese auf Pakete/Rezepte) — sie ziehen in die Konzept-Hülle mit
+        if ($formatFassungen !== []) {
+            $konzeptFassungen = array_merge($konzeptFassungen, DB::table('foodalchemist_format_slots')->whereIn('format_id', $formatFassungen)->whereNull('deleted_at')
+                ->whereNotNull('concept_id')->pluck('concept_id')->map(fn ($v) => (int) $v)->all());
+        }
         $offenK = $konzeptFassungen;
         $gesehenK = [];
         while ($offenK !== []) {
@@ -203,6 +222,9 @@ class AboService
         }
         if ($konzeptFassungen !== []) {
             $huelle['concept'] = $konzeptFassungen;
+        }
+        if ($formatFassungen !== []) {
+            $huelle['format'] = $formatFassungen;
         }
 
         return $huelle;
