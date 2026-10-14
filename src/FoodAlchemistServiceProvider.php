@@ -1197,6 +1197,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     // Spec 82 §12 B: Fassungen (Veröffentlichen + Änderungsprotokoll)
                     \Platform\FoodAlchemist\Tools\RecipeFassungenPublishTool::class,
                     \Platform\FoodAlchemist\Tools\RecipeFassungenGetTool::class,
+                    \Platform\FoodAlchemist\Tools\PaketFassungenPublishTool::class,
+                    \Platform\FoodAlchemist\Tools\PaketFassungenGetTool::class,
                     // Spec 82 §13 D: Gebühren (Plan-Preise, Plan und Nutzung)
                     \Platform\FoodAlchemist\Tools\PlanPreiseGetTool::class,
                     \Platform\FoodAlchemist\Tools\PlanPreisePostTool::class,

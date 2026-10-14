@@ -255,12 +255,12 @@ class InhaltsFreigabeService
 
     // ── Eigene Kopie ──
 
-    /** Freigegebenes (oder geerbtes) Rezept/Konzept/Format als eigene Kopie ins Team holen. Ab Kuratieren. */
+    /** Freigegebenes (oder geerbtes) Rezept/Konzept/Paket/Format als eigene Kopie ins Team holen. Ab Kuratieren. */
     public function kopieAnlegen(Team $team, string $typ, int $id, ?User $actor): \Illuminate\Database\Eloquent\Model
     {
         $this->rechte->pruefe($actor, $team, FaRolle::Kuratieren, 'eigene Kopie anlegen');
-        if (! in_array($typ, ['recipe', 'concept', 'format'], true)) {
-            throw new \RuntimeException('Eine eigene Kopie gibt es für Rezepte, Konzepte und Formate.');
+        if (! in_array($typ, ['recipe', 'concept', 'paket', 'format'], true)) {
+            throw new \RuntimeException('Eine eigene Kopie gibt es für Rezepte, Konzepte, Pakete und Formate.');
         }
         $original = $this->modelFuer($typ)::visibleToTeam($team)->findOrFail($id);
         if ($original->isOwnedBy($team)) {
@@ -269,6 +269,7 @@ class InhaltsFreigabeService
         $kopie = match ($typ) {
             'recipe' => app(RecipeService::class)->duplicate($team, $id, (string) $original->name),
             'concept' => app(ConceptService::class)->duplicate($team, $id),
+            'paket' => app(PaketService::class)->duplicate($team, $id),
             'format' => $this->formatKopie($team, $original),
         };
         if ($typ !== 'recipe') {

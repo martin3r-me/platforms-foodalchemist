@@ -26,7 +26,7 @@ class InhalteKopieTool extends WareneingangTool implements ToolContract, ToolMet
     public function getSchema(): array
     {
         return ['type' => 'object', 'required' => ['typ', 'id'], 'properties' => [
-            'typ' => ['type' => 'string', 'enum' => ['recipe', 'concept', 'format']], 'id' => ['type' => 'integer'],
+            'typ' => ['type' => 'string', 'enum' => ['recipe', 'concept', 'paket', 'format']], 'id' => ['type' => 'integer'],
         ]];
     }
 

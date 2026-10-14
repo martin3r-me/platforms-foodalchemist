@@ -24,8 +24,8 @@ final class AboSicht
 {
     public const CACHE_VORHANDEN = 'foodalchemist.abos.vorhanden';
 
-    /** Gilt im Durchstich nur für Rezepte; Konzepte/Formate/Pakete folgen im Ausbau. */
-    public const TYPEN = ['recipe'];
+    /** Rezepte und Pakete (PR 2); Konzepte und Formate folgen im Ausbau (Entwurf Abo Konzepte/Pakete/Formate). */
+    public const TYPEN = ['recipe', 'paket'];
 
     public static function aktiv(): bool
     {

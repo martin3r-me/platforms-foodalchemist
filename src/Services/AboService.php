@@ -136,20 +136,29 @@ class AboService
     public function huelle(int $mandantTeamId, ?int $ohneAboId = null, ?array $ohneSammlungsObjekt = null): array
     {
         // „Was bliebe ohne dieses Abo bzw. ohne dieses Sammlungs-Objekt (['sammlung_id','objekt_id'])?" — Kündigung/Zurückziehen, §12 D
-        $familien = DB::table('foodalchemist_sammlung_objekte AS o')
-            ->join('foodalchemist_abos AS a', 'a.sammlung_id', '=', 'o.sammlung_id')
-            ->join('foodalchemist_sammlungen AS s', 's.id', '=', 'o.sammlung_id')
-            ->where('a.mandant_team_id', $mandantTeamId)->where('a.status', FoodAlchemistAbo::AKTIV)
-            ->when($ohneAboId !== null, fn ($q) => $q->where('a.id', '!=', $ohneAboId))
-            ->when($ohneSammlungsObjekt !== null, fn ($q) => $q->whereNot(fn ($w) => $w->where('o.sammlung_id', $ohneSammlungsObjekt['sammlung_id'])
-                ->where('o.objekt_id', $ohneSammlungsObjekt['objekt_id'])))
-            ->whereNull('s.deleted_at')->where('o.typ', 'recipe')
-            ->distinct()->pluck('o.objekt_id')->map(fn ($v) => (int) $v)->all();
-        if ($familien === []) {
+        $familienJe = function (string $typ) use ($mandantTeamId, $ohneAboId, $ohneSammlungsObjekt): array {
+            return DB::table('foodalchemist_sammlung_objekte AS o')
+                ->join('foodalchemist_abos AS a', 'a.sammlung_id', '=', 'o.sammlung_id')
+                ->join('foodalchemist_sammlungen AS s', 's.id', '=', 'o.sammlung_id')
+                ->where('a.mandant_team_id', $mandantTeamId)->where('a.status', FoodAlchemistAbo::AKTIV)
+                ->when($ohneAboId !== null, fn ($q) => $q->where('a.id', '!=', $ohneAboId))
+                ->when($ohneSammlungsObjekt !== null && $typ === ($ohneSammlungsObjekt['typ'] ?? 'recipe'), fn ($q) => $q->whereNot(fn ($w) => $w->where('o.sammlung_id', $ohneSammlungsObjekt['sammlung_id'])
+                    ->where('o.objekt_id', $ohneSammlungsObjekt['objekt_id'])))
+                ->whereNull('s.deleted_at')->where('o.typ', $typ)
+                ->distinct()->pluck('o.objekt_id')->map(fn ($v) => (int) $v)->all();
+        };
+        $familien = $familienJe('recipe');
+        $paketFamilien = $familienJe('paket');
+        if ($familien === [] && $paketFamilien === []) {
             return [];
         }
 
-        $offen = $this->neuesteFassungen($familien);
+        // Pakete (PR 2): je Paket-Familie die jüngste Fassung; ihre Gerichte zeigen auf Rezept-Fassungen und ziehen in die Rezept-Hülle mit
+        $paketFassungen = $this->neuestePaketFassungen($paketFamilien);
+        $paketRezepte = $paketFassungen === [] ? [] : DB::table('foodalchemist_package_dishes')->whereIn('package_id', $paketFassungen)
+            ->whereNull('deleted_at')->pluck('sales_recipe_id')->map(fn ($v) => (int) $v)->all();
+
+        $offen = array_merge($this->neuesteFassungen($familien), $paketRezepte);
         $fertig = [];
         while ($offen !== []) {
             $offen = array_values(array_diff(array_unique($offen), $fertig));
@@ -163,7 +172,34 @@ class AboService
         $nurFassungen = DB::table('foodalchemist_recipes')->whereIn('id', $fertig ?: [0])
             ->where('ist_fassung', true)->whereNull('deleted_at')->orderBy('id')->pluck('id')->map(fn ($v) => (int) $v)->all();
 
-        return $nurFassungen === [] ? [] : ['recipe' => $nurFassungen];
+        $huelle = [];
+        if ($nurFassungen !== []) {
+            $huelle['recipe'] = $nurFassungen;
+        }
+        if ($paketFassungen !== []) {
+            sort($paketFassungen);
+            $huelle['paket'] = $paketFassungen;
+        }
+
+        return $huelle;
+    }
+
+    /**
+     * Je Paket-Familie (Arbeitszeile) die jüngste nicht gelöschte Fassungs-Zeile.
+     *
+     * @param  list<int>  $familien
+     * @return list<int>
+     */
+    private function neuestePaketFassungen(array $familien): array
+    {
+        if ($familien === []) {
+            return [];
+        }
+
+        return DB::table('foodalchemist_packages')->whereIn('fassung_von_id', $familien)
+            ->where('ist_fassung', true)->whereNull('deleted_at')
+            ->groupBy('fassung_von_id')->selectRaw('MAX(id) AS id')
+            ->pluck('id')->map(fn ($v) => (int) $v)->all();
     }
 
     /**
