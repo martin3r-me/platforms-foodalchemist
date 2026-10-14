@@ -86,7 +86,7 @@
                                         <label class="inline-flex items-center gap-1.5 text-[length:var(--fa-text-md)] pb-2"><input type="checkbox" class="w-4 h-4 rounded accent-[var(--fa-accent)]" wire:model="canvasNeu.{{ $f['key'] }}.{{ $sk }}" /> {{ $sl }}</label>
                                     @elseif($st !== 'kontakt')
                                         <x-fa::field :label="$sl" for="{{ $feldId }}-{{ $sk }}" optional>
-                                            <x-fa::input id="{{ $feldId }}-{{ $sk }}" wire:model="canvasNeu.{{ $f['key'] }}.{{ $sk }}" @if($st === 'zahl') inputmode="numeric" @endif />
+                                            <x-fa::input id="{{ $feldId }}-{{ $sk }}" wire:model="canvasNeu.{{ $f['key'] }}.{{ $sk }}" :inputmode="$st === 'zahl' ? 'numeric' : null" />
                                         </x-fa::field>
                                     @endif
                                 @endforeach
