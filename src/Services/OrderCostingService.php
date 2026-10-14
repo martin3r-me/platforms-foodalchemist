@@ -34,6 +34,8 @@ class OrderCostingService
         $mekComplete = collect($sheet['gp_bedarf'])->every(fn (array $gp) => (bool) ($gp['ek_bekannt'] ?? false));
         $activeMinutes = 0.0;
         $fek = 0.0;
+        // Spec 83 B3c/B3j: Lohn getrennt — Produktion (Basisrezepte) und je Gerichts-Block (Regenerieren, Anrichten)
+        $fekTeile = ['produktion' => 0.0, 'regenerieren' => 0.0, 'anrichten' => 0.0];
         $direct = 0.0;
         $stationLoad = [];
         $warnings = $sheet['warnungen'];
@@ -92,32 +94,76 @@ class OrderCostingService
                 'setup_minutes' => (float) $time['setup_minutes'],
                 'batch_minutes' => (float) $time['batch_minutes'],
                 'variable_minutes' => (float) $time['variable_minutes'],
+                'regenerieren_minutes' => (float) ($time['regenerieren_minutes'] ?? 0),
                 'active_person_minutes' => $minutes,
                 'batch_limit' => $time['batch_limit'],
                 'batch_limit_source' => $time['batch_limit_source'],
+                'bloecke' => $time['bloecke'] ?? null,
             ];
             $activeMinutes += $minutes;
-            $fek += $minutes / 60 * $rate['hourly_rate'];
+            // Last je Posten: [station_id|0 => [minuten, station, rate]]. Am Gericht (B3g/B3h) verteilt die Zeitrechnung alle drei
+            // Gerichts-Blöcke anteilig nach Komponenten auf die beteiligten Posten — der Sammel-Pass trägt nichts, „nicht zugeteilt" = 0.
+            $lastJePosten = [];
+            if (($time['bloecke'] ?? null) !== null) {
+                $ohnePosten = 0;
+                foreach (['regenerieren', 'anrichten'] as $b) {
+                    foreach ($time['bloecke'][$b]['aufteilung'] ?? [] as $teil) {
+                        $sid = $teil['station_id'];
+                        $st = $sid !== null ? ($stations->get($sid) ?? FoodAlchemistProductionStation::find($sid)) : null;
+                        if ($st !== null) {
+                            $stations->put($sid, $st);
+                        }
+                        $r = $st !== null ? $this->laborRates->rate($team, $st, $outlet)
+                            : ['hourly_rate' => $this->settings->stundensatz($team, $outlet), 'source' => 'nicht_zugeteilt', 'warnings' => []];
+                        $fekTeile[$b] += (float) $teil['minuten'] / 60 * $r['hourly_rate'];
+                        $warnings = array_merge($warnings, $r['warnings']);
+                        $ohnePosten = $st === null ? max($ohnePosten, (int) $teil['komponenten']) : $ohnePosten;
+                        $lastJePosten[$sid ?? 0] ??= ['minuten' => 0.0, 'station' => $st, 'rate' => $r];
+                        $lastJePosten[$sid ?? 0]['minuten'] += (float) $teil['minuten'];
+                    }
+                }
+                if (isset($lastJePosten[0])) {
+                    $warnings[] = sprintf('„%s“: %s ohne Posten — nicht zugeteilt, Team-Satz.', $recipe->name,
+                        $ohnePosten > 0 ? $ohnePosten.' Komponente(n)' : 'Gericht');
+                }
+            } else {
+                $lastJePosten[$station?->id ?? 0] = ['minuten' => $minutes, 'station' => $station, 'rate' => $rate];
+                $fekTeile['produktion'] += $minutes / 60 * $rate['hourly_rate'];
+            }
+            $fek += array_sum(array_map(fn ($l) => $l['minuten'] / 60 * $l['rate']['hourly_rate'], $lastJePosten));
             $direct += max(0.0, (float) ($recipe->additional_costs_eur ?? 0)) * max(0.0, $productionBatches);
             $warnings = array_merge($warnings, $time['warnings'], $rate['warnings']);
-            $key = $station?->id ?? 0;
-            $stationLoad[$key] ??= [
-                'station_id' => $station?->id,
-                'station' => $station?->name ?? 'Nicht zugeteilt',
-                'active_person_minutes' => 0.0,
-                'labor_source' => $rate['source'],
-            ];
-            $stationLoad[$key]['active_person_minutes'] += $minutes;
+            foreach ($lastJePosten as $key => $l) {
+                if (abs($l['minuten']) < 1e-9) {
+                    continue;
+                }
+                $stationLoad[$key] ??= [
+                    'station_id' => $l['station']?->id,
+                    'station' => $l['station']?->name ?? 'Nicht zugeteilt',
+                    'active_person_minutes' => 0.0,
+                    'labor_source' => $l['rate']['source'],
+                ];
+                $stationLoad[$key]['active_person_minutes'] += $l['minuten'];
+            }
         }
 
         // Arbeitgeberanteile genau einmal auf die aufgelösten Rollen-/Teamsätze anwenden.
         // Ebene 2: Lohnnebenkosten + Gemeinkosten-Schema folgen dem Betrieb (wie im Kalkulations-Cockpit).
-        $fek *= 1 + $this->settings->lohnnebenkostenPct($team, $outlet) / 100;
+        $lnk = 1 + $this->settings->lohnnebenkostenPct($team, $outlet) / 100;
+        $fek *= $lnk;
+        $fekTeile = array_map(fn ($v) => $v * $lnk, $fekTeile);
         $schema = array_values(array_filter($this->fixkosten->aufgeloestesSchema($team, $outlet), fn ($b) => $b['active']));
         $costBreakdown = [
             ['key' => 'mek', 'label' => 'Wareneinsatz (MEK)', 'amount' => $mek, 'stage' => 'cost'],
             ['key' => 'fek', 'label' => 'Lohn / Produktion (FEK)', 'amount' => $fek, 'stage' => 'cost'],
         ];
+        // „davon"-Zeilen (stage detail, NICHT aufsummieren): Lohn je Block, Summe = FEK
+        foreach (['produktion' => 'davon Produktion (Basisrezepte)', 'regenerieren' => 'davon Regenerieren',
+            'anrichten' => 'davon Anrichten'] as $k => $label) {
+            if ($fekTeile[$k] > 0.0) {
+                $costBreakdown[] = ['key' => 'fek_'.$k, 'label' => $label, 'amount' => $fekTeile[$k], 'stage' => 'detail', 'parent' => 'fek'];
+            }
+        }
         if ($direct > 0.0) {
             $costBreakdown[] = ['key' => 'direct', 'label' => 'Weitere direkte Kosten', 'amount' => $direct, 'stage' => 'cost'];
         }
@@ -179,6 +225,7 @@ class OrderCostingService
             'exploded_mek' => round($explodedMek, 4),
             'mek' => round($mek, 4),
             'fek' => round($fek, 4),
+            'fek_teile' => array_map(fn ($v) => round($v, 4), $fekTeile),
             'direct_costs' => round($direct, 4),
             'mgk' => round($mgk, 4),
             'fgk' => round($fgk, 4),

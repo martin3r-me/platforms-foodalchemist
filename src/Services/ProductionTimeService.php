@@ -16,6 +16,12 @@ class ProductionTimeService
      */
     public const ANRICHTEN_SEKUNDEN_JE_KOMPONENTE = 5.0;
 
+    /**
+     * Spec 83 B3d (Entscheid Dominique 14.10.2026): Regenerieren = Personenzeit je Regenerier-Behälter (Bestücken und
+     * Entnehmen), Startwert 30 s je GN-Behälter. Quelle: Spec 83, ungeprüft, Abgleich mit dem Küchenchef offen.
+     */
+    public const REGENERIEREN_SEKUNDEN_JE_BEHAELTER = 30.0;
+
     public function __construct(private TeamSettingsService $settings) {}
 
     /** @return array<string,mixed> */
@@ -79,10 +85,10 @@ class ProductionTimeService
         $effective = $caps[0] ?? null;
 
         if ($recipe->is_sales_recipe) {
-            // Spec 83 B3 (Entscheid Dominique 14.10.2026): am Gericht ist work_time_min „Pass einrichten“ und zählt EINMAL je
-            // Auftragszeile — nicht je Topf-Deckel (20 kg) und nicht je Portion (1 Ansatz = 1 Portion, s. calculateForBatches).
+            // Spec 83 B3j (Entscheid Dominique 14.10.2026, ersetzt B3b): am Gericht gibt es kein „Pass einrichten“ mehr —
+            // work_time_min zählt dort NICHT (Daten bleiben stehen). Ein Vorgang, keine Topf-Deckel-Rechnung.
             $operations = 1;
-            $effective = ['value' => null, 'source' => 'gericht_einmal'];
+            $effective = ['value' => null, 'source' => 'gericht'];
         } elseif ($totalQuantity > 0 && $effective !== null) {
             $operations = max(1, (int) ceil($totalQuantity / (float) $effective['value'] - 1e-9));
         } else {
@@ -105,10 +111,30 @@ class ProductionTimeService
         // Basisrezept. Am Gericht wird sie ignoriert — sonst rechneten Alt-Werte, die die
         // UI nicht mehr zeigt, still weiter in die Personenminuten.
         $setup = $recipe->is_sales_recipe ? 0.0 : max(0.0, (float) ($recipe->setup_time_min ?? 0));
-        $batch = max(0.0, (float) ($recipe->work_time_min ?? 0)) * $operations;
+        $batch = $recipe->is_sales_recipe ? 0.0 : max(0.0, (float) ($recipe->work_time_min ?? 0)) * $operations;
         $variable = $zeitJeMenge['min'] * $variableQuantity;
-        $active = $setup + $batch + $variable;
         $passive = max(0.0, (float) ($recipe->standzeit_min ?? 0));
+
+        // Spec 83 B3c/B3j: am Gericht zwei getrennte Blöcke — Regenerieren und Anrichten (Pass einrichten entfällt).
+        $bloecke = null;
+        $regen = 0.0;
+        if ($recipe->is_sales_recipe) {
+            $r = $this->regenerieren($team, $recipe, $rawBatches);
+            $regen = $r['minuten'];
+            $passive += $r['geraete_min'];                   // Gerätezeit: passiv, kein Lohn, nur Durchlaufzeit
+            $warnings = array_merge($warnings, $r['warnungen']);
+            unset($r['warnungen']);
+            // B3h: beide Blöcke anteilig nach Komponenten auf die beteiligten Posten (Sammel-Pass trägt nichts)
+            $anteile = $this->postenAnteile($recipe);
+            $bloecke = [
+                'regenerieren' => ['minuten' => round($regen, 3)] + $r + ['aufteilung' => $this->verteile($anteile, $regen)],
+                'anrichten' => ['minuten' => round($variable, 3), 'quelle' => $zeitJeMenge['quelle'],
+                    'komponenten' => $zeitJeMenge['komponenten'], 'je_einheit_min' => round($zeitJeMenge['min'], 4),
+                    'je_teller_s' => $variableBasis === 'portion' ? round($zeitJeMenge['min'] * 60, 1) : null,
+                    'basis' => $variableBasis, 'aufteilung' => $this->verteile($anteile, $variable)],
+            ];
+        }
+        $active = $setup + $batch + $regen + $variable;
 
         return [
             'operations' => $operations,
@@ -127,8 +153,38 @@ class ProductionTimeService
             'active_person_minutes' => round($active, 3),
             'passive_minutes' => round($passive, 3),
             'elapsed_minutes' => round($active + $passive, 3),
+            'regenerieren_minutes' => round($regen, 3),
+            'bloecke' => $bloecke,                                      // nur am Gericht, sonst null
             'warnings' => $warnings,
         ];
+    }
+
+    /**
+     * Regenerier-Block eines Gerichts für eine Zahl Ansätze (= Portionen, s. calculateForBatches):
+     * Personenzeit = Regenerier-Behälter ({@see BehaelterBedarfService::regenerierBehaelter}) × 30 s;
+     * Gerätezeit = längstes Programm aus der Regenerations-Kaskade (Spec 51), getrennt und passiv.
+     *
+     * @return array{minuten: float, behaelter: ?int, sekunden_je_behaelter: float, geraete_min: float, quelle: ?string, warnungen: list<string>}
+     */
+    public function regenerieren(Team $team, FoodAlchemistRecipe $gericht, ?float $ansaetze): array
+    {
+        $kaskade = app(RegenerationCascadeService::class)->fuerRezept($gericht);
+        $geraete = collect([...$kaskade['gesamt'], ...$kaskade['komponenten']])
+            ->pluck('duration_min')->filter(fn ($v) => $v !== null)->map(fn ($v) => (float) $v)->max() ?? 0.0;
+        $leer = ['minuten' => 0.0, 'behaelter' => null, 'sekunden_je_behaelter' => self::REGENERIEREN_SEKUNDEN_JE_BEHAELTER,
+            'geraete_min' => (float) $geraete, 'quelle' => null, 'warnungen' => []];
+        if ($ansaetze === null || ! $gericht->exists) {
+            return $leer;
+        }
+        $b = app(BehaelterBedarfService::class)->regenerierBehaelter($team, $gericht, $ansaetze);
+        $warnungen = $b['nicht_berechenbar'] === [] ? [] : [sprintf('Regenerier-Behälter nicht berechenbar für %s.', implode(', ', $b['nicht_berechenbar']))];
+        if ($b['anzahl'] <= 0) {
+            return ['warnungen' => $warnungen] + $leer;
+        }
+
+        return ['minuten' => $b['anzahl'] * self::REGENERIEREN_SEKUNDEN_JE_BEHAELTER / 60.0, 'behaelter' => $b['anzahl'],
+            'sekunden_je_behaelter' => self::REGENERIEREN_SEKUNDEN_JE_BEHAELTER, 'geraete_min' => (float) $geraete,
+            'quelle' => 'behaelter', 'warnungen' => $warnungen];
     }
 
     /**
@@ -157,11 +213,83 @@ class ProductionTimeService
      */
     public function tellerKomponenten(FoodAlchemistRecipe $recipe): int
     {
+        return count($this->tellerKomponentenZeilen($recipe));
+    }
+
+    /** @return list<\Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient> */
+    private function tellerKomponentenZeilen(FoodAlchemistRecipe $recipe): array
+    {
         if (! $recipe->exists) {
-            return 0;
+            return [];
         }
         $zeilen = $recipe->relationLoaded('ingredients') ? $recipe->ingredients : $recipe->ingredients()->with('unit')->get();
 
-        return $zeilen->filter(fn ($z) => ! $z->is_optional && $z->unit?->slug !== 'qs')->count();
+        return $zeilen->filter(fn ($z) => ! $z->is_optional && $z->unit?->slug !== 'qs')->values()->all();
+    }
+
+    /**
+     * Spec 83 B3g/B3h (Entscheide Dominique 14.10.2026): Der Pass ist ein Sammelposten ohne eigenes Personal. Regenerieren und
+     * Anrichten eines Gerichts belasten die BETEILIGTEN Posten anteilig nach ihren Komponenten. Posten einer
+     * Komponente = Posten ihres Sub-Rezepts (`default_station_id`, dieselbe Quelle wie das Routing der Auftragszeilen).
+     * Komponenten ohne Posten (z. B. GP-Garnitur) gehen an den Posten des Gerichts, wenn der kein Sammelposten ist; sonst als
+     * eigene Position „nicht zugeteilt" (station_id null). Ohne zählbare Komponente trägt der Gerichts-Posten alles (bzw.
+     * „nicht zugeteilt", wenn er Sammelposten ist). Geraten wird nichts.
+     *
+     * @return list<array{station_id:?int, komponenten:int, anteil:float}>
+     */
+    public function postenAnteile(FoodAlchemistRecipe $gericht): array
+    {
+        $gerichtPosten = $gericht->default_station_id !== null && ! $this->istSammelposten((int) $gericht->default_station_id)
+            ? (int) $gericht->default_station_id : null;
+        $zeilen = $this->tellerKomponentenZeilen($gericht);
+        if ($zeilen === []) {
+            return [['station_id' => $gerichtPosten, 'komponenten' => 0, 'anteil' => 1.0]];
+        }
+        $subPosten = FoodAlchemistRecipe::whereIn('id', array_filter(array_map(fn ($z) => $z->referenced_recipe_id, $zeilen)))
+            ->pluck('default_station_id', 'id');
+        $je = [];
+        foreach ($zeilen as $z) {
+            $posten = $z->referenced_recipe_id !== null ? ($subPosten[$z->referenced_recipe_id] ?? null) : null;
+            $posten = $posten !== null && ! $this->istSammelposten((int) $posten) ? (int) $posten : $gerichtPosten;
+            $je[$posten ?? 0] = ($je[$posten ?? 0] ?? 0) + 1;
+        }
+        $n = count($zeilen);
+        $raus = [];
+        foreach ($je as $key => $anzahl) {
+            $raus[] = ['station_id' => $key === 0 ? null : (int) $key, 'komponenten' => $anzahl, 'anteil' => round($anzahl / $n, 4)];
+        }
+
+        return $raus;
+    }
+
+    /**
+     * @param  list<array{station_id:?int, komponenten:int, anteil:float}>  $anteile
+     * @return list<array{station_id:?int, komponenten:int, anteil:float, minuten:float}>
+     */
+    private function verteile(array $anteile, float $minuten): array
+    {
+        if ($minuten <= 0) {
+            return [];
+        }
+        $summe = array_sum(array_column($anteile, 'komponenten')) ?: 1;
+
+        return array_map(fn ($a) => $a + ['minuten' => round($minuten * ($a['komponenten'] ?: $summe) / $summe, 3)], $anteile);
+    }
+
+    /** @var array<int,bool> */
+    private array $sammelposten = [];
+
+    private ?bool $hatSammelSpalte = null;
+
+    /** Peters Merkmal `production_stations.ist_sammelposten` (Spec 83 B2); ohne Spalte (vor seiner Migration) = kein Sammelposten. */
+    private function istSammelposten(int $stationId): bool
+    {
+        if (! array_key_exists($stationId, $this->sammelposten)) {
+            $this->hatSammelSpalte ??= \Illuminate\Support\Facades\Schema::hasColumn('foodalchemist_production_stations', 'ist_sammelposten');
+            $this->sammelposten[$stationId] = $this->hatSammelSpalte
+                && (bool) \Illuminate\Support\Facades\DB::table('foodalchemist_production_stations')->where('id', $stationId)->value('ist_sammelposten');
+        }
+
+        return $this->sammelposten[$stationId];
     }
 }

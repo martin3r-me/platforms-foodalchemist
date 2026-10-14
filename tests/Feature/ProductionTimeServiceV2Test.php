@@ -101,7 +101,7 @@ it('zaehlt Ruestzeit am Basisrezept, ignoriert sie am Gericht', function () {
     $ohneRuest = $this->times->calculateForBatches($this->rootTeam, $gericht, 2);
 
     expect($mitRuest['active_person_minutes'])->toBe(105.0)      // 25 Rüst + 2 × 40
-        ->and($ohneRuest['active_person_minutes'])->toBe(40.0);  // ohne Rüst; Spec 83 B3: Pass (work_time) am Gericht einmal je Zeile
+        ->and($ohneRuest['active_person_minutes'])->toBe(0.0);   // Spec 83 B3j: am Gericht zählen weder Rüst- noch work_time_min
 });
 
 it('rechnet variable Portionszeit aus Ansätzen und Portionen je Ansatz um', function () {

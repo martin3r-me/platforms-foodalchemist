@@ -45,11 +45,12 @@ it('Abnahme Senfrostbraten: 100 Portionen Anrichten ≈ 50 Personenminuten (±25
         ->and($r['variable_minutes'])->toBe(58.333)                              // 7 × 5 s × 100 / 60
         ->and($r['variable_minutes'])->toBeGreaterThanOrEqual(37.5)->toBeLessThanOrEqual(62.5)   // Ziel ~50 ±25 %
         ->and($r['warnings'])->toBeEmpty()
-        // Pass einrichten EINMAL je Auftragszeile (Entscheid 14.10.): nicht 3 × (47,7 kg / 20 kg), nicht 100 × (1 Ansatz = 1 Portion)
-        ->and($r['operations'])->toBe(1)->and($r['batch_minutes'])->toBe(5.0)
-        ->and($r['batch_limit'])->toBeNull()->and($r['batch_limit_source'])->toBe('gericht_einmal')
-        // Zeile: Pass 5 + Anrichten 58,3 = 63,3 Personenminuten — knapp über dem Ziel-Band 62,5 (an Dominique)
-        ->and($r['active_person_minutes'])->toBe(63.333);
+        // B3j (14.10.): Pass einrichten entfällt — work_time_min = 5 am Gericht zählt NICHT (Daten bleiben)
+        ->and($r['operations'])->toBe(1)->and($r['batch_minutes'])->toBe(0.0)
+        ->and($r['batch_limit'])->toBeNull()->and($r['batch_limit_source'])->toBe('gericht')
+        ->and($this->gericht->fresh()->work_time_min)->toBe(5)
+        // Zeile ohne Regenerier-Behälter: nur Anrichten 58,3
+        ->and($r['active_person_minutes'])->toBe(58.333);
 });
 
 it('Gepflegte Zeit pro Menge am Gericht gewinnt immer (Portion und auch kg)', function () {
@@ -92,15 +93,32 @@ it('Gericht ohne Komponenten: keine Anrichte-Zeit, keine Warnung (Bestand bleibt
     $r = $this->times->calculateForBatches($this->rootTeam, $leer, 2);
 
     expect($r['variable_minutes'])->toBe(0.0)->and($r['variable_time_source'])->toBeNull()
-        ->and($r['active_person_minutes'])->toBe(10.0)->and($r['warnings'])->toBeEmpty();   // Pass einmal, nicht 2 × 10
+        ->and($r['active_person_minutes'])->toBe(0.0)->and($r['warnings'])->toBeEmpty();    // B3j: work_time_min am Gericht zählt nicht
 });
 
-it('VK-Modal zeigt die abgeleitete Anrichte-Zeit als Platzhalter und Hinweis', function () {
+it('B3h VK-Modal: „Anrichten je Teller (s)“ — Startwert aus Komponenten, Sekunden ↔ min je Portion, alte kg-Zeit bleibt bis zur Eingabe', function () {
     $this->actingAs($this->makeUser($this->rootTeam, 'Koch Anrichten'));
-    $html = \Livewire\Livewire::test(\Platform\FoodAlchemist\Livewire\Verkauf\VkModal::class)->call('oeffnen', $this->gericht->id)->html();
+    $lw = \Livewire\Livewire::test(\Platform\FoodAlchemist\Livewire\Verkauf\VkModal::class)->call('oeffnen', $this->gericht->id);
+    expect($lw->html())->toContain('Anrichten je Teller (s)')->toContain('data-vk-anrichten-startwert="35"')
+        ->toContain('35 (Startwert aus 7 Komponenten)');
 
-    expect($html)->toContain('data-vk-anrichten-abgeleitet="0,58"')
-        ->and($html)->toContain('Leer = Anrichten aus 7 Teller-Komponenten × 5 s = 0,58 min je Portion');
+    // Eintragen: 30 s je Teller → 0,5 min je Portion
+    $lw->call('bearbeitenStarten')->set('form.anrichten_s', '30')->call('speichern');
+    $g = $this->gericht->fresh();
+    expect((float) $g->variable_work_time_min)->toBe(0.5)->and($g->variable_work_time_basis)->toBe('portion')
+        ->and($this->times->calculateForBatches($this->rootTeam, $g, 100)['bloecke']['anrichten'])->toMatchArray(['minuten' => 50.0, 'quelle' => 'gepflegt', 'je_teller_s' => 30.0]);
+
+    // Leeren → wieder Startwert aus Komponenten
+    \Livewire\Livewire::test(\Platform\FoodAlchemist\Livewire\Verkauf\VkModal::class)->call('oeffnen', $g->id)->assertSet('form.anrichten_s', '30')
+        ->call('bearbeitenStarten')->set('form.anrichten_s', '')->call('speichern');
+    expect($this->gericht->fresh()->variable_work_time_min)->toBeNull();
+
+    // Alte Zeit je kg (Behelf) bleibt stehen, solange keine Sekunden eingetragen werden — mit Hinweis
+    $this->gericht->update(['variable_work_time_min' => 0.8, 'variable_work_time_basis' => 'kg']);
+    $alt = \Livewire\Livewire::test(\Platform\FoodAlchemist\Livewire\Verkauf\VkModal::class)->call('oeffnen', $this->gericht->id);
+    expect($alt->html())->toContain('Bisher gepflegt: 0,80 min je kg (alt)');
+    $alt->call('bearbeitenStarten')->call('speichern');
+    expect((float) $this->gericht->fresh()->variable_work_time_min)->toBe(0.8)->and($this->gericht->fresh()->variable_work_time_basis)->toBe('kg');
 });
 
 it('Planungsblatt: Ansätze und Portionen des Gerichts bleiben unverändert, nur die Arbeitszeit folgt B3', function () {
@@ -110,5 +128,138 @@ it('Planungsblatt: Ansätze und Portionen des Gerichts bleiben unverändert, nur
 
     // Gerichts-Ansätze = Portionen ÷ max(1, sales_unit_count) — rechnet das Planungsblatt selbst, nicht ProductionTimeService
     expect($zeile['ansaetze'])->toBe(100.0)->and($zeile['benoetigt_ansaetze'])->toBe(100.0)->and($zeile['portionen'])->toBe(100)
-        ->and($zeile['arbeitszeit_min'])->toBe(63.333);                        // Pass 5 + Anrichten 58,3
+        ->and($zeile['arbeitszeit_min'])->toBe(58.333);                        // nur Anrichten 58,3 (B3j)
+});
+
+// ── B3c/B3d: drei Blöcke am Gericht, Regenerieren aus Behältern, getrennter Lohn ─────────────────────────
+
+function spec83RegenFixture($test, $team, $gericht): array
+{
+    $test->artisan('foodalchemist:behaelter-katalog --apply');
+    $gn = (int) \Illuminate\Support\Facades\DB::table('foodalchemist_vocab_containers')->where('slug', 'gn_11_65mm')->value('id');
+    $jus = \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::where('name', 'Jus: Altbier')->firstOrFail();
+    $fleisch = \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::where('name', 'Fleisch: Senfrostbraten')->firstOrFail();
+    foreach ([[$jus, 3.0], [$fleisch, 3.0]] as [$r, $kgJeGn]) {
+        \Platform\FoodAlchemist\Models\FoodAlchemistRecipeContainer::create(['team_id' => $team->id, 'recipe_id' => $r->id,
+            'zweck' => 'regenerieren', 'container_vocab_id' => $gn, 'referenz_menge_kg' => $kgJeGn]);
+    }
+    // Gerätezeit: Gesamt-Programm 25 min, Fleisch-Override 40 min → längstes Programm 40 min (passiv)
+    $fleischZeile = $gericht->ingredients()->where('referenced_recipe_id', $fleisch->id)->firstOrFail();
+    \Platform\FoodAlchemist\Models\FoodAlchemistRecipeRegeneration::create(['team_id' => $team->id, 'recipe_id' => $gericht->id,
+        'component_label' => 'Gesamt', 'duration_min' => 25, 'temp_c' => 80]);
+    \Platform\FoodAlchemist\Models\FoodAlchemistRecipeRegeneration::create(['team_id' => $team->id, 'recipe_id' => $gericht->id,
+        'component_label' => 'Fleisch', 'ingredient_id' => $fleischZeile->id, 'duration_min' => 40, 'temp_c' => 70]);
+
+    return ['jus' => $jus, 'fleisch' => $fleisch];
+}
+
+it('B3c/B3j: Gericht weist zwei Blöcke getrennt aus — Regenerieren (Behälter × 30 s), Anrichten; Gerätezeit passiv', function () {
+    spec83RegenFixture($this, $this->rootTeam, $this->gericht);
+    $behaelter = app(\Platform\FoodAlchemist\Services\BehaelterBedarfService::class)->regenerierBehaelter($this->rootTeam, $this->gericht->fresh(), 100);
+    $r = $this->times->calculateForBatches($this->rootTeam, $this->gericht->fresh(), 100);
+    $b = $r['bloecke'];
+
+    // 100 Portionen: Jus und Fleisch je 60 g → je 6 kg. Spec 51 wählt als Basis-Variante GN 2/1 65 mm (6,17 kg passt) → je 1
+    // Behälter, so wie das Produktionsblatt ihn druckt (Referenz GN 1/1 à 3 kg wäre die 2-Behälter-Alternative) → 2 Behälter
+    expect($behaelter['anzahl'])->toBe(2)->and($behaelter['nicht_berechenbar'])->toBe([])
+        ->and($b)->not->toHaveKey('pass')                                                     // B3j
+        ->and($b['regenerieren'])->toMatchArray(['minuten' => 1.0, 'behaelter' => 2, 'sekunden_je_behaelter' => 30.0,
+            'geraete_min' => 40.0, 'quelle' => 'behaelter'])
+        ->and($b['anrichten'])->toMatchArray(['minuten' => 58.333, 'quelle' => 'komponenten', 'komponenten' => 7])
+        // Summe der Blöcke = Personenzeit; die 40 Geräte-Minuten sind passiv (Durchlauf), kein Lohn
+        // Senfrostbraten nach B3j: Regenerieren 1,0 + Anrichten 58,3 = 59,3 Personenminuten
+        ->and($r['active_person_minutes'])->toBe(59.333)
+        ->and($r['passive_minutes'])->toBe(40.0)->and($r['elapsed_minutes'])->toBe(99.333);
+});
+
+it('B3c: ohne Regenerier-Behälter ist der Block 0 (kein Raten), Basisrezepte haben keine Blöcke', function () {
+    $r = $this->times->calculateForBatches($this->rootTeam, $this->gericht->fresh(), 100);
+    expect($r['bloecke']['regenerieren'])->toMatchArray(['minuten' => 0.0, 'behaelter' => null, 'quelle' => null])
+        ->and($r['active_person_minutes'])->toBe(58.333);
+
+    $basis = $this->makeRecipe($this->rootTeam, 'Fond: Huhn');
+    expect($this->times->calculateForBatches($this->rootTeam, $basis, 1)['bloecke'])->toBeNull();
+});
+
+it('B3c Kalkulation: Lohn je Block getrennt („davon“-Zeilen), Summe = FEK', function () {
+    spec83RegenFixture($this, $this->rootTeam, $this->gericht);
+    $costing = app(\Platform\FoodAlchemist\Services\OrderCostingService::class);
+    app(\Platform\FoodAlchemist\Services\TeamSettingsService::class)->update($this->rootTeam, ['stundensatz_eur' => 60]);
+    $concepts = app(\Platform\FoodAlchemist\Services\ConceptService::class);
+    $concept = $concepts->create($this->rootTeam, ['name' => 'Gala']);
+    $slot = $concepts->addSlot($this->rootTeam, $concept->id, ['role' => 'Hauptgang']);
+    $concepts->fillSlot($this->rootTeam, $slot->id, ['sales_recipe_id' => $this->gericht->id]);
+    $concepts->recomputeCache($concept->refresh());
+
+    $k = $costing->costConcept($this->rootTeam, $concept->refresh(), 100);
+    $teile = $k['fek_teile'];
+    $details = collect($k['cost_breakdown'])->where('stage', 'detail')->pluck('amount', 'key')->all();
+
+    expect($teile)->not->toHaveKey('pass')->and($teile['regenerieren'])->toBeGreaterThan(0)->and($teile['anrichten'])->toBeGreaterThan(0)
+        ->and(round(array_sum($teile), 2))->toBe(round($k['fek'], 2))
+        ->and(array_keys($details))->toContain('fek_regenerieren', 'fek_anrichten')->not->toContain('fek_pass')
+        // Verhältnis der Blöcke = Verhältnis der Minuten (gleicher Satz am Zeilen-Posten)
+        ->and(round($teile['anrichten'] / $teile['regenerieren'], 2))->toBe(round(58.333 / 1.0, 2));
+    $zeile = collect($k['time_breakdown'])->firstWhere('recipe_id', $this->gericht->id);
+    expect($zeile['regenerieren_minutes'])->toBeGreaterThan(0)->and($zeile['bloecke']['regenerieren']['behaelter'])->toBeGreaterThan(0);
+});
+
+// ── B3g: Pass = Sammelposten; Anrichte-Minuten anteilig auf die beteiligten Posten ────────────────────────
+
+function spec83Posten($test, $team, $gericht, bool $passIstSammel): array
+{
+    // Peters Spalte (Migration 2026_10_27_100000) gibt es vor seinem Merge noch nicht — nur in DIESER Fixture anlegen
+    if (! \Illuminate\Support\Facades\Schema::hasColumn('foodalchemist_production_stations', 'ist_sammelposten')) {
+        \Illuminate\Support\Facades\Schema::table('foodalchemist_production_stations', fn ($t) => $t->boolean('ist_sammelposten')->default(false));
+    }
+    $mk = fn (string $slug, string $name, bool $sammel = false) => tap(\Platform\FoodAlchemist\Models\FoodAlchemistProductionStation::create(
+        ['team_id' => $team->id, 'slug' => $slug, 'name' => $name]), fn ($s) => \Illuminate\Support\Facades\DB::table('foodalchemist_production_stations')
+        ->where('id', $s->id)->update(['ist_sammelposten' => $sammel]));
+    $p = ['saucier' => $mk('saucier', 'Saucier'), 'entremetier' => $mk('entremetier', 'Entremetier'), 'pass' => $mk('pass', 'Pass', $passIstSammel)];
+    foreach (['Fleisch: Senfrostbraten' => 'saucier', 'Jus: Altbier' => 'saucier', 'Pickle: Perlzwiebel' => 'saucier', 'Chip: Zwiebelring' => 'saucier',
+        'Püree: Petersilienwurzel' => 'entremetier', 'Beilage: Blumenkohl, geröstet' => 'entremetier'] as $name => $posten) {
+        \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::where('name', $name)->update(['default_station_id' => $p[$posten]->id]);
+    }
+    $gericht->update(['default_station_id' => $p['pass']->id]);   // Microgreens (GP) hat keinen Posten
+
+    return $p;
+}
+
+it('B3g/B3h: Blöcke 4/7 Saucier, 2/7 Entremetier, Garnitur ohne Posten am Sammel-Pass = „nicht zugeteilt“', function () {
+    $p = spec83Posten($this, $this->rootTeam, $this->gericht, true);
+    $bl = $this->times->calculateForBatches($this->rootTeam, $this->gericht->fresh(), 100)['bloecke'];
+    $a = collect($bl['anrichten']['aufteilung'])->keyBy(fn ($t) => $t['station_id'] ?? 0);
+    expect($bl)->not->toHaveKey('pass');                                                         // B3j
+
+    expect($a)->toHaveCount(3)
+        ->and($a[$p['saucier']->id])->toMatchArray(['komponenten' => 4, 'minuten' => 33.333])
+        ->and($a[$p['entremetier']->id])->toMatchArray(['komponenten' => 2, 'minuten' => 16.667])
+        ->and($a[0])->toMatchArray(['station_id' => null, 'komponenten' => 1, 'minuten' => 8.333])   // eigene Position, nicht geraten
+        ->and($a->has($p['pass']->id))->toBeFalse();                                               // Sammelposten trägt keine Anrichte-Minuten
+});
+
+it('B3g: Pass ohne Sammelposten-Merkmal nimmt die Komponente ohne Posten', function () {
+    $p = spec83Posten($this, $this->rootTeam, $this->gericht, false);
+    $a = collect($this->times->calculateForBatches($this->rootTeam, $this->gericht->fresh(), 100)['bloecke']['anrichten']['aufteilung'])
+        ->keyBy(fn ($t) => $t['station_id'] ?? 0);
+
+    expect($a[$p['pass']->id])->toMatchArray(['komponenten' => 1, 'minuten' => 8.333])->and($a->has(0))->toBeFalse();
+});
+
+it('B3h Kalkulation: Posten-Last nur bei den beteiligten Posten, Sammel-Pass trägt nichts', function () {
+    $p = spec83Posten($this, $this->rootTeam, $this->gericht, true);
+    $concepts = app(\Platform\FoodAlchemist\Services\ConceptService::class);
+    $concept = $concepts->create($this->rootTeam, ['name' => 'Gala']);
+    $slot = $concepts->addSlot($this->rootTeam, $concept->id, ['role' => 'Hauptgang']);
+    $concepts->fillSlot($this->rootTeam, $slot->id, ['sales_recipe_id' => $this->gericht->id]);
+    $concepts->recomputeCache($concept->refresh());
+
+    $k = app(\Platform\FoodAlchemist\Services\OrderCostingService::class)->costConcept($this->rootTeam, $concept->refresh(), 100);
+    $last = collect($k['station_load'])->keyBy(fn ($l) => $l['station_id'] ?? 0);
+
+    expect($last[$p['saucier']->id]['active_person_minutes'])->toBeGreaterThanOrEqual(33.33)
+        ->and($last->has($p['pass']->id))->toBeFalse()                                      // Sammel-Pass: keine Last
+        ->and(round($last[0]['active_person_minutes'], 2))->toBe(8.33)                     // 1/7 von Anrichten 58,33
+        ->and(implode(' ', $k['warnings']))->toContain('1 Komponente(n) ohne Posten')
+        ->and(round(array_sum($k['fek_teile']), 2))->toBe(round($k['fek'], 2));
 });

@@ -1246,7 +1246,7 @@
                                             @foreach($auftragsSimulation['cost_breakdown'] as $kosten)
                                                 @php $kostenStufe = $kosten['stage'] ?? 'cost'; @endphp
                                                 <div class="grid grid-cols-[minmax(0,1fr)_7rem_8rem] gap-2 py-1 text-[length:var(--fa-text-md)] {{ in_array($kostenStufe, ['subtotal', 'total'], true) ? 'mt-1 border-t border-[var(--fa-line)] font-semibold text-[var(--fa-ink)]' : 'text-[var(--fa-ink-2)]' }} {{ $kostenStufe === 'total' ? 'text-[var(--fa-accent)]' : '' }}">
-                                                    <span>{{ in_array($kostenStufe, ['surcharge'], true) ? '+ ' : '' }}{{ $kosten['label'] }}</span>
+                                                    <span class="{{ $kostenStufe === 'detail' ? 'pl-4 text-[var(--fa-ink-3)]' : '' }}">{{ in_array($kostenStufe, ['surcharge'], true) ? '+ ' : '' }}{{ $kosten['label'] }}</span>
                                                     <span class="text-right tabular-nums">{{ $euro((float) $kosten['amount'] / $simPax) }}</span>
                                                     <span class="text-right tabular-nums">{{ $euro($kosten['amount']) }}</span>
                                                 </div>
@@ -1270,7 +1270,7 @@
                                         <div class="overflow-x-auto pt-2">
                                             <table class="fa-table fa-table--compact min-w-[40rem]">
                                                 <thead><tr>
-                                                    <th>Rezept</th><th class="text-right">Ansätze</th><th class="text-right">Vorgänge</th><th class="text-right">Rüsten</th><th class="text-right">Vorgangszeit</th><th class="text-right">Variabel</th><th class="text-right">Aktiv gesamt</th>
+                                                    <th>Rezept</th><th class="text-right">Ansätze</th><th class="text-right">Vorgänge</th><th class="text-right">Rüsten</th><th class="text-right">Vorgangszeit</th><th class="text-right" title="Gericht: Regenerier-Behälter bestücken/entnehmen (Spec 83)">Regenerieren</th><th class="text-right">Variabel</th><th class="text-right">Aktiv gesamt</th>
                                                 </tr></thead>
                                                 <tbody>
                                                 @foreach($auftragsSimulation['time_breakdown'] as $zeit)
@@ -1280,6 +1280,7 @@
                                                         <td class="num">{{ $zeit['operations'] }}</td>
                                                         <td class="num">{{ number_format((float) $zeit['setup_minutes'], 1, ',', '.') }} min</td>
                                                         <td class="num">{{ number_format((float) $zeit['batch_minutes'], 1, ',', '.') }} min</td>
+                                                        <td class="num">{{ number_format((float) ($zeit['regenerieren_minutes'] ?? 0), 1, ',', '.') }} min</td>
                                                         <td class="num">{{ number_format((float) $zeit['variable_minutes'], 1, ',', '.') }} min</td>
                                                         <td class="num font-medium">{{ number_format((float) $zeit['active_person_minutes'], 1, ',', '.') }} min</td>
                                                     </tr>

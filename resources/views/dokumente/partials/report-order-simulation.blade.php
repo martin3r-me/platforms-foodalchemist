@@ -42,7 +42,7 @@
                 @foreach($sim['cost_breakdown'] as $row)
                     @php($stage = $row['stage'] ?? 'cost')
                     <tr class="{{ in_array($stage, ['subtotal', 'total'], true) ? 'sum-row' : '' }}">
-                        <td>{{ $stage === 'surcharge' ? '+ ' : '' }}{{ $row['label'] }}</td>
+                        <td style="{{ $stage === 'detail' ? 'padding-left:12px;color:#666' : '' }}">{{ $stage === 'surcharge' ? '+ ' : '' }}{{ $row['label'] }}</td>
                         <td class="num">{{ $money((float) $row['amount'] / $pax) }}</td>
                         <td class="num">{{ $money($row['amount']) }}</td>
                     </tr>
@@ -61,7 +61,7 @@
         <h3>Aktive Produktionszeit je Rezept</h3>
         <p class="muted">{{ number_format((float) $sim['active_person_minutes'], 1, ',', '.') }} aktive Personenminuten insgesamt.</p>
         <table>
-            <thead><tr><th width="24%">Rezept</th><th class="num">Ansätze</th><th class="num">Vorgänge</th><th class="num">Rüsten</th><th class="num">Vorgangszeit</th><th class="num">Variabel</th><th class="num">Aktiv gesamt</th></tr></thead>
+            <thead><tr><th width="24%">Rezept</th><th class="num">Ansätze</th><th class="num">Vorgänge</th><th class="num">Rüsten</th><th class="num">Vorgangszeit</th><th class="num">Regenerieren</th><th class="num">Variabel</th><th class="num">Aktiv gesamt</th></tr></thead>
             <tbody>
                 @foreach($sim['time_breakdown'] as $row)
                     <tr>
@@ -70,6 +70,7 @@
                         <td class="num">{{ $row['operations'] }}</td>
                         <td class="num">{{ number_format((float) $row['setup_minutes'], 1, ',', '.') }} min</td>
                         <td class="num">{{ number_format((float) $row['batch_minutes'], 1, ',', '.') }} min</td>
+                        <td class="num">{{ number_format((float) ($row['regenerieren_minutes'] ?? 0), 1, ',', '.') }} min</td>
                         <td class="num">{{ number_format((float) $row['variable_minutes'], 1, ',', '.') }} min</td>
                         <td class="num"><strong>{{ number_format((float) $row['active_person_minutes'], 1, ',', '.') }} min</strong></td>
                     </tr>

@@ -183,6 +183,9 @@ class VkModal extends Component
                 // Herstellungs-Eigenschaften, die am Gericht keine Bedeutung haben.
                 'variable_work_time_min' => $r->variable_work_time_min,
                 'variable_work_time_basis' => $r->variable_work_time_basis ?: 'portion',
+                // Spec 83 B3h: Anrichten je Teller in Sekunden = variable_work_time_min (Basis Portion) × 60. Leer = Startwert aus den Komponenten.
+                'anrichten_s' => ($r->variable_work_time_basis ?: 'portion') === 'portion' && (float) $r->variable_work_time_min > 0
+                    ? rtrim(rtrim(number_format((float) $r->variable_work_time_min * 60, 1, ',', ''), '0'), ',') : '',
                 'standzeit_min' => $r->standzeit_min,
                 'batch_max_kg' => $r->batch_max_kg,
                 'batch_max_pieces' => $r->batch_max_pieces,
@@ -440,6 +443,17 @@ class VkModal extends Component
             // Preis-Wahrheit liegt an der Darreichung. Ein im Rezeptkopf angezeigter
             // Legacy-VK darf beim allgemeinen Speichern keinen Auto-Preis fixieren.
             unset($update['sales_net'], $update['price_override_reason']);
+            // Spec 83 B3h: „Anrichten je Teller (s)" → variable_work_time_min je Portion. Leer heisst „Startwert aus Komponenten" —
+            // eine alte Zeit mit anderer Basis (z. B. min/kg) bleibt stehen, bis Sekunden je Teller eingetragen werden.
+            $sek = trim(str_replace(',', '.', (string) ($this->form['anrichten_s'] ?? '')));
+            if ($sek !== '' && is_numeric($sek)) {
+                $update['variable_work_time_min'] = round(max(0.0, (float) $sek) / 60, 4);
+                $update['variable_work_time_basis'] = 'portion';
+            } elseif (($this->form['variable_work_time_basis'] ?? 'portion') === 'portion') {
+                $update['variable_work_time_min'] = null;
+                $update['variable_work_time_basis'] = 'portion';
+            }
+            unset($update['anrichten_s']);
             app(SalesRecipeService::class)->updateVk($team, $this->recipeId, $update, $this->kiLineage);
             $this->kiLineage = [];
 

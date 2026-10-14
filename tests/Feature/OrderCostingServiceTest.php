@@ -107,12 +107,12 @@ it('weist Batchzeit nach physischer Grenze aus — ohne Rüstzeit am Gericht', f
     // und gilt nur am Basisrezept — sonst rechneten Alt-Werte still weiter, die die
     // Oberfläche nicht mehr zeigt. Die 30 Minuten fallen hier also bewusst weg.
     //
-    // Spec 83 B3 (Entscheid Dominique 14.10.2026): work_time_min am Gericht ist „Pass einrichten“ und zählt EINMAL je
-    // Zeile — nicht mehr je 20-kg-Topf-Deckel (vorher 5.000 Pax: 25 × 60 + 500 = 2.000).
-    // 100 Pax = 10 kg: 60 Pass + 10 variabel.
-    expect($small['active_person_minutes'])->toBe(70.0)
-        // 5.000 Pax = 500 kg: 60 Pass + 500 variabel.
-        ->and($large['active_person_minutes'])->toBe(560.0);
+    // Spec 83 B3j (Entscheid Dominique 14.10.2026): work_time_min am Gericht zählt nicht mehr (vorher je 20-kg-Topf-Deckel,
+    // 5.000 Pax: 25 × 60 + 500 = 2.000). Es bleibt die gepflegte Zeit pro Menge (1 min/kg).
+    // 100 Pax = 10 kg: 10 variabel.
+    expect($small['active_person_minutes'])->toBe(10.0)
+        // 5.000 Pax = 500 kg: 500 variabel.
+        ->and($large['active_person_minutes'])->toBe(500.0);
 });
 
 it('weist den Fertigungslohn aus und markiert fehlende Produktionszeiten als unvollständig', function () {

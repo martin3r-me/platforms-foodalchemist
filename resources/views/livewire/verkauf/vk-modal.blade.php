@@ -698,24 +698,14 @@
                         title="Schlägt Zeiten und Geschmacksrichtung vor" data-ki-eigenschaften>Zeiten vorschlagen</x-fa::button>
                 </x-slot:actions>
                 <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4" data-vk-produktion>
-                    {{-- Am Gericht ist das die FERTIGSTELLUNGS-Zeit. Wer hier die Gesamtzeit einträgt, zählt im
-                         selben Auftrag doppelt — deshalb Verdachts-Hinweis statt stiller Korrektur. --}}
-                    <x-fa::field label="Fertigstellungszeit (min)" for="vk-fertigzeit" class="sm:col-span-2"
-                        hint="Nur das Zusammensetzen. Die Herstellungszeit steht am jeweiligen Basisrezept.">
-                        <x-fa::input id="vk-fertigzeit" type="number" min="0" wire:model="form.work_time_min" numeric data-vk-fertigstellungszeit />
-                        @if(($komponentenZeiten['anzahl'] ?? 0) > 0)
-                            <p class="{{ $hinweis }}" data-vk-komponenten-zeiten>
-                                <span>Komponenten je Ansatz: {{ $komponentenZeiten['work_time_min'] }} min aktiv</span>
-                                @if($komponentenZeiten['setup_time_min'] > 0)<span>· {{ $komponentenZeiten['setup_time_min'] }} min Rüsten</span>@endif
-                                @if($komponentenZeiten['ohne_zeit'] > 0)
-                                    · <span class="text-[var(--fa-warn)]">{{ $komponentenZeiten['ohne_zeit'] }} von {{ $komponentenZeiten['anzahl'] }} ohne Zeitangabe</span>
-                                @endif
-                            </p>
-                            @if($komponentenZeiten['work_time_min'] > 0 && (float) ($form['work_time_min'] ?? 0) >= $komponentenZeiten['work_time_min'])
-                                <x-fa::signal tone="warn" data-vk-zeit-verdacht>Der Wert erreicht die Summe der Komponenten. Steht hier die Gesamtzeit? Sie würde doppelt zählen.</x-fa::signal>
-                            @endif
-                        @endif
-                    </x-fa::field>
+                    {{-- Spec 83 B3j (Entscheid Dominique 14.10.2026): Am Gericht zählen nur Regenerieren und Anrichten. Die frühere
+                         Fertigstellungszeit (work_time_min) wird nicht mehr gerechnet; ein Altwert bleibt gespeichert und sichtbar. --}}
+                    @if((float) ($form['work_time_min'] ?? 0) > 0)
+                        <x-fa::field label="Fertigstellungszeit (min) · wird nicht gerechnet" for="vk-fertigzeit" class="sm:col-span-2"
+                            hint="Altwert. Am Gericht zählen nur Regenerieren und Anrichten (Spec 83). Der Wert bleibt gespeichert.">
+                            <x-fa::input id="vk-fertigzeit" type="number" min="0" wire:model="form.work_time_min" numeric disabled data-vk-fertigstellungszeit-alt />
+                        </x-fa::field>
+                    @endif
                     <x-fa::field label="Passive Standzeit (min)" for="vk-standzeit">
                         <x-fa::input id="vk-standzeit" type="number" min="0" wire:model="form.standzeit_min" numeric />
                     </x-fa::field>
@@ -728,17 +718,18 @@
                         </x-fa::select>
                     </x-fa::field>
                     @php
-                        // Spec 83 B3: leer = Anrichten aus den Teller-Komponenten (Startwert, ungeprüft)
-                        $anrichteMin = $anrichteKomponenten * \Platform\FoodAlchemist\Services\ProductionTimeService::ANRICHTEN_SEKUNDEN_JE_KOMPONENTE / 60;
-                        $anrichteText = $anrichteKomponenten > 0 ? number_format($anrichteMin, 2, ',', '') : null;
+                        // Spec 83 B3h: Anrichten am Gericht = Sekunden für EINEN Teller. Leer = Startwert aus den Teller-Komponenten.
+                        $startwertS = (int) round($anrichteKomponenten * \Platform\FoodAlchemist\Services\ProductionTimeService::ANRICHTEN_SEKUNDEN_JE_KOMPONENTE);
+                        $altBasis = ($form['variable_work_time_basis'] ?? 'portion') !== 'portion' && (float) ($form['variable_work_time_min'] ?? 0) > 0;
+                        $basisText = ['kg' => 'kg', 'piece' => 'Stück'][$form['variable_work_time_basis'] ?? ''] ?? '';
                     @endphp
-                    <x-fa::field label="Variable Personenminuten" for="vk-varzeit"
-                        :hint="$anrichteText !== null ? 'Leer = Anrichten aus '.$anrichteKomponenten.' Teller-Komponenten × '.(int) \Platform\FoodAlchemist\Services\ProductionTimeService::ANRICHTEN_SEKUNDEN_JE_KOMPONENTE.' s = '.$anrichteText.' min je Portion (Startwert, ungeprüft). Ein eingetragener Wert gilt stattdessen.' : null">
-                        <x-fa::input id="vk-varzeit" inputmode="decimal" wire:model="form.variable_work_time_min" numeric
-                            :placeholder="$anrichteText !== null ? $anrichteText.' (je Portion, abgeleitet)' : '0'" data-vk-anrichten-abgeleitet="{{ $anrichteText ?? '' }}" />
-                    </x-fa::field>
-                    <x-fa::field label="Variable Zeit je" for="vk-varbasis">
-                        <x-fa::select id="vk-varbasis" wire:model="form.variable_work_time_basis" :options="['kg' => 'kg', 'piece' => 'Stück', 'portion' => 'Portion']" />
+                    <x-fa::field label="Anrichten je Teller (s)" for="vk-anrichten-s"
+                        :hint="$altBasis
+                            ? 'Bisher gepflegt: '.number_format((float) $form['variable_work_time_min'], 2, ',', '').' min je '.$basisText.' (alt). Ein Wert in Sekunden je Teller ersetzt ihn.'
+                            : ($startwertS > 0 ? 'Leer = Startwert aus '.$anrichteKomponenten.' Komponenten ('.$startwertS.' s, ungeprüft). Die Zeit für alle Teller verteilt sich anteilig auf die beteiligten Posten.' : 'Wie lange dauert es, EINEN Teller anzurichten?')">
+                        <x-fa::input id="vk-anrichten-s" inputmode="decimal" wire:model="form.anrichten_s" numeric
+                            :placeholder="$startwertS > 0 ? $startwertS.' (Startwert aus '.$anrichteKomponenten.' Komponenten)' : '0'"
+                            data-vk-anrichten-startwert="{{ $startwertS }}" />
                     </x-fa::field>
                     <x-fa::field label="Batchgrenze kg" for="vk-batch-kg">
                         <x-fa::input id="vk-batch-kg" inputmode="decimal" wire:model="form.batch_max_kg" numeric placeholder="Team-Standard" />
