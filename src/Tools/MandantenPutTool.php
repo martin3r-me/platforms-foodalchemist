@@ -30,7 +30,7 @@ class MandantenPutTool extends WareneingangTool implements ToolContract, ToolMet
             'team_id' => ['type' => 'integer'],
             'status' => ['type' => 'string', 'enum' => ['projekt', 'aktiv', 'beendet']],
             'modus' => ['type' => 'string', 'enum' => ['kuratiert', 'autark']],
-            'crm_company_id' => ['type' => ['integer', 'null']],
+            'crm_company_id' => ['description' => 'Ganzzahl oder null (null hebt auf)'],
             'notiz' => ['type' => 'string'],
         ], 'required' => ['team_id']];
     }

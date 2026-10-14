@@ -35,7 +35,7 @@ class GpLeadPutTool extends FoodAlchemistTool implements ToolContract, ToolMetad
             'type' => 'object',
             'properties' => [
                 'gp_id' => ['type' => 'integer'],
-                'la_id' => ['type' => ['integer', 'null'], 'description' => 'Lead-LA; null = Override lösen (Heuristik)'],
+                'la_id' => ['description' => 'Ganzzahl oder null — Lead-LA; null = Override lösen (Heuristik)'],
                 'reason' => ['type' => 'string', 'description' => 'Begründung des Overrides (Historie)'],
                 'recompute' => ['type' => 'boolean', 'default' => true],
             ],

@@ -26,7 +26,7 @@ class SupplierInvoicesPutTool extends WareneingangTool implements ToolContract, 
     {
         return ['type' => 'object', 'properties' => [
             'id' => ['type' => 'integer'], 'invoice_number' => ['type' => 'string'], 'invoice_date' => ['type' => 'string'],
-            'total_net' => ['type' => ['number', 'string']], 'note' => ['type' => 'string'], 'lines' => ['type' => 'array', 'description' => 'Positionen. Ware: {delivery_note_line_id?, order_line_id?, qty_packs, pack_price, begruendung?}. Nebenkosten: {art: fracht|pfand|zuschlag|rabatt, designation?, line_net}.', 'items' => ['type' => 'object']],
+            'total_net' => ['description' => 'Zahl oder Text'], 'note' => ['type' => 'string'], 'lines' => ['type' => 'array', 'description' => 'Positionen. Ware: {delivery_note_line_id?, order_line_id?, qty_packs, pack_price, begruendung?}. Nebenkosten: {art: fracht|pfand|zuschlag|rabatt, designation?, line_net}.', 'items' => ['type' => 'object']],
             'begruendung_line_id' => ['type' => 'integer'], 'begruendung' => ['type' => 'string'], 'strittig' => ['type' => 'boolean'],
         ], 'required' => ['id']];
     }

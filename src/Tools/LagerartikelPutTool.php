@@ -27,7 +27,7 @@ class LagerartikelPutTool extends FoodAlchemistTool implements ToolContract, Too
     {
         return ['type' => 'object', 'properties' => [
             'gp_ids' => ['type' => 'array', 'items' => ['type' => 'integer']], 'ist_lagerartikel' => ['type' => 'boolean'],
-            'mindestbestand' => ['type' => ['number', 'string', 'null']], 'sollbestand' => ['type' => ['number', 'string', 'null']],
+            'mindestbestand' => ['description' => 'Zahl oder Text oder null (null hebt auf)'], 'sollbestand' => ['description' => 'Zahl oder Text oder null (null hebt auf)'],
         ], 'required' => ['gp_ids']];
     }
 

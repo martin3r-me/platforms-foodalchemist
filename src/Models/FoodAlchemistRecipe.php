@@ -37,6 +37,9 @@ class FoodAlchemistRecipe extends Model
         return static::withoutGlobalScope(\Platform\FoodAlchemist\Models\Scopes\OhneFassungenScope::class);
     }
 
+    /** Bezug der variablen Arbeitszeit (`variable_work_time_min` je …): kg, Stück, Portion (wie Rezept-Modal und Verkaufs-Editor). */
+    public const ZEIT_BASEN = ['kg', 'piece', 'portion'];
+
     protected $table = 'foodalchemist_recipes';
 
     protected $guarded = ['id'];

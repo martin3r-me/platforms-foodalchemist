@@ -26,7 +26,7 @@ class StandorteSetBrilleTool extends WareneingangTool implements ToolContract, T
     public function getSchema(): array
     {
         return ['type' => 'object', 'required' => ['modus'], 'properties' => [
-            'modus' => ['type' => 'string', 'enum' => ['eigen', 'alle', 'team']], 'team_id' => ['type' => ['integer', 'null']],
+            'modus' => ['type' => 'string', 'enum' => ['eigen', 'alle', 'team']], 'team_id' => ['description' => 'Ganzzahl oder null (null hebt auf)'],
         ]];
     }
 

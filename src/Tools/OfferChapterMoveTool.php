@@ -34,7 +34,7 @@ class OfferChapterMoveTool extends FoodAlchemistTool implements ToolContract, To
             'type' => 'object',
             'properties' => [
                 'chapter_id' => ['type' => 'integer', 'description' => 'Zu verschiebendes Kapitel.'],
-                'parent_id' => ['type' => ['integer', 'null'], 'description' => 'Neues Eltern-Kapitel; null/weglassen = oberste Ebene.'],
+                'parent_id' => ['description' => 'Ganzzahl oder null — Neues Eltern-Kapitel; null/weglassen = oberste Ebene.'],
             ],
             'required' => ['chapter_id'],
         ];

@@ -34,7 +34,7 @@ class OutletsSetActiveTool extends FoodAlchemistTool implements ToolContract, To
         return [
             'type' => 'object',
             'properties' => [
-                'outlet_id' => ['type' => ['integer', 'null'], 'description' => 'Kalkulationsprofil, dessen Brille aktiv wird; null/weglassen = Team-Baseline. Muss dem Team gehören und aktiv sein.'],
+                'outlet_id' => ['description' => 'Ganzzahl oder null — Kalkulationsprofil, dessen Brille aktiv wird; null/weglassen = Team-Baseline. Muss dem Team gehören und aktiv sein.'],
             ],
         ];
     }

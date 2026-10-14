@@ -27,8 +27,8 @@ class ProductionOrdersFinishTool extends FoodAlchemistTool implements ToolContra
             'type' => 'object',
             'properties' => [
                 'order_id' => ['type' => 'integer'],
-                'finish_note' => ['type' => ['string', 'null']],
-                'expected_updated_at' => ['type' => ['string', 'null']],
+                'finish_note' => ['description' => 'Text oder null (null hebt auf)'],
+                'expected_updated_at' => ['description' => 'Text oder null (null hebt auf)'],
             ],
             'required' => ['order_id'],
         ];

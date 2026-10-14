@@ -27,7 +27,7 @@ class EigenproduktionEntnahmeTool extends FoodAlchemistTool implements ToolContr
     {
         return ['type' => 'object', 'properties' => [
             'batch_id' => ['type' => 'integer'], 'recipe_id' => ['type' => 'integer'], 'location_id' => ['type' => 'integer'],
-            'menge' => ['type' => ['number', 'string']], 'grund' => ['type' => 'string'], 'notiz' => ['type' => 'string'],
+            'menge' => ['description' => 'Zahl oder Text'], 'grund' => ['type' => 'string'], 'notiz' => ['type' => 'string'],
         ], 'required' => ['menge']];
     }
 

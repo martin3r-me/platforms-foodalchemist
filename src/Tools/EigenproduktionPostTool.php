@@ -28,7 +28,7 @@ class EigenproduktionPostTool extends FoodAlchemistTool implements ToolContract,
     public function getSchema(): array
     {
         return ['type' => 'object', 'properties' => [
-            'recipe_id' => ['type' => 'integer'], 'menge' => ['type' => ['number', 'string']], 'location_id' => ['type' => 'integer'],
+            'recipe_id' => ['type' => 'integer'], 'menge' => ['description' => 'Zahl oder Text'], 'location_id' => ['type' => 'integer'],
             'lagerart' => ['type' => 'string', 'enum' => ['gekuehlt', 'tiefgekuehlt', 'trocken']], 'produziert_am' => ['type' => 'string'],
             'eingefroren_am' => ['type' => 'string'], 'verbrauchen_bis' => ['type' => 'string'], 'notiz' => ['type' => 'string'],
             'production_order_line_id' => ['type' => 'integer'],

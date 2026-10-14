@@ -38,7 +38,7 @@ class ProductionOrdersLineOverrideTool extends FoodAlchemistTool implements Tool
             'type' => 'object',
             'properties' => [
                 'line_id' => ['type' => 'integer'],
-                'ansaetze' => ['type' => ['number', 'null'], 'description' => 'Manuelle Ansätze; null = Override zurücknehmen'],
+                'ansaetze' => ['description' => 'Zahl oder null — Manuelle Ansätze; null = Override zurücknehmen'],
                 'is_struck' => ['type' => 'boolean', 'description' => 'true = streichen, false = wiederherstellen'],
                 'struck_reason' => ['type' => 'string', 'description' => 'Grund fürs Streichen'],
             ],

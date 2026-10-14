@@ -30,7 +30,7 @@ class OrderTemplatesApplyTool extends FoodAlchemistTool implements ToolContract,
             'properties' => [
                 'template_id' => ['type' => 'integer'],
                 'liefertag' => ['type' => 'string', 'description' => 'YYYY-MM-DD'],
-                'mengen' => ['type' => 'object', 'additionalProperties' => ['type' => ['number', 'string']]],
+                'mengen' => ['type' => 'object', 'additionalProperties' => ['description' => 'Zahl oder Text']],
                 'strategie' => ['type' => 'string', 'description' => 'Lead-Strategie (leer = Team-Standard).'],
             ],
             'required' => ['template_id'],

@@ -29,7 +29,7 @@ class StorageBinsPutTool extends FoodAlchemistTool implements ToolContract, Tool
             'properties' => [
                 'bin_id' => ['type' => 'integer', 'description' => 'Stellplatz-Id.'],
                 'name' => ['type' => 'string'],
-                'zone' => ['type' => ['string', 'null']],
+                'zone' => ['description' => 'Text oder null (null hebt auf)'],
                 'verschieben' => ['type' => 'integer', 'enum' => [-1, 1]],
             ],
             'required' => ['bin_id'],

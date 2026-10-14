@@ -30,11 +30,11 @@ class LabelTemplatesPostTool extends FoodAlchemistTool implements ToolContract, 
             'type' => 'object',
             'properties' => [
                 'vorlage_id' => ['type' => 'integer'], 'name' => ['type' => 'string'], 'format' => ['type' => 'string'], 'typ' => ['type' => 'string'],
-                'betrieb_id' => ['type' => ['integer', 'null']], 'design' => ['type' => ['string', 'null']],
+                'betrieb_id' => ['description' => 'Ganzzahl oder null (null hebt auf)'], 'design' => ['description' => 'Text oder null (null hebt auf)'],
                 'felder' => ['type' => 'array', 'items' => ['type' => 'object']],
                 'allergen_darstellung' => ['type' => 'string'], 'schriftgroesse' => ['type' => 'string'],
-                'datum_gross' => ['type' => 'boolean'], 'logo' => ['type' => 'boolean'], 'fusstext' => ['type' => ['string', 'null']], 'standard' => ['type' => 'boolean'],
-                'standard_wandmonitor' => ['type' => 'boolean'], 'drucker_id' => ['type' => ['integer', 'null'], 'description' => 'Spec 78: Drucker — Format und Ränder kommen dann vom Drucker'],
+                'datum_gross' => ['type' => 'boolean'], 'logo' => ['type' => 'boolean'], 'fusstext' => ['description' => 'Text oder null (null hebt auf)'], 'standard' => ['type' => 'boolean'],
+                'standard_wandmonitor' => ['type' => 'boolean'], 'drucker_id' => ['description' => 'Ganzzahl oder null (null hebt auf) — Spec 78: Drucker — Format und Ränder kommen dann vom Drucker'],
             ],
         ];
     }

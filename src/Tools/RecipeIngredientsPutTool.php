@@ -50,7 +50,7 @@ class RecipeIngredientsPutTool extends FoodAlchemistTool implements ToolContract
                             'quantity_max' => ['type' => 'number'],
                             'unit' => ['type' => 'string'],
                             'trimming_loss_pct' => ['type' => 'number'],
-                            'cooking_loss_pct' => ['type' => ['number', 'null'], 'minimum' => 0, 'maximum' => 100],
+                            'cooking_loss_pct' => ['minimum' => 0, 'maximum' => 100, 'description' => 'Zahl 0–100 oder null (null hebt auf)'],
                             'is_optional' => ['type' => 'boolean'],
                             'note' => ['type' => 'string'],
                             'role' => ['type' => 'string'],
@@ -69,7 +69,7 @@ class RecipeIngredientsPutTool extends FoodAlchemistTool implements ToolContract
                         'type' => 'object',
                         'properties' => [
                             'ingredient_id' => ['type' => 'integer'],
-                            'cooking_loss_pct' => ['type' => ['number', 'null'], 'minimum' => 0, 'maximum' => 100],
+                            'cooking_loss_pct' => ['minimum' => 0, 'maximum' => 100, 'description' => 'Zahl 0–100 oder null (null hebt auf)'],
                         ],
                         'required' => ['ingredient_id', 'cooking_loss_pct'],
                     ],

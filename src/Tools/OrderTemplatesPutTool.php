@@ -24,15 +24,15 @@ class OrderTemplatesPutTool extends FoodAlchemistTool implements ToolContract, T
 
     public function getSchema(): array
     {
-        $pos = ['type' => 'object', 'properties' => ['type' => ['type' => 'string'], 'id' => ['type' => 'integer'], 'menge' => ['type' => ['number', 'string']], 'einheit' => ['type' => 'string']]];
+        $pos = ['type' => 'object', 'properties' => ['type' => ['type' => 'string'], 'id' => ['type' => 'integer'], 'menge' => ['description' => 'Zahl oder Text'], 'einheit' => ['type' => 'string']]];
 
         return [
             'type' => 'object',
             'properties' => [
                 'template_id' => ['type' => 'integer'],
-                'name' => ['type' => 'string'], 'notiz' => ['type' => ['string', 'null']], 'bestelltag' => ['type' => ['integer', 'null']],
+                'name' => ['type' => 'string'], 'notiz' => ['description' => 'Text oder null (null hebt auf)'], 'bestelltag' => ['description' => 'Ganzzahl oder null (null hebt auf)'],
                 'positionen_setzen' => ['type' => 'array', 'items' => $pos],
-                'positionen_aendern' => ['type' => 'array', 'items' => ['type' => 'object', 'properties' => ['line_id' => ['type' => 'integer'], 'menge' => ['type' => ['number', 'string']], 'einheit' => ['type' => 'string']]]],
+                'positionen_aendern' => ['type' => 'array', 'items' => ['type' => 'object', 'properties' => ['line_id' => ['type' => 'integer'], 'menge' => ['description' => 'Zahl oder Text'], 'einheit' => ['type' => 'string']]]],
                 'positionen_entfernen' => ['type' => 'array', 'items' => ['type' => 'integer']],
             ],
             'required' => ['template_id'],
