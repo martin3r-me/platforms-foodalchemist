@@ -328,6 +328,9 @@ class Tagesplan extends Component
     }
 
     /** Wandmonitor (Spec 35): zwischen Posten-Lanes und zusammengefasster Mise-en-Place umschalten. */
+    /** @var array<int, array{braucht: list<array<string,mixed>>, fuer: list<array<string,mixed>>}> Spec 83 M2, je Render neu (nicht öffentlich, nicht serialisiert) */
+    private array $wallVerknuepfung = [];
+
     public function wallAnsichtSetzen(string $a): void
     {
         $this->wallAnsicht = in_array($a, ['lanes', 'mise'], true) ? $a : 'lanes';
@@ -588,6 +591,8 @@ class Tagesplan extends Component
         // Wandmonitor-Extras nur im Wall-Modus rechnen (Readiness zieht eine zweite, teurere Abfrage).
         $readiness = ($istWall && $team !== null) ? app(ProductionReadinessService::class)->findings($team, $von, $bis) : [];
         $miseEnPlace = $istWall ? $this->miseEnPlace($zeilen) : collect();
+        // Spec 83 M2: Verknüpfung Ober-/Unterrezept aus den Auftragsdaten (vor den Gruppen: die Sortierung nutzt sie)
+        $this->wallVerknuepfung = $istWall ? $this->wallVerknuepfungen($zeilen) : [];
         $wallPostenGruppen = $istWall ? $this->wallPostenGruppen($zeilen) : collect();
         $anleitung = $istWall ? $this->anleitungAufloesen($zeilen) : null;
         $wallGericht = $istWall ? $this->wallGerichtAufloesen($wallPostenGruppen) : null;
@@ -607,6 +612,9 @@ class Tagesplan extends Component
             'readiness' => $readiness,
             'miseEnPlace' => $miseEnPlace,
             'wallPostenGruppen' => $wallPostenGruppen,
+            'wallVerknuepfung' => $this->wallVerknuepfung,
+            'wallIstPass' => fn ($schluessel, ?string $name) => $this->wallIstPassLane($schluessel, $name),
+            'wallPassAuftraege' => fn ($laneGruppen) => $this->wallPassAuftraege($laneGruppen),
             'wallGericht' => $wallGericht,
             'anleitung' => $anleitung,
             'postenListe' => $team !== null
@@ -726,9 +734,109 @@ class Tagesplan extends Component
             ->unique(fn ($z) => (int) ($z->id ?? 0))
             ->sortBy(fn ($z) => [
                 (bool) ($z->ist_verkaufsrezept ?? false) ? 0 : 1,
+                $this->wallVerknuepfungTiefe((int) ($z->id ?? 0)),   // Spec 83 M2: Unterrezepte vor dem Oberrezept
                 (int) ($z->position ?? 0),
                 (int) ($z->id ?? 0),
             ])
+            ->values();
+    }
+
+    /**
+     * Spec 83 M2 — Verknüpfung Ober-/Unterrezept am Küchenmonitor, ABGELEITET aus den Auftragsdaten (nicht geraten):
+     * Jede Auftragszeile trägt im Snapshot `zutaten` die Zutaten ihres Rezepts; Einträge mit `typ = sub` verweisen über `ref_recipe_id`
+     * auf ein Unterrezept. Steht dieses Unterrezept im SELBEN Auftrag als eigene Zeile (= eigene Aufgabe), sind beide verknüpft.
+     * Dieselbe Quelle nutzt {@see self::wallGerichtArbeitsZeilen} schon, um die Unterrezept-Zeilen ans Gericht zu hängen.
+     *
+     * @return array<int, array{braucht: list<array{id:int, name:string, erledigt:bool}>, fuer: list<array{id:int, name:string}>}>
+     */
+    private function wallVerknuepfungen(\Illuminate\Support\Collection $zeilen): array
+    {
+        $nachAuftragUndRezept = $zeilen->groupBy(fn ($z) => (int) ($z->order_id ?? 0).':'.(int) ($z->recipe_id ?? 0));
+        $karte = [];
+        foreach ($zeilen as $z) {
+            $refs = collect((array) ($z->zutaten ?? []))
+                ->filter(fn ($zu) => ($zu['typ'] ?? null) === 'sub' && ! empty($zu['ref_recipe_id']))
+                ->pluck('ref_recipe_id')->map(fn ($id) => (int) $id)->unique();
+            foreach ($refs as $ref) {
+                foreach ($nachAuftragUndRezept->get((int) ($z->order_id ?? 0).':'.$ref, collect()) as $kind) {
+                    if ((int) $kind->id === (int) $z->id) {
+                        continue;
+                    }
+                    $karte[(int) $z->id]['braucht'][(int) $kind->id] = ['id' => (int) $kind->id, 'name' => (string) ($kind->rezept_label ?: $kind->name), 'erledigt' => $kind->line_status === 'done'];
+                    $karte[(int) $kind->id]['fuer'][(int) $z->id] = ['id' => (int) $z->id, 'name' => (string) ($z->rezept_label ?: $z->name)];
+                }
+            }
+        }
+
+        return array_map(fn (array $e) => ['braucht' => array_values($e['braucht'] ?? []), 'fuer' => array_values($e['fuer'] ?? [])], $karte);
+    }
+
+    /** Tiefe im Abhängigkeitsbaum: 0 ohne Unterrezept-Zeile, sonst 1 + die größte Tiefe der benötigten Zeilen (Schutz gegen Zyklen). */
+    private function wallVerknuepfungTiefe(int $lineId, int $schutz = 0): int
+    {
+        $kinder = $this->wallVerknuepfung[$lineId]['braucht'] ?? [];
+        if ($kinder === [] || $schutz > 8) {
+            return 0;
+        }
+
+        return 1 + max(array_map(fn (array $k) => $this->wallVerknuepfungTiefe($k['id'], $schutz + 1), $kinder));
+    }
+
+    /**
+     * Spec 83 M1 — der Pass-Posten (und solange das Routing nicht greift auch „Nicht zugeteilt“) zeigt Aufträge statt Gericht-Karten.
+     * Ein Posten gilt als Pass, wenn sein Name „Pass“ ist oder damit beginnt („Pass“, „Pass 1“, „Pass kalt“). Ein Ort für diese Regel.
+     */
+    private function wallIstPassLane(string|int $schluessel, ?string $stationName): bool
+    {
+        return $schluessel === '_none' || preg_match('/^\s*pass(\b|\s|$)/iu', (string) $stationName) === 1;
+    }
+
+    /**
+     * Pass-Ansicht: je Auftrag und Ausgabetag EINE Karte, darin die Gerichte als Liste (Portionen, Haken, Fortschritt), sortiert nach Ausgabe.
+     * Allergene stehen nicht hier, erst im Detail (Antippen öffnet das Gericht).
+     *
+     * @param  \Illuminate\Support\Collection<int, object>  $laneGruppen  die Gericht-Gruppen EINES Posten ({@see self::wallPostenGruppen})
+     * @return \Illuminate\Support\Collection<int, object>
+     */
+    private function wallPassAuftraege(\Illuminate\Support\Collection $laneGruppen): \Illuminate\Support\Collection
+    {
+        return $laneGruppen
+            ->groupBy(fn ($g) => explode('|', (string) $g->key)[0].'|'.\Illuminate\Support\Carbon::parse($g->liefertag ?? now())->toDateString())
+            ->map(function ($gruppen, $key) {
+                $items = collect();
+                foreach ($gruppen as $g) {
+                    $vk = $g->hat_gericht ? $g->zeilen->first(fn ($z) => (bool) ($z->ist_verkaufsrezept ?? false)) : null;
+                    if ($g->hat_gericht) {
+                        $items->push((object) [
+                            'art' => 'gericht', 'key' => $g->key, 'name' => $g->gericht,
+                            'portionen' => $vk?->portionen !== null ? (int) $vk->portionen : null,
+                            'haken_line_id' => $vk?->id, 'erledigt' => $vk !== null ? $vk->line_status === 'done' : ($g->gesamt > 0 && $g->erledigt === $g->gesamt),
+                            'gesamt' => $g->gesamt, 'fertig_n' => $g->erledigt, 'laeuft' => $vk !== null && $vk->auftrag_status === 'in_progress',
+                            'sortierung' => (int) ($vk->position ?? $g->zeilen->min('position') ?? 0),
+                        ]);
+
+                        continue;
+                    }
+                    foreach ($g->zeilen as $z) {
+                        $items->push((object) [
+                            'art' => 'zeile', 'key' => $g->key, 'name' => $z->rezept_label ?: $z->name, 'zeile' => $z,
+                            'portionen' => null, 'haken_line_id' => (int) $z->id, 'erledigt' => $z->line_status === 'done',
+                            'gesamt' => 1, 'fertig_n' => $z->line_status === 'done' ? 1 : 0, 'laeuft' => $z->auftrag_status === 'in_progress',
+                            'sortierung' => (int) ($z->position ?? 0),
+                        ]);
+                    }
+                }
+                $items = $items->sortBy(fn ($i) => [$i->art === 'gericht' ? 0 : 1, $i->art === 'zeile' ? $this->wallVerknuepfungTiefe((int) $i->haken_line_id) : 0, $i->sortierung, $i->name])->values();
+                $erste = $gruppen->first();
+
+                return (object) [
+                    'key' => (string) $key, 'auftrag' => $erste->auftrag, 'liefertag' => $erste->liefertag,
+                    'items' => $items, 'gerichte' => $items->where('art', 'gericht')->count(),
+                    'portionen' => (int) $items->sum(fn ($i) => (int) ($i->portionen ?? 0)),
+                    'gesamt' => $items->count(), 'erledigt' => $items->where('erledigt', true)->count(),
+                ];
+            })
+            ->sortBy(fn ($a) => [(string) $a->liefertag, (string) $a->auftrag])
             ->values();
     }
 

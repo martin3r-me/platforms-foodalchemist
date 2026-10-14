@@ -149,7 +149,7 @@ class ProductionCapacityService
             ->select(array_merge([
                 'l.id', 'l.plan_date', 'l.station_id', 'l.assignee', 'l.arbeitszeit_min',
                 'l.ansaetze', 'l.manual_ansaetze', 'l.is_manual_ansaetze', 'l.titel', 'l.vorlauf_tage',
-                'l.recipe_id', 'l.tiefe', 'l.position', 'l.is_basisrezept',
+                'l.recipe_id', 'l.tiefe', 'l.position', 'l.is_basisrezept', 'l.portionen',   // portionen: Pass-Ansicht des Küchenmonitors (Spec 83 M1)
                 'l.benoetigt_ansaetze', 'l.basis_yield_kg', 'l.produzierte_menge_kg',
                 'l.blocked_reason', 'l.blocked_note', 'l.skipped_reason', 'l.started_at', 'l.updated_at',
                 'l.line_status',                       // Spec 30 E6: Küchen-Checkliste
