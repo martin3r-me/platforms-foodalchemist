@@ -276,8 +276,35 @@ class InhaltsFreigabeService
             $kopie->forceFill(['name' => (string) $original->name])->save();
         }
         $kopie->forceFill(['kopie_von_id' => $original->id, 'kopie_stand_at' => $original->updated_at ?? now()])->save();
+        $this->letzteHinweise = [];
+        if ($typ === 'concept') {   // Titelbild + Galerie in den Speicher des Teams (Entscheid Dominique 14.10.); fehlt die Datei: Kopie ohne Bild + Hinweis
+            $this->kopiereKonzeptBilder($original, $kopie, $team);
+        }
 
         return $kopie->refresh();
+    }
+
+    /** @var list<string> Hinweise der letzten Kopie (z. B. fehlende Bilddatei) */
+    public array $letzteHinweise = [];
+
+    private function kopiereKonzeptBilder(FoodAlchemistConcept $original, FoodAlchemistConcept $kopie, Team $team): void
+    {
+        $media = app(FoodAlchemistMediaService::class);
+        if ($original->image_context_file_id !== null || trim((string) $original->image_path) !== '') {
+            $m = $media->kopiereBild($original->image_context_file_id, $original->image_path, $team, 'foodalchemist.concept', (int) $kopie->id, "foodalchemist/concept/{$kopie->id}");
+            $m !== null
+                ? $kopie->forceFill(['image_context_file_id' => $m['context_file_id'], 'image_path' => $m['path']])->save()
+                : $this->letzteHinweise[] = 'Die Bilddatei fehlt — die Kopie hat kein Titelbild.';
+        }
+        foreach ($original->images()->get() as $bild) {
+            $m = $media->kopiereBild($bild->context_file_id, $bild->path, $team, 'foodalchemist.concept', (int) $kopie->id, "foodalchemist/concept/{$kopie->id}/gallery");
+            if ($m === null) {
+                $this->letzteHinweise[] = 'Eine Galerie-Bilddatei fehlt — die Kopie hat dieses Bild nicht.';
+
+                continue;
+            }
+            $bild->replicate(['uuid'])->forceFill(['concept_id' => $kopie->id, 'team_id' => $team->id, 'context_file_id' => $m['context_file_id'], 'path' => $m['path']])->save();
+        }
     }
 
     /** Hinweis an der Kopie: hat sich das Original seit dem Kopieren geändert? null = keine Kopie / Original weg. */

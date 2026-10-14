@@ -25,7 +25,7 @@
                     @php $v = $m['vorschau']; $artLabel = ['recipe' => 'Rezept', 'paket' => 'Paket', 'concept' => 'Konzept']; @endphp
                     <div class="flex flex-col gap-2 rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] px-3 py-2" data-abos-vorschau-mandant>
                         <div class="font-medium">{{ $m['name'] }}</div>
-                        @if($v['genutzt'] === [] && $v['mitkopiert'] === [] && $v['verschwindet'] === [])
+                        @if($v['genutzt'] === [] && $v['mitkopiert'] === [] && $v['verschwindet'] === [] && empty($v['bleibt']))
                             <p class="{{ $leise }}">Keine Wirkung: Die Rezepte bleiben über ein anderes Abo verfügbar.</p>
                         @endif
                         @if($v['genutzt'] !== [])
@@ -40,6 +40,12 @@
                             <div data-abos-vorschau-mitkopiert>
                                 <x-fa::badge tone="info">Bestandteile, werden mitkopiert</x-fa::badge>
                                 <ul class="mt-1 text-[length:var(--fa-text-sm)]">@foreach($v['mitkopiert'] as $r)<li>{{ $artLabel[$r['typ'] ?? 'recipe'] ?? 'Rezept' }}: {{ $r['name'] }}</li>@endforeach</ul>
+                            </div>
+                        @endif
+                        @if(! empty($v['bleibt']))
+                            <div data-abos-vorschau-bleibt>
+                                <x-fa::badge tone="ok">Bleibt über ein anderes Abo, keine Kopie</x-fa::badge>
+                                <ul class="mt-1 text-[length:var(--fa-text-sm)]">@foreach($v['bleibt'] as $r)<li>{{ $artLabel[$r['typ'] ?? 'recipe'] ?? 'Rezept' }}: {{ $r['name'] }} <span class="{{ $leise }}">(über {{ implode(', ', $r['via'] ?: ['ein anderes Abo']) }})</span></li>@endforeach</ul>
                             </div>
                         @endif
                         @if($v['verschwindet'] !== [])

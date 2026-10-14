@@ -1014,6 +1014,18 @@ class RecipeRecomputeService
             $sub = $this->subKosten[(int) $z->referenced_recipe_id] ?? ['per_kg' => null, 'basis' => null];
             $pSub = $sub['per_kg'] !== null ? $sub['per_kg'] / 1000 : null;
             $bSub = $pSub !== null ? ($sub['basis'] ?? EkPriceBasis::Unknown) : null;
+        } elseif ($z->referenced_recipe_id !== null && $z->referencedRecipe?->ist_fassung) {
+            // Spec 82 PR 6b (Lisa): eine Abo-FASSUNG als Zutat eines EIGENEN Rezepts trägt per Leck-Sperre kein ek_per_kg_eur (NULL) — der Sub-Preis kommt aus der
+            // Kostenschicht des Besitzer-Teams der Zeile (KostenCacheService), nicht aus der Rezept-Spalte. Unvollständig = kein Sub-Preis (Zutat unbepreist).
+            $team = $this->recomputeTeam ?? Team::find($z->recipe?->team_id);
+            if ($team !== null) {
+                $k = app(KostenCacheService::class)->fuer($z->referencedRecipe, $team);
+                $pSub = $k['vollstaendig'] && $k['ek_per_kg'] !== null ? ((float) $k['ek_per_kg']) / 1000 : null;
+                $bSub = $pSub !== null ? (EkPriceBasis::tryFrom((string) ($k['basis'] ?? '')) ?? EkPriceBasis::Unknown) : null;
+            } else {
+                $pSub = null;
+                $bSub = null;
+            }
         }
 
         if ($z->unit?->dimension === 'count') {                 // T3 Zeile count
