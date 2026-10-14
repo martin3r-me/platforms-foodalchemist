@@ -81,6 +81,9 @@ class DetailPanel extends Component
         // Ebene 2: mit Brille der €/Gast je Edition live gegen den Betrieb (preisCockpit), sonst Cache.
         $outlet = app(\Platform\FoodAlchemist\Services\ActiveOutletContext::class)->current($this->team());
         $conceptSlots = $format !== null ? $format->slots->where('type', 'concept') : collect();
+        if ($outlet !== null) {
+            app(\Platform\FoodAlchemist\Services\ConceptPreisService::class)->vorwaermen($conceptSlots->pluck('concept_id')->filter());   // EINE Abfrage für die Liste
+        }
         $vks = $conceptSlots
             ->map(function ($s) use ($outlet) {
                 $c = $s->concept;
@@ -93,6 +96,7 @@ class DetailPanel extends Component
             })
             ->filter(fn ($v) => $v !== null && $v > 0)
             ->values();
+        app(\Platform\FoodAlchemist\Services\ConceptPreisService::class)->vergessen();
         $cockpit = [
             'n_editionen' => $conceptSlots->count(),
             // Nur Anzeige (Offene Punkte im Detail): Editionen, für die kein Preis vorliegt.

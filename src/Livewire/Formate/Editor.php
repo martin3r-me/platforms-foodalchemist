@@ -588,9 +588,13 @@ class Editor extends Component
         $kalkZeilen = collect();
         $kalkSumme = ['n' => 0, 'min' => null, 'max' => null, 'avg' => null, 'avg_w' => null];
         if ($this->id !== null && $this->tab === 'kalkulation' && $format !== null) {
-            $kalkZeilen = $format->slots()->where('type', 'concept')
+            $kalkSlots = $format->slots()->where('type', 'concept')
                 ->with(['concept:id,name,consumer_name,price_per_person_cache,ek_per_person_cache'])
-                ->orderBy('position')->get()
+                ->orderBy('position')->get();
+            if ($outlet !== null) {
+                app(\Platform\FoodAlchemist\Services\ConceptPreisService::class)->vorwaermen($kalkSlots->pluck('concept_id')->filter());   // EINE Abfrage für die Liste
+            }
+            $kalkZeilen = $kalkSlots
                 ->map(function ($s) use ($outlet) {
                     $c = $s->concept;
                     if ($c === null) {
@@ -613,6 +617,7 @@ class Editor extends Component
                         'w' => ($vk !== null && $vk > 0 && $ek !== null) ? round($ek / $vk * 100, 1) : null,
                     ];
                 })->values();
+            app(\Platform\FoodAlchemist\Services\ConceptPreisService::class)->vergessen();
             $vks = $kalkZeilen->pluck('vk')->filter(fn ($v) => $v !== null && $v > 0)->values();
             $ws = $kalkZeilen->pluck('w')->filter(fn ($v) => $v !== null)->values();
             $kalkSumme = [

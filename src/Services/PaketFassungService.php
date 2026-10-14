@@ -81,18 +81,39 @@ class PaketFassungService
             return ['fassung_id' => (int) $vorher->id, 'neu' => false, 'fassung_nr' => (int) $vorher->fassung_nr, 'hinweise' => $hinweise];
         }
 
-        $fassung = DB::transaction(function () use ($paket, $gerichte, $rezeptFassung, $hash, $notiz, $actor) {
+        $fassung = DB::transaction(function () use ($paket, $gerichte, $rezeptFassung, $hash, $notiz, $actor, $vorher) {
             // Nummer über ALLE Fassungen der Familie, auch soft-gelöschte (wie beim Rezept)
             $nr = (int) FoodAlchemistPaket::mitFassungen()->withTrashed()->where('fassung_von_id', $paket->id)->where('ist_fassung', true)->max('fassung_nr') + 1;
 
-            return $this->kopiere($paket, $gerichte, $rezeptFassung, $nr, $hash, $notiz, $actor);
+            $neu = $this->kopiere($paket, $gerichte, $rezeptFassung, $nr, $hash, $notiz, $actor);
+            $this->markiereAllergenAenderung($neu, $vorher);
+
+            return $neu;
         });
 
         $this->abos->neuBerechnenAlle();   // Bibliothek der Abonnenten zieht auf die neueste Fassung nach
         $this->protokoll->schreibe('paket_fassung_veroeffentlicht', ['paket_id' => $paket->id, 'fassung_id' => $fassung->id,
             'fassung_nr' => (int) $fassung->fassung_nr, 'hinweise' => $hinweise, 'notiz' => $notiz], $actor, $fassung);
 
+        try {   // Signale und Folgen: nie ein Grund, die Veröffentlichung scheitern zu lassen
+            app(FassungSignalService::class)->nachBausteinVeroeffentlichung('paket', [(int) $fassung->id]);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Paket-Fassung veröffentlicht, aber die Signal-Erzeugung ist fehlgeschlagen: '.$e->getMessage(), ['exception' => $e, 'paket_id' => $paket->id]);
+        }
+
         return ['fassung_id' => (int) $fassung->id, 'neu' => true, 'fassung_nr' => (int) $fassung->fassung_nr, 'hinweise' => $hinweise];
+    }
+
+    /** Allergen-/Zusatzstoff-Erbe über die Kette: Flag an der Fassung, wenn sich das Bild gegenüber der Vorgängerin ändert. */
+    private function markiereAllergenAenderung(FoodAlchemistPaket $fassung, ?FoodAlchemistPaket $vorher): void
+    {
+        if ($vorher === null) {
+            return;
+        }
+        $v = app(FassungsVergleich::class);
+        if ($v->bilderDiff($v->kettenBild('paket', (int) $vorher->id), $v->kettenBild('paket', (int) $fassung->id)) !== []) {
+            $fassung->forceFill(['fassung_allergen_geaendert' => true])->save();
+        }
     }
 
     /**

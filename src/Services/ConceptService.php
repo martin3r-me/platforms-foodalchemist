@@ -701,8 +701,14 @@ class ConceptService
             ->get();
 
         $map = [];
-        foreach ($geladen as $c) {
-            $map[(int) $c->id] = round((float) $this->preisCockpit($c, $outlet)['price_per_person'], 2);
+        $preis = app(ConceptPreisService::class);
+        $preis->vorwaermen($geladen);   // EINE Abfrage für die ganze Liste statt einer je Konzept
+        try {
+            foreach ($geladen as $c) {
+                $map[(int) $c->id] = round((float) $this->preisCockpit($c, $outlet)['price_per_person'], 2);
+            }
+        } finally {
+            $preis->vergessen();
         }
 
         return $map;
