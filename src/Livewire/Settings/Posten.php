@@ -45,6 +45,9 @@ class Posten extends Component
 
     public string $standardTopfStueck = '';
 
+    /** Team-Vorgabe "Posten für Gerichte" (Pass): ID als String, leer = keine Vorgabe (Spec 83 B2). */
+    public string $gerichteStationId = '';
+
     public function mount(): void
     {
         $team = Auth::user()?->currentTeamRelation;
@@ -54,6 +57,32 @@ class Posten extends Component
         $s = app(TeamSettingsService::class)->for($team);
         $this->standardTopfKg = $s->default_batch_max_kg !== null ? (string) (float) $s->default_batch_max_kg : '';
         $this->standardTopfStueck = $s->default_batch_max_pieces !== null ? (string) (float) $s->default_batch_max_pieces : '';
+        $this->gerichteStationId = (string) (app(TeamSettingsService::class)->gerichtePostenId($team) ?? '');
+    }
+
+    /**
+     * Team-Vorgabe "Posten für Gerichte" speichern (Spec 83 B2): Gerichte gehen an diesen Posten (meist der Pass), wenn das Rezept keinen eigenen
+     * Standard-Posten trägt. Nur ein für das Team sichtbarer, aktiver Posten; leer löscht die Vorgabe. Unter-Teams erben sie vom Oberteam.
+     */
+    public function gerichtePostenSpeichern(): void
+    {
+        $this->fehler = null;
+        $this->meldung = null;
+
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null) {
+            $this->fehler = 'Kein Team im Zugriff.';
+
+            return;
+        }
+        $id = $this->gerichteStationId === '' ? null : (int) $this->gerichteStationId;
+        if ($id !== null && ! FoodAlchemistProductionStation::visibleToTeam($team)->whereKey($id)->where('is_inactive', false)->exists()) {
+            $this->fehler = 'Dieser Posten ist für dein Team nicht verfügbar.';
+
+            return;
+        }
+        app(TeamSettingsService::class)->update($team, ['gerichte_station_id' => $id]);
+        $this->meldung = $id === null ? 'Vorgabe für Gerichte entfernt.' : 'Posten für Gerichte gespeichert.';
     }
 
     /** Team-Standard-Topf-Deckel speichern — greift als Fallback, wenn Rezept/Posten keinen Deckel haben. */
@@ -126,6 +155,7 @@ class Posten extends Component
             'kapazitaet' => $posten->kapazitaet_min_pro_tag = $this->minuten($wert),
             'schicht' => $posten->schicht_minuten = $this->minuten($wert),                 // Stufe 3
             'batch_max_kg' => $posten->batch_max_kg = $this->zahl($wert),                    // Stufe 3 (Topf)
+            'ist_sammelposten' => $posten->ist_sammelposten = in_array($wert, ['1', 'true', 'on'], true),   // Spec 83 B3g: Pass = Sammelposten
             default => null,
         };
 
@@ -238,6 +268,8 @@ class Posten extends Component
                     ->orderBy('sort_order')->orderBy('name')->get()
                 : collect(),
             'eigenesTeamId' => $team?->id,
+            // Spec 83 B2: woher die Vorgabe "Posten für Gerichte" kommt (eigenes Team oder geerbt vom Oberteam)
+            'gerichteVorgabeGeerbt' => $team !== null && ($q = app(TeamSettingsService::class)->quelleTeamId($team, 'gerichte_station_id')) !== null && (int) $q !== (int) $team->id,
         ]);
     }
 }

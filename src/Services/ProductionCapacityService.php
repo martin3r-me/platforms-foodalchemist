@@ -69,12 +69,15 @@ class ProductionCapacityService
             $tag = Carbon::parse($r->plan_date)->toDateString();
             $sid = $r->station_id !== null ? (int) $r->station_id : null;
             $station = $sid !== null ? $posten->get($sid) : null;
-            $kapazitaet = $station?->kapazitaetAm(Carbon::parse($tag));
+            // Spec 83 B3g: ein Sammelposten (Pass) hat kein eigenes Personal — Kapazität und Überlast hängen an den beteiligten Posten.
+            $sammel = (bool) ($station?->ist_sammelposten ?? false);
+            $kapazitaet = $sammel ? null : $station?->kapazitaetAm(Carbon::parse($tag));
             $minuten = (int) $r->minuten;
 
             $ergebnis[$tag][] = [
                 'station_id' => $sid,
                 'station' => $sid === null ? 'Nicht zugeteilt' : ($station?->name ?? '— gelöschter Posten —'),
+                'ist_sammelposten' => $sammel,
                 'kapazitaet_min' => $kapazitaet,
                 'geplant_min' => $minuten,
                 'prozent' => $kapazitaet > 0 ? (int) round($minuten / $kapazitaet * 100) : null,

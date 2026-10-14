@@ -88,7 +88,7 @@
                         <tbody>
                             @forelse($zeilen as $z)
                                 @php
-                                    $behaelter = \Platform\FoodAlchemist\Services\BehaelterBedarfService::kurz($z['darreichung']['behaelter_bedarf'] ?? null);
+                                    $behaelter = \Platform\FoodAlchemist\Services\BehaelterBedarfService::kompakt($z['darreichung']['behaelter_bedarf'] ?? null);
                                 @endphp
                                 <tr class="{{ $z['ist_gestrichen'] ? 'opacity-60' : '' }}" wire:key="pz-{{ $z['id'] }}" data-produktion-zeile="{{ $z['id'] }}">
                                     <td>
@@ -150,7 +150,34 @@
                                         @endif
                                     </td>
                                     <td class="num">{{ $z['portionen'] ?? '–' }}</td>
-                                    <td class="whitespace-nowrap text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]" data-zeile-behaelter>{{ $behaelter ?? '–' }}</td>
+                                    {{-- Feste Spaltenbreite: nur die Summe in der Zelle, die volle Aufstellung je Komponente im Popover (details) --}}
+                                    <td class="w-44 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]" data-zeile-behaelter>
+                                        @if($behaelter === null)
+                                            –
+                                        @else
+                                            <details class="relative" data-zeile-behaelter-popover>
+                                                <summary class="flex w-44 cursor-pointer list-none items-center gap-1 truncate" title="Aufstellung je Komponente anzeigen" data-zeile-behaelter-kurz>
+                                                    <span class="truncate tabular-nums">{{ $behaelter['kurz'] }}</span>
+                                                    @if($behaelter['geschaetzt'] || $behaelter['luecken'] > 0)
+                                                        @svg('heroicon-m-information-circle', 'w-4 h-4 shrink-0 text-[var(--fa-warn)]')
+                                                    @endif
+                                                </summary>
+                                                <div class="absolute right-0 top-full z-30 mt-1 w-80 rounded-[var(--fa-radius-surface)] border border-[var(--fa-line)] bg-[var(--fa-surface)] p-3 text-left whitespace-normal shadow-lg" data-zeile-behaelter-detail>
+                                                    <p class="mb-1 font-medium text-[var(--fa-ink)]">Behälter je Komponente</p>
+                                                    <ul class="flex flex-col gap-1">
+                                                        @foreach($behaelter['zeilen'] as $teil)<li>{{ $teil }}</li>@endforeach
+                                                    </ul>
+                                                    @if($behaelter['geschaetzt'] || $behaelter['alternativen'] > 0 || $behaelter['luecken'] > 0)
+                                                        <p class="mt-2 text-[var(--fa-ink-3)]">
+                                                            @if($behaelter['geschaetzt'])Teils geschätzt. @endif
+                                                            @if($behaelter['alternativen'] > 0){{ $behaelter['alternativen'] }} {{ $behaelter['alternativen'] === 1 ? 'Alternative' : 'Alternativen' }} im Rezept. @endif
+                                                            @if($behaelter['luecken'] > 0){{ $behaelter['luecken'] }} {{ $behaelter['luecken'] === 1 ? 'Position' : 'Positionen' }} ohne berechenbaren Bedarf.@endif
+                                                        </p>
+                                                    @endif
+                                                </div>
+                                            </details>
+                                        @endif
+                                    </td>
                                     <td class="num">
                                         @if($z['arbeitszeit_min'] !== null)
                                             <x-fa::menge :value="$z['arbeitszeit_min']" unit="min" :decimals="0" />

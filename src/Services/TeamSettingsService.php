@@ -135,6 +135,8 @@ class TeamSettingsService
         // des Eltern-Teams. Die eigene Map gewinnt KOMPLETT, keine schlüsselweise Zusammenführung.
         'cooking_loss_defaults'  => true,
         'trimming_loss_defaults' => true,
+        // Spec 83 B2: Team-Vorgabe "Posten für Gerichte" (Pass): das Paket setzt sie am Oberteam, Unter-Teams erben sie.
+        'gerichte_station_id' => true,
     ];
 
     /**
@@ -346,6 +348,22 @@ class TeamSettingsService
         $settings->fill($attributes)->save();
 
         return $settings;
+    }
+
+    /**
+     * Spec 83 B2: Team-Vorgabe "Posten für Gerichte" (Pass): der Posten, den Auftragszeilen von Gerichten bekommen, wenn das Rezept keinen
+     * eigenen Standard-Posten trägt. Org-vererbt (Unter-Teams erben vom Oberteam). Gibt nur einen Posten zurück, der für das Team sichtbar
+     * (eigenes Team + Kette) und aktiv ist; alles andere gilt als "nicht gesetzt".
+     */
+    public function gerichtePostenId(Team $team): ?int
+    {
+        $id = (int) ($this->rohWert($team, 'gerichte_station_id') ?? 0);
+        if ($id <= 0) {
+            return null;
+        }
+
+        return \Platform\FoodAlchemist\Models\FoodAlchemistProductionStation::visibleToTeam($team)
+            ->whereKey($id)->where('is_inactive', false)->exists() ? $id : null;
     }
 
     /** Team-lokale Standard-Preisklasse; geerbte und globale Klassen duerfen referenziert werden. */

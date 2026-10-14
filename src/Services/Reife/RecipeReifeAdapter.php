@@ -121,14 +121,16 @@ class RecipeReifeAdapter implements ReifeAdapter
             $erfuellt[] = 'lagerung';
         }
 
-        if (! $istVk) {
-            if ($r->default_station_id === null) {
-                $luecken[] = $this->luecke('default_station_id', 'basisrezept', 'wichtig',
-                    'Kein Default-Posten für die Herstellung zugeordnet. Verfügbare IDs liefert production_stations.GET.',
-                    'foodalchemist.recipes.PUT');
-            } else {
-                $erfuellt[] = 'default_station_id';
-            }
+        // Spec 83 B2: der Posten kommt aus dem Rezept in die Auftragszeile (ProductionOrderService::recomputeOrder) — das gilt für Basisrezepte UND
+        // Gerichte (auch das Gericht hat eine eigene Zeile im Auftrag). Ohne Posten bleibt die Zeile „Kein Posten".
+        // Gerichte gehen an den Pass: mit gesetzter Team-Vorgabe "Posten für Gerichte" ist die Lücke keine (die Zeile bekommt den Pass).
+        $gerichteVorgabe = $istVk && app(\Platform\FoodAlchemist\Services\TeamSettingsService::class)->gerichtePostenId($team) !== null;
+        if ($r->default_station_id === null && ! $gerichteVorgabe) {
+            $luecken[] = $this->luecke('default_station_id', $istVk ? 'gericht' : 'basisrezept', 'wichtig',
+                'Kein Default-Posten für die Herstellung zugeordnet. Verfügbare IDs liefert production_stations.GET.',
+                'foodalchemist.recipes.PUT');
+        } else {
+            $erfuellt[] = 'default_station_id';
         }
 
         // ── 3. Satelliten — was complete_coverage füllen würde ───────────────────────
@@ -257,6 +259,7 @@ class RecipeReifeAdapter implements ReifeAdapter
         }
 
         $aus[] = $aspekt('default_station_id', 'wichtig', $br, 'basisrezept');
+        $aus[] = $aspekt('default_station_id', 'wichtig', $br, 'gericht');   // Spec 83 B2: auch am Gericht (recipes.PUT gilt für beide Ebenen)
 
         // Nur am Gericht: die VK-Vorbedingungen (T2) und die Dichteklasse fuer den Behaelter.
         $aus[] = $aspekt('portion', 'blockiert', 'foodalchemist.recipe_darreichung.PUT', 'gericht');

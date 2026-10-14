@@ -7,7 +7,9 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Platform\Core\Models\Team;
 use Platform\Core\Models\User;
+use Platform\FoodAlchemist\Models\FoodAlchemistProductionStation;
 use Platform\FoodAlchemist\Models\FoodAlchemistTeamPaket;
+use Platform\FoodAlchemist\Models\FoodAlchemistTeamSetting;
 use Platform\FoodAlchemist\Support\MasterTeam;
 use Symfony\Component\Uid\UuidV7;
 
@@ -106,7 +108,7 @@ class PaketGrundeinstellungenService
     /**
      * Paket buchen (idempotent). Nur Plattform-Admin, nur am Kunden-Hauptteam, nur mit konfiguriertem Master-Team.
      *
-     * @return array{team_id:int, gebucht:bool, seit:?string, ergebnis:list<array{tabelle:string, neu:int, vorhanden:int, bereits:int}>, trends:string}
+     * @return array{team_id:int, gebucht:bool, seit:?string, ergebnis:list<array{tabelle:string, neu:int, vorhanden:int, bereits:int}>, pass:array{posten:string, vorgabe:string}, trends:string}
      */
     public function buchen(Team $mandant, ?User $user): array
     {
@@ -117,11 +119,13 @@ class PaketGrundeinstellungenService
             throw new \RuntimeException('Es ist kein Master-Team festgelegt (master_team.PUT) — ohne Master gibt es keine Vorlage zum Kopieren.');
         }
 
-        $ergebnis = DB::transaction(function () use ($mandant, $master) {
+        $pass = [];
+        $ergebnis = DB::transaction(function () use ($mandant, $master, &$pass) {
             $ergebnis = [];
             foreach (self::TABELLEN as $spec) {
                 $ergebnis[] = $this->kopiere($mandant, $spec, $master);
             }
+            $pass = $this->passUndVorgabe($mandant);
 
             return $ergebnis;
         });
@@ -133,9 +137,9 @@ class PaketGrundeinstellungenService
             ['gebucht_von' => $war ? null : $admin->id, 'gebucht_am' => now()]
         );
         $this->protokoll->schreibe($war ? 'paket_grundeinstellungen_nachgezogen' : 'paket_grundeinstellungen_gebucht',
-            ['team_id' => $mandant->id, 'team' => $mandant->name, 'ergebnis' => $ergebnis, 'trends' => $trends], $admin, $paket);
+            ['team_id' => $mandant->id, 'team' => $mandant->name, 'ergebnis' => $ergebnis, 'pass' => $pass, 'trends' => $trends], $admin, $paket);
 
-        return $this->status($mandant) + ['ergebnis' => $ergebnis, 'trends' => $trends];
+        return $this->status($mandant) + ['ergebnis' => $ergebnis, 'pass' => $pass, 'trends' => $trends];
     }
 
     /**
@@ -254,6 +258,34 @@ class PaketGrundeinstellungenService
         $id = $q->value('id');
 
         return $id === null ? null : (int) $id;
+    }
+
+    /**
+     * Gerichte gehen an den Pass (Spec 83 B2, Erweiterung): das Paket bringt einen Posten "Pass" mit, als SAMMELPOSTEN markiert (ohne eigenes Personal
+     * und eigene Kapazität; legt ihn an, wenn das Team keinen mit dem
+     * Kürzel `pass` hat; kommt er schon aus den Master-Vorlagen, gilt er als vorhanden) und setzt ihn als Team-Vorgabe "Posten für Gerichte",
+     * aber NUR wenn das Team noch keine Vorgabe hat (nie überschreiben).
+     *
+     * @return array{posten:string, vorgabe:string}
+     */
+    private function passUndVorgabe(Team $mandant): array
+    {
+        if (! Schema::hasTable('foodalchemist_production_stations') || ! Schema::hasColumn('foodalchemist_team_settings', 'gerichte_station_id')) {
+            return ['posten' => 'übersprungen', 'vorgabe' => 'übersprungen'];
+        }
+        $station = FoodAlchemistProductionStation::where('team_id', $mandant->id)->where('slug', 'pass')->first();
+        $neu = $station === null;
+        if ($neu) {
+            $station = FoodAlchemistProductionStation::create(['team_id' => $mandant->id, 'slug' => 'pass', 'name' => 'Pass', 'group_name' => 'Ausgabe', 'sort_order' => 900, 'ist_sammelposten' => true]);
+        }
+        $settings = FoodAlchemistTeamSetting::firstOrNew(['team_id' => $mandant->id]);
+        $gesetzt = empty($settings->gerichte_station_id);
+        if ($gesetzt) {
+            $settings->gerichte_station_id = $station->id;
+            $settings->save();
+        }
+
+        return ['posten' => $neu ? 'angelegt' : 'vorhanden', 'vorgabe' => $gesetzt ? 'gesetzt' : 'bereits gesetzt'];
     }
 
     /** Trend-Startbestand ist ein Repo-Seed (Spec 79), keine Master-Zeilen: derselbe idempotente Befehl, hier für den Mandanten. */

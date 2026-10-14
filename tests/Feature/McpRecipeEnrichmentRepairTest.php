@@ -215,6 +215,10 @@ it('Reife-Check weist fehlenden Posten und den richtigen Garverlust-Endpunkt aus
     $this->recipe->update(['default_station_id' => $station->id]);
     expect($adapter->messe($this->rootTeam, $this->recipe->id)['erfuellt'])->toContain('default_station_id');
     $this->recipe->update(['is_sales_recipe' => true, 'default_station_id' => null]);
+    // Spec 83 B2: auch das Gericht ohne Posten meldet die Lücke (Ebene Gericht) — außer eine Team-Vorgabe "Posten für Gerichte" (Pass) ist gesetzt.
+    $luecke = collect($adapter->messe($this->rootTeam, $this->recipe->id)['luecken'])->firstWhere('code', 'default_station_id');
+    expect($luecke['ebene'])->toBe('gericht');
+    \Platform\FoodAlchemist\Models\FoodAlchemistTeamSetting::updateOrCreate(['team_id' => $this->rootTeam->id], ['gerichte_station_id' => $station->id]);
     expect(array_column($adapter->messe($this->rootTeam, $this->recipe->id)['luecken'], 'code'))->not->toContain('default_station_id');
 });
 

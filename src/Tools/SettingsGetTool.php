@@ -56,6 +56,9 @@ class SettingsGetTool extends FoodAlchemistTool implements ToolContract, ToolMet
             // Koch-Vorgang (Fallback der Zeitrechnung, wenn Rezept/Posten keinen eigenen pflegen).
             // Effektiver Wert inkl. Code-Default (nie null).
             'default_topf_deckel_kg' => $svc->defaultTopfDeckelKg($team),
+            // Spec 83 B2: Team-Vorgabe "Posten für Gerichte" (Pass), org-vererbt; null = nicht gesetzt (oder Posten für das Team nicht nutzbar).
+            'gerichte_station_id' => $svc->gerichtePostenId($team),
+            'gerichte_station_id_von_team_id' => $svc->quelleTeamId($team, 'gerichte_station_id'),
             'default_topf_deckel_stueck' => $svc->defaultTopfDeckelStueck($team),
             'note' => 'Skalar-Config via team_settings.PUT. Vokabular/Taxonomie additiv/reversibel via vocab_*.POST/PUT/'
                 . 'TOGGLE/REORDER (nur eigene Team-Zeilen; globale/kanonische read-only; KEIN hartes DELETE — Entfernen = TOGGLE inaktiv).',

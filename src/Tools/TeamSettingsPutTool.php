@@ -89,6 +89,7 @@ class TeamSettingsPutTool extends FoodAlchemistTool implements ToolContract, Too
                         'default_batch_max_kg' => ['type' => 'number', 'description' => 'Standard-Topf-Deckel je Koch-Vorgang (kg).'],
                         'default_batch_max_pieces' => ['type' => 'number', 'description' => 'Standard-Topf-Deckel je Koch-Vorgang (Stück).'],
                         'default_markup_class_id' => ['type' => 'integer', 'description' => 'ID der Standard-Aufschlagsklasse (team-scoped geprüft).'],
+                'gerichte_station_id' => ['type' => ['integer', 'null'], 'description' => 'Posten für Gerichte (Pass): Auftragszeilen von Gerichten ohne Rezept-Posten bekommen ihn. ID aus production_stations.GET, für das Team sichtbar und aktiv; null löscht die Vorgabe.'],
                         'show_fallback_chain' => ['type' => 'boolean', 'description' => 'Ausweich-Kette (Lead-LA) anzeigen.'],
                         'trend_dataforseo_enabled' => ['type' => 'boolean', 'description' => 'Spec 79: wöchentliche Google-Trends-Messung über DataForSEO an/aus (kostet je Abfrage).'],
                         'trend_dataforseo_budget_usd' => ['type' => 'number', 'description' => 'Spec 79: Monatsbudget Google Trends in USD (Standard 5).'],
@@ -127,7 +128,7 @@ class TeamSettingsPutTool extends FoodAlchemistTool implements ToolContract, Too
             self::INT_KEYS,
             array_keys(self::ENUM_KEYS),
             self::LOSS_MAP_KEYS,
-            ['kitchen_type', 'default_markup_class_id'],
+            ['kitchen_type', 'default_markup_class_id', 'gerichte_station_id'],
         );
         $unbekannt = array_values(array_diff(array_keys($settings), $erlaubt));
         if ($unbekannt !== []) {
@@ -173,6 +174,17 @@ class TeamSettingsPutTool extends FoodAlchemistTool implements ToolContract, Too
                     $map[(string) $wg] = (float) $pct;
                 }
                 $clean[$key] = $map;
+            } elseif ($key === 'gerichte_station_id') {
+                if ($wert === null || $wert === '') {
+                    $clean[$key] = null;
+
+                    continue;
+                }
+                $id = (int) $wert;
+                if ($id <= 0 || ! \Platform\FoodAlchemist\Models\FoodAlchemistProductionStation::visibleToTeam($team)->whereKey($id)->where('is_inactive', false)->exists()) {
+                    return ToolResult::error('gerichte_station_id: Posten nicht sichtbar/aktiv im Team (IDs: production_stations.GET).', 'NOT_FOUND');
+                }
+                $clean[$key] = $id;
             } elseif ($key === 'default_markup_class_id') {
                 $id = (int) $wert;
                 if ($id <= 0) {

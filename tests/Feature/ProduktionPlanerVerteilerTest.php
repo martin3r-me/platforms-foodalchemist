@@ -98,7 +98,8 @@ it('rechnet die Produktionskosten aus dem Posten-Rollensatz', function () {
 it('zeigt den Vorschlag im Tagesplan und übernimmt ihn per Klick', function () {
     Livewire::test(Tagesplan::class, ['von' => '2026-08-05', 'tage' => 8])
         ->call('vorschlagen')
-        ->assertSet('vorschlag', fn ($v) => $v !== null && $v['aenderungen'] >= 2)
+        // Spec 83 B2: der Rezept-Posten steckt schon in der Zeile (Übernahme beim Erzeugen) — der Vorschlag glättet nur noch den Vorlauf.
+        ->assertSet('vorschlag', fn ($v) => $v !== null && $v['aenderungen'] >= 1)
         ->assertSeeHtml('data-tagesplan-vorschlag')
         ->assertSee('Brauner Fond')
         ->call('vorschlagUebernehmen')
