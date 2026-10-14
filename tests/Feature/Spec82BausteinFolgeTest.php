@@ -305,3 +305,28 @@ it('MCP: baustein_fassungen.UEBERNEHMEN_GET und _POST', function () {
     expect($ok->success)->toBeTrue((string) ($ok->error ?? ''))
         ->and(DB::table('foodalchemist_concept_slots')->where('id', $this->slotZeile)->value('package_id'))->toBe($p2->id);
 });
+
+it('Merker: nach einer Exception im Block ist der Listen-Merker leer (mitVorwaermen), das Queue-Ereignis leert ihn ebenfalls', function () {
+    $cs = app(ConceptService::class);
+    $c = $cs->create($this->master, ['name' => 'Merker-Konzept']);
+    $preis = app(ConceptPreisService::class);
+    $merker = fn () => (new \ReflectionClass(ConceptPreisService::class))->getStaticPropertyValue('vorgewaermt');
+
+    expect(fn () => $preis->mitVorwaermen([$c->id], function () use ($merker, $c) {
+        expect($merker())->toHaveKey($c->id);   // im Block steht er
+        throw new \RuntimeException('mitten in der Liste');
+    }))->toThrow(\RuntimeException::class, 'mitten in der Liste');
+    expect($merker())->toBe([]);
+
+    // Ereignis-Weg (queue:work): ein hängengebliebener Merker verschwindet beim nächsten Job
+    $preis->vorwaermen([$c->id]);
+    expect($merker())->not->toBe([]);
+    event(new \Illuminate\Queue\Events\JobProcessing('sync', new class extends \Illuminate\Queue\Jobs\Job {
+        public function getJobId() { return '1'; }
+        public function getRawBody() { return '{}'; }
+        public function attempts() { return 1; }
+        public function release($delay = 0) {}
+        public function delete() {}
+    }));
+    expect($merker())->toBe([]);
+});

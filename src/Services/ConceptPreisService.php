@@ -56,6 +56,26 @@ class ConceptPreisService
         }
     }
 
+    /**
+     * Warm-up, Block, Aufräumen — das Aufräumen steht im finally, ein Fehler im Block lässt keinen Merker im Prozess zurück
+     * (queue:work, Octane). Der Weg für alle Aufrufer außer dem Dienst selbst.
+     *
+     * @template T
+     *
+     * @param  iterable<int|FoodAlchemistConcept>  $konzepte
+     * @param  callable():T  $block
+     * @return T
+     */
+    public function mitVorwaermen(iterable $konzepte, callable $block): mixed
+    {
+        $this->vorwaermen($konzepte);
+        try {
+            return $block();
+        } finally {
+            $this->vergessen();
+        }
+    }
+
     public function vergessen(): void
     {
         self::$vorgewaermt = [];

@@ -486,11 +486,13 @@ class FoodAlchemistServiceProvider extends ServiceProvider
             function () {
                 \Platform\FoodAlchemist\Support\StammPaket::flush();
                 \Platform\FoodAlchemist\Support\TeamSperre::flush();
+                app(\Platform\FoodAlchemist\Services\ConceptPreisService::class)->vergessen();   // Listen-Merker der Fassungs-Pfad-Prüfung (PR 5)
             },
         );
         $this->app->terminating(function () {
             \Platform\FoodAlchemist\Support\StammPaket::flush();
             \Platform\FoodAlchemist\Support\TeamSperre::flush();
+            app(\Platform\FoodAlchemist\Services\ConceptPreisService::class)->vergessen();
         });
 
         /**

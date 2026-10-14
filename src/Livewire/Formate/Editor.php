@@ -591,10 +591,8 @@ class Editor extends Component
             $kalkSlots = $format->slots()->where('type', 'concept')
                 ->with(['concept:id,name,consumer_name,price_per_person_cache,ek_per_person_cache'])
                 ->orderBy('position')->get();
-            if ($outlet !== null) {
-                app(\Platform\FoodAlchemist\Services\ConceptPreisService::class)->vorwaermen($kalkSlots->pluck('concept_id')->filter());   // EINE Abfrage für die Liste
-            }
-            $kalkZeilen = $kalkSlots
+            // EINE Abfrage für die Liste; Aufräumen im finally (mitVorwaermen), auch wenn im Block etwas wirft
+            $kalkZeilen = app(\Platform\FoodAlchemist\Services\ConceptPreisService::class)->mitVorwaermen($outlet !== null ? $kalkSlots->pluck('concept_id')->filter() : [], fn () => $kalkSlots
                 ->map(function ($s) use ($outlet) {
                     $c = $s->concept;
                     if ($c === null) {
@@ -616,8 +614,7 @@ class Editor extends Component
                         'ek' => $ek,
                         'w' => ($vk !== null && $vk > 0 && $ek !== null) ? round($ek / $vk * 100, 1) : null,
                     ];
-                })->values();
-            app(\Platform\FoodAlchemist\Services\ConceptPreisService::class)->vergessen();
+                })->values());
             $vks = $kalkZeilen->pluck('vk')->filter(fn ($v) => $v !== null && $v > 0)->values();
             $ws = $kalkZeilen->pluck('w')->filter(fn ($v) => $v !== null)->values();
             $kalkSumme = [
