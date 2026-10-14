@@ -90,6 +90,7 @@ final class RegelPromptBlock
         // Lesen Dossier GP §7+§8 nur wegen der Grammatur-Regeln (§7); die §8-Pflichtangaben prüfen den GP-NAMEN — diese
         // Prompts schätzen Stückgewicht bzw. Zähleinheiten und benennen nichts (13.10., Spec 81 E).
         'gp.piece_default_g' => 'Schätzt nur das Stückgewicht; die §8-Pflichtangaben betreffen den GP-Namen, den dieser Prompt nicht schreibt.',
+        'anker.wissen_auslese' => 'Liest Bedarf/Lieferung eines Ankers aus Dossiers; benennt weder GP noch Rezept, die Regel-Tabelle hat dafür nichts zu sagen.',
         'gp.zaehl_einheiten' => 'Schätzt nur Zähleinheiten; die §8-Pflichtangaben betreffen den GP-Namen, den dieser Prompt nicht schreibt.',
     ];
 

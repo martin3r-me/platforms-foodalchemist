@@ -5,6 +5,7 @@ namespace Platform\FoodAlchemist\Console;
 use Illuminate\Console\Command;
 use Platform\FoodAlchemist\Services\Pairing\AnkerNaehrwerte;
 use Platform\FoodAlchemist\Services\Pairing\AnkerVarianten;
+use Platform\FoodAlchemist\Services\Pairing\AnkerWissenAuslese;
 use Platform\FoodAlchemist\Services\Pairing\AnkerWissenImport;
 use Platform\FoodAlchemist\Services\Pairing\KategorieRegeln;
 use Platform\FoodAlchemist\Services\Pairing\KontrastAbleitung;
@@ -17,9 +18,10 @@ use Platform\FoodAlchemist\Services\Pairing\KontrastAbleitung;
  *   php artisan foodalchemist:anker-wissen kategorie            Lieferseite Träger/Frische/Aromatik/Röstaroma aus Kategorie + Verfahren
  *   php artisan foodalchemist:anker-wissen naehrwert            Lieferseite Salz/Süße/Fett aus den Nährwerten der Kern-GPs
  *   php artisan foodalchemist:anker-wissen intensitaet          Startwerte der Aroma-Intensität je Kategorie (nur leere)
+ *   php artisan foodalchemist:anker-wissen auslesen --team=ID   Dossiers per KI lesen → Profile als Entwurf (Prompt anker.wissen_auslese)
  *   php artisan foodalchemist:anker-wissen kontrast             Kontrast-Kanten aus Bedarf × Eigenschaft neu bauen
  *
- * Reihenfolge bei einem Neuaufbau: varianten → import → kategorie → naehrwert → intensitaet → kontrast
+ * Reihenfolge bei einem Neuaufbau: varianten → import (oder auslesen) → kategorie → naehrwert → intensitaet → kontrast
  * (danach `foodalchemist:rezept-profile --alle`, damit die Profile die neuen Eigenschaften tragen).
  *
  * Default ist Dry-Run für `varianten`; `import` und `kontrast` schreiben nur mit --apply.
@@ -27,8 +29,12 @@ use Platform\FoodAlchemist\Services\Pairing\KontrastAbleitung;
 class AnkerWissenCommand extends Command
 {
     protected $signature = 'foodalchemist:anker-wissen
-        {schritt : varianten | import | kategorie | naehrwert | intensitaet | kontrast}
+        {schritt : varianten | import | auslesen | kategorie | naehrwert | intensitaet | kontrast}
         {--pfad= : Ordner mit Profil-JSON-Dateien (import)}
+        {--team= : Team-ID für den KI-Zugang (auslesen)}
+        {--anker= : nur diesen Anker (Anker-ID, auslesen)}
+        {--limit=0 : höchstens so viele Anker (0 = alle, auslesen)}
+        {--sleep=0 : Sekunden Pause zwischen KI-Aufrufen (auslesen)}
         {--apply : wirklich schreiben}';
 
     protected $description = 'Spec 60: Anker-Varianten ableiten, Dossier-Wissen importieren, Kontrast-Kanten bauen';
@@ -40,6 +46,7 @@ class AnkerWissenCommand extends Command
         return match ((string) $this->argument('schritt')) {
             'varianten' => $this->varianten($apply),
             'import' => $this->import($apply),
+            'auslesen' => $this->auslesen($apply),
             'kategorie' => $this->regel($apply, fn () => app(KategorieRegeln::class)->eigenschaften(), 'Eigenschaften aus Kategorie/Verfahren'),
             'naehrwert' => $this->regel($apply, function () {
                 $r = app(AnkerNaehrwerte::class)->ableiten();
@@ -48,7 +55,7 @@ class AnkerWissenCommand extends Command
             }, 'Salz/Süße/Fett aus Nährwerten'),
             'intensitaet' => $this->regel($apply, fn () => app(KategorieRegeln::class)->intensitaet(), 'Anker mit Startwert Aroma-Intensität'),
             'kontrast' => $this->kontrast($apply),
-            default => $this->fehler('Schritt unbekannt. Erlaubt: varianten, import, kategorie, naehrwert, intensitaet, kontrast.'),
+            default => $this->fehler('Schritt unbekannt. Erlaubt: varianten, import, auslesen, kategorie, naehrwert, intensitaet, kontrast.'),
         };
     }
 
@@ -91,6 +98,68 @@ class AnkerWissenCommand extends Command
         }
         $this->table(['Kennzahl', 'Wert'], collect($summe)->map(fn ($v, $k) => [$k, $v])->values()->all());
         $this->line('Danach: foodalchemist:anker-wissen kontrast --apply');
+
+        return self::SUCCESS;
+    }
+
+    /**
+     * Dossiers per KI lesen. Ohne --apply: nur Scope zählen (kein KI-Aufruf, keine Kosten).
+     * Mit --apply: je Anker lesen, absichern und als Entwurf übernehmen. Ein Ausfall bricht den Lauf nicht ab;
+     * der Anker bleibt im Scope und kommt beim nächsten Lauf wieder.
+     */
+    private function auslesen(bool $apply): int
+    {
+        $svc = app(AnkerWissenAuslese::class);
+        $kandidaten = $svc->kandidaten($this->option('anker') !== null ? (int) $this->option('anker') : null, (int) $this->option('limit'));
+        $this->info(($apply ? 'LESE' : 'DRY-RUN').' — '.$kandidaten->count().' Anker ohne Dossier-Wissen');
+        if (! $apply) {
+            $this->line('Beispiele: '.$kandidaten->take(8)->pluck('name')->implode(', '));
+            $this->line('→ Mit --team=ID --apply lesen (KI-Aufrufe, Kosten über das Team-Budget).');
+
+            return self::SUCCESS;
+        }
+        $team = (int) $this->option('team') > 0 ? \Platform\Core\Models\Team::find((int) $this->option('team')) : null;
+        $nutzer = $team?->users()->first();
+        if ($team === null || $nutzer === null) {
+            return $this->fehler('--team=<id> mit mindestens einem Nutzer ist Pflicht (KI-Gateway braucht Team-Kontext und Kill-Switch).');
+        }
+        \Illuminate\Support\Facades\Auth::login($nutzer);
+
+        $summe = ['gelesen' => 0, 'leer' => 0, 'fehler' => 0, 'bedarfe' => 0, 'verworfen' => 0, 'eigenschaften' => 0, 'komponenten' => 0, 'kombinationen' => 0, 'konflikte' => 0, 'offen' => 0];
+        $bar = $this->output->createProgressBar($kandidaten->count());
+        foreach ($kandidaten as $k) {
+            try {
+                $r = $svc->lese((int) $k->id, true);
+            } catch (\Throwable $e) {
+                $summe['fehler']++;
+                $this->newLine();
+                $this->warn("{$k->slug}: ".mb_substr($e->getMessage(), 0, 140));
+                if ($e instanceof \Platform\FoodAlchemist\Exceptions\KiBudgetErschoepftException
+                    || $e instanceof \Platform\FoodAlchemist\Exceptions\KiDeaktiviertException) {
+                    break;   // jeder weitere Aufruf scheitert gleich — Lauf sauber beenden
+                }
+                $bar->advance();
+
+                continue;
+            }
+            if ($r['importiert'] === null || ($r['importiert']['status'] ?? '') !== 'ok') {
+                $summe['leer']++;
+            } else {
+                $summe['gelesen']++;
+                foreach (['bedarfe', 'eigenschaften', 'komponenten', 'kombinationen', 'konflikte', 'offen'] as $f) {
+                    $summe[$f] += $r['importiert'][$f];
+                }
+            }
+            $summe['verworfen'] += $r['verworfen'];
+            $bar->advance();
+            if ((int) $this->option('sleep') > 0) {
+                sleep((int) $this->option('sleep'));
+            }
+        }
+        $bar->finish();
+        $this->newLine(2);
+        $this->table(['Kennzahl', 'Wert'], collect($summe)->map(fn ($v, $k) => [$k, $v])->values()->all());
+        $this->line('verworfen = Bedarfe ohne Beleg im Dossier. Danach: foodalchemist:anker-wissen kontrast --apply');
 
         return self::SUCCESS;
     }
