@@ -89,7 +89,7 @@ class TeamSettingsPutTool extends FoodAlchemistTool implements ToolContract, Too
                         'default_batch_max_kg' => ['type' => 'number', 'description' => 'Standard-Topf-Deckel je Koch-Vorgang (kg).'],
                         'default_batch_max_pieces' => ['type' => 'number', 'description' => 'Standard-Topf-Deckel je Koch-Vorgang (Stück).'],
                         'default_markup_class_id' => ['type' => 'integer', 'description' => 'ID der Standard-Aufschlagsklasse (team-scoped geprüft).'],
-                'gerichte_station_id' => ['type' => ['integer', 'null'], 'description' => 'Posten für Gerichte (Pass): Auftragszeilen von Gerichten ohne Rezept-Posten bekommen ihn. ID aus production_stations.GET, für das Team sichtbar und aktiv; null löscht die Vorgabe.'],
+                'gerichte_station_id' => ['type' => 'integer', 'description' => 'Posten für Gerichte (Pass): Auftragszeilen von Gerichten ohne Rezept-Posten bekommen ihn. ID aus production_stations.GET, für das Team sichtbar und aktiv. 0 (oder null) löscht die Vorgabe. Nur einfacher Typ im Schema: der Core-Executor kennt keine Union-Typen (Spec 83 L2).'],
                         'show_fallback_chain' => ['type' => 'boolean', 'description' => 'Ausweich-Kette (Lead-LA) anzeigen.'],
                         'trend_dataforseo_enabled' => ['type' => 'boolean', 'description' => 'Spec 79: wöchentliche Google-Trends-Messung über DataForSEO an/aus (kostet je Abfrage).'],
                         'trend_dataforseo_budget_usd' => ['type' => 'number', 'description' => 'Spec 79: Monatsbudget Google Trends in USD (Standard 5).'],
@@ -175,7 +175,7 @@ class TeamSettingsPutTool extends FoodAlchemistTool implements ToolContract, Too
                 }
                 $clean[$key] = $map;
             } elseif ($key === 'gerichte_station_id') {
-                if ($wert === null || $wert === '') {
+                if ($wert === null || $wert === '' || (is_numeric($wert) && (int) $wert === 0)) {   // null, '' oder 0 löscht die Vorgabe
                     $clean[$key] = null;
 
                     continue;
