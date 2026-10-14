@@ -6,8 +6,8 @@
         @if($fehler)<x-fa::notice tone="crit" data-master-team-fehler>{{ $fehler }}</x-fa::notice>@endif
         @if($meldung)<x-fa::notice tone="ok" data-master-team-meldung>{{ $meldung }}</x-fa::notice>@endif
 
-        <x-fa::section title="Master-Team" icon="heroicon-o-star" data-master-team-sektion
-            description="Der eine Kurator der Plattform: sieht das Stamm-Paket immer, pflegt den globalen Bestand und die Master-Bibliothek. Ein Wechsel ändert die Sichtbarkeit aller Abos.">
+        <x-fa::section variant="plain" data-master-team-sektion>
+            <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)] max-w-[65ch]">Der eine Kurator der Plattform: sieht das Stamm-Paket immer, pflegt den globalen Bestand und die Master-Bibliothek. Ein Wechsel ändert die Sichtbarkeit aller Abos.</p>
             <p class="text-[length:var(--fa-text-md)] text-[var(--fa-ink)]" data-master-team-aktuell>
                 @if($master['team_id'])
                     Aktuell: <strong>{{ $master['name'] ?? ('Team #'.$master['team_id']) }}</strong>

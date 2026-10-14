@@ -6,8 +6,8 @@
         @if($fehler)<x-fa::notice tone="crit" data-mandant-beenden-fehler>{{ $fehler }}</x-fa::notice>@endif
         @if($meldung)<x-fa::notice tone="ok" data-mandant-beenden-meldung>{{ $meldung }}</x-fa::notice>@endif
 
-        <x-fa::section title="Mandant beenden" icon="heroicon-o-lock-closed"
-            description="Reihenfolge: Abos kündigen, Stamm-Paket abbestellen, Datenexport, Bereiche ausschalten, Team sperren. Gesperrt heißt: kein Zugriff mehr außer dem Export-Download. Rückgängig machbar. Die Daten werden nicht gelöscht.">
+        <x-fa::section variant="plain">
+            <p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)] max-w-[65ch]">Reihenfolge: Abos kündigen, Stamm-Paket abbestellen, Datenexport, Bereiche ausschalten, Team sperren. Gesperrt heißt: kein Zugriff mehr außer dem Export-Download. Rückgängig machbar. Die Daten werden nicht gelöscht.</p>
             @if($mandanten === [])
                 <x-fa::empty compact icon="heroicon-o-building-office" title="Keine Mandanten">Es gibt noch kein Haupt-Team neben dem Master-Team.</x-fa::empty>
             @else
@@ -18,9 +18,11 @@
                         @foreach($mandanten as $m)
                             <tr wire:key="mb-{{ $m['team_id'] }}" data-mandant-beenden-zeile="{{ $m['team_id'] }}">
                                 <td class="font-medium">{{ $m['name'] }}</td>
-                                <td class="whitespace-nowrap"><x-fa::badge tone="{{ $m['status'] === 'beendet' ? 'crit' : 'ok' }}">{{ $m['status'] === 'beendet' ? 'Beendet, gesperrt' : ucfirst($m['status']) }}</x-fa::badge></td>
+                                <td class="whitespace-nowrap">@if($m['ist_master'] ?? false)<span class="text-[var(--fa-ink-3)]">–</span>@else<x-fa::badge tone="{{ $m['status'] === 'beendet' ? 'crit' : 'ok' }}">{{ $m['status'] === 'beendet' ? 'Beendet, gesperrt' : ucfirst($m['status']) }}</x-fa::badge>@endif</td>
                                 <td class="text-right whitespace-nowrap">
-                                    @if($m['status'] === 'beendet')
+                                    @if($m['ist_master'] ?? false)
+                                        <x-fa::badge tone="accent" data-mandant-master-hinweis>Master-Team</x-fa::badge>
+                                    @elseif($m['status'] === 'beendet')
                                         <x-fa::button size="sm" variant="ghost" icon="heroicon-o-lock-open" wire:click="entsperren({{ $m['team_id'] }})" data-mandant-entsperren>Entsperren</x-fa::button>
                                     @else
                                         <x-fa::button size="sm" variant="ghost" icon="heroicon-o-lock-closed" wire:click="vorschau({{ $m['team_id'] }})" data-mandant-beenden-vorschau>Beenden …</x-fa::button>
