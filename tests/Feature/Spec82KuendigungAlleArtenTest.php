@@ -243,8 +243,8 @@ it('D3 · über ein zweites aktives Abo weiter sichtbar: nichts wird kopiert, ni
     app(AboService::class)->abonnieren($this->master, $this->broich, $zweite, $this->kurator);
 
     $r = $this->svc->kuendigen($this->broich, $this->aboBroich->id, $this->broichChef, bestaetigt: true);
-    expect($r['kopien_je_art'])->toBe(['recipe' => [], 'paket' => [], 'concept' => []])
-        ->and($r['vorschau']['verschwindet_je_art'])->toBe(['recipe' => [], 'paket' => [], 'concept' => []])
+    expect($r['kopien_je_art'])->toBe(['recipe' => [], 'paket' => [], 'concept' => [], 'format' => []])
+        ->and($r['vorschau']['verschwindet_je_art'])->toBe(['recipe' => [], 'paket' => [], 'concept' => [], 'format' => []])
         ->and(slotPaketId($this))->toBe($this->p1->id);
 });
 
@@ -313,7 +313,7 @@ it('Rechte beim Zurückziehen: nur Master mit Freigeben; Löschsperre je Art, bi
     expect(fn () => app(PaketService::class)->delete($this->master, $this->paket->id))->toThrow(\RuntimeException::class, 'zurückziehen')
         ->and(fn () => app(ConceptService::class)->delete($this->master, $this->konzept->id))->toThrow(\RuntimeException::class, 'zurückziehen')
         ->and(fn () => app(ConceptService::class)->delete($this->master, $this->paketKonzept->id))->not->toThrow(\RuntimeException::class);   // nicht in einer Sammlung: löschbar
-    expect(fn () => app(FormatService::class)->delete($this->master, $format->id))->toThrow(\RuntimeException::class, 'Sammlung');
+    expect(fn () => app(FormatService::class)->delete($this->master, $format->id))->toThrow(\RuntimeException::class, 'zurückziehen');
 
     // beide Abos kündigen → die Sperre fällt
     $this->svc->kuendigen($this->master, $this->aboBroich->id, $this->kurator, true);

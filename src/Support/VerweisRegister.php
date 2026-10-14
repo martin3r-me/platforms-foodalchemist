@@ -27,6 +27,10 @@ final class VerweisRegister
         'angebot' => ['tab' => 'foodalchemist_offer_blocks', 'spalte' => 'concept_id', 'art' => 'concept', 'eltern' => 'foodalchemist_offers', 'fk' => 'offer_id', 'name' => 'name', 'wo' => 'Angebot',
             'kapitel' => ['foodalchemist_offer_chapters', 'chapter_id'], 'angebot' => true],
         'speiseplan_konzept' => ['tab' => 'foodalchemist_menu_plan_entries', 'spalte' => 'concept_id', 'art' => 'concept', 'eltern' => 'foodalchemist_menu_plans', 'fk' => 'menu_plan_id', 'name' => 'name', 'wo' => 'Speiseplan'],
+        // Format-Kapitel/-Rubriken (PR 7): die Zeile IST das Kapitel, das Elternobjekt hängt direkt daran (kein Zwischenkapitel)
+        'foodbook_kapitel_format' => ['tab' => 'foodalchemist_foodbook_chapters', 'spalte' => 'format_id', 'art' => 'format', 'eltern' => 'foodalchemist_foodbooks', 'fk' => 'foodbook_id', 'name' => 'label', 'wo' => 'Foodbook'],
+        'angebot_kapitel_format' => ['tab' => 'foodalchemist_offer_chapters', 'spalte' => 'format_id', 'art' => 'format', 'eltern' => 'foodalchemist_offers', 'fk' => 'offer_id', 'name' => 'name', 'wo' => 'Angebot', 'angebot' => true],
+        'speisekarte_rubrik_format' => ['tab' => 'foodalchemist_menu_card_sections', 'spalte' => 'format_id', 'art' => 'format', 'eltern' => 'foodalchemist_menu_cards', 'fk' => 'menu_card_id', 'name' => 'name', 'wo' => 'Speisekarte'],
         'speiseplan_paket' => ['tab' => 'foodalchemist_menu_plan_entries', 'spalte' => 'package_id', 'art' => 'paket', 'eltern' => 'foodalchemist_menu_plans', 'fk' => 'menu_plan_id', 'name' => 'name', 'wo' => 'Speiseplan'],
     ];
 

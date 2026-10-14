@@ -55,7 +55,7 @@ class FormatService
 
     public function detail(Team $team, int $id): ?FoodAlchemistFormat
     {
-        return FoodAlchemistFormat::visibleToTeam($team)
+        $format = FoodAlchemistFormat::visibleToTeam($team)
             ->with([
                 // F2e: der Editor/Detail liest den Aufbau ausschließlich aus den Slots (Concept-Referenzen
                 // + Struktur-Blöcke) — der Alt-Editionen-Eager-Load ist mit dem Cutover entfernt.
@@ -66,6 +66,18 @@ class FormatService
                 'servingForm:id,label', 'eventType:id,name', 'serviceMoments:id,name', 'seasons:id,name', 'targetGroups:id,name',
             ])
             ->find($id);
+        // Spec 82 PR 7: die Konzepte einer Format-FASSUNG sind Konzept-Fassungen ohne Master-Preise — Team-Preis darüberlegen (ConceptPreisService, nie gespeichert)
+        if ($format !== null && $format->ist_fassung) {
+            $preis = app(ConceptPreisService::class);
+            foreach ($format->slots as $slot) {
+                if ($slot->concept !== null) {
+                    $slot->setRelation('concept', \Platform\FoodAlchemist\Models\FoodAlchemistConcept::mitFassungen()->find($slot->concept->id));
+                    $preis->anwenden($slot->concept, $team);
+                }
+            }
+        }
+
+        return $format;
     }
 
     public function create(Team $team, array $in): FoodAlchemistFormat

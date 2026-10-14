@@ -27,8 +27,8 @@ class BausteinFassungUebernehmenPostTool extends FoodAlchemistTool implements To
     public function getSchema(): array
     {
         return ['type' => 'object', 'properties' => [
-            'art' => ['type' => 'string', 'enum' => ['concept', 'paket']],
-            'quelle' => ['type' => 'string', 'description' => 'konzept_paket | konzept_eingebettet | format | foodbook | speisekarte | angebot | speiseplan_konzept | speiseplan_paket'],
+            'art' => ['type' => 'string', 'enum' => ['concept', 'paket', 'format']],
+            'quelle' => ['type' => 'string', 'description' => 'konzept_paket | konzept_eingebettet | format | foodbook_kapitel_format | angebot_kapitel_format | speisekarte_rubrik_format | foodbook | speisekarte | angebot | speiseplan_konzept | speiseplan_paket'],
             'row_id' => ['type' => 'integer'],
             'bestaetigt' => ['type' => 'boolean', 'description' => 'false/weglassen = Vorschau; true = übernehmen (Pflicht bei geändertem Allergenbild).'],
         ], 'required' => ['art', 'quelle', 'row_id']];

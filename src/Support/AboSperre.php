@@ -27,8 +27,7 @@ final class AboSperre
     {
         $n = self::aktiveAbos($typ, $id);
         if ($n > 0) {
-            throw new \RuntimeException(sprintf('%s wird von %d Abo(s) genutzt und lässt sich nicht löschen — nur zurückziehen (Bereich „Abos“, Spec 82 §8)%s.', $was, $n,
-                $typ === 'format' ? ' bzw. aus der Sammlung nehmen' : ''));
+            throw new \RuntimeException(sprintf('%s wird von %d Abo(s) genutzt und lässt sich nicht löschen — nur zurückziehen (Bereich „Abos“, Spec 82 §8).', $was, $n));
         }
     }
 }
