@@ -5,6 +5,7 @@ namespace Platform\FoodAlchemist\Services;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistProductionStation;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
+use Platform\FoodAlchemist\Support\PostenAufloesung;
 
 /** Einheitliche Personenzeit für Produktion und Angebotskalkulation. */
 class ProductionTimeService
@@ -365,37 +366,36 @@ class ProductionTimeService
      * Spec 83 B3g/B3h (Entscheide Dominique 14.10.2026): Der Pass ist ein Sammelposten ohne eigenes Personal. Regenerieren und
      * Anrichten eines Gerichts belasten die BETEILIGTEN Posten anteilig nach ihren Komponenten.
      *
-     * Posten einer Komponente = Posten ihres Sub-Rezepts (`default_station_id`). Posten des Gerichts = `default_station_id` bzw. die
-     * Team-Vorgabe „Posten für Gerichte" ({@see TeamSettingsService::gerichtePostenId}). Das ist dieselbe Regel wie das Routing der
-     * Auftragszeilen (Spec 83 B2, ProductionOrderService::standardPosten): nur für das Team sichtbare, aktive Posten zählen, ein
-     * fremder Posten (z. B. am Master-Rezept im Abo) wird nicht übernommen. Komponenten ohne nutzbaren Posten gehen an den Posten
-     * des Gerichts, wenn der kein Sammelposten ist; sonst als eigene Position „nicht zugeteilt" (station_id null). Geraten wird nichts.
+     * Welcher Posten für das Gericht und für jedes Sub-Rezept gilt, entscheidet dieselbe Regel wie bei den Auftragszeilen
+     * ({@see PostenAufloesung::fuerRezepte}: Rezept-Posten sichtbar/aktiv > Paket-Kopie des Master-Postens > beim Gericht die
+     * Team-Vorgabe „Posten für Gerichte"). Komponenten ohne nutzbaren Posten (z. B. GP-Garnitur) gehen an den Posten des Gerichts,
+     * wenn der kein Sammelposten ist; sonst als eigene Position „nicht zugeteilt" (station_id null). Geraten wird nichts.
      *
      * @return list<array{station_id:?int, komponenten:int, anteil:float}>
      */
     public function postenAnteile(FoodAlchemistRecipe $gericht, Team $team): array
     {
         $zeilen = $this->tellerKomponentenZeilen($gericht);
-        $subPosten = FoodAlchemistRecipe::whereIn('id', array_filter(array_map(fn ($z) => $z->referenced_recipe_id, $zeilen)))
-            ->pluck('default_station_id', 'id');
-        $gerichtRoh = $gericht->default_station_id !== null ? (int) $gericht->default_station_id : null;
-        $vorgabe = $this->settings->gerichtePostenId($team);
-        $kandidaten = array_values(array_unique(array_filter([$gerichtRoh, $vorgabe, ...$subPosten->filter()->map(fn ($v) => (int) $v)->all()])));
-        // nutzbar = sichtbar + aktiv für das Team; Wert = ist Sammelposten (Pass ohne eigenes Personal)
-        $nutzbar = $kandidaten === [] ? collect() : FoodAlchemistProductionStation::visibleToTeam($team)->where('is_inactive', false)
-            ->whereIn('id', $kandidaten)->pluck('ist_sammelposten', 'id')->map(fn ($v) => (bool) $v);
-        $traegt = fn (?int $id) => $id !== null && $nutzbar->has($id) && ! $nutzbar[$id];   // nutzbar und kein Sammelposten
+        $subIds = array_values(array_unique(array_filter(array_map(fn ($z) => $z->referenced_recipe_id, $zeilen))));
+        $rezepte = FoodAlchemistRecipe::whereIn('id', [...$subIds, (int) $gericht->id])->get(['id', 'name', 'default_station_id', 'is_sales_recipe']);
+        if (! $rezepte->contains('id', $gericht->id)) {
+            $rezepte->push($gericht);                       // ungespeichertes/gefiltertes Gericht: trotzdem Vorgabe prüfen
+        }
+        $aufloesung = app(PostenAufloesung::class);
+        [$posten] = $aufloesung->fuerRezepte($team, $rezepte);
+        $sammel = $aufloesung->sammelposten(array_values($posten));
+        $traegt = fn (?int $id) => $id !== null && ! ($sammel[$id] ?? false);   // aufgelöst und kein Sammelposten
 
-        $gerichtPosten = $gerichtRoh !== null && $nutzbar->has($gerichtRoh) ? $gerichtRoh : $vorgabe;
+        $gerichtPosten = $posten[(int) $gericht->id] ?? null;
         $gerichtPosten = $traegt($gerichtPosten) ? $gerichtPosten : null;
         if ($zeilen === []) {
             return [['station_id' => $gerichtPosten, 'komponenten' => 0, 'anteil' => 1.0]];
         }
         $je = [];
         foreach ($zeilen as $z) {
-            $posten = $z->referenced_recipe_id !== null ? ($subPosten[$z->referenced_recipe_id] ?? null) : null;
-            $posten = $traegt($posten !== null ? (int) $posten : null) ? (int) $posten : $gerichtPosten;
-            $je[$posten ?? 0] = ($je[$posten ?? 0] ?? 0) + 1;
+            $p = $z->referenced_recipe_id !== null ? ($posten[(int) $z->referenced_recipe_id] ?? null) : null;
+            $p = $traegt($p) ? $p : $gerichtPosten;
+            $je[$p ?? 0] = ($je[$p ?? 0] ?? 0) + 1;
         }
         $n = count($zeilen);
         $raus = [];
