@@ -88,7 +88,7 @@
                                 @svg('heroicon-o-square-2-stack', 'w-4 h-4 text-[var(--fa-ink-3)]') {{ $istTemplate ? 'Vorlage aufheben' : 'Als Vorlage markieren' }}
                             </button>
                             {{-- Spec 82 §13 B6: Arbeitszeile des Master-Teams als Fassung an die Abonnenten geben --}}
-                            @if(\Platform\FoodAlchemist\Support\MasterTeam::istMaster(auth()->user()?->currentTeamRelation))
+                            @if(\Platform\FoodAlchemist\Support\FassungMenue::sichtbar(auth()->user()?->currentTeamRelation, (int) $recipeId))
                                 <button type="button" role="menuitem" x-on:click="offen = false; $dispatch('fassung-modal.oeffnen', { recipeId: {{ (int) $recipeId }} })" class="{{ $menuePunkt }}"
                                         title="Stand als neue Fassung an die Abonnenten geben" data-fassung-menue>
                                     @svg('heroicon-o-paper-airplane', 'w-4 h-4 text-[var(--fa-ink-3)]') Veröffentlichen …
