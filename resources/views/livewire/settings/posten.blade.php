@@ -24,6 +24,20 @@
         </div>
     </x-fa::section>
 
+    {{-- Spec 83 B2: Gerichte gehen an den Pass. Welcher Posten das ist, bestimmt das Team hier; ein Rezept-Posten geht vor. --}}
+    <x-fa::section title="Posten für Gerichte" data-posten-gerichte
+        description="Gerichte gehen an den Pass. Hier legst du fest, an welchen Posten die Zeile eines Gerichts im Auftrag geht, wenn das Rezept keinen eigenen Standard-Posten trägt. Ein Posten am Rezept geht immer vor, eine Zuteilung von Hand ebenso. Unter-Teams erben die Vorgabe.">
+        <div class="flex flex-wrap items-end gap-3">
+            <x-fa::field label="Posten für Gerichte" for="posten-gerichte" class="w-72 max-w-full">
+                <x-fa::select id="posten-gerichte" wire:model="gerichteStationId" placeholder="Keine Vorgabe" data-posten-gerichte-select>
+                    @foreach($posten->where('is_inactive', false) as $p)<option value="{{ $p->id }}">{{ $p->name }}{{ $p->ist_sammelposten ? ' (Sammelposten)' : '' }}</option>@endforeach
+                </x-fa::select>
+            </x-fa::field>
+            <x-fa::button variant="primary" wire:click="gerichtePostenSpeichern" data-posten-gerichte-speichern>Speichern</x-fa::button>
+            @if($gerichteVorgabeGeerbt)<x-fa::badge title="Die Vorgabe kommt vom Oberteam. Speicherst du hier, gilt für dieses Team eine eigene.">geerbt</x-fa::badge>@endif
+        </div>
+    </x-fa::section>
+
     <x-fa::section title="Posten"
         description="Ein Posten ist ein Arbeitsplatz, kein Mensch. Die Kapazität ist netto: produktiv verplanbare Minuten, Rüsten und Reinigen schon abgezogen. Sie ist freiwillig, ohne Zahl warnt der Posten nie. Zwei Kombidämpfer trägst du als einen Posten mit doppelter Kapazität ein.">
         <div class="overflow-x-auto -mx-4">
@@ -98,6 +112,12 @@
                             <tr wire:key="pbes-{{ $p->id }}" data-posten-besetzung="{{ $p->id }}">
                                 <td colspan="6" class="pt-1 pb-3">
                                     <div class="flex flex-wrap items-center gap-x-4 gap-y-2 pl-1 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]">
+                                        {{-- Spec 83 B3g: der Pass ist ein Sammelposten ohne eigenes Personal --}}
+                                        <label class="inline-flex items-center gap-1.5" title="Ein Sammelposten hat kein eigenes Personal: Kapazität und Last hängen an den beteiligten Posten, es gibt keine Überlast-Warnung für ihn. Gedacht für den Pass.">
+                                            <input type="checkbox" @checked($p->ist_sammelposten) wire:change="feldSetzen({{ $p->id }}, 'ist_sammelposten', $event.target.checked ? '1' : '0')" data-posten-sammelposten />
+                                            Sammelposten (Pass)
+                                        </label>
+                                        @if($p->ist_sammelposten)<span class="text-[var(--fa-ink-3)]" data-posten-sammelposten-hinweis>ohne eigenes Personal, die Last verteilt sich auf die beteiligten Posten</span>@endif
                                         @if($rollen->isEmpty())
                                             <x-fa::signal tone="warn">
                                                 Erst <a href="{{ route('foodalchemist.einstellungen', ['sektion' => 'rollen']) }}" class="underline">Rollen und Stundensätze</a> anlegen, dann hier besetzen.

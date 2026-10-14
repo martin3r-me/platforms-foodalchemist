@@ -54,7 +54,7 @@ it('★ buchen kopiert die Vorlagen ins Oberteam; zweites Buchen kopiert nichts 
         ->and(($this->zeilen)('concept_categories', $this->rootTeam))->toBe(2)
         ->and(($this->zeilen)('target_groups', $this->rootTeam))->toBe(1)
         ->and(($this->zeilen)('kitchen_roles', $this->rootTeam))->toBe(1)
-        ->and(($this->zeilen)('production_stations', $this->rootTeam))->toBe(1)
+        ->and(($this->zeilen)('production_stations', $this->rootTeam))->toBe(2)   // 1 kopierter Posten + der mitgebrachte Pass
         ->and(($this->zeilen)('menu_plan_chips', $this->rootTeam))->toBe(1)
         ->and(($this->zeilen)('presentation_designs', $this->rootTeam))->toBe(1);
 

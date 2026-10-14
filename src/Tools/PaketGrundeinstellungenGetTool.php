@@ -20,7 +20,7 @@ class PaketGrundeinstellungenGetTool extends WareneingangTool implements ToolCon
     public function getDescription(): string
     {
         return 'Ohne team_id: alle Mandanten (Kunden-Hauptteams) mit Paketstatus. Mit team_id: Status plus Vorschau, was Buchen kopieren würde '
-            .'(je Tabelle: Quelle, schon zugeordnet, neu). Das Paket enthält reine Team-Arbeit (Konzept-Kategorien, Zielgruppen, Schreibstile, Rollen, Posten, Speiseplan-Chips, Präsentations-Designs, Trend-Startbestand), '
+            .'(je Tabelle: Quelle, schon zugeordnet, neu). Das Paket enthält reine Team-Arbeit (Konzept-Kategorien, Zielgruppen, Schreibstile, Rollen, Posten, Speiseplan-Chips, Präsentations-Designs, Trend-Startbestand, dazu der Posten "Pass" als Team-Vorgabe fuer Gerichte), '
             .'keine Basis-Kataloge. Nur Plattform-Admin, sonst FORBIDDEN.';
     }
 

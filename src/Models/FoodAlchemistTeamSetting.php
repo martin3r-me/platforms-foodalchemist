@@ -61,5 +61,6 @@ class FoodAlchemistTeamSetting extends Model
         'default_batch_max_kg' => 'decimal:3',
         'default_batch_max_pieces' => 'decimal:2',
         'default_markup_class_id' => 'integer',
+        'gerichte_station_id' => 'integer',
     ];
 }

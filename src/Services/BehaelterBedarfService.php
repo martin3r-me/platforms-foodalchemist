@@ -125,8 +125,16 @@ class BehaelterBedarfService
      */
     public static function kurz(?array $block): ?string
     {
+        $teile = self::teile($block);
+
+        return $teile === [] ? null : implode(' · ', $teile);
+    }
+
+    /** @return list<string> die einzelnen Aussagen (Abfüllen/durchgängig + je Komponente), wie sie `kurz()` mit · verbindet */
+    private static function teile(?array $block): array
+    {
         if ($block === null) {
-            return null;
+            return [];
         }
 
         $teile = [];
@@ -149,7 +157,63 @@ class BehaelterBedarfService
             }
         }
 
-        return $teile === [] ? null : implode(' · ', $teile);
+        return $teile;
+    }
+
+    /**
+     * Kompakt-Form für die ENGE Tabellenzelle des Produktions-Editors: EINE kurze Summe („3× GN 1/1 65mm" bzw. „5 Behälter") plus die
+     * volle Aufstellung je Komponente für ein Popover. Bei Gerichten wird der Bedarf aller Komponenten gebündelt; die lange Kette
+     * („Ausgabe Chip: Zwiebelring: 1× GN … · geschätzt · 4 Alternativen · …") gehört nicht in die Zelle.
+     *
+     * Die Summe zählt die BASIS-Variante je Position (dieselbe wie `kurz()`), nie eine Alternative, und lässt Behälter weg, die schon an
+     * einer anderen Zeile gezählt sind. Positionen ohne berechenbaren Bedarf zählen als Lücke.
+     *
+     * @return array{kurz: string, zeilen: list<string>, geschaetzt: bool, alternativen: int, luecken: int}|null
+     */
+    public static function kompakt(?array $block): ?array
+    {
+        $zeilen = self::teile($block);
+        if ($zeilen === []) {
+            return null;
+        }
+
+        $positionen = [];
+        $zusammen = $block['zusammen'] ?? [];
+        if (($zusammen['durchgaengig'] ?? false) && ($zusammen['behaelter'] ?? null) !== null) {
+            $positionen[] = ['berechenbar' => true, 'varianten' => [['behaelter' => $zusammen['behaelter'], 'anzahl' => $zusammen['anzahl']]]];
+        } elseif (($block['abfuellen'] ?? null) !== null) {
+            $positionen[] = $block['abfuellen'];
+        }
+        foreach ($block['je_komponente'] ?? [] as $k) {
+            if (! ($k['bereits_gezaehlt'] ?? false)) {
+                $positionen[] = $k;
+            }
+        }
+
+        $summe = [];       // Behälter-Name => Stückzahl
+        $geschaetzt = false;
+        $alternativen = 0;
+        $luecken = 0;
+        foreach ($positionen as $p) {
+            $basis = ($p['berechenbar'] ?? false) ? ($p['varianten'][0] ?? null) : null;
+            if ($basis === null) {
+                $luecken++;
+
+                continue;
+            }
+            $summe[(string) $basis['behaelter']] = ($summe[(string) $basis['behaelter']] ?? 0) + (int) $basis['anzahl'];
+            $geschaetzt = $geschaetzt || (($basis['konfidenz'] ?? 'hoch') !== 'hoch');
+            $alternativen += max(0, count($p['varianten'] ?? []) - 1);
+        }
+
+        $gesamt = array_sum($summe);
+        $kurz = match (true) {
+            $summe === [] => 'Angaben fehlen',
+            count($summe) === 1 => $gesamt.'× '.array_key_first($summe),
+            default => $gesamt.' Behälter',
+        };
+
+        return ['kurz' => $kurz, 'zeilen' => $zeilen, 'geschaetzt' => $geschaetzt, 'alternativen' => $alternativen, 'luecken' => $luecken];
     }
 
     /** Basis-Variante plus ehrlicher Hinweis auf Alternativen bzw. auf den Grund. */

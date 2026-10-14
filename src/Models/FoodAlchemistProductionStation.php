@@ -43,6 +43,7 @@ class FoodAlchemistProductionStation extends Model
         'batch_max_pieces' => 'decimal:2',
         'sort_order' => 'integer',
         'is_inactive' => 'boolean',
+        'ist_sammelposten' => 'boolean',   // Spec 83 B3g: Pass = Sammelposten ohne eigenes Personal, keine eigene Kapazität/Überlast
     ];
 
     public function lines(): HasMany

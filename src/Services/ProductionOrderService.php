@@ -263,12 +263,16 @@ class ProductionOrderService
         }
 
         $blatt = $this->planung->produktionsblattFuerZiele($team, $ziele);
+        // Posten aus dem Rezept: der Standard-Posten (recipe.default_station_id) wird beim Erzeugen übernommen — wenn er zum Team des Auftrags
+        // gehört. Ein per Overlay überlebter (manuell gesetzter) Posten gewinnt unten über array_merge.
+        [$standardPosten, $fremdePosten] = $this->standardPosten($order, $team, array_column($blatt['rezepte'], 'recipe_id'));
 
         foreach ($blatt['rezepte'] as $i => $r) {
             $order->lines()->create(array_merge([
                 'team_id' => $order->team_id,
                 'origin' => 'computed',
                 'recipe_id' => $r['recipe_id'],
+                'station_id' => $standardPosten[(int) $r['recipe_id']] ?? null,
                 'is_basisrezept' => $r['ist_basisrezept'],
                 'tiefe' => $r['tiefe'],
                 'ansaetze' => $r['ansaetze'],
@@ -298,6 +302,7 @@ class ProductionOrderService
         $order->warnungen = array_merge(
             $blatt['warnungen'],
             $this->verwaisteOverlays($overlay, array_column($blatt['rezepte'], 'recipe_id')),
+            $this->fremdePostenWarnungen($fremdePosten),
         );
         $order->save();
         $this->syncPlanDates($order);
@@ -307,6 +312,58 @@ class ProductionOrderService
         foreach ($order->lines()->whereNotNull('station_id')->whereNotNull('recipe_id')->get() as $line) {
             $this->aktualisiereStationArbeitszeit($line);
         }
+    }
+
+    /**
+     * Posten für neue Auftragszeilen (EINE Stelle für alle Wege, die Zeilen erzeugen; sie laufen alle über {@see recomputeOrder}).
+     * Routing-Reihenfolge: Zuteilung von Hand (Overlay, gewinnt im Aufrufer über array_merge) > `recipes.default_station_id` > bei Gerichten
+     * (`is_sales_recipe`) die Team-Vorgabe "Posten für Gerichte" ({@see TeamSettingsService::gerichtePostenId}, Pass) > keiner.
+     *
+     * Alles nur mit Posten, die für das Team des Auftrags sichtbar und aktiv sind (dieselbe Regel wie {@see assignLine}: `visibleToTeam`).
+     * Ein Rezept-Posten eines FREMDEN Teams (z. B. am Master-Rezept im Abo) wird nicht still übernommen; greift danach auch keine Team-Vorgabe,
+     * bleibt die Zeile ohne Posten und der Auftrag trägt eine Warnung.
+     *
+     * @param  list<int|string>  $recipeIds
+     * @return array{0: array<int,int>, 1: list<string>}  [recipe_id => station_id, Namen der Rezepte mit fremdem Posten ohne Ersatz]
+     */
+    private function standardPosten(FoodAlchemistProductionOrder $order, Team $team, array $recipeIds): array
+    {
+        $rezepte = FoodAlchemistRecipe::whereIn('id', array_map('intval', $recipeIds))->get(['id', 'name', 'default_station_id', 'is_sales_recipe']);
+        if ($rezepte->isEmpty()) {
+            return [[], []];
+        }
+        $besitzer = Team::find($order->team_id) ?? $team;
+        $vorgabe = app(\Platform\FoodAlchemist\Services\TeamSettingsService::class)->gerichtePostenId($besitzer);
+        $kandidaten = $rezepte->pluck('default_station_id')->filter()->map(fn ($i) => (int) $i)->all();
+        $sichtbar = $kandidaten === [] ? collect() : FoodAlchemistProductionStation::visibleToTeam($besitzer)->where('is_inactive', false)
+            ->whereIn('id', $kandidaten)->pluck('id')->map(fn ($i) => (int) $i)->flip();
+
+        $posten = [];
+        $fremd = [];
+        foreach ($rezepte as $r) {
+            $eigen = $r->default_station_id !== null ? (int) $r->default_station_id : null;
+            if ($eigen !== null && isset($sichtbar[$eigen])) {
+                $posten[(int) $r->id] = $eigen;
+            } elseif ($r->is_sales_recipe && $vorgabe !== null) {
+                $posten[(int) $r->id] = $vorgabe;            // Gericht ohne (nutzbaren) Rezept-Posten: Pass
+            } elseif ($eigen !== null) {
+                $fremd[] = (string) $r->name;
+            }
+        }
+
+        return [$posten, $fremd];
+    }
+
+    /** @param  list<string>  $namen @return list<string> */
+    private function fremdePostenWarnungen(array $namen): array
+    {
+        if ($namen === []) {
+            return [];
+        }
+        $zeige = implode(', ', array_map(fn ($n) => "„{$n}“", array_slice($namen, 0, 5)));
+
+        return [sprintf('%d Rezept(e) tragen einen Posten, der nicht zu diesem Team gehört — nicht übernommen, die Zeile bleibt ohne Posten: %s%s.',
+            count($namen), $zeige, count($namen) > 5 ? ' …' : '')];
     }
 
     /**
