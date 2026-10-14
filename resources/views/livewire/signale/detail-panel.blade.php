@@ -75,7 +75,7 @@
         {{-- Spec 82 §12 B: Fassungs-Signale — betroffene Angebote mit Sprung zu „Übernehmen“, Allergen-Änderung ausgeschrieben --}}
         @if(in_array($sig->type->value, ['fassung_neuer_verfuegbar', 'fassung_aktualisiert'], true))
             @php $fp = (array) $sig->payload; @endphp
-            <x-fa::section variant="plain" title="{{ $sig->type->value === 'fassung_neuer_verfuegbar' ? 'Betroffene Angebote' : 'Änderungen' }}" icon="heroicon-o-arrow-path" data-signal-fassung>
+            <x-fa::section variant="plain" title="{{ $sig->type->value === 'fassung_neuer_verfuegbar' ? (empty($fp['bausteine']) ? 'Betroffene Angebote' : 'Betroffene Stellen') : 'Änderungen' }}" icon="heroicon-o-arrow-path" data-signal-fassung>
                 @if(! empty($fp['allergene']))
                     <p class="text-[length:var(--fa-text-md)] font-medium text-[var(--fa-crit)]" data-signal-fassung-allergen>Allergen-/Zusatzstoffänderung: {{ implode('; ', $fp['allergene']) }}</p>
                 @endif
@@ -91,6 +91,31 @@
                         <x-fa::button size="sm" variant="ghost" icon="heroicon-m-arrow-right" wire:click="rezeptUebernahmePruefen({{ $r['recipe_id'] }}, {{ $fp['familie_id'] }})" data-signal-rezept-uebernehmen>Übernehmen am Rezept …</x-fa::button>
                     </div>
                 @endforeach
+                @foreach($fp['bausteine'] ?? [] as $b)
+                    <div class="flex items-center gap-2 py-1" wire:key="sigfb-{{ $b['quelle'] }}-{{ $b['row_id'] }}" data-signal-fassung-baustein="{{ $b['quelle'] }}-{{ $b['row_id'] }}">
+                        <span class="min-w-0 flex-1 truncate">{{ $b['wo'] }} „{{ $b['name'] }}“ <span class="text-[var(--fa-ink-3)]">· steht auf Fassung #{{ $b['von_nr'] }} · {{ $b['grund'] === 'allergen' ? 'Allergen-Änderung' : 'in eingefrorenem Angebot' }}</span></span>
+                        <x-fa::button size="sm" variant="ghost" icon="heroicon-m-arrow-right" wire:click="bausteinUebernahmePruefen('{{ $fp['art'] ?? 'concept' }}', '{{ $b['quelle'] }}', {{ $b['row_id'] }})" data-signal-baustein-uebernehmen>Übernehmen …</x-fa::button>
+                    </div>
+                @endforeach
+                @if($bausteinUebernahme)
+                    @php $bu = $bausteinUebernahme; @endphp
+                    <div class="mt-2 rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] p-3 flex flex-col gap-2" data-signal-baustein-vorschau>
+                        <p class="font-medium">{{ $bu['wo'] }} „{{ $bu['name'] }}“: Fassung #{{ $bu['von_nr'] }} → #{{ $bu['nach_nr'] }}</p>
+                        @if($bu['aenderungsnotiz'])<p class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]">Änderungsnotiz: {{ $bu['aenderungsnotiz'] }}</p>@endif
+                        @if($bu['allergen_diff'] !== [])
+                            <ul class="text-[length:var(--fa-text-sm)]">@foreach($bu['allergen_diff'] as $feld => $d)<li wire:key="sigbu-d-{{ $feld }}">{{ str_replace(['allergen_', 'additive_'], ['Allergen ', 'Zusatzstoff '], $feld) }}: {{ $d['von'] ?? '—' }} → {{ $d['nach'] ?? '—' }}</li>@endforeach</ul>
+                        @endif
+                        @if($bu['grund'] === 'eingefroren')<p class="text-[length:var(--fa-text-sm)]">Dieses Angebot ist eingefroren. Mit der Übernahme zeigt es danach auf die neue Fassung; der eingefrorene Stand bleibt als Historie.</p>@endif
+                        @if($bu['braucht_bestaetigung'])
+                            <label class="inline-flex items-center gap-2"><input type="checkbox" class="w-4 h-4 rounded accent-[var(--fa-accent)]" wire:model.live="bausteinBestaetigt" data-signal-baustein-bestaetigung />
+                                Ich habe die Allergen-Änderung geprüft (nur Rolle Freigeben).</label>
+                        @endif
+                        <div class="flex gap-2">
+                            <x-fa::button variant="primary" wire:click="bausteinUebernahmeAusfuehren" :disabled="$bu['braucht_bestaetigung'] && ! $bausteinBestaetigt" data-signal-baustein-ausfuehren>Fassung übernehmen</x-fa::button>
+                            <x-fa::button variant="ghost" wire:click="bausteinUebernahmeAbbrechen">Abbrechen</x-fa::button>
+                        </div>
+                    </div>
+                @endif
                 @if($rezeptUebernahme)
                     @php $ru = $rezeptUebernahme; @endphp
                     <div class="mt-2 rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] p-3 flex flex-col gap-2" data-signal-rezept-vorschau>

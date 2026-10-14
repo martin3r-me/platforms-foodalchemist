@@ -177,4 +177,5 @@
 
     {{-- Voll-Editor-Modal — auf Seitenebene, öffnet via formate-editor.oeffnen --}}
     <livewire:foodalchemist.formate.editor key="formate-browser--formate.editor" />
+    <livewire:foodalchemist.recipes.fassung-modal key="formate-browser--recipes.fassung-modal" />
 </x-ui-page>

@@ -88,6 +88,11 @@
                     @endif
                 @endunless
                 <x-fa::menu-item icon="heroicon-m-document-duplicate" wire:click="dupliziere">{{ $wort }} duplizieren</x-fa::menu-item>
+                {{-- Spec 82 §13 B6: Veröffentlichen — EINE Bedingung (Support\FassungMenue); ein Paket-Konzept (kind=paket) ist ein Konzept --}}
+                @if(\Platform\FoodAlchemist\Support\FassungMenue::sichtbar(auth()->user()?->currentTeamRelation, $concept, 'concept'))
+                    <x-fa::menu-item icon="heroicon-m-paper-airplane" x-on:click="$dispatch('fassung-modal.oeffnen', { art: 'concept', objektId: {{ $concept->id }} })"
+                        title="Stand als neue Fassung an die Abonnenten geben" data-fassung-menue>Veröffentlichen …</x-fa::menu-item>
+                @endif
                 <x-fa::menu-item danger icon="heroicon-m-trash" wire:click="loeschen" wire:confirm="{{ $istPaket ? 'Paket löschen?' : 'Concept löschen?' }}">{{ $wort }} löschen</x-fa::menu-item>
             </x-slot:menue>
         </x-fa::detail-kopf>

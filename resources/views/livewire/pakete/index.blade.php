@@ -78,6 +78,11 @@
                             </x-foodalchemist::bearbeiten-leiste>
                         </x-slot:aktion>
                         <x-slot:menue>
+                            {{-- Spec 82 §13 B6: Veröffentlichen — EINE Bedingung (Support\FassungMenue) für alle Arten --}}
+                            @if(\Platform\FoodAlchemist\Support\FassungMenue::sichtbar(auth()->user()?->currentTeamRelation, $selected, 'paket'))
+                                <x-fa::menu-item icon="heroicon-m-paper-airplane" x-on:click="$dispatch('fassung-modal.oeffnen', { art: 'paket', objektId: {{ $selected->id }} })"
+                                    title="Stand als neue Fassung an die Abonnenten geben" data-fassung-menue>Veröffentlichen …</x-fa::menu-item>
+                            @endif
                             <x-fa::menu-item danger icon="heroicon-m-trash" wire:click="loeschen({{ $selected->id }})" wire:confirm="Paket löschen?">Paket löschen</x-fa::menu-item>
                         </x-slot:menue>
                     </x-fa::detail-kopf>
@@ -256,5 +261,6 @@
             <div class="px-4 py-3 border-t border-[var(--fa-line)]">{{ $pakete->links('foodalchemist::components.fa.pagination') }}</div>
         </div>
     </x-ui-page-container>
+    <livewire:foodalchemist.recipes.fassung-modal key="pakete-index--recipes.fassung-modal" />
     {{-- Spec 53/F Stufe 2: Sprachbefehl-Mount auf Seitenebene (Modal + optionales schwebendes Element). --}}
 </x-ui-page>

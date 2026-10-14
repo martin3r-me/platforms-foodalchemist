@@ -74,6 +74,11 @@ class DetailPanel extends Component
 
     public bool $rezeptBestaetigt = false;
 
+    /** PR 8: Übernahme-Vorschau eines Verweises auf eine Konzept-/Paket-/Format-Fassung (payload.bausteine) */
+    public ?array $bausteinUebernahme = null;
+
+    public bool $bausteinBestaetigt = false;
+
     public ?string $meldung = null;
 
     public ?string $fehler = null;
@@ -130,6 +135,54 @@ class DetailPanel extends Component
             $this->rezeptUebernahme = null;
             $this->fehler = $e->getMessage();
         }
+    }
+
+    public function bausteinUebernahmePruefen(string $art, string $quelle, int $rowId): void
+    {
+        $this->bausteinBestaetigt = false;
+        $this->fehler = null;
+        $user = \Illuminate\Support\Facades\Auth::user();
+        try {
+            $r = app(\Platform\FoodAlchemist\Services\BausteinFolgeService::class)->uebernehmen($user->currentTeamRelation, $user, $art, $quelle, $rowId, false);
+            $tab = ['paket' => 'foodalchemist_packages', 'format' => 'foodalchemist_formats'][$art] ?? 'foodalchemist_concepts';
+            $v = $r['vorschau'];
+            $nr = fn (int $id) => (int) \Illuminate\Support\Facades\DB::table($tab)->where('id', $id)->value('fassung_nr');
+            $this->bausteinUebernahme = $v + ['art' => $art, 'quelle' => $quelle, 'row_id' => $rowId, 'von_nr' => $nr((int) $v['von_fassung_id']), 'nach_nr' => $nr((int) $v['nach_fassung_id']),
+                'braucht_bestaetigung' => $v['grund'] === 'allergen', 'aenderungsnotiz' => \Illuminate\Support\Facades\DB::table($tab)->where('id', (int) $v['nach_fassung_id'])->value('aenderungsnotiz')];
+        } catch (\Platform\FoodAlchemist\Exceptions\FaRechtFehltException|\RuntimeException $e) {
+            $this->bausteinUebernahme = null;
+            $this->fehler = $e->getMessage();
+        }
+    }
+
+    public function bausteinUebernahmeAbbrechen(): void
+    {
+        $this->bausteinUebernahme = null;
+        $this->bausteinBestaetigt = false;
+    }
+
+    public function bausteinUebernahmeAusfuehren(): void
+    {
+        $v = $this->bausteinUebernahme;
+        if ($v === null) {
+            return;
+        }
+        if ($v['braucht_bestaetigung'] && ! $this->bausteinBestaetigt) {
+            $this->fehler = 'Bitte bestätige zuerst, dass du die Allergen-Änderung geprüft hast.';
+
+            return;
+        }
+        $user = \Illuminate\Support\Facades\Auth::user();
+        try {
+            app(\Platform\FoodAlchemist\Services\BausteinFolgeService::class)->uebernehmen($user->currentTeamRelation, $user, (string) $v['art'], (string) $v['quelle'], (int) $v['row_id'], true);
+        } catch (\Platform\FoodAlchemist\Exceptions\FaRechtFehltException|\RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+
+            return;
+        }
+        $this->bausteinUebernahmeAbbrechen();
+        $this->meldung = 'Neuere Fassung übernommen.';
+        $this->dispatch('signal-geaendert');
     }
 
     public function rezeptUebernahmeAbbrechen(): void

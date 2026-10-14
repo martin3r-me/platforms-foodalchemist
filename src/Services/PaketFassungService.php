@@ -117,6 +117,38 @@ class PaketFassungService
     }
 
     /**
+     * Lese-Status für die Oberfläche „Veröffentlichen…“ — rechnet nichts um und schreibt nichts (Spec 82 §13 B6, PR 8). `blockiert` = Meldung, warum das
+     * Veröffentlichen gerade nicht geht (Rezept ohne Fassung, D2/D11); `weicht_ab` gilt nur, wenn nicht blockiert.
+     *
+     * @return array{letzte: ?array{id:int, nr:int, veroeffentlicht_at:?string, notiz:?string}, weicht_ab: bool, blockiert: ?string, hinweise: list<string>, allergen_aenderung: bool, allergen_felder: list<string>}
+     */
+    public function status(FoodAlchemistPaket $paket): array
+    {
+        $letzte = FoodAlchemistPaket::mitFassungen()->where('fassung_von_id', $paket->id)->where('ist_fassung', true)->whereNull('deleted_at')
+            ->orderByDesc('fassung_nr')->orderByDesc('id')->first();
+        $out = ['letzte' => $letzte === null ? null : ['id' => (int) $letzte->id, 'nr' => (int) $letzte->fassung_nr, 'veroeffentlicht_at' => $letzte->veroeffentlicht_at?->format('d.m.Y H:i'),
+            'notiz' => $letzte->aenderungsnotiz], 'weicht_ab' => true, 'blockiert' => null, 'hinweise' => [], 'allergen_aenderung' => false, 'allergen_felder' => []];
+        try {
+            $gerichte = $paket->dishes()->get();
+            [$rezeptFassung, $hinweise] = $this->rezeptFassungenSammeln($gerichte);
+        } catch (\RuntimeException $e) {
+            $out['blockiert'] = $e->getMessage();
+
+            return $out;
+        }
+        $out['hinweise'] = $hinweise;
+        $out['weicht_ab'] = $letzte === null || $letzte->inhalt_hash !== $this->inhaltHash($paket, $gerichte, $rezeptFassung);
+        if ($letzte !== null) {
+            $v = app(FassungsVergleich::class);
+            $diff = $v->bilderDiff($v->kettenBild('paket', (int) $letzte->id), $v->kettenBildAus(array_map(fn ($r) => (int) $r->id, array_values($rezeptFassung))));
+            $out['allergen_aenderung'] = $diff !== [];
+            $out['allergen_felder'] = array_keys($diff);
+        }
+
+        return $out;
+    }
+
+    /**
      * Je Gericht die jüngste Rezept-Fassung. Fehlt eine, bricht es mit der Liste ab (D2/D11); unveröffentlichte Änderungen
      * an der Arbeitszeile sind nur ein Hinweis (D10).
      *
