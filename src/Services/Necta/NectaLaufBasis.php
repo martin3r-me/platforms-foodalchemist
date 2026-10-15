@@ -291,7 +291,7 @@ abstract class NectaLaufBasis
     protected function laufAnlegen(string $art, int $verbindungId, ?int $teamId, array $opt): int
     {
         $optionen = array_intersect_key($opt, array_flip(['lieferanten', 'ohne_lieferanten', 'seite', 'pause_ms', 'max_lieferanten',
-            'detail_schwelle', 'seit', 'voll']));
+            'detail_schwelle', 'seit', 'voll', 'feld']));
 
         return (int) DB::table('foodalchemist_necta_laeufe')->insertGetId([
             'uuid' => (string) UuidV7::generate(), 'verbindung_id' => $verbindungId, 'team_id' => $teamId, 'art' => $art,
