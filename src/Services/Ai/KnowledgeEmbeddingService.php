@@ -528,12 +528,15 @@ class KnowledgeEmbeddingService
 
         $count = 0;
         foreach ($byTeam as $teamId => $entries) {
-            $service->embedAndStoreBatch(
-                teamId: (int) $teamId,
-                entityType: self::ENTITY_TYPE_ANKER,
-                entries: $entries,
-                providerName: $providerName,
-            );
+            // In Stapel teilen: alle 2.628 Anker in einem Aufruf überschreiten die 2.048 Eingaben je Request (und je nach Partner-Text die Token)
+            foreach (EmbeddingStapel::teilen($entries) as $stapel) {
+                $service->embedAndStoreBatch(
+                    teamId: (int) $teamId,
+                    entityType: self::ENTITY_TYPE_ANKER,
+                    entries: $stapel,
+                    providerName: $providerName,
+                );
+            }
             $count += count($entries);
         }
 
