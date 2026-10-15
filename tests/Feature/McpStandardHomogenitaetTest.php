@@ -121,6 +121,8 @@ it('gps_homogenitaet.GET zeigt NUR Sichtbares: kein fremdes Team, stamm_paket er
     expect($namen())->toBe(['Basis GP', 'Eigenes GP']);                       // kein Fremdes GP, kein Paket ohne Opt-in
 
     StammPaket::freischalten($this->rootTeam);
+    expect($namen())->toBe(['Basis GP', 'Eigenes GP']);                       // Paket gebucht, aber noch kein Lieferant freigeschaltet: deren Artikel fehlen
+    $this->alleLieferantenFrei($this->rootTeam);
     expect($namen())->toBe(['Basis GP', 'Eigenes GP', 'Paket GP']);
 
     $global = collect(app(\Platform\FoodAlchemist\Services\GpHomogenitaetService::class)->bericht()['gps'])->pluck('name')->sort()->values()->all();

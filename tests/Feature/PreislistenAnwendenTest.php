@@ -114,7 +114,7 @@ it('Rechte: Unter-Team und Betrachter dürfen nicht anwenden; fremde Läufe nich
 
 it('Artikel nicht mehr sichtbar (Stamm-Paket abbestellt): Zeile wird Fehler mit Grund, kein Preis', function () {
     $paket = FoodAlchemistSupplierItem::create(['team_id' => null, 'supplier_id' => $this->sup->id, 'designation' => 'Paketartikel', 'article_number' => '7007', 'stamm_class' => 'stamm_paket']);
-    StammPaket::freischalten($this->team);
+    StammPaket::freischalten($this->team); $this->alleLieferantenFrei($this->team);
     $run = ($this->lauf)("Artikelnummer;Preis netto\n7007;5,00\n");
     expect(FoodAlchemistPriceImportLine::where('run_id', $run->id)->value('status'))->toBe('treffer');
 

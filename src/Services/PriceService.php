@@ -144,15 +144,19 @@ class PriceService
      */
     public function stammFilter(Builder|\Illuminate\Database\Query\Builder $query, string $alias, ?Team $team): Builder|\Illuminate\Database\Query\Builder
     {
-        if (StammPaket::istFreigeschaltet($team)) {
+        if (StammPaket::sieheAlleLieferanten($team)) {
             return $query;
         }
 
-        return $query->whereExists(function ($sub) use ($alias, $team) {
+        // Mit gebuchtem Paket: eigene Preise eines Teams (team_id gesetzt) sind nie Stamm und verschwinden nicht, auch wenn der Lieferant nicht freigeschaltet ist.
+        // Ohne Paket gilt die alte Regel (Preis folgt dem Artikel).
+        $eigene = StammPaket::istFreigeschaltet($team);
+
+        return $query->where(fn ($w) => ($eigene ? $w->whereNotNull("{$alias}.team_id") : $w)->orWhereExists(function ($sub) use ($alias, $team) {
             $sub->selectRaw('1')->from('foodalchemist_supplier_items')
                 ->whereColumn('foodalchemist_supplier_items.id', "{$alias}.supplier_item_id");
             StammPaket::begrenzen($sub, 'foodalchemist_supplier_items', $team);
-        });
+        }));
     }
 
     /** Aktiv-Ordnung §3.3 innerhalb einer Stufe: unbefristet zuerst, dann valid_to DESC, Tiebreak id DESC. */

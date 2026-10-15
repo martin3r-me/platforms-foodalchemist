@@ -37,8 +37,8 @@ class GpHomogenitaetService
                 ->whereNotNull('s.gp_id')->whereNull('s.deleted_at')->whereNull('i.deleted_at');
             if ($team !== null) {
                 $q->join('foodalchemist_gps AS g', 'g.id', '=', 's.gp_id')->whereNull('g.deleted_at');
-                $this->sichtbar($q, 'i', $team);
-                $this->sichtbar($q, 'g', $team);
+                $this->sichtbar($q, 'i', $team, 'foodalchemist_supplier_items');
+                $this->sichtbar($q, 'g', $team, 'foodalchemist_gps');
             }
 
             return $q;
@@ -116,17 +116,13 @@ class GpHomogenitaetService
     }
 
     /** Sichtbarkeit einer Tabelle (Alias) für ein Team: global oder Team-Kette; globale stamm_paket-Zeilen nur mit Opt-in. */
-    private function sichtbar($q, string $alias, Team $team): void
+    private function sichtbar($q, string $alias, Team $team, string $basisTabelle): void
     {
         $kette = TeamScope::ancestryIds($team);
-        $frei = StammPaket::istFreigeschaltet($team);
-        $q->where(function ($w) use ($alias, $kette, $frei) {
-            $w->where(function ($g) use ($alias, $frei) {
-                $g->whereNull("{$alias}.team_id");
-                if (! $frei) {
-                    $g->where("{$alias}.stamm_class", StammPaket::BASIS);
-                }
-            })->orWhereIn("{$alias}.team_id", $kette);
+        $q->where(function ($w) use ($alias, $kette, $team, $basisTabelle) {
+            // eine Regel für globale Zeilen: basis für alle, stamm_paket mit Paket, Artikel/Lieferanten nur freigeschaltete (Spec 82)
+            $w->where(fn ($g) => StammPaket::globaleZeilen($g, "{$alias}.team_id", "{$alias}.stamm_class", $team, $basisTabelle))
+                ->orWhereIn("{$alias}.team_id", $kette);
         });
     }
 

@@ -31,7 +31,7 @@ it('StammPaket::begrenzen kennt Alias + Basistabelle', function () {
     $abfrage = fn () => StammPaket::begrenzen(DB::table('foodalchemist_supplier_items AS i')->select('i.id'), 'i', $this->rootTeam, 'foodalchemist_supplier_items');
 
     expect($abfrage()->pluck('id')->map(fn ($i) => (int) $i)->sort()->values()->all())->toBe([$this->basis->id]);
-    StammPaket::freischalten($this->rootTeam);
+    StammPaket::freischalten($this->rootTeam); $this->alleLieferantenFrei($this->rootTeam);
     expect($abfrage()->pluck('id')->map(fn ($i) => (int) $i)->sort()->values()->all())->toBe([$this->basis->id, $this->paket->id]);
 });
 
@@ -43,7 +43,7 @@ it('★ SupplierService::listWithCounts zählt Stamm-Paket-Artikel ohne Opt-in n
     }
 
     expect($zeile()->item_count)->toBe(1)->and($zeile()->mapped_count)->toBe(1);
-    StammPaket::freischalten($this->rootTeam);
+    StammPaket::freischalten($this->rootTeam); $this->alleLieferantenFrei($this->rootTeam);
     expect($zeile()->item_count)->toBe(2)->and($zeile()->mapped_count)->toBe(2);
 });
 

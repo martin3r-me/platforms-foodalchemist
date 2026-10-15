@@ -183,6 +183,18 @@ trait SeedsTeamHierarchy
      * standardmäßig Inhaber seines Teams (wie ein Ein-Personen-Betrieb). Niedrigere Rollen:
      * 'admin' | 'member' | 'viewer'; null = kein Mitglied (nur für Tests, die genau das prüfen).
      */
+    /** Schaltet alle derzeit vorhandenen globalen Lieferanten für das Team frei (Standard nach Buchung wäre „keine“). */
+    protected function alleLieferantenFrei(Team $team): void
+    {
+        $ids = \Illuminate\Support\Facades\DB::table('foodalchemist_suppliers')->whereNull('team_id')->pluck('id')
+            ->merge(\Illuminate\Support\Facades\DB::table('foodalchemist_supplier_items')->whereNull('team_id')->pluck('supplier_id'))->unique();
+        foreach ($ids as $id) {
+            \Illuminate\Support\Facades\DB::table('foodalchemist_team_stamm_lieferanten')->updateOrInsert(
+                ['team_id' => $team->id, 'supplier_id' => $id], ['created_at' => now(), 'updated_at' => now()]);
+        }
+        \Platform\FoodAlchemist\Support\StammPaket::flush();
+    }
+
     protected function makeUser(Team $team, string $name = 'Tester', ?string $rolle = 'owner'): \Platform\Core\Models\User
     {
         $user = \Platform\Core\Models\User::forceCreate([

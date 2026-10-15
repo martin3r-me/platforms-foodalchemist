@@ -2,6 +2,7 @@
 
 namespace Platform\FoodAlchemist\Services;
 
+use Illuminate\Support\Facades\DB;
 use Platform\Core\Models\Team;
 use Platform\Core\Models\User;
 use Platform\FoodAlchemist\Models\FoodAlchemistTeamStammOptin;
@@ -94,6 +95,81 @@ class StammPaketService
         }
 
         return $this->status($mandant);
+    }
+
+    /**
+     * Die Lieferanten des Stamm-Pakets (global, stamm_paket) mit Freigabe-Stand für einen Mandanten. Unter-Teams erben die Auswahl des Haupt-Teams,
+     * deshalb wird immer am Haupt-Team gelesen und gesetzt. Das Master-Team sieht immer alle (kein Stand nötig).
+     *
+     * @return array{team_id:int, gebucht:bool, gesamt:int, freigegeben:int, lieferanten:list<array{id:int, name:string, artikel:int, frei:bool}>}
+     */
+    public function lieferanten(Team $mandant, string $suche = ''): array
+    {
+        $haupt = $this->rechte->kundenHauptTeam($mandant);
+        $frei = $this->freigegebeneIds($haupt);
+        $alle = DB::table('foodalchemist_suppliers')->whereNull('team_id')->where('stamm_class', StammPaket::PAKET)->whereNull('deleted_at')
+            ->orderBy('name')->get(['id', 'name']);
+        $artikel = DB::table('foodalchemist_supplier_items')->whereNull('team_id')->where('stamm_class', StammPaket::PAKET)->whereNull('deleted_at')
+            ->selectRaw('supplier_id, COUNT(*) AS n')->groupBy('supplier_id')->pluck('n', 'supplier_id');
+        $zeilen = $alle->map(fn ($s) => ['id' => (int) $s->id, 'name' => (string) $s->name, 'artikel' => (int) ($artikel[$s->id] ?? 0), 'frei' => isset($frei[(int) $s->id])]);
+        $gefiltert = $suche === '' ? $zeilen : $zeilen->filter(fn ($z) => mb_stripos($z['name'], $suche) !== false);
+
+        return ['team_id' => (int) $haupt->id, 'gebucht' => $this->status($haupt)['gebucht'], 'gesamt' => $zeilen->count(),
+            'freigegeben' => $zeilen->where('frei', true)->count(), 'lieferanten' => $gefiltert->values()->all()];
+    }
+
+    /**
+     * Freigeschaltete Lieferanten eines Mandanten setzen — EXAKT diese Menge (`alle` = jeder Stamm-Lieferant, `keine` = leer). Nur Plattform-Admin,
+     * nur bei gebuchtem Paket, nur Stamm-Lieferanten; Protokoll am Opt-in. Standard bei neuer Buchung: keine.
+     *
+     * @param  list<int>|'alle'|'keine'  $auswahl
+     * @return array{team_id:int, gesamt:int, freigegeben:int, hinzu:int, entfernt:int}
+     */
+    public function setzeLieferanten(Team $mandant, array|string $auswahl, ?User $user): array
+    {
+        $admin = $this->nurPlattformAdmin($user, 'Stamm-Lieferanten freischalten');
+        $this->pruefeMandant($mandant);
+        if (! $this->status($mandant)['gebucht']) {
+            throw new \RuntimeException('Erst das Stamm-Paket buchen, dann Lieferanten freischalten.');
+        }
+        $stamm = DB::table('foodalchemist_suppliers')->whereNull('team_id')->where('stamm_class', StammPaket::PAKET)->whereNull('deleted_at')->pluck('name', 'id');
+        $soll = match (true) {
+            $auswahl === 'alle' => $stamm->keys()->map(fn ($i) => (int) $i)->all(),
+            $auswahl === 'keine' => [],
+            is_string($auswahl) => throw new \RuntimeException('auswahl: alle, keine oder eine Liste von Lieferanten-IDs.'),
+            default => array_values(array_unique(array_map('intval', $auswahl))),
+        };
+        $fremd = array_values(array_diff($soll, $stamm->keys()->map(fn ($i) => (int) $i)->all()));
+        if ($fremd !== []) {
+            throw new \RuntimeException('Kein Lieferant des Stamm-Pakets: '.implode(', ', array_slice($fremd, 0, 10)).'. IDs liefert stamm_paket_lieferanten.GET.');
+        }
+        $ist = array_keys($this->freigegebeneIds($mandant));
+        $hinzu = array_values(array_diff($soll, $ist));
+        $weg = array_values(array_diff($ist, $soll));
+        DB::transaction(function () use ($mandant, $admin, $hinzu, $weg) {
+            foreach (array_chunk($hinzu, 200) as $teil) {
+                DB::table(StammPaket::LIEFERANTEN_TABELLE)->insert(array_map(fn ($id) => [
+                    'team_id' => $mandant->id, 'supplier_id' => $id, 'freigegeben_von' => $admin->id, 'created_at' => now(), 'updated_at' => now()], $teil));
+            }
+            if ($weg !== []) {
+                DB::table(StammPaket::LIEFERANTEN_TABELLE)->where('team_id', $mandant->id)->whereIn('supplier_id', $weg)->delete();
+            }
+        });
+        StammPaket::flush();
+        $optin = FoodAlchemistTeamStammOptin::where('team_id', $mandant->id)->first();
+        if ($hinzu !== [] || $weg !== []) {
+            $namen = fn (array $ids) => array_values(array_map(fn ($i) => (string) ($stamm[$i] ?? $i), array_slice($ids, 0, 15)));
+            $this->protokoll->schreibe('stamm_lieferanten_gesetzt', ['team_id' => $mandant->id, 'team' => $mandant->name, 'hinzu' => count($hinzu), 'entfernt' => count($weg),
+                'frei_gesamt' => count($soll), 'hinzu_namen' => $namen($hinzu), 'entfernt_namen' => $namen($weg)], $admin, $optin);
+        }
+
+        return ['team_id' => (int) $mandant->id, 'gesamt' => $stamm->count(), 'freigegeben' => count($soll), 'hinzu' => count($hinzu), 'entfernt' => count($weg)];
+    }
+
+    /** @return array<int, true> supplier_id => true (nur die Auswahl dieses Haupt-Teams, nicht der Eltern) */
+    private function freigegebeneIds(Team $haupt): array
+    {
+        return DB::table(StammPaket::LIEFERANTEN_TABELLE)->where('team_id', $haupt->id)->pluck('supplier_id')->mapWithKeys(fn ($i) => [(int) $i => true])->all();
     }
 
     private function pruefeMandant(Team $mandant): void

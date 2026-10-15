@@ -34,7 +34,7 @@ it('Alias in from: stamm_paket ist ohne Opt-in unsichtbar, mit Opt-in sichtbar; 
 
     expect(($this->ids)($abfrage()))->toBe([$this->basis->id, $this->eigen->id]);          // kein Paket, kein Fremder
 
-    StammPaket::freischalten($this->rootTeam);
+    StammPaket::freischalten($this->rootTeam); $this->alleLieferantenFrei($this->rootTeam);
     expect(($this->ids)($abfrage()))->toBe([$this->basis->id, $this->paket->id, $this->eigen->id]);
 });
 
@@ -44,7 +44,7 @@ it('Alias aus einem Join (Spalte i.team_id, from ist eine andere Tabelle)', func
     );
 
     expect(($this->ids)($abfrage()))->toBe([$this->basis->id, $this->eigen->id]);
-    StammPaket::freischalten($this->rootTeam);
+    StammPaket::freischalten($this->rootTeam); $this->alleLieferantenFrei($this->rootTeam);
     expect(($this->ids)($abfrage()))->toContain($this->paket->id);
 });
 
@@ -57,7 +57,7 @@ it('Alias auf GPs (Muster FavoriteGpService: foodalchemist_gps AS g) und Liefera
     $lief = fn () => TeamScope::applyVisible(DB::table('foodalchemist_suppliers AS s')->select('s.id'), 's.team_id', $this->rootTeam);
 
     expect(($this->ids)($gps()))->toBe([$gpBasis->id])->and(($this->ids)($lief()))->toBe([$this->sup->id]);
-    StammPaket::freischalten($this->rootTeam);
+    StammPaket::freischalten($this->rootTeam); $this->alleLieferantenFrei($this->rootTeam);
     expect(($this->ids)($gps()))->toBe([$gpBasis->id, $gpPaket->id])->and(($this->ids)($lief()))->toContain($supPaket->id);
 });
 
@@ -69,7 +69,7 @@ it('Ohne Alias und mit vollem Tabellennamen verhält es sich unverändert; Eloqu
     foreach ([$voll, $ohnePunkt, $eloquent] as $abfrage) {
         expect(($this->ids)($abfrage()))->toBe([$this->basis->id, $this->eigen->id]);
     }
-    StammPaket::freischalten($this->rootTeam);
+    StammPaket::freischalten($this->rootTeam); $this->alleLieferantenFrei($this->rootTeam);
     foreach ([$voll, $ohnePunkt, $eloquent] as $abfrage) {
         expect(($this->ids)($abfrage()))->toContain($this->paket->id);
     }
