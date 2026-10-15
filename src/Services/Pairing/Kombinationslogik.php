@@ -40,6 +40,9 @@ final class Kombinationslogik
     /** Ab diesem Anteil Stufe-2-Masse „passen" sie (Hinweis, zählt nicht). */
     public const PASST_AB = 0.10;
 
+    /** Dossier-Hinweise je Gericht (Kurator 15.10.: mehr wird Rauschen). */
+    public const MAX_HINWEISE = 3;
+
     /**
      * Funktionen von Basisrezepten, die nicht auf den Teller gehen (Vorbereitung, Getränk) —
      * nie als Komponente vorschlagen. Freitext-Funktionen werden zusätzlich über Wortteile erkannt.
@@ -144,6 +147,7 @@ final class Kombinationslogik
         }
 
         $gedeckt = [];   // schluessel|achse => true
+        $hinweise = [];  // schluessel|schluessel|begriff => Aussage
         for ($i = 0; $i < count($mit); $i++) {
             for ($j = $i + 1; $j < count($mit); $j++) {
                 [$a, $b] = [$mit[$i], $mit[$j]];
@@ -164,8 +168,17 @@ final class Kombinationslogik
                     $aussagen[] = new Aussage(AussageTyp::Kombination, $this->wissensGrundlage($k->status),
                         "Klassiker: {$a['label']} mit {$b['label']}", [$a['schluessel'], $b['schluessel']]);
                 }
+                foreach ([[$a, $b], [$b, $a]] as [$x, $y]) {
+                    foreach ($this->graph->hinweise($x['profil'], $y['profil']) as $h) {
+                        $text = "Hinweis zu {$x['label']} + {$y['label']}: {$h->begriff}".($h->grund ? " – {$h->grund}" : '');
+                        $hinweise[$x['schluessel'].'|'.$y['schluessel'].'|'.$h->begriff] ??= new Aussage(
+                            AussageTyp::Hinweis, $this->wissensGrundlage($h->status), $text, [$x['schluessel'], $y['schluessel']]);
+                    }
+                }
             }
         }
+        // Hinweise sind Kontext, keine Bewertung: grau, höchstens MAX_HINWEISE je Gericht.
+        array_push($aussagen, ...array_slice(array_values($hinweise), 0, self::MAX_HINWEISE));
 
         // Offene Bedarfe des Tellers: je Achse einmal, „muss" vor „soll".
         $offen = [];

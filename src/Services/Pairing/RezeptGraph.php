@@ -15,6 +15,7 @@ use Platform\FoodAlchemist\Enums\Kantenart;
  *  Spannung   ein offener Bedarf der einen Seite, den die andere mit Stufe ≥ 2 liefert.
  *  Konflikt   „Zerstört" zwischen Kern-Ankern (Anteil ≥ 10 %) beider Seiten.
  *  Kombination „Verträgt" (Dossier) zwischen Kern-Ankern beider Seiten.
+ *  Hinweis    Warnung aus „Zerstört" ohne Sperre (Dosis, Technik, Gruppe), Kern-Anker, gerichtet.
  */
 final class RezeptGraph
 {
@@ -144,6 +145,19 @@ final class RezeptGraph
     public function kombinationen(array $p, array $q): array
     {
         return $this->wissen($p, $q, Kantenart::Kombination);
+    }
+
+    /**
+     * Dossier-Hinweise von p über q (gerichtet), nur zwischen Kern-Ankern — wie Konflikt.
+     *
+     * @return list<object{von: int, zu: int, begriff: string, grund: ?string, status: string}>
+     */
+    public function hinweise(array $p, array $q): array
+    {
+        $pk = array_keys(array_filter($this->anteile($p), fn ($a) => $a >= self::KERN));
+        $qk = array_keys(array_filter($this->anteile($q), fn ($a) => $a >= self::KERN));
+
+        return $this->graph->hinweise($pk, $qk);
     }
 
     /** @return list<object> */

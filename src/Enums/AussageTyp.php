@@ -15,6 +15,7 @@ enum AussageTyp: string
     case BedarfOffen = 'bedarf_offen';   // ein Bedarf, den im Gericht niemand deckt
     case Konflikt = 'konflikt';          // „Zerstört" zwischen Kern-Ankern
     case Kombination = 'kombination';    // Klassiker aus dem Dossier („Verträgt")
+    case Hinweis = 'hinweis';            // Dossier-Warnung ohne Sperre (Dosis/Technik/Gruppe) — keine Ampel
     case Unbekannt = 'unbekannt';        // Bestandteil ohne Aromenprofil
 
     public function label(): string
@@ -27,6 +28,7 @@ enum AussageTyp: string
             self::BedarfOffen => 'fehlt',
             self::Konflikt => 'Konflikt',
             self::Kombination => 'Klassiker',
+            self::Hinweis => 'Hinweis',
             self::Unbekannt => 'unbekannt',
         };
     }

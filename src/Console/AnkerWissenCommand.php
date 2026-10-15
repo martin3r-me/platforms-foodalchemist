@@ -80,7 +80,7 @@ class AnkerWissenCommand extends Command
 
             return self::SUCCESS;
         }
-        $summe = ['ok' => 0, 'abgelehnt' => 0, 'bedarfe' => 0, 'eigenschaften' => 0, 'komponenten' => 0, 'kombinationen' => 0, 'konflikte' => 0, 'offen' => 0];
+        $summe = ['ok' => 0, 'abgelehnt' => 0, 'bedarfe' => 0, 'eigenschaften' => 0, 'komponenten' => 0, 'kombinationen' => 0, 'konflikte' => 0, 'hinweise' => 0, 'offen' => 0];
         $svc = app(AnkerWissenImport::class);
         foreach ($dateien as $datei) {
             $profil = json_decode((string) file_get_contents($datei), true);
@@ -92,7 +92,7 @@ class AnkerWissenCommand extends Command
                 continue;
             }
             $summe['ok']++;
-            foreach (['bedarfe', 'eigenschaften', 'komponenten', 'kombinationen', 'konflikte', 'offen'] as $k) {
+            foreach (['bedarfe', 'eigenschaften', 'komponenten', 'kombinationen', 'konflikte', 'hinweise', 'offen'] as $k) {
                 $summe[$k] += $r[$k];
             }
         }

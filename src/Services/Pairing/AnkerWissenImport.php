@@ -22,6 +22,9 @@ use Platform\FoodAlchemist\Services\PairingService;
  *    Rezept-Analyse). Was nicht eindeutig ist, landet in `anchor_wissen_offen` (Prüfliste).
  *  - Zerstört mit art technik/zustand ist ein Verarbeitungsfehler, kein Konflikt zwischen
  *    Zutaten → `anchor_wissen_offen` mit art=verarbeitung (Hinweis für die Rezeptprüfung).
+ *  - Zerstört mit art=hinweis (Dosis/Technik/Gruppe, vorab aufgelöst) trägt ein Ziel
+ *    `anker:<slug>` | `gruppe:<Unterkategorie>` → `anchor_wissen_offen` art=hinweis, name=Ziel,
+ *    kontext=Originalbegriff. Die Kombinationslogik zeigt ihn grau ({@see AnkerGraph::hinweise}).
  *  - Herkunft: knowledge_document_id (Kombinations-Dossier, sonst erstes Quell-Dossier) und
  *    quelle_hash über die Inhalte aller Quell-Dossiers → Veraltet-Erkennung.
  */
@@ -45,7 +48,7 @@ final class AnkerWissenImport
         $basis = ['knowledge_document_id' => $docId, 'quelle_hash' => $hash, 'status' => WissensStatus::Entwurf->value,
             'created_at' => now(), 'updated_at' => now()];
         $stat = ['status' => 'ok', 'anker_id' => $ankerId, 'bedarfe' => 0, 'eigenschaften' => 0, 'komponenten' => 0,
-            'kombinationen' => 0, 'konflikte' => 0, 'offen' => 0];
+            'kombinationen' => 0, 'konflikte' => 0, 'hinweise' => 0, 'offen' => 0];
 
         DB::transaction(function () use ($p, $ankerId, $basis, &$stat) {
             $entwurf = WissensStatus::Entwurf->value;
@@ -122,6 +125,16 @@ final class AnkerWissenImport
             foreach ((array) ($p['zerstoert'] ?? []) as $z) {
                 $name = trim((string) ($z['name'] ?? ''));
                 if ($name === '') {
+                    continue;
+                }
+                if (($z['art'] ?? null) === AnkerGraph::HINWEIS) {
+                    // Warnung ohne Sperre mit strukturiertem Ziel (anker:<slug> | gruppe:<Unterkategorie>)
+                    $ziel = trim((string) ($z['ziel'] ?? ''));
+                    if (preg_match('/^(anker|gruppe):\S/u', $ziel)) {
+                        $this->offen($ankerId, AnkerGraph::HINWEIS, $ziel, $name, $z['grund'] ?? null, $basis);
+                        $stat['hinweise']++;
+                    }
+
                     continue;
                 }
                 if (($z['art'] ?? 'zutat') !== 'zutat') {

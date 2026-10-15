@@ -26,6 +26,11 @@ final class AnkerGraph
     /** Spec 60 · P4: Kontrast/Kombination/Konflikt (gerichtet, mit Status). */
     public const BEZIEHUNGEN = 'foodalchemist_anchor_beziehungen';
 
+    /** Prüfliste + Hinweise aus den Dossiers ({@see hinweise}). */
+    public const OFFEN = 'foodalchemist_anchor_wissen_offen';
+
+    public const HINWEIS = 'hinweis';
+
     /** Stufen. */
     public const HARMONIERT = 3;
 
@@ -157,6 +162,50 @@ final class AnkerGraph
             ->get(['anchor_a_id', 'anchor_b_id', 'art', 'achse', 'rang', 'status', 'grundlage'])
             ->map(fn ($r) => (object) ['von' => (int) $r->anchor_a_id, 'zu' => (int) $r->anchor_b_id, 'art' => $r->art,
                 'achse' => (string) $r->achse, 'rang' => (int) $r->rang, 'status' => $r->status, 'grundlage' => $r->grundlage]);
+    }
+
+    /**
+     * Dossier-Hinweise (Spec 60 · P4, Teil 2): Warnungen aus „Zerstört", die keine Sperre sind —
+     * Dosis („ein Spritzer hebt, zu viel überdeckt"), Technik, ganze Gruppen. Das Ziel steht
+     * strukturiert in `anchor_wissen_offen.name`: `anker:<slug>` oder `gruppe:<Inspire-Unterkategorie>`.
+     * Getroffen wird nur über den Anker bzw. dessen Unterkategorie (gleich oder darunter), nie über
+     * Freitext — Zitronengras ist nicht Zitrone. Verworfene zählen nie.
+     *
+     * @param  array<int, int|string>  $von
+     * @param  array<int, int|string>  $zu
+     * @return list<object{von: int, zu: int, begriff: string, grund: ?string, status: string}>
+     */
+    public function hinweise(array $von, array $zu): array
+    {
+        [$von, $zu] = [$this->ids($von), $this->ids($zu)];
+        if ($von === [] || $zu === []) {
+            return [];
+        }
+        $zeilen = DB::table(self::OFFEN)->whereIn('anchor_id', $von)->where('art', self::HINWEIS)
+            ->where('status', '!=', WissensStatus::Verworfen->value)->orderBy('id')
+            ->get(['anchor_id', 'name', 'kontext', 'grund', 'status']);
+        if ($zeilen->isEmpty()) {
+            return [];
+        }
+        $ziele = DB::table('foodalchemist_vocab_pairing_anchors')->whereIn('id', $zu)->get(['id', 'slug', 'subcategory']);
+        $out = [];
+        foreach ($zeilen as $r) {
+            [$typ, $wert] = array_pad(explode(':', (string) $r->name, 2), 2, '');
+            foreach ($ziele as $z) {
+                $treffer = match ($typ) {
+                    'anker' => $z->slug === $wert,
+                    'gruppe' => $wert !== '' && $z->subcategory !== null
+                        && ($z->subcategory === $wert || str_starts_with($z->subcategory, $wert.'/')),
+                    default => false,
+                };
+                if ($treffer && (int) $z->id !== (int) $r->anchor_id) {
+                    $out[] = (object) ['von' => (int) $r->anchor_id, 'zu' => (int) $z->id,
+                        'begriff' => (string) ($r->kontext ?? $wert), 'grund' => $r->grund, 'status' => $r->status];
+                }
+            }
+        }
+
+        return $out;
     }
 
     /**
