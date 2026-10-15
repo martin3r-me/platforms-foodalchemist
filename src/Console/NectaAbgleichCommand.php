@@ -28,7 +28,9 @@ class NectaAbgleichCommand extends Command
             ->createMutexNameUsing(self::SPERRE)->withoutOverlapping(720)
             ->onOneServer()->runInBackground()
             ->description('FoodAlchemist: Necta-Abgleich (Preis-Delta, neue Artikel)');
-        $schedule->command(self::class, ['--verbindung' => $verbindung, '--voll' => true])
+        // '--voll' als Element OHNE Schlüssel: ['--voll' => true] rendert Laravel als --voll='1', und ein Flag ohne Wert wirft
+        // „The "--voll" option does not accept a value.“ (auf io aufgetreten, 16.10.2026)
+        $schedule->command(self::class, ['--verbindung' => $verbindung, '--voll'])
             ->weeklyOn((int) config('foodalchemist.necta.vollvergleich_tag', 0), config('foodalchemist.necta.vollvergleich_zeit', '03:30'))
             ->createMutexNameUsing(self::SPERRE)->withoutOverlapping(720)
             ->onOneServer()->runInBackground()

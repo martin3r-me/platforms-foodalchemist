@@ -270,8 +270,28 @@ it('Zeitplan: nächtlicher Lauf und Vollvergleich teilen EINE Sperre, laufen im 
         ->and($nacht->withoutOverlapping)->toBeTrue()->and($voll->withoutOverlapping)->toBeTrue()
         ->and($nacht->runInBackground)->toBeTrue()->and($voll->runInBackground)->toBeTrue()
         ->and($nacht->onOneServer)->toBeTrue()->and($voll->onOneServer)->toBeTrue()
-        ->and($nacht->expression)->toBe('30 2 * * *')->and($voll->expression)->toBe('30 3 * * 0')
-        ->and((string) $voll->command)->toContain('--voll');
+        ->and($nacht->expression)->toBe('30 2 * * *')->and($voll->expression)->toBe('30 3 * * 0');
+});
+
+it('Zeitplan: die GERENDERTE Befehlszeile parst gegen die Optionen des Befehls (Flag --voll ohne Wert)', function () {
+    // Lücke auf io (16.10.2026): ['--voll' => true] wurde zu --voll='1' → „The "--voll" option does not accept a value.“
+    $schedule = new \Illuminate\Console\Scheduling\Schedule;
+    \Platform\FoodAlchemist\Console\NectaAbgleichCommand::planen($schedule);
+    $definition = \Illuminate\Support\Facades\Artisan::all()['foodalchemist:necta-abgleich']->getDefinition();
+    $parsen = function ($event) use ($definition) {
+        $zeile = (string) $event->command;
+        $argumente = trim(substr($zeile, strpos($zeile, 'foodalchemist:necta-abgleich') + strlen('foodalchemist:necta-abgleich')));
+        $eingabe = new \Symfony\Component\Console\Input\StringInput($argumente);
+        $eingabe->bind($definition);   // wirft wie Artisan selbst, wenn eine Option nicht passt
+
+        return $eingabe;
+    };
+    [$nacht, $voll] = array_values(array_filter($schedule->events(), fn ($e) => str_contains((string) $e->command, 'necta-abgleich')));
+
+    expect($parsen($voll)->getOption('voll'))->toBeTrue()
+        ->and($parsen($voll)->getOption('verbindung'))->toBe('1')
+        ->and($parsen($nacht)->getOption('voll'))->toBeFalse()
+        ->and($parsen($nacht)->getOption('verbindung'))->toBe('1');
 });
 
 it('Zeitplan: ohne foodalchemist.necta.abgleich_aktiv ist der Abgleich nicht eingeplant (Standard aus)', function () {
