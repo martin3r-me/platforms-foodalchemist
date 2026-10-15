@@ -50,7 +50,10 @@ beforeEach(function () {
                 'allergeneWheat' => 3, 'allergeneRye' => 1, 'allergeneOats' => 0],
         ],
         'supplier-item-declaration-substances' => [
-            ['supplierItemId' => 36674789, 'withDye' => 3, 'withPreservative' => 1, 'caffeinated' => 0, 'isGanzNeuesFeld' => 3],
+            // Feldnamen wie die Raw-API sie liefert (Nachholer-Lauf 3 auf foodalchemist.io, 15.10.2026)
+            ['supplierItemId' => 36674789, 'declarationWithDye' => 3, 'declarationWithPreservative' => 1, 'declarationCaffeinated' => 0,
+                'declarationBExcessiveConsumptionCanHaveLaxativeEffect' => 1, 'declarationTableSweetenerBasedOn' => 0,
+                'declarationIodhTlig' => 1, 'declarationReserve' => 0, 'isGanzNeuesFeld' => 3],
         ],
         'supplier-item-nutritional-values' => [
             ['supplierItemId' => 50000001, 'energyKilocalories' => 72, 'energyKilojoules' => 301, 'protein' => 0.1, 'fat' => 0,
@@ -120,7 +123,9 @@ it('echter Lauf: legt Fehlendes global an, nach den Konventionen des Bestands; B
 
     $dk = DB::table('foodalchemist_item_declarations')->where('legacy_id', 36674789)->sole();
     expect((int) $dk->with_dye)->toBe(3)->and((int) $dk->with_preservative)->toBe(1)->and((int) $dk->caffeinated)->toBe(0)
-        ->and(json_decode($dk->details, true))->toBe(['is_ganz_neues_feld' => 3])
+        ->and((int) $dk->excessive_consumption_laxative)->toBe(1)->and($dk->with_sweetener)->toBeNull()
+        // wie Bestand: Süßungsbasis in details, Jod/Reserve hat der Alt-Import nie übernommen
+        ->and(json_decode($dk->details, true))->toBe(['is_ganz_neues_feld' => 3, 'table_sweetener_basis' => 0])
         ->and($r['zaehler']['deklaration_unbekannte_felder'])->toBe(['isGanzNeuesFeld']);
 
     $preis = DB::table('foodalchemist_prices')->where('legacy_id', 138432829)->sole();
