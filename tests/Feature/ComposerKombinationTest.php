@@ -43,13 +43,16 @@ beforeEach(function () {
         ->pluck('label')->values()->all();
 });
 
-it('Netz: nur ★★★-Partner, Kontrast-Lieferant für den offenen Bedarf, keine Brücken', function () {
+it('Netz: nur ★★★-Partner; ★★★-Partner, der den offenen Bedarf deckt, bleibt im ★★★-Ring mit Kontrast-Markierung, keine Brücken', function () {
     $n = ($this->netz)(['pumpkin']);
 
-    expect(($this->knoten)($n, 'stern3'))->toBe(['Salbei'])
+    // Reisessig: ★★★ mit Kürbis UND deckt dessen Säure-Bedarf → vorn im ★★★-Ring (Dominique 15.10.:
+    // vorher verschwanden alle ★★★-Partner des Kürbis in den Kontrast-Ring)
+    expect(($this->knoten)($n, 'stern3'))->toBe(['Reisessig', 'Salbei'])
         ->and(($this->knoten)($n, 'stern2'))->toBe([])                        // Walnuss (2★) fehlt
-        ->and(($this->knoten)($n, 'kontrast'))->toBe(['Reisessig'])
-        ->and(collect($n['nodes'])->firstWhere('label', 'Reisessig')['achse'])->toBe('Säure')
+        ->and(($this->knoten)($n, 'kontrast'))->toBe([])                      // nicht doppelt
+        ->and(collect($n['nodes'])->firstWhere('label', 'Reisessig')['auch_kontrast'])->toBe('Säure')
+        ->and(collect($n['nodes'])->firstWhere('label', 'Salbei')['auch_kontrast'])->toBeNull()
         ->and($n['meta'])->not->toHaveKey('bridge')
         ->and($n['meta']['typ_default'])->toBe(['stern3' => true, 'kontrast' => true])
         ->and(collect($n['edges'])->where('kind', 'bridge'))->toHaveCount(0);
@@ -129,4 +132,30 @@ it('Kontrast ohne ★★★: reiner Träger (Stufe 3) ja, Aroma-Lieferant (Stufe
     DB::table('foodalchemist_anchor_eigenschaften')->where('anchor_id', $this->a['rice_vinegar'])->update(['stufe' => 2]);
     app(KontrastAbleitung::class)->baue();
     expect(($this->knoten)(($this->netz)(['pumpkin']), 'kontrast'))->toBe([]);                       // Säure 2, ohne ★★★
+});
+
+it('Netz-Rang ★★★: Klassiker und Verbreitung vor dem Alphabet, Grundform vor Variante, je Grundname einer', function () {
+    $neu = function (string $slug, string $name, ?string $grund = null, ?string $verfahren = null) {
+        DB::table('foodalchemist_vocab_pairing_anchors')->insert(['uuid' => (string) UuidV7::generate(), 'slug' => $slug,
+            'display_de' => $name, 'grundname' => $grund, 'verfahren' => $verfahren, 'aroma_intensitaet' => 1.0, 'created_at' => now(), 'updated_at' => now()]);
+        $id = (int) DB::getPdo()->lastInsertId();
+        Harmonie::kante($this->a['pumpkin'], $id, 3);
+
+        return $id;
+    };
+    $neu('aaa_exot', 'Aaa-Exot');
+    $ingwer = $neu('ginger', 'Ingwer', 'Ingwer');
+    $neu('ginger_roasted', 'Ingwer, geröstet', 'Ingwer', 'geroestet');
+    $thymian = $neu('thyme', 'Thymian');
+    $bbb = $neu('bbb_exot', 'Bbb-Exot');
+    DB::table('foodalchemist_anchor_beziehungen')->insert(['anchor_a_id' => $this->a['pumpkin'], 'anchor_b_id' => $thymian,
+        'art' => 'kombination', 'achse' => '', 'grundlage' => 'dossier', 'status' => 'entwurf', 'created_at' => now(), 'updated_at' => now()]);
+    $gp = $this->makeGp($this->rootTeam, 'Ingwer: frisch');
+    DB::table('foodalchemist_gp_anchor_mappings')->insert(['uuid' => (string) UuidV7::generate(), 'team_id' => $this->rootTeam->id,
+        'gp_id' => $gp->id, 'anchor_id' => $ingwer, 'role' => 'kern', 'created_at' => now(), 'updated_at' => now()]);
+
+    $stern3 = ($this->knoten)(($this->netz)(['pumpkin']), 'stern3');
+
+    // Reisessig deckt den Bedarf · Thymian Klassiker · Ingwer verbreitet (nur die Grundform) · Rest nach Slug
+    expect($stern3)->toBe(['Reisessig', 'Thymian', 'Ingwer', 'Aaa-Exot', 'Bbb-Exot', 'Salbei']);   // Ingwer, geröstet: gleicher Grundname, fällt weg
 });
