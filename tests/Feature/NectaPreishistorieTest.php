@@ -42,7 +42,7 @@ beforeEach(function () {
 it('Probe misst type, amountFrom, source und Zeilen je Artikel, schreibt nur die Laufzeile, lässt inaktive aus', function () {
     $vorher = [DB::table('foodalchemist_prices')->count(), DB::table('foodalchemist_price_history')->count()];
 
-    $this->artisan('foodalchemist:necta-preishistorie-nachholen', ['--probe' => true, '--pause-ms' => 0])
+    $this->artisan('foodalchemist:necta-preishistorie-nachholen', ['--analyse' => true, '--pause-ms' => 0])
         ->expectsOutputToContain('type: A 1 · N 4')
         ->expectsOutputToContain('amountFrom: 0 4 · 10 1')
         ->expectsOutputToContain('source (Top 10): 175492 5')
@@ -61,9 +61,53 @@ it('Probe misst type, amountFrom, source und Zeilen je Artikel, schreibt nur die
         ->and(collect($this->attrappe->filter)->pluck(1)->pluck('supplierId')->unique()->values()->all())->toBe([19491]);
 });
 
-it('ohne --probe verweigert der Befehl (Import erst nach belegter Zuordnung)', function () {
-    $this->artisan('foodalchemist:necta-preishistorie-nachholen', ['--pause-ms' => 0])->assertFailed();
-    expect($this->attrappe->aufrufe)->toBe([]);
+// ── Stufe 2: Import (16.10.2026) ──────────────────────────────────────────────────────────────────────────────────────────
+
+it('Import: N → 0, A → 2, je Artikel+Start+Status eine Zeile (kleinste Staffel), offen = NULL, Zeit UTC, team_id des Artikels', function () {
+    $this->attrappe->daten['supplier-item-price-historys'][] = ['id' => 6, 'supplierItemId' => 36674788, 'tenantId' => 1494, 'type' => 'N',
+        'price' => 0.95, 'priceOrderingUnit' => 0.95, 'amountFrom' => 2, 'validFrom' => '2026-10-15T00:00:00', 'validTo' => '3000-12-31T23:59:59', 'source' => 175492];
+    $this->attrappe->daten['supplier-item-price-historys'][] = ['id' => 7, 'supplierItemId' => 36674789, 'tenantId' => 1494, 'type' => 'X',
+        'price' => 1.0, 'priceOrderingUnit' => 1.0, 'amountFrom' => 0, 'validFrom' => '2026-01-01T00:00:00', 'validTo' => '3000-12-31T23:59:59', 'source' => 1];
+
+    $this->artisan('foodalchemist:necta-preishistorie-nachholen', ['--pause-ms' => 0])->assertSuccessful();
+
+    $h = DB::table('foodalchemist_price_history')->where('quelle', 'necta_historie')->orderBy('necta_historie_id')->get()->keyBy('necta_historie_id');
+    $a = FoodAlchemistSupplierItem::where('legacy_id', 36674788)->value('id');
+    expect($h->keys()->all())->toBe([1, 2, 3, 4, 5])                                                   // 6 = Staffel, 7 = type X, 9 = inaktiv
+        ->and($h[1]->status)->toBe('0')->and($h[4]->status)->toBe('2')
+        ->and($h[1]->status_valid_from)->toBe('2025-12-31 23:00:00')->and($h[1]->valid_to)->toBe('2026-05-31 21:59:59')   // Berlin → UTC
+        ->and($h[3]->valid_to)->toBeNull()                                                                  // 3000-12-31 = offen
+        ->and((int) $h[3]->supplier_item_id)->toBe($a)->and($h[3]->team_id)->toBeNull()->and($h[3]->price_id)->toBeNull()
+        ->and((float) $h[3]->price)->toBe(0.99)->and((bool) $h[3]->is_blocked)->toBeFalse()
+        ->and(json_decode($h[4]->details, true))->toBe(['source' => 175492, 'amount_from' => 10, 'type' => 'A']);
+
+    $z = json_decode(DB::table('foodalchemist_necta_laeufe')->where('art', 'preishistorie')->value('zaehler'), true);
+    expect($z['staffel_verworfen'])->toBe(1)->and($z['typ_unbekannt'])->toBe(1)->and($z['geschrieben'])->toBe(5);
+});
+
+it('Import ist idempotent über die Necta-History-ID; Probe schreibt nichts', function () {
+    $this->artisan('foodalchemist:necta-preishistorie-nachholen', ['--probe' => true, '--pause-ms' => 0])
+        ->expectsOutputToContain('PROBELAUF')->assertSuccessful();
+    expect(DB::table('foodalchemist_price_history')->count())->toBe(0);
+
+    $this->artisan('foodalchemist:necta-preishistorie-nachholen', ['--pause-ms' => 0])->assertSuccessful();
+    $this->artisan('foodalchemist:necta-preishistorie-nachholen', ['--pause-ms' => 0])->assertSuccessful();
+    $z = json_decode(DB::table('foodalchemist_necta_laeufe')->where('art', 'preishistorie')->where('probe', false)->orderByDesc('id')->value('zaehler'), true);
+    expect(DB::table('foodalchemist_price_history')->count())->toBe(5)
+        ->and($z['schon_vorhanden'])->toBe(5)->and($z['geschrieben'])->toBe(0);
+});
+
+it('--seit lässt ältere Stände aus; --fortsetzen macht beim nächsten Lieferanten weiter', function () {
+    $this->artisan('foodalchemist:necta-preishistorie-nachholen', ['--seit' => '2026-06-01T00:00:00', '--pause-ms' => 0])->assertSuccessful();
+    expect(DB::table('foodalchemist_price_history')->pluck('necta_historie_id')->map(fn ($v) => (int) $v)->sort()->values()->all())->toBe([2, 3, 4, 5]);
+
+    DB::table('foodalchemist_price_history')->delete();
+    $lauf = DB::table('foodalchemist_necta_laeufe')->insertGetId(['uuid' => (string) Symfony\Component\Uid\UuidV7::generate(), 'verbindung_id' => 1,
+        'art' => 'preishistorie', 'probe' => false, 'status' => 'fehler', 'cursor' => json_encode(['lieferant_index' => 1]),
+        'gestartet_at' => now(), 'created_at' => now(), 'updated_at' => now()]);
+    $this->artisan('foodalchemist:necta-preishistorie-nachholen', ['--fortsetzen' => $lauf, '--pause-ms' => 0])->assertSuccessful();
+    expect(DB::table('foodalchemist_price_history')->count())->toBe(0)                  // einziger aktiver Lieferant galt als erledigt
+        ->and(DB::table('foodalchemist_necta_laeufe')->find($lauf)->status)->toBe('fertig');
 });
 
 it('wirkt der supplierId-Filter nicht, bricht der Lieferant nach Seite 1 ab', function () {
