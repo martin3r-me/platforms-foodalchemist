@@ -30,14 +30,23 @@
     $n = fn ($x, int $i) => $namen[(string) ($x['bestandteile'][$i] ?? '')] ?? null;
     $achse = fn ($x) => $x['achse'] ? \Platform\FoodAlchemist\Enums\Achse::tryFrom($x['achse'])?->label() : null;
 
+    // Hinweis-Satz „Hinweis zu <A> + <B>: <Begriff> – <Grund>" → nur „<Begriff> – <Grund>" (Labels können „:" enthalten).
+    $voll = collect($daten['bestandteile'] ?? [])->mapWithKeys(fn ($t) => [(string) $t['schluessel'] => (string) $t['label']]);
+    $hinweisRest = function (array $x) use ($voll): string {
+        $kopf = 'Hinweis zu '.($voll[(string) ($x['bestandteile'][0] ?? '')] ?? '').' + '.($voll[(string) ($x['bestandteile'][1] ?? '')] ?? '').': ';
+
+        return str_starts_with($x['text'], $kopf) ? mb_substr($x['text'], mb_strlen($kopf)) : $x['text'];
+    };
+
     // Zeile: [Chip, Text]. Fehlt ein Name (ältere Daten), bleibt der volle Satz stehen.
-    $zeile = function (array $x) use ($n, $achse): array {
+    $zeile = function (array $x) use ($n, $achse, $hinweisRest): array {
         [$a0, $a1] = [$n($x, 0), $n($x, 1)];
         return match ($x['typ']) {
             'spannung' => $a0 && $a1 ? [$achse($x), $a1.' → '.$a0] : [null, $x['text']],
             'konflikt' => $a0 && $a1 ? [null, $a0.' ↔ '.$a1] : [null, $x['text']],
             'bedarf_offen' => [$achse($x), ($a0 ? 'für '.$a0 : $x['text']).(str_starts_with($x['text'], 'Es fehlt') ? '' : ' · könnte fehlen')],
             'unbekannt' => [null, $a0 ?? $x['text']],
+            'hinweis' => [null, ($a0 && $a1 ? $a0.' + '.$a1.' · ' : '').$hinweisRest($x)],
             default => $a0 && $a1 ? [null, $a0.' + '.$a1] : [null, $x['text']],
         };
     };
@@ -50,6 +59,7 @@
         'harmoniert' => ['Harmonie (gemessen)', false, null],
         'spannung' => ['Spannung', false, null],
         'kombination' => ['Klassiker', false, null],
+        'hinweis' => ['Hinweis aus Dossier', false, null],   // grau, keine Ampel (Kurator 15.10.)
         'unbekannt' => ['Ohne Aroma-Zuordnung', false, null],
     ];
     $leise = $liste('passt')->concat($liste('neutral'));
