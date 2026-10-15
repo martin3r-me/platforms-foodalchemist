@@ -42,7 +42,7 @@ beforeEach(function () {
         }
     };
     $mkKante($this->zander, $this->roteBete, 'klassisch');
-    $mkKante($this->zander, $this->meerrettich, 'aroma');
+    $mkKante($this->zander, $this->meerrettich, 'erprobt');   // ★★★ — Nachbarn sind nur noch ★★★ (Dominique 15.10.)
     $mkKante($this->zander, $this->dill, 'klassisch');
 
     $supplier = FoodAlchemistSupplier::create(['team_id' => $this->rootTeam->id, 'name' => 'Necta']);

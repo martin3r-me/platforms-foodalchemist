@@ -24,7 +24,7 @@ class ComposerAnkerSucheTool extends FoodAlchemistTool implements ToolContract, 
     public function getDescription(): string
     {
         return 'Composer: durchsucht das Aroma-Anker-Vokabular (Freitext auf Slug/Anzeigename + optional Kategorie) '
-            . 'und liefert Anker mit id + slug + Best/Good-Badge (typ: stern3/stern2) relativ zur bereits gewählten '
+            . 'und liefert Anker mit id + slug + Badge (typ: stern3 = ★★★ harmoniert · kontrast · konflikt) relativ zur bereits gewählten '
             . 'Menge (gewaehlte_ids) oder einem Fokus-Anker (fokus_id). Der Einstieg in den headless Composer: von '
             . 'einem Namen zu Anker-IDs für composer.KOHAESION, bzw. zu Slugs für recipes.GENERATE (seed_anker). '
             . 'Liefert zusätzlich alle verfügbaren Kategorien für den Filter. Read-only.';

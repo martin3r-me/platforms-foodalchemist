@@ -98,7 +98,7 @@ it('MCP: pairings.SUGGEST, composer.KOHAESION und kombination.GET führen die Ko
     $harmoniert = fn ($daten) => collect($daten['aussagen']['harmoniert'] ?? [])->pluck('text')->all();
     expect($suggest->success)->toBeTrue($suggest->error ?? '')
         ->and($harmoniert($suggest->data['kombination']))->toBe(['Rind: Hüfte und Fond: Kalb: harmonieren', 'Fond: Kalb und Sauce: Pfeffer: harmonieren'])
-        ->and(collect($suggest->data['kombination']['aussagen']['passt'] ?? [])->pluck('text')->all())->toBe(['Rind: Hüfte und Rosmarin: frisch: passen'])
+        ->and(collect($suggest->data['kombination']['aussagen']['passt'] ?? [])->pluck('text')->all())->toBe(['Rind: Hüfte und Rosmarin: frisch: teilen Grund-Aromen'])
         ->and($suggest->data['kombination']['aussagen']['harmoniert'][0]['grundlage'])->toBe('inspire_gemessen');
 
     $get = $registry->get('foodalchemist.kombination.GET')->execute(['recipe_id' => $this->gericht->id], $kontext);

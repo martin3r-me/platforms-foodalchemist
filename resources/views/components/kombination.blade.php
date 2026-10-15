@@ -4,7 +4,7 @@
 
      Kompakt (Dominique 2026-10-07: „sehr viel Text", Spannung immer offen):
      - offen nur, was zu tun ist (Konflikt, Es fehlt); Harmonie, Spannung, Klassiker, ohne Zuordnung
-       eingeklappt mit Anzahl, „passt"/„neutral" wie bisher unter „Weitere Paare".
+       eingeklappt mit Anzahl, Grund-Aroma (★★)/„neutral" unter „Weitere Paare" — ★★ ist keine Empfehlung.
      - je Aussage EINE Zeile mit Kurznamen (GP ohne Zusatz nach dem Doppelpunkt, Rezept ohne Klasse
        davor), Achse als Chip; Grundlage als Punkt (● belegt/gemessen, ○ ungeprüft), voller Satz + Grundlage
        im Tooltip. Die Aussage selbst (Text, Grundlage) bleibt unverändert — MCP/Generator lesen sie weiter. --}}
@@ -146,12 +146,12 @@
             <summary class="flex cursor-pointer list-none items-center gap-1.5 text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-3)] hover:text-[var(--fa-ink-2)]">
                 @svg('heroicon-m-chevron-right', 'w-3.5 h-3.5 shrink-0 transition-transform group-open:rotate-90')
                 Weitere Paare <span class="tabular-nums opacity-70">{{ $leise->count() }}</span>
-                <span class="font-normal">· nur „passen" oder ohne aromatischen Bezug</span>
+                <span class="font-normal">· nur Grund-Aromen gemeinsam oder ohne aromatischen Bezug</span>
             </summary>
             <ul class="mt-1 flex flex-col gap-0.5 text-[var(--fa-ink-3)]" data-aussagen="weitere">
                 @foreach($leise as $x)
                     @php [, $text] = $zeile($x); @endphp
-                    <li class="truncate" title="{{ $x['text'] }}">{{ $text }}<span class="text-[length:var(--fa-text-sm)]"> · {{ $x['typ'] === 'passt' ? 'passen' : 'kein Bezug' }}</span></li>
+                    <li class="truncate" title="{{ $x['text'] }}">{{ $text }}<span class="text-[length:var(--fa-text-sm)]"> · {{ $x['typ'] === 'passt' ? 'Grund-Aroma' : 'kein Bezug' }}</span></li>
                 @endforeach
             </ul>
         </details>

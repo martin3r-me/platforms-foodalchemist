@@ -38,7 +38,7 @@ final class Kombinationslogik
     /** Ab diesem Harmonie-Wert (Anteil harmonierender Aromamasse) „harmonieren" zwei Bestandteile. Kalibriert 2026-10-06: obere 20 % der Paare. */
     public const HARMONIERT_AB = 0.10;
 
-    /** Ab diesem Anteil Stufe-2-Masse „passen" sie (Hinweis, zählt nicht). */
+    /** Ab diesem Anteil ★★-Masse „teilen sie Grund-Aromen" (leise, keine Empfehlung, zählt nicht). */
     public const PASST_AB = 0.10;
 
     /** Dossier-Hinweise je Gericht (Kurator 15.10.: mehr wird Rauschen). */
@@ -673,7 +673,7 @@ final class Kombinationslogik
         }
         if ($h['passt'] >= self::PASST_AB) {
             return new Aussage(AussageTyp::Passt, Grundlage::InspireGemessen,
-                "{$a['label']} und {$b['label']}: passen", $paar, null, $h['passt']);
+                "{$a['label']} und {$b['label']}: teilen Grund-Aromen", $paar, null, $h['passt']);
         }
 
         return new Aussage(AussageTyp::Neutral, Grundlage::InspireGemessen,

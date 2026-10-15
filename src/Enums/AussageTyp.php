@@ -9,7 +9,7 @@ namespace Platform\FoodAlchemist\Enums;
 enum AussageTyp: string
 {
     case Harmoniert = 'harmoniert';      // gemessene Harmonie (Inspire, Stufe 3) trägt
-    case Passt = 'passt';                // nur schwache Harmonie (Stufe 2) — Hinweis, zählt nicht
+    case Passt = 'passt';                // ★★-Masse: teilen Grund-Aromen — keine Empfehlung, zählt nicht
     case Neutral = 'neutral';            // kein nennenswerter aromatischer Bezug (gemessen)
     case Spannung = 'spannung';          // ein Bedarf der einen Seite wird von der anderen gedeckt
     case BedarfOffen = 'bedarf_offen';   // ein Bedarf, den im Gericht niemand deckt
@@ -22,7 +22,7 @@ enum AussageTyp: string
     {
         return match ($this) {
             self::Harmoniert => 'harmonieren',
-            self::Passt => 'passen',
+            self::Passt => 'Grund-Aroma',
             self::Neutral => 'neutral',
             self::Spannung => 'Spannung',
             self::BedarfOffen => 'fehlt',
