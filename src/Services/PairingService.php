@@ -1759,15 +1759,21 @@ class PairingService
         // sonst relativ zur ganzen Auswahl.
         $badgeBasis = $focusId !== null ? [$focusId] : $selected;
         $badge = [];
+        $auchKontrast = [];
         if ($badgeBasis !== []) {
             // Spec 60: ★★★ = harmoniert · kontrast = deckt einen offenen Bedarf · konflikt = stört sich.
-            // Reihenfolge = Vorrang (später gewinnt): Kontrast vor ★★★, Konflikt vor allem.
+            // Wie im Netz (#393): ★★★, der zugleich einen Bedarf deckt, bleibt ★★★ und trägt die Achse
+            // (auch_kontrast); „kontrast" nur für Lieferanten ohne ★★★ (Klassiker). Konflikt vor allem.
             [$kand] = $this->kandidatenFuerAnker($badgeBasis);
             foreach ($kand as $c) {
                 $badge[(int) $c['id']] = $c['typ'];
             }
             foreach ($this->kontrastUndKonflikt($badgeBasis)[0] as $c) {
-                $badge[(int) $c['id']] = 'kontrast';                       // wie im Netz: Kontrast vor ★★★
+                if (($badge[(int) $c['id']] ?? null) === 'stern3') {
+                    $auchKontrast[(int) $c['id']] = $c['achse_label'];
+                } else {
+                    $badge[(int) $c['id']] = 'kontrast';
+                }
             }
             foreach ($this->graph()->beziehungen($badgeBasis, Kantenart::Konflikt) as $k) {
                 $badge[$k->zu] = 'konflikt';
@@ -1785,6 +1791,7 @@ class PairingService
                 'label' => $a->display_de ?: $a->slug,
                 'category' => $a->category,
                 'typ' => $badge[(int) $a->id] ?? null,
+                'auch_kontrast' => ($badge[(int) $a->id] ?? null) === 'stern3' ? ($auchKontrast[(int) $a->id] ?? null) : null,
             ])->all(),
             'total' => $total,
             'kategorien' => $kategorien,

@@ -1216,9 +1216,10 @@
                                             $punkt = ['stern3' => ['#fcd34d', '★★★ harmoniert'], 'kontrast' => ['#22d3ee', 'Kontrast: deckt einen offenen Bedarf'],
                                                 'konflikt' => ['#f43f5e', 'Konflikt: stört sich mit der Auswahl']][$it['typ'] ?? ''] ?? null;
                                         @endphp
-                                        <span class="w-2 h-2 rounded-full shrink-0" data-picker-typ="{{ $it['typ'] ?? '' }}"
-                                              style="background: {{ $punkt[0] ?? 'transparent' }}; {{ $punkt ? '' : 'border:1px solid rgba(148,163,184,.35);' }}"
-                                              title="{{ $punkt[1] ?? 'kein Bezug zur Auswahl' }}"></span>
+                                        @php $auch = ($it['auch_kontrast'] ?? null) ? ' · deckt auch '.$it['auch_kontrast'] : ''; @endphp
+                                        <span class="w-2 h-2 rounded-full shrink-0" data-picker-typ="{{ $it['typ'] ?? '' }}" @if($auch) data-picker-auch-kontrast="{{ $it['auch_kontrast'] }}" @endif
+                                              style="background: {{ $punkt[0] ?? 'transparent' }}; {{ $punkt ? '' : 'border:1px solid rgba(148,163,184,.35);' }} {{ $auch ? 'box-shadow: 0 0 0 1.5px #22d3ee;' : '' }}"
+                                              title="{{ ($punkt[1] ?? 'kein Bezug zur Auswahl').$auch }}"></span>
                                         <span class="flex-1 truncate">{{ $it['label'] }}</span>
                                         @if($it['category'])
                                             <span class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)] shrink-0">{{ $it['category'] }}</span>

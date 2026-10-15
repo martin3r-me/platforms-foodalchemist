@@ -77,8 +77,10 @@ it('Picker: ★★★, Kontrast und Konflikt relativ zur Auswahl', function () {
     $b = app(PairingService::class)->composerAnkerBrowse($this->rootTeam, '', null, [$this->a['pumpkin']]);
 
     expect(collect($b['items'])->pluck('typ', 'label')->all())->toBe([
-        'Anis' => 'konflikt', 'Reisessig' => 'kontrast', 'Salbei' => 'stern3', 'Vanille' => null, 'Walnuss' => null,
-    ]);
+        'Anis' => 'konflikt', 'Reisessig' => 'stern3', 'Salbei' => 'stern3', 'Vanille' => null, 'Walnuss' => null,
+    ])
+        // Reisessig: ★★★ UND deckt den Säure-Bedarf → bleibt ★★★ mit Markierung (wie im Netz, #393)
+        ->and(collect($b['items'])->pluck('auch_kontrast', 'label')->filter()->all())->toBe(['Reisessig' => 'Säure']);
 });
 
 it('Generator-Plan aus den gewählten Ankern: beim Gericht vorhandene Basisrezepte mit dem Aroma als Angebot', function () {
@@ -122,7 +124,7 @@ it('Composer-Tab rendert „Passt das zusammen?" aus der Kombinationslogik, Kont
         ->and($html)->toContain("toggleTyp('kontrast')")
         ->and($html)->not->toContain("toggleTyp('stern2')")
         ->and($html)->not->toContain('Anker-Paare über gemeinsame Partner')
-        ->and($html)->toContain('data-picker-typ="kontrast"');
+        ->and($html)->toContain('data-picker-auch-kontrast="Säure"');
 });
 
 it('Kontrast ohne ★★★: reiner Träger nur als Klassiker aus dem Dossier, ★★ lässt nichts zu', function () {
