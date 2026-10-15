@@ -1574,10 +1574,14 @@ class PairingService
         // Daraus: Kontrast-Ring (Lieferanten für offene Bedarfe), Konflikt-Linien und — nur im
         // Composer — der Hinweis „kein gemessener Bezug" an Ankern ohne jede Verbindung (neutral).
         [$kontrast, $konfliktKanten, $verbunden] = $this->kontrastUndKonflikt($innerIds);
-        // Ein Anker, der einen offenen Bedarf deckt, steht als Kontrast — die stärkere Aussage —
-        // und nicht zusätzlich im ★★★-Ring.
-        $kontrastIds = array_flip(array_map(fn ($c) => (int) $c['id'], $kontrast));
-        $kandidaten = array_values(array_filter($kandidaten, fn ($c) => ! isset($kontrastIds[(int) $c['id']])));
+        // Ein ★★★-Partner, der zugleich einen offenen Bedarf deckt, bleibt im ★★★-Ring und trägt die
+        // Kontrast-Achse als Markierung (Dominique 15.10.: vorher wanderten alle 6 ★★★-Partner des
+        // Kürbis in den Kontrast-Ring, der ★★★-Ring war leer). Der Kontrast-Ring zeigt den Rest.
+        $kontrastVon = [];
+        foreach ($kontrast as $c) {
+            $kontrastVon[(int) $c['id']] = $c;
+        }
+
         $edges = array_merge($edges, $konfliktKanten);
         if ($composer && count($innerIds) >= 2) {
             foreach ($ankerNodes as &$an) {
@@ -1586,17 +1590,32 @@ class PairingService
             unset($an);
         }
 
+        // Rang (vorher bei Gleichstand alphabetisch: „Afrikanische Tagetes, Alpenpfeffer …" vorne):
+        // verbindet mehr gewählte Anker · deckt einen offenen Bedarf · Klassiker aus dem Dossier ·
+        // Grundform vor Variante · Verbreitung im Katalog · Name. Vielfalt: je Grundname einer.
         $jeTyp = fn ($typ) => array_slice(
-            (function () use ($kandidaten, $typ) {
+            (function () use ($kandidaten, $typ, $kontrastVon) {
                 $l = array_values(array_filter($kandidaten, fn ($c) => $c['typ'] === $typ));
-                usort($l, fn ($x, $y) => [$y['cover'], $y['weight'], $x['slug']] <=> [$x['cover'], $x['weight'], $y['slug']]);
+                $schluessel = fn ($c) => [$c['cover'], isset($kontrastVon[(int) $c['id']]) ? 1 : 0, $c['klassiker'] ? 1 : 0,
+                    $c['grundform'] ? 1 : 0, $c['verbreitung'], $c['weight']];
+                usort($l, fn ($x, $y) => [...$schluessel($y), $x['slug']] <=> [...$schluessel($x), $y['slug']]);
+                $gesehen = [];
 
-                return $l;
+                return array_values(array_filter($l, function ($c) use (&$gesehen) {
+                    if (isset($gesehen[$c['grundname']])) {
+                        return false;
+                    }
+
+                    return $gesehen[$c['grundname']] = true;
+                }));
             })(),
             0, self::KANDIDATEN_PRO_TYP
         );
         // Spec 60: Harmonie-Kandidaten nur ★★★; der äußere Ring trägt den Kontrast (offene Bedarfe).
         $stern3 = $jeTyp('stern3');
+        // Wer im ★★★-Ring steht, erscheint nicht ein zweites Mal im Kontrast-Ring.
+        $stern3Ids = array_flip(array_map(fn ($c) => (int) $c['id'], $stern3));
+        $kontrast = array_values(array_filter($kontrast, fn ($c) => ! isset($stern3Ids[(int) $c['id']])));
 
         $basis = $this->komplementaerBasisrezepte($team, $recipeId, $candMeta);
 
@@ -1607,9 +1626,11 @@ class PairingService
         $mB = max(1, count($stern3));
         foreach ($stern3 as $idx => $c) {
             [$x, $y] = $this->positionAufKreis($idx, $mB, self::R_BEST, $cx, $cy);
+            $k = $kontrastVon[(int) $c['id']] ?? null;
             $kandidatNodes[] = [
                 'id' => 'k:'.$c['id'], 'kind' => 'kandidat', 'typ' => 'stern3', 'level' => 3,
                 'label' => $c['display_de'], 'slug' => $c['slug'], 'cover' => $c['cover'], 'x' => $x, 'y' => $y,
+                'auch_kontrast' => $k['achse_label'] ?? null,
             ];
             foreach ($c['partner'] as $p) {
                 $edges[] = ['source' => 'k:'.$c['id'], 'target' => 'a:'.$p['anker_id'], 'kind' => 'kandidat',
@@ -1910,9 +1931,16 @@ class PairingService
 
         // Spec 60: Kandidaten sind nur echtes Food Pairing (3★); 2★ ist Rauschen.
         $kanten = $this->graph()->kanten($innerIds, null, AnkerGraph::HARMONIERT, $innerIds);
+        $kandIds = $kanten->pluck('zu')->unique()->values()->all();
         $meta = DB::table('foodalchemist_vocab_pairing_anchors')
-            ->whereIn('id', $kanten->pluck('zu')->unique()->all())
-            ->get(['id', 'slug', 'display_de'])->keyBy('id');
+            ->whereIn('id', $kandIds)
+            ->get(['id', 'slug', 'display_de', 'grundname', 'verfahren'])->keyBy('id');
+        // Rang-Zutaten wie KontrastAbleitung (Spec 60 P4): Klassiker aus dem Dossier, Grundform, Verbreitung
+        $klassiker = $kandIds === [] ? [] : $this->graph()->beziehungen($kandIds, Kantenart::Kombination, $innerIds)
+            ->merge($this->graph()->beziehungen($innerIds, Kantenart::Kombination, $kandIds))
+            ->flatMap(fn ($k) => [$k->von, $k->zu])->flip()->all();
+        $verbreitung = $kandIds === [] ? [] : DB::table('foodalchemist_gp_anchor_mappings')->whereNull('deleted_at')
+            ->whereIn('anchor_id', $kandIds)->selectRaw('anchor_id, COUNT(*) AS n')->groupBy('anchor_id')->pluck('n', 'anchor_id')->all();
 
         $agg = [];
         foreach ($kanten as $k) {
@@ -1946,10 +1974,14 @@ class PairingService
                     break;
                 }
             }
+            $m = $meta[$cid];
             $kandidaten[] = [
                 'id' => $cid, 'slug' => $c['slug'], 'display_de' => $c['display_de'],
                 'typ' => $c['best']['typ'], 'level' => $c['best']['level'], 'weight' => $c['best']['weight'],
                 'cover' => $cover, 'partner' => $c['partner'],
+                'klassiker' => isset($klassiker[$cid]), 'grundform' => $m->verfahren === null,
+                'verbreitung' => (int) ($verbreitung[$cid] ?? 0),
+                'grundname' => mb_strtolower(trim((string) ($m->grundname ?: $m->slug))),
             ];
             $candMeta[$cid] = ['typ' => $c['best']['typ'], 'anker_id' => $primaerAnker, 'slug' => $c['slug']];
         }

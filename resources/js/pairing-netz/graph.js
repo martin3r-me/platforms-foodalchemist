@@ -354,7 +354,7 @@ export function pairingNetzGraph(config) {
         .attr('r', (d) => this._radius(d))
         .attr('fill', (d) => this._fill(d))
         .attr('stroke', (d) => this._stroke(d))
-        .attr('stroke-width', (d) => (d.kind === 'zentrum' || d.kind === 'bestandteil' || (d.kind === 'anker' && d.kern) ? 2.5 : 1.4))
+        .attr('stroke-width', (d) => (d.kind === 'zentrum' || d.kind === 'bestandteil' || (d.kind === 'anker' && d.kern) || d.auch_kontrast ? 2.5 : 1.4))
         .style('transition', 'opacity .15s');
 
       this._nodeSel.append('title').text((d) => this._title(d));
@@ -446,6 +446,7 @@ export function pairingNetzGraph(config) {
       if (d.kind === 'anker') return d.orphan ? '#d97706' : '#4f6ef7'; // Orphan = Bernstein-Warn-Ring
       if (d.kind === 'bestandteil') return d.ohne_profil ? '#9ca3af' : '#15803d';
       if (d.kind === 'basisrezept') return d.typ === 'kontrast' ? TYP_FARBE.kontrast : '#16a34a';
+      if (d.kind === 'kandidat' && d.auch_kontrast) return TYP_FARBE.kontrast; // ★★★, deckt zugleich einen Bedarf
 
       return TYP_FARBE[d.typ] || '#9ca3af'; // kandidat
     },
@@ -466,7 +467,7 @@ export function pairingNetzGraph(config) {
       }
       if (d.kind === 'kandidat') {
         const sym = LEVEL_SYM[d.level] || d.typ;
-        return `${d.label} — ${sym}${d.cover > 1 ? ` · passt zu ${d.cover} Ankern` : ''}`;
+        return `${d.label} — ${sym}${d.cover > 1 ? ` · passt zu ${d.cover} Ankern` : ''}${d.auch_kontrast ? ` · deckt auch ${d.auch_kontrast}` : ''}`;
       }
       if (d.kind === 'basisrezept' && d.typ === 'kontrast') return `${d.label} — deckt ${d.achse || d.via}`;
       if (d.kind === 'basisrezept') return `${d.label} — passt dazu (harmoniert mit ${d.via})`;
