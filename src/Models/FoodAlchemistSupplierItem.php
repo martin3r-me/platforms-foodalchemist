@@ -24,6 +24,16 @@ class FoodAlchemistSupplierItem extends Model
 
     protected $table = 'foodalchemist_supplier_items';
 
+    /** Jod (15.10.2026): Ändert sich die Zutatenliste, wird `iodized_abgeleitet` neu abgeleitet (Eloquent-Pfade: UI, MCP, Datei-Import). */
+    protected static function booted(): void
+    {
+        static::saving(function (self $item) {
+            if (! $item->exists || $item->isDirty('ingredients_supplier')) {
+                $item->iodized_abgeleitet = \Platform\FoodAlchemist\Support\JodAusZutaten::wert($item->ingredients_supplier);
+            }
+        });
+    }
+
     protected $guarded = ['id'];
 
     protected $casts = [

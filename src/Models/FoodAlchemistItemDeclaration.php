@@ -70,6 +70,14 @@ class FoodAlchemistItemDeclaration extends Model
         return $out;
     }
 
+    /**
+     * Freiwillige Angabe → abgeleitete Spalte am Lieferantenartikel (Jod aus der Zutatenliste, {@see \Platform\FoodAlchemist\Support\JodAusZutaten}).
+     * Die GP-Aggregation nimmt je Artikel max(Necta-Flag, abgeleitet); der Necta-Rohwert bleibt unberührt.
+     */
+    public const FREIWILLIG_ABGELEITET = [
+        'iodized' => 'iodized_abgeleitet',
+    ];
+
     /** Wortlaut des freiwilligen Hinweises je Feld (Speisekarte, Etikett), nur bei eingeschaltetem Mandanten-Schalter. */
     public const FREIWILLIG_HINWEIS = [
         'iodized' => 'mit Jodsalz hergestellt',

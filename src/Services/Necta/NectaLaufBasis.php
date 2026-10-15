@@ -7,6 +7,7 @@ use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Enums\SignalSeverity;
 use Platform\FoodAlchemist\Enums\SignalTyp;
 use Platform\FoodAlchemist\Services\SignalService;
+use Platform\FoodAlchemist\Support\JodAusZutaten;
 use Platform\FoodAlchemist\Support\MasterTeam;
 use Platform\FoodAlchemist\Support\StammPaket;
 use Symfony\Component\Uid\UuidV7;
@@ -129,8 +130,9 @@ abstract class NectaLaufBasis
         if ($this->probe) {
             return 0;
         }
+        // Jod aus der Zutatenliste: nur am Artikel, nicht im Necta-Stand (Ableitung, kein Necta-Feld)
         $faId = $this->einfuegen('foodalchemist_supplier_items', $zeile + ['supplier_id' => $l['fa_id'], 'team_id' => null,
-            'stamm_class' => StammPaket::PAKET]);
+            'stamm_class' => StammPaket::PAKET, 'iodized_abgeleitet' => JodAusZutaten::wert($zeile['ingredients_supplier'] ?? null)]);
         $this->stand('supplier_item', (int) $zeile['legacy_id'], $zeile);
 
         return $faId;
