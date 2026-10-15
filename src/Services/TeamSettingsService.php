@@ -137,6 +137,8 @@ class TeamSettingsService
         'trimming_loss_defaults' => true,
         // Spec 83 B2: Team-Vorgabe "Posten für Gerichte" (Pass): das Paket setzt sie am Oberteam, Unter-Teams erben sie.
         'gerichte_station_id' => true,
+        // Jod (15.10.2026): freiwilliger Hinweis „mit Jodsalz hergestellt“, der Mandant (Oberteam) schaltet, Unter-Teams erben.
+        'iodized_hint_active' => true,
     ];
 
     /**
@@ -230,6 +232,15 @@ class TeamSettingsService
     public function kiAktiv(Team $team): bool
     {
         return (bool) ($this->for($team)->ai_active ?? true);
+    }
+
+    /**
+     * Jod (15.10.2026): freiwilligen Hinweis „mit Jodsalz hergestellt“ auf Speisekarte und Etikett zeigen? Org-vererbt, Standard AUS.
+     * Rechtliche Einordnung (freiwillig, nicht ZZulV-Pflicht) = Kenntnisstand Kurator, vor Einsatz von QM bestätigen lassen.
+     */
+    public function jodHinweisAktiv(Team $team): bool
+    {
+        return (bool) ($this->rohWert($team, 'iodized_hint_active') ?? false);
     }
 
     /** Spec 53/F: Agenten-Modus des Sprachbefehls — ungültiger/fehlender Wert fällt auf `fragen` zurück. */

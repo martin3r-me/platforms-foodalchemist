@@ -7,6 +7,17 @@
     @if($fehler)<x-fa::notice tone="crit">{{ $fehler }}</x-fa::notice>@endif
     @if($hinweis)<x-fa::notice tone="info">{{ $hinweis }}</x-fa::notice>@endif
 
+    {{-- Jod (15.10.2026): freiwilliger Hinweis je Mandant, gilt für Speisekarte und Etikett. Rechtliche Einordnung
+         (freiwillig, keine ZZulV-Pflicht) ist Kenntnisstand Kurator, vor Einsatz von QM bestätigen lassen. --}}
+    <x-fa::section title="Freiwillige Hinweise" icon="heroicon-o-information-circle" data-etiketten-jod
+        description="Gilt für Speisekarte und Etikett dieses Teams. Unter-Teams übernehmen die Einstellung, solange sie keine eigene haben.">
+        <label class="inline-flex items-center gap-2 cursor-pointer text-[length:var(--fa-text-md)] text-[var(--fa-ink)]">
+            <input type="checkbox" class="{{ $haken }}" @checked($jodHinweis) wire:click="jodHinweisUmschalten" data-jod-schalter />
+            „mit Jodsalz hergestellt“ bei Gerichten mit jodiertem Salz zeigen
+        </label>
+        <p class="{{ $leise }}">Freiwillige Angabe, keine Zusatzstoff-Nummer und kein Eintrag in der Legende.</p>
+    </x-fa::section>
+
     <div class="flex flex-wrap items-center justify-between gap-2" data-etiketten-aktionen>
         <span class="text-[length:var(--fa-text-md)] font-medium text-[var(--fa-ink)]">{{ $form['name'] ?? '' }}</span>
         <div class="flex flex-wrap gap-2">

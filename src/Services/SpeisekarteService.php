@@ -807,7 +807,10 @@ class SpeisekarteService
         // #7: Brutto-Rundung der Karte als gebundene Closure in den Walk reichen (nur Anzeige).
         $rundung = $karte->preis_rundung ?? 'keine';
         $runde = fn (?float $b) => $this->rundeBrutto($b, $rundung);
-        $walk = function ($parentId, int $depth) use (&$walk, $byParent, &$rubriken, $codesFuer, $codesFuerGericht, $marge, $mwstSatz, $runde, $outlet) {
+        // Jod (15.10.2026): freiwilliger Hinweis je Gericht, nur bei Mandanten-Schalter; nie Teil von Codes/Legende
+        $jodAktiv = app(TeamSettingsService::class)->jodHinweisAktiv($team);
+        $hinweiseFuer = fn (Collection $gerichte) => $agg->freiwilligeHinweise($gerichte, $jodAktiv);
+        $walk = function ($parentId, int $depth) use (&$walk, $byParent, &$rubriken, $codesFuer, $codesFuerGericht, $hinweiseFuer, $marge, $mwstSatz, $runde, $outlet) {
             foreach ($byParent[$parentId] ?? [] as $rubrik) {
                 // Kaskade 2026-08-24: spezielle ist_format-Live-Rubrik entfernt — ein Format wird
                 // künftig wie ein Concept gebucht (live-referenziert, Kaskade bleibt live); F5.
@@ -819,9 +822,10 @@ class SpeisekarteService
                     $gaenge = [];
                     if ($pos->type === 'menue_ref') {
                         $dishById = $this->positionGerichte($pos)->keyBy('id');
-                        $gaenge = array_map(function ($g) use ($dishById, $codesFuerGericht) {
+                        $gaenge = array_map(function ($g) use ($dishById, $codesFuerGericht, $hinweiseFuer) {
                             $dish = ($g['recipe_id'] ?? null) !== null ? $dishById->get((int) $g['recipe_id']) : null;
                             $g['codes'] = $dish !== null ? $codesFuerGericht($dish) : [];
+                            $g['hinweise'] = $dish !== null ? $hinweiseFuer(collect([$dish])) : [];
 
                             return $g;
                         }, $this->menueGaenge($pos));
@@ -834,6 +838,7 @@ class SpeisekarteService
                         'variant_group_id' => $pos->variant_group_id !== null ? (int) $pos->variant_group_id : null,
                         // Einzelgericht = per-Gericht (eine Position, ein Gericht); Menü = Codes je Gang (oben).
                         'codes' => $pos->type === 'gericht_ref' ? $codesFuer($pos) : [],
+                        'hinweise' => $pos->type === 'gericht_ref' ? $hinweiseFuer($this->positionGerichte($pos)) : [],
                         'vk_netto' => $preis['vk'],
                         'vk_brutto' => $runde($einheit['vk_brutto_pro_einheit'] ?? null),
                         'preis_quelle' => $preis['quelle'],

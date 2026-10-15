@@ -50,6 +50,31 @@ class FoodAlchemistItemDeclaration extends Model
         'iodized' => 'jodiert',
     ];
 
+    /**
+     * MCP-Form der freiwilligen Angaben, getrennt von den Pflicht-Stoffen: [label => ja|nein|unbekannt] aus Rohwerten {3,1,0,NULL}.
+     *
+     * @param  callable(string):mixed  $wert  Feld → Rohwert (z. B. fn ($f) => $rezept->{"additive_{$f}"})
+     * @return array<string,string>
+     */
+    public static function freiwilligFuerMcp(callable $wert): array
+    {
+        $out = [];
+        foreach (self::FREIWILLIG as $feld => $label) {
+            $out[$label] = match ((int) ($wert($feld) ?? 0)) {
+                3 => 'ja',
+                1 => 'nein',
+                default => 'unbekannt',
+            };
+        }
+
+        return $out;
+    }
+
+    /** Wortlaut des freiwilligen Hinweises je Feld (Speisekarte, Etikett), nur bei eingeschaltetem Mandanten-Schalter. */
+    public const FREIWILLIG_HINWEIS = [
+        'iodized' => 'mit Jodsalz hergestellt',
+    ];
+
     protected $table = 'foodalchemist_item_declarations';
 
     protected $guarded = ['id'];

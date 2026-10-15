@@ -166,11 +166,14 @@
                         <tr>
                             <td class="pname">
                                 {{ $pos['name'] }}@if(!empty($pos['codes']))<span class="codes">{{ implode(',', $pos['codes']) }}</span>@endif
+                                {{-- Jod: freiwilliger Hinweis (Mandanten-Schalter), bewusst ohne Code und ohne Legende --}}
+                                @foreach(($pos['hinweise'] ?? []) as $h)<span class="sub hinweis">{{ $h }}</span>@endforeach
                                 @if(!empty($pos['wein']))<span class="sub">{{ implode(' · ', array_map('ucfirst', array_values($pos['wein']))) }}</span>@endif
                                 @if($pos['consumer_text'])<span class="sub">{{ $pos['consumer_text'] }}</span>@endif
                                 @foreach(($pos['gaenge'] ?? []) as $gang)
                                     {{-- Fix b: §-Codes PRO GANG (per Gericht), nicht aggregiert auf der Menü-Position. --}}
                                     <span class="sub" style="padding-left: {{ ($gang['einrueckung'] ?? 0) * 8 }}px">{{ $gang['type'] === 'header' ? '— ' . $gang['text'] . ' —' : $gang['text'] }}@if(!empty($gang['codes']))<span class="codes">{{ implode(',', $gang['codes']) }}</span>@endif
+                                        @if(!empty($gang['hinweise'])) · {{ implode(' · ', $gang['hinweise']) }}@endif
                                         @if(($gang['preis'] ?? null) !== null && $gang['preis'] > 0) — {{ number_format($gang['preis'], 2, ',', '.') }} €@endif</span>
                                 @endforeach
                             </td>

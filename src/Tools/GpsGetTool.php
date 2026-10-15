@@ -50,6 +50,8 @@ class GpsGetTool extends FoodAlchemistTool implements ToolContract, ToolMetadata
             $tags[$tag] = $gp->{'tag_' . $tag};   // tri-state: null = unbewertet
         }
 
+        $freiwillig = app(GpAggregateService::class)->freiwillig($gp);
+
         return ToolResult::success([
             'id' => $gp->id, 'name' => $gp->name,
             'status' => $gp->status instanceof \BackedEnum ? $gp->status->value : (string) $gp->status,
@@ -62,6 +64,8 @@ class GpsGetTool extends FoodAlchemistTool implements ToolContract, ToolMetadata
             'lead_la_supplier_item_id' => $gp->lead_la_supplier_item_id,
             'tags' => $tags,
             'allergene' => app(GpAggregateService::class)->allergene($gp),
+            // Freiwillige Angaben (Jod), getrennt von der Pflicht-Kennzeichnung; MAX über die Artikel des GP
+            'freiwillig' => \Platform\FoodAlchemist\Models\FoodAlchemistItemDeclaration::freiwilligFuerMcp(fn ($f) => $freiwillig[$f] ?? null),
         ]);
     }
 

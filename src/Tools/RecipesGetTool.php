@@ -64,6 +64,8 @@ class RecipesGetTool extends FoodAlchemistTool implements ToolContract, ToolMeta
             'ek_price_basis' => $kosten['basis'],
             'ek_price_basis_label' => \Platform\FoodAlchemist\Enums\EkPriceBasis::tryFrom((string) $kosten['basis'])?->label(),
             'allergens_confidence' => $r->allergens_confidence,
+            // Freiwillige Angaben (Jod), getrennt von der Pflicht-Kennzeichnung (ALL-MAXIMAL über die Zutaten)
+            'freiwillig' => \Platform\FoodAlchemist\Models\FoodAlchemistItemDeclaration::freiwilligFuerMcp(fn ($f) => $r->{"additive_{$f}"}),
             // MCP-Lockstep zum Produktionszeit-Feature: aktive Belegzeit (work/setup) + passive
             // Standzeit (= Durchlaufzeit) + Topf-Deckel je Koch-Vorgang. NULL = nicht gepflegt
             // (Deckel fällt dann auf Posten-/Team-/Code-Default zurück).

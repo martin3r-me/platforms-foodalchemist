@@ -483,6 +483,19 @@ class ConcepterAggregateService
             $zusatzstoffe[] = ['slug' => $slug, 'label' => $label, 'status' => $status];
         }
 
+        // Freiwillige Angaben (Jod): gleiche Status-Regel, eigener Schlüssel — nie in zusatzstoffe, Codes oder Legende
+        $freiwillig = [];
+        foreach (\Platform\FoodAlchemist\Models\FoodAlchemistItemDeclaration::FREIWILLIG as $slug => $label) {
+            $werte = $gerichte->map(fn ($g) => $g->{"additive_{$slug}"});
+            $status = match (true) {
+                $gerichte->isEmpty() => 'unbekannt',
+                $werte->contains(fn ($v) => (int) $v === 3) => 'ja',
+                $werte->contains(fn ($v) => $v === null || (int) $v === 0) => 'unbekannt',
+                default => 'frei',
+            };
+            $freiwillig[] = ['slug' => $slug, 'label' => $label, 'status' => $status];
+        }
+
         $minKonf = $gerichte->isEmpty() ? 0 : $gerichte->min(fn ($g) => self::KONF_RANG[$g->allergens_confidence] ?? 0);
 
         return [
@@ -490,7 +503,29 @@ class ConcepterAggregateService
             'confidence' => array_search($minKonf, self::KONF_RANG, true) ?: 'unknown',
             'allergene' => $allergene,
             'zusatzstoffe' => $zusatzstoffe,
+            'freiwillig' => $freiwillig,
         ];
+    }
+
+    /**
+     * Freiwillige Hinweise der Gerichte (Jod: „mit Jodsalz hergestellt“), nur bei eingeschaltetem Mandanten-Schalter und nur bei
+     * Status „ja“. Steht neben, nie in der Pflicht-Kennzeichnung (keine Nummer, kein Legenden-Eintrag).
+     *
+     * @return list<string>
+     */
+    public function freiwilligeHinweise(Collection $gerichte, bool $aktiv): array
+    {
+        if (! $aktiv) {
+            return [];
+        }
+        $hinweise = [];
+        foreach ($this->kennzeichnungFromGerichte($gerichte)['freiwillig'] as $f) {
+            if ($f['status'] === 'ja' && isset(\Platform\FoodAlchemist\Models\FoodAlchemistItemDeclaration::FREIWILLIG_HINWEIS[$f['slug']])) {
+                $hinweise[] = \Platform\FoodAlchemist\Models\FoodAlchemistItemDeclaration::FREIWILLIG_HINWEIS[$f['slug']];
+            }
+        }
+
+        return $hinweise;
     }
 
     // ── §-Kennzeichnung: Code-Katalog + PER-GERICHT-Codes + Legende ──────────────
@@ -641,7 +676,7 @@ class ConcepterAggregateService
         foreach (array_keys(\Platform\FoodAlchemist\Models\FoodAlchemistItemAllergen::ALLERGENE) as $slug) {
             $cols[] = "allergen_{$slug}";
         }
-        foreach (array_keys(\Platform\FoodAlchemist\Models\FoodAlchemistItemDeclaration::STOFFE) as $slug) {
+        foreach ([...array_keys(\Platform\FoodAlchemist\Models\FoodAlchemistItemDeclaration::STOFFE), ...array_keys(\Platform\FoodAlchemist\Models\FoodAlchemistItemDeclaration::FREIWILLIG)] as $slug) {
             $cols[] = "additive_{$slug}";
         }
 

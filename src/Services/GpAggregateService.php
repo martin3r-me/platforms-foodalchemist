@@ -180,8 +180,27 @@ class GpAggregateService
      */
     public function zusatzstoffe(FoodAlchemistGp $gp): array
     {
-        $stoffe = array_keys(FoodAlchemistItemDeclaration::STOFFE);
+        return $this->deklarationMax($gp, array_keys(FoodAlchemistItemDeclaration::STOFFE));
+    }
 
+    /**
+     * Freiwillige Angaben je GP (Jod, 15.10.2026): gleiche MAX-Regel wie {@see zusatzstoffe()}, aber getrennt ausgewiesen, nie
+     * Pflicht-Kennzeichnung. [feld => 3|1|0|null]
+     */
+    public function freiwillig(FoodAlchemistGp $gp): array
+    {
+        return $this->deklarationMax($gp, array_keys(FoodAlchemistItemDeclaration::FREIWILLIG));
+    }
+
+    /** Pflicht-Stoffe + freiwillige Angaben in EINER Abfrage (Rezept-Recompute). @return array<string,?int> */
+    public function zusatzstoffeUndFreiwillig(FoodAlchemistGp $gp): array
+    {
+        return $this->deklarationMax($gp, [...array_keys(FoodAlchemistItemDeclaration::STOFFE), ...array_keys(FoodAlchemistItemDeclaration::FREIWILLIG)]);
+    }
+
+    /** @param list<string> $stoffe @return array<string,?int> */
+    private function deklarationMax(FoodAlchemistGp $gp, array $stoffe): array
+    {
         $row = DB::table('foodalchemist_item_declarations AS d')
             ->join('foodalchemist_supplier_item_structures AS s', 's.supplier_item_id', '=', 'd.supplier_item_id')
             ->where('s.gp_id', $gp->id)
