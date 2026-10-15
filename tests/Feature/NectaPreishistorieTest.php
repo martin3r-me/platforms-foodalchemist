@@ -19,6 +19,7 @@ uses(TestCase::class, SeedsTeamHierarchy::class);
  */
 beforeEach(function () {
     $this->seedTeamHierarchy();
+    config(['foodalchemist.master_team_id' => $this->rootTeam->id]);
     $l = FoodAlchemistSupplier::create(['team_id' => null, 'legacy_id' => 19491, 'name' => 'Bäckerei', 'stamm_class' => StammPaket::PAKET]);
     $alt = FoodAlchemistSupplier::create(['team_id' => null, 'legacy_id' => 16555, 'name' => 'Handelshof alt', 'is_inactive' => true, 'stamm_class' => StammPaket::PAKET]);
     foreach ([[36674788, $l], [36674789, $l], [55500001, $alt]] as [$legacy, $lief]) {
@@ -63,7 +64,7 @@ it('Probe misst type, amountFrom, source und Zeilen je Artikel, schreibt nur die
 
 // ── Stufe 2: Import (16.10.2026) ──────────────────────────────────────────────────────────────────────────────────────────
 
-it('Import: N → 0, A → 2, je Artikel+Start+Status eine Zeile (kleinste Staffel), offen = NULL, Zeit UTC, team_id des Artikels', function () {
+it('Import: N → 0, A → 2, je Artikel+Start+Status eine Zeile (kleinste Staffel), offen = NULL, Zeit UTC, team_id = Team der Preise', function () {
     $this->attrappe->daten['supplier-item-price-historys'][] = ['id' => 6, 'supplierItemId' => 36674788, 'tenantId' => 1494, 'type' => 'N',
         'price' => 0.95, 'priceOrderingUnit' => 0.95, 'amountFrom' => 2, 'validFrom' => '2026-10-15T00:00:00', 'validTo' => '3000-12-31T23:59:59', 'source' => 175492];
     $this->attrappe->daten['supplier-item-price-historys'][] = ['id' => 7, 'supplierItemId' => 36674789, 'tenantId' => 1494, 'type' => 'X',
@@ -77,7 +78,8 @@ it('Import: N → 0, A → 2, je Artikel+Start+Status eine Zeile (kleinste Staff
         ->and($h[1]->status)->toBe('0')->and($h[4]->status)->toBe('2')
         ->and($h[1]->status_valid_from)->toBe('2025-12-31 23:00:00')->and($h[1]->valid_to)->toBe('2026-05-31 21:59:59')   // Berlin → UTC
         ->and($h[3]->valid_to)->toBeNull()                                                                  // 3000-12-31 = offen
-        ->and((int) $h[3]->supplier_item_id)->toBe($a)->and($h[3]->team_id)->toBeNull()->and($h[3]->price_id)->toBeNull()
+        // Team der Preise (Master), NICHT das des globalen Artikels (NULL): sonst verwirft die Preis-Linie die Historie
+        ->and((int) $h[3]->supplier_item_id)->toBe($a)->and((int) $h[3]->team_id)->toBe($this->rootTeam->id)->and($h[3]->price_id)->toBeNull()
         ->and((float) $h[3]->price)->toBe(0.99)->and((bool) $h[3]->is_blocked)->toBeFalse()
         ->and(json_decode($h[4]->details, true))->toBe(['source' => 175492, 'amount_from' => 10, 'type' => 'A']);
 
@@ -129,4 +131,24 @@ it('wirkt der supplierId-Filter nicht, bricht der Lieferant nach Seite 1 ab', fu
 
     expect($ignorant->seiten)->toBe(1)
         ->and($r['zaehler']['filter_wirkt_nicht'])->toBe([['legacy_id' => 19491, 'total' => 1513596]]);
+});
+
+it('Preis-Linie (PreisVerlaufService) zeigt Historie UND aktuelle Necta-Preiszeile zusammen, weil beide dem Team der Preise gehören', function () {
+    // Fall LA 296294 auf io: globaler Artikel (team NULL), aktuelle Preiszeile im Master-Team wie vom Nachholer geschrieben
+    $la = FoodAlchemistSupplierItem::where('legacy_id', 36674788)->first();
+    $la->update(['qty' => 1, 'unit_code' => 'kg']);
+    DB::table('foodalchemist_prices')->insert(['uuid' => (string) Symfony\Component\Uid\UuidV7::generate(), 'team_id' => $this->rootTeam->id,
+        'legacy_id' => 138432829, 'supplier_item_id' => $la->id, 'status' => '0', 'price' => 1.05, 'status_valid_from' => '2026-10-16 00:00:00',
+        'valid_to' => null, 'is_blocked' => 0, 'created_at' => now(), 'updated_at' => now()]);
+    $this->artisan('foodalchemist:necta-preishistorie-nachholen', ['--pause-ms' => 0])->assertSuccessful();
+
+    $this->actingAs($this->makeUser($this->rootTeam));
+    \Platform\FoodAlchemist\Services\PreisVerlaufService::flush();
+    $svc = app(\Platform\FoodAlchemist\Services\PreisVerlaufService::class);
+    [$von, $bis] = $svc->fenster('alles', null, null, \Illuminate\Support\Carbon::parse('2026-10-20'));
+    $r = $svc->verlauf($this->rootTeam, [$la->id], $von, $bis, $la->id);
+
+    $s = $r['linien'][0]['segmente'];
+    expect(array_column($s, 'preis_gebinde'))->toBe([0.89, 0.95, 0.99, 1.05])                     // 3 Historienstände + aktuelle Zeile
+        ->and(array_column($s, 'quelle'))->toBe(['historie', 'historie', 'historie', 'preis']);
 });
