@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\DB;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient;
@@ -152,4 +153,18 @@ it('Bedarf-Deckung „zubereitung": kein Partner deckt ihn, kein Basisrezept-Vor
     $deckung('beides');
     $a = ($this->logik)()->analysiere($this->gericht->fresh());
     expect(($this->texte)($a['aussagen'], 'spannung'))->toContain('Spannung: Knusper von Garnitur: Croutons für Beilage: Rosmarinkartoffeln');
+});
+
+it('Abgeschmeckt: ein Spritzer Essig deckt den Säure-Bedarf im Basisrezept, ohne Säure-Zutat bleibt er offen; Panel zeigt „Liefert"', function () {
+    $offen = fn (FoodAlchemistRecipe $r) => array_column(app(RezeptProfil::class)->fuer($r->id)['offene_bedarfe'], 'achse');
+    $ohne = ($this->basis)('Beilage: Kartoffeln natur', [['Kartoffeln: mehlig', 'potato', '400']], ['function' => 'Beilage']);
+    $mit = ($this->basis)('Beilage: Kartoffeln mit Essig', [['Kartoffeln: festkochend', 'potato', '400'], ['Rotweinessig: mild', 'vinegar', '2']], ['function' => 'Beilage']);
+
+    expect(app(RezeptProfil::class)->fuer($mit->id)['eigenschaften']['saeure']['stufe'] ?? 0)->toBeLessThan(2)   // nach Masse: kaum Säure
+        ->and($offen($ohne))->toContain('saeure')
+        ->and($offen($mit))->not->toContain('saeure')
+        ->and(app(RezeptProfil::class)->fuer($mit->id)['abgeschmeckt'])->toBe(['saeure']);
+
+    $html = Blade::render('<x-foodalchemist::kombination :daten="$d" />', ['d' => ($this->logik)()->daten($this->croutons->fresh())]);
+    expect($html)->toContain('data-profil-liefert')->and($html)->toContain('Knusper')->and($html)->toContain('●●●');
 });

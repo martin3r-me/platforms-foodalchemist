@@ -35,7 +35,8 @@ use Platform\FoodAlchemist\Services\SensorikService;
  *   abdeckung       Anteil der Rezeptmasse mit Anker (ehrliche Aussagekraft)
  *   eigenschaften   je Achse die Stufe 0–3: aus den Ankern (Stufe × min(1, Anteil/10 %)) und aus
  *                   der Sensorik (Süße, Salz, Fett aus Nährwerten) — die höhere gilt
- *   offene_bedarfe  Bedarfe der Kern-Anker (≥ 10 %), die das Rezept selbst nicht deckt (Stufe < 2)
+ *   offene_bedarfe  Bedarfe der Kern-Anker (≥ 10 %), die das Rezept selbst nicht deckt (Stufe < 2);
+ *                   Salz/Säure gelten schon als gedeckt, wenn eine deutlich salzende/säuernde Zutat drin ist
  *
  * Materialisiert mit Quell-Hash: {@see fuer} rechnet, vergleicht und schreibt nur bei Änderung.
  */
@@ -46,6 +47,9 @@ final class RezeptProfil
     public const KERN_FUER_BEDARF = 10.0;
 
     public const VOLL_AB_ANTEIL = 10.0;
+
+    /** Würz-Achsen: schon eine kleine Menge eines deutlichen Lieferanten deckt den Bedarf ({@see abgeschmeckt}). */
+    public const ABGESCHMECKT = ['salz', 'saeure'];
 
     private const REKURSION_MAX = 3;
 
@@ -169,6 +173,9 @@ final class RezeptProfil
         $masse = 0.0;
         $masseMitAnker = 0.0;
         $hash = [];
+        $wuerzGps = [];       // alle GP-Zeilen (auch < 5 % Aromamasse) — für „abgeschmeckt"
+        $wuerzAnker = [];
+        $abgeschmeckt = [];   // achse => true
         foreach ($zeilen as $z) {
             $g = (float) $gramm[$z->id];
             // Spec 58 (Dominique 06.10., übertragen auf die Teller-Rollen 11.10.): Gewicht aus der Regel pairing.rollen_gewicht.
@@ -177,6 +184,7 @@ final class RezeptProfil
             if ($z->referenced_recipe_id !== null) {
                 $sub = $this->fuer((int) $z->referenced_recipe_id, $tiefe + 1, $besucht);
                 $hash[] = ['sub', (int) $z->referenced_recipe_id, $g, $rolle, $sub['hash_teile'] ?? []];
+                $abgeschmeckt += array_fill_keys($sub['abgeschmeckt'] ?? [], true);
                 if ($sub['masse'] <= 0 || $sub['roh'] === []) {
                     continue;
                 }
@@ -195,6 +203,12 @@ final class RezeptProfil
                 ? ($gpKerne[$z->gp_id] ?? $this->pairing->ankerIdExakt($gpName))
                 : $this->pairing->ankerIdExakt($z->raw_text);
             $anker = $anker !== null ? (int) $anker : null;
+            if ($z->gp_id !== null) {
+                $wuerzGps[] = (int) $z->gp_id;
+            }
+            if ($anker !== null) {
+                $wuerzAnker[] = $anker;
+            }
             $verfahren = Verfahren::ausText($text) ?? Verfahren::ausText((string) strstr((string) $gpName, ':'))
                 ?? ($z->id === $staerksteZeile ? $namensVerfahren : null);
             $hash[] = ['z', $z->gp_id, $z->raw_text, $g, $rolle, $anker, $verfahren?->value];
@@ -213,7 +227,9 @@ final class RezeptProfil
 
         $anteile = $this->normiere($roh);
         $eigenschaften = $this->eigenschaften($recipeId, $anteile);
-        $offen = $this->offeneBedarfe($anteile, $eigenschaften);
+        $abgeschmeckt = array_keys($abgeschmeckt + $this->abgeschmeckt($wuerzGps, $wuerzAnker));
+        sort($abgeschmeckt);
+        $offen = $this->offeneBedarfe($anteile, $eigenschaften, $abgeschmeckt);
 
         return [
             'recipe_id' => $recipeId,
@@ -222,6 +238,7 @@ final class RezeptProfil
             'abdeckung' => $masse > 0 ? round(100 * $masseMitAnker / $masse, 2) : 0.0,
             'eigenschaften' => $eigenschaften,
             'offene_bedarfe' => $offen,
+            'abgeschmeckt' => $abgeschmeckt,
             'roh' => $roh,
             'masse' => $masse,
             'hash_teile' => [$hash, $anteile, $eigenschaften, $offen],
@@ -281,8 +298,9 @@ final class RezeptProfil
      * @param  array<string, array{stufe: float, quelle: string}>  $eigenschaften
      * @return list<array{achse: string, staerke: string, von: int, deckung: string}>
      */
-    private function offeneBedarfe(array $anteile, array $eigenschaften): array
+    private function offeneBedarfe(array $anteile, array $eigenschaften, array $abgeschmeckt = []): array
     {
+        $abgeschmeckt = array_flip($abgeschmeckt);
         $kern = array_keys(array_filter($anteile, fn ($a) => $a >= self::KERN_FUER_BEDARF));
         if ($kern === []) {
             return [];
@@ -292,7 +310,8 @@ final class RezeptProfil
             ->where('status', '!=', WissensStatus::Verworfen->value)
             ->orderByRaw("CASE staerke WHEN 'muss' THEN 0 ELSE 1 END")->orderBy('achse')
             ->get(['anchor_id', 'achse', 'staerke', 'deckung']) as $b) {
-            if (Achse::tryFrom((string) $b->achse) === null || ($eigenschaften[$b->achse]['stufe'] ?? 0) >= 2) {
+            if (Achse::tryFrom((string) $b->achse) === null || ($eigenschaften[$b->achse]['stufe'] ?? 0) >= 2
+                || isset($abgeschmeckt[$b->achse])) {
                 continue;
             }
             // je Achse einmal — der stärkste Bedarf zählt; Deckung vereint (Partner + Zubereitung = beides)
@@ -304,6 +323,40 @@ final class RezeptProfil
         }
 
         return array_values($offen);
+    }
+
+    /**
+     * Abgeschmeckt (Dominique 15.10.): Salz und Säure sind Würze — eine Prise Salz oder ein Spritzer
+     * Zitrone deckt den Bedarf, obwohl sie nach Masse kaum zählen. Gemessen vorher: 418 Basisrezepte
+     * MIT Salz in der Zutatenliste meldeten „Salz fehlt" (normal gesalzen = Nährwert-Stufe 1–1,8).
+     * Keine neue Schwelle: eine Zutat zählt, wenn sie die Achse selbst deutlich liefert (Stufe ≥ 2 —
+     * dieselbe Lieferanten-Grenze wie überall): Anker-Eigenschaft, bei Salz auch der gemessene
+     * Nährwert des GP über die Sensorik-Kurve.
+     *
+     * @param  list<int>  $gpIds
+     * @param  list<int>  $ankerIds
+     * @return array<string, true>
+     */
+    private function abgeschmeckt(array $gpIds, array $ankerIds): array
+    {
+        $out = [];
+        if ($ankerIds !== []) {
+            foreach (DB::table('foodalchemist_anchor_eigenschaften')->whereIn('anchor_id', array_values(array_unique($ankerIds)))
+                ->whereIn('achse', self::ABGESCHMECKT)->where('stufe', '>=', 2)
+                ->where('status', '!=', WissensStatus::Verworfen->value)->distinct()->pluck('achse') as $achse) {
+                $out[(string) $achse] = true;
+            }
+        }
+        if (! isset($out['salz']) && $gpIds !== []) {
+            foreach ($this->sensorik->erdungBulk($gpIds) as $dims) {
+                if (3 * (float) ($dims['salzig']['wert'] ?? 0) >= 2) {
+                    $out['salz'] = true;
+                    break;
+                }
+            }
+        }
+
+        return $out;
     }
 
     /** Inspire-Variante zum Verfahren, falls vorhanden (gleicher Grundname bzw. Grund-Anker). */
