@@ -9,6 +9,7 @@ use Platform\FoodAlchemist\Services\Necta\NectaMapper;
 use Platform\FoodAlchemist\Services\Necta\NectaNachholService;
 use Platform\FoodAlchemist\Services\Necta\NectaQuelle;
 use Platform\FoodAlchemist\Support\StammPaket;
+use Platform\FoodAlchemist\Tests\Support\NectaAttrappe;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
 use Platform\FoodAlchemist\Tests\TestCase;
 
@@ -21,44 +22,6 @@ uses(TestCase::class, SeedsTeamHierarchy::class);
  * Bestand: Lieferant 19491 mit Artikel 36674788 (in FA vorhanden). Necta liefert zusätzlich Lieferant 25345 (neu), bei 19491
  * den neuen Artikel 36674789 und bei 25345 den neuen Artikel 50000001, dazu Details und Preise.
  */
-class NectaAttrappe implements NectaQuelle
-{
-    /** @var array<string,int> */
-    public array $aufrufe = [];
-
-    /** @param array<string, list<array<string,mixed>>> $daten  @param array<int,int> $artikelLieferant */
-    public function __construct(public array $daten, public array $artikelLieferant) {}
-
-    public function seite(string $ressource, int $seite, int $groesse, array $filter = []): array
-    {
-        $this->aufrufe[$ressource] = ($this->aufrufe[$ressource] ?? 0) + 1;
-        $zeilen = array_values(array_filter($this->daten[$ressource] ?? [], function (array $r) use ($ressource, $filter) {
-            if (isset($filter['supplierItemId']) && (int) ($r['supplierItemId'] ?? $r['id']) !== (int) $filter['supplierItemId']) {
-                return false;
-            }
-            if (isset($filter['supplierId'])) {
-                $lieferant = $ressource === 'supplier-items' ? (int) $r['supplierId'] : ($this->artikelLieferant[(int) ($r['supplierItemId'] ?? 0)] ?? 0);
-
-                return $lieferant === (int) $filter['supplierId'];
-            }
-
-            return true;
-        }));
-        $seiten = (int) max(1, ceil(count($zeilen) / $groesse));
-
-        return NectaApiQuelle::normalisiere(['items' => array_slice($zeilen, ($seite - 1) * $groesse, $groesse),
-            'totalCount' => count($zeilen), 'pageNumber' => $seite, 'pageSize' => $groesse, 'totalPages' => $seiten], $seite, $groesse);
-    }
-}
-
-function nectaArtikel(int $id, int $lieferant, string $name, array $mehr = []): array
-{
-    return $mehr + ['id' => $id, 'supplierId' => $lieferant, 'articleNumber' => ' 99', 'designation' => $name, 'text' => null, 'packagingUnit' => 'ST',
-        'orderingUnit' => 'ST', 'quantityOrderingUnitsPerPackagingUnit' => 1, 'quantity' => 1, 'unitId' => 1005, 'eanPackagingUnit' => null,
-        'eanOrderingUnit' => '4001234567890', 'originCountryId' => 2, 'brand' => null, 'isOrganic' => true, 'isVegan' => false,
-        'isVegetarian' => true, 'isAlcohol' => false, 'isHalal' => false, 'isGmoFree' => false, 'isPreorder' => false, 'preorderDays' => null];
-}
-
 beforeEach(function () {
     $this->seedTeamHierarchy();
     config(['foodalchemist.master_team_id' => $this->rootTeam->id]);
@@ -77,9 +40,9 @@ beforeEach(function () {
                 'address' => 'Bautzner Straße 21', 'emailOrder' => 'info@edelrausch.de', 'isInactive' => false],
         ],
         'supplier-items' => [
-            nectaArtikel(36674788, 19491, 'Schoko Splitterbrötchen (Necta neu)'),
-            nectaArtikel(36674789, 19491, 'Laugenbrezel'),
-            nectaArtikel(50000001, 25345, 'Riesling trocken', ['unitId' => 1004, 'originCountryId' => 99, 'isOrganic' => false]),
+            NectaAttrappe::artikel(36674788, 19491, 'Schoko Splitterbrötchen (Necta neu)'),
+            NectaAttrappe::artikel(36674789, 19491, 'Laugenbrezel'),
+            NectaAttrappe::artikel(50000001, 25345, 'Riesling trocken', ['unitId' => 1004, 'originCountryId' => 99, 'isOrganic' => false]),
         ],
         'supplier-item-allergens' => [
             ['supplierItemId' => 36674789, 'gluten' => 3, 'crustaceans' => 1, 'egg' => 2, 'fish' => 0, 'peanut' => 1, 'soy' => 1, 'milk' => 3,
