@@ -21,6 +21,8 @@ use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem;
  * ({@see PriceService::stammFilter}) und die Preis-Kette des Teams; je Artikel gilt die beste vorhandene Stufe (eigenes Team vor Vorfahren
  * vor Listenpreis), damit Mandantenpreise nie mit dem Listenpreis zu einer Linie gemischt werden.
  *
+ * Aktion (status 2) läuft in Necta parallel zum Normalpreis und geht NICHT in die Linie ein (nur wenn ein Artikel keinen Normalpreis-Stand hat).
+ *
  * Trend: lineare Regression (kleinste Quadrate) auf der STUFENLINIE, gewichtet nach der Zeit, die jeder Preis galt (exakt, als Integral
  * über die Stufen, gleichwertig zu täglichen Stützpunkten) — nicht über die Änderungspunkte. Viele kurze Aktionspreise verzerren so den Trend nicht.
  * Unter zwei Ständen im Zeitraum gibt es keine Trendlinie. Mehrere Linien in einer Basiseinheit mischt der Aufrufer nie: Artikel mit
@@ -232,7 +234,7 @@ class PreisVerlaufService
                 continue;
             }
             $nachArtikel[(int) $r->supplier_item_id][] = [
-                'tier' => $t, 'start' => Carbon::parse($start)->getTimestamp(), 'ende' => $r->valid_to !== null ? Carbon::parse($r->valid_to)->getTimestamp() : null,
+                'status' => (string) $r->status, 'tier' => $t, 'start' => Carbon::parse($start)->getTimestamp(), 'ende' => $r->valid_to !== null ? Carbon::parse($r->valid_to)->getTimestamp() : null,
                 'preis' => (float) $r->price, 'quelle' => (string) $r->quelle, 'id' => (int) $r->id,
             ];
         }
@@ -241,6 +243,10 @@ class PreisVerlaufService
         foreach ($nachArtikel as $laId => $liste) {
             $beste = min(array_column($liste, 'tier'));
             $liste = array_values(array_filter($liste, fn ($s) => $s['tier'] === $beste));
+            // Aktion (status '2') gilt PARALLEL zum Normalpreis (gleicher Tag, zwei offene Stände): in einer Stufenlinie gäbe das Sprünge.
+            // Die Linie (und der Trend) nimmt den Normalpreis; nur ohne jeden Normalpreis-Stand dienen die Aktionsstände als Linie.
+            $normal = array_values(array_filter($liste, fn ($s) => $s['status'] !== '2'));
+            $liste = $normal !== [] ? $normal : $liste;
             // gleicher Stand: die Historie (alter Stand) vor der aktuellen Zeile, damit der neuere Wert gewinnt
             usort($liste, fn ($a, $b) => [$a['start'], $a['quelle'] === 'historie' ? 0 : 1, $a['id']] <=> [$b['start'], $b['quelle'] === 'historie' ? 0 : 1, $b['id']]);
             $ohneDoppel = [];
