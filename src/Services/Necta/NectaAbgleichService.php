@@ -27,7 +27,10 @@ use Symfony\Component\Uid\UuidV7;
  *    übernehmen, auch bei Handpflege (Zähler `allergen_verschaerft` / `deklaration_verschaerft`); Necta LOCKERER → Prüffall,
  *    FA bleibt, auch wenn FA dem letzten Necta-Stand entspricht — nie still lockern. Gleich streng (z. B. Deklaration 0 ⇄ NULL,
  *    beides k.A.) → Necta-Wert übernehmen, ohne Prüffall. Allergen-Unterarten (`details`: wheat, oats, almond …) dieselbe Regel
- *    JE UNTERART (Prüffall-Feld `details.<unterart>`); das Format ist gemessen identisch mit dem Bestand (139.012 von 139.012
+ *    JE UNTERART (Prüffall-Feld `details.<unterart>`). Ausnahme (Entscheid Dominique 15.10., Lauf 8: 36.057 × unbekannt →
+ *    nicht_enthalten): die ausdrückliche Erklärung der Abwesenheit (Allergen/Unterart NULL → nicht_enthalten, Deklaration
+ *    0/NULL → 1) wird automatisch übernommen (`allergen_abwesenheit_erklaert` / `deklaration_abwesenheit_erklaert`), aber nur,
+ *    wenn FA nicht von Hand gepflegt ist (kein Stand oder FA = Stand); das Format ist gemessen identisch mit dem Bestand (139.012 von 139.012
  *    Zeilen der demo-Kopie gegen die WaWi-Rohcodes, 15.10.2026).
  *  - Diagnose im Lauf: Prüffälle je Feld (`pruefaelle_je_feld`) und Lockerungen je Wechsel (`lockerung_je_wechsel`,
  *    z. B. „unbekannt→nicht_enthalten“), damit ein Probelauf zeigt, woraus die Prüffälle bestehen.
@@ -79,6 +82,7 @@ class NectaAbgleichService extends NectaLaufBasis
         $this->zaehler += ['seit' => $seit, 'preise_geprueft' => 0, 'preise_aktualisiert' => 0, 'vorgaenger_fortgeschrieben' => 0,
             'felder_uebernommen' => 0, 'objekte_aktualisiert' => 0, 'pruefaelle' => [], 'in_necta_entfernt' => 0,
             'allergen_verschaerft' => 0, 'deklaration_verschaerft' => 0, 'unterart_verschaerft' => 0, 'nicht_aus_necta' => 0,
+            'allergen_abwesenheit_erklaert' => 0, 'deklaration_abwesenheit_erklaert' => 0,
             'pruefaelle_je_feld' => [], 'lockerung_je_wechsel' => []];
 
         $this->laufId = $this->laufAnlegen($voll ? 'vollabgleich' : 'abgleich', $verbindungId, $this->teamId, $opt);
@@ -342,7 +346,7 @@ class NectaAbgleichService extends NectaLaufBasis
                 continue;
             }
             if ($kennzeichnung && $spalte === 'details' && $objekt === 'item_allergen') {
-                $neu = $this->unterartenAbgleichen($legacy, $fa->{$spalte} ?? null, $nWert);
+                $neu = $this->unterartenAbgleichen($legacy, $fa->{$spalte} ?? null, $nWert, $stand === null ? null : ($stand[$spalte] ?? null), $stand !== null);
                 if (self::norm($neu) !== $f) {
                     $uebernehmen[$spalte] = $neu;
                 }
@@ -351,6 +355,15 @@ class NectaAbgleichService extends NectaLaufBasis
             }
             if ($kennzeichnung) {
                 $strenge = $spalte === 'details' ? null : self::strenge($objekt, $nWert) <=> self::strenge($objekt, $fa->{$spalte} ?? null);
+                $nichtVonHand = $stand === null || self::norm($stand[$spalte] ?? null) === $f;
+                if ($strenge === -1 && $nichtVonHand && self::abwesenheitErklaert($objekt, $fa->{$spalte} ?? null, $nWert)) {
+                    // Entscheid Dominique 15.10.: ausdrückliche Lieferanten-Erklärung der Abwesenheit (k.A. → nicht_enthalten / nein)
+                    $uebernehmen[$spalte] = $nWert;
+                    $this->zaehler[$objekt === 'item_allergen' ? 'allergen_abwesenheit_erklaert' : 'deklaration_abwesenheit_erklaert']++;
+                    $this->beispiel('abwesenheit_erklaert', ['objekt' => $objekt, 'legacy_id' => $legacy, 'feld' => $spalte, 'fa' => $fa->{$spalte} ?? null, 'necta' => $nWert]);
+
+                    continue;
+                }
                 if ($strenge === -1) {
                     $this->lockerung($objekt, $fa->{$spalte} ?? null, $nWert);
                 }
@@ -403,10 +416,11 @@ class NectaAbgleichService extends NectaLaufBasis
      * Allergen-Unterarten je Schlüssel nach Strenge: strenger → übernehmen, gleich → bleibt, lockerer → Prüffall
      * `details.<unterart>` (FA-Wert bleibt). Rückgabe: neues details-JSON (sortiert) bzw. NULL, wenn leer.
      */
-    private function unterartenAbgleichen(int $legacy, mixed $faJson, mixed $nectaJson): ?string
+    private function unterartenAbgleichen(int $legacy, mixed $faJson, mixed $nectaJson, mixed $standJson = null, bool $mitStand = false): ?string
     {
         $fa = is_string($faJson) ? (array) json_decode($faJson, true) : (array) ($faJson ?? []);
         $necta = is_string($nectaJson) ? (array) json_decode($nectaJson, true) : (array) ($nectaJson ?? []);
+        $standD = is_string($standJson) ? (array) json_decode($standJson, true) : (array) ($standJson ?? []);
         $ergebnis = $fa;
         foreach (array_unique([...array_keys($fa), ...array_keys($necta)]) as $unterart) {
             $f = $fa[$unterart] ?? null;
@@ -416,6 +430,11 @@ class NectaAbgleichService extends NectaLaufBasis
                 $ergebnis[$unterart] = $n;   // NULL = unbekannt (strenger als nicht_enthalten) → Schlüssel fällt unten weg
                 $this->zaehler['unterart_verschaerft']++;
                 $this->beispiel('verschaerft', ['objekt' => 'item_allergen', 'legacy_id' => $legacy, 'feld' => "details.{$unterart}", 'fa' => $f, 'necta' => $n]);
+            } elseif ($vergleich === -1 && (! $mitStand || ($standD[$unterart] ?? null) === $f)
+                && self::abwesenheitErklaert('item_allergen', $f, $n)) {
+                $ergebnis[$unterart] = $n;   // Abwesenheit erklärt (unbekannt → nicht_enthalten), nicht von Hand gepflegt
+                $this->zaehler['allergen_abwesenheit_erklaert']++;
+                $this->beispiel('abwesenheit_erklaert', ['objekt' => 'item_allergen', 'legacy_id' => $legacy, 'feld' => "details.{$unterart}", 'fa' => $f, 'necta' => $n]);
             } elseif ($vergleich === -1) {
                 $this->lockerung('item_allergen', $f, $n);
                 $this->pruefall('allergen_aenderung', 'item_allergen', $legacy, "details.{$unterart}", $f, $n);
@@ -425,6 +444,19 @@ class NectaAbgleichService extends NectaLaufBasis
         ksort($ergebnis);
 
         return $ergebnis === [] ? null : json_encode($ergebnis);
+    }
+
+    /**
+     * Ausdrückliche Erklärung der Abwesenheit (Entscheid Dominique 15.10.2026): nur k.A. → „nicht enthalten“ bzw. „nein“.
+     * Allergen: NULL → nicht_enthalten. Deklaration: 0/NULL → 1. Alles, was von enthalten/spuren bzw. 3 weggeht, ist es nicht.
+     */
+    private static function abwesenheitErklaert(string $objekt, mixed $fa, mixed $necta): bool
+    {
+        if ($objekt === 'item_allergen') {
+            return ($fa === null || $fa === '') && $necta === 'nicht_enthalten';
+        }
+
+        return ($fa === null || $fa === '' || (int) $fa === 0) && $necta !== null && $necta !== '' && (int) $necta === 1;
     }
 
     /** Diagnose: Lockerung je Wechsel zählen, z. B. „allergen: unbekannt→nicht_enthalten“. */

@@ -119,7 +119,7 @@ it('wöchentlich, erster Abgleich: Nicht-Kennzeichnung übernehmen, strengeres A
 it('wöchentlich: Deklaration wie der Bestand gemappt → keine Abweichung; geänderter Stoff → Prüffall statt Übernahme', function () {
     // Bestandszeile so, wie ImportSliceCommand sie aus der WaWi-Kopie gebaut hat (rohe Integer, Süßungsbasis in details)
     DB::table('foodalchemist_item_declarations')->insert(['uuid' => (string) Symfony\Component\Uid\UuidV7::generate(), 'team_id' => null,
-        'legacy_id' => 36674788, 'supplier_item_id' => $this->a->id, 'with_dye' => 1, 'with_preservative' => 0, 'with_sweetener' => 3,
+        'legacy_id' => 36674788, 'supplier_item_id' => $this->a->id, 'with_dye' => 1, 'with_preservative' => 3, 'with_sweetener' => 3,
         'excessive_consumption_laxative' => 0, 'iodized' => 1,   // Jod: Stand nach necta-deklaration-nachfuellen
         'details' => json_encode(['table_sweetener_basis' => 0]), 'created_at' => now(), 'updated_at' => now()]);
     $this->attrappe->daten['supplier-item-declaration-substances'] = [
@@ -132,7 +132,7 @@ it('wöchentlich: Deklaration wie der Bestand gemappt → keine Abweichung; geä
 
     $pf = DB::table('foodalchemist_necta_pruefaelle')->where('art', 'deklaration_aenderung')->get();
     expect($pf->pluck('feld')->all())->toBe(['with_preservative'])            // nur der echte Unterschied, nicht details/Reserve
-        ->and((int) DB::table('foodalchemist_item_declarations')->where('legacy_id', 36674788)->value('with_preservative'))->toBe(0);
+        ->and((int) DB::table('foodalchemist_item_declarations')->where('legacy_id', 36674788)->value('with_preservative'))->toBe(3);   // ja → nein: Lockerung
 });
 
 it('wöchentlich, ab Lauf 2: von Hand gepflegtes Feld → Prüffall statt Überschreiben; unveränderte FA-Felder folgen Necta', function () {
@@ -292,19 +292,64 @@ it('Allergen-Unterarten je Unterart nach Strenge: strenger automatisch, lockerer
     $r = ($this->lauf)(['voll' => true]);
 
     $details = json_decode(DB::table('foodalchemist_item_allergens')->where('legacy_id', 36674788)->value('details'), true);
-    expect($details)->toBe(['oats' => 'enthalten', 'spelt' => 'spuren', 'wheat' => 'enthalten'])
+    expect($details)->toBe(['oats' => 'enthalten', 'rye' => 'nicht_enthalten', 'spelt' => 'spuren', 'wheat' => 'enthalten'])
         ->and(DB::table('foodalchemist_necta_pruefaelle')->where('art', 'allergen_aenderung')->orderBy('feld')->pluck('feld')->all())
-        ->toBe(['details.oats', 'details.rye'])
+        ->toBe(['details.oats'])
         ->and($r['zaehler']['unterart_verschaerft'])->toBe(1)
-        ->and($r['zaehler']['pruefaelle_je_feld']['allergen_aenderung'])->toBe(['details.oats' => 1, 'details.rye' => 1])
-        ->and($r['zaehler']['lockerung_je_wechsel'])->toBe(['allergen: enthalten→nicht_enthalten' => 1, 'allergen: unbekannt→nicht_enthalten' => 1]);
+        ->and($r['zaehler']['allergen_abwesenheit_erklaert'])->toBe(1)                                   // rye: unbekannt → nicht_enthalten
+        ->and($r['zaehler']['pruefaelle_je_feld']['allergen_aenderung'])->toBe(['details.oats' => 1])
+        ->and($r['zaehler']['lockerung_je_wechsel'])->toBe(['allergen: enthalten→nicht_enthalten' => 1]);
 });
 
 it('Probe --voll zeigt Prüffälle je Feld und Lockerungen je Wechsel', function () {
-    $this->attrappe->daten['supplier-item-allergens'][0] += ['allergeneRye' => 1, 'soy' => 1];   // zwei Lockerungen aus „unbekannt“
+    $this->attrappe->daten['supplier-item-allergens'][0]['gluten'] = 2;   // enthalten → spuren: echte Lockerung
     ($this->lauf)();
     $this->artisan('foodalchemist:necta-abgleich', ['--probe' => true, '--voll' => true, '--pause-ms' => 0])
-        ->expectsOutputToContain('allergen_aenderung je Feld: ')
-        ->expectsOutputToContain('Lockerungen je Wechsel: allergen: unbekannt→nicht_enthalten 2')
+        ->expectsOutputToContain('allergen_aenderung je Feld: allergen_gluten 1')
+        ->expectsOutputToContain('Lockerungen je Wechsel: allergen: enthalten→spuren 1')
         ->assertExitCode(0);
+});
+
+// ── Abwesenheit erklärt (Entscheid Dominique 15.10.2026, Lauf 8: 36.057 × unbekannt → nicht_enthalten) ──────────────────
+
+it('Abwesenheit erklärt: unbekannt → nicht_enthalten und k.A. → nein automatisch, wenn nicht von Hand gepflegt', function () {
+    DB::table('foodalchemist_item_declarations')->insert(['uuid' => (string) Symfony\Component\Uid\UuidV7::generate(), 'team_id' => null,
+        'legacy_id' => 36674788, 'supplier_item_id' => $this->a->id, 'with_dye' => 0, 'with_preservative' => null, 'waxed' => 3,
+        'created_at' => now(), 'updated_at' => now()]);
+    $this->attrappe->daten['supplier-item-allergens'][0] += ['soy' => 1, 'allergeneOats' => 1];
+    $this->attrappe->daten['supplier-item-declaration-substances'] = [['supplierItemId' => 36674788,
+        'declarationWithDye' => 1, 'declarationWithPreservative' => 1, 'declarationWaxed' => 1]];
+    ($this->lauf)();
+    $r = ($this->lauf)(['voll' => true]);
+
+    $al = DB::table('foodalchemist_item_allergens')->where('legacy_id', 36674788)->sole();
+    $dk = DB::table('foodalchemist_item_declarations')->where('legacy_id', 36674788)->sole();
+    expect($al->allergen_soy)->toBe('nicht_enthalten')->and(json_decode($al->details, true))->toBe(['oats' => 'nicht_enthalten'])
+        ->and((int) $dk->with_dye)->toBe(1)->and((int) $dk->with_preservative)->toBe(1)
+        ->and((int) $dk->waxed)->toBe(3)                                                                 // ja → nein bleibt Prüffall
+        ->and($r['zaehler']['allergen_abwesenheit_erklaert'])->toBe(2)->and($r['zaehler']['deklaration_abwesenheit_erklaert'])->toBe(2)
+        ->and(DB::table('foodalchemist_necta_pruefaelle')->where('art', 'deklaration_aenderung')->pluck('feld')->all())->toBe(['waxed'])
+        ->and(DB::table('foodalchemist_necta_pruefaelle')->where('art', 'allergen_aenderung')->count())->toBe(0)
+        ->and(collect(DB::table('foodalchemist_necta_laeufe')->find($r['lauf_id'])->beispiele ? json_decode(DB::table('foodalchemist_necta_laeufe')->find($r['lauf_id'])->beispiele, true)['abwesenheit_erklaert'] : [])->count())->toBe(3);
+});
+
+it('Abwesenheit erklärt NICHT bei Handpflege auf „unbekannt“ und nie bei Weggang von enthalten/spuren', function () {
+    $this->attrappe->daten['supplier-item-allergens'][0] += ['soy' => 2, 'allergeneOats' => 2];   // Lauf 1: soy/oats spuren (strenger, auto)
+    ($this->lauf)();
+    ($this->lauf)(['voll' => true]);
+    // Handpflege: soy und oats von Hand auf „unbekannt“ (Stand sagt spuren)
+    DB::table('foodalchemist_item_allergens')->where('legacy_id', 36674788)->update(['allergen_soy' => null, 'details' => null]);
+    $this->attrappe->daten['supplier-item-allergens'][0]['soy'] = 1;
+    $this->attrappe->daten['supplier-item-allergens'][0]['allergeneOats'] = 1;
+    $this->attrappe->daten['supplier-item-allergens'][0]['gluten'] = 1;                            // enthalten → nicht_enthalten
+    $this->travel(1)->minutes();
+    ($this->lauf)();
+    $this->travel(1)->minutes();
+    $r = ($this->lauf)(['voll' => true]);
+
+    $al = DB::table('foodalchemist_item_allergens')->where('legacy_id', 36674788)->sole();
+    expect($al->allergen_soy)->toBeNull()->and($al->details)->toBeNull()->and($al->allergen_gluten)->toBe('enthalten')
+        ->and($r['zaehler']['allergen_abwesenheit_erklaert'])->toBe(0)
+        ->and(DB::table('foodalchemist_necta_pruefaelle')->where('art', 'allergen_aenderung')->orderBy('feld')->pluck('feld')->all())
+        ->toBe(['allergen_gluten', 'allergen_soy', 'details.oats']);
 });
