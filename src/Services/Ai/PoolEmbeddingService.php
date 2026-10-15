@@ -101,16 +101,6 @@ class PoolEmbeddingService
     private const RECIPE_MAX_INGREDIENTS = 8;
 
     /**
-     * Batch-Budget je Embedding-Request (OpenAI-Limit: 300k Tokens/Request). Wir chunken
-     * VOR dem Core-`embedAndStoreBatch` konservativ nach Zeichen (~3–4 Zeichen/Token →
-     * 500k Zeichen ≈ 125–165k Tokens, sicherer Abstand) + Item-Cap. Ohne das sprengt ein
-     * großer Pool (z. B. alle Rezepte mit §5b-Prosa) das Limit → HTTP 400.
-     */
-    private const BATCH_MAX_CHARS = 500_000;
-
-    private const BATCH_MAX_ITEMS = 1000;
-
-    /**
      * §5b Embed-Text-Tiefe: max. Zeichen je Prosa-Feld (Zubereitung/Beschreibung) im
      * Rezept-Vektor. Moderat gedeckelt, damit Name + Zutaten prominent bleiben und der
      * Vektor nicht von langer Prosa dominiert wird (Zutat→Sub-Präzision). Ermöglicht
@@ -852,26 +842,9 @@ class PoolEmbeddingService
      * @param  list<array{id:int,text:string,metadata?:array}>  $entries
      * @return list<list<array{id:int,text:string,metadata?:array}>>
      */
-    private function chunkByBudget(array $entries): array
+    public function chunkByBudget(array $entries): array
     {
-        $chunks = [];
-        $cur = [];
-        $curChars = 0;
-        foreach ($entries as $entry) {
-            $len = mb_strlen((string) ($entry['text'] ?? ''));
-            if ($cur !== [] && ($curChars + $len > self::BATCH_MAX_CHARS || count($cur) >= self::BATCH_MAX_ITEMS)) {
-                $chunks[] = $cur;
-                $cur = [];
-                $curChars = 0;
-            }
-            $cur[] = $entry;
-            $curChars += $len;
-        }
-        if ($cur !== []) {
-            $chunks[] = $cur;
-        }
-
-        return $chunks;
+        return \Platform\FoodAlchemist\Support\EmbeddingStapel::teilen($entries);   // eine Stelle für Wissen und Pool
     }
 
     private function safeDelete(string $entityType, int $teamId, int $id): void

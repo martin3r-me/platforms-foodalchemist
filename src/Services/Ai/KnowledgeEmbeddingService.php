@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Log;
 use Platform\Core\Services\EmbeddingProviderRegistry;
 use Platform\Core\Services\EmbeddingService;
 use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Support\EmbeddingStapel;
 use Throwable;
 
 /**
@@ -228,12 +229,15 @@ class KnowledgeEmbeddingService
             }
 
             foreach ($byTeam as $teamId => $entries) {
-                $service->embedAndStoreBatch(
-                    teamId: (int) $teamId,
-                    entityType: self::ENTITY_TYPE,
-                    entries: $entries,
-                    providerName: $providerName,
-                );
+                // In Stapel teilen: ein Aufruf mit allen 11.975 Zutat-Dossiers sprengte das Request-Limit (HTTP 400, 987k > 300k Tokens)
+                foreach (EmbeddingStapel::teilen($entries) as $stapel) {
+                    $service->embedAndStoreBatch(
+                        teamId: (int) $teamId,
+                        entityType: self::ENTITY_TYPE,
+                        entries: $stapel,
+                        providerName: $providerName,
+                    );
+                }
                 $candidates += count($entries);
             }
 
