@@ -668,6 +668,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\GpsSearchTool::class,
                     \Platform\FoodAlchemist\Tools\GpsListTool::class,
                     \Platform\FoodAlchemist\Tools\GpsGetTool::class,
+                    \Platform\FoodAlchemist\Tools\PreiseVerlaufGetTool::class,   // Preisverlauf als Stufenlinie + Trend
                     \Platform\FoodAlchemist\Tools\RecipesSearchTool::class,
                     \Platform\FoodAlchemist\Tools\RecipesListTool::class,
                     \Platform\FoodAlchemist\Tools\RecipesGetTool::class,
