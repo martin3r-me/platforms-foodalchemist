@@ -142,6 +142,8 @@ final class SignalCockpit
      */
     private const NAVIGATE = [
         // Necta-Abgleich: Ereignis, kein Datenmangel — der Weg ist eine Freischalt-Entscheidung des Masters.
+        'necta_abgleich_fehler' => 'Der Lauf steht mit Fehlermeldung in der Laufliste (necta_laeufe). Ursache prüfen (Verbindung, '
+            . 'Necta erreichbar), dann den Abgleich erneut starten: Bereits Übernommenes bleibt, der Lauf ist über legacy_id wiederholbar.',
         'necta_lieferant_neu' => 'Der Lieferant ist global angelegt, aber noch für keinen Mandanten freigeschaltet. In der Verwaltung '
             . '(/verwaltung?tab=freigaben, Lieferanten-Freischaltung) entscheiden, welche Mandanten ihn sehen sollen, oder das Signal bewusst verwerfen.',
         // Spec 82 §12 B: Ereignis aus der Master-Bibliothek. Kein Datenmangel, deshalb kein Fixer; der Weg ist eine Entscheidung am Angebot.

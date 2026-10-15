@@ -449,6 +449,16 @@ return [
     | ausgibt, ist eine unbemerkte Rechnung. Der bleibt Knopf und MCP-Aufruf.
     |
     */
+    // Necta-Abgleich (Bauauftrag 15.10.2026): nur lesend aus necta.one über das Integrations-Modul. Zeitplan erst einschalten,
+    // wenn der Probelauf freigegeben ist (Dominique).
+    'necta' => [
+        'abgleich_aktiv' => env('FOODALCHEMIST_NECTA_ABGLEICH', false),
+        'verbindung' => (int) env('FOODALCHEMIST_NECTA_VERBINDUNG', 1),
+        'abgleich_zeit' => env('FOODALCHEMIST_NECTA_ABGLEICH_ZEIT', '02:30'),
+        'vollvergleich_tag' => (int) env('FOODALCHEMIST_NECTA_VOLL_TAG', 0),   // 0 = Sonntag
+        'vollvergleich_zeit' => env('FOODALCHEMIST_NECTA_VOLL_ZEIT', '03:30'),
+    ],
+
     'scheduler' => [
         // Spec 82 §13 D: täglicher Gebühren-Zähl-Lauf (Tageswerte), früh vor dem Arbeitstag.
         'plan_zaehlen_zeit' => env('FOODALCHEMIST_PLAN_ZAEHLEN_ZEIT', '02:10'),

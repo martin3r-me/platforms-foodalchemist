@@ -145,6 +145,8 @@ enum SignalTyp: string
     // Necta-Abgleich (Dominique 15.10.2026): ein neuer Lieferant kam aus Necta und wurde global angelegt. Kein Mandant bekommt ihn
     // automatisch — das Master-Team entscheidet in der Lieferanten-Freischaltung (/verwaltung, Karte Stamm-Paket).
     case NectaLieferantNeu = 'necta_lieferant_neu';
+    // Necta-Abgleich PR 2: ein nächtlicher bzw. wöchentlicher Lauf ist abgebrochen (Laufzeile mit Fehler in necta_laeufe).
+    case NectaAbgleichFehler = 'necta_abgleich_fehler';
 
     public function label(): string
     {
@@ -153,6 +155,7 @@ enum SignalTyp: string
             self::FassungAktualisiert => 'Abo-Rezept aktualisiert',
             self::FassungNeuerVerfuegbar => 'Neuere Fassung für ein eingefrorenes Angebot',
             self::NectaLieferantNeu => 'Neuer Lieferant aus Necta',
+            self::NectaAbgleichFehler => 'Necta-Abgleich fehlgeschlagen',
             self::PreisAnomalie => 'Auffälliger Lieferantenpreis',
             self::PreisSprungMargeImpact => 'Preissprung mit Folgen für die Marge',
             self::VeraltetePreise => 'Veraltete Preise',
@@ -212,6 +215,7 @@ enum SignalTyp: string
             self::FassungAktualisiert => 'heroicon-o-arrow-path',
             self::FassungNeuerVerfuegbar => 'heroicon-o-lock-open',
             self::NectaLieferantNeu => 'heroicon-o-truck',
+            self::NectaAbgleichFehler => 'heroicon-o-exclamation-triangle',
             self::PreisAnomalie => 'heroicon-o-arrow-trending-up',
             self::PreisSprungMargeImpact => 'heroicon-o-bolt',
             self::VeraltetePreise => 'heroicon-o-clock',
