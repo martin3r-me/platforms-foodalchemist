@@ -115,6 +115,24 @@ it('wöchentlich, erster Abgleich: Nicht-Kennzeichnung übernehmen, Allergen-Abw
         ->and(DB::table('foodalchemist_necta_laeufe')->find($r['lauf_id'])->art)->toBe('vollabgleich');
 });
 
+it('wöchentlich: Deklaration wie der Bestand gemappt → keine Abweichung; geänderter Stoff → Prüffall statt Übernahme', function () {
+    // Bestandszeile so, wie ImportSliceCommand sie aus der WaWi-Kopie gebaut hat (rohe Integer, Süßungsbasis in details)
+    DB::table('foodalchemist_item_declarations')->insert(['uuid' => (string) Symfony\Component\Uid\UuidV7::generate(), 'team_id' => null,
+        'legacy_id' => 36674788, 'supplier_item_id' => $this->a->id, 'with_dye' => 1, 'with_preservative' => 0, 'with_sweetener' => 3,
+        'excessive_consumption_laxative' => 0, 'details' => json_encode(['table_sweetener_basis' => 0]), 'created_at' => now(), 'updated_at' => now()]);
+    $this->attrappe->daten['supplier-item-declaration-substances'] = [
+        ['supplierItemId' => 36674788, 'declarationWithDye' => 1, 'declarationWithPreservative' => 1, 'declarationWithSweetener' => 3,
+            'declarationBExcessiveConsumptionCanHaveLaxativeEffect' => 0, 'declarationTableSweetenerBasedOn' => 0,
+            'declarationIodhTlig' => 1, 'declarationReserve' => 0],
+    ];
+    ($this->lauf)();
+    ($this->lauf)(['voll' => true]);
+
+    $pf = DB::table('foodalchemist_necta_pruefaelle')->where('art', 'deklaration_aenderung')->get();
+    expect($pf->pluck('feld')->all())->toBe(['with_preservative'])            // nur der echte Unterschied, nicht details/Jod/Reserve
+        ->and((int) DB::table('foodalchemist_item_declarations')->where('legacy_id', 36674788)->value('with_preservative'))->toBe(0);
+});
+
 it('wöchentlich, ab Lauf 2: von Hand gepflegtes Feld → Prüffall statt Überschreiben; unveränderte FA-Felder folgen Necta', function () {
     ($this->lauf)();
     ($this->lauf)(['voll' => true]);                                 // Vollvergleich 1 setzt den Necta-Stand

@@ -8,7 +8,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistItemDeclaration;
  * Necta Raw-API (camelCase, Stichprobe 15.10.2026) → FA-Spalten. Konventionen wie der bestehende Stamm (ImportSliceCommand und
  * die Nachpflege-Skripte), damit neue Zeilen nicht anders aussehen als die 264.516 vorhandenen:
  *  - Allergene: Necta 3/2/1/0 → enthalten / spuren / nicht_enthalten / NULL (unbekannt), Unterarten als JSON in `details`.
- *  - Deklaration: rohe Necta-Integer {0,1,3,NULL} (GL-09).
+ *  - Deklaration: rohe Necta-Integer {0,1,3,NULL} (GL-09), Feldnamen wie der Alt-Import (DEKLARATIONEN).
  *  - Nährwerte je 100 g; `sodium` aus `sodium`, sonst Salz × 400 mg (Skript 214), `sugar`/`saturated_fat` aus Summenfeldern;
  *    nicht gemappte Werte (≠ NULL) landen in `raw_json`.
  *  - Einheit/Land: Necta-ID → Wert wie im Bestand; unbekanntes Land → `TODO_country_<id>` (Bestandskonvention).
@@ -34,6 +34,33 @@ class NectaMapper
         'allergeneHazelnut' => 'hazelnut', 'allergeneWalnut' => 'walnut', 'allergeneCashewNut' => 'cashew', 'allergenePecanNut' => 'pecan',
         'allergeneBrazilNut' => 'brazil', 'allergenePistachio' => 'pistachio', 'allergeneMacadamiaNut' => 'macadamia',
         'allergeneQueenslandNut' => 'queensland'];
+
+    /**
+     * Necta-Deklarationsfeld → FA-Spalte ({@see FoodAlchemistItemDeclaration::STOFFE}). 1:1 aus dem Alt-Import, der die 112.605
+     * Bestandszeilen gebaut hat (`_legacy/POC_2026-05/46_build_master_db_1494.py`, DECLARATION_MAP, dort PascalCase aus dem
+     * Necta-Export; Raw-API liefert dieselben Namen camelCase). Werte roh als Integer, wie im Bestand ({0,1,3}).
+     */
+    public const DEKLARATIONEN = ['declarationWithDye' => 'with_dye', 'declarationWithPreservative' => 'with_preservative',
+        'declarationWithAntioxidant' => 'with_antioxidant', 'declarationWithFlavourEnhancer' => 'with_flavour_enhancer',
+        'declarationSulphurated' => 'sulphurated', 'declarationBlackened' => 'blackened', 'declarationWaxed' => 'waxed',
+        'declarationWithPhosphate' => 'with_phosphate', 'declarationWithSweetener' => 'with_sweetener',
+        'declarationContainsSourcePhenylalanine' => 'contains_phenylalanine',
+        'declarationBExcessiveConsumptionCanHaveLaxativeEffect' => 'excessive_consumption_laxative',
+        'declarationPackagedModifiedAtmosphere' => 'packaged_modified_atmosphere', 'declarationCaffeinated' => 'caffeinated',
+        'declarationContainsMilkProtein' => 'contains_milk_protein', 'declarationContainsQuinine' => 'contains_quinine',
+        'declarationTaurineContaining' => 'taurine_containing',
+        'declarationCanImpairActivityAttentionChildren' => 'can_impair_attention_children',
+        'declarationWithTypeSugarSweetener' => 'with_type_sugar_sweetener'];
+
+    /** Necta-Deklarationsfeld → Schlüssel in `details`, wie der Bestand (ImportSliceCommand: Integer bzw. Text). */
+    public const DEKLARATION_DETAILS = ['declarationTableSweetenerBasedOn' => 'table_sweetener_basis',
+        'declarationBasisTafeSweetness' => 'basis_tafe_sweetness'];
+
+    /**
+     * Necta-Felder, die der Alt-Import bewusst nicht übernommen hat (keine FA-Spalte, nicht im Bestand). Sie zählen nicht als
+     * unbekannt und landen nicht in `details`, sonst wiche jede Bestandszeile im Vollvergleich ab (Prüffall je Zeile).
+     */
+    public const DEKLARATION_OHNE_SPALTE = ['declarationIodhTlig', 'declarationReserve'];
 
     /** Necta-Nährwert → FA-Spalte, wo der Name abweicht (sonst camelCase → snake_case). */
     public const NAEHRWERT_NAMEN = ['blsKey' => 'bls_key', 'energyKilocalories' => 'energy_kcal', 'energyKilojoules' => 'energy_kj',
@@ -123,28 +150,29 @@ class NectaMapper
     }
 
     /**
-     * Deklaration: Stoff-Schlüssel per camelCase → snake_case auf {@see FoodAlchemistItemDeclaration::STOFFE}. Nicht erkannte
-     * Felder ≠ NULL gehen in `details` (und werden im Probelauf gezählt), damit eine abweichende Necta-Benennung sichtbar wird.
+     * Deklaration nach {@see self::DEKLARATIONEN} / {@see self::DEKLARATION_DETAILS}. Nicht erkannte Felder ≠ NULL gehen in
+     * `details` (und werden gezählt), damit eine neue Necta-Benennung sichtbar wird statt still zu verschwinden.
      *
      * @return array<string,mixed>
      */
     public function deklaration(array $r, ?array &$unbekannt = null): array
     {
         $zeile = ['legacy_id' => (int) $r['supplierItemId']];
-        $stoffe = array_keys(FoodAlchemistItemDeclaration::STOFFE);
-        foreach ($stoffe as $stoff) {
+        foreach (array_keys(FoodAlchemistItemDeclaration::STOFFE) as $stoff) {
             $zeile[$stoff] = null;
         }
         $details = [];
         foreach ($r as $feld => $wert) {
-            if (in_array($feld, ['supplierItemId', 'id', 'tenantId'], true) || $wert === null) {
+            if (in_array($feld, ['supplierItemId', 'id', 'tenantId'], true) || in_array($feld, self::DEKLARATION_OHNE_SPALTE, true)
+                || $wert === null || $wert === '') {
                 continue;
             }
-            $snake = self::snake($feld);
-            if (in_array($snake, $stoffe, true)) {
-                $zeile[$snake] = (int) $wert;
+            if (isset(self::DEKLARATIONEN[$feld])) {
+                $zeile[self::DEKLARATIONEN[$feld]] = (int) $wert;
+            } elseif (isset(self::DEKLARATION_DETAILS[$feld])) {
+                $details[self::DEKLARATION_DETAILS[$feld]] = $feld === 'declarationBasisTafeSweetness' ? (string) $wert : (int) $wert;
             } else {
-                $details[$snake] = $wert;
+                $details[self::snake($feld)] = $wert;
                 $unbekannt[$feld] = true;
             }
         }
