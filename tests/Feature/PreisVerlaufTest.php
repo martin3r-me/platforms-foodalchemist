@@ -109,10 +109,10 @@ it('Trend mit bekannter Steigung: tägliche Stände +0,01 €/Tag = +0,30 €/kg
     expect(Verlauf::trendText($t, '€/kg'))->toStartWith('+0,30 €/kg pro Monat · +')->toContain('% pro Jahr');
 });
 
-it('Trend ist zeitgewichtet: ein kurzer Aktionspreis verzerrt ihn nicht (Referenz: tägliche Stützpunkte); über die Änderungspunkte allein läge er weit daneben', function () {
+it('Trend ist zeitgewichtet: ein kurzer Preisabschlag verzerrt ihn nicht (Referenz: tägliche Stützpunkte); über die Änderungspunkte allein läge er weit daneben', function () {
     $la = ($this->la)('Hanos');
     ($this->preis)($la, 10.00, '2025-08-01', '2026-06-25');
-    ($this->preis)($la, 5.00, '2026-06-25', null, '2');              // 5 Tage Aktion am Ende
+    ($this->preis)($la, 5.00, '2026-06-25');                         // 5 Tage kurzer Preisabschlag am Ende (Normalpreis-Stand)
     $r = $this->svc->verlauf($this->rootTeam, [$la->id], ...($this->fenster)('frei', '2025-08-01', '2026-06-30'));
     $dienst = $r['linien'][0]['trend']['steigung_pro_monat'];
 
@@ -307,4 +307,26 @@ it('Embeds: LA-Modal (Preise-Reiter) und GP-Detail binden den Verlauf ein', func
 
     Livewire::test(\Platform\FoodAlchemist\Livewire\Suppliers\ItemModal::class)->call('oeffnen', $la->id)->assertSeeHtml('data-sektion="preisverlauf"')->assertSeeHtml('data-preisverlauf="la"');
     Livewire::test(\Platform\FoodAlchemist\Livewire\Gps\DetailPanel::class, ['gpId' => $gp->id])->assertSeeHtml('data-sektion="preisverlauf"')->assertSeeHtml('data-preisverlauf="gp"');
+});
+
+it('Aktion (status 2) läuft parallel zum Normalpreis und geht nicht in die Linie ein: keine Sprünge, Trend nur über den Normalpreis', function () {
+    $la = ($this->la)('Hanos');
+    ($this->preis)($la, 11.00, '2026-01-01', '2026-10-05');
+    ($this->preis)($la, 12.29, '2026-10-05');                       // Normalpreis ab 5.10.
+    ($this->preis)($la, 9.99, '2026-10-05', null, '2');             // paralleler Aktionspreis, ebenfalls offen
+    Carbon::setTestNow('2026-10-20 12:00:00');
+
+    $r = $this->svc->verlauf($this->rootTeam, [$la->id], ...($this->fenster)('alles'));
+
+    expect(array_column($r['linien'][0]['segmente'], 'wert'))->toBe([11.0, 12.29])->and($r['linien'][0]['trend']['steigung_pro_monat'])->toBeGreaterThan(0);
+});
+
+it('Ein Artikel nur mit Aktionsständen zeigt sie trotzdem als Linie (Fallback)', function () {
+    $la = ($this->la)('Hanos');
+    ($this->preis)($la, 7.00, '2026-02-01', '2026-04-01', '2');
+    ($this->preis)($la, 6.00, '2026-04-01', null, '2');
+
+    $r = $this->svc->verlauf($this->rootTeam, [$la->id], ...($this->fenster)('alles'));
+
+    expect(array_column($r['linien'][0]['segmente'], 'wert'))->toBe([7.0, 6.0]);
 });
