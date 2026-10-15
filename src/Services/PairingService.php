@@ -1047,11 +1047,13 @@ class PairingService
             return collect();
         }
 
-        return $this->graph()->partner((int) $ankerId, AnkerGraph::PASST, $limit)
+        // Nur ★★★ ist Empfehlung (Dominique 15.10.): ★★ = Grund-Aroma-Passform, im Schnitt 94 ★★- gegen
+        // 12 ★★★-Partner je Zutat, viel „technisch ja, kulinarisch nein" (Zitrone + Tagliatelle).
+        return $this->graph()->partner((int) $ankerId, AnkerGraph::HARMONIERT, $limit)
             ->map(fn ($p) => (object) [
                 'id' => $p->id, 'slug' => $p->slug, 'display_de' => $p->display_de,
                 'type' => 'aroma',
-                'evidence' => $p->stufe === AnkerGraph::HARMONIERT ? 'Foodpairing Inspire (best match)' : 'Foodpairing Inspire (good match)',
+                'evidence' => 'Foodpairing Inspire (best match)',
                 'axis' => 'harmony',
                 'level' => $p->stufe,
                 'weight' => AnkerGraph::GEWICHT[$p->stufe],
@@ -1956,7 +1958,7 @@ class PairingService
 
         $agg = [];
         foreach ($kanten as $k) {
-            // Bucket = Stern-Stufe: stern3 = Inspire best match, stern2 = good match.
+            // Bucket = Stern-Stufe; die Kanten sind nur ★★★ (best match), stern2 kommt nicht mehr vor.
             $cid = $k->zu;
             $m = $meta[$cid] ?? null;
             if ($m === null) {

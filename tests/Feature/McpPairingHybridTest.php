@@ -45,7 +45,7 @@ beforeEach(function () {
     $this->mkKante = function (int $a, int $b, string $typ = 'aroma'): void {
         \Platform\FoodAlchemist\Tests\Support\Harmonie::ausFixture([
             'uuid' => (string) UuidV7::generate(), 'anchor_a_id' => $a, 'anchor_b_id' => $b,
-            'type' => $typ, 'created_at' => now(), 'updated_at' => now(),
+            'type' => $typ, 'level' => 3, 'created_at' => now(), 'updated_at' => now(),   // pairings.GET liefert nur ★★★
         ]);
     };
 
@@ -123,4 +123,15 @@ it('pairings.GET reicht die resolution durch und meldet NOT_FOUND ohne Treffer',
     // Fantasie-Begriff, Semantik aus → sauberes NOT_FOUND (kein Crash).
     $miss = (new PairingsGetTool())->execute(['zutat' => 'Xyzzurpf', 'limit' => 20], $ctx);
     expect($miss->success)->toBeFalse()->and($miss->errorCode)->toBe('NOT_FOUND');
+});
+
+it('Gegenprobe: ★★ (Grund-Aroma-Passform) kommt nicht mehr als Partner, kein „good match"', function () {
+    $basil = ($this->mkAnker)('basil', 'Basil');
+    \Platform\FoodAlchemist\Tests\Support\Harmonie::kante($this->egg, $basil, 2);
+
+    $partner = collect(app(PairingService::class)->ankerNeighbors('eggplant'));
+
+    expect($partner->pluck('slug')->all())->toBe(['tomato'])
+        ->and($partner->pluck('evidence')->unique()->all())->toBe(['Foodpairing Inspire (best match)'])
+        ->and($partner->pluck('level')->unique()->all())->toBe([3]);
 });
