@@ -168,3 +168,22 @@ it('Abgeschmeckt: ein Spritzer Essig deckt den Säure-Bedarf im Basisrezept, ohn
     $html = Blade::render('<x-foodalchemist::kombination :daten="$d" />', ['d' => ($this->logik)()->daten($this->croutons->fresh())]);
     expect($html)->toContain('data-profil-liefert')->and($html)->toContain('Knusper')->and($html)->toContain('●●●');
 });
+
+it('KI-Texturen fließen ins Profil (ungeprüft gekennzeichnet) und decken als Bestandteil einen Bedarf', function () {
+    $chips = ($this->basis)('Garnitur: Kartoffelchips', [['Kartoffeln: Chips', 'potato', '100']], ['function' => 'Garnitur']);
+    $tex = fn (string $slug) => DB::table('foodalchemist_vocab_textures')->where('slug', $slug)->value('id')
+        ?? DB::table('foodalchemist_vocab_textures')->insertGetId(['slug' => $slug, 'display_de' => ucfirst($slug), 'created_at' => now(), 'updated_at' => now()]);
+    DB::table('foodalchemist_recipe_textures')->insert(['recipe_id' => $chips->id, 'texture_vocab_id' => $tex('knusprig'), 'intensity' => 0.9, 'source' => 'ai', 'created_at' => now(), 'updated_at' => now()]);
+    DB::table('foodalchemist_recipe_textures')->insert(['recipe_id' => $chips->id, 'texture_vocab_id' => $tex('kuehlend'), 'intensity' => 0.9, 'source' => 'ai', 'created_at' => now(), 'updated_at' => now()]);
+
+    $p = app(RezeptProfil::class)->fuer($chips->id);
+    expect($p['eigenschaften']['knusprig'])->toBe(['stufe' => 2.7, 'quelle' => 'ki_textur'])
+        ->and($p['eigenschaften'])->not->toHaveKey('kaelte');                     // „kühlend" hat keine Liefer-Achse
+
+    $liefert = collect(($this->logik)()->daten($chips->fresh())['profil']['eigenschaften'])->firstWhere('achse', 'knusprig');
+    expect($liefert['grundlage'])->toBe('KI-Einschätzung, ungeprüft');
+
+    ($this->einsetzen)($this->gericht, $chips, 5);
+    $a = ($this->logik)()->analysiere($this->gericht->fresh());
+    expect(($this->texte)($a['aussagen'], 'spannung'))->toContain('Spannung: Knusper von Garnitur: Kartoffelchips für Beilage: Rosmarinkartoffeln');
+});
