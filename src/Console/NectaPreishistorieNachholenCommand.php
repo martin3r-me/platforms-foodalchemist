@@ -14,6 +14,7 @@ class NectaPreishistorieNachholenCommand extends Command
 {
     protected $signature = 'foodalchemist:necta-preishistorie-nachholen
         {--verbindung= : integration_connections.id (Standard: foodalchemist.necta.verbindung)}
+        {--team= : Team der Historie = Team der Preise (Standard: Master-Team, wie der Nachholer)}
         {--analyse : nur messen (type, amountFrom, source, Folge), nichts schreiben}
         {--probe : Import durchrechnen, nichts schreiben}
         {--seit= : nur Stände mit validFrom ab (ISO, z. B. 2025-01-01T00:00:00)}
@@ -71,6 +72,7 @@ class NectaPreishistorieNachholenCommand extends Command
         $this->info(($probe ? 'PROBELAUF (schreibt nichts) · ' : '')."Necta-Preis-Historie nachholen, Verbindung {$verbindung}");
         try {
             $r = $dienst->nachholen($verbindung, [
+                'team_id' => $this->option('team') !== null ? (int) $this->option('team') : null,
                 'probe' => $probe,
                 'lieferanten' => array_map('intval', (array) $this->option('lieferant')),
                 'ohne_lieferanten' => array_map('intval', (array) $this->option('ohne-lieferant')),

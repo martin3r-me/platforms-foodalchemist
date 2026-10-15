@@ -11,7 +11,11 @@ use Illuminate\Support\Facades\DB;
  *    (Artikel 29075911: ab 05.10. gleichzeitig N 12,29 und A 9,99). Anderer type → nicht geschrieben, gezählt.
  *  - Je Artikel + validFrom + Status genau EINE Zeile: die mit der kleinsten amountFrom (Grundpreis; Staffeln verworfen, gezählt).
  *  - status_valid_from = validFrom, valid_to = NULL bei 3000-12-31 (offen), price = Gebindepreis (Claudia rechnet um),
- *    price_partial = priceOrderingUnit, team_id = team_id des FA-Artikels, details = {source, amount_from, type}.
+ *    price_partial = priceOrderingUnit, details = {source, amount_from, type}.
+ *  - team_id = Team des Laufs (`team_id` bzw. Master), GENAU wie Nachholer/Abgleich die Preiszeilen schreiben: Die Necta-Historie
+ *    ist die Preisliste dieser Verbindung. Korrektur 16.10.2026: zuerst team_id des Artikels (global = NULL) → auf io zeigte
+ *    Claudias Linie für LA 296294 von 173 Ständen nur einen, weil ihre Regel „beste Stufe, nie Mix“ die NULL-Historie hinter
+ *    der Master-Preiszeile verwarf.
  *  - Nur Artikel, die es bei uns gibt (legacy_id); inaktive Lieferanten aus; idempotent über `necta_historie_id`.
  *  - Zeiten Europe/Berlin → UTC wie der übrige Stamm ({@see NectaMapper::zeit()}).
  *  - Speicher: Kandidaten nur je Lieferant (kompakt), geschrieben in Blöcken zu 1.000; resumefähig je Lieferant.
@@ -73,15 +77,19 @@ class NectaPreishistorieService extends NectaLaufBasis
 
     private const BLOCK = 1000;
 
+    /** Team der Historie = Team der Preiszeilen dieses Laufs. */
+    private ?int $teamId = null;
+
     /**
-     * @param  array{probe?:bool, lieferanten?:list<int>, ohne_lieferanten?:list<int>, seite?:int, pause_ms?:int, seit?:?string,
-     *               fortsetzen?:?int, user_id?:?int}  $opt
+     * @param  array{team_id?:?int, probe?:bool, lieferanten?:list<int>, ohne_lieferanten?:list<int>, seite?:int, pause_ms?:int,
+     *               seit?:?string, fortsetzen?:?int, user_id?:?int}  $opt
      * @return array{lauf_id:int, status:string, zaehler:array<string,mixed>}
      */
     public function nachholen(int $verbindungId, array $opt, ?callable $log = null, ?NectaQuelle $quelle = null): array
     {
         $this->vorbereiten($verbindungId, $opt, $quelle);
         $log ??= fn (string $z) => null;
+        $this->teamId = $opt['team_id'] ?? \Platform\FoodAlchemist\Support\MasterTeam::id();   // wie die Preise im Nachholer
         $this->zaehler = ['lieferanten' => 0, 'lieferanten_erledigt' => 0, 'api_seiten' => 0, 'zeilen' => 0, 'zeilen_fremde_artikel' => 0,
             'typ_unbekannt' => 0, 'staffel_verworfen' => 0, 'vor_seit' => 0, 'zu_schreiben' => 0, 'geschrieben' => 0, 'schon_vorhanden' => 0,
             'filter_wirkt_nicht' => [], 'uebersprungen' => []];
@@ -148,7 +156,7 @@ class NectaPreishistorieService extends NectaLaufBasis
                         continue;
                     }
                 }
-                $kandidaten[$schluessel] = [$menge, (int) $r['id'], (int) $a->id, $a->team_id === null ? null : (int) $a->team_id, $status,
+                $kandidaten[$schluessel] = [$menge, (int) $r['id'], (int) $a->id, $this->teamId, $status,
                     $r['price'] ?? null, $r['priceOrderingUnit'] ?? null, (string) ($r['validFrom'] ?? ''), (string) ($r['validTo'] ?? ''),
                     $r['source'] ?? null, (string) ($r['type'] ?? '')];
             }
@@ -209,7 +217,7 @@ class NectaPreishistorieService extends NectaLaufBasis
             return [(int) $alt->id, (int) (json_decode((string) $alt->cursor, true)['lieferant_index'] ?? 0)];
         }
 
-        return [$this->laufAnlegen('preishistorie', $verbindungId, null, $opt), 0];
+        return [$this->laufAnlegen('preishistorie', $verbindungId, $this->teamId, $opt), 0];
     }
 
     /** Aktive, bei uns vorhandene Necta-Lieferanten (wie das Nachfüllen), sortiert nach Necta-ID. */
