@@ -300,6 +300,73 @@ it('Qdrant: liest den Bestand per Scroll statt je Artikel einen Hash-Abruf zu ma
         ->and(count($points[$coll]))->toBe(6);
 });
 
+it('Qdrant: fehlende Sammlung (frische Instanz, eigener Präfix) heißt „alles fehlt“ — kein Fehler, Sammlung wird vom Store angelegt', function () {
+    config(['embeddings.qdrant' => ['url' => 'http://qdrant.test', 'api_key' => null, 'timeout' => 5, 'collection_prefix' => 'fa']]);
+    $created = [];
+    $points = [];
+    $scrollStatus = [];
+
+    Http::fake(function (Request $req) use (&$created, &$points, &$scrollStatus) {
+        $path = parse_url($req->url(), PHP_URL_PATH);
+        $m = [];
+        if (preg_match('#^/collections/([^/]+)/points/scroll$#', $path, $m)) {
+            $scrollStatus[] = isset($created[$m[1]]) ? 200 : 404;
+
+            return isset($created[$m[1]])
+                ? Http::response(['result' => ['points' => [], 'next_page_offset' => null]])
+                : Http::response(['status' => ['error' => 'Not found: Collection `'.$m[1].'` doesn\'t exist!']], 404);
+        }
+        if (preg_match('#^/collections/([^/]+)/points/([0-9a-f-]{36})$#', $path)) {
+            return Http::response(['status' => 'not found'], 404);
+        }
+        if (preg_match('#^/collections/([^/]+)/points$#', $path, $m) && $req->method() === 'PUT') {
+            foreach ($req['points'] as $pt) {
+                $points[$m[1]][$pt['id']] = $pt['payload'];
+            }
+
+            return Http::response(['result' => ['status' => 'completed']]);
+        }
+        if (preg_match('#^/collections/([^/]+)/index$#', $path)) {
+            return Http::response(['result' => true]);
+        }
+        if (preg_match('#^/collections/([^/]+)$#', $path, $m)) {
+            if ($req->method() === 'PUT') {
+                $created[$m[1]] = true;
+
+                return Http::response(['result' => true]);
+            }
+
+            return isset($created[$m[1]]) ? Http::response(['result' => ['config' => ['params' => ['vectors' => ['size' => 64]]]]]) : Http::response([], 404);
+        }
+
+        return Http::response([], 500);
+    });
+    $registry = app(EmbeddingStoreRegistry::class);
+    $registry->register('qdrant', new QdrantEmbeddingStore('http://qdrant.test', null, 5, null, 'fa'));
+    $registry->route(PoolEmbeddingService::ENTITY_TYPE_SUPPLIER_ITEM, 'qdrant');
+    $this->app->forgetInstance(EmbeddingService::class);
+
+    foreach (range(1, 3) as $i) {
+        ($this->mkLa)("Artikel {$i}");
+    }
+
+    $res = ($this->lauf)(['missing' => true]);
+
+    expect($scrollStatus)->toBe([404])                         // Scroll traf die fehlende Sammlung …
+        ->and($res['missing'])->toBe(3)                         // … = alles fehlt
+        ->and($res['embedded'])->toBe(3)
+        ->and($res['failed_batches'])->toBe(0)
+        ->and($res['stopped'])->toBeNull()
+        ->and(array_keys($created))->toBe(['fa_fake_fake_bow_1'])   // vom Store beim ersten Upsert angelegt, mit dem Präfix der Instanz
+        ->and(count($points['fa_fake_fake_bow_1']))->toBe(3);
+
+    // --dry-run gegen eine fehlende Sammlung legt nichts an
+    $created = [];
+    $points = [];
+    $dry = ($this->lauf)(['missing' => true, 'dry_run' => true]);
+    expect($dry['missing'])->toBe(3)->and($created)->toBe([]);
+});
+
 it('Qdrant-Scroll mit Serverfehler bricht den Lauf ab, statt „alles fehlt“ anzunehmen', function () {
     config(['embeddings.qdrant' => ['url' => 'http://qdrant.test', 'api_key' => null, 'timeout' => 5, 'collection_prefix' => 'emb']]);
     Http::fake(['*' => Http::response(['status' => 'boom'], 500)]);
