@@ -3,6 +3,7 @@
 namespace Platform\FoodAlchemist\Console;
 
 use Illuminate\Console\Command;
+use Illuminate\Console\Scheduling\Schedule;
 use Platform\FoodAlchemist\Services\Necta\NectaAbgleichService;
 
 /**
@@ -12,11 +13,34 @@ use Platform\FoodAlchemist\Services\Necta\NectaAbgleichService;
  */
 class NectaAbgleichCommand extends Command
 {
+    /** EINE Sperre für nächtlichen Lauf und Vollvergleich: Sie schreiben nie gleichzeitig (Sonntag 02:30 / 03:30). */
+    public const SPERRE = 'foodalchemist-necta-abgleich';
+
+    /**
+     * Zeitplan (vom ServiceProvider nur bei foodalchemist.necta.abgleich_aktiv aufgerufen): nachts Preis-Delta, wöchentlich --voll.
+     * Gemeinsame Sperre + Hintergrund (ein stundenlanger Vollvergleich blockiert den übrigen Scheduler nicht) + ein Server.
+     */
+    public static function planen(Schedule $schedule): void
+    {
+        $verbindung = (int) config('foodalchemist.necta.verbindung', 1);
+        $schedule->command(self::class, ['--verbindung' => $verbindung])
+            ->dailyAt(config('foodalchemist.necta.abgleich_zeit', '02:30'))
+            ->createMutexNameUsing(self::SPERRE)->withoutOverlapping(720)
+            ->onOneServer()->runInBackground()
+            ->description('FoodAlchemist: Necta-Abgleich (Preis-Delta, neue Artikel)');
+        $schedule->command(self::class, ['--verbindung' => $verbindung, '--voll' => true])
+            ->weeklyOn((int) config('foodalchemist.necta.vollvergleich_tag', 0), config('foodalchemist.necta.vollvergleich_zeit', '03:30'))
+            ->createMutexNameUsing(self::SPERRE)->withoutOverlapping(720)
+            ->onOneServer()->runInBackground()
+            ->description('FoodAlchemist: Necta-Vollvergleich (Stammdaten, Allergene, Deklaration, Nährwerte)');
+    }
+
     protected $signature = 'foodalchemist:necta-abgleich
         {--verbindung= : integration_connections.id (Standard: foodalchemist.necta.verbindung)}
         {--team= : Team der Preise (Standard: Master-Team)}
         {--probe : nur lesen und zählen, nichts schreiben}
         {--voll : wöchentlicher Vollvergleich bekannter Artikel (Stammdaten, Allergene, Deklaration, Nährwerte)}
+        {--erzwingen : --voll auch ohne erfolgreichen nächtlichen Lauf seit dem letzten Vollvergleich}
         {--seit= : Preis-Delta ab (ISO, z. B. 2026-10-14T00:00:00); Standard: letzter erfolgreicher Lauf − 1 Tag}
         {--lieferant=* : nur diese Necta-Lieferanten-IDs}
         {--ohne-lieferant=* : diese Necta-Lieferanten-IDs auslassen (bei uns inaktive entfallen ohnehin)}
@@ -37,6 +61,7 @@ class NectaAbgleichCommand extends Command
                 'team_id' => $this->option('team') !== null ? (int) $this->option('team') : null,
                 'probe' => $probe,
                 'voll' => $voll,
+                'erzwingen' => (bool) $this->option('erzwingen'),
                 'seit' => $this->option('seit'),
                 'lieferanten' => array_map('intval', (array) $this->option('lieferant')),
                 'ohne_lieferanten' => array_map('intval', (array) $this->option('ohne-lieferant')),
@@ -49,6 +74,11 @@ class NectaAbgleichCommand extends Command
             return self::FAILURE;
         }
 
+        if ($r['status'] === 'ausgesetzt') {
+            $this->warn('Vollvergleich ausgesetzt: '.($r['zaehler']['grund'] ?? '').' (mit --erzwingen trotzdem starten).');
+
+            return self::SUCCESS;
+        }
         $z = $r['zaehler'];
         $this->table(['Zähler', 'Wert'], collect($z)->reject(fn ($v) => is_array($v))->map(fn ($v, $k) => [$k, $v])->values()->all());
         foreach ($z['neue_lieferanten'] ?? [] as $l) {

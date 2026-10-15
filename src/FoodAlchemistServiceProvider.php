@@ -200,19 +200,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
             // Necta-Abgleich (PR 2): nachts Preis-Delta + neue Artikel, wöchentlich Vollvergleich. NUR bewusst eingeschaltet
             // (foodalchemist.necta.abgleich_aktiv, Standard aus): erst Probelauf und Dominiques Ja, dann einschalten.
             if (config('foodalchemist.necta.abgleich_aktiv', false)) {
-                $verbindung = (int) config('foodalchemist.necta.verbindung', 1);
-                $schedule->command(\Platform\FoodAlchemist\Console\NectaAbgleichCommand::class, ['--verbindung' => $verbindung])
-                    ->dailyAt(config('foodalchemist.necta.abgleich_zeit', '02:30'))
-                    ->withoutOverlapping()
-                    ->onOneServer()
-                    ->runInBackground()
-                    ->description('FoodAlchemist: Necta-Abgleich (Preis-Delta, neue Artikel)');
-                $schedule->command(\Platform\FoodAlchemist\Console\NectaAbgleichCommand::class, ['--verbindung' => $verbindung, '--voll' => true])
-                    ->weeklyOn((int) config('foodalchemist.necta.vollvergleich_tag', 0), config('foodalchemist.necta.vollvergleich_zeit', '03:30'))
-                    ->withoutOverlapping()
-                    ->onOneServer()
-                    ->runInBackground()
-                    ->description('FoodAlchemist: Necta-Vollvergleich (Stammdaten, Allergene, Deklaration, Nährwerte)');
+                \Platform\FoodAlchemist\Console\NectaAbgleichCommand::planen($schedule);
             }
 
             // Spec 82 §13 D: FA-Gebühren täglich zählen (Tageswerte in team_billable_usages). Idempotent; verpasste Tage mit --von/--bis nachholen.

@@ -101,6 +101,7 @@ it('changeDateFrom: ohne Vorlauf 2 Tage zurück, danach Start des letzten erfolg
 });
 
 it('wöchentlich, erster Abgleich: Nicht-Kennzeichnung übernehmen, Allergen-Abweichung → Prüffall, in Necta entfernt → Prüffall (nicht löschen)', function () {
+    ($this->lauf)();                                                  // Voraussetzung: ein erfolgreicher nächtlicher Lauf
     $r = ($this->lauf)(['voll' => true]);
 
     $a = $this->a->fresh();
@@ -115,11 +116,15 @@ it('wöchentlich, erster Abgleich: Nicht-Kennzeichnung übernehmen, Allergen-Abw
 });
 
 it('wöchentlich, ab Lauf 2: von Hand gepflegtes Feld → Prüffall statt Überschreiben; unveränderte FA-Felder folgen Necta', function () {
-    ($this->lauf)(['voll' => true]);                                 // Lauf 1 setzt den Necta-Stand
+    ($this->lauf)();
+    ($this->lauf)(['voll' => true]);                                 // Vollvergleich 1 setzt den Necta-Stand
     $this->a->update(['designation' => 'Von Hand: Schokobrötchen']);  // Handpflege
     $this->attrappe->daten['supplier-items'][0]['designation'] = 'Schoko-Splitterbrötchen 90 g';   // Necta ändert dasselbe Feld
     $this->attrappe->daten['supplier-items'][0]['brand'] = 'Hausbäcker Plus';                      // und ein unberührtes Feld
 
+    $this->travel(1)->minutes();
+    ($this->lauf)();                                                  // nächtlicher Lauf zwischen zwei Vollvergleichen
+    $this->travel(1)->minutes();
     ($this->lauf)(['voll' => true]);
     $a = $this->a->fresh();
     $pf = DB::table('foodalchemist_necta_pruefaelle')->where('art', 'manuell_gepflegt')->sole();
@@ -151,6 +156,36 @@ it('Fehlschlag: Lauf steht auf fehler und das Master-Team bekommt ein Signal (Pr
 
     expect(fn () => ($this->lauf)(['probe' => true]))->toThrow(RuntimeException::class);
     expect(DB::table('foodalchemist_signals')->where('type', SignalTyp::NectaAbgleichFehler->value)->count())->toBe(1);
+});
+
+it('Vollvergleich nur nach erfolgreichem nächtlichem Lauf seit dem letzten Vollvergleich; --erzwingen übergeht das', function () {
+    $r = ($this->lauf)(['voll' => true]);
+    expect($r['status'])->toBe('ausgesetzt')->and($r['zaehler']['grund'])->toBe('noch kein erfolgreicher nächtlicher Abgleich')
+        ->and($this->a->fresh()->designation)->toBe('Schoko Splitterbrötchen')
+        ->and(DB::table('foodalchemist_necta_laeufe')->find($r['lauf_id'])->status)->toBe('ausgesetzt');
+
+    $this->artisan('foodalchemist:necta-abgleich', ['--voll' => true, '--pause-ms' => 0])
+        ->expectsOutputToContain('Vollvergleich ausgesetzt')->assertExitCode(0);
+
+    expect(($this->lauf)(['voll' => true, 'erzwingen' => true])['status'])->toBe('fertig')
+        ->and($this->a->fresh()->designation)->toBe('Schoko-Splitterbrötchen 80 g');
+    // direkt danach: seit diesem Vollvergleich noch kein Nachtlauf → wieder ausgesetzt
+    $this->travel(1)->minutes();
+    expect(($this->lauf)(['voll' => true])['zaehler']['grund'] ?? null)->toBe('seit dem letzten Vollvergleich kein erfolgreicher nächtlicher Abgleich');
+});
+
+it('Zeitplan: nächtlicher Lauf und Vollvergleich teilen EINE Sperre, laufen im Hintergrund und auf einem Server', function () {
+    $schedule = new \Illuminate\Console\Scheduling\Schedule;
+    \Platform\FoodAlchemist\Console\NectaAbgleichCommand::planen($schedule);
+    [$nacht, $voll] = array_values(array_filter($schedule->events(), fn ($e) => str_contains((string) $e->command, 'necta-abgleich')));
+
+    expect($nacht->mutexName())->toBe(\Platform\FoodAlchemist\Console\NectaAbgleichCommand::SPERRE)
+        ->and($voll->mutexName())->toBe($nacht->mutexName())
+        ->and($nacht->withoutOverlapping)->toBeTrue()->and($voll->withoutOverlapping)->toBeTrue()
+        ->and($nacht->runInBackground)->toBeTrue()->and($voll->runInBackground)->toBeTrue()
+        ->and($nacht->onOneServer)->toBeTrue()->and($voll->onOneServer)->toBeTrue()
+        ->and($nacht->expression)->toBe('30 2 * * *')->and($voll->expression)->toBe('30 3 * * 0')
+        ->and((string) $voll->command)->toContain('--voll');
 });
 
 it('Zeitplan: ohne foodalchemist.necta.abgleich_aktiv ist der Abgleich nicht eingeplant (Standard aus)', function () {

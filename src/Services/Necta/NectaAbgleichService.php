@@ -58,6 +58,13 @@ class NectaAbgleichService extends NectaLaufBasis
             'felder_uebernommen' => 0, 'objekte_aktualisiert' => 0, 'pruefaelle' => [], 'in_necta_entfernt' => 0];
 
         $this->laufId = $this->laufAnlegen($voll ? 'vollabgleich' : 'abgleich', $verbindungId, $this->teamId, $opt);
+        if ($voll && ! $this->probe && empty($opt['erzwingen']) && ($grund = $this->vollGesperrt($verbindungId)) !== null) {
+            $this->zaehler['grund'] = $grund;
+            $this->laufBeenden('ausgesetzt');
+            $log("Vollvergleich ausgesetzt: {$grund}");
+
+            return ['lauf_id' => $this->laufId, 'status' => 'ausgesetzt', 'zaehler' => $this->zaehler];
+        }
 
         try {
             foreach ($this->lieferanten($log) as $index => $l) {
@@ -78,6 +85,21 @@ class NectaAbgleichService extends NectaLaufBasis
         }
 
         return ['lauf_id' => $this->laufId, 'status' => 'fertig', 'zaehler' => $this->zaehler];
+    }
+
+    /**
+     * Ein Vollvergleich läuft nur, wenn der nächtliche Lauf seit dem letzten Vollvergleich mindestens einmal erfolgreich war (sonst
+     * vergleicht er auf veralteten Preisen und überdeckt einen kaputten Nachtlauf). Rückgabe: Grund oder null.
+     */
+    private function vollGesperrt(int $verbindungId): ?string
+    {
+        $basis = DB::table('foodalchemist_necta_laeufe')->where('verbindung_id', $verbindungId)->where('probe', false)->where('status', 'fertig');
+        $letzterVoll = (clone $basis)->where('art', 'vollabgleich')->max('gestartet_at');
+        $nachtNachher = (clone $basis)->where('art', 'abgleich')->when($letzterVoll !== null, fn ($q) => $q->where('gestartet_at', '>', $letzterVoll))->exists();
+
+        return $nachtNachher ? null : ($letzterVoll === null
+            ? 'noch kein erfolgreicher nächtlicher Abgleich'
+            : 'seit dem letzten Vollvergleich kein erfolgreicher nächtlicher Abgleich');
     }
 
     /**
@@ -190,7 +212,13 @@ class NectaAbgleichService extends NectaLaufBasis
 
     // ── Wöchentlich: Vollvergleich ────────────────────────────────────────────────────────────────────────────────────────
 
-    /** @param array{legacy_id:int, name:string, fa_id:?int} $l */
+    /**
+     * Speicher (Server memory_limit 512M): streamt seitenweise — je Necta-Seite nur deren Zeilen und eine FA-Abfrage dazu. Über den
+     * Lieferanten gehalten wird allein die Menge der gesehenen Necta-Artikel-IDs (int => true, je Lieferant, nicht global) für
+     * „in_necta_entfernt“; der Gegencheck läuft in Blöcken zu 2.000 FA-Zeilen. Keine Liste über alle 348.000 Artikel.
+     *
+     * @param array{legacy_id:int, name:string, fa_id:?int} $l
+     */
     private function vollvergleich(array $l, callable $log): void
     {
         // Artikel
@@ -230,25 +258,35 @@ class NectaAbgleichService extends NectaLaufBasis
                 });
         }
 
-        // Details bekannter Artikel (die neuen hat neueArtikelAbschliessen schon angelegt)
+        // Details bekannter Artikel, seitenweise: je Seite EINE Abfrage für die FA-Zeilen (nicht eine je Artikel);
+        // die neuen Artikel hat neueArtikelAbschliessen schon angelegt
         foreach (['allergene', 'deklaration', 'naehrwerte'] as $art) {
-            foreach ($this->alleSeitenIter(self::DETAIL_RESSOURCEN[$art], ['supplierId' => $l['legacy_id']]) as $r) {
-                $artikelLegacy = (int) ($r['supplierItemId'] ?? 0);
-                if (isset($neu[$artikelLegacy])) {
-                    continue;
-                }
-                [$tabelle, $objekt, $necta] = $this->detailZiel($art, $r, null);
-                $fa = DB::table($tabelle)->where('legacy_id', $artikelLegacy)->whereNull('deleted_at')->first();
-                if ($fa === null) {
-                    $faArtikel = DB::table('foodalchemist_supplier_items')->where('legacy_id', $artikelLegacy)->value('id');
-                    if ($faArtikel !== null) {
-                        $this->detailAnlegen($art, $r, (int) $faArtikel, null);
+            $tabelle = $this->detailZiel($art, ['supplierItemId' => 0], null)[0];
+            $seite = 1;
+            do {
+                $antwort = $this->holen(self::DETAIL_RESSOURCEN[$art], $seite, ['supplierId' => $l['legacy_id']]);
+                $ids = array_map(fn ($r) => (int) ($r['supplierItemId'] ?? 0), $antwort['items']);
+                $faZeilen = $ids === [] ? collect() : DB::table($tabelle)->whereIn('legacy_id', $ids)->whereNull('deleted_at')->get()->keyBy('legacy_id');
+                $faArtikel = null;
+                foreach ($antwort['items'] as $r) {
+                    $artikelLegacy = (int) ($r['supplierItemId'] ?? 0);
+                    if (isset($neu[$artikelLegacy])) {
+                        continue;
                     }
+                    [, $objekt, $necta] = $this->detailZiel($art, $r, null);
+                    $fa = $faZeilen->get($artikelLegacy);
+                    if ($fa === null) {
+                        $faArtikel ??= DB::table('foodalchemist_supplier_items')->whereIn('legacy_id', $ids)->pluck('id', 'legacy_id')->all();
+                        if (isset($faArtikel[$artikelLegacy])) {
+                            $this->detailAnlegen($art, $r, (int) $faArtikel[$artikelLegacy], null);
+                        }
 
-                    continue;
+                        continue;
+                    }
+                    $this->vergleichen($objekt, $tabelle, $fa, $necta);
                 }
-                $this->vergleichen($objekt, $tabelle, $fa, $necta);
-            }
+                $seite++;
+            } while ($seite <= max(1, $antwort['totalPages']) && $antwort['items'] !== []);
         }
     }
 
