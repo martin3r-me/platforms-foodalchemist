@@ -80,6 +80,11 @@ it('★ MCP-Schreibwege folgen derselben Regel: Master ja, Mandant ACCESS_DENIED
     $putSup = fn ($k) => $this->reg->get('foodalchemist.suppliers.PUT')->execute(['id' => $this->sup->id, 'input' => ['name' => 'Hanos GmbH']], $k);
     $putAll = fn ($k) => $this->reg->get('foodalchemist.artikel_allergene.PUT')->execute(['id' => $this->item->id, 'werte' => []], $k);
 
+    // Ohne Lieferanten-Freischaltung sieht der Mandant den Stamm-Lieferanten gar nicht
+    expect($putSup($c)->errorCode)->toBe('NOT_FOUND');
+
+    // Freigeschaltet: sichtbar, aber nicht schreibbar
+    $this->alleLieferantenFrei($this->rootTeam);
     $mandant = $putSup($c);
     expect($mandant->success)->toBeFalse()->and($mandant->errorCode)->toBe('ACCESS_DENIED');
     expect($putAll($c)->errorCode)->toBe('ACCESS_DENIED');
