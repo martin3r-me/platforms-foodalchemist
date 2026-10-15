@@ -77,6 +77,17 @@
                     <span class="rounded-[var(--fa-radius-control)] bg-[var(--fa-hover)] px-2 py-0.5 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]">{{ $k['name'] }} {{ number_format($k['anteil'], 0, ',', '.') }} %</span>
                 @endforeach
             </div>
+            @if(! empty($daten['profil']['eigenschaften']))
+                {{-- Was das Basisrezept selbst liefert (Röstaroma, Fett, Knusper …), Stufe 0–3 als Punkte --}}
+                <p class="mt-2 text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-3)] mb-1">Liefert</p>
+                <div class="flex flex-wrap gap-1" data-profil-liefert>
+                    @foreach($daten['profil']['eigenschaften'] as $e)
+                        @php $p = max(1, min(3, (int) round($e['stufe']))); @endphp
+                        <span class="rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] px-2 py-0.5 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-2)]"
+                              title="Stufe {{ number_format($e['stufe'], 1, ',', '.') }} · {{ $e['grundlage'] }}">{{ $e['label'] }} <span class="tracking-tight">{{ str_repeat('●', $p).str_repeat('○', 3 - $p) }}</span></span>
+                    @endforeach
+                </div>
+            @endif
         </div>
     @endif
 

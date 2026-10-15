@@ -132,7 +132,7 @@ it('offene Bedarfe: was der Kern braucht und das Rezept nicht selbst liefert', f
     $p = ($this->svc)()->fuer($r->id);
 
     expect($p['eigenschaften']['fett']['stufe'])->toBe(3.0)                       // 60/460 = 13 % ≥ 10 % → volle Stufe
-        ->and($p['offene_bedarfe'])->toBe([['achse' => 'saeure', 'staerke' => 'muss', 'von' => $this->anker['potato']]]);
+        ->and($p['offene_bedarfe'])->toBe([['achse' => 'saeure', 'staerke' => 'muss', 'von' => $this->anker['potato'], 'deckung' => 'partner']]);
 });
 
 it('Quell-Hash: unverändert wird nicht neu geschrieben, eine Mengenänderung schon', function () {
