@@ -5,6 +5,17 @@ namespace Platform\FoodAlchemist\Services\Necta;
 use Illuminate\Support\Facades\DB;
 
 /**
+ * Necta PR 2b, Stufe 2 (16.10.2026): {@see nachholen()} schreibt die Preis-Vergangenheit nach `foodalchemist_price_history`
+ * (quelle = 'necta_historie'), abgestimmt mit Claudia (PreisVerlaufService):
+ *  - Belegt an io (Lauf 10, 87.628 Zeilen): type N = Normalpreis → status '0', A = paralleler Aktionspreis → status '2'
+ *    (Artikel 29075911: ab 05.10. gleichzeitig N 12,29 und A 9,99). Anderer type → nicht geschrieben, gezählt.
+ *  - Je Artikel + validFrom + Status genau EINE Zeile: die mit der kleinsten amountFrom (Grundpreis; Staffeln verworfen, gezählt).
+ *  - status_valid_from = validFrom, valid_to = NULL bei 3000-12-31 (offen), price = Gebindepreis (Claudia rechnet um),
+ *    price_partial = priceOrderingUnit, team_id = team_id des FA-Artikels, details = {source, amount_from, type}.
+ *  - Nur Artikel, die es bei uns gibt (legacy_id); inaktive Lieferanten aus; idempotent über `necta_historie_id`.
+ *  - Zeiten Europe/Berlin → UTC wie der übrige Stamm ({@see NectaMapper::zeit()}).
+ *  - Speicher: Kandidaten nur je Lieferant (kompakt), geschrieben in Blöcken zu 1.000; resumefähig je Lieferant.
+ *
  * Necta PR 2b, Stufe 1: Analyse der Preis-Historie (`supplier-item-price-historys`, ~1,5 Mio. Zeilen) vor dem Nachholen.
  *
  * Bedeutung von `type`, `amountFrom` und `source` ist nicht dokumentiert; bekannt ist nur eine Stichprobe (15.10.2026:
@@ -55,6 +66,150 @@ class NectaPreishistorieService extends NectaLaufBasis
         }
 
         return ['lauf_id' => $this->laufId, 'status' => 'fertig', 'zaehler' => $this->zaehler, 'beispiele' => $this->beispiele];
+    }
+
+    /** type → status der Preis-Linie (belegt an io, siehe Klassenkommentar). */
+    public const TYPE_STATUS = ['N' => '0', 'A' => '2'];
+
+    private const BLOCK = 1000;
+
+    /**
+     * @param  array{probe?:bool, lieferanten?:list<int>, ohne_lieferanten?:list<int>, seite?:int, pause_ms?:int, seit?:?string,
+     *               fortsetzen?:?int, user_id?:?int}  $opt
+     * @return array{lauf_id:int, status:string, zaehler:array<string,mixed>}
+     */
+    public function nachholen(int $verbindungId, array $opt, ?callable $log = null, ?NectaQuelle $quelle = null): array
+    {
+        $this->vorbereiten($verbindungId, $opt, $quelle);
+        $log ??= fn (string $z) => null;
+        $this->zaehler = ['lieferanten' => 0, 'lieferanten_erledigt' => 0, 'api_seiten' => 0, 'zeilen' => 0, 'zeilen_fremde_artikel' => 0,
+            'typ_unbekannt' => 0, 'staffel_verworfen' => 0, 'vor_seit' => 0, 'zu_schreiben' => 0, 'geschrieben' => 0, 'schon_vorhanden' => 0,
+            'filter_wirkt_nicht' => [], 'uebersprungen' => []];
+
+        [$this->laufId, $startIndex] = $this->laufBeginnen($verbindungId, $opt);
+        try {
+            $lieferanten = $this->aktiveLieferanten();
+            $this->zaehler['lieferanten'] = count($lieferanten);
+            $index = 0;
+            foreach ($lieferanten as $l) {
+                $index++;
+                if ($index <= $startIndex) {
+                    continue;   // Wiederaufnahme: bis hier erledigt
+                }
+                $this->lieferantNachholen($l);
+                $this->zaehler['lieferanten_erledigt']++;
+                $this->cursor($index);
+                $log("{$l->name} (Necta {$l->legacy_id}): {$this->zaehler['zu_schreiben']} Stände bisher");
+            }
+            $this->laufBeenden('fertig');
+        } catch (\Throwable $e) {
+            $this->laufBeenden('fehler', $e->getMessage());
+            throw $e;
+        }
+
+        return ['lauf_id' => $this->laufId, 'status' => 'fertig', 'zaehler' => $this->zaehler];
+    }
+
+    private function lieferantNachholen(object $l): void
+    {
+        $artikel = DB::table('foodalchemist_supplier_items')->where('supplier_id', $l->id)->whereNotNull('legacy_id')
+            ->get(['id', 'legacy_id', 'team_id'])->keyBy(fn ($a) => (int) $a->legacy_id);
+        $seit = $this->opt['seit'] ?? null;
+        $kandidaten = [];   // "faId|validFrom|status" → kompakte Zeile mit kleinster amountFrom
+        $seite = 1;
+        do {
+            $antwort = $this->holen('supplier-item-price-historys', $seite, ['supplierId' => (int) $l->legacy_id]);
+            $fremde = 0;
+            foreach ($antwort['items'] as $r) {
+                $this->zaehler['zeilen']++;
+                $a = $artikel->get((int) ($r['supplierItemId'] ?? 0));
+                if ($a === null) {
+                    $this->zaehler['zeilen_fremde_artikel']++;
+                    $fremde++;
+
+                    continue;
+                }
+                $status = self::TYPE_STATUS[(string) ($r['type'] ?? '')] ?? null;
+                if ($status === null) {
+                    $this->zaehler['typ_unbekannt']++;
+
+                    continue;
+                }
+                if ($seit !== null && strcmp((string) ($r['validFrom'] ?? ''), (string) $seit) < 0) {
+                    $this->zaehler['vor_seit']++;
+
+                    continue;
+                }
+                $schluessel = "{$a->id}|{$r['validFrom']}|{$status}";
+                $menge = (float) ($r['amountFrom'] ?? 0);
+                if (isset($kandidaten[$schluessel])) {
+                    $this->zaehler['staffel_verworfen']++;
+                    if ($menge >= $kandidaten[$schluessel][0]) {
+                        continue;
+                    }
+                }
+                $kandidaten[$schluessel] = [$menge, (int) $r['id'], (int) $a->id, $a->team_id === null ? null : (int) $a->team_id, $status,
+                    $r['price'] ?? null, $r['priceOrderingUnit'] ?? null, (string) ($r['validFrom'] ?? ''), (string) ($r['validTo'] ?? ''),
+                    $r['source'] ?? null, (string) ($r['type'] ?? '')];
+            }
+            if ($seite === 1 && $antwort['items'] !== [] && $fremde === count($antwort['items'])) {
+                $this->zaehler['filter_wirkt_nicht'][] = ['legacy_id' => (int) $l->legacy_id, 'total' => $antwort['totalCount']];
+
+                return;
+            }
+            $seite++;
+        } while ($seite <= max(1, $antwort['totalPages']) && $antwort['items'] !== []);
+
+        $this->zaehler['zu_schreiben'] += count($kandidaten);
+        foreach (array_chunk(array_values($kandidaten), self::BLOCK) as $block) {
+            $this->blockSchreiben($block);
+        }
+    }
+
+    /** @param list<array> $block */
+    private function blockSchreiben(array $block): void
+    {
+        $ids = array_column($block, 1);
+        $vorhanden = DB::table('foodalchemist_price_history')->whereIn('necta_historie_id', $ids)->pluck('necta_historie_id')
+            ->map(fn ($v) => (int) $v)->flip();
+        $jetzt = now()->toDateTimeString();
+        $zeilen = [];
+        foreach ($block as [$menge, $id, $faId, $teamId, $status, $preis, $preisBe, $von, $bis, $source, $type]) {
+            if ($vorhanden->has($id)) {
+                $this->zaehler['schon_vorhanden']++;
+
+                continue;
+            }
+            $zeile = ['uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(), 'price_id' => null, 'legacy_id' => null, 'necta_historie_id' => $id,
+                'supplier_item_id' => $faId, 'team_id' => $teamId, 'status' => $status, 'price' => $preis, 'price_partial' => $preisBe,
+                'status_valid_from' => NectaMapper::zeit($von),
+                'valid_to' => str_starts_with($bis, '3000-') ? null : NectaMapper::zeit($bis),   // 3000-12-31 = offen
+                'is_blocked' => false, 'change_date' => null, 'quelle' => 'necta_historie',
+                'details' => json_encode(['source' => $source, 'amount_from' => $menge, 'type' => $type]),
+                'lauf_id' => $this->laufId, 'abgeloest_at' => null, 'created_at' => $jetzt, 'updated_at' => $jetzt];
+            $this->beispiel('stand', $zeile);
+            $zeilen[] = $zeile;
+        }
+        if ($this->probe || $zeilen === []) {
+            return;
+        }
+        $this->zaehler['geschrieben'] += DB::table('foodalchemist_price_history')->insertOrIgnore($zeilen);
+    }
+
+    /** @return array{0:int, 1:int} [Lauf-ID, Start-Index] */
+    private function laufBeginnen(int $verbindungId, array $opt): array
+    {
+        if (! empty($opt['fortsetzen'])) {
+            $alt = DB::table('foodalchemist_necta_laeufe')->where('id', (int) $opt['fortsetzen'])->where('art', 'preishistorie')->first();
+            if ($alt === null) {
+                throw new \RuntimeException("Lauf {$opt['fortsetzen']} (Preis-Historie) nicht gefunden.");
+            }
+            DB::table('foodalchemist_necta_laeufe')->where('id', $alt->id)->update(['status' => 'laeuft', 'fehler' => null, 'updated_at' => now()]);
+
+            return [(int) $alt->id, (int) (json_decode((string) $alt->cursor, true)['lieferant_index'] ?? 0)];
+        }
+
+        return [$this->laufAnlegen('preishistorie', $verbindungId, null, $opt), 0];
     }
 
     /** Aktive, bei uns vorhandene Necta-Lieferanten (wie das Nachfüllen), sortiert nach Necta-ID. */
