@@ -10,6 +10,7 @@ enum Grundlage: string
     case Regel = 'regel';                       // Kategorie/Verfahren (KategorieRegeln)
     case DossierEntwurf = 'dossier_entwurf';
     case DossierGeprueft = 'dossier_geprueft';
+    case KiEinschaetzung = 'ki_einschaetzung';  // KI-Textur des Rezepts, ungeprüft
     case Keine = 'keine';
 
     public function label(): string
@@ -20,6 +21,7 @@ enum Grundlage: string
             self::Regel => 'aus Kategorie',
             self::DossierEntwurf => 'aus Dossier, ungeprüft',
             self::DossierGeprueft => 'aus Dossier, geprüft',
+            self::KiEinschaetzung => 'KI-Einschätzung, ungeprüft',
             self::Keine => 'keine Grundlage',
         };
     }
@@ -30,6 +32,7 @@ enum Grundlage: string
         return match ($quelle) {
             'sensorik', 'naehrwert' => self::NaehrwertBelegt,
             'kategorie' => self::Regel,
+            'ki_textur' => self::KiEinschaetzung,
             default => $status === WissensStatus::Geprueft->value ? self::DossierGeprueft : self::DossierEntwurf,
         };
     }

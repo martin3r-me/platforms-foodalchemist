@@ -64,7 +64,7 @@
         'unbekannt' => ['Ohne Aroma-Zuordnung', false, null],
     ];
     $leise = $liste('passt')->concat($liste('neutral'));
-    $hatUngeprueft = collect($a)->flatten(1)->contains(fn ($x) => is_array($x) && ($x['grundlage'] ?? null) === 'dossier_entwurf');
+    $hatUngeprueft = collect($a)->flatten(1)->contains(fn ($x) => is_array($x) && in_array($x['grundlage'] ?? null, ['dossier_entwurf', 'ki_einschaetzung'], true));
 @endphp
 <div class="flex flex-col gap-2.5 text-[length:var(--fa-text-md)]" data-kombination data-art="{{ $daten['art'] ?? '' }}">
     <p class="text-[var(--fa-ink-2)]" data-zusammenfassung>{{ $daten['zusammenfassung'] ?? '' }}</p>
@@ -160,7 +160,7 @@
     @if($hatUngeprueft)
         <p class="flex items-center gap-3 text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]" data-grundlage-legende>
             <span class="inline-flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-[var(--fa-ok)]"></span> belegt oder gemessen</span>
-            <span class="inline-flex items-center gap-1"><span class="w-2 h-2 rounded-full border border-[var(--fa-ink-3)]"></span> aus Dossier, ungeprüft</span>
+            <span class="inline-flex items-center gap-1"><span class="w-2 h-2 rounded-full border border-[var(--fa-ink-3)]"></span> ungeprüft (Dossier oder KI)</span>
         </p>
     @endif
 </div>

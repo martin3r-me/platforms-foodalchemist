@@ -33,7 +33,8 @@ use Platform\FoodAlchemist\Services\SensorikService;
  *
  * Dazu je Rezept:
  *   abdeckung       Anteil der Rezeptmasse mit Anker (ehrliche Aussagekraft)
- *   eigenschaften   je Achse die Stufe 0–3: aus den Ankern (Stufe × min(1, Anteil/10 %)) und aus
+ *   eigenschaften   je Achse die Stufe 0–3: aus den Ankern (Stufe × min(1, Anteil/10 %)), aus den
+ *                   KI-Texturen des Rezepts (knusprig, cremig, saftig, weich; ungeprüft) und aus
  *                   der Sensorik (Süße, Salz, Fett aus Nährwerten) — die höhere gilt
  *   offene_bedarfe  Bedarfe der Kern-Anker (≥ 10 %), die das Rezept selbst nicht deckt (Stufe < 2);
  *                   Salz/Säure gelten schon als gedeckt, wenn eine deutlich salzende/säuernde Zutat drin ist
@@ -74,6 +75,9 @@ final class RezeptProfil
 
     /** @var array<int, ?float> anchor_id → Wirk-Dosis (null = linear) */
     private array $dosisCache = [];
+
+    /** Textur-Vokabular → Achse (nur lieferbare Textur-Achsen; kühlend/wärmend/körnig … haben keine Achse). */
+    private const TEXTUR_ACHSE = ['knusprig' => 'knusprig', 'cremig' => 'cremig', 'saftig' => 'saftig', 'weich' => 'weich'];
 
     /** Sensorik-Dimension → Achse; nur die aus Nährwerten belegten. */
     private const SENSORIK_BELEGT = ['suess' => 'suesse', 'salzig' => 'salz', 'fettig' => 'fett'];
@@ -279,6 +283,17 @@ final class RezeptProfil
                 if ($wert > ($out[$e->achse]['stufe'] ?? -1)) {
                     $out[$e->achse] = ['stufe' => $wert, 'quelle' => (string) $e->quelle];
                 }
+            }
+        }
+        // KI-Texturen des Rezepts (foodalchemist_recipe_textures, Intensität 0–1): Croutons sind knusprig,
+        // auch wenn ihr Anker es nicht ist. Ungeprüft, darum eigene Quelle (Grundlage „KI-Einschätzung").
+        foreach (DB::table('foodalchemist_recipe_textures as t')->join('foodalchemist_vocab_textures as v', 'v.id', '=', 't.texture_vocab_id')
+            ->where('t.recipe_id', $recipeId)->whereIn('v.slug', array_keys(self::TEXTUR_ACHSE))
+            ->get(['v.slug', 't.intensity']) as $t) {
+            $achse = self::TEXTUR_ACHSE[$t->slug];
+            $wert = round(3 * (float) $t->intensity, 2);
+            if ($wert > 0 && $wert > ($out[$achse]['stufe'] ?? -1)) {
+                $out[$achse] = ['stufe' => $wert, 'quelle' => 'ki_textur'];
             }
         }
         $sensorik = $this->sensorik->fuerRezept($recipeId)['geschmack'] ?? [];
