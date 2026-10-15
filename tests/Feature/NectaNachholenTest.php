@@ -124,7 +124,8 @@ it('echter Lauf: legt Fehlendes global an, nach den Konventionen des Bestands; B
     $dk = DB::table('foodalchemist_item_declarations')->where('legacy_id', 36674789)->sole();
     expect((int) $dk->with_dye)->toBe(3)->and((int) $dk->with_preservative)->toBe(1)->and((int) $dk->caffeinated)->toBe(0)
         ->and((int) $dk->excessive_consumption_laxative)->toBe(1)->and($dk->with_sweetener)->toBeNull()
-        // wie Bestand: Süßungsbasis in details, Jod/Reserve hat der Alt-Import nie übernommen
+        ->and((int) $dk->iodized)->toBe(1)                                                              // Jod seit 15.10. eigene Spalte
+        // wie Bestand: Süßungsbasis in details, Reserve hat der Alt-Import nie übernommen
         ->and(json_decode($dk->details, true))->toBe(['is_ganz_neues_feld' => 3, 'table_sweetener_basis' => 0])
         ->and($r['zaehler']['deklaration_unbekannte_felder'])->toBe(['isGanzNeuesFeld']);
 

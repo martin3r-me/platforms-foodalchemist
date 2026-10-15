@@ -38,7 +38,9 @@ class NectaMapper
     /**
      * Necta-Deklarationsfeld → FA-Spalte ({@see FoodAlchemistItemDeclaration::STOFFE}). 1:1 aus dem Alt-Import, der die 112.605
      * Bestandszeilen gebaut hat (`_legacy/POC_2026-05/46_build_master_db_1494.py`, DECLARATION_MAP, dort PascalCase aus dem
-     * Necta-Export; Raw-API liefert dieselben Namen camelCase). Werte roh als Integer, wie im Bestand ({0,1,3}).
+     * Necta-Export; Raw-API liefert dieselben Namen camelCase). Werte roh als Integer, wie im Bestand ({0,1,3}). Jod
+     * (`declarationIodhTlig` → `iodized`, freiwillige Angabe, {@see FoodAlchemistItemDeclaration::FREIWILLIG}) seit 15.10.2026,
+     * Bestand per `necta-deklaration-nachfuellen`.
      */
     public const DEKLARATIONEN = ['declarationWithDye' => 'with_dye', 'declarationWithPreservative' => 'with_preservative',
         'declarationWithAntioxidant' => 'with_antioxidant', 'declarationWithFlavourEnhancer' => 'with_flavour_enhancer',
@@ -50,7 +52,7 @@ class NectaMapper
         'declarationContainsMilkProtein' => 'contains_milk_protein', 'declarationContainsQuinine' => 'contains_quinine',
         'declarationTaurineContaining' => 'taurine_containing',
         'declarationCanImpairActivityAttentionChildren' => 'can_impair_attention_children',
-        'declarationWithTypeSugarSweetener' => 'with_type_sugar_sweetener'];
+        'declarationWithTypeSugarSweetener' => 'with_type_sugar_sweetener', 'declarationIodhTlig' => 'iodized'];
 
     /** Necta-Deklarationsfeld → Schlüssel in `details`, wie der Bestand (ImportSliceCommand: Integer bzw. Text). */
     public const DEKLARATION_DETAILS = ['declarationTableSweetenerBasedOn' => 'table_sweetener_basis',
@@ -60,7 +62,7 @@ class NectaMapper
      * Necta-Felder, die der Alt-Import bewusst nicht übernommen hat (keine FA-Spalte, nicht im Bestand). Sie zählen nicht als
      * unbekannt und landen nicht in `details`, sonst wiche jede Bestandszeile im Vollvergleich ab (Prüffall je Zeile).
      */
-    public const DEKLARATION_OHNE_SPALTE = ['declarationIodhTlig', 'declarationReserve'];
+    public const DEKLARATION_OHNE_SPALTE = ['declarationReserve'];
 
     /** Necta-Nährwert → FA-Spalte, wo der Name abweicht (sonst camelCase → snake_case). */
     public const NAEHRWERT_NAMEN = ['blsKey' => 'bls_key', 'energyKilocalories' => 'energy_kcal', 'energyKilojoules' => 'energy_kj',
@@ -158,7 +160,7 @@ class NectaMapper
     public function deklaration(array $r, ?array &$unbekannt = null): array
     {
         $zeile = ['legacy_id' => (int) $r['supplierItemId']];
-        foreach (array_keys(FoodAlchemistItemDeclaration::STOFFE) as $stoff) {
+        foreach ([...array_keys(FoodAlchemistItemDeclaration::STOFFE), ...array_keys(FoodAlchemistItemDeclaration::FREIWILLIG)] as $stoff) {
             $zeile[$stoff] = null;
         }
         $details = [];

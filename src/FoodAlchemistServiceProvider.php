@@ -67,6 +67,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 \Platform\FoodAlchemist\Console\NectaNachholenCommand::class,   // Necta-Abgleich: Einmal-Nachholer (Bauauftrag 15.10.2026)
                 \Platform\FoodAlchemist\Console\NectaAbgleichCommand::class,    // Necta-Abgleich: nächtlich + wöchentlich (PR 2)
                 \Platform\FoodAlchemist\Console\NectaDeklarationReparierenCommand::class,   // Einmal-Reparatur Deklarationen (Lauf 3, 15.10.2026)
+                \Platform\FoodAlchemist\Console\NectaDeklarationNachfuellenCommand::class,  // neue Deklarations-Spalte nachfüllen (Jod, 15.10.2026)
                 \Platform\FoodAlchemist\Console\PlanNutzungZaehlenCommand::class,   // Spec 82 §13 D (täglich, Tageswerte → team_billable_usages)
                 \Platform\FoodAlchemist\Console\PlanPreiseStartwerteCommand::class,   // Spec 82 §13 D (Platzhalter-Startpreise)
                 \Platform\FoodAlchemist\Console\EquipmentStandardSetzenCommand::class,   // Spec 82 §6 (Daten per Befehl, nicht per Migration)

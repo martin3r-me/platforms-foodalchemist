@@ -52,7 +52,8 @@ it('mappt die Rohwerte wie der Bestand neu, aktualisiert den Necta-Stand und lä
     $n = ($this->spalten)(1001);
     expect((int) $n['with_dye'])->toBe(3)->and((int) $n['with_preservative'])->toBe(1)->and((int) $n['caffeinated'])->toBe(0)
         ->and((int) $n['excessive_consumption_laxative'])->toBe(1)->and($n['with_sweetener'])->toBeNull()
-        ->and(json_decode($n['details'], true))->toBe(['table_sweetener_basis' => 0])                 // Jod/Reserve wie im Alt-Import weg
+        ->and((int) DB::table('foodalchemist_item_declarations')->where('legacy_id', 1001)->value('iodized'))->toBe(1)
+        ->and(json_decode($n['details'], true))->toBe(['table_sweetener_basis' => 0])                 // Reserve wie im Alt-Import weg
         ->and(json_decode(DB::table('foodalchemist_necta_stand')->where('legacy_id', 1001)->value('werte'), true)['with_dye'])->toBe(3)
         ->and(($this->spalten)(1002))->toBe($bestand)
         ->and(($this->spalten)(1003)['details'])->toBeNull();

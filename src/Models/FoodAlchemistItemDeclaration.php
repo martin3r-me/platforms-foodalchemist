@@ -10,7 +10,7 @@ use Platform\FoodAlchemist\Models\Concerns\BelongsToTeamHierarchy;
 use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
 
 /**
- * @ai.description LA-Deklarationen (M2-15, GL-09-Quelle): 18 LMIV-Stoffe als rohe
+ * @ai.description LA-Deklarationen (M2-15, GL-09-Quelle): 18 LMIV-Stoffe (+ freiwillig Jod) als rohe
  * Necta-Integer {0,1,3,NULL} (3=ja, 1=nein, 0/NULL=keine Angabe). Labels GL-09 §4.2.
  */
 class FoodAlchemistItemDeclaration extends Model
@@ -37,6 +37,17 @@ class FoodAlchemistItemDeclaration extends Model
         'taurine_containing' => 'taurinhaltig',
         'can_impair_attention_children' => 'kann Aktivität/Aufmerksamkeit bei Kindern beeinträchtigen',
         'with_type_sugar_sweetener' => 'mit Zuckerart(en) und Süßungsmittel(n)',
+    ];
+
+    /**
+     * Freiwillige Angaben: gleiche Roh-Domäne {0,1,3,NULL} wie STOFFE, aber NIE Teil der Pflicht-Kennzeichnung, der
+     * Zusatzstoff-Legende oder -Nummerierung (Entscheid Dominique 15.10.2026). Jod aus Necta `declarationIodhTlig`.
+     *
+     * Rechtliche Einordnung (freiwillig, keine ZZulV-Pflicht) ist Kenntnisstand des Kurators; vor einem Einsatz auf der
+     * Speisekarte von QM bzw. Lebensmittelüberwachung bestätigen lassen.
+     */
+    public const FREIWILLIG = [
+        'iodized' => 'jodiert',
     ];
 
     protected $table = 'foodalchemist_item_declarations';
