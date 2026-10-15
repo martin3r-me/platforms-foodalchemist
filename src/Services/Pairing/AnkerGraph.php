@@ -31,6 +31,9 @@ final class AnkerGraph
 
     public const HINWEIS = 'hinweis';
 
+    /** Präfix strukturierter Gruppen-Ziele in anchor_wissen_offen.name (Hinweis, Gruppen-Klassiker). */
+    public const GRUPPE = 'gruppe:';
+
     /** Stufen. */
     public const HARMONIERT = 3;
 
@@ -194,13 +197,78 @@ final class AnkerGraph
             foreach ($ziele as $z) {
                 $treffer = match ($typ) {
                     'anker' => $z->slug === $wert,
-                    'gruppe' => $wert !== '' && $z->subcategory !== null
-                        && ($z->subcategory === $wert || str_starts_with($z->subcategory, $wert.'/')),
+                    'gruppe' => self::inGruppe($z->subcategory, $wert),
                     default => false,
                 };
                 if ($treffer && (int) $z->id !== (int) $r->anchor_id) {
                     $out[] = (object) ['von' => (int) $r->anchor_id, 'zu' => (int) $z->id,
                         'begriff' => (string) ($r->kontext ?? $wert), 'grund' => $r->grund, 'status' => $r->status];
+                }
+            }
+        }
+
+        return $out;
+    }
+
+    /** Liegt eine Inspire-Unterkategorie in der Gruppe (gleich oder darunter, nie halber Pfad)? */
+    public static function inGruppe(?string $subcategory, string $gruppe): bool
+    {
+        return $gruppe !== '' && $subcategory !== null
+            && ($subcategory === $gruppe || str_starts_with($subcategory, $gruppe.'/'));
+    }
+
+    /**
+     * Gruppen-Klassiker (Dominique 15.10.): „verträgt Fisch" steht als anchor_wissen_offen art=kombination,
+     * name=gruppe:<Unterkategorie>. Je Anker die Gruppen; verworfene zählen nie. Ohne $ids: alle.
+     *
+     * @param  list<int>|null  $ids
+     * @return array<int, list<string>>
+     */
+    public function gruppenKlassiker(?array $ids = null): array
+    {
+        $out = [];
+        foreach (DB::table(self::OFFEN)->where('art', Kantenart::Kombination->value)->where('name', 'like', self::GRUPPE.'%')
+            ->where('status', '!=', WissensStatus::Verworfen->value)
+            ->when($ids !== null, fn ($q) => $q->whereIn('anchor_id', $this->ids($ids)))
+            ->get(['anchor_id', 'name']) as $r) {
+            $out[(int) $r->anchor_id][] = substr((string) $r->name, strlen(self::GRUPPE));
+        }
+
+        return $out;
+    }
+
+    /**
+     * Paare (a aus $von, b aus $zu), zwischen denen ein Gruppen-Klassiker steht — in beide Richtungen
+     * (a verträgt b's Gruppe ODER b verträgt a's Gruppe).
+     *
+     * @param  array<int, int|string>  $von
+     * @param  array<int, int|string>  $zu
+     * @return array<int, true>  id aus $zu (bzw. $von) => true, je beteiligtem Anker
+     */
+    public function gruppenKlassikerZwischen(array $von, array $zu): array
+    {
+        [$von, $zu] = [$this->ids($von), $this->ids($zu)];
+        if ($von === [] || $zu === []) {
+            return [];
+        }
+        $gruppen = $this->gruppenKlassiker(array_merge($von, $zu));
+        if ($gruppen === []) {
+            return [];
+        }
+        $sub = DB::table('foodalchemist_vocab_pairing_anchors')->whereIn('id', array_merge($von, $zu))->pluck('subcategory', 'id')->all();
+        $out = [];
+        foreach ($von as $a) {
+            foreach ($zu as $b) {
+                if ($a === $b) {
+                    continue;
+                }
+                foreach ([[$a, $b], [$b, $a]] as [$x, $y]) {
+                    foreach ($gruppen[$x] ?? [] as $g) {
+                        if (self::inGruppe($sub[$y] ?? null, $g)) {
+                            $out[$a] = $out[$b] = true;
+                            continue 3;
+                        }
+                    }
                 }
             }
         }
