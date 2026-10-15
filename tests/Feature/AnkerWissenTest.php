@@ -114,6 +114,28 @@ it('Kontrast: Kürbis braucht Säure, Reisessig und Zitrone liefern sie — ohne
         ->and($kontrast->first()->status)->toBe('entwurf');
 });
 
+it('Rangfolge: „Verträgt" laut Dossier schlägt reine Stärke, und je Grundname nur ein Partner', function () {
+    $butter = ($this->mk)('butter', 'Butter');
+    $salzbutter = ($this->mk)('salted_butter', 'Butter, gesalzen');
+    $wagyu = ($this->mk)('wagyu_beef', 'Wagyu-Rind');
+    DB::table('foodalchemist_vocab_pairing_anchors')->whereIn('id', [$butter, $salzbutter])->update(['grundname' => 'Butter']);
+    ($this->importiere)(($this->profil)(['braucht' => [['achse' => 'fett', 'staerke' => 'muss', 'beleg' => 'Fett ist Pflicht.']]]));
+    foreach ([[$butter, 'butter', 2], [$salzbutter, 'salted_butter', 3], [$wagyu, 'wagyu_beef', 3]] as [$id, $slug, $stufe]) {
+        ($this->importiere)(['anker_id' => $id, 'anker_slug' => $slug, 'liefert' => ['geschmack' => ['fett' => $stufe]]]);
+    }
+    // Dossier des Kürbis nennt Butter unter „Verträgt" (Kombination), Wagyu nicht.
+    DB::table('foodalchemist_anchor_beziehungen')->insert(['anchor_a_id' => $this->kuerbis, 'anchor_b_id' => $butter,
+        'art' => Kantenart::Kombination->value, 'achse' => '', 'rang' => 0, 'grundlage' => 'dossier', 'status' => 'entwurf',
+        'created_at' => now(), 'updated_at' => now()]);
+
+    app(KontrastAbleitung::class)->baue();
+    $zu = app(AnkerGraph::class)->beziehungen([$this->kuerbis], Kantenart::Kontrast)->pluck('zu')->all();
+
+    expect($zu[0])->toBe($butter)                         // empfohlen schlägt Wagyu trotz geringerer Stufe
+        ->and($zu)->toContain($wagyu)
+        ->and($zu)->not->toContain($salzbutter);          // gleicher Grundname „Butter" → nur einmal
+});
+
 it('verworfenes Wissen trägt keine Kontrast-Kante', function () {
     ($this->importiere)(($this->profil)());
     ($this->importiere)(['anker_id' => $this->essig, 'anker_slug' => 'rice_vinegar', 'liefert' => ['geschmack' => ['saeure' => 3]]]);
