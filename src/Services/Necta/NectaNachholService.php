@@ -7,7 +7,6 @@ use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Enums\SignalSeverity;
 use Platform\FoodAlchemist\Enums\SignalTyp;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem;
-use Platform\FoodAlchemist\Services\Ai\PoolEmbeddingService;
 use Platform\FoodAlchemist\Services\SignalService;
 use Platform\FoodAlchemist\Support\MasterTeam;
 use Platform\FoodAlchemist\Support\StammPaket;
@@ -26,7 +25,10 @@ use Symfony\Component\Uid\UuidV7;
  *  - Probelauf: liest alles, schreibt keine Stammdaten — nur die Laufzeile mit Zählern und Beispielen.
  *  - Resumefähig: Cursor (Lieferanten-Index) steht nach jedem Lieferanten in der Laufzeile; ein Neustart überspringt Erledigtes,
  *    und weil jede Anlage gegen `legacy_id` prüft, ist auch ein Neustart ohne Cursor idempotent.
- *  - Rohes Schreiben umgeht Observer: Embeddings neuer Artikel nur auf Wunsch (Option), gedrosselt über die Queue.
+ *  - Ausgenommen: Lieferanten per `ohne_lieferanten` (Necta-IDs) und Lieferanten, die bei uns `is_inactive` sind (z. B. der
+ *    auslaufende alte Handelshof-Kanal 16555, Dominique 15.10.). Beides steht im Protokoll unter `uebersprungen`.
+ *  - Rohes Schreiben umgeht den Embedding-Observer. Bewusst KEIN Einreihen hier (84k Jobs auf einmal): danach läuft
+ *    `foodalchemist:embed --pool=la --missing` (gestapelt, mit Pause und Zeitfenster).
  */
 class NectaNachholService
 {
@@ -58,14 +60,11 @@ class NectaNachholService
     /** @var array<string,true> */
     private array $unbekannteDeklarationsfelder = [];
 
-    /** @var list<int> */
-    private array $neueArtikelIds = [];
-
     public function __construct(private NectaMapper $mapper) {}
 
     /**
      * @param  array{team_id?: ?int, probe?: bool, lieferanten?: list<int>, seite?: int, pause_ms?: int, fortsetzen?: ?int,
-     *               embeddings?: bool, max_lieferanten?: ?int, detail_schwelle?: int, user_id?: ?int}  $opt
+     *               ohne_lieferanten?: list<int>, max_lieferanten?: ?int, detail_schwelle?: int, user_id?: ?int}  $opt
      * @param  callable(string): void|null  $log
      * @return array{lauf_id: int, status: string, zaehler: array<string,mixed>}
      */
@@ -80,7 +79,7 @@ class NectaNachholService
         [$this->laufId, $startIndex] = $this->laufBeginnen($verbindungId, $teamId, $opt);
         $this->zaehler = ['lieferanten_necta' => 0, 'lieferanten_neu' => 0, 'artikel_geprueft' => 0, 'artikel_neu' => 0,
             'allergene_neu' => 0, 'deklaration_neu' => 0, 'naehrwerte_neu' => 0, 'preise_neu' => 0, 'api_seiten' => 0,
-            'neue_lieferanten' => [], 'neue_artikel_je_lieferant' => [], 'lieferanten_erledigt' => 0];
+            'neue_lieferanten' => [], 'neue_artikel_je_lieferant' => [], 'lieferanten_erledigt' => 0, 'uebersprungen' => []];
 
         try {
             $lieferanten = $this->lieferanten($log);
@@ -96,9 +95,6 @@ class NectaNachholService
                 $this->lieferant($l, $teamId, $log);
                 $this->zaehler['lieferanten_erledigt']++;
                 $this->cursor($index);
-            }
-            if (! $this->probe && ! empty($opt['embeddings'])) {
-                $this->embeddings();
             }
             $this->laufBeenden('fertig');
         } catch (\Throwable $e) {
@@ -121,14 +117,24 @@ class NectaNachholService
     {
         $alle = $this->alleSeiten('suppliers', []);
         $this->zaehler['lieferanten_necta'] = count($alle);
-        $vorhanden = DB::table('foodalchemist_suppliers')->whereIn('legacy_id', array_map(fn ($r) => (int) $r['id'], $alle))
-            ->pluck('id', 'legacy_id')->all();
+        $vorhandeneZeilen = DB::table('foodalchemist_suppliers')->whereIn('legacy_id', array_map(fn ($r) => (int) $r['id'], $alle))
+            ->get(['id', 'legacy_id', 'is_inactive', 'name'])->keyBy('legacy_id');
         $filter = array_map('intval', $this->opt['lieferanten'] ?? []);
+        $ohne = array_map('intval', $this->opt['ohne_lieferanten'] ?? []);
 
         $raus = [];
         foreach ($alle as $r) {
             $legacy = (int) $r['id'];
-            $faId = isset($vorhanden[$legacy]) ? (int) $vorhanden[$legacy] : null;
+            $bei = $vorhandeneZeilen->get($legacy);
+            $faId = $bei !== null ? (int) $bei->id : null;
+            // Ausnahmen VOR jeder Anlage: ausgenommen per Option oder bei uns stillgelegt (auslaufender Kanal)
+            $grund = in_array($legacy, $ohne, true) ? 'ausgenommen (--ohne-lieferant)' : ($bei !== null && (bool) $bei->is_inactive ? 'bei uns inaktiv' : null);
+            if ($grund !== null) {
+                $this->zaehler['uebersprungen'][] = ['legacy_id' => $legacy, 'name' => (string) ($bei->name ?? $r['name'] ?? ''), 'grund' => $grund];
+                $log("Übersprungen: ".($bei->name ?? $r['name'] ?? '?')." (Necta {$legacy}) — {$grund}");
+
+                continue;
+            }
             if ($faId === null) {
                 $zeile = $this->mapper->lieferant($r);
                 $this->beispiel('lieferanten', $zeile);
@@ -178,7 +184,6 @@ class NectaNachholService
                     $faId = $this->einfuegen('foodalchemist_supplier_items', $zeile + ['supplier_id' => $l['fa_id'], 'team_id' => null,
                         'stamm_class' => StammPaket::PAKET]);
                     $neu[(int) $zeile['legacy_id']] = $faId;
-                    $this->neueArtikelIds[] = $faId;
                     $this->stand('supplier_item', (int) $zeile['legacy_id'], $zeile);
                 }
             }
@@ -310,17 +315,6 @@ class NectaNachholService
             ]);
     }
 
-    private function embeddings(): void
-    {
-        $dienst = app(PoolEmbeddingService::class);
-        foreach (array_chunk($this->neueArtikelIds, 500) as $teil) {
-            foreach (FoodAlchemistSupplierItem::withoutGlobalScopes()->whereIn('id', $teil)->get() as $si) {
-                $dienst->queueSupplierItem($si);
-            }
-        }
-        $this->zaehler['embeddings_eingereiht'] = count($this->neueArtikelIds);
-    }
-
     // ── Laufzeile ─────────────────────────────────────────────────────────────────────────────────────────────────────────
 
     /** @return array{0:int, 1:int} [lauf_id, Start-Index] */
@@ -335,7 +329,7 @@ class NectaNachholService
 
             return [(int) $alt->id, (int) (json_decode((string) $alt->cursor, true)['lieferant_index'] ?? 0)];
         }
-        $optionen = array_intersect_key($opt, array_flip(['lieferanten', 'seite', 'pause_ms', 'max_lieferanten', 'embeddings', 'detail_schwelle']));
+        $optionen = array_intersect_key($opt, array_flip(['lieferanten', 'ohne_lieferanten', 'seite', 'pause_ms', 'max_lieferanten', 'detail_schwelle']));
         $id = (int) DB::table('foodalchemist_necta_laeufe')->insertGetId([
             'uuid' => (string) UuidV7::generate(), 'verbindung_id' => $verbindungId, 'team_id' => $teamId, 'art' => 'nachholen',
             'probe' => $this->probe, 'status' => 'laeuft', 'optionen' => json_encode($optionen), 'cursor' => json_encode(['lieferant_index' => 0]),

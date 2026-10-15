@@ -216,3 +216,25 @@ it('Mapper: Allergen-Kodierung, Zeitzone und Raw-API-Antwortform', function () {
         ->and(NectaMapper::zeit('2026-01-15T12:00:00'))->toBe('2026-01-15 11:00:00')                         // Winterzeit
         ->and(NectaApiQuelle::normalisiere(['Items' => [['id' => 1]], 'TotalCount' => 1, 'TotalPages' => 1], 1, 50)['items'])->toBe([['id' => 1]]);
 });
+
+it('Ausnahmen: bei uns inaktiver Lieferant und --ohne-lieferant werden übersprungen und im Protokoll genannt', function () {
+    // auslaufender Kanal (wie Handelshof 16555): bei uns stillgelegt → kein neuer Artikel, keine Details, keine Preise
+    $this->lieferant->update(['is_inactive' => true]);
+    $r = $this->dienst->lauf(1, ['pause_ms' => 0, 'ohne_lieferanten' => [25345]]);
+
+    expect(collect($r['zaehler']['uebersprungen'])->pluck('grund', 'legacy_id')->all())
+        ->toBe([19491 => 'bei uns inaktiv', 25345 => 'ausgenommen (--ohne-lieferant)'])
+        ->and($r['zaehler']['artikel_neu'])->toBe(0)->and($r['zaehler']['lieferanten_neu'])->toBe(0)
+        ->and(FoodAlchemistSupplierItem::where('legacy_id', 36674789)->exists())->toBeFalse()
+        ->and(FoodAlchemistSupplier::where('legacy_id', 25345)->exists())->toBeFalse()          // ausgenommen: auch nicht angelegt
+        ->and(DB::table('foodalchemist_signals')->count())->toBe(0)
+        ->and($this->attrappe->aufrufe['supplier-items'] ?? 0)->toBe(0);                        // nicht einmal gelesen
+});
+
+it('Befehl: --ohne-lieferant und inaktive Lieferanten stehen in der Probe-Ausgabe', function () {
+    $this->lieferant->update(['is_inactive' => true]);
+    $this->artisan('foodalchemist:necta-nachholen', ['--probe' => true, '--pause-ms' => 0, '--ohne-lieferant' => [25345]])
+        ->expectsOutputToContain('übersprungen: Bäckerei Bestand (Necta 19491) — bei uns inaktiv')
+        ->expectsOutputToContain('(Necta 25345) — ausgenommen (--ohne-lieferant)')
+        ->assertExitCode(0);
+});

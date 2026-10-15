@@ -19,11 +19,11 @@ class NectaNachholenCommand extends Command
         {--team= : Team der Preise (Standard: Master-Team)}
         {--probe : nur lesen und zählen, nichts anlegen}
         {--lieferant=* : nur diese Necta-Lieferanten-IDs}
+        {--ohne-lieferant=* : diese Necta-Lieferanten-IDs auslassen (bei uns inaktive Lieferanten entfallen ohnehin)}
         {--max-lieferanten= : höchstens so viele Lieferanten in diesem Lauf}
         {--seite=500 : Seitengröße je Necta-Aufruf}
         {--pause-ms=200 : Pause zwischen zwei Necta-Aufrufen}
-        {--fortsetzen= : Lauf-ID eines abgebrochenen Nachhol-Laufs}
-        {--embeddings : Embeddings der neuen Artikel danach über die Queue einreihen (off-peak)}';
+        {--fortsetzen= : Lauf-ID eines abgebrochenen Nachhol-Laufs}';
 
     protected $description = 'Necta: fehlende Lieferanten, Artikel, Details und Preise einmalig nachholen (resumefähig, mit Probelauf)';
 
@@ -37,11 +37,11 @@ class NectaNachholenCommand extends Command
                 'team_id' => $this->option('team') !== null ? (int) $this->option('team') : null,
                 'probe' => $probe,
                 'lieferanten' => array_map('intval', (array) $this->option('lieferant')),
+                'ohne_lieferanten' => array_map('intval', (array) $this->option('ohne-lieferant')),
                 'max_lieferanten' => $this->option('max-lieferanten') !== null ? (int) $this->option('max-lieferanten') : null,
                 'seite' => max(1, (int) $this->option('seite')),
                 'pause_ms' => max(0, (int) $this->option('pause-ms')),
                 'fortsetzen' => $this->option('fortsetzen') !== null ? (int) $this->option('fortsetzen') : null,
-                'embeddings' => (bool) $this->option('embeddings'),
             ], fn (string $zeile) => $this->line('  '.$zeile));
         } catch (\Throwable $e) {
             $this->error('Abbruch: '.$e->getMessage().' — mit --fortsetzen=<lauf_id> weitermachen (Laufzeile in foodalchemist_necta_laeufe).');
@@ -54,10 +54,16 @@ class NectaNachholenCommand extends Command
         foreach ($z['neue_lieferanten'] ?? [] as $l) {
             $this->line("  neuer Lieferant: {$l['name']} (Necta {$l['legacy_id']})");
         }
+        foreach ($z['uebersprungen'] ?? [] as $l) {
+            $this->line("  übersprungen: {$l['name']} (Necta {$l['legacy_id']}) — {$l['grund']}");
+        }
         if (! empty($z['deklaration_unbekannte_felder'])) {
             $this->warn('Deklaration: unbekannte Necta-Felder (in details abgelegt): '.implode(', ', $z['deklaration_unbekannte_felder']));
         }
         $this->info("Lauf {$r['lauf_id']}: {$r['status']}".($probe ? ' (Probe)' : ''));
+        if (! $probe && ($z['artikel_neu'] ?? 0) > 0) {
+            $this->line('Als Nächstes: php artisan foodalchemist:embed --pool=la --missing (Embeddings der neuen Artikel, gestapelt).');
+        }
 
         return self::SUCCESS;
     }
