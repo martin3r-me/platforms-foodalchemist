@@ -20,6 +20,7 @@ use Platform\FoodAlchemist\Enums\WissensStatus;
  * stand beim Kürbis Wagyu als Fett-Partner oben, nur weil es maximal Fett liefert):
  *   Stärke des Bedarfs (muss 2, soll 1)                       · 1 000 000
  *   b steht im „Verträgt" von a oder umgekehrt (Dossier)      +   100 000
+ *     sonst Gruppen-Klassiker („verträgt Fisch", b ist Fisch)  +    50 000
  *   ★★★ zwischen a und b (Inspire; ★★ zählt nicht, Dominique  +    10 000
  *     15.10.: „2 Sterne ist die Grund-Aroma-Passform")
  *   Stufe der Eigenschaft (2–3)                               ·     1 000
@@ -71,6 +72,19 @@ final class KontrastAbleitung
             $vertraegt[(int) $k->anchor_b_id][(int) $k->anchor_a_id] = true;
         }
 
+        // Gruppen-Klassiker („verträgt Fisch"): schwächer als ein Einzel-Klassiker
+        $gruppen = $this->graph->gruppenKlassiker();
+        $sub = DB::table('foodalchemist_vocab_pairing_anchors')->pluck('subcategory', 'id')->all();
+        $inGruppe = function (int $x, int $y) use ($gruppen, $sub): bool {
+            foreach ($gruppen[$x] ?? [] as $g) {
+                if (AnkerGraph::inGruppe($sub[$y] ?? null, $g)) {
+                    return true;
+                }
+            }
+
+            return false;
+        };
+
         $verbreitung = DB::table('foodalchemist_gp_anchor_mappings')->whereNull('deleted_at')
             ->selectRaw('anchor_id, COUNT(*) AS n')->groupBy('anchor_id')->pluck('n', 'anchor_id')->all();
         $grundform = DB::table('foodalchemist_vocab_pairing_anchors')->whereNull('verfahren')
@@ -99,7 +113,7 @@ final class KontrastAbleitung
                     continue;
                 }
                 $rang = ($b->staerke === 'muss' ? 2 : 1) * 1000000
-                    + (isset($vertraegt[$a][$id]) ? 100000 : 0)
+                    + (isset($vertraegt[$a][$id]) ? 100000 : ($inGruppe($a, $id) || $inGruppe($id, $a) ? 50000 : 0))
                     + (($harmonie[$id] ?? AnkerGraph::NEUTRAL) >= AnkerGraph::HARMONIERT ? 10000 : 0)
                     + $l['stufe'] * 1000
                     + (isset($grundform[$id]) ? 500 : 0) + min(499, (int) ($verbreitung[$id] ?? 0));

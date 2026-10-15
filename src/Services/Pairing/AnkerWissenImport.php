@@ -49,7 +49,7 @@ final class AnkerWissenImport
         $basis = ['knowledge_document_id' => $docId, 'quelle_hash' => $hash, 'status' => WissensStatus::Entwurf->value,
             'created_at' => now(), 'updated_at' => now()];
         $stat = ['status' => 'ok', 'anker_id' => $ankerId, 'bedarfe' => 0, 'eigenschaften' => 0, 'komponenten' => 0,
-            'kombinationen' => 0, 'konflikte' => 0, 'hinweise' => 0, 'offen' => 0];
+            'kombinationen' => 0, 'gruppen_klassiker' => 0, 'konflikte' => 0, 'hinweise' => 0, 'offen' => 0];
 
         DB::transaction(function () use ($p, $ankerId, $basis, &$stat) {
             $entwurf = WissensStatus::Entwurf->value;
@@ -112,6 +112,14 @@ final class AnkerWissenImport
             foreach ((array) ($p['vertraegt'] ?? []) as $v) {
                 $name = trim((string) ($v['name'] ?? ''));
                 if ($name === '') {
+                    continue;
+                }
+                // Gruppen-Klassiker („verträgt Fisch"): strukturiertes Ziel gruppe:<Inspire-Unterkategorie>
+                $gruppe = trim((string) ($v['gruppe'] ?? ''));
+                if ($gruppe !== '') {
+                    $this->offen($ankerId, 'kombination', AnkerGraph::GRUPPE.$gruppe, $name, null, $basis);
+                    $stat['gruppen_klassiker']++;
+
                     continue;
                 }
                 $ziel = $this->pairing->ankerIdExakt($name);

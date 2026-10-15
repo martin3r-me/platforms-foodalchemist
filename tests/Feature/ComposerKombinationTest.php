@@ -163,3 +163,39 @@ it('Netz-Rang ★★★: Klassiker und Verbreitung vor dem Alphabet, Grundform v
     // Reisessig deckt den Bedarf · Thymian Klassiker · Ingwer verbreitet (nur die Grundform) · Rest nach Slug
     expect($stern3)->toBe(['Reisessig', 'Thymian', 'Ingwer', 'Aaa-Exot', 'Bbb-Exot', 'Salbei']);   // Ingwer, geröstet: gleicher Grundname, fällt weg
 });
+
+it('Gruppen-Klassiker: „verträgt Fisch" lässt einen Fisch als Lieferanten zu, schwächer als ein Einzel-Klassiker, kein halber Pfad', function () {
+    $fisch = function (string $slug, string $name, string $sub) {
+        DB::table('foodalchemist_vocab_pairing_anchors')->insert(['uuid' => (string) UuidV7::generate(), 'slug' => $slug,
+            'display_de' => $name, 'subcategory' => $sub, 'aroma_intensitaet' => 1.0, 'created_at' => now(), 'updated_at' => now()]);
+        $id = (int) DB::getPdo()->lastInsertId();
+        DB::table('foodalchemist_anchor_eigenschaften')->insert(['anchor_id' => $id, 'achse' => 'saeure', 'stufe' => 3, 'quelle' => 'dossier',
+            'status' => 'entwurf', 'created_at' => now(), 'updated_at' => now()]);
+
+        return $id;
+    };
+    $hering = $fisch('pickled_herring', 'Matjes', 'Protein/Fisch');
+    $sardelle = $fisch('anchovy', 'Sardelle', 'Protein/Fisch');
+    $limette = $fisch('lime', 'Limette', 'Obst/Zitrusfrüchte');   // gleiche Lieferung, kein Klassiker
+    DB::table('foodalchemist_anchor_beziehungen')->insert(['anchor_a_id' => $this->a['pumpkin'], 'anchor_b_id' => $sardelle,
+        'art' => 'kombination', 'achse' => '', 'grundlage' => 'dossier', 'status' => 'entwurf', 'created_at' => now(), 'updated_at' => now()]);
+    app(KontrastAbleitung::class)->baue();
+    expect(($this->knoten)(($this->netz)(['pumpkin']), 'kontrast'))->toBe(['Sardelle']);         // nur der Einzel-Klassiker
+
+    // Import: „Verträgt Fisch" als strukturiertes Gruppen-Ziel
+    $r = app(\Platform\FoodAlchemist\Services\Pairing\AnkerWissenImport::class)->importiere(['anker_id' => $this->a['pumpkin'], 'anker_slug' => 'pumpkin',
+        'braucht' => [['achse' => 'saeure', 'staerke' => 'muss', 'beleg' => 'Säure ist Pflicht']],
+        'vertraegt' => [['name' => 'Fisch', 'gruppe' => 'Protein/Fisch'], ['name' => 'Obst', 'gruppe' => 'Protein/Fi']]]);
+    DB::table('foodalchemist_anchor_beziehungen')->insert(['anchor_a_id' => $this->a['pumpkin'], 'anchor_b_id' => $sardelle,
+        'art' => 'kombination', 'achse' => '', 'grundlage' => 'dossier', 'status' => 'entwurf', 'created_at' => now(), 'updated_at' => now()]);
+    expect($r['gruppen_klassiker'])->toBe(2)
+        ->and(DB::table('foodalchemist_anchor_wissen_offen')->where('anchor_id', $this->a['pumpkin'])->where('art', 'kombination')->pluck('name')->all())
+        ->toBe(['gruppe:Protein/Fisch', 'gruppe:Protein/Fi']);
+
+    app(KontrastAbleitung::class)->baue();
+    $rang = DB::table('foodalchemist_anchor_beziehungen')->where('anchor_a_id', $this->a['pumpkin'])->where('art', 'kontrast')->where('achse', 'saeure')
+        ->pluck('rang', 'anchor_b_id');
+    expect(($this->knoten)(($this->netz)(['pumpkin']), 'kontrast'))->toBe(['Sardelle', 'Matjes'])   // Einzel vor Gruppe, Limette fehlt
+        ->and($rang[$sardelle] - $rang[$limette])->toBe(100000)                                       // Einzel-Klassiker
+        ->and($rang[$hering] - $rang[$limette])->toBe(50000);                                         // nur Gruppe
+});

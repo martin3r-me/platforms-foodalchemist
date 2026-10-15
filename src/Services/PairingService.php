@@ -1593,13 +1593,13 @@ class PairingService
         }
 
         // Rang (vorher bei Gleichstand alphabetisch: „Afrikanische Tagetes, Alpenpfeffer …" vorne):
-        // verbindet mehr gewählte Anker · deckt einen offenen Bedarf · Klassiker aus dem Dossier ·
+        // verbindet mehr gewählte Anker · deckt einen offenen Bedarf · Klassiker aus dem Dossier · Gruppen-Klassiker ·
         // Grundform vor Variante · Verbreitung im Katalog · Name. Vielfalt: je Grundname einer.
         $jeTyp = fn ($typ) => array_slice(
             (function () use ($kandidaten, $typ, $kontrastVon) {
                 $l = array_values(array_filter($kandidaten, fn ($c) => $c['typ'] === $typ));
-                $schluessel = fn ($c) => [$c['cover'], isset($kontrastVon[(int) $c['id']]) ? 1 : 0, $c['klassiker'] ? 1 : 0,
-                    $c['grundform'] ? 1 : 0, $c['verbreitung'], $c['weight']];
+                $schluessel = fn ($c) => [$c['cover'], isset($kontrastVon[(int) $c['id']]) ? 1 : 0,
+                    $c['klassiker'] ? 2 : ($c['gruppen_klassiker'] ? 1 : 0), $c['grundform'] ? 1 : 0, $c['verbreitung'], $c['weight']];
                 usort($l, fn ($x, $y) => [...$schluessel($y), $x['slug']] <=> [...$schluessel($x), $y['slug']]);
                 $gesehen = [];
 
@@ -1857,7 +1857,7 @@ class PairingService
         $id = fn (string $schluessel) => (int) substr($schluessel, 1);           // 'a123' → 123
 
         // Ein Lieferant muss zur Auswahl passen: ★★★ zu mindestens einem gewählten Anker ODER Klassiker
-        // aus dem Dossier („Verträgt"). Das gilt auch für reine Träger (Stufe 3: Öl, Meersalz, Zucker).
+        // aus dem Dossier („Verträgt"), auch als Gruppe („verträgt Fisch" + Lieferant ist Fisch, schwächer). Das gilt auch für reine Träger (Stufe 3: Öl, Meersalz, Zucker).
         // ★★ zählt nicht (Dominique 15.10.: „2 Sterne ist die Grund-Aroma-Passform", Rauschen).
         // Vorher durfte ein Träger ohne jede Harmonie stehen → Wildfond für Erdbeere + Basilikum,
         // Tikka Masala für Kürbis. (2026-10-06: Olivenöl für Tomate fehlte mit reinem ★★★-Filter —
@@ -1879,6 +1879,7 @@ class PairingService
         $klassiker = $alle === [] ? [] : $this->graph()->beziehungen($alle, Kantenart::Kombination, $innerIds)
             ->merge($this->graph()->beziehungen($innerIds, Kantenart::Kombination, $alle))
             ->flatMap(fn ($k) => [$k->von, $k->zu])->flip()->all();
+        $gruppenKlassiker = $this->graph()->gruppenKlassikerZwischen($alle, $innerIds);   // „verträgt Fisch", schwächer
         $stoert = $alle === [] ? [] : $this->graph()->beziehungen($alle, Kantenart::Konflikt, $innerIds)
             ->merge($this->graph()->beziehungen($innerIds, Kantenart::Konflikt, $alle))
             ->flatMap(fn ($k) => [$k->von, $k->zu])->flip()->all();
@@ -1893,10 +1894,13 @@ class PairingService
         $kontrast = [];
         foreach ($jeBedarf as [$fuer, $achse, $lieferanten]) {
             $passend = $lieferanten
-                ->filter(fn ($k) => ! isset($stoert[$k->zu]) && (isset($harmonien[$k->zu]) || isset($klassiker[$k->zu])))
+                ->filter(fn ($k) => ! isset($stoert[$k->zu])
+                    && (isset($harmonien[$k->zu]) || isset($klassiker[$k->zu]) || isset($gruppenKlassiker[$k->zu])))
                 ->sortBy([
                     fn ($x, $y) => ($harmonien[$y->zu] ?? 0) <=> ($harmonien[$x->zu] ?? 0),
-                    fn ($x, $y) => isset($klassiker[$y->zu]) <=> isset($klassiker[$x->zu]),
+                    // Klassiker-Stufe: Einzel 2, nur Gruppe 1 (eine Gruppe hebt nie über einen Einzel-Klassiker)
+                    fn ($x, $y) => (isset($klassiker[$y->zu]) ? 2 : (isset($gruppenKlassiker[$y->zu]) ? 1 : 0))
+                        <=> (isset($klassiker[$x->zu]) ? 2 : (isset($gruppenKlassiker[$x->zu]) ? 1 : 0)),
                     fn ($x, $y) => ($traeger[$y->zu.'|'.$achse] ?? 0) <=> ($traeger[$x->zu.'|'.$achse] ?? 0),
                     fn ($x, $y) => $y->rang <=> $x->rang,
                 ])
@@ -1953,6 +1957,7 @@ class PairingService
         $klassiker = $kandIds === [] ? [] : $this->graph()->beziehungen($kandIds, Kantenart::Kombination, $innerIds)
             ->merge($this->graph()->beziehungen($innerIds, Kantenart::Kombination, $kandIds))
             ->flatMap(fn ($k) => [$k->von, $k->zu])->flip()->all();
+        $gruppenKlassiker = $this->graph()->gruppenKlassikerZwischen($kandIds, $innerIds);
         $verbreitung = $kandIds === [] ? [] : DB::table('foodalchemist_gp_anchor_mappings')->whereNull('deleted_at')
             ->whereIn('anchor_id', $kandIds)->selectRaw('anchor_id, COUNT(*) AS n')->groupBy('anchor_id')->pluck('n', 'anchor_id')->all();
 
@@ -1993,7 +1998,8 @@ class PairingService
                 'id' => $cid, 'slug' => $c['slug'], 'display_de' => $c['display_de'],
                 'typ' => $c['best']['typ'], 'level' => $c['best']['level'], 'weight' => $c['best']['weight'],
                 'cover' => $cover, 'partner' => $c['partner'],
-                'klassiker' => isset($klassiker[$cid]), 'grundform' => $m->verfahren === null,
+                'klassiker' => isset($klassiker[$cid]), 'gruppen_klassiker' => isset($gruppenKlassiker[$cid]),
+                'grundform' => $m->verfahren === null,
                 'verbreitung' => (int) ($verbreitung[$cid] ?? 0),
                 'grundname' => mb_strtolower(trim((string) ($m->grundname ?: $m->slug))),
             ];
