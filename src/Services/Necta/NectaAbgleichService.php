@@ -335,6 +335,10 @@ class NectaAbgleichService extends NectaLaufBasis
             return;
         }
         if ($uebernehmen !== []) {
+            if ($objekt === 'supplier_item' && array_key_exists('ingredients_supplier', $uebernehmen)) {
+                // Zutatenliste geändert → Jod neu ableiten (Query Builder umgeht den Modell-Hook)
+                $uebernehmen['iodized_abgeleitet'] = \Platform\FoodAlchemist\Support\JodAusZutaten::wert($uebernehmen['ingredients_supplier']);
+            }
             DB::table($tabelle)->where('id', $fa->id)->update($uebernehmen + ['updated_at' => now()]);
         }
         $this->stand($objekt, $legacy, $necta + ['legacy_id' => $legacy]);

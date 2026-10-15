@@ -201,12 +201,29 @@ class GpAggregateService
     /** @param list<string> $stoffe @return array<string,?int> */
     private function deklarationMax(FoodAlchemistGp $gp, array $stoffe): array
     {
-        $row = DB::table('foodalchemist_item_declarations AS d')
-            ->join('foodalchemist_supplier_item_structures AS s', 's.supplier_item_id', '=', 'd.supplier_item_id')
-            ->where('s.gp_id', $gp->id)
-            ->whereNull('d.deleted_at')->whereNull('s.deleted_at')
-            ->selectRaw(implode(', ', array_map(fn ($f) => "MAX(d.{$f}) AS {$f}", $stoffe)))
-            ->first();
+        $abgeleitet = array_intersect_key(FoodAlchemistItemDeclaration::FREIWILLIG_ABGELEITET, array_flip($stoffe));
+        if ($abgeleitet === []) {
+            $row = DB::table('foodalchemist_item_declarations AS d')
+                ->join('foodalchemist_supplier_item_structures AS s', 's.supplier_item_id', '=', 'd.supplier_item_id')
+                ->where('s.gp_id', $gp->id)
+                ->whereNull('d.deleted_at')->whereNull('s.deleted_at')
+                ->selectRaw(implode(', ', array_map(fn ($f) => "MAX(d.{$f}) AS {$f}", $stoffe)))
+                ->first();
+        } else {
+            // Jod: je Artikel max(Necta-Flag, aus der Zutatenliste abgeleitet), auch für Artikel ohne Deklarationszeile.
+            // Für die Pflicht-Stoffe ändert der LEFT JOIN nichts (NULL fällt aus dem MAX).
+            $spalte = fn (string $f) => isset($abgeleitet[$f])
+                ? "MAX(CASE WHEN si.{$abgeleitet[$f]} IS NULL THEN d.{$f} WHEN d.{$f} IS NULL OR si.{$abgeleitet[$f]} > d.{$f} THEN si.{$abgeleitet[$f]} ELSE d.{$f} END) AS {$f}"
+                : "MAX(d.{$f}) AS {$f}";
+            $row = DB::table('foodalchemist_supplier_item_structures AS s')
+                ->join('foodalchemist_supplier_items AS si', 'si.id', '=', 's.supplier_item_id')
+                ->leftJoin('foodalchemist_item_declarations AS d', function ($j) {
+                    $j->on('d.supplier_item_id', '=', 's.supplier_item_id')->whereNull('d.deleted_at');
+                })
+                ->where('s.gp_id', $gp->id)->whereNull('s.deleted_at')
+                ->selectRaw(implode(', ', array_map($spalte, $stoffe)))
+                ->first();
+        }
 
         $out = [];
         foreach ($stoffe as $stoff) {
