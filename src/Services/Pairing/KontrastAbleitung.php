@@ -20,7 +20,8 @@ use Platform\FoodAlchemist\Enums\WissensStatus;
  * stand beim Kürbis Wagyu als Fett-Partner oben, nur weil es maximal Fett liefert):
  *   Stärke des Bedarfs (muss 2, soll 1)                       · 1 000 000
  *   b steht im „Verträgt" von a oder umgekehrt (Dossier)      +   100 000
- *   Harmonie-Stufe zwischen a und b (1–3, Inspire)            ·    10 000
+ *   ★★★ zwischen a und b (Inspire; ★★ zählt nicht, Dominique  +    10 000
+ *     15.10.: „2 Sterne ist die Grund-Aroma-Passform")
  *   Stufe der Eigenschaft (2–3)                               ·     1 000
  *   Grundform statt Variante                                  +       500
  *   Verbreitung im Katalog (Anzahl GP-Zuordnungen)            +   bis 499 — Alltagszutat vor Exot
@@ -99,7 +100,7 @@ final class KontrastAbleitung
                 }
                 $rang = ($b->staerke === 'muss' ? 2 : 1) * 1000000
                     + (isset($vertraegt[$a][$id]) ? 100000 : 0)
-                    + ($harmonie[$id] ?? AnkerGraph::NEUTRAL) * 10000
+                    + (($harmonie[$id] ?? AnkerGraph::NEUTRAL) >= AnkerGraph::HARMONIERT ? 10000 : 0)
                     + $l['stufe'] * 1000
                     + (isset($grundform[$id]) ? 500 : 0) + min(499, (int) ($verbreitung[$id] ?? 0));
                 $rangliste[] = [$id, $rang, $l['geprueft'] && $b->status === WissensStatus::Geprueft->value];

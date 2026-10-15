@@ -125,13 +125,15 @@ it('Composer-Tab rendert „Passt das zusammen?" aus der Kombinationslogik, Kont
         ->and($html)->toContain('data-picker-typ="kontrast"');
 });
 
-it('Kontrast ohne ★★★: reiner Träger (Stufe 3) ja, Aroma-Lieferant (Stufe 2) nein', function () {
-    app(\Platform\FoodAlchemist\Services\Pairing\AnkerGraph::class)->setze($this->a['pumpkin'], $this->a['rice_vinegar'], 1);
-    expect(($this->knoten)(($this->netz)(['pumpkin']), 'kontrast'))->toBe(['Reisessig']);          // Säure 3 = Träger
+it('Kontrast ohne ★★★: reiner Träger nur als Klassiker aus dem Dossier, ★★ lässt nichts zu', function () {
+    // Dominique 15.10.: „2 Sterne ist die Grund-Aroma-Passform" — vorher stand ein Träger (Stufe 3) auch
+    // ganz ohne Harmonie im Ring (Wildfond für Erdbeere + Basilikum)
+    app(\Platform\FoodAlchemist\Services\Pairing\AnkerGraph::class)->setze($this->a['pumpkin'], $this->a['rice_vinegar'], 2);
+    expect(($this->knoten)(($this->netz)(['pumpkin']), 'kontrast'))->toBe([]);                       // Säure 3, nur ★★
 
-    DB::table('foodalchemist_anchor_eigenschaften')->where('anchor_id', $this->a['rice_vinegar'])->update(['stufe' => 2]);
-    app(KontrastAbleitung::class)->baue();
-    expect(($this->knoten)(($this->netz)(['pumpkin']), 'kontrast'))->toBe([]);                       // Säure 2, ohne ★★★
+    DB::table('foodalchemist_anchor_beziehungen')->insert(['anchor_a_id' => $this->a['pumpkin'], 'anchor_b_id' => $this->a['rice_vinegar'],
+        'art' => 'kombination', 'achse' => '', 'grundlage' => 'dossier', 'status' => 'entwurf', 'created_at' => now(), 'updated_at' => now()]);
+    expect(($this->knoten)(($this->netz)(['pumpkin']), 'kontrast'))->toBe(['Reisessig']);          // Klassiker laut Dossier
 });
 
 it('Netz-Rang ★★★: Klassiker und Verbreitung vor dem Alphabet, Grundform vor Variante, je Grundname einer', function () {
