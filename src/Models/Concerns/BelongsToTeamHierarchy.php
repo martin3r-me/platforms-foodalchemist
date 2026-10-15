@@ -88,8 +88,18 @@ trait BelongsToTeamHierarchy
             return true;
         }
 
+        if ($this->team_id !== null || ! \Platform\FoodAlchemist\Support\MasterTeam::istMaster($team)) {
+            return false;
+        }
+
         // Spec 82 §13 I: Basis-Kataloge — globale Zeilen (team_id NULL) pflegt der Master (streng, kein „elternlos"-Rückfall).
-        return $this->team_id === null && static::istBasisKatalog() && \Platform\FoodAlchemist\Support\MasterTeam::istMaster($team);
+        if (static::istBasisKatalog()) {
+            return true;
+        }
+
+        // Spec 82 (Stamm global): globale STAMM-Zeilen (GP, Lieferant, Lieferantenartikel mit stamm_class = stamm_paket) pflegt ebenfalls der Master.
+        // Basis-Zeilen der Stamm-Modelle bleiben wie bisher nur lesbar; Mandanten (auch mit Paket) lesen nur. EINE Stelle für Dienste, Livewire und MCP.
+        return defined(static::class . '::STAMM_KLASSE') && ($this->stamm_class ?? StammPaket::BASIS) === StammPaket::PAKET;
     }
 
     /** Modelle der Basis-Kataloge überschreiben das mit `true` (Master pflegt globale Zeilen); Standard: nein. */
