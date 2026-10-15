@@ -557,3 +557,46 @@ it('Typ-Vokabular ohne Bedeutungen bleibt im Regel-Block bei der kompakten Liste
         ->and((string) app(\Platform\FoodAlchemist\Services\Regeln\RegelPromptBlock::class)->fuerPromptKey('recipe.name_putzen'))
         ->not->toContain('nur diese Werte (in dieser Reihenfolge):');
 });
+
+// ── Riegel: Alias gleich anderem Wert (demo 11.10.: „hauptkomponente“ als Alias von protein) ──────────────────
+
+it('Vokabular-Riegel: ein Alias, der einem anderen Wert gleicht, wird beim Speichern abgelehnt; gleicher Wert in zwei Gruppen nicht', function () {
+    $svc = app(\Platform\FoodAlchemist\Services\Regeln\RegelService::class);
+    $basis = ['regelwerk' => 'test', 'paragraph' => 'T', 'titel' => 'Test-Vokabular', 'art' => 'vokabular', 'ziel' => 'test.ziel', 'wirkung' => 'korrigieren'];
+
+    expect(fn () => $svc->speichere([...$basis, 'schluessel' => 'test.vok_kaputt', 'params' => ['werte' => [
+        ['wert' => 'protein', 'aliase' => ['fleisch', 'Hauptkomponente']], ['wert' => 'hauptkomponente'],
+    ]]], null, true, 'test'))->toThrow(\Platform\FoodAlchemist\Services\Regeln\RegelUngueltig::class);
+
+    expect(fn () => $svc->speichere([...$basis, 'schluessel' => 'test.vok_gruppen', 'params' => ['werte' => [
+        ['wert' => 'Coulis', 'gruppe' => 'Süße Saucen'], ['wert' => 'Coulis', 'gruppe' => 'Pürees', 'aliase' => ['coulis']],
+    ]]], null, true, 'test'))->not->toThrow(\Platform\FoodAlchemist\Services\Regeln\RegelUngueltig::class);
+});
+
+it('Teller-Rollen: „hauptkomponente“ bleibt hauptkomponente — kein Rück-Mapping auf protein', function () {
+    $protein = collect(FoodAlchemistRule::where('schluessel', TellerRolle::SCHLUESSEL)->firstOrFail()->params['werte'])->firstWhere('wert', 'protein');
+
+    expect(TellerRolle::kanonisch('hauptkomponente'))->toBe('hauptkomponente')
+        ->and(TellerRolle::kanonisch('Hauptkomponente'))->toBe('hauptkomponente')
+        ->and(array_map('mb_strtolower', (array) ($protein['aliase'] ?? [])))->not->toContain('hauptkomponente');
+});
+
+it('Alias-Bereinigung: ein eingeschleuster Alias gleich einem anderen Wert wird entfernt (idempotent)', function () {
+    $regel = FoodAlchemistRule::where('schluessel', TellerRolle::SCHLUESSEL)->firstOrFail();
+    $params = $regel->params;
+    foreach ($params['werte'] as $i => $w) {
+        if ($w['wert'] === 'protein') {
+            $params['werte'][$i]['aliase'] = [...(array) ($w['aliase'] ?? []), 'hauptkomponente'];
+        }
+    }
+    DB::table('foodalchemist_rules')->where('id', $regel->id)->update(['params' => json_encode($params)]);   // am Riegel vorbei
+    RegelBuch::vergessen();
+    expect(TellerRolle::kanonisch('hauptkomponente'))->toBe('protein');   // so sah demo aus
+
+    $mig = require dirname(__DIR__, 2) . '/database/migrations/2026_10_19_100000_regel_teller_rolle_alias_bereinigung.php';
+    $mig->up();
+    $mig->up();
+    RegelBuch::vergessen();
+
+    expect(TellerRolle::kanonisch('hauptkomponente'))->toBe('hauptkomponente');
+});

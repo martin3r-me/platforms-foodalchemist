@@ -24,6 +24,27 @@ final class Vokabular implements RegelArt
                 $fehler[] = "werte[{$i}]: wert fehlt";
             }
         }
+        // Riegel (demo 11.10., Teller-Rollen): ein Alias darf nie einem ANDEREN Wert desselben Vokabulars gleichen — sonst
+        // mappt die Normalisierung den richtigen Wert still auf den falschen zurück („hauptkomponente“ stand noch als Alias bei
+        // protein; die KI antwortete richtig, in der DB landete protein). Gleiche Werte in mehreren Gruppen sind erlaubt.
+        $werte = [];
+        foreach ($params['werte'] as $w) {
+            if (is_array($w) && ($n = RegelText::norm((string) ($w['wert'] ?? ''))) !== '') {
+                $werte[$n] = true;
+            }
+        }
+        foreach ($params['werte'] as $i => $w) {
+            if (! is_array($w)) {
+                continue;
+            }
+            $eigener = RegelText::norm((string) ($w['wert'] ?? ''));
+            foreach ((array) ($w['aliase'] ?? []) as $alias) {
+                $n = RegelText::norm((string) $alias);
+                if ($n !== '' && $n !== $eigener && isset($werte[$n])) {
+                    $fehler[] = "werte[{$i}] «" . ($w['wert'] ?? '') . "»: Alias «{$alias}» ist selbst ein Wert dieses Vokabulars";
+                }
+            }
+        }
 
         return $fehler;
     }
