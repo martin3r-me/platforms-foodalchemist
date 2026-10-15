@@ -136,6 +136,25 @@ it('Rangfolge: „Verträgt" laut Dossier schlägt reine Stärke, und je Grundna
         ->and($zu)->not->toContain($salzbutter);          // gleicher Grundname „Butter" → nur einmal
 });
 
+it('Rang: nur ★★★ hebt, ★★ zählt wie neutral (Grund-Aroma-Passform)', function () {
+    $drei = ($this->mk)('olive_oil', 'Olivenöl');
+    $zwei = ($this->mk)('sunflower_oil', 'Sonnenblumenöl');
+    $eins = ($this->mk)('rapeseed_oil', 'Rapsöl');
+    ($this->importiere)(($this->profil)(['braucht' => [['achse' => 'fett', 'staerke' => 'soll', 'beleg' => 'braucht Fett']]]));
+    foreach ([[$drei, 'olive_oil'], [$zwei, 'sunflower_oil'], [$eins, 'rapeseed_oil']] as [$id, $slug]) {
+        ($this->importiere)(['anker_id' => $id, 'anker_slug' => $slug, 'liefert' => ['geschmack' => ['fett' => 3]]]);
+    }
+    app(AnkerGraph::class)->setze($this->kuerbis, $drei, 3);
+    app(AnkerGraph::class)->setze($this->kuerbis, $zwei, 2);
+
+    app(KontrastAbleitung::class)->baue();
+    $rang = DB::table('foodalchemist_anchor_beziehungen')->where('anchor_a_id', $this->kuerbis)->where('art', 'kontrast')
+        ->where('achse', 'fett')->pluck('rang', 'anchor_b_id');
+
+    expect($rang[$drei])->toBeGreaterThan($rang[$zwei])
+        ->and($rang[$zwei])->toBe($rang[$eins]);
+});
+
 it('verworfenes Wissen trägt keine Kontrast-Kante', function () {
     ($this->importiere)(($this->profil)());
     ($this->importiere)(['anker_id' => $this->essig, 'anker_slug' => 'rice_vinegar', 'liefert' => ['geschmack' => ['saeure' => 3]]]);

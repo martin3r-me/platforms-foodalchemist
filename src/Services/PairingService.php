@@ -1847,14 +1847,14 @@ class PairingService
         $analyse = $logik->analysiereBestandteile($logik->bestandteileAusAnkern($innerIds));
         $id = fn (string $schluessel) => (int) substr($schluessel, 1);           // 'a123' → 123
 
-        // Ein Lieferant muss zur Auswahl passen. Zwei Arten:
-        //   reiner Träger   Stufe 3 auf der Achse (Öl = Fett, Meersalz = Salz, Zucker = Süße) — aromatisch
-        //                   neutral, darf ohne Harmonie stehen, solange er keinen Konflikt auslöst;
-        //   Aroma-Lieferant Stufe 2 (Parmesan, Ente, Avocado …) bringt eigenes Aroma mit und muss mit
-        //                   mindestens einem gewählten Anker ★★★ harmonieren.
-        // Sortiert: Harmonien mit der Auswahl, dann belegte Träger (Nährwert gemessen / Dossier geprüft)
-        // vor ungeprüften, dann Rang der Kontrast-Kante.
-        // Gemessen 2026-10-06: ohne Filter kam „Fett für Tomate: Ente, Açai-Beere"; nur mit ★★★-Filter fehlte Olivenöl.
+        // Ein Lieferant muss zur Auswahl passen: ★★★ zu mindestens einem gewählten Anker ODER Klassiker
+        // aus dem Dossier („Verträgt"). Das gilt auch für reine Träger (Stufe 3: Öl, Meersalz, Zucker).
+        // ★★ zählt nicht (Dominique 15.10.: „2 Sterne ist die Grund-Aroma-Passform", Rauschen).
+        // Vorher durfte ein Träger ohne jede Harmonie stehen → Wildfond für Erdbeere + Basilikum,
+        // Tikka Masala für Kürbis. (2026-10-06: Olivenöl für Tomate fehlte mit reinem ★★★-Filter —
+        // heute trägt das der Klassiker aus dem Dossier.)
+        // Sortiert: Harmonien mit der Auswahl, Klassiker, belegte Träger (Nährwert gemessen / Dossier
+        // geprüft) vor ungeprüften, dann Rang der Kontrast-Kante.
         $jeBedarf = [];
         foreach ($analyse['offene_bedarfe'] as $b) {
             $fuer = $id((string) $b['bestandteil']);
@@ -1866,6 +1866,10 @@ class PairingService
         foreach ($alle === [] ? [] : $this->graph()->kanten($alle, $innerIds, AnkerGraph::HARMONIERT) as $k) {
             $harmonien[$k->von] = ($harmonien[$k->von] ?? 0) + 1;
         }
+        // Klassiker aus dem Dossier („Verträgt") lässt einen Lieferanten auch ohne ★★★ zu
+        $klassiker = $alle === [] ? [] : $this->graph()->beziehungen($alle, Kantenart::Kombination, $innerIds)
+            ->merge($this->graph()->beziehungen($innerIds, Kantenart::Kombination, $alle))
+            ->flatMap(fn ($k) => [$k->von, $k->zu])->flip()->all();
         $stoert = $alle === [] ? [] : $this->graph()->beziehungen($alle, Kantenart::Konflikt, $innerIds)
             ->merge($this->graph()->beziehungen($innerIds, Kantenart::Konflikt, $alle))
             ->flatMap(fn ($k) => [$k->von, $k->zu])->flip()->all();
@@ -1880,9 +1884,10 @@ class PairingService
         $kontrast = [];
         foreach ($jeBedarf as [$fuer, $achse, $lieferanten]) {
             $passend = $lieferanten
-                ->filter(fn ($k) => ! isset($stoert[$k->zu]) && (isset($harmonien[$k->zu]) || isset($traeger[$k->zu.'|'.$achse])))
+                ->filter(fn ($k) => ! isset($stoert[$k->zu]) && (isset($harmonien[$k->zu]) || isset($klassiker[$k->zu])))
                 ->sortBy([
                     fn ($x, $y) => ($harmonien[$y->zu] ?? 0) <=> ($harmonien[$x->zu] ?? 0),
+                    fn ($x, $y) => isset($klassiker[$y->zu]) <=> isset($klassiker[$x->zu]),
                     fn ($x, $y) => ($traeger[$y->zu.'|'.$achse] ?? 0) <=> ($traeger[$x->zu.'|'.$achse] ?? 0),
                     fn ($x, $y) => $y->rang <=> $x->rang,
                 ])
