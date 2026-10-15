@@ -100,18 +100,19 @@ it('changeDateFrom: ohne Vorlauf 2 Tage zurück, danach Start des letzten erfolg
     expect(collect($this->attrappe->filter)->firstWhere(0, 'supplier-item-prices')[1]['changeDateFrom'])->toBe('2026-10-15T02:30:00');
 });
 
-it('wöchentlich, erster Abgleich: Nicht-Kennzeichnung übernehmen, Allergen-Abweichung → Prüffall, in Necta entfernt → Prüffall (nicht löschen)', function () {
+it('wöchentlich, erster Abgleich: Nicht-Kennzeichnung übernehmen, strengeres Allergen automatisch, in Necta entfernt → Prüffall (nicht löschen)', function () {
     ($this->lauf)();                                                  // Voraussetzung: ein erfolgreicher nächtlicher Lauf
     $r = ($this->lauf)(['voll' => true]);
 
     $a = $this->a->fresh();
     expect($a->designation)->toBe('Schoko-Splitterbrötchen 80 g')->and($a->brand)->toBe('Hausbäcker')->and($a->ean_ordering)->toBe('4001234567890')
-        ->and(DB::table('foodalchemist_item_allergens')->where('legacy_id', 36674788)->value('allergen_milk'))->toBeNull()   // Kennzeichnung nie still
-        ->and(DB::table('foodalchemist_necta_pruefaelle')->where('art', 'allergen_aenderung')->where('feld', 'allergen_milk')->value('necta_wert'))->toBe('enthalten')
+        // Milch unbekannt → enthalten ist strenger: automatisch (Entscheid Dominique 15.10.), kein Prüffall
+        ->and(DB::table('foodalchemist_item_allergens')->where('legacy_id', 36674788)->value('allergen_milk'))->toBe('enthalten')
+        ->and($r['zaehler']['allergen_verschaerft'])->toBe(1)
         ->and(FoodAlchemistSupplierItem::where('legacy_id', 36674790)->exists())->toBeTrue()                                   // B nicht gelöscht
         ->and(DB::table('foodalchemist_necta_pruefaelle')->where('art', 'in_necta_entfernt')->value('legacy_id'))->toBe(36674790)
         ->and(DB::table('foodalchemist_necta_stand')->where('objekt', 'supplier_item')->where('legacy_id', 36674788)->exists())->toBeTrue()
-        ->and(collect($r['zaehler']['pruefaelle'])->sortKeys()->all())->toBe(['allergen_aenderung' => 1, 'in_necta_entfernt' => 1])
+        ->and(collect($r['zaehler']['pruefaelle'])->sortKeys()->all())->toBe(['in_necta_entfernt' => 1])
         ->and(DB::table('foodalchemist_necta_laeufe')->find($r['lauf_id'])->art)->toBe('vollabgleich');
 });
 
@@ -150,7 +151,8 @@ it('wöchentlich, ab Lauf 2: von Hand gepflegtes Feld → Prüffall statt Übers
     expect($a->designation)->toBe('Von Hand: Schokobrötchen')->and($a->brand)->toBe('Hausbäcker Plus')
         ->and($pf->feld)->toBe('designation')->and($pf->fa_wert)->toBe('Von Hand: Schokobrötchen')->and($pf->necta_wert)->toBe('Schoko-Splitterbrötchen 90 g')
         // offener Prüffall wird beim nächsten Lauf aktualisiert, nicht verdoppelt
-        ->and(DB::table('foodalchemist_necta_pruefaelle')->where('art', 'allergen_aenderung')->count())->toBe(1);
+        ->and(DB::table('foodalchemist_necta_pruefaelle')->where('art', 'manuell_gepflegt')->count())->toBe(1)
+        ->and(DB::table('foodalchemist_necta_pruefaelle')->where('art', 'allergen_aenderung')->count())->toBe(0);
 });
 
 it('Probe --voll schreibt nichts und endet mit den Prüffällen je Art', function () {
@@ -158,11 +160,76 @@ it('Probe --voll schreibt nichts und endet mit den Prüffällen je Art', functio
         $this->a->fresh()->designation];
     $this->artisan('foodalchemist:necta-abgleich', ['--probe' => true, '--voll' => true, '--pause-ms' => 0])
         ->expectsOutputToContain('PROBELAUF')
-        ->expectsOutputToContain('Prüffälle je Art: allergen_aenderung 1 · in_necta_entfernt 1')
+        ->expectsOutputToContain('Prüffälle je Art: in_necta_entfernt 1')
         ->expectsOutputToContain('übersprungen: Handelshof alt (Necta 16555) — bei uns inaktiv')
         ->assertExitCode(0);
     expect([DB::table('foodalchemist_prices')->count(), DB::table('foodalchemist_supplier_items')->count(), DB::table('foodalchemist_necta_pruefaelle')->count(),
-        $this->a->fresh()->designation])->toBe($vorher);
+        $this->a->fresh()->designation])->toBe($vorher)
+        ->and(DB::table('foodalchemist_item_allergens')->where('legacy_id', 36674788)->value('allergen_milk'))->toBeNull();   // Probe verschärft nicht
+});
+
+// ── Strenge (Entscheid Dominique 15.10.2026): Verschärfung automatisch, Lockerung als Prüffall ─────────────────────────────
+
+it('Allergene: strenger automatisch auch über Handpflege, lockerer immer Prüffall (auch wenn FA dem Necta-Stand entspricht)', function () {
+    $allergen = fn (string $spalte) => DB::table('foodalchemist_item_allergens')->where('legacy_id', 36674788)->value($spalte);
+    DB::table('foodalchemist_item_allergens')->where('legacy_id', 36674788)->update(['allergen_eggs' => 'nicht_enthalten', 'allergen_soy' => 'enthalten',
+        'allergen_celery' => 'nicht_enthalten']);
+    $this->attrappe->daten['supplier-item-allergens'][0] = ['supplierItemId' => 36674788, 'gluten' => 3, 'milk' => 3,
+        'egg' => 3,        // nicht_enthalten → enthalten: strenger → automatisch
+        'soy' => 2,        // enthalten → spuren: lockerer → Prüffall
+        'celery' => null]; // nicht_enthalten → unbekannt: strenger (unbekannt > nicht_enthalten) → automatisch
+    ($this->lauf)();
+    ($this->lauf)(['voll' => true]);
+    expect($allergen('allergen_eggs'))->toBe('enthalten')->and($allergen('allergen_celery'))->toBeNull()
+        ->and($allergen('allergen_soy'))->toBe('enthalten')
+        ->and(DB::table('foodalchemist_necta_pruefaelle')->where('art', 'allergen_aenderung')->pluck('feld')->all())->toBe(['allergen_soy']);
+
+    // FA = letzter Necta-Stand (nicht von Hand gepflegt) und Necta lockert → trotzdem Prüffall, nie still lockern
+    $this->attrappe->daten['supplier-item-allergens'][0]['egg'] = 1;   // enthalten → nicht_enthalten
+    $this->travel(1)->minutes();
+    ($this->lauf)();
+    $this->travel(1)->minutes();
+    $r = ($this->lauf)(['voll' => true]);
+    expect($allergen('allergen_eggs'))->toBe('enthalten')
+        ->and(DB::table('foodalchemist_necta_pruefaelle')->where('art', 'allergen_aenderung')->where('feld', 'allergen_eggs')->value('necta_wert'))->toBe('nicht_enthalten')
+        ->and($r['zaehler']['allergen_verschaerft'])->toBe(0);
+
+    // Handpflege lockerer als Necta (FA ≠ Stand) und Necta bleibt streng → Necta gewinnt automatisch
+    DB::table('foodalchemist_item_allergens')->where('legacy_id', 36674788)->update(['allergen_gluten' => 'spuren']);
+    $this->travel(1)->minutes();
+    ($this->lauf)();
+    $this->travel(1)->minutes();
+    $r = ($this->lauf)(['voll' => true]);
+    expect($allergen('allergen_gluten'))->toBe('enthalten')->and($r['zaehler']['allergen_verschaerft'])->toBe(1);
+});
+
+it('Deklaration: 3 (ja) > 0/NULL (k.A.) > 1 (nein) — nein → ja automatisch, ja → nein Prüffall, k.A. 0 ⇄ NULL angleichen', function () {
+    DB::table('foodalchemist_item_declarations')->insert(['uuid' => (string) Symfony\Component\Uid\UuidV7::generate(), 'team_id' => null,
+        'legacy_id' => 36674788, 'supplier_item_id' => $this->a->id, 'with_dye' => 1, 'with_preservative' => 3, 'with_sweetener' => null,
+        'created_at' => now(), 'updated_at' => now()]);
+    $this->attrappe->daten['supplier-item-declaration-substances'] = [['supplierItemId' => 36674788,
+        'declarationWithDye' => 3, 'declarationWithPreservative' => 1, 'declarationWithSweetener' => 0]];
+    ($this->lauf)();
+    $r = ($this->lauf)(['voll' => true]);
+    $dk = DB::table('foodalchemist_item_declarations')->where('legacy_id', 36674788)->sole();
+    expect((int) $dk->with_dye)->toBe(3)->and((int) $dk->with_preservative)->toBe(3)->and((int) $dk->with_sweetener)->toBe(0)
+        ->and(DB::table('foodalchemist_necta_pruefaelle')->where('art', 'deklaration_aenderung')->pluck('feld')->all())->toBe(['with_preservative'])
+        ->and($r['zaehler']['deklaration_verschaerft'])->toBe(1);
+});
+
+it('Kunst-IDs ab 90.000.000 ohne Necta-Stand kamen nie aus Necta: nicht „entfernt“; mit Stand weiter gemeldet', function () {
+    FoodAlchemistSupplierItem::create(['team_id' => null, 'legacy_id' => 90000003, 'supplier_id' => $this->lieferant->id,
+        'designation' => 'Udon-Nudeln (HI TASTE)', 'stamm_class' => StammPaket::PAKET]);
+    FoodAlchemistSupplierItem::create(['team_id' => null, 'legacy_id' => 90000077, 'supplier_id' => $this->lieferant->id,
+        'designation' => 'Echter Necta-Artikel im hohen Bereich', 'stamm_class' => StammPaket::PAKET]);
+    DB::table('foodalchemist_necta_stand')->insert(['objekt' => 'supplier_item', 'legacy_id' => 90000077, 'werte' => '{}',
+        'created_at' => now(), 'updated_at' => now()]);
+    ($this->lauf)();
+    $r = ($this->lauf)(['voll' => true]);
+
+    expect(DB::table('foodalchemist_necta_pruefaelle')->where('art', 'in_necta_entfernt')->orderBy('legacy_id')->pluck('legacy_id')->all())
+        ->toBe([36674790, 90000077])
+        ->and($r['zaehler']['nicht_aus_necta'])->toBe(1);
 });
 
 it('Fehlschlag: Lauf steht auf fehler und das Master-Team bekommt ein Signal (Probe nicht)', function () {
