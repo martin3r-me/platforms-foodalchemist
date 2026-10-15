@@ -46,6 +46,8 @@
                     @break
                 @case('zusatzstoffe')
                     @if($d['zusatzstoffe'] !== [])<div class="z klein"><span class="k">Zusatzstoffe:</span> {{ implode(', ', array_map(fn ($z) => $v->allergen_darstellung === 'kuerzel' ? $z['code'] : $z['label'], $d['zusatzstoffe'])) }}</div>@endif
+                    {{-- Jod: freiwilliger Hinweis (Mandanten-Schalter), nie als Zusatzstoff-Kürzel --}}
+                    @if(($d['hinweise'] ?? []) !== [])<div class="z klein">{{ implode(' · ', $d['hinweise']) }}</div>@endif
                     @break
                 @case('kuerzel')
                     <div class="z"><span class="k">Kürzel:</span> {!! $d['kuerzel'] !== null ? e($d['kuerzel']) : $linie !!}</div>

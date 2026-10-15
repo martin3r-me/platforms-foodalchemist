@@ -577,7 +577,8 @@ class RecipeRecomputeService
 
     private function zusatzstoffe(FoodAlchemistRecipe $recipe, Collection $zutaten): void
     {
-        $stoffe = array_keys(FoodAlchemistItemDeclaration::STOFFE);
+        // Jod (FREIWILLIG) läuft durch dieselbe ALL-MAXIMAL-Regel, steht aber in eigenen Spalten und nie in der Pflicht-Kennzeichnung
+        $stoffe = [...array_keys(FoodAlchemistItemDeclaration::STOFFE), ...array_keys(FoodAlchemistItemDeclaration::FREIWILLIG)];
 
         // §7 F7.1/F7.5 — identisch zu allergene(): unsicheres Sub deckelt, löscht nicht.
         if ($this->hatUngemappteRelevante($zutaten)) {                // F7.1: nur nicht-optionale ungemappte → alle 18 NULL
@@ -593,7 +594,7 @@ class RecipeRecomputeService
         foreach ($this->aggregationsZutaten($zutaten) as $z) {
             $beitraege = null;
             if ($z->gp_id !== null && $z->gp !== null) {
-                $beitraege = $this->gpAggregate->zusatzstoffe($z->gp);
+                $beitraege = $this->gpAggregate->zusatzstoffeUndFreiwillig($z->gp);
             } elseif ($z->referencedRecipe !== null) {
                 $beitraege = collect($stoffe)->mapWithKeys(fn ($s) => [$s => $z->referencedRecipe->{"additive_{$s}"}])->all();
             }

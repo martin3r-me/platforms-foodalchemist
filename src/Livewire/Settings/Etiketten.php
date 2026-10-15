@@ -30,9 +30,23 @@ class Etiketten extends Component
 
     public ?string $hinweis = null;
 
+    /** Jod (15.10.2026): Mandanten-Schalter „mit Jodsalz hergestellt“ für Speisekarte und Etikett (org-vererbt, Standard aus). */
+    public bool $jodHinweis = false;
+
     public function mount(EtikettService $svc): void
     {
         $this->laden($svc, $svc->vorlage($this->team(), null)->id);
+        $this->jodHinweis = app(\Platform\FoodAlchemist\Services\TeamSettingsService::class)->jodHinweisAktiv($this->team());
+    }
+
+    /** Schreibt die eigene Team-Zeile; Unter-Teams ohne eigenen Wert erben ihn. */
+    public function jodHinweisUmschalten(): void
+    {
+        $this->jodHinweis = ! $this->jodHinweis;
+        app(\Platform\FoodAlchemist\Services\TeamSettingsService::class)->update($this->team(), ['iodized_hint_active' => $this->jodHinweis]);
+        $this->hinweis = $this->jodHinweis
+            ? 'Hinweis „mit Jodsalz hergestellt“ eingeschaltet: Speisekarte und Etikett zeigen ihn bei Gerichten mit Jod.'
+            : 'Hinweis „mit Jodsalz hergestellt“ ausgeschaltet.';
     }
 
     public function waehlen(int $id, EtikettService $svc): void

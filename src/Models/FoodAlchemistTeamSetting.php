@@ -31,6 +31,7 @@ class FoodAlchemistTeamSetting extends Model
         'lead_la_strategie_per_wg' => 'array',
         'lead_la_prioritaeten' => 'array',
         'show_fallback_chain' => 'boolean',
+        'iodized_hint_active' => 'boolean',   // NULL bleibt NULL = erben
         'trend_dataforseo_enabled' => 'boolean',
         'trend_dataforseo_budget_usd' => 'decimal:2',
         'cooking_loss_defaults' => 'array',

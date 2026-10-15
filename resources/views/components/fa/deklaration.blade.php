@@ -33,6 +33,9 @@
         if ($wert === null) { $stoffeOffen[$stoff] = $stoffKurz($label); }
         elseif ((int) $wert === 3) { $stoffeJa[$stoff] = $stoffKurz($label); }
     }
+    // Freiwillige Angaben (Jod): intern immer sichtbar, getrennt von der Pflicht-Kennzeichnung; auf Speisekarte/Etikett nur per Mandanten-Schalter
+    $freiwilligJa = array_filter(\Platform\FoodAlchemist\Models\FoodAlchemistItemDeclaration::FREIWILLIG,
+        fn ($label, $feld) => (int) ($rezept->{"additive_{$feld}"} ?? 0) === 3, ARRAY_FILTER_USE_BOTH);
 
     $diaeten = ['spec_is_vegan' => 'vegan', 'spec_is_vegetarian' => 'vegetarisch', 'spec_is_halal' => 'halal', 'spec_is_gluten_free' => 'glutenfrei', 'spec_is_lactose_free' => 'laktosefrei'];
     $geeignet = $nichtGeeignet = $diaetOffen = [];
@@ -79,6 +82,13 @@
         <div class="flex flex-wrap items-center gap-1.5" data-deklaration-zusatzstoffe>
             <span class="w-[92px] shrink-0 text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-2)]">Kennzeichnung</span>
             @foreach($stoffeJa as $stoff => $label)<x-fa::badge data-zusatzstoff="{{ $stoff }}">{{ $label }}</x-fa::badge>@endforeach
+        </div>
+    @endif
+
+    @if($freiwilligJa !== [])
+        <div class="flex flex-wrap items-center gap-1.5" data-deklaration-freiwillig>
+            <span class="w-[92px] shrink-0 text-[length:var(--fa-text-sm)] font-medium text-[var(--fa-ink-2)]">Freiwillig</span>
+            @foreach($freiwilligJa as $feld => $label)<x-fa::badge data-freiwillig="{{ $feld }}">{{ $label }}</x-fa::badge>@endforeach
         </div>
     @endif
 

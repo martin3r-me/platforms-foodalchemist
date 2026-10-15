@@ -110,7 +110,7 @@ class Index extends Component
         'mandanten' => ['label' => 'Mandanten', 'hint' => 'Stammblatt je Mandant: Status, Modus, CRM-Firma, Bereiche, Stamm-Paket, Abos, Kontingente, Gebühren'],
         // Spec 59: zentraler Chip-Katalog für Speiseplan-Vorgaben („mind. 2× vegan je Woche“) —
         // die Vorgaben selbst stehen je Plan im Speiseplan-Editor (Reiter Stammdaten).
-        'etiketten' => ['label' => 'Etiketten', 'hint' => 'Etikett-Vorlagen: Format, Felder, Datum vorbelegt oder zum Handschreiben, Logo und Design'],
+        'etiketten' => ['label' => 'Etiketten', 'hint' => 'Etikett-Vorlagen: Format, Felder, Datum vorbelegt oder zum Handschreiben, Logo und Design; Hinweis „mit Jodsalz hergestellt“'],
         'speiseplan-chips' => ['label' => 'Speiseplan-Chips', 'hint' => 'Prüf-Chips für Speiseplan-Vorgaben: Ernährungsform oder Hauptgruppe, Standardwerte mindestens und höchstens'],
     ];
 

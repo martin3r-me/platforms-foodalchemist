@@ -223,7 +223,7 @@ class EtikettService
         $kat = app(ConcepterAggregateService::class)->kennzeichnungKatalog();
         $heute = now()->startOfDay();
         $d = ['quelle' => $quelle, 'bezeichnung' => '', 'zusatz' => null, 'zutaten' => [], 'allergene' => [], 'spuren' => [], 'zusatzstoffe' => [],
-            'allergene_unbekannt' => false, 'inhalt' => [], 'haltbar_gekuehlt' => null, 'haltbar_tk' => null, 'lagerung' => null, 'lagerarten' => [], 'haltbar' => []];
+            'hinweise' => [], 'allergene_unbekannt' => false, 'inhalt' => [], 'haltbar_gekuehlt' => null, 'haltbar_tk' => null, 'lagerung' => null, 'lagerarten' => [], 'haltbar' => []];
 
         if ($quelle === 'recipe') {
             $r = FoodAlchemistRecipe::visibleToTeam($team)->with('ingredients.gp', 'ingredients.referencedRecipe')->findOrFail($id);
@@ -242,6 +242,8 @@ class EtikettService
                     $d['zusatzstoffe'][] = ['code' => $kat['zusatzstoffe'][$z['slug']]['code'] ?? '', 'label' => $z['label']];
                 }
             }
+            // Jod: freiwilliger Hinweis, nur bei Mandanten-Schalter; kein Zusatzstoff-Code
+            $d['hinweise'] = app(ConcepterAggregateService::class)->freiwilligeHinweise(collect([$r]), app(TeamSettingsService::class)->jodHinweisAktiv($team));
             $d['bezeichnung'] = $this->rezeptname((string) $r->name);
             $d['zutaten'] = $this->zutatenliste($team, $r);
             $d['haltbar_gekuehlt'] = $r->shelf_life_chilled_days;
@@ -266,6 +268,13 @@ class EtikettService
             foreach ($agg->zusatzstoffe($gp) as $stoff => $wert) {
                 if ((int) $wert === 3) {
                     $d['zusatzstoffe'][] = ['code' => $kat['zusatzstoffe'][$stoff]['code'] ?? '', 'label' => FoodAlchemistItemDeclaration::STOFFE[$stoff] ?? $stoff];
+                }
+            }
+            if (app(TeamSettingsService::class)->jodHinweisAktiv($team)) {
+                foreach ($agg->freiwillig($gp) as $feld => $wert) {
+                    if ((int) $wert === 3 && isset(FoodAlchemistItemDeclaration::FREIWILLIG_HINWEIS[$feld])) {
+                        $d['hinweise'][] = FoodAlchemistItemDeclaration::FREIWILLIG_HINWEIS[$feld];
+                    }
                 }
             }
             $d['bezeichnung'] = $this->kurzname((string) $gp->name);
