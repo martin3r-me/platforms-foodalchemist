@@ -64,6 +64,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
          */
         if ($this->app->runningInConsole()) {
             $this->commands([
+                \Platform\FoodAlchemist\Console\NectaNachholenCommand::class,   // Necta-Abgleich: Einmal-Nachholer (Bauauftrag 15.10.2026)
                 \Platform\FoodAlchemist\Console\PlanNutzungZaehlenCommand::class,   // Spec 82 §13 D (täglich, Tageswerte → team_billable_usages)
                 \Platform\FoodAlchemist\Console\PlanPreiseStartwerteCommand::class,   // Spec 82 §13 D (Platzhalter-Startpreise)
                 \Platform\FoodAlchemist\Console\EquipmentStandardSetzenCommand::class,   // Spec 82 §6 (Daten per Befehl, nicht per Migration)

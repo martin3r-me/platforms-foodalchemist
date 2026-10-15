@@ -141,6 +141,9 @@ final class SignalCockpit
      * ein zweiter, per Hand gepflegter Pfad würde davon wegdriften.
      */
     private const NAVIGATE = [
+        // Necta-Abgleich: Ereignis, kein Datenmangel — der Weg ist eine Freischalt-Entscheidung des Masters.
+        'necta_lieferant_neu' => 'Der Lieferant ist global angelegt, aber noch für keinen Mandanten freigeschaltet. In der Verwaltung '
+            . '(/verwaltung?tab=freigaben, Lieferanten-Freischaltung) entscheiden, welche Mandanten ihn sehen sollen, oder das Signal bewusst verwerfen.',
         // Spec 82 §12 B: Ereignis aus der Master-Bibliothek. Kein Datenmangel, deshalb kein Fixer; der Weg ist eine Entscheidung am Angebot.
         'fassung_aktualisiert' => 'Zur Kenntnis: Neue Angebote und Planungen nutzen die neue Fassung automatisch. Die Änderungsnotiz und eine '
             . 'etwaige Allergen-Änderung stehen im Signal. Eigene Rezepte und eingefrorene Angebote bleiben bis zur bewussten Übernahme auf ihrer Fassung.',
