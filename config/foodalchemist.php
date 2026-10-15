@@ -1563,14 +1563,16 @@ return [
                 . 'braucht: Abschnitte Kombinationslogik/Braucht und Spalte „braucht daneben“. staerke=muss NUR bei '
                 . 'ausdruecklicher Formulierung (zwingend, Pflicht, immer, nicht optional), sonst soll. beleg = '
                 . 'woertliches Kurzzitat (max. 20 Woerter) aus dem Dossier. Prozess-Anweisungen (spaet salzen, '
-                . 'Punktgarung) sind KEIN Bedarf. '
+                . 'Punktgarung) sind KEIN Bedarf. deckung: partner = von aussen (ein anderer Bestandteil liefert es), '
+                . 'zubereitung = die Zutat selbst (rösten, anbraten: „braucht Röstung“), beides = je nach Gericht '
+                . '(„Röstung oder kräftiger Fond“). '
                 . 'liefert.geschmack: Stufe 0-3 je Achse, nur wo der Text etwas sagt („bringt keine Saeure“ = 0); '
                 . 'liefert.textur: Liste aus knusprig, cremig, bissfest, weich, saftig; beleg = Kurzzitat. '
                 . 'vertraegt: jeder genannte Partner als eigener Eintrag {name, kontext}, Name wie im Text '
                 . '(Singular, ohne Mengen), Sammelbegriffe unaufgeloest. zerstoert: nur, was der Text als schaedlich '
                 . 'nennt {art: zutat|technik|zustand, name, grund}. komponenten: Zeilen des Komponenten-Katalogs '
                 . '{name, technik, liefert: [Achsen]}; „Unerschlossen“-Zeilen weglassen. '
-                . 'werte = {braucht: [{achse, staerke, beleg}], liefert: {geschmack: {achse: stufe}, textur: [..], beleg}, '
+                . 'werte = {braucht: [{achse, staerke, deckung, beleg}], liefert: {geschmack: {achse: stufe}, textur: [..], beleg}, '
                 . 'vertraegt: [{name, kontext}], zerstoert: [{art, name, grund}], komponenten: [{name, technik, liefert}]}.',
         ],
         // D (2026-09-04): Rezeptzeilen, die in einer VERPACKUNGS-Einheit dosieren („1,5 Paeckchen

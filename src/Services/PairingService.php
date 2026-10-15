@@ -1290,7 +1290,7 @@ class PairingService
         $ids = $anker->pluck('id')->map(fn ($i) => (int) $i)->all();
         $bedarfe = $ids === [] ? collect() : DB::table('foodalchemist_anchor_bedarfe')->whereIn('anchor_id', $ids)
             ->where('status', '!=', \Platform\FoodAlchemist\Enums\WissensStatus::Verworfen->value)
-            ->orderByRaw("CASE staerke WHEN 'muss' THEN 0 ELSE 1 END")->get(['achse', 'staerke', 'status']);
+            ->orderByRaw("CASE staerke WHEN 'muss' THEN 0 ELSE 1 END")->get(['achse', 'staerke', 'status', 'deckung']);
         $konflikt = $ids === [] ? [] : DB::table('foodalchemist_vocab_pairing_anchors')
             ->whereIn('id', $this->graph()->beziehungen($ids, Kantenart::Konflikt)->pluck('zu')->unique()->all())
             ->orderBy('display_de')->pluck('display_de')->all();
@@ -1302,6 +1302,7 @@ class PairingService
             'braucht' => $bedarfe->map(fn ($b) => [
                 'achse' => \Platform\FoodAlchemist\Enums\Achse::tryFrom((string) $b->achse)?->label() ?? (string) $b->achse,
                 'staerke' => $b->staerke,
+                'deckung' => \Platform\FoodAlchemist\Enums\BedarfDeckung::tryFrom((string) $b->deckung)?->label() ?? 'Partner',
                 'grundlage' => \Platform\FoodAlchemist\Enums\Grundlage::aus('dossier', (string) $b->status)->label(),
             ])->unique('achse')->values()->all(),
             'kontrast' => array_map(fn ($c) => ['name' => (string) ($c['display_de'] ?: $c['slug']), 'achse' => $c['achse_label']],

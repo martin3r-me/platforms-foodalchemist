@@ -5,6 +5,7 @@ namespace Platform\FoodAlchemist\Services\Pairing;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Platform\FoodAlchemist\Enums\Achse;
+use Platform\FoodAlchemist\Enums\BedarfDeckung;
 use Platform\FoodAlchemist\Services\Ai\AiGatewayService;
 
 /**
@@ -147,6 +148,7 @@ final class AnkerWissenAuslese
             $braucht[] = [
                 'achse' => (string) $b['achse'],
                 'staerke' => ($b['staerke'] ?? '') === 'muss' && self::hatMussWort($beleg) ? 'muss' : 'soll',
+                'deckung' => (BedarfDeckung::tryFrom((string) ($b['deckung'] ?? '')) ?? BedarfDeckung::Partner)->value,
                 'beleg' => $beleg,
             ];
         }

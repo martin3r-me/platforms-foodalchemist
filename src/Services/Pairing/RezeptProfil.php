@@ -4,6 +4,7 @@ namespace Platform\FoodAlchemist\Services\Pairing;
 
 use Illuminate\Support\Facades\DB;
 use Platform\FoodAlchemist\Enums\Achse;
+use Platform\FoodAlchemist\Enums\BedarfDeckung;
 use Platform\FoodAlchemist\Enums\Verfahren;
 use Platform\FoodAlchemist\Enums\WissensStatus;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient;
@@ -85,7 +86,7 @@ final class RezeptProfil
     /**
      * Profil eines Rezepts (gespeichert, bei Änderung neu gebaut).
      *
-     * @return array{recipe_id: int, anker: list<array{anchor_id: int, anteil: float, verfahren: ?string}>, abdeckung: float, eigenschaften: array<string, array{stufe: float, quelle: string}>, offene_bedarfe: list<array{achse: string, staerke: string, von: int}>, roh: array<int, float>, masse: float}
+     * @return array{recipe_id: int, anker: list<array{anchor_id: int, anteil: float, verfahren: ?string}>, abdeckung: float, eigenschaften: array<string, array{stufe: float, quelle: string}>, offene_bedarfe: list<array{achse: string, staerke: string, von: int, deckung?: string}>, roh: array<int, float>, masse: float}
      */
     public function fuer(int $recipeId, int $tiefe = 1, array $besucht = []): array
     {
@@ -107,7 +108,7 @@ final class RezeptProfil
      * Profil eines einzeln eingesetzten Grundprodukts bzw. Ankers (Gericht ohne Basisrezept):
      * derselbe Aufbau wie ein Rezept-Profil, mit 100 % des (ggf. Varianten-)Ankers.
      *
-     * @return array{anker: list<array{anchor_id: int, anteil: float, verfahren: ?string}>, abdeckung: float, eigenschaften: array<string, array{stufe: float, quelle: string}>, offene_bedarfe: list<array{achse: string, staerke: string, von: int}>}
+     * @return array{anker: list<array{anchor_id: int, anteil: float, verfahren: ?string}>, abdeckung: float, eigenschaften: array<string, array{stufe: float, quelle: string}>, offene_bedarfe: list<array{achse: string, staerke: string, von: int, deckung?: string}>}
      */
     public function einzel(int $anker, ?Verfahren $verfahren = null): array
     {
@@ -278,7 +279,7 @@ final class RezeptProfil
     /**
      * @param  array<int, float>  $anteile
      * @param  array<string, array{stufe: float, quelle: string}>  $eigenschaften
-     * @return list<array{achse: string, staerke: string, von: int}>
+     * @return list<array{achse: string, staerke: string, von: int, deckung: string}>
      */
     private function offeneBedarfe(array $anteile, array $eigenschaften): array
     {
@@ -290,14 +291,16 @@ final class RezeptProfil
         foreach (DB::table('foodalchemist_anchor_bedarfe')->whereIn('anchor_id', $kern)
             ->where('status', '!=', WissensStatus::Verworfen->value)
             ->orderByRaw("CASE staerke WHEN 'muss' THEN 0 ELSE 1 END")->orderBy('achse')
-            ->get(['anchor_id', 'achse', 'staerke']) as $b) {
+            ->get(['anchor_id', 'achse', 'staerke', 'deckung']) as $b) {
             if (Achse::tryFrom((string) $b->achse) === null || ($eigenschaften[$b->achse]['stufe'] ?? 0) >= 2) {
                 continue;
             }
-            // je Achse einmal — der stärkste Bedarf zählt
+            // je Achse einmal — der stärkste Bedarf zählt; Deckung vereint (Partner + Zubereitung = beides)
+            $deckung = BedarfDeckung::vereine($offen[$b->achse]['deckung'] ?? $b->deckung, $b->deckung);
             if (! isset($offen[$b->achse]) || ($b->staerke === 'muss' && $offen[$b->achse]['staerke'] !== 'muss')) {
                 $offen[$b->achse] = ['achse' => (string) $b->achse, 'staerke' => (string) $b->staerke, 'von' => (int) $b->anchor_id];
             }
+            $offen[$b->achse]['deckung'] = $deckung;
         }
 
         return array_values($offen);

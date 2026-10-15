@@ -4,6 +4,7 @@ namespace Platform\FoodAlchemist\Services\Pairing;
 
 use Illuminate\Support\Facades\DB;
 use Platform\FoodAlchemist\Enums\Achse;
+use Platform\FoodAlchemist\Enums\BedarfDeckung;
 use Platform\FoodAlchemist\Enums\Kantenart;
 use Platform\FoodAlchemist\Enums\WissensStatus;
 use Platform\FoodAlchemist\Services\PairingService;
@@ -69,6 +70,7 @@ final class AnkerWissenImport
                 DB::table('foodalchemist_anchor_bedarfe')->insert($basis + [
                     'anchor_id' => $ankerId, 'achse' => $achse->value,
                     'staerke' => ($b['staerke'] ?? '') === 'muss' ? 'muss' : 'soll',
+                    'deckung' => (BedarfDeckung::tryFrom((string) ($b['deckung'] ?? '')) ?? BedarfDeckung::Partner)->value,
                     'beleg' => $this->kurz($b['beleg'] ?? null),
                 ]);
                 $stat['bedarfe']++;

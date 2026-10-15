@@ -4,6 +4,7 @@ namespace Platform\FoodAlchemist\Services\Pairing;
 
 use Illuminate\Support\Facades\DB;
 use Platform\FoodAlchemist\Enums\Achse;
+use Platform\FoodAlchemist\Enums\BedarfDeckung;
 use Platform\FoodAlchemist\Enums\Kantenart;
 use Platform\FoodAlchemist\Enums\WissensStatus;
 
@@ -40,7 +41,9 @@ final class KontrastAbleitung
     public function baue(): array
     {
         $verworfen = WissensStatus::Verworfen->value;
+        // Zubereitungs-Bedarf („Erdnuss braucht Röstung") hat keinen Partner → keine Kontrast-Kante
         $bedarfe = DB::table('foodalchemist_anchor_bedarfe')->where('status', '!=', $verworfen)
+            ->where('deckung', '!=', BedarfDeckung::Zubereitung->value)
             ->get(['anchor_id', 'achse', 'staerke', 'status']);
         $lieferanten = [];
         foreach (DB::table('foodalchemist_anchor_eigenschaften')->where('status', '!=', $verworfen)

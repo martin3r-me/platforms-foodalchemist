@@ -127,3 +127,29 @@ it('Vorschlag für ein veganes Gericht: nur ausdrücklich vegane Basisrezepte', 
     $this->croutons->update(['spec_is_vegan' => true]);
     expect(array_column(($this->logik)()->vorschlaege($this->gericht->fresh())[0]['basisrezepte'], 'name'))->toBe(['Garnitur: Croutons']);
 });
+
+it('Bedarf-Deckung „zubereitung": kein Partner deckt ihn, kein Basisrezept-Vorschlag, nur Formwechsel; „partner" wie bisher', function () {
+    ($this->einsetzen)($this->gericht, $this->croutons, 5);       // Croutons liefern Knusper
+    $deckung = function (string $wie) {
+        DB::table('foodalchemist_anchor_bedarfe')->where('anchor_id', $this->a['potato'])->where('achse', 'knusprig')->update(['deckung' => $wie]);
+        app(RezeptProfil::class)->fuer($this->kartoffeln->id);
+    };
+
+    $deckung('partner');
+    $a = ($this->logik)()->analysiere($this->gericht->fresh());
+    expect(($this->texte)($a['aussagen'], 'spannung'))->toContain('Spannung: Knusper von Garnitur: Croutons für Beilage: Rosmarinkartoffeln')
+        ->and(array_column($a['offene_bedarfe'], 'achse'))->toBe([]);
+
+    $deckung('zubereitung');
+    $a = ($this->logik)()->analysiere($this->gericht->fresh());
+    $v = ($this->logik)()->vorschlaege($this->gericht->fresh());
+    expect(($this->texte)($a['aussagen'], 'spannung'))->not->toContain('Spannung: Knusper von Garnitur: Croutons für Beilage: Rosmarinkartoffeln')
+        ->and(($this->texte)($a['aussagen'], 'bedarf_offen'))->toBe(['Es könnte fehlen: Knusper (für Beilage: Rosmarinkartoffeln) – über die Zubereitung'])
+        ->and($v[0]['deckung'])->toBe('zubereitung')
+        ->and($v[0]['formwechsel'])->toBe(['Beilage: Rosmarinkartoffeln: als Kartoffelchips'])
+        ->and($v[0]['basisrezepte'])->toBe([]);
+
+    $deckung('beides');
+    $a = ($this->logik)()->analysiere($this->gericht->fresh());
+    expect(($this->texte)($a['aussagen'], 'spannung'))->toContain('Spannung: Knusper von Garnitur: Croutons für Beilage: Rosmarinkartoffeln');
+});

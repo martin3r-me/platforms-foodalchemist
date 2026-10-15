@@ -2,6 +2,7 @@
 
 namespace Platform\FoodAlchemist\Services\Pairing;
 
+use Platform\FoodAlchemist\Enums\BedarfDeckung;
 use Platform\FoodAlchemist\Enums\Kantenart;
 
 /**
@@ -126,6 +127,10 @@ final class RezeptGraph
     {
         $out = [];
         foreach ($p['offene_bedarfe'] ?? [] as $b) {
+            // „über die Zubereitung" deckt kein anderer Bestandteil (Erdnuss + Kaffee ≠ geröstete Erdnuss)
+            if (($b['deckung'] ?? null) === BedarfDeckung::Zubereitung->value) {
+                continue;
+            }
             $e = $q['eigenschaften'][$b['achse']] ?? null;
             if ($e !== null && (float) $e['stufe'] >= 2) {
                 $out[] = $b + ['stufe' => (float) $e['stufe'], 'quelle' => (string) $e['quelle']];
