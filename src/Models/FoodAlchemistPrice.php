@@ -43,14 +43,17 @@ class FoodAlchemistPrice extends Model
      */
     public function scopeStammSichtbar(\Illuminate\Database\Eloquent\Builder $query, ?\Platform\Core\Models\Team $team): \Illuminate\Database\Eloquent\Builder
     {
-        if (\Platform\FoodAlchemist\Support\StammPaket::istFreigeschaltet($team)) {
+        if (\Platform\FoodAlchemist\Support\StammPaket::sieheAlleLieferanten($team)) {
             return $query;
         }
 
-        return $query->whereIn($this->getTable() . '.supplier_item_id', function ($sub) use ($team) {
+        // Mit gebuchtem Paket: eigene Preise eines Teams (team_id gesetzt) sind nie Stamm und bleiben sichtbar; ohne Paket folgt der Preis dem Artikel.
+        $eigene = \Platform\FoodAlchemist\Support\StammPaket::istFreigeschaltet($team);
+
+        return $query->where(fn ($w) => ($eigene ? $w->whereNotNull($this->getTable() . '.team_id') : $w)->orWhereIn($this->getTable() . '.supplier_item_id', function ($sub) use ($team) {
             $sub->select('id')->from('foodalchemist_supplier_items');
             \Platform\FoodAlchemist\Support\StammPaket::begrenzen($sub, 'foodalchemist_supplier_items', $team);
-        });
+        }));
     }
 
     public function item(): BelongsTo

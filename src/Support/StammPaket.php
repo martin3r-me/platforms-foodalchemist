@@ -33,8 +33,14 @@ final class StammPaket
         'foodalchemist_supplier_items',
     ];
 
+    /** Tabelle der Lieferanten-Freigabe je Mandant (Haupt-Team): welche Stamm-Lieferanten sieht das Team, samt Artikeln. */
+    public const LIEFERANTEN_TABELLE = 'foodalchemist_team_stamm_lieferanten';
+
     /** @var array<int, bool> je Team-ID, je Prozess/Request */
     private static array $cache = [];
+
+    /** @var array<int, bool> je Team-ID: Master-Kette = sieht alle Stamm-Lieferanten ungefiltert */
+    private static array $alleCache = [];
 
     public static function betrifft(string $tabelle): bool
     {
@@ -59,6 +65,45 @@ final class StammPaket
         return self::$cache[$id] = $frei;
     }
 
+    /**
+     * Spec 82 (Lieferanten freischalten): Das Master-Team (und seine Unter-Teams) sieht ALLE Stamm-Lieferanten und ihre Artikel. Jedes andere Team
+     * mit Paket sieht nur die ausdrücklich freigeschalteten (Standard bei neuer Buchung: keine). Ohne Paket gilt unverändert nur `basis`.
+     */
+    public static function sieheAlleLieferanten(?Team $team): bool
+    {
+        if ($team === null) {
+            return false;
+        }
+        $id = (int) $team->id;
+        if (isset(self::$alleCache[$id])) {
+            return self::$alleCache[$id];
+        }
+        $master = MasterTeam::id();
+
+        return self::$alleCache[$id] = $master !== null && in_array($master, TeamScope::ancestryIds($team), true);
+    }
+
+    /**
+     * Subquery auf die freigeschalteten Lieferanten-IDs der Team-Kette (Haupt-Team + Eltern; Unter-Teams erben die Auswahl wie das Paket).
+     * Als Closure für `whereIn`: kein Array über alle Lieferanten, kein statischer Cache, der Queue-/Request-Grenzen überleben könnte.
+     */
+    public static function freigegebeneLieferanten(?Team $team): \Closure
+    {
+        $kette = TeamScope::ancestryIds($team);
+
+        return static fn ($sub) => $sub->select('supplier_id')->from(self::LIEFERANTEN_TABELLE)->whereIn('team_id', $kette);
+    }
+
+    /** Spalte mit der Lieferanten-ID je Stamm-Tabelle (`i.supplier_id` am Artikel, `s.id` am Lieferanten); GPs haben keine. */
+    private static function lieferantenSpalte(string $praefix, string $basisTabelle): ?string
+    {
+        return match ($basisTabelle) {
+            'foodalchemist_suppliers' => $praefix . '.id',
+            'foodalchemist_supplier_items' => $praefix . '.supplier_id',
+            default => null,
+        };
+    }
+
     /** Opt-in für einen Mandanten (idempotent). */
     public static function freischalten(Team $team, ?int $userId = null): FoodAlchemistTeamStammOptin
     {
@@ -76,6 +121,10 @@ final class StammPaket
         // Einzeln über das Modell löschen: Query-Löschungen feuern keine Eloquent-Ereignisse und blieben im activity-log unsichtbar.
         $zeilen = FoodAlchemistTeamStammOptin::where('team_id', $team->id)->get();
         $zeilen->each->delete();
+        // Die Lieferanten-Auswahl gehört zur Buchung: wer abbestellt, startet bei einer neuen Buchung wieder bei „keine".
+        if (\Illuminate\Support\Facades\Schema::hasTable(self::LIEFERANTEN_TABELLE)) {
+            DB::table(self::LIEFERANTEN_TABELLE)->where('team_id', $team->id)->delete();
+        }
         self::flush();
 
         return $zeilen->isNotEmpty();
@@ -86,11 +135,20 @@ final class StammPaket
      *
      * @param  \Illuminate\Database\Eloquent\Builder|\Illuminate\Database\Query\Builder  $q
      */
-    public static function globaleZeilen($q, string $teamIdCol, string $klasseCol, ?Team $team): void
+    public static function globaleZeilen($q, string $teamIdCol, string $klasseCol, ?Team $team, ?string $basisTabelle = null): void
     {
         $q->whereNull($teamIdCol);
         if (! self::istFreigeschaltet($team)) {
             $q->where($klasseCol, self::BASIS);
+
+            return;
+        }
+        // Mit Paket, aber nicht Master: stamm_paket-Lieferanten und -Artikel nur für freigeschaltete Lieferanten (basis bleibt für alle).
+        $spalte = $basisTabelle !== null && ! self::sieheAlleLieferanten($team)
+            ? self::lieferantenSpalte(str_contains($klasseCol, '.') ? strstr($klasseCol, '.', true) : $basisTabelle, $basisTabelle)
+            : null;
+        if ($spalte !== null) {
+            $q->where(fn ($w) => $w->where($klasseCol, self::BASIS)->orWhereIn($spalte, self::freigegebeneLieferanten($team)));
         }
     }
 
@@ -105,16 +163,27 @@ final class StammPaket
     public static function begrenzen($query, string $tabelle, ?Team $team, ?string $basisTabelle = null)
     {
         // `$tabelle` ist Tabellenname ODER Alias (`i`, `g`); bei Alias nennt `$basisTabelle` die echte Tabelle (sonst greift `betrifft` nie).
-        if (! self::betrifft($basisTabelle ?? $tabelle) || self::istFreigeschaltet($team)) {
+        $basis = $basisTabelle ?? $tabelle;
+        if (! self::betrifft($basis) || self::sieheAlleLieferanten($team)) {
+            return $query;
+        }
+        if (! self::istFreigeschaltet($team)) {
+            return $query->where(fn ($q) => $q->whereNotNull($tabelle . '.team_id')->orWhere($tabelle . '.stamm_class', self::BASIS));
+        }
+        // Paket gebucht: GPs bleiben sichtbar; Lieferanten und Artikel nur freigeschaltete (Spec 82 Lieferanten freischalten).
+        $spalte = self::lieferantenSpalte($tabelle, $basis);
+        if ($spalte === null) {
             return $query;
         }
 
-        return $query->where(fn ($q) => $q->whereNotNull($tabelle . '.team_id')->orWhere($tabelle . '.stamm_class', self::BASIS));
+        return $query->where(fn ($q) => $q->whereNotNull($tabelle . '.team_id')->orWhere($tabelle . '.stamm_class', self::BASIS)
+            ->orWhereIn($spalte, self::freigegebeneLieferanten($team)));
     }
 
     public static function flush(): void
     {
         self::$cache = [];
+        self::$alleCache = [];
         MasterTeam::flush();   // hängt an derselben Kette: Master-Wechsel ändert, wer das Paket immer hat
     }
 }

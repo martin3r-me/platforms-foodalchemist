@@ -49,8 +49,8 @@ final class TeamScope
         // die Klassenspalte hängt am Alias (`i.stamm_class`). Vorher blieb die Stamm-Klasse bei Alias-Abfragen ungefiltert.
         [$basis, $klassePraefix] = self::basisTabelleUndPraefix($query, $teamIdColumn);
         if ($team !== null && StammPaket::betrifft($basis)) {
-            return $query->where(function ($q) use ($teamIdColumn, $ids, $klassePraefix, $team) {
-                $q->where(fn ($g) => StammPaket::globaleZeilen($g, $teamIdColumn, $klassePraefix . '.stamm_class', $team));
+            return $query->where(function ($q) use ($teamIdColumn, $ids, $klassePraefix, $team, $basis) {
+                $q->where(fn ($g) => StammPaket::globaleZeilen($g, $teamIdColumn, $klassePraefix . '.stamm_class', $team, $basis));
                 if ($ids !== []) {
                     $q->orWhereIn($teamIdColumn, $ids);
                 }

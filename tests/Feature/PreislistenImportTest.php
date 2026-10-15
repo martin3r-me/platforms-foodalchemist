@@ -128,7 +128,7 @@ it('Sichtbarkeit: stamm_paket-Artikel ohne Opt-in ist kein Treffer, mit Opt-in s
     $ohne = $this->svc->stage($this->team, $pfad, [], $this->hanos->id);
     expect(($this->stati)($ohne))->toBe([2 => 'ohne_treffer', 3 => 'ohne_treffer']);
 
-    StammPaket::freischalten($this->team);
+    StammPaket::freischalten($this->team); $this->alleLieferantenFrei($this->team);
     $mit = $this->svc->stage($this->team, $pfad, [], $this->hanos->id);
     expect(($this->stati)($mit))->toBe([2 => 'treffer', 3 => 'ohne_treffer']);
 });

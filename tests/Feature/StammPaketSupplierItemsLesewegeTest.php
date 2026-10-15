@@ -39,7 +39,7 @@ it('★ DataQuality: ein GP, dessen einzige LA Stamm-Paket ohne Opt-in ist, gilt
         ->invoke(app(DataQualityService::class), $this->rootTeam, 'kein_la')->count();
 
     expect($anzahl())->toBe(1);
-    StammPaket::freischalten($this->rootTeam);
+    StammPaket::freischalten($this->rootTeam); $this->alleLieferantenFrei($this->rootTeam);
     expect($anzahl())->toBe(0);
 });
 
@@ -51,7 +51,7 @@ it('★ GpService-Browser: Menge/Einheit eines Stamm-Paket-Leads ohne Opt-in ble
     $zeile = fn () => app(GpService::class)->paginateBrowser([], $this->rootTeam)->getCollection()->firstWhere('id', $gp->id);
 
     expect($zeile()->lead_qty)->toBeNull()->and($zeile()->lead_unit_code)->toBeNull();
-    StammPaket::freischalten($this->rootTeam);
+    StammPaket::freischalten($this->rootTeam); $this->alleLieferantenFrei($this->rootTeam);
     expect((float) $zeile()->lead_qty)->toBe(2.0)->and($zeile()->lead_unit_code)->toBe('kg');
 });
 
@@ -64,7 +64,7 @@ it('★ Simulation „lieferant": ein Stamm-Paket-Lead ohne Opt-in trifft das GP
         ->invoke(app(SimulationService::class), $this->rootTeam, 'lieferant', (string) $this->sup->id);
 
     expect($treffer())->toBe([]);
-    StammPaket::freischalten($this->rootTeam);
+    StammPaket::freischalten($this->rootTeam); $this->alleLieferantenFrei($this->rootTeam);
     expect($treffer())->toBe([$gp->id]);
 });
 
@@ -83,6 +83,6 @@ it('★ Match-Brücke über EAN: weder Stamm-Paket ohne Opt-in noch ein FREMDER 
     $eans = fn () => array_map('strval', array_keys($bruecken()));      // numerische String-Schlüssel werden zu int
 
     expect($eans())->toBe(['4000000000031']);               // nur der eigene Artikel
-    StammPaket::freischalten($this->rootTeam);
+    StammPaket::freischalten($this->rootTeam); $this->alleLieferantenFrei($this->rootTeam);
     expect($eans())->toContain('4000000000024')->not->toContain('4000000000017');   // Paket jetzt ja, Fremder nie
 });

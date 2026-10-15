@@ -1174,6 +1174,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\GpsHomogenitaetGetTool::class,
                     \Platform\FoodAlchemist\Tools\StammPaketGetTool::class,
                     \Platform\FoodAlchemist\Tools\StammPaketPutTool::class,
+                    \Platform\FoodAlchemist\Tools\StammPaketLieferantenGetTool::class,
+                    \Platform\FoodAlchemist\Tools\StammPaketLieferantenPutTool::class,
                     \Platform\FoodAlchemist\Tools\PaketGrundeinstellungenGetTool::class,
                     \Platform\FoodAlchemist\Tools\PaketGrundeinstellungenPutTool::class,
                     \Platform\FoodAlchemist\Tools\MasterTeamGetTool::class,

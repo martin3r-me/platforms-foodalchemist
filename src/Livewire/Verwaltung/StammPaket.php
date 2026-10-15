@@ -3,6 +3,7 @@
 namespace Platform\FoodAlchemist\Livewire\Verwaltung;
 
 use Illuminate\Support\Facades\Auth;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Exceptions\FaRechtFehltException;
@@ -18,6 +19,15 @@ class StammPaket extends Component
 {
     /** Mandant, dessen Abbestell-Vorschau offen ist. */
     public ?int $vorschauTeamId = null;
+
+    /** Mandant, dessen Lieferanten-Freischaltung offen ist. Stabile Adresse: /verwaltung?tab=freigaben&lieferanten={Mandanten-Team-ID} */
+    #[Url(as: 'lieferanten')]
+    public ?int $lieferantenTeamId = null;
+
+    public string $lieferantenSuche = '';
+
+    /** @var list<int> Auswahl im offenen Panel (Checkboxen) */
+    public array $auswahl = [];
 
     public ?string $fehler = null;
 
@@ -51,6 +61,64 @@ class StammPaket extends Component
         }, $teamId);
     }
 
+    public function lieferantenOeffnen(int $teamId): void
+    {
+        $this->fehler = $this->meldung = null;
+        $this->lieferantenTeamId = $this->istAdmin() ? $teamId : null;
+        $this->auswahlLaden();
+    }
+
+    public function lieferantenSchliessen(): void
+    {
+        $this->lieferantenTeamId = null;
+        $this->auswahl = [];
+    }
+
+    public function alleWaehlen(): void
+    {
+        $t = $this->lieferantenTeam();
+        $this->auswahl = $t ? array_column(app(StammPaketService::class)->lieferanten($t)['lieferanten'], 'id') : [];
+    }
+
+    public function keineWaehlen(): void
+    {
+        $this->auswahl = [];
+    }
+
+    public function lieferantenSpeichern(): void
+    {
+        $this->fehler = $this->meldung = null;
+        $t = $this->lieferantenTeam();
+        if (! $t) {
+            return;
+        }
+        try {
+            $r = app(StammPaketService::class)->setzeLieferanten($t, array_map('intval', $this->auswahl), Auth::user());
+            $this->meldung = $r['freigegeben'].' von '.$r['gesamt'].' Lieferanten für „'.$t->name.'“ freigeschaltet.';
+        } catch (FaRechtFehltException|\RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+        }
+    }
+
+    private function lieferantenTeam(): ?Team
+    {
+        return $this->istAdmin() && $this->lieferantenTeamId !== null ? Team::find($this->lieferantenTeamId) : null;
+    }
+
+    private function auswahlLaden(): void
+    {
+        $t = $this->lieferantenTeam();
+        $this->auswahl = $t ? array_column(array_filter(app(StammPaketService::class)->lieferanten($t)['lieferanten'], fn ($z) => $z['frei']), 'id') : [];
+    }
+
+    public function mount(): void
+    {
+        // Sprung per Adresse (?lieferanten=ID): Auswahl des Mandanten vorbelegen
+        if ($this->lieferantenTeamId !== null) {
+            $this->auswahlLaden();
+        }
+    }
+
     private function istAdmin(): bool
     {
         $user = Auth::user();
@@ -77,6 +145,7 @@ class StammPaket extends Component
         return view('foodalchemist::livewire.verwaltung.stamm-paket', [
             'admin' => $admin,
             'mandanten' => $admin ? $svc->uebersicht() : [],
+            'lieferantenPanel' => ($lt = $this->lieferantenTeam()) ? ['team' => $lt, 'daten' => $svc->lieferanten($lt, $this->lieferantenSuche)] : null,
             'vorschau' => $admin && $this->vorschauTeamId !== null && ($t = Team::find($this->vorschauTeamId)) ? ['team' => $t, 'daten' => $svc->vorschauAbbestellen($t)] : null,
         ]);
     }

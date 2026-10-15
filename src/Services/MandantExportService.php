@@ -31,7 +31,7 @@ class MandantExportService
     /** Tabellen mit `team_id`, die nicht in den Export gehören (Verwaltung, Protokoll, Technik, Caches). */
     public const AUSGENOMMEN = [
         'foodalchemist_mandanten', 'foodalchemist_mandant_beenden_laeufe', 'foodalchemist_mandant_exporte',
-        'foodalchemist_team_bereiche', 'foodalchemist_user_bereich_sperren', 'foodalchemist_team_stamm_optins',
+        'foodalchemist_team_bereiche', 'foodalchemist_user_bereich_sperren', 'foodalchemist_team_stamm_optins', 'foodalchemist_team_stamm_lieferanten',
         'foodalchemist_team_pakete', 'foodalchemist_paket_kopien',   // Spec 82 §13 I: Buchung + Zuordnung Quelle→Kopie (Verwaltung)
         'foodalchemist_plattform_einstellungen', 'foodalchemist_bearbeitungssperren',
     ];

@@ -23,6 +23,7 @@ class PlattformProtokoll
     private const TEXTE = [
         'stamm_paket_gebucht' => 'Stamm-Paket gebucht',
         'stamm_paket_abbestellt' => 'Stamm-Paket abbestellt',
+        'stamm_lieferanten_gesetzt' => 'Stamm-Lieferanten freigeschaltet',   // Spec 82: Lieferanten je Mandant
         'master_team_gesetzt' => 'Master-Team festgelegt',
         'mandant_modus_geaendert' => 'Mandanten-Modus geändert',
         'mandant_gepflegt' => 'Mandant gepflegt',

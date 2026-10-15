@@ -59,7 +59,7 @@ it('teamgebundene Zeilen laufen unverändert durch (Team 6 auf demo: alles team-
 });
 
 it('Opt-in des Oberteams schaltet das Paket für Oberteam und Unter-Teams frei', function () {
-    StammPaket::freischalten($this->rootTeam);
+    StammPaket::freischalten($this->rootTeam); $this->alleLieferantenFrei($this->rootTeam);
 
     foreach ([$this->rootTeam, $this->childA, $this->childB] as $team) {
         expect(sichtbar(FoodAlchemistGp::class, $team))->toContain($this->gpPaket->id)
@@ -69,7 +69,7 @@ it('Opt-in des Oberteams schaltet das Paket für Oberteam und Unter-Teams frei',
 });
 
 it('Opt-in gilt nur abwärts: ein Unter-Team schaltet weder Eltern noch Geschwister frei', function () {
-    StammPaket::freischalten($this->childA);
+    StammPaket::freischalten($this->childA); $this->alleLieferantenFrei($this->childA);
 
     expect(sichtbar(FoodAlchemistGp::class, $this->childA))->toContain($this->gpPaket->id)
         ->and(sichtbar(FoodAlchemistGp::class, $this->childB))->not->toContain($this->gpPaket->id)
@@ -77,7 +77,7 @@ it('Opt-in gilt nur abwärts: ein Unter-Team schaltet weder Eltern noch Geschwis
 });
 
 it('abbestellen nimmt das Paket wieder weg (Cache wird geleert)', function () {
-    StammPaket::freischalten($this->rootTeam);
+    StammPaket::freischalten($this->rootTeam); $this->alleLieferantenFrei($this->rootTeam);
     expect(sichtbar(FoodAlchemistGp::class, $this->childB))->toContain($this->gpPaket->id);
 
     expect(StammPaket::abbestellen($this->rootTeam))->toBeTrue()
@@ -102,7 +102,7 @@ it('Raw-Pfad TeamScope::applyVisible folgt derselben Regel', function () {
 
     expect($ids($this->childA))->toContain($this->gpBasis->id)->not->toContain($this->gpPaket->id);
 
-    StammPaket::freischalten($this->rootTeam);
+    StammPaket::freischalten($this->rootTeam); $this->alleLieferantenFrei($this->rootTeam);
     expect($ids($this->childA))->toContain($this->gpPaket->id);
 });
 
@@ -111,7 +111,7 @@ it('begrenzen() filtert nur globale Paket-Zeilen und lässt teamgebundene durch'
 
     expect($roh($this->childB))->toContain($this->gpBasis->id, $this->gpEigen->id)->not->toContain($this->gpPaket->id);
 
-    StammPaket::freischalten($this->rootTeam);
+    StammPaket::freischalten($this->rootTeam); $this->alleLieferantenFrei($this->rootTeam);
     expect($roh($this->childB))->toContain($this->gpPaket->id);
 });
 
@@ -169,7 +169,7 @@ it('Listenpreis folgt dem Artikel: Preis eines stamm_paket-Artikels ist ohne Opt
     $roh = FoodAlchemistPrice::query()->stammSichtbar($this->childB)->where('supplier_item_id', $this->laPaket->id)->count();
     expect($roh)->toBe(0);
 
-    StammPaket::freischalten($this->childB);
+    StammPaket::freischalten($this->childB); $this->alleLieferantenFrei($this->childB);
     expect($ids())->toContain($preisPaket->id, $teamPreisAufPaket->id);
 });
 
@@ -194,7 +194,7 @@ it('geschlossen (Folge-PR 3a): alle Preis-Lesewege prüfen die Stamm-Sichtbarkei
         ->and($ps->activeFor($this->laBasis->id, $this->childB)?->id)->toBe($basis->id);
 
     // mit Opt-in: der Teampreis gewinnt (Team-Stufe), andere Teams ohne Opt-in sehen weiter nichts
-    StammPaket::freischalten($this->childB);
+    StammPaket::freischalten($this->childB); $this->alleLieferantenFrei($this->childB);
     expect($ps->activeFor($this->laPaket->id, $this->childB)?->id)->toBe($team->id)
         ->and((float) $subq($this->laPaket->id, $this->childB))->toBe(8.8)
         ->and($ps->activeFor($this->laPaket->id, $this->childA))->toBeNull()

@@ -53,7 +53,7 @@ trait BelongsToTeamHierarchy
             $tabelle = $query->getModel()->getTable();
 
             return $query->where(function (Builder $q) use ($col, $team, $tabelle) {
-                $q->where(fn (Builder $g) => StammPaket::globaleZeilen($g, $col, $tabelle . '.stamm_class', $team))
+                $q->where(fn (Builder $g) => StammPaket::globaleZeilen($g, $col, $tabelle . '.stamm_class', $team, $tabelle))
                     ->orWhereIn($col, self::teamAncestryIds($team));
             });
         }
