@@ -52,7 +52,7 @@ final class AnkerWissenFreigabe
         return [
             'anker' => ['id' => (int) $anker->id, 'slug' => $anker->slug, 'name' => $anker->display_de, 'gemessen' => $anker->inspire_id !== null],
             'status' => $this->zaehle($ankerId),
-            'bedarfe' => $this->zeilen('bedarfe', $ankerId, ['achse', 'staerke', 'beleg'])
+            'bedarfe' => $this->zeilen('bedarfe', $ankerId, ['achse', 'staerke', 'deckung', 'beleg'])
                 ->map(fn ($z) => $z + ['achse_label' => $label($z['achse'])])->all(),
             'eigenschaften' => $this->zeilen('eigenschaften', $ankerId, ['achse', 'stufe', 'beleg'])
                 ->map(fn ($z) => $z + ['achse_label' => $label($z['achse'])])->all(),

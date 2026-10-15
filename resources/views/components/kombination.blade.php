@@ -44,7 +44,8 @@
         return match ($x['typ']) {
             'spannung' => $a0 && $a1 ? [$achse($x), $a1.' → '.$a0] : [null, $x['text']],
             'konflikt' => $a0 && $a1 ? [null, $a0.' ↔ '.$a1] : [null, $x['text']],
-            'bedarf_offen' => [$achse($x), ($a0 ? 'für '.$a0 : $x['text']).(str_starts_with($x['text'], 'Es fehlt') ? '' : ' · könnte fehlen')],
+            'bedarf_offen' => [$achse($x), ($a0 ? 'für '.$a0 : $x['text']).(str_starts_with($x['text'], 'Es fehlt') ? '' : ' · könnte fehlen')
+                .(preg_match('/ – (über die Zubereitung|Partner oder Zubereitung)$/u', $x['text'], $m) ? ' · '.$m[1] : '')],
             'unbekannt' => [null, $a0 ?? $x['text']],
             'hinweis' => [null, ($a0 && $a1 ? $a0.' + '.$a1.' · ' : '').$hinweisRest($x)],
             default => $a0 && $a1 ? [null, $a0.' + '.$a1] : [null, $x['text']],
@@ -121,7 +122,7 @@
                             <span class="block text-[var(--fa-ink-2)]">+ {{ $b['name'] }}<span class="text-[length:var(--fa-text-sm)] text-[var(--fa-ink-3)]"> · harmoniert mit {{ $b['mit'] }}</span></span>
                         @endforeach
                         @if($v['formwechsel'] === [] && $v['basisrezepte'] === [])
-                            <span class="block text-[var(--fa-ink-3)]">kein passendes Basisrezept im Bestand</span>
+                            <span class="block text-[var(--fa-ink-3)]">{{ ($v['deckung'] ?? 'partner') === 'zubereitung' ? 'über die Zubereitung lösen' : 'kein passendes Basisrezept im Bestand' }}</span>
                         @endif
                     </li>
                 @endforeach

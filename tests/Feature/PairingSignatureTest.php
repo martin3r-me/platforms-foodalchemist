@@ -144,7 +144,7 @@ it('GP-Editor: nur ★★★-Partner, was der Anker braucht, wer es liefert, wom
     $p = $this->svc->panelGp((int) $gp->id);
 
     expect($p['aroma'])->toBe(['Reisessig', 'Salbei'])
-        ->and($p['braucht'])->toBe([['achse' => 'Säure', 'staerke' => 'muss', 'grundlage' => 'aus Dossier, ungeprüft']])
+        ->and($p['braucht'])->toBe([['achse' => 'Säure', 'staerke' => 'muss', 'deckung' => 'Partner', 'grundlage' => 'aus Dossier, ungeprüft']])
         ->and($p['kontrast'])->toBe([['name' => 'Reisessig', 'achse' => 'Säure']])
         ->and($p['konflikt'])->toBe(['Anis']);
 });

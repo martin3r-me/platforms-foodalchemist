@@ -45,7 +45,7 @@ it('Leit-Aroma: Harmonie nur 3★, Bedarf mit Lieferant, Konflikt zum Vermeiden'
     expect($p['leit_aromen'])->toHaveCount(1)
         ->and($p['leit_aromen'][0]['aroma'])->toBe('Kürbis')
         ->and($p['leit_aromen'][0]['harmonie'])->toBe(['Salbei'])
-        ->and($p['leit_aromen'][0]['braucht'])->toBe([['achse' => 'Säure', 'staerke' => 'muss', 'liefern' => ['Reisessig']]])
+        ->and($p['leit_aromen'][0]['braucht'])->toBe([['achse' => 'Säure', 'staerke' => 'muss', 'deckung' => 'partner', 'liefern' => ['Reisessig']]])
         ->and($p['leit_aromen'][0]['vermeiden'])->toBe(['Anis'])
         ->and($p)->not->toHaveKey('komponenten');
 });

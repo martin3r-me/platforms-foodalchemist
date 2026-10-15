@@ -74,7 +74,7 @@
                     <h3 class="font-medium tracking-tight text-gray-900">Braucht · Kontrast</h3>
                     @if(count($pairing['braucht'] ?? []))
                         <p class="text-[11px] text-gray-500">
-                            @foreach($pairing['braucht'] as $b){{ $loop->first ? '' : ' · ' }}{{ $b['achse'] }}{{ $b['staerke'] === 'muss' ? ' (muss)' : '' }}@endforeach
+                            @foreach($pairing['braucht'] as $b){{ $loop->first ? '' : ' · ' }}{{ $b['achse'] }}{{ $b['staerke'] === 'muss' ? ' (muss)' : '' }}{{ ($b['deckung'] ?? 'Partner') !== 'Partner' ? ' – '.$b['deckung'] : '' }}@endforeach
                             <span class="opacity-70">— {{ $pairing['braucht'][0]['grundlage'] }}</span>
                         </p>
                     @endif

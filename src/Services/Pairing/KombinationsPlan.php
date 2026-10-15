@@ -75,7 +75,7 @@ final class KombinationsPlan
             $braucht = [];
             foreach (DB::table('foodalchemist_anchor_bedarfe')->where('anchor_id', $id)
                 ->where('status', '!=', WissensStatus::Verworfen->value)
-                ->orderByRaw("CASE staerke WHEN 'muss' THEN 0 ELSE 1 END")->get(['achse', 'staerke']) as $b) {
+                ->orderByRaw("CASE staerke WHEN 'muss' THEN 0 ELSE 1 END")->get(['achse', 'staerke', 'deckung']) as $b) {
                 $achse = Achse::tryFrom((string) $b->achse);
                 if ($achse === null) {
                     continue;
@@ -83,7 +83,7 @@ final class KombinationsPlan
                 $liefern = $this->graph->beziehungen([$id], Kantenart::Kontrast)
                     ->where('achse', $achse->value)->take(self::LIEFERANTEN)->pluck('zu')->all();
                 $braucht[] = ['achse' => $achse->label(), 'staerke' => (string) $b->staerke,
-                    'liefern' => $this->namen($liefern)];
+                    'deckung' => (string) ($b->deckung ?? 'partner'), 'liefern' => $this->namen($liefern)];
             }
             if (! isset($namen[$id])) {
                 continue;
@@ -107,7 +107,8 @@ final class KombinationsPlan
             'hinweis' => 'Kombinationslogik (gemessen + Anker-Wissen): `harmonie` = echtes Food Pairing (Foodpairing 3★) '
                 .'je Leit-Aroma — bevorzugt daraus abrunden. `braucht` = was das Leit-Aroma von außen braucht (Kontrast, '
                 .'z. B. Säure gegen Süße/Fett); decke jeden „muss"-Bedarf mit einem der genannten Lieferanten oder einer '
-                .'gleichwertigen Zutat. `vermeiden` nie kombinieren. Erfinde keine unbelegten Paarungen.'
+                .'gleichwertigen Zutat; bei `deckung` = zubereitung deckt die Zutat ihn selbst über die Zubereitung (z. B. '
+                .'rösten, anbraten), nicht über einen Partner. `vermeiden` nie kombinieren. Erfinde keine unbelegten Paarungen.'
                 .($gericht ? ' Ein Gericht besteht aus Basisrezepten. Je Leit-Aroma stehen unter `basisrezepte` vorhandene '
                     .'Basisrezepte, die das Aroma tragen; `komponenten` = vorhandene Basisrezepte, die einen offenen Bedarf decken. '
                     .'Entscheide je Komponente: vorhandenes Basisrezept wiederverwenden (sub_rezept_id), wenn es zur Idee passt — '

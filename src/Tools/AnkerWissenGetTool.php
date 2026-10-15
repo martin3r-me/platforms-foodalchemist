@@ -24,7 +24,7 @@ class AnkerWissenGetTool extends FoodAlchemistTool implements ToolContract, Tool
     public function getDescription(): string
     {
         return 'Anker-Wissen (Spec 60) eines Aroma-Ankers mit Status je Eintrag (entwurf = aus dem Dossier ausgelesen, '
-            . 'ungeprüft · geprueft · verworfen): bedarfe (was der Anker von außen braucht, muss|soll), eigenschaften '
+            . 'ungeprüft · geprueft · verworfen): bedarfe (was der Anker braucht, muss|soll; deckung partner|zubereitung|beides), eigenschaften '
             . '(was er selbst liefert, Stufe 0–3), komponenten (Formen mit Technik), beziehungen (kombination = Klassiker, '
             . 'konflikt = stört sich; messung_3_sterne zeigt den Widerspruch zur Foodpairing-Messung) und offen '
             . '(Rohnamen ohne Anker). Anker per anker_id oder anker_slug (Suche: foodalchemist.composer.ANKER_SUCHE). Read-only.';

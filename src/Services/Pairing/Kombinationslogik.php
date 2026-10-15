@@ -5,6 +5,7 @@ namespace Platform\FoodAlchemist\Services\Pairing;
 use Illuminate\Support\Facades\DB;
 use Platform\FoodAlchemist\Enums\Achse;
 use Platform\FoodAlchemist\Enums\AussageTyp;
+use Platform\FoodAlchemist\Enums\BedarfDeckung;
 use Platform\FoodAlchemist\Enums\Grundlage;
 use Platform\FoodAlchemist\Enums\Verfahren;
 use Platform\FoodAlchemist\Enums\WissensStatus;
@@ -188,15 +189,19 @@ final class Kombinationslogik
                     continue;
                 }
                 $alt = $offen[$b['achse']] ?? null;
+                $deckung = BedarfDeckung::vereine($alt['deckung'] ?? ($b['deckung'] ?? null), $b['deckung'] ?? null);
                 if ($alt === null || ($b['staerke'] === 'muss' && $alt['staerke'] !== 'muss')) {
                     $offen[$b['achse']] = $b + ['bestandteil' => $t['schluessel'], 'label' => $t['label']];
                 }
+                $offen[$b['achse']]['deckung'] = $deckung;
             }
         }
         foreach ($offen as $b) {
             $achse = Achse::from($b['achse'])->label();
+            $wie = BedarfDeckung::from($b['deckung']);
             $aussagen[] = new Aussage(AussageTyp::BedarfOffen, $this->bedarfGrundlage((int) $b['von'], $b['achse']),
-                ($b['staerke'] === 'muss' ? 'Es fehlt ' : 'Es könnte fehlen: ').$achse." (für {$b['label']})", [$b['bestandteil']], $b['achse']);
+                ($b['staerke'] === 'muss' ? 'Es fehlt ' : 'Es könnte fehlen: ').$achse." (für {$b['label']})"
+                .($wie === BedarfDeckung::Partner ? '' : ' – '.$wie->label()), [$b['bestandteil']], $b['achse']);
         }
 
         $zusammen = [];
@@ -248,6 +253,9 @@ final class Kombinationslogik
         $kandAnker = [];
         foreach ($analyse['offene_bedarfe'] as $i => $b) {
             $jeBedarfKandidaten[$i] = [];
+            if (! (BedarfDeckung::tryFrom((string) ($b['deckung'] ?? '')) ?? BedarfDeckung::Partner)->partnerMoeglich()) {
+                continue;   // nur Formwechsel („als geröstet zubereiten"), kein Basisrezept als Partner
+            }
             foreach ($this->basisKatalog($teamId) as $rid => $k) {
                 if (in_array($rid, $vorhanden, true) || ! $k['teller'] || ! $this->passtZurDiaet($k, $diaet)
                     || ($richtung !== null && $k['richtung'] !== null && $k['richtung'] !== $richtung && $k['richtung'] !== 'neutral')) {
@@ -317,7 +325,7 @@ final class Kombinationslogik
             }
             usort($kandidaten, fn ($x, $y) => [$y['sort'], $x['recipe_id']] <=> [$x['sort'], $y['recipe_id']]);
             $out[] = [
-                'achse' => $b['achse'], 'staerke' => $b['staerke'],
+                'achse' => $b['achse'], 'staerke' => $b['staerke'], 'deckung' => $b['deckung'] ?? BedarfDeckung::Partner->value,
                 'formwechsel' => $this->formwechsel($teile, $b['achse']),
                 'basisrezepte' => array_map(function ($k) {
                     unset($k['sort']);
