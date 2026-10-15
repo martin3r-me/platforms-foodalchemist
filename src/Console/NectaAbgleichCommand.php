@@ -97,6 +97,15 @@ class NectaAbgleichCommand extends Command
         $pf = $z['pruefaelle'] ?? [];
         ksort($pf);
         $this->line('Prüffälle je Art: '.($pf === [] ? 'keine' : collect($pf)->map(fn ($n, $art) => "{$art} {$n}")->implode(' · ')));
+        // Diagnose: woraus die Kennzeichnungs-Prüffälle bestehen (je Feld, Lockerung je Wechsel), absteigend
+        foreach (['allergen_aenderung', 'deklaration_aenderung'] as $art) {
+            if (! empty($z['pruefaelle_je_feld'][$art])) {
+                $this->line("  {$art} je Feld: ".collect($z['pruefaelle_je_feld'][$art])->sortDesc()->map(fn ($n, $f) => "{$f} {$n}")->implode(' · '));
+            }
+        }
+        if (! empty($z['lockerung_je_wechsel'])) {
+            $this->line('  Lockerungen je Wechsel: '.collect($z['lockerung_je_wechsel'])->sortDesc()->map(fn ($n, $w) => "{$w} {$n}")->implode(' · '));
+        }
         $this->info("Lauf {$r['lauf_id']}: {$r['status']}".($probe ? ' (Probe)' : ''));
 
         return self::SUCCESS;
