@@ -142,6 +142,9 @@ enum SignalTyp: string
     // Rezept-Qualität im Sinn der Ampel, sondern ein Ereignis aus der Master-Bibliothek.
     case FassungAktualisiert = 'fassung_aktualisiert';
     case FassungNeuerVerfuegbar = 'fassung_neuer_verfuegbar';
+    // Necta-Abgleich (Dominique 15.10.2026): ein neuer Lieferant kam aus Necta und wurde global angelegt. Kein Mandant bekommt ihn
+    // automatisch — das Master-Team entscheidet in der Lieferanten-Freischaltung (/verwaltung, Karte Stamm-Paket).
+    case NectaLieferantNeu = 'necta_lieferant_neu';
 
     public function label(): string
     {
@@ -149,6 +152,7 @@ enum SignalTyp: string
             self::SteuerdatenDrift => 'Wissenseinstellungen der KI weichen ab',
             self::FassungAktualisiert => 'Abo-Rezept aktualisiert',
             self::FassungNeuerVerfuegbar => 'Neuere Fassung für ein eingefrorenes Angebot',
+            self::NectaLieferantNeu => 'Neuer Lieferant aus Necta',
             self::PreisAnomalie => 'Auffälliger Lieferantenpreis',
             self::PreisSprungMargeImpact => 'Preissprung mit Folgen für die Marge',
             self::VeraltetePreise => 'Veraltete Preise',
@@ -207,6 +211,7 @@ enum SignalTyp: string
             self::SteuerdatenDrift => 'heroicon-o-adjustments-horizontal',
             self::FassungAktualisiert => 'heroicon-o-arrow-path',
             self::FassungNeuerVerfuegbar => 'heroicon-o-lock-open',
+            self::NectaLieferantNeu => 'heroicon-o-truck',
             self::PreisAnomalie => 'heroicon-o-arrow-trending-up',
             self::PreisSprungMargeImpact => 'heroicon-o-bolt',
             self::VeraltetePreise => 'heroicon-o-clock',
