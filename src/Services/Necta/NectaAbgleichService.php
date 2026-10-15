@@ -22,9 +22,13 @@ use Symfony\Component\Uid\UuidV7;
  *  - Erster Abgleich eines Objekts (noch kein `necta_stand`): Abweichungen übernehmen — der Stamm ist frisch importiert und noch
  *    nicht von Hand gepflegt (Entscheid Dominique über den Kurator, 15.10.).
  *  - Ab dem zweiten Lauf: FA-Wert ≠ letzter Necta-Stand → von Hand gepflegt → Prüffall `manuell_gepflegt`, FA bleibt.
- *  - Kennzeichnung (Allergene, Deklaration/Zusatzstoffe) wird NIE still übernommen, auch nicht beim ersten Abgleich: jede
- *    Abweichung → Prüffall (Regelwerk Szenario 12; Zusatzstoffe sind kennzeichnungspflichtig).
- *  - Ein Artikel, den wir haben, Necta aber nicht mehr liefert, wird NICHT gelöscht → Prüffall `in_necta_entfernt`.
+ *  - Kennzeichnung (Allergene, Deklaration/Zusatzstoffe) nach Strenge (Entscheid Dominique 15.10.2026, Lauf 6 auf io:
+ *    18.491 Allergen-Abweichungen, Lieferanten haben seit dem Juni-Export nachgepflegt): Necta STRENGER als FA → automatisch
+ *    übernehmen, auch bei Handpflege (Zähler `allergen_verschaerft` / `deklaration_verschaerft`); Necta LOCKERER → Prüffall,
+ *    FA bleibt, auch wenn FA dem letzten Necta-Stand entspricht — nie still lockern. Gleich streng (z. B. Deklaration 0 ⇄ NULL,
+ *    beides k.A.) → Necta-Wert übernehmen, ohne Prüffall. Allergen-Unterarten (`details`, JSON) weiter als Prüffall.
+ *  - Ein Artikel, den wir haben, Necta aber nicht mehr liefert, wird NICHT gelöscht → Prüffall `in_necta_entfernt`. Ausgenommen
+ *    sind Artikel, die nie aus Necta kamen ({@see self::KUNST_ID_AB}).
  *  - Fehlende Detailzeilen zu bekannten Artikeln werden angelegt.
  *
  * Inaktive bzw. ausgenommene Lieferanten werden nicht abgeglichen. Bei Fehlschlag: Signal `necta_abgleich_fehler` an den Master.
@@ -34,6 +38,20 @@ class NectaAbgleichService extends NectaLaufBasis
 {
     /** Objekte, deren Abweichungen nie still übernommen werden (Kennzeichnung). */
     public const KENNZEICHNUNG = ['item_allergen', 'item_declaration'];
+
+    /**
+     * Ab dieser `legacy_id` stammt ein Artikel nicht aus Necta: Das Skript `00_SYSTEM/00.04_Scripts/114_add_hanos_achenbach.py`
+     * (+ `114b_pdf_diff_achenbach.py`) legte Hanos-/Achenbach-Excel/PDF-Artikel in der WaWi-Kopie mit `NEW_ITEM_ID_START =
+     * 90_000_000` an („sicherer Range außerhalb existierender supplier_items.id“); der FA-Import übernahm `supplier_items.id` als
+     * `legacy_id`. In der WaWi-Kopie genau 64 Artikel 90.000.000–90.000.063 (Achenbach 52, Hanos 9, Chefs Culinar 2,
+     * Bergischländer 1) = die 64 `in_necta_entfernt` aus Lauf 6; höchste echte Necta-ID dort 35.954.031.
+     * Ausgeschlossen wird nur, wer zusätzlich keinen Necta-Stand hat — ein echter Necta-Artikel in diesem Bereich (sobald Necta so
+     * hoch zählt) hat einen Stand und wird weiter gemeldet.
+     */
+    public const KUNST_ID_AB = 90_000_000;
+
+    /** Strenge je Wert, höher = strenger. Allergene: enthalten > spuren > unbekannt (NULL) > nicht_enthalten. */
+    private const ALLERGEN_STRENGE = ['enthalten' => 3, 'spuren' => 2, '' => 1, 'nicht_enthalten' => 0];
 
     /** Preis-Spalten, die Necta pflegt und die wir vergleichen. */
     private const PREIS_SPALTEN = ['status', 'price', 'price_partial', 'note', 'valid_to', 'status_valid_from', 'is_blocked', 'change_date'];
@@ -55,7 +73,8 @@ class NectaAbgleichService extends NectaLaufBasis
         $seit = $opt['seit'] ?? $this->seitLetztemLauf($verbindungId);
         $this->opt['seit'] = $seit;
         $this->zaehler += ['seit' => $seit, 'preise_geprueft' => 0, 'preise_aktualisiert' => 0, 'vorgaenger_fortgeschrieben' => 0,
-            'felder_uebernommen' => 0, 'objekte_aktualisiert' => 0, 'pruefaelle' => [], 'in_necta_entfernt' => 0];
+            'felder_uebernommen' => 0, 'objekte_aktualisiert' => 0, 'pruefaelle' => [], 'in_necta_entfernt' => 0,
+            'allergen_verschaerft' => 0, 'deklaration_verschaerft' => 0, 'nicht_aus_necta' => 0];
 
         $this->laufId = $this->laufAnlegen($voll ? 'vollabgleich' : 'abgleich', $verbindungId, $this->teamId, $opt);
         if ($voll && ! $this->probe && empty($opt['erzwingen']) && ($grund = $this->vollGesperrt($verbindungId)) !== null) {
@@ -249,7 +268,16 @@ class NectaAbgleichService extends NectaLaufBasis
         if ($l['fa_id'] !== null) {
             DB::table('foodalchemist_supplier_items')->where('supplier_id', $l['fa_id'])->whereNotNull('legacy_id')->whereNull('deleted_at')
                 ->orderBy('id')->select(['id', 'legacy_id', 'designation'])->chunk(2000, function ($teil) use ($gesehen) {
+                    // Kunst-IDs ohne Necta-Stand kamen nie aus Necta (Skript 114) → nicht „entfernt“, nur zählen
+                    $mitStand = DB::table('foodalchemist_necta_stand')->where('objekt', 'supplier_item')
+                        ->whereIn('legacy_id', $teil->pluck('legacy_id')->filter(fn ($id) => (int) $id >= self::KUNST_ID_AB)->all())
+                        ->pluck('legacy_id')->flip();
                     foreach ($teil as $a) {
+                        if ((int) $a->legacy_id >= self::KUNST_ID_AB && ! $mitStand->has($a->legacy_id)) {
+                            $this->zaehler['nicht_aus_necta']++;
+
+                            continue;
+                        }
                         if (! isset($gesehen[(int) $a->legacy_id])) {
                             $this->zaehler['in_necta_entfernt']++;
                             $this->pruefall('in_necta_entfernt', 'supplier_item', (int) $a->legacy_id, null, (string) $a->designation, null);
@@ -309,7 +337,18 @@ class NectaAbgleichService extends NectaLaufBasis
                 continue;
             }
             if ($kennzeichnung) {
-                $this->pruefall($objekt === 'item_allergen' ? 'allergen_aenderung' : 'deklaration_aenderung', $objekt, $legacy, $spalte, $fa->{$spalte} ?? null, $nWert);
+                $strenge = $spalte === 'details' ? null : self::strenge($objekt, $nWert) <=> self::strenge($objekt, $fa->{$spalte} ?? null);
+                if ($strenge === 1) {
+                    // Necta strenger: automatisch übernehmen, auch über Handpflege hinweg (Sicherheit vor Pflegestand)
+                    $uebernehmen[$spalte] = $nWert;
+                    $this->zaehler[$objekt === 'item_allergen' ? 'allergen_verschaerft' : 'deklaration_verschaerft']++;
+                    $this->beispiel('verschaerft', ['objekt' => $objekt, 'legacy_id' => $legacy, 'feld' => $spalte, 'fa' => $fa->{$spalte} ?? null, 'necta' => $nWert]);
+                } elseif ($strenge === 0) {
+                    $uebernehmen[$spalte] = $nWert;   // gleich streng (k.A. 0 ⇄ NULL): angleichen, kein Prüffall
+                } else {
+                    // lockerer (oder Unterarten-JSON): nie still → Prüffall, FA bleibt
+                    $this->pruefall($objekt === 'item_allergen' ? 'allergen_aenderung' : 'deklaration_aenderung', $objekt, $legacy, $spalte, $fa->{$spalte} ?? null, $nWert);
+                }
 
                 continue;
             }
@@ -342,6 +381,23 @@ class NectaAbgleichService extends NectaLaufBasis
             DB::table($tabelle)->where('id', $fa->id)->update($uebernehmen + ['updated_at' => now()]);
         }
         $this->stand($objekt, $legacy, $necta + ['legacy_id' => $legacy]);
+    }
+
+    /**
+     * Strenge eines Kennzeichnungs-Werts (höher = strenger). Allergene {@see self::ALLERGEN_STRENGE}; Deklaration roh:
+     * 3 (ja) > 0/NULL (k.A.) > 1 (nein).
+     */
+    private static function strenge(string $objekt, mixed $wert): int
+    {
+        if ($objekt === 'item_allergen') {
+            return self::ALLERGEN_STRENGE[(string) ($wert ?? '')] ?? 1;
+        }
+
+        return match ($wert === null || $wert === '' ? null : (int) $wert) {
+            3 => 2,
+            1 => 0,
+            default => 1,
+        };
     }
 
     /** Prüffall anlegen oder ein offenes für dasselbe (Objekt, Necta-ID, Feld, Art) aktualisieren. Probe: nur zählen. */
