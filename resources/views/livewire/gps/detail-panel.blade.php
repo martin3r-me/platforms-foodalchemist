@@ -414,6 +414,12 @@
                 @endif
             </div>
         </x-fa::section>
+        {{-- Preisverlauf als Linie: eine Linie je Lieferantenartikel, Lead hervorgehoben (Detail UND GP-Modal, das dieses Panel einbettet) --}}
+        @if($gp->n_las_total > 0)
+            <x-fa::section variant="plain" title="Preisverlauf" icon="heroicon-o-presentation-chart-line" data-sektion="preisverlauf">
+                <livewire:foodalchemist.preise.verlauf modus="gp" :objekt-id="$gp->id" :key="'pv-gp-'.$gp->id" />
+            </x-fa::section>
+        @endif
         @endif
 
         {{-- Fachabschnitte --}}

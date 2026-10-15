@@ -294,6 +294,13 @@
                         </table>
                     </div>
                 </x-fa::section>
+
+                {{-- Preisverlauf als Linie (Preis je Basiseinheit, Rohpreis je Gebinde im Tooltip) --}}
+                @if($item !== null)
+                    <x-fa::section title="Preisverlauf" icon="heroicon-o-presentation-chart-line" data-sektion="preisverlauf">
+                        <livewire:foodalchemist.preise.verlauf modus="la" :objekt-id="$item->id" :key="'pv-la-'.$item->id" />
+                    </x-fa::section>
+                @endif
             </div>{{-- /Reiter PREISE --}}
 
             {{-- ── Reiter ALLERGENE UND NÄHRWERTE ──────────────────────────────── --}}
