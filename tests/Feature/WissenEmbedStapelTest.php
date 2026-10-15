@@ -121,3 +121,42 @@ it('Der Helper: Item-Obergrenze, einzelner Riese bekommt einen eigenen Stapel, R
     $pool = app(PoolEmbeddingService::class)->chunkByBudget($klein(2500));
     expect($pool)->toBe(EmbeddingStapel::teilen($klein(2500)));
 });
+
+// ── Anker: dieselbe Fehlerklasse (alle 2.628 Anker in EINEM Aufruf; OpenAI erlaubt 2.048 Eingaben je Request) ──
+
+it('embedAnkers: 2.628 Anker gehen in mehreren Aufrufen an den Core, keiner über 1000 Einträgen (OpenAI-Grenze 2.048), alle genau einmal', function () {
+    $ids = [];
+    foreach (range(1, 2628) as $n) {
+        DB::table('foodalchemist_vocab_pairing_anchors')->insert([
+            'uuid' => (string) UuidV7::generate(), 'slug' => 'anker_'.$n, 'display_de' => 'Anker '.$n, 'team_id' => null, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $ids[] = (int) DB::getPdo()->lastInsertId();
+    }
+
+    $r = app(KnowledgeEmbeddingService::class)->embedAnkers();
+
+    expect($r['available'])->toBeTrue()->and($r['candidates'])->toBe(2628)
+        ->and(count($this->aufrufe))->toBe(3)
+        ->and(max(array_column($this->aufrufe, 'n')))->toBeLessThanOrEqual(EmbeddingStapel::MAX_EINTRAEGE)->toBeLessThan(2048)
+        ->and(max(array_column($this->aufrufe, 'zeichen')))->toBeLessThanOrEqual(EmbeddingStapel::MAX_ZEICHEN);
+    expect(collect($this->aufrufe)->pluck('ids')->flatten()->sort()->values()->all())->toBe(collect($ids)->sort()->values()->all());
+});
+
+it('embedAnkers Gegenprobe: ohne Stapelung wäre es ein Aufruf mit 2.628 Einträgen, über der OpenAI-Grenze von 2.048', function () {
+    $alle = array_map(fn ($n) => ['id' => $n, 'text' => 'Anker '.$n], range(1, 2628));
+
+    expect(count($alle))->toBeGreaterThan(2048);                                       // das alte Verhalten: EIN Aufruf
+    expect(max(array_map('count', EmbeddingStapel::teilen($alle))))->toBeLessThan(2048);   // mit Stapelung nie
+});
+
+it('embedAnkers: ein kleines Anker-Vokabular bleibt EIN Aufruf; „neutral“ wird weiter ausgelassen', function () {
+    foreach (['neutral', 'zitrone', 'basilikum'] as $slug) {
+        DB::table('foodalchemist_vocab_pairing_anchors')->insert([
+            'uuid' => (string) UuidV7::generate(), 'slug' => $slug, 'display_de' => ucfirst($slug), 'team_id' => null, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+    }
+
+    $r = app(KnowledgeEmbeddingService::class)->embedAnkers();
+
+    expect($r['candidates'])->toBe(2)->and($this->aufrufe)->toHaveCount(1)->and($this->aufrufe[0]['n'])->toBe(2);
+});
