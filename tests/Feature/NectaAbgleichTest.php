@@ -279,3 +279,32 @@ it('Zeitplan: ohne foodalchemist.necta.abgleich_aktiv ist der Abgleich nicht ein
         ->filter(fn ($e) => str_contains((string) $e->command, 'necta-abgleich'));
     expect(config('foodalchemist.necta.abgleich_aktiv'))->toBeFalse()->and($geplant)->toHaveCount(0);
 });
+
+it('Allergen-Unterarten je Unterart nach Strenge: strenger automatisch, lockerer Prüffall details.<unterart>, gleich bleibt', function () {
+    DB::table('foodalchemist_item_allergens')->where('legacy_id', 36674788)->update(['details' => json_encode([
+        'wheat' => 'nicht_enthalten', 'oats' => 'enthalten', 'spelt' => 'spuren'])]);
+    $this->attrappe->daten['supplier-item-allergens'][0] += [
+        'allergeneWheat' => 3,   // nicht_enthalten → enthalten: strenger → automatisch
+        'allergeneOats' => 1,    // enthalten → nicht_enthalten: lockerer → Prüffall
+        'allergeneSpelt' => 2,   // gleich
+        'allergeneRye' => 1];    // fehlt im FA (unbekannt) → nicht_enthalten: lockerer → Prüffall
+    ($this->lauf)();
+    $r = ($this->lauf)(['voll' => true]);
+
+    $details = json_decode(DB::table('foodalchemist_item_allergens')->where('legacy_id', 36674788)->value('details'), true);
+    expect($details)->toBe(['oats' => 'enthalten', 'spelt' => 'spuren', 'wheat' => 'enthalten'])
+        ->and(DB::table('foodalchemist_necta_pruefaelle')->where('art', 'allergen_aenderung')->orderBy('feld')->pluck('feld')->all())
+        ->toBe(['details.oats', 'details.rye'])
+        ->and($r['zaehler']['unterart_verschaerft'])->toBe(1)
+        ->and($r['zaehler']['pruefaelle_je_feld']['allergen_aenderung'])->toBe(['details.oats' => 1, 'details.rye' => 1])
+        ->and($r['zaehler']['lockerung_je_wechsel'])->toBe(['allergen: enthalten→nicht_enthalten' => 1, 'allergen: unbekannt→nicht_enthalten' => 1]);
+});
+
+it('Probe --voll zeigt Prüffälle je Feld und Lockerungen je Wechsel', function () {
+    $this->attrappe->daten['supplier-item-allergens'][0] += ['allergeneRye' => 1, 'soy' => 1];   // zwei Lockerungen aus „unbekannt“
+    ($this->lauf)();
+    $this->artisan('foodalchemist:necta-abgleich', ['--probe' => true, '--voll' => true, '--pause-ms' => 0])
+        ->expectsOutputToContain('allergen_aenderung je Feld: ')
+        ->expectsOutputToContain('Lockerungen je Wechsel: allergen: unbekannt→nicht_enthalten 2')
+        ->assertExitCode(0);
+});

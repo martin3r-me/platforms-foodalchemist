@@ -26,7 +26,11 @@ use Symfony\Component\Uid\UuidV7;
  *    18.491 Allergen-Abweichungen, Lieferanten haben seit dem Juni-Export nachgepflegt): Necta STRENGER als FA → automatisch
  *    übernehmen, auch bei Handpflege (Zähler `allergen_verschaerft` / `deklaration_verschaerft`); Necta LOCKERER → Prüffall,
  *    FA bleibt, auch wenn FA dem letzten Necta-Stand entspricht — nie still lockern. Gleich streng (z. B. Deklaration 0 ⇄ NULL,
- *    beides k.A.) → Necta-Wert übernehmen, ohne Prüffall. Allergen-Unterarten (`details`, JSON) weiter als Prüffall.
+ *    beides k.A.) → Necta-Wert übernehmen, ohne Prüffall. Allergen-Unterarten (`details`: wheat, oats, almond …) dieselbe Regel
+ *    JE UNTERART (Prüffall-Feld `details.<unterart>`); das Format ist gemessen identisch mit dem Bestand (139.012 von 139.012
+ *    Zeilen der demo-Kopie gegen die WaWi-Rohcodes, 15.10.2026).
+ *  - Diagnose im Lauf: Prüffälle je Feld (`pruefaelle_je_feld`) und Lockerungen je Wechsel (`lockerung_je_wechsel`,
+ *    z. B. „unbekannt→nicht_enthalten“), damit ein Probelauf zeigt, woraus die Prüffälle bestehen.
  *  - Ein Artikel, den wir haben, Necta aber nicht mehr liefert, wird NICHT gelöscht → Prüffall `in_necta_entfernt`. Ausgenommen
  *    sind Artikel, die nie aus Necta kamen ({@see self::KUNST_ID_AB}).
  *  - Fehlende Detailzeilen zu bekannten Artikeln werden angelegt.
@@ -74,7 +78,8 @@ class NectaAbgleichService extends NectaLaufBasis
         $this->opt['seit'] = $seit;
         $this->zaehler += ['seit' => $seit, 'preise_geprueft' => 0, 'preise_aktualisiert' => 0, 'vorgaenger_fortgeschrieben' => 0,
             'felder_uebernommen' => 0, 'objekte_aktualisiert' => 0, 'pruefaelle' => [], 'in_necta_entfernt' => 0,
-            'allergen_verschaerft' => 0, 'deklaration_verschaerft' => 0, 'nicht_aus_necta' => 0];
+            'allergen_verschaerft' => 0, 'deklaration_verschaerft' => 0, 'unterart_verschaerft' => 0, 'nicht_aus_necta' => 0,
+            'pruefaelle_je_feld' => [], 'lockerung_je_wechsel' => []];
 
         $this->laufId = $this->laufAnlegen($voll ? 'vollabgleich' : 'abgleich', $verbindungId, $this->teamId, $opt);
         if ($voll && ! $this->probe && empty($opt['erzwingen']) && ($grund = $this->vollGesperrt($verbindungId)) !== null) {
@@ -336,8 +341,19 @@ class NectaAbgleichService extends NectaLaufBasis
             if ($n === $f) {
                 continue;
             }
+            if ($kennzeichnung && $spalte === 'details' && $objekt === 'item_allergen') {
+                $neu = $this->unterartenAbgleichen($legacy, $fa->{$spalte} ?? null, $nWert);
+                if (self::norm($neu) !== $f) {
+                    $uebernehmen[$spalte] = $neu;
+                }
+
+                continue;
+            }
             if ($kennzeichnung) {
                 $strenge = $spalte === 'details' ? null : self::strenge($objekt, $nWert) <=> self::strenge($objekt, $fa->{$spalte} ?? null);
+                if ($strenge === -1) {
+                    $this->lockerung($objekt, $fa->{$spalte} ?? null, $nWert);
+                }
                 if ($strenge === 1) {
                     // Necta strenger: automatisch übernehmen, auch über Handpflege hinweg (Sicherheit vor Pflegestand)
                     $uebernehmen[$spalte] = $nWert;
@@ -384,6 +400,42 @@ class NectaAbgleichService extends NectaLaufBasis
     }
 
     /**
+     * Allergen-Unterarten je Schlüssel nach Strenge: strenger → übernehmen, gleich → bleibt, lockerer → Prüffall
+     * `details.<unterart>` (FA-Wert bleibt). Rückgabe: neues details-JSON (sortiert) bzw. NULL, wenn leer.
+     */
+    private function unterartenAbgleichen(int $legacy, mixed $faJson, mixed $nectaJson): ?string
+    {
+        $fa = is_string($faJson) ? (array) json_decode($faJson, true) : (array) ($faJson ?? []);
+        $necta = is_string($nectaJson) ? (array) json_decode($nectaJson, true) : (array) ($nectaJson ?? []);
+        $ergebnis = $fa;
+        foreach (array_unique([...array_keys($fa), ...array_keys($necta)]) as $unterart) {
+            $f = $fa[$unterart] ?? null;
+            $n = $necta[$unterart] ?? null;
+            $vergleich = self::strenge('item_allergen', $n) <=> self::strenge('item_allergen', $f);
+            if ($vergleich === 1) {
+                $ergebnis[$unterart] = $n;   // NULL = unbekannt (strenger als nicht_enthalten) → Schlüssel fällt unten weg
+                $this->zaehler['unterart_verschaerft']++;
+                $this->beispiel('verschaerft', ['objekt' => 'item_allergen', 'legacy_id' => $legacy, 'feld' => "details.{$unterart}", 'fa' => $f, 'necta' => $n]);
+            } elseif ($vergleich === -1) {
+                $this->lockerung('item_allergen', $f, $n);
+                $this->pruefall('allergen_aenderung', 'item_allergen', $legacy, "details.{$unterart}", $f, $n);
+            }
+        }
+        $ergebnis = array_filter($ergebnis, fn ($v) => $v !== null);
+        ksort($ergebnis);
+
+        return $ergebnis === [] ? null : json_encode($ergebnis);
+    }
+
+    /** Diagnose: Lockerung je Wechsel zählen, z. B. „allergen: unbekannt→nicht_enthalten“. */
+    private function lockerung(string $objekt, mixed $fa, mixed $necta): void
+    {
+        $name = fn ($v) => $v === null || $v === '' ? 'unbekannt' : (string) $v;
+        $schluessel = ($objekt === 'item_allergen' ? 'allergen' : 'deklaration').": {$name($fa)}→{$name($necta)}";
+        $this->zaehler['lockerung_je_wechsel'][$schluessel] = ($this->zaehler['lockerung_je_wechsel'][$schluessel] ?? 0) + 1;
+    }
+
+    /**
      * Strenge eines Kennzeichnungs-Werts (höher = strenger). Allergene {@see self::ALLERGEN_STRENGE}; Deklaration roh:
      * 3 (ja) > 0/NULL (k.A.) > 1 (nein).
      */
@@ -404,6 +456,8 @@ class NectaAbgleichService extends NectaLaufBasis
     private function pruefall(string $art, string $objekt, int $legacy, ?string $feld, mixed $faWert, mixed $nectaWert): void
     {
         $this->zaehler['pruefaelle'][$art] = ($this->zaehler['pruefaelle'][$art] ?? 0) + 1;
+        $feldName = $feld ?? '—';
+        $this->zaehler['pruefaelle_je_feld'][$art][$feldName] = ($this->zaehler['pruefaelle_je_feld'][$art][$feldName] ?? 0) + 1;
         $this->beispiel("pruefall_{$art}", ['objekt' => $objekt, 'legacy_id' => $legacy, 'feld' => $feld, 'fa' => $faWert, 'necta' => $nectaWert]);
         if ($this->probe) {
             return;
