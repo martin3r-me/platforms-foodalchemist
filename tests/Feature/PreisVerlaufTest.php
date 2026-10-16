@@ -371,19 +371,39 @@ it('Embeds: LA-Modal (Preise-Reiter) und GP-Detail binden den Verlauf ein', func
     Livewire::test(\Platform\FoodAlchemist\Livewire\Gps\DetailPanel::class, ['gpId' => $gp->id])->assertSeeHtml('data-sektion="preisverlauf"')->assertSeeHtml('data-preisverlauf="gp"');
 });
 
-it('Aktion (status 2) läuft parallel zum Normalpreis und geht nicht in die Linie ein: keine Sprünge, Trend nur über den Normalpreis', function () {
+it('Echte Aktion (Historie, status A) läuft parallel und geht nicht in die Linie ein: keine Sprünge, Trend nur über den Normalpreis', function () {
     $la = ($this->la)('Hanos');
     ($this->preis)($la, 11.00, '2026-01-01', '2026-10-05');
     ($this->preis)($la, 12.29, '2026-10-05');                       // Normalpreis ab 5.10.
-    ($this->preis)($la, 9.99, '2026-10-05', null, '2');             // paralleler Aktionspreis, ebenfalls offen
+    DB::table('foodalchemist_price_history')->insert(['uuid' => (string) UuidV7::generate(), 'price_id' => null, 'supplier_item_id' => $la->id, 'team_id' => $la->team_id, 'status' => 'A',
+        'price' => 9.99, 'status_valid_from' => '2026-10-05', 'valid_to' => '2026-10-12', 'is_blocked' => 0, 'quelle' => 'necta_historie', 'abgeloest_at' => now(), 'created_at' => now(), 'updated_at' => now()]);
     Carbon::setTestNow('2026-10-20 12:00:00');
 
     $r = $this->svc->verlauf($this->rootTeam, [$la->id], ...($this->fenster)('alles'));
 
     expect(array_column($r['linien'][0]['segmente'], 'wert'))->toBe([11.0, 12.29])->and($r['linien'][0]['trend']['steigung_pro_monat'])->toBeGreaterThan(0);
+    // Gegenprobe: ein altes status-2 in der Historie (vor der Umstellung auf A) ist ebenfalls keine Linie
+    DB::table('foodalchemist_price_history')->update(['status' => '2']);
+    $alt = $this->svc->verlauf($this->rootTeam, [$la->id], ...($this->fenster)('alles'));
+    expect(array_column($alt['linien'][0]['segmente'], 'wert'))->toBe([11.0, 12.29]);
 });
 
-it('Ein Artikel nur mit Aktionsständen zeigt sie trotzdem als Linie (Fallback)', function () {
+it('Preiszeile status 2 MIT Preis (läuft aus) ist Teil der Linie, derselbe Preis wie der N-Stand: keine Sprünge, kein Doppelstand; 2 ohne Preis trägt nichts', function () {
+    $la = ($this->la)('Hanos');
+    ($this->historie)($la, 11.0, '2026-01-01', '2026-10-05');
+    ($this->preis)($la, 12.29, '2026-10-05', null, '2');            // zuletzt gelistet 12,29, jetzt „läuft aus“ (gleiche Preiszeile, anderer Status)
+    Carbon::setTestNow('2026-10-20 12:00:00');
+    $ohne = ($this->la)('Chefs');
+    DB::table('foodalchemist_prices')->insert(['uuid' => (string) UuidV7::generate(), 'team_id' => $ohne->team_id, 'supplier_item_id' => $ohne->id, 'status' => '2', 'price' => null,
+        'status_valid_from' => '2026-01-01', 'valid_to' => null, 'is_blocked' => 0, 'created_at' => now(), 'updated_at' => now()]);   // eingestellt
+
+    $r = $this->svc->verlauf($this->rootTeam, [$la->id, $ohne->id], ...($this->fenster)('alles'));
+
+    expect(array_column($r['linien'], 'la_id'))->toBe([$la->id])->and(array_column($r['linien'][0]['segmente'], 'wert'))->toBe([11.0, 12.29])
+        ->and($r['ohne_verlauf'])->toBe(1);
+});
+
+it('Ein Artikel nur mit Preiszeilen status 2 (läuft aus) zeigt sie als Linie', function () {
     $la = ($this->la)('Hanos');
     ($this->preis)($la, 7.00, '2026-02-01', '2026-04-01', '2');
     ($this->preis)($la, 6.00, '2026-04-01', null, '2');
@@ -401,7 +421,7 @@ it('Frühere Preise: Necta-Historie als Liste, neueste zuerst, Aktion markiert, 
     ($this->historie)($la, 8.0, '2026-01-01', '2026-02-28 23:59:59');
     ($this->historie)($la, 9.0, '2026-03-01');                        // offen → gilt bis zum nächsten Stand desselben Status
     ($this->historie)($la, 10.0, '2026-05-01');                       // dieselbe Stufe wie die Preiszeile → nicht doppelt
-    DB::table('foodalchemist_price_history')->insert(['uuid' => (string) UuidV7::generate(), 'price_id' => null, 'supplier_item_id' => $la->id, 'team_id' => $la->team_id, 'status' => '2',
+    DB::table('foodalchemist_price_history')->insert(['uuid' => (string) UuidV7::generate(), 'price_id' => null, 'supplier_item_id' => $la->id, 'team_id' => $la->team_id, 'status' => 'A',
         'price' => 7.0, 'status_valid_from' => '2026-02-01', 'valid_to' => '2026-02-14', 'is_blocked' => 0, 'quelle' => 'necta_historie', 'abgeloest_at' => now(), 'created_at' => now(), 'updated_at' => now()]);
 
     $r = $this->svc->fruehere($this->rootTeam, $la);
@@ -436,7 +456,7 @@ it('Frühere Preise: Sichtbarkeit wie die Linie (fremde Historie nicht, Kappung 
 it('Komponente Frühere Preise: eingeklappte Gruppe „Frühere Preise (n)“ mit Gültig ab/bis, Preis, je Basiseinheit, Quelle, Aktion markiert; ohne Historie nichts', function () {
     $la = ($this->la)('Hanos', 2.0, 'kg');
     ($this->historie)($la, 8.0, '2026-01-01', '2026-02-28 23:59:59');
-    DB::table('foodalchemist_price_history')->insert(['uuid' => (string) UuidV7::generate(), 'price_id' => null, 'supplier_item_id' => $la->id, 'team_id' => $la->team_id, 'status' => '2',
+    DB::table('foodalchemist_price_history')->insert(['uuid' => (string) UuidV7::generate(), 'price_id' => null, 'supplier_item_id' => $la->id, 'team_id' => $la->team_id, 'status' => 'A',
         'price' => 7.0, 'status_valid_from' => '2026-02-01', 'valid_to' => '2026-02-14', 'is_blocked' => 0, 'quelle' => 'necta_historie', 'abgeloest_at' => now(), 'created_at' => now(), 'updated_at' => now()]);
 
     $html = Livewire::test(\Platform\FoodAlchemist\Livewire\Preise\Fruehere::class, ['itemId' => $la->id])->html();

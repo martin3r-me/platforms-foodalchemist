@@ -21,7 +21,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem;
  * ({@see PriceService::stammFilter}) und die Preis-Kette des Teams; je Artikel gilt die beste vorhandene Stufe (eigenes Team vor Vorfahren
  * vor Listenpreis), damit Mandantenpreise nie mit dem Listenpreis zu einer Linie gemischt werden.
  *
- * Aktion (status 2) läuft in Necta parallel zum Normalpreis und geht NICHT in die Linie ein (nur wenn ein Artikel keinen Normalpreis-Stand hat).
+ * Die Linie nimmt Preiszeilen mit status 0 und 2 MIT Preis (läuft aus, gleicher Preis wie der letzte N-Stand) sowie Historie status 0. Die echte Aktion (Historie, status A) läuft parallel und geht NICHT in Linie und Trend ein.
  *
  * Trend: lineare Regression (kleinste Quadrate) auf der STUFENLINIE, gewichtet nach der Zeit, die jeder Preis galt (exakt, als Integral
  * über die Stufen, gleichwertig zu täglichen Stützpunkten) — nicht über die Änderungspunkte. Viele kurze Aktionspreise verzerren so den Trend nicht.
@@ -216,7 +216,10 @@ class PreisVerlaufService
         $nachArtikel = [];
         foreach ($zeilen as $r) {
             $item = $items[(int) $r->supplier_item_id] ?? null;
-            if ($item === null || $r->price === null || (float) $r->price < 0 || $r->is_blocked || ! in_array((string) $r->status, ['0', '2', ''], true)) {
+            // Status je Quelle: Preiszeile '0' (gelistet) und '2' MIT Preis (läuft aus, der letzte N-Preis gilt weiter — kein paralleler Stand);
+            // Historie nur '0'. 'A' (echte Aktion) und ein altes '2' in der Historie (vor der Umstellung auf 'A') bleiben aus Linie und Trend.
+            $linienStatus = $r->quelle === 'historie' ? ['0', ''] : ['0', '2', ''];
+            if ($item === null || $r->price === null || (float) $r->price < 0 || $r->is_blocked || ! in_array((string) $r->status, $linienStatus, true)) {
                 continue;
             }
             $t = $tier($r, $item);
@@ -237,10 +240,6 @@ class PreisVerlaufService
         foreach ($nachArtikel as $laId => $liste) {
             $beste = min(array_column($liste, 'tier'));
             $liste = array_values(array_filter($liste, fn ($s) => $s['tier'] === $beste));
-            // Aktion (status '2') gilt PARALLEL zum Normalpreis (gleicher Tag, zwei offene Stände): in einer Stufenlinie gäbe das Sprünge.
-            // Die Linie (und der Trend) nimmt den Normalpreis; nur ohne jeden Normalpreis-Stand dienen die Aktionsstände als Linie.
-            $normal = array_values(array_filter($liste, fn ($s) => $s['status'] !== '2'));
-            $liste = $normal !== [] ? $normal : $liste;
             // gleicher Stand: die Historie (alter Stand) vor der aktuellen Zeile, damit der neuere Wert gewinnt
             usort($liste, fn ($a, $b) => [$a['start'], $a['quelle'] === 'historie' ? 0 : 1, $a['id']] <=> [$b['start'], $b['quelle'] === 'historie' ? 0 : 1, $b['id']]);
             $ohneDoppel = [];
@@ -283,7 +282,7 @@ class PreisVerlaufService
 
     /**
      * Frühere Preise eines Artikels aus der Necta-Historie (`price_history`), für die Liste im Preise-Reiter: neueste zuerst, mit Gültig ab/bis,
-     * Preis je Gebinde, Preis je Basiseinheit und Quelle. Aktionspreise (status 2) sind hier SICHTBAR und markiert (in der Linie nicht).
+     * Preis je Gebinde, Preis je Basiseinheit und Quelle. Aktionspreise (Historie status A, bis zur Datenumstellung auch '2') sind hier SICHTBAR und markiert (in der Linie nicht).
      * Gleiche Sichtbarkeit wie die Linie (beste Stufe über Preiszeilen und Historie); Stände, die schon als Preiszeile in der Liste stehen, fehlen hier.
      * Ist ein Stand offen (valid_to leer), gilt er bis zum nächsten Stand desselben Status.
      *
@@ -352,7 +351,7 @@ class PreisVerlaufService
             $zeilen[] = [
                 'von' => Carbon::createFromTimestamp($s['start'])->toDateString(), 'bis' => $ende !== null ? Carbon::createFromTimestamp($ende)->toDateString() : null,
                 'preis' => $s['preis'], 'je_basis' => $basis !== null ? round((float) $basis['value'], 4) : null, 'einheit' => $basis['unit'] ?? null,
-                'aktion' => $s['status'] === '2', 'quelle' => 'Necta-Historie',
+                'aktion' => in_array($s['status'], ['A', '2'], true), 'quelle' => 'Necta-Historie',
             ];
         }
         $zeilen = array_reverse($zeilen);   // neueste zuerst
