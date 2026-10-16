@@ -146,6 +146,14 @@ it('Trait-Vertrag: ALLE Models tragen LogsActivity + BelongsToTeamHierarchy + Ha
             //  - LogsActivity: trägt es (Protokoll-Subjekt für PlattformProtokoll, plan_preis_gesetzt), die Zeile trägt zusätzlich geaendert_von.
             continue;
         }
+        if (class_basename($klasse) === 'FoodAlchemistSupportFreigabe') {
+            // Spec 84 §4.4 (E3): Support-Freigabe eines Mandanten (Hauptteam, optional ein Admin, gültig bis, widerrufen).
+            //  - kein BelongsToTeamHierarchy: Rechte-Verwaltung über den Mandanten, kein Inhalt; gelesen nur über
+            //    SupportFreigabeService (Owner/Admin des Hauptteams) und InhaltsSperre, nie über den Team-Scope.
+            //  - kein SoftDeletes: eine Freigabe wird nie gelöscht, sondern widerrufen (widerrufen_am/_von) — die Historie bleibt.
+            //  - LogsActivity + HasUuidV7: trägt es; Freigabe, Widerruf und jeder Zugriff hängen als PlattformProtokoll daran.
+            continue;
+        }
         if (class_basename($klasse) === 'FoodAlchemistMandant') {
             // Spec 82 §9/§13 B3 + G: Verwaltungszeile je Mandant (Status, Modus, CRM-Firma), eine Zeile je Kunden-Hauptteam.
             //  - kein BelongsToTeamHierarchy: die Zeile ist Plattform-Verwaltung über den Mandanten, kein Inhalt des Teams;

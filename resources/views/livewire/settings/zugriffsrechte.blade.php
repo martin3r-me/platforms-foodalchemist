@@ -94,4 +94,41 @@
             </table>
         </div>
     </x-fa::section>
+
+    {{-- Spec 84 §4.4 (E3): Support-Zugang auf Freigabe — ohne Freigabe sieht kein Plattform-Admin Inhalte dieses Teams --}}
+    @if($supportFreigaben !== null)
+        <x-fa::section title="Support-Zugang" :meta="$supportFreigaben->filter->istAktiv()->count() > 0 ? 'aktiv' : null"
+                       description="Ohne deine Freigabe sieht niemand vom Plattform-Support Inhalte deines Teams. Für eine Fehlersuche kannst du den Zugang befristet erteilen und jederzeit widerrufen. Jeder Zugriff wird protokolliert." data-rechte-support>
+            <div class="flex flex-wrap items-end gap-2">
+                <label class="flex flex-col gap-1 {{ $leise }}">Dauer (Stunden)
+                    <x-fa::input type="number" min="1" max="168" wire:model="supportStunden" class="w-24" data-support-stunden />
+                </label>
+                <label class="flex flex-1 flex-col gap-1 {{ $leise }}">Anlass (z. B. Ticket)
+                    <x-fa::input wire:model="supportGrund" placeholder="optional" data-support-grund />
+                </label>
+                <x-fa::button wire:click="supportErteilen" data-support-erteilen>Zugang erteilen</x-fa::button>
+            </div>
+            @if($supportFreigaben->isNotEmpty())
+                <ul class="mt-3 flex flex-col gap-1">
+                    @foreach($supportFreigaben->take(10) as $f)
+                        <li class="flex items-center justify-between gap-2 {{ $leise }}" data-support-zeile="{{ $f->id }}">
+                            <span>
+                                @if($f->istAktiv())
+                                    <strong class="text-[var(--fa-ink)]">aktiv</strong> bis {{ $f->gueltig_bis->format('d.m.Y H:i') }}
+                                @elseif($f->widerrufen_am)
+                                    widerrufen am {{ $f->widerrufen_am->format('d.m.Y H:i') }}
+                                @else
+                                    abgelaufen am {{ $f->gueltig_bis->format('d.m.Y H:i') }}
+                                @endif
+                                @if($f->grund) · {{ $f->grund }}@endif
+                            </span>
+                            @if($f->istAktiv())
+                                <x-fa::button size="sm" variant="ghost" wire:click="supportWiderrufen({{ $f->id }})" data-support-widerrufen="{{ $f->id }}">widerrufen</x-fa::button>
+                            @endif
+                        </li>
+                    @endforeach
+                </ul>
+            @endif
+        </x-fa::section>
+    @endif
 </div>

@@ -59,8 +59,30 @@ final class InhaltsSperre
         if ($rechte->istMitglied($user, $team)) {
             return false;   // echte team_user-Mitgliedschaft (Team oder Eltern-Team)
         }
+        if (self::masterLesendBeiKuratiert($user, $team)) {
+            return false;
+        }
 
-        return ! self::masterLesendBeiKuratiert($user, $team);
+        // Spec 84 §4.4 (E3): befristeter Support-Zugang, vom Mandanten erteilt, hebt die Sperre für seine Dauer auf
+        return app(\Platform\FoodAlchemist\Services\SupportFreigabeService::class)->aktiveFuer($team, $user) === null;
+    }
+
+    /**
+     * Spec 84 §4.4 (E3): Arbeitet `$user` in `$team` gerade NUR dank einer Support-Freigabe? Dann die Freigabe (für das Protokoll an den
+     * drei Sperrpunkten), sonst null. Nur Plattform-Admins ohne echte Mitgliedschaft können hier landen.
+     */
+    public static function perSupportZugang(?User $user, ?Team $team): ?\Platform\FoodAlchemist\Models\FoodAlchemistSupportFreigabe
+    {
+        if ($user === null || $team === null || $user->isAiUser()) {
+            return null;
+        }
+        $rechte = app(FaRechte::class);
+        if (! $rechte->istPlattformAdmin($user) || MasterTeam::istMaster($team) || MasterTeam::istMaster($rechte->kundenHauptTeam($team))
+            || $rechte->istMitglied($user, $team) || self::masterLesendBeiKuratiert($user, $team)) {
+            return null;
+        }
+
+        return app(\Platform\FoodAlchemist\Services\SupportFreigabeService::class)->aktiveFuer($team, $user);
     }
 
     /** Mitglied des Master-Teams, das einen KURATIERTEN Mandanten liest (vertraglich, §13 G): nicht gesperrt, aber nur lesend (FaRechte::rolle). */
