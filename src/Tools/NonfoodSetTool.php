@@ -20,8 +20,8 @@ class NonfoodSetTool extends FoodAlchemistTool implements ToolContract, ToolMeta
 
     public function getDescription(): string
     {
-        return 'Setzt das Non-Food-Urteil eines team-eigenen Lieferantenartikels: ist_nonfood=true (Non-Food, optional mit unterkategorie), '
-            .'false (Food bestätigt) oder null (Urteil zurücknehmen). Das Urteil gilt als „manuell“ und wird von keinem Erkennungslauf überschrieben. '
+        return 'Setzt das Non-Food-Urteil eines team-eigenen Lieferantenartikels: ist_nonfood=true (Non-Food, optional mit unterkategorie) oder '
+            .'false (Food bestätigt); zuruecknehmen=true nimmt ein Urteil von Hand zurück (statt ist_nonfood). Das Urteil gilt als „manuell“ und wird von keinem Erkennungslauf überschrieben. '
             .'Unterkategorien: '.implode(', ', NonFoodRegeln::unterkategorien()).'.';
     }
 
@@ -29,9 +29,10 @@ class NonfoodSetTool extends FoodAlchemistTool implements ToolContract, ToolMeta
     {
         return ['type' => 'object', 'properties' => [
             'id' => ['type' => 'integer', 'description' => 'Artikel-Id (team-eigen).'],
-            'ist_nonfood' => ['type' => ['boolean', 'null'], 'description' => 'true Non-Food, false Food, null Urteil zurücknehmen.'],
+            'ist_nonfood' => ['type' => 'boolean', 'description' => 'true Non-Food, false Food bestätigt.'],
+            'zuruecknehmen' => ['type' => 'boolean', 'description' => 'true nimmt das Urteil von Hand zurück (der Artikel gilt wieder als Food ohne Urteil); statt ist_nonfood.'],
             'unterkategorie' => ['type' => 'string', 'enum' => NonFoodRegeln::unterkategorien()],
-        ], 'required' => ['id', 'ist_nonfood']];
+        ], 'required' => ['id']];
     }
 
     public function execute(array $arguments, ToolContext $context): ToolResult
@@ -40,8 +41,11 @@ class NonfoodSetTool extends FoodAlchemistTool implements ToolContract, ToolMeta
         if ($team === null) {
             return ToolResult::error('Kein Team im Kontext.', 'NO_TEAM');
         }
-        if (! array_key_exists('ist_nonfood', $arguments) || ($arguments['ist_nonfood'] !== null && ! is_bool($arguments['ist_nonfood']))) {
-            return ToolResult::error('ist_nonfood muss true, false oder null sein.', 'VALIDATION_ERROR');
+        // Kein Union-Typ im Schema (stürzt den Core-ToolExecutor ab): Zurücknehmen ist ein eigener Schalter; ein ausdrückliches ist_nonfood=null
+        // (frühere Schreibweise) wirkt weiter wie zuruecknehmen.
+        $zuruecknehmen = ($arguments['zuruecknehmen'] ?? false) === true || (array_key_exists('ist_nonfood', $arguments) && $arguments['ist_nonfood'] === null);
+        if (! $zuruecknehmen && (! array_key_exists('ist_nonfood', $arguments) || ! is_bool($arguments['ist_nonfood']))) {
+            return ToolResult::error('ist_nonfood muss true oder false sein, oder zuruecknehmen=true.', 'VALIDATION_ERROR');
         }
         $item = FoodAlchemistSupplierItem::visibleToTeam($team)->whereKey((int) ($arguments['id'] ?? 0))->first();
         if ($item === null) {
@@ -52,7 +56,7 @@ class NonfoodSetTool extends FoodAlchemistTool implements ToolContract, ToolMeta
         }
 
         try {
-            $z = app(NonFoodService::class)->setzeManuell($item, $arguments['ist_nonfood'], $arguments['unterkategorie'] ?? null);
+            $z = app(NonFoodService::class)->setzeManuell($item, $zuruecknehmen ? null : $arguments['ist_nonfood'], $arguments['unterkategorie'] ?? null);
         } catch (\RuntimeException $e) {
             return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR');
         }
