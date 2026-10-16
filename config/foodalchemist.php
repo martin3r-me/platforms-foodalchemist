@@ -1150,6 +1150,10 @@ return [
                 . 'Sorten-, Marken- und Fantasienamen (z. B. »Bella Ciao«, Eigenmarken, Linienbezeichnungen) gehören nicht in die Hauptzutat '
                 . 'und nicht in den Namen (§5/§7): bestimme stattdessen, was der Artikel fachlich IST (z. B. eine Salatmischung statt einer '
                 . 'Einzelsorte, wenn Zutatenangabe oder Vorbilder das zeigen); belege dein Urteil kurz in reasoning. '
+                . 'Hauptzutat = nur das fachliche Kernwort bzw. der Gattungsbegriff (§6), höchstens 2–3 Wörter, nur Wörter, die in Bezeichnung, '
+                . 'Zutatenangabe oder Marketingnamen vorkommen; Zusätze wie »mit Cashew-Creme« sind Eigenschaften, nicht Hauptzutat; die Form (z. B. Mousse) '
+                . 'steht nicht doppelt in der Hauptzutat. Steht im Kontext haltbarkeit, entscheidet die Lagerart: nur tiefgekuehlt_tage → condition TK, nur trocken_tage → trocken. '
+                . 'Bei Warengruppe 13 (Convenience) wähle den Subtyp 13.1–13.7, der zur Art des Produkts passt (z. B. Dessert/Süßspeise), exakt aus taxonomie. '
                 . 'Gib sub_category immer an, wenn commodity_group_code gesetzt ist und eine Unterkategorie der Warengruppe fachlich passt '
                 . '(exakt aus taxonomie); nur wenn keine passt, "".',
         ],

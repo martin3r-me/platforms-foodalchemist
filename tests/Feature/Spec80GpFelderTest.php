@@ -22,7 +22,7 @@ it('zerlegt einen Bestandsnamen nach §6 in die Felder (Verarbeitung nur mit §2
 
     expect($n->felderAusName('Schalotten: frisch, Wuerfel 5 mm'))->toMatchArray(['hauptzutat' => 'Schalotten', 'condition' => 'frisch', 'processing' => 'Wuerfel 5 mm', 'form' => ''])
         ->and($n->felderAusName('Olivenoel: trocken, hochwertig'))->toMatchArray(['condition' => 'trocken', 'processing' => '', 'form' => 'hochwertig'])
-        ->and($n->felderAusName('Amerikaner mit Zuckerguss: TK, mini, 25 g pro Stueck'))->toMatchArray(['condition' => 'TK', 'form' => 'mini', 'pflichtangabe' => '25 g pro Stueck'])
+        ->and($n->felderAusName('Amerikaner mit Zuckerguss: TK, mini, 25 g pro Stueck'))->toMatchArray(['condition' => 'TK', 'form' => 'mini', 'portion' => '25 g', 'pflichtangabe' => ''])
         ->and($n->felderAusName('Reis Parboiled: trocken / (Bio)')['bio'])->toBeTrue();
 });
 
