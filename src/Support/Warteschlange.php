@@ -30,6 +30,10 @@ namespace Platform\FoodAlchemist\Support;
  *   · `kaskade`    — Slot-Concepts je Frame-Slot (Foodbook/Angebot/Format)
  *   · `anreichern` — Anreicherung je Sub-Rezept
  *
+ * Dazu kommt die INTERAKTIVE Schlange (16.10.2026, erster Praxistest Produktpass auf io): `interaktiv` — nutzerausgelöste EINZELjobs, hinter denen ein
+ * Mensch wartet (Produktpass lesen, später die Web-Recherche). Ohne eigene Schlange stand der Lese-Job hinter 648 Non-Food-KI-Stapeln in `default`
+ * (io hat nur einen Worker) und hätte Stunden gewartet. Massenläufe bleiben auf ihren Fan-out-Schlangen bzw. `anreichern`, nie auf `interaktiv`.
+ *
  * »Planung« hat heute KEINEN Massen-Pfad, und das ist Absicht: der Vorschlag-Gate erzeugt je
  * menschlichem Klick genau einen `GenerateDishProposalJob`. Eine Schlange anzulegen, die niemand
  * füllt, wäre eine Attrappe — sie kommt, wenn ein Fan-out sie braucht.
@@ -67,6 +71,12 @@ final class Warteschlange
     public static function anreichern(): ?string
     {
         return self::name('anreichern');
+    }
+
+    /** Nutzerausgelöste Einzeljobs, hinter denen ein Mensch wartet (Produktpass lesen, Web-Recherche). Nie für Massenläufe. */
+    public static function interaktiv(): ?string
+    {
+        return self::name('interaktiv');
     }
 
     /**

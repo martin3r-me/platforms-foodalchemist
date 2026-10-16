@@ -11,8 +11,8 @@ use Platform\FoodAlchemist\Models\FoodAlchemistProduktpass;
 use Platform\FoodAlchemist\Services\Produktpass\ProduktpassService;
 
 /**
- * Produktpass lesen (PDF/Foto → Extrakt → direkte Felder). Läuft auf der Anreicherungs-Schlange (Rückfall default,
- * {@see \Platform\FoodAlchemist\Support\Warteschlange::anreichern()}). Fehler fängt {@see ProduktpassService::lesen()}
+ * Produktpass lesen (PDF/Foto → Extrakt → direkte Felder). Läuft auf der INTERAKTIVEN Schlange (Rückfall default,
+ * {@see \Platform\FoodAlchemist\Support\Warteschlange::interaktiv()}): ein Mensch wartet auf das Ergebnis, der Job darf nicht hinter Massenläufen stehen. Fehler fängt {@see ProduktpassService::lesen()}
  * selbst (Status `fehler` mit Meldung), der Job bricht deshalb nie mit einer Ausnahme ab.
  */
 class ProduktpassLesenJob implements ShouldQueue
