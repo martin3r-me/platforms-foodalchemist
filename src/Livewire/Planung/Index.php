@@ -13,7 +13,6 @@ use Platform\FoodAlchemist\Models\FoodAlchemistAngebot;
 use Platform\FoodAlchemist\Models\FoodAlchemistCascadeRun;
 use Platform\FoodAlchemist\Models\FoodAlchemistFormat;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
-use Platform\FoodAlchemist\Models\FoodAlchemistDishIdea;
 use Platform\FoodAlchemist\Models\FoodAlchemistPlanningSession;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeStepPhoto;
@@ -24,7 +23,6 @@ use Platform\FoodAlchemist\Services\ConceptGeneratorService;
 use Platform\FoodAlchemist\Services\ConceptService;
 use Platform\FoodAlchemist\Services\FoodbookService;
 use Platform\FoodAlchemist\Services\FormatService;
-use Platform\FoodAlchemist\Services\IdeenService;
 use Platform\FoodAlchemist\Services\PairingService;
 use Platform\FoodAlchemist\Services\PlanningCascadeService;
 use Platform\FoodAlchemist\Services\PlanningSessionService;
@@ -81,11 +79,6 @@ class Index extends Component
 
     /** Editor-Felder der aktiven Session. */
     public array $form = ['title' => '', 'brief' => '', 'analysis' => '', 'creative_mode' => 'voll_kreativ'];
-
-    /** Skizzen-Eingaben. */
-    public string $ideeTitel = '';
-
-    public string $paketName = '';
 
     /** Composer-Tab: gewählte Anker (Einträge {id, slug, label}), Cap = INNER_ANKER_MAX (12). */
     public array $composerAnker = [];
@@ -513,31 +506,8 @@ class Index extends Component
      */
     public array $planForm = [];
 
-    /**
-     * Ursprungs-Skizze für den Gericht-Go (Etappe 4, Teil 2a — Lineage). {@see skizzeAlsGericht} merkt
-     * die Skizze beim Übertragen in den Gericht-Tab; der nächste Gericht-`Go` stempelt sie als
-     * `origin_dish_idea_id` auf den Lauf ({@see goKaskade}) → die Skizzen-Karte kann später den
-     * Lauf-Status zurückspiegeln. **Transient** (keine DB-Spalte); nach dem Go verbraucht.
-     */
-    public ?int $skizzeGerichtId = null;
-
-    /**
-     * Gezielte Batch-Auswahl (Etappe 4, Teil 3b) — angehakte Skizzen-IDs im Divergenz-Board. Ist die
-     * Liste NICHT leer, startet {@see skizzenBatchAlsGerichte} nur GENAU diese (Schnittmenge mit den
-     * bearbeitbaren Skizzen); ist sie leer, bleibt es beim „alle"-Verhalten. Checkbox-Werte kommen als
-     * Strings aus Livewire — beim Filtern nach int normalisieren.
-     */
-    public array $skizzenAuswahl = [];
-
     /** Sekunden auf `running` ohne jeden Step-Fortschritt, ab denen der Watchdog anschlägt (über der realistischen Erst-Dauer). */
     protected const WATCHDOG_SEKUNDEN = 90;
-
-    /**
-     * Batch-Kaskaden-Cap (Etappe 4, Teil 3) — Runaway-/Kosten-Guard: pro Klick höchstens so viele
-     * Skizzen-Gerichte auf einmal starten. Spiegelt die `kiDivergenz`-Obergrenze (max. 12 Skizzen
-     * je Lauf) — mehr wird gedeckelt und gesagt, nicht still verschluckt.
-     */
-    protected const BATCH_SKIZZEN_MAX = 12;
 
     /** Deep-Link `?session=X&open=1` (z.B. vom Trendradar-Carry-in) öffnet den Editor direkt. */
     public function mount(): void
@@ -1561,238 +1531,6 @@ class Index extends Component
         $this->meldung = 'Gespeichert.';
     }
 
-    // ── Skizzen (Divergenz-Board) ──────────────────────────────────────
-
-    public function ideeHinzu(IdeenService $svc): void
-    {
-        $team = $this->team();
-        $session = $this->aktiveSession();
-        if ($team === null || $session === null || trim($this->ideeTitel) === '') {
-            return;
-        }
-        try {
-            $svc->add($team, ['planning_session_id' => $session->id, 'title' => $this->ideeTitel, 'created_via' => 'ui']);
-            $this->ideeTitel = '';
-            $this->fehler = null;
-        } catch (\Throwable $e) {
-            $this->fehler = $e->getMessage();
-        }
-    }
-
-    public function ideeVerwerfen(int $id, IdeenService $svc): void
-    {
-        $team = $this->team();
-        if ($team === null) {
-            return;
-        }
-        try {
-            $svc->setStatus($team, $id, 'verworfen');
-        } catch (\Throwable $e) {
-            $this->fehler = $e->getMessage();
-        }
-    }
-
-    public function paketBilden(IdeenService $svc): void
-    {
-        $team = $this->team();
-        $session = $this->aktiveSession();
-        if ($team === null || $session === null || trim($this->paketName) === '') {
-            return;
-        }
-        try {
-            $svc->addGruppe($team, ['planning_session_id' => $session->id, 'name' => $this->paketName]);
-            $this->paketName = '';
-        } catch (\Throwable $e) {
-            $this->fehler = $e->getMessage();
-        }
-    }
-
-    /**
-     * Spec 40 E0: Analyse-Tab → aus dem Analyse-Text mehrere Gericht-Skizzen ableiten (KI-Divergenz auf
-     * Session-Ebene, {@see IdeenService::kiDivergenzSession}). Kein „Go", keine Erdung — reine Ideen fürs
-     * Divergenz-Board (Skizzen-Tab). `creative_mode` fließt als Kontext-Hinweis mit. Graceful ohne Provider
-     * (Sandbox): der Fehler wird gemeldet, der Editor bleibt stehen.
-     */
-    public function skizzenAusAnalyse(IdeenService $svc): void
-    {
-        $team = $this->team();
-        $session = $this->aktiveSession();
-        if ($team === null || $session === null) {
-            return;
-        }
-        $analyse = trim((string) ($this->form['analysis'] ?? ''));
-        if ($analyse === '') {
-            $this->fehler = 'Bitte zuerst eine Analyse/Ausgangslage eintragen — daraus leite ich die Skizzen ab.';
-
-            return;
-        }
-        try {
-            $r = $svc->kiDivergenzSession($team, (int) $session->id, $analyse, 5, (string) ($this->form['creative_mode'] ?? 'voll_kreativ'));
-            $n = count($r['angelegt'] ?? []);
-            $this->fehler = null;
-            $this->meldung = $n > 0
-                ? "{$n} Skizzen aus der Analyse abgeleitet — prüfe/ergänze sie im Skizzen-Tab, dann Go."
-                : 'Kein verwertbarer Vorschlag — Analyse konkreter fassen und erneut versuchen.';
-        } catch (\Throwable $e) {
-            $this->fehler = 'Skizzen-Ableitung fehlgeschlagen (kein KI-Provider?) — ' . $e->getMessage();
-        }
-    }
-
-    /**
-     * Skizzen-Integration (Etappe 4) — Skizze als Kaskaden-EINGANG (erster Teilschritt): statt die
-     * Skizze (wie der Foodbook-Pfad {@see MaterializeIdeaJob}) direkt zu materialisieren, überträgt
-     * diese Aktion sie in den Gericht-Tab (Titel → Titel, Beschreibung → Brief). Der Mensch prüft
-     * dort die Leitplanken und drückt „Go" ({@see goKaskade}) — der geführte, voll getestete
-     * Kaskaden-Pfad, ohne neue Fan-out-Verdrahtung/Migration. Erfüllt den Nordstern „nichts läuft
-     * still" (geführte Freigabe je Stufe).
-     *
-     * Scope-Entscheid: eine Divergenz-Board-Skizze IST eine Gericht-Idee → Gericht-Tab (nicht
-     * Basisrezept/Concept). Die Skizze bleibt `entwurf` — das Prefill verbraucht sie NICHT (erst der
-     * Go erzeugt etwas); der Mensch kann sie danach manuell verwerfen. Den Tab-Wechsel macht das
-     * Blade (Alpine `tab='gericht'`), damit der Mensch direkt bei den Leitplanken landet.
-     */
-    public function skizzeAlsGericht(int $ideaId): void
-    {
-        $team = $this->team();
-        $session = $this->aktiveSession();
-        if ($team === null || $session === null) {
-            return;
-        }
-        // Team-scoped + an die AKTIVE Session gebunden + nicht verworfen — eine fremde/gelöschte/
-        // Papierkorb-Skizze wird nicht übernommen (gesagt, nicht still verschluckt).
-        $idee = FoodAlchemistDishIdea::visibleToTeam($team)
-            ->where('planning_session_id', $session->id)
-            ->where('status', '!=', 'verworfen')
-            ->whereKey($ideaId)
-            ->first();
-        if ($idee === null) {
-            $this->fehler = 'Skizze nicht gefunden (oder verworfen) — bitte neu wählen.';
-
-            return;
-        }
-        $this->eingabe['gericht']['titel'] = (string) $idee->title;
-        $this->eingabe['gericht']['brief'] = (string) ($idee->description ?? '');
-        // Lineage (Teil 2a): die Skizze für den nächsten Gericht-Go merken — der Lauf wird auf sie
-        // zurückgestempelt (origin_dish_idea_id), damit die Karte später den Stand zeigen kann.
-        $this->skizzeGerichtId = (int) $idee->id;
-        $this->fehler = null;
-        $this->meldung = 'Skizze in den Gericht-Tab übernommen — Leitplanken prüfen, dann „Go".';
-    }
-
-    /**
-     * Skizzen-Integration (Etappe 4, Teil 3) — KI-Divergenz-Skizzen als BATCH-Kaskaden-Eingang:
-     * statt jede Skizze einzeln in den Gericht-Tab zu übertragen (Teil 1, {@see skizzeAlsGericht}),
-     * startet dieser Knopf für ALLE bearbeitbaren Session-Skizzen auf einmal je einen GESTUFTEN
-     * Gericht-Lauf (staged → hält bei „prüfen" an; geführte Freigabe je Stück — Nordstern „nichts
-     * läuft still"). Reust den voll getesteten `starteKaskade('gericht', …)`-Pfad je Skizze (kein
-     * neuer Fan-out-Code) und stempelt jeden Lauf auf seine Ursprungs-Skizze (origin_dish_idea_id)
-     * → die Karte zeigt den Stand (Teil 2b).
-     *
-     * Auswahl: alle Session-Skizzen (Einzel + Gruppen), die (a) nicht `verworfen` sind und (b) KEIN
-     * Bestands-Gericht referenzieren (`sales_recipe_id` = Reuse-Zeiger, kein Generierungs-Brief). Ist
-     * {@see $skizzenAuswahl} NICHT leer (Etappe 4, Teil 3b — Checkboxen je Karte), wird zusätzlich auf
-     * GENAU diese IDs gefiltert (Schnittmenge mit den bearbeitbaren) — sonst „alle". Die Gericht-Tab-
-     * Leitplanken (reglerParams) gelten für den ganzen Batch (Start-Tab-Regel). Cap
-     * {@see BATCH_SKIZZEN_MAX} als Runaway-/Kosten-Guard — darüber wird gedeckelt und gesagt.
-     *
-     * KEIN Cockpit-Hijack: der Batch feuert N gestufte Läufe; ihr Stand erscheint je Skizzen-Karte
-     * (Teil 2b), nicht im Einzel-Cockpit ($laufId/$laeuft bleiben unangetastet).
-     */
-    public function skizzenBatchAlsGerichte(PlanningCascadeService $cascade, PlanningSessionService $svc): void
-    {
-        $team = $this->team();
-        $session = $this->aktiveSession();
-        if ($team === null || $session === null) {
-            return;
-        }
-        // Bearbeitbare Session-Skizzen: nicht verworfen + kein Bestands-Zeiger (das wäre Reuse eines
-        // echten Gerichts, kein Brief zum Generieren). Reihenfolge = Board-Reihenfolge.
-        $query = FoodAlchemistDishIdea::visibleToTeam($team)
-            ->where('planning_session_id', $session->id)
-            ->where('status', '!=', 'verworfen')
-            ->whereNull('sales_recipe_id')
-            ->orderBy('position')->orderBy('id');
-        // Gezielte Auswahl (Teil 3b): nur die angehakten Skizzen — Strings aus Livewire nach int
-        // normalisieren, leere/ungültige Einträge raus. Leere Auswahl = „alle" (Bestandsverhalten).
-        $gewaehlt = collect($this->skizzenAuswahl)
-            ->map(fn ($v) => (int) $v)->filter()->unique()->values();
-        $mitAuswahl = $gewaehlt->isNotEmpty();
-        if ($mitAuswahl) {
-            $query->whereIn('id', $gewaehlt->all());
-        }
-        $kandidaten = $query->get();
-        if ($kandidaten->isEmpty()) {
-            $this->fehler = $mitAuswahl
-                ? 'Keine der angehakten Skizzen ist startbar (verworfen oder Bestands-Übernahme) — Auswahl prüfen.'
-                : 'Keine bearbeitbaren Skizzen — leg oben eine an (Bestands-Übernahmen zählen nicht).';
-
-            return;
-        }
-        // Start-Tab-Regel: die Gericht-Tab-Leitplanken gelten für den ganzen Batch. Ein Ziel-VK-
-        // Tippfehler wird GESAGT (nicht still verworfen) — sonst startet ein ganzer Batch mit falscher
-        // Preis-Absicht (Spiegel goKaskade/VkGeneratorModal).
-        if (trim((string) ($this->regler['gericht']['ziel_vk'] ?? '')) !== '' && $this->zielVkEur('gericht') === null) {
-            $this->fehler = 'Ziel-VK: bitte einen Netto-Preis je Portion zwischen 0,50 € und 500,00 € angeben (z. B. 8,50) — oder das Feld leer lassen.';
-
-            return;
-        }
-
-        $gedeckelt = $kandidaten->count() > self::BATCH_SKIZZEN_MAX;
-        $auswahl = $kandidaten->take(self::BATCH_SKIZZEN_MAX);
-
-        $params = $this->reglerParams('gericht');
-        $creativeMode = (string) ($this->eingabe['gericht']['creative_mode'] ?? 'voll_kreativ');
-        $vollAnreichern = (bool) ($this->regler['gericht']['voll_anreichern'] ?? true);
-        // Fan-out-Vererbung wie beim Einzel-Go (fail-soft — kippt sie, darf der Batch NICHT sterben).
-        try {
-            $svc->setGenerationParams($team, $session->id, $params);
-        } catch (\Throwable $e) {
-            \Illuminate\Support\Facades\Log::warning('[Planung] Batch setGenerationParams übersprungen', ['error' => $e->getMessage()]);
-        }
-
-        $gestartet = 0;
-        foreach ($auswahl as $idee) {
-            $titel = trim((string) $idee->title);
-            $besch = trim((string) ($idee->description ?? ''));
-            // Brief wie effektiverBrief('gericht'): Titel — Beschreibung, sonst was da ist.
-            $brief = ($titel !== '' && $besch !== '') ? $titel . ' — ' . $besch : ($besch !== '' ? $besch : $titel);
-            if ($brief === '') {
-                continue;   // titellose Skizze (Pflichtfeld sollte das verhindern) — kein Leer-Lauf
-            }
-            try {
-                $cascade->starteKaskade($team, 'gericht', $session, $creativeMode, [
-                    'created_via' => 'plan_batch_skizze',
-                    'brief' => $brief,
-                    'params' => $params,
-                    'voll_anreichern' => $vollAnreichern,
-                    'origin_dish_idea_id' => (int) $idee->id,
-                ]);
-                $gestartet++;
-            } catch (\Throwable $e) {
-                // Ein einzelner Fehlstart kippt den Batch NICHT — die restlichen Skizzen laufen weiter.
-                \Illuminate\Support\Facades\Log::warning('[Planung] Batch-Skizze übersprungen', ['idea_id' => $idee->id, 'error' => $e->getMessage()]);
-            }
-        }
-
-        if ($gestartet === 0) {
-            $this->fehler = 'Keine Skizze konnte gestartet werden — bitte Leitplanken/Brief prüfen.';
-
-            return;
-        }
-        // Auswahl ist verbraucht — der nächste Klick ist wieder „alle" (sofern nicht neu angehakt).
-        $this->skizzenAuswahl = [];
-        $this->fehler = null;
-        $this->meldung = $gedeckelt
-            ? "{$gestartet} Skizzen als Gerichte gestartet (auf ".self::BATCH_SKIZZEN_MAX.' gedeckelt) — Stand je Karte, dann prüfen/freigeben.'
-            : "{$gestartet} Skizzen als Gerichte gestartet — Stand je Karte, dann prüfen/freigeben.";
-    }
-
-    /** Hebt die gezielte Skizzen-Auswahl (Teil 3b) auf → nächster Batch-Klick startet wieder „alle". */
-    public function skizzenAuswahlLeeren(): void
-    {
-        $this->skizzenAuswahl = [];
-    }
-
     // ── Leitstelle: Regler-Bedienung ───────────────────────────────────
 
     /** Multi-Select-Regler (Toggle in/aus der Liste): Diät + Frische-Erlaubnis + Allergen-No-Go. */
@@ -1963,7 +1701,7 @@ class Index extends Component
      * Et.4 (Eingabe-Reife) »Titel-/Namensvorschlag aus dem Brief« — Teil 3 (UI). Schlägt aus dem
      * Tab-Briefing einen nüchternen, §-konformen Titel vor ({@see TitelVorschlagService}, Teil 2 —
      * `recipe.titel_vorschlag` §1 bzw. `vk.titel_vorschlag` §4.4-Pipe) und füllt ihn ins Tab-Titelfeld
-     * — **nur wenn dort noch keiner steht** (empty-only, Muster {@see briefVorlage}/{@see skizzeAlsGericht});
+     * — **nur wenn dort noch keiner steht** (empty-only, Muster {@see briefVorlage});
      * ein bereits getippter Titel bleibt unangetastet. Kein Go — reiner Vorschlag, der Mensch prüft.
      *
      * `concept` ist bewusst außen vor (dessen `name_claim` liefert der kreative KI-Kopf, nicht der
@@ -2925,30 +2663,13 @@ class Index extends Component
                 $this->planConceptId = null;
             }
         }
-        // SKIZZEN-LINEAGE (Etappe 4, Teil 2a): kam der Gericht-Go aus einer übertragenen Skizze
-        // ({@see skizzeAlsGericht} → $skizzeGerichtId), wird der Lauf auf sie zurückgestempelt
-        // (origin_dish_idea_id) — Voraussetzung für die Status-Rückkopplung auf die Skizzen-Karte.
-        // FAIL-SOFT: ist die Skizze inzwischen weg (gelöscht/verworfen/Team-fremd), NICHT blocken —
-        // Prop still verwerfen und ohne Herkunft generieren (eine tote Skizze kippt den Go nicht).
-        if ($scope === 'gericht' && (int) ($this->skizzeGerichtId ?? 0) > 0) {
-            $skizzeDa = FoodAlchemistDishIdea::visibleToTeam($team)
-                ->where('status', '!=', 'verworfen')
-                ->whereKey($this->skizzeGerichtId)
-                ->exists();
-            if ($skizzeDa) {
-                $optionen['origin_dish_idea_id'] = (int) $this->skizzeGerichtId;
-            } else {
-                $this->skizzeGerichtId = null;
-            }
-        }
         try {
             $run = $cascade->starteKaskade($team, $scope, $session, (string) ($this->eingabe[$scope]['creative_mode'] ?? 'voll_kreativ'), $optionen);
             $this->laufId = $run->id;
             $this->laeuft = true;
             $this->hinweis = null;
-            // Verbrauch AN DEN SCOPE binden: nur der Concept-Go verbraucht den KI-Kopf-Plan, nur der
-            // Gericht-Go die Skizzen-Herkunft. Sonst löschte ein Basisrezept-/Gericht-Go den vorbereiteten
-            // Concept-Plan, obwohl er für diesen Lauf nie gelesen wurde (und umgekehrt).
+            // Verbrauch AN DEN SCOPE binden: nur der Concept-Go verbraucht den KI-Kopf-Plan. Sonst löschte ein
+            // Basisrezept-/Gericht-Go den vorbereiteten Concept-Plan, obwohl er für diesen Lauf nie gelesen wurde.
             if ($scope === 'concept') {
                 $this->planConceptId = null;    // Plan verbraucht (referenziert ODER frisch generiert) → nächster Go Schnell-Pfad
                 // #53 persistent: auch den gespeicherten Zeiger lösen (Plan verbraucht) — sonst böte ein
@@ -2960,9 +2681,6 @@ class Index extends Component
                         // Persistenz-Fehler darf den bereits gestarteten Lauf nicht kippen.
                     }
                 }
-            }
-            if ($scope === 'gericht') {
-                $this->skizzeGerichtId = null;  // Skizzen-Ursprung verbraucht (auf den Lauf gestempelt) → nächster Go ohne Herkunft
             }
             $this->wissenVorschau = null;   // neue Kaskade → Vorschau weg; die Steps zeigen dann das ECHTE Wissen (#1a)
             $this->meldung = 'Kaskade gestartet — Entwurf wird erzeugt …';
@@ -4187,68 +3905,6 @@ class Index extends Component
             ])->values();
 
         $active = $this->aktiveSession();
-        $skizzen = null;
-        if ($active !== null) {
-            $skizzen = app(IdeenService::class)->liste($team, null, null, false, $active->id);
-        }
-
-        // Status-Rückkopplung auf die Skizzen-Karte (Etappe 4, Teil 2b): der aus einer Skizze
-        // gestartete Gericht-Go stempelt sich per origin_dish_idea_id (Teil 2a) auf die Ursprungs-
-        // Skizze zurück. Hier den jüngsten verknüpften Lauf je Skizze auflösen → die Karte zeigt
-        // läuft/prüfen/fertig/fehlgeschlagen, ohne den Worker zu öffnen. Map: idea_id → {run_id,status,scope}.
-        $skizzenLauf = [];
-        if ($skizzen !== null && $team !== null) {
-            $ideaIds = collect($skizzen['einzel'])->pluck('id')
-                ->merge(collect($skizzen['gruppen'])->flatMap(fn ($g) => collect($g['ideen'])->pluck('id')))
-                ->filter()->map(fn ($v) => (int) $v)->unique()->values()->all();
-            if ($ideaIds !== []) {
-                // orderByDesc('id') → erster Treffer je Skizze = jüngster Lauf (Retry gewinnt).
-                $laeufe = FoodAlchemistCascadeRun::visibleToTeam($team)
-                    ->whereIn('origin_dish_idea_id', $ideaIds)
-                    ->orderByDesc('id')
-                    ->get(['id', 'scope', 'status', 'origin_dish_idea_id']);
-                foreach ($laeufe as $r) {
-                    $oid = (int) $r->origin_dish_idea_id;
-                    if (! isset($skizzenLauf[$oid])) {
-                        $skizzenLauf[$oid] = [
-                            'run_id' => (int) $r->id,
-                            'status' => (string) $r->status,
-                            'scope' => (string) $r->scope,
-                        ];
-                    }
-                }
-                // E5 (Spec 40): „daraus entstanden" — den materialisierten Artefakt-Namen je Lauf mitführen
-                // (ein Batch-Query über die Steps der schon gesammelten Läufe, KEIN zusätzlicher Round-Trip
-                // je Karte). Der Step-Label trägt nach markStepDone den echten Rezept-/Concept-Namen.
-                $runIds = collect($skizzenLauf)->pluck('run_id')->map(fn ($v) => (int) $v)->unique()->values()->all();
-                if ($runIds !== []) {
-                    $ergebnisse = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep::whereIn('cascade_run_id', $runIds)
-                        ->whereNotNull('ref_id')->whereNotNull('label')
-                        ->orderBy('id')->get(['cascade_run_id', 'label'])
-                        ->groupBy('cascade_run_id');
-                    foreach ($skizzenLauf as $oid => $l) {
-                        $steps = $ergebnisse[(int) $l['run_id']] ?? null;
-                        if ($steps !== null && $steps->isNotEmpty()) {
-                            $skizzenLauf[$oid]['ergebnis'] = (string) $steps->first()->label;
-                        }
-                    }
-                }
-            }
-        }
-
-        // Live-Poll der Karten-Badges (Etappe 4, Teil 3b-b): solange ein aus einer Skizze gestarteter
-        // Lauf noch `running` ist, refresht sich die Karte selbst (bare wire:poll → $refresh → render()
-        // liest $skizzenLauf frisch), ohne das Einzel-Cockpit ($laufId/$laeuft) anzuwerfen. Nur `running`
-        // ist transient (Worker-getrieben); `review`/`done`/`failed` warten auf den Menschen bzw. sind
-        // terminal → kein Poll-Grund → das Poll-Element entfällt und das Polling stoppt.
-        $skizzenLaufAktiv = false;
-        foreach ($skizzenLauf as $l) {
-            if (($l['status'] ?? null) === 'running') {
-                $skizzenLaufAktiv = true;
-                break;
-            }
-        }
-
         // Aktiver Kaskaden-Lauf (in-place „Go") inkl. Steps — für Fortschritt + Ergebnis-Liste.
         $lauf = ($team !== null && $this->laufId !== null)
             ? app(PlanningCascadeService::class)->lauf($team, $this->laufId)
@@ -4574,9 +4230,6 @@ class Index extends Component
             'irgendeinLaeuft' => $irgendeinLaeuft,
             'pollAktiv' => $pollAktiv,
             'active' => $active,
-            'skizzen' => $skizzen,
-            'skizzenLauf' => $skizzenLauf,
-            'skizzenLaufAktiv' => $skizzenLaufAktiv,
             'lauf' => $lauf,
             'kalkulation' => $kalkulation,
             'bildCalls' => $bildCalls,
