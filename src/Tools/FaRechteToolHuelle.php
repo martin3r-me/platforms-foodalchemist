@@ -56,12 +56,18 @@ class FaRechteToolHuelle implements ToolContract, ToolMetadataContract
 
     public function execute(array $arguments, ToolContext $context): ToolResult
     {
-        // Spec 84 E-1: jeder FA-Tool-Aufruf ist ein eigener Mess-Abschnitt (Eingang = Tool-Name, Team = MCP-Team)
-        return \Platform\FoodAlchemist\Support\LangsameAbfragen::imEingang(
+        // Spec 84 §3.3 (A-1): jedes FA-Tool läuft im Team seines Aufrufs — FaTeam::aktuell() und jeder darin versandte Job sehen
+        // dieses Team, auch nach core.team.switch. imTeam stellt danach den vorigen Stand wieder her (Tool-Loop: kein Nachhängen).
+        // Spec 84 E-1: Mess-Abschnitt INNEN, mit der Team-ID aus FaTeam — eine Wahrheit für Messung, Riegel und Abrechnung.
+        $user = $context->user;
+        $kTeam = $context->team instanceof Team ? $context->team : ($user instanceof User ? ($user->currentTeamRelation ?? null) : null);
+        $messen = fn () => \Platform\FoodAlchemist\Support\LangsameAbfragen::imEingang(
             'mcp:' . $this->getName(),
-            $context->team instanceof Team ? (int) $context->team->id : null,
+            \Platform\FoodAlchemist\Support\FaTeam::aktuellId(),
             fn () => $this->ausfuehren($arguments, $context),
         );
+
+        return $kTeam instanceof Team ? \Platform\FoodAlchemist\Support\FaTeam::imTeam($kTeam, $messen) : $messen();
     }
 
     private function ausfuehren(array $arguments, ToolContext $context): ToolResult
