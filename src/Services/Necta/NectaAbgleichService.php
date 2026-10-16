@@ -407,6 +407,12 @@ class NectaAbgleichService extends NectaLaufBasis
                 // Zutatenliste geändert → Jod neu ableiten (Query Builder umgeht den Modell-Hook)
                 $uebernehmen['iodized_abgeleitet'] = \Platform\FoodAlchemist\Support\JodAusZutaten::wert($uebernehmen['ingredients_supplier']);
             }
+            if ($objekt === 'supplier_item' && array_intersect(['designation', 'qty', 'qty_ordering_per_packaging', 'unit_code'], array_keys($uebernehmen)) !== []) {
+                // Bezeichnung/Menge/Stückzahl/Einheit geändert → Mengen-Korrektur neu ableiten (mit den übrigen FA-Werten)
+                $w = fn (string $f) => array_key_exists($f, $uebernehmen) ? $uebernehmen[$f] : ($fa->{$f} ?? null);
+                $uebernehmen += \Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem::mengenKorrektur($w('designation'), $w('qty'),
+                    $w('qty_ordering_per_packaging'), $w('unit_code'));
+            }
             DB::table($tabelle)->where('id', $fa->id)->update($uebernehmen + ['updated_at' => now()]);
         }
         $this->stand($objekt, $legacy, $necta + ['legacy_id' => $legacy]);

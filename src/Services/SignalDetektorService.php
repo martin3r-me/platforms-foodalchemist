@@ -491,7 +491,7 @@ class SignalDetektorService
         $las = DB::table('foodalchemist_supplier_items AS i')
             ->join('foodalchemist_supplier_item_structures AS s', 's.supplier_item_id', '=', 'i.id')
             ->where('s.gp_id', $gpId)->whereNull('s.deleted_at')->whereNull('i.deleted_at')
-            ->select('i.id', 'i.designation', 'i.qty', 'i.unit_code')
+            ->select('i.id', 'i.designation', 'i.qty', 'i.qty_korrigiert', 'i.unit_code')   // vergleichspreis nimmt die korrigierte Menge
             ->selectSub($preisSvc->activePriceSubquery('i.id')->toBase(), 'aktiver_preis');
         // Spec 82 §12 A3: Stamm-Paket-Artikel ohne Opt-in sind keine Alternative (Bezeichnung + Preis würden sonst im Signal stehen).
         $las = StammPaket::begrenzen($las, 'i', $team, 'foodalchemist_supplier_items')->get();
@@ -657,7 +657,7 @@ class SignalDetektorService
             ->whereNull('s.deleted_at')->whereNull('i.deleted_at')->whereNull('g.deleted_at')
             ->whereIn('g.team_id', FoodAlchemistGp::teamAncestryIds($team))
             ->where('g.n_las_total', '>=', 3)
-            ->select('s.gp_id', 'g.name as gp_name', 'i.id as item_id', 'i.unit_code', 'i.qty')
+            ->select('s.gp_id', 'g.name as gp_name', 'i.id as item_id', 'i.unit_code', 'i.qty', 'i.qty_korrigiert')
             ->selectSub($ps->activePriceSubquery('i.id'), 'aktiv_preis')
             ->get();
 
@@ -681,7 +681,7 @@ class SignalDetektorService
                     if ($r->aktiv_preis === null) {
                         continue;
                     }
-                    $qty = (float) ($r->qty ?? 0);
+                    $qty = (float) (\Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem::mengeVon($r) ?? 0);   // korrigierte Menge vor Necta-qty
                     $ppus[] = ['item_id' => (int) $r->item_id, 'ppu' => $qty > 0 ? (float) $r->aktiv_preis / $qty : (float) $r->aktiv_preis, 'price' => (float) $r->aktiv_preis];
                 }
                 if (count($ppus) < 3) {

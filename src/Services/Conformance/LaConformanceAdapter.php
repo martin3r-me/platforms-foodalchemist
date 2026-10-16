@@ -67,7 +67,7 @@ class LaConformanceAdapter implements ConformanceAdapter
             'lieferant' => $la->supplier?->name,
             'gebinde' => $la->packaging_unit,
             'bestelleinheit' => $la->ordering_unit,
-            'gebinde_menge' => $la->qty !== null ? (float) $la->qty : null,
+            'gebinde_menge' => \Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem::mengeVon($la),   // korrigierte Menge vor Necta-qty
             'bio' => $la->is_organic,
             'vegan' => $la->is_vegan,
             'vegetarisch' => $la->is_vegetarian,

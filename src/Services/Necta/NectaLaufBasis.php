@@ -132,7 +132,10 @@ abstract class NectaLaufBasis
         }
         // Jod aus der Zutatenliste: nur am Artikel, nicht im Necta-Stand (Ableitung, kein Necta-Feld)
         $faId = $this->einfuegen('foodalchemist_supplier_items', $zeile + ['supplier_id' => $l['fa_id'], 'team_id' => null,
-            'stamm_class' => StammPaket::PAKET, 'iodized_abgeleitet' => JodAusZutaten::wert($zeile['ingredients_supplier'] ?? null)]);
+            'stamm_class' => StammPaket::PAKET, 'iodized_abgeleitet' => JodAusZutaten::wert($zeile['ingredients_supplier'] ?? null)]
+            // Mengen-Korrektur aus der Bezeichnung (EDI: Menge / Stückzahl), ebenfalls nicht im Necta-Stand
+            + \Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem::mengenKorrektur($zeile['designation'] ?? null, $zeile['qty'] ?? null,
+                $zeile['qty_ordering_per_packaging'] ?? null, $zeile['unit_code'] ?? null));
         $this->stand('supplier_item', (int) $zeile['legacy_id'], $zeile);
 
         return $faId;

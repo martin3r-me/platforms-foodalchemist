@@ -31,7 +31,39 @@ class FoodAlchemistSupplierItem extends Model
             if (! $item->exists || $item->isDirty('ingredients_supplier')) {
                 $item->iodized_abgeleitet = \Platform\FoodAlchemist\Support\JodAusZutaten::wert($item->ingredients_supplier);
             }
+            // Mengen-Korrektur (16.10.2026): neu ableiten, wenn sich Bezeichnung, Menge, Stückzahl oder Einheit ändert
+            if (! $item->exists || $item->isDirty(['designation', 'qty', 'qty_ordering_per_packaging', 'unit_code'])) {
+                foreach (self::mengenKorrektur($item->designation, $item->qty, $item->qty_ordering_per_packaging, $item->unit_code) as $k => $v) {
+                    $item->{$k} = $v;
+                }
+            }
         });
+    }
+
+    /**
+     * Spalten der Mengen-Korrektur aus der Bezeichnung ({@see \Platform\FoodAlchemist\Support\MengeAusBezeichnung}).
+     *
+     * @return array{qty_korrigiert: ?float, qty_korrektur_quelle: ?string}
+     */
+    public static function mengenKorrektur(?string $bezeichnung, mixed $qty, mixed $stueck, ?string $einheit): array
+    {
+        $k = \Platform\FoodAlchemist\Support\MengeAusBezeichnung::korrektur($bezeichnung, $qty, $stueck, $einheit);
+
+        return ['qty_korrigiert' => $k, 'qty_korrektur_quelle' => $k === null ? null : \Platform\FoodAlchemist\Support\MengeAusBezeichnung::QUELLE];
+    }
+
+    /** SQL der wirksamen Menge je Bestelleinheit für rohe Abfragen: korrigierte Menge vor Necta-qty. */
+    public static function mengeSql(string $alias): string
+    {
+        return "COALESCE({$alias}.qty_korrigiert, {$alias}.qty)";
+    }
+
+    /** Wirksame Menge eines Artikels (Modell oder Abfrage-Zeile): `qty_korrigiert ?? qty`, NULL wenn keine. */
+    public static function mengeVon(object $la): ?float
+    {
+        $wert = $la->qty_korrigiert ?? $la->qty ?? null;
+
+        return $wert === null || $wert === '' ? null : (float) $wert;
     }
 
     protected $guarded = ['id'];
@@ -39,6 +71,7 @@ class FoodAlchemistSupplierItem extends Model
     protected $casts = [
         'uuid' => 'string',
         'qty' => 'decimal:3',
+        'qty_korrigiert' => 'decimal:4',
         'qty_ordering_per_packaging' => 'decimal:3',
         'is_organic' => 'boolean',
         'is_vegan' => 'boolean',

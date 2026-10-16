@@ -41,7 +41,7 @@ class GebindeRechner
             return [...$leer, 'grund' => 'Kein Hauptartikel hinterlegt. Das Gebinde lässt sich nicht bestimmen.'];
         }
 
-        $qty = $leadLa->qty !== null ? (float) $leadLa->qty : null;
+        $qty = \Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem::mengeVon($leadLa);   // korrigierte Menge vor Necta-qty
         $unit = $leadLa->unit_code ?? null;
         $preis = isset($leadLa->aktiver_preis) && $leadLa->aktiver_preis !== null ? (float) $leadLa->aktiver_preis : null;
         $stamm = [

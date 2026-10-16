@@ -1312,8 +1312,8 @@ class RecipeRecomputeService
             $stueckG = $gp->piece_default_g !== null ? (float) $gp->piece_default_g : null;
             if ($werte->isEmpty() && $stueckG !== null && $stueckG > 0) {
                 $werte = $this->laCache[(int) $gp->id]
-                    ->filter(fn ($la) => $la->unit_code === 'Stk' && $la->qty > 0 && $la->aktiver_preis !== null)
-                    ->map(fn ($la) => ((float) $la->aktiver_preis) / (float) $la->qty / $stueckG)
+                    ->filter(fn ($la) => $la->unit_code === 'Stk' && FoodAlchemistSupplierItem::mengeVon($la) > 0 && $la->aktiver_preis !== null)
+                    ->map(fn ($la) => ((float) $la->aktiver_preis) / FoodAlchemistSupplierItem::mengeVon($la) / $stueckG)
                     ->values();
             }
             $result[(int) $gp->id] = [
@@ -1421,16 +1421,16 @@ class RecipeRecomputeService
     private function preisProStueckMitBasis(FoodAlchemistGp $gp): array
     {
         foreach ($this->preisKandidaten($gp) as $la) {
-            if ($la->unit_code === 'Stk' && $la->qty > 0 && $la->aktiver_preis !== null) {
-                return [(float) $la->aktiver_preis / (float) $la->qty, EkPriceBasis::Lead];
+            if ($la->unit_code === 'Stk' && FoodAlchemistSupplierItem::mengeVon($la) > 0 && $la->aktiver_preis !== null) {
+                return [(float) $la->aktiver_preis / FoodAlchemistSupplierItem::mengeVon($la), EkPriceBasis::Lead];
             }
         }
 
         $summe = 0.0;
         $n = 0;
         foreach ($this->alleAktivenLas($gp) as $la) {
-            if ($la->unit_code === 'Stk' && $la->qty > 0 && $la->aktiver_preis !== null) {
-                $summe += (float) $la->aktiver_preis / (float) $la->qty;
+            if ($la->unit_code === 'Stk' && FoodAlchemistSupplierItem::mengeVon($la) > 0 && $la->aktiver_preis !== null) {
+                $summe += (float) $la->aktiver_preis / FoodAlchemistSupplierItem::mengeVon($la);
                 $n++;
             }
         }

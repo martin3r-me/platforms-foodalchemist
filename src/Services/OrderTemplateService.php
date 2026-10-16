@@ -232,7 +232,7 @@ class OrderTemplateService
             if ($packs <= 0 || $l->supplier_item_id === null) {
                 continue;
             }
-            $inhalt = $this->inhalt((float) ($l->supplierItem?->qty ?? $l->pack_qty ?? 0), (string) ($l->supplierItem?->unit_code ?? $l->unit_code));
+            $inhalt = $this->inhalt((float) (($l->supplierItem !== null ? FoodAlchemistSupplierItem::mengeVon($l->supplierItem) : null) ?? $l->pack_qty ?? 0), (string) ($l->supplierItem?->unit_code ?? $l->unit_code));
             if ($l->gp_id !== null && $inhalt !== null) {
                 $quellen[] = ['type' => 'gp', 'id' => (int) $l->gp_id, 'qty' => round($packs * $inhalt[0], 3), 'unit' => $inhalt[1]];
             } else {

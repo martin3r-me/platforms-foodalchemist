@@ -305,7 +305,8 @@ class GpService
                 // Spec 82 §12 A3: ein Lead aus dem Stamm-Paket ohne Opt-in zeigt weder Menge noch Einheit.
                 \Platform\FoodAlchemist\Support\StammPaket::begrenzen($j, 'lead', $team, 'foodalchemist_supplier_items');
             })
-            ->select('foodalchemist_gps.*', 'lead.qty AS lead_qty', 'lead.unit_code AS lead_unit_code')
+            ->select('foodalchemist_gps.*', 'lead.unit_code AS lead_unit_code')
+            ->selectRaw(\Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem::mengeSql('lead').' AS lead_qty')   // korrigierte Menge vor Necta-qty
             ->selectSub(app(PriceService::class)->activePriceSubquery('lead.id', $team)->toBase(), 'lead_preis') // Spec 82 3a
             ->with('commodity_group')
             ->orderBy('foodalchemist_gps.name');
