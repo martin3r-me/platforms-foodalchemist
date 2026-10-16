@@ -11,7 +11,7 @@ use RuntimeException;
 
 /**
  * Ändert eine team-eigene Schnellstart-Vorlage: umbenennen (label) und/oder aktiv-schalten (active).
- * Kuratierte Globals sind read-only → Owns-Guard wirft. Kein Umschreiben von Brief/Regler-Snapshot
+ * Fremde/geerbte Vorlagen sind read-only → Owns-Guard wirft. Kein Umschreiben von Brief/Regler-Snapshot
  * (eine neue Konfiguration = neue Vorlage via POST + alte via DELETE — Snapshots bleiben stabil).
  */
 class BriefTemplatesPutTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
@@ -24,7 +24,7 @@ class BriefTemplatesPutTool extends FoodAlchemistTool implements ToolContract, T
     public function getDescription(): string
     {
         return 'Ändert eine team-eigene Schnellstart-Vorlage (Brief-Template): umbenennen (label) und/oder '
-            . 'aktiv/inaktiv schalten (active). Kuratierte Globals sind read-only. Brief/Leitplanken-Snapshot werden '
+            . 'aktiv/inaktiv schalten (active). Vorlagen des Oberteams sind read-only. Brief/Leitplanken-Snapshot werden '
             . 'NICHT geändert — für eine neue Konfiguration eine neue Vorlage via foodalchemist.brief_templates.POST anlegen.';
     }
 

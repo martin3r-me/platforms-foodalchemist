@@ -18,8 +18,8 @@ uses(TestCase::class, SeedsTeamHierarchy::class);
 /**
  * Schnellstart-Vorlagen (Brief-Templates): kunden-anlegbare Startpunkte für die Planung-Erzeugung.
  * Eine Vorlage = benannter Snapshot (Brief + Kreativ-Modus + kompletter Leitplanken-Stand) je Scope.
- * Beweisziele: kuratierte Globals sichtbar + read-only, Snapshot aus dem Editor legt team-eigene an,
- * Anwenden setzt Brief + Regler, Owns-Guard schützt fremde/kuratierte Vorlagen (D1-Tenancy).
+ * Beweisziele (Spec 84 L1: Vorlagen gehören dem Team): Snapshot aus dem Editor legt team-eigene an, Unter-Teams lesen die
+ * des Oberteams, Anwenden setzt Brief + Regler, Owns-Guard schützt fremde Vorlagen, kein Master-Sonderweg, nichts ohne Team.
  */
 beforeEach(function () {
     $this->seedTeamHierarchy();
@@ -27,17 +27,12 @@ beforeEach(function () {
     $this->actingAs($this->user);
 });
 
-it('seedet die 6 kuratierten Globals (Gericht-Scope, team_id NULL, read-only)', function () {
-    $globals = FoodAlchemistBriefTemplate::whereNull('team_id')->get();
-    expect($globals)->toHaveCount(6)
-        ->and($globals->pluck('scope')->unique()->all())->toBe(['gericht']);
-
-    $fuerGericht = app(BriefTemplateService::class)->fuer($this->rootTeam, 'gericht');
-    expect($fuerGericht)->toHaveCount(6)
-        ->and(collect($fuerGericht)->every(fn ($v) => $v['is_global']))->toBeTrue();
-
-    // Kein Global auf dem Basisrezept-Tab → leer, bis der Kunde dort selbst eine anlegt.
-    expect(app(BriefTemplateService::class)->fuer($this->rootTeam, 'rezept'))->toBe([]);
+it('Spec 84 L1: Vorlagen ohne Team (frühere Globals) sieht niemand', function () {
+    // In der Test-DB laufen die Migrationen vor dem Anlegen der Teams → die Kopier-Migration findet kein Hauptteam
+    // und lässt die 6 Seed-Zeilen stehen. Sie sind ohne Team und damit für kein Team sichtbar.
+    expect(FoodAlchemistBriefTemplate::whereNull('team_id')->count())->toBe(6);
+    expect(app(BriefTemplateService::class)->fuer($this->rootTeam, 'gericht'))->toBe([])
+        ->and(app(BriefTemplateService::class)->verwaltung($this->childA))->toHaveCount(0);
 });
 
 it('speichere: legt eine team-eigene Vorlage mit Regler-Snapshot an und zeigt sie im Scope', function () {
@@ -65,34 +60,31 @@ it('speichere: leerer Name oder leerer Brief wirft', function () {
     expect(fn () => $svc->speichere($this->rootTeam, 'gericht', 'Name', '   ', []))->toThrow(RuntimeException::class);
 });
 
-it('Globals: Master-Team (root) kuratiert sie, ein Kind-Team nicht', function () {
-    // Spec 84 §4.0: Master ist das KONFIGURIERTE Team (MasterTeam::istMaster), nicht „elternlos“.
-    config(['foodalchemist.master_team_id' => $this->rootTeam->id]);
-    $global = FoodAlchemistBriefTemplate::whereNull('team_id')->firstOrFail();
+it('Spec 84 L1: Kind-Team sieht die Vorlagen des Oberteams nur lesend, das Oberteam pflegt sie', function () {
     $svc = app(BriefTemplateService::class);
+    $tpl = $svc->speichere($this->rootTeam, 'gericht', 'Oberteam-Vorlage', 'Brief.', []);
 
-    // Kind-Team (childA, parent gesetzt) ist NICHT Master → globale Vorlage read-only.
-    expect(fn () => $svc->umbenennen($this->childA, (int) $global->id, 'Hack'))->toThrow(RuntimeException::class);
-    expect(fn () => $svc->loeschen($this->childA, (int) $global->id))->toThrow(RuntimeException::class);
+    $fuerKind = $svc->fuer($this->childA, 'gericht');
+    expect($fuerKind)->toHaveKey((string) $tpl->id)
+        ->and($fuerKind[(string) $tpl->id]['is_global'])->toBeTrue();   // „geerbt, nur lesbar“
+    expect(fn () => $svc->umbenennen($this->childA, (int) $tpl->id, 'Hack'))->toThrow(RuntimeException::class);
+    expect(fn () => $svc->loeschen($this->childA, (int) $tpl->id))->toThrow(RuntimeException::class);
 
-    // rootTeam (konfigurierter Master) DARF global kuratieren.
-    $svc->umbenennen($this->rootTeam, (int) $global->id, 'BHG-Empfang v2');
-    expect(FoodAlchemistBriefTemplate::find($global->id)->label)->toBe('BHG-Empfang v2');
-    $svc->loeschen($this->rootTeam, (int) $global->id);
-    expect(FoodAlchemistBriefTemplate::find($global->id))->toBeNull();
+    $svc->umbenennen($this->rootTeam, (int) $tpl->id, 'Oberteam-Vorlage v2');
+    expect(FoodAlchemistBriefTemplate::find($tpl->id)->label)->toBe('Oberteam-Vorlage v2');
 });
 
-it('Spec 84 §4.0: ein elternloser Mandant ist kein Master und löscht keine globale Vorlage', function () {
-    // Auf io sind alle Mandanten elternlos. Vorher reichte das für Master-Rechte.
+it('Spec 84 L1: kein Master-Sonderweg — auch das konfigurierte Master-Team ändert keine Vorlage ohne Team', function () {
     config(['foodalchemist.master_team_id' => $this->rootTeam->id]);
     $mandant = \Platform\Core\Models\Team::create(['name' => 'Mandant ohne Eltern', 'user_id' => 1, 'personal_team' => false]);
-    $global = FoodAlchemistBriefTemplate::whereNull('team_id')->firstOrFail();
+    $ohneTeam = FoodAlchemistBriefTemplate::whereNull('team_id')->firstOrFail();
     $svc = app(BriefTemplateService::class);
 
-    expect($svc->istMaster($mandant))->toBeFalse();
-    expect(fn () => $svc->loeschen($mandant, (int) $global->id))->toThrow(RuntimeException::class);
-    expect(fn () => $svc->umbenennen($mandant, (int) $global->id, 'Hack'))->toThrow(RuntimeException::class);
-    expect(FoodAlchemistBriefTemplate::find($global->id))->not->toBeNull();
+    foreach ([$this->rootTeam, $mandant] as $team) {
+        expect(fn () => $svc->loeschen($team, (int) $ohneTeam->id))->toThrow(RuntimeException::class);
+        expect(fn () => $svc->umbenennen($team, (int) $ohneTeam->id, 'Hack'))->toThrow(RuntimeException::class);
+    }
+    expect(FoodAlchemistBriefTemplate::find($ohneTeam->id))->not->toBeNull();
 });
 
 it('Tenancy: ein fremdes Team kann eine Vorlage nicht löschen (Owns-Guard)', function () {
@@ -139,12 +131,19 @@ it('Livewire: loeschenVorlage entfernt eine eigene Vorlage', function () {
 
 // ── MCP-Tools (foodalchemist.brief_templates.*) ────────────────────────────
 
-it('MCP LIST: liefert die kuratierten Globals (read-only, nicht editierbar)', function () {
-    $res = (new BriefTemplatesListTool())->execute(['scope' => 'gericht'], new ToolContext($this->user, $this->rootTeam));
+it('MCP LIST: eigene editierbar, die des Oberteams nur lesbar, nichts ohne Team', function () {
+    $tpl = app(BriefTemplateService::class)->speichere($this->rootTeam, 'gericht', 'Oberteam-Vorlage', 'Brief.', []);
 
-    expect($res->success)->toBeTrue()
-        ->and($res->data['total'])->toBe(6)
-        ->and(collect($res->data['brief_templates'])->every(fn ($v) => $v['is_global'] && ! $v['editable']))->toBeTrue();
+    $root = (new BriefTemplatesListTool())->execute(['scope' => 'gericht'], new ToolContext($this->user, $this->rootTeam));
+    expect($root->success)->toBeTrue()->and($root->data['total'])->toBe(1)
+        ->and($root->data['brief_templates'][0]['editable'])->toBeTrue()
+        ->and($root->data['brief_templates'][0]['is_global'])->toBeFalse();
+
+    $kind = (new BriefTemplatesListTool())->execute(['scope' => 'gericht'], new ToolContext($this->makeUser($this->childA), $this->childA));
+    expect($kind->data['total'])->toBe(1)
+        ->and($kind->data['brief_templates'][0]['id'])->toBe((int) $tpl->id)
+        ->and($kind->data['brief_templates'][0]['editable'])->toBeFalse()
+        ->and($kind->data['brief_templates'][0]['is_global'])->toBeTrue();
 });
 
 it('MCP: voller CRUD einer eigenen Vorlage (POST → LIST → PUT → DELETE)', function () {
@@ -172,26 +171,26 @@ it('MCP: voller CRUD einer eigenen Vorlage (POST → LIST → PUT → DELETE)', 
     expect(FoodAlchemistBriefTemplate::find($id))->toBeNull();
 });
 
-it('MCP: ein Kind-Team kann Globals NICHT kuratieren (PUT/DELETE → error)', function () {
+it('MCP: ein Kind-Team ändert die Vorlagen des Oberteams NICHT (PUT/DELETE → error)', function () {
     $ctx = new ToolContext($this->makeUser($this->childA), $this->childA);
-    $global = FoodAlchemistBriefTemplate::whereNull('team_id')->firstOrFail();
+    $tpl = app(BriefTemplateService::class)->speichere($this->rootTeam, 'gericht', 'Oberteam-Vorlage', 'Brief.', []);
 
-    $put = (new BriefTemplatesPutTool())->execute(['id' => (int) $global->id, 'label' => 'Hack'], $ctx);
+    $put = (new BriefTemplatesPutTool())->execute(['id' => (int) $tpl->id, 'label' => 'Hack'], $ctx);
     expect($put->success)->toBeFalse()->and($put->errorCode)->toBe('ACCESS_DENIED');
 
-    $del = (new BriefTemplatesDeleteTool())->execute(['id' => (int) $global->id], $ctx);
+    $del = (new BriefTemplatesDeleteTool())->execute(['id' => (int) $tpl->id], $ctx);
     expect($del->success)->toBeFalse();
-    expect(FoodAlchemistBriefTemplate::find($global->id))->not->toBeNull();
+    expect(FoodAlchemistBriefTemplate::find($tpl->id))->not->toBeNull();
 });
 
-it('MCP: Master-Team (root) kuratiert einen Global (PUT active=false greift)', function () {
-    config(['foodalchemist.master_team_id' => $this->rootTeam->id]);   // Spec 84 §4.0: Master = konfiguriert, nicht „elternlos“
+it('MCP: auch das Master-Team ändert keine Vorlage ohne Team (kein Master-Sonderweg)', function () {
+    config(['foodalchemist.master_team_id' => $this->rootTeam->id]);
     $ctx = new ToolContext($this->user, $this->rootTeam);
-    $global = FoodAlchemistBriefTemplate::whereNull('team_id')->firstOrFail();
+    $ohneTeam = FoodAlchemistBriefTemplate::whereNull('team_id')->firstOrFail();
 
-    $put = (new BriefTemplatesPutTool())->execute(['id' => (int) $global->id, 'active' => false], $ctx);
-    expect($put->success)->toBeTrue()->and($put->data['active'])->toBeFalse();
-    expect(FoodAlchemistBriefTemplate::find($global->id)->active)->toBeFalse();
+    $put = (new BriefTemplatesPutTool())->execute(['id' => (int) $ohneTeam->id, 'active' => false], $ctx);
+    expect($put->success)->toBeFalse();
+    expect(FoodAlchemistBriefTemplate::find($ohneTeam->id)->active)->toBeTrue();
 });
 
 // ── Settings-Verwaltungsseite ──────────────────────────────────────────────

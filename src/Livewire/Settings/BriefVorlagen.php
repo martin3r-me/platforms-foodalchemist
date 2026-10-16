@@ -35,10 +35,9 @@ class BriefVorlagen extends Component
     {
         $team = Auth::user()?->currentTeamRelation;
         $tpl = FoodAlchemistBriefTemplate::find($id);
-        $darf = $team !== null && $tpl !== null
-            && (TeamScope::owns($tpl->team_id, $team) || ($tpl->team_id === null && app(BriefTemplateService::class)->istMaster($team)));
+        $darf = $team !== null && $tpl !== null && TeamScope::owns($tpl->team_id, $team);   // Spec 84 L1: Vorlagen gehören dem Team
         if (! $darf) {
-            $this->fehler = 'Nur eigene Vorlagen bearbeitbar; globale Vorlagen kuratiert das Master-Team.';
+            $this->fehler = 'Nur eigene Vorlagen sind bearbeitbar.';
 
             return;
         }
@@ -106,9 +105,8 @@ class BriefVorlagen extends Component
 
         return view('foodalchemist::livewire.settings.brief-vorlagen', [
             'sperr' => $this->sperrZustand(),   // Spec 65
-            'eigene' => $rows->whereNotNull('team_id')->values(),
-            'globals' => $rows->whereNull('team_id')->values(),
-            'istMaster' => $team !== null && app(BriefTemplateService::class)->istMaster($team),
+            'eigene' => $rows->filter(fn ($r) => TeamScope::owns($r->team_id, $team))->values(),
+            'geerbte' => $rows->reject(fn ($r) => TeamScope::owns($r->team_id, $team))->values(),   // Vorlagen des Oberteams, nur lesbar
             'scopeLabel' => ['rezept' => 'Basisrezept', 'gericht' => 'Gericht', 'concept' => 'Konzept'],
         ]);
     }

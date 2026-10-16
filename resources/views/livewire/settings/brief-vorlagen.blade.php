@@ -1,13 +1,16 @@
 {{-- Schnellstart-Vorlagen (Brief-Templates) verwalten. Angelegt im Planung-Editor (Snapshot);
-     hier: eigene umbenennen/aktiv/löschen + kuratierte nur lesen. Auch per MCP (brief_templates.*).
+     hier: eigene umbenennen/aktiv/löschen + die des Oberteams nur lesen. Auch per MCP (brief_templates.*).
+     Spec 84 L1: Vorlagen gehören dem Team — keine globalen, vom Master gepflegten Vorlagen mehr.
      Häufigste Aufgabe: eigene Vorlage umbenennen oder ausblenden. Darum eigene zuerst. --}}
 @php
     $menuPunkt = 'flex w-full items-center gap-2 px-3 py-1.5 text-left text-[length:var(--fa-text-md)] text-[var(--fa-ink)] hover:bg-[var(--fa-hover)]';
     $menuGefahr = 'flex w-full items-center gap-2 px-3 py-1.5 text-left text-[length:var(--fa-text-md)] text-[var(--fa-crit)] hover:bg-[var(--fa-crit-soft)]';
     $zeilenGruppen = [
         ['schluessel' => 'eigene', 'zeilen' => $eigene, 'bearbeitbar' => true, 'key' => 'bt'],
-        ['schluessel' => 'globals', 'zeilen' => $globals, 'bearbeitbar' => $istMaster, 'key' => 'btg'],
     ];
+    if ($geerbte->isNotEmpty()) {   // nur Unter-Teams haben ein Oberteam — sonst kein leerer Abschnitt
+        $zeilenGruppen[] = ['schluessel' => 'geerbte', 'zeilen' => $geerbte, 'bearbeitbar' => false, 'key' => 'btg'];
+    }
 @endphp
 
 <div class="flex flex-col gap-5" data-settings-brief-vorlagen>
@@ -30,16 +33,16 @@
             $zeilen = $gruppe['zeilen'];
             $bearbeitbar = $gruppe['bearbeitbar'];
         @endphp
-        <x-fa::section :title="$istEigene ? 'Eigene Vorlagen' : 'Kuratierte Vorlagen'"
+        <x-fa::section :title="$istEigene ? 'Eigene Vorlagen' : 'Vorlagen des Oberteams'"
                        :meta="$zeilen->count() > 0 ? $zeilen->count() . ' ' . ($zeilen->count() === 1 ? 'Vorlage' : 'Vorlagen') : null"
-                       :description="$istEigene ? 'Vorlagen deines Teams.' : ($istMaster ? 'Mitgelieferte Vorlagen. Dein Team pflegt sie für alle Teams.' : 'Mitgelieferte Vorlagen. Nur zum Verwenden, ändern kann sie nur das Master-Team.')">
+                       :description="$istEigene ? 'Vorlagen deines Teams.' : 'Nur zum Verwenden. Ändern kann sie nur das Oberteam.'">
             @if($zeilen->isEmpty())
                 @if($istEigene)
                     <x-fa::empty icon="heroicon-o-bookmark" title="Noch keine eigene Vorlage" compact>
                         In der Planung einen Auftrag vorbereiten und „Als Vorlage speichern“ wählen. Die Vorlage erscheint dann hier.
                     </x-fa::empty>
                 @else
-                    <x-fa::empty icon="heroicon-o-bookmark" title="Keine kuratierten Vorlagen vorhanden" compact />
+                    <x-fa::empty icon="heroicon-o-bookmark" title="Keine Vorlagen des Oberteams" compact />
                 @endif
             @else
                 <div class="overflow-x-auto -mx-4">
@@ -89,7 +92,7 @@
                                                             </button>
                                                             <div class="my-1 border-t border-[var(--fa-line)]"></div>
                                                             <button type="button" role="menuitem" x-on:click="offen = false" wire:click="loeschen({{ $t->id }})"
-                                                                    wire:confirm="{{ $istEigene ? 'Vorlage „' . $t->label . '“ löschen?' : 'Kuratierte Vorlage „' . $t->label . '“ für alle Teams löschen?' }}"
+                                                                    wire:confirm="{{ 'Vorlage „' . $t->label . '“ löschen?' }}"
                                                                     class="{{ $menuGefahr }}">
                                                                 @svg('heroicon-m-trash', 'w-4 h-4')
                                                                 Vorlage löschen
