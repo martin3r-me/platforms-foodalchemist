@@ -105,6 +105,16 @@
                 <x-fa::notice tone="crit" class="mb-4" data-la-fehler>{{ $fehler }}</x-fa::notice>
             @endif
 
+            {{-- Lieferstatus aus Necta: eingestellt (kein Preis mehr, nicht bestellbar) bzw. läuft aus (letzter Preis gilt noch) --}}
+            @if($lieferstatus = $item->lieferstatusInfo())
+                <x-fa::notice :tone="$lieferstatus['status'] === 'eingestellt' ? 'crit' : 'warn'" class="mb-4" data-lieferstatus-hinweis="{{ $lieferstatus['status'] }}">
+                    <span class="font-medium">{{ $lieferstatus['text'] }}.</span>
+                    {{ $lieferstatus['status'] === 'eingestellt'
+                        ? 'Der Lieferant führt den Artikel nicht mehr, er ist nicht bestellbar; der Preisverlauf endet an diesem Tag.'
+                        : 'Der Lieferant nimmt den Artikel aus dem Sortiment, der letzte Preis gilt noch.' }}
+                </x-fa::notice>
+            @endif
+
             {{-- Alpine-Modus: alle Reiter bleiben im DOM, damit die entangle-Bindings (Allergene,
                  Zusatzstoffe) und ungespeicherte Eingaben beim Umschalten erhalten bleiben. --}}
             <x-foodalchemist::editor-tabs marker="la" wire-key="la-tabs-{{ $item->id }}" :init="$gpName === null ? 'gp' : 'preise'" :gesperrt="$darfEdit && in_array($sperr['modus'] ?? 'aus', ['lesen', 'fremd'], true)"

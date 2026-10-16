@@ -197,6 +197,34 @@ it('VK-Modal: Block Zubehör & Verpackung je Form — hinzufügen (nur Non-Food 
 
 // ── Kopien: Fassung, Paket-Fassung, Kündigung, Team-Kalkulation ──────────────────────────────────
 
+it('Preis-Anstoß: ändert sich der Lead-Preis des Zubehör-GP (Preiszeile, Lead-Wechsel), rechnen NUR die Darreichungen mit diesem Zubehör neu', function () {
+    $this->svc->setzeZubehoer($this->rootTeam, $this->dar->id, $this->glas->id, 1);
+    expect(($this->ek)())->toBe(2.5);
+
+    // zweites Gericht ohne Zubehör: bleibt unberührt (kein Massen-Recompute)
+    $anderes = FoodAlchemistRecipe::create(['team_id' => $this->rootTeam->id, 'recipe_key' => 'zub-andere', 'name' => 'Anderes Gericht', 'status' => 'approved', 'is_sales_recipe' => true, 'ek_per_kg_eur' => 10.0]);
+    $andereDar = $this->svc->ensureStandard($this->rootTeam, $anderes->id);
+    $andereDar->update(['quantity_per_unit_g' => 200]);
+    $this->svc->recomputePreise($andereDar->fresh());
+    $andereDar->update(['ek_portion' => 99.0]);   // Marker: würde ein Massen-Recompute ihn überschreiben, sähe man es
+
+    // 1) Preiszeile am Lead-Artikel: 6,00 → 12,00 je 12 Stk = 1,00 €/Stk
+    $la = FoodAlchemistSupplierItem::findOrFail($this->glas->lead_la_supplier_item_id);
+    app(PriceService::class)->createFor($this->rootTeam, $la, 12.00);
+    expect(($this->ek)())->toBe(3.0)->and((float) $andereDar->fresh()->ek_portion)->toBe(99.0);
+
+    // 2) Lead-Wechsel auf einen günstigeren Artikel desselben GP: 3,00 je 12 Stk = 0,25 €/Stk
+    $sup = FoodAlchemistSupplier::first();
+    $la2 = FoodAlchemistSupplierItem::create(['team_id' => $this->rootTeam->id, 'supplier_id' => $sup->id, 'designation' => 'Schraubglas günstig', 'qty' => 12, 'unit_code' => 'Stk']);
+    FoodAlchemistSupplierItemStructure::create(['team_id' => $this->rootTeam->id, 'supplier_item_id' => $la2->id, 'gp_id' => $this->glas->id]);
+    FoodAlchemistPrice::create(['team_id' => $this->rootTeam->id, 'supplier_item_id' => $la2->id, 'price' => 3.00, 'status' => '0']);
+    app(\Platform\FoodAlchemist\Services\LeadLaService::class)->setLeadLa($this->rootTeam, $this->glas->fresh(), $la2->id);
+    expect(($this->ek)())->toBe(2.25)->and((float) $andereDar->fresh()->ek_portion)->toBe(99.0);
+
+    // Gegenprobe: ein Lebensmittel-GP ohne Zubehör-Zeile löst keinen Darreichungs-Recompute aus
+    expect($this->svc->recomputeFuerZubehoerGps([999999]))->toBe(0)->and($this->svc->nachLaPreisAenderung(999999))->toBe(0);
+});
+
 // ── Kopien: Abo-Welt als Closure (braucht die geschützten Fixture-Helfer der Testbasis) ──
 function zubehoerAboWeltLeer(): void {}
 

@@ -470,6 +470,41 @@ class DarreichungService
         }
     }
 
+    /**
+     * Preis-Anstoß fürs Zubehör: ändert sich der (Lead-)Preis eines Non-Food-GP, rechnen NUR die Darreichungen neu, die es als Zubehör
+     * führen — gezielt über den Index auf gp_id, kein Massen-Recompute. Ohne Zubehör-Zeile kostet der Aufruf eine Abfrage.
+     *
+     * @param  list<int>  $gpIds
+     * @return int Anzahl neu gerechneter Darreichungen
+     */
+    public function recomputeFuerZubehoerGps(array $gpIds): int
+    {
+        $gpIds = array_values(array_unique(array_map('intval', $gpIds)));
+        if ($gpIds === []) {
+            return 0;
+        }
+        $ids = DB::table('foodalchemist_recipe_presentation_zubehoer')->whereIn('gp_id', $gpIds)->whereNull('deleted_at')->distinct()->pluck('presentation_id');
+        if ($ids->isEmpty()) {
+            return 0;
+        }
+        $n = 0;
+        foreach (FoodAlchemistRecipeDarreichung::whereIn('id', $ids)->get() as $d) {
+            $this->recomputePreise($d);
+            $n++;
+        }
+
+        return $n;
+    }
+
+    /** Wie {@see recomputeFuerZubehoerGps}, ausgehend von einem Lieferantenartikel (Preiszeile geändert): die GPs kommen aus der Struktur. */
+    public function nachLaPreisAenderung(int $supplierItemId): int
+    {
+        $gpIds = DB::table('foodalchemist_supplier_item_structures')->where('supplier_item_id', $supplierItemId)->whereNull('deleted_at')
+            ->whereNotNull('gp_id')->pluck('gp_id')->map(fn ($v) => (int) $v)->all();
+
+        return $this->recomputeFuerZubehoerGps($gpIds);
+    }
+
     /** Alle Darreichungen eines Gerichts neu rechnen (nach Zutaten-/EK-Änderung). */
     public function recomputeFuerRezept(int $recipeId): void
     {

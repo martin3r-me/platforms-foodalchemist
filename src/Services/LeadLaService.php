@@ -287,6 +287,7 @@ class LeadLaService
         $gp->update(['lead_la_supplier_item_id' => $laId]);
         // Spec 82 3b: der globale Lead gilt für alle Teams ohne eigenen Pin → Team-Kosten aller Teams veraltet
         app(KostenCacheService::class)->markiereVeraltet(app(KostenCacheService::class)->rezepteMitGps([(int) $gp->id]), null);
+        app(DarreichungService::class)->recomputeFuerZubehoerGps([(int) $gp->id]);   // Non-Food-GP als Zubehör: Darreichungen gezielt neu rechnen
 
         // Jeder Aufruf hier IST ein manueller Override — auch ohne Begründung. Die Zeile ist das
         // Merkmal, an dem repickVorschau() den Lead vor einer Neuwahl schützt.

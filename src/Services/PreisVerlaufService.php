@@ -93,7 +93,7 @@ class PreisVerlaufService
         if ($team !== null) {
             $itemQuery->visibleToTeam($team);
         }
-        $items = $itemQuery->get(['id', 'team_id', 'supplier_id', 'designation', 'marketing_name', 'qty', 'qty_korrigiert', 'unit_code'])->keyBy('id');
+        $items = $itemQuery->get(['id', 'team_id', 'supplier_id', 'designation', 'marketing_name', 'qty', 'qty_korrigiert', 'unit_code', 'lieferstatus', 'lieferstatus_seit'])->keyBy('id');
         if ($items->isEmpty()) {
             return $leer;
         }
@@ -154,7 +154,10 @@ class PreisVerlaufService
 
         $result = [];
         foreach ($ausgabe as $id => $a) {
-            $zugeschnitten = $this->zuschneiden($a['segmente'], $vonTs, $bisTs);
+            // Eingestellt (Necta, status 2 ohne Preis): die Linie endet am Tag der Einstellung, auch wenn ein Stand noch offen steht
+            $ls = $a['item']->lieferstatusInfo();
+            $bisLinie = ($ls !== null && $ls['status'] === 'eingestellt' && $ls['seit_ts'] !== null) ? min($bisTs, $ls['seit_ts']) : $bisTs;
+            $zugeschnitten = $this->zuschneiden($a['segmente'], $vonTs, $bisLinie);
             if ($zugeschnitten === []) {
                 $ohneVerlauf++;
 
@@ -167,6 +170,7 @@ class PreisVerlaufService
                 'artikel' => $item->marketing_name ?: $item->designation,
                 'lead' => $leadLaId !== null && (int) $id === $leadLaId,
                 'fokus' => $fokusLaId !== null && (int) $id === $fokusLaId,
+                'lieferstatus' => $item->lieferstatusInfo(),   // eingestellt / läuft aus seit …: die Linie endet bzw. wird beschriftet
                 'segmente' => array_map(fn (array $s) => [
                     'von' => Carbon::createFromTimestamp($s['von_ts'])->toDateString(), 'bis' => Carbon::createFromTimestamp($s['bis_ts'])->toDateString(),
                     'von_ts' => $s['von_ts'], 'bis_ts' => $s['bis_ts'],

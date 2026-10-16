@@ -151,7 +151,12 @@ class Verlauf extends Component
                 $trend = ['x1' => $x($l['trend']['von_ts']), 'y1' => $y(min($yMax, max($yMin, $l['trend']['start_wert']))),
                     'x2' => $x($l['trend']['bis_ts']), 'y2' => $y(min($yMax, max($yMin, $l['trend']['ende_wert'])))];
             }
+            // Lieferstatus: Markierung am Tag, an dem der Artikel eingestellt wurde bzw. zu laufen aufhört (nur im sichtbaren Zeitraum)
+            $ls = $l['lieferstatus'] ?? null;
+            $marker = $ls !== null && $ls['seit_ts'] !== null && $ls['seit_ts'] >= $t0 && $ls['seit_ts'] <= $t1
+                ? ['x' => $x((int) $ls['seit_ts']), 'label' => $ls['kurz'], 'art' => $ls['status']] : null;
             $svgLinien[] = [
+                'lieferstatus' => $ls, 'marker' => $marker,
                 'la_id' => $l['la_id'], 'farbe' => $farbe, 'breite' => $haupt ? 2.5 : 1.75, 'gedaempft' => $mitFokus && ! $haupt, 'fokus' => $l['fokus'], 'pfad' => trim($pfad), 'luecken' => trim($luecken), 'punkte' => $punkte, 'trend' => $trend,
                 'lead' => $l['lead'], 'lieferant' => $l['lieferant'], 'artikel' => $l['artikel'], 'staende' => $l['staende'], 'ohne_wechsel' => $l['ohne_wechsel'] ?? false,
                 'aktuell' => end($l['segmente'])['wert'], 'trend_text' => self::trendText($l['trend'], (string) $daten['einheit']),
