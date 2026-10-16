@@ -49,16 +49,42 @@ class GpNamingService
         return trim($s, '_');
     }
 
+    /** Platzhalter, die KI oder Importe für „weiß ich nicht" liefern. Sie sind KEIN Wert (Regelwerk GP §6/§9, §12). */
+    private const LEERWERTE = ['unbekannt', 'unknown', 'n/a', 'na', 'n.a.', 'k.a.', 'ka', 'keine angabe', 'nicht bekannt', 'nicht angegeben', 'none', 'null', '-', '–', '?'];
+
+    /** Strukturfeld bereinigen: „unbekannt" und Verwandte werden zu leer, nie zu Name oder Kennung. */
+    public function bereinigeFeld(mixed $wert): string
+    {
+        if (! is_string($wert) && ! is_numeric($wert)) {
+            return '';
+        }
+        $w = trim((string) $wert);
+
+        return in_array(mb_strtolower(trim($w, " \t()[].,;:")), self::LEERWERTE, true) || in_array(mb_strtolower($w), self::LEERWERTE, true) ? '' : $w;
+    }
+
+    /** Alle strukturierten Naming-Felder eines Eingabe-Arrays bereinigen (Name/Kennung bleiben frei von Platzhaltern). */
+    public function bereinigeFelder(array $in): array
+    {
+        foreach (['hauptzutat', 'condition', 'processing', 'form', 'pflichtangabe', 'portion', 'sub_category'] as $feld) {
+            if (array_key_exists($feld, $in)) {
+                $in[$feld] = $this->bereinigeFeld($in[$feld]);
+            }
+        }
+
+        return $in;
+    }
+
     /** commands.rs:2496 — IMMER 3 Slots, auch leere (Tomatenpulver-Dubletten-Bug 2026-05-26). */
     public function buildGpKey(string $hauptzutatSlug, ?string $processing, ?string $form): string
     {
-        return $hauptzutatSlug . '|' . $this->slugify($processing ?? '') . '|' . $this->slugify($form ?? '');
+        return $hauptzutatSlug . '|' . $this->slugify($this->bereinigeFeld($processing)) . '|' . $this->slugify($this->bereinigeFeld($form));
     }
 
     /** A2/A7: Eingangs-Normalisierung — Langform → kanonisch TK; sonst unverändert. */
     public function normalisiereZustand(?string $condition): ?string
     {
-        if ($condition === null || trim($condition) === '') {
+        if ($condition === null || $this->bereinigeFeld($condition) === '') {
             return null;
         }
         $z = trim($condition);
@@ -121,6 +147,7 @@ class GpNamingService
      */
     public function renderGpName(array $in): string
     {
+        $in = $this->bereinigeFelder($in);
         $parts = [];
         $condition = $this->normalisiereZustand($in['condition'] ?? null);
         if ($condition !== null) {
@@ -243,7 +270,11 @@ class GpNamingService
      */
     public function createGp(Team $team, array $in, bool $force = false): FoodAlchemistGp
     {
+        $in = $this->bereinigeFelder($in);
         $name = trim($in['name'] ?? '') !== '' ? trim($in['name']) : $this->renderGpName($in);
+        if ($this->enthaeltPlatzhalter($name)) {
+            throw new \RuntimeException('Der Name enthält „unbekannt“. Unbekannte Eigenschaften bleiben leer und stehen nie im Namen (Regelwerk GP §6, §12).');
+        }
         $pruefung = $this->validateGpName($name, $in);
         if ($pruefung['errors'] !== []) {
             throw new \RuntimeException(implode(' ', $pruefung['errors']));
@@ -291,6 +322,7 @@ class GpNamingService
     /** GP-Edit über die strukturierten Felder — gleiche Validierung, gp_key wird NICHT umgeschrieben (Seed-Stabilität). */
     public function updateGp(Team $team, FoodAlchemistGp $gp, array $in): FoodAlchemistGp
     {
+        $in = $this->bereinigeFelder($in);
         $name = trim($in['name'] ?? '') !== '' ? trim($in['name']) : $this->renderGpName($in);
         $pruefung = $this->validateGpName($name, $in);
         if ($pruefung['errors'] !== []) {
@@ -320,6 +352,14 @@ class GpNamingService
         ]);
 
         return $gp->refresh();
+    }
+
+    /** Steht ein Platzhalter („unbekannt") als Attribut im Namen? Nur ganze Wörter im Attributteil nach dem Doppelpunkt. */
+    public function enthaeltPlatzhalter(string $name): bool
+    {
+        $teil = str_contains($name, ':') ? substr($name, (int) strpos($name, ':') + 1) : $name;
+
+        return (bool) preg_match('/(^|[\s,\/(])(unbekannt|unknown)([\s,\/)]|$)/iu', $teil);
     }
 
     private function normalisiere(string $s): string

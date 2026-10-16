@@ -849,8 +849,7 @@ class GpModal extends Component
         if ($wg !== null) {
             $this->builder['commodity_group_code'] = (string) $wg->code;
             $sub = trim((string) ($v->werte['sub_category'] ?? ''));
-            $treffer = $vocab->listSubCategories($team, (string) $wg->code)->pluck('sub_category')
-                ->first(fn ($x) => mb_strtolower((string) $x) === mb_strtolower($sub));
+            $treffer = self::subKategorieTreffer($vocab->listSubCategories($team, (string) $wg->code)->pluck('sub_category')->all(), $sub);
             $this->builder['sub_category'] = $treffer !== null ? (string) $treffer : '';
             $gesetzt[] = 'Warengruppe '.$wg->codedLabel().($treffer !== null ? ' › '.$treffer : ' (keine passende Unterkategorie)');
         }
@@ -904,9 +903,12 @@ class GpModal extends Component
 
             return;
         }
+        $naming = app(GpNamingService::class);
         foreach (['hauptzutat', 'condition', 'processing', 'form', 'pflichtangabe'] as $feld) {
-            if (! empty($vorschlag->werte[$feld]) && is_string($vorschlag->werte[$feld])) {
-                $this->builder[$feld] = $vorschlag->werte[$feld];
+            // „unbekannt" & Co. sind kein Wert: das Feld bleibt leer und gelangt nie in Name oder Kennung (Regelwerk GP §6, §12)
+            $wert = $naming->bereinigeFeld($vorschlag->werte[$feld] ?? null);
+            if ($wert !== '') {
+                $this->builder[$feld] = $wert;
             }
         }
         $code = trim((string) ($vorschlag->werte['commodity_group_code'] ?? ''));
@@ -914,14 +916,36 @@ class GpModal extends Component
             ?? $warengruppen->first(fn ($x) => mb_strtolower((string) $x->name) === mb_strtolower($code));
         if ($wg !== null) {
             $this->builder['commodity_group_code'] = (string) $wg->code;
-            $sub = trim((string) ($vorschlag->werte['sub_category'] ?? ''));
             $erlaubt = $vocab->listSubCategories($team, (string) $wg->code)->pluck('sub_category');
-            $treffer = $erlaubt->first(fn ($x) => mb_strtolower((string) $x) === mb_strtolower($sub));
-            $this->builder['sub_category'] = $treffer !== null ? (string) $treffer : '';
+            $treffer = self::subKategorieTreffer($erlaubt->all(), (string) ($vorschlag->werte['sub_category'] ?? ''));
+            $this->builder['sub_category'] = $treffer ?? '';
         }
         if ($this->supplierItemId === null) {
             $this->laSuche = trim($this->kiRohtext);
         }
+    }
+
+    /**
+     * Unterkategorie der KI gegen die erlaubte Liste der Warengruppe abgleichen: exakt, dann ohne Umlaut/Satzzeichen, dann Teilwort.
+     * Kein Treffer = null (leer lassen, nie raten).
+     *
+     * @param  list<string>  $erlaubt
+     */
+    private static function subKategorieTreffer(array $erlaubt, string $vorschlag): ?string
+    {
+        $norm = fn (string $x) => trim((string) preg_replace('/[^a-z0-9]+/', ' ', strtr(mb_strtolower($x), ['ä' => 'ae', 'ö' => 'oe', 'ü' => 'ue', 'ß' => 'ss', '&' => ' und '])));
+        $v = $norm($vorschlag);
+        if ($v === '') {
+            return null;
+        }
+        foreach ($erlaubt as $e) {
+            if ($norm((string) $e) === $v) {
+                return (string) $e;
+            }
+        }
+        $teil = array_values(array_filter($erlaubt, fn ($e) => ($n = $norm((string) $e)) !== '' && (str_contains($n, $v) || str_contains($v, $n))));
+
+        return count($teil) === 1 ? (string) $teil[0] : null;
     }
 
     /**
@@ -935,11 +959,21 @@ class GpModal extends Component
             return null;
         }
         $la = \Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem::visibleToTeam($team)
-            ->with(['supplier:id,name', 'structure'])
+            ->with(['supplier:id,name', 'structure', 'allergens', 'nutritionals'])
             ->find($this->supplierItemId);
         if ($la === null || $la->structure?->gp_id !== null) {
             return null;
         }
+        $allergene = [];
+        foreach (\Platform\FoodAlchemist\Models\FoodAlchemistItemAllergen::ALLERGENE as $key => $label) {
+            $wert = $la->allergens?->{'allergen_'.$key} ?? null;
+            if (in_array($wert, ['enthalten', 'spuren'], true)) {
+                $allergene[] = $label.' ('.$wert.')';
+            }
+        }
+        $naehrwerte = $la->nutritionals !== null
+            ? array_filter($la->nutritionals->only(['energy_kcal', 'protein', 'fat', 'carbs_absorbable']), fn ($v) => $v !== null)
+            : [];
 
         return [
             'id' => (int) $la->id,
@@ -955,7 +989,34 @@ class GpModal extends Component
             'vegan' => $la->is_vegan,
             'vegetarisch' => $la->is_vegetarian,
             'alkohol' => $la->is_alcohol,
+            // Nur zur Einordnung (Form, Zustand, Sortiment), NIE Teil des GP-Namens (§7.1): Gebinde und Einheit
+            'gebinde_hinweis' => array_filter(['menge' => $la->qty !== null ? (float) $la->qty : null, 'einheit' => $la->unit_code, 'verpackung' => $la->packaging_unit]),
+            'allergene' => $allergene,
+            'naehrwerte_je_100' => $naehrwerte,
+            'aehnliche_artikel_mit_gp' => $this->aehnlicheArtikelMitGp($la),
         ];
+    }
+
+    /**
+     * Bereits zugeordnete Lieferantenartikel mit gleichem Anfangswort der Bezeichnung und deren GP-Namen: reale Vorbilder
+     * für Hauptzutat, Zustand und Form (z. B. Sortenname → Mischung). Höchstens 5, nur sichtbare Artikel.
+     */
+    private function aehnlicheArtikelMitGp(\Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem $la): array
+    {
+        $team = $this->team();
+        $erstes = trim((string) preg_split('/[\s,]+/u', trim((string) $la->designation), 2)[0]);
+        if ($team === null || mb_strlen($erstes) < 4) {
+            return [];
+        }
+
+        return \Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem::visibleToTeam($team)
+            ->where('foodalchemist_supplier_items.id', '!=', $la->id)
+            ->where('designation', 'like', $erstes.'%')
+            ->whereHas('structure', fn ($q) => $q->whereNotNull('gp_id'))
+            ->with('structure.gp:id,name')
+            ->limit(5)->get()
+            ->map(fn ($x) => ['bezeichnung' => (string) $x->designation, 'gp' => (string) ($x->structure?->gp?->name ?? '')])
+            ->filter(fn ($z) => $z['gp'] !== '')->values()->all();
     }
 
     public function supplierItemWaehlen(int $id): void
@@ -1012,8 +1073,9 @@ class GpModal extends Component
         }
         $builder = $this->builder;
         foreach (['hauptzutat', 'condition', 'processing', 'form', 'pflichtangabe'] as $feld) {
-            if (! empty($vorschlag->werte[$feld]) && is_string($vorschlag->werte[$feld])) {
-                $builder[$feld] = $vorschlag->werte[$feld];
+            $wert = app(GpNamingService::class)->bereinigeFeld($vorschlag->werte[$feld] ?? null);
+            if ($wert !== '') {
+                $builder[$feld] = $wert;
             }
         }
         $name = trim(app(GpNamingService::class)->renderGpName($builder));
