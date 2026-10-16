@@ -57,7 +57,7 @@ final class NonFoodRegeln
             'mopp(?:s)?', 'wischmopp', 'besen', 'kehrschaufel', 'kehrblech', 'bürste(?:n)?', 'mikrofaser*', 'sprühflasche', 'deo', 'deodorant', 'w\.?\s?gr\.?\s?38',
         ],
         self::SUB_EINWEG => [
-            'einweg*', 'alufolie', 'frischhaltefolie', 'backpapier', 'pergament*', 'gefrierbeutel', 'vakuumbeutel', 'gefrierbox', 'frischhaltebox',
+            'einweg*', 'bagasse', 'alufolie', 'frischhaltefolie', 'backpapier', 'pergament*', 'gefrierbeutel', 'vakuumbeutel', 'gefrierbox', 'frischhaltebox',
             'to[\s-]?go[\s-]?box', 'burgerbox', 'menübox', 'pizzakarton', 'strohhalm*', 'trinkhalm*', 'pappbecher', 'pappteller', 'partyteller',
             'holzspieß(?:e)?', 'zahnstocher', 'etikett(?:en)?', 'klebeband',
         ],
@@ -68,13 +68,18 @@ final class NonFoodRegeln
         self::SUB_DEKO => [
             'kerze(?:n)?', 'teelicht(?:er)?', 'lampion(?:s)?', 'tischdecke(?:n)?', 'tischset(?:s)?', 'tischläufer', 'serviette(?:n)?', 'luftballon(?:s)?', 'girlande(?:n)?', 'konfetti',
             'led-lampe(?:n)?', 'leuchtmittel', 'glühbirne(?:n)?',
+            // 16.10.2026, an den echten Bezeichnungen belegt (Zahlen: docs/PLANUNG/_NonFood_Regeln_Belege_2026-10-16.md): reine Deko-Wörter ohne GP-Zuordnung
+            'windlicht(?:er)?', 'vase(?:n)?', 'untersetzer', 'kerzenhalter',
         ],
         self::SUB_GESCHIRR => [
             'speiseteller', 'suppenteller', 'dessertteller', 'frühstücksteller', 'platzteller', 'kaffeetasse(?:n)?', 'teetasse(?:n)?', 'espressotasse(?:n)?', 'cappuccinotasse(?:n)?',
             'weinglas', 'weingläser', 'sektglas', 'sektgläser', 'wasserglas', 'wassergläser', 'biergl(?:as|äser)', 'whiskyglas', 'longdrinkglas', 'besteck(?:e|s)?', 'servierplatte(?:n)?',
+            // 16.10.2026 belegt (siehe Doku): Material-/Gerätewörter ohne GP-Zuordnung
+            'melamin', 'porzellan', 'tablett(?:s)?', 'schüssel(?:n)?',
         ],
         self::SUB_KUECHE => [
             'schneebesen', 'thermometer', 'messbecher', 'backblech(?:e)?', 'dosenöffner', 'korkenzieher', 'küchenmesser', 'kochlöffel', 'sparschäler', 'gn-behälter', 'gastronormbehälter',
+            'edelstahl', 'kunststoff', 'schneidebrett(?:er)?', 'schneidbrett(?:er)?', 'backform(?:en)?', 'lampe(?:n)?',
         ],
         self::SUB_BUERO => [
             'kugelschreiber', 'bleistift(?:e)?', 'batterie(?:n)?', 'feuerzeug(?:e)?', 'streichholz', 'streichhölzer', 'kassenrolle(?:n)?', 'thermorolle(?:n)?', 'schreibblock',
@@ -83,10 +88,16 @@ final class NonFoodRegeln
 
     /** Mehrdeutige Wörter: Gebinde oder Geschirr — allein nie ein Urteil, nur „unklar“. */
     private const MEHRDEUTIG = [
-        'becher', 'teller', 'schale', 'schüssel', 'löffel', 'gabel', 'messer', 'glas', 'gläser', 'flasche', 'dose', 'tüte', 'beutel', 'folie', 'papier', 'tuch', 'tücher',
-        'box', 'karton', 'korb', 'körbe', 'krug', 'kanne', 'tasse', 'pfanne', 'topf', 'form', 'gitter', 'zange', 'sieb', 'brett', 'eimer', 'spray', 'tablett', 'deckel',
-        'lampe', 'behälter', 'kiste', 'untersetzer', 'platte', 'halter', 'ständer', 'spender', 'etikett', 'spieß', 'spieße',
+        'becher', 'teller', 'schale', 'löffel', 'gabel', 'messer', 'glas', 'gläser', 'flasche', 'dose', 'tüte', 'beutel', 'folie', 'papier', 'tuch', 'tücher',
+        'vase', 'box', 'karton', 'korb', 'körbe', 'krug', 'kanne', 'tasse', 'pfanne', 'topf', 'form', 'gitter', 'zange', 'sieb', 'brett', 'eimer', 'spray', 'deckel',
+        'behälter', 'kiste', 'platte', 'halter', 'ständer', 'spender', 'etikett', 'spieß', 'spieße',
     ];
+
+    /**
+     * Wörter, die ein starkes Non-Food-Wort ENTWERTEN: das starke Wort steht dann an einer Ware (Koppert „Venus Vase“ = Kresse in der Glasvase,
+     * Belege in den io-Daten). Der Artikel fällt auf „mehrdeutig/unklar“ zurück und geht an die KI statt automatisch auf Non-Food.
+     */
+    private const AUSNAHMEN = ['koppert', 'kresse', 'microgreens'];
 
     /** Lieferanten-Branche bzw. -Name, die für sich Non-Food bedeutet, mit Unterkategorie (null = nur Non-Food, Unterkategorie offen). */
     private const BRANCHE = [
@@ -103,13 +114,17 @@ final class NonFoodRegeln
     private static ?string $mehrdeutigRegex = null;
 
     /**
-     * @param  array{bezeichnung:?string, verkaufsname?:?string, branche?:?string, lieferant?:?string, gruppe?:?string, hat_food_daten:bool}  $a
+     * @param  array{bezeichnung:?string, verkaufsname?:?string, branche?:?string, lieferant?:?string, gruppe?:?string, hat_food_daten:bool, hat_echte_food_daten?:bool}  $a
      * @return array{klasse:'nonfood'|'food'|'unklar', subkategorie:?string, konfidenz:?float, grund:?string}
      */
     public static function bewerte(array $a): array
     {
         $text = trim((string) ($a['bezeichnung'] ?? '').' '.(string) ($a['verkaufsname'] ?? ''));
         $hatFood = (bool) $a['hat_food_daten'];
+        // Zwei Schwellen: `hat_food_daten` (weit: irgendeine Zeile) hält mehrdeutige Wörter bei Food-Artikeln aus der KI; `hat_echte_food_daten` (eng: GP-Zuordnung,
+        // positives Allergen, Nährwerte > 0, Zutatenliste, Alkohol) entscheidet bei einem STARKEN Wort zwischen Non-Food und unklar. Leere Import-Zeilen
+        // (Allergene/Nährwerte/Deklarationen ohne Wert) sind kein Food-Beleg: sie hingen an 2.748 offensichtlichen Non-Food-Artikeln und schickten sie an die KI.
+        $hatEchteFood = array_key_exists('hat_echte_food_daten', $a) ? (bool) $a['hat_echte_food_daten'] : $hatFood;
 
         $brancheSub = null;
         $brancheTreffer = in_array((string) ($a['gruppe'] ?? ''), LieferantenGruppen::NONFOOD_GRUPPEN, true);   // gepflegte Lieferanten-Gruppe (Non-Food/Verleih) vor dem Muster
@@ -121,10 +136,13 @@ final class NonFoodRegeln
         }
 
         $stark = self::starkTreffer($text);
+        if ($stark !== null && preg_match('/(?<![\p{L}\p{N}])(?:'.implode('|', self::AUSNAHMEN).')(?![\p{L}\p{N}])/iu', $text) === 1) {
+            $stark = null;   // starkes Wort an einer Ware: nicht automatisch Non-Food
+        }
         $mehrdeutig = $stark === null && self::mehrdeutigTreffer($text);
 
         if ($stark !== null || $brancheTreffer) {
-            if ($hatFood) {
+            if ($hatEchteFood) {
                 return ['klasse' => 'unklar', 'subkategorie' => $stark ?? $brancheSub, 'konfidenz' => null,
                     'grund' => 'Non-Food-Signal, aber Allergen-/Nährwert-/Zutatendaten vorhanden'];
             }

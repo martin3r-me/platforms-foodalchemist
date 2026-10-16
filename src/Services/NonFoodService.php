@@ -51,6 +51,10 @@ class NonFoodService
             ->selectRaw('EXISTS (SELECT 1 FROM foodalchemist_item_allergens a WHERE a.supplier_item_id = i.id) AS f_all')
             ->selectRaw('EXISTS (SELECT 1 FROM foodalchemist_item_nutritionals n WHERE n.supplier_item_id = i.id) AS f_nae')
             ->selectRaw('EXISTS (SELECT 1 FROM foodalchemist_item_declarations d WHERE d.supplier_item_id = i.id) AS f_dek')
+            // ENGE Food-Belege (nur für die Entscheidung bei einem starken Non-Food-Wort): leere Import-Zeilen zählen nicht
+            ->selectRaw('EXISTS (SELECT 1 FROM foodalchemist_supplier_item_structures st WHERE st.supplier_item_id = i.id AND st.gp_id IS NOT NULL) AS f_gp')
+            ->selectRaw('EXISTS (SELECT 1 FROM foodalchemist_item_allergens a WHERE a.supplier_item_id = i.id AND ('.self::allergenPositivSql().')) AS f_pos')
+            ->selectRaw('EXISTS (SELECT 1 FROM foodalchemist_item_nutritionals n WHERE n.supplier_item_id = i.id AND (n.energy_kcal > 0 OR n.protein > 0 OR n.fat > 0 OR n.carbs_absorbable > 0)) AS f_nwert')
             ->orderBy('i.id');
 
         $query->chunkById(2000, function ($zeilen) use (&$r, $schreiben, $vorhanden, $limit) {
@@ -59,10 +63,13 @@ class NonFoodService
                     return false;
                 }
                 $r['gesamt']++;
-                $hatFood = (bool) ($z->f_all || $z->f_nae || $z->f_dek || $z->is_alcohol || trim((string) $z->ingredients_supplier) !== '');
+                $zutaten = trim((string) $z->ingredients_supplier) !== '';
+                // weit: irgendeine Zeile oder GP-Zuordnung (hält mehrdeutige Wörter bei Food aus der KI); eng: echte Werte (entscheidet bei starkem Wort)
+                $hatFood = (bool) ($z->f_all || $z->f_nae || $z->f_dek || $z->f_gp || $z->is_alcohol || $zutaten);
+                $hatEchte = (bool) ($z->f_gp || $z->f_pos || $z->f_nwert || $z->is_alcohol || $zutaten);
                 $b = NonFoodRegeln::bewerte([
                     'bezeichnung' => $z->designation, 'verkaufsname' => $z->marketing_name, 'branche' => $z->branche,
-                    'lieferant' => $z->lieferant, 'gruppe' => $z->gruppe, 'hat_food_daten' => $hatFood,
+                    'lieferant' => $z->lieferant, 'gruppe' => $z->gruppe, 'hat_food_daten' => $hatFood, 'hat_echte_food_daten' => $hatEchte,
                 ]);
                 $r[$b['klasse']]++;
                 if ($b['klasse'] !== 'food') {
@@ -104,6 +111,12 @@ class NonFoodService
         }, 'i.id', 'id');
 
         return $r;
+    }
+
+    /** SQL-Bedingung „mindestens ein Allergen ist ausdrücklich enthalten/Spuren“ (nicht_enthalten und leer sind kein Food-Beleg). */
+    private static function allergenPositivSql(): string
+    {
+        return implode(' OR ', array_map(fn (string $k) => "a.allergen_{$k} IN ('enthalten', 'spuren')", array_keys(\Platform\FoodAlchemist\Models\FoodAlchemistItemAllergen::ALLERGENE)));
     }
 
     /**
