@@ -11,6 +11,12 @@
                         data-zeitraum="{{ $key }}">{{ $label }}</button>
             @endforeach
         </div>
+        @if($modus === 'la' && ($daten['gp_id'] ?? null) !== null && ($daten['la_gesamt'] ?? 0) > 1)
+            <button type="button" wire:click="alleArtikelUmschalten" aria-pressed="{{ $alleArtikel ? 'true' : 'false' }}" data-preisverlauf-alle
+                    class="h-7 px-2.5 rounded-[var(--fa-radius-control)] border border-[var(--fa-line)] text-[length:var(--fa-text-sm)] {{ $alleArtikel ? 'bg-[var(--fa-accent)] text-[var(--fa-on-accent)] font-medium' : 'text-[var(--fa-ink-2)] hover:text-[var(--fa-ink)]' }}">
+                Alle Artikel des Grundprodukts ({{ $daten['la_gesamt'] }})
+            </button>
+        @endif
         @if($zeitraum === 'frei')
             <div class="flex items-center gap-2">
                 <input type="date" wire:model.live="von" class="fa-input h-7 text-[length:var(--fa-text-sm)]" aria-label="von" data-preisverlauf-von>
@@ -57,7 +63,7 @@
                         @if($l['luecken'] !== '')
                             <path d="{{ $l['luecken'] }}" fill="none" stroke="{{ $l['farbe'] }}" stroke-width="1.25" stroke-dasharray="3 4" stroke-opacity="0.6" vector-effect="non-scaling-stroke" data-preisverlauf-luecke />
                         @endif
-                        <path d="{{ $l['pfad'] }}" fill="none" stroke="{{ $l['farbe'] }}" stroke-width="{{ $l['breite'] }}" stroke-linejoin="miter" stroke-linecap="butt" vector-effect="non-scaling-stroke" />
+                        <path d="{{ $l['pfad'] }}" fill="none" stroke="{{ $l['farbe'] }}" stroke-width="{{ $l['breite'] }}" stroke-opacity="{{ $l['gedaempft'] ? '0.65' : '1' }}" stroke-linejoin="miter" stroke-linecap="butt" vector-effect="non-scaling-stroke" />
                         @if($l['trend'])
                             <line x1="{{ $l['trend']['x1'] }}" y1="{{ $l['trend']['y1'] }}" x2="{{ $l['trend']['x2'] }}" y2="{{ $l['trend']['y2'] }}" stroke="{{ $l['farbe'] }}"
                                   stroke-width="1.5" stroke-dasharray="6 4" vector-effect="non-scaling-stroke" data-preisverlauf-trend />
@@ -89,7 +95,14 @@
                     <span class="inline-block h-0.5 w-5 shrink-0 self-center rounded" style="background: {{ $l['farbe'] }}; height: {{ $l['lead'] ? 3 : 2 }}px"></span>
                     <span class="font-medium text-[var(--fa-ink)]">{{ $l['lieferant'] ?? '–' }}</span>
                     <span class="text-[var(--fa-ink-2)]">{{ $l['artikel'] }}</span>
-                    @if($l['lead'])<x-fa::badge tone="accent">Lead</x-fa::badge>@endif
+                    @if($l['lead'] && $modus === 'la' && $l['fokus'])
+                        <span title="Preis dieses Artikels gilt als EK des Grundprodukts" data-lead-badge><x-fa::badge tone="accent">Lead von {{ $daten['gp_name'] }}</x-fa::badge></span>
+                    @elseif($l['lead'] && $modus === 'la')
+                        <span title="Lead-Artikel des Grundprodukts: sein Preis gilt als EK des Grundprodukts" data-lead-badge><x-fa::badge tone="accent">Lead</x-fa::badge></span>
+                    @elseif($l['lead'])
+                        <x-fa::badge tone="accent">Lead</x-fa::badge>
+                    @endif
+                    @if($modus === 'la' && $l['fokus'] && ! $l['lead'] && count($diagramm['linien']) > 1)<span data-fokus-badge><x-fa::badge>dieser Artikel</x-fa::badge></span>@endif
                     <span class="tabular-nums text-[var(--fa-ink)]">{{ number_format($l['aktuell'], 2, ',', '.') }} {{ $diagramm['einheit'] }}</span>
                     @if($l['trend_text'])
                         <span class="tabular-nums text-[var(--fa-ink-2)] font-medium" data-preisverlauf-steigung>Trend {{ $l['trend_text'] }}</span>

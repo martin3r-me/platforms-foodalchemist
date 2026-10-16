@@ -81,7 +81,7 @@ class PreisVerlaufService
      *   linien:list<array{la_id:int, lieferant:?string, artikel:?string, lead:bool, segmente:list<array<string,mixed>>, trend:?array<string,mixed>, staende:int}>
      * }
      */
-    public function verlauf(?Team $team, array $laIds, ?Carbon $von, Carbon $bis, ?int $leadLaId = null): array
+    public function verlauf(?Team $team, array $laIds, ?Carbon $von, Carbon $bis, ?int $leadLaId = null, ?int $fokusLaId = null): array
     {
         $laIds = array_values(array_unique(array_map('intval', $laIds)));
         $leer = ['einheit' => null, 'von' => $von?->toDateString(), 'bis' => $bis->toDateString(), 'weggelassen' => 0, 'ohne_verlauf' => 0, 'linien' => []];
@@ -135,7 +135,7 @@ class PreisVerlaufService
         }
 
         // Eine Basiseinheit: die des Lead-LA, sonst die häufigste (Gleichstand: kg vor l vor Stk). Fremde Einheiten weglassen und zählen.
-        $einheit = $this->gemeinsameEinheit($linien, $leadLaId);
+        $einheit = $this->gemeinsameEinheit($linien, $fokusLaId ?? $leadLaId);
         $weggelassen = $ohneBasis;
         $ausgabe = [];
         $erster = null;
@@ -166,6 +166,7 @@ class PreisVerlaufService
                 'lieferant' => $item->supplier?->name,
                 'artikel' => $item->marketing_name ?: $item->designation,
                 'lead' => $leadLaId !== null && (int) $id === $leadLaId,
+                'fokus' => $fokusLaId !== null && (int) $id === $fokusLaId,
                 'segmente' => array_map(fn (array $s) => [
                     'von' => Carbon::createFromTimestamp($s['von_ts'])->toDateString(), 'bis' => Carbon::createFromTimestamp($s['bis_ts'])->toDateString(),
                     'von_ts' => $s['von_ts'], 'bis_ts' => $s['bis_ts'],
@@ -176,7 +177,7 @@ class PreisVerlaufService
                 'trend' => $this->ohneWechsel($zugeschnitten) ? null : $this->trend($zugeschnitten),
             ];
         }
-        usort($result, fn ($a, $b) => [! $a['lead'], mb_strtolower((string) $a['lieferant'])] <=> [! $b['lead'], mb_strtolower((string) $b['lieferant'])]);
+        usort($result, fn ($a, $b) => [! $a['fokus'], ! $a['lead'], mb_strtolower((string) $a['lieferant'])] <=> [! $b['fokus'], ! $b['lead'], mb_strtolower((string) $b['lieferant'])]);
 
         return [
             'einheit' => $einheit,
@@ -489,6 +490,33 @@ class PreisVerlaufService
         $lead = $gp->lead_la_supplier_item_id !== null ? (int) $gp->lead_la_supplier_item_id : null;
 
         return $this->verlauf($team, $laIds, $von, $bis, $lead) + ['la_gesamt' => count($laIds), 'lead_la_id' => $lead];
+    }
+
+    /**
+     * Verlauf am Lieferantenartikel. Ohne Grundprodukt EINE Linie ohne Lead-Kennzeichnung. Mit Grundprodukt kommt der Lead-LA als zweite Linie
+     * dazu (sofern der Artikel nicht selbst Lead ist); `$alle` zeigt alle Artikel des Grundprodukts. Der Artikel selbst ist `fokus`,
+     * seine Basiseinheit gilt (andere Einheiten werden weggelassen und gezählt, wie am Grundprodukt).
+     *
+     * @return array<string,mixed>  wie {@see verlauf()}, dazu `gp_id`, `gp_name`, `lead_la_id` (nur mit Grundprodukt), `la_gesamt`
+     */
+    public function verlaufFuerLa(?Team $team, int $laId, ?Carbon $von, Carbon $bis, bool $alle = false): array
+    {
+        $gpId = \Platform\FoodAlchemist\Models\FoodAlchemistSupplierItemStructure::query()->where('supplier_item_id', $laId)->whereNotNull('gp_id')->value('gp_id');
+        $gpQuery = $gpId !== null ? \Platform\FoodAlchemist\Models\FoodAlchemistGp::query() : null;
+        if ($gpQuery !== null && $team !== null) {
+            $gpQuery->visibleToTeam($team);
+        }
+        $gp = $gpQuery?->find($gpId);
+        if ($gp === null) {
+            return $this->verlauf($team, [$laId], $von, $bis, null, $laId) + ['gp_id' => null, 'gp_name' => null, 'lead_la_id' => null, 'la_gesamt' => 1];
+        }
+        $lead = $gp->lead_la_supplier_item_id !== null ? (int) $gp->lead_la_supplier_item_id : null;
+        $alleIds = \Platform\FoodAlchemist\Models\FoodAlchemistSupplierItemStructure::query()->where('gp_id', $gp->id)
+            ->pluck('supplier_item_id')->map(fn ($i) => (int) $i)->unique()->values()->all();
+        $ids = $alle ? $alleIds : array_values(array_filter([$laId, $lead]));
+
+        return $this->verlauf($team, $ids, $von, $bis, $lead, $laId)
+            + ['gp_id' => (int) $gp->id, 'gp_name' => $gp->name, 'lead_la_id' => $lead, 'la_gesamt' => count($alleIds)];
     }
 
     /** Für Tests: Zwischenspeicher der Tabellen-Prüfung zurücksetzen. */

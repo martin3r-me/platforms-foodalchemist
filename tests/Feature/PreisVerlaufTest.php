@@ -510,3 +510,54 @@ it('Ein Preis, der gerade eben angelegt wurde, erscheint sofort in der Linie (Fe
         expect(array_column($r['linien'][0]['segmente'], 'wert'))->toBe([4.0, 5.5]);
     }
 });
+
+it('Artikel-Modal: ohne Grundprodukt eine Linie und KEIN Lead-Badge; ein Artikel mit GP, der nicht Lead ist, zeigt den Lead als zweite Linie', function () {
+    $solo = ($this->la)('Kluth');
+    ($this->preis)($solo, 4.0, '2026-01-01', '2026-04-01');
+    ($this->preis)($solo, 5.0, '2026-04-01');
+    $c = Livewire::test(Verlauf::class, ['modus' => 'la', 'objektId' => $solo->id]);
+    expect(substr_count($c->html(), 'data-preisverlauf-linie='))->toBe(1)->and($c->html())->not->toContain('data-lead-badge')->not->toContain('data-preisverlauf-alle');
+    $r = $this->svc->verlaufFuerLa($this->rootTeam, $solo->id, ...($this->fenster)('alles'));
+    expect($r['linien'][0]['lead'])->toBeFalse()->and($r['linien'][0]['fokus'])->toBeTrue()->and($r['gp_id'])->toBeNull();
+
+    $gp = FoodAlchemistGp::create(['team_id' => $this->rootTeam->id, 'gp_key' => 'pv|lead', 'name' => 'Sahne 30 %']);
+    $lead = ($this->la)('Hanos');
+    $anderer = ($this->la)('Chefs');
+    $dritter = ($this->la)('Metro');
+    foreach ([$lead, $anderer, $dritter] as $la) {
+        ($this->preis)($la, 4.0, '2026-01-01', '2026-04-01');
+        ($this->preis)($la, 5.0, '2026-04-01');
+        FoodAlchemistSupplierItemStructure::create(['team_id' => $this->rootTeam->id, 'supplier_item_id' => $la->id, 'gp_id' => $gp->id]);
+    }
+    $gp->update(['lead_la_supplier_item_id' => $lead->id]);
+
+    $c = Livewire::test(Verlauf::class, ['modus' => 'la', 'objektId' => $anderer->id]);
+    $html = $c->html();
+    expect(substr_count($html, 'data-preisverlauf-linie='))->toBe(2)->and($html)->toContain('data-preisverlauf-alle')->toContain('dieser Artikel')->toContain('Hanos');
+    $r = $this->svc->verlaufFuerLa($this->rootTeam, $anderer->id, ...($this->fenster)('alles'));
+    expect(array_column($r['linien'], 'la_id'))->toBe([$anderer->id, $lead->id])->and($r['linien'][0]['fokus'])->toBeTrue()->and($r['linien'][0]['lead'])->toBeFalse()
+        ->and($r['linien'][1]['lead'])->toBeTrue()->and($r['linien'][1]['fokus'])->toBeFalse();
+
+    // Umschalter: alle drei Artikel
+    $c->call('alleArtikelUmschalten');
+    expect(substr_count($c->html(), 'data-preisverlauf-linie='))->toBe(3);
+    $c->call('alleArtikelUmschalten');
+    expect(substr_count($c->html(), 'data-preisverlauf-linie='))->toBe(2);
+
+    // Gegenprobe: der Lead selbst zeigt eine Linie und das Badge „Lead von <GP>“ mit Tooltip
+    $l = Livewire::test(Verlauf::class, ['modus' => 'la', 'objektId' => $lead->id]);
+    expect(substr_count($l->html(), 'data-preisverlauf-linie='))->toBe(1)->and($l->html())->toContain('Lead von Sahne 30 %')->toContain('gilt als EK des Grundprodukts');
+});
+
+it('Artikel-Modal: Basiseinheit des Artikels gilt, fremde Einheit am Lead wird weggelassen und gezählt', function () {
+    $gp = FoodAlchemistGp::create(['team_id' => $this->rootTeam->id, 'gp_key' => 'pv|einheit', 'name' => 'Milch']);
+    $kg = ($this->la)('Hanos', 1.0, 'kg');
+    $l = ($this->la)('Metro', 1.0, 'l');
+    foreach ([$kg, $l] as $la) {
+        ($this->preis)($la, 4.0, '2026-01-01');
+        FoodAlchemistSupplierItemStructure::create(['team_id' => $this->rootTeam->id, 'supplier_item_id' => $la->id, 'gp_id' => $gp->id]);
+    }
+    $gp->update(['lead_la_supplier_item_id' => $l->id]);
+    $r = $this->svc->verlaufFuerLa($this->rootTeam, $kg->id, ...($this->fenster)('alles'));
+    expect($r['einheit'])->toBe('€/kg')->and(array_column($r['linien'], 'la_id'))->toBe([$kg->id])->and($r['weggelassen'])->toBe(1);
+});
