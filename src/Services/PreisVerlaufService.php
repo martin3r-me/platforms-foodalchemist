@@ -36,6 +36,9 @@ class PreisVerlaufService
 
     public const TAGE_PRO_JAHR = 365.25;
 
+    /** Sekunden: Lücken bis zu zwei Tagen zwischen zwei Ständen gelten als durchgehend (valid_to endet meist am Vortag). */
+    public const LUECKE_TOLERANZ = 172800;
+
     /** Einheiten-Rangfolge bei Gleichstand der Basiseinheit (kg vor l vor Stk). */
     private const EINHEIT_RANG = ['€/kg' => 0, '€/l' => 1, '€/Stk' => 2];
 
@@ -276,8 +279,10 @@ class PreisVerlaufService
         foreach ($punkte as $i => $p) {
             $naechster = $punkte[$i + 1]['start'] ?? null;
             $ende = $naechster ?? ($p['ende'] ?? $bis->getTimestamp());
+            // Necta beendet einen Stand meist knapp VOR dem nächsten (valid_to z. B. 23:59:59 am Vortag): kleine Lücken schließen wir, sonst reißt die Treppe
+            // auf. Nur eine echte Lücke (Artikel zeitweise ohne Preis, länger als LUECKE_TOLERANZ) bleibt eine Lücke.
             if ($p['ende'] !== null && ($naechster === null || $p['ende'] < $naechster)) {
-                $ende = $p['ende'];   // eingestellt: die Linie endet dort (Lücke bis zum nächsten Stand)
+                $ende = ($naechster !== null && $naechster - $p['ende'] <= self::LUECKE_TOLERANZ) ? $naechster : $p['ende'];
             }
             if ($ende <= $p['start']) {
                 continue;

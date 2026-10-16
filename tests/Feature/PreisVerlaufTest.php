@@ -253,7 +253,7 @@ it('Trendtext: Minuszeichen bei fallendem Preis, ohne Trend null', function () {
         ->and(Verlauf::trendText(null, '€/kg'))->toBeNull();
 });
 
-it('Diagramm: Stufenpfad, gestrichelte Trendlinie in derselben Farbe, Lead dicker, Achsen, Tooltip mit Rohpreis je Gebinde', function () {
+it('Diagramm: durchgehende Treppe mit senkrechtem Strich beim Preiswechsel, gestrichelte Trendlinie, Lead dicker, Tooltip je Stand', function () {
     $la = ($this->la)('Hanos', 2.0, 'kg');
     ($this->preis)($la, 8.0, '2026-01-01', '2026-04-01');
     ($this->preis)($la, 10.0, '2026-04-01');
@@ -262,10 +262,68 @@ it('Diagramm: Stufenpfad, gestrichelte Trendlinie in derselben Farbe, Lead dicke
     $d = Verlauf::diagramm($daten);
     $l = $d['linien'][0];
 
-    expect($l['pfad'])->toStartWith('M')->toContain('V')->toContain('H')->and($l['breite'])->toBe(3)->and($l['lead'])->toBeTrue()
-        ->and($l['trend'])->not->toBeNull()->and($l['punkte'][0]['tip'])->toContain('Gebinde 8,00 €')->toContain('4,00 €/kg')->toContain('01.01.2026')
-        ->and($d['achse_y'])->toHaveCount(5)->and($d['achse_x'])->toHaveCount(4)->and($d['einheit'])->toBe('€/kg')
+    expect($l['pfad'])->toMatch('/^M[\d.]+ [\d.]+ H[\d.]+ V[\d.]+ H[\d.]+$/')   // erst waagerecht, dann EIN senkrechter Strich, dann waagerecht
+        ->and($l['luecken'])->toBe('')                                               // keine Lücke
+        ->and($l['breite'])->toBe(2.5)->and($l['lead'])->toBeTrue()->and($l['trend'])->not->toBeNull()->and($d['einheit'])->toBe('€/kg')->and($d['hoehe'])->toBe(240)
+        ->and($l['punkte'][0]['tip'])->toContain('Gebinde 8,00 €')->toContain('4,00 €/kg')->toContain('01.01.2026')->toContain('Hanos')
         ->and($l['trend_text'])->toContain('€/kg pro Monat')->toContain('% pro Jahr');
+});
+
+it('Treppe reißt nicht auf: Necta beendet einen Stand knapp VOR dem nächsten (valid_to am Vortag 23:59:59) — das ist keine Lücke', function () {
+    $la = ($this->la)('Hanos');
+    ($this->preis)($la, 4.0, '2026-01-01', '2026-02-28 23:59:59');
+    ($this->preis)($la, 5.0, '2026-03-01');
+
+    $d = Verlauf::diagramm($this->svc->verlauf($this->rootTeam, [$la->id], ...($this->fenster)('alles')));
+
+    expect($d['linien'][0]['pfad'])->toContain(' V')->and($d['linien'][0]['luecken'])->toBe('');
+});
+
+it('Eine echte Lücke (Artikel zeitweise ohne Preis) bleibt eine Lücke und wird gestrichelt verbunden', function () {
+    $la = ($this->la)('Hanos');
+    ($this->preis)($la, 4.0, '2026-01-01', '2026-02-01');        // bis 1.2., danach ein Monat ohne Preis
+    ($this->preis)($la, 5.0, '2026-03-05');
+
+    $d = Verlauf::diagramm($this->svc->verlauf($this->rootTeam, [$la->id], ...($this->fenster)('alles')));
+
+    expect($d['linien'][0]['luecken'])->toStartWith('M')->toContain('L')->and($d['linien'][0]['pfad'])->not->toContain(' V');
+});
+
+it('Y-Achse: 4–5 sinnvoll gerundete Ticks (keine krummen Werte), die Achse reicht über die Daten; flache Reihe mittig', function () {
+    [$ticks, $min, $max] = Verlauf::runderAchsenwert(1.37, 1.74);
+    expect($ticks)->toBe([1.3, 1.4, 1.5, 1.6, 1.7, 1.8])->and($min)->toBe(1.3)->and($max)->toBe(1.8);   // 1,30 / 1,40 … statt 1,37 / 1,49 / 1,62
+
+    [$t2] = Verlauf::runderAchsenwert(0.0, 100.0);
+    expect($t2)->toBe([0.0, 25.0, 50.0, 75.0, 100.0]);
+
+    [$t3, $a, $b] = Verlauf::runderAchsenwert(5.0, 5.0);   // flach: nicht am Rand
+    expect($a)->toBeLessThan(5.0)->and($b)->toBeGreaterThan(5.0)->and(count($t3))->toBeBetween(3, 7);
+    foreach ([[1.37, 1.74], [0.82, 0.93], [12.0, 480.0], [3.1, 3.2]] as [$lo, $hi]) {
+        [$t, $tMin, $tMax] = Verlauf::runderAchsenwert($lo, $hi);
+        expect(count($t))->toBeBetween(3, 7)->and($tMin)->toBeLessThanOrEqual($lo)->and($tMax)->toBeGreaterThanOrEqual($hi);
+    }
+});
+
+it('X-Achse: Monats- bzw. Quartals-Ticks im Format „Jan 26“, bei kurzen Zeiträumen wöchentlich, bei langen je Jahr', function () {
+    $x = fn (int $t) => 0.0;
+    $labels = fn (string $von, string $bis) => array_column(Verlauf::zeitTicks(Carbon::parse($von)->getTimestamp(), Carbon::parse($bis)->getTimestamp(), $x), 'label');
+
+    expect($labels('2026-01-01', '2026-06-30'))->toBe(['Jan 26', 'Feb 26', 'Mär 26', 'Apr 26', 'Mai 26', 'Jun 26'])                     // 6 M: monatlich
+        ->and($labels('2025-07-01', '2026-06-30'))->toBe(['Jul 25', 'Okt 25', 'Jan 26', 'Apr 26'])                                      // 12 M: Quartale
+        ->and($labels('2018-03-01', '2026-06-30'))->toBe(['Jan 19', 'Jan 20', 'Jan 21', 'Jan 22', 'Jan 23', 'Jan 24', 'Jan 25', 'Jan 26'])   // Alles: je Jahr
+        ->and($labels('2026-06-01', '2026-06-20'))->toBe(['01.06.', '08.06.', '15.06.']);                                                // wenige Tage: wöchentlich
+});
+
+it('Ansicht: feste Höhe, Beschriftung als HTML in FA-Typografie (nicht im skalierten SVG), Einheit klein an der Achse, X-Achse mit Monaten, Hover-Bänder, Trend lesbar', function () {
+    $la = ($this->la)('Hanos', 2.0, 'kg');
+    ($this->preis)($la, 8.0, '2026-01-01', '2026-04-01');
+    ($this->preis)($la, 10.0, '2026-04-01');
+
+    $html = Livewire::test(Verlauf::class, ['modus' => 'la', 'objektId' => $la->id])->set('zeitraum', 'alles')->html();
+
+    expect($html)->toContain('grid-template-rows: 240px')->toContain('data-preisverlauf-einheit')->toContain('data-preisverlauf-achse-x')
+        ->toContain('Jan 26')->toContain('Apr 26')->toContain('preserveAspectRatio="none"')->toContain('data-preisverlauf-band')
+        ->toContain('<title>')->toContain('Trend +')->not->toContain('<text');                   // keine Schrift im SVG: sie skaliert sonst mit
 });
 
 it('Komponente: LA-Modal zeigt eine Linie, GP zeigt je LA eine Linie mit Legende, Zeitraum-Umschalter und Hinweis auf weggelassene Artikel', function () {
