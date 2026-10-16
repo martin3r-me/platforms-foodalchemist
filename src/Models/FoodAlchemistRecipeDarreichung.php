@@ -83,6 +83,12 @@ class FoodAlchemistRecipeDarreichung extends Model
         return $this->hasMany(FoodAlchemistRecipeDarreichungDelta::class, 'presentation_id');
     }
 
+    /** Zubehör & Verpackung dieser Form (Non-Food-GPs, Menge je Einheit) — wirkt nur auf den EK. */
+    public function zubehoer()
+    {
+        return $this->hasMany(FoodAlchemistRecipeDarreichungZubehoer::class, 'presentation_id')->orderBy('position')->orderBy('id');
+    }
+
     /** Default-Geschirr der Form — der Concepter schlägt es am Slot vor. */
     public function dishwareItem()
     {

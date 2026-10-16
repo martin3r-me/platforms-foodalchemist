@@ -121,6 +121,9 @@ class VkModal extends Component
 
     public ?int $darDeltaOffen = null;                               // Darreichung mit offenem Komponenten-Editor
 
+    /** @var array<int, string> Darreichungs-Id → Suchtext für Zubehör & Verpackung (Non-Food-GP) */
+    public array $darZubehoerSuche = [];
+
     public string $darNeueForm = '';                                 // serving_form_id für Anlage
 
     /**
@@ -373,6 +376,29 @@ class VkModal extends Component
             return;                                               // leere Auswahl = kein Wechsel
         }
         $this->darServiceCall(fn ($svc, $team) => $svc->setzeServierform($team, $id, (int) $servierformId));
+    }
+
+    /** Zubehör & Verpackung (Non-Food) zu einer Form hinzufügen: Menge 1 je Einheit, danach im Feld änderbar. */
+    public function darZubehoerHinzu(int $darId, int $gpId): void
+    {
+        $this->darServiceCall(fn ($svc, $team) => $svc->setzeZubehoer($team, $darId, $gpId, 1.0));
+        if ($this->fehler === null) {
+            unset($this->darZubehoerSuche[$darId]);
+        }
+    }
+
+    public function darZubehoerMenge(int $darId, int $gpId, ?string $wert): void
+    {
+        $menge = is_numeric(str_replace(',', '.', (string) $wert)) ? (float) str_replace(',', '.', (string) $wert) : 0.0;
+        $this->darServiceCall(function ($svc, $team) use ($darId, $gpId, $menge) {
+            $notiz = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichungZubehoer::where('presentation_id', $darId)->where('gp_id', $gpId)->value('note');
+            $svc->setzeZubehoer($team, $darId, $gpId, $menge, $notiz);
+        });
+    }
+
+    public function darZubehoerWeg(int $darId, int $gpId): void
+    {
+        $this->darServiceCall(fn ($svc, $team) => $svc->entferneZubehoer($team, $darId, $gpId));
     }
 
     public function darDeltaToggle(int $id): void
@@ -1499,6 +1525,18 @@ class VkModal extends Component
                         ->where('recipe_id', $this->recipeId)->pluck('serving_form_id'));
                 }
             })->orderBy('sort_order')->get(['id', 'code', 'label']),
+            // Zubehör & Verpackung je Form (interne Sicht: Zeile mit Menge und EK) + Trefferliste für die Suche (nur Non-Food-GPs)
+            'darZubehoer' => $this->recipeId !== null && $team !== null
+                ? \Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung::where('recipe_id', $this->recipeId)->pluck('id')
+                    ->mapWithKeys(fn ($id) => [(int) $id => app(\Platform\FoodAlchemist\Services\DarreichungService::class)
+                        ->zubehoerKosten(\Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung::find($id), $team)])->all()
+                : [],
+            'darZubehoerTreffer' => $team !== null
+                ? collect($this->darZubehoerSuche)->filter(fn ($t) => trim((string) $t) !== '')
+                    ->map(fn ($t) => \Platform\FoodAlchemist\Support\Suche::like(
+                        \Platform\FoodAlchemist\Models\FoodAlchemistGp::visibleToTeam($team)->nonFood()->whereNotIn('status', ['rejected', 'merged']), 'name', $t)
+                        ->orderBy('name')->limit(6)->get(['id', 'name']))->all()
+                : [],
             'geschirrItems' => $team !== null
                 ? \Platform\FoodAlchemist\Models\FoodAlchemistGeschirrItem::visibleToTeam($team)
                     ->orderBy('label')->get(['id', 'label', 'rental_price'])

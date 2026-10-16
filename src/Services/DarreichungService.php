@@ -9,6 +9,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistPriceChangeAudit;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichungDelta;
+use Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichungZubehoer;
 
 /**
  * Darreichungs-CRUD + Preisrechnung (Umbau-Spec Darreichungen, Phase 5).
@@ -307,6 +308,67 @@ class DarreichungService
         $this->recomputePreise($darreichung);
     }
 
+    /**
+     * Zubehör & Verpackung setzen/ändern (ein Non-Food-GP je Form). Nur Grundprodukte der Warengruppe 16: Lebensmittel gehören in die
+     * Zutaten (Gegenstück zum Zutaten-Guard). Wirkt nur auf den EK der Darreichung, nie auf Allergene, Nährwerte, Profil oder Yield.
+     */
+    public function setzeZubehoer(Team $team, int $darreichungId, int $gpId, float $menge, ?string $note = null): FoodAlchemistRecipeDarreichungZubehoer
+    {
+        $darreichung = $this->find($team, $darreichungId);
+        if ($menge <= 0) {
+            throw new \RuntimeException('Die Menge muss größer als 0 sein.');
+        }
+        $gp = \Platform\FoodAlchemist\Models\FoodAlchemistGp::visibleToTeam($team)->find($gpId);
+        if ($gp === null) {
+            throw new \RuntimeException('Grundprodukt nicht sichtbar/vorhanden.');
+        }
+        if (! $gp->istNonFood()) {
+            throw new \RuntimeException('Zubehör & Verpackung nimmt nur Non-Food-Grundprodukte (Warengruppe 16). Lebensmittel gehören in die Zutaten.');
+        }
+        $zeile = FoodAlchemistRecipeDarreichungZubehoer::withTrashed()->updateOrCreate(
+            ['presentation_id' => $darreichung->id, 'gp_id' => $gp->id],
+            ['team_id' => $darreichung->team_id, 'quantity' => $menge, 'note' => $note !== null && trim($note) !== '' ? trim($note) : null, 'deleted_at' => null],
+        );
+        if ($zeile->wasRecentlyCreated || $zeile->position === 0) {
+            $zeile->update(['position' => (int) $darreichung->zubehoer()->max('position') + 1]);
+        }
+        $this->recomputePreise($darreichung);
+
+        return $zeile;
+    }
+
+    public function entferneZubehoer(Team $team, int $darreichungId, int $gpId): void
+    {
+        $darreichung = $this->find($team, $darreichungId);
+        $darreichung->zubehoer()->where('gp_id', $gpId)->forceDelete();
+        $this->recomputePreise($darreichung);
+    }
+
+    /**
+     * Kosten des Zubehörs je Einheit der Darreichung (Lead-LA-Preis je Stück wie überall).
+     *
+     * @return array{summe: float, vollstaendig: bool, zeilen: list<array{gp_id:int, name:string, menge:float, preis_stk:?float, kosten:?float, note:?string}>}
+     */
+    public function zubehoerKosten(FoodAlchemistRecipeDarreichung $darreichung, ?Team $team = null): array
+    {
+        $team ??= Team::find($darreichung->team_id);
+        $summe = 0.0;
+        $vollstaendig = true;
+        $zeilen = [];
+        foreach ($darreichung->zubehoer()->with('gp:id,name,team_id,commodity_group_code,lead_la_supplier_item_id,piece_default_g')->get() as $z) {
+            $preis = $z->gp !== null ? $this->recompute->preisProStueckPublic($z->gp, $team) : null;
+            $kosten = $preis !== null ? round($preis * (float) $z->quantity, 4) : null;
+            if ($kosten === null) {
+                $vollstaendig = false;
+            } else {
+                $summe += $kosten;
+            }
+            $zeilen[] = ['gp_id' => (int) $z->gp_id, 'name' => (string) $z->gp?->name, 'menge' => (float) $z->quantity, 'preis_stk' => $preis, 'kosten' => $kosten, 'note' => $z->note];
+        }
+
+        return ['summe' => round($summe, 4), 'vollstaendig' => $vollstaendig, 'zeilen' => $zeilen];
+    }
+
     /** EK/VK einer Darreichung neu rechnen (Stufe 1 + Stufe-2-Deltas). */
     public function recomputePreise(FoodAlchemistRecipeDarreichung $darreichung, ?FoodAlchemistRecipe $recipe = null): void
     {
@@ -351,6 +413,12 @@ class DarreichungService
                     ? round((float) $recipe->ek_per_kg_eur / 1000.0 * $masse
                         * (float) ($darreichung->unit_count ?: 1), 4)
                     : null);
+        }
+
+        // Zubehör & Verpackung (Non-Food, je Einheit) kommt auf den EK der Darreichung — NUR dorthin. Ist der Lebensmittel-EK unbepreist,
+        // bleibt ek_portion null: das Zubehör allein täuscht keinen Preis vor.
+        if ($ekPortion !== null && $darreichung->zubehoer()->exists()) {
+            $ekPortion = round($ekPortion + $this->zubehoerKosten($darreichung, $team)['summe'] * (float) ($darreichung->unit_count ?: 1), 4);
         }
 
         $oldCalculated = $darreichung->calculated_sales_net;
