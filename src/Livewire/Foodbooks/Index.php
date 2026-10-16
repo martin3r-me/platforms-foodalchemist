@@ -819,15 +819,20 @@ class Index extends Component
      */
     /**
      * Board: manuellen Kapitel-Fortschritt setzen (offen|in_arbeit|fertig). Treibt den Punkt im Board
-     * + die KPI „Fertig X/Y". Direkt persistiert (kein Speichern-Roundtrip), team-gescoped via eigenesKapitel.
+     * + die KPI „Fertig X/Y". Schreibt über FoodbookService::kapitelFortschritt (Besitzer-Prüfung + Vokabular, Spec 84 §5.5).
      */
     public function kapitelFortschritt(int $id, string $wert): void
     {
-        $k = $this->eigenesKapitel($id);
-        if ($k === null || ! in_array($wert, \Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel::FORTSCHRITT_STUFEN, true)) {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null) {
             return;
         }
-        $k->update(['fortschritt' => $wert]);
+        try {
+            app(\Platform\FoodAlchemist\Services\FoodbookService::class)->kapitelFortschritt($team, $id, $wert);
+        } catch (\RuntimeException $e) {
+            // fremdes/geerbtes Kapitel oder unbekannte Stufe: wie bisher still ignorieren (der Board-Punkt bleibt stehen)
+            unset($e);
+        }
     }
 
     private function eigenesKapitel(int $id): ?\Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel
