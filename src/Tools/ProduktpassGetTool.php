@@ -8,6 +8,7 @@ use Platform\Core\Contracts\ToolMetadataContract;
 use Platform\Core\Contracts\ToolResult;
 use Platform\FoodAlchemist\Models\FoodAlchemistProduktpass;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem;
+use Platform\FoodAlchemist\Services\Produktpass\ProduktpassAbweichungService;
 use Platform\FoodAlchemist\Services\Produktpass\ProduktpassService;
 
 /** Stand der Produktpässe eines Lieferantenartikels: Versionen, gelesene Felder mit Konfidenz und Übernahme-Status, Allergen-Vorschlag. */
@@ -22,7 +23,8 @@ class ProduktpassGetTool extends FoodAlchemistTool implements ToolContract, Tool
     {
         return 'Stand des Produktpasses eines Lieferantenartikels: alle Versionen (Datum, Status, Quelle), die gelesenen Felder der jüngsten gelesenen '
             .'Version (Wert, Konfidenz, aktueller FA-Wert, status übernommen|vorschlag), den Allergen-Vorschlag mit Gegenüberstellung (allergene_status '
-            .'vorschlag = noch nicht bestätigt, der alte Allergenstand gilt) und die Quelle je Feld (produktpass_ki/websuche). Optional version für eine bestimmte Version.';
+            .'vorschlag = noch nicht bestätigt, der alte Allergenstand gilt) und die Quelle je Feld (produktpass_ki/websuche). necta_abweichungen = offene Necta-Abweichungen an Pass-Feldern (Allergene, Unterarten, '
+            .'Zusatzstoffe, Nährwerte, Zutatenliste): der Pass-Wert gilt, entscheiden mit foodalchemist.produktpass.ABWEICHUNG_ENTSCHEIDEN. Optional version für eine bestimmte Version.';
     }
 
     public function getSchema(): array
@@ -59,7 +61,11 @@ class ProduktpassGetTool extends FoodAlchemistTool implements ToolContract, Tool
         // Haltbarkeit (MHD) am Artikel in Tagen je Lagerart — Quelle je Feld steht in quellen_der_felder; ändern: foodalchemist.artikel.PUT (shelf_life_*_days)
         $haltbarkeit = ['gekuehlt_tage' => $item->shelf_life_chilled_days, 'tiefgekuehlt_tage' => $item->shelf_life_frozen_days, 'trocken_tage' => $item->shelf_life_dry_days];
 
-        return ToolResult::success(['supplier_item_id' => $item->id, 'designation' => $item->designation, 'haltbarkeit' => $haltbarkeit] + $stand);
+        // Offene Necta-Abweichungen an Pass-Feldern der Kerngruppen: der Pass-Wert gilt; entscheiden mit produktpass.ABWEICHUNG_ENTSCHEIDEN
+        $abweichungen = app(ProduktpassAbweichungService::class)->offene($item);
+
+        return ToolResult::success(['supplier_item_id' => $item->id, 'designation' => $item->designation, 'haltbarkeit' => $haltbarkeit,
+            'necta_abweichungen' => $abweichungen] + $stand);
     }
 
     public function getMetadata(): array
@@ -68,7 +74,7 @@ class ProduktpassGetTool extends FoodAlchemistTool implements ToolContract, Tool
             'category' => 'read', 'tags' => ['foodalchemist', 'produktpass', 'lieferantenartikel', 'read'],
             'read_only' => true, 'idempotent' => true, 'risk_level' => 'safe',
             'requires_auth' => true, 'requires_team' => true, 'cost_class' => 'local_db', 'side_effects' => [],
-            'related_tools' => ['foodalchemist.produktpass.POST', 'foodalchemist.produktpass.ALLERGENE_BESTAETIGEN'],
+            'related_tools' => ['foodalchemist.produktpass.POST', 'foodalchemist.produktpass.ALLERGENE_BESTAETIGEN', 'foodalchemist.produktpass.ABWEICHUNG_ENTSCHEIDEN'],
             'examples' => ['Was steht im Produktpass von Artikel 4711?'],
         ];
     }

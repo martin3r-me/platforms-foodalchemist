@@ -144,6 +144,9 @@ final class SignalCockpit
         // Necta-Abgleich: Ereignis, kein Datenmangel — der Weg ist eine Freischalt-Entscheidung des Masters.
         'necta_abgleich_fehler' => 'Der Lauf steht mit Fehlermeldung in der Laufliste (necta_laeufe). Ursache prüfen (Verbindung, '
             . 'Necta erreichbar), dann den Abgleich erneut starten: Bereits Übernommenes bleibt, der Lauf ist über legacy_id wiederholbar.',
+        'produktpass_abweichung' => 'Der Produktpass-Wert gilt weiter. Am Artikel den Reiter Produktpass öffnen, Abschnitt „Necta-Abweichungen“: '
+            . 'je Feld „Pass behalten“ (diese Abweichung kommt nicht wieder), „Necta übernehmen“ (Wert eintragen, Pass schützt das Feld nicht mehr) '
+            . 'oder einen neueren Produktpass hochladen. Das Signal schließt, wenn nichts mehr offen ist.',
         'necta_lieferant_neu' => 'Der Lieferant ist global angelegt, aber noch für keinen Mandanten freigeschaltet. In der Verwaltung '
             . '(/verwaltung?tab=freigaben, Lieferanten-Freischaltung) entscheiden, welche Mandanten ihn sehen sollen, oder das Signal bewusst verwerfen.',
         // Spec 82 §12 B: Ereignis aus der Master-Bibliothek. Kein Datenmangel, deshalb kein Fixer; der Weg ist eine Entscheidung am Angebot.

@@ -874,6 +874,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\ProduktpassGetTool::class,
                     \Platform\FoodAlchemist\Tools\ProduktpassKennzeichnungBestaetigenTool::class,
                     \Platform\FoodAlchemist\Tools\ProduktpassAllergeneBestaetigenTool::class,
+                    \Platform\FoodAlchemist\Tools\ProduktpassAbweichungEntscheidenTool::class,
                     \Platform\FoodAlchemist\Tools\TrendBelegeDeleteTool::class,
                     \Platform\FoodAlchemist\Tools\TrendsMessenTool::class,
                     \Platform\FoodAlchemist\Tools\FundstueckeGetTool::class,

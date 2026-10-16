@@ -9,6 +9,7 @@ use Platform\FoodAlchemist\Exceptions\FaRechtFehltException;
 use Platform\FoodAlchemist\Models\FoodAlchemistProduktpass;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem;
 use Platform\FoodAlchemist\Services\Produktpass\ProduktdatenQuelle;
+use Platform\FoodAlchemist\Services\Produktpass\ProduktpassAbweichungService;
 use Platform\FoodAlchemist\Services\Produktpass\ProduktpassService;
 use Platform\FoodAlchemist\Support\Curate;
 use Platform\FoodAlchemist\Support\ProduktpassFelder;
@@ -117,6 +118,18 @@ class ProduktpassPanel extends Component
         }
     }
 
+    /** Necta-Abweichung an einem Pass-Feld: Pass-Wert bleibt, dieselbe Necta-Angabe wird nicht wieder gemeldet. */
+    public function passBehalten(int $pruefallId): void
+    {
+        $this->abweichung(fn (ProduktpassAbweichungService $s) => $s->behalten($this->team(), $pruefallId, Auth::id()), 'Produktpass-Wert behalten.');
+    }
+
+    /** Necta-Wert eintragen; der Pass schützt dieses Feld danach nicht mehr. */
+    public function nectaUebernehmen(int $pruefallId): void
+    {
+        $this->abweichung(fn (ProduktpassAbweichungService $s) => $s->uebernehmen($this->team(), $pruefallId, Auth::id()), 'Necta-Wert übernommen.');
+    }
+
     /** „Recherchieren" — nur, wenn eine Quelle `websuche` angebunden ist (Container-Tag `produktdaten.quellen`). */
     public function recherchieren(): void
     {
@@ -154,6 +167,7 @@ class ProduktpassPanel extends Component
         $vorschau = $pass !== null && $angezeigt !== null && $angezeigt['status'] === 'gelesen' ? $svc->uebernahmeVorschau($item, $pass) : null;
 
         return view('foodalchemist::livewire.suppliers.produktpass-panel', [
+            'abweichungen' => app(ProduktpassAbweichungService::class)->offene($item),
             'vorschau' => $vorschau,
             'item' => $item,
             'darfEdit' => Curate::canCurate(Auth::user(), $item),
@@ -181,6 +195,21 @@ class ProduktpassPanel extends Component
         } catch (\Throwable $e) {
             report($e);   // nie SQL- oder Systemtext zum Nutzer
             $this->fehler = 'Das hat nicht geklappt. Der Wert wurde nicht übernommen.';
+        }
+    }
+
+    private function abweichung(callable $tat, string $meldung): void
+    {
+        $this->reset(['fehler', 'hinweis']);
+        try {
+            $tat(app(ProduktpassAbweichungService::class));
+            $this->hinweis = $meldung;
+            $this->dispatch('produktpass.geaendert', itemId: $this->itemId);
+        } catch (FaRechtFehltException|RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+        } catch (\Throwable $e) {
+            report($e);
+            $this->fehler = 'Das hat nicht geklappt. Es wurde nichts geändert.';
         }
     }
 
