@@ -132,3 +132,19 @@ it('Spec 84 E-1 · die Messung wirft nie, auch wenn der Log-Kanal kaputt ist', f
     expect(fn () => DB::table('foodalchemist_gps')->count())->not->toThrow(\Throwable::class);
     LangsameAbfragen::abschliessen();
 });
+
+it('Spec 84 E-1 · Queue-Ereignis mit kaputtem Job-Payload: kein Absturz, an und aus (#457-Rotfall)', function () {
+    $kaputt = new class extends \Illuminate\Queue\Jobs\Job {
+        public function getJobId() { return 'x'; }
+        public function getRawBody() { return '{}'; }   // kein 'job' im Payload → resolveName() wirft
+        public function attempts() { return 1; }
+    };
+
+    foreach ([null, 0] as $schwelle) {
+        config(['foodalchemist.leistung.langsam_ms' => $schwelle]);
+        expect(fn () => event(new \Illuminate\Queue\Events\JobProcessing('sync', $kaputt)))->not->toThrow(\Throwable::class)
+            ->and(fn () => event(new \Illuminate\Queue\Events\JobProcessed('sync', $kaputt)))->not->toThrow(\Throwable::class);
+    }
+    expect(LangsameAbfragen::jobName($kaputt))->toBe($kaputt::class)
+        ->and(LangsameAbfragen::jobName(null))->toBe('?');
+});
