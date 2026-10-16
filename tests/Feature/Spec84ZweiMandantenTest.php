@@ -412,9 +412,7 @@ const SPEC84_ERLAUBT = [
  * Bekannte Lecks (Tool → Befund), am 16.10. mit diesem Test gefunden und an Spec 84 gemeldet. Die Liste darf nur
  * schrumpfen: Ist ein Leck behoben, schlägt der Sperrklinken-Test unten an — dann die Zeile hier löschen.
  */
-const SPEC84_BEKANNTE_LECKS = [
-    'foodalchemist.brief_templates.DELETE' => 'L1: BriefTemplateService::istMaster = „parent_team_id NULL" (dritte Master-Definition) → jeder elternlose Mandant löscht globale Brief-Vorlagen',
-];
+const SPEC84_BEKANNTE_LECKS = [];   // L1 Brief-Vorlagen behoben (Spec 84 PR 0)
 
 beforeEach(function () {
     // Alle schreibenden Tools als $user/$team gegen fremde Ziel-Sätze. Ein Leck ist:
@@ -540,9 +538,6 @@ it('Spec 84 B0a · Sperrklinke: jedes bekannte Leck tritt noch auf (sonst ist es
 
     expect(array_keys(array_diff_key(SPEC84_BEKANNTE_LECKS, $this->nochOffen)))->toBe([], 'behoben — bitte aus SPEC84_BEKANNTE_LECKS löschen');
 });
-
-it('Spec 84 B0a · L1 Brief-Vorlagen: elternloser Mandant darf globale Vorlagen nicht ändern oder löschen')
-    ->todo(note: 'BriefTemplateService::istMaster (parent_team_id NULL) durch MasterTeam::istMaster ersetzen; ebenso Settings/Wissenskategorien prüfen. Gemeldet an Spec 84.');
 
 it('Spec 84 B0a · Gegenprobe Schreiben: als Eigentümer ändern die Aufrufe die eigenen Zeilen', function () {
     $basis = ($this->zeilen)();
