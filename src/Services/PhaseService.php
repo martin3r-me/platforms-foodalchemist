@@ -51,7 +51,7 @@ class PhaseService
         if ($phase === 'freigabe' && $this->coverage->hatRoteAmpeln($team, $ownerType, $ownerId)) {
             $note = $overrideNote !== null ? trim($overrideNote) : '';
             if ($note === '') {
-                throw new RuntimeException('Freigabe-Gate: Coverage zeigt rote Ampeln (verletzt). Erst beheben — oder mit Override-Begründung freigeben.');
+                throw new \Platform\FoodAlchemist\Exceptions\FreigabeGateOffenException('Freigabe-Gate: Coverage zeigt rote Ampeln (verletzt). Erst beheben — oder mit Override-Begründung freigeben.');
             }
             // Durabel am Objekt (Sandbox-ActivityLog ist Stub); zusätzlich ActivityLog, wo vorhanden.
             $daten['phase_override_note'] = $note;

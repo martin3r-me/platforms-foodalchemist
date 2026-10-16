@@ -288,7 +288,7 @@ class IdeenService
 
         $kapitel = FoodAlchemistFoodbookKapitel::visibleToTeam($team)->findOrFail($chapterId);
         if (! $kapitel->isOwnedBy($team)) {
-            throw new \RuntimeException('Geerbtes Foodbook — KI-Divergenz nur durchs Besitzer-Team (D1).');
+            throw new \Platform\FoodAlchemist\Exceptions\GeerbtNurLesenException('Ideen', 'Geerbtes Foodbook — KI-Divergenz nur durchs Besitzer-Team (D1).');
         }
         $kapitel->loadMissing(['foodbook.serviceMoments', 'foodbook.targetGroups', 'targetGroups', 'parent.targetGroups']);
         $fb = $kapitel->foodbook;
@@ -382,7 +382,7 @@ class IdeenService
 
         $concept = FoodAlchemistConcept::visibleToTeam($team)->findOrFail($conceptId);
         if (! $concept->isOwnedBy($team)) {
-            throw new \RuntimeException('Geerbtes Konzept — KI-Divergenz nur durchs Besitzer-Team (D1).');
+            throw new \Platform\FoodAlchemist\Exceptions\GeerbtNurLesenException('Ideen', 'Geerbtes Konzept — KI-Divergenz nur durchs Besitzer-Team (D1).');
         }
 
         $frameSvc = app(PlanningFrameService::class);
@@ -539,7 +539,7 @@ class IdeenService
 
         $session = FoodAlchemistPlanningSession::visibleToTeam($team)->findOrFail($sessionId);
         if (! $session->isOwnedBy($team)) {
-            throw new \RuntimeException('Geerbte Planungs-Session — KI-Divergenz nur durchs Besitzer-Team (D1).');
+            throw new \Platform\FoodAlchemist\Exceptions\GeerbtNurLesenException('Ideen', 'Geerbte Planungs-Session — KI-Divergenz nur durchs Besitzer-Team (D1).');
         }
         $seed = trim((string) $analyse);
         if ($seed === '') {
@@ -666,17 +666,17 @@ class IdeenService
         if ($chapterId !== null) {
             $k = FoodAlchemistFoodbookKapitel::visibleToTeam($team)->findOrFail($chapterId);
             if (! $k->isOwnedBy($team)) {
-                throw new \RuntimeException('Geerbtes Foodbook — Skizzen nur durchs Besitzer-Team (D1).');
+                throw new \Platform\FoodAlchemist\Exceptions\GeerbtNurLesenException('Ideen', 'Geerbtes Foodbook — Skizzen nur durchs Besitzer-Team (D1).');
             }
         } elseif ($conceptId !== null) {
             $c = FoodAlchemistConcept::visibleToTeam($team)->findOrFail($conceptId);
             if (! $c->isOwnedBy($team)) {
-                throw new \RuntimeException('Geerbtes Konzept — Skizzen nur durchs Besitzer-Team (D1).');
+                throw new \Platform\FoodAlchemist\Exceptions\GeerbtNurLesenException('Ideen', 'Geerbtes Konzept — Skizzen nur durchs Besitzer-Team (D1).');
             }
         } else {
             $s = FoodAlchemistPlanningSession::visibleToTeam($team)->findOrFail($sessionId);
             if (! $s->isOwnedBy($team)) {
-                throw new \RuntimeException('Geerbte Planungs-Session — Skizzen nur durchs Besitzer-Team (D1).');
+                throw new \Platform\FoodAlchemist\Exceptions\GeerbtNurLesenException('Ideen', 'Geerbte Planungs-Session — Skizzen nur durchs Besitzer-Team (D1).');
             }
         }
 
@@ -734,7 +734,7 @@ class IdeenService
     {
         $idee = FoodAlchemistDishIdea::visibleToTeam($team)->findOrFail($id);
         if (! $idee->isOwnedBy($team)) {
-            throw new \RuntimeException('Geerbte Skizze — Pflege nur durchs Besitzer-Team (D1).');
+            throw new \Platform\FoodAlchemist\Exceptions\GeerbtNurLesenException('Ideen', 'Geerbte Skizze — Pflege nur durchs Besitzer-Team (D1).');
         }
 
         return $idee;
@@ -744,7 +744,7 @@ class IdeenService
     {
         $gruppe = FoodAlchemistDishIdeaGroup::visibleToTeam($team)->findOrFail($id);
         if (! $gruppe->isOwnedBy($team)) {
-            throw new \RuntimeException('Geerbte Paket-Gruppe — Pflege nur durchs Besitzer-Team (D1).');
+            throw new \Platform\FoodAlchemist\Exceptions\GeerbtNurLesenException('Ideen', 'Geerbte Paket-Gruppe — Pflege nur durchs Besitzer-Team (D1).');
         }
 
         return $gruppe;

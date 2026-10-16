@@ -37,7 +37,7 @@ trait ManagesPhase
         } catch (RuntimeException $e) {
             $this->phaseFehler = $e->getMessage();
             // Freigabe-Gate: Override-Feld anbieten statt Sackgasse
-            $this->phaseOverrideOffen = str_contains($e->getMessage(), 'Freigabe-Gate');
+            $this->phaseOverrideOffen = $e instanceof \Platform\FoodAlchemist\Exceptions\FreigabeGateOffenException;
         }
     }
 

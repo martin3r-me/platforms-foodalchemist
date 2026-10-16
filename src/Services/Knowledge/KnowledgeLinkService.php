@@ -245,7 +245,7 @@ class KnowledgeLinkService
     {
         $doc = $this->doc($team, $slug);
         if ($doc === null) {
-            throw new RuntimeException("Wissens-Dokument \"{$slug}\" nicht gefunden.");
+            throw new \Platform\FoodAlchemist\Exceptions\NichtGefundenException("Wissens-Dokument \"{$slug}\" nicht gefunden.");
         }
         if (! $nurLesen && ! \Platform\FoodAlchemist\Services\Knowledge\WissensSichtbarkeit::mayWrite($doc->team_id, $team)) {
             throw new WissenGesperrtException(

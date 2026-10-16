@@ -429,7 +429,7 @@ class InventurService
     {
         $count = FoodAlchemistInventoryCount::where('team_id', $team->id)->findOrFail($countId);
         if ($count->istGebucht()) {
-            throw new \RuntimeException('Diese Inventur ist bereits gebucht.');
+            throw new \Platform\FoodAlchemist\Exceptions\BereitsGebuchtException('Diese Inventur ist bereits gebucht.');
         }
 
         return $count;
