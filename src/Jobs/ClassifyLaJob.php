@@ -66,6 +66,11 @@ class ClassifyLaJob implements ShouldQueue
             return;
         }
 
+        // Non-Food bekommt keine Food-Struktur (Zustand/Verarbeitung/Hauptzutat) — der Klassifikator würde sie erfinden.
+        if (app(\Platform\FoodAlchemist\Services\NonFoodService::class)->istNonFood($la->id)) {
+            return;
+        }
+
         $designation = trim((string) $la->designation);
         if ($designation === '') {
             return;

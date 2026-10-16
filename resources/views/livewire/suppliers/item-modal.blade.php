@@ -457,6 +457,24 @@
                             </div>
                         </div>
                     </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3" data-nonfood>
+                        <x-fa::field label="Art des Artikels" for="la-nonfood">
+                            <x-fa::select id="la-nonfood" wire:model.live="nonfood.ist" placeholder="Food (kein Urteil)"
+                                :options="['1' => 'Non-Food', '0' => 'Food (bestätigt)']" :disabled="! $darfEdit" data-nonfood-ist />
+                        </x-fa::field>
+                        @if(($nonfood['ist'] ?? '') === '1')
+                            <x-fa::field label="Unterkategorie Non-Food" for="la-nonfood-sub">
+                                <x-fa::select id="la-nonfood-sub" wire:model="nonfood.subkategorie" placeholder="offen"
+                                    :options="array_combine($nonfoodUnterkategorien, $nonfoodUnterkategorien)" :disabled="! $darfEdit" data-nonfood-sub />
+                            </x-fa::field>
+                        @endif
+                        @if($item?->nonfood)
+                            <div class="{{ $leise }} self-end pb-2" data-nonfood-herkunft>
+                                @if($item->nonfood->pruefung_offen)<x-fa::badge tone="warn">Bitte prüfen</x-fa::badge>@endif
+                                {{ match($item->nonfood->quelle) { 'manuell' => 'von Hand', 'ki' => 'von der KI erkannt', default => 'nach Regel erkannt' } }}@if($item->nonfood->begruendung): {{ $item->nonfood->begruendung }}@endif
+                            </div>
+                        @endif
+                    </div>
                     <x-fa::field label="Zutatenliste des Lieferanten" for="la-ingredients">
                         <x-fa::textarea id="la-ingredients" rows="3" wire:model="eigenschaften.ingredients_supplier" :disabled="! $darfEdit" />
                     </x-fa::field>

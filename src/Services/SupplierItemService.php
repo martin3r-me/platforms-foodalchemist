@@ -84,11 +84,15 @@ class SupplierItemService
     private function baseQuery(Team $team, array $filters): Builder
     {
         return FoodAlchemistSupplierItem::visibleToTeam($team)
-            ->with(['structure.gp:id,name,lead_la_supplier_item_id'])
+            ->with(['structure.gp:id,name,lead_la_supplier_item_id', 'nonfood:id,supplier_item_id,ist_nonfood,pruefung_offen,subkategorie'])
             ->when($filters['onlyActive'] ?? true, fn ($q) => $q->where('is_discontinued', false))
             // Spec 16·S2 — WG-Lead-Scope: nur Artikel der übergebenen Lieferanten (whereIn).
             // Leeres/fehlendes Array = kein Scope (globale Suche, Ist-Verhalten unberührt).
             ->when(! empty($filters['supplier_ids']), fn ($q) => $q->whereIn('supplier_id', $filters['supplier_ids']))
+            // Non-Food-Filter: 'nonfood' (entschieden), 'pruefen' (Prüfliste: unklar/offen), 'food' (alles ausser entschiedenem Non-Food)
+            ->when(($filters['art'] ?? '') === 'nonfood', fn ($q) => $q->whereHas('nonfood', fn ($n) => $n->where('ist_nonfood', true)))
+            ->when(($filters['art'] ?? '') === 'pruefen', fn ($q) => $q->whereHas('nonfood', fn ($n) => $n->where('pruefung_offen', true)))
+            ->when(($filters['art'] ?? '') === 'food', fn ($q) => $q->whereDoesntHave('nonfood', fn ($n) => $n->where('ist_nonfood', true)))
             ->addSelect([
                 '*',
                 'aktiver_preis' => app(PriceService::class)->activePriceSubquery('foodalchemist_supplier_items.id', $team), // Spec 82 3a

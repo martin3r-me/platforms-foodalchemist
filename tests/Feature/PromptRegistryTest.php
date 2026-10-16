@@ -16,6 +16,7 @@ const REGISTRY_SOLL = [
     'gp.domain' => 'B', 'gp.piece_default_g' => 'B', 'gp.verluste' => 'B', 'gp.zaehl_einheiten' => 'B',
     'gp.anker' => 'B', 'gp.la_suggest' => 'B', 'gp.term_la_rank' => 'B',
     'anker.wissen_auslese' => 'B',
+    'la.nonfood' => 'B',                                              // Non-Food-Erkennung am LA, Stufe 2 nach der Regel (Klassifikator in Stapeln)
     // Rezept-Welt
     'recipe.generator' => 'B', 'recipe.komponenten_plan' => 'B', 'recipe.description' => 'C', 'recipe.category' => 'D',
     'recipe.posten' => 'B', 'recipe.garverlust' => 'C', 'recipe.name_putzen' => 'D', 'recipe.ruestschritt' => 'D', 'recipe.titel_vorschlag' => 'B', 'recipe.sektor' => 'B',

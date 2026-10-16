@@ -162,6 +162,8 @@
                             aria-pressed="{{ $reviewOffen ? 'true' : 'false' }}" data-review-btn>{{ $fmt($offeneVorschlaege) }} Vorschläge prüfen</x-fa::button>
                     @endif
                 @endif
+                <x-fa::select wire:model.live="art" size="sm" aria-label="Art des Artikels" class="w-auto" placeholder="Alle Artikel" data-art-filter
+                    :options="['nonfood' => 'Nur Non-Food', 'pruefen' => 'Non-Food prüfen', 'food' => 'Ohne Non-Food']" />
                 <x-fa::select wire:model.live="perPage" size="sm" aria-label="Einträge je Seite" class="w-auto" data-per-page>
                     @foreach([25, 50, 100, 250, 500] as $n)<option value="{{ $n }}">{{ $n }} je Seite</option>@endforeach
                 </x-fa::select>
@@ -293,6 +295,8 @@
                                     <span class="inline-flex items-center gap-1">
                                         @if($item->is_discontinued)<x-fa::badge>Ausgelistet</x-fa::badge>
                                         @else<x-fa::badge tone="ok">Lieferbar</x-fa::badge>@endif
+                                        @if($item->nonfood?->ist_nonfood)<x-fa::badge tone="info" title="Kein Lebensmittel{{ $item->nonfood->subkategorie ? ': '.$item->nonfood->subkategorie : '' }}" data-nonfood-pill>Non-Food</x-fa::badge>
+                                        @elseif($item->nonfood?->pruefung_offen)<x-fa::badge tone="warn" title="Food oder Non-Food? Bitte im Artikel entscheiden" data-nonfood-pruefen-pill>Prüfen</x-fa::badge>@endif
                                         @if($item->is_preorder)
                                             <x-fa::badge tone="info" icon="heroicon-m-clock" title="Vorbestell-Artikel{{ $item->preorder_days ? ', ' . $item->preorder_days . ' Tage Vorlauf' : '' }}" data-vorbestell-pill>Vorbestellung{{ $item->preorder_days ? ' ' . $item->preorder_days . ' T' : '' }}</x-fa::badge>
                                         @endif

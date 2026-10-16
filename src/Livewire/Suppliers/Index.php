@@ -36,6 +36,16 @@ class Index extends Component
     public string $artikelSuche = '';
 
 
+    /** Filter Art: '' alle · nonfood · pruefen (Non-Food-Prüfliste) · food */
+    #[Url(as: 'art')]
+    public string $art = '';
+
+    public function updatedArt(): void
+    {
+        $this->art = in_array($this->art, ['nonfood', 'pruefen', 'food'], true) ? $this->art : '';
+        $this->resetPage();
+    }
+
     public bool $includeInactive = false;
 
     public bool $onlyActive = true;
@@ -294,8 +304,8 @@ class Index extends Component
         }
 
         $artikel = match (true) {
-            $globaleSuche => $items->searchGlobal($team, trim($this->q), ['onlyActive' => $this->onlyActive], $this->perPage),
-            $this->supplierId !== null => $items->paginateForSupplier($team, $this->supplierId, ['onlyActive' => $this->onlyActive, 'q' => $this->artikelSuche], $this->perPage),
+            $globaleSuche => $items->searchGlobal($team, trim($this->q), ['onlyActive' => $this->onlyActive, 'art' => $this->art], $this->perPage),
+            $this->supplierId !== null => $items->paginateForSupplier($team, $this->supplierId, ['onlyActive' => $this->onlyActive, 'q' => $this->artikelSuche, 'art' => $this->art], $this->perPage),
             default => null,
         };
 
