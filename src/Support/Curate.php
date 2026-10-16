@@ -4,11 +4,14 @@ namespace Platform\FoodAlchemist\Support;
 
 use Illuminate\Database\Eloquent\Model;
 use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Models\Concerns\BelongsToTeamHierarchy;
 
 /**
  * M1-08 / D1: Katalog-Pflege-Gate — zentral für ALLE Edit-UIs.
  *
  * Editieren darf nur, wer Mitglied des Besitzer-Teams ist (currentTeam == Owner).
+ * Modelle mit BelongsToTeamHierarchy: EINE Regel — `isOwnedBy(currentTeam)` (inkl. Master pflegt globale Basis-Kataloge
+ * und globale stamm_paket-Zeilen). Andere Modelle: team_id == currentTeam.
  * Kind-Teams sehen geerbte Katalog-Daten read-only (D1: sichtbar = Kette aufwärts,
  * editierbar = nur Eigenes). Views fragen IMMER hierüber — nie team_id-Vergleiche
  * inline nachbauen.
@@ -27,6 +30,15 @@ final class Curate
         $currentTeamId = (int) ($user->current_team_id ?? 0);
         if ($currentTeamId === 0) {
             return false;
+        }
+
+        if ($target instanceof Model && in_array(BelongsToTeamHierarchy::class, class_uses_recursive($target), true)) {
+            $aktuell = $user->currentTeamRelation ?? null;
+            if (! $aktuell instanceof Team || (int) $aktuell->id !== $currentTeamId) {
+                $aktuell = Team::find($currentTeamId);
+            }
+
+            return $aktuell !== null && $target->isOwnedBy($aktuell);
         }
 
         $ownerTeamId = $target instanceof Team
