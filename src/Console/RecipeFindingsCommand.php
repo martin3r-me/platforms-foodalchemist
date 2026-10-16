@@ -68,7 +68,7 @@ class RecipeFindingsCommand extends Command
         foreach ($teams as $team) {
             $this->info("── Team {$team->id} ({$team->name}) · Pass {$pass}" . ($trocken ? ' · dry-run' : ''));
 
-            $e = $batch->laufe(
+            $e = \Platform\FoodAlchemist\Support\FaTeam::imTeam($team, fn () => $batch->laufe(   // Spec 84 A-4: KI-Riegel und Abrechnung im Team des Laufs
                 team: $team,
                 limit: $limit,
                 nurVerkauf: (bool) $this->option('nur-verkauf'),
@@ -76,7 +76,7 @@ class RecipeFindingsCommand extends Command
                 nurRezept: $this->option('recipe') ? (int) $this->option('recipe') : null,
                 trocken: $trocken,
                 log: fn (string $zeile) => $this->line('   ' . $zeile),
-            );
+            ));
 
             if ($e['geprueft'] > 0 && $e['run_id'] !== null) {
                 $this->line("   → offen {$e['offen']} · neu {$e['neu']} · wieder {$e['wieder']}"

@@ -70,7 +70,7 @@ class RezeptFolgeService
 
                 continue;
             }
-            $r = $this->folgenFuerTeam((int) $teamId, $familien, false);
+            $r = \Platform\FoodAlchemist\Support\FaTeam::imTeam((int) $teamId, fn () => $this->folgenFuerTeam((int) $teamId, $familien, false));   // Spec 84 A-4: synchron für ein fremdes Team
             $bericht['umgestellt'] += $r['umgestellt'];
             $bericht['gehalten'] += $r['gehalten'];
             array_push($bericht['signale'], ...$r['signale']);
