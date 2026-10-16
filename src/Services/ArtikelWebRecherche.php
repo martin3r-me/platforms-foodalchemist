@@ -4,7 +4,9 @@ namespace Platform\FoodAlchemist\Services;
 
 use Platform\FoodAlchemist\Models\FoodAlchemistItemAllergen;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem;
+use Platform\FoodAlchemist\Services\Produktpass\ProduktdatenQuelle;
 use Platform\FoodAlchemist\Services\Websuche\WebSucheTransport;
+use Platform\FoodAlchemist\Support\ProduktpassFelder;
 
 /**
  * Web-Recherche zu EINEM Lieferantenartikel (nur auf Knopfdruck, ein Aufruf je Klick). Liefert ausschließlich VORSCHLÄGE:
@@ -13,7 +15,7 @@ use Platform\FoodAlchemist\Services\Websuche\WebSucheTransport;
  *
  * Rückgabe in der Form der Produktpass-Quellen (`ProduktdatenQuelle::liefere`, Quelle `websuche`):
  *   quelle   'websuche'
- *   felder   key => {wert, konfidenz, url, zitat?, einheit?}      Schlüssel aus {@see FELDER}
+ *   felder   key => {wert, konfidenz, url, zitat?, einheit?}      Schlüssel aus ProduktpassFelder::schluessel()
  *   allergene key => {wert enthalten|spuren|nicht_enthalten, konfidenz, url, zitat}   14 EU-Keys
  *   deutung  key => {wert, url}    Produkttyp/Hauptzutat/Warengruppe/Unterkategorie/Marke/Zustand/Form (GP-Dialog)
  *   quellen  list<{url,title}>     alle tatsächlich gefundenen Quellen
@@ -23,19 +25,10 @@ use Platform\FoodAlchemist\Services\Websuche\WebSucheTransport;
  * - Fehlt ein Wert: Schlüssel weglassen. Nie „nicht_enthalten" ableiten: es braucht ein wörtliches Zitat.
  * - Unbekannte Schlüssel und ungültige Werte werden verworfen.
  *
- * Hinweis: Sobald Pauls Interface `Services\Produktpass\ProduktdatenQuelle` in main liegt, kommt `implements ProduktdatenQuelle`
- * dazu (Signatur identisch) und der Container-Tag `produktdaten.quellen`.
+ * Eingehängt als Produktdaten-Quelle `websuche` (Container-Tag `produktdaten.quellen`); erlaubte Feldschlüssel = ProduktpassFelder::schluessel().
  */
-class ArtikelWebRecherche
+class ArtikelWebRecherche implements ProduktdatenQuelle
 {
-    /** Erlaubte Feldschlüssel (Produktpass-Form: FA-Spalten bzw. Gruppe.Feld). */
-    public const FELDER = [
-        'zutatenliste', 'gebinde.qty', 'gebinde.einheit', 'herkunft', 'marke', 'hersteller', 'ean', 'haltbarkeit.chilled_days',
-        'naehrwerte.energy_kcal', 'naehrwerte.energy_kj', 'naehrwerte.fat', 'naehrwerte.saturated_fat', 'naehrwerte.carbs_absorbable',
-        'naehrwerte.sugar', 'naehrwerte.protein', 'naehrwerte.sodium',
-        'zusatzstoffe.with_dye', 'zusatzstoffe.with_preservative', 'zusatzstoffe.with_antioxidant', 'zusatzstoffe.with_sweetener',
-    ];
-
     /** Deutung für den GP-Dialog: bestimmt, was der Artikel IST (kein Marken- oder Fantasiename im GP-Namen). */
     public const DEUTUNG = ['produkttyp', 'hauptzutat', 'warengruppe', 'unterkategorie', 'marke_fantasiename', 'zustand', 'form'];
 
@@ -66,7 +59,7 @@ class ArtikelWebRecherche
 
         $felder = [];
         foreach ((array) ($antwort['felder'] ?? []) as $key => $eintrag) {
-            if (in_array($key, self::FELDER, true) && ($e = $this->eintrag($eintrag, $erlaubt)) !== null) {
+            if (in_array($key, ProduktpassFelder::schluessel(), true) && ($e = $this->eintrag($eintrag, $erlaubt)) !== null) {
                 $felder[$key] = $e;
             }
         }
@@ -146,6 +139,7 @@ class ArtikelWebRecherche
 
     private function anweisung(): string
     {
-        return (string) (config('foodalchemist.prompts', [])['artikel.web_recherche']['task'] ?? '');
+        return (string) (config('foodalchemist.prompts', [])['artikel.web_recherche']['task'] ?? '')
+            .' Erlaubte felder-Schlüssel: '.implode(', ', ProduktpassFelder::schluessel()).'.';
     }
 }
