@@ -705,7 +705,7 @@ class ConceptService
             // Fassung: betrachtendes Team (Parameter > Overlay-Instanz > Betrieb > angemeldeter Benutzer); eigenes Konzept: sein Besitzer
             $team = $fassung
                 ? ($team ?? $concept->preisTeam ?? ($outlet !== null ? \Platform\Core\Models\Team::find($outlet->team_id) : null)
-                    ?? \Illuminate\Support\Facades\Auth::user()?->currentTeamRelation)
+                    ?? \Platform\FoodAlchemist\Support\FaTeam::aktuell())   // Spec 84 A-2
                 : \Platform\Core\Models\Team::find($concept->team_id);
             if ($team === null) {
                 return ['zeilen' => [], 'price_per_person' => null, 'summe_pro_person' => null, 'price_mode' => 'auto', 'ek_per_person' => null,

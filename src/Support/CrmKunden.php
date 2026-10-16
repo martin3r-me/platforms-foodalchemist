@@ -90,6 +90,6 @@ final class CrmKunden
 
     public static function aktuellesTeam(): ?Team
     {
-        return auth()->user()?->currentTeamRelation;
+        return FaTeam::aktuell();   // Spec 84 A-2
     }
 }

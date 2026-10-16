@@ -57,8 +57,9 @@ class AiGatewayService
 
     public function propose(string $promptKey, array $context = [], array $options = []): AiProposal
     {
-        // M7-08: Kill-Switch — Team-Schalter stoppt jeden Call VOR dem Provider
-        $team = Auth::user()?->currentTeamRelation;
+        // M7-08: Kill-Switch — Team-Schalter stoppt jeden Call VOR dem Provider. Spec 84 A-2: Team aus FaTeam (MCP-Team nach
+        // team.switch, Job-Team aus dem Payload) statt currentTeamRelation (das war immer das UI-Team)
+        $team = \Platform\FoodAlchemist\Support\FaTeam::aktuell();
         if ($team !== null && ! app(\Platform\FoodAlchemist\Services\TeamSettingsService::class)->kiAktiv($team)) {
             throw new \Platform\FoodAlchemist\Exceptions\KiDeaktiviertException();
         }
@@ -624,7 +625,7 @@ class AiGatewayService
      */
     public function callWithTools(string $auftrag, array $toolNames, int $maxRuns = 6, array $optionen = []): array
     {
-        $team = Auth::user()?->currentTeamRelation;
+        $team = \Platform\FoodAlchemist\Support\FaTeam::aktuell();   // Spec 84 A-2
         if ($team !== null && ! app(\Platform\FoodAlchemist\Services\TeamSettingsService::class)->kiAktiv($team)) {
             throw new \Platform\FoodAlchemist\Exceptions\KiDeaktiviertException();
         }
@@ -845,7 +846,7 @@ class AiGatewayService
                 : null;
             $values = [
                 'uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(),
-                'team_id' => Auth::user()?->currentTeamRelation?->id,
+                'team_id' => \Platform\FoodAlchemist\Support\FaTeam::aktuellId(),   // Spec 84 A-2
                 'user_id' => Auth::id(),
                 'feature' => $feature,
                 'tier' => $tier,
@@ -1098,7 +1099,7 @@ class AiGatewayService
         }
         try {
             $resolved = app(\Platform\Core\SemanticLayer\Services\SemanticLayerResolver::class)
-                ->resolveFor(Auth::user()?->currentTeamRelation, 'foodalchemist');
+                ->resolveFor(\Platform\FoodAlchemist\Support\FaTeam::aktuell(), 'foodalchemist');   // Spec 84 A-2
         } catch (\Throwable) {
             return null;                                             // Hülle darf den Fach-Call nie reißen
         }
